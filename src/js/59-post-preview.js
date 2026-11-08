@@ -887,7 +887,7 @@ function postRows(co){
     const acc = (co.bankAccounts || []).find(a => a.id === st.acctId) || {};
     b.rows.filter(r => r.state === "ready").forEach(r => out.push({kind: "bank", id: r.id, date: r.date, party: (r.dec && r.dec.name) || r.narr.slice(0, 40), no: (r.dec && (r.dec.chq || r.dec.utr)) || r.ref || "",
       amount: num(r.debit || r.credit), led: {party: [r.ledger].filter(Boolean), expense: [acc.ledger].filter(Boolean), gst: [], tds: r.tdsAtPay ? [r.tdsLedger || ""].filter(Boolean) : []}, e: r,
-      state: stOf(r.id, r.postError ? ["Failed: " + r.postError, "bad"] : r.rep && r.rep.kind === "weak" && !r.rep.ok ? ["Possible repeat — check", "warn"] : b.busy && /^Posting/.test(b.busy) ? ["Sending", "warn"] : ["Waiting for Tally", ""])}));
+      state: stOf(r.id, r.postError ? ["Failed: " + r.postError, "bad"] : bankRepOpen(r) ? ["Possible repeat — check", "warn"] : b.busy && /^Posting/.test(b.busy) ? ["Sending", "warn"] : ["Waiting for Tally", ""])}));
   }
   const s = S.sales && S.sales.cid === co.id && !S.sales.loading ? S.sales : null;
   if (s) s.list.filter(v => v.status === "ready").forEach(v => {

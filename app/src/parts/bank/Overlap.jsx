@@ -25,8 +25,8 @@ export function DupWords({ st }) {
 export function RepMark({ r }) {
   if (!r.rep) return null;
   if (r.rep.ok) return <div className="bo-mark ok" data-rep-ok={r.id}>Checked: not a repeat of the entry of {fmtDate(r.rep.of)}</div>;
-  if (r.rep.kind !== "weak") return null;
-  return <div className="bo-mark" data-weak={r.id} title={r.rep.why}>⚠ Possible repeat — check: same amount as the entry of {fmtDate(r.rep.of)}. Not posted until you choose.
+  if (!BankOverlap.isOpen(r)) return null;
+  return <div className="bo-mark" data-weak={r.id} title={r.rep.why}>⚠ Possible repeat — check: {r.rep.kind === "weak" ? "same amount as" : "looks like"} the entry of {fmtDate(r.rep.of)}{r.rep.kind === "weak" ? "" : " (" + r.rep.why + ")"}. Not posted until you choose.
     {BankOverlap.isOpen(r) && <> <button type="button" className="linkbtn" data-rep-keep={r.id} onClick={(ev) => { ev.stopPropagation(); BankOverlap.keep(r.id); }}>Keep it</button>
       {" · "}<button type="button" className="linkbtn" data-rep-repeat={r.id} onClick={(ev) => { ev.stopPropagation(); BankOverlap.repeat(r.id); }}>It’s a repeat</button></>}</div>;
 }

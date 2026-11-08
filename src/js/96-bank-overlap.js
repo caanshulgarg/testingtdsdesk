@@ -13,8 +13,8 @@
 //   - the same UTR / reference / cheque number and amount within 2 days, or the same date, amount and running balance
 //     after it: held aside ("Repeat of <date> entry"), not in the books and never posted until "Keep it" or "It's a repeat";
 //   - the same amount within a day, with no reference and no balance to compare: added, marked "Possible repeat — check"
-//     (r.rep), and not posted to Tally until confirmed (bankGoneAsk, app/src/parts/bank/goneSent.js; the Tally file,
-//     bankExportProblems below; automatic posting, src/js/90);
+//     (r.rep), and not posted to Tally until confirmed (bankRepOpen, src/js/22: postBankToTally, the Tally file, automatic
+//     posting, the Post page, the reconciliation);
 // a line marked "It's a repeat" is kept aside, never deleted, and can be brought back.
 // Review of 08-Nov-2026: held lines and repeats stay among the statement's lines, in their place (b.rows is synced to the
 // firm account in parts by position: a line taken out or put in would shift the parts other computers hold), state
@@ -148,7 +148,8 @@ const BankOverlap = (() => {
   }
   /* ---------- after the upload ---------- */
   // the line's own state is what counts (a statement record cannot bring a line back or lose one): bankAside, src/js/22
-  const isOpen = r => !!(r && r.rep && r.rep.kind === "weak" && !r.rep.ok && !r.rep.gone && r.state !== "ignored");
+  // a marked line in the books not confirmed (any mark: after an Undo or an older version's Restore too): never posted
+  const isOpen = r => bankRepOpen(r);
   const isHeld = r => bankAside(r) && !r.rep.gone;
   const isRepeat = r => bankAside(r) && !!r.rep.gone;
   const stOf = () => curStmt();
@@ -160,14 +161,15 @@ const BankOverlap = (() => {
     st.summaryOk = st.opening !== undefined && st.closing !== undefined ? Math.abs(r2(st.opening - st.totDr + st.totCr) - st.closing) <= 0.011 : null;
     delete st.held; delete st.repeats;
   }
-  function done(st, b, why){ refigure(st, b.rows); st.counts = countStates(b.rows); saveBank({rows: true, stmts: true}); toast(why); render(); }
+  // an Undo from before would put a line back without its mark: it is cleared
+  function done(st, b, why){ b.undo = null; refigure(st, b.rows); st.counts = countStates(b.rows); saveBank({rows: true, stmts: true}); toast(why); render(); }
   const now = () => new Date().toISOString();
   // "Keep it": a held line goes into the books, or a marked line is confirmed
   function keep(id){
     const b = B(), st = stOf(); if (!b || !st) return;
     const r = b.rows.find(x => x.id === id);
     if (!r || !r.rep) return;
-    if (isOpen(r)){ Object.assign(r.rep, {ok: true, at: now()}); return done(st, b, "Kept: this entry is not a repeat, and can be posted."); }
+    if (isOpen(r)){ r.rep = Object.assign({}, r.rep, {ok: true, at: now()}); delete r.rep.gone; return done(st, b, "Kept: this entry is not a repeat, and can be posted."); }
     if (!isHeld(r)) return;
     r.rep = Object.assign({}, r.rep, {ok: true, at: now()});
     Object.assign(r, {state: "attention", ledger: "", userSet: false}); delete r.prevState;
@@ -224,11 +226,5 @@ const BankOverlap = (() => {
   }
   return {take, figures, keep, repeat, back, skipped, join, isOpen, isHeld, isRepeat, nearOf, refKey, periodWords};
 })();
-// the Tally file (src/js/22 exportBankXml): a line marked "Possible repeat — check" waits until it is confirmed
-if (typeof bankExportProblems === "function" && !bankExportProblems.bo){
-  const bankExportProblems0 = bankExportProblems;
-  const bep = function (rows){ const n = (rows || []).filter(BankOverlap.isOpen).length; return (n ? [(n === 1 ? "1 entry is" : n + " entries are") + " marked Possible repeat — check: Keep it or It’s a repeat first"] : []).concat(bankExportProblems0(rows)); };
-  bep.bo = 1; globalThis.bankExportProblems = bep;
-}
 if (typeof globalThis === "object") Object.assign(globalThis, {BankOverlap});
 /* @react-lazy: end */

@@ -30,7 +30,7 @@ SHOTS = os.environ.get("BANK_SHOTS", "")
 PORT = 8417
 class Q(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *a): pass
-srv = http.server.ThreadingHTTPServer(("localhost", PORT), functools.partial(Q, directory=SITE)); threading.Thread(target=srv.serve_forever, daemon=True).start()
+srv = http.server.ThreadingHTTPServer(("localhost", 0), functools.partial(Q, directory=SITE)); PORT = srv.server_address[1]; threading.Thread(target=srv.serve_forever, daemon=True).start()
 fails, errors = [], []
 def ok(c, w):
     print(("  ok   " if c else "  FAIL ") + w)
@@ -230,6 +230,47 @@ with sync_playwright() as p:
     ok(rec2 and len(rec2.get("dupIds") or []) == 6, "and the skipped lines' list (bank_stmt of May)")
     kinds = sorted(set(E("Object.values(__db).map(r => r.kind)")))
     ok(kinds == ["bank_meta", "bank_rows", "bank_stmt"] or set(kinds) >= {"bank_meta", "bank_rows", "bank_stmt"} and not [k for k in kinds if k.startswith("bank_") and k not in ("bank_meta", "bank_rows", "bank_stmt")], "the same kinds of record as before (%s)" % kinds)
+
+    print("== 3b. one posting check: Undo, Bring back, an older version's Restore; the reconciliation")
+    E("() => { window.__exact0 = window.exactLedger; window.exactLedger = (v) => v; B().filter = 'all'; render(); }")
+    POST = "(async () => { window.__ids = null; await postBankToTally(); return window.__ids; })()"
+    def blocked(i): return i not in (E(POST) or []) and E("(id) => bankRepOpen(B().rows.find(r => r.id === id))", i) is True
+    def buttons(i): pg.wait_for_timeout(250); return E("(id) => !!document.querySelector(`[data-rep-keep='${id}']`) && !!document.querySelector(`[data-rep-repeat='${id}']`)", i)
+    # A: a line marked Possible repeat, a ledger picked, It's a repeat, Undo
+    E("(id) => { const r = B().rows.find(x => x.id === id); r.rep = {kind: 'weak', of: '2026-04-28', ofId: 'x', why: 'same amount on the same date'}; r.state = 'attention'; r.ledger = ''; B().undo = null; render(); }", c2)
+    E("(id) => bankSetLedger(id, 'Some Ledger')", c2); pg.wait_for_timeout(200)
+    ok(E("!!(B().undo && B().undo.snaps.some(s => s.rep && s.rep.kind === 'weak' && !s.rep.ok))"), "A: picking a ledger keeps the mark in the Undo snapshot")
+    E("() => { window.__u = B().undo; }"); E("(id) => BankOverlap.repeat(id)", c2); pg.wait_for_timeout(200)
+    ok(E("B().undo") is None, "A: It's a repeat clears the Undo")
+    E("undoBank()"); ok(E("(id) => bankAside(B().rows.find(r => r.id === id))", c2) is True and c2 not in (E(POST) or []), "A: Undo then does nothing: the line stays aside, not posted")
+    E("() => { B().undo = window.__u; undoBank(); const r = B().rows.find(x => x.id === '%s'); r.ledger = 'Some Ledger'; r.state = 'ready'; render(); }" % c2)
+    ok(blocked(c2) and buttons(c2), "A: even an Undo from before: the line comes back with its mark, not posted, Keep it / It's a repeat shown")
+    # B: ... It's a repeat, Bring back, Undo
+    E("(id) => { const r = B().rows.find(x => x.id === id); r.state = 'attention'; r.ledger = ''; B().undo = null; bankSetLedger(id, 'Some Ledger'); window.__u = B().undo; }", c2)
+    E("(id) => BankOverlap.repeat(id)", c2); E("(id) => BankOverlap.back(id)", c2); pg.wait_for_timeout(200)
+    ok(E("B().undo") is None and E("(id) => BankOverlap.isHeld(B().rows.find(r => r.id === id))", c2) is True, "B: Bring back: held, and the Undo cleared")
+    E("() => { B().undo = window.__u; undoBank(); const r = B().rows.find(x => x.id === '%s'); r.state = 'ready'; render(); }" % c2)
+    ok(blocked(c2) and buttons(c2), "B: an Undo from before: not posted, Keep it / It's a repeat shown")
+    # an older version's Restore of a held line: state back in the books, the mark still strong and not confirmed
+    o = held[3]["id"]
+    E("(id) => { const r = B().rows.find(x => x.id === id); r.state = 'ready'; r.ledger = 'Some Ledger'; render(); }", o)
+    ok(blocked(o) and buttons(o) and "looks like the entry of 15-Apr-2026" in E("(id) => document.querySelector(`[data-weak='${id}']`).innerText", o), "an older version's Restore: not posted, Possible repeat — check with Keep it / It's a repeat")
+    ok(any("Possible repeat" in x for x in E("bankExportProblems(B().rows.filter(r => r.state === 'ready'))")) and E("(id) => postRows(CO()).find(x => x.id === id).state[0]", o) == "Possible repeat — check", "and the Tally file and the Post page agree")
+    pg.click("[data-rep-keep='%s']" % o); pg.wait_for_timeout(300)
+    ok(o in (E(POST) or []), "Keep it: now it is posted")
+    # the reconciliation: lines set aside are not the statement's entries, never take a Tally voucher
+    E("(id) => { B().rows.find(x => x.id === id).state = 'ignored'; B().rows.find(x => x.id === id).rep = {kind: 'strong', of: '2026-04-15', ofId: 'y', why: 'test'}; }", o)
+    aside = E("B().rows.filter(bankAside).map(r => r.id)")
+    R = E("""async () => { const sv = [window.ensureTallyCompany, window.tallyBankBalance, Bridge.call];
+      CO().bankAccounts[0].ledger = 'Demo Bank A/c';
+      window.ensureTallyCompany = async () => 'ZZ TEST'; window.tallyBankBalance = async () => ({close: 0, how: 'test'});
+      Bridge.call = async () => ({vouchers: [{date: '20260409', guid: 'g1', type: 'Payment', number: '7', entries: [{ledger: 'Demo Bank A/c', amount: '5000'}, {ledger: 'Cash', amount: '-5000'}]},
+                                             {date: '20260405', guid: 'g2', type: 'Payment', number: '8', entries: [{ledger: 'Demo Bank A/c', amount: '1200'}, {ledger: 'Beta', amount: '-1200'}]}]});
+      try { const R = await reconcileBank({stay: true}); return R && {missing: R.missing, extra: R.extra.length, pairs: R.pairs}; }
+      finally { [window.ensureTallyCompany, window.tallyBankBalance, Bridge.call] = sv; S.recon = null; } }""")
+    ok(R and not set(R["missing"]) & set(aside) and R["extra"] == 2 and R["pairs"] == 0 and all(E("(id) => B().rows.find(r => r.id === id).state", i) == "ignored" for i in aside),
+       "the reconciliation: the %d lines set aside are not left out, take no Tally voucher (both Tally entries stay unpaired), stay aside (%s)" % (len(aside), R))
+    E("() => { window.exactLedger = window.__exact0; B().filter = 'review'; render(); }")
 
     print("== 4. two identical lines on one day, no balance")
     E(OPEN, "zzov2"); wait(pg, "B() && B().cid === 'zzov2' && !B().loading")

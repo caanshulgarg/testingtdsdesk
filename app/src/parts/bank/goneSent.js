@@ -29,15 +29,7 @@ export function goneToast(m) {
 }
 
 // asked by postBankToTally before anything is sent: the ids to post (unchanged when no such line is among them), or false
-// next-bank-overlap: a line marked "Possible repeat — check" (src/js/96) is never sent until it is confirmed
 async function bankGoneAsk(b, ids) {
-  const rep = (r) => !!(r.rep && r.rep.kind === "weak" && !r.rep.ok), ready = (r) => r.state === "ready" && (!ids || ids.includes(r.id));
-  const held = b.rows.filter((r) => ready(r) && rep(r));
-  if (held.length) {
-    ids = b.rows.filter((r) => ready(r) && !rep(r)).map((r) => r.id);
-    toast((held.length === 1 ? "1 entry is" : held.length + " entries are") + " marked Possible repeat — check, and " + (held.length === 1 ? "was" : "were") + " not posted: Keep it or It’s a repeat first.");
-    if (!ids.length) return false;
-  }
   const want = (r) => r.state === "ready" && (!ids || ids.includes(r.id));
   const pick = b.rows.filter((r) => want(r) && r.goneSent && !r.goneSent.ok);
   if (!pick.length) return ids;

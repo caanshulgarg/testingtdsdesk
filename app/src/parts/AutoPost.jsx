@@ -20,7 +20,7 @@ export function AutoChip({ x, inert }) {
   if (!a) return null;
   const hold = x.autoHold && !x.auto && Date.parse(x.autoHold.until) > Date.now();
   // next-bank-overlap: a line marked "Possible repeat — check" waits (src/js/90): no time is shown for it
-  const rep = !x.auto && x.rep && x.rep.kind === "weak" && !x.rep.ok;
+  const rep = !x.auto && typeof bankRepOpen === "function" && bankRepOpen(x);
   const when = rep ? "Auto · waits: Possible repeat — check" : x.auto ? (notInTally(x) ? "Queued automatically" : "Posted automatically") + (a.at ? " at " + fmtDateTime(a.at) : "") : hold ? "Auto · posting at " + hhmm(x.autoHold.until) : "Auto · posting now";
   return <span className="ap-chip" tabIndex={inert ? undefined : 0} data-ap-chip={a.rule || ""}>
     <span className="ap-chip-t">{a.chip || "Auto"}</span>

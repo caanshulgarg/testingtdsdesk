@@ -650,7 +650,7 @@ function sameParty(a, b){
   const [short, long] = pa.length <= pb.length ? [pa, pb] : [pb, pa];
   return short.length >= 17 && long.startsWith(short);
 }
-function rowSnapshot(r){ return {id: r.id, ledger: r.ledger, state: r.state, userSet: r.userSet, why: r.why, source: r.source, vtype: r.vtype, billId: r.billId, billRef: r.billRef, tdsAtPay: r.tdsAtPay}; }
+function rowSnapshot(r){ return {id: r.id, rep: r.rep ? Object.assign({}, r.rep) : r.rep, ledger: r.ledger, state: r.state, userSet: r.userSet, why: r.why, source: r.source, vtype: r.vtype, billId: r.billId, billRef: r.billRef, tdsAtPay: r.tdsAtPay}; }
 // Set a ledger on some rows; every other open row of the same party follows, and a rule is kept for next time
 function setLedgerFor(rows, ledger, how){
   const b = B(), co = CO(b.cid);
@@ -936,7 +936,8 @@ function bankExportProblems(rows){
     else if (!exactLedger(r.ledger)) probs.push(fmtDate(r.date) + ": \u201c" + r.ledger + "\u201d is not a Tally ledger");
     else if (isOwnBank(r, r.ledger)) probs.push(fmtDate(r.date) + ": " + OWN_BANK);
   });
-  return probs;
+  const n = rows.filter(bankRepOpen).length;
+  return (n ? [(n === 1 ? "1 entry is" : n + " entries are") + " marked Possible repeat — check: Keep it or It’s a repeat first"] : []).concat(probs);
 }
 async function exportBankXml(){
   const b = B(), st = curStmt(), co = CO(b.cid);
@@ -996,6 +997,9 @@ function tabStates(tab){ return tab === "ready" ? ["ready"] : tab === "done" ? [
 function bankMatched(r){ return !r.goneFromTally && (r.state === "intally" || (r.state === "sent" && (!!(r.tally && (r.tally.guid || r.tally.masterId || r.tally.number)) || r.postByReply === true) && !r.checking)); }
 // next-bank-overlap: a line held aside as a repeat of an earlier entry, or kept aside as one (src/js/96): ignored and marked,
 // it stays among the lines (in its place) but is in no tab, no total, no suggestion and no Tally matching
+// and the one posting check (review of 08-Nov-2026): a line marked as a possible repeat and not confirmed, whatever the mark
+// (after an Undo, or a Restore in an older version), that is not ignored, is never posted until Keep it or It's a repeat
+function bankRepOpen(r){ return !!(r && r.rep && !r.rep.ok && r.state !== "ignored"); }
 function bankAside(r){ return !!(r && r.rep && r.state === "ignored" && (r.rep.gone || (r.rep.kind === "strong" && !r.rep.ok))); }
 function bankTabOf(r){
   if (bankAside(r)) return "aside";
