@@ -54,7 +54,7 @@ print("  md5 of %s: %s (%d bytes)" % (os.path.basename(M146), hashlib.md5(text.e
 code = "\n".join(l.split("--")[0] for l in text.lower().splitlines())
 print("== 0. the file")
 ok(re.search(r"^begin;\s*\nset local lock_timeout = '10s';", text, re.M) is not None and text.rstrip().endswith("commit;") and code.count("\nbegin;") == 1, "one transaction, lock_timeout 10 s")
-ok(re.findall(r"delete from [\w.]+", code) == ["delete from tally_work_claims"] and not re.search(r"\b(drop|truncate)\s", code) and not re.search(r"\balter\s+table\s+(?!public\.tally_work_claims\s+enable)", code), "add-only: nothing dropped or truncated; no other table altered; the one delete is of expired claim rows")
+ok("delete from" not in code and not re.search(r"\b(drop|truncate)\s", code) and not re.search(r"\balter\s+table\s+(?!public\.tally_work_claims\s+enable)", code), "add-only: nothing dropped, deleted, truncated; no other table altered")
 ok("create table if not exists public.tally_work_claims" in code and "alter table public.tally_work_claims enable row level security" in code, "the new table, RLS on")
 ok(not re.search(r"supabase\.co|https?://|qbocskai|project[_ ]ref", text.lower()), "names no real database")
 SVC = {"tally_read_heard": "(uuid)", "tally_read_serving": "(uuid, uuid)", "tally_read_serving_many": "(uuid, uuid[])", "tally_read_serves": "(uuid, uuid, uuid, text)",
@@ -233,12 +233,6 @@ try:
     if not RED: db.sql("update tally_work_claims set until = now() - interval '1 second' where book_id = %s and kind = 'held' and unit = 'L-1'" % q(BK))
     ok(wclaim(["L-1"], DB, BB) == ["L-1"], "A's claim expired: B gets it")
     ok(wclaim(["L-9"], DA, BB) == [] and wclaim(["L-9"], DA, "v1") == [], "a bridge id not bound to that key, or a v1 bridge: nothing")
-    if not RED:
-        db.sql("insert into tally_work_claims (firm_id, book_id, kind, unit, device_id, bridge_id, until) values (%s, %s, 'held', 'L-old', %s, %s, now() - interval '2 days'), (%s, %s, 'held', 'L-hour', %s, %s, now() - interval '1 hour'), (%s, %s, 'masters', 'L-oldm', %s, %s, now() - interval '2 days')"
-               % (q(F), q(BK), q(DA), q(BA), q(F), q(BK), q(DA), q(BA), q(F), q(BK), q(DA), q(BA)))
-    wclaim(["L-5"], DB, BB)
-    left = {} if RED else {r["unit"] for r in db.rows("select unit from tally_work_claims where book_id = %s" % q(BK))}
-    ok("L-old" not in left and "L-hour" in left and "L-oldm" in left, "a claim ended over a day ago is cleared when that book and kind is claimed; one ended an hour ago, or of another kind, stays")
 
     print("== 4. read older entries: a key nobody switched follows a key on the same computer (info.computer), as it is now")
     fon = lambda d: (db.one("select tally_fetch_on(%s::uuid)::text" % q(d)) == "true") if not RED else None

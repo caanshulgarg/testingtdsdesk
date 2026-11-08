@@ -19,8 +19,7 @@
 --      check (a day of Check for changes), held (a held line asked again), masters (the book's full ledger list); the
 --      bridge holding it and until when. tally_work_claim(firm, book, kind, units, device, bridge, ttl): under one lock per
 --      book and kind, each unit free, expired or already this bridge's is (re)claimed for it and returned; the others are
---      not. An unfinished claim returns to the pool when it expires; a claim ended over a day ago is deleted (claim rows
---      only) the next time that book and kind is claimed.
+--      not. An unfinished claim returns to the pool when it expires (the row stays and is claimed again in place).
 --   3. tally_days_claim(firm, book, device, bridge, kind, max, night): 98's tally_period_next_paced (kind period) or 135's
 --      tally_check_next_open (kind check) as they are (their order, pace and stop rules), asked for as many more days as
 --      other bridges hold, the days another bridge holds left out, the rest claimed for this bridge (5 minutes, renewed
@@ -141,8 +140,6 @@ begin
   if tally_bridge_device(p_firm, p_bridge) is distinct from p_device then return got; end if;
   if not exists (select 1 from tally_links l where l.firm_id = p_firm and l.book_id = p_book and l.state = 'linked') then return got; end if;
   perform pg_advisory_xact_lock(hashtext('tally_work_claim:' || p_book::text || ':' || p_kind));
-  -- the book's claims ended more than a day ago are cleared (claim rows only)
-  delete from tally_work_claims c where c.book_id = p_book and c.kind = p_kind and c.until < now() - interval '1 day';
   for u in select distinct x from unnest(coalesce(p_units, '{}'::text[])) x where coalesce(x, '') <> '' limit 400 loop
     insert into tally_work_claims as c (firm_id, book_id, kind, unit, device_id, bridge_id, claimed_at, until)
     values (p_firm, p_book, p_kind, left(u, 120), p_device, p_bridge, now(), now() + make_interval(secs => ttl))

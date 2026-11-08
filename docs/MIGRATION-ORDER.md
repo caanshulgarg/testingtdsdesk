@@ -760,8 +760,8 @@ stamps back); `tally_fetch_on(device)` ("read older entries": its own switch; a 
 takes the CURRENT switch of a key of the firm on the same computer by `info.computer`, never the key's name; a key a person
 turned off stays off); `tally_read_heard`; `tally_read_view()` (members; the page; the held lines re-asked only those a
 bridge accepts: the link's company GUID, a MasterID or type and number, the company still this book, not waiting for a
-ledger). Claims ended over a day ago are deleted (claim rows only) when that book and kind is claimed next. No existing
-table, column or function changed; the lease and postings (142) unchanged.
+ledger). Nothing is deleted: an expired claim's row stays and is claimed again in
+place. No existing table, column, function or row changed; the lease and postings (142) unchanged.
 Add-only, one transaction, `lock_timeout` 10 s, safe twice; after 54, 98, 110, 127, 133, 135, 142 (147 before or after). Tested on pg_stand:
 `tests/run_migration146.py` (two bridges claiming at the same time; `RED_WITHOUT_146=1` fails). Deploy order: 146, then
 tally-ingest of next-link-follow (until it runs no bridge record has `cos`: nobody serves by these rules and the days go
