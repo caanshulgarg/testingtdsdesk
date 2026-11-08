@@ -4,7 +4,7 @@ Reviewers: the session that built it (a self-review against the owner's rules, b
 coordinator's) at c936bdcf5: no duplicate postings, one instance, versions numbered right; seven items to fix before the
 release, all fixed with tests in d144a3663 (below). The fixes are the building session's self-review only.
 
-Range: 1400f77d6..fd11cff34 (released 2.5.9 to the review's fixes, d144a3663, and the first build's withdrawal, fd11cff34: build files moved only)
+Range: 1400f77d6..7b3dc0c76 (released 2.5.9 to the review's fixes, d144a3663, the first build's withdrawal, fd11cff34, round 2's priority, bb86c1c48, and the second build's withdrawal, 7b3dc0c76: build files moved only)
 
 The first build of 2.5.10 (e6aeb8422, setup 0ca4dace...2ef3, never published) is withdrawn; its files are kept in
 assets-test/bridge-go-old as *-2.5.10-withdrawn-0ca4dace*.
@@ -127,4 +127,11 @@ pick_ack_test.mjs (new); run_tally_buttons.py, run_period_ingest.py. docs: MIGRA
 7. A worker that ended with code 9 by itself is recorded as it ended (only one the supervisor ended is a hang); the
    network's fingerprint leaves out IPv6 (its temporary addresses), adapters that are down, the loopback and virtual
    adapters; a failed heartbeat's pause is moved by up to a fifth. TestR2510WatchdogStallRestarts, TestR2510NetPrintAndJitter.
+
+## Round 2 of the independent review (at fa94c647c): nothing blocks
+
+One change asked and made in bb86c1c48: the keep-alive task runs at priority 5, not Task Scheduler's default 7 (below
+normal) (keepalive.go keepAliveTaskXML; TestR2510KeepAliveTask). The second build (fa94c647c, setup 2700b597...b941,
+never published) is withdrawn; its files are kept in assets-test/bridge-go-old as *-2.5.10-withdrawn-2700b597*.
+origin/staging-next had not moved (1400f77d6, already in the branch): nothing to merge.
 

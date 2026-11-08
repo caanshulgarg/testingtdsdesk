@@ -3,7 +3,7 @@
 Reviewers: the session that built it (self-review), then an independent review at c936bdcf5 (seven items, fixed in
 d144a3663: bridge-2.5.10-code-review.md); the fixes are the building session's self-review only.
 
-Range: 1400f77d6..fd11cff34 (released 2.5.9 to the review's fixes, d144a3663, and the first build's withdrawal, fd11cff34: build files moved only)
+Range: 1400f77d6..7b3dc0c76 (released 2.5.9 to the review's fixes, d144a3663, the first build's withdrawal, fd11cff34, round 2's priority, bb86c1c48, and the second build's withdrawal, 7b3dc0c76: build files moved only)
 
 ## Requests to Tally
 
@@ -32,7 +32,7 @@ Range: 1400f77d6..fd11cff34 (released 2.5.9 to the review's fixes, d144a3663, an
 
 - The keep-alive task runs as the signed-in user only (InteractiveToken as the user's SID, least privilege), with no
   stored password and no raised rights; it is made from a task file written in the bridge's own folder (0600, removed
-  after), its paths XML-escaped and refused when they hold a quote; it starts the bridge at normal priority, never while
+  after), its paths XML-escaped and refused when they hold a quote; the task itself at priority 5 (round 2), it starts the bridge at normal priority, never while
   a setup is between its stop and its install; it starts the bridge only when this user's
   supervisor is not running and no setup is stopping it. The per-user uninstall removes it. The installer itself is
   unchanged. Updates and signatures: not touched.
