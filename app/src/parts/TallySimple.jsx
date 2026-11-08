@@ -474,10 +474,15 @@ function Row({ row, download, oneDl, seen, cs, x, checkAgain }) {
   const m = linked ? mastersOf(row.cid, row.company) : null, e = linked ? entriesOf(row.cid, m, row.last) : null, p = e && e.p && !e.p.done && e.b && e.b.book ? e.p : null;
   // the row's ONE main button, chosen by its state; a short note under it when needed
   const mm = mainOf(row, pg).main;
+  // (the owner's Fingate row, 08-Nov-2026: "Not brought yet" with Upload Day Book as its button) the company open on a
+  // live bridge of the firm, its entries not in FinCom or behind: the bridge brings them (Bring books, masters first);
+  // the Day Book upload stays under More (Upload a Day Book file, and in Answers). Upload is the button only where no
+  // bridge of the firm can bring them
+  const canBring = pg.btn === "update" && linked && !!(e && e.b && e.b.book) && ["none", "behind", "stopped"].includes(e.st);
   let btn = null, main = "", note = "";
   if (!canWrite()) btn = null;
   // (a row whose own action is the Day Book upload or the missing days' fetch: that action, in its words)
-  else if (mm === "upload" || mm === "bring") { btn = <Act row={row} main />; main = mm; }
+  else if (mm === "bring" || (mm === "upload" && !canBring)) { btn = <Act row={row} main />; main = mm; }
   else if (pg.btn === "again") { btn = <Again row={row} x={x} cs={cs} checkAgain={checkAgain} label={pg.label} />; main = "again"; note = pg.note || ""; }
   // masters read first, entries only waiting after them: Reading… (Pause and Stop under More)
   else if (pg.btn === "update" && p && e.st === "after") { btn = <button type="button" className="btn tpt-btn" data-tpt-main="reading" disabled>Reading…</button>; main = "reading"; }

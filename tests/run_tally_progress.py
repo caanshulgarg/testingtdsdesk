@@ -152,6 +152,15 @@ def main():
            "1 (review 6). no second 'Tally' title; the dark Download FinCom Bridge 2.5.5 (its fingerprinted link) (%s | %s)" % (txt(dl), pg.get_attribute(dl + " [data-tpg-download]", "href")))
         ok(E("(s) => { const h = document.querySelector(s).getBoundingClientRect(), b = document.querySelector(s + ' [data-tpg-download]').getBoundingClientRect(); return Math.abs(h.right - b.right) <= 2 && b.left > h.left + h.width / 2; }", dl),
            "1 (review 6). the Download right-aligned")
+        # (the owner's Mac, 08-Nov-2026) the Download never under the sticky top bar, the page scrolled a little or a lot
+        DLV = """(y) => { window.scrollTo(0, y); return new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => {
+          const h = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--head-h')) || 0, b = document.querySelector('#app [data-tpg-download]').getBoundingClientRect();
+          r({y: Math.round(window.scrollY), head: Math.round(h), top: Math.round(b.top), bottom: Math.round(b.bottom), vh: window.innerHeight}); }))); }"""
+        for y in (60, 500):
+            v = E(DLV, y)
+            ok(v["y"] > 0 and v["head"] > 0 and v["top"] >= v["head"] - 1 and v["bottom"] <= v["vh"], "1 (owner's Mac). scrolled %d px: the Download fully below the top bar (%s)" % (y, v))
+            if SHOTS and y == 60: os.makedirs(SHOTS, exist_ok=True); pg.screenshot(path=os.path.join(SHOTS, "tally-progress-scrolled.png"))
+        E("() => window.scrollTo(0, 0)")
         ok(txt("#app [data-tsm-steps-link]") == "How to connect" and n("#app [data-tsm-top] [data-tsm-top-check]") == 1, "1. the connection card: How to connect, Check again (%s)" % txt("#app [data-tsm-top]")[:120])
         E("""() => { const t = (m) => new Date(Date.now() - m * 60000).toISOString();
           window.__rounds['bk-Kestrel Textiles'] = [{round_id: 'k1', started_at: t(2), last_seen_at: t(0.2), rows_received: 7560, rows_read: null, complete: null, batches: 4}]; }""")
@@ -217,6 +226,19 @@ def main():
         ok(n(L(ORBIT) + " [data-tpt-update-more]") == 1, "3. More: Update now too, when the row's button is another")
         pg.click(R(ORBIT) + " [data-tpt-open]"); pg.wait_for_timeout(300)
         E("(c) => { (TCloud.st[c].books || []).forEach(b => { b.to = new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 10); }); render(); }", cid(ORBIT))
+        # (the owner's Fingate row, 08-Nov-2026) entries not brought yet, an upload as the row's action (a gap FinCom's cloud
+        # sees, no bridge set to fetch): the company open on a live bridge of the firm, so Bring books is the button; the
+        # Day Book upload under More (and in Answers)
+        E("""(c) => { window.__gapWas = Rec.gapFor; Rec.gapFor = (x) => x === c ? [{gap: {since: new Date(Date.now() - 3 * 86400e3).toISOString(), missing: 4}}] : [];
+          window.__orbBooks = JSON.parse(JSON.stringify(TCloud.st[c].books || [])); (TCloud.st[c].books || []).forEach(b => { b.days = 0; b.to = null; b.daysAt = null; });
+          (window.__sum.find(x => x.client === c) || {devices: []}).devices.forEach(d => { d.fetchOn = false; }); if (window.tfxRefresh) window.tfxRefresh(); render(); }""", cid(ORBIT)); pg.wait_for_timeout(3000)
+        more(ORBIT); pg.click(L(ORBIT) + " [data-tpt-details]"); pg.wait_for_timeout(600)
+        ok(n(L(ORBIT) + ' [data-tsm-col="do"] [data-tsm-act="upload"]') == 1, "3 (Fingate). the row's action is the Day Book upload (a gap, no bridge set to fetch): it is in Answers (%s)" % txt(L(ORBIT) + ' [data-tsm-col="do"]'))
+        ok(txt(R(ORBIT) + " [data-tpg-entries]").startswith("Not brought yet") and mains(ORBIT) == ["books"] and txt(R(ORBIT) + " [data-tpt-main]") == "Bring books" and n(L(ORBIT) + " [data-tpt-daybook]") == 1,
+           "3 (Fingate). open on a live bridge, entries not brought yet: Bring books is the button, Upload a Day Book file under More (%s | %s)" % (mains(ORBIT), txt(R(ORBIT) + " [data-tpg-entries]")))
+        pg.click(R(ORBIT) + " [data-tpt-open]"); pg.wait_for_timeout(300)
+        E("""(c) => { Rec.gapFor = window.__gapWas; TCloud.st[c].books = window.__orbBooks; (window.__sum.find(x => x.client === c) || {devices: []}).devices.forEach(d => { d.fetchOn = true; });
+          S.tsm.details = {}; if (window.tfxRefresh) window.tfxRefresh(); render(); }""", cid(ORBIT)); pg.wait_for_timeout(2000)
         # Kestrel's: Bring books paused, the bridge's wait, in its history
         E("() => { window.__sum.find(x => x.pull).pull.state = 'paused'; if (window.tfxRefresh) window.tfxRefresh(); }"); pg.wait_for_timeout(1500)
         ok(mains(KES) == ["resume"] and txt(R(KES) + " [data-tpt-main]") == "Resume" and txt(R(KES) + " [data-tpg-entries]").startswith("Paused"), "3. paused: Resume, Entries Paused (%s | %s)" % (mains(KES), txt(R(KES) + " [data-tpg-entries]")))
