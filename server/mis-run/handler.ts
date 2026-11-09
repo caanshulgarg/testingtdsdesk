@@ -4,6 +4,8 @@
 //     schedules that are due (mis_take: each moved on to its next time at once, so nothing is sent twice) and runs each.
 //   POST from a signed-in owner or staff member: {action: "run", schedule_id} runs one of the firm's schedules now (its
 //     next time stays as it is). A look-only member may not.
+//   POST from a signed-in member (next-cloud-calc1, migration 151): {action: "now", client, from, to} MIS's figures for
+//     the period worked out in the database, kept while the books stay the same (misNow below)
 // A run: the saved report (client_book_items, key misCustom, item "#<report id>") for the schedule's period (last month,
 // month / quarter / year to date, in IST) worked out by the app's own engine (app/src/lib/misCustom.js) from the cloud copy
 // (data.ts); its Excel (ExcelJS, the app's own workbook: misXlsx.js) and PDF (pdf.ts) kept in the private bucket
@@ -105,6 +107,57 @@ export function handler(deps: Deps) {
     return { ok: false, error: why };
   }
 
+  // next-cloud-calc1 (the owner, 09-Nov-2026: "it should not freeze at all, whatever the book size; calculation should
+  // happen in cloud"): {action: "now", client, from, to} from a signed-in member (any role: it only reads) answers MIS's
+  // figures for the period worked out in the database (migration 151, each checked against the browser's own engine by
+  // tests/run_migration151.py): the receivables and payables ageing (MIS.ageing), the month-end figures (Rec.fincom:
+  // receivables, payables, cash and bank, profit, trial balance) and every ledger's balance on the last day
+  // (Audit.balances). Kept in tally_calc_results with the book's data version: asked again with the same books, the kept
+  // answer comes back at once; once an entry, a day or the ledger list changes, it is worked out again. The member's own
+  // token reads (my_firm(): its own firm's books only); only keeping the answer uses the service key.
+  // partial: the parts of MIS.runNow not worked out here yet (the browser works those out itself until they move).
+  const NOW_PARTS = ["recv", "pay", "owed", "tieout", "balances"];
+  const NOW_LATER = ["sales", "purchases", "pl", "prev", "ly", "mtd", "ytd", "cash", "comp", "dues", "p2", "msme", "control", "dso", "dpo"];
+  async function misNow(body: any, jwt: string): Promise<[number, unknown]> {
+    if (!jwt || jwt === ANON || jwt === SERVICE) return [401, { ok: false, kind: "auth", error: "Sign in to the firm account first." }];
+    let user: any;
+    try { user = await rest("/auth/v1/user", jwt); } catch { return [401, { ok: false, kind: "auth", error: "Sign in again." }]; }
+    if (!user?.id) return [401, { ok: false, kind: "auth", error: "Sign in again." }];
+    const client = String(body?.client || ""), from = String(body?.from || "").replace(/-/g, ""), to = String(body?.to || "").replace(/-/g, "");
+    if (!client || !/^\d{8}$/.test(from) || !/^\d{8}$/.test(to) || from > to) return [400, { ok: false, error: "Give the client and the period (from, to)." }];
+    const iso = (d: string) => d.slice(0, 4) + "-" + d.slice(4, 6) + "-" + d.slice(6);
+    const args = from + "|" + to, t0 = Date.now();
+    let kept: any;
+    try { kept = await rpc("tally_calc_cached", { p_client: client, p_on: iso(to), p_kind: "mis-now", p_args: args }, jwt); }
+    catch (e) { return [500, { ok: false, error: "the books in FinCom's cloud could not be read: " + String((e as Error).message || e).slice(0, 200) }]; }
+    if (!kept || kept.none) return [404, { ok: false, kind: "none", error: "FinCom's cloud has no books of this client for that period." }];
+    if (kept.result) return [200, { ok: true, kept: true, at: kept.at, result: kept.result }];
+    // the month-ends of the period (the tie-out's months), at most 36
+    const months: string[] = [];
+    for (let y = +from.slice(0, 4), m = +from.slice(4, 6); (y * 100 + m) <= +to.slice(0, 6) && months.length < 36; m === 12 ? (m = 1, y++) : m++) months.push(y + "-" + String(m).padStart(2, "0") + "-01");
+    let recv: any, pay: any, tie: any, bal: any[];
+    try {
+      [recv, pay, tie, bal] = await Promise.all([
+        rpc("tally_ageing", { p_client: client, p_as_on: iso(to), p_side: "r" }, jwt),
+        rpc("tally_ageing", { p_client: client, p_as_on: iso(to), p_side: "p" }, jwt),
+        rpc("tally_tieout", { p_client: client, p_months: months }, jwt),
+        rpc("tally_balances_at", { p_book: kept.book, p_dates: [iso(to)] }, jwt)]);
+    } catch (e) { return [500, { ok: false, error: "the figures could not be worked out: " + String((e as Error).message || e).slice(0, 200) }]; }
+    const last = (tie && tie.months && tie.months[months[months.length - 1]]) || {};
+    const at: Record<string, number> = {};
+    for (const r of bal || []) at[r.ledger] = Number(r.bal);
+    const result = {
+      v: 1, kind: "mis-now", partial: true, parts: NOW_PARTS, later: NOW_LATER, from, to, book: kept.book, version: kept.version, at: now().toISOString(),
+      recv, pay, tieout: tie && tie.months || {},
+      // the headline owed to you and by you: the ledger balances (Parties.position, as MIS.runNow's r.owed)
+      owed: last.receivables == null ? null : { r: last.receivables, p: last.payables, custAdv: (recv && recv.sum && recv.sum.advance) || 0, supAdv: (pay && pay.sum && pay.sum.advance) || 0 },
+      balances: { asOn: to, at },
+    };
+    const ms = Date.now() - t0;
+    await rpc("tally_calc_put", { p_book: kept.book, p_kind: "mis-now", p_args: args, p_version: kept.version, p_result: result, p_ms: ms }).catch(() => null);
+    return [200, { ok: true, kept: false, ms, result }];
+  }
+
   return async (req: Request): Promise<Response> => {
     const cors = corsFor(req);
     const reply = (code: number, body: unknown) => new Response(JSON.stringify(body), { status: code, headers: { ...cors, "Content-Type": "application/json" } });
@@ -126,6 +179,7 @@ export function handler(deps: Deps) {
       }
       return reply(200, { ok: true, runs: out });
     }
+    if (action === "now") return reply(...(await misNow(body, jwt)));
     if (action !== "run") return reply(400, { ok: false, error: "Unknown action." });
     if (!jwt || jwt === ANON || jwt === SERVICE) return reply(401, { ok: false, kind: "auth", error: "Sign in to the firm account first." });
     let user: any;
