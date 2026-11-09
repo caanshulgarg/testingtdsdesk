@@ -6,3 +6,8 @@ branch tally-batch249, bridge next-bridge-249 f447764ca), TallyPrime 7.1 and 3.0
 B5 of each of 18 days) and FinComVoucherObject's answer of each entry, on the test companies the harness makes in
 Educational mode (tdsgst masters and entries, TDS challan payments, payg payroll with salary payments per employee,
 stock journals). Test data only; no client's books.
+
+b4-range-2512.xml, b4-list-2512.xml (FinCom Bridge 2.5.12, the owner's approval of 09-Nov-2026): b4-range.xml / b4-list.xml
+with exactly four fields added to the FETCH (a ledger line's stock items: ALLLEDGERENTRIES.INVENTORYALLOCATIONS.
+STOCKITEMNAME, BILLEDQTY, RATE, AMOUNT after the payroll's fields, and their LEDGERENTRIES copies at the end); built from
+the 2.4.9 files, not a capture (TestR2512FetchIs249PlusItems). Not yet measured on real TallyPrime.

@@ -61,6 +61,7 @@ func batchFetchFields() []string {
 	all = append(all, liveKeepTDS243...)
 	all = append(all, liveKeepPay244...)
 	all = append(all, batchPayrollFields...)
+	all = append(all, liveKeepInv2512...) // 2.5.12 (the owner's approval of 09-Nov-2026): a ledger line's stock items
 	seen := map[string]bool{}
 	var o []string
 	for _, f := range all {
@@ -80,8 +81,10 @@ func batchFetchFields() []string {
 
 var batchFetchText = strings.Join(batchFetchFields(), ", ")
 
-// 2.4.9 review R1-11 / S-5: the approved FETCH, frozen (the text of testdata/batch249/b4-range.xml)
-const batchFetchSHA = "cd914d4c22caf66ab493da5a734baf236609f998a3cbbc7ab1f972d6d0f54280"
+// 2.4.9 review R1-11 / S-5: the approved FETCH, frozen. 2.5.12 (the owner's approval of 09-Nov-2026): 2.4.9's text
+// (testdata/batch249/b4-range.xml, cd914d4c22ca...) with exactly liveKeepInv2512's four fields after the payroll's and
+// their four LEDGERENTRIES copies at the end (testdata/batch249/b4-range-2512.xml; TestR2512FetchIs249PlusItems)
+const batchFetchSHA = "0896778656aff4de7ec76a97c37ccc427783790b2cbf5fc377c1b6777cec0dfe"
 
 func batchFetchOK() bool {
 	s := sha256.Sum256([]byte(batchFetchText))
@@ -578,7 +581,7 @@ func pullBatchStep(w *pullWork, port int) (handled, sent, more bool) {
 			writeLog(fmt.Sprintf("Older entries of %s: the entry with MasterID %s is no longer the one %s's list named; not sent (the day is counted again)", it.Company, m, liveDay(it.Day)))
 			continue
 		}
-		w.got = append(w.got, x)
+		pullKeep(w, m, x) // 2.5.12: one larger than FinCom takes is held alone (daypull.go)
 	}
 	var rest []string
 	for _, m := range w.want {

@@ -477,10 +477,10 @@ func newStandTally(t *testing.T) *standTally {
 				}
 			}
 		case "FinComDayHeads": // 2.4.5: one day's entry heads, as a real TallyPrime writes them (testdata/r245); F2: one type
-			day, _ := pinDates(body)
+			day, last := pinDates(body) // 2.5.12: or a range of days (range2512.go)
 			typ := pinQuoted(body, "$VoucherTypeName")
 			for _, v := range f.vch {
-				if (v.date == day || f.headsAllDays) && (typ == "" || v.typ == typ) {
+				if ((v.date >= day && v.date <= last) || f.headsAllDays) && (typ == "" || v.typ == typ) {
 					fmt.Fprintf(&o, `<VOUCHER REMOTEID="%s" VCHKEY="%s-0000b4b8:00000008" VCHTYPE="%s" OBJVIEW="Accounting Voucher View"><DATE TYPE="Date">%s</DATE><GUID>%s</GUID><REQUESTORRULE/><VOUCHERTYPENAME>%s</VOUCHERTYPENAME><VOUCHERNUMBER>%s</VOUCHERNUMBER><ALTERID TYPE="Number"> %d</ALTERID><MASTERID TYPE="Number"> %s</MASTERID></VOUCHER>`,
 						v.guid, v.guid, esc(v.typ), v.date, v.guid, esc(v.typ), esc(v.no), v.alter, v.master)
 				}

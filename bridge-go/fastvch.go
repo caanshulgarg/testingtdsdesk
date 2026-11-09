@@ -118,6 +118,22 @@ var liveKeepTDS243 = []string{
 // PAYMENTFAVOURING (bank details: fastNeverPay244)
 var liveKeepPay244 = []string{"ALLLEDGERENTRIES.BANKALLOCATIONS.BANKEMPLOYEENAME", "ALLLEDGERENTRIES.BANKALLOCATIONS.AMOUNT"}
 
+// 2.5.12 (the owner's approval of 09-Nov-2026): a sale entered in voucher mode (Accounting Invoice) keeps its stock items
+// under the sales ledger's line (ALLLEDGERENTRIES.LIST > INVENTORYALLOCATIONS.LIST), not in ALLINVENTORYENTRIES. Before
+// 2.5.12 the strip held every such entry (a stock item at a place it did not keep) and the older-entries read marked its
+// whole day to be uploaded by hand (on one book 62 days of 223). The item lines are kept now, as the items of an item
+// invoice are (ALLINVENTORYENTRIES: the stock item, billed quantity, rate and amount; no godown or batch, which no list
+// keeps), each inside its ledger line and written after that line's own fields (fastEmit), so the line's own AMOUNT stays
+// the first one a reader meets in it (parse.js one(e, "AMOUNT")). Written into FinComVoucherBatch's FETCH (and so
+// FinComVoucherWindow's: one frozen text), with the LEDGERENTRIES copy as every ALLLEDGERENTRIES field; NOT into
+// FinComVoucherObject's FETCHLIST (Tally ignores it and sends the whole voucher: that request stays byte for byte as
+// measured, shape ce0e72f74e72). An entry without such lines carries nothing more: Tally gives the fields only where the
+// list is filled, and the strip drops an empty list
+var liveKeepInv2512 = []string{
+	"ALLLEDGERENTRIES.INVENTORYALLOCATIONS.STOCKITEMNAME", "ALLLEDGERENTRIES.INVENTORYALLOCATIONS.BILLEDQTY",
+	"ALLLEDGERENTRIES.INVENTORYALLOCATIONS.RATE", "ALLLEDGERENTRIES.INVENTORYALLOCATIONS.AMOUNT",
+}
+
 // never kept, whatever list approves (the owner's decision of 12-Oct-2026, items 3 and 5)
 var fastNeverPay244 = map[string]bool{"ALLLEDGERENTRIES.BANKALLOCATIONS.ACCOUNTNUMBER": true, "ALLLEDGERENTRIES.BANKALLOCATIONS.IFSCODE": true,
 	"ALLLEDGERENTRIES.BANKALLOCATIONS.PAYMENTFAVOURING": true}
@@ -145,6 +161,9 @@ func fastApprovedPaths() map[string]bool {
 		m[f] = true
 	}
 	for _, f := range liveKeepPay244 {
+		m[f] = true
+	}
+	for _, f := range liveKeepInv2512 {
 		m[f] = true
 	}
 	return m
@@ -328,8 +347,9 @@ func fastStripVoucher(v string) string {
 }
 
 // 2.3.4 (the independent review, L1 and L2): the names of a voucher's lines FinCom stores (a ledger line, an item, a pay
-// head). One of them, filled, at a place the strip does not keep (a stock item under a ledger line: voucher mode; a stock
-// journal's lines in and out are the exception below; items in INVENTORYENTRIES; pay heads by employee; ledger lines in
+// head). One of them, filled, at a place the strip does not keep (2.5.12: a stock item under a ledger line, voucher mode,
+// is kept now: liveKeepInv2512; a stock journal's lines in and out are the exception below; items in INVENTORYENTRIES;
+// pay heads by employee; ledger lines in
 // both LEDGERENTRIES and ALLLEDGERENTRIES) would be dropped, the body sent short and its stored rows marked gone (migration 57): such a voucher
 // is held instead ("" and the place, in plain words)
 var fastLineNames = map[string]bool{"LEDGERNAME": true, "STOCKITEMNAME": true, "PAYHEADNAME": true}
@@ -351,6 +371,13 @@ func fastStrip(v string, hold bool) (string, string) {
 		return "", ""
 	}
 	ok := fastApprovedPaths()
+	// 2.5.12: a ledger line's stock items are kept only in an entry with no item of its own (voucher mode); an entry with
+	// items (an item invoice, a collection's answer that lists them) strips exactly as in 2.5.11 (a collection's sales
+	// line repeats the items there: never kept twice; a stock item under a ledger line beside items: held, as before)
+	withItems := fastHasItems(root)
+	if withItems {
+		ok = fastOKNoInv(ok)
+	}
 	hasAll := false
 	for _, k := range root.kids {
 		if k.name == "ALLLEDGERENTRIES.LIST" {
@@ -448,7 +475,7 @@ func fastStrip(v string, hold bool) (string, string) {
 		}
 	}
 	payOK := len(heads) > 0 && !payBad
-	ok0 := fastApprovedPaths()
+	ok0 := ok
 	var lost string
 	var walk func(e *fastEl, prefix string)
 	walk = func(e *fastEl, prefix string) {
@@ -518,8 +545,82 @@ func fastStrip(v string, hold bool) (string, string) {
 		}
 		fastEmit(&b, k, name, "", ok)
 	}
+	if !withItems {
+		fastVoucherModeItems(&b, root, hasAll, childText)
+	}
 	b.WriteString("</VOUCHER>")
 	return b.String(), ""
+}
+
+// 2.5.12: a voucher-mode entry's stock items (a ledger line's INVENTORYALLOCATIONS) also written as the entry's items,
+// as Tally's own Voucher collection gives them (FinComVoucherByMaster, the entry request up to 2.3.3, and
+// FinComVoucherBatch: testdata/fast234kinds/*/sales-voucher-mode-items-bymaster.xml.gz): one ALLINVENTORYENTRIES.LIST
+// a stock item, its name, rate, amount and billed quantity, and under it the ledger line it sits in
+// (ACCOUNTINGALLOCATIONS: the ledger's name, its ISDEEMEDPOSITIVE, the item's amount). So FinCom stores the entry's
+// items exactly as it stored them from that request (tests/run_parse_fast234_kinds.mjs: parse.js's output the same,
+// field by field, on 3.0 .. 7.1). Only approved fields; only for an entry with no item of its own (a group's answer
+// already carries Tally's: never twice); every other entry is written exactly as before
+func fastVoucherModeItems(b *strings.Builder, root *fastEl, hasAll bool, childText func(*fastEl, string) string) {
+	keep := map[string]bool{"STOCKITEMNAME": true, "RATE": true, "AMOUNT": true, "BILLEDQTY": true}
+	for _, k := range root.kids {
+		if k.name != "ALLLEDGERENTRIES.LIST" && !(k.name == "LEDGERENTRIES.LIST" && !hasAll) {
+			continue
+		}
+		led, pos := childText(k, "LEDGERNAME"), childText(k, "ISDEEMEDPOSITIVE")
+		if strings.TrimSpace(led) == "" {
+			continue
+		}
+		for _, a := range k.kids {
+			if a.name != "INVENTORYALLOCATIONS.LIST" || strings.TrimSpace(childText(a, "STOCKITEMNAME")) == "" {
+				continue
+			}
+			b.WriteString("<ALLINVENTORYENTRIES.LIST>")
+			amt := ""
+			for _, f := range a.kids {
+				if !f.hasKids && keep[f.name] {
+					b.WriteString("<" + f.name + ">" + f.text + "</" + f.name + ">")
+					if f.name == "AMOUNT" && amt == "" {
+						amt = f.text
+					}
+				}
+			}
+			b.WriteString("<ACCOUNTINGALLOCATIONS.LIST><LEDGERNAME>" + led + "</LEDGERNAME>")
+			if pos != "" {
+				b.WriteString("<ISDEEMEDPOSITIVE>" + pos + "</ISDEEMEDPOSITIVE>")
+			}
+			if amt != "" {
+				b.WriteString("<AMOUNT>" + amt + "</AMOUNT>")
+			}
+			b.WriteString("</ACCOUNTINGALLOCATIONS.LIST></ALLINVENTORYENTRIES.LIST>")
+		}
+	}
+}
+
+// 2.5.12: the entry has an item of its own (an ALLINVENTORYENTRIES list naming a stock item)
+func fastHasItems(root *fastEl) bool {
+	for _, k := range root.kids {
+		if k.name != "ALLINVENTORYENTRIES.LIST" {
+			continue
+		}
+		for _, q := range k.kids {
+			if q.name == "STOCKITEMNAME" && !q.hasKids && strings.TrimSpace(q.text) != "" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// the approved paths without 2.5.12's (an entry with items of its own)
+func fastOKNoInv(ok map[string]bool) map[string]bool {
+	m := make(map[string]bool, len(ok))
+	for k, v := range ok {
+		m[k] = v
+	}
+	for _, f := range liveKeepInv2512 {
+		delete(m, f)
+	}
+	return m
 }
 
 // 2.3.4: an entry Tally keeps in a form the strip cannot keep whole (fastStripWhy): held, never sent short, never taken
@@ -547,7 +648,18 @@ func fastEmit(b *strings.Builder, e *fastEl, name, prefix string, ok map[string]
 		if p == "ALLLEDGERENTRIES.BANKALLOCATIONS" && !fastNamesEmployee(e) {
 			ok2 = fastOKNoPay(ok)
 		}
+		// 2.5.12: a ledger line's stock items (voucher mode) after the line's own fields (liveKeepInv2512)
+		var late []*fastEl
 		for _, k := range e.kids {
+			if p == "ALLLEDGERENTRIES" && k.name == "INVENTORYALLOCATIONS.LIST" {
+				late = append(late, k)
+				continue
+			}
+			if fastEmit(&kb, k, k.name, p, ok2) {
+				any = true
+			}
+		}
+		for _, k := range late {
 			if fastEmit(&kb, k, k.name, p, ok2) {
 				any = true
 			}

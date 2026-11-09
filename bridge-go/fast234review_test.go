@@ -125,14 +125,23 @@ func TestFast234StripHoldsUnreadShapes(t *testing.T) {
 	head := `<VOUCHER REMOTEID="g-1" VCHTYPE="X"><MASTERID>5</MASTERID><DATE>20261005</DATE>`
 	item := `<STOCKITEMNAME>Item T03</STOCKITEMNAME><AMOUNT>300.00</AMOUNT>`
 	for name, body := range map[string]string{
-		"voucher mode":        `<ALLLEDGERENTRIES.LIST><LEDGERNAME>Sales</LEDGERNAME><AMOUNT>300.00</AMOUNT><INVENTORYALLOCATIONS.LIST>` + item + `</INVENTORYALLOCATIONS.LIST></ALLLEDGERENTRIES.LIST>`,
-		"voucher mode mapped": `<LEDGERENTRIES.LIST><LEDGERNAME>Sales</LEDGERNAME><AMOUNT>300.00</AMOUNT><INVENTORYALLOCATIONS.LIST>` + item + `</INVENTORYALLOCATIONS.LIST></LEDGERENTRIES.LIST>`,
-		"inventory entries":   `<INVENTORYENTRIES.LIST>` + item + `</INVENTORYENTRIES.LIST>`,
+		"inventory entries": `<INVENTORYENTRIES.LIST>` + item + `</INVENTORYENTRIES.LIST>`,
 	} {
 		v := head + body + `</VOUCHER>`
 		got, why := fastStripWhy(v)
 		if got != "" || why == "" || fastStripVoucher(v) != "" {
 			t.Fatalf("%s: not held (%q):\n%s", name, why, got)
+		}
+	}
+	// 2.5.12 (the owner's approval of 09-Nov-2026): voucher mode (a stock item under a ledger line) is read, not held
+	// (r2512_test.go)
+	for name, body := range map[string]string{
+		"voucher mode":        `<ALLLEDGERENTRIES.LIST><LEDGERNAME>Sales</LEDGERNAME><AMOUNT>300.00</AMOUNT><INVENTORYALLOCATIONS.LIST>` + item + `</INVENTORYALLOCATIONS.LIST></ALLLEDGERENTRIES.LIST>`,
+		"voucher mode mapped": `<LEDGERENTRIES.LIST><LEDGERNAME>Sales</LEDGERNAME><AMOUNT>300.00</AMOUNT><INVENTORYALLOCATIONS.LIST>` + item + `</INVENTORYALLOCATIONS.LIST></LEDGERENTRIES.LIST>`,
+	} {
+		v := head + body + `</VOUCHER>`
+		if got, why := fastStripWhy(v); why != "" || !strings.Contains(got, "<INVENTORYALLOCATIONS.LIST>"+item+"</INVENTORYALLOCATIONS.LIST>") {
+			t.Fatalf("%s: held (%q):\n%s", name, why, got)
 		}
 	}
 	// pay heads by employee (the second review's L1, 08-Oct-2026): no longer held; each pay head's total written as a
@@ -165,13 +174,14 @@ func TestFast234StripHoldsUnreadShapes(t *testing.T) {
 func TestFast234UnreadShapeHeld(t *testing.T) {
 	p, f, c := r222bBridge(t, `,"RecorderResolveSec":0`)
 	v := r222Vch(f, 25795, "Sales", "SV-1", "20261005", 54595)
-	v.extra = `<ALLLEDGERENTRIES.LIST><LEDGERNAME>Sales</LEDGERNAME><AMOUNT>300.00</AMOUNT><INVENTORYALLOCATIONS.LIST><STOCKITEMNAME>Item T03</STOCKITEMNAME><AMOUNT>300.00</AMOUNT></INVENTORYALLOCATIONS.LIST></ALLLEDGERENTRIES.LIST>`
+	// (2.5.12: voucher mode is read now; items in INVENTORYENTRIES are still a form no list keeps)
+	v.extra = `<INVENTORYENTRIES.LIST><STOCKITEMNAME>Item T03</STOCKITEMNAME><AMOUNT>300.00</AMOUNT></INVENTORYENTRIES.LIST>`
 	liveAppend(t, p, r222Line("voucher_accept_pre", "07:25", nwsGUID+"-00000000", "0", "0", "Sales", "SV-1", "5-Oct-2026", "vm"),
 		r222Line("voucher_accept_post", "07:25", nwsGUID+"-00000000", "25795", "0", "Sales", "SV-1", "5-Oct-2026", "vm"))
 	readAndUploadAll(t)
 	fastTurns(3)
 	s := c.recSent()
-	if len(s) != 1 || str(s[0]["xml"]) != "" || !strings.Contains(str(s[0]["heldWhy"]), "INVENTORYALLOCATIONS") ||
+	if len(s) != 1 || str(s[0]["xml"]) != "" || !strings.Contains(str(s[0]["heldWhy"]), "INVENTORYENTRIES") ||
 		!strings.Contains(str(s[0]["heldWhy"]), "upload that day's Day Book to settle it") {
 		t.Fatalf("sent: %v", s)
 	}
@@ -287,14 +297,11 @@ func TestFast234KindsStrip(t *testing.T) {
 			t.Fatalf("%s: no voucher", f)
 		}
 		s, why := fastStripWhy(cleanXML(vs[0]))
-		kind := strings.TrimSuffix(filepath.Base(f), "-object.xml.gz")
 		out := strings.TrimSuffix(f, "-object.xml.gz") + "-object-stripped.xml"
 		if why != "" {
 			s = "HELD: " + why
 			held++
-			if kind != "sales-voucher-mode-items" {
-				t.Errorf("%s: held (%s)", f, why)
-			}
+			t.Errorf("%s: held (%s)", f, why) // 2.5.12: the voucher-mode invoice is read too (liveKeepInv2512)
 		} else {
 			for _, p := range fastLeafPaths(s) {
 				if !fastPathOK(ok, p) {
@@ -312,7 +319,7 @@ func TestFast234KindsStrip(t *testing.T) {
 		}
 		n++
 	}
-	if n < 100 || held != 5 {
-		t.Fatalf("%d answers, %d held (want every release's voucher-mode invoice held, 5)", n, held)
+	if n < 100 || held != 0 {
+		t.Fatalf("%d answers, %d held (2.5.12: none, the voucher-mode invoice read on every release)", n, held)
 	}
 }

@@ -429,7 +429,7 @@ func TestR2511Versions(t *testing.T) {
 			t.Fatal(c)
 		}
 	}
-	if BridgeVersion != "2.5.11" || !newerVersion(BridgeVersion, "2.5.10") {
+	if !newerVersion(BridgeVersion, "2.5.10") { // 2.5.12: the version itself in r2512_test.go
 		t.Fatalf("version %s", BridgeVersion)
 	}
 }

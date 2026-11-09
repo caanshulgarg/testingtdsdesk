@@ -33,11 +33,13 @@ func midList(from, n int64) []string {
 
 // 1. the request is byte for byte the one measured and approved (run 40750991113's capture, the same on 3.0 .. 7.1)
 func TestR249RequestAsApproved(t *testing.T) {
-	if got, want := voucherBatchRangeRequest("@@CO@@", "20991231", 111111, 222222), batchTD(t, "b4-range.xml"); got != want {
+	// 2.5.12 (the owner's approval of 09-Nov-2026): 2.4.9's measured request with the four fields of a ledger line's stock
+	// items (TestR2512FetchIs249PlusItems: exactly b4-range.xml's text with them)
+	if got, want := voucherBatchRangeRequest("@@CO@@", "20991231", 111111, 222222), batchTD(t, "b4-range-2512.xml"); got != want {
 		t.Fatalf("the range form is not the approved request:\n%s\nwant\n%s", got, want)
 	}
 	mids := []string{"15", "17", "20"}
-	want := strings.Replace(batchTD(t, "b4-list.xml"), "@@MIDS@@", "$MasterID = 15 OR $MasterID = 17 OR $MasterID = 20", 1)
+	want := strings.Replace(batchTD(t, "b4-list-2512.xml"), "@@MIDS@@", "$MasterID = 15 OR $MasterID = 17 OR $MasterID = 20", 1)
 	if got := voucherBatchListRequest("@@CO@@", "20991231", mids); got != want {
 		t.Fatalf("the list form is not the approved request:\n%s\nwant\n%s", got, want)
 	}
@@ -61,8 +63,8 @@ func TestR249RequestAsApproved(t *testing.T) {
 			t.Errorf("a field FinComVoucherObject does not keep: %s", f)
 		}
 	}
-	if len(fs) != 174 {
-		t.Errorf("%d fields, measured with 174", len(fs))
+	if len(fs) != 174+2*len(liveKeepInv2512) { // 2.5.12: four fields and their LEDGERENTRIES copies (r2512_test.go)
+		t.Errorf("%d fields, measured with 174 (2.5.12: and 8)", len(fs))
 	}
 	// refused: no day, b below a, no MasterID, more than 100 listed, a MasterID twice or with a leading zero
 	for _, bad := range []string{voucherBatchRangeRequest("C", "2026083", 1, 2), voucherBatchRangeRequest("C", "20260831", 9, 5), voucherBatchRangeRequest("C", "20260831", 0, 5),
@@ -448,7 +450,7 @@ func allowRowsBefore249() string {
 // 2.4.9: the version; one request added (FinComVoucherBatch: the table changed by that row only); the decision line names
 // 2.4.9 by the owner's decision of 2026-10-29 with the measured times, 2.4.8's kept as history; the dated line; the sheet
 func TestR249VersionAllowList(t *testing.T) {
-	if BridgeVersion != "2.5.11" { // 2.5.11 (r2511_test.go); 2.5.10 (r2510pick_test.go); 2.5.9 (fastmeasure_test.go); 2.5.8 (nocompany258_test.go); 2.5.7 (fastentries_test.go); 2.5.6 (firstread_test.go); 2.5.5 (ledgers255_test.go, loginport255_test.go); 2.5.4 (r254_test.go); 2.5.3 (r253owntally_test.go); 2.5.2 (stock251_test.go); 2.5.1 (r251openings_test.go); 2.5.0 (r250dated_test.go): kept as history
+	if BridgeVersion != "2.5.12" { // 2.5.12 (r2512_test.go); 2.5.11 (r2511_test.go); 2.5.10 (r2510pick_test.go); 2.5.9 (fastmeasure_test.go); 2.5.8 (nocompany258_test.go); 2.5.7 (fastentries_test.go); 2.5.6 (firstread_test.go); 2.5.5 (ledgers255_test.go, loginport255_test.go); 2.5.4 (r254_test.go); 2.5.3 (r253owntally_test.go); 2.5.2 (stock251_test.go); 2.5.1 (r251openings_test.go); 2.5.0 (r250dated_test.go): kept as history
 		t.Fatalf("BridgeVersion %s", BridgeVersion)
 	}
 	if h := allowListHash(allowRowsBefore249()); h != "b4df290484f57e3cba053d16cc29f68209eda6a1f087c3c4a1616e69886e9391" {
@@ -460,7 +462,7 @@ func TestR249VersionAllowList(t *testing.T) {
 	}
 	al := readText(filepath.Join("..", "docs", "tally-allowlist.md"))
 	line := group(`(?m)^(First table: .*)$`, al, 1)
-	for _, w := range []string{"as for 2.4.9: the owner's decision of 2026-10-29", "FinComVoucherBatch (shape " + shapeOf(allowListSamples()[vchBatchID]) + ")",
+	for _, w := range []string{"as for 2.4.9: the owner's decision of 2026-10-29", "FinComVoucherBatch (shape 97496818a7d8)", // (2.4.9's shape; 2.5.12's in r2512_test.go)
 		"0.95 s worst", "1.41 s", "as for 2.4.8: the owner's standing decision of 2026-10-06"} {
 		if !strings.Contains(line, w) {
 			t.Errorf("the decision line does not say %q", w)
