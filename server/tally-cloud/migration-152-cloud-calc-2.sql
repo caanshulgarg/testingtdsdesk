@@ -29,14 +29,17 @@
 --                                         TDS payable rolled from the opening (MIS.tdsPayable)
 --   tally_calc_msme(book, to)             MIS.runNow's r.msme: micro and small suppliers' bills left past the days set
 --                                         (MIS.msme from "ledInfo" and "msme", MIS.cfg's msmeDays from "misCfg")
---   tally_calc_control(book, from, to, today)  MIS.runNow's r.control: only for the books' whole span to the day they
---                                         were read (b.tb.from / b.tb.to), each ledger's movement against Tally's own
+--   tally_calc_control(book, from, to, today)  MIS.runNow's r.control: none on the cloud copy (the browser skips the check
+--                                         when its balances are the copy, tb.src "copy": next-mis-speed b33f4a180)
 --   tally_calc_mis(book, part, from, to, today)  one part of MIS.runNow: sales, purchases, pl, prev, ly (with their
 --                                         ranges), tops (mtd, ytd), cash, comp, msme, control
 --   tally_mis_part(client, part, from, to, today)  the same for a member: the book for the period of its own firm only
 -- Adds only: new functions. No table, no index (tally_vouchers (book_id, guid), tally_lines (book_id, guid),
--- tally_ledger_day (book_id, ledger, day) and (book_id, day) are there). Safe to run twice. Nothing of 151 is changed;
--- it needs 151 as revised (tally_calc_led with the group walk and deleted ledgers left out, tally_calc_ageing_bal).
+-- tally_ledger_day (book_id, ledger, day) and (book_id, day) are there). Safe to run twice. Built on 151 exactly as applied
+-- on staging (516eb301c). Three of 151's functions are made again with the same signatures, grants and search_path
+-- (create or replace): tally_calc_nclean and tally_calc_nkey, as server/_shared/names.js (the final review of 151:
+-- every numeric entity, JavaScript's white space), and tally_calc_version (CALC_V 152.1 for the names, and the work
+-- 152's parts read, so no kept answer outlives a change to it). Nothing else of 151 changes.
 -- Each function sets jit off (on a plan the planner costs high, JIT compiling took half a second before the first row on
 -- 10,000 ledgers), the heavy ones work_mem 32MB (the period's lines sorted in memory), and the line reader no nested
 -- loop (the planner, not knowing the period, guessed a few hundred entries for 40,000). Every part takes under 1 s on
@@ -44,6 +47,98 @@
 
 begin;
 set local lock_timeout = '10s';
+
+-- ---------------------------------------------------------------- names, as server/_shared/names.js has them (151 replaced)
+-- The final review of 151 (applied on staging as 516eb301c): its tally_calc_nclean decoded only some entities and trimmed
+-- spaces only. Replaced here with the same signature, the same grants and the same search_path, as names.js does it:
+--   namesDecode: every numeric entity, also escaped twice (&(amp;)?#(x[0-9a-f]+|\d+);, in one pass): 13 and 10 a line
+--     break, 9 and 160 a space, any other code below 32 (and none Unicode can hold, or half of a UTF-16 pair) a space,
+--     the rest the character itself ("ABC&#4;Ltd" -> "ABC Ltd", "Tom &#38; Jerry", "O&#39;Brien", "a&#x26;b"); then the
+--     named ones (amp, lt, gt, quot, apos, nbsp; also escaped twice), in one pass
+--   namesBreaks: each run of line breaks (raw, or &#13; &#10;) with the spaces and tabs around it one space; the ends
+--     trimmed as JavaScript's trim (tab, line breaks, vertical tab, form feed, space, U+00A0, U+1680, U+2000-U+200A,
+--     U+2028, U+2029, U+202F, U+205F, U+3000, U+FEFF)
+--   namesKey: namesClean, every run of that white space one space, trimmed, lower case (locale-free, as toLowerCase)
+-- So a group's parent "&#4; Primary" is "Primary" once cleaned and tally_calc_led's ^\W*Primary$ finds it there (its walk
+-- keeps a name with & that is no group cleaned). The data version is raised with it (tally_calc_version, below).
+create or replace function public.tally_calc_nclean(p text)
+returns text language plpgsql immutable set search_path to 'public', 'pg_temp' as $function$
+declare
+  s text := coalesce(p, ''); o text; i int; m text[]; c bigint; d text; r text;
+  ws constant text := '[\t\n\v\f\r    -     　﻿]';
+begin
+  if s ~ '[&\r\n]' then
+    -- numeric entities, in one pass (what one gives is not looked at again)
+    o := '';
+    loop
+      i := regexp_instr(s, '&(amp;)?#(x[0-9a-f]+|[0-9]+);', 1, 1, 0, 'i');
+      exit when i = 0;
+      m := regexp_match(substr(s, i), '^&(amp;)?#(x[0-9a-f]+|[0-9]+);', 'i');
+      d := m[2];
+      if lower(left(d, 1)) = 'x' then d := ltrim(substr(d, 2), '0'); c := case when d = '' then 0 when length(d) > 8 then 99999999 else ('x' || lpad(d, 16, '0'))::bit(64)::bigint end;
+      else d := ltrim(d, '0'); c := case when d = '' then 0 when length(d) > 9 then 99999999 else d::bigint end; end if;
+      r := case when c in (13, 10) then E'\n' when c in (9, 160) then ' ' when c >= 32 and c < 1114112 and not (c between 55296 and 57343) then chr(c::int) else ' ' end;
+      o := o || left(s, i - 1) || r;
+      s := substr(s, i + length('&' || coalesce(m[1], '') || '#' || m[2] || ';'));
+    end loop;
+    s := o || s;
+    -- the named ones, in one pass
+    o := '';
+    loop
+      i := regexp_instr(s, '&(amp;)?(amp|lt|gt|quot|apos|nbsp);', 1, 1, 0, 'i');
+      exit when i = 0;
+      m := regexp_match(substr(s, i), '^&(amp;)?(amp|lt|gt|quot|apos|nbsp);', 'i');
+      r := case lower(m[2]) when 'amp' then '&' when 'lt' then '<' when 'gt' then '>' when 'quot' then '"' when 'apos' then '''' else ' ' end;
+      o := o || left(s, i - 1) || r;
+      s := substr(s, i + length('&' || coalesce(m[1], '') || m[2] || ';'));
+    end loop;
+    s := o || s;
+  end if;
+  -- namesBreaks, then JavaScript's trim
+  s := regexp_replace(s, '[ \t]*(&#13;|&#10;|\r|\n)+[ \t]*', ' ', 'g');
+  return regexp_replace(s, '^' || ws || '+|' || ws || '+$', '', 'g');
+end $function$;
+
+create or replace function public.tally_calc_nkey(p text)
+returns text language sql immutable set search_path to 'public', 'pg_temp' as $function$
+  select lower(regexp_replace(regexp_replace(tally_calc_nclean(p), '[\t\n\v\f\r    -     　﻿]+', ' ', 'g'), '^ | $', '', 'g') collate "und-x-icu")
+$function$;
+
+revoke all on function public.tally_calc_nclean(text) from public, anon, authenticated;
+revoke all on function public.tally_calc_nkey(text) from public, anon, authenticated;
+grant execute on function public.tally_calc_nclean(text) to service_role;
+grant execute on function public.tally_calc_nkey(text) to service_role;
+
+-- ---------------------------------------------------------------- the data version (151's, replaced: the same signature)
+-- 151's version with FinCom's working raised (CALC_V 152.1: the names above; nothing kept under 151.3 is served after
+-- them), and with what 152's parts read besides the entries and the ledger list, so an answer kept with them is worked
+-- out again when one changes: FinCom's work kept for the client (client_book_items ledInfo and msme: the MSME types; fs:
+-- the accounts' line chosen by hand and the manufacturing switch; misCfg: the MSME days; challans) and the client's
+-- choices (clients.data -> choices: a ledger marked Loan given)
+create or replace function public.tally_calc_version(p_book uuid)
+returns text language sql stable security definer set search_path to 'public', 'pg_temp' as $function$
+  -- every part in its place: a part with no value is the marker ~ (concat_ws would drop it and shift the rest)
+  select md5(array_to_string(array['CALC_V=152.1', b.days_at::text, b.ledgers_at::text, b.from_date::text,
+           (select array_to_string(array[count(*), max(v.alter_id), count(v.deleted_at), count(*) filter (where v.cancelled), count(*) filter (where v.optional)]::text[] || max(v.deleted_at)::text, ':', '~')
+              from tally_vouchers v where v.book_id = b.book_id),
+           (select array_to_string(array[count(*), sum(hashtext(array_to_string(array[l.name, l.parent, l.open::text, l.chain::text, l.primary_group, l.merged_into, (l.deleted_at is null)::text], '~', '^'))::bigint)]::text[], ':', '~')
+              from tally_ledgers l where l.book_id = b.book_id),
+           (select array_to_string(array[count(*), sum(hashtext(g.name || '~' || coalesce(g.parent, '^'))::bigint)]::text[], ':', '~') from tally_groups g where g.book_id = b.book_id),
+           (select array_to_string(array[count(*), sum(hashtext(d.ledger)::numeric * d.amount)]::text[], ':', '~') from tally_ledger_day d where d.book_id = b.book_id and d.merged_into is null),
+           (select array_to_string(array[count(*), sum(hashtext(x.ledger || '|' || coalesce(x.name, '') || '|' || coalesce(x.type, ''))::numeric * x.amount + coalesce(x.credit_days, 0))]::text[], ':', '~')
+              from tally_bills x where x.book_id = b.book_id),
+           (select array_to_string(array[count(*)::text, max(i.seq)::text, max(i.updated_at)::text], ':', '~') from client_book_items i
+             where i.firm_id = b.firm_id and i.client_id = b.client_id and i.key = 'map'),
+           -- 152: the work its parts read, each a count, the highest change and an order-free sum of row hashes
+           (select array_to_string(array[count(*)::text, max(i.seq)::text, max(i.updated_at)::text,
+                     sum(hashtext(i.key || '~' || i.item || '~' || coalesce(i.data::text, '^') || '~' || i.deleted::text)::bigint)::text], ':', '~') from client_book_items i
+             where i.firm_id = b.firm_id and i.client_id = b.client_id and i.key in ('ledInfo', 'msme', 'fs', 'misCfg', 'challans')),
+           (select coalesce(md5((c.data -> 'choices')::text), '^') from clients c where c.firm_id = b.firm_id and c.id::text = b.client_id)], '|', '~'))
+    from tally_books b where b.book_id = p_book;
+$function$;
+
+revoke all on function public.tally_calc_version(uuid) from public, anon, authenticated;
+grant execute on function public.tally_calc_version(uuid) to service_role;
 
 -- ---------------------------------------------------------------- small helpers, the browser's own arithmetic
 -- MIS.shift(d, years, days): a year on with JavaScript's Date (29 February to 1 March in a year that has none)
@@ -626,22 +721,15 @@ begin
 end $function$;
 
 -- ---------------------------------------------------------------- the control against Tally's balances (r.control)
--- Only when the period is the span Tally's balances were read for (b.tb: the books' first day to the day the books were
--- brought in, p_today). The copy carries no closing balance (TCloud.load reads close as ""), so each ledger's closing is
--- nought there, as in the browser
+-- MIS.runNow (src/js/07-mis.js as of next-mis-speed b33f4a180): the control is worked out only on Tally's own closing
+-- balances (the bridge's trial balance read, a trial balance file). FinCom's cloud copy has openings only (tally_ledgers
+-- has no closing) or closings FinCom worked out itself, and the browser marks its balances tb.src "copy" and skips the
+-- check ("963 ledgers differ from Tally" on such a book before). Everything here is the cloud copy, so the control is
+-- none, always, as the browser's on these books
 create or replace function public.tally_calc_control(p_book uuid, p_from date, p_to date, p_today date)
-returns jsonb language plpgsql stable security definer set search_path to 'public', 'pg_temp' set jit to 'off' set work_mem to '32MB' as $function$
-declare b tally_books%rowtype; res jsonb;
+returns jsonb language plpgsql stable security definer set search_path to 'public', 'pg_temp' set jit to 'off' as $function$
 begin
-  select * into b from tally_books x where x.book_id = p_book;
-  if b.book_id is null or p_today is null or b.from_date is distinct from p_from or p_to is distinct from p_today then return null; end if;
-  with mv as (select d.ledger, sum(d.amount) as t from tally_ledger_day d where d.book_id = p_book and d.merged_into is null and d.day between p_from and p_to group by 1),
-  dl as (select l.name, round((0 - coalesce(l.open, 0)) - coalesce(mv.t, 0), 2) as d from tally_calc_led(p_book) l left join mv on mv.ledger = l.name where l.in_master),
-  bad as (select dl.*, row_number() over (order by dl.name) as o from dl where abs(dl.d) >= 1)
-  select jsonb_build_object('ok', count(*) = 0, 'n', count(*), 'amt', coalesce(sum(abs(bad.d)), 0),
-           'list', coalesce(jsonb_agg(jsonb_build_array(bad.name, bad.d) order by bad.o) filter (where bad.o <= 50), '[]'::jsonb))
-    into res from bad;
-  return res;
+  return null;
 end $function$;
 
 -- ---------------------------------------------------------------- one part of MIS.runNow
