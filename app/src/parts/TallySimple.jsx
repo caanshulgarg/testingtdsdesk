@@ -2,8 +2,9 @@
 // screens/Tally.jsx under its "Tally" title and Download FinCom Bridge, above Advanced (for support):
 //   1. ONE connection card (Top): a dot, "Connected to Tally" or the real state, one muted line, How to connect (the six
 //      steps under the card), Check again with its result; the bridge's wait and a stuck posting as one line in it
-//   2. "Clients · N" and ONE table: Client · Tally company | Masters | Entries | Action. One main button a row, chosen by
-//      its state; More ▾ opens one light row under it with the rest (see MoreRow). No filter chips
+//   2. "Clients · N", the filters (next-tally-filters2: search, Filters, Sort, the state chips, Views) and ONE table:
+//      Client · Tally company | State | In Tally | Masters | Entries | Last entry | Action. One main button a row, chosen by
+//      its state; More ▾ opens one light row under it with the rest (see MoreRow)
 //   3. the foot: "One main button per client. More ▾ opens the rest." and Advanced (for support)
 // Before (next-tally-simple, 02-Nov-2026, "Tally — Yes or No"):
 //   1. the header: "Tally", "N clients are fine. M need you.", Check Tally now (the day check of every client:
@@ -558,13 +559,16 @@ function Row({ row, download, oneDl, seen, cs, x, checkAgain }) {
   const why = rw && (rw.phase === "done" || rw.phase === "why") ? rw.text : rw ? "" : aw ? aw.text : pg.kind === "reading" ? "" : pg.why;
   // (held lines or a held day: what to do about them stays in view while a read runs, and after it)
   const held = row.act && row.act.held && row.todo && row.todo !== why ? row.todo : "";
-  const co = shown(row.company);
+  const co = shown(row.company), io = inTally(row, pg, seen);
   const toggle = () => set(more ? { more: "", details: ui.details === "all" ? "all" : Object.assign({}, ui.details || {}, { [key]: false }) } : { more: key, details: ui.details === "all" ? "all" : {} });
   return <><tr className={"tsm-tr tpt-tr" + (pg.need ? " tpt-need" : "") + (more ? " tpt-open" : "") + (row.focus ? " tsm-focus" : "")} data-tsm-row={name} data-tsm-kind={row.kind} data-tsm-cid={row.cid || undefined}
     data-tpt-kind={pg.kind} data-tsm-need={row.need ? "" : undefined} data-tsm-fine={row.fine ? "" : undefined} data-focus={row.focus ? "" : undefined}>
     <td className="tpt-td tpt-client" data-tsm-col="client" data-label="Client">
       {row.kind === "client" ? <b className="tsm-client-name" data-tsm-client={row.cid}>{row.client}</b> : <span className="tsm-client-none">Not chosen yet</span>}
-      <span className="tpt-co-line">{co ? <>{"Tally: "}<span className="tpt-co" data-tpt-co="">{co}</span></> : <span className="tpt-co" data-tpt-co="" data-tpt-nolink="">Not linked</span>}</span>
+      <span className="tpt-co-line">{co ? <span className="tpt-co" data-tpt-co="">{co}</span> : <span className="tpt-co" data-tpt-co="" data-tpt-nolink="">Not linked</span>}</span>
+    </td>
+    {/* next-tally-filters2: the state, its why, held and where lines (were under the client's name) */}
+    <td className="tpt-td tpt-st" data-tsm-col="state" data-label="State">
       <span className="tpt-state">
         <span className={"tpt-say " + pg.dot} data-tpt-state={pg.kind}><Dot k={pg.dot} />{rw && rw.phase !== "done" && rw.phase !== "why" ? (rw.phase === "waiting" ? "Waiting for Tally" : "Updating") : pg.say}</span>
         {why && <span className={"tpt-why" + (rw && (rw.phase === "why" || rw.phase === "waiting") ? " bad" : "")} data-tpt-why={rw ? "run-" + rw.phase : aw ? (aw.step ? "step" + aw.step.n : "why") : ""} role={rw ? "status" : undefined}>{why}
@@ -576,8 +580,10 @@ function Row({ row, download, oneDl, seen, cs, x, checkAgain }) {
           <ConnectBtn r={near} co={row.co} label={"Link " + row.client + " to it"} primary={false} hook={{ "data-tsm-away-relink": row.cid }} /></span>}
       </span>
     </td>
+    <td className="tpt-td tpt-io-td" data-label="In Tally">{io ? <span className={"tpt-io " + io} data-tpt-intally={io}>{io === "open" ? "Open" : "Not open"}<span className="tpt-io-x">{" in Tally"}</span></span> : <span className="tpg-sub">—</span>}</td>
     <td className="tpt-td tpt-masters" data-label="Masters">{linked ? <MastersCell row={row} /> : <span className="tpg-sub">—</span>}</td>
     <td className="tpt-td tpt-entries" data-label="Entries">{linked ? <EntriesCell row={row} /> : <span className="tpg-sub">—</span>}</td>
+    <td className="tpt-td tpt-last" data-label="Last entry" data-tpt-last={row.last || ""}>{linked ? (row.last ? lastWords(row.last) : "Never") : "—"}</td>
     <td className="tpt-td tpt-act" data-label="">
       <div className="tpt-act-in">{btn}{note && <span className="tpt-note" data-tpt-note="">{note}</span>}
         {/* next-buttons: what came of Bring books / Bring missing days, kept with the row whatever its button turns into */}
@@ -588,7 +594,7 @@ function Row({ row, download, oneDl, seen, cs, x, checkAgain }) {
         <button type="button" className="linkbtn tpt-more-btn" data-tpt-open={key} aria-expanded={more ? "true" : "false"} aria-label={(more ? "Less for " : "More for ") + label} onClick={toggle}>{more ? "Less ▴" : "More ▾"}</button></div>
     </td>
   </tr>
-    {more && <tr className={"tpt-light-tr" + (pg.need ? " tpt-need" : "")} data-tpt-light={key} data-tpt-light-of={name}><td colSpan={4} className="tpt-light-td">
+    {more && <tr className={"tpt-light-tr" + (pg.need ? " tpt-need" : "")} data-tpt-light={key} data-tpt-light-of={name}><td colSpan={7}className="tpt-light-td">
       <MoreRow row={row} linked={linked} e={e} main={main} det={det} running={runningRead} download={download} oneDl={oneDl}
         onAnswers={() => set({ details: ui.details === "all" ? "all" : Object.assign({}, ui.details || {}, { [key]: !det }) })} /></td></tr>}</>;
 }
@@ -601,54 +607,204 @@ function ActLink({ row }) {
   return <span className="tpt-link"><button type="button" className="btn tpt-btn primary" data-tsm-act={kind} data-tpt-main="link" onClick={() => setPick(!pick)} aria-expanded={pick}>Link</button>
     {pick && <div className="tsm-pick" data-tsm-row-pick="">{kind === "pickco" ? <ChangePick co={row.co} cur="" onClose={() => setPick(false)} /> : <Pick r={row.r} co={null} pre={row.best ? row.best.id : ""} onClose={() => setPick(false)} />}</div>}</span>;
 }
-// next-tally-simple2: "Clients · N", the note that masters come first, then ONE table: Client · Tally company | Masters |
-// Entries | Action (no filter chips; the search only for a long list)
-// next-tally-filters (the owner, 09-Nov-2026: "there should be filters in the tally companies list.. in column also... and
-// with regard to statuses also"): a filter at the head of each column: the row's state (Client · Tally company), Masters,
-// Entries; each choice with its count (of the rows the search keeps), a choice with none greyed. They add up with the
-// search; Clear filters (and No client matches' Show all) sets them back. Kept for the tab (S.tsm), never stored
-const F_ST = [["all", "All states"], ["need", "Needs attention"], ["ok", "Connected"], ["reading", "Reading now"], ["away", "Not open in Tally"], ["free", "Not linked"]];
-const F_MA = [["all", "All masters"], ["done", "Up to date"], ["reading", "Reading or waiting"], ["why", "Not done"], ["none", "Not brought yet"]];
-const F_EN = [["all", "All entries"], ["up", "Up to date"], ["going", "Bringing"], ["held", "Paused or stopped"], ["behind", "Days to bring"], ["none", "Not brought yet"]];
+// next-tally-filters2 (the owner's approved filter design, 09-Nov-2026: design-filters Main and Phone; replaces the
+// per-column filters of next-tally-filters): above ONE table (Client · Tally company | State | In Tally | Masters |
+// Entries | Last entry | Action) a search (client, Tally company, the client's GSTIN or PAN), Filters (how many are on)
+// and Sort; the state chips, each with its count; the Filters panel (Masters, Entries, Last entry received, In Tally,
+// Tally computer: each choice with its count, a choice with none off unless chosen); the filters on as tags, Clear all and
+// "Showing X of N clients"; Views (built in, and the firm's own saved in this browser). A phone: the chips scroll
+// sideways, the rows are cards and the panel opens as a bottom sheet. The filters are kept for the tab (S.tsm); only the
+// saved views are stored (localStorage, per firm; the tab's own copy when the browser keeps nothing). Each count is of
+// the rows the search and the other filters keep. The financial year is the page's own (this year): no year choice
 const isLinked = (r) => r.kind === "client" && r.c.w === YES;
-function tagsOf(r, seen) {
-  const p = pageOf(r, seen), s = [];
+const CHIPS = [["all", "All"], ["need", "Needs attention"], ["reading", "Reading now"], ["ok", "Up to date"], ["open", "Open in Tally now"], ["away", "Not open in Tally"], ["free", "Not linked"]];
+const CHIP_DOT = { need: "warn", reading: "read", ok: "ok", away: "idle", free: "ring" };
+const G_MA = [["done", "Up to date"], ["reading", "Reading or waiting"], ["none", "Not brought yet"], ["why", "Not done"]];
+const G_EN = [["up", "Up to date"], ["going", "Bringing"], ["behind", "Days to bring"], ["upload", "Upload needed"], ["held", "Paused or stopped"], ["none", "Not brought yet"]];
+const G_LAST = [["any", "Any time"], ["today", "Today"], ["week", "In the last 7 days"], ["older", "Older than 7 days"], ["never", "Never"]];
+const G_OPEN = [["any", "Open or not"], ["open", "Open in Tally now"], ["away", "Not open in Tally"]];
+const SORTS = [["need", "Needs attention first"], ["open", "Open in Tally first"], ["name", "Client name A–Z"], ["last", "Last entry, newest"], ["days", "Most days to bring"]];
+const NO_F = { chip: "all", fma: [], fen: [], flast: "any", fopen: "any", fpc: [] };
+const VIEWS = [["all", "All clients", {}], ["need", "Needs attention", { chip: "need" }], ["books", "Bringing books", { fen: ["going"] }], ["upload", "Upload needed", { fen: ["upload"] }]];
+const arr = (v) => (Array.isArray(v) ? v : []);
+const fOf = (ui) => ({ chip: ui.chip || "all", fma: arr(ui.fma), fen: arr(ui.fen), flast: ui.flast || "any", fopen: ui.fopen || "any", fpc: arr(ui.fpc), sort: ui.sort || "need", dir: ui.dir === -1 ? -1 : 1 });
+const viewSig = (f) => JSON.stringify([f.chip || "all", [...arr(f.fma)].sort(), [...arr(f.fen)].sort(), f.flast || "any", f.fopen || "any", [...arr(f.fpc)].sort(), f.sort || "need", f.dir === -1 ? -1 : 1]);
+// "open" | "away" (linked, its company open nowhere FinCom hears) | "" (not linked); the row's own test (pageOf)
+function inTally(r, p, seen) {
+  if (isLinked(r)) return r.o.w === YES || seen.has(coKey(r.company)) ? "open" : "away";
+  return p.kind === "open" || p.kind === "company" ? "open" : "";
+}
+// the computer's name only (never its Windows login): "NAME · DOMAIN\user" → "NAME"
+const pcName = (d) => { const i = (d && d.info) || {}; return String(i.computer || (i.beat || {}).computer || (d && d.name) || "").split(/\s+·\s+/)[0].split("\\")[0].trim(); };
+// the companies FinCom keeps (tally_companies, as coRows reads them) by name, worked out once while they stay the same
+let CO_BY = { a: null, b: null, n: -1, m: new Map() };
+function coBy() {
+  const a = (typeof TLight === "object" && TLight.st && TLight.st.cos) || null, b = (typeof TCloud === "object" && TCloud.pane && TCloud.pane.companies) || null, n = arr(a).length + arr(b).length;
+  if (CO_BY.a !== a || CO_BY.b !== b || CO_BY.n !== n) { const m = new Map();
+    [].concat(arr(a), arr(b)).forEach((x) => { if (!x || !x.device_id) return; const k = coKey(x.company); if (!m.has(k)) m.set(k, []); m.get(k).push(x); });
+    CO_BY = { a, b, n, m }; }
+  return CO_BY.m;
+}
+function pcOfRow(r, devs, by) {
+  if (!isLinked(r)) return "";
+  const rs = by.get(coKey(r.company)) || [], l = rs.find((x) => String(x.client_id || "") === String(r.cid) && x.device_id) || rs.find((x) => x.device_id);
+  const d = l && devs.get(l.device_id);
+  return d ? pcName(d) : "";
+}
+// a row's place in each filter: {s: chips, m, e: [entries], l: [last entry], io, pc, days, lm, nm, i}
+function tagsOf(r, i, seen, devs, now, by) {
+  const p = pageOf(r, seen), L = isLinked(r), io = inTally(r, p, seen), s = [];
+  const m = L ? mastersOf(r.cid, r.company) : null, e = L ? entriesOf(r.cid, m, r.last) : null, es = e ? e.st : "";
+  const reading = L && (p.kind === "reading" || runBusy(r.cid) || m.st === "reading" || m.st === "waiting" || es === "going" || es === "after");
   if (p.need) s.push("need");
-  if (p.kind === "ok") s.push("ok");
-  if (p.kind === "reading" || (isLinked(r) && runBusy(r.cid))) s.push("reading");
-  if (p.kind === "away") s.push("away");
+  if (reading) s.push("reading");
+  if (L && p.kind === "ok" && !reading && m.st === "done" && (es === "uptodate" || es === "done")) s.push("ok");
+  if (io) s.push(io);
   if (p.kind === "free" || p.kind === "open" || p.kind === "company") s.push("free");
-  if (!isLinked(r)) return { s, m: "", e: "" };
-  const ms = mastersOf(r.cid, r.company), es = entriesOf(r.cid, ms, r.last).st;
-  return { s, m: ms.st === "waiting" ? "reading" : ms.st,
-    e: es === "uptodate" || es === "done" ? "up" : es === "after" || es === "going" ? "going" : es === "paused" || es === "stopped" ? "held" : es };
+  const en = !L ? [] : [es === "uptodate" || es === "done" ? "up" : es === "after" || es === "going" ? "going" : es === "paused" || es === "stopped" ? "held" : es];
+  // Upload needed: the row's button is the Day Book upload, or days of its book Tally did not send wait for one (what is
+  // already read: nothing is asked for the filters)
+  if (L && ((r.act && r.act.kind === "upload") || (e.b && e.b.pull && arr(e.b.pull.upload).length))) en.push("upload");
+  const lm = Date.parse(r.last || "") || 0;
+  const l = !lm ? ["never"] : now - lm < 7 * 86400e3 ? (ISTD(lm) === ISTD(now) ? ["today", "week"] : ["week"]) : ["older"];
+  let days = e && es === "behind" ? parseInt(e.sub, 10) || 0 : 0;
+  if (!days && r.act && r.act.kind === "bring") { try { days = daysOf(r.act.need).length; } catch (x) { days = 0; } }
+  return { r, i, s, m: m ? (m.st === "waiting" ? "reading" : m.st) : "", e: en, l, io, pc: pcOfRow(r, devs, by), days, lm, nm: String(r.client || shown(r.company)).toLowerCase() };
 }
-function FSel({ k, opts, n, label }) {
-  const v = UI()[k] || "all";
-  return <select className={"tpt-fsel" + (v !== "all" ? " on" : "")} data-tpt-filter={k} aria-label={"Filter by " + label} value={v} onChange={(ev) => set({ [k]: ev.target.value })}>
-    {opts.map(([o, w]) => <option key={o} value={o} disabled={o !== "all" && o !== v && !n[o]}>{o === "all" ? w : w + " (" + (n[o] || 0) + ")"}</option>)}</select>;
+// a row kept by the filters; skip: the one group its own counts leave out
+function keeps(t, f, skip) {
+  return (skip === "chip" || f.chip === "all" || t.s.includes(f.chip)) && (skip === "fma" || !f.fma.length || f.fma.includes(t.m))
+    && (skip === "fen" || !f.fen.length || f.fen.some((k) => t.e.includes(k))) && (skip === "flast" || f.flast === "any" || t.l.includes(f.flast))
+    && (skip === "fopen" || f.fopen === "any" || t.io === f.fopen) && (skip === "fpc" || !f.fpc.length || f.fpc.includes(t.pc));
 }
-const NO_F = { fst: "all", fma: "all", fen: "all" };
+const SORT_BY = { need: (a, b) => a.i - b.i, open: (a, b) => (b.io === "open") - (a.io === "open"), name: (a, b) => a.nm.localeCompare(b.nm, "en"), last: (a, b) => b.lm - a.lm, days: (a, b) => b.days - a.days };
+// the saved views: [{name, f}], this browser's, per firm
+const VKEY = () => "fincom:tally-views:" + String((typeof Cloud === "object" && Cloud.st && Cloud.st.firm) || (S.account && S.account.firm && S.account.firm.id) || (S.firm && S.firm.firmName) || "local");
+function savedViews() {
+  const ui = UI(), k = VKEY();
+  if (ui.vk !== k) { ui.vk = k; ui.views = [];
+    try { const v = JSON.parse(localStorage.getItem(k) || "[]"); if (Array.isArray(v)) ui.views = v.filter((x) => x && typeof x.name === "string" && x.name && x.f && typeof x.f === "object").slice(0, 50); } catch (e) { /* storage blocked: the tab's own */ } }
+  return ui.views;
+}
+function keepViews(list) { const ui = UI(); ui.views = list; try { localStorage.setItem(VKEY(), JSON.stringify(list)); } catch (e) { /* storage blocked: kept for the tab */ } render(); }
+const viewApply = (f) => set(Object.assign({}, NO_F, { sort: "need", dir: 1 }, f, { fma: arr(f.fma), fen: arr(f.fen), fpc: arr(f.fpc) }));
+const X = <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>;
+function Views({ f }) {
+  const ui = UI(), list = savedViews(), sig = viewSig(f), [name, setName] = useState("");
+  // (a saved view the same as a built-in one: shown by its own name, so it can be removed)
+  const s = list.find((v) => viewSig(v.f) === sig), b = !s && VIEWS.find((v) => viewSig(Object.assign({}, NO_F, { sort: "need", dir: 1 }, v[2])) === sig);
+  const cur = b ? b[0] : s ? "saved:" + s.name : "";
+  const save = () => { const n = name.trim().slice(0, 40); if (!n) return;
+    const { sort, dir, chip, fma, fen, flast, fopen, fpc } = f;
+    keepViews(list.filter((v) => v.name.toLowerCase() !== n.toLowerCase()).concat({ name: n, f: { chip, fma, fen, flast, fopen, fpc, sort, dir } }));
+    setName(""); set({ saving: false }); };
+  return <div className="tpf-views" data-tpf-views="">
+    <label className="tpf-lab" htmlFor="tpf-view">View</label>
+    <select id="tpf-view" className="tpf-sel" data-tpf-view="" value={cur} onChange={(ev) => { const v = ev.target.value, x = VIEWS.find((y) => y[0] === v), y = list.find((z) => "saved:" + z.name === v);
+      if (x) viewApply(x[2]); else if (y) viewApply(y.f); }}>
+      {!cur && <option value="">Custom</option>}
+      {VIEWS.map(([k, w]) => <option key={k} value={k}>{w}</option>)}
+      {list.length > 0 && <optgroup label="Saved views">{list.map((v) => <option key={v.name} value={"saved:" + v.name}>{v.name}</option>)}</optgroup>}
+    </select>
+    {s && <button type="button" className="btn tpf-btn" data-tpf-remove={s.name} aria-label={"Remove view " + s.name} onClick={() => keepViews(list.filter((v) => v !== s))}>Remove view</button>}
+    {!ui.saving ? <button type="button" className="btn tpf-btn" data-tpf-save="" onClick={() => set({ saving: true })}>Save view</button>
+      : <form className="tpf-save" data-tpf-save-form="" onSubmit={(ev) => { ev.preventDefault(); save(); }}>
+        <input type="text" className="tpf-sel" data-tpf-save-name="" aria-label="Name of the view" placeholder="Name of the view" maxLength={40} value={name} autoFocus onChange={(ev) => setName(ev.target.value)} />
+        <button type="submit" className="btn primary tpf-btn" data-tpf-save-ok="" disabled={!name.trim()}>Save</button>
+        <button type="button" className="btn tpf-btn" data-tpf-save-cancel="" onClick={() => { setName(""); set({ saving: false }); }}>Cancel</button></form>}
+  </div>;
+}
+function Group({ k, legend, opts, n, f, multi }) {
+  const v = f[k];
+  return <fieldset className="tpf-group" data-tpf-group={k}><legend className="tpf-legend">{legend}</legend>
+    {opts.map(([o, w]) => { const on = multi ? v.includes(o) : v === o, c = n[o] || 0, off = !on && !c && o !== "any";
+      return <label key={o} className={"tpf-opt" + (off ? " off" : "")} data-tpf-opt={k + ":" + o}>
+        <input type={multi ? "checkbox" : "radio"} name={"tpf-" + k} checked={on} disabled={off}
+          onChange={() => set({ [k]: multi ? (on ? v.filter((x) => x !== o) : v.concat(o)) : o })} />
+        <span className="tpf-w">{w}</span><span className="tpf-n" data-tpf-n={c}>{c}</span></label>; })}
+  </fieldset>;
+}
+function SortSel({ f, where }) {
+  return <select className="tpf-sel" data-tpf-sort={where} aria-label="Sort clients" value={f.sort} onChange={(ev) => set({ sort: ev.target.value, dir: 1 })}>
+    {SORTS.map(([k, w]) => <option key={k} value={k}>{w}</option>)}</select>;
+}
+// a column head that sorts: a press sorts by it, a second press the other way
+function SortTh({ k, f, children, className }) {
+  const on = f.sort === k, up = on && (k === "last" ? f.dir === -1 : f.dir === 1);
+  return <th className={className} aria-sort={on ? (up ? "ascending" : "descending") : "none"} data-tpf-th={k}>
+    <button type="button" className={"tpf-th" + (on ? " on" : "")} data-tpf-head={k} onClick={() => set(on ? { dir: -f.dir } : { sort: k, dir: 1 })}>{children}
+      <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d={on ? (f.dir === 1 ? "M6 9l6 6 6-6" : "M6 15l6-6 6 6") : "M6 15l6 6 6-6M6 9l6-6 6 6"} /></svg></button></th>;
+}
 function Table({ rows, download, oneDl, cs, x, checkAgain }) {
-  const ui = UI(), seen = openAnywhere(), fst = ui.fst || "all", fma = ui.fma || "all", fen = ui.fen || "all";
-  const tg = rows.filter((r) => matches(r, ui.q)).map((r) => Object.assign({ r }, tagsOf(r, seen)));
-  const cnt = (f) => tg.reduce((n, t) => { [].concat(f(t)).forEach((k) => { if (k) n[k] = (n[k] || 0) + 1; }); return n; }, {});
-  const nS = cnt((t) => t.s), nM = cnt((t) => t.m), nE = cnt((t) => t.e), on = fst !== "all" || fma !== "all" || fen !== "all";
-  const list = tg.filter((t) => (fst === "all" || t.s.includes(fst)) && (fma === "all" || t.m === fma) && (fen === "all" || t.e === fen)).map((t) => t.r);
-  const w = headWords(rows), nc = rows.filter((r) => r.kind === "client").length;
+  const ui = UI(), seen = openAnywhere(), f = fOf(ui), now = Date.now();
+  let devs = new Map(); try { devs = new Map(tallyDevs().map((d) => [d.id, d])); } catch (e) { devs = new Map(); }
+  const q = String(ui.q || "").trim().toLowerCase(), by = coBy();
+  const hit = (r) => matches(r, ui.q) || (!!q && [r.co && r.co.gstin, r.co && r.co.pan, r.r && r.r.gstin].some((v) => String(v || "").toLowerCase().includes(q)));
+  const tg = rows.map((r, i) => (hit(r) ? tagsOf(r, i, seen, devs, now, by) : null)).filter(Boolean);
+  const cnt = (skip, key) => tg.reduce((n, t) => { if (keeps(t, f, skip)) { n.any = (n.any || 0) + 1; [].concat(t[key]).forEach((v) => { if (v) n[v] = (n[v] || 0) + 1; }); } return n; }, {});
+  const nC = cnt("chip", "s"); nC.all = nC.any || 0;
+  const nM = cnt("fma", "m"), nE = cnt("fen", "e"), nL = cnt("flast", "l"), nO = cnt("fopen", "io"), nP = cnt("fpc", "pc");
+  const pcs = [...new Set(tg.map((t) => t.pc).concat(f.fpc).filter(Boolean))].sort((a, b) => a.localeCompare(b, "en")).map((p) => [p, p]);
+  const dir = f.dir, cmp = SORT_BY[f.sort] || SORT_BY.need;
+  const kept = tg.filter((t) => keeps(t, f, "")).sort((a, b) => (f.sort === "need" ? dir * (a.i - b.i) : dir * cmp(a, b) || a.i - b.i));
+  const list = kept.map((t) => t.r);
+  const lab = (opts, ks) => ks.map((k) => (opts.find((o) => o[0] === k) || [k, k])[1]).join(", ");
+  const tags = [f.chip !== "all" && ["chip", (CHIPS.find((c) => c[0] === f.chip) || [, f.chip])[1], { chip: "all" }],
+    f.fma.length && ["fma", "Masters: " + lab(G_MA, f.fma), { fma: [] }], f.fen.length && ["fen", "Entries: " + lab(G_EN, f.fen), { fen: [] }],
+    f.flast !== "any" && ["flast", "Last entry: " + lab(G_LAST, [f.flast]), { flast: "any" }], f.fopen !== "any" && ["fopen", lab(G_OPEN, [f.fopen]), { fopen: "any" }],
+    f.fpc.length && ["fpc", "Tally computer: " + f.fpc.join(", "), { fpc: [] }]].filter(Boolean);
+  const nOn = tags.length, any = nOn > 0 || !!q;
+  const clear = () => set(Object.assign({ q: "" }, NO_F));
+  const w = headWords(rows), nc = rows.filter((r) => r.kind === "client").length, panel = !!ui.fpanel;
+  const close = () => set({ fpanel: false });
   return <section className="tpt-sec" aria-label="Clients" data-tsm-table="" data-tsm-n={rows.length}>
-    <div className="tpt-head"><h3 className="tpt-title" data-tpt-title="">{"Clients · " + nc}</h3>
+    <div className="tpt-head"><div className="tpt-head-l"><h3 className="tpt-title" data-tpt-title="">{"Clients · " + nc}</h3>
+      {any && <span className="tpf-showing" data-tpf-showing={list.length} data-tpt-filtered={list.length}>{"Showing " + list.length + " of " + rows.length + (rows.length === 1 ? " client" : " clients")}</span>}</div>
+      {rows.length > 0 && <Views f={f} />}
       <span className="sr-only" data-tsm-say=""><b className="tsm-fine">{w.fine}</b>{" "}<b className="tsm-need" data-tsm-need-n={rows.filter((r) => r.need).length}>{w.need}</b></span></div>
-    {rows.length > 6 && <label className="tsm-search"><span className="sr-only">Search client</span>
-      <input type="search" data-tsm-q="" placeholder="Search client or Tally company" aria-label="Search client or Tally company" value={ui.q} onChange={(ev) => set({ q: ev.target.value })} /></label>}
-    {on && <div className="tsm-note tpt-fnote" data-tpt-filtered={list.length}>{"Showing " + list.length + " of " + rows.length + " "}
-      <button type="button" className="linkbtn" data-tpt-fclear="" onClick={() => set(NO_F)}>Clear filters</button></div>}
+    {rows.length > 0 && <div className="tsm-card tpf" data-tpf="">
+      <div className="tpf-bar">
+        <label className="tpf-search"><span className="sr-only">Search clients</span>
+          <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
+          <input type="search" data-tsm-q="" placeholder="Search client, Tally company or GSTIN" aria-label="Search clients" value={ui.q || ""} onChange={(ev) => set({ q: ev.target.value })} /></label>
+        <button type="button" className={"tpf-toggle" + (panel || nOn ? " on" : "")} data-tpf-toggle="" aria-expanded={panel ? "true" : "false"} aria-controls="tpf-panel"
+          aria-label={nOn ? "Filters, " + nOn + " on" : "Filters"} onClick={() => set({ fpanel: !panel })}>
+          <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 6h16M7 12h10M10 18h4" /></svg>
+          <span className="tpf-toggle-w">Filters</span>{nOn > 0 && <span className="tpf-count" data-tpf-count={nOn}>{nOn}</span>}</button>
+        <span className="tpf-sortbar"><label className="tpf-lab" htmlFor="tpf-sort">Sort</label><SortSel f={f} where="bar" /></span>
+      </div>
+      <div className="tpf-chips" role="group" aria-label="State" data-tpf-chips="">
+        {CHIPS.map(([k, cw]) => { const on = f.chip === k, c = nC[k] || 0;
+          return <button key={k} type="button" className={"tpf-chip" + (on ? " on" + (k === "need" ? " warn" : "") : "")} data-tpf-chip={k} aria-pressed={on ? "true" : "false"}
+            disabled={!on && !c && k !== "all"} onClick={() => set({ chip: k })}>
+            {CHIP_DOT[k] && <Dot k={CHIP_DOT[k]} />}{k === "open" && <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#17803D" strokeWidth="2.2" strokeLinecap="round"><rect x="3" y="4" width="18" height="13" rx="2" /><path d="M8 21h8M12 17v4" /></svg>}
+            {cw}<span className="tpf-n" data-tpf-n={c}>{c}</span></button>; })}
+      </div>
+      {panel && <div className="tpf-back" data-tpf-back="" onClick={close} />}
+      {panel && <div className="tpf-panel" id="tpf-panel" data-tpf-panel="" role="region" aria-label="Filters">
+        <div className="tpf-sheet-head"><b>Filters</b><button type="button" className="linkbtn" data-tpf-clear="sheet" onClick={clear}>Clear all</button></div>
+        <div className="tpf-sheet-sort"><span className="tpf-legend">Sort</span><SortSel f={f} where="sheet" /></div>
+        <div className="tpf-groups">
+          <Group k="fma" legend="Masters" opts={G_MA} n={nM} f={f} multi />
+          <Group k="fen" legend="Entries" opts={G_EN} n={nE} f={f} multi />
+          <Group k="flast" legend="Last entry received" opts={G_LAST} n={Object.assign({}, nL, { any: nL.any || 0 })} f={f} />
+          <Group k="fopen" legend="In Tally" opts={G_OPEN} n={Object.assign({}, nO, { any: nO.any || 0 })} f={f} />
+          {pcs.length > 0 && <Group k="fpc" legend="Tally computer" opts={pcs} n={nP} f={f} multi />}
+        </div>
+        <button type="button" className="btn primary tpf-show" data-tpf-show={list.length} onClick={close}>{"Show " + list.length + (list.length === 1 ? " client" : " clients")}</button>
+      </div>}
+      {any && <div className="tpf-tags" data-tpf-tags="">
+        <span className="tpf-lab">Active:</span>
+        {q && <button type="button" className="tpf-tag" data-tpf-tag="q" aria-label={"Remove search " + ui.q.trim()} onClick={() => set({ q: "" })}>{"Search: “" + ui.q.trim() + "”"}{X}</button>}
+        {tags.map(([k, tw, off]) => <button key={k} type="button" className="tpf-tag" data-tpf-tag={k} aria-label={"Remove filter: " + tw} onClick={() => set(off)}>{tw}{X}</button>)}
+        <button type="button" className="linkbtn tpf-clear" data-tpf-clear="" data-tpt-fclear="" onClick={clear}>Clear all</button></div>}
+    </div>}
     <div className="tsm-card tpt">
       {!list.length && <div className="tsm-none" data-tsm-none={rows.length ? "match" : reading() ? "reading" : "none"}>{rows.length ? "No client matches. " : reading() ? readingWords() : "No client yet. "}
-        {rows.length > 0 && <button type="button" className="linkbtn" data-tsm-showall="" onClick={() => set(Object.assign({ q: "" }, NO_F))}>Show all</button>}</div>}
-      {(list.length > 0 || (rows.length > 0 && on)) && <div className="tsm-scroll"><table className="tpt-grid nocards">
-        <thead><tr><th>Client · Tally company<FSel k="fst" opts={F_ST} n={nS} label="state" /></th><th>Masters<FSel k="fma" opts={F_MA} n={nM} label="masters" /></th>
-          <th>Entries<FSel k="fen" opts={F_EN} n={nE} label="entries" /></th><th className="tpt-th-act">Action</th></tr></thead>
+        {rows.length > 0 && <button type="button" className="linkbtn" data-tsm-showall="" onClick={clear}>Show all</button>}</div>}
+      {list.length > 0 && <div className="tsm-scroll"><table className="tpt-grid nocards">
+        <thead><tr><SortTh k="name" f={f}>Client · Tally company</SortTh><SortTh k="need" f={f}>State</SortTh><SortTh k="open" f={f}>In Tally</SortTh>
+          <th>Masters</th><th>Entries</th><SortTh k="last" f={f}>Last entry</SortTh><th className="tpt-th-act">Action</th></tr></thead>
         <tbody>{list.map((r) => <Row key={r.key} row={r} download={download} oneDl={oneDl} seen={seen} cs={cs} x={x} checkAgain={checkAgain} />)}</tbody></table></div>}
     </div>
   </section>;
