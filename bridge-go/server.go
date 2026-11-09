@@ -440,7 +440,8 @@ func route(w http.ResponseWriter, r *http.Request, path string, qs url.Values, b
 		return M{"ok": true, "version": BridgeVersion, "computer": computerName(), "user": ownerName(), "mySession": mySession(), "mode": pm, "onlyMySession": cfgB("OnlyMySession"), "time": nowS(),
 			"sessions": sessions, "allowImport": cfgB("AllowImport") && why == "", "readOnly": why, "impl": "go", "testMode": testMode(), "paused": paused(),
 			"tallyStuck": getTallyStuck(), "wake": wakeStatus(), "jobs": jobsNow, "posting": postingNow(), "tally": tallyStatus(sessions), "beat": beatStatus(),
-			"tallyWhy": why253, "tallyConnectSay": tallyConnectSay(why253, tallyIniBeat()), "sameSession": sameSessionOf(r)}, nil // 2.5.3
+			"tallyWhy": why253, "tallyConnectSay": tallyConnectSay(why253, tallyIniBeat()), "sameSession": sameSessionOf(r),
+			"tallyOff": tallyOffBeat(why253)}, nil // 2.5.3; 2.5.11: tallyOff
 	case "/companies":
 		list := []any{}
 		for _, s := range openCompanies(false) {

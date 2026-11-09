@@ -130,6 +130,7 @@ func resetIniPorts() {
 	iniPortsMu.Lock()
 	iniPortsAt, iniPortsL = time.Time{}, nil
 	iniPortsMu.Unlock()
+	resetOwnIniPorts() // 2.5.11
 }
 
 // --- b. the typed port

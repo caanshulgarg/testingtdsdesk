@@ -265,6 +265,33 @@ def main():
         if n("header.top .tally-pop [data-link-status-go]"): pg.click("header.top .tally-pop [data-link-status-go]"); pg.wait_for_timeout(1500)
         else: pg.click("header.top .tally-pop [data-tally-pop-steps]"); pg.wait_for_timeout(1500)
         ok(n(G) == 1 and E("() => S.view") == "home", "16. See the 6 steps opens the Tally page's steps")
+        print("== 17. FinCom Bridge 2.5.11: step 3 in the bridge's words from what it read (tallyOff), never 'close and reopen' by itself")
+        MODEW = "Your TallyPrime is open but its connection is off: in TallyPrime press F1 → Settings → Connectivity, set 'TallyPrime acts as' to Both, keep the port, press Ctrl+A to save, then reopen TallyPrime."
+        CLASHW = "Your TallyPrime's port 9000 is used by made-up-b's Tally: set your own port 9039 in F1 → Settings → Connectivity, press Ctrl+A to save, then reopen TallyPrime."
+        LOSTW = "Yesterday your Tally used port 9039 but TallyPrime did not save it. Set it again in F1 → Settings → Connectivity and press Ctrl+A to save."
+        CLOSEDW = "Your TallyPrime is open but not taking connections on port 9114: in F1 → Settings → Connectivity check 'TallyPrime acts as' is Both and the port is 9114, press Ctrl+A to save, reopen TallyPrime."
+        REOPENW = "Your TallyPrime's connection is set but not on yet: close and reopen TallyPrime once."
+        own9114 = {"port": 9114, "ok": False, "skipped": False, "n": 0, "error": "Tally is not open (nothing listens on this port)", "reason": "closed"}
+        SHAREDINI = [{"path": "C:\\Program Files\\TallyPrime\\tally.ini", "connect": "off; shared by every user of this computer, not changed"}]
+        def off_dev(ports, say, off, ini=None):
+            d = adev(ports, why="connection off", say=say, version="2.5.11"); d["info"]["beat"]["tallyOff"] = off
+            if ini: d["info"]["beat"]["tallyIni"] = ini
+            return d
+        base = {"folder": "TallyPrime", "iniKind": "programFiles", "iniFolder": "TallyPrime", "mode": "Both", "port": 9114, "want": 9114, "iniAfterStart": False}
+        cases = [("mode", [own9114], MODEW, dict(base, reason="mode", mode="Client"), SHAREDINI, "mode", "9114", True),
+                 ("clash", [held], CLASHW, dict(base, reason="clash", iniKind="virtualStore", port=9000, want=9000, heldBy="otherUser", heldUser="made-up-b", ownPort=9039), SHAREDINI, "clash", "9039", False),
+                 ("lost", [own9114], LOSTW, dict(base, reason="lost", lastPort=9039, lastAt="2026-11-08T09:30:00Z"), None, "lost", "9039", False),
+                 ("closed", [own9114], CLOSEDW, dict(base, reason="closed"), None, "closed", "9114", False),
+                 ("reopen", [own9114], REOPENW, dict(base, reason="reopen", iniAfterStart=True), SHAREDINI, "reopen", None, False)]
+        for name, ports, say, off, ini, hook, copy, warn in cases:
+            scene([off_dev(ports, say, off, ini), bdev()], cos, CL, A_PINGS)
+            g = guide()
+            ok(g["now"] == "3" and g["hook"] == hook and g["say"].startswith("Step 3: " + say) and g["states"][:2] == ["done", "done"], "17. %s: step 3 says the bridge's words, hook %s (%s)" % (name, g["hook"], g["say"][:240]))
+            ok(("changing the port here changes it for all of them" in g["say"]) == warn, "17. %s: the shared-settings warning %s (%s)" % (name, "given" if warn else "not given", g["say"][-160:]))
+            ok((name == "reopen") == ("close and reopen" in g["say"].lower() or "open it again once" in g["say"].lower()), "17. %s: 'close and reopen' only when tally.ini changed after Tally started" % name)
+            cp = E("(s) => { const b = document.querySelector(s + ' [data-tsm-port-copy]'); return b ? b.getAttribute('data-tsm-port-copy') : null; }", G)
+            ok(cp == copy, "17. %s: the port to copy %s (%s)" % (name, copy, cp))
+            never_b("17 " + name, g)
     print("\npage errors: %s" % errors[:5])
     ok(not errors, "no page errors")
     print("\n%s: %d" % ("FAILED" if fails else "PASSED", len(fails)) + ("" if fails else " failures"))

@@ -10,12 +10,11 @@
 //  2. Windows does not list programs, every port tried is closed, and every tally.ini known says the connection is
 //     off and may not be changed by FinCom ("cannot write", or shared by every user: iniconnect254.go).
 //
-// The person's words go in the beat's tallyConnectSay (200 letters at most).
+// The person's words go in the beat's tallyConnectSay (200 letters at most). 2.5.11: the words of case 1 and its details
+// (the beat's tallyOff) are owntally2511.go's.
 package main
 
 import (
-	"fmt"
-	"strings"
 	"sync"
 	"time"
 )
@@ -28,12 +27,14 @@ const (
 	connOffWordsReopen = "Your Tally's connection is set but not on yet. Close and reopen Tally once."
 )
 
-// whether this login's Tally takes no connection, and the person's words (a hook for the tests)
+// whether this login's Tally takes no connection, the person's words and (2.5.11) its details for the beat's tallyOff
+// (nil when Windows does not list programs); a hook for the tests
 var connOffFn = connOffNow
 
 var connOffLast struct {
-	mu    sync.Mutex
-	words string
+	mu     sync.Mutex
+	words  string
+	detail M
 }
 
 // the words of the last "connection off" found (tallyConnectSay)
@@ -43,20 +44,25 @@ func connOffWords() string {
 	return connOffLast.words
 }
 
-func noteConnOff(words string) {
+// 2.5.11: the details of the last "connection off" found (tallyOff; owntally2511.go)
+func connOffDetail() M {
 	connOffLast.mu.Lock()
-	connOffLast.words = words
+	defer connOffLast.mu.Unlock()
+	return connOffLast.detail
+}
+
+func noteConnOff(words string, detail M) {
+	connOffLast.mu.Lock()
+	connOffLast.words, connOffLast.detail = words, detail
 	connOffLast.mu.Unlock()
 }
 
-func connOffNow(ports []any) (bool, string) {
+func connOffNow(ports []any) (bool, string, M) {
 	ok, procs, lis := netState()
 	if ok {
 		listens := map[int]bool{}
-		holder := map[int]int{}
 		for _, l := range lis {
 			listens[l.Pid] = true
-			holder[l.Port] = l.Pid
 		}
 		for _, p := range procs {
 			if !reTally.MatchString(p.Name) || sessionOwner(p) != "mine" || listens[p.ID] {
@@ -65,24 +71,11 @@ func connOffNow(ports []any) (bool, string) {
 			if !p.Started.IsZero() && time.Since(p.Started) < time.Minute {
 				continue // just opened: Tally takes its port a moment after it starts
 			}
-			ini := tallyIni(p.Path)
-			mode := strings.ToLower(str(ini["mode"]))
-			if ini["found"] == true && mode != "both" && mode != "server" {
-				return true, connOffWordsMode
-			}
-			want := toInt(ini["port"])
-			if want <= 0 {
-				want = 9000
-			}
-			if pid, held := holder[want]; held && pid != p.ID {
-				return true, fmt.Sprintf(connOffWordsPort, want)
-			}
-			if ini["found"] != true {
-				return true, connOffWordsMode
-			}
-			return true, connOffWordsReopen
+			// 2.5.11 (owntally2511.go): "set but not on yet" only when its tally.ini changed after it started; else why
+			d, words := tallyOffOf(p, procs, lis)
+			return true, words, d
 		}
-		return false, ""
+		return false, "", nil
 	}
 	// Windows does not list programs: by the ports tried and the tally.ini files known
 	for _, x := range ports {
@@ -91,23 +84,23 @@ func connOffNow(ports []any) (bool, string) {
 			continue
 		}
 		if str(o["reason"]) != "closed" {
-			return false, ""
+			return false, "", nil
 		}
 	}
 	ini := tallyIniBeat()
 	if len(ini) == 0 {
-		return false, ""
+		return false, "", nil
 	}
 	words := ""
 	for _, x := range ini {
 		o := obj(x)
 		c := str(o["connect"])
 		if c != connectCannotWrite && c != connectSharedOff {
-			return false, ""
+			return false, "", nil
 		}
 		if words == "" {
 			words = connectWhyOf(c)
 		}
 	}
-	return true, words
+	return true, words, nil
 }

@@ -59,6 +59,8 @@ export const WORDS = {
   reading: (co, what, todo) => "Reading “" + shown(co) + "”: " + what + ". " + todo,
 };
 
+// bridge 2.5.11: step 3's hook by the bridge's reason (tallyOff.reason)
+const OFF_HOOK = { reopen: "reopen", lost: "lost", mode: "mode", clash: "clash", program: "clash", closed: "closed" };
 // this login's Windows user ("made-up-a"): its own bridge's, else what the bridge answering in this session says
 function loginOf(o) {
   const list = localBridges() || [], x = list.find((y) => y && y.sameSession === true) || list.find((y) => y && !Object.prototype.hasOwnProperty.call(y, "sameSession") && y.yours !== false);
@@ -143,12 +145,19 @@ export function connectSteps(opts) {
     put("tally", true, "", null, "", "TallyPrime is running in this login");
     if (why === "not answering") put("connect", false, WORDS.notanswering, { kind: "check" }, "notanswering");
     else {
-      const devs = onThisPc(b), m = /port (\d+) is used/i.exec(say), held = m ? Number(m[1]) : 0;
+      // bridge 2.5.11: what the bridge read (tallyOff: why, tally.ini's mode and port, who holds the port): its own words
+      const off = src.tallyOff && typeof src.tallyOff === "object" ? src.tallyOff : null, r = off ? String(off.reason || "") : "";
+      const devs = onThisPc(b), m = /port (\d+) is used/i.exec(say), held = off ? (off.heldBy ? Number(off.want) || 0 : 0) : m ? Number(m[1]) : 0;
       const free = ownPort(devs, login, [held].concat(ports.filter((p) => p && p.skipped).map((p) => p.port)), b && b.dev && b.dev.id);
       const ini = [].concat(src.tallyIni || (b && b.beat && b.beat.tallyIni) || []).map((x) => lc(x && x.connect));
-      const warn = /every user of this computer shares/i.test(say) || ini.some((c) => c.startsWith("off; shared")) ? " " + WORDS.shared
+      // (this login's own VirtualStore copy of tally.ini is its own: no other login shares it)
+      const warn = off && (r === "reopen" || off.iniKind === "virtualStore") ? ""
+        : /every user of this computer shares/i.test(say) || ini.some((c) => c.startsWith("off; shared")) ? " " + WORDS.shared
         : /may not change tallyprime|cannot write/i.test(say) || ini.includes("cannot write") ? " " + WORDS.cantWrite : "";
-      if (held) put("connect", false, WORDS.clash(held, holderOf(devs, held, login), free) + warn, { kind: "check", free }, "clash");
+      if (off) {
+        const fr = r === "reopen" ? 0 : r === "lost" ? Number(off.lastPort) : r === "clash" || r === "program" ? Number(off.ownPort) || free : Number(off.port) || 0;
+        put("connect", false, (shown(say) || WORDS.mode(free)) + warn, fr > 0 ? { kind: "check", free: fr } : { kind: "check" }, OFF_HOOK[r] || "mode");
+      } else if (held) put("connect", false, WORDS.clash(held, holderOf(devs, held, login), free) + warn, { kind: "check", free }, "clash");
       else if (/set but not on yet/i.test(say)) put("connect", false, WORDS.reopen, { kind: "check" }, "reopen");
       else put("connect", false, WORDS.mode(free) + warn, { kind: "check", free }, warn ? (warn === " " + WORDS.shared ? "shared" : "cantwrite") : "mode");
     }

@@ -18,7 +18,7 @@
 // Book upload); nothing new is asked of the bridge or of Tally. No computer's name anywhere here.
 import { Component, useEffect, useState } from "react";
 import { linkTo, Pick, ChangePick, booksLoad, firstSync, syncPoll, openFromTally } from "./TallyCompanies.jsx";
-import { checkAll, connSig, tallyOpenOn, bridgesOf, rowsLast, placeOf, LEDN, ASKED_N, rowsFor, quickRows, openingsAll, openingsDecide, rupees, matches, headWords, ownState, localBridges, rescanLocal, lookOnce, aimLocal, LOCALB, YES, NO, NOTYET, BLOCKED } from "../lib/tallySimple.js";
+import { checkAll, connSig, tallyOpenOn, offSay, bridgesOf, rowsLast, placeOf, LEDN, ASKED_N, rowsFor, quickRows, openingsAll, openingsDecide, rupees, matches, headWords, ownState, localBridges, rescanLocal, lookOnce, aimLocal, LOCALB, YES, NO, NOTYET, BLOCKED } from "../lib/tallySimple.js";
 import { coKey, tallyDevs, pcRawOf } from "../lib/tallyState.js";
 import { bridgeStopped, bridgeBack, stoppedWhere } from "../lib/bridgeStop.js";   // bridge 2.5.10: a bridge stopped, or back by itself
 import { ledgersHeld, LED_N, ledBook, cloudLedgerCount, baseKey, stallWhy, companyRows, unlink, runPress, runWords, runSettle, runBusy, keepWaitWords } from "./TallyCompanies.jsx";
@@ -216,7 +216,9 @@ export function ownTallys(own) {
   // the bridge says a Tally whose connection is off by the beat's tallyWhy, its own port's reason "closed": that port is
   // this login's Tally with its connection off
   const why = lc((here && here.tallyWhy) || b.tallyWhy), tp = Number((here && here.tallyPort) || b.tallyPort) || 0;
-  const offAt = (p) => why === "connection off" && !p.ok && (tp ? Number(p.port) === tp : all.filter((x) => !x.ok).length === 1);
+  // bridge 2.5.11: its details name the port this login's Tally should take (tallyOff.want): that one, however many are closed
+  const tf = (here && here.tallyOff) || b.tallyOff, fp = tf && typeof tf === "object" ? Number(tf.want) || 0 : 0;
+  const offAt = (p) => !p.ok && (fp ? Number(p.port) === fp : why === "connection off" && (tp ? Number(p.port) === tp : all.filter((x) => !x.ok).length === 1));
   const ses = all.filter((p) => p.ok || offAt(p) || !(/^closed$|^$/.test(lc(p.reason || p.state || "")) || /nothing listens/i.test(String(p.error || ""))));
   const items = here ? [].concat(here.open || []).filter((o) => o && o.mine !== false) : [], oks = ses.filter((s) => s.ok);
   const by = new Map(), out = [], unknown = [];
@@ -225,6 +227,8 @@ export function ownTallys(own) {
     if (p) by.set(p, (by.get(p) || []).concat(n)); else unknown.push(n); });
   ses.forEach((x) => { const p = Number(x.port); if (out.some((t) => t.port === p)) return;
     out.push({ port: p, ok: !!x.ok, state: x.ok ? "connected" : offAt(x) ? "connection off" : SESS_STATE[lc(x.reason || x.state)] || "not answering", names: by.get(p) || [] }); });
+  // (its port not among this login's own, e.g. another login's Tally holds it: this login's Tally is shown all the same)
+  if (fp && !out.some((t) => t.port === fp)) out.push({ port: fp, ok: false, state: "connection off", names: [] });
   return { tallys: out, unknown };
 }
 const STATE_OF = { clash: "port taken", reopen: "connection set, not on yet", notanswering: "not answering", admin: "run as administrator" };
@@ -643,8 +647,10 @@ function Top({ cs, own, rows, checkAgain, ready, shown, beat }) {
   else if (stop && !(cs.mode === "laptop" && office.length)) { dot = "warn"; title = stop.title; sub = stop.todo; }
   // a computer with no bridge of its own (a laptop, a Mac): the office's Tally through the firm's bridges heard now
   // (counted by Tally open there: bridges heard with Tally closed are not "connected", amber)
-  else if (cs.mode === "laptop" && office.length && !officeK) { dot = "warn"; title = "Office bridges online, but Tally is not open";
-    sub = "Open TallyPrime and the company on the computer or server where FinCom Bridge runs."; }
+  else if (cs.mode === "laptop" && office.length && !officeK) { const w = office.map((x) => offSay(x.beat)).find(Boolean); dot = "warn";
+    // (bridge 2.5.11: a Tally open there that takes no connection is said so, with the bridge's words)
+    title = w ? "Office bridges online: Tally is open but takes no connection" : "Office bridges online, but Tally is not open";
+    sub = w || "Open TallyPrime and the company on the computer or server where FinCom Bridge runs."; }
   else if (cs.mode === "laptop" && office.length) { dot = "ok"; title = "Connected through the office Tally (Tally open in " + officeK + " of " + nOfW(office.length, "bridge", "bridges") + ")";
     sub = [nOfW(rows.filter((r) => r.kind === "client" && r.c.w === YES).length, "client linked", "clients linked"), nOfW(officeOpen, "company open", "companies open"), lastAny ? "last entry " + lastWords(lastAny) : ""].filter(Boolean).join(" · "); }
   else if (cs.mode === "laptop") { dot = "warn"; title = "No FinCom Bridge is connected"; sub = "Open FinCom on the computer or server where TallyPrime runs, and install FinCom Bridge there."; }

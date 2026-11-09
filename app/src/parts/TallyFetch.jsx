@@ -144,7 +144,21 @@ export function whyWords(p, b) {
   const devs = (b && b.devices) || [];
   if (!devs.length) return "Waiting: open " + ((b && b.company) || "the company") + " in TallyPrime on the Tally computer, with FinCom Bridge running.";
   if (!devs.some((d) => d.fetchOn)) return "Waiting: reading older entries is off for the Tally computer that has this company.";
-  if (!p.pace) return "Waiting for Tally to be free: FinCom reads only while nobody is working in Tally and nothing is being posted.";
+  if (!p.pace) return reachWords(devs) || "Waiting for Tally to be free: FinCom reads only while nobody is working in Tally and nothing is being posted.";
+  return "";
+}
+// bridge 2.5.3+: the company's computer's bridge says (its beat, heard in the last 3 minutes) that no Tally of its login
+// answers, and why: said instead of "Waiting for Tally to be free" (the bridge's own words when it gives them)
+const REACH = { "connection off": "Tally is open but takes no connection.", "not answering": "Tally is open but does not answer.",
+  "no tally running in this login": "TallyPrime is not open in its Windows login.", "owner unknown": "TallyPrime seems to run as administrator.",
+  "another user": "the Tally running there is another Windows user’s." };
+export function reachWords(devs) {
+  const ids = new Set([].concat(devs || []).filter((d) => d && d.fetchOn).map((d) => d.id));
+  for (const d of tallyDevs()) {
+    const bt = ((d && d.info) || {}).beat || {}, why = String(bt.tallyWhy || "").trim().toLowerCase();
+    if (!ids.has(d.id) || !why || !bt.at || Date.now() - Date.parse(bt.at) > 3 * 60000) continue;
+    return "FinCom Bridge can’t reach your Tally: " + (String(bt.tallyConnectSay || "").replace(/\s+/g, " ").trim() || REACH[why] || why);
+  }
   return "";
 }
 function Bar({ p, label }) {

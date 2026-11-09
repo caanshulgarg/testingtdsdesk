@@ -1153,7 +1153,9 @@ func beatBody(tally bool, tstate, tsince string, open, ports, cos []any) M {
 		"tallyWhy": tallyWhy(ports), // 2.5.3: why no Tally of this user answers ("" when one does)
 		// 2.5.3: the person's words while FinCom just switched on Tally's connection in tally.ini ("" otherwise)
 		"tallyConnectSay": tallyConnectSay(tallyWhy(ports), tallyIniBeat()),
-		"updating":        keepRunning(), "dailyAt": keepDailyAt(), "nightlyAt": keepDailyAt(), "lastRun": keepLastRun(), "paused": paused(), "notAnsweringSince": notAnsweringSince(),
+		// 2.5.11: why this login's Tally takes no connection, its details (owntally2511.go; null otherwise)
+		"tallyOff": tallyOffBeat(tallyWhy(ports)),
+		"updating": keepRunning(), "dailyAt": keepDailyAt(), "nightlyAt": keepDailyAt(), "lastRun": keepLastRun(), "paused": paused(), "notAnsweringSince": notAnsweringSince(),
 		"lastRead": lastReadAt(), "events": true, "computer": computerName(), "allowlist": allowListBeat(),
 		"postOnly": toAny(postOnlyList()), // round 11: the companies this computer may post to (empty: any)
 		// round 15: the batch sizes applied (the file's, or FinCom's), and when FinCom last set them

@@ -86,7 +86,11 @@ func netState() (bool, []proc, []listener) {
 		var ps []proc
 		for _, x := range arr(f["processes"]) {
 			o := obj(x)
-			ps = append(ps, proc{ID: toInt(o["pid"]), Name: str(o["name"]), Session: toInt(o["session"]), Path: str(o["path"]), SessionUnknown: o["sessionUnknown"] == true, Sid: str(o["sid"])})
+			pr := proc{ID: toInt(o["pid"]), Name: str(o["name"]), Session: toInt(o["session"]), Path: str(o["path"]), SessionUnknown: o["sessionUnknown"] == true, Sid: str(o["sid"])}
+			if t, err := time.Parse(time.RFC3339, str(o["started"])); err == nil {
+				pr.Started = t // 2.5.11: when the program started (the tests' file)
+			}
+			ps = append(ps, pr)
 		}
 		var ls []listener
 		for _, x := range arr(f["listeners"]) {
@@ -267,7 +271,7 @@ func diagnosis() M {
 				}
 			}
 			// 2.5.3: a Tally whose owner is unknown counts as possibly yours (it is asked), never as another user's
-			tallies = append(tallies, M{"pid": p.ID, "program": p.Name, "session": p.Session, "user": users[p.Session], "mine": sessionOwner(p) != "other", "owner": sessionOwner(p), "ports": ports, "ini": tallyIni(p.Path)})
+			tallies = append(tallies, M{"pid": p.ID, "program": p.Name, "session": p.Session, "user": users[p.Session], "mine": sessionOwner(p) != "other", "owner": sessionOwner(p), "ports": ports, "ini": diagIni(p)})
 		}
 	}
 	free := 0
@@ -278,6 +282,7 @@ func diagnosis() M {
 		}
 	}
 	var mine, others []M
+	var tallyOff any // 2.5.11: the details of this login's Tally that takes no connection (owntally2511.go)
 	for _, t := range tallies {
 		if t["mine"] == true {
 			mine = append(mine, t)
@@ -318,6 +323,18 @@ func diagnosis() M {
 				add("ok", "Your TallyPrime accepts connections on port "+portList(ps)+".", "")
 				continue
 			}
+			// 2.5.11: its details and words, as the beat gives them (owntally2511.go)
+			offWords := ""
+			for _, p := range procs {
+				if p.ID == toInt(t["pid"]) {
+					d, w := tallyOffOf(p, procs, lis)
+					offWords = w
+					if tallyOff == nil {
+						tallyOff = d
+					}
+					break
+				}
+			}
 			ini := t["ini"].(M)
 			want := 9000
 			if toInt(ini["port"]) > 0 {
@@ -338,11 +355,16 @@ func diagnosis() M {
 					add("bad", fmt.Sprintf("Port %d is taken by another program (%s, %s), so your TallyPrime cannot use it.", want, str(h["program"]), who), fmt.Sprintf("In TallyPrime: F1 Help > Settings > Connectivity > Port = %d, save and restart TallyPrime.", free))
 				}
 			} else {
-				add("bad", fmt.Sprintf("Your TallyPrime is running but is not accepting connections on port %d yet.", want), "In TallyPrime: F1 Help > Settings > Connectivity > \"TallyPrime acts as\" = Both, then close and reopen TallyPrime (the setting takes effect after a restart).")
+				// 2.5.11 (owntally2511.go): why, as the beat says it ("close and reopen" only when tally.ini changed after it started)
+				fix := offWords
+				if fix == "" {
+					fix = "In TallyPrime: F1 Help > Settings > Connectivity > \"TallyPrime acts as\" = Both, then close and reopen TallyPrime (the setting takes effect after a restart)."
+				}
+				add("bad", fmt.Sprintf("Your TallyPrime is running but is not accepting connections on port %d yet.", want), fix)
 			}
 		}
 	}
-	return M{"ok": true, "version": BridgeVersion, "user": me, "mySession": mySession(), "seeProcesses": ok, "findings": findings, "tallies": tallies, "listeners": listeners, "freePort": free}
+	return M{"ok": true, "version": BridgeVersion, "user": me, "mySession": mySession(), "seeProcesses": ok, "findings": findings, "tallies": tallies, "listeners": listeners, "freePort": free, "tallyOff": tallyOff}
 }
 
 // the ports to try (2.5.3: a chain that cannot silently end empty): the ports the settings name (TallyPorts), then
@@ -401,7 +423,9 @@ func portPlan() (string, []M) {
 			add(f)
 		}
 	}
-	more := mergePorts(tallyIniPorts(), []int{9000})
+	// 2.5.11 (owntally2511.go): the ports the tally.ini of this login's running Tally names (and this login's VirtualStore
+	// copies), first, whether or not anything listens there yet
+	more := mergePorts(mergePorts(ownTallyIniPorts(), tallyIniPorts()), []int{9000})
 	if lis == nil && mode == "auto" {
 		// Windows did not let the bridge list programs (and no port is set by hand): FallbackPorts too, as before
 		mode = "fallback"

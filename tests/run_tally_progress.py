@@ -270,6 +270,20 @@ def main():
         ew = txt(R(KES) + " [data-tpg-ewait]")
         ok(pg.get_attribute(R(KES) + " [data-tpg-entries]", "data-tpg-entries") == "going" and ew == "Waiting: reading older entries is off for the Tally computer that has this company.",
            "3 (review). Bring books waiting: why, in the Entries cell (%s | %s)" % (pg.get_attribute(R(KES) + " [data-tpg-entries]", "data-tpg-entries"), ew))
+        # bridge 2.5.11: waiting for Tally to be free, but the company's computer's bridge can't reach its Tally: the real reason
+        OFFW = "Your TallyPrime is open but its connection is off: in TallyPrime press F1 → Settings → Connectivity, set 'TallyPrime acts as' to Both, keep the port, press Ctrl+A to save, then reopen TallyPrime."
+        BEATS = "[window.__devs, TLight.st.devs, TCloud.pane.devices].forEach(L => (L || []).forEach(d => { if (d && d.id === id && d.info && d.info.beat) f(d.info.beat); }))"
+        E("""([id, w]) => { const sm = window.__sum.find(x => x.pull); sm.devices = [{id, fetchOn: true}]; sm.pull.state = 'going'; sm.pull.pace = false;
+          const f = (b) => { b.at = new Date().toISOString(); b.tallyWhy = 'connection off'; b.tallyConnectSay = w; }; %s;
+          if (window.tfxRefresh) window.tfxRefresh(); render(); }""" % BEATS, [dA["id"], OFFW]); pg.wait_for_timeout(1500)
+        ew = txt(R(KES) + " [data-tpg-ewait]")
+        ok(ew == "FinCom Bridge can’t reach your Tally: " + OFFW, "3 (2.5.11). waiting, the bridge can't reach the company's Tally: the bridge's words, not 'Waiting for Tally to be free' (%s)" % ew)
+        E("""([id]) => { const f = (b) => { b.tallyConnectSay = ''; b.tallyWhy = 'no Tally running in this login'; }; %s; if (window.tfxRefresh) window.tfxRefresh(); render(); }""" % BEATS, [dA["id"]]); pg.wait_for_timeout(1200)
+        ew = txt(R(KES) + " [data-tpg-ewait]")
+        ok(ew == "FinCom Bridge can’t reach your Tally: TallyPrime is not open in its Windows login.", "3 (2.5.11). no words from the bridge: its reason in plain words (%s)" % ew)
+        E("""([id]) => { const f = (b) => { b.tallyWhy = ''; }; %s; if (window.tfxRefresh) window.tfxRefresh(); render(); }""" % BEATS, [dA["id"]]); pg.wait_for_timeout(1200)
+        ew = txt(R(KES) + " [data-tpg-ewait]")
+        ok(ew.startswith("Waiting for Tally to be free"), "3 (2.5.11). Tally reachable, only busy: 'Waiting for Tally to be free' as before (%s)" % ew)
         E("""() => { const sm = window.__sum.find(x => x.pull); Object.assign(sm, window.__pull0); if (window.__kSync) S.tcoSync[sm.client] = window.__kSync; if (window.tfxRefresh) window.tfxRefresh(); }"""); pg.wait_for_timeout(1500)
         # Kestrel's: Bring books paused, the bridge's wait, in its history
         E("() => { window.__sum.find(x => x.pull).pull.state = 'paused'; if (window.tfxRefresh) window.tfxRefresh(); }"); pg.wait_for_timeout(1500)

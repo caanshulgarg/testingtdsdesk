@@ -75,6 +75,7 @@ func portReason(e M) string {
 // the beat's tallyWhy: "" when one of the user's Tallys answers; else the most useful reason for the person: not
 // answering, (2.5.4) connection off, owner unknown, another user, no Tally running in this login
 func tallyWhy(ports []any) string {
+	noteTallyPort(ports) // 2.5.11: the last port this login's own Tally answered on (owntally2511.go)
 	has := map[string]bool{}
 	for _, x := range ports {
 		o := obj(x)
@@ -91,8 +92,8 @@ func tallyWhy(ports []any) string {
 		return "not answering"
 	}
 	// 2.5.4 (owntally254.go): this login's Tally takes no connection: said above "owner unknown" and "another user"
-	if off, words := connOffFn(ports); off {
-		noteConnOff(words)
+	if off, words, d := connOffFn(ports); off {
+		noteConnOff(words, d)
 		return whyConnOff
 	}
 	switch {

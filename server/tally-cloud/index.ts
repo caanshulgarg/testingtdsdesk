@@ -2232,6 +2232,31 @@ const PORT_REASONS = ["open", "busy", "closed", "not answering", "owner unknown"
 const PORT_LISTS = ["named", "empty", "emptyHeld", "kept", "never"];
 // bridge 2.5.4: "connection off" (this login's Tally runs but takes no connection; the fix in tallyConnectSay)
 const TALLY_WHY = ["not answering", "connection off", "owner unknown", "another user", "no Tally running in this login"];
+// bridge 2.5.11: why this login's TallyPrime is open but takes no connection, its details (the beat's tallyOff): the reason
+// (a known one), the running tally.exe's folder name and the tally.ini's (a name only: no path), which tally.ini it reads,
+// "TallyPrime acts as", its port and the port it should listen on, when that file changed and when the Tally started (ISO
+// times only) and whether it changed after, who holds the port (a known kind; another user's short name, 40 letters at
+// most), this login's own port, the last port its Tally answered on and when; anything else dropped
+const OFF_REASONS = ["reopen", "lost", "mode", "clash", "program", "closed"];
+const OFF_INI = ["programFiles", "virtualStore", "exeFolder", "none"];
+const OFF_MODES = ["Both", "Server", "Client", "None"];
+const OFF_HELD = ["otherUser", "tally", "program"];
+function tallyOffOf(b: any) {
+  const x = b?.tallyOff;
+  if (!x || typeof x !== "object" || Array.isArray(x) || !OFF_REASONS.includes(x.reason)) return null;
+  // (a name only: the last part of a path sent by mistake, never the path)
+  const nm = (v: unknown) => typeof v === "string" ? (v.split(/[\\/]/).pop() || "").replace(/[:*?"<>|\x00-\x1f]/g, "").trim().slice(0, 60) : "";
+  const port = (v: unknown) => Number.isInteger(v) && (v as number) > 0 && (v as number) <= 65535 ? v as number : 0;
+  const t = (v: unknown) => typeof v === "string" && /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?(Z|[+-]\d\d:\d\d)$/.test(v) && !isNaN(Date.parse(v)) ? v : "";
+  const o: any = { reason: x.reason, folder: nm(x.folder), iniKind: OFF_INI.includes(x.iniKind) ? x.iniKind : "none", iniFolder: nm(x.iniFolder),
+    mode: OFF_MODES.includes(x.mode) ? x.mode : "", port: port(x.port), want: port(x.want), iniAfterStart: x.iniAfterStart === true };
+  if (t(x.iniAt)) o.iniAt = t(x.iniAt);
+  if (t(x.startedAt)) o.startedAt = t(x.startedAt);
+  if (OFF_HELD.includes(x.heldBy)) { o.heldBy = x.heldBy; if (x.heldBy === "otherUser" && nm(x.heldUser)) o.heldUser = nm(x.heldUser).slice(0, 40); }
+  if (port(x.ownPort)) o.ownPort = port(x.ownPort);
+  if (port(x.lastPort)) { o.lastPort = port(x.lastPort); if (t(x.lastAt)) o.lastAt = t(x.lastAt); }
+  return o;
+}
 // bridge 2.5.10 (the owner: "Bridge should work every time except when Tally itself is unavailable"): why the bridge's
 // last run ended and when it ran again (it says so for 6 hours): when (ISO times only), a known reason, the exit code, the
 // kind of its last log line (a known kind, never the line); anything else dropped. Kept on the beat and, for the page's
@@ -4306,6 +4331,8 @@ Deno.serve(sentry.wrap(async (req) => {
           // bridge 2.5.3: why none of the user's Tallys answers ("" when one does), and the person's words after FinCom
           // switched on Tally's connection in tally.ini
           ...(TALLY_WHY.includes(b.tallyWhy) ? { tallyWhy: b.tallyWhy } : {}), ...(s(b.tallyConnectSay, 200) ? { tallyConnectSay: s(b.tallyConnectSay, 200) } : {}),
+          // bridge 2.5.11: why this login's Tally takes no connection, its details (only with tallyWhy "connection off")
+          ...(b.tallyWhy === "connection off" && tallyOffOf(b) ? { tallyOff: tallyOffOf(b) } : {}),
           companies: (Array.isArray(b.companies) ? b.companies : []).slice(0, 200).map((c: any) => ({ name: coTrim(c?.name), open: !!c?.open, at: s(c?.at, 30), phase: s(c?.phase, 12),
             waiting: Math.max(0, Math.min(1e6, Math.floor(Number(c?.waiting) || 0))), lastRead: s(c?.lastRead, 30),
             // 2.4.5: the company's GUID as the bridge holds it (the ledger progress of a bridge not holding it yet is matched by it)

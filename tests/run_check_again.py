@@ -123,6 +123,22 @@ def main():
            "M2. the top line: office bridges online, but Tally is not open, amber (%s)" % txt("#app [data-tsm-top]")[:160])
         say = E("() => FCTallySimple.checkedSay()")
         ok(re.match(CHECKED, say) and "2 bridges online, but Tally is not open." in say and "connected" not in say, "M2. bridges online, Tally closed: not 'connected' (%s)" % say)
+        # bridge 2.5.11: one of them says its login's Tally is open but takes no connection: never "Tally is not open"
+        OFFW = "Your TallyPrime is open but not taking connections on port 9041: in F1 → Settings → Connectivity check 'TallyPrime acts as' is Both and the port is 9041, press Ctrl+A to save, reopen TallyPrime."
+        c1o = [T.dev(5, NW, "made-up-o1", tally="closed", opened=(), version="2.5.11", rec=(), beat={"bridgePort": 9101, "windowsUser": NW + "\\made-up-o1", "tallyWhy": "connection off",
+                     "tallyConnectSay": OFFW, "tallyOff": {"reason": "closed", "folder": "TallyPrime", "iniKind": "programFiles", "mode": "Both", "port": 9041, "want": 9041}},
+                     ports=[{"port": 9041, "ok": False, "skipped": False, "n": 0, "error": "Tally is not open (nothing listens on this port)", "reason": "closed"}]), c1s[1]]
+        scene(c1o, c9, [ORBIT, NOVA_C, LARK], {})
+        say = E("() => FCTallySimple.checkedSay()")
+        ok(re.match(CHECKED, say) and ("2 bridges online. Tally is open in your Windows login but takes no connection: " + OFFW) in say and "Tally is not open" not in say,
+           "M2. 2.5.11: a bridge says its Tally takes no connection: said with its words, never 'Tally is not open' (%s)" % say)
+        ok(txt("#app [data-tsm-top-title]") == "Office bridges online: Tally is open but takes no connection" and OFFW in txt("#app [data-tsm-top-sub]"),
+           "M2. 2.5.11: the top line says it too, with the bridge's words (%s)" % txt("#app [data-tsm-top]")[:200])
+        E("() => { const b = window.__devs[0].info.beat; b.tallyWhy = ''; delete b.tallyOff; b.tallyConnectSay = ''; TLight.st.devs = JSON.parse(JSON.stringify(window.__devs)); TCloud.pane.devices = TLight.st.devs; render(); }")
+        pg.wait_for_timeout(400)
+        say = E("() => FCTallySimple.checkedSay()")
+        ok("2 bridges online, but Tally is not open." in say, "M2. 2.5.11: neither says so: 'Tally is not open' as before (%s)" % say)
+        scene(c1s, c9, [ORBIT, NOVA_C, LARK], {})
         say = E("() => { const L = FCTallySimple.LOCALB, b = L.busy; L.busy = true; try { return FCTallySimple.checkedSay(); } finally { L.busy = b; } }")
         ok("Still looking on this computer." in say, "M2. the look still going: still looking on this computer (%s)" % say)
         say = E("() => { const L = FCTallySimple.LOCALB, p = L.perm; L.perm = 'denied'; try { return FCTallySimple.checkedSay(); } finally { L.perm = p; } }")

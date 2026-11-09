@@ -117,6 +117,17 @@ def main():
         ok(txt("#app [data-tsm-top-tally='9043']").startswith("port 9043 · connection off") and txt("#app [data-tsm-top-tally='9041']").startswith("port 9041 · connected · 1 company"),
            "1b. the top line: 9041 connected with its company, 9043 its connection off (%s)" % t[:0] + txt(TOP)[:220])
         ok(n("#app [data-tsm-top-tally='9044']") == 0 and "9044" not in txt(TOP), "1b (re-review 3). another program on 9044 ('not tally') is not listed as a Tally")
+        # bridge 2.5.11: its details name the port (tallyOff.want): marked "connection off" however many of this login's ports are closed
+        off47 = {"port": 9047, "ok": False, "skipped": False, "n": 0, "error": "Tally is not open (nothing listens on this port)", "reason": "closed"}
+        dA1c = adev([up, off43, off47], opened=(ORB,), why="connection off")
+        dA1c["info"]["beat"]["tallyOff"] = {"reason": "closed", "folder": "TallyPrime", "iniKind": "programFiles", "mode": "Both", "port": 9047, "want": 9047}
+        scene([dA1c, bdev()], c1, CL, A_PINGS)
+        ok(txt("#app [data-tsm-top-tally='9047']").startswith("port 9047 · connection off") and n("#app [data-tsm-top-tally='9043']") == 0,
+           "1c (2.5.11). two closed: the one tallyOff names is 'connection off', the other no Tally (%s)" % txt(TOP)[:220])
+        dA1d = adev([up, off43], opened=(ORB,), why="connection off")
+        dA1d["info"]["beat"]["tallyOff"] = {"reason": "clash", "folder": "TallyPrime", "iniKind": "programFiles", "mode": "Both", "port": 9000, "want": 9000, "heldBy": "otherUser"}
+        scene([dA1d, bdev()], c1, CL, A_PINGS)
+        ok(txt("#app [data-tsm-top-tally='9000']").startswith("port 9000 · connection off"), "1c (2.5.11). its port held by another login's Tally: still shown as this login's, connection off (%s)" % txt(TOP)[:220])
         up45 = {"port": 9045, "ok": True, "skipped": False, "n": 1, "error": "", "reason": "open"}
         scene([adev([up, up45], opened=(ORB,)), bdev()], c1, CL, A_PINGS)
         ok(txt("#app [data-tsm-top-sub]").startswith("2 Tallys (ports 9041, 9045) · 1 company open") and "port ?" not in txt(TOP) and "No company open" not in txt(TOP),

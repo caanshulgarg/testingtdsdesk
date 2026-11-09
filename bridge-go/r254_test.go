@@ -224,7 +224,7 @@ func TestR254ConnectionOffRanked(t *testing.T) {
 	r254Bridge(t)
 	old := connOffFn
 	t.Cleanup(func() { connOffFn = old })
-	connOffFn = func([]any) (bool, string) { return true, connOffWordsMode }
+	connOffFn = func([]any) (bool, string, M) { return true, connOffWordsMode, nil }
 	cases := []struct {
 		ports []any
 		want  string
@@ -243,7 +243,7 @@ func TestR254ConnectionOffRanked(t *testing.T) {
 	if say := tallyConnectSay(tallyWhy(cases[0].ports), nil); say != connOffWordsMode {
 		t.Fatalf("say %q", say)
 	}
-	connOffFn = func([]any) (bool, string) { return false, "" }
+	connOffFn = func([]any) (bool, string, M) { return false, "", nil }
 	if got := tallyWhy(cases[0].ports); got != "another user" {
 		t.Fatalf("not off: %q", got)
 	}
@@ -261,15 +261,17 @@ func TestR254ConnectionOffFromWindows(t *testing.T) {
 	// durgesh's Tally (session 1) listens nowhere; hemant's (session 2) has 9000
 	procs := fmt.Sprintf(`{"pid": 10, "name": "tally", "session": 1, "path": %q}, {"pid": 20, "name": "tally", "session": 2}`, exe)
 	r253Server(t, procs, `{"port": 9000, "pid": 20}`)
-	if off, w := connOffNow(nil); !off || w != connOffWordsMode {
+	// 2.5.11 (owntally2511.go): the words say the mode, the port taken by another user's Tally (with this login's own port), and
+	// nothing listening on its port ("close and reopen" only when tally.ini changed after the Tally started: r2511_test.go)
+	if off, w, _ := connOffNow(nil); !off || w != offWordsMode {
 		t.Fatalf("acts as Client: %v %q", off, w)
 	}
 	write("[Tally]\r\nClient Server = Both\r\nServer Port = 9000\r\n")
-	if off, w := connOffNow(nil); !off || w != fmt.Sprintf(connOffWordsPort, 9000) {
+	if off, w, d := connOffNow(nil); !off || !strings.HasPrefix(w, "Your TallyPrime's port 9000 is used by hemant's Tally: set your own port ") || d["reason"] != offClash {
 		t.Fatalf("port taken: %v %q", off, w)
 	}
 	write("[Tally]\r\nClient Server = Both\r\nServer Port = 9070\r\n")
-	if off, w := connOffNow(nil); !off || w != connOffWordsReopen {
+	if off, w, _ := connOffNow(nil); !off || w != fmt.Sprintf(offWordsClosed, 9070, 9070) {
 		t.Fatalf("set, not on: %v %q", off, w)
 	}
 	// the beat: hemant's port is "another user", but the reason given is this login's connection
@@ -288,12 +290,12 @@ func TestR254ConnectionOffFromWindows(t *testing.T) {
 	}
 	// this login's Tally listening: not off
 	r253Server(t, fmt.Sprintf(`{"pid": 10, "name": "tally", "session": 1, "path": %q}`, exe), `{"port": 9070, "pid": 10}`)
-	if off, _ := connOffNow(nil); off {
+	if off, _, _ := connOffNow(nil); off {
 		t.Fatal("listening: not off")
 	}
 	// no Tally in this login: not off (the reason stays "no Tally running in this login")
 	r253Server(t, `{"pid": 20, "name": "tally", "session": 2}`, `{"port": 9000, "pid": 20}`)
-	if off, _ := connOffNow(nil); off {
+	if off, _, _ := connOffNow(nil); off {
 		t.Fatal("no own Tally: not off")
 	}
 }

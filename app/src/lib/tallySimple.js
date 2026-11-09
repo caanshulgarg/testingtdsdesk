@@ -330,13 +330,18 @@ const hhmm = () => { const d = new Date(), p = (x) => String(x).padStart(2, "0")
 const nBr = (n) => n + (n > 1 ? " bridges" : " bridge");
 // a bridge of the firm (bridgesOf) whose Tally is open: a company open there, or its beat's ports say so
 export const tallyOpenOn = (b) => !!(b.open.length || upBeat(b.beat || {}));
+// bridge 2.5.11: a beat saying its login's Tally is open but takes no connection (tallyWhy "connection off", or its
+// details tallyOff): the bridge's words ("" otherwise)
+export const offSay = (x) => { const b = x || {}; return lc(b.tallyWhy) === "connection off" || (b.tallyOff && typeof b.tallyOff === "object") ? shown(b.tallyConnectSay) || "its connection is off." : ""; };
 export function checkedSay(lead) {
   const at = "Checked " + hhmm() + ": ";
   try {
     const o = ownState(), own = o.own || {}, here = o.from === "here" || !!own.local || own.how === "found" || own.how === "unsure";
     const on = bridgesOf().filter((b) => b.at && Date.now() - Date.parse(b.at) < 3 * 60000), k = on.filter(tallyOpenOn).length;
+    // (bridge 2.5.11: a fresh beat whose Tally runs but takes no connection is never "Tally is not open")
+    const off = k ? "" : on.map((b) => offSay(b.beat)).find(Boolean);
     const office = !on.length ? "no FinCom Bridge of the firm is online." : k ? "the office Tally is connected (" + nBr(on.length) + ", Tally open in " + k + ")."
-      : nBr(on.length) + " online, but Tally is not open.";
+      : off ? nBr(on.length) + " online. Tally is open in your Windows login but takes no connection: " + off : nBr(on.length) + " online, but Tally is not open.";
     const me = LOCALB.busy ? "Still looking on this computer." : LOCALB.perm === "denied" ? BLOCKED
       : here ? (o.state === "ok" ? "This computer's FinCom Bridge is connected." : "This computer's FinCom Bridge is not answering.")
       : own.how === "linked" ? "This computer has no FinCom Bridge: your login uses the office's."
