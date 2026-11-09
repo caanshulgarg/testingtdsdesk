@@ -1,7 +1,7 @@
 FINCOM BRIDGE 2.5.11 - TEST SHEET (2.5.10's sheet below, with 2.5.11's new checks first)
 
 File:        FinComBridge-Setup-2.5.11.exe
-Fingerprint: SHA-256 (filled in at the build; compare with the .sha256 file next to the setup)
+Fingerprint: SHA-256 27f950e9d2fea218d1f32143a2e8b804afe1e2e2cb739b60d49d1fb43ca3458b (FinComBridge-Setup-2.5.11.exe, built 09-Nov-2026 09:30 UTC at bridge sources 044b4a3ea, POSTONLY=any; compare with the .sha256 file next to the setup); program FinComBridge-2.5.11.exe SHA-256 a4623baf903a5332ee8dd08247aae8bfa62001603d40cbe4d4c9e7c0a58198ac
 
 2.5.11: one thing, nothing new asked of Tally (no new request, the same 2-second stop, one request at a time, postings
 first, never while someone is typing in Tally), and no tally.ini written by it (another user's never).
