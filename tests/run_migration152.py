@@ -242,6 +242,7 @@ def load_book(db, B, F_, cid, L, V, start):
                 tid += 1; rows_b.append("\t".join([str(tid), B, F_, v["id"], v["date"].isoformat(), e["l"], x[0], x[1], paise(x[2]), str(x[3])]))
     s = ["insert into tally_books (book_id, firm_id, client_id, company, from_date, open_as_on, days_at, ledgers_at) values (%s, %s, %s, 'Made-up Heron Traders', %s, %s, now(), now());" % (q(B), q(F_), q(cid), q(start.isoformat()), q(start.isoformat())),
          "copy tally_ledgers (book_id, firm_id, name, parent, open, chain, primary_group, merged_into, deleted_at) from stdin;", "\n".join(rows_l), "\\.",
+         "copy tally_groups (book_id, firm_id, name, parent) from stdin;", "\n".join("\t".join([B, F_, g, pg]) for g, pg in GROUPS.items()), "\\.",
          "copy tally_vouchers (book_id, firm_id, guid, day, alter_id, vtype, vno, party, narration, cancelled, optional, deleted_at, pos, cmp_gstin) from stdin;", "\n".join(rows_v), "\\.",
          "copy tally_lines (id, book_id, firm_id, guid, day, ledger, amount) from stdin;", "\n".join(rows_t), "\\.",
          "copy tally_bills (id, book_id, firm_id, guid, day, ledger, name, type, amount, credit_days) from stdin;", "\n".join(rows_b), "\\.",
@@ -253,13 +254,15 @@ def load_book(db, B, F_, cid, L, V, start):
          "analyze;"]
     db.sql("\n".join(s) + "\n")
 
+TODAY = datetime.date(2026, 11, 9)          # the day the books were brought in (b.tb.to; the control's day)
 def browser_books(cid, L, V, start, end, led_order, st):
+    """what TCloud.load reads (tally_ledgers in the cloud's order by name, tally_groups, the entries: a deleted one is gone,
+    a cancelled or optional one kept, marked), and the work the browser keeps for the client"""
     saved, led_info, msme, fs, challans, company, cfg = st
-    return {"cid": cid, "meta": {"from": d8(start), "to": d8(end), "company": "Made-up Heron Traders"},
-            # Tally's balances as TCloud.load reads them (tally_ledgers ordered by name; no closing balance in the copy)
-            "tb": {"from": d8(start), "to": d8(end), "at": "2026-11-01T00:00:00Z", "src": "copy", "led": {n: {"open": L[n][1] / 100, "close": ""} for n in led_order}},
-            "under": {n: L[n][0] for n in led_order if L[n][0]}, "groups": dict(GROUPS),
-            "ledInfo": led_info, "msme": msme, "fs": fs, "challans": challans, "misCfg": cfg,
+    return {"cid": cid, "from": d8(start), "today": d8(TODAY),
+            "ledgers": [{"name": n, "parent": L[n][0], "open": L[n][1] / 100} for n in led_order],
+            "groups": [{"name": g, "parent": pg} for g, pg in GROUPS.items()],
+            "work": {"ledInfo": led_info, "msme": msme, "fs": fs, "challans": challans, "misCfg": cfg},
             "vouchers": [{"id": v["id"], "date": d8(v["date"]), "no": v["no"], "type": v["type"], "party": v["party"], "pos": v["pos"], "cmp": v["cmp"].upper(), "narr": "", "opt": v["opt"], "cancel": v["cancel"],
                           "ent": [dict({"l": e["l"], "a": e["a"] / 100}, **({"b": [[x[0], x[1], x[2] / 100, x[3]] for x in e["b"]]} if e.get("b") else {})) for e in v["ent"]]}
                          for v in V if not v["deleted"]]}
@@ -381,6 +384,7 @@ try:
     create table if not exists tally_bills (book_id uuid, firm_id uuid, guid text, day date, ledger text, name text, type text, amount numeric, bill_date date, credit_days integer, due date, id bigint primary key);
     create index if not exists tally_bills_book_guid on tally_bills (book_id, guid);
     create index if not exists tally_lines_book_day on tally_lines (book_id, day);
+    create table if not exists tally_groups (book_id uuid, firm_id uuid, name text, parent text, primary key (book_id, name));
     create table if not exists clients (id text, firm_id uuid, name text, data jsonb default '{}', deleted boolean default false, primary key (firm_id, id));
     insert into firms values (%s, 'Made-up Firm A'), (%s, 'Made-up Firm B');
     insert into members (user_id, firm_id, name, role) values (%s, %s, 'Made-up Owner', 'owner'), (%s, %s, 'Made-up Other', 'owner');
@@ -403,14 +407,14 @@ try:
         nlines = int(db.one("select count(*) from tally_lines where book_id = %s" % q(B)))
         print("== %s: %d entries (%d ledgers, %d lines) made and loaded in %.1f s" % (label, len(V), len(L), nlines, time.time() - t0))
         led_order = [r["name"] for r in db.rows("select name from tally_ledgers where book_id = %s and merged_into is null order by name" % q(B))]
-        periods = [("20250401", "20260331"), ("20261001", "20261031"), ("20250815", "20251120"), (d8(start), d8(end)), ("20240501", "20240630")]
+        periods = [("20250401", "20260331"), ("20261001", "20261031"), ("20250815", "20251120"), (d8(start), d8(TODAY)), ("20240501", "20240630")]
         t0 = time.time()
         br = run_browser(label, browser_books(cid, L, V, start, end, led_order, st), st[0], st[5], periods)
         print("   the browser's engine in Node: %.1f s (MIS.runNow: %s ms)" % (time.time() - t0, ", ".join("%s %d" % (k, v) for k, v in br["ms"].items())))
         store(db, F, cid, br["map"], st)
-        compare(db, label, cid, br, periods, end)
+        compare(db, label, cid, br, periods, TODAY)
         if timed:
-            T = timing(db, B, [periods[0], periods[3]], end); T_ALL = T
+            T = timing(db, B, [periods[0], periods[3]], TODAY); T_ALL = T
             for k, v in T.items(): print("   %-34s %8.1f ms" % (k, v))
             ok(all(v < 1000 for v in T.values()), "3. every part under 1 s on %d entries / %d ledgers (slowest %.0f ms: %s)" % (len(V), len(L), max(T.values()), max(T, key=T.get)))
 

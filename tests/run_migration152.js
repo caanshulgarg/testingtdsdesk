@@ -5,11 +5,22 @@
 // Python side to compare with the SQL, each run timed.
 const fs = require("fs"), {load} = require("./harness"), {HTML} = require("./harness");
 const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "fmtDate", "tallyDate", "STATE_CODES", "RULE_DEFAULTS", "Books", "LedMaster", "Audit", "MIS", "TDS", "Certs", "GSTR", "GSTAdv", "GSTRev", "GSTAmend", "GST2B",
-  "INR", "NORM_CACHE", "normName", "normNameRaw", "nameSim", "Parties", "FS", "GSTSet", "GSTF", "GSTQ", "FC", "LK", "Rec", "choiceSplit", "choiceAcc", "choiceLegacy", "choiceRec", "choiceDerive", "choiceGet", "choiceUsable"];
+  "INR", "NORM_CACHE", "normName", "normNameRaw", "nameSim", "Parties", "FS", "GSTSet", "GSTF", "GSTQ", "FC", "LK", "Rec", "TallyRead", "choiceSplit", "choiceAcc", "choiceLegacy", "choiceRec", "choiceDerive", "choiceGet", "choiceUsable"];
 const {ctx, x} = load(HTML, NAMES);
-const inp = JSON.parse(fs.readFileSync(process.argv[2], "utf8")), b = inp.books;
+const all = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+const inp = Object.assign({}, all.books, {saved: all.saved, company: all.company, periods: all.periods});
+// the books as TCloud.load puts them together (src/js/49, as tests/run_migration151.js does): the groups as
+// TCloud.groupsInto reads tally_groups, TallyRead.balances with the ledger rows TCloud.restAll reads (in the cloud's
+// order by name) and the copy's first day, tb.src "copy", tb.to the day they were brought in; FinCom's ledger list by
+// Books.mapLedgers (with the ledgers set by hand); then the work kept in client_book_items (ledInfo, msme, fs, misCfg,
+// challans) and the client's choices
+const b = {cid: inp.cid, meta: {from: inp.from, company: "Made-up Heron Traders"}, vouchers: inp.vouchers};
 b.vouchers.forEach(v => { v.ent.forEach(e => { if (!e.b) delete e.b; }); });
-b.map = x.Books.mapLedgers(b.vouchers, inp.saved || {});   // FinCom's ledger list as the browser makes it on load, with the ones set by hand
+b.groups = {}; (inp.groups || []).forEach(g => { b.groups[g.name] = g.parent || ""; });
+x.TallyRead.balances(b, {ledgers: inp.ledgers.map(l => ({name: l.name, parent: l.parent, open: String(l.open), close: ""}))}, inp.from, inp.today);
+b.tb.src = "copy"; if (String(b.tb.to) < inp.today) b.tb.to = inp.today;
+Object.assign(b, inp.work);
+b.map = x.Books.mapLedgers(b.vouchers, inp.saved || {});
 ctx.S.books = b; ctx.S.coId = b.cid; ctx.S.companies = {[b.cid]: inp.company}; ctx.CO = () => Object.assign({id: b.cid, name: "Made-up Heron Traders"}, inp.company);
 const out = {map: b.map, runs: {}, ms: {}};
 inp.periods.forEach(([from, to]) => {

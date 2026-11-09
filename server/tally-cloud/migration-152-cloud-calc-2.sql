@@ -35,7 +35,12 @@
 --                                         ranges), tops (mtd, ytd), cash, comp, msme, control
 --   tally_mis_part(client, part, from, to, today)  the same for a member: the book for the period of its own firm only
 -- Adds only: new functions. No table, no index (tally_vouchers (book_id, guid), tally_lines (book_id, guid),
--- tally_ledger_day (book_id, ledger, day) and (book_id, day) are there). Safe to run twice. Nothing of 151 is changed.
+-- tally_ledger_day (book_id, ledger, day) and (book_id, day) are there). Safe to run twice. Nothing of 151 is changed;
+-- it needs 151 as revised (tally_calc_led with the group walk and deleted ledgers left out, tally_calc_ageing_bal).
+-- Each function sets jit off (on a plan the planner costs high, JIT compiling took half a second before the first row on
+-- 10,000 ledgers), the heavy ones work_mem 32MB (the period's lines sorted in memory), and the line reader no nested
+-- loop (the planner, not knowing the period, guessed a few hundred entries for 40,000). Every part takes under 1 s on
+-- 40,000 entries and 10,000 ledgers (tests/run_migration152.py).
 
 begin;
 set local lock_timeout = '10s';
@@ -587,26 +592,36 @@ end $function$;
 -- ---------------------------------------------------------------- MSME suppliers past the days (MIS.runNow's r.msme)
 create or replace function public.tally_calc_msme(p_book uuid, p_to date)
 returns jsonb language plpgsql stable security definer set search_path to 'public', 'pg_temp' set jit to 'off' set work_mem to '32MB' as $function$
-declare b tally_books%rowtype; ag jsonb; md numeric := 45; v jsonb; res jsonb;
+declare b tally_books%rowtype; ag jsonb; md numeric := 45; v jsonb; res jsonb; pb jsonb; mm jsonb;
 begin
   select * into b from tally_books x where x.book_id = p_book;
   if b.book_id is null or p_to is null then return null; end if;
   -- MIS.cfg: misCfg.msmeDays, else 45
   select i.data into v from client_book_items i where i.firm_id = b.firm_id and i.client_id = b.client_id and i.key = 'misCfg' and i.item = '.msmeDays' and not i.deleted;
   if v is not null then md := tally_calc_num(v); end if;
-  ag := tally_calc_ageing(p_book, p_to, 'p');
-  -- MIS.msme: the Udyam type in the ledger masters (ledInfo), the type set on the page (msme) over it ('' takes it off)
+  -- MIS.msme: the Udyam type in the ledger masters (ledInfo), the type set on the page (msme) over it ('' takes it off);
+  -- only a micro or small enterprise counts here
   with li as (select substr(i.item, 2) as name, i.data ->> 'msme' as t from client_book_items i
                 where i.firm_id = b.firm_id and i.client_id = b.client_id and i.key = 'ledInfo' and i.item like '.%' and not i.deleted and tally_calc_truthy(i.data -> 'msme')),
   ms as (select substr(i.item, 2) as name, i.data from client_book_items i
                 where i.firm_id = b.firm_id and i.client_id = b.client_id and i.key = 'msme' and i.item like '.%' and not i.deleted),
-  mm as (select coalesce(ms.name, li.name) as name, case when ms.name is not null then case when tally_calc_truthy(ms.data) then ms.data #>> '{}' end else li.t end as t
-           from li full join ms on ms.name = li.name),
-  pr as (select r.o, r.x ->> 'party' as party, mm.t, r.x -> 'open' as op from jsonb_array_elements(coalesce(ag -> 'rows', '[]'::jsonb)) with ordinality r(x, o)
-           join mm on mm.name = r.x ->> 'party' where mm.t ~* 'micro|small'),
-  pb as (select pr.o, pr.party, pr.t, jsonb_agg(z.y order by z.k) as bills, sum((z.y ->> 'left')::numeric) as amt
+  m0 as (select coalesce(ms.name, li.name) as name, case when ms.name is not null then case when tally_calc_truthy(ms.data) then ms.data #>> '{}' end else li.t end as t
+           from li full join ms on ms.name = li.name)
+  select coalesce(jsonb_object_agg(m0.name, m0.t), '{}'::jsonb) into mm from m0 where m0.t ~* 'micro|small';
+  if mm = '{}'::jsonb then return jsonb_build_object('days', md, 'rows', '[]'::jsonb); end if;
+  -- the payables ageing on the day (MIS.ageing(to, "p"), tally_calc_ageing_bal) of these suppliers alone: each party's
+  -- row is its own bills and its own balance (Audit.balances: the opening plus every entry from the books' first day)
+  with l as (select x.name, x.open, x.deb, x.cred from tally_calc_led(p_book) x where x.cred and mm ? x.name),
+  d as (select d.ledger, sum(d.amount) as a from tally_ledger_day d join l on l.name = d.ledger
+         where d.book_id = p_book and d.merged_into is null and d.day >= b.from_date and d.day <= p_to group by 1)
+  select coalesce(jsonb_object_agg(l.name, jsonb_build_array(l.open + coalesce(d.a, 0), l.deb, l.cred)), '{}'::jsonb) into pb from l left join d on d.ledger = l.name;
+  ag := tally_calc_ageing_bal(p_book, p_to, 'p', pb);
+  -- the bills left past the days, party by party in the ageing's order (MIS.runNow's r.msme)
+  with pr as (select r.o, r.x ->> 'party' as party, mm ->> (r.x ->> 'party') as t, r.x -> 'open' as op
+                from jsonb_array_elements(coalesce(ag -> 'rows', '[]'::jsonb)) with ordinality r(x, o)),
+  pb2 as (select pr.o, pr.party, pr.t, jsonb_agg(z.y order by z.k) as bills, sum((z.y ->> 'left')::numeric) as amt
            from pr cross join lateral jsonb_array_elements(pr.op) with ordinality z(y, k) where (z.y ->> 'age')::numeric > md group by 1, 2, 3)
-  select coalesce(jsonb_agg(jsonb_build_object('party', pb.party, 'type', pb.t, 'bills', pb.bills, 'amt', round(pb.amt, 2)) order by pb.o), '[]'::jsonb) into res from pb;
+  select coalesce(jsonb_agg(jsonb_build_object('party', pb2.party, 'type', pb2.t, 'bills', pb2.bills, 'amt', round(pb2.amt, 2)) order by pb2.o), '[]'::jsonb) into res from pb2;
   return jsonb_build_object('days', md, 'rows', res);
 end $function$;
 
