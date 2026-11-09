@@ -115,9 +115,19 @@ export function handler(deps: Deps) {
   // (Audit.balances). Kept in tally_calc_results with the book's data version: asked again with the same books, the kept
   // answer comes back at once; once an entry, a day or the ledger list changes, it is worked out again. The member's own
   // token reads (my_firm(): its own firm's books only); only keeping the answer uses the service key.
-  // partial: the parts of MIS.runNow not worked out here yet (the browser works those out itself until they move).
-  const NOW_PARTS = ["recv", "pay", "owed", "tieout", "balances"];
-  const NOW_LATER = ["sales", "purchases", "pl", "prev", "ly", "mtd", "ytd", "cash", "comp", "dues", "p2", "msme", "control", "dso", "dpo"];
+  // next-cloud-calc2 (migration 152): the rest of MIS.runNow, each part one call of tally_mis_part (the member's token):
+  // sales, purchases, the profit and loss, the period before and last year, month and year to date, received and paid
+  // with the cash flow (r.p2.cash), compliance without GST 3B (GST paid from the bank, TDS, challans, the TDS roll),
+  // MSME, the control; days of sales and purchases from those, as MIS.runNow works them out. GST 3B's figures in
+  // comp.gst (output, credit, worked out to pay) are the GST 3B helper's, not this answer's (OUTSIDE).
+  // partial: a part of the list below this answer has not got (a book without its ledger masters: sales are the
+  // browser's taxable values then, not worked out here).
+  const NOW_PARTS = ["recv", "pay", "owed", "tieout", "balances", "sales", "purchases", "pl", "prev", "ly", "mtd", "ytd", "cash", "comp", "msme", "control", "dso", "dpo"];
+  const SQL_PARTS = ["sales", "purchases", "pl", "prev", "ly", "tops", "cash", "comp", "msme", "control"];
+  // MIS.runNow's parts that are not MIS's sections and are not worked out here: GST 3B (its own helper), the dues
+  // (dates from today and the client's GST settings), the forecast, ratios, registrations and cost centres of r.p2
+  const OUTSIDE = ["comp.gst.due", "comp.audit", "dues", "p2.fc", "p2.ratios", "p2.regs", "p2.cc"];
+  const RESULT_V = 2;                    // a kept answer of phase 1 (v 1, partial) is worked out again
   async function misNow(body: any, jwt: string): Promise<[number, unknown]> {
     if (!jwt || jwt === ANON || jwt === SERVICE) return [401, { ok: false, kind: "auth", error: "Sign in to the firm account first." }];
     let user: any;
@@ -131,27 +141,54 @@ export function handler(deps: Deps) {
     try { kept = await rpc("tally_calc_cached", { p_client: client, p_on: iso(to), p_kind: "mis-now", p_args: args }, jwt); }
     catch (e) { return [500, { ok: false, error: "the books in FinCom's cloud could not be read: " + String((e as Error).message || e).slice(0, 200) }]; }
     if (!kept || kept.none) return [404, { ok: false, kind: "none", error: "FinCom's cloud has no books of this client for that period." }];
-    if (kept.result) return [200, { ok: true, kept: true, at: kept.at, result: kept.result }];
+    if (kept.result && Number(kept.result.v) >= RESULT_V) return [200, { ok: true, kept: true, at: kept.at, result: kept.result }];
     // the month-ends of the period (the tie-out's months), at most 36
     const months: string[] = [];
     for (let y = +from.slice(0, 4), m = +from.slice(4, 6); (y * 100 + m) <= +to.slice(0, 6) && months.length < 36; m === 12 ? (m = 1, y++) : m++) months.push(y + "-" + String(m).padStart(2, "0") + "-01");
-    let recv: any, pay: any, tie: any, bal: any[];
+    let recv: any, pay: any, tie: any, bal: any[], got: any[];
+    // the day Tally's balances are taken to (b.tb.to: the day the books were brought in), for the control
+    const today = istIso(now());
     try {
-      [recv, pay, tie, bal] = await Promise.all([
+      [recv, pay, tie, bal, ...got] = await Promise.all([
         rpc("tally_ageing", { p_client: client, p_as_on: iso(to), p_side: "r" }, jwt),
         rpc("tally_ageing", { p_client: client, p_as_on: iso(to), p_side: "p" }, jwt),
         rpc("tally_tieout", { p_client: client, p_months: months }, jwt),
-        rpc("tally_balances_at", { p_book: kept.book, p_dates: [iso(to)] }, jwt)]);
+        rpc("tally_balances_at", { p_book: kept.book, p_dates: [iso(to)] }, jwt),
+        ...SQL_PARTS.map((p) => rpc("tally_mis_part", { p_client: client, p_part: p, p_from: iso(from), p_to: iso(to), p_today: today }, jwt))]);
     } catch (e) { return [500, { ok: false, error: "the figures could not be worked out: " + String((e as Error).message || e).slice(0, 200) }]; }
     const last = (tie && tie.months && tie.months[months[months.length - 1]]) || {};
     const at: Record<string, number> = {};
     for (const r of bal || []) at[r.ledger] = Number(r.bal);
+    const part: Record<string, any> = {};
+    SQL_PARTS.forEach((p, i) => { const g = got[i]; part[p] = g && !g.none && g.book === kept.book ? g.result : null; });
+    const sales = part.sales && part.sales.masters !== false ? part.sales : null;
+    const purchases = part.purchases ? (({ goods, ...rest }: any) => rest)(part.purchases) : null;
+    const pl = part.pl || null, cash = part.cash || null, comp = part.comp || null, tops = part.tops || {};
+    // MIS.runNow: days in the period, revenue from operations (the profit and loss's, else the sales), days of sales and
+    // purchases owed (never below nought), purchases only for a client that buys goods
+    const days = Math.round((Date.parse(iso(to)) - Date.parse(iso(from))) / 86400000) + 1;
+    const revOps = (pl && pl.heads && pl.heads.rev && pl.heads.rev.t) || (sales ? sales.total : 0);
+    const goods = part.purchases ? !!part.purchases.goods : null;
+    const oweR = (recv && recv.sum && recv.sum.owe) || 0, oweP = (pay && pay.sum && pay.sum.owe) || 0;
+    const missing = ["sales", "purchases", "pl", "prev", "ly", "tops", "cash", "comp", "msme", "control"].filter((p) => !got[SQL_PARTS.indexOf(p)] || got[SQL_PARTS.indexOf(p)].none || (p === "sales" && !sales));
     const result = {
-      v: 1, kind: "mis-now", partial: true, parts: NOW_PARTS, later: NOW_LATER, from, to, book: kept.book, version: kept.version, at: now().toISOString(),
+      v: RESULT_V, kind: "mis-now", partial: missing.length > 0, parts: NOW_PARTS, later: missing, outside: OUTSIDE, from, to, book: kept.book, version: kept.version, at: now().toISOString(),
       recv, pay, tieout: tie && tie.months || {},
       // the headline owed to you and by you: the ledger balances (Parties.position, as MIS.runNow's r.owed)
       owed: last.receivables == null ? null : { r: last.receivables, p: last.payables, custAdv: (recv && recv.sum && recv.sum.advance) || 0, supAdv: (pay && pay.sum && pay.sum.advance) || 0 },
       balances: { asOn: to, at },
+      sales, purchases, goods, pl,
+      prev: part.prev ? part.prev.cmp : null, ly: part.ly ? part.ly.cmp : null,
+      prevRange: part.prev ? part.prev.range : null, lyRange: part.ly ? part.ly.range : null,
+      mtd: tops.mtd ?? null, ytd: tops.ytd ?? null,
+      cash: cash ? cash.cash : null,
+      p2: { cash: cash ? cash.flow : null },
+      // GST: paid from the bank here; out, itc, rcm, carry and due come from the GST 3B helper
+      comp: comp ? { gst: comp.gst, tds: comp.tds, tdsRoll: comp.tdsRoll, audit: null } : null,
+      msme: part.msme ? part.msme.rows : null, msmeDays: part.msme ? part.msme.days : null,
+      control: part.control ? part.control.control : null,
+      dso: oweR > 0 && revOps > 0 ? Math.round(oweR / (revOps / days)) : null,
+      dpo: goods && oweP > 0 && purchases && purchases.total > 0 ? Math.round(oweP / (purchases.total / days)) : null,
     };
     const ms = Date.now() - t0;
     await rpc("tally_calc_put", { p_book: kept.book, p_kind: "mis-now", p_args: args, p_version: kept.version, p_result: result, p_ms: ms }).catch(() => null);
