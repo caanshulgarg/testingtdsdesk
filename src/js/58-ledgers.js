@@ -40,7 +40,11 @@ const Ledgers = {
   books(cid){
     const b = S.books;
     if (!b || b.cid !== cid || b.loading) return [];
-    const info = b.ledInfo || {}, under = b.under || {}, g = b.groups || {}, k = cid + (b.ledInfoAt || "") + Object.keys(info).length + "/" + Object.keys(under).length;
+    // next-mis-speed (4,191 ledgers: 20 s in one task): every exactLedger asks for the list, and counting the masters each
+    // time made the matching of all the ledgers go as their square. Counted once a task (until its microtasks)
+    const info = b.ledInfo || {}, under = b.under || {}, g = b.groups || {}, c = this._n,
+      n = c && c.i === info && c.u === under ? c.n : (queueMicrotask(() => { this._n = null; }), (this._n = {i: info, u: under, n: Object.keys(info).length + "/" + Object.keys(under).length}).n),
+      k = cid + (b.ledInfoAt || "") + n;
     if (b._led && b._led.k === k) return b._led.l;
     const l = Array.from(new Set(Object.keys(info).concat(Object.keys(under).filter(n => !g[n])))).filter(Boolean).sort()
       .map(n => { const i = info[n] || {}; return {name: n, group: i.group || under[n] || "", gstin: String(i.gstin || (b.gstins || {})[n] || "").toUpperCase(), pan: String(i.pan || (b.pans || {})[n] || "").toUpperCase(), taxType: i.taxType || "", dutyHead: i.dutyHead || "", tdsNature: i.tdsNature || ""}; });

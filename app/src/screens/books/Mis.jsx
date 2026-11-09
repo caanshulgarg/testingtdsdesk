@@ -58,16 +58,24 @@ function Head({ b, r, rg }) {
       </details>
       <span className="note mis-period" data-mis-period="">{rg.from && rg.to ? fmtDate(rg.from) + " to " + fmtDate(rg.to) : ""}</span>
       <span className="mis-btns"><button className="btn small" data-mymis-open="" title="Build your own MIS: choose the figures, add charts, save and share" onClick={() => goClient("books:mymis")}>My MIS</button>{r && <><Act act="misExcel">Excel</Act><Act act="misPack" className="btn small">Download the MIS pack (PDF)</Act></>}
-        <Act act="misRun" className="btn small primary">Run now</Act></span>
+        <button className="btn small primary" onClick={() => FinComNav.go(() => rg.from && rg.to && rg.from <= rg.to ? runSplit(rg.from, rg.to, "run now") : doAct("misRun"))}>Run now</button></span>
     </div>
   </section>;
+}
+
+// next-mis-speed: a run in three tasks, so none holds the page: the GST workings of each month and the parties' balances
+// first (kept for the run by memoKeep and Parties.position), then the run, then the save
+function runSplit(from, to, how) {
+  const t = Audit.ymd(to); MIS._again = true;
+  setTimeout(() => { try { memoScope(() => MIS.monthsOf(Audit.ymd(from), t).forEach(MIS.gst3b, MIS)); Parties.position(t); } catch (e) {}
+    setTimeout(() => { try { memoKeep(() => MIS.run(from, to, how)); setTimeout(saveBooks, 0); } finally { MIS._again = false; render(); } }, 0); }, 0);
 }
 
 // the line under the head: the period run, how, when, its result code, and whether it agrees with Tally
 function RunLine({ r }) {
   return <p className="note" style={{ margin: "10px 0" }}>{d(r.from) + " to " + d(r.to) + " · " + r.how + " on " + fmtDateTime(r.at) + " · result code "}<b>{r.code}</b>
     {r.control ? (r.control.ok ? <>{" · "}<span style={{ color: "var(--ok)" }}>agrees with Tally’s balances, ledger by ledger</span></> : <>{" · "}<span className="bad">{r.control.n + " ledgers differ from Tally by ₹" + m(r.control.amt)}</span></>)
-      : " · read the period from Tally through the bridge to check it against Tally’s balances"}</p>;
+      : null}</p>;
 }
 
 // a search box, and on Receivables and Payables the overdue / MSME filter
@@ -358,7 +366,7 @@ export default function Mis({ b }) {
   if (catchUp) return <CatchUp text={catchUp} />;
   const r0 = (b.mis || {}).last, stale = MIS.stale(b);
   // a saved run from other books or older working: worked out again now, its figures not shown meanwhile
-  if (stale && !MIS._again) { MIS._again = true; setTimeout(() => { try { MIS.run(r0.from, r0.to, "worked out again (the books or FinCom changed since " + fmtDate(r0.at.slice(0, 10)) + ")"); saveBooks(); } finally { MIS._again = false; render(); } }, 0); }
+  if (stale && !MIS._again) runSplit(r0.from, r0.to, "worked out again (the books or FinCom changed since " + fmtDate(r0.at.slice(0, 10)) + ")");
   if (stale) return <div className="bk-none" data-mis-again="" style={{ marginTop: 12 }}>{"Working out again: the books or FinCom’s working changed since the run of " + fmtDate(r0.at.slice(0, 10)) + " (result code " + r0.code + ")."}</div>;
   const r = r0;
   // the period: the one chosen (kept for the client), else this financial year to date (smart moves round 1)

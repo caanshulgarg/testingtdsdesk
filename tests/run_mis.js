@@ -36,5 +36,21 @@ const M = v => x.INR.format(Math.round(v || 0));
   // bills: a party's bills add up to what the day book moved for it, less what was before these books
   const p = r.recv.rows[0]; console.log("  largest customer " + p.party + " " + M(p.total) + " in " + p.bills.length + " bills");
   ok(p.bills.reduce((s, z) => s + z.amt, 0) - p.total < 1, "a customer's bills add to its total");
+  // the control against Tally's balances (next-mis-speed): real Tally closings show real differences; FinCom's cloud copy
+  // (tb.src "copy": openings only, closings blank, kept as 0 by TallyRead.balances) shows no "differ from Tally" at all
+  {
+    const mv = x.MIS.moves("20250401", "20260331"), names = Object.keys(b.ledInfo).sort(), led = {};
+    names.forEach((l, i) => { const op = x.num(b.ledInfo[l].ob); led[l] = {open: op, close: x.r2(op + ((mv[l] || {}).t || 0) + (i < 3 ? 500 : 0)), parent: b.ledInfo[l].group}; });
+    b.tb = {from: "20250401", to: "20260331", at: "2026-04-01T00:00:00Z", led};
+    const t1 = x.MIS.run("20250401", "20260331", "test");
+    ok(t1.control && t1.control.n === 3 && t1.control.amt === 1500, "Tally's closings: 3 ledgers differ by 1,500 (" + JSON.stringify(t1.control && [t1.control.n, t1.control.amt]) + ")");
+    led[names[0]].close = "";
+    const t2 = x.MIS.run("20250401", "20260331", "test");
+    ok(t2.control && t2.control.n === 2, "a ledger whose Tally closing is not known is left out of the check (" + (t2.control && t2.control.n) + ")");
+    names.forEach(l => { led[l].close = 0; }); b.tb.src = "copy";
+    const t3 = x.MIS.run("20250401", "20260331", "test");
+    ok(t3.control === null, "FinCom's cloud copy (no Tally closings): no check, no “differ from Tally” line");
+    delete b.tb;
+  }
   console.log("\n" + (fails ? fails + " FAILED" : "all passed")); process.exit(fails ? 1 : 0);
 })().catch(e => { console.error(e); process.exit(2); });
