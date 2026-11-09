@@ -5,7 +5,7 @@ Fingerprint: SHA-256 (filled in at the build; compare with the .sha256 file next
 
 2.5.12: three things, all in Bring books (the older entries a person chose to bring from Tally). The same 2-second stop
 on every request, one request at a time, postings first, never while someone is typing in Tally. FinCom's cloud needs
-migration 151 and the new tally-ingest for point 2 (with the old cloud a held entry's day is marked to upload by hand).
+migration 154 and the new tally-ingest for point 2 (with the old cloud a held entry's day is marked to upload by hand).
  1. A sale entered in voucher mode (Accounting Invoice: the stock item typed under the sales ledger's line, as
     marketplace sales often are) is now read and brought in, with its stock items (item, billed quantity, rate,
     amount) as the entry's items, exactly as FinCom stored them before 2.3.4. Before 2.5.12 FinCom Bridge could not

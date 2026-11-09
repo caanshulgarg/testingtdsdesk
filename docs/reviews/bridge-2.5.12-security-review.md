@@ -19,11 +19,11 @@ Range: ff86083bf..c081db8ce (origin/staging-next, which holds released 2.5.11, t
 - A held entry: its GUID, MasterID, AlterID, voucher type and one line of words go to FinCom's own tally-ingest in the
   existing period_entries call (no party or amount). tally-ingest keeps only those, cleaned and cut (heldOf).
 
-## Cloud (migration 151, not run)
+## Cloud (migration 154, not run)
 
 - One column added (tally_period_days.held). tally_period_hold and tally_period_held_release: service_role only.
   tally_period_held_list: the firm's members (tally_period_member); tally_period_held_retry: owner or staff of the firm
-  (tally_period_member(..., true)); another firm refused (run_migration151.py).
+  (tally_period_member(..., true)); another firm refused (run_migration154.py).
 
 ## Files
 

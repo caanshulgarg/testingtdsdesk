@@ -1,6 +1,6 @@
-"""python3 run_migration151.py - server/tally-cloud/migration-151-period-held.sql (09-Nov-2026, FinCom Bridge 2.5.12).
-On a throwaway PostgreSQL (pg_stand, port 31511 unless PG151_PORT; never a real database): migration 98 (its tables and
-functions), then 151 (twice). Made-up rows only (a book "ZZ CO", GUIDs g-1 and g-2). Checks:
+"""python3 run_migration154.py - server/tally-cloud/migration-154-period-held.sql (09-Nov-2026, FinCom Bridge 2.5.12).
+On a throwaway PostgreSQL (pg_stand, port 31541 unless PG154_PORT; never a real database): migration 98 (its tables and
+functions), then 154 (twice). Made-up rows only (a book "ZZ CO", GUIDs g-1 and g-2). Checks:
   0. the file: one transaction, lock_timeout 10 s; one column added, nothing dropped or emptied; names no real database;
      the grants (hold and release: service_role only; retry and the list: authenticated)
   1. a held entry keeps its day open (done_at null, not marked: listed again by 98's rule) with the words "1 entry on
@@ -10,12 +10,12 @@ functions), then 151 (twice). Made-up rows only (a book "ZZ CO", GUIDs g-1 and g
   3. a retry that reads it (the day's last call says held []) clears the mark and finishes the day
   4. the day's Day Book uploaded (the entry in FinCom at the AlterID held): the list settles it, the day done
   5. "Try again now" (staff of the firm): the manual day listed again; a person of another firm refused
-  6. the second run of 151 changes nothing of the rows"""
+  6. the second run of 154 changes nothing of the rows"""
 import os, re, sys, json
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 import pg_stand
 SQLDIR = os.path.join(HERE, "..", "server", "tally-cloud")
-M151 = os.path.join(SQLDIR, "migration-151-period-held.sql")
+M154 = os.path.join(SQLDIR, "migration-154-period-held.sql")
 M98 = os.path.join(SQLDIR, "migration-98-period-pull.sql")
 fails = []
 def ok(c, w):
@@ -23,7 +23,7 @@ def ok(c, w):
     if not c: fails.append(w)
 def q(s): return "'" + str(s).replace("'", "''") + "'"
 
-text = open(M151).read()
+text = open(M154).read()
 code = "\n".join(l.split("--")[0] for l in text.lower().splitlines())
 ok(re.search(r"^begin;\s*\nset local lock_timeout = '10s';", text, re.M) is not None and text.rstrip().endswith("commit;") and code.count("\nbegin;") == 1, "0. one transaction, lock_timeout 10 s")
 ok(re.findall(r"alter table [^;]*;", code) == ["alter table public.tally_period_days add column if not exists held jsonb not null default '[]'::jsonb;"]
@@ -42,7 +42,7 @@ alter table tally_vouchers add column if not exists deleted_at timestamptz;
 create table if not exists tally_devices (id uuid primary key, firm_id uuid, info jsonb, revoked boolean);
 """
 DAY = "2025-10-12"
-db = pg_stand.start(int(os.environ.get("PG151_PORT") or 31511))
+db = pg_stand.start(int(os.environ.get("PG154_PORT") or 31541))
 try:
     db.sql(SCHEMA)
     db.sql(pg_stand.migration_body(M98))
@@ -53,8 +53,8 @@ try:
       insert into tally_period_days (book_id, firm_id, day, tally_n, held_n, heads, via, counted_at)
       values (%s, %s, %s, 2, 1, '[["g-1", "1", "5", "Sales"], ["g-2", "2", "7", "Sales"]]', 'day', now());"""
            % (q(B), q(F), q(STAFF), q(F), q(OTHER), q(F2), q(B), q(F), q(B), q(F), q(DAY), q(B), q(F), q(DAY)))
-    db.sql(pg_stand.migration_body(M151))
-    db.sql(pg_stand.migration_body(M151))     # safe twice
+    db.sql(pg_stand.migration_body(M154))
+    db.sql(pg_stand.migration_body(M154))     # safe twice
     HELD = json.dumps([{"guid": "g-2", "masterId": "2", "alterId": 7, "type": "Sales", "why": "Sales entry (MasterID 2) of 12-Oct-2025 held: a form not read"}])
     def hold(held=HELD, ver="2.5.12"):
         return json.loads(db.one("select tally_period_hold(%s, %s, %s::jsonb, %s)::text" % (q(B), q(DAY), q(held), q(ver))))
@@ -96,7 +96,7 @@ try:
     except RuntimeError as e:
         ok("not allowed" in str(e), "5. another firm's person refused")
     before = day()
-    db.sql(pg_stand.migration_body(M151))
+    db.sql(pg_stand.migration_body(M154))
     ok(day() == before, "6. the second run changes no row")
 except RuntimeError as e:
     ok(False, "the run: %s" % str(e)[-800:])

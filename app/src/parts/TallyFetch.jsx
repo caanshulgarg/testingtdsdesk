@@ -207,7 +207,7 @@ export default function OlderEntries({ cid, say = false }) {
   useEffect(() => { setFy(0); setErr(""); setBusy(""); }, [book]);   // (next-buttons: a Start still on its way for the client left does not hold this one)
   const p = b && b.pull;
   useLive(!!(p && p.state === "going" && !p.done));
-  // FinCom Bridge 2.5.12 (migration 151): the days with an entry Tally keeps in a form the bridge could not read yet; the
+  // FinCom Bridge 2.5.12 (migration 154): the days with an entry Tally keeps in a form the bridge could not read yet; the
   // bridge tries again by itself, "Try again now" queues it at once; after 3 tries the manual step (the day's Day Book)
   const [held, setHeld] = useState([]), [heldBusy, setHeldBusy] = useState("");
   const heldSig = book + "|" + (p ? [p.x, p.countedDays, p.state].join(",") : "");

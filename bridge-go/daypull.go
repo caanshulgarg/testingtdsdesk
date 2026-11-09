@@ -945,7 +945,7 @@ func pullKeep(w *pullWork, mid, x string) {
 // as Tally keeps it (an errFastShape, or larger than FinCom takes) is HELD ALONE; the day's other entries are read and
 // sent as on any day. The day stays OPEN for that entry: nothing of it is sent as an entry (never a head taken as "seen":
 // the voucher is missing or stale in FinCom, and the day must not look done); the entry and its reason go to FinCom with
-// the day's last period_entries as "held": [{guid, masterId, alterId, type, why}]. tally-ingest (migration 151,
+// the day's last period_entries as "held": [{guid, masterId, alterId, type, why}]. tally-ingest (migration 154,
 // tally_period_hold) keeps them on the day, keeps the day unfinished and lists it again by itself: every later pull and
 // the night's catch-up ask Tally for that entry again (FinComVoucherObject, the one-entry request; no new request), and
 // again after each bridge update; a read that takes it clears the mark and ends the day. After 3 tries that fail on one

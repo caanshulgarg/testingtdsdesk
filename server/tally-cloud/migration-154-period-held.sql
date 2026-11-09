@@ -1,4 +1,4 @@
--- migration-151-period-held (09-Nov-2026, FinCom Bridge 2.5.12). Written, NOT run yet: the owner reads it and runs it.
+-- migration-154-period-held (09-Nov-2026, FinCom Bridge 2.5.12). Written, NOT run yet: the owner reads it and runs it.
 -- Why: an older day can hold one entry Tally keeps in a form the bridge cannot read (before 2.5.12 the whole day went to
 -- "upload by hand"). From 2.5.12 the bridge sends the day's other entries and names the held entry (period_entries
 -- "held": [{guid, masterId, alterId, type, why}]). The independent review: such a day must stay visibly unfinished,
@@ -17,7 +17,7 @@
 --   - tally_period_held_settle (in tally_period_held_list): an entry FinCom now holds at the AlterID held or higher (the
 --     day's Day Book uploaded, or read since) leaves the list; an empty list clears the mark and ends the day;
 --   - tally_period_held_list (the app's, owner or staff or viewer of the firm): the held days [{day, n, tries, manual, words}].
--- Safe to run twice; one transaction, lock_timeout 10 s. Tested on pg_stand: tests/run_migration151.py.
+-- Add-only and safe to run again; one transaction, lock_timeout 10 s. Tested on pg_stand: tests/run_migration154.py.
 begin;
 set local lock_timeout = '10s';
 

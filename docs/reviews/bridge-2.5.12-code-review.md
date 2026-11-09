@@ -10,8 +10,8 @@ fastOKNoInv), batch249.go (FinComVoucherBatch's FETCH 2.5.11's again; pullKeep),
 pullKeep, the day's last period_entries says "held"), range2512.go (new), pinned.go and daypull.go dayHeadsExact (the
 range form pinned and guarded), allowlist.go (FinComDayHeads' words; the stock row's version word), util.go (2.5.12);
 tests r2512_test.go, r2512range_test.go, the version tests, the voucher-mode goldens. server/tally-cloud/index.ts
-(heldOf, periodHold, the held words, a bridge update releases held days), migration-151-period-held.sql (new, not run).
-app/src/parts/TallyFetch.jsx (the held line and Try again now). tests/run_migration151.py (new), run_period_ingest.py
+(heldOf, periodHold, the held words, a bridge update releases held days), migration-154-period-held.sql (new, not run).
+app/src/parts/TallyFetch.jsx (the held line and Try again now). tests/run_migration154.py (new), run_period_ingest.py
 (section 5), run_parse_fast234_kinds.mjs. docs.)
 
 ## 1. The voucher-mode sale is read (fastvch.go)
@@ -36,11 +36,11 @@ app/src/parts/TallyFetch.jsx (the held line and Try again now). tests/run_migrat
   clears). Asked counted once (review 7: the double count of an oversize entry removed); the log line counts the held
   entries apart (review 7).
 - Cloud (index.ts): heldOf cleans the list (a GUID that is no GUID dropped, words cut); periodHold calls
-  tally_period_hold; the answer never says done while one is held and gives the plain words. A cloud without 151: the
+  tally_period_hold; the answer never says done while one is held and gives the plain words. A cloud without 154: the
   day marked to upload with "1 entry on 30-Aug could not be read: upload the Day Book for this day." (never done). A beat
   whose bridge version differs from the device's last calls tally_period_held_release (the firm's held days of an older
   version listed again).
-- Migration 151 (written, not run; add-only: one column): tally_period_hold keeps the list on the day, done_at null while
+- Migration 154 (written, not run; add-only: one column): tally_period_hold keeps the list on the day, done_at null while
   it is not empty; tries per entry, AlterID and bridge version; under 3 the day stays listed by 98's own rule (counted,
   not done, not marked), so every pull and the night ask for it again with FinComVoucherObject; at 3 upload_why 'held'
   with the manual step's words; an empty list clears it and ends the day by 98's count. tally_period_held_list (the app)
@@ -76,12 +76,12 @@ sent of it, held named on the day's last call, asked again when listed again, he
 version; the allow-list); r2512range_test.go (every day told after evidence and the check; consecutive days only; no range
 for a day of 51 entries or a single list of 320 ms; the check's mismatch off for good, after a restart too; cut / error /
 over 2 s: no stop, single days, all told; date not applied; the sizes, the halving and the cap, a 0.9 s answer; the guard).
-Cloud: tests/run_migration151.py (pg_stand: held keeps the day open with the plain line; 3 failures give the manual step;
+Cloud: tests/run_migration154.py (pg_stand: held keeps the day open with the plain line; 3 failures give the manual step;
 an update tries again from 1; a retry that reads clears it; an upload at the AlterID settles it, an older copy does not;
 Try again now; another firm refused; twice safe); tests/run_period_ingest.py section 5 (held cleaned and kept; [] clears;
-a cloud without 151; the release on a version change).
+a cloud without 154; the release on a version change).
 
 ## Verdict
 
-Ship after the coordinator's review, migration 151 and the new tally-ingest deployed first, and a measurement of
+Ship after the coordinator's review, migration 154 and the new tally-ingest deployed first, and a measurement of
 FinComDayHeads' range form on real TallyPrime.

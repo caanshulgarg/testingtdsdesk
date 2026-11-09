@@ -2136,7 +2136,7 @@ async function periodEntriesRpc(args: Record<string, unknown>) {
   const r = await db.rpc("tally_period_entries_logged", args);
   return r.error && missingFn(String(r.error.message || "")) ? await db.rpc("tally_period_entries", args) : r;
 }
-// FinCom Bridge 2.5.12 (migration 151): the entries of the day the bridge holds (Tally keeps them in a form it cannot read,
+// FinCom Bridge 2.5.12 (migration 154): the entries of the day the bridge holds (Tally keeps them in a form it cannot read,
 // or larger than FinCom takes), said with the day's LAST period_entries ([] when none): [{guid, masterId, alterId, type,
 // why}], cleaned; null when the call says nothing of them (an older bridge, or more of the day's entries still to come)
 function heldOf(body: any): Record<string, unknown>[] | null {
@@ -2153,7 +2153,7 @@ function heldOf(body: any): Record<string, unknown>[] | null {
 }
 const HELD_WORDS = (d: string, n: number) => (n === 1 ? "1 entry" : n + " entries") + " on " + d.slice(6, 8) + "-" + MONS[Number(d.slice(4, 6)) - 1] + " could not be read yet. FinCom tries again by itself.";
 // the day's held entries kept (tally_period_hold: the day open, tried again by itself; the manual step after 3 tries); a
-// cloud without migration 151: the day marked to be uploaded by hand with plain words (never taken as done)
+// cloud without migration 154: the day marked to be uploaded by hand with plain words (never taken as done)
 async function periodHold(book: string, day: string, held: Record<string, unknown>[], version: string) {
   const { data, error } = await db.rpc("tally_period_hold", { p_book: book, p_day: iso(day), p_held: held, p_version: version });
   if (!error) return (data || {}) as any;
@@ -2216,7 +2216,7 @@ async function periodEntries(book: string, body: any) {
   if (d.ok !== true) return reply(200, { ok: false, locked: d.locked === true, error: String(d.error || "not stored"), ...(bad.length ? { upload: PERIOD_ENTRY_WORDS(day) } : {}) });
   // a month locked in FinCom: the day is not fetched again; the one quiet line asks for it to be uploaded once unlocked
   if (d.locked === true) return reply(200, { ok: true, stored: 0, locked: true, upload: String(d.upload || PERIOD_ENTRY_WORDS(day)) });
-  // 2.5.12 (migration 151): the day's held entries: the day stays open (never done while one is held), tried again by itself
+  // 2.5.12 (migration 154): the day's held entries: the day stays open (never done while one is held), tried again by itself
   const hk = held && !bad.length ? await periodHold(book, day, held, version) : null;
   if (held && held.length) console.log("tally-ingest period_entries: " + held.length + " entr" + (held.length === 1 ? "y" : "ies") + " held, the day stays open", book, day, hk?.manual ? "(the manual step)" : "");
   return reply(200, { ok: true, stored: d.stored, stale: d.stale, held: d.held, n: d.n, done: d.done === true && !(held && held.length), ...(bad.length ? { notTaken: bad.length, upload: PERIOD_ENTRY_WORDS(day) } : {}),
@@ -4339,7 +4339,7 @@ Deno.serve(sentry.wrap(async (req) => {
   }
   const seen = { last_seen: new Date().toISOString() } as Record<string, unknown>;
   if (body.version) seen.version = String(body.version).slice(0, 40);
-  // FinCom Bridge 2.5.12 (migration 151): a computer whose bridge was updated tries every held entry of the firm again
+  // FinCom Bridge 2.5.12 (migration 154): a computer whose bridge was updated tries every held entry of the firm again
   if (body.version && dev.version && String(body.version).slice(0, 40) !== String(dev.version)) {
     const { error } = await db.rpc("tally_period_held_release", { p_firm: firm, p_version: String(body.version).slice(0, 40) });
     if (error && !missingFn(String(error.message || ""))) fail("period_held_release", error);
