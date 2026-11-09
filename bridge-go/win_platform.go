@@ -274,6 +274,25 @@ func processesNow() ([]proc, bool) {
 				if windows.GetProcessTimes(h, &c, &x, &k, &u) == nil {
 					p.Started = time.Unix(0, c.Nanoseconds())
 				}
+				// 2.5.11 (review 4): 32-bit on 64-bit Windows, and elevated (each "not known" when Windows does not say)
+				var w bool
+				if windows.IsWow64Process(h, &w) == nil {
+					p.Wow64 = triNo
+					if w {
+						p.Wow64 = triYes
+					}
+				}
+				var tok windows.Token
+				if windows.OpenProcessToken(h, windows.TOKEN_QUERY, &tok) == nil {
+					var e, n uint32
+					if windows.GetTokenInformation(tok, windows.TokenElevation, (*byte)(unsafe.Pointer(&e)), 4, &n) == nil {
+						p.Elevated = triNo
+						if e != 0 {
+							p.Elevated = triYes
+						}
+					}
+					tok.Close()
+				}
 				windows.CloseHandle(h)
 			}
 		}
@@ -526,6 +545,19 @@ func regString(name string) string {
 
 // this Windows user's %LOCALAPPDATA%, from the process's own user (Windows' known folder): a program started for another
 // user (runas, Start-Process -Credential) may carry the caller's environment, so the variable comes last
+func vsLocalAppData() string {
+	// 2.5.11 (review 5): the service runs as SYSTEM: the owning user's own profile, else nothing (never SYSTEM's)
+	if asService {
+		if sid := cfgS("OwnerSid"); sid != "" {
+			if p := profileOf(sid); p != "" {
+				return filepath.Join(p, "AppData", "Local")
+			}
+		}
+		return ""
+	}
+	return localAppData()
+}
+
 func localAppData() string {
 	if p, err := windows.KnownFolderPath(windows.FOLDERID_LocalAppData, 0); err == nil && p != "" {
 		return p

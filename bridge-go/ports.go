@@ -26,7 +26,28 @@ type proc struct {
 	SessionUnknown bool
 	// 2.5.4: the SID of the Windows user the program runs as ("" when Windows did not say)
 	Sid string
+	// 2.5.11 (review 4): a 32-bit program on 64-bit Windows (WOW64) and run elevated: triYes / triNo / triUnknown (0).
+	// Only a 32-bit Tally not run elevated has its tally.ini redirected to the user's VirtualStore (owntally2511.go)
+	Wow64, Elevated int
 }
+
+const (
+	triUnknown = 0
+	triYes     = 1
+	triNo      = 2
+)
+
+// a yes / no / not given from the tests' file
+func triOf(v any) int {
+	switch v {
+	case true:
+		return triYes
+	case false:
+		return triNo
+	}
+	return triUnknown
+}
+
 type listener struct{ Port, Pid int }
 
 // --- test mode only: processes, listeners and users come from a file (TDSBRIDGE_FAKE)
@@ -90,6 +111,7 @@ func netState() (bool, []proc, []listener) {
 			if t, err := time.Parse(time.RFC3339, str(o["started"])); err == nil {
 				pr.Started = t // 2.5.11: when the program started (the tests' file)
 			}
+			pr.Wow64, pr.Elevated = triOf(o["wow64"]), triOf(o["elevated"])
 			ps = append(ps, pr)
 		}
 		var ls []listener
@@ -323,17 +345,22 @@ func diagnosis() M {
 				add("ok", "Your TallyPrime accepts connections on port "+portList(ps)+".", "")
 				continue
 			}
-			// 2.5.11: its details and words, as the beat gives them (owntally2511.go)
-			offWords := ""
+			// 2.5.11: its details and words, as the beat gives them (owntally2511.go); review 8: one finding, one port
+			// (the one the words name), its fix the beat's words
+			found := false
 			for _, p := range procs {
 				if p.ID == toInt(t["pid"]) {
 					d, w := tallyOffOf(p, procs, lis)
-					offWords = w
 					if tallyOff == nil {
 						tallyOff = d
 					}
+					add("bad", diagOffText(d), w)
+					found = true
 					break
 				}
+			}
+			if found {
+				continue
 			}
 			ini := t["ini"].(M)
 			want := 9000
@@ -355,12 +382,7 @@ func diagnosis() M {
 					add("bad", fmt.Sprintf("Port %d is taken by another program (%s, %s), so your TallyPrime cannot use it.", want, str(h["program"]), who), fmt.Sprintf("In TallyPrime: F1 Help > Settings > Connectivity > Port = %d, save and restart TallyPrime.", free))
 				}
 			} else {
-				// 2.5.11 (owntally2511.go): why, as the beat says it ("close and reopen" only when tally.ini changed after it started)
-				fix := offWords
-				if fix == "" {
-					fix = "In TallyPrime: F1 Help > Settings > Connectivity > \"TallyPrime acts as\" = Both, then close and reopen TallyPrime (the setting takes effect after a restart)."
-				}
-				add("bad", fmt.Sprintf("Your TallyPrime is running but is not accepting connections on port %d yet.", want), fix)
+				add("bad", fmt.Sprintf("Your TallyPrime is running but is not accepting connections on port %d yet.", want), "In TallyPrime: F1 Help > Settings > Connectivity > \"TallyPrime acts as\" = Both, then close and reopen TallyPrime (the setting takes effect after a restart).")
 			}
 		}
 	}

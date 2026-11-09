@@ -39,13 +39,17 @@ try:
     print("== 1. kept, cleaned")
     off = {"reason": "clash", "folder": "TallyPrime", "iniKind": "virtualStore", "iniFolder": "TallyPrime", "mode": "Both", "port": 9000, "want": 9000,
            "iniAt": "2026-11-01T10:00:00Z", "startedAt": "2026-11-09T03:00:00Z", "iniAfterStart": False, "heldBy": "otherUser", "heldUser": "made-up-b" + "q" * 60,
-           "ownPort": 9039, "lastPort": 9039, "lastAt": "2026-11-08T09:30:00Z", "secret": "x"}
+           "ownPort": 9039, "lastPort": 9039, "lastAt": "2026-11-08T09:30:00Z", "secret": "x", "shared": True, "unwritable": "yes", "iniUnsure": True}
     c, r = call(dict(base, tallyOff=off, tallyConnectSay="Your TallyPrime's port 9000 is used by made-up-b's Tally"))
     o = kept().get("tallyOff") or {}
     ok(c == 200 and o.get("reason") == "clash" and o.get("folder") == "TallyPrime" and o.get("iniKind") == "virtualStore" and o.get("mode") == "Both"
        and o.get("port") == 9000 and o.get("want") == 9000 and o.get("iniAt") == "2026-11-01T10:00:00Z" and o.get("startedAt") == "2026-11-09T03:00:00Z"
        and o.get("iniAfterStart") is False and o.get("heldBy") == "otherUser" and o.get("heldUser", "").startswith("made-up-b") and len(o["heldUser"]) == 40
-       and o.get("ownPort") == 9039 and o.get("lastPort") == 9039 and o.get("lastAt") == "2026-11-08T09:30:00Z" and "secret" not in o, "1. kept (%s)" % o)
+       and o.get("ownPort") == 9039 and o.get("lastPort") == 9039 and o.get("lastAt") == "2026-11-08T09:30:00Z" and "secret" not in o
+       and o.get("shared") is True and o.get("iniUnsure") is True and "unwritable" not in o, "1. kept (%s)" % o)
+    say = "Your TallyPrime is open but its connection is off; every Windows login here shares TallyPrime's settings: ask the computer's administrator to give each login its own TallyPrime folder and port (yours: 9039)." + "w" * 300
+    c, r = call(dict(base, tallyOff={"reason": "mode"}, tallyConnectSay=say))
+    ok(len(kept().get("tallyConnectSay", "")) == 300 and kept()["tallyConnectSay"].startswith("Your TallyPrime is open"), "1. the words: 300 letters kept (%d)" % len(kept().get("tallyConnectSay", "")))
     c, r = call(dict(base, tallyOff={"reason": "reopen", "folder": "C:\\Users\\made-up-a\\TallyPrime" + "z" * 100, "iniKind": "made up", "mode": "<b>", "port": 70000, "want": "9000",
                                      "iniAt": "yesterday", "startedAt": 5, "iniAfterStart": "yes", "heldBy": "program", "heldUser": "made-up-b", "ownPort": -1, "lastPort": 0, "lastAt": "2026-11-08T09:30:00Z"}))
     o = kept().get("tallyOff") or {}

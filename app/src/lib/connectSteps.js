@@ -150,12 +150,15 @@ export function connectSteps(opts) {
       const devs = onThisPc(b), m = /port (\d+) is used/i.exec(say), held = off ? (off.heldBy ? Number(off.want) || 0 : 0) : m ? Number(m[1]) : 0;
       const free = ownPort(devs, login, [held].concat(ports.filter((p) => p && p.skipped).map((p) => p.port)), b && b.dev && b.dev.id);
       const ini = [].concat(src.tallyIni || (b && b.beat && b.beat.tallyIni) || []).map((x) => lc(x && x.connect));
-      // (this login's own VirtualStore copy of tally.ini is its own: no other login shares it)
+      // (this login's own VirtualStore copy of tally.ini is its own: no other login shares it. 2.5.11 review 2: the bridge
+      // says the computer's logins share the file (off.shared) or this login may not write it (off.unwritable) whether
+      // or not it ever tried to change it: the warning then too, and this login's own port to give the administrator)
+      const admin = !!off && r !== "reopen" && off.iniKind !== "virtualStore" && (off.shared === true || off.unwritable === true);
       const warn = off && (r === "reopen" || off.iniKind === "virtualStore") ? ""
-        : /every user of this computer shares/i.test(say) || ini.some((c) => c.startsWith("off; shared")) ? " " + WORDS.shared
-        : /may not change tallyprime|cannot write/i.test(say) || ini.includes("cannot write") ? " " + WORDS.cantWrite : "";
+        : (off && off.shared === true) || /every user of this computer shares/i.test(say) || ini.some((c) => c.startsWith("off; shared")) ? " " + WORDS.shared
+        : (off && off.unwritable === true) || /may not change tallyprime|cannot write/i.test(say) || ini.includes("cannot write") ? " " + WORDS.cantWrite : "";
       if (off) {
-        const fr = r === "reopen" ? 0 : r === "lost" ? Number(off.lastPort) : r === "clash" || r === "program" ? Number(off.ownPort) || free : Number(off.port) || 0;
+        const fr = r === "reopen" ? 0 : admin || r === "clash" || r === "program" ? Number(off.ownPort) || free : r === "lost" ? Number(off.lastPort) : Number(off.port) || 0;
         put("connect", false, (shown(say) || WORDS.mode(free)) + warn, fr > 0 ? { kind: "check", free: fr } : { kind: "check" }, OFF_HOOK[r] || "mode");
       } else if (held) put("connect", false, WORDS.clash(held, holderOf(devs, held, login), free) + warn, { kind: "check", free }, "clash");
       else if (/set but not on yet/i.test(say)) put("connect", false, WORDS.reopen, { kind: "check" }, "reopen");

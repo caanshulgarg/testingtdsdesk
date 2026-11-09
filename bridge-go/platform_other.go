@@ -96,6 +96,9 @@ func platSwitchToMain(fincom string) error {
 func removeOwnTask()       {}
 func localAppData() string { return os.Getenv("LOCALAPPDATA") }
 
+// 2.5.11: the folder whose VirtualStore holds the owning user's redirected files (as localAppData off Windows)
+func vsLocalAppData() string { return localAppData() }
+
 // 2.3.0: not Windows (the tests): there are no Windows users to tell apart, so nothing is checked
 func platPeerUser(local, remote int) (string, bool, error)                { return "", false, nil }
 func platPeerSession(local, remote int) (int, bool)                       { return 0, false }

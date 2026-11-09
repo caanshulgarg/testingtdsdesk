@@ -1147,14 +1147,15 @@ func beatMissedSince() time.Time { _, f := beatTimes(); return f }
 func beatBody(tally bool, tstate, tsince string, open, ports, cos []any) M {
 	au, rb := autoUpdateBeat()
 	tport, tdata := myTallyFor(ports)
+	why := tallyWhy(ports)                                                                                          // 2.5.11 (review 9): once per beat (the connection-off look reads Windows' lists and tally.ini)
 	waitStarts := liveWaitStarts()                                                                                  // release-240 re-review M2-r: each reason's start, and the earliest
 	return M{"windowsUser": ownerName(), "bridgePort": toInt(cfg("Port")), "tallyPort": tport, "dataFolder": tdata, // 2.3.0: one bridge per Windows user
 		"reqs": beatReqs(), "readStopped": readStopAny(), "kind": "beat", "tally": tally, "tallyState": tstate, "busySince": tsince, "every": beatEvery(), "open": open, "ports": ports, "companies": cos,
-		"tallyWhy": tallyWhy(ports), // 2.5.3: why no Tally of this user answers ("" when one does)
+		"tallyWhy": why, // 2.5.3: why no Tally of this user answers ("" when one does)
 		// 2.5.3: the person's words while FinCom just switched on Tally's connection in tally.ini ("" otherwise)
-		"tallyConnectSay": tallyConnectSay(tallyWhy(ports), tallyIniBeat()),
+		"tallyConnectSay": tallyConnectSay(why, tallyIniBeat()),
 		// 2.5.11: why this login's Tally takes no connection, its details (owntally2511.go; null otherwise)
-		"tallyOff": tallyOffBeat(tallyWhy(ports)),
+		"tallyOff": tallyOffBeat(why),
 		"updating": keepRunning(), "dailyAt": keepDailyAt(), "nightlyAt": keepDailyAt(), "lastRun": keepLastRun(), "paused": paused(), "notAnsweringSince": notAnsweringSince(),
 		"lastRead": lastReadAt(), "events": true, "computer": computerName(), "allowlist": allowListBeat(),
 		"postOnly": toAny(postOnlyList()), // round 11: the companies this computer may post to (empty: any)

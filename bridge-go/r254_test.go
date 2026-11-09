@@ -263,15 +263,16 @@ func TestR254ConnectionOffFromWindows(t *testing.T) {
 	r253Server(t, procs, `{"port": 9000, "pid": 20}`)
 	// 2.5.11 (owntally2511.go): the words say the mode, the port taken by another user's Tally (with this login's own port), and
 	// nothing listening on its port ("close and reopen" only when tally.ini changed after the Tally started: r2511_test.go)
-	if off, w, _ := connOffNow(nil); !off || w != offWordsMode {
+	// (another login's Tally runs here: the computer is shared, so the administrator's words, never F1 > Ctrl+A: review 2)
+	if off, w, _ := connOffNow(nil); !off || !strings.HasPrefix(w, offAdminMode+offWhyShared) {
 		t.Fatalf("acts as Client: %v %q", off, w)
 	}
 	write("[Tally]\r\nClient Server = Both\r\nServer Port = 9000\r\n")
-	if off, w, d := connOffNow(nil); !off || !strings.HasPrefix(w, "Your TallyPrime's port 9000 is used by hemant's Tally: set your own port ") || d["reason"] != offClash {
+	if off, w, d := connOffNow(nil); !off || !strings.HasPrefix(w, "Your TallyPrime's port 9000 is used by hemant's Tally"+offWhyShared) || d["reason"] != offClash {
 		t.Fatalf("port taken: %v %q", off, w)
 	}
 	write("[Tally]\r\nClient Server = Both\r\nServer Port = 9070\r\n")
-	if off, w, _ := connOffNow(nil); !off || w != fmt.Sprintf(offWordsClosed, 9070, 9070) {
+	if off, w, _ := connOffNow(nil); !off || !strings.HasPrefix(w, fmt.Sprintf(offAdminClosed, 9070)+offWhyShared) {
 		t.Fatalf("set, not on: %v %q", off, w)
 	}
 	// the beat: hemant's port is "another user", but the reason given is this login's connection

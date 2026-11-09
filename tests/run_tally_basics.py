@@ -128,6 +128,15 @@ def main():
         dA1d["info"]["beat"]["tallyOff"] = {"reason": "clash", "folder": "TallyPrime", "iniKind": "programFiles", "mode": "Both", "port": 9000, "want": 9000, "heldBy": "otherUser"}
         scene([dA1d, bdev()], c1, CL, A_PINGS)
         ok(txt("#app [data-tsm-top-tally='9000']").startswith("port 9000 · connection off"), "1c (2.5.11). its port held by another login's Tally: still shown as this login's, connection off (%s)" % txt(TOP)[:220])
+        # review 10: the local status when present; never a row from a stale beat
+        r = E("""() => { const st0 = Bridge.st, t = new Date().toISOString(), old = new Date(Date.now() - 600000).toISOString();
+          const off = {reason: 'clash', want: 9000, heldBy: 'otherUser'}, p = [{port: 9041, ok: true, skipped: false, reason: 'open', mine: true}];
+          const run = (st, beat) => { Bridge.st = st; try { return FCOwnTallys({from: st ? 'here' : 'cloud', own: {beat}, names: new Map()}).tallys.map(x => x.port + ' ' + x.state).join(', '); } finally { Bridge.st = st0; } };
+          return {stale: run(null, {at: old, tallyWhy: 'connection off', tallyOff: off, ports: p}), fresh: run(null, {at: t, tallyWhy: 'connection off', tallyOff: off, ports: p}),
+            local: run({tallyWhy: '', tallyOff: null, sessions: p}, {at: t, tallyWhy: 'connection off', tallyOff: off, ports: p}),
+            localOff: run({tallyWhy: 'connection off', tallyOff: off, sessions: p}, {at: old, ports: p})}; }""")
+        ok(r["stale"] == "9041 connected" and r["fresh"] == "9041 connected, 9000 connection off" and r["local"] == "9041 connected" and r["localOff"] == "9041 connected, 9000 connection off",
+           "1c (2.5.11 review 10). a stale beat adds no row; the local status wins over the beat (%s)" % r)
         up45 = {"port": 9045, "ok": True, "skipped": False, "n": 1, "error": "", "reason": "open"}
         scene([adev([up, up45], opened=(ORB,)), bdev()], c1, CL, A_PINGS)
         ok(txt("#app [data-tsm-top-sub]").startswith("2 Tallys (ports 9041, 9045) · 1 company open") and "port ?" not in txt(TOP) and "No company open" not in txt(TOP),

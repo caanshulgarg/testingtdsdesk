@@ -2236,7 +2236,8 @@ const TALLY_WHY = ["not answering", "connection off", "owner unknown", "another 
 // (a known one), the running tally.exe's folder name and the tally.ini's (a name only: no path), which tally.ini it reads,
 // "TallyPrime acts as", its port and the port it should listen on, when that file changed and when the Tally started (ISO
 // times only) and whether it changed after, who holds the port (a known kind; another user's short name, 40 letters at
-// most), this login's own port, the last port its Tally answered on and when; anything else dropped
+// most), this login's own port, the last port its Tally answered on and when, and (true only) shared / unwritable /
+// iniUnsure; anything else dropped. bridge 2.5.11: tallyConnectSay up to 300 letters (the administrator's words)
 const OFF_REASONS = ["reopen", "lost", "mode", "clash", "program", "closed"];
 const OFF_INI = ["programFiles", "virtualStore", "exeFolder", "none"];
 const OFF_MODES = ["Both", "Server", "Client", "None"];
@@ -2250,6 +2251,9 @@ function tallyOffOf(b: any) {
   const t = (v: unknown) => typeof v === "string" && /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?(Z|[+-]\d\d:\d\d)$/.test(v) && !isNaN(Date.parse(v)) ? v : "";
   const o: any = { reason: x.reason, folder: nm(x.folder), iniKind: OFF_INI.includes(x.iniKind) ? x.iniKind : "none", iniFolder: nm(x.iniFolder),
     mode: OFF_MODES.includes(x.mode) ? x.mode : "", port: port(x.port), want: port(x.want), iniAfterStart: x.iniAfterStart === true };
+  // (2.5.11 review 2 and 4: the computer's logins share the settings; this login may not write the file; a VirtualStore
+  // copy there that Windows did not say this Tally reads)
+  for (const k of ["shared", "unwritable", "iniUnsure"]) if (x[k] === true) o[k] = true;
   if (t(x.iniAt)) o.iniAt = t(x.iniAt);
   if (t(x.startedAt)) o.startedAt = t(x.startedAt);
   if (OFF_HELD.includes(x.heldBy)) { o.heldBy = x.heldBy; if (x.heldBy === "otherUser" && nm(x.heldUser)) o.heldUser = nm(x.heldUser).slice(0, 40); }
@@ -4330,7 +4334,7 @@ Deno.serve(sentry.wrap(async (req) => {
             ...(/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d$/.test(p?.askedAt) ? { askedAt: p.askedAt } : {}), ...(PORT_LISTS.includes(p?.list) ? { list: p.list } : {}) })),
           // bridge 2.5.3: why none of the user's Tallys answers ("" when one does), and the person's words after FinCom
           // switched on Tally's connection in tally.ini
-          ...(TALLY_WHY.includes(b.tallyWhy) ? { tallyWhy: b.tallyWhy } : {}), ...(s(b.tallyConnectSay, 200) ? { tallyConnectSay: s(b.tallyConnectSay, 200) } : {}),
+          ...(TALLY_WHY.includes(b.tallyWhy) ? { tallyWhy: b.tallyWhy } : {}), ...(s(b.tallyConnectSay, 300) ? { tallyConnectSay: s(b.tallyConnectSay, 300) } : {}),
           // bridge 2.5.11: why this login's Tally takes no connection, its details (only with tallyWhy "connection off")
           ...(b.tallyWhy === "connection off" && tallyOffOf(b) ? { tallyOff: tallyOffOf(b) } : {}),
           companies: (Array.isArray(b.companies) ? b.companies : []).slice(0, 200).map((c: any) => ({ name: coTrim(c?.name), open: !!c?.open, at: s(c?.at, 30), phase: s(c?.phase, 12),

@@ -216,8 +216,11 @@ export function ownTallys(own) {
   // the bridge says a Tally whose connection is off by the beat's tallyWhy, its own port's reason "closed": that port is
   // this login's Tally with its connection off
   const why = lc((here && here.tallyWhy) || b.tallyWhy), tp = Number((here && here.tallyPort) || b.tallyPort) || 0;
-  // bridge 2.5.11: its details name the port this login's Tally should take (tallyOff.want): that one, however many are closed
-  const tf = (here && here.tallyOff) || b.tallyOff, fp = tf && typeof tf === "object" ? Number(tf.want) || 0 : 0;
+  // bridge 2.5.11: its details name the port this login's Tally should take (tallyOff.want): that one, however many are
+  // closed. Review 10: the local status when it is there (an answer of this login's bridge now), else only a beat heard
+  // in the last 3 minutes: never a row from a stale beat
+  const live = !!here && here.tallyWhy != null, beatNow = !!b.at && Date.now() - Date.parse(b.at) < 3 * 60000;
+  const tf = live ? here.tallyOff : beatNow ? b.tallyOff : null, fp = tf && typeof tf === "object" ? Number(tf.want) || 0 : 0;
   const offAt = (p) => !p.ok && (fp ? Number(p.port) === fp : why === "connection off" && (tp ? Number(p.port) === tp : all.filter((x) => !x.ok).length === 1));
   const ses = all.filter((p) => p.ok || offAt(p) || !(/^closed$|^$/.test(lc(p.reason || p.state || "")) || /nothing listens/i.test(String(p.error || ""))));
   const items = here ? [].concat(here.open || []).filter((o) => o && o.mine !== false) : [], oks = ses.filter((s) => s.ok);
@@ -231,6 +234,7 @@ export function ownTallys(own) {
   if (fp && !out.some((t) => t.port === fp)) out.push({ port: fp, ok: false, state: "connection off", names: [] });
   return { tallys: out, unknown };
 }
+if (typeof window === "object") window.FCOwnTallys = ownTallys;   // (the tests)
 const STATE_OF = { clash: "port taken", reopen: "connection set, not on yet", notanswering: "not answering", admin: "run as administrator" };
 const nOfW = (n, one, many) => n + " " + (n === 1 ? one : many);
 

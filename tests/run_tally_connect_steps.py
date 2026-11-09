@@ -278,7 +278,13 @@ def main():
             if ini: d["info"]["beat"]["tallyIni"] = ini
             return d
         base = {"folder": "TallyPrime", "iniKind": "programFiles", "iniFolder": "TallyPrime", "mode": "Both", "port": 9114, "want": 9114, "iniAfterStart": False}
+        ADMINW = "Your TallyPrime is open but its connection is off; every Windows login here shares TallyPrime's settings: ask the computer's administrator to give each login its own TallyPrime folder and port (yours: 9039)."
+        NOWRITEW = "Your TallyPrime is open but its connection is off; this Windows login may not save TallyPrime's settings: ask the computer's administrator to give each login its own TallyPrime folder and port (yours: 9039)."
         cases = [("mode", [own9114], MODEW, dict(base, reason="mode", mode="Client"), SHAREDINI, "mode", "9114", True),
+                 ("mode, single-user", [own9114], MODEW, dict(base, reason="mode", mode="Client"), None, "mode", "9114", False),
+                 # (review 2: the bridge says the file is every login's, though it never tried to change it: the warning, this login's port)
+                 ("mode, shared", [own9114], ADMINW, dict(base, reason="mode", mode="None", shared=True, ownPort=9039), None, "mode", "9039", True),
+                 ("mode, not writable", [own9114], NOWRITEW, dict(base, reason="mode", mode="None", unwritable=True, ownPort=9039), None, "mode", "9039", False),
                  ("clash", [held], CLASHW, dict(base, reason="clash", iniKind="virtualStore", port=9000, want=9000, heldBy="otherUser", heldUser="made-up-b", ownPort=9039), SHAREDINI, "clash", "9039", False),
                  ("lost", [own9114], LOSTW, dict(base, reason="lost", lastPort=9039, lastAt="2026-11-08T09:30:00Z"), None, "lost", "9039", False),
                  ("closed", [own9114], CLOSEDW, dict(base, reason="closed"), None, "closed", "9114", False),
@@ -288,6 +294,7 @@ def main():
             g = guide()
             ok(g["now"] == "3" and g["hook"] == hook and g["say"].startswith("Step 3: " + say) and g["states"][:2] == ["done", "done"], "17. %s: step 3 says the bridge's words, hook %s (%s)" % (name, g["hook"], g["say"][:240]))
             ok(("changing the port here changes it for all of them" in g["say"]) == warn, "17. %s: the shared-settings warning %s (%s)" % (name, "given" if warn else "not given", g["say"][-160:]))
+            ok(("may not change TallyPrime’s settings" in g["say"]) == (name == "mode, not writable"), "17. %s: the not-writable warning only for a file this login may not write" % name)
             ok((name == "reopen") == ("close and reopen" in g["say"].lower() or "open it again once" in g["say"].lower()), "17. %s: 'close and reopen' only when tally.ini changed after Tally started" % name)
             cp = E("(s) => { const b = document.querySelector(s + ' [data-tsm-port-copy]'); return b ? b.getAttribute('data-tsm-port-copy') : null; }", G)
             ok(cp == copy, "17. %s: the port to copy %s (%s)" % (name, copy, cp))
