@@ -113,3 +113,19 @@ anything left (`tmReasons`), and what goes to Claude for the left-overs and how 
 `tmAiParse`, `tmAiCheck`). Plain JavaScript with no imports. The tds-challan-match function imports it; `build.py` puts it,
 without its export line, at the head of the app after match2b.js (`SHARED_JS`), where `TDSMatch` (src/js/86) calls it.
 `node tests/run_tds_match.js` checks the rules one by one; `python3 tests/run_tds_challan_match_server.py` the function.
+
+## gst3b.js: the GSTR-3B engine, one source for the app and gst-run
+
+`gst3b.js` (next-cloud-gst, 09-Nov-2026) is the part of the app's objects that a month's 3B and its carried credit reach
+(`GSTR.threeB`, `GSTR.creditIn`: GSTR, Books, GST2B, GSTSet, GSTQ, GSTF, ITCT, CustIMS, GSTAdv, GSTRev, GSTAmend, GSTV,
+M2B, and the plain helpers they call), with what makes the books from the cloud's rows (BookSrc.apply / ledgersInto,
+BookItems.join, Books.mapLedgers, LedMaster.refresh and the two members of Audit it calls); GSTAdv, GSTAmend, GSTF, GSTQ,
+GSTRev, GSTSet, ITCT, CustIMS and BookSrc are here whole. `build.py`
+puts it, without its export line, at the head of the app after tallyname.js (`SHARED_JS`), so these are the app's own
+top-level objects; the rest of each object (screens, files, buttons) is put on it in src/js with `Object.assign(GSTR, {`
+(tests/harness.js loads those blocks with their object). Plain JavaScript with no imports; it reads `S` and `CO()` and
+names.js's functions as globals at call time, and the app's perRender / reactScope / IN_RENDER / RENDER_GEN / ITCDec /
+whoAmI / TDSTally / GSTX only through `typeof`. A change to the 3B is made here, once. `server/gst-run` imports it (engine.js) and is
+deployed with `../_shared/gst3b.js`, `../_shared/names.js`, `../_shared/cors.ts` and `../_shared/firmgate.ts`; verify_jwt
+off (it checks the member's token itself); it needs migrations 151 and 153. `node tests/run_gst_cloud.js` checks the
+cloud's 3B is the app's, box for box; `python3 tests/run_migration153.py` the version it is kept by.

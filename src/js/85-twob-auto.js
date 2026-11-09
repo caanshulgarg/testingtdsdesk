@@ -10,14 +10,11 @@
 // Hook for the 2B screen (and its redesign, branch next-gst-portal): M2B.view(reg) gives the run for the registration and
 // the year of S.gstYm; M2B.statusOf2b(key) / M2B.statusOfBook(id) give each document's status:
 //   "matched-rules" | "matched-ai" | "probable" | "mismatch" | "2b-only" | "books-only".
-const M2B = {
-  st: {},                                           // reg|fy -> {run, hash, busy, err, at}
+// M2B's part the GSTR-3B engine runs is in server/_shared/gst3b.js (shared with the gst-run function); the rest is put on it here
+Object.assign(M2B, {
   url(){ return String(Cloud.cfg().url || "").replace(/\/+$/, "") + "/functions/v1/gst-2b-match"; },
-  fyOf(ym){ const y = +String(ym).slice(0, 4), m = +String(ym).slice(4, 6); const s = m >= 4 ? y : y - 1; return s + "-" + String((s + 1) % 100).padStart(2, "0"); },
   months(fy){ const y = +String(fy).slice(0, 4), out = []; for (let m = 4; m <= 15; m++) out.push((m <= 12 ? y : y + 1) + String(m <= 12 ? m : m - 12).padStart(2, "0")); return out; },
-  fyNow(){ const ms = (typeof GSTR === "object" && GSTR.months) ? GSTR.months() : []; return this.fyOf(S.gstYm || ms[ms.length - 1] || new Date().toISOString().slice(0, 7).replace("-", "")); },
   gstinOf(reg){ return ((typeof GSTR === "object" && GSTR.gstins(S.books)) || []).find(g => g.slice(0, 2) === reg) || ((GST2B.all2b(reg)[0] || {}).gstin) || ""; },
-  key(reg, fy){ return (reg || "") + "|" + fy; },
   // AI only where the firm's AI help is on for 2B (Settings, AI help) and the client is not left out of it
   // on by default (the owner, 17-Oct-2026): only a firm whose owner switched AI help off, 2B's part switched off, or a client
   // left out of AI help is matched by the rules alone; the daily cost cap stays
@@ -92,14 +89,6 @@ const M2B = {
     Object.defineProperty(res, "_maps", {value: {g, b}, enumerable: false});
     return res._maps;
   },
-  // next-itc-simple: the AI's pairs for GST2B.run (a 2B document with its books entries), and what they were made from
-  aiLinks(reg){
-    const s = this.st[this.key(reg, this.fyNow())], res = s && s.run && s.run.result;
-    if (!res) return [];
-    return (res.rows || []).filter(r => (r.st === "matched-ai" || r.st === "probable") && r.g.length === 1 && r.b.length)
-      .map(r => ({g: r.g[0], b: r.b.slice(), st: r.st, why: (r.why || []).join("; "), id: r.id}));
-  },
-  aiSig(reg){ const s = this.st[this.key(reg, this.fyNow())]; return s && s.run ? String(s.run.id || "") + ":" + String(s.run.at || "") + ":" + ((s.run.result || {}).rows || []).length + ":" + JSON.stringify(s.run.decisions || {}).length : ""; },
   statusOf2b(key, reg){ const m = this.statusMaps(reg === undefined ? r2Reg(S.books) : reg); return m ? m.g[key] || "" : ""; },
   statusOfBook(id, reg){ const m = this.statusMaps(reg === undefined ? r2Reg(S.books) : reg); return m ? m.b[id] || "" : ""; },
   // a person's accept or reject of a probable pair (one, or all of them): kept on the server, and an accepted pair of one
@@ -119,7 +108,7 @@ const M2B = {
     } catch (e){ toast("Could not keep it: " + e.message); }
     s.busy = false; render();
   }
-};
+});
 // The 2B reconciliation's hook (app/src/screens/gst/reco.js autoFor): the automatic run's pairs for the registration, in
 // its shape {results: [{key2b, books, status, reason, confidence, id}]}; mismatches stay with the reconciliation's own rules.
 const GSTAutoMatch = {

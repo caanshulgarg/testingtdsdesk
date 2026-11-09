@@ -117,47 +117,7 @@ const S = {
 // only the line breaks go (Tally keeps names such as "Arktos  Control & Instruments" with two spaces, and a posting must
 // use Tally's exact name); the same rule as tally_nm on the server
 function ledNm(n){ return namesBreaks(n); }
-// review of 02-Oct-2026 (trade receivables 11,550 short): Tally's XML can carry a name's line breaks escaped twice
-// ("MCS Project Pvt Ltd&amp;#13;&amp;#10;"), which comes out of the reader as "MCS Project Pvt Ltd&#13;&#10;"; a copy
-// of the books read before the cloud cleaned its names (migration-23) keeps such names in its balances and groups.
-// ledClean: the name as it is kept: entities decoded, line breaks gone (ledNm); other spaces stay, as Tally has them.
-// ledKey: the name for matching only: also every run of spaces as one, so "A  B" and "A B&#13;&#10;" meet
-// All four are the one rule shared with the cloud reader (server/_shared/names.js, put ahead of this file by build.py)
-function ledEnt(s){ return namesDecode(s); }
-function ledClean(n){ return namesClean(n); }
-function ledKey(n){ return namesKey(n); }
-// the group a ledger sits under, and the groups above it: the one place every report looks it up (MIS, Reports, the
-// accounts, Audit, Parties). The name is looked up as kept, else by its clean key, so a name with line breaks or
-// entities still finds its group (and a group's parent the same way)
-const LED_IDX = new WeakMap();
-function ledIdx(o){
-  if (!o) return null;
-  // built again when the names changed (counted at most once a second: paths are asked for many times a run)
-  const x = LED_IDX.get(o), t = Date.now();
-  if (x && t - x.at < 1000) return x;
-  const n = Object.keys(o).length;
-  if (x && x.n === n){ x.at = t; return x; }
-  const m = new Map(); Object.keys(o).forEach(k => { const kk = ledKey(k); if (kk && (!m.has(kk) || o[k])) m.set(kk, o[k]); });
-  const y = {n, m, at: t, seen: new Map()};             // seen: a name already looked up by its key
-  LED_IDX.set(o, y);
-  return y;
-}
-function ledLook(o, l){
-  if (!o || l == null) return undefined;
-  if (o[l] != null) return o[l];
-  const x = ledIdx(o);
-  if (x.seen.has(l)) return x.seen.get(l);
-  const p = x.m.get(ledKey(l)), v = p == null ? undefined : p;
-  x.seen.set(l, v);
-  return v;
-}
-function ledUnder(b, l){ return ledLook(b && b.under, l); }
-function ledGroupPath(b, l){
-  const groups = (b && b.groups) || {}, out = [];
-  let p = ledUnder(b, l);
-  for (let i = 0; p && i < 15; i++){ if (groups[p] == null && /&|\r|\n/.test(p)) p = ledClean(p); out.push(p); p = ledLook(groups, p) || ""; }
-  return out;
-}
+// ledEnt, ledClean, ledKey, LED_IDX, ledIdx, ledLook, ledUnder, ledGroupPath: server/_shared/gst3b.js (shared with the gst-run function)
 function newCompany(f){
   f = f || {};
   const gstin = String(f.gstin || "").toUpperCase().trim();

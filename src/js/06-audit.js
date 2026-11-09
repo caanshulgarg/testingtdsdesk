@@ -2,7 +2,8 @@
 /* Audit: checks run on the books, each with the problem, what it     */
 /* costs, what to do, and the journal entry when one is needed        */
 /* ================================================================== */
-const Audit = {
+// Audit's part the GSTR-3B engine runs is in server/_shared/gst3b.js (shared with the gst-run function); the rest is put on it here
+Object.assign(Audit, {
   AREAS: [["cash", "Cash and loans"], ["tds", "TDS"], ["gst", "GST"], ["books", "Books and audit trail"], ["bal", "Balances"]],
   SEV: {high: 3, medium: 2, low: 1},
   STATUS: [["open", "Open"], ["explained", "Explained"], ["pass", "Entry to pass"], ["passed", "Entry passed"], ["no", "Not an issue"]],
@@ -12,10 +13,6 @@ const Audit = {
   days(a, c){ const f = s => new Date(this.iso(s) + "T00:00:00").getTime(); return Math.round((f(c) - f(a)) / 86400000); },
   today(){ const d = new Date(); return d.getFullYear() + String(d.getMonth() + 1).padStart(2, "0") + String(d.getDate()).padStart(2, "0"); },
   fyStart(d){ d = this.ymd(d); const y = num(d.slice(0, 4)), m = num(d.slice(4, 6)); return String(m >= 4 ? y : y - 1) + "0401"; },
-  // the group a ledger sits under, up to the top
-  // (ledGroupPath, src/js/00: a name with line breaks or entities still finds its group)
-  path(l){ return ledGroupPath(S.books, l); },
-  under(l, re){ return this.path(l).some(g => re.test(g)); },
   isCash(l){ const m = Books.ledgerOf(l); return this.under(l, /^cash-in-hand$/i) || (!this.path(l).length && m.kind === "bank" && /\bCASH\b/i.test(l)); },
   isBankL(l){ return this.under(l, /^bank (accounts|od a\/c|occ a\/c)$/i) || (Books.ledgerOf(l).kind === "bank" && !this.isCash(l)); },
   isLoan(l){ return this.under(l, /^(loans \(liability\)|secured loans|unsecured loans)$/i) || (!this.path(l).length && /\bLOAN\b/i.test(l)); },
@@ -597,5 +594,5 @@ const Audit = {
     const out = XLSX.write(wb, {bookType: "xlsx", type: "array"});
     saveFile(CO().name.replace(/[^A-Za-z0-9]+/g, "-") + "-audit-" + run.from + "-" + run.to + ".xlsx", new Blob([out], {type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));
   }
-};
+});
 

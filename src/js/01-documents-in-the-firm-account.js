@@ -363,9 +363,7 @@ function xesc(s){ return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"
 function blobUrl(f){ return URL.createObjectURL(/^(application\/pdf|image\/(png|jpe?g|gif|webp))$/i.test(f.type || "") ? f : new Blob([f], {type: /\.pdf$/i.test(f.name || "") ? "application/pdf" : "application/octet-stream"})); }
 // a CSV cell's text: one that Excel would take for a formula (= + - @, not a number) is kept as text
 function csvTxt(v){ const s = String(v == null ? "" : v); return typeof v === "string" && /^[=+\-@\t\r]/.test(s) && !/^-?[\d,.]+$/.test(s) ? "'" + s : s; }
-function num(v){ if (typeof v === "number") return isFinite(v) ? v : 0; const n = parseFloat(String(v == null ? "" : v).replace(/[^0-9.\-]/g, "")); return isFinite(n) ? n : 0; }
-function r2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
-const INR = new Intl.NumberFormat("en-IN", {minimumFractionDigits:2, maximumFractionDigits:2});
+// num, r2, INR, MONTHS3, toDateObj, fmtDate: server/_shared/gst3b.js (shared with the gst-run function)
 const INR0 = new Intl.NumberFormat("en-IN", {maximumFractionDigits:0});
 // a negative amount reads "-₹1,234.00" (the minus before the rupee sign; colour scheme of 02-Oct-2026), shown in red by negAmounts
 // a Tally narration as shown on the screen: without FinCom's matching mark (" | TDSDesk:<id>", kept in Tally so FinCom can
@@ -398,14 +396,6 @@ function fyOf(d){
   return s + "-" + String((s + 1) % 100).padStart(2, "0");
 }
 S.partyFy = fyOf(null);
-// One date format everywhere (review item 31): 19-Sep-2026, and 19-Sep-2026 09:32 with the time (24-hour, this computer's time)
-const MONTHS3 = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-function toDateObj(d){
-  if (d instanceof Date) return d;
-  if (typeof d === "number") return new Date(d);
-  const t = String(d);
-  return /^\d{4}-\d{2}-\d{2}$/.test(t.slice(0, 10)) && t.length <= 10 ? new Date(t + "T00:00:00") : new Date(t);
-}
 // a large sum in a few characters, as said in India: ₹49.99 Cr, ₹3.20 L, ₹45,000 (review of 01-Oct-2026: header chips)
 function moneyShort(v){
   const n = num(v), a = Math.abs(n), sg = n < 0 ? "-" : "";
@@ -414,11 +404,6 @@ function moneyShort(v){
   if (a >= 1e7) return sg + "\u20b9" + down(a / 1e7) + " Cr";
   if (a >= 1e5) return sg + "\u20b9" + down(a / 1e5) + " L";
   return sg + "\u20b9" + INR.format(a);
-}
-function fmtDate(d){
-  if (!d && d !== 0) return "—";
-  const dt = toDateObj(d);
-  return isNaN(dt) ? String(d).replace(/[^\w \-\/.:]/g, "") : String(dt.getDate()).padStart(2, "0") + "-" + MONTHS3[dt.getMonth()] + "-" + dt.getFullYear();
 }
 function fmtTime(d){ const p = istParts(d); return !p || p.day ? "" : p2ist(p.h) + ":" + p2ist(p.mi) + " IST"; }
 function fmtDateTime(d){ const p = istParts(d); return !p ? "—" : p2ist(p.d) + "-" + MONTHS3[p.mo - 1] + "-" + p.y + (p.day ? "" : " " + p2ist(p.h) + ":" + p2ist(p.mi) + " IST"); }
