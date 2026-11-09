@@ -3,8 +3,10 @@
 // Supabase (the user check, the RPCs); made-up figures only.
 //   - no token, the anon or the service key: refused; a bad period: 400; no books: 404
 //   - a kept answer for the same books comes back at once, nothing worked out again
-//   - otherwise: the ageing (both sides), the tie-out (the period's month-ends) and the balances on the last day are read
-//     with the MEMBER's token (its own firm only); the answer is kept with the service key, with the book's version
+//   - otherwise: ONE call, tally_now, with the MEMBER's token (its own firm only), whose one JSON value carries every
+//     balance (1,500 ledgers here; a REST call of rows stops at 1,000, which the fake does too); the answer is kept with the
+//     service key under the kind's own revision and the version read before the figures (tally_calc_cached)
+//   - a period of more than 120 months: 400, nothing read
 import { handler } from "./handler.ts";
 
 function assert(c: unknown, w: string): asserts c { if (!c) throw new Error(w); }
@@ -22,9 +24,12 @@ function fake(opts: { kept?: any, none?: boolean }) {
     const args = JSON.parse(init.body || "{}");
     calls.push({ fn: m[1], args, token });
     if (m[1] === "tally_calc_cached") return json(opts.none ? { none: true } : { book: BOOK, version: "v-1", result: opts.kept || null, at: opts.kept ? "2026-11-09T10:00:00Z" : null });
-    if (m[1] === "tally_ageing") return json({ asOn: "20261031", side: args.p_side, rows: [], sum: { owe: args.p_side === "r" ? 1000 : 400, advance: args.p_side === "r" ? 50 : 20 } });
-    if (m[1] === "tally_tieout") return json({ book: BOOK, months: Object.fromEntries(args.p_months.map((x: string, i: number) => [x, { receivables: 1000 + i, payables: 400, cash_bank: 9, profit: 7, tb_total: 99, why: {} }])) });
-    if (m[1] === "tally_balances_at") return json([{ date: "2026-10-31", ledger: "Made-up Bank", bal: "-1234.50" }, { date: "2026-10-31", ledger: "Made-up Capital", bal: "1234.50" }]);
+    if (m[1] === "tally_now") return json({ book: BOOK, from: args.p_from.replace(/-/g, ""), to: args.p_to.replace(/-/g, ""),
+      recv: { sum: { owe: 1000 } }, pay: { sum: { owe: 400 } }, owed: { r: 1000, p: 400, custAdv: 50, supAdv: 20 },
+      balances: { asOn: "20261031", cash: [["Made-up Cash", 9]], bank: [], at: Object.fromEntries(Array.from({ length: 1500 }, (_, i) => ["Made-up Ledger " + i, -i])) },
+    });
+    // PostgREST's row limit: a function returning rows gives at most 1,000
+    if (m[1] === "tally_balances_at") return json(Array.from({ length: 1000 }, (_, i) => ({ ledger: "Made-up Ledger " + i, bal: -i })));
     if (m[1] === "tally_calc_put") return json(null);
     return json({ message: "unknown rpc" }, 404);
   };
@@ -42,28 +47,34 @@ Deno.test("now: refused without a member's token, a bad period, no books", async
   eq((await fake({ none: true }).ask({ action: "now", client: "c1", from: "20260401", to: "20261031" })).status, 404, "no books");
 });
 
+Deno.test("now: a period of more than 120 months is refused before anything is read", async () => {
+  const f = fake({});
+  eq((await f.ask({ action: "now", client: "c1", from: "20150401", to: "20260331" })).status, 400, "11 years");
+  eq(f.calls.length, 0, "nothing read");
+  eq((await f.ask({ action: "now", client: "c1", from: "20160401", to: "20260331" })).status, 200, "120 months");
+});
+
 Deno.test("now: a kept answer for the same books comes back, nothing worked out again", async () => {
   const f = fake({ kept: { kind: "mis-now", x: 1 } });
   const r = await f.ask({ action: "now", client: "c1", from: "2026-04-01", to: "2026-10-31" });
   eq(r.status, 200, "status"); eq(r.body.kept, true, "kept"); eq(r.body.result, { kind: "mis-now", x: 1 }, "the kept answer");
   eq(f.calls.map((c) => c.fn), ["tally_calc_cached"], "only the look-up");
-  eq(f.calls[0].args, { p_client: "c1", p_on: "2026-10-31", p_kind: "mis-now", p_args: "20260401|20261031" }, "asked with the period");
+  eq(f.calls[0].args, { p_client: "c1", p_on: "2026-10-31", p_kind: "mis-now.2", p_args: "20260401|20261031" }, "asked with the period, under the kind's new revision");
 });
 
-Deno.test("now: worked out with the member's token, kept with the service key", async () => {
+Deno.test("now: one call with the member's token, every balance (over 1,000 ledgers), kept with the service key", async () => {
   const f = fake({});
   const r = await f.ask({ action: "now", client: "c1", from: "20260401", to: "20261031" });
   eq(r.status, 200, "status"); eq(r.body.kept, false, "not kept before");
   const res = r.body.result;
+  eq(f.calls.map((c) => c.fn), ["tally_calc_cached", "tally_now", "tally_calc_put"], "the look-up, one working, the keeping");
   eq(f.calls.filter((c) => c.fn !== "tally_calc_put").every((c) => c.token === JWT), true, "every read with the member's token");
-  const put = f.calls.find((c) => c.fn === "tally_calc_put")!;
-  assert(put && put.token === SERVICE, "kept with the service key");
-  eq([put.args.p_book, put.args.p_kind, put.args.p_args, put.args.p_version], [BOOK, "mis-now", "20260401|20261031", "v-1"], "kept under the book, kind, period and version");
-  eq(f.calls.find((c) => c.fn === "tally_tieout")!.args.p_months, ["2026-04-01", "2026-05-01", "2026-06-01", "2026-07-01", "2026-08-01", "2026-09-01", "2026-10-01"], "the period's months");
-  eq(f.calls.filter((c) => c.fn === "tally_ageing").map((c) => [c.args.p_side, c.args.p_as_on]).sort(), [["p", "2026-10-31"], ["r", "2026-10-31"]], "the ageing on the last day, both sides");
-  eq(f.calls.find((c) => c.fn === "tally_balances_at")!.args, { p_book: BOOK, p_dates: ["2026-10-31"] }, "the balances on the last day");
-  eq(res.owed, { r: 1006, p: 400, custAdv: 50, supAdv: 20 }, "owed from the last month-end, advances from the ageing");
-  eq(res.balances.at, { "Made-up Bank": -1234.5, "Made-up Capital": 1234.5 }, "the balances");
-  eq([res.partial, res.version, res.book, res.recv.sum.owe, res.pay.sum.owe], [true, "v-1", BOOK, 1000, 400], "the answer");
+  eq(f.calls[1].args, { p_client: "c1", p_from: "2026-04-01", p_to: "2026-10-31" }, "the period");
+  const put = f.calls[2];
+  assert(put.token === SERVICE, "kept with the service key");
+  eq([put.args.p_book, put.args.p_kind, put.args.p_args, put.args.p_version], [BOOK, "mis-now.2", "20260401|20261031", "v-1"], "kept under the book, the kind's revision, the period and the version read before the figures");
+  eq(Object.keys(res.balances.at).length, 1500, "all 1,500 balances, not the 1,000 a row call would give");
+  eq(res.owed, { r: 1000, p: 400, custAdv: 50, supAdv: 20 }, "owed as tally_now worked it out on the day");
+  eq([res.partial, res.version, res.book, res.recv.sum.owe, res.pay.sum.owe, res.kind], [true, "v-1", BOOK, 1000, 400, "mis-now.2"], "the answer");
   assert(res.later.includes("pl") && res.parts.includes("recv"), "says what is not worked out here yet");
 });
