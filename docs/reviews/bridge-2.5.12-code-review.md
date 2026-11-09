@@ -3,7 +3,7 @@
 Reviewers: the session that built it (a self-review against the owner's rules), after the independent review of
 f1b3e700b (seven points; all addressed below). The coordinator reviews again.
 
-Range: ff86083bf..c081db8ce (origin/staging-next, which holds released 2.5.11, to this build)
+Range: ff86083bf..85d478c14 (origin/staging-next, which holds released 2.5.11, to this build)
 
 (bridge-go/: fastvch.go (liveKeepInv2512 kept by the strip only, fastEmit's order, fastVoucherModeItems, fastHasItems /
 fastOKNoInv), batch249.go (FinComVoucherBatch's FETCH 2.5.11's again; pullKeep), daypull.go (pullHoldEntry,
