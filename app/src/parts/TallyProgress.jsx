@@ -12,7 +12,7 @@
 // rounds, the books' summary): none is made up; a count not known says "—"; a read with no total known says the count so
 // far. Nothing new is asked of Tally.
 import { useEffect, useState } from "react";
-import { LED_N, ledBook, ledgersOf, ledgersHeld, cloudLedgerCount, groupCount, GRP, runPress, runWords, runBusy, keepWaitOf, cloudBook, d8Of, daybookHeld } from "./TallyCompanies.jsx";
+import { LED_N, ledBook, ledgersOf, ledgersHeld, cloudLedgerCount, groupCount, GRP, runPress, runWords, runBusy, keepWaitOf, cloudBook, d8Of, daybookHeld, readOf } from "./TallyCompanies.jsx";
 import { bookSum, pctOf, partWords, etaWords, nf, rpc, summary, fyNow, whyWords, pullWatch } from "./TallyFetch.jsx";
 import { noAnswer } from "../lib/readFollow.js";   // next-link-follow: a result line when no Tally can answer
 import { press, busyOf, lockOf, Said, useSaid, errWords } from "./TallyBtn.jsx";   // next-buttons: every click says what came of it
@@ -32,12 +32,11 @@ const day8w = (d8) => /^\d{8}$/.test(d8) ? Number(d8.slice(6, 8)) + "-" + MON[Nu
 const whenIn = (at) => whenWords(at).replace(/^Today/, "today").replace(/^Yesterday/, "yesterday");
 const today8 = () => ist(Date.now()).toISOString().slice(0, 10).replace(/-/g, "");
 const daysBetween = (a8, b8) => Math.max(0, Math.round((Date.parse(b8.slice(0, 4) + "-" + b8.slice(4, 6) + "-" + b8.slice(6, 8)) - Date.parse(a8.slice(0, 4) + "-" + a8.slice(4, 6) + "-" + a8.slice(6, 8))) / 86400e3));
-const sync = (cid) => ((typeof S === "object" && S.tcoSync) || {})[cid] || null;
 const mayChange = () => !(typeof S === "object" && S.account && S.account.me) || ["owner", "staff"].includes(S.account.me.role);
 
 // ---------- Step 1 · Masters: {st: reading | waiting | done | none | why, n, g, read, of, pct, words, sub, at}
 export function mastersOf(cid, company) {
-  const x = sync(cid), n = ledgersOf(cid), g = (GRP[cid] || {}).n, held = ledgersHeld(cid), bk = ledBook(cid) || {};
+  const x = readOf(cid, company), n = ledgersOf(cid), g = (GRP[cid] || {}).n, held = ledgersHeld(cid), bk = ledBook(cid) || {};
   const rw = runWords(cid, company), at = bk.ledgersAt || "", ln = LED_N.get(cid), nKnown = n > 0 || !!(ln && ln.book === bk.book);
   const running = !!(x && !x.end && !x.err && !x.late) || runBusy(cid);
   const of = x && x.prog ? Number(x.prog.of) || 0 : 0, read = x && x.prog ? Math.min(Number(x.prog.read) || 0, of || Infinity) : 0;
@@ -47,6 +46,10 @@ export function mastersOf(cid, company) {
     if (kw && !(read > 0)) return Object.assign(base, { st: "waiting", words: /^waiting/i.test(kw) ? kw : "Waiting: " + kw, read, of, pct: 0 });
     if (of > 0) return Object.assign(base, { st: "reading", read, of, pct: Math.min(99, Math.round((read * 100) / of)), words: "Reading · " + nf(read) + " of " + nf(of) });
     if (read > 0) return Object.assign(base, { st: "reading", read, of: 0, pct: 0, words: "Reading… " + nf(read) + " so far" });
+    // next-masters-progress: a bridge that sends no progress (it reads on its own, or an older one): FinCom's own count of
+    // the ledgers arrived so far (read again each 10 s while the cell shows it), never a blank "Reading…". Only on a first
+    // read (no masters in FinCom before it: x.la0 "", known once the read took its snapshot): an Update now's count would be the old ones
+    if (nKnown && n > 0 && x && x.la0 === "" && !(rw && rw.phase === "waiting")) return Object.assign(base, { st: "reading", read: n, of: 0, pct: 0, words: "Reading… " + nf(n) + " so far" });
     // (the read asked, nothing from Tally yet and a reason known: "Not started yet: …", amber)
     if (rw && rw.phase === "waiting") return Object.assign(base, { st: "waiting", read: 0, of: 0, pct: 0, words: rw.text });
     return Object.assign(base, { st: "reading", read: 0, of: 0, pct: 0, words: rw && rw.text ? rw.text : "Reading…" });
@@ -91,6 +94,8 @@ export function MastersCell({ row }) {
   const m = mastersOf(row.cid, row.company), live = m.st === "reading" || m.st === "waiting";
   // (each 2 s while the masters are read: the read's own counts)
   useEffect(() => { if (!live) return; const t = setInterval(() => tick((k) => k + 1), 2000); return () => clearInterval(t); }, [live]);
+  // (next-masters-progress: FinCom's own count of the ledgers arrived, each 10 s while the masters are read)
+  useEffect(() => { if (!live || !row.cid) return; const t = setInterval(() => { cloudLedgerCount(row.cid, false, 9000).catch(() => null); }, 10000); return () => clearInterval(t); }, [live, row.cid]);
   let head, sub = "", sub2 = "", cls = "";
   if (m.st === "done") { head = "✓ Up to date"; cls = " ok"; sub = countWords(m.n, m.g); sub2 = m.at ? "Updated " + whenIn(m.at) : ""; }
   // (the groups only once FinCom holds this client's masters: a first read has no count yet, never "0 groups")
@@ -136,11 +141,11 @@ export function rangeWords(cid) {
 // Bring masters (= Bring ledgers & groups, masters missing): the masters' read, as Update now (FinCom's Update now: never
 // a second read)
 export function BringMasters({ row, primary = true, link = false }) {
-  const [busy, setBusy] = useState(false), x = sync(row.cid), running = busy || runBusy(row.cid) || !!(x && !x.end && !x.err && !x.late);
+  const [busy, setBusy] = useState(false), x = readOf(row.cid, row.company), running = busy || runBusy(row.cid) || !!(x && !x.end && !x.err && !x.late);
   if (!mayChange()) return null;
   // (link: under More, the masters alone read again; never the row's main button)
   const go = () => { if (running) return; setBusy(true); runPress(row.cid, row.company).catch(() => {}).finally(() => setBusy(false)); };
-  const why = running ? "The masters are being read from Tally now; the row says how far." : undefined;
+  const why = undefined;
   if (link) return <button type="button" className="linkbtn" data-tpt-masters-more={row.cid} disabled={running} title={why}
     onClick={go}>{running ? "Reading masters…" : "Bring masters"}</button>;
   return <button type="button" className={"btn tpt-btn" + (primary ? " primary" : "")} data-tpt-main="masters" data-tpg-bring={row.cid} disabled={running} title={why}

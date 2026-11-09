@@ -95,9 +95,9 @@ def main():
             if not n(L(name)): pg.click(R(name) + " [data-tpt-open]"); pg.wait_for_timeout(700)
 
         print("== 2. the table (next-tally-simple2: Client · Tally company | Masters | Entries | Action)")
-        heads = E("() => [...document.querySelectorAll('#app [data-tsm-table] thead th')].map(e => e.textContent.trim())")
+        heads = E("() => [...document.querySelectorAll('#app [data-tsm-table] thead th')].map(e => (e.firstChild && e.firstChild.nodeType === 3 ? e.firstChild.textContent : e.textContent).trim())")
         ok(heads == ["Client · Tally company", "Masters", "Entries", "Action"], "2. the columns (%s)" % heads)
-        ok(txt("#app [data-tsm-table] [data-tpt-title]") == "Clients · 4" and txt("#app [data-tsm-table] [data-tpt-say]") == "Masters (ledgers & groups) always come first, then entries",
+        ok(txt("#app [data-tsm-table] [data-tpt-title]") == "Clients · 4" and n("#app [data-tsm-table] [data-tpt-say]") == 0,
            "2. 'Clients · 4', masters always come first (%s | %s)" % (txt("#app [data-tsm-table] [data-tpt-title]"), txt("#app [data-tsm-table] [data-tpt-say]")))
         cos_ = {KES: KESC, ORBIT: ORB, ACME: ACO, NIMB: NIC}
         ok(all(txt(R(nm) + " .tpt-co-line") == "Tally: " + co and txt(R(nm) + " [data-tpt-co]") == co for nm, co in cos_.items()),

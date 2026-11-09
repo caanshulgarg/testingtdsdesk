@@ -21,7 +21,7 @@ import { linkTo, Pick, ChangePick, booksLoad, firstSync, syncPoll, openFromTally
 import { checkAll, connSig, tallyOpenOn, offSay, bridgesOf, rowsLast, placeOf, LEDN, ASKED_N, rowsFor, quickRows, openingsAll, openingsDecide, rupees, matches, headWords, ownState, localBridges, rescanLocal, lookOnce, aimLocal, LOCALB, YES, NO, NOTYET, BLOCKED } from "../lib/tallySimple.js";
 import { coKey, tallyDevs, pcRawOf } from "../lib/tallyState.js";
 import { bridgeStopped, bridgeBack, stoppedWhere } from "../lib/bridgeStop.js";   // bridge 2.5.10: a bridge stopped, or back by itself
-import { ledgersHeld, LED_N, ledBook, cloudLedgerCount, baseKey, stallWhy, companyRows, unlink, runPress, runWords, runSettle, runBusy, keepWaitWords } from "./TallyCompanies.jsx";
+import { ledgersHeld, LED_N, ledBook, cloudLedgerCount, baseKey, stallWhy, companyRows, unlink, runPress, runWords, runSettle, runBusy, keepWaitWords, readOf } from "./TallyCompanies.jsx";
 import { soonDraw } from "../lib/soonDraw.js";
 import { MastersCell, EntriesCell, BringMasters, BringBooks, PullButtons, History, DayBookDrop, rangeWords, mastersOf, entriesOf } from "./TallyProgress.jsx";
 import OlderEntries, { TurnOn, owner, TURN_FROM } from "./TallyFetch.jsx";
@@ -521,7 +521,7 @@ function Row({ row, download, oneDl, seen, cs, x, checkAgain }) {
   const rw = linked ? runWords(row.cid, row.company) : null, live = !!(rw && rw.phase !== "done" && rw.phase !== "why");
   useEffect(() => { if (!live) return; const t = setInterval(() => tick((k) => k + 1), 1000); return () => clearInterval(t); }, [live]);
   useEffect(() => { if (linked) runSettle(row.cid, row.company, () => tick((k) => k + 1)); });
-  const sx = (S.tcoSync || {})[row.cid], runningRead = !!(sx && !sx.end && !sx.err && !sx.late) || runBusy(row.cid);
+  const sx = linked ? readOf(row.cid, row.company) : null, runningRead = !!(sx && !sx.end && !sx.err && !sx.late) || runBusy(row.cid);
   const label = row.client || shown(row.company), name = row.kind === "client" ? row.client : row.company;
   const m = linked ? mastersOf(row.cid, row.company) : null, e = linked ? entriesOf(row.cid, m, row.last) : null, p = e && e.p && !e.p.done && e.b && e.b.book ? e.p : null;
   // the row's ONE main button, chosen by its state; a short note under it when needed
@@ -637,7 +637,7 @@ function Table({ rows, download, oneDl, cs, x, checkAgain }) {
   const list = tg.filter((t) => (fst === "all" || t.s.includes(fst)) && (fma === "all" || t.m === fma) && (fen === "all" || t.e === fen)).map((t) => t.r);
   const w = headWords(rows), nc = rows.filter((r) => r.kind === "client").length;
   return <section className="tpt-sec" aria-label="Clients" data-tsm-table="" data-tsm-n={rows.length}>
-    <div className="tpt-head"><h3 className="tpt-title" data-tpt-title="">{"Clients · " + nc}</h3><span className="tsm-note" data-tpt-say="">Masters (ledgers &amp; groups) always come first, then entries</span>
+    <div className="tpt-head"><h3 className="tpt-title" data-tpt-title="">{"Clients · " + nc}</h3>
       <span className="sr-only" data-tsm-say=""><b className="tsm-fine">{w.fine}</b>{" "}<b className="tsm-need" data-tsm-need-n={rows.filter((r) => r.need).length}>{w.need}</b></span></div>
     {rows.length > 6 && <label className="tsm-search"><span className="sr-only">Search client</span>
       <input type="search" data-tsm-q="" placeholder="Search client or Tally company" aria-label="Search client or Tally company" value={ui.q} onChange={(ev) => set({ q: ev.target.value })} /></label>}
@@ -657,7 +657,7 @@ function Table({ rows, download, oneDl, cs, x, checkAgain }) {
 function Foot() {
   // (next-buttons: the run_tally_clicks dead button: pressed while already open it did nothing visible; now it closes it)
   const open = !!(S.tallyMore || {}).support;
-  return <div className="tpt-foot" data-tpt-foot=""><span className="tsm-note">One main button per client. More ▾ opens the rest.</span>
+  return <div className="tpt-foot" data-tpt-foot="">
     <button type="button" className="linkbtn" data-tpt-advanced="" aria-expanded={open ? "true" : "false"} onClick={() => { S.tallyMore = Object.assign({}, S.tallyMore || {}, { support: !open }); render();
       if (!open) setTimeout(() => { const el = document.querySelector("#app [data-for-support]"); if (el && el.scrollIntoView) el.scrollIntoView({ block: "start", behavior: "smooth" }); }, 60); }}>{open ? "Hide advanced (for support)" : "Advanced (for support)"}</button></div>;
 }
@@ -733,8 +733,7 @@ export function SupportTools({ checkAgain, pcs, download, sha }) {
   let st = null; try { st = bridgeStopped(tallyDevs()); } catch (e) { st = null; }
   return <div className="tsm-support" data-tsm-support="">
     {st && <div className="tsm-note bad" data-tsm-support-stopped="">{stoppedWhere(st, pcRawOf(st.dev))}</div>}
-    <div className="row" style={{ gap: 8, alignItems: "center", flexWrap: "wrap" }}><button type="button" className="btn small" data-tsm-check="" disabled={on} onClick={() => checkTallyNow(rows, checkAgain)}>{on ? "Checking Tally…" : "Check every client for changes in Tally"}</button>
-      <span className="note">Each linked client’s entries of this year checked against Tally, one day at a time.</span></div>
+    <div className="row" style={{ gap: 8, alignItems: "center", flexWrap: "wrap" }}><button type="button" className="btn small" data-tsm-check="" disabled={on} onClick={() => checkTallyNow(rows, checkAgain)}>{on ? "Checking Tally…" : "Check every client for changes in Tally"}</button></div>
     <Said k="checkall" hook="check-all" />
     {pcs && <Computers pcs={pcs} download={download} sha={sha} />}
   </div>;

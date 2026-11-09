@@ -82,6 +82,17 @@ def main():
         pg.click("#app [data-tpt-fclear]"); pg.wait_for_timeout(500)
         ok(n(ROWS) == 3, "3. Clear filters: all 3 again")
 
+        print("== 5. a read asked for the client's older Tally company (relinked since): not this link's read")
+        OR = '#app [data-tsm-table] tr[data-tsm-row="%s"]' % ORBIT
+        cid = pg.get_attribute(OR, "data-tsm-cid")
+        before = pg.get_attribute(OR + " [data-tpg-masters]", "data-tpg-masters")
+        E("""(c) => { S.tcoSync = S.tcoSync || {}; S.tcoSync[c] = {cid: c, company: 'ORBIT SPACE - (from 1-Apr-2021)', at: Date.now() - 400000, via: 'cloud', err: '', end: 0, late: false, led: null, prog: null, why: 'made up', la0: '', samples: []}; render(); }""", cid)
+        pg.wait_for_timeout(700)
+        ok(pg.get_attribute(OR + " [data-tpg-masters]", "data-tpg-masters") == before and "from 1-Apr-2021" not in txt(OR), "5. the older company's read is not shown on the row (%s -> %s; %s)" % (before, pg.get_attribute(OR + " [data-tpg-masters]", "data-tpg-masters"), txt(OR)[:160]))
+        E("""(c) => { S.tcoSync[c].company = 'ORBIT SPACE'; render(); }""", cid); pg.wait_for_timeout(700)
+        ok(pg.get_attribute(OR + " [data-tpg-masters]", "data-tpg-masters") in ("reading", "waiting"), "5. the same read for the linked company: shown (%s)" % pg.get_attribute(OR + " [data-tpg-masters]", "data-tpg-masters"))
+        E("""(c) => { delete S.tcoSync[c]; render(); }""", cid); pg.wait_for_timeout(400)
+
         print("== 4. a phone")
         pg.set_viewport_size({"width": 390, "height": 844}); pg.wait_for_timeout(600)
         sw = E("() => document.documentElement.scrollWidth")

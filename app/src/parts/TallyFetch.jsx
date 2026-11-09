@@ -87,7 +87,6 @@ export const askOff = () => ASK.off;
 export function bookFetch(cid, book) { askStatus(); const l = ASK.books || []; return l.find((x) => x.book === book) || l.find((x) => x.client === cid) || null; }
 // the honest pace (the owner, 30-Oct-2026, 16:30): office hours, a few days at a time while Tally is free; outside them up
 // to 30 days at a time ("" when the hours are not known)
-const hh = (h) => String(h).padStart(2, "0") + ":00";
 export function nightNow(h, now = Date.now()) {
   if (!h) return false;
   const t = new Date(now + 5.5 * 3600e3), hr = t.getUTCHours(), from = Number(h.from), to = Number(h.to);
@@ -95,11 +94,9 @@ export function nightNow(h, now = Date.now()) {
   if (from === to) return false;
   return from < to ? hr >= from && hr < to : hr >= from || hr < to;
 }
-export function paceWords(h) {
-  if (!h || h.from == null || h.to == null) return "";
-  return nightNow(h) ? "Night pace (" + hh(h.from) + "–" + hh(h.to) + "): up to 30 days at a time."
-    : "Office hours pace: a few days at a time, only while Tally is free; faster from " + hh(h.from) + " (up to 30 days at a time).";
-}
+// the owner, 09-Nov-2026: "I don't want these types of line anywhere in our system.. which does not have any impact nor
+// any useful info.. it needs to be professional looking": the pace is no longer said (kept for its callers: always "")
+export function paceWords() { return ""; }
 // keep the summary fresh while something is going on (a period being read, an upload being checked)
 function useLive(on) {
   const [, tick] = useState(0);
@@ -258,7 +255,6 @@ export default function OlderEntries({ cid, say = false }) {
     {!may() && <p className="note" data-older-view="" style={{ margin: "4px 0 0" }}>{VIEW_ONLY}</p>}
     {p && (p.upload || []).map((u) => <p key={u.day} className="note" data-older-upload={u.day} style={{ margin: "4px 0 0" }}>{u.words + " "}
       <button className="linkbtn" data-older-upload-go={u.day} onClick={() => typeof tallyPickFor === "function" && tallyPickFor(tallyDate(u.day), tallyDate(u.day))}>{"Upload " + dayLong(u.day)}</button></p>)}
-    <p className="note" data-older-safe="" style={{ margin: "8px 0 0" }}>FinCom Bridge reads one day at a time, only while nobody is working in Tally; each request stops at 2 seconds and postings go first, so Tally never hangs.</p>
   </section>;
 }
 
@@ -363,6 +359,5 @@ export function UploadCheck({ cid }) {
     {s.checked > 0 && <p data-check-total="" style={{ margin: "0 0 4px" }}><b>{s.totalWords || ""}</b>{s.fixed ? "; FinCom’s copy now matches Tally for the days checked." : s.same && !waiting ? "; the upload matches Tally ✓" : ""}</p>}
     {same.length > 0 && <><button className="linkbtn" data-check-same-show="" aria-expanded={days ? "true" : "false"} onClick={() => setDays(!days)}>{days ? "Hide the days the same" : "Show the days the same (" + same.length + ")"}</button>
       {days && <p className="note" data-check-same="" style={{ margin: "4px 0 0" }}>{same.map((x) => "✓ " + day8(x.day)).join(" · ")}</p>}</>}
-    <p className="note" style={{ margin: "6px 0 0" }}>FinCom corrects only its own copy to Tally (adds, updates, and removes with history kept); nothing is ever changed in Tally.</p>
   </section>;
 }
