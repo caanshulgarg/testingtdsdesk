@@ -796,3 +796,16 @@ line), scanned within migration 47's working hours. Not executable by anon or au
 transaction (lock_timeout 10 s), safe to run twice. Needs migration 47. Deploy: this file any time; tally-ingest and the
 app do not depend on it (without it the bell has no such line; the Tally page's top line says it all the same).
 Tested: `tests/run_migration149.py`.
+
+## 150: a gap closes when Tally was asked about every day of it (not run yet; branch next-gap-close, 09-Nov-2026)
+
+**150, gap closed by days** (09-Nov-2026, branch `next-gap-close`; **written, not run yet**; file md5 1e3c646b012b7a0752a6fc77f59ac1ce):
+`server/tally-cloud/migration-150-gap-closed-by-days.sql`. "Bring missing days" kept coming back after the bridge read
+every missing day and found FinCom held everything: `tally_recorder_gap_check` closed a gap only by the start point, the
+recorder's lines or `tally_days.alter_max` (Day Book uploads). Now also closed (recorded as the match it is) when every
+day from India's day of the gap's `since` through India's day of the check has a `tally_check_days` row of the book
+done at or after `gap_at` (any source; none open, none left to upload / refused), AND the copy's highest voucher
+AlterID reaches Tally's number now and the gap's, AND no queued send failed for good (47's `lost`). One new read-only
+function `tally_recorder_gap_asked`; `tally_recorder_gap_check` is 47's (staging's live) text with one line changed.
+Both service_role only. No table created, altered or emptied; one transaction (lock_timeout 10 s); safe to run twice.
+Needs 47 and 133. Deploy: this file any time; nothing else depends on it. Tested: `tests/run_migration150.py`.
