@@ -5,7 +5,9 @@ Tally's balances for the year with 963 ledgers off. On the React build (app/dist
   1. the ledger list matched again when the books come (ledgersChanged: 20 s in one task before, the masters counted at
      every exactLedger) and opening MIS with its run out of date, Run now and every tab: no task over 300 ms;
   2. the figures as before the change (result code 34B4A78C, sales, profit, owed, the 963 ledgers off Tally);
-  3. FinCom's cloud copy (Tally's closings blank): no "differ from Tally" line at all.
+  3. Run now: a second click while a run is pending is ignored; a client changed during the run stops it, and nothing is
+     written to either client's books;
+  4. FinCom's cloud copy (Tally's closings blank): no "differ from Tally" line at all.
 Under the lock: flock /tmp/fincom-app.lock python3 tests/run_mis_speed.py (MIS_SPEED_MAX to change the 300 ms)"""
 import os, sys, subprocess, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -61,7 +63,33 @@ with sync_playwright() as p:
     f = pg.evaluate("(({code, sales, pl, recv, pay, control}) => ({code, sales: sales.total, pbt: pl.pbt.t, owed: recv.sum.owe, owe: pay.sum.owe, n: control && control.n, amt: control && control.amt}))(S.books.mis.last)")
     ok(f == {"code": "34B4A78C", "sales": 115825858, "pbt": 76728852, "owed": 175748856.78, "owe": 52316134.18, "n": 963, "amt": 286787}, "result code 34B4A78C, sales 11,58,25,858, profit 7,67,28,852, owed 17,57,48,856.78 / 5,23,16,134.18, 963 ledgers off Tally by 2,86,787: %s" % f)
     ok("963 ledgers differ from Tally by ₹2,86,787.00" in pg.inner_text("#app"), "the line under the head says so")
-    print("\n3. FinCom's cloud copy: no line about Tally")
+    print("\n3. Run now: one at a time, and only for the books it began on")
+    r = pg.evaluate("""() => new Promise(res => {
+      const A = S.books, at = A.mis.last.at, real = MIS.runNow, saves = []; let runs = 0;
+      MIS.runNow = function(){ runs++; return real.apply(this, arguments); };
+      const save = Books.save; Books.save = function(cid, x){ saves.push([cid, Object.keys(x || {}).length]); return save.apply(this, arguments); };
+      const btn = () => document.querySelector('section[data-mis-head] button.primary');
+      btn().click(); btn().click();                      // a second click while the first run is pending: ignored
+      setTimeout(() => res({runs, saves, again: MIS._again, how: A.mis.last.how, changed: A.mis.last.at !== at}), 3000);
+      window.__restore = () => { MIS.runNow = real; Books.save = save; };
+    })""")
+    pg.evaluate("window.__restore()")
+    ok(r["runs"] == 1 and r["changed"] and not r["again"] and len(r["saves"]) == 1, "two clicks: one run, one save, MIS._again cleared (%s)" % {k: r[k] for k in ("runs", "saves", "again", "changed")})
+    r = pg.evaluate("""() => new Promise(res => {
+      const A = S.books, at = A.mis.last.at, real = MIS.runNow, saves = []; let runs = 0;
+      MIS.runNow = function(){ runs++; return real.apply(this, arguments); };
+      const save = Books.save; Books.save = function(cid, x){ saves.push(cid); return save.apply(this, arguments); };
+      const c2 = newCompany({name: "Wrenfield Made-up Traders LLP", gstin: "07AAJFW1234K1Z5"}); S.companies[c2.id] = c2; S.data[c2.id] = {parties: {}, entries: {}, loaded: true};
+      const B = {cid: c2.id, loading: false, vouchers: [], meta: {}, challans: [], alloc: {}};
+      // the client changed during the run: at the end of its first task (the GST workings), before the next
+      const g = MIS.gst3b; let sw = 0;
+      MIS.gst3b = function(){ if (!sw++) queueMicrotask(() => { S.books = B; S.coId = c2.id; render(); }); return g.apply(this, arguments); };
+      document.querySelector('section[data-mis-head] button.primary').click();
+      setTimeout(() => { res({runs, saves, sw: sw > 0, bMis: !!B.mis, aSame: A.mis.last.at === at, again: MIS._again, still: S.books === B, cidA: A.cid, cidB: B.cid}); MIS.gst3b = g; MIS.runNow = real; Books.save = save; S.books = A; S.coId = A.cid; render(); }, 3000);
+    })""")
+    ok(r["sw"] and r["runs"] == 0 and not r["bMis"] and r["cidB"] not in r["saves"] and r["cidA"] not in r["saves"] and r["aSame"] and r["still"] and not r["again"],
+       "client changed during the run: it stops; nothing written to either client's books (%s)" % r)
+    print("\n4. FinCom's cloud copy: no line about Tally")
     pg.evaluate("() => { const t = S.books.tb; t.src = 'copy'; Object.values(t.led).forEach(x => { x.close = 0; }); S.books.mis.last.basis = 'x'; render(); }"); pg.wait_for_timeout(5000)
     txt = pg.inner_text("#app")
     ok(pg.evaluate("S.books.mis.last.control") is None and "differ from Tally" not in txt and "agrees with Tally" not in txt and "through the bridge" not in txt, "no check and no line when Tally's closings are not known")
