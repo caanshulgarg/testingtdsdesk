@@ -1,8 +1,9 @@
 # Security review: FinCom Bridge 2.5.11
 
-Reviewers: the session that built it (self-review).
+Reviewers: the session that built it (self-review); the independent review at 044b4a3ea found no request to another
+user's Tally and no privacy leak; its ten fixes (c28d45c94) are in the code review.
 
-Range: da12b90e1..044b4a3ea (released 2.5.10 to the version bump)
+Range: da12b90e1..3f2908483 (released 2.5.10 to the withdrawal of the first build)
 
 ## Requests to Tally
 
@@ -13,7 +14,10 @@ Range: da12b90e1..044b4a3ea (released 2.5.10 to the version bump)
 ## Files read and written
 
 - Read only: the tally.ini next to this login's running tally.exe (as 2.5.4), and this login's own
-  %LOCALAPPDATA%\VirtualStore\Program Files*\TallyPrime*\tally.ini (the known folder of the bridge's own Windows user).
+  %LOCALAPPDATA%\VirtualStore\Program Files*\TallyPrime*\tally.ini (the known folder of the bridge's own Windows user;
+  as a service the owning user's profile, else none: never SYSTEM's). Whether this login may write tally.ini is looked
+  at by opening it for writing and closing it, nothing written (iniWritableFn, as 2.5.3). The Tally process's 32-bit
+  and elevation flags are read with its path (PROCESS_QUERY_LIMITED_INFORMATION, TOKEN_QUERY; this login's own Tally).
   No tally.ini is written, no backup made, VirtualStore is never added to the files the setup may change.
 - Written: sync\tally-last-port.json in the bridge's own data folder (a port number and a time), at most hourly.
 
@@ -21,7 +25,8 @@ Range: da12b90e1..044b4a3ea (released 2.5.10 to the version bump)
 
 - The beat's tallyOff: folder names (never a path: a user's profile path never leaves the computer), kinds, the mode,
   port numbers, ISO times, booleans, and, when another login's Tally holds this login's port, that login's short
-  Windows user name (the beat's ports already name it as "Tally of <user>"). The cloud keeps only these fields, cut,
+  Windows user name (the beat's ports already name it as "Tally of <user>"); true-only flags shared / unwritable /
+  iniUnsure. The cloud keeps only these fields, cut,
   path characters stripped, and only with tallyWhy "connection off" (run_tally_off_ingest.py).
 - /status and /diagnose (the local server, behind its existing checks) add the same details; /diagnose's tally.ini
   entry for this login's Tally names which copy was read.

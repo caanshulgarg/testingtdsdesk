@@ -1,8 +1,10 @@
 # Code review: FinCom Bridge 2.5.11 (why this login's TallyPrime is open but takes no connection)
 
-Reviewers: the session that built it (a self-review against the owner's rules, below).
+Reviewers: the session that built it (a self-review against the owner's rules, below), then an independent review at
+044b4a3ea (no request to another user's Tally, no privacy leak; ten fixes, made with tests in c28d45c94: see the end).
 
-Range: da12b90e1..044b4a3ea (released 2.5.10 to the version bump)
+Range: da12b90e1..3f2908483 (released 2.5.10 to the withdrawal of the first build; the last commit moves the withdrawn
+build's files only)
 
 (bridge-go/: owntally2511.go (new: tallyOffOf, ownIniOf, virtualStoreOf / virtualStoreInis, ownTallyIniPorts, the
 last-port memory, tallyOffBeat, diagIni), owntally254.go (connOffNow returns the details; connOffFn's third value),
@@ -34,11 +36,15 @@ connection rows marked "connection off" only when exactly one port was closed.
   (9000 when none), the file's time and the process's start (UTC ISO) and whether the file changed after the start, who
   holds the port (otherUser with the short name, tally (owner unknown), program), this login's own port (clash only),
   the last port remembered and when.
-- The words in order: reopen ONLY when tally.ini changed after this Tally started (a start time Windows did not give is
-  never "after"); lost (a remembered port not listening now, tally.ini naming another port and not saved since that
-  port answered); mode not Both / Server (no tally.ini counts here, as 2.5.4); the port held by a Tally of another login
-  (this login's own port, loginOwnPortFree with every listening port put aside, as the page counts it) or by another
-  program (2.5.4's words); else nothing listening on its port. Each case and its 200-letter bound: TestR2511Words.
+- The words in order (after the independent review): mode not Both / Server (no tally.ini counts here, as 2.5.4); the
+  port held by a Tally of another login (this login's own port, loginOwnPortFree with every listening port put aside,
+  as the page counts it), by a Tally whose owner Windows did not give ("another program or a Tally run as
+  administrator"), or by another program (2.5.4's words); reopen ONLY when tally.ini changed after this Tally started
+  (a start time Windows did not give is never "after"); lost (a remembered port not listening now and not the port it
+  should take, tally.ini not saved since that port answered); else nothing listening on its port. On a computer
+  several logins use (iniSharedFn) or with a tally.ini this login may not write, the administrator's words with this
+  login's own port instead of F1 > Ctrl+A (this login's VirtualStore copy is its own: Ctrl+A). Each case and its
+  300-letter bound: TestR2511Words, TestR2511AdminWords, TestR2511LostAgainstWant.
 - Day words: "Earlier today" / "Yesterday" / "On 07-Nov" by the computer's own calendar (TestR2511LastPort).
 - 2.5.4's fallback (Windows lists no programs) is unchanged and carries no details.
 
@@ -52,10 +58,11 @@ connection rows marked "connection off" only when exactly one port was closed.
 ## 3. VirtualStore (owntally2511.go ownIniOf, virtualStoreInis)
 
 - The copy of a tally.ini under Program Files / Program Files (x86) at %LOCALAPPDATA%\VirtualStore\<that folder's
-  name>\<the rest> (the known-folder LOCALAPPDATA of the bridge's own user, platform's localAppData), read only. For
-  this login's own Tally the copy is taken when it exists and is not older than the file next to tally.exe (a Tally
-  without administrator rights saving its settings writes it there); the other copy's port is kept as otherPort for
-  the plan. Never written, no backup made (TestR2511VirtualStore). tallyIniDirsFn (the files the setup may add the
+  name>\<the rest> (the known-folder LOCALAPPDATA of the bridge's own user; as a service the owning user's profile
+  by OwnerSid, else none), read only. For this login's own Tally the copy is taken only for a 32-bit (WOW64) Tally not
+  run elevated (Windows redirects no other; IsWow64Process and the token's elevation, read with the path and start
+  time); not known: the Program Files file, and tallyOff.iniUnsure says so. The other copy's port is kept as otherPort
+  for the plan. Never written, no backup made (TestR2511VirtualStore). tallyIniDirsFn (the files the setup may add the
   add-on line to) is not changed: VirtualStore is never among the files written.
 
 ## 4. The plan (ports.go portPlan)
@@ -91,7 +98,8 @@ connection rows marked "connection off" only when exactly one port was closed.
 - The Entries cell: waiting for Tally to be free and the book's computer's fresh beat says no Tally of its login answers:
   "FinCom Bridge can't reach your Tally: <its words>" (else its reason in plain words), else as before
   (run_tally_progress.py 3 (2.5.11)).
-- Main bundle 266,135 B gzip (limit 266,240; the code is in the Tally chunks); legacy.js unchanged (615,218 B).
+- Main bundle 266,144 B gzip after the review's fixes (limit 266,240; the code is in the Tally chunks); legacy.js
+  unchanged (615,218 B).
 
 ## Owner's rules
 
@@ -104,3 +112,25 @@ connection rows marked "connection off" only when exactly one port was closed.
 ## Verdict
 
 Ship (self-review).
+
+## The independent review (at 044b4a3ea) and its fixes (c28d45c94)
+
+No request to another user's Tally, no privacy leak. Fixed before the release, each with a test:
+1. "Reopen" only for a tally.ini changed after the start that says Both / Server with its port free; otherwise the
+   mode's or the clash's words (TestR2511Words: None / Client changed after start; another login saved the shared file
+   naming 9000, held by its Tally).
+2. A shared computer or an unwritable tally.ini: the administrator's words, "each login its own TallyPrime folder and
+   port (yours: <p>)", never Ctrl+A in F1 (TestR2511AdminWords); tallyOff.shared / unwritable; the page's
+   shared-settings warning whenever the bridge says so, not only after a bridge write (run_tally_connect_steps.py 17);
+   the cloud keeps 300 letters of the words (run_tally_off_ingest.py).
+3. The remembered port compared with the port it should take (9000 when tally.ini names none), after the mode
+   (TestR2511LostAgainstWant).
+4. VirtualStore not chosen by date: only for a 32-bit Tally not run elevated; not known: Program Files', and said
+   (TestR2511VirtualStore).
+5. Service mode: the owning user's profile's VirtualStore, else none (vsLocalAppData; TestR2511VirtualStore: no folder,
+   none read).
+6. heldBy "tally" (owner unknown): "another program or a Tally run as administrator" (TestR2511Words).
+7. No own port: "set a port of your own" (TestR2511Words).
+8. /diagnose: one finding, one port, the words' (TestR2511DiagnoseOnePort).
+9. tallyWhy once per beat (TestR2511BeatCarriesTallyOff); the last-port file at most hourly (kept).
+10. The page's rows: the local status when present; no row from a beat over 3 minutes old (run_tally_basics.py 1c).

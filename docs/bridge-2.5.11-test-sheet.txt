@@ -1,48 +1,62 @@
 FINCOM BRIDGE 2.5.11 - TEST SHEET (2.5.10's sheet below, with 2.5.11's new checks first)
 
 File:        FinComBridge-Setup-2.5.11.exe
-Fingerprint: SHA-256 27f950e9d2fea218d1f32143a2e8b804afe1e2e2cb739b60d49d1fb43ca3458b (FinComBridge-Setup-2.5.11.exe, built 09-Nov-2026 09:30 UTC at bridge sources 044b4a3ea, POSTONLY=any; compare with the .sha256 file next to the setup); program FinComBridge-2.5.11.exe SHA-256 a4623baf903a5332ee8dd08247aae8bfa62001603d40cbe4d4c9e7c0a58198ac
+Fingerprint: SHA-256 (filled in at the rebuild; compare with the .sha256 file next to the setup; the first build, setup 27f950e9...458b, was withdrawn unpublished)
 
 2.5.11: one thing, nothing new asked of Tally (no new request, the same 2-second stop, one request at a time, postings
 first, never while someone is typing in Tally), and no tally.ini written by it (another user's never).
  When TallyPrime is open in your Windows login but takes no connection, FinCom Bridge now says exactly why, from what
- Windows and TallyPrime's own tally.ini show (read only), and the Tally page uses its words:
-  - "set but not on yet: close and reopen TallyPrime once" ONLY when tally.ini was saved after that Tally started;
+ Windows and TallyPrime's own tally.ini show (read only), and the Tally page uses its words, in this order:
+  - "TallyPrime acts as" not Both;
+  - its port used by another Windows login's Tally (your own port to set instead), or by "another program or a Tally
+    run as administrator", or by another program;
+  - "set but not on yet: close and reopen TallyPrime once" ONLY when tally.ini was saved after that Tally started (and
+    says Both, its port free);
   - the port your Tally used before but never saved ("Yesterday your Tally used port 9039 but TallyPrime did not save
-    it. Set it again in F1 → Settings → Connectivity and press Ctrl+A to save.");
-  - "TallyPrime acts as" not Both: the menu path, keep the port, Ctrl+A, reopen;
-  - its port used by another Windows user's Tally: your own port to set instead;
+    it ...");
   - nothing listening on its port.
- FinCom Bridge also reads your own copy of tally.ini that Windows keeps when TallyPrime saves its settings without
- administrator rights (%LOCALAPPDATA%\VirtualStore\Program Files\TallyPrime*\tally.ini), and tries the port your running
- Tally's tally.ini names even before anything listens there, so a Tally that starts listening is found at once.
- Check again on the Tally page says "Tally is open in your Windows login but takes no connection: <the bridge's words>"
- instead of "Tally is not open"; step 3 of the six steps gives the bridge's words; a book's Entries cell says "FinCom
- Bridge can't reach your Tally: <words>" instead of "Waiting for Tally to be free" when that is the reason.
+ On a computer one person uses, whose tally.ini your login may change, the words say F1 → Settings → Connectivity and
+ Ctrl+A. On a computer several logins use (a shared server), or when your login may not change tally.ini, they say
+ instead "... every Windows login here shares TallyPrime's settings: ask the computer's administrator to give each
+ login its own TallyPrime folder and port (yours: <p>)." (or "this Windows login may not save TallyPrime's settings"),
+ because a change in F1 there is every login's, or is silently not kept; the Tally page adds its shared-settings warning.
+ FinCom Bridge also reads your own copy of tally.ini that Windows keeps for a 32-bit TallyPrime run without
+ administrator rights (%LOCALAPPDATA%\VirtualStore\Program Files\TallyPrime*\tally.ini); for a 64-bit or elevated
+ TallyPrime it reads the Program Files file (when Windows does not say which, the Program Files file, and support's
+ details say so). It tries the port your running Tally's tally.ini names even before anything listens there, so a Tally
+ that starts listening is found at once. Check again on the Tally page says "Tally is open in your Windows login but
+ takes no connection: <the bridge's words>" instead of "Tally is not open"; step 3 of the six steps gives the bridge's
+ words; a book's Entries cell says "FinCom Bridge can't reach your Tally: <words>" instead of "Waiting for Tally to be
+ free" when that is the reason.
 
-CHECK 2.5.11-A - THE PORT TYPED BUT NOT SAVED (the case of 09-Nov-2026)
+CHECK 2.5.11-A - THE PORT TYPED BUT NOT SAVED (the case of 09-Nov-2026, on the shared server)
    In your login on the shared server, open TallyPrime with a company, F1 → Settings → Connectivity, set a port of your
    own (the Tally page's step 3 names it) and leave WITHOUT Ctrl+A. Wait until the Tally page shows the company
    (FinCom Bridge remembers that port). Close TallyPrime and open it again.
-   You should see: the Tally page's step 3 and Check again: "Earlier today your Tally used port <p> but TallyPrime did
-   not save it. Set it again in F1 → Settings → Connectivity and press Ctrl+A to save." (the next day: "Yesterday ...").
-   Never "close and reopen" for it. Set it again with Ctrl+A: connected within a minute, without reopening.
+   You should see: step 3 and Check again: "Earlier today your Tally used port <p> but TallyPrime did not save it;
+   every Windows login here shares TallyPrime's settings: ask the computer's administrator to give each login its own
+   TallyPrime folder and port (yours: <p>)." (the next day: "Yesterday ..."), and the shared-settings warning. Never
+   "close and reopen" for it. On a computer one person uses: "... Set it again in F1 → Settings → Connectivity and
+   press Ctrl+A to save."
 
 CHECK 2.5.11-B - "TALLYPRIME ACTS AS" NOT BOTH
-   Set "TallyPrime acts as" to Client, Ctrl+A, close and reopen TallyPrime, wait a minute.
+   On a computer one person uses: set "TallyPrime acts as" to Client, Ctrl+A, close and reopen TallyPrime, wait a minute.
    You should see: step 3 "Your TallyPrime is open but its connection is off: in TallyPrime press F1 → Settings →
-   Connectivity, set 'TallyPrime acts as' to Both, keep the port, press Ctrl+A to save, then reopen TallyPrime." Do it:
-   connected.
+   Connectivity, set 'TallyPrime acts as' to Both, keep the port, press Ctrl+A to save, then reopen TallyPrime." (never
+   "close and reopen" alone, even right after the save). Do it: connected. On the shared server the administrator's
+   words instead.
 
 CHECK 2.5.11-C - YOUR PORT USED BY ANOTHER LOGIN'S TALLY
-   With another login's TallyPrime on 9000, set yours to 9000 (Both), Ctrl+A, reopen.
-   You should see: "Your TallyPrime's port 9000 is used by <that login>'s Tally: set your own port <p> in F1 → Settings
-   → Connectivity, press Ctrl+A to save, then reopen TallyPrime." with Copy <p>; <p> is the same port step 3 proposed
-   before. Nothing of the other login's Tally is read or changed.
+   On the shared server, with another login's TallyPrime on 9000 and yours set to 9000 (Both).
+   You should see: "Your TallyPrime's port 9000 is used by <that login>'s Tally; every Windows login here shares
+   TallyPrime's settings: ask the computer's administrator to give each login its own TallyPrime folder and port
+   (yours: <p>)." with Copy <p>; <p> is the same port step 3 proposed before. Nothing of the other login's Tally is
+   read or changed. A TallyPrime run as administrator on 9000 instead: "... used by another program or a Tally run as
+   administrator ...", never "another Windows user's".
 
 CHECK 2.5.11-D - REOPEN ONLY WHEN TALLY.INI CHANGED AFTER TALLY STARTED
-   With TallyPrime open and not listening, save its connection (Ctrl+A in F1 → Settings → Connectivity) so tally.ini
-   changes, and wait a minute.
+   On a computer one person uses, with TallyPrime open and not listening, save its connection as Both with a free port
+   (Ctrl+A in F1 → Settings → Connectivity) so tally.ini changes, and wait a minute.
    You should see: only now "Your TallyPrime's connection is set but not on yet: close and reopen TallyPrime once."
 
 CHECK 2.5.11-E - THE ENTRIES CELL AND THE OFFICE LINE
