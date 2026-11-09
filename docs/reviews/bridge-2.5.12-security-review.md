@@ -1,36 +1,34 @@
 # Security review: FinCom Bridge 2.5.12
 
-Reviewers: the session that built it (self-review).
+Reviewers: the session that built it (self-review), after the independent review of f1b3e700b.
 
-Range: ff86083bf..f1b3e700b (origin/staging-next, which holds released 2.5.11, to the version bump)
+Range: ff86083bf..c081db8ce (origin/staging-next, which holds released 2.5.11, to this build)
 
 ## Requests to Tally
 
-- None added. One changed, by the owner's approval of 09-Nov-2026: FinComVoucherBatch's FETCH (and FinComVoucherWindow's,
-  the same frozen text, sent only with FastEntries on) names four more stored fields, a ledger line's stock items
-  (ALLLEDGERENTRIES.INVENTORYALLOCATIONS.STOCKITEMNAME, BILLEDQTY, RATE, AMOUNT, and their LEDGERENTRIES copies). Read
-  only; no computed field; the request is still built only as frozen (batchFetchSHA) and refused otherwise.
+- None added. FinComVoucherBatch, FinComVoucherWindow and FinComVoucherObject byte for byte 2.5.11's.
 - FinComDayHeads may also go for a range of 2 to 31 consecutive days FinCom listed (the same fields: GUID, MasterID,
   AlterID, date; the owner's approval of 09-Nov-2026), pinned to its builder and let through by the dated guard only
-  while it is the range being asked and every day of it is listed now; over 2 s it stops the company's period as one
-  day's list does.
-- FinComVoucherObject is byte for byte 2.5.11's. The 2-second stop, one request in flight, postings first, idle only and
-  the typing gate are unchanged (no code path around them was touched).
+  while it is the range being asked and every day of it is listed now; only for a book shown sparse, its predicted time
+  under 0.8 s; the 2-second stop, one request in flight, postings first, idle only and the typing gate unchanged.
 
 ## Data kept and sent
 
-- The strip keeps only approved paths (the four fields added to the approved set; TestR2512VoucherModeRealReleases checks
-  every kept path of the real answers); godown, batch, actual quantity and every other field are dropped before anything
-  is logged, stored or sent. The items written as ALLINVENTORYENTRIES are built only from those kept fields and the
-  line's already-kept LEDGERNAME / ISDEEMEDPOSITIVE.
-- A held entry: its head (GUID, MasterID, AlterID, date, voucher type: what FinComDayHeads already sends) and one line of
-  words go to FinCom's own tally-ingest in the existing period_entries call; the words name the voucher type, MasterID,
-  day and the strip's reason, no party or amount. The log line carries the same and the company name, as every
-  older-entries log line already does.
+- The strip keeps only approved paths (a ledger line's stock item, billed quantity, rate, amount added); godown, batch,
+  actual quantity and every other field are dropped before anything is logged, stored or sent.
+- A held entry: its GUID, MasterID, AlterID, voucher type and one line of words go to FinCom's own tally-ingest in the
+  existing period_entries call (no party or amount). tally-ingest keeps only those, cleaned and cut (heldOf).
 
-## Files read and written
+## Cloud (migration 151, not run)
 
-- None new.
+- One column added (tally_period_days.held). tally_period_hold and tally_period_held_release: service_role only.
+  tally_period_held_list: the firm's members (tally_period_member); tally_period_held_retry: owner or staff of the firm
+  (tally_period_member(..., true)); another firm refused (run_migration151.py).
+
+## Files
+
+- New: sync\range-off.json in the bridge's own data folder (company names and a reason), written when a range check
+  finds a difference.
 
 ## Verdict
 

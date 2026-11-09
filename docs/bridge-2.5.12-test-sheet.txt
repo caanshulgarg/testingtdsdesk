@@ -4,77 +4,77 @@ File:        FinComBridge-Setup-2.5.12.exe
 Fingerprint: SHA-256 (filled in at the build; compare with the .sha256 file next to the setup)
 
 2.5.12: three things, all in Bring books (the older entries a person chose to bring from Tally). The same 2-second stop
-on every request, one request at a time, postings first, never while someone is typing in Tally.
+on every request, one request at a time, postings first, never while someone is typing in Tally. FinCom's cloud needs
+migration 151 and the new tally-ingest for point 2 (with the old cloud a held entry's day is marked to upload by hand).
  1. A sale entered in voucher mode (Accounting Invoice: the stock item typed under the sales ledger's line, as
     marketplace sales often are) is now read and brought in, with its stock items (item, billed quantity, rate,
-    amount) inside its sales line. Before 2.5.12 FinCom Bridge could not read such an entry and gave up the WHOLE day
-    ("Please upload that day's Day Book"); on one real book 62 days of 223 were lost this way. The only request that
-    changed is the one that reads up to 100 older entries of a day at once (FinComVoucherBatch, and the faster
-    window read that uses the same field list, switched off by default): it now also names those four fields of a
-    ledger line's stock items (the owner's approval of 09-Nov-2026). An entry without such lines gives nothing more.
-    The one-entry request (FinComVoucherObject) is unchanged.
+    amount) as the entry's items, exactly as FinCom stored them before 2.3.4. Before 2.5.12 FinCom Bridge could not
+    read such an entry and gave up the WHOLE day ("Please upload that day's Day Book"); on one real book 62 days of
+    223 were lost this way. No request to Tally changed for it: the bridge keeps what Tally already sends.
  2. One entry never sinks a day. If an entry of the day still cannot be taken (its items kept where no field list
-    reads them, or an entry larger than FinCom takes), only THAT entry is held, with a plain reason naming its voucher
-    type and MasterID; the day's other entries are brought in as on any day and the day counts as done. The reason is
-    in the bridge's log and once in the tray's activity, and goes to FinCom with the day's entries. That one entry is
-    not in FinCom's books until the day's Day Book is uploaded (the reason says so); it is asked of Tally again only
-    when it is altered in Tally.
-
+    reads them, or an entry larger than FinCom takes), only THAT entry is held; the day's other entries are brought
+    in as on any day. The day stays open: Books › From Tally says "1 entry on 12-Oct could not be read yet. FinCom
+    tries again by itself." with a "Try again now" button. FinCom asks Tally for that entry again by itself on every
+    later reading and at night, and again after each FinCom Bridge update; when it reads, the line goes and the day
+    is done, with nobody doing anything. Only after 3 tries fail (on one bridge version) the line gives the manual
+    step: "In Tally, open Day Book, press F2 and set the date to 12-Oct-2025, then Alt+E (Export) → Current, F8 (File
+    Format): XML, and E to export; drop the file on Books › From Tally." Uploading that file ends it too.
  3. Faster for books with few entries, with no missing days. Before, FinCom Bridge asked Tally for the list of each
-    day's entries one day at a time (a book of 420 entries a year still needed 223 lists). Now it asks for the lists
-    of several days FinCom handed it in ONE request (the same day-list request, with a first and a last day: the only
+    day's entries one day at a time (a book of 420 entries a year still needed 223 lists). Now, once three days in a
+    row have shown the book sparse (50 entries or fewer, each list under 0.3 second), it asks for the lists of a few
+    days FinCom handed it in ONE request (the same day-list request with a first and a last day: the only request
     change, approved by the owner on 09-Nov-2026), splits the answer by date and tells FinCom each day exactly as
-    before, an empty day as an empty list. It starts each period with 7 days, doubles only after an answer under 1
-    second (a month at most), halves after an answer over 1 second, and goes back to single days after a day of more
-    than 200 entries. Only days FinCom handed out that follow each other are put together. If an answer is cut, has a
-    Tally error, has an entry dated outside the days asked, or does not add up, NOTHING of it is used: each of those
-    days is asked alone, as before. An answer over 2 seconds stops reading that company's older entries exactly as a
-    slow one-day list does (never asked again by itself), so Tally is never held. Postings first, one request at a
-    time and never while someone is typing in Tally, as before.
+    before, an empty day as an empty list. It starts with 3 days, keeps each request's expected time under 0.8 second,
+    grows by half only after an answer under 0.5 second (a month at most) and halves after one over 0.8 second. The
+    first such request of each company in each run is only a check: the same days are then read one by one and
+    compared, and any difference switches it off for that company for good. A request that is cut, has a Tally error,
+    does not add up or takes over 2 seconds is not used and stops nothing: as when Tally is busy, the bridge waits and
+    reads that company one day at a time for the rest of the run. An entry dated outside the days asked is taken as
+    Tally not applying the date, exactly as for one day. Only days FinCom handed out that follow each other are put
+    together.
+ Also (the review's point 6, accepted): the same reading applies to entries as they are saved in Tally (the live
+ recorder) and to FinCom Bridge's checks of an entry after a posting: a voucher-mode sale saved in Tally now reaches
+ FinCom whole, with its items, instead of being held with "upload that day's Day Book".
 
 CHECK 2.5.12-A - A VOUCHER-MODE SALE IS BROUGHT IN
    On ZZ TEST (never a client's books for this check), make a Sales entry in voucher mode: Alt+H (Change Mode) →
    Accounting Invoice; the party, then the sales ledger, and under it a stock item with quantity and rate; GST lines
    as usual; save. Date it in a past month. In FinCom choose that month for Bring books from Tally and let it run.
    You should see: the day of that sale is brought in (not "Please upload that day's Day Book"); the entry is in the
-   client's books with its party, sales and GST lines and the right amounts (the sales line's amount, not the item's
-   when there are two items); FinCom Bridge's log says "... entries sent to FinCom" for that day and nothing "held".
+   client's books with its party, sales and GST lines, the right amounts and its stock item; nothing "held".
 
 CHECK 2.5.12-B - ORDINARY ENTRIES ARE AS BEFORE
    On the same month, entries of other kinds (an item invoice, a payment with bank details, a journal with TDS, a
    salary entry) are brought in as 2.5.11 brought them.
-   You should see: the same entries, lines and figures as before 2.5.12 (compare with a day brought in by 2.5.11, or
-   with the Day Book); every request in the bridge's log under 2 s.
+   You should see: the same entries, lines and figures as before 2.5.12; every request in the bridge's log under 2 s.
 
-CHECK 2.5.12-C - ONE ENTRY HELD, THE DAY KEPT
-   On ZZ TEST, a day with several entries where one is an entry FinCom cannot read (support can say which kind; or
-   use the test company's prepared entry). Bring that month.
-   You should see: the day is NOT marked "Please upload that day's Day Book"; its other entries are in FinCom; the
-   bridge's log has one line "Older entries of ZZ TEST: <Type> entry (MasterID <n>) of <day> held: Tally keeps this
-   entry with ...; upload that day's Day Book to settle it (the day's other entries are sent; ...)"; the tray's
-   activity says it once. Uploading that day's Day Book brings the held entry in. Bring books does not ask Tally for
-   that entry again (unless it is altered in Tally).
+CHECK 2.5.12-C - ONE ENTRY HELD, THE DAY OPEN, IT COMES IN BY ITSELF
+   On ZZ TEST, a day with several entries where one is an entry FinCom cannot read (support's prepared entry). Bring
+   that month.
+   You should see: the day's other entries in FinCom; Books › From Tally: "1 entry on <day> could not be read yet.
+   FinCom tries again by itself." and Try again now; the bridge's log: "<Type> entry (MasterID <n>) of <day> held: ...
+   (the day's other entries are sent; the day stays open for this entry ...)". Change that entry in Tally so it is an
+   ordinary one: within a few minutes the line goes and the day is done. Leave it unreadable: after 3 tries the line
+   gives the Day Book export steps; do them and drop the file on Books › From Tally: the line goes.
 
 CHECK 2.5.12-D - A SPARSE BOOK: SEVERAL DAYS IN ONE LIST, NO DAY MISSING
    On ZZ TEST with few entries (some days with none), choose a past quarter for Bring books, outside office hours
    (FinCom hands out up to 30 days then; in office hours 3 at a time).
-   You should see: in the bridge's log "Tally lists <n> entries for the days <d1> to <d2> (<k> days, ...) in <ms> ms;
-   each day goes to FinCom on its own (next range <k> days)"; ranges of 7, then 14, then up to a month while each
-   answer is under 1 s; every day of the quarter counted on the Tally page, the empty days too, and the entries the
-   same as the Day Book; no day marked "Please upload that day's Day Book". Type in Tally meanwhile: nothing is asked
-   until you stop, as before.
+   You should see in the bridge's log, in this order: three days read one by one; "... this run's first range is
+   checked: the same days are read one by one and compared ..."; "the check of a range against the same days read one
+   by one passed"; then "Tally lists <n> entries for the days <d1> to <d2> (<k> days, ...) in <ms> ms; each day goes to
+   FinCom on its own (next range <k> days)". Every day of the quarter counted on the Tally page, the empty days too,
+   and the entries the same as the Day Book; nothing over 2 s.
 
-CHECK 2.5.12-E - A BUSY DAY STILL GOES ALONE
-   On a day of more than 200 entries in the same period.
-   You should see: after that day's list the log says "a day of more than 200 entries: single days from now on", and
-   the next days are asked one by one as in 2.5.11; nothing over 2 s (if Tally ever takes over 2 s, the older-entries
-   read of that company stops with its usual one line, exactly as for one day).
+CHECK 2.5.12-E - A BUSY BOOK STAYS ON SINGLE DAYS
+   A company with days of more than 50 entries.
+   You should see: no range in the log; every day asked alone as in 2.5.11.
 
 CHECK 2.5.12-F - NOTHING ELSE CHANGED (2.5.12 over 2.5.11)
    Let 2.5.11 update itself to 2.5.12 (or run the setup over it).
-   You should see: the tray says 2.5.12; Help & support's request table has the same rows as 2.5.11, with
-   FinComVoucherBatch's shape changed (its FETCH has the four fields of a ledger line's stock items), the
-   FinComDayHeads row's words (the range form) and the FinComStockInHand row's words; posting, Update now, Bring books and Check again work as before.
+   You should see: the tray says 2.5.12; Help & support's request table has the same rows as 2.5.11 but the
+   FinComDayHeads row's words (the range form) and the FinComStockInHand row's words; posting, Update now, Bring books
+   and Check again work as before.
 
 FINCOM BRIDGE 2.5.11 - TEST SHEET (2.5.10's sheet below, with 2.5.11's new checks first)
 

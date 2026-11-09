@@ -1,112 +1,87 @@
 # Code review: FinCom Bridge 2.5.12 (a voucher-mode sale read; one entry never sinks a day; day lists by range)
 
-Reviewers: the session that built it (a self-review against the owner's rules, below). An independent review is the
-coordinator's.
+Reviewers: the session that built it (a self-review against the owner's rules), after the independent review of
+f1b3e700b (seven points; all addressed below). The coordinator reviews again.
 
-Range: ff86083bf..f1b3e700b (origin/staging-next, which holds released 2.5.11, to the version bump)
+Range: ff86083bf..c081db8ce (origin/staging-next, which holds released 2.5.11, to this build)
 
-(bridge-go/: fastvch.go (liveKeepInv2512, the strip keeps a ledger line's stock items in an entry with no item of its
-own, fastEmit writes them after the line's own fields, fastVoucherModeItems writes them as the entry's items too,
-fastHasItems / fastOKNoInv), batch249.go (the four fields in FinComVoucherBatch's FETCH, the frozen SHA, pullKeep),
-range2512.go (new: the range form of FinComDayHeads), pinned.go and daypull.go dayHeadsExact (the range form pinned and guarded), daypull.go (pullHoldEntry, pullHeldHead, pullKeep, pullEntryMax, the "held" list in period_entries), allowlist.go (the
-FinComVoucherBatch row's words; the stock row's version word), util.go (2.5.12); tests r2512_test.go (new), the version
-tests, fast234review_test.go / fast234rr_test.go (voucher mode is read now; the hold tests use items in INVENTORYENTRIES,
-still held), fast234form_test.go (the approved paths' count), r249batch_test.go (the 2.5.12 request files; 2.4.9's
-shape kept as history), stock251_test.go (the history rows as 2.5.11's), testdata: the five voucher-mode goldens,
-batch249/b4-range-2512.xml and b4-list-2512.xml. tests/run_parse_fast234_kinds.mjs (nothing held now).
-docs/tally-allowlist.md, docs/bridge-2.5.12-test-sheet.txt.)
+(bridge-go/: fastvch.go (liveKeepInv2512 kept by the strip only, fastEmit's order, fastVoucherModeItems, fastHasItems /
+fastOKNoInv), batch249.go (FinComVoucherBatch's FETCH 2.5.11's again; pullKeep), daypull.go (pullHoldEntry,
+pullKeep, the day's last period_entries says "held"), range2512.go (new), pinned.go and daypull.go dayHeadsExact (the
+range form pinned and guarded), allowlist.go (FinComDayHeads' words; the stock row's version word), util.go (2.5.12);
+tests r2512_test.go, r2512range_test.go, the version tests, the voucher-mode goldens. server/tally-cloud/index.ts
+(heldOf, periodHold, the held words, a bridge update releases held days), migration-151-period-held.sql (new, not run).
+app/src/parts/TallyFetch.jsx (the held line and Try again now). tests/run_migration151.py (new), run_period_ingest.py
+(section 5), run_parse_fast234_kinds.mjs. docs.)
 
-## The case (staging, 09-Nov-2026)
+## 1. The voucher-mode sale is read (fastvch.go)
 
-The older-entries day read lost whole days: a marketplace sale entered in voucher mode keeps its stock item under the
-sales ledger's line (ALLLEDGERENTRIES.LIST > INVENTORYALLOCATIONS.LIST). The strip held such an entry ("its lines in
-ALLLEDGERENTRIES.INVENTORYALLOCATIONS, which FinCom's entry request does not read"), the group read left it for the
-one-entry read, which returned fastShapeError, and pullFetchStep marked the whole day "upload by hand" with the reason
-dropped (pullMarkUpload(w, "shape", "")). On one real book 62 days of 223.
+- The strip keeps ALLLEDGERENTRIES.INVENTORYALLOCATIONS.STOCKITEMNAME, BILLEDQTY, RATE, AMOUNT only in an entry with no
+  item of its own, inside the line after its own fields, and writes each as one of the entry's items (ALLINVENTORYENTRIES
+  with ACCOUNTINGALLOCATIONS: the line's ledger), as Tally's own collection gave them: parse.js reads the five releases'
+  voucher-mode invoice field for field as the 2.3.3 request's answer (run_parse_fast234_kinds.mjs: 112 entries, 0 held).
+  Every other capture strips byte for byte as 2.5.11 (TestR2512OrdinaryVouchersUnchanged).
+- Review point 5: no request changes for it. FinComVoucherBatch's FETCH is 2.5.11's again (SHA cd914d4c22ca...,
+  TestR2512GroupRequestAs2511: b4-range.xml and b4-list.xml byte for byte, the window form the same text); a group's
+  voucher-mode entry (its items listed by Tally, the stock item still under the line) is held by the strip and left for
+  FinComVoucherObject, whose FETCHLIST is unchanged (Tally ignores it and sends the whole voucher).
+- Review point 6 (accepted): the strip is the live recorder's and the posting checks' too, so a voucher-mode sale saved
+  in Tally now goes with its body there as well (said in the test sheet).
 
-## 1. The voucher-mode sale is read (fastvch.go, batch249.go)
+## 2. One entry never sinks a day; the day stays open; the entry comes in by itself (review point 3)
 
-- liveKeepInv2512: ALLLEDGERENTRIES.INVENTORYALLOCATIONS.STOCKITEMNAME, BILLEDQTY, RATE, AMOUNT: the item fields an item
-  invoice's items carry (ALLINVENTORYENTRIES: name, billed quantity, rate, amount). No godown or batch (no list keeps
-  them for ALLINVENTORYENTRIES either), no ACTUALQTY.
-- Kept only in an entry with no item of its own (fastHasItems false). An entry with items strips exactly as in 2.5.11:
-  a collection's item invoice repeats its items under the sales line and none of that is kept (TestFast234StripCaptures'
-  by-number goldens unchanged); a stock item under a ledger line BESIDE items is held as before (TestR2512VoucherModeKept).
-- Written inside the ledger line after its own fields (fastEmit defers INVENTORYALLOCATIONS.LIST under
-  ALLLEDGERENTRIES), so the line's own AMOUNT is the first a reader meets (parse.js one(e, "AMOUNT"), the bridge's
-  voucherLines). Real TallyPrime already writes the line's AMOUNT first (3.0 .. 7.1 captures); the order is a guard.
-- fastVoucherModeItems also writes each such stock item as one of the entry's items (ALLINVENTORYENTRIES.LIST with the
-  four fields and ACCOUNTINGALLOCATIONS: the line's LEDGERNAME, ISDEEMEDPOSITIVE, the item's AMOUNT), exactly the form
-  Tally's own Voucher collection gave for such an entry (FinComVoucherByMaster, the entry request up to 2.3.3:
-  sales-voucher-mode-items-bymaster.xml.gz). Result: parse.js reads the stripped object of the voucher-mode invoice on
-  3.0, 4.1, 5.1, 6.2 and 7.1 field for field as it read that request's answer, items included
-  (tests/run_parse_fast234_kinds.mjs: 112 entries, 0 held, all ok). Only approved paths are written.
-- The one-entry request (FinComVoucherObject) is byte for byte 2.5.11's: its FETCHLIST is liveFetchFields, unchanged
-  (Tally sends the whole voucher anyway). The four fields go into FinComVoucherBatch's FETCH (and so
-  FinComVoucherWindow's, the same frozen text) after the payroll's, with their LEDGERENTRIES copies at the end, as every
-  ALLLEDGERENTRIES field: +372 bytes on a 7,629-byte request; the answer of an entry without such lines is unchanged
-  (TestR2512OrdinaryVouchersUnchanged: every fast234kinds and batch249 capture strips the same with and without the four
-  fields). batchFetchSHA is the new text's (0896778656af...), computed independently from b4-range.xml plus the fields.
-- In a group's answer Tally may list a voucher-mode entry's items itself (as its collections do): the entry then has
-  items, nothing of 2.5.12 applies, and if its ledger lines still carry the stock item the strip holds it and the group
-  leaves it for FinComVoucherObject (as before), which reads it. Either way it is read; not measured on real Tally.
+- Bridge: an errFastShape entry, or one over 2 MB, is held alone (pullHoldEntry): out of the wanted list, NOTHING of it
+  sent as an entry (2.5.12's first build sent its head, which tally-ingest kept as seen: the day looked done with the
+  voucher missing or stale; removed). The day's last period_entries says "held": [...] ([] when none, so an earlier mark
+  clears). Asked counted once (review 7: the double count of an oversize entry removed); the log line counts the held
+  entries apart (review 7).
+- Cloud (index.ts): heldOf cleans the list (a GUID that is no GUID dropped, words cut); periodHold calls
+  tally_period_hold; the answer never says done while one is held and gives the plain words. A cloud without 151: the
+  day marked to upload with "1 entry on 30-Aug could not be read: upload the Day Book for this day." (never done). A beat
+  whose bridge version differs from the device's last calls tally_period_held_release (the firm's held days of an older
+  version listed again).
+- Migration 151 (written, not run; add-only: one column): tally_period_hold keeps the list on the day, done_at null while
+  it is not empty; tries per entry, AlterID and bridge version; under 3 the day stays listed by 98's own rule (counted,
+  not done, not marked), so every pull and the night ask for it again with FinComVoucherObject; at 3 upload_why 'held'
+  with the manual step's words; an empty list clears it and ends the day by 98's count. tally_period_held_list (the app)
+  settles first: an entry FinCom now holds at the AlterID held or higher (a Day Book uploaded) leaves the list, and an
+  empty list ends the day. tally_period_held_retry ("Try again now", owner or staff). An older copy of the voucher is
+  kept as it is; the day shows the line until the entry is in at Tally's AlterID.
+- Words (TallyPrime's own keys, as FinCom's From Tally page already says them): "1 entry on 12-Oct could not be read yet.
+  FinCom tries again by itself."; after 3 tries "In Tally, open Day Book, press F2 and set the date to 12-Oct-2025, then
+  Alt+E (Export) → Current, F8 (File Format): XML, and E to export; drop the file on Books › From Tally."
 
-## 2. One entry never sinks a day (daypull.go)
+## 3. Day lists by range (range2512.go; review points 1, 2, 4)
 
-- errFastShape in pullFetchStep, and an entry larger than tally-ingest takes (2 MB, MAX_RECORDER_XML: it refused the
-  whole call, which marked the day), go to pullHoldEntry: the entry leaves the wanted list, the day's other entries are
-  read and sent as on any day, and the day is NOT marked upload.
-- The cloud has no "day done except entry X". The closest existing mechanism is used, no cloud change: the day's held
-  count (tally_period_days.held_n). The entry goes in period_entries as its head only (GUID, MASTERID, ALTERID, DATE,
-  VOUCHERTYPENAME, as FinComDayHeads gave them; no ledger line). tally-ingest periodEntries takes a voucher Tally gave that
-  parse.js makes no entry of as seen at its AlterID (the rule for stock journals and delivery notes), tally_period_held
-  counts it, and the day is done. Asked again only when its AlterID moves.
-- The reason, with the voucher type and MasterID and the fastShapeError's own words ("Sales entry (MasterID 701) of
-  15-Sep-2025 held: Tally keeps this entry with its lines in INVENTORYENTRIES, which FinCom's entry request does not
-  read; upload that day's Day Book to settle it"), goes in the same call as "held": [{guid, masterId, alterId, type,
-  why}] (today's tally-ingest ignores the key; nothing is refused), in the bridge's log (writeLog), and once in the
-  tray's activity (liveSayOnce). It is never dropped.
-- Its lines are not in FinCom's books until the Day Book is uploaded. Without a GUID in the day's list (never seen) the
-  day is marked as before.
-- To show it on the Tally page, tally-ingest would keep body.held (e.g. its words in tally_period_days, or a held row):
-  not done here (no cloud change, no deploy).
-
-## 3. Day lists by range (range2512.go; the owner's approval of 09-Nov-2026: "Yes but no missing days at all", "and no hang of Tally at all")
-
-- dayHeadsRangeRequest: FinComDayHeads exactly (formCollection, formPlainT, F1's four fields), SVFROMDATE < SVTODATE, 2 to
-  31 days. pinned.go rebuilds it from its dates; dayHeadsExact lets it through only while it is the range being asked
-  (pull.rangeAsk) and every day of it is in pull.items for that company, under the same 2 s TC.
-- pullRangeStep runs in pullStep's heads phase after pullMayAskWhy (the six conditions, typing gate, postings first) and
-  before one day's list; FastEntries on, a split day, or a day whose range answer was not used: one day's list as before.
-- The range: consecutive days from the current one that pull.items holds for the same company, GUID, choice, kind,
-  fetch and types, not finished, not marked, not already holding a range list; never a day FinCom did not hand out.
-- The answer is used only whole: envelope with its end, no LINEERROR, every row dated inside the range, every
-  <VOUCHER opening a counted row, rows <= DayPullHeadsMax. Otherwise nothing is used (w.noRange; each day asks its own
-  list; the company's later ranges are single days). A row dated outside the range thus never gets dropped.
-- Used: the current day's list into w.heads; each other day's list kept by its day key with the time; the day's own
-  turn takes it (once) while fresh (pullHeadsFresh, the group read's rule), else asks its own list. Each day then goes
-  through pullSendHeads as before (an empty day: n 0, heads []), so FinCom's per-day claim and count are unchanged and
-  tally-ingest needs nothing.
-- No hang: errRecorderStop (over 2 s) -> pullStopCompany("over2s"), Tally's window held 2 s -> "window", exactly as one
-  day's list (never retried); the size starts at 7 per company and choice, pullRangeNext doubles under 1 s (31 at most),
-  halves over 1 s; a day of more than 200 rows sets single days.
-- The stand Tally (tests) answers FinComDayHeads for its dates' range.
+- FinComDayHeads exactly, SVFROMDATE < SVTODATE, 2 to 31 days; pinned; let through only while it is the range being asked
+  and every day of it is listed now.
+- Only a book shown sparse: 3 single-day lists of the company and choice in a row, each ≤ 50 rows and < 300 ms (any other
+  single day, or a single day's error, starts again). 3 days first; capped so the predicted time (the slower of the single
+  days' average and the last range's time a day) stays under 0.8 s; +50% (at least a day) only under 0.5 s, 31 at most;
+  halved over 0.8 s; a day of more than 200 rows ends ranges for the period.
+- Over the 2 s stop, Tally's window held 2 s, a cut or unreadable answer, rows not adding up: not used and NOT a stop of
+  the company; Tally's end of a request given up on is awaited (bounded), the shared retry schedule gives the usual wait,
+  the company's days go one by one for the rest of the run, logged. A single day's list over 2 s stops the company as
+  before (unchanged).
+- A row dated outside the range: the single-day rule's "date not applied" (the answer dropped, the day marked "dates", no
+  day asked of that Tally until restart).
+- Each run's first range of a company is a check only: its days are then read one by one and their GUIDs compared; a
+  difference turns ranges off for that company for good (sync\range-off.json, logged); only after the run's check passed
+  are later ranges used (their days' lists taken while fresh).
 
 ## 4. Tests
 
-r2512range_test.go: every day of a 7-day sparse stretch told (empty days as 0) in one list request, entries as before;
-only consecutive listed days together (a day not handed out never told); outside-range row / cut / Tally error: nothing
-used, each day alone, all told, sizes to 1; over 2 s: the company stopped, no day told, not asked again; the halving and
-the 31-day cap, a 1.2 s answer halving 7 to 3, a 201-entry day ending ranges; the guard.
-
-## 5. Tests (the voucher-mode and held-entry parts)
-
-r2512_test.go: the voucher-mode strip (order, fields, mapped form, from a group, beside items, a collection's item
-invoice), the five real releases, ordinary entries unchanged, the request = 2.4.9's + the fields (and the 2.5.12 file),
-a day with one unreadable entry (one by one and in groups: the others sent as the strip makes them, the held head as
-tally-ingest takes it, the reason with its type in "held" and the log, no upload mark, not asked again when listed again),
-an oversize entry held alone, the version, the allow-list (the table is 2.5.11's but for the one row).
+Go: r2512_test.go (the strip, the real releases, ordinary entries, the group request as 2.5.11's, a held entry: nothing
+sent of it, held named on the day's last call, asked again when listed again, held [] once it reads; oversize; the
+version; the allow-list); r2512range_test.go (every day told after evidence and the check; consecutive days only; no range
+for a day of 51 entries or a single list of 320 ms; the check's mismatch off for good, after a restart too; cut / error /
+over 2 s: no stop, single days, all told; date not applied; the sizes, the halving and the cap, a 0.9 s answer; the guard).
+Cloud: tests/run_migration151.py (pg_stand: held keeps the day open with the plain line; 3 failures give the manual step;
+an update tries again from 1; a retry that reads clears it; an upload at the AlterID settles it, an older copy does not;
+Try again now; another firm refused; twice safe); tests/run_period_ingest.py section 5 (held cleaned and kept; [] clears;
+a cloud without 151; the release on a version change).
 
 ## Verdict
 
-Ship after the coordinator's review and a measurement on real TallyPrime of FinComVoucherBatch with the four fields and of FinComDayHeads for a range of days.
+Ship after the coordinator's review, migration 151 and the new tally-ingest deployed first, and a measurement of
+FinComDayHeads' range form on real TallyPrime.
