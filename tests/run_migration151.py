@@ -28,7 +28,13 @@ list the browser makes on load (Books.mapLedgers) is kept in client_book_items a
   4b. one client with two books, 2025-26 (from 1 April 2025) and 2026-27 (from 1 April 2026, profit and loss openings
      carried): tally_tieout, tally_ageing and tally_now each take the book of the period (the 2025-26 months from the
      2025-26 book) and match the browser on that book
-  5. timings on the 40,000-entry book (best of five; the target: under 1 s each)
+  5. timings on the 40,000-entry book (the median of five; the target: under 1 s each, tally_now under 0.8 s)
+  7. a book with no groups read (the browser: the parent alone, ledGroupPath over an empty b.groups), and ledgers whose
+     parent is a case or space variant of a group's name ("north customers", "sundry  debtors": found as ledLook finds
+     them, by namesKey, the variant itself kept in the path): every figure to the paisa
+  8. members: another firm's member and anon get nothing from tally_now, tally_balances_json, tally_calc_cached, nor rows
+     of tally_calc_results; a member's limits: 31 dates, 24 months of tie-out
+  The database is set as staging is (jit off: on, its compiling alone took 1.6 s of a 1.7 s call here).
   6. mis-run "now" end to end on the 40,000-entry book (server/mis-run/now_pg_test.ts, the real handler, each RPC through
      psql; needs deno: DENO, else on PATH): every balance (about 10,000 ledgers, over the 1,000 of a REST row call) and
      both ageings as the browser's; asked again: the kept answer"""
@@ -51,10 +57,12 @@ print("  md5 of %s: %s (%d bytes)" % (os.path.basename(M151), hashlib.md5(text.e
 code = "\n".join(l.split("--")[0] for l in text.lower().splitlines())
 print("== 0. the file")
 ok(re.search(r"^begin;\s*\nset local lock_timeout = '10s';", text, re.M) is not None and text.rstrip().endswith("commit;") and code.count("\nbegin;") == 1 and code.count("commit;") == 1, "one transaction, lock_timeout 10 s")
-ok("delete from" not in code and not re.search(r"\b(drop|truncate)\s", code) and not re.search(r"\balter\s+table\s+(?!public\.tally_calc_results\s+enable)", code), "add-only: nothing dropped, deleted, truncated; no other table altered")
+code_nd = code.replace("drop policy if exists tally_calc_results_read on public.tally_calc_results;", "")
+ok(code.count("drop policy if exists tally_calc_results_read on public.tally_calc_results;") == 1, "the one drop: this migration's own policy, made again at once")
+ok("delete from" not in code and not re.search(r"\b(drop|truncate)\s", code_nd) and not re.search(r"\balter\s+table\s+(?!public\.tally_calc_results\s+enable)", code), "add-only: nothing dropped, deleted, truncated; no other table altered")
 ok("create table if not exists public.tally_calc_results" in code and "alter table public.tally_calc_results enable row level security" in code, "the new table, RLS on")
 ok(not re.search(r"supabase\.co|https?://|qbocskai|project[_ ]ref", text.lower()), "names no real database")
-SVC = {"tally_calc_led": "(uuid)", "tally_calc_bal": "(uuid, date[])", "tally_calc_tieout": "(uuid, text[])", "tally_calc_ageing": "(uuid, date, text)", "tally_calc_ageing_bal": "(uuid, date, text, jsonb)", "tally_calc_ageing_json": "(uuid, date, text, jsonb)",
+SVC = {"tally_calc_nclean": "(text)", "tally_calc_nkey": "(text)", "tally_calc_ageing_sides": "(uuid, date, text, jsonb)", "tally_calc_led": "(uuid)", "tally_calc_bal": "(uuid, date[])", "tally_calc_tieout": "(uuid, text[])", "tally_calc_ageing": "(uuid, date, text)", "tally_calc_ageing_bal": "(uuid, date, text, jsonb)", "tally_calc_ageing_json": "(uuid, date, text, jsonb)",
        "tally_calc_version": "(uuid)", "tally_calc_put": "(uuid, text, text, text, jsonb, integer)"}
 MEM = {"tally_balances_at": "(uuid, date[])", "tally_balances_json": "(uuid, date[])", "tally_tieout": "(text, text[])", "tally_ageing": "(text, date, text)", "tally_calc_cached": "(text, date, text, text)",
        "tally_now": "(text, date, date)"}
@@ -90,6 +98,9 @@ def make_book(seed, n_v, n_cust, n_sup, n_exp, start, end, pl_open=False):
     L = {}
     def led(n, parent, op=0, master=True, deleted=False): L[n] = (parent, op, master, deleted); return n
     cust = [led("Customer %05d Stores" % i, "North Customers" if i % 3 == 0 else "Sundry Debtors", -R.randrange(0, 900000) * 10 if i % 4 == 0 else 0) for i in range(n_cust)]
+    # a parent written in other capitals or with two spaces (ledLook finds the group by namesKey; the path keeps the variant:
+    # "sundry  debtors" is not Audit.isDebtor's "sundry debtors", though its group's parent is walked)
+    cust += [led("Customer %05d Lane" % i, "north customers" if i % 2 else "sundry  debtors", -R.randrange(0, 90000) * 10) for i in range(max(4, n_cust // 20))]
     sup = [led("Supplier %05d Mills" % i, "Sundry Creditors", R.randrange(0, 700000) * 10 if i % 5 == 0 else 0) for i in range(n_sup)]
     exps = [led("Expense Head %04d" % i, "Salary & Wages" if i % 7 == 0 else ("Direct Expenses" if i % 11 == 0 else "Indirect Expenses"), (-R.randrange(1, 90000) * 100 if pl_open and i % 9 == 0 else 0)) for i in range(n_exp)]
     bank = led("Kestrel Bank Current", "Bank Accounts", -250000000); od = led("Kestrel Bank OD", "Bank OD A/c", 120000000); cash = led("Cash", "Cash-in-Hand", -1500000)
@@ -172,7 +183,7 @@ def make_book(seed, n_v, n_cust, n_sup, n_exp, start, end, pl_open=False):
 
 def paise(p): return ("-" if p < 0 else "") + "%d.%02d" % divmod(abs(p), 100)
 
-def load_book(db, B, F_, cid, L, V, start):
+def load_book(db, B, F_, cid, L, V, start, groups=True):
     rows_l, rows_v, rows_t, rows_b = [], [], [], []
     for n, (parent, op, master, deleted) in L.items():
         # the customers under a sub-group of Sundry Debtors carry no chain (as a Zoho copy): only the groups place them
@@ -188,7 +199,7 @@ def load_book(db, B, F_, cid, L, V, start):
                 tid += 1; rows_b.append("\t".join([str(tid), B, F_, v["id"], v["date"].isoformat(), e["l"], x[0], x[1], paise(x[2]), str(x[3])]))
     s = ["insert into tally_books (book_id, firm_id, client_id, company, from_date, open_as_on, days_at, ledgers_at) values (%s, %s, %s, 'Made-up Heron Traders', %s, %s, now(), now());" % (q(B), q(F_), q(cid), q(start.isoformat()), q(start.isoformat())),
          "copy tally_ledgers (book_id, firm_id, name, parent, open, chain, primary_group, merged_into, deleted_at) from stdin;", "\n".join(rows_l), "\\.",
-         "copy tally_groups (book_id, firm_id, name, parent) from stdin;", "\n".join("\t".join([B, F_, g, pg]) for g, pg in GROUPS.items()), "\\.",
+         "copy tally_groups (book_id, firm_id, name, parent) from stdin;" if groups else "", "\n".join("\t".join([B, F_, g, pg]) for g, pg in GROUPS.items()) if groups else "", "\\." if groups else "",
          "copy tally_vouchers (book_id, firm_id, guid, day, alter_id, vtype, vno, party, narration, cancelled, optional, deleted_at) from stdin;", "\n".join(rows_v), "\\.",
          "copy tally_lines (id, book_id, firm_id, guid, day, ledger, amount) from stdin;", "\n".join(rows_t), "\\.",
          "copy tally_bills (id, book_id, firm_id, guid, day, ledger, name, type, amount, credit_days) from stdin;", "\n".join(rows_b) if rows_b else "", "\\.",
@@ -201,12 +212,12 @@ def load_book(db, B, F_, cid, L, V, start):
          "analyze;"]
     db.sql("\n".join(s) + "\n")
 
-def browser_books(cid, L, V, start, end):
+def browser_books(cid, L, V, start, end, groups=True):
     """what TCloud.load reads: tally_ledgers (name, parent, open) not merged and not deleted in Tally, tally_groups, and
     the entries (a deleted one is gone from the browser's books; a cancelled or optional one is kept, marked)"""
     return {"cid": cid, "from": d8(start), "today": "20261109",
             "ledgers": [{"name": n, "parent": p, "open": op / 100} for n, (p, op, m, dl) in sorted(L.items()) if m and not dl],
-            "groups": [{"name": g, "parent": pg} for g, pg in GROUPS.items()],
+            "groups": [{"name": g, "parent": pg} for g, pg in GROUPS.items()] if groups else [],
             "vouchers": [{"id": v["id"], "date": d8(v["date"]), "no": v["no"], "type": v["type"], "party": v["party"], "narr": "", "opt": v["opt"], "cancel": v["cancel"],
                           "ent": [dict({"l": e["l"], "a": e["a"] / 100}, **({"b": [[x[0], x[1], x[2] / 100, x[3]] for x in e["b"]]} if e.get("b") else {})) for e in v["ent"]]}
                          for v in V if not v["deleted"]]}
@@ -228,7 +239,8 @@ def run_browser(name, books, dates, months, ageing):
     if os.path.exists(out + "." + key): return json.load(open(out + "." + key))      # the same books and engine as a run before (M151_TMP kept)
     open(inp, "w").write(body)
     env = dict(os.environ, TDSDESK_HTML=HTML)
-    r = subprocess.run(["flock", "/tmp/fincom-app.lock", "node", "--max-old-space-size=4096", os.path.join(HERE, "run_migration151.js"), inp, out], capture_output=True, text=True, env=env)
+    lock = [] if os.environ.get("M151_LOCK_HELD") == "1" else ["flock", "/tmp/fincom-app.lock"]     # the whole run under flock: not twice
+    r = subprocess.run(lock + ["node", "--max-old-space-size=4096", os.path.join(HERE, "run_migration151.js"), inp, out], capture_output=True, text=True, env=env)
     if r.returncode: raise RuntimeError("the browser engine: " + (r.stderr or r.stdout)[-1500:])
     os.replace(out, out + "." + key)
     return json.load(open(out + "." + key))
@@ -327,11 +339,16 @@ def timing(db, B, cid, dates, months, d):
             "tally_tieout (1 month)": "select count(*) from jsonb_object_keys(tally_calc_tieout(%s, array[%s]))" % (q(B), q(months[-1])),
             "tally_ageing r": "select length(tally_calc_ageing(%s, %s, 'r')::text)" % (q(B), q(d)),
             "tally_ageing p": "select length(tally_calc_ageing(%s, %s, 'p')::text)" % (q(B), q(d)),
-            "tally_now (%d months)" % len(months): "select length(tally_now(%s, %s, %s)::text)" % (q(cid), q(months[0]), q(d)),
+            "tally_now (%d months, worked out)" % (len(months) - 1): "select length(tally_now(%s, %s, %s)::text)" % (q(cid), q(months[1]), q(d)),
             "tally_calc_version": "select length(tally_calc_version(%s))" % q(B)}
     res = {}
     for k, s in asks.items():
-        res[k] = min(float(db.one("select t_ms(%s)" % q(s), uid=U)) for _ in range(5))
+        v = sorted(float(db.one("select t_ms(%s)" % q(s), uid=U)) for _ in range(5))
+        res[k] = v[2]                                                     # the median of five
+    # the same asked once kept (as mis-run keeps it): the kept answer back
+    db.sql("select tally_calc_put(%s, 'mis-now.2', %s, tally_calc_version(%s), tally_now(%s, %s, %s)::jsonb)" % (q(B), q(months[1].replace("-", "") + "|" + d.replace("-", "")), q(B), q(cid), q(months[1]), q(d)), uid=U)
+    v = sorted(float(db.one("select t_ms(%s)" % q("select length(tally_now(%s, %s, %s)::text)" % (q(cid), q(months[1]), q(d))), uid=U)) for _ in range(5))
+    res["tally_now (kept)"] = v[2]
     return res
 
 # the test page: build.py's own assembly, into the scratch folder (site/ and site-test/ are not touched)
@@ -352,6 +369,8 @@ try:
     create index if not exists tally_bills_book_party on tally_bills (book_id, ledger, name);
     create index if not exists tally_lines_book_day on tally_lines (book_id, day);
     create table if not exists tally_groups (book_id uuid, firm_id uuid, name text, parent text, primary key (book_id, name));
+    alter database postgres set jit = off;
+    grant select on members to authenticated; grant usage on schema auth to authenticated; grant execute on function auth.uid() to authenticated;
     insert into firms values (%s, 'Made-up Firm A'), (%s, 'Made-up Firm B');
     insert into members (user_id, firm_id, name, role) values (%s, %s, 'Made-up Owner', 'owner'), (%s, %s, 'Made-up Other', 'owner');
     """ % (q(F), q(F2), q(U), q(F), q(U2), q(F2)))
@@ -386,13 +405,15 @@ try:
                 E = json.load(open(outp)); R0 = E["first"]["result"]
                 bad = [("at",) + tuple(x) for x in bal_diff(br["bal"]["20261031"], R0["balances"]["at"])]
                 for side, k in (("r", "recv"), ("p", "pay")): bad += [(k,) + tuple(x) for x in age_diff(br["age"]["20261031"][side], R0[k])[0]]
-                ok(not bad and E["calls"] == ["tally_calc_cached", "tally_now", "tally_calc_put", "tally_calc_cached"],
+                ok(not bad and E["calls"] == ["tally_now", "tally_calc_put", "tally_now"],
                    "6. mis-run now end to end: %d balances (one value, not 1,000 rows), both ageings as the browser's; %d ms, asked again: kept, %d ms (%s %s)" % (len(R0["balances"]["at"]), E["firstMs"], E["secondMs"], E["calls"], bad[:2]))
         elif timed: print("   6. skipped: no deno (DENO=... or on PATH)")
         if timed:
             T = timing(db, B, cid, dates, months, ageing[-1])
             for k, v in T.items(): print("   %-34s %8.1f ms" % (k, v))
-            ok(all(v < 1000 for v in T.values()), "5. every function under 1 s on %d entries / %d ledgers (slowest %.0f ms)" % (len(V), len(L), max(T.values())))
+            ok(all(v < 1000 for v in T.values()), "5. every function under 1 s on %d entries / %d ledgers (median of five; slowest %.0f ms)" % (len(V), len(L), max(T.values())))
+            tn = [v for k, v in T.items() if k.startswith("tally_now (") and "kept" not in k][0]
+            ok(tn < 800, "5. tally_now under 0.8 s (median of five: %.0f ms)" % tn)
 
     # 4. members and the kept answers
     B, cid = "b1510000-0000-0000-0000-%012d" % 151, "client-151"
@@ -426,11 +447,43 @@ try:
         c = json.loads(db.one("select tally_calc_cached(%s, null, 'mis-now', '20260401|20261031')::text" % q(cid), uid=U))
         ok(c["version"] != before and c.get("result") is None, "4. %s: the version moves, the kept answer is not used" % what)
     for what, s, w in (("401 dates", "select count(*) from tally_calc_bal(%s, (select array_agg(d::date) from generate_series(date '2025-01-01', date '2025-01-01' + 400, interval '1 day') d))" % q(B), "at most 400 dates"),
-                       ("121 months (tieout)", "select tally_tieout(%s, (select array_agg(to_char(d, 'YYYY-MM-DD')) from generate_series(date '2016-01-01', date '2026-01-01', interval '1 month') d))" % q(cid), "at most 120 months"),
+                       ("121 months (server tieout)", "select tally_calc_tieout(%s, (select array_agg(to_char(d, 'YYYY-MM-DD')) from generate_series(date '2016-01-01', date '2026-01-01', interval '1 month') d))" % q(B), "at most 120 months"),
+                       ("25 months (member tieout)", "select tally_tieout(%s, (select array_agg(to_char(d, 'YYYY-MM-DD')) from generate_series(date '2024-01-01', date '2026-01-01', interval '1 month') d))" % q(cid), "at most 24 months"),
+                       ("32 dates (member rows)", "select count(*) from tally_balances_at(%s, (select array_agg(d::date) from generate_series(date '2025-06-01', date '2025-06-01' + 31, interval '1 day') d))" % q(B), "at most 31 dates"),
+                       ("32 dates (member json)", "select tally_balances_json(%s, (select array_agg(d::date) from generate_series(date '2025-06-01', date '2025-06-01' + 31, interval '1 day') d))" % q(B), "at most 31 dates"),
                        ("121 months (now)", "select tally_now(%s, '2016-01-01', '2026-01-31')" % q(cid), "at most 120 months")):
         try: db.sql(s, uid=U); ok(False, "4. limit: %s refused" % what)
         except RuntimeError as e: ok(w in str(e), "4. limit: %s refused" % what)
-    ok(db.one("select count(*) from tally_calc_bal(%s, (select array_agg(d::date) from generate_series(date '2025-05-01', date '2025-05-01' + 399, interval '1 day') d))" % q(B)) not in (None, "0"), "4. limit: 400 dates worked out")
+    ok(db.one("select count(*) from tally_calc_bal(%s, (select array_agg(d::date) from generate_series(date '2025-05-01', date '2025-05-01' + 399, interval '1 day') d))" % q(B)) not in (None, "0"), "4. limit: 400 dates worked out (the server)")
+    ok(db.one("select count(*) from tally_balances_at(%s, (select array_agg(d::date) from generate_series(date '2025-05-01', date '2025-05-01' + 30, interval '1 day') d))" % q(B), uid=U) not in (None, "0"), "4. limit: 31 dates worked out (a member)")
+    # 8. another firm's member, and anon
+    ok(json.loads(db.one("select tally_now(%s, '2026-04-01', '2026-10-31')::text" % q(cid), uid=U2)).get("none") is True, "8. another firm's member: tally_now gives nothing")
+    ok(json.loads(db.one("select tally_calc_cached(%s, null, 'mis-now', '20260401|20261031')::text" % q(cid), uid=U2)).get("none") is True, "8. another firm's member: tally_calc_cached gives nothing")
+    try: db.sql("select tally_balances_json(%s, array['2026-03-31']::date[])" % q(B), uid=U2); ok(False, "8. another firm's member refused tally_balances_json")
+    except RuntimeError as e: ok("not a company of your firm" in str(e), "8. another firm's member refused tally_balances_json")
+    n_own = db.one("set role authenticated; select count(*) from tally_calc_results;", uid=U); n_other = db.one("set role authenticated; select count(*) from tally_calc_results;", uid=U2)
+    ok(n_own not in (None, "0") and n_other == "0", "8. tally_calc_results as a member: its own firm's %s rows; another firm's member: %s" % (n_own, n_other))
+    for what, s in (("tally_now", "select tally_now(%s, '2026-04-01', '2026-10-31')" % q(cid)), ("tally_balances_json", "select tally_balances_json(%s, array['2026-03-31']::date[])" % q(B)),
+                    ("tally_calc_cached", "select tally_calc_cached(%s, null, 'mis-now', 'x')" % q(cid)), ("tally_calc_results", "select count(*) from tally_calc_results"),
+                    ("tally_calc_put", "select tally_calc_put(%s, 'k', 'a', 'v', '{}'::jsonb)" % q(B)), ("tally_calc_ageing_sides", "select count(*) from tally_calc_ageing_sides(%s, '2026-03-31', 'r', '{}'::jsonb)" % q(B))):
+        try: db.sql("set role anon; " + s + ";"); ok(False, "8. anon refused %s" % what)
+        except RuntimeError as e: ok("permission denied" in str(e), "8. anon refused %s" % what)
+    try: db.sql("set role authenticated; select tally_calc_put(%s, 'k', 'a', 'v', '{}'::jsonb);" % q(B), uid=U); ok(False, "8. a member may not keep answers (tally_calc_put)")
+    except RuntimeError as e: ok("permission denied" in str(e), "8. a member may not keep answers (tally_calc_put)")
+    ok(db.one("select count(*) from pg_policies where tablename = 'tally_calc_results'") == "1", "0. the second run left the one policy, as written")
+
+    # 7. a book with no groups read
+    B, cid = "b1510000-0000-0000-0000-000000007151", "client-nogroups"
+    start, end = datetime.date(2025, 4, 1), datetime.date(2026, 3, 31)
+    L, V = make_book(7151, 1500, 50, 30, 30, start, end)
+    load_book(db, B, F, cid, L, V, start, groups=False)
+    months = month_ends(start, end); dates = sorted(set([eom(m).isoformat() for m in months])); ageing = ["2025-10-31", "2026-03-31"]
+    brn = run_browser("nogroups", browser_books(cid, L, V, start, end, groups=False), [d.replace("-", "") for d in dates], months, [d.replace("-", "") for d in ageing])
+    store_map(db, F, cid, brn["map"])
+    compare(db, "7. no groups", B, cid, brn, dates, months, ageing, now_from=start.isoformat())
+    direct = sum(1 for n, x in L.items() if x[2] and not x[3] and x[0] == "Sundry Debtors")
+    got = len(json.loads(db.one("select tally_ageing(%s, '2026-03-31', 'r')::text" % q(cid), uid=U))["rows"])
+    ok(0 < got <= direct < sum(1 for n in L if n.startswith("Customer")), "7. no groups: the customers are only those directly under Sundry Debtors (%d parties of %d directly there)" % (got, direct))
 
     # 4b. one client, two books: 2025-26 and 2026-27 (its profit and loss openings carried to Profit & Loss A/c)
     cid = "client-fy"

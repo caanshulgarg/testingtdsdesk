@@ -7,67 +7,98 @@
 -- (tests/run_migration151.py checks each figure against the browser's engine on the same made-up books). Nothing in the
 -- browser changes yet.
 --
+--   tally_calc_nclean / _nkey          namesClean / namesKey (server/_shared/names.js): names matched as the browser does
 --   tally_calc_led(book)               every ledger as the browser sees it (TCloud.load, TallyRead.balances and
 --                                      yearOpen): the masters not merged and not deleted in Tally, any ledger with entries
---                                      but no master; its opening, its group path (the parent, then tally_groups up), the
---                                      kind in FinCom's ledger list, and the browser's tests: Audit.isDebtor / isCreditor /
---                                      isCash / isBankL, and MIS.plHead (a profit and loss ledger)
+--                                      but no master; its opening, its group path (ledGroupPath over tally_groups; the
+--                                      parent alone when no groups are read), the kind in FinCom's ledger list, and the
+--                                      browser's tests: Audit.isDebtor / isCreditor / isCash / isBankL, MIS.plHead
 --   tally_calc_bal(book, dates)        Audit.balances().at(d) for each date (at most 400): the opening plus every entry
 --                                      from the book's first day to d (tally_ledger_day: never a deleted, cancelled or
 --                                      optional entry), a credit positive; the ledgers the browser's answer holds
---   tally_balances_at(book, dates)     the same for a member of the book's firm: (date, ledger, bal) rows
---   tally_balances_json(book, dates)   the same as one value {date: {ledger: bal}} (no REST row limit)
---   tally_calc_tieout / tally_tieout   Rec.fincom (src/js/61) for each month-end (at most 120), each month from the book
---                                      that covers it: receivables and payables (Parties.position), cash and bank, the
---                                      profit after tax from the year's start (MIS.pl), the trial balance's debit total
---                                      (LK.tbBooks, with "Difference in opening balances"; none when it does not total)
---   tally_calc_ageing(_bal) / tally_ageing  MIS.ageing (src/js/07; server/_shared/misageing.js): bill by bill
---                                      (tally_bills, else the line on account), by age from the due date, each party's
---                                      open bills net of payments on account, advances and the difference to its ledger
---                                      balance (MIS.netOpen), not bill-wise, advances, the control against the balance
---   tally_now(client, from, to)        mis-run "now" in one call: both ageings, owed (Parties.position(to)), cash and bank
---                                      (MIS.runNow's r.balances), every balance on the day; all from one working of it
+--   tally_balances_at(book, dates)     the same for a member of the book's firm (at most 31 dates): (date, ledger, bal)
+--   tally_balances_json(book, dates)   the same as one value {date: {ledger: bal}} (no REST row limit; at most 31 dates)
+--   tally_calc_tieout / tally_tieout   Rec.fincom (src/js/61) for each month-end (a member: at most 24 months; the server
+--                                      120), each month from the book that covers it: receivables and payables
+--                                      (Parties.position), cash and bank, the profit after tax from the year's start
+--                                      (MIS.pl), the trial balance's debit total (LK.tbBooks, with "Difference in opening
+--                                      balances"; none when it does not total)
+--   tally_calc_ageing(_sides/_json/_bal) / tally_ageing  MIS.ageing (src/js/07; server/_shared/misageing.js): bill by
+--                                      bill (tally_bills, else the line on account), by age from the due date, each
+--                                      party's open bills net of payments on account, advances and the difference to its
+--                                      ledger balance (MIS.netOpen), not bill-wise, advances, the control against the
+--                                      balance. Like MIS.bills, every entry up to the day counts (no floor at the book's
+--                                      first day: the balances have one, as Audit.balances moves from tb.from)
+--   tally_now(client, from, to)        mis-run "now" in one call: the book's version and its kept answer, else both
+--                                      ageings, owed (Parties.position(to)), cash and bank (MIS.runNow's r.balances) and
+--                                      every balance on the day, all from one working of it
 --   tally_calc_results                 worked-out answers kept per book, kind and arguments with the book's data version
 --                                      (tally_calc_version, with FinCom's working CALC_V): used only while the version is
 --                                      the same, so new entries, a rename or a fix make it worked out again
 --   tally_calc_cached / tally_calc_put the answer kept for a member's client (only while current) / kept by the server
 -- Adds only: new functions and one new table (RLS on; members read their own firm's rows; written by the service role
--- only). No index needed: tally_ledger_day (book_id, ledger, day) and (book_id, day), tally_lines (book_id, ledger, day),
+-- only; its one policy is dropped and made again so a second run converges, the only drop here). No index needed: tally_ledger_day (book_id, ledger, day) and (book_id, day), tally_lines (book_id, ledger, day),
 -- tally_bills (book_id, guid), tally_vouchers (book_id, guid), tally_groups (book_id, name) are there. Safe to run twice.
 
 begin;
 set local lock_timeout = '10s';
 
+-- ---------------------------------------------------------------- names, as the browser matches them
+-- namesClean / namesKey (server/_shared/names.js, put at the head of the app): entities decoded (also escaped twice), each
+-- run of line breaks with the spaces around it one space, the ends trimmed; the key also every run of white space one
+-- space, lower case. The named entities and &#9; &#10; &#13; &#160; (the ones Tally writes in names) are decoded here;
+-- other numeric entities are left as they are (migration 23 keeps names free of line breaks on the way in).
+create or replace function public.tally_calc_nclean(p text)
+returns text language sql immutable set search_path to 'public', 'pg_temp' as $function$
+  select btrim(regexp_replace(
+    case when coalesce(p, '') !~ '[&\r\n]' then coalesce(p, '') else
+      regexp_replace(regexp_replace(regexp_replace(regexp_replace(regexp_replace(regexp_replace(regexp_replace(regexp_replace(
+        coalesce(p, ''), '&(amp;)?#(13|10|x0d|x0a);', E'\n', 'gi'), '&(amp;)?#(9|160|x09|xa0);', ' ', 'gi'),
+        '&(amp;)?lt;', '<', 'gi'), '&(amp;)?gt;', '>', 'gi'), '&(amp;)?quot;', '"', 'gi'), '&(amp;)?apos;', '''', 'gi'), '&(amp;)?nbsp;', ' ', 'gi'), '&(amp;)?amp;', '&', 'gi') end,
+    '[ \t]*[\r\n]+[ \t]*', ' ', 'g'))
+$function$;
+create or replace function public.tally_calc_nkey(p text)
+returns text language sql immutable set search_path to 'public', 'pg_temp' as $function$
+  select lower(btrim(regexp_replace(tally_calc_nclean(p), '\s+', ' ', 'g')))
+$function$;
+
 -- ---------------------------------------------------------------- every ledger, as the browser's books hold it
 -- TCloud.load: the masters not merged and not deleted in Tally (TCloud.restAll adds deleted_at=is.null; a deleted ledger
--- that still has entries is a ledger with no master), put in by TallyRead.balances: under[ledger] = its parent, and
--- TallyRead.yearOpen when the copy starts on 1 April and the groups are read: the openings of the profit and loss
--- ledgers go to "Profit & Loss A/c". The group path is ledGroupPath's: the parent, then each group's parent in
--- tally_groups (tally_groups is what TCloud.groupsInto reads); a book with no groups read: the chain the bridge sent.
+-- that still has entries is a ledger with no master), put in by TallyRead.balances: under[ledger] = its parent (cleaned),
+-- and TallyRead.yearOpen when the copy starts on 1 April and the groups are read: the openings of the profit and loss
+-- ledgers go to "Profit & Loss A/c". The group path is ledGroupPath's (src/js/00-core.js): the parent, then each group's
+-- parent in tally_groups (what TCloud.groupsInto reads), each looked up as ledLook does (the name as kept, else by its
+-- namesKey), a name with & or a line break that is no group as kept cleaned before it goes in. A book with no groups
+-- read: the parent alone, as the browser (TCloud.load reads name, parent and open only; the chain is not read).
 create or replace function public.tally_calc_led(p_book uuid)
 returns table (name text, open numeric, in_master boolean, path text[], kind text, deb boolean, cred boolean, cash boolean, bank boolean, pl boolean)
 language sql stable security definer set search_path to 'public', 'pg_temp' as $function$
   with recursive bk as (select b.firm_id, b.client_id, b.from_date from tally_books b where b.book_id = p_book),
-  grp as (select g.name, coalesce(g.parent, '') as parent from tally_groups g where g.book_id = p_book),
-  -- each group's way up: itself, then its parent while that is a group (ledGroupPath; at most 15 names)
-  gw (top, cur, path, n) as (
-    select grp.name, grp.parent, array[grp.name], 1 from grp
-    union all
-    select gw.top, coalesce(p.parent, ''), gw.path || gw.cur, gw.n + 1 from gw left join grp p on p.name = gw.cur where gw.cur <> '' and gw.n < 15),
-  gp0 as (select distinct on (gw.top) gw.top as name, gw.path from gw order by gw.top, gw.n desc),
-  -- and its primary group (TallyRead.primaryOf: the last name before "Primary"), once a group, not once a ledger
-  gpath as (select gp0.name, gp0.path, (select (array_agg(u.g order by u.i desc))[1] from unnest(gp0.path) with ordinality u(g, i)
-                    where u.i < coalesce((select min(v.i) from unnest(gp0.path) with ordinality v(g, i) where v.g ~* '^\W*Primary$'), 1000)) as prim from gp0),
+  grp as materialized (select g.name, coalesce(g.parent, '') as parent from tally_groups g where g.book_id = p_book),
+  -- ledLook by key: the last name with a parent among those of one key (ledIdx), when the name as kept is no group
+  gk as materialized (select distinct on (tally_calc_nkey(grp.name)) tally_calc_nkey(grp.name) as k, grp.parent from grp order by tally_calc_nkey(grp.name), (grp.parent <> '') desc, grp.name desc),
   hasg as (select exists (select 1 from grp) as y),
-  m1 as (select l.name, coalesce(l.open, 0) as open,
-           case when not (select y from hasg) or coalesce(l.parent, '') = '' then null when gp.name is not null then gp.prim when l.parent !~* '^\W*Primary$' then l.parent end as prim,
-           case when coalesce(l.parent, '') = '' then '{}'::text[]
-                when (select y from hasg) then coalesce(gp.path, array[l.parent])
-                when coalesce(array_length(l.chain, 1), 0) > 0 then l.chain
-                when coalesce(l.primary_group, '') not in ('', l.parent) then array[l.parent, l.primary_group]
-                else array[l.parent] end as path
-           from tally_ledgers l left join gpath gp on gp.name = l.parent
-          where l.book_id = p_book and l.merged_into is null and l.deleted_at is null),
+  ml0 as materialized (select l.name, coalesce(l.open, 0) as open, coalesce(l.parent, '') as parent
+          from tally_ledgers l where l.book_id = p_book and l.merged_into is null and l.deleted_at is null),
+  -- each parent cleaned once (a few dozen), not once a ledger
+  pc as materialized (select z.parent, case when z.parent = '' then '' else tally_calc_nclean(z.parent) end as par from (select distinct ml0.parent from ml0) z),
+  ml as materialized (select ml0.name, ml0.open, pc.par from ml0 join pc on pc.parent = ml0.parent),
+  -- ledGroupPath from each parent the ledgers have (a few dozen), at most 15 names
+  walk (st, cur, path, n) as (
+    select z.par, z.par, array[z.par], 1 from (select distinct ml.par from ml where ml.par <> '') z where (select y from hasg)
+    union all
+    select w.st, nx.p, w.path || nx.p, w.n + 1
+      from walk w
+      cross join lateral (select coalesce((select grp.parent from grp where grp.name = w.cur), (select gk.parent from gk where gk.k = tally_calc_nkey(w.cur)), '') as raw) q
+      cross join lateral (select case when q.raw ~ '[&\r\n]' and not exists (select 1 from grp where grp.name = q.raw) then tally_calc_nclean(q.raw) else q.raw end as p) nx
+     where nx.p <> '' and w.n < 15),
+  wp0 as (select distinct on (walk.st) walk.st, walk.path from walk order by walk.st, walk.n desc),
+  -- and its primary group (TallyRead.primaryOf: the last name before "Primary"), once a parent, not once a ledger
+  wp as (select wp0.st, wp0.path, (select (array_agg(u.g order by u.i desc))[1] from unnest(wp0.path) with ordinality u(g, i)
+                    where u.i < coalesce((select min(v.i) from unnest(wp0.path) with ordinality v(g, i) where v.g ~* '^\W*Primary$'), 1000)) as prim from wp0),
+  m1 as (select ml.name, ml.open, wp.prim,
+           case when ml.par = '' then '{}'::text[] when (select y from hasg) then wp.path else array[ml.par] end as path
+           from ml left join wp on wp.st = ml.par),
   -- TallyRead.yearOpen: a profit and loss ledger's opening moves when the copy starts on 1 April and the groups are read
   yo as (select (extract(month from bk.from_date) = 4 and extract(day from bk.from_date) = 1 and (select y from hasg)) as on_ from bk),
   m2 as (select m1.name, m1.open, m1.path,
@@ -108,6 +139,17 @@ language plpgsql stable security definer set search_path to 'public', 'pg_temp' 
 #variable_conflict use_column
 begin
   if cardinality(p_dates) > 400 then raise exception 'at most 400 dates' using errcode = '22023'; end if;
+  if cardinality(p_dates) = 1 then
+    -- one date (tally_now, the ageing): the sums to the day, no running total
+    return query
+    with bk as (select b.from_date from tally_books b where b.book_id = p_book),
+    mv as (select ld.ledger, sum(ld.amount) as a from tally_ledger_day ld, bk
+            where ld.book_id = p_book and ld.merged_into is null and ld.day >= bk.from_date and ld.day <= p_dates[1] group by 1)
+    select p_dates[1], l.name, l.open + coalesce(mv.a, 0), l.in_master, l.deb, l.cred, l.cash, l.bank, l.pl
+      from tally_calc_led(p_book) l left join mv on mv.ledger = l.name
+     where l.in_master or mv.ledger is not null;
+    return;
+  end if;
   return query
   with bk as (select b.from_date from tally_books b where b.book_id = p_book),
   dts as (select z.x as d, (row_number() over (order by z.x))::int as k from (select distinct x from unnest(p_dates) x where x is not null) z),
@@ -126,10 +168,13 @@ begin
     from cum where cum.in_master or cum.n > 0;
 end $function$;
 
+-- a member asks at most 31 dates (a month's days, or the month-ends of two and a half years: what Reports and MIS ask);
+-- the server's own functions up to 400
 create or replace function public.tally_balances_at(p_book uuid, p_dates date[])
 returns table (date date, ledger text, bal numeric)
 language plpgsql stable security definer set search_path to 'public', 'pg_temp' as $function$
 begin
+  if cardinality(p_dates) > 31 then raise exception 'at most 31 dates' using errcode = '22023'; end if;
   if not exists (select 1 from tally_books b where b.book_id = p_book and b.firm_id = my_firm()) then
     raise exception 'not a company of your firm' using errcode = '42501';
   end if;
@@ -141,6 +186,7 @@ create or replace function public.tally_balances_json(p_book uuid, p_dates date[
 returns jsonb language plpgsql stable security definer set search_path to 'public', 'pg_temp' as $function$
 declare res jsonb;
 begin
+  if cardinality(p_dates) > 31 then raise exception 'at most 31 dates' using errcode = '22023'; end if;
   if not exists (select 1 from tally_books b where b.book_id = p_book and b.firm_id = my_firm()) then
     raise exception 'not a company of your firm' using errcode = '42501';
   end if;
@@ -197,7 +243,7 @@ create or replace function public.tally_tieout(p_client text, p_months text[])
 returns jsonb language plpgsql stable security definer set search_path to 'public', 'pg_temp' as $function$
 declare r record; res jsonb := '{}'; bks jsonb := '{}'; last_bk uuid;
 begin
-  if cardinality(p_months) > 120 then raise exception 'at most 120 months' using errcode = '22023'; end if;
+  if cardinality(p_months) > 24 then raise exception 'at most 24 months' using errcode = '22023'; end if;     -- a member: two years (the server's own: 120)
   for r in select z.bk, array_agg(z.m order by z.m) as ms, max(z.m) as mx from
              (select m, tally_pick(p_client, (date_trunc('month', m::date) + interval '1 month - 1 day')::date) as bk from unnest(p_months) m where m ~ '^\d{4}-\d{2}-01$') z
             where z.bk is not null group by z.bk order by max(z.m) loop
@@ -213,12 +259,18 @@ end $function$;
 -- p_bal: the balances on the day of the customers and suppliers, {ledger: [balance, is a debtor, is a creditor]}
 -- (worked out once by the caller: tally_calc_ageing below, tally_now). p_side 'r' or 'p': that side's ageing; 'rp': both
 -- in one pass over the entries and bills, {r: ..., p: ...}
-create or replace function public.tally_calc_ageing_json(p_book uuid, p_as_on date, p_side text, p_bal jsonb)
-returns json language plpgsql stable security definer set search_path to 'public', 'pg_temp' as $function$
-declare res json;
+create or replace function public.tally_calc_ageing_sides(p_book uuid, p_as_on date, p_side text, p_bal jsonb)
+returns table (sd text, j json) language plpgsql stable security definer set search_path to 'public', 'pg_temp'
+-- hash joins: the parties' count is known only at run time (jsonb_each), and the planner, guessing 100, looped an index
+-- scan per party (0.77 s against 0.51 s on 4,000 customers)
+set enable_nestloop to off as $function$
+#variable_conflict use_column
 begin
-  if p_side not in ('r', 'p', 'rp') or p_as_on is null or not exists (select 1 from tally_books b where b.book_id = p_book) then return null; end if;
-  with ab as materialized (select e.key as ledger, (e.value->>0)::numeric as bal, (e.value->>1)::boolean as deb, (e.value->>2)::boolean as cred from jsonb_each(coalesce(p_bal, '{}'::jsonb)) e),
+  if p_side not in ('r', 'p', 'rp') or p_as_on is null or not exists (select 1 from tally_books b where b.book_id = p_book) then return; end if;
+  -- worked in whole paise (bigint; Tally's amounts have two places, so every sum is the browser's r2 at each step), and
+  -- given back in rupees with two places
+  return query
+  with ab as materialized (select e.key as ledger, round((e.value->>0)::numeric * 100)::bigint as bal, (e.value->>1)::boolean as deb, (e.value->>2)::boolean as cred from jsonb_each(coalesce(p_bal, '{}'::jsonb)) e),
   -- the parties of each side asked (Audit.isDebtor for 'r', Audit.isCreditor for 'p')
   pty as materialized (select ab.ledger as name, 'r' as sd from ab where ab.deb and strpos(p_side, 'r') > 0
                        union all select ab.ledger, 'p' from ab where ab.cred and strpos(p_side, 'p') > 0),
@@ -227,86 +279,96 @@ begin
   -- tally_ledger_day_rebuild reads it; on staging no line differs from its entry, none has no entry); the entry's number
   -- is read only for a bill's first New Ref (fn below)
   vx as materialized (select v.guid from tally_vouchers v where v.book_id = p_book and (v.deleted_at is not null or coalesce(v.cancelled, false) or coalesce(v.optional, false))),
-  lk as materialized (select t.guid, t.ledger, min(t.day) as day, sum(t.amount) as lt, min(t.id) as id
+  lk as materialized (select t.guid, t.ledger, min(t.day) as day, sum(round(t.amount * 100)::bigint) as lt, min(t.id) as id
            from tally_lines t join pn1 on pn1.name = t.ledger where t.book_id = p_book and t.day <= p_as_on and not exists (select 1 from vx where vx.guid = t.guid) group by 1, 2),
-  bl as materialized (select x.guid, x.ledger, x.id, coalesce(x.name, '') as nm, coalesce(x.type, '') as ty, coalesce(x.amount, 0) as amt, coalesce(x.credit_days, 0) as cd
-           from tally_bills x join pn1 on pn1.name = x.ledger join lk on lk.guid = x.guid and lk.ledger = x.ledger where x.book_id = p_book),
+  -- the bills of those entries (a bill row carries its entry's day as its lines do; on staging none differs, none has no line)
+  bl as materialized (select x.guid, x.ledger, x.day, x.id, coalesce(x.name, '') as nm, coalesce(x.type, '') as ty, round(coalesce(x.amount, 0) * 100)::bigint as amt, coalesce(x.credit_days, 0) as cd
+           from tally_bills x join pn1 on pn1.name = x.ledger where x.book_id = p_book and x.day <= p_as_on and not exists (select 1 from vx where vx.guid = x.guid)),
   bs as (select bl.guid, bl.ledger, sum(bl.amt) as amt from bl group by 1, 2),
-  -- each allocation; a line with none is one "On Account" of its whole amount. The cloud keeps an entry's bills by
-  -- party, not by line: with two lines of one party and bills on one, what the bills do not cover is on account
-  al as (select lk.ledger, lk.day, lk.guid, bl.id as ord, bl.nm, bl.ty, bl.amt, bl.cd from lk join bl on bl.guid = lk.guid and bl.ledger = lk.ledger
-         union all
-         select lk.ledger, lk.day, lk.guid, lk.id, '', 'On Account', lk.lt - coalesce(bs.amt, 0), 0 from lk left join bs on bs.guid = lk.guid and bs.ledger = lk.ledger
-          where bs.guid is null or abs(lk.lt - bs.amt) >= 0.005),
-  ky as (select al.*, pty.sd, case when al.ty = 'On Account' or al.nm = '' then '' else al.nm end as ref, case when pty.sd = 'r' then -al.amt else al.amt end as s
-           from al join pty on pty.name = al.ledger),
+  -- each allocation, a bill's own key (party and name; "On Account" or no name: the party's one key with no name); a
+  -- line with none is one "On Account" of its whole amount. The cloud keeps an entry's bills by party, not by line: with
+  -- two lines of one party and bills on one, what the bills do not cover is on account
+  bk0 as (select bl.ledger, case when bl.ty = 'On Account' or bl.nm = '' then '' else bl.nm end as ref, bl.day, bl.guid, bl.id as ord, bl.ty, bl.amt, bl.cd from bl),
+  oa as (select lk.ledger, lk.day, lk.lt - coalesce(bs.amt, 0) as amt from lk left join bs on bs.guid = lk.guid and bs.ledger = lk.ledger
+          where bs.guid is null or lk.lt <> bs.amt),
+  -- each bill's sum and the day it was first touched, worked out once for both sides (the side only turns the sign)
+  ag1 as (select z.ledger, z.ref, sum(z.amt) as amt, min(z.first) as first from
+            (select bk0.ledger, bk0.ref, sum(bk0.amt) as amt, min(bk0.day) as first from bk0 group by 1, 2
+             union all select oa.ledger, '', sum(oa.amt), min(oa.day) from oa group by 1) z group by 1, 2),
   -- the first New Ref or Advance of a bill (in the order of the entries): its date, entry number and credit days
-  fn0 as (select distinct on (ky.sd, ky.ledger, ky.ref) ky.sd, ky.ledger, ky.ref, ky.day, ky.guid, case when ky.ty = 'New Ref' and ky.cd > 0 then ky.cd end as cd
-           from ky where ky.ty in ('New Ref', 'Advance') order by ky.sd, ky.ledger, ky.ref, ky.day, ky.guid, ky.ord),
+  fn0 as (select distinct on (bk0.ledger collate "C", bk0.ref collate "C") bk0.ledger, bk0.ref, bk0.day, bk0.guid, case when bk0.ty = 'New Ref' and bk0.cd > 0 then bk0.cd end as cd
+           from bk0 where bk0.ty in ('New Ref', 'Advance') order by bk0.ledger collate "C", bk0.ref collate "C", bk0.day, bk0.guid collate "C", bk0.ord),
   fn as (select fn0.*, coalesce(v.vno, '') as vno from fn0 left join tally_vouchers v on v.book_id = p_book and v.guid = fn0.guid),
-  ag0 as (select ky.sd, ky.ledger as party, ky.ref, round(sum(ky.s), 2) as amt, min(ky.day) as first from ky group by 1, 2, 3),
-  ag as (select ag0.*, fn.day as nd, fn.vno as nno, fn.cd as ndays from ag0 left join fn on fn.sd = ag0.sd and fn.ledger = ag0.party and fn.ref = ag0.ref),
+  ag as (select pty.sd, ag1.ledger as party, ag1.ref, case when pty.sd = 'r' then -ag1.amt else ag1.amt end as amt, ag1.first, fn.day as nd, fn.vno as nno, fn.cd as ndays
+           from ag1 join pty on pty.name = ag1.ledger left join fn on fn.ledger = ag1.ledger and fn.ref = ag1.ref),
   bi as (select ag.sd, ag.party, ag.ref, ag.amt, coalesce(ag.nd, ag.first) as date, ag.nd is not null as has_new, coalesce(ag.nno, '') as no,
            case when ag.ndays is not null then coalesce(ag.nd, ag.first) + ag.ndays::int end as due
-           from ag where abs(ag.amt) >= 0.5),
+           from ag where abs(ag.amt) >= 50),
   bx as (select bi.*, p_as_on - bi.date as age, case when bi.due is not null then greatest(0, p_as_on - bi.due) else p_as_on - bi.date end as od from bi),
   bk2 as materialized (select bx.*, case when bx.od <= 30 then 1 when bx.od <= 60 then 2 when bx.od <= 90 then 3 when bx.od <= 180 then 4 else 5 end as bucket,
             case when bx.ref = '' then 'unalloc' when not bx.has_new then 'pre' when bx.amt < 0 then 'adv' else 'open' end as cls from bx),
-  pg as (select x.sd, x.party, round(sum(x.amt), 2) as total,
-           coalesce(round(sum(x.amt) filter (where x.cls = 'adv'), 2), 0) as adv, coalesce(round(sum(x.amt) filter (where x.cls = 'unalloc'), 2), 0) as unalloc,
-           coalesce(round(sum(x.amt) filter (where x.cls = 'pre'), 2), 0) as pre, coalesce(max(x.od) filter (where x.cls = 'open'), 0) as oldest,
-           array[coalesce(round(sum(x.amt) filter (where x.cls = 'open' and x.bucket = 1), 2), 0), coalesce(round(sum(x.amt) filter (where x.cls = 'open' and x.bucket = 2), 2), 0),
-                 coalesce(round(sum(x.amt) filter (where x.cls = 'open' and x.bucket = 3), 2), 0), coalesce(round(sum(x.amt) filter (where x.cls = 'open' and x.bucket = 4), 2), 0),
-                 coalesce(round(sum(x.amt) filter (where x.cls = 'open' and x.bucket = 5), 2), 0)] as b
+  pg as (select x.sd, x.party, sum(x.amt) as total,
+           coalesce(sum(x.amt) filter (where x.cls = 'adv'), 0) as adv, coalesce(sum(x.amt) filter (where x.cls = 'unalloc'), 0) as unalloc,
+           coalesce(sum(x.amt) filter (where x.cls = 'pre'), 0) as pre, coalesce(max(x.od) filter (where x.cls = 'open'), 0) as oldest,
+           array[coalesce(sum(x.amt) filter (where x.cls = 'open' and x.bucket = 1), 0), coalesce(sum(x.amt) filter (where x.cls = 'open' and x.bucket = 2), 0),
+                 coalesce(sum(x.amt) filter (where x.cls = 'open' and x.bucket = 3), 0), coalesce(sum(x.amt) filter (where x.cls = 'open' and x.bucket = 4), 0),
+                 coalesce(sum(x.amt) filter (where x.cls = 'open' and x.bucket = 5), 0)]::bigint[] as b
            from bk2 x group by 1, 2),
   -- each party: its bills, or (a balance but no bill in the books read) a row of its own
   pa as (select pg.sd, pg.party, false as no_bills from pg
          union all
-         select pty.sd, pty.name, true from pty join ab a on a.ledger = pty.name where abs(a.bal) >= 0.005
+         select pty.sd, pty.name, true from pty join ab a on a.ledger = pty.name where a.bal <> 0
             and not exists (select 1 from pg where pg.sd = pty.sd and pg.party = pty.name)),
   pr as (select pa.sd, pa.party, pa.no_bills, coalesce(pg.total, 0) as total, coalesce(pg.adv, 0) as adv, coalesce(pg.unalloc, 0) as unalloc, coalesce(pg.pre, 0) as pre,
-           coalesce(pg.oldest, 0) as oldest, coalesce(pg.b, array[0, 0, 0, 0, 0]::numeric[]) as b,
-           round(case when pa.sd = 'r' then -ab.bal else ab.bal end, 2) as tally
+           coalesce(pg.oldest, 0) as oldest, coalesce(pg.b, array[0, 0, 0, 0, 0]::bigint[]) as b,
+           case when pa.sd = 'r' then -ab.bal else ab.bal end as tally
            from pa left join pg on pg.sd = pa.sd and pg.party = pa.party left join ab on ab.ledger = pa.party),
-  pn as materialized (select pr.*, case when pr.tally is not null then round(pr.tally - pr.total, 2) end as diff, coalesce(pr.tally, pr.total) as net, greatest(0, coalesce(pr.tally, pr.total)) as owe from pr),
+  pn as materialized (select pr.*, pr.tally - pr.total as diff, coalesce(pr.tally, pr.total) as net, greatest(0, coalesce(pr.tally, pr.total)) as owe from pr),
   -- MIS.netOpen: what the bills carry beyond the balance is set against the oldest bills first
+  -- (the open bills' sum is the party's buckets' sum; one window, one sort)
   ob as (select x.sd, x.party, x.ref, x.date, x.due, x.age, x.od, x.amt, x.no, x.bucket,
-           sum(x.amt) over (partition by x.sd, x.party) - pn.owe as less0,
-           coalesce(sum(x.amt) over (partition by x.sd, x.party order by x.date, x.ref rows between unbounded preceding and 1 preceding), 0) as before
+           (pn.b[1] + pn.b[2] + pn.b[3] + pn.b[4] + pn.b[5]) - pn.owe as less0,
+           coalesce(sum(x.amt) over (partition by x.sd, x.party collate "C" order by x.date, x.ref rows between unbounded preceding and 1 preceding), 0) as before
            from bk2 x join pn on pn.sd = x.sd and pn.party = x.party where x.cls = 'open'),
   ol as (select ob.*, ob.amt - greatest(0, least(ob.amt, ob.less0 - ob.before)) as left_ from ob),
-  oo as (select ol.* from ol where ol.left_ >= 0.005),
+  oo as (select ol.* from ol where ol.left_ > 0),
   og as (select o.sd, o.party,
-           array[coalesce(round(sum(o.left_) filter (where o.bucket = 1), 2), 0), coalesce(round(sum(o.left_) filter (where o.bucket = 2), 2), 0), coalesce(round(sum(o.left_) filter (where o.bucket = 3), 2), 0),
-                 coalesce(round(sum(o.left_) filter (where o.bucket = 4), 2), 0), coalesce(round(sum(o.left_) filter (where o.bucket = 5), 2), 0)] as nb,
+           array[coalesce(sum(o.left_) filter (where o.bucket = 1), 0), coalesce(sum(o.left_) filter (where o.bucket = 2), 0), coalesce(sum(o.left_) filter (where o.bucket = 3), 0),
+                 coalesce(sum(o.left_) filter (where o.bucket = 4), 0), coalesce(sum(o.left_) filter (where o.bucket = 5), 0)]::bigint[] as nb,
            sum(o.left_) as left_all,
            json_agg(json_build_object('ref', o.ref, 'date', to_char(o.date, 'YYYYMMDD'), 'due', coalesce(to_char(o.due, 'YYYYMMDD'), ''), 'age', o.age, 'od', o.od,
-                      'amt', o.amt, 'left', round(o.left_, 2), 'no', o.no) order by o.date, o.ref) as open_bills
+                      'amt', round((o.amt)::numeric / 100, 2), 'left', round((o.left_)::numeric / 100, 2), 'no', o.no) order by o.date, o.ref) as open_bills
            from oo o group by 1, 2),
-  rows_ as (select pn.*, coalesce(og.nb, array[0, 0, 0, 0, 0]::numeric[]) as nb, round(pn.owe - coalesce(og.left_all, 0), 2) as und0,
-           case when pn.net < 0 then round(-pn.net, 2) else 0 end as advance, coalesce(og.open_bills, '[]'::json) as open_bills
+  rows_ as (select pn.*, coalesce(og.nb, array[0, 0, 0, 0, 0]::bigint[]) as nb, pn.owe - coalesce(og.left_all, 0) as und0,
+           case when pn.net < 0 then -pn.net else 0 end as advance, coalesce(og.open_bills, '[]'::json) as open_bills
            from pn left join og on og.sd = pn.sd and og.party = pn.party),
-  rr as materialized (select rows_.*, case when rows_.und0 >= 0.005 then rows_.und0 else 0 end as und from rows_),
+  rr as materialized (select rows_.*, case when rows_.und0 > 0 then rows_.und0 else 0 end as und from rows_),
   sides as (select x as sd from unnest(case p_side when 'rp' then array['r', 'p'] else array[p_side] end) x),
   one as (select sides.sd, json_build_object('asOn', to_char(p_as_on, 'YYYYMMDD'), 'side', sides.sd,
-    'rows', coalesce((select json_agg(json_build_object('party', rr.party, 'total', rr.total, 'b', to_json(rr.b), 'adv', rr.adv, 'unalloc', rr.unalloc, 'pre', rr.pre, 'oldest', rr.oldest,
-               'tally', rr.tally, 'diff', rr.diff, 'net', round(rr.net, 2), 'owe', round(rr.owe, 2), 'open', rr.open_bills, 'nb', to_json(rr.nb), 'und', rr.und, 'advance', rr.advance, 'noBills', rr.no_bills)
+    'rows', coalesce((select json_agg(json_build_object('party', rr.party, 'total', round((rr.total)::numeric / 100, 2), 'b', json_build_array(round((rr.b[1])::numeric / 100, 2), round((rr.b[2])::numeric / 100, 2), round((rr.b[3])::numeric / 100, 2), round((rr.b[4])::numeric / 100, 2), round((rr.b[5])::numeric / 100, 2)),
+               'adv', round((rr.adv)::numeric / 100, 2), 'unalloc', round((rr.unalloc)::numeric / 100, 2), 'pre', round((rr.pre)::numeric / 100, 2), 'oldest', rr.oldest,
+               'tally', round((rr.tally)::numeric / 100, 2), 'diff', round((rr.diff)::numeric / 100, 2), 'net', round((rr.net)::numeric / 100, 2), 'owe', round((rr.owe)::numeric / 100, 2), 'open', rr.open_bills,
+               'nb', json_build_array(round((rr.nb[1])::numeric / 100, 2), round((rr.nb[2])::numeric / 100, 2), round((rr.nb[3])::numeric / 100, 2), round((rr.nb[4])::numeric / 100, 2), round((rr.nb[5])::numeric / 100, 2)), 'und', round((rr.und)::numeric / 100, 2), 'advance', round((rr.advance)::numeric / 100, 2), 'noBills', rr.no_bills)
                order by rr.total desc, rr.party) from rr where rr.sd = sides.sd), '[]'::json),
-    'sum', (select json_build_object('total', coalesce(round(sum(rr.total), 2), 0),
-               'b', json_build_array(coalesce(round(sum(rr.b[1]), 2), 0), coalesce(round(sum(rr.b[2]), 2), 0), coalesce(round(sum(rr.b[3]), 2), 0), coalesce(round(sum(rr.b[4]), 2), 0), coalesce(round(sum(rr.b[5]), 2), 0)),
-               'adv', coalesce(round(sum(rr.adv), 2), 0), 'unalloc', coalesce(round(sum(rr.unalloc), 2), 0), 'pre', coalesce(round(sum(rr.pre), 2), 0),
-               'tally', round(sum(rr.tally), 2),
-               'open', coalesce(round(sum(rr.b[1] + rr.b[2] + rr.b[3] + rr.b[4] + rr.b[5]), 2), 0),
-               'owe', coalesce(round(sum(greatest(0, rr.net)), 2), 0), 'advance', coalesce(round(sum(rr.advance), 2), 0),
-               'nb', json_build_array(coalesce(round(sum(rr.nb[1]), 2), 0), coalesce(round(sum(rr.nb[2]), 2), 0), coalesce(round(sum(rr.nb[3]), 2), 0), coalesce(round(sum(rr.nb[4]), 2), 0), coalesce(round(sum(rr.nb[5]), 2), 0)),
-               'und', coalesce(round(sum(rr.und), 2), 0), 'diff', coalesce(round(sum(coalesce(rr.diff, 0)), 2), 0),
-               'differ', coalesce((select json_agg(json_build_object('party', d.party, 'bills', d.total, 'ledger', d.tally, 'diff', d.diff) order by abs(d.diff) desc, d.party)
-                                    from rr d where d.sd = sides.sd and d.diff is not null and abs(d.diff) >= 1), '[]'::json)) from rr where rr.sd = sides.sd)) as j from sides)
+    'sum', (select json_build_object('total', round((coalesce(sum(rr.total), 0))::numeric / 100, 2),
+               'b', json_build_array(round((coalesce(sum(rr.b[1]), 0))::numeric / 100, 2), round((coalesce(sum(rr.b[2]), 0))::numeric / 100, 2), round((coalesce(sum(rr.b[3]), 0))::numeric / 100, 2), round((coalesce(sum(rr.b[4]), 0))::numeric / 100, 2), round((coalesce(sum(rr.b[5]), 0))::numeric / 100, 2)),
+               'adv', round((coalesce(sum(rr.adv), 0))::numeric / 100, 2), 'unalloc', round((coalesce(sum(rr.unalloc), 0))::numeric / 100, 2), 'pre', round((coalesce(sum(rr.pre), 0))::numeric / 100, 2),
+               'tally', round((sum(rr.tally))::numeric / 100, 2),
+               'open', round((coalesce(sum(rr.b[1] + rr.b[2] + rr.b[3] + rr.b[4] + rr.b[5]), 0))::numeric / 100, 2),
+               'owe', round((coalesce(sum(greatest(0, rr.net)), 0))::numeric / 100, 2), 'advance', round((coalesce(sum(rr.advance), 0))::numeric / 100, 2),
+               'nb', json_build_array(round((coalesce(sum(rr.nb[1]), 0))::numeric / 100, 2), round((coalesce(sum(rr.nb[2]), 0))::numeric / 100, 2), round((coalesce(sum(rr.nb[3]), 0))::numeric / 100, 2), round((coalesce(sum(rr.nb[4]), 0))::numeric / 100, 2), round((coalesce(sum(rr.nb[5]), 0))::numeric / 100, 2)),
+               'und', round((coalesce(sum(rr.und), 0))::numeric / 100, 2), 'diff', round((coalesce(sum(coalesce(rr.diff, 0)), 0))::numeric / 100, 2),
+               'differ', coalesce((select json_agg(json_build_object('party', d.party, 'bills', round((d.total)::numeric / 100, 2), 'ledger', round((d.tally)::numeric / 100, 2), 'diff', round((d.diff)::numeric / 100, 2)) order by abs(d.diff) desc, d.party)
+                                    from rr d where d.sd = sides.sd and d.diff is not null and abs(d.diff) >= 100), '[]'::json)) from rr where rr.sd = sides.sd)) as j from sides)
   -- built as json (text, in order): a third quicker than jsonb at every level; tally_now passes it on as it is
-  select case when p_side = 'rp' then (select json_object_agg(one.sd, one.j) from one) else (select one.j from one) end
-    into res;
-  return res;
+  select one.sd, one.j from one;
 end $function$;
+
+create or replace function public.tally_calc_ageing_json(p_book uuid, p_as_on date, p_side text, p_bal jsonb)
+returns json language sql stable security definer set search_path to 'public', 'pg_temp' as $function$
+  select case when p_side = 'rp' then (select json_object_agg(z.sd, z.j) from tally_calc_ageing_sides(p_book, p_as_on, p_side, p_bal) z)
+              else (select z.j from tally_calc_ageing_sides(p_book, p_as_on, p_side, p_bal) z) end;
+$function$;
 
 create or replace function public.tally_calc_ageing_bal(p_book uuid, p_as_on date, p_side text, p_bal jsonb)
 returns jsonb language sql stable security definer set search_path to 'public', 'pg_temp' as $function$
@@ -332,20 +394,27 @@ begin
 end $function$;
 
 -- ---------------------------------------------------------------- MIS for a period, in one call (mis-run "now")
--- a member: the book for the period's last day (tally_pick(client, to)); the balances on that day worked out once and
--- shared by the receivables and payables ageing, the headline owed to you and by you (Parties.position(to)) and the cash
--- and bank lists (MIS.runNow's r.balances), and every balance on the day. One value, so no REST row limit applies. The
--- month-end tie-out is not part of MIS.runNow and is asked on its own (tally_tieout). At most 120 months. The data
--- version is not worked out here: mis-run takes it from tally_calc_cached, asked first (an answer kept under a version
--- read before the figures can only be worked out again too soon, never served stale).
+-- a member: the book for the period's last day (tally_pick(client, to)) and its data version, worked out once here.
+-- An answer kept for that version (tally_calc_results, kind mis-now.2, args "from|to") comes back as it is:
+-- {kept: true, at, result}. Otherwise the figures, {kept: false, book, version, ...}: the balances on the day worked out
+-- once and shared by the receivables and payables ageing, the headline owed to you and by you (Parties.position(to)),
+-- the cash and bank lists (MIS.runNow's r.balances) and every balance on the day; mis-run keeps them with that version
+-- (read before the figures: a change meanwhile makes the next ask work them out again, never serves them stale). One
+-- json value (built in order, not parsed again), so no REST row limit applies. The month-end tie-out is not part of
+-- MIS.runNow (tally_tieout). At most 120 months.
 create or replace function public.tally_now(p_client text, p_from date, p_to date)
 returns json language plpgsql stable security definer set search_path to 'public', 'pg_temp' as $function$
-declare bk uuid := tally_pick(p_client, p_to); at_ json; pb jsonb; ag json; cashl json; bankl json; o_r numeric; o_p numeric; c_adv numeric; s_adv numeric; nm int;
+declare bk uuid := tally_pick(p_client, p_to); ver text; k_ver text; k_at timestamptz; k_res jsonb; at_ json; pb jsonb; jr json; jp json; cashl json; bankl json;
+  o_r numeric; o_p numeric; c_adv numeric; s_adv numeric; nm int;
 begin
   if p_from is null or p_to is null or p_from > p_to then raise exception 'give the period, from before to' using errcode = '22023'; end if;
   nm := (extract(year from p_to)::int - extract(year from p_from)::int) * 12 + extract(month from p_to)::int - extract(month from p_from)::int + 1;
   if nm > 120 then raise exception 'at most 120 months' using errcode = '22023'; end if;
   if bk is null then return json_build_object('none', true); end if;
+  ver := tally_calc_version(bk);
+  select x.version, x.at, x.result into k_ver, k_at, k_res from tally_calc_results x
+   where x.book_id = bk and x.kind = 'mis-now.2' and x.args = to_char(p_from, 'YYYYMMDD') || '|' || to_char(p_to, 'YYYYMMDD') and x.firm_id = my_firm();
+  if k_ver = ver then return json_build_object('kept', true, 'at', k_at, 'book', bk, 'version', ver, 'result', k_res); end if;
   select coalesce(json_object_agg(c.ledger, c.bal), '{}'::json),
          coalesce(jsonb_object_agg(c.ledger, jsonb_build_array(c.bal, c.deb, c.cred)) filter (where c.deb or c.cred), '{}'::jsonb),
          coalesce(json_agg(json_build_array(c.ledger, -round(c.bal, 2)) order by c.ledger collate "C") filter (where c.cash), '[]'::json),
@@ -358,9 +427,10 @@ begin
          coalesce(sum(-round(c.bal, 2)) filter (where c.cred and not c.deb and round(c.bal, 2) < 0), 0)
     into at_, pb, cashl, bankl, o_r, c_adv, o_p, s_adv
     from tally_calc_bal(bk, array[p_to]) c;
-  ag := tally_calc_ageing_json(bk, p_to, 'rp', pb);                -- both sides in one pass
-  return json_build_object('book', bk, 'from', to_char(p_from, 'YYYYMMDD'), 'to', to_char(p_to, 'YYYYMMDD'),
-    'recv', ag->'r', 'pay', ag->'p',
+  -- both sides in one pass over the entries and bills
+  select (array_agg(z.j) filter (where z.sd = 'r'))[1], (array_agg(z.j) filter (where z.sd = 'p'))[1] into jr, jp from tally_calc_ageing_sides(bk, p_to, 'rp', pb) z;
+  return json_build_object('kept', false, 'book', bk, 'version', ver, 'from', to_char(p_from, 'YYYYMMDD'), 'to', to_char(p_to, 'YYYYMMDD'),
+    'recv', jr, 'pay', jp,
     'owed', json_build_object('r', round(o_r, 2), 'p', round(o_p, 2), 'custAdv', round(c_adv, 2), 'supAdv', round(s_adv, 2)),
     'balances', json_build_object('asOn', to_char(p_to, 'YYYYMMDD'), 'cash', cashl, 'bank', bankl, 'at', at_));
 end $function$;
@@ -378,11 +448,9 @@ create table if not exists public.tally_calc_results (
   primary key (book_id, kind, args)
 );
 alter table public.tally_calc_results enable row level security;
-do $$ begin
-  if not exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'tally_calc_results' and policyname = 'tally_calc_results_read') then
-    create policy tally_calc_results_read on public.tally_calc_results for select to authenticated using (firm_id = (select public.my_firm()));
-  end if;
-end $$;
+-- this migration's own policy, made again so a second run leaves it as written here (the only drop in this file)
+drop policy if exists tally_calc_results_read on public.tally_calc_results;
+create policy tally_calc_results_read on public.tally_calc_results for select to authenticated using (firm_id = (select public.my_firm()));
 revoke all on public.tally_calc_results from public, anon, authenticated;
 grant select on public.tally_calc_results to authenticated;
 grant all on public.tally_calc_results to service_role;
@@ -392,21 +460,22 @@ grant all on public.tally_calc_results to service_role;
 -- entry the bridge's lines add, change or delete (count, highest AlterID, deletions, cancelled, optional), and
 -- fingerprints that move with a ledger renamed or carried (tally_ledger_rename / tally_ledger_carry move lines, bills
 -- and day totals from one name to another without a new AlterID): the masters (name, parent, opening, chain, merged,
--- deleted), the groups, the day totals (they move with the lines: a rename or carry moves both) and the bills (each a
--- count and a sum of name hash x amount), and FinCom's ledger list. About 0.1 s on 40,000 entries.
+-- deleted), the groups (each a count and a sum of row hashes), the day totals (they move with the lines: a rename or
+-- carry moves both) and the bills (each a count and a sum of name hash x amount), and FinCom's ledger list.
 create or replace function public.tally_calc_version(p_book uuid)
 returns text language sql stable security definer set search_path to 'public', 'pg_temp' as $function$
-  select md5(concat_ws('|', 'CALC_V=151.2', b.days_at, b.ledgers_at, b.from_date,
-           (select concat_ws(':', count(*), max(v.alter_id), count(v.deleted_at), max(v.deleted_at), count(*) filter (where v.cancelled), count(*) filter (where v.optional))
+  -- every part in its place: a part with no value is the marker ~ (concat_ws would drop it and shift the rest)
+  select md5(array_to_string(array['CALC_V=151.3', b.days_at::text, b.ledgers_at::text, b.from_date::text,
+           (select array_to_string(array[count(*), max(v.alter_id), count(v.deleted_at), count(*) filter (where v.cancelled), count(*) filter (where v.optional)]::text[] || max(v.deleted_at)::text, ':', '~')
               from tally_vouchers v where v.book_id = b.book_id),
-           (select md5(string_agg(concat_ws('~', l.name, l.parent, l.open, l.chain::text, l.primary_group, l.merged_into, l.deleted_at is null), '|' order by l.name))
+           (select array_to_string(array[count(*), sum(hashtext(array_to_string(array[l.name, l.parent, l.open::text, l.chain::text, l.primary_group, l.merged_into, (l.deleted_at is null)::text], '~', '^'))::bigint)]::text[], ':', '~')
               from tally_ledgers l where l.book_id = b.book_id),
-           (select md5(string_agg(g.name || '~' || coalesce(g.parent, ''), '|' order by g.name)) from tally_groups g where g.book_id = b.book_id),
-           (select concat_ws(':', count(*), sum(hashtext(d.ledger)::numeric * d.amount)) from tally_ledger_day d where d.book_id = b.book_id and d.merged_into is null),
-           (select concat_ws(':', count(*), sum(hashtext(x.ledger || '|' || coalesce(x.name, '') || '|' || coalesce(x.type, ''))::numeric * x.amount + coalesce(x.credit_days, 0)))
+           (select array_to_string(array[count(*), sum(hashtext(g.name || '~' || coalesce(g.parent, '^'))::bigint)]::text[], ':', '~') from tally_groups g where g.book_id = b.book_id),
+           (select array_to_string(array[count(*), sum(hashtext(d.ledger)::numeric * d.amount)]::text[], ':', '~') from tally_ledger_day d where d.book_id = b.book_id and d.merged_into is null),
+           (select array_to_string(array[count(*), sum(hashtext(x.ledger || '|' || coalesce(x.name, '') || '|' || coalesce(x.type, ''))::numeric * x.amount + coalesce(x.credit_days, 0))]::text[], ':', '~')
               from tally_bills x where x.book_id = b.book_id),
-           (select concat_ws(':', count(*), max(i.seq), max(i.updated_at)) from client_book_items i
-             where i.firm_id = b.firm_id and i.client_id = b.client_id and i.key = 'map')))
+           (select array_to_string(array[count(*)::text, max(i.seq)::text, max(i.updated_at)::text], ':', '~') from client_book_items i
+             where i.firm_id = b.firm_id and i.client_id = b.client_id and i.key = 'map')], '|', '~'))
     from tally_books b where b.book_id = p_book;
 $function$;
 
@@ -431,6 +500,9 @@ $function$;
 
 -- the service role only: the functions on a book id (no firm check of their own)
 revoke all on function public.tally_calc_led(uuid) from public, anon, authenticated;
+revoke all on function public.tally_calc_nclean(text) from public, anon, authenticated;
+revoke all on function public.tally_calc_nkey(text) from public, anon, authenticated;
+revoke all on function public.tally_calc_ageing_sides(uuid, date, text, jsonb) from public, anon, authenticated;
 revoke all on function public.tally_calc_bal(uuid, date[]) from public, anon, authenticated;
 revoke all on function public.tally_calc_tieout(uuid, text[]) from public, anon, authenticated;
 revoke all on function public.tally_calc_ageing(uuid, date, text) from public, anon, authenticated;
@@ -439,6 +511,9 @@ revoke all on function public.tally_calc_ageing_json(uuid, date, text, jsonb) fr
 revoke all on function public.tally_calc_version(uuid) from public, anon, authenticated;
 revoke all on function public.tally_calc_put(uuid, text, text, text, jsonb, integer) from public, anon, authenticated;
 grant execute on function public.tally_calc_led(uuid) to service_role;
+grant execute on function public.tally_calc_nclean(text) to service_role;
+grant execute on function public.tally_calc_nkey(text) to service_role;
+grant execute on function public.tally_calc_ageing_sides(uuid, date, text, jsonb) to service_role;
 grant execute on function public.tally_calc_bal(uuid, date[]) to service_role;
 grant execute on function public.tally_calc_tieout(uuid, text[]) to service_role;
 grant execute on function public.tally_calc_ageing(uuid, date, text) to service_role;

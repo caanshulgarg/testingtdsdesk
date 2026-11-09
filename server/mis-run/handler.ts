@@ -109,16 +109,17 @@ export function handler(deps: Deps) {
 
   // next-cloud-calc1 (the owner, 09-Nov-2026: "it should not freeze at all, whatever the book size; calculation should
   // happen in cloud"): {action: "now", client, from, to} from a signed-in member (any role: it only reads) answers MIS's
-  // figures for the period worked out in the database in ONE call (tally_now, migration 151; each figure checked against
-  // the browser's own engine by tests/run_migration151.py): the receivables and payables ageing (MIS.ageing), owed to
-  // you and by you (Parties.position(to)), cash and bank (r.balances) and every ledger's balance on the last day, all
-  // from one working of that day's balances (the month-end tie-out, not part of MIS.runNow, is rpc tally_tieout). One JSON
-  // value: no REST row limit. Kept in tally_calc_results with the book's data
-  // version (which carries FinCom's working, CALC_V, and the kind below its own revision): asked again with the same
-  // books, the kept answer comes back at once; once an entry, a day, a rename, the ledger list or the working changes, it
-  // is worked out again. The member's own token reads (my_firm(): its own firm's books only); only keeping the answer
-  // uses the service key. partial: the parts of MIS.runNow not worked out here yet (the browser works those out itself).
-  const NOW_KIND = "mis-now.2";                // .2: answers kept by the first revision are never given back
+  // figures for the period worked out in the database in ONE call, tally_now (migration 151; each figure checked against
+  // the browser's own engine by tests/run_migration151.py). It works out the book's data version (which carries FinCom's
+  // working, CALC_V) and gives back the answer kept for it (kind mis-now.2: answers of the first revision are never
+  // served), else the figures: the receivables and payables ageing (MIS.ageing), owed to you and by you
+  // (Parties.position(to)), cash and bank (r.balances) and every ledger's balance on the last day, all from one working of
+  // that day's balances (the month-end tie-out, not part of MIS.runNow, is rpc tally_tieout). One JSON value: no REST
+  // row limit. Those are kept with the version read before them, so a change meanwhile makes the next ask work them out
+  // again. As "run": the member's firm, and the firm's and the company's switches (firmGate), first. The member's own
+  // token reads (my_firm(): its own firm's books only); only keeping the answer uses the service key. partial: the parts
+  // of MIS.runNow not worked out here yet (the browser works those out itself).
+  const NOW_KIND = "mis-now.2";                // as tally_now; .2: answers kept by the first revision are never given back
   const NOW_PARTS = ["recv", "pay", "owed", "balances"];
   const NOW_LATER = ["sales", "purchases", "pl", "prev", "ly", "mtd", "ytd", "cash", "comp", "dues", "p2", "msme", "control", "dso", "dpo"];
   const NOW_MONTHS = 120;                      // as tally_now
@@ -131,21 +132,22 @@ export function handler(deps: Deps) {
     if (!client || !/^\d{8}$/.test(from) || !/^\d{8}$/.test(to) || from > to) return [400, { ok: false, error: "Give the client and the period (from, to)." }];
     const nMonths = (+to.slice(0, 4) - +from.slice(0, 4)) * 12 + (+to.slice(4, 6) - +from.slice(4, 6)) + 1;
     if (nMonths > NOW_MONTHS) return [400, { ok: false, error: "A period of at most " + NOW_MONTHS + " months." }];
+    const mem = (await rest("/rest/v1/members?select=firm_id,role,active&user_id=eq." + enc(user.id)).catch(() => [])) as any[];
+    const member = (mem || []).find((m) => m.active);
+    if (!member) return [403, { ok: false, kind: "firm", error: "This account is not part of a firm." }];
+    const gate = await firmGate(viaRest(rest, SERVICE), String(member.firm_id || ""), client);
+    if (gate) return [gate.status, { ok: false, kind: "paused", reason: gate.reason, error: gate.error }];
     const iso = (d: string) => d.slice(0, 4) + "-" + d.slice(4, 6) + "-" + d.slice(6);
     const args = from + "|" + to, t0 = Date.now();
-    let kept: any;
-    try { kept = await rpc("tally_calc_cached", { p_client: client, p_on: iso(to), p_kind: NOW_KIND, p_args: args }, jwt); }
-    catch (e) { return [500, { ok: false, error: "the books in FinCom's cloud could not be read: " + String((e as Error).message || e).slice(0, 200) }]; }
-    if (!kept || kept.none) return [404, { ok: false, kind: "none", error: "FinCom's cloud has no books of this client for that period." }];
-    if (kept.result) return [200, { ok: true, kept: true, at: kept.at, result: kept.result }];
     let n: any;
     try { n = await rpc("tally_now", { p_client: client, p_from: iso(from), p_to: iso(to) }, jwt); }
     catch (e) { return [500, { ok: false, error: "the figures could not be worked out: " + String((e as Error).message || e).slice(0, 200) }]; }
     if (!n || n.none) return [404, { ok: false, kind: "none", error: "FinCom's cloud has no books of this client for that period." }];
-    // the version read before the figures (tally_calc_cached): a change meanwhile makes the next ask work it out again
-    const result = { v: 2, kind: NOW_KIND, partial: true, parts: NOW_PARTS, later: NOW_LATER, at: now().toISOString(), ...n, version: kept.version };
+    if (n.kept) return [200, { ok: true, kept: true, at: n.at, result: n.result }];
+    const { kept: _k, ...figures } = n;
+    const result = { v: 2, kind: NOW_KIND, partial: true, parts: NOW_PARTS, later: NOW_LATER, at: now().toISOString(), ...figures };
     const ms = Date.now() - t0;
-    await rpc("tally_calc_put", { p_book: n.book, p_kind: NOW_KIND, p_args: args, p_version: kept.version, p_result: result, p_ms: ms }).catch(() => null);
+    await rpc("tally_calc_put", { p_book: n.book, p_kind: NOW_KIND, p_args: args, p_version: n.version, p_result: result, p_ms: ms }).catch(() => null);
     return [200, { ok: true, kept: false, ms, result }];
   }
 

@@ -23,6 +23,9 @@ Deno.test({ name: "now against the database: every balance, worked out once, the
     const url = String(input), token = String((init.headers || {}).Authorization || "").replace(/^Bearer /, "");
     const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { "Content-Type": "application/json" } });
     if (url.endsWith("/auth/v1/user")) return token === "member-token" ? json({ id: uid }) : json({ message: "bad" }, 401);
+    // the member's firm from the stand's members table; the firm's switches are not in the stand (firmGate: go ahead)
+    if (url.includes("/rest/v1/members?")) return new Response(await sql("select coalesce(json_agg(json_build_object('firm_id', firm_id, 'role', role, 'active', active)), '[]') from members where user_id = '" + uid + "'", false), { status: 200 });
+    if (/\/rest\/v1\/(firms|clients|subscriptions)\?/.test(url)) return json([]);
     const m = url.match(/\/rest\/v1\/rpc\/(\w+)$/);
     if (!m) return json({ message: "not here" }, 404);
     const args = JSON.parse(init.body || "{}");
