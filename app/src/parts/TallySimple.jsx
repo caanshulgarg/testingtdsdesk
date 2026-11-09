@@ -653,9 +653,9 @@ function Top({ cs, own, rows, checkAgain, ready, shown, beat }) {
   // (counted by Tally open there: bridges heard with Tally closed are not "connected", amber)
   else if (cs.mode === "laptop" && office.length && !officeK) { const w = office.map((x) => offSay(x.beat)).find(Boolean); dot = "warn";
     // (bridge 2.5.11: a Tally open there that takes no connection is said so, with the bridge's words)
-    title = w ? "Office bridges online: Tally is open but takes no connection" : "Office bridges online, but Tally is not open";
+    title = w ? "The office Tally is open but takes no connection" : "The office Tally is not open";
     sub = w || "Open TallyPrime and the company on the computer or server where FinCom Bridge runs."; }
-  else if (cs.mode === "laptop" && office.length) { dot = "ok"; title = "Connected through the office Tally (Tally open in " + officeK + " of " + nOfW(office.length, "bridge", "bridges") + ")";
+  else if (cs.mode === "laptop" && office.length) { dot = "ok"; title = "Connected through the office Tally";
     sub = [nOfW(rows.filter((r) => r.kind === "client" && r.c.w === YES).length, "client linked", "clients linked"), nOfW(officeOpen, "company open", "companies open"), lastAny ? "last entry " + lastWords(lastAny) : ""].filter(Boolean).join(" · "); }
   else if (cs.mode === "laptop") { dot = "warn"; title = "No FinCom Bridge is connected"; sub = "Open FinCom on the computer or server where TallyPrime runs, and install FinCom Bridge there."; }
   else if (cs.mode === "error" || !login) { dot = "idle"; title = "Tally"; sub = "The state could not be worked out just now."; }

@@ -86,9 +86,9 @@ def main():
         c9 = [{"company": ORB, "client_id": "NAME:" + ORBIT, "device_id": o1["id"], "gstin": "", "last_seen": "ago:0.5"},
               {"company": NOVA, "client_id": "NAME:" + NOVA_C, "device_id": o2["id"], "gstin": "", "last_seen": "ago:0.5"},
               {"company": "LARKSPUR CO", "client_id": "NAME:" + LARK, "device_id": o1["id"], "gstin": "", "last_seen": "ago:3000"}]
-        MAC = ["the office Tally is connected (2 bridges, Tally open in 2).", "This computer has no FinCom Bridge."]
+        MAC = ["the office Tally is connected.", "This computer has no FinCom Bridge."]
         ids = scene([o1, o2], c9, [ORBIT, NOVA_C, LARK], {}, books={ORBIT: T.book(ORBIT), NOVA_C: T.book(NOVA_C)})
-        ok(txt("#app [data-tsm-top-title]") == "Connected through the office Tally (Tally open in 2 of 2 bridges)", "M. the top line: through the office Tally, counted by Tally open (%s)" % txt("#app [data-tsm-top-title]"))
+        ok(txt("#app [data-tsm-top-title]") == "Connected through the office Tally", "M. the top line: through the office Tally, counted by Tally open (%s)" % txt("#app [data-tsm-top-title]"))
         press("M. the top line's Check again", "#app [data-tsm-top-check]", "#app [data-tsm-top] [data-checked]", MAC)
         pg.click("#app [data-tsm-steps-link='laptop']"); pg.wait_for_timeout(600)
         press("M. Connect Tally on this computer's Check again", "#app [data-tsm-guide] [data-tsm-recheck]", "#app [data-tsm-guide] [data-checked]", MAC)
@@ -104,7 +104,7 @@ def main():
         # 1. the Mac's login linked to the office bridge go-5 (tally_member_bridges): that bridge is not this computer's
         scene([o1, o2], c9, [ORBIT, NOVA_C, LARK], {}, how=("linked", "go-5", o1["id"]), books={ORBIT: T.book(ORBIT), NOVA_C: T.book(NOVA_C)})
         ok(E("() => (FCTallySimple.ownBridge() || {}).how") == "linked", "M2. the login's bridge: the member's link (%s)" % E("() => (FCTallySimple.ownBridge() || {}).how"))
-        press("M2. linked to an office bridge: the top line", "#app [data-tsm-top-check]", "#app [data-tsm-top] [data-checked]", ["the office Tally is connected (2 bridges, Tally open in 2).", "This computer has no FinCom Bridge: your login uses the office's."])
+        press("M2. linked to an office bridge: the top line", "#app [data-tsm-top-check]", "#app [data-tsm-top] [data-checked]", ["the office Tally is connected.", "This computer has no FinCom Bridge: your login uses the office's."])
         ok("This computer's FinCom Bridge is connected" not in txt("#app [data-tsm-top]"), "M2. never 'This computer's FinCom Bridge is connected' for the office's bridge")
         # 3. the top line's words: gone after 3 minutes, gone when the connection changes
         E("() => { S.tsm.said.at -= 181000; render(); }"); pg.wait_for_timeout(400)
@@ -119,10 +119,10 @@ def main():
                T.dev(6, NW, "made-up-o2", tally="closed", opened=(), version="2.5.4", rec=(), beat={"bridgePort": 9102, "windowsUser": NW + "\\made-up-o2"},
                      ports=[{"port": 9043, "ok": False, "skipped": False, "n": 0, "error": "Tally is not open (nothing listens on this port)", "reason": "closed"}])]
         scene(c1s, c9, [ORBIT, NOVA_C, LARK], {})
-        ok(txt("#app [data-tsm-top-title]") == "Office bridges online, but Tally is not open" and E("() => (document.querySelector('#app [data-tsm-top] [data-tpt-dot]') || {}).getAttribute?.('data-tpt-dot')") == "warn",
+        ok(txt("#app [data-tsm-top-title]") == "The office Tally is not open" and E("() => (document.querySelector('#app [data-tsm-top] [data-tpt-dot]') || {}).getAttribute?.('data-tpt-dot')") == "warn",
            "M2. the top line: office bridges online, but Tally is not open, amber (%s)" % txt("#app [data-tsm-top]")[:160])
         say = E("() => FCTallySimple.checkedSay()")
-        ok(re.match(CHECKED, say) and "2 bridges online, but Tally is not open." in say and "connected" not in say, "M2. bridges online, Tally closed: not 'connected' (%s)" % say)
+        ok(re.match(CHECKED, say) and "the office Tally is not open." in say and "connected" not in say and "bridges" not in say, "M2. bridges online, Tally closed: not 'connected' (%s)" % say)
         # bridge 2.5.11: one of them says its login's Tally is open but takes no connection: never "Tally is not open"
         OFFW = "Your TallyPrime is open but not taking connections on port 9041: in F1 → Settings → Connectivity check 'TallyPrime acts as' is Both and the port is 9041, press Ctrl+A to save, reopen TallyPrime."
         c1o = [T.dev(5, NW, "made-up-o1", tally="closed", opened=(), version="2.5.11", rec=(), beat={"bridgePort": 9101, "windowsUser": NW + "\\made-up-o1", "tallyWhy": "connection off",
@@ -130,14 +130,14 @@ def main():
                      ports=[{"port": 9041, "ok": False, "skipped": False, "n": 0, "error": "Tally is not open (nothing listens on this port)", "reason": "closed"}]), c1s[1]]
         scene(c1o, c9, [ORBIT, NOVA_C, LARK], {})
         say = E("() => FCTallySimple.checkedSay()")
-        ok(re.match(CHECKED, say) and ("2 bridges online. Tally is open in your Windows login but takes no connection: " + OFFW) in say and "Tally is not open" not in say,
+        ok(re.match(CHECKED, say) and ("the office Tally is open but takes no connection: " + OFFW) in say and "Tally is not open" not in say,
            "M2. 2.5.11: a bridge says its Tally takes no connection: said with its words, never 'Tally is not open' (%s)" % say)
-        ok(txt("#app [data-tsm-top-title]") == "Office bridges online: Tally is open but takes no connection" and OFFW in txt("#app [data-tsm-top-sub]"),
+        ok(txt("#app [data-tsm-top-title]") == "The office Tally is open but takes no connection" and OFFW in txt("#app [data-tsm-top-sub]"),
            "M2. 2.5.11: the top line says it too, with the bridge's words (%s)" % txt("#app [data-tsm-top]")[:200])
         E("() => { const b = window.__devs[0].info.beat; b.tallyWhy = ''; delete b.tallyOff; b.tallyConnectSay = ''; TLight.st.devs = JSON.parse(JSON.stringify(window.__devs)); TCloud.pane.devices = TLight.st.devs; render(); }")
         pg.wait_for_timeout(400)
         say = E("() => FCTallySimple.checkedSay()")
-        ok("2 bridges online, but Tally is not open." in say, "M2. 2.5.11: neither says so: 'Tally is not open' as before (%s)" % say)
+        ok("the office Tally is not open." in say, "M2. 2.5.11: neither says so: 'Tally is not open' as before (%s)" % say)
         scene(c1s, c9, [ORBIT, NOVA_C, LARK], {})
         say = E("() => { const L = FCTallySimple.LOCALB, b = L.busy; L.busy = true; try { return FCTallySimple.checkedSay(); } finally { L.busy = b; } }")
         ok("Still looking on this computer." in say, "M2. the look still going: still looking on this computer (%s)" % say)
@@ -178,18 +178,23 @@ def main():
             return d
         cw = [{"company": ORB, "client_id": "NAME:" + ORBIT, "device_id": "d0000000-0000-4000-8000-000000000007", "gstin": "", "last_seen": "ago:600"}]
         A_PINGS = {"9101": TS.ping(9101, True, UA, version="2.5.4", bridgeId="go-7")}
-        WIN = ["This computer's FinCom Bridge is connected"]
+        WIN = ["Tally is connected.", "This computer's FinCom Bridge is connected"]
         def comes_up():
             E("""() => { const t = new Date().toISOString(), d = window.__devs.find(x => x.info && x.info.user === 'made-up-a');
               d.last_seen = t; d.info.beat.at = t; Object.values(d.info.bridges || {}).forEach(b => { b.at = t; }); }""")
             E("(p) => { window.__pings = p; }", A_PINGS)
-        def down_scene():
-            ids = scene([adev()], cw, [ORBIT], {}, books={ORBIT: T.book(ORBIT)})
+        def down_scene(two=False):
+            sib = T.dev(8, PC, "made-up-b", tally="closed", opened=(), version="2.5.4", rec=(), beat={"bridgePort": 9102, "windowsUser": PC + "\\made-up-b"},
+                        ports=[{"port": 9000, "ok": False, "skipped": True, "n": 0, "error": "Tally of made-up-a", "reason": "another user"}])
+            ids = scene([adev()] + ([sib] if two else []), cw, [ORBIT], {}, books={ORBIT: T.book(ORBIT)})
             return ids
-        ids = down_scene()
+        ids = down_scene(True)
         ok(txt("#app [data-tsm-top-title]") != "Connected to Tally", "W. not reachable at the start: not connected (%s)" % txt("#app [data-tsm-top-title]"))
         press("W. the top line's Check again", "#app [data-tsm-top-check]", "#app [data-tsm-top] [data-checked]", WIN, before=comes_up)
         ok(txt("#app [data-tsm-top-title]") == "Connected to Tally", "W. and the top line: Connected to Tally (%s)" % txt("#app [data-tsm-top-title]"))
+        w = txt("#app [data-tsm-top] [data-checked]")
+        ok("bridge" not in w.replace("FinCom Bridge", "") and "made-up-b" not in w and "office" not in w,
+           "W. the owner (09-Nov-2026): another login's bridge online on the server is never counted or named (%s)" % w)
         down_scene()
         sel = "#app [data-tsm-guide] [data-tsm-go=check], #app [data-tsm-guide] [data-tsm-recheck]"
         # (connected, the steps fold away: the words stay, on the top line)
@@ -202,11 +207,13 @@ def main():
         ids = scene([d3], [{"company": ORB, "client_id": "NAME:" + ORBIT, "device_id": d3["id"], "gstin": "", "last_seen": "ago:30"}], [ORBIT], A_PINGS, books={ORBIT: T.book(ORBIT)})
         E("(c) => { location.hash = '#/c/' + encodeURIComponent(c) + '/from-tally'; if (typeof Route === 'object' && Route.apply) Route.apply(location.hash); else openCompany(c).then(() => { S.tab = 'books'; S.booksTab = 'import'; render(); }); }", ids[ORBIT])
         pg.wait_for_timeout(4000)
+        say = E("() => FCTallySimple.checkedSay()")
+        ok("your Tally is open but takes no connection" in say and "bridges" not in say, "W. its own Tally's connection off: said so, about this login only (%s)" % say)
         def tally_on():
             E("""() => { const t = new Date().toISOString(), d = window.__devs[0]; d.last_seen = t; d.info.beat.at = t; d.info.beat.tallyWhy = ''; d.info.beat.tallyConnectSay = '';
               d.info.beat.ports = [{port: 9041, ok: true, skipped: false, n: 1, error: '', reason: 'open'}]; d.info.tally = 'open'; Object.values(d.info.bridges || {}).forEach(b => { b.at = t; }); }""")
         ok(n("#app [data-masters-step]") == 1, "W. Books › From Tally: the step line (%s)" % txt("#app [data-masters]")[:160])
-        press("W. Books › From Tally's step line", "#app [data-masters-recheck]", "#app [data-masters] [data-checked]", WIN, before=tally_on)
+        press("W. Books › From Tally's step line", "#app [data-masters-recheck]", "#app [data-masters] [data-checked]", ["your Tally is open, but no company is open in it.", "This computer's FinCom Bridge is connected"], before=tally_on)
         ids = down_scene()
         E("(c) => { openCompany(c); }", ids[ORBIT]); pg.wait_for_timeout(2500)
         pg.click("header.top [data-tally-icon]"); pg.wait_for_selector("header.top .tally-pop [data-tally-pop-word]", timeout=15000); pg.wait_for_timeout(500)

@@ -327,7 +327,6 @@ const pause = (ms) => new Promise((ok) => setTimeout(ok, ms));
 // Bridge" only for one found here (never the member's link to an office bridge); the browser's block and a look still
 // going said so. lead: a sentence first (the Tally box: the client's own state)
 const hhmm = () => { const d = new Date(), p = (x) => String(x).padStart(2, "0"); return p(d.getHours()) + ":" + p(d.getMinutes()); };
-const nBr = (n) => n + (n > 1 ? " bridges" : " bridge");
 // a bridge of the firm (bridgesOf) whose Tally is open: a company open there, or its beat's ports say so
 export const tallyOpenOn = (b) => !!(b.open.length || upBeat(b.beat || {}));
 // bridge 2.5.11: a beat saying its login's Tally is open but takes no connection (tallyWhy "connection off", or its
@@ -340,13 +339,26 @@ export function checkedSay(lead) {
     const on = bridgesOf().filter((b) => b.at && Date.now() - Date.parse(b.at) < 3 * 60000), k = on.filter(tallyOpenOn).length;
     // (bridge 2.5.11: a fresh beat whose Tally runs but takes no connection is never "Tally is not open")
     const off = k ? "" : on.map((b) => offSay(b.beat)).find(Boolean);
-    const office = !on.length ? "no FinCom Bridge of the firm is online." : k ? "the office Tally is connected (" + nBr(on.length) + ", Tally open in " + k + ")."
-      : off ? nBr(on.length) + " online. Tally is open in your Windows login but takes no connection: " + off : nBr(on.length) + " online, but Tally is not open.";
+    // next-own-bridge-words (the owner, 09-Nov-2026: "you don't need to tell me whose bridge is opened other than me.. if
+    // there would be 20 bridges opened then I will be confused.. it should remain with the person whose FinCom and bridge
+    // is opened"): a login with its own bridge hears only about its own bridge and its own Tally; no count of the firm's
+    // bridges anywhere (a computer with none: the office's Tally, without counts)
+    // (a login linked to an office bridge, tally_member_bridges, has no bridge of its own: it hears of the office's Tally)
+    // ownState's own reading (the bridge's answer here, else its fresh beat): names, why (whyOf), say, noCo
+    const mineB = o.own && o.own.how !== "linked" && ["ok", "away", "checking"].includes(o.state) ? o.own : null;
+    const nm = o.names instanceof Map ? o.names.size : 0, why = String(o.why || "");
+    const mineSay = o.state === "checking" ? "still asking your FinCom Bridge." : o.state !== "ok" ? "your FinCom Bridge is not answering."
+      : nm > 0 ? "your Tally is connected." : o.noCo ? "your Tally is open, but no company is open in it."
+      : /connection off/i.test(why) || offSay(mineB.beat) ? "your Tally is open but takes no connection: " + (shown(o.say) || offSay(mineB.beat) || "its connection is off.")
+      : why ? why : "your Tally is not open.";
+    const office = mineB ? mineSay
+      : !on.length ? "no FinCom Bridge of the firm is online." : k ? "the office Tally is connected."
+      : off ? "the office Tally is open but takes no connection: " + off : "the office Tally is not open.";
     const me = LOCALB.busy ? "Still looking on this computer." : LOCALB.perm === "denied" ? BLOCKED
-      : here ? (o.state === "ok" ? "This computer's FinCom Bridge is connected." : "This computer's FinCom Bridge is not answering.")
+      : here ? (o.state === "ok" ? "This computer's FinCom Bridge is connected." : mineB ? "" : "This computer's FinCom Bridge is not answering.")
       : own.how === "linked" ? "This computer has no FinCom Bridge: your login uses the office's."
       : o.own ? "This computer's FinCom Bridge does not answer here." : "This computer has no FinCom Bridge.";
-    return at + (lead ? lead + ". " + office.charAt(0).toUpperCase() + office.slice(1) : office) + " " + me;
+    return at + (lead ? lead + ". " + office.charAt(0).toUpperCase() + office.slice(1) : office) + (me ? " " + me : "");
   } catch (e) { return at + "could not tell, see above."; }
 }
 // the connection as the words saw it: the words go when it changes (Tally page: UI().said)
