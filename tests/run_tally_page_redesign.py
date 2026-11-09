@@ -107,7 +107,7 @@ def main():
 
         print("== 2. one table, one button a row")
         ok(n(TB) == 1 and txt(TB + " .tpt-title").startswith("Clients · ") and n("#app [data-tsm-filter]") == 0, "2. one table, 'Clients · N', no filter chips (%s)" % txt(TB + " .tpt-title"))
-        heads = E("() => [...document.querySelectorAll('#app [data-tsm-table] thead th')].map(t => t.textContent.trim())")
+        heads = E("() => [...document.querySelectorAll('#app [data-tsm-table] thead th')].map(t => (t.firstChild && t.firstChild.nodeType === 3 ? t.firstChild.textContent : t.textContent).trim())")
         # next-tally-simple2: Client · Tally company | Masters | Entries | Action (the state under the client)
         ok(heads == ["Client · Tally company", "Masters", "Entries", "Action"], "2. the columns (%s)" % heads)
         for name, want in ((ORBIT, ("update", "reading")), (ACME, ("again",)), (NOVA_C, ("connect",)), (ZETA, ("link",)), (LARK, ("link",))):

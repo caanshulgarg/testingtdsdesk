@@ -603,19 +603,52 @@ function ActLink({ row }) {
 }
 // next-tally-simple2: "Clients · N", the note that masters come first, then ONE table: Client · Tally company | Masters |
 // Entries | Action (no filter chips; the search only for a long list)
+// next-tally-filters (the owner, 09-Nov-2026: "there should be filters in the tally companies list.. in column also... and
+// with regard to statuses also"): a filter at the head of each column: the row's state (Client · Tally company), Masters,
+// Entries; each choice with its count (of the rows the search keeps), a choice with none greyed. They add up with the
+// search; Clear filters (and No client matches' Show all) sets them back. Kept for the tab (S.tsm), never stored
+const F_ST = [["all", "All states"], ["need", "Needs attention"], ["ok", "Connected"], ["reading", "Reading now"], ["away", "Not open in Tally"], ["free", "Not linked"]];
+const F_MA = [["all", "All masters"], ["done", "Up to date"], ["reading", "Reading or waiting"], ["why", "Not done"], ["none", "Not brought yet"]];
+const F_EN = [["all", "All entries"], ["up", "Up to date"], ["going", "Bringing"], ["held", "Paused or stopped"], ["behind", "Days to bring"], ["none", "Not brought yet"]];
+const isLinked = (r) => r.kind === "client" && r.c.w === YES;
+function tagsOf(r, seen) {
+  const p = pageOf(r, seen), s = [];
+  if (p.need) s.push("need");
+  if (p.kind === "ok") s.push("ok");
+  if (p.kind === "reading" || (isLinked(r) && runBusy(r.cid))) s.push("reading");
+  if (p.kind === "away") s.push("away");
+  if (p.kind === "free" || p.kind === "open" || p.kind === "company") s.push("free");
+  if (!isLinked(r)) return { s, m: "", e: "" };
+  const ms = mastersOf(r.cid, r.company), es = entriesOf(r.cid, ms, r.last).st;
+  return { s, m: ms.st === "waiting" ? "reading" : ms.st,
+    e: es === "uptodate" || es === "done" ? "up" : es === "after" || es === "going" ? "going" : es === "paused" || es === "stopped" ? "held" : es };
+}
+function FSel({ k, opts, n, label }) {
+  const v = UI()[k] || "all";
+  return <select className={"tpt-fsel" + (v !== "all" ? " on" : "")} data-tpt-filter={k} aria-label={"Filter by " + label} value={v} onChange={(ev) => set({ [k]: ev.target.value })}>
+    {opts.map(([o, w]) => <option key={o} value={o} disabled={o !== "all" && o !== v && !n[o]}>{o === "all" ? w : w + " (" + (n[o] || 0) + ")"}</option>)}</select>;
+}
+const NO_F = { fst: "all", fma: "all", fen: "all" };
 function Table({ rows, download, oneDl, cs, x, checkAgain }) {
-  const ui = UI(), seen = openAnywhere();
-  const list = rows.filter((r) => matches(r, ui.q)), w = headWords(rows), nc = rows.filter((r) => r.kind === "client").length;
+  const ui = UI(), seen = openAnywhere(), fst = ui.fst || "all", fma = ui.fma || "all", fen = ui.fen || "all";
+  const tg = rows.filter((r) => matches(r, ui.q)).map((r) => Object.assign({ r }, tagsOf(r, seen)));
+  const cnt = (f) => tg.reduce((n, t) => { [].concat(f(t)).forEach((k) => { if (k) n[k] = (n[k] || 0) + 1; }); return n; }, {});
+  const nS = cnt((t) => t.s), nM = cnt((t) => t.m), nE = cnt((t) => t.e), on = fst !== "all" || fma !== "all" || fen !== "all";
+  const list = tg.filter((t) => (fst === "all" || t.s.includes(fst)) && (fma === "all" || t.m === fma) && (fen === "all" || t.e === fen)).map((t) => t.r);
+  const w = headWords(rows), nc = rows.filter((r) => r.kind === "client").length;
   return <section className="tpt-sec" aria-label="Clients" data-tsm-table="" data-tsm-n={rows.length}>
     <div className="tpt-head"><h3 className="tpt-title" data-tpt-title="">{"Clients · " + nc}</h3><span className="tsm-note" data-tpt-say="">Masters (ledgers &amp; groups) always come first, then entries</span>
       <span className="sr-only" data-tsm-say=""><b className="tsm-fine">{w.fine}</b>{" "}<b className="tsm-need" data-tsm-need-n={rows.filter((r) => r.need).length}>{w.need}</b></span></div>
     {rows.length > 6 && <label className="tsm-search"><span className="sr-only">Search client</span>
       <input type="search" data-tsm-q="" placeholder="Search client or Tally company" aria-label="Search client or Tally company" value={ui.q} onChange={(ev) => set({ q: ev.target.value })} /></label>}
+    {on && <div className="tsm-note tpt-fnote" data-tpt-filtered={list.length}>{"Showing " + list.length + " of " + rows.length + " "}
+      <button type="button" className="linkbtn" data-tpt-fclear="" onClick={() => set(NO_F)}>Clear filters</button></div>}
     <div className="tsm-card tpt">
       {!list.length && <div className="tsm-none" data-tsm-none={rows.length ? "match" : reading() ? "reading" : "none"}>{rows.length ? "No client matches. " : reading() ? readingWords() : "No client yet. "}
-        {rows.length > 0 && <button type="button" className="linkbtn" data-tsm-showall="" onClick={() => set({ q: "" })}>Show all</button>}</div>}
-      {list.length > 0 && <div className="tsm-scroll"><table className="tpt-grid nocards">
-        <thead><tr><th>Client · Tally company</th><th>Masters</th><th>Entries</th><th className="tpt-th-act">Action</th></tr></thead>
+        {rows.length > 0 && <button type="button" className="linkbtn" data-tsm-showall="" onClick={() => set(Object.assign({ q: "" }, NO_F))}>Show all</button>}</div>}
+      {(list.length > 0 || (rows.length > 0 && on)) && <div className="tsm-scroll"><table className="tpt-grid nocards">
+        <thead><tr><th>Client · Tally company<FSel k="fst" opts={F_ST} n={nS} label="state" /></th><th>Masters<FSel k="fma" opts={F_MA} n={nM} label="masters" /></th>
+          <th>Entries<FSel k="fen" opts={F_EN} n={nE} label="entries" /></th><th className="tpt-th-act">Action</th></tr></thead>
         <tbody>{list.map((r) => <Row key={r.key} row={r} download={download} oneDl={oneDl} seen={seen} cs={cs} x={x} checkAgain={checkAgain} />)}</tbody></table></div>}
     </div>
   </section>;

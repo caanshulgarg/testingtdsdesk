@@ -244,3 +244,8 @@
 @media (max-width: 760px) and (prefers-color-scheme: dark) {
   #app .tpt-grid tr.tpt-tr.tpt-need, #app .tpt-grid tr.tpt-light-tr.tpt-need { background: color-mix(in srgb, var(--warning, #B45309) 14%, var(--surface)); border-color: color-mix(in srgb, var(--warning, #B45309) 40%, var(--border)); }
 }
+/* next-tally-filters: a filter at the head of each column (the owner, 09-Nov-2026) */
+#app .tpt-grid > thead th .tpt-fsel { display: block; margin-top: 6px; max-width: 100%; min-height: 30px; font: inherit; font-size: 12px; font-weight: 400;
+  text-transform: none; letter-spacing: normal; padding: 2px 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: inherit; }
+#app .tpt-grid > thead th .tpt-fsel.on { border-color: var(--accent); font-weight: 600; }
+#app .tpt-fnote { margin: 4px 0 8px; }

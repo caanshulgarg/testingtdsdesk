@@ -287,7 +287,7 @@ def main():
         E(LOCAL, [HERE, PC + "\\" + WIN, "go-7"]); pg.wait_for_timeout(2500)
         names = E("() => [...document.querySelectorAll('#app [data-tsm-table] tr[data-tsm-row]')].map(e => e.getAttribute('data-tsm-row'))")
         ok(names == [ACME, BRIGHT, CORAL, DELTA, EVER, GAMMA, HAZEL, IRIS, ZETA], "3. one row a client (by name), then the company no client has (%s)" % names)
-        heads = E("() => [...document.querySelectorAll('#app [data-tsm-table] thead th')].map(e => e.textContent.trim())")
+        heads = E("() => [...document.querySelectorAll('#app [data-tsm-table] thead th')].map(e => (e.firstChild && e.firstChild.nodeType === 3 ? e.firstChild.textContent : e.textContent).trim())")
         # next-tally-simple2: Client · Tally company | Masters | Entries | Action (the six questions' answers in More ▾ › Answers)
         ok(heads == ["Client · Tally company", "Masters", "Entries", "Action"], "3. the four columns (the six questions in the answers) (%s)" % heads)
         ok(all(txt(row(c) + " .tpt-co-line") == "Tally: " + c for c in (ACME, BRIGHT, CORAL, GAMMA, HAZEL, IRIS)) and txt(row(DELTA) + " .tpt-co-line") == "Not linked",
