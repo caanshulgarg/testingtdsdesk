@@ -124,11 +124,12 @@ var liveKeepPay244 = []string{"ALLLEDGERENTRIES.BANKALLOCATIONS.BANKEMPLOYEENAME
 // whole day to be uploaded by hand (on one book 62 days of 223). The item lines are kept now, as the items of an item
 // invoice are (ALLINVENTORYENTRIES: the stock item, billed quantity, rate and amount; no godown or batch, which no list
 // keeps), each inside its ledger line and written after that line's own fields (fastEmit), so the line's own AMOUNT stays
-// the first one a reader meets in it (parse.js one(e, "AMOUNT")). Written into FinComVoucherBatch's FETCH (and so
-// FinComVoucherWindow's: one frozen text), with the LEDGERENTRIES copy as every ALLLEDGERENTRIES field; NOT into
-// FinComVoucherObject's FETCHLIST (Tally ignores it and sends the whole voucher: that request stays byte for byte as
-// measured, shape ce0e72f74e72). An entry without such lines carries nothing more: Tally gives the fields only where the
-// list is filled, and the strip drops an empty list
+// the first one a reader meets in it (parse.js one(e, "AMOUNT")). Kept by the strip of FinComVoucherObject's answer only
+// (Tally sends the whole voucher whatever its FETCHLIST names): NO request changes for it. FinComVoucherObject's FETCHLIST
+// stays byte for byte as measured (shape ce0e72f74e72), and FinComVoucherBatch's FETCH is 2.5.11's (the independent
+// review: a group gains nothing from them; a group's voucher-mode entry, which Tally gives with its items listed and the
+// stock item still under the sales line, is held by the strip and left for FinComVoucherObject, which reads it). An entry
+// without such lines strips exactly as before (the strip drops an empty list)
 var liveKeepInv2512 = []string{
 	"ALLLEDGERENTRIES.INVENTORYALLOCATIONS.STOCKITEMNAME", "ALLLEDGERENTRIES.INVENTORYALLOCATIONS.BILLEDQTY",
 	"ALLLEDGERENTRIES.INVENTORYALLOCATIONS.RATE", "ALLLEDGERENTRIES.INVENTORYALLOCATIONS.AMOUNT",

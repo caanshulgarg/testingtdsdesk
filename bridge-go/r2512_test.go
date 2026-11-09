@@ -5,6 +5,8 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -148,43 +150,50 @@ func TestR2512OrdinaryVouchersUnchanged(t *testing.T) {
 	}
 }
 
-// 2b. FinComVoucherBatch's FETCH (and so FinComVoucherWindow's) is 2.4.9's measured text with exactly the four fields after
-// the payroll's and their four LEDGERENTRIES copies at the end: the request XML change the owner approved on 09-Nov-2026
-func TestR2512FetchIs249PlusItems(t *testing.T) {
-	add := ", " + strings.Join(liveKeepInv2512, ", ")
-	cp := strings.ReplaceAll(add, "ALLLEDGERENTRIES.", "LEDGERENTRIES.")
-	if !strings.Contains(batchFetchText, batchPayrollFields[len(batchPayrollFields)-1]+add+", LEDGERENTRIES.") || !strings.HasSuffix(batchFetchText, cp) {
-		t.Fatalf("the FETCH: %s", batchFetchText)
+// 2b. the review's point 5: the group request (FinComVoucherBatch, and FinComVoucherWindow's same frozen FETCH) is byte for
+// byte 2.5.11's (2.4.9's measured text, testdata/batch249/b4-range.xml and b4-list.xml); the entry request
+// (FinComVoucherObject) too: 2.5.12 changes no request for a voucher-mode sale (the strip keeps what Tally sends anyway)
+func TestR2512GroupRequestAs2511(t *testing.T) {
+	if s := sha256.Sum256([]byte(batchFetchText)); hex.EncodeToString(s[:]) != "cd914d4c22caf66ab493da5a734baf236609f998a3cbbc7ab1f972d6d0f54280" || strings.Contains(batchFetchText, "INVENTORYALLOCATIONS") {
+		t.Fatalf("the group's FETCH is not 2.5.11's: %s", batchFetchText)
 	}
-	old := strings.Replace(strings.TrimSuffix(batchFetchText, cp), add, "", 1)
-	got := voucherBatchRangeRequest("@@CO@@", "20991231", 111111, 222222)
-	if strings.Replace(got, batchFetchText, old, 1) != batchTD(t, "b4-range.xml") {
-		t.Fatalf("the range form is not 2.4.9's approved request with the four fields:\n%s", got)
+	if got := voucherBatchRangeRequest("@@CO@@", "20991231", 111111, 222222); got != batchTD(t, "b4-range.xml") {
+		t.Fatalf("the range form is not 2.5.11's:\n%s", got)
 	}
-	if got != batchTD(t, "b4-range-2512.xml") {
-		t.Fatalf("the range form is not the 2.5.12 request kept in testdata:\n%s", got)
+	want := strings.Replace(batchTD(t, "b4-list.xml"), "@@MIDS@@", "$MasterID = 15 OR $MasterID = 17", 1)
+	if got := voucherBatchListRequest("@@CO@@", "20991231", []string{"15", "17"}); got != want {
+		t.Fatalf("the list form is not 2.5.11's:\n%s", got)
 	}
-	// the window form uses the same frozen text
 	if w := fastBatchRequest("@@CO@@", "20991201", "20991231", 1, 2); !strings.Contains(w, "<FETCH>"+batchFetchText+"</FETCH>") {
 		t.Fatalf("the window request: %s", w)
 	}
-	// FinComVoucherObject's FETCHLIST does not carry them
 	if strings.Contains(voucherObjectRequest("@@CO@@", "7"), "INVENTORYALLOCATIONS") {
 		t.Fatal("the entry request carries them")
 	}
+	// a group's voucher-mode entry (Tally lists its items itself and still keeps the stock item under the sales line) is
+	// left for FinComVoucherObject, which reads it
+	group := strings.Replace(r2512VoucherMode, "</VOUCHER>", `<ALLINVENTORYENTRIES.LIST><STOCKITEMNAME>Pen Blue</STOCKITEMNAME><AMOUNT>200.00</AMOUNT></ALLINVENTORYENTRIES.LIST></VOUCHER>`, 1)
+	if _, leave := batchEntry("Made Up Traders", group); leave == "" {
+		t.Fatal("a group's voucher-mode entry taken from the group")
+	}
 }
 
-// tally-ingest's rule for an entry Tally gave that FinCom keeps no entry of (index.ts periodEntries: its GUID, AlterID
-// and date): held as seen at that AlterID
-var (
-	r2512IngestGUID  = regexp.MustCompile(`<GUID[^>]*>\s*([^<]{1,100}?)\s*</GUID>`)
-	r2512IngestAlter = regexp.MustCompile(`<ALTERID[^>]*>\s*(\d{1,15})\s*<`)
-	r2512IngestDate  = regexp.MustCompile(`<DATE[^>]*>\s*(\d{8})\s*<`)
-)
+// the held entries a day's calls told FinCom (the last call of a day says "held", [] when none)
+func r2512HeldTold(m *pullModel) (held []any, said int) {
+	for _, e := range m.entries {
+		if hs, ok := e["held"]; ok {
+			said++
+			held = append(held, arr(hs)...)
+		}
+	}
+	return held, said
+}
 
 // 3. a day with one entry FinCom cannot read (its items in INVENTORYENTRIES): the day's other entries are sent as on any
-// day, only that entry is held (its head only, which tally-ingest keeps as seen, and its reason with its voucher type in
-// "held"), the day is not marked to be uploaded, and the day ends. One by one, and from a group of 100
+// day; only that entry is held: NOTHING of it is sent as an entry (never a head FinCom would keep as seen), and the
+// day's last call names it with its reason ("held"), so FinCom keeps the day open; the day is not marked to be uploaded
+// here. Listed again, that entry is asked of Tally again (FinComVoucherObject); once it reads, the day's last call says
+// held [] (FinCom clears the mark). One by one, and from a group of 100
 func TestR2512OneUnreadableEntryHeldDayKept(t *testing.T) {
 	for name, mode := range map[string]string{"one by one": `,"DayPullBatchMax":1`, "groups": ""} {
 		t.Run(name, func(t *testing.T) { r2512OneHeld(t, mode) })
@@ -192,72 +201,70 @@ func TestR2512OneUnreadableEntryHeldDayKept(t *testing.T) {
 }
 
 func r2512OneHeld(t *testing.T, mode string) {
-	{
-		f, _, m := pullBridgeWith(t, mode)
-		vs := pullDay(f, "20250915", 700, "Sales", "Sales", "Receipt", "Payment")
-		vs[1].extra = `<INVENTORYENTRIES.LIST><STOCKITEMNAME>Pen Blue</STOCKITEMNAME><AMOUNT>100.00</AMOUNT></INVENTORYENTRIES.LIST>`
-		vs[2].extra = `<ALLLEDGERENTRIES.LIST><LEDGERNAME>Sales Online</LEDGERNAME><AMOUNT>0.00</AMOUNT><INVENTORYALLOCATIONS.LIST><STOCKITEMNAME>Pen Blue</STOCKITEMNAME>` +
-			`<BILLEDQTY> 1 Nos</BILLEDQTY><AMOUNT>0.00</AMOUNT></INVENTORYALLOCATIONS.LIST></ALLLEDGERENTRIES.LIST>`
-		applyPeriodDays(pullList("20250915"))
-		pullRun(t, 30)
-		if len(m.upload) != 0 {
-			t.Fatalf("%q: the day marked to be uploaded: %v", mode, m.upload)
+	f, _, m := pullBridgeWith(t, mode)
+	vs := pullDay(f, "20250915", 700, "Sales", "Sales", "Receipt", "Payment")
+	vs[1].extra = `<INVENTORYENTRIES.LIST><STOCKITEMNAME>Pen Blue</STOCKITEMNAME><AMOUNT>100.00</AMOUNT></INVENTORYENTRIES.LIST>`
+	vs[2].extra = `<ALLLEDGERENTRIES.LIST><LEDGERNAME>Sales Online</LEDGERNAME><AMOUNT>0.00</AMOUNT><INVENTORYALLOCATIONS.LIST><STOCKITEMNAME>Pen Blue</STOCKITEMNAME>` +
+		`<BILLEDQTY> 1 Nos</BILLEDQTY><AMOUNT>0.00</AMOUNT></INVENTORYALLOCATIONS.LIST></ALLLEDGERENTRIES.LIST>`
+	applyPeriodDays(pullList("20250915"))
+	pullRun(t, 30)
+	if len(m.upload) != 0 || pullCurrent() != nil {
+		t.Fatalf("upload %v, still read %v", m.upload, pullCurrent() != nil)
+	}
+	sent := sentEntries(m)
+	if len(sent) != 3 || sent[vs[1].master] != "" {
+		t.Fatalf("%d entries sent (the held one: %q)", len(sent), cut(sent[vs[1].master], 100))
+	}
+	for i, v := range vs {
+		if i != 1 && (sent[v.master] != fastStripVoucher(cleanXML(v.xml())) || !strings.Contains(sent[v.master], "<LEDGERNAME>")) {
+			t.Fatalf("MasterID %s sent as %s", v.master, sent[v.master])
 		}
-		if pullCurrent() != nil {
-			t.Fatalf("%q: the day still read", mode)
-		}
-		sent := sentEntries(m)
-		if len(sent) != 4 {
-			t.Fatalf("%q: %d entries sent", mode, len(sent))
-		}
-		for i, v := range vs {
-			x := sent[v.master]
-			if i == 1 {
-				// held: its head only, no ledger line; tally-ingest takes its GUID, AlterID and date (seen, so held)
-				if strings.Contains(x, "LEDGERENTRIES") || strings.Contains(x, "STOCKITEM") || r2512IngestGUID.FindStringSubmatch(x)[1] != v.guid ||
-					toI64(r2512IngestAlter.FindStringSubmatch(x)[1]) != v.alter || r2512IngestDate.FindStringSubmatch(x)[1] != "20250915" {
-					t.Fatalf("%q: the held entry sent as %s", mode, x)
-				}
-				continue
-			}
-			if x != fastStripVoucher(cleanXML(v.xml())) || !strings.Contains(x, "<LEDGERNAME>") {
-				t.Fatalf("%q: MasterID %s sent as %s", mode, v.master, x)
-			}
-		}
-		// the voucher-mode sale went whole, its stock item in its sales line
-		if !strings.Contains(sent[vs[2].master], "<STOCKITEMNAME>Pen Blue</STOCKITEMNAME>") {
-			t.Fatalf("%q: the voucher-mode sale: %s", mode, sent[vs[2].master])
-		}
-		// the reason, with the voucher type and the strip's place
-		var held []any
-		for _, e := range m.entries {
-			held = append(held, arr(e["held"])...)
-		}
-		if len(held) != 1 {
-			t.Fatalf("%q: held told %v", mode, held)
-		}
-		h := obj(held[0])
-		if str(h["masterId"]) != vs[1].master || str(h["guid"]) != vs[1].guid || str(h["type"]) != "Sales" ||
-			!strings.HasPrefix(str(h["why"]), "Sales entry (MasterID "+vs[1].master+") of ") || !strings.Contains(str(h["why"]), "INVENTORYENTRIES") ||
-			!strings.Contains(str(h["why"]), "upload that day's Day Book to settle it") {
-			t.Fatalf("%q: held: %v", mode, h)
-		}
-		// the reason is in the bridge's log (never dropped)
-		if lg := readText(logFile()); !strings.Contains(lg, "Sales entry (MasterID "+vs[1].master+")") || !strings.Contains(lg, "INVENTORYENTRIES") {
-			t.Fatalf("%q: not in the log", mode)
-		}
-		// listed again: FinCom holds every entry of the day (the held one as seen), nothing more asked of the entries
-		n0 := f.n(vchObjectID) + f.n(vchBatchID)
-		pullReset()
-		applyPeriodDays(pullList("20250915"))
-		pullRun(t, 30)
-		if f.n(vchObjectID)+f.n(vchBatchID) != n0 {
-			t.Fatalf("%q: asked again: %v", mode, f.ids())
-		}
+	}
+	if !strings.Contains(sent[vs[2].master], "<STOCKITEMNAME>Pen Blue</STOCKITEMNAME>") {
+		t.Fatalf("the voucher-mode sale: %s", sent[vs[2].master])
+	}
+	if _, seen := m.held[vs[1].guid]; seen {
+		t.Fatal("the held entry was given to FinCom as an entry")
+	}
+	held, said := r2512HeldTold(m)
+	if said != 1 || len(held) != 1 {
+		t.Fatalf("held told %d times: %v", said, held)
+	}
+	h := obj(held[0])
+	if str(h["masterId"]) != vs[1].master || str(h["guid"]) != vs[1].guid || str(h["type"]) != "Sales" || toI64(h["alterId"]) != vs[1].alter ||
+		!strings.HasPrefix(str(h["why"]), "Sales entry (MasterID "+vs[1].master+") of ") || !strings.Contains(str(h["why"]), "INVENTORYENTRIES") {
+		t.Fatalf("held: %v", h)
+	}
+	if lg := readText(logFile()); !strings.Contains(lg, "Sales entry (MasterID "+vs[1].master+")") || !strings.Contains(lg, "the day stays open") || !strings.Contains(lg, "1 held") {
+		t.Fatal("not in the log")
+	}
+	// listed again (FinCom keeps the day open): the held entry is asked of Tally again, by itself (FinComVoucherObject)
+	n0 := f.n(vchObjectID)
+	pullReset()
+	applyPeriodDays(pullList("20250915"))
+	pullRun(t, 30)
+	if f.n(vchObjectID) != n0+1 {
+		t.Fatalf("not asked again: %d -> %d", n0, f.n(vchObjectID))
+	}
+	if held, said := r2512HeldTold(m); said != 2 || len(held) != 2 {
+		t.Fatalf("held again: %d %v", said, held)
+	}
+	// it reads now (the entry altered in Tally into a form FinCom reads): sent, and the day's last call says held []
+	vs[1].extra = ""
+	pullReset()
+	applyPeriodDays(pullList("20250915"))
+	pullRun(t, 30)
+	if sent := sentEntries(m); sent[vs[1].master] == "" {
+		t.Fatal("the retry did not send it")
+	}
+	last := m.entries[len(m.entries)-1]
+	if hs, ok := last["held"]; !ok || len(arr(hs)) != 0 {
+		t.Fatalf("the day's last call: %v", last["held"])
 	}
 }
 
-// 3b. an entry larger than FinCom takes in one call (tally-ingest refused the whole day's call for it): held alone too
+// 3b. an entry larger than FinCom takes in one call (tally-ingest refused the whole day's call for it): held alone too,
+// counted once as asked
 func TestR2512OversizeEntryHeldAlone(t *testing.T) {
 	f, _, m := pullBridge(t)
 	vs := pullDay(f, "20250915", 900, "Journal", "Journal")
@@ -265,15 +272,18 @@ func TestR2512OversizeEntryHeldAlone(t *testing.T) {
 	applyPeriodDays(pullList("20250915"))
 	pullRun(t, 30)
 	sent := sentEntries(m)
-	if len(m.upload) != 0 || len(sent) != 2 || strings.Contains(sent[vs[0].master], "NARRATION") || !strings.Contains(sent[vs[1].master], "<LEDGERNAME>") {
-		t.Fatalf("upload %v, sent %d: %s", m.upload, len(sent), cut(sent[vs[0].master], 200))
+	if len(m.upload) != 0 || len(sent) != 1 || sent[vs[0].master] != "" || !strings.Contains(sent[vs[1].master], "<LEDGERNAME>") {
+		t.Fatalf("upload %v, sent %d", m.upload, len(sent))
 	}
-	var held []any
-	for _, e := range m.entries {
-		held = append(held, arr(e["held"])...)
-	}
+	held, _ := r2512HeldTold(m)
 	if len(held) != 1 || !strings.Contains(str(obj(held[0])["why"]), "larger than FinCom takes") || !strings.HasPrefix(str(obj(held[0])["why"]), "Journal entry") {
 		t.Fatalf("held: %v", held)
+	}
+	pull.mu.Lock()
+	asked := toInt(pull.state[companyKey(zz)]["asked"])
+	pull.mu.Unlock()
+	if asked != 2 {
+		t.Fatalf("asked counted %d times for 2 entries", asked)
 	}
 }
 
@@ -292,23 +302,15 @@ func TestR2512Version(t *testing.T) {
 	}
 }
 
-// the FinComVoucherBatch row as 2.5.11 had it (shape 97496818a7d8, its words before 2.5.12's sentence): the history tests
-// (2.4.9 .. 2.5.2) compare the table as it was before 2.5.12 changed that one row (and the stock row's version word:
-// the table is then 2.5.11's exactly, its hash 9a9d44d30cca...)
-const allowRow2511Batch = "| FinComVoucherBatch | older entries for a period the person chose in FinCom (2.4.9), on a computer whose owner switched it on, idle only: up to 100 entries of ONE day FinCom listed (SVFROMDATE = SVTODATE) in one request, by a run of that day's MasterIDs (a..b) or a list of them, after that day's FinComDayHeads; FETCH exactly FinComVoucherObject's approved fields, the ledger lines also under LEDGERENTRIES (an entry with items keeps those, any other its ALLLEDGERENTRIES), then FinComVoucherObject's strip (only approved fields kept, before anything is logged, stored or sent); payroll entries one by one; a group stopped at 2 s asked again in halves, then the day one by one; Tally's window held 2 s stops the period for that company | 97496818a7d8 | 1.4 | 2026-10-28 (real TallyPrime 3.0, 4.1, 5.1, 6.2, 7.1; tally-versions mode batch, run 40750991113, at 30,021 and 100,021 entries: 100 entries of a day of up to 2,216 entries 945 ms worst (4.1), of a day of 7,601 entries 1,405 ms worst (6.2), window held 1.35 s at most; exactly the entries asked in 6,280 requests; every kept field identical to FinComVoucherObject's on 150 of 150 entries a release) | bridge |"
-
 // 2.5.12's sentence in the FinComDayHeads row (the range form, range2512.go)
 const allowRange2512Words = "; 2.5.12 (the owner's approval of 09-Nov-2026): also the same request for a RANGE of 2 to 31 consecutive days FinCom listed (SVFROMDATE < SVTODATE), split by day and told to FinCom day by day as before (empty days too); 7 days at the start of a period, doubled only after an answer under 1 s, halved after one over 1 s, single days after a day of more than 200 entries or any answer not whole; over 2 s or Tally's window held 2 s stops the period for that company as for one day"
 
 func allowListRows2511() string {
 	var o []string
 	for _, l := range strings.SplitAfter(allowListRows(), "\n") {
-		if strings.HasPrefix(l, "| "+vchBatchID+" |") {
-			l = allowRow2511Batch + "\n"
-		}
 		if strings.HasPrefix(l, "| "+dayHeadsID+" |") {
 			// 2.5.12's sentence on the range form (range2512.go) out: the row as 2.5.11 had it
-			l = strings.Replace(l, allowRange2512Words, "", 1)
+			l = strings.Replace(l, dayHeadsRangeWords, "", 1)
 		}
 		if strings.HasPrefix(l, "| "+stockID+" |") {
 			l = strings.Replace(l, "unchanged in 2.5.12)", "unchanged in 2.5.11)", 1)
@@ -318,20 +320,20 @@ func allowListRows2511() string {
 	return strings.Join(o, "")
 }
 
-// 5. the allow-list: only FinComVoucherBatch's row changed from 2.5.11 (its shape and its words); the decision line names
-// 2.5.12 by the owner's decision of 2026-11-09 with the new shape, 2.5.11's kept as history; the dated line
+// 5. the allow-list: the table is 2.5.11's but for FinComDayHeads' words on the range form (its shape unchanged) and the
+// stock row's version word; FinComVoucherBatch's row and shape are 2.5.11's; the decision line names 2.5.12 by the owner's
+// decision of 2026-11-09, 2.5.11's kept as history; the dated line
 func TestR2512AllowList(t *testing.T) {
 	if h := allowListHash(allowListRows2511()); h != "9a9d44d30ccaaf1d2b5dc2bda88adf01d4150fe52255dc45b7fe6a86c10dc94f" {
-		t.Fatalf("a row other than FinComVoucherBatch and FinComDayHeads' words changed from 2.5.11 (%s)", h)
+		t.Fatalf("a row other than FinComDayHeads' words changed from 2.5.11 (%s)", h)
 	}
-	if sh := shapeOf(allowListSamples()[vchBatchID]); sh != "dc4c907eb0d2" {
+	if sh := shapeOf(allowListSamples()[vchBatchID]); sh != "97496818a7d8" {
 		t.Fatalf("FinComVoucherBatch's shape %s", sh)
 	}
 	al := readText(filepath.Join("..", "docs", "tally-allowlist.md"))
 	line := group(`(?m)^(First table: .*)$`, al, 1)
-	for _, w := range []string{"allowed for 2.5.12 by the owner's decision of 2026-11-09", "FinComVoucherBatch (shape dc4c907eb0d2, was 97496818a7d8)",
-		"ALLLEDGERENTRIES.INVENTORYALLOCATIONS.STOCKITEMNAME, BILLEDQTY, RATE, AMOUNT", "FinComVoucherObject's FETCHLIST is unchanged",
-		"as for 2.5.11 by the owner's standing decision of 2026-10-06", "FinComDayHeads (shape unchanged for one day) is also sent for a RANGE of 2 to 31 consecutive days"} {
+	for _, w := range []string{"allowed for 2.5.12 by the owner's decision of 2026-11-09", "FinComDayHeads (shape unchanged for one day) is also sent for a RANGE of 2 to 31 consecutive days",
+		"FinComVoucherBatch and FinComVoucherObject unchanged", "as for 2.5.11 by the owner's standing decision of 2026-10-06"} {
 		if !strings.Contains(line, w) {
 			t.Errorf("the decision line does not say %q", w)
 		}
@@ -339,7 +341,7 @@ func TestR2512AllowList(t *testing.T) {
 	if !strings.Contains(al, "(re-measured on 2026-11-09 for 2.5.12: on the stand only, not on real TallyPrime") || strings.Contains(al, "allowed for 2.5.11 by") {
 		t.Error("the dated lines")
 	}
-	if a := tallyAllowList[vchBatchID]; a.maxSec != 1.41 || !strings.Contains(a.purpose, "2.5.12 (the owner's approval of 09-Nov-2026)") {
+	if a := tallyAllowList[dayHeadsID]; !strings.HasSuffix(a.purpose, dayHeadsRangeWords) {
 		t.Fatalf("the row: %+v", a)
 	}
 }

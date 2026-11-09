@@ -660,7 +660,7 @@ func pullStep() (sent bool, more bool) {
 			return false, false
 		}
 		return pullFetchStep(w, port)
-	case len(w.got)+len(w.gone) > 0:
+	case len(w.got)+len(w.gone)+len(w.held) > 0:
 		return false, pullFlush(w)
 	case w.paySkip > 0:
 		// review 245 R15 (M1): what was read is sent; the payroll entries left out: the day to be uploaded (one quiet line)
@@ -700,6 +700,7 @@ func pullHeadsStep(w *pullWork, port int) (bool, bool) {
 	case gaveWay(err) || errors.Is(err, errRetryWait) || errors.Is(err, errReadStopped) || errors.Is(err, errDayHeadsRefused):
 		return false, false // nothing reached Tally; the day waits
 	case errors.Is(err, errRecorderStop):
+		pullRangeNoteFail(it) // 2.5.12: the sparse evidence starts again (range2512.go)
 		// ROUND 103 (1b, the owner's freeze safety): a day's list over 2 s stops reading older entries of this company;
 		// the days still missing are to be uploaded by hand (one quiet line); never asked again by itself
 		pullStopCompany(w, "over2s", form)
@@ -753,6 +754,9 @@ func pullHeadsStep(w *pullWork, port int) (bool, bool) {
 	}
 	if w.headsDone {
 		w.warmAt = nowFn()
+		if !w.split {
+			pullRangeNoteDay(it, len(rows), int(took*1000), w.heads) // 2.5.12 (range2512.go): sparse evidence, the run's check
+		}
 	}
 	pullNote(it, "heads", w)
 	return true, w.headsDone
@@ -893,6 +897,7 @@ func pullFetchStep(w *pullWork, port int) (bool, bool) {
 	case errors.Is(err, errFastShape):
 		// 2.5.12: one entry never sinks a day: only that entry is held (its reason kept), the day's others go on
 		if pullHoldEntry(w, mid, err.Error()) {
+			w.asked++ // (asked once: pullHoldEntry does not count it)
 			pullNote(it, "fetch", w)
 			return true, true
 		}
@@ -936,20 +941,17 @@ func pullKeep(w *pullWork, mid, x string) {
 	w.got = append(w.got, x)
 }
 
-// 2.5.12 (the owner's approval of 09-Nov-2026): an entry of the day FinCom cannot take as Tally keeps it (an
-// errFastShape, or larger than FinCom takes) is HELD ALONE; the day's other entries are read and sent as on any day,
-// and the day is no longer marked to be uploaded by hand for it. Before 2.5.12 such an entry threw the whole day away.
-//
-// How it is held, with no change to FinCom's cloud (tally-ingest, migration 98): the period protocol has no "day done
-// except this entry", so the closest existing mechanism is used, the day's held count (tally_period_days.held_n): the
-// entry goes in the day's period_entries as its head only (GUID, MasterID, AlterID, date and type as the day's list gave
-// them, no ledger line), which tally-ingest takes as an entry "Tally gave that FinCom keeps no entry of", held as seen at
-// that AlterID (the rule a stock journal's or delivery note's entry already goes by). So the day is done once its other
-// entries are in, and the entry is asked again only when Tally's AlterID for it moves (altered in Tally). Its reason, in
-// plain words with its voucher type and MasterID, goes in the same call as "held" (today's tally-ingest does not keep
-// it; a later one may), in the bridge's log, and once in the tray's activity. Its lines are NOT in FinCom: the reason
-// says to upload that day's Day Book to settle it. Nothing more is asked of Tally for it. false: not held (no GUID in
-// the day's list for it: the caller marks the day as before)
+// 2.5.12 (the owner's approval of 09-Nov-2026; the independent review's point 3): an entry of the day FinCom cannot take
+// as Tally keeps it (an errFastShape, or larger than FinCom takes) is HELD ALONE; the day's other entries are read and
+// sent as on any day. The day stays OPEN for that entry: nothing of it is sent as an entry (never a head taken as "seen":
+// the voucher is missing or stale in FinCom, and the day must not look done); the entry and its reason go to FinCom with
+// the day's last period_entries as "held": [{guid, masterId, alterId, type, why}]. tally-ingest (migration 151,
+// tally_period_hold) keeps them on the day, keeps the day unfinished and lists it again by itself: every later pull and
+// the night's catch-up ask Tally for that entry again (FinComVoucherObject, the one-entry request; no new request), and
+// again after each bridge update; a read that takes it clears the mark and ends the day. After 3 tries that fail on one
+// bridge version FinCom shows the manual step (the day's Day Book exported from Tally). Its reason is in the bridge's
+// log and once in the tray's activity. false: not held (no GUID in the day's list for it: the caller marks the day as
+// before). The caller counts the entry as asked
 func pullHoldEntry(w *pullWork, mid, why string) bool {
 	it, h := w.it, w.heads[mid]
 	g := cleanGUID(h.GUID)
@@ -968,20 +970,11 @@ func pullHoldEntry(w *pullWork, mid, why string) bool {
 		}
 	}
 	w.want = rest
-	w.asked++
 	w.fails = 0
-	w.got = append(w.got, pullHeldHead(h, mid, it.Day))
 	w.held = append(w.held, M{"guid": g, "masterId": mid, "alterId": h.Alter, "type": typ, "why": words})
-	writeLog("Older entries of " + it.Company + ": " + words + " (the day's other entries are sent; this entry is held, the day is not marked to be uploaded)")
+	writeLog("Older entries of " + it.Company + ": " + words + " (the day's other entries are sent; the day stays open for this entry and FinCom asks for it again by itself)")
 	liveSayOnce("pull|held|"+it.key()+"|"+mid, "Older entries of "+it.Company+": "+words)
 	return true
-}
-
-// the head of a held entry as the day's period_entries carries it: no ledger line (tally-ingest: held as seen)
-func pullHeldHead(h pullHead, mid, day string) string {
-	g := esc(cleanGUID(h.GUID))
-	return `<VOUCHER REMOTEID="` + g + `"><GUID>` + g + `</GUID><MASTERID>` + mid + `</MASTERID><ALTERID>` + fmt.Sprint(h.Alter) +
-		`</ALTERID><DATE>` + day + `</DATE><VOUCHERTYPENAME>` + esc(strings.TrimSpace(h.Type)) + `</VOUCHERTYPENAME></VOUCHER>`
 }
 
 // payroll (ROUND 103, B): the company's employees (FinComEmployees, 2.4.4's read) read and taken by FinCom before the first
@@ -1097,7 +1090,7 @@ func pullGotBytes(w *pullWork) int {
 
 // the entries read go to FinCom (period_entries); taken: they are not sent again
 func pullFlush(w *pullWork) bool {
-	if len(w.got) == 0 && len(w.gone) == 0 {
+	if len(w.got) == 0 && len(w.gone) == 0 && len(w.held) == 0 {
 		return true
 	}
 	it := w.it
@@ -1113,20 +1106,27 @@ func pullFlush(w *pullWork) bool {
 		vs = append(vs, x)
 	}
 	body := M{"kind": "period_entries", "company": it.Company, "company_guid": it.CGUID, "day": it.Day, "vouchers": vs, "gone": toAny(w.gone), "full": true}
-	if len(w.held) > 0 {
+	// 2.5.12 (pullHoldEntry): the day's LAST call says which of its entries are held, [] when none (so FinCom clears an
+	// earlier mark when a retry took the entry); a call with more of the day's entries still to come says nothing of it
+	last := n == len(w.got) && len(w.want) == 0
+	held := 0
+	if last {
 		hs := make([]any, 0, len(w.held))
 		for _, h := range w.held {
 			hs = append(hs, h)
 		}
-		body["held"] = hs // 2.5.12 (pullHoldEntry): each held entry and its reason
+		body["held"], held = hs, len(hs)
 	}
 	r := invokeCloud(body, 120)
 	if !pullCloudOK(w, r, "the entries") {
 		return false
 	}
-	w.held = nil
-	writeLog(fmt.Sprintf("Older entries of %s: %s: %d entr%s sent to FinCom%s", it.Company, liveDay(it.Day), n, map[bool]string{true: "y", false: "ies"}[n == 1],
-		map[bool]string{true: fmt.Sprintf(" (%d no longer in Tally)", len(w.gone)), false: ""}[len(w.gone) > 0]))
+	if last {
+		w.held = nil
+	}
+	writeLog(fmt.Sprintf("Older entries of %s: %s: %d entr%s sent to FinCom%s%s", it.Company, liveDay(it.Day), n, map[bool]string{true: "y", false: "ies"}[n == 1],
+		map[bool]string{true: fmt.Sprintf(" (%d no longer in Tally)", len(w.gone)), false: ""}[len(w.gone) > 0],
+		map[bool]string{true: fmt.Sprintf("; %d held (the day stays open for %s)", held, map[bool]string{true: "it", false: "them"}[held == 1]), false: ""}[held > 0]))
 	w.got, w.gone = append([]string(nil), w.got[n:]...), nil
 	fastRateNote(it, n) // next-fast-entries: the speed told in the beat, FastEntries on only (entries FinCom took, a minute)
 	// an entry whose lines did not total zero was not taken: FinCom marked the day to be uploaded by hand (its words)

@@ -1,52 +1,130 @@
 // FinCom Bridge 2.5.12 (the owner's approval of 09-Nov-2026: "Yes but no missing days at all", "and no hang of Tally at
-// all"): the older-entries read asks Tally for the day lists (FinComDayHeads) of a RANGE of consecutive days FinCom
-// listed in one request, for sparse books (a book of 420 entries a year needed one request a day). The request is
+// all"; the independent review of f1b3e700b, points 1, 2, 4): the older-entries read asks Tally for the day lists
+// (FinComDayHeads) of a RANGE of consecutive days FinCom listed in one request, for SPARSE books only. The request is
 // FinComDayHeads exactly, its fields and date form, with SVFROMDATE < SVTODATE (2 to 31 days): the only request change
 // approved for it. The answer is split by date and each day goes on exactly as today: its own turn, its own period_heads
-// (an empty day an empty list), its entries asked as today; tally-ingest is not changed.
+// (an empty day an empty list), its entries asked as today; tally-ingest is not changed for it.
+//
+// Only a book shown sparse: a range is asked only after 3 single-day lists of the company in a row, each of 50 entries
+// at most and answered in under 300 ms. Its size starts at 3 days; before each range its cost is predicted from the
+// days' own times (the slower of the single days' average and the last range's time a day) and the range is cut so the
+// prediction stays under 0.8 s. It grows by half (at least a day) only after an answer under 0.5 s, up to 31 days, and
+// halves after one over 0.8 s; a day of more than 200 entries ends ranges for the period.
 //
 // No missing days:
-//   - a range holds only consecutive days FinCom handed this bridge (pull.items, the same company, GUID, choice and kind;
-//     never a day it was not given: days not next to each other are never put together);
-//   - its answer is used only when it is whole: an envelope and its end, no Tally error, every row dated inside the
-//     range, every row counted into one day (the rows Tally gave = the sum of the days' lists, rows without GUID or
-//     MasterID aside as for one day), not more than DayPullHeadsMax rows. Else NOTHING of it is used: each day of the
-//     range asks its own list as before (a row dated outside the range is so never dropped: its date is read in its own
-//     turn), and later ranges of the company are single days;
-//   - each day's list is used only by that day's turn and only while fresh (DayPullHeadsFreshSec, as the group read's
-//     rule); an older one is asked again for that day alone.
+//   - only consecutive days FinCom handed this bridge (pull.items: the same company, GUID, choice, kind), never others;
+//   - the first range of each company in each run is a CHECK only: its answer is not used, the same days are read one by
+//     one, and each day's GUIDs are compared with the range's; any difference turns ranges off for that company for good
+//     (kept in sync\range-off.json, logged); only after the run's check passed are its later ranges used;
+//   - a row dated outside the range is the single-day rule's "date not applied": the answer is dropped, the day marked as
+//     that rule marks it, and no day is asked of that Tally until the bridge restarts;
+//   - an answer cut, in error, not adding up (rows Tally gave not equal to the days' lists), over the 2 s stop, or Tally's
+//     window held 2 s: not used, and NOT a stop of the company: as Tally being busy (the shared retry schedule's wait
+//     after a stop, Tally's own end of the request awaited), single days for that company for the rest of this run, logged;
+//   - a day's list from a range is used only by that day's turn and only while fresh (DayPullHeadsFreshSec).
 //
 // No hang: the same gate as one day's list (the six conditions just before, postings first, the typing gate, one request
-// in flight, the 2 s stop, Tally's window watched). A range starts at 7 days for each company and choice, never above 31;
-// it doubles only after an answer under 1 s, halves after one over 1 s; over the 2 s stop, or Tally's window held 2 s,
-// the company's period stops exactly as for one day's list (never the same range asked again); a day of more than 200
-// entries (a large day list) ends ranges for the company and choice (single days from then on). With FastEntries on
-// (its own window read) no range is asked.
+// in flight, the 2 s stop, Tally's window watched). With FastEntries on (its own window read) no range is asked. A single
+// day's list over 2 s still stops the company exactly as before.
 package main
 
 import (
 	"errors"
 	"fmt"
 	"html"
+	"math"
+	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 )
 
 var reRangeVchOpen = regexp.MustCompile(`<VOUCHER[\s>]`)
 
+// the allow-list row's words on the range form (allowlist.go FinComDayHeads)
+const dayHeadsRangeWords = "; 2.5.12 (the owner's approval of 09-Nov-2026): also the same request for a RANGE of 2 to 31 consecutive days FinCom listed (SVFROMDATE < SVTODATE), only for a book shown sparse (3 single days in a row of 50 entries at most, each under 300 ms), split by day and told to FinCom day by day as before (empty days too); 3 days first, cut so its predicted time stays under 0.8 s, grown by half only after an answer under 0.5 s, halved after one over 0.8 s; each run's first range of a company checked against the same days read one by one (any difference: ranges off for that company for good); an answer over 2 s, cut or not whole: not used, single days for the rest of the run (no stop); a row outside the range: the date not applied, as for one day"
+
 const (
-	pullRangeStart     = 7
+	pullRangeStart     = 3
 	pullRangeMaxDays   = 31
-	pullRangeGrowMs    = 1000 // grow only below
-	pullRangeShrinkMs  = 1000 // halve above
-	pullRangeLargeDay  = 200  // a day list this long: single days from then on
+	pullRangeGrowMs    = 500 // grow (by half) only below
+	pullRangeShrinkMs  = 800 // halve above
+	pullRangeBudgetMs  = 800 // a range's predicted time at most
+	pullRangeLargeDay  = 200 // a day list this long: single days for the period
+	pullRangeSparseN   = 3   // single-day lists in a row that show a sparse book
+	pullRangeSparseMax = 50  // rows of such a day at most
+	pullRangeSparseMs  = 300 // and its time under
 	pullRangeNoneValue = 1
 )
 
 type pullRangeDay struct {
 	heads []pullHead
 	at    time.Time
+}
+
+// a run's first range of a company: its days' GUIDs, compared with the same days read one by one
+type pullRangeCheck struct {
+	company, cguid string
+	days           map[string]map[string]bool // day -> GUIDs the range gave
+	left           map[string]bool
+	at             time.Time
+}
+
+var rng = struct {
+	mu       sync.Mutex
+	sparse   map[string][]int           // per company and choice: the single-day lists in a row that showed it sparse (their ms)
+	perDay   map[string]int             // per company and choice: the last range's time a day (ms)
+	offRun   map[string]string          // per company and GUID: ranges off for this run, and why
+	verified map[string]bool            // per company and GUID: this run's check passed
+	check    map[string]*pullRangeCheck // per company and GUID: the check under way
+	offSaved M                          // sync\range-off.json, read once
+}{}
+
+func pullRangeReset() {
+	rng.mu.Lock()
+	rng.sparse, rng.perDay, rng.offRun, rng.verified, rng.check, rng.offSaved = map[string][]int{}, map[string]int{}, map[string]string{}, map[string]bool{}, map[string]*pullRangeCheck{}, nil
+	rng.mu.Unlock()
+}
+
+func init() { pullRangeReset() }
+
+func pullRangeCoKey(it pullItem) string {
+	return companyKey(it.Company) + "|" + strings.ToLower(it.CGUID)
+}
+func pullRangeOffFile() string { return filepath.Join(syncDir(), "range-off.json") }
+
+// under rng.mu: ranges off for good for the company (a check that found a difference)
+func pullRangeOffLocked(k string) bool {
+	if rng.offSaved == nil {
+		rng.offSaved = readObjFile(pullRangeOffFile())
+		if rng.offSaved == nil {
+			rng.offSaved = M{}
+		}
+	}
+	_, off := rng.offSaved[k]
+	return off
+}
+
+func pullRangeOffForGood(it pullItem, why string) {
+	k := pullRangeCoKey(it)
+	rng.mu.Lock()
+	pullRangeOffLocked(k)
+	rng.offSaved[k] = M{"company": it.Company, "why": cutRunes(why, 300), "at": nowFn().Format(time.RFC3339)}
+	text := jsonText(rng.offSaved)
+	delete(rng.check, k)
+	rng.mu.Unlock()
+	if err := saveFile(pullRangeOffFile(), text); err != nil {
+		writeLog("Older entries: " + pullRangeOffFile() + " could not be written: " + err.Error())
+	}
+	writeLog(fmt.Sprintf("Older entries of %s: the day lists of a range differ from the same days read one by one (%s); ranges are off for this company for good, its days are read one by one", it.Company, why))
+}
+
+func pullRangeOffThisRun(it pullItem, why string) {
+	rng.mu.Lock()
+	rng.offRun[pullRangeCoKey(it)] = why
+	rng.mu.Unlock()
+	writeLog(fmt.Sprintf("Older entries of %s: %s; taken as Tally being busy (nothing stopped): its days are read one by one for the rest of this run", it.Company, why))
 }
 
 // the range form of F1: the days a..z (2 to 31 days), FinComDayHeads' own fields and date form; "" for anything else
@@ -83,7 +161,7 @@ func dayHeadsRangeExact(x, co, a, z string) bool {
 	return true
 }
 
-// the range size for the item's company and choice: 7 at the start of every period (choice), 1 once ranges ended
+// the range size for the item's company and choice: 3 at the start of every period (choice), 1 once ranges ended
 func pullRangeN(it pullItem) int {
 	pull.mu.Lock()
 	defer pull.mu.Unlock()
@@ -102,15 +180,78 @@ func pullRangeSet(it pullItem, n int) {
 	pull.rangeN[pullBatchCoKey(it)] = n
 }
 
-// the next range size after an answer that took ms: doubled under 1 s (31 days at most), halved over 1 s, else kept
+// the next range size after an answer that took ms: by half (at least a day more) under 0.5 s, 31 days at most; halved
+// over 0.8 s; else kept
 func pullRangeNext(n, ms int) int {
 	switch {
 	case ms < pullRangeGrowMs:
-		return minI(n*2, pullRangeMaxDays)
+		return minI(pullRangeMaxDays, maxI(n+1, int(math.Ceil(float64(n)*1.5))))
 	case ms > pullRangeShrinkMs:
 		return maxI(pullRangeNoneValue, n/2)
 	}
 	return n
+}
+
+// the days a range may hold, from the time a day is predicted to take: the prediction under 0.8 s
+func pullRangeCap(n, perDayMs int) int {
+	if perDayMs < 1 {
+		perDayMs = 1
+	}
+	return minI(n, pullRangeBudgetMs/perDayMs)
+}
+
+// a single day's list answered (pullHeadsStep): the sparse evidence, and this run's check of the company's first range
+func pullRangeNoteDay(it pullItem, rows, ms int, heads map[string]pullHead) {
+	k, kc := pullBatchCoKey(it), pullRangeCoKey(it)
+	rng.mu.Lock()
+	if rows <= pullRangeSparseMax && ms < pullRangeSparseMs {
+		rng.sparse[k] = append(rng.sparse[k], ms)
+		if l := len(rng.sparse[k]); l > 5 {
+			rng.sparse[k] = rng.sparse[k][l-5:]
+		}
+	} else {
+		delete(rng.sparse, k)
+	}
+	c := rng.check[kc]
+	var diff string
+	passed := false
+	if c != nil && c.left[it.Day] {
+		got := map[string]bool{}
+		for _, h := range heads {
+			got[strings.ToLower(h.GUID)] = true
+		}
+		want := c.days[it.Day]
+		if len(got) != len(want) {
+			diff = fmt.Sprintf("%s: %d entries one by one, %d in the range", liveDay(it.Day), len(got), len(want))
+		} else {
+			for g := range got {
+				if !want[g] {
+					diff = fmt.Sprintf("%s: an entry one by one that the range did not give", liveDay(it.Day))
+					break
+				}
+			}
+		}
+		delete(c.left, it.Day)
+		if diff == "" && len(c.left) == 0 {
+			rng.verified[kc] = true
+			delete(rng.check, kc)
+			passed = true
+		}
+	}
+	rng.mu.Unlock()
+	if diff != "" {
+		pullRangeOffForGood(it, diff)
+	}
+	if passed {
+		writeLog(fmt.Sprintf("Older entries of %s: the check of a range against the same days read one by one passed; its later ranges are used in this run", it.Company))
+	}
+}
+
+// a single day's list that did not come (an error, a stop): the evidence starts again
+func pullRangeNoteFail(it pullItem) {
+	rng.mu.Lock()
+	delete(rng.sparse, pullBatchCoKey(it))
+	rng.mu.Unlock()
 }
 
 // two listed days may share a range: the same company, GUID, choice, kind and reading
@@ -166,6 +307,38 @@ func pullRangeTake(w *pullWork) bool {
 	return true
 }
 
+// whether a range may be asked for the company now, and the predicted time of a day (ms); why not (for the tests)
+func pullRangeMay(it pullItem) (int, string) {
+	k, kc := pullBatchCoKey(it), pullRangeCoKey(it)
+	rng.mu.Lock()
+	defer rng.mu.Unlock()
+	if pullRangeOffLocked(kc) {
+		return 0, "off for good"
+	}
+	if why := rng.offRun[kc]; why != "" {
+		return 0, "off this run"
+	}
+	if c := rng.check[kc]; c != nil {
+		if nowFn().Sub(c.at) < 15*time.Minute && !nowFn().Before(c.at) {
+			return 0, "check under way"
+		}
+		delete(rng.check, kc) // a check whose days never came: asked again later
+	}
+	s := rng.sparse[k]
+	if len(s) < pullRangeSparseN {
+		return 0, "not shown sparse"
+	}
+	sum := 0
+	for _, v := range s {
+		sum += v
+	}
+	per := (sum + len(s) - 1) / len(s)
+	if p := rng.perDay[k]; p > per {
+		per = p
+	}
+	return maxI(per, 1), ""
+}
+
 // one step of the range read (pullStep, before one day's list): handled false: one day's list as before
 func pullRangeStep(w *pullWork, port int) (handled, sent, more bool) {
 	it := w.it
@@ -175,7 +348,11 @@ func pullRangeStep(w *pullWork, port int) (handled, sent, more bool) {
 	if pullRangeTake(w) {
 		return true, false, true
 	}
-	n := pullRangeN(it)
+	per, why := pullRangeMay(it)
+	if why != "" {
+		return false, false, false
+	}
+	n := pullRangeCap(pullRangeN(it), per)
 	if n < 2 {
 		return false, false, false
 	}
@@ -190,7 +367,11 @@ func pullRangeStep(w *pullWork, port int) (handled, sent, more bool) {
 	if x == "" {
 		return false, false, false
 	}
-	form := fmt.Sprintf("the days %s to %s (%d days, yyyymmdd TYPE=Date)", liveDay(a), liveDay(z), len(days))
+	kc := pullRangeCoKey(it)
+	rng.mu.Lock()
+	checking := !rng.verified[kc]
+	rng.mu.Unlock()
+	form := fmt.Sprintf("the days %s to %s (%d days, FinComDayHeads, yyyymmdd TYPE=Date)", liveDay(a), liveDay(z), len(days))
 	pull.mu.Lock()
 	pull.lastAsk, pull.rangeAsk = nowFn(), x
 	pull.mu.Unlock()
@@ -209,31 +390,27 @@ func pullRangeStep(w *pullWork, port int) (handled, sent, more bool) {
 	pullNoteWatched(holdMs)
 	pullNoteLook(err == nil && took > 0, holdMs)
 	ms := int(took * 1000)
-	single := func(why string) (bool, bool, bool) {
-		// nothing of the range used: each of its days asks its own list; the company's later ranges are single days
+	busy := func(what string) (bool, bool, bool) {
+		// the review's point 1: never a stop of the company for a range; as Tally being busy
 		w.noRange = true
-		pullRangeSet(it, pullRangeNoneValue)
-		writeLog(fmt.Sprintf("Older entries of %s: the day lists of %s: %s; not used, each day is asked alone", it.Company, form, why))
-		return true, took > 0, true
+		if errors.Is(err, errRecorderStop) && took > 0 && abandonMax() > 0 {
+			pullAwaitEarlier(port, abandonWait()) // Tally's own end of the request it was given up on
+		}
+		pullRangeOffThisRun(it, "the day lists of "+form+": "+what)
+		return true, took > 0, false
 	}
 	switch {
-	case gaveWay(err) || errors.Is(err, errRetryWait) || errors.Is(err, errReadStopped) || errors.Is(err, errDayHeadsRefused):
-		if took == 0 {
-			return true, false, false // nothing reached Tally; the day waits
-		}
-		return single(cutRunes(err.Error(), 160))
+	case took == 0 && (gaveWay(err) || errors.Is(err, errRetryWait) || errors.Is(err, errReadStopped) || errors.Is(err, errDayHeadsRefused)):
+		return true, false, false // nothing reached Tally; the day waits
 	case errors.Is(err, errRecorderStop):
-		// the owner's freeze safety, exactly as for one day's list: the period of the company stops (never asked again)
-		pullStopCompany(w, "over2s", form)
-		return true, true, false
+		return busy("over the 2-second stop")
 	case holdMs >= 2000:
-		pullStopCompany(w, "window", fmt.Sprintf("Tally's window did not answer for %.1f s (%s)", float64(holdMs)/1000, form))
-		return true, true, false
+		return busy(fmt.Sprintf("Tally's window did not answer for %.1f s", float64(holdMs)/1000))
 	case err != nil:
-		return single("not answered (" + cutRunes(err.Error(), 160) + ")")
+		return busy("not answered (" + cutRunes(err.Error(), 160) + ")")
 	}
 	if !strings.Contains(raw, "<ENVELOPE") || !strings.Contains(raw, "</ENVELOPE>") || reTallyLineErr.MatchString(raw) {
-		return single("Tally's answer was cut or could not be read")
+		return busy("Tally's answer was cut or could not be read")
 	}
 	body := reCmpInfo.ReplaceAllString(raw, "")
 	raw = ""
@@ -242,9 +419,9 @@ func pullRangeStep(w *pullWork, port int) (handled, sent, more bool) {
 		in[d] = true
 	}
 	byDay := map[string][]pullHead{}
-	blocks, counted := reVchBlock.FindAllString(body, -1), 0
+	blocks := reVchBlock.FindAllString(body, -1)
 	if len(blocks) > pullHeadsMax() {
-		return single(fmt.Sprintf("%d rows, more than one read takes", len(blocks)))
+		return busy(fmt.Sprintf("%d rows, more than one read takes", len(blocks)))
 	}
 	for _, b := range blocks {
 		h := pullHead{GUID: cut(strings.TrimSpace(tagValue(b, "GUID")), 100), Mid: strings.TrimLeft(tagNum(b, "MASTERID"), "0"), Alter: toI64(tagNum(b, "ALTERID")),
@@ -253,30 +430,57 @@ func pullRangeStep(w *pullWork, port int) (handled, sent, more bool) {
 			h.Type = tagValue(b, "VOUCHERTYPENAME")
 		}
 		if !in[h.Date] {
-			// never dropped silently: the range is not used, and that date is read in its own turn
-			return single("an entry dated " + or(liveDay(h.Date), "no date") + " came, outside the range")
+			// the review's point 4: the single-day rule's "date not applied", as for one day
+			bad := or(h.Date, "no date")
+			pull.mu.Lock()
+			pull.stopped[port] = "an entry of " + liveDay(bad) + " came for " + form
+			pull.mu.Unlock()
+			writeLog(fmt.Sprintf("Older entries of %s: Tally answered the request for %s with an entry dated %s: the date was not applied. The answer is dropped, nothing is stored or sent, and no day is asked of this Tally until the bridge restarts", it.Company, form, liveDay(bad)))
+			pullMarkUpload(w, "dates", "")
+			return true, true, false
 		}
-		counted++
 		if h.Mid == "" || h.GUID == "" {
 			continue // as for one day's list
 		}
 		byDay[h.Date] = append(byDay[h.Date], h)
 	}
-	if counted != len(blocks) || len(reRangeVchOpen.FindAllString(body, -1)) != len(blocks) {
-		return single("the rows Tally gave do not add up to the days' lists")
+	if len(reRangeVchOpen.FindAllString(body, -1)) != len(blocks) {
+		return busy("the rows Tally gave do not add up to the days' lists")
 	}
 	large := false
+	total := 0
 	for _, d := range days {
+		total += len(byDay[d])
 		if len(byDay[d]) > pullRangeLargeDay {
 			large = true
 		}
 	}
-	next := pullRangeNext(n, ms)
+	next := pullRangeNext(pullRangeN(it), ms)
 	if large {
 		next = pullRangeNoneValue
 	}
 	pullRangeSet(it, next)
+	rng.mu.Lock()
+	rng.perDay[pullBatchCoKey(it)] = (ms + len(days) - 1) / len(days)
+	rng.mu.Unlock()
 	now := nowFn()
+	if checking {
+		// the run's first range of the company: a check only; the same days are read one by one and compared
+		c := &pullRangeCheck{company: it.Company, cguid: it.CGUID, days: map[string]map[string]bool{}, left: map[string]bool{}, at: now}
+		for _, d := range days {
+			c.days[d], c.left[d] = map[string]bool{}, true
+			for _, h := range byDay[d] {
+				c.days[d][strings.ToLower(h.GUID)] = true
+			}
+		}
+		rng.mu.Lock()
+		rng.check[kc] = c
+		rng.mu.Unlock()
+		w.noRange = true
+		writeLog(fmt.Sprintf("Older entries of %s: Tally lists %d entr%s for %s in %d ms; this run's first range is checked: the same days are read one by one and compared before ranges are used",
+			it.Company, total, map[bool]string{true: "y", false: "ies"}[total == 1], form, ms))
+		return true, true, true
+	}
 	pull.mu.Lock()
 	if pull.rangeHeads == nil {
 		pull.rangeHeads = map[string]pullRangeDay{}
@@ -291,13 +495,9 @@ func pullRangeStep(w *pullWork, port int) (handled, sent, more bool) {
 		w.heads[h.Mid] = h
 	}
 	w.fails, w.headsDone, w.warmAt = 0, true, now
-	total := 0
-	for _, d := range days {
-		total += len(byDay[d])
-	}
 	writeLog(fmt.Sprintf("Older entries of %s: Tally lists %d entr%s for %s in %d ms; each day goes to FinCom on its own (next range %d day%s)%s",
 		it.Company, total, map[bool]string{true: "y", false: "ies"}[total == 1], form, ms, next, map[bool]string{true: "", false: "s"}[next == 1],
-		map[bool]string{true: "; a day of more than 200 entries: single days from now on", false: ""}[large]))
+		map[bool]string{true: "; a day of more than 200 entries: single days for this period", false: ""}[large]))
 	pullNote(it, "heads", w)
 	return true, true, true
 }

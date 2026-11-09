@@ -38,6 +38,7 @@ def rpc(name, a):
         if name == "tally_period_gate": return GATE["fn"](a)
         if name == "tally_period_heads": return {"ok": True, "n": len(a["p_heads"]), "held": 1, "done": False, "want": [str(h[1]) for h in a["p_heads"][1:]]}
         if name == "tally_period_entries": return {"ok": True, "stored": len(a["p_vouchers"]), "stale": 0, "held": 2, "n": 3, "done": False}
+        if name == "tally_period_hold": return {"ok": True, "held": len(a["p_held"]), "tries": 1, "manual": False, "words": "1 entry on 30-Aug could not be read yet. FinCom tries again by itself."} if a["p_held"] else {"ok": True, "held": 0}
         return {"ok": True}
     return real(name, a)
 FS.rpc = rpc
@@ -252,6 +253,35 @@ try:
     c, r = call(dict(base, kind="ledger_progress", company="BIG CO", company_guid=CG, round="r2", read=1240, of=1240, done=True))
     lp = FS.ARGS["tally_ledger_progress_save"][-1]
     ok(c == 200 and lp["p_read"] == 1240 and lp["p_done"] is True and lp["p_round"] == "r2" and lp["p_device"] == DA, "4. kept (%s)" % lp)
+    # FinCom Bridge 2.5.12 (migration 151): the day's held entries
+    print("== 5. held entries (2.5.12)")
+    nh = len(FS.ARGS.get("tally_period_hold") or [])
+    c, r = call(dict(base, kind="period_entries", company="BIG CO", company_guid=CG, day="20250830", vouchers=[V(20, "20250830")], full=True))
+    ok(c == 200 and len(FS.ARGS.get("tally_period_hold") or []) == nh and "heldEntries" not in r, "5. a call saying nothing of held entries (an older bridge): nothing held (%s)" % r)
+    held = [{"guid": CG + "-00000015", "masterId": "21", "alterId": 5021, "type": "Sales", "why": "Sales entry (MasterID 21) of 30-Aug-2025 held: a form not read", "extra": "x" * 900},
+            {"guid": "bad guid <x>", "masterId": "22"}]
+    c, r = call(dict(base, version="2.5.12", kind="period_entries", company="BIG CO", company_guid=CG, day="20250830", vouchers=[V(20, "20250830")], held=held, full=True))
+    hk = (FS.ARGS.get("tally_period_hold") or [{}])[-1]
+    ok(c == 200 and r.get("heldEntries") == 1 and r.get("done") is False and "could not be read yet" in r.get("heldWords", "") and "upload" not in r, "5. held: the day open, its plain words (%s)" % r)
+    ok(hk.get("p_day") == "2025-08-30" and hk.get("p_version") == "2.5.12" and hk.get("p_held") == [{"guid": CG + "-00000015", "masterId": "21", "alterId": 5021, "type": "Sales", "why": held[0]["why"]}],
+       "5. kept cleaned: a GUID that is no GUID dropped, nothing else passed (%s)" % hk)
+    ok(len((FS.ARGS.get("tally_period_entries") or [{}])[-1].get("p_vouchers") or []) == 1, "5. the day's other entry stored as any day's")
+    c, r = call(dict(base, version="2.5.12", kind="period_entries", company="BIG CO", company_guid=CG, day="20250830", vouchers=[V(21, "20250830")], held=[], full=True))
+    ok(c == 200 and (FS.ARGS.get("tally_period_hold") or [{}])[-1].get("p_held") == [] and "heldEntries" not in r, "5. a retry read it: held [] clears the mark (%s)" % r)
+    FS.NO_FN.add("tally_period_hold")
+    nu = len(FS.ARGS.get("tally_period_upload") or [])
+    c, r = call(dict(base, version="2.5.12", kind="period_entries", company="BIG CO", company_guid=CG, day="20250830", vouchers=[V(22, "20250830")], held=held[:1], full=True))
+    u = (FS.ARGS.get("tally_period_upload") or [{}])[-1]
+    ok(c == 200 and len(FS.ARGS.get("tally_period_upload") or []) == nu + 1 and u.get("p_why") == "held" and u.get("p_words") == "1 entry on 30-Aug could not be read: upload the Day Book for this day." and r.get("upload") == u.get("p_words") and r.get("done") is False,
+       "5. a cloud without 151: the day marked to upload with plain words, never done (%s)" % r)
+    FS.NO_FN.discard("tally_period_hold")
+    nr = len(FS.ARGS.get("tally_period_held_release") or [])
+    next(d for d in FS.T["tally_devices"] if d["id"] == DA)["version"] = "2.5.11"
+    c, r = call(dict(beat, version="2.5.12"))
+    rel = FS.ARGS.get("tally_period_held_release") or []
+    ok(c == 200 and len(rel) == nr + 1 and rel[-1] == {"p_firm": FIRM, "p_version": "2.5.12"}, "5. a bridge updated (2.5.11 -> 2.5.12): its firm's held entries tried again (%s)" % rel[-1:])
+    c, r = call(dict(beat, version="2.5.12"))
+    ok(len(FS.ARGS.get("tally_period_held_release") or []) == nr + 1, "5. the same version again: nothing released")
 finally:
     fn.terminate()
     FS.stop() if hasattr(FS, "stop") else None

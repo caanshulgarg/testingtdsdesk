@@ -1,12 +1,14 @@
-// FinCom Bridge 2.5.12 (range2512.go): the day lists of a range of days in one FinComDayHeads, for sparse books. No missing
-// days (every listed day reported, empty ones too; a row outside the range never dropped; a range answer cut, in error,
-// or not adding up never used; only days FinCom handed this bridge, consecutive ones together) and no hang of Tally
-// (over 2 s stops the company as for one day; halved over 1 s; 31 days at most; single days after a large day).
+// FinCom Bridge 2.5.12 (range2512.go; the independent review of f1b3e700b, points 1, 2 and 4): the day lists of a range of
+// days in one FinComDayHeads, only for a book shown sparse. No missing days (every listed day reported, empty ones too;
+// the run's first range checked against single days; a row outside the range is "date not applied"; a range answer cut,
+// in error, not adding up, or over 2 s never used and never a stop; only days FinCom handed this bridge, consecutive ones
+// together) and no hang of Tally (3 days first, a predicted time under 0.8 s, +50% under 0.5 s, halved over 0.8 s).
 package main
 
 import (
 	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 )
@@ -25,6 +27,16 @@ func r2512HeadsAsked(f *standTally) [][2]string {
 	return o
 }
 
+func r2512Ranges(f *standTally) [][2]string {
+	var o [][2]string
+	for _, x := range r2512HeadsAsked(f) {
+		if x[1] > x[0] {
+			o = append(o, x)
+		}
+	}
+	return o
+}
+
 // the days told to FinCom (period_heads, not an upload mark), each with its count
 func r2512Told(m *pullModel) map[string]int {
 	o := map[string]int{}
@@ -36,178 +48,298 @@ func r2512Told(m *pullModel) map[string]int {
 	return o
 }
 
-// a sparse stretch: 7 listed days, entries on two of them
-func r2512Sparse(t *testing.T, mode string) (*standTally, *standCloud, *pullModel, []string, []*tVch) {
+func r2512Days(from string, n int) []string {
+	var o []string
+	for i := 0; i < n; i++ {
+		o = append(o, addDays(from, i))
+	}
+	return o
+}
+
+// a sparse stretch of n listed days from 01-Sep-2025, entries on the 1st (2), the 6th (1) and the 9th (1); a day after it
+// that FinCom did not hand out
+func r2512Sparse(t *testing.T, n int) (*standTally, *standCloud, *pullModel, []string) {
 	t.Helper()
-	f, c, m := pullBridgeWith(t, mode)
-	days := []string{"20250901", "20250902", "20250903", "20250904", "20250905", "20250906", "20250907"}
-	vs := append(pullDay(f, days[0], 700, "Sales", "Receipt"), pullDay(f, days[3], 710, "Payment")...)
-	pullDay(f, "20250908", 720, "Journal") // a day Tally has that FinCom did not hand out
-	return f, c, m, days, vs
+	f, c, m := pullBridgeWith(t, "")
+	days := r2512Days("20250901", n)
+	pullDay(f, "20250901", 700, "Sales", "Receipt")
+	pullDay(f, "20250906", 710, "Payment")
+	pullDay(f, "20250909", 720, "Journal")
+	pullDay(f, addDays("20250901", n), 730, "Journal")
+	return f, c, m, days
 }
 
-// 1. every day of the range is reported, the empty ones as empty lists, in ONE request for the lists; only the days
-// FinCom handed out; the entries asked per day as before
+func r2512Want(days []string) map[string]int {
+	w := map[string]int{}
+	for _, d := range days {
+		w[d] = map[string]int{"20250901": 2, "20250906": 1, "20250909": 1}[d]
+	}
+	return w
+}
+
+func r2512List(days ...string) M {
+	return M{"periodDays": pullList(days...)["periodDays"], "periodNight": true}
+}
+
+// 1. every day reported (the empty ones as 0); a range only after 3 sparse single days; this run's first range is a check
+// (the same days then read one by one); only after it passed is a range used; only days FinCom handed out
 func TestR2512RangeEveryDayReported(t *testing.T) {
-	f, _, m, days, vs := r2512Sparse(t, "")
-	applyPeriodDays(M{"periodDays": pullList(days...)["periodDays"], "periodNight": true})
-	pullRun(t, 80)
-	if got := r2512HeadsAsked(f); len(got) != 1 || got[0] != [2]string{days[0], days[6]} {
-		t.Fatalf("lists asked: %v", got)
+	f, _, m, days := r2512Sparse(t, 12)
+	applyPeriodDays(r2512List(days...))
+	pullRun(t, 120)
+	rs := r2512Ranges(f)
+	if len(rs) < 2 || rs[0] != [2]string{days[3], days[5]} {
+		t.Fatalf("ranges: %v (all lists %v)", rs, r2512HeadsAsked(f))
 	}
-	told := r2512Told(m)
-	want := map[string]int{days[0]: 2, days[1]: 0, days[2]: 0, days[3]: 1, days[4]: 0, days[5]: 0, days[6]: 0}
-	if fmt.Sprint(told) != fmt.Sprint(want) {
-		t.Fatalf("told %v, want %v", told, want)
+	// the check's days read one by one after it, then the next range used (no single list of its days)
+	singles := map[string]int{}
+	for _, x := range r2512HeadsAsked(f) {
+		if x[0] == x[1] {
+			singles[x[0]]++
+		}
 	}
-	if len(m.upload) != 0 || len(sentEntries(m)) != len(vs) {
-		t.Fatalf("upload %v, entries %d", m.upload, len(sentEntries(m)))
+	for _, d := range days[:6] {
+		if singles[d] != 1 {
+			t.Fatalf("%s asked alone %d times (the evidence and the check's days): %v", d, singles[d], r2512HeadsAsked(f))
+		}
 	}
-	if pullCurrent() != nil {
-		t.Fatal("a day still read")
+	if rs[1][0] != days[6] || singles[days[6]] != 0 {
+		t.Fatalf("the range after the check: %v, %v", rs, singles)
+	}
+	if fmt.Sprint(r2512Told(m)) != fmt.Sprint(r2512Want(days)) {
+		t.Fatalf("told %v, want %v", r2512Told(m), r2512Want(days))
+	}
+	if _, had := r2512Told(m)[addDays(days[11], 1)]; had || len(m.upload) != 0 || len(sentEntries(m)) != 4 || pullCurrent() != nil {
+		t.Fatalf("a day not handed out told, or upload %v, entries %d", m.upload, len(sentEntries(m)))
+	}
+	if !strings.Contains(readText(logFile()), "the check of a range against the same days read one by one passed") {
+		t.Fatal("the check not logged")
 	}
 }
 
-// 2. days FinCom handed out that are not next to each other are never in one range; one listed day alone is asked alone
+// 2. days FinCom handed out that are not next to each other are never in one range
 func TestR2512RangeOnlyConsecutiveDays(t *testing.T) {
-	f, _, m, days, _ := r2512Sparse(t, "")
-	list := []string{days[0], days[1], days[3], days[4], days[6]}
-	applyPeriodDays(M{"periodDays": pullList(list...)["periodDays"], "periodNight": true})
-	pullRun(t, 80)
-	got := r2512HeadsAsked(f)
-	if fmt.Sprint(got) != fmt.Sprint([][2]string{{days[0], days[1]}, {days[3], days[4]}, {days[6], days[6]}}) {
-		t.Fatalf("lists asked: %v", got)
+	f, _, m, days := r2512Sparse(t, 12)
+	list := append(append([]string{}, days[:5]...), days[6:]...) // the 6th not handed out
+	applyPeriodDays(r2512List(list...))
+	pullRun(t, 120)
+	for _, r := range r2512Ranges(f) {
+		if r[0] <= days[5] && r[1] >= days[5] {
+			t.Fatalf("a range over a day not handed out: %v", r)
+		}
 	}
 	told := r2512Told(m)
-	if len(told) != 5 || told[days[0]] != 2 || told[days[3]] != 1 {
+	if _, had := told[days[5]]; had || len(told) != 11 {
 		t.Fatalf("told %v", told)
 	}
-	if _, had := told[days[2]]; had {
-		t.Fatal("a day FinCom did not hand out was told")
+}
+
+// 3. not a sparse book: a day of more than 50 entries, or a single day's list of 300 ms or more, in the last three: no range
+func TestR2512RangeOnlyWhenSparse(t *testing.T) {
+	f, _, _, days := r2512Sparse(t, 8)
+	var types []string
+	for i := 0; i < 51; i++ {
+		types = append(types, "Sales")
+	}
+	pullDay(f, days[2], 5000, types...)
+	applyPeriodDays(r2512List(days[:5]...))
+	pullRun(t, 200)
+	if rs := r2512Ranges(f); len(rs) != 0 {
+		t.Fatalf("a range after a day of 51 entries: %v", rs)
+	}
+	f2, _, _, d2 := r2512Sparse(t, 6)
+	f2.mu.Lock()
+	f2.slow = func(id, body string) time.Duration {
+		if a, z := pinDates(body); id == dayHeadsID && a == z && a == d2[1] {
+			return 320 * time.Millisecond
+		}
+		return 0
+	}
+	f2.mu.Unlock()
+	applyPeriodDays(r2512List(d2[:5]...))
+	pullRun(t, 80)
+	if rs := r2512Ranges(f2); len(rs) != 0 {
+		t.Fatalf("a range after a single day of 320 ms: %v", rs)
 	}
 }
 
-// 3. a range answer with a row dated outside it, cut, or a Tally error: nothing of it used; each day asked alone and
-// reported as it is (the row outside the range never dropped silently: its own day is read in its own turn)
-func TestR2512RangeAnswerNotUsedWhenInDoubt(t *testing.T) {
-	for name, answer := range map[string]string{
-		"outside": `<ENVELOPE><BODY><DATA><COLLECTION><VOUCHER REMOTEID="x" VCHTYPE="Sales"><DATE TYPE="Date">20250908</DATE><GUID>x</GUID><ALTERID> 9</ALTERID><MASTERID> 999</MASTERID></VOUCHER></COLLECTION></DATA></BODY></ENVELOPE>`,
-		"cut":     `<ENVELOPE><BODY><DATA><COLLECTION><VOUCHER REMOTEID="x" VCHTYPE="Sales"><DATE TYPE="Date">20250901</DATE>`,
-		"error":   `<ENVELOPE><BODY><DATA><LINEERROR>Could not set 'SVCurrentCompany'</LINEERROR></DATA></BODY></ENVELOPE>`,
-	} {
+// the stand's own answer to a range, as a real TallyPrime writes it, with the rows of skip left out
+func r2512RangeAnswer(f *standTally, a, z string, skip map[string]bool) string {
+	var o strings.Builder
+	o.WriteString(`<ENVELOPE><BODY><DATA><COLLECTION>`)
+	f.mu.Lock()
+	for _, v := range f.vch {
+		if v.date >= a && v.date <= z && !skip[v.master] {
+			fmt.Fprintf(&o, `<VOUCHER REMOTEID="%s" VCHTYPE="%s"><DATE TYPE="Date">%s</DATE><GUID>%s</GUID><VOUCHERTYPENAME>%s</VOUCHERTYPENAME><ALTERID TYPE="Number"> %d</ALTERID><MASTERID TYPE="Number"> %s</MASTERID></VOUCHER>`,
+				v.guid, v.typ, v.date, v.guid, v.typ, v.alter, v.master)
+		}
+	}
+	f.mu.Unlock()
+	o.WriteString(`</COLLECTION></DATA></BODY></ENVELOPE>`)
+	return o.String()
+}
+
+// 4. the run's check finds a difference (the range left out an entry the day read alone gives): ranges off for that
+// company for good (kept in sync\range-off.json, so a new run does not use them either), logged; no day missing
+func TestR2512RangeCheckMismatchOffForGood(t *testing.T) {
+	f, _, m, days := r2512Sparse(t, 10)
+	pullDay(f, days[4], 740, "Sales")
+	f.mu.Lock()
+	f.behave = func(w http.ResponseWriter, r *http.Request, id, body string) bool {
+		if a, z := pinDates(body); id == dayHeadsID && z > a {
+			fmt.Fprint(w, r2512RangeAnswer(f, a, z, map[string]bool{"740": true}))
+			return true
+		}
+		return false
+	}
+	f.mu.Unlock()
+	applyPeriodDays(r2512List(days...))
+	pullRun(t, 120)
+	if rs := r2512Ranges(f); len(rs) != 1 {
+		t.Fatalf("ranges after a check that failed: %v", rs)
+	}
+	want := r2512Want(days)
+	want[days[4]] = 1
+	if fmt.Sprint(r2512Told(m)) != fmt.Sprint(want) {
+		t.Fatalf("told %v", r2512Told(m))
+	}
+	if !strings.Contains(readText(pullRangeOffFile()), zz) || !strings.Contains(readText(logFile()), "ranges are off for this company for good") {
+		t.Fatal("not kept or not logged")
+	}
+	// a new run (the bridge restarted): still off
+	pullRangeReset()
+	if _, why := pullRangeMay(pullItem{Company: zz, CGUID: b220CoGUID, Day: days[0], Fetch: true}); why != "off for good" {
+		t.Fatalf("after a restart: %q", why)
+	}
+}
+
+// 5. a range answer cut, in error, or over the 2 s stop: not used, NOT a stop of the company (as Tally being busy); its
+// days read one by one, every day told; ranges off for the rest of the run
+func TestR2512RangeBusyNotAStop(t *testing.T) {
+	for name, how := range map[string]string{"cut": "cut", "error": "error", "over 2 s": "slow"} {
 		t.Run(name, func(t *testing.T) {
-			f, _, m, days, vs := r2512Sparse(t, "")
+			f, c, m, days := r2512Sparse(t, 9)
+			stops := r1Stops(c)
 			f.mu.Lock()
 			f.behave = func(w http.ResponseWriter, r *http.Request, id, body string) bool {
-				if a, z := pinDates(body); id == dayHeadsID && z > a {
-					fmt.Fprint(w, answer)
+				a, z := pinDates(body)
+				if id != dayHeadsID || z <= a {
+					return false
+				}
+				switch how {
+				case "cut":
+					fmt.Fprint(w, `<ENVELOPE><BODY><DATA><COLLECTION><VOUCHER REMOTEID="x" VCHTYPE="Sales"><DATE TYPE="Date">`+a+`</DATE>`)
+					return true
+				case "error":
+					fmt.Fprint(w, `<ENVELOPE><BODY><DATA><LINEERROR>Could not set 'SVCurrentCompany'</LINEERROR></DATA></BODY></ENVELOPE>`)
 					return true
 				}
 				return false
 			}
-			f.mu.Unlock()
-			applyPeriodDays(M{"periodDays": pullList(days[:3]...)["periodDays"], "periodNight": true})
-			pullRun(t, 80)
-			got := r2512HeadsAsked(f)
-			if len(got) != 4 || got[0] != [2]string{days[0], days[2]} {
-				t.Fatalf("lists asked: %v", got)
-			}
-			for i, d := range days[:3] {
-				if got[i+1] != [2]string{d, d} {
-					t.Fatalf("not asked alone: %v", got)
+			if how == "slow" {
+				f.slow = func(id, body string) time.Duration {
+					if a, z := pinDates(body); id == dayHeadsID && z > a {
+						return 2500 * time.Millisecond
+					}
+					return 0
 				}
 			}
-			told := r2512Told(m)
-			if fmt.Sprint(told) != fmt.Sprint(map[string]int{days[0]: 2, days[1]: 0, days[2]: 0}) || len(m.upload) != 0 {
-				t.Fatalf("told %v, upload %v", told, m.upload)
+			f.mu.Unlock()
+			applyPeriodDays(r2512List(days...))
+			pullRun(t, 120)
+			// the shared retry schedule's wait after a stop: the clock moved on, the read goes on by itself
+			at := nowFn().Add(10 * time.Minute)
+			nowFn = func() time.Time { return at }
+			retryReset()
+			pullRun(t, 120)
+			if len(*stops) != 0 {
+				t.Fatalf("the company stopped: %v", *stops)
 			}
-			if sent := sentEntries(m); len(sent) != 2 || sent[vs[0].master] == "" || sent[vs[1].master] == "" {
-				t.Fatalf("entries %d", len(sent))
+			if rs := r2512Ranges(f); len(rs) != 1 {
+				t.Fatalf("ranges: %v", rs)
 			}
-			// the company's later ranges are single days
-			if n := pullRangeN(pullItem{Company: zz, CGUID: b220CoGUID, Day: days[0], Fetch: true}); n != 1 {
-				t.Fatalf("range size after a doubtful answer: %d", n)
+			if fmt.Sprint(r2512Told(m)) != fmt.Sprint(r2512Want(days)) || len(m.upload) != 0 {
+				t.Fatalf("told %v, upload %v", r2512Told(m), m.upload)
+			}
+			if _, why := pullRangeMay(pullItem{Company: zz, CGUID: b220CoGUID, Day: days[0], Fetch: true}); why != "off this run" || !strings.Contains(readText(logFile()), "taken as Tally being busy (nothing stopped)") {
+				t.Fatalf("after it: %q", why)
 			}
 		})
 	}
 }
 
-// 4. a range over the 2 s stop: the company's period stops exactly as for one day's list; no day of the range is told
-// or marked done, and the same range is never asked again
-func TestR2512RangeOver2sStopsAsADay(t *testing.T) {
-	f, c, m, days, _ := r2512Sparse(t, "")
-	stops := r1Stops(c)
+// 6. a row dated outside the range: the single-day rule's "date not applied" (the answer dropped, the day marked, no day
+// asked of that Tally until the bridge restarts)
+func TestR2512RangeDateNotApplied(t *testing.T) {
+	f, _, m, days := r2512Sparse(t, 9)
 	f.mu.Lock()
-	f.slow = func(id, body string) time.Duration {
+	f.behave = func(w http.ResponseWriter, r *http.Request, id, body string) bool {
 		if a, z := pinDates(body); id == dayHeadsID && z > a {
-			return 2500 * time.Millisecond
+			fmt.Fprint(w, r2512RangeAnswer(f, "20250101", "20251231", nil))
+			return true
 		}
-		return 0
+		return false
 	}
 	f.mu.Unlock()
-	applyPeriodDays(M{"periodDays": pullList(days...)["periodDays"], "periodNight": true})
-	pullRun(t, 40)
-	if got := r2512HeadsAsked(f); len(got) != 1 {
-		t.Fatalf("lists asked: %v", got)
+	applyPeriodDays(r2512List(days...))
+	pullRun(t, 120)
+	n := len(r2512HeadsAsked(f))
+	if up := m.upload[days[3]]; up == nil || str(up["why"]) != "dates" || !strings.Contains(readText(logFile()), "the date was not applied") {
+		t.Fatalf("the mark: %v", m.upload)
 	}
-	if len(r2512Told(m)) != 0 || len(m.entries) != 0 || len(*stops) != 1 || str((*stops)[0]["why"]) != "over2s" {
-		t.Fatalf("told %v, entries %d, stops %v", r2512Told(m), len(m.entries), *stops)
+	if _, had := r2512Told(m)[days[3]]; had {
+		t.Fatal("a day of the dropped answer told")
 	}
-	applyPeriodDays(M{"periodDays": pullList(days...)["periodDays"], "periodNight": true})
-	pullRun(t, 40)
-	if got := r2512HeadsAsked(f); len(got) != 1 {
-		t.Fatalf("asked again after the stop: %v", got)
+	applyPeriodDays(r2512List(days[4:]...))
+	pullRun(t, 20)
+	if len(r2512HeadsAsked(f)) != n {
+		t.Fatal("another day asked of the same Tally")
 	}
 }
 
-// 5. the size: 7 days at the start of a period, doubled only after an answer under 1 s, halved after one over 1 s,
-// never above 31 days; single days after a day of more than 200 entries
+// 7. the sizes: 3 days first; +50% (a day more at least) only under 0.5 s, 31 days at most; halved over 0.8 s; a range
+// cut so its predicted time stays under 0.8 s
 func TestR2512RangeHalvingAndCap(t *testing.T) {
-	for _, c := range [][3]int{{7, 300, 14}, {14, 300, 28}, {28, 300, 31}, {31, 300, 31}, {7, 1000, 7}, {14, 1500, 7}, {7, 1500, 3}, {3, 1500, 1}, {1, 1500, 1}} {
+	for _, c := range [][3]int{{3, 300, 5}, {5, 300, 8}, {8, 499, 12}, {27, 300, 31}, {31, 100, 31}, {8, 500, 8}, {8, 800, 8}, {8, 801, 4}, {3, 900, 1}, {1, 900, 1}} {
 		if got := pullRangeNext(c[0], c[1]); got != c[2] {
 			t.Fatalf("after %d days in %d ms: %d, want %d", c[0], c[1], got, c[2])
 		}
 	}
-	if dayHeadsRangeRequest("ZZ", "20250901", "20251001") == "" || dayHeadsRangeRequest("ZZ", "20250901", "20251002") != "" { // 31 days at most
-		t.Fatal("a range of more than 31 days was built")
+	for _, c := range [][3]int{{31, 100, 8}, {31, 250, 3}, {31, 400, 2}, {31, 500, 1}, {5, 10, 5}, {31, 0, 31}} {
+		if got := pullRangeCap(c[0], c[1]); got != c[2] {
+			t.Fatalf("a range of %d at %d ms a day: %d, want %d", c[0], c[1], got, c[2])
+		}
 	}
-	if dayHeadsRangeRequest("ZZ", "20250901", "20250930") == "" || dayHeadsRangeRequest("ZZ", "20250902", "20250901") != "" {
-		t.Fatal("the range bounds")
+	if pullRangeN(pullItem{Company: zz, CGUID: b220CoGUID, Day: "20250901", ChosenAt: "x"}) != 3 {
+		t.Fatal("not 3 days at the start of a period")
 	}
-	// a slow answer (1.2 s) halves the next range
-	f, _, _, days, _ := r2512Sparse(t, "")
+	if dayHeadsRangeRequest("ZZ", "20250901", "20251001") == "" || dayHeadsRangeRequest("ZZ", "20250901", "20251002") != "" || dayHeadsRangeRequest("ZZ", "20250902", "20250901") != "" {
+		t.Fatal("the range bounds (31 days at most)")
+	}
+	// a range answered in 0.9 s halves the next; its time a day caps the one after
+	f, _, _, days := r2512Sparse(t, 20)
 	f.mu.Lock()
 	f.slow = func(id, body string) time.Duration {
 		if a, z := pinDates(body); id == dayHeadsID && z > a {
-			return 1200 * time.Millisecond
+			return 900 * time.Millisecond
 		}
 		return 0
 	}
 	f.mu.Unlock()
-	applyPeriodDays(M{"periodDays": pullList(days...)["periodDays"], "periodNight": true})
-	pullRun(t, 80)
-	it := pullItem{Company: zz, CGUID: b220CoGUID, Day: days[0], Fetch: true}
-	if n := pullRangeN(it); n != 3 {
-		t.Fatalf("after a 1.2 s answer: %d days", n)
-	}
-	// a day of more than 200 entries: single days from then on
-	f2, _, m2 := pullBridgeWith(t, "")
-	var types []string
-	for i := 0; i < 201; i++ {
-		types = append(types, "Sales")
-	}
-	pullDay(f2, "20250801", 5000, types...)
-	applyPeriodDays(M{"periodDays": pullList("20250801", "20250802")["periodDays"], "periodNight": true})
+	applyPeriodDays(r2512List(days...))
 	pullRun(t, 200)
-	it.Day = "20250801"
-	if n := pullRangeN(it); n != 1 || r2512Told(m2)["20250801"] != 201 {
-		t.Fatalf("after a large day: %d, told %v", n, r2512Told(m2))
+	it := pullItem{Company: zz, CGUID: b220CoGUID, Day: days[0], Fetch: true}
+	if n := pullRangeN(it); n != 1 {
+		t.Fatalf("after a 0.9 s answer of 3 days: %d days", n)
+	}
+	if rs := r2512Ranges(f); len(rs) != 1 {
+		t.Fatalf("ranges: %v", rs)
 	}
 }
 
-// 6. the dated guard: the range form only as built, while it is being asked, every day of it listed now
+// 8. the dated guard: the range form only as built, while it is being asked, every day of it listed now
 func TestR2512RangeGuard(t *testing.T) {
-	_, _, _, days, _ := r2512Sparse(t, "")
+	_, _, _, days := r2512Sparse(t, 3)
 	applyPeriodDays(pullList(days[0], days[1]))
 	x := dayHeadsRangeRequest(zz, days[0], days[1])
 	tc := recorderTC(nil)

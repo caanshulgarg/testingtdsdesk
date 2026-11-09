@@ -33,13 +33,11 @@ func midList(from, n int64) []string {
 
 // 1. the request is byte for byte the one measured and approved (run 40750991113's capture, the same on 3.0 .. 7.1)
 func TestR249RequestAsApproved(t *testing.T) {
-	// 2.5.12 (the owner's approval of 09-Nov-2026): 2.4.9's measured request with the four fields of a ledger line's stock
-	// items (TestR2512FetchIs249PlusItems: exactly b4-range.xml's text with them)
-	if got, want := voucherBatchRangeRequest("@@CO@@", "20991231", 111111, 222222), batchTD(t, "b4-range-2512.xml"); got != want {
+	if got, want := voucherBatchRangeRequest("@@CO@@", "20991231", 111111, 222222), batchTD(t, "b4-range.xml"); got != want {
 		t.Fatalf("the range form is not the approved request:\n%s\nwant\n%s", got, want)
 	}
 	mids := []string{"15", "17", "20"}
-	want := strings.Replace(batchTD(t, "b4-list-2512.xml"), "@@MIDS@@", "$MasterID = 15 OR $MasterID = 17 OR $MasterID = 20", 1)
+	want := strings.Replace(batchTD(t, "b4-list.xml"), "@@MIDS@@", "$MasterID = 15 OR $MasterID = 17 OR $MasterID = 20", 1)
 	if got := voucherBatchListRequest("@@CO@@", "20991231", mids); got != want {
 		t.Fatalf("the list form is not the approved request:\n%s\nwant\n%s", got, want)
 	}
@@ -63,8 +61,8 @@ func TestR249RequestAsApproved(t *testing.T) {
 			t.Errorf("a field FinComVoucherObject does not keep: %s", f)
 		}
 	}
-	if len(fs) != 174+2*len(liveKeepInv2512) { // 2.5.12: four fields and their LEDGERENTRIES copies (r2512_test.go)
-		t.Errorf("%d fields, measured with 174 (2.5.12: and 8)", len(fs))
+	if len(fs) != 174 {
+		t.Errorf("%d fields, measured with 174", len(fs))
 	}
 	// refused: no day, b below a, no MasterID, more than 100 listed, a MasterID twice or with a leading zero
 	for _, bad := range []string{voucherBatchRangeRequest("C", "2026083", 1, 2), voucherBatchRangeRequest("C", "20260831", 9, 5), voucherBatchRangeRequest("C", "20260831", 0, 5),

@@ -240,6 +240,7 @@ func pullReset() {
 	pull.stopCo = map[string]M{}
 	pull.batchCo = map[string]int{}
 	pull.rangeAsk, pull.rangeN, pull.rangeHeads = "", map[string]int{}, map[string]pullRangeDay{} // 2.5.12 (range2512.go)
+	pullRangeReset()
 	pull.empAt, pull.night, pull.nightAt, pull.beatAt = map[string]time.Time{}, false, time.Time{}, time.Time{}
 	pickReset() // 2.5.10 (pickack.go)
 	pullSaveMu.Lock()
@@ -357,8 +358,7 @@ func TestR245PullCountingOnlyAndThreeDaysAnAnswer(t *testing.T) {
 		t.Fatalf("%d days taken from one answer, want 3", n)
 	}
 	pullRun(t, 20)
-	// 2.5.12 (range2512.go): the three consecutive days' lists in one request, each day told on its own
-	if f.n(vchObjectID) != 0 || f.n(dayHeadsID) != 1 || len(m.heads) != 3 || m.n["20250401"] != 2 || m.n["20250402"] != 0 || m.n["20250403"] != 0 {
+	if f.n(vchObjectID) != 0 || f.n(dayHeadsID) != 3 || len(m.heads) != 3 || m.n["20250401"] != 2 || m.n["20250402"] != 0 {
 		t.Fatalf("counting: %v %v", f.ids(), m.n)
 	}
 }
@@ -514,14 +514,12 @@ func TestR245PullDateNotAppliedStops(t *testing.T) {
 	f, _, m := pullBridge(t)
 	pullDay(f, "20250510", 1200, "Sales")
 	pullDay(f, "20250511", 1300, "Sales")
-	pullDay(f, "20250512", 1350, "Sales") // 2.5.12: a day not listed, so the range answer shows the date not applied
 	f.mu.Lock()
 	f.headsAllDays = true
 	f.mu.Unlock()
 	applyPeriodDays(pullList("20250510", "20250511"))
 	pullRun(t, 10)
-	// 2.5.12 (range2512.go): the range's answer (a row dated outside it) is not used; the day alone, as before
-	if f.n(dayHeadsID) != 2 || f.n(vchObjectID) != 0 || len(m.entries) != 0 || m.n["20250510"] != 0 || m.n["20250511"] != 0 {
+	if f.n(dayHeadsID) != 1 || f.n(vchObjectID) != 0 || len(m.entries) != 0 || m.n["20250510"] != 0 {
 		t.Fatalf("after a wrong date: %v %v", f.ids(), m.n)
 	}
 	if up := m.upload["20250510"]; up == nil || str(up["why"]) != "dates" {
@@ -532,7 +530,7 @@ func TestR245PullDateNotAppliedStops(t *testing.T) {
 	}
 	applyPeriodDays(pullList("20250511"))
 	pullRun(t, 5)
-	if f.n(dayHeadsID) != 2 {
+	if f.n(dayHeadsID) != 1 {
 		t.Fatal("another day asked of the same Tally")
 	}
 }
