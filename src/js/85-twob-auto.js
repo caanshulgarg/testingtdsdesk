@@ -15,7 +15,21 @@ const M2B = {
   url(){ return String(Cloud.cfg().url || "").replace(/\/+$/, "") + "/functions/v1/gst-2b-match"; },
   fyOf(ym){ const y = +String(ym).slice(0, 4), m = +String(ym).slice(4, 6); const s = m >= 4 ? y : y - 1; return s + "-" + String((s + 1) % 100).padStart(2, "0"); },
   months(fy){ const y = +String(fy).slice(0, 4), out = []; for (let m = 4; m <= 15; m++) out.push((m <= 12 ? y : y + 1) + String(m <= 12 ? m : m - 12).padStart(2, "0")); return out; },
-  fyNow(){ const ms = (typeof GSTR === "object" && GSTR.months) ? GSTR.months() : []; return this.fyOf(S.gstYm || ms[ms.length - 1] || new Date().toISOString().slice(0, 7).replace("-", "")); },
+  // next-speed0 (09-Nov-2026, the GST input register of a 40,000-entry book: 10.4 s of 13.1 s): GST2B.run asks aiSig, and so
+  // the year, at every ask, and each time GSTR.months read every entry's date. The books' last month is asked only when no
+  // month is chosen (S.gstYm), and is then kept for these books: the same books object, the same list of entries (its
+  // length, its first and last entry), the same save (BOOKS_REV) and the same client. Kept only when the months come from
+  // the entries; the months worked out from today's date (books with no dated entry) are asked each time. tests/run_speed0.js
+  _last: null,
+  lastYm(){
+    if (!(typeof GSTR === "object" && GSTR.months)) return undefined;
+    const b = S.books, v = b && b.vouchers, n = Array.isArray(v) ? v.length : 0, rev = typeof BOOKS_REV === "number" ? BOOKS_REV : 0, c = this._last;
+    if (c && n && c.b === b && c.v === v && c.n === n && c.a === v[0] && c.z === v[n - 1] && c.rev === rev && c.co === S.coId) return c.last;
+    const ms = GSTR.months(), last = ms[ms.length - 1];
+    this._last = n && v.some(e => e && GSTR.ym(e.date).length === 6) ? {b, v, n, a: v[0], z: v[n - 1], rev, co: S.coId, last} : null;
+    return last;
+  },
+  fyNow(){ return this.fyOf(S.gstYm || this.lastYm() || new Date().toISOString().slice(0, 7).replace("-", "")); },
   gstinOf(reg){ return ((typeof GSTR === "object" && GSTR.gstins(S.books)) || []).find(g => g.slice(0, 2) === reg) || ((GST2B.all2b(reg)[0] || {}).gstin) || ""; },
   key(reg, fy){ return (reg || "") + "|" + fy; },
   // AI only where the firm's AI help is on for 2B (Settings, AI help) and the client is not left out of it
