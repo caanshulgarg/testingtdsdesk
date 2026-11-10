@@ -61,7 +61,9 @@ const M = v => x.INR.format(Math.round(v || 0));
     x.TallyRead.after = after;
     const c4 = got && got.refused ? "refused" : x.MIS.run(F, b.tb.to, "test").control;
     ok(b.tb.from === F && b.tb.own === 1 && c4 === null, "a trial balance file: closings worked out here, no check, no line and no \u201cagrees with Tally\u201d (" + JSON.stringify(c4) + ")");
-    delete b.tb.own; const c5 = x.MIS.run(F, b.tb.to, "test").control;
+    delete b.tb.own; const c6 = x.MIS.run(F, b.tb.to, "test").control;
+    ok(c6 === null, "a trial balance file saved before the mark (source only): no check either (" + JSON.stringify(c6) + ")");
+    const src = b.tb.source; delete b.tb.source; const c5 = x.MIS.run(F, b.tb.to, "test").control; b.tb.source = src;
     ok(c5 && c5.ok, "(without the mark it would have said it agrees with Tally: the test is not empty)");
     delete b.tb;
   }

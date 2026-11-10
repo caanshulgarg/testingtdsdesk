@@ -467,8 +467,9 @@ const MIS = {
       .map(x => Object.assign(x, {amt: r2(x.bills.reduce((s2, y) => s2 + y.left, 0))}));
     // the control: every ledger's movement here against Tally's own closings, from the bridge's read only. FinCom's cloud
     // copy has none (src/js/49: blank, kept as 0) or works them out from openings (TallyRead.openings): tb.src "copy";
-    // a trial balance file's are worked out too (tb.own). Neither is a check (next-mis-speed: "963 ledgers differ")
-    if (b.tb && b.tb.src !== "copy" && !b.tb.own && b.tb.from === from && b.tb.to === to){
+    // a trial balance file's are worked out too (tb.own; tb.source, set only by bringTbFile, on books saved before tb.own).
+    // Neither is a check (next-mis-speed: "963 ledgers differ")
+    if (b.tb && b.tb.src !== "copy" && !b.tb.own && !b.tb.source && b.tb.from === from && b.tb.to === to){
       const mv = this.moves(from, to); let n = 0, amt = 0; const list = [];
       Object.entries(b.tb.led).forEach(([l, x]) => { const d = r2((num(x.close) - num(x.open)) - ((mv[l] || {}).t || 0)); if (Math.abs(d) >= 1){ n++; amt = r2(amt + Math.abs(d)); list.push([l, d]); } });
       r.control = {ok: n === 0, n, amt, list: list.slice(0, 50)};
