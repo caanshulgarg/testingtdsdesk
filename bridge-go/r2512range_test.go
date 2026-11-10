@@ -464,3 +464,39 @@ func TestR2512RangeOffFileUnreadable(t *testing.T) {
 		t.Fatalf("the other entries lost: %v", got)
 	}
 }
+
+// the final review: a range stopped at 2 s while Tally's window is held 2 s (also measured over the wait for Tally's end of
+// it) stops the company for the window, as the group read; never taken as Tally being busy
+func TestR2512RangeStoppedAndWindowHeldStopsCompany(t *testing.T) {
+	f, c, _, days := r2512Sparse(t, 9)
+	stops := r1Stops(c)
+	f.mu.Lock()
+	f.slow = func(id, body string) time.Duration {
+		if a, z := pinDates(body); id == dayHeadsID && z > a {
+			return 2500 * time.Millisecond
+		}
+		return 0
+	}
+	f.mu.Unlock()
+	old := windowHoldFn
+	windowHoldFn = func() func(time.Time) int {
+		pull.mu.Lock()
+		rangeNow := pull.rangeAsk != ""
+		pull.mu.Unlock()
+		return func(time.Time) int {
+			if rangeNow {
+				return 2300
+			}
+			return 0
+		}
+	}
+	t.Cleanup(func() { windowHoldFn = old })
+	applyPeriodDays(r2512List(days...))
+	pullRun(t, 120)
+	if rs := r2512Ranges(f); len(rs) != 1 || len(*stops) != 1 || str((*stops)[0]["why"]) != "window" {
+		t.Fatalf("ranges %v, stops %v", rs, *stops)
+	}
+	if _, why := pullRangeMay(pullItem{Company: zz, CGUID: b220CoGUID, Day: days[0], Fetch: true}); why == "off this run" {
+		t.Fatal("taken as Tally being busy")
+	}
+}

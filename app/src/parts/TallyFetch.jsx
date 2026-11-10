@@ -213,7 +213,7 @@ export default function OlderEntries({ cid, say = false }) {
   // 154), every "upload" line stays on the page as before)
   const [held, setHeld] = useState([]), [heldOk, setHeldOk] = useState(false), [heldBusy, setHeldBusy] = useState("");
   const heldSig = book + "|" + (p ? [p.x, p.countedDays, p.state].join(",") : "");
-  useEffect(() => { let on = true; if (!book) { setHeld([]); setHeldOk(false); return; }
+  useEffect(() => { let on = true; setHeldOk(false); if (!book) { setHeld([]); return; }
     rpc("tally_period_held_list", { p_book: book }).then((r) => { if (!on) return; const ok = !!(r && r.ok && Array.isArray(r.held)); setHeld(ok ? r.held : []); setHeldOk(ok); },
       () => { if (on) { setHeld([]); setHeldOk(false); } });
     return () => { on = false; }; }, [heldSig]);

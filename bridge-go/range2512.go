@@ -406,7 +406,15 @@ func pullRangeStep(w *pullWork, port int) (handled, sent, more bool) {
 	pull.mu.Lock()
 	pull.rangeAsk = ""
 	pull.mu.Unlock()
-	holdMs := held(time.Now().Add(-time.Duration(took * float64(time.Second))))
+	// the final review (as batch249.go): Tally's end of a range stopped at 2 s awaited FIRST, then the window measured
+	// from the send over that wait too, then window -> over2s -> the stop as Tally being busy
+	from := time.Now().Add(-time.Duration(took * float64(time.Second)))
+	unfinished := false
+	if errors.Is(err, errRecorderStop) && took > 0 {
+		// not finished within TallyAbandonWaitSec, or its end not watchable: never a second request at Tally
+		unfinished = abandonMax() <= 0 || !pullAwaitEarlier(port, abandonWait())
+	}
+	holdMs := held(from)
 	if took == 0 {
 		holdMs = 0
 	}
@@ -414,26 +422,26 @@ func pullRangeStep(w *pullWork, port int) (handled, sent, more bool) {
 	pullNoteLook(err == nil && took > 0, holdMs)
 	ms := int(took * 1000)
 	busy := func(what string) (bool, bool, bool) {
-		// the review's point 1: a range over 2 s or cut is not a stop of the company; as Tally being busy. Review 2 (M2):
-		// only once Tally has finished the range it was stopped on (as the group read, batch249.go): not finished within
-		// TallyAbandonWaitSec, or not watchable, the company's period stops (never two requests at Tally)
+		// the review's point 1: a range over 2 s (Tally finished it, its window answering) or cut is not a stop of the
+		// company; as Tally being busy: single days for the rest of the run
 		w.noRange = true
-		if errors.Is(err, errRecorderStop) && took > 0 && (abandonMax() <= 0 || !pullAwaitEarlier(port, abandonWait())) {
-			pullStopCompany(w, "over2s", fmt.Sprintf("the day lists of %s: Tally had not finished them %d s after the 2 s stop (or could not be watched)", form, int(pullAwaitBound(abandonWait()).Seconds())))
-			return true, true, false
-		}
 		pullRangeOffThisRun(it, "the day lists of "+form+": "+what)
 		return true, took > 0, false
 	}
 	switch {
 	case took == 0 && (gaveWay(err) || errors.Is(err, errRetryWait) || errors.Is(err, errReadStopped) || errors.Is(err, errDayHeadsRefused)):
 		return true, false, false // nothing reached Tally; the day waits
-	case errors.Is(err, errRecorderStop):
-		return busy("over the 2-second stop")
 	case holdMs >= 2000:
-		// review 2 (L3): Tally's window held 2 s stops the company exactly as for one day's list
+		// review 2 (L3): Tally's window held 2 s stops the company exactly as for one day's list (also when the range was
+		// stopped at 2 s, and while Tally finished it)
 		pullStopCompany(w, "window", fmt.Sprintf("Tally's window did not answer for %.1f s while %s were read", float64(holdMs)/1000, form))
 		return true, true, false
+	case unfinished:
+		// review 2 (M2): as the group read, Tally had not finished the range it was stopped on: the company's period stops
+		pullStopCompany(w, "over2s", fmt.Sprintf("the day lists of %s: Tally had not finished them %d s after the 2 s stop (or could not be watched)", form, int(pullAwaitBound(abandonWait()).Seconds())))
+		return true, true, false
+	case errors.Is(err, errRecorderStop):
+		return busy("over the 2-second stop")
 	case err != nil:
 		return busy("not answered (" + cutRunes(err.Error(), 160) + ")")
 	}
