@@ -126,7 +126,8 @@ def main():
         w = txt(card + " [data-cc-words]")
         ok(w == "Checked 120 of 213 days · about 6 min left (" + RANGE + ")", "2. the progress (%s)" % w)
         ok(E("() => document.querySelector(\"#app [data-check-changes='books'] [role=progressbar]\").getAttribute('aria-valuenow')") == "56" and n(card + " [data-cc-wait]") == 0, "2. the bar at 56%, nothing in the way")
-        ok("2 seconds" in txt(card + " [data-cc-safe]") and "never hangs" in txt(card + " [data-cc-safe]") and "Nothing is ever changed in Tally" in txt(card), "2. Tally never hangs and is never changed, said")
+        # (the owner, 09-Nov-2026: no lines without use: the card no longer explains how the bridge reads)
+        ok(n(card + " [data-cc-safe]") == 0 and "never hangs" not in txt(card) and "FinCom compares each day" not in txt(card), "2. no explaining lines on the card")
         shot("check-progress-1366")
         state(sb(pull=GOING), ASK(cid, after=True))
         ok(txt(card + " [data-cc-wait='after']") == "Waiting for Bring books from Tally (FY %d-%s) to finish: the check goes next." % (FYN, str(FYN + 1)[2:]), "2. after a running Bring books from Tally (%s)" % txt(card + " [data-cc-wait]"))
@@ -179,7 +180,7 @@ def main():
         state(sb(pull=GOING), None, 1400, [{"book": "bk-zz", "client": cid, "fill": None, "lean": lean, "hours": HOURS}])
         oc = "#app [data-older-entries]"
         ok(txt(oc + " [data-older-lean]") == "213 days: 206 already in FinCom, 7 to bring.", "7. the year in days (%s)" % txt(oc + " [data-older-lean]"))
-        ok(txt(oc + " [data-older-pace]") == PACE, "7. the honest pace (%s)" % txt(oc + " [data-older-pace]"))
+        ok(n(oc + " [data-older-pace]") == 0 and "pace" not in txt(oc), "7. no pace line (%s)" % txt(oc + " [data-older-pace]"))
         state(sb(), None, 1400, [{"book": "bk-zz", "client": cid, "fill": None, "lean": None, "hours": HOURS}])
         pg.click(oc + " [data-older-start]"); pg.wait_for_timeout(600)
         ok(calls("tally_period_choose_lean")[-1:] == [{"p_book": "bk-zz", "p_fy_start": "%d-04-01" % FYN, "p_part": "year"}] and not calls("tally_period_choose"), "7. Start walks only what FinCom lacks (%s)" % calls("tally_period_choose_lean")[-1:])

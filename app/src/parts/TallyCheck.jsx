@@ -132,9 +132,7 @@ export default function CheckChanges({ cid, where = "books" }) {
   if (where !== "books") return <div className="tfx-line tfx-cc" data-check-changes="row">{picker}{body}</div>;
   return <section className="dash-card tfx-cc" data-check-changes="books" style={{ marginBottom: 12 }}>
     <h3>Check for changes in Tally</h3>
-    <p className="note" style={{ margin: "0 0 8px" }}>FinCom compares each day of the period with Tally and corrects its own copy: entries added, changed or deleted in Tally are brought in (a deleted one is kept in history). Nothing is ever changed in Tally.</p>
     {picker}{body}
-    <p className="note" data-cc-safe="" style={{ margin: "8px 0 0" }}>FinCom Bridge reads one day at a time, only while nobody is working in Tally; each request stops at 2 seconds and postings go first, so Tally never hangs.</p>
   </section>;
 }
 

@@ -25,7 +25,7 @@ const rs = (v) => money(r2(v || 0));
 const d = (x) => fmtDate(tallyDate(x));
 import { FinComNav } from "../../nav.js";
 // stability batch 3: Run now shows the thin bar while the run takes over 300 ms
-const Act = ({ act, className = "btn small", children }) => <button className={className} onClick={() => (act === "misRun" || act === "auditRun" ? FinComNav.go(() => doAct(act)) : doAct(act))}>{children}</button>;
+const Act = ({ act, className = "btn small", children }) => <button className={className} onClick={() => doAct(act)}>{children}</button>;
 const Tile = ({ l, v, sub }) => <div className="dtile"><span>{l}</span><b>{v}</b><small>{sub || ""}</small></div>;
 // MIS statements and schedules (profit and loss, ages, months): their rows in the report's order
 const Table = ({ id, head, children, style }) => <div className="bk-tablewrap"><table className="bk-table" id={id} style={style} data-statement="">{head && <thead><tr>{head}</tr></thead>}<tbody>{children}</tbody></table></div>;
@@ -58,16 +58,41 @@ function Head({ b, r, rg }) {
       </details>
       <span className="note mis-period" data-mis-period="">{rg.from && rg.to ? fmtDate(rg.from) + " to " + fmtDate(rg.to) : ""}</span>
       <span className="mis-btns"><button className="btn small" data-mymis-open="" title="Build your own MIS: choose the figures, add charts, save and share" onClick={() => goClient("books:mymis")}>My MIS</button>{r && <><Act act="misExcel">Excel</Act><Act act="misPack" className="btn small">Download the MIS pack (PDF)</Act></>}
-        <Act act="misRun" className="btn small primary">Run now</Act></span>
+        <button className="btn small primary" onClick={() => runNow(rg)}>Run now</button></span>
     </div>
   </section>;
 }
+
+// next-mis-speed: a run in five tasks, so none holds the page: the GST workings of every month the run asks for (the
+// period and the forecast's last three months); the parties' balances, the TDS rows and the days to pay; the cash flow
+// and the cost centres (all kept for the run: memoKeep, MIS.keep, Parties.position); then the run; then the save. Only
+// for the books it began on: when the client changes (or its books are loading) between tasks it stops, and nothing is
+// written to the other books. One at a time: a click meanwhile is ignored, and MIS._again stays set until the run is
+// done or stopped
+function runSplit(from, to, how) {
+  const b = S.books, t = Audit.ymd(to), f = Audit.ymd(from), f3 = MIS.shift(t, 0, -89);
+  if (MIS._again || !b || b.loading) return;
+  MIS._again = true; FinComNav.start();
+  const fs = [() => memoScope(() => MIS.monthsOf(f3 < f ? f3 : f, t).forEach(MIS.gst3b, MIS)), () => memoKeep(() => { Parties.position(t); TDS.rows(); TDS.salaryRows(); MIS.payDays("r", t); MIS.payDays("p", t); }),
+    () => memoKeep(() => { MIS.cashActual(f, t); MIS.costCentres(f, t); }), () => memoKeep(() => MIS.run(from, to, how)), () => saveBooks(null, b).catch(() => {})], R = 3;
+  const end = () => { MIS._again = false; FinComNav.done(); render(); };
+  const go = (i) => setTimeout(() => {
+    // the save names its books: done even when the client changed after the run
+    if (i <= R && (S.books !== b || b.loading)) return end();
+    try { fs[i](); } catch (e) { if (i === R) { end(); throw e; } }
+    if (i === R) end();
+    if (i < R + 1) go(i + 1);
+  }, 0);
+  go(0);
+}
+// Run now: the period chosen, else doAct says what is wrong with it
+const runNow = (rg) => FinComNav.go(() => rg.from && rg.to && rg.from <= rg.to ? runSplit(rg.from, rg.to, "run now") : doAct("misRun"));
 
 // the line under the head: the period run, how, when, its result code, and whether it agrees with Tally
 function RunLine({ r }) {
   return <p className="note" style={{ margin: "10px 0" }}>{d(r.from) + " to " + d(r.to) + " · " + r.how + " on " + fmtDateTime(r.at) + " · result code "}<b>{r.code}</b>
     {r.control ? (r.control.ok ? <>{" · "}<span style={{ color: "var(--ok)" }}>agrees with Tally’s balances, ledger by ledger</span></> : <>{" · "}<span className="bad">{r.control.n + " ledgers differ from Tally by ₹" + m(r.control.amt)}</span></>)
-      : " · read the period from Tally through the bridge to check it against Tally’s balances"}</p>;
+      : null}</p>;
 }
 
 // a search box, and on Receivables and Payables the overdue / MSME filter
@@ -358,7 +383,7 @@ export default function Mis({ b }) {
   if (catchUp) return <CatchUp text={catchUp} />;
   const r0 = (b.mis || {}).last, stale = MIS.stale(b);
   // a saved run from other books or older working: worked out again now, its figures not shown meanwhile
-  if (stale && !MIS._again) { MIS._again = true; setTimeout(() => { try { MIS.run(r0.from, r0.to, "worked out again (the books or FinCom changed since " + fmtDate(r0.at.slice(0, 10)) + ")"); saveBooks(); } finally { MIS._again = false; render(); } }, 0); }
+  if (stale && !MIS._again) runSplit(r0.from, r0.to, "worked out again (the books or FinCom changed since " + fmtDate(r0.at.slice(0, 10)) + ")");
   if (stale) return <div className="bk-none" data-mis-again="" style={{ marginTop: 12 }}>{"Working out again: the books or FinCom’s working changed since the run of " + fmtDate(r0.at.slice(0, 10)) + " (result code " + r0.code + ")."}</div>;
   const r = r0;
   // the period: the one chosen (kept for the client), else this financial year to date (smart moves round 1)
@@ -373,7 +398,7 @@ export default function Mis({ b }) {
   // clean-up batch 3: six tabs (the statements and the figures most asked for), the rest under More (parts/PageTabs.jsx)
   const tabs = <PageTabs label="MIS" attr="data-mis-tab" value={tab} onPick={misTabGo} tabs={TAB_ORDER.map((id) => TABS.find((t) => t[0] === id))} />;
   if (notRead) return <>{tabs}<Head b={b} r={r} rg={rg} /><div style={{ marginTop: 12 }}>{notRead}</div></>;
-  if (!r) return <>{tabs}<Head b={b} r={r} rg={rg} /><div className="bk-none" data-mis-empty="" style={{ marginTop: 12 }}>Nothing is worked out for this period yet. <button className="linkbtn" onClick={() => FinComNav.go(() => doAct("misRun"))}>Run now</button></div></>;
+  if (!r) return <>{tabs}<Head b={b} r={r} rg={rg} /><div className="bk-none" data-mis-empty="" style={{ marginTop: 12 }}>Nothing is worked out for this period yet. <button className="linkbtn" onClick={() => runNow(rg)}>Run now</button></div></>;
   const p2 = r.p2;
   let body;
   if (tab === "summary") body = <Summary b={b} r={r} />;

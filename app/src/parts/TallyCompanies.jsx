@@ -465,7 +465,7 @@ async function askUpdate(x) {
   try { await TCloud.rpc("tally_want_update", { p_client: x.cid }); } catch (e) { /* the wake was asked; the beat says why */ }
 }
 export async function firstSync(cid, company, opts) {
-  const x = SYNC()[cid] = { cid, company: company || "", at: Date.now(), via: "", err: "", end: 0, late: false, led: null, prog: null, ledAt: 0, why: "", snap: false, ledger0: null, la0: "", moveAt: 0, samples: [], upAsked: 0 };
+  const x = SYNC()[cid] = { cid, company: company || "", at: Date.now(), via: "", err: "", end: 0, late: false, led: null, prog: null, ledAt: 0, why: "", snap: false, ledger0: null, la0: null, moveAt: 0, samples: [], upAsked: 0 };
   render();
   // what is there before this read (so an earlier read never counts as this one's)
   try { await TCloud.status(cid, true); } catch (e) { /* the time check below then */ }
@@ -620,7 +620,7 @@ function LaterLine({ cid }) {
 // (its own line says what FinCom holds); on the Ledgers page, only today's changes
 export function LedgerBar({ cid, where = "row", company = "" }) {
   const [, tick] = useState(0);
-  const x = (S.tcoSync || {})[cid], running = !!(x && !x.end && !x.err && !x.late);
+  const x = readOf(cid, company), running = !!(x && !x.end && !x.err && !x.late);
   useEffect(() => { if (!running) return; const t = setInterval(() => tick((n) => n + 1), 1000); return () => clearInterval(t); }, [running]);
   useEffect(() => { if (!running) return; const t = setInterval(() => syncPoll(cid), POLL_MS); return () => clearInterval(t); }, [running, x && x.at]);
   const co = S.companies && S.companies[cid], n = Math.max(ledgersOf(cid), (x && x.led) || 0), led = ledgersHeld(cid);
@@ -773,8 +773,12 @@ export function runSettle(cid, company, done) {
     .then(([n1, g1, rr]) => { m.say = mastersResult(m.b, { n: n1 == null ? m.b.n : n1, g: g1 == null ? m.b.g : g1 }, rr); m.ok = true; done(); });
 }
 // {phase: asking | reading | waiting | done | why, text} of this client's Update now, or null when none was pressed
+// next-masters-progress (the owner, 09-Nov-2026: a client relinked from a split company's older part to its newer one
+// kept saying "Not started: '<the older part>' is not open"): a read asked for another Tally company than the client's
+// link now is not this link's read: nothing of it is said or counted
+export const readOf = (cid, company) => { const x = SYNC()[cid]; return x && company && x.company && coKey(x.company) !== coKey(company) ? null : x || null; };
 export function runWords(cid, company) {
-  const m = MR[cid], x = SYNC()[cid];
+  const m = MR[cid], x = readOf(cid, company);
   if (!m) return null;
   if (m.asking) return { phase: "asking", text: "Asking Tally…" };
   if (m.fail) return { phase: "why", text: "Not updated: " + m.fail };
@@ -806,7 +810,7 @@ export function MastersLine({ cid }) {
   const [ck, setCk] = useState(false), [pressing, setPressing] = useState(false), [said, setSaid] = useState("");
   const [, tick] = useState(0), co = S.companies && S.companies[cid];
   const link = typeof tallyLinkOf === "function" && co ? tallyLinkOf(co) || {} : {}, company = link.company || (TCloud.companyOf ? TCloud.companyOf(cid) : "") || "";
-  const x = SYNC()[cid], running = !!(x && !x.end && !x.err && !x.late), m = MR[cid];
+  const x = readOf(cid, company), running = !!(x && !x.end && !x.err && !x.late), m = MR[cid];
   const bk = ledBook(cid) || {}, n = Math.max(ledgersOf(cid), (x && x.led > 0 && x.led) || 0), g = (GRP[cid] || {}).n;
   useEffect(() => { let on = true; Promise.all([cloudLedgerCount(cid).catch(() => null), groupCount(cid).catch(() => null)]).then(() => { if (on) tick((k) => k + 1); }); return () => { on = false; }; }, [cid, bk.book, bk.ledgersAt]);
   // the result once this Update now's read is done (counts read again, the rounds since the press)

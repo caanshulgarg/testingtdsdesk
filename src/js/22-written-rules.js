@@ -1036,4 +1036,3 @@ function ledgerOptions(selected, preferGroups){
 const BANK_GROUPS = /bank accounts|bank od|cash-in-hand/i;
 
 // the bank screen: React (app/src/screens/Bank.jsx)
-function viewBank(){ return '<div data-react="Bank"></div>'; }

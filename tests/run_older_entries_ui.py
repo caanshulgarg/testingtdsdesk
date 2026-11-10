@@ -110,7 +110,7 @@ def main():
         ok(w == FYL + ": 8,412 of 12,960 entries (65%) · about 40 min left · started 10:42 IST · 113 entries a minute", "1. a stale beat: the cloud's estimate (%s)" % w)
         E("() => { TCloud.pane.devices = window.__devs0; }"); state(sb(pull=GOING))
         ok(n(card + " [data-older-pause]") == 1 and n(card + " [data-older-stop]") == 1 and n(card + " [data-older-start]") == 0, "1. going: Pause and Stop")
-        ok("2 seconds" in txt(card + " [data-older-safe]") and "never hangs" in txt(card + " [data-older-safe]"), "1. Tally never hangs, said once (%s)" % txt(card + " [data-older-safe]"))
+        ok(n(card + " [data-older-safe]") == 0 and "never hangs" not in txt(card), "1. no explaining line about how the bridge reads (the owner, 09-Nov-2026)")
         shot("from-tally-going-1366")
         pg.click(card + " [data-older-pause]"); pg.wait_for_timeout(400)
         ok(calls("tally_period_pause")[-1:] == [{"p_book": "bk-zz", "p_pause": True}], "1. Pause")

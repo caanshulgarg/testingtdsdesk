@@ -182,7 +182,6 @@ const GUIDE = {
 };
 
 /* ---------- the screen is app/src/screens/Help.jsx; what its buttons and boxes do ---------- */
-function viewHelp(){ return '<div data-react="Help"></div>'; }
 // typed or chosen: the guide's search (the best article opens), the ticket searches, the reply, the desk's filters
 function supType(k, v, now){
   const s = SUP.st(); s[k] = v;
