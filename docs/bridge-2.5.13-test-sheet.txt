@@ -1,7 +1,7 @@
 FINCOM BRIDGE 2.5.13 - TEST SHEET (2.5.12's sheet below, with 2.5.13's fixes first)
 
 File:        FinComBridge-Setup-2.5.13.exe
-Fingerprint: SHA-256 39c9235c45362b641fd2764b96d6510288a92083d4c1605f5ccaa3d29f8012f9 (FinComBridge-Setup-2.5.13.exe, built 10-Nov-2026 05:48 UTC from the bridge sources of the 2.5.13 commit, POSTONLY=any; compare with the .sha256 file next to the setup); program FinComBridge-2.5.13.exe SHA-256 dc9207f28e6491825902cf5d8357bb236c8dc30e531427a3994f2d291d607b21
+Fingerprint: SHA-256 8e11b02babbe2d3be9c4db95259aa4d79c24f7cd24e686621862288040b2c497 (FinComBridge-Setup-2.5.13.exe, built 10-Nov-2026 06:36 UTC at bridge sources 5806ce693 after the independent review, POSTONLY=any; compare with the .sha256 file next to the setup); program FinComBridge-2.5.13.exe SHA-256 708ccf28e40cfd5385f5e31ed08235c431b7dd91af21e919ea80e209d9ee870b (earlier builds 39c9235c...12f9 and b7d17318...0d19 were never published)
 
 2.5.13: two fixes. Nothing new is asked of Tally (no new request, the same 2-second stop, one request at
 a time, postings first, never while someone is typing in Tally). No migration; FinCom's cloud takes the ledgers without
