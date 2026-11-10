@@ -25,7 +25,7 @@ import * as E from "../_shared/gst3b.js";
 import { gst3bPrint } from "../_shared/gst3bprint.js";
 
 // the revision of the function around the engine (data.ts, handler.ts): moved by hand with tests/gst_cloud_rev.json
-export const REV = "153.5";
+export const REV = "153.6";
 
 const G = globalThis;
 // what the app's program has around the engine: names.js (put at its head by build.py too)
@@ -112,7 +112,7 @@ export function step(rows, reg, kept, o) {
     if (todo.length && atReady > ready) return { big: true, months: [], more: true, all, vouchers: b.vouchers.length, ms: now() - t0, booksMs: o.books ? 0 : tBooks, books: b, fp: fp0, atReady };
     let last = atReady;
     for (const m of todo) {
-      if (done.length >= max || used() + last > total) break;
+      if (done.length >= max || (done.length && used() + last > total)) break;     // the first month always (ready by o.ready)
       const tm = now();
       // the month on screen: its year's 2B matching, nothing kept from another month but the 3Bs before it (perRender's
       // "3b|<month>|<reg>": GSTR.creditIn reads the credit the month before carried from it)

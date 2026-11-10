@@ -236,7 +236,7 @@ async function big(){
   ok(big.heads.length >= 40000, "the book: " + big.heads.length + " entries, " + big.lines.length + " lines");
   fs.writeFileSync(bf, JSON.stringify({rows: big, asks: [{reg: "07", ym: "202603"}], firm: FIRM, timing: true}));
   const bt = deno(br, [bf, br]), BR = bt.runs.filter(r => r.months && r.months.length);
-  ok(bt.kept.filter(k => !/\|all$/.test(k.args)).length === 12 && BR.every(r => r.months.length <= 2), BR.length + " runs: " + BR.map(r => r.months.join("+")).join(" "));
+  ok(bt.kept.filter(k => !/\|all$/.test(k.args)).length === 12 && BR.every(r => r.months.length <= 2), BR.length + " runs: " + BR.map(r => r.months.join("+")).join(" ") + (bt.kept.filter(k => !/\|all$/.test(k.args)).length === 12 ? "" : " (the last runs: " + JSON.stringify(bt.runs.slice(-3).map(r => ({months: r.months, ok: r.ok, more: r.more, big: r.big, error: r.error, spentMs: r.spentMs, readyMs: r.readyMs, cpu: r.cpu}))) + "; queue left " + bt.queueLeft + ")"));
   const bw = Math.max(...BR.map(r => r.cpu));
   ok(bw < 2000, "CPU per run under the 2 s limit" + (bw < 1000 ? " and the 1 s target" : ", NOT under the 1 s target") + " (the fake database's own left out): " + BR.map(r => r.cpu).join(", ") + " ms; the worst " + bw + " ms (wall " + Math.max(...BR.map(r => r.wall)) + " ms; reading the answers (JSON) " + BR.map(r => r.spentMs).join("/") + " ms, making the books " + BR.map(r => r.booksMs).join("/") + " ms, the step " + BR.map(r => r.ms).join("/") + " ms)");
   const bh = Math.max(...BR.map(r => r.heap)), lv = bt.live || {};
