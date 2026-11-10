@@ -22,7 +22,7 @@ b.tb.src = "copy"; if (String(b.tb.to) < inp.today) b.tb.to = inp.today;
 Object.assign(b, inp.work);
 b.map = x.Books.mapLedgers(b.vouchers, inp.saved || {});
 ctx.S.books = b; ctx.S.coId = b.cid; ctx.S.companies = {[b.cid]: inp.company}; ctx.CO = () => Object.assign({id: b.cid, name: "Made-up Heron Traders"}, inp.company);
-const out = {map: b.map, runs: {}, ms: {}};
+const out = {map: b.map, runs: {}, ms: {}, opens: Object.fromEntries(Object.entries(b.tb.led).map(([n, x]) => [n, x.open]))};
 inp.periods.forEach(([from, to]) => {
   const t0 = Date.now(), r = x.MIS.runNow(from, to, "test");
   out.ms[from + "|" + to] = Date.now() - t0;

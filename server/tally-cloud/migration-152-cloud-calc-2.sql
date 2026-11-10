@@ -36,10 +36,12 @@
 --   tally_mis_part(client, part, from, to, today)  the same for a member: the book for the period of its own firm only
 -- Adds only: new functions. No table, no index (tally_vouchers (book_id, guid), tally_lines (book_id, guid),
 -- tally_ledger_day (book_id, ledger, day) and (book_id, day) are there). Safe to run twice. Built on 151 exactly as applied
--- on staging (516eb301c). Three of 151's functions are made again with the same signatures, grants and search_path
+-- on staging (516eb301c). Four of 151's functions are made again with the same signatures, grants and search_path
 -- (create or replace): tally_calc_nclean and tally_calc_nkey, as server/_shared/names.js (the final review of 151:
--- every numeric entity, JavaScript's white space), and tally_calc_version (CALC_V 152.1 for the names, and the work
--- 152's parts read, so no kept answer outlives a change to it). Nothing else of 151 changes.
+-- every numeric entity, JavaScript's white space); tally_calc_led, whose primary group (for the 1 April openings) is now
+-- read from the raw group names as TallyRead.primaryOf reads them, so the cleaner names do not move openings the
+-- browser leaves; and tally_calc_version (CALC_V 152.2 for both, and the work 152's parts read, so no kept answer
+-- outlives a change to it). Nothing else of 151 changes.
 -- Each function sets jit off (on a plan the planner costs high, JIT compiling took half a second before the first row on
 -- 10,000 ledgers), the heavy ones work_mem 32MB (the period's lines sorted in memory), and the line reader no nested
 -- loop (the planner, not knowing the period, guessed a few hundred entries for 40,000). Every part takes under 1 s on
@@ -59,8 +61,9 @@ set local lock_timeout = '10s';
 --     trimmed as JavaScript's trim (tab, line breaks, vertical tab, form feed, space, U+00A0, U+1680, U+2000-U+200A,
 --     U+2028, U+2029, U+202F, U+205F, U+3000, U+FEFF)
 --   namesKey: namesClean, every run of that white space one space, trimmed, lower case (locale-free, as toLowerCase)
--- So a group's parent "&#4; Primary" is "Primary" once cleaned and tally_calc_led's ^\W*Primary$ finds it there (its walk
--- keeps a name with & that is no group cleaned). The data version is raised with it (tally_calc_version, below).
+-- The path keeps a name with & that is no group cleaned ("&#4; Primary" is "Primary" in it), as ledGroupPath; the primary
+-- group for the 1 April openings is read from the raw names, as TallyRead.primaryOf (tally_calc_led, below). The data
+-- version is raised with both (tally_calc_version, below).
 create or replace function public.tally_calc_nclean(p text)
 returns text language plpgsql immutable set search_path to 'public', 'pg_temp' as $function$
 declare
@@ -109,8 +112,85 @@ revoke all on function public.tally_calc_nkey(text) from public, anon, authentic
 grant execute on function public.tally_calc_nclean(text) to service_role;
 grant execute on function public.tally_calc_nkey(text) to service_role;
 
+-- ---------------------------------------------------------------- every ledger (151's tally_calc_led, replaced: the same signature)
+-- The review of 152: with the names cleaned as names.js, a group's parent "&#4; Primary" became "Primary", and the path's
+-- Primary test then made the group under it a primary group, so on a book starting 1 April the openings under it moved to
+-- Profit & Loss A/c where the browser moves none. The browser's TallyRead.primaryOf tests the RAW value ledLook(groups, p)
+-- gives and returns that raw value. 151's function as applied on staging, with only that changed: the raw chain kept
+-- beside the path, the primary group read from it, and compared after JavaScript's trim. The path is as before.
+create or replace function public.tally_calc_led(p_book uuid)
+returns table (name text, open numeric, in_master boolean, path text[], kind text, deb boolean, cred boolean, cash boolean, bank boolean, pl boolean)
+language sql stable security definer set search_path to 'public', 'pg_temp' as $function$
+  with recursive bk as (select b.firm_id, b.client_id, b.from_date from tally_books b where b.book_id = p_book),
+  grp as materialized (select g.name, coalesce(g.parent, '') as parent from tally_groups g where g.book_id = p_book),
+  -- ledLook by key: the last name with a parent among those of one key (ledIdx), when the name as kept is no group
+  gk as materialized (select distinct on (tally_calc_nkey(grp.name)) tally_calc_nkey(grp.name) as k, grp.parent from grp order by tally_calc_nkey(grp.name), (grp.parent <> '') desc, grp.name desc),
+  hasg as (select exists (select 1 from grp) as y),
+  ml0 as materialized (select l.name, coalesce(l.open, 0) as open, coalesce(l.parent, '') as parent
+          from tally_ledgers l where l.book_id = p_book and l.merged_into is null and l.deleted_at is null),
+  -- each parent cleaned once (a few dozen), not once a ledger
+  pc as materialized (select z.parent, case when z.parent = '' then '' else tally_calc_nclean(z.parent) end as par from (select distinct ml0.parent from ml0) z),
+  ml as materialized (select ml0.name, ml0.open, pc.par from ml0 join pc on pc.parent = ml0.parent),
+  -- ledGroupPath from each parent the ledgers have (a few dozen), at most 15 names
+  -- beside the path, the raw chain TallyRead.primaryOf walks: the parent as b.under keeps it (cleaned), then each group's
+  -- parent as ledLook(groups, p) gives it, before any cleaning
+  walk (st, cur, path, raw, n) as (
+    select z.par, z.par, array[z.par], array[z.par], 1 from (select distinct ml.par from ml where ml.par <> '') z where (select y from hasg)
+    union all
+    select w.st, nx.p, w.path || nx.p, w.raw || q.raw, w.n + 1
+      from walk w
+      cross join lateral (select coalesce((select grp.parent from grp where grp.name = w.cur), (select gk.parent from gk where gk.k = tally_calc_nkey(w.cur)), '') as raw) q
+      cross join lateral (select case when q.raw ~ '[&\r\n]' and not exists (select 1 from grp where grp.name = q.raw) then tally_calc_nclean(q.raw) else q.raw end as p) nx
+     where nx.p <> '' and w.n < 15),
+  wp0 as (select distinct on (walk.st) walk.st, walk.path, walk.raw from walk order by walk.st, walk.n desc),
+  -- and its primary group, TallyRead.primaryOf (src/js/18, next-mis-speed b33f4a180): along the raw chain, the name just
+  -- before the first that is empty or /^\W*Primary$/i, as it is (raw: "&#4; Primary" is no Primary there, so the
+  -- group under it is no primary group). JavaScript's \W is ASCII: [^A-Za-z0-9_] here, not Postgres's \W
+  wk as (select wp0.*, (select min(u.i) from unnest(wp0.raw) with ordinality u(g, i) where u.g = '' or u.g ~* '^[^A-Za-z0-9_]*Primary$') as k from wp0),
+  wp as (select wk.st, wk.path, case when wk.k is null then wk.raw[cardinality(wk.raw)] when wk.k = 1 then '' else wk.raw[wk.k - 1] end as prim from wk),
+  m1 as (select ml.name, ml.open, wp.prim,
+           case when ml.par = '' then '{}'::text[] when (select y from hasg) then wp.path else array[ml.par] end as path
+           from ml left join wp on wp.st = ml.par),
+  -- TallyRead.yearOpen: a profit and loss ledger's opening moves when the copy starts on 1 April and the groups are read
+  yo as (select (extract(month from bk.from_date) = 4 and extract(day from bk.from_date) = 1 and (select y from hasg)) as on_ from bk),
+  m2 as (select m1.name, m1.open, m1.path,
+           (select on_ from yo) and m1.name <> 'Profit & Loss A/c' and m1.open <> 0
+             -- String(primaryOf).trim().toLowerCase(): JavaScript's trim
+             and lower(regexp_replace(coalesce(m1.prim, ''), '^[\t\n\v\f\r \u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]+|[\t\n\v\f\r \u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]+$', '', 'g'))
+               in ('sales accounts', 'purchase accounts', 'direct incomes', 'direct expenses', 'indirect incomes', 'indirect expenses') as moves
+           from m1),
+  mv as (select coalesce(sum(m2.open) filter (where m2.moves), 0) as amt, count(*) filter (where m2.moves) as n from m2),
+  m as (select m2.name, case when m2.moves then 0 when m2.name = 'Profit & Loss A/c' and (select n from mv) > 0 then m2.open + (select amt from mv) else m2.open end as open, true as im, m2.path from m2
+        union all
+        select 'Profit & Loss A/c', (select amt from mv), true, '{}'::text[] where (select n from mv) > 0 and not exists (select 1 from m2 where m2.name = 'Profit & Loss A/c')),
+  -- a ledger with entries but no master: no opening, no group
+  x as (select distinct d.ledger as name from tally_ledger_day d where d.book_id = p_book and d.merged_into is null
+           and not exists (select 1 from m where m.name = d.ledger)),
+  a as (select m.name, m.open, m.im, m.path from m union all select x.name, 0::numeric, false, '{}'::text[] from x),
+  -- FinCom's ledger list (Books.ledgerOf: b.map, saved under client_book_items key "map", item "." + name)
+  k as (select substr(i.item, 2) as name, coalesce(i.data->>'kind', '') as kind from client_book_items i, bk
+         where i.firm_id = bk.firm_id and i.client_id = bk.client_id and i.key = 'map' and i.item like '.%' and not i.deleted),
+  -- materialized: inlined, the planner ran the masters' part again for every ledger (1.2 s on 10,000 ledgers; 0.17 s so)
+  f as materialized (select a.name, a.open, a.im, a.path, coalesce(k.kind, '') as kind, coalesce((select array_agg(lower(g)) from unnest(a.path) g), '{}'::text[]) as lp
+          from a left join k on k.name = a.name),
+  g as (select f.*, ('cash-in-hand' = any(f.lp)) or (f.path = '{}' and f.kind = 'bank' and f.name ~* '\yCASH\y') as is_cash from f)
+  select g.name, g.open, g.im, g.path, g.kind,
+         'sundry debtors' = any(g.lp),                                                    -- Audit.isDebtor
+         'sundry creditors' = any(g.lp),                                                  -- Audit.isCreditor
+         g.is_cash,                                                                       -- Audit.isCash
+         (g.lp && array['bank accounts', 'bank od a/c', 'bank occ a/c']) or (g.kind = 'bank' and not g.is_cash),   -- Audit.isBankL
+         -- MIS.plHead: a ledger in a profit and loss group (FS.nature's reserved groups, MIS.headByGroup); with no group,
+         -- by its name when FinCom's list gives it no kind
+         case when g.path <> '{}' then g.lp && array['sales accounts', 'direct incomes', 'indirect incomes', 'purchase accounts', 'direct expenses', 'indirect expenses']
+              else g.kind = '' and (g.name ~* '^SALES' or g.name ~* 'SERVICE RENDERED' or g.name ~* 'REVENUE' or g.name ~* '^PURCHASE') end
+    from g;
+$function$;
+
+revoke all on function public.tally_calc_led(uuid) from public, anon, authenticated;
+grant execute on function public.tally_calc_led(uuid) to service_role;
+
 -- ---------------------------------------------------------------- the data version (151's, replaced: the same signature)
--- 151's version with FinCom's working raised (CALC_V 152.1: the names above; nothing kept under 151.3 is served after
+-- 151's version with FinCom's working raised (CALC_V 152.2: the names above and the primary group; nothing kept under 151.3 is served after
 -- them), and with what 152's parts read besides the entries and the ledger list, so an answer kept with them is worked
 -- out again when one changes: FinCom's work kept for the client (client_book_items ledInfo and msme: the MSME types; fs:
 -- the accounts' line chosen by hand and the manufacturing switch; misCfg: the MSME days; challans) and the client's
@@ -118,7 +198,7 @@ grant execute on function public.tally_calc_nkey(text) to service_role;
 create or replace function public.tally_calc_version(p_book uuid)
 returns text language sql stable security definer set search_path to 'public', 'pg_temp' as $function$
   -- every part in its place: a part with no value is the marker ~ (concat_ws would drop it and shift the rest)
-  select md5(array_to_string(array['CALC_V=152.1', b.days_at::text, b.ledgers_at::text, b.from_date::text,
+  select md5(array_to_string(array['CALC_V=152.2', b.days_at::text, b.ledgers_at::text, b.from_date::text,
            (select array_to_string(array[count(*), max(v.alter_id), count(v.deleted_at), count(*) filter (where v.cancelled), count(*) filter (where v.optional)]::text[] || max(v.deleted_at)::text, ':', '~')
               from tally_vouchers v where v.book_id = b.book_id),
            (select array_to_string(array[count(*), sum(hashtext(array_to_string(array[l.name, l.parent, l.open::text, l.chain::text, l.primary_group, l.merged_into, (l.deleted_at is null)::text], '~', '^'))::bigint)]::text[], ':', '~')
@@ -770,11 +850,19 @@ begin
   raise exception 'no such part: %', p_part using errcode = '22023';
 end $function$;
 
--- a member of the firm: the part for its own client (tally_pick: its own firm's book for the period's last day)
+-- a member of the firm: the part for its own client (tally_pick: its own firm's book for the period's last day). p_today
+-- (the day the books are brought in, for the control) is not part of the data version nor of mis-run's kept answer's
+-- key: that is right only while the control is none on the cloud copy (tally_calc_control); a control that uses it again
+-- must put it in the key
 create or replace function public.tally_mis_part(p_client text, p_part text, p_from date, p_to date, p_today date default null)
 returns jsonb language plpgsql stable security definer set search_path to 'public', 'pg_temp' set jit to 'off' as $function$
 declare bk uuid := tally_pick(p_client, p_to);
 begin
+  -- the same limit as tally_now: a period from before to, of at most 120 months
+  if p_from is null or p_to is null or p_from > p_to then raise exception 'give the period, from before to' using errcode = '22023'; end if;
+  if (extract(year from p_to)::int - extract(year from p_from)::int) * 12 + extract(month from p_to)::int - extract(month from p_from)::int + 1 > 120 then
+    raise exception 'at most 120 months' using errcode = '22023';
+  end if;
   if bk is null then return jsonb_build_object('none', true); end if;
   return jsonb_build_object('book', bk, 'part', p_part, 'result', tally_calc_mis(bk, p_part, p_from, p_to, p_today));
 end $function$;

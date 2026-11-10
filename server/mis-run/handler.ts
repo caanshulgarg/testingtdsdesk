@@ -134,6 +134,7 @@ export function handler(deps: Deps) {
   const NOW_V = 3;                             // a whole answer with 152's parts; anything less is never served as kept
   const NOW_PARTS = ["recv", "pay", "owed", "balances", "sales", "purchases", "goods", "pl", "prev", "ly", "mtd", "ytd", "cash", "p2.cash", "comp", "msme", "control", "dso", "dpo"];
   const SQL_PARTS = ["sales", "purchases", "pl", "prev", "ly", "tops", "cash", "comp", "msme", "control"];
+  const PART_AT_ONCE = 3;                      // the parts asked at a time (the review: not ten connections per MIS open)
   const OUTSIDE = ["comp.gst.out", "comp.gst.itc", "comp.gst.rcm", "comp.gst.carry", "comp.gst.due", "comp.audit", "dues", "p2.fc", "p2.ratios", "p2.regs", "p2.cc"];
   const FIGURES = ["book", "version", "from", "to", "recv", "pay", "owed", "balances"];   // what tally_now works out
   const NOW_MONTHS = 120;                      // as tally_now
@@ -165,8 +166,17 @@ export function handler(deps: Deps) {
     // the day Tally's balances are taken to (b.tb.to: the day the books are brought in), for the control
     const today = istIso(now());
     const errors: Record<string, string> = {};
-    const got = await Promise.all(SQL_PARTS.map((p) => rpc("tally_mis_part", { p_client: client, p_part: p, p_from: iso(from), p_to: iso(to), p_today: today }, jwt)
-      .catch((e) => { errors[p] = String((e as Error).message || e).slice(0, 200); return null; })));
+    // at most PART_AT_ONCE parts asked at a time (each is a database connection and up to a second of its time)
+    const got: any[] = new Array(SQL_PARTS.length).fill(null);
+    let nextPart = 0;
+    const worker = async () => {
+      while (nextPart < SQL_PARTS.length) {
+        const i = nextPart++, p = SQL_PARTS[i];
+        got[i] = await rpc("tally_mis_part", { p_client: client, p_part: p, p_from: iso(from), p_to: iso(to), p_today: today }, jwt)
+          .catch((e) => { errors[p] = String((e as Error).message || e).slice(0, 200); return null; });
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(PART_AT_ONCE, SQL_PARTS.length) }, worker));
     // each part as worked out on the same book as tally_now's (the book for the period's last day)
     const part: Record<string, any> = {};
     SQL_PARTS.forEach((p, i) => {
@@ -174,7 +184,12 @@ export function handler(deps: Deps) {
       part[p] = g && !g.none && g.book === figures.book && g.result ? g.result : null;
       if (!part[p] && !errors[p]) errors[p] = g && g.book && g.book !== figures.book ? "worked out on another book" : "not worked out";
     });
-    if (part.sales && part.sales.masters === false) { errors.sales = part.sales.why || "no ledger masters"; part.sales = null; }
+    // a book without its ledger masters: sales are the browser's (the taxable value of the sale entries), and so are the
+    // sales of the period before, last year, the month and the year to date (their totals are none here)
+    if (part.sales && part.sales.masters === false) {
+      const why = part.sales.why || "no ledger masters";
+      for (const p of ["sales", "prev", "ly", "tops"]) { errors[p] = why; part[p] = null; }
+    }
     const sales = part.sales, pl = part.pl, cash = part.cash, comp = part.comp, tops = part.tops;
     const purchases = part.purchases ? (({ goods: _g, ...rest }: any) => rest)(part.purchases) : null;
     const goods = part.purchases ? !!part.purchases.goods : null;

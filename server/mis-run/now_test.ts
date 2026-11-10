@@ -26,6 +26,7 @@ const PART: Record<string, any> = {
 };
 function fake(opts: { kept?: any, none?: boolean, firm?: string, company?: string, no152?: boolean, noMasters?: boolean, failing?: string }) {
   const calls: { fn: string, args: any, token: string }[] = [], reads: string[] = [];
+  const busy = { now: 0, most: 0 };
   const fetchFn = async (input: any, init: any = {}) => {
     const url = String(input), token = String((init.headers || {}).Authorization || "").replace(/^Bearer /, "");
     const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { "Content-Type": "application/json" } });
@@ -53,6 +54,9 @@ function fake(opts: { kept?: any, none?: boolean, firm?: string, company?: strin
     if (m[1] === "tally_balances_at") return json(Array.from({ length: 1000 }, (_, i) => ({ ledger: "Made-up Ledger " + i, bal: -i })));
     if (m[1] === "tally_calc_put") return json(null);
     if (m[1] === "tally_mis_part") {
+      busy.now++; busy.most = Math.max(busy.most, busy.now);
+      await new Promise((r) => setTimeout(r, 2));
+      busy.now--;
       if (opts.no152) return json({ code: "PGRST202", message: "Could not find the function public.tally_mis_part" }, 404);
       if (opts.failing === args.p_part) return json({ code: "57014", message: "canceling statement due to statement timeout" }, 500);
       return json({ book: BOOK, part: args.p_part, result: args.p_part === "sales" && opts.noMasters ? { masters: false, why: "the ledger masters are not in the cloud copy" } : PART[args.p_part] });
@@ -62,7 +66,7 @@ function fake(opts: { kept?: any, none?: boolean, firm?: string, company?: strin
   const h = handler({ env: (k: string) => ({ SUPABASE_URL: "https://made-up.invalid", SUPABASE_SERVICE_ROLE_KEY: SERVICE, SUPABASE_ANON_KEY: ANON } as any)[k], fetch: fetchFn as any,
     now: () => new Date("2026-11-09T10:30:00Z"), excel: async () => null });
   const ask = async (body: unknown, token = JWT) => { const r = await h(new Request("https://made-up.invalid/mis-run", { method: "POST", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json", Origin: "https://fincom.live" }, body: JSON.stringify(body) })); return { status: r.status, body: await r.json() }; };
-  return { ask, calls, reads };
+  return { ask, calls, reads, busy };
 }
 const P = { action: "now", client: "c1", from: "20260401", to: "20261031" };
 
@@ -118,6 +122,7 @@ Deno.test("now: one call with the member's token, every balance (over 1,000 ledg
   eq(put.args.p_result.partial, false, "a whole answer kept");
   const parts = f.calls.filter((c) => c.fn === "tally_mis_part");
   eq(parts.map((c) => c.args.p_part).sort(), ["cash", "comp", "control", "ly", "msme", "pl", "prev", "purchases", "sales", "tops"], "every part asked");
+  eq(f.busy.most, 3, "at most three parts asked at a time");
   eq(parts.every((c) => c.token === JWT && c.args.p_client === "c1" && c.args.p_from === "2026-04-01" && c.args.p_to === "2026-10-31" && c.args.p_today === "2026-11-09"), true, "with the member's token, the period and today (IST)");
   eq([res.sales.total, res.purchases.total, res.purchases.goods, res.goods, res.pl.pat.t, res.prev.sales, res.ly, res.prevRange, res.mtd, res.ytd, res.cash, res.p2.cash.net, res.comp.gst[0].pay, res.msme[0].amt, res.msmeDays, res.control],
      [365000, 73000, undefined, true, 1000, 1, null, ["20251001", "20260331"], 10, 20, { rec: 5, pay: 4 }, 1, 9, 7, 45, null], "the parts in MIS.runNow's places");
@@ -136,14 +141,14 @@ Deno.test("now: a kept answer of phase 1 alone gives its figures; only 152's par
 });
 
 Deno.test("now: a partial answer is given back and never kept (152 not run, a part failing, no ledger masters)", async () => {
-  for (const [o, later] of [[{ no152: true }, ["sales", "purchases", "pl", "prev", "ly", "tops", "cash", "comp", "msme", "control"]], [{ failing: "cash" }, ["cash"]], [{ noMasters: true }, ["sales"]]] as [any, string[]][]) {
+  for (const [o, later] of [[{ no152: true }, ["sales", "purchases", "pl", "prev", "ly", "tops", "cash", "comp", "msme", "control"]], [{ failing: "cash" }, ["cash"]], [{ noMasters: true }, ["sales", "prev", "ly", "tops"]]] as [any, string[]][]) {
     const f = fake(o);
     const r = await f.ask(P);
     const res = r.body.result;
     eq([r.status, r.body.kept, res.partial, res.later, res.owed.r], [200, false, true, later, 1000], "given back " + JSON.stringify(o));
     eq(f.calls.filter((c) => c.fn === "tally_calc_put").length, 0, "never kept " + JSON.stringify(o));
     assert(later.every((p) => typeof res.errors[p] === "string" && res.errors[p]), "says why " + JSON.stringify(o));
-    if (o.noMasters) eq([res.sales, res.dso, res.pl.pat.t], [null, null, 1000], "sales and DSO left to the browser, the rest here");
+    if (o.noMasters) eq([res.sales, res.dso, res.prev, res.ly, res.mtd, res.ytd, res.pl.pat.t], [null, null, null, null, null, null, 1000], "sales, their comparisons and DSO left to the browser, the rest here");
     if (o.no152) eq([res.sales, res.pl, res.dso, res.dpo], [null, null, null, null], "nothing of 152's");
   }
   // asked again with the books unchanged: still worked out, never served as kept (nothing was kept)

@@ -25,7 +25,8 @@ and the client's Loan-given choice are kept in client_book_items and clients as 
      the browser's), days of sales and purchases (worked out as the handler does)
   2. members: another firm's member gets nothing; a part that does not exist is refused
   3. timings on the 40,000-entry book (five runs each: the best and the median; the target: a median under 1 s each part)
-The scratch database is removed when the run ends.
+The database is set as staging is (jit off, as tests/run_migration151.py; 152's own functions set it off besides). The
+scratch database is removed when the run ends. 151's tally_now is timed too (it reads 152's tally_calc_led).
 M152_ONLY=small (or 40k, nogroups) runs one book; M152_TMP keeps the browser's answers between runs; M152_LOCK_HELD=1 when
 the whole run is under flock /tmp/fincom-app.lock already (as tests/run_migration151.py's M151_LOCK_HELD)."""
 import os, re, sys, json, hashlib, random, subprocess, datetime, time, tempfile, math
@@ -56,13 +57,16 @@ for d in ("server/tally-cloud", "server/security", "server/mis-run", "server/boo
         if f.endswith(".sql") and "152" not in f: old |= set(re.findall(r"create or replace function public\.(\w+)\(", open(os.path.join(ROOT, d, f)).read().lower()))
 # made again, as the final review of 151 asked (the same signatures, grants and search_path): the name helpers as
 # server/_shared/names.js, and the data version (CALC_V 152.1, and the work 152's parts read)
-REPLACED = {"tally_calc_nclean", "tally_calc_nkey", "tally_calc_version"}
+REPLACED = {"tally_calc_nclean", "tally_calc_nkey", "tally_calc_led", "tally_calc_version"}
 ok(set(made) & old == REPLACED, "of what is there before, only %s made again (%s)" % (sorted(REPLACED), sorted(set(made) & old)))
 t151 = open(M151).read()
-def head_of(t, fn): m = re.search(r"create or replace function public\.%s\((.*?)\)\s*\nreturns (\w+)[^\n]*?(security definer )?set search_path to 'public', 'pg_temp'" % fn, t, re.S); return m and (m.group(1), m.group(2), bool(m.group(3)))
-ok(all(head_of(text, f) == head_of(t151, f) and head_of(text, f) for f in REPLACED), "the three with 151's own signatures, returns, SECURITY DEFINER or not, and search_path")
+def head_of(t, fn):
+    """(the arguments, what it returns, SECURITY DEFINER or not) up to its search_path; a returns table may span lines"""
+    m = re.search(r"create or replace function public\.%s\((.*?)\)\s*\nreturns (.*?)\s*\n?language \w+ \w+ (security definer )?set search_path to 'public', 'pg_temp'" % fn, t, re.S)
+    return m and (m.group(1), re.sub(r"\s+", " ", m.group(2)), bool(m.group(3)))
+ok(all(head_of(text, f) == head_of(t151, f) and head_of(text, f) for f in REPLACED), "the four with 151's own signatures, returns, SECURITY DEFINER or not, and search_path")
 ok(all(len(re.findall(r"(revoke all|grant execute) on function public\.%s\([^)]*\)[^;]*;" % f, text)) == 2 and all(x in text for x in re.findall(r"(?:revoke all|grant execute) on function public\.%s\([^)]*\)[^;]*;" % f, t151)) for f in REPLACED),
-   "the three with 151's own grants (service_role only)")
+   "the four with 151's own grants (service_role only)")
 heads = {m.group(1): m.group(2) for m in re.finditer(r"create or replace function public\.(\w+)\((.*?)\$function\$", text, re.S)}
 ok(sorted(heads) == made and all(re.search(r"security definer set search_path to 'public', 'pg_temp'( set \w+ to '[^']*')* as $", h) for f, h in heads.items() if f not in ("tally_calc_nclean", "tally_calc_nkey"))
    and all(re.search(r"set search_path to 'public', 'pg_temp' as $", heads[f]) for f in ("tally_calc_nclean", "tally_calc_nkey")),
@@ -70,7 +74,7 @@ ok(sorted(heads) == made and all(re.search(r"security definer set search_path to
 MEM = {"tally_mis_part"}
 for fn in made:
     sig = re.search(r"(revoke all on function public\.%s\(([^)]*)\) from public, anon(, authenticated)?;)" % fn, text)
-    if fn in ("tally_calc_nclean", "tally_calc_nkey", "tally_calc_version"): continue    # checked above, as 151's
+    if fn in REPLACED: continue    # checked above, as 151's
     if fn in MEM: ok(sig is not None and not sig.group(3) and ("grant execute on function public.%s(%s) to authenticated, service_role;" % (fn, sig.group(2))) in text, "%s: members (revoked from public and anon, granted to authenticated)" % fn)
     else: ok(sig is not None and sig.group(3) and ("grant execute on function public.%s(%s) to service_role;" % (fn, sig.group(2))) in text, "%s: service_role only" % fn)
 
@@ -83,7 +87,9 @@ GROUPS = {"Current Assets": "", "Current Liabilities": "", "Sales Accounts": "",
           "Bank Accounts": "Current Assets", "Cash-in-Hand": "Current Assets", "Duties & Taxes": "Current Liabilities", "Unsecured Loans": "Loans (Liability)", "Secured Loans": "Loans (Liability)",
           "Bank OD A/c": "Loans (Liability)", "Salary & Wages": "Indirect Expenses", "Finance Costs": "Indirect Expenses", "Advance Income Tax": "Current Assets",
           "Staff Dues": "Current Liabilities", "Rowan Teal": "Loans (Liability)", "Partner Current Accounts": "Unsecured Loans"}
-# a group whose parent Tally wrote with an entity: cleaned it is "Primary" (namesClean; tally_calc_led's walk, ^\W*Primary$)
+# a group whose parent Tally wrote with an entity: in the path it is "Primary" (cleaned, as ledGroupPath), but
+# TallyRead.primaryOf tests the raw "&#4; Primary", which is no Primary: Indirect Incomes is then no primary group here,
+# and on these books (from 1 April) the openings under it do NOT move to Profit & Loss A/c (the review of 152, F1)
 GROUPS["Indirect Incomes"] = "&#4; Primary"
 def chain(parent):
     out, p = [], parent
@@ -109,12 +115,16 @@ def make_book(seed, n_v, n_cust, n_sup, n_exp, start, end):
     exps += [led("Expense Head %04d B" % i, "indirect expenses" if i % 2 else "Indirect  Expenses") for i in range(max(4, n_exp // 20))]
     bank = led("Kestrel Bank Current", "Bank Accounts", -250000000); od = led("Kestrel Bank OD", "Bank OD A/c", 120000000); cash = led("Cash", "Cash-in-Hand", -1500000)
     charges = led("Bank Charges", "Indirect Expenses")                     # FinCom's guess makes it a bank (Books.guess): cash and bank, and "bank" for TDS and GST paid
-    s_loc, s_int = led("Sales Local", "Sales Accounts"), led("Sales Interstate", "sales accounts"); svc = led("Service Income", "Direct Incomes"); pur = led("Purchase Goods", "Purchase Accounts")
+    # openings of profit and loss ledgers (the copy starts 1 April: TallyRead.yearOpen moves those whose primary group is a
+    # nominal one): under the variant "sales accounts" (found by namesKey: moves), under Indirect Incomes (its parent the
+    # raw "&#4; Primary": does not move), under a parent written "Indirect Expenses&#13;" (cleaned: moves)
+    s_loc, s_int = led("Sales Local", "Sales Accounts"), led("Sales Interstate", "sales accounts", 4321000);
+    led("Office Rent Accrued Head", "Indirect Expenses&#13;", -555500); svc = led("Service Income", "Direct Incomes"); pur = led("Purchase Goods", "Purchase Accounts")
     cg, sg, ig = led("Output CGST", "Duties & Taxes"), led("Output SGST", "Duties & Taxes"), led("Input IGST", "Duties & Taxes")
     ig07, ig27 = led("07 IGST Output", "Duties & Taxes"), led("27 IGST Output", "Duties & Taxes")
     gcash = led("GST Electronic Cash", "Duties & Taxes"); gint = led("GST Late Fee", "Indirect Expenses")
     tds_c, tds_j, tds_cl = led("TDS Payable 194C", "Duties & Taxes"), led("Professional Withholding 194J", "Duties & Taxes"), led("TDS Clearing", "Current Liabilities")
-    intr = led("Interest Received", "Indirect Incomes"); led("Capital", "Capital Account", 300000000); rcap = led("Rowan Teal Capital", "Capital Account", 50000000)
+    intr = led("Interest Received", "Indirect Incomes", 1234500); led("Capital", "Capital Account", 300000000); rcap = led("Rowan Teal Capital", "Capital Account", 50000000)
     dloan = led("Loan from Director", "Unsecured Loans", 50000000); tloan = led("Kestrel Term Loan", "Secured Loans", 90000000)
     rloan = led("Rowan Teal Loan", "Rowan Teal", 10000000); pcur = led("Partner Current Iris", "Partner Current Accounts", 2000000)
     equip = led("Office Equipment", "Fixed Assets", -40000000); fd = led("Fixed Deposit Kestrel", "Investments", -20000000)
@@ -407,7 +417,7 @@ def compare(db, label, cid, br, periods, end):
         dpo = js_round(W["owe"]["p"] / (p["total"] / days)) if goods and W["owe"]["p"] > 0 and p["total"] > 0 else None
         ok(dso == W["dso"] and dpo == W["dpo"], "%s dso %s, dpo %s from the parts here (the browser: %s, %s)" % (tag, dso, dpo, W["dso"], W["dpo"]))
 
-def timing(db, B, periods, end):
+def timing(db, B, periods, end, cid=None):
     db.sql("""create or replace function t_ms(p text) returns numeric language plpgsql as $$ declare t timestamptz := clock_timestamp(); n bigint; begin execute p into n; return round(extract(epoch from clock_timestamp() - t) * 1000, 1); end $$;""")
     res = {}
     for (f, t) in periods:
@@ -415,6 +425,11 @@ def timing(db, B, periods, end):
             s = "select length(tally_calc_mis(%s, %s, %s, %s, %s)::text)" % (q(B), q(part), q(iso(f)), q(iso(t)), q(end.isoformat()))
             v = sorted(float(db.one("select t_ms(%s)" % q(s))) for _ in range(5))
             res["%s %s-%s" % (part, f, t)] = (v[0], v[2])          # the best and the median of five
+        # 151's tally_now as a member, now that it reads 152's tally_calc_led (the primary group from the raw names)
+        if cid:
+            s = "select length(tally_now(%s, %s, %s)::text)" % (q(cid), q(iso(f)), q(iso(t)))
+            v = sorted(float(db.one("select t_ms(%s)" % q(s), uid=U)) for _ in range(5))
+            res["tally_now %s-%s" % (f, t)] = (v[0], v[2])
     return res
 
 # the browser to match: next-mis-speed b33f4a180 (its control is skipped on FinCom's copy), built by its own build.py from
@@ -436,6 +451,7 @@ T_ALL = {}
 try:
     db.sql("""
     do $$ begin if not exists (select 1 from pg_roles where rolname = 'service_role') then create role service_role; end if; end $$;
+    alter database postgres set jit = off;
     alter table tally_ledgers add column if not exists deleted_at timestamptz;
     alter table tally_ledger_day add column if not exists merged_into text;
     alter table tally_vouchers add column if not exists deleted_at timestamptz;
@@ -474,6 +490,15 @@ try:
         print("   the browser's engine in Node: %.1f s (MIS.runNow: %s ms)" % (time.time() - t0, ", ".join("%s %d" % (k, v) for k, v in br["ms"].items())))
         store(db, F, cid, br["map"], st)
         compare(db, label, cid, br, periods, TODAY)
+        # every master's opening as the browser's books hold it (TallyRead.balances and its yearOpen): what moves to
+        # Profit & Loss A/c and what stays (TallyRead.primaryOf on the raw group names)
+        so = {r["name"]: P(r["open"]) for r in db.rows("select name, open from tally_calc_led(%s) where in_master" % q(B))}
+        bo = {n: P(v) for n, v in br["opens"].items()}
+        dif = sorted((n, bo.get(n), so.get(n)) for n in set(so) | set(bo) if bo.get(n) != so.get(n))
+        moved = {n: (L[n][1], so.get(n)) for n in ("Sales Interstate", "Office Rent Accrued Head", "Interest Received") if n in L}
+        ok(not dif and (not groups or (so.get("Sales Interstate") == 0 and so.get("Office Rent Accrued Head") == 0 and so.get("Interest Received") == 1234500)),
+           "%s: every opening as the browser's (%d masters; Profit & Loss A/c %s; Sales Interstate, Office Rent Accrued Head moved, Interest Received not: %s) %s"
+           % (label, len(so), so.get("Profit & Loss A/c"), moved, dif[:4]))
         # the variants and the book with no groups read: the parties the groups make customers and suppliers, as the browser
         got = {r["ledger"] for r in db.rows("select ledger from tally_calc_bal(%s, array['2026-03-31']::date[]) where deb" % q(B))}
         # Audit.isDebtor on the browser's path: the parent cleaned, then (groups read) the groups up by ledLook
@@ -481,7 +506,7 @@ try:
         want = {n for n, x in L.items() if x[2] and n.startswith("Customer") and x[0] in debtor_parent}
         ok(want == {n for n in got if n.startswith("Customer")}, "%s: the customers are the browser's (%d; variant parents found by namesKey%s)" % (label, len(want), "" if groups else "; no groups: only those directly under Sundry Debtors"))
         if timed:
-            T = timing(db, B, [periods[0], periods[3]], TODAY); T_ALL = T
+            T = timing(db, B, [periods[0], ("20250501", "20261031"), periods[3]], TODAY, cid); T_ALL = T
             print("   %-34s %10s %10s" % ("part and period", "best", "median"))
             for k, v in T.items(): print("   %-34s %8.1f ms %8.1f ms" % (k, v[0], v[1]))
             slow = max(T, key=lambda k: T[k][1])
