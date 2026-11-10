@@ -1295,7 +1295,7 @@ async function shadowCall(dev: any, firm: string, body: any) {
     const { data: have } = await db.from("tally_companies").select("company, client_id").eq("firm_id", firm);
     const linked = new Map((have || []).map((r: any) => [r.company, !!r.client_id]));
     const links: Record<string, boolean> = {};
-    for (const c of (Array.isArray(body.companies) ? body.companies : []).slice(0, 200)) { const n = String(c?.name || "").trim(); if (n) links[n] = !!linked.get(n); }
+    for (const c of (Array.isArray(body.companies) ? body.companies : []).slice(0, 200)) { const raw = String(c?.name || "").slice(0, 300), n = coTrim(raw); if (n) { links[n] = !!linked.get(n); links[raw] = links[n]; } }
     return reply(200, { ok: true, links, shadow: true });
   }
   const book = await bookFor(firm, String(body.company || ""));
@@ -1363,7 +1363,8 @@ async function placeSeen(firm: string, book: string, dev: any, body: any) {
   } catch (e) { console.error("tally-ingest placeSeen", (e as Error).message); }
 }
 async function bookFor(firm: string, company: string) {
-  const { data, error } = await db.rpc("tally_book_for", { p_firm: firm, p_company: company });
+  // the name trimmed as the beat trims it (coTrim): the list holds it so, and the bridge may send Tally's chr(4) or spaces
+  const { data, error } = await db.rpc("tally_book_for", { p_firm: firm, p_company: coTrim(company) });
   if (error) throw new Error(error.message);
   return data as string | null;
 }
@@ -1875,9 +1876,21 @@ async function periodDaysFor(firm: string, body: any, stopped: boolean, max = 3,
   if (Date.now() - periodMissing < 600000) return null;
   try {
     const s = (v: unknown, n: number) => typeof v === "string" ? v.trim().slice(0, n) : "";
+    // a company this bridge cannot start a day of (no starting point: its beat entry has no ALTVCHID/ALTMSTID and the
+    // beat's startPoint none, or it refused one a moment ago with noStart) is left out of this beat: the bridge holds a
+    // listed day as its current one, so that day held every other book's (head of the line). Listed again once its beat
+    // has the numbers, or 10 minutes after the refusal (so a company is never left out for good)
+    const key = (v: unknown) => coName(coTrim(v));
+    const sp = new Set(Object.keys(body?.startPoint && typeof body.startPoint === "object" ? body.startPoint : {}).map(key));
+    const noStart = new Set<string>();
+    for (const x of (Array.isArray(body?.pickups) ? body.pickups : []).slice(0, 20) as any[]) {
+      if (x?.state === "refused" && x?.code === "noStart" && Date.now() - Date.parse(String(x?.at || "")) < 600000) noStart.add(key(x?.company));
+    }
     const open = new Map<string, string>();
     for (const c of (Array.isArray(body?.companies) ? body.companies : []).slice(0, 200) as any[]) {
       const name = s(c?.name, 200);
+      const unstarted = !!c && typeof c === "object" && "altvchid" in c && altOf(c.altvchid) === null && altOf(c.altmstid) === null && !sp.has(key(name));
+      if (unstarted || noStart.has(key(name))) continue;
       if (name && c?.open === true && !open.has(name)) open.set(name, s(c?.guid, 100));
     }
     const books = new Set<string>();
@@ -4308,6 +4321,9 @@ Deno.serve(sentry.wrap(async (req) => {
   let body: any;
   try { body = JSON.parse(await readBody(req)); } catch (e) { return (e as Error).message === "too large" ? reply(413, { ok: false, error: "Too much in one go; send fewer days at a time." }) : reply(400, { ok: false, error: "Bad request" }); }
   const firm = dev.firm_id as string;
+  // a company's name as the beat keeps it (coTrim: Tally's chr(4), spaces, CR/LF off its ends) on every call that names one,
+  // so the call finds the book, the computer's own companies and the posting checks the beat's names were kept under
+  if (body && typeof body === "object" && typeof body.company === "string") body.company = coTrim(body.company);
   // final review M3 (migration 54): the bridge moves itself to its new computer key. This call comes with the NEW key; its
   // body holds the OLD key the bridge id is bound to: only a program holding both keys can ask (a member alone cannot move
   // a bridge, and no owner is needed for one's own). Answered before the id is bound to the new key
@@ -4859,7 +4875,7 @@ Deno.serve(sentry.wrap(async (req) => {
       }
       case "companies": {
         const list = (Array.isArray(body.companies) ? body.companies : []).slice(0, 200)
-          .map((c: any) => ({ name: coTrim(String(c?.name || "")), gstin: String(c?.gstin || "").trim().toUpperCase().slice(0, 15), guid: String(c?.guid || "").trim().slice(0, 100) })).filter((c: any) => c.name);
+          .map((c: any) => ({ name: coTrim(String(c?.name || "")), sent: String(c?.name || "").slice(0, 300), gstin: String(c?.gstin || "").trim().toUpperCase().slice(0, 15), guid: String(c?.guid || "").trim().slice(0, 100) })).filter((c: any) => c.name);
         const { data: have } = await db.from("tally_companies").select("company, client_id, linked_at").eq("firm_id", firm);
         const known = new Map((have || []).map((r: any) => [r.company, r.client_id]));
         const unlinked = new Set((have || []).filter((r: any) => !r.client_id && r.linked_at).map((r: any) => r.company));   // unlinked by a person: left so
@@ -4889,6 +4905,8 @@ Deno.serve(sentry.wrap(async (req) => {
           await db.from("tally_companies").upsert({ firm_id: firm, company: c.name, ...(c.gstin ? { gstin: c.gstin } : {}), device_id: dev.id, last_seen: new Date().toISOString(),
             ...(auto ? { client_id: client, linked_at: new Date().toISOString() } : {}) }, { onConflict: "firm_id,company" });
           links[c.name] = !!client;
+          // the bridge looks its link up by the name exactly as it sent it (with Tally's chr(4) or spaces): that key too
+          if (c.sent !== c.name) links[c.sent] = !!client;
           // rebuilt 2.1.4: the company's Tally GUID kept with its book; another GUID marks it needs_baseline (no migration-32: skipped)
           if (client && c.guid) {
             const book = await bookFor(firm, c.name);

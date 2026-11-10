@@ -158,6 +158,48 @@ try:
     first = df.get("at")
     call(dict(base))
     ok(((next(d for d in FS.T["tally_devices"] if d["id"] == DA).get("info") or {}).get("dayFirst") or {}).get("at") == first, "6. not moved by a later beat")
+
+    print("== 7. a company's name with Tally's edge characters (chr(4), spaces) finds its book on every call")
+    RAW = "\x04MADE UP CO  "
+    call(dict(base))
+    c, r = call({"version": "2.5.10", "bridge": GA, "kind": "lease_take", "company": RAW, "ttl": 120})
+    ok(c == 200 and r.get("ok") is True, "7. lease_take with the name as the bridge sends it: the book's lease (%s %s)" % (c, r))
+    c, r = call({"version": "2.5.10", "bridge": GA, "kind": "period_heads", "company": RAW, "company_guid": CG, "day": "20250830", "heads": []})
+    ok(c == 200 and not r.get("notLinked") and not r.get("notMine"), "7. period_heads: linked and named by this computer (%s %s)" % (c, r))
+    c, r = call({"version": "2.5.10", "bridge": GA, "kind": "companies", "companies": [{"name": RAW, "guid": CG}]})
+    lk = r.get("links") or {}
+    ok(c == 200 and lk.get(RAW) is True and lk.get("MADE UP CO") is True, "7. companies: links under the name as sent and trimmed (%s)" % lk)
+    ok(not any(x["company"] != x["company"].strip("\x04 ") for x in FS.T["tally_companies"]), "7. the list keeps the trimmed name only")
+
+    print("== 8. a company with no starting point never holds the other books' days (head of the line)")
+    BOOK2, CG2 = "22222222-2222-2222-2222-222222222510", "b2f776bd-4a48-4f7d-9c73-48a8f0872510"
+    FS.T["tally_companies"].append({"firm_id": FIRM, "company": "ACME TRADERS", "client_id": "c2", "book_id": BOOK2})
+    FS.T["tally_books"].append({"book_id": BOOK2, "firm_id": FIRM, "client_id": "c2", "company": "ACME TRADERS", "from_date": "2025-04-01", "open_as_on": "2025-03-31"})
+    FS.T["clients"].append({"id": "c2", "firm_id": FIRM, "name": "ACME TRADERS", "tally_name": "ACME TRADERS", "gstin": "", "deleted": False})
+    FS.T["tally_sync_cursor"].append({"book_id": BOOK2, "company_guid": CG2})
+    NEXT[BOOK2] = [{"day": "20250901", "fetch": True, "types": ["Sales"], "chosenAt": CA}]
+    acme = {"name": "ACME TRADERS", "open": True, "guid": CG2, "altvchid": 120, "altmstid": 40}
+    def cos(**made): return [dict({"name": "MADE UP CO", "open": True, "guid": CG}, **made), acme]
+    def days8(**more):
+        c, r = call(dict(base, open=["MADE UP CO", "ACME TRADERS"], **more))
+        return c, sorted({d.get("company") for d in (r.get("periodDays") or [])})
+    c, got = days8(companies=cos(altvchid=None, altmstid=None))
+    ok(c == 200 and got == ["ACME TRADERS"], "8. no altvchid/altmstid in its beat entry: its days not listed, the others' are (%s)" % got)
+    c, got = days8(companies=cos(altvchid=None, altmstid=None), startPoint={"MADE UP CO": {"altvchid": 10, "altmstid": 5, "guid": CG}})
+    ok("MADE UP CO" in got, "8. its starting point in the beat's startPoint: listed (%s)" % got)
+    c, got = days8(companies=cos(altvchid=50, altmstid=20))
+    ok("MADE UP CO" in got, "8. once it has its numbers: listed again, never starved (%s)" % got)
+    now = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+    c, got = days8(companies=cos(altvchid=50, altmstid=20), pickups=[refused(code="noStart", kind="period", at=now)])
+    ok(got == ["ACME TRADERS"], "8. this bridge refused it a moment ago (noStart): not listed this beat (%s)" % got)
+    c, got = days8(companies=cos(altvchid=50, altmstid=20), pickups=[refused(code="typing", kind="period", at=now)])
+    ok("MADE UP CO" in got, "8. a refusal for a reason of every book (typing): listed as before (%s)" % got)
+    old = (datetime.datetime.utcnow() - datetime.timedelta(minutes=11)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    c, got = days8(companies=cos(altvchid=50, altmstid=20), pickups=[refused(code="noStart", kind="period", at=old)])
+    ok("MADE UP CO" in got, "8. a noStart refusal 11 minutes old: listed again (%s)" % got)
+    call(dict(base, bridge=GB, pickups=[refused(code="noStart", kind="period", at=now)]))
+    c, got = days8(companies=cos(altvchid=50, altmstid=20))
+    ok("MADE UP CO" in got, "8. another bridge's noStart: not this bridge's (%s)" % got)
 finally:
     fn.terminate()
 if fails:
