@@ -3,7 +3,7 @@
 Reviewers: the session that built it (a self-review against the owner's rules), after the independent review of
 f1b3e700b (seven points; all addressed below). The coordinator reviews again.
 
-Range: ff86083bf..7e46a9dc1 (origin/staging-next, which holds released 2.5.11, to this build)
+Range: ff86083bf..e6a43e67b (origin/staging-next, which holds released 2.5.11, to this build)
 
 (bridge-go/: fastvch.go (liveKeepInv2512 kept by the strip only, fastEmit's order, fastVoucherModeItems, fastHasItems /
 fastOKNoInv), batch249.go (FinComVoucherBatch's FETCH 2.5.11's again; pullKeep), daypull.go (pullHoldEntry,
@@ -93,6 +93,13 @@ a cloud without 154; the release on a version change).
   over; a readable one keeps its other entries, written through a temp file and a rename (TestR2512RangeOffFileUnreadable).
 - L5 (migration 154, still add-only): tally_period_held_settle also drops a held entry the day's latest list from Tally no
   longer names (deleted or moved in Tally); run_migration154.py check 7.
+
+## 6. The final review (one point, fixed)
+
+- range2512.go, as batch249.go: Tally's end of a range stopped at 2 s is awaited first, Tally's window is measured from
+  the send over that wait, then window held 2 s -> stop "window"; Tally not finished (or not watchable) -> stop
+  "over2s"; only then the stop as Tally being busy (TestR2512RangeStoppedAndWindowHeldStopsCompany). TallyFetch.jsx: the
+  held list's "loaded" mark cleared at the start of each load (a book change never hides a line with the old book's list).
 
 ## Verdict
 

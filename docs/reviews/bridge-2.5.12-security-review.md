@@ -2,7 +2,7 @@
 
 Reviewers: the session that built it (self-review), after the independent review of f1b3e700b.
 
-Range: ff86083bf..7e46a9dc1 (origin/staging-next, which holds released 2.5.11, to this build)
+Range: ff86083bf..e6a43e67b (origin/staging-next, which holds released 2.5.11, to this build)
 
 ## Requests to Tally
 
