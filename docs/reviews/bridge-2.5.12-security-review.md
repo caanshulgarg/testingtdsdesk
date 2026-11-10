@@ -2,7 +2,7 @@
 
 Reviewers: the session that built it (self-review), after the independent review of f1b3e700b.
 
-Range: ff86083bf..e6a43e67b (origin/staging-next, which holds released 2.5.11, to this build)
+Range: ff86083bf..53be56303 (origin/staging-next, which holds released 2.5.11, to this build; 53be56303 merges origin/staging-next 6a8249a34, which changes no bridge-go file: the bridge sources are e6a43e67b's)
 
 ## Requests to Tally
 
