@@ -18,9 +18,11 @@
 //     (kept in sync\range-off.json, logged); only after the run's check passed are its later ranges used;
 //   - a row dated outside the range is the single-day rule's "date not applied": the answer is dropped, the day marked as
 //     that rule marks it, and no day is asked of that Tally until the bridge restarts;
-//   - an answer cut, in error, not adding up (rows Tally gave not equal to the days' lists), over the 2 s stop, or Tally's
-//     window held 2 s: not used, and NOT a stop of the company: as Tally being busy (the shared retry schedule's wait
-//     after a stop, Tally's own end of the request awaited), single days for that company for the rest of this run, logged;
+//   - an answer cut, in error, not adding up (rows Tally gave not equal to the days' lists) or over the 2 s stop: not
+//     used, and NOT a stop of the company: as Tally being busy (the shared retry schedule's wait after a stop, Tally's
+//     own end of the request awaited), single days for that company for the rest of this run, logged. Review 2: Tally
+//     not finished with a range stopped at 2 s within TallyAbandonWaitSec (or not watchable: TallyAbandonMaxSec 0, when
+//     no range is asked at all), or Tally's window held 2 s, stops the company as for one day;
 //   - a day's list from a range is used only by that day's turn and only while fresh (DayPullHeadsFreshSec).
 //
 // No hang: the same gate as one day's list (the six conditions just before, postings first, the typing gate, one request
@@ -33,6 +35,7 @@ import (
 	"fmt"
 	"html"
 	"math"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -79,11 +82,13 @@ var rng = struct {
 	verified map[string]bool            // per company and GUID: this run's check passed
 	check    map[string]*pullRangeCheck // per company and GUID: the check under way
 	offSaved M                          // sync\range-off.json, read once
+	offBad   bool                       // that file is there but cannot be read: off for every company
 }{}
 
 func pullRangeReset() {
 	rng.mu.Lock()
 	rng.sparse, rng.perDay, rng.offRun, rng.verified, rng.check, rng.offSaved = map[string][]int{}, map[string]int{}, map[string]string{}, map[string]bool{}, map[string]*pullRangeCheck{}, nil
+	rng.offBad = false
 	rng.mu.Unlock()
 }
 
@@ -95,12 +100,22 @@ func pullRangeCoKey(it pullItem) string {
 func pullRangeOffFile() string { return filepath.Join(syncDir(), "range-off.json") }
 
 // under rng.mu: ranges off for good for the company (a check that found a difference)
+// review 2 (L4): a file there that cannot be read keeps ranges off for EVERY company (never back on by itself) and is
+// never written over (its entries would be lost); logged once
 func pullRangeOffLocked(k string) bool {
 	if rng.offSaved == nil {
-		rng.offSaved = readObjFile(pullRangeOffFile())
+		f := pullRangeOffFile()
+		rng.offSaved = readObjFile(f)
 		if rng.offSaved == nil {
 			rng.offSaved = M{}
+			if _, err := os.Stat(f); err == nil {
+				rng.offBad = true
+				writeLog("Older entries: " + f + " cannot be read; ranges of day lists are off for every company (the file is left as it is)")
+			}
 		}
+	}
+	if rng.offBad {
+		return true
 	}
 	_, off := rng.offSaved[k]
 	return off
@@ -111,10 +126,13 @@ func pullRangeOffForGood(it pullItem, why string) {
 	rng.mu.Lock()
 	pullRangeOffLocked(k)
 	rng.offSaved[k] = M{"company": it.Company, "why": cutRunes(why, 300), "at": nowFn().Format(time.RFC3339)}
-	text := jsonText(rng.offSaved)
+	text, bad := jsonText(rng.offSaved), rng.offBad
 	delete(rng.check, k)
 	rng.mu.Unlock()
-	if err := saveFile(pullRangeOffFile(), text); err != nil {
+	// the old entries kept (read first), written through a temp file and a rename (saveFile); never over an unreadable file
+	if bad {
+		writeLog("Older entries: " + pullRangeOffFile() + " cannot be read, so it is not written (ranges stay off for every company)")
+	} else if err := saveFile(pullRangeOffFile(), text); err != nil {
 		writeLog("Older entries: " + pullRangeOffFile() + " could not be written: " + err.Error())
 	}
 	writeLog(fmt.Sprintf("Older entries of %s: the day lists of a range differ from the same days read one by one (%s); ranges are off for this company for good, its days are read one by one", it.Company, why))
@@ -318,6 +336,11 @@ func pullRangeMay(it pullItem) (int, string) {
 	if why := rng.offRun[kc]; why != "" {
 		return 0, "off this run"
 	}
+	if abandonMax() <= 0 {
+		// review 2 (M2): with TallyAbandonMaxSec 0 a request given up at 2 s is closed and Tally's end cannot be watched:
+		// no range (a single day's list keeps its own rule)
+		return 0, "Tally's end of a request cannot be watched"
+	}
 	if c := rng.check[kc]; c != nil {
 		if nowFn().Sub(c.at) < 15*time.Minute && !nowFn().Before(c.at) {
 			return 0, "check under way"
@@ -391,10 +414,13 @@ func pullRangeStep(w *pullWork, port int) (handled, sent, more bool) {
 	pullNoteLook(err == nil && took > 0, holdMs)
 	ms := int(took * 1000)
 	busy := func(what string) (bool, bool, bool) {
-		// the review's point 1: never a stop of the company for a range; as Tally being busy
+		// the review's point 1: a range over 2 s or cut is not a stop of the company; as Tally being busy. Review 2 (M2):
+		// only once Tally has finished the range it was stopped on (as the group read, batch249.go): not finished within
+		// TallyAbandonWaitSec, or not watchable, the company's period stops (never two requests at Tally)
 		w.noRange = true
-		if errors.Is(err, errRecorderStop) && took > 0 && abandonMax() > 0 {
-			pullAwaitEarlier(port, abandonWait()) // Tally's own end of the request it was given up on
+		if errors.Is(err, errRecorderStop) && took > 0 && (abandonMax() <= 0 || !pullAwaitEarlier(port, abandonWait())) {
+			pullStopCompany(w, "over2s", fmt.Sprintf("the day lists of %s: Tally had not finished them %d s after the 2 s stop (or could not be watched)", form, int(pullAwaitBound(abandonWait()).Seconds())))
+			return true, true, false
 		}
 		pullRangeOffThisRun(it, "the day lists of "+form+": "+what)
 		return true, took > 0, false
@@ -405,7 +431,9 @@ func pullRangeStep(w *pullWork, port int) (handled, sent, more bool) {
 	case errors.Is(err, errRecorderStop):
 		return busy("over the 2-second stop")
 	case holdMs >= 2000:
-		return busy(fmt.Sprintf("Tally's window did not answer for %.1f s", float64(holdMs)/1000))
+		// review 2 (L3): Tally's window held 2 s stops the company exactly as for one day's list
+		pullStopCompany(w, "window", fmt.Sprintf("Tally's window did not answer for %.1f s while %s were read", float64(holdMs)/1000, form))
+		return true, true, false
 	case err != nil:
 		return busy("not answered (" + cutRunes(err.Error(), 160) + ")")
 	}

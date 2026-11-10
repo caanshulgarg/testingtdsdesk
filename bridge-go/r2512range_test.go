@@ -60,7 +60,12 @@ func r2512Days(from string, n int) []string {
 // that FinCom did not hand out
 func r2512Sparse(t *testing.T, n int) (*standTally, *standCloud, *pullModel, []string) {
 	t.Helper()
-	f, c, m := pullBridgeWith(t, "")
+	return r2512SparseWith(t, n, `,"TallyAbandonMaxSec":600`) // (Tally's end of a request watched, as the bridge's default)
+}
+
+func r2512SparseWith(t *testing.T, n int, extra string) (*standTally, *standCloud, *pullModel, []string) {
+	t.Helper()
+	f, c, m := pullBridgeWith(t, extra)
 	days := r2512Days("20250901", n)
 	pullDay(f, "20250901", 700, "Sales", "Receipt")
 	pullDay(f, "20250906", 710, "Payment")
@@ -362,4 +367,100 @@ func TestR2512RangeGuard(t *testing.T) {
 	pull.mu.Lock()
 	pull.rangeAsk = ""
 	pull.mu.Unlock()
+}
+
+// the second review's M2: a range stopped at 2 s that Tally has not finished within TallyAbandonWaitSec stops the
+// company, as the group read (never a single day's list at Tally while it is still on the range); with
+// TallyAbandonMaxSec 0 (Tally's end cannot be watched) no range is asked at all
+func TestR2512RangeStoppedNotFinishedStopsCompany(t *testing.T) {
+	f, c, m, days := r2512SparseWith(t, 9, `,"TallyAbandonMaxSec":600,"TallyAbandonWaitSec":1`)
+	stops := r1Stops(c)
+	f.mu.Lock()
+	f.slow = func(id, body string) time.Duration {
+		if a, z := pinDates(body); id == dayHeadsID && z > a {
+			return 4 * time.Second
+		}
+		return 0
+	}
+	f.mu.Unlock()
+	applyPeriodDays(r2512List(days...))
+	pullRun(t, 120)
+	if len(*stops) != 1 || str((*stops)[0]["why"]) != "over2s" {
+		t.Fatalf("stops: %v", *stops)
+	}
+	if rs := r2512Ranges(f); len(rs) != 1 {
+		t.Fatalf("ranges: %v", rs)
+	}
+	for _, d := range days[3:] {
+		if _, had := r2512Told(m)[d]; had {
+			t.Fatalf("%s told after the stop", d)
+		}
+	}
+	time.Sleep(3 * time.Second) // (the stand's answer to the range ends)
+}
+
+func TestR2512NoRangeWhenTallyEndNotWatched(t *testing.T) {
+	f, _, m, days := r2512SparseWith(t, 9, `,"TallyAbandonMaxSec":0`)
+	applyPeriodDays(r2512List(days...))
+	pullRun(t, 120)
+	if rs := r2512Ranges(f); len(rs) != 0 {
+		t.Fatalf("a range with TallyAbandonMaxSec 0: %v", rs)
+	}
+	if fmt.Sprint(r2512Told(m)) != fmt.Sprint(r2512Want(days)) {
+		t.Fatalf("told %v", r2512Told(m))
+	}
+}
+
+// the second review's L3: Tally's window held 2 s during a range stops the company, as for one day's list
+func TestR2512RangeWindowHeldStopsCompany(t *testing.T) {
+	f, c, _, days := r2512Sparse(t, 9)
+	stops := r1Stops(c)
+	old := windowHoldFn
+	windowHoldFn = func() func(time.Time) int {
+		pull.mu.Lock()
+		rangeNow := pull.rangeAsk != ""
+		pull.mu.Unlock()
+		return func(time.Time) int {
+			if rangeNow {
+				return 2200
+			}
+			return 0
+		}
+	}
+	t.Cleanup(func() { windowHoldFn = old })
+	applyPeriodDays(r2512List(days...))
+	pullRun(t, 120)
+	if rs := r2512Ranges(f); len(rs) != 1 || len(*stops) != 1 || str((*stops)[0]["why"]) != "window" {
+		t.Fatalf("ranges %v, stops %v", rs, *stops)
+	}
+}
+
+// the second review's L4: a range-off file that cannot be read keeps ranges off for every company and is never written over
+func TestR2512RangeOffFileUnreadable(t *testing.T) {
+	_, _, _, days := r2512Sparse(t, 3)
+	if err := saveFile(pullRangeOffFile(), "{not json"); err != nil {
+		t.Fatal(err)
+	}
+	pullRangeReset()
+	for _, co := range []string{zz, "Made Up Other Co"} {
+		if _, why := pullRangeMay(pullItem{Company: co, CGUID: b220CoGUID, Day: days[0], Fetch: true}); why != "off for good" {
+			t.Fatalf("%s: %q", co, why)
+		}
+	}
+	pullRangeOffForGood(pullItem{Company: zz, CGUID: b220CoGUID, Day: days[0]}, "a made-up difference")
+	if got := readText(pullRangeOffFile()); got != "{not json" {
+		t.Fatalf("written over: %q", got)
+	}
+	if !strings.Contains(readText(logFile()), "cannot be read; ranges of day lists are off for every company") {
+		t.Fatal("not logged")
+	}
+	// a readable file keeps the other companies' entries when one more is added
+	if err := saveFile(pullRangeOffFile(), jsonText(M{"other|guid": M{"company": "Made Up Other Co"}})); err != nil {
+		t.Fatal(err)
+	}
+	pullRangeReset()
+	pullRangeOffForGood(pullItem{Company: zz, CGUID: b220CoGUID, Day: days[0]}, "a made-up difference")
+	if got := readObjFile(pullRangeOffFile()); got["other|guid"] == nil || len(got) != 2 {
+		t.Fatalf("the other entries lost: %v", got)
+	}
 }

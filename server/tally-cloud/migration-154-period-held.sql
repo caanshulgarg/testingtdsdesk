@@ -15,7 +15,8 @@
 --     'held' by an older version are listed again (tried again after each bridge update);
 --   - tally_period_held_retry (the app's "Try again now", owner or staff): the day listed again at once;
 --   - tally_period_held_settle (in tally_period_held_list): an entry FinCom now holds at the AlterID held or higher (the
---     day's Day Book uploaded, or read since) leaves the list; an empty list clears the mark and ends the day;
+--     day's Day Book uploaded, or read since), or one the day's latest list from Tally no longer names (deleted or moved
+--     in Tally), leaves the list; an empty list clears the mark and ends the day;
 --   - tally_period_held_list (the app's, owner or staff or viewer of the firm): the held days [{day, n, tries, manual, words}].
 -- Add-only and safe to run again; one transaction, lock_timeout 10 s. Tested on pg_stand: tests/run_migration154.py.
 begin;
@@ -86,9 +87,12 @@ language plpgsql security definer set search_path = public, pg_temp as $function
 declare r record; rest jsonb; h record; n int := 0;
 begin
   for r in select * from tally_period_days x where x.book_id = p_book and jsonb_array_length(x.held) > 0 for update loop
+    -- review 2 (L5): an entry the day's latest list from Tally no longer names (deleted or moved in Tally) leaves it too
     select coalesce(jsonb_agg(e), '[]'::jsonb) into rest from jsonb_array_elements(r.held) e
      where not exists (select 1 from tally_vouchers v where v.book_id = p_book and v.guid = e->>'guid' and v.deleted_at is null
-                         and coalesce(v.alter_id, 0) >= coalesce((e->>'alter')::bigint, 0));
+                         and coalesce(v.alter_id, 0) >= coalesce((e->>'alter')::bigint, 0))
+       and (jsonb_typeof(r.heads) is distinct from 'array'
+            or exists (select 1 from jsonb_array_elements(r.heads) hd where jsonb_typeof(hd) = 'array' and hd->>0 = e->>'guid'));
     if jsonb_array_length(rest) = jsonb_array_length(r.held) then continue; end if;
     n := n + 1;
     if jsonb_array_length(rest) > 0 then

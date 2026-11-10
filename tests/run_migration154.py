@@ -10,7 +10,8 @@ functions), then 154 (twice). Made-up rows only (a book "ZZ CO", GUIDs g-1 and g
   3. a retry that reads it (the day's last call says held []) clears the mark and finishes the day
   4. the day's Day Book uploaded (the entry in FinCom at the AlterID held): the list settles it, the day done
   5. "Try again now" (staff of the firm): the manual day listed again; a person of another firm refused
-  6. the second run of 154 changes nothing of the rows"""
+  6. the second run of 154 changes nothing of the rows
+  7. the held entry deleted in Tally (the day's latest list no longer names it): the list settles it, the day done"""
 import os, re, sys, json
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 import pg_stand
@@ -95,6 +96,10 @@ try:
         db.one("select tally_period_held_retry(%s, %s)::text" % (q(B), q(DAY)), OTHER); ok(False, "5. another firm's person refused")
     except RuntimeError as e:
         ok("not allowed" in str(e), "5. another firm's person refused")
+    # 7. (review 2, L5) the entry deleted in Tally: the day's latest list no longer names it; the list settles it
+    db.sql("update tally_period_days set heads = '[[\"g-1\", \"1\", \"5\", \"Sales\"]]', tally_n = 1 where book_id = %s and day = %s" % (q(B), q(DAY)))
+    l = lst(); d = day()
+    ok(l["held"] == [] and d["n"] == "0" and d["open"] == "f" and d["listed"] == "t", "7. deleted in Tally (no longer in the day's list): settled, the day done (%s)" % d)
     before = day()
     db.sql(pg_stand.migration_body(M154))
     ok(day() == before, "6. the second run changes no row")
