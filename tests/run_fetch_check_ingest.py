@@ -184,7 +184,7 @@ try:
     n0 = len(FS.ARGS.get("gst_calc_want_book") or [])
     c, r = call({"kind": "upload_days", "client": "c1", "company": "MADE UP CO", "days": [{"day": "20250907", "gz": gz(day0.replace("20250901", "20250907"))}]}, key=None, tok="tok-owner")
     got = gw(n0 + 1); w = (FS.ARGS.get("gst_calc_want_book") or [{}])[-1]
-    ok(c == 200 and got == n0 + 1 and w.get("p_book") == BOOK and w.get("p_why") == "books" and w.get("p_delay") == 0, "6. an upload's days stored: one gst_calc_want_book for the book, not waited on (%s)" % w)
+    ok(c == 200 and got == n0 + 1 and w.get("p_book") == BOOK and w.get("p_why") == "books" and "p_after" in w and w.get("p_after") is None, "6. an upload's days stored: one gst_calc_want_book for the book, not waited on (%s)" % w)
     n1 = len(FS.ARGS.get("gst_calc_want_book") or [])
     c, r = call(dict(base, kind="days", company="MADE UP CO", company_guid=CG, days=[{"day": "20250908", "gz": gz("<ENVELOPE></ENVELOPE>")}]))
     ok(c == 200 and gw(n1 + 1) == n1 + 1, "6. the bridge's days stored: queued too (%s)" % c)

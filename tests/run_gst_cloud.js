@@ -205,7 +205,9 @@ const near0 = o => !o || H.every(h => Math.abs(Number(o[h]) || 0) < 0.005);
   ok(q.afterThreeKilled && q.afterThreeKilled.taken === 0 && q.afterThreeKilled.tooBig === true && q.afterThreeKilled.want === false, "a run taken three times and never finished: the client too big, not taken again, no run started for it (the app works it out)");
   ok(q.afterADay && q.afterADay.want === true && q.afterADay.tooBig === false, "a too-big client wanted a day after its last run: taken back");
   ok(q.cap && q.cap.first3.join() === "c-a,c-b,c-c" && q.cap.more === 0, "at most 3 runs at once, in the order first wanted (" + (q.cap && q.cap.first3.join()) + ")");
-  ok(q.delayed && q.delayed.start === false && q.delayed.now === 0 && q.delayed.later === 1, "lines queued for the drain: wanted 60 s on, not taken before");
+  ok(q.held && q.held.start === false && q.held.now === 0 && q.held.stillHeld === 0 && q.held.applied === 1, "lines queued for the drain: no run started, not taken while its message waits, taken once applied");
+  ok(q.dueKept === true, "a want never puts off a client already due");
+  ok(q.dead && q.dead.within === false && q.dead.after === true, "a run going: a miss starts none; a run taken 2 minutes ago and dead: a miss starts one");
   ok(cloud.kicksDuringRuns === 0 && cloud.kickedAgain === 2, "a background run never starts another (the timer and the members' misses do)");
   const tb = cloud.tooBigRun || {};
   ok(tb.ok && tb.big === true && tb.afterOne && tb.afterOne.too_big === false && tb.second && tb.second.big === true && tb.stored === 0 && tb.queued && tb.queued.too_big === true && tb.backOnNewEngine,

@@ -2986,8 +2986,9 @@ async function recorderLines(dev: any, firm: string, book: string, body: any) {
     }
     if (error && notReady44(error)) return reply(503, { ok: false, notReady: true, error: "The cloud does not take recorder lines yet (migration 44)." });
     if (error) throw dbFail("recorder_lines " + via, error, "The cloud could not store these recorder lines just now; send them again.");
-    // stored now: queued for the 3B at once; queued for the drain (pg_cron every 30 s): wanted once it has applied them
-    if (full) gstWant(book, data && typeof data.queued === "number" ? 60 : 0);
+    // stored now: queued for the 3B at once; queued for the drain (pg_cron every 30 s): queued with its message, and not
+    // taken while that message waits (gst_calc_held): the 3B is worked out once the drain has applied these lines
+    if (full) gstWant(book, data && typeof data.queued === "number" && Number(data.msg) > 0 ? Number(data.msg) : null);
     if (data && typeof data.queued === "number") {
       send.forEach((l: any, k: number) => { results[at[k]] = { line_id: String(l.line_id ?? ""), state: "queued", why: null, ...(found.has(String(l.line_id ?? "")) ? { guid: found.get(String(l.line_id ?? "")) } : {}) }; });
       const failed = results.filter((r) => r?.state === "failed").length;
@@ -3150,7 +3151,8 @@ async function retryHeldShort(firm: string, job: string) {
       await shortBodies(firm, book, lines);
       const { data: r, error: e2 } = await db.rpc("tally_recorder_short_retry", { p_firm: firm, p_book: book, p_lines: lines.map((l) => ({ row: l.row, line_id: l.line_id, vouchers: l.vouchers || [], lines: l.lines || [] })) });
       if (e2) console.log("tally-ingest posts_update: held short lines", job, String(e2.message || "").slice(0, 200));
-      else { if ((Number((r as any)?.applied) || 0) > 0) gstWant(book); } if (!e2) console.log("tally-ingest posts_update: held short lines retried", book, JSON.stringify({ applied: (r as any)?.applied, held: (r as any)?.held, skipped: (r as any)?.skipped }));
+      else if ((Number((r as any)?.applied) || 0) > 0) gstWant(book);
+      if (!e2) console.log("tally-ingest posts_update: held short lines retried", book, JSON.stringify({ applied: (r as any)?.applied, held: (r as any)?.held, skipped: (r as any)?.skipped }));
     }
   } catch (e) { console.log("tally-ingest posts_update: held short lines", job, (e as Error).message); }
 }
@@ -3232,11 +3234,11 @@ async function checkQueue(book: string, days: string[]) {
 }
 // next-cloud-gst (migration 153): a book's entries stored, its client's GSTR-3B is queued to be worked out again in the
 // cloud (gst-run). Never fails the ingest; a cloud without 153: nothing queued
-function gstWant(book: string, delay = 0) {
+function gstWant(book: string, after: number | null = null) {
   // not waited on (EdgeRuntime.waitUntil keeps it going after the reply), and given up after 2 s: never slows an ingest
   const p = (async () => {
     try {
-      const { error } = await db.rpc("gst_calc_want_book", { p_book: book, p_why: delay ? "queued" : "books", p_delay: delay }).abortSignal(AbortSignal.timeout(2000));
+      const { error } = await db.rpc("gst_calc_want_book", { p_book: book, p_why: after ? "queued" : "books", p_after: after }).abortSignal(AbortSignal.timeout(2000));
       if (error && !missingFn(String(error.message || ""))) console.log("tally-ingest gst_calc_want_book: " + String(error.message || "").slice(0, 200), book);
     } catch (e) { console.log("tally-ingest gst_calc_want_book: " + String((e as Error)?.message || e).slice(0, 200), book); }
   })();

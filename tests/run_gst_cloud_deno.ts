@@ -30,6 +30,7 @@ const T: Record<string, any[]> = {
 // the fake's answers for the books' tables, kept between writes (only the tests write to them, and clear these)
 const pages = new Map<string, string>(), sorted = new Map<string, any[]>();
 let clock = Date.parse("2026-11-09T10:00:00Z"), reads = 0, fakeCpu = 0, failOn = "";
+const HELD = new Set<number>();     // tally_recorder's messages not applied yet (gst_calc_held)
 // the CPU of the thread JavaScript runs on (user and system; not V8's helper threads) from /proc, in ms (10 ms steps)
 const cpu = () => { const f = Deno.readTextFileSync("/proc/thread-self/stat"), x = f.slice(f.lastIndexOf(")") + 2).split(" "); return (+x[11] + +x[12]) * 10; };
 const pass = (row: any, k: string, v: string) => {
@@ -51,20 +52,21 @@ const RPC: Record<string, (a: any) => any> = {
     .concat(T.clients.filter((c) => c.id === a.p_client && c.data && c.data.gstin).map((c) => String(c.data.gstin).toUpperCase())))).filter((g) => /^\d{2}[A-Z0-9]{13}$/.test(g)).sort(),
   gst_calc_version: (a) => "v" + s32(JSON.stringify([T.tally_vouchers, T.tally_lines, T.tally_bills, T.tally_ledgers, T.client_book_items, T.clients.filter((c) => c.id === a.p_client), T.records, T.gst_2b_runs, T.gst_2b_decisions])),
   // migration 153's queue, as the database answers it
-  gst_calc_want: (a) => { const d = Math.max(0, Math.min(a.p_delay || 0, 600)) * 1000, w = clock + d; const q = T.gst_calc_queue.find((x) => x.client_id === a.p_client && x.firm_id === a.p_firm);
-    if (!q) { T.gst_calc_queue.push({ firm_id: a.p_firm, client_id: a.p_client, why: a.p_why, wanted_at: w, first_wanted: clock, taken_at: null, ran_at: null, attempts: 0, too_big: false, big_n: 0, rev: null }); return !d; }
+  gst_calc_want: (a) => { const af = a.p_after ?? null; const q = T.gst_calc_queue.find((x) => x.client_id === a.p_client && x.firm_id === a.p_firm);
+    if (!q) { T.gst_calc_queue.push({ firm_id: a.p_firm, client_id: a.p_client, why: a.p_why, wanted_at: clock, first_wanted: clock, asked_at: clock, after_msg: af, taken_at: null, ran_at: null, attempts: 0, too_big: false, big_n: 0, rev: null }); return af == null; }
     if (q.too_big && (q.ran_at == null || q.ran_at < clock - 86400000 || (a.p_rev != null && a.p_rev !== q.rev))) Object.assign(q, { too_big: false, attempts: 0, big_n: 0 });
-    const was = { ...q }; q.wanted_at = Math.max(q.wanted_at, w); q.why = a.p_why || q.why; return !was.too_big && was.taken_at == null && !d; },
+    const was = { ...q }; q.wanted_at = Math.min(q.wanted_at ?? clock, clock); q.asked_at = clock; q.why = a.p_why || q.why; if (af != null) q.after_msg = Math.max(q.after_msg || 0, af);
+    return !was.too_big && af == null && !HELD.has(was.after_msg) && (was.taken_at == null || was.taken_at < clock - 120000); },
   gst_calc_take: (a) => {
     T.gst_calc_queue.forEach((x) => { if (!x.too_big && x.attempts >= 3 && (x.taken_at == null || x.taken_at < clock - 120000)) { x.too_big = true; x.taken_at = null; x.ran_at = clock; } });
     const going = T.gst_calc_queue.filter((x) => x.taken_at != null && x.taken_at >= clock - 120000).length;
     if (going >= 3) return [];
-    return T.gst_calc_queue.filter((x) => !x.too_big && x.attempts < 3 && x.wanted_at <= clock && (x.taken_at == null || x.taken_at < clock - 120000) && (x.ran_at == null || x.ran_at < clock - 20000))
+    return T.gst_calc_queue.filter((x) => !x.too_big && x.attempts < 3 && x.wanted_at <= clock && !HELD.has(x.after_msg) && (x.taken_at == null || x.taken_at < clock - 120000) && (x.ran_at == null || x.ran_at < clock - 20000))
       .sort((p, q) => (p.first_wanted - q.first_wanted) || (p.wanted_at - q.wanted_at)).slice(0, Math.max(1, Math.min(a.p_n || 1, 5, 3 - going))).map((q) => { q.taken_at = clock; q.attempts++; return { firm_id: q.firm_id, client_id: q.client_id, why: q.why }; }); },
   gst_calc_done: (a) => { const q = T.gst_calc_queue.find((x) => x.client_id === a.p_client && x.firm_id === a.p_firm); if (!q) return null;
     if (a.p_big) Object.assign(q, { big_n: q.big_n + 1, too_big: q.big_n + 1 >= 2, rev: a.p_rev, taken_at: null, ran_at: clock });
     else if (!a.p_ok) Object.assign(q, { taken_at: null, ran_at: clock, rev: a.p_rev });
-    else if (!a.p_more && q.taken_at != null && q.wanted_at <= q.taken_at) T.gst_calc_queue.splice(T.gst_calc_queue.indexOf(q), 1);
+    else if (!a.p_more && q.taken_at != null && (q.asked_at ?? q.wanted_at) <= q.taken_at) T.gst_calc_queue.splice(T.gst_calc_queue.indexOf(q), 1);
     else Object.assign(q, { taken_at: null, ran_at: clock, attempts: 0, rev: a.p_rev });
     return null; },
   gst_calc_book_months: (a) => { const bs = T.tally_books.filter((b) => b.firm_id === a.p_firm && b.client_id === a.p_client && b.from_date && b.open_as_on); if (!bs.length) return [];
@@ -204,8 +206,12 @@ if (!IN.timing) {
   T.gst_calc_queue = []; ["c-a", "c-b", "c-c", "c-d", "c-e"].forEach((c, i) => { clock += 10; W(c); });
   const first3 = RPC.gst_calc_take({ p_n: 5 }).map((x: any) => x.client_id);
   out.q.cap = { first3, more: RPC.gst_calc_take({ p_n: 5 }).length };
-  T.gst_calc_queue = []; out.q.delayed = { start: W("c-late", { p_delay: 60 }), now: RPC.gst_calc_take({ p_n: 1 }).length };
-  clock += 61000; out.q.delayed.later = RPC.gst_calc_take({ p_n: 1 }).length;
+  // lines queued for the drain (its message 77 waiting): not taken until the drain has applied them; a want never puts
+  // off one already due; a run taken and dead (2 minutes) is started again by a miss
+  T.gst_calc_queue = []; HELD.add(77); out.q.held = { start: W("c-late", { p_after: 77 }), now: RPC.gst_calc_take({ p_n: 1 }).length };
+  clock += 300000; out.q.held.stillHeld = RPC.gst_calc_take({ p_n: 1 }).length; HELD.delete(77); out.q.held.applied = RPC.gst_calc_take({ p_n: 1 }).length;
+  T.gst_calc_queue = []; W("c-due"); const due0 = Q("c-due").wanted_at; clock += 5000; W("c-due"); out.q.dueKept = Q("c-due").wanted_at === due0;
+  RPC.gst_calc_take({ p_n: 1 }); clock += 1000; out.q.dead = { within: W("c-due") }; clock += 121000; out.q.dead.after = W("c-due");
   // a run whose reading and books take longer than its budget (here 1 ms): nothing stored, the client too big
   T.gst_calc_queue = []; clock += 600000; const n0 = T.tally_calc_results.length;
   W(rows.client); T.client_book_items.push({ ...T.client_book_items[0], key: "gst3b", item: ".07|209901", data: { rev2: { igst: 1 } }, deleted: false }); pages.clear(); sorted.clear();

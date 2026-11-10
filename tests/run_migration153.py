@@ -36,7 +36,7 @@ ok(all((d[1] or d[2]).startswith("gst_calc_") for d in drops) and len(re.findall
    and "delete from gst_calc_queue" in code and code.count("delete from") == 1 and not re.search(r"\balter\s+table\s+(?!public\.gst_calc_queue\s)", code),
    "add-only: the only drops are this migration's own earlier drafts (gst_calc_* triggers and functions, if there: %d), the one delete the queue's own row, no other table altered" % len(drops))
 SVC = {"gst_calc_rows": "(uuid)", "gst_calc_book": "(uuid, text, text)", "gst_calc_book_months": "(uuid, text, text)", "gst_calc_gstins": "(uuid, text)", "gst_calc_version": "(uuid, text)",
-       "gst_calc_want": "(uuid, text, text, text, integer)", "gst_calc_want_book": "(uuid, text, integer)", "gst_calc_take": "(integer)", "gst_calc_done": "(uuid, text, boolean, boolean, boolean, text)"}
+       "gst_calc_held": "(bigint)", "gst_calc_want": "(uuid, text, text, text, bigint)", "gst_calc_want_book": "(uuid, text, bigint)", "gst_calc_take": "(integer)", "gst_calc_done": "(uuid, text, boolean, boolean, boolean, text)"}
 for fn, sig in SVC.items():
     ok(("revoke all on function public.%s%s from public, anon, authenticated;" % (fn, sig)) in text and ("grant execute on function public.%s%s to service_role;" % (fn, sig)) in text, fn + ": service role only")
 ok("revoke all on function public.gst_calc_cached(text, text, text) from public, anon;" in text and "grant execute on function public.gst_calc_cached(text, text, text) to authenticated, service_role;" in text, "gst_calc_cached: members (the month's book worked out from the month, not given by the caller)")
@@ -88,10 +88,12 @@ try:
     if draft.strip():
         db.sql(draft)
         ok(db.one("select count(*) from pg_trigger where tgname like 'gst_calc_%'") == "6", "an earlier draft (6ad23becc, with its triggers) run first")
+    prev = subprocess.run(["git", "-C", ROOT, "show", "0dea4d712:server/gst-run/migration-153-gst-cloud.sql"], capture_output=True, text=True).stdout
+    if prev.strip(): db.sql(prev)     # and the one reviewed before this (want's delay in seconds, an integer)
     db.sql(text); db.sql(text)
     ok(not draft.strip() or (db.one("select count(*) from pg_trigger where tgname like 'gst_calc_%'") == "0" and db.one("select count(*) from pg_proc where proname in ('gst_calc_items_changed', 'gst_calc_vouchers_changed')") == "0"
-       and db.one("select count(*) from information_schema.columns where table_name = 'gst_calc_queue' and column_name in ('attempts', 'too_big', 'big_n', 'rev', 'first_wanted')") == "5"
-       and db.one("select count(*) from pg_proc where proname = 'gst_calc_want'") == "1"), "run over it: the draft's triggers and their functions gone, the queue's new columns there, one gst_calc_want")
+       and db.one("select count(*) from information_schema.columns where table_name = 'gst_calc_queue' and column_name in ('attempts', 'too_big', 'big_n', 'rev', 'first_wanted', 'asked_at', 'after_msg')") == "7"
+       and db.one("select count(*) from pg_proc where proname in ('gst_calc_want', 'gst_calc_want_book')") == "2"), "run over earlier drafts: their triggers and functions gone, the queue's new columns there, one gst_calc_want and one _want_book")
     ok(db.one("select count(*) from pg_proc where proname in ('gst_calc_version', 'gst_calc_cached')") == "2", "after 151: runs, twice")
     V = lambda: db.one("select gst_calc_version('%s', 'c1')" % BK)
     print("== 2. the version moves on every input")
@@ -182,24 +184,37 @@ try:
     db.sql("select gst_calc_want('%s', 'c1', 'asked')" % F); db.sql("select gst_calc_done('%s', 'c1', false, true, true, null)" % F); db.sql("select gst_calc_done('%s', 'c1', false, true, true, null)" % F)
     ok(json.loads(db.one("select gst_calc_cached('c1', '07', '202505')", uid=U)).get("too_big") is True, "too big (the run's budget): gst_calc_cached says so, the app works it out")
     db.sql("delete from gst_calc_queue")
-    for c in ("q1", "q2", "q3", "q4"): db.sql("select gst_calc_want('%s', '%s', 'asked', null, 0)" % (F, c))
+    for c in ("q1", "q2", "q3", "q4"): db.sql("select gst_calc_want('%s', '%s', 'asked', null, null)" % (F, c))
     t = db.rows("select * from gst_calc_take(5)")
     ok([x["client_id"] for x in t] == ["q1", "q2", "q3"] and not db.rows("select * from gst_calc_take(5)"), "at most 3 runs at once, in the order first wanted; none while 3 are going")
     db.sql("update gst_calc_queue set taken_at = now() - interval '3 minutes', ran_at = now() - interval '3 minutes'")
     ok([x["client_id"] for x in db.rows("select * from gst_calc_take(1)")] == ["q1"], "runs over 2 minutes old no longer count: taken again, first wanted first")
     db.sql("delete from gst_calc_queue")
-    ok(db.one("select gst_calc_want('%s', 'd1', 'queued', null, 60)" % F) == "f" and not db.rows("select * from gst_calc_take(1)"), "wanted with a delay (lines queued for the drain): no run started, not taken before it")
-    db.sql("update gst_calc_queue set wanted_at = now() - interval '1 second'")
-    ok(len(db.rows("select * from gst_calc_take(1)")) == 1, "taken once the delay is over")
-    db.sql("delete from gst_calc_queue"); db.sql("select gst_calc_want('%s', 'b1', 'asked', null, 0)" % F)
+    ok(db.one("select gst_calc_held(77)") == "f", "no recorder queue here (migration 47): nothing held")
+    db.sql("create schema if not exists pgmq; create table if not exists pgmq.q_tally_recorder (msg_id bigint primary key, message jsonb); insert into pgmq.q_tally_recorder values (77, '{}')")
+    ok(db.one("select gst_calc_want_book('%s', 'queued', 77)" % BK) == "f" and db.one("select after_msg from gst_calc_queue where client_id = 'c1'") == "77" and not db.rows("select * from gst_calc_take(1)"),
+       "lines queued for the drain (message 77 waiting): no run started, not taken while it waits")
+    ok(db.one("select gst_calc_want('%s', 'c1', 'asked')" % F) == "f" and not db.rows("select * from gst_calc_take(1)"), "a member's miss meanwhile: still waits for the drain")
+    db.sql("delete from pgmq.q_tally_recorder where msg_id = 77")     # the drain applied it (archived)
+    ok([x["client_id"] for x in db.rows("select * from gst_calc_take(1)")] == ["c1"], "the drain has applied them: taken")
+    db.sql("delete from gst_calc_queue"); db.sql("select gst_calc_want('%s', 'e1', 'asked')" % F); db.sql("update gst_calc_queue set wanted_at = now() - interval '5 minutes'")
+    db.sql("select gst_calc_want('%s', 'e1', 'asked')" % F)
+    ok(db.one("select wanted_at < now() - interval '4 minutes' from gst_calc_queue where client_id = 'e1'") == "t", "a want never puts off a client already due")
+    db.rows("select * from gst_calc_take(1)")
+    ok(db.one("select gst_calc_want('%s', 'e1', 'asked')" % F) == "f", "a run going (taken under 2 minutes ago): a miss starts none")
+    db.sql("update gst_calc_queue set taken_at = now() - interval '3 minutes', ran_at = now() - interval '3 minutes' where client_id = 'e1'")
+    ok(db.one("select gst_calc_want('%s', 'e1', 'asked')" % F) == "t", "a run taken 3 minutes ago and never done (dead): a miss starts one again")
+    db.sql("select gst_calc_done('%s', 'e1', false, true, false, null)" % F)
+    ok(db.one("select count(*) from gst_calc_queue where client_id = 'e1'") == "1", "wanted after the dead run was taken: kept when it is done")
+    db.sql("delete from gst_calc_queue"); db.sql("select gst_calc_want('%s', 'b1', 'asked', null, null)" % F)
     db.rows("select * from gst_calc_take(1)"); db.sql("select gst_calc_done('%s', 'b1', true, true, true, '153.4')" % F)
     one = db.one("select too_big || ':' || big_n from gst_calc_queue where client_id = 'b1'")
     db.sql("update gst_calc_queue set ran_at = now() - interval '21 seconds'"); db.rows("select * from gst_calc_take(1)"); db.sql("select gst_calc_done('%s', 'b1', true, true, true, '153.4')" % F)
     ok(one == "false:1" and db.one("select too_big || ':' || big_n from gst_calc_queue where client_id = 'b1'") == "true:2", "over its budget once: counted; twice: too big")
-    ok(db.one("select gst_calc_want('%s', 'b1', 'asked', '153.4', 0)" % F) == "f", "too big, the same engine, within a day: stays with the app")
-    ok(db.one("select gst_calc_want('%s', 'b1', 'asked', '153.5', 0)" % F) == "t" and db.one("select too_big from gst_calc_queue where client_id = 'b1'") == "f", "a new engine: taken back")
+    ok(db.one("select gst_calc_want('%s', 'b1', 'asked', '153.4', null)" % F) == "f", "too big, the same engine, within a day: stays with the app")
+    ok(db.one("select gst_calc_want('%s', 'b1', 'asked', '153.5', null)" % F) == "t" and db.one("select too_big from gst_calc_queue where client_id = 'b1'") == "f", "a new engine: taken back")
     db.sql("update gst_calc_queue set too_big = true, ran_at = now() - interval '25 hours' where client_id = 'b1'")
-    ok(db.one("select gst_calc_want('%s', 'b1', 'asked', null, 0)" % F) == "t", "a day after its last run: taken back")
+    ok(db.one("select gst_calc_want('%s', 'b1', 'asked', null, null)" % F) == "t", "a day after its last run: taken back")
     db.sql("insert into tally_books (book_id, firm_id, client_id, company, from_date, open_as_on) values ('bbbbbbbb-0153-4000-8000-000000000003', '%s', 'c1', 'Older', '2024-04-01', '2024-04-01')" % F)
     bm = {r["book_id"]: r["months"] for r in db.rows("select book_id, months::text from gst_calc_book_months('%s', 'c1', '202506')" % F)}
     ok(bm.get("bbbbbbbb-0153-4000-8000-000000000003", "").startswith("{202404,") and bm.get("bbbbbbbb-0153-4000-8000-000000000003", "").endswith("202503}") and bm.get(BK) == "{202504,202505,202506}",
