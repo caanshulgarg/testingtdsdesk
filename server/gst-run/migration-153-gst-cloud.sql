@@ -11,7 +11,8 @@
 --                        the inputs it was worked out from), the version, and how long it took. RLS on, members read
 --                        their own firm's rows, written by the service role only (all in 151).
 --   tally_calc_version   the book's own version (its days and ledgers times, entries, deletions, FinCom's ledger list).
--- What this adds (nothing dropped, deleted or altered; no trigger on any table; safe to run twice):
+-- What this adds (nothing of any other migration dropped, deleted or altered; no trigger on any table; safe to run twice,
+-- and over an earlier draft of itself):
 --   gst_calc_queue                    one row per client whose 3B store is to be filled, queued explicitly: by tally-ingest
 --                                     after a book's entries are stored (gst_calc_want_book), by the app after a GST item of
 --                                     the work is saved (gst_calc_poke), and by a member's miss (gst-run). Taken by gst-run's
@@ -36,7 +37,10 @@
 --                                     only while the version is the same ({book, version, result: null when not, at,
 --                                     too_big: the cloud leaves this client to the app}).
 --   gst_calc_want / _want_book / _poke / _take / _done   the queue (want, want_book, take, done: service role only;
---                                     poke: a member, for a client of its firm)
+--                                     poke: a member, for a client of its firm). At most 3 runs at once; a client is taken
+--                                     in the order it was first wanted; too big after 3 unfinished runs or 2 over budget,
+--                                     taken back a day later or when the engine changes
+--   gst_calc_book_months(firm, client, to)   each book of the client with the months gst_calc_book gives it
 --   the timer: a pg_cron job, gst-run-warm, every minute, waking gst-run ({action: "warm"}) up to three times while
 --                                     clients wait, with gst-taxpro's timer key (Vault gst_cron_key) at this project's own
 --                                     address (Vault fincom_project_url). Made only where pg_cron, pg_net and both Vault
@@ -59,10 +63,25 @@ create table if not exists public.gst_calc_queue (
   wanted_at timestamptz not null default now(),
   taken_at  timestamptz,
   ran_at    timestamptz,
-  attempts  integer not null default 0,
-  too_big   boolean not null default false,
   primary key (firm_id, client_id)
 );
+-- a run of an earlier draft of this migration (never released) converges: its columns added, its triggers and the
+-- functions whose arguments or answer changed since dropped (only gst_calc_* objects of its own; nothing else is dropped)
+alter table public.gst_calc_queue add column if not exists attempts integer not null default 0;
+alter table public.gst_calc_queue add column if not exists too_big boolean not null default false;
+alter table public.gst_calc_queue add column if not exists big_n integer not null default 0;
+alter table public.gst_calc_queue add column if not exists rev text;
+alter table public.gst_calc_queue add column if not exists first_wanted timestamptz not null default now();
+do $draft$ begin
+  drop trigger if exists gst_calc_items_ins on public.client_book_items; drop trigger if exists gst_calc_items_upd on public.client_book_items;
+  drop trigger if exists gst_calc_items_del on public.client_book_items; drop trigger if exists gst_calc_vouchers_ins on public.tally_vouchers;
+  drop trigger if exists gst_calc_vouchers_upd on public.tally_vouchers; drop trigger if exists gst_calc_vouchers_del on public.tally_vouchers;
+  drop function if exists public.gst_calc_items_changed(); drop function if exists public.gst_calc_vouchers_changed();
+  drop function if exists public.gst_calc_want(uuid, text, text); drop function if exists public.gst_calc_want_book(uuid, text);
+  drop function if exists public.gst_calc_take(); drop function if exists public.gst_calc_take(integer);
+  drop function if exists public.gst_calc_done(uuid, text, boolean); drop function if exists public.gst_calc_done(uuid, text, boolean, boolean, boolean);
+  drop function if exists public.gst_calc_cached(text, date, text, text);
+end $draft$;
 alter table public.gst_calc_queue enable row level security;
 revoke all on public.gst_calc_queue from public, anon, authenticated;
 grant all on public.gst_calc_queue to service_role;
@@ -74,6 +93,15 @@ returns uuid language sql stable security definer set search_path to 'public', '
   select b.book_id from tally_books b, d
    where b.client_id = p_client and b.firm_id = p_firm and b.from_date is not null and b.open_as_on <= d.on_day
    order by (b.from_date <= d.on_day) desc, b.from_date desc limit 1;
+$function$;
+
+-- every month from the client's first book to p_to, by the book gst_calc_book gives it (one call for gst-run's runs)
+create or replace function public.gst_calc_book_months(p_firm uuid, p_client text, p_to text)
+returns table (book_id uuid, months text[]) language sql stable security definer set search_path to 'public', 'pg_temp' as $function$
+  with f as (select min(b.from_date) d from tally_books b where b.firm_id = p_firm and b.client_id = p_client and b.from_date is not null and b.open_as_on is not null),
+  m as (select to_char(g, 'YYYYMM') ym from f, generate_series(date_trunc('month', f.d), to_date(p_to || '01', 'YYYYMMDD'), interval '1 month') g where f.d is not null),
+  x as (select m.ym, gst_calc_book(p_firm, p_client, m.ym) bk from m)
+  select x.bk, array_agg(x.ym order by x.ym) from x where x.bk is not null group by x.bk;
 $function$;
 
 -- the client's GSTINs: its entries' own (cmp_gstin) and its record's
@@ -140,62 +168,72 @@ begin
     'too_big', exists (select 1 from gst_calc_queue q where q.firm_id = f and q.client_id = p_client and q.too_big));
 end $function$;
 
--- the queue: a client wanted. wanted_at moves to now (a change during a run is seen at its end); taken_at is left as it
--- is. True when a run may start for it now (new, or waiting and not being worked on): only then is one started; false
--- while a run holds it (gst_calc_done then keeps it, wanted after it was taken, and that run starts the next) or when it is
--- too big
-create or replace function public.gst_calc_want(p_firm uuid, p_client text, p_why text default 'asked')
+-- the queue: a client wanted. wanted_at moves to now (or p_delay seconds on: entries queued to be applied, after the
+-- drain); taken_at and first_wanted are left as they are. A client left to the app (too big) is taken back when it last
+-- ran over a day ago or the engine changed (p_rev). True when a run may start for it now (new, or waiting and not being
+-- worked on): only then is one started
+create or replace function public.gst_calc_want(p_firm uuid, p_client text, p_why text default 'asked', p_rev text default null, p_delay integer default 0)
 returns boolean language plpgsql volatile security definer set search_path to 'public', 'pg_temp' as $function$
-declare q gst_calc_queue%rowtype;
+declare q gst_calc_queue%rowtype; w timestamptz := now() + make_interval(secs => greatest(0, least(coalesce(p_delay, 0), 600)));
 begin
   if p_firm is null or coalesce(p_client, '') = '' then return false; end if;
   select * into q from gst_calc_queue where firm_id = p_firm and client_id = p_client for update;
   if not found then
-    insert into gst_calc_queue (firm_id, client_id, why, wanted_at) values (p_firm, p_client, coalesce(p_why, 'asked'), now()) on conflict do nothing;
-    return true;
+    insert into gst_calc_queue (firm_id, client_id, why, wanted_at, first_wanted) values (p_firm, p_client, coalesce(p_why, 'asked'), w, now()) on conflict do nothing;
+    return coalesce(p_delay, 0) = 0;
   end if;
-  update gst_calc_queue set wanted_at = now(), why = coalesce(p_why, why) where firm_id = p_firm and client_id = p_client;
-  return not q.too_big and q.taken_at is null;
+  if q.too_big and (q.ran_at is null or q.ran_at < now() - interval '1 day' or (p_rev is not null and p_rev is distinct from q.rev)) then
+    update gst_calc_queue set too_big = false, attempts = 0, big_n = 0 where firm_id = p_firm and client_id = p_client;
+    q.too_big := false;
+  end if;
+  update gst_calc_queue set wanted_at = greatest(wanted_at, w), why = coalesce(p_why, why) where firm_id = p_firm and client_id = p_client;
+  return not q.too_big and q.taken_at is null and coalesce(p_delay, 0) = 0;
 end $function$;
--- tally-ingest, after a book's entries are stored: the book's client
-create or replace function public.gst_calc_want_book(p_book uuid, p_why text default 'books')
+-- tally-ingest, after a book's entries are stored: the book's client (p_delay: lines queued, applied by the drain)
+create or replace function public.gst_calc_want_book(p_book uuid, p_why text default 'books', p_delay integer default 0)
 returns boolean language sql volatile security definer set search_path to 'public', 'pg_temp' as $function$
-  select coalesce((select gst_calc_want(b.firm_id, b.client_id, p_why) from tally_books b where b.book_id = p_book and b.client_id is not null), false);
+  select coalesce((select gst_calc_want(b.firm_id, b.client_id, p_why, null, p_delay) from tally_books b where b.book_id = p_book and b.client_id is not null), false);
 $function$;
 -- a member (the app, after a GST item of the work is saved): a client of its own firm
 create or replace function public.gst_calc_poke(p_client text)
 returns boolean language sql volatile security definer set search_path to 'public', 'pg_temp' as $function$
-  select coalesce((select gst_calc_want(c.firm_id, c.id, 'work') from clients c where c.firm_id = my_firm() and c.id = p_client and c.deleted is not true), false);
+  select coalesce((select gst_calc_want(c.firm_id, c.id, 'work', null, 0) from clients c where c.firm_id = my_firm() and c.id = p_client and c.deleted is not true), false);
 $function$;
--- the next clients to work on (p_n of them, at most 5): waiting (wanted since last taken, or more to do), never one taken
--- in the last 2 minutes, nor one run in the last 20 seconds, nor one too big. A client whose runs were taken 3 times and
--- never finished is marked too big here (the app works its 3B out itself)
+-- the next clients to work on (p_n, at most 5, in the order first wanted): waiting (wanted by now), never one taken in
+-- the last 2 minutes, nor one run in the last 20 seconds, nor one too big; and none while 3 runs are going (taken in the
+-- last 2 minutes): at most 3 runs at once, however they were started. A client whose runs were taken 3 times and never
+-- finished is marked too big here (the app works its 3B out itself)
 create or replace function public.gst_calc_take(p_n integer default 1)
 returns table (firm_id uuid, client_id text, why text) language plpgsql volatile security definer set search_path to 'public', 'pg_temp' as $function$
+declare going integer;
 begin
-  update gst_calc_queue x set too_big = true, taken_at = null
+  perform pg_advisory_xact_lock(hashtext('gst_calc_take'));
+  update gst_calc_queue x set too_big = true, taken_at = null, ran_at = now()
    where not x.too_big and x.attempts >= 3 and (x.taken_at is null or x.taken_at < now() - interval '2 minutes');
+  select count(*) into going from gst_calc_queue g where g.taken_at >= now() - interval '2 minutes';
+  if going >= 3 then return; end if;
   return query
   update gst_calc_queue q set taken_at = now(), attempts = q.attempts + 1
    where (q.firm_id, q.client_id) in (select y.firm_id, y.client_id from gst_calc_queue y
-                                      where not y.too_big and y.attempts < 3
+                                      where not y.too_big and y.attempts < 3 and y.wanted_at <= now()
                                         and (y.taken_at is null or y.taken_at < now() - interval '2 minutes')
                                         and (y.ran_at is null or y.ran_at < now() - interval '20 seconds')
-                                      order by y.wanted_at limit greatest(1, least(coalesce(p_n, 1), 5)) for update skip locked)
+                                      order by y.first_wanted, y.wanted_at limit greatest(1, least(coalesce(p_n, 1), 5, 3 - going)) for update skip locked)
   returning q.firm_id, q.client_id, q.why;
 end $function$;
 -- a run over: done (p_ok) and nothing more to do and not wanted again while it ran: the client leaves the queue; more to
--- do, or wanted again: it waits its 20 seconds; failed: its attempt stays counted; too big (p_big): left to the app
-create or replace function public.gst_calc_done(p_firm uuid, p_client text, p_more boolean, p_ok boolean default true, p_big boolean default false)
+-- do, or wanted again: it waits its 20 seconds; failed: its attempt stays counted; over its budget (p_big): counted, and
+-- at the second such run left to the app (too big, with the engine's revision p_rev)
+create or replace function public.gst_calc_done(p_firm uuid, p_client text, p_more boolean, p_ok boolean default true, p_big boolean default false, p_rev text default null)
 returns void language plpgsql volatile security definer set search_path to 'public', 'pg_temp' as $function$
 begin
   if p_big then
-    update gst_calc_queue set too_big = true, taken_at = null, ran_at = now() where firm_id = p_firm and client_id = p_client;
+    update gst_calc_queue set big_n = big_n + 1, too_big = (big_n + 1 >= 2), rev = p_rev, taken_at = null, ran_at = now() where firm_id = p_firm and client_id = p_client;
   elsif not coalesce(p_ok, false) then
-    update gst_calc_queue set taken_at = null, ran_at = now() where firm_id = p_firm and client_id = p_client;
+    update gst_calc_queue set taken_at = null, ran_at = now(), rev = p_rev where firm_id = p_firm and client_id = p_client;
   else
     delete from gst_calc_queue where firm_id = p_firm and client_id = p_client and not p_more and taken_at is not null and wanted_at <= taken_at;
-    update gst_calc_queue set taken_at = null, ran_at = now(), attempts = 0 where firm_id = p_firm and client_id = p_client;
+    update gst_calc_queue set taken_at = null, ran_at = now(), attempts = 0, rev = p_rev where firm_id = p_firm and client_id = p_client;
   end if;
 end $function$;
 
@@ -212,8 +250,9 @@ begin
         url := (select decrypted_secret from vault.decrypted_secrets where name = 'fincom_project_url') || '/functions/v1/gst-run',
         headers := jsonb_build_object('Content-Type', 'application/json', 'x-cron-key', (select decrypted_secret from vault.decrypted_secrets where name = 'gst_cron_key')),
         body := '{"action":"warm"}'::jsonb)
-      from generate_series(1, least(3, (select count(*)::int from public.gst_calc_queue q where not q.too_big and q.attempts < 3
-              and (q.taken_at is null or q.taken_at < now() - interval '2 minutes') and (q.ran_at is null or q.ran_at < now() - interval '20 seconds'))))
+      from generate_series(1, greatest(0, least(3 - (select count(*)::int from public.gst_calc_queue g where g.taken_at >= now() - interval '2 minutes'),
+              (select count(*)::int from public.gst_calc_queue q where not q.too_big and q.attempts < 3 and q.wanted_at <= now()
+              and (q.taken_at is null or q.taken_at < now() - interval '2 minutes') and (q.ran_at is null or q.ran_at < now() - interval '20 seconds')))))
     $job$);
   end if;
 end $cron$;
@@ -226,14 +265,16 @@ revoke all on function public.gst_calc_gstins(uuid, text) from public, anon, aut
 grant execute on function public.gst_calc_gstins(uuid, text) to service_role;
 revoke all on function public.gst_calc_version(uuid, text) from public, anon, authenticated;
 grant execute on function public.gst_calc_version(uuid, text) to service_role;
-revoke all on function public.gst_calc_want(uuid, text, text) from public, anon, authenticated;
-grant execute on function public.gst_calc_want(uuid, text, text) to service_role;
-revoke all on function public.gst_calc_want_book(uuid, text) from public, anon, authenticated;
-grant execute on function public.gst_calc_want_book(uuid, text) to service_role;
+revoke all on function public.gst_calc_book_months(uuid, text, text) from public, anon, authenticated;
+grant execute on function public.gst_calc_book_months(uuid, text, text) to service_role;
+revoke all on function public.gst_calc_want(uuid, text, text, text, integer) from public, anon, authenticated;
+grant execute on function public.gst_calc_want(uuid, text, text, text, integer) to service_role;
+revoke all on function public.gst_calc_want_book(uuid, text, integer) from public, anon, authenticated;
+grant execute on function public.gst_calc_want_book(uuid, text, integer) to service_role;
 revoke all on function public.gst_calc_take(integer) from public, anon, authenticated;
 grant execute on function public.gst_calc_take(integer) to service_role;
-revoke all on function public.gst_calc_done(uuid, text, boolean, boolean, boolean) from public, anon, authenticated;
-grant execute on function public.gst_calc_done(uuid, text, boolean, boolean, boolean) to service_role;
+revoke all on function public.gst_calc_done(uuid, text, boolean, boolean, boolean, text) from public, anon, authenticated;
+grant execute on function public.gst_calc_done(uuid, text, boolean, boolean, boolean, text) to service_role;
 revoke all on function public.gst_calc_poke(text) from public, anon;
 grant execute on function public.gst_calc_poke(text) to authenticated, service_role;
 revoke all on function public.gst_calc_cached(text, text, text) from public, anon;

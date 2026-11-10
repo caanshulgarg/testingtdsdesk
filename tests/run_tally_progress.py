@@ -96,12 +96,13 @@ def main():
 
         print("== 2. the table (next-tally-simple2: Client · Tally company | Masters | Entries | Action)")
         heads = E("() => [...document.querySelectorAll('#app [data-tsm-table] thead th')].map(e => (e.firstChild && e.firstChild.nodeType === 3 ? e.firstChild.textContent : e.textContent).trim())")
-        ok(heads == ["Client · Tally company", "Masters", "Entries", "Action"], "2. the columns (%s)" % heads)
+        # (next-tally-filters2: the state, In Tally and Last entry their own columns)
+        ok(heads == ["Client · Tally company", "State", "In Tally", "Masters", "Entries", "Last entry", "Action"], "2. the columns (%s)" % heads)
         ok(txt("#app [data-tsm-table] [data-tpt-title]") == "Clients · 4" and n("#app [data-tsm-table] [data-tpt-say]") == 0,
            "2. 'Clients · 4', masters always come first (%s | %s)" % (txt("#app [data-tsm-table] [data-tpt-title]"), txt("#app [data-tsm-table] [data-tpt-say]")))
         cos_ = {KES: KESC, ORBIT: ORB, ACME: ACO, NIMB: NIC}
-        ok(all(txt(R(nm) + " .tpt-co-line") == "Tally: " + co and txt(R(nm) + " [data-tpt-co]") == co for nm, co in cos_.items()),
-           "2. every row: its Tally company, 'Tally: <NAME>' (%s)" % [txt(R(nm) + " .tpt-co-line") for nm in cos_])
+        ok(all(txt(R(nm) + " .tpt-co-line") == co and txt(R(nm) + " [data-tpt-co]") == co for nm, co in cos_.items()),
+           "2. every row: its Tally company under the client (%s)" % [txt(R(nm) + " .tpt-co-line") for nm in cos_])
         ok(n("#app [data-tsm-filter]") == 0 and n("#app .tsm-filters") == 0, "2. no filter chips")
         ok(n("#app [data-tpg-now]") == 0 and "Coming in from Tally now" not in txt("#app [data-tally-simple]") and n("#app [data-tpg-details]") == 0, "2. no 'Coming in from Tally now' panel, no detail cards")
         mo = txt(R(ORBIT) + " [data-tpg-masters]")
@@ -126,7 +127,7 @@ def main():
         nm_ = txt(R(NIMB) + " [data-tpg-masters]")
         ok(pg.get_attribute(R(NIMB) + " [data-tpg-masters]", "data-tpg-masters") in ("reading", "waiting") and "group" not in nm_, "2 (review 1). a first masters read: no '· N groups' before FinCom holds them (%s)" % nm_)
         ok(txt(R(NIMB) + " [data-tpt-state]") in ("Updating", "Waiting for Tally") and n(R(NIMB) + " .tpt-why") == 0 and mains(NIMB) == ["reading"],
-           "2 (review 5). the client cell just '● Updating', the read's words only in the Masters cell (%s | %s)" % (txt(R(NIMB) + " .tpt-client"), nm_))
+           "2 (review 5). the State cell just '● Updating', the read's words only in the Masters cell (%s | %s)" % (txt(R(NIMB) + " .tpt-st"), nm_))
         # (review 5) "on the server" only once the look on this computer has found no bridge, never while it still looks
         E("() => { window.__cfg0 = Bridge.cfg; const L = FCTallySimple.LOCALB; window.__lb0 = {list: L.list, busy: L.busy, cut: L.cut, blocked: L.blocked}; Bridge.cfg = () => ({}); Object.assign(L, {list: null, busy: true}); render(); }"); pg.wait_for_timeout(300)
         sa = [E("() => FCTallySimple.placeOf()"), txt(R(ACME) + " [data-tpt-state]")]
@@ -253,8 +254,8 @@ def main():
         E("""(c) => { (window.__sum.find(x => x.client === c) || {}).devices = window.__orbDevs; window.__ah0 = {heldFor: AlertHub.heldFor, heldDay: AlertHub.heldDay}; window.__nk0 = Rec.needKind; const d = new Date(Date.now() - 2 * 86400e3).toISOString().slice(0, 10);
           AlertHub.heldFor = (ids) => ids.includes(c) ? [{cid: c, day: d, kind: 'daybook'}] : []; AlertHub.heldDay = (l) => l.day; Rec.needKind = (l) => l.kind || '';
           if (window.tfxRefresh) window.tfxRefresh(); render(); }""", cid(ORBIT)); pg.wait_for_timeout(1500)
-        ok(mains(ORBIT) == ["upload"] and txt(R(ORBIT) + " [data-tpt-main]") == "Upload Day Book" and "Upload that day" in txt(R(ORBIT) + " .tpt-client"),
-           "3 (Fingate, review). a held day, the company open on a live bridge: Upload Day Book is the button (%s | %s)" % (mains(ORBIT), txt(R(ORBIT) + " .tpt-client")))
+        ok(mains(ORBIT) == ["upload"] and txt(R(ORBIT) + " [data-tpt-main]") == "Upload Day Book" and "Upload that day" in txt(R(ORBIT) + " .tpt-st"),
+           "3 (Fingate, review). a held day, the company open on a live bridge: Upload Day Book is the button (%s | %s)" % (mains(ORBIT), txt(R(ORBIT) + " .tpt-st")))
         # (review) the held day's note stays in view while a read runs (Update now pressed: the run's words)
         E("""(c) => { S.tcoSync = S.tcoSync || {}; S.tcoSync[c] = {at: Date.now(), via: 'bridge', company: 'ORBIT SPACE', prog: {read: 40, of: 438}}; }""", cid(ORBIT))
         E("(c) => { if (window.FCRunState) window.FCRunState[c] = {at: S.tcoSync[c].at}; render(); }", cid(ORBIT)); pg.wait_for_timeout(1200)

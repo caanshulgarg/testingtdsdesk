@@ -30,7 +30,21 @@ Object.assign(Audit, {
   BLOCKED_RE: /\b(FOOD|MEAL|CATERING|CANTEEN|STAFF WELFARE|REFRESHMENT|CLUB|MEMBERSHIP|HEALTH|MEDICAL|LIFE INSURANCE|MOTOR CAR|CAR HIRE|VEHICLE|BEAUTY|GYM|GIFT|HOLIDAY)\b/i,
   isFixed(l){ return this.under(l, /^fixed assets$/i); },
   isIncome(l){ return this.under(l, /^(sales accounts|direct incomes|indirect incomes)$/i); },
-  mastersIn(){ return Object.keys(S.books.under || {}).length > 0; },
+  // next-speed0 (09-Nov-2026, a 40,000-entry book with 6,787 ledgers: 84 s of the first open were spent here): TDS.billParty
+  // asks once per entry and the checks once per line, and counting every ledger name each time made it ledgers x entries.
+  // Now a "yes" is kept for the list of groups it was counted on (S.books.under itself: another client's books, or books
+  // read again, hold another list) until the next save of the books (BOOKS_REV); a "no" is never kept (an empty list costs
+  // nothing to count), so masters read in a moment ago are seen at the very next ask. tests/run_speed0.js
+  _in: new WeakMap(),
+  mastersIn(){
+    const u = S.books.under;
+    if (!u || typeof u !== "object") return Object.keys(u || {}).length > 0;
+    const rev = typeof BOOKS_REV === "number" ? BOOKS_REV : 0;
+    if (this._in.get(u) === rev) return true;
+    const yes = Object.keys(u).length > 0;
+    if (yes) this._in.set(u, rev);
+    return yes;
+  },
   // balances need the opening balances and every voucher since the books began
   // balances at any date in the period: from Tally's own balances when the bridge has read them,
   // else from the opening balances in the masters, when the day book starts where the books begin

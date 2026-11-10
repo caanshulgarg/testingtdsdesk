@@ -25,7 +25,7 @@ import * as E from "../_shared/gst3b.js";
 import { gst3bPrint } from "../_shared/gst3bprint.js";
 
 // the revision of the function around the engine (data.ts, handler.ts): moved by hand with tests/gst_cloud_rev.json
-export const REV = "153.3";
+export const REV = "153.4";
 
 const G = globalThis;
 // what the app's program has around the engine: names.js (put at its head by build.py too)
@@ -90,8 +90,8 @@ let GEN = 0;
 export function step(rows, reg, kept, o) {
   o = o || {}; kept = kept || {};
   // the budget is the run's own work (o.spent: the ms the request already spent reading answers, its JSON and unpacking;
-  // then this step's): reading and making the books over o.ready (1100 ms) is too big for a run; a month is worked out
-  // only when, at the pace of the reading, it ends by o.total (1500 ms). Waiting on the database is not counted (an edge
+  // then this step's): reading and making the books over o.ready (1100 ms) is too big for a run; the first month is then
+  // worked out, a further one only when, at the pace of the one before, it ends by o.total (1500 ms). Waiting on the database is not counted (an edge
   // function's CPU limit does not count it either)
   const max = o.max || 2, now = o.now || (() => Date.now()), ready = o.ready || 1100, total = o.total || 1500;
   const was = { S: G.S, CO: G.CO, perRender: G.perRender, IN_RENDER: G.IN_RENDER, RENDER_GEN: G.RENDER_GEN };
@@ -109,7 +109,7 @@ export function step(rows, reg, kept, o) {
     const all = E.GSTR.months(), want = (m) => !o.only || o.only.includes(m), todo = all.filter((m) => !kept[m] && want(m)), done = [], have = Object.assign({}, kept);
     const gstin = (E.GSTR.gstins(b) || []).find((g) => g.slice(0, 2) === reg) || "";
     const atReady = used();
-    if (todo.length && (atReady > ready || atReady * 2 > total)) return { big: true, months: [], more: true, all, vouchers: b.vouchers.length, ms: now() - t0, booksMs: o.books ? 0 : tBooks, books: b, fp: fp0, atReady };
+    if (todo.length && atReady > ready) return { big: true, months: [], more: true, all, vouchers: b.vouchers.length, ms: now() - t0, booksMs: o.books ? 0 : tBooks, books: b, fp: fp0, atReady };
     let last = atReady;
     for (const m of todo) {
       if (done.length >= max || used() + last > total) break;

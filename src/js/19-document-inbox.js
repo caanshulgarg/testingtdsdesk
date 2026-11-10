@@ -108,17 +108,8 @@ async function assignDocq(id, cid){
 // Documents in the firm account: switched on or off, how long they are kept, and what is held
 
 // the document inbox panel and the upload block are React (app/src/parts/Docq.jsx, UploadBlock.jsx)
-function docqPanel(cid){ return Cloud.on() && docqFor(cid).length ? '<div data-react="DocqPanel" data-cid="' + esc(cid || "") + '"></div>' : ""; }
-function uploadBlock(co){ return '<div data-react="UploadBlock"></div>'; }
 function readDocqNow(id, cid, force){ if (force) S.docqLocal[id] = {}; readDocq([id], cid, force ? {force: true} : undefined); }
 // the bill list, a bill and the vendor reconciliation are React (app/src/screens/Invoices.jsx, Bill.jsx, VendorRecon.jsx)
-function viewInvoices(){
-  // the vendor reconciliation is under Reconciliations → Vendors (app/src/lib/registers.js)
-  if (S.reviewTable && S.filter === "draft") return viewReviewTable();
-  return '<div data-react="Invoices"></div>';
-}
-function viewDetail(e){ return '<div data-react="BillDetail" data-id="' + esc(e.id) + '"></div>'; }
 
 /* ---------- Client: deductees ---------- */
 // the deductees of a client: React (app/src/screens/Parties.jsx)
-function viewParties(){ return '<div data-react="Parties"></div>'; }

@@ -210,7 +210,6 @@ const ASST = {
   // the tool reads them, the model is not sent them as they are
   ups(){ const a = this.st(), k = this.key(); a.upsBy = a.upsBy || {}; return a.upsBy[k] = a.upsBy[k] || []; },
   // the files themselves are chosen, dropped or pasted into the question box (app/src/parts/asst-upload.js, ASST.upload/prep)
-  unUpload(path){ const l = this.ups(), i = l.findIndex(x => x.path === path); if (i >= 0) l.splice(i, 1); this.draw(); },
   // the notice's reply date on the client's due list: only when the user clicks
   async addTask(t){
     const n = t.notice || {};

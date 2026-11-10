@@ -186,8 +186,6 @@ const LK = {
     this._namesBusy = false;
     if (S.booksTab === "lookup") render();
   },
-  cached(key, force){ const c = this.cache[key]; return !force && c && Date.now() - c.at < this.TTL ? c.v : null; },
-  keep(key, v){ this.cache[key] = {at: Date.now(), v}; return v; },
   // every ledger's balance on a date, a group, a ledger month by month: from FinCom's copy (TCloud: tally_balances when
   // the cloud has it, else its trial balance and ledger functions)
   async tbTally(asOn){ return this.copyAns(await TCloud.tb(S.coId, asOn)); },
@@ -281,7 +279,6 @@ const LK = {
     if (how === "tally" || how === "fresh") return true;
     return x.src !== "books";
   },
-  covers(from, to){ const m = (S.books || {}).meta || {}; return (S.books.vouchers || []).length > 0 && !!m.from && m.from <= from && String(m.to || "") >= to; },
   // an answer with nothing in it yet, from FinCom's copy: said, not an error
   copyNone(x, why){
     return {kind: x.kind, src: "cloud", none: why, empty: true, led: x.led, grp: x.grp, from: x.from, to: x.to, asOn: x.asOn, rows: [], groups: [], dr: 0, cr: 0, at: Date.now(), line: copyLine(S.coId)};
@@ -444,13 +441,6 @@ const LK = {
       this.cache = {}; toast(res.vouchers.length + " entries from " + FC.span(start, to) + " brought in.");
     } catch (e){ toast("Could not read Tally: " + ((e && e.message) || e)); }
     f.busy = ""; render();
-  },
-  async syncNow(){
-    const r = await askConfirm({title: "Make the copy of the books now?", ok: "Make it now", body: "<p>The bridge reads this year\u2019s day book and every ledger\u2019s balance from Tally. On a large company Tally is busy for several minutes and others using it will wait.</p><p>Best done after office hours. Switching on the nightly copy does this every night at 2 am instead.</p>"});
-    if (!r || !r.ok) return;
-    const f = this.fr(); f.busy = "The bridge is copying the books from Tally\u2026 this takes a few minutes"; render();
-    try { await Bridge.call("/syncnow", {company: this.tname()}, 3600000); f.at = 0; f.busy = ""; await this.autoFresh(); }
-    catch (e){ f.busy = ""; toast("The copy did not finish: " + ((e && e.message) || e)); render(); }
   },
   // ---------- a question in plain words, turned into a look-up
   STOP: new Set(["the", "of", "for", "and", "to", "a", "an", "in", "on", "from", "show", "me", "give", "what", "is", "was", "ledger", "account", "a/c", "ac", "statement", "balance", "balances", "all", "with", "by", "as", "at", "till", "upto", "up", "this", "last", "year", "month", "quarter", "fy", "ltd", "pvt", "private", "limited", "llp", "co", "&", "m/s", "ms", "entries", "entry", "list", "please", "details", "detail", "how", "much", "many", "our", "my", "we", "us"]),

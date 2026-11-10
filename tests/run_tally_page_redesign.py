@@ -108,8 +108,8 @@ def main():
         print("== 2. one table, one button a row")
         ok(n(TB) == 1 and txt(TB + " .tpt-title").startswith("Clients · ") and n("#app [data-tsm-filter]") == 0, "2. one table, 'Clients · N', no filter chips (%s)" % txt(TB + " .tpt-title"))
         heads = E("() => [...document.querySelectorAll('#app [data-tsm-table] thead th')].map(t => (t.firstChild && t.firstChild.nodeType === 3 ? t.firstChild.textContent : t.textContent).trim())")
-        # next-tally-simple2: Client · Tally company | Masters | Entries | Action (the state under the client)
-        ok(heads == ["Client · Tally company", "Masters", "Entries", "Action"], "2. the columns (%s)" % heads)
+        # next-tally-filters2: Client · Tally company | State | In Tally | Masters | Entries | Last entry | Action
+        ok(heads == ["Client · Tally company", "State", "In Tally", "Masters", "Entries", "Last entry", "Action"], "2. the columns (%s)" % heads)
         for name, want in ((ORBIT, ("update", "reading")), (ACME, ("again",)), (NOVA_C, ("connect",)), (ZETA, ("link",)), (LARK, ("link",))):
             m = mains(name)
             ok(len(m) == 1 and m[0] in want, "2. %s: exactly one button, %s (%s)" % (name, "/".join(want), m))

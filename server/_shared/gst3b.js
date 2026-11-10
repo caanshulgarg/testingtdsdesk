@@ -1650,7 +1650,8 @@ const GSTR = {
   months(){
     const b = S.books;
     if (!b) return [];
-    const seen = Array.from(new Set((b.vouchers || []).map(v => this.ym(v.date)).filter(x => x.length === 6))).sort();
+    // next-mis-speed: the months of the entries found once per drawing or calculation (each month's credit carried in asked again)
+    const f = () => Array.from(new Set((b.vouchers || []).map(v => this.ym(v.date)).filter(x => x.length === 6))).sort(), seen = typeof perRender === "function" ? perRender(this, "seen", f) : f();
     // every month from the books' first to their last, with or without entries (review of 01-Oct-2026: Apr-Jun 2026 were
     // missing because no entry fell in them)
     const m = [];
@@ -1685,10 +1686,10 @@ const GSTR = {
   // (review of 01-Oct-2026: GSTR-1 counted 13 Optional sales of one client, each also entered as a regular invoice: their
   // tax twice; the server's GST summary, which leaves them out, showed it). Cancelled entries are left out too (review of
   // 02-Oct-2026: as the server's summary and MIS do); table 13 counts their numbers on its own
+  // next-mis-speed: the year's entries filtered only when the index is made, not at every ask for a month
   vIn(ym){
-    const all = (S.books.vouchers || []).filter(v => !v.opt && !v.cancel);
-    if (typeof perRender !== "function" || !ym || String(ym).length !== 6) return all;
-    return perRender(this, "byMonth", () => { const m = {}; all.forEach(v => { const k = String(v.date).slice(0, 6); (m[k] = m[k] || []).push(v); }); return m; })[ym] || [];
+    if (typeof perRender !== "function" || !ym || String(ym).length !== 6) return (S.books.vouchers || []).filter(v => !v.opt && !v.cancel);
+    return perRender(this, "byMonth", () => { const m = {}; this.vIn().forEach(v => { const k = String(v.date).slice(0, 6); (m[k] = m[k] || []).push(v); }); return m; })[ym] || [];
   },
   // one row per invoice and rate, from the sales side
   outward(ym, reg){
@@ -2290,8 +2291,6 @@ const GSTV = {
 const ITCT = {
   store(reg){ const b = S.books; b.itcTrack = b.itcTrack || {}; const t = b.itcTrack[reg || ""] = b.itcTrack[reg || ""] || {}; t.dec = t.dec || {}; t.sent = t.sent || {}; t.contact = t.contact || {}; return t; },
   dec(reg, key){ return ((this.store(reg).dec[key]) || {}); },
-  // the last day to take credit on a bill: 30 November after the end of its year (section 16(4))
-  deadline(d){ const s = String(d || ""); if (s.length < 6) return ""; const y = num(s.slice(0, 4)), m = num(s.slice(4, 6)), fy = m >= 4 ? y : y - 1; return (fy + 1) + "1130"; },
   today(){ const d = new Date(); return d.getFullYear() + String(d.getMonth() + 1).padStart(2, "0") + String(d.getDate()).padStart(2, "0"); },
   tax(o){ return r2(num(o.igst) + num(o.cgst) + num(o.sgst) + num(o.cess)); },
 };
@@ -2299,7 +2298,21 @@ const ITCT = {
 const M2B = {
   st: {},                                           // reg|fy -> {run, hash, busy, err, at},
   fyOf(ym){ const y = +String(ym).slice(0, 4), m = +String(ym).slice(4, 6); const s = m >= 4 ? y : y - 1; return s + "-" + String((s + 1) % 100).padStart(2, "0"); },
-  fyNow(){ const ms = (typeof GSTR === "object" && GSTR.months) ? GSTR.months() : []; return this.fyOf(S.gstYm || ms[ms.length - 1] || new Date().toISOString().slice(0, 7).replace("-", "")); },
+  // next-speed0 (09-Nov-2026, the GST input register of a 40,000-entry book: 10.4 s of 13.1 s): GST2B.run asks aiSig, and so
+  // the year, at every ask, and each time GSTR.months read every entry's date. The books' last month is asked only when no
+  // month is chosen (S.gstYm), and is then kept for these books: the same books object, the same list of entries (its
+  // length, its first and last entry), the same save (BOOKS_REV) and the same client. Kept only when the months come from
+  // the entries; the months worked out from today's date (books with no dated entry) are asked each time. tests/run_speed0.js
+  _last: null,
+  lastYm(){
+    if (!(typeof GSTR === "object" && GSTR.months)) return undefined;
+    const b = S.books, v = b && b.vouchers, n = Array.isArray(v) ? v.length : 0, rev = typeof BOOKS_REV === "number" ? BOOKS_REV : 0, c = this._last;
+    if (c && n && c.b === b && c.v === v && c.n === n && c.a === v[0] && c.z === v[n - 1] && c.rev === rev && c.co === S.coId) return c.last;
+    const ms = GSTR.months(), last = ms[ms.length - 1];
+    this._last = n && v.some(e => e && GSTR.ym(e.date).length === 6) ? {b, v, n, a: v[0], z: v[n - 1], rev, co: S.coId, last} : null;
+    return last;
+  },
+  fyNow(){ return this.fyOf(S.gstYm || this.lastYm() || new Date().toISOString().slice(0, 7).replace("-", "")); },
   key(reg, fy){ return (reg || "") + "|" + fy; },
   // next-itc-simple: the AI's pairs for GST2B.run (a 2B document with its books entries), and what they were made from
   aiLinks(reg){

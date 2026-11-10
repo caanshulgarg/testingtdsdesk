@@ -2626,17 +2626,6 @@ const READ_LABELS = {"free-text":"free (PDF text)", "free-ocr":"free OCR", "free
   "google-ocr":"Google OCR", "google+claude-text":"Google OCR + Claude (text only)", "free-partial":"free (partly read)",
   "claude-text":"Claude (text only)", "claude-images":"Claude (images)", "claude-careful":"Claude (careful re-read)"};
 function readLabel(r){ return READ_LABELS[r.method] || r.method || ""; }
-// A small coloured badge: green = free, blue = Claude
-function readBadge(mode){
-  if (!mode) return "";
-  if (/^free (OCR|\(PDF)/.test(mode)) return '<span class="tag ok" title="' + esc(mode) + '">Free</span>';
-  if (mode === "Google OCR") return '<span class="tag ok" title="' + esc(mode) + '">Google OCR</span>';
-  if (/text only/.test(mode)) return '<span class="tag stamp" title="' + esc(mode) + '">Claude text</span>';
-  if (/^Claude/.test(mode)) return '<span class="tag stamp" title="' + esc(mode) + '">Claude</span>';
-  if (mode === "pasted") return '<span class="tag no">Pasted</span>';
-  if (mode === "free (partly read)") return '<span class="tag warn" title="' + esc(mode) + '">Partly read</span>';
-  return "";
-}
 function checksPass(j){
   const tot = num(j.totalAmount), tx = num(j.taxableValue), gst = num(j.cgst) + num(j.sgst) + num(j.igst);
   return !!(j.vendorName && j.invoiceDate && tot > 0 && tx > 0 && Math.abs(tx + gst - tot) <= 1.5);
@@ -4003,10 +3992,6 @@ async function rereadCarefully(e){
 }
 function cidForCount(j){ return j.target && j.target !== "auto" ? j.target : null; }
 // the reading queue, the reading check, the upload options and the "reading…" cards are React (app/src/parts/Reading.jsx)
-// which: "auto" (uploads for any client) or a client's id
-function viewJobs(which){ return S.jobs.some(j => which === "auto" ? j.target === "auto" : j.target === which || j.cid === which || j.target === "auto") ? '<div data-react="Jobs" data-which="' + esc(which) + '"></div>' : ""; }
-function readingCheck(){ return '<div data-react="ReadingCheck"></div>'; }
-function uploadOptions(){ return '<div data-react="UploadOptions"></div>'; }
 // a job in the reading queue: read it again (the same way, or with Google OCR or Claude), type it in, or open its bill
 function jobAction(kind, jid){
   const j = S.jobs.find(x => x.id === jid);

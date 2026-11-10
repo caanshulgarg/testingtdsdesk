@@ -178,10 +178,6 @@ const CloudJobs = {
     } catch (e){ if (!auto) toast((e && e.message) || String(e)); }
     await this.load(true);
   },
-  async undismiss(j){
-    try { await TCloud.rpc("tally_post_undismiss", {p_id: j.id}); } catch (e){ toast((e && e.message) || String(e)); }
-    await this.load(true);
-  },
   // a failed or cancelled posting whose every entry a later posting put in: dismissed by FinCom (the server checks it again)
   autoDismiss(){
     if (!this.dismissOk) return;
@@ -225,20 +221,6 @@ const CloudJobs = {
   },
   // the queue's postings still going or stopped: waiting for the Tally computer, being posted, or failed
   open(cid){ return this.forClient(cid).filter(j => ["waiting", "taken", "running", "failed"].includes(j.status)); },
-  // the list on Post to Tally: postings still going, failed or cancelled ones not dismissed with something left to send,
-  // and the last 7 days of finished ones (all: everything, the dismissed and older ones too)
-  view(cid, all){
-    const week = Date.now() - 7 * 86400000;
-    return this.forClient(cid).filter(j => {
-      if (all) return true;
-      if (["waiting", "taken", "running"].includes(j.status) || j.checking) return true;
-      const stopped = ["failed", "cancelled"].includes(j.status);
-      // dismissed by a person: off the list, whatever its state (request of 02-Oct-2026: finished postings too)
-      if (j.dismissed_at && !j.dismiss_auto) return false;
-      if (stopped && !j.dismissed_at && !this.postedLater(j) && this.leftToSend(j) !== 0) return true;
-      return (Date.parse(j.updated_at || j.created_at) || 0) >= week;
-    });
-  },
   // review of 02-Oct-2026 (item 5): the postings of a client as people think of them. A failed or cancelled posting
   // whose every entry a later posting put in is one with that later posting ("Posted 07:51 (second try)", without the
   // old error); one still failed, not dismissed, with something left to send, needs a decision (Retry, Dismiss);

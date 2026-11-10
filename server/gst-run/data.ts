@@ -49,7 +49,7 @@ export async function load(rest: Rest, rpc: (fn: string, a: Record<string, unkno
     all(rest, "/rest/v1/client_book_items?select=key,item,ord,data,deleted&firm_id=eq." + enc(firm) + "&client_id=eq." + enc(client) + "&deleted=eq.false", "key,item"),
     all(rest, "/rest/v1/records?select=id,data&firm_id=eq." + enc(firm) + "&client_id=eq." + enc(client) + "&kind=eq.sales&deleted=not.is.true", "id"),
   ]);
-  const { heads, lines, bills } = unpack(packed);
+  const u0 = Date.now(), { heads, lines, bills } = unpack(packed), unpackMs = Date.now() - u0;
   // the 2B matching kept by gst-2b-match, as its "get" shows it to the app (the run, with the decisions taken on it)
   const runs: Record<string, any> = {};
   for (const g of gstins) for (const fy of fys) {
@@ -59,6 +59,6 @@ export async function load(rest: Rest, rpc: (fn: string, a: Record<string, unkno
     const dec = (await rest("/rest/v1/gst_2b_decisions?select=pair_id,decision&" + w).catch(() => [])) || [];
     runs[g + "|" + fy] = { id: run.id, status: run.status, at: run.done_at || run.queued_at, result: run.result, decisions: Object.fromEntries(dec.map((r: any) => [r.pair_id, r.decision])) };
   }
-  return { client, co, book, heads, lines, bills, ledgers, groups, items, sales: sales.map((r: any) => r.data).filter(Boolean), runs };
+  return { client, co, book, heads, lines, bills, ledgers, groups, items, sales: sales.map((r: any) => r.data).filter(Boolean), runs, unpackMs };
 }
 export { fyOf };

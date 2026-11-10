@@ -203,8 +203,14 @@ const near0 = o => !o || H.every(h => Math.abs(Number(o[h]) || 0) < 0.005);
   const q = cloud.q || {};
   ok(q.taken === 1 && q.wantWhileTaken === false && q.takenAgainWithin2min === 0 && q.keptAfterDone && q.goneWhenNothingNew, "the queue: a change while a run holds the client starts no run, is not taken again within 2 minutes, and stays queued after that run for the next; with nothing new it leaves");
   ok(q.afterThreeKilled && q.afterThreeKilled.taken === 0 && q.afterThreeKilled.tooBig === true && q.afterThreeKilled.want === false, "a run taken three times and never finished: the client too big, not taken again, no run started for it (the app works it out)");
+  ok(q.afterADay && q.afterADay.want === true && q.afterADay.tooBig === false, "a too-big client wanted a day after its last run: taken back");
+  ok(q.cap && q.cap.first3.join() === "c-a,c-b,c-c" && q.cap.more === 0, "at most 3 runs at once, in the order first wanted (" + (q.cap && q.cap.first3.join()) + ")");
+  ok(q.delayed && q.delayed.start === false && q.delayed.now === 0 && q.delayed.later === 1, "lines queued for the drain: wanted 60 s on, not taken before");
+  ok(cloud.kicksDuringRuns === 0 && cloud.kickedAgain === 2, "a background run never starts another (the timer and the members' misses do)");
   const tb = cloud.tooBigRun || {};
-  ok(tb.ok && tb.big === true && tb.stored === 0 && tb.queued && tb.queued.too_big === true, "a run whose reading and books pass its budget: nothing stored, the client marked too big (spent " + tb.spentMs + " ms, ready at " + tb.readyMs + " ms)");
+  ok(tb.ok && tb.big === true && tb.afterOne && tb.afterOne.too_big === false && tb.second && tb.second.big === true && tb.stored === 0 && tb.queued && tb.queued.too_big === true && tb.backOnNewEngine,
+    "a run whose reading and books pass its budget: nothing stored; at the second such run the client is too big; a new engine takes it back (spent " + tb.spentMs + " ms, ready at " + tb.readyMs + " ms)");
+  ok((cloud.twoAtOnce || []).length === 2 && cloud.twoAtOnce.every(x => x.ok) && new Set(cloud.twoAtOnce.map(x => x.client)).size === 2, "two runs at once in one isolate: two clients, each run with its own budget (" + JSON.stringify(cloud.twoAtOnce) + ")");
 
   console.log("== 4b. the version's GST keys, the engine's reads and the app's poke");
   const {GST3B_KEYS} = await import(path.join(ROOT, "server", "_shared", "gst3bprint.js"));
@@ -216,7 +222,8 @@ const near0 = o => !o || H.every(h => Math.abs(Number(o[h]) || 0) < 0.005);
   ok(JSON.stringify(arr) === JSON.stringify(GST3B_KEYS), "gst_calc_version counts exactly gst3bprint.js's GST3B_KEYS (" + arr.length + ")");
   const poke = (fs.readFileSync(path.join(ROOT, "src", "js", "54-live-sync.js"), "utf8").match(/send\.some\(x => (\/\^\([^/]*\/)\.test\(x\[2\]\.k\)\)\) Cloud\.api\("rpc\/gst_calc_poke"/) || [])[1];
   const pre = poke ? new RegExp(poke.slice(1, -1)) : null;
-  ok(pre && GST3B_KEYS.every(k => pre.test(k)), "the app pokes gst_calc_poke after saving an item of any of those keys (BookItems.pushNow, src/js/54)");
+  const pk = poke ? poke.slice(3, -3).split("|") : [];
+  ok(pre && JSON.stringify(pk.slice().sort()) === JSON.stringify(GST3B_KEYS.slice().sort()) && GST3B_KEYS.every(k => pre.test(k)) && !pre.test("gstNotes") && !pre.test("tdsFiled"), "the app pokes gst_calc_poke after saving an item of exactly those keys (BookItems.pushNow, src/js/54)");
 
   return big();
 })().catch(e => { console.error(e); process.exit(1); });

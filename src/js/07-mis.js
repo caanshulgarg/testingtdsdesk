@@ -390,8 +390,12 @@ const MIS = {
   // off across registrations)
   gst3b(m){
     const regs = Array.from(new Set((GSTR.gstins(S.books) || []).map(g => String(g).slice(0, 2))));
-    return regs.length > 1 ? regs.map(rg => GSTR.threeBm(m, rg)) : [GSTR.threeB(m, "")];
+    // next-mis-speed: a registration's 3B working once per run (Compliance, Registrations and the 13 weeks each asked for it)
+    return regs.length > 1 ? regs.map(rg => this.keep("3b" + m + rg, () => GSTR.threeBm(m, rg))) : [GSTR.threeB(m, "")];
   },
+  // next-mis-speed: a figure kept for the drawing or calculation (perRender), so a run in parts (Mis.jsx runSplit, by
+  // memoKeep) can work it out before the run
+  keep(k, f){ return typeof perRender === "function" ? perRender(this, k, f) : f(); },
   // what falls due in the next six weeks, from today (review of 02-Oct-2026: it counted from the end of the report's
   // period, and gave TDS for March as due on 7 April). TDS: the 7th of the next month, but 30 April for March; returns on
   // 31 Jul, 31 Oct, 31 Jan and 31 May. GST by the client's filing type: monthly GSTR-1 on the 11th and 3B on the 20th;
@@ -461,8 +465,11 @@ const MIS = {
     // what is left of each bill after payments on account and advances (MIS.netOpen), as the ageing
     r.msme = r.pay.rows.filter(p => /micro|small/i.test(msme[p.party] || "")).map(p => ({party: p.party, type: msme[p.party], bills: (p.open || []).filter(x => x.age > md)})).filter(x => x.bills.length)
       .map(x => Object.assign(x, {amt: r2(x.bills.reduce((s2, y) => s2 + y.left, 0))}));
-    // the control: every ledger's movement here against Tally's own balances
-    if (b.tb && b.tb.from === from && b.tb.to === to){
+    // the control: every ledger's movement here against Tally's own closings, from the bridge's read only. FinCom's cloud
+    // copy has none (src/js/49: blank, kept as 0) or works them out from openings (TallyRead.openings): tb.src "copy";
+    // a trial balance file's are worked out too (tb.own; tb.source, set only by bringTbFile, on books saved before tb.own).
+    // Neither is a check (next-mis-speed: "963 ledgers differ")
+    if (b.tb && b.tb.src !== "copy" && !b.tb.own && !b.tb.source && b.tb.from === from && b.tb.to === to){
       const mv = this.moves(from, to); let n = 0, amt = 0; const list = [];
       Object.entries(b.tb.led).forEach(([l, x]) => { const d = r2((num(x.close) - num(x.open)) - ((mv[l] || {}).t || 0)); if (Math.abs(d) >= 1){ n++; amt = r2(amt + Math.abs(d)); list.push([l, d]); } });
       r.control = {ok: n === 0, n, amt, list: list.slice(0, 50)};
@@ -611,7 +618,8 @@ Object.assign(MIS, {
     } finally { this._co = prev; }
   },
   // money in and out of cash and bank, month by month, by what it was for (the direct method)
-  cashActual(from, to){
+  cashActual(f, t){ return this.keep("ca" + f + t, () => this.cashNow(f, t)); },
+  cashNow(from, to){
     const months = this.monthsOf(from, to), rows = {}, seen = new Set();
     (S.books.vouchers || []).forEach(v => {
       if (v.date < from || v.date > to || v.opt || v.cancel) return;
@@ -650,7 +658,8 @@ Object.assign(MIS, {
   },
   median(a){ if (!a.length) return null; const s2 = a.slice().sort((x, y) => x - y), k = Math.floor(s2.length / 2); return s2.length % 2 ? s2[k] : Math.round((s2[k - 1] + s2[k]) / 2); },
   // how long each party takes to settle a bill, from the bills settled in the books
-  payDays(side, asOn){
+  payDays(s, d){ return this.keep("pd" + s + d, () => this.payNow(s, d)); },
+  payNow(side, asOn){
     const A = Audit, want = l => side === "r" ? A.isDebtor(l) : A.isCreditor(l), ref = {};
     (S.books.vouchers || []).filter(v => v.date <= asOn && !v.opt && !v.cancel).sort((a, c) => a.date.localeCompare(c.date)).forEach(v => v.ent.forEach(e => {
       if (!want(e.l) || !e.b) return;
@@ -772,7 +781,7 @@ Object.assign(MIS, {
         if (Books.isSale(v)){ const a = Books.lines(v).taxable * (/CREDIT NOTE/i.test(v.type) ? -1 : 1); sales = r2(sales + a); m[ym].s = r2(m[ym].s + a); }
         else if (Books.isPurchase(v)){ const a = Books.lines(v).taxable * (/DEBIT NOTE/i.test(v.type) ? -1 : 1); purch = r2(purch + a); m[ym].p = r2(m[ym].p + a); }
       });
-      const gst = months.map(mm => { try { const t = GSTR.threeBm(mm, rg); return r2(Math.max(0, t.net.igst + t.net.cgst + t.net.sgst + t.net.cess - (t.netItc.igst + t.netItc.cgst + t.netItc.sgst + t.netItc.cess))); } catch (e){ return 0; } });
+      const gst = months.map(mm => { try { const t = this.keep("3b" + mm + rg, () => GSTR.threeBm(mm, rg)); return r2(Math.max(0, t.net.igst + t.net.cgst + t.net.sgst + t.net.cess - (t.netItc.igst + t.netItc.cgst + t.netItc.sgst + t.netItc.cess))); } catch (e){ return 0; } });
       return {reg: rg, gstin: ((S.books.meta || {}).gstins || []).find(g => g.slice(0, 2) === rg), sales, purch, m, gstPay: r2(gst.reduce((a, x) => a + x, 0)), months};
     });
   },
@@ -780,7 +789,8 @@ Object.assign(MIS, {
   // set-off of an expense head in credit are the profit and loss's own (MIS.plRule), so income and expenses, allocated
   // or not, come to the profit and loss's totals. What a head in credit sends to Other income, and the set-off that
   // leaves the head nil, belong to no cost centre: they are with what is not allocated
-  costCentres(from, to){
+  costCentres(f, t){ return this.keep("cc" + f + t, () => this.ccNow(f, t)); },
+  ccNow(from, to){
     const cc = {}, un = {inc: 0, exp: 0}, c = typeof FS !== "undefined" ? FS.cfg(S.books) : null, R = this.plRule(from, to, c), hd = {};
     R.rows.forEach(r => { hd[r.l] = r.h; });
     (S.books.vouchers || []).forEach(v => {
