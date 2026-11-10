@@ -646,13 +646,16 @@ type keepRun struct {
 	caughtUp bool
 	// 2.5.0 (booksfrom.go): a company whose ledger read was held for want of its books-from: not marked read
 	booksHeld map[string]bool
-	light     bool
-	force     bool
-	once      bool
-	allDone   bool
-	told      map[string]bool
-	id        string           // this run (a round of slices resumes within it)
-	alter     map[string]int64 // each company's highest AlterID, as its check said (for the rewind guard)
+	// 2.5.13 (review A2): the companies whose ledger list came without its openings this run (no first day known): not a
+	// read of the books ("Books as of" is not moved)
+	openUnknown map[string]bool
+	light       bool
+	force       bool
+	once        bool
+	allDone     bool
+	told        map[string]bool
+	id          string           // this run (a round of slices resumes within it)
+	alter       map[string]int64 // each company's highest AlterID, as its check said (for the rewind guard)
 	// an Update now a person pressed that waited KeepNowWaitSec (2 minutes) for a 15 s pause in Tally: it reads on, in
 	// short slices (each request under the 2 s stop), giving way between them while the person types (holdNow)
 	pressOn bool
@@ -1426,8 +1429,8 @@ func keepWorker(r runReq) {
 			switch {
 			case err == nil:
 				clearBgBackoff(o.port)
-				if !k.booksHeld[o.name] {
-					markRead(o.name) // 2.5.0: a ledger read held for want of books-from is not a read
+				if !k.booksHeld[o.name] && !k.openUnknown[o.name] {
+					markRead(o.name) // 2.5.0: a ledger read held for want of books-from is not a read (2.5.13: nor one without openings)
 				}
 				if k.caughtUp {
 					upToDate[o.name] = true

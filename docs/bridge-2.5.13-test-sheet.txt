@@ -12,8 +12,10 @@ openings with the new tally-ingest (an older one stores their openings as nil un
     Check: on a book whose days were marked to upload and then reset in FinCom, after the update the days are read
     within a few beats and Books › From Tally counts them in; the tray no longer lists them to upload.
  2. A day FinCom still marks to upload is not read (FinCom does not hand it out). A day just marked is not read again
-    for 2 minutes after FinCom took the mark, and at most 3 times in one run of the bridge if FinCom keeps resetting
-    it (never a loop).
+    for 2 minutes after FinCom took the mark. The limit: in one run of the bridge (from its start until it stops or
+    restarts) the same day is read again at most 3 times when FinCom keeps resetting it; after the third it stays
+    marked here until the bridge next starts (never a loop). Check: reset one marked day in FinCom: it is read at the
+    next beats; reset it a fourth time without restarting the bridge: it is not read until the bridge restarts.
  3. At the start after the update, the marks left by an earlier bridge version are dropped (one log line counts
     them): FinCom's own marks decide which days are read.
  4. A company whose books' first day Tally does not give (its company list has no "Books beginning from"): FinCom's

@@ -466,6 +466,10 @@ func (k *keepRun) ledgerList(company string, port int, dir string, st M, inBudge
 	bf, herr := booksFromForRead(k.tc, company)
 	standIn := herr != nil
 	if standIn {
+		if k.openUnknown == nil {
+			k.openUnknown = map[string]bool{}
+		}
+		k.openUnknown[company] = true
 		bf = ledgerStandInDay()
 		if !k.told["standin:"+company] {
 			k.told["standin:"+company] = true

@@ -102,7 +102,7 @@ func TestR250LedgerRequestsCarryBooksPeriod(t *testing.T) {
 // --- 2. books-from unknown: held, one plain log line, the company list read again; never undated
 func TestR250BooksFromUnknownHeld(t *testing.T) {
 	f, _ := r250Bridge(t, "-")
-	const said = "not read: Tally has not said when its books begin; the company list is read again and the ledgers wait until it does"
+	const said = ": Tally has not said when its books begin and FinCom has no first day for the book; the company list is read again; the ledger list is read without its openings, and the openings and single ledgers wait until a first day is known" // 2.5.13 (review A2)
 	for i := 0; i < 3; i++ {
 		// a minute on since the last re-read (the once-a-minute clock of the re-read only; the bridge's other clocks as they are)
 		booksFromMu.Lock()
@@ -133,7 +133,7 @@ func TestR250BooksFromUnknownHeld(t *testing.T) {
 			t.Fatalf("the masters' round not dated the stand-in year: %s-%s", a, z)
 		}
 	}
-	if n := logLines("Ledgers of " + zz + " " + said); n != 1 {
+	if n := logLines("Ledgers of " + zz + said); n != 1 {
 		t.Fatalf("the held read said %d times in the log", n)
 	}
 	if ledgerChunkRequest(zz, 0, 2000) != "" || ledgerChangesRequest(zz, 0, 200) != "" || ledgerByNameRequest(zz, "Cash") != "" {

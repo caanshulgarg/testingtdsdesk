@@ -270,6 +270,10 @@ func TestR2513MastersReadWithoutBooksFrom(t *testing.T) {
 	if logLines(booksFromUnknownWords) == 0 {
 		t.Fatalf("not said:\n%s", readText(logFile()))
 	}
+	// review A2: a read without its openings is not a read of the books ("Books as of" not moved)
+	if st := readKeepState(syncFolder(zz)); st == nil || str(st["readAt"]) != "" {
+		t.Fatalf("the books' read time moved: %v", st["readAt"])
+	}
 	// the beat names it for the company (the page shows it instead of "no answer from Tally")
 	ss := openCompaniesWith(fin, true)
 	var open []any

@@ -379,7 +379,8 @@ func holdLedgerRead(tc *TC, company string) error {
 	booksFromSaid[k] = true
 	booksFromMu.Unlock()
 	if !said {
-		writeLog("Ledgers of " + company + " not read: Tally has not said when its books begin; the company list is read again and the ledgers wait until it does")
+		// 2.5.13 (review A2): the masters' own round is read meanwhile (ledgerList's stand-in day), without the openings
+		writeLog("Ledgers of " + company + ": Tally has not said when its books begin and FinCom has no first day for the book; the company list is read again; the ledger list is read without its openings, and the openings and single ledgers wait until a first day is known")
 	}
 	if tc == nil {
 		tc = fin

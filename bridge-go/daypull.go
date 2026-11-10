@@ -1368,16 +1368,6 @@ func pullLoad() {
 // FinCom has not taken the mark yet (it is still to be told: FinCom's list does not know of it), nor within
 // pullUploadGrace of FinCom taking it (a beat answered meanwhile may be older than the mark), nor more than
 // pullUploadReleaseMax times a day in one run (never a loop of reads). Called with pull.mu held.
-// 2.5.13: the log lines noted while pull.mu is held, written after it is let go (no disk write under the lock)
-func pullLogFlush() {
-	pull.mu.Lock()
-	ls := pull.logs
-	pull.logs = nil
-	pull.mu.Unlock()
-	for _, l := range ls {
-		writeLog(l)
-	}
-}
 
 const (
 	pullUploadGrace      = 2 * time.Minute
@@ -1411,6 +1401,17 @@ func pullUploadReleaseLocked(it pullItem) bool {
 	pullSaveLocked()
 	pull.logs = append(pull.logs, "Older entries of "+it.Company+": "+liveDay(it.Day)+" is listed again by FinCom (its mark to upload cleared there): read again")
 	return true
+}
+
+// 2.5.13: the log lines noted while pull.mu is held, written after it is let go (no disk write under the lock)
+func pullLogFlush() {
+	pull.mu.Lock()
+	ls := pull.logs
+	pull.logs = nil
+	pull.mu.Unlock()
+	for _, l := range ls {
+		writeLog(l)
+	}
 }
 
 // --- for the beat and the tray
