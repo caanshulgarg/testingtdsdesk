@@ -249,11 +249,15 @@
 #app .tpt-head-l { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 #app .tpf-showing { font-size: 14px; color: var(--text-secondary); }
 #app .tpf-views { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
+#app .tpf-bar .tpf-views .tpf-sel, #app .tpf-bar .tpf-views .tpf-btn { height: 44px; }
+#app .tpf-bar .tpf-views { flex: 0 0 auto; flex-wrap: nowrap; max-width: 100%; }
+#app .tpf-bar .tpf-views .tpf-sel { min-width: 0; }
+#app .tpf-sheet-title:focus { outline: none; }
 #app .tpf-save { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
 #app .tpf-save input { width: 200px; max-width: 100%; }
 #app .tpf-lab { font-size: 13px; color: var(--text-secondary); }
 #app .tpf-sel { height: 40px; padding: 0 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--foreground); font: inherit; font-size: 14px; max-width: 100%; box-sizing: border-box; }
-#app .tpf-btn { height: 40px; min-height: 40px; padding: 0 14px; border-radius: 8px; font-weight: 500; }
+#app .tpf-btn { height: 40px; min-height: 40px; padding: 0 14px; border-radius: 8px; font-weight: 500; white-space: nowrap; }
 #app .tpf { padding: 16px; display: flex; flex-direction: column; gap: 14px; }
 #app .tpf-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; min-width: 0; }
 #app .tpf-search { flex: 1 1 320px; min-width: 0; display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text-secondary); box-sizing: border-box; }
@@ -311,16 +315,16 @@
 /* a phone: the chips scroll sideways, the panel is a bottom sheet with Show N clients */
 @media (max-width: 640px) {
   #app .tpf { padding: 12px; gap: 12px; }
-  #app .tpf-bar { flex-wrap: nowrap; gap: 8px; }
-  #app .tpf-search { flex: 1 1 auto; padding: 0 12px; }
+  #app .tpf-bar { gap: 8px; }
+  #app .tpf-search { flex: 1 1 0; padding: 0 12px; }
   #app .tpf-toggle { padding: 0 12px; flex: none; }
   #app .tpf-sortbar { display: none; }
   #app .tpf-chips { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 2px; -webkit-overflow-scrolling: touch; }
   #app .tpf-chip { flex: none; padding: 0 12px; }
-  #app .tpf-views { width: 100%; }
+  #app .tpf-bar .tpf-views { flex: 1 1 100%; }
   #app .tpf-views .tpf-sel { flex: 1 1 140px; }
   #app .tpf-back { display: block; position: fixed; inset: 0; z-index: 1000; background: rgba(20, 24, 31, .35); }
-  #app .tpf-panel { position: fixed; left: 0; right: 0; bottom: 0; z-index: 1001; max-height: 85vh; overflow-y: auto; background: var(--surface); border: 1px solid var(--border); border-radius: 16px 16px 0 0;
+  #app .tpf-panel { position: fixed; left: 0; right: 0; bottom: 0; z-index: 1001; max-height: 85vh; overflow-y: auto; overscroll-behavior: contain; background: var(--surface); border: 1px solid var(--border); border-radius: 16px 16px 0 0;
     padding: 16px; box-shadow: 0 -4px 16px rgba(20, 24, 31, .08); box-sizing: border-box; }
   #app .tpf-sheet-head { display: flex; align-items: center; justify-content: space-between; font-size: 16px; }
   #app .tpf-sheet-head .linkbtn { font-size: 13px; font-weight: 600; }

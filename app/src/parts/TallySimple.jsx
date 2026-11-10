@@ -570,7 +570,8 @@ function Row({ row, download, oneDl, seen, cs, x, checkAgain }) {
     {/* next-tally-filters2: the state, its why, held and where lines (were under the client's name) */}
     <td className="tpt-td tpt-st" data-tsm-col="state" data-label="State">
       <span className="tpt-state">
-        <span className={"tpt-say " + pg.dot} data-tpt-state={pg.kind}><Dot k={pg.dot} />{rw && rw.phase !== "done" && rw.phase !== "why" ? (rw.phase === "waiting" ? "Waiting for Tally" : "Updating") : pg.say}</span>
+        {/* (not linked: the client line says so; the state line only when it adds to it) */}
+        {pg.kind !== "free" && <span className={"tpt-say " + pg.dot} data-tpt-state={pg.kind}><Dot k={pg.dot} />{rw && rw.phase !== "done" && rw.phase !== "why" ? (rw.phase === "waiting" ? "Waiting for Tally" : "Updating") : pg.say}</span>}
         {why && <span className={"tpt-why" + (rw && (rw.phase === "why" || rw.phase === "waiting") ? " bad" : "")} data-tpt-why={rw ? "run-" + rw.phase : aw ? (aw.step ? "step" + aw.step.n : "why") : ""} role={rw ? "status" : undefined}>{why}
           {aw && aw.step && <>{" "}<button type="button" className="linkbtn" data-tsm-away-steps={aw.step.n} onClick={() => { set({ open: true }); window.scrollTo(0, 0); }}>See step {aw.step.n}</button></>}</span>}
         {held && <span className="tpt-why" data-tpt-held="">{held}</span>}
@@ -580,7 +581,7 @@ function Row({ row, download, oneDl, seen, cs, x, checkAgain }) {
           <ConnectBtn r={near} co={row.co} label={"Link " + row.client + " to it"} primary={false} hook={{ "data-tsm-away-relink": row.cid }} /></span>}
       </span>
     </td>
-    <td className="tpt-td tpt-io-td" data-label="In Tally">{io ? <span className={"tpt-io " + io} data-tpt-intally={io}>{io === "open" ? "Open" : "Not open"}<span className="tpt-io-x">{" in Tally"}</span></span> : <span className="tpg-sub">—</span>}</td>
+    <td className="tpt-td tpt-io-td" data-label="In Tally">{io ? <span className={"tpt-io " + io} data-tpt-intally={io}>{io === "open" ? "Open" : "Not open"}<span className="tpt-io-x">{" in Tally"}</span></span> : null}</td>
     <td className="tpt-td tpt-masters" data-label="Masters">{linked ? <MastersCell row={row} /> : <span className="tpg-sub">—</span>}</td>
     <td className="tpt-td tpt-entries" data-label="Entries">{linked ? <EntriesCell row={row} /> : <span className="tpg-sub">—</span>}</td>
     <td className="tpt-td tpt-last" data-label="Last entry" data-tpt-last={row.last || ""}>{linked ? (row.last ? lastWords(row.last) : "Never") : "—"}</td>
@@ -679,14 +680,21 @@ function keeps(t, f, skip) {
 }
 const SORT_BY = { need: (a, b) => a.i - b.i, open: (a, b) => (b.io === "open") - (a.io === "open"), name: (a, b) => a.nm.localeCompare(b.nm, "en"), last: (a, b) => b.lm - a.lm, days: (a, b) => b.days - a.days };
 // the saved views: [{name, f}], this browser's, per firm
-const VKEY = () => "fincom:tally-views:" + String((typeof Cloud === "object" && Cloud.st && Cloud.st.firm) || (S.account && S.account.firm && S.account.firm.id) || (S.firm && S.firm.firmName) || "local");
+// (no firm known yet: no saved views, never a key shared between firms)
+const firmId = () => String((typeof Cloud === "object" && Cloud.st && Cloud.st.firm) || (S.account && S.account.firm && S.account.firm.id) || "");
+const VKEY = () => (firmId() ? "fincom:tally-views:" + firmId() : "");
+// a stored view as the page can use it: a chip, a sort and choices it knows, else left out
+const cleanView = (x) => { if (!x || typeof x.name !== "string" || !x.name.trim() || !x.f || typeof x.f !== "object") return null;
+  const f = x.f, ks = (o) => o.map((y) => y[0]), only = (v, o) => arr(v).filter((y) => ks(o).includes(y));
+  return { name: x.name.trim().slice(0, 40), f: { chip: ks(CHIPS).includes(f.chip) ? f.chip : "all", fma: only(f.fma, G_MA), fen: only(f.fen, G_EN), flast: ks(G_LAST).includes(f.flast) ? f.flast : "any",
+    fopen: ks(G_OPEN).includes(f.fopen) ? f.fopen : "any", fpc: arr(f.fpc).filter((y) => typeof y === "string" && y), sort: ks(SORTS).includes(f.sort) ? f.sort : "need", dir: f.dir === -1 ? -1 : 1 } }; };
 function savedViews() {
   const ui = UI(), k = VKEY();
   if (ui.vk !== k) { ui.vk = k; ui.views = [];
-    try { const v = JSON.parse(localStorage.getItem(k) || "[]"); if (Array.isArray(v)) ui.views = v.filter((x) => x && typeof x.name === "string" && x.name && x.f && typeof x.f === "object").slice(0, 50); } catch (e) { /* storage blocked: the tab's own */ } }
+    if (k) try { const v = JSON.parse(localStorage.getItem(k) || "[]"); if (Array.isArray(v)) ui.views = v.map(cleanView).filter(Boolean).slice(0, 50); } catch (e) { /* storage blocked: the tab's own */ } }
   return ui.views;
 }
-function keepViews(list) { const ui = UI(); ui.views = list; try { localStorage.setItem(VKEY(), JSON.stringify(list)); } catch (e) { /* storage blocked: kept for the tab */ } render(); }
+function keepViews(list) { const ui = UI(), k = VKEY(); ui.views = list; if (k) try { localStorage.setItem(k, JSON.stringify(list)); } catch (e) { /* storage blocked: kept for the tab */ } render(); }
 const viewApply = (f) => set(Object.assign({}, NO_F, { sort: "need", dir: 1 }, f, { fma: arr(f.fma), fen: arr(f.fen), fpc: arr(f.fpc) }));
 const X = <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>;
 function Views({ f }) {
@@ -707,7 +715,7 @@ function Views({ f }) {
       {list.length > 0 && <optgroup label="Saved views">{list.map((v) => <option key={v.name} value={"saved:" + v.name}>{v.name}</option>)}</optgroup>}
     </select>
     {s && <button type="button" className="btn tpf-btn" data-tpf-remove={s.name} aria-label={"Remove view " + s.name} onClick={() => keepViews(list.filter((v) => v !== s))}>Remove view</button>}
-    {!ui.saving ? <button type="button" className="btn tpf-btn" data-tpf-save="" onClick={() => set({ saving: true })}>Save view</button>
+    {!firmId() ? null : !ui.saving ? <button type="button" className="btn tpf-btn" data-tpf-save="" onClick={() => set({ saving: true })}>Save view</button>
       : <form className="tpf-save" data-tpf-save-form="" onSubmit={(ev) => { ev.preventDefault(); save(); }}>
         <input type="text" className="tpf-sel" data-tpf-save-name="" aria-label="Name of the view" placeholder="Name of the view" maxLength={40} value={name} autoFocus onChange={(ev) => setName(ev.target.value)} />
         <button type="submit" className="btn primary tpf-btn" data-tpf-save-ok="" disabled={!name.trim()}>Save</button>
@@ -724,8 +732,8 @@ function Group({ k, legend, opts, n, f, multi }) {
         <span className="tpf-w">{w}</span><span className="tpf-n" data-tpf-n={c}>{c}</span></label>; })}
   </fieldset>;
 }
-function SortSel({ f, where }) {
-  return <select className="tpf-sel" data-tpf-sort={where} aria-label="Sort clients" value={f.sort} onChange={(ev) => set({ sort: ev.target.value, dir: 1 })}>
+function SortSel({ f, where, id }) {
+  return <select id={id} className="tpf-sel" data-tpf-sort={where} aria-label="Sort clients" value={f.sort} onChange={(ev) => set({ sort: ev.target.value, dir: 1 })}>
     {SORTS.map(([k, w]) => <option key={k} value={k}>{w}</option>)}</select>;
 }
 // a column head that sorts: a press sorts by it, a second press the other way
@@ -734,6 +742,21 @@ function SortTh({ k, f, children, className }) {
   return <th className={className} aria-sort={on ? (up ? "ascending" : "descending") : "none"} data-tpf-th={k}>
     <button type="button" className={"tpf-th" + (on ? " on" : "")} data-tpf-head={k} onClick={() => set(on ? { dir: -f.dir } : { sort: k, dir: 1 })}>{children}
       <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d={on ? (f.dir === 1 ? "M6 9l6 6 6-6" : "M6 15l6-6 6 6") : "M6 15l6 6 6-6M6 9l6-6 6 6"} /></svg></button></th>;
+}
+// the Filters panel: in the card on a wide screen; on a phone (≤ 640 px) a bottom sheet: a modal dialog, its heading
+// focused, Escape closes it (focus back to Filters), the page behind does not scroll
+const PHONE = "(max-width: 640px)";
+function Sheet({ close, children }) {
+  const phone = typeof matchMedia === "function" && matchMedia(PHONE).matches;
+  useEffect(() => {
+    const key = (ev) => { if (ev.key === "Escape") { ev.preventDefault(); close(); } };
+    document.addEventListener("keydown", key);
+    let html = null, was = "";
+    if (phone) { html = document.documentElement; was = html.style.overflow; html.style.overflow = "hidden";
+      const t = document.querySelector("#app [data-tpf-sheet-title]"); if (t) t.focus({ preventScroll: true }); }
+    return () => { document.removeEventListener("keydown", key); if (html) html.style.overflow = was; };
+  }, [phone]);
+  return <div className="tpf-panel" id="tpf-panel" data-tpf-panel="" role={phone ? "dialog" : "region"} aria-modal={phone ? "true" : undefined} aria-label="Filters">{children}</div>;
 }
 function Table({ rows, download, oneDl, cs, x, checkAgain }) {
   const ui = UI(), seen = openAnywhere(), f = fOf(ui), now = Date.now();
@@ -756,11 +779,10 @@ function Table({ rows, download, oneDl, cs, x, checkAgain }) {
   const nOn = tags.length, any = nOn > 0 || !!q;
   const clear = () => set(Object.assign({ q: "" }, NO_F));
   const w = headWords(rows), nc = rows.filter((r) => r.kind === "client").length, panel = !!ui.fpanel;
-  const close = () => set({ fpanel: false });
+  const close = () => { set({ fpanel: false }); setTimeout(() => { const b = document.querySelector("#app [data-tpf-toggle]"); if (b) b.focus(); }, 0); };
   return <section className="tpt-sec" aria-label="Clients" data-tsm-table="" data-tsm-n={rows.length}>
     <div className="tpt-head"><div className="tpt-head-l"><h3 className="tpt-title" data-tpt-title="">{"Clients · " + nc}</h3>
       {any && <span className="tpf-showing" data-tpf-showing={list.length} data-tpt-filtered={list.length}>{"Showing " + list.length + " of " + rows.length + (rows.length === 1 ? " client" : " clients")}</span>}</div>
-      {rows.length > 0 && <Views f={f} />}
       <span className="sr-only" data-tsm-say=""><b className="tsm-fine">{w.fine}</b>{" "}<b className="tsm-need" data-tsm-need-n={rows.filter((r) => r.need).length}>{w.need}</b></span></div>
     {rows.length > 0 && <div className="tsm-card tpf" data-tpf="">
       <div className="tpf-bar">
@@ -771,7 +793,9 @@ function Table({ rows, download, oneDl, cs, x, checkAgain }) {
           aria-label={nOn ? "Filters, " + nOn + " on" : "Filters"} onClick={() => set({ fpanel: !panel })}>
           <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 6h16M7 12h10M10 18h4" /></svg>
           <span className="tpf-toggle-w">Filters</span>{nOn > 0 && <span className="tpf-count" data-tpf-count={nOn}>{nOn}</span>}</button>
-        <span className="tpf-sortbar"><label className="tpf-lab" htmlFor="tpf-sort">Sort</label><SortSel f={f} where="bar" /></span>
+        <span className="tpf-sortbar"><label className="tpf-lab" htmlFor="tpf-sort">Sort</label><SortSel f={f} where="bar" id="tpf-sort" /></span>
+        {/* 2. the views in the bar (were above it, under the sticky Download bar) */}
+        <Views f={f} />
       </div>
       <div className="tpf-chips" role="group" aria-label="State" data-tpf-chips="">
         {CHIPS.map(([k, cw]) => { const on = f.chip === k, c = nC[k] || 0;
@@ -781,8 +805,8 @@ function Table({ rows, download, oneDl, cs, x, checkAgain }) {
             {cw}<span className="tpf-n" data-tpf-n={c}>{c}</span></button>; })}
       </div>
       {panel && <div className="tpf-back" data-tpf-back="" onClick={close} />}
-      {panel && <div className="tpf-panel" id="tpf-panel" data-tpf-panel="" role="region" aria-label="Filters">
-        <div className="tpf-sheet-head"><b>Filters</b><button type="button" className="linkbtn" data-tpf-clear="sheet" onClick={clear}>Clear all</button></div>
+      {panel && <Sheet close={close}>
+        <div className="tpf-sheet-head"><b className="tpf-sheet-title" tabIndex={-1} data-tpf-sheet-title="">Filters</b><button type="button" className="linkbtn" data-tpf-clear="sheet" onClick={clear}>Clear all</button></div>
         <div className="tpf-sheet-sort"><span className="tpf-legend">Sort</span><SortSel f={f} where="sheet" /></div>
         <div className="tpf-groups">
           <Group k="fma" legend="Masters" opts={G_MA} n={nM} f={f} multi />
@@ -792,7 +816,7 @@ function Table({ rows, download, oneDl, cs, x, checkAgain }) {
           {pcs.length > 0 && <Group k="fpc" legend="Tally computer" opts={pcs} n={nP} f={f} multi />}
         </div>
         <button type="button" className="btn primary tpf-show" data-tpf-show={list.length} onClick={close}>{"Show " + list.length + (list.length === 1 ? " client" : " clients")}</button>
-      </div>}
+      </Sheet>}
       {any && <div className="tpf-tags" data-tpf-tags="">
         <span className="tpf-lab">Active:</span>
         {q && <button type="button" className="tpf-tag" data-tpf-tag="q" aria-label={"Remove search " + ui.q.trim()} onClick={() => set({ q: "" })}>{"Search: “" + ui.q.trim() + "”"}{X}</button>}

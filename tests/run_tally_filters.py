@@ -1,17 +1,19 @@
 """python3 run_tally_filters.py - the Tally page's clients: the owner's approved filter design (next-tally-filters2,
 design-filters Main and Phone). Made-up names only.
   1. the bar: search, Filters, Sort (Needs attention first); the state chips with counts (a chip with none off); the
-     seven columns, four of them sort buttons; nothing filtered: no tags, no "Showing" line
+     seven columns, four of them sort buttons; nothing filtered: no tags, no "Showing" line; a client not linked says so
+     once; View and Save view in the bar, clear of the sticky Download bar
   2. a chip: Not open in Tally: only that client, "Showing 1 of 4 clients", its tag, Filters 1; the tag removed: all again
   3. the Filters panel: Masters, Entries, Last entry received, In Tally, Tally computer (the computer's name only), each
      choice with its count, none: off; filters add up with the chips; tags, Clear all
   4. search: client, Tally company, the client's GSTIN
   5. sort by each option and by the column heads (aria-sort, a second press the other way)
-  6. views: built in, saved (this browser, per firm), applied, removed; with no browser storage: kept for the tab
+  6. views: built in, saved (this browser, per firm), applied, removed; a stored view this page cannot use cleaned; no
+     firm known: no Save view; with no browser storage: kept for the tab
   7. More ▾ still opens the light row; Less ▴ closes it
   8. a read asked for the client's older Tally company (relinked since): not this link's read
   9. a phone (390): no sideways scroll of the page, the chips scroll, the rows are cards, the panel a bottom sheet with
-     Show N clients
+     Show N clients, a modal dialog (its heading focused, Escape closes it, focus back on Filters, the page held)
 """
 import os, re, sys, json, threading, functools, http.server, datetime
 from playwright.sync_api import sync_playwright
@@ -93,6 +95,15 @@ def main():
         ok(n(LR + " td[data-tsm-col=state] [data-tpt-state=away]") == 1 and "is not open in Tally" in txt(LR + " td[data-tsm-col=state]"), "1. the state and what to do in the State cell (%s)" % txt(LR + " td[data-tsm-col=state]")[:160])
         ok(pg.get_attribute(LR + " [data-tpt-intally]", "data-tpt-intally") == "away" and txt(LR + " td.tpt-io-td") == "Not open", "1. In Tally: Not open")
         ok(pg.get_attribute('#app tr[data-tsm-row="%s"] [data-tpt-intally]' % ORBIT, "data-tpt-intally") == "open", "1. In Tally: Open")
+        KR = '#app [data-tsm-table] tr[data-tsm-row="%s"]' % KEST
+        ok(txt(KR + " .tpt-co-line") == "Not linked" and n(KR + " [data-tpt-state]") == 0 and txt(KR).count("Not linked") == 1 and txt(KR + " td.tpt-io-td") == "",
+           "1. a client not linked: 'Not linked' once, on the client line; no state line or In Tally mark repeating it (%s)" % txt(KR)[:120])
+        ok(E("() => { const l = document.querySelector('#app label[for=tpf-sort]'), s = document.getElementById('tpf-sort'); return !!l && !!s && s.matches('select[data-tpf-sort=bar]'); }"), "1. the Sort label names its select")
+        ok(n("#app [data-tpf] .tpf-bar select[data-tpf-view]") == 1 and n("#app .tpt-head [data-tpf-views]") == 0, "1. View and Save view in the filter bar")
+        vis = E("""() => { const e = document.querySelector('#app [data-tsm-table]'); e.scrollIntoView({block: 'start'}); window.scrollBy(0, -80);
+          const v = document.querySelector('#app select[data-tpf-view]'), r = v.getBoundingClientRect(), h = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return h === v || v.contains(h); }""")
+        ok(vis, "1. the View select is not under the sticky Download bar")
+        E("() => window.scrollTo(0, 0)")
 
         print("== 2. a chip")
         click("#app [data-tpf-chip=away]")
@@ -106,6 +117,7 @@ def main():
         ok(n("#app [data-tpf-panel]") == 0 and pg.get_attribute("#app [data-tpf-toggle]", "aria-expanded") == "false", "3. closed at first")
         click("#app [data-tpf-toggle]")
         ok(n("#app [data-tpf-panel]") == 1 and pg.get_attribute("#app [data-tpf-toggle]", "aria-expanded") == "true", "3. Filters opens it")
+        ok(pg.get_attribute("#app [data-tpf-panel]", "role") == "region" and pg.get_attribute("#app [data-tpf-panel]", "aria-modal") is None, "3. a wide screen: a region of the card, not a dialog")
         groups = E("() => [...document.querySelectorAll('#app [data-tpf-group]')].map(g => g.querySelector('legend').textContent)")
         ok(groups == ["Masters", "Entries", "Last entry received", "In Tally", "Tally computer"], "3. its five groups (%s)" % groups)
         o = opts()
@@ -212,6 +224,18 @@ def main():
         click("#app [data-tpf-remove]")
         ok(not any(v.startswith("saved:") for v in vopts()) and E("() => JSON.parse(localStorage.getItem(Object.keys(localStorage).find(k => k.startsWith('fincom:tally-views:'))))") == [], "6. Remove view: gone (%s)" % vopts())
         click("#app [data-tpf-clear]:not([data-tpf-clear=sheet])"); sort("need")
+        # a view kept by an older page: a chip and a sort this page does not know are left out
+        E("""() => { const k = Object.keys(localStorage).find(k => k.startsWith('fincom:tally-views:')); localStorage.setItem(k, JSON.stringify([{name: 'Old view', f: {chip: 'gone', fen: ['up', 'nope'], sort: 'bogus', dir: 7}}, {name: '', f: {}}, 'x'])); S.tsm = null; render(); }""")
+        pg.wait_for_timeout(450)
+        ok([v for v in vopts() if v.startswith("saved:")] == ["saved:Old view=Old view"], "5. a stored view kept, the broken ones dropped (%s)" % vopts())
+        pg.select_option("#app select[data-tpf-view]", "saved:Old view"); pg.wait_for_timeout(450)
+        ok(chips()["all"][2] == "true" and pg.input_value("#app select[data-tpf-sort=bar]") == "need" and tags() == ["Entries: Up to date"], "5. its unknown chip and sort left out, its known choice kept (%s)" % tags())
+        click("#app [data-tpf-remove]"); click("#app [data-tpf-clear]:not([data-tpf-clear=sheet])")
+        # no firm known yet: no Save view (never a key shared by every firm)
+        E("() => { window.__firm = Cloud.st.firm; Cloud.st.firm = ''; S.tsm = null; render(); }"); pg.wait_for_timeout(450)
+        ok(n("#app [data-tpf-save]") == 0 and n("#app select[data-tpf-view]") == 1 and E("() => Object.keys(localStorage).filter(k => /^fincom:tally-views:(local)?$/.test(k)).length") == 0, "5. no firm known: no Save view, nothing stored under a shared key")
+        E("() => { Cloud.st.firm = window.__firm; S.tsm = null; render(); }"); pg.wait_for_timeout(450)
+        ok(n("#app [data-tpf-save]") == 1, "5. the firm known again: Save view")
         E("() => { window.__ls = [Storage.prototype.getItem, Storage.prototype.setItem]; Storage.prototype.getItem = () => { throw new Error('blocked'); }; Storage.prototype.setItem = () => { throw new Error('blocked'); }; S.tsm = null; render(); }")
         pg.wait_for_timeout(450)
         ok(n(ROWS) == 4 and vopts()[:1] == ["all=All clients"], "6. no browser storage: the page and its views all the same")
@@ -274,6 +298,12 @@ def main():
         ok(txt("#app [data-tpf-show]") == "Show 1 client", "9. it follows the filters (%s)" % txt("#app [data-tpf-show]"))
         click("#app [data-tpf-show]")
         ok(n("#app [data-tpf-panel]") == 0 and names() == [ORBIT], "9. Show closes the sheet (%s)" % names())
+        click("#app [data-tpf-toggle]")
+        dg = E("() => { const p = document.querySelector('#app [data-tpf-panel]'), a = document.activeElement; return [p.getAttribute('role'), p.getAttribute('aria-modal'), a && a.hasAttribute('data-tpf-sheet-title'), getComputedStyle(document.documentElement).overflow]; }")
+        ok(dg == ["dialog", "true", True, "hidden"], "9. the sheet: a modal dialog, its heading focused, the page behind not scrolling (%s)" % dg)
+        pg.keyboard.press("Escape"); pg.wait_for_timeout(450)
+        af = E("() => [!!document.querySelector('#app [data-tpf-panel]'), !!(document.activeElement && document.activeElement.hasAttribute('data-tpf-toggle')), getComputedStyle(document.documentElement).overflow]")
+        ok(af[0] is False and af[1] and af[2] != "hidden", "9. Escape closes it, focus back on Filters, the page scrolls again (%s)" % af)
         sw = E("() => document.documentElement.scrollWidth")
         ok(sw <= 392, "9. still no sideways scroll (%d)" % sw)
         br.close()
