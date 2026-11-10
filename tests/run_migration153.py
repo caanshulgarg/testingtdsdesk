@@ -18,7 +18,7 @@ server/tally-cloud/migration-151-cloud-calc-1.sql when this branch has it, else 
      wanted again during its run, drops it otherwise; too big shown by gst_calc_cached
   5. the timer: no pg_cron here, so none is made (the migration says so and runs)
   The version counts exactly the work keys of server/_shared/gst3bprint.js's GST3B_KEYS: each one moves it, another does not"""
-import os, re, sys, json, subprocess
+import os, re, sys, json, subprocess, time
 HERE = os.path.dirname(os.path.abspath(__file__)); ROOT = os.path.join(HERE, ".."); sys.path.insert(0, HERE)
 import pg_stand
 M153 = os.path.join(ROOT, "server", "gst-run", "migration-153-gst-cloud.sql")
@@ -191,12 +191,23 @@ try:
     ok([x["client_id"] for x in db.rows("select * from gst_calc_take(1)")] == ["q1"], "runs over 2 minutes old no longer count: taken again, first wanted first")
     db.sql("delete from gst_calc_queue")
     ok(db.one("select gst_calc_held(77)") == "f", "no recorder queue here (migration 47): nothing held")
-    db.sql("create schema if not exists pgmq; create table if not exists pgmq.q_tally_recorder (msg_id bigint primary key, message jsonb); insert into pgmq.q_tally_recorder values (77, '{}')")
+    db.sql("create schema if not exists pgmq; create table if not exists pgmq.q_tally_recorder (msg_id bigint primary key, enqueued_at timestamptz not null default now(), message jsonb); insert into pgmq.q_tally_recorder (msg_id, message) values (77, '{}')")
     ok(db.one("select gst_calc_want_book('%s', 'queued', 77)" % BK) == "f" and db.one("select after_msg from gst_calc_queue where client_id = 'c1'") == "77" and not db.rows("select * from gst_calc_take(1)"),
        "lines queued for the drain (message 77 waiting): no run started, not taken while it waits")
     ok(db.one("select gst_calc_want('%s', 'c1', 'asked')" % F) == "f" and not db.rows("select * from gst_calc_take(1)"), "a member's miss meanwhile: still waits for the drain")
     db.sql("delete from pgmq.q_tally_recorder where msg_id = 77")     # the drain applied it (archived)
     ok([x["client_id"] for x in db.rows("select * from gst_calc_take(1)")] == ["c1"], "the drain has applied them: taken")
+    db.sql("delete from gst_calc_queue"); db.sql("insert into pgmq.q_tally_recorder (msg_id, enqueued_at, message) values (78, now() - interval '16 minutes', '{}')")
+    db.sql("select gst_calc_want_book('%s', 'queued', 78)" % BK)
+    ok(db.one("select gst_calc_held(78)") == "f" and [x["client_id"] for x in db.rows("select * from gst_calc_take(1)")] == ["c1"], "a message waiting over 15 minutes (the drain stopped): never held longer, taken")
+    db.sql("delete from gst_calc_queue"); db.sql("insert into pgmq.q_tally_recorder (msg_id, message) values (79, '{}'), (80, '{}')")
+    # two first wants at once, in two sessions: the first's new row not committed yet, the second finds none, inserts,
+    # waits on the first, then meets its row (on conflict): its message kept, not lost
+    import threading
+    a = threading.Thread(target=lambda: db.sql("begin; select gst_calc_want('%s', 'r1', 'queued', null, 79); select pg_sleep(1.5); commit;" % F)); a.start(); time.sleep(0.5)
+    w2 = db.one("select gst_calc_want('%s', 'r1', 'queued', null, 80)" % F); a.join()
+    ok(w2 == "f" and db.one("select after_msg || ':' || (asked_at >= first_wanted) || ':' || (wanted_at <= now()) from gst_calc_queue where client_id = 'r1'") == "80:true:true",
+       "two first wants at once (two sessions): the later message kept (%s), asked again, due no later" % db.one("select after_msg from gst_calc_queue where client_id = 'r1'"))
     db.sql("delete from gst_calc_queue"); db.sql("select gst_calc_want('%s', 'e1', 'asked')" % F); db.sql("update gst_calc_queue set wanted_at = now() - interval '5 minutes'")
     db.sql("select gst_calc_want('%s', 'e1', 'asked')" % F)
     ok(db.one("select wanted_at < now() - interval '4 minutes' from gst_calc_queue where client_id = 'e1'") == "t", "a want never puts off a client already due")

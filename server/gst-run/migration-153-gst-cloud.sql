@@ -172,12 +172,13 @@ begin
 end $function$;
 
 -- recorder lines on tally_recorder's queue (migration 47) not applied yet: the message p_msg is still there (the drain
--- archives it once applied, or once it stops trying). False where there is no such queue
+-- archives it once applied, or once it stops trying), sent within the last 15 minutes (never held longer: a drain stopped
+-- or a message left behind does not hold the client for ever). False where there is no such queue
 create or replace function public.gst_calc_held(p_msg bigint)
 returns boolean language plpgsql stable security definer set search_path to 'public', 'pg_temp' as $function$
 begin
   if p_msg is null or to_regclass('pgmq.q_tally_recorder') is null then return false; end if;
-  return exists (select 1 from pgmq.q_tally_recorder m where m.msg_id = p_msg);
+  return exists (select 1 from pgmq.q_tally_recorder m where m.msg_id = p_msg and m.enqueued_at > now() - interval '15 minutes');
 end $function$;
 
 -- the queue: a client wanted. wanted_at is when it is due: now, never later than it was (a want never puts off one
@@ -195,7 +196,9 @@ begin
   select * into q from gst_calc_queue where firm_id = p_firm and client_id = p_client for update;
   if not found then
     insert into gst_calc_queue (firm_id, client_id, why, wanted_at, first_wanted, asked_at, after_msg)
-    values (p_firm, p_client, coalesce(p_why, 'asked'), now(), now(), now(), p_after) on conflict do nothing;
+    values (p_firm, p_client, coalesce(p_why, 'asked'), now(), now(), now(), p_after)
+    on conflict (firm_id, client_id) do update set why = excluded.why, asked_at = now(), wanted_at = least(gst_calc_queue.wanted_at, now()),
+       after_msg = case when excluded.after_msg is null then gst_calc_queue.after_msg else greatest(coalesce(gst_calc_queue.after_msg, 0), excluded.after_msg) end;
     return p_after is null;
   end if;
   if q.too_big and (q.ran_at is null or q.ran_at < now() - interval '1 day' or (p_rev is not null and p_rev is distinct from q.rev)) then
