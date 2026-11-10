@@ -3,7 +3,7 @@
 Reviewers: the session that built it (a self-review against the owner's rules), after the independent review of
 f1b3e700b (seven points; all addressed below). The coordinator reviews again.
 
-Range: ff86083bf..85d478c14 (origin/staging-next, which holds released 2.5.11, to this build)
+Range: ff86083bf..7e46a9dc1 (origin/staging-next, which holds released 2.5.11, to this build)
 
 (bridge-go/: fastvch.go (liveKeepInv2512 kept by the strip only, fastEmit's order, fastVoucherModeItems, fastHasItems /
 fastOKNoInv), batch249.go (FinComVoucherBatch's FETCH 2.5.11's again; pullKeep), daypull.go (pullHoldEntry,
@@ -80,6 +80,19 @@ Cloud: tests/run_migration154.py (pg_stand: held keeps the day open with the pla
 an update tries again from 1; a retry that reads clears it; an upload at the AlterID settles it, an older copy does not;
 Try again now; another firm refused; twice safe); tests/run_period_ingest.py section 5 (held cleaned and kept; [] clears;
 a cloud without 154; the release on a version change).
+
+## 5. The second independent review (five points, fixed)
+
+- M1 (TallyFetch.jsx): an upload line marked "held" is hidden only when the held list loaded and names that day; a list
+  that cannot be read (a cloud without migration 154) leaves every upload line on the page.
+- M2 (range2512.go): a range stopped at 2 s that Tally has not finished within TallyAbandonWaitSec, or whose end cannot be
+  watched, stops the company as the group read does (never a second request at Tally); with TallyAbandonMaxSec 0 no
+  range is asked at all (TestR2512RangeStoppedNotFinishedStopsCompany, TestR2512NoRangeWhenTallyEndNotWatched).
+- L3: Tally's window held 2 s during a range stops the company, as for one day (TestR2512RangeWindowHeldStopsCompany).
+- L4: a range-off.json that is there but cannot be read keeps ranges off for every company, is logged and never written
+  over; a readable one keeps its other entries, written through a temp file and a rename (TestR2512RangeOffFileUnreadable).
+- L5 (migration 154, still add-only): tally_period_held_settle also drops a held entry the day's latest list from Tally no
+  longer names (deleted or moved in Tally); run_migration154.py check 7.
 
 ## Verdict
 

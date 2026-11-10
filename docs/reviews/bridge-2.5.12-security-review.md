@@ -2,7 +2,7 @@
 
 Reviewers: the session that built it (self-review), after the independent review of f1b3e700b.
 
-Range: ff86083bf..85d478c14 (origin/staging-next, which holds released 2.5.11, to this build)
+Range: ff86083bf..7e46a9dc1 (origin/staging-next, which holds released 2.5.11, to this build)
 
 ## Requests to Tally
 
@@ -28,7 +28,8 @@ Range: ff86083bf..85d478c14 (origin/staging-next, which holds released 2.5.11, t
 ## Files
 
 - New: sync\range-off.json in the bridge's own data folder (company names and a reason), written when a range check
-  finds a difference.
+  finds a difference. Written only through a temp file and a rename, its other entries kept; never written over when it
+  cannot be read (then ranges stay off for every company).
 
 ## Verdict
 

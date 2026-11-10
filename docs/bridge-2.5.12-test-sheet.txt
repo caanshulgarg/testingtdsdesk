@@ -29,7 +29,9 @@ migration 154 and the new tally-ingest for point 2 (with the old cloud a held en
     first such request of each company in each run is only a check: the same days are then read one by one and
     compared, and any difference switches it off for that company for good. A request that is cut, has a Tally error,
     does not add up or takes over 2 seconds is not used and stops nothing: as when Tally is busy, the bridge waits and
-    reads that company one day at a time for the rest of the run. An entry dated outside the days asked is taken as
+    reads that company one day at a time for the rest of the run. If Tally has not finished a request that took
+    over 2 seconds within the usual wait, or its window stops answering for 2 seconds, the older-entries read of that
+    company stops exactly as for a slow one-day list. An entry dated outside the days asked is taken as
     Tally not applying the date, exactly as for one day. Only days FinCom handed out that follow each other are put
     together.
  Also (the review's point 6, accepted): the same reading applies to entries as they are saved in Tally (the live
