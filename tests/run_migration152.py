@@ -91,6 +91,12 @@ GROUPS = {"Current Assets": "", "Current Liabilities": "", "Sales Accounts": "",
 # TallyRead.primaryOf tests the raw "&#4; Primary", which is no Primary: Indirect Incomes is then no primary group here,
 # and on these books (from 1 April) the openings under it do NOT move to Profit & Loss A/c (the review of 152, F1)
 GROUPS["Indirect Incomes"] = "&#4; Primary"
+# two groups each other's parent (TallyRead.primaryOf goes round them to its limit of 30 names and gives the last; the path
+# stops at 15, ledGroupPath's): from "Loop Income" the 15th name is Loop Income and the 30th DIRECT INCOMES (a nominal
+# group: its ledger's opening moves); from "DIRECT INCOMES" the other way round (it stays). DIRECT INCOMES, not a Sales
+# group: "SALES ACCOUNTS" would share its key with the books' "sales accounts" variant and move Sales Interstate's path
+GROUPS["Loop Income"] = "DIRECT INCOMES"
+GROUPS["DIRECT INCOMES"] = "Loop Income"
 def chain(parent):
     out, p = [], parent
     while p and len(out) < 15: out.append(p); p = GROUPS.get(p, "")
@@ -119,7 +125,7 @@ def make_book(seed, n_v, n_cust, n_sup, n_exp, start, end):
     # nominal one): under the variant "sales accounts" (found by namesKey: moves), under Indirect Incomes (its parent the
     # raw "&#4; Primary": does not move), under a parent written "Indirect Expenses&#13;" (cleaned: moves)
     s_loc, s_int = led("Sales Local", "Sales Accounts"), led("Sales Interstate", "sales accounts", 4321000);
-    led("Office Rent Accrued Head", "Indirect Expenses&#13;", -555500); svc = led("Service Income", "Direct Incomes"); pur = led("Purchase Goods", "Purchase Accounts")
+    led("Office Rent Accrued Head", "Indirect Expenses&#13;", -555500); led("Loop Commission", "Loop Income", 777700); led("Loop Fee", "DIRECT INCOMES", 888800); svc = led("Service Income", "Direct Incomes"); pur = led("Purchase Goods", "Purchase Accounts")
     cg, sg, ig = led("Output CGST", "Duties & Taxes"), led("Output SGST", "Duties & Taxes"), led("Input IGST", "Duties & Taxes")
     ig07, ig27 = led("07 IGST Output", "Duties & Taxes"), led("27 IGST Output", "Duties & Taxes")
     gcash = led("GST Electronic Cash", "Duties & Taxes"); gint = led("GST Late Fee", "Indirect Expenses")
@@ -495,10 +501,15 @@ try:
         so = {r["name"]: P(r["open"]) for r in db.rows("select name, open from tally_calc_led(%s) where in_master" % q(B))}
         bo = {n: P(v) for n, v in br["opens"].items()}
         dif = sorted((n, bo.get(n), so.get(n)) for n in set(so) | set(bo) if bo.get(n) != so.get(n))
-        moved = {n: (L[n][1], so.get(n)) for n in ("Sales Interstate", "Office Rent Accrued Head", "Interest Received") if n in L}
-        ok(not dif and (not groups or (so.get("Sales Interstate") == 0 and so.get("Office Rent Accrued Head") == 0 and so.get("Interest Received") == 1234500)),
-           "%s: every opening as the browser's (%d masters; Profit & Loss A/c %s; Sales Interstate, Office Rent Accrued Head moved, Interest Received not: %s) %s"
-           % (label, len(so), so.get("Profit & Loss A/c"), moved, dif[:4]))
+        moved = {n: (L[n][1], so.get(n)) for n in ("Sales Interstate", "Office Rent Accrued Head", "Interest Received", "Loop Commission", "Loop Fee") if n in L}
+        expect = {"Sales Interstate": 0, "Office Rent Accrued Head": 0, "Interest Received": 1234500, "Loop Commission": 0, "Loop Fee": 888800} if groups else {n: L[n][1] for n in moved}
+        ok(not dif and all(so.get(n) == v for n, v in expect.items()),
+           "%s: every opening as the browser's (%d masters; Profit & Loss A/c %s; %s: Sales Interstate, Office Rent Accrued Head, Loop Commission moved, Interest Received, Loop Fee not: %s) %s"
+           % (label, len(so), so.get("Profit & Loss A/c"), "groups read" if groups else "no groups: none moved", moved, dif[:4]))
+        if groups:
+            # the cycle: the path at 15 names, the raw chain to 30 (its 15th and 30th names differ)
+            pth = {r["name"]: r["path"] for r in db.rows("select name, cardinality(path) as path from tally_calc_led(%s) where name in ('Loop Commission', 'Loop Fee')" % q(B))}
+            ok(pth == {"Loop Commission": "15", "Loop Fee": "15"}, "%s: round two groups, the path stops at 15 names (%s)" % (label, pth))
         # the variants and the book with no groups read: the parties the groups make customers and suppliers, as the browser
         got = {r["ledger"] for r in db.rows("select ledger from tally_calc_bal(%s, array['2026-03-31']::date[]) where deb" % q(B))}
         # Audit.isDebtor on the browser's path: the parent cleaned, then (groups read) the groups up by ledLook

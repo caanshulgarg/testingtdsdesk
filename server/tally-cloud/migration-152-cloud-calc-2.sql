@@ -40,7 +40,7 @@
 -- (create or replace): tally_calc_nclean and tally_calc_nkey, as server/_shared/names.js (the final review of 151:
 -- every numeric entity, JavaScript's white space); tally_calc_led, whose primary group (for the 1 April openings) is now
 -- read from the raw group names as TallyRead.primaryOf reads them, so the cleaner names do not move openings the
--- browser leaves; and tally_calc_version (CALC_V 152.2 for both, and the work 152's parts read, so no kept answer
+-- browser leaves; and tally_calc_version (CALC_V 152.3 for both, and the work 152's parts read, so no kept answer
 -- outlives a change to it). Nothing else of 151 changes.
 -- Each function sets jit off (on a plan the planner costs high, JIT compiling took half a second before the first row on
 -- 10,000 ledgers), the heavy ones work_mem 32MB (the period's lines sorted in memory), and the line reader no nested
@@ -133,15 +133,16 @@ language sql stable security definer set search_path to 'public', 'pg_temp' as $
   ml as materialized (select ml0.name, ml0.open, pc.par from ml0 join pc on pc.parent = ml0.parent),
   -- ledGroupPath from each parent the ledgers have (a few dozen), at most 15 names
   -- beside the path, the raw chain TallyRead.primaryOf walks: the parent as b.under keeps it (cleaned), then each group's
-  -- parent as ledLook(groups, p) gives it, before any cleaning
+  -- parent as ledLook(groups, p) gives it, before any cleaning; at most 30 names (primaryOf's own limit: two groups each
+  -- other's parent by their keys go round to it), the path still at most 15 (ledGroupPath's)
   walk (st, cur, path, raw, n) as (
     select z.par, z.par, array[z.par], array[z.par], 1 from (select distinct ml.par from ml where ml.par <> '') z where (select y from hasg)
     union all
-    select w.st, nx.p, w.path || nx.p, w.raw || q.raw, w.n + 1
+    select w.st, nx.p, case when w.n < 15 then w.path || nx.p else w.path end, w.raw || q.raw, w.n + 1
       from walk w
       cross join lateral (select coalesce((select grp.parent from grp where grp.name = w.cur), (select gk.parent from gk where gk.k = tally_calc_nkey(w.cur)), '') as raw) q
       cross join lateral (select case when q.raw ~ '[&\r\n]' and not exists (select 1 from grp where grp.name = q.raw) then tally_calc_nclean(q.raw) else q.raw end as p) nx
-     where nx.p <> '' and w.n < 15),
+     where nx.p <> '' and w.n < 30),
   wp0 as (select distinct on (walk.st) walk.st, walk.path, walk.raw from walk order by walk.st, walk.n desc),
   -- and its primary group, TallyRead.primaryOf (src/js/18, next-mis-speed b33f4a180): along the raw chain, the name just
   -- before the first that is empty or /^\W*Primary$/i, as it is (raw: "&#4; Primary" is no Primary there, so the
@@ -155,8 +156,9 @@ language sql stable security definer set search_path to 'public', 'pg_temp' as $
   yo as (select (extract(month from bk.from_date) = 4 and extract(day from bk.from_date) = 1 and (select y from hasg)) as on_ from bk),
   m2 as (select m1.name, m1.open, m1.path,
            (select on_ from yo) and m1.name <> 'Profit & Loss A/c' and m1.open <> 0
-             -- String(primaryOf).trim().toLowerCase(): JavaScript's trim
-             and lower(regexp_replace(coalesce(m1.prim, ''), '^[\t\n\v\f\r \u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]+|[\t\n\v\f\r \u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]+$', '', 'g'))
+             -- String(primaryOf).trim().toLowerCase(): JavaScript's trim, and capitals made small as toLowerCase makes those of
+             -- the reserved names (translate: no locale's rules)
+             and translate(regexp_replace(coalesce(m1.prim, ''), '^[\t\n\v\f\r \u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]+|[\t\n\v\f\r \u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]+$', '', 'g'), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz')
                in ('sales accounts', 'purchase accounts', 'direct incomes', 'direct expenses', 'indirect incomes', 'indirect expenses') as moves
            from m1),
   mv as (select coalesce(sum(m2.open) filter (where m2.moves), 0) as amt, count(*) filter (where m2.moves) as n from m2),
@@ -190,7 +192,7 @@ revoke all on function public.tally_calc_led(uuid) from public, anon, authentica
 grant execute on function public.tally_calc_led(uuid) to service_role;
 
 -- ---------------------------------------------------------------- the data version (151's, replaced: the same signature)
--- 151's version with FinCom's working raised (CALC_V 152.2: the names above and the primary group; nothing kept under 151.3 is served after
+-- 151's version with FinCom's working raised (CALC_V 152.3: the names above and the primary group; nothing kept under 151.3 is served after
 -- them), and with what 152's parts read besides the entries and the ledger list, so an answer kept with them is worked
 -- out again when one changes: FinCom's work kept for the client (client_book_items ledInfo and msme: the MSME types; fs:
 -- the accounts' line chosen by hand and the manufacturing switch; misCfg: the MSME days; challans) and the client's
@@ -198,7 +200,7 @@ grant execute on function public.tally_calc_led(uuid) to service_role;
 create or replace function public.tally_calc_version(p_book uuid)
 returns text language sql stable security definer set search_path to 'public', 'pg_temp' as $function$
   -- every part in its place: a part with no value is the marker ~ (concat_ws would drop it and shift the rest)
-  select md5(array_to_string(array['CALC_V=152.2', b.days_at::text, b.ledgers_at::text, b.from_date::text,
+  select md5(array_to_string(array['CALC_V=152.3', b.days_at::text, b.ledgers_at::text, b.from_date::text,
            (select array_to_string(array[count(*), max(v.alter_id), count(v.deleted_at), count(*) filter (where v.cancelled), count(*) filter (where v.optional)]::text[] || max(v.deleted_at)::text, ':', '~')
               from tally_vouchers v where v.book_id = b.book_id),
            (select array_to_string(array[count(*), sum(hashtext(array_to_string(array[l.name, l.parent, l.open::text, l.chain::text, l.primary_group, l.merged_into, (l.deleted_at is null)::text], '~', '^'))::bigint)]::text[], ':', '~')

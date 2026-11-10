@@ -358,6 +358,9 @@ import build
 HTML = os.path.join(SCRATCH, "index-m151.html")
 open(HTML, "w").write(build.assemble())
 
+# M151_ONLY=e2e: only section 6 (the real handler end to end on the 40,000-entry book, against the browser's figures)
+E2E = os.environ.get("M151_ONLY") == "e2e"
+class E2EDone(Exception): pass
 db = pg_stand.start(int(os.environ.get("PG151_PORT") or 31151))
 try:
     db.sql("""
@@ -385,6 +388,7 @@ try:
 
     for label, seed, n_v, n_c, n_s, n_e, start, end, timed in (("small", 151, 2500, 60, 40, 30, datetime.date(2025, 5, 1), datetime.date(2026, 10, 31), False),
                                                                 ("40k", 40151, 40000, 4000, 3000, 2950, datetime.date(2025, 5, 1), datetime.date(2026, 10, 31), True)):
+        if E2E and not timed: continue          # M151_ONLY=e2e: the 40,000-entry book's end-to-end section alone
         B, cid = "b1510000-0000-0000-0000-%012d" % seed, "client-%d" % seed
         t0 = time.time(); L, V = make_book(seed, n_v, n_c, n_s, n_e, start, end)
         months = month_ends(start, end); dates = [eom(m).isoformat() for m in months] + ["2025-05-01", "2025-08-17", "2026-03-31", "2026-04-01", "2026-10-30"]
@@ -396,7 +400,7 @@ try:
         br = run_browser(label, browser_books(cid, L, V, start, end), [d.replace("-", "") for d in dates], months, [d.replace("-", "") for d in ageing])
         print("   the browser's engine in Node: %.1f s (balances %d ms, tie-out %d ms, ageing %d ms)" % (time.time() - t0, br["ms"]["balances"], br["ms"]["tieout"], br["ms"]["ageing"]))
         store_map(db, F, cid, br["map"])
-        compare(db, label, B, cid, br, dates, months, ageing)
+        if not E2E: compare(db, label, B, cid, br, dates, months, ageing)
         if timed and DENO:
             # 6. the real handler, end to end, on this book
             outp = os.path.join(SCRATCH, "now-pg.json")
@@ -416,6 +420,7 @@ try:
                    "6. mis-run now end to end: %d balances (one value, not 1,000 rows), both ageings as the browser's; %d ms, asked again: %s, %d ms (%s %s)"
                    % (len(R0["balances"]["at"]), E["firstMs"], "partial (152 not here), not kept: %d kept rows" % kept_rows if part else "kept", E["secondMs"], calls, bad[:2]))
         elif timed: print("   6. skipped: no deno (DENO=... or on PATH)")
+        if E2E: raise E2EDone()
         if timed:
             T = timing(db, B, cid, dates, months, ageing[-1])
             for k, v in T.items(): print("   %-34s %8.1f ms" % (k, v))
@@ -513,6 +518,8 @@ try:
     TT = json.loads(db.one("select tally_tieout(%s, array[%s])::text" % (q(cid), ",".join(q(m) for m in MONTHS[books[0][0]] + MONTHS[books[1][0]])), uid=U))
     ok(all(TT["books"][m] == B for B in MONTHS for m in MONTHS[B]) and all(P(TT["months"][m]["tb_total"]) == P(BR[B]["tie"][m]["tb_total"]) and P(TT["months"][m]["profit"]) == P(BR[B]["tie"][m]["profit"]) for B in MONTHS for m in MONTHS[B]),
        "4b. one tie-out over both years: each month from its own book, as the browser on that book")
+except E2EDone:
+    pass
 except RuntimeError as e:
     ok(False, "the run: %s" % str(e)[-1500:])
 finally:
