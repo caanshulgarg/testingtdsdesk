@@ -126,6 +126,16 @@ top-level objects; the rest of each object (screens, files, buttons) is put on i
 (tests/harness.js loads those blocks with their object). Plain JavaScript with no imports; it reads `S` and `CO()` and
 names.js's functions as globals at call time, and the app's perRender / reactScope / IN_RENDER / RENDER_GEN / ITCDec /
 whoAmI / TDSTally / GSTX only through `typeof`. A change to the 3B is made here, once. `server/gst-run` imports it (engine.js) and is
-deployed with `../_shared/gst3b.js`, `../_shared/names.js`, `../_shared/cors.ts` and `../_shared/firmgate.ts`; verify_jwt
-off (it checks the member's token itself); it needs migrations 151 and 153. `node tests/run_gst_cloud.js` checks the
+deployed with `../_shared/gst3b.js`, `../_shared/gst3bprint.js`, `../_shared/names.js`, `../_shared/cors.ts` and
+`../_shared/firmgate.ts`; verify_jwt off (it checks the member's token, the service key or the timer's key itself); it
+needs migrations 151 and 153. It never works a month out while a page waits: a member's request reads what is kept
+(or queues the client), and background runs (the queue of migration 153, filled by its triggers and by misses; a timer
+calling `{action: "warm"}` with x-cron-key, not set up yet) work out a month or two each from the credit kept for the
+month before; it reads a book's entries in one compact answer (`gst_calc_rows`). Measured (tests/run_gst_cloud.js): a
+run on a small client takes tens of ms of CPU; on a 40,000-entry book about 0.9 to 1.25 s a month (under the 2 s limit, over
+the 1 s target: the year-wide work a month needs, 2B matching, rule 37's bills, advances, the ledger list, is done again
+in every run), with about 150 MB alive at the fullest. `gst3bprint.js` is the fingerprint of a 3B's inputs, made the same way from the app's open books and from
+the cloud's (an ES module, not in legacy.js): a page may show the cloud's 3B only when the two are the same and nothing
+is pending. After a change to gst-run's files, move `REV` in server/gst-run/engine.js and write
+`tests/gst_cloud_rev.json` again (`GST_REV_WRITE=1 node tests/run_gst_cloud.js`). `node tests/run_gst_cloud.js` checks the
 cloud's 3B is the app's, box for box; `python3 tests/run_migration153.py` the version it is kept by.

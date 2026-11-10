@@ -6,14 +6,25 @@
 //                          cloud copy has (each ledger's group, GSTIN and PAN: BookSrc.ledgersInto; Tally's groups), the
 //                          entries (tally_vouchers / tally_lines / tally_bills: BookSrc.apply), meta as a Day Book read
 //                          sets it, and the ledger list (Books.mapLedgers on the saved list, then LedMaster.refresh)
-//   run(rows, asks)        the 3B of each month asked ([{reg, ym}]) and of every month before it in the books (the credit
-//                          carried in is worked out month by month, as the app does), with the state the engine reads
-//                          (S, CO(), the 2B matching kept by gst-2b-match for M2B)
+//   step(rows, reg, kept, o)  one background run's work: the first months of the books not kept yet (kept: {ym: result}
+//                          worked out on the same version and engine), at most o.max (2) months and about o.budget ms
+//                          (600), each starting from the credit the month before carried (taken from what is kept, so
+//                          no earlier month is worked out again). Each month is worked out as the app works it out with
+//                          that month on screen: S.gstYm the month, the 2B matching of its year (gst-2b-match's run for
+//                          the month's GSTIN and year) in M2B.st. Each month keeps the fingerprint of its inputs (fp,
+//                          server/_shared/gst3bprint.js). -> {months: [{ym, result}], more, all: the books' months}
 //   boxes(t)               a 3B's figures as kept: every box, with the lists of documents behind them counted, not kept
-// The engine reads S and CO() as globals (as in the app): run() sets them, works everything out at once (no await in
+//   ENGINE                 a hash of the engine's own text (gst3b.js, names.js, this file's books / step / boxes) and REV
+//                          (data.ts and handler.ts are counted through REV: tests/run_gst_cloud.js stops when one of the
+//                          files changes and REV and tests/gst_cloud_rev.json do not)
+// The engine reads S and CO() as globals (as in the app): step() sets them, works its months out at once (no await in
 // between, so two requests never share them) and puts them back.
 import * as names from "../_shared/names.js";
 import * as E from "../_shared/gst3b.js";
+import { gst3bPrint } from "../_shared/gst3bprint.js";
+
+// the revision of the function around the engine (data.ts, handler.ts): moved by hand with tests/gst_cloud_rev.json
+export const REV = "153.2";
 
 const G = globalThis;
 // what the app's program has around the engine: names.js (put at its head by build.py too)
@@ -63,9 +74,10 @@ export function boxes(t) {
 
 // the engine's own text: a result worked out by another engine is worked out again
 export const ENGINE = (() => {
-  let s = "";
+  let s = REV + "|" + books.toString() + boxes.toString() + step.toString() + gst3bPrint.toString();
   const add = (v) => { if (typeof v === "function") s += v.toString(); else if (v && typeof v === "object") Object.keys(v).sort().forEach((k) => { const x = v[k]; s += k + (typeof x === "function" ? x.toString() : typeof x === "object" && x && !(x instanceof Map) && !(x instanceof WeakMap) ? JSON.stringify(x) : ""); }); };
   Object.keys(E).sort().forEach((k) => add(E[k]));
+  Object.keys(names).sort().forEach((k) => add(names[k]));
   let h = 2166136261 >>> 0, h2 = 5381;
   for (let i = 0; i < s.length; i++) { const c = s.charCodeAt(i); h = Math.imul(h ^ c, 16777619) >>> 0; h2 = ((h2 * 33) ^ c) >>> 0; }
   return "e" + h.toString(16).padStart(8, "0") + h2.toString(16).padStart(8, "0");
@@ -73,42 +85,41 @@ export const ENGINE = (() => {
 
 let GEN = 0;
 // rows: {client, co (the client's record), book, heads, lines, bills, ledgers, groups, items, sales (records rows' data),
-// runs: {"<gstin>|<fy>": run as gst-2b-match shows it}}; asks: [{reg, ym}]
-export function run(rows, asks) {
+// runs: {"<gstin>|<fy>": run as gst-2b-match shows it}}; reg: the state code; kept: {ym: result} current
+export function step(rows, reg, kept, o) {
+  o = o || {}; kept = kept || {};
+  const max = o.max || 2, budget = o.budget || 600, now = o.now || (() => Date.now());
   const was = { S: G.S, CO: G.CO, perRender: G.perRender, IN_RENDER: G.IN_RENDER, RENDER_GEN: G.RENDER_GEN };
-  const t0 = Date.now();
+  const t0 = now();
   try {
     const co = Object.assign({}, rows.co || {}, { id: rows.client });
     const S = { books: null, coId: rows.client, companies: { [rows.client]: co }, sales: { cid: rows.client, list: rows.sales || [] }, gstYm: "" };
     G.S = S; G.CO = (cid) => S.companies[cid || S.coId];
-    const b = books(rows);
-    // the app's figures for one drawing are worked out once (perRender, src/js/01; Books.lines' own keep): the same here,
-    // for one run
-    let memo = new WeakMap();
-    G.IN_RENDER = 1; G.RENDER_GEN = ++GEN;
-    G.perRender = (o, key, fn) => { let m = memo.get(o); if (!m) memo.set(o, m = new Map()); if (m.has(key)) return m.get(key); const v = fn(); m.set(key, v); return v; };
-    const tb = Date.now() - t0;
-    E.GSTR._carry = null; E.GST2B._memo = null; E.GSTAdv._memo = null; E.M2B.st = {};
-    const months = E.GSTR.months(), out = [];
-    for (const a of asks) {
-      const reg = String(a.reg || ""), ym = String(a.ym || "");
-      // M2B reads the year of the month on screen (S.gstYm): here, the month asked
-      S.gstYm = ym; E.M2B.st = {};
-      const gstin = (E.GSTR.gstins(b) || []).find((g) => g.slice(0, 2) === reg) || "", fy = E.M2B.fyOf(ym);
-      const r2b = (rows.runs || {})[gstin + "|" + fy];
+    // the books, made once for every registration of a run (o.books: those step made before, from the same rows)
+    const b = o.books || books(rows), tBooks = now() - t0;
+    S.books = b;
+    // the fingerprint of the inputs, as read (before anything is worked out)
+    const fp0 = o.fp || gst3bPrint(b, rows.sales || [], "");
+    E.GSTR._carry = null; E.GST2B._memo = null; E.GSTAdv._memo = null; E.GSTF._bills = null; E.GSTF._owe = null; E.M2B.st = {};
+    const all = E.GSTR.months(), todo = all.filter((m) => !kept[m]), done = [], have = Object.assign({}, kept);
+    const gstin = (E.GSTR.gstins(b) || []).find((g) => g.slice(0, 2) === reg) || "";
+    for (const m of todo) {
+      if (done.length >= max || (done.length && now() - t0 > budget)) break;
+      // the month on screen: its year's 2B matching, nothing kept from another month but the 3Bs before it (perRender's
+      // "3b|<month>|<reg>": GSTR.creditIn reads the credit the month before carried from it)
+      S.gstYm = m; E.M2B.st = {};
+      const fy = E.M2B.fyOf(m), r2b = (rows.runs || {})[gstin + "|" + fy];
       if (r2b) E.M2B.st[E.M2B.key(reg, fy)] = { run: r2b };
-      // each month asked is one drawing of the 3B screen: nothing kept from the one before
-      E.GST2B._memo = null; E.GSTR._carry = null; memo = new WeakMap(); G.RENDER_GEN = ++GEN;
-      const t1 = Date.now();
-      const done = [];
-      // every month up to the one asked, in order (each one's credit carried into the next)
-      for (const m of months.filter((x) => x <= ym).concat(months.includes(ym) ? [] : [ym])) {
-        const t = E.GSTR.threeB(m, reg);
-        done.push({ reg, ym: m, result: Object.assign(boxes(t), { engine: ENGINE }) });
-      }
-      out.push({ reg, ym, ms: Date.now() - t1, months: done });
+      E.GST2B._memo = null; E.GSTR._carry = null;
+      const memo = new WeakMap(), g = new Map();
+      memo.set(E.GSTR, g);
+      Object.keys(have).forEach((k) => { if (k < m) g.set("3b|" + k + "|" + reg, have[k]); });
+      G.IN_RENDER = 1; G.RENDER_GEN = ++GEN;
+      G.perRender = (obj, key, fn) => { let x = memo.get(obj); if (!x) memo.set(obj, x = new Map()); if (x.has(key)) return x.get(key); const v = fn(); x.set(key, v); return v; };
+      const t = E.GSTR.threeB(m, reg), res = Object.assign(boxes(t), { engine: ENGINE, fp: Object.assign({}, fp0, { run: r2b ? String(r2b.id) : "" }) });
+      have[m] = res; done.push({ ym: m, result: res });
     }
-    return { months, out, booksMs: tb, vouchers: b.vouchers.length };
+    return { months: done, more: all.some((m) => !have[m]), all, vouchers: b.vouchers.length, ms: now() - t0, booksMs: o.books ? 0 : tBooks, books: b, fp: fp0 };
   } finally {
     Object.assign(G, was);
     Object.keys(was).forEach((k) => { if (was[k] === undefined) delete G[k]; });

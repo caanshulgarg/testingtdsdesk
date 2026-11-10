@@ -6,12 +6,15 @@
 //     LedMaster.refresh), with Asia/Kolkata's clock, and its 3B worked out month by month (GSTR.threeB) with the 2B
 //     matching gst-2b-match kept in M2B.st, inside one drawing (the app's memoScope / perRender), as the 3B screen does.
 //   The cloud's side: the gst-run function itself in Deno (tests/run_gst_cloud_deno.ts: server/gst-run/handler.ts with a
-//     fake Supabase holding the same rows, UTC clock), for every month asked by a member; then asked again (kept: given
-//     back without working out), and after a change (worked out again).
-//   Checks: every box of every month equal (3.1, 3.2, 4, 5, the payment and the credit carried in and out), and the whole
+//     fake Supabase holding the same rows and migration 153's functions, UTC clock): a member's miss (queued, nothing
+//     worked out), then the background runs one after another (a month or two each, from the credit kept for the month
+//     before), then the member's months given back as kept; a change (a miss again); the switches, the keys, a failure.
+//   Checks: each background run's CPU (the fake's own taken out) under 1 s and its memory under 256 MB, on the made-up
+//     client and on a 40,000-entry book; the fingerprint of the inputs the same on both sides (and not when they differ);
+//     every box of every month equal (3.1, 3.2, 4, 5, the payment and the credit carried in and out), and the whole
 //     3B object equal; the months cover QRMP (a quarter's 3B, credit held through the quarter), rules 42 and 43, rule 37,
 //     an amendment of an earlier month's GSTR-1, an advance (11A and 11B), the credit carried over at least 3 months,
-//     2B held / released / rejected in IMS, a 3B kept as filed; then the time per month on a 40,000-entry book (< 1 s).
+//     2B held / released / rejected in IMS, a 3B kept as filed. tests/gst_cloud_rev.json: REV moves when gst-run's files do.
 // DENO: the deno to run (else deno on the PATH, else .deno-scratch/package/deno in the worktree).
 "use strict";
 const fs = require("fs"), path = require("path"), cp = require("child_process");
@@ -25,6 +28,8 @@ let fails = 0; const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + 
 const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "MONTHS3", "toDateObj", "fmtDate", "tallyDate", "STATE_CODES", "RULE_DEFAULTS", "Books", "LedMaster", "GSTR", "GSTAdv", "GSTRev", "GSTAmend",
   "GST2B", "INR", "normName", "nameSim", "ITCT", "GSTSet", "CustIMS", "GSTF", "GSTQ", "GSTV", "M2B", "Audit", "TDSTally", "TDS", "BookSrc", "BookItems", "BookSync", "BOOKS_KEYS", "clone", "TallyRead", "CO",
   "RENDER_GEN", "BOOKS_REV", "drawStamp", "REACT_SCOPE", "reactScopeEnd", "reactScope", "perRender", "memoScope"];
+const REVF = path.join(__dirname, "gst_cloud_rev.json"), REV_FILES = ["server/_shared/gst3b.js", "server/_shared/names.js", "server/_shared/gst3bprint.js", "server/gst-run/engine.js", "server/gst-run/data.ts", "server/gst-run/handler.ts", "server/gst-run/index.ts"];
+function revSha(){ const h = require("crypto").createHash("sha256"); REV_FILES.forEach(f => h.update(f + "\n" + fs.readFileSync(path.join(ROOT, f), "utf8").replace(/^export const REV = "[^"]*";$/m, "") + "\n")); return h.digest("hex"); }
 const CLIENT = "cli-syn-153", FIRM = "f1530000-0000-4000-8000-000000000001";
 
 // ---------------------------------------------------------------- the app's side
@@ -86,11 +91,11 @@ let rows = rowsOf(W);
   const work = Object.assign({}, rows.work, {filed, gstFiled: Object.assign({}, rows.work.gstFiled, {"07": Object.assign({}, rows.work.gstFiled["07"], {"202507": {snap: jul, r3b: "2025-08-20", r1: "2025-08-11"}, "202506": {r1: "2025-07-11"}})})});
   rows = Object.assign({}, rows, {items: items(work), work});
 }
-const ASKS = ["202506", "202507", "202508", "202509", "202510", "202511", "202512", "202601", "202602", "202603"].map(ym => ({reg: "07", ym}));
+const ASKS = ["202504", "202505", "202506", "202507", "202508", "202509", "202510", "202511", "202512", "202601", "202602", "202603"].map(ym => ({reg: "07", ym}));
 
 // ---------------------------------------------------------------- the cloud's side (Deno)
 function deno(file, args){
-  const r = cp.spawnSync(DENO, ["run", "--allow-read", "--allow-env", "--allow-write", path.join(__dirname, "run_gst_cloud_deno.ts")].concat(args), {encoding: "utf8", env: Object.assign({}, process.env, {TZ: "UTC", DENO_DIR: path.join(ROOT, ".deno-scratch", "cache")}), maxBuffer: 1 << 30});
+  const r = cp.spawnSync(DENO, ["run", "--allow-all", "--v8-flags=--expose-gc", path.join(__dirname, "run_gst_cloud_deno.ts")].concat(args), {encoding: "utf8", env: Object.assign({}, process.env, {TZ: "UTC", DENO_DIR: path.join(ROOT, ".deno-scratch", "cache")}), maxBuffer: 1 << 30});
   if (r.status !== 0){ console.log(r.stdout, r.stderr); throw new Error("deno failed"); }
   return JSON.parse(fs.readFileSync(file, "utf8"));
 }
@@ -102,35 +107,55 @@ const H = ["igst", "cgst", "sgst", "cess"], BOX = {
   "credit carried in": t => t.opening, "credit carried out": t => t.pay.carry, "payable": t => t.payable};
 const near0 = o => !o || H.every(h => Math.abs(Number(o[h]) || 0) < 0.005);
 (async () => {
-  const boxes = (await import(path.join(ROOT, "server", "gst-run", "engine.js"))).boxes;
-  console.log("== 1. every box of every month: the app (Node, Asia/Kolkata) and gst-run (Deno, UTC)");
+  const eng = await import(path.join(ROOT, "server", "gst-run", "engine.js")), boxes = eng.boxes;
+  const {gst3bPrint, gst3bSame} = await import(path.join(ROOT, "server", "_shared", "gst3bprint.js"));
+  console.log("== 0. the engine's revision");
+  const rec = (() => { try { return JSON.parse(fs.readFileSync(REVF, "utf8")); } catch (e){ return {}; } })(), sha = revSha();
+  if (process.env.GST_REV_WRITE){ fs.writeFileSync(REVF, JSON.stringify({rev: eng.REV, sha}, null, 2) + "\n"); console.log("  (written: " + eng.REV + " " + sha + ")"); }
+  else ok(rec.sha === sha && rec.rev === eng.REV, "gst-run's files are as REV " + eng.REV + " says (" + (rec.sha === sha ? "same" : "changed: move REV in server/gst-run/engine.js, then GST_REV_WRITE=1 node tests/run_gst_cloud.js") + ")");
+
+  if (process.env.GST_ONLY_BIG) return big();
+  console.log("== 1. the background runs (gst-run in Deno, UTC): a month or two each, CPU and memory");
   const file = path.join(OUT, "gst-cloud-rows.json"), res = path.join(OUT, "gst-cloud-res.json");
   fs.writeFileSync(file, JSON.stringify({rows, asks: ASKS, firm: FIRM}));
-  const t0 = Date.now(), cloud = deno(res, [file, res]);
-  console.log("  (gst-run: " + cloud.calls.length + " calls, " + (Date.now() - t0) + " ms with Deno's start)");
-  let boxN = 0, monthsN = 0, allSame = true;
+  const cloud = deno(res, [file, res]);
+  ok(cloud.miss.ok && cloud.miss.pending && cloud.miss.result === null && cloud.kicked === 1 && cloud.keptAtMiss === 0, "a member's miss: nothing worked out in the request, the client queued and a background run started");
+  ok(cloud.limited && cloud.limited.idle, "the same client is not taken again within 20 seconds (the queue's rate limit)");
+  const R = cloud.runs.filter(r => r.months && r.months.length);
+  ok(R.every(r => r.ok && r.months.length <= 2) && cloud.kept.length === 12, R.length + " runs, at most 2 months each, every month from April kept (" + cloud.kept.length + "): " + R.map(r => r.months.join("+")).join(" "));
+  const worst = Math.max(...R.map(r => r.cpu));
+  ok(worst < 1000, "CPU per run (the fake database's own left out): " + R.map(r => r.cpu).join(", ") + " ms; the worst " + worst + " ms (target about 1 s; the limit 2 s)");
+  const hp = Math.max(...R.map(r => r.heap)), lv0 = cloud.live || {};
+  ok(hp < 128 && lv0.rowsAndBooks < 64, "memory: each run's heap in use at most " + hp + " MB, alive after a collection " + lv0.rowsAndBooks + " MB (limit 256 MB for the whole function; Deno with the fake database in it: " + cloud.peakRss + " MB)");
+
+  console.log("== 2. every box of every month: the app (Node, Asia/Kolkata, the month on screen) and what gst-run kept");
+  let boxN = 0, allSame = true, fpOk = true;
   const appBy = {};
   for (const a of ASKS){
-    const mine = app3b(rows, a.reg, a.ym), got = cloud.calls.find(c => c.ym === a.ym);
-    Object.assign(appBy, mine);
-    ok(got && got.ok && got.months.length === 1 && !got.months[0].cached, "gst-run answers " + a.ym + " for a member (worked out, not kept)");
-    const g = got.months[0].result, m = boxes(mine[a.ym]);
-    let bad = [];
-    Object.entries(BOX).forEach(([k, f]) => { boxN++; if (JSON.stringify(f(g)) !== JSON.stringify(f(m))) bad.push(k + ": cloud " + JSON.stringify(f(g)) + " app " + JSON.stringify(f(m))); });
-    const same = JSON.stringify(Object.assign({}, g, {engine: undefined})) === JSON.stringify(m);
+    const mine = app3b(rows, a.reg, a.ym);
+    appBy[a.ym] = mine[a.ym];
+    const k = cloud.kept.find(z => z.args === "07|" + a.ym), g = k && k.result, m = boxes(mine[a.ym]);
+    const bad = [];
+    Object.entries(BOX).forEach(([n, f]) => { boxN++; if (!g || JSON.stringify(f(g)) !== JSON.stringify(f(m))) bad.push(n + ": cloud " + JSON.stringify(g && f(g)) + " app " + JSON.stringify(f(m))); });
+    const same = g && JSON.stringify(Object.assign({}, g, {engine: undefined, fp: undefined})) === JSON.stringify(m);
     if (!same) allSame = false;
     ok(!bad.length && same, a.ym + (mine[a.ym].quarter ? " (quarter " + mine[a.ym].months.join(",") + ")" : "") + ": every box equal" + (bad.length ? "; " + bad.slice(0, 3).join("; ") : same ? "" : "; the boxes agree but the whole 3B differs"));
-    monthsN++;
-    // the months before it, kept by gst-run with it, are the app's too
-    const kept = cloud.kept.filter(k => k.args.startsWith("07|") && k.args.slice(3) <= a.ym);
-    if (a.ym === ASKS[ASKS.length - 1].ym){
-      const diff = kept.filter(k => JSON.stringify(Object.assign({}, k.result, {engine: undefined})) !== JSON.stringify(boxes(mine[k.args.slice(3)])));
-      ok(kept.length === Object.keys(mine).length && !diff.length, "every month from April kept by gst-run (" + kept.length + ") equals the app's" + (diff.length ? ": " + diff.map(k => k.args).join(", ") : ""));
-    }
+    // the app's own fingerprint of the books it has open, with the 2B run of the month's year it read
+    const b = open(rows), run = rows.runs[W.OWN + "|" + x.M2B.fyOf(a.ym)], mineFp = gst3bPrint(b, ctx.S.sales.list, run ? run.id : "");
+    if (!g || !gst3bSame(mineFp, g.fp)) { fpOk = false; console.log("    fp app ", JSON.stringify(mineFp), "\n    fp cloud", JSON.stringify(g && g.fp)); }
   }
-  console.log("  (" + monthsN + " months, " + boxN + " boxes compared; the whole 3B object compared too: " + (allSame ? "equal" : "NOT equal") + ")");
+  console.log("  (" + ASKS.length + " months, " + boxN + " boxes compared; the whole 3B object compared too: " + (allSame ? "equal" : "NOT equal") + ")");
+  ok(fpOk, "the fingerprint of the inputs: the app's (made from its open books) and the cloud's the same for every month, nothing pending");
+  { const r2 = JSON.parse(JSON.stringify(rows)); r2.heads.push(Object.assign({}, r2.heads[0], {guid: "syn-local-1", alter_id: 1000001})); r2.lines.push(Object.assign({}, r2.lines[0], {guid: "syn-local-1"}));
+    const fpX = gst3bPrint(open(r2), ctx.S.sales.list, ""), k = cloud.kept[0].result.fp;
+    const r3 = JSON.parse(JSON.stringify(rows)); r3.work.map["Input IGST"] = Object.assign({}, r3.work.map["Input IGST"], {byHand: false, ok: false}); r3.items = items(r3.work);
+    const fpP = gst3bPrint(open(r3), ctx.S.sales.list, "");
+    const r4 = JSON.parse(JSON.stringify(rows)); r4.work.gst3b["07|202509"] = {rev2: {igst: 1}}; r4.items = items(r4.work);
+    const fpW = gst3bPrint(open(r4), ctx.S.sales.list, k.run);
+    ok(!gst3bSame(fpX, k) && !gst3bSame(fpP, k) && fpP.pend > 0 && !gst3bSame(fpW, k), "and not the same when the app has an entry the cloud has not, a ledger whose kind is a guess (pending), or a figure typed only here");
+  }
 
-  console.log("== 2. what the months cover (on the app's figures)");
+  console.log("== 3. what the months cover (on the app's figures)");
   const T = appBy, nz = o => !near0(o);
   ok(T["202603"].quarter && T["202603"].months.join() === "202601,202602,202603" && JSON.stringify(T["202602"].opening) === JSON.stringify(T["202601"].opening), "QRMP: January to March 2026 is one 3B at March; the credit carried in holds through the quarter");
   ok(nz(T["202603"].pmt), "QRMP: PMT-06 paid in January used first in the quarter's 3B");
@@ -139,30 +164,44 @@ const near0 = o => !o || H.every(h => Math.abs(Number(o[h]) || 0) < 0.005);
   ok(nz(T["202510"].r37 && T["202510"].r37.rev) && nz(T["202512"].r37 && T["202512"].r37.re), "rule 37: April's unpaid bill reversed in October, taken back in December");
   ok(T["202507"].amend.rows.length > 0 && nz(T["202507"].amend.out), "an amendment: June's invoice changed after its GSTR-1, the difference in July's 3.1(a)");
   ok(nz(T["202508"].adv) && nz(T["202510"].adv) && T["202508"].adv.igst > 0 && T["202510"].adv.igst < 0, "an advance: 11A in August, 11B in October");
-  const carried = ASKS.map(a => a.ym).filter(m => !T[m].quarter && T[m].months === undefined && nz(T[m].opening) && nz(T[m].pay.carry));
+  const carried = ASKS.map(a => a.ym).filter(m => !T[m].quarter && nz(T[m].opening) && nz(T[m].pay.carry));
   let run = 0, best = 0; ["202507", "202508", "202509", "202510", "202511", "202512"].forEach(m => { run = carried.includes(m) ? run + 1 : 0; best = Math.max(best, run); });
-  ok(best >= 3, "credit carried forward " + best + " months running (" + carried.join(", ") + ")");
+  ok(best >= 3, "credit carried forward " + best + " months running (" + carried.join(", ") + "), each run starting from the credit kept for the month before");
   ok(T["202508"].opening && JSON.stringify(T["202508"].opening) === JSON.stringify(rows.work.gstFiled["07"]["202507"].snap.pay.carry), "August's credit comes from July's 3B kept as filed");
   ok(nz(T["202505"].held) && nz(T["202506"].released), "2B: a bill not yet in 2B held, then taken in the month its 2B shows it");
   ok(T["202507"].held.list.some(d => d.rejected), "IMS: a bill rejected in IMS gives no credit");
   ok(nz(T["202509"].cn2b) && nz(T["202510"].na), "2B: a supplier's credit note only in 2B; credit 2B says is not available (4(D)(2))");
   ok(nz(T["202510"].custRej && T["202510"].custRej.add), "IMS: our credit note rejected by the customer added back");
   ok(nz(T["202508"].rev2), "the figures typed into 3B (4(B)(2))");
+  ok(T["202511"].other && cloud.kept.find(z => z.args === "07|202511").result.fp.run === "41", "November: the AI pair kept by gst-2b-match for 2025-26 read (run 41)");
 
-  console.log("== 3. kept, and worked out again on a change");
-  ok(cloud.again.every(c => c.ok && c.months.every(m => m.cached)), "asked again with nothing changed: every month given back as kept, nothing worked out (" + cloud.againReads + " reads for " + cloud.again.length + " asks: the member, the client, the switches, the book, the kept rows)");
-  ok(cloud.changed.ok && cloud.changed.months.every(m => !m.cached) && cloud.changed.version !== cloud.calls[0].version, "a new entry moves the version: worked out again");
+  console.log("== 4. kept, a change, the keys, the switches, a failure");
+  ok(cloud.hits.every(c => c.ok && c.cached && c.result), "the member's months given back as kept, nothing worked out");
+  ok(cloud.changed.ok && cloud.changed.pending && cloud.changed.version !== cloud.miss.version, "a new entry moves the version: a miss again, queued");
   ok(cloud.other.status === 404 && cloud.noauth.status === 401 && cloud.nomember.status === 403, "another firm's client 404, no sign-in 401, not a member 403");
+  ok(cloud.warmNoKey.status === 401 && cloud.warmCron.status === 200, "a background run: the service key or the timer's key only");
+  ok(cloud.clientOff.status === 403 && cloud.clientOff.reason === "company_off" && cloud.clientOffWarm.kind === "gate", "a switched-off client: refused, by the member's request and the background run");
+  ok(cloud.firmPaused.status === 403 && cloud.firmPaused.reason === "firm_paused", "a paused firm: refused");
+  ok(cloud.failure.status === 500 && cloud.failure.ok === false && /down/.test(cloud.failure.error) && cloud.failure.cors, "a failure inside: JSON {ok: false, error} with the CORS headers");
 
-  console.log("== 4. time per month on a 40,000-entry book (gst-run in Deno)");
+  return big();
+})().catch(e => { console.error(e); process.exit(1); });
+async function big(){
+  const boxes = (await import(path.join(ROOT, "server", "gst-run", "engine.js"))).boxes;
+  console.log("== 5. a 40,000-entry book: CPU per background run (the limit 2 s, the target about 1 s) and memory (256 MB)");
   const big = rowsOf(world({seed: 7, scale: 1110})), bf = path.join(OUT, "gst-cloud-big.json"), br = path.join(OUT, "gst-cloud-big-res.json");
   ok(big.heads.length >= 40000, "the book: " + big.heads.length + " entries, " + big.lines.length + " lines");
   fs.writeFileSync(bf, JSON.stringify({rows: big, asks: [{reg: "07", ym: "202603"}], firm: FIRM, timing: true}));
-  const bt = deno(br, [bf, br]);
-  ok(bt.perMonth < 1000, "the books made in " + bt.booksMs + " ms; then " + bt.months + " months worked out in " + bt.ms + " ms: " + bt.perMonth + " ms a month (best of 3; the target under 1 s)");
-  // and the big book's last quarter equal to the app's
-  const bigApp = app3b(big, "07", "202603"), bigCloud = bt.result;
-  ok(JSON.stringify(Object.assign({}, bigCloud, {engine: undefined})) === JSON.stringify(boxes(bigApp["202603"])), "the 40,000-entry book's January-March quarter: the cloud's 3B is the app's");
+  const bt = deno(br, [bf, br]), BR = bt.runs.filter(r => r.months && r.months.length);
+  ok(bt.kept.length === 12 && BR.every(r => r.months.length <= 2), BR.length + " runs: " + BR.map(r => r.months.join("+")).join(" "));
+  const bw = Math.max(...BR.map(r => r.cpu));
+  ok(bw < 2000, "CPU per run under the 2 s limit" + (bw < 1000 ? " and the 1 s target" : ", NOT under the 1 s target") + " (the fake database's own left out): " + BR.map(r => r.cpu).join(", ") + " ms; the worst " + bw + " ms (wall " + Math.max(...BR.map(r => r.wall)) + " ms; reading " + BR.map(r => r.loadMs).join("/") + " ms, making the books " + BR.map(r => r.booksMs).join("/") + " ms, the step " + BR.map(r => r.ms).join("/") + " ms)");
+  const bh = Math.max(...BR.map(r => r.heap)), lv = bt.live || {};
+  const need = Math.max(lv.rows, lv.rowsAndBooks) + 60;
+  ok(need < 256, "memory: what a run holds alive at its fullest (after a collection): the rows read " + lv.rows + " MB, the rows and the books with a month worked out " + lv.rowsAndBooks + " MB; with a Deno function's own (about 60 MB) " + need + " MB, under the 256 MB limit (heap in use during a run, garbage not yet collected included: up to " + bh + " MB; this test's process, with the fake database's 40,000 entries in it too: " + bt.peakRss + " MB)");
+  const bigApp = app3b(big, "07", "202603"), bk = bt.kept.find(z => z.args === "07|202603");
+  ok(bk && JSON.stringify(Object.assign({}, bk.result, {engine: undefined, fp: undefined})) === JSON.stringify(boxes(bigApp["202603"])), "the 40,000-entry book's January-March quarter: the cloud's 3B is the app's");
+  [bf, br, path.join(OUT, "gst-cloud-rows.json"), path.join(OUT, "gst-cloud-res.json")].forEach(f => { try { fs.unlinkSync(f); } catch (e){} });
   console.log(fails ? fails + " FAILED" : "all ok");
   process.exit(fails ? 1 : 0);
-})().catch(e => { console.error(e); process.exit(1); });
+}

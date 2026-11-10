@@ -137,16 +137,16 @@ function world(o){
   led("Kestrel Bank", "Bank Accounts", {open: -2500000});
   const groups = [["Sundry Debtors", "Current Assets"], ["Sundry Creditors", "Current Liabilities"], ["Bank Accounts", "Current Assets"], ["Duties & Taxes", "Current Liabilities"],
     ["Sales Accounts", ""], ["Purchase Accounts", ""], ["Indirect Expenses", ""], ["Fixed Assets", ""], ["Current Assets", ""], ["Current Liabilities", ""]].map(([name, parent]) => ({name, parent}));
-  // FinCom's ledger list as confirmed in the app (Settings > ledgers): the tax ledgers and the bank
+  // FinCom's ledger list as set in the app (Settings > ledgers, by hand): the tax ledgers and the bank
   const map = {};
-  TAX.forEach(([l, tax, side]) => { map[l] = {kind: "gst", what: "gst", tax, side, reg: "07", ok: true}; });
-  map["Input CGST Common"] = {kind: "gst_common", what: "gst_common", tax: "CGST", side: "input", reg: "07", ok: true};
-  map["Input SGST Common"] = {kind: "gst_common", what: "gst_common", tax: "SGST", side: "input", reg: "07", ok: true};
-  map["RCM CGST Payable"] = {kind: "gst", what: "gst_rcm", tax: "CGST", side: "output", rcm: true, reg: "07", ok: true};
-  map["RCM SGST Payable"] = {kind: "gst", what: "gst_rcm", tax: "SGST", side: "output", rcm: true, reg: "07", ok: true};
-  map["Input CGST RCM"] = {kind: "gst", what: "gst_rcm", tax: "CGST", side: "input", rcm: true, reg: "07", ok: true};
-  map["Input SGST RCM"] = {kind: "gst", what: "gst_rcm", tax: "SGST", side: "input", rcm: true, reg: "07", ok: true};
-  map["Kestrel Bank"] = {kind: "bank", what: "bank", ok: true};
+  TAX.forEach(([l, tax, side]) => { map[l] = {kind: "gst", what: "gst", tax, side, reg: "07", ok: true, byHand: true}; });
+  map["Input CGST Common"] = {kind: "gst_common", what: "gst_common", tax: "CGST", side: "input", reg: "07", ok: true, byHand: true};
+  map["Input SGST Common"] = {kind: "gst_common", what: "gst_common", tax: "SGST", side: "input", reg: "07", ok: true, byHand: true};
+  map["RCM CGST Payable"] = {kind: "gst", what: "gst_rcm", tax: "CGST", side: "output", rcm: true, reg: "07", ok: true, byHand: true};
+  map["RCM SGST Payable"] = {kind: "gst", what: "gst_rcm", tax: "SGST", side: "output", rcm: true, reg: "07", ok: true, byHand: true};
+  map["Input CGST RCM"] = {kind: "gst", what: "gst_rcm", tax: "CGST", side: "input", rcm: true, reg: "07", ok: true, byHand: true};
+  map["Input SGST RCM"] = {kind: "gst", what: "gst_rcm", tax: "SGST", side: "input", rcm: true, reg: "07", ok: true, byHand: true};
+  map["Kestrel Bank"] = {kind: "bank", what: "bank", ok: true, byHand: true};
   const work = {
     map, gstOpen: {"07": {igst: 12000, cgst: 4000, sgst: 4000, cess: 0}},
     gstSet: {"07": {filing: [{type: "qrmp", from: "202601"}]}},
