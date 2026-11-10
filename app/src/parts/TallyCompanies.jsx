@@ -550,6 +550,10 @@ function stallWhyNow(cid, company) {
   if (!(b.tally === true || b.tallyState === "open" || b.tallyState === "busy")) return "Tally is not open on " + pc + ": open TallyPrime there with " + name + ".";
   if (b.tallyState === "busy") return "Tally is busy on " + pc + ": FinCom carries on when it is free.";
   if (!openOn(d).some((o) => coKey(o) === coKey(name))) return name + " is not open in Tally on " + pc + ": open it in TallyPrime; the ledgers come within a minute.";
+  // bridge 2.5.13: the books' first day is known nowhere (FinCom has none for the book, Tally gives none): the bridge says
+  // so in its beat (the ledgers come without their openings); the page asks for the date, never "no answer from Tally"
+  const cr = (Array.isArray(b.companies) ? b.companies : []).find((c) => c && coKey(c.name) === coKey(name));
+  if (cr && cr.booksFromWhy) return cr.booksFromWhy;
   return "";
 }
 

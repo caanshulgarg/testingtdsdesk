@@ -1195,6 +1195,24 @@ func minDur(a, b time.Duration) time.Duration {
 	return b
 }
 
+// 2.5.13: the ledger run's end: "done" only when no company's ledger read was held (a held read is said, never "done")
+func ledgerRunEndWords(k *keepRun, allDone bool) string {
+	var held []string
+	for c, on := range k.booksHeld {
+		if on {
+			held = append(held, c)
+		}
+	}
+	sort.Strings(held)
+	if len(held) > 0 {
+		return "Ledger list: not read for " + strings.Join(held, ", ") + " (Tally has not said when the books begin; the read waits until it does)"
+	}
+	if allDone {
+		return "Ledger list: done"
+	}
+	return "Ledger list: not finished"
+}
+
 // the time of the last read from Tally that came in, for FinCom's "last read 15:34" and "Books as of 15:34"
 func markRead(company string) {
 	dir, err := companyDir(company)
@@ -1482,7 +1500,7 @@ func keepWorker(r runReq) {
 	case k.light:
 		writeLog("Light update: not done (" + why + ")" + reqs() + "; the next event tries again")
 	case r.kind == "ledgers" && k.allDone:
-		writeLog("Ledger list: done" + reqs() + "; the bridge is idle again")
+		writeLog(ledgerRunEndWords(k, true) + reqs() + "; the bridge is idle again")
 	case r.kind == "ledgers":
 		if why == "" {
 			why = "Tally or the company not open"

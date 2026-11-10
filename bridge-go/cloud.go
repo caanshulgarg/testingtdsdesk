@@ -961,10 +961,14 @@ func beatCompanies(sessions []M, open []any) []any {
 		}
 	}
 	guidOf := map[string]string{}
+	listedNoBF := map[string]bool{} // 2.5.13: listed by this user's Tally without a BOOKSFROM
 	for _, s := range sessions {
 		for _, c := range sessCompanies(s) {
 			if g := str(c["guid"]); g != "" {
 				guidOf[companyKey(str(c["name"]))] = g
+			}
+			if s["mine"] != false && !isTallyDate(normDate(str(c["booksFrom"]))) {
+				listedNoBF[companyKey(str(c["name"]))] = true
 			}
 		}
 	}
@@ -989,6 +993,11 @@ func beatCompanies(sessions []M, open []any) []any {
 		}
 		seen, _ := recorderHolding(name, g)
 		e["recorderSeen"] = seen
+		// 2.5.13: an open company whose books' first day nobody has said (FinCom has none, Tally's list gives no BOOKSFROM):
+		// said plainly, so FinCom's page shows it (the ledgers come without their openings; booksfrom.go)
+		if isOpen && listedNoBF[companyKey(name)] && booksFromOf(name) == "" {
+			e["booksFromWhy"] = booksFromUnknownWords
+		}
 		return e
 	}
 	cos := []any{}

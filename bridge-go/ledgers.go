@@ -362,16 +362,21 @@ func ledResendFile(dir string) string { return filepath.Join(dir, "ledger-resend
 func setLedOutOpeningsAt(dir, bf string, whole bool) {
 	ledOutMu.Lock()
 	defer ledOutMu.Unlock()
-	setLedOutOpeningsAtLocked(dir, bf, whole)
+	setLedOutOpeningsAtLocked(dir, bf, whole, false)
 }
 
 // setLedOutOpeningsAt with ledOutMu held
-func setLedOutOpeningsAtLocked(dir, bf string, whole bool) {
+func setLedOutOpeningsAtLocked(dir, bf string, whole, unknown bool) {
 	o := readObjFile(ledOutFile(dir))
 	if o == nil {
 		return
 	}
 	o["openingsAt"] = bf
+	if unknown {
+		o["openingsUnknown"] = true // 2.5.13: a stand-in round (booksfrom.go): no opening goes
+	} else {
+		delete(o, "openingsUnknown")
+	}
 	if whole {
 		// review of 2.5.0: the outbox holds a whole list (every ledger); held, it is not sent whole again. Kept until the
 		// outbox goes, whatever plain rounds merge into it meanwhile
@@ -456,19 +461,22 @@ func (k *keepRun) ledgerList(company string, port int, dir string, st M, inBudge
 	}
 	// 2.5.0 (the owner's decision of 30-Oct-2026; booksfrom.go): the ledgers are read with the books' first year as the
 	// period. Books-from not known: the read is held (one log line, the company list read again), never sent undated
+	// 2.5.13: no first day known at all (FinCom's nor Tally's): the masters are read all the same, dated with the stand-in
+	// day, their openings not known (booksfrom.go), said once
 	bf, herr := booksFromForRead(k.tc, company)
-	if herr != nil {
-		if k.booksHeld == nil {
-			k.booksHeld = map[string]bool{}
+	standIn := herr != nil
+	if standIn {
+		bf = ledgerStandInDay()
+		if !k.told["standin:"+company] {
+			k.told["standin:"+company] = true
+			writeLog("Keeping " + company + ": " + booksFromUnknownWords + "; the ledger and group lists are read all the same")
 		}
-		k.booksHeld[company] = true
-		k.caughtUp = true
-		return false, nil
 	}
 	ls := obj(st["led"])
-	// a round begun on another basis (by a bridge before 2.5.0, undated, or with another books-from) starts again: one
-	// round's openings are all as at the same date
-	if ls != nil && str(ls["openingsAt"]) != bf {
+	// a round begun on another basis (by a bridge before 2.5.0, undated, or with another books-from; 2.5.13: or with the
+	// stand-in day while a first day is now known, or the other way) starts again: one round's openings are all as at the
+	// same date
+	if ls != nil && (str(ls["openingsAt"]) != bf || truthy(ls["standIn"]) != standIn) {
 		ls = nil
 	}
 	if t, ok := parseTime(str(ls["started"])); ls == nil || !ok || time.Since(t) > time.Duration(keepNum("LedgerResumeHours", 6))*time.Hour {
@@ -479,6 +487,9 @@ func (k *keepRun) ledgerList(company string, port int, dir string, st M, inBudge
 			size = ledChunkDefault()
 		}
 		ls = M{"started": nowS(), "after": 0, "size": size, "empty": 0, "groups": false, "n": 0, "reqs": 0, "round": newLedRound(), "openingsAt": bf}
+		if standIn {
+			ls["standIn"] = true
+		}
 		_ = os.Remove(ledReadFile(dir))
 		st["led"] = ls
 		save()
@@ -562,7 +573,14 @@ func (k *keepRun) ledgerList(company string, port int, dir string, st M, inBudge
 		}
 		// review of 2.5.0: the company's books-from changed since the round began (Tally's Books beginning from corrected):
 		// the round starts again at the next turn, every chunk with the new one
-		if now := booksFromOf(company); now == "" {
+		if now := booksFromOf(company); now == "" && truthy(ls["standIn"]) {
+			// 2.5.13: a stand-in round goes on while no first day is known
+		} else if now != "" && truthy(ls["standIn"]) {
+			delete(st, "led")
+			save()
+			writeLog("Keeping " + company + ": its books' first day is now known (" + now + "); the ledger list is read again from the first ledger, with the openings")
+			return false, nil
+		} else if now == "" {
 			// the company list answered without BOOKSFROM for a while: this turn stops (said once, the list read again);
 			// the round goes on from its last chunk once Tally says it again (review of 2.5.0, rounds 3 and 4)
 			_ = holdLedgerRead(k.tc, company)
@@ -739,7 +757,12 @@ func (k *keepRun) ledgerList(company string, port int, dir string, st M, inBudge
 	// goes to FinCom's cloud with this round's openings, as at the books' beginning (the cloud prefers a dated round's)
 	// (review: a round whose openings FinCom's cloud held, as not adding up to nil, is sent whole again next time)
 	resend := exists(ledResendFile(dir))
-	whole := str(st["ledOpeningsAt"]) != bf || resend
+	// 2.5.13: a stand-in round's openings are not known: the outbox says so (none sent, none taken), no date named
+	oa, unknown := bf, truthy(ls["standIn"])
+	if unknown {
+		oa = ""
+	}
+	whole := str(st["ledOpeningsAt"]) != oa || resend
 	if whole {
 		d = diffAll(held, read, d)
 	}
@@ -773,9 +796,9 @@ func (k *keepRun) ledgerList(company string, port int, dir string, st M, inBudge
 	// fourth review: one ledOutMu section, so a push never reads the outbox between the merge and its openingsAt
 	ledOutMu.Lock()
 	mergeLedOutLocked(dir, d, sendGroups, round, seen, natOfRound(ls))
-	setLedOutOpeningsAtLocked(dir, bf, whole) // a whole list held again is not sent whole again (review of 2.5.0, round 3)
+	setLedOutOpeningsAtLocked(dir, oa, whole, unknown) // a whole list held again is not sent whole again (review of 2.5.0, round 3)
 	ledOutMu.Unlock()
-	st["ledOpeningsAt"] = bf
+	st["ledOpeningsAt"] = oa
 	if resend {
 		_ = os.Remove(ledResendFile(dir))
 	}
@@ -783,6 +806,9 @@ func (k *keepRun) ledgerList(company string, port int, dir string, st M, inBudge
 	notes := ""
 	if truthy(ls["groupsStopped"]) {
 		notes += "; the group list was stopped at 2 s (FinCom keeps the groups it has)"
+	}
+	if unknown {
+		notes += "; without their openings: " + booksFromUnknownWords
 	}
 	if truthy(ls["natStopped"]) {
 		notes += fmt.Sprintf("; the natures of payment were stopped at 2 s (%d time(s) so far)", toInt(st["natStops"]))
@@ -869,6 +895,9 @@ func pushLedgerList(company, dir string) error {
 			// special rate, lower-deduction certificates] (round 11: the state; 2.3.1: the party's deductee type, TDSDEDUCTEETYPE;
 			// 2.4.3: TDSRATENAME, the special rate and the certificates, ledTDSCols)
 			row := []any{g, toI64(at(a, 0)), toI64(at(a, 1)), str(at(a, 2)), str(at(a, 3)), str(at(a, 4)), str(at(a, 5)), str(at(a, 6)), oc, str(at(a, 8)), str(at(a, 9))}
+			if truthy(o["openingsUnknown"]) {
+				row[5], row[8] = "", 0 // 2.5.13: the opening is not known (a stand-in round): none sent
+			}
 			if len(a) >= 13 {
 				// read by 2.4.3 (a row a 2.4.2 round left in the outbox has none: sent without them, FinCom leaves its own)
 				row = append(row, ledTDSCols(str(at(a, 10)), str(at(a, 11)), str(at(a, 12)))...)
@@ -884,6 +913,9 @@ func pushLedgerList(company, dir string) error {
 			"round": str(o["round"]), "complete": true, "rowsRead": toInt(o["rowsRead"]), "seen": toAny(sb)}
 		if oa := str(o["openingsAt"]); isTallyDate(oa) {
 			body["openingsAt"] = oa // 2.5.0: the openings are as at the books' beginning (a dated read; booksfrom.go)
+		}
+		if truthy(o["openingsUnknown"]) {
+			body["openingsUnknown"], body["openingsWhy"] = true, booksFromUnknownWords // 2.5.13: none taken (booksfrom.go)
 		}
 		if first {
 			rl := []any{}

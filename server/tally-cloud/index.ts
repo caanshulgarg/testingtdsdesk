@@ -1671,7 +1671,11 @@ async function applyLedgerList(firm: string, book: string, body: any, dev?: any,
   // FinCom's copy of the book begins later (1-Apr-2025): openings as at another day are never taken (they would leave
   // out the year between); the stored stay, said in the notes, until a read as at the copy's own first day
   let openDateWrong = false;
-  if (g130 && openingsAt) {
+  // bridge 2.5.13: no first day known anywhere (FinCom's book has none, Tally gives no BOOKSFROM): the ledgers come without
+  // their openings (openingsUnknown, the bridge's words in openingsWhy): no opening is staged, settled or written from it
+  const openUnknown = body?.openingsUnknown === true;
+  if (openUnknown) { openDateWrong = true; notes.push("openings not taken: " + (typeof body?.openingsWhy === "string" && body.openingsWhy.trim() ? body.openingsWhy.trim().slice(0, 200) : "the books' first day is not known")); }
+  if (g130 && openingsAt && !openUnknown) {
     const { data: bk } = await db.from("tally_books").select("from_date").eq("book_id", book).maybeSingle();
     const from = bk?.from_date ? String(bk.from_date).slice(0, 10) : null;
     if (from && from !== openingsAt) { openDateWrong = true; notes.push("openings as at " + openingsAt + " not taken: FinCom's books of this company begin on " + from + "; the stored openings stay"); }
@@ -1683,9 +1687,9 @@ async function applyLedgerList(firm: string, book: string, body: any, dev?: any,
       if (error) throw new Error(error.message);
     }
   } else if (openingsAt && !g130) notes.push("openings as at " + openingsAt + " taken without the guards: migration 130 is not applied");
-  const fresh = rows.filter((r: any) => !have.has(r.name)).map((r: any) => ({ ...base(r), open: g130 ? 0 : r.open, open_sent: g130 ? 0 : r.open }));
-  const opened = g130 ? [] : rows.filter((r: any) => have.has(r.name) && r.oc).map((r: any) => ({ ...base(r), open: r.open, open_sent: r.open }));
-  const plain = rows.filter((r: any) => have.has(r.name) && (g130 || !r.oc)).map(base);
+  const fresh = rows.filter((r: any) => !have.has(r.name)).map((r: any) => ({ ...base(r), open: g130 || openUnknown ? 0 : r.open, open_sent: g130 || openUnknown ? 0 : r.open }));
+  const opened = g130 || openUnknown ? [] : rows.filter((r: any) => have.has(r.name) && r.oc).map((r: any) => ({ ...base(r), open: r.open, open_sent: r.open }));
+  const plain = rows.filter((r: any) => have.has(r.name) && (g130 || openUnknown || !r.oc)).map(base);
   for (const set of [fresh, opened, plain]) {
     for (let i = 0; i < set.length; i += 1000) {
       const error = await upsertLedgers(set.slice(i, i + 1000));
@@ -4383,7 +4387,9 @@ Deno.serve(sentry.wrap(async (req) => {
             ...(typeof c?.guid === "string" && c.guid ? { guid: s(c.guid, 100) } : {}),
             // phase 2 (migration 44): Tally's highest change numbers and the recorder's state, when the bridge says them
             ...(altOf(c?.altvchid) !== null ? { altvchid: altOf(c?.altvchid), altmstid: altOf(c?.altmstid) } : {}),
-            ...(typeof c?.recorderSeen === "boolean" ? { recorderSeen: c.recorderSeen, recorderLastAt: s(c?.recorderLastAt, 40) } : {}) })),
+            ...(typeof c?.recorderSeen === "boolean" ? { recorderSeen: c.recorderSeen, recorderLastAt: s(c?.recorderLastAt, 40) } : {}),
+            // bridge 2.5.13: the books' first day is known nowhere (the ledgers come without their openings): the bridge's words
+            ...(s(c?.booksFromWhy, 200) ? { booksFromWhy: s(c.booksFromWhy, 200) } : {}) })),
           // go-bridge: Tally open / busy (open, slow to answer) / closed, and how often the beat comes (2.0: 30 s; 1.15.0: 60 s)
           tallyState: ["open", "busy", "closed"].includes(b.tallyState) ? b.tallyState : (b.tally ? "open" : "closed"), busySince: s(b.busySince, 30),
           every: Math.max(10, Math.min(600, Math.floor(Number(b.every) || 60))), version: s(body.version, 40),

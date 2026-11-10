@@ -115,8 +115,9 @@ func TestR250BooksFromUnknownHeld(t *testing.T) {
 		if err := k.step(zz, f.port, ""); err != nil {
 			t.Fatal(err)
 		}
-		if f.n("TDSDeskCompanies") <= c0 || !k.booksHeld[zz] {
-			t.Fatalf("round %d: the company list was not read again (or the company not marked held)", i)
+		// 2.5.13: the masters' own round is no longer held: read with the stand-in day, without openings (r2513_test.go)
+		if f.n("TDSDeskCompanies") <= c0 || k.booksHeld[zz] {
+			t.Fatalf("round %d: the company list was not read again (or the masters held)", i)
 		}
 		// within the minute: held again, the company list not read again (review: not on every held chunk or ledger)
 		c1 := f.n("TDSDeskCompanies")
@@ -124,8 +125,13 @@ func TestR250BooksFromUnknownHeld(t *testing.T) {
 			t.Fatalf("round %d: a held chunk read the company list again within the minute: %v", i, err)
 		}
 	}
-	if f.n(ledListID)+f.n(ledChangesID)+f.n(ledByNameID) != 0 {
+	if f.n(ledChangesID)+f.n(ledByNameID) != 0 {
 		t.Fatalf("a ledger request went with books-from unknown: %v", f.ids())
+	}
+	for _, b := range f.bodiesOf(ledListID) {
+		if a, z := pinDates(b); a != ledgerStandInDay() || z != booksYearEnd(a) {
+			t.Fatalf("the masters' round not dated the stand-in year: %s-%s", a, z)
+		}
 	}
 	if n := logLines("Ledgers of " + zz + " " + said); n != 1 {
 		t.Fatalf("the held read said %d times in the log", n)
@@ -133,16 +139,17 @@ func TestR250BooksFromUnknownHeld(t *testing.T) {
 	if ledgerChunkRequest(zz, 0, 2000) != "" || ledgerChangesRequest(zz, 0, 200) != "" || ledgerByNameRequest(zz, "Cash") != "" {
 		t.Fatal("a ledger request is built with books-from unknown")
 	}
-	if _, _, err := readLedgerChunk(fin, zz, f.port, 0, 2000); err == nil || f.n(ledListID) != 0 {
+	nLed := f.n(ledListID) // (the masters' own rounds above, 2.5.13)
+	if _, _, err := readLedgerChunk(fin, zz, f.port, 0, 2000); err == nil || f.n(ledListID) != nLed {
 		t.Fatalf("a chunk read with books-from unknown: %v", err)
 	}
-	if _, err := fetchLedgerByMaster(fin, zz, f.port, 1); err == nil || f.n(ledListID) != 0 {
+	if _, err := fetchLedgerByMaster(fin, zz, f.port, 1); err == nil || f.n(ledListID) != nLed {
 		t.Fatalf("one ledger fetched with books-from unknown: %v", err)
 	}
 	// an undated ledger request is refused at the gate, whoever asks and whatever ReadDays says
 	und := fcCollection(ledListID, zz, "", "Ledger", ledFetch, masterRange(0, 2000))
 	oldDaysOn()
-	if _, err := invokeTally(&TC{person: true}, f.port, und, 5); err == nil || f.n(ledListID) != 0 {
+	if _, err := invokeTally(&TC{person: true}, f.port, und, 5); err == nil || f.n(ledListID) != nLed {
 		t.Fatalf("an undated ledger request went: %v", err)
 	}
 	// Tally says it: the next round reads, dated
@@ -155,10 +162,10 @@ func TestR250BooksFromUnknownHeld(t *testing.T) {
 	if err := newRun("ledgers", "r250-hz").step(zz, f.port, ""); err != nil {
 		t.Fatal(err)
 	}
-	if f.n(ledListID) == 0 {
+	if f.n(ledListID) == nLed {
 		t.Fatalf("not read once books-from is known: %v", f.ids())
 	}
-	for _, b := range f.bodiesOf(ledListID) {
+	for _, b := range f.bodiesOf(ledListID)[nLed:] {
 		if !strings.Contains(b, r250Period) {
 			t.Fatalf("undated: %s", b)
 		}
@@ -435,7 +442,7 @@ func TestR250OwnTallyAndResendAfterHeld(t *testing.T) {
 // 2.5.0: the version; four rows changed (the table otherwise 2.4.9's); the decision line names 2.5.0 by the owner's
 // decision of 2026-10-30 with the three shapes, 2.4.9's kept as history; the dated line; the test sheet
 func TestR250VersionAllowList(t *testing.T) {
-	if BridgeVersion != "2.5.12" { // 2.5.12 (r2512_test.go); 2.5.11 (r2511_test.go); 2.5.10 (r2510pick_test.go); 2.5.9 (fastmeasure_test.go); 2.5.8 (nocompany258_test.go); 2.5.7 (fastentries_test.go); 2.5.6 (firstread_test.go); 2.5.5 (ledgers255_test.go, loginport255_test.go); 2.5.4 (r254_test.go); 2.5.3 (r253owntally_test.go); 2.5.2 (stock251_test.go); 2.5.1 (r251openings_test.go): kept as history
+	if BridgeVersion != "2.5.13" { // 2.5.13 (r2513_test.go); 2.5.12 (r2512_test.go); 2.5.11 (r2511_test.go); 2.5.10 (r2510pick_test.go); 2.5.9 (fastmeasure_test.go); 2.5.8 (nocompany258_test.go); 2.5.7 (fastentries_test.go); 2.5.6 (firstread_test.go); 2.5.5 (ledgers255_test.go, loginport255_test.go); 2.5.4 (r254_test.go); 2.5.3 (r253owntally_test.go); 2.5.2 (stock251_test.go); 2.5.1 (r251openings_test.go): kept as history
 		t.Fatalf("BridgeVersion %s", BridgeVersion)
 	}
 	if h := allowListHash(allowRowsBefore250()); h != "8962b5cdd4868e09696bef97780b196198a2fb9d7f79293ace32d799b6dfa79b" {

@@ -216,7 +216,10 @@ var pull = struct {
 	rangeAsk   string
 	rangeN     map[string]int
 	rangeHeads map[string]pullRangeDay
-}{empAt: map[string]time.Time{}, stopped: map[int]string{}, upload: map[string]M{}, tell: map[string]M{}, stopCo: map[string]M{}, done: map[string]time.Time{}, state: map[string]M{}, said: map[string]string{}}
+	// 2.5.13: the days whose local "upload" mark was dropped in this run because FinCom listed them again (pullUploadRelease)
+	released map[string]int
+	logs     []string // 2.5.13: log lines noted under the lock (pullLogFlush)
+}{released: map[string]int{}, empAt: map[string]time.Time{}, stopped: map[int]string{}, upload: map[string]M{}, tell: map[string]M{}, stopCo: map[string]M{}, done: map[string]time.Time{}, state: map[string]M{}, said: map[string]string{}}
 
 // --- the beat answer: periodDays [{company, company_guid, day, fetch, types}], at most 3
 func applyPeriodDays(j M) {
@@ -276,6 +279,7 @@ func applyPeriodDays(j M) {
 		}
 	}
 	pickTake(items, refused, refusedWhy)
+	defer pullLogFlush() // 2.5.13: the lines noted under the lock, written once it is let go (runs after the unlock below)
 	pull.mu.Lock()
 	defer pull.mu.Unlock()
 	keep := map[string]bool{}
@@ -295,8 +299,8 @@ func applyPeriodDays(j M) {
 	// every beat; other days go first)
 	var fresh []pullItem
 	for _, it := range items {
-		if _, up := pull.upload[it.key()]; up {
-			continue // marked "upload": never asked again
+		if _, up := pull.upload[it.key()]; up && !pullUploadReleaseLocked(it) {
+			continue // marked "upload": not asked again while FinCom keeps its own mark
 		}
 		fresh = append(fresh, it)
 	}
@@ -1141,7 +1145,7 @@ func pullFlush(w *pullWork) bool {
 // a day FinCom marked to be uploaded by hand: kept here for the tray's one quiet line (FinCom was told already)
 func pullNoteUpload(it pullItem, why, words string) {
 	pull.mu.Lock()
-	pull.upload[it.key()] = M{"company": it.Company, "day": it.Day, "words": cutRunes(words, 300), "why": why, "at": nowFn().Format(time.RFC3339), "atN": nowFn().UnixNano()}
+	pull.upload[it.key()] = M{"company": it.Company, "day": it.Day, "words": cutRunes(words, 300), "why": why, "at": nowFn().Format(time.RFC3339), "atN": nowFn().UnixNano(), "ver": BridgeVersion}
 	// at most 500 kept (the oldest dropped from the tray's list first; FinCom keeps every one)
 	for len(pull.upload) > 500 {
 		ok, oldest := "", int64(-1)
@@ -1221,6 +1225,9 @@ func pullTell(key string, body M) {
 	if r.code == 200 && r.json != nil && truthy(r.json["ok"]) {
 		pull.mu.Lock()
 		delete(pull.tell, key)
+		if e := pull.upload[key]; e != nil {
+			e["toldN"] = nowFn().UnixNano() // 2.5.13: FinCom took the mark now (pullUploadRelease)
+		}
 		pullSaveLocked()
 		pull.mu.Unlock()
 		return
@@ -1324,15 +1331,23 @@ func pullLoad() {
 	if j == nil {
 		return
 	}
+	defer pullLogFlush() // 2.5.13 (after the unlock below)
 	pull.mu.Lock()
 	defer pull.mu.Unlock()
+	// 2.5.13: the marks of an older bridge (made before an update) are dropped, with what was left to tell FinCom of them:
+	// FinCom's own marks decide (a day it still marks is not listed; one it lists is read again)
+	older := map[string]bool{}
 	for k, v := range obj(j["upload"]) {
 		if e := obj(v); e != nil {
+			if str(e["ver"]) != BridgeVersion {
+				older[k] = true
+				continue
+			}
 			pull.upload[k] = e
 		}
 	}
 	for k, v := range obj(j["tell"]) {
-		if b := obj(v); b != nil {
+		if b := obj(v); b != nil && !older[k] {
 			pull.tell[k] = M{"body": b, "at": time.Time{}}
 		}
 	}
@@ -1341,6 +1356,61 @@ func pullLoad() {
 			pull.stopCo[k] = e
 		}
 	}
+	if len(older) > 0 {
+		pullSaveLocked()
+		pull.logs = append(pull.logs, fmt.Sprintf("Older entries: %d day%s marked to upload by an earlier bridge version: the marks dropped here (FinCom's own marks decide)", len(older), map[bool]string{true: "", false: "s"}[len(older) == 1]))
+	}
+}
+
+// 2.5.13: FinCom's period list hands out only the days it does not mark to upload (tally_period_next_paced: upload_at is
+// null; a check or fill day only when FinCom asks for it again), so a day listed that this bridge marked "upload" here
+// means FinCom cleared its mark (the day reset in FinCom): the local mark is dropped and the day read again. Not while
+// FinCom has not taken the mark yet (it is still to be told: FinCom's list does not know of it), nor within
+// pullUploadGrace of FinCom taking it (a beat answered meanwhile may be older than the mark), nor more than
+// pullUploadReleaseMax times a day in one run (never a loop of reads). Called with pull.mu held.
+// 2.5.13: the log lines noted while pull.mu is held, written after it is let go (no disk write under the lock)
+func pullLogFlush() {
+	pull.mu.Lock()
+	ls := pull.logs
+	pull.logs = nil
+	pull.mu.Unlock()
+	for _, l := range ls {
+		writeLog(l)
+	}
+}
+
+const (
+	pullUploadGrace      = 2 * time.Minute
+	pullUploadReleaseMax = 3
+)
+
+func pullUploadReleaseLocked(it pullItem) bool {
+	k := it.key()
+	e := pull.upload[k]
+	if e == nil {
+		return true
+	}
+	if _, pending := pull.tell[k]; pending {
+		return false
+	}
+	at := toI64(e["toldN"])
+	if a := toI64(e["atN"]); a > at {
+		at = a
+	}
+	if at > 0 && nowFn().Sub(time.Unix(0, at)) < pullUploadGrace {
+		return false
+	}
+	if pull.released == nil {
+		pull.released = map[string]int{}
+	}
+	if pull.released[k] >= pullUploadReleaseMax {
+		return false
+	}
+	pull.released[k]++
+	delete(pull.upload, k)
+	pullSaveLocked()
+	pull.logs = append(pull.logs, "Older entries of "+it.Company+": "+liveDay(it.Day)+" is listed again by FinCom (its mark to upload cleared there): read again")
+	return true
 }
 
 // --- for the beat and the tray
