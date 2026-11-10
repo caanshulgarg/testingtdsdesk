@@ -12,7 +12,9 @@
 //     account (src/js/07-mis.js), so receivables are the same
 //   - TDS: the object, like the Day Book, carries the TDS details of an entry typed on the screen that today's answer
 //     left empty (the S5 payment on 7.1): more, never less
-// The voucher-mode invoice (stock under the sales line) is held by the bridge (its golden says HELD): not compared.
+// The voucher-mode invoice (stock under the sales line): held by the bridge up to 2.5.11 (its golden said HELD); from
+// 2.5.12 read and compared as every other entry (the strip keeps the line's stock items and writes them as the entry's
+// items, as the collection gave them: bridge-go/fastvch.go fastVoucherModeItems). None is held.
 // 2.3.4 re-review (push-design run 37770938549, 3.0 and 7.1): an item invoice whose sales ledger is also a line of its own
 // (M2: read as the collection's answer was, by parse.js) and a payroll voucher typed on Tally's Payroll screen (L1: its pay
 // heads under each employee written as ledger lines with the employees as cost centres, by the bridge): stored as today,
@@ -38,7 +40,7 @@ for (const rel of fs.readdirSync(TD).filter((d) => /^\d+\.\d+$/.test(d)).sort())
   for (const f of fs.readdirSync(path.join(TD, rel)).filter((f) => f.endsWith("-object-stripped.xml")).sort()) {
     const kind = f.replace(/-object-stripped\.xml$/, "");
     const fast = fs.readFileSync(path.join(TD, rel, f), "utf8");
-    if (fast.startsWith("HELD: ")) { held++; ok(kind === "sales-voucher-mode-items", rel + " " + kind + ": held by the bridge (" + fast.slice(6) + ")"); continue; }
+    if (fast.startsWith("HELD: ")) { held++; ok(false, rel + " " + kind + ": held by the bridge (" + fast.slice(6) + ")"); continue; }
     const today = parseDay(zlib.gunzipSync(fs.readFileSync(path.join(TD, rel, kind + "-bymaster.xml.gz"))).toString("utf8")), got = parseDay(fast);
     // the two differences towards the Day Book
     let oa = 0, tm = 0;
@@ -57,6 +59,6 @@ for (const rel of fs.readdirSync(TD).filter((d) => /^\d+\.\d+$/.test(d)).sort())
       (diff.length ? "; differ: " + diff.slice(0, 8).map((k) => k + " today " + a[k] + " fast " + b[k]).join(" | ") : ""));
   }
 }
-ok(n >= 100 && held === 5, n + " entries compared on five releases, " + held + " held; " + onAcc + " On Account bills only in today's answer; " + tdsMore + " entries with TDS details only in the object; " + costMore + " with cost centres only in the object");
+ok(n >= 100 && held === 0, n + " entries compared on five releases, " + held + " held; " + onAcc + " On Account bills only in today's answer; " + tdsMore + " entries with TDS details only in the object; " + costMore + " with cost centres only in the object");
 console.log(fails ? fails + " FAILED" : "all ok");
 process.exit(fails ? 1 : 0);

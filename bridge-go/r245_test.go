@@ -239,6 +239,8 @@ func pullReset() {
 	pull.stopped, pull.upload, pull.tell, pull.done, pull.state, pull.said = map[int]string{}, map[string]M{}, map[string]M{}, map[string]time.Time{}, map[string]M{}, map[string]string{}
 	pull.stopCo = map[string]M{}
 	pull.batchCo = map[string]int{}
+	pull.rangeAsk, pull.rangeN, pull.rangeHeads = "", map[string]int{}, map[string]pullRangeDay{} // 2.5.12 (range2512.go)
+	pullRangeReset()
 	pull.empAt, pull.night, pull.nightAt, pull.beatAt = map[string]time.Time{}, false, time.Time{}, time.Time{}
 	pickReset() // 2.5.10 (pickack.go)
 	pullSaveMu.Lock()

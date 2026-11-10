@@ -111,10 +111,14 @@ var requestRebuild = map[string]func(x string) []string{
 		}
 		return employeeChunkRequest(pinCo(x), a, u)
 	}),
-	// 2.4.5: one day only (SVFROMDATE = SVTODATE), F1 or F2 for the type its filter names; FinComLedgerIds in chunks of
+	// 2.4.5: one day only (SVFROMDATE = SVTODATE; 2.5.12: or a range, range2512.go), F1 or F2 for the type its filter names; FinComLedgerIds in chunks of
 	// 2,000 MasterIDs at most, or the one request for every ledger
 	dayHeadsID: func(x string) []string {
 		a, z := pinDates(x)
+		if len(a) == 8 && len(z) == 8 && z > a {
+			// 2.5.12 (the owner's approval of 09-Nov-2026): a range of 2 to 31 consecutive days, F1's fields (range2512.go)
+			return []string{dayHeadsRangeRequest(pinCo(x), a, z)}
+		}
 		if len(a) != 8 || a != z {
 			return nil
 		}

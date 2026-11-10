@@ -80,7 +80,9 @@ func TestFast234RRHeldListStopAsksOnceMore(t *testing.T) {
 	}
 }
 
-const rrVoucherMode = `<ALLLEDGERENTRIES.LIST><LEDGERNAME>Sales</LEDGERNAME><AMOUNT>300.00</AMOUNT><INVENTORYALLOCATIONS.LIST><STOCKITEMNAME>Item T03</STOCKITEMNAME><AMOUNT>300.00</AMOUNT></INVENTORYALLOCATIONS.LIST></ALLLEDGERENTRIES.LIST>`
+// a form the strip cannot keep whole (2.5.12: voucher mode, a stock item under a ledger line, is read now; items in
+// INVENTORYENTRIES are still held)
+const rrVoucherMode = `<INVENTORYENTRIES.LIST><STOCKITEMNAME>Item T03</STOCKITEMNAME><AMOUNT>300.00</AMOUNT></INVENTORYENTRIES.LIST>`
 
 // --- L2: a held cancel whose voucher Tally keeps in a form the strip cannot keep whole: held for good with words (not
 // "asked again" every turn); one request

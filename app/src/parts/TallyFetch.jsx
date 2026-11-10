@@ -204,6 +204,18 @@ export default function OlderEntries({ cid, say = false }) {
   useEffect(() => { setFy(0); setErr(""); setBusy(""); }, [book]);   // (next-buttons: a Start still on its way for the client left does not hold this one)
   const p = b && b.pull;
   useLive(!!(p && p.state === "going" && !p.done));
+  // FinCom Bridge 2.5.12 (migration 154): the days with an entry Tally keeps in a form the bridge could not read yet; the
+  // bridge tries again by itself, "Try again now" queues it at once; after 3 tries the manual step (the day's Day Book)
+  // (review 2, M1: heldOk true only once the list loaded; until then, or when it cannot be read (a cloud without migration
+  // 154), every "upload" line stays on the page as before)
+  const [held, setHeld] = useState([]), [heldOk, setHeldOk] = useState(false), [heldBusy, setHeldBusy] = useState("");
+  const heldSig = book + "|" + (p ? [p.x, p.countedDays, p.state].join(",") : "");
+  useEffect(() => { let on = true; setHeldOk(false); if (!book) { setHeld([]); return; }
+    rpc("tally_period_held_list", { p_book: book }).then((r) => { if (!on) return; const ok = !!(r && r.ok && Array.isArray(r.held)); setHeld(ok ? r.held : []); setHeldOk(ok); },
+      () => { if (on) { setHeld([]); setHeldOk(false); } });
+    return () => { on = false; }; }, [heldSig]);
+  const heldRetry = (day) => { setHeldBusy(day); rpc("tally_period_held_retry", { p_book: book, p_day: day.slice(0, 4) + "-" + day.slice(4, 6) + "-" + day.slice(6, 8) })
+    .then(() => rpc("tally_period_held_list", { p_book: book })).then((r) => { if (r && r.ok && Array.isArray(r.held)) { setHeld(r.held); setHeldOk(true); } summary(true); }, (e) => setErr(errWords(e))).finally(() => setHeldBusy("")); };
   if (!b) return say ? <p className="note" data-older-none={SUM.off ? "off" : SUM.books ? "none" : "reading"}>{!(typeof TCloud === "object" && TCloud.on && TCloud.on()) ? "Sign in to the firm account first: books come from Tally through FinCom’s cloud."
     : SUM.off ? "Bring another year is not in FinCom’s cloud yet. Use Upload a Day Book file instead."
     : SUM.books ? "FinCom’s cloud has no books of this client from Tally yet: press Update now first, then come back here." : "Reading the books from FinCom’s cloud…"}</p> : null;
@@ -253,7 +265,10 @@ export default function OlderEntries({ cid, say = false }) {
     {err && <p className="note bad" data-older-err="" style={{ margin: "4px 0 0" }}>{err}</p>}
     <Said k={sk} hook="older" className="note" />
     {!may() && <p className="note" data-older-view="" style={{ margin: "4px 0 0" }}>{VIEW_ONLY}</p>}
-    {p && (p.upload || []).map((u) => <p key={u.day} className="note" data-older-upload={u.day} style={{ margin: "4px 0 0" }}>{u.words + " "}
+    {held.map((h) => <p key={"held" + h.day} className="note" data-older-held={h.day} data-older-held-manual={h.manual ? "1" : "0"} style={{ margin: "4px 0 0" }}>{h.words + " "}
+      {may() && <button className="linkbtn" data-older-held-retry={h.day} disabled={heldBusy === h.day} onClick={() => heldRetry(h.day)}>{heldBusy === h.day ? "Asking…" : "Try again now"}</button>}
+      {h.manual && <>{" "}<button className="linkbtn" data-older-upload-go={h.day} onClick={() => typeof tallyPickFor === "function" && tallyPickFor(tallyDate(h.day), tallyDate(h.day))}>{"Upload " + dayLong(h.day)}</button></>}</p>)}
+    {p && (p.upload || []).filter((u) => !(u.why === "held" && heldOk && held.some((h) => h.day === u.day))).map((u) => <p key={u.day} className="note" data-older-upload={u.day} style={{ margin: "4px 0 0" }}>{u.words + " "}
       <button className="linkbtn" data-older-upload-go={u.day} onClick={() => typeof tallyPickFor === "function" && tallyPickFor(tallyDate(u.day), tallyDate(u.day))}>{"Upload " + dayLong(u.day)}</button></p>)}
   </section>;
 }

@@ -63,6 +63,7 @@ MOCK = """([sum, chk, today]) => { window.__sum = sum; window.__chk = chk; windo
     if (fn === 'tally_check_status') return JSON.parse(JSON.stringify(window.__chk));
     if (fn === 'tally_today_from_tally') return JSON.parse(JSON.stringify(window.__today));
     if (fn === 'tally_status') return window.__base(fn, a);
+    if (fn === 'tally_period_held_list') { if (window.__heldFail) throw new Error('Could not find the function public.tally_period_held_list'); return {ok: true, held: JSON.parse(JSON.stringify(window.__held || []))}; }
     return {ok: true}; };
   if (typeof tfxRefresh === 'function') tfxRefresh(); }"""
 
@@ -144,6 +145,25 @@ def main():
         E("() => { S.account.me.role = 'readonly'; render(); }"); pg.wait_for_timeout(400)
         ok(n(card + " [data-older-pause]") == 0 and n(card + " [data-older-start]") == 0 and n(card + " [data-older-progress]") == 1, "1. a viewer: the bar, no buttons")
         E("() => { S.account.me.role = 'owner'; render(); }"); pg.wait_for_timeout(300)
+
+        print("== 1b. bridge 2.5.12 (migration 154): a day with an entry held")
+        D12, W1 = "%d1012" % FYN, "1 entry on 12-Oct could not be read yet. FinCom tries again by itself."
+        WM = "In Tally, open Day Book, press F2 and set the date to 12-Oct-%d, then Alt+E (Export) → Current, F8 (File Format): XML, and E to export; drop the file on Books › From Tally." % FYN
+        E("(h) => { window.__held = h; window.__heldFail = false; }", [{"day": D12, "n": 1, "tries": 1, "manual": False, "words": W1}])
+        state(sb(pull=dict(GOING, x=8413)), wait=1400)
+        hl = card + ' [data-older-held="%s"]' % D12
+        ok(txt(hl) == W1 + " Try again now" and E("(s) => document.querySelector(s).getAttribute('data-older-held-manual')", hl) == "0", "1b. the plain line with Try again now (%s)" % txt(hl))
+        pg.click(hl + " [data-older-held-retry]"); pg.wait_for_timeout(500)
+        ok(calls("tally_period_held_retry")[-1:] == [{"p_book": "bk-zz", "p_day": "%d-10-12" % FYN}], "1b. Try again now queues the retry (%s)" % calls("tally_period_held_retry")[-1:])
+        E("(h) => { window.__held = h; }", [{"day": D12, "n": 1, "tries": 3, "manual": True, "words": WM}])
+        state(sb(pull=dict(GOING, x=8414, upload=[{"day": D12, "why": "held", "words": WM}])), wait=1400)
+        ok(txt(hl).startswith(WM) and n(hl + " [data-older-upload-go]") == 1 and n(card + " [data-older-upload]") == 0, "1b. after 3 tries the manual step, once, with its Upload button (%s)" % txt(hl))
+        E("() => { window.__heldFail = true; }")
+        state(sb(pull=dict(GOING, x=8415, upload=[{"day": D12, "why": "held", "words": WM}])), wait=1400)
+        ok(n(hl) == 0 and n(card + ' [data-older-upload="%s"]' % D12) == 1, "1b. the held list cannot be read (a cloud without migration 154): the upload line stays")
+        E("() => { window.__held = []; window.__heldFail = false; }")
+        state(sb(pull=dict(GOING, x=8416)), wait=1200)
+        ok(n(card + " [data-older-held]") == 0, "1b. none held: no line")
 
         print("== 2. Books › From Tally: the upload checked against Tally")
         state(sb(pull=GOING, check={"total": 20, "same": 15, "fixed": 3, "waiting": 2, "upload": 0, "run": {"state": "going"}}), CHECK, 1400)

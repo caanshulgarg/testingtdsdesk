@@ -162,6 +162,9 @@ type pullWork struct {
 	empSince time.Time
 	empNext  time.Time
 	paySkip  int
+	// 2.5.12: the day's entries held alone (pullHoldEntry), told with the next period_entries: [{guid, masterId, alterId,
+	// type, why}]
+	held []M
 	// ROUND 104 (a): Tally's company list named the company for this day at coAt (the bridge's clock) / coReal (the
 	// wall clock), on coPort; zero: to be asked before the next entry
 	coAt   time.Time
@@ -175,6 +178,7 @@ type pullWork struct {
 	batches  int
 	single   map[string]bool // entries a group's answer left for FinComVoucherObject
 	warmAt   time.Time       // review R1-5: the day's heads, or its last group, answered (the bridge's clock)
+	noRange  bool            // 2.5.12: this day's list is asked for this day alone (a range answer was not used)
 }
 
 // review 245 R15 (M1): a payroll entry waits for its employees at most EmployeeWaitTries tries (a minute apart) and
@@ -207,6 +211,11 @@ var pull = struct {
 	// 2.4.9: the FinComVoucherBatch request being asked now (the dated guard lets only it through; batch249.go)
 	batchAsk string
 	batchCo  map[string]int // review R1-4: the group size a company's slow days came down to (batch249.go pullBatchCo)
+	// 2.5.12 (range2512.go): the range of days being asked now, each company's range size, and the days' lists a range
+	// answer gave (by day key), each taken by its own day's turn
+	rangeAsk   string
+	rangeN     map[string]int
+	rangeHeads map[string]pullRangeDay
 }{empAt: map[string]time.Time{}, stopped: map[int]string{}, upload: map[string]M{}, tell: map[string]M{}, stopCo: map[string]M{}, done: map[string]time.Time{}, state: map[string]M{}, said: map[string]string{}}
 
 // --- the beat answer: periodDays [{company, company_guid, day, fetch, types}], at most 3
@@ -319,6 +328,9 @@ func dayHeadsExact(tc *TC, x string) bool {
 	}
 	co := pinCo(x)
 	a, z := pinDates(x)
+	if a != "" && z > a {
+		return dayHeadsRangeExact(x, pinCo(x), a, z) // 2.5.12: a range of the days FinCom listed (range2512.go)
+	}
 	if a == "" || a != z {
 		return false
 	}
@@ -627,6 +639,9 @@ func pullStep() (sent bool, more bool) {
 		if handled, sent, more := fastStep(w, port); handled {
 			return sent, more
 		}
+		if handled, sent, more := pullRangeStep(w, port); handled {
+			return sent, more // 2.5.12: the days' lists for a range of days (range2512.go)
+		}
 		return pullHeadsStep(w, port)
 	case !w.sentHeads:
 		return false, pullSendHeads(w)
@@ -645,7 +660,7 @@ func pullStep() (sent bool, more bool) {
 			return false, false
 		}
 		return pullFetchStep(w, port)
-	case len(w.got)+len(w.gone) > 0:
+	case len(w.got)+len(w.gone)+len(w.held) > 0:
 		return false, pullFlush(w)
 	case w.paySkip > 0:
 		// review 245 R15 (M1): what was read is sent; the payroll entries left out: the day to be uploaded (one quiet line)
@@ -685,6 +700,7 @@ func pullHeadsStep(w *pullWork, port int) (bool, bool) {
 	case gaveWay(err) || errors.Is(err, errRetryWait) || errors.Is(err, errReadStopped) || errors.Is(err, errDayHeadsRefused):
 		return false, false // nothing reached Tally; the day waits
 	case errors.Is(err, errRecorderStop):
+		pullRangeNoteFail(it) // 2.5.12: the sparse evidence starts again (range2512.go)
 		// ROUND 103 (1b, the owner's freeze safety): a day's list over 2 s stops reading older entries of this company;
 		// the days still missing are to be uploaded by hand (one quiet line); never asked again by itself
 		pullStopCompany(w, "over2s", form)
@@ -738,6 +754,9 @@ func pullHeadsStep(w *pullWork, port int) (bool, bool) {
 	}
 	if w.headsDone {
 		w.warmAt = nowFn()
+		if !w.split {
+			pullRangeNoteDay(it, len(rows), int(took*1000), w.heads) // 2.5.12 (range2512.go): sparse evidence, the run's check
+		}
 	}
 	pullNote(it, "heads", w)
 	return true, w.headsDone
@@ -876,6 +895,12 @@ func pullFetchStep(w *pullWork, port int) (bool, bool) {
 		return true, false
 	case err == nil:
 	case errors.Is(err, errFastShape):
+		// 2.5.12: one entry never sinks a day: only that entry is held (its reason kept), the day's others go on
+		if pullHoldEntry(w, mid, err.Error()) {
+			w.asked++ // (asked once: pullHoldEntry does not count it)
+			pullNote(it, "fetch", w)
+			return true, true
+		}
 		pullMarkUpload(w, "shape", "")
 		return true, false
 	default:
@@ -898,10 +923,58 @@ func pullFetchStep(w *pullWork, port int) (bool, bool) {
 		// moved to another day, or not the entry the day's list named: not sent; the day is counted again on its next turn
 		writeLog(fmt.Sprintf("Older entries of %s: the entry with MasterID %s is no longer of %s in Tally; not sent (the day is counted again)", it.Company, mid, liveDay(it.Day)))
 	default:
-		w.got = append(w.got, x)
+		pullKeep(w, mid, x)
 	}
 	pullNote(it, "fetch", w)
 	return true, true
+}
+
+// 2.5.12: the largest entry FinCom takes in a day's call (tally-ingest MAX_RECORDER_XML, 2 MB; it refuses the whole call
+// for one larger entry, which marked the whole day to be uploaded): a larger one is held alone (pullHoldEntry)
+const pullEntryMax = 2 * 1024 * 1024
+
+// 2.5.12: an entry read, as kept, goes with the day's others; one larger than FinCom takes is held alone
+func pullKeep(w *pullWork, mid, x string) {
+	if len(x) > pullEntryMax && pullHoldEntry(w, mid, fmt.Sprintf("the entry is larger than FinCom takes (%d characters); upload that day's Day Book to settle it", len(x))) {
+		return
+	}
+	w.got = append(w.got, x)
+}
+
+// 2.5.12 (the owner's approval of 09-Nov-2026; the independent review's point 3): an entry of the day FinCom cannot take
+// as Tally keeps it (an errFastShape, or larger than FinCom takes) is HELD ALONE; the day's other entries are read and
+// sent as on any day. The day stays OPEN for that entry: nothing of it is sent as an entry (never a head taken as "seen":
+// the voucher is missing or stale in FinCom, and the day must not look done); the entry and its reason go to FinCom with
+// the day's last period_entries as "held": [{guid, masterId, alterId, type, why}]. tally-ingest (migration 154,
+// tally_period_hold) keeps them on the day, keeps the day unfinished and lists it again by itself: every later pull and
+// the night's catch-up ask Tally for that entry again (FinComVoucherObject, the one-entry request; no new request), and
+// again after each bridge update; a read that takes it clears the mark and ends the day. After 3 tries that fail on one
+// bridge version FinCom shows the manual step (the day's Day Book exported from Tally). Its reason is in the bridge's
+// log and once in the tray's activity. false: not held (no GUID in the day's list for it: the caller marks the day as
+// before). The caller counts the entry as asked
+func pullHoldEntry(w *pullWork, mid, why string) bool {
+	it, h := w.it, w.heads[mid]
+	g := cleanGUID(h.GUID)
+	if g == "" || !isTallyDate(it.Day) || !batchMidOK(mid) {
+		return false
+	}
+	typ := strings.TrimSpace(h.Type)
+	words := cutRunes(fmt.Sprintf("%s entry (MasterID %s) of %s held: %s", or(typ, "An"), mid, liveDay(it.Day), why), 300)
+	if typ == "" {
+		words = cutRunes(fmt.Sprintf("An entry (MasterID %s) of %s held: %s", mid, liveDay(it.Day), why), 300)
+	}
+	var rest []string
+	for _, m := range w.want {
+		if m != mid {
+			rest = append(rest, m)
+		}
+	}
+	w.want = rest
+	w.fails = 0
+	w.held = append(w.held, M{"guid": g, "masterId": mid, "alterId": h.Alter, "type": typ, "why": words})
+	writeLog("Older entries of " + it.Company + ": " + words + " (the day's other entries are sent; the day stays open for this entry and FinCom asks for it again by itself)")
+	liveSayOnce("pull|held|"+it.key()+"|"+mid, "Older entries of "+it.Company+": "+words)
+	return true
 }
 
 // payroll (ROUND 103, B): the company's employees (FinComEmployees, 2.4.4's read) read and taken by FinCom before the first
@@ -1017,7 +1090,7 @@ func pullGotBytes(w *pullWork) int {
 
 // the entries read go to FinCom (period_entries); taken: they are not sent again
 func pullFlush(w *pullWork) bool {
-	if len(w.got) == 0 && len(w.gone) == 0 {
+	if len(w.got) == 0 && len(w.gone) == 0 && len(w.held) == 0 {
 		return true
 	}
 	it := w.it
@@ -1032,12 +1105,28 @@ func pullFlush(w *pullWork) bool {
 	for _, x := range w.got[:n] {
 		vs = append(vs, x)
 	}
-	r := invokeCloud(M{"kind": "period_entries", "company": it.Company, "company_guid": it.CGUID, "day": it.Day, "vouchers": vs, "gone": toAny(w.gone), "full": true}, 120)
+	body := M{"kind": "period_entries", "company": it.Company, "company_guid": it.CGUID, "day": it.Day, "vouchers": vs, "gone": toAny(w.gone), "full": true}
+	// 2.5.12 (pullHoldEntry): the day's LAST call says which of its entries are held, [] when none (so FinCom clears an
+	// earlier mark when a retry took the entry); a call with more of the day's entries still to come says nothing of it
+	last := n == len(w.got) && len(w.want) == 0
+	held := 0
+	if last {
+		hs := make([]any, 0, len(w.held))
+		for _, h := range w.held {
+			hs = append(hs, h)
+		}
+		body["held"], held = hs, len(hs)
+	}
+	r := invokeCloud(body, 120)
 	if !pullCloudOK(w, r, "the entries") {
 		return false
 	}
-	writeLog(fmt.Sprintf("Older entries of %s: %s: %d entr%s sent to FinCom%s", it.Company, liveDay(it.Day), n, map[bool]string{true: "y", false: "ies"}[n == 1],
-		map[bool]string{true: fmt.Sprintf(" (%d no longer in Tally)", len(w.gone)), false: ""}[len(w.gone) > 0]))
+	if last {
+		w.held = nil
+	}
+	writeLog(fmt.Sprintf("Older entries of %s: %s: %d entr%s sent to FinCom%s%s", it.Company, liveDay(it.Day), n, map[bool]string{true: "y", false: "ies"}[n == 1],
+		map[bool]string{true: fmt.Sprintf(" (%d no longer in Tally)", len(w.gone)), false: ""}[len(w.gone) > 0],
+		map[bool]string{true: fmt.Sprintf("; %d held (the day stays open for %s)", held, map[bool]string{true: "it", false: "them"}[held == 1]), false: ""}[held > 0]))
 	w.got, w.gone = append([]string(nil), w.got[n:]...), nil
 	fastRateNote(it, n) // next-fast-entries: the speed told in the beat, FastEntries on only (entries FinCom took, a minute)
 	// an entry whose lines did not total zero was not taken: FinCom marked the day to be uploaded by hand (its words)
