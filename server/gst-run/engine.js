@@ -6,9 +6,10 @@
 //                          cloud copy has (each ledger's group, GSTIN and PAN: BookSrc.ledgersInto; Tally's groups), the
 //                          entries (tally_vouchers / tally_lines / tally_bills: BookSrc.apply), meta as a Day Book read
 //                          sets it, and the ledger list (Books.mapLedgers on the saved list, then LedMaster.refresh)
-//   step(rows, reg, kept, o)  one background run's work: the first months of the books not kept yet (kept: {ym: result}
-//                          worked out on the same version and engine), at most o.max (2) months and about o.budget ms
-//                          (600), each starting from the credit the month before carried (taken from what is kept, so
+//   step(rows, reg, kept, o)  one background run's work: the first months of the books (of o.only) not kept yet (kept:
+//                          {ym: result} worked out on the same version and engine), at most o.max (2) months, within the
+//                          time from the request's start (o.ready, o.total: else {big: true}, nothing worked out), each
+//                          starting from the credit the month before carried (taken from what is kept, so
 //                          no earlier month is worked out again). Each month is worked out as the app works it out with
 //                          that month on screen: S.gstYm the month, the 2B matching of its year (gst-2b-match's run for
 //                          the month's GSTIN and year) in M2B.st. Each month keeps the fingerprint of its inputs (fp,
@@ -24,7 +25,7 @@ import * as E from "../_shared/gst3b.js";
 import { gst3bPrint } from "../_shared/gst3bprint.js";
 
 // the revision of the function around the engine (data.ts, handler.ts): moved by hand with tests/gst_cloud_rev.json
-export const REV = "153.2";
+export const REV = "153.3";
 
 const G = globalThis;
 // what the app's program has around the engine: names.js (put at its head by build.py too)
@@ -88,9 +89,13 @@ let GEN = 0;
 // runs: {"<gstin>|<fy>": run as gst-2b-match shows it}}; reg: the state code; kept: {ym: result} current
 export function step(rows, reg, kept, o) {
   o = o || {}; kept = kept || {};
-  const max = o.max || 2, budget = o.budget || 600, now = o.now || (() => Date.now());
+  // the budget is the run's own work (o.spent: the ms the request already spent reading answers, its JSON and unpacking;
+  // then this step's): reading and making the books over o.ready (1100 ms) is too big for a run; a month is worked out
+  // only when, at the pace of the reading, it ends by o.total (1500 ms). Waiting on the database is not counted (an edge
+  // function's CPU limit does not count it either)
+  const max = o.max || 2, now = o.now || (() => Date.now()), ready = o.ready || 1100, total = o.total || 1500;
   const was = { S: G.S, CO: G.CO, perRender: G.perRender, IN_RENDER: G.IN_RENDER, RENDER_GEN: G.RENDER_GEN };
-  const t0 = now();
+  const t0 = now(), spent = o.spent || 0, used = () => spent + now() - t0;
   try {
     const co = Object.assign({}, rows.co || {}, { id: rows.client });
     const S = { books: null, coId: rows.client, companies: { [rows.client]: co }, sales: { cid: rows.client, list: rows.sales || [] }, gstYm: "" };
@@ -101,10 +106,14 @@ export function step(rows, reg, kept, o) {
     // the fingerprint of the inputs, as read (before anything is worked out)
     const fp0 = o.fp || gst3bPrint(b, rows.sales || [], "");
     E.GSTR._carry = null; E.GST2B._memo = null; E.GSTAdv._memo = null; E.GSTF._bills = null; E.GSTF._owe = null; E.M2B.st = {};
-    const all = E.GSTR.months(), todo = all.filter((m) => !kept[m]), done = [], have = Object.assign({}, kept);
+    const all = E.GSTR.months(), want = (m) => !o.only || o.only.includes(m), todo = all.filter((m) => !kept[m] && want(m)), done = [], have = Object.assign({}, kept);
     const gstin = (E.GSTR.gstins(b) || []).find((g) => g.slice(0, 2) === reg) || "";
+    const atReady = used();
+    if (todo.length && (atReady > ready || atReady * 2 > total)) return { big: true, months: [], more: true, all, vouchers: b.vouchers.length, ms: now() - t0, booksMs: o.books ? 0 : tBooks, books: b, fp: fp0, atReady };
+    let last = atReady;
     for (const m of todo) {
-      if (done.length >= max || (done.length && now() - t0 > budget)) break;
+      if (done.length >= max || used() + last > total) break;
+      const tm = now();
       // the month on screen: its year's 2B matching, nothing kept from another month but the 3Bs before it (perRender's
       // "3b|<month>|<reg>": GSTR.creditIn reads the credit the month before carried from it)
       S.gstYm = m; E.M2B.st = {};
@@ -117,9 +126,9 @@ export function step(rows, reg, kept, o) {
       G.IN_RENDER = 1; G.RENDER_GEN = ++GEN;
       G.perRender = (obj, key, fn) => { let x = memo.get(obj); if (!x) memo.set(obj, x = new Map()); if (x.has(key)) return x.get(key); const v = fn(); x.set(key, v); return v; };
       const t = E.GSTR.threeB(m, reg), res = Object.assign(boxes(t), { engine: ENGINE, fp: Object.assign({}, fp0, { run: r2b ? String(r2b.id) : "" }) });
-      have[m] = res; done.push({ ym: m, result: res });
+      have[m] = res; done.push({ ym: m, result: res }); last = now() - tm;
     }
-    return { months: done, more: all.some((m) => !have[m]), all, vouchers: b.vouchers.length, ms: now() - t0, booksMs: o.books ? 0 : tBooks, books: b, fp: fp0 };
+    return { months: done, more: all.some((m) => want(m) && !have[m]), all, vouchers: b.vouchers.length, ms: now() - t0, booksMs: o.books ? 0 : tBooks, books: b, fp: fp0, atReady };
   } finally {
     Object.assign(G, was);
     Object.keys(was).forEach((k) => { if (was[k] === undefined) delete G[k]; });

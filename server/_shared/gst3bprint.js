@@ -10,13 +10,18 @@
 //     run        the 2B matching run of the month's year that was read (gst-2b-match's id), "" for none
 //     pend       ledgers with entries whose kind (GST, TDS, bank...) is a guess, not set or confirmed: the app may guess
 //                them otherwise (another client's confirmation), so a cloud answer is used only when this is 0
-//     work       a hash of the work the 3B reads (2B, IMS, typed and filed returns, settings, rules, advances, the
-//                ledger list's kinds, the masters' groups and GSTINs)
+//     work       a hash of the work the 3B reads (GST3B_KEYS: 2B, IMS, typed and filed returns, settings, rules,
+//                advances, the masters; the ledger list by its kinds)
 // Note (review of 18ad47515, item 9): entries of the same day are taken in the order the books hold them; the app's
 // books and the cloud's can hold one day's entries in another order. The app's order is not changed here; the fingerprint
 // leaves the order out, and run_gst_cloud.js keeps the two orders the same.
-const WORK = ["twoBs", "reco2b", "itcTrack", "outRej", "gst3b", "gstFiled", "gstSet", "gstOpen", "rule37On", "rev", "assets", "filed", "filed1a", "itcBasis",
-  "advFix", "gstVault", "gstRegs", "states", "gstins", "under", "groups", "ledInfo", "itcDec", "gone"];
+// the items of a client's work the 3B engine reads (server/_shared/gst3b.js: S.books.<key>), the ledger list (map) with
+// them; migration 153's gst_calc_version counts exactly these keys, and tests/run_gst_cloud.js checks the engine reads no
+// other and tests/run_migration153.py that each one moves the version
+const GST3B_KEYS = ["advFix", "amendFix", "assets", "filed", "filed1a", "gone", "groups", "gst3b", "gstAato", "gstApi", "gstCashLedger", "gstContacts", "gstFiled",
+  "gstOpen", "gstRegs", "gstSet", "gstVault", "gstins", "itcBasis", "itcDec", "itcTrack", "ledCheck", "ledInfo", "ledInfoAt", "map", "outRej", "pans", "reco2b",
+  "rev", "rule37On", "states", "twoBs", "under"];
+const WORK = GST3B_KEYS.filter((k) => k !== "map");
 function gst3bHash(s) {
   let a = 2166136261 >>> 0, c = 5381;
   for (let i = 0; i < s.length; i++) { const k = s.charCodeAt(i); a = Math.imul(a ^ k, 16777619) >>> 0; c = (Math.imul(c, 33) ^ k) >>> 0; }
@@ -41,4 +46,4 @@ function gst3bPrint(b, sales, run2b) {
 }
 // the same inputs: every part equal, and nothing pending on either side
 function gst3bSame(a, c) { return !!(a && c) && a.pend === 0 && c.pend === 0 && gst3bStable(a) === gst3bStable(c); }
-export { gst3bPrint, gst3bSame, gst3bHash, gst3bStable };
+export { gst3bPrint, gst3bSame, gst3bHash, gst3bStable, GST3B_KEYS };

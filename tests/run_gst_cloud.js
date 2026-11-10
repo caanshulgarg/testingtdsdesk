@@ -28,7 +28,7 @@ let fails = 0; const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + 
 const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "MONTHS3", "toDateObj", "fmtDate", "tallyDate", "STATE_CODES", "RULE_DEFAULTS", "Books", "LedMaster", "GSTR", "GSTAdv", "GSTRev", "GSTAmend",
   "GST2B", "INR", "normName", "nameSim", "ITCT", "GSTSet", "CustIMS", "GSTF", "GSTQ", "GSTV", "M2B", "Audit", "TDSTally", "TDS", "BookSrc", "BookItems", "BookSync", "BOOKS_KEYS", "clone", "TallyRead", "CO",
   "RENDER_GEN", "BOOKS_REV", "drawStamp", "REACT_SCOPE", "reactScopeEnd", "reactScope", "perRender", "memoScope"];
-const REVF = path.join(__dirname, "gst_cloud_rev.json"), REV_FILES = ["server/_shared/gst3b.js", "server/_shared/names.js", "server/_shared/gst3bprint.js", "server/gst-run/engine.js", "server/gst-run/data.ts", "server/gst-run/handler.ts", "server/gst-run/index.ts"];
+const REVF = path.join(__dirname, "gst_cloud_rev.json"), REV_FILES = ["server/_shared/gst3b.js", "server/_shared/names.js", "server/_shared/gst3bprint.js", "server/gst-run/engine.js", "server/gst-run/data.ts", "server/gst-run/handler.ts", "server/gst-run/index.ts", "server/gst-run/migration-153-gst-cloud.sql"];
 function revSha(){ const h = require("crypto").createHash("sha256"); REV_FILES.forEach(f => h.update(f + "\n" + fs.readFileSync(path.join(ROOT, f), "utf8").replace(/^export const REV = "[^"]*";$/m, "") + "\n")); return h.digest("hex"); }
 const CLIENT = "cli-syn-153", FIRM = "f1530000-0000-4000-8000-000000000001";
 
@@ -91,6 +91,16 @@ let rows = rowsOf(W);
   const work = Object.assign({}, rows.work, {filed, gstFiled: Object.assign({}, rows.work.gstFiled, {"07": Object.assign({}, rows.work.gstFiled["07"], {"202507": {snap: jul, r3b: "2025-08-20", r1: "2025-08-11"}, "202506": {r1: "2025-07-11"}})})});
   rows = Object.assign({}, rows, {items: items(work), work});
 }
+// an older book of the same client (the year before, the same entries a year earlier): its months are gst_calc_book's
+// for 2024-25, and the background runs fill them too
+const OLDBK = "bbbbbbbb-0153-4000-8000-000000000002";
+function older(r){
+  const y = d => d ? String(Number(String(d).slice(0, 4)) - 1) + String(d).slice(4) : d, g = id => "old-" + id;
+  return Object.assign({}, r, {book: Object.assign({}, r.book, {book_id: OLDBK, from_date: "2024-04-01", open_as_on: "2024-04-01"}),
+    heads: r.heads.map(h => Object.assign({}, h, {guid: g(h.guid), day: y(h.day), ref_date: y(h.ref_date), deleted_at: h.deleted_at ? y(h.deleted_at) : null})),
+    lines: r.lines.map(l => Object.assign({}, l, {guid: g(l.guid)})), bills: r.bills.map(b => Object.assign({}, b, {guid: g(b.guid)}))});
+}
+const OLD = older(rows);
 const ASKS = ["202504", "202505", "202506", "202507", "202508", "202509", "202510", "202511", "202512", "202601", "202602", "202603"].map(ym => ({reg: "07", ym}));
 
 // ---------------------------------------------------------------- the cloud's side (Deno)
@@ -117,12 +127,12 @@ const near0 = o => !o || H.every(h => Math.abs(Number(o[h]) || 0) < 0.005);
   if (process.env.GST_ONLY_BIG) return big();
   console.log("== 1. the background runs (gst-run in Deno, UTC): a month or two each, CPU and memory");
   const file = path.join(OUT, "gst-cloud-rows.json"), res = path.join(OUT, "gst-cloud-res.json");
-  fs.writeFileSync(file, JSON.stringify({rows, asks: ASKS, firm: FIRM}));
+  fs.writeFileSync(file, JSON.stringify({rows, old: {book: OLD.book, heads: OLD.heads, lines: OLD.lines, bills: OLD.bills}, asks: ASKS, firm: FIRM}));
   const cloud = deno(res, [file, res]);
-  ok(cloud.miss.ok && cloud.miss.pending && cloud.miss.result === null && cloud.kicked === 1 && cloud.keptAtMiss === 0, "a member's miss: nothing worked out in the request, the client queued and a background run started");
-  ok(cloud.limited && cloud.limited.idle, "the same client is not taken again within 20 seconds (the queue's rate limit)");
-  const R = cloud.runs.filter(r => r.months && r.months.length);
-  ok(R.every(r => r.ok && r.months.length <= 2) && cloud.kept.length === 12, R.length + " runs, at most 2 months each, every month from April kept (" + cloud.kept.length + "): " + R.map(r => r.months.join("+")).join(" "));
+  ok(cloud.miss.ok && cloud.miss.pending && cloud.miss.result === null && cloud.miss.started === true && cloud.kicked === 1 && cloud.keptAtMiss === 0, "a member's miss: nothing worked out in the request, the client queued (gst_calc_want true) and a background run started");
+  ok(cloud.limited && cloud.limited.idle, "the same client is not taken again while a run holds it or within 20 seconds of one (the queue's rate limit)");
+  const R = cloud.runs.filter(r => r.months && r.months.length), KN = cloud.kept.filter(k => k.book === rows.book.book_id && !/\|all$/.test(k.args)), KO = cloud.kept.filter(k => k.book === OLDBK && !/\|all$/.test(k.args));
+  ok(R.every(r => r.ok && r.months.length <= 2) && KN.length === 12 && KO.length === 12 && cloud.queueLeft === 0, R.length + " runs, at most 2 months each; every month kept on its own book (gst_calc_book): 12 on 2025-26's book, then 12 on the older 2024-25 book; the queue empty after: " + R.map(r => (r.book === OLDBK ? "old " : "") + r.months.join("+")).join(" "));
   const worst = Math.max(...R.map(r => r.cpu));
   ok(worst < 1000, "CPU per run (the fake database's own left out): " + R.map(r => r.cpu).join(", ") + " ms; the worst " + worst + " ms (target about 1 s; the limit 2 s)");
   const hp = Math.max(...R.map(r => r.heap)), lv0 = cloud.live || {};
@@ -134,7 +144,7 @@ const near0 = o => !o || H.every(h => Math.abs(Number(o[h]) || 0) < 0.005);
   for (const a of ASKS){
     const mine = app3b(rows, a.reg, a.ym);
     appBy[a.ym] = mine[a.ym];
-    const k = cloud.kept.find(z => z.args === "07|" + a.ym), g = k && k.result, m = boxes(mine[a.ym]);
+    const k = KN.find(z => z.args === "07|" + a.ym), g = k && k.result, m = boxes(mine[a.ym]);
     const bad = [];
     Object.entries(BOX).forEach(([n, f]) => { boxN++; if (!g || JSON.stringify(f(g)) !== JSON.stringify(f(m))) bad.push(n + ": cloud " + JSON.stringify(g && f(g)) + " app " + JSON.stringify(f(m))); });
     const same = g && JSON.stringify(Object.assign({}, g, {engine: undefined, fp: undefined})) === JSON.stringify(m);
@@ -144,10 +154,17 @@ const near0 = o => !o || H.every(h => Math.abs(Number(o[h]) || 0) < 0.005);
     const b = open(rows), run = rows.runs[W.OWN + "|" + x.M2B.fyOf(a.ym)], mineFp = gst3bPrint(b, ctx.S.sales.list, run ? run.id : "");
     if (!g || !gst3bSame(mineFp, g.fp)) { fpOk = false; console.log("    fp app ", JSON.stringify(mineFp), "\n    fp cloud", JSON.stringify(g && g.fp)); }
   }
+  // the older book: each month as the app works it out with that book open and the month on screen
+  let oldSame = 0; const oldBad = [];
+  for (const m of ["202404", "202405", "202406", "202407", "202408", "202409", "202410", "202411", "202412", "202501", "202502", "202503"]){
+    const mine = app3b(OLD, "07", m), k = KO.find(z => z.args === "07|" + m);
+    if (k && JSON.stringify(Object.assign({}, k.result, {engine: undefined, fp: undefined})) === JSON.stringify(boxes(mine[m]))) oldSame++; else oldBad.push(m);
+  }
+  ok(oldSame === 12, "the older book's 12 months: the cloud's 3B is the app's, box for box (the whole 3B)" + (oldBad.length ? "; not: " + oldBad.join(", ") : ""));
   console.log("  (" + ASKS.length + " months, " + boxN + " boxes compared; the whole 3B object compared too: " + (allSame ? "equal" : "NOT equal") + ")");
   ok(fpOk, "the fingerprint of the inputs: the app's (made from its open books) and the cloud's the same for every month, nothing pending");
   { const r2 = JSON.parse(JSON.stringify(rows)); r2.heads.push(Object.assign({}, r2.heads[0], {guid: "syn-local-1", alter_id: 1000001})); r2.lines.push(Object.assign({}, r2.lines[0], {guid: "syn-local-1"}));
-    const fpX = gst3bPrint(open(r2), ctx.S.sales.list, ""), k = cloud.kept[0].result.fp;
+    const fpX = gst3bPrint(open(r2), ctx.S.sales.list, ""), k = KN[0].result.fp;
     const r3 = JSON.parse(JSON.stringify(rows)); r3.work.map["Input IGST"] = Object.assign({}, r3.work.map["Input IGST"], {byHand: false, ok: false}); r3.items = items(r3.work);
     const fpP = gst3bPrint(open(r3), ctx.S.sales.list, "");
     const r4 = JSON.parse(JSON.stringify(rows)); r4.work.gst3b["07|202509"] = {rev2: {igst: 1}}; r4.items = items(r4.work);
@@ -173,7 +190,7 @@ const near0 = o => !o || H.every(h => Math.abs(Number(o[h]) || 0) < 0.005);
   ok(nz(T["202509"].cn2b) && nz(T["202510"].na), "2B: a supplier's credit note only in 2B; credit 2B says is not available (4(D)(2))");
   ok(nz(T["202510"].custRej && T["202510"].custRej.add), "IMS: our credit note rejected by the customer added back");
   ok(nz(T["202508"].rev2), "the figures typed into 3B (4(B)(2))");
-  ok(T["202511"].other && cloud.kept.find(z => z.args === "07|202511").result.fp.run === "41", "November: the AI pair kept by gst-2b-match for 2025-26 read (run 41)");
+  ok(T["202511"].other && KN.find(z => z.args === "07|202511").result.fp.run === "41", "November: the AI pair kept by gst-2b-match for 2025-26 read (run 41)");
 
   console.log("== 4. kept, a change, the keys, the switches, a failure");
   ok(cloud.hits.every(c => c.ok && c.cached && c.result), "the member's months given back as kept, nothing worked out");
@@ -183,6 +200,23 @@ const near0 = o => !o || H.every(h => Math.abs(Number(o[h]) || 0) < 0.005);
   ok(cloud.clientOff.status === 403 && cloud.clientOff.reason === "company_off" && cloud.clientOffWarm.kind === "gate", "a switched-off client: refused, by the member's request and the background run");
   ok(cloud.firmPaused.status === 403 && cloud.firmPaused.reason === "firm_paused", "a paused firm: refused");
   ok(cloud.failure.status === 500 && cloud.failure.ok === false && /down/.test(cloud.failure.error) && cloud.failure.cors, "a failure inside: JSON {ok: false, error} with the CORS headers");
+  const q = cloud.q || {};
+  ok(q.taken === 1 && q.wantWhileTaken === false && q.takenAgainWithin2min === 0 && q.keptAfterDone && q.goneWhenNothingNew, "the queue: a change while a run holds the client starts no run, is not taken again within 2 minutes, and stays queued after that run for the next; with nothing new it leaves");
+  ok(q.afterThreeKilled && q.afterThreeKilled.taken === 0 && q.afterThreeKilled.tooBig === true && q.afterThreeKilled.want === false, "a run taken three times and never finished: the client too big, not taken again, no run started for it (the app works it out)");
+  const tb = cloud.tooBigRun || {};
+  ok(tb.ok && tb.big === true && tb.stored === 0 && tb.queued && tb.queued.too_big === true, "a run whose reading and books pass its budget: nothing stored, the client marked too big (spent " + tb.spentMs + " ms, ready at " + tb.readyMs + " ms)");
+
+  console.log("== 4b. the version's GST keys, the engine's reads and the app's poke");
+  const {GST3B_KEYS} = await import(path.join(ROOT, "server", "_shared", "gst3bprint.js"));
+  const eng3b = fs.readFileSync(path.join(ROOT, "server", "_shared", "gst3b.js"), "utf8"), BK = JSON.parse(fs.readFileSync(path.join(ROOT, "src", "js", "18-certificates-under-197-and-206aa-where-t.js"), "utf8").match(/const BOOKS_KEYS = (\[[^\]]*\])/)[1]);
+  const read = new Set(); for (const mm of eng3b.matchAll(/\b(?:b|S\.books|\(S\.books \|\| \{\}\)|\(\(S\.books \|\| \{\}\)|\(S\.books && S\.books)\s*\.\s*([A-Za-z_]\w*)/g)) read.add(mm[1]);
+  const reads = BK.filter(k => read.has(k) && !["vouchers", "meta"].includes(k));
+  ok(reads.every(k => GST3B_KEYS.includes(k)), "every work key the engine reads is one the version counts (" + reads.length + " read: " + reads.filter(k => !GST3B_KEYS.includes(k)).join(", ") + ")");
+  const sql = fs.readFileSync(path.join(ROOT, "server", "gst-run", "migration-153-gst-cloud.sql"), "utf8"), arr = (sql.match(/i\.key = any \(array\[([^\]]*)\]/) || ["", ""])[1].split(",").map(x => x.trim().replace(/^'|'$/g, "")).filter(Boolean);
+  ok(JSON.stringify(arr) === JSON.stringify(GST3B_KEYS), "gst_calc_version counts exactly gst3bprint.js's GST3B_KEYS (" + arr.length + ")");
+  const poke = (fs.readFileSync(path.join(ROOT, "src", "js", "54-live-sync.js"), "utf8").match(/send\.some\(x => (\/\^\([^/]*\/)\.test\(x\[2\]\.k\)\)\) Cloud\.api\("rpc\/gst_calc_poke"/) || [])[1];
+  const pre = poke ? new RegExp(poke.slice(1, -1)) : null;
+  ok(pre && GST3B_KEYS.every(k => pre.test(k)), "the app pokes gst_calc_poke after saving an item of any of those keys (BookItems.pushNow, src/js/54)");
 
   return big();
 })().catch(e => { console.error(e); process.exit(1); });
@@ -193,9 +227,9 @@ async function big(){
   ok(big.heads.length >= 40000, "the book: " + big.heads.length + " entries, " + big.lines.length + " lines");
   fs.writeFileSync(bf, JSON.stringify({rows: big, asks: [{reg: "07", ym: "202603"}], firm: FIRM, timing: true}));
   const bt = deno(br, [bf, br]), BR = bt.runs.filter(r => r.months && r.months.length);
-  ok(bt.kept.length === 12 && BR.every(r => r.months.length <= 2), BR.length + " runs: " + BR.map(r => r.months.join("+")).join(" "));
+  ok(bt.kept.filter(k => !/\|all$/.test(k.args)).length === 12 && BR.every(r => r.months.length <= 2), BR.length + " runs: " + BR.map(r => r.months.join("+")).join(" "));
   const bw = Math.max(...BR.map(r => r.cpu));
-  ok(bw < 2000, "CPU per run under the 2 s limit" + (bw < 1000 ? " and the 1 s target" : ", NOT under the 1 s target") + " (the fake database's own left out): " + BR.map(r => r.cpu).join(", ") + " ms; the worst " + bw + " ms (wall " + Math.max(...BR.map(r => r.wall)) + " ms; reading " + BR.map(r => r.loadMs).join("/") + " ms, making the books " + BR.map(r => r.booksMs).join("/") + " ms, the step " + BR.map(r => r.ms).join("/") + " ms)");
+  ok(bw < 2000, "CPU per run under the 2 s limit" + (bw < 1000 ? " and the 1 s target" : ", NOT under the 1 s target") + " (the fake database's own left out): " + BR.map(r => r.cpu).join(", ") + " ms; the worst " + bw + " ms (wall " + Math.max(...BR.map(r => r.wall)) + " ms; reading the answers (JSON) " + BR.map(r => r.spentMs).join("/") + " ms, making the books " + BR.map(r => r.booksMs).join("/") + " ms, the step " + BR.map(r => r.ms).join("/") + " ms)");
   const bh = Math.max(...BR.map(r => r.heap)), lv = bt.live || {};
   const need = Math.max(lv.rows, lv.rowsAndBooks) + 60;
   ok(need < 256, "memory: what a run holds alive at its fullest (after a collection): the rows read " + lv.rows + " MB, the rows and the books with a month worked out " + lv.rowsAndBooks + " MB; with a Deno function's own (about 60 MB) " + need + " MB, under the 256 MB limit (heap in use during a run, garbage not yet collected included: up to " + bh + " MB; this test's process, with the fake database's 40,000 entries in it too: " + bt.peakRss + " MB)");

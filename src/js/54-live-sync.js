@@ -208,6 +208,8 @@ Object.assign(BookItems, {
         at = end;
       }
       s.error = ""; await this.keep(cid); Live.saved();
+      // next-cloud-gst: a GST item saved: the client's 3B queued to be worked out in the cloud (best effort, not waited on)
+      if (send.some(x => /^(twoBs|reco2b|itc|outRej|gst|filed|rule37On|rev|assets|advFix|amendFix|map|gone|states|under|groups|pans|led)/.test(x[2].k))) Cloud.api("rpc/gst_calc_poke", {method: "POST", body: {p_client: cid}}).catch(() => {});
     } catch (e){
       if (this.missing(e)){ this.off = true; BookSync.schedule(cid); return 0; }
       if (/not allowed|42501|permission/i.test(e.message)){ BookSync.of(cid).readonly = true; Live.saved(); return 0; }

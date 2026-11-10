@@ -9,19 +9,19 @@ import { step } from "../server/gst-run/engine.js";
 
 const [inFile, outFile] = Deno.args;
 const IN = JSON.parse(await Deno.readTextFile(inFile));
-const rows = IN.rows, FIRM = IN.firm, OTHER = "f1530000-0000-4000-8000-000000000002";
+const rows = IN.rows, old = IN.old || null, FIRM = IN.firm, OTHER = "f1530000-0000-4000-8000-000000000002";
 const USER = "u1530000-0000-4000-8000-00000000000a", OUTSIDER = "u1530000-0000-4000-8000-00000000000b";
 const BK = rows.book.book_id;
 const T: Record<string, any[]> = {
   members: [{ user_id: USER, firm_id: FIRM, role: "viewer", active: true }],
   clients: [{ id: rows.client, firm_id: FIRM, data: rows.co, deleted: false, status: "active" }, { id: "cli-other", firm_id: OTHER, data: { name: "Another Firm's Client" }, deleted: false }],
   firms: [{ id: FIRM, status: "active" }], subscriptions: [],
-  tally_books: [Object.assign({ open_as_on: "2025-04-01" }, rows.book, { open_as_on: rows.book.open_as_on || "2025-04-01" })],
-  tally_vouchers: rows.heads.map((h: any) => ({ ...h, book_id: BK })),
-  tally_lines: rows.lines.map((l: any, i: number) => ({ ...l, id: i + 1, book_id: BK })),
-  tally_bills: rows.bills.map((l: any, i: number) => ({ ...l, id: i + 1, book_id: BK })),
-  tally_ledgers: rows.ledgers.map((l: any) => ({ ...l, book_id: BK, merged_into: null, deleted_at: null })),
-  tally_groups: rows.groups.map((l: any) => ({ ...l, book_id: BK })),
+  tally_books: [Object.assign({ open_as_on: "2025-04-01" }, rows.book, { open_as_on: rows.book.open_as_on || "2025-04-01" })].concat(old ? [Object.assign({}, old.book, { firm_id: FIRM, client_id: rows.client })] : []),
+  tally_vouchers: rows.heads.map((h: any) => ({ ...h, book_id: BK })).concat(old ? old.heads.map((h: any) => ({ ...h, book_id: old.book.book_id })) : []),
+  tally_lines: rows.lines.map((l: any, i: number) => ({ ...l, id: i + 1, book_id: BK })).concat(old ? old.lines.map((l: any, i: number) => ({ ...l, id: 900000 + i, book_id: old.book.book_id })) : []),
+  tally_bills: rows.bills.map((l: any, i: number) => ({ ...l, id: i + 1, book_id: BK })).concat(old ? old.bills.map((l: any, i: number) => ({ ...l, id: 900000 + i, book_id: old.book.book_id })) : []),
+  tally_ledgers: rows.ledgers.map((l: any) => ({ ...l, book_id: BK, merged_into: null, deleted_at: null })).concat(old ? rows.ledgers.map((l: any) => ({ ...l, book_id: old.book.book_id, merged_into: null, deleted_at: null })) : []),
+  tally_groups: rows.groups.map((l: any) => ({ ...l, book_id: BK })).concat(old ? rows.groups.map((l: any) => ({ ...l, book_id: old.book.book_id })) : []),
   client_book_items: rows.items.map((r: any) => ({ ...r, firm_id: FIRM, client_id: rows.client })),
   records: rows.sales.map((d: any) => ({ firm_id: FIRM, client_id: rows.client, kind: "sales", id: rows.client + ":" + d.id, data: d, deleted: null })),
   gst_2b_runs: Object.entries(rows.runs).map(([k, r]: [string, any]) => ({ id: r.id, firm_id: FIRM, client_id: rows.client, gstin: k.split("|")[0], fy: k.split("|")[1], status: "done", done_at: r.at, queued_at: r.at, result: r.result })),
@@ -50,12 +50,24 @@ const RPC: Record<string, (a: any) => any> = {
   gst_calc_gstins: (a) => Array.from(new Set(T.tally_vouchers.filter((v) => v.book_id === a.p_book && v.cmp_gstin).map((v) => String(v.cmp_gstin).toUpperCase())
     .concat(T.clients.filter((c) => c.id === a.p_client && c.data && c.data.gstin).map((c) => String(c.data.gstin).toUpperCase())))).filter((g) => /^\d{2}[A-Z0-9]{13}$/.test(g)).sort(),
   gst_calc_version: (a) => "v" + s32(JSON.stringify([T.tally_vouchers, T.tally_lines, T.tally_bills, T.tally_ledgers, T.client_book_items, T.clients.filter((c) => c.id === a.p_client), T.records, T.gst_2b_runs, T.gst_2b_decisions])),
-  gst_calc_want: (a) => { const q = T.gst_calc_queue.find((x) => x.client_id === a.p_client); if (q) { q.taken_at = null; } else T.gst_calc_queue.push({ firm_id: a.p_firm, client_id: a.p_client, why: a.p_why, wanted_at: clock, taken_at: null, ran_at: null }); return null; },
-  gst_calc_take: () => { const q = T.gst_calc_queue.filter((x) => (x.taken_at == null || x.taken_at < clock - 120000) && (x.ran_at == null || x.ran_at < clock - 20000)).sort((a, b) => a.wanted_at - b.wanted_at)[0];
-    if (!q) return []; q.taken_at = clock; return [{ firm_id: q.firm_id, client_id: q.client_id, why: q.why }]; },
-  gst_calc_done: (a) => { const i = T.gst_calc_queue.findIndex((x) => x.client_id === a.p_client); if (i < 0) return null; if (a.p_more) Object.assign(T.gst_calc_queue[i], { ran_at: clock, taken_at: null }); else T.gst_calc_queue.splice(i, 1); return null; },
+  gst_calc_want: (a) => { const q = T.gst_calc_queue.find((x) => x.client_id === a.p_client && x.firm_id === a.p_firm);
+    if (!q) { T.gst_calc_queue.push({ firm_id: a.p_firm, client_id: a.p_client, why: a.p_why, wanted_at: clock, taken_at: null, ran_at: null, attempts: 0, too_big: false }); return true; }
+    const was = { ...q }; q.wanted_at = clock; q.why = a.p_why || q.why; return !was.too_big && was.taken_at == null; },
+  gst_calc_take: (a) => {
+    T.gst_calc_queue.forEach((x) => { if (!x.too_big && x.attempts >= 3 && (x.taken_at == null || x.taken_at < clock - 120000)) { x.too_big = true; x.taken_at = null; } });
+    return T.gst_calc_queue.filter((x) => !x.too_big && x.attempts < 3 && (x.taken_at == null || x.taken_at < clock - 120000) && (x.ran_at == null || x.ran_at < clock - 20000))
+      .sort((p, q) => p.wanted_at - q.wanted_at).slice(0, Math.max(1, Math.min(a.p_n || 1, 5))).map((q) => { q.taken_at = clock; q.attempts++; return { firm_id: q.firm_id, client_id: q.client_id, why: q.why }; }); },
+  gst_calc_done: (a) => { const q = T.gst_calc_queue.find((x) => x.client_id === a.p_client && x.firm_id === a.p_firm); if (!q) return null;
+    if (a.p_big) Object.assign(q, { too_big: true, taken_at: null, ran_at: clock });
+    else if (!a.p_ok) Object.assign(q, { taken_at: null, ran_at: clock });
+    else if (!a.p_more && q.taken_at != null && q.wanted_at <= q.taken_at) T.gst_calc_queue.splice(T.gst_calc_queue.indexOf(q), 1);
+    else Object.assign(q, { taken_at: null, ran_at: clock, attempts: 0 });
+    return null; },
   gst_cron_ok: (a) => a.k === "cron-key",
-  gst_calc_rows: (a) => {
+  gst_calc_rows: (a) => rowsCache.get(a.p_book) || (rowsCache.set(a.p_book, rowsOf(a)), rowsCache.get(a.p_book)),
+};
+const rowsCache = new Map<string, any>();
+function rowsOf(a: any) { return (() => {
     const cols = "guid,day,alter_id,vtype,vno,party,narration,cancelled,optional,deleted_at,gstin,pos,ref,ref_date,cmp_gstin,irn,irn_ack_date,gst_reg_type,gst_country,gst_rcm,gst_nature,gst_taxability,gst_supply,gst_ineligible,gst_mixed,gst_alter_id".split(",");
     const ls = T.tally_lines.filter((l) => l.book_id === a.p_book), bs = T.tally_bills.filter((b) => b.book_id === a.p_book);
     const names = Array.from(new Set(ls.map((l) => l.ledger).concat(bs.map((b) => b.ledger)).filter((x) => x != null))).sort(), at = new Map(names.map((n, i) => [n, i]));
@@ -64,7 +76,8 @@ const RPC: Record<string, (a: any) => any> = {
     bs.slice().sort((x, y) => x.id - y.id).forEach((b) => { (B.get(b.guid) || B.set(b.guid, []).get(b.guid))!.push([at.get(b.ledger), b.name ?? null, b.type ?? null, b.amount, b.credit_days ?? null]); });
     const hs = T.tally_vouchers.filter((v) => v.book_id === a.p_book).slice().sort((x, y) => x.day < y.day ? -1 : x.day > y.day ? 1 : x.guid < y.guid ? -1 : x.guid > y.guid ? 1 : 0);
     return { ledgers: names, heads: hs.map((v) => cols.map((c) => v[c] ?? null).concat([L.get(v.guid) || [], B.get(v.guid) || []])) };
-  },
+  })(); }
+const RPC_DUMMY: Record<string, unknown> = {
 };
 const kicks: any[] = [];
 const fake = async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
@@ -125,16 +138,19 @@ const month = (ym: string, tok = "tok-member") => call({ action: "month", client
 // a miss: nothing worked out, queued, a background run started
 out.miss = await month(IN.asks[IN.asks.length - 1].ym);
 out.kicked = kicks.length; out.keptAtMiss = T.tally_calc_results.length;
+out.missAgain = await month(IN.asks[IN.asks.length - 1].ym);   // still waiting, not taken: may start a run
+out.kickedAgain = kicks.length;
 // the background runs, one after another (each run waits its 20 seconds before the client is taken again)
 out.limited = null;
-for (let i = 0; i < 40; i++) {
+for (let i = 0; i < 80; i++) {
   const r = await warm();
   if (i === 0) { const again = await call({ action: "warm" }, "service-key"); out.limited = again; }
   if (r.idle || !r.more) break;
   clock += 21000;
 }
-out.runs = runs.map((r) => ({ months: r.months, cpu: r.cpu, wall: r.wall, rss: r.rss, heap: r.heap, ok: r.ok, more: r.more, error: r.error, loadMs: r.loadMs, booksMs: r.booksMs, ms: r.ms }));
-out.kept = T.tally_calc_results.map((k) => ({ args: k.args, result: k.result, version: k.version }));
+out.runs = runs.map((r) => ({ months: r.months, book: r.book, cpu: r.cpu, wall: r.wall, rss: r.rss, heap: r.heap, ok: r.ok, more: r.more, big: r.big, error: r.error, spentMs: r.spentMs, readyMs: r.readyMs, booksMs: r.booksMs, ms: r.ms }));
+out.kept = T.tally_calc_results.map((k) => ({ book: k.book_id, args: k.args, result: k.result, version: k.version }));
+out.queueLeft = T.gst_calc_queue.length;
 out.peakRss = Math.round(rss / 1048576);
 // what a run holds alive at its fullest (after a collection): the rows read and the books made from them, one month
 // worked out (gst-run's reading and the engine, as a run does them; the fake's tables are in the base)
@@ -151,7 +167,7 @@ if (gc) {
 if (!IN.timing) {
   out.hits = []; for (const a of IN.asks) out.hits.push(await month(a.ym));
   // a new entry: the version moves, a miss again (and only a queued run, nothing worked out in the request)
-  T.tally_vouchers.push({ ...T.tally_vouchers[0], guid: "syn-new-1", alter_id: 999999, day: "2026-03-30" }); pages.clear(); sorted.clear();
+  T.tally_vouchers.push({ ...T.tally_vouchers[0], guid: "syn-new-1", alter_id: 999999, day: "2026-03-30" }); pages.clear(); sorted.clear(); rowsCache.clear();
   out.changed = await month("202603");
   out.other = await month("202603").then(() => call({ action: "month", client_id: "cli-other", reg: "07", ym: "202603" }));
   out.noauth = await month("202603", "");
@@ -159,9 +175,27 @@ if (!IN.timing) {
   out.warmNoKey = await call({ action: "warm" }, "tok-member");
   out.warmCron = await call({ action: "warm" }, "anon-key", { "x-cron-key": "cron-key" });
   // the console's switches: a switched-off client, a paused firm (the member's request and the background run)
-  T.clients[0].status = "off"; out.clientOff = await month("202603"); clock += 21000; T.gst_calc_queue = [{ firm_id: FIRM, client_id: rows.client, why: "t", wanted_at: 0, taken_at: null, ran_at: null }]; out.clientOffWarm = await call({ action: "warm" }, "service-key"); T.clients[0].status = "active";
+  T.clients[0].status = "off"; out.clientOff = await month("202603"); clock += 21000; T.gst_calc_queue = [{ firm_id: FIRM, client_id: rows.client, why: "t", wanted_at: 0, taken_at: null, ran_at: null, attempts: 0, too_big: false }]; out.clientOffWarm = await call({ action: "warm" }, "service-key"); T.clients[0].status = "active";
   T.firms[0].status = "paused"; out.firmPaused = await month("202603"); T.firms[0].status = "active";
   // a failure inside: JSON with the CORS headers, not a crash
   failOn = "tally_calc_results"; out.failure = await month("202603"); failOn = "";
+  // the queue (migration 153's rules): a change while a run holds the client is kept for the next run; a run taken and
+  // never finished three times leaves the client to the app; a run that would take too long stores nothing
+  const Q = (id: string) => T.gst_calc_queue.find((x) => x.client_id === id);
+  T.gst_calc_queue = []; clock += 600000;
+  RPC.gst_calc_want({ p_firm: FIRM, p_client: "cli-q", p_why: "t" });
+  const tk = RPC.gst_calc_take({ p_n: 1 }); clock += 1000;
+  out.q = { taken: tk.length, wantWhileTaken: RPC.gst_calc_want({ p_firm: FIRM, p_client: "cli-q", p_why: "t" }), takenAgainWithin2min: RPC.gst_calc_take({ p_n: 1 }).length };
+  RPC.gst_calc_done({ p_firm: FIRM, p_client: "cli-q", p_more: false, p_ok: true }); out.q.keptAfterDone = !!Q("cli-q");
+  clock += 21000; RPC.gst_calc_take({ p_n: 1 }); RPC.gst_calc_done({ p_firm: FIRM, p_client: "cli-q", p_more: false, p_ok: true }); out.q.goneWhenNothingNew = !Q("cli-q");
+  T.gst_calc_queue = []; RPC.gst_calc_want({ p_firm: FIRM, p_client: "cli-k", p_why: "t" });
+  for (let i = 0; i < 3; i++) { RPC.gst_calc_take({ p_n: 1 }); clock += 121000; }
+  out.q.afterThreeKilled = { taken: RPC.gst_calc_take({ p_n: 1 }).length, tooBig: Q("cli-k").too_big, want: RPC.gst_calc_want({ p_firm: FIRM, p_client: "cli-k", p_why: "t" }) };
+  // a run whose reading and books take longer than its budget (here 1 ms): nothing stored, the client too big
+  T.gst_calc_queue = []; clock += 600000; const n0 = T.tally_calc_results.length;
+  RPC.gst_calc_want({ p_firm: FIRM, p_client: rows.client, p_why: "t" }); T.client_book_items.push({ ...T.client_book_items[0], key: "gst3b", item: ".07|209901", data: { rev2: { igst: 1 } }, deleted: false }); pages.clear(); sorted.clear();
+  const h2 = handler({ env: (k) => env[k], fetch: fake as typeof fetch, now: () => new Date(Date.parse(IN.today || "2026-04-20T06:00:00Z")), later: () => {}, ready: 1 });
+  const r2 = await h2(new Request("https://fake.example/functions/v1/gst-run", { method: "POST", headers: { Authorization: "Bearer service-key", "Content-Type": "application/json" }, body: JSON.stringify({ action: "warm" }) }));
+  out.tooBigRun = await r2.json(); out.tooBigRun.stored = T.tally_calc_results.length - n0; out.tooBigRun.queued = Q(rows.client);
 }
 await Deno.writeTextFile(outFile, JSON.stringify(out));

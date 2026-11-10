@@ -129,9 +129,12 @@ whoAmI / TDSTally / GSTX only through `typeof`. A change to the 3B is made here,
 deployed with `../_shared/gst3b.js`, `../_shared/gst3bprint.js`, `../_shared/names.js`, `../_shared/cors.ts` and
 `../_shared/firmgate.ts`; verify_jwt off (it checks the member's token, the service key or the timer's key itself); it
 needs migrations 151 and 153. It never works a month out while a page waits: a member's request reads what is kept
-(or queues the client), and background runs (the queue of migration 153, filled by its triggers and by misses; a timer
-calling `{action: "warm"}` with x-cron-key, not set up yet) work out a month or two each from the credit kept for the
-month before; it reads a book's entries in one compact answer (`gst_calc_rows`). Measured (tests/run_gst_cloud.js): a
+(or queues the client), and background runs work out a month or two each from the credit kept for the month before.
+The queue (migration 153, no trigger on any table) is filled explicitly: tally-ingest after a book's entries are stored
+(`gst_calc_want_book`, never failing the ingest), the app after a GST item of the work is saved (`gst_calc_poke`, not
+waited on), and a member's miss; it is drained by migration 153's pg_cron job (every minute, made only where pg_cron,
+pg_net and the Vault secrets are) and by each run starting the next; a client whose run would pass its budget, or whose
+runs were taken 3 times and never finished, is left to the app (too_big); it reads a book's entries in one compact answer (`gst_calc_rows`). Measured (tests/run_gst_cloud.js): a
 run on a small client takes tens of ms of CPU; on a 40,000-entry book about 0.9 to 1.25 s a month (under the 2 s limit, over
 the 1 s target: the year-wide work a month needs, 2B matching, rule 37's bills, advances, the ledger list, is done again
 in every run), with about 150 MB alive at the fullest. `gst3bprint.js` is the fingerprint of a 3B's inputs, made the same way from the app's open books and from

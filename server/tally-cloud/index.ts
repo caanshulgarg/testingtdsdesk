@@ -2983,6 +2983,7 @@ async function recorderLines(dev: any, firm: string, book: string, body: any) {
     }
     if (error && notReady44(error)) return reply(503, { ok: false, notReady: true, error: "The cloud does not take recorder lines yet (migration 44)." });
     if (error) throw dbFail("recorder_lines " + via, error, "The cloud could not store these recorder lines just now; send them again.");
+    if (full) await gstWant(book);
     if (data && typeof data.queued === "number") {
       send.forEach((l: any, k: number) => { results[at[k]] = { line_id: String(l.line_id ?? ""), state: "queued", why: null, ...(found.has(String(l.line_id ?? "")) ? { guid: found.get(String(l.line_id ?? "")) } : {}) }; });
       const failed = results.filter((r) => r?.state === "failed").length;
@@ -3210,6 +3211,7 @@ async function selfCheck(dev: any, firm: string, book: string, body: any) {
 async function ingestDays(firm: string, book: string, daysIn: unknown, check = false) {
   const r = await ingestDaysRaw(firm, book, daysIn);
   if (check && !r.error) await checkQueue(book, r.done);
+  if (!r.error && r.done.length) await gstWant(book);
   return r.error ? reply(400, { ok: false, error: r.error }) : reply(200, { ok: true, done: r.done, bad: r.bad, ...(r.locked.length ? { locked: r.locked } : {}) });
 }
 // 30-Oct-2026 (the owner: "if anyone uploads any books and there is any difference.. it should find out the difference in
@@ -3223,6 +3225,14 @@ async function checkQueue(book: string, days: string[]) {
     const { error } = await db.rpc("tally_check_queue", { p_book: book, p_days: ds.map(iso), p_source: "upload" });
     if (error && !missingFn(String(error.message || ""))) fail("check_queue", error);
   } catch (e) { fail("check_queue", e); }
+}
+// next-cloud-gst (migration 153): a book's entries stored, its client's GSTR-3B is queued to be worked out again in the
+// cloud (gst-run). Never fails the ingest; a cloud without 153: nothing queued
+async function gstWant(book: string) {
+  try {
+    const { error } = await db.rpc("gst_calc_want_book", { p_book: book, p_why: "books" });
+    if (error && !missingFn(String(error.message || ""))) console.log("tally-ingest gst_calc_want_book: " + String(error.message || "").slice(0, 200), book);
+  } catch (e) { console.log("tally-ingest gst_calc_want_book: " + String((e as Error)?.message || e).slice(0, 200), book); }
 }
 // migration 44 (review M3): a day of a month the owner locked is refused by tally_ingest_day (nothing stored, nothing
 // marked). It is answered under `locked` [{day, why}], never under `done`, and logged as kept, not applied: the file stays
@@ -3481,6 +3491,7 @@ async function workPiece(m: any) {
     const r = await ingestDaysRaw(firm, book, m.days);
     if (r.error) throw new Error(r.error);
     await checkQueue(book, r.done);     // migration 133: the upload's days checked against Tally
+    if (r.done.length) await gstWant(book);
     await jobStep(job, r.done.length + r.bad.length, r.bad);
   } else if (/^\d{6}$/.test(String(m.month || ""))) {
     const r = await reparseMonthRaw(firm, book, m.month);
