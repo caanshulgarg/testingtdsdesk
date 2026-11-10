@@ -166,14 +166,17 @@ try:
     print("== 7. a link with no Tally GUID takes it from the bridge's own record (migration 155)")
     FS.ARGS.pop("tally_link_guid_fill", None)
     c, r = call(dict(base))
+    for i in range(40):     # (review B3: asked without the beat waiting for it)
+        if FS.ARGS.get("tally_link_guid_fill"): break
+        time.sleep(0.05)
     g = FS.ARGS.get("tally_link_guid_fill") or []
     ok(c == 200 and g and g[-1] == {"p_firm": FIRM, "p_device": DA, "p_bridge": GA["id"]}, "7. asked after the beat's record is kept, for this bridge (%s)" % g[-1:])
     FS.ARGS.pop("tally_link_guid_fill", None)
-    c, r = call(dict(base, companies=[{"name": "MADE UP CO", "open": False, "guid": CG}]))
+    c, r = call(dict(base, companies=[{"name": "MADE UP CO", "open": False, "guid": CG}])); time.sleep(0.5)
     ok(c == 200 and not FS.ARGS.get("tally_link_guid_fill"), "7. not asked when the bridge's own record lists no company open")
     FS.NO_FN.add("tally_link_guid_fill")
-    c, r = call(dict(base)); n1 = len(FS.ARGS.get("tally_link_guid_fill") or [])
-    c2, r2 = call(dict(base))
+    c, r = call(dict(base)); time.sleep(0.5); n1 = len(FS.ARGS.get("tally_link_guid_fill") or [])
+    c2, r2 = call(dict(base)); time.sleep(0.5)
     ok(c == 200 and r.get("ok") is True and c2 == 200 and len(FS.ARGS.get("tally_link_guid_fill") or []) == n1, "7. a cloud without 155: the beat answers as before, not asked again for 10 minutes")
     FS.NO_FN.discard("tally_link_guid_fill")
 finally:

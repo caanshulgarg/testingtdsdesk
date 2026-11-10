@@ -4451,10 +4451,12 @@ Deno.serve(sentry.wrap(async (req) => {
         // migration 155 (the owner, 10-Nov-2026: a link belongs to the company and the firm, never to a person or a bridge): a
         // linked company this bridge's own record lists open, whose link has no Tally GUID yet, takes the GUID from it (never
         // over one; never one another linked book holds), so every bridge that opens it serves it. A cloud without 155: off
+        // (review B3: not waited for; never fails the beat)
         if ((me.entry as any)?.cos?.length && Date.now() - guidFillMissing >= 600000) {
-          const { data: gf, error: ge } = await db.rpc("tally_link_guid_fill", { p_firm: firm, p_device: dev.id, p_bridge: me.id });
-          if (ge) { if (missingFn(String(ge.message || ""))) guidFillMissing = Date.now(); else console.log("tally-ingest beat: the links' GUIDs not filled:", String(ge.message || "").slice(0, 160)); }
-          else if (Number(gf) > 0) console.log("tally-ingest beat: a link's Tally GUID filled from the bridge's record", dev.id, me.id, Number(gf));
+          Promise.resolve(db.rpc("tally_link_guid_fill", { p_firm: firm, p_device: dev.id, p_bridge: me.id })).then(({ data: gf, error: ge }: any) => {
+            if (ge) { if (missingFn(String(ge.message || ""))) guidFillMissing = Date.now(); else console.log("tally-ingest beat: the links' GUIDs not filled:", String(ge.message || "").slice(0, 160)); }
+            else if (Number(gf) > 0) console.log("tally-ingest beat: a link's Tally GUID filled from the bridge's record", dev.id, me.id, Number(gf));
+          }).catch((e: unknown) => console.log("tally-ingest beat: the links' GUIDs not filled:", String((e as Error)?.message || e).slice(0, 160)));
         }
         // next-tally-linknow: the companies this beat says open that the firm's list lacks are registered now (they were
         // only by the "companies" message, every 5 minutes): a click on Link works within a beat of Tally opening it

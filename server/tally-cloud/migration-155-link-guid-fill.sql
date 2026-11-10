@@ -10,7 +10,9 @@
 --   beat says open, kept by tally-ingest since migration 146) lists by the same name once cleaned (tally_nm, case
 --   folded, the exact name otherwise), the GUID is filled in, lower case. Never over a GUID already there; never a GUID
 --   another linked book of the firm holds (tally_links_guid_once); never for a name the record lists twice with two
---   GUIDs. device_id, computer, client and state are not touched. Returns the number of links filled.
+--   GUIDs; never when more than one linked book of the firm has that name (review B2); never against the book's own
+--   recorded GUID (tally_sync_cursor.company_guid, which 110's tally_link_guid prefers): a book whose cursor names
+--   another GUID is left (review B1). device_id, computer, client and state are not touched. Returns the number filled.
 -- tally-ingest calls it after each beat's record is kept (a cloud without it: the call fails quietly, nothing changes).
 begin;
 set local lock_timeout = '10s';
@@ -32,6 +34,9 @@ begin
        group by lower(tally_nm(name)) having count(distinct g) = 1)
     select l.book_id, one.g from tally_links l join one on one.k = lower(tally_nm(l.company_name))
      where l.firm_id = p_firm and l.state = 'linked' and l.company_guid is null
+       and (select count(*) from tally_links y where y.firm_id = p_firm and y.state = 'linked' and lower(tally_nm(y.company_name)) = one.k) = 1
+       and not exists (select 1 from tally_sync_cursor s where s.book_id = l.book_id
+                        and nullif(lower(btrim(coalesce(s.company_guid, ''))), '') is not null and lower(btrim(s.company_guid)) <> one.g)
   loop
     perform pg_advisory_xact_lock(hashtext('tally_links:' || p_firm::text));
     update tally_links l set company_guid = c.g
