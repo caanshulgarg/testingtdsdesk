@@ -681,12 +681,8 @@ function bankSetLedger(id, v){
   if (l !== r.ledger || r.state !== "ready"){ setRowLedger(r, l); saveBank({rows: true}); render(); }
   return true;
 }
-// which Tally ledger a bank account is
-// (confirmed: the person picked it and pressed Confirm; kept in the client's choices, src/js/60)
-function bankSetAccLedger(accId, v){ return bankConfirmAccLedger(accId, v); }
 // tick a line; with Shift, every line between it and the one ticked before
 function bankToggleRow(id, on, shift){ bankToggle({dataset: {bsel: id}, checked: on}, shift); }
-function bankSelAll(on){ const b = B(); bankVisibleRows().filter(r => r.state !== "sent").forEach(r => { if (on) b.sel.add(r.id); else b.sel.delete(r.id); }); bankLightRefresh(); }
 // a client's bank settings and rules (app/src/parts/BankSettings.jsx): the settings shown or not, a standard entry's
 // ledger, an automation choice, and a rule changed, paused, deleted (asked first), moved or copied to other clients
 // the checks over a statement (app/src/parts/BankChecks.jsx): show only some lines, tick an entry to delete from Tally

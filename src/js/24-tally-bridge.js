@@ -1554,7 +1554,6 @@ async function setAutoNumbering(){
 // the Tally Bridge settings (app/src/screens/Tally.jsx): an address, key or following typed; a Tally company linked to a
 // client; one Tally chosen (a port) or back to automatic
 function bridgeSet(k, v){ Bridge.setCfg({[k]: typeof v === "string" ? v.trim() : v}); if (k !== "follow"){ Bridge.lastOpenKey = null; startBridgePolling(); } render(); }
-function bridgeLink(name, cid){ const c = S.companies[cid]; if (c){ c.tallyName = name; Store.saveCompany(c); Bridge.lastOpenKey = null; toast(c.name + " is linked to the Tally company " + c.tallyName + "."); bridgeTick(false); render(); } }
 function bridgePin(port){
   port = num(port); Bridge.setCfg({port: port || 0}); Bridge.lastOpenKey = null;
   if (S.bank){ S.bank.syncedAt = {}; S.bank.ledgers.importedAt = ""; }

@@ -1650,11 +1650,6 @@ const TLight = {
     });
     return by;
   },
-  cell(cid){
-    this.refresh();
-    const x = this.st.by[cid];
-    return x ? '<span class="tag ' + x.level + '" title="' + esc(x.say) + '">' + (x.level === "ok" ? "\u25CF " : x.level === "warn" ? "\u25D0 " : "\u25CB ") + esc(x.short) + "</span>" : '<span class="note">\u2014</span>';
-  }
 };
 
 

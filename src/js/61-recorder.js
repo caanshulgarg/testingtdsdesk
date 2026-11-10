@@ -571,12 +571,6 @@ const Rec = {
     return [...s].filter(Boolean);
   },
   pcOf(dev){ return ((dev && dev.info) || {}).computer || (dev && dev.name) || "the Tally computer"; },
-  // the companies open on a computer whose changes are not recorded ([] when it reports no recorder)
-  notRecording(dev){
-    const rc = this.recOf(dev);
-    if (!rc) return [];
-    return this.openOf(dev).filter(co => rc[co] && rc[co].seen === false);
-  },
   // (bridge 2.3.1, the owner's last change: nothing is switched off by the 2-second rule any more; the per-company
   // "switched off" lines and their "Changes come from" advice are gone. A request not answered in time is said on the
   // computer's line, TCloud.readState)
@@ -664,5 +658,4 @@ const Rec = {
     await this.alertsLoad();
     render();                                   // asked for by the person: drawn, with its words, whatever the list did
   },
-  alertKind(k){ return {gap: "Changes not received", silent: "Silent", summary: "Today"}[k] || String(k || ""); }
 };

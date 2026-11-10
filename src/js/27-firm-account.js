@@ -812,7 +812,6 @@ Cloud.oauth = function(provider){
 /* ---------- Client setup: React (app/src/screens/Settings.jsx) ---------- */
 
 /* ---------- Client: send to Tally: React (app/src/screens/Post.jsx) ---------- */
-function viewExport(){ return '<div data-react="Export"></div>'; }
 
 /* ---------- Company switcher (F3) ---------- */
 function switcherList(){
@@ -1192,10 +1191,6 @@ function clearFilter(id){ S[id] = {}; render(); }
 // 27Q: a non-resident deductee's details for the file; 27EQ: a TCS ledger's collection code
 function tdsNrSet(party, k, v){ const b = S.books; b.nrInfo = Object.assign({}, b.nrInfo); b.nrInfo[party] = Object.assign({}, b.nrInfo[party], {[k]: typeof v === "string" ? v.trim() : v}); saveBooks(); render(); }
 function tdsTcsCode(ledger, code){ const b = S.books; b.tcsCodes = Object.assign({}, b.tcsCodes, {[ledger]: code}); saveBooks(); render(); }
-function r2TabGo(id){ S.r2Tab = id; render(); }
-function r2ScopeGo(mode){ S.r2Scope = mode; render(); }
-function r2Filter(key, val, typed){ const tab = S.r2Tab || "suppliers"; S.r2F = Object.assign({}, S.r2F, {[tab]: Object.assign({}, (S.r2F || {})[tab], {[key]: val})}); if (typed){ FinComReact.redraw(); later("r2f", render, 250); } else render(); }
-function r2FilterClear(tab){ S.r2F = Object.assign({}, S.r2F, {[tab]: {}}); render(); }
 function r2SetTol(v){ const st = GST2B.state(); st.opt = Object.assign({}, st.opt, {tol: Math.max(0, num(v))}); saveBooks(); render(); }
 // "Same": a likely pair confirmed; "Not the same" or "Unlink": the 2B document and those Tally entries are kept apart
 function r2Confirm(key){ const st = GST2B.state(); st.confirm[key] = "yes"; saveBooks(); render(); }
@@ -1203,14 +1198,6 @@ function r2Unlink(key, ids){ const st = GST2B.state(); ids.forEach(id => { st.co
 // a 2B document not found in Tally, linked by hand to the entry it was booked as
 function r2Link(key, id){ const st = GST2B.state(); if (id){ st.link[key] = [id]; delete st.confirm[key]; } saveBooks(); render(); }
 // a remark on a document (r2Tag): app/src/lib/itcSync.js, the decision on that bill (ITCDec)
-// a note to a supplier listing the invoices not in their return, to the clipboard (or on screen to copy)
-function r2Copy(k){
-  const reg = r2Reg(S.books), sc0 = r2Scope(), sc = GST2B.scope(reg, sc0.months);
-  const s = GST2B.suppliers(sc).find(x => (x.gstin || x.party) === k); if (!s) return;
-  const text = GST2B.followUp(s);
-  (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject()).then(() => toast("Note copied: paste it into an email or WhatsApp."),
-    () => printView("Note to " + s.party, "<pre style=\"white-space:pre-wrap;font:13px/1.5 inherit\">" + esc(text) + "</pre>"));
-}
 // one setting of a page kept in S (S.inregF, S.inregScope, …); typed: the page follows a moment later
 function setAndShow(key, val, typed){ S[key] = val; if (typed){ FinComReact.redraw(); later(key, render, 250); } else render(); }
 // a TDS return's pages (app/src/screens/TdsReturn.jsx): its tabs, filters, sorting, the rows opened, challans
@@ -1358,48 +1345,23 @@ document.addEventListener("click", ev => {
   if (reactOwned(ev.target)) return;
   const t = ev.target.closest("button,[data-select],[data-open],#drop,#modal,#bankDrop,#salesDrop");
   if (!t) return;
-  if (t.dataset.settab !== undefined){ S.settingsTab = t.dataset.settab || null; render(); window.scrollTo(0, 0); return; }
-  if (t.dataset.openentry){
-    const e0 = S.data[t.dataset.openco] && S.data[t.dataset.openco].entries[t.dataset.openentry];
-    if (e0){ if (S.coId !== t.dataset.openco) openCompany(t.dataset.openco); S.tab = "invoices"; S.reviewTable = false; S.filter = e0.status; S.selected = e0.id; render(); window.scrollTo(0, 0); }
-    return;
-  }
-  if (t.dataset.useexp){
-    billUseExpense(curEntry(), t.dataset.useexp);
-    return;
-  }
   if (t.closest && t.closest("[data-colf]")){ const bt = t.closest("[data-colf]"), k = bt.dataset.colf, tb = bt.dataset.colt; S.colPop = S.colPop && S.colPop.k === k && S.colPop.t === tb ? null : {t: tb, k, justOpened: true}; render(); return; }
   if (t.closest && t.closest("[data-cpclose]")){ S.colPop = null; render(); return; }
   if (t.closest && t.closest("[data-cpapply]")){ colPopApply(false); return; }
   if (t.closest && t.closest("[data-cpclear]")){ colPopApply(true, S.colAuto); return; }
   if (t.dataset.cpquick){ const [a2, b2] = quickRange(t.dataset.cpquick), pop = document.getElementById("colpop"); if (pop){ pop.querySelector('[data-pf="from"]').value = a2; pop.querySelector('[data-pf="to"]').value = b2; } colPopApply(false, false); return; }   // a quick pick is a whole choice: close
-  if (t.dataset.billdel){ billDelete(t.dataset.billdel); return; }
   if (t.dataset.reread){ const e0 = D().entries[t.dataset.rid]; if (e0) rereadEntry(e0, t.dataset.reread === "free" ? null : t.dataset.reread); return; }
   if (S.view === "company" && (S.tab === "bank" || (S.tab === "export" && S.bank && S.bank.cid === S.coId)) && bankClick(t)) return;   // bank buttons also work on the Post step
   if (S.view === "company" && S.tab === "sales" && salesClick(t)) return;
   if (t.dataset.open){ openCompany(t.dataset.open); return; }
-  if (t.dataset.bookstab){ booksTabGo(t.dataset.bookstab, t.dataset.gstpart); return; }
-  if (t.dataset.gstpart){ gstPartGo(t.dataset.gstpart); return; }
-  if (t.dataset.tdspart){ S.tdsPart = t.dataset.tdspart; render(); return; }
-  if (t.dataset.tdsnav){ tdsNav(t.dataset.tdsnav); return; }
-  if (t.dataset.tdsgo){ tdsGo(...t.dataset.tdsgo.split("|")); return; }
   if (t.dataset.tdstab){ tdsTabGo(t.dataset.tdstab); return; }
   if (t.dataset.tdsfclear){ tdsFilterClear(t.dataset.tdsfclear); return; }
   if (t.dataset.tdssort){ tdsSortBy(...t.dataset.tdssort.split("|")); return; }
-  if (t.dataset.mistab){ S.misTab = t.dataset.mistab; S.misQ = ""; S.misF = ""; render(); return; }
-  if (t.dataset.misquick){ const x = misRangeQuick(t.dataset.misquick, S.books); S.misRange = {from: Audit.iso(x.from), to: Audit.iso(x.to)}; render(); return; }
-  if (t.dataset.b2open){ S.b2Open = S.b2Open === t.dataset.b2open ? "" : t.dataset.b2open; render(); return; }
   if (t.dataset.clearf){ clearFilter(t.dataset.clearf); return; }
   if (t.dataset.printid){ printTable(t.dataset.printid, t.dataset.printtitle); return; }
-  if (t.dataset.qgo){ S.tdsQ = t.dataset.qgo; S.tdsForm = "26Q"; S.tdsView = "return"; S.tdsTab = ""; render(); return; }
-  if (t.dataset["2btab"]){ S.twoBTab = t.dataset["2btab"]; render(); return; }
-  if (t.dataset.goclient !== undefined && t.dataset.goclient !== null && t.dataset.goclient !== ""){ goClient(t.dataset.goclient); return; }
   if (t.dataset.nav){ navHome(t.dataset.nav); return; }
   if (t.dataset.step){ goStep(t.dataset.step); return; }
-  if (t.dataset.dtype){ goDocType(t.dataset.dtype, t.dataset.gstep); return; }
-  if (t.dataset.goto){ const st = t.dataset.gstep || "review"; openCompany(t.dataset.goto).then(() => goStep(st, "bills")); return; }
   if (t.dataset.tab){ goTab(t.dataset.tab); return; }
-  if (t.dataset.htab){ S.homeTab = t.dataset.htab; S.addingCo = false; render(); return; }
   if (t.dataset.filter){ S.filter = t.dataset.filter; S.selected = null; render(); return; }
   if (t.dataset.select){ S.selected = t.dataset.select; render(); if (window.innerWidth < 860){ const d = document.querySelector(".detail"); if (d) d.scrollIntoView({behavior:"smooth", block:"start"}); } return; }
   if (t.id === "drop"){ pickFiles("company"); return; }
@@ -1430,7 +1392,6 @@ function doAct(act, t){
     case "skipTds": if (e && e.status === "draft"){ e.tdsForce = false; e.tdsSkip = "pay"; Store.saveEntry(S.coId, e); refreshStats(S.coId); toast("TDS will not be booked on this bill. Choose the reason in the TDS decision section."); render(); } break;
     case "revTable": S.reviewTable = true; S.revSel = new Set(); render(); window.scrollTo(0, 0); break;
     case "revList": S.reviewTable = false; render(); break;
-    case "bankPickBills": S.reviewTable = false; render(); setTimeout(() => { const el = document.getElementById("fileIn"); if (el) el.click(); }, 50); break;
     case "revNone": S.revSel = new Set(); render(); break;
     case "revTdsOn": case "revTdsOff": {
       const want = act === "revTdsOn";
@@ -1500,7 +1461,6 @@ function doAct(act, t){
     }
     // the coordinator's screenshot review (14-Oct-2026): no floating box; the sidebar's foot says it (Side.jsx FootLine)
     case "useOffline": Cloud.setCfg({gate: false}); render(); break;
-    case "docqReadAll": { const ids = docqFor(S.view === "company" ? S.coId : "").filter(d => d.status === "waiting").map(d => d.id); readDocq(ids, S.view === "company" ? S.coId : ""); break; }
     case "dropKeysList": Cloud.rpc("my_drop_keys").then(r => { S.dropKeys = [].concat(r || []); render(); }, e => toast(e.message)); break;
     case "dropKeyNew": {
       askConfirm({title: "Make a drop key", ok: "Make it", body: '<div class="bk-form one"><label><span>What is it for?</span><input type="text" id="dkLabel" value="Cowork agent"></label></div>',
@@ -1516,10 +1476,7 @@ function doAct(act, t){
     case "dropKeyHide": S.newDropKey = null; render(); break;
     case "drawerClose": S.drawerOpen = false; render(); break;
     case "setup": toggleSetup(); break;
-    case "toBankReady": S.tab = "bank"; if (S.bank) S.bank.filter = "ready"; render(); break;
-    case "toBankDone": S.tab = "bank"; if (S.bank) S.bank.filter = "done"; render(); break;
     case "toBillsApproved": S.tab = "invoices"; S.filter = "approved"; S.selected = null; render(); break;
-    case "collectBills": pickMode = "company"; document.getElementById("fileIn").click(); break;
     case "uploadHere": {
       if (docType() === "bank"){
         if (S.tab !== "bank" || curStep() !== "review") goStep("review", "bank");
@@ -1621,7 +1578,6 @@ function doAct(act, t){
       Bridge.setCfg({key: k ? k.value.trim() : Bridge.cfg().key, url: u ? u.value.trim() || "http://127.0.0.1:9100" : Bridge.cfg().url});
       Bridge.lastOpenKey = null; Bridge.refresh().then(() => { toast(Bridge.up() ? "Connected to FinCom Bridge." : Bridge.st.error); startBridgePolling(); render(); }); break; }
     case "bridgeSetupFile": saveBridgeSetup(); break;
-    case "adminCreditGo": break;
     case "bridgeConnect": {
       askConfirm({title: "Connect to FinCom Bridge", ok: "Connect",
         body: '<p class="note">Type the 6-digit code FinCom Bridge shows on this computer: right-click the FinCom icon near the clock \u2192 \u201cConnect FinCom on this computer\u2026\u201d. The code works once, for 15 minutes.</p><input type="text" id="bridgeCode" inputmode="numeric" maxlength="7" autocomplete="off" placeholder="6-digit code" style="width:160px;font-size:18px;letter-spacing:3px">',
@@ -1641,11 +1597,8 @@ function doAct(act, t){
     case "bridgeOff": Bridge.setCfg({key: ""}); clearInterval(bridgeTimer); Bridge.st = {state: "off", sessions: [], open: [], at: Date.now(), error: ""}; render(); break;
     case "billPost": postBillsToTally(); break;
     case "postAll": postAllToTally(); break;
-    case "postToChoose": goChooseTallyCompany(); break;
     case "marketPick": { const i = document.getElementById("marketIn"); if (i){ i.value = ""; i.click(); } break; }
     case "tallyPick": { const i = document.getElementById("tallyIn"); if (i){ i.value = ""; i.click(); } break; }
-    case "booksPick": { const i = document.getElementById("booksIn"); if (i){ i.value = ""; i.click(); } break; }
-    case "mastersPick": { const i = document.getElementById("mastersIn"); if (i){ i.value = ""; i.click(); } break; }
     case "setupKeepOn": LK.keepOn(true).then(() => { (S.setupKeep || {})[S.coId] = null; render(); }); break;
     case "keepNow": {
       // 03-Oct-2026 (item 25): reading stopped from FinCom for this client's computer: nothing is asked, the toast says who and why
@@ -1658,11 +1611,8 @@ function doAct(act, t){
       Bridge.call("/keepmode" + (Bridge.pinQ() ? "?" + Bridge.pinQ().slice(1) : ""), {company: BridgeSeed.company(), mode: act === "setupModeBridge" ? "bridge" : "files"}, 20000)
         .then(j => { (S.setupKeep = S.setupKeep || {})[S.coId] = {at: Date.now(), st: j}; toast(act === "setupModeBridge" ? "The bridge will copy the year from Tally in the evening, or when nobody is at the computer." : "The bridge waits for the day book files."); render(); }, e => toast("The bridge could not do it: " + ((e && e.message) || e) + (/Unknown|No such/i.test(String(e && e.message)) ? " (it needs FinCom Bridge 2.1: install it from the Tally page)" : "")));
       break;
-    case "tbCheckPick": { const i = document.getElementById("tbCheckIn"); if (i){ i.value = ""; i.click(); } break; }
     case "multiPick": { const i = document.getElementById("multiBooksIn"); if (i){ i.value = ""; i.click(); } break; }
-    case "multiStart": MultiUp.start(); break;
     case "multiClose": S.multiUp = null; render(); break;
-    case "tbPick": { const i = document.getElementById("tbIn"); if (i){ i.value = ""; i.click(); } break; }
     case "filedPick": { const i = document.getElementById("filedIn"); if (i){ i.value = ""; i.click(); } break; }
     case "twoBPick": { const i = document.getElementById("twoBIn"); if (i){ i.value = ""; i.click(); } break; }
     case "tallyRead": {
@@ -1684,12 +1634,6 @@ function doAct(act, t){
     case "tallyCopyUse": {
       const cp = S.tallyCopy; if (!cp || !cp.from) break;
       TallyRead.read(cp.from, cp.to, "copy").then(n2 => { toast(n2 + " vouchers read from last night's copy."); render(); }, e => { S.books.busy = ""; toast("Could not read the copy: " + (e && e.message || e)); render(); });
-      break;
-    }
-    case "tallyScheduleOn": case "tallyScheduleOff": {
-      const on = act === "tallyScheduleOn", time = (S.tallyCopy || {}).time || "02:00";
-      Bridge.call("/schedule", {on, time}, 60000).then(sc => { S.tallyCopy = Object.assign({}, S.tallyCopy, {schedule: sc}); toast(on ? "The bridge will copy every open company at " + time + " each night." : "Nightly copy stopped."); render(); },
-        e => toast("The bridge could not set it: " + (e && e.message || e)));
       break;
     }
     case "misRun": {
@@ -1765,15 +1709,6 @@ function doAct(act, t){
     case "gst9Pdf": case "gst9cPdf": { const w = act === "gst9Pdf" ? "9" : "9C"; printView(CO().name + " GSTR-" + w, "<style>@page{size:A4 portrait;margin:12mm}</style>" + gst9PackHtml(w)); break; }
     case "inregExcel": inregExcel().then(() => toast("Downloaded."), e => toast("Could not build the file: " + (e && e.message))); break;
     case "gst9Excel": case "gst9cExcel": gst9Excel(act === "gst9Excel" ? "9" : "9C").then(() => toast("Downloaded."), e => toast("Could not build the file: " + (e && e.message))); break;
-    case "lmPostAll": { const n2 = LedMaster.applyPosting(S.books, CO()); toast(n2 + " posting ledger" + (n2 === 1 ? "" : "s") + " set from the master."); render(); break; }
-    case "lmConfirmShown": {
-      const b = S.books, info = b.ledInfo || {}, q = String(S.ledQ || "").toLowerCase(), view = S.lmView || "pending";
-      const pool = view === "gst" ? Object.entries(b.map).filter(([nm, m]) => LedMaster.isGst(m.what) && LedMaster.taxLike(nm, m, info[nm])) :
-        view === "tds" ? Object.entries(b.map).filter(([nm, m]) => LedMaster.isTds(m.what) && LedMaster.taxLike(nm, m, info[nm])) : LedMaster.pending(b);
-      const names = pool.filter(([nm, m]) => !m.ok && (!q || nm.toLowerCase().includes(q) || String(m.section || "").toLowerCase().includes(q) || String((info[nm] || {}).group || "").toLowerCase().includes(q))).map(x => x[0]);
-      // a confirm button is its own confirm step: saved at once, not a draft (src/js/60)
-      Drafts.direct(() => { LedMaster.confirm(b, names, true); b.reco = null; saveBooks(); }, {bypass: true}); toast(names.length + " ledger" + (names.length === 1 ? "" : "s") + " confirmed."); render(); break;
-    }
     // ledgers with entries but no master: the masters read again (through the bridge here, else the firm's Tally
     // computer is asked to update the cloud copy, masters included)
     case "tbMasters": {
@@ -1850,21 +1785,12 @@ function doAct(act, t){
       }); break;
     }
     case "fvuClose": S.fvuResult = null; render(); break;
-    case "tdsFClear": S.tdsF = {}; render(); break;
-    case "tdsPrint": {
-      const co = CO(), t = document.getElementById("tdsTable");
-      printView(co.name + " TDS " + (S.tdsQ || "") + " " + (S.tdsFy || ""),
-        "<h1>" + esc(co.name) + '</h1><p class="note">TDS other than salary \u00b7 ' + esc(S.tdsQ || "all quarters") + " " + esc(S.tdsFy || "") +
-        " \u00b7 printed " + fmtDate(new Date().toISOString().slice(0, 10)) + "</p>" + (t ? t.outerHTML : ""));
-      break;
-    }
     case "yearExcel26": TDSYear.toExcel(S.tdsFy || "", "26Q").then(() => toast("Downloaded."), e => toast("Could not build it: " + (e && e.message))); break;
     case "yearExcel24": TDSYear.toExcel(S.tdsFy || "", "24Q").then(() => toast("Downloaded."), e => toast("Could not build it: " + (e && e.message))); break;
     case "yearExcelAll": TDSYear.toExcel(S.tdsFy || "", "").then(() => toast("Downloaded."), e => toast("Could not build it: " + (e && e.message))); break;
     case "salaryPick": { const i = document.getElementById("salaryIn"); if (i){ i.value = ""; i.click(); } break; }
     case "salaryClear": askConfirm({title: "Remove the salary sheet?", ok: "Remove", danger: true, body: '<p class="note">The salary sheet of ' + ((S.books && S.books.salary) || []).length + ' employee' + (((S.books && S.books.salary) || []).length === 1 ? "" : "s") + ' is removed; this cannot be undone (upload it again to bring it back). The challans and everything else stay.</p>'}).then(ok => {
       if (!ok) return; S.books.salary = []; saveBooks(); toast("Removed."); render(); }); break;
-    case "q24Excel": TDS24Q.toExcel(S.tdsFy || "", S.tdsQ || "Q4").then(() => toast("Downloaded."), e => toast("Could not build the file: " + (e && e.message))); break;
     case "tdsTxt": { if (!ledgersReady("tds")) break; LedMaster.snap(S.books, (S.tdsForm || "26Q") + " " + (S.tdsQ || "") + " " + (S.tdsFy || "")); saveBooks();
       const q = S.tdsQ || "", fy = S.tdsFy || "";
       if (!q || !fy){ toast("Choose the year and the quarter first."); break; }
@@ -1910,7 +1836,6 @@ function doAct(act, t){
     case "gstExcel": GSTR.toExcel(S.gstYm || "", S.gstReg || "").then(() => toast("Downloaded."), e => toast("Could not build the file: " + (e && e.message))); break;
     case "twoBExcel": { const sc0 = r2Scope(); GST2B.toExcel(GST2B.scope(r2Reg(S.books), sc0.months), sc0.label).then(() => toast("Downloaded."), e => toast("Could not build the file: " + (e && e.message))); break; }
     case "txnCsv": txnCsv(); break;
-    case "txnClear": S.txnQ = ""; S.txnStatus = ""; S.txnF = S.txnF || {}; S.txnF[txnTab()] = {}; render(); break;
     case "tallyPanel": S.tallyPanel = !S.tallyPanel; S.firmMenu = false; render(); break;
     case "tallyPanelClose": S.tallyPanel = false; render(); break;
     // the top bar's sign, not ready (the steady sign, 11-Oct-2026): the next step for its state. Connect this computer:
@@ -1948,7 +1873,6 @@ function doAct(act, t){
     case "vchAuto": setAutoNumbering(); break;
     case "vchTallyDone": { const co = CO(); co.vchNumbering = "tally"; co.vchAutoAt = new Date().toISOString(); Store.saveCompany(co); toast("FinCom will leave voucher numbers to Tally."); render(); break; }
     case "vchUseBillNo": { const co = CO(); co.vchNumbering = ""; Store.saveCompany(co); toast("FinCom will send the supplier\u2019s bill number as the voucher number."); render(); break; }
-    case "revFClear": S.revF = {}; S.revQuery = ""; S.revSel = new Set(); render(); break;
     case "billBackAll": {
       const list = Object.values(D().entries).filter(e => e.status === "approved" && !e.exportedAt);
       list.forEach(e => unapply(e, S.coId)); list.forEach(e => Store.saveEntry(S.coId, e));
@@ -1965,15 +1889,6 @@ function doAct(act, t){
         ids.forEach(id => { const e = D().entries[id]; if (!e) return; if (e.status === "approved") unapply(e, S.coId); removeEntry(e); });
         S.revSel = new Set(); S.drawerOpen = false; refreshStats(S.coId); toast(ids.length + " deleted."); render();
       });
-      break;
-    }
-    case "billRetry": {
-      const ids = ((S.billPost && S.billPost.failed) || []).map(f => f.id).filter(Boolean);
-      let again = 0, stuck = [];
-      ids.forEach(id => { const e = D().entries[id]; if (!e || e.status !== "draft") return; const c = compute(e); if (c.missing.length){ stuck.push(e.x.invoiceNo || e.x.vendorName); return; }
-        e.vchNo = e.vchNo || ""; const keepSel = S.selected; approve(e); S.selected = keepSel; again++; });
-      if (stuck.length) toast(stuck.length + " still need something filled in: open them in To review.");
-      if (again) postBillsToTally();
       break;
     }
     case "billUnpost": {
@@ -1995,7 +1910,6 @@ function doAct(act, t){
       break;
     }
     case "billCheck": checkBillsInTally(); break;
-    case "billCheckWaiting": checkBillsInTally(true); break;
     case "bridgeReadTest": {
       // round 19, guard (a): the trial tools are an owner's only (staff never see them)
       if (typeof postOwner === "function" && !postOwner()){ toast("Only an owner of the firm runs the reading test."); break; }
@@ -2006,16 +1920,8 @@ function doAct(act, t){
       Bridge.call("/readtest?company=" + encodeURIComponent(name) + Bridge.pinQ(), null, 180000).then(j => { S.readTest = Object.assign({at: Date.now()}, j, {tests: [].concat(j.tests || [])}); render(); }, err => { S.readTest = {error: err.message}; render(); });
       break;
     }
-    case "billRepostGone":
-    case "billRepost": {
-      // billRepostGone: the bills whose voucher is no longer in Tally's entries in the cloud copy (TallyProof)
-      const ids = act === "billRepostGone" ? Object.values(D().entries).filter(e => e.goneFromTally).map(e => e.id) : (S.billCheck && S.billCheck.missing) || [];
-      ids.forEach(id => { const e = D().entries[id]; if (e){ e.exportedAt = null; e.postNote = ""; e.postVerified = false; e.tallyCheck = null; e.postUnconfirmed = null; e.postError = ""; delete e.goneFromTally; Store.saveEntry(S.coId, e); } });
-      S.billCheck = null; refreshStats(S.coId); toast(ids.length + " bills are waiting to be posted again."); render(); break;
-    }
     case "bridgeDiag": Bridge.diagnose().then(() => Bridge.refresh()).then(() => render()); break;
     // round 39: the open client's Link to Tally card (Client setup → Tally)
-    case "coTally": S.step = null; S.arm = null; S.tab = "cotally"; render(); window.scrollTo(0, 0); break;
     case "goTcloud": Smart.setReturn(); S.settingsTab = "tcloud"; S.firmMenu = false; S.tallyPanel = false; closeSwitcher(); S.view = "home"; S.homeTab = "rules"; S.arm = null; render(); window.scrollTo(0, 0); break;
     case "openSettings": S.settingsTab = S.settingsTab || null; S.firmMenu = false; S.tallyPanel = false; closeSwitcher(); S.view = "home"; S.homeTab = "rules"; S.arm = null; render(); window.scrollTo(0, 0); break;
     case "dlStandalone": downloadStandalone(); break;
@@ -2023,10 +1929,7 @@ function doAct(act, t){
     case "testReader": testReader(); break;
     case "testOcr": testFreeOcr(); break;
     case "testGoogle": testGoogle(); break;
-    case "saveGoogle": case "removeGoogle": toast("Keys are no longer kept in the browser. Sign in to the firm account to use Google OCR."); break;
     case "askPerm": askPermission(); break;
-    case "toggleKey": S.apiKeyShown = !S.apiKeyShown; render(); break;
-    case "saveKey": case "removeKey": toast("Keys are no longer kept in the browser. Sign in to the firm account to use Claude."); break;
     case "pasteOpen": S.pasteOpen = true; render(); break;
     case "pasteClose": S.pasteOpen = false; render(); break;
     case "notDup": if (e){ const was = e.status; e.notDuplicate = true; if (e.status === "duplicate") e.status = "draft"; delete e.dupOf; Store.saveEntry(S.coId, e); S.filter = "draft"; refreshStats(S.coId);
@@ -2156,24 +2059,6 @@ document.addEventListener("input", ev => {
     }
   }
   if (t && t.id === "tdsq"){ S.tdsF = Object.assign({}, S.tdsF, {q: t.value}); later("tdsq", render, 250); return; }
-  if (t && t.dataset && t.dataset.tdsfsec !== undefined){ S.tdsF = Object.assign({}, S.tdsF, {section: t.value}); render(); return; }
-  if (t && t.dataset && t.dataset.tdsfch !== undefined){ S.tdsF = Object.assign({}, S.tdsF, {challan: t.value}); render(); return; }
-  if (t && t.dataset && t.dataset.tdsfpan !== undefined){ S.tdsF = Object.assign({}, S.tdsF, {pan: t.value}); render(); return; }
-  if (t && t.dataset && t.dataset.tdsq !== undefined){ S.tdsQ = t.value; render(); return; }
-  if (t && t.dataset && t.dataset.ledkind){ const m = S.books.map[t.dataset.ledkind]; if (m){ m.kind = t.value; m.byHand = true; if (m.kind !== "tds_payable") delete m.section;
-    if (/^(gst|gst_common|ineligible)$/.test(m.kind)){ const gg = Books.guess(t.dataset.ledkind); if (!m.tax) m.tax = gg.tax || "IGST"; if (!m.side) m.side = gg.side || "input"; if (m.reg == null && gg.reg) m.reg = gg.reg; }
-    S.books.mapV = (S.books.mapV || 0) + 1; S.books.reco = null; saveBooks(); render(); } return; }
-  if (t && t.dataset && (t.dataset.ledtax || t.dataset.ledside || t.dataset.ledreg)){
-    const key = t.dataset.ledtax || t.dataset.ledside || t.dataset.ledreg, m = S.books.map[key];
-    if (m){
-      if (t.dataset.ledtax) m.tax = t.value;
-      if (t.dataset.ledside) m.side = t.value;
-      if (t.dataset.ledreg) m.reg = t.value;
-      m.byHand = true; S.books.mapV = (S.books.mapV || 0) + 1; S.books.reco = null; saveBooks(); render();
-    }
-    return;
-  }
-  if (t && t.dataset && t.dataset.ledsec){ const m = S.books.map[t.dataset.ledsec]; if (m){ m.section = t.value.toUpperCase(); m.byHand = true; later("ledsec", () => { saveBooks(); render(); }, 500); } return; }
   if (t && t.dataset && ["email", "password", "firm", "name"].includes(t.dataset.cloud)){ S.cloudForm = Object.assign({}, S.cloudForm, {[t.dataset.cloud]: t.value}); }
   if (S.view === "company" && S.tab === "bank" && bankInput(t)) return;
   if (S.view === "company" && S.tab === "sales" && salesInput(t)) return;
@@ -2318,8 +2203,6 @@ document.addEventListener("change", ev => {
   if (S.view === "company" && S.tab === "sales" && salesChange(t)) return;
   if (t.id === "fileIn" || t.id === "camIn"){ const files = Array.from(t.files || []); t.value = ""; handleFiles(files, pickMode); return; }
   if (t.dataset.x === "invoiceDate" && e && e.status === "draft"){ billSetX(e, "invoiceDate", t.value); return; }
-  if (t.dataset.gst && e && e.status === "draft"){ billGst(e, t.dataset.gst, t.type === "checkbox" ? t.checked : t.value); return; }
-  if (t.dataset.gstrule && CO()){ const co = CO(); co.gstBlock = co.gstBlock || {}; co.gstBlock[t.dataset.gstrule] = t.value; Store.saveCompany(co); render(); return; }
   if (t.hasAttribute("data-bookTds") && e && e.status === "draft"){ billBookTds(e, t.checked); return; }
   if (t.dataset.e && e && e.status === "draft"){
     if (t.type === "checkbox" || t.tagName === "SELECT") billSetChoice(e, t.dataset.e, t.type === "checkbox" ? t.checked : t.value);

@@ -24,7 +24,6 @@ const TDS = {
   // "Form No. 140 (Earlier Form No. 26Q)": Form 140 (earlier 26Q); earlier years keep the old name alone
   FORM_ABOUT: {"24Q": "Salary", "26Q": "Non-salary, residents", "27Q": "Non-residents", "27EQ": "TCS"},
   formShort(kind, fy){ return this.isNew(fy) && this.NEW_FORM[kind] ? "Form " + this.NEW_FORM[kind] + " (earlier " + kind + ")" : kind; },
-  formLabel(kind, fy){ return this.formShort(kind, fy) + " \u00b7 " + (this.FORM_ABOUT[kind] || ""); },
   // Protean's RPU and FVU 1.2 say "Tax Year" for the years of the Act of 2025
   yearWord(fy){ return this.isNew(fy) ? "Tax Year" : "Financial Year"; },
   // a section as the return pages show it: from tax year 2026-27 the new provision of section 393 with the old section

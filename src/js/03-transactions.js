@@ -85,7 +85,6 @@ function txnFiltered(rows){
     && (st === "dup" || st === "del" ? stOf(r) === st : stOf(r) !== "del" && (!st || r.cls === st)));
 }
 // the register: React (app/src/screens/Txn.jsx)
-function viewTransactions(){ return '<div data-react="Txn"></div>'; }
 // the register as an Excel file (review item 30), the same rows and columns as the CSV, amounts as numbers
 function txnTable(){
   const tab = txnTab();

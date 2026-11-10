@@ -566,7 +566,6 @@ const PostFlags = {
     } finally { this.busy = false; }
   },
   isHidden(k){ return this.hide.has(k); },
-  isRemoved(k){ return this.removed.has(k); },
   // review M1: a removal is void once the row's posting is going on again or was started again since (Retry under the same
   // job id: its attempts changed); the row is then listed where its state puts it
   removedNow(x){
