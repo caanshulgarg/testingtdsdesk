@@ -1,7 +1,7 @@
 FINCOM BRIDGE 2.5.12 - TEST SHEET (2.5.11's sheet below, with 2.5.12's new checks first)
 
 File:        FinComBridge-Setup-2.5.12.exe
-Fingerprint: SHA-256 (filled in at the build; compare with the .sha256 file next to the setup)
+Fingerprint: SHA-256 a34bd9ad59efc591f0e78ddde5b7fc4c542e930f2030a02847aae99e3c90814d (FinComBridge-Setup-2.5.12.exe, built 10-Nov-2026 01:50 UTC at bridge sources e6a43e67b after the final review, POSTONLY=any; compare with the .sha256 file next to the setup); program FinComBridge-2.5.12.exe SHA-256 daf271fd721b0421448f5fac45f42b3315cc96864a1cc4efa7a6f7d6c3a97ccd
 
 2.5.12: three things, all in Bring books (the older entries a person chose to bring from Tally). The same 2-second stop
 on every request, one request at a time, postings first, never while someone is typing in Tally. FinCom's cloud needs
