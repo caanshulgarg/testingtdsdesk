@@ -1,6 +1,6 @@
 // node run_mis.js - MIS on the VMS books, 2025-26
 const fs = require("fs"), {load, openBlob} = require("./harness"), {HTML, DATA, CACHE, OUT, FIXTURE} = require("./harness");
-const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "fmtDate", "tallyDate", "STATE_CODES", "RULE_DEFAULTS", "Books", "LedMaster", "Audit", "MIS", "TDS", "Certs", "GSTR", "GSTAdv", "GSTRev", "GSTAmend", "GST2B", "INR", "NORM_CACHE", "normName", "normNameRaw", "nameSim", "Parties", "FS", "GSTSet", "GSTF", "GSTQ"];
+const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "fmtDate", "tallyDate", "STATE_CODES", "RULE_DEFAULTS", "Books", "LedMaster", "Audit", "MIS", "TDS", "Certs", "GSTR", "GSTAdv", "GSTRev", "GSTAmend", "GST2B", "INR", "NORM_CACHE", "normName", "normNameRaw", "nameSim", "Parties", "FS", "GSTSet", "GSTF", "GSTQ", "TallyRead", "TBFile", "bringTbFile"];
 const {ctx, x} = load(HTML, NAMES);
 let fails = 0; const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };
 const M = v => x.INR.format(Math.round(v || 0));
@@ -36,5 +36,34 @@ const M = v => x.INR.format(Math.round(v || 0));
   // bills: a party's bills add up to what the day book moved for it, less what was before these books
   const p = r.recv.rows[0]; console.log("  largest customer " + p.party + " " + M(p.total) + " in " + p.bills.length + " bills");
   ok(p.bills.reduce((s, z) => s + z.amt, 0) - p.total < 1, "a customer's bills add to its total");
+  // the control against Tally's balances (next-mis-speed), in the shape TallyRead.balances keeps them: Tally's closings
+  // show real differences; FinCom's cloud copy (src/js/49: closings blank, kept as 0, tb.src "copy") shows no "differ
+  // from Tally" at all, nor a copy whose closings FinCom worked out (TallyRead.openings)
+  {
+    const F = "20250401", T = "20260331", mv = x.MIS.moves(F, T), names = Object.keys(b.ledInfo).sort();
+    const tb = (close, src) => { x.TallyRead.balances(b, {ledgers: names.map((l, i) => ({name: l, parent: b.ledInfo[l].group, open: String(x.num(b.ledInfo[l].ob)), close: close(l, i)}))}, F, T); if (src) b.tb.src = src; return x.MIS.run(F, T, "test").control; };
+    // Tally's closing: the opening as Tally has it at the start of the year (TallyRead.yearOpen) plus the year's entries
+    const tallyClose = (l, i) => { const o = (b.tb && b.tb.led[x.ledClean(l)]) || {}; return String(x.r2(x.num(o.open) + ((mv[l] || {}).t || 0) + (i < 3 ? 500 : 0))); };
+    tb(() => "0");                                            // the openings as TallyRead keeps them, for the closings below
+    const c1 = tb(tallyClose);
+    ok(c1 && c1.n === 3 && c1.amt === 1500, "Tally's closings: 3 ledgers differ by 1,500 (" + JSON.stringify(c1 && [c1.n, c1.amt]) + ")");
+    // TallyRead.openings with nothing from the cloud (no copy here): Tally's closings stay Tally's, never marked a copy
+    await x.TallyRead.openings(b, "t", F, T);
+    const c3 = x.MIS.run(F, T, "test").control;
+    ok(b.tb.src !== "copy" && c3 && c3.n === 3, "no copy from the cloud: Tally's closings are not marked a copy, still checked (" + (b.tb.src || "-") + ", " + (c3 && c3.n) + ")");
+    ok(tb(() => "", "copy") === null, "FinCom's cloud copy (closings blank, src copy): no check, no \u201cdiffer from Tally\u201d line");
+    ok(tb(tallyClose, "copy") === null, "a copy's closings worked out by FinCom (TallyRead.openings) are no check either");
+    // a trial balance file (bringTbFile): openings only, the closings FinCom's own: no check, so no line and no "agrees"
+    Object.assign(ctx, {saveBooks: async () => {}, render: () => {}, Bridge: {on: () => false}, TCloudUp: {on: () => false}, askConfirm: () => {}});
+    const after = x.TallyRead.after; x.TallyRead.after = () => {};
+    const xml = names.map(l => { const ob = x.num(b.ledInfo[l].ob); return "<DSPACCNAME><DSPDISPNAME>" + x.esc(l) + "</DSPDISPNAME></DSPACCNAME><DSPACCINFO><DSPCLDRAMTA>" + (ob < 0 ? -ob : "") + "</DSPCLDRAMTA><DSPCLCRAMTA>" + (ob > 0 ? ob : "") + "</DSPCLCRAMTA></DSPACCINFO>"; }).join("");
+    const got = await x.bringTbFile(new Blob(["<ENVELOPE>" + xml + "</ENVELOPE>"]), "20250331", {toast: false});
+    x.TallyRead.after = after;
+    const c4 = got && got.refused ? "refused" : x.MIS.run(F, b.tb.to, "test").control;
+    ok(b.tb.from === F && b.tb.own === 1 && c4 === null, "a trial balance file: closings worked out here, no check, no line and no \u201cagrees with Tally\u201d (" + JSON.stringify(c4) + ")");
+    delete b.tb.own; const c5 = x.MIS.run(F, b.tb.to, "test").control;
+    ok(c5 && c5.ok, "(without the mark it would have said it agrees with Tally: the test is not empty)");
+    delete b.tb;
+  }
   console.log("\n" + (fails ? fails + " FAILED" : "all passed")); process.exit(fails ? 1 : 0);
 })().catch(e => { console.error(e); process.exit(2); });
