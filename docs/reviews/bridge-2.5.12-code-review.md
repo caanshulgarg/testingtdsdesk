@@ -3,7 +3,7 @@
 Reviewers: the session that built it (a self-review against the owner's rules), after the independent review of
 f1b3e700b (seven points; all addressed below). The coordinator reviews again.
 
-Range: ff86083bf..53be56303 (origin/staging-next, which holds released 2.5.11, to this build; 53be56303 merges origin/staging-next 6a8249a34, which changes no bridge-go file: the bridge sources are e6a43e67b's)
+Range: ff86083bf..f8a15d27b (origin/staging-next, which holds released 2.5.11, to this build; 53be56303 merges origin/staging-next 6a8249a34, which changes no bridge-go file: the bridge sources are e6a43e67b's; f8a15d27b adds only the held-entry checks to tests/run_older_entries_ui.py)
 
 (bridge-go/: fastvch.go (liveKeepInv2512 kept by the strip only, fastEmit's order, fastVoucherModeItems, fastHasItems /
 fastOKNoInv), batch249.go (FinComVoucherBatch's FETCH 2.5.11's again; pullKeep), daypull.go (pullHoldEntry,
