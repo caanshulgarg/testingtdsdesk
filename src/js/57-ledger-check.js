@@ -179,7 +179,6 @@ const LedCheck = {
   // the answer used: AI's for a ledger the rules left unclear, else the rules'
   pick(it){ return it.ai && (it.s.conf === "low") ? Object.assign({}, it.s, it.ai, {fromAi: true}) : it.s; },
   ticked(it){ return it.tick !== undefined ? !!it.tick : (this.pick(it).conf === "high" && !this.pick(it).fromAi); },
-  setTick(n, on){ const it = (S.books.ledCheck || {}).items[n]; if (it){ it.tick = !!on; render(); } },
   // the answers ticked go into the ledger master, confirmed, with where each came from; the check is saved, and from now
   // on a tax-like ledger not confirmed counts in no return
   confirm(b, names){
@@ -199,13 +198,6 @@ const LedCheck = {
   // Books.ledgerOf no longer reads them as "other tax": the books' map counts as in 2.3.3, the check's suggestions count
   // in no figure until confirmed (they are kept apart in b.ledCheck until then)
   PENDING: Object.freeze({kind: "tax_other", pending: true}),
-  held(b){
-    if (!(b && b.ledCheck && b.ledCheck.strict)) return null;
-    const k = (b.mapV || 0) + "|" + Object.keys(b.map || {}).length;
-    if (this._held && this._held.b === b && this._held.k === k) return this._held.set;
-    const set = new Set(Object.entries(b.map || {}).filter(([n, m]) => !m.ok && LedMaster.taxLike(n, m, (b.ledInfo || {})[n])).map(([n]) => n));
-    this._held = {b, k, set}; return set;
-  },
 
   // ---------- 17. AI, only for what is still unclear: one call per client ----------
   async askAi(b){
@@ -451,13 +443,6 @@ const LedPage = {
     return out;
   },
   fine(b, key){ Drafts.direct(() => { (b.ledOk = b.ledOk || {})[key] = {by: whoAmI(), at: new Date().toISOString()}; saveBooks(); }, {bypass: true}); render(); },
-  // entries naming a ledger FinCom does not have yet (migration 56; Rec.unkGroups: settled ones left out, worked out live),
-  // one item a ledger, most used first. The pages show them as ONE line a client (parts/UnknownLedgers.jsx)
-  unknown(cid){
-    if (typeof Rec !== "object" || !Rec.unkGroups || typeof TCloud !== "object" || !TCloud.on() || !cid) return [];
-    const bks = Rec.unkBooks(cid), g = Rec.unkGroups(cid, bks.length ? bks : null)[0];
-    return g ? g.ledgers.map(x => ({key: "unk:" + x.n, n: x.n, count: x.rows.length, text: "'" + x.n + "': " + Rec.unkN(x.rows.length) + ", not in FinCom's ledger list yet."})) : [];
-  },
   // a confirmed ledger now used differently: kept as confirmed, with its use now (the warning goes)
   // release-240 review M5: saved at once, as fine() (its own confirm step, not a draft)
   keepUse(b, n){ const it = ((b.ledCheck || {}).items || {})[n]; if (it) Drafts.direct(() => { it.okSig = LedCheck.sig(LedCheck.usage(b, [n])[n]); it.okAt = new Date().toISOString(); it.okBy = whoAmI(); saveBooks(); }, {bypass: true}); render(); },

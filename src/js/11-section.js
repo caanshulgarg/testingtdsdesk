@@ -13,7 +13,6 @@ const GST2B = {
   },
   lastDigits(s){ const d = String(s || "").match(/\d+/g); return d ? String(num(d[d.length - 1])) : ""; },
   dmy(s){ const p = String(s || "").split("-"); return p.length === 3 ? p[2] + p[1] + p[0] : String(s || "").replace(/\D/g, "").slice(0, 8); },
-  ymOfPeriod(p){ p = String(p || ""); return p.length === 6 ? p.slice(2) + p.slice(0, 2) : ""; },
   RSN: {P: "place of supply rule: supplier and recipient in the same state, different place of supply", C: "filed after the time limit in section 16(4)"},
   IMS: {N: "no action", A: "accepted", R: "rejected", P: "pending"},
   // the portal's JSON: one row per document, every section 2B carries. The reading is server/_shared/match2b.js
@@ -252,7 +251,6 @@ const GST2B = {
       timing: pairs.filter(x => x.timing), only2b: r.only2b.filter(p => inM(p.ym)), onlyBooks: r.onlyBooks.filter(d => inM(d.ym)),
       laterMissing: r.onlyBooks.filter(d => inM(d.ym) && d.ym >= lastLoaded).length, taxOf: r.taxOf, reversed: (r.reversed || []).filter(pr => pr.some(d => inM(d.ym))), rejected: (r.rejected || []).filter(x => inM(x.p.ym) || x.books.some(d => inM(d.ym)))};
   },
-  totals(list, f){ return list.reduce((a, x) => { const o = f ? f(x) : x; return {n: a.n + 1, taxable: r2(a.taxable + num(o.taxable) * (o.dir || 1)), tax: r2(a.tax + (num(o.igst) + num(o.cgst) + num(o.sgst) + num(o.cess)) * (o.dir || 1))}; }, {n: 0, taxable: 0, tax: 0}); },
   // supplier by supplier, 2B against the books
   suppliers(sc){
     const m = {};

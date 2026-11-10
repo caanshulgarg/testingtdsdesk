@@ -408,7 +408,6 @@ function salesVisible(){
     .sort((a, b) => String(b.x.date).localeCompare(String(a.x.date)) || String(b.x.number).localeCompare(String(a.x.number)));
 }
 // the Sales screen and its bar: React (app/src/screens/Sales.jsx)
-function viewSales(){ return '<div data-react="Sales"></div>'; }
 // the bar at the foot of sales: while making an invoice, or when there is a list (app/src/Main.jsx)
 function salesBarOn(){ const s = SL(); return !!(s && !s.loading && ((s.view === "create" && s.draft) || (s.view !== "create" && s.list.length))); }
 function salesLightRefresh(){ FinComReact.redraw(); }

@@ -135,8 +135,6 @@ function uploadProgress(cid){
 // the firm's plan comes as {name, includes, …} from the firm account; older copies kept only its name
 function planName(p){ return p && typeof p === "object" ? String(p.name || "") : String(p || ""); }
 /* ---------- Post to Tally and Done: React (app/src/screens/Post.jsx, Done.jsx) ---------- */
-function viewPostStep(){ return '<div data-react="PostStep"></div>'; }
-function viewDoneStep(){ return '<div data-react="DoneStep"></div>'; }
 /* ---------- Client setup: four tabs, out of the daily path ---------- */
 // the sections of Client setup, in the order of the list on its left (app/src/screens/Settings.jsx)
 const SETUP_TABS = [["settings", "Company"], ["cotally", "Tally"], ["cotds", "TDS"], ["deductees", "Suppliers"], ["gstset", "GST"],
@@ -144,5 +142,4 @@ const SETUP_TABS = [["settings", "Company"], ["cotally", "Tally"], ["cotds", "TD
 function isSetupTab(t){ return SETUP_TABS.some(x => x[0] === t); }
 
 /* ---------- Collect: everything that arrives for this client (React: app/src/screens/Collect.jsx) ---------- */
-function viewCollect(){ return docType() === "sales" ? viewSales() : '<div data-react="Collect"></div>'; }
 
