@@ -1,6 +1,6 @@
 // node run_mis.js - MIS on the VMS books, 2025-26
 const fs = require("fs"), {load, openBlob} = require("./harness"), {HTML, DATA, CACHE, OUT, FIXTURE} = require("./harness");
-const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "fmtDate", "tallyDate", "STATE_CODES", "RULE_DEFAULTS", "Books", "LedMaster", "Audit", "MIS", "TDS", "Certs", "GSTR", "GSTAdv", "GSTRev", "GSTAmend", "GST2B", "INR", "NORM_CACHE", "normName", "normNameRaw", "nameSim", "Parties", "FS", "GSTSet", "GSTF", "GSTQ", "TallyRead"];
+const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "fmtDate", "tallyDate", "STATE_CODES", "RULE_DEFAULTS", "Books", "LedMaster", "Audit", "MIS", "TDS", "Certs", "GSTR", "GSTAdv", "GSTRev", "GSTAmend", "GST2B", "INR", "NORM_CACHE", "normName", "normNameRaw", "nameSim", "Parties", "FS", "GSTSet", "GSTF", "GSTQ", "TallyRead", "TBFile", "bringTbFile"];
 const {ctx, x} = load(HTML, NAMES);
 let fails = 0; const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };
 const M = v => x.INR.format(Math.round(v || 0));
@@ -53,6 +53,16 @@ const M = v => x.INR.format(Math.round(v || 0));
     ok(b.tb.src !== "copy" && c3 && c3.n === 3, "no copy from the cloud: Tally's closings are not marked a copy, still checked (" + (b.tb.src || "-") + ", " + (c3 && c3.n) + ")");
     ok(tb(() => "", "copy") === null, "FinCom's cloud copy (closings blank, src copy): no check, no \u201cdiffer from Tally\u201d line");
     ok(tb(tallyClose, "copy") === null, "a copy's closings worked out by FinCom (TallyRead.openings) are no check either");
+    // a trial balance file (bringTbFile): openings only, the closings FinCom's own: no check, so no line and no "agrees"
+    Object.assign(ctx, {saveBooks: async () => {}, render: () => {}, Bridge: {on: () => false}, TCloudUp: {on: () => false}, askConfirm: () => {}});
+    const after = x.TallyRead.after; x.TallyRead.after = () => {};
+    const xml = names.map(l => { const ob = x.num(b.ledInfo[l].ob); return "<DSPACCNAME><DSPDISPNAME>" + x.esc(l) + "</DSPDISPNAME></DSPACCNAME><DSPACCINFO><DSPCLDRAMTA>" + (ob < 0 ? -ob : "") + "</DSPCLDRAMTA><DSPCLCRAMTA>" + (ob > 0 ? ob : "") + "</DSPCLCRAMTA></DSPACCINFO>"; }).join("");
+    const got = await x.bringTbFile(new Blob(["<ENVELOPE>" + xml + "</ENVELOPE>"]), "20250331", {toast: false});
+    x.TallyRead.after = after;
+    const c4 = got && got.refused ? "refused" : x.MIS.run(F, b.tb.to, "test").control;
+    ok(b.tb.from === F && b.tb.own === 1 && c4 === null, "a trial balance file: closings worked out here, no check, no line and no \u201cagrees with Tally\u201d (" + JSON.stringify(c4) + ")");
+    delete b.tb.own; const c5 = x.MIS.run(F, b.tb.to, "test").control;
+    ok(c5 && c5.ok, "(without the mark it would have said it agrees with Tally: the test is not empty)");
     delete b.tb;
   }
   console.log("\n" + (fails ? fails + " FAILED" : "all passed")); process.exit(fails ? 1 : 0);

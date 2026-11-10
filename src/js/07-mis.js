@@ -390,10 +390,9 @@ const MIS = {
   // off across registrations)
   gst3b(m){
     const regs = Array.from(new Set((GSTR.gstins(S.books) || []).map(g => String(g).slice(0, 2))));
-    return regs.length > 1 ? regs.map(rg => this.t3(m, rg)) : [GSTR.threeB(m, "")];
+    // next-mis-speed: a registration's 3B working once per run (Compliance, Registrations and the 13 weeks each asked for it)
+    return regs.length > 1 ? regs.map(rg => this.keep("3b" + m + rg, () => GSTR.threeBm(m, rg))) : [GSTR.threeB(m, "")];
   },
-  // next-mis-speed: a registration's 3B working once per run (Compliance, Registrations and the 13 weeks each asked for it)
-  t3(m, rg){ return this.keep("3b" + m + rg, () => GSTR.threeBm(m, rg)); },
   // next-mis-speed: a figure kept for the drawing or calculation (perRender), so a run in parts (Mis.jsx runSplit, by
   // memoKeep) can work it out before the run
   keep(k, f){ return typeof perRender === "function" ? perRender(this, k, f) : f(); },
@@ -466,12 +465,10 @@ const MIS = {
     // what is left of each bill after payments on account and advances (MIS.netOpen), as the ageing
     r.msme = r.pay.rows.filter(p => /micro|small/i.test(msme[p.party] || "")).map(p => ({party: p.party, type: msme[p.party], bills: (p.open || []).filter(x => x.age > md)})).filter(x => x.bills.length)
       .map(x => Object.assign(x, {amt: r2(x.bills.reduce((s2, y) => s2 + y.left, 0))}));
-    // the control: every ledger's movement here against Tally's own balances. Only Tally's closing balances: FinCom's
-    // cloud copy has openings only (src/js/49 reads tally_ledgers, which has no closing: blank, kept as 0 by
-    // TallyRead.balances), or closings FinCom worked out itself (TallyRead.openings), and either is no check (next-mis-speed:
-    // "963 ledgers differ from Tally" on such a book). Both mark the balances tb.src "copy", and that is the stop: closings
-    // come only from Tally's own trial balance (the bridge's read, a trial balance file), which has every ledger's closing
-    if (b.tb && b.tb.src !== "copy" && b.tb.from === from && b.tb.to === to){
+    // the control: every ledger's movement here against Tally's own closings, from the bridge's read only. FinCom's cloud
+    // copy has none (src/js/49: blank, kept as 0) or works them out from openings (TallyRead.openings): tb.src "copy";
+    // a trial balance file's are worked out too (tb.own). Neither is a check (next-mis-speed: "963 ledgers differ")
+    if (b.tb && b.tb.src !== "copy" && !b.tb.own && b.tb.from === from && b.tb.to === to){
       const mv = this.moves(from, to); let n = 0, amt = 0; const list = [];
       Object.entries(b.tb.led).forEach(([l, x]) => { const d = r2((num(x.close) - num(x.open)) - ((mv[l] || {}).t || 0)); if (Math.abs(d) >= 1){ n++; amt = r2(amt + Math.abs(d)); list.push([l, d]); } });
       r.control = {ok: n === 0, n, amt, list: list.slice(0, 50)};
@@ -783,7 +780,7 @@ Object.assign(MIS, {
         if (Books.isSale(v)){ const a = Books.lines(v).taxable * (/CREDIT NOTE/i.test(v.type) ? -1 : 1); sales = r2(sales + a); m[ym].s = r2(m[ym].s + a); }
         else if (Books.isPurchase(v)){ const a = Books.lines(v).taxable * (/DEBIT NOTE/i.test(v.type) ? -1 : 1); purch = r2(purch + a); m[ym].p = r2(m[ym].p + a); }
       });
-      const gst = months.map(mm => { try { const t = this.t3(mm, rg); return r2(Math.max(0, t.net.igst + t.net.cgst + t.net.sgst + t.net.cess - (t.netItc.igst + t.netItc.cgst + t.netItc.sgst + t.netItc.cess))); } catch (e){ return 0; } });
+      const gst = months.map(mm => { try { const t = this.keep("3b" + mm + rg, () => GSTR.threeBm(mm, rg)); return r2(Math.max(0, t.net.igst + t.net.cgst + t.net.sgst + t.net.cess - (t.netItc.igst + t.netItc.cgst + t.netItc.sgst + t.netItc.cess))); } catch (e){ return 0; } });
       return {reg: rg, gstin: ((S.books.meta || {}).gstins || []).find(g => g.slice(0, 2) === rg), sales, purch, m, gstPay: r2(gst.reduce((a, x) => a + x, 0)), months};
     });
   },

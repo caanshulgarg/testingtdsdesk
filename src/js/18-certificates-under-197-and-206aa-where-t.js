@@ -350,7 +350,7 @@ const TallyRead = {
     if (j && (j.ledgers || []).length){
       this.balances(b, j, from, to);
       if (typeof MIS === "object"){ const mv = MIS.moves(b.tb.from, b.tb.to); Object.entries(b.tb.led).forEach(([l, x]) => { x.close = r2(num(x.open) + ((mv[l] || {}).t || 0)); }); }
-      // next-mis-speed: a copy only when the copy's balances were taken here, never Tally's own closings kept from before
+      // next-mis-speed: a copy only when the copy's balances were taken here (its closings FinCom's own: no check, MIS)
       b.tb.src = "copy"; b.tb.line = copyLine(cid);
     }
     return j;

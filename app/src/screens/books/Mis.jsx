@@ -72,12 +72,13 @@ function Head({ b, r, rg }) {
 function runSplit(from, to, how) {
   const b = S.books, t = Audit.ymd(to), f = Audit.ymd(from), f3 = MIS.shift(t, 0, -89);
   if (MIS._again || !b || b.loading) return;
-  MIS._again = true;
+  MIS._again = true; FinComNav.start();
   const fs = [() => memoScope(() => MIS.monthsOf(f3 < f ? f3 : f, t).forEach(MIS.gst3b, MIS)), () => memoKeep(() => { Parties.position(t); TDS.rows(); TDS.salaryRows(); MIS.payDays("r", t); MIS.payDays("p", t); }),
-    () => memoKeep(() => { MIS.cashActual(f, t); MIS.costCentres(f, t); }), () => memoKeep(() => MIS.run(from, to, how)), () => saveBooks(null, b)], R = 3;
-  const end = () => { MIS._again = false; render(); };
+    () => memoKeep(() => { MIS.cashActual(f, t); MIS.costCentres(f, t); }), () => memoKeep(() => MIS.run(from, to, how)), () => saveBooks(null, b).catch(() => {})], R = 3;
+  const end = () => { MIS._again = false; FinComNav.done(); render(); };
   const go = (i) => setTimeout(() => {
-    if (S.books !== b || b.loading) return i <= R && end();
+    // the save names its books: done even when the client changed after the run
+    if (i <= R && (S.books !== b || b.loading)) return end();
     try { fs[i](); } catch (e) { if (i === R) { end(); throw e; } }
     if (i === R) end();
     if (i < R + 1) go(i + 1);

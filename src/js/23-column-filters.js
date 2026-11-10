@@ -1159,7 +1159,7 @@ async function bringTbFile(f, on, opts){
   const to = (b.meta || {}).to || next;
   const j = {from: next, to, ledgers: r.rows.map(x => ({name: x.name, parent: (b.under || {})[x.name] || "", open: String(x.open), close: ""}))};
   TallyRead.balances(b, j, next, to);
-  b.tb.source = "the trial balance file " + f.name; b.tb.openAsOn = on;
+  b.tb.source = "the trial balance file " + f.name; b.tb.openAsOn = on; b.tb.own = 1;     // closings FinCom's own: no check against Tally (MIS)
   // the closing figures follow from the opening and the entries brought in
   if (typeof MIS === "object"){ const mv = MIS.moves(b.tb.from, b.tb.to); Object.entries(b.tb.led).forEach(([l, x]) => { x.close = r2(num(x.open) + ((mv[l] || {}).t || 0)); }); }
   TallyRead.after(b, "after the trial balance was read", {from: next, to});
