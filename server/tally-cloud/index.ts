@@ -1887,9 +1887,13 @@ async function periodDaysFor(firm: string, body: any, stopped: boolean, max = 3,
       if (x?.state === "refused" && x?.code === "noStart" && Date.now() - Date.parse(String(x?.at || "")) < 600000) noStart.add(key(x?.company));
     }
     const open = new Map<string, string>();
-    for (const c of (Array.isArray(body?.companies) ? body.companies : []).slice(0, 200) as any[]) {
+    const cosIn = (Array.isArray(body?.companies) ? body.companies : []).slice(0, 200) as any[];
+    // a bridge that sends the numbers for any company sends them for each one it has them for: one without the key has none
+    // (an older bridge sending none for any is left as before)
+    const sendsAlt = cosIn.some((c: any) => !!c && typeof c === "object" && ("altvchid" in c || "altmstid" in c));
+    for (const c of cosIn) {
       const name = s(c?.name, 200);
-      const unstarted = !!c && typeof c === "object" && "altvchid" in c && altOf(c.altvchid) === null && altOf(c.altmstid) === null && !sp.has(key(name));
+      const unstarted = sendsAlt && !!c && typeof c === "object" && altOf(c.altvchid) === null && altOf(c.altmstid) === null && !sp.has(key(name));
       if (unstarted || noStart.has(key(name))) continue;
       if (name && c?.open === true && !open.has(name)) open.set(name, s(c?.guid, 100));
     }

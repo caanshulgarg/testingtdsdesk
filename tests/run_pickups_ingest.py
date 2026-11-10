@@ -183,6 +183,10 @@ try:
     def days8(**more):
         c, r = call(dict(base, open=["MADE UP CO", "ACME TRADERS"], **more))
         return c, sorted({d.get("company") for d in (r.get("periodDays") or [])})
+    c, got = days8(companies=[{"name": "MADE UP CO", "open": True, "guid": CG}, acme])
+    ok(c == 200 and got == ["ACME TRADERS"], "8. no altvchid key at all in its beat entry (others have one): its days not listed (%s)" % got)
+    c, got = days8(companies=[{"name": "MADE UP CO", "open": True, "guid": CG}, {"name": "ACME TRADERS", "open": True, "guid": CG2}])
+    ok(c == 200 and "MADE UP CO" in got, "8. an older bridge sending no numbers for any company: as before (%s)" % got)
     c, got = days8(companies=cos(altvchid=None, altmstid=None))
     ok(c == 200 and got == ["ACME TRADERS"], "8. no altvchid/altmstid in its beat entry: its days not listed, the others' are (%s)" % got)
     c, got = days8(companies=cos(altvchid=None, altmstid=None), startPoint={"MADE UP CO": {"altvchid": 10, "altmstid": 5, "guid": CG}})
