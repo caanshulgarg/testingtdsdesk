@@ -27,6 +27,10 @@ import { ListRows } from "../../parts/ListTable.jsx";
 import DateBox from "../../parts/DateBox.jsx";
 import NotRead from "../../parts/NotRead.jsx";
 
+// fix-lookup (11-Nov-2026): every list the page draws is read through L, so an answer or a list that came without it
+// draws as empty instead of reaching Part below (the owner's "Cannot read properties of undefined (reading 'map')")
+const L = (v) => (Array.isArray(v) ? v : []);
+
 const Tile = ({ l, v, cls }) => <div className={"dtile" + (cls ? " " + cls : "")}><span>{l}</span><b>{v}</b></div>;
 const LedBtn = ({ l }) => <button className="linkbtn strong" onClick={(ev) => { ev.stopPropagation(); lkLed(l); }}>{l}</button>;
 const enter = (fn) => (ev) => { if (ev.key === "Enter") { ev.preventDefault(); fn(ev); } };
@@ -39,7 +43,7 @@ function VoucherRow({ r, x, children }) {
   return <>
     <tr className={"lk-v" + (open ? " open" : "")} data-key={r.id} tabIndex={0} onClick={() => lkOpen(r.id)} onKeyDown={enter(() => lkOpen(r.id))}>{children}</tr>
     {open && <tr className="lk-sub"><td colSpan={9}><div className="lk-entries">{r.narr && <p className="note">{shownNarr(r.narr)}</p>}
-      <table className="bk-table lk-in" data-statement=""><tbody>{r.ent.map((e, i) => <tr key={i}><td><LedBtn l={e.l} /></td><td className="n">{e.a < 0 ? FC.amt(-e.a) : ""}</td><td className="n">{e.a > 0 ? FC.amt(e.a) : ""}</td></tr>)}</tbody></table></div></td></tr>}
+      <table className="bk-table lk-in" data-statement=""><tbody>{L(r.ent).map((e, i) => <tr key={i}><td><LedBtn l={e.l} /></td><td className="n">{e.a < 0 ? FC.amt(-e.a) : ""}</td><td className="n">{e.a > 0 ? FC.amt(e.a) : ""}</td></tr>)}</tbody></table></div></td></tr>}
   </>;
 }
 
@@ -47,14 +51,14 @@ function VoucherRow({ r, x, children }) {
 // round 1: the year being worked on comes first; the running balance still counts them)
 function earlier(r, x) {
   const fs = Smart.fyStartOf(Smart.today());
-  if (x.early || !(r.from < fs && r.to >= fs)) return { rows: r.rows, n: 0 };
-  const n = r.rows.filter((v) => v.date < fs).length;
-  return { rows: r.rows.filter((v) => v.date >= fs), n, fs, last: n ? r.rows[n - 1] : null, dr: r2(r.rows.slice(0, n).reduce((a, v) => a + num(v.dr), 0)), cr: r2(r.rows.slice(0, n).reduce((a, v) => a + num(v.cr), 0)) };
+  if (x.early || !(r.from < fs && r.to >= fs)) return { rows: L(r.rows), n: 0 };
+  const rows = L(r.rows), n = rows.filter((v) => v.date < fs).length;
+  return { rows: rows.filter((v) => v.date >= fs), n, fs, last: n ? rows[n - 1] : null, dr: r2(rows.slice(0, n).reduce((a, v) => a + num(v.dr), 0)), cr: r2(rows.slice(0, n).reduce((a, v) => a + num(v.cr), 0)) };
 }
 const ShowEarly = ({ n, fs, cols }) => <tr className="lk-early" data-lk-early=""><td colSpan={cols}>{n + (n === 1 ? " entry" : " entries") + " before " + FC.when(fs) + " · "}<button className="linkbtn" onClick={() => { LK.st().early = true; render(); }}>Show earlier years</button></td></tr>;
 
-function Body({ r, x }) {
-  const LIMIT = gfN(1500);
+function Body({ r: r0, x }) {
+  const LIMIT = gfN(1500), r = Object.assign({}, r0, { rows: L(r0.rows), groups: L(r0.groups) });
   // the opening and the closing each shown once: in the table's first and last rows when there are entries, else as tiles
   if (r.kind === "ledger") { const E = earlier(r, x); return <>
     <div className="dash-tiles">{!r.rows.length && <Tile l="Opening" v={r.open == null ? "not known" : FC.drcr(r.open)} />}<Tile l="Debits" v={FC.amt(r.dr) || "0.00"} /><Tile l="Credits" v={FC.amt(r.cr) || "0.00"} />{(!r.rows.length || r.close == null) && <Tile l="Closing" v={r.close == null ? FC.drcr(r.dr - r.cr) + " (movement)" : FC.drcr(r.close)} />}</div>
@@ -80,7 +84,7 @@ function Body({ r, x }) {
   </>;
   if (r.kind === "tb") {
     if (r.none) return <div className="bk-none">{"The balances on this date are not in FinCom’s copy of the books yet: " + r.none + ". Bring in last night’s copy or today’s entries above; the trial balance is then worked out here, without holding Tally up."}</div>;
-    const diff = r2(r.dr - r.cr), agrees = Math.abs(diff) < 0.5, nm = r.noMaster || [];
+    const diff = r2(r.dr - r.cr), agrees = Math.abs(diff) < 0.5, nm = L(r.noMaster);
     const masters = nm.length > 0 && <div className="bk-alert" data-tb-nomaster="">
       <b>{nm.length} ledger{nm.length === 1 ? " has" : "s have"} entries but no master in the books read:</b>{" "}
       {nm.slice(0, 8).map((z) => z.l + " " + FC.drcr(z.bal)).join(", ")}{nm.length > 8 ? "…" : ""}. Their group and opening balance are not known.{" "}
@@ -96,7 +100,7 @@ function Body({ r, x }) {
       <div className="dash-tiles"><Tile l="Debit balances" v={FC.amt(r.dr)} /><Tile l="Credit balances" v={FC.amt(r.cr)} /><Tile l="Difference" v={agrees ? (r.openDiff ? "agrees, with the opening difference" : "agrees") : FC.amt(diff)} cls={agrees ? "" : "warn"} /><Tile l="Ledgers" v={String(r.rows.length - (r.openDiff ? 1 : 0))} /></div>
       <Wrap head={<><th>Ledger</th><th>Under</th><th className="n">Debit</th><th className="n">Credit</th></>}>
         {r.groups.map((g, gi) => <Fragment key={g.g + ":" + gi}><tr className="lk-grp"><td colSpan={2}><b>{g.g}</b></td><td className="n"><b>{FC.amt(g.dr)}</b></td><td className="n"><b>{FC.amt(g.cr)}</b></td></tr>
-          {g.rows.map((z, i) => <tr key={z.l + ":" + i} data-tb-row-opendiff={z.openDiff ? "" : undefined}><td style={{ paddingLeft: 22 }}>{z.openDiff ? <span>{z.l}</span> : <LedBtn l={z.l} />}</td><td>{z.sub}</td><td className="n">{z.bal > 0 ? FC.amt(z.bal) : ""}</td><td className="n">{z.bal < 0 ? FC.amt(-z.bal) : ""}</td></tr>)}</Fragment>)}
+          {L(g.rows).map((z, i) => <tr key={z.l + ":" + i} data-tb-row-opendiff={z.openDiff ? "" : undefined}><td style={{ paddingLeft: 22 }}>{z.openDiff ? <span>{z.l}</span> : <LedBtn l={z.l} />}</td><td>{z.sub}</td><td className="n">{z.bal > 0 ? FC.amt(z.bal) : ""}</td><td className="n">{z.bal < 0 ? FC.amt(-z.bal) : ""}</td></tr>)}</Fragment>)}
         <tr className="lk-tot"><td><b>Total</b></td><td></td><td className="n"><b>{FC.amt(r.dr)}</b></td><td className="n"><b>{FC.amt(r.cr)}</b></td></tr>
       </Wrap></>;
   }
@@ -163,7 +167,7 @@ function Form({ x }) {
   if (x.kind === "monthly") return <>{ledIn("Ledger (or leave empty and choose a group)", true)}{grpIn}{dates}</>;
   if (x.kind === "bills") return <>{ledIn("Party", false)}{asOn}<label className="f"><span>Side</span><select aria-label="Side" value={x.side === "p" ? "p" : "r"} onChange={(ev) => lkType("side", ev.target.value)}><option value="r">Owed to the client</option><option value="p">Owed by the client</option></select></label></>;
   return <><label className="f lk-wide"><span>Words, a number or an amount</span>{text("q", { type: "search", "data-fk": "lkQ", "aria-label": "Words, a number or an amount", placeholder: "party, narration, bill number or 25000", autoComplete: undefined })}</label>{dates}
-    <label className="f"><span>Type</span><select aria-label="Type" value={x.typ || ""} onChange={(ev) => lkType("typ", ev.target.value)}><option value="">Every type</option>{LK.types().map((t) => <option key={t}>{t}</option>)}</select></label></>;
+    <label className="f"><span>Type</span><select aria-label="Type" value={x.typ || ""} onChange={(ev) => lkType("typ", ev.target.value)}><option value="">Every type</option>{L(LK.types()).map((t) => <option key={t}>{t}</option>)}</select></label></>;
 }
 
 export default function Lookup({ b }) {
@@ -175,8 +179,8 @@ export default function Lookup({ b }) {
     if (!(LK.names && LK.names.cid === S.coId) && !LK._namesBusy && LK._namesTried !== S.coId && typeof TCloud === "object" && TCloud.has(S.coId)) { LK._namesTried = S.coId; setTimeout(() => LK.loadNames(), 0); }
     if (LK.live()) setTimeout(() => LK.autoFresh(), 0);
   });
-  const leds = FC.ledgers() || [], grps = FC.groups() || [], T = FC.tn();
-  const can = LK.canTally(x), fromTally = can && LK.useTally(x, "auto"), rec = Array.isArray(LK.recent()) ? LK.recent() : [];
+  const leds = L(FC.ledgers()), grps = L(FC.groups()), T = FC.tn();
+  const can = LK.canTally(x), fromTally = can && LK.useTally(x, "auto"), rec = L(LK.recent());
   // smart moves round 1 (3): the dates run past the books in FinCom: one line, Read that year from Tally or show the last year read
   const asked = ["tb", "bills"].includes(x.kind) ? x.asOn : x.to, end = have ? Smart.booksEndBefore(asked) : "";
   const notRead = end && <NotRead end={end} read={Smart.fyLabelOf(asked)} show={Smart.fyLabelOf(end) !== Smart.fyLabelOf(asked) ? Smart.fyLabelOf(end) : ""} onShow={() => lkShowFy(Smart.fyStartOf(end))} bridge={live || (typeof TCloud === "object" && TCloud.has(S.coId))} />;

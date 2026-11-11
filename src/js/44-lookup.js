@@ -84,7 +84,7 @@ const LK = {
     return S.lk;
   },
   recentKey(){ return "tdsdesk:lkrecent:" + (S.coId || ""); },
-  recent(){ try { return JSON.parse(lsGet(this.recentKey()) || "[]"); } catch (e){ return []; } },
+  recent(){ try { const r = JSON.parse(lsGet(this.recentKey()) || "[]"); return Array.isArray(r) ? r.filter(x => x && typeof x === "object") : []; } catch (e){ return []; } },
   remember(x){
     const k = JSON.stringify([x.kind, x.led, x.grp, x.from, x.to, x.asOn, x.q]);
     const list = this.recent().filter(r => JSON.stringify([r.kind, r.led, r.grp, r.from, r.to, r.asOn, r.q]) !== k);

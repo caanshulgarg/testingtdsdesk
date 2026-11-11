@@ -141,6 +141,8 @@ export default function Reports({ b }) {
     {have && R && R.notRead && <NotRead end={R.end} what={"Reports " + FC.fyLabel(R.fy)} read={FC.fyLabel(R.fy)} show={RPT.fys()[0] ? FC.fyLabel(RPT.fys()[0]) : ""} onShow={() => RPT.pickFy(RPT.fys()[0])} />}
     {LK.fr().busy && <BusyCard title="Bringing the books up to date…" detail={LK.fr().busy} done={0} total={0} />}
     {!have && <NoBooks what="Reports" />}
+    {/* fix-lookup (11-Nov-2026): entries with no dates at all give no year: said, never the error box */}
+    {have && !R && <p className="note" data-rpt-noyear="">{"The dates these books cover are not known yet, so no year can be shown. Bring the books in from Tally again (From Tally), and the reports show here."}</p>}
   </>;
   // the older "Financial statements (Schedule III)" view is gone: an old link to it opens the Financial statements page,
   // Reports' one entry for the statements (RPT.LIST "fs")
