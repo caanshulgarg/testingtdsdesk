@@ -83,6 +83,8 @@ function runSplit(from, to, how) {
     try { yield* misSteps(from, to, how); } finally { MIS._again = false; FinComNav.done(); }
     // the save names its books: done even when the client changes after the run
     saveBooks(null, b).catch(() => {});
+    // (a run that ends inside its first step, small books, ends before any drawing of the job: the page drawn again with it)
+    setTimeout(() => { if (S.books === b) render(); }, 0);
     return true;
   });
 }
