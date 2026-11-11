@@ -22,7 +22,10 @@ const hm = (t) => String((typeof tallyHm === "function" ? tallyHm(t) : "") || ""
 export const sameCo = (a, b) => coKey(a) === coKey(b) || (typeof LinkRec === "object" && LinkRec.same(a, b));
 const check = () => (typeof tallyCheckNow === "function" ? tallyCheckNow() : null);
 const goLink = (co) => () => { S.tallyPanel = false; if (typeof openConnectTally === "function") openConnectTally(4, co.id); window.scrollTo(0, 0); };
-const goRow = (co) => () => { S.tallyPanel = false; S.tallyGuide = {}; if (typeof openTallyFor === "function") openTallyFor(co.id); else if (typeof navHome === "function") navHome("tally"); window.scrollTo(0, 0); };
+// next-bell-tally: the basic Tally page at the client's row; more: a control only Advanced has, behind the row's "More settings"
+// (TWO: the card of a company open in two places; ACTIVITY: Sync activity for the client)
+const TWO = { to: "support", at: "[data-tco-two-places]" }, ACTIVITY = { to: "activity" };
+const goRow = (co, more) => () => { S.tallyPanel = false; S.tallyGuide = {}; if (typeof openTallyFor === "function") openTallyFor(co.id, more); else if (typeof navHome === "function") navHome("tally"); window.scrollTo(0, 0); };
 export const WORDS = { linked: "Linked", waiting: "Waiting for Tally", needs: "Needs you", unlinked: "Not linked" };
 const LEVEL = { linked: "ok", waiting: "warn", needs: "bad", unlinked: "warn" };
 
@@ -55,7 +58,7 @@ function linkWordNow(co, company) {
   // open in none of several computer keys (a shared server: one a Windows login): the plain words, never one login's
   const open = sv === null && globalThis.tallyPlain(devId) ? "Open " + name + " in Tally" : "Open " + name + " in TallyPrime on " + pc;
   // the same company in two places (a copied data folder keeps the GUID): nothing from the other place is applied
-  if (rec && typeof LinkRec === "object" && LinkRec.twoPlaces(rec)) return o("needs", name + " is open in two places with different data: choose which is the books", { label: "Choose", act: goRow(co) }, base);
+  if (rec && typeof LinkRec === "object" && LinkRec.twoPlaces(rec)) return o("needs", name + " is open in two places with different data: choose which is the books", { label: "Choose", act: goRow(co, TWO) }, base);
   // (no computer of the firm has FinCom Bridge at all: that is what to do first)
   if (!dev) return o("waiting", devs.length ? open : "Install FinCom Bridge on the computer with TallyPrime", null, base);
   const ds = typeof devState === "function" ? devState(dev) : { bridge: "online", tally: "open" };
@@ -69,10 +72,10 @@ function linkWordNow(co, company) {
   const posting = rec ? !!rec.posting_allowed : typeof postToProblem === "function" && !postToProblem(co, "");
   if (!posting && rec) return o("needs", "Posting into Tally is stopped for " + co.name, { label: "Allow posting", act: () => (typeof linkPostingSet === "function" ? linkPostingSet(co, rec, true) : null) }, base);
   const l = k.line || null;
-  if (l && l.state === "stopped") return o("needs", l.text, { label: "Open the Tally page", act: goRow(co) }, base);
+  if (l && l.state === "stopped") return o("needs", l.text, { label: "Open the Tally page", act: goRow(co, ACTIVITY) }, base);
   if (l && l.state === "paused") return o("needs", l.text, { label: "Update now", act: () => (typeof tallyUpdateNow === "function" ? tallyUpdateNow(co.id) : null) }, base);
   if (l && l.state === "notanswering") return o("needs", l.text, { label: "Check again", act: check }, base);
-  if (k.state === "needs") return o("needs", "Entries wait for you on the Tally page", { label: "Open the Tally page", act: goRow(co) }, base);
+  if (k.state === "needs") return o("needs", "Entries wait for you on the Tally page", { label: "Open the Tally page", act: goRow(co, ACTIVITY) }, base);
   const last = lastEntry(co, k);
   return o("linked", ["reading", posting ? "posting allowed" : "posting not allowed", last ? "last entry " + hm(last) : ""].filter(Boolean).join(" · "), null, base);
 }

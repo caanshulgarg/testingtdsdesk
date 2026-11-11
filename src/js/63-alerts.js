@@ -200,11 +200,13 @@ const AlertHub = {
           out.push(Object.assign(base, {sev: "warn", text: who + ": " + (hd.length === b.other.length ? this.heldSay(hd, true) + "."
               : (b.other.length === 1 ? "1 change" : b.other.length + " changes") + " from Tally " + (b.other.length === 1 ? "is" : "are") + " waiting, not yet in the books" + (locked.length === b.other.length ? " (the month is locked)." : ".")),
             // FinCom 2.3.5: lines the bridge gave up on say the one thing to do (Sync activity's "Needs you" has each day's button)
-            fix: locked.length === b.other.length ? "Apply them on Sync activity, or unlock the month." : b.other.every(l => Rec.needKind(l) === "readstop")
+            fix: locked.length === b.other.length ? "Apply them from the Tally page (More settings), or unlock the month." : b.other.every(l => Rec.needKind(l) === "readstop")
               ? "Needs you: reading from Tally is stopped from FinCom on that computer; an owner resumes it on the Tally page."
               : b.other.every(l => ["daybook", "dupid"].includes(Rec.needKind(l)))
-              ? "Needs you: upload the Day Book for " + [...new Set(b.other.map(l => this.heldDay(l)).filter(Boolean))].sort().map(d => fmtDate(tallyDate(d))).join(", ") + " (Sync activity has each day's button)."
-              : hd.length === b.other.length ? "See them on Sync activity." : "See why on Sync activity.", act: {label: "Sync activity", run: () => Rec.openActivity(b.cid)}}));
+              ? "Needs you: upload the Day Book for " + [...new Set(b.other.map(l => this.heldDay(l)).filter(Boolean))].sort().map(d => fmtDate(tallyDate(d))).join(", ") + " (the Tally page has the button)."
+              : hd.length === b.other.length ? "See them on the Tally page." : "See why on the Tally page.",
+            // next-bell-tally: the basic Tally page at the client's row; its "More settings" opens Sync activity for it
+            act: {label: "Open on Tally page", run: () => openTallyFor(b.cid, {to: "activity"})}}));
         }
       });
       // ---- 2.4.0 review MEDIUM (next-renumber): entries Tally may have renumbered that FinCom Bridge could not read again

@@ -12,11 +12,12 @@ const ChangePick = lazy(() => import("./TallyCompanies.jsx").then((m) => ({ defa
 //   TallyOne   Client setup: "Tally: <company> ● Connected · Open in Tally page" / "Tally: Not linked · Choose on Tally page"
 // goTallyRow(cid): linked, the Tally page with the client's row(s) marked (S.tallyFocus); not linked, the Tally page's list
 // for that client (openConnectTally(4, cid): every company with "Link to <client>", the open ones first)
-export function goTallyRow(cid) {
+// (more: openTallyFor's, for a control only Advanced has: the row then shows "More settings" to it)
+export function goTallyRow(cid, more) {
   const co = cid && S.companies ? S.companies[cid] : null;
   const linked = co && typeof tallyLinkOf === "function" && tallyLinkOf(co).state !== "unlinked";
   S.tallyPanel = false;
-  if (linked) { S.tallyGuide = {}; openTallyFor(cid); } else openConnectTally(4, cid || "");
+  if (linked) { S.tallyGuide = {}; openTallyFor(cid, more); } else openConnectTally(4, cid || "");
   window.scrollTo(0, 0);
   return Promise.resolve();
 }

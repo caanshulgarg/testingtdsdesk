@@ -512,6 +512,14 @@ function MoreRow({ row, linked, e, main, det, running, download, oneDl, onAnswer
   </div>;
 }
 const READING_WHY = "FinCom is reading this company from Tally now; the button comes back when it is done.";
+// next-bell-tally: "More settings" of a row opened for an advanced-only control (S.tallyAdv, openTallyFor's more):
+// {to: "activity"} Sync activity for the client; else Advanced (for support) opened and brought into view at a.at
+function moreGo(a) {
+  if (a.to === "activity") return Rec.openActivity(a.cid, a.filter);
+  S.tallyMore = Object.assign({}, S.tallyMore, { support: true }); render();
+  let n = 0; const t = setInterval(() => { const e = document.querySelector("#app " + (a.at || "[data-for-support]"));
+    if (e || ++n > 50) { clearInterval(t); if (e && e.scrollIntoView) e.scrollIntoView({ block: "center" }); } }, 100);
+}
 function Row({ row, download, oneDl, seen, cs, x, checkAgain }) {
   const ui = UI(), [, tick] = useState(0), key = row.cid || row.company;
   const det = ui.details === "all" || !!(ui.details || {})[key], more = ui.more === key || det;
@@ -575,6 +583,9 @@ function Row({ row, download, oneDl, seen, cs, x, checkAgain }) {
         {why && <span className={"tpt-why" + (rw && (rw.phase === "why" || rw.phase === "waiting") ? " bad" : "")} data-tpt-why={rw ? "run-" + rw.phase : aw ? (aw.step ? "step" + aw.step.n : "why") : ""} role={rw ? "status" : undefined}>{why}
           {aw && aw.step && <>{" "}<button type="button" className="linkbtn" data-tsm-away-steps={aw.step.n} onClick={() => { set({ open: true }); window.scrollTo(0, 0); }}>See step {aw.step.n}</button></>}</span>}
         {held && <span className="tpt-why" data-tpt-held="">{held}</span>}
+        {/* next-bell-tally: opened for a control only Advanced has (the bell's lines waiting, a company in two places): "More settings" to it */}
+        {row.focus && S.tallyAdv && S.tallyAdv.cid === row.cid && <span className="tpt-why"><button type="button" className="linkbtn" data-tally-more-go={S.tallyAdv.to}
+          onClick={() => moreGo(S.tallyAdv)}>More settings</button></span>}
         {/* next-link-follow (migration 146): where the book is read from, or the linked computer offline with the company open nowhere */}
         {row.where && row.where.text !== why && <span className={"tpt-why" + (row.where.kind === "offline" ? " bad" : "")} data-tpt-where={row.where.kind}>{row.where.text}</span>}
         {near && canWrite() && <span className="tpt-why" data-tsm-away-near={near.company}>{"“" + shown(near.company) + "” is open in your Tally, a close name. "}
@@ -960,9 +971,9 @@ export default function SimpleTally({ installed, ready = true, pcs, download, sh
   // bridge 2.5.3: this Windows login's own bridge, looked for once for the tab, once the firm's computers are read (their
   // ports are asked too); never from a drawing (next-fix-probe-loop)
   useEffect(() => { if (ready) lookOnce(); }, [ready]);
-  // from a client's "Open Tally page" (openTallyFor: S.tallyFocus): its row is marked here, and For support opens with that
-  // client's company and its ⋯ (Post entries here, Change Tally company…, Unlink)
-  useEffect(() => { if (S.tallyFocus && !(S.tallyMore || {}).support) { S.tallyMore = Object.assign({}, S.tallyMore, { support: true }); render(); } }, [S.tallyFocus]);
+  // from a client's "Open Tally page", the bell, the Tally icon (openTallyFor: S.tallyFocus): its row is marked here and
+  // brought into view; Advanced (for support) stays closed (next-bell-tally, the owner: "it should go to the basic Tally
+  // page"); the row's More ▾ has the client's Change and Unlink
   // "Open Companies in Tally" (openConnectTally(4) with no client, e.g. Settings › Books in the cloud): that list is under For support
   useEffect(() => { if (g.at && (g.step || 0) >= 4 && !g.cid && !(S.tallyMore || {}).support) { S.tallyMore = Object.assign({}, S.tallyMore, { support: true }); render(); } }, [g.at]);
   useEffect(() => { if (!focus) return; const t = setTimeout(() => { const e = document.querySelector("#app [data-tsm-row][data-focus]"); if (e && e.scrollIntoView) e.scrollIntoView({ block: "center" }); }, 120); return () => clearTimeout(t); }, [focus]);

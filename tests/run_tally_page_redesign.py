@@ -290,10 +290,11 @@ def main():
         ok(lt is not None and (max(lt) if lt else 0) < 300, "10. the longest task while opening them under 300 ms (%s)" % (sorted(lt or [], reverse=True)[:6]))
 
         print("== 11 (review of dd9288be4)")
-        # 1. a client's "Open Tally page": its row marked, Advanced open, the focus kept (the day check reads the rows as they are)
+        # 1. a client's "Open Tally page": its row marked, the focus kept (the day check reads the rows as they are); next-bell-tally
+        # (the owner, 11-Nov-2026: "it should go to the basic Tally page"): Advanced (for support) stays closed
         ids = scene([dA, bdev()], c1, CLx, A_PINGS)
-        E("(c) => { S.tallyFocus = c; S.tallyMore = {}; navHome('tally'); render(); }", ids[ACME]); pg.wait_for_timeout(3000)
-        ok(n(TB + " tr[data-focus]") == 1 and attr(TB + " tr[data-focus]", "data-tsm-row") == ACME and n("#app [data-support-body]") == 1, "11.1 from a client: its row marked, Advanced open (%s)" % attr(TB + " tr[data-focus]", "data-tsm-row"))
+        E("(c) => { S.tallyMore = {support: true}; openTallyFor(c); render(); }", ids[ACME]); pg.wait_for_timeout(3000)
+        ok(n(TB + " tr[data-focus]") == 1 and attr(TB + " tr[data-focus]", "data-tsm-row") == ACME and n("#app [data-support-body]") == 0, "11.1 from a client: its row marked, Advanced closed (%s)" % attr(TB + " tr[data-focus]", "data-tsm-row"))
         E("() => { S.tallyFocus = ''; S.tallyMore = {}; render(); }")
         # 2. a row's one button: the missing days' fetch, the Day Book upload, else Update now
         M = lambda r: E("(r) => FCTallyMain(r)", r)

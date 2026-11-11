@@ -13,6 +13,8 @@ export function goTallyPage(tab = "computers", { bridgeDetails = false } = {}) {
   if (tab === "sent") S.logAll = false;
   // signed in, the bridge's section is inside the page's Details (for support): opened; signed out it is on the page
   if (bridgeDetails) S.tallyMore = Object.assign({}, S.tallyMore || {}, { page: true });
+  // next-bell-tally: "Open Tally page" (the Tally icon's, Settings'): the basic page, Advanced (for support) closed
+  else if (tab === "computers") { S.tallyGuide = {}; S.tallyAdv = null; S.tallyMore = Object.assign({}, S.tallyMore || {}, { support: false, page: false }); }
   navHome("tally");
   if (bridgeDetails) setTimeout(() => { const el = document.querySelector("[data-connect-section]"); if (el && el.scrollIntoView) el.scrollIntoView({ block: "start" }); }, 80);
 }

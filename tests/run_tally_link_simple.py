@@ -126,7 +126,13 @@ def main():
             ok(pg.locator(one).count() == 1 and tags == [want] and pg.locator("#app [data-tally-link]").count() == 0, "%s: exactly one Tally line, %r, no card (%s)" % (label, want, tags))
             return re.sub(r"\s+", " ", txt(one))
         def to_row():
+            linked = txt("#app [data-tally-one-go]").strip() == "Open in Tally page"
             pg.click("#app [data-tally-one-go]"); pg.wait_for_timeout(1300)
+            # next-bell-tally (the owner, 11-Nov-2026: "it should go to the basic Tally page"): a linked client's row on the
+            # basic page, Advanced closed; its Companies in Tally (the ⋯ of each company) are under Advanced: opened here
+            if linked:
+                ok(pg.locator("#app [data-support-body]").count() == 0, "Open in Tally page: the basic page, Advanced closed")
+                pg.click("#app [data-support-toggle]"); pg.wait_for_timeout(1500)
         def menu_open(co):
             pg.click(R(co) + " [data-tco-more] summary"); pg.wait_for_timeout(250)
         def confirm(yes=True):

@@ -393,7 +393,7 @@ const Rec = {
   },
   // a client's Tie-out (unlocking a month), its From Tally (the ledgers), the Tally page, Resume reading on one computer
   async openClientTab(cid, tab){ if (!cid) return; if (S.view !== "company" || S.coId !== cid) await openCompany(cid); goClient(tab); },
-  openTallyPage(){ S.tallyTab = "computers"; navHome("tally"); },
+  openTallyPage(){ tallyBasic(); S.tallyFocus = ""; S.tallyAdv = null; navHome("tally"); },
   resumeOn(g){ if (typeof TCloud === "object" && g && g.deviceId) TCloud.readResume({device: {id: g.deviceId}, computer: g.pc}); },
   // Apply now on every line of a group, one after another (the list's own Apply now, line by line)
   async releaseAll(lines){ for (const r of [].concat(lines || [])) if (r.state === "held") await this.release(r); },

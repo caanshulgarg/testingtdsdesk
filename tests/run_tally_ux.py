@@ -115,8 +115,9 @@ def main():
         # clean-up batch 1 (11-Oct-2026): the way back is the sidebar's client card, not a link on the page
         back = '#side [data-side-client="back"]'
         ok(pg.get_attribute(back, "aria-label") == "Back to Alpha Traders" and pg.locator("#app [data-back-client]").count() == 0, "1. the sidebar's client card: 'Back to Alpha Traders'; no Back link on the page (%r)" % pg.get_attribute(back, "aria-label"))
-        ok(pg.locator('#app [data-tally-focus="%s"]' % cid).count() == 1 and pg.locator('#app [data-tco-row="GARG SHEKHAR"][data-focus]').count() == 1,
-           "C. focused on the client's company: its row marked")
+        # next-bell-tally (the owner, 11-Nov-2026: "it should go to the basic Tally page"): the basic page's row, Advanced closed
+        ok(pg.locator('#app [data-tsm-row][data-focus][data-tsm-cid="%s"]' % cid).count() == 1 and pg.locator("#app [data-support-body]").count() == 0,
+           "C. focused on the client: its row marked on the basic page, Advanced closed")
         shot("tally-from-client")
         # 15-Oct-2026 (the calm page): Sync activity and Everything sent open from the Advanced (for support) fold
         E("() => { S.tallyMore = {support: true, page: true}; render(); }"); pg.wait_for_timeout(400)

@@ -403,6 +403,11 @@ def main():
         st = status(pg)
         ok(st["state"] == "needs" and st["words"] == ALPHA + " is open in two places with different data. Choose which one is the books." and st["buttons"] == ["place1", "place2"], "Needs you: the same company in two places, Use ① / Use ② (%s)" % st)
         status(pg, keep=True); pg.click("header.top [data-tally-pop-page]"); pg.wait_for_timeout(1500)
+        # next-bell-tally (the owner, 11-Nov-2026: "it should go to the basic Tally page"): the basic page, Advanced closed,
+        # the client's row with "More settings", which opens Advanced at the card
+        ok(E("() => S.homeTab") == "tally" and pg.locator("#app [data-support-body]").count() == 0 and pg.locator("#app [data-tsm-row][data-focus] [data-tally-more-go]").count() == 1,
+           "Open Tally page: the basic page, Advanced closed, the client's row with More settings")
+        pg.click("#app [data-tsm-row][data-focus] [data-tally-more-go]"); pg.wait_for_timeout(2500)
         card = T(pg, "#app [data-tco-two-places]")
         ok(E("() => S.homeTab") == "tally" and card.startswith(ALPHA + " is open in two places with different data:") and "① C:\\Users\\anshul\\TallyPrime\\Data · NWS144 · login anshul · last entry 27-Oct-2026 (FinCom reads this one)" in card
            and "② D:\\Copy\\Data · LAPTOP · login ravi · last entry 20-Oct-2026" in card and "nothing from the other is applied" in card, "Choose opens the Tally page's card: ① the place FinCom reads, ② the other, each with its full folder, computer, login and last entry (%s)" % card[:300])

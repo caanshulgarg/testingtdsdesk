@@ -193,7 +193,7 @@ const ASST = {
     this.close();
     const m = {post_to_tally: () => goClient("post"), bills: () => goClient("bills"), bank: () => goClient("bank"), sales: () => goClient("sales"), gst_filing: () => goClient("books:gst"),
       gst_settings: () => goGstSettings ? goGstSettings() : goClient("books:gst"), tds_returns: () => goClient("books:tds"), tds_challans: () => goClient("books:tds"), tally_ledgers: () => goClient("books:ledgers"),
-      tally_sync: () => { S.tallyFocus = cid || ""; navHome("tally"); }, closed_periods: () => goSettings("closed"), due_list: () => navHome("today")};
+      tally_sync: () => openTallyFor(cid || ""), closed_periods: () => goSettings("closed"), due_list: () => navHome("today")};
     try { (m[s] || (() => navHome("today")))(); } catch (e){ navHome("today"); }
   },
   async download(f){

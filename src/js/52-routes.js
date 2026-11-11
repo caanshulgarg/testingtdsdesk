@@ -203,7 +203,12 @@ function backToClient(){
   Route.apply(h);
 }
 // from a client: the Tally page, focused on that client's computer and company (S.tallyFocus)
-function openTallyFor(cid){ S.tallyFocus = cid || S.coId || ""; S.tallyTab = "computers"; navHome("tally"); }
+// next-bell-tally (11-Nov-2026, the owner: "When I open the Tally page from the bell ... it redirects to the Advanced
+// settings of the Tally page; it should go to the basic Tally page"): every way in from elsewhere (the bell, the Tally
+// icon, a client's links, Sync activity) opens the BASIC page, Advanced (for support) closed, the client's row marked.
+// more ({to: "activity", filter}): the item is about a list only Advanced has; the row then shows "More settings" to it
+function tallyBasic(){ S.tallyTab = "computers"; S.tallyGuide = {}; S.tallyMore = Object.assign({}, S.tallyMore, {support: false, page: false}); }
+function openTallyFor(cid, more){ tallyBasic(); S.tallyFocus = cid || S.coId || ""; S.tallyAdv = more && S.tallyFocus ? Object.assign({cid: S.tallyFocus}, more) : null; navHome("tally"); }
 // the ONE place to connect Tally (15-Oct-2026; the owner: "multiple pages of Tally connection.. multiple places to
 // connect.. need a very simple connection guide"): the Tally page's Connect Tally guide. Every other place that spoke of
 // connecting or linking is a pointer that lands here: step 1 install, 2 open Tally, 3 keep a company open, 4 link a client,
@@ -212,7 +217,7 @@ function openTallyFor(cid){ S.tallyFocus = cid || S.coId || ""; S.tallyTab = "co
 // step of that morning is gone again (FinCom Bridge 2.4.5 puts the add-on into Tally itself), so the six steps as before
 function openConnectTally(step, cid, company){
   S.tallyGuide = {step: Number(step) || 0, cid: cid || "", company: company || "", at: Date.now()};
-  S.tallyFocus = ""; S.tallyTab = "computers";
+  S.tallyFocus = ""; S.tallyTab = "computers"; S.tallyAdv = null;
   navHome("tally");
 }
 if (typeof window !== "undefined"){

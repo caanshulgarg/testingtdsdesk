@@ -26,6 +26,8 @@ import { ownOpen, NO_CO, lookOnce, checkAll, checkedSay } from "../lib/tallySimp
 import "../lib/connectSteps.js";
 import { errWords, slowClock, SLOW_MS } from "./TallyBtn.jsx";   // next-buttons: a failure in plain words; a slow cloud said so
 import { noAnswer, readWhere } from "../lib/readFollow.js";
+// next-bell-tally: "Open Tally page" for a control only Advanced has: the row's "More settings" to it (as lib/linkStatus.js)
+const TWO = { to: "support", at: "[data-tco-two-places]" }, ACTIVITY = { to: "activity" };
 
 const TONE = { linked: "on", waiting: "warn", needs: "off", none: "idle" };
 const isOwner = () => !!(S.account && S.account.me && S.account.me.role === "owner");
@@ -159,6 +161,6 @@ export default function TallyPop({ co, nOpen, close, back }) {
     {msg && <p className={"note tally-pop-msg" + (msg.ok ? "" : " bad")} data-tally-pop-msg="" role="status">{msg.text}</p>}
     {stale && <p className="note books-stale" data-books-stale="">{stale}</p>}
     {/* Task D (the owner, 28-Oct-2026: "No suggestion to add clients"): no count of companies not linked */}
-    <p className="tally-pop-foot"><button type="button" className="linkbtn" data-tally-pop-page="" onClick={() => { close(); if (co) goTallyRow(co.id); else goTallyPage(); }}>Open Tally page</button></p>
+    <p className="tally-pop-foot"><button type="button" className="linkbtn" data-tally-pop-page="" onClick={() => { close(); if (co) goTallyRow(co.id, s.cause === "two" ? TWO : ["entries", "stopped", "paused"].includes(s.cause) ? ACTIVITY : undefined); else goTallyPage(); }}>Open Tally page</button></p>
   </div>;
 }
