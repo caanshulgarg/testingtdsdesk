@@ -9,14 +9,18 @@
 -- after a delete, and the gap opened at 18:53:07 - after the day was checked - stays open: the page says "3 entries made
 -- in Tally since 18:44 IST are not yet in FinCom", which is false.
 -- What 158 adds (nothing new is asked of Tally: the day check stays 133's FinComDayHeads list):
---   1. tally_held_delete_by_heads(book, day, heads): called by tally-ingest with a WHOLE-day list of a day being checked,
---      before 133's tally_check_heads. A held GUID-less 'deleted' line of that day is applied at once, on this first list,
---      when ALL of these hold (else 133/136's two lists as before):
---        - the line names Tally's MasterID, its number and type, and the book's company GUID (the line's own);
+--   1. tally_held_delete_by_heads(book, day, heads, device, bridge): called by tally-ingest with a WHOLE-day list of a day
+--      being checked, before 133's tally_check_heads. A held GUID-less 'deleted' line of that day is applied at once, on this
+--      first list, when ALL of these hold (else 133/136's two lists as before):
+--        - the line names Tally's MasterID, its number and type, and the book's company GUID (the line's own); it came from
+--          the computer and bridge that sent the list, in the last 10 minutes;
+--        - FinCom held the entry's version it holds now BEFORE the line arrived (tally_voucher_versions.seen_at): a new entry
+--          made after the delete with the same number and MasterID, taken by FinCom later, is never removed (review 2);
 --        - FinCom holds exactly ONE live entry of that day with that number and type, and its GUID is the GUID Tally makes
 --          for that MasterID (<company GUID>-<MasterID in 8 hex digits>; an entry that came by import keeps another GUID
 --          and is never matched);
---        - the list is not empty (42: an empty day is read twice) and names neither that GUID nor that MasterID.
+--        - the list is not empty (42: an empty day is read twice) and names neither that GUID nor that MasterID (as a
+--          number: leading zeros never hide it).
 --      Two proofs, each from Tally: the recorder line says that very entry (MasterID, number, type, date) was deleted,
 --      and this bridge's Tally's whole list of the day, taken now, no longer has it. The second list guarded against a
 --      list missing an entry by chance; that it misses exactly the entry a delete line names is not chance. A locked month
@@ -29,9 +33,13 @@
 --      India's) for 133's check (source 'gap') when none was listed whole after that number was seen; and
 --      tally_recorder_gap_asked (150) replaced: as 150, OR every day of the gap listed whole by Tally and done AFTER
 --      FinCom first saw Tally's number now (so every change up to that number is in those lists), none open or left to
---      upload, Tally's number not moved since, and the gap explained by deletes: a 'deleted' / 'cancelled' line of the book
---      received since the gap began, settled (applied / duplicate / stale), and no line of the book received since still
---      held. 47/150's queued-send check (lost = 0) still applies in tally_recorder_gap_check.
+--      upload, Tally's number not moved since, and the gap EXPLAINED by deletes (review 1): Tally's number less FinCom's
+--      highest known (the copy's highest AlterID, deleted entries' too, the starting point, the recorder's, a Day Book's,
+--      the last match's) is at most the number of settled 'deleted' / 'cancelled' lines (one entry each) received since
+--      the gap began; no line of the book received since still held. Any number more stays a gap (150's rule for it: a
+--      change dated on a day not listed, e.g. a journal of 01-Oct made today whose line never came). 47/150's queued-send
+--      check (lost = 0) still applies in tally_recorder_gap_check. The trigger re-queues a day only (source, queued and
+--      asked times, its count of lists this round); what the day's earlier checks found (heads, removed, ...) is kept.
 -- Add-only: one new table (row security on, service_role only), three new functions, one new trigger; one function
 -- replaced (150's tally_recorder_gap_asked, the same arguments, its grants restated: service_role only). No column,
 -- row or other function changed. One transaction, lock_timeout 10 s; safe twice. Tested by tests/run_migration158.py
@@ -40,12 +48,13 @@ begin;
 set local lock_timeout = '10s';
 
 -- ---------------------------------------------------------------- 1. a held GUID-less delete applied on the first whole list
-create or replace function public.tally_held_delete_by_heads(p_book uuid, p_day date, p_heads jsonb) returns jsonb
+create or replace function public.tally_held_delete_by_heads(p_book uuid, p_day date, p_heads jsonb, p_device uuid, p_bridge text) returns jsonb
 language plpgsql security definer set search_path = public, pg_temp as $function$
-declare cg text; f uuid; l record; g text; hx text; nv int; vg text; res jsonb; n int := 0; done jsonb := '[]'::jsonb;
+declare cg text; f uuid; l record; g text; hx text; mid bigint; nv int; vg text; va bigint; res jsonb; n int := 0; done jsonb := '[]'::jsonb;
 begin
   if auth.role() <> 'service_role' then raise exception 'not allowed' using errcode = '42501'; end if;
-  if p_book is null or p_day is null or jsonb_typeof(coalesce(p_heads, 'null'::jsonb)) <> 'array' or jsonb_array_length(p_heads) = 0 then
+  if p_book is null or p_day is null or p_device is null or coalesce(p_bridge, '') = ''
+     or jsonb_typeof(coalesce(p_heads, 'null'::jsonb)) <> 'array' or jsonb_array_length(p_heads) = 0 then
     return jsonb_build_object('ok', true, 'removed', 0);
   end if;
   if not exists (select 1 from tally_check_days k where k.book_id = p_book and k.day = p_day and k.done_at is null and k.upload_at is null) then
@@ -53,29 +62,34 @@ begin
   end if;
   select lower(btrim(coalesce(c.start_guid, c.company_guid))), c.firm_id into cg, f from tally_sync_cursor c where c.book_id = p_book;
   if coalesce(cg, '') !~ '^[0-9a-f][0-9a-f-]{7,99}$' then return jsonb_build_object('ok', true, 'mine', true, 'removed', 0); end if;
-  for l in select x.id, x.master_id, x.vch_no, x.vch_type from tally_recorder_lines x
+  for l in select x.id, x.master_id, x.vch_no, x.vch_type, x.received_at from tally_recorder_lines x
             where x.book_id = p_book and x.vch_date = p_day and x.state = 'held' and x.event = 'deleted'
+              and x.device_id = p_device and x.bridge = p_bridge and x.received_at > now() - interval '10 minutes'
               and (x.object_guid is null or x.object_guid ~ '-0{8}$')
               and coalesce(x.master_id, '') ~ '^[0-9]{1,15}$' and x.master_id::bigint > 0
               and lower(btrim(coalesce(x.company_guid, ''))) = cg
               and btrim(coalesce(x.vch_no, '')) <> '' and btrim(coalesce(x.vch_type, '')) <> ''
               and coalesce(x.held_why, '') not like 'month locked%' and coalesce(x.held_why, '') not like 'FinCom id %'
             order by x.id loop
-    hx := to_hex(l.master_id::bigint);
+    mid := l.master_id::bigint; hx := to_hex(mid);
     g := cg || '-' || case when length(hx) < 8 then lpad(hx, 8, '0') else hx end;
     -- this Tally's whole list of the day names neither that GUID nor that MasterID
     continue when exists (select 1 from jsonb_array_elements(p_heads) h
-                           where jsonb_typeof(h) <> 'array' or lower(coalesce(h->>0, '')) = g or coalesce(h->>1, '') = l.master_id);
+                           where jsonb_typeof(h) <> 'array' or lower(coalesce(h->>0, '')) = g
+                              or (coalesce(h->>1, '') ~ '^[0-9]{1,15}$' and (h->>1)::bigint = mid));
     -- exactly one live entry of the day with the line's number and type, and it is that GUID
-    select count(*), min(v.guid) into nv, vg from tally_vouchers v
+    select count(*), min(v.guid), min(v.alter_id) into nv, vg, va from tally_vouchers v
      where v.book_id = p_book and v.day = p_day and v.deleted_at is null and v.vno = l.vch_no and v.vtype = l.vch_type;
-    continue when nv <> 1 or lower(vg) <> g;
+    continue when nv <> 1 or lower(vg) <> g or va is null;
+    -- (review 2) the version FinCom holds now was held before the delete line arrived (a MasterID reused by a new entry
+    -- taken later is never removed by an older delete line)
+    continue when not exists (select 1 from tally_voucher_versions vv where vv.book_id = p_book and vv.tally_guid = vg and vv.alter_id = va and vv.seen_at <= l.received_at);
     res := tally_ingest_delete(p_book, vg, null, false, 'day check: deleted in Tally (MasterID)');
     continue when coalesce(res->>'state', '') <> 'applied' or coalesce((res->>'already')::boolean, false);
     insert into tally_fetch_log (book_id, firm_id, via, what, guid, day) values (p_book, f, 'check', 'deleted', vg, p_day);
     update tally_recorder_lines set state = 'applied', applied_at = now(),
            held_why = format('deleted in Tally: %s %s of %s (Tally''s MasterID %s) removed from FinCom - Tally''s whole list of the day, read %s, no longer has it',
-                             l.vch_type, l.vch_no, to_char(p_day, 'DD-Mon-YYYY'), l.master_id, to_char(now() at time zone 'Asia/Kolkata', 'DD-Mon-YYYY HH24:MI'))
+                             l.vch_type, l.vch_no, to_char(p_day, 'DD-Mon-YYYY'), mid, to_char(now() at time zone 'Asia/Kolkata', 'DD-Mon-YYYY HH24:MI'))
      where id = l.id and state = 'held';
     n := n + 1; done := done || to_jsonb(vg);
   end loop;
@@ -153,8 +167,7 @@ begin
     insert into tally_check_runs (book_id, firm_id) values (new.book_id, new.firm_id) on conflict (book_id) do nothing;
     insert into tally_check_days (book_id, firm_id, day, source, queued_at)
     select new.book_id, new.firm_id, d, 'gap', now() from unnest(want) d
-    on conflict (book_id, day) do update set source = excluded.source, queued_at = now(), asked_at = null, first_asked_at = null, lists = 0, tally_n = null, heads = null, via = null,
-      listed_at = null, gone1 = null, gone1_at = null, added = 0, updated = 0, removed = 0, same = null, done_at = null, upload_at = null, upload_words = null
+    on conflict (book_id, day) do update set source = excluded.source, queued_at = now(), asked_at = null, lists = 0, same = null, done_at = null, upload_at = null, upload_words = null
       where not (tally_check_days.done_at is null and tally_check_days.upload_at is null);
   exception when others then
     raise log 'tally_sync_cursor_gap_seen: book %: % %', new.book_id, sqlstate, sqlerrm;
@@ -170,7 +183,7 @@ do $$ begin
 end $$;
 
 -- 150's rule, OR (158) every day of the gap listed whole and done after FinCom first saw Tally's number now, that number not
--- moved since, the gap explained by settled deletes, nothing of the book held since the gap began
+-- moved since, every number of the gap explained by a settled delete, nothing of the book held since the gap began
 create or replace function public.tally_recorder_gap_asked(p_book uuid, p_gap_at timestamptz, p_since timestamptz, p_at timestamptz, p_altvchid bigint)
 returns boolean language sql stable security definer set search_path = public, pg_temp as $function$
   select p_gap_at is not null and p_since is not null and p_at is not null and p_altvchid is not null and p_since <= p_at
@@ -184,15 +197,22 @@ returns boolean language sql stable security definer set search_path = public, p
                   and not exists (select 1 from generate_series((p_since at time zone 'Asia/Kolkata')::date, greatest((p_at at time zone 'Asia/Kolkata')::date, (n.first_at at time zone 'Asia/Kolkata')::date), interval '1 day') s(d)
                                    where not exists (select 1 from tally_check_days k where k.book_id = p_book and k.day = s.d::date and k.via = 'day'
                                                        and k.listed_at >= n.first_at and k.done_at is not null and k.upload_at is null)))
-        and exists (select 1 from tally_recorder_lines l where l.book_id = p_book and l.event in ('deleted', 'cancelled') and l.received_at >= p_since
-                      and l.state in ('applied', 'duplicate', 'stale'))
+        -- (review 1) every number above FinCom's highest known is explained by a settled delete / cancel (one entry each)
+        and greatest(1, p_altvchid - (select greatest(coalesce((select max(v.alter_id) from tally_vouchers v where v.book_id = p_book), 0),
+                                                       coalesce((select max(d.alter_max) from tally_days d where d.book_id = p_book), 0),
+                                                       coalesce(c.last_voucher_alterid, 0), coalesce(c.recorder_max_alter, 0),
+                                                       coalesce(case when c.match_start is not distinct from c.start_at then c.match_alter end, 0))
+                                        from tally_sync_cursor c where c.book_id = p_book))
+            <= (select count(distinct coalesce(lower(l.object_guid), l.master_id || '|' || coalesce(l.vch_type, '') || '|' || coalesce(l.vch_no, '') || '|' || coalesce(l.vch_date::text, '')))
+                  from tally_recorder_lines l where l.book_id = p_book and l.event in ('deleted', 'cancelled') and l.received_at >= p_since
+                   and l.state in ('applied', 'duplicate', 'stale'))
         and not exists (select 1 from tally_recorder_lines l where l.book_id = p_book and l.received_at >= p_since and l.state in ('held', 'received')))
      )
 $function$;
 
 -- ---------------------------------------------------------------- 4. who may call
-revoke all on function public.tally_held_delete_by_heads(uuid, date, jsonb), public.tally_held_front(uuid, uuid, text, integer) from public, anon, authenticated;
-grant execute on function public.tally_held_delete_by_heads(uuid, date, jsonb), public.tally_held_front(uuid, uuid, text, integer) to service_role;
+revoke all on function public.tally_held_delete_by_heads(uuid, date, jsonb, uuid, text), public.tally_held_front(uuid, uuid, text, integer) from public, anon, authenticated;
+grant execute on function public.tally_held_delete_by_heads(uuid, date, jsonb, uuid, text), public.tally_held_front(uuid, uuid, text, integer) to service_role;
 revoke all on function public.tally_sync_cursor_gap_seen() from public, anon, authenticated, service_role;
 revoke all on function public.tally_recorder_gap_asked(uuid, timestamptz, timestamptz, timestamptz, bigint) from public, anon, authenticated;
 grant execute on function public.tally_recorder_gap_asked(uuid, timestamptz, timestamptz, timestamptz, bigint) to service_role;

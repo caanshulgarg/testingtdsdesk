@@ -46,10 +46,10 @@ def part(path, name):
     s = open(path).read(); i = s.index(name + ' = r"""') if (name + ' = r"""') in s else s.index(name + ' = """')
     i = s.index('"""', i) + 3; return s[i:s.index('"""', i)]
 F = "99999999-9999-9999-9999-999999999158"
-B, B3 = "819d4a59-4cee-4bf7-8f8c-000000000158", "819d4a59-4cee-4bf7-8f8c-000000003158"
+B, B3, B4 = "819d4a59-4cee-4bf7-8f8c-000000000158", "819d4a59-4cee-4bf7-8f8c-000000003158", "819d4a59-4cee-4bf7-8f8c-000000004158"
 DV = "dddddddd-0000-4000-8000-000000000158"
 BR, BR2 = "go-aaaaaa158158", "go-bbbbbb158158"
-CG, CG3 = "7c5fd9b3-7235-4cbb-b4cd-1124be599158", "b20abc61-0000-4000-8000-79149af7c158"
+CG, CG3, CG4 = "7c5fd9b3-7235-4cbb-b4cd-1124be599158", "b20abc61-0000-4000-8000-79149af7c158", "b20abc61-0000-4000-8000-79149af7c458"
 G = lambda mid, cg=CG: cg + "-%08x" % mid
 IST = datetime.datetime.utcnow() + datetime.timedelta(hours=5, minutes=30)
 TODAY = IST.date()
@@ -97,7 +97,7 @@ def L(lid): return (db.rows("select state, coalesce(held_why, '') as why from ta
 def cday(book, n): return (db.rows("select source, (done_at is not null) as done, (upload_at is not null) as up, lists, asked_at from tally_check_days where book_id = %s and day = %s" % (q(book), q(D(n)))) or [{}])[0]
 is_open = lambda book, n: cday(book, n).get("done") == "f" and cday(book, n).get("up") == "f"
 live = lambda book, guid: db.one("select count(*) from tally_vouchers where book_id = %s and guid = %s and deleted_at is null" % (q(book), q(guid))) == "1"
-BYH = lambda n, hs, book=B: j("select tally_held_delete_by_heads(%s, %s, %s)::text" % (q(book), q(D(n)), js(hs)))
+BYH = lambda n, hs, book=B, bridge=BR: j("select tally_held_delete_by_heads(%s, %s, %s, %s, %s)::text" % (q(book), q(D(n)), js(hs), q(DV), q(bridge)))
 FRONT = lambda bridge=BR, mx=3, book=B: (lambda r: r if isinstance(r, list) else [{"_error": r}])(j("select tally_held_front(%s, %s, %s, %d)::text" % (q(book), q(DV), q(bridge), mx)))
 HEADS = lambda n, hs, book=B: j("select tally_check_heads(%s, %s, %s, 'day')::text" % (q(book), q(D(n)), js(hs)))
 def gap(alt, book=B3):
@@ -109,10 +109,10 @@ try:
     db.sql(part(os.path.join(HERE, "run_migration47.py"), "SCHEMA47"))
     db.sql("create index if not exists tally_vouchers_day on tally_vouchers (book_id, day)")
     db.sql("""insert into firms values (%(F)s, 'Firm') on conflict do nothing;
-      insert into tally_books (book_id, firm_id, client_id, company, from_date, open_as_on) values (%(B)s, %(F)s, 'c1', 'MADE UP CO', '2026-04-01', '2026-03-31'), (%(B3)s, %(F)s, 'c3', 'THIRD MADE UP', '2026-04-01', '2026-03-31');
+      insert into tally_books (book_id, firm_id, client_id, company, from_date, open_as_on) values (%(B)s, %(F)s, 'c1', 'MADE UP CO', '2026-04-01', '2026-03-31'), (%(B3)s, %(F)s, 'c3', 'THIRD MADE UP', '2026-04-01', '2026-03-31'), (%(B4)s, %(F)s, 'c4', 'FOURTH MADE UP', '2026-04-01', '2026-03-31');
       create table if not exists clients (id text, firm_id uuid, name text, data jsonb, deleted boolean default false, tally_name text, gstin text, primary key (firm_id, id));
       insert into clients (id, firm_id, name, data) values ('c1', %(F)s, 'MADE UP CO', '{"choices": {}}'), ('c3', %(F)s, 'THIRD MADE UP', '{"choices": {}}');"""
-           % {"F": q(F), "B": q(B), "B3": q(B3)})
+           % {"F": q(F), "B": q(B), "B3": q(B3), "B4": q(B4)})
     for path in FILES:
         r = psql_text(open(path).read())
         if r.returncode: ok(False, "%s runs: %s" % (os.path.basename(path), r.stderr[-300:])); raise SystemExit("cannot go on")
@@ -143,6 +143,8 @@ try:
     day(B, D(1), [V(G(26400), 42700, D(1), "Payment", "481"), V(G(26401), 42701, D(1), "Payment", "481")])
     day(B, D(2), [V("0aaa0000-0000-4000-8000-imported0001-00000011", 42600, D(2), "Payment", "900")])
     db.sql("update tally_days set at = now() - interval '1 hour' where book_id = %s" % q(B))
+    # FinCom held them an hour before the lines (the stand only: the versions are append-only, their guard set aside for this)
+    db.sql("alter table tally_voucher_versions disable trigger tally_voucher_versions_frozen; update tally_voucher_versions set seen_at = now() - interval '1 hour' where book_id = %s; alter table tally_voucher_versions enable trigger tally_voucher_versions_frozen" % q(B))
 
     print("== 1. tally_held_front: the held delete's day first")
     line("del-481", mid="26524", no="481")
@@ -164,6 +166,15 @@ try:
     ok(r.get("removed") == 0 and live(B, G(26524)), "2. the list has its MasterID under another GUID: nothing (%s)" % r)
     r = BYH(0, [])
     ok(r.get("removed") == 0 and live(B, G(26524)), "2. an empty list: nothing (%s)" % r)
+    r = BYH(0, [H(G(26500), 26500, 42800, "Receipt")], bridge=BR2)
+    ok(r.get("removed") == 0 and live(B, G(26524)), "2. (review 3) a list from another bridge than the line's: nothing (%s)" % r)
+    db.sql("update tally_recorder_lines set master_id = '0026524' where line_id = 'del-481'")
+    r = BYH(0, [H(G(77777), 26524, 42872), H(G(26500), 26500, 42800, "Receipt")])
+    ok(r.get("removed") == 0 and live(B, G(26524)), "2. (review 3) the line's MasterID with leading zeros, the list has it as 26524: nothing (%s)" % r)
+    db.sql("update tally_recorder_lines set received_at = now() - interval '11 minutes' where line_id = 'del-481'")
+    r = BYH(0, [H(G(26500), 26500, 42800, "Receipt")])
+    ok(r.get("removed") == 0 and live(B, G(26524)), "2. (review 2) a line older than 10 minutes: nothing (the two lists) (%s)" % r)
+    db.sql("update tally_recorder_lines set received_at = now() - interval '60 seconds' where line_id = 'del-481'")
     line("del-x", mid="26524", no="481", cg="ffffffff-0000-4000-8000-000000000000")
     r = BYH(5, [H(G(26500), 26500, 42800, "Receipt")])
     ok(r.get("mine") is False and r.get("removed") == 0, "2. a day not being checked: nothing (%s)" % r)
@@ -188,45 +199,72 @@ try:
     line("del-imp", n=2, mid="17", no="900")
     r = BYH(2, [H(G(1), 1, 1, "Journal")])
     ok(r.get("removed") == 0 and live(B, "0aaa0000-0000-4000-8000-imported0001-00000011"), "2. an entry whose GUID is not the MasterID's: nothing (%s)" % r)
+    # (review 2) MasterID reused: Payment 481 deleted, a new 481 made the same day with that MasterID, FinCom took it AFTER the
+    # delete line arrived; a list read before that create lacks it: never removed
+    line("del-re", n=3, mid="26600", no="481", ago_sec=90)
+    day(B, D(3), [V(G(26600), 42900, D(3), "Payment", "481")])
+    db.sql("update tally_recorder_lines set state = 'held' where line_id = 'del-re'")     # (the stand's Day Book settled it by 92; held again, as a line arriving after it)
+    db.sql("insert into tally_check_days (book_id, firm_id, day, source, queued_at) values (%s, %s, %s, 'held', now()) on conflict (book_id, day) do update set done_at = null, upload_at = null" % (q(B), q(F), q(D(3))))
+    ok(is_open(B, 3) and L("del-re").get("state") == "held", "2. (MasterID reused) the line held, the day being checked")
+    r = BYH(3, [H(G(1), 1, 1, "Journal")])
+    ok(r.get("removed") == 0 and live(B, G(26600)) and "MasterID" not in L("del-re").get("why", ""), "2. (review 2) an entry FinCom took only after the delete line arrived: never removed (%s, %s)" % (r, L("del-re")))
 
-    print("== 3. the gap: create, alter, delete without GUID, the day checked -> closed")
-    # the staging sequence on book B3: start point 42868, Payment 481 created (42869, applied), altered and deleted in Tally
-    # (Tally's ALTVCHID 42872); the delete line without GUID settled by the check, the check done before the gap was seen
-    db.sql("""insert into tally_sync_cursor (book_id, firm_id, last_voucher_alterid, start_at, start_guid, recorder_max_alter, recorder_last_at, last_match_at, match_at, match_alter, match_start)
-              values (%(B)s, %(F)s, 42868, now() - interval '4 days', %(CG)s, 42869, now() - interval '12 minutes', now() - interval '10 minutes', now() - interval '10 minutes', 42869, null);
-              update tally_sync_cursor set match_start = start_at where book_id = %(B)s""" % {"B": q(B3), "F": q(F), "CG": q(CG3)})
-    day(B3, D(0), [V(G(26523, CG3), 42868, D(0), "Receipt", "480"), V(G(26524, CG3), 42869, D(0), "Payment", "481")])
-    line("g-create", book=B3, ev="created", mid="26524", guid=G(26524, CG3), alter=42869, state="applied", cg=CG3, ago_sec=11 * 60)
-    db.sql("select tally_ingest_delete(%s, %s, null, false, 'upload check: deleted in Tally')" % (q(B3), q(G(26524, CG3))))
-    line("g-delete", book=B3, ev="deleted", mid="26524", state="applied", cg=CG3, ago_sec=8 * 60, why="nothing left to do: checked against Tally")
-    db.sql("""insert into tally_check_runs (book_id, firm_id) values (%(B)s, %(F)s) on conflict do nothing;
-      insert into tally_check_days (book_id, firm_id, day, source, queued_at, lists, tally_n, heads, via, listed_at, same, done_at)
-      values (%(B)s, %(F)s, %(d)s, 'held', now() - interval '8 minutes', 3, 1, %(h)s, 'day', now() - interval '6 minutes', false, now() - interval '6 minutes')"""
-           % {"B": q(B3), "F": q(F), "d": q(D(0)), "h": js([H(G(26523, CG3), 26523, 42868, "Receipt")])})
-    r, c = gap(42872)
-    ok(c["closed"] == "f" and r.get("missing") == 3, "3. Tally's number 42872 first seen: the gap opens, 3 missing (%s)" % r.get("missing"))
-    ok(is_open(B3, 0) and cday(B3, 0).get("source") == "gap", "3. its day (checked before the number was seen) queued again by itself (%s)" % cday(B3, 0))
-    r, c = gap(42872)
+    print("== 3. the gap: create, alter, delete without GUID, the day checked -> closed when the deletes explain it")
+    # the sequence on a made-up book: start point 42868, Payment 481 created (42869, applied), altered (42870, applied) and
+    # deleted in Tally (Tally's ALTVCHID 42871); the delete line without GUID settled by the check, the check done before the
+    # gap was seen. book: the book; alt: Tally's number; altered: whether the alteration's line came
+    def gapbook(book, cg, altered=True):
+        top = 42870 if altered else 42869
+        db.sql("""insert into tally_sync_cursor (book_id, firm_id, last_voucher_alterid, start_at, start_guid, recorder_max_alter, recorder_last_at, last_match_at, match_at, match_alter, match_start)
+                  values (%(B)s, %(F)s, 42868, now() - interval '4 days', %(CG)s, %(T)s, now() - interval '12 minutes', now() - interval '10 minutes', now() - interval '10 minutes', %(T)s, null);
+                  update tally_sync_cursor set match_start = start_at where book_id = %(B)s""" % {"B": q(book), "F": q(F), "CG": q(cg), "T": top})
+        day(book, D(0), [V(G(26523, cg), 42868, D(0), "Receipt", "480"), V(G(26524, cg), top, D(0), "Payment", "481")])
+        line("g-create-" + book[-4:], book=book, ev="created", mid="26524", guid=G(26524, cg), alter=42869, state="applied", cg=cg, ago_sec=11 * 60)
+        if altered: line("g-alter-" + book[-4:], book=book, ev="altered", mid="26524", guid=G(26524, cg), alter=42870, state="applied", cg=cg, ago_sec=9 * 60)
+        db.sql("select tally_ingest_delete(%s, %s, null, false, 'upload check: deleted in Tally')" % (q(book), q(G(26524, cg))))
+        line("g-delete-" + book[-4:], book=book, ev="deleted", mid="26524", state="applied", cg=cg, ago_sec=8 * 60, why="nothing left to do: checked against Tally")
+        db.sql("""insert into tally_check_runs (book_id, firm_id) values (%(B)s, %(F)s) on conflict do nothing;
+          insert into tally_check_days (book_id, firm_id, day, source, queued_at, lists, tally_n, heads, via, listed_at, same, done_at, removed)
+          values (%(B)s, %(F)s, %(d)s, 'held', now() - interval '8 minutes', 3, 1, %(h)s, 'day', now() - interval '6 minutes', false, now() - interval '6 minutes', 1)"""
+               % {"B": q(book), "F": q(F), "d": q(D(0)), "h": js([H(G(26523, cg), 26523, 42868, "Receipt")])})
+    LIST3 = lambda cg: [H(G(26523, cg), 26523, 42868, "Receipt")]
+    gapbook(B3, CG3)
+    r, c = gap(42871)
+    ok(c["closed"] == "f" and r.get("missing") == 1, "3. Tally's number 42871 first seen: the gap opens, 1 missing (%s)" % r.get("missing"))
+    cd = (db.rows("select source, (done_at is null and upload_at is null) as open, removed, heads::text as heads, via from tally_check_days where book_id = %s and day = %s" % (q(B3), q(D(0)))) or [{}])[0]
+    ok(cd.get("open") == "t" and cd.get("source") == "gap", "3. its day (checked before the number was seen) queued again by itself (%s)" % cd)
+    ok(cd.get("removed") == "1" and cd.get("heads") not in ("", None) and cd.get("via") == "day", "3. (review 3) re-queued only: the day's history kept (%s)" % cd)
+    r, c = gap(42871)
     ok(c["closed"] == "f", "3. the day not listed again yet: open")
-    h = HEADS(0, [H(G(26523, CG3), 26523, 42868, "Receipt")], book=B3)
+    h = HEADS(0, LIST3(CG3), book=B3)
     ok(h.get("done") is True, "3. Tally lists the day, it matches FinCom (%s)" % h)
     line("g-held", book=B3, ev="altered", mid="26523", guid=G(26523, CG3), alter=42870, state="held", cg=CG3, ago_sec=5, why="waiting for the ledger 'X' from Tally")
-    r, c = gap(42872)
+    r, c = gap(42871)
     ok(c["closed"] == "f", "3. a line of the book still held since the gap began: open")
     db.sql("update tally_recorder_lines set state = 'duplicate' where line_id = 'g-held'")
-    db.sql("update tally_recorder_lines set received_at = now() - interval '2 hours' where line_id = 'g-delete'")
-    r, c = gap(42872)
-    ok(c["closed"] == "f", "3. no delete since the gap began (the copy's highest below Tally's, nothing explains it): open")
-    db.sql("update tally_recorder_lines set received_at = now() - interval '8 minutes' where line_id = 'g-delete'")
-    r, c = gap(42872)
-    ok(c["closed"] == "t" and r.get("matched") is True and c["match_alter"] == "42872", "3. the next gap check: closed as a match at Tally's number (%s / %s)" % (r, c))
-    r, c = gap(42872)
+    db.sql("update tally_recorder_lines set received_at = now() - interval '2 hours' where line_id = 'g-delete-3158'")
+    r, c = gap(42871)
+    ok(c["closed"] == "f", "3. no delete since the gap began (nothing explains it): open")
+    db.sql("update tally_recorder_lines set received_at = now() - interval '8 minutes' where line_id = 'g-delete-3158'")
+    r, c = gap(42871)
+    ok(c["closed"] == "t" and r.get("matched") is True and c["match_alter"] == "42871", "3. one missing, one settled delete: closed as a match at Tally's number (%s / %s)" % (r, c))
+    r, c = gap(42871)
     ok(c["closed"] == "t", "3. and stays closed")
-    # Tally's number moved on after the list: open again, the day asked again; never closed by the earlier list
-    r, c = gap(42874)
-    ok(c["closed"] == "f" and r.get("missing") == 2, "3. Tally's number moved on (42874): open (%s)" % r.get("missing"))
-    r, c = gap(42874)
+    r, c = gap(42873)
+    ok(c["closed"] == "f" and r.get("missing") == 2, "3. Tally's number moved on (42873): open (%s)" % r.get("missing"))
+    r, c = gap(42873)
     ok(c["closed"] == "f" and is_open(B3, 0) and cday(B3, 0).get("source") == "gap", "3. ... stays open, the day asked again (%s)" % cday(B3, 0))
+    HEADS(0, LIST3(CG3), book=B3)
+    r, c = gap(42873)
+    ok(c["closed"] == "f", "3. listed again and matching, but no delete explains the two: open (%s)" % r.get("missing"))
+    # (review 1) more numbers missing than settled deletes: e.g. 481 deleted AND a journal dated 01-Oct made today whose line
+    # never came (today's list cannot show it): never closed by the days
+    gapbook(B4, CG4, altered=False)
+    r, c = gap(42872, book=B4)
+    ok(c["closed"] == "f" and r.get("missing") == 3, "3. (review 1) 3 missing, 1 settled delete: the gap opens (%s)" % r.get("missing"))
+    HEADS(0, LIST3(CG4), book=B4)
+    r, c = gap(42872, book=B4)
+    ok(c["closed"] == "f", "3. (review 1) today listed and matching: still open (two numbers not explained by a delete)")
 finally:
     db.stop()
 print("\n" + ("PASSED" if not fails else "FAILED: %d" % len(fails)))

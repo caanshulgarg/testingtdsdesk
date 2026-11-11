@@ -8,7 +8,7 @@ bridge already has (periodDays -> period_heads). Made-up books only. Written bef
      its choice time, the company and its GUID), and is never listed twice (the check's own list naming it again);
      tally_held_front returning nothing: the order as before; a cloud without 158: as before (and not asked again at once).
   2. period_heads: a whole-day list (via day) first goes to tally_held_delete_by_heads (the book, the day, the heads as
-     four columns), BEFORE tally_check_heads; a split list or an empty one: not; its failure never fails the call; a cloud
+     four columns, this computer and bridge), BEFORE tally_check_heads; a split list or an empty one: not; its failure never fails the call; a cloud
      without 158: as before.
 Needs Deno (DENO, default: the deno on the PATH or /opt/deno/deno). INDEX_TS: another index.ts (the red run)."""
 import os, sys, json, time, hashlib, subprocess, threading, urllib.request, urllib.error, shutil, datetime
@@ -120,6 +120,7 @@ try:
     hd = (FS.ARGS.get("tally_held_delete_by_heads") or [{}])[-1]
     ok(c == 200 and r.get("ok") is True and r.get("done") is True, "2. the call answered as the check's (%s)" % r)
     ok(hd.get("p_book") == BOOK and hd.get("p_day") == "2026-11-11" and hd.get("p_heads") == [h[:4] for h in heads], "2. tally_held_delete_by_heads: the book, the day, four columns a head (%s)" % hd)
+    ok(hd.get("p_device") == DA and hd.get("p_bridge") == GA["id"], "2. (review 3) and the computer and bridge that sent the list (only their own lines) (%s)" % hd)
     ok("tally_held_delete_by_heads" in ORDER and "tally_check_heads" in ORDER and ORDER.index("tally_held_delete_by_heads") < ORDER.index("tally_check_heads"), "2. before tally_check_heads (%s)" % ORDER)
     n1 = len(FS.ARGS.get("tally_held_delete_by_heads") or [])
     c, r = call(dict(base, kind="period_heads", company="MADE UP CO", company_guid=CG, day=TODAY8, via="split", n=2, heads=heads, fetch=True))

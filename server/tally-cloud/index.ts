@@ -2153,7 +2153,7 @@ function periodAllowed(devId: string) {
   return true;
 }
 // a day's heads from Tally (its count, by FinComDayHeads), or the day to be uploaded by hand
-async function periodHeads(book: string, body: any) {
+async function periodHeads(book: string, body: any, device = "", bridge = "") {
   const day = String(body?.day || "");
   if (!isDay(day)) return reply(400, { ok: false, error: "not a day" });
   if (body?.upload === true) {
@@ -2174,10 +2174,11 @@ async function periodHeads(book: string, body: any) {
   const via = body?.via === "split" ? "split" : "day";
   // next-fast-delete (migration 158): a whole-day list of a day being checked first applies the held deletes it proves (the
   // line's MasterID, number and type name one live entry, whose GUID Tally makes from that MasterID, and the list has
-  // neither): the entry leaves FinCom on this list, not a second one a minute on. Never fails the call
-  if (via === "day" && heads.length > 0 && Date.now() - heldHeadsMissing >= 600000) {
+  // neither; the line this computer's bridge's own, in the last 10 minutes, the entry held before it): the entry leaves
+  // FinCom on this list, not a second one a minute on. Never fails the call
+  if (via === "day" && heads.length > 0 && device && bridge && Date.now() - heldHeadsMissing >= 600000) {
     try {
-      const { data: hd, error: he } = await db.rpc("tally_held_delete_by_heads", { p_book: book, p_day: iso(day), p_heads: heads });
+      const { data: hd, error: he } = await db.rpc("tally_held_delete_by_heads", { p_book: book, p_day: iso(day), p_heads: heads, p_device: device, p_bridge: bridge });
       if (he) { if (missingFn(String(he.message || ""))) heldHeadsMissing = Date.now(); else fail("held_delete_by_heads", he); }
       else if (Number((hd as any)?.removed) > 0) console.log("tally-ingest period_heads: held deletes applied on the day's list", book, day, (hd as any).removed);
     } catch (e) { fail("held_delete_by_heads", e); }
@@ -5115,7 +5116,7 @@ Deno.serve(sentry.wrap(async (req) => {
         if (recorded && sent.toLowerCase() !== recorded.toLowerCase()) return reply(409, { ok: false, otherGuid: true, error: "This Tally company's GUID is not the one FinCom keeps for this client's books." });
         if (body.kind === "ledger_progress") return await ledgerProgress(book, dev, body);
         if (body.kind === "period_stop") return await periodStop(book, body);
-        if (body.kind === "period_heads") return await periodHeads(book, body);
+        if (body.kind === "period_heads") return await periodHeads(book, body, String(dev.id), bridgeOf(dev, body, false).id);   // 158: only the lines of this computer and bridge
         const stored = await periodEntries(book, body);
         // next-book-start: after the entries are stored, the day just sent counted when they were taken
         await bookStartFromState(book, { day: stored.status === 200 ? String(body.day || "") : "" });
