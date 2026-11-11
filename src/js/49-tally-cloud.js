@@ -1559,8 +1559,47 @@ const TallyClock = {
   }
 };
 function beatEvery(beat){ return Math.max(10, Math.min(600, num((beat || {}).every) || 60)); }
+// reliability (11-Nov-2026; the audit: "when FinCom's cloud is slow, every company turns 'computer offline' (wrong,
+// alarming) or keeps a stale tick, with no word that the page itself could not read"). A read of FinCom's cloud that
+// failed is never told as the Tally computer's state. TStale keeps, per read (light: the computers; sum, ask, prog: the
+// Tally page's own), when it last worked and whether its last try failed:
+//   TStale.ok(k) / TStale.fail(k, e, again)   the read's answer, or its failure and how to ask it again
+//   TStale.now()   null, or {at, words: "Could not check just now, trying again", as: "as of 14:02 IST"} (at: the oldest
+//                  last good read among the failing ones; 0 = never read)
+//   TStale.clock() the moment the computers' state is judged at: the last good read while their read fails, so a beat
+//                  FinCom could not fetch never ages into "offline"
+//   tallyMark(p)   a status ({level, text, ...}) as last known: no green tick, the words and the time added
+const TStale = {
+  by: {}, WORDS: "Could not check just now, trying again",
+  ok(k){ this.by[k] = {okAt: Date.now(), err: ""}; },
+  // again: how that read is asked once more. "Trying again" is kept true by TStale itself: every 10 s while a read
+  // stands failed and the tab is seen (the reads start from the page's drawings, and a quiet page draws nothing)
+  fail(k, e, again){ const x = this.by[k] = this.by[k] || {okAt: 0}; x.err = String((e && e.message) || e || "failed"); x.errAt = Date.now(); if (again) x.again = again; this.soon(); },
+  soon(){
+    if (this.t) return;
+    this.t = setTimeout(() => {
+      this.t = 0;
+      const bad = Object.values(this.by).filter(x => x.err);
+      if (!bad.length) return;
+      if (pollOk()) bad.forEach(x => { try { if (x.again) x.again(); } catch (e){} });
+      this.soon();
+    }, 10000);
+  },
+  clock(now){ const x = this.by.light; return x && x.err && x.okAt ? Math.min(now, x.okAt) : now; },
+  now(){
+    const bad = Object.values(this.by).filter(x => x.err);
+    if (!bad.length) return null;
+    const at = Math.min(...bad.map(x => x.okAt || 0));
+    return {at, words: this.WORDS, as: at ? "as of " + tallyHm(at) : "nothing read yet"};
+  }
+};
+function tallyMark(p){
+  const st = TStale.now();
+  if (!st || !p || p.state === "unlinked") return p;
+  return Object.assign({}, p, {stale: st, level: p.level === "ok" ? "warn" : p.level, text: p.text + " \u2014 " + st.words.toLowerCase() + " (" + st.as + ")"});
+}
 function devState(d, now){
-  now = now || Date.now();
+  now = TStale.clock(now || Date.now());
   const beat = ((d && d.info) || {}).beat || null;
   if (!beat || !beat.at) return {bridge: "none", tally: "closed", age: Infinity, every: 60};
   // the steady sign (11-Oct-2026, the owner: "shows connected but was not connected"): a beat's age is told from its own
@@ -1596,9 +1635,13 @@ const TLight = {
         TallyClock.see(this.st.devs, Date.now());
         this.st.by = this.work((cos || []).filter(c => c.client_id), devs || [], Date.now());
         linkByGstin(this.st.cos);
-      }, () => {})
+        TStale.ok("light");
+      })
+      // (a read that failed, or was given up after Cloud.api's wait: said so, what was known kept as of its time, and
+      // asked again in 10 s; busy is let go whatever happened)
+      .catch(e => { TStale.fail("light", e, () => TLight.refresh()); })
       .then(() => {
-        this.st.at = Date.now(); this.st.busy = false;
+        this.st.at = Date.now() - (TStale.by.light.err ? 15000 : 0); this.st.busy = false;
         // the top bar follows a change of state at once; nothing else is redrawn while someone types. The open client's
         // last read and "reading now" are part of it (review of 02-Oct-2026: the Post page said "last read 15:34" at
         // 17:43 because a new read time alone never drew the page again)
@@ -1620,7 +1663,7 @@ const TLight = {
       // it is compared; a time is compared to the minute (as shown), so a beat whose times alone moved draws nothing
       const minute = (k, v) => (typeof v === "string" && /^\d{4}-\d\d-\d\dT\d\d:\d\d/.test(v) ? v.slice(0, 16) : v);
       const devs = tallyPage ? JSON.stringify((this.st.devs || []).map(d => [d.id, d.name, d.last_seen, d.info]), minute) : null;
-      return JSON.stringify([t.parts || {}, t.state, t.label, l ? [l.state, l.read, l.reading, l.text] : null, h.code, h.label, (h.other || ""), S.view === "home" ? this.st.by : null, devs]);
+      return JSON.stringify([TStale.now(), t.parts || {}, t.state, t.label, l ? [l.state, l.read, l.reading, l.text] : null, h.code, h.label, (h.other || ""), S.view === "home" ? this.st.by : null, devs]);
     } catch (e){ return String(Date.now()); }
   },
   // client id -> {level: ok | warn | bad, short, say}
@@ -2079,7 +2122,11 @@ function tallyStatus(co){
   const hhmm = t => istDay(t) === istDay(Date.now()) ? fmtTime(t) : fmtDateTime(t);
   const SHORT = {none: "Tally not set up", offline: "Tally offline" + (heard ? " \u00b7 " + hhmm(heard) : ""), reconnecting: "Tally reconnecting\u2026",
     unlinked: "Tally: not linked", busy: "Tally busy", ok: "Tally in sync"};
-  const out = o => Object.assign(o, {parts, short: o.state === "waiting" ? o.label.replace(/ waiting$/, "") + " for Tally" : SHORT[o.state] || o.label});
+  // (reliability: while FinCom's own read fails, the last known state, without a tick, with the words and its time)
+  const stale = TStale.now();
+  const out = o => { Object.assign(o, {parts, short: o.state === "waiting" ? o.label.replace(/ waiting$/, "") + " for Tally" : SHORT[o.state] || o.label});
+    return stale ? Object.assign(o, {stale, level: o.level === "ok" ? "warn" : o.level, label: o.label + " (" + stale.as + ")", say: stale.words + " (" + stale.as + "). " + o.say}) : o; };
+  if (stale && !devs.length && !local) return out({state: "unknown", level: "warn", label: stale.words, say: "FinCom could not read the firm\u2019s Tally computers."});
   if (!local && !devs.length) return out({state: "none", level: "bad", label: "Not set up", say: "FinCom Bridge is not on this computer, and no computer of the firm sends from Tally. Install FinCom Bridge from the Tally page on the computer with TallyPrime."});
   if (bridge === "offline" || bridge === "none") return out({state: "offline", level: "bad", label: "Offline since " + (heard ? when(heard) : "\u2014"), say: "No word from the firm's Tally computer" + (heard ? " since " + when(heard) : "") + " (three heartbeats missed): the computer or its bridge is off, or it has no internet."});
   if (bridge === "reconnecting") return out({state: "reconnecting", level: "warn", label: "Reconnecting\u2026", say: "The bridge's last heartbeat is late. FinCom keeps listening; it shows Offline only after three missed heartbeats (about two minutes)."});

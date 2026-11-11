@@ -23,10 +23,29 @@ const Cloud = {
   setDels(m){ lsSet("tdsdesk:clouddels", JSON.stringify(m)); },
   delete(kind, cid, id, why){ if (typeof Live === "object" && Live.applying) return; const d = this.dels(); d[kind + "|" + (cid || "") + "|" + id] = {at: new Date().toISOString(), why: String(why || "").slice(0, 200)}; this.setDels(d); },
   setMarks(m){ lsSet("tdsdesk:cloudmarks", JSON.stringify(m)); },
+  // reliability (11-Nov-2026; the cloud held requests for minutes and every poll's "busy" stayed set, the page silently
+  // stale): no request to FinCom's cloud waits for ever. f(signal) is given up after ms (the request itself is stopped
+  // where the browser can) and fails with words a person can read; e.timedOut tells the callers that care. WAIT: 20 s
+  // (the database itself gives up at 8 s); a save has one more second for each 8 KB it sends (a slow office line), two
+  // minutes at most; a caller that knows better says so (opts.timeout, in ms)
+  WAIT: 20000,
+  waitFor(opts, body){ return num(opts && opts.timeout) > 0 ? num(opts.timeout) : Math.min(120000, this.WAIT + Math.round((body ? body.length : 0) / 8)); },
+  timed(ms, f){
+    const ac = typeof AbortController === "function" ? new AbortController() : null;
+    let t = 0;
+    const late = new Promise((_, no) => { t = setTimeout(() => {
+      const e = new Error("FinCom\u2019s cloud did not answer in " + Math.round(ms / 1000) + " seconds (timed out). Check the internet and try again.");
+      e.timedOut = true; no(e);
+      try { if (ac) ac.abort(); } catch (x){}
+    }, ms); });
+    return Promise.race([Promise.resolve().then(() => f(ac ? ac.signal : undefined)), late]).finally(() => clearTimeout(t));
+  },
   async authCall(path, body){
     const c = this.cfg();
-    const r = await fetch(c.url.replace(/\/+$/, "") + "/auth/v1/" + path, {method: "POST", headers: {apikey: c.key, "Content-Type": "application/json"}, body: JSON.stringify(body)});
-    const j = await r.json().catch(() => ({}));
+    const [r, j] = await this.timed(this.WAIT, async signal => {
+      const r = await fetch(c.url.replace(/\/+$/, "") + "/auth/v1/" + path, {method: "POST", headers: {apikey: c.key, "Content-Type": "application/json"}, body: JSON.stringify(body), signal});
+      return [r, await r.json().catch(() => ({}))];
+    });
     if (!r.ok) throw new Error(switchedOff(j) || j.error_description || j.msg || j.message || ("Sign-in failed (" + r.status + ")"));
     return j;
   },
@@ -119,10 +138,13 @@ const Cloud = {
     const body = opts.body ? JSON.stringify(opts.body) : undefined;
     // a save over 32 KB goes gzipped (app/src/lib/gzUpload.js: the same request, through records-upload); else, and on
     // any failure there, as before
-    const r = (body && body.length > 32768 && typeof loadGzUpload == "function" && await loadGzUpload().then(m => m.send(path, opts, body, headers, c.url)).catch(() => null))
-      || await fetch(c.url.replace(/\/+$/, "") + "/rest/v1/" + path, {method: opts.method || "GET", headers, body});
+    // (the answer's text is read inside the same wait: a body that never ends is given up too)
+    const [r, text] = await this.timed(this.waitFor(opts, body), async signal => {
+      const r = (body && body.length > 32768 && typeof loadGzUpload == "function" && await loadGzUpload().then(m => m.send(path, opts, body, headers, c.url, signal)).catch(() => null))
+        || await fetch(c.url.replace(/\/+$/, "") + "/rest/v1/" + path, {method: opts.method || "GET", headers, body, signal});
+      return [r, r.status === 401 && !retry ? "" : await r.text()];
+    });
     if (r.status === 401 && !retry){ await this.refreshToken(s.access_token); return this.api(path, opts, true); }
-    const text = await r.text();
     let j = null;
     try { j = text ? JSON.parse(text) : null; } catch (e){ j = null; }
     if (!r.ok) throw new Error((j && (j.message || j.hint)) || ("Cloud error " + r.status));
