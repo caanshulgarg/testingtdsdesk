@@ -191,9 +191,15 @@ function companyRowsNow(opts) {
 // punctuation, "(Depot)", a year off) or have the same GSTIN. Any one of them, or a company a person unlinked: the link is
 // chosen in a list, never made in one click
 const lookKey = (n) => (typeof tallyLookKey === "function" ? tallyLookKey(String(n || "")) : coKey(n));
+// (the same pool as tally-ingest's: hidden companies count, those of a removed computer do not; both GSTINs known and
+// different: another business)
+const POOL = { at: 0, v: [] };
 export function alikeCos(r, rows, name) {
-  const ks = [lookKey(r.company), name ? lookKey(name) : ""].filter(Boolean), g = String(r.gstin || "").toUpperCase();
-  return (rows || companyRows()).filter((o) => o.company !== r.company && (!o.client || o.client === r.client) && (ks.includes(lookKey(o.company)) || (g.length === 15 && String(o.gstin || "").toUpperCase() === g)));
+  const ks = [lookKey(r.company), name ? lookKey(name) : ""].filter(Boolean), G = (x) => String(x || "").toUpperCase(), g = G(r.gstin);
+  // (read at most every half second, not copied: only looked at here)
+  if (Date.now() - POOL.at > 500) { POOL.v = companyRowsNow({ hidden: true }); POOL.at = Date.now(); }
+  return POOL.v.filter((o) => o.company !== r.company && (!o.client || o.client === r.client)
+    && ((ks.includes(lookKey(o.company)) && !(g.length === 15 && G(o.gstin).length === 15 && G(o.gstin) !== g)) || (g.length === 15 && G(o.gstin) === g)));
 }
 export const askFirst = (r, rows, name) => !!r && (!!r.unlinked || alikeCos(r, rows, name).length > 0);
 // what a Tally company holds as the firm's computers' beats say it (Tally's highest change numbers ALTVCHID / ALTMSTID, the
@@ -1054,7 +1060,7 @@ export function CompanyRow({ r, rows = null, forCo = null, focus = false, onDone
     // itself (the clients already in FinCom, the likeliest chosen); no "Add as client" suggestion
     client = forCo ? <button className="btn small primary" data-tco-act="link" data-tco-link={forCo.id} disabled={!!busy}
         onClick={run("link", { kind: "link", cid: forCo.id }, () => linkTo(r, forCo).then((ok) => ok && forCo.id))}>{busy ? "Linking…" : "Link to " + forCo.name}</button>
-      : <Pick r={r} co={null} inline pre={(yr || tw || {}).id || ""} />;
+      : <Pick r={r} co={null} inline pre={askFirst(r) ? "" : (yr || tw || {}).id || ""} />;
     acts = (r.hidden || !r.open) ? <details className="bk-menu tco-more" data-tco-more={r.company}>
         <summary className="btn small" aria-label={"More for " + shown(r.company)}>⋯</summary>
         <div className="bk-menu-list">
@@ -1090,7 +1096,7 @@ export function CompanyRow({ r, rows = null, forCo = null, focus = false, onDone
     {drop && <div className="tco-under" data-tco-ledger-drop={co.id}><Suspense fallback={null}><LedgerDrop x={drop} where="row" /></Suspense></div>}
     {co && !earlier && <TwoPlaces co={co} company={r.company} />}
     {co && <div className="tco-under"><SyncLine cid={co.id} bar /><CloudSays cid={co.id} /></div>}
-    {pick && <div className="tco-under"><Pick r={r} co={co} pre={co ? "" : ((yr || tw || {}).id || "")} onClose={() => setPick(false)} /></div>}
+    {pick && <div className="tco-under"><Pick r={r} co={co} pre={co || askFirst(r) ? "" : ((yr || tw || {}).id || "")} onClose={() => setPick(false)} /></div>}
     {chg && co && <div className="tco-under"><ChangePick co={co} cur={r.company} onClose={() => setChg(false)} /></div>}
   </li>;
 }

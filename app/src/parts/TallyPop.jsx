@@ -59,7 +59,8 @@ function LinkPick({ co, run, busy }) {
   useEffect(() => { lookOnce(); }, []);   // (this computer's bridges looked for, if not yet: until then nothing is chosen)
   const own = ownOpen(), mine = own.has;
   const score = (r) => (mine(r) ? 8 : 0) + ((hist || []).includes(r.company) ? 4 : 0) + (String(r.gstin || "").toUpperCase() === g && g ? 2 : [k, kn].includes(baseKey(r.company)) ? 1 : 0);
-  const rows = companyRows().filter((r) => r.reported && !r.client && !own.theirs(r)).sort((a, b) => score(b) - score(a) || (mine(b) - mine(a)) || String(b.seen).localeCompare(String(a.seen)));
+  // next-link-choose (review): the same companies as the Tally page's list (ChangePick): another login's, one not sent yet
+  const rows = companyRows().filter((r) => !r.client).sort((a, b) => score(b) - score(a) || (mine(b) - mine(a)) || String(b.seen).localeCompare(String(a.seen)));
   const [pick, setPick] = useState("");
   // (a company open now on another computer only: linkable, never chosen for it)
   // next-link-choose: one a person unlinked (the same company again after an unlink) or one of several alike: never chosen

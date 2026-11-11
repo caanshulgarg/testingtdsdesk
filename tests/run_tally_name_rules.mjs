@@ -86,6 +86,12 @@ ok(autoLinkFor({ name: "ORION TRADERS PVT LTD", gstin: "" }, [OR], [], [{ name: 
 ok(autoLinkFor({ name: "OT BOOKS", gstin: "07AAACO1234A1Z5" }, [OR], [], [{ company: "OT BOOKS COPY", gstin: "07AAACO1234A1Z5" }]) === null, "another company with the same GSTIN: nothing linked by itself");
 ok(autoLinkFor({ name: "ORION TRADERS PVT LTD", gstin: "" }, [OR], [], [{ company: "Orion Traders Pvt Ltd (Depot)", client: "c-other" }]).client.id === OR.id, "a look-alike linked to another client is not a candidate");
 ok(autoLinkFor({ name: "ORION TRADERS PVT LTD", gstin: "" }, [OR], [], [{ company: "ORION TRADERS PVT LTD" }, { company: "Vega Exports" }]).client.id === OR.id, "the company itself and other names are not candidates");
+// review: "(P) Ltd" is Pvt Ltd; a look-alike with another GSTIN is another business, not a second candidate
+ok(tallyLookKey("Rhea Mills (P) Ltd") === tallyLookKey("RHEA MILLS PVT LTD"), "(P) Ltd and Pvt Ltd look alike (" + tallyLookKey("Rhea Mills (P) Ltd") + ")");
+const RH = { id: "c-rhea", name: "Rhea Traders", gstin: "07AAACR1111A1Z5" };
+ok((autoLinkFor({ name: "RHEA TRADERS", gstin: "07AAACR1111A1Z5" }, [RH], [], [{ company: "Rhea Traders (Depot)", gstin: "07AAACR2222B1Z5" }]) || {}).client === RH,
+  "the same GSTIN as the client: a look-alike with ANOTHER GSTIN does not block it");
+ok(autoLinkFor({ name: "RHEA TRADERS", gstin: "07AAACR1111A1Z5" }, [RH], [], [{ company: "Rhea Traders (Depot)", gstin: "" }]) === null, "a look-alike whose GSTIN is not known still blocks it");
 
 console.log(fails ? "\n" + fails + " failed" : "\nall passed");
 process.exit(fails ? 1 : 0);

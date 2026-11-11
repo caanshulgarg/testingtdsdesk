@@ -4913,13 +4913,14 @@ Deno.serve(sentry.wrap(async (req) => {
       case "companies": {
         const list = (Array.isArray(body.companies) ? body.companies : []).slice(0, 200)
           .map((c: any) => ({ name: coTrim(String(c?.name || "")), sent: String(c?.name || "").slice(0, 300), gstin: String(c?.gstin || "").trim().toUpperCase().slice(0, 15), guid: String(c?.guid || "").trim().slice(0, 100) })).filter((c: any) => c.name);
-        const { data: have } = await db.from("tally_companies").select("company, client_id, linked_at, gstin").eq("firm_id", firm);
+        const { data: have } = await db.from("tally_companies").select("company, client_id, linked_at, gstin, device_id").eq("firm_id", firm);
         const known = new Map((have || []).map((r: any) => [r.company, r.client_id]));
         const unlinked = new Set((have || []).filter((r: any) => !r.client_id && r.linked_at).map((r: any) => r.company));   // unlinked by a person: left so
         const { data: clients } = await db.from("clients").select("id, name, gstin, deleted").eq("firm_id", firm);
         // the clients linked to a company already (a company of the same name or GSTIN is not moved to them by itself)
         const taken = new Set((have || []).filter((r: any) => r.client_id).map((r: any) => String(r.client_id)));
         const links: Record<string, boolean> = {};
+        let others: any[] | null = null;   // next-link-choose: the firm's other companies, for autoLinkFor (read once, when needed)
         for (const c of list) {
           // migration 110 (next-link-record): a company renamed in Tally (the GUID of a linked company under a new name,
           // from the data location FinCom reads) takes over that link and its books once the old name has not been
@@ -4938,7 +4939,15 @@ Deno.serve(sentry.wrap(async (req) => {
             // next-link-choose (11-Nov-2026: a client linked by itself to an empty copy of its company while the real one
             // was open too): never when another of the firm's companies (listed, or in this report) looks alike or has the
             // same GSTIN: two candidates, a person chooses
-            const others = [...(have || []).map((r: any) => ({ company: r.company, gstin: r.gstin, client: r.client_id })), ...list.map((o: any) => ({ company: o.name, gstin: o.gstin, client: known.get(o.name) || "" }))];
+            if (!others) {
+              // (the Tally page's pool, companyRows: a company no client has whose computer was removed or moved away
+              // does not count; one in this report always does)
+              const { data: devs } = await db.from("tally_devices").select("id, revoked, info").eq("firm_id", firm);
+              const live = new Set((devs || []).filter((d: any) => !d.revoked && !(d.info?.movedAway && d.info.movedAway.revoked !== false)).map((d: any) => String(d.id)));
+              const gone = (r: any) => !r.client_id && !!r.device_id && (devs || []).length > 0 && !live.has(String(r.device_id));
+              others = [...(have || []).filter((r: any) => !gone(r) || list.some((o: any) => o.name === r.company)).map((r: any) => ({ company: r.company, gstin: r.gstin, client: r.client_id })),
+                ...list.map((o: any) => ({ company: o.name, gstin: o.gstin, client: known.get(o.name) || "" }))];
+            }
             const m = autoLinkFor({ name: c.name, gstin: c.gstin }, clients || [], taken, others);
             if (m) { client = m.client.id; auto = true; taken.add(String(client)); }
           }

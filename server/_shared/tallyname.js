@@ -54,7 +54,9 @@ const tnNameOf = (c) => String((c && c.name) || "");
 // next-link-choose (11-Nov-2026; a client linked by itself to an empty copy of its company, a near-identical name, while
 // the real one was open too): the key under which Tally companies LOOK ALIKE to a person: tallyYearKey with any bracketed
 // word taken off too ("X (Depot)", "X (New)"). Never a link by itself: the lists ask a person when two share it.
-function tallyLookKey(s) { return tallyYearKey(String(s == null ? "" : s).replace(/[([{][^()[\]{}]*[)\]}]/g, " ")); }
+function tallyLookKey(s) { return tallyYearKey(String(s == null ? "" : s).replace(/\(\s*p\s*\)/gi, " pvt ").replace(/[([{][^()[\]{}]*[)\]}]/g, " ")); }
+// two companies that look alike are two candidates unless both GSTINs are known and differ (another business)
+const tnOtherGst = (g, og) => !(TN_GST.test(g) && TN_GST.test(og) && g !== og);
 const tnOtherName = (o) => String((o && (o.company || o.name)) || "");
 
 // clients: [{id, name, gstin, deleted}]; company: {name, gstin}; linkedClients: the ids already linked to ANOTHER company
@@ -84,7 +86,8 @@ function autoLinkFor(company, clients, linkedClients, others) {
     const me = String((company && company.name) || ""), ks = [tallyLookKey(me), tallyLookKey(tnNameOf(hit))].filter(Boolean);
     const alike = [].concat(others).some((o) => { const n = tnOtherName(o);
       if (!n || n === me || (o.client && String(o.client) !== String(hit.id))) return false;
-      return ks.includes(tallyLookKey(n)) || (TN_GST.test(g) && tnGstKey(o.gstin) === g); });
+      const og = tnGstKey(o.gstin);
+      return (ks.includes(tallyLookKey(n)) && tnOtherGst(g, og)) || (TN_GST.test(g) && og === g); });
     if (alike) return null;   // two companies could be this client's: a person chooses
   }
   return { client: hit, why };

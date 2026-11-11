@@ -312,7 +312,7 @@ function Act({ row, main = false }) {
     onClick={() => press(fk, () => bringDays(row, a))}>{busyOf(fk) ? "Asking Tally…" : a.label}</button>;
   return <>{btn}{a.kind === "upload" && <Said k={"up:" + row.cid} hook="upload" />}
     {a.kind === "choose" && row.best && !row.ask && !pick && <div><button type="button" className="linkbtn tsm-small" data-tsm-act-choose="" onClick={() => setPick(true)}>Choose another client</button></div>}
-    {pick && a.kind === "choose" && <div className="tsm-pick" data-tsm-row-pick=""><Pick r={row.r} co={null} pre={row.best ? row.best.id : ""} onClose={() => setPick(false)} /></div>}
+    {pick && a.kind === "choose" && <div className="tsm-pick" data-tsm-row-pick=""><Pick r={row.r} co={null} pre={row.best && !row.ask ? row.best.id : ""} onClose={() => setPick(false)} /></div>}
     {pick && a.kind === "pickco" && <div className="tsm-pick" data-tsm-row-pick=""><ChangePick co={row.co} cur="" onClose={() => setPick(false)} /></div>}</>;
 }
 // ---------- opening balances (migration 138): one line under "Ledgers received?"; when Tally's differ, the owner's two
@@ -578,7 +578,7 @@ function Row({ row, download, oneDl, seen, cs, x, checkAgain }) {
         {/* next-link-follow (migration 146): where the book is read from, or the linked computer offline with the company open nowhere */}
         {row.where && row.where.text !== why && <span className={"tpt-why" + (row.where.kind === "offline" ? " bad" : "")} data-tpt-where={row.where.kind}>{row.where.text}</span>}
         {near && canWrite() && <span className="tpt-why" data-tsm-away-near={near.company}>{"“" + shown(near.company) + "” is open in your Tally, a close name. "}
-          <ConnectBtn r={near} co={row.co} label={"Link " + row.client + " to it"} primary={false} hook={{ "data-tsm-away-relink": row.cid }} /></span>}
+          <NearPick row={row} /></span>}
       </span>
     </td>
     <td className="tpt-td tpt-io-td" data-label="In Tally">{io ? <span className={"tpt-io " + io} data-tpt-intally={io}>{io === "open" ? "Open" : "Not open"}<span className="tpt-io-x">{" in Tally"}</span></span> : null}</td>
@@ -606,7 +606,14 @@ function ActLink({ row }) {
   if (a.kind === "connect") return <ConnectBtn r={row.r} co={row.co} label="Link" primary={false} hook={{ "data-tsm-act": "connect", "data-tpt-main": "link" }} />;
   const kind = a.kind === "pickco" ? "pickco" : "choose";
   return <span className="tpt-link"><button type="button" className="btn tpt-btn primary" data-tsm-act={kind} data-tpt-main="link" onClick={() => setPick(!pick)} aria-expanded={pick}>Link</button>
-    {pick && <div className="tsm-pick" data-tsm-row-pick="">{kind === "pickco" ? <ChangePick co={row.co} cur="" onClose={() => setPick(false)} /> : <Pick r={row.r} co={null} pre={row.best ? row.best.id : ""} onClose={() => setPick(false)} />}</div>}</span>;
+    {pick && <div className="tsm-pick" data-tsm-row-pick="">{kind === "pickco" ? <ChangePick co={row.co} cur="" onClose={() => setPick(false)} /> : <Pick r={row.r} co={null} pre={row.best && !row.ask ? row.best.id : ""} onClose={() => setPick(false)} />}</div>}</span>;
+}
+// next-link-choose (review): a linked client away, a close name open here: the list of companies (nothing chosen), never
+// one click (it may be an empty copy, or the company a person just unlinked)
+function NearPick({ row }) {
+  const [pick, setPick] = useState(false);
+  return <>{!pick && <button type="button" className="linkbtn" data-tsm-away-choose={row.cid} onClick={() => setPick(true)}>Choose the Tally company…</button>}
+    {pick && <ChangePick co={row.co} cur={row.company} onClose={() => setPick(false)} />}</>;
 }
 // next-tally-filters2 (the owner's approved filter design, 09-Nov-2026: design-filters Main and Phone; replaces the
 // per-column filters of next-tally-filters): above ONE table (Client · Tally company | State | In Tally | Masters |

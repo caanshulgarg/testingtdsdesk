@@ -128,6 +128,39 @@ def main():
         E("() => { window.__calls = []; }")
         pg.click(row(DELTA) + " [data-tsm-connect]"); pg.wait_for_timeout(2500)
         ok(links() == [{"p_company": DELTA, "p_client": ids[DELTA]}], "5. one click, one link (%s)" % links())
+
+        print("== 6. review: a linked client away, a close name open and free: the list, never one click")
+        PAX0, PAX1 = "PAX MEDIA (2024-25)", "PAX MEDIA (2025-26)"
+        d6 = T.dev(7, PC, "made-up-a", tally="open", opened=(PAX1,), version="2.5.4", rec=(PAX1,), beat={"bridgePort": 9101, "windowsUser": UA})
+        c6 = [seen(PAX0, d6, client_id="NAME:Pax Media", linked_at="ago:900", last_seen="ago:600"), seen(PAX1, d6)]
+        ids = scene([d6, db], c6, ["Pax Media"], OWN, PINGS, local=[[PAX1], UA, "go-7", 9101])
+        r6 = row("Pax Media")
+        ok(n(r6 + " [data-tsm-away-relink]") == 0 and n(r6 + " [data-tsm-away-choose]") == 1, "6. no one-click 'Link Pax Media to it'; a Choose button (%s)" % txt(r6))
+        if n(r6 + " [data-tsm-away-choose]"):
+            E("() => { window.__calls = []; }")
+            pg.click(r6 + " [data-tsm-away-choose]"); pg.wait_for_timeout(700)
+            ok(n(r6 + " [data-tlk-pick-box]") == 1 and E("(s) => document.querySelector(s + ' [data-tlk-pick]').value", r6) == "" and links() == [],
+               "6. the list opens, nothing chosen, nothing linked (%s)" % links())
+
+        print("== 7. review: asked, the clients' list chooses nothing (a company a person unlinked, a year of a client)")
+        c7 = [seen(PAX0, d6, client_id="NAME:Pax Media", linked_at="ago:900"), seen(PAX1, d6, linked_at="ago:20", linked_by="u-1")]
+        d7 = T.dev(7, PC, "made-up-a", tally="open", opened=(PAX0, PAX1), version="2.5.4", rec=(PAX0, PAX1), beat={"bridgePort": 9101, "windowsUser": UA})
+        ids = scene([d7, db], c7, ["Pax Media"], OWN, PINGS, local=[[PAX0, PAX1], UA, "go-7", 9101])
+        r7 = row(PAX1)
+        ok(n(r7) == 1 and n(r7 + " [data-tsm-act-client]") == 0 and n(r7 + " [data-tsm-connect]") == 0, "7. %s: no one-click (%s)" % (PAX1, txt(r7)))
+        if n(r7 + ' [data-tsm-act="choose"]'):
+            pg.click(r7 + ' [data-tsm-act="choose"]'); pg.wait_for_timeout(700)
+            v = E("(s) => { const e = document.querySelector(s + ' select[data-tco-relink-pick]'); return e ? e.value : null; }", r7)
+            ok(v == "", "7. the clients' list: nothing chosen (%r)" % v)
+
+        print("== 8. review: the Tally icon's list offers what the page's list offers (another login's Tally too)")
+        ids = scene([da, db], cos, clients, OWN, PINGS, local=[list(opened), UA, "go-7", 9101])
+        E("(c) => { openCompany(c); S.view = 'company'; S.tab = 'dash'; render(); }", ids["Orion Traders"]); pg.wait_for_timeout(1500)
+        pg.click("header.top [data-tally-icon]"); pg.wait_for_selector(POP + " [data-tally-pop-word]", timeout=15000); pg.wait_for_timeout(500)
+        po = E("(s) => { const e = document.querySelector(s + ' [data-tally-pop-pick]'); return e ? [...e.options].map(o => o.value).filter(Boolean) : []; }", POP)
+        ok(KITE in po and ORION in po and ORIOND in po, "8. the icon's list: %s (another login's) and both Orions (%s)" % (KITE, po))
+        ok(E("(s) => { const e = document.querySelector(s + ' [data-tally-pop-pick]'); return e ? e.value : null; }", POP) == "", "8. nothing chosen: two Orions look alike")
+        pg.keyboard.press("Escape")
         br.close()
     srv.shutdown()
     ok(not errors, "no page error (%s)" % errors[:3])
