@@ -25,7 +25,12 @@ const BookSync = {
   of(cid){ return this.st[cid] || (this.st[cid] = {rev: null, base: null}); },
   on(){ return !this.off && typeof Cloud === "object" && Cloud.on() && !!Cloud.st.firm; },
   // the work part of a client's books, as plain data (no undefined, so it compares the same after a round trip)
-  work(b){ const w = {}; this.keys().forEach(k => { if (b && b[k] !== undefined) w[k] = b[k]; }); return JSON.parse(JSON.stringify(w)); },
+  // keys: only those parts (BookItems.heal reads the challans and allocations alone; the whole work part of a large client
+  // is 10 MB, its audit run 8.5 MB of it)
+  work(b, keys){ return JSON.parse(this.workStr(b, keys)); },
+  workStr(b, keys){ const w = {}; (keys || this.keys()).forEach(k => { if (b && b[k] !== undefined) w[k] = b[k]; }); return JSON.stringify(w); },
+  // the open client's work part as text (the plain data localWork hands out is JSON.parse of it), else null
+  openWorkStr(cid){ return S.books && S.books.cid === cid && (!S.books.loading || S.books.cached) ? this.workStr(S.books) : null; },
   same(a, b){ return stableStr(a === undefined ? null : a) === stableStr(b === undefined ? null : b); },
   /* ---------- what this browser last agreed with the database ---------- */
   async loadBase(cid){
@@ -90,11 +95,11 @@ const BookSync = {
       await Books.save(cid, saved);
     }
   },
-  async localWork(cid){
+  async localWork(cid, keys){
     // next-fast-open: books being opened from this browser's copy (cached) are that copy; not read from the store again
-    if (S.books && S.books.cid === cid && (!S.books.loading || S.books.cached)) return this.work(S.books);
+    if (S.books && S.books.cid === cid && (!S.books.loading || S.books.cached)) return this.work(S.books, keys);
     const saved = await Books.load(cid);
-    return saved ? this.work(saved) : null;
+    return saved ? this.work(saved, keys) : null;
   },
   who(uid){ const m = ((Cloud.st && Cloud.st.members) || []).find(x => x.user_id === uid); return m ? (m.name || m.email) : "someone else"; },
   tell(cid, clash, by){

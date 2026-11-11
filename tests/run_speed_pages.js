@@ -110,9 +110,88 @@ async function sectionA(){
   T.allRowsNow = NOW; delete ctx.TCloud;
 }
 
+// ---------------------------------------------------------------- B. BookItems: the 45-second round with nothing new
+async function sectionB(){
+  const BI = x.BookItems, BS = x.BookSync, calls = [], server = {rows: [], fail: 0};
+  ctx.Cloud = {on: () => true, st: {firm: "f1"}, api: async (path, o) => {
+    calls.push(path);
+    if (path.startsWith("client_books?")) return [];
+    if (path.startsWith("client_book_items?")){ const r = server.rows; server.rows = []; return r; }
+    if (path === "rpc/save_book_items"){ if (server.fail){ server.fail--; throw new Error("network down"); } calls.push({sent: o.body.p_items}); return {ok: true}; }
+    throw new Error("unexpected " + path);
+  }};
+  ctx.Live = {saving(){}, saved(){}, fail(){}, ok(){}, me: () => "u-me", noteItems(){}, sv: {}};
+  ctx.IDBStore = {get: async () => null, write: async () => {}};
+  ctx.LK = {cache: {}};
+  const b = makeBooks(400, 31, 202504, 6); open(b);
+  b.challans = [{id: "CH-A", tax: 100}, {id: "CH-B", tax: 200}];
+  b.alloc = {}; for (let i = 0; i < 40; i++) b.alloc["row-" + i] = i % 2 ? "CH-A" : "CH-B";
+  b.audit = {last: {findings: Array.from({length: 300}, (_, i) => ({id: "f" + i, rows: [{a: i, b: "x".repeat(50)}]}))}};
+  b.letters = {conf: {}, rem: {}, contacts: {}, cfg: {}};
+  let splits = 0, works = 0; const SPLIT = BI.split, WORK = BS.work;
+  BI.split = function(){ splits++; return SPLIT.apply(this, arguments); };
+  BS.work = function(bb, keys){ if (!keys) works++; return WORK.apply(this, arguments); };
+  const sent = () => calls.filter(c => c && c.sent).reduce((a, c) => a.concat(c.sent), []);
+  const agrees = (w) => {
+    const s = BI.st[b.cid], m = SPLIT.call(BI, WORK.call(BS, b)); let bad = 0;
+    m.forEach((it, key) => { if (s.base[key] !== BI.h(it.d, it.o)) bad++; });
+    ok(bad === 0, "B. " + w + ": the record of what the server has agrees with the books, item by item (" + m.size + " items)");
+  };
+  const pass = async (w, want) => {
+    calls.length = 0; splits = 0; works = 0;
+    await BI.pullNow(b.cid);
+    const items = sent();
+    if (want.n != null) ok(items.length === want.n, "B. " + w + ": " + items.length + " item(s) sent (expected " + want.n + ")" + (want.keys ? " " + J(items.map(z => z.k + z.i)) : ""));
+    if (want.keys) ok(J(items.map(z => z.k + z.i).sort()) === J(want.keys.slice().sort()), "B. " + w + ": the items sent are " + J(want.keys));
+    if (want.idle) ok(splits === 0 && works === 0, "B. " + w + ": the work part was not copied, cut or hashed (copies " + works + ", cuts " + splits + ")");
+    return items;
+  };
+  const first = await pass("the first round", {}).catch(e => { ok(false, "B. the first round: " + e.message); return []; });
+  ok(first.length > 100, "B. the first round sends the whole work part as items (" + first.length + ")");
+  agrees("after the first round");
+  await pass("the next round, nothing new and nothing changed", {n: 0, idle: true});
+  await pass("and the next", {n: 0, idle: true});
+  b.alloc["row-new"] = "CH-A";
+  await pass("an allocation made in place, not saved", {n: 1, keys: ["alloc.row-new"]}); agrees("after it");
+  await pass("the round after", {n: 0, idle: true});
+  // the server sends an older copy of an item changed here since: the record moves, the books keep this computer's
+  BI.st[b.cid].editAt = Date.now();
+  b.alloc["row-1"] = "CH-B";
+  server.rows = [{key: "alloc", item: ".row-1", ord: null, data: "CH-OLD", deleted: false, seq: 7, updated_at: new Date(Date.now() - 60000).toISOString(), updated_by: "u-other"}];
+  await pass("an older copy came from the server while changed here", {n: 1, keys: ["alloc.row-1"]});
+  ok(b.alloc["row-1"] === "CH-B", "B. this computer's later change stays"); agrees("after it");
+  // a newer copy from the server: taken, nothing to send back
+  server.rows = [{key: "alloc", item: ".row-2", ord: null, data: "CH-NEW", deleted: false, seq: 8, updated_at: new Date(Date.now() + 60000).toISOString(), updated_by: "u-other"}];
+  await pass("a newer copy came from the server", {n: 0});
+  ok(b.alloc["row-2"] === "CH-NEW", "B. the server's newer copy is in the books"); agrees("after it");
+  await pass("the round after", {n: 0, idle: true});
+  // a send that fails: sent again at the next round
+  b.letters.cfg.signer = "Made Up Signer"; server.fail = 1;
+  calls.length = 0; await BI.pullNow(b.cid);
+  ok(BI.st[b.cid].error === "network down", "B. a failed send is noted");
+  await pass("the round after a failed send", {n: 1, keys: ["letters.cfg"]}); agrees("after it");
+  // most of the allocations taken out here: held back (never inferred), not marked done; then allowed
+  for (let i = 0; i < 30; i++) delete b.alloc["row-" + i];
+  const warn = console.warn; let warned = 0; console.warn = () => { warned++; };
+  await pass("most allocations taken out: held back", {n: 0});
+  await pass("held back again at the next round (looked at again)", {n: 0});
+  ok(warned === 2 && splits > 0, "B. the held removal is looked at in every round (" + warned + " warnings)");
+  console.warn = warn;
+  BI.allowMass = {[b.cid + "|alloc"]: 1};
+  const gone = await pass("the removal allowed", {n: 30});
+  ok(gone.every(z => z.del && z.k === "alloc"), "B. the 30 allocations are removed on the server"); agrees("after it");
+  await pass("the round after", {n: 0, idle: true});
+  // a change from saveBooks' path (BOOKS_REV) and a whole part replaced
+  b.challans = b.challans.concat([{id: "CH-C", tax: 300}]); saved();
+  await pass("a challan added and saved", {n: 1, keys: ["challans#CH-C"]}); agrees("after it");
+  b.audit = {last: {findings: []}};
+  const au = await pass("the audit's findings replaced", {n: 1}); ok(au[0] && au[0].k === "audit", "B. the audit part is sent"); agrees("after it");
+  await pass("the last round", {n: 0, idle: true});
+  BI.split = SPLIT; BS.work = WORK;
+}
 
 (async () => {
-  for (const f of [sectionA]) await f();
+  for (const f of [sectionA, sectionB]) await f();
   console.log(fails ? "\n" + fails + " FAILED" : "\nall passed");
   process.exit(fails ? 1 : 0);
 })().catch(e => { console.log("  FAIL " + (e && e.stack || e)); process.exit(1); });
