@@ -21,42 +21,59 @@ const Books = {
     }
     return "";
   },
+  // speed (11-Nov-2026: a linked client's first opening read each month in one task, up to 0.5 s with the page frozen):
+  // the browser gets its turn whenever a piece of work has run SLICE ms (a message, not a timer: no 4 ms wait each time)
+  SLICE: 30,
+  pause(){
+    if (typeof scheduler === "object" && scheduler && typeof scheduler.yield === "function") return scheduler.yield().catch(() => {});
+    if (typeof MessageChannel !== "function") return typeof setTimeout === "function" ? new Promise(r => setTimeout(r, 0)) : Promise.resolve();
+    return new Promise(r => { const ch = new MessageChannel(); ch.port1.onmessage = () => { ch.port1.close(); r(); }; ch.port2.postMessage(0); });
+  },
+  now(){ return typeof performance === "object" && performance ? performance.now() : Date.now(); },
+  // a slice's clock: due() once SLICE ms have passed since the browser last had its turn; give() gives it (a new slice)
+  slicer(){ let t = this.now(); return {due: () => Books.now() - t > Books.SLICE, async give(){ await Books.pause(); t = Books.now(); }}; },
   // Tally exports can be very large, so the file is read in pieces and only what we use is kept
   async importDayBook(file, onProgress){
     const dec = await this.decoder(file);
     const out = [], meta = {company: "", from: "", to: "", gstins: new Set(), bills: 1, cc: 1};
     let buf = "", read = 0;
-    const reader = file.stream().getReader();
-    for (;;){
-      const {done, value} = await reader.read();
-      if (done) break;
-      read += value.length;
-      buf += dec.decode(value, {stream: true});
+    const reader = file.stream().getReader(), sl = this.slicer();
+    const take = async () => {
       let cut;
       while ((cut = buf.indexOf("</VOUCHER>")) >= 0){
         const piece = buf.slice(0, cut + 10);
         buf = buf.slice(cut + 10);
         const start = piece.lastIndexOf("<VOUCHER ");
         if (start >= 0) this.takeVoucher(piece.slice(start), out, meta);
+        if (sl.due()) await sl.give();
       }
+    };
+    for (;;){
+      const {done, value} = await reader.read();
+      if (done) break;
+      read += value.length;
+      buf += dec.decode(value, {stream: true});
+      await take();
       if (buf.length > 400000) buf = buf.slice(-200000);
       if (onProgress && out.length % 250 === 0) onProgress("Read " + out.length + " vouchers (" + Math.round(read / 1048576) + " MB)…");
     }
     buf += dec.decode();
-    let cut;
-    while ((cut = buf.indexOf("</VOUCHER>")) >= 0){
-      const piece = buf.slice(0, cut + 10); buf = buf.slice(cut + 10);
-      const start = piece.lastIndexOf("<VOUCHER ");
-      if (start >= 0) this.takeVoucher(piece.slice(start), out, meta);
-    }
+    await take();
     meta.gstins = Array.from(meta.gstins);
     const dates = out.map(v => v.date).filter(Boolean).sort();
     meta.from = dates[0] || ""; meta.to = dates[dates.length - 1] || "";
     // build 191: each entry's words are cut from the file's text, and the browser keeps the whole text alive behind
     // them (a year's day book of 400 MB stayed in memory: 430 MB used for 7 MB of entries). A copy lets it go
-    let clean = out;
-    try { clean = typeof structuredClone === "function" ? structuredClone(out) : JSON.parse(JSON.stringify(out)); } catch (e){ clean = out; }
-    return {vouchers: clean, meta};
+    // (speed: copied a few hundred entries at a time, the browser given its turn between)
+    return {vouchers: await this.copyOut(out, sl), meta};
+  },
+  async copyOut(out, sl){
+    const cp = x => typeof structuredClone === "function" ? structuredClone(x) : JSON.parse(JSON.stringify(x));
+    try {
+      const clean = [];
+      for (let i = 0; i < out.length; i += 250){ clean.push(...cp(out.slice(i, i + 250))); if (sl && sl.due()) await sl.give(); }
+      return clean;
+    } catch (e){ return out; }
   },
   // build 195: which Tally company a file was exported from: its name (SVCURRENTCOMPANY) and the company part of the
   // entries' GUIDs (the same in every export of that company), and the first registration in it

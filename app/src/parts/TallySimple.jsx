@@ -940,6 +940,12 @@ function Computers({ pcs, download, sha }) {
 // the page above For support. installed: a bridge of the firm heard this week (the guided box counts it only when this user
 // has a bridge of their own: ownState); pcs: {connected, away, older};
 // download: the one Download FinCom Bridge (this site's latest.json); connectPanel: step 1's Download, Open it, Type its code
+// reliability (11-Nov-2026): a read of FinCom's cloud that failed (the computers, the summary, the checks, the masters'
+// progress: TStale, src/js/49) is said once above the table, with the time of what is shown; never told as Tally's state
+function StaleNote() {
+  const st = typeof TStale === "object" ? TStale.now() : null;
+  return st ? <p className="note warn" data-tally-stale={st.at || 0} role="status" style={{ margin: "6px 0" }}>{st.words + " \u00b7 " + (st.at ? "showing what FinCom last knew, " + st.as : st.as)}</p> : null;
+}
 export default function SimpleTally({ installed, ready = true, pcs, download, sha, checkAgain, connectPanel, latest = "" }) {
   const ui = UI(), g = S.tallyGuide || {}, now = Date.now();
   const focus = g.cid && g.at && now - g.at < GUIDE_MS ? g.cid : (S.tallyFocus || "");
@@ -980,6 +986,7 @@ export default function SimpleTally({ installed, ready = true, pcs, download, sh
   const beat = ((own.own || {}).beat) || null;
   return <div className="tsm" data-tally-simple="" data-tsm-own={own.state} data-tsm-own-from={own.from || undefined} data-tsm-own-how={(own.own && own.own.how) || undefined} data-tsm-rows={R.extra ? "done" : "quick"}>
     <Part name="top" v={v}><Top cs={cs} own={own} rows={rows} checkAgain={checkAgain} ready={ready} shown={!!ready && showGuide} beat={beat} /></Part>
+    <StaleNote />
     {strip && !(ready && R.extra && cs.mode === "login") && <Part name="strip" v={v}><Strip key={coKey(open.company)} r={open} best={best} more={unlinked.length - 1} /></Part>}
     {ready && showGuide && <Part name="guided box" v={v}><Guide cs={cs} collapsed={!expanded} forced={forced} asked={!!g.at && (g.step || 0) <= 3 && now - g.at < GUIDE_MS} connectPanel={connectPanel} download={download} checkAgain={checkAgain} /></Part>}
     {down && ready && R.extra && !rows.length ? <Part name="short" v={v}><ShortCard rows={rows} cs={cs} /></Part>

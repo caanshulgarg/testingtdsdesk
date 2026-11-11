@@ -125,7 +125,7 @@ async function bankHeal(cid, stmts, keys, force){
     Object.keys(m).some(k => { const p = k.split("|"); return p[0] === "bank_stmt" && p[1] === cid && m[k] !== "gone" && !have.has(String(p[2]).split(":")[1]); });
   if (!lost) return false;
   let recs;
-  try { recs = await Cloud.api("records?select=kind,id,data,deleted&client_id=eq." + encodeURIComponent(cid) + "&kind=in.(bank_stmt,bank_rows,bank_meta)"); } catch (e){ return false; }
+  try { recs = await Cloud.api("records?select=kind,id,data,deleted&client_id=eq." + encodeURIComponent(cid) + "&kind=in.(bank_stmt,bank_rows,bank_meta)", {timeout: 60000}); } catch (e){ return false; }
   done[cid] = 1;
   const list = ((await BankDB.get("stmts:" + cid)) || []).slice(), n0 = list.length, parts = {};
   let meta = null, wrote = 0;
