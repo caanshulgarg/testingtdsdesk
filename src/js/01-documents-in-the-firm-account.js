@@ -345,7 +345,7 @@ const Store = {
     const d = S.data[cid];
     Object.keys(d.parties).forEach(id => this.deleteParty(cid, id));
     Object.keys(d.entries).forEach(id => this.deleteEntry(cid, id));
-    this.put("companies/" + cid, null);
+    this.put("companies/" + cid, null); Books.drop(cid);
     if (typeof Cloud === "object") Cloud.delete("client", cid, cid, why || "client removed by the user");
     delete S.data[cid]; delete S.companies[cid];
     if (S.storeKind === "local") this.saveLocal();

@@ -309,7 +309,8 @@ const TallyRead = {
       if (bad(v.party)){ v.party = ledClean(v.party); n++; }
       (v.ent || []).forEach(e => { if (bad(e.l)){ e.l = ledClean(e.l); n++; } });
     });
-    if (n){ b.mapV = (b.mapV || 0) + 1; if (typeof LK === "object") LK.cache = {}; }
+    // (names in the entries changed in place: a new array, so the save writes them: Books.touch, src/js/04)
+    if (n){ b.mapV = (b.mapV || 0) + 1; Books.touch(b); if (typeof LK === "object") LK.cache = {}; }
     return n;
   },
   // review of 01-Oct-2026 (owner's go-ahead): at the start of a financial year, income and expense ledgers open at nil

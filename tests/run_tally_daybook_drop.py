@@ -104,7 +104,7 @@ def main():
             r = E("() => [S.coId === window.__openCo, S.books === window.__open, JSON.stringify(S.books) === window.__openBytes, S.coId, S.books && S.books.cid]")
             ok(r[0] and r[1] and r[2], "%s: the client open here untouched (S.coId %s, S.books the same object %s, the same bytes %s)" % (case, r[3], r[1], r[2]))
         def books(c):
-            return E("""async (c) => { const d = await IDBStore.get('books:' + c); return d ? {n: (d.vouchers || []).map((v) => v.narr), parts: ((d.meta || {}).parts || []).map((p) => [p.file, p.cloud || '']),
+            return E("""async (c) => { const d = await Books.read(c); return d ? {n: (d.vouchers || []).map((v) => v.narr), parts: ((d.meta || {}).parts || []).map((p) => [p.file, p.cloud || '']),
               pans: d.pans || {}, groups: Object.keys(d.groups || {}), co: d.tallyCo || null} : null; }""", c)
         def marks(c, tag):
             b = books(c); return [x for x in ((b or {}).get("n") or []) if str(x).startswith(tag + "-")]

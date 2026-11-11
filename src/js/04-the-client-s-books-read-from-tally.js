@@ -519,14 +519,46 @@ const Books = {
   // (the due list on Today works a client out again only when its books were saved since)
   MEM: 3, mem: new Map(), ver: {},
   remember(cid, data){ this.mem.delete(cid); if (data) this.mem.set(cid, data); while (this.mem.size > this.MEM) this.mem.delete(this.mem.keys().next().value); },
+  // split-save (11-Nov-2026): a save wrote the whole books as one record ("books:<cid>"; 51,758 entries: 0.4 s, about
+  // 1.5 s on an office PC) for any change: a tick, a cloud item, an MIS or audit run. Now the entries are kept apart from
+  // the rest and written again only when they changed, in one transaction with the rest:
+  //   "bke:<cid>" {s, v: the entries}   "bkw:<cid>" {s, d: the rest}   "bkh:<cid>" {s}
+  // s: the version of the entries the rest goes with (bkh, small, is read in the save's transaction: another tab wrote
+  // other entries since this page last saved, and this page's are written too). The entries changed when b.vouchers is
+  // another array, or holds another entry in any place, than when this page last saved or read them (vk); a change to an
+  // entry in place gives the books a new array (touch). Every reader goes through read: the books rebuilt only when the
+  // two records carry the same version, else the single record of before (an older build's), which is removed once a
+  // read found the two matching.
+  vk: {},
+  K(cid){ return ["bke:", "bkw:", "bkh:", "books:"].map(p => p + cid); },
+  touch(b){ if (b && b.vouchers) b.vouchers = b.vouchers.slice(); },
   async save(cid, data){
     this.remember(cid, data); this.ver[cid] = (this.ver[cid] || 0) + 1;
-    await IDBStore.write([["books:" + cid, data]]);
+    const [E, W, H] = this.K(cid);
+    await IDBStore.tx((st, g) => { const q = st.get(H); q.onsuccess = () => g(() => {
+      const k = this.vk[cid], h = q.result, v = data.vouchers, d = Object.assign({}, data);
+      const s = k && h && h.s === k.s && k.r === v && (!v || v.length === k.a.length && v.every((x, i) => x === k.a[i])) ? k.s : Date.now() + "." + Math.random();
+      delete d.vouchers;
+      // (kept before the transaction is done: if it fails, bkh differs from it and the next save writes the entries)
+      if (!k || s !== k.s){ st.put({s, v}, E); st.put({s}, H); this.vk[cid] = {s, r: v, a: v && v.slice()}; }
+      st.put({s, d}, W);
+    }); });
+  },
+  // mine: the books read are to be this page's copy (load), so their entries are the ones last read here (not while the
+  // open books are this client's: those are)
+  async read(cid, mine){
+    const [E, W, , O] = this.K(cid), [e, w] = await IDBStore.gets([E, W]), m = mine && !(S.books && S.books.cid === cid && !S.books.loading);
+    if (!(e && w && e.s === w.s)){ if (m) delete this.vk[cid]; return IDBStore.get(O); }
+    if (m) this.vk[cid] = {s: e.s, r: e.v, a: e.v && e.v.slice()};
+    IDBStore.write([[O, null]]).catch(() => {});
+    return Object.assign({cid: w.d.cid, vouchers: e.v}, w.d);
   },
   async load(cid){
     if (this.mem.has(cid)){ const d = this.mem.get(cid); this.remember(cid, d); return d; }
-    try { const d = await IDBStore.get("books:" + cid); if (d && d.cid === cid) this.remember(cid, d); return d; } catch (e){ return null; }
+    try { const d = await this.read(cid, 1); if (d && d.cid === cid) this.remember(cid, d); return d; } catch (e){ return null; }
   },
+  // a client removed: its books leave this browser
+  drop(cid){ this.forget(cid); delete this.vk[cid]; return IDBStore.write(this.K(cid).map(k => [k, null])).catch(() => {}); },
   forget(cid){ if (cid) this.mem.delete(cid); else this.mem.clear(); }
 };
 
