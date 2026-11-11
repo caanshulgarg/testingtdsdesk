@@ -3,9 +3,9 @@ FINCOM BRIDGE 2.5.14 - TEST SHEET (2.5.13's sheet below, with 2.5.14's fixes fir
 File:        FinComBridge-Setup-2.5.14.exe
 Fingerprint: not built yet (the sources only; the setup, its SHA-256 and the signed list come with the build)
 
-2.5.14: seven reliability fixes. Nothing new is asked of Tally: no new request, the same 2-second stop, one request at
-a time, postings first, never while someone is typing in Tally. The one change in what a request carries is point 7 (a
-company's name cleaned at its ends; the owner's decision of 11-Nov-2026). No migration.
+2.5.14: eight reliability fixes. Nothing new is asked of Tally: no new request and no request changed (the requests are
+2.5.13's), the same 2-second stop, one request at a time, postings first, never while someone is typing in Tally. No
+migration.
  1. One company closed in Tally no longer holds up the others. Before, when the day FinCom handed out first belonged
     to a company not open in this login's Tally (or one whose starting point is not recorded yet), FinCom Bridge kept
     waiting on that day and read no older entries of any other company on the computer. Now that day gives way: it is
@@ -25,15 +25,22 @@ company's name cleaned at its ends; the owner's decision of 11-Nov-2026). No mig
     Check: link a company on the Tally page; within about 5 minutes its ledgers show without pressing anything.
  5. The masters progress ("312 ledgers read") is sent for every read: Update now and the nightly read too, not only
     Import ledgers. The exact "of N" is still counted only for Import ledgers (it is a request to Tally).
- 6. When FinCom's cloud answers "busy" (HTTP 503), FinCom Bridge waits (5 seconds, doubling to a minute, or the
-    cloud's own Retry-After up to 2 minutes), sends nothing meanwhile and tries again by itself; nothing is lost. It
-    never says the computer's key is not valid and never needs connecting again for it. The log says "FinCom's cloud
-    is busy for a moment" once, and "FinCom's cloud answers again".
- 7. A company's name is cleaned once where FinCom Bridge reads Tally's company list: control characters and spaces
-    (tabs, line breaks) at either END are dropped; nothing inside the name is changed (two spaces inside a name
-    stay). The cleaned name is used everywhere: in every request's company (SVCURRENTCOMPANY), the bridge's own
-    matching and what it tells FinCom, the same rule as FinCom's cloud and page.
-    Check: a company whose name in Tally ends in a stray space or line break is linked and its reads come in.
+ 6. When FinCom's cloud answers "busy" (HTTP 503 saying busy, or a 503 with no answer of its own), FinCom Bridge
+    waits (5 seconds, doubling to a minute, or the cloud's own Retry-After up to 2 minutes; calls side by side count
+    once), sends nothing but the heartbeat meanwhile and tries again by itself; nothing is lost. The heartbeat goes at
+    least every 30 seconds, so FinCom never shows the computer offline for it, and its first answer lets everything
+    (postings first) go on at once. It never says the computer's key is not valid and never needs connecting again for
+    it. A 503 that says the cloud is not ready for something yet (a missing update of FinCom's cloud) is not "busy":
+    it is handled as before. The log says "FinCom's cloud is busy for a moment" once, and "FinCom's cloud answers again".
+ 7. A company's name: Tally is always asked with the name exactly as Tally's own company list gives it (spaces or
+    other characters at its ends included), also when the name came from FinCom, which keeps names without them.
+    FinCom is told the name without them (the cloud's own rule, character for character), and FinCom Bridge matches
+    names that way. Nothing inside a name is changed.
+    Check: a company whose name in Tally ends in a stray space is linked, its older entries come in, and a posting to
+    it lands in that company.
+ 8. The nightly check: when FinCom's cloud is busy, the night's check is tried again every 10 minutes (six times at
+    most) instead of waiting for the next night. A cloud not ready for the nightly check: it waits for the next night,
+    as before.
 
 ---------------------------------------------------------------------------------------------------------------------
 

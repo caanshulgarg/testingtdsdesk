@@ -67,11 +67,13 @@ func invokeCloud(body M, timeoutSec int) cloudResp {
 			return cloudResp{0, nil, "FinCom's cloud has not confirmed test mode yet; nothing is sent"}
 		}
 	}
-	// 2.5.14: FinCom's cloud said it is busy (503) a moment ago: nothing is sent to it until its wait is over
-	if left := cloudBusyLeft(); left > 0 {
+	// 2.5.14: FinCom's cloud said it is busy (503) a moment ago: nothing is sent to it until its wait is over, but the
+	// heartbeat (its own loop waits at most 30 s while the cloud is busy: beatLoop), so FinCom never shows this computer
+	// offline for a busy moment and the first answer ends the wait for every call
+	if left := cloudBusyLeft(); left > 0 && str(body["kind"]) != "beat" {
 		return cloudResp{503, nil, cloudBusyWords}
 	}
-	req, _ := http.NewRequest("POST", cfgS("CloudUrl"), strings.NewReader(jsonText(body)))
+	req, _ := http.NewRequest("POST", cfgS("CloudUrl"), strings.NewReader(jsonText(cloudNames(body))))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("x-fincom-device", cloudKey())
 	ctxC := &http.Client{Transport: cloudHTTP.Transport, Timeout: time.Duration(timeoutSec) * time.Second}
@@ -81,14 +83,16 @@ func invokeCloud(body M, timeoutSec int) cloudResp {
 	}
 	defer resp.Body.Close()
 	b, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode == 503 {
-		// busy, never "this computer's key is not valid": whatever the body says, the words are the bridge's own, the
-		// pairing is untouched, and the call is made again by its caller after the wait (nothing is lost)
+	o := parseObj(string(b))
+	if resp.StatusCode == 503 && (o == nil || truthy(o["busy"])) {
+		// busy (tally-ingest: {busy: true, retry: true} with Retry-After; or no answer of its own, a gateway's 503),
+		// never "this computer's key is not valid": the words are the bridge's own, the pairing is untouched, and the
+		// call is made again by its caller after the wait (nothing is lost). A 503 that says something else (notReady:
+		// a cloud without a migration yet) is an answer like any other: its caller's own rule, as before 2.5.14
 		cloudBusyNote(resp.Header.Get("Retry-After"))
-		return cloudResp{503, nil, cloudBusyWords}
+		return cloudResp{503, o, cloudBusyWords}
 	}
 	cloudBusyClear()
-	o := parseObj(string(b))
 	e := ""
 	if o != nil && str(o["error"]) != "" {
 		e = str(o["error"])
@@ -112,6 +116,12 @@ var cloudBusy = struct {
 
 func cloudBusyNote(retryAfter string) {
 	cloudBusy.mu.Lock()
+	if now := nowFn(); !cloudBusy.until.IsZero() && now.Before(cloudBusy.until) && cloudBusy.until.Sub(now) <= 3*time.Minute {
+		// already waiting: a call that went before the wait began answers 503 too; one step per wait, never one per
+		// call (calls made side by side would otherwise grow the wait at once)
+		cloudBusy.mu.Unlock()
+		return
+	}
 	d := 5 * time.Second
 	for i := 0; i < cloudBusy.n && d < time.Minute; i++ {
 		d *= 2
@@ -152,6 +162,58 @@ func cloudBusyLeft() time.Duration {
 		return 0
 	}
 	return cloudBusy.until.Sub(now)
+}
+
+// the heartbeat's own last answer was "busy": its loop waits at most 30 s before the next (beatLoop), so FinCom (which
+// shows a computer offline after 2 minutes without a beat) never shows it offline for a busy moment
+var beatBusy atomic.Bool
+
+func beatBusyPause(d time.Duration) time.Duration {
+	if beatBusy.Load() && d > 30*time.Second {
+		return 30 * time.Second
+	}
+	return d
+}
+
+// 2.5.14 (the independent review of 9d546dcb1): every company name sent to FinCom's cloud as the cloud keeps it (coTrim,
+// its own rule character for character); what goes to Tally keeps Tally's own spelling (tallyCo). The body's "company",
+// the names of its "companies" and its "open" list; the caller's body is not changed (a copy is sent)
+func cloudNames(body M) M {
+	out := M{}
+	for k, v := range body {
+		out[k] = v
+	}
+	if s, ok := body["company"].(string); ok {
+		out["company"] = coTrim(s)
+	}
+	if l, ok := body["open"].([]any); ok {
+		o := make([]any, len(l))
+		for i, x := range l {
+			if s, ok := x.(string); ok {
+				x = coTrim(s)
+			}
+			o[i] = x
+		}
+		out["open"] = o
+	}
+	if l, ok := body["companies"].([]any); ok {
+		o := make([]any, len(l))
+		for i, x := range l {
+			if m, ok := x.(M); ok {
+				if s, ok := m["name"].(string); ok {
+					c := M{}
+					for k, v := range m {
+						c[k] = v
+					}
+					c["name"] = coTrim(s)
+					x = c
+				}
+			}
+			o[i] = x
+		}
+		out["companies"] = o
+	}
+	return out
 }
 
 func gzipB64(t string) string {
@@ -327,6 +389,14 @@ func updateCloudLinks() {
 	}
 	for k, v := range obj(r.json["links"]) {
 		cloudLinks[k] = truthy(v)
+	}
+	// 2.5.14: the names went cleaned (cloudNames); each is held here under the name Tally gave too
+	for _, x := range cos {
+		if raw := str(obj(x)["name"]); raw != "" {
+			if v, ok := obj(r.json["links"])[coTrim(raw)]; ok {
+				cloudLinks[raw] = truthy(v)
+			}
+		}
 	}
 	cloudLinksAt = time.Now()
 	holdLinks(cloudLinks)
@@ -862,6 +932,7 @@ func beatLoop() {
 				beatFresh() // a connection of a network gone only times out
 			}
 			fails++
+			d = beatBusyPause(d)
 		}
 		switch beatWait(d, beatNow, stopCh) {
 		case "stop":
@@ -883,6 +954,7 @@ func beatOnce() {
 	go tallyIniSeen()       // 2.4.5: a TallyPrime folder not looked at before (at most once in 10 minutes; no request to Tally)
 	go tallyIniRecheckDue() // ROUND 103 (1a): every known tally.ini looked at again, read only, at the start and every 6 h
 	r := invokeCloud(beatBody(tally, tstate, tsince, open, ports, cos), 10)
+	beatBusy.Store(r.code == 503 && r.err == cloudBusyWords) // 2.5.14
 	// the owner's condition (Fix 2c): FinCom refused this computer key the bridge's id: its words in the tray and the log
 	if r.code == 409 && r.json != nil && truthy(r.json["idRefused"]) {
 		setIdRefused(str(r.json["error"]))

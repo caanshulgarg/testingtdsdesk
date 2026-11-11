@@ -641,8 +641,8 @@ func pullGiveWay(w *pullWork, code string) bool {
 		w.ownSince = time.Time{}
 		return false
 	}
+	pull.mu.Lock()
 	if !w.began {
-		pull.mu.Lock()
 		if pull.work == w {
 			pull.work = nil
 		}
@@ -650,6 +650,7 @@ func pullGiveWay(w *pullWork, code string) bool {
 		pull.mu.Unlock()
 		return true
 	}
+	pull.mu.Unlock()
 	if w.ownSince.IsZero() || nowFn().Before(w.ownSince) {
 		w.ownSince = nowFn()
 	}
@@ -670,6 +671,20 @@ func pullGiveWay(w *pullWork, code string) bool {
 	return true
 }
 
+// 2.5.14 (the independent review of 9d546dcb1): the day is begun BEFORE its first request goes, under pull.mu, and only
+// while it is still the day being read: the heartbeat (applyPeriodDays) lets go of a day not begun, under the same lock,
+// so a day is never let go while its first request is at Tally, and no request goes for a day already let go. false: let
+// go meanwhile (nothing is sent; the loop takes the next day)
+func pullBegin(w *pullWork) bool {
+	pull.mu.Lock()
+	defer pull.mu.Unlock()
+	if pull.work != w {
+		return false
+	}
+	w.began = true
+	return true
+}
+
 // one step: sent (a request reached the gate to Tally), more (another step may follow now)
 func pullStep() (sent bool, more bool) {
 	w := pullCurrent()
@@ -679,7 +694,7 @@ func pullStep() (sent bool, more bool) {
 	// 2.5.10 (pickack.go): a request for the day reached the gate to Tally: its hand-out started
 	defer func() {
 		if sent {
-			w.began, w.ownSince = true, time.Time{} // 2.5.14
+			w.ownSince = time.Time{} // 2.5.14 (began: pullBegin, before the send)
 			pickStarted(w.it)
 		}
 	}()
@@ -690,7 +705,7 @@ func pullStep() (sent bool, more bool) {
 	case !w.headsDone:
 		// next-fast-entries (FastEntries, off by default; fastentries.go): a day the window read already is taken as read
 		if fastTake(w) {
-			w.began = true
+			pullBegin(w)
 			pickStarted(w.it) // (read by the fast window already)
 			return false, true
 		}
@@ -703,6 +718,9 @@ func pullStep() (sent bool, more bool) {
 			return false, pullGiveWay(w, code)
 		}
 		w.ownSince = time.Time{}
+		if !pullBegin(w) {
+			return false, true // FinCom no longer lists it (the heartbeat let it go a moment ago): nothing sent
+		}
 		pickQueued(w.it)
 		if handled, sent, more := fastStep(w, port); handled {
 			return sent, more

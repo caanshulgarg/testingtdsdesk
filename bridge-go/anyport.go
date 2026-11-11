@@ -357,7 +357,7 @@ func tryTypedPort(port int) (M, error) {
 	}
 	cos := []any{}
 	for _, c := range xmlDoc(raw).All("COMPANY") {
-		if n := coClean(nameOf(c)); n != "" {
+		if n := nameOf(c); n != "" {
 			cos = append(cos, n)
 		}
 	}

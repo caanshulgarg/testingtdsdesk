@@ -9,10 +9,16 @@ package main
 //  6. HTTP 503 from FinCom's cloud: busy, tried again after a growing wait; never "the key is not valid"
 //  7. a company's name cleaned at its ends (the owner's decision of 11-Nov-2026), in SVCURRENTCOMPANY too
 import (
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -31,16 +37,19 @@ func TestR2514Version(t *testing.T) {
 	}
 	al := readText("../docs/tally-allowlist.md")
 	line := group(`(?m)^(First table: .*)$`, al, 1)
-	for _, w := range []string{"allowed for 2.5.14 by the owner's decision of 2026-11-11", "as for 2.5.13 by the owner's standing decision of 2026-10-06"} {
+	for _, w := range []string{"allowed for 2.5.14 by the owner's standing decision of 2026-10-06", "the requests are 2.5.13's", "as for 2.5.13 by the owner's standing decision of 2026-10-06"} {
 		if !strings.Contains(line, w) {
 			t.Errorf("the decision line does not say %q", w)
 		}
 	}
-	if !regexp.MustCompile(`re-measured on 2026-11-11 for 2\.5\.14: [^\n]*company name cleaned of control characters and edge spaces in SVCURRENTCOMPANY, allowed for 2\.5\.14 by the owner's decision of 2026-11-11`).MatchString(al) {
+	if !regexp.MustCompile(`re-measured on 2026-11-11 for 2\.5\.14: no request was measured again[^\n]*allowed for 2\.5\.14 by the owner's standing decision of 2026-10-06`).MatchString(al) {
 		t.Error("no dated line for 2.5.14")
 	}
 	if strings.Contains(al, "allowed for 2.5.13 by") {
 		t.Error("2.5.13's line is still worded as the current one")
+	}
+	if strings.Contains(al, "cleaned of control characters and edge spaces in SVCURRENTCOMPANY") {
+		t.Error("the allow-list still says the company's name is cleaned in what goes to Tally")
 	}
 }
 
@@ -335,7 +344,7 @@ func TestR2514ProgressForEveryRead(t *testing.T) {
 		}
 		return 200, M{"ok": true}
 	}
-	f := ledgerTally(t, 5000, c.cfg())
+	f := ledgerTally(t, 500, c.cfg()+`,"LedgerChunk":200,"LedgerChunkMin":50`) // small chunks: in time under -race too
 	noteCompanyGUID(zz, f.guid)
 	ledProg.mu.Lock()
 	ledProg.last, ledProg.sent = map[string]M{}, map[string]time.Time{}
@@ -356,7 +365,7 @@ func TestR2514ProgressForEveryRead(t *testing.T) {
 	if p := ps[0]; toInt(p["read"]) <= 0 || toInt(p["of"]) != 0 || p["done"] == true || str(p["company"]) != zz {
 		t.Fatalf("the first: %v", p)
 	}
-	if p := ps[len(ps)-1]; toInt(p["read"]) != 5000 || toInt(p["of"]) != 5000 || p["done"] != true || str(p["company_guid"]) != f.guid {
+	if p := ps[len(ps)-1]; toInt(p["read"]) != 500 || toInt(p["of"]) != 500 || p["done"] != true || str(p["company_guid"]) != f.guid {
 		t.Fatalf("the end: %v", p)
 	}
 	if b := ledProgressBeat(); len(b) != 1 || obj(b[0])["done"] != true {
@@ -376,7 +385,7 @@ func TestR2514CloudBusy503(t *testing.T) {
 	c.other = func(k string, b M) (int, M) {
 		if busy > 0 {
 			busy--
-			return 503, M{"ok": false, "error": "This computer's key is not valid any more. Connect it again from FinCom."}
+			return 503, M{"ok": false, "busy": true, "retry": true, "error": "This computer's key is not valid any more. Connect it again from FinCom."}
 		}
 		return prev(k, b)
 	}
@@ -401,6 +410,12 @@ func TestR2514CloudBusy503(t *testing.T) {
 	}
 	if d := cloudBusyLeft(); d <= 0 || d > 5*time.Second {
 		t.Fatalf("the first wait: %s", d)
+	}
+	// a 503 of a call that went before the wait began (side by side): no second step
+	cloudBusyNote("")
+	cloudBusyNote("")
+	if d := cloudBusyLeft(); d <= 0 || d > 5*time.Second {
+		t.Fatalf("calls side by side grew the wait: %s", d)
 	}
 	step := func(d time.Duration) {
 		at := nowFn().Add(d)
@@ -432,85 +447,280 @@ func TestR2514CloudBusy503(t *testing.T) {
 	if d := cloudBusyLeft(); d != 120*time.Second {
 		t.Fatalf("Retry-After capped: %s", d)
 	}
-	cloudBusyClear()
-	// the heartbeat: said not reached (busy), the key kept
+	// the heartbeat goes during the wait; its answer ends the wait for every call (postings at once)
 	c.mu.Lock()
 	c.kinds = nil
 	c.mu.Unlock()
-	cloudBusyNote("")
 	beatOnce()
-	if c.count("beat") != 0 || cloudKey() != key {
-		t.Fatal("a beat went during the wait, or the key changed")
+	if c.count("beat") != 1 || cloudKey() != key || cloudBusyLeft() != 0 || beatBusy.Load() {
+		t.Fatalf("the beat during the wait: %d sent, wait %s", c.count("beat"), cloudBusyLeft())
 	}
-	if _, failAt := beatTimes(); failAt.IsZero() {
-		t.Fatal("the beat not noted as not reaching FinCom")
+	if r := invokeCloud(M{"kind": "period_stop"}, 5); r.code != 200 {
+		t.Fatalf("a call after the beat answered: %v", r)
+	}
+	// the heartbeat answered busy: its next try within 30 s, whatever the back-off had grown to
+	beatBusy.Store(true)
+	if d := beatBusyPause(time.Minute); d != 30*time.Second {
+		t.Fatalf("the beat waits %s while the cloud is busy", d)
+	}
+	beatBusy.Store(false)
+	if d := beatBusyPause(time.Minute); d != time.Minute {
+		t.Fatalf("not busy: %s", d)
 	}
 	cloudBusyClear()
 }
 
-// 7. the company's name: control characters and spaces at either end dropped, nothing inside touched; the same in every
-// request's SVCURRENTCOMPANY and in the bridge's own matching; a clean name's requests are byte for byte as before
-func TestR2514CompanyNameCleaned(t *testing.T) {
-	for in, want := range map[string]string{
-		"Made Up Traders":            "Made Up Traders",
-		"  Made Up Traders \r\n\r\n": "Made Up Traders",
-		"\x04 Made Up Traders\t":     "Made Up Traders",
-		string(rune(0xa0)) + "Made  Up   Traders" + string(rune(0xfeff)): "Made  Up   Traders", // inside: as Tally has it
-		"Made\tUp": "Made\tUp",
-		" \r\n":    "",
-	} {
-		if g := coClean(in); g != want {
-			t.Errorf("%q: %q", in, g)
-		}
+// 6b. a 503 that is not "busy" (notReady: a cloud without a migration yet; index.ts) is an answer as before 2.5.14: its
+// body and words reach the caller, and nothing else waits; a 503 with no body of its own (a gateway's) is busy
+func TestR2514Cloud503NotReadyIsNotBusy(t *testing.T) {
+	_, c, _ := pullBridge(t)
+	reply := M{"ok": false, "notReady": true, "error": "FinCom's cloud is not ready for this yet."}
+	c.mu.Lock()
+	c.other = func(k string, b M) (int, M) { return 503, reply }
+	c.mu.Unlock()
+	r := invokeCloud(M{"kind": "period_stop"}, 5)
+	if r.code != 503 || r.json == nil || !truthy(r.json["notReady"]) || r.err != str(reply["error"]) || cloudBusyLeft() != 0 {
+		t.Fatalf("notReady: %+v, wait %s", r, cloudBusyLeft())
 	}
+	if r := invokeCloud(M{"kind": "period_stop"}, 5); r.code != 503 || c.count("period_stop") != 2 {
+		t.Fatalf("the next call was held after a notReady: %+v", r)
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(503)
+		_, _ = w.Write([]byte("<html>Service Unavailable</html>"))
+	}))
+	defer srv.Close()
+	old := cfgS("CloudUrl")
+	setCfg("CloudUrl", srv.URL)
+	defer setCfg("CloudUrl", old)
+	if r := invokeCloud(M{"kind": "period_stop"}, 5); r.code != 503 || r.err != cloudBusyWords || cloudBusyLeft() <= 0 {
+		t.Fatalf("a gateway's 503: %+v", r)
+	}
+	cloudBusyClear()
+}
+
+// 7. (as the independent review of 9d546dcb1 asked) Tally is asked with the company's name exactly as its own company list
+// gave it, edge characters and all; a name that came cleaned from FinCom's cloud is put back to Tally's spelling; FinCom's
+// cloud is told the name cleaned (coTrim); the bridge matches on the cleaned name. A clean name: byte for byte as before
+func TestR2514CompanyNameRawToTallyCleanToCloud(t *testing.T) {
 	if companyKey("\x04Made Up Traders \r\n") != companyKey("made up traders") || !sameCompany(" Made Up Traders\r\n", "Made Up Traders") {
 		t.Error("the bridge's own matching does not use the cleaned name")
 	}
 	const d = "20250915"
-	dirty, clean := " \x04Made  Up & Co \r\n", "Made  Up & Co"
-	pairs := map[string][2]string{
-		"FinComDayHeads":       {dayHeadsRequest(dirty, d), dayHeadsRequest(clean, d)},
-		"FinComLedgers":        {ledgerChunkRequestAt(dirty, "20250401", 0, 2000), ledgerChunkRequestAt(clean, "20250401", 0, 2000)},
-		"FinComGroups":         {groupListRequest(dirty), groupListRequest(clean)},
-		"FinComLedgerIds":      {ledgerIdsRequest(dirty, 0, 0), ledgerIdsRequest(clean, 0, 0)},
-		"Day Book":             {dayBookRequestForm(dirty, "", d, d), dayBookRequestForm(clean, "", d, d)},
-		"TDSDeskVchHeads":      {vchHeadsRequest(dirty, d, d), vchHeadsRequest(clean, d, d)},
-		"TDSDeskKeepList":      {keepListAboveRequest(dirty, 5), keepListAboveRequest(clean, 5)},
-		"FinComVoucherObject":  {voucherObjectRequest(dirty, "77"), voucherObjectRequest(clean, "77")},
-		"FinComCompanyNumbers": {companyNumbersRequest(dirty), companyNumbersRequest(clean)},
-		"TDSDeskCompanyInfo":   {coInfoRequest(dirty), coInfoRequest(clean)},
-		"the import":           {importEnvelope("Vouchers", dirty, "<X/>"), importEnvelope("Vouchers", clean, "<X/>")},
-	}
-	for id, p := range pairs {
-		if p[0] != p[1] {
-			t.Errorf("%s: a name with stray ends gives another request:\n%s\n%s", id, p[0], p[1])
-		}
-		if !strings.Contains(p[1], "<SVCURRENTCOMPANY>Made  Up &amp; Co</SVCURRENTCOMPANY>") {
-			t.Errorf("%s: SVCURRENTCOMPANY: %s", id, p[1])
-		}
-		if pinCo(p[0]) != clean {
-			t.Errorf("%s: the request's company read back: %q", id, pinCo(p[0]))
+	raw, clean := " \x04Made  Up & Co \u00a0", "Made  Up & Co"
+	build := func(co string) map[string]string {
+		return map[string]string{
+			"FinComDayHeads":       dayHeadsRequest(co, d),
+			"FinComLedgers":        ledgerChunkRequestAt(co, "20250401", 0, 2000),
+			"FinComGroups":         groupListRequest(co),
+			"FinComLedgerIds":      ledgerIdsRequest(co, 0, 0),
+			"Day Book":             dayBookRequestForm(co, "", d, d),
+			"TDSDeskVchHeads":      vchHeadsRequest(co, d, d),
+			"TDSDeskKeepList":      keepListAboveRequest(co, 5),
+			"FinComVoucherObject":  voucherObjectRequest(co, "77"),
+			"FinComCompanyNumbers": companyNumbersRequest(co),
+			"FinComCompany":        companyCheckRequest(co),
+			"TDSDeskCompanyInfo":   coInfoRequest(co),
+			"the import":           importEnvelope("Vouchers", co, "<X/>"),
 		}
 	}
-	// Tally's company list with stray ends in the name: the cleaned name is the one held everywhere
-	f := newStandTally(t)
-	f.coName = zz + " \r\n"
-	standBridge(t, f, "")
-	n := 0
-	for _, s := range openCompanies(true) {
-		for _, co := range sessCompanies(s) {
-			n++
-			if str(co["name"]) != zz {
-				t.Fatalf("the list's name: %q", str(co["name"]))
+	old := tallyNames.Load()
+	t.Cleanup(func() { tallyNames.Store(old) })
+	// before any company list: every name as it came
+	tallyNames.Store(nil)
+	before := build(clean)
+	// Tally's list names the company with edge characters: asked with them, byte for byte, whichever spelling asks
+	noteTallyNames([]M{{"ok": true, "companies": []any{M{"name": raw}}}})
+	for _, co := range []string{raw, clean, "made up & co"} {
+		for id, x := range build(co) {
+			if pinCo(x) != raw || !strings.Contains(x, "<SVCURRENTCOMPANY>"+esc(raw)+"</SVCURRENTCOMPANY>") {
+				t.Errorf("%s asked as %q: the company sent %q", id, co, pinCo(x))
 			}
 		}
 	}
-	if n != 1 {
-		t.Fatalf("companies listed: %d", n)
+	for _, id := range []string{"FinComCompany", "FinComCompanyNumbers", "TDSDeskCompanyInfo"} {
+		if x := build(clean)[id]; !strings.Contains(x, esc(`$Name = "`+raw+`"`)) && !strings.Contains(x, `$Name = "`+esc(raw)+`"`) {
+			t.Errorf("%s: its own name filter is not Tally's spelling: %s", id, x)
+		}
 	}
-	if p, err := findCompanyPort(zz, 0); err != nil || p != f.port {
-		t.Fatalf("the company is not found by its cleaned name: %v", err)
+	// a clean name Tally gives as it is: every request exactly as built before the list (2.5.13's builders)
+	noteTallyNames([]M{{"ok": true, "companies": []any{M{"name": clean}}}})
+	for id, x := range build(clean) {
+		if x != before[id] {
+			t.Errorf("%s: a clean name's request changed", id)
+		}
 	}
+	// two spellings listed: neither is guessed
+	noteTallyNames([]M{{"ok": true, "companies": []any{M{"name": raw}, M{"name": clean + " "}}}})
+	if g := tallyCo("Made  Up & Co"); g != "Made  Up & Co" {
+		t.Errorf("two spellings: %q", g)
+	}
+	// to FinCom's cloud: cleaned, the caller's body untouched
+	c := newStandCloud(t)
+	f := newStandTally(t)
+	standBridge(t, f, c.cfg())
+	body := M{"kind": "period_stop", "company": raw, "open": []any{raw}, "companies": []any{M{"name": raw, "guid": "g"}}}
+	invokeCloud(body, 5)
+	c.mu.Lock()
+	sent := parseObj(c.raw[len(c.raw)-1])
+	c.mu.Unlock()
+	if str(sent["company"]) != clean || str(arr(sent["open"])[0]) != clean || str(obj(arr(sent["companies"])[0])["name"]) != clean || str(obj(arr(sent["companies"])[0])["guid"]) != "g" {
+		t.Fatalf("to the cloud: %v", sent)
+	}
+	if body["company"] != raw || arr(body["open"])[0] != raw || obj(arr(body["companies"])[0])["name"] != raw {
+		t.Fatalf("the caller's body was changed: %v", body)
+	}
+}
+
+// 7b. end to end: Tally lists "ZZ TEST" with edge spaces; FinCom hands out the day under the cleaned name. Tally is asked
+// with its own spelling, FinCom is told the cleaned one, and the link FinCom answers is held under both
+func TestR2514RawNameDayPullEndToEnd(t *testing.T) {
+	f, c, m := pullBridge(t)
+	rawZZ := "  " + zz + " \u00a0"
+	f.mu.Lock()
+	f.coName = rawZZ
+	f.mu.Unlock()
+	openCompanies(true)
+	if g := tallyCo(zz); g != rawZZ {
+		t.Fatalf("Tally's spelling not held from its list: %q", g)
+	}
+	pullDay(f, "20250915", 700, "Sales")
+	applyPeriodDays(pullList("20250915"))
+	n0 := len(f.ids())
+	pullRun(t, 20)
+	if m.n["20250915"] != 1 || len(m.held) != 1 {
+		t.Fatalf("the day was not read: %v %d (%v)", m.n, len(m.held), f.ids()[n0:])
+	}
+	f.mu.Lock()
+	bodies := append([]string{}, f.bodies[n0:]...)
+	f.mu.Unlock()
+	for _, b := range bodies {
+		if co := pinCo(b); co != "" && co != rawZZ {
+			t.Fatalf("Tally asked for %q, not its own %q", co, rawZZ)
+		}
+	}
+	for _, h := range m.heads {
+		if str(h["company"]) != zz {
+			t.Fatalf("FinCom told %q", str(h["company"]))
+		}
+	}
+	cloudMu.Lock()
+	cloudLinks = map[string]bool{}
+	updateCloudLinks()
+	on := cloudLinks[rawZZ] && cloudLinks[zz]
+	cloudMu.Unlock()
+	c.mu.Lock()
+	var cos []any
+	for i := len(c.kinds) - 1; i >= 0; i-- {
+		if c.kinds[i] == "companies" {
+			cos = arr(parseObj(c.raw[i])["companies"])
+			break
+		}
+	}
+	c.mu.Unlock()
+	if !on || len(cos) == 0 || str(obj(cos[0])["name"]) != zz {
+		t.Fatalf("the links: held %v, sent %v", on, cos)
+	}
+}
+
+// 5b. the cleaning rule is the cloud's coTrim, case for case (tests/fixtures/cotrim-cases.json); with node here, the
+// cloud's own function is run on the same cases
+func TestR2514CoTrimParity(t *testing.T) {
+	fx := filepath.Join("..", "tests", "fixtures", "cotrim-cases.json")
+	var f struct {
+		Cases []struct{ In, Out, Why string }
+	}
+	if err := json.Unmarshal([]byte(readText(fx)), &f); err != nil || len(f.Cases) < 10 {
+		t.Fatalf("%s: %v (%d cases)", fx, err, len(f.Cases))
+	}
+	for _, c := range f.Cases {
+		if g := coTrim(c.In); g != c.Out {
+			t.Errorf("%s: %q gives %q, the cloud keeps %q", c.Why, c.In, g, c.Out)
+		}
+	}
+	node, err := exec.LookPath("node")
+	if err != nil {
+		t.Log("node not here: the cloud's own function not run (the cases above still hold)")
+		return
+	}
+	lk, _ := filepath.Abs(filepath.Join("..", "server", "tally-cloud", "linknow.js"))
+	af, _ := filepath.Abs(fx)
+	js := `import(` + jsonText(lk) + `).then(async (m) => { const f = JSON.parse((await import("fs")).readFileSync(` + jsonText(af) +
+		`, "utf8")); const bad = f.cases.filter((c) => m.coTrim(c.in) !== c.out).map((c) => c.why); console.log(JSON.stringify({ n: f.cases.length, bad })); })`
+	out, err := exec.Command(node, "--input-type=module", "-e", js).Output()
+	if err != nil {
+		t.Fatalf("node: %v", err)
+	}
+	r := parseObj(strings.TrimSpace(string(out)))
+	if toInt(r["n"]) != len(f.Cases) || len(arr(r["bad"])) != 0 {
+		t.Fatalf("the cloud's coTrim: %s", out)
+	}
+}
+
+// 1d. (the independent review of 9d546dcb1) a day is begun under the lock before its first request: the heartbeat that
+// no longer lists it lets it go only before; a day let go sends nothing; begun, it is kept and finished
+func TestR2514BeginBeforeSend(t *testing.T) {
+	f, _, m := pullBridge(t)
+	r2514Other(true)
+	pullDay(f, "20250915", 700, "Sales")
+	ch := nowFn().UTC().Format(time.RFC3339)
+	applyPeriodDays(r2514Days(ch, [3]string{zz, b220CoGUID, "20250915"}))
+	w := pullCurrent()
+	// the heartbeat drops the day between the loop taking it and its first request: nothing is sent for it
+	applyPeriodDays(r2514Days(ch, [3]string{r2514Co, r2514GUID, "20250910"}))
+	if pullBegin(w) {
+		t.Fatal("a day let go was begun")
+	}
+	// begun first: the heartbeat that no longer lists it keeps it, and it is finished
+	at := nowFn().Add(3 * time.Minute)
+	nowFn = func() time.Time { return at }
+	applyPeriodDays(r2514Days(ch, [3]string{zz, b220CoGUID, "20250915"}))
+	w = pullCurrent()
+	if w == nil || !pullBegin(w) {
+		t.Fatal("not begun")
+	}
+	applyPeriodDays(r2514Days(ch, [3]string{r2514Co, r2514GUID, "20250910"}))
+	if pullCurrent() != w {
+		t.Fatal("a begun day was let go")
+	}
+	pullRun(t, 20)
+	if m.n["20250915"] != 1 || len(m.held) != 1 {
+		t.Fatalf("the begun day was not finished: %v %d", m.n, len(m.held))
+	}
+}
+
+// 1e. the heartbeat and the loop side by side (run with -race): the loop's steps and the beat's lists of days
+func TestR2514BeatAndLoopSideBySide(t *testing.T) {
+	f, _, _ := pullBridge(t)
+	r2514Other(true)
+	for i := 0; i < 6; i++ {
+		pullDay(f, fmt.Sprintf("202509%02d", 10+i), int64(700+10*i), "Sales")
+	}
+	ch := nowFn().UTC().Format(time.RFC3339)
+	stop := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for i := 0; ; i++ {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			if i%2 == 0 {
+				applyPeriodDays(r2514Days(ch, [3]string{zz, b220CoGUID, fmt.Sprintf("202509%02d", 10+i%6)}, [3]string{r2514Co, r2514GUID, "20250901"}))
+			} else {
+				applyPeriodDays(r2514Days(ch, [3]string{r2514Co, r2514GUID, "20250901"}))
+			}
+			_ = pullBeat()
+		}
+	}()
+	for i := 0; i < 300; i++ {
+		_, _ = pullStep()
+	}
+	close(stop)
+	wg.Wait()
 }
 
 // 8. the nightly check: FinCom's cloud busy (503) does not end the night's check. It is tried again 10 minutes later
@@ -578,5 +788,27 @@ func TestR2514SelfCheckRetriesAfterBusy(t *testing.T) {
 	st = scState(zz, b220CoGUID)
 	if tries != scBusyTries || len(scSteps(c2, "compare")) != scBusyTries || str(st["night"]) != "20261006" || st["mark"] != nil {
 		t.Fatalf("busy all night: %d tries, %d calls, %v", tries, len(scSteps(c2, "compare")), st)
+	}
+}
+
+// 8b. a 503 that says notReady (a cloud without the nightly check yet): the night's check stops for the night, as
+// before 2.5.14; nothing is retried tonight
+func TestR2514SelfCheckNotReadyStopsTheNight(t *testing.T) {
+	f, c := scBridge(t, "")
+	f.add("20261006", "Party B", "2", "", "50.00")
+	led231Numbers(t, f)
+	c.mu.Lock()
+	c.scReply = func(M) (int, M) { return 503, M{"ok": false, "notReady": true, "error": "not ready"} }
+	c.mu.Unlock()
+	r, err := selfCheckStart(zz, f.port)
+	if r != nil || err == nil || !strings.Contains(err.Error(), "not ready for the nightly check") {
+		t.Fatalf("notReady: %v %v", r, err)
+	}
+	if st := scState(zz, b220CoGUID); str(st["night"]) != "20261006" || st["busyN"] != nil || cloudBusyLeft() != 0 {
+		t.Fatalf("notReady was taken as busy: %v", st)
+	}
+	scAt(t, nowFn().Add(11*time.Minute))
+	if r, _ := selfCheckStart(zz, f.port); r != nil || len(scSteps(c, "compare")) != 1 {
+		t.Fatal("tried again the same night after notReady")
 	}
 }

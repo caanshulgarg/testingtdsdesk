@@ -523,7 +523,7 @@ const (
 
 func scCloudErr(r *scRun, ans cloudResp) error {
 	st := scState(r.company, r.guid)
-	if ans.code == 503 {
+	if ans.code == 503 && ans.err == cloudBusyWords {
 		// 2.5.14: busy (its database could not be read just now), not "no nightly check": tonight's check is not given
 		// up. Tried again every 10 minutes (the cloud's own Retry-After when longer), six times a night at most; only
 		// then is the night left, and the next night checks from the same mark (nothing is skipped over)
@@ -554,7 +554,7 @@ func scCloudErr(r *scRun, ans cloudResp) error {
 	if ans.json != nil && str(ans.json["error"]) != "" {
 		why = str(ans.json["error"])
 	}
-	if ans.code == 400 || ans.code == 404 {
+	if ans.code == 400 || ans.code == 503 || ans.code == 404 { // (503 here: notReady, a cloud without the nightly check yet)
 		set["night"] = r.night // the cloud has no nightly check yet: nothing more tonight
 		why = "FinCom's cloud is not ready for the nightly check yet (" + why + ")"
 	}
