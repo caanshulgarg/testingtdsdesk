@@ -723,7 +723,7 @@ func openCompaniesAsk(tc *TC, fresh bool) ([]M, bool) {
 			}
 			list := []any{}
 			for _, c := range xmlDoc(raw).All("COMPANY") {
-				name := nameOf(c)
+				name := coClean(nameOf(c)) // 2.5.14: cleaned once, here (posting_status.go coClean)
 				if name == "" {
 					continue
 				}
@@ -1180,7 +1180,7 @@ func companiesRequest() string {
 
 // one company's GSTIN and PAN (the company's own master fields)
 func coInfoRequest(name string) string {
-	extra := `<FILTERS>TDSDeskThisCo</FILTERS></COLLECTION><SYSTEM TYPE="Formulae" NAME="TDSDeskThisCo">$Name = "` + esc(strings.ReplaceAll(name, `"`, "")) + `"</SYSTEM><COLLECTION NAME="TDSDeskUnused" ISMODIFY="No"><TYPE>Company</TYPE>`
+	extra := `<FILTERS>TDSDeskThisCo</FILTERS></COLLECTION><SYSTEM TYPE="Formulae" NAME="TDSDeskThisCo">$Name = "` + esc(strings.ReplaceAll(coClean(name), `"`, "")) + `"</SYSTEM><COLLECTION NAME="TDSDeskUnused" ISMODIFY="No"><TYPE>Company</TYPE>`
 	return collectionRequest("TDSDeskCompanyInfo", "Company", "NAME,GSTREGISTRATIONNUMBER,INCOMETAXNUMBER,GSTREGISTRATIONDETAILS.LIST,GUID", name, extra)
 }
 

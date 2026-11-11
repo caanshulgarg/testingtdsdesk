@@ -253,7 +253,7 @@ func nameOf(n *Node) string {
 func collectionRequest(id, typ, fetch, company, extra string) string {
 	sv := "<SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>"
 	if company != "" {
-		sv += "<SVCURRENTCOMPANY>" + esc(company) + "</SVCURRENTCOMPANY>"
+		sv += "<SVCURRENTCOMPANY>" + esc(coClean(company)) + "</SVCURRENTCOMPANY>"
 	}
 	return "<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>" + id + "</ID></HEADER>" +
 		"<BODY><DESC><STATICVARIABLES>" + sv + "</STATICVARIABLES><TDL><TDLMESSAGE>" +
@@ -1481,7 +1481,7 @@ func companyCheckRequest(company string) string {
 	}
 	// 2.2.0 (the owner's finding on NWS144): AltVchId and AltMstId are Company methods, not stored fields; a FETCH of them
 	// gave the company with empty tags. They are asked as NATIVEMETHODs (form a); the report form b is in safety.go
-	return fcCollection("FinComCompany", company, "", "Company", "NAME, GUID</FETCH><NATIVEMETHOD>AltVchId</NATIVEMETHOD><NATIVEMETHOD>AltMstId</NATIVEMETHOD><FETCH>NAME", `$Name = "`+strings.ReplaceAll(company, `"`, "")+`"`)
+	return fcCollection("FinComCompany", company, "", "Company", "NAME, GUID</FETCH><NATIVEMETHOD>AltVchId</NATIVEMETHOD><NATIVEMETHOD>AltMstId</NATIVEMETHOD><FETCH>NAME", `$Name = "`+strings.ReplaceAll(coClean(company), `"`, "")+`"`)
 }
 
 // form b: a small report over the one company (by $Name), two fields SET to $AltVchId and $AltMstId (method reads of
@@ -1489,7 +1489,7 @@ func companyCheckRequest(company string) string {
 const cnReportID = "FinComCompanyNumbers"
 
 func companyNumbersRequest(company string) string {
-	co := esc(company)
+	co := esc(coClean(company))
 	return "<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Data</TYPE><ID>" + cnReportID + "</ID></HEADER>" +
 		"<BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>" + co + "</SVCURRENTCOMPANY></STATICVARIABLES><TDL><TDLMESSAGE>" +
 		`<REPORT NAME="` + cnReportID + `" ISMODIFY="No"><FORMS>FinComCNForm</FORMS></REPORT>` +
@@ -1501,7 +1501,7 @@ func companyNumbersRequest(company string) string {
 		`<FIELD NAME="FinComCNVch" ISMODIFY="No"><SET>$AltVchId</SET><XMLTAG>ALTVCHID</XMLTAG></FIELD>` +
 		`<FIELD NAME="FinComCNMst" ISMODIFY="No"><SET>$AltMstId</SET><XMLTAG>ALTMSTID</XMLTAG></FIELD>` +
 		`<COLLECTION NAME="FinComCNCos" ISMODIFY="No"><TYPE>Company</TYPE><FILTERS>FinComCNOnly</FILTERS></COLLECTION>` +
-		`<SYSTEM TYPE="Formulae" NAME="FinComCNOnly">` + esc(`$Name = "`+strings.ReplaceAll(company, `"`, "")+`"`) + `</SYSTEM>` +
+		`<SYSTEM TYPE="Formulae" NAME="FinComCNOnly">` + esc(`$Name = "`+strings.ReplaceAll(coClean(company), `"`, "")+`"`) + `</SYSTEM>` +
 		"</TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>"
 }
 

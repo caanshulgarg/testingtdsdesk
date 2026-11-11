@@ -10,10 +10,22 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"unicode"
 )
 
 // --- the company
-func companyKey(s string) string { return strings.ToLower(strings.Join(strings.Fields(s), " ")) }
+func companyKey(s string) string {
+	return strings.ToLower(strings.Join(strings.Fields(coClean(s)), " "))
+}
+
+// 2.5.14 (the owner's decision of 11-Nov-2026): a company's name cleaned once where Tally's company list is read, and
+// wherever a request names its company (SVCURRENTCOMPANY): control characters and spaces (tabs, CR/LF, a no-break space,
+// a byte-order mark) at either END are dropped; nothing inside the name is touched (a name that truly has two spaces
+// inside it stays so: Tally selects the company by it). The cloud's rule (server/tally-cloud/linknow.js coTrim) and the
+// page's, so the three never disagree over a name with a stray end
+func coClean(s string) string {
+	return strings.TrimFunc(s, func(r rune) bool { return r <= 0x1f || r == 0xfeff || unicode.IsSpace(r) })
+}
 func sameCompany(a, b string) bool {
 	return a != "" && companyKey(a) == companyKey(b)
 }

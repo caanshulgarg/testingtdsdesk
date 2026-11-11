@@ -144,8 +144,19 @@ func selfCheckBlocked(company, guid string) string {
 	if guid == "" {
 		return "Tally gave no GUID for the company"
 	}
-	if st := scState(company, guid); str(st["night"]) == night {
+	st := scState(company, guid)
+	if str(st["night"]) == night {
 		return "already checked tonight"
+	}
+	// 2.5.14: FinCom's cloud answered "busy" (503) to tonight's check: tried again later tonight (scCloudErr), and
+	// nothing is asked of Tally for it while the cloud's own wait lasts
+	if str(st["busyNight"]) == night {
+		if t, err := time.Parse(time.RFC3339, str(st["busyUntil"])); err == nil && nowFn().Before(t) && t.Sub(nowFn()) <= time.Hour {
+			return scBusyWords
+		}
+	}
+	if cloudBusyLeft() > 0 {
+		return scBusyWords
 	}
 	if postingGoing() || importsInFlight.Load() > 0 {
 		return "a posting is going (the check goes after it)"
@@ -209,7 +220,7 @@ func selfCheckAfterLightCheck(company string, port int) {
 		guid = heldGUID(company)
 	}
 	if why := selfCheckBlocked(company, guid); why != "" {
-		if why != "not after hours" && why != "already checked tonight" && why != "the nightly check is off on this computer" {
+		if why != "not after hours" && why != "already checked tonight" && why != "the nightly check is off on this computer" && why != scBusyWords {
 			liveSayOnce("selfcheck|"+companyKey(company)+"|"+why, "Nightly check of "+company+": not now: "+why)
 		}
 		return
@@ -504,8 +515,36 @@ func scHist(company, guid, night string, mark int64) []any {
 
 // the cloud could not take the step: tried again at the next light check (three times a night at most); a cloud without
 // the nightly check (migration 65) is said once and not asked again tonight
+const (
+	scBusyWords = "FinCom's cloud was busy; the nightly check is tried again later tonight"
+	scBusyTries = 6
+	scBusyEvery = 10 * time.Minute
+)
+
 func scCloudErr(r *scRun, ans cloudResp) error {
 	st := scState(r.company, r.guid)
+	if ans.code == 503 {
+		// 2.5.14: busy (its database could not be read just now), not "no nightly check": tonight's check is not given
+		// up. Tried again every 10 minutes (the cloud's own Retry-After when longer), six times a night at most; only
+		// then is the night left, and the next night checks from the same mark (nothing is skipped over)
+		n := toInt(st["busyN"]) + 1
+		if str(st["busyNight"]) != r.night {
+			n = 1
+		}
+		wait := scBusyEvery
+		if left := cloudBusyLeft(); left > wait {
+			wait = left
+		}
+		at := nowFn().Add(wait)
+		set := M{"busyN": n, "busyNight": r.night, "busyUntil": at.Format(time.RFC3339)}
+		if n >= scBusyTries {
+			set["night"] = r.night
+			scSave(r.company, r.guid, set)
+			return fmt.Errorf("FinCom's cloud was busy %d times tonight; the check runs again tomorrow night, from the same mark", n)
+		}
+		scSave(r.company, r.guid, set)
+		return fmt.Errorf("FinCom's cloud is busy; tried again at %s (try %d of %d tonight)", at.Format("15:04"), n, scBusyTries)
+	}
 	n := toInt(st["tries"]) + 1
 	if str(st["triesNight"]) != r.night {
 		n = 1
@@ -515,7 +554,7 @@ func scCloudErr(r *scRun, ans cloudResp) error {
 	if ans.json != nil && str(ans.json["error"]) != "" {
 		why = str(ans.json["error"])
 	}
-	if ans.code == 400 || ans.code == 503 || ans.code == 404 {
+	if ans.code == 400 || ans.code == 404 {
 		set["night"] = r.night // the cloud has no nightly check yet: nothing more tonight
 		why = "FinCom's cloud is not ready for the nightly check yet (" + why + ")"
 	}

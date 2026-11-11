@@ -91,7 +91,7 @@ func dayBookRequest(company, from, to string) string {
 // round 18: the Day Book with its dates in one of the four forms (dates.go); only the read test asks for another form
 func dayBookRequestForm(company, form, from, to string) string {
 	return "<ENVELOPE><HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER><BODY><EXPORTDATA><REQUESTDESC><REPORTNAME>Day Book</REPORTNAME>" +
-		"<STATICVARIABLES><SVCURRENTCOMPANY>" + esc(company) + "</SVCURRENTCOMPANY>" + dateVars(form, from, to) +
+		"<STATICVARIABLES><SVCURRENTCOMPANY>" + esc(coClean(company)) + "</SVCURRENTCOMPANY>" + dateVars(form, from, to) +
 		"<SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><EXPLODEFLAG>Yes</EXPLODEFLAG></STATICVARIABLES></REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>"
 }
 
@@ -196,7 +196,7 @@ func getVouchers(company, from, to, ledger, types string, pref int) (M, error) {
 // the vouchers of a period, heads only (Optional ones too)
 func vchHeadsRequest(company, from, to string) string {
 	return "<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>TDSDeskVchHeads</ID></HEADER>" +
-		"<BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>" + esc(company) + "</SVCURRENTCOMPANY>" +
+		"<BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>" + esc(coClean(company)) + "</SVCURRENTCOMPANY>" +
 		periodVars(from, to) + "</STATICVARIABLES><TDL><TDLMESSAGE>" +
 		`<COLLECTION NAME="TDSDeskVchHeads" ISMODIFY="No"><TYPE>Voucher</TYPE><FETCH>DATE,VOUCHERTYPENAME,VOUCHERNUMBER,REFERENCE,PARTYLEDGERNAME,NARRATION,MASTERID,GUID,ALTERID,ISOPTIONAL,ISCANCELLED</FETCH></COLLECTION>` +
 		"</TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>"

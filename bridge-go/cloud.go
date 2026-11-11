@@ -21,6 +21,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -66,6 +67,10 @@ func invokeCloud(body M, timeoutSec int) cloudResp {
 			return cloudResp{0, nil, "FinCom's cloud has not confirmed test mode yet; nothing is sent"}
 		}
 	}
+	// 2.5.14: FinCom's cloud said it is busy (503) a moment ago: nothing is sent to it until its wait is over
+	if left := cloudBusyLeft(); left > 0 {
+		return cloudResp{503, nil, cloudBusyWords}
+	}
 	req, _ := http.NewRequest("POST", cfgS("CloudUrl"), strings.NewReader(jsonText(body)))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("x-fincom-device", cloudKey())
@@ -76,6 +81,13 @@ func invokeCloud(body M, timeoutSec int) cloudResp {
 	}
 	defer resp.Body.Close()
 	b, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode == 503 {
+		// busy, never "this computer's key is not valid": whatever the body says, the words are the bridge's own, the
+		// pairing is untouched, and the call is made again by its caller after the wait (nothing is lost)
+		cloudBusyNote(resp.Header.Get("Retry-After"))
+		return cloudResp{503, nil, cloudBusyWords}
+	}
+	cloudBusyClear()
 	o := parseObj(string(b))
 	e := ""
 	if o != nil && str(o["error"]) != "" {
@@ -84,6 +96,62 @@ func invokeCloud(body M, timeoutSec int) cloudResp {
 		e = fmt.Sprintf("HTTP %d", resp.StatusCode)
 	}
 	return cloudResp{resp.StatusCode, o, e}
+}
+
+// --- 2.5.14: FinCom's cloud busy (HTTP 503: its database could not be read just now). Every call waits: 5 s after the
+// first 503, doubling to 60 s while it goes on, or the cloud's own Retry-After (seconds, 120 at most) when it is longer;
+// the first answer that is not a 503 ends it. A call made meanwhile is not sent and is answered as a 503 here, so every
+// caller keeps what it had to send and tries again as after any answer that did not come
+const cloudBusyWords = "FinCom's cloud is busy for a moment (HTTP 503); tried again shortly by itself, nothing is lost"
+
+var cloudBusy = struct {
+	mu    sync.Mutex
+	until time.Time
+	n     int
+}{}
+
+func cloudBusyNote(retryAfter string) {
+	cloudBusy.mu.Lock()
+	d := 5 * time.Second
+	for i := 0; i < cloudBusy.n && d < time.Minute; i++ {
+		d *= 2
+	}
+	if d > time.Minute {
+		d = time.Minute
+	}
+	if s, err := strconv.Atoi(strings.TrimSpace(retryAfter)); err == nil && s > 0 {
+		if ra := time.Duration(minI(s, 120)) * time.Second; ra > d {
+			d = ra
+		}
+	}
+	first := cloudBusy.n == 0
+	cloudBusy.n++
+	cloudBusy.until = nowFn().Add(d)
+	cloudBusy.mu.Unlock()
+	if first {
+		writeLog("Cloud: " + cloudBusyWords)
+	}
+}
+
+func cloudBusyClear() {
+	cloudBusy.mu.Lock()
+	was := cloudBusy.n > 0
+	cloudBusy.n, cloudBusy.until = 0, time.Time{}
+	cloudBusy.mu.Unlock()
+	if was {
+		writeLog("Cloud: FinCom's cloud answers again")
+	}
+}
+
+// how long the wait still lasts (0: none; a clock set back ends it)
+func cloudBusyLeft() time.Duration {
+	cloudBusy.mu.Lock()
+	defer cloudBusy.mu.Unlock()
+	now := nowFn()
+	if cloudBusy.until.IsZero() || !now.Before(cloudBusy.until) || cloudBusy.until.Sub(now) > 3*time.Minute {
+		return 0
+	}
+	return cloudBusy.until.Sub(now)
 }
 
 func gzipB64(t string) string {
@@ -270,6 +338,13 @@ func updateCloudLinks() {
 				continue
 			}
 			mark := filepath.Join(dir, "cloud-all.done")
+			// 2.5.14: its masters are read now too (the ledgers-only run, the request as always; wakeLedgers' own rules:
+			// paused, Tally closed, the debounce), so a book just linked does not wait for the night or a person's click.
+			// Only for a link made while this bridge runs (FinCom said "not linked" before in this run) or one never seen
+			// here before: a restart does not read every linked company's masters again
+			if _, seen := was[k]; seen || !exists(mark) {
+				linkedWake(k)
+			}
 			if exists(dir) && !exists(mark) {
 				var days []string
 				for _, f := range dayFiles(dir, "") {
@@ -282,6 +357,22 @@ func updateCloudLinks() {
 			}
 		}
 	}
+}
+
+// 2.5.14: the masters read of a company just linked, started apart from the cloud push that learnt of the link
+var linkedWakeSeen func(company string) // tests: the companies woken
+
+func linkedWake(company string) {
+	if linkedWakeSeen != nil {
+		linkedWakeSeen(company)
+		return
+	}
+	go func() {
+		defer func() { _ = recover() }()
+		if r := wakeLedgers(company, "linked in FinCom", false); r["started"] != true {
+			writeLog("Cloud: " + company + " is linked in FinCom; its ledger list is not read at once (" + or(str(r["why"]), "a read is going") + ")")
+		}
+	}()
 }
 
 func rows2(v any) []any {

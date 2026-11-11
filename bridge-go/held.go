@@ -18,7 +18,7 @@ import (
 func fcCollection(id, company, statics, typ, fetch, filter string) string {
 	sv := "<SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>"
 	if company != "" {
-		sv += "<SVCURRENTCOMPANY>" + esc(company) + "</SVCURRENTCOMPANY>"
+		sv += "<SVCURRENTCOMPANY>" + esc(coClean(company)) + "</SVCURRENTCOMPANY>"
 	}
 	flt, sys := "", ""
 	if filter != "" {
