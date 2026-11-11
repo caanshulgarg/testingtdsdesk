@@ -31,14 +31,14 @@ const GSTX = {
       const own = reg || String(r.gstin || "").slice(0, 2), cust = r.gstin ? r.gstin.slice(0, 2) : this.posCode(r.pos);
       if (!cust || !own) return;
       const inter = cust !== own, i = Math.abs(num(r.igst)) > 0.5, cs = Math.abs(num(r.cgst)) + Math.abs(num(r.sgst)) > 0.5;
-      const posC = this.posCode(r.pos), posOff = r.gstin && posC && posC !== cust;
+      const tp = r.posTally != null ? r.posTally : r.pos, posC = this.posCode(tp), posOff = r.gstin && posC && posC !== cust;
       let why = "";
       if (inter && cs && !i) why = "CGST + SGST charged, but the customer is in " + this.stateName(cust) + (r.gstin ? " (GSTIN " + r.gstin + ")" : "") + ": it is an inter-state supply, IGST";
       else if (!inter && i && !cs) why = "IGST charged, but the customer is in " + this.stateName(cust) + ", the client's own state: CGST + SGST";
       else if (i && cs) why = "both IGST and CGST + SGST on one invoice";
       if (!why) return;
       out.push({id: r.id, ym, date: r.date, no: r.no, party: r.party, gstin: r.gstin, kind: r.kind, cust, pos: r.pos, posOff,
-        taxable: r.taxable, igst: r.igst, cgst: r.cgst, sgst: r.sgst, should: inter ? "IGST" : "CGST + SGST", why: why + (posOff ? " (Tally's place of supply says " + r.pos + ")" : "")});
+        taxable: r.taxable, igst: r.igst, cgst: r.cgst, sgst: r.sgst, should: inter ? "IGST" : "CGST + SGST", why: why + (posOff ? " (Tally's place of supply says " + tp + ")" : "")});
     }));
     return out;
   },

@@ -8,24 +8,26 @@ Object.assign(GSTR, {
   // what would be rejected or questioned, before it is filed
   checks(ym, reg){
     const out = this.outward(ym, reg), inn = this.inward(ym, reg), list = [];
-    const add = (what, rows, how) => { if (rows.length) list.push({what, n: rows.length, how, rows: rows.slice(0, 5)}); };
+    // all: every document found (GST › What to fix lists them); rows: the first five, the examples
+    const add = (what, rows, how) => { if (rows.length) list.push({what, n: rows.length, how, rows: rows.slice(0, 5), all: rows}); };
     add("Invoices to a registered party with no GSTIN", out.filter(r => r.kind === "B2B" && !r.gstin), "Fill the GSTIN on the party ledger in Tally.");
-    add("Outward invoices with no place of supply", out.filter(r => !r.pos && r.kind !== "NIL"), "Set the place of supply on the voucher.");
+    add("Outward invoices with no place of supply", out.filter(r => !r.posCode && r.kind !== "NIL"), "Set the place of supply on the voucher in Tally, or choose the state here (Set place of supply).");
+    add("Tax type that does not match the place of supply", out.filter(r => r.posBad && r.kind !== "NIL"), "CGST and SGST are for a sale within your state; IGST for a sale to another state. Correct the tax ledgers or the place of supply on the invoice in Tally.");
     add("Outward invoices with no HSN", out.filter(r => !r.hsn && r.cls === "taxable"), "HSN is needed in the GSTR-1 summary.");
     add("Tax that does not fit the taxable value", out.filter(r => r.taxable && this.partsOf([r]).some(q => !Books.GST_RATES.includes(q.rate))), "Check the rate on these invoices.");
-    if (typeof GSTF === "object") add("Credit notes issued after 30 November following the invoice\u2019s year", GSTF.lateCn(ym, reg).map(x => ({no: x.no + " (for " + x.orig + ")", party: x.party})), "Section 34(2): these cannot reduce your tax. Keep them out of 3.1(a) or issue them as financial credit notes without GST.");
+    if (typeof GSTF === "object") add("Credit notes issued after 30 November following the invoice\u2019s year", GSTF.lateCn(ym, reg).map(x => ({no: x.no + " (for " + x.orig + ")", party: x.party, doc: x})), "Section 34(2): these cannot reduce your tax. Keep them out of 3.1(a) or issue them as financial credit notes without GST.");
     if (typeof GSTF === "object"){ const e = GSTF.einv(ym, reg);
       if (e.uses){ add("Invoices to registered customers without an e-invoice (IRN)", e.missing, "Generate the IRN before reporting; GSTR-1 is filled from e-invoices and an invoice without one is not a valid tax invoice where e-invoicing applies.");
         add("E-invoices generated more than 30 days after the invoice date", e.late, "For turnover of \u20b910 crore and above the IRP refuses these; check the date and the turnover limit that applies."); } }
     add("Invoices with items at more than one rate", out.filter(r => r.mixed), "Split rate by rate in the return, from each item's rate in Tally.");
     // G-A1, G-A2 (10-Oct-2026): what the portal refuses, found before the file is made
-    add("Buyer GSTINs that are not valid", out.filter(r => r.gstin && !gstinValid(r.gstin)).map(r => ({no: r.gstin, party: r.party})), "The 15th character (the check digit) or the form of the GSTIN is wrong, so the portal refuses the invoice. Correct the GSTIN on the party ledger in Tally.");
+    add("Buyer GSTINs that are not valid", out.filter(r => r.gstin && !gstinValid(r.gstin)).map(r => ({no: r.gstin, party: r.party, doc: r})), "The 15th character (the check digit) or the form of the GSTIN is wrong, so the portal refuses the invoice. Correct the GSTIN on the party ledger in Tally.");
     const dn = this.docNoIssues(ym, reg);
     add("Invoice numbers longer than 16 characters", dn.long, "The portal takes at most 16 characters. Shorten the number in Tally (and on the invoice), e.g. drop the year's prefix.");
     add("Invoice numbers with characters the portal does not take", dn.chars, "Only letters, digits, / and - are allowed, and a number cannot be only zeros. Change the number in Tally.");
     add("Invoice numbers used twice in the financial year", dn.dup, "Each invoice (and each credit or debit note) needs its own number in the year. Renumber one of them in Tally.");
     add("Purchases with no supplier GSTIN", inn.filter(r => !r.gstin && !r.fromHold && (r.cgst || r.sgst || r.igst)), "Needed to match against 2B.");
-    add("Supplier GSTINs that are not valid", inn.filter(r => r.gstin && !gstinValid(r.gstin)).map(r => ({no: r.gstin, party: r.party})), "The check digit or the form of the GSTIN is wrong: the bill can never match 2B. Correct the GSTIN on the supplier's ledger in Tally.");
+    add("Supplier GSTINs that are not valid", inn.filter(r => r.gstin && !gstinValid(r.gstin)).map(r => ({no: r.gstin, party: r.party, doc: r})), "The check digit or the form of the GSTIN is wrong: the bill can never match 2B. Correct the GSTIN on the supplier's ledger in Tally.");
     add("Purchases marked ITC not to be taken", inn.filter(r => r.blocked), "These are kept out of the credit claimed.");
     add("Inward supplies under reverse charge", inn.filter(r => r.rcm), "Tax on these is payable by you and shown in 3.1(d).");
     // for the year's grid: a check that is only for information is not an error
@@ -61,10 +63,15 @@ Object.assign(GSTR, {
     return idx;
   },
   // G-E1: the errors to fix before filing a month's GSTR-1 (sales side) and 3B (purchase side), for the year's grid
-  errorsFor(ym, reg){
+  // errorChecks: the checks it counts, each return's list (GST › What to fix shows the same list, so the counts are one)
+  errorChecks(ym, reg){
     const all = typeof perRender === "function" ? perRender(this, "chk|" + ym + "|" + reg, () => this.checks(ym, reg)) : this.checks(ym, reg);
-    const n = ret => all.filter(c => !c.info && c.ret === ret).reduce((a, c) => a + c.n, 0);
-    return {r1: n("r1"), r3b: n("r3b")};
+    const of = ret => all.filter(c => !c.info && c.ret === ret);
+    return {r1: of("r1"), r3b: of("r3b")};
+  },
+  errorsFor(ym, reg){
+    const e = this.errorChecks(ym, reg), n = l => l.reduce((a, c) => a + c.n, 0);
+    return {r1: n(e.r1), r3b: n(e.r3b)};
   },
   async toJsonFile(ym, reg){
     const ft = typeof GSTSet === "object" && reg ? GSTSet.typeOf(ym, reg) : "monthly";

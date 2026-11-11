@@ -479,3 +479,36 @@ details.more .more-words p{margin:0 0 6px}
 #app [data-r3b-portal] tr.r3b-groups th.r3b-grp { text-align: center; border-bottom: 1px solid var(--border); }
 #app table.bk-table td.r1p-nw { white-space: nowrap; }
 #app [data-r1-portal] table.bk-table thead th { white-space: normal; vertical-align: bottom; }
+/* GST › What to fix (gst/FixList.jsx): the month's errors by kind, each opening to its documents; the count on top of the other tabs */
+.ret-card.ret-one .ret-back.ret-back-y { font-size: 13px; text-decoration: none; white-space: nowrap; }
+.fx-top { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin: 0 0 10px; padding: 8px 12px; border-left: 3px solid var(--bad); background: var(--bad-soft); border-radius: 6px; }
+.fx-top > b { color: var(--bad); }
+.fx-top .note { flex: 1 1 260px; min-width: 0; }
+.fx h3 { color: var(--bad); }
+.fx-list { list-style: none; margin: 8px 0 0; padding: 0; }
+.fx-g { border-top: 1px solid var(--rule); }
+.fx-h { all: unset; box-sizing: border-box; display: block; width: 100%; padding: 9px 2px; cursor: pointer; }
+.fx-h:hover b, .fx-h:focus-visible b { color: var(--accent); }
+.fx-h:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.fx-b { padding: 0 0 12px 18px; }
+.fx-b .note { margin: 0 0 4px; }
+.fx-tally { margin: 0 0 8px; font-size: 13px; }
+.fx-b .bk-tablewrap { max-width: 100%; }
+@media (max-width: 640px) { .fx-b { padding-left: 4px; } }
+/* next-gst-pos: setting the place of supply of sales that have none (GST › What to fix, GSTR-1 Details) */
+.pos-bulk { margin: 4px 0 10px; display: flex; flex-direction: column; gap: 8px; }
+.pos-all, .pos-tk { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; cursor: pointer; }
+.pos-tk { min-width: 44px; }
+.pos-all input, .pos-tk input { width: 20px; height: 20px; }
+.pos-set { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; padding: 10px; border: 1px solid var(--rule); border-radius: 8px; max-width: 640px; }
+.pos-l { display: flex; flex-direction: column; gap: 4px; flex: 1 1 260px; font-weight: 600; }
+.pos-q { min-height: 44px; font: inherit; padding: 0 10px; box-sizing: border-box; width: 100%; }
+.pos-opts { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; flex: 1 1 100%; }
+.pos-o { min-height: 44px; padding: 0 12px; border: 1px solid var(--rule); border-radius: 6px; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+.pos-o.on { border-color: var(--accent); outline: 2px solid var(--accent); }
+.pos-o small { opacity: .7; }
+.pos-act { display: flex; gap: 8px; }
+.pos-act .btn { min-height: 44px; }
+.pos-btn { min-height: 44px; }
+.pos-fixed { margin-top: 12px; padding-top: 8px; border-top: 1px solid var(--rule); }
+.pos-fixed ul { margin: 4px 0 0; padding-left: 18px; }
