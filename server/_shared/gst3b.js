@@ -19,7 +19,7 @@
 // No AI here: M2B.aiLinks only reads the pairs the gst-2b-match function already stored for the year.
 // GST3B_SRC: this file's and names.js's text (this value left out), hashed (tests/run_gst_cloud.js keeps it so): a 3B the
 // cloud worked out carries it, and the 3B page uses the cloud's only when its own is the same (app/src/screens/gst/cloud3b.js)
-const GST3B_SRC = "s8f4528c1e0a68ba3";
+const GST3B_SRC = "s62de96d336828df1";
 function num(v){ if (typeof v === "number") return isFinite(v) ? v : 0; const n = parseFloat(String(v == null ? "" : v).replace(/[^0-9.\-]/g, "")); return isFinite(n) ? n : 0; }
 function r2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
 const INR = new Intl.NumberFormat("en-IN", {minimumFractionDigits:2, maximumFractionDigits:2});
@@ -1721,34 +1721,38 @@ const GSTR = {
   },
   // one row per invoice and rate, from the sales side
   outward(ym, reg){
-    const b = S.books, out = [];
-    this.vIn(ym).forEach(v => {
-      if (!Books.isSale(v)) return;
-      if (ym && !this.inP(v.date, ym)) return;
-      if (reg && this.regOf(v) !== reg) return;
-      const L = Books.lines(v);
-      const tax = r2(L.tax.CGST + L.tax.SGST + L.tax.IGST);
-      if (!L.taxable && !tax) return;
-      const note = /CREDIT NOTE/i.test(v.type) ? "credit" : /DEBIT NOTE/i.test(v.type) ? "debit" : "";
-      const exp = /EXPORT/i.test(v.type);
-      const gstin = (v.gstin || "").toUpperCase();
-      const parts = L.parts || [];
-      const rate = parts.length === 1 ? parts[0].rate : L.taxable ? Books.snapRate(Math.round(tax / L.taxable * 10000) / 100) : 0;
-      const cls = Books.supplyClass(v);
-      const interState = !!(gstin && v.cmp && gstin.slice(0, 2) !== String(v.cmp).slice(0, 2)) || (!gstin && v.pos && v.pos !== (b.stateOf || v.pos) && L.tax.IGST > 0);
-      // B2C large: inter-state to an unregistered person above Rs 1 lakh from 1 August 2024 (Rs 2.5 lakh before)
-      const b2cl = !gstin && L.tax.IGST > 0 && L.total > (String(v.date) >= "20240801" ? 100000 : 250000);
-      // a consolidated B2C entry (many B2C sales in one, e.g. through a payment gateway) is reported in B2C small, as totals,
-      // even inter-state above the limit: it is not one invoice (b2cSumWhy says by which rule)
-      const sum = !gstin && !note && !exp && cls === "taxable" && !(b.gstins || {})[v.party] ? this.b2cSumWhy(v.id, v.party, v.no || v.ref) : "";
-      const P = this.posOfSale({id: v.id, pos: v.pos, own: reg || this.regOf(v), gstin: gstin || String((b.gstins || {})[v.party] || ""), igst: L.tax.IGST, cgst: L.tax.CGST, sgst: L.tax.SGST, zero: cls === "sez" || cls === "export" || exp});
-      out.push({id: v.id, date: v.date, no: v.no || v.ref || "", party: v.party, gstin, pos: P.code ? (P.from === "tally" ? v.pos : this.posName(P.code)) : "", posCode: P.code, posFrom: P.from, posBad: P.bad, posTally: v.pos || "",
-        cls, rcm: Books.isRcm(v), hsn: (parts[0] && parts[0].hsn) || (v.hsn || [])[0] || "", supply: (parts[0] && parts[0].supply) || v.supply || "", eco: "", tcs: 0, parts, mixed: new Set(parts.map(q => q.rate)).size > 1,
-        kind: note ? (note === "credit" ? "CDNR" : "DBNR") : cls === "export" ? "EXP" : (cls === "sez" && gstin) ? "B2B" : cls === "sez" ? "EXP" : (cls === "exempt" || cls === "nil" || cls === "nongst") ? "NIL" : gstin ? "B2B" : b2cl && !sum ? "B2CL" : "B2C", b2cSum: sum,
-        taxable: L.taxable, cgst: L.tax.CGST, sgst: L.tax.SGST, igst: L.tax.IGST, cess: L.tax.CESS,
-        rate, total: L.total, note, type: v.type, src: v.src === "bridge" ? "bridge" : "daybook"});
-    });
+    const out = [];
+    this.vIn(ym).forEach(v => { const r = this.outRow(v, ym, reg); if (r) out.push(r); });
     return out.concat(this.fromSales(ym)).sort((a, c) => String(a.date).localeCompare(String(c.date)));
+  },
+  // next-gst-share: one entry's row of outward (null when it has none): the body of outward, so entryShares (below) puts
+  // an entry's share by the very same text
+  outRow(v, ym, reg){
+    const b = S.books;
+    if (!Books.isSale(v)) return null;
+    if (ym && !this.inP(v.date, ym)) return null;
+    if (reg && this.regOf(v) !== reg) return null;
+    const L = Books.lines(v);
+    const tax = r2(L.tax.CGST + L.tax.SGST + L.tax.IGST);
+    if (!L.taxable && !tax) return null;
+    const note = /CREDIT NOTE/i.test(v.type) ? "credit" : /DEBIT NOTE/i.test(v.type) ? "debit" : "";
+    const exp = /EXPORT/i.test(v.type);
+    const gstin = (v.gstin || "").toUpperCase();
+    const parts = L.parts || [];
+    const rate = parts.length === 1 ? parts[0].rate : L.taxable ? Books.snapRate(Math.round(tax / L.taxable * 10000) / 100) : 0;
+    const cls = Books.supplyClass(v);
+    const interState = !!(gstin && v.cmp && gstin.slice(0, 2) !== String(v.cmp).slice(0, 2)) || (!gstin && v.pos && v.pos !== (b.stateOf || v.pos) && L.tax.IGST > 0);
+    // B2C large: inter-state to an unregistered person above Rs 1 lakh from 1 August 2024 (Rs 2.5 lakh before)
+    const b2cl = !gstin && L.tax.IGST > 0 && L.total > (String(v.date) >= "20240801" ? 100000 : 250000);
+    // a consolidated B2C entry (many B2C sales in one, e.g. through a payment gateway) is reported in B2C small, as totals,
+    // even inter-state above the limit: it is not one invoice (b2cSumWhy says by which rule)
+    const sum = !gstin && !note && !exp && cls === "taxable" && !(b.gstins || {})[v.party] ? this.b2cSumWhy(v.id, v.party, v.no || v.ref) : "";
+    const P = this.posOfSale({id: v.id, pos: v.pos, own: reg || this.regOf(v), gstin: gstin || String((b.gstins || {})[v.party] || ""), igst: L.tax.IGST, cgst: L.tax.CGST, sgst: L.tax.SGST, zero: cls === "sez" || cls === "export" || exp});
+    return {id: v.id, date: v.date, no: v.no || v.ref || "", party: v.party, gstin, pos: P.code ? (P.from === "tally" ? v.pos : this.posName(P.code)) : "", posCode: P.code, posFrom: P.from, posBad: P.bad, posTally: v.pos || "",
+      cls, rcm: Books.isRcm(v), hsn: (parts[0] && parts[0].hsn) || (v.hsn || [])[0] || "", supply: (parts[0] && parts[0].supply) || v.supply || "", eco: "", tcs: 0, parts, mixed: new Set(parts.map(q => q.rate)).size > 1,
+      kind: note ? (note === "credit" ? "CDNR" : "DBNR") : cls === "export" ? "EXP" : (cls === "sez" && gstin) ? "B2B" : cls === "sez" ? "EXP" : (cls === "exempt" || cls === "nil" || cls === "nongst") ? "NIL" : gstin ? "B2B" : b2cl && !sum ? "B2CL" : "B2C", b2cSum: sum,
+      taxable: L.taxable, cgst: L.tax.CGST, sgst: L.tax.SGST, igst: L.tax.IGST, cess: L.tax.CESS,
+      rate, total: L.total, note, type: v.type, src: v.src === "bridge" ? "bridge" : "daybook"};
   },
   // next-gst-b2cs-summary (the owner, a CA, 11-Nov-2026): a sales entry that books many B2C sales at once (one entry for a
   // payment gateway's or a marketplace's collections, "2026-27/155 to 2026-27/182") is a B2C summary: reported in B2CS (by
@@ -1848,51 +1852,54 @@ const GSTR = {
     return n;
   },
   inward(ym, reg){
-    const b = S.books, out = [], gst = b.gstins || {};
-    this.vIn(ym).forEach(v => {
-      if (Books.isSale(v)) return;
-      if (ym && !this.inP(v.date, ym)) return;
-      const purch = Books.isPurchase(v);
-      let inTax = false, outTax = false, signed = 0;
-      v.ent.forEach(e => { const m = Books.ledgerOf(e.l);
-        if (((m.kind === "gst" || m.kind === "gst_common") && m.side === "input") || m.kind === "ineligible"){ inTax = true; signed += e.a; }
-        else if ((m.kind === "gst" || m.kind === "gst_common") && m.side === "output" && !m.rcm) outTax = true; });
-      if (!purch && (!inTax || outTax)) return;
-      if (reg && this.regOf(v) !== reg) return;
-      // not a bill: the credit is the input ledgers' net (above). None left (a move between input ledgers, a bill or a
-      // write-off on the held ledger): no credit. A set-off (with output tax or the GST payable or cash ledger) or a
-      // rounding of the input ledgers is no purchase, so never negative credit
-      // (a bill on the held ledger: the same, its credit waits)
-      let ni = this.netIn(v); const none = ["IGST", "CGST", "SGST", "CESS", "inel"].every(h => Math.abs(ni[h]) < 0.005);
-      if (purch && !ni.hold) ni = null;
-      else if (purch ? none : (ni.other || (ni.round && ni.ro) || none)) return;
-      if (ni){ const s = r2(ni.IGST + ni.CGST + ni.SGST + ni.CESS); signed = s > 0 ? -1 : 1; }
-      const L0 = Books.lines(v), d = signed < 0 ? 1 : -1;
-      const L = ni ? Object.assign({}, L0, {tax: {IGST: r2(ni.IGST * d), CGST: r2(ni.CGST * d), SGST: r2(ni.SGST * d), CESS: r2(ni.CESS * d)}}) : L0;
-      const tax = r2(L.tax.CGST + L.tax.SGST + L.tax.IGST + L.tax.CESS);
-      const rcm = Books.isRcm(v);
-      let party = v.party, gstin = String(v.gstin || gst[v.party] || "").toUpperCase(), taxable = L.taxable, parts = L.parts || [], guessed = false, taxOnly = false;
-      if (!purch){
-        // a journal or payment: the value is what sits on the same side as the tax
-        if (!gstin){ const e = v.ent.find(x => gst[x.l]); if (e){ party = e.l; gstin = String(gst[e.l]).toUpperCase(); } }
-        taxable = 0;
-        v.ent.forEach(e => { if (e.l !== party && !Books.ledgerOf(e.l).kind && (e.a < 0) === (signed < 0)) taxable = r2(taxable + Math.abs(e.a)); });
-        // an entry with only an input-tax line and no supplier GSTIN (a bank payment with only IGST) still takes input tax
-        // (request of 02-Oct-2026: it was dropped here and in the server's summary); it is marked so the lists can say why
-        // it can never be in 2B
-        if (!taxable && !gstin && !rcm) taxOnly = true;
-        if (!taxable && rcm){ const rt = num((String(v.narr || "").match(/@\s*(\d+(?:\.\d+)?)\s*%/) || [])[1]) || 18; taxable = r2((tax - L.tax.CESS) * 100 / rt); guessed = true; }
-        const rt = taxable ? Books.snapRate(Math.round(r2(tax - L.tax.CESS) / taxable * 10000) / 100) : 0;
-        parts = [{rate: rt, hsn: parts[0] ? parts[0].hsn : "", supply: v.supply || "", taxable, igst: L.tax.IGST, cgst: L.tax.CGST, sgst: L.tax.SGST, cess: L.tax.CESS, guessed}];
-      } else if (ni) parts = [Object.assign({}, parts[0] || {}, {taxable, igst: L.tax.IGST, cgst: L.tax.CGST, sgst: L.tax.SGST, cess: L.tax.CESS})];
-      if (!taxable && !tax) return;
-      out.push({id: v.id, date: v.date, no: Books.supInv(v), voucher: v.no || "", type: v.type, party, gstin, refDate: v.refDate || "",
-        taxable, cgst: L.tax.CGST, sgst: L.tax.SGST, igst: L.tax.IGST, cess: L.tax.CESS, parts, valueGuessed: guessed, bill: purch,
-        cls: Books.supplyClass(v), rcm, import: Books.isImport(v), supply: v.supply || (parts[0] && parts[0].supply) || "",
-        blocked: !!v.ineligibleFlag, hsn: (parts[0] && parts[0].hsn) || (v.hsn || [])[0] || "",
-        ineligible: L.ineligible || 0, common: L.common || null, dir: ni ? d : this.itcDir(v), note: (ni ? d : this.itcDir(v)) < 0 ? "debit" : "", narr: v.narr || "", taxOnly, fromHold: ni && ni.hold < 0 ? -ni.hold : 0, src: v.src === "bridge" ? "bridge" : "daybook"});
-    });
+    const out = [];
+    this.vIn(ym).forEach(v => { const r = this.inRow(v, ym, reg); if (r) out.push(r); });
     return out;
+  },
+  // next-gst-share: one entry's row of inward (null when it has none): the body of inward, for entryShares as outRow
+  inRow(v, ym, reg){
+    const b = S.books, gst = b.gstins || {};
+    if (Books.isSale(v)) return null;
+    if (ym && !this.inP(v.date, ym)) return null;
+    const purch = Books.isPurchase(v);
+    let inTax = false, outTax = false, signed = 0;
+    v.ent.forEach(e => { const m = Books.ledgerOf(e.l);
+      if (((m.kind === "gst" || m.kind === "gst_common") && m.side === "input") || m.kind === "ineligible"){ inTax = true; signed += e.a; }
+      else if ((m.kind === "gst" || m.kind === "gst_common") && m.side === "output" && !m.rcm) outTax = true; });
+    if (!purch && (!inTax || outTax)) return null;
+    if (reg && this.regOf(v) !== reg) return null;
+    // not a bill: the credit is the input ledgers' net (above). None left (a move between input ledgers, a bill or a
+    // write-off on the held ledger): no credit. A set-off (with output tax or the GST payable or cash ledger) or a
+    // rounding of the input ledgers is no purchase, so never negative credit
+    // (a bill on the held ledger: the same, its credit waits)
+    let ni = this.netIn(v); const none = ["IGST", "CGST", "SGST", "CESS", "inel"].every(h => Math.abs(ni[h]) < 0.005);
+    if (purch && !ni.hold) ni = null;
+    else if (purch ? none : (ni.other || (ni.round && ni.ro) || none)) return null;
+    if (ni){ const s = r2(ni.IGST + ni.CGST + ni.SGST + ni.CESS); signed = s > 0 ? -1 : 1; }
+    const L0 = Books.lines(v), d = signed < 0 ? 1 : -1;
+    const L = ni ? Object.assign({}, L0, {tax: {IGST: r2(ni.IGST * d), CGST: r2(ni.CGST * d), SGST: r2(ni.SGST * d), CESS: r2(ni.CESS * d)}}) : L0;
+    const tax = r2(L.tax.CGST + L.tax.SGST + L.tax.IGST + L.tax.CESS);
+    const rcm = Books.isRcm(v);
+    let party = v.party, gstin = String(v.gstin || gst[v.party] || "").toUpperCase(), taxable = L.taxable, parts = L.parts || [], guessed = false, taxOnly = false;
+    if (!purch){
+      // a journal or payment: the value is what sits on the same side as the tax
+      if (!gstin){ const e = v.ent.find(x => gst[x.l]); if (e){ party = e.l; gstin = String(gst[e.l]).toUpperCase(); } }
+      taxable = 0;
+      v.ent.forEach(e => { if (e.l !== party && !Books.ledgerOf(e.l).kind && (e.a < 0) === (signed < 0)) taxable = r2(taxable + Math.abs(e.a)); });
+      // an entry with only an input-tax line and no supplier GSTIN (a bank payment with only IGST) still takes input tax
+      // (request of 02-Oct-2026: it was dropped here and in the server's summary); it is marked so the lists can say why
+      // it can never be in 2B
+      if (!taxable && !gstin && !rcm) taxOnly = true;
+      if (!taxable && rcm){ const rt = num((String(v.narr || "").match(/@\s*(\d+(?:\.\d+)?)\s*%/) || [])[1]) || 18; taxable = r2((tax - L.tax.CESS) * 100 / rt); guessed = true; }
+      const rt = taxable ? Books.snapRate(Math.round(r2(tax - L.tax.CESS) / taxable * 10000) / 100) : 0;
+      parts = [{rate: rt, hsn: parts[0] ? parts[0].hsn : "", supply: v.supply || "", taxable, igst: L.tax.IGST, cgst: L.tax.CGST, sgst: L.tax.SGST, cess: L.tax.CESS, guessed}];
+    } else if (ni) parts = [Object.assign({}, parts[0] || {}, {taxable, igst: L.tax.IGST, cgst: L.tax.CGST, sgst: L.tax.SGST, cess: L.tax.CESS})];
+    if (!taxable && !tax) return null;
+    return {id: v.id, date: v.date, no: Books.supInv(v), voucher: v.no || "", type: v.type, party, gstin, refDate: v.refDate || "",
+      taxable, cgst: L.tax.CGST, sgst: L.tax.SGST, igst: L.tax.IGST, cess: L.tax.CESS, parts, valueGuessed: guessed, bill: purch,
+      cls: Books.supplyClass(v), rcm, import: Books.isImport(v), supply: v.supply || (parts[0] && parts[0].supply) || "",
+      blocked: !!v.ineligibleFlag, hsn: (parts[0] && parts[0].hsn) || (v.hsn || [])[0] || "",
+      ineligible: L.ineligible || 0, common: L.common || null, dir: ni ? d : this.itcDir(v), note: (ni ? d : this.itcDir(v)) < 0 ? "debit" : "", narr: v.narr || "", taxOnly, fromHold: ni && ni.hold < 0 ? -ni.hold : 0, src: v.src === "bridge" ? "bridge" : "daybook"};
   },
   sum(rows){
     return rows.reduce((a, r) => ({n: a.n + 1, taxable: r2(a.taxable + num(r.taxable)), cgst: r2(a.cgst + num(r.cgst)),
@@ -1989,8 +1996,10 @@ const GSTR = {
     if (typeof GSTSet === "object" && reg && GSTSet.typeOf(ym, reg) === "qrmp" && GSTSet.isQEnd(ym) && typeof GSTQ === "object") return GSTQ.threeBQ(ym, reg);
     return this.threeBm(ym, reg);
   },
-  threeBm(ym, reg){
-    const out = this.outward(ym, reg), inn = this.inward(ym, reg).map(r => this.signedIn(r));
+  // next-gst-share: 3.1 (the books' part: before the advances, the amendments and the customers' IMS) and 3.2, of a
+  // month's outward rows and its inward rows signed (signedIn): threeBm's own figures, and what the cloud's sums of
+  // entryShares are checked against (gst-run's parity)
+  sec31(out, inn){
     const S1 = f => this.sum(out.filter(f)), S2 = f => this.sum(inn.filter(f));
     const taxableOut = S1(r => r.cls === "taxable" && r.kind !== "CDNR");
     const cn = S1(r => r.kind === "CDNR");
@@ -1998,8 +2007,18 @@ const GSTR = {
     const nil = S1(r => r.cls === "exempt" || r.cls === "nil");
     const nongst = S1(r => r.cls === "nongst");
     const rcmOut = S2(r => r.rcm || (r.import && r.supply !== "Goods"));   // 3.1(d): tax we pay on inward supplies, imported services included
-    const rcmIn = S2(r => r.rcm && !r.import);                      // 4(A)(3): the credit of that tax, other than on imports
     const toUnreg = S1(r => !r.gstin && r.igst > 0);                 // 3.2 inter-state to unregistered
+    // 3.2: inter-state supplies to unregistered persons, place of supply by place of supply
+    const posOf = r => r.posCode || "00";
+    const unregPos = {};
+    this.partsOf(out.filter(r => !r.gstin && r.igst > 0 && r.cls === "taxable")).forEach(q => { const r = q.row, k = posOf(r) || "97", sg = r.kind === "CDNR" ? -1 : 1, x = unregPos[k] = unregPos[k] || {pos: k, taxable: 0, igst: 0}; x.taxable = r2(x.taxable + sg * q.taxable); x.igst = r2(x.igst + sg * q.igst); });
+    return {taxableOut, cn, zero, nil, nongst, rcmOut, toUnreg, unregPos: Object.values(unregPos).sort((a, c) => a.pos.localeCompare(c.pos))};
+  },
+  threeBm(ym, reg){
+    const out = this.outward(ym, reg), inn = this.inward(ym, reg).map(r => this.signedIn(r));
+    const S2 = f => this.sum(inn.filter(f));
+    const P31 = this.sec31(out, inn), {taxableOut, cn, zero, nil, nongst, rcmOut, toUnreg} = P31;
+    const rcmIn = S2(r => r.rcm && !r.import);                      // 4(A)(3): the credit of that tax, other than on imports
     const impGoods = S2(r => r.import && r.supply === "Goods");
     const impServ = S2(r => r.import && r.supply !== "Goods");
     let other = S2(r => !r.import && !r.rcm);
@@ -2052,10 +2071,6 @@ const GSTR = {
     const noTax = inn.filter(r => r.bill && !r.import && !r.rcm && r.dir > 0 && !(num(r.igst) || num(r.cgst) || num(r.sgst)) && r.taxable);
     const inw5 = {gstInter: 0, gstIntra: 0, ngInter: 0, ngIntra: 0};
     noTax.forEach(r => { const inter = gstOf(r) && gstOf(r) !== own; const k = (r.cls === "nongst" ? "ng" : "gst") + (inter ? "Inter" : "Intra"); inw5[k] = r2(inw5[k] + num(r.taxable)); });
-    // 3.2: inter-state supplies to unregistered persons, place of supply by place of supply
-    const posOf = r => r.posCode || "00";
-    const unregPos = {};
-    this.partsOf(out.filter(r => !r.gstin && r.igst > 0 && r.cls === "taxable")).forEach(q => { const r = q.row, k = posOf(r) || "97", sg = r.kind === "CDNR" ? -1 : 1, x = unregPos[k] = unregPos[k] || {pos: k, taxable: 0, igst: 0}; x.taxable = r2(x.taxable + sg * q.taxable); x.igst = r2(x.igst + sg * q.igst); });
     const adv = GSTAdv.month(ym, reg).net;                           // 11A less 11B goes into 3.1(a)
     // round 43: the amendments of earlier months reported in this month's GSTR-1 (tables 9A, 9C, 10): their differences are
     // paid with this month's 3B (3.1(a); an SEZ or export invoice's in 3.1(b)); the earlier month's filed 3B is not changed
@@ -2077,7 +2092,7 @@ const GSTR = {
     const opening = this.creditIn(ym, reg);
     const pay = this.setOff(net, rcmOut, netItc, opening);
     return {sale: taxableOut, cn, net, adv, amend: amd, custRej: cust, rules, r42: rul.r42, r43: rul.r43, zero, nil, nongst, rcmOut, rcmIn, toUnreg, impGoods, impServ, other, blocked,
-      buy: this.sum(inn), itc, reversal, rev1, rev2, reclaim, r37, na, inw5, unregPos: Object.values(unregPos).sort((a, c) => a.pos.localeCompare(c.pos)),
+      buy: this.sum(inn), itc, reversal, rev1, rev2, reclaim, r37, na, inw5, unregPos: P31.unregPos,
       basis: basis.on ? "2b" : basis.why, held, released, cn2b, rejBack, netItc, ineligible: this.sum(inn).ineligible, opening, pay, payable: pay.cash};
   },
   // credit on the 2B basis for a month: on when that month's 2B is here and the client has not chosen the books basis
@@ -2203,6 +2218,60 @@ const GSTR = {
     return out;
   },
 };
+// next-gst-share (part A, shadow): one entry's GST share, so the cloud keeps it entry by entry (gst_share, migration 164)
+// and a month's 3B 3.1/3.2 and GSTR-1 tables are sums of month totals. Worked out by the engine's own text: the entry's
+// row of outward (outRow) or inward (inRow), with the place of supply, the B2C summary rule, the supply class and reverse
+// charge as there; the registration the entry is in (regOf) and its month. It reads S.books as the engine does (its
+// ledger list, groups, GSTINs, gstPosFix); ctx.books, when given, is used for the call and put back after.
+//   -> {id, ym, reg, rows: [{sec, k1, k2, k3, n, taxable, igst, cgst, sgst, cess, qty}]}; no rows: the entry is in no
+//   part of these (an optional or cancelled one, a receipt, a sale with no value and no tax...). The sections:
+//     3B.sale / 3B.cn / 3B.zero / 3B.nil / 3B.nongst / 3B.unreg   threeBm's sale, cn, zero, nil, nongst, toUnreg
+//     3B.rcm                                                       threeBm's rcmOut (3.1(d)), signed as signedIn
+//     3B.pos   k1 the place of supply                              3.2 (unregPos), a credit note taken off
+//     R1.B2B / R1.B2CL / R1.B2C / R1.CDNR / R1.DBNR / R1.EXP / R1.NIL   GSTR-1's parts (cdnr is CDNR and DBNR)
+//     R1.B2CS  k1 the rate, k2 the place of supply                 GSTR.one's b2cRates (by rate), part by part
+//     R1.HSN   k1 the HSN, k2 the rate, k3 b2b|b2c                 GSTR.one's hsn (table 12), a credit note taken off
+// Each figure is the entry's own, to the paisa (r2 as the engine adds); a month's figure is the sum over its entries.
+// Not here (not an entry's): advances, amendments, the customers' IMS, marketplace sales kept in Sales (records).
+function entryShares(v, ctx){
+  const was = S.books;
+  if (ctx && ctx.books) S.books = ctx.books;
+  try {
+    const out = {id: v && v.id, ym: v ? String(v.date).slice(0, 6) : "", reg: "", rows: []};
+    if (!v || v.opt || v.cancel || !Array.isArray(v.ent)) return out;
+    out.reg = GSTR.regOf(v);
+    const acc = new Map(), F = ["taxable", "igst", "cgst", "sgst", "cess", "qty"];
+    const add = (sec, k1, k2, k3, o, sg) => {
+      const key = sec + "\u0001" + k1 + "\u0001" + k2 + "\u0001" + k3;
+      let x = acc.get(key);
+      if (!x){ x = {sec, k1: String(k1), k2: String(k2), k3: String(k3), n: 0, taxable: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, qty: 0}; acc.set(key, x); }
+      x.n++; F.forEach(f => { x[f] = r2(x[f] + sg * num(o[f])); });
+    };
+    if (Books.isSale(v)){
+      const r = GSTR.outRow(v, null, "");
+      if (r){
+        if (r.cls === "taxable" && r.kind !== "CDNR") add("3B.sale", "", "", "", r, 1);
+        if (r.kind === "CDNR") add("3B.cn", "", "", "", r, 1);
+        if (r.cls === "export" || r.cls === "sez") add("3B.zero", "", "", "", r, 1);
+        if (r.cls === "exempt" || r.cls === "nil") add("3B.nil", "", "", "", r, 1);
+        if (r.cls === "nongst") add("3B.nongst", "", "", "", r, 1);
+        if (!r.gstin && r.igst > 0) add("3B.unreg", "", "", "", r, 1);
+        const sg = r.kind === "CDNR" ? -1 : 1, parts = GSTR.partsOf([r]);
+        if (!r.gstin && r.igst > 0 && r.cls === "taxable") parts.forEach(q => add("3B.pos", (r.posCode || "00") || "97", "", "", {taxable: q.taxable, igst: q.igst}, sg));
+        add("R1." + r.kind, "", "", "", r, 1);
+        if (r.kind === "B2C") parts.forEach(q => add("R1.B2CS", String(q.rate), r.posCode || "", "", q, 1));
+        if (r.cls === "taxable" || r.cls === "export" || r.cls === "sez" || r.cls === "exempt" || r.cls === "nil") parts.forEach(q => add("R1.HSN", q.hsn || "", String(q.rate), r.gstin ? "b2b" : "b2c", q, sg));
+      }
+    } else {
+      const r0 = GSTR.inRow(v, null, "");
+      if (r0){ const r = GSTR.signedIn(r0); if (r.rcm || (r.import && r.supply !== "Goods")) add("3B.rcm", "", "", "", r, 1); }
+    }
+    out.rows = Array.from(acc.values());
+    return out;
+  } finally {
+    S.books = was;
+  }
+}
 // GSTRev (src/js/15-itc-reversal.js)
 const GSTRev = {
   HEADS: ["igst", "cgst", "sgst", "cess"],
@@ -2603,4 +2672,4 @@ const LedMaster = {
 };
 
 
-export {GST3B_SRC, num, r2, INR, MONTHS3, toDateObj, fmtDate, ledEnt, ledClean, ledKey, LED_IDX, ledIdx, ledLook, ledUnder, ledGroupPath, STATE_CODES, NORM_CACHE, GRAM_CACHE, normName, gramsOf, normNameRaw, nameSim, BookItems, BookSrc, Books, CustIMS, GST2B, GSTAdv, GSTAmend, GSTF, GSTQ, GSTR, GSTRev, GSTSet, GSTV, ITCT, M2B, LedMaster, Audit};
+export {GST3B_SRC, entryShares, num, r2, INR, MONTHS3, toDateObj, fmtDate, ledEnt, ledClean, ledKey, LED_IDX, ledIdx, ledLook, ledUnder, ledGroupPath, STATE_CODES, NORM_CACHE, GRAM_CACHE, normName, gramsOf, normNameRaw, nameSim, BookItems, BookSrc, Books, CustIMS, GST2B, GSTAdv, GSTAmend, GSTF, GSTQ, GSTR, GSTRev, GSTSet, GSTV, ITCT, M2B, LedMaster, Audit};
