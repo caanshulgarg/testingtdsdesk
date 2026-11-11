@@ -25,7 +25,7 @@ import * as E from "../_shared/gst3b.js";
 import { gst3bPrint } from "../_shared/gst3bprint.js";
 
 // the revision of the function around the engine (data.ts, handler.ts): moved by hand with tests/gst_cloud_rev.json
-export const REV = "153.9";
+export const REV = "162.1";
 
 const G = globalThis;
 // what the app's program has around the engine: names.js (put at its head by build.py too)
@@ -49,8 +49,11 @@ export function books(rows) {
   led.forEach((l) => { if (l && l.name && l.parent) { const n = E.ledClean(l.name); (b.under = b.under || {})[n] = b.under[n] || E.ledClean(l.parent); } });
   E.BookSrc.ledgersInto(b, led, rows.book && rows.book.ledgers_at);
   if ((rows.groups || []).length) { b.groups = Object.assign({}, b.groups || {}); rows.groups.forEach((x) => { b.groups[x.name] = x.parent || ""; }); }
-  // the entries: the cloud copy's rows, as Books.importDayBook makes them (BookSrc.fromCopy), deleted ones out
-  E.BookSrc.apply(b, rows.heads || [], rows.lines || [], rows.bills || []);
+  // the entries: the cloud copy's rows, as Books.importDayBook makes them (BookSrc.fromCopy), deleted ones out; or the
+  // list fromCopy made of the same rows before (rows.made: gst_calc_prep, migration 162), put in the same way (BookSrc.put:
+  // of a deleted entry nothing is in the list, and the books start with none)
+  if (!rows.made) rows.made = E.BookSrc.fromCopy(rows.heads || [], rows.lines || [], rows.bills || []);
+  E.BookSrc.apply(b, rows.heads || [], rows.lines || [], rows.bills || [], rows.made);
   // meta as a Day Book read sets it (TallyRead.merge): bill-wise on, the company's GSTINs from its entries
   b.meta = Object.assign({}, b.meta || {}, { bills: 1, gstins: Array.from(new Set(b.vouchers.map((v) => v.cmp).filter(Boolean))).sort() });
   // FinCom's ledger list as TCloud.load makes it on opening: the one saved (a ledger set by hand or confirmed stays as it
@@ -109,7 +112,10 @@ export function step(rows, reg, kept, o) {
     const all = E.GSTR.months(), want = (m) => !o.only || o.only.includes(m), todo = all.filter((m) => !kept[m] && want(m)), done = [], have = Object.assign({}, kept);
     const gstin = (E.GSTR.gstins(b) || []).find((g) => g.slice(0, 2) === reg) || "";
     const atReady = used();
-    if (todo.length && atReady > ready) return { big: true, months: [], more: true, all, vouchers: b.vouchers.length, ms: now() - t0, booksMs: o.books ? 0 : tBooks, books: b, fp: fp0, atReady };
+    // too big for a run: with o.keep, the entries made of the book's rows (fromCopy's list, nothing worked out on them
+    // yet) as JSON, for gst_calc_prep: the next run starts from them instead of the rows
+    if (todo.length && atReady > ready) return { big: true, months: [], more: true, all, vouchers: b.vouchers.length, ms: now() - t0, booksMs: o.books ? 0 : tBooks, books: b, fp: fp0, atReady,
+      made: o.keep && !rows.fromPrep && rows.made ? JSON.stringify(rows.made) : undefined };
     let last = atReady;
     for (const m of todo) {
       if (done.length >= max || (done.length && used() + last > total)) break;     // the first month always (ready by o.ready)

@@ -26,10 +26,11 @@ const T: Record<string, any[]> = {
   records: rows.sales.map((d: any) => ({ firm_id: FIRM, client_id: rows.client, kind: "sales", id: rows.client + ":" + d.id, data: d, deleted: null })),
   gst_2b_runs: Object.entries(rows.runs).map(([k, r]: [string, any]) => ({ id: r.id, firm_id: FIRM, client_id: rows.client, gstin: k.split("|")[0], fy: k.split("|")[1], status: "done", done_at: r.at, queued_at: r.at, result: r.result })),
   gst_2b_decisions: [], tally_calc_results: [], gst_calc_queue: [],
+  gst_calc_prep: [],     // migration 162: a book's entries made once for gst-run ({book_id, firm_id, version, engine, vouchers: text})
 };
 // the fake's answers for the books' tables, kept between writes (only the tests write to them, and clear these)
 const pages = new Map<string, string>(), sorted = new Map<string, any[]>();
-let clock = Date.parse("2026-11-09T10:00:00Z"), reads = 0, fakeCpu = 0, failOn = "";
+let clock = Date.parse("2026-11-09T10:00:00Z"), reads = 0, fakeCpu = 0, failOn = "", prepPuts = 0, prepGets = 0;
 const HELD = new Set<number>();     // tally_recorder's messages not applied yet (gst_calc_held)
 // the CPU of the thread JavaScript runs on (user and system; not V8's helper threads) from /proc, in ms (10 ms steps)
 const cpu = () => { const f = Deno.readTextFileSync("/proc/thread-self/stat"), x = f.slice(f.lastIndexOf(")") + 2).split(" "); return (+x[11] + +x[12]) * 10; };
@@ -50,6 +51,12 @@ const RPC: Record<string, (a: any) => any> = {
     .sort((x, y) => (Number(y.from_date <= d) - Number(x.from_date <= d)) || String(y.from_date).localeCompare(String(x.from_date)))[0] || {}).book_id || null; },
   gst_calc_gstins: (a) => Array.from(new Set(T.tally_vouchers.filter((v) => v.book_id === a.p_book && v.cmp_gstin).map((v) => String(v.cmp_gstin).toUpperCase())
     .concat(T.clients.filter((c) => c.id === a.p_client && c.data && c.data.gstin).map((c) => String(c.data.gstin).toUpperCase())))).filter((g) => /^\d{2}[A-Z0-9]{13}$/.test(g)).sort(),
+  // migration 152's version of a book (here: everything of the book's own rows)
+  tally_calc_version: (a) => "b" + s32(JSON.stringify([T.tally_vouchers.filter((v) => v.book_id === a.p_book), T.tally_lines.filter((v) => v.book_id === a.p_book), T.tally_bills.filter((v) => v.book_id === a.p_book), T.tally_ledgers.filter((v) => v.book_id === a.p_book)])),
+  // migration 162: the book's entries as gst-run made them, kept on the book's version and the engine
+  gst_calc_prep_put: (a) => { const bk = T.tally_books.find((b) => b.book_id === a.p_book); if (!bk || !String(a.p_vouchers || "").startsWith("[")) return false;
+    const row = { book_id: a.p_book, firm_id: bk.firm_id, version: a.p_version, engine: a.p_engine, vouchers: String(a.p_vouchers), n: 0, at: clock }, i = T.gst_calc_prep.findIndex((x) => x.book_id === a.p_book);
+    if (i >= 0) T.gst_calc_prep[i] = row; else T.gst_calc_prep.push(row); prepPuts++; return true; },
   gst_calc_version: (a) => "v" + s32(JSON.stringify([T.tally_vouchers, T.tally_lines, T.tally_bills, T.tally_ledgers, T.client_book_items, T.clients.filter((c) => c.id === a.p_client), T.records, T.gst_2b_runs, T.gst_2b_decisions])),
   // migration 153's queue, as the database answers it
   gst_calc_want: (a) => { const af = a.p_after ?? null; const q = T.gst_calc_queue.find((x) => x.client_id === a.p_client && x.firm_id === a.p_firm);
@@ -98,6 +105,9 @@ const fake = async (input: string | URL | Request, init?: RequestInit): Promise<
     if (u.pathname === "/functions/v1/gst-run") { kicks.push(JSON.parse(String(init!.body))); return json({ ok: true }); }
     if (u.pathname === "/auth/v1/user") { const t = auth.replace("Bearer ", ""); return t === "tok-member" ? json({ id: USER }) : t === "tok-outsider" ? json({ id: OUTSIDER }) : json({ msg: "bad jwt" }, 401); }
     if (auth !== "Bearer service-key") return json({ message: "service role only here" }, 401);
+    // gst_calc_prep_get returns the kept text as it is (the column's text cast to json: PostgREST sends it unchanged)
+    if (u.pathname === "/rest/v1/rpc/gst_calc_prep_get") { const a = JSON.parse(String(init!.body || "{}")), p = T.gst_calc_prep.find((x) => x.book_id === a.p_book && x.version === a.p_version && x.engine === a.p_engine);
+      if (p) prepGets++; return new Response(p ? p.vouchers : "null", { status: 200, headers: { "Content-Type": "application/json" } }); }
     if (u.pathname.startsWith("/rest/v1/rpc/")) { const fn = u.pathname.slice(13); if (!RPC[fn]) return json({ message: "no function " + fn }, 404); return json(RPC[fn](JSON.parse(String(init!.body || "{}")))); }
     const table = u.pathname.replace("/rest/v1/", "");
     if (failOn && table === failOn) return json({ message: "the database is down" }, 503);
@@ -146,6 +156,9 @@ const warm = async (tok = "service-key", extra: Record<string, string> = {}) => 
   const x = { ...r, procCpu: all, cpu: Math.round(c), wall: Math.round(performance.now() - t0), rss: Math.round(m / 1048576), heap: Math.round((peak - base) / 1048576) }; runs.push(x); return x;
 };
 const out: any = {};
+// gst-run's reading, as a run does it (for the memory and the made-entries checks)
+const svc = async (p: string) => { const r = await fake("https://fake.example" + p, { headers: { Authorization: "Bearer service-key" } }); return r.json(); };
+const rpcF = async (fn: string, a: any) => { const r = await fake("https://fake.example/rest/v1/rpc/" + fn, { method: "POST", headers: { Authorization: "Bearer service-key" }, body: JSON.stringify(a) }); return r.json(); };
 const month = (ym: string, tok = "tok-member") => call({ action: "month", client_id: rows.client, reg: "07", ym }, tok);
 // a miss: nothing worked out, queued, a background run started
 out.miss = await month(IN.asks[IN.asks.length - 1].ym);
@@ -160,7 +173,8 @@ for (let i = 0; i < 80; i++) {
   if (r.idle || !r.more) break;
   clock += 21000;
 }
-out.runs = runs.map((r) => ({ months: r.months, book: r.book, cpu: r.cpu, wall: r.wall, rss: r.rss, heap: r.heap, ok: r.ok, more: r.more, big: r.big, error: r.error, spentMs: r.spentMs, readyMs: r.readyMs, booksMs: r.booksMs, ms: r.ms }));
+out.runs = runs.map((r) => ({ months: r.months, book: r.book, cpu: r.cpu, wall: r.wall, rss: r.rss, heap: r.heap, ok: r.ok, more: r.more, big: r.big, prep: r.prep, fromPrep: r.fromPrep, error: r.error, spentMs: r.spentMs, readyMs: r.readyMs, booksMs: r.booksMs, ms: r.ms }));
+out.prepPuts = prepPuts; out.prepGets = prepGets; out.prepBytes = T.gst_calc_prep.map((p) => p.vouchers.length);
 out.kept = T.tally_calc_results.map((k) => ({ book: k.book_id, args: k.args, result: k.result, version: k.version }));
 out.queueLeft = T.gst_calc_queue.length; out.kicksDuringRuns = kicks.length - k0;
 out.peakRss = Math.round(rss / 1048576);
@@ -168,8 +182,6 @@ out.peakRss = Math.round(rss / 1048576);
 // worked out (gst-run's reading and the engine, as a run does them; the fake's tables are in the base)
 if (gc) {
   gc(); const h0 = Deno.memoryUsage().heapUsed;
-  const svc = async (p: string) => { const r = await fake("https://fake.example" + p, { headers: { Authorization: "Bearer service-key" } }); return r.json(); };
-  const rpcF = async (fn: string, a: any) => { const r = await fake("https://fake.example/rest/v1/rpc/" + fn, { method: "POST", headers: { Authorization: "Bearer service-key" }, body: JSON.stringify(a) }); return r.json(); };
   const lr = await load(svc, rpcF, FIRM, rows.client, T.tally_books[0], rows.co, ["2025-26"], RPC.gst_calc_gstins({ p_book: BK, p_client: rows.client }));
   gc(); const h1 = Deno.memoryUsage().heapUsed;
   const st = step(lr, "07", {}, { max: 1, budget: 1 });
@@ -219,7 +231,10 @@ if (!IN.timing) {
   W(rows.client); T.client_book_items.push({ ...T.client_book_items[0], key: "gst3b", item: ".07|209901", data: { rev2: { igst: 1 } }, deleted: false }); pages.clear(); sorted.clear();
   const h2 = handler({ env: (k) => env[k], fetch: fake as typeof fetch, now: () => new Date(Date.parse(IN.today || "2026-04-20T06:00:00Z")), later: () => {}, ready: 1 });
   const r2 = await h2(new Request("https://fake.example/functions/v1/gst-run", { method: "POST", headers: { Authorization: "Bearer service-key", "Content-Type": "application/json" }, body: JSON.stringify({ action: "warm" }) }));
-  out.tooBigRun = await r2.json(); out.tooBigRun.stored = T.tally_calc_results.length - n0; out.tooBigRun.afterOne = { ...Q(rows.client) };
+  out.tooBigRun = { prepRun: await r2.json() }; out.tooBigRun.prepStored = T.gst_calc_prep.some((p) => p.book_id === BK); out.tooBigRun.afterPrep = { ...Q(rows.client) };
+  clock += 21000;
+  const r2b = await h2(new Request("https://fake.example/functions/v1/gst-run", { method: "POST", headers: { Authorization: "Bearer service-key", "Content-Type": "application/json" }, body: JSON.stringify({ action: "warm" }) }));
+  Object.assign(out.tooBigRun, await r2b.json()); out.tooBigRun.stored = T.tally_calc_results.length - n0; out.tooBigRun.afterOne = { ...Q(rows.client) };
   clock += 21000;
   const r3 = await h2(new Request("https://fake.example/functions/v1/gst-run", { method: "POST", headers: { Authorization: "Bearer service-key", "Content-Type": "application/json" }, body: JSON.stringify({ action: "warm" }) }));
   out.tooBigRun.second = await r3.json(); out.tooBigRun.stored = T.tally_calc_results.length - n0; out.tooBigRun.queued = { ...Q(rows.client) };
@@ -228,6 +243,15 @@ if (!IN.timing) {
   T.gst_calc_queue = []; clock += 600000; T.clients.push({ id: "cli-two", firm_id: FIRM, data: rows.co, deleted: false, status: "active" });
   W(rows.client); W("cli-two");
   const both = await Promise.all([1, 2].map(() => h(new Request("https://fake.example/functions/v1/gst-run", { method: "POST", headers: { Authorization: "Bearer service-key", "Content-Type": "application/json" }, body: JSON.stringify({ action: "warm" }) })).then((r) => r.json())));
+  // the entries kept for the book (gst_calc_prep, made by the too-big run above) give every month as the book's own rows do
+  { const pr = T.gst_calc_prep.find((p) => p.book_id === BK && p.version === RPC.tally_calc_version({ p_book: BK }));
+    out.prepSame = null;
+    if (pr) {
+      const g = RPC.gst_calc_gstins({ p_book: BK, p_client: rows.client });
+      const a = await load(svc, rpcF, FIRM, rows.client, T.tally_books[0], rows.co, ["2025-26"], g), b = await load(svc, rpcF, FIRM, rows.client, T.tally_books[0], rows.co, ["2025-26"], g, JSON.parse(pr.vouchers));
+      const sa = step(a, "07", {}, { max: 12, ready: 1e9, total: 1e9 }), sb = step(b, "07", {}, { max: 12, ready: 1e9, total: 1e9 });
+      out.prepSame = { n: sa.months.length, noRows: !b.heads.length && !b.lines.length, same: JSON.stringify(sa.months) === JSON.stringify(sb.months) && JSON.stringify(sa.all) === JSON.stringify(sb.all), fp: JSON.stringify(sa.fp) === JSON.stringify(sb.fp) };
+    } }
   out.twoAtOnce = both.map((x: any) => ({ ok: x.ok, client: x.client, big: !!x.big, spentMs: x.spentMs }));
 }
 await Deno.writeTextFile(outFile, JSON.stringify(out));

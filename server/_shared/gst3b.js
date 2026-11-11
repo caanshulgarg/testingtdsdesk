@@ -19,7 +19,7 @@
 // No AI here: M2B.aiLinks only reads the pairs the gst-2b-match function already stored for the year.
 // GST3B_SRC: this file's and names.js's text (this value left out), hashed (tests/run_gst_cloud.js keeps it so): a 3B the
 // cloud worked out carries it, and the 3B page uses the cloud's only when its own is the same (app/src/screens/gst/cloud3b.js)
-const GST3B_SRC = "s0a7df3d274e8bbb4";
+const GST3B_SRC = "s7cb0655a72cadd0c";
 function num(v){ if (typeof v === "number") return isFinite(v) ? v : 0; const n = parseFloat(String(v == null ? "" : v).replace(/[^0-9.\-]/g, "")); return isFinite(n) ? n : 0; }
 function r2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
 const INR = new Intl.NumberFormat("en-IN", {minimumFractionDigits:2, maximumFractionDigits:2});
@@ -265,12 +265,13 @@ const BookSrc = {
     });
     return n;
   },
-  // the cloud copy's rows into the books: deleted entries out, new and later ones in; how many changed
-  apply(b, heads, lines, bills){
+  // the cloud copy's rows into the books: deleted entries out, new and later ones in; how many changed. made: the
+  // entries fromCopy made of these rows before (gst-run keeps them for a large book, migration 160), else made here
+  apply(b, heads, lines, bills, made){
     b.vouchers = b.vouchers || [];
     let n = this.drop(b, heads);
     const by = this.index(b.vouchers);
-    this.fromCopy(heads, lines, bills).forEach(v => { if (this.put(b, v, by)) n++; });
+    (made || this.fromCopy(heads, lines, bills)).forEach(v => { if (this.put(b, v, by)) n++; });
     // 2.4.3: the TDS details of an entry held at the same version (a Day Book's, read the same way by the cloud) are added to it
     (heads || []).forEach(h => { const tx = this.tdsxOf(h); if (!tx || !h || !by.has(h.guid)) return; const v = b.vouchers[by.get(h.guid)]; if (v && !v.tdsx && this.alt(v.alt) === this.alt(h.alter_id)){ v.tdsx = tx; n++; } });
     // (an entry changed in place: the books get a new array, so the save writes the entries again: Books.touch, src/js/04)
@@ -543,7 +544,9 @@ const Books = {
 const CustIMS = {
   store(reg){ const b = S.books; b.outRej = b.outRej || {}; return b.outRej[reg || ""] = b.outRej[reg || ""] || {}; },
   // documents the customer can act on in IMS: invoices and notes to registered customers
-  docs(reg){ return GSTR.outward(null, reg).filter(r => r.gstin && (r.kind === "B2B" || r.kind === "CDNR" || r.kind === "DBNR" || (r.kind === "EXP" && r.cls === "sez"))); },
+  // (next-gst-big: once a drawing; a quarter's 3B asked it for each of its months, the book's every sale each time)
+  docs(reg){ const f = () => GSTR.outward(null, reg).filter(r => r.gstin && (r.kind === "B2B" || r.kind === "CDNR" || r.kind === "DBNR" || (r.kind === "EXP" && r.cls === "sez")));
+    return typeof perRender === "function" ? perRender(this, "docs|" + (reg || ""), f) : f(); },
   items(reg){
     const st = this.store(reg), byId = new Map(this.docs(reg).map(r => [r.id, r]));
     return Object.keys(st).map(id => { const s = st[id], r = byId.get(id);
