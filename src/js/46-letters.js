@@ -158,6 +158,8 @@ const LTR = {
 // Letters (app/src/screens/books/Letters.jsx): what its buttons, ticks and boxes do
 function ltrMode(m){ const x = LTR.st(); x.mode = m; x.q = ""; render(); }
 function ltrSet(k, v, isDate){ const x = LTR.st(); x[k] = isDate ? FC.d8(v) : v; if (k === "asOn") x.sel = {}; render(); }
+// next-speed-pages: every party's row drawn (the list draws the first 200 until then; app/src/screens/books/Letters.jsx)
+function ltrShowAll(){ LTR.st().full = true; render(); }
 function ltrQ(v){ LTR.st().q = v; FinComReact.redraw(); }
 function ltrSide(k, on){ LTR.st().sides[k] = on; render(); }
 function ltrSel(key, on){ LTR.st().sel[key] = on; render(); }
@@ -192,6 +194,7 @@ if (typeof LTR !== "undefined") globalThis.LTR = LTR;
 if (typeof ltrMode !== "undefined") globalThis.ltrMode = ltrMode;
 if (typeof ltrSet !== "undefined") globalThis.ltrSet = ltrSet;
 if (typeof ltrQ !== "undefined") globalThis.ltrQ = ltrQ;
+if (typeof ltrShowAll !== "undefined") globalThis.ltrShowAll = ltrShowAll;
 if (typeof ltrSide !== "undefined") globalThis.ltrSide = ltrSide;
 if (typeof ltrSel !== "undefined") globalThis.ltrSel = ltrSel;
 if (typeof ltrOne !== "undefined") globalThis.ltrOne = ltrOne;

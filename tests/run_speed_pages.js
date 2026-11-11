@@ -212,9 +212,48 @@ async function sectionC(){
     M.msme = MS;
 }
 
+// ---------------------------------------------------------------- D. Audit.balances, carried on from an earlier date
+async function sectionD(){
+  const A = x.Audit;
+  // the reading of every entry, as before next-speed-pages (src/js/06-audit.js, origin/staging-next)
+  const oldMove = (b, base, start, d) => { const bal = Object.assign({}, base); (b.vouchers || []).forEach(v => { if (v.date < start || v.date > d || v.opt || v.cancel) return; v.ent.forEach(e => { bal[e.l] = x.r2((bal[e.l] || 0) + e.a); }); }); return bal; };
+  const b = makeBooks(1500, 51, 202404, 24); open(b);
+  const names = Object.keys(b.under); b.ledInfo = {}; names.forEach((l, i) => { b.ledInfo[l] = {ob: i % 3 ? String((i * 1234.56) % 50000 - 20000) : null, from: "20240401"}; });
+  b.meta = {from: "20240401", to: "20260331"};
+  const ob = {}; Object.entries(b.ledInfo).forEach(([n, z]) => { if (z.ob) ob[n] = x.num(z.ob); });
+  const dates = ["20260331", "20240401", "20251130", "20240930", "20250331", "20250815", "20240331", "20260101", "20250815", "20270101", "20240415", "20250101"];
+  const check = (w, base, start, from, to) => {
+    const B = A.balances(from, to); let bad = 0, first = "";
+    dates.forEach(d => { const got = J(B.at(d)), want = J(oldMove(b, base, start, d)); if (got !== want){ bad++; if (!first) first = d; } });
+    ok(B.ok && bad === 0, "D. " + w + ": " + dates.length + " dates, each the same figures in the same order as reading every entry" + (bad ? " (" + bad + " differ, first " + first + ")" : ""));
+  };
+  check("opening balances from the masters", ob, "00000000", "20240401", "20260331");
+  check("asked again (kept on the way)", ob, "00000000", "20240401", "20260331");
+  { const B = A.balances("20240401", "20260331"), a1 = B.at("20250331"); a1["Made Up Bank"] = 9e9; a1["A New Name"] = 1;
+    ok(J(B.at("20250331")) === J(oldMove(b, ob, "00000000", "20250331")), "D. a caller changing an answer does not change the next"); }
+  b.vouchers[200].ent[0].a = x.r2(b.vouchers[200].ent[0].a - 1000); b.vouchers[200].ent[1].a = x.r2(b.vouchers[200].ent[1].a + 1000); saved();
+  check("an entry changed and saved", ob, "00000000", "20240401", "20260331");
+  b.vouchers.push({id: "x1", date: "20250505", type: "Journal", ent: [{l: "Made Up Bank", a: 10}, {l: "Rent Paid 03", a: -10}]});
+  check("an entry added at the end, out of date order: read in full", ob, "00000000", "20240401", "20260331");
+  b.vouchers.sort((a, c) => a.date < c.date ? -1 : a.date > c.date ? 1 : 0); b.vouchers = b.vouchers.slice();
+  check("the entries sorted again (a new list)", ob, "00000000", "20240401", "20260331");
+  const led = {}; names.forEach((l, i) => { led[l] = {open: String((i * 77.7) % 9000 - 3000)}; });
+  b.tb = {from: "20240701", to: "20260331", at: "2026-04-10T10:00:00Z", src: "copy", led};
+  const opn = {}; Object.entries(led).forEach(([n, z]) => { opn[n] = x.num(z.open); });
+  check("opening balances from FinCom's copy (from 01-Jul-2024)", opn, "20240701", "20240801", "20260331");
+  led[names[4]].open = "123.45"; opn[names[4]] = 123.45;
+  check("an opening balance changed in place", opn, "20240701", "20240801", "20260331");
+  b.vouchers[250] = Object.assign({}, b.vouchers[250], {ent: b.vouchers[250].ent.map(e => Object.assign({}, e, {a: x.r2(e.a * 2)}))});
+  check("an entry replaced in the list, not saved", opn, "20240701", "20240801", "20260331");
+  b.vouchers[300].cancel = !b.vouchers[300].cancel; saved();
+  check("an entry cancelled and saved", opn, "20240701", "20240801", "20260331");
+  const bb = makeBooks(600, 52, 202404, 12); const save1 = S.books; open(bb); bb.tb = {from: "20240401", to: "20250331", at: "x", src: "copy", led: {}};
+  { const B = A.balances("20240401", "20250331"); ok(J(B.at("20250331")) === J(oldMove(bb, {}, "20240401", "20250331")), "D. another client's books: their own figures"); }
+  open(save1); check("back to the first books", opn, "20240701", "20240801", "20260331");
+}
 
 (async () => {
-  for (const f of [sectionA, sectionB, sectionC]) await f();
+  for (const f of [sectionA, sectionB, sectionC, sectionD]) await f();
   console.log(fails ? "\n" + fails + " FAILED" : "\nall passed");
   process.exit(fails ? 1 : 0);
 })().catch(e => { console.log("  FAIL " + (e && e.stack || e)); process.exit(1); });
