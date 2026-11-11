@@ -515,6 +515,7 @@ async function bookForBeat(firm: string, name: string) {
 // not stopped, not test mode, "go-" only). Each book asked at most every 20 s. {company name: {book, serving}}; empty on a
 // cloud without 146 (asked again after 10 minutes) or on any error: the beat answers as before
 let servingMissing = 0;
+let guidFillMissing = 0;     // migration 155 found missing (asked again 10 minutes later)
 const servingMemo = new Map<string, { serving: any[]; t: number }>();
 async function servingFor(firm: string, b: any): Promise<Map<string, { book: string; serving: any[] }>> {
   const out = new Map<string, { book: string; serving: any[] }>();
@@ -4558,6 +4559,17 @@ Deno.serve(sentry.wrap(async (req) => {
         const want = (dev as any).want_update_at, sent = (dev as any).want_sent_at;
         const updateNow = !!want && (!sent || Date.parse(want) > Date.parse(sent));
         await db.from("tally_devices").update(updateNow ? { info, want_sent_at: want } : { info }).eq("id", dev.id);
+        // migration 155 (the owner, 10-Nov-2026: a link belongs to the company and the firm, never to a person or a bridge): a
+        // linked company this bridge's own record lists open, whose link has no Tally GUID yet, takes the GUID from it (never
+        // over one; never one another linked book holds), so every bridge that opens it serves it. A cloud without 155: off
+        // (review B3: not waited for; never fails the beat. Kept alive after the answer by later(): EdgeRuntime.waitUntil.
+        // The names are matched as coTrim keeps them, the same rule in the function; look-alikes are never filled)
+        if ((me.entry as any)?.cos?.length && Date.now() - guidFillMissing >= 600000) {
+          later(Promise.resolve(db.rpc("tally_link_guid_fill", { p_firm: firm, p_device: dev.id, p_bridge: me.id })).then(({ data: gf, error: ge }: any) => {
+            if (ge) { if (missingFn(String(ge.message || ""))) guidFillMissing = Date.now(); else console.log("tally-ingest beat: the links' GUIDs not filled:", String(ge.message || "").slice(0, 160)); }
+            else if (Number(gf) > 0) console.log("tally-ingest beat: a link's Tally GUID filled from the bridge's record", dev.id, me.id, Number(gf));
+          }).catch((e: unknown) => console.log("tally-ingest beat: the links' GUIDs not filled:", String((e as Error)?.message || e).slice(0, 160))));
+        }
         // next-tally-linknow: the companies this beat says open that the firm's list lacks are registered now (they were
         // only by the "companies" message, every 5 minutes): a click on Link works within a beat of Tally opening it
         await registerOpenFromBeat(firm, dev, beat, prevInfo);
