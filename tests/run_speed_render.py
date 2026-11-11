@@ -12,7 +12,7 @@ nothing worked out in the drawing itself, one step a task, every step drawn), th
   4. a second open: the figures in the first drawing, nothing worked out again;
   5. an entry changed and the books saved: the last figures stay, marked updating, then the new ones replace them, and they
      are the books' as changed.
-Pages: T. Tie-out, R. the Reports list, M. MIS and A. Audit (each worked out again after a pull from Tally, as they are).
+Pages: T. Tie-out, R. the Reports list, L. the TDS ledgers, M. MIS and A. Audit (each worked out again after a pull from Tally, as they are).
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_speed_render.py"""
 import os, sys, json, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -40,8 +40,8 @@ SETUP = """async ([n]) => {
   if (S.view !== "company" || S.coId !== c.id) await openCompany(c.id);
   let s = 7; const R = () => { s = (Math.imul(s, 1664525) + 1013904223) >>> 0; return s / 4294967296; };
   const groups = {"Sundry Debtors": "Current Assets", "Sundry Creditors": "Current Liabilities", "Bank Accounts": "Current Assets", "Cash-in-Hand": "Current Assets",
-    "Current Assets": "", "Current Liabilities": "", "Capital Account": "", "Sales Accounts": "", "Purchase Accounts": "", "Indirect Expenses": ""};
-  const under = {"Made Up Bank": "Bank Accounts", "Cash": "Cash-in-Hand", "Capital": "Capital Account", "Sales": "Sales Accounts", "Purchases": "Purchase Accounts", "Rent": "Indirect Expenses", "Office Expenses": "Indirect Expenses"};
+    "Current Assets": "", "Current Liabilities": "", "Duties & Taxes": "Current Liabilities", "Capital Account": "", "Sales Accounts": "", "Purchase Accounts": "", "Indirect Expenses": ""};
+  const under = {"Made Up Bank": "Bank Accounts", "Cash": "Cash-in-Hand", "Capital": "Capital Account", "Sales": "Sales Accounts", "Purchases": "Purchase Accounts", "Rent": "Indirect Expenses", "Office Expenses": "Indirect Expenses", "TDS Payable 194I": "Duties & Taxes", "TDS Payable 194C": "Duties & Taxes"};
   const cus = [], sup = [];
   for (let i = 0; i < 12; i++){ const a = "Made Up Customer " + i, b = "Made Up Supplier " + i; cus.push(a); sup.push(b); under[a] = "Sundry Debtors"; under[b] = "Sundry Creditors"; }
   const V = [], pad = (x) => String(x).padStart(2, "0");
@@ -49,7 +49,7 @@ SETUP = """async ([n]) => {
     const k = Math.floor(i * 25 / n), y = 2024 + Math.floor((3 + k) / 12), mo = (3 + k) % 12 + 1, date = y + pad(mo) + pad(1 + Math.floor(R() * 28)), amt = Math.round(1000 + R() * 90000) + Math.round(R() * 100) / 100, kind = i % 6;
     const cu = cus[Math.floor(R() * cus.length)], su = sup[Math.floor(R() * sup.length)];
     const ent = kind === 0 ? [[cu, -amt], ["Sales", amt]] : kind === 1 ? [["Purchases", -amt], [su, amt]] : kind === 2 ? [["Made Up Bank", -amt], [cu, amt]]
-      : kind === 3 ? [[su, -amt], ["Made Up Bank", amt]] : kind === 4 ? [["Rent", -amt], ["Made Up Bank", amt]] : [["Cash", -amt], ["Made Up Bank", amt]];
+      : kind === 3 ? [[su, -amt], ["Made Up Bank", amt]] : kind === 4 ? (i % 4 ? [["Rent", -amt], ["Made Up Bank", amt]] : [["Rent", -amt], [su, r2(amt * 0.9)], ["TDS Payable 194I", r2(amt - r2(amt * 0.9))]]) : [["Cash", -amt], ["Made Up Bank", amt]];
     V.push({id: "e" + i, date, no: String(i + 1), type: ["Sales", "Purchase", "Receipt", "Payment", "Payment", "Contra"][kind], party: "", narr: "", ent: ent.map(([l, a]) => ({l, a}))});
   }
   V.sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
@@ -118,7 +118,7 @@ def page(pg, E, tag, name, go, sel, frame, at_once=AT_ONCE, change=CHANGE, shown
     fr3 = E(WATCH, ["render()", ""])
     ok(fr3[0][0] == 0 and fr3[0][1] > 0, tag + "5. after a change: the last figures stay, marked updating, none says Working out (%s)" % fr3[:2])
     got2 = see(); want2 = E(at_once, sel)
-    ok(got2 == want2 and want2 != want, tag + "5. then the new figures replace them, the books' as changed")
+    ok(got2 == want2 and want2 != want, tag + "5. then the new figures replace them, the books' as changed" + ("" if got2 == want2 and want2 != want else " (shown as worked out at once: %s; changed: %s; %s)" % (got2 == want2, want2 != want, got2[:300])))
 
 try:
     with sync_playwright() as p:
@@ -133,6 +133,8 @@ try:
         E("() => { S.books = Object.assign({}, S.books); Rec._fc = null; render(); }"); pg.wait_for_timeout(500)
         tieout(pg, E, cid)
         E("() => { S.rptFy = '2025'; S.rxView = null; }")
+        page(pg, E, "L", "the TDS ledgers", "location.hash = '#/c/' + S.coId + '/books/tds/ledgers'", "#app [data-led-section]", "#app [data-ledpage]", AT_ONCE,
+             "() => { TaxLed.confirm(S.books, ['TDS Payable 194C'], 'row'); }")
         # MIS and Audit: Tally changed (TallyRead.after marks both out of date), the tab worked out again behind the page
         PULL = "() => { TallyRead.after(S.books, 'a pull from Tally'); }"
         MIS_AT_ONCE = """(sel) => { const H = S.books.mis.history[0]; MIS.run(H.from, H.to, 'at once'); render(); return [...document.querySelectorAll(sel)].map(x => x.textContent).join('|'); }"""

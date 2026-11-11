@@ -16,6 +16,7 @@
 // State: S.ledKind (tds | gst | all), S.ledQ (the find box), S.ledEdit (the row being changed), S.tlPick (the posting
 // choice whose picker is open) and S.tlPickQ (its search).
 import { Editor, changeRow, Example, PleaseCheck, Status, UndoLine, Others, Notices, pleaseLines } from "./Ledgers.jsx";
+import { behind, Working } from "../../lib/behind.jsx";
 const plural = (k, one, many) => k + " " + (k === 1 ? one : many);
 const money = (v) => "₹" + INR.format(r2(Math.abs(v || 0)));
 const KIND_LABEL = { tds: "TDS ledgers", gst: "GST ledgers", all: "TDS and GST ledgers" };
@@ -124,15 +125,23 @@ function PostLedgers({ b, kind }) {
   </section>;
 }
 
+// next-speed-render (51,758 made-up entries: the page held 0.9-1 s before it showed; the ledger check read every entry
+// whenever the books had changed): the page is drawn at once, the rows (TaxLed.forKind, after the check: LedPage.ensureIn,
+// 4,000 entries a step) are worked out behind it (lib/behind.jsx) and filled in; kept for the books as they are; after a
+// change the last rows stay, marked updating, until the new ones are in
+const ledSig = (b, kind) => () => { const ext = TaxLed.ext[b.cid]; return [S.books, typeof BOOKS_REV === "number" ? BOOKS_REV : 0, b.vouchers, (b.vouchers || []).length, b.map, Object.keys(b.map || {}).length, b.mapV || 0, b.ledInfo, b.ledInfoAt || "", b.ledCheck, b.under, kind, ext, ext && ext.at, typeof Ledgers === "object" ? Ledgers.st[b.cid] : null, typeof Ledgers === "object" ? (Ledgers.st[b.cid] || {}).list : null, (S.bank || {}).ledgers]; };
+function* ledSteps(b, kind) { yield* LedPage.ensureIn(b); yield; TaxLed.tally(b); yield; return TaxLed.forKind(b, kind); }
+const NONE = { rows: [], more: [], tally: {} };
+
 export default function TaxLedgers({ b, kind: pageKind }) {
   const cid = b.cid, kind = S.ledKind === "all" ? "all" : pageKind, q = String(S.ledQ || "").toLowerCase().trim();
   TaxLed.loadExt(cid);
-  const all = TaxLed.forKind(b, kind);
-  TaxLed.auto(b, all.rows.concat(all.more));
+  const job = behind("taxled:" + cid + ":" + kind, ledSig(b, kind), () => ledSteps(b, kind)), all = job.v || NONE, working = !job.v, fresh = job.done;
+  if (fresh) TaxLed.auto(b, all.rows.concat(all.more));
   const hit = (r) => !q || r.n.toLowerCase().includes(q) || String((r.ans || {}).section || "").toLowerCase().includes(q) || String(r.group || "").toLowerCase().includes(q) || r.says.toLowerCase().includes(q);
   const rows = all.rows.filter(hit), more = all.more.filter(hit);
   const shown = rows.concat(more).filter((r) => !r.ok && r.ans && r.ans.what);
-  const others = LedPage.others(b).filter((r) => !q || r.n.toLowerCase().includes(q) || String(r.group || "").toLowerCase().includes(q));
+  const others = (fresh ? LedPage.others(b) : []).filter((r) => !q || r.n.toLowerCase().includes(q) || String(r.group || "").toLowerCase().includes(q));
   const okN = all.rows.filter((r) => r.ok).length, toN = all.rows.filter((r) => !r.ok).length;
   const inRows = new Set(all.rows.concat(all.more).map((r) => r.n));
   // the find box also searches the whole Tally list: a ledger not in the table can be marked as TDS or GST with Change
@@ -146,17 +155,18 @@ export default function TaxLedgers({ b, kind: pageKind }) {
         <button key={k} data-tl-kind={k} aria-selected={kind === k} onClick={() => setKind(k)}>{l}</button>)}</nav>
     </div>
     <Status b={b} />
-    <AiLine b={b} rows={all.rows.concat(all.more)} />
+    {fresh && <AiLine b={b} rows={all.rows.concat(all.more)} />}
     <UndoLine b={b} />
-    <PleaseCheck b={b} items={LedPage.review(b).filter((x) => kind === "all" || (TaxLed.kindOfWhat((x.m || {}).what) || kind) === kind)} lines={pleaseLines(b)} />
-    <section className="led-sec" data-led-section="main">
-      <div className="led-sec-head"><h3>{KIND_LABEL[kind] + " "}<span className="sbar-n">{all.rows.length}</span>{" "}<span className="note" data-tl-counts="">{okN + " confirmed · " + toN + " to confirm"}</span></h3>
+    {fresh && <PleaseCheck b={b} items={LedPage.review(b).filter((x) => kind === "all" || (TaxLed.kindOfWhat((x.m || {}).what) || kind) === kind)} lines={pleaseLines(b)} />}
+    <section className="led-sec" data-led-section="main" data-updating={job.old && !fresh ? "" : undefined}>
+      <div className="led-sec-head"><h3>{KIND_LABEL[kind] + " "}{working ? <Working /> : <><span className="sbar-n">{all.rows.length}</span>{" "}<span className="note" data-tl-counts="">{okN + " confirmed · " + toN + " to confirm"}</span></>}</h3>
         {shown.length > 0 && <button className="btn small primary" data-tl-confirm-shown="" onClick={() => TaxLed.confirm(b, shown.map((r) => r.n), "shown")}>{"Confirm all shown (" + shown.length + ")"}</button>}</div>
       <div className="led-tools">
         <input type="search" aria-label="Find a ledger" data-fk="ledq" value={S.ledQ || ""} placeholder="Find a ledger, section or group; or any Tally ledger, e.g. TDS payable 194C" onChange={(ev) => setAndShow("ledQ", ev.target.value, true)} />
         {cos.length > 1 && <select aria-label="Client" data-led-client="" style={{ width: "auto", maxWidth: "100%" }} value={cid} onChange={(ev) => { if (ev.target.value !== cid) Rec.openClientTab(ev.target.value, "books:ledgers"); }}>{cos.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>}
       </div>
-      {rows.length ? <Table b={b} rows={rows} which="main" /> : <p className="note" data-led-empty="main">{q ? "No " + (kind === "all" ? "GST or TDS" : kind.toUpperCase()) + " ledger matches." : "No " + (kind === "all" ? "GST or TDS" : kind.toUpperCase()) + " ledger yet."}</p>}
+      {working ? <table className="led-t nocards" data-led-table="main"><thead><tr><th>Ledger in your Tally</th><th>FinCom reads it as</th><th className="n">Used in (entries)</th><th>Example entry</th><th className="ac"></th></tr></thead><tbody><tr><td colSpan={5}><Working /></td></tr></tbody></table>
+        : rows.length ? <Table b={b} rows={rows} which="main" /> : <p className="note" data-led-empty="main">{q ? "No " + (kind === "all" ? "GST or TDS" : kind.toUpperCase()) + " ledger matches." : "No " + (kind === "all" ? "GST or TDS" : kind.toUpperCase()) + " ledger yet."}</p>}
       {tallyHits.length > 0 && <div className="tl-tallyhits" data-tl-tally-hits="">
         <p className="note">{"Other ledgers in Tally matching “" + S.ledQ + "”: choose Change to count one as a TDS or GST ledger."}</p>
         <table className="led-t nocards"><tbody>{tallyHits.map((l) => <tr key={l.name} data-tl-tally-hit={l.name}><td><span className="led-name">{l.name}</span>{l.group && <div className="nr">{l.group}</div>}</td>
