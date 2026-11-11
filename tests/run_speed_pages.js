@@ -189,9 +189,32 @@ async function sectionB(){
   await pass("the last round", {n: 0, idle: true});
   BI.split = SPLIT; BS.work = WORK;
 }
+// ---------------------------------------------------------------- C. the statements read the MSME list once a task
+async function sectionC(){
+    const FinSt = x.FinSt, M = x.MIS, MS = M.msme;
+    const b = makeBooks(50, 41, 202504, 3); open(b);
+    const sups = Object.keys(b.under).filter(l => b.under[l] === "Sundry Creditors");
+    b.ledInfo = {}; sups.forEach((l, i) => { b.ledInfo[l] = i % 4 === 0 ? {msme: "Micro"} : i % 4 === 1 ? {msme: "Medium"} : {}; });
+    b.msme = {[sups[2]]: "Small"};
+    let n = 0; M.msme = function(){ n++; return MS.apply(this, arguments); };
+    const codes = () => sups.map(l => FinSt.refine(l, "tp", ["Sundry Creditors"], -100, "co"));
+    const want = () => sups.map(l => /micro|small/i.test((MS.call(M) || {})[l] || "") ? "6A" : "6B");
+    let c = codes();
+    ok(J(c) === J(want()), "C. the trade payables' codes are as before: " + c.filter(z => z === "6A").length + " of " + c.length + " micro or small");
+    ok(n === 1, "C. MIS.msme read once for " + sups.length + " trade payables (" + n + ")");
+    await tick();
+    b.msme[sups[3]] = "Micro"; n = 0; c = codes();
+    ok(J(c) === J(want()) && c[3] === "6A" && n === 1, "C. a ledger marked micro, in the next task: seen");
+    b.msme[sups[5]] = "Small"; saved(); c = codes();
+    ok(J(c) === J(want()) && c[5] === "6A", "C. a ledger marked small and the books saved, in the same task: seen");
+    b.ledInfo = Object.assign({}, b.ledInfo, {[sups[1]]: {msme: "micro"}}); c = codes();
+    ok(J(c) === J(want()) && c[1] === "6A", "C. the masters read again, in the same task: seen");
+    M.msme = MS;
+}
+
 
 (async () => {
-  for (const f of [sectionA, sectionB]) await f();
+  for (const f of [sectionA, sectionB, sectionC]) await f();
   console.log(fails ? "\n" + fails + " FAILED" : "\nall passed");
   process.exit(fails ? 1 : 0);
 })().catch(e => { console.log("  FAIL " + (e && e.stack || e)); process.exit(1); });
