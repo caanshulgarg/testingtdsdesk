@@ -295,7 +295,7 @@ const TaxLed = {
     S.tab = "books"; S.ledKind = kind; S.ledEdit = ""; S.ledEditPrev = null;
     if (kind === "gst"){ S.booksTab = "gst"; S.gstView = "ledgers"; }
     else { S.booksTab = "tds"; S.tdsView = "ledgers"; }
-    if (typeof Route === "object") Route.replaceNext = true;
+    // fix-lookup (11-Nov-2026, "← Back"): a step of its own in the history; replacing the page before lost the way back to it
     render(); if (typeof window === "object" && window.scrollTo) window.scrollTo(0, 0);
   },
   // the Tally ledgers tab asked for (an old link, a bookmark, code that sets S.booksTab = "ledgers"): moved, the address
@@ -303,7 +303,6 @@ const TaxLed = {
   redirect(){
     if (S.booksTab !== "ledgers") return false;
     S.booksTab = "tds"; S.tdsView = "ledgers"; S.ledKind = "all";
-    if (typeof Route === "object") Route.replaceNext = true;
     return true;
   }
 };

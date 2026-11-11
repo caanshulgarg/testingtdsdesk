@@ -11,6 +11,7 @@ import { useLayoutEffect, Suspense, lazy } from "react";
 // next-tally-firstlink: the companies open in Tally, not linked, with their one-click link, at the top of the Tally panel
 import { createPortal } from "react-dom";
 import Bell from "./parts/Bell.jsx";
+import BackBtn from "./parts/back.jsx";
 import { Inbox as InboxIcon } from "lucide-react";
 import { needDays } from "./lib/needDays.js";
 // Arc UI (src/arc): the status tabs are Arc's Tabs, the Tally panel Arc's Drawer, the firm menu a dropdown menu in Arc's
@@ -37,6 +38,8 @@ const DOC_NAMES = { bills: "Purchase", bank: "Bank", sales: "Sales" };
 function Title({ title, sub, crumb, children }) {
   return (
     <div className="tbar" data-crumb={crumb}>
+      {/* the owner, 11-Nov-2026: a way back on every page reached from another (parts/back.jsx) */}
+      <BackBtn className="btn small tbar-back" data-back-page="" />
       <div className="tbar-title"><h2>{title}</h2>{typeof sub === "string" || sub == null ? <span className="note" title={sub || undefined}>{sub}</span> : sub}</div>
       {children}
     </div>
