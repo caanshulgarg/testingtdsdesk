@@ -43,6 +43,8 @@ run_bill_typing_echo.py               180  TDSDESK_SITE=../app/dist-test
 run_block17.js                        120
 run_booksync.js                       120
 run_speed_pages.js                    120
+run_speed_render.js                   120
+run_speed_render.py                   180  TDSDESK_SITE=../app/dist-test
 run_boot_watch.py                     120  TDSDESK_SITE=../app/dist-test
 run_bridge_control_server.py          120
 run_bridge_fast.py                    630

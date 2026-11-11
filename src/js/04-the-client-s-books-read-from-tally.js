@@ -345,7 +345,8 @@ const Books = {
     // next-fix-books-crash: a render React schedules by itself is a drawing too (reactScope, src/js/01)
     if (typeof reactScope === "function") reactScope();
     if (typeof IN_RENDER === "undefined" || !IN_RENDER) return this.linesNow(v);
-    const c = this._lc && this._lc.gen === RENDER_GEN && this._lc.books === S.books ? this._lc : (this._lc = {gen: RENDER_GEN, books: S.books, map: new WeakMap()});
+    // a job behind the page (app/src/lib/behind.jsx): the lines kept for the job's steps
+    const c = typeof JOB_MEMO !== "undefined" && JOB_MEMO ? perRender(this, "\u0001lc", () => ({map: new WeakMap()})) : this._lc && this._lc.gen === RENDER_GEN && this._lc.books === S.books ? this._lc : (this._lc = {gen: RENDER_GEN, books: S.books, map: new WeakMap()});
     let r = c.map.get(v); if (!r){ r = this.linesNow(v); c.map.set(v, r); }
     return r;
   },

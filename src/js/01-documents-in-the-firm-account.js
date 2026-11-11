@@ -4412,7 +4412,8 @@ window.addEventListener("resize", () => requestAnimationFrame(padForBars));
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => requestAnimationFrame(padForBars));
 // build 190: a figure worked out from the whole books (TDS rows, say) is worked out once per drawing of the page, not
 // each time a part of the page asks for it (the TDS page asked 15 times). Outside a drawing it is always fresh
-let RENDER_GEN = 0, IN_RENDER = 0;
+// JOB_MEMO: the figures shared by the steps of a job behind the page (app/src/lib/behind.jsx)
+let RENDER_GEN = 0, IN_RENDER = 0, JOB_MEMO = null;
 // books-speed (24-Oct-2026, Leads at 4x CPU: each drawing of a TDS page 500-800 ms): the top bar's own news (Saving…,
 // Saved 14:05, offline, back online), a colleague's change to another client and the like drew the whole page again and
 // worked out every figure from the 4,414 entries again. BOOKS_REV: moved by every save of the books (saveBooks), so a change
@@ -4449,7 +4450,9 @@ function reactScope(){
 function perRender(o, key, fn){
   reactScope();
   if (!IN_RENDER) return fn();
-  const m = o._pr = o._pr && o._pr.gen === RENDER_GEN && o._pr.books === S.books ? o._pr : {gen: RENDER_GEN, books: S.books, v: {}};
+  let m;
+  if (JOB_MEMO){ m = JOB_MEMO.get(o); if (!m) JOB_MEMO.set(o, m = {v: {}}); }
+  else m = o._pr = o._pr && o._pr.gen === RENDER_GEN && o._pr.books === S.books ? o._pr : {gen: RENDER_GEN, books: S.books, v: {}};
   if (Object.prototype.hasOwnProperty.call(m.v, key)) return m.v[key];
   return (m.v[key] = fn());
 }

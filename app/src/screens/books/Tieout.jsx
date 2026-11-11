@@ -5,12 +5,33 @@
 // ticked month is read-only for staff. Without migration 44: "not available until migration 44 runs".
 import Msg from "../../parts/Msg.jsx";
 import { useState, useEffect } from "react";
+import { behind, Working } from "../../lib/behind.jsx";
 
 const money = (v) => v == null ? "" : INR.format(r2(v));
 const who = (uid) => typeof memberName === "function" ? memberName(uid) : "a member of the firm";
 const label = (m) => GSTR.label(m.slice(0, 4) + m.slice(5, 7));
 
-function Month({ cid, m, t, no44 }) {
+// next-speed-render (51,758 made-up entries: the page held 1.3 s in one task, 12-13 s on an office PC, while FinCom's figures
+// of 25 month-ends were worked out): the page is drawn at once, each month's FinCom figures (Rec.fincom, the same) are
+// worked out behind it, a month a step, newest first, and filled in as they come; kept for the books as they are
+// (lib/behind.jsx), so a second open is at once; after a change, the last figures show until the new ones are in
+const tieSig = (b, cid, months) => () => [S.books, typeof BOOKS_REV === "number" ? BOOKS_REV : 0, b.vouchers, (b.vouchers || []).length, b.tb, (b.tb || {}).at, b.mapV || 0, b.map, b.under, b.groups, b.ledInfo, b.meta, cid, months.join(",")];
+// first the year's balances and amounts carried on month by month, oldest first (each step a month of entries: Audit.balances
+// and MIS.moves keep them on the way), so no step reads a year of entries; then the months, newest first
+function* tieSteps(b, cid, months) {
+  for (const m of months.slice().reverse()) {
+    const e = Rec.monthEnd(m), fs = Audit.fyStart(e), tb = b.tb, base = tb && tb.from > fs && tb.from <= e ? tb.from : fs;
+    try { Audit.balances(base, e).at(e); } catch (x) { /* Rec.fincom says why */ }
+    yield;
+    try { if (MIS.covered(fs)) MIS.moves(fs, e); } catch (x) { /* as above */ }
+    yield;
+  }
+  const out = {};
+  for (const m of months) { out[m] = yield* Rec.fincomSteps(cid, m); yield Object.assign({}, out); }
+  return out;
+}
+
+function Month({ cid, m, t, no44, fc, old }) {
   const row = t.rows[m] || null, lock = t.locks[m] || null, msg = t.msg[m] || null;
   const owner = Rec.owner(), ticked = !!(row && row.ticked_at);
   const ro = no44 || !Rec.canWrite() || (ticked && !owner);
@@ -18,18 +39,17 @@ function Month({ cid, m, t, no44 }) {
   const [v, setV] = useState(init);
   const sig = row ? JSON.stringify([row.saved_at, row.ticked_at]) : "";
   useEffect(() => { setV(init()); }, [sig]);
-  const fc = Rec.fincom(cid, m);
   return <tr data-tieout-month={m}>
     <td><b>{label(m)}</b><div className="nr">{"to " + fmtDate(tallyDate(Rec.monthEnd(m)))}</div>
       {ticked && <div className="nr ok" data-tie-ticked="">{"Tied out by " + who(row.ticked_by) + " on " + fmtDate(String(row.ticked_at).slice(0, 10))}</div>}
       {lock && <div className="nr bad" data-tie-locked="" style={{ whiteSpace: "normal" }}>{"Locked: Tally changes to this month are held for your approval" + (lock.note ? " (" + lock.note + ")" : "")}</div>}
     </td>
     {Rec.FIGS.map(([k, name]) => {
-      const typed = Rec.parse(v[k]), f = fc[k], d = typed == null || Number.isNaN(typed) || f == null ? null : r2(typed - f);
+      const typed = Rec.parse(v[k]), f = fc ? fc[k] : null, d = typed == null || Number.isNaN(typed) || f == null ? null : r2(typed - f);
       return <td key={k} className="n" style={{ minWidth: 150 }}>
         <input type="text" inputMode="decimal" data-tie-fig={k} aria-label={name + " in Tally, " + label(m)} placeholder="from Tally" value={v[k]} disabled={ro} style={{ width: 130, textAlign: "right" }}
           onChange={(ev) => setV({ ...v, [k]: ev.target.value })} />
-        <div className="nr" data-tie-fincom={k} title={f == null ? (fc.why[k] || "") : "FinCom’s figure"}>{f == null ? "FinCom: not available" : "FinCom " + money(f)}</div>
+        <div className="nr" data-tie-fincom={k} data-updating={old ? "" : undefined} title={!fc ? "" : f == null ? (fc.why[k] || "") : "FinCom’s figure"}>{!fc ? <Working /> : f == null ? "FinCom: not available" : "FinCom " + money(f)}</div>
         <div className={"nr" + (d ? " bad" : d === 0 ? " ok" : "")} data-tie-diff={k} data-off={d ? "1" : "0"}>{d == null ? "" : d === 0 ? "0.00" : (d > 0 ? "+" : "") + money(d)}</div>
       </td>;
     })}
@@ -52,8 +72,10 @@ export default function Tieout({ b }) {
   const cid = S.coId;
   if (!TCloud.on()) return <section className="dash-card" data-tieout=""><h3>Tie-out with Tally</h3><p className="note" data-tieout-signin="">The month’s tie-out is kept in the firm account, so it needs you signed in. <button className="linkbtn" onClick={() => goSettings("account")}>Sign in</button></p></section>;
   const t = Rec.tieOf(cid), months = Rec.months(cid), no44 = !!t.no44;
+  const job = behind("tieout:" + cid, tieSig(b, cid, months), () => tieSteps(b, cid, months)), part = job.part || {};
+  const figs = (m) => job.done ? [job.v[m], false] : part[m] ? [part[m], false] : job.old && job.v[m] ? [job.v[m], true] : [null, false];
   const nas = new Set();
-  months.forEach((m) => { const f = Rec.fincom(cid, m); Rec.FIGS.forEach(([k, name]) => { if (f[k] == null) nas.add(name + ": " + f.why[k]); }); });
+  months.forEach((m) => { const [f] = figs(m); if (f) Rec.FIGS.forEach(([k, name]) => { if (f[k] == null) nas.add(name + ": " + f.why[k]); }); });
   return <section className="dash-card" data-tieout="">
     <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}><h3 style={{ margin: 0 }}>Tie-out with Tally</h3>
       <button className="linkbtn note" data-sync-open="" onClick={() => Rec.openActivity(cid)}>Sync activity of this client</button></div>
@@ -63,7 +85,7 @@ export default function Tieout({ b }) {
     {!months.length ? <p className="note">No months yet: the copy of the books has no period. Bring in the books from Tally first.</p>
       : <div className="bk-tablewrap"><table className="bk-table" data-statement="" data-tieout-table="">
         <thead><tr><th>Month</th>{Rec.FIGS.map(([k, name]) => <th key={k} className="n">{name}</th>)}<th></th></tr></thead>
-        <tbody>{months.map((m) => <Month key={m} cid={cid} m={m} t={t} no44={no44} />)}</tbody>
+        <tbody>{months.map((m) => { const [fc, old] = figs(m); return <Month key={m} cid={cid} m={m} t={t} no44={no44} fc={fc} old={old} />; })}</tbody>
       </table></div>}
     {nas.size > 0 && <p className="note" data-tie-na="" style={{ marginTop: 8 }}>{"Not available from FinCom: " + [...nas].slice(0, 5).join("; ") + "."}</p>}
   </section>;

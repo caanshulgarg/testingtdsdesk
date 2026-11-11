@@ -8,7 +8,7 @@
 const Parties = {
   position(asOn){
     const b = S.books || {}, tb = b.tb, fs = Audit.fyStart(asOn), base = tb && tb.from > fs && tb.from <= asOn ? tb.from : fs;
-    const key = [b.cid, asOn, base, (b.vouchers || []).length, (tb || {}).at || "", b.mapV || 0].join("|");
+    const key = [b.cid, asOn, base, (b.vouchers || []).length, (tb || {}).at || "", b.mapV || 0, typeof BOOKS_REV === "number" ? BOOKS_REV : 0].join("|");
     if (this._p && this._p.key === key && this._p.b === b) return this._p.r;
     let B; try { B = Audit.balances(base, asOn); } catch (e){ B = {ok: false, why: e.message}; }
     let r;
@@ -90,7 +90,43 @@ const MIS = {
   HEADS: [["rev", "Revenue from operations", 1], ["oth", "Other income", 1], ["pur", "Purchases", -1], ["dir", "Direct expenses", -1], ["emp", "Employee costs", -1],
     ["exp", "Other expenses", -1], ["fin", "Finance costs", -1], ["dep", "Depreciation", -1], ["tax", "Tax", -1]],
   // amounts by ledger and month for a set of vouchers (credit positive, as Tally keeps it)
+  //
+  // next-speed-render (the tie-out asks the profit from the year's start at each of 25 month-ends, each reading every
+  // entry): with the entries in date order, the amounts to a date are those kept to an earlier date from the same start,
+  // carried on over the entries after it (Audit.moveKept's rule: the same entries in the same order, added the same way,
+  // so the same figures and the same order); not in date order, read in full as before. Each answer is a copy
+  _mk: new WeakMap(),
   moves(from, to){
+    const b = S.books, V = b.vouchers, rev = typeof BOOKS_REV === "number" ? BOOKS_REV : 0, n = Array.isArray(V) ? V.length : 0;
+    if (n && typeof from === "string" && typeof to === "string"){
+      let c = this._mk.get(V);
+      if (!c || c.n !== n || c.rev !== rev || c.b !== b || !c.vs.every((v, i) => v === V[i])){
+        let ok = true;
+        for (let i = 0; i < n && ok; i++){ const t = V[i] && V[i].date; ok = typeof t === "string" && !(i && V[i - 1].date > t); }
+        this._mk.set(V, c = {n, rev, b, ok, sets: {}, cps: 0, vs: V.slice()});
+      }
+      if (c.ok){
+        const first = f => { let lo = 0, hi = n; while (lo < hi){ const m = (lo + hi) >> 1; if (f(V[m].date)) hi = m; else lo = m + 1; } return lo; };
+        const cp2 = o => { const r = {}; for (const l in o) r[l] = Object.assign({}, o[l]); return r; };
+        const set = c.sets[from] = c.sets[from] || [{i: first(t => !(t < from)), out: {}}], e = Math.max(set[0].i, first(t => t > to));
+        let cp = set[0];
+        set.forEach(x => { if (x.i <= e && x.i > cp.i) cp = x; });
+        const out = cp2(cp.out), keep = i => { if (c.cps < 60 && !set.some(x => x.i === i)){ set.push({i, out: cp2(out)}); c.cps++; } };
+        for (let i = cp.i; i < e; i++){
+          const v = V[i];
+          if (i > cp.i && v.date.slice(0, 6) !== V[i - 1].date.slice(0, 6)) keep(i);
+          if (v.opt || v.cancel) continue;
+          const ym = this.ym(v.date);
+          v.ent.forEach(z => { const x = out[z.l] = out[z.l] || {}; x[ym] = r2((x[ym] || 0) + z.a); x.t = r2((x.t || 0) + z.a); });
+        }
+        keep(e);
+        return out;
+      }
+    }
+    return this.movesNow(from, to);
+  },
+  // read in full
+  movesNow(from, to){
     const out = {};
     (S.books.vouchers || []).forEach(v => {
       if (v.date < from || v.date > to || v.opt || v.cancel) return;

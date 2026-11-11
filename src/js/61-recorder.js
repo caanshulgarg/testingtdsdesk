@@ -59,11 +59,13 @@ const Rec = {
   // balance total LK.tbBooks (Look up's trial balance, its debit total; one that does not total is not given).
   // {receivables, payables, cash_bank, profit, tb_total, why: {figure: words when not available}}
   _fc: null,
-  fincom(cid, month){
+  fincom(cid, month){ const it = this.fincomSteps(cid, month); let r; while (!(r = it.next()).done); return r.value; },
+  // the same in steps (the tie-out works them out behind the page, app/src/screens/books/Tieout.jsx)
+  *fincomSteps(cid, month){
     const b = S.books && S.books.cid === cid ? S.books : null, out = {why: {}};
     const na = (k, w) => { out[k] = null; out.why[k] = w; };
     if (!b || !(b.vouchers || []).length){ this.FIGS.forEach(([k]) => na(k, "the books are not open here")); return out; }
-    const end = this.monthEnd(month), key = [cid, end, (b.vouchers || []).length, (b.tb || {}).at || "", b.mapV || 0, Object.keys(b.under || {}).length].join("|");
+    const end = this.monthEnd(month), key = [cid, end, (b.vouchers || []).length, (b.tb || {}).at || "", b.mapV || 0, Object.keys(b.under || {}).length, typeof BOOKS_REV === "number" ? BOOKS_REV : 0].join("|");
     const memo = this._fc && this._fc.b === b ? this._fc.m : new Map();
     this._fc = {b, m: memo};
     if (memo.has(key)) return memo.get(key);
@@ -72,6 +74,7 @@ const Rec = {
     try { P = Parties.position(end); } catch (e){ P = {ok: false, why: (e && e.message) || String(e)}; }
     tryIt("receivables", () => P.ok ? P.owed : {na: P.why});
     tryIt("payables", () => P.ok ? P.youOwe : {na: P.why});
+    yield;
     tryIt("cash_bank", () => {
       const tb = b.tb, fs = Audit.fyStart(end), base = tb && tb.from > fs && tb.from <= end ? tb.from : fs;
       const B = Audit.balances(base, end);
@@ -79,11 +82,13 @@ const Rec = {
       const at = B.at(end);
       return Object.keys(at).filter(l => Audit.isCash(l) || Audit.isBankL(l)).reduce((s, l) => s + r2(-at[l]), 0);
     });
+    yield;
     tryIt("profit", () => {
       const fs = Audit.fyStart(end);
       if (!MIS.covered(fs)) return {na: "the books here begin after " + fmtDate(tallyDate(fs))};
       return MIS.pl(fs, end).pat.t;
     });
+    yield;
     tryIt("tb_total", () => {
       const T = LK.tbBooks(end);
       if (T.none) return {na: T.none};
