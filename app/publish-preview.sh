@@ -28,6 +28,11 @@ fi
 # with the bridge's own key: a signature that does not verify stops the publish. FINCOM_SIGN_BRIDGE_LIST=1 signs the list
 # afresh (a new latest.json; the passphrase: FINCOM_SIGNING_PASS or FINCOM_SIGNING_PASS_FILE). A list with no signature
 # goes as it is (no bridge updates itself), said here
+# (11-Nov-2026: two publishes from a build made without build.py --react went out with no bridge files, so the bridges'
+# update check got "not found"): asked to ship the bridge, a build without its update list is never published
+if [ "${FINCOM_SHIP_BRIDGE:-}" = 1 ] && [ ! -f dist-test/assets/bridge-go/latest.json ]; then
+  echo "FINCOM_SHIP_BRIDGE=1 but dist-test/assets/bridge-go/latest.json is missing (build with build.py --react): stopped (nothing published)."; exit 1
+fi
 if [ -f dist-test/assets/bridge-go/latest.json ]; then
   if [ "${FINCOM_SIGN_BRIDGE_LIST:-}" = 1 ]; then
     python3 "../tools/bridge_list_sign.py" sign dist-test/assets/bridge-go || { echo "The bridge's update list is not signed well: stopped (nothing published)."; exit 1; }
