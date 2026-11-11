@@ -17,6 +17,9 @@
 // namesClean / namesKey; the app's perRender, reactScope, IN_RENDER, RENDER_GEN, ITCDec, whoAmI, TDSTally and GSTX when
 // they are there (each looked up with typeof). Plain JavaScript with no imports; nothing runs at load but the objects being made.
 // No AI here: M2B.aiLinks only reads the pairs the gst-2b-match function already stored for the year.
+// GST3B_SRC: this file's and names.js's text (this value left out), hashed (tests/run_gst_cloud.js keeps it so): a 3B the
+// cloud worked out carries it, and the 3B page uses the cloud's only when its own is the same (app/src/screens/gst/cloud3b.js)
+const GST3B_SRC = "s14c6452003adbbd9";
 function num(v){ if (typeof v === "number") return isFinite(v) ? v : 0; const n = parseFloat(String(v == null ? "" : v).replace(/[^0-9.\-]/g, "")); return isFinite(n) ? n : 0; }
 function r2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
 const INR = new Intl.NumberFormat("en-IN", {minimumFractionDigits:2, maximumFractionDigits:2});
@@ -2535,4 +2538,4 @@ const LedMaster = {
 };
 
 
-export {num, r2, INR, MONTHS3, toDateObj, fmtDate, ledEnt, ledClean, ledKey, LED_IDX, ledIdx, ledLook, ledUnder, ledGroupPath, STATE_CODES, NORM_CACHE, GRAM_CACHE, normName, gramsOf, normNameRaw, nameSim, BookItems, BookSrc, Books, CustIMS, GST2B, GSTAdv, GSTAmend, GSTF, GSTQ, GSTR, GSTRev, GSTSet, GSTV, ITCT, M2B, LedMaster, Audit};
+export {GST3B_SRC, num, r2, INR, MONTHS3, toDateObj, fmtDate, ledEnt, ledClean, ledKey, LED_IDX, ledIdx, ledLook, ledUnder, ledGroupPath, STATE_CODES, NORM_CACHE, GRAM_CACHE, normName, gramsOf, normNameRaw, nameSim, BookItems, BookSrc, Books, CustIMS, GST2B, GSTAdv, GSTAmend, GSTF, GSTQ, GSTR, GSTRev, GSTSet, GSTV, ITCT, M2B, LedMaster, Audit};

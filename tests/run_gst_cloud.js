@@ -25,10 +25,13 @@ const ROOT = path.join(__dirname, "..");
 const DENO = process.env.DENO || (() => { try { cp.execFileSync("deno", ["--version"], {stdio: "ignore"}); return "deno"; } catch (e){ return path.join(ROOT, ".deno-scratch", "package", "deno"); } })();
 const OUT = path.join(__dirname, "out"); fs.mkdirSync(OUT, {recursive: true});
 let fails = 0; const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };
-const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "MONTHS3", "toDateObj", "fmtDate", "tallyDate", "STATE_CODES", "RULE_DEFAULTS", "Books", "LedMaster", "GSTR", "GSTAdv", "GSTRev", "GSTAmend",
+const NAMES = ["GST3B_SRC", "num", "r2", "xesc", "esc", "MONTHS", "MONTHS3", "toDateObj", "fmtDate", "tallyDate", "STATE_CODES", "RULE_DEFAULTS", "Books", "LedMaster", "GSTR", "GSTAdv", "GSTRev", "GSTAmend",
   "GST2B", "INR", "normName", "nameSim", "ITCT", "GSTSet", "CustIMS", "GSTF", "GSTQ", "GSTV", "M2B", "Audit", "TDSTally", "TDS", "BookSrc", "BookItems", "BookSync", "BOOKS_KEYS", "clone", "TallyRead", "CO",
   "RENDER_GEN", "BOOKS_REV", "drawStamp", "REACT_SCOPE", "reactScopeEnd", "reactScope", "perRender", "memoScope"];
 const REVF = path.join(__dirname, "gst_cloud_rev.json"), REV_FILES = ["server/_shared/gst3b.js", "server/_shared/names.js", "server/_shared/gst3bprint.js", "server/gst-run/engine.js", "server/gst-run/data.ts", "server/gst-run/handler.ts", "server/gst-run/index.ts", "server/gst-run/migration-153-gst-cloud.sql"];
+// GST3B_SRC (server/_shared/gst3b.js): its text without the value, and names.js's, hashed
+const SRC_RE = /^const GST3B_SRC = "[^"]*";$/m;
+function srcHash(){ const h = require("crypto").createHash("sha256"); h.update(fs.readFileSync(path.join(ROOT, "server/_shared/gst3b.js"), "utf8").replace(SRC_RE, "") + "\n" + fs.readFileSync(path.join(ROOT, "server/_shared/names.js"), "utf8")); return "s" + h.digest("hex").slice(0, 16); }
 function revSha(){ const h = require("crypto").createHash("sha256"); REV_FILES.forEach(f => h.update(f + "\n" + fs.readFileSync(path.join(ROOT, f), "utf8").replace(/^export const REV = "[^"]*";$/m, "") + "\n")); return h.digest("hex"); }
 const CLIENT = "cli-syn-153", FIRM = "f1530000-0000-4000-8000-000000000001";
 
@@ -121,7 +124,10 @@ const near0 = o => !o || H.every(h => Math.abs(Number(o[h]) || 0) < 0.005);
   const {gst3bPrint, gst3bSame} = await import(path.join(ROOT, "server", "_shared", "gst3bprint.js"));
   console.log("== 0. the engine's revision");
   const rec = (() => { try { return JSON.parse(fs.readFileSync(REVF, "utf8")); } catch (e){ return {}; } })(), sha = revSha();
-  if (process.env.GST_REV_WRITE){ fs.writeFileSync(REVF, JSON.stringify({rev: eng.REV, sha}, null, 2) + "\n"); console.log("  (written: " + eng.REV + " " + sha + ")"); }
+  if (process.env.GST_REV_WRITE){ const f = path.join(ROOT, "server/_shared/gst3b.js"); fs.writeFileSync(f, fs.readFileSync(f, "utf8").replace(SRC_RE, 'const GST3B_SRC = "' + srcHash() + '";')); console.log("  (GST3B_SRC written: " + srcHash() + ")"); }
+  else ok((fs.readFileSync(path.join(ROOT, "server/_shared/gst3b.js"), "utf8").match(SRC_RE) || [""])[0] === 'const GST3B_SRC = "' + srcHash() + '";', "GST3B_SRC is the hash of gst3b.js and names.js (" + srcHash() + "; else GST_REV_WRITE=1 node tests/run_gst_cloud.js)");
+  const sha2 = revSha();
+  if (process.env.GST_REV_WRITE){ fs.writeFileSync(REVF, JSON.stringify({rev: eng.REV, sha: sha2}, null, 2) + "\n"); console.log("  (written: " + eng.REV + " " + sha2 + ")"); }
   else ok(rec.sha === sha && rec.rev === eng.REV, "gst-run's files are as REV " + eng.REV + " says (" + (rec.sha === sha ? "same" : "changed: move REV in server/gst-run/engine.js, then GST_REV_WRITE=1 node tests/run_gst_cloud.js") + ")");
 
   if (process.env.GST_ONLY_BIG) return big();
@@ -147,7 +153,7 @@ const near0 = o => !o || H.every(h => Math.abs(Number(o[h]) || 0) < 0.005);
     const k = KN.find(z => z.args === "07|" + a.ym), g = k && k.result, m = boxes(mine[a.ym]);
     const bad = [];
     Object.entries(BOX).forEach(([n, f]) => { boxN++; if (!g || JSON.stringify(f(g)) !== JSON.stringify(f(m))) bad.push(n + ": cloud " + JSON.stringify(g && f(g)) + " app " + JSON.stringify(f(m))); });
-    const same = g && JSON.stringify(Object.assign({}, g, {engine: undefined, fp: undefined})) === JSON.stringify(m);
+    const same = g && JSON.stringify(Object.assign({}, g, {engine: undefined, src: undefined, fp: undefined})) === JSON.stringify(m);
     if (!same) allSame = false;
     ok(!bad.length && same, a.ym + (mine[a.ym].quarter ? " (quarter " + mine[a.ym].months.join(",") + ")" : "") + ": every box equal" + (bad.length ? "; " + bad.slice(0, 3).join("; ") : same ? "" : "; the boxes agree but the whole 3B differs"));
     // the app's own fingerprint of the books it has open, with the 2B run of the month's year it read
@@ -158,7 +164,7 @@ const near0 = o => !o || H.every(h => Math.abs(Number(o[h]) || 0) < 0.005);
   let oldSame = 0; const oldBad = [];
   for (const m of ["202404", "202405", "202406", "202407", "202408", "202409", "202410", "202411", "202412", "202501", "202502", "202503"]){
     const mine = app3b(OLD, "07", m), k = KO.find(z => z.args === "07|" + m);
-    if (k && JSON.stringify(Object.assign({}, k.result, {engine: undefined, fp: undefined})) === JSON.stringify(boxes(mine[m]))) oldSame++; else oldBad.push(m);
+    if (k && JSON.stringify(Object.assign({}, k.result, {engine: undefined, src: undefined, fp: undefined})) === JSON.stringify(boxes(mine[m]))) oldSame++; else oldBad.push(m);
   }
   ok(oldSame === 12, "the older book's 12 months: the cloud's 3B is the app's, box for box (the whole 3B)" + (oldBad.length ? "; not: " + oldBad.join(", ") : ""));
   console.log("  (" + ASKS.length + " months, " + boxN + " boxes compared; the whole 3B object compared too: " + (allSame ? "equal" : "NOT equal") + ")");
@@ -169,7 +175,8 @@ const near0 = o => !o || H.every(h => Math.abs(Number(o[h]) || 0) < 0.005);
     const fpP = gst3bPrint(open(r3), ctx.S.sales.list, "");
     const r4 = JSON.parse(JSON.stringify(rows)); r4.work.gst3b["07|202509"] = {rev2: {igst: 1}}; r4.items = items(r4.work);
     const fpW = gst3bPrint(open(r4), ctx.S.sales.list, k.run);
-    ok(!gst3bSame(fpX, k) && !gst3bSame(fpP, k) && fpP.pend > 0 && !gst3bSame(fpW, k), "and not the same when the app has an entry the cloud has not, a ledger whose kind is a guess (pending), or a figure typed only here");
+    ok(KN.length && KN.every(r => r.result.src === x.GST3B_SRC) && /^s[0-9a-f]{16}$/.test(x.GST3B_SRC || ""), "every month the cloud kept carries the engine's source (GST3B_SRC " + x.GST3B_SRC + "), the app's own: the 3B page may use it");
+  ok(!gst3bSame(fpX, k) && !gst3bSame(fpP, k) && fpP.pend > 0 && !gst3bSame(fpW, k), "and not the same when the app has an entry the cloud has not, a ledger whose kind is a guess (pending), or a figure typed only here");
   }
 
   console.log("== 3. what the months cover (on the app's figures)");
@@ -243,7 +250,7 @@ async function big(){
   const need = Math.max(lv.rows, lv.rowsAndBooks) + 60;
   ok(need < 256, "memory: what a run holds alive at its fullest (after a collection): the rows read " + lv.rows + " MB, the rows and the books with a month worked out " + lv.rowsAndBooks + " MB; with a Deno function's own (about 60 MB) " + need + " MB, under the 256 MB limit (heap in use during a run, garbage not yet collected included: up to " + bh + " MB; this test's process, with the fake database's 40,000 entries in it too: " + bt.peakRss + " MB)");
   const bigApp = app3b(big, "07", "202603"), bk = bt.kept.find(z => z.args === "07|202603");
-  ok(bk && JSON.stringify(Object.assign({}, bk.result, {engine: undefined, fp: undefined})) === JSON.stringify(boxes(bigApp["202603"])), "the 40,000-entry book's January-March quarter: the cloud's 3B is the app's");
+  ok(bk && JSON.stringify(Object.assign({}, bk.result, {engine: undefined, src: undefined, fp: undefined})) === JSON.stringify(boxes(bigApp["202603"])), "the 40,000-entry book's January-March quarter: the cloud's 3B is the app's");
   [bf, br, path.join(OUT, "gst-cloud-rows.json"), path.join(OUT, "gst-cloud-res.json")].forEach(f => { try { fs.unlinkSync(f); } catch (e){} });
   console.log(fails ? fails + " FAILED" : "all ok");
   process.exit(fails ? 1 : 0);

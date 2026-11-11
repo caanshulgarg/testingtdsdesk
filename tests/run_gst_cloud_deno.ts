@@ -122,7 +122,9 @@ const fake = async (input: string | URL | Request, init?: RequestInit): Promise<
   } finally { fakeCpu += cpu() - c0; }
 };
 const env: Record<string, string> = { SUPABASE_URL: "https://fake.example", SUPABASE_SERVICE_ROLE_KEY: "service-key", SUPABASE_ANON_KEY: "anon-key" };
-const h = handler({ env: (k) => env[k], fetch: fake as typeof fetch, now: () => new Date(Date.parse(IN.today || "2026-04-20T06:00:00Z")), later: (p) => { p.catch(() => {}); } });
+// GST_READY_MS / GST_TOTAL_MS: a slower machine's budget, to check the figures there (the function's own is 1.1 s / 1.5 s)
+const envMs = (k: string) => Number(Deno.env.get(k) || 0) || undefined;
+const h = handler({ env: (k) => env[k], fetch: fake as typeof fetch, now: () => new Date(Date.parse(IN.today || "2026-04-20T06:00:00Z")), later: (p) => { p.catch(() => {}); }, ready: envMs("GST_READY_MS"), total: envMs("GST_TOTAL_MS") });
 const call = async (body: unknown, tok = "tok-member", extra: Record<string, string> = {}) => {
   const r = await h(new Request("https://fake.example/functions/v1/gst-run", { method: "POST", headers: { Authorization: "Bearer " + tok, "Content-Type": "application/json", Origin: "https://staging.fincom.live", ...extra }, body: JSON.stringify(body) }));
   return { status: r.status, cors: r.headers.get("Access-Control-Allow-Origin") || "", ...(await r.json()) };

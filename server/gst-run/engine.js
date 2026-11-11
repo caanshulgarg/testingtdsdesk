@@ -25,7 +25,7 @@ import * as E from "../_shared/gst3b.js";
 import { gst3bPrint } from "../_shared/gst3bprint.js";
 
 // the revision of the function around the engine (data.ts, handler.ts): moved by hand with tests/gst_cloud_rev.json
-export const REV = "153.7";
+export const REV = "153.8";
 
 const G = globalThis;
 // what the app's program has around the engine: names.js (put at its head by build.py too)
@@ -125,7 +125,7 @@ export function step(rows, reg, kept, o) {
       Object.keys(have).forEach((k) => { if (k < m) g.set("3b|" + k + "|" + reg, have[k]); });
       G.IN_RENDER = 1; G.RENDER_GEN = ++GEN;
       G.perRender = (obj, key, fn) => { let x = memo.get(obj); if (!x) memo.set(obj, x = new Map()); if (x.has(key)) return x.get(key); const v = fn(); x.set(key, v); return v; };
-      const t = E.GSTR.threeB(m, reg), res = Object.assign(boxes(t), { engine: ENGINE, fp: Object.assign({}, fp0, { run: r2b ? String(r2b.id) : "" }) });
+      const t = E.GSTR.threeB(m, reg), res = Object.assign(boxes(t), { engine: ENGINE, src: E.GST3B_SRC, fp: Object.assign({}, fp0, { run: r2b ? String(r2b.id) : "" }) });
       have[m] = res; done.push({ ym: m, result: res }); last = now() - tm;
     }
     return { months: done, more: all.some((m) => want(m) && !have[m]), all, vouchers: b.vouchers.length, ms: now() - t0, booksMs: o.books ? 0 : tBooks, books: b, fp: fp0, atReady };
