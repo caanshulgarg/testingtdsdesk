@@ -12,6 +12,9 @@ hand (page.clock).
   3. Books > From Tally with a year being read and a check going: ONE shared poll (one 5-second timer however many lines),
      the summary at most every 15 s (10 s while a check goes), none while the tab is hidden, the timer gone on leaving
      the page, one again for another client.
+  1b. (the review of 07041bcdd) an answer that comes in parts for a minute is read whole; one that stops for 20 s is
+     given up. 4b: one book's progress failing marks that row alone, and the mark goes within 2 minutes once nothing
+     reads it.
   4. FinCom's own reads fail for 5 minutes: "Could not check just now, trying again" with the time of what is shown; no
      row turns "offline", no fresh tick, the top bar's state is not ok; busy is let go and it asks again; when the reads
      work again the line goes and the ticks are back. A computer that is really silent (the reads work, its beat is old)
@@ -54,6 +57,12 @@ API = """async ([path, opts, how, runMs]) => {
   window.fetch = (url, o) => { out.asked++; out.url = String(url);
     if (o && o.signal) o.signal.addEventListener("abort", () => { out.aborted = true; });
     if (how.never) return new Promise((_, no) => { if (o && o.signal) o.signal.addEventListener("abort", () => no(new DOMException("aborted", "AbortError"))); });
+    if (how.parts) { const enc = new TextEncoder(); let i = 0;
+      // an answer that starts at once and comes in parts: how.gap ms between them, how.stall ms before the part how.at
+      const body = new ReadableStream({ pull: (c) => new Promise(ok => setTimeout(() => {
+        if (i >= how.parts) { c.enqueue(enc.encode("]")); c.close(); return ok(); }
+        c.enqueue(enc.encode((i ? "," : "[") + JSON.stringify({i, pad: "x".repeat(1000)}))); i++; ok(); }, i === how.at ? how.stall : how.gap)) });
+      return Promise.resolve(new Response(body, {status: 200})); }
     return new Promise(r => setTimeout(() => r(new Response(JSON.stringify(how.answer), {status: 200})), how.ms || 0)); };
   const t0 = Date.now();
   window.__apiRun = Cloud.api(path, opts || undefined).then(v => { out.val = v; }, e => { out.err = String((e && e.message) || e); out.timedOut = !!(e && e.timedOut); })
@@ -97,6 +106,13 @@ def main():
         ok(not a[0]["err"] and not a[1]["err"] and a[2]["timedOut"] and 69000 <= a[2]["at"] <= 72000, "1. a 400 KB save has longer (20 s + 1 s for each 8 KB): waited for at 69 s, given up at 70 s (%s)" % a[2]["at"])
         a = api("records?x=1", {"method": "POST", "body": {"rows": "x" * 4000000}}, {"never": True}, [119000, 2000])
         ok(not a[0]["err"] and a[1]["timedOut"] and a[1]["at"] <= 121000, "1. two minutes at most, however large (%s)" % a[1]["at"])
+        # (the review of 07041bcdd: a large answer that keeps coming, as the firm's backup or a whole client's books)
+        a = api("client_books?select=rev,data", None, {"parts": 12, "gap": 5000, "at": -1, "stall": 0}, [61000, 5000])
+        ok(not a[1]["err"] and isinstance(a[1]["val"], list) and len(a[1]["val"]) == 12 and a[1]["at"] >= 60000,
+           "1. an answer that comes in parts for a minute (5 s between them): read whole, never cut at 20 s (%s parts, %d ms, %s)" % (len(a[1]["val"] or []), a[1]["at"], a[1]["err"][:40]))
+        a = api("client_books?select=rev,data", None, {"parts": 12, "gap": 2000, "at": 4, "stall": 60000}, [27000, 3000])
+        ok(not a[0]["err"] and a[1]["timedOut"] and "stopped sending for 20 seconds" in a[1]["err"] and a[1]["aborted"],
+           "1. an answer that stops coming for 20 s: given up, in words (%s, %d ms)" % (a[1]["err"][:60], a[1]["at"]))
         a = api("tally_devices?select=id", {"timeout": 5000}, {"never": True}, [4000, 2000])
         ok(not a[0]["err"] and a[1]["timedOut"] and "5 seconds" in a[1]["err"], "1. a caller's own wait (opts.timeout) (%s)" % a[1]["err"][:50])
         a = api("tally_devices?select=id", None, {"answer": [{"id": 1}], "ms": 3000}, [4000, 30000])
@@ -204,6 +220,24 @@ def main():
         ok(len(chips) >= 6 and all("could not check" not in c[1] for c in chips) and any(c[2].startswith("●") for c in chips), "4. ... and the chips are as before (%s)" % (chips[:1],))
         E("() => { navHome('tally'); }"); run(3000)
         ok(n("#app [data-tally-stale]") == 0 and ms.startswith("✓ Up to date") and E("() => tallyStatus(null).state") != "offline", "4. the reads work again: the line goes, the tick is back (%s)" % ms)
+        # (the review of 07041bcdd) one book's masters progress fails: its own row only, never the others, the chips or the
+        # top bar; the company closed (nothing reads it any more): the mark is gone within 2 minutes
+        kesrow = TB + ' tr[data-tsm-row="%s"]' % NAMES[0]
+        E("""() => { const rpc = TCloud.rpc; window.__rpc0 = rpc;
+          TCloud.rpc = async (fn, a) => { if (fn === 'tally_period_status' && a.p_book === 'bk-Kestrel Textiles') { window.__req.push('rpc/tally_period_status:bad'); throw new Error('Cloud error 520'); } return rpc(fn, a); }; }""")
+        clear(); run(60000)
+        kes_ms, orb_ms = txt(kesrow + " [data-tpg-masters]"), txt(row + " [data-tpg-masters]")
+        st = E("() => { const t = tallyStatus(null); return [t.state, t.level, t.label]; }")
+        ok("✓" not in kes_ms and "as of" in kes_ms and orb_ms.startswith("✓ Up to date") and n(TB + " [data-tpg-stale]") == 1,
+           "4b. one book's progress fails: that row alone without its tick, as of its time; the others ✓ (%s | %s)" % (kes_ms, orb_ms))
+        ok(st[1] == "ok" and "as of" not in st[2] and txt("#app [data-tally-stale]").startswith(STALE), "4b. the top bar is as before; the page's one line says it (%s)" % st)
+        E("() => { window.__devs.forEach(d => { d.info.beat.open = d.info.beat.open.filter(c => c !== 'KESTREL TEXTILES'); Object.values(d.info.bridges || {}).forEach(b => { b.open = b.open.filter(c => c !== 'KESTREL TEXTILES'); }); }); TLight.st.at = 0; }")
+        clear(); run(150000)
+        ok(n("#app [data-tally-stale]") == 0 and n(TB + " [data-tpg-stale]") == 0 and txt(kesrow + " [data-tpg-masters]").startswith("✓"),
+           "4b. the company closed, nothing reads it: the mark is gone within 2 minutes (%s)" % txt(kesrow + " [data-tpg-masters]"))
+        clear(); run(60000)
+        ok(not reqs("rpc/tally_period_status:bad"), "4b. ... and it is not asked again for ever (%d)" % len(reqs("rpc/tally_period_status:bad")))
+        E("() => { TCloud.rpc = window.__rpc0; }")
         # the control: the reads work, the computer itself has gone silent
         E("() => { window.__silent = true; }"); run(400000)
         st = E("() => tallyStatus(null).state")

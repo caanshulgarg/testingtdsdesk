@@ -1561,40 +1561,53 @@ const TallyClock = {
 function beatEvery(beat){ return Math.max(10, Math.min(600, num((beat || {}).every) || 60)); }
 // reliability (11-Nov-2026; the audit: "when FinCom's cloud is slow, every company turns 'computer offline' (wrong,
 // alarming) or keeps a stale tick, with no word that the page itself could not read"). A read of FinCom's cloud that
-// failed is never told as the Tally computer's state. TStale keeps, per read (light: the computers; sum, ask, prog: the
-// Tally page's own), when it last worked and whether its last try failed:
+// failed is never told as the Tally computer's state. TStale keeps, per read (light: the firm's computers; sum, ask: the
+// Tally page's summary and checks; prog:<book>: one book's masters progress), when it last worked and whether its last
+// try failed. The review of 07041bcdd: a mark is its own read's: the computers' (light) mark the chips, the top bar and
+// the computers' state; the summary's the Entries cells; a book's progress that book's row only; the page's one line
+// says any of them. A mark goes with the next good read of its key, when its row is no longer shown (forget), when it
+// was not tried again for 2 minutes (KEEP: a company closed, a row no longer read), and on sign-out / another client
 //   TStale.ok(k) / TStale.fail(k, e, again)   the read's answer, or its failure and how to ask it again
-//   TStale.now()   null, or {at, words: "Could not check just now, trying again", as: "as of 14:02 IST"} (at: the oldest
-//                  last good read among the failing ones; 0 = never read)
+//   TStale.now(keys)   null, or {at, words: "Could not check just now, trying again", as: "as of 14:02 IST"} for those
+//                  keys (all when none given; at: the oldest last good read among the failing ones; 0 = never read)
+//   TStale.forget(k) / TStale.reset(prefix)   a row gone / everything (or every key that starts with prefix)
 //   TStale.clock() the moment the computers' state is judged at: the last good read while their read fails, so a beat
 //                  FinCom could not fetch never ages into "offline"
 //   tallyMark(p)   a status ({level, text, ...}) as last known: no green tick, the words and the time added
 const TStale = {
-  by: {}, WORDS: "Could not check just now, trying again",
+  by: {}, WORDS: "Could not check just now, trying again", KEEP: 120000, t: 0,
   ok(k){ this.by[k] = {okAt: Date.now(), err: ""}; },
+  live(x){ return !!(x && x.err && Date.now() - (x.errAt || 0) < this.KEEP); },
   // again: how that read is asked once more. "Trying again" is kept true by TStale itself: every 10 s while a read
   // stands failed and the tab is seen (the reads start from the page's drawings, and a quiet page draws nothing)
-  fail(k, e, again){ const x = this.by[k] = this.by[k] || {okAt: 0}; x.err = String((e && e.message) || e || "failed"); x.errAt = Date.now(); if (again) x.again = again; this.soon(); },
+  fail(k, e, again){ const x = this.by[k] = this.by[k] || {okAt: 0}; x.err = String((e && e.message) || e || "failed"); x.errAt = Date.now(); x.again = again || null; this.soon(); },
+  forget(k){ delete this.by[k]; },
+  reset(prefix){
+    Object.keys(this.by).forEach(k => { if (!prefix || k.startsWith(prefix)) delete this.by[k]; });
+    if (!prefix && this.t){ clearTimeout(this.t); this.t = 0; }
+  },
+  // (an expired mark is dropped here, and not asked again)
+  retry(){
+    Object.keys(this.by).forEach(k => { const x = this.by[k]; if (x.err && !this.live(x)) { x.err = ""; x.again = null; } });
+    const bad = Object.values(this.by).filter(x => this.live(x));
+    if (bad.length && (typeof pollOk !== "function" || pollOk())) bad.forEach(x => { try { if (x.again) x.again(); } catch (e){} });
+    return bad.length;
+  },
   soon(){
     if (this.t) return;
-    this.t = setTimeout(() => {
-      this.t = 0;
-      const bad = Object.values(this.by).filter(x => x.err);
-      if (!bad.length) return;
-      if (pollOk()) bad.forEach(x => { try { if (x.again) x.again(); } catch (e){} });
-      this.soon();
-    }, 10000);
+    this.t = setTimeout(() => { this.t = 0; if (this.retry()) this.soon(); }, 10000);
   },
-  clock(now){ const x = this.by.light; return x && x.err && x.okAt ? Math.min(now, x.okAt) : now; },
-  now(){
-    const bad = Object.values(this.by).filter(x => x.err);
+  clock(now){ const x = this.by.light; return this.live(x) && x.okAt ? Math.min(now, x.okAt) : now; },
+  now(keys){
+    const bad = (keys ? keys.map(k => this.by[k]) : Object.values(this.by)).filter(x => this.live(x));
     if (!bad.length) return null;
     const at = Math.min(...bad.map(x => x.okAt || 0));
     return {at, words: this.WORDS, as: at ? "as of " + tallyHm(at) : "nothing read yet"};
   }
 };
+// (the chips' and the top bar's: the firm's computers alone)
 function tallyMark(p){
-  const st = TStale.now();
+  const st = TStale.now(["light"]);
   if (!st || !p || p.state === "unlinked") return p;
   return Object.assign({}, p, {stale: st, level: p.level === "ok" ? "warn" : p.level, text: p.text + " \u2014 " + st.words.toLowerCase() + " (" + st.as + ")"});
 }
@@ -2123,7 +2136,7 @@ function tallyStatus(co){
   const SHORT = {none: "Tally not set up", offline: "Tally offline" + (heard ? " \u00b7 " + hhmm(heard) : ""), reconnecting: "Tally reconnecting\u2026",
     unlinked: "Tally: not linked", busy: "Tally busy", ok: "Tally in sync"};
   // (reliability: while FinCom's own read fails, the last known state, without a tick, with the words and its time)
-  const stale = TStale.now();
+  const stale = TStale.now(["light"]);
   const out = o => { Object.assign(o, {parts, short: o.state === "waiting" ? o.label.replace(/ waiting$/, "") + " for Tally" : SHORT[o.state] || o.label});
     return stale ? Object.assign(o, {stale, level: o.level === "ok" ? "warn" : o.level, label: o.label + " (" + stale.as + ")", say: stale.words + " (" + stale.as + "). " + o.say}) : o; };
   if (stale && !devs.length && !local) return out({state: "unknown", level: "warn", label: stale.words, say: "FinCom could not read the firm\u2019s Tally computers."});

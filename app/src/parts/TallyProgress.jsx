@@ -73,7 +73,7 @@ export function cloudProg(cid, company) {
   const v = k.v, t = v ? Date.parse(v.at) || 0 : 0, going = !!v && !v.done && Date.now() - t < FRESH_MS;
   // (a company open nowhere is not being read: nothing asked; what was read stays)
   if (!k.busy && seen() && (going || openNow(company)) && Date.now() - k.at > (going ? 5000 : 20000)) {
-    const was = JSON.stringify(k.v), say = (e) => { if (typeof TStale === "object") { if (e) TStale.fail("prog", e, () => cloudProg(cid, company)); else TStale.ok("prog"); } };
+    const was = JSON.stringify(k.v), key = "prog:" + bk.book, say = (e) => { if (typeof TStale === "object") { if (e) TStale.fail(key, e, () => { k.at = 0; cloudProg(cid, company); }); else TStale.ok(key); } };
     // (a read that failed is said, TStale: what was read before stays, with its time; the next look asks again)
     k.busy = cloudAsk("prog:" + bk.book, () => TCloud.rpc("tally_period_status", { p_book: bk.book }).then((p) => { k.v = (p && p.ledger) || null; say(); }, (e) => { if (!missing(e)) say(e); })
       .finally(() => { k.at = Date.now(); k.busy = false; if (JSON.stringify(k.v) !== was) soonDraw(); }));
@@ -166,8 +166,9 @@ export function entriesOf(cid, ms, last) {
 }
 // reliability: while a read of FinCom's cloud fails (TStale, src/js/49) a tick is not said afresh: the same words without
 // it, as last known ("Up to date" · as of 14:02 IST); the page's one line above the table says why
-function known(head, cls) {
-  const st = typeof TStale === "object" ? TStale.now() : null;
+// (keys: the reads this cell is made of: the computers', and its book's progress or the summary)
+function known(head, cls, keys) {
+  const st = typeof TStale === "object" ? TStale.now(keys) : null;
   return st && cls === " ok" ? [head.replace(/^✓ /, ""), " muted", st.as] : [head, cls, ""];
 }
 function Bar({ pct, kind, label }) {
@@ -187,6 +188,9 @@ export function MastersCell({ row }) {
   // open in Tally; it draws this row only when what it shows changed)
   const need = live || openNow(row.company), ref = useRef(row); ref.current = row;
   useEffect(() => (need ? rowWatch({ row: () => ref.current, tick: () => tick((k) => k + 1) }) : undefined), [need, row.cid]);
+  // (a row no longer shown, or showing another book: its progress's mark goes with it)
+  const mBook = (ledBook(row.cid) || {}).book || "";
+  useEffect(() => () => { if (mBook && typeof TStale === "object") TStale.forget("prog:" + mBook); }, [mBook]);
   let head, sub = "", sub2 = "", cls = "";
   if (m.st === "done") { head = "✓ Up to date"; cls = " ok"; sub = countWords(m.n, m.g); sub2 = m.readLine || (m.at ? "Updated " + whenIn(m.at) : ""); }
   // (the groups only once FinCom holds this client's masters: a first read has no count yet, never "0 groups")
@@ -195,7 +199,7 @@ export function MastersCell({ row }) {
   else if (m.st === "why") { head = m.empty ? "No masters from Tally" : "Not done"; cls = " bad"; sub = m.words.replace(/^Not done:\s*/, ""); }
   // (0 only when FinCom's book for it is known and says no ledger ever came; else "—")
   else { const bk = ledBook(row.cid); head = "Not brought yet"; cls = " bad"; sub = (m.n != null ? nf(m.n) : bk && !bk.ledgersAt ? "0" : "—") + " ledgers in FinCom"; sub2 = "TDS and GST need these"; }
-  let as; [head, cls, as] = known(head, cls); if (as) sub2 = as;
+  let as; [head, cls, as] = known(head, cls, ["light", "prog:" + mBook]); if (as) sub2 = as;
   return <div className="tpg-cell" data-tpg-masters={m.st} data-tpg-stale={as ? "" : undefined}>
     <span className={"tpg-words" + cls} data-tpg-mw="">{head}</span>
     {live && <Bar pct={m.pct} kind="read" label={"Ledgers of " + row.client} />}
@@ -217,7 +221,7 @@ export function EntriesCell({ row }) {
   // (Bring books asked, not moving: why, in the words of Books › From Tally: the computer, reading of older entries off,
   // Tally busy, stopped. Not while it waits for the masters, which the head says)
   const wait = p && !p.done && e.st !== "after" ? whyWords(p, e.b) : "";
-  let as; [head, cls, as] = known(head, cls); if (as) sub = [sub, as].filter(Boolean).join(" · ");
+  let as; [head, cls, as] = known(head, cls, ["light", "sum"]); if (as) sub = [sub, as].filter(Boolean).join(" · ");
   return <div className="tpg-cell" data-tpg-entries={e.st} data-tpg-stale={as ? "" : undefined}>
     <span className={"tpg-words" + cls} data-tpg-ew="">{head}</span>
     {p && !p.done && (e.st === "going" || e.st === "after" || e.st === "paused") && <Bar pct={e.pct} kind={e.st === "going" ? "read" : "wait"} label={"Entries of " + row.client} />}

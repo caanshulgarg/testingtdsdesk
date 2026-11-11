@@ -24,28 +24,54 @@ const Cloud = {
   delete(kind, cid, id, why){ if (typeof Live === "object" && Live.applying) return; const d = this.dels(); d[kind + "|" + (cid || "") + "|" + id] = {at: new Date().toISOString(), why: String(why || "").slice(0, 200)}; this.setDels(d); },
   setMarks(m){ lsSet("tdsdesk:cloudmarks", JSON.stringify(m)); },
   // reliability (11-Nov-2026; the cloud held requests for minutes and every poll's "busy" stayed set, the page silently
-  // stale): no request to FinCom's cloud waits for ever. f(signal) is given up after ms (the request itself is stopped
-  // where the browser can) and fails with words a person can read; e.timedOut tells the callers that care. WAIT: 20 s
-  // (the database itself gives up at 8 s); a save has one more second for each 8 KB it sends (a slow office line), two
-  // minutes at most; a caller that knows better says so (opts.timeout, in ms)
+  // stale): no request to FinCom's cloud waits for ever. timed(ms, f, idle): f(signal, alive) is given up when its answer
+  // has not started within ms, or when, once started, nothing more came for idle ms (alive() is called at the answer's
+  // start and at each part of it: readText). A large answer that keeps coming (a backup, a whole client's books, a bank
+  // statement on a slow line) is never cut for its size. The request itself is stopped where the browser can, and fails
+  // with words a person can read; e.timedOut tells the callers that care. WAIT: 20 s for the answer to start (the
+  // database itself gives up at 8 s) and between its parts; a save has one more second for each 8 KB it sends (a slow
+  // office line), two minutes at most; a caller that knows better says so (opts.timeout, in ms: the answer's start)
   WAIT: 20000,
   waitFor(opts, body){ return num(opts && opts.timeout) > 0 ? num(opts.timeout) : Math.min(120000, this.WAIT + Math.round((body ? body.length : 0) / 8)); },
-  timed(ms, f){
+  timed(ms, f, idle){
     const ac = typeof AbortController === "function" ? new AbortController() : null;
-    let t = 0;
-    const late = new Promise((_, no) => { t = setTimeout(() => {
-      const e = new Error("FinCom\u2019s cloud did not answer in " + Math.round(ms / 1000) + " seconds (timed out). Check the internet and try again.");
-      e.timedOut = true; no(e);
+    let t = 0, no = null, started = false, done = false;
+    const arm = (wait) => { clearTimeout(t); if (done) return; t = setTimeout(() => {
+      const e = new Error("FinCom\u2019s cloud " + (started ? "stopped sending for " : "did not answer in ") + Math.round(wait / 1000) + " seconds (timed out). Check the internet and try again.");
+      e.timedOut = true; done = true; no(e);
       try { if (ac) ac.abort(); } catch (x){}
-    }, ms); });
-    return Promise.race([Promise.resolve().then(() => f(ac ? ac.signal : undefined)), late]).finally(() => clearTimeout(t));
+    }, wait); };
+    const late = new Promise((_, n) => { no = n; });
+    const alive = () => { started = true; arm(idle || this.WAIT); };
+    arm(ms);
+    return Promise.race([Promise.resolve().then(() => f(ac ? ac.signal : undefined, alive)), late]).finally(() => { done = true; clearTimeout(t); });
   },
-  async authCall(path, body){
+  // an answer's text, read part by part (each part keeps the wait alive); an answer without a stream, as text
+  async readText(r, alive){
+    if (!r || !r.body || typeof r.body.getReader !== "function" || typeof TextDecoder !== "function") return r.text();
+    const rd = r.body.getReader(), dec = new TextDecoder(), out = [];
+    for (;;){
+      const {done, value} = await rd.read();
+      if (done) break;
+      if (alive) alive();
+      out.push(dec.decode(value, {stream: true}));
+    }
+    out.push(dec.decode());
+    return out.join("");
+  },
+  // the review of 07041bcdd: the token's refresh is never cut at 20 s (Supabase may already have made the new token: the
+  // old refresh token is then spent, and sending it again after its short grace ends the session). It has a minute
+  // (refreshWait) and is sent once a refresh token: a refresh whose answer never came is remembered (in this browser,
+  // for every tab: fincom:refresh-sent), and that refresh token is not sent again; another tab's new session is taken as
+  // it is, else the person signs in again
+  refreshWait: 60000,
+  async authCall(path, body, wait){
     const c = this.cfg();
-    const [r, j] = await this.timed(this.WAIT, async signal => {
+    const [r, j] = await this.timed(wait || this.WAIT, async (signal, alive) => {
       const r = await fetch(c.url.replace(/\/+$/, "") + "/auth/v1/" + path, {method: "POST", headers: {apikey: c.key, "Content-Type": "application/json"}, body: JSON.stringify(body), signal});
+      alive();
       return [r, await r.json().catch(() => ({}))];
-    });
+    }, wait);
     if (!r.ok) throw new Error(switchedOff(j) || j.error_description || j.msg || j.message || ("Sign-in failed (" + r.status + ")"));
     return j;
   },
@@ -87,7 +113,19 @@ const Cloud = {
     this._refreshing = (async () => {
       const s = this.sess();
       if (!s || !s.refresh_token) throw new Error("Signed out");
-      const j = await this.authCall("token?grant_type=refresh_token", {refresh_token: s.refresh_token});
+      const tag = String(s.refresh_token).slice(-16), SENT = "fincom:refresh-sent";
+      if (lsGet(SENT) === tag){
+        const e = new Error("FinCom could not renew your sign-in (no answer came). Sign in again."); e.signIn = true; throw e;
+      }
+      lsSet(SENT, tag);
+      let j;
+      try { j = await this.authCall("token?grant_type=refresh_token", {refresh_token: s.refresh_token}, this.refreshWait); }
+      catch (e){
+        // the server answered (it refused): nothing was spent, a later try may send it; no answer: never again
+        if (!(e && (e.timedOut || e.name === "TypeError" || e.name === "AbortError"))) lsDel(SENT);
+        throw e;
+      }
+      lsDel(SENT);
       const now = this.sess();
       if (!now || now.refresh_token !== s.refresh_token) return;      // signed out, or another tab got there first
       this.setSess(Object.assign({}, s, {access_token: j.access_token, refresh_token: j.refresh_token || s.refresh_token, at: Date.now(), expires_in: j.expires_in || 3600}));
@@ -106,7 +144,7 @@ const Cloud = {
   // never the firm's data; cleared all the same, so nothing of this sign-in stays behind). Only this address's own
   // (fincom-files:/review/ or /next/, the worker's RUNTIME): the trial build never clears the live one's; the other tab
   // is signed out too (the shared sign-in) and clears its own
-  signOut(){ try { Live.stop(); } catch (e){} try { if (window.caches) caches.delete("fincom-files:" + new URL("./", location.href).pathname).catch(() => {}); } catch (e){} this.setSess(null); this.st = {state: "off", email: "", role: "", firm: "", lastSync: 0, pending: 0, error: "", busy: "", members: []}; },
+  signOut(){ try { Live.stop(); } catch (e){} try { lsDel("fincom:refresh-sent"); if (typeof TStale === "object") TStale.reset(); } catch (e){} try { if (window.caches) caches.delete("fincom-files:" + new URL("./", location.href).pathname).catch(() => {}); } catch (e){} this.setSess(null); this.st = {state: "off", email: "", role: "", firm: "", lastSync: 0, pending: 0, error: "", busy: "", members: []}; },
   // speed round 2 (27-Oct-2026, client_timings: about 20 reads sent at the same moment as the page opened, each 150-280 ms
   // alone but up to 1.3 s together, and 5 s for alert_dismissals_list, tally_post_jobs and tally_post_row_flags): the
   // reads of things the first page does not show (alerts and their dismissals, posting flags and payloads, ledgers Tally
@@ -139,10 +177,11 @@ const Cloud = {
     // a save over 32 KB goes gzipped (app/src/lib/gzUpload.js: the same request, through records-upload); else, and on
     // any failure there, as before
     // (the answer's text is read inside the same wait: a body that never ends is given up too)
-    const [r, text] = await this.timed(this.waitFor(opts, body), async signal => {
+    const [r, text] = await this.timed(this.waitFor(opts, body), async (signal, alive) => {
       const r = (body && body.length > 32768 && typeof loadGzUpload == "function" && await loadGzUpload().then(m => m.send(path, opts, body, headers, c.url, signal)).catch(() => null))
         || await fetch(c.url.replace(/\/+$/, "") + "/rest/v1/" + path, {method: opts.method || "GET", headers, body, signal});
-      return [r, r.status === 401 && !retry ? "" : await r.text()];
+      alive();
+      return [r, r.status === 401 && !retry ? "" : await this.readText(r, alive)];
     });
     if (r.status === 401 && !retry){ await this.refreshToken(s.access_token); return this.api(path, opts, true); }
     let j = null;
@@ -856,6 +895,7 @@ async function openCompany(cid){
   closeSwitcher();
   const changed = S.coId !== cid;
   S.coId = cid; S.view = "company"; S.arm = null;
+  if (changed && typeof TStale === "object") TStale.reset("prog:");   // (the rows' marks: reliability round)
   if (changed){ S.tab = "dash"; S.filter = "draft"; S.selected = null; S.partySel = null; S.step = null;
     // the periods of the books pages are the client's own (smart moves round 1): chosen again for this client when shown
     S.tdsFy = ""; S.tdsQ = ""; S.tdsView = ""; S.tdsPickForm = ""; S.gstYm = ""; S.gstView = ""; S.gstPart = ""; S.gstSub = ""; S.misRange = null; S.rptFy = ""; }
@@ -1347,7 +1387,8 @@ function acctPerson(what, email){
   else Cloud.fn("admin", {action: "set_person", email, active: what === "on"}).then(() => { toast(what === "on" ? "Switched on." : "Switched off."); loadAccount(); }, e => toast(e.message));
 }
 function acctBackup(id){
-  Cloud.rpc("backup_data", {p_id: num(id)}).then(d => {
+  // (the firm's whole backup: the server may take long to start its answer; the answer itself is waited for while it comes)
+  Cloud.api("rpc/backup_data", {method: "POST", body: {p_id: num(id)}, timeout: 180000}).then(d => {
     saveFile("tds-desk-backup-" + new Date().toISOString().slice(0, 10) + ".json", new Blob([JSON.stringify(d, null, 1)], {type: "application/json"}));
     toast("Downloaded. Keep it somewhere outside this system.");
   }, e => toast(e.message));
