@@ -58,30 +58,28 @@ const Audit = {
   // so the same figures and the same order of ledgers as reading them all. Kept per list of entries while it, each entry in it,
   // the books, the save of the books (BOOKS_REV), the start and the opening balances (their contents) are the same; not in
   // date order, or a date that is no text: read in full as before. Each answer is a copy (a caller may change it)
-  _mv: typeof WeakMap === "function" ? new WeakMap() : null,
-  moveKept(b, base, baseSig, start, d){
-    const V = b.vouchers || [], n = V.length, rev = typeof BOOKS_REV === "number" ? BOOKS_REV : 0;
-    if (!this._mv || typeof start !== "string" || typeof d !== "string" || !Array.isArray(b.vouchers)) return null;
+  _mv: new WeakMap(),
+  moveKept(b, base, sig, start, d){
+    const V = b.vouchers, rev = typeof BOOKS_REV === "number" ? BOOKS_REV : 0;
+    if (typeof start !== "string" || typeof d !== "string" || !Array.isArray(V)) return null;
+    const n = V.length;
     let c = this._mv.get(V);
     if (!c || c.n !== n || c.rev !== rev || c.b !== b || !c.vs.every((v, i) => v === V[i])){
-      let sorted = true;
-      for (let i = 0; i < n; i++){ const t = V[i] && V[i].date; if (typeof t !== "string" || (i && !(V[i - 1].date <= t))){ sorted = false; break; } }
-      c = {n, rev, b, sorted, sets: new Map(), cps: 0, vs: V.slice()}; this._mv.set(V, c);
+      let ok = true;
+      for (let i = 0; i < n && ok; i++){ const t = V[i] && V[i].date; ok = typeof t === "string" && !(i && V[i - 1].date > t); }
+      this._mv.set(V, c = {n, rev, b, ok, sets: {}, cps: 0, vs: V.slice()});
     }
-    if (!c.sorted) return null;
-    const first = (f) => { let lo = 0, hi = n; while (lo < hi){ const m = (lo + hi) >> 1; if (f(V[m].date)) hi = m; else lo = m + 1; } return lo; };
-    const k = start + "\u0001" + baseSig;
-    let set = c.sets.get(k);
-    if (!set){ const i0 = first(t => !(t < start)); set = {i0, cps: [{i: i0, bal: Object.assign({}, base)}]}; c.sets.set(k, set); }
-    const e = Math.max(set.i0, first(t => t > d));
-    let cp = set.cps[0];
-    set.cps.forEach(x => { if (x.i <= e && x.i > cp.i) cp = x; });
-    const bal = Object.assign({}, cp.bal), keep = (i) => { if (c.cps < 60 && !set.cps.some(x => x.i === i)){ set.cps.push({i, bal: Object.assign({}, bal)}); c.cps++; } };
+    if (!c.ok) return null;
+    const first = f => { let lo = 0, hi = n; while (lo < hi){ const m = (lo + hi) >> 1; if (f(V[m].date)) hi = m; else lo = m + 1; } return lo; };
+    const k = start + "\u0001" + sig, set = c.sets[k] = c.sets[k] || [{i: first(t => !(t < start)), bal: Object.assign({}, base)}];
+    const e = Math.max(set[0].i, first(t => t > d));
+    let cp = set[0];
+    set.forEach(x => { if (x.i <= e && x.i > cp.i) cp = x; });
+    const bal = Object.assign({}, cp.bal), keep = i => { if (c.cps < 60 && !set.some(x => x.i === i)){ set.push({i, bal: Object.assign({}, bal)}); c.cps++; } };
     for (let i = cp.i; i < e; i++){
       const v = V[i];
       if (i > cp.i && v.date.slice(0, 6) !== V[i - 1].date.slice(0, 6)) keep(i);
-      if (v.opt || v.cancel) continue;
-      v.ent.forEach(z => { bal[z.l] = r2((bal[z.l] || 0) + z.a); });
+      if (!v.opt && !v.cancel) v.ent.forEach(z => { bal[z.l] = r2((bal[z.l] || 0) + z.a); });
     }
     keep(e);
     return bal;
@@ -90,8 +88,8 @@ const Audit = {
     const b = S.books, tb = b.tb;
     let sigOf = null;
     const move = (base, start, d) => {
-      if (sigOf === null || sigOf.base !== base){ let s = null; try { s = JSON.stringify(base); } catch (e){ s = null; } sigOf = {base, s}; }
-      const kept = sigOf.s === null || typeof Audit !== "object" ? null : Audit.moveKept(b, base, sigOf.s, start, d);
+      if (!sigOf || sigOf.base !== base){ let s = null; try { s = JSON.stringify(base); } catch (e){} sigOf = {base, s}; }
+      const kept = sigOf.s === null ? null : Audit.moveKept(b, base, sigOf.s, start, d);
       if (kept) return kept;
       const bal = Object.assign({}, base);
       (b.vouchers || []).forEach(v => { if (v.date < start || v.date > d || v.opt || v.cancel) return; v.ent.forEach(e => { bal[e.l] = r2((bal[e.l] || 0) + e.a); }); });

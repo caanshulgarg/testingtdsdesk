@@ -359,28 +359,7 @@ const MIS = {
     const open = owed(Audit.dayBefore(from)) || 0, close = r2(open + ded - paid), books = owed(to);
     return {open, ded, paid, close, books, ties: books == null || Math.abs(books - close) < 1};
   },
-  // next-speed-pages (11-Nov-2026, 51,758 entries: the Reports list 1.2 s in one task, 6.6-8.4 s on an office PC, at every
-  // drawing): within a drawing, kept for as long as the books and what the GST and TDS workings read beside them are the
-  // same: the books object, their save (BOOKS_REV), the entries (the list and how many), the ledger map's version, the
-  // client and its settings (their contents), the firm's AI settings, the month chosen, the 2B matching runs; and handed
-  // out only while still as made (its contents compared). Outside a drawing, worked out afresh as before
-  _comp: typeof WeakMap === "function" ? new WeakMap() : null,
   compliance(from, to){
-    const b = S.books;
-    if (!this._comp || !b || typeof b !== "object" || typeof IN_RENDER === "undefined" || !IN_RENDER) return this.complianceNow(from, to);
-    let k = null;
-    try {
-      const m2b = typeof M2B === "object" && M2B.st ? Object.keys(M2B.st).sort().map(z => { const r = (M2B.st[z] || {}).run; return z + "=" + (r ? String(r.id || "") + ":" + String(r.at || "") + ":" + ((r.result || {}).rows || []).length + ":" + JSON.stringify(r.decisions || {}) : ""); }).join("|") : "";
-      k = [typeof BOOKS_REV === "number" ? BOOKS_REV : 0, S.coId, b.vouchers, (b.vouchers || []).length, b.map, b.mapV || 0, b.tb, b.challans, (b.challans || []).length, b.audit, (b.audit || {}).last, b.gstSet, b.itcBasis, from, to, S.gstYm || "",
-        JSON.stringify((typeof CO === "function" && CO()) || null), JSON.stringify((S.firm || {}).ai || null), m2b];
-    } catch (e){ k = null; }
-    const all = this._comp.get(b) || {}, was = all[from + "|" + to], sigOf = v => { try { return JSON.stringify(v); } catch (e){ return null; } };
-    if (k && was && was.k.length === k.length && was.k.every((z, i) => z === k[i])){ const sg = sigOf(was.v); if (sg !== null && sg === was.sig) return was.v; }
-    const v = this.complianceNow(from, to), sig = sigOf(v);
-    if (k && sig !== null){ all[from + "|" + to] = {k, v, sig}; this._comp.set(b, all); }
-    return v;
-  },
-  complianceNow(from, to){
     const months = this.monthsOf(from, to), paid = this.booksPaid(from, to);
     // worked out to pay: the 3B working's cash (after the set-off by head and credit carried forward) and reverse charge
     // paid in cash; paid: the bank payments to the GST ledgers (review of 02-Oct-2026)

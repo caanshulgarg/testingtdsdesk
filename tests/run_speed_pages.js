@@ -12,7 +12,6 @@
 //   D. Audit.balances' balance at a date, carried on from an earlier one: against the old reading of every entry for many
 //      dates, opening balances from the masters and from Tally, cancelled and optional entries, entries out of date order,
 //      an entry changed and saved, a caller changing the answer;
-//   E. MIS.compliance (the Reports list) kept across drawings while the books and the client's settings are the same.
 // Made-up books only (seeded; no client's name or figure).
 "use strict";
 process.env.TDSDESK_CACHE = process.env.TDSDESK_CACHE || "/dev/null";
@@ -251,22 +250,9 @@ async function sectionD(){
   { const B = A.balances("20240401", "20250331"); ok(J(B.at("20250331")) === J(oldMove(bb, {}, "20240401", "20250331")), "D. another client's books: their own figures"); }
   open(save1); check("back to the first books", opn, "20240701", "20240801", "20260331");
 }
-// ---------------------------------------------------------------- E. the Reports list's compliance line, kept
-async function sectionE(){
-  const M = x.MIS, NOW = M.compliance;
-  if (!M.complianceNow){ ok(false, "E. MIS.compliance is kept across drawings (MIS.complianceNow)"); return; }
-  let n = 0; const CN = M.complianceNow; M.complianceNow = function(){ n++; return CN.apply(this, arguments); };
-  const b = makeBooks(500, 61, 202504, 6); open(b);
-  const same = (w, want) => { const before = n, got = J(x.memoScope(() => M.compliance("20250401", "20250930"))), f = J(CN.call(M, "20250401", "20250930"));
-    ok(got === f, "E. " + w + ": the compliance figures are those worked out afresh"); if (want != null) ok(n - before === want, "E. " + w + ": worked out " + (n - before) + " time(s) (expected " + want + ")"); };
-  same("the first drawing", 1); same("the next drawing", 0); saved(); same("the books saved", 1);
-  ctx.CO().gstin = "07AAGCL4827M1Z3"; same("the client's settings changed", 1);
-  b.challans = [{id: "C9", tax: 5000, date: "20250607"}]; same("a challan added in place", 1);
-  M.complianceNow = CN;
-}
 
 (async () => {
-  for (const f of [sectionA, sectionB, sectionC, sectionD, sectionE]) await f();
+  for (const f of [sectionA, sectionB, sectionC, sectionD]) await f();
   console.log(fails ? "\n" + fails + " FAILED" : "\nall passed");
   process.exit(fails ? 1 : 0);
 })().catch(e => { console.log("  FAIL " + (e && e.stack || e)); process.exit(1); });

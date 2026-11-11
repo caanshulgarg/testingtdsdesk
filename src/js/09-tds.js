@@ -300,27 +300,18 @@ const TDS = {
   // a row changed in place (a tag sets r.challan) is worked out again; so are rows after an entry of the list is replaced by
   // another (each entry compared by itself). An entry changed in place is seen at the save that follows it, as every
   // figure kept for the page's drawings (memoKeep). Outside a drawing, as before, always fresh
-  _kept: typeof WeakMap === "function" ? new WeakMap() : null,
-  keptKey(b){
-    let co = {}; try { co = (typeof CO === "function" && CO()) || {}; } catch (e){ co = {}; }
-    const x = typeof TCloud === "object" && TCloud.tdsl && TCloud.tdsl[b.cid], small = {};
-    ["alloc", "allocFrom", "tdsSplits", "tdsEdits", "tdsAdded", "panFix", "tdsFiled", "filedOn", "tcsCodes", "tcsCodesFixed", "tdsPayKind", "nrInfo"].forEach(k => { small[k] = b[k]; });
-    let cp = ""; try { cp = typeof ClosedP === "object" ? JSON.stringify(ClosedP.cfg(co).tdsFiled || {}) : ""; } catch (e){ cp = ""; }
-    return [typeof BOOKS_REV === "number" ? BOOKS_REV : 0, b.cid, b.vouchers, (b.vouchers || []).length, b.map, b.mapV || 0, b.under, b.groups, b.ledInfo, b.ledInfoAt || "",
-      b.pans, Object.keys(b.pans || {}).length, b.salary, b.payroll, x && x.rows, co.supInvFrom || "", cp, JSON.stringify(small)];
-  },
+  _kept: new WeakMap(),
   kept(name, fn, extra, setExtra){
-    const b = S.books;
-    if (!this._kept || !b || typeof b !== "object" || !b.vouchers || typeof IN_RENDER === "undefined" || !IN_RENDER) return fn();
-    const k = this.keptKey(b), all = this._kept.get(b) || {}, was = all[name];
-    const V = b.vouchers, sameV = (vs) => Array.isArray(V) && vs.length === V.length && vs.every((v, i) => v === V[i]);
-    if (was && was.k.length === k.length && was.k.every((z, i) => z === k[i]) && sameV(was.vs)){
-      let sig = null; try { sig = JSON.stringify([was.v, was.x]); } catch (e){ sig = null; }
-      if (sig !== null && sig === was.sig){ if (setExtra) setExtra(was.x); return was.v; }
-    }
-    const v = fn(), x = extra ? extra() : undefined;
-    let sig = null; try { sig = JSON.stringify([v, x]); } catch (e){ sig = null; }
-    if (sig !== null && Array.isArray(V)){ all[name] = {k, v, x, sig, vs: V.slice()}; this._kept.set(b, all); }
+    const b = S.books, V = b && b.vouchers;
+    if (!Array.isArray(V) || typeof IN_RENDER === "undefined" || !IN_RENDER) return fn();
+    let co = {}, k, sig; try { co = CO() || {}; } catch (e){}
+    const x = typeof TCloud === "object" && TCloud.tdsl && TCloud.tdsl[b.cid], J = v => { try { return JSON.stringify(v); } catch (e){ return null; } };
+    try { k = J([co.supInvFrom, typeof ClosedP === "object" ? ClosedP.cfg(co).tdsFiled : 0, Object.keys(b.pans || {}).length, b.mapV, b.ledInfoAt, b.cid].concat(["alloc", "allocFrom", "tdsSplits", "tdsEdits", "tdsAdded", "panFix", "tdsFiled", "filedOn", "tcsCodes", "tcsCodesFixed", "tdsPayKind", "nrInfo"].map(z => b[z]))); } catch (e){ k = null; }
+    const ids = [typeof BOOKS_REV === "number" ? BOOKS_REV : 0, b.map, b.under, b.groups, b.ledInfo, b.pans, b.salary, b.payroll, x && x.rows, V].concat(V);
+    const all = this._kept.get(b) || {}, w = all[name];
+    if (k !== null && w && w.k === k && w.ids.length === ids.length && w.ids.every((z, i) => z === ids[i]) && (sig = J([w.v, w.x])) !== null && sig === w.sig){ if (setExtra) setExtra(w.x); return w.v; }
+    const v = fn(), xx = extra ? extra() : undefined;
+    if (k !== null && (sig = J([v, xx])) !== null){ all[name] = {k, ids, v, x: xx, sig}; this._kept.set(b, all); }
     return v;
   },
   allRowsNow(){
