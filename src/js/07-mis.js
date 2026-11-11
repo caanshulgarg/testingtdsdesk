@@ -29,6 +29,10 @@ const Parties = {
   }
 };
 const MIS = {
+  // next-speed-render: a loop over the entries that a calculation in steps may stop in, every 5,000 entries; runSteps:
+  // such steps at once
+  *eachV(V, f){ for (let i = 0; i < V.length; i++){ f(V[i]); if (i % 5000 === 4999) yield; } },
+  runSteps(it){ let r; while (!(r = it.next()).done); return r.value; },
   cfg(b){ return Object.assign({freq: "monthly", msmeDays: 45}, (b && b.misCfg) || {}); },
   ym(d){ return String(d).slice(0, 6); },
   monthsOf(from, to){ const out = []; let y = num(from.slice(0, 4)), m = num(from.slice(4, 6)); while (String(y) + String(m).padStart(2, "0") <= to.slice(0, 6)){ out.push(String(y) + String(m).padStart(2, "0")); m++; if (m > 12){ m = 1; y++; } } return out; },
@@ -207,10 +211,12 @@ const MIS = {
       pat: calc(x => x("rev") + x("oth") - x("pur") - x("dir") - x("emp") - x("exp") - x("fin") - x("dep") - x("tax"))};
   },
   // bill by bill: what each party owed or was owed on a date
-  bills(asOn, side){
+  // next-speed-render: bills, ageing and sales also in steps (a page works them out behind it: app/src/lib/behind.jsx)
+  bills(asOn, side){ return this.runSteps(this.billsSteps(asOn, side)); },
+  *billsSteps(asOn, side){
     const A = Audit, b = S.books, ref = {};
     const want = l => side === "r" ? A.isDebtor(l) : A.isCreditor(l);
-    (b.vouchers || []).forEach(v => {
+    yield* this.eachV(b.vouchers || [], v => {
       if (v.date > asOn || v.opt || v.cancel) return;
       v.ent.forEach(e => {
         if (!want(e.l)) return;
@@ -233,10 +239,11 @@ const MIS = {
     });
   },
   BUCKETS: [[30, "0\u201330"], [60, "31\u201360"], [90, "61\u201390"], [180, "91\u2013180"], [1e9, "over 180"]],
-  ageing(asOn, side, bal){
+  ageing(asOn, side, bal){ return this.runSteps(this.ageingSteps(asOn, side, bal)); },
+  *ageingSteps(asOn, side, bal){
     // the balances on the day, as everywhere else (Parties.position) when the caller has none
     if (!bal){ const P = Parties.position(asOn); if (P.ok) bal = P.at; }
-    const bills = this.bills(asOn, side), by = {}, msme = this.msme();
+    const bills = yield* this.billsSteps(asOn, side), by = {}, msme = this.msme();
     bills.forEach(x => {
       const p = by[x.party] = by[x.party] || {party: x.party, total: 0, b: [0, 0, 0, 0, 0], adv: 0, unalloc: 0, pre: 0, oldest: 0, bills: [], msme: msme[x.party] || ""};
       if (!x.ref){ p.unalloc = r2(p.unalloc + x.amt); }
@@ -298,7 +305,8 @@ const MIS = {
     Object.entries(set).forEach(([n, v]) => { if (v) out[n] = v; else delete out[n]; });
     return out;
   },
-  sales(from, to){
+  sales(from, to){ return this.runSteps(this.salesSteps(from, to)); },
+  *salesSteps(from, to){
     const by = {}, months = this.monthsOf(from, to), byState = {}, byReg = {};
     // review of 01-Oct-2026: with the masters read, sales are the Sales Accounts ledgers themselves (credit positive, a
     // credit note's debit taking off), as Tally's profit and loss shows them: the taxable value of a sale entry counted a
@@ -306,7 +314,7 @@ const MIS = {
     // kept apart, as other income. Without the masters, the taxable value of the sale entries, as before
     const masters = Audit.mastersIn(), A = Audit;
     let other = 0;
-    (S.books.vouchers || []).forEach(v => {
+    yield* this.eachV(S.books.vouchers || [], v => {
       if (v.date < from || v.date > to || v.opt || v.cancel) return;
       if (masters){
         v.ent.forEach(e => { if (A.under(e.l, /^(direct|indirect) incomes$/i)) other = r2(other + e.a); });

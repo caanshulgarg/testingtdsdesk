@@ -8,7 +8,10 @@ const GSTRev = {
   total(x){ return r2(this.HEADS.reduce((s, h) => s + num(x[h]), 0)); },
   settings(){ return Object.assign({d2: true}, (S.books && S.books.rev) || {}); },
   // turnover of the month: E is exempt, nil rated and non-GST; F is all of it, exports included
-  turnover(ym, reg){
+  // next-speed-render: kept for the drawing or calculation (each month's 3B asked it of every earlier month: 28 readings of
+  // a month's sales a 3B on 25 months of books); the figures are only read
+  turnover(ym, reg){ return typeof perRender === "function" ? perRender(this, "to|" + ym + "|" + reg, () => this.turnoverNow(ym, reg)) : this.turnoverNow(ym, reg); },
+  turnoverNow(ym, reg){
     let T = 0, Z = 0, E = 0;
     GSTR.outward(ym, reg).forEach(r => {
       const sign = r.kind === "CDNR" ? -1 : 1, v = num(r.taxable) * sign;

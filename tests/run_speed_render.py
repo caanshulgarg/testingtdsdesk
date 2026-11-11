@@ -12,7 +12,7 @@ nothing worked out in the drawing itself, one step a task, every step drawn), th
   4. a second open: the figures in the first drawing, nothing worked out again;
   5. an entry changed and the books saved: the last figures stay, marked updating, then the new ones replace them, and they
      are the books' as changed.
-Pages: T. Tie-out.
+Pages: T. Tie-out, R. the Reports list.
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_speed_render.py"""
 import os, sys, json, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -62,8 +62,10 @@ SETUP = """async ([n]) => {
 }"""
 # what the page shows, frame by frame from the click until nothing is worked out (or 20 s): the count of "Working out…"
 # and of figures marked updating, in each frame
-WATCH = """(go) => new Promise((done) => { const out = []; const t0 = performance.now(); (new Function(go))();
-  const look = () => { const w = document.querySelectorAll('#app [data-working]').length, u = document.querySelectorAll('#app [data-updating]').length;
+# (from the first frame the page itself is in: frame, a selector)
+WATCH = """([go, frame]) => new Promise((done) => { const out = []; const t0 = performance.now(); (new Function(go))();
+  const look = () => { if (frame && !document.querySelector(frame) && performance.now() - t0 < 10000) return requestAnimationFrame(look);
+    const w = document.querySelectorAll('#app [data-working]').length, u = document.querySelectorAll('#app [data-updating]').length;
     out.push([w, u]); if ((w === 0 && u === 0 && out.length > 1) || performance.now() - t0 > 20000) done(out); else requestAnimationFrame(look); };
   look(); })"""
 
@@ -74,7 +76,7 @@ def tieout(pg, E, cid):
       return Object.fromEntries(Rec.months(cid).map(m => { const f = Rec.fincom(cid, m); return [m, Rec.FIGS.map(([k]) => f[k] == null ? "FinCom: not available" : "FinCom " + INR.format(r2(f[k])))]; })); }"""
     shown = """() => Object.fromEntries([...document.querySelectorAll('#app [data-tieout-month]')].map(r => [r.getAttribute('data-tieout-month'), [...r.querySelectorAll('[data-tie-fincom]')].map(x => x.textContent.trim())]))"""
     E("() => goClient('books:dash')"); pg.wait_for_timeout(500)
-    fr = E(WATCH, "goClient('books:tieout')")
+    fr = E(WATCH, ["goClient('books:tieout')", "#app [data-tieout-table]"])
     first = fr[0]
     ok(len(months) == 25 and E("() => document.querySelectorAll('#app [data-tieout-table] [data-tieout-month]').length") == 25, "T1. the page and its 25 months are drawn (%d months)" % len(months))
     ok(first[0] >= 5 * 24, "T1. the first drawing says Working out… where FinCom's figures go (%d of 125)" % first[0])
@@ -83,14 +85,39 @@ def tieout(pg, E, cid):
     want = E(fresh, cid); got = E(shown)
     ok(got == want, "T3. every figure is Rec.fincom's, worked out at once from nothing kept (%d months)" % len(want) + ("" if got == want else " got %s want %s" % (json.dumps(got)[:300], json.dumps(want)[:300])))
     E("() => goClient('books:dash')"); pg.wait_for_timeout(400)
-    fr2 = E(WATCH, "goClient('books:tieout')")
+    fr2 = E(WATCH, ["goClient('books:tieout')", "#app [data-tieout-table]"])
     ok(fr2[0] == [0, 0] and E(shown) == want, "T4. a second open: the figures in the first drawing (%s)" % fr2[:3])
     # an entry of Apr-2025 doubled and the books saved: Apr-2025 onwards change
     E("""() => { const b = S.books, i = b.vouchers.findIndex(v => v.date >= "20250410" && /Sales/.test(v.type)); b.vouchers[i] = Object.assign({}, b.vouchers[i], {ent: b.vouchers[i].ent.map(e => ({l: e.l, a: r2(e.a * 2)}))}); saveBooks(); }""")
-    fr3 = E(WATCH, "render()")
+    fr3 = E(WATCH, ["render()", ""])
     ok(fr3[0][0] == 0 and fr3[0][1] > 0, "T5. after a change: the last figures stay, marked updating, none says Working out (%s)" % fr3[:2])
     want2 = E(fresh, cid); got2 = E(shown)
     ok(got2 == want2 and want2 != want, "T5. then the new figures replace them, the books' as changed (%d months differ from before)" % sum(1 for m in want if want[m] != want2.get(m)))
+
+# the page's figures as working them out at once gives them: the books as a new object (nothing kept for them), the steps
+# all run in the drawing itself, as before next-speed-render
+AT_ONCE = """(sel) => { const B = window.FinComBehind, was = Object.assign({}, B); Object.assign(B, {IN_MS: 1e9, SMALL: 1e9});
+  S.books = Object.assign({}, S.books); if (typeof RPT === "object") RPT._d = null; render();
+  const t = [...document.querySelectorAll(sel)].map(x => x.textContent).join("|"); Object.assign(B, was); return t; }"""
+TEXT = "(sel) => [...document.querySelectorAll(sel)].map(x => x.textContent).join('|')"
+CHANGE = """() => { const b = S.books, i = b.vouchers.findIndex(v => v.date >= "20250410" && /Sales/.test(v.type)); b.vouchers[i] = Object.assign({}, b.vouchers[i], {ent: b.vouchers[i].ent.map(e => ({l: e.l, a: r2(e.a * 2)}))}); saveBooks(); }"""
+
+def page(pg, E, tag, name, go, sel, frame):
+    print(tag + ". " + name)
+    E("() => goClient('books:dash')"); pg.wait_for_timeout(500)
+    fr = E(WATCH, [go, frame])
+    ok(E("(s) => !!document.querySelector(s)", frame) and fr[0][0] > 0, tag + "1. the first drawing has the page (%s) and says Working out… where the figures go (%d)" % (frame, fr[0][0]))
+    ok(sum(1 for w, u in fr if w) >= 3, tag + "2. the figures are worked out over several tasks (%d frames with Working out…)" % sum(1 for w, u in fr if w))
+    got = E(TEXT, sel); want = E(AT_ONCE, sel)
+    ok(got == want and len(want) > 50, tag + "3. once in, every figure is the one worked out at once (%d characters)" % len(want) + ("" if got == want else " got %s want %s" % (got[:200], want[:200])))
+    E("() => goClient('books:dash')"); pg.wait_for_timeout(400)
+    fr2 = E(WATCH, [go, frame])
+    ok(fr2[0] == [0, 0] and E(TEXT, sel) == want, tag + "4. a second open: the figures in the first drawing (%s)" % fr2[:3])
+    E(CHANGE)
+    fr3 = E(WATCH, ["render()", ""])
+    ok(fr3[0][0] == 0 and fr3[0][1] > 0, tag + "5. after a change: the last figures stay, marked updating, none says Working out (%s)" % fr3[:2])
+    got2 = E(TEXT, sel); want2 = E(AT_ONCE, sel)
+    ok(got2 == want2 and want2 != want, tag + "5. then the new figures replace them, the books' as changed")
 
 try:
     with sync_playwright() as p:
@@ -100,10 +127,12 @@ try:
         E = lambda js, *a: pg.evaluate(js, *a)
         cid = E(SETUP, [2500]); pg.wait_for_timeout(800)
         # the screens' files in before anything is timed
-        for t in ("books:tieout", "books:dash"): E("(t) => goClient(t)", t); pg.wait_for_timeout(1500)
+        for t in ("books:tieout", "books:reports", "books:dash"): E("(t) => goClient(t)", t); pg.wait_for_timeout(1500)
         # ... and nothing kept from that visit (the same books as a new object: nothing worked out for them yet)
         E("() => { S.books = Object.assign({}, S.books); Rec._fc = null; render(); }"); pg.wait_for_timeout(500)
         tieout(pg, E, cid)
+        E("() => { S.rptFy = '2025'; S.rxView = null; }")
+        page(pg, E, "R", "the Reports list", "goClient('books:reports')", "#app [data-answer], #app [data-rpt-index], #app [data-rpt-charts]", "#app [data-rpt-index]")
         br.close()
 finally:
     srv.shutdown()

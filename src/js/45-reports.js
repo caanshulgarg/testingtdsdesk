@@ -80,13 +80,20 @@ const RPT = {
   },
   years(){ const R = this.range(), ys = this.fys(); return R && !ys.includes(R.fy) ? [R.fy].concat(ys) : ys; },
   pickFy(fy){ S.rptFy = fy; Smart.keep("reports", {fy}); render(); },
-  data(){
+  // the figures of the Reports list; dataSteps: the same in steps (the list works them out behind the page, Reports.jsx)
+  data(){ return MIS.runSteps(this.dataSteps()); },
+  dataKey(){ const b = S.books, R = this.range(); return R && !R.notRead ? [b.cid, R.from, R.to, (b.vouchers || []).length, (b.meta || {}).at || "", b.mapV || 0, ((b.audit || {}).last || {}).at || "", (b.tb || {}).at || "", JSON.stringify(b.gstFiled || {}).length, typeof BOOKS_REV === "number" ? BOOKS_REV : 0].join("|") : null; },
+  *dataSteps(){
     const b = S.books, R = this.range(); if (!R || R.notRead) return null;
-    const key = [b.cid, R.from, R.to, (b.vouchers || []).length, (b.meta || {}).at || "", b.mapV || 0, ((b.audit || {}).last || {}).at || "", (b.tb || {}).at || "", JSON.stringify(b.gstFiled || {}).length].join("|");
+    const key = this.dataKey();
     if (this._d && this._d.key === key) return this._d.d;
+    // each month's GST working first (the compliance figures read them), a month a step, from the books' first month
+    // (each month's credit is carried from the one before)
+    if (typeof JOB_MEMO !== "undefined" && JOB_MEMO) for (const m of GSTR.months().filter(x => x <= R.to.slice(0, 6))){ try { MIS.gst3b(m); } catch (e){ /* as compliance below */ } yield; }
     const months = MIS.monthsOf(R.from, R.to), pl = MIS.pl(R.from, R.to);
+    yield;
     const bal = Audit.balances(R.from, R.to), balTo = bal.ok ? bal.at(R.to) : null;
-    const recv = MIS.ageing(R.to, "r", balTo), pay = MIS.ageing(R.to, "p", balTo), msme = MIS.msme(), md = MIS.cfg(b).msmeDays;
+    const recv = yield* MIS.ageingSteps(R.to, "r", balTo), pay = yield* MIS.ageingSteps(R.to, "p", balTo), msme = MIS.msme(), md = MIS.cfg(b).msmeDays;
     const msmeDue = r2(pay.rows.filter(p => /micro|small/i.test(msme[p.party] || "")).reduce((s, p) => s + (p.open || []).filter(x => x.age > md).reduce((a, x) => a + x.left, 0), 0));
     const inM = {}, outM = {}, sales = {}, purch = {};
     months.forEach(m => { inM[m] = 0; outM[m] = 0; });
@@ -99,13 +106,17 @@ const RPT = {
     // sales are MIS's sales (MIS.sales: the Sales Accounts ledgers once the masters are read, else the sale entries), the
     // figure MIS's "Sales" tile shows for the same dates. The profit and loss's "Revenue from operations" counted, without
     // the ledgers' groups, only ledgers named "Sales...", and showed sales of nil beside MIS's 7,70,000 (audit of 11-Oct-2026)
-    const st = MIS.sales(R.from, R.to);
+    yield;
+    const st = yield* MIS.salesSteps(R.from, R.to);
     months.forEach(m => { sales[m] = r2(st.rows.reduce((a, x) => a + (x.m[m] || 0), 0)); purch[m] = r2((H("pur").m[m] || 0) + (H("dir").m[m] || 0)); });
+    yield;
     let comp = null; try { comp = MIS.compliance(R.from, R.to); } catch (e){ comp = {gst: [], tds: [], audit: null}; }
+    yield;
+    const tr = TDS.rows();
     const cashBank = balTo ? r2(Object.keys(balTo).filter(l => Audit.isCash(l) || Audit.isBankL(l)).reduce((s, l) => s - balTo[l], 0)) : null;
     const au = (b.audit || {}).last, open = au ? au.findings.filter(f => Audit.status(f.id).s === "open") : [];
     const d = {R, months, pl, salesTotal: st.total, groups: !!Audit.mastersIn(), bal, recv, pay, msmeDue, inM, outM, sales, purch, comp, cashBank, au, open,
-      tdsDeductees: new Set(TDS.rows().filter(r => r.date >= R.from && r.date <= R.to).map(r => r.pan || r.party)).size};
+      tdsDeductees: new Set(tr.filter(r => r.date >= R.from && r.date <= R.to).map(r => r.pan || r.party)).size};
     this._d = {key, d};
     return d;
   },
