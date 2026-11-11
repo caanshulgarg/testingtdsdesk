@@ -9,6 +9,8 @@ firm (run_tally_page_clean.py's stand-in cloud; nothing real is changed): the cl
   3. linked as earlier years: its row says "Earlier years · until 31-Mar-2025 (a split Tally)", has no Sync now / Post
      here, and "Unlink earlier years" (asked once) sends tally_split_unlink with its book
   4. a client with one company: no earlier-years choice in the picker
+  5. Books › From Tally, Bring books from Tally: the years of both companies; an earlier year chosen stays chosen and Start
+     asks it of the earlier company's book; a later year of the current company's
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_tally_split_years_ui.py"""
 import os, re, sys, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -93,6 +95,34 @@ def main():
             pk2 = R(LONE) + " select[data-tco-act=pick]"
             pg.select_option(pk2, ids["Other Pvt Ltd"]); pg.wait_for_timeout(600)
             ok(n(R(LONE) + " [data-tco-split-pick]") == 0, "no choice for a client with no company linked")
+            print("== 5. Bring books from Tally: an earlier year is kept and brought from the earlier company (the review's finding 2)")
+            ids = scene(); cid = ids[CLIENT]
+            E("""(a) => { const sum = [{book: 'b-cur', client: a.cid, company: a.c, from: '2025-04-01', devices: [{id: 'dv', fetchOn: true}]},
+                                     {book: 'b-early', client: a.cid, company: a.e, from: '2021-04-01', devices: [{id: 'dv', fetchOn: true}]}];
+              const st = {split: {book: 'b-early', company: a.e, ends: '20250331', from: '20210401', currentBook: 'b-cur', currentCompany: a.c, curFrom: '20250401', live: true, version: 1}, splitAt: Date.now(), at: Date.now(),
+                books: [{book: 'b-cur', company: a.c, from: '2025-04-01', to: '2026-01-31', days: 30, entries: 300}, {book: 'b-early', company: a.e, from: '2021-04-01', to: '2025-03-31', days: 300, entries: 3000}]};
+              TCloud.splitLoad = async (id) => (TCloud.st[id] || {}).split || null;
+              const rpc = TCloud.rpc; TCloud.rpc = async (fn, x) => { if (fn === 'tally_fetch_summary') { window.__calls.push([fn, x]); return {ok: true, books: sum}; }
+                if (fn === 'tally_status') { window.__calls.push([fn, x]); Object.assign(TCloud.st[a.cid] = TCloud.st[a.cid] || {}, st); return st.books; } return rpc(fn, x); };
+              Object.assign(TCloud.st[a.cid] = TCloud.st[a.cid] || {}, st);
+              location.hash = '#/c/' + encodeURIComponent(a.cid) + '/from-tally'; if (typeof Route === 'object' && Route.apply) Route.apply(location.hash); }""", {"e": EARLY, "c": CUR, "cid": cid})
+            pg.wait_for_timeout(4000)
+            E("() => { if (window.tfxRefresh) window.tfxRefresh(); }"); pg.wait_for_timeout(1500); E("() => render()"); pg.wait_for_timeout(1500)
+            fysel = "#app [data-older-fy]"
+            ok(n(fysel) == 1, "Bring books from Tally is on the page (%s)" % txt("#app")[:200])
+            opts = E("(s) => { const e = document.querySelector(s); return e ? [...e.options].map(o => [o.value, o.getAttribute('data-older-fy-book'), o.textContent]) : []; }", fysel)
+            ok(any(o[0] == "2023" and o[1] == "early" and EARLY in o[2] for o in opts) and any(o[1] == "current" for o in opts) and not any(o[0] == "2024" and o[1] == "current" for o in opts),
+               "the years of both companies, each said with its company (%s)" % [o[0] + ":" + str(o[1]) for o in opts])
+            pg.select_option(fysel, "2023"); pg.wait_for_timeout(1500)
+            ok(pg.input_value(fysel) == "2023", "FY 2023-24 chosen stays chosen (it moves the picker to the earlier company's book) (%s)" % pg.input_value(fysel))
+            E("() => { window.__calls = []; }")
+            pg.click("#app [data-older-start]"); pg.wait_for_timeout(1500)
+            ch = [c[1] for c in E("window.__calls") if c[0] in ("tally_period_choose_lean", "tally_period_choose")]
+            ok(ch[:1] == [{"p_book": "b-early", "p_fy_start": "2023-04-01", "p_part": "year"}], "Start: FY 2023-24 asked of the earlier company's book (%s)" % ch)
+            pg.select_option(fysel, "2025"); pg.wait_for_timeout(1500); E("() => { window.__calls = []; }")
+            if n("#app [data-older-start]"): pg.click("#app [data-older-start]"); pg.wait_for_timeout(1500)
+            ch = [c[1] for c in E("window.__calls") if c[0] in ("tally_period_choose_lean", "tally_period_choose")]
+            ok(pg.input_value(fysel) == "2025" and ch[:1] == [{"p_book": "b-cur", "p_fy_start": "2025-04-01", "p_part": "year"}], "FY 2025-26: asked of the current company's book (%s)" % ch)
         except Exception as e:
             ok(False, "the steps ran through (%s)" % str(e).split("\n")[0])
         ok(not errors, "no page errors %s" % errors[:2])

@@ -401,7 +401,7 @@ const TCloud = {
         if (got % 10 === 0 || got === want.length) say("Bringing in the books from FinCom's cloud: " + got + " of " + want.length + " days…"); } };
       const pre = fo && await fo.run({b, bk, byMonth, todo, from, to, say, p, co});
       if (pre){ want.forEach(x => { days[x.day] = x.at; }); copy = pre.copy; }
-      else await Promise.all(Array.from({length: Math.min(p ? p.par || 1 : 16, want.length)}, one));
+      else await Promise.all(Array.from({length: Math.min(p ? p.dayPar || 1 : 16, want.length)}, one));
       // next-fast-open: a month whose every day is the file read into the books before (a Day Book uploaded again with
       // the same entries) is not read again; when nothing else changed, only the days' new times are kept
       const redo = todo.filter(ym => !byMonth[ym].every(x => seen[x.day] && known[x.day]));

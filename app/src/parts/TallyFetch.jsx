@@ -236,7 +236,11 @@ export default function OlderEntries({ cid, say = false }) {
   const want0 = fy || (b0 && b0.pull ? fyOf8(b0.pull.fy) : fyNow()), b = eB && want0 <= endFy ? eB : b0;
   useSaid();
   const book = (b && b.book) || "", cur = useRef(book); cur.current = book;
-  useEffect(() => { setFy(0); setErr(""); setBusy(""); }, [book]);   // (next-buttons: a Start still on its way for the client left does not hold this one)
+  // (next-buttons: a Start still on its way for the client left does not hold this one.) next-split-years: the year chosen is
+  // kept when it moves the picker to the other company's book (only another client, or its current book changing, starts afresh)
+  const home = cid + "|" + ((b0 && b0.book) || "");
+  useEffect(() => { setFy(0); setErr(""); setBusy(""); }, [home]);
+  useEffect(() => { setErr(""); setBusy(""); }, [book]);
   const p = b && b.pull;
   useLive(!!(p && p.state === "going" && !p.done), book);
   // FinCom Bridge 2.5.12 (migration 154): the days with an entry Tally keeps in a form the bridge could not read yet; the

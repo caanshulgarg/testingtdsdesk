@@ -98,5 +98,32 @@ const plain = books(all, tbOf("20210401", open0));
 ok(!plain.tb.step, "no step");
 same(want, figures(plain), "one company");
 
+console.log("\n5. the check is the same on the first load and every later one (the review's finding 4)");
+// the current books hold an entry before the current company's start (an old Day Book upload), on a day the earlier
+// company holds entries too: the joined books take that day from the current books, and the check counts what they hold
+const upload = { id: "u-1", date: "20250331", type: "Journal", no: "U1", party: "", narr: "", ent: [{ l: "Cash", a: -250 }, { l: "Capital", a: 250 }] };
+const cur5 = books(curV.concat([upload]), tbOf("20250401", carriedOpen));
+const c1 = SB.join(cur5, clone(eb), SP, { nominal: nominal(cur5) }).check;
+const c2 = SB.join(cur5, SB.earlyBack(cur5), SP, { nominal: nominal(cur5) }).check;
+const c3 = SB.join(cur5, SB.earlyBack(cur5), SP, { nominal: nominal(cur5) }).check;
+ok(JSON.stringify(c1) === JSON.stringify(c2) && JSON.stringify(c2) === JSON.stringify(c3), "first load, reload, reload again: one check (" + SB.checkWords(c1) + " / " + SB.checkWords(c2) + ")");
+ctx.S.books = cur5; const at5 = x.Audit.balances("20210401", "20260331").at("20250401");
+ok(["Cash", "Capital", "Debtor A"].every((l) => x.r2(at5[l] || 0) === x.r2(carriedOpen[l] || 0)), "on 1-Apr-2025 the balances are the current company's openings (" + ["Cash", "Capital", "Debtor A"].map((l) => l + " " + at5[l]).join(", ") + ")");
+
+console.log("\n6. a ledger renamed between the years");
+const ren = (vs) => vs.map((v) => Object.assign(clone(v), { ent: v.ent.map((e) => ({ l: e.l === "Debtor A" ? "Debtor Alpha" : e.l, a: e.a })) }));
+const openRen = Object.fromEntries(Object.entries(carriedOpen).map(([l, o]) => [l === "Debtor A" ? "Debtor Alpha" : l, o]));
+const tbRen = () => { const t = tbOf("20250401", {}); Object.entries(openRen).forEach(([l, o]) => { t.led[l] = { open: o, close: 0, parent: under[l === "Debtor Alpha" ? "Debtor A" : l] }; }); return t; };
+const cur6 = books(ren(curV), tbRen()); cur6.under["Debtor Alpha"] = "Sundry Debtors";
+const g6 = SB.join(cur6, clone(eb), SP, { nominal: nominal(cur6), guids: { cur: { "Debtor Alpha": "g-led-1" }, early: { "debtor  a": "g-led-1" } } });
+ok(g6.check.matched && !(g6.check.renamed || []).length && cur6.vouchers.every((v) => v.ent.every((e) => e.l !== "debtor  a" && e.l !== "Debtor A")), "paired by the ledger's Tally GUID: one ledger, Matched (" + SB.checkWords(g6.check) + ")");
+const cur7 = books(ren(curV), tbRen()); cur7.under["Debtor Alpha"] = "Sundry Debtors";
+const g7 = SB.join(cur7, clone(eb), SP, { nominal: nominal(cur7) });
+ok(g7.check.matched && g7.check.n === 0 && g7.check.total === 0 && (g7.check.renamed || []).length === 1 && /renamed\?/.test(SB.checkWords(g7.check)),
+   "no GUID: one \"renamed?\" pair, never twice in the difference: " + SB.checkWords(g7.check));
+ctx.S.books = cur7; const B7 = x.Audit.balances("20210401", "20260331").at("20260331");
+ctx.S.books = books(all, tbOf("20210401", open0)); const B1 = x.Audit.balances("20210401", "20260331").at("20260331");
+ok(x.r2((B7["Debtor Alpha"] || 0) + (B7["debtor  a"] || 0)) === x.r2(B1["Debtor A"]) && x.r2(B7.Cash) === x.r2(B1.Cash), "and the balances are not doubled (" + B7["Debtor Alpha"] + " + " + (B7["debtor  a"] || 0) + " = " + B1["Debtor A"] + ")");
+
 console.log(fails ? "\n" + fails + " failure(s)" : "\nall ok");
 process.exit(fails ? 1 : 0);

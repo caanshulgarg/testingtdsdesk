@@ -31,11 +31,15 @@ export function cutOf(ends, curFrom) {
   const e = d8(ends), c = curFrom ? dayBefore(curFrom) : "";
   return c && (!e || c < e) ? c : e;
 }
-// the earlier company's ledger names that the current company names otherwise (the same ledKey): early name -> current
-export function renames(curNames, earlyNames) {
+// the earlier company's ledger names that the current company names otherwise: the same Tally ledger GUID (a ledger
+// renamed between the years; guids: {cur: {name: guid}, early: {name: guid}}, from tally_ledgers.tally_guid), else the
+// same ledKey: early name -> current name
+export function renames(curNames, earlyNames, guids) {
   const by = new Map(); [...curNames].forEach((n) => { const k = KEY(n); if (k && !by.has(k)) by.set(k, n); });
+  const gc = new Map(), cg = (guids && guids.cur) || {}, eg = (guids && guids.early) || {}, curSet = new Set(curNames);
+  Object.entries(cg).forEach(([n, g]) => { if (g && curSet.has(n)) gc.set(g, gc.has(g) ? null : n); });
   const out = new Map();
-  [...earlyNames].forEach((n) => { const c = by.get(KEY(n)); if (c && c !== n) out.set(n, c); });
+  [...earlyNames].forEach((n) => { const byG = eg[n] && gc.get(eg[n]), c = byG || by.get(KEY(n)); if (c && c !== n) out.set(n, c); });
   return out;
 }
 const nameOf = (m, n) => (m.has(n) ? m.get(n) : n);
@@ -73,14 +77,22 @@ export function openingsCheck(curOpen, expected, on) {
   const names = new Set([...Object.keys(curOpen), ...Object.keys(expected)]), list = [];
   names.forEach((n) => { const c = R2(curOpen[n] || 0), e = R2(expected[n] || 0), d = R2(c - e); if (Math.abs(d) >= 0.01) list.push([n, c, e, d]); });
   list.sort((a, b) => Math.abs(b[3]) - Math.abs(a[3]) || a[0].localeCompare(b[0]));
-  const total = R2(list.reduce((s, x) => s + Math.abs(x[3]), 0)), net = R2(list.reduce((s, x) => s + x[3], 0));
+  // (every difference stands in the balances: all)
   const all = {}; list.forEach(([n, , , d]) => { all[n] = d; });
-  return { matched: !list.length, n: list.length, total, net, list: list.slice(0, 500), on, all };
+  // a ledger only the current company has, opening at exactly what one only the earlier company has carries: one ledger
+  // renamed between the years (no GUID paired them)? said once as "renamed?", never twice in the difference
+  const renamed = [], only = (n, inCur) => (inCur ? n in curOpen && !(n in expected) : !(n in curOpen));
+  const left = list.filter((x) => { if (x[2] !== 0 || !only(x[0], true)) return true;
+    const o = list.find((y) => y !== x && y[1] === 0 && only(y[0], false) && R2(y[2]) === R2(x[1]) && !renamed.some((r) => r[0] === y[0]));
+    if (!o) return true; renamed.push([o[0], x[0], x[1]]); return false; }).filter((x) => !renamed.some((r) => r[0] === x[0]));
+  const total = R2(left.reduce((s, x) => s + Math.abs(x[3]), 0)), net = R2(left.reduce((s, x) => s + x[3], 0));
+  return { matched: !left.length, n: left.length, total, net, list: left.slice(0, 500), on, all, renamed: renamed.slice(0, 100) };
 }
 const rupees = (x) => "₹" + Math.abs(R2(x)).toLocaleString("en-IN", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 export function checkWords(ck) {
   if (!ck) return "";
-  return ck.matched ? "Matched" : "Differs by " + rupees(ck.total) + " in " + ck.n + (ck.n === 1 ? " ledger" : " ledgers");
+  const rn = (ck.renamed || []).length ? " · " + ck.renamed.map(([o, n]) => o + " → " + n).slice(0, 3).join(", ") + " (renamed?)" : "";
+  return (ck.matched ? "Matched" : "Differs by " + rupees(ck.total) + " in " + ck.n + (ck.n === 1 ? " ledger" : " ledgers")) + rn;
 }
 // the current company's books and the earlier company's joined into b (in place). cur: the current books' balances
 // (b.tb as the current company's own: {from, to, led}); eb: the earlier books ({vouchers, tb, under, groups, meta});
@@ -98,7 +110,7 @@ export function join(b, eb, sp, o) {
   mine.forEach((v) => (v.ent || []).forEach((e) => curNames.add(e.l)));
   const earlyNames = new Set([...Object.keys(eb.tb.led || {}), ...Object.keys(eb.under || {})]);
   (eb.vouchers || []).forEach((v) => (v.ent || []).forEach((e) => earlyNames.add(e.l)));
-  const m = renames(curNames, earlyNames);
+  const m = renames(curNames, earlyNames, o.guids);
   const early = (eb.vouchers || []).filter((v) => v && String(v.date) <= cut && !curDays.has(String(v.date))).map((v) => earlyEntry(v, m));
   // the groups: the current company's first, the earlier company's for its own ledgers (what was added is kept, to undo)
   const added = { under: [], groups: [] };
@@ -108,7 +120,10 @@ export function join(b, eb, sp, o) {
   Object.entries(eb.groups || {}).forEach(([n, p]) => { if (!(n in b.groups)) { b.groups[n] = p; added.groups.push(n); } });
   // the check, on the day the current company starts
   const nominal = (n) => !!o.nominal && o.nominal(n);
-  const expected = carried(closingAt(eb, cut, m), nominal);
+  // (from the joined books themselves, so the first load and every later one say the same: the earlier company's openings
+  // and every entry the joined books hold before the current company's first day)
+  const before = early.concat(mine.filter((v) => String(v.date) < curFrom));
+  const expected = carried(closingAt({ tb: eb.tb, vouchers: before }, dayBefore(curFrom), m), nominal);
   const curOpen = {}; Object.entries(curTb.led || {}).forEach(([n, x]) => { curOpen[n] = N(x.open); });
   const ck = openingsCheck(curOpen, expected, curFrom);
   // the joined balances: the earlier company's openings on its first day; every ledger of either
@@ -119,7 +134,7 @@ export function join(b, eb, sp, o) {
   Object.values(led).forEach((x) => { x.openSent = x.open; });
   const tb = { from: eb.tb.from, to: curTb.to, at: curTb.at || eb.tb.at, src: curTb.src || "copy", line: curTb.line, led, split: sp.book };
   // differs: the current company's openings stand from its first day (never the earlier company's, never silently)
-  if (!ck.matched) tb.step = { from: curFrom, led: ck.all };
+  if (Object.keys(ck.all).length) tb.step = { from: curFrom, led: ck.all };
   b.vouchers = early.concat(mine).sort((a, c) => (String(a.date) < String(c.date) ? -1 : String(a.date) > String(c.date) ? 1 : 0));
   b.tb = tb;
   meta.split = { book: sp.book, company: sp.company || "", ends: d8(sp.ends), cut, curFrom, curCompany: sp.curCompany || "", n: early.length, at: new Date().toISOString(),
@@ -161,19 +176,32 @@ export const Split = {
     this.busy[co.id] = true;
     try {
       const eb = earlyBack(b);
-      const r = await T.loadNow(true, false, { b: eb, co, gate: () => null, bk, nosave: true, par: 8 });
+      const r = await T.loadNow(true, false, { b: eb, co, gate: () => null, bk, nosave: true, dayPar: 8 });
       if (r === "big" || !eb.tb) return "";
       const nominal = (n) => { const TR = G.TallyRead; if (!TR) return false; const set = new Set(TR.NOMINAL.map((x) => x.toLowerCase()));
         const pb = { under: Object.assign({}, eb.under || {}, b.under || {}), groups: Object.assign({}, eb.groups || {}, b.groups || {}) };
         return set.has(String(TR.primaryOf(pb, n) || "").trim().toLowerCase()); };
       const was = b.meta && b.meta.split, sig = (x) => x && [x.book, x.ends, x.n, (x.check || {}).total, x.curTb && x.curTb.to].join("|");
       const before = sig(was), tbWas = b.tb && b.tb.split ? b.tb : null;
-      const done = join(b, eb, { book: sp.book, company: sp.company, ends: sp.ends, curFrom: sp.curFrom, curCompany: sp.currentCompany }, { nominal });
+      const cb = T.book(co.id), guids = { cur: cb ? await this.guids(T, cb) : {}, early: await this.guids(T, bk) };
+      const done = join(b, eb, { book: sp.book, company: sp.company, ends: sp.ends, curFrom: sp.curFrom, curCompany: sp.currentCompany }, { nominal, guids });
       if (!done) return "";
       if (before === sig(done) && r === true && tbWas) return "";
       await this.after(b, "joined");
       return "joined";
     } finally { delete this.busy[co.id]; }
+  },
+  // a book's ledgers' Tally GUIDs (a ledger renamed between the years is paired by it), read once per book's ledger list
+  G: {},
+  async guids(T, bk) {
+    const k = bk.book + "|" + (bk.ledgersAt || ""), had = this.G[bk.book];
+    if (had && had.k === k) return had.m;
+    let rows = [];
+    try { rows = await T.restAll("tally_ledgers?select=name,tally_guid&merged_into=is.null&book_id=eq." + encodeURIComponent(bk.book)); } catch (e) { rows = []; }
+    const cl = (n) => (typeof G.ledClean === "function" ? G.ledClean(n) : n), m = {};
+    (rows || []).forEach((x) => { if (x && x.name && x.tally_guid) m[cl(x.name)] = String(x.tally_guid).trim().toLowerCase(); });
+    this.G[bk.book] = { k, m };
+    return m;
   },
   async after(b, why) {
     try { if (G.Books && G.Books.mapLedgers) b.map = G.Books.mapLedgers(b.vouchers || [], b.map); } catch (e) { /* as before */ }

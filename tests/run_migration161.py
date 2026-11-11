@@ -39,7 +39,14 @@ ok(re.search(r"^begin;\s*\nset local lock_timeout = '10s';", text, re.M) is not 
 ok("delete from" not in text.lower() and not re.search(r"\b(drop|truncate)\s+(table|view|function|policy|column|index|schema|trigger|constraint)\b", code) and not re.search(r"\btruncate\b|\balter table public\.(?!tally_split_links)", code), "add-only")
 ok(not re.search(r"supabase\.co|https?://|qbocskai|nrtczu|project[_ ]ref", text.lower()), "names no real database")
 made = sorted(set(re.findall(r"create or replace function public\.(\w+)\(", code)))
-ok(made == ["tally_split_link", "tally_split_of", "tally_split_of_firm", "tally_split_unlink"], "four new functions, none replaced: %s" % made)
+ok(made == ["tally_post_enqueue_core", "tally_split_link", "tally_split_of", "tally_split_of_firm", "tally_split_unlink"], "four new functions and tally_post_enqueue_core: %s" % made)
+m116 = open(os.path.join(HERE, "..", "server", "security", "migration-116-write-checks.sql")).read()
+def fbody(t_, name):
+    i = t_.index("create or replace function public." + name + "("); return t_[i:t_.index("end $function$;", i)].splitlines()
+added = [l for l in fbody(text, "tally_post_enqueue_core") if l not in fbody(m116, "tally_post_enqueue_core")]
+gone = [l for l in fbody(m116, "tally_post_enqueue_core") if l not in fbody(text, "tally_post_enqueue_core")]
+ok(len(added) == 3 and "tally_split_links" in added[1] and len(gone) == 1 and "order by t.last_seen" in gone[0], "tally_post_enqueue_core: 116's text (as on staging) but the company pick, which leaves out the earlier-years company (%s / %s)" % (added, gone))
+ok("revoke all on function public.tally_post_enqueue_core(uuid, text, jsonb, uuid, text) from public, anon, authenticated;" in text and "grant execute on function public.tally_post_enqueue_core(uuid, text, jsonb, uuid, text) to service_role;" in text, "tally_post_enqueue_core keeps 116's grants")
 ok(re.findall(r"create table if not exists public\.(\w+)", code) == ["tally_split_links"], "one new table")
 for gr in ("grant select on public.tally_split_links to authenticated;", "grant all on public.tally_split_links to service_role;", "revoke all on public.tally_split_links from public, anon, authenticated;",
            "grant execute on function public.tally_split_link(text, text, date), public.tally_split_unlink(uuid), public.tally_split_of(text) to authenticated, service_role;",
@@ -140,6 +147,28 @@ try:
     ok("not allowed" in unl(VIEWER, BOLD).get("_error", ""), "a viewer may not unlink")
     ok(splitlink(OWN, OLDCO, CL, "2025-03-31").get("ok") is True and splitof(OWN, CL).get("live") is True, "linked again in one call")
 
+    print("== 7b. posting while the earlier company was the last one open (the review's finding 1)")
+    db.sql("update tally_companies set last_seen = now() + interval '1 minute' where book_id = %s; update tally_companies set last_seen = now() - interval '1 hour' where book_id = %s;" % (q(BOLD), q(BNEW)))
+    enq = lambda nn: rpc(OWN, "select tally_post_enqueue_to(%s::uuid, %s, %s::jsonb, null, null)::text" % (q("%08d-0000-0000-0000-000000000161" % nn), q(CL), q(json.dumps({"vouchers": [{"id": "V%d" % nn, "xml": "<VOUCHER/>"}]}))))
+    e7 = enq(1)
+    ok(not e7.get("notAllowed") and "may post only" not in str(e7) and "_error" not in e7, "a posting is checked against the current company, not the earlier one seen last (%s)" % (e7.get("error") or e7.get("_error") or e7))
+    ok(OLDCO not in str(e7) and (NEWCO in str(e7) or e7.get("company") in (None, NEWCO)), "its words name the current company only, never the earlier one (%s)" % e7)
+    ok(not db.one("select string_agg(company, ',') from tally_post_jobs where client_id = %s and company = %s" % (q(CL), q(OLDCO))), "nothing queued for the earlier company")
+
+    print("== 7c. the earlier company unlinked another way: its row has ended (the review's finding 3)")
+    ok("_error" not in link(OWN, OLDCO, None), "(the earlier company unlinked the usual way)")
+    ok(splitof(OWN, CL) is None, "tally_split_of: none")
+    r7c = splitlink(OWN, "ZZ LONE CO", CL, "2024-03-31")
+    ok(r7c.get("ok") is True or "linked to Other client" in str(r7c), "a new earlier-years company is not refused for the ended row (%s)" % r7c)
+    ok(db.one("select state from tally_split_links where book_id = %s" % q(BOLD)) == "unlinked", "the ended row is marked unlinked")
+    db.sql("update tally_split_links set state = 'unlinked' where client_id = %s" % q(CL))
+    ok(splitlink(OWN, OLDCO, CL, "2025-03-31").get("ok") is True and splitof(OWN, CL).get("live") is True, "the earlier company linked again in one call")
+    # the client removed (migration 128): every link of it released; restored and linked again, earlier years again
+    db.sql("update clients set deleted = true where id = %s" % q(CL)); db.sql("update clients set deleted = false where id = %s" % q(CL))
+    ok(splitof(OWN, CL) is None, "the client removed: its earlier years have ended (none)")
+    ok("_error" not in link(OWN, NEWCO, CL), "(the current company linked again)")
+    ok(splitlink(OWN, OLDCO, CL, "2025-03-31").get("ok") is True and splitof(OWN, CL).get("live") is True, "earlier years linked again, the ended row no hindrance")
+
     print("== 8. the current company unlinked")
     ok("_error" not in link(OWN, NEWCO, None), "(the current company unlinked)")
     s8 = splitof(OWN, CL)
@@ -159,6 +188,7 @@ try:
         ok(priv("authenticated", fn) == "true" and priv("service_role", fn) == "true" and priv("anon", fn) == "false", fn + ": members and the service role, not anon")
     fn = "public.tally_split_of_firm(uuid,text)"
     ok(priv("authenticated", fn) == "false" and priv("anon", fn) == "false" and priv("service_role", fn) == "true", fn + ": the service role only")
+    ok(priv("authenticated", "public.tally_post_enqueue_core(uuid,text,jsonb,uuid,text)") == "false" and priv("service_role", "public.tally_post_enqueue_core(uuid,text,jsonb,uuid,text)") == "true", "tally_post_enqueue_core: the service role only, as before")
     sd = db.rows("select p.proname, p.prosecdef::text sd, array_to_string(p.proconfig, ';') cfg from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname like 'tally_split%'")
     ok(len(sd) == 4 and all(x["sd"] == "true" and "search_path=public, pg_temp" in x["cfg"] for x in sd), "every new function security definer, search_path public, pg_temp (%d)" % len(sd))
 finally:
