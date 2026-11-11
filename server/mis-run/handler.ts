@@ -4,6 +4,8 @@
 //     schedules that are due (mis_take: each moved on to its next time at once, so nothing is sent twice) and runs each.
 //   POST from a signed-in owner or staff member: {action: "run", schedule_id} runs one of the firm's schedules now (its
 //     next time stays as it is). A look-only member may not.
+//   POST from a signed-in member (next-cloud-calc1, migration 151): {action: "now", client, from, to} MIS's figures for
+//     the period worked out in the database, kept while the books stay the same (misNow below)
 // A run: the saved report (client_book_items, key misCustom, item "#<report id>") for the schedule's period (last month,
 // month / quarter / year to date, in IST) worked out by the app's own engine (app/src/lib/misCustom.js) from the cloud copy
 // (data.ts); its Excel (ExcelJS, the app's own workbook: misXlsx.js) and PDF (pdf.ts) kept in the private bucket
@@ -105,6 +107,117 @@ export function handler(deps: Deps) {
     return { ok: false, error: why };
   }
 
+  // next-cloud-calc1 (the owner, 09-Nov-2026: "it should not freeze at all, whatever the book size; calculation should
+  // happen in cloud"): {action: "now", client, from, to} from a signed-in member (any role: it only reads) answers MIS's
+  // figures for the period worked out in the database in ONE call, tally_now (migration 151; each figure checked against
+  // the browser's own engine by tests/run_migration151.py). It works out the book's data version (which carries FinCom's
+  // working, CALC_V) and gives back the answer kept for it (kind mis-now.2: answers of the first revision are never
+  // served), else the figures: the receivables and payables ageing (MIS.ageing), owed to you and by you
+  // (Parties.position(to)), cash and bank (r.balances) and every ledger's balance on the last day, all from one working of
+  // that day's balances (the month-end tie-out, not part of MIS.runNow, is rpc tally_tieout). One JSON value: no REST
+  // row limit. Those are kept with the version read before them, so a change meanwhile makes the next ask work them out
+  // again. As "run": the member's firm, and the firm's and the company's switches (firmGate), first. The member's own
+  // token reads (my_firm(): its own firm's books only); only keeping the answer uses the service key. partial: the parts
+  // of MIS.runNow not worked out here yet (the browser works those out itself).
+  // next-cloud-calc2 (migration 152): the rest of MIS.runNow, each part one call of tally_mis_part with the member's token,
+  // asked once tally_now has answered: sales, purchases, the profit and loss, the period before and last year, month and
+  // year to date, received and paid with the cash flow (r.p2.cash), compliance without GST 3B (GST paid from the bank,
+  // TDS, challans, the TDS roll), MSME, the control; days of sales and purchases from those, as MIS.runNow works them out.
+  // A part not worked out (152 not run yet, a failure, a book without its ledger masters for sales) is left to the
+  // browser: named in later, the reason in errors, and the answer is partial. A partial answer is given back but NEVER
+  // kept: only a whole answer (v 3, not partial) is kept and served as kept. A kept answer of phase 1 alone (v 2, partial)
+  // is still the books' current version, so its figures are used and only 152's parts are worked out. GST 3B's figures
+  // in comp.gst (output, credit, worked out to pay) are the GST 3B helper's, and the parts of MIS.runNow that are not
+  // MIS's sections (the dues, the forecast, ratios, registrations and cost centres of r.p2, the audit's count) are not
+  // worked out here either (outside).
+  const NOW_KIND = "mis-now.2";                // as tally_now; .2: answers kept by the first revision are never given back
+  const NOW_V = 3;                             // a whole answer with 152's parts; anything less is never served as kept
+  const NOW_PARTS = ["recv", "pay", "owed", "balances", "sales", "purchases", "goods", "pl", "prev", "ly", "mtd", "ytd", "cash", "p2.cash", "comp", "msme", "control", "dso", "dpo"];
+  const SQL_PARTS = ["sales", "purchases", "pl", "prev", "ly", "tops", "cash", "comp", "msme", "control"];
+  const PART_AT_ONCE = 3;                      // the parts asked at a time (the review: not ten connections per MIS open)
+  const OUTSIDE = ["comp.gst.out", "comp.gst.itc", "comp.gst.rcm", "comp.gst.carry", "comp.gst.due", "comp.audit", "dues", "p2.fc", "p2.ratios", "p2.regs", "p2.cc"];
+  const FIGURES = ["book", "version", "from", "to", "recv", "pay", "owed", "balances"];   // what tally_now works out
+  const NOW_MONTHS = 120;                      // as tally_now
+  async function misNow(body: any, jwt: string): Promise<[number, unknown]> {
+    if (!jwt || jwt === ANON || jwt === SERVICE) return [401, { ok: false, kind: "auth", error: "Sign in to the firm account first." }];
+    let user: any;
+    try { user = await rest("/auth/v1/user", jwt); } catch { return [401, { ok: false, kind: "auth", error: "Sign in again." }]; }
+    if (!user?.id) return [401, { ok: false, kind: "auth", error: "Sign in again." }];
+    const client = String(body?.client || ""), from = String(body?.from || "").replace(/-/g, ""), to = String(body?.to || "").replace(/-/g, "");
+    if (!client || !/^\d{8}$/.test(from) || !/^\d{8}$/.test(to) || from > to) return [400, { ok: false, error: "Give the client and the period (from, to)." }];
+    const nMonths = (+to.slice(0, 4) - +from.slice(0, 4)) * 12 + (+to.slice(4, 6) - +from.slice(4, 6)) + 1;
+    if (nMonths > NOW_MONTHS) return [400, { ok: false, error: "A period of at most " + NOW_MONTHS + " months." }];
+    const mem = (await rest("/rest/v1/members?select=firm_id,role,active&user_id=eq." + enc(user.id)).catch(() => [])) as any[];
+    const member = (mem || []).find((m) => m.active);
+    if (!member) return [403, { ok: false, kind: "firm", error: "This account is not part of a firm." }];
+    const gate = await firmGate(viaRest(rest, SERVICE), String(member.firm_id || ""), client);
+    if (gate) return [gate.status, { ok: false, kind: "paused", reason: gate.reason, error: gate.error }];
+    const iso = (d: string) => d.slice(0, 4) + "-" + d.slice(4, 6) + "-" + d.slice(6);
+    const args = from + "|" + to, t0 = Date.now();
+    let n: any;
+    try { n = await rpc("tally_now", { p_client: client, p_from: iso(from), p_to: iso(to) }, jwt); }
+    catch (e) { return [500, { ok: false, error: "the figures could not be worked out: " + String((e as Error).message || e).slice(0, 200) }]; }
+    if (!n || n.none) return [404, { ok: false, kind: "none", error: "FinCom's cloud has no books of this client for that period." }];
+    const whole = (r: any) => r && Number(r.v) >= NOW_V && r.partial === false;
+    if (n.kept && whole(n.result)) return [200, { ok: true, kept: true, at: n.at, result: n.result }];
+    // tally_now's figures: worked out now, or those of a kept answer that is not whole (the same version of the books)
+    const figures: any = {};
+    for (const k of FIGURES) figures[k] = n.kept ? (k === "book" || k === "version" ? n[k] : (n.result || {})[k]) : n[k];
+    // the day Tally's balances are taken to (b.tb.to: the day the books are brought in), for the control
+    const today = istIso(now());
+    const errors: Record<string, string> = {};
+    // at most PART_AT_ONCE parts asked at a time (each is a database connection and up to a second of its time)
+    const got: any[] = new Array(SQL_PARTS.length).fill(null);
+    let nextPart = 0;
+    const worker = async () => {
+      while (nextPart < SQL_PARTS.length) {
+        const i = nextPart++, p = SQL_PARTS[i];
+        got[i] = await rpc("tally_mis_part", { p_client: client, p_part: p, p_from: iso(from), p_to: iso(to), p_today: today }, jwt)
+          .catch((e) => { errors[p] = String((e as Error).message || e).slice(0, 200); return null; });
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(PART_AT_ONCE, SQL_PARTS.length) }, worker));
+    // each part as worked out on the same book as tally_now's (the book for the period's last day)
+    const part: Record<string, any> = {};
+    SQL_PARTS.forEach((p, i) => {
+      const g = got[i];
+      part[p] = g && !g.none && g.book === figures.book && g.result ? g.result : null;
+      if (!part[p] && !errors[p]) errors[p] = g && g.book && g.book !== figures.book ? "worked out on another book" : "not worked out";
+    });
+    // a book without its ledger masters: sales are the browser's (the taxable value of the sale entries), and so are the
+    // sales of the period before, last year, the month and the year to date (their totals are none here)
+    if (part.sales && part.sales.masters === false) {
+      const why = part.sales.why || "no ledger masters";
+      for (const p of ["sales", "prev", "ly", "tops"]) { errors[p] = why; part[p] = null; }
+    }
+    const sales = part.sales, pl = part.pl, cash = part.cash, comp = part.comp, tops = part.tops;
+    const purchases = part.purchases ? (({ goods: _g, ...rest }: any) => rest)(part.purchases) : null;
+    const goods = part.purchases ? !!part.purchases.goods : null;
+    // MIS.runNow: the days in the period; revenue from operations (the profit and loss's, else the sales); days of sales
+    // and of purchases owed, never below nought, purchases only for a client that buys goods
+    const days = Math.round((Date.parse(iso(to)) - Date.parse(iso(from))) / 86400000) + 1;
+    const revOps = (pl && pl.heads && pl.heads.rev && pl.heads.rev.t) || (sales ? sales.total : 0);
+    const oweR = (figures.recv && figures.recv.sum && figures.recv.sum.owe) || 0, oweP = (figures.pay && figures.pay.sum && figures.pay.sum.owe) || 0;
+    const later = SQL_PARTS.filter((p) => !part[p]);
+    const result = { v: NOW_V, kind: NOW_KIND, partial: later.length > 0, parts: NOW_PARTS, later, outside: OUTSIDE, ...(later.length ? { errors } : {}), at: now().toISOString(), ...figures,
+      sales, purchases, goods, pl,
+      prev: part.prev ? part.prev.cmp : null, ly: part.ly ? part.ly.cmp : null,
+      prevRange: part.prev ? part.prev.range : null, lyRange: part.ly ? part.ly.range : null,
+      mtd: tops ? tops.mtd : null, ytd: tops ? tops.ytd : null,
+      cash: cash ? cash.cash : null, p2: { cash: cash ? cash.flow : null },
+      // GST: paid from the bank here; out, itc, rcm, carry and due come from the GST 3B helper
+      comp: comp ? { gst: comp.gst, tds: comp.tds, tdsRoll: comp.tdsRoll, audit: null } : null,
+      msme: part.msme ? part.msme.rows : null, msmeDays: part.msme ? part.msme.days : null,
+      control: part.control ? part.control.control : null,
+      dso: sales && pl && oweR > 0 && revOps > 0 ? Math.round(oweR / (revOps / days)) : null,
+      dpo: goods && oweP > 0 && purchases && purchases.total > 0 ? Math.round(oweP / (purchases.total / days)) : null,
+    };
+    const ms = Date.now() - t0;
+    // only a whole answer is kept (a part left to the browser: given back, never kept)
+    if (!result.partial) await rpc("tally_calc_put", { p_book: figures.book, p_kind: NOW_KIND, p_args: args, p_version: figures.version, p_result: result, p_ms: ms }).catch(() => null);
+    return [200, { ok: true, kept: false, ms, result }];
+  }
+
   return async (req: Request): Promise<Response> => {
     const cors = corsFor(req);
     const reply = (code: number, body: unknown) => new Response(JSON.stringify(body), { status: code, headers: { ...cors, "Content-Type": "application/json" } });
@@ -126,6 +239,7 @@ export function handler(deps: Deps) {
       }
       return reply(200, { ok: true, runs: out });
     }
+    if (action === "now") return reply(...(await misNow(body, jwt)));
     if (action !== "run") return reply(400, { ok: false, error: "Unknown action." });
     if (!jwt || jwt === ANON || jwt === SERVICE) return reply(401, { ok: false, kind: "auth", error: "Sign in to the firm account first." });
     let user: any;
