@@ -11,11 +11,11 @@
 // The numbers are the cloud's and the bridge's own (FinCom's counts of ledgers and groups, the read's progress, the
 // rounds, the books' summary): none is made up; a count not known says "—"; a read with no total known says the count so
 // far. Nothing new is asked of Tally.
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { LED_N, ledBook, ledgersOf, ledgersHeld, cloudLedgerCount, groupCount, GRP, runPress, runWords, runBusy, keepWaitOf, cloudBook, d8Of, daybookHeld, readOf, EMPTY_WORDS, lpEmpty } from "./TallyCompanies.jsx";
 import { tallyDevs, openOn, pcLive, coKey } from "../lib/tallyState.js";
 import { soonDraw } from "../lib/soonDraw.js";
-import { bookSum, pctOf, partWords, etaWords, nf, rpc, summary, fyNow, whyWords, pullWatch } from "./TallyFetch.jsx";
+import { bookSum, pctOf, partWords, etaWords, nf, rpc, summary, fyNow, whyWords, pullWatch, missing } from "./TallyFetch.jsx";
 import { noAnswer } from "../lib/readFollow.js";   // next-link-follow: a result line when no Tally can answer
 import { press, busyOf, lockOf, Said, useSaid, errWords } from "./TallyBtn.jsx";   // next-buttons: every click says what came of it
 import { ackSnap } from "../lib/pickAck.js";   // bridge 2.5.10: what the bridge said of it
@@ -45,18 +45,63 @@ const mayChange = () => !(typeof S === "object" && S.account && S.account.me) ||
 const LP = {}, FRESH_MS = 3 * 60000;
 export const ledProgForget = () => { Object.keys(LP).forEach((k) => delete LP[k]); };
 const openNow = (company) => { try { return !!company && tallyDevs().some((d) => pcLive(d) && openOn(d).some((o) => coKey(o) === coKey(company))); } catch (e) { return false; } };
+// reliability (11-Nov-2026; the audit: one timer and one cloud call per company row, 100 companies open on a shared Tally
+// server = about 300 calls a minute and 100 drawings every 5 s). Now ONE timer for the whole table (rowWatch) and ONE
+// queue for the rows' reads of FinCom's cloud (cloudAsk): a read is asked once per book however many rows want it, two
+// at a time at most, none while the tab is hidden (pollOk). A row is drawn again only when what it shows changed.
+// (No function reads the progress of many books in one call yet. The one wanted: tally_fetch_summary giving each book's
+// `ledger` {round, read, of, done, at} and its count of ledgers beside `pull`, or tally_ledger_progress_many(p_books
+// uuid[]); the summary is already read once for the page, so the per-book calls below would then go.)
+const seen = () => typeof pollOk !== "function" || pollOk();
+const Q = { run: 0, wait: [], keys: new Set() }, Q_MAX = 2;
+function pump() {
+  while (Q.run < Q_MAX && Q.wait.length) {
+    const j = Q.wait.shift(); Q.run++;
+    Promise.resolve().then(j.fn).catch(() => null).finally(() => { Q.run--; Q.keys.delete(j.key); pump(); });
+  }
+}
+// false: the same read (key) is already waiting or on its way
+export function cloudAsk(key, fn) {
+  if (Q.keys.has(key)) return false;
+  Q.keys.add(key); Q.wait.push({ key, fn }); pump();
+  return true;
+}
+export const cloudAskState = () => ({ run: Q.run, wait: Q.wait.length });
 export function cloudProg(cid, company) {
   const bk = ledBook(cid); if (!bk || !bk.book || typeof TCloud !== "object" || !TCloud.rpc) return null;
   const k = LP[cid] && LP[cid].book === bk.book ? LP[cid] : (LP[cid] = { book: bk.book, at: 0, v: null, busy: false });
   const v = k.v, t = v ? Date.parse(v.at) || 0 : 0, going = !!v && !v.done && Date.now() - t < FRESH_MS;
   // (a company open nowhere is not being read: nothing asked; what was read stays)
-  if (!k.busy && (going || openNow(company)) && Date.now() - k.at > (going ? 5000 : 20000)) {
-    k.busy = true;
-    const was = JSON.stringify(k.v);
-    Promise.resolve().then(() => TCloud.rpc("tally_period_status", { p_book: bk.book })).then((p) => { k.v = (p && p.ledger) || null; }, () => { /* the next look */ })
-      .finally(() => { k.at = Date.now(); k.busy = false; if (JSON.stringify(k.v) !== was) soonDraw(); });
+  if (!k.busy && seen() && (going || openNow(company)) && Date.now() - k.at > (going ? 5000 : 20000)) {
+    const was = JSON.stringify(k.v), key = "prog:" + bk.book, say = (e) => { if (typeof TStale === "object") { if (e) TStale.fail(key, e, () => { k.at = 0; cloudProg(cid, company); }); else TStale.ok(key); } };
+    // (a read that failed is said, TStale: what was read before stays, with its time; the next look asks again)
+    k.busy = cloudAsk("prog:" + bk.book, () => TCloud.rpc("tally_period_status", { p_book: bk.book }).then((p) => { k.v = (p && p.ledger) || null; say(); }, (e) => { if (!missing(e)) say(e); })
+      .finally(() => { k.at = Date.now(); k.busy = false; if (JSON.stringify(k.v) !== was) soonDraw(); }));
   }
   return liveOf(k.v, bk);
+}
+// the table's one timer: every 2 s, for the rows whose masters are being read or whose company is open in Tally (the
+// only ones that register), the row's state is worked out again (which asks FinCom's cloud only as often as cloudProg
+// says, through the queue), FinCom's own count of the ledgers arrived each 10 s while they are read, and the row drawn
+// only when its words or numbers changed. It stops with the last row that leaves
+const ROWS = new Set(); let rowT = 0, rowN = 0;
+export const rowTimers = () => ({ rows: ROWS.size, on: !!rowT });
+function rowBeat() {
+  rowN++;
+  if (!seen()) return;
+  ROWS.forEach((w) => {
+    try {
+      const r = w.row(), m = mastersOf(r.cid, r.company);
+      if ((m.st === "reading" || m.st === "waiting") && rowN % 5 === 0) cloudAsk("led:" + r.cid, () => cloudLedgerCount(r.cid, false, 9000));
+      const sig = JSON.stringify([m.st, m.read, m.of, m.n, m.g, m.words, m.sub, m.readLine]);
+      if (sig !== w.sig) { w.sig = sig; w.tick(); }
+    } catch (e) { /* the next beat */ }
+  });
+}
+export function rowWatch(w) {
+  ROWS.add(w);
+  if (!rowT) rowT = setInterval(rowBeat, 2000);
+  return () => { ROWS.delete(w); if (!ROWS.size && rowT) { clearInterval(rowT); rowT = 0; } };
 }
 export function liveOf(v, bk) {
   if (!v || typeof v !== "object") return null;
@@ -119,6 +164,13 @@ export function entriesOf(cid, ms, last) {
   }
   return { st: "none", p: null, b, pct: 0, words: ms && ms.st !== "done" ? "After masters" : "Not brought in yet" };
 }
+// reliability: while a read of FinCom's cloud fails (TStale, src/js/49) a tick is not said afresh: the same words without
+// it, as last known ("Up to date" · as of 14:02 IST); the page's one line above the table says why
+// (keys: the reads this cell is made of: the computers', and its book's progress or the summary)
+function known(head, cls, keys) {
+  const st = typeof TStale === "object" ? TStale.now(keys) : null;
+  return st && cls === " ok" ? [head.replace(/^✓ /, ""), " muted", st.as] : [head, cls, ""];
+}
 function Bar({ pct, kind, label }) {
   return <div className="tpg-bar" role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct || 0} data-tpg-pct={pct || 0}>
     <i className={kind} style={{ width: Math.max(2, pct || 0) + "%" }} /></div>;
@@ -132,14 +184,13 @@ export function MastersCell({ row }) {
   useEffect(() => { let on = true; if (ledgersHeld(row.cid)) Promise.all([cloudLedgerCount(row.cid).catch(() => null), groupCount(row.cid).catch(() => null)]).then(() => { if (on) tick((k) => k + 1); });
     return () => { on = false; }; }, [row.cid, (ledBook(row.cid) || {}).ledgersAt]);
   const m = mastersOf(row.cid, row.company), live = m.st === "reading" || m.st === "waiting";
-  // (each 2 s while the masters are read: the read's own counts)
-  useEffect(() => { if (!live) return; const t = setInterval(() => tick((k) => k + 1), 2000); return () => clearInterval(t); }, [live]);
-  // (next-masters-progress: a company open in Tally is looked at every 5 s, so a read nobody pressed here shows: cloudProg
-  // asks FinCom's cloud only as often as it says)
-  const open = !live && openNow(row.company);
-  useEffect(() => { if (!open) return; const t = setInterval(() => tick((k) => k + 1), 5000); return () => clearInterval(t); }, [open]);
-  // (next-masters-progress: FinCom's own count of the ledgers arrived, each 10 s while the masters are read)
-  useEffect(() => { if (!live || !row.cid) return; const t = setInterval(() => { cloudLedgerCount(row.cid, false, 9000).catch(() => null); }, 10000); return () => clearInterval(t); }, [live, row.cid]);
+  // (reliability: no timer of its own: the table's one timer, rowWatch, while the masters are read or the company is
+  // open in Tally; it draws this row only when what it shows changed)
+  const need = live || openNow(row.company), ref = useRef(row); ref.current = row;
+  useEffect(() => (need ? rowWatch({ row: () => ref.current, tick: () => tick((k) => k + 1) }) : undefined), [need, row.cid]);
+  // (a row no longer shown, or showing another book: its progress's mark goes with it)
+  const mBook = (ledBook(row.cid) || {}).book || "";
+  useEffect(() => () => { if (mBook && typeof TStale === "object") TStale.forget("prog:" + mBook); }, [mBook]);
   let head, sub = "", sub2 = "", cls = "";
   if (m.st === "done") { head = "✓ Up to date"; cls = " ok"; sub = countWords(m.n, m.g); sub2 = m.readLine || (m.at ? "Updated " + whenIn(m.at) : ""); }
   // (the groups only once FinCom holds this client's masters: a first read has no count yet, never "0 groups")
@@ -148,7 +199,8 @@ export function MastersCell({ row }) {
   else if (m.st === "why") { head = m.empty ? "No masters from Tally" : "Not done"; cls = " bad"; sub = m.words.replace(/^Not done:\s*/, ""); }
   // (0 only when FinCom's book for it is known and says no ledger ever came; else "—")
   else { const bk = ledBook(row.cid); head = "Not brought yet"; cls = " bad"; sub = (m.n != null ? nf(m.n) : bk && !bk.ledgersAt ? "0" : "—") + " ledgers in FinCom"; sub2 = "TDS and GST need these"; }
-  return <div className="tpg-cell" data-tpg-masters={m.st}>
+  let as; [head, cls, as] = known(head, cls, ["light", "prog:" + mBook]); if (as) sub2 = as;
+  return <div className="tpg-cell" data-tpg-masters={m.st} data-tpg-stale={as ? "" : undefined}>
     <span className={"tpg-words" + cls} data-tpg-mw="">{head}</span>
     {live && <Bar pct={m.pct} kind="read" label={"Ledgers of " + row.client} />}
     {sub && <span className="tpg-sub" data-tpg-ms="">{sub}</span>}
@@ -169,7 +221,8 @@ export function EntriesCell({ row }) {
   // (Bring books asked, not moving: why, in the words of Books › From Tally: the computer, reading of older entries off,
   // Tally busy, stopped. Not while it waits for the masters, which the head says)
   const wait = p && !p.done && e.st !== "after" ? whyWords(p, e.b) : "";
-  return <div className="tpg-cell" data-tpg-entries={e.st}>
+  let as; [head, cls, as] = known(head, cls, ["light", "sum"]); if (as) sub = [sub, as].filter(Boolean).join(" · ");
+  return <div className="tpg-cell" data-tpg-entries={e.st} data-tpg-stale={as ? "" : undefined}>
     <span className={"tpg-words" + cls} data-tpg-ew="">{head}</span>
     {p && !p.done && (e.st === "going" || e.st === "after" || e.st === "paused") && <Bar pct={e.pct} kind={e.st === "going" ? "read" : "wait"} label={"Entries of " + row.client} />}
     {sub && <span className="tpg-sub" data-tpg-es="">{sub}</span>}

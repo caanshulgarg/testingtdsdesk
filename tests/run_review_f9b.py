@@ -64,7 +64,7 @@ with sync_playwright() as p:
           tally: i < 4 ? {at: '2026-09-27T10:30:16Z', guid: 'g' + i, number: String(690 + i), vchDate: '2026040' + (i + 1)} : null}))};
       CO().bankAccounts = [{id: 'a1', bank: 'HDFC', ledger: 'HDFC BANK'}]; S.bank = b;
       TCloud.on = () => true; TCloud.has = () => true; TCloud.book = () => ({book: 'bk', daysAt: '2026-10-01T10:44:08Z', state: {doneTo: '20261001', skipped: ['20260930', '20261001']}});
-      Cloud.api = async (u) => /tally_vouchers/.test(u) ? [{guid: 'g0', cancelled: false}] : /tally_lines/.test(u) && /2026-04-05/.test(u) ? [{ledger: 'HDFC BANK', amount: 1004}] : []; }""")
+      Cloud.api = async (u) => /tally_vouchers/.test(u) ? [{guid: 'g0', cancelled: false}] : /tally_lines/.test(u) && /2026-04-05/.test(u) ? [{ledger: 'HDFC BANK', amount: 1004, day: '2026-04-05'}] : []; }""")
     n = E("TallyProof.checkBank(S.coId, true)")
     tc = E("tabCounts(B().rows)")
     ok(n == 4 and tc["done"] == 2 and tc["gone"] == 4 and tc["ready"] == 4, "7. In Tally: only the 2 lines still among Tally's entries; 4 no longer there go back under Post to Tally (%s)" % {k: tc[k] for k in ("done", "ready", "gone")})

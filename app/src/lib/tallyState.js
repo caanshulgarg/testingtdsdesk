@@ -54,8 +54,10 @@ export function hereOpen(k) {
 // 10,000 names compared, again for each list). The same answers; a copy each time (callers add to it).
 const PR = {};
 const perDraw = (key, fn) => (typeof perRender === "function" ? perRender(PR, key, fn) : fn());
+// (reliability: while FinCom's own read of the computers fails, the last known state marked so: tallyMark, src/js/49)
+const mark = (p) => (typeof tallyMark === "function" ? tallyMark(p) : p);
 export function tallyCoState(company) {
-  return Object.assign({}, perDraw("st:" + String(company), () => tallyCoStateNow(company)));
+  return mark(Object.assign({}, perDraw("st:" + String(company), () => tallyCoStateNow(company))));
 }
 function openHas(d, k, company) {
   const names = openOn(d), keys = perDraw("openKeys", () => new WeakMap());
@@ -84,7 +86,7 @@ function tallyCoStateNow(company) {
 // cloud is not in use)
 export function clientTallyState(co) {
   // next-link-record: one word everywhere (Linked / Waiting for Tally / Needs you), lib/linkStatus.js once loaded
-  const w = globalThis.LinkWord && LinkWord(co); if (w) return w;
+  const w = globalThis.LinkWord && LinkWord(co); if (w) return mark(w);
   const k = co && typeof tallyLinkOf === "function" ? tallyLinkOf(co) : null;
   if (!k || k.state === "unlinked") return { state: "unlinked", level: "warn", word: "Not linked", text: "Not linked to its company in Tally yet", computer: "", seen: "", company: "" };
   const cloud = typeof TCloud === "object" && TCloud.on();

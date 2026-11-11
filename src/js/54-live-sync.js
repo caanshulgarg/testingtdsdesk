@@ -71,11 +71,11 @@ const BookItems = {
     let s = this.st[cid];
     if (s && s.ready) return s;
     s = this.st[cid] = s || {seq: 0, base: {}, chain: Promise.resolve()};
-    try { const m = await IDBStore.get("bookitems:" + cid); if (m){ s.seq = m.seq || 0; s.base = m.base || {}; if (typeof m.healed === "string") s.healed = m.healed; } } catch (e){}
+    try { const m = await IDBStore.get("bookitems:" + cid); if (m){ s.seq = m.seq || 0; s.base = m.base || {}; if (typeof m.healed === "string") s.healed = m.healed; if (Array.isArray(m.own)) s.own = new Set(m.own); } } catch (e){}
     s.ready = true;
     return s;
   },
-  async keep(cid){ const s = this.st[cid]; try { await IDBStore.write([["bookitems:" + cid, {seq: s.seq, base: s.base, healed: typeof s.healed === "string" ? s.healed : undefined, at: new Date().toISOString()}]]); } catch (e){} },
+  async keep(cid){ const s = this.st[cid]; try { await IDBStore.write([["bookitems:" + cid, {seq: s.seq, base: s.base, healed: typeof s.healed === "string" ? s.healed : undefined, own: s.own && s.own.size ? Array.from(s.own) : undefined, at: new Date().toISOString()}]]); } catch (e){} },
   // one thing at a time for a client: fetching, sending and live changes are not interleaved
   queue(cid, fn){ const s = this.st[cid] || (this.st[cid] = {seq: 0, base: {}, chain: Promise.resolve()}); const p = s.chain.then(fn, fn); s.chain = p.catch(() => {}); return p; },
   // ---------- from the server
@@ -88,6 +88,24 @@ const BookItems = {
       after = rows[rows.length - 1].seq;
     }
   },
+  // speed (11-Nov-2026: a linked client opened again after a reload fetched 3.8 MB of items, all of them this computer's
+  // own saves of its first opening, each then found known and left): the seqs this computer's saves were given (s.own,
+  // kept with the cursor) are passed over. What came since the cursor is asked by seq only; when it is all this
+  // computer's own, nothing more is fetched; else the items from the first one not its own (as before, from there)
+  async since(cid, s){
+    const own = s.own;
+    if (!own || !own.size || !s.seq) return this.fetch(cid, s.seq);
+    let after = s.seq, top = s.seq, first = 0;
+    for (;;){
+      const rows = await Cloud.api("client_book_items?select=seq&client_id=eq." + encodeURIComponent(cid) + "&seq=gt." + after + "&order=seq.asc&limit=1000") || [];
+      for (const r of rows){ const q = num(r.seq); if (!own.has(q)){ first = q; break; } top = q; }
+      if (first || rows.length < 1000) break;
+      after = rows[rows.length - 1].seq;
+    }
+    s.seq = top; this.prune(s);
+    return first ? this.fetch(cid, top) : [];
+  },
+  prune(s){ if (s.own) s.own.forEach(q => { if (q <= s.seq) s.own.delete(q); }); },
   // on opening a client (and after being offline): what changed on the server since this computer last looked
   // o.taken (next-fast-open): called once the server's changes are in the books here, before the challans are healed and
   // this computer's changes sent, so a client opened again is shown after one read
@@ -95,7 +113,7 @@ const BookItems = {
   async pullNow(cid, o){
     const s = await this.state(cid);
     let rows;
-    try { rows = await this.fetch(cid, s.seq); Live.ok(); }
+    try { rows = await this.since(cid, s); Live.ok(); }
     catch (e){ if (this.missing(e)){ this.off = true; return "off"; } Live.fail(e); s.error = e.message; throw e; }
     s.error = "";
     if (!s.seq && !rows.length && !Object.keys(s.base).length) await this.fromBlob(cid);
@@ -144,6 +162,7 @@ const BookItems = {
       use.push({k: r.key, i: r.item, o: r.ord, d: r.data, del: !!r.deleted});
       if (!o.first && r.updated_by && r.updated_by !== me) notes.push(r);
     });
+    this.prune(s);
     if (use.length) await this.into(cid, use);
     await this.keep(cid);
     if (notes.length) Live.noteItems(cid, notes);
@@ -226,6 +245,7 @@ const BookItems = {
         const res = await Cloud.api("rpc/save_book_items", {method: "POST", body: {p_client: cid, p_items: part.map(x => x[2])}});
         if (!res || !res.ok) throw new Error("The server did not take the change.");
         part.forEach(x => { s.base[x[0]] = x[1]; }); s.bv = (s.bv || 0) + 1; own++;
+        (res.items || []).forEach(x => { const q = num(x && x.seq); if (q > s.seq) (s.own = s.own || new Set()).add(q); });
         at = end;
       }
       s.error = ""; clean(); await this.keep(cid); Live.saved();

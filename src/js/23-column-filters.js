@@ -440,13 +440,17 @@ const Trash = {
   // keeps a removal; resolves {id, server} where server says whether the server has it
   async put(cid, kind, label, data, reason){
     const at = new Date().toISOString(), rec = {cid, kind, label, reason: reason || "", at, by: whoAmI(), data};
-    let sid = null;
+    let sid = null, unsure = false;
     if (this.cloud()){
       try { sid = await Cloud.api("rpc/trash_put", {method: "POST", body: {p_client: cid, p_kind: kind, p_label: label, p_reason: reason || "", p_data: data}}); }
-      catch (e){ if (this.missing(e)) this.off = true; else toast("Kept in this browser only: the server did not take it (" + ((e && e.message) || e) + ")."); }
+      catch (e){
+        if (this.missing(e)) this.off = true; else toast("Kept in this browser only: the server did not take it (" + ((e && e.message) || e) + ").");
+        // (no answer at all, e.g. timed out: the server may have kept it all the same; the next list finds out: unsure)
+        unsure = !!(e && (e.timedOut || e.name === "TypeError" || e.name === "AbortError"));
+      }
     }
     const id = "trash:" + cid + ":" + Date.now();
-    try { await IDBStore.write([[id, Object.assign({id, sid}, rec)]]); } catch (e){ if (!sid) throw e; }
+    try { await IDBStore.write([[id, Object.assign({id, sid}, unsure ? {unsure: true} : {}, rec)]]); } catch (e){ if (!sid) throw e; }
     return {id: sid || id, server: !!sid};
   },
   // what can be put back for a client, newest first: the server's rows (from any computer) and this browser's own
@@ -459,6 +463,16 @@ const Trash = {
         const rows = await Cloud.api("client_trash?select=id,kind,label,reason,deleted_at,deleted_by_email,restored_at&client_id=eq." + encodeURIComponent(cid) + "&restored_at=is.null&order=deleted_at.desc&limit=50") || [];
         server = rows.map(r => ({id: r.id, sid: r.id, cid, kind: r.kind, label: r.label, reason: r.reason, at: r.deleted_at, by: r.deleted_by_email || "", server: true}));
       } catch (e){ if (this.missing(e)) this.off = true; }
+    }
+    // the review of 07041bcdd: a removal whose answer was lost (unsure) and that the server did keep: the server's row of
+    // the same kind and name, removed within 10 minutes of it and not claimed by another copy here, is it; this copy
+    // takes its id (saved), so it is listed once
+    const claimed = new Set(local.map(x => x.sid).filter(Boolean));
+    for (const x of local.filter(x => x.unsure && !x.sid)){
+      const m = server.find(r => !claimed.has(r.sid) && r.kind === x.kind && r.label === x.label && Math.abs(Date.parse(r.at) - Date.parse(x.at)) < 600000);
+      if (!m) continue;
+      claimed.add(m.sid); x.sid = m.sid; delete x.unsure;
+      try { await IDBStore.write([[x.id, x]]); } catch (e){}
     }
     const onServer = new Set(server.map(x => x.sid));
     const mine = local.filter(x => !x.restoredAt && !(x.sid && (onServer.has(x.sid) || this.cloud())));

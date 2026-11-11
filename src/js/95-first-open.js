@@ -111,10 +111,15 @@ const FirstOpen = {
     try { await TCloud.groupsInto(b, bk.book); await TCloud.naturesInto(b, bk.book); } catch (e){}
     st.mapBefore = JSON.stringify(b.map || {});
     b.vouchers = (b.vouchers || []).filter(v => v && v.src !== "bridge");
-    list.sort((x, y) => x[0] < y[0] ? -1 : 1).forEach(([ym, res]) => {
+    // a copy of each month's entries (the drawings of these pages never touch the ones the books are made from), made a
+    // few hundred at a time with the browser given its turn between (speed, 11-Nov-2026: one task of seconds before);
+    // then put in, month by month, as before
+    const sl = Books.slicer(), copies = [];
+    for (const [ym, res] of list.sort((x, y) => x[0] < y[0] ? -1 : 1)) copies.push([ym, res, await Books.copyOut(res.vouchers || [], sl)]);
+    await Books.pause();
+    copies.forEach(([ym, res, vs]) => {
       const m = TallyRead.months(ym + "01", to).find(z => z.ym === ym) || {from: ym + "01", to: ym + "31"};
-      // a copy of the month's entries: the drawings of these pages never touch the ones the books are made from
-      TallyRead.merge(b, {vouchers: structuredClone(res.vouchers || []), meta: res.meta || {}}, m.from < from ? from : m.from, m.to);
+      TallyRead.merge(b, {vouchers: vs, meta: res.meta || {}}, m.from < from ? from : m.from, m.to);
     });
     if (b.tb && String(b.tb.to) < to) b.tb.to = to;
     b.map = Books.mapLedgers(b.vouchers || [], b.map); try { LedMaster.refresh(b); } catch (e){}
@@ -139,6 +144,9 @@ const FirstOpen = {
     // the newest days first; within a month, its days in any order (a month is read once all of them are in)
     const want = [].concat(...months.map(ym => byMonth[ym].slice().sort((x, y) => x.day < y.day ? 1 : -1)));
     const nRecent = [].concat(...recent.map(ym => byMonth[ym])).length;
+    // the entries of the days (tally_days.n), for the plain line "Loading entries from Tally: 12,000 of 51,758…"
+    const ents = x => Math.max(0, Math.round(+x.n || 0)), nAll = all.reduce((t, x) => t + ents(x), 0), fmt = n => n.toLocaleString("en-IN");
+    let inN = 0;
     // speed round (27-Oct-2026): where a prefetch's time goes (the timings' prefetch/ledgers, prefetch/thin, prefetch/months,
     // prefetch/copy; p.mark from src/js/98)
     const tm = (k, t0, x) => { try { if (p && p.mark) p.mark("prefetch/" + k, performance.now() - t0, x || {}); } catch (e){} };
@@ -166,14 +174,15 @@ const FirstOpen = {
         res[ym] = r; fin[ym][0]();
       }).catch(e => { failed = failed || e; months.forEach(m => fin[m][1](e)); });
     };
+    const line = () => nAll ? "Loading entries from Tally: " + fmt(Math.min(inN, nAll)) + " of " + fmt(nAll) + "…" : "Loading entries from Tally: " + got + " of " + want.length + " days…";
     const progress = () => {
-      if (!st.ready){ if (got % 10 === 0 || got === want.length) say("Bringing in " + st.fy + " from FinCom's cloud: " + Math.min(got, nRecent) + " of " + nRecent + " days…"); return; }
-      if (got % 5 === 0 || got === want.length) this.tell(st, "Books: " + st.fy + " ready · loading " + st.older + " (" + (got - nRecent) + " of " + (want.length - nRecent) + " days)…");
+      if (!st.ready){ if (got % 10 === 0 || got === want.length) say(line()); return; }
+      if (got % 5 === 0 || got === want.length) this.tell(st, "Books: " + st.fy + " ready · " + line());
     };
     // a day in: kept (packed, many to a write), and its month read once its last day is in
     const take = (x, v, keep) => {
       if (keep && v) { writes.push(["tcday:" + book + ":" + x.day, {at: x.at, gz: v}]); if (writes.length >= 40) flush(); }
-      z[x.day] = v; got++;
+      z[x.day] = v; got++; inN += ents(x);
       const ym = x.day.slice(0, 6);
       if (--left[ym] === 0) readMonth(ym);
       progress();
