@@ -144,7 +144,7 @@ def main():
         # the read on its way: its count
         E("""(c) => { const x = S.tcoSync[c] || (S.tcoSync[c] = {cid: c, at: Date.now(), samples: []}); FCRunState[c] = Object.assign(FCRunState[c] || {b: {n: 0, g: 0}}, {at: x.at, asking: false, say: ''});
           x.via = 'cloud'; x.prog = {round: 'r1', read: 1200, of: 3400, done: false, at: new Date().toISOString()}; render(); }""", cid); pg.wait_for_timeout(1300)
-        ok(txt(R(ORBIT) + " [data-tpg-ms]").startswith("1,200 of 3,400 ledgers") and n(R(ORBIT) + " .tpt-why") == 0, "3. '1,200 of 3,400 ledgers', once, in Masters (%s)" % txt(R(ORBIT) + " [data-tpg-masters]"))
+        ok(txt(R(ORBIT) + " [data-tpg-ms]").startswith("Reading masters from Tally: 1,200 of 3,400 ledgers…") and n(R(ORBIT) + " .tpt-why") == 0, "3. 'Reading masters from Tally: 1,200 of 3,400 ledgers…', once, in Masters (%s)" % txt(R(ORBIT) + " [data-tpg-masters]"))
         # nothing from the bridge in 30 s: why
         E("(c) => { const x = S.tcoSync[c]; x.prog = null; x.at -= 31000; FCRunState[c].at = x.at; x.why = 'Tally is not open on SRV01: open TallyPrime there with ORBIT SPACE.'; render(); }", cid); pg.wait_for_timeout(1300)
         ok(txt(R(ORBIT) + " [data-tpg-ms]").startswith("Not started yet: Tally is not open on SRV01") and attr(R(ORBIT) + " [data-tpg-masters]", "data-tpg-masters") == "waiting", "3. nothing in 30 s: why, plainly, Masters waiting (%s)" % txt(R(ORBIT) + " [data-tpg-masters]"))

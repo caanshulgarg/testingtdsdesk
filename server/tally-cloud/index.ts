@@ -57,7 +57,12 @@
 //                                                       (complete round, every batch arrived, the bulk limit, the guard). The
 //                                                       bridge's deleted list is ignored for marking (deletedIgnored). Without
 //                                                       migration-34, or without a round id, nothing is marked. At most 60
-//                                                       calls a minute from one computer (429)
+//                                                       calls a minute from one computer (429). next-masters-progress: each
+//                                                       batch is also the ledgers' progress (tally_ledger_progress_save: the
+//                                                       GUIDs delivered so far of rowsRead, done on the last batch); a last
+//                                                       batch with no rows, no GUIDs seen and no groups is an empty list
+//                                                       (empty: true, the note EMPTY_LIST_NOTE, kept on the round): ledgers_at
+//                                                       is not set
 //   {kind:"ledger_changes", company, company_guid, ledgers:[the ledger_list row shape], why: counter | wanted, after?, upto?}
 //                                                    -> {ok, ledgers, added, updated, kept}: FinCom Bridge 2.3.1 (masters,
 //                                                       applyLedgerChanges): the ledgers created or altered since Tally's
@@ -1535,6 +1540,8 @@ async function openingsHold(book: string, source: string, round: string | null, 
   return data;
 }
 const inrText = (n: number) => { const a = Math.abs(Math.round(n * 100) / 100), [i, d] = a.toFixed(2).split("."); const g = i.length > 3 ? i.slice(0, -3).replace(/\B(?=(\d{2})+(?!\d))/g, ",") + "," + i.slice(-3) : i; return g + "." + d + (n < 0 ? " Dr" : n > 0 ? " Cr" : ""); };
+// next-masters-progress: the words of an empty ledger list (the answer's notes, the round's note; the Tally page reads them)
+const EMPTY_LIST_NOTE = "Tally gave an empty list for this company";
 async function applyLedgerList(firm: string, book: string, body: any, dev?: any, me?: { id: string; entry: any }) {
   const s = (v: unknown, n: number) => String(v ?? "").slice(0, n);
   const m32 = await hasCols("tally_ledgers", "tally_guid, alter_id, deleted_at");
@@ -1565,12 +1572,13 @@ async function applyLedgerList(firm: string, book: string, body: any, dev?: any,
   const rowsRead = body.rowsRead === null || body.rowsRead === undefined || body.rowsRead === "" || !Number.isFinite(Number(body.rowsRead)) ? null : Math.max(0, Math.floor(Number(body.rowsRead)));
   const seenIn = (Array.isArray(body.seen) ? body.seen : []).slice(0, 50000).map((g: any) => s(g, 100).trim());
   let m34: boolean | null = null;
+  let roundSeen: number | null = null;     // the GUIDs the round has delivered so far (tally_ledger_round_batch's seen)
   const missing34 = (e: any) => !!e && /could not find|does not exist|schema cache|tally_ledger_round_batch|tally_ledgers_mark_gone|tally_ledger_rename/i.test(String(e.message || ""));
   if (round) {
-    const { error } = await db.rpc("tally_ledger_round_batch", { p_book: book, p_round: round, p_rows: rows.length, p_rows_read: rowsRead, p_complete: complete, p_device: dev?.id ?? null, p_bridge: me?.id ?? null, p_seen: seenIn });
+    const { data: rb, error } = await db.rpc("tally_ledger_round_batch", { p_book: book, p_round: round, p_rows: rows.length, p_rows_read: rowsRead, p_complete: complete, p_device: dev?.id ?? null, p_bridge: me?.id ?? null, p_seen: seenIn });
     if (error && missing34(error)) { m34 = false; notes.push("round not recorded: migration-34 (tally_ledger_rounds) is not applied"); }
     else if (error) throw new Error(error.message);
-    else { m34 = true; out.round = round; }
+    else { m34 = true; out.round = round; const n = Number(rb?.seen); if (rb && Number.isFinite(n) && n >= 0) roundSeen = Math.floor(n); }
   }
   // 1. groups (added or changed; none removed), and every group's parent for the chains
   const grpIn = cleanPairs(body.groups, 20000);
@@ -1751,9 +1759,34 @@ async function applyLedgerList(firm: string, book: string, body: any, dev?: any,
   // round 64: the list's time on the book (tally_books.ledgers_at), as the trial balance's "ledgers" call sets it, on the
   // last batch of a round (or a call with no round, a bridge before 2.1.5): the app sees that the ledgers came (Ledgers.watch,
   // Connect Tally's step 5)
-  if (body.last === true || !round) {
+  // next-masters-progress: a last batch with no ledger rows, no GUIDs seen (this batch and the round) and no groups is an
+  // empty list (Tally answered for another company, or for none): it is never taken as the company's masters having
+  // come, so ledgers_at stays; the answer and the round say so (tally_ledger_rounds.note, which the Tally page reads)
+  const final = body.last === true || !round;
+  const empty = final && !rows.length && !grpIn.length && !seenIn.length && !(Number(rowsRead) > 0) && !(Number(roundSeen) > 0);
+  if (empty) {
+    notes.push(EMPTY_LIST_NOTE);
+    (out as Record<string, unknown>).empty = true;
+    console.log("tally-ingest ledger_list: an empty list", book, round);
+    if (round && m34) {
+      const { error } = await db.from("tally_ledger_rounds").update({ note: EMPTY_LIST_NOTE + "; ledgers_at not set" }).eq("book_id", book).eq("round_id", round);
+      if (error) notes.push("the round's note not kept: " + String(error.message || "").slice(0, 160));
+    }
+  } else if (final) {
     const { error } = await db.from("tally_books").update({ ledgers_at: now }).eq("book_id", book);
     if (error) notes.push("ledgers_at not set: " + String(error.message || "").slice(0, 160));
+  }
+  // next-masters-progress (the owner: "reading masters does not have progress bar"): every batch of a round is the ledgers'
+  // progress for the Tally page, whichever read sent it (Update now, the nightly run, Import ledgers): the GUIDs delivered
+  // so far of the round's rowsRead, done on the last batch. A round the bridge itself reports (Import ledgers, 2.4.5's
+  // ledger_progress) is never put back: tally_ledger_progress_save keeps a done round done and never lowers its count
+  if (round) {
+    const read = empty ? 0 : roundSeen !== null ? roundSeen : final ? rowsRead : null;
+    if (read !== null) {
+      const of = empty ? 0 : Math.max(read, rowsRead ?? 0);
+      const { error } = await db.rpc("tally_ledger_progress_save", { p_book: book, p_round: round.slice(0, 64), p_read: Math.min(read, 10000000), p_of: Math.min(of, 10000000), p_done: final && (complete || empty), p_device: dev?.id ?? null });
+      if (error && !missingFn(String(error.message || ""))) notes.push("progress not kept: " + String(error.message || "").slice(0, 160));
+    }
   }
   // 5. the year's openings worked out again (a ledger added, an opening or a group changed)
   if (fresh.length || opened.length || body.last) {

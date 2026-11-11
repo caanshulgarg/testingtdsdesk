@@ -6,7 +6,8 @@ cloud of run_tally_simple.py).
      "✓ Up to date · Last entry <when>", "Up to 12-Oct-2026 · N days to bring", "Not brought yet · Comes after masters"; ONE
      main button a row (Update now, Check again + "Open it in Tally first", Bring masters); no filter chips, no "Coming in
      from Tally now" panel.
-  1. Masters reading in the row ("Reading now", its bar, "7,560 of 12,195 ledgers · 148 groups"), Entries "Next, after
+  1. Masters reading in the row ("Reading now", its bar, "Reading masters from Tally: 7,560 of 12,195 ledgers… · 148
+     groups"), Entries "Next, after
      masters" with its bar; the row's button Pause, Stop under More (tally_period_pause / tally_period_cancel); waiting in
      the bridge's own words; the title and Download FinCom Bridge <version>; the connection card's How to connect.
   3. More ▾: one light row (one open at a time): Entries in FinCom: <range>, Update history from tally_ledger_rounds
@@ -141,8 +142,8 @@ def main():
           window.__sum = window.__sum.filter(x => x.book !== b).concat([{book: b, client: c, company: 'KESTREL TEXTILES', from: '2026-04-01', devices: [{id: 'd', fetchOn: true}], pull: {fy: '20260401', part: 'year', state: 'going', x: 1304, y: 2651, etaMin: 12, rate: 113, chosenAt: new Date(Date.now() - 1800000).toISOString(), pace: true}}]);
           if (window.tfxRefresh) window.tfxRefresh(); render(); }""", [cid(KES), "bk-Kestrel Textiles"]); pg.wait_for_timeout(2500)
         mk, ek = txt(R(KES) + " [data-tpg-masters]"), txt(R(KES) + " [data-tpg-entries]")
-        ok(pg.get_attribute(R(KES) + " [data-tpg-masters]", "data-tpg-masters") == "reading" and mk == "Reading now 7,560 of 12,195 ledgers · 148 groups" and pg.get_attribute(R(KES) + " [data-tpg-masters] [role=progressbar]", "aria-valuenow") == "62",
-           "1. Masters reading: Reading now, its bar (62), 7,560 of 12,195 ledgers · 148 groups (%s)" % mk)
+        ok(pg.get_attribute(R(KES) + " [data-tpg-masters]", "data-tpg-masters") == "reading" and mk == "Reading now Reading masters from Tally: 7,560 of 12,195 ledgers… · 148 groups" and pg.get_attribute(R(KES) + " [data-tpg-masters] [role=progressbar]", "aria-valuenow") == "62",
+           "1. Masters reading: Reading now, its bar (62), Reading masters from Tally: 7,560 of 12,195 ledgers… · 148 groups (%s)" % mk)
         ok(ek == "Next, after masters 1,304 of 2,651 · about 12 min" and n(R(KES) + " [data-tpg-entries] [role=progressbar]") == 1, "1. Entries: Next, after masters, its bar, 1,304 of 2,651 · about 12 min (%s)" % ek)
         ok("left" not in mk and "slow" not in txt(R(KES)), "1. no masters time left, no 'ledgers slow in Tally' (no data for them)")
         ok(mains(KES) == ["reading"] and txt(R(KES) + " [data-tpt-main]") == "Reading…" and pg.is_disabled(R(KES) + " [data-tpt-main]"),

@@ -448,6 +448,10 @@ async function ledgerNow(cid) {
   const p = await TCloud.rpc("tally_period_status", { p_book: bk.book });
   return (p && p.ledger) || null;
 }
+// next-masters-progress: a read that ended with nothing (the bridge's done at 0 of 0; tally-ingest's ledger_list then says
+// "Tally gave an empty list for this company" and leaves the book's ledger time as it was): said in plain words, never "✓"
+export const EMPTY_WORDS = "Tally gave no masters for this company — is the right Tally company linked?";
+export const lpEmpty = (lp) => !!lp && !!lp.done && !(Number(lp.read) > 0) && !(Number(lp.of) > 0);
 const sameLp = (a, b) => !!a && !!b && a.round === b.round && String(a.at) === String(b.at) && Number(a.read) === Number(b.read) && !!a.done === !!b.done;
 // next-tally-ledgers-button (04-Nov-2026; the owner: "first time integrating a Tally company I cannot see the masters coming,
 // nor any button to bring them"). Staging, a shared server: the "ledgers" wake reached the computers, but a bridge reads
@@ -503,6 +507,7 @@ export async function syncPoll(cid) {
       const rd = Number(lp.read) || 0, last = x.samples[x.samples.length - 1];
       if (!last || rd !== last.read) { x.samples.push({ t: Date.now(), read: rd }); x.moveAt = Date.now(); }
       x.prog = lp;
+      if (lpEmpty(lp)) { x.err = EMPTY_WORDS; x.empty = true; return; }
     }
     const laNew = !!la && (x.snap ? la !== x.la0 : Date.parse(la) >= since);
     if (!x.ledAt && ((x.prog && x.prog.done) || laNew)) {
