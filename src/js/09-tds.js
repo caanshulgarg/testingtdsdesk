@@ -183,7 +183,7 @@ const TDS = {
   // 27Q: deductions from non-residents
   nrRows(){ const f = () => this.allRows().filter(r => this.NR.test(this.sec(r.section))); return typeof perRender === "function" ? perRender(this, "nrRows", f) : f(); },
   // 27EQ: tax collected at source on sales, one row per voucher and TCS ledger
-  tcsRows(){ return typeof perRender === "function" ? perRender(this, "tcsRows", () => this.tcsRowsNow()) : this.tcsRowsNow(); },
+  tcsRows(){ return typeof perRender === "function" ? perRender(this, "tcsRows", () => this.kept("tcsRows", () => this.tcsRowsNow())) : this.tcsRowsNow(); },
   tcsRowsNow(){
     const b = S.books;
     if (!b || !b.vouchers) return [];
@@ -289,7 +289,40 @@ const TDS = {
   },
   reversals(){ this.allRows(); return this._rev || []; },
   // every voucher that carries a TDS ledger becomes one deduction row (but a TDS ledger's adjustment: TDS.adjOnly)
-  allRows(){ return typeof perRender === "function" ? perRender(this, "allRows", () => this.allRowsNow()) : this.allRowsNow(); },
+  allRows(){ return typeof perRender === "function" ? perRender(this, "allRows", () => this.kept("allRows", () => this.allRowsNow(), () => this._rev, v => { this._rev = v; })) : this.allRowsNow(); },
+  // next-speed-pages (11-Nov-2026, made-up books of 51,758 entries): a page change draws 2 to 6 times, and each drawing
+  // worked out every entry's TDS again (200 ms a time at 1x, a TDS return page 4 s, 13-22 s on an office PC). The rows
+  // are kept now for as long as everything they are worked out from is the same: the same books object, the same save
+  // of the books (BOOKS_REV, moved by every saveBooks), the same entries (the list and how many), ledger map and its
+  // version, masters, PANs, salary and payroll, the TDS work written in place (allocations, splits, edits, deductions
+  // added, the PAN book, returns filed: compared by their contents), the Closed periods' TDS dates, and Tally's TDS
+  // lines from the cloud. A kept answer is handed out only while it is still as it was made (its contents compared):
+  // a row changed in place (a tag sets r.challan) is worked out again; so are rows after an entry of the list is replaced by
+  // another (each entry compared by itself). An entry changed in place is seen at the save that follows it, as every
+  // figure kept for the page's drawings (memoKeep). Outside a drawing, as before, always fresh
+  _kept: typeof WeakMap === "function" ? new WeakMap() : null,
+  keptKey(b){
+    let co = {}; try { co = (typeof CO === "function" && CO()) || {}; } catch (e){ co = {}; }
+    const x = typeof TCloud === "object" && TCloud.tdsl && TCloud.tdsl[b.cid], small = {};
+    ["alloc", "allocFrom", "tdsSplits", "tdsEdits", "tdsAdded", "panFix", "tdsFiled", "filedOn", "tcsCodes", "tcsCodesFixed", "tdsPayKind", "nrInfo"].forEach(k => { small[k] = b[k]; });
+    let cp = ""; try { cp = typeof ClosedP === "object" ? JSON.stringify(ClosedP.cfg(co).tdsFiled || {}) : ""; } catch (e){ cp = ""; }
+    return [typeof BOOKS_REV === "number" ? BOOKS_REV : 0, b.cid, b.vouchers, (b.vouchers || []).length, b.map, b.mapV || 0, b.under, b.groups, b.ledInfo, b.ledInfoAt || "",
+      b.pans, Object.keys(b.pans || {}).length, b.salary, b.payroll, x && x.rows, co.supInvFrom || "", cp, JSON.stringify(small)];
+  },
+  kept(name, fn, extra, setExtra){
+    const b = S.books;
+    if (!this._kept || !b || typeof b !== "object" || !b.vouchers || typeof IN_RENDER === "undefined" || !IN_RENDER) return fn();
+    const k = this.keptKey(b), all = this._kept.get(b) || {}, was = all[name];
+    const V = b.vouchers, sameV = (vs) => Array.isArray(V) && vs.length === V.length && vs.every((v, i) => v === V[i]);
+    if (was && was.k.length === k.length && was.k.every((z, i) => z === k[i]) && sameV(was.vs)){
+      let sig = null; try { sig = JSON.stringify([was.v, was.x]); } catch (e){ sig = null; }
+      if (sig !== null && sig === was.sig){ if (setExtra) setExtra(was.x); return was.v; }
+    }
+    const v = fn(), x = extra ? extra() : undefined;
+    let sig = null; try { sig = JSON.stringify([v, x]); } catch (e){ sig = null; }
+    if (sig !== null && Array.isArray(V)){ all[name] = {k, v, x, sig, vs: V.slice()}; this._kept.set(b, all); }
+    return v;
+  },
   allRowsNow(){
     const b = S.books;
     if (!b || !b.vouchers) return [];
@@ -372,7 +405,7 @@ const TDS = {
     return out;
   },
   // the TDS payment vouchers in the books: the challan's amount and date are already there
-  paymentsFromBooks(){ return typeof perRender === "function" ? perRender(this, "pay", () => this.paymentsFromBooksNow()) : this.paymentsFromBooksNow(); },
+  paymentsFromBooks(){ return typeof perRender === "function" ? perRender(this, "pay", () => this.kept("pay", () => this.paymentsFromBooksNow())) : this.paymentsFromBooksNow(); },
   paymentsFromBooksNow(){
     const b = S.books;
     if (!b || !b.vouchers) return [];
