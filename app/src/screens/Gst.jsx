@@ -38,6 +38,7 @@ import FiledCompare from "./gst/FiledCompare.jsx";
 import Recon from "./gst/Recon.jsx";
 import { Qrmp, Cmp08, Gstr4 } from "./gst/Periodic.jsx";
 import FileApi from "./gst/FileApi.jsx";
+import { FixList, FixTop } from "./gst/FixList.jsx";
 import "../parts/returns.css";
 import Filters, { Field, Search } from "../parts/Filters.jsx";
 import { r1Lists, r1BillsExcel } from "./gst/R1Bills.jsx";
@@ -96,7 +97,7 @@ function Cell({ c, ym, part, label }) {
   if (!c) return <td><div className="rp-cell st-na" aria-hidden="true">—</div></td>;
   const words = c.st === "none" ? c.none || "Not started" : c.st === "bad" ? (c.errors ? "Errors " : "Mismatch ") + c.n : c.st === "filed" ? "Filed " + c.on : c.ready || "Ready";
   return <td><button className={"rp-cell st-" + c.st} data-cell={label + "|" + ym} data-status={c.st} aria-label={label + " " + (ym.length === 6 ? GSTR.label(ym) : ym) + ": " + words}
-    aria-current={S.gstView === "return" && S.gstYm === ym && S.gstPart === part || undefined} onClick={() => gstOpen(ym.length === 6 ? ym : S.gstYm, part)}>
+    aria-current={S.gstView === "return" && S.gstYm === ym && S.gstPart === part || undefined} onClick={() => gstOpen(ym.length === 6 ? ym : S.gstYm, part, undefined, c.errors ? "fix" : "")}>
     <span className="rp-s">{words}</span>{c.amount && <span className="rp-a">{c.amount}</span>}
     {(c.lines || []).map((w, i) => <span key={i} className="nr">{w}</span>)}</button></td>;
 }
@@ -171,11 +172,17 @@ function OptionalNote() {
 
 // a GSTR-1 or 3B open: its summary card (round 46) — the return and period, its status as the year's grid says it, the
 // one download, and More
-function GstCard({ part, months, gNow, ftype, noReturn, sub, prefile, ctx, ledger, retPick, oneGstin }) {
+// the status of the GSTR-1 or 3B open, as the year's grid says it (its errors are What to fix's count)
+function cardStatus(part, months, ftype) {
   const reg = S.gstReg || "", ym = S.gstYm || "", have = new Set(months), last = (S.books.meta || {}).to ? String(S.books.meta.to).slice(0, 6) : "";
   const inBooks = (S.books.vouchers || []).length > 0 && have.has(ym) && (!last || ym <= last);
   const iff = part === "r1" && ftype === "qrmp" && !GSTSet.isQEnd(ym);
-  const c = status(reg, part === "r3b" ? "r3b" : iff ? "iff" : "r1", ym, inBooks, GSTCMP.month(ym, reg));
+  return status(reg, part === "r3b" ? "r3b" : iff ? "iff" : "r1", ym, inBooks, GSTCMP.month(ym, reg));
+}
+
+function GstCard({ part, c, gNow, ftype, noReturn, sub, prefile, ctx, ledger, retPick, oneGstin }) {
+  const reg = S.gstReg || "", ym = S.gstYm || "";
+  const iff = part === "r1" && ftype === "qrmp" && !GSTSet.isQEnd(ym);
   const words = c.st === "none" ? "Not started" : c.st === "bad" ? (c.errors ? c.n + " to fix" : "Differs from the books: " + c.n) : c.st === "filed" ? "Filed " + c.on : "Ready to file";
   const name = part === "r1" ? (iff ? "IFF" : "GSTR-1") : "GSTR-3B", forWhat = ftype === "qrmp" ? " for the quarter" : "";
   const primary = noReturn || c.st === "filed" || sub === "file" ? null : part === "r1" ? ["Download GSTR-1 JSON" + forWhat, () => doAct("gstJson")] : ["Download GSTR-3B JSON" + forWhat, () => doAct("gst3bJson")];
@@ -185,7 +192,6 @@ function GstCard({ part, months, gNow, ftype, noReturn, sub, prefile, ctx, ledge
   // · the actions at the right; under it, small: the GSTIN's state and filing type, the status, the ledgers to confirm
   return <section className="ret-card ret-slim ret-pro ret-one" data-return-card={part + "|" + ym}>
     <div className="ret-head">
-      <button className="linkbtn ret-back" onClick={() => gstViewGo("year")} aria-label={"Back to GST " + GSTF.fyOf(ym)} title={"Back to GST " + GSTF.fyOf(ym)}>←</button>
       <h2 data-return-title="" className="sr-only">{name} · {periodLabel(ym, reg)}</h2>
       {/* round 6: the return is the title's first choice (the part chips' row is gone): GSTR-1, 3B, … and the year's grid */}
       {retPick || <span className="ret-name-h" aria-hidden="true">{name}</span>}
@@ -198,7 +204,10 @@ function GstCard({ part, months, gNow, ftype, noReturn, sub, prefile, ctx, ledge
         {primary && <button className="btn small primary" data-card-primary="" onClick={primary[1]}>{primary[0]}</button>}
       </div>
     </div>
-    <div className="ret-sub ret-line2"><span>{oneGstin ? gNow + " · " : ""}{GSTRegs.state(gNow)} · {GSTSet.typeLabel(ftype)}{GSTSet.peek(reg).portalUser ? " · portal user " + GSTSet.peek(reg).portalUser : ""}
+    <div className="ret-sub ret-line2">
+      {/* the owner, 11-Nov-2026: the way back to the year's grid, in words, first on the card's second line */}
+      <button className="linkbtn ret-back ret-back-y" data-back-year="" onClick={() => gstViewGo("year")} title={"Back to GST " + GSTF.fyOf(ym) + ", the year's grid"}>← Back to the year</button>
+      <span>{oneGstin ? gNow + " · " : ""}{GSTRegs.state(gNow)} · {GSTSet.typeLabel(ftype)}{GSTSet.peek(reg).portalUser ? " · portal user " + GSTSet.peek(reg).portalUser : ""}
       {ftype === "qrmp" && (GSTSet.isQEnd(ym) ? " · the downloads cover the whole of " + GSTSet.qLabel(ym) : " · for reference: this month has no GSTR-1 or 3B, see “This quarter”")}</span>
       <span className={"tag " + (c.st === "filed" ? "ok" : c.st === "bad" ? "bad" : c.st === "none" ? "no" : "info")} data-status-tag="">{words}</span>
       {ledger}
@@ -272,7 +281,10 @@ export default function Gst() {
   // without a day book there is no grid: the year opens on the first part (2B)
   if (noBooks && S.gstView === "year") S.gstView = "return";
   const part = S.gstPart, noReturn = ftype === "qrmp" && !GSTSet.isQEnd(S.gstYm || ""), iffNow = noReturn && part === "r1", gNow = regs.find((g) => g.slice(0, 2) === S.gstReg) || "";
-  const subs = S.gstView === "return" && !noBooks ? SUBS[part] : null;
+  // a GSTR-1 or 3B with errors to fix before filing (the year's grid's red "Errors N"): What to fix (N) is its first tab
+  const cardSt = S.gstView === "return" && !noBooks && SUBS[part] ? cardStatus(part, months, ftype) : null;
+  const fixN = cardSt && cardSt.errors ? cardSt.n : 0, fixRet = part === "r3b" ? "r3b" : "r1";
+  const subs = S.gstView === "return" && !noBooks ? (fixN ? [["fix", "What to fix (" + fixN + ")"]].concat(SUBS[part]) : SUBS[part]) : null;
   if (subs && !subs.some(([k]) => k === S.gstSub)) S.gstSub = "summary";
   const sub = subs ? S.gstSub : undefined;
   const noDownload = ["r2b", "rev", "inreg", "itcfinal", "qtr", "vault", "filedcmp", "recon"].includes(part) || ftype === "comp";
@@ -302,7 +314,7 @@ export default function Gst() {
     {!cardOn && bar}
     {!cardOn && partNav}
     {S.gstView === "year" ? <Grid months={months} reg={S.gstReg || ""} /> : <>
-    {subs && <GstCard part={part} months={months} gNow={gNow} ftype={ftype} noReturn={noReturn} sub={sub} prefile={!noBooks && S.gstYm ? <PreFileButton kind="gst" reg={S.gstReg || ""} ym={S.gstYm} /> : null}
+    {subs && <GstCard part={part} c={cardSt} gNow={gNow} ftype={ftype} noReturn={noReturn} sub={sub} prefile={!noBooks && S.gstYm ? <PreFileButton kind="gst" reg={S.gstReg || ""} ym={S.gstYm} /> : null}
       oneGstin={regs.length <= 1} retPick={<select className="ret-pick" aria-label="Return" data-gst-return-pick="" value={part} onChange={(ev) => (ev.target.value === "year" ? gstViewGo("year") : gstPartGo(ev.target.value))}>
         {sec === "returns" && !noBooks && <option value="year">The year's grid</option>}
         {subParts.map(([id, l]) => <option key={id} value={id} data-part={id}>{l}</option>)}</select>}
@@ -313,6 +325,7 @@ export default function Gst() {
     {!subs && part === "r3b" && !noReturn && <div className="revfilter"><button className="btn small primary" onClick={() => doAct("gst3bJson")}>Download GSTR-3B JSON{forWhat}</button></div>}
     {subs && <div className="tg-tabrow"><nav className="sbar rp-tabs" aria-label="Return">{subs.map(([k, l]) => <button key={k} data-sub={k} aria-selected={S.gstSub === k} onClick={() => gstSubGo(k)}>{l}</button>)}</nav>
       <div className="tg-tabside">{part === "r1" && sub === "details" && <R1Tools />}<ReturnXl part={part} sub={sub} noReturn={noReturn} /></div></div>}
+    {fixN > 0 && sub !== "fix" && <FixTop ym={S.gstYm || ""} reg={S.gstReg || ""} ret={fixRet} n={fixN} />}
     {!noBooks && (part === "r1" || part === "r3b" || part === "qtr") && <OptionalNote />}
     {noBooks && <p className="note" style={{ margin: "0 0 10px" }}>No Tally day book here yet. 2B and the returns filed work without it; GSTR-1, 3B, the input register and the other workings need the day book, brought in under “From Tally”.</p>}
     {sub === "file" && <section className="dash-card" style={{ marginBottom: 12 }} data-file={part}><h3>{part === "r1" ? "GSTR-1" : "GSTR-3B"} for {periodLabel(S.gstYm || "", S.gstReg || "")}</h3>
@@ -329,7 +342,7 @@ export default function Gst() {
         label={part === "r3b" ? "GSTR-3B" + (ftype === "qrmp" ? " for the quarter" : "") : ftype === "qrmp" ? (GSTSet.isQEnd(S.gstYm || "") ? "GSTR-1 for the quarter" : "IFF") : "GSTR-1"} />}</section>}
     {/* the browser helper (next-gst-browser): fills the return on the portal and stops before File */}
     {sub === "file" && (!noReturn || iffNow) && S.gstYm && <BrowserHelper form={iffNow ? "IFF" : part === "r1" ? "R1" : "3B"} ym={S.gstYm} reg={S.gstReg || ""} />}
-    {part === "r1" ? <Gstr1 b={b} sub={sub} /> : part === "r3b" ? <Gstr3b b={b} sub={sub} /> : part === "inreg" ? <InputRegister b={b} /> : part === "r2b" ? <TwoB b={b} /> : part === "amend" ? <Amendments b={b} /> : part === "adv" ? <Advances /> : part === "rev" ? <Reversal b={b} /> : part === "g9" ? <Gst9 b={b} /> : part === "g9c" ? <Gst9c /> : part === "itcfinal" ? <ItcFinal b={b} /> : part === "vault" ? <ReturnsFiled b={b} /> : part === "filedcmp" ? <FiledCompare b={b} /> : part === "recon" ? <Recon b={b} /> : part === "qtr" ? <Qrmp /> : part === "cmp08" ? <Cmp08 /> : part === "gstr4" ? <Gstr4 /> : part === "notices" ? <Notices b={b} kind="gst" /> : null}
+    {sub === "fix" ? <FixList ym={S.gstYm || ""} reg={S.gstReg || ""} ret={fixRet} n={fixN} /> : part === "r1" ? <Gstr1 b={b} sub={sub} /> : part === "r3b" ? <Gstr3b b={b} sub={sub} /> : part === "inreg" ? <InputRegister b={b} /> : part === "r2b" ? <TwoB b={b} /> : part === "amend" ? <Amendments b={b} /> : part === "adv" ? <Advances /> : part === "rev" ? <Reversal b={b} /> : part === "g9" ? <Gst9 b={b} /> : part === "g9c" ? <Gst9c /> : part === "itcfinal" ? <ItcFinal b={b} /> : part === "vault" ? <ReturnsFiled b={b} /> : part === "filedcmp" ? <FiledCompare b={b} /> : part === "recon" ? <Recon b={b} /> : part === "qtr" ? <Qrmp /> : part === "cmp08" ? <Cmp08 /> : part === "gstr4" ? <Gstr4 /> : part === "notices" ? <Notices b={b} kind="gst" /> : null}
     </>}
     </>}
   </div>;

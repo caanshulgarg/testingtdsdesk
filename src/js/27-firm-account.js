@@ -1352,9 +1352,10 @@ function tdsPick(fy, q, form){
   render();
 }
 // the GST pages (redesign of 09-Oct-2026): the year's grid of returns and months, or one return and period with its tabs
-function gstOpen(ym, part, reg){ if (reg) S.gstReg = reg; if (ym && ym !== S.gstYm){ S.gstYm = ym; Smart.keep("gst", {ym}); if (S.books) S.books.reco = null; }
+// sub: the tab to open on (the year's red cell opens "fix", What to fix)
+function gstOpen(ym, part, reg, sub){ if (reg) S.gstReg = reg; if (ym && ym !== S.gstYm){ S.gstYm = ym; Smart.keep("gst", {ym}); if (S.books) S.books.reco = null; }
   S.gstSeen = (S.gstReg || "") + "|" + (typeof GSTSet === "object" ? GSTSet.typeOf(S.gstYm || "", S.gstReg || "") : "monthly");
-  S.gstPart = part; S.gstView = "return"; S.gstSub = ""; render(); window.scrollTo(0, 0); }
+  S.gstPart = part; S.gstView = "return"; S.gstSub = sub || ""; render(); window.scrollTo(0, 0); }
 function gstViewGo(v){ S.gstView = v; render(); }
 function gstSubGo(sub){ S.gstSub = sub; render(); }
 // the review table (app/src/screens/Review.jsx)
