@@ -18,3 +18,4 @@ latest-2.0.0.json, latest-2.1.2.json and latest-2.1.3.json are the update lists 
 2.5.11 (built again 09-Nov-2026 10:28 UTC after the independent review; replaces the withdrawn first build above): its files are in assets-test/bridge-go.
 2.5.11 (built 09-Nov-2026, its update list signed; replaced by 2.5.12, built 10-Nov-2026): FinComBridge-2.5.11.exe, FinComBridge-Setup-2.5.11.exe(.sha256), latest-2.5.11.json and its signature latest-2.5.11.json.sig kept here as history.
 2.5.12 (built 10-Nov-2026, its update list signed; replaced by 2.5.13, built 10-Nov-2026): FinComBridge-2.5.12.exe, FinComBridge-Setup-2.5.12.exe(.sha256), latest-2.5.12.json and its signature latest-2.5.12.json.sig kept here as history.
+2.5.13 (built 10-Nov-2026, its update list signed; replaced by 2.5.14, built 11-Nov-2026): FinComBridge-2.5.13.exe, FinComBridge-Setup-2.5.13.exe(.sha256), latest-2.5.13.json and its signature latest-2.5.13.json.sig kept here as history.
