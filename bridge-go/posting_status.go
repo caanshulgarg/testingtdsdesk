@@ -13,7 +13,44 @@ import (
 )
 
 // --- the company
-func companyKey(s string) string { return strings.ToLower(strings.Join(strings.Fields(s), " ")) }
+func companyKey(s string) string {
+	return strings.ToLower(strings.Join(strings.Fields(coClean(s)), " "))
+}
+
+// 2.5.14 (the owner's decision of 11-Nov-2026, as the independent review of 9d546dcb1 narrowed it): a company's name as
+// the cloud keeps it, for the bridge's own matching (companyKey) and for every name sent to FinCom's cloud (cloudNames).
+// NEVER for what is sent to Tally: Tally is asked with the name exactly as its own company list gave it (an edge
+// character Tally stores is part of its name; a cleaned name could find nothing, or fall to the active company).
+// The rule is the cloud's coTrim (server/tally-cloud/linknow.js) character for character: JavaScript's \s and
+// U+0000..U+001F dropped at either END (U+0085 is not JavaScript's \s: kept), nothing inside the name touched;
+// coTrim also cuts at 200 UTF-16 units as JavaScript's slice(0, 200) does (tests/fixtures/cotrim-cases.json, shared
+// with the cloud's rule: TestR2514CoTrimParity)
+func coJSSpace(r rune) bool {
+	switch {
+	case r <= 0x20, r == 0xa0, r == 0x1680, r >= 0x2000 && r <= 0x200a, r == 0x2028, r == 0x2029, r == 0x202f, r == 0x205f,
+		r == 0x3000, r == 0xfeff:
+		return true
+	}
+	return false
+}
+
+func coClean(s string) string { return strings.TrimFunc(s, coJSSpace) }
+
+func coTrim(s string) string {
+	s = coClean(s)
+	n := 0
+	for i, r := range s {
+		w := 1
+		if r >= 0x10000 {
+			w = 2
+		}
+		if n+w > 200 {
+			return s[:i] // (JavaScript would keep half of a pair cut at the 200th unit; Go keeps neither half)
+		}
+		n += w
+	}
+	return s
+}
 func sameCompany(a, b string) bool {
 	return a != "" && companyKey(a) == companyKey(b)
 }

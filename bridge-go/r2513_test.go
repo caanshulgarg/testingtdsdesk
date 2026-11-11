@@ -199,7 +199,7 @@ func TestR2513NoReReadLoop(t *testing.T) {
 
 // the version
 func TestR2513Version(t *testing.T) {
-	if BridgeVersion != "2.5.13" || !newerVersion("2.5.13", "2.5.12") || newerVersion("2.5.12", "2.5.13") {
+	if BridgeVersion != "2.5.14" || !newerVersion("2.5.13", "2.5.12") || newerVersion("2.5.12", "2.5.13") {
 		t.Fatalf("version %s", BridgeVersion)
 	}
 	if _, err := os.Stat("../docs/bridge-2.5.13-test-sheet.txt"); err != nil {
@@ -364,7 +364,7 @@ func TestR2513AllowListOnlyLedgersWords(t *testing.T) {
 	if a := tallyAllowList[ledListID]; !strings.Contains(a.purpose, r2513LedgersWords) {
 		t.Fatalf("the FinComLedgers row: %q", a.purpose)
 	}
-	if !strings.Contains(readText("../docs/tally-allowlist.md"), "allowed for 2.5.13 by the owner's standing decision of 2026-10-06") {
+	if !strings.Contains(readText("../docs/tally-allowlist.md"), "as for 2.5.13 by the owner's standing decision of 2026-10-06") { // 2.5.14 names the line (r2514_test.go)
 		t.Fatal("no decision line for 2.5.13")
 	}
 }

@@ -242,6 +242,7 @@ func pullReset() {
 	pull.rangeAsk, pull.rangeN, pull.rangeHeads = "", map[string]int{}, map[string]pullRangeDay{} // 2.5.12 (range2512.go)
 	pullRangeReset()
 	pull.released = map[string]int{} // 2.5.13
+	pull.aside = map[string]bool{}   // 2.5.14
 	pull.empAt, pull.night, pull.nightAt, pull.beatAt = map[string]time.Time{}, false, time.Time{}, time.Time{}
 	pickReset() // 2.5.10 (pickack.go)
 	pullSaveMu.Lock()
