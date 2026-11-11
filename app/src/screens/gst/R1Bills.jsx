@@ -12,6 +12,7 @@ import { useState } from "react";
 import SrcTag from "../../parts/SrcTag.jsx";
 import { R1_BY, r1Title } from "./portal.js";
 import { r1PortalData } from "./R1Portal.jsx";
+import { PosCell, PosFixed } from "./PosPick.jsx";
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
 const day = (d) => fmtDate(tallyDate(d));
@@ -150,7 +151,7 @@ export function Bills({ rows }) {
   };
   const many = new Set(L.all.map((r) => String(r.date).slice(0, 6))).size > 1, any = Object.values(f).some(Boolean);
   const list = shown.slice(0, more);
-  return <div className="bk-tablewrap"><table className="bk-table tg-fit gf-off" data-statement="" id="r1Bills">
+  return <><div className="bk-tablewrap"><table className="bk-table tg-fit gf-off" data-statement="" id="r1Bills">
     <thead><tr><th className="n">#</th><th className={"dt " + (thF("month") || "")}><span className="colh"><span>Date · Invoice no</span>{many && <HF k="month" label="Month" options={fo.month} />}</span></th><th className={"pty " + (thF("party") || "")}><span className="colh"><span>Customer · GSTIN</span><HF k="party" label="Customer" options={fo.party} /></span></th>
       <th className={thF("part")}><span className="colh"><span>Part</span><HF k="part" label="Part" options={fo.part} /></span></th>
       <th className={thF("pos")}><span className="colh"><span>Place of supply</span><HF k="pos" label="Place of supply" options={fo.pos} /></span></th>
@@ -160,7 +161,7 @@ export function Bills({ rows }) {
       {list.map((r, i) => <tr key={r.no + ":" + i} data-r1-bill="">
         <td className="n">{i + 1}</td><td className="dt">{day(r.date)}<div className="tg-sub code">{r.no}</div><div className="tg-sub"><SrcTag r={r} /></div></td>
         <td className="pty"><div className="tg-pty">{r.party}<div className="tg-sub">{r.gstin || "no GSTIN"}</div></div></td>
-        <td><span className="tg-part" data-part-of={partOf(r)} title={R1_PARTS[partOf(r)]}>{R1_SHORT[partOf(r)]}</span></td><td>{r.pos || ""}</td><td className="n">{r.rate}%</td>
+        <td><span className="tg-part" data-part-of={partOf(r)} title={R1_PARTS[partOf(r)]}>{R1_SHORT[partOf(r)]}</span></td><td><PosCell r={r} /></td><td className="n">{r.rate}%</td>
         <td className="n">{money(r.taxable)}</td><td className="n">{money(r.igst)}</td><td className="n">{money(r.cgst)}</td><td className="n">{money(r.sgst)}</td><td className="n">{money(total(r))}<div className="tg-sub">tax {money(r2(num(r.igst) + num(r.cgst) + num(r.sgst) + num(r.cess)))}</div></td></tr>)}
       {shown.length > list.length && <tr className="lt-more"><td colSpan={11} style={{ textAlign: "center" }}>
         <span className="note">{list.length} of {shown.length} bills shown · </span>
@@ -174,5 +175,5 @@ export function Bills({ rows }) {
       {shown.length !== L.all.length && <span className="note"> · of {L.all.length}</span>}{any && <> · <button type="button" className="linkbtn" data-r1-clear="" onClick={() => clearFilter("r1F")}>Clear filters</button></>}</td>
       <td className="n"><b data-r1-sum="taxable">{money(sum("taxable"))}</b></td><td className="n"><b data-r1-sum="igst">{money(sum("igst"))}</b></td><td className="n"><b data-r1-sum="cgst">{money(sum("cgst"))}</b></td><td className="n"><b data-r1-sum="sgst">{money(sum("sgst"))}</b></td>
       <td className="n"><b data-r1-sum="total">{money(r2(sum("taxable") + sum("igst") + sum("cgst") + sum("sgst") + sum("cess")))}</b></td></tr></tfoot>
-  </table></div>;
+  </table></div><PosFixed rows={rows.filter((r) => r.posFrom === "fincom")} /></>;
 }

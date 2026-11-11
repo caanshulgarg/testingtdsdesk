@@ -3,6 +3,8 @@
 // counts, src/js/12), so the count here is the cell's; no rule is made here. Each kind of error is a group in plain words,
 // opening to its documents (date, number, party, amount), why the portal minds, what to do and the field to correct in
 // Tally; each document opens in Look up, found and opened. FixTop is the same count on top of the return's other tabs.
+import { PosSet, PosCell, PosFixed } from "./PosPick.jsx";
+const POS_MISSING = "Outward invoices with no place of supply";
 const money = (v) => "₹" + INR.format(r2(v || 0));
 const day = (d) => (d ? fmtDate(tallyDate(d)) : "");
 
@@ -13,7 +15,8 @@ const SUP_GSTIN = "In Tally: Alter the supplier's ledger (Gateway of Tally › A
 const VNO = "In Tally: open the voucher (Display › Day Book › the voucher › Alt+A to alter) and change the Voucher No. (or the voucher type's numbering prefix), then read the books again.";
 const SAY = {
   "Invoices to a registered party with no GSTIN": ["Buyer GSTIN missing", "invoice", "The sale is to a registered business but carries no GSTIN, so the buyer cannot get the credit.", PARTY_GSTIN],
-  "Outward invoices with no place of supply": ["Place of supply missing", "invoice", "GSTR-1 needs the state each sale is made to; it decides IGST or CGST and SGST.", "In Tally: open the invoice (Alt+A) › Party details › Place of Supply, or set the State on the party's ledger."],
+  "Outward invoices with no place of supply": ["Place of supply missing", "invoice", "GSTR-1 needs the state each sale is made to. These charge IGST to a buyer with no GSTIN and no state in Tally, so the state cannot be known from the books.", "In Tally: open the invoice (Alt+A) › Party details › Place of Supply. Or tick the invoices here and choose the state (Set place of supply): FinCom keeps it with the client's books; Tally's, if entered later, is used instead."],
+  "Tax type that does not match the place of supply": ["Tax type does not match the place of supply", "invoice", "CGST and SGST are charged on a sale to another state, or IGST on a sale within your own state (the state from Tally's place of supply or the buyer's GSTIN).", "In Tally: open the invoice (Alt+A) and check the GST ledgers (IGST for another state, CGST and SGST for your own) and Party details › Place of Supply."],
   "Outward invoices with no HSN": ["Missing HSN", "invoice", "The HSN summary (table 12) needs the HSN or SAC code of what was sold.", "In Tally: Alter the stock item (or the sales ledger, for services) › Statutory details / HSN/SAC details › HSN/SAC."],
   "Tax that does not fit the taxable value": ["Tax does not match a GST rate", "invoice", "The tax on the invoice does not work out to a GST rate of its taxable value.", "In Tally: open the invoice (Alt+A) and check the GST rate on the stock item or sales ledger and the tax lines."],
   "Credit notes issued after 30 November following the invoice’s year": ["Credit note too late to reduce tax", "credit note", "A credit note after 30 November of the next year cannot reduce output tax (section 34(2)).", "In Tally: re-enter it as a financial credit note without GST (no GST ledgers on the note)."],
@@ -55,6 +58,13 @@ function Group({ c, k, find, r3b }) {
   const [label, word, why, tally] = sayOf(c);
   const rows = open ? (c.all || c.rows).slice(0, all ? undefined : SHOW).map((x) => [x, docOf(x, find)]) : [];
   const toggle = () => { st[k] = !open; render(); };
+  // the invoices with no place of supply: ticked ones get a state at once (next-gst-pos)
+  const pos = c.what === POS_MISSING && !r3b, tk = pos ? (st[k + "|tick"] = st[k + "|tick"] || {}) : null;
+  const ids = pos ? (c.all || c.rows).map((x) => x.id).filter(Boolean) : [];
+  Object.keys(tk || {}).forEach((id) => { if (!ids.includes(id)) delete tk[id]; });
+  const ticked = pos ? ids.filter((id) => tk[id]) : [], allOn = pos && ids.length > 0 && ticked.length === ids.length;
+  const tick = (id, on) => { if (on) tk[id] = true; else delete tk[id]; render(); };
+  const tickAll = (on) => { ids.forEach((id) => { if (on) tk[id] = true; else delete tk[id]; }); render(); };
   return <li className="fx-g" data-fix-group={c.what} data-n={c.n}>
     <button type="button" className="fx-h" data-fix-toggle="" aria-expanded={open} onClick={toggle}>
       <span aria-hidden="true">{open ? "▾" : "▸"}</span> <b>{label} — {plural(c.n, word)}</b></button>
@@ -62,13 +72,18 @@ function Group({ c, k, find, r3b }) {
       {why && <p className="note" data-fix-why="">{why}</p>}
       <p className="note" data-fix-how=""><b>What to do:</b> {c.how}</p>
       {tally && <p className="fx-tally" data-fix-tally="">{tally}</p>}
+      {pos && <div className="pos-bulk" data-pos-bulk="">
+        <label className="pos-all"><input type="checkbox" data-pos-all="" checked={allOn} onChange={(e) => tickAll(e.target.checked)} /> Select all {plural(ids.length, "invoice")} in this group</label>
+        {ticked.length > 0 && <PosSet ids={ticked} label={"Set place of supply"} onDone={() => tickAll(false)} />}
+      </div>}
       <div className="bk-tablewrap"><table className="bk-table tg-fit" data-statement="">
-        <thead><tr><th className="dt">Date</th><th>{r3b ? "Bill" : "Number"}</th><th>{r3b ? "Supplier" : "Party"}</th><th className="n">Amount</th><th>Open</th></tr></thead>
+        <thead><tr><th className="dt">Date</th><th>{r3b ? "Bill" : "Number"}</th><th>{r3b ? "Supplier" : "Party"}</th><th className="n">Amount</th>{pos && <th>Place of supply</th>}<th>Open</th></tr></thead>
         <tbody>{rows.map(([x, d], i) => <tr key={i} data-fix-row="" data-id={d.id || ""}>
-          <td className="dt">{day(d.date) || "—"}</td>
+          <td className="dt">{pos && d.id ? <label className="pos-tk"><input type="checkbox" data-pos-tick={d.id} aria-label={"Tick " + (d.no || "the invoice")} checked={!!tk[d.id]} onChange={(e) => tick(d.id, e.target.checked)} /> {day(d.date) || "—"}</label> : day(d.date) || "—"}</td>
           <td>{d.no || x.no || "—"}{r3b && d.voucher && d.voucher !== d.no ? <small className="nr"> voucher {d.voucher}</small> : null}</td>
           <td>{d.party || x.party || "—"}{x.doc && x.no ? <small className="nr"> GSTIN {x.no}</small> : d.gstin && /GSTIN/.test(c.what) ? <small className="nr"> GSTIN {d.gstin}</small> : null}</td>
           <td className="n">{d.id ? money(amountOf(d)) : "—"}</td>
+          {pos && <td><PosCell r={d} /></td>}
           <td>{d.date || d.id ? <button type="button" className="linkbtn" data-fix-open="" title="Open the entry in Look up" onClick={() => openDoc(d)}>Open the entry</button> : ""}</td></tr>)}</tbody>
       </table></div>
       {!all && (c.all || c.rows).length > SHOW && <button type="button" className="linkbtn" data-fix-more="" onClick={() => { st[k + "|all"] = true; render(); }}>Show all {c.n}</button>}
@@ -91,6 +106,7 @@ export function FixList({ ym, reg, ret, n }) {
     <h3>What to fix ({n})</h3>
     <p className="note">{name} for {GSTR.label(ym)}: {plural(n, "error")} to fix before filing{ids.size && ids.size !== n ? ", on " + plural(ids.size, "document") : ""}, by kind. Open a kind to see its documents; each opens in Look up. The fix is made in Tally and the books read again.</p>
     <ul className="fx-list">{list.map((c) => <Group key={c.what} c={c} k={ym + "|" + reg + "|" + ret + "|" + c.what} find={find} r3b={ret === "r3b"} />)}</ul>
+    {ret === "r1" && <PosFixed rows={GSTR.outward(ym, reg).filter((r) => r.posFrom === "fincom")} />}
   </section>;
 }
 

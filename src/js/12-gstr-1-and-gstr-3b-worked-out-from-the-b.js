@@ -54,6 +54,25 @@ const GSTR = {
     if (typeof perRender !== "function" || !ym || String(ym).length !== 6) return (S.books.vouchers || []).filter(v => !v.opt && !v.cancel);
     return perRender(this, "byMonth", () => { const m = {}; this.vIn().forEach(v => { const k = String(v.date).slice(0, 6); (m[k] = m[k] || []).push(v); }); return m; })[ym] || [];
   },
+  // next-gst-pos (the owner, a CA, 11-Nov-2026): the place of supply of a sale, as a state code, is "missing" only when it
+  // cannot be known. In order: (1) the entry's own place of supply from Tally; (2) FinCom's own correction, typed under
+  // GST › What to fix (b.gstPosFix, one of BOOKS_KEYS, so it is synced; Tally's, when it arrives, wins); (3) CGST and
+  // SGST (or UTGST) charged: within the state, so the state of the registration the return is for; (4) the party's GSTIN,
+  // on the entry or its ledger: that GSTIN's state; else "" (e.g. IGST to an unregistered buyer with no state).
+  // {code, from: "tally"|"fincom"|"tax"|"gstin"|"", bad}: bad when the tax does not fit the place of supply known from
+  // Tally, the correction or the party's GSTIN (CGST and SGST to another state, or IGST within the own state)
+  posCode(p){ const x = String(p == null ? "" : p).trim(); if (/^\d{1,2}$/.test(x)) return x.padStart(2, "0"); if (/^\d{2}\b/.test(x)) return x.slice(0, 2); return STATE_CODES[x.toUpperCase().replace(/&/g, "AND").replace(/\s+/g, " ")] || ""; },
+  posName(c){ return (typeof GST_STATES === "object" && GST_STATES[c]) || (Object.keys(STATE_CODES).find(k => STATE_CODES[k] === c) || c || ""); },
+  posFix(id){ const f = ((S.books || {}).gstPosFix || {})[id]; return f && /^\d{2}$/.test(String(f.pos || "")) ? f : null; },
+  posOfSale(o){
+    const tally = this.posCode(o.pos), fix = this.posFix(o.id), own = String(o.own || ""), g = String(o.gstin || "").toUpperCase();
+    const gs = /^\d{2}[A-Z0-9]{13}$/.test(g) && !/^(97|99)/.test(g) ? g.slice(0, 2) : "";
+    const i = Math.abs(num(o.igst)) > 0.005, cs = Math.abs(num(o.cgst)) + Math.abs(num(o.sgst)) > 0.005;
+    const known = tally || (fix && fix.pos) || gs, from = tally ? "tally" : fix ? "fincom" : "";
+    const code = known && from ? known : cs && !i && own ? own : known, why = from || (cs && !i && own ? "tax" : gs ? "gstin" : "");
+    const bad = !!(own && known && !o.zero && (cs && !i ? known !== own : i && !cs ? known === own : false));
+    return {code, from: why, bad};
+  },
   // one row per invoice and rate, from the sales side
   outward(ym, reg){
     const b = S.books, out = [];
@@ -73,7 +92,8 @@ const GSTR = {
       const interState = !!(gstin && v.cmp && gstin.slice(0, 2) !== String(v.cmp).slice(0, 2)) || (!gstin && v.pos && v.pos !== (b.stateOf || v.pos) && L.tax.IGST > 0);
       // B2C large: inter-state to an unregistered person above Rs 1 lakh from 1 August 2024 (Rs 2.5 lakh before)
       const b2cl = !gstin && L.tax.IGST > 0 && L.total > (String(v.date) >= "20240801" ? 100000 : 250000);
-      out.push({id: v.id, date: v.date, no: v.no || v.ref || "", party: v.party, gstin, pos: v.pos || "",
+      const P = this.posOfSale({id: v.id, pos: v.pos, own: reg || this.regOf(v), gstin: gstin || String((b.gstins || {})[v.party] || ""), igst: L.tax.IGST, cgst: L.tax.CGST, sgst: L.tax.SGST, zero: cls === "sez" || cls === "export" || exp});
+      out.push({id: v.id, date: v.date, no: v.no || v.ref || "", party: v.party, gstin, pos: P.code ? (P.from === "tally" ? v.pos : this.posName(P.code)) : "", posCode: P.code, posFrom: P.from, posBad: P.bad, posTally: v.pos || "",
         cls, rcm: Books.isRcm(v), hsn: (parts[0] && parts[0].hsn) || (v.hsn || [])[0] || "", supply: (parts[0] && parts[0].supply) || v.supply || "", eco: "", tcs: 0, parts, mixed: new Set(parts.map(q => q.rate)).size > 1,
         kind: note ? (note === "credit" ? "CDNR" : "DBNR") : cls === "export" ? "EXP" : (cls === "sez" && gstin) ? "B2B" : cls === "sez" ? "EXP" : (cls === "exempt" || cls === "nil" || cls === "nongst") ? "NIL" : gstin ? "B2B" : b2cl ? "B2CL" : "B2C",
         taxable: L.taxable, cgst: L.tax.CGST, sgst: L.tax.SGST, igst: L.tax.IGST, cess: L.tax.CESS,
@@ -89,8 +109,9 @@ const GSTR = {
       const x = v.x || {}, d = String(x.date || "").replace(/-/g, "");
       if (ym && !GSTR.inP(d, ym)) return null;
       const tax = r2(num(x.cgst) + num(x.sgst) + num(x.igst));
-      return {id: v.id, date: d, no: x.number || "", party: x.customerName || "", gstin: (x.customerGstin || "").toUpperCase(),
-        pos: x.placeOfSupply || "", cls: "taxable", rcm: false, hsn: x.hsn || "", supply: "", eco: x.ecommerce || "market", etin: this.ecoGstinOf(x.ecoGstin) || this.ecoGstinOf(x.ecommerce),
+      const P = this.posOfSale({id: v.id, pos: x.placeOfSupply, own: String((this.gstins(S.books)[0]) || "").slice(0, 2), gstin: x.customerGstin, igst: x.igst, cgst: x.cgst, sgst: x.sgst});
+      return {posCode: P.code, posFrom: P.from, posBad: P.bad, posTally: x.placeOfSupply || "", id: v.id, date: d, no: x.number || "", party: x.customerName || "", gstin: (x.customerGstin || "").toUpperCase(),
+        pos: P.code ? (P.from === "tally" ? x.placeOfSupply : this.posName(P.code)) : "", cls: "taxable", rcm: false, hsn: x.hsn || "", supply: "", eco: x.ecommerce || "market", etin: this.ecoGstinOf(x.ecoGstin) || this.ecoGstinOf(x.ecommerce),
         tcs: num(x.tcs), kind: x.noteKind === "credit" ? "CDNR" : (x.customerGstin ? "B2B" : "B2C"), note: x.noteKind || "",
         taxable: num(x.taxable), cgst: num(x.cgst), sgst: num(x.sgst), igst: num(x.igst), cess: num(x.cess),
         rate: num(x.rate) || (num(x.taxable) ? Math.round(tax / num(x.taxable) * 10000) / 100 : 0), total: num(x.total)};
@@ -351,7 +372,7 @@ const GSTR = {
     const inw5 = {gstInter: 0, gstIntra: 0, ngInter: 0, ngIntra: 0};
     noTax.forEach(r => { const inter = gstOf(r) && gstOf(r) !== own; const k = (r.cls === "nongst" ? "ng" : "gst") + (inter ? "Inter" : "Intra"); inw5[k] = r2(inw5[k] + num(r.taxable)); });
     // 3.2: inter-state supplies to unregistered persons, place of supply by place of supply
-    const posOf = r => String(STATE_CODES[String(r.pos || "").toUpperCase()] || "").padStart(2, "0");
+    const posOf = r => r.posCode || "00";
     const unregPos = {};
     this.partsOf(out.filter(r => !r.gstin && r.igst > 0 && r.cls === "taxable")).forEach(q => { const r = q.row, k = posOf(r) || "97", sg = r.kind === "CDNR" ? -1 : 1, x = unregPos[k] = unregPos[k] || {pos: k, taxable: 0, igst: 0}; x.taxable = r2(x.taxable + sg * q.taxable); x.igst = r2(x.igst + sg * q.igst); });
     const adv = GSTAdv.month(ym, reg).net;                           // 11A less 11B goes into 3.1(a)
@@ -425,7 +446,8 @@ const GSTR = {
     // all: every document found (GST › What to fix lists them); rows: the first five, the examples
     const add = (what, rows, how) => { if (rows.length) list.push({what, n: rows.length, how, rows: rows.slice(0, 5), all: rows}); };
     add("Invoices to a registered party with no GSTIN", out.filter(r => r.kind === "B2B" && !r.gstin), "Fill the GSTIN on the party ledger in Tally.");
-    add("Outward invoices with no place of supply", out.filter(r => !r.pos && r.kind !== "NIL"), "Set the place of supply on the voucher.");
+    add("Outward invoices with no place of supply", out.filter(r => !r.posCode && r.kind !== "NIL"), "Set the place of supply on the voucher in Tally, or choose the state here (Set place of supply).");
+    add("Tax type that does not match the place of supply", out.filter(r => r.posBad && r.kind !== "NIL"), "CGST and SGST are for a sale within your state; IGST for a sale to another state. Correct the tax ledgers or the place of supply on the invoice in Tally.");
     add("Outward invoices with no HSN", out.filter(r => !r.hsn && r.cls === "taxable"), "HSN is needed in the GSTR-1 summary.");
     add("Tax that does not fit the taxable value", out.filter(r => r.taxable && this.partsOf([r]).some(q => !Books.GST_RATES.includes(q.rate))), "Check the rate on these invoices.");
     if (typeof GSTF === "object") add("Credit notes issued after 30 November following the invoice\u2019s year", GSTF.lateCn(ym, reg).map(x => ({no: x.no + " (for " + x.orig + ")", party: x.party, doc: x})), "Section 34(2): these cannot reduce your tax. Keep them out of 3.1(a) or issue them as financial credit notes without GST.");
@@ -495,7 +517,7 @@ const GSTR = {
     const items = r => { const m = {}; this.partsOf([r]).forEach(q => { const k = String(q.rate), x = m[k] = m[k] || {rt: q.rate, txval: 0, iamt: 0, camt: 0, samt: 0, csamt: 0};
         x.txval = r2(x.txval + num(q.taxable)); x.iamt = r2(x.iamt + num(q.igst)); x.camt = r2(x.camt + num(q.cgst)); x.samt = r2(x.samt + num(q.sgst)); x.csamt = r2(x.csamt + num(q.cess)); });
       return Object.values(m).sort((a, c) => a.rt - c.rt).map((x, i) => ({num: i + 1, itm_det: Object.assign({rt: x.rt, txval: x.txval, csamt: x.csamt}, r.igst ? {iamt: x.iamt} : {camt: x.camt, samt: x.samt})})); };
-    const posOf = r => { const st = STATE_CODES[(r.pos || "").toUpperCase()] || (r.gstin || "").slice(0, 2); return String(st || "").padStart(2, "0"); };
+    const posOf = r => String(r.posCode || (r.posCode == null ? STATE_CODES[(r.pos || "").toUpperCase()] || (r.gstin || "").slice(0, 2) : "") || "").padStart(2, "0");
     const byParty = (rows, wrap) => {
       const m = {};
       rows.forEach(r => { (m[r.gstin] = m[r.gstin] || []).push(r); });

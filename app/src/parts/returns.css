@@ -495,3 +495,20 @@ details.more .more-words p{margin:0 0 6px}
 .fx-tally { margin: 0 0 8px; font-size: 13px; }
 .fx-b .bk-tablewrap { max-width: 100%; }
 @media (max-width: 640px) { .fx-b { padding-left: 4px; } }
+/* next-gst-pos: setting the place of supply of sales that have none (GST › What to fix, GSTR-1 Details) */
+.pos-bulk { margin: 4px 0 10px; display: flex; flex-direction: column; gap: 8px; }
+.pos-all, .pos-tk { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; cursor: pointer; }
+.pos-tk { min-width: 44px; }
+.pos-all input, .pos-tk input { width: 20px; height: 20px; }
+.pos-set { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; padding: 10px; border: 1px solid var(--rule); border-radius: 8px; max-width: 640px; }
+.pos-l { display: flex; flex-direction: column; gap: 4px; flex: 1 1 260px; font-weight: 600; }
+.pos-q { min-height: 44px; font: inherit; padding: 0 10px; box-sizing: border-box; width: 100%; }
+.pos-opts { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; flex: 1 1 100%; }
+.pos-o { min-height: 44px; padding: 0 12px; border: 1px solid var(--rule); border-radius: 6px; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+.pos-o.on { border-color: var(--accent); outline: 2px solid var(--accent); }
+.pos-o small { opacity: .7; }
+.pos-act { display: flex; gap: 8px; }
+.pos-act .btn { min-height: 44px; }
+.pos-btn { min-height: 44px; }
+.pos-fixed { margin-top: 12px; padding-top: 8px; border-top: 1px solid var(--rule); }
+.pos-fixed ul { margin: 4px 0 0; padding-left: 18px; }
