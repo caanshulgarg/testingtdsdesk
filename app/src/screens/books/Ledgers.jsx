@@ -183,13 +183,18 @@ export function UndoLine({ b }) {
 // the other ledgers (not tax), folded: Change marks one as tax
 export function Others({ b, rows }) {
   const shown = rows.slice(0, 300);
+  // a party ledger of sales with no GSTIN: the switch "Consolidated B2C" (GSTR.b2cSumLedger; its sales go in B2C small as
+  // totals, never as one B2C large invoice, and their numbers are not checked), FinCom's own
+  const b2c = GSTR.b2cParties(b);
   return <details className="led-fold" data-led-other="" open={!!S.ledQ || (!!S.ledEdit && rows.some((r) => r.n === S.ledEdit))}>
     <summary>{"Other ledgers (not tax) · " + rows.length}</summary>
     <p className="note">To count one as a GST or TDS ledger, choose Change.</p>
     <table className="led-t nocards" data-led-table="other"><thead><tr><th>Ledger in your Tally</th><th>FinCom reads it as</th><th className="n">Used in (entries)</th><th className="ac"></th></tr></thead>
       <tbody>{shown.map((r) => <tr key={r.n} data-key={r.n}>
         <td><span className="led-name">{r.n}</span>{r.group && <div className="nr">{r.group}</div>}</td>
-        <td>{S.ledEdit === r.n ? <Editor b={b} n={r.n} /> : <span className="led-says">{r.m && r.m.what ? LedMaster.label(r.m.what) : "Not tax"}</span>}</td>
+        <td>{S.ledEdit === r.n ? <Editor b={b} n={r.n} /> : <span className="led-says">{r.m && r.m.what ? LedMaster.label(r.m.what) : "Not tax"}</span>}
+          {(b2c.has(r.n) || (r.m && r.m.b2cSum)) && <label className="chk nr" title="One entry books many B2C sales (e.g. a payment gateway's or a marketplace's collections): GSTR-1 reports its sales in B2C small as totals, with no invoice number. FinCom's own setting, not written to Tally">
+            <input type="checkbox" data-b2cs-ledger={r.n} checked={!!(r.m && r.m.b2cSum)} onChange={(ev) => GSTR.b2cSumLedger(r.n, ev.target.checked)} /> Consolidated B2C (summary of many sales)</label>}</td>
         <td className="n">{r.used ? Number(r.used).toLocaleString("en-IN") : ""}</td>
         <td className="ac">{S.ledEdit === r.n ? null : <button className="linkbtn" data-led-change={r.n} onClick={() => changeRow(b, r)}>Change</button>}</td></tr>)}</tbody></table>
     {rows.length > shown.length && <p className="note">{"The first " + shown.length + " are shown, the most used first; find the rest by name."}</p>}

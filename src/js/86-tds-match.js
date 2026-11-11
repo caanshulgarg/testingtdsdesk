@@ -159,6 +159,8 @@ const TDSMatch = {
     if (!x) return null;
     let bal = num(x.open);
     (this.books().vouchers || []).forEach(v => { if (v.opt || v.cancel) return; const t = TDS.ymd(v.date), f = TDS.ymd(tb.from); if (t >= f && t < d) v.ent.forEach(e => { if (e.l === l) bal += e.a; }); else if (t < f && t >= d) v.ent.forEach(e => { if (e.l === l) bal -= e.a; }); });
+    // next-split-years: the current company's opening difference from its first day (tb.step, src/js/06)
+    const st = tb.step && tb.step.led && tb.step.led[l]; if (st && TDS.ymd(tb.step.from) <= d && TDS.ymd(tb.from) < TDS.ymd(tb.step.from)) bal += num(st);
     return r2(bal);
   },
   // next-24q-split (the owner on Leads' Form 138 Q1: "24Q has only 2 month TDS challan… why only 2 months?"): a challan

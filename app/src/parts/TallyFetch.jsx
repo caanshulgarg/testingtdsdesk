@@ -25,6 +25,7 @@ import { pullPaced } from "../lib/pullSpeed.js";
 import { tallyDevs } from "../lib/tallyState.js";
 import { press, busyOf, lockOf, Said, useSaid, errWords, VIEW_ONLY } from "./TallyBtn.jsx";   // next-buttons: every click says what came of it
 import { ackSnap } from "../lib/pickAck.js";   // bridge 2.5.10: what the bridge said of it
+import { splitOf, checkLine } from "../lib/splitLink.js";   // next-split-years: a client's earlier-years company
 
 export const nf = (n) => Number(n || 0).toLocaleString("en-IN");
 const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -227,10 +228,19 @@ export function pullWatch(p0) {
 // ---------- Books › From Tally: Bring books from Tally
 // say: drawn where a person opened it (the Tally page's Bring another year): never empty, its words while the books are read
 export default function OlderEntries({ cid, say = false }) {
-  const b = bookSum(cid), [fy, setFy] = useState(0), [busy, setBusy] = useState(""), [err, setErr] = useState("");
+  // next-split-years (migration 161): a client with an earlier-years company (a split Tally): its years are listed too, each
+  // year brought from the company that holds it (the earlier company's book up to its end day, the current one's after)
+  const [fy, setFy] = useState(0), [busy, setBusy] = useState(""), [err, setErr] = useState("");
+  const b0 = bookSum(cid), sp = splitOf(cid), endFy = sp ? fyOfDate(sp.ends) : 0;
+  const eB = sp && sp.live && summary() ? pullPaced((summary() || []).find((x) => x.book === sp.book) || null, tallyDevs()) : null;
+  const want0 = fy || (b0 && b0.pull ? fyOf8(b0.pull.fy) : fyNow()), b = eB && want0 <= endFy ? eB : b0;
   useSaid();
   const book = (b && b.book) || "", cur = useRef(book); cur.current = book;
-  useEffect(() => { setFy(0); setErr(""); setBusy(""); }, [book]);   // (next-buttons: a Start still on its way for the client left does not hold this one)
+  // (next-buttons: a Start still on its way for the client left does not hold this one.) next-split-years: the year chosen is
+  // kept when it moves the picker to the other company's book (only another client, or its current book changing, starts afresh)
+  const home = cid + "|" + ((b0 && b0.book) || "");
+  useEffect(() => { setFy(0); setErr(""); setBusy(""); }, [home]);
+  useEffect(() => { setErr(""); setBusy(""); }, [book]);
   const p = b && b.pull;
   useLive(!!(p && p.state === "going" && !p.done), book);
   // FinCom Bridge 2.5.12 (migration 154): the days with an entry Tally keeps in a form the bridge could not read yet; the
@@ -254,7 +264,9 @@ export default function OlderEntries({ cid, say = false }) {
   // are in, moves the book's start back (tally-ingest's bookStartFromState); Tally holds no entries before its own start:
   // "Tally lists no entries for this period"
   const now = fyNow(), years = [], bookFy = fyOfDate(b.from);
-  for (let y = now; y >= now - 5; y--) years.push(y);
+  for (let y = now; y >= now - 5 && (!eB || y > endFy); y--) years.push(y);
+  // the earlier company's years: from its end day back to its first (else five years)
+  if (eB) { const first = fyOfDate(eB.from || sp.from) || endFy - 4; for (let y = endFy; y >= Math.max(first, endFy - 15); y--) years.push(y); }
   const chosenFy = fy || (p ? fyOf8(p.fy) : now), same = !!(p && fyOf8(p.fy) === chosenFy), before = !!bookFy && chosenFy < bookFy;
   const act = (fn, args, what) => { const bk = book; setBusy(what); setErr("");
     return rpc(fn, args).then((r) => { if (cur.current !== bk) return; if (r && r.ok === false) setErr(String(r.error || "FinCom did not take it")); summary(true); },
@@ -281,7 +293,7 @@ export default function OlderEntries({ cid, say = false }) {
     <h3>Bring books from Tally</h3>
     <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center" }}>
       <select data-older-fy="" aria-label="Financial year to bring from Tally" value={chosenFy} disabled={!may()} style={{ width: "auto", minWidth: 0 }} onChange={(ev) => setFy(Number(ev.target.value))}>
-        {years.map((y) => <option key={y} value={y}>{fyLabel(y)}</option>)}</select>
+        {years.map((y) => <option key={y} value={y} data-older-fy-book={eB && y <= endFy ? "early" : "current"}>{fyLabel(y) + (eB && y <= endFy ? " · " + (sp.company || "earlier company") : "")}</option>)}</select>
       {may() && !going && !paused && !stoppedT && <button className="btn small primary" data-older-start="" disabled={!!busy || (lockOf("choose:" + book) && !busyOf(sk))} title={lockOf("choose:" + book) && !busyOf(sk) ? "FinCom is asking for this client’s books from Tally now; one moment." : undefined} onClick={start}>{busy === "start" ? "Starting…" : "Start"}</button>}
       {may() && going && <button className="btn small" data-older-pause="" disabled={!!busy} onClick={() => pause(true)}>Pause</button>}
       {may() && paused && <button className="btn small primary" data-older-resume="" disabled={!!busy} onClick={() => pause(false)}>Resume</button>}
@@ -298,6 +310,7 @@ export default function OlderEntries({ cid, say = false }) {
     {why && <p className={"note" + (p.state === "stopped" ? " bad" : "")} data-older-why={p.state} style={{ margin: "6px 0 0" }}>{why}
       {p.state === "going" && <TurnOn b={b} />}</p>}
     {err && <p className="note bad" data-older-err="" style={{ margin: "4px 0 0" }}>{err}</p>}
+    {sp && checkLine(cid) && <p className={"note" + (/Differs/.test(checkLine(cid)) ? " bad" : "")} data-older-split-check="" style={{ margin: "4px 0 0" }}>{checkLine(cid)}</p>}
     <Said k={sk} hook="older" className="note" />
     {!may() && <p className="note" data-older-view="" style={{ margin: "4px 0 0" }}>{VIEW_ONLY}</p>}
     {held.map((h) => <p key={"held" + h.day} className="note" data-older-held={h.day} data-older-held-manual={h.manual ? "1" : "0"} style={{ margin: "4px 0 0" }}>{h.words + " "}

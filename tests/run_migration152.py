@@ -33,7 +33,10 @@ and the client's Loan-given choice are kept in client_book_items and clients as 
 The database is set as staging is (jit off, as tests/run_migration151.py; 152's own functions set it off besides). The
 scratch database is removed when the run ends. 151's tally_now is timed too (it reads 152's tally_calc_led).
 M152_ONLY=small (or 40k, nogroups) runs one book; M152_TMP keeps the browser's answers between runs; M152_LOCK_HELD=1 when
-the whole run is under flock /tmp/fincom-app.lock already (as tests/run_migration151.py's M151_LOCK_HELD)."""
+the whole run is under flock /tmp/fincom-app.lock already (as tests/run_migration151.py's M151_LOCK_HELD).
+A later migration of server/tally-cloud that makes one of 152's functions again (163: tally_calc_cash, faster, the same
+answer) is applied after 152, as staging will have it, and every check from 1 on runs on it; M152_NO_LATER=1 for 152
+alone."""
 import os, re, sys, json, hashlib, random, subprocess, datetime, time, tempfile, math
 HERE = os.path.dirname(os.path.abspath(__file__)); ROOT = os.path.join(HERE, ".."); sys.path.insert(0, HERE); sys.path.insert(0, ROOT)
 import pg_stand, csv
@@ -59,7 +62,9 @@ old = set()
 for d in ("server/tally-cloud", "server/security", "server/mis-run", "server/books-sync", "server/console"):
     if not os.path.isdir(os.path.join(ROOT, d)): continue
     for f in os.listdir(os.path.join(ROOT, d)):
-        if f.endswith(".sql") and "152" not in f: old |= set(re.findall(r"create or replace function public\.(\w+)\(", open(os.path.join(ROOT, d, f)).read().lower()))
+        # only what was there before 152 (a later migration, 163, makes one of 152's functions again on purpose)
+        num = re.match(r"migration-(\d+)-", f)
+        if f.endswith(".sql") and "152" not in f and not (num and int(num.group(1)) > 152): old |= set(re.findall(r"create or replace function public\.(\w+)\(", open(os.path.join(ROOT, d, f)).read().lower()))
 # made again, as the final review of 151 asked (the same signatures, grants and search_path): the name helpers as
 # server/_shared/names.js, and the data version (CALC_V 152.1, and the work 152's parts read)
 REPLACED = {"tally_calc_nclean", "tally_calc_nkey", "tally_calc_led", "tally_calc_version"}
@@ -77,6 +82,11 @@ ok(sorted(heads) == made and all(re.search(r"security definer set search_path to
    and all(re.search(r"set search_path to 'public', 'pg_temp' as $", heads[f]) for f in ("tally_calc_nclean", "tally_calc_nkey")),
    "every function SECURITY DEFINER with search_path public, pg_temp (%d; the two name helpers as 151 has them: search_path, no definer)" % len(heads))
 MEM = {"tally_mis_part"}
+LATER = [] if os.environ.get("M152_NO_LATER") else sorted(
+    (os.path.join(ROOT, "server", "tally-cloud", f) for f in os.listdir(os.path.join(ROOT, "server", "tally-cloud"))
+     if re.match(r"migration-(\d+)-.*\.sql$", f) and int(re.match(r"migration-(\d+)-", f).group(1)) > 152
+     and set(re.findall(r"create or replace function public\.(\w+)\(", open(os.path.join(ROOT, "server", "tally-cloud", f)).read().lower())) & set(made)),
+    key=lambda p: int(re.match(r"migration-(\d+)-", os.path.basename(p)).group(1)))
 for fn in made:
     sig = re.search(r"(revoke all on function public\.%s\(([^)]*)\) from public, anon(, authenticated)?;)" % fn, text)
     if fn in REPLACED: continue    # checked above, as 151's
@@ -521,6 +531,10 @@ try:
     ok(db.one("select md5(string_agg(pg_get_functiondef(p.oid), '' order by p.proname)) from pg_proc p where p.proname in (%s)" % ",".join(q(x) for x in made)) == first, "0. runs twice: the same functions")
     acl = {r["proname"]: r["acl"] for r in db.rows("select proname, proacl::text as acl from pg_proc where proname in (%s)" % ",".join(q(x) for x in made))}
     ok(all(("authenticated=X" in acl[f]) == (f in MEM) and "anon" not in acl[f] and "service_role=X" in acl[f] and not re.search(r"(^|[{,])=X", acl[f]) for f in made), "0. execute rights as declared")
+    # the later migrations that make one of 152's functions again (163: tally_calc_cash, the same answer, faster), as
+    # staging will have them: every check below runs on them (M152_NO_LATER=1: on 152 alone)
+    for f in LATER:
+        db.sql(open(f).read()); print("  applied after 152: %s (md5 %s)" % (os.path.basename(f), hashlib.md5(open(f).read().encode()).hexdigest()))
     ok(db.one("select count(*) from pg_proc where proname in (%s) and ((not prosecdef and proname not in ('tally_calc_nclean', 'tally_calc_nkey')) or not exists (select 1 from unnest(proconfig) c where c = 'search_path=public, pg_temp'))" % ",".join(q(x) for x in made)) == "0",
        "0. in the database: every function SECURITY DEFINER (the two name helpers as 151 has them), search_path fixed")
 

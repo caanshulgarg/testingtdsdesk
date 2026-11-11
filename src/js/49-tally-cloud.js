@@ -77,7 +77,20 @@ const TCloud = {
     return s.books;
   },
   // (an answer that is not a list, from an older cloud or a stand-in, is no book)
-  book(cid){ const s = this.st[cid]; return s && Array.isArray(s.books) && s.books.find(b => b && b.from) || null; },
+  // next-split-years (migration 161): a client's earlier-years company (a split Tally) is never its book here: its entries
+  // are joined into the current company's (app/src/lib/splitBooks.js)
+  book(cid){ const s = this.st[cid], e = s && s.split && s.split.book; return s && Array.isArray(s.books) && s.books.find(b => b && b.from && b.book !== e) || null; },
+  // the client's earlier-years company (tally_split_of), asked only when the cloud lists more than one book for it, kept
+  // 5 minutes; a cloud without migration 161: none, as before
+  async splitLoad(cid, force){
+    const s = this.st[cid] = this.st[cid] || {};
+    if (!Array.isArray(s.books) || s.books.filter(b => b && b.book).length < 2 || this.splitOff){ s.split = null; return null; }
+    if (!force && s.splitAt && Date.now() - s.splitAt < SLOW_MS) return s.split;
+    try { s.split = await this.rpc("tally_split_of", {p_client: cid}) || null; }
+    catch (e){ if (/tally_split_of|PGRST202|does not exist|schema cache/i.test(String((e && e.message) || e))) this.splitOff = true; s.split = s.split || null; }
+    s.splitAt = Date.now();
+    return s.split;
+  },
   has(cid){ return !!this.book(cid); },
   big(cid){ const b = this.book(cid); return !!(b && b.entries > this.BIG); },
   // ---------- answers from the cloud's ready totals
@@ -307,8 +320,15 @@ const TCloud = {
     if (p) return this.loadNow(force, opening, p);
     const co = CO(), b = S.books, v0 = co && b && b.cid === co.id && this.on() && MIS.cloudOn() ? this.calcVer(co.id) : null;
     this.loadErr = null;
-    const r = await this.loadNow(force, opening);
-    if (v0){
+    let r = await this.loadNow(force, opening);
+    // next-split-years: a client with an earlier-years company (or one just unlinked): the two books joined, or undone
+    const sp = co && b && b.cid === co.id && this.on() && r && r !== "big" ? (this.st[co.id] || {}).split : null;
+    if ((sp || (b && b.meta && b.meta.split)) && window.loadSplit){
+      try { const m = await loadSplit(); const j = await m.Split.run(b, co, sp, sp && ((this.st[co.id] || {}).books || []).find(x => x && x.book === sp.book)); if (j) r = "new"; }
+      catch (e){ toast("Could not join the earlier years: " + ((e && e.message) || e)); }
+    }
+    if (v0 && b.meta && b.meta.split){ const m = b.meta.cloud; if (m){ delete m.ver; delete m.verWork; } }
+    else if (v0){
       const m = (b.meta || {}).cloud, a = await v0, z = m && !this.loadErr && (r === true || r === "new") && !b.meta.fo ? await this.calcVer(b.cid) : null;
       if (m && a && z && a.version && a.version === z.version && a.book === z.book && z.book === m.book && !this.loadErr){ m.ver = z.version; m.verWork = MIS.cloudWork(b); }
       else if (m){ delete m.ver; delete m.verWork; }
@@ -318,8 +338,9 @@ const TCloud = {
   async loadNow(force, opening, p){
     const co = p ? p.co : CO(), b = p ? p.b : S.books, g = () => p && p.gate(), draw = () => { if (!p) render(); };
     if (!co || !b || b.cid !== co.id || !this.on()) return false;
-    const books = await this.status(co.id, force) || [];
-    const bk = books.find(x => x.from);
+    const books = p && p.bk ? [p.bk] : await this.status(co.id, force) || [];
+    const sp = p && p.bk ? null : await this.splitLoad(co.id, force), early = sp && sp.book;
+    const bk = books.find(x => x.from && x.book !== early);
     if (!bk) return false;
     const f = p ? {} : LK.fr();
     if (bk.entries > this.BIG){
@@ -348,7 +369,7 @@ const TCloud = {
     // cut short, meta.fo) are brought in by FirstOpen (src/js/95, loaded with its own chunk): the days newest first, read
     // as they come, the latest year shown as soon as it is in. It hands back what this load puts into the books below,
     // the same way as ever; without the chunk, as before
-    const fo = !same && todo.length && (!(b.vouchers || []).length || meta.fo === bk.book) && window.loadFirstOpen ? await loadFirstOpen().then(m => m.FirstOpen, () => null) : null;
+    const fo = !(p && p.nosave) && !same && todo.length && (!(b.vouchers || []).length || meta.fo === bk.book) && window.loadFirstOpen ? await loadFirstOpen().then(m => m.FirstOpen, () => null) : null;
     // round 44: the entries the bridge sent by itself (the cloud copy), with the Day Book's (BookSrc, src/js/67)
     let copy = null;
     const lately = same && opening && this.checkedLately(meta.copy, bk);
@@ -380,13 +401,13 @@ const TCloud = {
         if (got % 10 === 0 || got === want.length) say("Bringing in the books from FinCom's cloud: " + got + " of " + want.length + " days…"); } };
       const pre = fo && await fo.run({b, bk, byMonth, todo, from, to, say, p, co});
       if (pre){ want.forEach(x => { days[x.day] = x.at; }); copy = pre.copy; }
-      else await Promise.all(Array.from({length: Math.min(p ? 1 : 16, want.length)}, one));
+      else await Promise.all(Array.from({length: Math.min(p ? p.dayPar || 1 : 16, want.length)}, one));
       // next-fast-open: a month whose every day is the file read into the books before (a Day Book uploaded again with
       // the same entries) is not read again; when nothing else changed, only the days' new times are kept
       const redo = todo.filter(ym => !byMonth[ym].every(x => seen[x.day] && known[x.day]));
       if (same && !redo.length && !ledNew && !(copy && copy.changes)){
         meta.cloud = Object.assign({}, meta.cloud, {days: Object.assign({}, known, days)});
-        await saveBooks({fromCloud: true}, b); kept = true;
+        if (!(p && p.nosave)) await saveBooks({fromCloud: true}, b); kept = true;
       } else {
         // next-fast-open: everything is read first (the ledgers, each month's entries, the bridge's lines), then put into
         // the books in one go, so a page drawn meanwhile (the books are not covered by a wait any more) never shows them
@@ -430,11 +451,12 @@ const TCloud = {
         if (copy) this.copyPut(b, bk, copy, rows);
         if (b.tb && String(b.tb.to) < to) b.tb.to = to;
         b.map = Books.mapLedgers(b.vouchers || [], b.map); try { LedMaster.refresh(b); } catch (e){}
-        try { TDSTally.sync(b); } catch (e){}      // bridge 2.4.3: challans, tags, certificates and sections from Tally (src/js/72)
-        try { await g(); await Payroll.into(b, bk.book); Payroll.autoTag(b); Payroll.carry(b); } catch (e){ if (p && p.stop) throw e; }      // bridge 2.4.4: the payroll (src/js/73)
+        if (!(p && p.nosave)) try { TDSTally.sync(b); } catch (e){}      // bridge 2.4.3: challans, tags, certificates and sections from Tally (src/js/72)
+        if (!(p && p.nosave)) try { await g(); await Payroll.into(b, bk.book); Payroll.autoTag(b); Payroll.carry(b); } catch (e){ if (p && p.stop) throw e; }      // bridge 2.4.4: the payroll (src/js/73)
         meta.cloud = {book: bk.book, company: bk.company, ledgersAt: bk.ledgersAt, days: Object.assign({}, known, days), at: new Date().toISOString()};
         meta.at = meta.cloud.at; meta.keep = true; meta.file = "the copy in FinCom's cloud"; meta.from = meta.from && meta.from < from ? meta.from : from; delete meta.fo; delete meta.pre; b.firstOpen = null;
-        if (p){ meta.pre = meta.at; changed = true; await g(); await saveBooks({fromCloud: true}, b); }
+        if (p && p.nosave) changed = true;
+        else if (p){ meta.pre = meta.at; changed = true; await g(); await saveBooks({fromCloud: true}, b); }
         else { TallyRead.after(b, "after changes came from the cloud copy"); LK.cache = {}; changed = true; await saveBooks(); }
       }
     } catch (e){ if (p) throw e; this.loadErr = e; toast("Could not bring in the cloud copy: " + ((e && e.message) || e)); }
@@ -2467,7 +2489,10 @@ async function tallyReleaseClient(cid){
 }
 // the client's company in the cloud's link: of several (a client with a company a year), the latest seen
 function tallyRowOf(co, rows){
-  return co ? (rows || []).filter(c => c && String(c.client_id || "") === String(co.id)).sort((a, b) => String(b.last_seen || "").localeCompare(String(a.last_seen || "")))[0] || null : null;
+  // next-split-years: the client's earlier-years company (a split Tally) is never its row while another is linked
+  const e = co && typeof TCloud === "object" && TCloud.st && TCloud.st[co.id] && TCloud.st[co.id].split ? TCloud.st[co.id].split.book : "";
+  const all = co ? (rows || []).filter(c => c && String(c.client_id || "") === String(co.id)) : [], mine = e ? all.filter(c => c.book_id !== e) : all;
+  return (mine.length ? mine : all).sort((a, b) => String(b.last_seen || "").localeCompare(String(a.last_seen || "")))[0] || null;
 }
 // The one link state of a client, in four words, for its Link to Tally card (app/src/parts/TallyLink.jsx), the Clients
 // list and the top bar's sign:

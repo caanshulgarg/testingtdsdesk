@@ -84,13 +84,18 @@ Object.assign(Audit, {
   balances(from, to){
     const b = S.books, tb = b.tb;
     let sigOf = null;
+    // next-split-years: a client whose books join an earlier-years company (app/src/lib/splitBooks.js) and whose current
+    // company's openings differ from what the earlier one carries: those differences from the current company's first day
+    // (tb.step), so its years show its own openings. No step (every other client): as before
+    const step = tb && tb.step && tb.step.led ? tb.step : null;
+    const stepAt = (bal, start, d) => { if (!step || !(start < step.from) || !(d >= step.from)) return bal; const o = Object.assign({}, bal); Object.entries(step.led).forEach(([n, x]) => { o[n] = r2((o[n] || 0) + num(x)); }); return o; };
     const move = (base, start, d) => {
       if (!sigOf || sigOf.base !== base){ let s = null; try { s = JSON.stringify(base); } catch (e){} sigOf = {base, s}; }
       const kept = sigOf.s === null ? null : Audit.moveKept(b, base, sigOf.s, start, d);
-      if (kept) return kept;
+      if (kept) return stepAt(kept, start, d);
       const bal = Object.assign({}, base);
       (b.vouchers || []).forEach(v => { if (v.date < start || v.date > d || v.opt || v.cancel) return; v.ent.forEach(e => { bal[e.l] = r2((bal[e.l] || 0) + e.a); }); });
-      return bal;
+      return stepAt(bal, start, d);
     };
     // the year in progress (staging, 11-Nov-2026: books from this 1 April showed no balance sheet): a balance as on a day
     // still to come is the one to date, so balances kept to today answer for a period ending later (the entries up to

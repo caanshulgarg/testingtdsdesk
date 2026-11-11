@@ -39,7 +39,9 @@ import { cloudKnows, linkNow } from "../lib/tallyConnect.js";
 import { ownOpen, ownBridge, NO_CO, lookOnce, rescanLocal, checkAll } from "../lib/tallySimple.js";
 import { TITLES } from "../lib/connectSteps.js";
 import { PostingWait } from "./StuckJobs.jsx";
-import { noAnswer } from "../lib/readFollow.js";   // next-link-follow (migration 146): Update now says at once when no Tally can answer
+import { noAnswer } from "../lib/readFollow.js";
+// next-split-years (migration 161): a client's earlier-years company (a split Tally) beside its current one
+import { splitOf, isSplitCo, splitLink, splitUnlink, endsGuess, sameGuid, dayWords, checkLine } from "../lib/splitLink.js";   // next-link-follow (migration 146): Update now says at once when no Tally can answer
 // 30-Oct-2026 (the owner): a client's row says the books being brought from Tally (the bar and its time) and what FinCom
 // received from Tally today
 import { OlderLine, TodayLine } from "./TallyFetch.jsx";
@@ -130,7 +132,7 @@ export function booksLoad(cids) {
   booksBusy = true;
   // (a read that leaves no time behind is kept as read now, so the list does not ask again at every drawing)
   const stamp = (cid) => { const s = TCloud.st[cid] = TCloud.st[cid] || {}; if (!s.at) s.at = Date.now(); };
-  Promise.all(want.map((cid) => Promise.resolve(TCloud.status(cid)).then(() => (ledgersOf(cid) > 0 ? null : cloudLedgerCount(cid))).catch(() => null).finally(() => stamp(cid))))
+  Promise.all(want.map((cid) => Promise.resolve(TCloud.status(cid)).then(() => (TCloud.splitLoad ? TCloud.splitLoad(cid) : null)).then(() => (ledgersOf(cid) > 0 ? null : cloudLedgerCount(cid))).catch(() => null).finally(() => stamp(cid))))
     .finally(() => { booksBusy = false; soonDraw(); });
 }
 
@@ -911,10 +913,13 @@ export function SyncLine({ cid, compact = false, words = false, bar = false }) {
 // ---------- one row
 // the pill: a linked company's state (lib/tallyState.js, the words every place uses), Earlier year when a newer year of
 // the same client is in use, Not a client when not linked
-function Pill({ r, st, co, earlier, noLine = false }) {
+function Pill({ r, st, co, earlier, split = null, noLine = false }) {
   // Task D (the owner, 28-Oct-2026: "No suggestion to add clients"): a company not linked says so neutrally
   if (!r.client) return <span className="tco-pill" data-tco-pill="notclient" data-tco-pill-text="Not linked">
     <span className="tag">Not linked</span><span className="tco-why">{r.open ? " · open in Tally" : " · not open in Tally now"}</span></span>;
+  // next-split-years: the client's earlier-years company (a split Tally): its years end on a day; never posted into
+  if (split) return <span className="tco-pill" data-tco-pill="split" data-tco-pill-text={"Earlier years until " + dayWords(split.ends)}>
+    <span className="tag">Earlier years</span><span className="tco-why">{" · until " + dayWords(split.ends) + " (a split Tally) · joined with " + shown(split.currentCompany || "the current company") + (split.live ? "" : " once that is linked again")}</span></span>;
   if (earlier) return <span className="tco-pill" data-tco-pill="earlier" data-tco-pill-text={"Earlier year of " + earlier}>
     <span className="tag">Earlier year</span><span className="tco-why">{" · " + earlier + " is the newer year"}</span></span>;
   // next-link-record: a linked company says the client's one word (Linked / Waiting for Tally / Needs you) and its one line
@@ -956,6 +961,28 @@ function TwoPlaces({ co, company }) {
       : <p className="note" style={{ margin: 0 }}>An owner of the firm chooses.</p>}
   </div>;
 }
+// next-split-years: unlink the earlier years (the client is back to its current company alone), asked once; the openings
+// check of the joined books (when they are open here)
+async function unlinkSplit(co, setBusy) {
+  const sp = splitOf(co.id); if (!sp) return;
+  const ok = await askConfirm({ title: "Unlink the earlier years of " + co.name + "?", ok: "Unlink", danger: true,
+    body: "<p>" + esc(shown(sp.company)) + "’s entries leave " + esc(co.name) + "’s books; " + esc(co.name) + " keeps " + esc(shown(sp.currentCompany || "its current company")) + " alone. Nothing in Tally changes.</p>" });
+  if (!ok) return;
+  if (setBusy) setBusy(true);
+  const r = await splitUnlink(co.id);
+  if (setBusy) setBusy(false);
+  toast(r.ok ? "Earlier years unlinked from " + co.name + "." : "Not unlinked: " + r.error); render();
+}
+function SplitUnlink({ co }) {
+  const [busy, setBusy] = useState(false);
+  if (!splitOf(co.id)) return null;
+  const go = () => { if (!busy) unlinkSplit(co, setBusy); };
+  return <button className="btn small" data-tco-split-unlink={co.id} disabled={busy} onClick={go}>{busy ? "Unlinking…" : "Unlink earlier years"}</button>;
+}
+function SplitCheck({ cid }) {
+  const w = checkLine(cid);
+  return w ? <div className={"tco-under note" + (/Differs/.test(w) ? " bad" : "")} data-tco-split-check={/Differs/.test(w) ? "differs" : "matched"} role="status">{w}</div> : null;
+}
 // choose a client: "Link to a client…" (not linked) and "Link to another client" (linked: it moves, asked once)
 // Task D (the owner, 28-Oct-2026: "No suggestion to add clients"): the ONE way to link a company not linked: the clients
 // already in FinCom (the likeliest first and chosen, when one is: the same GSTIN or name, the client before this year);
@@ -971,9 +998,17 @@ export function Pick({ r, co, onClose, pre = "", inline = false }) {
   const cs = rankClients(r, co ? co.id : "");
   // next-link-choose: the companies in Tally that look like this one, each with what it holds (an empty copy is plain)
   const alike = alikeCos(r);
+  // next-split-years: the client chosen already has its current company in Tally: this one may be its EARLIER YEARS (a
+  // split Tally: the same business cut by date), with the day they end; chosen first when both are one company in Tally
+  // (one GUID: linked the usual way it would be taken for a rename of the current one)
+  const tc = !co && pick && S.companies[pick] ? S.companies[pick] : null, curCo = tc && typeof tallyLinkOf === "function" ? (tallyLinkOf(tc) || {}).company || "" : "";
+  const canEarly = !!curCo && coKey(curCo) !== coKey(r.company) && !isSplitCo(tc.id, r.company) && !splitOf(tc.id);
+  const [early, setEarly] = useState(false), [ends, setEnds] = useState("");
+  useEffect(() => { setEarly(canEarly && sameGuid(r.company, curCo)); setEnds(endsGuess(curCo)); }, [pick, curCo]);
   // (next-buttons: never left on "Linking…"; a link that fails says why here)
   const go = async () => { const t = S.companies[pick]; if (!t || busy) return; setBusy(true); setErr(""); let ok = false;
-    try { if (typeof TCloud === "object") TCloud.linkErr = ""; ok = await (co ? moveTo(Object.assign({}, r, { client: co.id }), t) : r.reported || r.open ? linkTo(r, t) : (keep(r, { kind: "link", cid: t.id }), true));
+    try { if (typeof TCloud === "object") TCloud.linkErr = ""; ok = early && canEarly ? await splitLink(r.company, t.id, ends).then((x) => { if (!x.ok) setErr("Not linked: " + String(x.error).replace(/[.\s]+$/, "") + "."); return x.ok ? true : null; })
+      : await (co ? moveTo(Object.assign({}, r, { client: co.id }), t) : r.reported || r.open ? linkTo(r, t) : (keep(r, { kind: "link", cid: t.id }), true));
       if (ok === false) setErr("Not linked: " + String((typeof TCloud === "object" && TCloud.linkErr) || "FinCom did not take it. Try again in a minute").replace(/[.\s]+$/, "") + "."); }
     catch (e) { setErr(errWords(e)); } finally { setBusy(false); }
     if (ok && onClose) onClose(); };
@@ -982,6 +1017,11 @@ export function Pick({ r, co, onClose, pre = "", inline = false }) {
     <select data-tco-relink-pick="" {...(inline ? { "data-tco-act": "pick", "data-tco-pre": pre || "" } : {})} aria-label={"The client " + shown(r.company) + " belongs to"} value={pick} onChange={(ev) => setPick(ev.target.value)}>
       <option value="">{inline ? "Choose client" : "Choose a client…"}</option>{cs.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
     <button className={"btn small" + (inline ? "" : " primary")} data-tco-relink="" disabled={!pick || busy} title={!pick ? "Choose a client first" : undefined} onClick={go}>{busy ? (SENDING[coKey(r.company)] ? "Sending to FinCom…" : "Linking…") : co ? "Move" : "Link"}</button>
+    {canEarly && <span className="tco-split-pick" data-tco-split-pick="" role="radiogroup" aria-label={"How " + shown(r.company) + " is " + tc.name + "’s"}>
+      <label><input type="radio" name={"tco-split-" + r.company} data-tco-split-as="current" checked={!early} onChange={() => setEarly(false)} />{" Current company (instead of " + shown(curCo) + ")"}</label>{" "}
+      <label><input type="radio" name={"tco-split-" + r.company} data-tco-split-as="early" checked={early} onChange={() => setEarly(true)} />{" Earlier years (a split Tally), ending on "}</label>
+      <input type="date" data-tco-split-ends="" aria-label="The last day of the earlier years" value={ends} disabled={!early} onChange={(ev) => setEnds(ev.target.value)} style={{ width: "auto" }} />
+      {early && <span className="note" data-tco-split-note="">{" Its entries up to " + dayWords(ends) + " join " + tc.name + "’s books; entries are posted only into " + shown(curCo) + "."}</span>}</span>}
     {!inline && <button className="linkbtn" data-tco-relink-cancel="" onClick={onClose}>Cancel</button>}
     {!co && <button className="linkbtn tco-new" data-tco-add-new={r.company} disabled={busy} onClick={async () => { setBusy(true); setErr(""); let id = ""; try { id = await addNew(r); } catch (e) { setErr(errWords(e)); } finally { setBusy(false); } if (id && onClose) onClose(); }}>+ New client with this name</button>}
     {alike.length > 0 && <span className="note" data-tco-alike={alike.length}>{"Look alike in Tally — check you have the right one: "
@@ -1023,7 +1063,8 @@ export function CompanyRow({ r, rows = null, forCo = null, focus = false, onDone
   const k = co && typeof tallyLinkOf === "function" ? tallyLinkOf(co) : null;
   // its other years (the same business once the period is off; another company of the same client is not a year)
   const sib = co ? (rows || []).filter((o) => o.client === co.id && o.company !== r.company && yearKey(o.company) === yearKey(r.company)) : [];
-  const newer = co && !r.open ? sib.find((o) => o.open || String(o.seen) > String(r.seen)) : null, earlier = newer ? shown(newer.company) : "";
+  const split = co && isSplitCo(co.id, r.company) ? splitOf(co.id) : null;
+  const newer = co && !r.open && !split ? sib.find((o) => o.open || String(o.seen) > String(r.seen)) : null, earlier = newer ? shown(newer.company) : "";
   const last = co && k && (!k.company || k.company === r.company) ? lastEntry(co, k) : "";
   const when = last ? "last entry " + seenWords(last) : r.open ? "" : r.seen ? "last seen " + seenWords(r.seen) : "";
   const meta = quiet ? [r.open ? "open in Tally on another computer" : "not open in Tally now", when].filter(Boolean).join(" · ") : wordOf && wordOf.line ? "" : when;
@@ -1050,7 +1091,7 @@ export function CompanyRow({ r, rows = null, forCo = null, focus = false, onDone
   else if (co) {
     // next-fix-clientremove (the owner: "no visibility of which client it's linked to"): a labelled line, the name opens the client
     client = <span className="tco-linked-to" data-tco-linked-label={co.id}><span className="note">Linked to client:</span> <button className="linkbtn tco-client" data-tco-client={co.id} title={"Open " + co.name} onClick={() => openCompany(co.id)}>{co.name}</button></span>;
-    acts = <>
+    acts = split ? (may ? <SplitUnlink co={co} /> : null) : <>
       {may && <button className="btn small" data-tco-sync-now={co.id} disabled={!!syncing} onClick={() => syncNow(co.id, r.company)}>{syncing ? "Syncing…" : "Sync now"}</button>}
       <LinkedMenu r={r} co={co} may={may} onPick={setPick} onChange={() => setChg(true)} computer={pc} /></>;
   }
@@ -1082,12 +1123,13 @@ export function CompanyRow({ r, rows = null, forCo = null, focus = false, onDone
       {r.why && <span className={"tag " + (r.why === "like" ? "warn" : "ok")} data-tco-why={r.why}>{r.why === "gstin" ? "same GSTIN" : r.why === "name" ? "same name" : "similar name"}</span>}
       {spacesOdd(r.company) && <span className="tag warn" data-tco-spaces="" title={"In Tally: “" + r.company + "”"}>name has extra spaces in Tally</span>}</div>
     {(co || quietWord || meta || acts) && <div className="tco-line2">
-      {co ? <Pill r={r} st={st} co={co} earlier={earlier} noLine={quiet} /> : quietWord}
+      {co ? <Pill r={r} st={st} co={co} earlier={earlier} split={split} noLine={quiet} /> : quietWord}
       {co && <SyncLine cid={co.id} words />}
       {meta && <span className="note tco-meta" data-linked-meta={quiet ? "" : undefined}>{meta}</span>}
       {acts && <span className="tco-act">{acts}</span>}
     </div>}
-    {co && !earlier && !quiet && (wordOf ? wordOf.button && <div className="tco-under note" data-tco-fix=""><LinkStatus co={co} where="row" company={r.company} /></div>
+    {co && (split || (splitOf(co.id) && !isSplitCo(co.id, r.company))) && <SplitCheck cid={co.id} />}
+    {co && !earlier && !split && !quiet && (wordOf ? wordOf.button && <div className="tco-under note" data-tco-fix=""><LinkStatus co={co} where="row" company={r.company} /></div>
       : st.state !== "connected" && fixOf(r, st) && <div className="tco-under note" data-tco-fix="">{fixOf(r, st)}</div>)}
     {!r.reported && !pend && r.open && !co && <div className="tco-under note" data-tco-unreported="">{SENDING[coKey(r.company)] ? "Sending " + shown(r.company) + " to FinCom and linking it…" : "Not in FinCom’s cloud yet: Link to client… sends it and links it at once."}</div>}
     {pend && <div className={"tco-under note" + (pend.late ? " bad" : "")} data-tco-pending-say="">{pend.late ? "Not sent to FinCom in 10 minutes: keep " + shown(r.company) + " open in TallyPrime, with FinCom Bridge running. Your click is still kept."
@@ -1145,7 +1187,7 @@ function FreeClientRow({ co, open, onOpen }) {
   </li>;
 }
 function LinkedClientRow({ co, r, k, more, earlier, here, open, onOpen, hooks }) {
-  const may = canWrite(), st = r.st || tallyCoState(r.company);
+  const may = canWrite(), st = r.st || tallyCoState(r.company), split = isSplitCo(co.id, r.company) ? splitOf(co.id) : null;
   const now = r.open && (!here || here.has(coKey(r.company)));
   const last = k && (!k.company || k.company === r.company) ? lastEntry(co, k) : "";
   const when = last ? "last entry " + seenWords(last) : r.seen ? "last seen " + seenWords(r.seen) : "";
@@ -1158,20 +1200,22 @@ function LinkedClientRow({ co, r, k, more, earlier, here, open, onOpen, hooks })
     <div className="tco-main" data-tlk-side="tally"><b className="tco-name" title={r.nowName ? "In FinCom’s cloud: " + r.company : undefined}>{shown(r.nowName || r.company)}</b>
 </div>
     <div className="tco-line2">
-      <Pill r={r} st={st} co={co} earlier={earlier} noLine />
+      <Pill r={r} st={st} co={co} earlier={split ? "" : earlier} split={split} noLine />
       <span className="note tco-meta" data-tlk-state="" data-linked-meta="">{state}</span>
       <SyncLine cid={co.id} words />
       {may && <span className="tco-act"><details className="bk-menu tco-more" data-tlk-more={co.id} data-tco-more={r.company}>
         <summary className="btn small" aria-label={"More for " + co.name}>⋯</summary>
         <div className="bk-menu-list">
           <button data-tlk-change={co.id} onClick={close(() => onOpen(true))}>Change Tally company…<small>{"Link " + co.name + " to another company FinCom has seen in Tally."}</small></button>
-          <button className="danger" data-tlk-unlink={co.id} data-tco-unlink={r.company} onClick={close(() => unlink(r))}>Unlink<small>The company is free to link again.</small></button>
+          {split ? <button className="danger" data-tlk-split-unlink={co.id} onClick={close(() => unlinkSplit(co))}>Unlink earlier years<small>{co.name + " keeps its current company alone."}</small></button>
+            : <button className="danger" data-tlk-unlink={co.id} data-tco-unlink={r.company} onClick={close(() => unlink(r))}>Unlink<small>The company is free to link again.</small></button>}
           {/* (kept from the quiet rows before: Sync now, and the Day Book while days of this year are missing) */}
           <button data-tco-sync-now={co.id} onClick={close(() => syncNow(co.id, r.company))}>Sync now<small>Masters and vouchers, when the company is open in Tally.</small></button>
           {oldDaysMissing(co.id) && <button data-tco-daybook={co.id} onClick={close(() => openFromTally(co.id))}>Upload older entries (Day Book)<small>Days of this year not in FinCom yet: upload Tally’s Day Book once.</small></button>}
         </div></details></span>}
     </div>
     <div className="tco-under"><SyncLine cid={co.id} bar /></div>
+    {!more && splitOf(co.id) && <SplitCheck cid={co.id} />}
     {!more && <div className="tco-under" data-tfx-row={co.id}><OlderLine cid={co.id} onOpen={() => openFromTally(co.id)} /><TodayLine cid={co.id} /><CheckChanges cid={co.id} where="row" /></div>}
     {open && <div className="tco-under"><ChangePick co={co} cur={r.company} onClose={() => onOpen(false)} /></div>}
   </li>;
