@@ -89,7 +89,19 @@ def main():
         card = "#app [data-older-entries]"
         ok(n(card) == 1 and txt(card + " h3") == "Bring books from Tally", "1. the card is there: Bring books from Tally")
         opts = E("() => [...document.querySelectorAll('#app [data-older-fy] option')].map(o => o.textContent)")
-        ok(opts and opts[0] == FYL and E("() => document.querySelector('#app [data-older-fy] option:checked').textContent") == FYL and len(opts) == 2, "1. the years the books cover, the current one chosen (%s)" % opts)
+        ok(opts and opts[0] == FYL and E("() => document.querySelector('#app [data-older-fy] option:checked').textContent") == FYL and len(opts) == 6 and opts[-1] == "FY %d-%s" % (FYN - 5, str(FYN - 4)[2:]), "1. this year and the five before it, the current one chosen (%s)" % opts)
+        # staging, 11-Nov-2026 (the owner: "while bringing another year, I am not able to see previous periods"): a book FinCom
+        # began this 1 April (Tally's company "(from 1-Apr-25)") still offers last year, says where it comes from, and Start asks for it
+        state(sb(**{"from": "%d-04-01" % FYN}))
+        opts = E("() => [...document.querySelectorAll('#app [data-older-fy] option')].map(o => o.textContent)")
+        PYL = "FY %d-%s" % (FYN - 1, str(FYN)[2:])
+        ok(len(opts) == 6 and PYL in opts and n(card + " [data-older-before]") == 0, "1. a book begun this April: earlier years offered too (%s)" % opts)
+        pg.select_option(card + " [data-older-fy]", str(FYN - 1)); pg.wait_for_timeout(300)
+        bw = txt(card + " [data-older-before]")
+        ok(bw == "FinCom’s books of ZZ begin on 01-Apr-%d: %s comes from the same company in Tally, when Tally keeps that year in it." % (FYN, PYL), "1. a year before the book's start says so (%s)" % bw)
+        pg.click(card + " [data-older-start]"); pg.wait_for_timeout(500)
+        ok(calls("tally_period_choose_lean")[-1:] == [{"p_book": "bk-zz", "p_fy_start": "%d-04-01" % (FYN - 1), "p_part": "year"}], "1. Start asks for last year (%s)" % calls("tally_period_choose_lean")[-1:])
+        E("() => { window.__rpc = []; }"); state(sb()); pg.select_option(card + " [data-older-fy]", str(FYN)); pg.wait_for_timeout(300)
         ok(E("() => { const s = document.querySelector('#app [data-older-entries] [data-older-fy]'), b = document.querySelector('#app [data-older-entries] [data-older-start]'); return !!s && !!b && Math.abs(s.getBoundingClientRect().top - b.getBoundingClientRect().top) < 12; }") and n(card + " [data-older-start]") == 1 and n(card + " [data-older-pause]") == 0, "1. '[FY ▾] Start'")
         ok(txt("#app [data-up-older]") == LINE, "1. the plain upload line stays (%s)" % txt("#app [data-up-older]"))
         pg.click(card + " [data-older-start]"); pg.wait_for_timeout(500)

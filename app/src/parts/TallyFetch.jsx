@@ -248,9 +248,14 @@ export default function OlderEntries({ cid, say = false }) {
   if (!b) return say ? <p className="note" data-older-none={SUM.off ? "off" : SUM.books ? "none" : "reading"}>{!(typeof TCloud === "object" && TCloud.on && TCloud.on()) ? "Sign in to the firm account first: books come from Tally through FinCom’s cloud."
     : SUM.off ? "Bring another year is not in FinCom’s cloud yet. Use Upload a Day Book file instead."
     : SUM.books ? "FinCom’s cloud has no books of this client from Tally yet: press Update now first, then come back here." : "Reading the books from FinCom’s cloud…"}</p> : null;
-  const now = fyNow(), first = Math.max(fyOfDate(b.from) || now - 5, now - 5), years = [];
-  for (let y = now; y >= first; y--) years.push(y);
-  const chosenFy = fy || (p ? fyOf8(p.fy) : now), same = !!(p && fyOf8(p.fy) === chosenFy);
+  // staging, 11-Nov-2026 (the owner: "while bringing another year, I am not able to see previous periods"): the years are
+  // this one and the five before it, whatever day FinCom's book starts on (b.from is the day FinCom began the book, chosen
+  // by a person: "(from 1-Apr-25)" in Tally, 1-Apr-2026 in FinCom offered this year alone); a year before it, once its days
+  // are in, moves the book's start back (tally-ingest's bookStartFromState); Tally holds no entries before its own start:
+  // "Tally lists no entries for this period"
+  const now = fyNow(), years = [], bookFy = fyOfDate(b.from);
+  for (let y = now; y >= now - 5; y--) years.push(y);
+  const chosenFy = fy || (p ? fyOf8(p.fy) : now), same = !!(p && fyOf8(p.fy) === chosenFy), before = !!bookFy && chosenFy < bookFy;
   const act = (fn, args, what) => { const bk = book; setBusy(what); setErr("");
     return rpc(fn, args).then((r) => { if (cur.current !== bk) return; if (r && r.ok === false) setErr(String(r.error || "FinCom did not take it")); summary(true); },
       (e) => { if (cur.current === bk) setErr(errWords(e)); }).finally(() => setBusy("")); };
@@ -286,6 +291,7 @@ export default function OlderEntries({ cid, say = false }) {
     {p && <div className="tco-sync" data-older-progress={p.done ? "done" : p.counting ? "counting" : "fetching"} data-older-state={p.state} role="status" style={{ marginTop: 8 }}>
       {!p.done && <Bar p={p} label={"Bringing " + partWords(p) + " from Tally"} />}
       <span data-older-words="" className={p.done ? "ok" : ""}>{partWords(p) + ": " + pullWords(p)}</span></div>}
+    {before && !same && <p className="note" data-older-before="" style={{ margin: "4px 0 0" }}>{"FinCom’s books of " + (b.company || "this company") + " begin on " + dayLong(b.from) + ": " + fyLabel(chosenFy) + " comes from the same company in Tally, when Tally keeps that year in it."}</p>}
     {lean && <p className="note" data-older-lean="" style={{ margin: "4px 0 0" }}>{nf(lean.days) + " days: " + nf(lean.already) + " already in FinCom, " + nf(lean.toBring) + " to bring" +
       (Number(lean.upload) ? ", " + nf(lean.upload) + " to upload by hand" : "") + "."}</p>}
     {p && p.state === "going" && !p.done && pace && <p className="note" data-older-pace={nightNow(bf && bf.hours) ? "night" : "day"} style={{ margin: "4px 0 0" }}>{pace}</p>}

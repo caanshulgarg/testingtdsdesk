@@ -56,7 +56,11 @@ const RPT = {
     ["lk-find", "audit", "Find any entry", "By party, narration, number or amount", {lk: {kind: "find", q: ""}}]
   ],
   fys(){
-    const m = (S.books || {}).meta || {}, f = String(m.from || ""), t = String(m.to || "");
+    const m = (S.books || {}).meta || {};
+    let f = String(m.from || ""), t = String(m.to || "");
+    // hotfix 11-Nov-2026 (Reports "Cannot read properties of null (reading 'fy')"): books brought from FinCom's cloud may
+    // carry no from/to: the entries' own first and last dates then
+    if (!f || !t){ ((S.books || {}).vouchers || []).forEach(v => { const d = String(v.date || ""); if (d.length === 8){ if (!f || d < f) f = d; if (!t || d > t) t = d; } }); }
     if (!f || !t) return [];
     const out = []; for (let y = num(Audit.fyStart(t).slice(0, 4)); y >= num(Audit.fyStart(f).slice(0, 4)); y--) out.push(String(y));
     return out;
