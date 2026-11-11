@@ -305,13 +305,13 @@ function Act({ row, main = false }) {
   if (!canWrite()) return null;
   let btn;
   if (a.kind === "connect") btn = <ConnectBtn r={row.r} co={row.co} label="Link" hook={{ "data-tsm-act": "connect" }} />;
-  else if (a.kind === "choose" && row.best) btn = <ConnectBtn r={row.r} co={row.best} label="Link" hook={{ "data-tsm-act": "connect", "data-tsm-act-client": row.best.id }} />;
+  else if (a.kind === "choose" && row.best && !row.ask) btn = <ConnectBtn r={row.r} co={row.best} label="Link" hook={{ "data-tsm-act": "connect", "data-tsm-act-client": row.best.id }} />;
   else if (a.kind === "choose" || a.kind === "pickco") btn = <button type="button" className="btn primary" data-tsm-act={a.kind} onClick={() => setPick(!pick)} aria-expanded={pick}>{a.label}</button>;
   else if (a.kind === "upload") btn = <button type="button" className={"btn primary" + (main ? " tpt-btn" : "")} data-tsm-act="upload" data-tpt-main={main ? "upload" : undefined} onClick={() => { try { if (a.run) a.run(); else if (a.day && typeof Rec === "object" && Rec.uploadFrom) Rec.uploadFrom(row.cid, a.day); else openFromTally(row.cid); } catch (e) { say("up:" + row.cid, errWords(e), true); } }}>{a.label}</button>;
   else if (a.kind === "bring") btn = <button type="button" className={"btn primary" + (main ? " tpt-btn" : "")} data-tsm-act="bring" data-tpt-main={main ? "bring" : undefined} disabled={busyOf(fk)}
     onClick={() => press(fk, () => bringDays(row, a))}>{busyOf(fk) ? "Asking Tally…" : a.label}</button>;
   return <>{btn}{a.kind === "upload" && <Said k={"up:" + row.cid} hook="upload" />}
-    {a.kind === "choose" && row.best && !pick && <div><button type="button" className="linkbtn tsm-small" data-tsm-act-choose="" onClick={() => setPick(true)}>Choose another client</button></div>}
+    {a.kind === "choose" && row.best && !row.ask && !pick && <div><button type="button" className="linkbtn tsm-small" data-tsm-act-choose="" onClick={() => setPick(true)}>Choose another client</button></div>}
     {pick && a.kind === "choose" && <div className="tsm-pick" data-tsm-row-pick=""><Pick r={row.r} co={null} pre={row.best ? row.best.id : ""} onClose={() => setPick(false)} /></div>}
     {pick && a.kind === "pickco" && <div className="tsm-pick" data-tsm-row-pick=""><ChangePick co={row.co} cur="" onClose={() => setPick(false)} /></div>}</>;
 }
@@ -405,7 +405,7 @@ function bridgesUp() { try { return bridgesOf().some((b) => b.at && Date.now() -
 function openAnywhere() { try { return new Set(companyRows().filter((r) => r.open).map((r) => coKey(r.company))); } catch (e) { return new Set(); } }
 // what a row is: {kind, dot (ok | read | warn | idle | ring), say, why, btn (update | again | connect | link | act), need}
 export function pageOf(row, seen) {
-  if (row.kind === "company") return { kind: "company", dot: "idle", say: "Open in Tally · not linked", why: row.best ? "Client “" + row.best.name + "” matches" : "No client of its name yet", btn: row.best ? "connect" : "link" };
+  if (row.kind === "company") return { kind: "company", dot: "idle", say: "Open in Tally · not linked", why: row.best ? "Client “" + row.best.name + "” matches" + (row.ask ? ": choose to link" : "") : "No client of its name yet", btn: row.best && !row.ask ? "connect" : "link" };
   if (row.c.w !== YES) {
     if (row.c.connect) return { kind: "open", dot: "idle", say: "Open in Tally · not linked", why: "", btn: "connect" };
     return { kind: "free", dot: "ring", say: "Not linked", why: row.found ? "Found in Tally: “" + shown(row.found) + "”" : "", btn: "link" };
@@ -428,7 +428,7 @@ export function mainOf(row, pg) {
   if (pg.btn === "update" && row.act && (row.act.kind === "upload" || row.act.kind === "bring")) return { main: row.act.kind, label: row.act.label };
   if (pg.btn === "update") return { main: "update", label: "Update now" };
   if (pg.btn === "again") return { main: "again", label: pg.label || "Connect again" };
-  if (pg.kind === "open" || (pg.kind === "company" && row.best)) return { main: "connect", label: "Connect" };
+  if (pg.kind === "open" || (pg.kind === "company" && row.best && !row.ask)) return { main: "connect", label: "Connect" };
   return { main: "link", label: "Link" };
 }
 if (typeof globalThis === "object") globalThis.FCTallyMain = (row) => mainOf(row, pageOf(row, new Set()));
@@ -550,7 +550,7 @@ function Row({ row, download, oneDl, seen, cs, x, checkAgain }) {
   else if (pg.btn === "update" && linked && e.b && e.b.book && (e.st === "behind" || e.st === "stopped" || (e.st === "none" && m.st === "done"))) { btn = <BringBooks row={row} e={e} />; main = "books"; }
   else if (pg.btn === "update") { btn = <button type="button" className="btn tpt-btn" data-tpt-main="update" data-tsm-update={row.cid} onClick={() => runPress(row.cid, row.company, { entries: true }).catch(() => {}).then(() => tick((k) => k + 1))}>Update now</button>; main = "update"; }
   else if (pg.kind === "open") { btn = <ConnectBtn r={row.r} co={row.co} label="Connect" hook={{ "data-tsm-connect": row.cid, "data-tpt-main": "connect" }} />; main = "connect"; }
-  else if (pg.kind === "company" && row.best) { btn = <ConnectBtn r={row.r} co={row.best} label="Connect" hook={{ "data-tsm-act": "connect", "data-tsm-act-client": row.best.id, "data-tpt-main": "connect" }} />; main = "connect"; }
+  else if (pg.kind === "company" && row.best && !row.ask) { btn = <ConnectBtn r={row.r} co={row.best} label="Connect" hook={{ "data-tsm-act": "connect", "data-tsm-act-client": row.best.id, "data-tpt-main": "connect" }} />; main = "connect"; }
   else { btn = <ActLink row={row} />; main = "link"; }
   const aw = pg.btn === "again" ? Again.why(row, cs) : null;
   const near = pg.kind === "away" && x ? (x.unlinked || []).find((u) => coKey(u.company) !== coKey(row.company) && (baseKey(u.company) === baseKey(row.company) || !!(globalThis.LinkRec && LinkRec.same && LinkRec.same(u.company, row.company)))) : null;

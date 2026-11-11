@@ -1988,7 +1988,8 @@ const linkTried = new Set();
 function tallyAutoClient(company){
   const rows = [].concat((typeof TLight === "object" && TLight.st.cos) || [], (typeof TCloud === "object" && TCloud.pane.companies) || []);
   const taken = new Set(rows.filter(r => r && r.client_id && r.company !== company.name).map(r => String(r.client_id)));
-  return autoLinkFor(company, Object.values(S.companies || {}), taken);
+  // next-link-choose: and never when another of the firm's companies looks alike or has its GSTIN (a person chooses)
+  return autoLinkFor(company, Object.values(S.companies || {}), taken, rows.map(r => ({company: r && r.company, gstin: r && r.gstin, client: r && r.client_id})));
 }
 function linkByGstin(cos){
   if (!TCloud.on()) return;

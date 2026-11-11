@@ -4880,7 +4880,7 @@ Deno.serve(sentry.wrap(async (req) => {
       case "companies": {
         const list = (Array.isArray(body.companies) ? body.companies : []).slice(0, 200)
           .map((c: any) => ({ name: coTrim(String(c?.name || "")), sent: String(c?.name || "").slice(0, 300), gstin: String(c?.gstin || "").trim().toUpperCase().slice(0, 15), guid: String(c?.guid || "").trim().slice(0, 100) })).filter((c: any) => c.name);
-        const { data: have } = await db.from("tally_companies").select("company, client_id, linked_at").eq("firm_id", firm);
+        const { data: have } = await db.from("tally_companies").select("company, client_id, linked_at, gstin").eq("firm_id", firm);
         const known = new Map((have || []).map((r: any) => [r.company, r.client_id]));
         const unlinked = new Set((have || []).filter((r: any) => !r.client_id && r.linked_at).map((r: any) => r.company));   // unlinked by a person: left so
         const { data: clients } = await db.from("clients").select("id, name, gstin, deleted").eq("firm_id", firm);
@@ -4902,7 +4902,11 @@ Deno.serve(sentry.wrap(async (req) => {
             // other PAN. It was "exactly one client has this Tally name": a Tally name left over from the Add client form
             // linked VMS EVENTS PRIVATE LIMITED (2024-25) to Salesify Marketing LLP on staging (linked_by empty). Anything
             // else is offered to a person (the client's Tally card, Add client's Pick from Tally)
-            const m = autoLinkFor({ name: c.name, gstin: c.gstin }, clients || [], taken);
+            // next-link-choose (11-Nov-2026: a client linked by itself to an empty copy of its company while the real one
+            // was open too): never when another of the firm's companies (listed, or in this report) looks alike or has the
+            // same GSTIN: two candidates, a person chooses
+            const others = [...(have || []).map((r: any) => ({ company: r.company, gstin: r.gstin, client: r.client_id })), ...list.map((o: any) => ({ company: o.name, gstin: o.gstin, client: known.get(o.name) || "" }))];
+            const m = autoLinkFor({ name: c.name, gstin: c.gstin }, clients || [], taken, others);
             if (m) { client = m.client.id; auto = true; taken.add(String(client)); }
           }
           // a GSTIN is recorded when the computer knows it (the company open in Tally); never wiped by a report without one

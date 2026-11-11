@@ -1,7 +1,7 @@
 // node tests/run_tally_name_rules.mjs - the one rule for linking a client to its Tally company (server/_shared/tallyname.js,
 // 23-Oct-2026: Salesify was linked by itself to VMS EVENTS, and its own company "SALESIFY MARKETING LLP - (from 1-Apr-25)"
 // never matched "Salesify Marketing LLP"). The names are the firm's own from staging.
-import { tallyNameKey, sameTallyName, tallyYearKey, autoLinkFor, suggestFor, similarClients, clientNameFromTally } from "../server/_shared/tallyname.js";
+import { tallyNameKey, sameTallyName, tallyYearKey, tallyLookKey, autoLinkFor, suggestFor, similarClients, clientNameFromTally } from "../server/_shared/tallyname.js";
 let fails = 0;
 const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };
 
@@ -73,6 +73,19 @@ const sp = similarClients(clientNameFromTally("Kestrel Advisory Private Limited 
 ok(sp.length === 1 && sp[0].client.id === POST.id && sp[0].why === "same", "the client of that name is found for the split company (" + JSON.stringify(sp.map((x) => x.why)) + ")");
 ok(autoLinkFor({ name: "Kestrel Advisory Private Limited 01 Apr 2018", gstin: "" }, [POST], []) === null, "a split company is never linked by itself (a person chooses which split)");
 ok(!sameTallyName("Kestrel Advisory Private Limited 01 Apr 2018", "Kestrel Advisory Private Limited"), "the splits stay different companies to tallyNameKey");
+// 7. next-link-choose (11-Nov-2026; a client linked by itself to an empty copy of its company while the real one was open
+// too): companies that look alike (case, punctuation, a bracketed word such as "(Depot)", a year) share tallyLookKey, and
+// autoLinkFor links nothing by itself when another of the firm's Tally companies looks alike or has the same GSTIN
+ok(tallyLookKey("Orion Traders Pvt Ltd") === tallyLookKey("ORION TRADERS PVT. LTD. (Depot)") && tallyLookKey("orion traders private limited 2025-26") === tallyLookKey("Orion Traders Pvt Ltd"),
+  "look alike: case, punctuation, (Depot), a year (" + tallyLookKey("ORION TRADERS PVT. LTD. (Depot)") + ")");
+ok(tallyLookKey("Orion Traders") !== tallyLookKey("Orion Exports") && tallyLookKey("") === "", "other names do not look alike");
+const OR = { id: "c-orion", name: "Orion Traders Pvt Ltd", gstin: "07AAACO1234A1Z5" };
+ok(autoLinkFor({ name: "ORION TRADERS PVT LTD", gstin: "" }, [OR], [], []).client.id === OR.id, "no other company: linked by its name as before");
+ok(autoLinkFor({ name: "ORION TRADERS PVT LTD", gstin: "" }, [OR], [], [{ company: "Orion Traders Pvt Ltd (Depot)", gstin: "", client: "" }]) === null, "another company looks alike (Depot): nothing linked by itself");
+ok(autoLinkFor({ name: "ORION TRADERS PVT LTD", gstin: "" }, [OR], [], [{ name: "orion traders pvt. ltd.", gstin: "" }]) === null, "another company of the same name but for case and dots: nothing linked by itself");
+ok(autoLinkFor({ name: "OT BOOKS", gstin: "07AAACO1234A1Z5" }, [OR], [], [{ company: "OT BOOKS COPY", gstin: "07AAACO1234A1Z5" }]) === null, "another company with the same GSTIN: nothing linked by itself");
+ok(autoLinkFor({ name: "ORION TRADERS PVT LTD", gstin: "" }, [OR], [], [{ company: "Orion Traders Pvt Ltd (Depot)", client: "c-other" }]).client.id === OR.id, "a look-alike linked to another client is not a candidate");
+ok(autoLinkFor({ name: "ORION TRADERS PVT LTD", gstin: "" }, [OR], [], [{ company: "ORION TRADERS PVT LTD" }, { company: "Vega Exports" }]).client.id === OR.id, "the company itself and other names are not candidates");
 
 console.log(fails ? "\n" + fails + " failed" : "\nall passed");
 process.exit(fails ? 1 : 0);
