@@ -934,15 +934,7 @@ function advFix(id, key, val){
 // rule 43: a capital good's name, date put to use, credit, use, registration, date sold
 function assetSet(id, k, v){ const a = (S.books.assets || []).find(x => x.id === id); if (a){ a[k] = /^(igst|cgst|sgst|cess)$/.test(k) ? r2(num(v)) : v; saveBooks(); render(); } }
 function assetRemove(id){ S.books.assets = (S.books.assets || []).filter(a => a.id !== id); saveBooks(); render(); }
-// GSTR-9 and 9C (app/src/screens/gst/Annual.jsx): figures not in the books, typed once for the year and GSTIN
-function gst9Where(){ const b = S.books; return {fy: GST9.fyOf(S.gstYm || GSTR.months().slice(-1)[0]), reg: S.gstReg || ((GSTR.gstins(b) || [])[0] || "").slice(0, 2)}; }
-function gst9Typed(k, f, v){ const w = gst9Where(), st = GST9.typed(w.fy, S.gstReg || ""); st[k] = Object.assign({}, st[k], {[f]: v === "" ? "" : num(v)}); if (Object.values(st[k]).every(x => x === "")) delete st[k]; saveBooks(); render(); }
-// 9C: key is "turnover", "itcBooks", "adj.5B", "reasons.6"…; reasons are text, the rest amounts
-function gst9cSet(key, v){
-  const w = gst9Where(), st = GST9C.st(w.fy, w.reg), val = key.startsWith("reasons.") ? v : (v === "" ? "" : num(v));
-  if (key.startsWith("adj.")) st.adj[key.slice(4)] = val; else if (key.startsWith("reasons.")) st.reasons[key.slice(8)] = val; else st[key] = val;
-  saveBooks(); render();
-}
+// GSTR-9 and 9C's typed figures (gst9Where, gst9Typed, gst9cSet) are src/js/08, with the GST screen
 // a Tally ledger's GST or TDS meaning, set on the Tally ledgers tab (app/src/screens/books/Ledgers.jsx): what (the
 // kind), tax, side, reg, gstRate, section, rate. A choice made here is the user's own: it counts as confirmed.
 // FinCom 2.4.1 (Cause B): saved at once, its own confirm step, never a draft (it was a draft under the page's Save, so

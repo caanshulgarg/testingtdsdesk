@@ -19,7 +19,6 @@ window.__fincomReactRendering = () => { const h = reactInternals && reactInterna
 import Guard from "./Guard.jsx";
 import { subscribe, snapshot } from "./store.js";
 import { flushSync } from "react-dom";
-import { Gst9c } from "./screens/gst/Annual.jsx";
 import { watchFresh } from "./fresh.js";
 import { preloadScreens, lineSlow } from "./screens/lazy.js";
 import "./nav.js";
@@ -50,6 +49,9 @@ window.loadBankOverlap = () => import("./lib/bankOverlap.js").catch((e) => { sta
 window.loadTallyJson = () => import("./lib/tallyJson.js").catch((e) => { staleReload(e, true); throw e; });
 // the bridge follows the FinCom login using it (migration 115; TCloud.autoOwn)
 window.loadBridgeFollow = () => import("./lib/bridgeFollow.js");
+// next-size-room: a screen's own part of the program, for an action asked for before that screen's file is in (withPart,
+// src/js/82): GSTR-9 and 9C (with the 9C screen, for its PDF), the MIS pack, the printed sales invoice
+window.loadPart = (k) => (k === "gst9" ? import("./screens/gst/Annual.jsx") : k === "mis" ? import("../../src/js/18-mis-pack.js") : import("../../src/js/26-sales-invoice.js")).catch((e) => { staleReload(e, true); throw e; });
 window.loadRegisters = () => import("./lib/registers.js").catch((e) => { staleReload(e, true); throw e; });
 // ROUND 99: the financial statements' Excel and PDF (src/lib/finExport.js, FinSt with it), loaded the first time they
 // are asked for. Until then FinXlsx / FinPdf load it and pass the call on; the PDF's window is opened at once (a pop-up
@@ -61,11 +63,11 @@ if (!window.FinPdf) window.FinPdf = { open: (fy, o) => { const w = window.open("
 // calm motion (src/arc/lib/calm-motion.js): every animation in the app takes Motion's reduced path
 import { MotionConfig } from "motion/react";
 
-// a screen as plain HTML, for printing (the GSTR-9C PDF is printed from its screen: gst9PackHtml in src/js/18)
-const PRINTABLE = { Gst9c };
+// a screen as plain HTML, for printing (the GSTR-9C PDF is printed from its screen: gst9PackHtml in src/js/08). The screen
+// puts itself in FinComReact.printable when its file comes (gst/Annual.jsx), so it is not in this first file
 window.FinComReact.markup = (name, props) => {
   const el = document.createElement("div"), root = createRoot(el);
-  flushSync(() => root.render(createElement(PRINTABLE[name], props || {})));
+  flushSync(() => root.render(createElement(window.FinComReact.printable[name], props || {})));
   const html = el.innerHTML; root.unmount(); return html;
 };
 

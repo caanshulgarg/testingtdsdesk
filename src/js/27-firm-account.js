@@ -1711,8 +1711,8 @@ function doAct(act, t){
       MIS.HEADS.forEach(([h2]) => { const H = r.pl.heads[h2]; if (!H) return; const avg = r2(H.t / n2 * k); B[h2] = {}; GSTRev.fyMonths(fy + "04").forEach(mm => { B[h2][mm] = Math.round(avg); }); });
       saveBooks(); toast("Budget filled: this year's monthly average so far, plus " + (S.misBudPct || 10) + "%. Change any month."); render(); break;
     }
-    case "misPack": { const r = (S.books.mis || {}).last; if (r) printView(CO().name + " MIS " + r.from + "-" + r.to, "<style>@page{size:A4 portrait;margin:14mm}h2{font-size:15px;margin:14px 0 6px;border-bottom:1px solid #D7DEDA;padding-bottom:3px}</style>" + heldPrintHtml(S.coId) + misPackHtml(r)); break; }
-    case "misExcel": { const r = (S.books.mis || {}).last; if (r) misExcel(r).then(() => toast("Downloaded."), e => toast("Could not build the file: " + (e && e.message))); break; }
+    case "misPack": { const r = (S.books.mis || {}).last; if (r) withPart("mis", "misPackHtml", () => printView(CO().name + " MIS " + r.from + "-" + r.to, "<style>@page{size:A4 portrait;margin:14mm}h2{font-size:15px;margin:14px 0 6px;border-bottom:1px solid #D7DEDA;padding-bottom:3px}</style>" + heldPrintHtml(S.coId) + misPackHtml(r))); break; }
+    case "misExcel": { const r = (S.books.mis || {}).last; if (r) withPart("mis", "misExcel", () => misExcel(r).then(() => toast("Downloaded."), e => toast("Could not build the file: " + (e && e.message)))); break; }
     case "relAddTyped": {
       const b = S.books, i = document.getElementById("relq"), v = i ? i.value.trim() : "";
       if (!v || !(Object.assign({}, b.ledInfo || {}, b.map || {})[v])){ toast("Choose a ledger from the list."); break; }
@@ -1769,9 +1769,9 @@ function doAct(act, t){
       break;
     }
     case "auditUnlock": { const run = (S.books.audit || {}).last; if (run && S.books.audit.final){ delete S.books.audit.final[run.from + "-" + run.to]; saveBooks(); toast("Unlocked."); render(); } break; }
-    case "gst9Pdf": case "gst9cPdf": { const w = act === "gst9Pdf" ? "9" : "9C"; printView(CO().name + " GSTR-" + w, "<style>@page{size:A4 portrait;margin:12mm}</style>" + gst9PackHtml(w)); break; }
+    case "gst9Pdf": case "gst9cPdf": { const w = act === "gst9Pdf" ? "9" : "9C"; withPart("gst9", "gst9PackHtml", () => printView(CO().name + " GSTR-" + w, "<style>@page{size:A4 portrait;margin:12mm}</style>" + gst9PackHtml(w))); break; }
     case "inregExcel": inregExcel().then(() => toast("Downloaded."), e => toast("Could not build the file: " + (e && e.message))); break;
-    case "gst9Excel": case "gst9cExcel": gst9Excel(act === "gst9Excel" ? "9" : "9C").then(() => toast("Downloaded."), e => toast("Could not build the file: " + (e && e.message))); break;
+    case "gst9Excel": case "gst9cExcel": withPart("gst9", "gst9Excel", () => gst9Excel(act === "gst9Excel" ? "9" : "9C").then(() => toast("Downloaded."), e => toast("Could not build the file: " + (e && e.message)))); break;
     // ledgers with entries but no master: the masters read again (through the bridge here, else the firm's Tally
     // computer is asked to update the cloud copy, masters included)
     case "tbMasters": {
