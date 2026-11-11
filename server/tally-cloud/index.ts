@@ -1918,6 +1918,7 @@ async function booksFromFor(firm: string, body: any): Promise<Record<string, str
 // tally_read_serving) gets its days by claim (tally_days_claim: 98's and 135's own order and rules, the days another
 // bridge holds left out, the rest held for this bridge 5 minutes): two bridges read different days of one book at once
 let daysClaimMissing = 0;
+let heldFrontMissing = 0, heldHeadsMissing = 0;     // migration 158 (tally_held_front / tally_held_delete_by_heads) not applied
 async function periodDaysFor(firm: string, body: any, stopped: boolean, max = 3, night = max > 3, markCheck = false, claim?: { dev: any; bridge: string; shared: Set<string> }): Promise<Record<string, unknown>[] | null> {
   const out: Record<string, unknown>[] = [];
   max = Math.max(1, Math.min(30, Math.floor(Number(max) || 3)));
@@ -1965,6 +1966,20 @@ async function periodDaysFor(firm: string, body: any, stopped: boolean, max = 3,
       // asked only for the days left of the answer, so every day it stamps as handed out is handed out
       // next-fast-entries: the pace said is the computer's own hours (night), not the answer's size (a fast bridge by day
       // is handed 30 and still called "day")
+      // next-fast-delete (migration 158): a day with a held delete this bridge sent (no entry GUID on the line) goes FIRST,
+      // before the period's days (which fill a 3-day answer), once per day per 3 minutes (tally_held_front): its whole-day
+      // list applies the delete at once (tally_held_delete_by_heads). A cloud without 158: as before (asked again in 10 min)
+      if (claim && Date.now() - heldFrontMissing >= 600000 && out.length < max) {
+        const { data: hf, error: he } = await db.rpc("tally_held_front", { p_book: book, p_device: claim.dev.id, p_bridge: claim.bridge, p_max: max - out.length });
+        if (he) { if (missingFn(String(he.message || ""))) heldFrontMissing = Date.now(); else fail("held_front", he); }
+        for (const d of Array.isArray(hf) ? hf as any[] : []) {
+          if (out.length >= max) break;
+          const day = String(d?.day || "");
+          if (!isDay(day) || out.some((x) => x.company === company && x.day === day)) continue;
+          out.push({ company, company_guid: guid, day, fetch: true, types: CHECK_TYPES, ...chosenOf(d), ...(markCheck ? { check: true } : {}), kind: "check" });
+        }
+        if (out.length >= max) continue;
+      }
       const byClaim = !!claim && claim.shared.has(company) && Date.now() - daysClaimMissing >= 600000;
       const dArgs = byClaim ? { p_firm: firm, p_book: book, p_device: claim!.dev.id, p_bridge: claim!.bridge } : null;
       let { data, error } = byClaim ? await db.rpc("tally_days_claim", { ...dArgs, p_kind: "period", p_max: max - out.length, p_night: night })
@@ -1986,7 +2001,7 @@ async function periodDaysFor(firm: string, body: any, stopped: boolean, max = 3,
       }
       for (const d of Array.isArray(data) ? data as any[] : []) {
         if (out.length >= max) break;
-        if (!isDay(String(d?.day || ""))) continue;
+        if (!isDay(String(d?.day || "")) || out.some((x) => x.company === company && x.day === String(d.day))) continue;
         // review 245 R1: "&", "<" and ">" pass (the bridge escapes the request); never a quote mark or a control character
         const types = (Array.isArray(d?.types) ? d.types : []).filter((t: unknown) => typeof t === "string" && t.length > 0 && t.length <= 60 && t === t.trim() && !/["\u0000-\u001f\u007f]/.test(t)).slice(0, 40);
         // 30-Oct-2026 (migration 133): the choice time travels with the day (the bridge's stop names it; without it a stop
@@ -2138,7 +2153,7 @@ function periodAllowed(devId: string) {
   return true;
 }
 // a day's heads from Tally (its count, by FinComDayHeads), or the day to be uploaded by hand
-async function periodHeads(book: string, body: any) {
+async function periodHeads(book: string, body: any, device = "", bridge = "") {
   const day = String(body?.day || "");
   if (!isDay(day)) return reply(400, { ok: false, error: "not a day" });
   if (body?.upload === true) {
@@ -2157,6 +2172,17 @@ async function periodHeads(book: string, body: any) {
   // the upload lacks or holds at another AlterID; FinCom's entries Tally no longer lists are removed on a second whole list),
   // with the period's own count kept as well when the day is one of the period chosen
   const via = body?.via === "split" ? "split" : "day";
+  // next-fast-delete (migration 158): a whole-day list of a day being checked first applies the held deletes it proves (the
+  // line's MasterID, number and type name one live entry, whose GUID Tally makes from that MasterID, and the list has
+  // neither; the line this computer's bridge's own, in the last 10 minutes, the entry held before it): the entry leaves
+  // FinCom on this list, not a second one a minute on. Never fails the call
+  if (via === "day" && heads.length > 0 && device && bridge && Date.now() - heldHeadsMissing >= 600000) {
+    try {
+      const { data: hd, error: he } = await db.rpc("tally_held_delete_by_heads", { p_book: book, p_day: iso(day), p_heads: heads, p_device: device, p_bridge: bridge });
+      if (he) { if (missingFn(String(he.message || ""))) heldHeadsMissing = Date.now(); else fail("held_delete_by_heads", he); }
+      else if (Number((hd as any)?.removed) > 0) console.log("tally-ingest period_heads: held deletes applied on the day's list", book, day, (hd as any).removed);
+    } catch (e) { fail("held_delete_by_heads", e); }
+  }
   const { data: ck, error: ce } = await db.rpc("tally_check_heads", { p_book: book, p_day: iso(day), p_heads: heads, p_via: via });
   if (ce && !missingFn(String(ce.message || ""))) return periodError(ce);
   if (!ce && (ck as any)?.mine === true) {
@@ -5090,7 +5116,7 @@ Deno.serve(sentry.wrap(async (req) => {
         if (recorded && sent.toLowerCase() !== recorded.toLowerCase()) return reply(409, { ok: false, otherGuid: true, error: "This Tally company's GUID is not the one FinCom keeps for this client's books." });
         if (body.kind === "ledger_progress") return await ledgerProgress(book, dev, body);
         if (body.kind === "period_stop") return await periodStop(book, body);
-        if (body.kind === "period_heads") return await periodHeads(book, body);
+        if (body.kind === "period_heads") return await periodHeads(book, body, String(dev.id), bridgeOf(dev, body, false).id);   // 158: only the lines of this computer and bridge
         const stored = await periodEntries(book, body);
         // next-book-start: after the entries are stored, the day just sent counted when they were taken
         await bookStartFromState(book, { day: stored.status === 200 ? String(body.day || "") : "" });
