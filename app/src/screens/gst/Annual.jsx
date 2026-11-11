@@ -1,8 +1,12 @@
 // The annual returns for the year of the month chosen: GSTR-9 (built from the months in the books) and GSTR-9C (the
 // reconciliation with the audited accounts). Were viewGst9 and viewGst9c (src/js/18). The figures are GST9 and GST9C
-// (src/js/16); what is typed is saved by gst9Typed and gst9cSet (src/js/23). GSTR-9's own tables (GST9.html) are the
+// (src/js/08); what is typed is saved by gst9Typed and gst9cSet (src/js/08 too). GSTR-9's own tables (GST9.html) are the
 // same HTML the PDF is printed from, shown here as an old piece. The 9C PDF is printed from this screen
 // (FinComReact.markup("Gst9c"), see gst9PackHtml).
+// GST9 and GST9C, their PDF and Excel and what is typed on them (src/js/08) come with this screen's file, not in legacy.js
+// (build.py lazy_files); the GST screen (Gst.jsx) imports this one, and an action asked for before (doAct "gst9Excel",
+// withPart in src/js/82) loads it (window.loadPart, main.jsx)
+import "../../../../src/js/08-gstr-9-and-gstr-9c.js";
 import ExcelTools from "../../parts/ExcelTools.jsx";
 import Legacy from "../../parts/Legacy.jsx";
 import CommitBox from "../../parts/CommitBox.jsx";
@@ -99,3 +103,6 @@ export function Gst9c() {
     </section>
   );
 }
+
+// the 9C screen as plain HTML, for its PDF (gst9PackHtml, FinComReact.markup in main.jsx): kept here, not in the first file
+(window.FinComReact.printable || (window.FinComReact.printable = {})).Gst9c = Gst9c;

@@ -18,6 +18,8 @@ import PageTabs from "../../parts/PageTabs.jsx";
 import Filters, { Field } from "../../parts/Filters.jsx";
 import { Answer, Fold, Info } from "../../parts/Answer.jsx";
 import DetailDrawer from "../../parts/DetailDrawer.jsx";
+// the printed pack and the Excel (misPackHtml, misExcel: src/js/18-mis-pack.js) come with this screen's file, not in legacy.js (build.py lazy_files)
+import "../../../../src/js/18-mis-pack.js";
 import More from "../../parts/More.jsx";
 
 const m = (v) => INR.format(r2(v || 0));

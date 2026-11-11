@@ -22,6 +22,8 @@ import NoticeLine from "../parts/NoticeLine.jsx";
 import DateBox from "../parts/DateBox.jsx";
 // EINV (src/js/55-einvoice.js) comes with this screen's file, not in legacy.js (build.py lazy_files)
 import "../../../src/js/55-einvoice.js";
+// the printed invoice (invoiceHtml: src/js/26-sales-invoice.js) too
+import "../../../src/js/26-sales-invoice.js";
 import "../../../src/js/96-bank-sent-heal.js";
 import "../../../src/js/98-link-record.js";
 import "../../../src/js/97-postto-link.js";

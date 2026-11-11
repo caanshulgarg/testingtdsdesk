@@ -221,11 +221,19 @@ func ledRowsOf(raw string) ([]ledRow, int64) {
 	return out, top
 }
 
+// 2.5.14: Tally answered, and named no group for the company (or, a round through, not one of the ledgers held from an
+// earlier read). A real company always has its primary groups, so this is not a list: nothing is saved, nothing is sent to FinCom as a
+// complete read, the reason is told in plain words (the keep run's own trouble line), and the read is tried again later
+var errNoMasters = errors.New("Tally gave no masters for this company")
+
 // Tally's groups, name and parent (a primary group's parent is empty): one request
 func readGroupList(tc *TC, company string, port int) ([][2]string, error) {
 	raw, err := invokeTally(ledgerTC(tc), port, groupListRequest(company), ledChunkSec())
 	if err != nil {
 		return nil, err
+	}
+	if !strings.Contains(raw, "<ENVELOPE") {
+		return nil, errors.New("Tally's answer to the group list could not be read: " + cut(flat(raw), 120))
 	}
 	var out [][2]string
 	for _, g := range xmlDoc(raw).All("GROUP") {
@@ -514,6 +522,10 @@ func (k *keepRun) ledgerList(company string, port int, dir string, st M, inBudge
 			save()
 		} else if err != nil {
 			return false, err
+		} else if len(g) == 0 {
+			// 2.5.14: an answer with no group at all is not a list (errNoMasters): the list held is kept, the round
+			// does not go on, and it is asked again at the next try
+			return false, errNoMasters
 		} else {
 			gl := []any{}
 			for _, x := range g {
@@ -531,6 +543,8 @@ func (k *keepRun) ledgerList(company string, port int, dir string, st M, inBudge
 	// 2.4.5: the exact count first (FinComLedgerIds, rows counted, under the 2 s stop; ledcount.go): the step-5 bar's "of N".
 	// Only for the ledgers-only read Connect Tally's step 5 asks (Import ledgers, the cloud's "ledgers" wake); Update now and
 	// the nightly run read the list as before
+	// 2.5.14: the progress itself (ledger_progress to FinCom, never to Tally) is said for every read; only the count, a
+	// request to Tally, stays the ledgers-only read's (Update now and the nightly run: "read" without "of N")
 	bar := k.kind == "ledgers"
 	if bar {
 		ledCountFor(company, port, ls, save, func() bool { return inBudget() && k.holdNow() == "" }, nextPoison(st, 0) > 0)
@@ -727,9 +741,7 @@ func (k *keepRun) ledgerList(company string, port int, dir string, st M, inBudge
 		}
 		st["ledSize"] = ls["size"]
 		save()
-		if bar {
-			ledProgressNote(company, str(ls["round"]), toInt(ls["n"]), toInt(ls["of"]), false) // 2.4.5: "312 of 1,240 ledgers"
-		}
+		ledProgressNote(company, str(ls["round"]), toInt(ls["n"]), toInt(ls["of"]), false) // 2.4.5: "312 of 1,240 ledgers" (2.5.14: every read)
 		writeLog(fmt.Sprintf("Keeping %s: ledger list MasterID %d-%s, %d ledger(s) (%.1fs); saved", company, after+1, map[bool]string{true: "end", false: fmt.Sprint(upto)}[tail], len(rows), sec))
 		keepRest(time.Duration(maxI(200, int(sec*500))) * time.Millisecond)
 	}
@@ -749,6 +761,15 @@ func (k *keepRun) ledgerList(company string, port int, dir string, st M, inBudge
 				}
 			}
 		}
+	}
+	if len(read) == 0 && (len(held) > 0 || truthy(ls["groupsStopped"])) {
+		// 2.5.14: every chunk answered and none named a ledger, though ledgers are held from an earlier read (or this
+		// round's groups were not read either): not a list (errNoMasters). The list held and FinCom's are left as they
+		// are (no ledger is said gone), and the round starts again at the next try
+		delete(st, "led")
+		_ = os.Remove(ledReadFile(dir))
+		save()
+		return false, errNoMasters
 	}
 	// seen: every distinct GUID of the round (the skipped ledgers' among them); rowsRead is their count
 	seen := make([]string, 0, len(read))
@@ -822,9 +843,7 @@ func (k *keepRun) ledgerList(company string, port int, dir string, st M, inBudge
 	if truthy(ls["natDone"]) && !truthy(ls["natSkip"]) {
 		delete(st, "natStops") // read this round: the count starts again
 	}
-	if bar {
-		ledProgressNote(company, round, len(read), len(read), true) // 2.4.5: the round's end, the final count
-	}
+	ledProgressNote(company, round, len(read), len(read), true) // 2.4.5: the round's end, the final count (2.5.14: every read)
 	delete(st, "led")
 	st["ledRun"], st["ledAt"] = k.id, nowS()
 	save()

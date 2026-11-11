@@ -1,3 +1,4 @@
+/* @react-lazy: begin 08-gstr-9-and-gstr-9c.js (the React app loads this file with its GST › GSTR-9 and 9C screen (app/src/screens/gst/Annual.jsx): build.py react_parts) */
 /* ================================================================== */
 /* GSTR-9 and GSTR-9C: the year, built from the monthly figures       */
 /* ================================================================== */
@@ -203,3 +204,53 @@ const GST9C = {
   }
 };
 
+/* ---------- GSTR-9 and 9C as PDF and Excel (were in src/js/18), and what is typed on them (src/js/23) ---------- */
+function gst9PackHtml(which){
+  const b = S.books, reg = S.gstReg || ((GSTR.gstins(b) || [])[0] || "").slice(0, 2), fy = GST9.fyOf(S.gstYm || GSTR.months().slice(-1)[0]), co = CO();
+  const head = (t) => '<div style="border-bottom:2px solid #15201B;padding-bottom:8px;margin-bottom:10px"><div style="font-size:12px;color:#5A6B63">' + t + ' \u2014 WORKING FROM THE BOOKS</div><h1 style="font-size:20px;margin:4px 0">' + esc(co.name) + "</h1><div>" + esc((GSTR.gstins(b) || []).find(g => g.slice(0, 2) === reg) || reg) + " \u00b7 " + GST9.label(fy) + "</div></div>";
+  if (which === "9") return head("GSTR-9") + GST9.html(GST9.build(fy, reg)).replace(/<div class="bk-tablewrap">|<\/div>/g, "");
+  // the 9C screen itself (app/src/screens/gst/Annual.jsx), with the boxes turned into their values
+  return head("GSTR-9C") + FinComReact.markup("Gst9c").replace(/<input[^>]*value="([^"]*)"[^>]*>/g, "$1").replace(/<textarea[^>]*>([^<]*)<\/textarea>/g, "<p>$1</p>").replace(/<button[^>]*>[^<]*<\/button>/g, "").replace(/class="bk-tablewrap"/g, "");
+}
+async function gst9Excel(which){
+  await ensureXlsx();
+  const b = S.books, reg = S.gstReg || ((GSTR.gstins(b) || [])[0] || "").slice(0, 2), fy = GST9.fyOf(S.gstYm || GSTR.months().slice(-1)[0]), wb = XLSX.utils.book_new();
+  if (which === "9"){
+    const d = GST9.build(fy, reg), rows = [["Table", "Details", "Taxable value", "IGST", "CGST", "SGST", "Cess"]];
+    GST9.ROWS.forEach(r => { if (r.length === 3 && /^(II|III|IV|V|VI)$/.test(r[0])){ rows.push(["Part " + r[0], r[1] + ". " + r[2]]); return; } const x = d.T[r[0]] || GST9.Z(); rows.push([r[0].replace(/-.*/, ""), r[1], x.taxable, x.igst, x.cgst, x.sgst, x.cess]); });
+    rows.push([]); rows.push(["Part IV", "9. Tax paid", "Tax payable", "Paid in cash", "Through IGST credit", "Through CGST credit", "Through SGST credit", "Through cess credit"]);
+    [["igst", "Integrated tax"], ["cgst", "Central tax"], ["sgst", "State/UT tax"], ["cess", "Cess"]].forEach(([k, l]) => { const p = d.pay[k], by = p.by || {}; rows.push(["9", l, p.due, p.cash, by.igst || 0, by.cgst || 0, by.sgst || 0, by.cess || 0]); });
+    const T14 = d.T["14"] || {}; rows.push([]); rows.push(["14", "Differential tax paid on 10 and 11", "payable " + num(T14.payable), "paid " + num(T14.paid)]);
+    rows.push([]); rows.push(["Part VI", "15, 16 and 19", "Value / amount", "IGST", "CGST", "SGST", "Cess"]);
+    GST9.TYPED.filter(([k]) => /^1[569]/.test(k)).forEach(([k, l]) => { const x = d.part6[k] || {}; rows.push([k, l.replace(/^\d+[A-Z]? /, ""), num(x.taxable), num(x.igst), num(x.cgst), num(x.sgst), num(x.cess)]); });
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), "GSTR-9");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["HSN", "Rate", "Taxable", "IGST", "CGST", "SGST", "Cess"]].concat(d.hsnOut.map(x => [x.hsn, x.rate, x.taxable, x.igst, x.cgst, x.sgst, x.cess]))), "17 HSN outward");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["HSN", "Taxable", "IGST", "CGST", "SGST", "Cess"]].concat(d.hsnIn.map(x => [x.hsn, x.taxable, x.igst, x.cgst, x.sgst, x.cess]))), "18 HSN inward");
+  } else {
+    const c = GST9C.build(fy, reg), rows = [["Table", "Details", "Amount"], ["5A", "Turnover as per audited financial statements", c.a5]].concat(GST9C.ADJ.map(([k, l, sg]) => [k, l + (sg > 0 ? " (+)" : " (-)"), c.adjOf(k)]))
+      .concat([["5O", "Annual turnover after adjustments", c.o5], ["5P", "Turnover as per GSTR-9", c.p5], ["5Q", "Unreconciled", c.q5], ["6", "Reasons", c.st.reasons["6"] || ""],
+        ["7A", "Annual turnover after adjustments", c.o5], ["7B", "Exempted, nil, non-GST", c.exempt], ["7C", "Zero rated without payment", c.zero], ["7D", "Reverse charge supplies", c.rcm], ["7E", "Taxable turnover as per adjustments", c.e7], ["7F", "Taxable turnover as per GSTR-9", c.f7], ["7G", "Unreconciled", c.g7], ["8", "Reasons", c.st.reasons["8"] || ""],
+        ["12A", "ITC as per audited financial statements", c.itcBooks], ["12B", "ITC of earlier years claimed this year", num(c.st.adj["12B"])], ["12C", "ITC of this year to be claimed later", num(c.st.adj["12C"])], ["12D", "After adjustments", c.d12], ["12E", "ITC claimed in GSTR-9", c.e12], ["12F", "Unreconciled", c.f12], ["13", "Reasons", c.st.reasons["13"] || ""]]);
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), "GSTR-9C");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["Rate", "Taxable", "Tax payable"]].concat(c.rates.map(x => [x.rate, x.taxable, x.tax]))), "9 Tax by rate");
+  }
+  saveFile(CO().name.replace(/[^A-Za-z0-9]+/g, "-") + "-GSTR-" + which + "-" + fy + "-" + reg + ".xlsx", new Blob([XLSX.write(wb, {bookType: "xlsx", type: "array"})], {type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));
+}
+// GSTR-9 and 9C (app/src/screens/gst/Annual.jsx): figures not in the books, typed once for the year and GSTIN
+function gst9Where(){ const b = S.books; return {fy: GST9.fyOf(S.gstYm || GSTR.months().slice(-1)[0]), reg: S.gstReg || ((GSTR.gstins(b) || [])[0] || "").slice(0, 2)}; }
+function gst9Typed(k, f, v){ const w = gst9Where(), st = GST9.typed(w.fy, S.gstReg || ""); st[k] = Object.assign({}, st[k], {[f]: v === "" ? "" : num(v)}); if (Object.values(st[k]).every(x => x === "")) delete st[k]; saveBooks(); render(); }
+// 9C: key is "turnover", "itcBooks", "adj.5B", "reasons.6"…; reasons are text, the rest amounts
+function gst9cSet(key, v){
+  const w = gst9Where(), st = GST9C.st(w.fy, w.reg), val = key.startsWith("reasons.") ? v : (v === "" ? "" : num(v));
+  if (key.startsWith("adj.")) st.adj[key.slice(4)] = val; else if (key.startsWith("reasons.")) st.reasons[key.slice(8)] = val; else st[key] = val;
+  saveBooks(); render();
+}
+if (typeof GST9 !== "undefined") globalThis.GST9 = GST9;
+if (typeof GST9C !== "undefined") globalThis.GST9C = GST9C;
+if (typeof gst9PackHtml !== "undefined") globalThis.gst9PackHtml = gst9PackHtml;
+if (typeof gst9Excel !== "undefined") globalThis.gst9Excel = gst9Excel;
+if (typeof gst9Where !== "undefined") globalThis.gst9Where = gst9Where;
+if (typeof gst9Typed !== "undefined") globalThis.gst9Typed = gst9Typed;
+if (typeof gst9cSet !== "undefined") globalThis.gst9cSet = gst9cSet;
+// (each name only when declared: a test's harness loads a file's names one by one, tests/harness.js)
+/* @react-lazy: end */

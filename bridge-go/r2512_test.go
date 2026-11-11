@@ -294,7 +294,7 @@ func TestR2512Version(t *testing.T) {
 			t.Fatal(c)
 		}
 	}
-	if BridgeVersion != "2.5.13" { // 2.5.13 (r2513_test.go)
+	if BridgeVersion != "2.5.14" { // 2.5.14 (r2514_test.go); 2.5.13 (r2513_test.go)
 		t.Fatalf("version %s", BridgeVersion)
 	}
 	if _, err := os.Stat("../docs/bridge-2.5.12-test-sheet.txt"); err != nil {
@@ -317,7 +317,7 @@ func allowListRows2511() string {
 			l = strings.Replace(l, r2513LedgersWords, "", 1)
 		}
 		if strings.HasPrefix(l, "| "+stockID+" |") {
-			l = strings.Replace(l, "unchanged in 2.5.13)", "unchanged in 2.5.11)", 1)
+			l = strings.Replace(l, "unchanged in 2.5.14)", "unchanged in 2.5.11)", 1)
 		}
 		o = append(o, l)
 	}
@@ -336,7 +336,7 @@ func TestR2512AllowList(t *testing.T) {
 	}
 	al := readText(filepath.Join("..", "docs", "tally-allowlist.md"))
 	line := group(`(?m)^(First table: .*)$`, al, 1)
-	for _, w := range []string{"the requests are 2.5.12's, as the owner's decision of 2026-11-09 allowed them", "allowed for 2.5.13 by the owner's standing decision of 2026-10-06", "FinComDayHeads (shape unchanged for one day) is also sent for a RANGE of 2 to 31 consecutive days",
+	for _, w := range []string{"the requests are 2.5.12's, as the owner's decision of 2026-11-09 allowed them", "as for 2.5.13 by the owner's standing decision of 2026-10-06", "FinComDayHeads (shape unchanged for one day) is also sent for a RANGE of 2 to 31 consecutive days",
 		"FinComVoucherBatch and FinComVoucherObject unchanged", "as for 2.5.11 by the owner's standing decision of 2026-10-06"} {
 		if !strings.Contains(line, w) {
 			t.Errorf("the decision line does not say %q", w)

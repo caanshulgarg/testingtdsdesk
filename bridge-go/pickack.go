@@ -159,13 +159,25 @@ func pickRefused(it pullItem, code string) {
 	now := nowFn()
 	picks.mu.Lock()
 	changed := false
+	own := pickOwnCompany[code]
 	for _, a := range picks.m {
-		if a.state == "started" || (a.state == "refused" && a.code == code) {
+		same := companyKey(a.company) == companyKey(it.Company) && strings.EqualFold(a.guid, it.CGUID)
+		if own && !same {
+			// 2.5.14: this reason says nothing of another company's hand-out. A reason that held every book alike and is
+			// still shown for it is no longer known to hold (the loop looked past it): it waits its turn, said so, until
+			// its own day is looked at
+			if a.state == "refused" && !pickOwnCompany[a.code] && a.code != "queued" {
+				a.state, a.code, a.at, changed = "refused", "queued", now, true
+			}
 			continue
 		}
-		if pickOwnCompany[code] && (companyKey(a.company) != companyKey(it.Company) || !strings.EqualFold(a.guid, it.CGUID)) {
+		if a.state == "refused" && a.code == code {
 			continue
 		}
+		if a.state == "started" && !own {
+			continue // a hold of every book passes by itself: the day goes on
+		}
+		// (2.5.14: the company's own reason is said for a hand-out already started too: its day waits on it now)
 		a.state, a.code, a.at, changed = "refused", code, now, true
 	}
 	picks.mu.Unlock()
