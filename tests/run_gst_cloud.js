@@ -14,7 +14,9 @@
 //     every box of every month equal (3.1, 3.2, 4, 5, the payment and the credit carried in and out), and the whole
 //     3B object equal; the months cover QRMP (a quarter's 3B, credit held through the quarter), rules 42 and 43, rule 37,
 //     an amendment of an earlier month's GSTR-1, an advance (11A and 11B), the credit carried over at least 3 months,
-//     2B held / released / rejected in IMS, a 3B kept as filed. tests/gst_cloud_rev.json: REV moves when gst-run's files do.
+//     2B held / released / rejected in IMS, a 3B kept as filed. The 40,000-entry book: its first run keeps the entries
+//     made (gst_calc_prep, migration 162), every later run starts from them and works a month out within the budgets; the
+//     entries kept give every month exactly as the rows do. tests/gst_cloud_rev.json: REV moves when gst-run's files do.
 // DENO: the deno to run (else deno on the PATH, else .deno-scratch/package/deno in the worktree).
 "use strict";
 const fs = require("fs"), path = require("path"), cp = require("child_process");
@@ -139,6 +141,7 @@ const near0 = o => !o || H.every(h => Math.abs(Number(o[h]) || 0) < 0.005);
   ok(cloud.limited && cloud.limited.idle, "the same client is not taken again while a run holds it or within 20 seconds of one (the queue's rate limit)");
   const R = cloud.runs.filter(r => r.months && r.months.length), KN = cloud.kept.filter(k => k.book === rows.book.book_id && !/\|all$/.test(k.args)), KO = cloud.kept.filter(k => k.book === OLDBK && !/\|all$/.test(k.args));
   ok(R.every(r => r.ok && r.months.length <= 2) && KN.length === 12 && KO.length === 12 && cloud.queueLeft === 0, R.length + " runs, at most 2 months each; every month kept on its own book (gst_calc_book): 12 on 2025-26's book, then 12 on the older 2024-25 book; the queue empty after: " + R.map(r => (r.book === OLDBK ? "old " : "") + r.months.join("+")).join(" "));
+  ok(cloud.prepPuts === 0 && R.every(r => !r.fromPrep), "a book whose runs fit keeps no entries made for it (gst_calc_prep is for the large books only)");
   const worst = Math.max(...R.map(r => r.cpu));
   ok(worst < 1000, "CPU per run (the fake database's own left out): " + R.map(r => r.cpu).join(", ") + " ms; the worst " + worst + " ms (target about 1 s; the limit 2 s)");
   const hp = Math.max(...R.map(r => r.heap)), lv0 = cloud.live || {};
@@ -226,8 +229,12 @@ const near0 = o => !o || H.every(h => Math.abs(Number(o[h]) || 0) < 0.005);
   ok(q.dead && q.dead.within === false && q.dead.after === true, "a run going: a miss starts none; a run taken 2 minutes ago and dead: a miss starts one");
   ok(cloud.kicksDuringRuns === 0 && cloud.kickedAgain === 2, "a background run never starts another (the timer and the members' misses do)");
   const tb = cloud.tooBigRun || {};
-  ok(tb.ok && tb.big === true && tb.afterOne && tb.afterOne.too_big === false && tb.second && tb.second.big === true && tb.stored === 0 && tb.queued && tb.queued.too_big === true && tb.backOnNewEngine,
-    "a run whose reading and books pass its budget: nothing stored; at the second such run the client is too big; a new engine takes it back (spent " + tb.spentMs + " ms, ready at " + tb.readyMs + " ms)");
+  ok(tb.prepRun && tb.prepRun.ok && tb.prepRun.prep === true && !tb.prepRun.big && tb.prepRun.more === true && tb.prepStored && tb.afterPrep && tb.afterPrep.too_big === false && tb.afterPrep.big_n === 0,
+    "a run whose reading and books pass its budget with no entries made for the book yet: it keeps them (gst_calc_prep, migration 162) for the next run, no month, not too big");
+  ok(tb.ok && tb.big === true && tb.fromPrep === true && tb.afterOne && tb.afterOne.too_big === false && tb.second && tb.second.big === true && tb.stored === 0 && tb.queued && tb.queued.too_big === true && tb.backOnNewEngine,
+    "one that passes it even with the entries made: nothing stored; at the second such run the client is too big; a new engine takes it back (spent " + tb.spentMs + " ms, ready at " + tb.readyMs + " ms)");
+  const ps = cloud.prepSame || {};
+  ok(ps.n === 12 && ps.noRows && ps.same && ps.fp, "the entries kept for a book (gst_calc_prep) give every month and the fingerprint exactly as the book's own rows do (" + JSON.stringify(ps) + ")");
   ok((cloud.twoAtOnce || []).length === 2 && cloud.twoAtOnce.every(x => x.ok) && new Set(cloud.twoAtOnce.map(x => x.client)).size === 2, "two runs at once in one isolate: two clients, each run with its own budget (" + JSON.stringify(cloud.twoAtOnce) + ")");
 
   console.log("== 4b. the version's GST keys, the engine's reads and the app's poke");
@@ -252,8 +259,11 @@ async function big(){
   const big = rowsOf(world({seed: 7, scale: 1110})), bf = path.join(OUT, "gst-cloud-big.json"), br = path.join(OUT, "gst-cloud-big-res.json");
   ok(big.heads.length >= 40000, "the book: " + big.heads.length + " entries, " + big.lines.length + " lines");
   fs.writeFileSync(bf, JSON.stringify({rows: big, asks: [{reg: "07", ym: "202603"}], firm: FIRM, timing: true}));
-  const bt = deno(br, [bf, br]), BR = bt.runs.filter(r => r.months && r.months.length);
-  ok(bt.kept.filter(k => !/\|all$/.test(k.args)).length === 12 && BR.every(r => r.months.length <= 2), BR.length + " runs: " + BR.map(r => r.months.join("+")).join(" ") + (bt.kept.filter(k => !/\|all$/.test(k.args)).length === 12 ? "" : " (the last runs: " + JSON.stringify(bt.runs.slice(-3).map(r => ({months: r.months, ok: r.ok, more: r.more, big: r.big, error: r.error, spentMs: r.spentMs, readyMs: r.readyMs, cpu: r.cpu}))) + "; queue left " + bt.queueLeft + ")"));
+  const bt = deno(br, [bf, br]), BR = bt.runs.filter(r => (r.months && r.months.length) || r.prep), BM = BR.filter(r => r.months && r.months.length);
+  const P0 = bt.runs[0] || {};
+  ok(P0.prep === true && !P0.big && bt.prepPuts === 1 && BM.length && BM.every(r => r.fromPrep && !r.prep && r.readyMs <= 1100) && !bt.runs.some(r => r.big),
+    "the first run keeps the book's entries as made (gst_calc_prep: " + (bt.prepBytes || []).map(n => (n / 1e6).toFixed(1) + " MB").join() + ", reading and books ready at " + P0.readyMs + " ms); every later run starts from them, ready within its 1.1 s (" + BM.map(r => r.readyMs).join("/") + " ms), none too big");
+  ok(bt.kept.filter(k => !/\|all$/.test(k.args)).length === 12 && BM.every(r => r.months.length <= 2), BR.length + " runs: " + BR.map(r => r.prep ? "(entries made)" : r.months.join("+")).join(" ") + (bt.kept.filter(k => !/\|all$/.test(k.args)).length === 12 ? "" : " (the last runs: " + JSON.stringify(bt.runs.slice(-3).map(r => ({months: r.months, ok: r.ok, more: r.more, big: r.big, error: r.error, spentMs: r.spentMs, readyMs: r.readyMs, cpu: r.cpu}))) + "; queue left " + bt.queueLeft + ")"));
   const bw = Math.max(...BR.map(r => r.cpu));
   ok(bw < 2000, "CPU per run under the 2 s limit" + (bw < 1000 ? " and the 1 s target" : ", NOT under the 1 s target") + " (the fake database's own left out): " + BR.map(r => r.cpu).join(", ") + " ms; the worst " + bw + " ms (wall " + Math.max(...BR.map(r => r.wall)) + " ms; reading the answers (JSON) " + BR.map(r => r.spentMs).join("/") + " ms, making the books " + BR.map(r => r.booksMs).join("/") + " ms, the step " + BR.map(r => r.ms).join("/") + " ms)");
   const bh = Math.max(...BR.map(r => r.heap)), lv = bt.live || {};

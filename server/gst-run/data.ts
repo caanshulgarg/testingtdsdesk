@@ -31,6 +31,7 @@ const fyOf = (ym: string) => { const y = +ym.slice(0, 4), m = +ym.slice(4, 6), s
 // gst_calc_rows' compact answer as the rows BookSrc.fromCopy reads (each name one string, shared by its lines)
 const COLS = HEADS.split(",");
 export function unpack(p: any) {
+  if (!p) return { heads: [], lines: [], bills: [] };
   const L: string[] = (p && p.ledgers) || [], heads: any[] = [], lines: any[] = [], bills: any[] = [];
   ((p && p.heads) || []).forEach((x: any[]) => {
     const h: any = {}; COLS.forEach((c, i) => { h[c] = x[i]; }); heads.push(h);
@@ -40,10 +41,12 @@ export function unpack(p: any) {
   return { heads, lines, bills };
 }
 // gstins: the client's GSTINs as gst_calc_gstins gives them (the version counts the 2B runs and decisions of the same)
-export async function load(rest: Rest, rpc: (fn: string, a: Record<string, unknown>) => Promise<any>, firm: string, client: string, book: any, co: any, fys: string[], gstins: string[]) {
+// made: the book's entries as gst-run made them before (gst_calc_prep, migration 162: BookSrc.fromCopy's list, kept on
+// the book's version and the engine); the book's own rows are then not read (heads, lines and bills empty)
+export async function load(rest: Rest, rpc: (fn: string, a: Record<string, unknown>) => Promise<any>, firm: string, client: string, book: any, co: any, fys: string[], gstins: string[], made?: any[]) {
   const bk = "book_id=eq." + enc(book.book_id);
   const [packed, ledgers, groups, items, sales] = await Promise.all([
-    rpc("gst_calc_rows", { p_book: book.book_id }),
+    made ? null : rpc("gst_calc_rows", { p_book: book.book_id }),
     all(rest, "/rest/v1/tally_ledgers?select=name,parent,open,pan,gstin&merged_into=is.null&deleted_at=is.null&" + bk, "name"),
     all(rest, "/rest/v1/tally_groups?select=name,parent&" + bk, "name").catch(() => []),
     all(rest, "/rest/v1/client_book_items?select=key,item,ord,data,deleted&firm_id=eq." + enc(firm) + "&client_id=eq." + enc(client) + "&deleted=eq.false", "key,item"),
@@ -59,6 +62,6 @@ export async function load(rest: Rest, rpc: (fn: string, a: Record<string, unkno
     const dec = (await rest("/rest/v1/gst_2b_decisions?select=pair_id,decision&" + w).catch(() => [])) || [];
     runs[g + "|" + fy] = { id: run.id, status: run.status, at: run.done_at || run.queued_at, result: run.result, decisions: Object.fromEntries(dec.map((r: any) => [r.pair_id, r.decision])) };
   }
-  return { client, co, book, heads, lines, bills, ledgers, groups, items, sales: sales.map((r: any) => r.data).filter(Boolean), runs, unpackMs };
+  return { client, co, book, heads, lines, bills, made: made || null, fromPrep: !!made, ledgers, groups, items, sales: sales.map((r: any) => r.data).filter(Boolean), runs, unpackMs };
 }
 export { fyOf };

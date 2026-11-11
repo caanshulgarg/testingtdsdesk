@@ -182,6 +182,11 @@ const AlertHub = {
           out.push(Object.assign(base, {sev: "info", text: hd.length === b.ours.length && k2 === hd.length ? who + ": " + this.heldSay(hd, true) + "."
             : who + ": " + this.n(k2) + " made in Tally" + (since ? " since " + this.when(since) : "") + (k2 === 1 ? " is" : " are") + " not yet in FinCom.",
             fix: "FinCom is fetching the entry's details from Tally; nothing to do."}));
+        } else if (gapN && b.gap && b.gap.checking === true && !waiting){
+          // next-gap-autoread (migration 160): FinCom asks FinCom Bridge to read Tally's Day Book of the gap's days itself;
+          // a read that matches closes the gap, one that shows a missing entry brings it in. Information, no button
+          out.push(Object.assign(base, {sev: "info", text: who + ": Checking with Tally… (no action needed)",
+            fix: "FinCom is reading Tally's Day Book for " + this.days(b.gap.since) + " by itself; nothing to do."}));
         } else if (gapN || (b.rows.length && !b.gap && !waiting)){
           // a real gap: entries made in Tally that never reached FinCom; the Day Book of those days brings them in
           const gap = b.gap || {since: b.rows[0] && b.rows[0].at};

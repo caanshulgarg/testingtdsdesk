@@ -19,7 +19,7 @@
 // No AI here: M2B.aiLinks only reads the pairs the gst-2b-match function already stored for the year.
 // GST3B_SRC: this file's and names.js's text (this value left out), hashed (tests/run_gst_cloud.js keeps it so): a 3B the
 // cloud worked out carries it, and the 3B page uses the cloud's only when its own is the same (app/src/screens/gst/cloud3b.js)
-const GST3B_SRC = "s0a7df3d274e8bbb4";
+const GST3B_SRC = "s8f4528c1e0a68ba3";
 function num(v){ if (typeof v === "number") return isFinite(v) ? v : 0; const n = parseFloat(String(v == null ? "" : v).replace(/[^0-9.\-]/g, "")); return isFinite(n) ? n : 0; }
 function r2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
 const INR = new Intl.NumberFormat("en-IN", {minimumFractionDigits:2, maximumFractionDigits:2});
@@ -265,12 +265,13 @@ const BookSrc = {
     });
     return n;
   },
-  // the cloud copy's rows into the books: deleted entries out, new and later ones in; how many changed
-  apply(b, heads, lines, bills){
+  // the cloud copy's rows into the books: deleted entries out, new and later ones in; how many changed. made: the
+  // entries fromCopy made of these rows before (gst-run keeps them for a large book, migration 160), else made here
+  apply(b, heads, lines, bills, made){
     b.vouchers = b.vouchers || [];
     let n = this.drop(b, heads);
     const by = this.index(b.vouchers);
-    this.fromCopy(heads, lines, bills).forEach(v => { if (this.put(b, v, by)) n++; });
+    (made || this.fromCopy(heads, lines, bills)).forEach(v => { if (this.put(b, v, by)) n++; });
     // 2.4.3: the TDS details of an entry held at the same version (a Day Book's, read the same way by the cloud) are added to it
     (heads || []).forEach(h => { const tx = this.tdsxOf(h); if (!tx || !h || !by.has(h.guid)) return; const v = b.vouchers[by.get(h.guid)]; if (v && !v.tdsx && this.alt(v.alt) === this.alt(h.alter_id)){ v.tdsx = tx; n++; } });
     // (an entry changed in place: the books get a new array, so the save writes the entries again: Books.touch, src/js/04)
@@ -324,14 +325,15 @@ const Books = {
     seen.forEach((n, name) => {
       const keep = (saved || {})[name];
       if (keep && keep.byHand){ map[name] = Object.assign({n}, keep); return; }
-      map[name] = Object.assign({n}, this.guess(name), keep && keep.byHand ? keep : {});
+      // next-gst-b2cs-summary: the party ledger's "Consolidated B2C" switch (FinCom's own, b2cSum) is kept with the guess
+      map[name] = Object.assign({n}, this.guess(name), keep && keep.byHand ? keep : {}, keep && keep.b2cSum ? {b2cSum: keep.b2cSum} : {});
     });
     // FinCom 2.4.1 (Cause A, 01-Oct-2026: 17 confirms wiped on one refresh): a ledger a person confirmed or set by hand
     // that no entry uses (yet) is kept, with n:0. It was dropped here, LedMaster.refresh put it back as a guess, and the
     // save wiped the confirm. No figure moves: no entry uses it
     Object.keys(saved || {}).forEach(name => {
       const keep = saved[name];
-      if (!seen.has(name) && keep && (keep.byHand || keep.ok)) map[name] = Object.assign({}, keep, {n: 0});
+      if (!seen.has(name) && keep && (keep.byHand || keep.ok || keep.b2cSum)) map[name] = Object.assign({}, keep, {n: 0});
     });
     return map;
   },
@@ -543,7 +545,9 @@ const Books = {
 const CustIMS = {
   store(reg){ const b = S.books; b.outRej = b.outRej || {}; return b.outRej[reg || ""] = b.outRej[reg || ""] || {}; },
   // documents the customer can act on in IMS: invoices and notes to registered customers
-  docs(reg){ return GSTR.outward(null, reg).filter(r => r.gstin && (r.kind === "B2B" || r.kind === "CDNR" || r.kind === "DBNR" || (r.kind === "EXP" && r.cls === "sez"))); },
+  // (next-gst-big: once a drawing; a quarter's 3B asked it for each of its months, the book's every sale each time)
+  docs(reg){ const f = () => GSTR.outward(null, reg).filter(r => r.gstin && (r.kind === "B2B" || r.kind === "CDNR" || r.kind === "DBNR" || (r.kind === "EXP" && r.cls === "sez")));
+    return typeof perRender === "function" ? perRender(this, "docs|" + (reg || ""), f) : f(); },
   items(reg){
     const st = this.store(reg), byId = new Map(this.docs(reg).map(r => [r.id, r]));
     return Object.keys(st).map(id => { const s = st[id], r = byId.get(id);
@@ -1734,14 +1738,49 @@ const GSTR = {
       const interState = !!(gstin && v.cmp && gstin.slice(0, 2) !== String(v.cmp).slice(0, 2)) || (!gstin && v.pos && v.pos !== (b.stateOf || v.pos) && L.tax.IGST > 0);
       // B2C large: inter-state to an unregistered person above Rs 1 lakh from 1 August 2024 (Rs 2.5 lakh before)
       const b2cl = !gstin && L.tax.IGST > 0 && L.total > (String(v.date) >= "20240801" ? 100000 : 250000);
+      // a consolidated B2C entry (many B2C sales in one, e.g. through a payment gateway) is reported in B2C small, as totals,
+      // even inter-state above the limit: it is not one invoice (b2cSumWhy says by which rule)
+      const sum = !gstin && !note && !exp && cls === "taxable" && !(b.gstins || {})[v.party] ? this.b2cSumWhy(v.id, v.party, v.no || v.ref) : "";
       const P = this.posOfSale({id: v.id, pos: v.pos, own: reg || this.regOf(v), gstin: gstin || String((b.gstins || {})[v.party] || ""), igst: L.tax.IGST, cgst: L.tax.CGST, sgst: L.tax.SGST, zero: cls === "sez" || cls === "export" || exp});
       out.push({id: v.id, date: v.date, no: v.no || v.ref || "", party: v.party, gstin, pos: P.code ? (P.from === "tally" ? v.pos : this.posName(P.code)) : "", posCode: P.code, posFrom: P.from, posBad: P.bad, posTally: v.pos || "",
         cls, rcm: Books.isRcm(v), hsn: (parts[0] && parts[0].hsn) || (v.hsn || [])[0] || "", supply: (parts[0] && parts[0].supply) || v.supply || "", eco: "", tcs: 0, parts, mixed: new Set(parts.map(q => q.rate)).size > 1,
-        kind: note ? (note === "credit" ? "CDNR" : "DBNR") : cls === "export" ? "EXP" : (cls === "sez" && gstin) ? "B2B" : cls === "sez" ? "EXP" : (cls === "exempt" || cls === "nil" || cls === "nongst") ? "NIL" : gstin ? "B2B" : b2cl ? "B2CL" : "B2C",
+        kind: note ? (note === "credit" ? "CDNR" : "DBNR") : cls === "export" ? "EXP" : (cls === "sez" && gstin) ? "B2B" : cls === "sez" ? "EXP" : (cls === "exempt" || cls === "nil" || cls === "nongst") ? "NIL" : gstin ? "B2B" : b2cl && !sum ? "B2CL" : "B2C", b2cSum: sum,
         taxable: L.taxable, cgst: L.tax.CGST, sgst: L.tax.SGST, igst: L.tax.IGST, cess: L.tax.CESS,
         rate, total: L.total, note, type: v.type, src: v.src === "bridge" ? "bridge" : "daybook"});
     });
     return out.concat(this.fromSales(ym)).sort((a, c) => String(a.date).localeCompare(String(c.date)));
+  },
+  // next-gst-b2cs-summary (the owner, a CA, 11-Nov-2026): a sales entry that books many B2C sales at once (one entry for a
+  // payment gateway's or a marketplace's collections, "2026-27/155 to 2026-27/182") is a B2C summary: reported in B2CS (by
+  // place of supply and rate, no invoice number), never as one B2C large invoice, and its number is not checked. Which
+  // rule, in order: "entry" - marked so on GST > What to fix (b.gstPosFix[id].b2cs = {on: true}; {on: false} is "not a
+  // summary" and wins over the others); "ledger" - the party ledger's switch "Consolidated B2C (summary of many sales)"
+  // (b.map[party].b2cSum, FinCom's own, synced, never written to Tally); "range" - the number is a range (noRange). Only
+  // for a taxable sale to a party with no GSTIN (the caller sees to that); "" when none
+  b2cSumWhy(id, party, no){
+    const b = S.books || {}, f = ((b.gstPosFix || {})[id] || {}).b2cs;
+    if (f && typeof f === "object") return f.on ? "entry" : "";
+    if (((b.map || {})[party] || {}).b2cSum) return "ledger";
+    return this.noRange(no) ? "range" : "";
+  },
+  // a voucher number that is a range of documents: "X155 to X182" (or "X155 to 182"), or "X155-X182" (a dash: the same
+  // prefix on both sides, not empty, so "2026-27" or "LFE/25-26/001" is no range); the second number above the first.
+  // {pre, from, to, n} (n: how many documents), or null
+  noRange(no){
+    const s = String(no || "").trim(), tail = x => { const m = /^(.*?)(\d+)$/.exec(x); return m ? {pre: m[1], n: m[2]} : null; };
+    const seps = [/\s+to\s+/ig, /\s*[-\u2013]\s*/g];
+    for (let k = 0; k < seps.length; k++){
+      const re = seps[k]; let m;
+      while ((m = re.exec(s))){
+        const L = tail(s.slice(0, m.index)), R = tail(s.slice(m.index + m[0].length));
+        if (!L || !R) continue;
+        const same = R.pre.toUpperCase() === L.pre.toUpperCase();
+        if (!(k === 0 ? same || !R.pre : same && L.pre)) continue;
+        const a = Number(L.n), c = Number(R.n);
+        if (c > a && c - a < 100000) return {pre: L.pre, from: L.pre + L.n, to: L.pre + R.n, n: c - a + 1};
+      }
+    }
+    return null;
   },
   // invoices that came from a marketplace, kept in Sales
   fromSales(ym){
@@ -1881,14 +1920,15 @@ const GSTR = {
     });
     // documents issued (table 13), by nature: invoices 1, debit notes 4, credit notes 5; cancelled numbers counted in their series
     const series = {}, natOf = r => r.kind === "CDNR" ? 5 : r.kind === "DBNR" ? 4 : 1;
-    const inSeries = (no, nat, cancelled) => {
-      const pre = String(no).replace(/\d+[A-Za-z]?$/, ""), k = nat + "|" + pre, sr = series[k] = series[k] || {nat, pre, from: no, to: no, n: 0, cancelled: 0};
-      sr.n++; if (cancelled) sr.cancelled++;
+    // a B2C summary numbered as a range (noRange) counts the range's documents, "155 to 182" 28, in its series
+    const inSeries = (no, nat, cancelled, last, many) => {
+      const pre = String(no).replace(/\d+[A-Za-z]?$/, ""), k = nat + "|" + pre, sr = series[k] = series[k] || {nat, pre, from: no, to: last || no, n: 0, cancelled: 0};
+      sr.n += many || 1; if (cancelled) sr.cancelled++;
       const key = x => pre + String(String(x).slice(pre.length)).padStart(12, "0");
       if (key(no) < key(sr.from)) sr.from = no;
-      if (key(no) > key(sr.to)) sr.to = no;
+      if (key(last || no) > key(sr.to)) sr.to = last || no;
     };
-    rows.filter(r => r.no && !r.eco).forEach(r => inSeries(r.no, natOf(r), false));
+    rows.filter(r => r.no && !r.eco).forEach(r => { const g = r.b2cSum && this.noRange(r.no); if (g) inSeries(g.from, natOf(r), false, g.to, g.n); else inSeries(r.no, natOf(r), false); });
     ((S.books || {}).vouchers || []).filter(v => v.cancel && v.no && (!ym || this.inP(v.date, ym)) && Books.isSale(v) && (!reg || String(v.cmp || "").slice(0, 2) === reg || !v.cmp))
       .forEach(v => inSeries(v.no, /CREDIT NOTE/i.test(v.type) ? 5 : /DEBIT NOTE/i.test(v.type) ? 4 : 1, true));
     // the operator sales (table 14: eco14 below, the R1 portal screen); the old card's per-operator summary is gone (17-Oct-2026)
@@ -1902,11 +1942,11 @@ const GSTR = {
   // changes is a B2C large one (inter-state, above the limit: typ B2CL) or an export (EXPWP / EXPWOP); otherwise it adjusts
   // B2C small. The invoice is not named on the note in the books: a B2C large invoice to the same buyer and place, on or
   // before the note, is taken as it
-  cdnurTyp(r){
+  cdnurTyp(r, all){
     if (r.gstin || !(r.kind === "CDNR" || r.kind === "DBNR")) return "";
     if (r.cls === "export") return r.igst ? "EXPWP" : "EXPWOP";
     if (!(r.igst > 0)) return "";
-    const b2cl = this.outward("", "").filter(x => x.kind === "B2CL" && x.party === r.party && String(x.pos || "") === String(r.pos || "") && String(x.date) <= String(r.date));
+    const b2cl = (all || this.outward("", "")).filter(x => x.kind === "B2CL" && x.party === r.party && String(x.pos || "") === String(r.pos || "") && String(x.date) <= String(r.date));
     return b2cl.length ? "B2CL" : "";
   },
   // each row's rate and HSN parts; a row with none is one part at its own rate

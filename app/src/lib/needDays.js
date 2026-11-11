@@ -24,7 +24,9 @@ export function needDays(b, cid) {
       if (!since) return;
       let n = 0; for (let x = since; x <= today; x = BridgeSeed.add(x, 1)) n++;
       const k = Number((g.gap && (g.gap.missingMax || g.gap.missing)) || 0);
-      out.push({ from: since, to: today, days: n, say: (k ? plural(k, "entry", "entries") : "Entries") + " made in Tally since then " + (k === 1 ? "is" : "are") + " not in FinCom" });
+      // next-gap-autoread (migration 160): FinCom reads Tally's Day Book of these days by itself (checking: no action needed)
+      const checking = !!(g.gap && g.gap.checking === true);
+      out.push({ from: since, to: today, days: n, ...(checking ? { checking: true } : {}), say: (k ? plural(k, "entry", "entries") : "Entries") + " made in Tally since then " + (k === 1 ? "is" : "are") + " not in FinCom" + (checking ? "; FinCom is checking with Tally (no action needed)" : "") });
     });
   }
   // the dates between the files brought in

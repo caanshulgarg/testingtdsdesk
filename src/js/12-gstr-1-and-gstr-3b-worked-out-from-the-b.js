@@ -43,9 +43,15 @@ Object.assign(GSTR, {
   // digits, / and -, or only zeros; the same number twice in the financial year (invoices and notes counted apart, capitals
   // and small letters the same, as the portal counts them). Only documents reported one by one (B2B, B2C large, exports,
   // notes); B2C small goes as totals
+  // next-gst-b2cs-summary (the owner, 11-Nov-2026): never a row reported in B2CS: a B2C summary (GSTR.b2cSumWhy: B2C, not
+  // B2C large) and a note to a buyer with no GSTIN that adjusts B2C small (no cdnur type) carry no number on the portal
+  // (ctx: {all}, the year's sales, read once for every month asked with the same ctx)
+  numbered(rows, ctx){
+    const c = ctx || {}, ONE = {B2B: 1, B2CL: 1, EXP: 1};
+    return rows.filter(r => String(r.no || "").trim() && (ONE[r.kind] || ((r.kind === "CDNR" || r.kind === "DBNR") && (r.gstin || this.cdnurTyp(r, c.all = c.all || this.outward("", ""))))));
+  },
   docNoIssues(ym, reg){
-    const ONE = {B2B: 1, B2CL: 1, EXP: 1, CDNR: 1, DBNR: 1};
-    const rows = this.outward(ym, reg).filter(r => ONE[r.kind] && String(r.no || "").trim());
+    const rows = this.numbered(this.outward(ym, reg));
     const s = r => String(r.no).trim();
     const fyM = (() => { const y = num(String(ym).slice(0, 4)), m = num(String(ym).slice(4, 6)), f = m >= 4 ? y : y - 1, out = []; for (let i = 0; i < 12; i++){ const mm = (i + 3) % 12 + 1; out.push((mm >= 4 ? f : f + 1) + String(mm).padStart(2, "0")); } return out; })();
     const idx = typeof perRender === "function" ? perRender(this, "docNos|" + reg + "|" + fyM[0], () => this.docNoIndex(fyM, reg)) : this.docNoIndex(fyM, reg);
@@ -54,13 +60,35 @@ Object.assign(GSTR, {
       dup: rows.filter(r => (idx[keyOf(r)] || []).some(id => id !== r.id))};
   },
   docNoIndex(months, reg){
-    const ONE = {B2B: 1, B2CL: 1, EXP: 1, CDNR: 1, DBNR: 1}, have = new Set(this.months()), idx = {};
-    months.filter(m => have.has(m)).forEach(m => this.outward(m, reg).forEach(r => {
-      if (!ONE[r.kind] || !String(r.no || "").trim()) return;
+    const have = new Set(this.months()), idx = {}, ctx = {};
+    months.filter(m => have.has(m)).forEach(m => this.numbered(this.outward(m, reg), ctx).forEach(r => {
       const k = (r.note ? "N|" : "I|") + String(r.no).trim().toUpperCase();
       (idx[k] = idx[k] || []).includes(r.id) || idx[k].push(r.id);
     }));
     return idx;
+  },
+  // the switches of a B2C summary (b2cSumWhy, server/_shared/gst3b.js): the party ledger's (b.map[name].b2cSum) and
+  // one entry's (b.gstPosFix[id].b2cs: on true "a summary", on false "not a summary", null cleared); FinCom's own, saved with
+  // the books (synced), nothing written to Tally
+  b2cSumLedger(name, on){
+    const b = S.books; if (!b || !name) return;
+    b.map = Object.assign({}, b.map || {});
+    const m = b.map[name] = Object.assign({n: 0}, b.map[name] || {});
+    if (on) m.b2cSum = {by: typeof whoAmI === "function" ? whoAmI() : "", at: new Date().toISOString()}; else delete m.b2cSum;
+    b.mapV = (b.mapV || 0) + 1; saveBooks(); render();
+  },
+  b2cSumEntry(id, on){
+    const b = S.books; if (!b || !id) return;
+    const fx = b.gstPosFix = Object.assign({}, b.gstPosFix || {}), cur = Object.assign({}, fx[id] || {});
+    if (on == null) delete cur.b2cs; else cur.b2cs = {on: !!on, by: typeof whoAmI === "function" ? whoAmI() : "", at: new Date().toISOString()};
+    if (cur.pos || cur.b2cs) fx[id] = cur; else delete fx[id];
+    saveBooks(); render();
+  },
+  // the party ledgers of sales with no GSTIN (the Ledgers tab offers them the switch)
+  b2cParties(b){
+    const g = b.gstins || {}, out = new Set();
+    (b.vouchers || []).forEach(v => { if (!v.gstin && !g[v.party] && v.party && !v.cancel && Books.isSale(v)) out.add(v.party); });
+    return out;
   },
   // G-E1: the errors to fix before filing a month's GSTR-1 (sales side) and 3B (purchase side), for the year's grid
   // errorChecks: the checks it counts, each return's list (GST › What to fix shows the same list, so the counts are one)

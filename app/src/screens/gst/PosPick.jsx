@@ -18,13 +18,14 @@ export function posMatches(q) {
 export function posSave(ids, code) {
   const b = S.books; if (!b || !/^\d{2}$/.test(String(code || ""))) return;
   const fx = (b.gstPosFix = Object.assign({}, b.gstPosFix || {})), by = (typeof Cloud === "object" && Cloud.st && Cloud.st.email) || "", at = new Date().toISOString();
-  ids.forEach((id) => { if (id) fx[id] = { pos: String(code), by, at }; });
+  // an entry's B2C summary mark (b2cs, GSTR.b2cSumEntry) is kept with it
+  ids.forEach((id) => { if (id) fx[id] = Object.assign(fx[id] && fx[id].b2cs ? { b2cs: fx[id].b2cs } : {}, { pos: String(code), by, at }); });
   saveBooks(); render();
 }
 export function posClear(ids) {
   const b = S.books; if (!b || !b.gstPosFix) return;
   const fx = (b.gstPosFix = Object.assign({}, b.gstPosFix));
-  ids.forEach((id) => { delete fx[id]; });
+  ids.forEach((id) => { if (fx[id] && fx[id].b2cs) fx[id] = { b2cs: fx[id].b2cs }; else delete fx[id]; });
   saveBooks(); render();
 }
 export const POS_FROM = { tally: "from Tally", fincom: "set in FinCom", tax: "from the CGST and SGST charged", gstin: "from the party's GSTIN" };
