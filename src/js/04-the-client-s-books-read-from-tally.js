@@ -528,14 +528,17 @@ const Books = {
   // another array, or holds another entry in any place, than when this page last saved or read them (vk); a change to an
   // entry in place gives the books a new array (touch). Every reader goes through read: the books rebuilt only when the
   // two records carry the same version.
-  // The single record of before ("books:<cid>", an older build's; it carries no time): every save here removes it in its
-  // own transaction, so one found by a read was written after this build's last save, by a tab still on the older build
-  // (while a release reaches every tab): it is the newer, read and written again as the two records (none of its
-  // changes ignored).
-  vk: {},
+  // The single record of before ("books:<cid>", an older build's; it carries no time, so its age is known this way): it
+  // is removed only by a save here, in that save's own transaction (the save writes the whole books: the last writer
+  // wins, as when the books were one record); a read never removes it. So one found by a read was written after this
+  // build's last save, by a tab still on the older build (while a release reaches every tab): it is the newer and is
+  // what is read, until the next save here writes the books as the two records (none of its changes ignored).
+  // gone: clients removed here (drop); a save for one is refused, so their books are not written again
+  vk: {}, gone: {},
   K(cid){ return ["bke:", "bkw:", "bkh:", "books:"].map(p => p + cid); },
   touch(b){ if (b && b.vouchers) b.vouchers = b.vouchers.slice(); },
   async save(cid, data){
+    if (this.gone[cid]) return;
     this.remember(cid, data); this.ver[cid] = (this.ver[cid] || 0) + 1;
     const [E, W, H, O] = this.K(cid);
     await IDBStore.tx((st, g) => { const q = st.get(H); q.onsuccess = () => g(() => {
@@ -551,7 +554,7 @@ const Books = {
   // open books are this client's: those are)
   async read(cid, mine){
     const [e, w, o] = await IDBStore.gets(this.K(cid).filter((k, i) => i !== 2)), m = mine && !(S.books && S.books.cid === cid && !S.books.loading);
-    if (o){ if (o.cid === cid) this.save(cid, o).catch(() => {}); return o; }
+    if (o){ if (m) delete this.vk[cid]; return o; }
     if (!(e && w && e.s === w.s)){ if (m) delete this.vk[cid]; return; }
     if (m) this.vk[cid] = {s: e.s, r: e.v, a: e.v && e.v.slice()};
     return Object.assign({cid: w.d.cid, vouchers: e.v}, w.d);
@@ -561,7 +564,7 @@ const Books = {
     try { const d = await this.read(cid, 1); if (d && d.cid === cid) this.remember(cid, d); return d; } catch (e){ return null; }
   },
   // a client removed: its books leave this browser
-  drop(cid){ this.forget(cid); delete this.vk[cid]; return IDBStore.write(this.K(cid).map(k => [k, null])).catch(() => {}); },
+  drop(cid){ this.gone[cid] = 1; this.forget(cid); delete this.vk[cid]; return IDBStore.write(this.K(cid).map(k => [k, null])).catch(() => {}); },
   forget(cid){ if (cid) this.mem.delete(cid); else this.mem.clear(); }
 };
 

@@ -8,10 +8,11 @@ are kept apart from the rest (the work) and written only when they changed: "bke
 The React test build (app/dist-test, or TDSDESK_SITE) served at /review/, signed in to the stand-in cloud (tally_shapes.py):
   1. a save and a reload: the books read back the same; the entries are written once, not again for a change of the work
      only; again for any change to the entries
-  2. books kept by a build before this one (the single record) open as they were and are written again as the two
-     records (the single one removed in that transaction); (a) a tab still on the older build saves after this build's
-     save: its single record is the newer and is what opens (none of its changes ignored); (b) this build saves after
-     it: this build's books open, the single record gone
+  2. books kept by a build before this one (the single record) open as they were; a read never removes that record;
+     the next save here writes the two records and removes it in its own transaction; (a) a tab still on the older
+     build saves after this build's save: its single record is the newer and is what opens (none of its changes
+     ignored), also when it lands between a read here and the next save; (b) this build saves after it: this build's
+     books open, the single record gone
   3. a save cut short (its second write fails): nothing of it is kept and the books read back as saved before it; two
      records that do not go together (versions differ) are never put together: the single record, else nothing
   4. another tab wrote other entries since this page last saved (bkh): a save of the work alone writes the entries too
@@ -20,7 +21,8 @@ The React test build (app/dist-test, or TDSDESK_SITE) served at /review/, signed
      books are the books in memory after each; an entry changed in place without a new array IS caught by that diff
      (the test's own check), and saved once the books are given a new array (Books.touch)
   6. the books removed (More > Remove) and restored (More > Restore) come back identical, also after a reload
-  7. a client removed: its records are removed (both parts, the head and the record of before)
+  7. a client removed: its records are removed (both parts, the head and the record of before), and a save for it
+     after that (a late saveBooks) writes nothing again
   8. this browser's copy cleared (sign-out "remove this browser's copy"): no record of the books is left"""
 import os, sys, json, asyncio
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -139,24 +141,32 @@ async def main():
         ok(back == ob, "the single record of before is read as it was%s" % ("" if back == ob else " GOT %s / %s" % ((back or "")[:200], ob[:200])))
         await E("async (cid) => { await openCompany(cid); await openBooks(cid); for (let i = 0; i < 100 && (!S.books || S.books.loading); i++) await new Promise((r) => setTimeout(r, 50)); }", cid)
         ok(await E("() => S.books.vouchers.length") == 120, "the client opens with those books (120 entries)")
-        await asyncio.sleep(0.5)
+        ok((await raw())["books:" + cid] is not None, "a read leaves the single record where it is")
+        await E("async () => { S.books.challans = [{id: 'ch8', amt: 8}]; await saveBooks(); }")
         r = await raw()
         ok(r["bke:" + cid] and r["bkw:" + cid] and r["books:" + cid] is None and len(r["bke:" + cid]["v"]) == 120,
-           "written again as the two records, the single record removed: %s" % {k: (v or {}).get("s", bool(v)) for k, v in r.items()})
+           "the next save writes the two records and removes the single one: %s" % {k: (v or {}).get("s", bool(v)) for k, v in r.items()})
         print("2a. split saved here, then a tab on the older build saves later")
         await E("async () => { S.books.challans = [{id: 'ch9', amt: 9}]; await saveBooks(); }")
+        await asyncio.sleep(2.0)     # (the page's own saves done first)
         later = await E(MAKE, [cid, 130]); later["challans"] = [{"id": "old-tab", "amt": 1}]
         await E(RAWPUT, [W, [["books:" + cid, later]]])
         await reload()
+        print("    (single record there after the reload: %s)" % ((await raw())["books:" + cid] is not None))
         back = await E(SAVED, cid)
         ob = await E("(b) => stableStr(JSON.parse(JSON.stringify(b)))", later)
         ok(back == ob, "a new tab opens the older tab's later save (130 entries, its challan), not the split records")
-        await asyncio.sleep(0.5)
-        r = await raw()
-        ok(r["books:" + cid] is None and len(r["bke:" + cid]["v"]) == 130 and r["bkw:" + cid]["d"]["challans"][0]["id"] == "old-tab",
-           "and writes it again as the two records")
         await E("async (cid) => { await openCompany(cid); await openBooks(cid); for (let i = 0; i < 100 && (!S.books || S.books.loading); i++) await new Promise((r) => setTimeout(r, 50)); }", cid)
         ok(await E("() => S.books.vouchers.length") == 130 and await E("() => S.books.challans[0].id") == "old-tab", "the client opens with the older tab's books")
+        await asyncio.sleep(2.0)     # (the page's own saves after opening done first)
+        later2 = dict(later, challans=[{"id": "old-tab-2", "amt": 2}])
+        await E(RAWPUT, [W, [["books:" + cid, later2]]])
+        ok(await E(SAVED, cid) == await E("(b) => stableStr(JSON.parse(JSON.stringify(b)))", later2) and (await raw())["books:" + cid]["challans"][0]["id"] == "old-tab-2",
+           "an older-build save landing after that read (before any save here): kept, and it is what a read gives")
+        await E("async () => { S.books = Object.assign(S.books, {challans: [{id: 'old-tab-2', amt: 2}]}); await saveBooks(); }")
+        r = await raw()
+        ok(r["books:" + cid] is None and len(r["bke:" + cid]["v"]) == 130 and r["bkw:" + cid]["d"]["challans"][0]["id"] == "old-tab-2",
+           "the next save here writes them as the two records")
         print("2b. the single record older than this build's save")
         await E(RAWPUT, [W, [["books:" + cid, old]]])
         await E("async () => { S.books.challans = [{id: 'ch10', amt: 10}]; await saveBooks(); }")
@@ -256,6 +266,9 @@ async def main():
         await E("async (cid) => { await Store.deleteCompany(cid, 'test'); await new Promise((r) => setTimeout(r, 300)); }", c2)
         r = await raw(c2)
         ok(all(r0.values()) and not any(r.values()), "before: %s; after: %s" % ([k for k, v in r0.items() if v], [k for k, v in r.items() if v]))
+        await E("async ([cid, bk]) => { await Books.save(cid, bk); }", [c2, await E(MAKE, [c2, 10])])
+        r = await raw(c2)
+        ok(not any(r.values()), "a save for it after the removal writes nothing again: %s" % [k for k, v in r.items() if v])
 
         ok(not [e for e in errs if "made up" not in e], "no page errors up to here (%s)" % errs[:3])   # (after the clearing a save may fail: that is the point)
         print("8. this browser's copy cleared")
