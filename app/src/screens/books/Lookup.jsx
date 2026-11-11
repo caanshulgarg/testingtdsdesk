@@ -5,7 +5,19 @@
 // lkMonth, lkOpen, lkSrc, and typing through lkType (src/js/44).
 //
 // State: S.lk (kind, led, grp, from, to, asOn, q, typ, side, ask, heard, src, busy, res: the answer, open: entries opened).
-import { Fragment, useEffect } from "react";
+import { Component, Fragment, useEffect } from "react";
+// hotfix 11-Nov-2026 (Look up "Cannot read properties of undefined (reading 'map')" on a client's real books): a part that
+// cannot be drawn says so in plain words, with Clear, and the rest of the page stays
+class Part extends Component {
+  constructor(p) { super(p); this.state = { err: null }; }
+  static getDerivedStateFromError(err) { return { err }; }
+  componentDidCatch(err) { try { console.error("[FinCom] Look up part could not be drawn:", err); if (typeof window === "object" && window.__fincomReport) window.__fincomReport(err); } catch (e) { /* nothing more */ } }
+  render() {
+    if (!this.state.err) return this.props.children;
+    return <p className="note" data-lk-part-error="">{"This part could not be shown (" + String(this.state.err && this.state.err.message || this.state.err) + "). "}
+      <button className="linkbtn" onClick={() => { try { const x = LK.st(); x.res = null; x.busy = ""; } catch (e) { /* nothing more */ } this.setState({ err: null }); render(); }}>Clear</button></p>;
+  }
+}
 import Bars from "../../parts/Bars.jsx";
 import NoBooks from "../../parts/NoBooks.jsx";
 import FreshBar from "../../parts/FreshBar.jsx";
@@ -163,8 +175,8 @@ export default function Lookup({ b }) {
     if (!(LK.names && LK.names.cid === S.coId) && !LK._namesBusy && LK._namesTried !== S.coId && typeof TCloud === "object" && TCloud.has(S.coId)) { LK._namesTried = S.coId; setTimeout(() => LK.loadNames(), 0); }
     if (LK.live()) setTimeout(() => LK.autoFresh(), 0);
   });
-  const leds = FC.ledgers(), grps = FC.groups(), T = FC.tn();
-  const can = LK.canTally(x), fromTally = can && LK.useTally(x, "auto"), rec = LK.recent();
+  const leds = FC.ledgers() || [], grps = FC.groups() || [], T = FC.tn();
+  const can = LK.canTally(x), fromTally = can && LK.useTally(x, "auto"), rec = Array.isArray(LK.recent()) ? LK.recent() : [];
   // smart moves round 1 (3): the dates run past the books in FinCom: one line, Read that year from Tally or show the last year read
   const asked = ["tb", "bills"].includes(x.kind) ? x.asOn : x.to, end = have ? Smart.booksEndBefore(asked) : "";
   const notRead = end && <NotRead end={end} read={Smart.fyLabelOf(asked)} show={Smart.fyLabelOf(end) !== Smart.fyLabelOf(asked) ? Smart.fyLabelOf(end) : ""} onShow={() => lkShowFy(Smart.fyStartOf(end))} bridge={live || (typeof TCloud === "object" && TCloud.has(S.coId))} />;
@@ -177,7 +189,7 @@ export default function Lookup({ b }) {
       {x.heard && <p className="note lk-heard">Understood as: <b>{x.heard}</b>. Change anything below.</p>}
       <div className="lk-kinds" role="tablist" aria-label="What to look up">{LK.KINDS.map(([k, l]) => <button key={k} role="tab" aria-selected={x.kind === k} onClick={() => lkKind(k)}>{l}</button>)}</div>
       <FreshBar b={b} held={!x.res} />
-      <div className="lk-form"><Form x={x} /></div>
+      <div className="lk-form"><Part><Form x={x} /></Part></div>
       {["ledger", "group", "monthly", "find"].includes(x.kind) && <div className="lk-presets">{FC.PRESETS.map(([k, l]) => <button key={k} className="btn small" onClick={() => lkPer(k)}>{l}</button>)}</div>}
       {notRead}
       <div className="row" style={{ gap: 8, marginTop: 10, alignItems: "center" }}><button className="btn" disabled={!!x.busy} title={x.busy ? "Wait: the answer is being worked out" : undefined} onClick={() => LK.run("auto")}>{x.busy ? "Working it out…" : "Show"}</button>
@@ -193,6 +205,6 @@ export default function Lookup({ b }) {
     {needBooks && <NoBooks what="Look up" />}
     {x.busy && <BusyCard title="Working it out…" detail={x.busy} done={0} total={0} />}
     {LK.fr().busy && <BusyCard title="Bringing the books up to date…" detail={LK.fr().busy} done={0} total={0} />}
-    {x.res && <Result r={x.res} x={x} cut={!!notRead} />}
+    {x.res && <Part><Result r={x.res} x={x} cut={!!notRead} /></Part>}
   </>;
 }

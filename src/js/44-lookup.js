@@ -37,7 +37,7 @@ const FC = {
   span(from, to){ return this.when(from) + " to " + this.when(to); },
   // every ledger known for the client: in the masters, the balances, or the vouchers
   // Tally's own ledger names, read through the bridge when Look up opens (light: names and groups only)
-  tn(){ const n = typeof LK === "object" ? LK.names : null; return n && n.cid === S.coId ? n : null; },
+  tn(){ const n = typeof LK === "object" ? LK.names : null; return n && n.cid === S.coId && Array.isArray(n.leds) && n.groups && typeof n.groups === "object" && n.under && typeof n.under === "object" ? n : null; },   // hotfix 11-Nov-2026: an incomplete names answer is not used
   ledgers(){
     const T = this.tn(); if (T) return T.leds;
     const b = S.books || {}, key = (b.vouchers || []).length + "|" + ((b.meta || {}).at || "") + "|" + Object.keys(b.under || {}).length + "|" + Object.keys(b.ledInfo || {}).length + "|" + ((b.tb || {}).at || "");

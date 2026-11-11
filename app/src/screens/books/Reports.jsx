@@ -126,7 +126,7 @@ export default function Reports({ b }) {
   const head = <>
     {(have || LK.live()) && <FreshBar b={b} />}
     <Filters className="rpt-find" label="Find a report" data-rpt-find=""
-      period={have ? <Field label="Year"><select aria-label="Year" value={RPT.range().fy} onChange={(ev) => RPT.pickFy(ev.target.value)}>{RPT.years().map((y) => <option key={y} value={y}>{FC.fyLabel(y)}</option>)}</select></Field> : null}
+      period={have ? <Field label="Year"><select aria-label="Year" value={R ? R.fy : ""} onChange={(ev) => RPT.pickFy(ev.target.value)}>{RPT.years().map((y) => <option key={y} value={y}>{FC.fyLabel(y)}</option>)}</select></Field> : null}
       search={<Search id="rptQ" data-fk="rptQ" value={S.rptQ} placeholder="Find a report: ageing, 3B, cash, ratios…" label="Find a report" onChange={(v) => setAndShow("rptQ", v, true)} />}
       onClear={() => setAndShow("rptQ", "")} active={!!q} />
     {have && R && R.notRead && <NotRead end={R.end} what={"Reports " + FC.fyLabel(R.fy)} read={FC.fyLabel(R.fy)} show={RPT.fys()[0] ? FC.fyLabel(RPT.fys()[0]) : ""} onShow={() => RPT.pickFy(RPT.fys()[0])} />}
