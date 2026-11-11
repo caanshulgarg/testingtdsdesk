@@ -365,7 +365,14 @@ const IDBStore = {
     try { return await f(db); }
     catch (e){ await new Promise(r => setTimeout(r, 0)); if (!idbGone(this, db, e)) throw e; return f(await this.ready()); }
   },
-  get(key){ return this.run(db => new Promise((ok, no) => { const q = db.transaction("docs").objectStore("docs").get(key); q.onsuccess = () => ok(q.result); q.onerror = () => no(q.error); })); },
+  get(key){ return this.gets([key]).then(r => r[0]); },
+  // split-save: several records read in one transaction (what one moment holds: no write comes between them)
+  gets(keys){
+    return this.run(db => new Promise((ok, no) => {
+      const st = db.transaction("docs").objectStore("docs"), out = []; let n = keys.length;
+      keys.forEach((k, i) => { const q = st.get(k); q.onsuccess = () => { out[i] = q.result; --n || ok(out); }; q.onerror = () => no(q.error); });
+    }));
+  },
   prefix(p){
     return this.run(db => new Promise((ok, no) => {
       const out = [], q = db.transaction("docs").objectStore("docs").openCursor(IDBKeyRange.bound(p, p + "\uffff"));
@@ -373,12 +380,17 @@ const IDBStore = {
       q.onerror = () => no(q.error);
     }));
   },
-  write(pairs){
+  write(pairs){ return this.tx(st => pairs.forEach(([k, v]) => { if (v == null) st.delete(k); else st.put(v, k); })); },
+  // f(store, g): puts and deletes (and reads before them) in one transaction: all of them kept, or none. A throw in f, or
+  // in a read's callback run through g, gives the whole transaction up (split-save: before, a put that threw left the
+  // puts before it to be kept)
+  tx(f){
     return this.run(db => new Promise((ok, no) => {
       const tx = db.transaction("docs", "readwrite"), st = tx.objectStore("docs");
-      pairs.forEach(([k, v]) => { if (v == null) st.delete(k); else st.put(v, k); });
+      let x; const g = h => { try { h(); } catch (e){ x = e; tx.abort(); } };
+      g(() => f(st, g));
       // (an error ends in the abort: answered there, once the transaction is over)
-      tx.oncomplete = () => ok(); tx.onabort = () => no(tx.error || {name: "AbortError"});
+      tx.oncomplete = () => ok(); tx.onabort = () => no(x || tx.error || {name: "AbortError"});
     }));
   }
 };

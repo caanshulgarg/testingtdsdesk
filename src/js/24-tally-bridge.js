@@ -55,7 +55,10 @@ const Bridge = {
   async find(code){
     const c = this.cfg();
     if (!this.localUrl(c.url)) return null;
-    const found = (await Promise.all(this.PORTS.map(p => this.probe(p, 1500, c.key, code)))).filter(Boolean);
+    // speed (11-Nov-2026): the last good port first; this login's bridge proven there (no pairing code): the other 99 not
+    // asked. Else the range, at most RANGE_AT_ONCE at a time (100 pings at once on every look before)
+    const at = this.urlPort(c.url), one = !code && c.key && at ? await this.probe(at, 1500, c.key) : null;
+    const found = one && one.proven && one.sameSession === true ? [one] : (await this.capped(this.PORTS, this.RANGE_AT_ONCE, p => this.probe(p, 1500, c.key, code))).filter(Boolean);
     // bridge 2.5.3: one answering sameSession false runs for another Windows session (never this browser's); true: this one's
     const ok = found.filter(b => (code ? (b.pairProven || b.spake) : b.proven) && b.sameSession !== false);
     const linked = typeof TCloud === "object" && TCloud.myBridge ? TCloud.myBridge() : "";
@@ -68,10 +71,19 @@ const Bridge = {
     if (pick && !code) this.proven[pick.url] = Date.now();
     return pick ? brief(pick) : null;
   },
-  // the bridge did not answer, did not prove itself, or is another Windows user's: looked for once (at most every 15 s)
+  RANGE_AT_ONCE: 16,
+  async capped(xs, n, f){
+    const out = new Array(xs.length); let i = 0;
+    await Promise.all(Array.from({length: Math.min(n, xs.length)}, async () => { while (i < xs.length){ const k = i++; out[k] = await Promise.resolve().then(() => f(xs[k])).catch(() => null); } }));
+    return out;
+  },
+  // the bridge did not answer, did not prove itself, or is another Windows user's: looked for once (at most every 15 s;
+  // speed, 11-Nov-2026: while no bridge is found, the wait doubles up to 5 minutes, back to 15 s once one is)
+  missed: 0,
   async refind(){
-    if (this.foundAt && Date.now() - this.foundAt < 15000) return false;
+    if (this.foundAt && Date.now() - this.foundAt < Math.min(300000, 15000 * Math.pow(2, this.missed || 0))) return false;
     const f = await this.find();
+    this.missed = f ? 0 : Math.min(5, (this.missed || 0) + 1);
     if (!f || f.url === this.cfg().url.replace(/\/+$/, "")) return false;
     this.setCfg({url: f.url, bridgeId: f.bridgeId || this.cfg().bridgeId || ""});
     return true;

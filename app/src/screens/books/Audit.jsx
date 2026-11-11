@@ -9,6 +9,7 @@ import Legacy from "../../parts/Legacy.jsx";
 import CommitBox from "../../parts/CommitBox.jsx";
 import { AuditButton, AiLedgers } from "../../parts/Ai.jsx";
 import { CatchUp } from "../../parts/Notes.jsx";
+import { catchSoon } from "../../lib/catchSoon.js";
 import Confirm from "../../parts/Confirm.jsx";
 import ListTable, { ListRows } from "../../parts/ListTable.jsx";
 import DateBox from "../../parts/DateBox.jsx";
@@ -239,7 +240,7 @@ function Form3cd({ b }) {
 // named Audit_ so the audit checks (the global Audit) stay in reach inside this file
 export default function Audit_({ b }) {
   // Tally changed since the last run: the tab says so while it is worked out again (TallyRead.catchUp, src/js/18)
-  const catchUp = TallyRead.catchUp(b, "audit");
+  const catchUp = catchSoon(b, "audit");   // on screen only, at most once in 5 s (lib/catchSoon.js)
   if (catchUp) return <CatchUp text={catchUp} />;
   const t = S.auditTab || "find";
   return <><Tabs />{t === "rel" ? <Related b={b} /> : t === "3cd" ? <Form3cd b={b} /> : t === "wp" ? <WorkingPapers b={b} /> : <Findings b={b} />}</>;

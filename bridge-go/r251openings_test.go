@@ -267,13 +267,18 @@ func TestR251FinComDayOnOrAfterTallysBooks(t *testing.T) {
 	if n != 1 {
 		t.Fatalf("%d days kept", n)
 	}
-	// Tally's books-from not known (its company list answers without it): held with 2.5.0's words, FinCom's day or not
+	// Tally's books-from not known (its company list answers without it): 2.5.13 (the owner's decision of 10-Nov-2026):
+	// FinCom's day is used as it is; with neither, held with 2.5.0's words (the masters' own round reads without openings)
 	f.mu.Lock()
 	f.booksFrom = "-"
 	f.mu.Unlock()
 	openCompaniesWith(fin, true)
-	if tallyBooksFromOf(zz) != "" || booksFromOf(zz) != "" || ledgerChunkRequest(zz, 0, 2000) != "" {
-		t.Fatalf("read with Tally's books-from not known: %q", booksFromOf(zz))
+	if tallyBooksFromOf(zz) != "" || booksFromOf(zz) != "20251001" || !strings.Contains(ledgerChunkRequest(zz, 0, 2000), `<SVFROMDATE TYPE="Date">20251001</SVFROMDATE>`) {
+		t.Fatalf("Tally's books-from not known, FinCom's day not used: %q", booksFromOf(zz))
+	}
+	applyBooksFrom(M{"booksFrom": M{zz: ""}})
+	if booksFromOf(zz) != "" || ledgerChunkRequest(zz, 0, 2000) != "" {
+		t.Fatalf("read with no day known: %q", booksFromOf(zz))
 	}
 	if _, _, err := readLedgerChunk(fin, zz, f.port, 0, 2000); !errors.Is(err, errBooksFromUnknown) {
 		t.Fatalf("a chunk not held: %v", err)
@@ -289,7 +294,7 @@ func TestR251FinComDayOnOrAfterTallysBooks(t *testing.T) {
 // the owner's decision of 2026-10-30 (the same dated form, only the date's source changed), 2.5.0's kept as history; the
 // dated line; the test sheet
 func TestR251VersionAllowList(t *testing.T) {
-	if BridgeVersion != "2.5.12" { // 2.5.12 (r2512_test.go); 2.5.11 (r2511_test.go); 2.5.10 (r2510pick_test.go); 2.5.9 (fastmeasure_test.go); 2.5.8 (nocompany258_test.go); 2.5.7 (fastentries_test.go); 2.5.6 (firstread_test.go); 2.5.5 (ledgers255_test.go, loginport255_test.go); 2.5.4 (r254_test.go); 2.5.3 (r253owntally_test.go); 2.5.2 (stock251_test.go): kept as history
+	if BridgeVersion != "2.5.14" { // 2.5.14 (r2514_test.go); 2.5.13 (r2513_test.go); 2.5.12 (r2512_test.go); 2.5.11 (r2511_test.go); 2.5.10 (r2510pick_test.go); 2.5.9 (fastmeasure_test.go); 2.5.8 (nocompany258_test.go); 2.5.7 (fastentries_test.go); 2.5.6 (firstread_test.go); 2.5.5 (ledgers255_test.go, loginport255_test.go); 2.5.4 (r254_test.go); 2.5.3 (r253owntally_test.go); 2.5.2 (stock251_test.go): kept as history
 		t.Fatalf("BridgeVersion %s", BridgeVersion)
 	}
 	if h := allowListHash(allowRowsBeforeStock()); !strings.HasPrefix(h, "0ed4d3e21f6f") { // 2.5.2 added FinComStockInHand

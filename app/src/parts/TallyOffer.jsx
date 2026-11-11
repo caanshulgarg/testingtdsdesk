@@ -13,7 +13,7 @@
 // off): [Link to <best>] [Link to existing client ▾] [Add as new client] (asked first: addNew); a name with a split's date
 // and no client alike: the picker first, Add as new client after it.
 import { useState } from "react";
-import { companyRows, addNew, linkTo, alikeOf } from "./TallyCompanies.jsx";
+import { companyRows, addNew, linkTo, alikeOf, askFirst } from "./TallyCompanies.jsx";
 import { tallyDevs, pcOf, mayLink } from "../lib/tallyState.js";
 import "./tallyOffer.css";
 
@@ -29,7 +29,8 @@ function OpenCompany({ r, here }) {
     if (id && S.companies[id]) toast(S.companies[id].name + " is added and linked to " + shown(r.company) + ". Its ledgers are coming in now."); after(); };
   const link = async (co) => { if (!co) return; setBusy("link"); const ok = await linkTo(r, co); setBusy("");
     if (ok) toast(shown(r.company) + (shown(r.company).toLowerCase() === shown(co.name).toLowerCase() ? " is linked" : " is linked to " + co.name) + ". Its ledgers are coming in now."); after(); };
-  const first = here || alike[0], addFirst = !first && !dated;
+  // next-link-choose: unlinked by a person, or another company in Tally looks alike: no one-click link, the list only
+  const ask = askFirst(r, null, (here || alike[0] || {}).name), first = ask ? null : here || alike[0], addFirst = !first && !dated && !ask;
   const addBtn = <button className={"btn small" + (addFirst ? " primary" : "")} data-tally-offer-add="" disabled={!!busy} onClick={add}>{busy === "add" ? "Adding…" : "Add as new client"}</button>;
   const ids = new Set(alike.map((c) => c.id)), list = alike.concat(clients().filter((c) => !ids.has(c.id)));
   return <div className="toffer" data-tally-offer={r.company} data-tally-offer-first={first ? "link" : addFirst ? "add" : "pick"}>

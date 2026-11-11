@@ -8,7 +8,7 @@
 /* is left. The screen part is app/src/screens/gst/TwoBAuto.jsx.      */
 /* ================================================================== */
 // Hook for the 2B screen (and its redesign, branch next-gst-portal): M2B.view(reg) gives the run for the registration and
-// the year of S.gstYm; M2B.statusOf2b(key) / M2B.statusOfBook(id) give each document's status:
+// the year of S.gstYm; M2B.statusMaps(reg) gives each document's status:
 //   "matched-rules" | "matched-ai" | "probable" | "mismatch" | "2b-only" | "books-only".
 // M2B's part the GSTR-3B engine runs is in server/_shared/gst3b.js (shared with the gst-run function); the rest is put on it here
 Object.assign(M2B, {
@@ -89,8 +89,6 @@ Object.assign(M2B, {
     Object.defineProperty(res, "_maps", {value: {g, b}, enumerable: false});
     return res._maps;
   },
-  statusOf2b(key, reg){ const m = this.statusMaps(reg === undefined ? r2Reg(S.books) : reg); return m ? m.g[key] || "" : ""; },
-  statusOfBook(id, reg){ const m = this.statusMaps(reg === undefined ? r2Reg(S.books) : reg); return m ? m.b[id] || "" : ""; },
   // a person's accept or reject of a probable pair (one, or all of them): kept on the server, and an accepted pair of one
   // 2B document is linked for the rest of the 2B screen as a link by hand is
   async decide(reg, pairs, decision){

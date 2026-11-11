@@ -440,13 +440,17 @@ const Trash = {
   // keeps a removal; resolves {id, server} where server says whether the server has it
   async put(cid, kind, label, data, reason){
     const at = new Date().toISOString(), rec = {cid, kind, label, reason: reason || "", at, by: whoAmI(), data};
-    let sid = null;
+    let sid = null, unsure = false;
     if (this.cloud()){
       try { sid = await Cloud.api("rpc/trash_put", {method: "POST", body: {p_client: cid, p_kind: kind, p_label: label, p_reason: reason || "", p_data: data}}); }
-      catch (e){ if (this.missing(e)) this.off = true; else toast("Kept in this browser only: the server did not take it (" + ((e && e.message) || e) + ")."); }
+      catch (e){
+        if (this.missing(e)) this.off = true; else toast("Kept in this browser only: the server did not take it (" + ((e && e.message) || e) + ").");
+        // (no answer at all, e.g. timed out: the server may have kept it all the same; the next list finds out: unsure)
+        unsure = !!(e && (e.timedOut || e.name === "TypeError" || e.name === "AbortError"));
+      }
     }
     const id = "trash:" + cid + ":" + Date.now();
-    try { await IDBStore.write([[id, Object.assign({id, sid}, rec)]]); } catch (e){ if (!sid) throw e; }
+    try { await IDBStore.write([[id, Object.assign({id, sid}, unsure ? {unsure: true} : {}, rec)]]); } catch (e){ if (!sid) throw e; }
     return {id: sid || id, server: !!sid};
   },
   // what can be put back for a client, newest first: the server's rows (from any computer) and this browser's own
@@ -459,6 +463,16 @@ const Trash = {
         const rows = await Cloud.api("client_trash?select=id,kind,label,reason,deleted_at,deleted_by_email,restored_at&client_id=eq." + encodeURIComponent(cid) + "&restored_at=is.null&order=deleted_at.desc&limit=50") || [];
         server = rows.map(r => ({id: r.id, sid: r.id, cid, kind: r.kind, label: r.label, reason: r.reason, at: r.deleted_at, by: r.deleted_by_email || "", server: true}));
       } catch (e){ if (this.missing(e)) this.off = true; }
+    }
+    // the review of 07041bcdd: a removal whose answer was lost (unsure) and that the server did keep: the server's row of
+    // the same kind and name, removed within 10 minutes of it and not claimed by another copy here, is it; this copy
+    // takes its id (saved), so it is listed once
+    const claimed = new Set(local.map(x => x.sid).filter(Boolean));
+    for (const x of local.filter(x => x.unsure && !x.sid)){
+      const m = server.find(r => !claimed.has(r.sid) && r.kind === x.kind && r.label === x.label && Math.abs(Date.parse(r.at) - Date.parse(x.at)) < 600000);
+      if (!m) continue;
+      claimed.add(m.sid); x.sid = m.sid; delete x.unsure;
+      try { await IDBStore.write([[x.id, x]]); } catch (e){}
     }
     const onServer = new Set(server.map(x => x.sid));
     const mine = local.filter(x => !x.restoredAt && !(x.sid && (onServer.has(x.sid) || this.cloud())));
@@ -920,15 +934,7 @@ function advFix(id, key, val){
 // rule 43: a capital good's name, date put to use, credit, use, registration, date sold
 function assetSet(id, k, v){ const a = (S.books.assets || []).find(x => x.id === id); if (a){ a[k] = /^(igst|cgst|sgst|cess)$/.test(k) ? r2(num(v)) : v; saveBooks(); render(); } }
 function assetRemove(id){ S.books.assets = (S.books.assets || []).filter(a => a.id !== id); saveBooks(); render(); }
-// GSTR-9 and 9C (app/src/screens/gst/Annual.jsx): figures not in the books, typed once for the year and GSTIN
-function gst9Where(){ const b = S.books; return {fy: GST9.fyOf(S.gstYm || GSTR.months().slice(-1)[0]), reg: S.gstReg || ((GSTR.gstins(b) || [])[0] || "").slice(0, 2)}; }
-function gst9Typed(k, f, v){ const w = gst9Where(), st = GST9.typed(w.fy, S.gstReg || ""); st[k] = Object.assign({}, st[k], {[f]: v === "" ? "" : num(v)}); if (Object.values(st[k]).every(x => x === "")) delete st[k]; saveBooks(); render(); }
-// 9C: key is "turnover", "itcBooks", "adj.5B", "reasons.6"…; reasons are text, the rest amounts
-function gst9cSet(key, v){
-  const w = gst9Where(), st = GST9C.st(w.fy, w.reg), val = key.startsWith("reasons.") ? v : (v === "" ? "" : num(v));
-  if (key.startsWith("adj.")) st.adj[key.slice(4)] = val; else if (key.startsWith("reasons.")) st.reasons[key.slice(8)] = val; else st[key] = val;
-  saveBooks(); render();
-}
+// GSTR-9 and 9C's typed figures (gst9Where, gst9Typed, gst9cSet) are src/js/08, with the GST screen
 // a Tally ledger's GST or TDS meaning, set on the Tally ledgers tab (app/src/screens/books/Ledgers.jsx): what (the
 // kind), tax, side, reg, gstRate, section, rate. A choice made here is the user's own: it counts as confirmed.
 // FinCom 2.4.1 (Cause B): saved at once, its own confirm step, never a draft (it was a draft under the page's Save, so

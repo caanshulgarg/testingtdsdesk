@@ -94,6 +94,26 @@ export const lastMine = () => { const L = HERE.last; return L && L.gen === HERE.
 // older bridge, or none; known: this login's own bridge is known to exist (installed here, not answering now). First the
 // remembered address and this login's own bridge's port (its beat's bridgePort); only when none of them is this login's
 // bridge, the whole range (once a tab, or when full)
+// speed (11-Nov-2026: the Tally page asked 102 ports on every open of a linked firm's tab): nothing known here of this
+// login's own bridge (a new browser, or its key not here), the ports the firm's bridges' beats give (FinCom's cloud, at most
+// 4, the latest heard first) are asked with the remembered address before the whole range; the range only when none of
+// them is this login's, at most RANGE_AT_ONCE ports at a time
+export const RANGE_AT_ONCE = 16;
+function heardPorts(hint) {
+  if (hint.id || hint.user || hint.ports.length) return [];
+  let rows = [];
+  try { rows = (typeof TCloud === "object" && TCloud.bridgesHeard ? TCloud.bridgesHeard() : []) || []; } catch (e) { rows = []; }
+  const out = [];
+  rows.filter((r) => r && Number(r.port) >= 9100 && Number(r.port) <= 9199).sort((a, b) => String(b.at || "").localeCompare(String(a.at || "")))
+    .forEach((r) => { const p = Number(r.port); if (out.length < 4 && !out.includes(p)) out.push(p); });
+  return out;
+}
+// f over xs, n at a time; the answers in xs' order
+export async function capped(xs, n, f) {
+  const out = new Array(xs.length); let i = 0;
+  await Promise.all(Array.from({ length: Math.min(n, xs.length) }, async () => { while (i < xs.length) { const k = i++; out[k] = await Promise.resolve().then(() => f(xs[k])).catch(() => null); } }));
+  return out;
+}
 export function lookHere(opts) {
   const full = !!(opts && opts.full), L = lastMine();
   if (L) return Promise.resolve(L);
@@ -112,8 +132,8 @@ async function lookHereOnce(full) {
   // (localhost and 127.0.0.1 are one address: told apart by port only)
   const port = (u) => (/^https?:\/\/(127\.0\.0\.1|localhost)[:/]/.test(u) ? Bridge.urlPort(u) : 0), key = (u) => (port(u) ? "p" + port(u) : u), same = (a, b) => key(a || "") === key(b || "");
   const urls = [];
-  [base].concat(hint.ports.map((p) => "http://127.0.0.1:" + p)).forEach((u) => { if (u && !urls.some((x) => same(x, u))) urls.push(u); });
-  const ask = urls.slice(0, 4);
+  [base].concat(hint.ports.concat(heardPorts(hint)).map((p) => "http://127.0.0.1:" + p)).forEach((u) => { if (u && !urls.some((x) => same(x, u))) urls.push(u); });
+  const ask = urls.slice(0, 6);
   let all = (await Promise.all(ask.map((u) => (port(u) ? Bridge.probe(port(u), 2500) : Bridge.probeUrl(u, 2500))))).filter(Boolean);
   // a new start meanwhile (another address, another login's scene): this look ends here, never asking the whole range
   if (HERE.gen !== g || !same(baseNow(), base)) return { mine: null, other: null, old: null, known: false, hint, all, asked: ask.map(port), stale: true, gen: g };
@@ -123,7 +143,7 @@ async function lookHereOnce(full) {
   if (!all.some((b) => isMine(b, hint)) && (full || !HERE.fullAt)) {
     HERE.fullAt = Date.now(); ranged = true;
     const asked = new Set(all.map((b) => Number(b.port) || Bridge.urlPort(b.url || "")));
-    all = all.concat((await Promise.all(Bridge.PORTS.filter((p) => !asked.has(p)).map((p) => Bridge.probe(p, 2500)))).filter(Boolean));
+    all = all.concat((await capped(Bridge.PORTS.filter((p) => !asked.has(p)), RANGE_AT_ONCE, (p) => Bridge.probe(p, 2500))).filter(Boolean));
   }
   const mine = all.find((b) => b.sameSession === true) || all.find((b) => isMine(b, hint)),
     other = all.find((b) => !isMine(b, hint) && isOther(b, hint)), old = all.find((b) => b.yours !== false && !b.bridgeId && b.sameSession !== false && !isOther(b, hint));

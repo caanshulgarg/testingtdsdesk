@@ -809,3 +809,22 @@ AlterID reaches Tally's number now and the gap's, AND no queued send failed for 
 function `tally_recorder_gap_asked`; `tally_recorder_gap_check` is 47's (staging's live) text with one line changed.
 Both service_role only. No table created, altered or emptied; one transaction (lock_timeout 10 s); safe to run twice.
 Needs 47 and 133. Deploy: this file any time; nothing else depends on it. Tested: `tests/run_migration150.py`.
+
+## 156, 157: the reliability audit's cloud fixes (not run yet; branch next-rel-cloud, 11-Nov-2026)
+
+**156, the Tally page's summary counts instead of building rows** (11-Nov-2026, branch `next-rel-cloud`; **written, not
+run yet**; file md5 fdd87cecba7a586f1a9793c716a74584): `server/tally-cloud/migration-156-reliability.sql`. Replaces ONE
+function, `tally_fetch_summary` (same arguments, result and grants; the same JSON byte for byte): today's counts come
+straight from `tally_recorder_lines` and `tally_fetch_log` (it no longer calls `tally_today_rows`, which built one JSON
+row per entry fetched today with a sum over `tally_lines` each). One index, `tally_recorder_lines_applied_at` (if not
+exists). No table created, altered or emptied; one transaction (lock_timeout 10 s); safe to run twice. Needs 133.
+Deploy: this file any time (no app or function change needed). Tested: `tests/run_migration156.py`.
+
+**157, the job log trimmed and the jobs' minutes spread** (11-Nov-2026, branch `next-rel-cloud`; the owner's decision
+of 11-Nov-2026; **written, not run yet**; file md5 11b58645a067e610bbe0f5c1e823ab6e):
+`server/tally-cloud/migration-157-cron-housekeeping.sql`. One procedure, `cron_run_details_trim` (deletes ONLY rows of
+`cron.job_run_details` that ended more than 14 days ago, in batches, each its own commit; nobody but its owner may
+call it), one daily job `cron-run-details-trim` (21:53 UTC) whose first night is the one-time trim, and eight jobs'
+schedules moved off minute 0 by `cron.alter_job` (same jobs, commands and frequency; only where the schedule is still
+the old one; the list old -> new is in the file's head). Independent of every other migration. Tested:
+`tests/run_migration157.py`.

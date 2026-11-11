@@ -26,7 +26,7 @@ export async function gzip(text) {
 
 // path, opts: Cloud.api's own; body: its JSON text; headers: the request's (apikey, Authorization); url: the project's.
 // Returns a Response standing for PostgREST's answer, or null (send it plain)
-export async function send(path, opts, body, headers, url) {
+export async function send(path, opts, body, headers, url, signal) {
   const prefer = String((opts.headers && opts.headers.Prefer) || "");
   if ((opts.method || "GET") !== "POST" || !Object.prototype.hasOwnProperty.call(ROUTES, path) || ROUTES[path] !== prefer) return null;
   if (typeof body !== "string" || body.length <= MIN || typeof CompressionStream !== "function" || Date.now() < offUntil) { stats.plain++; return null; }
@@ -35,7 +35,7 @@ export async function send(path, opts, body, headers, url) {
     const gz = await gzip(body);
     const q = "path=" + encodeURIComponent(path) + "&prefer=" + encodeURIComponent(prefer);
     r = await fetch(url.replace(/\/+$/, "") + "/functions/v1/records-upload?" + q, {
-      method: "POST", headers: { apikey: headers.apikey, Authorization: headers.Authorization, "Content-Type": "application/gzip" }, body: gz });
+      method: "POST", headers: { apikey: headers.apikey, Authorization: headers.Authorization, "Content-Type": "application/gzip" }, body: gz, signal });
     if (r.ok) j = await r.json().catch(() => null);
     if (!j || j.fincomUpload !== 1 || typeof j.status !== "number") {
       // not the function's answer (not deployed, refused, down): plain from now on in this tab for a while; an expired
@@ -48,6 +48,8 @@ export async function send(path, opts, body, headers, url) {
   } catch (e) {
     // no answer at all (a function not deployed may answer without CORS headers): not asked again for a while, unless
     // the computer is simply offline (the plain call then fails as before)
+    // (given up by Cloud.api's own wait: the failure is the caller's, and the function is asked again next time)
+    if (signal && signal.aborted) throw e;
     if (!(typeof navigator === "object" && navigator.onLine === false)) offUntil = Date.now() + 600000;
     stats.plain++;
     return null;

@@ -93,6 +93,17 @@ const FinSt = (() => {
     [/RATES|TAXES|FILING FEE|\bROC\b|STAMP DUTY|REGISTRATION|LICEN[CS]E FEE/, "17P"], [/ADVERTIS|MARKETING|PROMOTION|PUBLICITY|SPONSOR/, "17Q"], [/\bCSR\b|CORPORATE SOCIAL/, "17R"],
     [/BAD DEBT|WRITTEN OFF|WRITE OFF|PROVISION FOR DOUBTFUL/, "17S"], [/LOSS ON SALE|LOSS ON DISPOSAL/, "17T"], [/EXCHANGE|FOREX|FOREIGN/, "17U"], [/COMMISSION|BROKERAGE/, "17V"], [/SOFTWARE|SUBSCRIPTION|SAAS|CLOUD|HOSTING/, "17W"]];
   const STAT_INT = /INTEREST\b.*\b(TDS|TCS|GST|IGST|CGST|SGST|INCOME TAX|STATUTORY|PF|ESI|PROFESSIONAL TAX|SERVICE TAX|LATE PAYMENT)\b|\b(TDS|TCS|GST)\b.*\bINTEREST/;
+  // next-speed-pages (11-Nov-2026, 4,188 ledgers: Statements 2.0 s in one task, 9 s on an office PC): MIS.msme() walks
+  // every ledger's master, and was asked for each trade payable placed (ledgers x ledgers). Read once and kept until
+  // the end of the task, while the books, their masters, the MSME list and the save of the books are the same
+  let msmeKeep = null;
+  const msmeNow = () => {
+    const b = S.books || {}, rev = typeof BOOKS_REV === "number" ? BOOKS_REV : 0, k = msmeKeep;
+    if (k && k.b === S.books && k.info === b.ledInfo && k.set === b.msme && k.rev === rev) return k.v;
+    const v = MIS.msme() || {}, me = msmeKeep = {b: S.books, info: b.ledInfo, set: b.msme, rev, v};
+    Promise.resolve().then(() => { if (msmeKeep === me) msmeKeep = null; });
+    return v;
+  };
   // the code within an old line (or the line FS.place gives); bal is a debit positive
   function refine(l, line, gp, bal, kind){
     const nm = String(l).toUpperCase(), P = (gp || []).map(g => String(g).toLowerCase()), has = g => P.includes(g), up = nm + " " + P.join(" ").toUpperCase(), cr = N(bal) < 0;
@@ -117,7 +128,7 @@ const FinSt = (() => {
       case "ltp": return /GRATUITY/.test(nm) ? "5A" : /LEAVE/.test(nm) ? "5B" : "5D";
       case "stp": return /GRATUITY/.test(nm) ? "5E" : /LEAVE/.test(nm) ? "5B" : /\bTAX/.test(nm) ? "7D" : /EXPENSE|PAYABLE|OUTSTANDING/.test(nm) ? "5F" : "5G";
       case "stb": return /CREDIT CARD/.test(up) ? "33C" : (/OVERDRAFT|\bOD\b|\bCC\b|CASH CREDIT|BANK/.test(up) || has("bank od a/c") || has("bank occ a/c")) ? "33A" : "33B";
-      case "tp": return /micro|small/i.test((MIS.msme() || {})[l] || "") ? "6A" : "6B";
+      case "tp": return /micro|small/i.test(msmeNow()[l] || "") ? "6A" : "6B";
       case "ocl":
         if (has("sundry debtors") || /ADVANCE (FROM|RECEIVED)|CUSTOMER ADVANCE/.test(nm)) return "7E";
         if (has("duties & taxes") || /\bTDS\b|\bTCS\b|\bGST\b|IGST|CGST|SGST|\bPF\b|\bEPF\b|\bESIC?\b|PROFESSIONAL TAX|DUTIES|LABOUR WELFARE|WITHHOLDING/.test(nm)) return "7C";

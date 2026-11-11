@@ -17,7 +17,7 @@ import { useEffect, useRef, useState } from "react";
 import "../../../src/js/98-link-record.js";
 import "./LinkStatus.jsx";
 import { tallyDevs, mayLink, tallyCoState } from "../lib/tallyState.js";
-import { companyRows, linkTo, baseKey } from "./TallyCompanies.jsx";
+import { companyRows, linkTo, baseKey, askFirst, holdsWords } from "./TallyCompanies.jsx";
 import { goTallyRow } from "./TallyChip.jsx";
 import { goTallyPage } from "./HomeLink.jsx";
 import { staleWords } from "./TallyLine.jsx";
@@ -59,17 +59,20 @@ function LinkPick({ co, run, busy }) {
   useEffect(() => { lookOnce(); }, []);   // (this computer's bridges looked for, if not yet: until then nothing is chosen)
   const own = ownOpen(), mine = own.has;
   const score = (r) => (mine(r) ? 8 : 0) + ((hist || []).includes(r.company) ? 4 : 0) + (String(r.gstin || "").toUpperCase() === g && g ? 2 : [k, kn].includes(baseKey(r.company)) ? 1 : 0);
-  const rows = companyRows().filter((r) => r.reported && !r.client && !own.theirs(r)).sort((a, b) => score(b) - score(a) || (mine(b) - mine(a)) || String(b.seen).localeCompare(String(a.seen)));
+  // next-link-choose (review): the same companies as the Tally page's list (ChangePick): another login's, one not sent yet
+  const rows = companyRows().filter((r) => !r.client).sort((a, b) => score(b) - score(a) || (mine(b) - mine(a)) || String(b.seen).localeCompare(String(a.seen)));
   const [pick, setPick] = useState("");
   // (a company open now on another computer only: linkable, never chosen for it)
-  const sel = pick || (rows[0] && score(rows[0]) > 0 && !own.elsewhere(rows[0]) ? rows[0].company : "");
+  // next-link-choose: one a person unlinked (the same company again after an unlink) or one of several alike: never chosen
+  // for them; the person picks, each company saying what it holds
+  const sel = pick || (rows[0] && score(rows[0]) > 0 && !own.elsewhere(rows[0]) && !askFirst(rows[0], null, co.name) ? rows[0].company : "");
   if (!mayLink()) return <p className="note" data-tally-pop-owner="">An owner or staff member of the firm links it.</p>;
   if (!rows.length) return tallyDevs().length ? <p className="note" data-tally-pop-none="">{own.noCo ? NO_CO : "No Tally company to link yet: open the company in Tally; it shows here within a minute."}</p> : <Download />;
   return <div className="tally-pop-link" data-tally-pop-link="">
     <label className="note" htmlFor="tallyPopPick">Link to Tally company</label>
     <select id="tallyPopPick" data-tally-pop-pick="" value={sel} title={sel} onChange={(e) => setPick(e.target.value)}>
       {!sel && <option value="">Choose a Tally company…</option>}
-      {rows.map((r) => <option key={r.company} value={r.company}>{r.company + (r.gstin && String(r.gstin).toUpperCase() === g ? " (same GSTIN)" : (hist || []).includes(r.company) ? " (linked before)" : "")}</option>)}
+      {rows.map((r) => <option key={r.company} value={r.company}>{r.company + (r.gstin && String(r.gstin).toUpperCase() === g ? " (same GSTIN)" : (hist || []).includes(r.company) ? " (linked before)" : "") + (holdsWords(r.company) ? " · " + holdsWords(r.company) : "")}</option>)}
     </select>
     <button type="button" className="btn small primary" data-tally-pop-act="link" disabled={!!busy} title={!sel ? "Choose a Tally company first" : undefined} onClick={() => run(async () => {
       const r = rows.find((x) => x.company === sel); if (!r) return "Choose a Tally company first.";

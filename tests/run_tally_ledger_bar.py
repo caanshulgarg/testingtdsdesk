@@ -153,6 +153,10 @@ def main():
         stalled([d], "Reading is paused on the Tally computer", "reading paused")
         d = SV.dev(); d["info"]["beat"]["tallyState"] = "busy"
         stalled([d], "Tally is busy on the Tally computer", "Tally busy")
+        # bridge 2.5.13: the books' first day known nowhere: the page asks for it (the bridge's words), never "no answer from Tally"
+        BFW = "Tally has not said when this company's books begin; set the book's first day in FinCom (the ledgers came without their openings)"
+        d = SV.dev(); d["info"]["beat"]["companies"] = [{"name": VMS, "open": True, "booksFromWhy": BFW}]
+        stalled([d], BFW, "the books' first day not known")
         # no count for 3 minutes, the beat says nothing wrong: stuck all the same (never a bar that runs for ever)
         scene(lp=None)
         E("() => { Object.values(S.companies).filter(c => c.tallyName === '%s').forEach(c => { c.deleted = true; }); render(); }" % VMS); pg.wait_for_timeout(400)

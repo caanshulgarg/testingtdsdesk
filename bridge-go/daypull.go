@@ -179,6 +179,10 @@ type pullWork struct {
 	single   map[string]bool // entries a group's answer left for FinComVoucherObject
 	warmAt   time.Time       // review R1-5: the day's heads, or its last group, answered (the bridge's clock)
 	noRange  bool            // 2.5.12: this day's list is asked for this day alone (a range answer was not used)
+	// 2.5.14: a request for the day reached the gate to Tally (or the fast window read it); since when the company's own
+	// reason (not open here, no starting point ...) has kept a day already begun waiting (zero: it does not)
+	began    bool
+	ownSince time.Time
 }
 
 // review 245 R15 (M1): a payroll entry waits for its employees at most EmployeeWaitTries tries (a minute apart) and
@@ -216,7 +220,13 @@ var pull = struct {
 	rangeAsk   string
 	rangeN     map[string]int
 	rangeHeads map[string]pullRangeDay
-}{empAt: map[string]time.Time{}, stopped: map[int]string{}, upload: map[string]M{}, tell: map[string]M{}, stopCo: map[string]M{}, done: map[string]time.Time{}, state: map[string]M{}, said: map[string]string{}}
+	// 2.5.13: the days whose local "upload" mark was dropped in this run because FinCom listed them again (pullUploadRelease)
+	released map[string]int
+	logs     []string // 2.5.13: log lines noted under the lock (pullLogFlush)
+	// 2.5.14: the listed days set aside in this pass because their own company cannot be asked now (closed in Tally, no
+	// starting point ...): the other companies' days go first; looked at again once the pass is through, or at the next list
+	aside map[string]bool
+}{aside: map[string]bool{}, released: map[string]int{}, empAt: map[string]time.Time{}, stopped: map[int]string{}, upload: map[string]M{}, tell: map[string]M{}, stopCo: map[string]M{}, done: map[string]time.Time{}, state: map[string]M{}, said: map[string]string{}}
 
 // --- the beat answer: periodDays [{company, company_guid, day, fetch, types}], at most 3
 func applyPeriodDays(j M) {
@@ -276,15 +286,21 @@ func applyPeriodDays(j M) {
 		}
 	}
 	pickTake(items, refused, refusedWhy)
+	defer pullLogFlush() // 2.5.13: the lines noted under the lock, written once it is let go (runs after the unlock below)
 	pull.mu.Lock()
 	defer pull.mu.Unlock()
 	keep := map[string]bool{}
 	for _, it := range items {
 		keep[it.key()] = true
 	}
+	pull.aside = map[string]bool{} // 2.5.14: a new list: every listed day is looked at again, in FinCom's order
 	if pull.work != nil && !keep[pull.work.it.key()] {
 		if len(items) == 0 {
 			pull.work = nil // FinCom lists nothing (paused, done, stopped): nothing more is asked of it
+		} else if !pull.work.began {
+			// 2.5.14: FinCom no longer names the day and nothing was asked of Tally for it yet: it is let go (it held every
+			// other company's days behind it while its own company could not be asked); FinCom lists it again if wanted
+			pull.work = nil
 		} else {
 			// FinCom lists other days first (the day being read was handed out a moment ago): it is finished here; FinCom
 			// refuses it in words if it is no longer wanted (pullCloudOK), and nothing more is asked then
@@ -295,8 +311,8 @@ func applyPeriodDays(j M) {
 	// every beat; other days go first)
 	var fresh []pullItem
 	for _, it := range items {
-		if _, up := pull.upload[it.key()]; up {
-			continue // marked "upload": never asked again
+		if _, up := pull.upload[it.key()]; up && !pullUploadReleaseLocked(it) {
+			continue // marked "upload": not asked again while FinCom keeps its own mark
 		}
 		fresh = append(fresh, it)
 	}
@@ -600,10 +616,73 @@ func pullCurrent() *pullWork {
 		if _, up := pull.upload[it.key()]; up {
 			continue
 		}
+		if pull.aside[it.key()] {
+			continue // 2.5.14: its own company cannot be asked now: the other days first
+		}
 		pull.work = &pullWork{it: it, heads: map[string]pullHead{}, stops: map[string]int{}}
 		return pull.work
 	}
+	if len(pull.aside) > 0 {
+		pull.aside = map[string]bool{} // the pass is through: the days set aside are looked at again at the next turn
+	}
 	return nil
+}
+
+// 2.5.14 (head-of-line): the reasons that are one company's own, for which its day gives way to the other companies'
+// days (pickack.go pickOwnCompany's, less the two applyPeriodDays already filters)
+var pullOwnRefusal = map[string]bool{"noStart": true, "slow": true, "notOpen": true, "otherLogin": true}
+
+// the current day cannot be asked for its own company's reason (said and reported as always, by the caller). Nothing
+// asked of Tally for it yet: set aside for this pass, and the next listed day is taken. Already begun: what was read goes
+// to FinCom, and once the reason has lasted a minute the day is left (FinCom lists it again; its list is then asked
+// once more, as after a restart). True when the day was let go (another step may follow now)
+func pullGiveWay(w *pullWork, code string) bool {
+	if !pullOwnRefusal[code] {
+		w.ownSince = time.Time{}
+		return false
+	}
+	pull.mu.Lock()
+	if !w.began {
+		if pull.work == w {
+			pull.work = nil
+		}
+		pull.aside[w.it.key()] = true
+		pull.mu.Unlock()
+		return true
+	}
+	pull.mu.Unlock()
+	if w.ownSince.IsZero() || nowFn().Before(w.ownSince) {
+		w.ownSince = nowFn()
+	}
+	if nowFn().Sub(w.ownSince) < time.Minute {
+		return false
+	}
+	if len(w.got)+len(w.gone) > 0 && !pullFlush(w) {
+		return false // FinCom did not take what was read: kept, sent again later (pullCloudOK)
+	}
+	pull.mu.Lock()
+	still := pull.work == w
+	pull.mu.Unlock()
+	if !still {
+		return true
+	}
+	writeLog("Older entries of " + w.it.Company + ": " + liveDay(w.it.Day) + " is left for now (its company cannot be asked); the other companies' days go on, and FinCom lists it again")
+	pullDrop(w)
+	return true
+}
+
+// 2.5.14 (the independent review of 9d546dcb1): the day is begun BEFORE its first request goes, under pull.mu, and only
+// while it is still the day being read: the heartbeat (applyPeriodDays) lets go of a day not begun, under the same lock,
+// so a day is never let go while its first request is at Tally, and no request goes for a day already let go. false: let
+// go meanwhile (nothing is sent; the loop takes the next day)
+func pullBegin(w *pullWork) bool {
+	pull.mu.Lock()
+	defer pull.mu.Unlock()
+	if pull.work != w {
+		return false
+	}
+	w.began = true
+	return true
 }
 
 // one step: sent (a request reached the gate to Tally), more (another step may follow now)
@@ -615,6 +694,7 @@ func pullStep() (sent bool, more bool) {
 	// 2.5.10 (pickack.go): a request for the day reached the gate to Tally: its hand-out started
 	defer func() {
 		if sent {
+			w.ownSince = time.Time{} // 2.5.14 (began: pullBegin, before the send)
 			pickStarted(w.it)
 		}
 	}()
@@ -625,6 +705,7 @@ func pullStep() (sent bool, more bool) {
 	case !w.headsDone:
 		// next-fast-entries (FastEntries, off by default; fastentries.go): a day the window read already is taken as read
 		if fastTake(w) {
+			pullBegin(w)
 			pickStarted(w.it) // (read by the fast window already)
 			return false, true
 		}
@@ -633,7 +714,12 @@ func pullStep() (sent bool, more bool) {
 			fastWaited() // review (5): the window's company list is asked again after any wait, as the per-day path's
 			pullSayWait(w.it, why)
 			pickRefused(w.it, code)
-			return false, false
+			// 2.5.14: the company's own reason: its day gives way, the next listed day (another company's) is taken now
+			return false, pullGiveWay(w, code)
+		}
+		w.ownSince = time.Time{}
+		if !pullBegin(w) {
+			return false, true // FinCom no longer lists it (the heartbeat let it go a moment ago): nothing sent
 		}
 		pickQueued(w.it)
 		if handled, sent, more := fastStep(w, port); handled {
@@ -655,10 +741,13 @@ func pullStep() (sent bool, more bool) {
 			w.coAt = time.Time{} // ROUND 104 (a): after any wait the company list is asked again before the next entry
 			pullSayWait(w.it, why)
 			if len(w.got)+len(w.gone) > 0 {
-				pullFlush(w) // what was read goes now (the cloud only)
+				if !pullFlush(w) { // what was read goes now (the cloud only)
+					return false, false
+				}
 			}
-			return false, false
+			return false, pullGiveWay(w, code) // 2.5.14: the company's own reason for a minute: the day is left
 		}
+		w.ownSince = time.Time{}
 		return pullFetchStep(w, port)
 	case len(w.got)+len(w.gone)+len(w.held) > 0:
 		return false, pullFlush(w)
@@ -1141,7 +1230,7 @@ func pullFlush(w *pullWork) bool {
 // a day FinCom marked to be uploaded by hand: kept here for the tray's one quiet line (FinCom was told already)
 func pullNoteUpload(it pullItem, why, words string) {
 	pull.mu.Lock()
-	pull.upload[it.key()] = M{"company": it.Company, "day": it.Day, "words": cutRunes(words, 300), "why": why, "at": nowFn().Format(time.RFC3339), "atN": nowFn().UnixNano()}
+	pull.upload[it.key()] = M{"company": it.Company, "day": it.Day, "words": cutRunes(words, 300), "why": why, "at": nowFn().Format(time.RFC3339), "atN": nowFn().UnixNano(), "ver": BridgeVersion}
 	// at most 500 kept (the oldest dropped from the tray's list first; FinCom keeps every one)
 	for len(pull.upload) > 500 {
 		ok, oldest := "", int64(-1)
@@ -1221,6 +1310,9 @@ func pullTell(key string, body M) {
 	if r.code == 200 && r.json != nil && truthy(r.json["ok"]) {
 		pull.mu.Lock()
 		delete(pull.tell, key)
+		if e := pull.upload[key]; e != nil {
+			e["toldN"] = nowFn().UnixNano() // 2.5.13: FinCom took the mark now (pullUploadRelease)
+		}
 		pullSaveLocked()
 		pull.mu.Unlock()
 		return
@@ -1324,15 +1416,23 @@ func pullLoad() {
 	if j == nil {
 		return
 	}
+	defer pullLogFlush() // 2.5.13 (after the unlock below)
 	pull.mu.Lock()
 	defer pull.mu.Unlock()
+	// 2.5.13: the marks of an older bridge (made before an update) are dropped, with what was left to tell FinCom of them:
+	// FinCom's own marks decide (a day it still marks is not listed; one it lists is read again)
+	older := map[string]bool{}
 	for k, v := range obj(j["upload"]) {
 		if e := obj(v); e != nil {
+			if str(e["ver"]) != BridgeVersion {
+				older[k] = true
+				continue
+			}
 			pull.upload[k] = e
 		}
 	}
 	for k, v := range obj(j["tell"]) {
-		if b := obj(v); b != nil {
+		if b := obj(v); b != nil && !older[k] {
 			pull.tell[k] = M{"body": b, "at": time.Time{}}
 		}
 	}
@@ -1340,6 +1440,62 @@ func pullLoad() {
 		if e := obj(v); e != nil {
 			pull.stopCo[k] = e
 		}
+	}
+	if len(older) > 0 {
+		pullSaveLocked()
+		pull.logs = append(pull.logs, fmt.Sprintf("Older entries: %d day%s marked to upload by an earlier bridge version: the marks dropped here (FinCom's own marks decide)", len(older), map[bool]string{true: "", false: "s"}[len(older) == 1]))
+	}
+}
+
+// 2.5.13: FinCom's period list hands out only the days it does not mark to upload (tally_period_next_paced: upload_at is
+// null; a check or fill day only when FinCom asks for it again), so a day listed that this bridge marked "upload" here
+// means FinCom cleared its mark (the day reset in FinCom): the local mark is dropped and the day read again. Not while
+// FinCom has not taken the mark yet (it is still to be told: FinCom's list does not know of it), nor within
+// pullUploadGrace of FinCom taking it (a beat answered meanwhile may be older than the mark), nor more than
+// pullUploadReleaseMax times a day in one run (never a loop of reads). Called with pull.mu held.
+
+const (
+	pullUploadGrace      = 2 * time.Minute
+	pullUploadReleaseMax = 3
+)
+
+func pullUploadReleaseLocked(it pullItem) bool {
+	k := it.key()
+	e := pull.upload[k]
+	if e == nil {
+		return true
+	}
+	if _, pending := pull.tell[k]; pending {
+		return false
+	}
+	at := toI64(e["toldN"])
+	if a := toI64(e["atN"]); a > at {
+		at = a
+	}
+	if at > 0 && nowFn().Sub(time.Unix(0, at)) < pullUploadGrace {
+		return false
+	}
+	if pull.released == nil {
+		pull.released = map[string]int{}
+	}
+	if pull.released[k] >= pullUploadReleaseMax {
+		return false
+	}
+	pull.released[k]++
+	delete(pull.upload, k)
+	pullSaveLocked()
+	pull.logs = append(pull.logs, "Older entries of "+it.Company+": "+liveDay(it.Day)+" is listed again by FinCom (its mark to upload cleared there): read again")
+	return true
+}
+
+// 2.5.13: the log lines noted while pull.mu is held, written after it is let go (no disk write under the lock)
+func pullLogFlush() {
+	pull.mu.Lock()
+	ls := pull.logs
+	pull.logs = nil
+	pull.mu.Unlock()
+	for _, l := range ls {
+		writeLog(l)
 	}
 }
 

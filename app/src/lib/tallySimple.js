@@ -5,7 +5,7 @@
 // the books being brought); nothing new is asked of the bridge, the cloud or Tally.
 //   Client · Linked to Tally? · Open in Tally right now? · Ledgers received? · All entries received? · What to do
 // No computer's name anywhere here (the owner: "no computer names like NWS144"); For support keeps those.
-import { companyRows, twinOf, alikeOf, yearOf, ledgersOf, ledgersHeld, daybookHeld, cloudBook, ledBook, ledgerChanges, ledgerChangesForget } from "../parts/TallyCompanies.jsx";
+import { companyRows, twinOf, alikeOf, yearOf, ledgersOf, ledgersHeld, daybookHeld, cloudBook, ledBook, ledgerChanges, ledgerChangesForget, askFirst } from "../parts/TallyCompanies.jsx";
 import { seenWords, coKey, lastEntry, tallyDevs } from "./tallyState.js";
 import { bookSum, bookFetch, pctOf, etaWords, summary, askStatus } from "../parts/TallyFetch.jsx";
 import { needDays } from "./needDays.js";
@@ -104,7 +104,7 @@ function keepAnswers(name, arity) {
   k.kept = true;
   g[name] = k;
 }
-if (typeof window === "object") { keepAnswers("tallyNameKey", 1); keepAnswers("nameScore", 2); keepAnswers("clientNameFromTally", 1); }
+if (typeof window === "object") { keepAnswers("tallyNameKey", 1); keepAnswers("nameScore", 2); keepAnswers("clientNameFromTally", 1); keepAnswers("tallyLookKey", 1); }
 // the page's own count of a client's ledgers (FinCom's cloud, tally_ledgers counted), by book: a later read of the client's
 // books (TCloud.status) replaces TCloud.st[cid] and its count with it
 export const LEDN = {}, ASKED_N = new Set();
@@ -654,13 +654,16 @@ function clientRow(co, all, opts) {
     // not connected: the company of its name (or GSTIN) that FinCom has seen in Tally, open first; never one open now in
     // another login's Tally (next-tally-other-login). Open in this login's own Tally: Connect, one click, in the column
     const oo = openOf(opts.own), mine = twinsOf(all, cid).filter((r) => !oo.theirs(r) && !oo.elsewhere(r)).sort((a, b) => (oo.open(b) - oo.open(a)) || String(b.seen).localeCompare(String(a.seen)));
-    const r = mine[0] || null, here = !!r && oo.has(r);
-    Object.assign(row, { r, found: r ? r.company : "",
-      c: { w: NO, note: r ? "Found in Tally: “" + shown(r.company) + "”" : "", connect: here },
+    // next-link-choose (the owner: "when we unlink and again link, the same company linked again without giving the
+    // option"): the company a person unlinked, or one of several that look alike (askFirst), is never linked in one click:
+    // Link opens the list of the firm's Tally companies (ChangePick), each with what it holds
+    const r = mine[0] || null, ask = !!r && (mine.length > 1 || askFirst(r, all, co.name)), here = !!r && !ask && oo.has(r);
+    Object.assign(row, { r, found: r ? r.company : "", ask,
+      c: { w: NO, note: r ? (ask && mine.length > 1 ? mine.length + " companies in Tally look alike: choose one" : "Found in Tally: “" + shown(r.company) + "”") : "", connect: here },
       o: { w: DASH, note: "" }, l: { w: DASH, note: "Come after connecting" }, e: { w: DASH, note: "" } });
     if (here) row.todo = "Press Connect.";
-    else if (r) { row.act = { kind: "connect", label: "Link" }; row.todo = "Link it to the Tally company shown."; }
-    else { row.act = { kind: "pickco", label: "Link" }; row.todo = "Open its company in Tally, then press Link."; }
+    else if (r && !ask) { row.act = { kind: "connect", label: "Link" }; row.todo = "Link it to the Tally company shown."; }
+    else { row.act = { kind: "pickco", label: "Link" }; row.todo = ask ? "Press Link and choose which Tally company is this client’s." : "Open its company in Tally, then press Link."; }
     return row;
   }
   // connected
@@ -754,10 +757,11 @@ function clientRow(co, all, opts) {
 }
 // a company open in Tally that no client has: choose its client (the likeliest chosen first)
 function companyRow(r, all, own) {
-  const best = bestFor(r, all);
-  return { key: "t:" + coKey(r.company), kind: "company", r, company: r.company, client: "", best,
+  // next-link-choose: unlinked by a person, or another company looks alike: the client is chosen in the list (best first)
+  const best = bestFor(r, all), ask = askFirst(r, all, best && best.name);
+  return { key: "t:" + coKey(r.company), kind: "company", r, company: r.company, client: "", best, ask,
     c: { w: NO, note: "Open in Tally: “" + shown(r.company) + "”" }, o: openCell(localOpen(r.company, own), own), l: { w: DASH, note: "Come after connecting" }, e: { w: DASH, note: "" },
-    act: { kind: "choose", label: best ? "Link" : "Link to a client" }, todo: best ? "Link it to client “" + best.name + "”." : "Choose which client it is.", upload: false };
+    act: { kind: "choose", label: best && !ask ? "Link" : "Link to a client" }, todo: best && !ask ? "Link it to client “" + best.name + "”." : "Choose which client it is.", upload: false };
 }
 // every row: the clients (by name), then the companies open in Tally that no client has (and that are not a client's
 // "Found in Tally")
@@ -851,7 +855,7 @@ function rowsWork() {
       do { if (i < cs.length) out.push(safeRow(cs[i++], all, opts)); } while (i < cs.length && performance.now() - a < SLICE_MS);
       if (i >= cs.length) {
         const rows = finishRows(out, all, opts), unlinked = openUnlinked(all, own), open = unlinked[0] || null;
-        fin = { rows, extra: { own, unlinked, open, best: open ? bestFor(open, all) : null, just: justLinked(all), linkedN: all.filter((r) => r.client).length } };
+        fin = { rows, extra: { own, unlinked, open, best: open && !askFirst(open, all) ? bestFor(open, all) : null, just: justLinked(all), linkedN: all.filter((r) => r.client).length } };
       }
     } catch (e) { told(e, "the table"); fin = { rows: out.length ? out : quickRows(opts), extra: null }; }
     finally { MEMO.cur = was; QUIET.on -= q; }

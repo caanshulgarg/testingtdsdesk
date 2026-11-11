@@ -11,7 +11,7 @@
 // goes first. Its own file, loaded only with the Tally page and Books › From Tally (the app's first file and legacy.js stay
 // within budget).
 import { useEffect, useState } from "react";
-import { nf, day8, dayLong, hm, fyNow, plural, rpc, missing, may, TurnOn, bookSum, summary, etaWords, partWords, askStatus, askOff, bookFetch, paceWords } from "./TallyFetch.jsx";
+import { nf, day8, dayLong, hm, fyNow, plural, rpc, missing, may, TurnOn, bookSum, summary, etaWords, partWords, askStatus, askOff, bookFetch, paceWords, useLive } from "./TallyFetch.jsx";
 // bridge 2.5.10: once pressed, what the bridge itself said of the check ("Started at …" / "Not started: <its words>"); with
 // nothing said (an older bridge) the waiting words below, as before
 import { ackSnap, ackNew, ackWords } from "../lib/pickAck.js";
@@ -87,8 +87,8 @@ export default function CheckChanges({ cid, where = "books" }) {
   // the press's own answer until the firm's list carries it (then the list, read again while it goes)
   const k = k0 && (!mine || Date.parse(k0.at) >= Date.parse(mine.at)) ? k0 : mine;
   const going = !!(k && k.state !== "done");
-  const [, tick] = useState(0);
-  useEffect(() => { if (!going) return; const t = setInterval(() => { askStatus(true); summary(true); tick((n) => n + 1); }, 10000); return () => clearInterval(t); }, [going]);
+  // (reliability: the one shared poll, lib of TallyFetch.jsx useLive: nothing while the tab is hidden, one read at a time)
+  useLive(going, book, { sum: 10000, ask: 10000 });
   if (!b || askOff()) return null;
   const [a, z] = periodOf(kind, own[0], own[1], b.from), today = istToday(), bf = iso8(b.from);
   const press = () => { if (!a || !z) { setErr("Choose the first and the last day."); return; }
@@ -149,11 +149,10 @@ export const daysOf = (need) => { const out = [];
 export function MissingDays({ cid, need }) {
   const b = bookSum(cid), days = daysOf(need), on = !!(b && (b.devices || []).some((x) => x.fetchOn)), sig = cid + "|" + days.join(",");
   const f = b ? (bookFetch(cid, b.book) || {}).fill : null;
-  const [, tick] = useState(0);
   useEffect(() => { if (!b || !days.length || !on || !may() || askOff() || ASKED.has(sig)) return; ASKED.add(sig);
     rpc("tally_fill_request", { p_client: cid, p_days: days }).then(() => { askStatus(true); }, () => { ASKED.delete(sig); }); }, [sig, on, !!b]);
   const going = !!(f && f.waiting > 0);
-  useEffect(() => { if (!going) return; const t = setInterval(() => { askStatus(true); tick((n) => n + 1); }, 10000); return () => clearInterval(t); }, [going]);
+  useLive(going, cid, { ask: 10000 });
   if (!b || !f || askOff()) return null;
   const ch = Number(f.added || 0) + Number(f.changed || 0) + Number(f.deleted || 0);
   if (going) return <p className="note tfx-fill" data-fill-line="going" role="status" style={{ margin: "0 0 10px" }}>{"Bringing " + plural(f.total, "missing day", "missing days") + " from Tally" +

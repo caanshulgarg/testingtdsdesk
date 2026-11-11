@@ -104,7 +104,8 @@ def main():
             E("(c) => { openCompany(c); S.view = 'company'; S.tab = 'dash'; render(); }", cid); pg.wait_for_timeout(1500)
             if n("[data-tally-icon]"):
                 pg.click("[data-tally-icon]"); pg.wait_for_timeout(1500)
-                opts = E("() => { const e = document.querySelector('[data-tally-pop-pick]'); return e ? [...e.options].map(o => o.value) : null; }")
+                opts = E("() => { const e = document.querySelector('[data-tally-pop-pick]'); return e ? [...e.options].map(o => o.value).filter(Boolean) : null; }")
+                # (next-link-choose: two splits look alike, so none is chosen for the person: the empty "Choose…" first)
                 ok(opts and opts[0] in (SPLIT, POST) and opts.index(OTHER) > max(opts.index(SPLIT), opts.index(POST)), "the popover lists %s's splits first (%s)" % (POST, opts))
                 pg.keyboard.press("Escape")
             else:

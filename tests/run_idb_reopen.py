@@ -69,10 +69,10 @@ async def main():
         r = await pg.evaluate("""async () => { const d = await IDBStore.ready(); d.close();
             try { await Books.save('zz-made-up', {cid: 'zz-made-up', vouchers: [{id: 'v1'}]}); return 'kept'; } catch (e) { return (%s)(e); } }""" % ERR)
         ok(r == "kept", "Books.save after the connection closed: %s" % (r,))
-        v = await pg.evaluate(RAW, [W, "docs", "books:zz-made-up"])
-        ok(isinstance(v, dict) and v.get("cid") == "zz-made-up", "the books are in the database (read with a connection of its own): %s" % (json.dumps(v)[:80],))
-        r = await pg.evaluate("""async () => { (await IDBStore.ready()).close(); try { const a = await IDBStore.get('books:zz-made-up');
-            (await IDBStore.ready()).close(); const b = await IDBStore.prefix('books:zz-made'); return [a && a.cid, b.length]; } catch (e) { return (%s)(e); } }""" % ERR)
+        v = await pg.evaluate(RAW, [W, "docs", "bkw:zz-made-up"])     # (split-save: the books' work part, src/js/04)
+        ok(isinstance(v, dict) and (v.get("d") or {}).get("cid") == "zz-made-up", "the books are in the database (read with a connection of its own): %s" % (json.dumps(v)[:80],))
+        r = await pg.evaluate("""async () => { (await IDBStore.ready()).close(); try { const a = await Books.read('zz-made-up');
+            (await IDBStore.ready()).close(); const b = await IDBStore.prefix('bkw:zz-made'); return [a && a.cid, b.length]; } catch (e) { return (%s)(e); } }""" % ERR)
         ok(r == ["zz-made-up", 1], "a read and a prefix read after the connection closed: %s" % (r,))
 
         print("2. IDBStore: the browser closes the connection")
