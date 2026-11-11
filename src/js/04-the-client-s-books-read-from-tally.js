@@ -527,30 +527,33 @@ const Books = {
   // other entries since this page last saved, and this page's are written too). The entries changed when b.vouchers is
   // another array, or holds another entry in any place, than when this page last saved or read them (vk); a change to an
   // entry in place gives the books a new array (touch). Every reader goes through read: the books rebuilt only when the
-  // two records carry the same version, else the single record of before (an older build's), which is removed once a
-  // read found the two matching.
+  // two records carry the same version.
+  // The single record of before ("books:<cid>", an older build's; it carries no time): every save here removes it in its
+  // own transaction, so one found by a read was written after this build's last save, by a tab still on the older build
+  // (while a release reaches every tab): it is the newer, read and written again as the two records (none of its
+  // changes ignored).
   vk: {},
   K(cid){ return ["bke:", "bkw:", "bkh:", "books:"].map(p => p + cid); },
   touch(b){ if (b && b.vouchers) b.vouchers = b.vouchers.slice(); },
   async save(cid, data){
     this.remember(cid, data); this.ver[cid] = (this.ver[cid] || 0) + 1;
-    const [E, W, H] = this.K(cid);
+    const [E, W, H, O] = this.K(cid);
     await IDBStore.tx((st, g) => { const q = st.get(H); q.onsuccess = () => g(() => {
       const k = this.vk[cid], h = q.result, v = data.vouchers, d = Object.assign({}, data);
       const s = k && h && h.s === k.s && k.r === v && (!v || v.length === k.a.length && v.every((x, i) => x === k.a[i])) ? k.s : Date.now() + "." + Math.random();
       delete d.vouchers;
       // (kept before the transaction is done: if it fails, bkh differs from it and the next save writes the entries)
       if (!k || s !== k.s){ st.put({s, v}, E); st.put({s}, H); this.vk[cid] = {s, r: v, a: v && v.slice()}; }
-      st.put({s, d}, W);
+      st.put({s, d}, W); st.delete(O);
     }); });
   },
   // mine: the books read are to be this page's copy (load), so their entries are the ones last read here (not while the
   // open books are this client's: those are)
   async read(cid, mine){
-    const [E, W, , O] = this.K(cid), [e, w] = await IDBStore.gets([E, W]), m = mine && !(S.books && S.books.cid === cid && !S.books.loading);
-    if (!(e && w && e.s === w.s)){ if (m) delete this.vk[cid]; return IDBStore.get(O); }
+    const [e, w, o] = await IDBStore.gets(this.K(cid).filter((k, i) => i !== 2)), m = mine && !(S.books && S.books.cid === cid && !S.books.loading);
+    if (o){ if (o.cid === cid) this.save(cid, o).catch(() => {}); return o; }
+    if (!(e && w && e.s === w.s)){ if (m) delete this.vk[cid]; return; }
     if (m) this.vk[cid] = {s: e.s, r: e.v, a: e.v && e.v.slice()};
-    IDBStore.write([[O, null]]).catch(() => {});
     return Object.assign({cid: w.d.cid, vouchers: e.v}, w.d);
   },
   async load(cid){

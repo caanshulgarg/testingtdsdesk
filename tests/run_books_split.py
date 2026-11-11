@@ -8,8 +8,10 @@ are kept apart from the rest (the work) and written only when they changed: "bke
 The React test build (app/dist-test, or TDSDESK_SITE) served at /review/, signed in to the stand-in cloud (tally_shapes.py):
   1. a save and a reload: the books read back the same; the entries are written once, not again for a change of the work
      only; again for any change to the entries
-  2. books kept by a build before this one (the single record) open as they were; the next save writes the two records
-     and keeps the old one; the next read that finds the two matching removes it
+  2. books kept by a build before this one (the single record) open as they were and are written again as the two
+     records (the single one removed in that transaction); (a) a tab still on the older build saves after this build's
+     save: its single record is the newer and is what opens (none of its changes ignored); (b) this build saves after
+     it: this build's books open, the single record gone
   3. a save cut short (its second write fails): nothing of it is kept and the books read back as saved before it; two
      records that do not go together (versions differ) are never put together: the single record, else nothing
   4. another tab wrote other entries since this page last saved (bkh): a save of the work alone writes the entries too
@@ -137,17 +139,33 @@ async def main():
         ok(back == ob, "the single record of before is read as it was%s" % ("" if back == ob else " GOT %s / %s" % ((back or "")[:200], ob[:200])))
         await E("async (cid) => { await openCompany(cid); await openBooks(cid); for (let i = 0; i < 100 && (!S.books || S.books.loading); i++) await new Promise((r) => setTimeout(r, 50)); }", cid)
         ok(await E("() => S.books.vouchers.length") == 120, "the client opens with those books (120 entries)")
+        await asyncio.sleep(0.5)
+        r = await raw()
+        ok(r["bke:" + cid] and r["bkw:" + cid] and r["books:" + cid] is None and len(r["bke:" + cid]["v"]) == 120,
+           "written again as the two records, the single record removed: %s" % {k: (v or {}).get("s", bool(v)) for k, v in r.items()})
+        print("2a. split saved here, then a tab on the older build saves later")
         await E("async () => { S.books.challans = [{id: 'ch9', amt: 9}]; await saveBooks(); }")
+        later = await E(MAKE, [cid, 130]); later["challans"] = [{"id": "old-tab", "amt": 1}]
+        await E(RAWPUT, [W, [["books:" + cid, later]]])
+        await reload()
+        back = await E(SAVED, cid)
+        ob = await E("(b) => stableStr(JSON.parse(JSON.stringify(b)))", later)
+        ok(back == ob, "a new tab opens the older tab's later save (130 entries, its challan), not the split records")
+        await asyncio.sleep(0.5)
+        r = await raw()
+        ok(r["books:" + cid] is None and len(r["bke:" + cid]["v"]) == 130 and r["bkw:" + cid]["d"]["challans"][0]["id"] == "old-tab",
+           "and writes it again as the two records")
+        await E("async (cid) => { await openCompany(cid); await openBooks(cid); for (let i = 0; i < 100 && (!S.books || S.books.loading); i++) await new Promise((r) => setTimeout(r, 50)); }", cid)
+        ok(await E("() => S.books.vouchers.length") == 130 and await E("() => S.books.challans[0].id") == "old-tab", "the client opens with the older tab's books")
+        print("2b. the single record older than this build's save")
+        await E(RAWPUT, [W, [["books:" + cid, old]]])
+        await E("async () => { S.books.challans = [{id: 'ch10', amt: 10}]; await saveBooks(); }")
         await asyncio.sleep(2.0); await E("() => saveBooks()")
         mem = await E(MEM)
         r = await raw()
-        ok(r["bke:" + cid] and r["bkw:" + cid] and r["books:" + cid] is not None and r["bke:" + cid]["s"] == r["bkw:" + cid]["s"],
-           "the next save writes the two records (the entries too) and keeps the single record: %s" % {k: (v or {}).get("s", bool(v)) for k, v in r.items()})
+        ok(r["books:" + cid] is None, "this build's later save removes the older single record in its transaction")
         await reload()
-        back = await E(SAVED, cid)
-        await asyncio.sleep(0.3)
-        r = await raw()
-        ok(back == mem and r["books:" + cid] is None, "the next read finds the two matching: the books as saved, the single record removed (%s)" % (r["books:" + cid] is None))
+        ok(await E(SAVED, cid) == mem, "the split records win: the books as this build saved them")
 
         print("3. a save cut short")
         await E("async (cid) => { await openCompany(cid); await openBooks(cid); for (let i = 0; i < 100 && (!S.books || S.books.loading); i++) await new Promise((r) => setTimeout(r, 50)); }", cid)
@@ -170,7 +188,7 @@ async def main():
         ok(await E(SAVED, cid) is None, "two records whose versions differ (and no single record): nothing, never the two put together")
         await E(RAWPUT, [W, [["books:" + cid, old]]])
         ok(await E(SAVED, cid) == await E("(b) => stableStr(JSON.parse(JSON.stringify(b)))", old), "... and with a single record there: that record")
-        await E(RAWPUT, [W, [["bkw:" + cid, r["bkw:" + cid]], ["books:" + cid, None]]])
+        await asyncio.sleep(0.5); await E("() => saveBooks()")     # (this page's books saved again, as they were)
 
         print("4. another tab wrote other entries")
         await reload()
