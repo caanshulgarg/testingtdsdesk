@@ -194,7 +194,7 @@ func voucherObjectRequest(company, mid string) string {
 	}
 	return `<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Object</TYPE><SUBTYPE>Voucher</SUBTYPE>` +
 		`<ID TYPE="Name">ID:` + mid + `</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>` +
-		`<SVCURRENTCOMPANY>` + esc(company) + `</SVCURRENTCOMPANY></STATICVARIABLES><FETCHLIST>` + fl.String() + `</FETCHLIST></DESC></BODY></ENVELOPE>`
+		`<SVCURRENTCOMPANY>` + esc(tallyCo(company)) + `</SVCURRENTCOMPANY></STATICVARIABLES><FETCHLIST>` + fl.String() + `</FETCHLIST></DESC></BODY></ENVELOPE>`
 }
 
 var reObjMid = regexp.MustCompile(`<ID TYPE="Name">ID:(\d+)</ID>`)

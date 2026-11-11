@@ -45,7 +45,7 @@ const importHead = "<ENVELOPE><HEADER><TALLYREQUEST>Import Data</TALLYREQUEST></
 
 func importEnvelope(report, company, body string) string {
 	return importHead + report + "</REPORTNAME>" +
-		"<STATICVARIABLES><SVCURRENTCOMPANY>" + esc(company) + "</SVCURRENTCOMPANY></STATICVARIABLES></REQUESTDESC><REQUESTDATA>" + body + "</REQUESTDATA></IMPORTDATA></BODY></ENVELOPE>"
+		"<STATICVARIABLES><SVCURRENTCOMPANY>" + esc(tallyCo(company)) + "</SVCURRENTCOMPANY></STATICVARIABLES></REQUESTDESC><REQUESTDATA>" + body + "</REQUESTDATA></IMPORTDATA></BODY></ENVELOPE>"
 }
 
 func flat(s string) string { return re(`\s+`).ReplaceAllString(s, " ") }

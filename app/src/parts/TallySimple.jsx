@@ -305,14 +305,14 @@ function Act({ row, main = false }) {
   if (!canWrite()) return null;
   let btn;
   if (a.kind === "connect") btn = <ConnectBtn r={row.r} co={row.co} label="Link" hook={{ "data-tsm-act": "connect" }} />;
-  else if (a.kind === "choose" && row.best) btn = <ConnectBtn r={row.r} co={row.best} label="Link" hook={{ "data-tsm-act": "connect", "data-tsm-act-client": row.best.id }} />;
+  else if (a.kind === "choose" && row.best && !row.ask) btn = <ConnectBtn r={row.r} co={row.best} label="Link" hook={{ "data-tsm-act": "connect", "data-tsm-act-client": row.best.id }} />;
   else if (a.kind === "choose" || a.kind === "pickco") btn = <button type="button" className="btn primary" data-tsm-act={a.kind} onClick={() => setPick(!pick)} aria-expanded={pick}>{a.label}</button>;
   else if (a.kind === "upload") btn = <button type="button" className={"btn primary" + (main ? " tpt-btn" : "")} data-tsm-act="upload" data-tpt-main={main ? "upload" : undefined} onClick={() => { try { if (a.run) a.run(); else if (a.day && typeof Rec === "object" && Rec.uploadFrom) Rec.uploadFrom(row.cid, a.day); else openFromTally(row.cid); } catch (e) { say("up:" + row.cid, errWords(e), true); } }}>{a.label}</button>;
   else if (a.kind === "bring") btn = <button type="button" className={"btn primary" + (main ? " tpt-btn" : "")} data-tsm-act="bring" data-tpt-main={main ? "bring" : undefined} disabled={busyOf(fk)}
     onClick={() => press(fk, () => bringDays(row, a))}>{busyOf(fk) ? "Asking Tally…" : a.label}</button>;
   return <>{btn}{a.kind === "upload" && <Said k={"up:" + row.cid} hook="upload" />}
-    {a.kind === "choose" && row.best && !pick && <div><button type="button" className="linkbtn tsm-small" data-tsm-act-choose="" onClick={() => setPick(true)}>Choose another client</button></div>}
-    {pick && a.kind === "choose" && <div className="tsm-pick" data-tsm-row-pick=""><Pick r={row.r} co={null} pre={row.best ? row.best.id : ""} onClose={() => setPick(false)} /></div>}
+    {a.kind === "choose" && row.best && !row.ask && !pick && <div><button type="button" className="linkbtn tsm-small" data-tsm-act-choose="" onClick={() => setPick(true)}>Choose another client</button></div>}
+    {pick && a.kind === "choose" && <div className="tsm-pick" data-tsm-row-pick=""><Pick r={row.r} co={null} pre={row.best && !row.ask ? row.best.id : ""} onClose={() => setPick(false)} /></div>}
     {pick && a.kind === "pickco" && <div className="tsm-pick" data-tsm-row-pick=""><ChangePick co={row.co} cur="" onClose={() => setPick(false)} /></div>}</>;
 }
 // ---------- opening balances (migration 138): one line under "Ledgers received?"; when Tally's differ, the owner's two
@@ -405,7 +405,7 @@ function bridgesUp() { try { return bridgesOf().some((b) => b.at && Date.now() -
 function openAnywhere() { try { return new Set(companyRows().filter((r) => r.open).map((r) => coKey(r.company))); } catch (e) { return new Set(); } }
 // what a row is: {kind, dot (ok | read | warn | idle | ring), say, why, btn (update | again | connect | link | act), need}
 export function pageOf(row, seen) {
-  if (row.kind === "company") return { kind: "company", dot: "idle", say: "Open in Tally · not linked", why: row.best ? "Client “" + row.best.name + "” matches" : "No client of its name yet", btn: row.best ? "connect" : "link" };
+  if (row.kind === "company") return { kind: "company", dot: "idle", say: "Open in Tally · not linked", why: row.best ? "Client “" + row.best.name + "” matches" + (row.ask ? ": choose to link" : "") : "No client of its name yet", btn: row.best && !row.ask ? "connect" : "link" };
   if (row.c.w !== YES) {
     if (row.c.connect) return { kind: "open", dot: "idle", say: "Open in Tally · not linked", why: "", btn: "connect" };
     return { kind: "free", dot: "ring", say: "Not linked", why: row.found ? "Found in Tally: “" + shown(row.found) + "”" : "", btn: "link" };
@@ -428,7 +428,7 @@ export function mainOf(row, pg) {
   if (pg.btn === "update" && row.act && (row.act.kind === "upload" || row.act.kind === "bring")) return { main: row.act.kind, label: row.act.label };
   if (pg.btn === "update") return { main: "update", label: "Update now" };
   if (pg.btn === "again") return { main: "again", label: pg.label || "Connect again" };
-  if (pg.kind === "open" || (pg.kind === "company" && row.best)) return { main: "connect", label: "Connect" };
+  if (pg.kind === "open" || (pg.kind === "company" && row.best && !row.ask)) return { main: "connect", label: "Connect" };
   return { main: "link", label: "Link" };
 }
 if (typeof globalThis === "object") globalThis.FCTallyMain = (row) => mainOf(row, pageOf(row, new Set()));
@@ -550,7 +550,7 @@ function Row({ row, download, oneDl, seen, cs, x, checkAgain }) {
   else if (pg.btn === "update" && linked && e.b && e.b.book && (e.st === "behind" || e.st === "stopped" || (e.st === "none" && m.st === "done"))) { btn = <BringBooks row={row} e={e} />; main = "books"; }
   else if (pg.btn === "update") { btn = <button type="button" className="btn tpt-btn" data-tpt-main="update" data-tsm-update={row.cid} onClick={() => runPress(row.cid, row.company, { entries: true }).catch(() => {}).then(() => tick((k) => k + 1))}>Update now</button>; main = "update"; }
   else if (pg.kind === "open") { btn = <ConnectBtn r={row.r} co={row.co} label="Connect" hook={{ "data-tsm-connect": row.cid, "data-tpt-main": "connect" }} />; main = "connect"; }
-  else if (pg.kind === "company" && row.best) { btn = <ConnectBtn r={row.r} co={row.best} label="Connect" hook={{ "data-tsm-act": "connect", "data-tsm-act-client": row.best.id, "data-tpt-main": "connect" }} />; main = "connect"; }
+  else if (pg.kind === "company" && row.best && !row.ask) { btn = <ConnectBtn r={row.r} co={row.best} label="Connect" hook={{ "data-tsm-act": "connect", "data-tsm-act-client": row.best.id, "data-tpt-main": "connect" }} />; main = "connect"; }
   else { btn = <ActLink row={row} />; main = "link"; }
   const aw = pg.btn === "again" ? Again.why(row, cs) : null;
   const near = pg.kind === "away" && x ? (x.unlinked || []).find((u) => coKey(u.company) !== coKey(row.company) && (baseKey(u.company) === baseKey(row.company) || !!(globalThis.LinkRec && LinkRec.same && LinkRec.same(u.company, row.company)))) : null;
@@ -578,7 +578,7 @@ function Row({ row, download, oneDl, seen, cs, x, checkAgain }) {
         {/* next-link-follow (migration 146): where the book is read from, or the linked computer offline with the company open nowhere */}
         {row.where && row.where.text !== why && <span className={"tpt-why" + (row.where.kind === "offline" ? " bad" : "")} data-tpt-where={row.where.kind}>{row.where.text}</span>}
         {near && canWrite() && <span className="tpt-why" data-tsm-away-near={near.company}>{"“" + shown(near.company) + "” is open in your Tally, a close name. "}
-          <ConnectBtn r={near} co={row.co} label={"Link " + row.client + " to it"} primary={false} hook={{ "data-tsm-away-relink": row.cid }} /></span>}
+          <NearPick row={row} /></span>}
       </span>
     </td>
     <td className="tpt-td tpt-io-td" data-label="In Tally">{io ? <span className={"tpt-io " + io} data-tpt-intally={io}>{io === "open" ? "Open" : "Not open"}<span className="tpt-io-x">{" in Tally"}</span></span> : null}</td>
@@ -606,7 +606,14 @@ function ActLink({ row }) {
   if (a.kind === "connect") return <ConnectBtn r={row.r} co={row.co} label="Link" primary={false} hook={{ "data-tsm-act": "connect", "data-tpt-main": "link" }} />;
   const kind = a.kind === "pickco" ? "pickco" : "choose";
   return <span className="tpt-link"><button type="button" className="btn tpt-btn primary" data-tsm-act={kind} data-tpt-main="link" onClick={() => setPick(!pick)} aria-expanded={pick}>Link</button>
-    {pick && <div className="tsm-pick" data-tsm-row-pick="">{kind === "pickco" ? <ChangePick co={row.co} cur="" onClose={() => setPick(false)} /> : <Pick r={row.r} co={null} pre={row.best ? row.best.id : ""} onClose={() => setPick(false)} />}</div>}</span>;
+    {pick && <div className="tsm-pick" data-tsm-row-pick="">{kind === "pickco" ? <ChangePick co={row.co} cur="" onClose={() => setPick(false)} /> : <Pick r={row.r} co={null} pre={row.best && !row.ask ? row.best.id : ""} onClose={() => setPick(false)} />}</div>}</span>;
+}
+// next-link-choose (review): a linked client away, a close name open here: the list of companies (nothing chosen), never
+// one click (it may be an empty copy, or the company a person just unlinked)
+function NearPick({ row }) {
+  const [pick, setPick] = useState(false);
+  return <>{!pick && <button type="button" className="linkbtn" data-tsm-away-choose={row.cid} onClick={() => setPick(true)}>Choose the Tally company…</button>}
+    {pick && <ChangePick co={row.co} cur={row.company} onClose={() => setPick(false)} />}</>;
 }
 // next-tally-filters2 (the owner's approved filter design, 09-Nov-2026: design-filters Main and Phone; replaces the
 // per-column filters of next-tally-filters): above ONE table (Client · Tally company | State | In Tally | Masters |
@@ -933,6 +940,12 @@ function Computers({ pcs, download, sha }) {
 // the page above For support. installed: a bridge of the firm heard this week (the guided box counts it only when this user
 // has a bridge of their own: ownState); pcs: {connected, away, older};
 // download: the one Download FinCom Bridge (this site's latest.json); connectPanel: step 1's Download, Open it, Type its code
+// reliability (11-Nov-2026): a read of FinCom's cloud that failed (the computers, the summary, the checks, the masters'
+// progress: TStale, src/js/49) is said once above the table, with the time of what is shown; never told as Tally's state
+function StaleNote() {
+  const st = typeof TStale === "object" ? TStale.now() : null;
+  return st ? <p className="note warn" data-tally-stale={st.at || 0} role="status" style={{ margin: "6px 0" }}>{st.words + " \u00b7 " + (st.at ? "showing what FinCom last knew, " + st.as : st.as)}</p> : null;
+}
 export default function SimpleTally({ installed, ready = true, pcs, download, sha, checkAgain, connectPanel, latest = "" }) {
   const ui = UI(), g = S.tallyGuide || {}, now = Date.now();
   const focus = g.cid && g.at && now - g.at < GUIDE_MS ? g.cid : (S.tallyFocus || "");
@@ -973,6 +986,7 @@ export default function SimpleTally({ installed, ready = true, pcs, download, sh
   const beat = ((own.own || {}).beat) || null;
   return <div className="tsm" data-tally-simple="" data-tsm-own={own.state} data-tsm-own-from={own.from || undefined} data-tsm-own-how={(own.own && own.own.how) || undefined} data-tsm-rows={R.extra ? "done" : "quick"}>
     <Part name="top" v={v}><Top cs={cs} own={own} rows={rows} checkAgain={checkAgain} ready={ready} shown={!!ready && showGuide} beat={beat} /></Part>
+    <StaleNote />
     {strip && !(ready && R.extra && cs.mode === "login") && <Part name="strip" v={v}><Strip key={coKey(open.company)} r={open} best={best} more={unlinked.length - 1} /></Part>}
     {ready && showGuide && <Part name="guided box" v={v}><Guide cs={cs} collapsed={!expanded} forced={forced} asked={!!g.at && (g.step || 0) <= 3 && now - g.at < GUIDE_MS} connectPanel={connectPanel} download={download} checkAgain={checkAgain} /></Part>}
     {down && ready && R.extra && !rows.length ? <Part name="short" v={v}><ShortCard rows={rows} cs={cs} /></Part>

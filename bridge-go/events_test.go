@@ -94,6 +94,9 @@ func newStandIn(t *testing.T, ledgers int) *standIn {
 		}
 		out := "<ENVELOPE></ENVELOPE>"
 		switch id {
+		case grpListID:
+			// 2.5.14: a real company always has its primary groups (an answer with none is not a list: ledgers.go)
+			out = `<ENVELOPE><GROUP NAME="Capital Account"><PARENT></PARENT></GROUP></ENVELOPE>`
 		case "TDSDeskCompanies":
 			out = `<ENVELOPE><COLLECTION><COMPANY NAME="` + zz + `"><NAME>` + zz + `</NAME><STARTINGFROM>20260401</STARTINGFROM><ENDINGAT>20270331</ENDINGAT><BOOKSFROM>20260401</BOOKSFROM><GUID>g-1</GUID></COMPANY></COLLECTION></ENVELOPE>`
 		case "TDSDeskKeepCo":
@@ -123,6 +126,9 @@ func newStandIn(t *testing.T, ledgers int) *standIn {
 // a bridge in a folder of its own, using the stand-in Tally; the state of earlier tests forgotten
 func bridgeFor(t *testing.T, s *standIn, extra string) string {
 	waitIdle(t)
+	// 2.5.14: the stand cloud says every company linked; the masters read a new link starts (cloud.go linkedWake) is not
+	// started in these tests (r2514_test.go tests it): they count their own runs and requests
+	linkedWakeSeen = func(string) {}
 	dir := t.TempDir()
 	booksFromMu.Lock()
 	booksFromHeld, booksFromSaid, booksFromAsk = map[string]string{}, map[string]bool{}, map[string]time.Time{} // 2.5.0: each company's books-from, per test

@@ -28,6 +28,8 @@ import "../../../src/js/96-bank-sent-heal.js";
 import "../../../src/js/98-link-record.js";
 import "../../../src/js/97-postto-link.js";
 import "../../../src/js/98-post-register.js";
+// who holds a posting (PostOwner: src/js/59-post-owner.js) comes with this screen's file, not in legacy.js (build.py lazy_files)
+import "../../../src/js/59-post-owner.js";
 
 const plural = (n, one, many) => n + " " + (n === 1 ? one : many);
 const OPTIONAL_HELP = "Tally does not show these in the Day Book: Display More Reports → Exception Reports → Optional Vouchers. Open one and press Ctrl+L to make it a regular entry.";

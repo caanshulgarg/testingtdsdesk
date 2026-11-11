@@ -21,42 +21,59 @@ const Books = {
     }
     return "";
   },
+  // speed (11-Nov-2026: a linked client's first opening read each month in one task, up to 0.5 s with the page frozen):
+  // the browser gets its turn whenever a piece of work has run SLICE ms (a message, not a timer: no 4 ms wait each time)
+  SLICE: 30,
+  pause(){
+    if (typeof scheduler === "object" && scheduler && typeof scheduler.yield === "function") return scheduler.yield().catch(() => {});
+    if (typeof MessageChannel !== "function") return typeof setTimeout === "function" ? new Promise(r => setTimeout(r, 0)) : Promise.resolve();
+    return new Promise(r => { const ch = new MessageChannel(); ch.port1.onmessage = () => { ch.port1.close(); r(); }; ch.port2.postMessage(0); });
+  },
+  now(){ return typeof performance === "object" && performance ? performance.now() : Date.now(); },
+  // a slice's clock: due() once SLICE ms have passed since the browser last had its turn; give() gives it (a new slice)
+  slicer(){ let t = this.now(); return {due: () => Books.now() - t > Books.SLICE, async give(){ await Books.pause(); t = Books.now(); }}; },
   // Tally exports can be very large, so the file is read in pieces and only what we use is kept
   async importDayBook(file, onProgress){
     const dec = await this.decoder(file);
     const out = [], meta = {company: "", from: "", to: "", gstins: new Set(), bills: 1, cc: 1};
     let buf = "", read = 0;
-    const reader = file.stream().getReader();
-    for (;;){
-      const {done, value} = await reader.read();
-      if (done) break;
-      read += value.length;
-      buf += dec.decode(value, {stream: true});
+    const reader = file.stream().getReader(), sl = this.slicer();
+    const take = async () => {
       let cut;
       while ((cut = buf.indexOf("</VOUCHER>")) >= 0){
         const piece = buf.slice(0, cut + 10);
         buf = buf.slice(cut + 10);
         const start = piece.lastIndexOf("<VOUCHER ");
         if (start >= 0) this.takeVoucher(piece.slice(start), out, meta);
+        if (sl.due()) await sl.give();
       }
+    };
+    for (;;){
+      const {done, value} = await reader.read();
+      if (done) break;
+      read += value.length;
+      buf += dec.decode(value, {stream: true});
+      await take();
       if (buf.length > 400000) buf = buf.slice(-200000);
       if (onProgress && out.length % 250 === 0) onProgress("Read " + out.length + " vouchers (" + Math.round(read / 1048576) + " MB)…");
     }
     buf += dec.decode();
-    let cut;
-    while ((cut = buf.indexOf("</VOUCHER>")) >= 0){
-      const piece = buf.slice(0, cut + 10); buf = buf.slice(cut + 10);
-      const start = piece.lastIndexOf("<VOUCHER ");
-      if (start >= 0) this.takeVoucher(piece.slice(start), out, meta);
-    }
+    await take();
     meta.gstins = Array.from(meta.gstins);
     const dates = out.map(v => v.date).filter(Boolean).sort();
     meta.from = dates[0] || ""; meta.to = dates[dates.length - 1] || "";
     // build 191: each entry's words are cut from the file's text, and the browser keeps the whole text alive behind
     // them (a year's day book of 400 MB stayed in memory: 430 MB used for 7 MB of entries). A copy lets it go
-    let clean = out;
-    try { clean = typeof structuredClone === "function" ? structuredClone(out) : JSON.parse(JSON.stringify(out)); } catch (e){ clean = out; }
-    return {vouchers: clean, meta};
+    // (speed: copied a few hundred entries at a time, the browser given its turn between)
+    return {vouchers: await this.copyOut(out, sl), meta};
+  },
+  async copyOut(out, sl){
+    const cp = x => typeof structuredClone === "function" ? structuredClone(x) : JSON.parse(JSON.stringify(x));
+    try {
+      const clean = [];
+      for (let i = 0; i < out.length; i += 250){ clean.push(...cp(out.slice(i, i + 250))); if (sl && sl.due()) await sl.give(); }
+      return clean;
+    } catch (e){ return out; }
   },
   // build 195: which Tally company a file was exported from: its name (SVCURRENTCOMPANY) and the company part of the
   // entries' GUIDs (the same in every export of that company), and the first registration in it
@@ -502,14 +519,52 @@ const Books = {
   // (the due list on Today works a client out again only when its books were saved since)
   MEM: 3, mem: new Map(), ver: {},
   remember(cid, data){ this.mem.delete(cid); if (data) this.mem.set(cid, data); while (this.mem.size > this.MEM) this.mem.delete(this.mem.keys().next().value); },
+  // split-save (11-Nov-2026): a save wrote the whole books as one record ("books:<cid>"; 51,758 entries: 0.4 s, about
+  // 1.5 s on an office PC) for any change: a tick, a cloud item, an MIS or audit run. Now the entries are kept apart from
+  // the rest and written again only when they changed, in one transaction with the rest:
+  //   "bke:<cid>" {s, v: the entries}   "bkw:<cid>" {s, d: the rest}   "bkh:<cid>" {s}
+  // s: the version of the entries the rest goes with (bkh, small, is read in the save's transaction: another tab wrote
+  // other entries since this page last saved, and this page's are written too). The entries changed when b.vouchers is
+  // another array, or holds another entry in any place, than when this page last saved or read them (vk); a change to an
+  // entry in place gives the books a new array (touch). Every reader goes through read: the books rebuilt only when the
+  // two records carry the same version.
+  // The single record of before ("books:<cid>", an older build's; it carries no time, so its age is known this way): it
+  // is removed only by a save here, in that save's own transaction (the save writes the whole books: the last writer
+  // wins, as when the books were one record); a read never removes it. So one found by a read was written after this
+  // build's last save, by a tab still on the older build (while a release reaches every tab): it is the newer and is
+  // what is read, until the next save here writes the books as the two records (none of its changes ignored).
+  // gone: clients removed here (drop); a save for one is refused, so their books are not written again
+  vk: {}, gone: {},
+  K(cid){ return ["bke:", "bkw:", "bkh:", "books:"].map(p => p + cid); },
+  touch(b){ if (b && b.vouchers) b.vouchers = b.vouchers.slice(); },
   async save(cid, data){
+    if (this.gone[cid]) return;
     this.remember(cid, data); this.ver[cid] = (this.ver[cid] || 0) + 1;
-    await IDBStore.write([["books:" + cid, data]]);
+    const [E, W, H, O] = this.K(cid);
+    await IDBStore.tx((st, g) => { const q = st.get(H); q.onsuccess = () => g(() => {
+      const k = this.vk[cid], h = q.result, v = data.vouchers, d = Object.assign({}, data);
+      const s = k && h && h.s === k.s && k.r === v && (!v || v.length === k.a.length && v.every((x, i) => x === k.a[i])) ? k.s : Date.now() + "." + Math.random();
+      delete d.vouchers;
+      // (kept before the transaction is done: if it fails, bkh differs from it and the next save writes the entries)
+      if (!k || s !== k.s){ st.put({s, v}, E); st.put({s}, H); this.vk[cid] = {s, r: v, a: v && v.slice()}; }
+      st.put({s, d}, W); st.delete(O);
+    }); });
+  },
+  // mine: the books read are to be this page's copy (load), so their entries are the ones last read here (not while the
+  // open books are this client's: those are)
+  async read(cid, mine){
+    const [e, w, o] = await IDBStore.gets(this.K(cid).filter((k, i) => i !== 2)), m = mine && !(S.books && S.books.cid === cid && !S.books.loading);
+    if (o){ if (m) delete this.vk[cid]; return o; }
+    if (!(e && w && e.s === w.s)){ if (m) delete this.vk[cid]; return; }
+    if (m) this.vk[cid] = {s: e.s, r: e.v, a: e.v && e.v.slice()};
+    return Object.assign({cid: w.d.cid, vouchers: e.v}, w.d);
   },
   async load(cid){
     if (this.mem.has(cid)){ const d = this.mem.get(cid); this.remember(cid, d); return d; }
-    try { const d = await IDBStore.get("books:" + cid); if (d && d.cid === cid) this.remember(cid, d); return d; } catch (e){ return null; }
+    try { const d = await this.read(cid, 1); if (d && d.cid === cid) this.remember(cid, d); return d; } catch (e){ return null; }
   },
+  // a client removed: its books leave this browser
+  drop(cid){ this.gone[cid] = 1; this.forget(cid); delete this.vk[cid]; return IDBStore.write(this.K(cid).map(k => [k, null])).catch(() => {}); },
   forget(cid){ if (cid) this.mem.delete(cid); else this.mem.clear(); }
 };
 

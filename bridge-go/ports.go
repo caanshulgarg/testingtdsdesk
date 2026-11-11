@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -599,6 +600,7 @@ func openCompaniesAsk(tc *TC, fresh bool) ([]M, bool) {
 				coMu.Lock()
 				coCache, coCacheAt = l, t
 				coMu.Unlock()
+				noteTallyNames(l) // 2.5.14
 				return copySessions(l), false
 			}
 		}
@@ -748,6 +750,7 @@ func openCompaniesAsk(tc *TC, fresh bool) ([]M, bool) {
 	planMode = mode
 	coCache, coCacheAt = sessions, time.Now()
 	coMu.Unlock()
+	noteTallyNames(sessions) // 2.5.14
 	_ = saveFile(shared, jsonText(sessions))
 	if !partial { // 2.5.8 round-2 review: an ask of some ports only is no look at every own Tally (recorder_owntally.go)
 		liveNoteOwnTally(ownOpen, ownAll)
@@ -808,6 +811,48 @@ func sessionsFromFile(f string) []M {
 		return []M{}
 	}
 	return out
+}
+
+// --- 2.5.14 (the independent review of 9d546dcb1): every request names its company exactly as Tally's own company list
+// gave it. A name that came another way (FinCom's cloud keeps names cleaned of edge spaces and control characters:
+// coTrim) is put back to Tally's own spelling when the last list named exactly one company of that name (companyKey);
+// else it is left as it came. A name Tally gave is never changed, so a clean name's requests are byte for byte as
+// before. Read from a snapshot taken when the list is kept (no lock: a request may be built under any lock)
+var tallyNames atomic.Pointer[[]string]
+
+func noteTallyNames(sessions []M) {
+	var l []string
+	for _, s := range sessions {
+		if s["ok"] != true || s["skipped"] == true {
+			continue
+		}
+		for _, c := range sessCompanies(s) {
+			if n := str(c["name"]); n != "" {
+				l = append(l, n)
+			}
+		}
+	}
+	tallyNames.Store(&l)
+}
+
+func tallyCo(company string) string {
+	p := tallyNames.Load()
+	if company == "" || p == nil {
+		return company
+	}
+	k, name := companyKey(company), ""
+	for _, n := range *p {
+		if n == company {
+			return company
+		}
+		if companyKey(n) == k {
+			if name != "" && name != n {
+				return company // two spellings of one name: not known which is meant
+			}
+			name = n
+		}
+	}
+	return or(name, company)
 }
 
 func sessCompanies(s M) []M {
@@ -1180,7 +1225,7 @@ func companiesRequest() string {
 
 // one company's GSTIN and PAN (the company's own master fields)
 func coInfoRequest(name string) string {
-	extra := `<FILTERS>TDSDeskThisCo</FILTERS></COLLECTION><SYSTEM TYPE="Formulae" NAME="TDSDeskThisCo">$Name = "` + esc(strings.ReplaceAll(name, `"`, "")) + `"</SYSTEM><COLLECTION NAME="TDSDeskUnused" ISMODIFY="No"><TYPE>Company</TYPE>`
+	extra := `<FILTERS>TDSDeskThisCo</FILTERS></COLLECTION><SYSTEM TYPE="Formulae" NAME="TDSDeskThisCo">$Name = "` + esc(strings.ReplaceAll(tallyCo(name), `"`, "")) + `"</SYSTEM><COLLECTION NAME="TDSDeskUnused" ISMODIFY="No"><TYPE>Company</TYPE>`
 	return collectionRequest("TDSDeskCompanyInfo", "Company", "NAME,GSTREGISTRATIONNUMBER,INCOMETAXNUMBER,GSTREGISTRATIONDETAILS.LIST,GUID", name, extra)
 }
 

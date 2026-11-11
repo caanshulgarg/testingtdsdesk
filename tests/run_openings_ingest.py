@@ -208,6 +208,20 @@ try:
     ok(c == 200 and r.get("booksFrom") == {"LOAN CO": ""}, "H. a company of that name with another GUID (a restored or test copy): \"\", never the book's day (%s)" % r.get("booksFrom"))
     c, r = call({"kind": "beat", "tally": True, "open": ["LOAN CO"], "companies": [{"name": "LOAN CO", "open": True}]})
     ok(c == 200 and not r.get("booksFrom"), "H. no GUID in the beat yet for a book with a recorded GUID: left out, the bridge keeps its day (%s)" % r.get("booksFrom"))
+    print("== I. (2.5.13) no first day known anywhere: the ledgers come without their openings")
+    seed(BB, [("Cash", "Cash-in-Hand", -40), ("Capital", "Capital Account", 40)])
+    n_st, n_se = len(FS.ARGS.get("tally_openings_stage") or []), len(FS.ARGS.get("tally_openings_settle") or [])
+    W = "Tally has not said when this company's books begin; set the book's first day in FinCom (the ledgers came without their openings)"
+    c, r = call({"kind": "ledger_list", "company": "TIED CO", "round": "n-1", "complete": True, "rowsRead": 3, "seen": ["g-1", "g-3", "g-7"], "last": True,
+                 "openingsUnknown": True, "openingsWhy": W, "groups": [["Sundry Debtors", ""], ["Cash-in-Hand", ""], ["Capital Account", ""]],
+                 "ledgers": [row("1", "Cash", "Cash-in-Hand", ""), row("3", "Capital", "Capital Account", ""), row("7", "First Party", "Sundry Debtors", "")]})
+    ok(c == 200 and len(FS.ARGS.get("tally_openings_stage") or []) == n_st and len(FS.ARGS.get("tally_openings_settle") or []) == n_se and r.get("openings") is None
+       and L(BB)["Cash"] == (-40, -40) and L(BB)["Capital"] == (40, 40) and L(BB)["First Party"] == (0, 0),
+       "I. nothing staged or settled; the stored openings stay; a new ledger at nil (%s; %s)" % (L(BB), r.get("openings")))
+    ok(any(n == "openings not taken: " + W for n in r.get("notes", [])), "I. the notes carry the bridge's words (%s)" % r.get("notes"))
+    c, r = call({"kind": "beat", "tally": True, "open": ["TIED CO"], "companies": [{"name": "TIED CO", "open": True, "guid": "cg-b", "booksFromWhy": W}]})
+    bt = (next((d for d in FS.T["tally_devices"] if d["id"] == DEV), {}).get("info") or {}).get("beat") or {}
+    ok(c == 200 and any(x.get("booksFromWhy") == W for x in bt.get("companies", [])), "I. the beat's company row keeps the words for the page (%s)" % bt.get("companies"))
     print("== F. a cloud without migration 130")
     FS.NO_COL["tally_openings_held"] = {"id"}
     time.sleep(0.1)

@@ -447,7 +447,11 @@ func newStandTally(t *testing.T) *standTally {
 				}
 			}
 		case "FinComGroups":
-			for _, g := range f.grp {
+			grp := f.grp
+			if grp == nil {
+				grp = [][2]string{{"Capital Account", ""}} // 2.5.14: a real company always has its primary groups (an empty, non-nil list: none)
+			}
+			for _, g := range grp {
 				fmt.Fprintf(&o, `<GROUP NAME="%s"><PARENT>%s</PARENT></GROUP>`, esc(g[0]), esc(g[1]))
 			}
 		case "Day Book":
@@ -908,6 +912,7 @@ func standBridge(t *testing.T, f *standTally, extra string) string {
 	dir := bridgeFor(t, &standIn{port: f.port}, extra)
 	cloudMu.Lock()
 	cloudLinks, cloudLinksAt, cloudBack, cloudStateAt = map[string]bool{}, time.Time{}, map[string]keepBack{}, map[string]time.Time{}
+	cloudBusyClear() // 2.5.14
 	cloudMu.Unlock()
 	probeMu.Lock()
 	probes = map[int]*probeState{}

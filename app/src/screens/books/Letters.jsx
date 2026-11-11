@@ -24,10 +24,23 @@ const contactCols = () => [
   { k: "email", label: "Email", cell: (r) => <input type="email" className="ltr-in" defaultValue={r.c.email} placeholder="email" aria-label={r.l + " email"} onChange={(ev) => ltrContact(r.l, "email", ev.target.value)} /> },
   { k: "phone", label: "Phone", cell: (r) => <input type="tel" className="ltr-in sm" defaultValue={r.c.phone} placeholder="phone" aria-label={r.l + " phone"} onChange={(ev) => ltrContact(r.l, "phone", ev.target.value)} /> },
 ];
+// next-speed-pages (11-Nov-2026, 2,700 parties on a large client: 2.4 s to draw, 10 s on an office PC): the first
+// LTR_ROWS parties are drawn, the rest on "Show all"; the count, the totals, Tick all, Find, the letters and the Excel take
+// the whole list, and printing the page draws every row first (beforeprint)
+const LTR_ROWS = 200;
+const ShowAll = ({ n }) => <div className="row ltr-more" data-ltr-more="" style={{ margin: "10px 0" }}><button className="btn" onClick={() => ltrShowAll()}>{"Show all " + n}</button></div>;
+function usePrintAll() {
+  useEffect(() => {
+    const f = () => { if (!LTR.st().full) ltrShowAll(); };
+    window.addEventListener("beforeprint", f);
+    return () => window.removeEventListener("beforeprint", f);
+  }, []);
+}
 const SendBtns = ({ kind, l }) => <><button className="btn small" onClick={() => ltrOne(kind, "print", l)}>Letter</button><button className="btn small" title={kind === "confirm" ? "Opens your email with the letter written" : undefined} onClick={() => ltrOne(kind, "mail", l)}>Email</button><button className="btn small" onClick={() => ltrOne(kind, "wa", l)}>WhatsApp</button></>;
 
 function Confirm() {
   const x = LTR.st(), { B, rows } = LTR.confirmRows(), c = LTR.cfg();
+  usePrintAll();
   const form = <section className="dash-card" style={{ marginTop: 12 }}><div className="lk-form">
     <label className="f"><span>Balance as on</span><DateBox aria-label="Balance as on" value={FC.iso(x.asOn)} onChange={(ev) => ltrSet("asOn", ev.target.value, true)} /></label>
     <div className="f"><span>Write to</span><div className="row" style={{ gap: 12 }}>{[["r", "Customers"], ["p", "Suppliers"], ["o", "Loans and advances"]].map(([k, l]) => <label key={k} className="chk"><input type="checkbox" checked={!!x.sides[k]} onChange={(ev) => ltrSide(k, ev.target.checked)} /> {l}</label>)}</div></div>
@@ -44,7 +57,7 @@ function Confirm() {
       <div className="row ltr-bar"><button className="btn primary" disabled={!picked.length} title={!picked.length ? "Tick at least one party in the list first" : undefined} onClick={() => ltrAct("print")}>{"Print or PDF the letters (" + picked.length + ")"}</button>
         <button className="btn" onClick={() => ltrAct("selall")}>{picked.length === rows.length ? "Untick all" : "Tick all " + rows.length}</button><button className="btn" onClick={() => ltrAct("excel")}>Excel of the list</button></div>
       {/* the one list table (spec K6): sent (date), party, balance, reply (status), then the rest */}
-      <ListTable name="ltr-confirm" className="bk-table lk-t ltr-t" rows={rows} rowKey={(r, i) => r.l + ":" + i} unit={["party", "parties"]} rowProps={(r) => ({ "data-key": r.l })}
+      <ListTable name="ltr-confirm" className="bk-table lk-t ltr-t" rows={rows} rowKey={(r, i) => r.l + ":" + i} unit={["party", "parties"]} rowProps={(r) => ({ "data-key": r.l })} limit={x.full ? undefined : LTR_ROWS} more={<ShowAll n={rows.length} />}
         cols={[
           { k: "pick", role: "pick", cls: "ck", head: "", cell: (r) => <input type="checkbox" checked={!!x.sel[r.l]} aria-label={"Tick " + r.l} onChange={(ev) => ltrSel(r.l, ev.target.checked)} /> },
           { k: "sent", role: "date", label: "Sent", v: (r) => r.s.sentAt || "", cell: (r) => (r.s.sentAt ? <>{fmtDate(r.s.sentAt.slice(0, 10))}<span className="nr">{r.s.via || ""}</span></> : <span className="note">not yet</span>) },
@@ -61,6 +74,7 @@ function Confirm() {
 
 function Remind() {
   const x = LTR.st(), rows = LTR.remindRows(), c = LTR.cfg(), picked = rows.filter((r) => x.sel["rem|" + r.l]), tot = rows.reduce((s, r) => s + r.amt, 0);
+  usePrintAll();
   return <>
     <section className="dash-card" style={{ marginTop: 12 }}><div className="lk-form">
       <label className="f"><span>Bills due as on</span><DateBox aria-label="Bills due as on" value={FC.iso(x.remOn)} onChange={(ev) => ltrSet("remOn", ev.target.value, true)} /></label>
@@ -74,7 +88,7 @@ function Remind() {
       <div className="row ltr-bar"><button className="btn primary" disabled={!picked.length} onClick={() => ltrAct("rprint")}>{"Print or PDF the reminders (" + picked.length + ")"}</button>
         <button className="btn" onClick={() => ltrAct("rselall")}>{picked.length === rows.length ? "Untick all" : "Tick all " + rows.length}</button></div>
       {/* the one list table (spec K6): last reminder (date), customer, overdue (amount), then the rest */}
-      <ListTable name="ltr-remind" className="bk-table lk-t ltr-t" rows={rows} rowKey={(r, i) => r.l + ":" + i} unit={["customer", "customers"]} rowProps={(r) => ({ "data-key": r.l })}
+      <ListTable name="ltr-remind" className="bk-table lk-t ltr-t" rows={rows} rowKey={(r, i) => r.l + ":" + i} unit={["customer", "customers"]} rowProps={(r) => ({ "data-key": r.l })} limit={x.full ? undefined : LTR_ROWS} more={<ShowAll n={rows.length} />}
         cols={[
           { k: "pick", role: "pick", cls: "ck", head: "", cell: (r) => <input type="checkbox" checked={!!x.sel["rem|" + r.l]} aria-label={"Tick " + r.l} onChange={(ev) => ltrSel("rem|" + r.l, ev.target.checked)} /> },
           { k: "last", role: "date", label: "Last reminder", v: (r) => (r.last ? r.last.at : ""), cell: (r) => (r.last ? <>{fmtDate(r.last.at.slice(0, 10))}<span className="nr">{r.last.via + ", " + (r.last.tone || "")}</span></> : <span className="note">never</span>) },

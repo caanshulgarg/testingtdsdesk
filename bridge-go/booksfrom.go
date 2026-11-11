@@ -32,6 +32,16 @@ import (
 	"time"
 )
 
+// 2.5.13 (live, a company opened in Tally for the first time: FinCom had no first day for the book and Tally's company
+// list gave no BOOKSFROM, so its ledgers were never read): the masters need no first day, only their openings do. The
+// ledger list's round (FinComLedgers, byte for byte as built) is then dated with the stand-in day below, the first day of
+// the current financial year, and FinCom is told that round's openings are not known (none sent, none taken), with these
+// words; the next round once a first day is known is dated it and sends every ledger with its opening. The stand-in day
+// is allowed only for FinComLedgers and only while no first day is known (ledgerPeriodExact)
+const booksFromUnknownWords = "Tally has not said when this company's books begin; set the book's first day in FinCom (the ledgers came without their openings)"
+
+func ledgerStandInDay() string { return tallyDate(fyStart(nowFn())) }
+
 var errBooksFromUnknown = errors.New("Tally has not said when this company's books begin: its ledgers are not read until it does")
 
 // a ledger request that does not carry exactly its company's books' first year (or none): never sent, whoever asks and
@@ -106,7 +116,10 @@ func applyBooksFrom(j M) {
 	if !ok {
 		return
 	}
-	type cand struct{ key, name, day, tally string }
+	type cand struct {
+		key, name, day, tally string
+		listed                bool // 2.5.13: listed by this user's own Tally (with or without its books-from)
+	}
 	var cs []cand
 	n := 0
 	for co, v := range m {
@@ -124,7 +137,7 @@ func applyBooksFrom(j M) {
 			}
 		}
 		// Tally's own books-from of the company (outside the lock: tallyBooksFromOf takes it)
-		cs = append(cs, cand{k, strings.Join(strings.Fields(co), " "), day, tallyBooksFromOf(co)}) // one line: no line break from the answer
+		cs = append(cs, cand{k, strings.Join(strings.Fields(co), " "), day, tallyBooksFromOf(co), tallyListsCompany(co)}) // one line: no line break from the answer
 	}
 	var tell []cand
 	booksFromMu.Lock()
@@ -139,8 +152,8 @@ func applyBooksFrom(j M) {
 			}
 			continue
 		}
-		if _, had := finComFromHeld[c.key]; !had && c.tally == "" {
-			continue // not a company of this Tally with its books-from said (yet): named again at the next heartbeat
+		if _, had := finComFromHeld[c.key]; !had && c.tally == "" && !c.listed {
+			continue // not a company of this Tally (yet): named again at the next heartbeat (2.5.13: listed without its books-from: kept)
 		}
 		if _, had := finComFromHeld[c.key]; !had && len(finComFromHeld) >= 1000 {
 			continue // at most 1,000 companies kept
@@ -216,10 +229,14 @@ func booksFromOf(company string) string {
 }
 
 // the day in use and Tally's own (each "" when not known); Tally's books-from read once
+//
+// 2.5.13 (the owner's decision of 10-Nov-2026: "we ask the date for uploading"): with Tally's books-from not known, FinCom's
+// first day of the book is used as it is (the date the person gave when bringing the books); "not earlier than Tally's"
+// holds only when Tally's is known. Neither known: "" (the masters are still read, without their openings: ledgerList)
 func booksFromPair(company string) (string, string) {
 	t := tallyBooksFromOf(company)
 	if t == "" {
-		return "", ""
+		return finComBooksFrom(company), ""
 	}
 	if d := finComBooksFrom(company); d != "" && finComDayFits(d, t) {
 		return d, t
@@ -235,7 +252,7 @@ func booksFromAllowed(company string) []string {
 	if d == "" {
 		return nil
 	}
-	if d == t {
+	if d == t || t == "" {
 		return []string{d}
 	}
 	return []string{d, t}
@@ -275,6 +292,31 @@ func tallyBooksFromOf(company string) string {
 	return ""
 }
 
+// 2.5.13: whether this user's own Tally lists the company (its last company list, or the one saved with the open
+// companies), with or without its books-from
+func tallyListsCompany(company string) bool {
+	if companyKey(company) == "" {
+		return false
+	}
+	coMu.Lock()
+	c := coCache
+	coMu.Unlock()
+	if c == nil {
+		c = sessionsFromFile(filepath.Join(syncDir(), "open-companies.json"))
+	}
+	for _, s := range c {
+		if s["mine"] == false {
+			continue
+		}
+		for _, co := range sessCompanies(s) {
+			if sameCompany(str(co["name"]), company) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // the books' first year: books-from to books-from + 1 year - 1 day (yyyymmdd); "" when from is not a date
 func booksYearEnd(from string) string {
 	t, err := time.Parse("20060102", from)
@@ -308,7 +350,11 @@ func ledgerPeriodExact(x string) bool {
 	}
 	a, z := pinDates(x)
 	okDay := false
-	for _, bf := range booksFromAllowed(co) {
+	allowed := booksFromAllowed(co)
+	if id == ledListID && len(allowed) == 0 {
+		allowed = []string{ledgerStandInDay()} // 2.5.13: no first day known: the masters' stand-in day (above)
+	}
+	for _, bf := range allowed {
 		if a == bf && z == booksYearEnd(bf) {
 			okDay = true
 		}
@@ -333,7 +379,8 @@ func holdLedgerRead(tc *TC, company string) error {
 	booksFromSaid[k] = true
 	booksFromMu.Unlock()
 	if !said {
-		writeLog("Ledgers of " + company + " not read: Tally has not said when its books begin; the company list is read again and the ledgers wait until it does")
+		// 2.5.13 (review A2): the masters' own round is read meanwhile (ledgerList's stand-in day), without the openings
+		writeLog("Ledgers of " + company + ": Tally has not said when its books begin and FinCom has no first day for the book; the company list is read again; the ledger list is read without its openings, and the openings and single ledgers wait until a first day is known")
 	}
 	if tc == nil {
 		tc = fin

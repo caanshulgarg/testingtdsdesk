@@ -1,0 +1,806 @@
+FINCOM BRIDGE 2.5.13 - TEST SHEET (2.5.12's sheet below, with 2.5.13's fixes first)
+
+File:        FinComBridge-Setup-2.5.13.exe
+Fingerprint: SHA-256 8e11b02babbe2d3be9c4db95259aa4d79c24f7cd24e686621862288040b2c497 (FinComBridge-Setup-2.5.13.exe, built 10-Nov-2026 06:36 UTC at bridge sources 5806ce693 after the independent review, POSTONLY=any; compare with the .sha256 file next to the setup); program FinComBridge-2.5.13.exe SHA-256 708ccf28e40cfd5385f5e31ed08235c431b7dd91af21e919ea80e209d9ee870b (earlier builds 39c9235c...12f9 and b7d17318...0d19 were never published)
+
+2.5.13: two fixes. Nothing new is asked of Tally (no new request, the same 2-second stop, one request at
+a time, postings first, never while someone is typing in Tally). No migration; FinCom's cloud takes the ledgers without
+openings with the new tally-ingest (an older one stores their openings as nil until a dated read).
+ 1. A day the bridge once marked "upload that day's Day Book" is read again when FinCom hands it out again (FinCom's
+    marks decide). Before 2.5.13 such a day was never read again on that computer, even after FinCom cleared its
+    mark (a reset of the year's days): FinCom kept listing the days and nothing came in.
+    Check: on a book whose days were marked to upload and then reset in FinCom, after the update the days are read
+    within a few beats and Books › From Tally counts them in; the tray no longer lists them to upload.
+ 2. A day FinCom still marks to upload is not read (FinCom does not hand it out). A day just marked is not read again
+    for 2 minutes after FinCom took the mark. The limit: in one run of the bridge (from its start until it stops or
+    restarts) the same day is read again at most 3 times when FinCom keeps resetting it; after the third it stays
+    marked here until the bridge next starts (never a loop). Check: reset one marked day in FinCom: it is read at the
+    next beats; reset it a fourth time without restarting the bridge: it is not read until the bridge restarts.
+ 3. At the start after the update, the marks left by an earlier bridge version are dropped (one log line counts
+    them): FinCom's own marks decide which days are read.
+ 4. A company whose books' first day Tally does not give (its company list has no "Books beginning from"): FinCom's
+    first day of the book (the date given when bringing the books) is used. With no date anywhere, the ledgers and
+    groups are still read, without their openings, and the Tally page says "Tally has not said when this company's
+    books begin; set the book's first day in FinCom (the ledgers came without their openings)" instead of "no answer
+    from Tally". Once a date is set, the next read brings the openings. The ledger run never says "done" for a company
+    whose ledgers it did not read.
+    Check: a company opened in Tally for the first time, with no first day in FinCom: its ledgers come in within a
+    minute or two; then set the first day in FinCom and press Update now: the openings come.
+
+---------------------------------------------------------------------------------------------------------------------
+
+FINCOM BRIDGE 2.5.12 - TEST SHEET
+
+File:        FinComBridge-Setup-2.5.12.exe
+Fingerprint: SHA-256 a34bd9ad59efc591f0e78ddde5b7fc4c542e930f2030a02847aae99e3c90814d (FinComBridge-Setup-2.5.12.exe, built 10-Nov-2026 01:50 UTC at bridge sources e6a43e67b after the final review, POSTONLY=any; compare with the .sha256 file next to the setup); program FinComBridge-2.5.12.exe SHA-256 daf271fd721b0421448f5fac45f42b3315cc96864a1cc4efa7a6f7d6c3a97ccd
+
+2.5.12: three things, all in Bring books (the older entries a person chose to bring from Tally). The same 2-second stop
+on every request, one request at a time, postings first, never while someone is typing in Tally. FinCom's cloud needs
+migration 154 and the new tally-ingest for point 2 (with the old cloud a held entry's day is marked to upload by hand).
+ 1. A sale entered in voucher mode (Accounting Invoice: the stock item typed under the sales ledger's line, as
+    marketplace sales often are) is now read and brought in, with its stock items (item, billed quantity, rate,
+    amount) as the entry's items, exactly as FinCom stored them before 2.3.4. Before 2.5.12 FinCom Bridge could not
+    read such an entry and gave up the WHOLE day ("Please upload that day's Day Book"); on one real book 62 days of
+    223 were lost this way. No request to Tally changed for it: the bridge keeps what Tally already sends.
+ 2. One entry never sinks a day. If an entry of the day still cannot be taken (its items kept where no field list
+    reads them, or an entry larger than FinCom takes), only THAT entry is held; the day's other entries are brought
+    in as on any day. The day stays open: Books › From Tally says "1 entry on 12-Oct could not be read yet. FinCom
+    tries again by itself." with a "Try again now" button. FinCom asks Tally for that entry again by itself on every
+    later reading and at night, and again after each FinCom Bridge update; when it reads, the line goes and the day
+    is done, with nobody doing anything. Only after 3 tries fail (on one bridge version) the line gives the manual
+    step: "In Tally, open Day Book, press F2 and set the date to 12-Oct-2025, then Alt+E (Export) → Current, F8 (File
+    Format): XML, and E to export; drop the file on Books › From Tally." Uploading that file ends it too.
+ 3. Faster for books with few entries, with no missing days. Before, FinCom Bridge asked Tally for the list of each
+    day's entries one day at a time (a book of 420 entries a year still needed 223 lists). Now, once three days in a
+    row have shown the book sparse (50 entries or fewer, each list under 0.3 second), it asks for the lists of a few
+    days FinCom handed it in ONE request (the same day-list request with a first and a last day: the only request
+    change, approved by the owner on 09-Nov-2026), splits the answer by date and tells FinCom each day exactly as
+    before, an empty day as an empty list. It starts with 3 days, keeps each request's expected time under 0.8 second,
+    grows by half only after an answer under 0.5 second (a month at most) and halves after one over 0.8 second. The
+    first such request of each company in each run is only a check: the same days are then read one by one and
+    compared, and any difference switches it off for that company for good. A request that is cut, has a Tally error,
+    does not add up or takes over 2 seconds is not used and stops nothing: as when Tally is busy, the bridge waits and
+    reads that company one day at a time for the rest of the run. If Tally has not finished a request that took
+    over 2 seconds within the usual wait, or its window stops answering for 2 seconds, the older-entries read of that
+    company stops exactly as for a slow one-day list. An entry dated outside the days asked is taken as
+    Tally not applying the date, exactly as for one day. Only days FinCom handed out that follow each other are put
+    together.
+ Also (the review's point 6, accepted): the same reading applies to entries as they are saved in Tally (the live
+ recorder) and to FinCom Bridge's checks of an entry after a posting: a voucher-mode sale saved in Tally now reaches
+ FinCom whole, with its items, instead of being held with "upload that day's Day Book".
+
+CHECK 2.5.12-A - A VOUCHER-MODE SALE IS BROUGHT IN
+   On ZZ TEST (never a client's books for this check), make a Sales entry in voucher mode: Alt+H (Change Mode) →
+   Accounting Invoice; the party, then the sales ledger, and under it a stock item with quantity and rate; GST lines
+   as usual; save. Date it in a past month. In FinCom choose that month for Bring books from Tally and let it run.
+   You should see: the day of that sale is brought in (not "Please upload that day's Day Book"); the entry is in the
+   client's books with its party, sales and GST lines, the right amounts and its stock item; nothing "held".
+
+CHECK 2.5.12-B - ORDINARY ENTRIES ARE AS BEFORE
+   On the same month, entries of other kinds (an item invoice, a payment with bank details, a journal with TDS, a
+   salary entry) are brought in as 2.5.11 brought them.
+   You should see: the same entries, lines and figures as before 2.5.12; every request in the bridge's log under 2 s.
+
+CHECK 2.5.12-C - ONE ENTRY HELD, THE DAY OPEN, IT COMES IN BY ITSELF
+   On ZZ TEST, a day with several entries where one is an entry FinCom cannot read (support's prepared entry). Bring
+   that month.
+   You should see: the day's other entries in FinCom; Books › From Tally: "1 entry on <day> could not be read yet.
+   FinCom tries again by itself." and Try again now; the bridge's log: "<Type> entry (MasterID <n>) of <day> held: ...
+   (the day's other entries are sent; the day stays open for this entry ...)". Change that entry in Tally so it is an
+   ordinary one: within a few minutes the line goes and the day is done. Leave it unreadable: after 3 tries the line
+   gives the Day Book export steps; do them and drop the file on Books › From Tally: the line goes.
+
+CHECK 2.5.12-D - A SPARSE BOOK: SEVERAL DAYS IN ONE LIST, NO DAY MISSING
+   On ZZ TEST with few entries (some days with none), choose a past quarter for Bring books, outside office hours
+   (FinCom hands out up to 30 days then; in office hours 3 at a time).
+   You should see in the bridge's log, in this order: three days read one by one; "... this run's first range is
+   checked: the same days are read one by one and compared ..."; "the check of a range against the same days read one
+   by one passed"; then "Tally lists <n> entries for the days <d1> to <d2> (<k> days, ...) in <ms> ms; each day goes to
+   FinCom on its own (next range <k> days)". Every day of the quarter counted on the Tally page, the empty days too,
+   and the entries the same as the Day Book; nothing over 2 s.
+
+CHECK 2.5.12-E - A BUSY BOOK STAYS ON SINGLE DAYS
+   A company with days of more than 50 entries.
+   You should see: no range in the log; every day asked alone as in 2.5.11.
+
+CHECK 2.5.12-F - NOTHING ELSE CHANGED (2.5.12 over 2.5.11)
+   Let 2.5.11 update itself to 2.5.12 (or run the setup over it).
+   You should see: the tray says 2.5.12; Help & support's request table has the same rows as 2.5.11 but the
+   FinComDayHeads row's words (the range form) and the FinComStockInHand row's words; posting, Update now, Bring books
+   and Check again work as before.
+
+FINCOM BRIDGE 2.5.11 - TEST SHEET (2.5.10's sheet below, with 2.5.11's new checks first)
+
+File:        FinComBridge-Setup-2.5.11.exe
+Fingerprint: SHA-256 9e130855aef37acdc0b1e31ffb881b2ad5e7e44fac3e1e8879c49b71d820faf7 (FinComBridge-Setup-2.5.11.exe, built 09-Nov-2026 10:28 UTC at bridge sources c28d45c94 after the independent review, POSTONLY=any; compare with the .sha256 file next to the setup); program FinComBridge-2.5.11.exe SHA-256 263000475453896776be712c4284d6b74779ad64050a7326fd78d69d60b6f24f (the first build, setup 27f950e9...458b, was withdrawn unpublished)
+
+2.5.11: one thing, nothing new asked of Tally (no new request, the same 2-second stop, one request at a time, postings
+first, never while someone is typing in Tally), and no tally.ini written by it (another user's never).
+ When TallyPrime is open in your Windows login but takes no connection, FinCom Bridge now says exactly why, from what
+ Windows and TallyPrime's own tally.ini show (read only), and the Tally page uses its words, in this order:
+  - "TallyPrime acts as" not Both;
+  - its port used by another Windows login's Tally (your own port to set instead), or by "another program or a Tally
+    run as administrator", or by another program;
+  - "set but not on yet: close and reopen TallyPrime once" ONLY when tally.ini was saved after that Tally started (and
+    says Both, its port free);
+  - the port your Tally used before but never saved ("Yesterday your Tally used port 9039 but TallyPrime did not save
+    it ...");
+  - nothing listening on its port.
+ On a computer one person uses, whose tally.ini your login may change, the words say F1 → Settings → Connectivity and
+ Ctrl+A. On a computer several logins use (a shared server), or when your login may not change tally.ini, they say
+ instead "... every Windows login here shares TallyPrime's settings: ask the computer's administrator to give each
+ login its own TallyPrime folder and port (yours: <p>)." (or "this Windows login may not save TallyPrime's settings"),
+ because a change in F1 there is every login's, or is silently not kept; the Tally page adds its shared-settings warning.
+ FinCom Bridge also reads your own copy of tally.ini that Windows keeps for a 32-bit TallyPrime run without
+ administrator rights (%LOCALAPPDATA%\VirtualStore\Program Files\TallyPrime*\tally.ini); for a 64-bit or elevated
+ TallyPrime it reads the Program Files file (when Windows does not say which, the Program Files file, and support's
+ details say so). It tries the port your running Tally's tally.ini names even before anything listens there, so a Tally
+ that starts listening is found at once. Check again on the Tally page says "Tally is open in your Windows login but
+ takes no connection: <the bridge's words>" instead of "Tally is not open"; step 3 of the six steps gives the bridge's
+ words; a book's Entries cell says "FinCom Bridge can't reach your Tally: <words>" instead of "Waiting for Tally to be
+ free" when that is the reason.
+
+CHECK 2.5.11-A - THE PORT TYPED BUT NOT SAVED (the case of 09-Nov-2026, on the shared server)
+   In your login on the shared server, open TallyPrime with a company, F1 → Settings → Connectivity, set a port of your
+   own (the Tally page's step 3 names it) and leave WITHOUT Ctrl+A. Wait until the Tally page shows the company
+   (FinCom Bridge remembers that port). Close TallyPrime and open it again.
+   You should see: step 3 and Check again: "Earlier today your Tally used port <p> but TallyPrime did not save it;
+   every Windows login here shares TallyPrime's settings: ask the computer's administrator to give each login its own
+   TallyPrime folder and port (yours: <p>)." (the next day: "Yesterday ..."), and the shared-settings warning. Never
+   "close and reopen" for it. On a computer one person uses: "... Set it again in F1 → Settings → Connectivity and
+   press Ctrl+A to save."
+
+CHECK 2.5.11-B - "TALLYPRIME ACTS AS" NOT BOTH
+   On a computer one person uses: set "TallyPrime acts as" to Client, Ctrl+A, close and reopen TallyPrime, wait a minute.
+   You should see: step 3 "Your TallyPrime is open but its connection is off: in TallyPrime press F1 → Settings →
+   Connectivity, set 'TallyPrime acts as' to Both, keep the port, press Ctrl+A to save, then reopen TallyPrime." (never
+   "close and reopen" alone, even right after the save). Do it: connected. On the shared server the administrator's
+   words instead.
+
+CHECK 2.5.11-C - YOUR PORT USED BY ANOTHER LOGIN'S TALLY
+   On the shared server, with another login's TallyPrime on 9000 and yours set to 9000 (Both).
+   You should see: "Your TallyPrime's port 9000 is used by <that login>'s Tally; every Windows login here shares
+   TallyPrime's settings: ask the computer's administrator to give each login its own TallyPrime folder and port
+   (yours: <p>)." with Copy <p>; <p> is the same port step 3 proposed before. Nothing of the other login's Tally is
+   read or changed. A TallyPrime run as administrator on 9000 instead: "... used by another program or a Tally run as
+   administrator ...", never "another Windows user's".
+
+CHECK 2.5.11-D - REOPEN ONLY WHEN TALLY.INI CHANGED AFTER TALLY STARTED
+   On a computer one person uses, with TallyPrime open and not listening, save its connection as Both with a free port
+   (Ctrl+A in F1 → Settings → Connectivity) so tally.ini changes, and wait a minute.
+   You should see: only now "Your TallyPrime's connection is set but not on yet: close and reopen TallyPrime once."
+
+CHECK 2.5.11-E - THE ENTRIES CELL AND THE OFFICE LINE
+   With Bring books going for a client and your TallyPrime taking no connection (B), look at the client's Entries cell
+   on the Tally page; from a laptop, look at the Tally page's top line and press Check again.
+   You should see: "FinCom Bridge can't reach your Tally: <the words of B>"; on the laptop "Office bridges online: Tally
+   is open but takes no connection" with the words, and Check again "... Tally is open in your Windows login but takes
+   no connection: ...", never "Tally is not open".
+
+CHECK 2.5.11-F - NOTHING ELSE CHANGED (2.5.11 over 2.5.10)
+   Let 2.5.10 update itself to 2.5.11 (or run the setup over it).
+   You should see: the tray says 2.5.11; Help & support's request table has the same rows as 2.5.10 (the
+   FinComStockInHand row's words aside); no tally.ini changed (compare its date before and after); posting, Update now,
+   Bring books and Check again work as before.
+
+FINCOM BRIDGE 2.5.10 - TEST SHEET (2.5.9's sheet below, with 2.5.10's new checks first)
+
+File:        FinComBridge-Setup-2.5.10.exe
+Fingerprint: SHA-256 5bcadee0f554c27cede4f4e065cd56e9cf8821be1c7b7ad305e6f8e775433647 (FinComBridge-Setup-2.5.10.exe, built 08-Nov-2026 17:48 UTC at bridge sources bb86c1c48 after round 2 of the independent review, POSTONLY=any; compare with the .sha256 file next to the setup); program FinComBridge-2.5.10.exe SHA-256 09b1f4e92ce565b9577df02ecfab87a44725ee69904d99f7f0f1830c8b9f1281 (two earlier builds, setup 0ca4dace...2ef3 and 2700b597...b941, were withdrawn unpublished)
+
+2.5.10: three things, nothing new asked of Tally (no new request, the same 2-second stop, one request at a time,
+postings first, never while someone is typing in Tally).
+ 1. Bring books, Bring another year, Bring missing days and Check for changes: FinCom Bridge itself says whether it
+    took the work up: "Started at 10:42 IST on <your Windows login>'s Tally." or "Not started: <its reason>" (Tally not
+    open, reading paused or stopped, a posting first, someone working in Tally, Tally busy, ...). An older bridge: the
+    words as before.
+ 2. Stop posting: when the bridge cannot stop a posting it says why ("already sent to Tally - it may be in Tally; check
+    Tally before posting it again", "being posted right now - ...", "not this computer's posting - ...", "not found
+    (already finished) - ...", "not allowed from this login - ..."). What may be stopped is unchanged.
+ 3. FinCom Bridge keeps itself running: a "FinCom Bridge keep-alive (<login>)" scheduled task (made by the bridge
+    itself, no administrator) starts it again within 5 minutes if it is not running; a heartbeat that stops moving for 3
+    minutes ends the bridge and its supervisor starts it again; a heartbeat that does not reach FinCom is tried again
+    after 5 s growing to a minute, for as long as it takes, and at once after the computer wakes up or its network
+    changes. After a restart the Tally page says "FinCom Bridge restarted itself at HH:MM IST after <why>"; when every
+    bridge of the firm is silent for 10 minutes the Tally page's top line says "FinCom Bridge on the office Tally
+    computer stopped answering at HH:MM IST" (the computer's name only under Advanced), and the bell has one line
+    (migration 149, when it is applied).
+
+CHECK 2.5.10-A - BRING BOOKS SAYS IT STARTED
+   On ZZ TEST open in Tally, on the Tally page press Bring books (or More > Bring another year > Start).
+   You should see: "Asked: ..." and, within about a minute, "Started at HH:MM IST on <your Windows login>'s Tally."
+   Then start typing in Tally on that computer and press Bring another year for another year.
+   You should see: "Not started: someone is working in Tally; reading starts once Tally has been left alone for a
+   minute." and, a minute after you stop typing, "Started at ...". Nothing feels slow in Tally.
+
+CHECK 2.5.10-B - BRING MISSING DAYS AND CHECK FOR CHANGES
+   On a client with days missing press Bring missing days; on Books > From Tally press Check for changes in Tally.
+   You should see: the same "Started at ..." (or "Not started: <why>"), beside each.
+
+CHECK 2.5.10-C - STOP POSTING SAYS WHY
+   Post a few entries to ZZ TEST; while they go, on the Tally page open See postings and press Stop posting.
+   You should see: "Stopped. ..." while it waits for Tally, or, while a request is at Tally, "Stop asked. FinCom
+   Bridge said: being posted right now - the part at Tally now finishes first and nothing after it is sent; wait for it
+   to finish, then check Tally." Nothing after that part is posted.
+
+CHECK 2.5.10-D - THE KEEP-ALIVE TASK (installed just for this user)
+   After the update, open Task Scheduler (taskschd.msc), Task Scheduler Library.
+   You should see: "FinCom Bridge keep-alive (<your login> <your SID>)", every 5 minutes, "Run only when user is logged
+   on", Conditions: "Start the task only if the computer is on AC power" NOT ticked. In
+   Task Manager end every "FinCom Bridge" process of your login (the tray icon goes). Wait up to 5 minutes.
+   You should see: FinCom Bridge and its icon back by themselves; its log says "Keep-alive: FinCom Bridge was not
+   running for this Windows user; it is started again"; the Tally page says "FinCom Bridge restarted itself at HH:MM IST
+   after it was found not running."
+
+CHECK 2.5.10-E - SLEEP AND NETWORK
+   Put the computer to sleep (or hibernate it) for 10 minutes or more, wake it (or pull the network cable for 2 minutes
+   and put it back).
+   You should see: the Tally page shows the computer connected again within about a minute; the log says "Heartbeat:
+   the computer slept or its clock changed ..." (or "... this computer's network changed ..."), then "FinCom reached
+   again"; never "Watchdog: ... ends itself" or "the bridge hangs" for the sleep. While a posting is going, a stuck
+   heartbeat waits for it (the log says "ends itself once a posting is being sent to Tally no more").
+
+CHECK 2.5.10-F - THE BRIDGE STOPPED ANSWERING
+   With the Tally computer on since the morning, turn it off (or sign out of Windows) between 09:30 and 18:30 and wait 10
+   minutes; look at FinCom's Tally page from another computer. (Switched off after 18:30: the page says it, the bell does
+   not.)
+   You should see: the top line "FinCom Bridge on the office Tally computer stopped answering at HH:MM IST" with what to
+   do; Advanced (for support) names the computer; the bell has one line about it (once migration 149 is applied).
+   Turn it on again: within a few minutes of signing in, connected again.
+
+CHECK 2.5.10-G - NOTHING ELSE CHANGED (2.5.10 over 2.5.9)
+   Let 2.5.9 update itself to 2.5.10 (or run the setup over it).
+   You should see: the tray says 2.5.10 (the update is offered: 2.5.10 is newer than 2.5.9); Help & support's request
+   table has the same rows as 2.5.9 (the FinComStockInHand row's words aside); posting, Update now and Check again work
+   as before.
+
+FINCOM BRIDGE 2.5.9 - TEST SHEET (2.5.8's sheet below, with 2.5.9's new checks first)
+
+File:        FinComBridge-Setup-2.5.9.exe
+Fingerprint: SHA-256 fdb1142b943b484fc8e7e05d489db50753e09077fa72396aaeba4cc8c21ef4f7 (FinComBridge-Setup-2.5.9.exe, built 08-Nov-2026 08:56 UTC at bridge sources 497503622, POSTONLY=any; compare with the .sha256 file next to the setup); program FinComBridge-2.5.9.exe SHA-256 4062606bd2fd6c0d0cc8fef6d485c3b76b13ddd72c6a575137a99b1fe18d504e
+
+2.5.9: a new tray item, "Measure the fast read on the company open in Tally". It times the faster read of older
+entries (FastEntries, in the bridge since 2.5.7 and still SWITCHED OFF) on this computer's own TallyPrime, on the one
+company open in it, which must be linked to a FinCom client (the owner's decision of 08-Nov-2026: a real client's books,
+to see the real speed; ZZ TEST too). It only reads, one request at a time, only while nobody is working in Tally, and
+stops at once if Tally takes longer than 2 seconds or its window stops answering for 1 second. Only times, counts and
+field names go to FinCom. Nothing else changes: with nobody pressing the item nothing new is sent to Tally. The
+owner's steps: docs/fast-entries-measure-steps.md.
+
+CHECK 2.5.9-A - THE MEASUREMENT ON A CLIENT COMPANY
+   Outside office hours (or with nobody entering in it), open only a linked client company in Tally, the bigger the
+   better. Right-click the FinCom Bridge icon, choose "Measure the fast read on the company open in Tally".
+   You should see: a box "Measure on <the company>? Tally is only read, nothing is written. It stops at once if Tally
+   slows." naming that company. Say Yes and leave the computer alone for a few minutes. Then a box with the company,
+   PASS or NOT A PASS, the slowest answer, the longest moment Tally's window did not answer and how many entries were
+   the same, then "FinCom has the result. Nothing was changed in Tally." Tally never feels stuck. On FinCom's Tally
+   page, Advanced (for support) shows "Fast read measured" with that company and run.
+   (Without migration 148 on the server the box says FinCom did not take the result; the run is in Show log.)
+
+CHECK 2.5.9-B - THE REFUSALS (nothing is sent to Tally)
+   Try the item with: no company open; two companies open; a company not linked to a FinCom client; FastEntries
+   switched on for this computer (FinCom support); the internet off; the bridge running as a service with no Tally
+   window on this desktop.
+   You should see: each time a box saying why ("Open only the company to measure", "... is not linked to a FinCom
+   client", ...), and nothing in the log about a fast-read request.
+
+CHECK 2.5.9-C - IT STOPS
+   Start the measurement, then (a) open another company in Tally, or (b) start typing in Tally and keep at it.
+   You should see: (a) it stops before its next request and says another company was opened; (b) it waits while you
+   type and, after 2 minutes of it, stops with "Tally was not free". Nothing was changed in Tally.
+
+CHECK 2.5.9-D - NOTHING ELSE CHANGED (2.5.9 over 2.5.8)
+   Let 2.5.8 update itself to 2.5.9 (or run the setup over it). Bring books, post an entry, press Check again.
+   You should see: the tray says 2.5.9; everything works as with 2.5.8; Help & support shows the request table as
+   before (the same rows as 2.5.8, the FinComStockInHand row's words aside); the log never names FinComWindowHeads or
+   FinComVoucherWindow unless the measurement is running.
+
+FINCOM BRIDGE 2.5.8 - TEST SHEET (2.5.7's sheet below, with 2.5.8's new checks first)
+
+File:        FinComBridge-Setup-2.5.8.exe
+Fingerprint: SHA-256 ad9b8e6340b57ac4811c33fbd1919774e9b4e36d6cc500b9bff4aed54ec42cf0 (FinComBridge-Setup-2.5.8.exe, built 08-Nov-2026 06:35 UTC at bridge sources ef6e15406, POSTONLY=any; compare with the .sha256 file next to the setup); program FinComBridge-2.5.8.exe SHA-256 38bdd001f364b8be1dd067b27c8ec4d587bdd3de32593b41a3d373dd8487c248
+
+2.5.8: a company opened in Tally shows in FinCom within about a minute, also when Tally answered a moment earlier
+that no company was open (Tally just started, the company not loaded yet). It was up to 10 minutes. No new request to
+Tally: the same light company list is asked again sooner (30 s, easing to 2 minutes while Tally stays without a
+company), each time under the 2-second rule, one request at a time, postings first, and never while someone is typing
+in Tally. Check again on the Tally page of the Tally computer now asks Tally at once. FastEntries stays off.
+
+CHECK 2.5.8-A - A COMPANY OPENED RIGHT AFTER TALLY STARTS
+   Close TallyPrime. Open it again and wait on its company list (no company loaded) for about a minute, so the bridge
+   sees Tally with no company. On FinCom's Tally page, step 4 says "Tally is open, but no company is open in it. ...
+   Tally answered at HH:MM with no company; checking again… If the company is already open ...". Now open ZZ TEST.
+   (While a posting goes, or the answer is over 5 minutes old, it says only "Tally answered at HH:MM with no company.")
+   You should see: within about a minute ZZ TEST shows as open on the Tally page (without pressing anything); the
+   bridge's log says "Company list: Tally names a company now (it named none before); FinCom is told at once".
+   (The "Tally answered at HH:MM" words come from this computer's bridge; seen from another computer they need
+   FinCom's cloud (tally-ingest) with 2.5.8's two port fields; without it step 4 says the rest.)
+
+CHECK 2.5.8-B - CHECK AGAIN ON THE TALLY COMPUTER
+   With Tally open and no company loaded, open ZZ TEST in Tally and at once press Check again on FinCom's Tally page
+   in this computer's browser (this Windows login, its FinCom Bridge connected).
+   You should see: ZZ TEST shows at once. Pressed on a laptop (no bridge here), Check again only reads FinCom again,
+   and the company shows within about a minute by itself.
+
+CHECK 2.5.8-C - TALLY STARTED AFTER THE BRIDGE / ANOTHER TALLY ON THE PORT
+   With the bridge running and Tally closed, open TallyPrime and a company in it. Then close TallyPrime and open it
+   again with the company.
+   You should see: each time the company shows within about a minute; nothing else is asked of Tally (the log names
+   only the company list, its company info and the light check).
+
+CHECK 2.5.8-D - NOTHING MORE WHILE A COMPANY IS OPEN, OR WHILE POSTING OR TYPING
+   Keep ZZ TEST open for 15 minutes and post an entry from FinCom meanwhile; type in Tally for a while.
+   You should see: the company list is asked about every 10 minutes as before (not every 30 s); while a posting goes
+   or someone types in Tally nothing extra is asked; Tally never feels stuck.
+
+CHECK 2.5.8-E - TWO TALLYS IN THIS LOGIN (one with a company, one at Select Company)
+   Open two TallyPrime installs in this Windows login: ZZ TEST in one, the other left on its company list.
+   You should see: the Tally with ZZ TEST is asked about every 10 minutes as before; only the other is asked every
+   30 s to 2 minutes; the log says "Tally names a company now" only when a company is opened in the second one, and
+   it shows within about a minute.
+
+CHECK 2.5.8-F - THE UPGRADE (2.5.8 over 2.5.7)
+   Let 2.5.7 update itself to 2.5.8 (or run the setup over it).
+   You should see: the tray says 2.5.8; postings and Update now work as before; Help & support shows the request table
+   as before (the same rows as 2.5.7, the FinComStockInHand row's words aside).
+
+FINCOM BRIDGE 2.5.7 - TEST SHEET (2.5.6's sheet below, with 2.5.7's new checks first)
+
+File:        FinComBridge-Setup-2.5.7.exe
+Fingerprint: SHA-256 ca666efbb5e5a9ab09260d4eda2d94fbc32f5c8ca9c81469727287c34f18b5f4 (FinComBridge-Setup-2.5.7.exe, built 07-Nov-2026 21:31 UTC at bridge sources 7357e3e36, POSTONLY=any; compare with the .sha256 file next to the setup); program FinComBridge-2.5.7.exe SHA-256 ce3818e9cdc4ff5e761e31bb956cb414645265ed88b5547b9270efe59847a301
+
+2.5.7: the faster read of older entries (FastEntries: a window of days at once) is in the build, SWITCHED OFF. With it
+off nothing new is sent to Tally, the request list and the bridge's heartbeat are 2.5.6's, and Books > From Tally reads
+as before. One fix on the old path: a day's list that Tally answers with an error is no longer taken as a day of no
+entries; it is asked again later. Do not switch FastEntries on: its two requests are not measured on real Tally yet
+(docs/fast-entries-design.md, section 9b).
+
+CHECK 2.5.7-A - BRING BOOKS FROM TALLY AS BEFORE (FastEntries off)
+   On ZZ TEST, Books > From Tally: choose a year, Start.
+   You should see: the bar moves as with 2.5.6 ("N of M entries ... about N min left"); the counts at the end equal
+   Tally's; Tally never feels stuck. The bridge's log never names FinComWindowHeads or FinComVoucherWindow.
+
+CHECK 2.5.7-B - A DAY TALLY ANSWERS WITH AN ERROR
+   (Done by the tests; on the computer nothing to do.) A day's list answered with a Tally error is not counted as a
+   day with no entries: the log says "Tally's answer for <day> could not be read; asked again later", and the day is
+   counted when Tally answers it properly.
+
+CHECK 2.5.7-C - THE UPGRADE (2.5.7 over 2.5.6)
+   Let 2.5.6 update itself to 2.5.7 (or run the setup over it).
+   You should see: the tray says 2.5.7; postings and Update now work as before; Help & support shows the request table
+   as before (the same rows as 2.5.6, the FinComStockInHand row's words aside).
+
+FINCOM BRIDGE 2.5.6 - TEST SHEET (2.5.5's sheet below, with 2.5.6's new check first)
+
+File:        FinComBridge-Setup-2.5.6.exe
+Fingerprint: SHA-256 80e6f4705803460aa5616ab87cbcffbc88cb0a64fc98372034869530aeb32073 (FinComBridge-Setup-2.5.6.exe, built 07-Nov-2026 12:58 UTC at bridge sources a219bdee9, POSTONLY=any; compare with the .sha256 file next to the setup); program FinComBridge-2.5.6.exe SHA-256 99087ddbe8b888001ecb3965e43595ba9a767b1f2804cda4b9fd5e0123796436
+
+2.5.6: Update now (and the nightly and light runs) waits only for a posting that is being started or sent, as every
+other read from Tally does, not for one that is waiting for Tally or was stopped part-way. No new request to Tally and
+no request shape changed.
+
+CHECK 2.5.6-A - A POSTING WAITING FOR ANOTHER COMPANY DOES NOT HOLD UPDATE NOW
+   Leave a posting waiting for a company that is not open in Tally (or one the cloud failed earlier), open another
+   linked company in Tally, and press Update now.
+   You should see: the open company's ledgers and entries are read (the Tally page shows the read going on, not
+   "Waiting: a posting into Tally is going on"); the waiting posting stays waiting and goes when its company is opened.
+   A posting being sent still goes first: press Update now while one is being sent, and the read starts after it.
+   Known: while such a posting waits, it asks Tally which companies are open every 15-60 s, and each ask can cut off a
+   ledger request in flight; the read goes on from where it was, only slower.
+
+FINCOM BRIDGE 2.5.5 - TEST SHEET (2.5.4's sheet below, with 2.5.5's new checks first)
+
+File:        FinComBridge-Setup-2.5.5.exe
+Fingerprint: SHA-256 816a3253ae78c806063e7a038f0b63c7846aa869348813b3be0e56a0416720aa (FinComBridge-Setup-2.5.5.exe, built 07-Nov-2026 11:03 UTC at bridge sources 9a972e19c, POSTONLY=any; compare with the .sha256 file next to the setup); program FinComBridge-2.5.5.exe SHA-256 45db9870073a161092a464b2ce64e29c330da9d8db0e0182ef76cc9a14ef5ee9
+
+2.5.5: the full ledger read (Update now, the nightly run, the ledger wake) never holds Tally longer than 2 s per request,
+as the light check already did, and the ledgers keep coming in even when Tally is slow; an Update now a person pressed
+reads on after 2 minutes, in short parts, giving way while someone types; and a tally.ini only this login uses gets
+the port FinCom's Tally page proposes for this login. No new request to Tally and no request shape changed.
+
+CHECK 2.5.5-A - UPDATE NOW ON A BIG COMPANY NEVER FREEZES TALLY
+   On a company with many ledgers (ZZ BIG TEST, or a real one with thousands), press Update now on FinCom's Tally page
+   and keep working in Tally.
+   You should see: Tally never stops answering for more than about 2 s; the ledger count in FinCom keeps rising until
+   it matches Tally's; if Tally is slow, the run's line says Tally was slow and it goes on by itself later, from where
+   it stopped (it does not start again from the first ledger).
+
+CHECK 2.5.5-B - A SLOW GROUP LIST DOES NOT HOLD THE LEDGERS
+   On a Tally slow to list its groups (2-8 s, e.g. a large company just loaded), press Update now.
+   You should see: the ledgers still come in; FinCom keeps the groups it already had; the next full read asks for the
+   groups again.
+
+CHECK 2.5.5-C - ONE LEDGER THAT TAKES TALLY LONGER THAN 2 S
+   A ledger that alone takes Tally more than 2 s to give (e.g. one with a very long history) is skipped, and every other
+   ledger is read.
+   You should see: FinCom names that ledger as "takes Tally longer than 2 s"; it is asked once more, alone, at the first
+   Update now or nightly run of each later day; once Tally gives it in time it is read and no longer named. A ledger
+   skipped as hanging Tally stays skipped, as before.
+
+CHECK 2.5.5-D - UPDATE NOW WHILE SOMEONE TYPES IN TALLY
+   Press Update now and keep typing in Tally (an entry, a report) without a 15 s pause.
+   You should see: for up to 2 minutes nothing is read; then reading goes on in short parts, each waiting while you are
+   typing, so typing is never held up by more than about 2 s. The nightly catch-up and the light update keep waiting for
+   a pause as before. A posting from FinCom is never held by this. Pressed while the nightly catch-up (or another
+   update) is waiting, the Update now goes first at once, and its 2 minutes count from when you pressed it.
+
+CHECK 2.5.5-E - tally.ini OF THIS LOGIN GETS THIS LOGIN'S PORT
+   On a computer one person uses, with Tally's connection off and no ServerPort line in tally.ini, install 2.5.5 (or let
+   the bridge switch the connection on).
+   You should see: tally.ini gets "Client Server = Both" and the ServerPort FinCom's Tally page proposes for this
+   login (the same number the page shows), unless another tally.ini on the computer names that port or something already
+   listens on it (then the 2.5.3 choice). A ServerPort the file already names is never changed; a shared server's
+   tally.ini is left alone (CHECK 2.5.4-E below).
+
+FINCOM BRIDGE 2.5.4 - TEST SHEET (2.5.3's sheet below, with 2.5.4's new checks first)
+
+File:        FinComBridge-Setup-2.5.4.exe
+Fingerprint: SHA-256 b04879382c59a002d0fcc5f74ee98b7d1ccf2e70fe836398a20b6ecc0fa7b48c (FinComBridge-Setup-2.5.4.exe, built 04-Nov-2026 20:50 UTC at bridge sources d187cf024, POSTONLY=any; compare with the .sha256 file next to the setup); program FinComBridge-2.5.4.exe SHA-256 de96e30c7eb6928bc0ba171b7bb47ad2b7fdb6ef874b8cd2424d8c03412e927d
+
+2.5.4: no hang and no false message on a shared Windows server. It reaches computers by itself through FinCom's signed,
+gated automatic updates (one bridge of a computer at a time, only while idle with Tally). Nothing new is asked of Tally:
+only waits (each request to Tally 2 s at most), Windows' own lists read less often, and order.
+
+CHECK 2.5.4-A - THE UPDATE ARRIVES BY ITSELF, NOBODY WAITS
+   Leave a computer on bridge 2.5.3 with Tally open and idle. Within about 6 hours (its own time to look) it updates.
+   You should see: the FinCom icon goes away for a few seconds and comes back; FinCom's Tally page shows 2.5.4 for the
+   line; no window, no question, no UAC prompt; Tally is not interrupted. The update never starts while a posting is
+   being sent or a request is at Tally. On a shared server the users' bridges update one after another.
+   On 2.5.4 the Tally page (Help & support) shows why a bridge did or did not update: the last look, its words, the
+   version offered, and whether automatic updates are off.
+
+CHECK 2.5.4-B - CHECK FOR UPDATES NEVER HANGS THE ICON
+   Right-click the FinCom icon > Check for updates.
+   You should see: an answer within 8 seconds ("This is the newest FinCom Bridge (2.5.4)." or "Looking for an update in
+   the background..."); the icon keeps working.
+
+CHECK 2.5.4-C - A TALLY SLOW TO LIST ITS COMPANIES (a company list that takes 2-8 s, e.g. many companies loaded)
+   You should see: FinCom shows the companies open (the bridge stops waiting at 2 s and keeps Tally's answer when it comes);
+   a posting to one of them goes; FinCom never says "Company ... is not open in Tally" for a company that is open, and
+   never "Tally is busy" for good.
+
+CHECK 2.5.4-D - TALLY'S CONNECTION OFF IN YOUR LOGIN
+   In TallyPrime (your login) set F1 Help > Settings > Connectivity > TallyPrime acts as: Client; restart Tally.
+   You should see: FinCom says "Your Tally's connection is off. In TallyPrime: F1 Help > Settings > Connectivity >
+   TallyPrime acts as: Both, then close and reopen Tally." (not "another user", even when another user's Tally is open).
+   Set it back to Both and reopen Tally: FinCom finds it within a few seconds.
+
+CHECK 2.5.4-E - A SHARED SERVER'S tally.ini IS LEFT ALONE
+   On a Windows Server (or a computer two people are signed in to) with TallyPrime acts as None in its tally.ini, install
+   2.5.4.
+   You should see: tally.ini's "Client Server" and "ServerPort" lines are NOT changed (FinCom's add-on line may be added,
+   as before); Help & support says "Tally's connection is off. Every user of this computer shares this TallyPrime's
+   settings, so FinCom does not change them..."; FinCom never says "Close and reopen Tally once" on that computer.
+
+CHECK 2.5.4-F - YOUR TALLY RUN AS ADMINISTRATOR, ANOTHER USER'S TOO
+   Two users on one server each run TallyPrime as administrator.
+   You should see: each user's FinCom finds only their own Tally (by the Windows user it runs as), never the other's,
+   whatever port each bridge has.
+
+CHECK 2.5.4-G - THE SETUP FOR ALL USERS LEAVES OTHER USERS' BRIDGES RUNNING
+   On a shared server where another user has FinCom Bridge installed just for them, run the setup "for all users".
+   You should see: the other user's FinCom icon keeps running (only the service's own program is stopped); the setup
+   finishes without "FinComBridge.exe ... is in use and could not be replaced".
+
+FINCOM BRIDGE 2.5.3 - TEST SHEET (2.5.2's sheet below, with 2.5.3's new checks first)
+
+2.5.3: on a shared Windows server each user's FinCom Bridge finds that user's OWN TallyPrime even when Windows does not say
+whose it is (TallyPrime run as administrator), and even when Windows' list of ports does not show it; it switches on
+TallyPrime's connection in tally.ini when it is off. Nothing new is asked of Tally.
+
+CHECK 2.5.3-A - YOUR TALLY RUN AS ADMINISTRATOR (a shared server)
+   Close TallyPrime. Right-click TallyPrime > Run as administrator; open your company.
+   You should see: within a minute FinCom's Tally page shows your company open on this computer. If Windows did not say
+   whose TallyPrime it is, the page says "owner unknown (Tally may be running as administrator)" next to the port and
+   still uses it. Another user's TallyPrime on the same server is never used.
+
+CHECK 2.5.3-B - TALLY ON A PORT WINDOWS DID NOT LIST
+   In TallyPrime: F1 Help > Settings > Connectivity: TallyPrime acts as Both, port 9070 (any free port); restart Tally.
+   You should see: FinCom shows the company open (tally.ini's port is always tried); the beat's port list has 9070 with
+   reason "open".
+
+CHECK 2.5.3-C - CONNECT AT ONCE
+   Close TallyPrime. Open FinCom's Tally page; press Connect (or refresh the page); then open TallyPrime and its company.
+   You should see: FinCom shows the company within a few seconds of Tally opening (not after the next 30 s heartbeat).
+
+CHECK 2.5.3-D - TALLY'S CONNECTION OFF (on a spare computer, or put tally.ini back after from tally.ini.fincom-bak)
+   Close TallyPrime. In tally.ini set "Client Server = None" (keep your ServerPort line). Install 2.5.3.
+   You should see: tally.ini now says "Client Server = Both", your ServerPort is unchanged, nothing else changed, and
+   tally.ini.fincom-bak holds the file as it was (if there was no backup yet). FinCom says "FinCom switched on Tally's
+   connection. Close and reopen Tally once." Open TallyPrime: FinCom finds it within a few seconds.
+   With no ServerPort line at all: "ServerPort = 9000" is added (or the first free port when 9000 is another install's).
+   On a computer where this Windows user may not change tally.ini: nothing is changed and the beat says "cannot write".
+   Note for CHECK 6 below: with User TDL = No the add-on is still NOT added; 2.5.3 does switch on the connection if it
+   is off (the owner's approval of 03-Nov-2026).
+
+CHECK 2.5.3-E - ANOTHER USER'S TALLY
+   On a shared server, another user's TallyPrime open in their own login.
+   You should see: it is listed as "another user" and never asked.
+
+FINCOM 2.5.2 - TEST SHEET (NWS144, staging)
+
+File:        FinComBridge-Setup-2.5.2.exe
+Fingerprint: SHA-256 648b5187128fc3d6f003fbcc7afa0dc87b849eb1655a0b400d978005439e3e07 (FinComBridge-Setup-2.5.2.exe, built 02-Nov-2026 at the commit after 416fba46a, bridge sources d2b6778f3 with 2.5.1 and staging-next ee904a4b3 merged, POSTONLY=any; compare with the .sha256 file next to the setup); program FinComBridge-2.5.2.exe SHA-256 267d696c49a8980ff1413b140d1b8dfc4d814e34a3883c8753a2f10293798c05
+
+What 2.5.2 changes (the owner's decision of 30-Oct-2026, "1": the stock from Tally ONLY when a person clicks; one request
+added, FinComStockInHand, exactly as measured; nothing else asked of Tally changed):
+R1. On Financial statements > Trial balance & mapping > Stock, "Bring stock from Tally" asks this computer's Tally once
+    for the period on the page: Tally's own Stock-in-Hand figure (its stock summary), opening and closing.
+R2. The panel then says "Opening stock Rs X . Closing stock Rs Y . from Tally at HH:MM" and the statements use them; a
+    figure typed, or last year's balance sheet, is still used when Tally was not asked or could not answer.
+R3. Nothing asks Tally for the stock by itself: no background read, no schedule, no retry. "Ask Tally again" asks once more.
+R4. Tally over 2 s (or its window not answering for 2 s): "Tally took too long; type the stock or try again later".
+Real-Tally gate: TallyPrime 3.0, 4.1, 5.1, 6.2 and 7.1 (one request added), the committed setup, with the upgrade from 2.5.1.
+Deploy order (the owner): migration-134-stock-from-tally.sql, then tally-ingest, then the app, then the setup.
+
+CHECK 25 - THE STOCK FROM TALLY, ON A CLICK (2.5.2)
+   In TallyPrime, open a company that keeps stock (items with opening stock and purchases / sales). In FinCom, open its
+   client: Financial statements > Trial balance & mapping, the period of the year you want. On the Stock panel click
+   "Bring stock from Tally". Leave Tally alone.
+   You should see: within a few seconds "Opening stock Rs X . Closing stock Rs Y . from Tally at HH:MM"; X and Y equal
+   Tally's Stock Summary (Gateway > Display More Reports > Stock Summary, the same period: its opening and closing
+   value). The statements' changes in inventories and the balance sheet's inventories use them. In the bridge's log
+   (right-click the FinCom icon > Show log) one line "Stock of <company> ... from Tally in N ms".
+
+CHECK 26 - ONCE PER PERIOD; NOTHING BY ITSELF (2.5.2)
+   Leave FinCom and Tally open for 10 minutes; open and close the Financial statements; click "Bring stock from Tally"
+   again for the same period (the button now reads "Ask Tally again" once an answer is kept: do not click it yet).
+   You should see: the log has no new "Stock of" line in those 10 minutes (nothing is asked by itself); the same figures
+   and time are shown. Now click "Ask Tally again": exactly one new "Stock of" line, the time shown moves.
+
+CHECK 27 - TALLY TOO SLOW (2.5.2)
+   Restart TallyPrime with a large company that keeps stock (the first request after a start can take Tally over 2 s),
+   then click "Bring stock from Tally" at once.
+   You should see: either the figures (Tally answered within 2 s) or "Tally took too long; type the stock or try again
+   later"; never a frozen Tally; the log says "stopped at 2 s" or "window did not answer"; nothing more is asked until
+   you click again. Type the stock in the panel: it is used.
+
+CHECK 28 - THE UPGRADE (2.5.2 over 2.5.1)
+   Install 2.5.2 over 2.5.1 by hand.
+   You should see: FinCom's Tally page shows version 2.5.2 within a minute; the ledger reads go on as at FinCom's first day
+   of the book as with 2.5.1 (CHECK 22); nothing asks Tally for the stock until you click (the log has no "Stock of" line);
+   nothing else changes.
+
+The checks of 2.5.1 follow, unchanged.
+
+CHECK 22 - OPENINGS AS AT FINCOM'S FIRST DAY (2.5.1; a company whose Tally books begin a year before FinCom's copy)
+   Install 2.5.1. In FinCom: Books > From Tally > Update now (or Read the ledgers again) for that company.
+   You should see: the log says "Ledgers of <company> are read as at 1-Apr-2025, FinCom's first day of its books of this
+   company (Tally's books begin on 1-Apr-2024)" once; the opening balances in FinCom's trial balance are those of FinCom's
+   first day (compare with Tally's Trial Balance as on the day before FinCom's books begin, i.e. 31-Mar-2025); they add
+   up to nil; the Tally page's notes have no "not taken" line for this read.
+
+CHECK 23 - THE UPGRADE (2.5.1 over 2.5.0)
+   Install 2.5.1 over 2.5.0 by hand.
+   You should see: FinCom's Tally page shows version 2.5.1 within a minute; within a heartbeat the next ledger read goes
+   as at FinCom's first day and sends every ledger once; a 2.5.0 read in between is not taken by FinCom (its notes say
+   "openings as at 2024-04-01 not taken: FinCom's books of this company begin on 2025-04-01"); nothing else changes.
+
+CHECK 24 - A COMPANY WITHOUT FINCOM'S FIRST DAY (2.5.1)
+   A company linked in FinCom whose books FinCom has not been given a first day for (a new link before its first
+   opening balances): Update now.
+   You should see: its ledgers are read as at the day Tally's books begin, as 2.5.0 did (CHECK 19).
+
+The checks of 2.5.0 follow, unchanged.
+
+CHECK 19 - OPENINGS AS AT THE BOOKS' BEGINNING (2.5.0)
+   In Tally, change the period (Alt+F2) and the date (F2) at the Gateway to next year. In FinCom: Books > From Tally >
+   Update now (or Read the ledgers again).
+   You should see: the opening balances in FinCom's trial balance are those of the day the books begin (compare with
+   Tally's Trial Balance as on the day before the books begin); they add up to nil.
+
+CHECK 20 - THE UPGRADE (2.5.0 over 2.4.9)
+   Install 2.5.0 over 2.4.9 by hand.
+   You should see: FinCom's Tally page shows version 2.5.0 within a minute; the next ledger read sends every ledger once
+   (the log says the ledger list was read and sent); nothing else changes.
+
+CHECK 21 - OPENINGS THAT DO NOT ADD UP (2.5.0, migration 130)
+   Upload a trial balance file whose balances do not add up to nil, as opening balances (Books > From Tally).
+   You should see: "Opening balances from a trial balance uploaded do not add up to nil: <difference>"; FinCom's
+   openings unchanged. A trial balance dated other than the day before the books begin is refused with the dates in words.
+
+The checks of 2.4.9 follow, unchanged.
+
+
+CHECK 16 - OLDER ENTRIES, 100 AT A TIME (2.4.9)
+   As CHECK 3 below (the switch on, CHECK 2b first): Books > From Tally > Bring older entries from Tally, a year with
+   many entries. Leave Tally alone.
+   You should see: the progress line goes up in steps of up to 100 entries, many times faster than with 2.4.8 (FinCom's
+   Tally page shows the pace); Tally never freezes; at the end "all in FinCom". In the log (right-click the FinCom icon >
+   Show log): no line "took Tally over 2 s"; if there is one, the next lines say the day was asked again in smaller
+   groups or one by one.
+
+CHECK 17 - THE ENTRIES ARE THE SAME (2.4.9)
+   Pick three entries of that year in Tally: an item invoice (Sales with items), a payment with TDS or a bank date, and
+   a payroll voucher if the company has payroll. Open each in FinCom's books.
+   You should see: the same ledger lines, amounts, bill names, GST, TDS and bank details as in Tally; the item invoice's
+   sales ledger is not counted twice (its total equals Tally's).
+
+CHECK 18 - THE UPGRADE (2.4.9 over 2.4.8)
+   Install 2.4.9 over 2.4.8 by hand.
+   You should see: FinCom's Tally page shows version 2.4.9 within a minute; the settings, the pairing and the reading of
+   older entries go on from where they were (an upgrade from 2.4.8 changes nothing else).
+
+The checks of 2.4.8 follow, unchanged.
+
+
+CHECK 13 - TALLY ON ANOTHER PORT (2.4.8)
+   In TallyPrime: F1 Help > Settings > Connectivity: set the port to 4125 (TallyPrime acts as Both), save, restart
+   TallyPrime with a company open. Do not change FinCom or the bridge.
+   You should see: within a minute FinCom's Tally page shows the company open "on port 4125"; right-click the FinCom icon
+   > Test connection says "Tally: OK on port 4125"; FinCom > Help & support > Check my Tally says "Your TallyPrime
+   accepts connections on port 4125." Put the port back to 9000 afterwards.
+
+CHECK 14 - USE THIS PORT (2.4.8)
+   With Tally on 4125 as in CHECK 13, FinCom's Tally page > Find Tally; if it says no Tally, type 4125 > Use this port.
+   You should see: "TallyPrime on port 4125: N companies open". Type a port nothing uses (e.g. 4999) > Use this port:
+   "Nothing is listening on port 4999 on this computer ..."; nothing changes. On a shared server, type another
+   user's Tally port: "Port ... is the TallyPrime of <user>, another Windows user on this computer ..."; nothing
+   changes and that Tally is never asked. "Find it by itself again": the bridge finds your Tally by itself.
+
+CHECK 15 - LEDGERS RIGHT AFTER A LINK (2.4.8)
+   Get companies > Link to client... a company not linked before.
+   You should see: "Reading ledgers from Tally... N so far" within a few seconds (not after up to 5 minutes), then
+   "N ledgers from Tally".
+
+What 2.4.7 changed (kept: docs/bridge-2.4.7-notes.md):
+2.4.7 (the owner's "yes" of 24-Oct-2026: close the pairing gap of the 2.4.6 security review; nothing new is
+asked of Tally; FinCom's page is updated with it and must be the review build of the same day or later):
+P1. Only FinCom's own pages may talk to the bridge: "null" (any website's sandboxed frame) and http://localhost are no
+    longer trusted, even if an older settings file names them. Developers and FinCom's tests switch them on with
+    "DevOrigins": true in the settings (off by default).
+P2. A typed code is checked without ever giving away anything that lets the code be worked out: the bridge no longer
+    answers with a proof made from the 6 digits. FinCom and the bridge check the code together (SPAKE2); the 6 digits
+    never leave the page, each check is one of the five tries for that code, a wrong code says so.
+P3. FinCom opened by the bridge (the tray's Connect FinCom on this computer..., the installer's last page, the first
+    start) carries the code and a long secret of that connect window (#pair=123456-<32 letters and digits>); FinCom
+    pairs with the secret once the bridge proved it holds it. The message box still shows the 6 digits only.
+P4. The tray never sends the bridge's key: it asks the program on the bridge's port to prove it holds the key, then sends
+    a one-use proof for each request and seals what it sends (a program of another Windows user that took the port while
+    the bridge was down gets nothing it can use). A tray of another version than the bridge starts again from the
+    program on disk.
+
+CHECK 10 - CONNECT BY THE TRAY (2.4.7)
+   Right-click the FinCom icon near the clock > "Connect FinCom on this computer...".
+   You should see: FinCom opens and connects by itself, as in 2.4.6; the address bar briefly shows #pair=<6 digits>-<a
+   long secret> and loses it at once; the message box shows only the 6 digits.
+
+CHECK 11 - A TYPED CODE (2.4.7)
+   Close the browser tab FinCom opened. Choose "Connect FinCom on this computer..." again, but do not use the tab it
+   opens: in another FinCom tab, Tally page > Connect this computer, type a WRONG code (e.g. 111111), then the right one.
+   You should see: the wrong code: "That is not the code in the FinCom Bridge box. Check the six digits (five tries for
+   each code) ..."; the right code connects by itself. The bridge's log shows "FinCom asked to connect with the code
+   (1 of 5)" and "(2 of 5)", then "FinCom connected with the code". After five checks the window closes: "The code has
+   run out ... again".
+
+CHECK 12 - NOT FOR OTHER PAGES
+   (for FinCom's developer) A page on http://localhost or a sandboxed frame calling the bridge gets 403 "This bridge
+   answers FinCom only."; with "DevOrigins": true in the bridge's settings it is answered again (then set it back).
+
+What 2.4.6 changed (kept: docs/bridge-2.4.6-notes.md):
+A. The installer's last page has a ticked "Open FinCom to connect". Press Finish: FinCom opens in your browser with this
+   computer's connect code already filled in (the address ends with #pair=, which FinCom takes off at once), and the
+   computer connects by itself. After installing you only press "Add as client" on the Tally page.
+B. Right-click the FinCom icon near the clock > "Connect FinCom on this computer...": FinCom opens in the browser with a
+   new code filled in, and a message says "FinCom is opening in your browser ... If it doesn't, open <FinCom's address>
+   on this computer and type this code: 123456 (until 14:05)". It no longer says "Settings > Tally Bridge > Connect".
+C. The last page left open (or the computer restarted before Finish): at the bridge's first start after the install,
+   FinCom opens by itself once (after 2 minutes), only for the Windows user the bridge works for, only in that user's
+   own signed-in session, never by the Windows service, and not when this computer is already connected to FinCom.
+   Untick "Open FinCom to connect" and it does not open by itself. A silent install (/S) never opens FinCom.
+D. The code works as before: once, for 10 minutes. Only FinCom's own https addresses are opened; the address carries
+   only the 6-digit code, never the bridge's key.
+
+CHECK 7 - THE INSTALL CONNECTS BY ITSELF (2.4.6; a computer or Windows user not yet connected to FinCom)
+   Sign in to FinCom in the default browser first. Install FinComBridge-Setup-2.4.8.exe "Just for me"; on the last page
+   leave "Open FinCom to connect" ticked and press Finish.
+   You should see: FinCom opens in the default browser within a few seconds; its address bar shows no #pair= (taken off
+   at once); Connect Tally says connected to FinCom Bridge on this computer, then the firm link within a minute; open a
+   company in Tally and "Add as client" is the only step left. The bridge's log says "FinCom handed to the tray to open
+   in the browser and connect this computer (the first start after the setup, session N, the setup's Finish page: Open
+   FinCom to connect ticked)"; install.log says "Open FinCom to connect: chosen on the last page".
+   Restart the computer and sign in: FinCom does NOT open again (once per install).
+
+CHECK 8 - THE TRAY ITEM
+   Right-click the FinCom icon near the clock > "Connect FinCom on this computer...".
+   You should see: FinCom opens with the code filled in and the message box "FinCom is opening in your browser ... If it
+   doesn't, open https://staging.fincom.live/review/ on this computer and type this code: ... (until hh:mm)". FinCom
+   says this browser is connected. Choosing the item again gives a new code; the old one no longer works.
+
+CHECK 9 - NOT FOR ANOTHER USER, NOT WHEN UNTICKED, NOT WHEN CONNECTED
+   (a) Install again, untick "Open FinCom to connect", press Finish, wait 3 minutes: FinCom does not open; install.log says
+       "Open FinCom to connect: left unticked on the last page".
+   (b) On a computer already connected to FinCom (upgrade from 2.4.5), install 2.4.6 and untick the box: FinCom does not
+       open by itself, then or after a restart; the log says "Already connected to FinCom" once.
+   (c) For all users (the service): sign in as another Windows user on the same computer: no browser opens for that
+       user, and no FinCom icon starts for them.
+
+What 2.4.5 changed (kept: the full notes, docs/bridge-2.4.5-notes.md):
+1. Older entries from Tally only for a period you choose: Books > From Tally (and Connect Tally after step 6), "Bring older
+   entries from Tally": a financial year, Whole year / Apr-Sep / Oct-Mar (the halves once the year passes 20,000
+   vouchers), Start, Pause. The bridge reads one day at a time, only while nobody works in Tally; your entries go first.
+   Progress reads like "8,412 of 12,960 vouchers (65%) - 4,548 left".
+2. A day Tally cannot give within 2 seconds even one voucher type at a time shows one quiet line: "Tally took too long to
+   give <day>. Please upload that day's Day Book." with an Upload button. Nothing else about Tally is shown.
+3. Connect Tally step 5 shows the exact ledger count: "312 of 1,240 ledgers".
+4. The installer adds FinCom's add-on to each TallyPrime's tally.ini (TDL = C:\ProgramData\FinCom\addon\FinComRecorder.tdl,
+   and User TDL = Yes only if there is no User TDL line), keeping a backup tally.ini.fincom-bak. A tally.ini with
+   "User TDL = No" is left as it is and shown under Help & support.
+5. Job progress files are written so that no update is lost.
+6. FinCom's cloud stores these (migration 98, run on staging before the tally-ingest of 2.4.5).
+7. Night and Sunday pace: outside office hours (20:00-08:00 IST and all Sunday unless you change them on FinCom's Tally
+   page, per computer) the chosen period is read day after day while Tally is idle; the progress line shows the time
+   left ("about 1 h 40 min left at night pace"). For a big company's first load, the Day Book export (Alt+E) and upload
+   is still the quick way: Books > From Tally says so.
+8. Payroll in the older entries: a payroll voucher of the period comes with every employee's pay heads (its entry
+   request may take Tally up to 3 seconds, as in 2.4.4); the payroll's employees are read first; a salary payment keeps
+   the employee and amount, never the bank details.
+
+Before you start: migration 98 has run on staging and the tally-ingest of 2.4.5 is deployed; you are signed in to FinCom
+as the owner; TallyPrime 7.1 is open on NWS144 with a ZZ TEST company that has entries in an earlier year. Copy
+C:\Program Files\TallyPrime\tally.ini somewhere before installing. In every entry you make for this sheet, start the
+narration with TRIAL. Write down the time (IST) of each check.
+
+CHECK 1 - THE VERSION AND TALLY.INI
+   Close TallyPrime. Install FinComBridge-Setup-2.4.8.exe and compare its fingerprint. Open tally.ini in Notepad.
+   You should see: the tray says FinCom Bridge 2.4.7; FinCom's Tally page shows version 2.4.7; tally.ini has the line
+   TDL = C:\ProgramData\FinCom\addon\FinComRecorder.tdl after your other TDL lines (they are all still there, in the
+   same order); tally.ini.fincom-bak next to it is your old file. Open TallyPrime: F1 > TDLs & Add-ons lists FinCom's
+   add-on and every add-on you had.
+
+CHECK 2 - THE LEDGER COUNT
+   Connect Tally > step 5 > read the ledgers again.
+   You should see: "N of M ledgers" counting up, M the exact number of ledgers in Tally (Gateway > Display More Reports >
+   List of Accounts shows the same count).
+
+CHECK 2b - TEST READING OLD DAYS (read only; do this BEFORE CHECK 3)
+   Right-click the FinCom icon near the clock > "Test reading old days (read-only)". It suggests the smallest company open
+   in Tally; answer Yes for a small company (No suggests the next one). Leave Tally alone for a minute.
+   You should see: a message "Old-days test: 0.21 s / 0.34 s / 0.18 s - no freeze" (three times, each under 2 s), and the
+   same line on FinCom's Tally page under this computer (Help & support > Details). Nothing changes in Tally or in FinCom.
+   If a time says "longer than 2 s" or "did not answer": stop here and send the line to FinCom; do not do CHECK 3.
+
+CHECK 3 - OLDER ENTRIES
+   Only after CHECK 2b showed "no freeze": on FinCom's Tally page, under this computer's Details, "Reading older entries on
+   this computer: off" > Switch on (owner only).
+   Books > From Tally > Bring older entries from Tally: choose last year, Whole year, Start. Leave Tally alone.
+   You should see: "Counting the year in Tally... X of 365 days", then "X of Y vouchers (P%) - Z left" going up, Tally
+   never freezing; at the end "all in FinCom". Y equals Tally's voucher count for that year (Day Book, Ctrl+F12 period).
+   If Tally is ever slow for a day (over 2 s), FinCom stops reading by itself and shows one line asking for the Day Book of
+   the days still missing; it does not try again until you choose the period again.
+
+CHECK 3b - NIGHT PACE AND PAYROLL (after 20:00 IST, or on a Sunday)
+   FinCom's Tally page > this computer's Details: "Faster reading of older entries outside office hours: 20:00 to 08:00
+   and all Sunday (India time)" > Change lets you set other hours (owner only). With CHECK 3 still going, after 20:00:
+   You should see: the progress line goes up faster and ends with "about ... left at night pace"; Tally never freezes.
+   If the company has payroll in that year: Payroll > the payroll voucher of a month in the period shows in FinCom's
+   books with each employee's pay heads; the salary payment shows each employee's amount, and no bank account number.
+
+CHECK 3c - TALLY NEVER HELD BY THE CHANGE LIST (2.4.5 ROUND 104; a company of more than 5,000 vouchers)
+   Leave Tally open on that company overnight with the bridge running (nobody at the computer).
+   You should see: in the log, once, "Tally's list of changed entries is not asked (the company has up to ... vouchers
+   ...)"; no "TDSDeskKeepList took 2.2s" line; FinCom's Tally page shows the nightly check "Not checked ... Upload the
+   Day Book ..." for that company. A small company (under 5,000) is still checked.
+
+CHECK 4 - YOUR WORK GOES FIRST
+   While CHECK 3 runs, save a Journal of Rs 1, narration "TRIAL 245 first".
+   You should see: it is in FinCom's books in a few seconds, as with 2.4.4; the progress waits while you type and goes
+   on a minute after you stop.
+
+CHECK 5 - PAUSE
+   Press Pause; wait two minutes; press Resume.
+   You should see: the count stops while paused and goes on from where it stopped.
+
+CHECK 6 - USER TDL = NO (only on a spare computer, or put tally.ini back after)
+   Close TallyPrime; in tally.ini set "User TDL = No"; install again.
+   You should see: tally.ini is not changed at all; Help & support in FinCom says the add-on could not be added because
+   tally.ini says User TDL = No.
+
+How to send the log lines: right-click the FinCom icon near the clock > Show log.
+
+HOW TO ROLL BACK (go back to 2.4.8)
+   1. Right-click the FinCom icon near the clock > "Roll back to the previous version".
+   2. A question names the version it goes back to (2.4.8). Answer Yes.
+   3. The icon goes away for a few seconds and comes back.
+   You should see: within a minute, FinCom's Tally page shows version 2.4.8 for your line; older entries are then read one at a time again (the pairing stays). Automatic updates stay off on this computer until FinCom turns them
+   on again.

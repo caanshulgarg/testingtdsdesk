@@ -126,7 +126,7 @@ const Prefetch = {
   },
   // the books from FinCom's cloud: TCloud.load on a books object of this client (not the open one), saved as it saves them
   async books(cid, co){
-    let held = null; try { held = await IDBStore.get("books:" + cid); } catch (e){ held = null; }
+    let held = null; try { held = await Books.read(cid); } catch (e){ held = null; }
     // books here already (brought in before, or a Day Book read here): the opening checks them for changes
     if (held && held.cid === cid && ((held.meta && held.meta.cloud) || (held.vouchers || []).length)) return false;
     await this.gate();

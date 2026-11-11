@@ -4,6 +4,8 @@
 // (src/js/86) and the deductees' PANs (PANCheck, TDSPanFix: src/js/87), each marked @react-lazy (build.py lazy_files).
 import * as TM from "../../../server/_shared/tdsmatch.js";
 Object.assign(globalThis, TM);
+// 24Q's text file and its download (TDS24Q_FILE, payFvuDownload: src/js/73-tds-24q-file.js)
+import "../../../src/js/73-tds-24q-file.js";
 import "../../../src/js/70-traces-files.js";
 import "../../../src/js/86-tds-match.js";
 import "../../../src/js/87-pan-check.js";

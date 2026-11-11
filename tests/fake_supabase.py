@@ -31,6 +31,9 @@ FAIL_DONE = {"upload": 0} # the next n tally_work_done of an upload piece fail
 FAIL_DAY = {}             # day -> n: the next n calls queuing a day file of that day fail (tally_work_send / tally_upload_advance)
 NO_FN = set()             # functions this database does not have yet (an older cloud): PostgREST's 404 PGRST202
 FAIL_SELECT = {}          # table -> {message, code}: a GET answers this PostgREST error (bridge 2.3.1 Lows: errors are logged)
+FAIL_RPC = {}             # function -> {message, code}: the call answers this PostgREST error (the database cannot be read)
+DELAY = [0.0]             # seconds every request waits before it is answered (a slow database)
+SPANS = []                # while DELAY is on: (method, path?query, started, ended) of each request, to see which ran at the same time
 MAX_URL = [0]             # > 0: a request whose path and query are longer answers 414 (a gateway's URL limit; the refetch chunks)
 # migration 130 (bridge 2.5.0): by default a database before it (tally_openings_held not there); run_openings_ingest.py
 # removes this to stand for one with it
@@ -183,6 +186,8 @@ class H(http.server.BaseHTTPRequestHandler):
         if path == "/auth/v1/user":
             w = self.who(); return self.send(200, w) if isinstance(w, dict) else self.send(401, {"msg": "bad token"})
         if path.startswith("/rest/v1/rpc/"):
+            if path.rsplit("/", 1)[1] in FAIL_RPC:
+                return self.send(500, dict(FAIL_RPC[path.rsplit("/", 1)[1]], details=None, hint=None))
             if path.rsplit("/", 1)[1] in NO_FN:
                 return self.send(404, {"code": "PGRST202", "message": "Could not find the function public.%s in the schema cache" % path.rsplit("/", 1)[1], "details": None, "hint": None})
             try: return self.send(200, rpc(path.rsplit("/", 1)[1], json.loads(raw or b"{}")))
@@ -275,11 +280,16 @@ class H(http.server.BaseHTTPRequestHandler):
                     return self.send(206, raw=data[a:b + 1], headers={"Content-Type": "application/octet-stream", "Content-Range": "bytes %d-%d/%d" % (a, b, len(data))})
                 return self.send(200, raw=FILES[key], headers={"Content-Type": "application/gzip"})
         self.send(404, {"message": "no such path " + path})
-    def do_GET(self): self.handle_any("GET")
-    def do_HEAD(self): self.handle_any("HEAD")
-    def do_POST(self): self.handle_any("POST")
-    def do_PATCH(self): self.handle_any("PATCH")
-    def do_PUT(self): self.handle_any("PUT")
-    def do_DELETE(self): self.handle_any("DELETE")
+    def timed(self, method):
+        if not DELAY[0]: return self.handle_any(method)
+        t0 = time.time(); time.sleep(DELAY[0])
+        try: return self.handle_any(method)
+        finally: SPANS.append((method, self.path, t0, time.time()))
+    def do_GET(self): self.timed("GET")
+    def do_HEAD(self): self.timed("HEAD")
+    def do_POST(self): self.timed("POST")
+    def do_PATCH(self): self.timed("PATCH")
+    def do_PUT(self): self.timed("PUT")
+    def do_DELETE(self): self.timed("DELETE")
 def start():
     srv = http.server.ThreadingHTTPServer(("127.0.0.1", PORT), H); threading.Thread(target=srv.serve_forever, daemon=True).start(); return srv

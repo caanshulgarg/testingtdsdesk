@@ -145,7 +145,8 @@ const BookSrc = {
     this.fromCopy(heads, lines, bills).forEach(v => { if (this.put(b, v, by)) n++; });
     // 2.4.3: the TDS details of an entry held at the same version (a Day Book's, read the same way by the cloud) are added to it
     (heads || []).forEach(h => { const tx = this.tdsxOf(h); if (!tx || !h || !by.has(h.guid)) return; const v = b.vouchers[by.get(h.guid)]; if (v && !v.tdsx && this.alt(v.alt) === this.alt(h.alter_id)){ v.tdsx = tx; n++; } });
-    if (n) b.vouchers.sort((a, c) => String(a.date).localeCompare(String(c.date)));
+    // (an entry changed in place: the books get a new array, so the save writes the entries again: Books.touch, src/js/04)
+    if (n) b.vouchers = b.vouchers.slice().sort((a, c) => String(a.date).localeCompare(String(c.date)));
     return n;
   },
   // before the Day Book's months are read again (TallyRead.merge puts in exactly what the files hold), the bridge's

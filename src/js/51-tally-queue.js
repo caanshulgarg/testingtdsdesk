@@ -290,10 +290,11 @@ const TallyProof = {
     }
     return Cloud.api(path);
   },
-  // the GUIDs of the day's entries deleted in Tally (none on a cloud without the column)
-  async deletedOn(book, day){
+  // the GUIDs of the entries deleted in Tally on the days asked (q: "&day=eq.…" or "&day=in.(…)"), read page by page; none
+  // on a cloud without the column
+  async deletedIn(book, q){
     if (this.hasDel === false) return new Set();
-    try { const r = await Cloud.api("tally_vouchers?select=guid&book_id=eq." + encodeURIComponent(book) + "&day=eq." + day + "&deleted_at=not.is.null"); this.hasDel = true; return new Set((r || []).map(x => x.guid)); }
+    try { const r = await TCloud.restPages("tally_vouchers?select=guid&book_id=eq." + encodeURIComponent(book) + q + "&deleted_at=not.is.null&order=guid.asc"); this.hasDel = true; return new Set((r || []).map(x => x.guid)); }
     catch (e){ if (/deleted_at|42703/i.test(String((e && e.message) || e))) this.hasDel = false; return new Set(); }
   },
   async check(cid, force){
@@ -342,9 +343,15 @@ const TallyProof = {
     // no voucher id: the account's ledger on that day, for that amount
     const noId = rows.filter(r => !(r.tally && r.tally.guid)), lines = {};
     // the lines of an entry deleted in Tally stay in the cloud copy (migration-37) and are left out here by its GUID
-    for (const day of Array.from(new Set(noId.map(r => d8(r.date)))).filter(Boolean)){
-      const gone = await this.deletedOn(bk.book, Audit.iso(day));
-      lines[day] = (await Cloud.api("tally_lines?select=ledger,amount,guid&book_id=eq." + encodeURIComponent(bk.book) + "&day=eq." + Audit.iso(day)) || []).filter(x => !gone.has(x.guid));
+    // speed (11-Nov-2026: 16 days of a statement were 32 calls one after another): the days asked at once, 31 to a
+    // query (day=in.(...)), the lines read page by page; the same lines as day by day
+    const dayList = Array.from(new Set(noId.map(r => d8(r.date)))).filter(Boolean);
+    for (let i = 0; i < dayList.length; i += 31){
+      const part = dayList.slice(i, i + 31), q = part.length === 1 ? "&day=eq." + Audit.iso(part[0]) : "&day=in.(" + part.map(d => Audit.iso(d)).join(",") + ")";
+      const gone = await this.deletedIn(bk.book, q);
+      const got = await TCloud.restPages("tally_lines?select=ledger,amount,guid,day&book_id=eq." + encodeURIComponent(bk.book) + q + "&order=day.asc,guid.asc,ledger.asc,amount.asc");
+      part.forEach(d => { lines[d] = []; });
+      (got || []).forEach(x => { const d = part.length === 1 ? part[0] : d8(x.day); if (lines[d] && !gone.has(x.guid)) lines[d].push(x); });
     }
     const ledOf = r => { const s2 = (b.stmts || []).find(x => x.id === String(r.id || "").split("-")[0]) || {}; return ledNm(accountFor(s2).ledger || "").toLowerCase(); };
     let n = 0;

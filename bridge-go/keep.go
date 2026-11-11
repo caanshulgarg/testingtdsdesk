@@ -206,7 +206,7 @@ func readsOffErr() error {
 // the body fetch asks Tally by it); still undated, the AlterID filter only
 func keepListAboveRequest(company string, after int64) string {
 	return "<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>TDSDeskKeepList</ID></HEADER>" +
-		"<BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>" + esc(company) + "</SVCURRENTCOMPANY>" +
+		"<BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>" + esc(tallyCo(company)) + "</SVCURRENTCOMPANY>" +
 		"</STATICVARIABLES><TDL><TDLMESSAGE>" +
 		`<COLLECTION NAME="TDSDeskKeepList" ISMODIFY="No"><TYPE>Voucher</TYPE><FETCH>GUID,MASTERID,ALTERID,DATE</FETCH><FILTERS>TDSDeskKeepNew</FILTERS></COLLECTION>` +
 		fmt.Sprintf(`<SYSTEM TYPE="Formulae" NAME="TDSDeskKeepNew">$AlterID &gt; %d</SYSTEM>`, after) +
@@ -220,7 +220,7 @@ func keepListRequest(company, from, to string, after int64) string {
 		sys = fmt.Sprintf(`<SYSTEM TYPE="Formulae" NAME="TDSDeskKeepNew">$AlterID &gt; %d</SYSTEM>`, after)
 	}
 	return "<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>TDSDeskKeepList</ID></HEADER>" +
-		"<BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>" + esc(company) + "</SVCURRENTCOMPANY>" +
+		"<BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>" + esc(tallyCo(company)) + "</SVCURRENTCOMPANY>" +
 		periodVars(from, to) + "</STATICVARIABLES><TDL><TDLMESSAGE>" +
 		`<COLLECTION NAME="TDSDeskKeepList" ISMODIFY="No"><TYPE>Voucher</TYPE><FETCH>GUID,ALTERID,DATE</FETCH>` + flt + "</COLLECTION>" + sys +
 		"</TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>"
@@ -646,13 +646,16 @@ type keepRun struct {
 	caughtUp bool
 	// 2.5.0 (booksfrom.go): a company whose ledger read was held for want of its books-from: not marked read
 	booksHeld map[string]bool
-	light     bool
-	force     bool
-	once      bool
-	allDone   bool
-	told      map[string]bool
-	id        string           // this run (a round of slices resumes within it)
-	alter     map[string]int64 // each company's highest AlterID, as its check said (for the rewind guard)
+	// 2.5.13 (review A2): the companies whose ledger list came without its openings this run (no first day known): not a
+	// read of the books ("Books as of" is not moved)
+	openUnknown map[string]bool
+	light       bool
+	force       bool
+	once        bool
+	allDone     bool
+	told        map[string]bool
+	id          string           // this run (a round of slices resumes within it)
+	alter       map[string]int64 // each company's highest AlterID, as its check said (for the rewind guard)
 	// an Update now a person pressed that waited KeepNowWaitSec (2 minutes) for a 15 s pause in Tally: it reads on, in
 	// short slices (each request under the 2 s stop), giving way between them while the person types (holdNow)
 	pressOn bool
@@ -1195,6 +1198,24 @@ func minDur(a, b time.Duration) time.Duration {
 	return b
 }
 
+// 2.5.13: the ledger run's end: "done" only when no company's ledger read was held (a held read is said, never "done")
+func ledgerRunEndWords(k *keepRun, allDone bool) string {
+	var held []string
+	for c, on := range k.booksHeld {
+		if on {
+			held = append(held, c)
+		}
+	}
+	sort.Strings(held)
+	if len(held) > 0 {
+		return "Ledger list: not read for " + strings.Join(held, ", ") + " (Tally has not said when the books begin; the read waits until it does)"
+	}
+	if allDone {
+		return "Ledger list: done"
+	}
+	return "Ledger list: not finished"
+}
+
 // the time of the last read from Tally that came in, for FinCom's "last read 15:34" and "Books as of 15:34"
 func markRead(company string) {
 	dir, err := companyDir(company)
@@ -1408,8 +1429,8 @@ func keepWorker(r runReq) {
 			switch {
 			case err == nil:
 				clearBgBackoff(o.port)
-				if !k.booksHeld[o.name] {
-					markRead(o.name) // 2.5.0: a ledger read held for want of books-from is not a read
+				if !k.booksHeld[o.name] && !k.openUnknown[o.name] {
+					markRead(o.name) // 2.5.0: a ledger read held for want of books-from is not a read (2.5.13: nor one without openings)
 				}
 				if k.caughtUp {
 					upToDate[o.name] = true
@@ -1482,7 +1503,7 @@ func keepWorker(r runReq) {
 	case k.light:
 		writeLog("Light update: not done (" + why + ")" + reqs() + "; the next event tries again")
 	case r.kind == "ledgers" && k.allDone:
-		writeLog("Ledger list: done" + reqs() + "; the bridge is idle again")
+		writeLog(ledgerRunEndWords(k, true) + reqs() + "; the bridge is idle again")
 	case r.kind == "ledgers":
 		if why == "" {
 			why = "Tally or the company not open"

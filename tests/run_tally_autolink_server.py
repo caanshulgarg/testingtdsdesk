@@ -21,12 +21,18 @@ S1 = {"id": "cmvkrssmhbi53l", "firm_id": FIRM, "name": "Salesify Marketing LLP",
 S2 = {"id": "cmvkrtpqqr6z9j", "firm_id": FIRM, "name": "Salesify Marketing LLP", "tally_name": "Salesify Marketing LLP", "gstin": "06AEVFS5010H1ZV", "deleted": False}
 GS = {"id": "cmupe4m7upncpy", "firm_id": FIRM, "name": "Garg Shekhar & Company", "tally_name": "Garg Shekhar & Company", "gstin": "09AANFG3202D1ZR", "deleted": False}
 AL = {"id": "c-alpha", "firm_id": FIRM, "name": "Alpha Traders LLP", "tally_name": "ALPHA TRADERS LLP (2024-25)", "gstin": "", "deleted": False}
-F.T["clients"].extend([S1, S2, GS, AL])
+OR = {"id": "c-orion", "firm_id": FIRM, "name": "Orion Traders Pvt Ltd", "tally_name": "", "gstin": "", "deleted": False}
+VE = {"id": "c-vega", "firm_id": FIRM, "name": "Vega Exports LLP", "tally_name": "", "gstin": "", "deleted": False}
+LY = {"id": "c-lyra", "firm_id": FIRM, "name": "Lyra Systems Pvt Ltd", "tally_name": "", "gstin": "27AABCL1234M1Z2", "deleted": False}
+IR = {"id": "c-iris", "firm_id": FIRM, "name": "Iris Looms", "tally_name": "", "gstin": "", "deleted": False}
+RH = {"id": "c-rhea", "firm_id": FIRM, "name": "Rhea Traders", "tally_name": "", "gstin": "07AAACR1111A1Z5", "deleted": False}
+F.T["clients"].extend([S1, S2, GS, AL, OR, VE, LY, IR, RH])
 F.T["tally_companies"].append({"firm_id": FIRM, "company": "ALPHA TRADERS LLP (2024-25)", "client_id": "c-alpha", "book_id": "b-al", "last_seen": "2026-10-01T00:00:00Z", "linked_at": "2026-10-01T00:00:00Z"})
 # unlinked by a person once: never linked by itself again
 F.T["tally_companies"].append({"firm_id": FIRM, "company": "GARG SHEKHAR & CO OLD", "client_id": None, "gstin": "09AANFG3202D1ZR", "last_seen": "2026-10-01T00:00:00Z", "linked_at": "2026-10-02T00:00:00Z"})
 F.T["tally_devices"].append({"id": "d-1", "firm_id": FIRM, "name": "NWS144", "key_hash": hashlib.sha256(KEY.encode()).hexdigest(), "revoked": False, "info": {}, "wake_token": "w" * 64,
                              "version": "2.4.1", "want_update_at": None, "want_sent_at": None})
+F.T["tally_devices"].append({"id": "d-9", "firm_id": FIRM, "name": "OLDPC", "key_hash": "0" * 64, "revoked": True, "info": {}, "wake_token": "v" * 64, "version": "2.4.1"})
 F.start()
 env = dict(os.environ, SUPABASE_URL="http://127.0.0.1:%d" % F.PORT, SUPABASE_SERVICE_ROLE_KEY=F.SERVICE, SUPABASE_ANON_KEY="anon-key")
 fn = subprocess.Popen([DENO, "run", "--allow-net", "--allow-env", "--allow-read", os.path.join(HERE, "..", "server", "tally-cloud", "index.ts")], env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
@@ -54,9 +60,13 @@ try:
     c, r = call({"kind": "companies", "companies": [{"name": SAL, "gstin": ""}]})
     ok(r.get("links", {}).get(SAL) is True and row(SAL).get("client_id") == S2["id"] and row(SAL).get("linked_at"),
        "2. one Salesify left: SALESIFY MARKETING LLP - (from 1-Apr-25) linked to it by the normalised name (%s)" % row(SAL))
-    # 3. the same GSTIN, another name
+    # 3. the same GSTIN, another name: linked when no other company of the firm has that GSTIN
+    c, r = call({"kind": "companies", "companies": [{"name": "LYRA BOOKS 2026", "gstin": "27AABCL1234M1Z2"}]})
+    ok(row("LYRA BOOKS 2026").get("client_id") == LY["id"], "3. the same GSTIN as Lyra Systems: linked (%s)" % row("LYRA BOOKS 2026").get("client_id"))
+    # 3b. next-link-choose: another company of the firm (one a person unlinked) has that GSTIN too: a person chooses
     c, r = call({"kind": "companies", "companies": [{"name": "GSC BOOKS 2026", "gstin": "09AANFG3202D1ZR"}]})
-    ok(row("GSC BOOKS 2026").get("client_id") == GS["id"], "3. the same GSTIN as Garg Shekhar & Company: linked (%s)" % row("GSC BOOKS 2026").get("client_id"))
+    ok(not row("GSC BOOKS 2026").get("client_id") and r.get("links", {}).get("GSC BOOKS 2026") is False,
+       "3b. two Tally companies with that GSTIN: neither linked by itself (%s)" % row("GSC BOOKS 2026").get("client_id"))
     # 4. a client linked to a company already: another of the same name waits for a person
     c, r = call({"kind": "companies", "companies": [{"name": "ALPHA TRADERS LLP (2025-26)", "gstin": ""}]})
     ok(not row("ALPHA TRADERS LLP (2025-26)").get("client_id"), "4. Alpha Traders, linked already: its 2025-26 company is not moved to it by itself")
@@ -101,6 +111,28 @@ try:
     F.NO_FN.add("tally_link_place_check")
     c, r = call({"kind": "days", "company": "ZZ PERSON RENAMED", "days": [{"day": "20261001", "gz": ""}]})
     ok(not r.get("otherPlace") and c != 409, "8. a cloud without migration 110: as before, not refused (%s %s)" % (c, str(r)[:120]))
+    # 9. next-link-choose (11-Nov-2026: a client linked by itself to an empty copy of its company, a near-identical name,
+    # while the real one was open too): two companies that look alike in one report: neither linked by itself
+    c, r = call({"kind": "companies", "companies": [{"name": "ORION TRADERS PVT LTD", "gstin": ""}, {"name": "Orion Traders Pvt Ltd (Depot)", "gstin": ""}]})
+    ok(c == 200 and not row("ORION TRADERS PVT LTD").get("client_id") and not row("Orion Traders Pvt Ltd (Depot)").get("client_id")
+       and r.get("links", {}).get("ORION TRADERS PVT LTD") is False, "9. two Orion companies alike in one report: a person chooses (%s)" % r.get("links"))
+    # 10. one alike seen earlier (another computer, never linked): the one reported now is not linked by itself either
+    F.T["tally_companies"].append({"firm_id": FIRM, "company": "VEGA EXPORTS LLP.", "client_id": None, "last_seen": "2026-11-01T00:00:00Z"})
+    c, r = call({"kind": "companies", "companies": [{"name": "VEGA EXPORTS LLP", "gstin": ""}]})
+    ok(not row("VEGA EXPORTS LLP").get("client_id"), "10. Vega: a look-alike seen before on the firm's list: nothing linked by itself (%s)" % row("VEGA EXPORTS LLP").get("client_id"))
+    # 11. unlinked by a person, reported again (the owner: "when we unlink and again link the same company linked again"):
+    # never linked by itself again, whatever names and GSTIN say
+    rl = row("LYRA BOOKS 2026"); rl["client_id"] = None; rl["linked_at"] = "2026-11-11T05:00:00Z"
+    c, r = call({"kind": "companies", "companies": [{"name": "LYRA BOOKS 2026", "gstin": "27AABCL1234M1Z2"}]})
+    ok(not row("LYRA BOOKS 2026").get("client_id") and r.get("links", {}).get("LYRA BOOKS 2026") is False, "11. a company unlinked by a person stays unlinked when reported again")
+    # 12. review: a look-alike of a removed computer (revoked) does not count, as on the Tally page (deviceGone)
+    F.T["tally_companies"].append({"firm_id": FIRM, "company": "IRIS LOOMS.", "client_id": None, "device_id": "d-9", "last_seen": "2026-10-01T00:00:00Z"})
+    c, r = call({"kind": "companies", "companies": [{"name": "IRIS LOOMS", "gstin": ""}]})
+    ok(row("IRIS LOOMS").get("client_id") == IR["id"], "12. the only look-alike is a removed computer's: linked by its name (%s)" % row("IRIS LOOMS").get("client_id"))
+    # 13. review: a look-alike with another GSTIN is another business: the client's own GSTIN links it
+    F.T["tally_companies"].append({"firm_id": FIRM, "company": "Rhea Traders (Depot)", "client_id": None, "device_id": "d-1", "gstin": "07AAACR2222B1Z5", "last_seen": "2026-11-01T00:00:00Z"})
+    c, r = call({"kind": "companies", "companies": [{"name": "RHEA TRADERS", "gstin": "07AAACR1111A1Z5"}]})
+    ok(row("RHEA TRADERS").get("client_id") == RH["id"], "13. the same GSTIN as Rhea Traders, its look-alike another GSTIN: linked (%s)" % row("RHEA TRADERS").get("client_id"))
 finally:
     fn.terminate()
     errs = [l for l in log if "error" in l.lower() or "uncaught" in l.lower()]

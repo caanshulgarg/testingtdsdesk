@@ -396,6 +396,8 @@ const TDSF25 = {
   rowsOf(fy, q, form){
     let rows, nil = [], lo = [];
     if (form === "24Q"){
+      // 24Q's text file comes with the TDS screens (src/js/73-tds-24q-file.js); this file comes with Settings too
+      if (typeof TDS24Q_FILE !== "object") return {error: "Open the TDS page to make 24Q's file."};
       const s = TDS24Q_FILE.rowsOf(fy, q);
       if (s.error) return s;
       lo = TDS26Q.leftOut(form, fy, q).filter(x => x.k === "nochallan");

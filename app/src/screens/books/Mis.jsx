@@ -10,6 +10,7 @@ import NotRead from "../../parts/NotRead.jsx";
 import { Fragment } from "react";
 import CommitBox from "../../parts/CommitBox.jsx";
 import { CatchUp } from "../../parts/Notes.jsx";
+import { catchSoon } from "../../lib/catchSoon.js";
 import Confirm from "../../parts/Confirm.jsx";
 import { ListRows } from "../../parts/ListTable.jsx";
 import DateBox from "../../parts/DateBox.jsx";
@@ -17,6 +18,8 @@ import PageTabs from "../../parts/PageTabs.jsx";
 import Filters, { Field } from "../../parts/Filters.jsx";
 import { Answer, Fold, Info } from "../../parts/Answer.jsx";
 import DetailDrawer from "../../parts/DetailDrawer.jsx";
+// the printed pack and the Excel (misPackHtml, misExcel: src/js/18-mis-pack.js) come with this screen's file, not in legacy.js (build.py lazy_files)
+import "../../../../src/js/18-mis-pack.js";
 import More from "../../parts/More.jsx";
 
 const m = (v) => INR.format(r2(v || 0));
@@ -379,7 +382,7 @@ function Compliance({ r }) {
 
 export default function Mis({ b }) {
   // Tally changed since the last run: the tab says so while it is worked out again (TallyRead.catchUp, src/js/18)
-  const catchUp = TallyRead.catchUp(b, "mis");
+  const catchUp = catchSoon(b, "mis");   // on screen only, at most once in 5 s (lib/catchSoon.js)
   if (catchUp) return <CatchUp text={catchUp} />;
   const r0 = (b.mis || {}).last, stale = MIS.stale(b);
   // a saved run from other books or older working: worked out again now, its figures not shown meanwhile

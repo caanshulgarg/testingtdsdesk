@@ -71,11 +71,11 @@ const BookItems = {
     let s = this.st[cid];
     if (s && s.ready) return s;
     s = this.st[cid] = s || {seq: 0, base: {}, chain: Promise.resolve()};
-    try { const m = await IDBStore.get("bookitems:" + cid); if (m){ s.seq = m.seq || 0; s.base = m.base || {}; if (typeof m.healed === "string") s.healed = m.healed; } } catch (e){}
+    try { const m = await IDBStore.get("bookitems:" + cid); if (m){ s.seq = m.seq || 0; s.base = m.base || {}; if (typeof m.healed === "string") s.healed = m.healed; if (Array.isArray(m.own)) s.own = new Set(m.own); } } catch (e){}
     s.ready = true;
     return s;
   },
-  async keep(cid){ const s = this.st[cid]; try { await IDBStore.write([["bookitems:" + cid, {seq: s.seq, base: s.base, healed: typeof s.healed === "string" ? s.healed : undefined, at: new Date().toISOString()}]]); } catch (e){} },
+  async keep(cid){ const s = this.st[cid]; try { await IDBStore.write([["bookitems:" + cid, {seq: s.seq, base: s.base, healed: typeof s.healed === "string" ? s.healed : undefined, own: s.own && s.own.size ? Array.from(s.own) : undefined, at: new Date().toISOString()}]]); } catch (e){} },
   // one thing at a time for a client: fetching, sending and live changes are not interleaved
   queue(cid, fn){ const s = this.st[cid] || (this.st[cid] = {seq: 0, base: {}, chain: Promise.resolve()}); const p = s.chain.then(fn, fn); s.chain = p.catch(() => {}); return p; },
   // ---------- from the server
@@ -88,6 +88,24 @@ const BookItems = {
       after = rows[rows.length - 1].seq;
     }
   },
+  // speed (11-Nov-2026: a linked client opened again after a reload fetched 3.8 MB of items, all of them this computer's
+  // own saves of its first opening, each then found known and left): the seqs this computer's saves were given (s.own,
+  // kept with the cursor) are passed over. What came since the cursor is asked by seq only; when it is all this
+  // computer's own, nothing more is fetched; else the items from the first one not its own (as before, from there)
+  async since(cid, s){
+    const own = s.own;
+    if (!own || !own.size || !s.seq) return this.fetch(cid, s.seq);
+    let after = s.seq, top = s.seq, first = 0;
+    for (;;){
+      const rows = await Cloud.api("client_book_items?select=seq&client_id=eq." + encodeURIComponent(cid) + "&seq=gt." + after + "&order=seq.asc&limit=1000") || [];
+      for (const r of rows){ const q = num(r.seq); if (!own.has(q)){ first = q; break; } top = q; }
+      if (first || rows.length < 1000) break;
+      after = rows[rows.length - 1].seq;
+    }
+    s.seq = top; this.prune(s);
+    return first ? this.fetch(cid, top) : [];
+  },
+  prune(s){ if (s.own) s.own.forEach(q => { if (q <= s.seq) s.own.delete(q); }); },
   // on opening a client (and after being offline): what changed on the server since this computer last looked
   // o.taken (next-fast-open): called once the server's changes are in the books here, before the challans are healed and
   // this computer's changes sent, so a client opened again is shown after one read
@@ -95,7 +113,7 @@ const BookItems = {
   async pullNow(cid, o){
     const s = await this.state(cid);
     let rows;
-    try { rows = await this.fetch(cid, s.seq); Live.ok(); }
+    try { rows = await this.since(cid, s); Live.ok(); }
     catch (e){ if (this.missing(e)){ this.off = true; return "off"; } Live.fail(e); s.error = e.message; throw e; }
     s.error = "";
     if (!s.seq && !rows.length && !Object.keys(s.base).length) await this.fromBlob(cid);
@@ -113,12 +131,13 @@ const BookItems = {
   // challans were fetched in full on every opening. Now once per set of missing challans: the set still missing after the
   // fetch is kept here (s.healed, with the sync marks), so it is not fetched again until another challan goes missing
   async heal(cid, s){
-    const w = (await BookSync.localWork(cid)) || {}, have = new Set((w.challans || []).map(c => c && c.id));
+    // next-speed-pages: the challans and allocations alone (the whole work part was copied here every 45 s)
+    const w = (await BookSync.localWork(cid, ["challans", "alloc"])) || {}, have = new Set((w.challans || []).map(c => c && c.id));
     const missing = () => [...new Set(Object.values(w.alloc || {}))].filter(id => id && typeof id === "string" && !have.has(id)).sort();
     const ids = missing();
     if (!ids.length || s.healed === ids.join(",")){ s.chMiss = ids.length; return; }
     const rows = (await this.fetch(cid, 0, "challans")).filter(r => r.item[0] === "#" && !r.deleted && r.data && !have.has(r.data.id));
-    rows.forEach(r => { have.add(r.data.id); s.base[this.ik(r.key, r.item)] = this.h(r.data, r.ord); });
+    rows.forEach(r => { have.add(r.data.id); s.base[this.ik(r.key, r.item)] = this.h(r.data, r.ord); s.bv = (s.bv || 0) + 1; });
     if (rows.length) await this.into(cid, rows.map(r => ({k: r.key, i: r.item, o: r.ord, d: r.data})));
     const left = missing();
     s.chMiss = left.length; s.healed = left.join(",");
@@ -127,20 +146,23 @@ const BookItems = {
   // rows from the server (fetched, or live): applied unless this computer changed the same item later
   async take(cid, rows, o){
     const s = await this.state(cid), me = Live.me();
-    const work = (await BookSync.localWork(cid)) || {}, mine = this.split(work), use = [], notes = [];
+    // next-speed-pages (11-Nov-2026): nothing came (the 45-second round, most of the time): the work part is not copied
+    // and cut into items for nothing (10 MB on a large client: a 0.5 s freeze, 2 s on an office PC, every 45 s)
+    const work = rows.length ? ((await BookSync.localWork(cid)) || {}) : {}, mine = rows.length ? this.split(work) : new Map(), use = [], notes = [];
     rows.forEach(r => {
       const key = this.ik(r.key, r.item), hNew = r.deleted ? "gone" : this.h(r.data, r.ord);
       if (o.cursor) s.seq = Math.max(s.seq, num(r.seq));
       if (s.base[key] === hNew) return;                                       // known already (this computer's own save, come back)
       const loc = mine.get(key), hLoc = loc ? this.h(loc.d, loc.o) : "gone";
       const changedHere = hLoc !== (s.base[key] || "gone");
-      s.base[key] = hNew;
+      s.base[key] = hNew; s.bv = (s.bv || 0) + 1;
       if (hLoc === hNew) return;
       // changed here too and not sent yet: the later change stays (it is sent next)
       if (changedHere && s.editAt && s.editAt > Date.parse(r.updated_at || 0)) return;
       use.push({k: r.key, i: r.item, o: r.ord, d: r.data, del: !!r.deleted});
       if (!o.first && r.updated_by && r.updated_by !== me) notes.push(r);
     });
+    this.prune(s);
     if (use.length) await this.into(cid, use);
     await this.keep(cid);
     if (notes.length) Live.noteItems(cid, notes);
@@ -182,7 +204,15 @@ const BookItems = {
   async pushNow(cid){
     const s = await this.state(cid);
     if (BookSync.of(cid).readonly) return 0;
-    const work = await BookSync.localWork(cid);
+    // next-speed-pages (11-Nov-2026): the open client's work part as text first; the same text as at the end of the last
+    // pass that left nothing to send (everything sent, nothing held back), with the same record of what the server has
+    // (s.base: the same object, not written since: s.bv) and the same permissions to remove many items: nothing to send
+    // again, so it is not cut into items and every item hashed again (14,446 items, 0.4 s, every 45 s)
+    const raw = BookSync.openWorkStr(cid), c = s.clean;
+    if (raw !== null && c && c.raw === raw && c.base === s.base && c.bv === (s.bv || 0) && c.mass === this.allowMass){ Live.saved(); return 0; }
+    s.clean = null;
+    const bv0 = s.bv || 0, base0 = s.base; let own = 0;
+    const work = raw !== null ? JSON.parse(raw) : await BookSync.localWork(cid);
     if (!work) return 0;
     const mine = this.split(work), send = [], present = new Set(Object.keys(work));
     mine.forEach((x, key) => { const hh = this.h(x.d, x.o); if (s.base[key] !== hh) send.push([key, hh, {k: x.k, i: x.i, o: x.o, d: x.d}]); });
@@ -190,18 +220,21 @@ const BookItems = {
     // missing here (storage cleared, not loaded yet) is never sent as removed, and neither is most of a part at once
     // (review of 02-Oct-2026: never infer a removal from absence)
     const out = {}, had = {};
+    let held = false;
     Object.keys(s.base).forEach(key => { if (s.base[key] === "gone") return; const k = key.split("\u0001")[0]; had[k] = (had[k] || 0) + 1; if (!mine.has(key)) (out[k] = out[k] || []).push(key); });
     Object.entries(out).forEach(([k, keys]) => {
       if (!present.has(k)) return;
       const left = had[k] - keys.length;
       if (keys.length > 3 && keys.length > had[k] * 0.25 && !(this.allowMass && this.allowMass[cid + "|" + k])){
         s.held = Object.assign({}, s.held, {[k]: {n: keys.length, of: had[k], at: new Date().toISOString()}});
+        held = true;
         console.warn("FinCom: " + keys.length + " of " + had[k] + " items of " + k + " missing here; not removed on the server" + (left ? "" : " (none left)"));
         return;
       }
       keys.forEach(key => send.push([key, "gone", {k, i: key.split("\u0001")[1], del: true}]));
     });
-    if (!send.length){ Live.saved(); return 0; }
+    const clean = () => { if (raw === null || held || s.base !== base0 || (s.bv || 0) !== bv0 + own) return; Object.keys(this.st).forEach(k => { if (k !== cid && this.st[k]) this.st[k].clean = null; }); s.clean = {raw, base: s.base, bv: s.bv || 0, mass: this.allowMass}; };
+    if (!send.length){ clean(); Live.saved(); return 0; }
     Live.saving();
     try {
       for (let at = 0; at < send.length;){
@@ -211,10 +244,11 @@ const BookItems = {
         const part = send.slice(at, end);
         const res = await Cloud.api("rpc/save_book_items", {method: "POST", body: {p_client: cid, p_items: part.map(x => x[2])}});
         if (!res || !res.ok) throw new Error("The server did not take the change.");
-        part.forEach(x => { s.base[x[0]] = x[1]; });
+        part.forEach(x => { s.base[x[0]] = x[1]; }); s.bv = (s.bv || 0) + 1; own++;
+        (res.items || []).forEach(x => { const q = num(x && x.seq); if (q > s.seq) (s.own = s.own || new Set()).add(q); });
         at = end;
       }
-      s.error = ""; await this.keep(cid); Live.saved();
+      s.error = ""; clean(); await this.keep(cid); Live.saved();
     } catch (e){
       if (this.missing(e)){ this.off = true; BookSync.schedule(cid); return 0; }
       if (/not allowed|42501|permission/i.test(e.message)){ BookSync.of(cid).readonly = true; Live.saved(); return 0; }

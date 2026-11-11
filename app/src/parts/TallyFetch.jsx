@@ -45,14 +45,20 @@ export const owner = () => !!(typeof S === "object" && S.account && S.account.me
 const redraw = () => soonDraw();
 
 // ---------- the firm's summary (one call for the Tally page and From Tally; read again every 30 s, at once after a click)
+// reliability (11-Nov-2026): force is a person's click alone (it reads at once, also in a hidden tab); what keeps itself
+// fresh goes through the one shared poll below (useLive), never its own timer. A read that failed is said (TStale,
+// src/js/49: "Could not check just now, trying again"), what was read before kept with its time; `every`: the age (ms)
+// at which this look reads again (30 s; the shared poll: 15 s while something goes)
 const SUM = { at: 0, busy: false, books: null, off: false };
-export function summary(force = false) {
+const seen = () => typeof pollOk !== "function" || pollOk();
+const stale = (k, e, again) => { if (typeof TStale === "object") { if (e) TStale.fail(k, e, again); else TStale.ok(k); } };
+export function summary(force = false, every = 30000) {
   if (typeof TCloud !== "object" || !TCloud.on || !TCloud.on() || SUM.off) return null;
   // (a hidden tab reads nothing by itself: pollOk, src/js; a press still reads at once)
-  if (!SUM.busy && (force || (!QUIET.on && Date.now() - SUM.at > 30000 && (typeof pollOk !== "function" || pollOk())))) {
+  if (!SUM.busy && (force || (!QUIET.on && Date.now() - SUM.at > every && seen()))) {
     SUM.busy = true;
-    rpc("tally_fetch_summary", { p_book: null }).then((r) => { if (r && r.ok && Array.isArray(r.books)) SUM.books = r.books; },
-      (e) => { if (missing(e)) SUM.off = true; }).finally(() => { SUM.at = Date.now(); SUM.busy = false; redraw(); });
+    rpc("tally_fetch_summary", { p_book: null }).then((r) => { if (r && r.ok && Array.isArray(r.books)) SUM.books = r.books; stale("sum"); },
+      (e) => { if (missing(e)) SUM.off = true; else stale("sum", e, () => summary(false, 9000)); }).finally(() => { SUM.at = Date.now(); SUM.busy = false; redraw(); });
   }
   return SUM.books;
 }
@@ -72,13 +78,13 @@ if (typeof window === "object") window.tfxRefresh = () => { askStatus(true); ret
 // days being brought, the year chosen in days, the Tally computer's office hours): one call, read again every 30 s (every
 // 10 s while something goes), at once with the summary (tfxRefresh); a cloud without 135: nothing of them
 const ASK = { at: 0, busy: false, asks: null, books: null, off: false };
-export function askStatus(force = false) {
+export function askStatus(force = false, every = 0) {
   if (typeof TCloud !== "object" || !TCloud.on || !TCloud.on() || ASK.off) return null;
   const going = (ASK.asks || []).some((k) => k.state !== "done") || (ASK.books || []).some((x) => x.fill && x.fill.waiting > 0);
-  if (!ASK.busy && (force || (!QUIET.on && Date.now() - ASK.at > (going ? 10000 : 30000) && (typeof pollOk !== "function" || pollOk())))) {
+  if (!ASK.busy && (force || (!QUIET.on && Date.now() - ASK.at > (every || (going ? 10000 : 30000)) && seen()))) {
     ASK.busy = true;
-    rpc("tally_check_ask_status", { p_client: null }).then((r) => { if (r && r.ok && Array.isArray(r.asks)) { ASK.asks = r.asks; ASK.books = Array.isArray(r.books) ? r.books : []; } },
-      (e) => { if (missing(e)) ASK.off = true; }).finally(() => { ASK.at = Date.now(); ASK.busy = false; redraw(); });
+    rpc("tally_check_ask_status", { p_client: null }).then((r) => { if (r && r.ok && Array.isArray(r.asks)) { ASK.asks = r.asks; ASK.books = Array.isArray(r.books) ? r.books : []; } stale("ask"); },
+      (e) => { if (missing(e)) ASK.off = true; else stale("ask", e, () => askStatus(false, 9000)); }).finally(() => { ASK.at = Date.now(); ASK.busy = false; redraw(); });
   }
   return ASK.asks;
 }
@@ -98,9 +104,32 @@ export function nightNow(h, now = Date.now()) {
 // any useful info.. it needs to be professional looking": the pace is no longer said (kept for its callers: always "")
 export function paceWords() { return ""; }
 // keep the summary fresh while something is going on (a period being read, an upload being checked)
-function useLive(on) {
+// reliability (11-Nov-2026; the audit: every mounted line owned an interval that forced the firm's slowest call, seen or
+// hidden: 10 summaries a minute from one browser). ONE shared poll for all of them: each line that has something going
+// says what it wants ({sum, ask}: the age in ms at which it is read again; key: its book, so a change of client starts
+// it afresh); one 5-second timer reads the summary and the checks at the shortest age wanted, each at most once at a
+// time (their busy flags), nothing while the tab is hidden (pollOk); it stops with the last line that leaves (unmount,
+// another client, nothing going any more). The lines are drawn again every 5 s while seen (their words carry the time)
+const LIVE = { subs: new Set(), t: 0 };
+export const liveCount = () => LIVE.subs.size;
+function liveBeat() {
+  if (!seen()) return;
+  let sum = 0, ask = 0;
+  LIVE.subs.forEach((w) => { if (w.sum) sum = Math.min(sum || w.sum, w.sum); if (w.ask) ask = Math.min(ask || w.ask, w.ask); });
+  // (the timer's own beat taken off, so "every 15 s" is the third beat and not the fourth)
+  if (sum) summary(false, sum - 2500);
+  if (ask) askStatus(false, ask - 2500);
+  const now = Date.now();
+  LIVE.subs.forEach((w) => { if (now - w.at >= (Math.min(w.sum || 1e9, w.ask || 1e9)) - 2500) { w.at = now; if (w.run) w.run(); w.tick(); } });
+}
+export function liveWatch(w) {
+  w.at = Date.now(); LIVE.subs.add(w);
+  if (!LIVE.t) LIVE.t = setInterval(liveBeat, 5000);
+  return () => { LIVE.subs.delete(w); if (!LIVE.subs.size && LIVE.t) { clearInterval(LIVE.t); LIVE.t = 0; } };
+}
+export function useLive(on, key = "", want = { sum: 15000 }) {
   const [, tick] = useState(0);
-  useEffect(() => { if (!on) return; const t = setInterval(() => { summary(true); tick((n) => n + 1); }, 15000); return () => clearInterval(t); }, [on]);
+  useEffect(() => (on ? liveWatch({ sum: want.sum || 0, ask: want.ask || 0, run: want.run, tick: () => tick((n) => n + 1) }) : undefined), [on, key]);
 }
 
 // ---------- the period's words
@@ -203,7 +232,7 @@ export default function OlderEntries({ cid, say = false }) {
   const book = (b && b.book) || "", cur = useRef(book); cur.current = book;
   useEffect(() => { setFy(0); setErr(""); setBusy(""); }, [book]);   // (next-buttons: a Start still on its way for the client left does not hold this one)
   const p = b && b.pull;
-  useLive(!!(p && p.state === "going" && !p.done));
+  useLive(!!(p && p.state === "going" && !p.done), book);
   // FinCom Bridge 2.5.12 (migration 154): the days with an entry Tally keeps in a form the bridge could not read yet; the
   // bridge tries again by itself, "Try again now" queues it at once; after 3 tries the manual step (the day's Day Book)
   // (review 2, M1: heldOk true only once the list loaded; until then, or when it cannot be read (a cloud without migration
@@ -276,7 +305,7 @@ export default function OlderEntries({ cid, say = false }) {
 // ---------- one line on the Tally page (a client's row)
 export function OlderLine({ cid, onOpen }) {
   const b = bookSum(cid), p = b && b.pull;
-  useLive(!!(p && p.state === "going" && !p.done));
+  useLive(!!(p && p.state === "going" && !p.done), cid);
   if (!p || p.done) return null;
   const why = whyWords(p, b);
   return <div className="tco-sync tfx-line" data-older-line={p.state} role="status">
@@ -350,8 +379,8 @@ export function UploadCheck({ cid }) {
   const load = () => rpc("tally_check_status", { p_book: bk }).then((r) => { if (r && r.ok) setSt(r); }, () => {});
   const ck = (b && b.check) || {}, sig = [ck.total, ck.same, ck.fixed, ck.waiting, ck.upload, (ck.run || {}).state, (b && b.pull && b.pull.state) || ""].join("|");
   useEffect(() => { if (bk && has) load(); else setSt(null); }, [bk, has, sig]);
-  useEffect(() => { if (!bk || !waiting) return; const t = setInterval(load, 15000); return () => clearInterval(t); }, [bk, waiting]);
-  useLive(waiting);
+  // (reliability: its own read too on the one shared poll: not while the tab is hidden)
+  useLive(waiting, bk, { sum: 15000, run: () => { if (bk) load(); } });
   if (!has) return null;
   const s = st || Object.assign({ lines: [] }, b.check), run = s.run || {}, stopped = run.state === "stopped" || (s.period === "stopped");
   const fixed = (s.lines || []).filter((x) => x.state === "fixed"), same = (s.lines || []).filter((x) => x.state === "same"), up = (s.lines || []).filter((x) => x.state === "upload");
