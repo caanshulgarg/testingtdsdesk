@@ -484,15 +484,6 @@ function tdsQuarterChallans(fy, q, rows){
   const used = new Set(rows.map(r => r.challan).filter(Boolean));
   return TDS.challans().filter(c => (TDS.fyOf(c.date) === fy && TDS.qOf(c.date) === q) || used.has(c.id));
 }
-function filterBar(id, opts){
-  const f = S[id] || {};
-  return '<div class="revfilter"><input type="search" id="' + id + 'q" data-fk="' + id + 'q" data-keeptyped value="' + esc(f.q || "") + '" placeholder="' + esc(opts.placeholder || "Find") + '">' +
-    (opts.selects || []).map(sel => '<select data-' + id + sel.key + '>' + sel.options.map(([v, l]) => '<option value="' + v + '"' + ((f[sel.key] || "") === v ? " selected" : "") + ">" + esc(l) + "</option>").join("") + "</select>").join("") +
-    '<span class="note">' + esc(opts.count || "") + "</span>" +
-    (Object.keys(f).some(k => f[k]) ? '<button class="linkbtn" data-clearf="' + id + '">Clear</button>' : "") +
-    '<button class="btn small" data-printid="' + opts.table + '" data-printtitle="' + esc(opts.title || "") + '">Print or save as PDF</button>' +
-    (opts.excel ? '<button class="btn small" data-act="' + opts.excel + '">Excel</button>' : "") + "</div>";
-}
 // printing, which is also how a PDF is made
 function printView(title, html){
   const w = window.open("", "_blank");

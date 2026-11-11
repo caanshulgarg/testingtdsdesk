@@ -644,10 +644,14 @@ const TDSMatch = {
     return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36) + "." + s.length.toString(36);
   },
   // ask once for these leftovers (again only when they change, or "Ask AI again"); whatever happens the rules stand
+  // next-speed-pages (11-Nov-2026, 51,758 made-up entries: a return's page 2.5 s of its 5.9 s here): asked from a timer,
+  // outside a drawing, every form's rows were worked out afresh for each of rows, nrRows, salaryRows (12 readings of every
+  // entry). What the rules leave is worked out as a calculation (memoScope), with the figures a drawing has (TDS.kept)
   async askAi(form, fy, q, force){
-    const k = this.aiKey(form, fy, q), h = this.leftHash(form, fy, q), a = this.ai[k] = this.slot(k) || {};
+    const calc = typeof memoScope === "function" ? memoScope : f => f();
+    const k = this.aiKey(form, fy, q), h = calc(() => this.leftHash(form, fy, q)), a = this.ai[k] = this.slot(k) || {};
     if (a.busy || (!force && a.hash === h)) return a;
-    const l = this.leftovers(form, fy, q);
+    const l = calc(() => this.leftovers(form, fy, q));
     // asked again for the same leftovers ("Ask AI again"): the answer shown stays until the new one comes
     const old = a.hash === h ? a.raw : null;
     a.hash = h; a.raw = null;
