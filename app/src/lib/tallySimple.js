@@ -723,6 +723,9 @@ function clientRow(co, all, opts) {
   } else if (p) {
     const pc = pctOf(p);
     row.e = { w: NOTYET, note: (days ? "" : "New client · ") + pc + "% received" + (Number(p.etaMin) > 0 ? " · " + etaWords(p.etaMin).replace(/^about /, "") + " left" : ""), pct: Math.max(2, pc) };
+  } else if (!hd.length && need.length && need.every((x) => x.checking)) {
+    // next-gap-autoread (migration 160): the recorder's gap only, FinCom reading Tally's Day Book of those days itself
+    row.e = { w: NOTYET, note: "Checking with Tally\u2026 (no action needed)" };
   } else if ((hd.length && !again) || need.length) {
     const words = missingWords(hd.length ? hd.map((d) => ({ from: d, to: d })) : need);
     row.e = { w: NO, note: words || "Some entries are missing" };

@@ -16,6 +16,11 @@
 //     the client waits its 20 seconds; the timer or a member's miss starts the next run (a run never starts another). A
 //     run that fails counts as an attempt; after 3 the client is too big (gst_calc_take); so is one whose runs passed
 //     their budget twice. At most 3 runs at once (gst_calc_take).
+//   A large book (next-gst-big, 11-Nov-2026: 40,000 entries took 1.3-1.7 s to read and make, so every run was too big):
+//     a run over budget on the book's own rows keeps the entries it made of them (gst_calc_prep_put, migration 162, on
+//     the book's tally_calc_version and the engine) and stops there (more to do, not too big); the next runs read those
+//     (gst_calc_prep_get) instead of the rows, and take the fingerprint from a month kept on the same version, so a month
+//     fits. Too big as before only when a run is over budget even so. Without migration 162 nothing is kept: as before.
 //   A paused firm or a switched-off client (the console's switches) is refused, by both.
 //   Any failure: JSON {ok: false, error} with the CORS headers.
 import { corsFor } from "../_shared/cors.ts";
@@ -91,13 +96,30 @@ export function handler(deps: Deps) {
         const left = (reg: string) => { const all = kept[reg].all ? kept[reg].all.months : null; return all ? covers.filter((m: string) => all.includes(m) && !kept[reg][m]) : covers.filter((m: string) => !kept[reg][m]); };
         const reg = regs.find((r) => left(r).length);
         if (!reg) continue;
-        const rows = await load((p: string) => rest(p), rpc, firm, client, book, cl.data || {}, fysOf(covers[0], covers[covers.length - 1]), gstins);
+        // a large book's entries as an earlier run made them (gst_calc_prep, migration 162), when kept on the book's
+        // version (tally_calc_version) and this engine: the book's rows are then not read again
+        const bver = String(await rpc("tally_calc_version", { p_book: book.book_id }).catch(() => "") || "");
+        const prep = bver ? await rpc("gst_calc_prep_get", { p_book: book.book_id, p_version: bver, p_engine: ENGINE }).catch(() => null) : null;
+        const rows = await load((p: string) => rest(p), rpc, firm, client, book, cl.data || {}, fysOf(covers[0], covers[covers.length - 1]), gstins, Array.isArray(prep) ? prep : undefined);
         spent += rows.unpackMs || 0;
         const t0 = Date.now();
         const months = Object.assign({}, kept[reg]); delete months.all;
-        const r = step(rows, reg, months, { max: deps.max || 2, spent, ready: deps.ready, total: deps.total, only: covers });
-        rows.heads = rows.lines = rows.bills = [];
-        if (r.big) { big = true; okRun = true; return { ok: true, client, reg, book: book.book_id, big: true, spentMs: spent, readyMs: r.atReady }; }
+        // the fingerprint of the inputs, as a month kept on this version and engine has it (the same inputs: the version
+        // counts every one of them), so it is not made again; the first run of a version makes it
+        const fpKept = regs.map((x) => Object.keys(kept[x]).filter((m) => m !== "all").map((m) => kept[x][m].fp).find(Boolean)).find(Boolean);
+        const r = step(rows, reg, months, { max: deps.max || 2, spent, ready: deps.ready, total: deps.total, only: covers, keep: !!bver, fp: fpKept ? Object.assign({}, fpKept, { run: "" }) : undefined });
+        const fromPrep = rows.fromPrep;
+        rows.heads = rows.lines = rows.bills = []; rows.made = null;
+        if (r.big) {
+          // over budget on the book's own rows: the entries made of them kept for the next run (no month worked out
+          // here, the client not marked too big); over budget from those too, or nothing kept: too big, as before
+          if (r.made && !fromPrep) {
+            const put = await rpc("gst_calc_prep_put", { p_book: book.book_id, p_version: bver, p_engine: ENGINE, p_vouchers: r.made }).catch(() => false);
+            r.made = undefined;
+            if (put === true) { more = true; okRun = true; return { ok: true, client, reg, book: book.book_id, prep: true, more: true, spentMs: spent, readyMs: r.atReady, booksMs: r.booksMs }; }
+          }
+          big = true; okRun = true; return { ok: true, client, reg, book: book.book_id, big: true, fromPrep, spentMs: spent, readyMs: r.atReady };
+        }
         const per = Math.max(1, Math.round((Date.now() - t0) / Math.max(1, r.months.length)));
         const put = r.months.map((d: any) => ({ book_id: book.book_id, firm_id: firm, kind: "gst-3b", args: reg + "|" + d.ym, version, result: d.result, ms: per, at: new Date().toISOString() }));
         put.push({ book_id: book.book_id, firm_id: firm, kind: "gst-3b", args: reg + "|all", version, result: { months: r.all, engine: ENGINE }, ms: 0, at: new Date().toISOString() });
@@ -105,7 +127,7 @@ export function handler(deps: Deps) {
         // more: this registration, another of this book, or an older book (looked at by the next run)
         more = r.more || regs.some((x) => x !== reg && left(x).length) || bi < list.length - 1;
         okRun = true;
-        return { ok: true, client, reg, book: book.book_id, version, months: r.months.map((d: any) => d.ym), ms: Date.now() - t0, spentMs: spent, booksMs: r.booksMs, readyMs: r.atReady, more };
+        return { ok: true, client, reg, book: book.book_id, version, months: r.months.map((d: any) => d.ym), ms: Date.now() - t0, spentMs: spent, booksMs: r.booksMs, readyMs: r.atReady, fromPrep, more };
       }
       okRun = true;
       return { ok: true, client, more: false };
