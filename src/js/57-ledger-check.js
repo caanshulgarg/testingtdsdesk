@@ -51,10 +51,14 @@ const LedCheck = {
   },
 
   // ---------- 16. how the day book uses each tax-like ledger ----------
-  usage(b, names){
+  // next-speed-render: usage, run and LedPage.ensure also in steps (the TDS and GST ledgers' page works the check out
+  // behind it: app/src/screens/books/TaxLedgers.jsx); the plain ones run the same steps at once
+  usage(b, names){ const it = this.usageIn(b, names); let r; while (!(r = it.next()).done); return r.value; },
+  *usageIn(b, names){
     const want = new Set(names), u = {}, reg = String((GSTR.gstins(b) || [])[0] || (CO() || {}).gstin || "").slice(0, 2), nom = {}, gst = b.gstins || {};
     const nomOf = l => nom[l] === undefined ? (nom[l] = this.nominal(b, l)) : nom[l];
-    (b.vouchers || []).forEach(v => {
+    const V0 = b.vouchers || [];
+    for (let i = 0; i < V0.length; i++){ if (i % 4000 === 3999) yield; (v => {
       if (v.opt || v.cancel || !v.ent.some(e => want.has(e.l))) return;
       const cn = /CREDIT\s*NOTE/i.test(v.type), dn = /DEBIT\s*NOTE/i.test(v.type), pay = /PAYMENT|RECEIPT|CONTRA/i.test(v.type);
       const inc = v.ent.some(e => nomOf(e.l) === "inc"), exp = v.ent.some(e => nomOf(e.l) === "exp"), sale = !cn && (Books.isSale(v) || inc), purch = Books.isPurchase(v) || exp;
@@ -72,7 +76,7 @@ const LedCheck = {
         if (x.samples.length < 5 && (!x.samples.length || x.samples[x.samples.length - 1].type !== v.type || x.samples.length < 3))
           x.samples.push({date: v.date, type: v.type, no: v.no, side: e.a < 0 ? "Dr" : "Cr", amt: Math.abs(e.a), lines: v.ent.slice(0, 6).map(z => (z.a < 0 ? "Dr " : "Cr ") + z.l + " " + Math.abs(z.a))});
       });
-    });
+    })(V0[i]); }
     Object.values(u).forEach(x => { const r = x.ratios.slice().sort((a, c) => a - c); x.ratio = r.length ? r[Math.floor(r.length / 2)] : null; x.months = x.months.size; delete x.ratios; });
     return u;
   },
@@ -153,9 +157,12 @@ const LedCheck = {
 
   // ---------- run, keep, and what changed since ----------
   st(b){ return b.ledCheck = b.ledCheck || {v: this.V, items: {}}; },
-  run(b){
-    const names = this.candidates(b), u = this.usage(b, names), c = this.st(b), at = new Date().toISOString();
-    names.forEach(n => {
+  run(b){ const it = this.runIn(b); let r; while (!(r = it.next()).done); return r.value; },
+  *runIn(b){
+    const names = this.candidates(b);
+    yield;
+    const u = yield* this.usageIn(b, names), c = this.st(b), at = new Date().toISOString();
+    for (let k = 0; k < names.length; k++){ const n = names[k]; if (k % 40 === 39) yield;
       const hint = typeof LedMaster.tplFor === "function" ? LedMaster.tplFor(b, n) : null, s = this.suggest(b, n, u[n], hint), it = c.items[n] = c.items[n] || {};
       const ai = it.ai && !s.ev.some(e => e.src === "master") ? it.ai : null;
       it.s = s; it.use = u[n] ? {n: u[n].n, say: this.sayUse(u[n]), samples: u[n].samples} : {n: 0, say: "not used in the day book"}; it.sig = this.sig(u[n]); it.at = at;
@@ -163,7 +170,7 @@ const LedCheck = {
       // confirmed (then it is in the ledger master, b.map, which is what the returns read)
       it.state = ((b.map || {})[n] || {}).ok ? "confirmed" : "pending";
       if (ai) it.ai = ai;
-    });
+    }
     c.ranAt = at; c.names = names;
     return c;
   },
@@ -240,10 +247,11 @@ const LedPage = {
   // the check worked out by itself when the books, the masters or the ledgers change (it was a button: "Run the ledger
   // check"; "Check again" under More still runs it on demand)
   key(b){ return (b.vouchers || []).length + "|" + (b.ledInfoAt || "") + "|" + Object.keys(b.map || {}).length + "|" + Object.keys(b.ledInfo || {}).length; },
-  ensure(b){
+  ensure(b){ const it = this.ensureIn(b); let r; while (!(r = it.next()).done); return r.value; },
+  *ensureIn(b){
     const k = this.key(b);
     if (!b.ledCheck || !b.ledCheck.ranAt || b.ledCheck.autoKey !== k){
-      LedCheck.run(b); b.ledCheck.autoKey = k;
+      yield* LedCheck.runIn(b); b.ledCheck.autoKey = k;
       // kept with the books, its suggestions pending (they count in nothing until confirmed)
       if (typeof saveBooks === "function" && b.cid) setTimeout(() => { if (S.books === b) saveBooks(); }, 0);
     }

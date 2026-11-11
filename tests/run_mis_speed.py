@@ -65,19 +65,19 @@ with sync_playwright() as p:
     ok("963 ledgers differ from Tally by ₹2,86,787.00" in pg.inner_text("#app"), "the line under the head says so")
     print("\n3. Run now: one at a time, and only for the books it began on")
     r = pg.evaluate("""() => new Promise(res => {
-      const A = S.books, at = A.mis.last.at, real = MIS.runNow, saves = []; let runs = 0;
-      MIS.runNow = function(){ runs++; return real.apply(this, arguments); };
+      const A = S.books, at = A.mis.last.at, real = MIS.runIn, saves = []; let runs = 0;   // next-speed-render: the run is MIS.runIn's steps
+      MIS.runIn = function(){ runs++; return real.apply(this, arguments); };
       const save = Books.save; Books.save = function(cid, x){ saves.push([cid, Object.keys(x || {}).length]); return save.apply(this, arguments); };
       const btn = () => document.querySelector('section[data-mis-head] button.primary');
       btn().click(); btn().click();                      // a second click while the first run is pending: ignored
       setTimeout(() => res({runs, saves, again: MIS._again, how: A.mis.last.how, changed: A.mis.last.at !== at}), 3000);
-      window.__restore = () => { MIS.runNow = real; Books.save = save; };
+      window.__restore = () => { MIS.runIn = real; Books.save = save; };
     })""")
     pg.evaluate("window.__restore()")
     ok(r["runs"] == 1 and r["changed"] and not r["again"] and len(r["saves"]) == 1, "two clicks: one run, one save, MIS._again cleared (%s)" % {k: r[k] for k in ("runs", "saves", "again", "changed")})
     r = pg.evaluate("""() => new Promise(res => {
-      const A = S.books, at = A.mis.last.at, real = MIS.runNow, saves = []; let runs = 0;
-      MIS.runNow = function(){ runs++; return real.apply(this, arguments); };
+      const A = S.books, at = A.mis.last.at, real = MIS.runIn, saves = []; let runs = 0;   // next-speed-render: the run is MIS.runIn's steps
+      MIS.runIn = function(){ runs++; return real.apply(this, arguments); };
       const save = Books.save; Books.save = function(cid, x){ saves.push(cid); return save.apply(this, arguments); };
       const c2 = newCompany({name: "Wrenfield Made-up Traders LLP", gstin: "07AAJFW1234K1Z5"}); S.companies[c2.id] = c2; S.data[c2.id] = {parties: {}, entries: {}, loaded: true};
       const B = {cid: c2.id, loading: false, vouchers: [], meta: {}, challans: [], alloc: {}};
@@ -85,7 +85,7 @@ with sync_playwright() as p:
       const g = MIS.gst3b; let sw = 0;
       MIS.gst3b = function(){ if (!sw++) queueMicrotask(() => { S.books = B; S.coId = c2.id; render(); }); return g.apply(this, arguments); };
       document.querySelector('section[data-mis-head] button.primary').click();
-      setTimeout(() => { res({runs, saves, sw: sw > 0, bMis: !!B.mis, aSame: A.mis.last.at === at, again: MIS._again, still: S.books === B, cidA: A.cid, cidB: B.cid}); MIS.gst3b = g; MIS.runNow = real; Books.save = save; S.books = A; S.coId = A.cid; render(); }, 3000);
+      setTimeout(() => { res({runs, saves, sw: sw > 0, bMis: !!B.mis, aSame: A.mis.last.at === at, again: MIS._again, still: S.books === B, cidA: A.cid, cidB: B.cid}); MIS.gst3b = g; MIS.runIn = real; Books.save = save; S.books = A; S.coId = A.cid; render(); }, 3000);
     })""")
     ok(r["sw"] and r["runs"] == 0 and not r["bMis"] and r["cidB"] not in r["saves"] and r["cidA"] not in r["saves"] and r["aSame"] and r["still"] and not r["again"],
        "client changed during the run: it stops; nothing written to either client's books (%s)" % r)

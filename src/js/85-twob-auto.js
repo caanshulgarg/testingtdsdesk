@@ -10,28 +10,11 @@
 // Hook for the 2B screen (and its redesign, branch next-gst-portal): M2B.view(reg) gives the run for the registration and
 // the year of S.gstYm; M2B.statusMaps(reg) gives each document's status:
 //   "matched-rules" | "matched-ai" | "probable" | "mismatch" | "2b-only" | "books-only".
-const M2B = {
-  st: {},                                           // reg|fy -> {run, hash, busy, err, at}
+// M2B's part the GSTR-3B engine runs is in server/_shared/gst3b.js (shared with the gst-run function); the rest is put on it here
+Object.assign(M2B, {
   url(){ return String(Cloud.cfg().url || "").replace(/\/+$/, "") + "/functions/v1/gst-2b-match"; },
-  fyOf(ym){ const y = +String(ym).slice(0, 4), m = +String(ym).slice(4, 6); const s = m >= 4 ? y : y - 1; return s + "-" + String((s + 1) % 100).padStart(2, "0"); },
   months(fy){ const y = +String(fy).slice(0, 4), out = []; for (let m = 4; m <= 15; m++) out.push((m <= 12 ? y : y + 1) + String(m <= 12 ? m : m - 12).padStart(2, "0")); return out; },
-  // next-speed0 (09-Nov-2026, the GST input register of a 40,000-entry book: 10.4 s of 13.1 s): GST2B.run asks aiSig, and so
-  // the year, at every ask, and each time GSTR.months read every entry's date. The books' last month is asked only when no
-  // month is chosen (S.gstYm), and is then kept for these books: the same books object, the same list of entries (its
-  // length, its first and last entry), the same save (BOOKS_REV) and the same client. Kept only when the months come from
-  // the entries; the months worked out from today's date (books with no dated entry) are asked each time. tests/run_speed0.js
-  _last: null,
-  lastYm(){
-    if (!(typeof GSTR === "object" && GSTR.months)) return undefined;
-    const b = S.books, v = b && b.vouchers, n = Array.isArray(v) ? v.length : 0, rev = typeof BOOKS_REV === "number" ? BOOKS_REV : 0, c = this._last;
-    if (c && n && c.b === b && c.v === v && c.n === n && c.a === v[0] && c.z === v[n - 1] && c.rev === rev && c.co === S.coId) return c.last;
-    const ms = GSTR.months(), last = ms[ms.length - 1];
-    this._last = n && v.some(e => e && GSTR.ym(e.date).length === 6) ? {b, v, n, a: v[0], z: v[n - 1], rev, co: S.coId, last} : null;
-    return last;
-  },
-  fyNow(){ return this.fyOf(S.gstYm || this.lastYm() || new Date().toISOString().slice(0, 7).replace("-", "")); },
   gstinOf(reg){ return ((typeof GSTR === "object" && GSTR.gstins(S.books)) || []).find(g => g.slice(0, 2) === reg) || ((GST2B.all2b(reg)[0] || {}).gstin) || ""; },
-  key(reg, fy){ return (reg || "") + "|" + fy; },
   // AI only where the firm's AI help is on for 2B (Settings, AI help) and the client is not left out of it
   // on by default (the owner, 17-Oct-2026): only a firm whose owner switched AI help off, 2B's part switched off, or a client
   // left out of AI help is matched by the rules alone; the daily cost cap stays
@@ -106,14 +89,6 @@ const M2B = {
     Object.defineProperty(res, "_maps", {value: {g, b}, enumerable: false});
     return res._maps;
   },
-  // next-itc-simple: the AI's pairs for GST2B.run (a 2B document with its books entries), and what they were made from
-  aiLinks(reg){
-    const s = this.st[this.key(reg, this.fyNow())], res = s && s.run && s.run.result;
-    if (!res) return [];
-    return (res.rows || []).filter(r => (r.st === "matched-ai" || r.st === "probable") && r.g.length === 1 && r.b.length)
-      .map(r => ({g: r.g[0], b: r.b.slice(), st: r.st, why: (r.why || []).join("; "), id: r.id}));
-  },
-  aiSig(reg){ const s = this.st[this.key(reg, this.fyNow())]; return s && s.run ? String(s.run.id || "") + ":" + String(s.run.at || "") + ":" + ((s.run.result || {}).rows || []).length + ":" + JSON.stringify(s.run.decisions || {}).length : ""; },
   // a person's accept or reject of a probable pair (one, or all of them): kept on the server, and an accepted pair of one
   // 2B document is linked for the rest of the 2B screen as a link by hand is
   async decide(reg, pairs, decision){
@@ -131,7 +106,7 @@ const M2B = {
     } catch (e){ toast("Could not keep it: " + e.message); }
     s.busy = false; render();
   }
-};
+});
 // The 2B reconciliation's hook (app/src/screens/gst/reco.js autoFor): the automatic run's pairs for the registration, in
 // its shape {results: [{key2b, books, status, reason, confidence, id}]}; mismatches stay with the reconciliation's own rules.
 const GSTAutoMatch = {

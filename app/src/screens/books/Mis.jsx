@@ -10,7 +10,8 @@ import NotRead from "../../parts/NotRead.jsx";
 import { Fragment } from "react";
 import CommitBox from "../../parts/CommitBox.jsx";
 import { CatchUp } from "../../parts/Notes.jsx";
-import { catchSoon } from "../../lib/catchSoon.js";
+import { catchSoon, misSteps } from "../../lib/catchSoon.js";
+import { behind } from "../../lib/behind.jsx";
 import Confirm from "../../parts/Confirm.jsx";
 import { ListRows } from "../../parts/ListTable.jsx";
 import DateBox from "../../parts/DateBox.jsx";
@@ -66,27 +67,24 @@ function Head({ b, r, rg }) {
   </section>;
 }
 
-// next-mis-speed: a run in five tasks, so none holds the page: the GST workings of every month the run asks for (the
-// period and the forecast's last three months); the parties' balances, the TDS rows and the days to pay; the cash flow
-// and the cost centres (all kept for the run: memoKeep, MIS.keep, Parties.position); then the run; then the save. Only
-// for the books it began on: when the client changes (or its books are loading) between tasks it stops, and nothing is
-// written to the other books. One at a time: a click meanwhile is ignored, and MIS._again stays set until the run is
-// done or stopped
+// next-mis-speed: a run in parts, so none holds the page; next-speed-render (51,758 made-up entries: the run itself
+// held the page 0.3-2 s): the run in steps behind the page (lib/catchSoon.js misSteps: each month's GST working, the
+// parties, the TDS rows, the days to pay, the cash flow and the cost centres, then MIS.runIn: 5,000 entries of the sales
+// and the ages a step), then the save. Only for the books it began on: when the client changes (or its books are
+// loading) it stops, and nothing is written to the other books. One at a time: a click meanwhile is ignored, and
+// MIS._again stays set until the run is done or stopped
+let runN = 0;
 function runSplit(from, to, how) {
-  const b = S.books, t = Audit.ymd(to), f = Audit.ymd(from), f3 = MIS.shift(t, 0, -89);
+  const b = S.books;
   if (MIS._again || !b || b.loading) return;
   MIS._again = true; FinComNav.start();
-  const fs = [() => memoScope(() => MIS.monthsOf(f3 < f ? f3 : f, t).forEach(MIS.gst3b, MIS)), () => memoKeep(() => { Parties.position(t); TDS.rows(); TDS.salaryRows(); MIS.payDays("r", t); MIS.payDays("p", t); }),
-    () => memoKeep(() => { MIS.cashActual(f, t); MIS.costCentres(f, t); }), () => memoKeep(() => MIS.run(from, to, how)), () => saveBooks(null, b).catch(() => {})], R = 3;
-  const end = () => { MIS._again = false; FinComNav.done(); render(); };
-  const go = (i) => setTimeout(() => {
-    // the save names its books: done even when the client changed after the run
-    if (i <= R && (S.books !== b || b.loading)) return end();
-    try { fs[i](); } catch (e) { if (i === R) { end(); throw e; } }
-    if (i === R) end();
-    if (i < R + 1) go(i + 1);
-  }, 0);
-  go(0);
+  const n = ++runN;
+  behind("mis-run", () => [b, n, b.loading], function* () {
+    try { yield* misSteps(from, to, how); } finally { MIS._again = false; FinComNav.done(); }
+    // the save names its books: done even when the client changes after the run
+    saveBooks(null, b).catch(() => {});
+    return true;
+  });
 }
 // next-cloud-mis: the figures from FinCom's cloud when its answer fits these books exactly (MIS.cloudGo, src/js/07: the
 // same book, version and working), else worked out here in parts (runSplit) and the cloud asked again for next time
@@ -388,26 +386,29 @@ function Compliance({ r }) {
 
 export default function Mis({ b }) {
   // Tally changed since the last run: the tab says so while it is worked out again (TallyRead.catchUp, src/js/18)
-  const catchUp = catchSoon(b, "mis");   // on screen only, at most once in 5 s (lib/catchSoon.js)
-  if (catchUp) return <CatchUp text={catchUp} />;
-  const r0 = (b.mis || {}).last, stale = MIS.stale(b);
-  // a saved run from other books or older working: worked out again now, its figures not shown meanwhile
-  if (stale && !MIS._again) misGo(r0.from, r0.to, "worked out again (the books or FinCom changed since " + fmtDate(r0.at.slice(0, 10)) + ")");
-  if (stale) return <div className="bk-none" data-mis-again="" style={{ marginTop: 12 }}>{"Working out again: the books or FinCom’s working changed since the run of " + fmtDate(r0.at.slice(0, 10)) + " (result code " + r0.code + ")."}</div>;
-  const r = r0;
   // the period: the one chosen (kept for the client), else this financial year to date (smart moves round 1)
   if (!S.misRange) { const k = Smart.recall("mis"); S.misRange = k && k.from && k.to ? k : ((x) => ({ from: Audit.iso(x.from), to: Audit.iso(x.to) }))(misRangeQuick("ytd", b)); }
-  const rg = S.misRange;
+  const rg = S.misRange, tab = S.misTab || "summary";
+  // the tabs first, at the top of the page (review of 01-Oct-2026), then the period
+  // clean-up batch 3: six tabs (the statements and the figures most asked for), the rest under More (parts/PageTabs.jsx)
+  const tabs = <PageTabs label="MIS" attr="data-mis-tab" value={tab} onPick={misTabGo} tabs={TAB_ORDER.map((id) => TABS.find((t) => t[0] === id))} />;
+  // next-speed-render: while the run is worked out behind the page, the tabs and the period are drawn, and the words
+  // where the figures go
+  const catchUp = catchSoon(b, "mis");   // on screen only, at most once in 5 s (lib/catchSoon.js)
+  const r0 = (b.mis || {}).last;
+  // the last run's figures stay on the page, marked, until the new ones replace them; none yet: the words where they go
+  if (catchUp && !r0) return <>{tabs}<Head b={b} r={null} rg={rg} /><div data-working=""><CatchUp text={catchUp} /></div></>;
+  const busy = catchUp ? <div data-updating=""><CatchUp text={catchUp} /></div> : null, stale = !catchUp && MIS.stale(b);
+  // a saved run from other books or older working: worked out again now, its figures not shown meanwhile
+  if (stale && !MIS._again) misGo(r0.from, r0.to, "worked out again (the books or FinCom changed since " + fmtDate(r0.at.slice(0, 10)) + ")");
+  if (stale && MIS.stale(b)) return <>{tabs}<Head b={b} r={null} rg={rg} /><div className="bk-none" data-mis-again="" style={{ marginTop: 12 }}>{"Working out again: the books or FinCom’s working changed since the run of " + fmtDate(r0.at.slice(0, 10)) + " (result code " + r0.code + ")."}</div></>;
+  const r = (b.mis || {}).last;
   // the books in FinCom end before the period starts: one line, not an empty page (nor an older run's figures)
   const end = Smart.booksEndBefore(String(rg.from || "").replace(/-/g, ""));
   const notRead = end && !(r && Audit.iso(r.from) === rg.from && Audit.iso(r.to) === rg.to) ? <NotRead end={end} what={"MIS " + Smart.fyLabelOf(rg.from.replace(/-/g, "")) + " to date"} read={Smart.fyLabelOf(rg.from.replace(/-/g, ""))} show={Smart.fyLabelOf(end)}
     onShow={() => { S.misRange = { from: Audit.iso(Smart.fyStartOf(end)), to: Audit.iso(end) }; Smart.keep("mis", S.misRange); render(); }} /> : null;
-  const tab = S.misTab || "summary";
-  // the tabs first, at the top of the page (review of 01-Oct-2026), then the period
-  // clean-up batch 3: six tabs (the statements and the figures most asked for), the rest under More (parts/PageTabs.jsx)
-  const tabs = <PageTabs label="MIS" attr="data-mis-tab" value={tab} onPick={misTabGo} tabs={TAB_ORDER.map((id) => TABS.find((t) => t[0] === id))} />;
-  if (notRead) return <>{tabs}<Head b={b} r={r} rg={rg} /><div style={{ marginTop: 12 }}>{notRead}</div></>;
-  if (!r) return <>{tabs}<Head b={b} r={r} rg={rg} /><div className="bk-none" data-mis-empty="" style={{ marginTop: 12 }}>Nothing is worked out for this period yet. <button className="linkbtn" onClick={() => runNow(rg)}>Run now</button></div></>;
+  if (notRead) return <>{tabs}<Head b={b} r={r} rg={rg} />{busy}<div style={{ marginTop: 12 }}>{notRead}</div></>;
+  if (!r) return <>{tabs}<Head b={b} r={r} rg={rg} />{busy}<div className="bk-none" data-mis-empty="" style={{ marginTop: 12 }}>Nothing is worked out for this period yet. <button className="linkbtn" onClick={() => runNow(rg)}>Run now</button></div></>;
   const p2 = r.p2;
   let body;
   if (tab === "summary") body = <Summary b={b} r={r} />;
@@ -422,6 +423,7 @@ export default function Mis({ b }) {
   return <div data-phone-scroll="">
     {tabs}
     <Head b={b} r={r} rg={rg} />
+    {busy}
     <Answer label="MIS key figures" figs={f.answer} />
     <RunLine r={r} />
     {body}

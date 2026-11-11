@@ -91,7 +91,9 @@ function qStart(fy, q) { const y = num(String(fy).slice(0, 4)); return q === "Q2
 const Calm = ({ children }) => <div className="tg-empty" data-list-empty="">{children}</div>;
 
 export default function Tds({ b }) {
-  const rows = TDS.rows(), had = tdsYears(b, rows), fys = tdsBarYears(b, rows);
+  // next-speed-render: the TDS ledgers need no deduction rows (worked out again after every save of the books: 0.2-0.3 s
+  // on 51,758 entries); every other view as before
+  const led = S.tdsView === "ledgers", rows = led ? [] : TDS.rows(), had = led ? [] : tdsYears(b, rows), fys = led ? [] : tdsBarYears(b, rows);
   // tds-layout: the old tabs' views to their new places (Challans, Salary, 26AS & AIS, TRACES files, Checks, Certificates)
   tdsRedirect();
   // smart moves round 1 (the owner's choice of 09-Oct-2026, "due now"): opened afresh, the page shows the year and the

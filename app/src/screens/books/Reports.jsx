@@ -19,6 +19,7 @@ import { Answer, Fold } from "../../parts/Answer.jsx";
 import Statements, { RX_VIEWS } from "./Statements.jsx";
 // RPT (src/js/45-reports.js) comes with this screen's file, not in legacy.js (build.py lazy_files)
 import "../../../../src/js/45-reports.js";
+import { behind, Working } from "../../lib/behind.jsx";
 
 // two decimals everywhere (spec K5), with ₹ on every amount (clean-up batch 3)
 const m = (v) => money(r2(v || 0));
@@ -117,11 +118,19 @@ function heads(id, d) {
   return [];
 }
 
+// next-speed-render (51,758 made-up entries: the list held the page 1.2-1.9 s in one task, 6.6-8.4 s on an office PC, at each
+// open): the list, the search and the areas are drawn at once; the figures (RPT.dataSteps, the same RPT.data in steps:
+// each month's GST working, the ages, the sales ...) are worked out behind the page and filled in when ready; kept for the
+// books as they are (lib/behind.jsx); after a change the last figures stay, marked updating, until the new ones are in
+const rptSig = (b) => () => [S.books, typeof BOOKS_REV === "number" ? BOOKS_REV : 0, RPT.dataKey(), b.vouchers, b.map, b.under, b.ledInfo, b.groups, b.tb, b.audit, (b.audit || {}).last, b.challans, b.gstSet, b.misCfg, b.msme, S.coId];
+const WORK_FIGS = [["Sales", <Working />, ""], ["Profit before tax", <Working />, ""], ["Owed to you", <Working />, ""], ["You owe", <Working />, ""]];
+
 export default function Reports({ b }) {
   const have = (b.vouchers || []).length > 0, q = String(S.rptQ || "").toLowerCase().trim();
   // when the bridge is live, the books are brought up to date on opening (as before, after each drawing)
   useEffect(() => { if (LK.live()) setTimeout(() => LK.autoFresh(), 0); });
-  const d = have ? RPT.data() : null, R = have ? RPT.range() : null;
+  const R = have ? RPT.range() : null, job = have && R && !R.notRead ? behind("rpt:" + b.cid, rptSig(b), () => RPT.dataSteps()) : null;
+  const d = job ? job.v || null : null, working = !!job && !job.done && !job.old, updating = !!job && !job.done && job.old;
   const yr = d ? FC.fyLabel(d.R.fy) + (d.R.to < d.R.fyEnd ? ", to " + FC.when(d.R.to) : "") : "";
   const head = <>
     {(have || LK.live()) && <FreshBar b={b} />}
@@ -147,13 +156,13 @@ export default function Reports({ b }) {
       {hits.length ? <ul className="rpt-list">{hits.map((r) => <li key={r[0]}><Link r={r} /></li>)}</ul> : <p className="note">Nothing by that name. Try Look up for a ledger or an entry.</p>}</section></div>;
   }
   // the answer: the overview's and the parties' headline figures (heads), the same as before, for the year shown
-  const top = d ? heads("overview", d).concat(heads("parties", d)).map(([l, v], i) => [l, v, i === 0 ? yr : ""]) : [];
-  return <div data-phone-scroll="">{head}
+  const top = d ? heads("overview", d).concat(heads("parties", d)).map(([l, v], i) => [l, v, i === 0 ? yr : ""]) : working ? WORK_FIGS : [];
+  return <div data-phone-scroll="" data-updating={updating ? "" : undefined}>{head}
     <Answer label="Reports key figures" figs={top} />
     {rx}
     <div className="rpt-index" data-rpt-index="">{RPT.AREAS.map((a, i) => { const h = heads(a.id, d), n = RPT.LIST.filter((r) => r[1] === a.id).length;
       return <Fold key={a.id} id={"rpt:" + a.id} first={i === 0} className={"fold rpt-group rpt-g-" + a.id} data-rpt-group={a.id} title={a.title}
-        sub={<>{h.length > 0 && <ul className="rpt-heads" data-rpt-heads="">{h.map(([l, v]) => <li key={l}>{l + " "}<b>{v}</b></li>)}</ul>}<span className="rpt-n">{n + " reports"}</span></>}>
+        sub={<>{working && <ul className="rpt-heads"><li><Working /></li></ul>}{h.length > 0 && <ul className="rpt-heads" data-rpt-heads="">{h.map(([l, v]) => <li key={l}>{l + " "}<b>{v}</b></li>)}</ul>}<span className="rpt-n">{n + " reports"}</span></>}>
         <ul className="rpt-list">{RPT.LIST.filter((r) => r[1] === a.id).map((r) => <li key={r[0]}><Link r={r} /></li>)}</ul></Fold>; })}</div>
     {/* the areas' figures and charts, as they were, folded */}
     {d && <details className="fold rpt-charts" data-rpt-charts=""><summary><span>Figures and charts</span><span className="fold-sub">{yr}</span></summary>

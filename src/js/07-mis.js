@@ -8,7 +8,7 @@
 const Parties = {
   position(asOn){
     const b = S.books || {}, tb = b.tb, fs = Audit.fyStart(asOn), base = tb && tb.from > fs && tb.from <= asOn ? tb.from : fs;
-    const key = [b.cid, asOn, base, (b.vouchers || []).length, (tb || {}).at || "", b.mapV || 0].join("|");
+    const key = [b.cid, asOn, base, (b.vouchers || []).length, (tb || {}).at || "", b.mapV || 0, typeof BOOKS_REV === "number" ? BOOKS_REV : 0].join("|");
     if (this._p && this._p.key === key && this._p.b === b) return this._p.r;
     let B; try { B = Audit.balances(base, asOn); } catch (e){ B = {ok: false, why: e.message}; }
     let r;
@@ -29,6 +29,10 @@ const Parties = {
   }
 };
 const MIS = {
+  // next-speed-render: a loop over the entries that a calculation in steps may stop in, every 5,000 entries; runSteps:
+  // such steps at once
+  *eachV(V, f){ for (let i = 0; i < V.length; i++){ f(V[i]); if (i % 5000 === 4999) yield; } },
+  runSteps(it){ let r; while (!(r = it.next()).done); return r.value; },
   cfg(b){ return Object.assign({freq: "monthly", msmeDays: 45}, (b && b.misCfg) || {}); },
   ym(d){ return String(d).slice(0, 6); },
   monthsOf(from, to){ const out = []; let y = num(from.slice(0, 4)), m = num(from.slice(4, 6)); while (String(y) + String(m).padStart(2, "0") <= to.slice(0, 6)){ out.push(String(y) + String(m).padStart(2, "0")); m++; if (m > 12){ m = 1; y++; } } return out; },
@@ -90,7 +94,43 @@ const MIS = {
   HEADS: [["rev", "Revenue from operations", 1], ["oth", "Other income", 1], ["pur", "Purchases", -1], ["dir", "Direct expenses", -1], ["emp", "Employee costs", -1],
     ["exp", "Other expenses", -1], ["fin", "Finance costs", -1], ["dep", "Depreciation", -1], ["tax", "Tax", -1]],
   // amounts by ledger and month for a set of vouchers (credit positive, as Tally keeps it)
+  //
+  // next-speed-render (the tie-out asks the profit from the year's start at each of 25 month-ends, each reading every
+  // entry): with the entries in date order, the amounts to a date are those kept to an earlier date from the same start,
+  // carried on over the entries after it (Audit.moveKept's rule: the same entries in the same order, added the same way,
+  // so the same figures and the same order); not in date order, read in full as before. Each answer is a copy
+  _mk: new WeakMap(),
   moves(from, to){
+    const b = S.books, V = b.vouchers, rev = typeof BOOKS_REV === "number" ? BOOKS_REV : 0, n = Array.isArray(V) ? V.length : 0;
+    if (n && typeof from === "string" && typeof to === "string"){
+      let c = this._mk.get(V);
+      if (!c || c.n !== n || c.rev !== rev || c.b !== b || !c.vs.every((v, i) => v === V[i])){
+        let ok = true;
+        for (let i = 0; i < n && ok; i++){ const t = V[i] && V[i].date; ok = typeof t === "string" && !(i && V[i - 1].date > t); }
+        this._mk.set(V, c = {n, rev, b, ok, sets: {}, cps: 0, vs: V.slice()});
+      }
+      if (c.ok){
+        const first = f => { let lo = 0, hi = n; while (lo < hi){ const m = (lo + hi) >> 1; if (f(V[m].date)) hi = m; else lo = m + 1; } return lo; };
+        const cp2 = o => { const r = {}; for (const l in o) r[l] = Object.assign({}, o[l]); return r; };
+        const set = c.sets[from] = c.sets[from] || [{i: first(t => !(t < from)), out: {}}], e = Math.max(set[0].i, first(t => t > to));
+        let cp = set[0];
+        set.forEach(x => { if (x.i <= e && x.i > cp.i) cp = x; });
+        const out = cp2(cp.out), keep = i => { if (c.cps < 60 && !set.some(x => x.i === i)){ set.push({i, out: cp2(out)}); c.cps++; } };
+        for (let i = cp.i; i < e; i++){
+          const v = V[i];
+          if (i > cp.i && v.date.slice(0, 6) !== V[i - 1].date.slice(0, 6)) keep(i);
+          if (v.opt || v.cancel) continue;
+          const ym = this.ym(v.date);
+          v.ent.forEach(z => { const x = out[z.l] = out[z.l] || {}; x[ym] = r2((x[ym] || 0) + z.a); x.t = r2((x.t || 0) + z.a); });
+        }
+        keep(e);
+        return out;
+      }
+    }
+    return this.movesNow(from, to);
+  },
+  // read in full
+  movesNow(from, to){
     const out = {};
     (S.books.vouchers || []).forEach(v => {
       if (v.date < from || v.date > to || v.opt || v.cancel) return;
@@ -171,10 +211,12 @@ const MIS = {
       pat: calc(x => x("rev") + x("oth") - x("pur") - x("dir") - x("emp") - x("exp") - x("fin") - x("dep") - x("tax"))};
   },
   // bill by bill: what each party owed or was owed on a date
-  bills(asOn, side){
+  // next-speed-render: bills, ageing and sales also in steps (a page works them out behind it: app/src/lib/behind.jsx)
+  bills(asOn, side){ return this.runSteps(this.billsSteps(asOn, side)); },
+  *billsSteps(asOn, side){
     const A = Audit, b = S.books, ref = {};
     const want = l => side === "r" ? A.isDebtor(l) : A.isCreditor(l);
-    (b.vouchers || []).forEach(v => {
+    yield* this.eachV(b.vouchers || [], v => {
       if (v.date > asOn || v.opt || v.cancel) return;
       v.ent.forEach(e => {
         if (!want(e.l)) return;
@@ -197,10 +239,11 @@ const MIS = {
     });
   },
   BUCKETS: [[30, "0\u201330"], [60, "31\u201360"], [90, "61\u201390"], [180, "91\u2013180"], [1e9, "over 180"]],
-  ageing(asOn, side, bal){
+  ageing(asOn, side, bal){ return this.runSteps(this.ageingSteps(asOn, side, bal)); },
+  *ageingSteps(asOn, side, bal){
     // the balances on the day, as everywhere else (Parties.position) when the caller has none
     if (!bal){ const P = Parties.position(asOn); if (P.ok) bal = P.at; }
-    const bills = this.bills(asOn, side), by = {}, msme = this.msme();
+    const bills = yield* this.billsSteps(asOn, side), by = {}, msme = this.msme();
     bills.forEach(x => {
       const p = by[x.party] = by[x.party] || {party: x.party, total: 0, b: [0, 0, 0, 0, 0], adv: 0, unalloc: 0, pre: 0, oldest: 0, bills: [], msme: msme[x.party] || ""};
       if (!x.ref){ p.unalloc = r2(p.unalloc + x.amt); }
@@ -262,7 +305,8 @@ const MIS = {
     Object.entries(set).forEach(([n, v]) => { if (v) out[n] = v; else delete out[n]; });
     return out;
   },
-  sales(from, to){
+  sales(from, to){ return this.runSteps(this.salesSteps(from, to)); },
+  *salesSteps(from, to){
     const by = {}, months = this.monthsOf(from, to), byState = {}, byReg = {};
     // review of 01-Oct-2026: with the masters read, sales are the Sales Accounts ledgers themselves (credit positive, a
     // credit note's debit taking off), as Tally's profit and loss shows them: the taxable value of a sale entry counted a
@@ -270,7 +314,7 @@ const MIS = {
     // kept apart, as other income. Without the masters, the taxable value of the sale entries, as before
     const masters = Audit.mastersIn(), A = Audit;
     let other = 0;
-    (S.books.vouchers || []).forEach(v => {
+    yield* this.eachV(S.books.vouchers || [], v => {
       if (v.date < from || v.date > to || v.opt || v.cancel) return;
       if (masters){
         v.ent.forEach(e => { if (A.under(e.l, /^(direct|indirect) incomes$/i)) other = r2(other + e.a); });
@@ -428,7 +472,9 @@ const MIS = {
   },
   // one run: every table for the period, the same every time for the same books
   run(from, to, how){ return typeof memoScope === "function" ? memoScope(() => this.runNow(from, to, how)) : this.runNow(from, to, how); },
-  runNow(from, to, how){
+  runNow(from, to, how){ return this.runSteps(this.runIn(from, to, how)); },
+  // the run in steps (MIS works it out behind the page: app/src/screens/books/Mis.jsx): the same figures
+  *runIn(from, to, how){
     from = Audit.ymd(from); to = Audit.ymd(to);
     const days = Audit.days(from, to) + 1, lyFrom = this.shift(from, -1), lyTo = this.shift(to, -1);
     // the period before: whole months when the period is whole months, else the same number of days
@@ -441,15 +487,27 @@ const MIS = {
     }
     const bal = Audit.balances(from, to), balTo = bal.ok ? bal.at(to) : null;
     const fyFrom = Audit.fyStart(to), mFrom = to.slice(0, 6) + "01";
-    const s = this.sales(from, to), pr = this.purchases(from, to), pl = this.pl(from, to);
-    const cmp = (f, t2) => this.covered(f) ? {sales: this.sales(f, t2).total, pl: this.pl(f, t2)} : null;
-    return this.made(from, to, how, bal, balTo, {sales: s, purchases: pr, pl, prev: cmp(pFrom, pTo), ly: cmp(lyFrom, lyTo), prevRange: [pFrom, pTo], lyRange: [lyFrom, lyTo],
-      mtd: this.covered(mFrom) ? this.sales(mFrom, to).total : null, ytd: this.covered(fyFrom) ? this.sales(fyFrom, to).total : null,
-      cash: this.cashflow(from, to), recv: this.ageing(to, "r", balTo), pay: this.ageing(to, "p", balTo), comp: this.compliance(from, to)});
+    const s = yield* this.salesSteps(from, to);
+    yield;
+    const pr = this.purchases(from, to), pl = this.pl(from, to);
+    yield;
+    const cmp = function* (M, f, t2){ if (!M.covered(f)) return null; const st = yield* M.salesSteps(f, t2); yield; return {sales: st.total, pl: M.pl(f, t2)}; };
+    const prev = yield* cmp(this, pFrom, pTo), ly = yield* cmp(this, lyFrom, lyTo);
+    const mtd = this.covered(mFrom) ? (yield* this.salesSteps(mFrom, to)).total : null, ytd = this.covered(fyFrom) ? (yield* this.salesSteps(fyFrom, to)).total : null;
+    yield;
+    const cash = this.cashflow(from, to);
+    yield;
+    const recv = yield* this.ageingSteps(to, "r", balTo), pay = yield* this.ageingSteps(to, "p", balTo);
+    yield;
+    const comp = this.compliance(from, to);
+    yield;
+    return yield* this.madeIn(from, to, how, bal, balTo, {sales: s, purchases: pr, pl, prev, ly, prevRange: [pFrom, pTo], lyRange: [lyFrom, lyTo], mtd, ytd, cash, recv, pay, comp});
   },
-  // next-cloud-mis: the rest of a run, the same whether its figures were worked out here (runNow) or in FinCom's cloud
-  // (fromCloud): w holds sales to comp (and, from the cloud, owed, goods and the cash flow, flow)
-  made(from, to, how, bal, balTo, w){
+  // next-cloud-mis: the rest of a run, the same whether its figures were worked out here (runIn) or in FinCom's cloud
+  // (fromCloud): w holds sales to comp (and, from the cloud, owed, goods and the cash flow, flow); in steps (madeIn) for a
+  // run behind the page, at once (made) for the cloud's
+  made(from, to, how, bal, balTo, w){ return this.runSteps(this.madeIn(from, to, how, bal, balTo, w)); },
+  *madeIn(from, to, how, bal, balTo, w){
     const b = S.books, days = Audit.days(from, to) + 1, s = w.sales, pr = w.purchases, pl = w.pl;
     const r = {at: new Date().toISOString(), how: how || "run now", from, to, company: (b.meta || {}).company || CO().name,
       sales: s, purchases: pr, pl, prev: w.prev, ly: w.ly, prevRange: w.prevRange, lyRange: w.lyRange, mtd: w.mtd, ytd: w.ytd,
@@ -468,6 +526,7 @@ const MIS = {
     const goods = "goods" in w ? w.goods : Object.entries(this.moves(from, to)).some(([l, x]) => Audit.under(l, /^purchase accounts$/i) && Math.abs(num(x.t)) >= 1);
     r.goods = goods;
     r.dpo = goods && r.pay.sum.owe > 0 && pr.total > 0 ? Math.round(r.pay.sum.owe / (pr.total / days)) : null;
+    yield;
     r.p2 = this.phase2(r, balTo, bal.ok ? r2(r.balances.cash.concat(r.balances.bank).reduce((s2, x) => s2 + x[1], 0)) : null, w.flow);
     const md = this.cfg(b).msmeDays, msme = this.msme();
     // what is left of each bill after payments on account and advances (MIS.netOpen), as the ageing

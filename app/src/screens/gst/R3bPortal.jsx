@@ -63,11 +63,12 @@ function Ledger({ t }) {
     Credit brought forward: {line((k) => num((t.opening || {})[k]))}.<br />Credit carried to next month: {line((k) => num((P.carry || {})[k]))}.</p>;
 }
 
-export default function R3bPortal({ b, t }) {
+export default function R3bPortal({ b, t, cloud }) {
   const ym = S.gstYm || "", reg = S.gstReg || "";
   const qrmp = typeof GSTSet === "object" && reg && GSTSet.typeOf(ym, reg) === "qrmp" && GSTSet.isQEnd(ym);
   const per = qrmp ? GSTSet.qStart(ym) + "-" + ym : ym;
-  let j = null; try { j = GSTR.threeBJson(ym, reg); } catch (e) { j = null; }
+  // the cloud's 3B (cloud3b.js): the JSON's 4(A)(3) as GSTR.threeBJson makes it from the same figures, not worked out again
+  let j = null; try { j = cloud ? { itc_elg: { itc_avl: [{ ty: "ISRC", iamt: r2(t.rcmIn.igst), camt: r2(t.rcmIn.cgst), samt: r2(t.rcmIn.sgst), csamt: r2(t.rcmIn.cess) }] } } : GSTR.threeBJson(ym, reg); } catch (e) { j = null; }
   const tables = r3bTables(t, j), open = S.r3bOpen || "";
   const go = (id) => { S.r3bOpen = open === id ? "" : id; render(); };
   const close = () => { S.r3bOpen = ""; render(); };
