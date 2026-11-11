@@ -299,7 +299,23 @@ const TCloud = {
   // prefetch-books (the owner, 26-Oct-2026: "can we have it just after login"): p = {b, co, gate} brings a client that is
   // not open into this browser's store the same way (src/js/98, Prefetch): nothing drawn or said, saved with fromCloud (never
   // sent), gate() awaited before each read; what only the open books can work out waits for the first opening (meta.pre)
+  // next-cloud-mis: the cloud copy's version of the books brought in (tally_calc_cached: its book and version), asked
+  // before the load reads anything and again after; kept (meta.cloud.ver, with MIS.cloudWork) only when the two agree
+  // and the load read everything, so MIS uses the cloud's figures only for exactly these books (MIS.cloudFits)
+  calcVer(cid){ return this.rpc("tally_calc_cached", {p_client: cid, p_on: this.iso(Audit.today()), p_kind: "mis-now.2", p_args: ""}).catch(() => null); },
   async load(force, opening, p){
+    if (p) return this.loadNow(force, opening, p);
+    const co = CO(), b = S.books, v0 = co && b && b.cid === co.id && this.on() && MIS.cloudOn() ? this.calcVer(co.id) : null;
+    this.loadErr = null;
+    const r = await this.loadNow(force, opening);
+    if (v0){
+      const m = (b.meta || {}).cloud, a = await v0, z = m && !this.loadErr && (r === true || r === "new") && !b.meta.fo ? await this.calcVer(b.cid) : null;
+      if (m && a && z && a.version && a.version === z.version && a.book === z.book && z.book === m.book && !this.loadErr){ m.ver = z.version; m.verWork = MIS.cloudWork(b); }
+      else if (m){ delete m.ver; delete m.verWork; }
+    }
+    return r;
+  },
+  async loadNow(force, opening, p){
     const co = p ? p.co : CO(), b = p ? p.b : S.books, g = () => p && p.gate(), draw = () => { if (!p) render(); };
     if (!co || !b || b.cid !== co.id || !this.on()) return false;
     const books = await this.status(co.id, force) || [];
@@ -421,7 +437,7 @@ const TCloud = {
         if (p){ meta.pre = meta.at; changed = true; await g(); await saveBooks({fromCloud: true}, b); }
         else { TallyRead.after(b, "after changes came from the cloud copy"); LK.cache = {}; changed = true; await saveBooks(); }
       }
-    } catch (e){ if (p) throw e; toast("Could not bring in the cloud copy: " + ((e && e.message) || e)); }
+    } catch (e){ if (p) throw e; this.loadErr = e; toast("Could not bring in the cloud copy: " + ((e && e.message) || e)); }
     b.catchUp = "";
     if (!quiet || changed){ f.busy = b.busy = ""; draw(); }
     if (kept && !p && window.PayLoad) await PayLoad.ensure(b, bk.book);
@@ -542,7 +558,12 @@ const TCloud = {
   rework(b){
     try {
       const last = b.mis && b.mis.last;
-      if (last && last.from && last.to) MIS.run(last.from, last.to, "after the books came in from the cloud copy"); else MIS.maybeRun();
+      const how = "after the books came in from the cloud copy";
+      // next-cloud-mis: from the cloud's figures when they fit these books (MIS.cloudGo: else worked out here, as before)
+      if (last && last.from && last.to){
+        if (MIS.cloudOk(b) && window.loadPart) window.loadPart("mis").then(() => MIS.cloudGo(last.from, last.to, how, () => { MIS.run(last.from, last.to, how); saveBooks(); render(); })).catch(() => {});
+        else MIS.run(last.from, last.to, how);
+      } else MIS.maybeRun();
       Audit.maybeRun(); saveBooks(); render();
     } catch (e){}
   },

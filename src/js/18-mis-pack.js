@@ -67,6 +67,48 @@ async function misExcel(r){
   const out = XLSX.write(wb, {bookType: "xlsx", type: "array"});
   saveFile(CO().name.replace(/[^A-Za-z0-9]+/g, "-") + "-MIS-" + r.from + "-" + r.to + ".xlsx", new Blob([out], {type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));
 }
+// next-cloud-mis: a run from FinCom's cloud's figures (MIS.cloudOk / cloudWork in src/js/07-mis.js say when they may be
+// used); here, with the MIS screen, not in legacy.js
+const MisCloud = {
+  cloudFits(b, c){ const m = b && b.meta && b.meta.cloud; return !!(c && m && c.partial === false && c.misV === this.V && c.book === m.book && c.version === m.ver && this.cloudOk(b)); },
+  async cloudAsk(b, from, to){
+    let t; const late = new Promise((_, no) => { t = setTimeout(() => no(new Error("no answer")), 30000); });
+    try { const j = await Promise.race([Cloud.fn("mis-run", {action: "now", client: b.cid, from: Audit.ymd(from), to: Audit.ymd(to)}), late]); return j && j.result ? Object.assign({}, j.result, {kept: !!j.kept}) : null; }
+    finally { clearTimeout(t); }
+  },
+  // "cloud" (the run made from the cloud's figures, saved), "here" (local() worked it out), "busy" or "stopped"
+  async cloudGo(from, to, how, local){
+    const b = S.books, m = b && b.meta && b.meta.cloud;
+    if (this._again || !b || b.loading) return "busy";
+    if (!this.cloudOk(b)){ local(); if (m && m.book && !m.big && this.cloudOn()) this.cloudAsk(b, from, to).catch(() => {}); return "here"; }
+    this._again = true; let c = null;
+    try { c = await this.cloudAsk(b, from, to); } catch (e){ c = null; }
+    this._again = false;
+    if (S.books !== b || b.loading) return "stopped";
+    let r = null;
+    if (this.cloudFits(b, c)) try { r = memoScope(() => this.fromCloud(c, how)); } catch (e){ r = null; }
+    if (!r){ local(); return "here"; }
+    saveBooks(null, b).catch(() => {}); render(); return "cloud";
+  },
+  // runNow's answer from the cloud's figures; what the cloud leaves out (GST 3B's workings, the dues, the 13 weeks, the
+  // ratios, registrations, cost centres, the audit's count, the MSME list) is worked out here as runNow does, and so is
+  // the ageing, from the cloud's balances on the day (its bills are needed here for the page and the Excel). The balances
+  // in the order the books here hold their ledgers, so every sum over them adds up as runNow's
+  fromCloud(c, how){
+    const b = S.books, from = c.from, to = c.to, bal = Audit.balances(from, to), cb = c.balances && c.balances.at;
+    if (!bal.ok || !cb || !c.p2 || !c.comp) return null;
+    const balTo = {};
+    Object.keys((b.tb || {}).led || {}).forEach(l => { if (l in cb) balTo[l] = cb[l]; });
+    Object.keys(cb).forEach(l => { if (!(l in balTo)) balTo[l] = cb[l]; });
+    // the sales as runNow's (the cloud's own note on the ledger masters left out)
+    const sales = Object.assign({}, c.sales); delete sales.masters;
+    const r = this.made(from, to, how, bal, balTo, {sales, purchases: c.purchases, pl: c.pl, prev: c.prev, ly: c.ly, prevRange: c.prevRange, lyRange: c.lyRange, mtd: c.mtd, ytd: c.ytd,
+      cash: c.cash, recv: this.ageing(to, "r", balTo), pay: this.ageing(to, "p", balTo), comp: this.compliance(from, to, c.comp), owed: c.owed, goods: c.goods, flow: c.p2.cash});
+    r.cloud = {at: c.at, kept: !!c.kept};
+    return r;
+  }
+};
+if (typeof MIS === "object") Object.assign(MIS, MisCloud);
 if (typeof misPackHtml !== "undefined") globalThis.misPackHtml = misPackHtml;
 if (typeof misExcel !== "undefined") globalThis.misExcel = misExcel;
 // (each name only when declared: a test's harness loads a file's names one by one, tests/harness.js)

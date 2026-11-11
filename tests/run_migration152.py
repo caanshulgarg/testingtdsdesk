@@ -25,6 +25,11 @@ and the client's Loan-given choice are kept in client_book_items and clients as 
      the browser's), days of sales and purchases (worked out as the handler does)
   2. members: another firm's member gets nothing; a part that does not exist is refused
   3. timings on the 40,000-entry book (five runs each: the best and the median; the target: a median under 1 s each part)
+  4. next-cloud-mis, the MIS page from the cloud (needs deno: DENO, else on PATH): for every book and period the real
+     mis-run handler's answer (server/mis-run/now_pg_test.ts on this database: worked out, then as kept) made into the
+     page's run by THIS tree's browser (MIS.fromCloud, src/js/18-mis-pack.js; tests/run_mis_cloud.js) is MIS.runNow's own,
+     every value but when, how and where it ran, result code included; the fingerprint guard (MIS.cloudFits) and the
+     page's choice (MIS.cloudGo: from the cloud, or worked out here and the cloud asked again)
 The database is set as staging is (jit off, as tests/run_migration151.py; 152's own functions set it off besides). The
 scratch database is removed when the run ends. 151's tally_now is timed too (it reads 152's tally_calc_led).
 M152_ONLY=small (or 40k, nogroups) runs one book; M152_TMP keeps the browser's answers between runs; M152_LOCK_HELD=1 when
@@ -423,6 +428,41 @@ def compare(db, label, cid, br, periods, end):
         dpo = js_round(W["owe"]["p"] / (p["total"] / days)) if goods and W["owe"]["p"] > 0 and p["total"] > 0 else None
         ok(dso == W["dso"] and dpo == W["dpo"], "%s dso %s, dpo %s from the parts here (the browser: %s, %s)" % (tag, dso, dpo, W["dso"], W["dpo"]))
 
+# 4. next-cloud-mis: the MIS page's run from the cloud's answer against the browser's own (this tree's browser)
+DENO = os.environ.get("DENO") or __import__("shutil").which("deno")
+def page_parity(db, label, cid, books, saved, company, periods):
+    if not DENO: print("   4. skipped: no deno (DENO=... or on PATH)"); return
+    answers = {}
+    for (f, t) in periods:
+        outp = os.path.join(SCRATCH, "page-%s-%s-%s.json" % (label, f, t))
+        r = subprocess.run([DENO, "test", "-A", "--no-lock", "--no-check", os.path.join(ROOT, "server", "mis-run", "now_pg_test.ts")], cwd=ROOT, capture_output=True, text=True, timeout=900,
+                           env=dict(os.environ, NO_COLOR="1", NOW_PG="|".join([str(db.port), U, cid, f, t, outp])))
+        if r.returncode or not os.path.exists(outp): ok(False, "4. %s %s-%s: the handler on this database: %s" % (label, f, t, (r.stdout + r.stderr)[-800:])); continue
+        E = json.load(open(outp)); os.remove(outp)
+        ok(E["first"].get("ok") and E["first"]["result"].get("partial") is False and E["second"].get("kept") is True and E["first"]["result"].get("misV") is not None,
+           "4. %s %s-%s: the handler's answer is whole (misV %s), kept and served as kept the second time (%d ms, then %d ms)" % (label, f, t, E["first"]["result"].get("misV"), E["firstMs"], E["secondMs"]))
+        answers[f + "|" + t] = {"first": E["first"], "second": E["second"]}
+    inp, outp = os.path.join(SCRATCH, "page-%s-in.json" % label), os.path.join(SCRATCH, "page-%s-out.json" % label)
+    ap = os.path.join(SCRATCH, "page-%s-answers.json" % label)
+    open(inp, "w").write(json.dumps({"books": books, "saved": saved, "company": company, "periods": periods})); open(ap, "w").write(json.dumps(answers))
+    r = subprocess.run(LOCK + ["node", "--max-old-space-size=6144", os.path.join(HERE, "run_mis_cloud.js"), inp, ap, outp], capture_output=True, text=True, env=dict(os.environ, TDSDESK_HTML=HTML_HERE))
+    if r.returncode or not os.path.exists(outp): ok(False, "4. %s: the page's run in Node: %s" % (label, (r.stderr or r.stdout)[-1500:])); return
+    O = json.load(open(outp))
+    for p in [f + "|" + t for f, t in periods]:
+        R = O.get(p) or {"missing": True}
+        if R.get("missing"): ok(False, "4. %s %s: no answer" % (label, p)); continue
+        ok(not R["diffs"]["first"] and not R["diffs"]["second"] and R["code"][0] == R["code"][1],
+           "4. %s %s: the page's run from the cloud = MIS.runNow here, every value (result code %s), from the answer worked out and as kept %s" % (label, p, R["code"][0], (R["diffs"]["first"] or R["diffs"]["second"])[:4]))
+        F_ = R["fits"]
+        ok(F_["same"] and F_["sameAgain"] and not any(F_[k] for k in ("otherVersion", "otherBook", "otherWorking", "noWorking", "partial", "notSignedIn", "entryChanged", "msmeChanged")),
+           "4. %s %s: used only for the books whose cloud version was kept (another version, book or MIS working, partial, not signed in, an entry or an MSME type changed here: not) %s" % (label, p, F_))
+    G = O[periods[0][0] + "|" + periods[0][1]].get("go") or {}
+    a, b2, c2 = G.get("fits") or {}, G.get("other") or {}, G.get("notKept") or {}
+    ok(a.get("w") == "cloud" and a.get("here") == 0 and len(a.get("asked") or []) == 1 and a["asked"][0][:3] == ["mis-run", "now", cid] and a.get("saved") == 1 and a.get("cloud") and not a.get("again")
+       and b2.get("w") == "here" and b2.get("here") == 1 and len(b2.get("asked") or []) == 1 and not b2.get("cloud")
+       and c2.get("w") == "here" and c2.get("here") == 1 and len(c2.get("asked") or []) == 1 and not c2.get("cloud"),
+       "4. %s: MIS.cloudGo: fits: from the cloud, saved, nothing worked out here; another version: worked out here; no version kept: worked out here and the cloud asked (%s)" % (label, G))
+
 def timing(db, B, periods, end, cid=None):
     db.sql("""create or replace function t_ms(p text) returns numeric language plpgsql as $$ declare t timestamptz := clock_timestamp(); n bigint; begin execute p into n; return round(extract(epoch from clock_timestamp() - t) * 1000, 1); end $$;""")
     res = {}
@@ -451,6 +491,11 @@ spec = importlib.util.spec_from_file_location("build_" + REV, os.path.join(TREE,
 HTML = os.path.join(SCRATCH, "index-m152-%s.html" % REV)
 open(HTML, "w").write(build.assemble())
 print("  the browser: src/js of %s (%s)" % (REV, subprocess.run(["git", "-C", ROOT, "log", "-1", "--format=%h %s", REV], capture_output=True, text=True).stdout.strip()[:90]))
+
+# 4. the MIS page: this tree's browser (build.py's own assembly, into the scratch folder)
+spec = importlib.util.spec_from_file_location("build_here", os.path.join(ROOT, "build.py")); build_here = importlib.util.module_from_spec(spec); spec.loader.exec_module(build_here)
+HTML_HERE = os.path.join(SCRATCH, "index-m152-here.html")
+open(HTML_HERE, "w").write(build_here.assemble())
 
 db = pg_stand.start(int(os.environ.get("PG152_PORT") or 31252))
 T_ALL = {}
@@ -496,6 +541,7 @@ try:
         print("   the browser's engine in Node: %.1f s (MIS.runNow: %s ms)" % (time.time() - t0, ", ".join("%s %d" % (k, v) for k, v in br["ms"].items())))
         store(db, F, cid, br["map"], st)
         compare(db, label, cid, br, periods, TODAY)
+        page_parity(db, label, cid, browser_books(cid, L, V, start, end, led_order, st, groups), st[0], st[5], periods)
         # every master's opening as the browser's books hold it (TallyRead.balances and its yearOpen): what moves to
         # Profit & Loss A/c and what stays (TallyRead.primaryOf on the raw group names)
         so = {r["name"]: P(r["open"]) for r in db.rows("select name, open from tally_calc_led(%s) where in_master" % q(B))}

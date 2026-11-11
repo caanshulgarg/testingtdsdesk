@@ -69,6 +69,8 @@ function fake(opts: { kept?: any, none?: boolean, firm?: string, company?: strin
   return { ask, calls, reads, busy };
 }
 const P = { action: "now", client: "c1", from: "20260401", to: "20261031" };
+// next-cloud-mis: the browser's MIS working (MIS.V in src/js/07-mis.js), which every answer carries as misV
+const MIS_V = Number((Deno.readTextFileSync(new URL("../../src/js/07-mis.js", import.meta.url)).match(/^  V: (\d+),/m) || [])[1]);
 
 Deno.test("now: refused without a member's token, a bad period, no books", async () => {
   const f = fake({});
@@ -97,11 +99,23 @@ Deno.test("now: the firm's switches first, as run: a paused firm or a switched-o
 });
 
 Deno.test("now: a whole kept answer for the same books comes back, nothing worked out or kept again", async () => {
-  const f = fake({ kept: { v: 3, partial: false, kind: "mis-now.2", x: 1 } });
+  const f = fake({ kept: { v: 3, misV: MIS_V, partial: false, kind: "mis-now.2", x: 1 } });
   const r = await f.ask({ ...P, from: "2026-04-01", to: "2026-10-31" });
-  eq(r.status, 200, "status"); eq(r.body.kept, true, "kept"); eq(r.body.result, { v: 3, partial: false, kind: "mis-now.2", x: 1 }, "the kept answer");
+  eq(r.status, 200, "status"); eq(r.body.kept, true, "kept"); eq(r.body.result, { v: 3, misV: MIS_V, partial: false, kind: "mis-now.2", x: 1 }, "the kept answer");
   eq(f.calls.map((c) => c.fn), ["tally_now"], "one call, no keeping");
   eq(f.calls[0].args, { p_client: "c1", p_from: "2026-04-01", p_to: "2026-10-31" }, "asked with the period");
+});
+
+Deno.test("now: a kept whole answer of another MIS working (no misV, or not MIS.V) is worked out again and kept as this one", async () => {
+  assert(MIS_V > 0, "MIS.V read from src/js/07-mis.js");
+  for (const misV of [undefined, MIS_V - 1]) {
+    const f = fake({ kept: { v: 3, misV, partial: false, kind: "mis-now.2", from: "20260401", to: "20261031", recv: { sum: { owe: 1000 } }, pay: { sum: { owe: 400 } },
+      owed: { r: 1000, p: 400, custAdv: 50, supAdv: 20 }, balances: { asOn: "20261031", cash: [], bank: [], at: {} } } });
+    const r = await f.ask(P);
+    eq([r.status, r.body.kept, r.body.result.misV, r.body.result.partial], [200, false, MIS_V, false], "worked out again for misV " + misV);
+    const put = f.calls.find((c) => c.fn === "tally_calc_put");
+    eq(put && put.args.p_result.misV, MIS_V, "kept as this working");
+  }
 });
 
 Deno.test("now: one call with the member's token, every balance (over 1,000 ledgers), kept with the service key", async () => {
@@ -116,7 +130,7 @@ Deno.test("now: one call with the member's token, every balance (over 1,000 ledg
   eq([put.args.p_book, put.args.p_kind, put.args.p_args, put.args.p_version], [BOOK, "mis-now.2", "20260401|20261031", "v-1"], "kept under the book, the kind's revision, the period and tally_now's version");
   eq(Object.keys(res.balances.at).length, 1500, "all 1,500 balances, not the 1,000 a row call would give");
   eq(res.owed, { r: 1000, p: 400, custAdv: 50, supAdv: 20 }, "owed as tally_now worked it out on the day");
-  eq([res.v, res.partial, res.version, res.book, res.recv.sum.owe, res.pay.sum.owe, res.kind, "kept" in res], [3, false, "v-1", BOOK, 1000, 400, "mis-now.2", false], "the answer");
+  eq([res.v, res.misV, res.partial, res.version, res.book, res.recv.sum.owe, res.pay.sum.owe, res.kind, "kept" in res], [3, MIS_V, false, "v-1", BOOK, 1000, 400, "mis-now.2", false], "the answer");
   eq(res.later, [], "nothing left to the browser");
   assert(res.parts.includes("recv") && res.parts.includes("pl") && res.outside.includes("comp.gst.due"), "says what is here and what is another's");
   eq(put.args.p_result.partial, false, "a whole answer kept");

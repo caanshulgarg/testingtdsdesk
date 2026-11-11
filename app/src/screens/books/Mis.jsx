@@ -88,12 +88,18 @@ function runSplit(from, to, how) {
   }, 0);
   go(0);
 }
+// next-cloud-mis: the figures from FinCom's cloud when its answer fits these books exactly (MIS.cloudGo, src/js/07: the
+// same book, version and working), else worked out here in parts (runSplit) and the cloud asked again for next time
+const misGo = (from, to, how) => FinComNav.track(MIS.cloudGo(from, to, how, () => runSplit(from, to, how)));
 // Run now: the period chosen, else doAct says what is wrong with it
-const runNow = (rg) => FinComNav.go(() => rg.from && rg.to && rg.from <= rg.to ? runSplit(rg.from, rg.to, "run now") : doAct("misRun"));
+const runNow = (rg) => FinComNav.go(() => rg.from && rg.to && rg.from <= rg.to ? misGo(rg.from, rg.to, "run now") : doAct("misRun"));
+// where the figures were worked out, in plain words: the cloud's time (with its day when not today), or here
+const hhmm = (at) => { const t = fmtTime(at).replace(/ IST$/, ""), day = fmtDateTime(at).split(" ")[0]; return t + (day !== fmtDateTime(new Date().toISOString()).split(" ")[0] ? " on " + day : ""); };
+const Where = ({ r }) => <span data-mis-where={r.cloud ? "cloud" : "here"}>{r.cloud ? "Worked out in FinCom’s cloud at " + hhmm(r.cloud.at) : "Worked out here"}</span>;
 
 // the line under the head: the period run, how, when, its result code, and whether it agrees with Tally
 function RunLine({ r }) {
-  return <p className="note" style={{ margin: "10px 0" }}>{d(r.from) + " to " + d(r.to) + " · " + r.how + " on " + fmtDateTime(r.at) + " · result code "}<b>{r.code}</b>
+  return <p className="note" style={{ margin: "10px 0" }}><Where r={r} />{" · " + d(r.from) + " to " + d(r.to) + " · " + r.how + " on " + fmtDateTime(r.at) + " · result code "}<b>{r.code}</b>
     {r.control ? (r.control.ok ? <>{" · "}<span style={{ color: "var(--ok)" }}>agrees with Tally’s balances, ledger by ledger</span></> : <>{" · "}<span className="bad">{r.control.n + " ledgers differ from Tally by ₹" + m(r.control.amt)}</span></>)
       : null}</p>;
 }
@@ -386,7 +392,7 @@ export default function Mis({ b }) {
   if (catchUp) return <CatchUp text={catchUp} />;
   const r0 = (b.mis || {}).last, stale = MIS.stale(b);
   // a saved run from other books or older working: worked out again now, its figures not shown meanwhile
-  if (stale && !MIS._again) runSplit(r0.from, r0.to, "worked out again (the books or FinCom changed since " + fmtDate(r0.at.slice(0, 10)) + ")");
+  if (stale && !MIS._again) misGo(r0.from, r0.to, "worked out again (the books or FinCom changed since " + fmtDate(r0.at.slice(0, 10)) + ")");
   if (stale) return <div className="bk-none" data-mis-again="" style={{ marginTop: 12 }}>{"Working out again: the books or FinCom’s working changed since the run of " + fmtDate(r0.at.slice(0, 10)) + " (result code " + r0.code + ")."}</div>;
   const r = r0;
   // the period: the one chosen (kept for the client), else this financial year to date (smart moves round 1)

@@ -132,6 +132,9 @@ export function handler(deps: Deps) {
   // worked out here either (outside).
   const NOW_KIND = "mis-now.2";                // as tally_now; .2: answers kept by the first revision are never given back
   const NOW_V = 3;                             // a whole answer with 152's parts; anything less is never served as kept
+  // next-cloud-mis: the browser's MIS working (MIS.V, src/js/07-mis.js) these figures are the same as; the MIS page uses
+  // an answer only of its own working, and a kept answer of another is worked out again (handler_test checks it is MIS.V)
+  const MIS_V = 8;
   const NOW_PARTS = ["recv", "pay", "owed", "balances", "sales", "purchases", "goods", "pl", "prev", "ly", "mtd", "ytd", "cash", "p2.cash", "comp", "msme", "control", "dso", "dpo"];
   const SQL_PARTS = ["sales", "purchases", "pl", "prev", "ly", "tops", "cash", "comp", "msme", "control"];
   const PART_AT_ONCE = 3;                      // the parts asked at a time (the review: not ten connections per MIS open)
@@ -158,7 +161,7 @@ export function handler(deps: Deps) {
     try { n = await rpc("tally_now", { p_client: client, p_from: iso(from), p_to: iso(to) }, jwt); }
     catch (e) { return [500, { ok: false, error: "the figures could not be worked out: " + String((e as Error).message || e).slice(0, 200) }]; }
     if (!n || n.none) return [404, { ok: false, kind: "none", error: "FinCom's cloud has no books of this client for that period." }];
-    const whole = (r: any) => r && Number(r.v) >= NOW_V && r.partial === false;
+    const whole = (r: any) => r && Number(r.v) >= NOW_V && r.partial === false && r.misV === MIS_V;
     if (n.kept && whole(n.result)) return [200, { ok: true, kept: true, at: n.at, result: n.result }];
     // tally_now's figures: worked out now, or those of a kept answer that is not whole (the same version of the books)
     const figures: any = {};
@@ -199,7 +202,7 @@ export function handler(deps: Deps) {
     const revOps = (pl && pl.heads && pl.heads.rev && pl.heads.rev.t) || (sales ? sales.total : 0);
     const oweR = (figures.recv && figures.recv.sum && figures.recv.sum.owe) || 0, oweP = (figures.pay && figures.pay.sum && figures.pay.sum.owe) || 0;
     const later = SQL_PARTS.filter((p) => !part[p]);
-    const result = { v: NOW_V, kind: NOW_KIND, partial: later.length > 0, parts: NOW_PARTS, later, outside: OUTSIDE, ...(later.length ? { errors } : {}), at: now().toISOString(), ...figures,
+    const result = { v: NOW_V, misV: MIS_V, kind: NOW_KIND, partial: later.length > 0, parts: NOW_PARTS, later, outside: OUTSIDE, ...(later.length ? { errors } : {}), at: now().toISOString(), ...figures,
       sales, purchases, goods, pl,
       prev: part.prev ? part.prev.cmp : null, ly: part.ly ? part.ly.cmp : null,
       prevRange: part.prev ? part.prev.range : null, lyRange: part.ly ? part.ly.range : null,

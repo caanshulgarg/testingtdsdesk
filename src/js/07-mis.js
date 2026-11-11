@@ -359,8 +359,10 @@ const MIS = {
     const open = owed(Audit.dayBefore(from)) || 0, close = r2(open + ded - paid), books = owed(to);
     return {open, ded, paid, close, books, ties: books == null || Math.abs(books - close) < 1};
   },
-  compliance(from, to){
-    const months = this.monthsOf(from, to), paid = this.booksPaid(from, to);
+  // next-cloud-mis: cl, the cloud's own (GST paid from the bank, TDS, the TDS roll); GST 3B's workings always here
+  compliance(from, to, cl){
+    const months = this.monthsOf(from, to), paid = cl ? {} : this.booksPaid(from, to);
+    if (cl) (cl.gst || []).forEach(g => { paid[g.ym] = {gst: g.pay}; });
     // worked out to pay: the 3B working's cash (after the set-off by head and credit carried forward) and reverse charge
     // paid in cash; paid: the bank payments to the GST ledgers (review of 02-Oct-2026)
     const sum4 = x => r2(["igst", "cgst", "sgst", "cess"].reduce((a, k) => a + num((x || {})[k]), 0));
@@ -376,13 +378,13 @@ const MIS = {
       const rcm = add(t => t.pay && t.pay.rcmCash ? sum4(t.pay.rcmCash) : 0);
       const due = add(t => t.pay && t.pay.cash ? sum4(t.pay.cash) : r2(Math.max(0, sum4(t.net) - sum4(t.netItc)) + (t.pay && t.pay.rcmCash ? sum4(t.pay.rcmCash) : 0)));
       return {ym: m, out, itc, rcm, carry: r2(due - (out - itc + rcm)), due, pay: pd}; } catch (e){ return {ym: m, out: 0, itc: 0, rcm: 0, carry: 0, due: 0, pay: pd}; } });
-    const tds = months.map(m => {
+    const tds = cl ? cl.tds : months.map(m => {
       const p = paid[m] || {};
       const challans = r2(TDS.challans().filter(c => this.ym(TDS.ymd(c.date)) === m).reduce((s, c) => s + num(c.tax), 0));
       return {ym: m, ded: p.tdsDed || 0, dep: p.tdsPaid || 0, challans};
     });
     const au = (S.books.audit || {}).last;
-    let tdsRoll = null; try { tdsRoll = this.tdsPayable(from, to); } catch (e){}
+    let tdsRoll = cl ? cl.tdsRoll : null; if (!cl) try { tdsRoll = this.tdsPayable(from, to); } catch (e){}
     // an audit run that no longer fits the books is not counted (review of 02-Oct-2026)
     return {gst, tds, tdsRoll, audit: au && !Audit.stale(au) ? {at: au.at, open: au.findings.filter(f => Audit.status(f.id).s === "open").length, high: au.findings.filter(f => f.sev === "high").length, solved: (au.solved || []).reduce((s, x) => s + x.n, 0)} : null};
   },
@@ -427,7 +429,6 @@ const MIS = {
   // one run: every table for the period, the same every time for the same books
   run(from, to, how){ return typeof memoScope === "function" ? memoScope(() => this.runNow(from, to, how)) : this.runNow(from, to, how); },
   runNow(from, to, how){
-    const b = S.books;
     from = Audit.ymd(from); to = Audit.ymd(to);
     const days = Audit.days(from, to) + 1, lyFrom = this.shift(from, -1), lyTo = this.shift(to, -1);
     // the period before: whole months when the period is whole months, else the same number of days
@@ -442,25 +443,32 @@ const MIS = {
     const fyFrom = Audit.fyStart(to), mFrom = to.slice(0, 6) + "01";
     const s = this.sales(from, to), pr = this.purchases(from, to), pl = this.pl(from, to);
     const cmp = (f, t2) => this.covered(f) ? {sales: this.sales(f, t2).total, pl: this.pl(f, t2)} : null;
-    const r = {at: new Date().toISOString(), how: how || "run now", from, to, company: (b.meta || {}).company || CO().name,
-      sales: s, purchases: pr, pl, prev: cmp(pFrom, pTo), ly: cmp(lyFrom, lyTo), prevRange: [pFrom, pTo], lyRange: [lyFrom, lyTo],
+    return this.made(from, to, how, bal, balTo, {sales: s, purchases: pr, pl, prev: cmp(pFrom, pTo), ly: cmp(lyFrom, lyTo), prevRange: [pFrom, pTo], lyRange: [lyFrom, lyTo],
       mtd: this.covered(mFrom) ? this.sales(mFrom, to).total : null, ytd: this.covered(fyFrom) ? this.sales(fyFrom, to).total : null,
-      cash: this.cashflow(from, to), recv: this.ageing(to, "r", balTo), pay: this.ageing(to, "p", balTo), comp: this.compliance(from, to), dues: this.dues(),
+      cash: this.cashflow(from, to), recv: this.ageing(to, "r", balTo), pay: this.ageing(to, "p", balTo), comp: this.compliance(from, to)});
+  },
+  // next-cloud-mis: the rest of a run, the same whether its figures were worked out here (runNow) or in FinCom's cloud
+  // (fromCloud): w holds sales to comp (and, from the cloud, owed, goods and the cash flow, flow)
+  made(from, to, how, bal, balTo, w){
+    const b = S.books, days = Audit.days(from, to) + 1, s = w.sales, pr = w.purchases, pl = w.pl;
+    const r = {at: new Date().toISOString(), how: how || "run now", from, to, company: (b.meta || {}).company || CO().name,
+      sales: s, purchases: pr, pl, prev: w.prev, ly: w.ly, prevRange: w.prevRange, lyRange: w.lyRange, mtd: w.mtd, ytd: w.ytd,
+      cash: w.cash, recv: w.recv, pay: w.pay, comp: w.comp, dues: this.dues(),
       balances: bal.ok ? {src: bal.src, cash: Object.keys(balTo).filter(l => Audit.isCash(l)).sort().map(l => [l, r2(-balTo[l])]), bank: Object.keys(balTo).filter(l => Audit.isBankL(l)).sort().map(l => [l, r2(-balTo[l])])} : {why: bal.why}};
     // days of sales or purchases owed: from what is owed on balance; never below nought (an advance is not "negative days")
     // the headline owed to you and by you is the ledger balances (Parties.position), the same figure as Reports and
     // Letters; the ageing only splits it, any part no bill explains shown as not bill-wise (review of 02-Oct-2026)
-    const P = Parties.position(to);
-    r.owed = P.ok ? {r: P.owed, p: P.youOwe, custAdv: P.custAdv, supAdv: P.supAdv} : null;
+    const P = "owed" in w ? null : Parties.position(to);
+    r.owed = P ? (P.ok ? {r: P.owed, p: P.youOwe, custAdv: P.custAdv, supAdv: P.supAdv} : null) : w.owed;
     // review of 02-Oct-2026: on revenue from operations (the profit and loss's), never total income
     const revOps = (pl.heads.rev || {t: 0}).t || s.total;
     r.dso = r.recv.sum.owe > 0 && revOps > 0 ? Math.round(r.recv.sum.owe / (revOps / days)) : null;
     // days of purchases only for a client that buys goods (Purchase Accounts used in the period): a service firm's bills
     // are expenses, and "days of purchases" says nothing about them (review of 02-Oct-2026)
-    const goods = Object.entries(this.moves(from, to)).some(([l, x]) => Audit.under(l, /^purchase accounts$/i) && Math.abs(num(x.t)) >= 1);
+    const goods = "goods" in w ? w.goods : Object.entries(this.moves(from, to)).some(([l, x]) => Audit.under(l, /^purchase accounts$/i) && Math.abs(num(x.t)) >= 1);
     r.goods = goods;
     r.dpo = goods && r.pay.sum.owe > 0 && pr.total > 0 ? Math.round(r.pay.sum.owe / (pr.total / days)) : null;
-    r.p2 = this.phase2(r, balTo, bal.ok ? r2(r.balances.cash.concat(r.balances.bank).reduce((s2, x) => s2 + x[1], 0)) : null);
+    r.p2 = this.phase2(r, balTo, bal.ok ? r2(r.balances.cash.concat(r.balances.bank).reduce((s2, x) => s2 + x[1], 0)) : null, w.flow);
     const md = this.cfg(b).msmeDays, msme = this.msme();
     // what is left of each bill after payments on account and advances (MIS.netOpen), as the ageing
     r.msme = r.pay.rows.filter(p => /micro|small/i.test(msme[p.party] || "")).map(p => ({party: p.party, type: msme[p.party], bills: (p.open || []).filter(x => x.age > md)})).filter(x => x.bills.length)
@@ -491,6 +499,15 @@ const MIS = {
     return Audit.hash(JSON.stringify([this.V, vs.length, alt, (b.tb || {}).at || "", b.mapV || 0, (b.meta || {}).to || "", (b.meta || {}).at || "", Object.keys(b.ledInfo || {}).length, this.flowMarks((S.companies || {})[b.cid || S.coId])]));
   },
   stale(b){ const r = b && b.mis && b.mis.last; return !!r && r.basis !== this.basis(b); },
+  // ---------- next-cloud-mis (the owner, 09-Nov-2026: "calculation should happen in cloud"): a run's figures from
+  // FinCom's cloud (mis-run {action: "now"}: migrations 151 and 152, each figure the same as runNow's), used only for the
+  // books held here. TCloud.load keeps the cloud copy's version of the books it brought in (meta.cloud.ver, read before
+  // and after, kept only when the two agree) with cloudWork; an answer is used only when it is whole, of this working
+  // (V), and its book and version are those kept, while cloudWork still holds. Anything else: worked out here, and the
+  // cloud asked again so its answer is ready next time (cloudGo, fromCloud: in src/js/18-mis-pack.js, with the MIS screen)
+  cloudWork(b){ return Audit.hash(JSON.stringify([this.basis(b), b.map || {}, b.ledInfo || {}, b.msme || {}, b.fs || {}, b.challans || [], b.misCfg || {}])); },
+  cloudOn(){ return typeof Cloud === "object" && Cloud.on() && !!Cloud.sess(); },
+  cloudOk(b){ const m = b && b.meta && b.meta.cloud; return !!(m && m.ver && !m.big && m.verWork === this.cloudWork(b) && this.cloudOn()); },
   due(b){
     const c = this.cfg(b), last = b.mis && b.mis.last ? String(b.mis.last.at).slice(0, 10).replace(/-/g, "") : "", t = Audit.today();
     if (c.freq === "off" || !(b.vouchers || []).length) return false;
@@ -830,8 +847,8 @@ Object.assign(MIS, {
     const pbtB = r2(rows.reduce((s2, x) => s2 + x.budget * x.sign, 0));
     return {fy, rows, has: Object.keys(bud).length > 0, pbt: {actual: r.pl.pbt.t, budget: pbtB, diff: r2(r.pl.pbt.t - pbtB)}};
   },
-  phase2(r, balTo, cashAtEnd){
-    return {cash: this.cashActual(r.from, r.to), fc: this.forecast(r.to, r.recv, r.pay, cashAtEnd), ratios: this.ratios(r, balTo), regs: this.byReg(r.from, r.to), cc: this.costCentres(r.from, r.to)};
+  phase2(r, balTo, cashAtEnd, flow){
+    return {cash: flow || this.cashActual(r.from, r.to), fc: this.forecast(r.to, r.recv, r.pay, cashAtEnd), ratios: this.ratios(r, balTo), regs: this.byReg(r.from, r.to), cc: this.costCentres(r.from, r.to)};
   }
 });
 

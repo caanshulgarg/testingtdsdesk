@@ -52,5 +52,6 @@ Deno.test({ name: "now against the database: every balance, worked out once, the
     const canon = (v: any): any => Array.isArray(v) ? v.map(canon) : v && typeof v === "object" ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, canon(v[k])])) : v;
     if (JSON.stringify(canon(a.body.result)) !== JSON.stringify(canon(b.body.result))) throw new Error("the kept answer differs");
   }
-  await Deno.writeTextFile(out, JSON.stringify({ first: a.body, firstMs: a.ms, secondMs: b.ms, calls }));
+  // next-cloud-mis: the kept answer too (as jsonb gives it back), for the MIS page's parity test (tests/run_migration152.py 4)
+  await Deno.writeTextFile(out, JSON.stringify({ first: a.body, second: b.body, firstMs: a.ms, secondMs: b.ms, calls }));
 } });
