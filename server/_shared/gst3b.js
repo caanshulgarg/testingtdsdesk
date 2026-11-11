@@ -19,7 +19,7 @@
 // No AI here: M2B.aiLinks only reads the pairs the gst-2b-match function already stored for the year.
 // GST3B_SRC: this file's and names.js's text (this value left out), hashed (tests/run_gst_cloud.js keeps it so): a 3B the
 // cloud worked out carries it, and the 3B page uses the cloud's only when its own is the same (app/src/screens/gst/cloud3b.js)
-const GST3B_SRC = "s14c6452003adbbd9";
+const GST3B_SRC = "s9ee9a8c098ae8d1e";
 function num(v){ if (typeof v === "number") return isFinite(v) ? v : 0; const n = parseFloat(String(v == null ? "" : v).replace(/[^0-9.\-]/g, "")); return isFinite(n) ? n : 0; }
 function r2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
 const INR = new Intl.NumberFormat("en-IN", {minimumFractionDigits:2, maximumFractionDigits:2});

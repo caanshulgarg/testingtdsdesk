@@ -401,8 +401,8 @@ export default function Mis({ b }) {
   const end = Smart.booksEndBefore(String(rg.from || "").replace(/-/g, ""));
   const notRead = end && !(r && Audit.iso(r.from) === rg.from && Audit.iso(r.to) === rg.to) ? <NotRead end={end} what={"MIS " + Smart.fyLabelOf(rg.from.replace(/-/g, "")) + " to date"} read={Smart.fyLabelOf(rg.from.replace(/-/g, ""))} show={Smart.fyLabelOf(end)}
     onShow={() => { S.misRange = { from: Audit.iso(Smart.fyStartOf(end)), to: Audit.iso(end) }; Smart.keep("mis", S.misRange); render(); }} /> : null;
-  if (notRead) return <>{tabs}<Head b={b} r={r} rg={rg} /><div style={{ marginTop: 12 }}>{notRead}</div></>;
-  if (!r) return <>{tabs}<Head b={b} r={r} rg={rg} /><div className="bk-none" data-mis-empty="" style={{ marginTop: 12 }}>Nothing is worked out for this period yet. <button className="linkbtn" onClick={() => runNow(rg)}>Run now</button></div></>;
+  if (notRead) return <>{tabs}<Head b={b} r={r} rg={rg} />{busy}<div style={{ marginTop: 12 }}>{notRead}</div></>;
+  if (!r) return <>{tabs}<Head b={b} r={r} rg={rg} />{busy}<div className="bk-none" data-mis-empty="" style={{ marginTop: 12 }}>Nothing is worked out for this period yet. <button className="linkbtn" onClick={() => runNow(rg)}>Run now</button></div></>;
   const p2 = r.p2;
   let body;
   if (tab === "summary") body = <Summary b={b} r={r} />;
