@@ -844,3 +844,20 @@ arguments and grants; OR: every day listed whole after Tally's number was first 
 explained by a settled delete, nothing held since; a re-queued day keeps its history). Add-only, one transaction, lock_timeout 10 s, safe twice. Needs 133, 135, 136 and 150. Deploy:
 158 first, then tally-ingest (without 158 the function says nothing new). No bridge release. Tested:
 `tests/run_migration158.py`, `tests/run_held_delete_fast_ingest.py`.
+
+## 160: the recorder's gap read from Tally by FinCom itself, and closed by that read (not run yet; branch next-gap-autoread, 11-Nov-2026)
+
+**160, gap read close** (11-Nov-2026, branch `next-gap-autoread`; **written, not run yet**; file md5 2ee9a51270ae415b5d5d450277ab6bb8):
+`server/tally-cloud/migration-160-gap-read-close.sql`. The gap (Tally's ALTVCHID ahead of FinCom's) stayed until a hand
+upload when the numbers were taken by an entry's alterations and its delete (staging: Payment 481 created, altered with no
+line, deleted; 3 missing, 1 settled delete: 158 kept it open). Adds `tally_gap_read_explains` (the gap explained by Tally's
+whole Day Book of the gap's days, read after Tally's number was seen, matching FinCom, nothing held, FinCom's highest known
+number an entry of those days deleted by a settled line and read after it), `tally_gap_front` (the beat asks the bridge
+for those days itself: gap open 2 minutes, nothing held, no posting waiting, each day at most once per 15 minutes, newest
+first, for 6 hours), the table `tally_gap_closes` (service_role only; "checked against Tally at <time>: ..." with the
+arithmetic) and two triggers on `tally_sync_cursor` (the close recorded; the gap's `checking` flag for the page's "Checking
+with Tally... (no action needed)"); replaces 158's `tally_recorder_gap_asked` (158's text, OR the read explains it; same
+arguments and grants). A read showing an entry FinCom lacks never closes the gap: 133 wants it and the read brings it in.
+Add-only, one transaction, lock_timeout 10 s, safe twice. Needs 133, 135, 136, 150 and 158. Deploy: 160, then tally-ingest
+and the app (without 160 the function says nothing new). No bridge release (the check day's FinComDayHeads read, as 158).
+Tested: `tests/run_migration160.py`, `tests/run_gap_autoread_ingest.py`.

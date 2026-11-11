@@ -1919,6 +1919,7 @@ async function booksFromFor(firm: string, body: any): Promise<Record<string, str
 // bridge holds left out, the rest held for this bridge 5 minutes): two bridges read different days of one book at once
 let daysClaimMissing = 0;
 let heldFrontMissing = 0, heldHeadsMissing = 0;     // migration 158 (tally_held_front / tally_held_delete_by_heads) not applied
+let gapFrontMissing = 0;                             // migration 160 (tally_gap_front) not applied
 async function periodDaysFor(firm: string, body: any, stopped: boolean, max = 3, night = max > 3, markCheck = false, claim?: { dev: any; bridge: string; shared: Set<string> }): Promise<Record<string, unknown>[] | null> {
   const out: Record<string, unknown>[] = [];
   max = Math.max(1, Math.min(30, Math.floor(Number(max) || 3)));
@@ -1973,6 +1974,22 @@ async function periodDaysFor(firm: string, body: any, stopped: boolean, max = 3,
         const { data: hf, error: he } = await db.rpc("tally_held_front", { p_book: book, p_device: claim.dev.id, p_bridge: claim.bridge, p_max: max - out.length });
         if (he) { if (missingFn(String(he.message || ""))) heldFrontMissing = Date.now(); else fail("held_front", he); }
         for (const d of Array.isArray(hf) ? hf as any[] : []) {
+          if (out.length >= max) break;
+          const day = String(d?.day || "");
+          if (!isDay(day) || out.some((x) => x.company === company && x.day === day)) continue;
+          out.push({ company, company_guid: guid, day, fetch: true, types: CHECK_TYPES, ...chosenOf(d), ...(markCheck ? { check: true } : {}), kind: "check" });
+        }
+        if (out.length >= max) continue;
+      }
+      // next-gap-autoread (migration 160): the recorder's gap (Tally's number ahead of FinCom's) open 2 minutes, nothing of
+      // the book held, no posting of its company waiting: its days (newest first, each at most once per 15 minutes) next,
+      // before the period's days, read by the bridge itself as check days (the same whole-day read: no new Tally request);
+      // a read that matches closes the gap ("checked against Tally"), one that shows a missing entry brings it in. A cloud
+      // without 160: as before (asked again in 10 minutes)
+      if (Date.now() - gapFrontMissing >= 600000 && out.length < max) {
+        const { data: gf, error: ge } = await db.rpc("tally_gap_front", { p_book: book, p_max: max - out.length });
+        if (ge) { if (missingFn(String(ge.message || ""))) gapFrontMissing = Date.now(); else fail("gap_front", ge); }
+        for (const d of Array.isArray(gf) ? gf as any[] : []) {
           if (out.length >= max) break;
           const day = String(d?.day || "");
           if (!isDay(day) || out.some((x) => x.company === company && x.day === day)) continue;
