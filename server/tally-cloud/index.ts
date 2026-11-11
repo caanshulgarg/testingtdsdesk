@@ -271,6 +271,12 @@ const ANON = Deno.env.get("SUPABASE_ANON_KEY")!;
 // "*": the Tally bridge (no browser) and the app both call it, and every call carries a device key or a sign-in token
 const cors = corsFor(null, { any: true, methods: "POST, OPTIONS" });
 const reply = (code: number, body: unknown) => new Response(JSON.stringify(body), { status: code, headers: { ...cors, "Content-Type": "application/json" } });
+// reliability audit C2 (11-Nov-2026): the database could not be read (an ERROR, not "no such row"): the caller is told
+// FinCom is busy and to come again (503, Retry-After), never that its key is not valid: on 11-Nov-2026 a bridge was
+// answered "key is not valid any more. Connect it again" 113 times while the database was down. The bridge takes any
+// answer that is not 200 as "not sent, tried again" and keeps its key
+const BUSY_WORDS = "FinCom is busy, trying again";
+const busyReply = () => new Response(JSON.stringify({ ok: false, busy: true, retry: true, error: BUSY_WORDS }), { status: 503, headers: { ...cors, "Content-Type": "application/json", "Retry-After": "30" } });
 
 async function sha256(s: string) {
   const h = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
@@ -485,13 +491,23 @@ const otherSaid = new Set<string>();
 // review 46 M1: the book of a company, per firm and company, for 5 minutes (not linked: 1 minute). tally_book_for writes
 // tally_books (in the Realtime publication) at every call; a client unlinked or relinked is seen by the beat within that time
 const bookMemo = new Map<string, { book: string | null; t: number }>();
+// reliability audit C4 (11-Nov-2026): lookups of one beat now run side by side; two of them asking the same company's
+// book while the first call is still out share that call (bookAsk), so a company is asked once, as when they ran in turn
+const bookAsk = new Map<string, Promise<string | null>>();
 async function bookForBeat(firm: string, name: string) {
   const k = firm + "|" + name, m = bookMemo.get(k);
   if (m && Date.now() - m.t < (m.book ? 300000 : 60000)) return m.book;
-  const book = await bookFor(firm, name);
-  if (bookMemo.size > 5000) bookMemo.clear();
-  bookMemo.set(k, { book, t: Date.now() });
-  return book;
+  let p = bookAsk.get(k);
+  if (!p) {
+    p = (async () => {
+      const book = await bookFor(firm, name);
+      if (bookMemo.size > 5000) bookMemo.clear();
+      bookMemo.set(k, { book, t: Date.now() });
+      return book;
+    })().finally(() => { bookAsk.delete(k); });
+    bookAsk.set(k, p);
+  }
+  return await p;
 }
 // next-link-follow (migration 146; the owner, 08-Nov-2026: "it should connect to both Tally rather than switching"): for
 // every linked company this beat says open (at most 200, in one call: tally_read_serving_many), the bridges of the SAME
@@ -4339,7 +4355,9 @@ Deno.serve(sentry.wrap(async (req) => {
   // the database's timer: the queue's pieces (migration-13); its key is kept in the vault
   const workKey = (req.headers.get("x-fincom-work") || "").trim();
   if (workKey) {
-    const { data: okKey } = await db.rpc("tally_work_key_ok", { p_key: workKey });
+    const { data: okKey, error: keyErr } = await db.rpc("tally_work_key_ok", { p_key: workKey });
+    // the key could not be checked (the database did not answer): busy, the timer comes again in 30 s
+    if (keyErr) { fail("work_key", keyErr); console.error("tally-ingest: the work key could not be checked:", String(keyErr.message || "").slice(0, 200)); return busyReply(); }
     if (okKey !== true) return reply(401, { ok: false, error: "not allowed" });
     try { return reply(200, { ok: true, done: await work(100000) }); } catch (e) { fail("work", e); console.error("tally-ingest work", (e as Error).message); return reply(500, { ok: false, error: (e as Error).message }); }
   }
@@ -4353,7 +4371,10 @@ Deno.serve(sentry.wrap(async (req) => {
   const len = Number(req.headers.get("content-length") || 0);
   if (len > MAX_BODY) return reply(413, { ok: false, error: "Too much in one go; send fewer days at a time." });
   // every column: wake_token is there from migration-13 on, and the heartbeat works without it
-  const { data: dev } = await db.from("tally_devices").select("*").eq("key_hash", await sha256(key)).maybeSingle();
+  const { data: dev, error: devErr } = await db.from("tally_devices").select("*").eq("key_hash", await sha256(key)).maybeSingle();
+  // the lookup FAILED (a database error is not "no such key"): busy, asked again; the 401 below only when the database
+  // answered and holds no such key, or holds it revoked
+  if (devErr) { fail("device_lookup", devErr); console.error("tally-ingest: the computer key could not be looked up:", String(devErr.code || ""), String(devErr.message || "").slice(0, 200)); return busyReply(); }
   if (!dev || dev.revoked) return reply(401, { ok: false, error: "This computer's key is not valid any more. Connect it again from FinCom." });
   let body: any;
   try { body = JSON.parse(await readBody(req)); } catch (e) { return (e as Error).message === "too large" ? reply(413, { ok: false, error: "Too much in one go; send fewer days at a time." }) : reply(400, { ok: false, error: "Bad request" }); }
@@ -4419,7 +4440,18 @@ Deno.serve(sentry.wrap(async (req) => {
         // how many days wait to be sent. FinCom's clients list shows a light from it. Nothing of the books is in it
         const b = body || {};
         const s = (v: unknown, n = 80) => typeof v === "string" ? v.slice(0, n) : "";
-        const beat = { at: new Date().toISOString(), tally: !!b.tally, updating: !!b.updating, dailyAt: s(b.dailyAt, 5), lastRun: s(b.lastRun, 8),
+        // reliability audit C4 (11-Nov-2026): three lookups that do not depend on each other, asked side by side instead of
+        // one after another (the same calls, the same answers; the beat's time is taken first, as before)
+        const beatAt = new Date().toISOString();
+        const prevInfo = ((dev as any).info && typeof (dev as any).info === "object") ? (dev as any).info : {};
+        const me = bridgeOf(dev, body, false);
+        const [speedBooks, pickups, co] = await Promise.all([
+          speedBooksFor(firm, b),
+          // bridge 2.5.10: the days as the bridge took them (pickupsOf); none from an older bridge
+          pickupsOf(b, prevInfo, me.id, (c: string) => bookForBeat(firm, c)),
+          // migration 54: switched to changes only by an owner (said on the bridge's line and to the bridge)
+          changesOnly(dev, me.id)]);
+        const beat = { at: beatAt, tally: !!b.tally, updating: !!b.updating, dailyAt: s(b.dailyAt, 5), lastRun: s(b.lastRun, 8),
           // next-tally-connectfix: a company's name trimmed of spaces and CR/LF (staging: one came with "\r\n\r\n" at its end)
           open: (Array.isArray(b.open) ? b.open : []).slice(0, 50).map((x: unknown) => coTrim(x)),
           // bridge 1.14.9: each Tally port as the bridge sees it (open, another user's, how many companies, the error)
@@ -4473,19 +4505,13 @@ Deno.serve(sentry.wrap(async (req) => {
           ...(b.recorderState && typeof b.recorderState === "object" ? { recorderStuck: stuckOf(b.recorderState) } : {}),
           // FinCom Bridge 2.4.5: each tally.ini and what the bridge did with FinCom's add-on line in it (Help & support:
           // "User TDL = No" left alone), and the older entries being read (per company the day and its phase; the days to upload)
-          ...tallyIniOf(b), ...periodPullOf(b, await speedBooksFor(firm, b)), ...oldDaysTestOf(b), ...updateOf(b),
+          ...tallyIniOf(b), ...periodPullOf(b, speedBooks), ...oldDaysTestOf(b), ...updateOf(b),
           // next-fix-read-any-bridge (bridge 2.5.5): why its run waits before reading Tally, and an Update now queued behind it
           ...keepWaitOf(b),
           // bridge 2.5.10: why its last run ended, when it ran again (lastStopOf)
           ...(lastStopOf(b) ? { lastStop: lastStopOf(b) } : {}),
           windowsUser: s(b.windowsUser, 60), bridgePort: Math.max(0, Math.min(65535, Math.floor(Number(b.bridgePort) || 0))), tallyPort: Math.max(0, Math.min(65535, Math.floor(Number(b.tallyPort) || 0))), dataFolder: s(b.dataFolder, 260) };
-        const prevInfo = ((dev as any).info && typeof (dev as any).info === "object") ? (dev as any).info : {};
-        const me = bridgeOf(dev, body, false);
-        // bridge 2.5.10: the days as the bridge took them (pickupsOf); none from an older bridge
-        const pickups = await pickupsOf(b, prevInfo, me.id, (c: string) => bookForBeat(firm, c));
         if (pickups.length) (beat as any).pickups = pickups;
-        // migration 54: switched to changes only by an owner (said on the bridge's line and to the bridge)
-        const co = await changesOnly(dev, me.id);
         if (co) (me.entry as any).changesOnly = true;
         // migration-35: Stop reading from FinCom, Resume, the version it may install (and the pilot's evidence)
         const ctl = await bridgeControl(dev, firm, me, prevInfo);
@@ -4562,13 +4588,15 @@ Deno.serve(sentry.wrap(async (req) => {
           const x = v as any;
           if (x && Date.parse(String(x.at)) > Date.now() - 600000) stock[k] = { from: String(x.from || ""), to: String(x.to || ""), at: String(x.at), again: x.again === true };
         }
-        const { data: lastJob } = await db.from("tally_post_jobs").select("updated_at").eq("device_id", dev.id).order("updated_at", { ascending: false }).limit(1);
+        // reliability audit C4: the last posting's time and the recorder's check (below) are asked side by side
+        const [{ data: lastJob }, recorder] = await Promise.all([
+          db.from("tally_post_jobs").select("updated_at").eq("device_id", dev.id).order("updated_at", { ascending: false }).limit(1),
+          recorderGaps(dev, firm, me.id, beatChanges(b))]);
         const activityAt = [prevInfo.activityAt, want, lastJob && lastJob[0] && lastJob[0].updated_at].filter((x) => x && !isNaN(Date.parse(String(x))))
           .map((x) => new Date(String(x)).toISOString()).sort().pop() || "";
         // phase 2 (migration 44): a PC without the add-on - the change numbers compared with the recorder's lines. Round 19: read
         // from both shapes of the beat (companies[] first, else the top-level startPoint / changeNumbers of 2.1.9), the
-        // starting point recorded first (tally_start_point, once)
-        const recorder = await recorderGaps(dev, firm, me.id, beatChanges(b));
+        // starting point recorded first (tally_start_point, once): recorderGaps, asked above
         // round 19 (migration 46): the owner's switch "Trial tools on this computer" (tally_devices.trial_tools); a cloud
         // without the column answers false
         const trialTools = (dev as any).trial_tools === true;
@@ -4581,11 +4609,17 @@ Deno.serve(sentry.wrap(async (req) => {
         const gate = servingGate(await servingFor(firm, b), dev.id, me.id);
         const bRead = gate.others.size ? beatOnly(b, (n: string) => !gate.others.has(n)) : b;
         // FinCom Bridge 2.2.2: the lines held without their entry, asked of Tally again by the bridge (left out when none)
-        const heldLines = await heldLinesFor(dev, firm, me.id, me.entry.version, gate.follow);
         // 06-Oct-2026: this bridge's own held lines without their entry's body or with a placeholder GUID, at most 20
-        const refetch = await refetchFor(dev, firm, me.id, me.entry.version, gate.follow);
         // bridge 2.3.1 (masters): the ledgers this bridge's held lines wait for, fetched by the bridge before the entry
-        const held = await ledgersWantedFor(dev, firm, me.id);
+        // reliability audit C4: the held lines and then the refetch (one after the other: both claim lines), beside them
+        // the ledgers wanted and the older-entries switch (fetchOnFor, explained below): reads that depend on neither
+        const [[heldLines, refetch], held, periodFetch] = await Promise.all([
+          (async () => {
+            const h = await heldLinesFor(dev, firm, me.id, me.entry.version, gate.follow);
+            return [h, await refetchFor(dev, firm, me.id, me.entry.version, gate.follow)] as const;
+          })(),
+          ledgersWantedFor(dev, firm, me.id),
+          fetchOnFor(dev)]);
         // 15-Oct-2026 (migration 89): the ledgers the live entries use that FinCom lacks, in the room left of the 20, or the
         // full ledger list ("ledgers", as the ledger chooser asks it); nothing while reading is paused or stopped
         const auto = await autoLedgersFor(firm, bRead, held, !!beat.paused || !!beat.readStopped || !!(info as any).readStop);
@@ -4598,7 +4632,7 @@ Deno.serve(sentry.wrap(async (req) => {
         // key nobody switched turned on); the column stays the one switch the page and migrations 133, 135-137 read.
         // next-link-follow (migration 146): a key nobody ever switched (period_fetch_at null) that is off also takes the switch
         // of a key of the firm on the same computer that has it on (tally_fetch_on); a key a person turned off stays off
-        const periodFetch = await fetchOnFor(dev);
+        // (periodFetch: asked above, with the held lines)
         // ROUND 103 (evening): outside this computer's office hours up to 30 days an answer (the bridge reads day after day
         // while Tally is idle and asks again when they are done); the switch above still wins
         const periodNight = periodFetch && periodNightNow(dev);
