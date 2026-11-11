@@ -32,9 +32,14 @@
 //     o.limit, 3000), reads them (gst_share_rows), works out their shares (engine.js shares, entryShares of gst3b.js) and
 //     writes them (gst_share_put: the months touched summed again under the book's lock). An entry on a ledger the
 //     context has not got: nothing kept, the context is made again on the next run. -> {ok, ctx | entries, more}
-//   POST {action: "share_parity", book_id, ym, reg?}: the month by today's engine on the whole book against the sums
+//   POST {action: "share_parity", book_id, ym?, reg?}: the month (none: every month the book has sums for, each
+//     registration and all; the timer's nightly run) by today's engine on the whole book against the sums
 //     (gst_month_get), every figure to the paisa, kept in calc_parity (gst_parity_put); a context that differs from the
-//     one kept with the same version (a guess that moved with the entries) marks its entries due. -> {ok, same, diffs}
+//     one kept with the same version (a guess that moved with the entries) marks its entries due. -> {ok, same, checked}
+//   Both: one run a book at a time (gst_share_lease; a book busy is skipped: {busy: true}); the firm's switches as
+//     above; within the run's own time (deps.total, 1500 ms): a rebuild of the context that cannot finish backs off
+//     (gst_share_backoff: 10 minutes, doubling to a day), a parity that cannot is kept as not checked (ok null,
+//     notes.skipped). An entry whose share fails is kept as an error (calc_seen) and the batch goes on.
 //   A paused firm or a switched-off client (the console's switches) is refused, by both.
 //   Any failure: JSON {ok: false, error} with the CORS headers.
 import { corsFor } from "../_shared/cors.ts";
@@ -162,7 +167,16 @@ export function handler(deps: Deps) {
     return { rows, cl };
   };
   const bookOf = async (id: string) => ((await rest("/rest/v1/tally_books?select=book_id,firm_id,client_id,company,from_date,open_as_on,ledgers_at&book_id=eq." + enc(id))) || [])[0] || null;
-  async function shareSweep(id: string, limit: number) {
+  // the run's own time (reading answers and the work here; never the wait for the database): over SHARE_BUDGET a
+  // context rebuild or a parity stops, says so and backs off (gst_share_backoff) instead of trying again every minute
+  const SHARE_BUDGET = deps.total || 1500;
+  // one run a book at a time (gst_share_lease): the lease is let go at the end, or runs out
+  async function underLease<T>(id: string, fn: (run: string) => Promise<T>): Promise<T | { ok: true, busy: true }> {
+    const run = crypto.randomUUID();
+    if ((await rpc("gst_share_lease", { p_book: id, p_run: run, p_secs: 120 })) !== true) return { ok: true, busy: true };
+    try { return await fn(run); } finally { await rpc("gst_share_unlease", { p_book: id, p_run: run }).catch(() => null); }
+  }
+  async function shareSweep(id: string, limit: number, run: string) {
     spent = 0;
     const book = await bookOf(id);
     if (!book || !book.client_id) return { ok: false, error: "no such book" };
@@ -170,63 +184,101 @@ export function handler(deps: Deps) {
     if (gate) return { ok: false, kind: "gate", reason: gate.reason, error: gate.error };
     const stamp = String(await rpc("gst_share_ctx_version", { p_book: book.book_id }) || "");
     const kept = (await rpc("gst_share_ctx_get", { p_book: book.book_id })) || null;
-    if (!kept || kept.stamp !== stamp || kept.engine !== ENGINE || !kept.ctx) {
-      // the context made from the whole book, and the entries it moves due
-      const { rows } = await wholeBook(book);
-      const t0 = Date.now(), ctx = contextOf(rows);
-      rows.heads = rows.lines = rows.bills = []; rows.made = null;
+    if (!kept || !kept.ctx || kept.stamp !== stamp || kept.engine !== ENGINE) {
+      if (kept && kept.backoff) return { ok: true, book: book.book_id, ctx: true, backoff: kept.backoff, more: false };
+      // the context made from the whole book, and the entries it moves due; a book too big to read and make within the
+      // run's time: nothing kept, backed off
+      const t0 = Date.now();
+      let ctx: any;
+      try {
+        const { rows } = await wholeBook(book);
+        if (spent > SHARE_BUDGET * 0.7) {
+          const until = await rpc("gst_share_backoff", { p_book: book.book_id, p_what: "ctx", p_why: "reading the book took " + spent + " ms of the run's " + SHARE_BUDGET });
+          return { ok: true, book: book.book_id, ctx: true, big: true, backoff: until, spentMs: spent, more: false };
+        }
+        ctx = contextOf(rows);
+        rows.heads = rows.lines = rows.bills = []; rows.made = null;
+      } catch (e) {
+        const until = await rpc("gst_share_backoff", { p_book: book.book_id, p_what: "ctx", p_why: String((e as Error)?.message || e).slice(0, 300) }).catch(() => null);
+        return { ok: false, book: book.book_id, ctx: true, error: String((e as Error)?.message || e).slice(0, 300), backoff: until };
+      }
       const d = kept && kept.ctx && kept.engine === ENGINE ? ctxDiff(kept.ctx, ctx) : { all: true, ledgers: [], guids: [] };
-      const put = await rpc("gst_share_ctx_put", { p_book: book.book_id, p_stamp: stamp, p_engine: ENGINE, p_ctx: ctx, p_ledgers: d.ledgers, p_guids: d.guids, p_all: d.all });
-      return { ok: !!(put && put.ok), book: book.book_id, ctx: true, all: d.all, ledgers: d.ledgers.length, guids: d.guids.length, due: put && put.due, ms: Date.now() - t0, spentMs: spent, more: true };
+      const put = await rpc("gst_share_ctx_put", { p_book: book.book_id, p_run: run, p_stamp: stamp, p_engine: ENGINE, p_ctx: ctx, p_ledgers: d.ledgers, p_guids: d.guids, p_all: d.all });
+      if (put && put.ok) await rpc("gst_share_backoff_clear", { p_book: book.book_id, p_what: "ctx" }).catch(() => null);
+      return { ok: !!(put && put.ok), error: put && put.error, book: book.book_id, ctx: true, all: d.all, ledgers: d.ledgers.length, guids: d.guids.length, due: put && put.due, ms: Date.now() - t0, spentMs: spent, more: true };
     }
     const pick = await rpc("gst_share_pick", { p_book: book.book_id, p_limit: limit });
     if (!pick || !pick.ok) return { ok: false, error: (pick && pick.error) || "the pick failed" };
     const guids: string[] = pick.guids || [];
     if (!guids.length) return { ok: true, book: book.book_id, entries: 0, more: false };
+    // the client's record, as the engine's month has it (CO())
+    const cl = ((await rest("/rest/v1/clients?select=id,data&firm_id=eq." + enc(String(book.firm_id)) + "&id=eq." + enc(String(book.client_id)))) || [])[0];
     const packed = await rpc("gst_share_rows", { p_book: book.book_id, p_guids: guids });
     const t0 = Date.now(), { heads, lines, bills } = unpack(packed);
-    const r = shares({ client: String(book.client_id), heads, lines, bills }, kept.ctx);
+    const r = shares({ client: String(book.client_id), co: (cl && cl.data) || {}, heads, lines, bills }, kept.ctx);
     // what is kept as seen: the copy at the pick (an entry changed since is picked again); gone from the copy: forgotten
     const seen = Array.isArray(pick.seen) ? pick.seen : [];
     if (r.unknown.length) {
       // a ledger the context has not got: the context made again first (nothing kept of this batch)
-      await rpc("gst_share_ctx_put", { p_book: book.book_id, p_stamp: "stale:" + stamp, p_engine: ENGINE, p_ctx: kept.ctx, p_ledgers: [], p_guids: [], p_all: false });
+      await rpc("gst_share_ctx_put", { p_book: book.book_id, p_run: run, p_stamp: "stale:" + stamp, p_engine: ENGINE, p_ctx: kept.ctx, p_ledgers: [], p_guids: [], p_all: false });
       return { ok: true, book: book.book_id, entries: 0, unknown: r.unknown.slice(0, 20), more: true };
     }
     const ms = Date.now() - t0;
-    const put = await rpc("gst_share_put", { p_book: book.book_id, p_at: pick.at, p_shares: r.shares, p_seen: seen });
-    return { ok: !!(put && put.ok), book: book.book_id, entries: seen.length, shares: r.shares.length, months: put && put.months, ms, spentMs: spent, more: !!pick.more };
+    const put = await rpc("gst_share_put", { p_book: book.book_id, p_run: run, p_at: pick.at, p_shares: r.shares, p_seen: seen, p_errors: r.errors });
+    return { ok: !!(put && put.ok), error: put && put.error, book: book.book_id, entries: seen.length, shares: r.shares.length, errors: r.errors.length, months: put && put.months, ms, spentMs: spent, more: !!pick.more };
   }
-  async function shareParity(id: string, ym: string, reg: string) {
+  // ym "" (the timer's nightly run): every month the book has sums for, each registration and all, as far as the run's
+  // time goes (the months left said in the last row's notes)
+  async function shareParity(id: string, ym: string, reg: string, run: string) {
     spent = 0;
     const book = await bookOf(id);
     if (!book || !book.client_id) return { ok: false, error: "no such book" };
+    const gate = await firmGate(viaRest(rest, SERVICE), String(book.firm_id), String(book.client_id));
+    if (gate) return { ok: false, kind: "gate", reason: gate.reason, error: gate.error };
+    let asks: [string, string][] = [[ym, reg]];
+    if (!ym) {
+      const ms = ((await rest("/rest/v1/gst_month?select=ym,reg&book_id=eq." + enc(book.book_id) + "&order=ym")) || []) as any[];
+      const yms = Array.from(new Set(ms.map((m) => String(m.ym)))).sort(), regs = Array.from(new Set(ms.map((m) => String(m.reg)).filter(Boolean))).sort();
+      asks = yms.flatMap((m) => [[m, ""] as [string, string]].concat(regs.map((g) => [m, g] as [string, string])));
+    }
+    const skip = async (why: string, left: [string, string][]) => {
+      for (const [m, g] of left.slice(0, 1)) await rpc("gst_parity_put", { p_book: book.book_id, p_ym: m, p_reg: g, p_engine: ENGINE, p_ok: null, p_max: 0, p_diffs: [],
+        p_notes: { skipped: why, left: left.length, spentMs: spent } });
+      return { ok: true, book: book.book_id, skipped: why, left: left.length };
+    };
+    if (!asks.length) return { ok: true, book: book.book_id, checked: 0 };
     const { rows } = await wholeBook(book);
-    const t0 = Date.now(), e = engineMonth(rows, ym, reg);
-    const month = ((await rpc("gst_month_get", { p_book: book.book_id, p_ym: ym })) || []) as any[];
-    const c = compare(e.sums, cloudSums(month, reg));
-    const head = month.find((m) => m.sec === "*");
-    // the context the shares were made on against the whole book's now (the same version: a guess moved with the entries)
+    if (spent > SHARE_BUDGET * 0.7) return await skip("reading the book took " + spent + " ms of the run's " + SHARE_BUDGET, asks);
+    const t0 = Date.now(), used = () => spent + Date.now() - t0;
+    let b: any = null, done = 0, same = 0, first: any = null;
     const kept = (await rpc("gst_share_ctx_get", { p_book: book.book_id })) || null;
+    for (let k = 0; k < asks.length; k++) {
+      if (k && used() > SHARE_BUDGET) return Object.assign(await skip("over the run's time after " + done + " checks", asks.slice(k)), { checked: done, same });
+      const [m, g] = asks[k], e = engineMonth(rows, m, g, b ? { books: b } : undefined); b = e.books;
+      const month = ((await rpc("gst_month_get", { p_book: book.book_id, p_ym: m })) || []) as any[];
+      const c = compare(e.sums, cloudSums(month, g)), head = month.find((x) => x.sec === "*");
+      const notes = { status: head ? head.status : "none", market: e.market, ms: used() };
+      await rpc("gst_parity_put", { p_book: book.book_id, p_ym: m, p_reg: g, p_engine: ENGINE, p_ok: c.ok, p_max: c.max, p_diffs: c.diffs.slice(0, 500), p_notes: notes });
+      done++; if (c.ok) same++; else if (!first) first = { ym: m, reg: g, diffs: c.diffs.slice(0, 5) };
+    }
+    // the context the shares were made on against the whole book's now (the same version: a guess moved with the entries)
     let drift: any = null;
-    if (kept && kept.ctx && kept.engine === ENGINE) {
-      const now = ctxOf(e.books), d = ctxDiff(kept.ctx, now);
+    if (b && kept && kept.ctx && kept.engine === ENGINE) {
+      const now = ctxOf(b), d = ctxDiff(kept.ctx, now);
       if (d.all || d.ledgers.length || d.guids.length) {
         drift = { all: d.all, ledgers: d.ledgers.slice(0, 50), guids: d.guids.slice(0, 50) };
-        await rpc("gst_share_ctx_put", { p_book: book.book_id, p_stamp: kept.stamp, p_engine: ENGINE, p_ctx: now, p_ledgers: d.ledgers, p_guids: d.guids, p_all: d.all });
+        await rpc("gst_share_ctx_put", { p_book: book.book_id, p_run: run, p_stamp: kept.stamp, p_engine: ENGINE, p_ctx: now, p_ledgers: d.ledgers, p_guids: d.guids, p_all: d.all });
       }
     }
-    const notes = { status: head ? head.status : "none", market: e.market, drift, ms: Date.now() - t0 };
-    const pid = await rpc("gst_parity_put", { p_book: book.book_id, p_ym: ym, p_reg: reg, p_engine: ENGINE, p_ok: c.ok, p_max: c.max, p_diffs: c.diffs.slice(0, 500), p_notes: notes });
-    return { ok: true, book: book.book_id, ym, reg, same: c.ok, max: c.max, diffs: c.diffs.length, first: c.diffs.slice(0, 5), notes, id: pid };
+    return { ok: true, book: book.book_id, ym, reg, checked: done, same: same === done, sameN: same, first, drift, ms: used() };
   }
 
-    return { rest, rpc, kick, warm, shareSweep, shareParity };
+    return { rest, rpc, kick, warm, shareSweep, shareParity, underLease };
   };
 
   return async (req: Request): Promise<Response> => {
     const cors = corsFor(req);
-    const { rest, rpc, kick, warm, shareSweep, shareParity } = per();
+    const { rest, rpc, kick, warm, shareSweep, shareParity, underLease } = per();
     const reply = (code: number, body: unknown) => new Response(JSON.stringify(body), { status: code, headers: { ...cors, "Content-Type": "application/json" } });
     try {
       if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
@@ -247,10 +299,10 @@ export function handler(deps: Deps) {
         if (!inside) return reply(401, { ok: false, error: "Not allowed." });
         const id = String(body.book_id || "");
         if (!/^[0-9a-f-]{36}$/i.test(id)) return reply(400, { ok: false, error: "Say the book (book_id)." });
-        if (action === "share_sweep") return reply(200, await shareSweep(id, Math.max(1, Math.min(5000, Number(body.limit) || 3000))));
+        if (action === "share_sweep") { const n = Math.max(1, Math.min(5000, Number(body.limit) || 3000)); return reply(200, await underLease(id, (run) => shareSweep(id, n, run))); }
         const ym = String(body.ym || ""), reg = String(body.reg || "");
-        if (!YM.test(ym) || (reg && !REG.test(reg))) return reply(400, { ok: false, error: "Say the month (YYYYMM) and, if one, the registration (its state code)." });
-        return reply(200, await shareParity(id, ym, reg));
+        if ((ym && !YM.test(ym)) || (reg && (!REG.test(reg) || !ym))) return reply(400, { ok: false, error: "Say the month (YYYYMM; none: every month) and, if one, the registration (its state code)." });
+        return reply(200, await underLease(id, (run) => shareParity(id, ym, reg, run)));
       }
       if (action !== "month") return reply(400, { ok: false, error: "Unknown action." });
       const client = String(body.client_id || ""), reg = String(body.reg || ""), ym = String(body.ym || "");

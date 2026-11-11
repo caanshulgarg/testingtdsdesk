@@ -48,9 +48,12 @@ const clone = (o) => JSON.parse(JSON.stringify(o));
       // a debit note raised on a customer (R1 DBNR)
       extra.dn = add("2025-10-07", "Debit Note", "Birchwood Retail", [["Birchwood Retail", -5900], ["Sales - Goods", 5000, {hsn: "8471", rate: 18}], ["Output CGST", 450], ["Output SGST", 450]], {gstin: "07AABCB7310K1Z2", pos: "Delhi"});
       // a non-GST sale and a nil-rated one
+      // a party whose name came from Tally with its "&" escaped (the copy keeps it so: tally_nm takes out line breaks only)
+      extra.amp = add("2025-11-09", "Sales", "Oak &amp; Fern Traders", [["Oak &amp; Fern Traders", -11800], ["Sales - Goods", 10000, {hsn: "8471", rate: 18}], ["Output CGST", 900], ["Output SGST", 900]], {pos: "Delhi"});
       extra.ng = add("2025-11-04", "Sales", "Birchwood Retail", [["Birchwood Retail", -8000], ["Sales - Exempt", 8000]], {gstin: "07AABCB7310K1Z2", pos: "Delhi", gst_taxability: "Non-GST", gst_alter_id: 900099});
     }
-    return {client: CLIENT, co: w.co, book: Object.assign({}, w.book, {book_id: "bbbbbbbb-0164-4000-8000-000000000001", client_id: CLIENT}), heads, lines, bills, ledgers: w.ledgers, groups: w.groups,
+    const ledgers = extra ? w.ledgers.concat([{name: "Oak &amp; Fern Traders", parent: "Sundry Debtors", open: 0, gstin: "07AACCO1234F1Z5"}]) : w.ledgers;
+    return {client: CLIENT, co: w.co, book: Object.assign({}, w.book, {book_id: "bbbbbbbb-0164-4000-8000-000000000001", client_id: CLIENT}), heads, lines, bills, ledgers, groups: w.groups,
       items: items(w.work), sales: [], runs: {}, work: w.work};
   }
   // the cloud's side, in memory as migration 164 keeps it: gst_share by entry, summed to a month (paise, as numeric adds)
@@ -177,6 +180,26 @@ const clone = (o) => JSON.parse(JSON.stringify(o));
     sweep(st, rows, dirty.concat(touching(rows, d.ledgers), d.guids));
     ok(hit.length > 0, "renamed: " + hit.length + " entries on " + days.size + " dirty days worked out again");
     parity(st, rows, "a ledger renamed (" + from + ")");
+  }
+  // a ledger named with an escaped "&": its GSTIN changed in the copy's ledger list (kept under the cleaned name, "Oak &
+  // Fern Traders"): the context names the form the lines carry too, so the SQL finds its entries (tally_lines.ledger)
+  {
+    rows.ledgers = rows.ledgers.map((l) => l.name === "Oak &amp; Fern Traders" ? Object.assign({}, l, {gstin: "07AACCO1234F2Z4"}) : l);
+    const d = reCtx(st, rows);
+    ok(d.ledgers.includes("Oak &amp; Fern Traders") && d.ledgers.includes("Oak & Fern Traders"), "an '&' ledger changed: both its forms named (" + d.ledgers.join(", ") + ")");
+    const hit = touching(rows, d.ledgers);
+    ok(hit.includes(extra.amp), "so its entry is found by the name its lines carry");
+    sweep(st, rows, hit.concat(d.guids));
+    parity(st, rows, "an '&' ledger's GSTIN changed");
+  }
+  // one entry that fails: kept as an error, the rest of the batch worked out
+  {
+    const ctx2 = Object.assign({}, st.ctx, {map: Object.assign({}, st.ctx.map)});
+    Object.defineProperty(ctx2.map, "Oak &amp; Fern Traders", {enumerable: true, get(){ return {get kind(){ throw new Error("made-up failure"); }}; }});
+    const g = new Set(rows.heads.slice(60, 70).map((h) => h.guid).concat([extra.amp])), sub = (l) => l.filter((z) => g.has(String(z.guid)));
+    const r = eng.shares({client: rows.client, co: rows.co, heads: sub(rows.heads), lines: sub(rows.lines), bills: sub(rows.bills)}, ctx2);
+    ok(r.errors.length === 1 && r.errors[0].guid === extra.amp && /made-up failure/.test(r.errors[0].error) && !r.shares.some((x) => x.guid === extra.amp) && r.shares.length > 0,
+      "an entry whose share fails: one error with its words, the other " + (g.size - 1) + " entries worked out");
   }
   const sharesFinal = [...st.share.values()].flat();
 

@@ -15,6 +15,12 @@ port 31864 unless PG164_PORT; never a real database), made-up rows only, after m
   4. the context: put keeps it; the entries on a ledger changed (a line or the party), named, or all are due
   5. members: anon and authenticated may not read calc_seen, gst_share, tally_calc_dirty nor call a function; a member
      reads gst_month and calc_parity of its own firm only; the service role's grants
+  3b. (review) a month whose entries have no share (a receipt edited, an entry moved) ends fresh; an entry that fails is
+     kept as an error and not picked again until it changes; two runs on one book: the second waits for the lease, a
+     late put of the first is refused (lease lost); a day written again moves an already-due entry's due_at on; a share
+     with no GUID is refused
+  4b. backing off (10 minutes, doubling) and the timer's books (due: days written, entries due, no context; not leased,
+     not backing off; nightly: books with sums); a parity not checked kept with ok null
   6. a book deleted takes every row of the new tables
   7. the triggers' cost: 100,000 entries (and 200,000 lines) inserted in one statement each, and 2,000 entries one
      statement each (as the recorder), with and without the triggers"""
@@ -39,16 +45,23 @@ dels = re.findall(r"delete from (\w+)", code)
 ok(dels and all(d in ("gst_month", "gst_share", "calc_seen") for d in dels), "deletes only rows of its own tables (%s)" % sorted(set(dels)))
 ok(sorted(re.findall(r"create trigger %i after (insert|update|delete)", code)) == ["delete", "insert", "update"] and "array['tally_vouchers', 'tally_lines', 'tally_bills']" in code
    and code.count("for each statement") == 3 and "referencing" in code and "tally_days" not in re.sub(r"--.*", "", text.lower()), "statement triggers on entries, lines and bills; tally_days never written")
-FNS = {"gst_share_ctx_version": "(uuid)", "gst_share_ctx_get": "(uuid)", "gst_share_ctx_put": "(uuid, text, text, jsonb, text[], text[], boolean)", "gst_share_pick": "(uuid, integer)",
-       "gst_share_rows": "(uuid, text[])", "gst_share_put": "(uuid, timestamptz, jsonb, jsonb)", "gst_month_get": "(uuid, text)", "gst_parity_put": "(uuid, text, text, text, boolean, numeric, jsonb, jsonb)"}
+FNS = {"gst_share_ctx_version": "(uuid)", "gst_share_ctx_get": "(uuid)", "gst_share_ctx_put": "(uuid, text, text, text, jsonb, text[], text[], boolean)", "gst_share_pick": "(uuid, integer)",
+       "gst_share_rows": "(uuid, text[])", "gst_share_put": "(uuid, text, timestamptz, jsonb, jsonb, jsonb)", "gst_month_get": "(uuid, text)", "gst_parity_put": "(uuid, text, text, text, boolean, numeric, jsonb, jsonb)",
+       "gst_share_lease": "(uuid, text, integer)", "gst_share_unlease": "(uuid, text)", "gst_share_backoff": "(uuid, text, text)", "gst_share_backoff_clear": "(uuid, text)",
+       "gst_share_books_due": "(integer)", "gst_share_books_all": "(integer)"}
 for fn, sig in FNS.items():
     ok(("revoke all on function public.%s%s from public, anon, authenticated;" % (fn, sig)) in text and ("grant execute on function public.%s%s to service_role;" % (fn, sig)) in text, fn + ": service role only")
-INTERNAL = ["gst_share_month_sum", "gst_share_stale", "tally_calc_dirty_ins", "tally_calc_dirty_del", "tally_calc_dirty_upd"]
+INTERNAL = ["gst_share_month_sum", "gst_share_stale", "gst_share_holds", "tally_calc_dirty_ins", "tally_calc_dirty_del", "tally_calc_dirty_upd"]
 ok(sorted(set(re.findall(r"create or replace function public\.(\w+)\(", code))) == sorted(list(FNS) + INTERNAL), "adds only its own functions")
 ok(all(re.search(r"revoke all on function [^;]*public\.%s\([^;]*from public, anon, authenticated, service_role;" % f, text) for f in INTERNAL), "the internal ones granted to nobody")
 ok("grant select on public.gst_month, public.calc_parity to authenticated;" in text and "grant select, insert, update, delete on public.calc_seen, public.gst_share, public.gst_month, public.calc_parity to service_role;" in text
    and "revoke all on public.tally_calc_dirty from public, anon, authenticated;" in text, "explicit grants on the tables")
 ok(not re.search(r"supabase\.co|https?://|qbocskai|nrtczu", text.lower()), "names no real database")
+ok(code.count("order by y.book_id, y.day") == 3, "the triggers' upserts in (book, day) order")
+ok(code.count("(select public.my_firm())") == 2 and "= public.my_firm()" not in code, "the read policies use (select my_firm())")
+ok("run it while tally sync is quiet" in text.lower() and "lock_timeout" in text.lower(), "the header says to run it while Tally sync is quiet (lock_timeout)")
+ok("cron.schedule('gst-share-sweep', '* * * * *'" in text and "cron.schedule('gst-share-parity', '17 21 * * *'" in text and code.count("'x-cron-key'") == 2
+   and "gst_share_books_due(3)" in text and "gst_share_books_all(200)" in text, "the timer: share_sweep every minute (3 books), share_parity nightly at 21:17 UTC, gst-taxpro's cron key")
 T151 = open(os.path.join(ROOT, "server", "tally-cloud", "migration-151-cloud-calc-1.sql")).read()
 T153 = open(os.path.join(ROOT, "server", "gst-run", "migration-153-gst-cloud.sql")).read(); T159 = open(os.path.join(ROOT, "server", "gst-run", "migration-159-gst-posfix.sql")).read()
 PAR = os.path.join(HERE, "out", "gst-share-parity.json")
@@ -141,14 +154,16 @@ try:
     d3 = dirty(); ok(d3[day(g1)] != d2[day(g1)], "a bill allocation deleted: its day marked")
 
     print("== 3. the sweep")
+    RUN = "run-a"
+    ok(db.one("select gst_share_lease('%s', 'run-a', 600)" % BK) == "t", "the run takes the book's lease")
     pick = lambda n=3000: json.loads(db.one("select gst_share_pick('%s', %d)::text" % (BK, n)))
-    def put(p, shares):
-        return json.loads(db.one("select gst_share_put('%s', %s, %s::jsonb, %s::jsonb)::text" % (BK, q(p["at"]), J(shares), J(p["seen"]))))
+    def put(p, shares, errors=None, run=None):
+        return json.loads(db.one("select gst_share_put('%s', %s, %s, %s::jsonb, %s::jsonb, %s::jsonb)::text" % (BK, q(run or RUN), q(p["at"]), J(shares), J(p["seen"]), J(errors or []))))
     month = lambda ym: json.loads(db.one("select gst_month_get('%s', %s)::text" % (BK, q(ym))))
     p = pick(50)
     ok(p["ok"] and p["due"] == len(guids) and len(p["guids"]) == 50 and p["more"], "the first pick: every entry new (%d due), 50 taken, more" % p["due"])
     ok(db.one("select count(*) from gst_month where book_id = '%s' and sec = '*' and status = 'stale'" % BK) == str(len(P["months"])), "their months marked stale (%d)" % len(P["months"]))
-    ok(all(set(x) >= {"guid", "alter_id", "gst_alter_id", "tds_alter_id", "deleted", "cancelled", "optional", "gone"} for x in p["seen"]), "the pick says what the copy holds of each (AlterIDs, deleted, cancelled, optional)")
+    ok(all(set(x) >= {"guid", "day", "alter_id", "gst_alter_id", "tds_alter_id", "deleted", "cancelled", "optional", "gone"} for x in p["seen"]), "the pick says what the copy holds of each (AlterIDs, deleted, cancelled, optional)")
     while True:
         took = set(p["guids"]); r = put(p, [s for s in P["shares"] if s["guid"] in took])
         if not r["ok"]: ok(False, "put: " + json.dumps(r)); break
@@ -197,26 +212,71 @@ try:
     p, gs = due_after("update tally_lines set ledger = 'Sales - Goods (renamed)' where book_id = '%s' and guid = %s and ledger = 'Sales - Goods'" % (BK, q(g0)))
     ok(g0 in gs and gs == sorted(x for x in guids if day(x) == day(g0)), "a ledger renamed (AlterID the same): the entries of its days due")
     # marked again after the pick: stays due
-    db.sql("update calc_seen set due = true, due_at = clock_timestamp() + interval '1 second' where book_id = '%s' and key = %s" % (BK, q(g0)))
+    db.sql("update calc_seen set due = true, due_at = clock_timestamp() where book_id = '%s' and key = %s" % (BK, q(g0)))
     put(p, [s for s in P["shares"] if s["guid"] in set(gs)])
     ok(db.one("select due from calc_seen where book_id = '%s' and key = %s" % (BK, q(g0))) == "t", "an entry marked again after the pick stays due after the put")
     p = pick(); put(p, [s for s in P["shares"] if s["guid"] in set(p["guids"])])
     bad = put(pick(), [{"guid": "not-seen", "ym": "202504", "sec": "3B.sale"}])
     ok(not bad["ok"] and "not seen" in bad["error"], "a share of an entry not seen: refused")
+    pn = pick(); bad = put(pn, [{"guid": None, "ym": "202504", "sec": "3B.sale"}])
+    ok(not bad["ok"] and db.one("select count(*) from gst_share where guid is null or guid = ''") == "0", "a share with no GUID: refused, nothing kept")
+    # M1: an entry with no GST (a receipt) in a month with no share: the month ends fresh, with no rows but its own
+    db.sql("insert into tally_vouchers (book_id, firm_id, guid, day, alter_id, vtype, vno, party, cancelled, optional) values ('%s', '%s', 'rcpt-1', '2026-06-10', 5001, 'Receipt', 'R/1', 'Made-up Buyer', false, false)" % (BK, F))
+    p = pick()
+    ok(p["guids"] == ["rcpt-1"] and head("202606")["status"] == "stale", "a receipt in a month with no GST: due, its month stale")
+    put(p, []); ok(head("202606")["status"] == "fresh" and len(month("202606")) == 1, "worked out (no share): the month fresh, with no rows but its own")
+    db.sql("update tally_vouchers set alter_id = 5002, narration = 'edited' where book_id = '%s' and guid = 'rcpt-1'" % BK)
+    p = pick(); ok(p["guids"] == ["rcpt-1"] and head("202606")["status"] == "stale", "the receipt edited: due, the month stale")
+    put(p, []); ok(head("202606")["status"] == "fresh", "worked out again: the month fresh (not stuck stale)")
+    db.sql("update tally_vouchers set day = '2026-07-02', alter_id = 5003 where book_id = '%s' and guid = 'rcpt-1'" % BK)
+    p = pick(); put(p, [])
+    ok(head("202606")["status"] == "fresh" and head("202607")["status"] == "fresh", "moved to another month: both months summed again, fresh")
+    # L4: an entry whose share failed: kept as an error, its month stale, not picked again until it changes
+    p, gs = due_after("update tally_vouchers set alter_id = alter_id + 1 where book_id = '%s' and guid = %s" % (BK, q(guids[3])))
+    put(p, [s_ for s_ in P["shares"] if s_["guid"] in set(gs) and s_["guid"] != guids[3]], [{"guid": guids[3], "error": "made-up failure"}])
+    ok(db.one("select status || ':' || error from calc_seen where book_id = '%s' and key = %s" % (BK, q(guids[3]))) == "error:made-up failure", "an entry that failed: status error, with its words")
+    ok(head(ymOf[guids[3]])["status"] == "stale" and pick()["due"] == 0, "its month stale; not picked again while it is unchanged")
+    p, gs = due_after("update tally_vouchers set alter_id = alter_id + 1 where book_id = '%s' and guid = %s" % (BK, q(guids[3])))
+    ok(guids[3] in gs, "changed: picked again")
+    put(p, [s_ for s_ in P["shares"] if s_["guid"] in set(gs)])
+    ok(db.one("select status from calc_seen where book_id = '%s' and key = %s" % (BK, q(guids[3]))) == "ok" and head(ymOf[guids[3]])["status"] == "fresh" and same(ymOf[guids[3]]), "worked out: ok, the month fresh and its sums as before")
+    # M2: two runs on one book
+    ok(db.one("select gst_share_lease('%s', 'run-b', 60)" % BK) == "f", "a second run while the first holds the book: no lease (the book skipped)")
+    pa, gs = due_after("update tally_vouchers set alter_id = alter_id + 1 where book_id = '%s' and guid = %s" % (BK, q(guids[4])))
+    db.sql("update calc_seen set data = jsonb_build_object('until', clock_timestamp() - interval '1 second') where book_id = '%s' and kind = 'book' and key = 'lease'" % BK)
+    ok(db.one("select gst_share_lease('%s', 'run-b', 60)" % BK) == "t", "the first run's lease run out: the second takes the book")
+    db.sql("update tally_lines set amount = amount + 1 where book_id = '%s' and guid = %s and ledger = 'Sales - Goods'" % (BK, q(guids[4])))
+    pb = pick()
+    r = put(pa, [s_ for s_ in P["shares"] if s_["guid"] in set(gs)])
+    ok(not r["ok"] and r["error"] == "lease lost", "the first run's late put: refused (lease lost), nothing saved over the second's")
+    ok(db.one("select due from calc_seen where book_id = '%s' and key = %s" % (BK, q(guids[4]))) == "t", "the entry still due")
+    put(pb, [s_ for s_ in P["shares"] if s_["guid"] in set(pb["guids"])], run="run-b")
+    ok(db.one("select due from calc_seen where book_id = '%s' and key = %s" % (BK, q(guids[4]))) == "f", "the second run's put saves it")
+    ok(db.one("select gst_share_unlease('%s', 'run-a')" % BK) == "f" and db.one("select gst_share_unlease('%s', 'run-b')" % BK) == "t" and db.one("select gst_share_lease('%s', 'run-a', 600)" % BK) == "t", "only the holder lets the lease go")
+    # a day written again while an entry is already due: due_at moves on, so the earlier pick's put leaves it due
+    p1, gs = due_after("update tally_vouchers set alter_id = alter_id + 1 where book_id = '%s' and guid = %s" % (BK, q(guids[5])))
+    db.sql("update tally_lines set amount = amount + 1 where book_id = '%s' and guid = %s and ledger = 'Sales - Goods'" % (BK, q(guids[5])))
+    p2 = pick()
+    put(p1, [s_ for s_ in P["shares"] if s_["guid"] in set(gs)])
+    ok(db.one("select due from calc_seen where book_id = '%s' and key = %s" % (BK, q(guids[5]))) == "t", "an entry already due whose day is written again: an earlier pick's put leaves it due")
+    p = pick(); put(p, [s_ for s_ in P["shares"] if s_["guid"] in set(p["guids"])])
+    _p = pick()
+    ok(_p["due"] == 0 and all(same(ym) for ym in P["months"] if ym != ymOf[g1]), "and the next sweep: nothing due, every month as before (but the one whose entry was deleted above)")
     rows = json.loads(db.one("select gst_share_rows('%s', array[%s, 'nope'])::text" % (BK, q(g0))))
     ok(len(rows["heads"]) == 1 and rows["heads"][0][0] == g0 and len(rows["heads"][0]) == 28 and set(rows["ledgers"]) == {"Made-up Buyer", "Sales - Goods (renamed)"}, "gst_share_rows: the entries asked for, in gst_calc_rows' form")
 
     print("== 4. the context")
     v = db.one("select gst_share_ctx_version('%s')" % BK)
-    r = json.loads(db.one("select gst_share_ctx_put('%s', %s, 'e1', '{\"map\": {}}'::jsonb, array['Made-up Buyer'], '{}', false)::text" % (BK, q(v))))
-    ok(r["ok"] and r["due"] == len(guids) - 1, "a ledger changed (the party of every entry): every entry on it due (%s)" % r["due"])
+    r = json.loads(db.one("select gst_share_ctx_put('%s', 'run-a', %s, 'e1', '{\"map\": {}}'::jsonb, array['Made-up Buyer'], '{}', false)::text" % (BK, q(v))))
+    live = int(db.one("select count(*) from tally_vouchers where book_id = '%s'" % BK))
+    ok(r["ok"] and r["due"] == live, "a ledger changed (the party of every entry): every entry on it due (%s)" % r["due"])
     ok(json.loads(db.one("select gst_share_ctx_get('%s')::text" % BK))["stamp"] == v, "kept with its version")
     p = pick(); put(p, [s for s in P["shares"] if s["guid"] in set(p["guids"])])
-    r = json.loads(db.one("select gst_share_ctx_put('%s', %s, 'e1', '{}'::jsonb, '{}', array[%s], false)::text" % (BK, q(v), q(guids[2]))))
+    r = json.loads(db.one("select gst_share_ctx_put('%s', 'run-a', %s, 'e1', '{}'::jsonb, '{}', array[%s], false)::text" % (BK, q(v), q(guids[2]))))
     ok(r["due"] == 1, "an entry named (a place of supply typed): it alone")
     p = pick(); put(p, keep(guids[2]))
-    r = json.loads(db.one("select gst_share_ctx_put('%s', %s, 'e2', '{}'::jsonb, '{}', '{}', true)::text" % (BK, q(v))))
-    ok(r["due"] == len(guids) - 1, "all (a new engine): every entry")
+    r = json.loads(db.one("select gst_share_ctx_put('%s', 'run-a', %s, 'e2', '{}'::jsonb, '{}', '{}', true)::text" % (BK, q(v))))
+    ok(r["due"] == live, "all (a new engine): every entry")
     p = pick(); put(p, [s for s in P["shares"] if s["guid"] in set(p["guids"])])
     db.sql("insert into client_book_items (firm_id, client_id, key, item, data, seq) values ('%s', 'c1', 'map', 'Sales - Goods', '{\"kind\": \"\"}', 9)" % F)
     ok(db.one("select gst_share_ctx_version('%s')" % BK) != v, "the version moves with the ledger list")
@@ -224,11 +284,28 @@ try:
     v2 = db.one("select gst_share_ctx_version('%s')" % BK); db.sql("update tally_ledgers set parent = 'Sundry Creditors' where book_id = '%s'" % BK)
     ok(db.one("select gst_share_ctx_version('%s')" % BK) != v2, "and with a ledger's group")
     ok(db.one("select gst_parity_put('%s', '202504', '07', 'e2', true, 0, '[]', '{\"status\": \"fresh\"}')" % BK) is not None, "a parity check kept")
+    ok(db.one("select gst_parity_put('%s', '202505', '', 'e2', null, 0, '[]', '{\"skipped\": \"over the run''s time\"}')" % BK) is not None
+       and db.one("select ok is null from calc_parity where ym = '202505'") == "t", "a parity not checked: kept with ok null and the reason")
+    ok(db.one("select gst_share_ctx_put('%s', 'run-x', %s, 'e1', '{}'::jsonb, '{}', '{}', false)::text" % (BK, q(v))) == '{"ok": false, "error": "lease lost"}', "the context's put: refused without the lease")
+    print("== 4b. backing off, and the timer's books")
+    db.sql("insert into tally_books (book_id, firm_id, client_id, company, from_date, open_as_on) values ('%s', '%s', 'c3', 'Third Made-up', '2025-04-01', '2025-04-01')" % ("bbbbbbbb-0164-4000-8000-000000000003", F))
+    B3 = "bbbbbbbb-0164-4000-8000-000000000003"
+    db.sql("insert into tally_vouchers (book_id, firm_id, guid, day, alter_id, vtype, vno, party, cancelled, optional) values ('%s', '%s', 'b3-1', '2025-05-05', 1, 'Sales', 'S/1', 'Made-up Buyer', false, false)" % (B3, F))
+    due = lambda: [r["book_id"] for r in db.rows("select book_id from gst_share_books_due(5)")]
+    ok(B3 in due() and BK not in due(), "books due: one with days written and no context; not the one leased by a run going (%s)" % due())
+    u1 = db.one("select gst_share_backoff('%s', 'ctx', 'too big')" % B3); u2 = db.one("select gst_share_backoff('%s', 'ctx', 'too big')" % B3)
+    ok(B3 not in due() and db.one("select (data->>'n')::int from calc_seen where book_id = '%s' and key = 'backoff:ctx'" % B3) == "2"
+       and db.one("select %s::timestamptz - now() > interval '19 minutes'" % q(u2)) == "t", "backing off: left out of the books due; 10 minutes, then 20")
+    ok(json.loads(db.one("select gst_share_ctx_get('%s')::text" % B3))["backoff"] is not None, "ctx_get says until when")
+    db.sql("select gst_share_backoff_clear('%s', 'ctx')" % B3)
+    ok(B3 in due(), "cleared: due again")
+    db.sql("select gst_share_unlease('%s', 'run-a')" % BK)
+    ok(BK in [r["book_id"] for r in db.rows("select book_id from gst_share_books_all(10)")] and B3 not in [r["book_id"] for r in db.rows("select book_id from gst_share_books_all(10)")], "the nightly parity's books: those with sums")
 
     print("== 5. members")
     for role in ("anon", "authenticated"):
         for s in ("select count(*) from calc_seen", "select count(*) from gst_share", "select count(*) from tally_calc_dirty", "select gst_share_pick('%s', 1)" % BK,
-                  "select gst_month_get('%s', '202504')" % BK, "select gst_share_put('%s', now(), '[]', '[]')" % BK):
+                  "select gst_month_get('%s', '202504')" % BK, "select gst_share_put('%s', 'r', now(), '[]', '[]', '[]')" % BK, "select gst_share_lease('%s', 'r', 60)" % BK, "select * from gst_share_books_due(1)"):
             try: db.sql("set role %s; %s;" % (role, s)); ok(False, role + " may not: " + s)
             except RuntimeError as e: ok("permission denied" in str(e), role + " may not: " + s.split("(")[0][:40])
     try: db.sql("set role anon; select count(*) from gst_month;"); ok(False, "anon may not read gst_month")
@@ -236,12 +313,13 @@ try:
     db.sql("insert into gst_month (book_id, firm_id, ym, sec, status) values ('%s', '%s', '202504', '*', 'fresh')" % (BK2, F2))
     mine = db.one("set role authenticated; select count(*) from gst_month;", U); theirs = db.one("set role authenticated; select count(*) from gst_month;", U2)
     ok(int(mine) > 1 and theirs == "1", "a member reads gst_month of its own firm only (%s / %s)" % (mine, theirs))
-    ok(db.one("set role authenticated; select count(*) from calc_parity;", U) == "1" and db.one("set role authenticated; select count(*) from calc_parity;", U2) == "0", "and calc_parity")
+    ok(db.one("set role authenticated; select count(*) from calc_parity;", U) == "2" and db.one("set role authenticated; select count(*) from calc_parity;", U2) == "0", "and calc_parity")
     try: db.sql("set role authenticated; delete from gst_month;", U); ok(False, "a member may not write")
     except RuntimeError as e: ok("permission denied" in str(e), "a member may not write gst_month")
 
     print("== 6. a book deleted")
     db.sql("delete from tally_vouchers where book_id = '%s'; delete from tally_lines where book_id = '%s'; delete from tally_books where book_id = '%s'" % (BK, BK, BK))
+    db.sql("delete from tally_vouchers where book_id = '%s'; delete from tally_books where book_id = '%s'" % (B3, B3))
     ok(all(db.one("select count(*) from %s where book_id = '%s'" % (t, BK)) == "0" for t in NEW), "takes every row of the new tables with it")
 finally:
     db.stop()

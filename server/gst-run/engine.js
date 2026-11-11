@@ -29,7 +29,7 @@ import * as E from "../_shared/gst3b.js";
 import { gst3bPrint } from "../_shared/gst3bprint.js";
 
 // the revision of the function around the engine (data.ts, handler.ts): moved by hand with tests/gst_cloud_rev.json
-export const REV = "164.1";
+export const REV = "164.2";
 
 const G = globalThis;
 // what the app's program has around the engine: names.js (put at its head by build.py too)
@@ -181,13 +181,23 @@ export function ctxDiff(a, c) {
   if (!a) return { all: true, ledgers: [], guids: [] };
   const part = (x, n) => JSON.stringify([(x.map || {})[n] || null, E.ledGroupPath(x, n), (x.gstins || {})[n] || ""]);
   const names = new Set([].concat(Object.keys(a.map || {}), Object.keys(c.map || {}), Object.keys(a.under || {}), Object.keys(c.under || {}), Object.keys(a.gstins || {}), Object.keys(c.gstins || {})));
-  const ledgers = [...names].filter((n) => part(a, n) !== part(c, n)).sort();
+  const moved = [...names].filter((n) => part(a, n) !== part(c, n));
+  // the names the copy's lines and entries carry (tally_lines.ledger, tally_vouchers.party: Tally's text with only its
+  // line breaks taken out, migration 23's tally_nm; "&amp;" can stay as it came) are the ledger list's own keys (made
+  // from those lines); the groups and GSTINs are kept under the cleaned name (ledClean: "&"). A ledger moved under
+  // either form names every form of it the ledger list has, so the SQL finds its lines
+  const byClean = new Map();
+  [a, c].forEach((x) => Object.keys(x.map || {}).forEach((k) => { const n = E.ledClean(k); if (!byClean.has(n)) byClean.set(n, new Set()); byClean.get(n).add(k); }));
+  const out = new Set(moved);
+  moved.forEach((n) => (byClean.get(E.ledClean(n)) || []).forEach((k) => out.add(k)));
+  const ledgers = [...out].sort();
   const ids = new Set([].concat(Object.keys(a.gstPosFix || {}), Object.keys(c.gstPosFix || {})));
   const guids = [...ids].filter((i) => JSON.stringify((a.gstPosFix || {})[i] || null) !== JSON.stringify((c.gstPosFix || {})[i] || null)).sort();
   return { all: String(a.stateOf || "") !== String(c.stateOf || ""), ledgers, guids };
 }
 // a batch's shares (rows: {client, heads, lines, bills} of gst_share_rows; ctx: ctxOf of the whole book) ->
-// {shares: [{guid, ym, reg, sec, k1, k2, k3, n, ...}], unknown: [ledgers not in the
+// {shares: [{guid, ym, reg, sec, k1, k2, k3, n, ...}], errors: [{guid, error}: an entry whose share could not be worked
+// out (the rest go on)], unknown: [ledgers not in the
 // context: the batch is not to be kept, the context is to be made again]}
 export function shares(rows, ctx) {
   const was = { S: G.S, CO: G.CO };
@@ -198,8 +208,12 @@ export function shares(rows, ctx) {
     const unknown = new Set();
     b.vouchers.forEach((v) => v.ent.forEach((e) => { if (!b.map[e.l]) unknown.add(e.l); }));
     const out = [];
-    b.vouchers.forEach((v) => { const x = E.entryShares(v); x.rows.forEach((r) => out.push(Object.assign({ guid: v.id, ym: x.ym, reg: x.reg }, r))); });
-    return { shares: out, unknown: [...unknown].sort() };
+    const errors = [];
+    b.vouchers.forEach((v) => {
+      try { const x = E.entryShares(v); x.rows.forEach((r) => out.push(Object.assign({ guid: v.id, ym: x.ym, reg: x.reg }, r))); }
+      catch (e) { errors.push({ guid: v.id, error: String((e && e.message) || e).slice(0, 300) }); }
+    });
+    return { shares: out, errors, unknown: [...unknown].sort() };
   } finally {
     Object.assign(G, was);
     Object.keys(was).forEach((k) => { if (was[k] === undefined) delete G[k]; });

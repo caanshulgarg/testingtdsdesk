@@ -4,7 +4,9 @@
 // due once, then those changed; put: the shares kept; gst_month_get: their month sums). Checks: only the service role or
 // the timer's key; the first run makes the context and stops; the next runs take batches (limit) until nothing is due;
 // the parity of every month is the engine's (calc_parity kept, same); an entry changed is the only one taken again;
-// a ledger the context has not got: nothing kept, the context made again; the existing actions still answer.
+// a ledger the context has not got: nothing kept, the context made again; the client's record read; the book's lease
+// (a book busy skipped); the nightly parity of every month; over the run's time: a parity kept as not checked, a context
+// rebuild backed off; a paused firm refused by both; the existing actions still answer.
 // Made-up rows only; nothing real is called.
 import { handler } from "../server/gst-run/handler.ts";
 import { unpack, HEADS } from "../server/gst-run/data.ts";
@@ -33,31 +35,39 @@ const monthRows = (ym: string) => {
     x.n += s.n; ["taxable", "igst", "cgst", "sgst", "cess", "qty"].forEach((f) => { x[f] = Math.round(x[f] * 100 + Number(s[f] || 0) * 100) / 100; }); m.set(k, x); }));
   return [...m.values()].concat([{ reg: "", sec: "*", k1: "", k2: "", k3: "", n: 0, status: T.due.size ? "stale" : "fresh" }]);
 };
+const leaseOk = (a: any) => T.lease && T.lease.run === a.p_run && T.lease.until > Date.now();
 const RPC: Record<string, (a: any) => any> = {
+  gst_share_lease: (a) => { T.leases = (T.leases || 0) + 1; if (T.lease && T.lease.run !== a.p_run && T.lease.until > Date.now()) return false; T.lease = { run: a.p_run, until: Date.now() + a.p_secs * 1000 }; return true; },
+  gst_share_unlease: (a) => { if (T.lease && T.lease.run === a.p_run) { T.lease = null; return true; } return false; },
+  gst_share_backoff: (a) => { T.backoff = { what: a.p_what, why: a.p_why, until: new Date(Date.now() + 600000).toISOString() }; return T.backoff.until; },
+  gst_share_backoff_clear: () => { T.backoff = null; return null; },
   gst_share_ctx_version: () => "ctx-v1" + (T.ctxBump || ""),
-  gst_share_ctx_get: () => T.ctx,
-  gst_share_ctx_put: (a) => { T.ctx = { stamp: a.p_stamp, engine: a.p_engine, ctx: a.p_ctx }; T.ctxPuts = (T.ctxPuts || 0) + 1;
+  gst_share_ctx_get: () => Object.assign({}, T.ctx || {}, { backoff: T.backoff && T.backoff.what === "ctx" ? T.backoff.until : null }),
+  gst_share_ctx_put: (a) => { if (!leaseOk(a)) return { ok: false, error: "lease lost" }; T.ctx = { stamp: a.p_stamp, engine: a.p_engine, ctx: a.p_ctx }; T.ctxPuts = (T.ctxPuts || 0) + 1;
     const L = new Set(a.p_ledgers || []); W.heads.forEach((h: any) => { if (a.p_all || L.has(h.party) || W.lines.some((l: any) => l.guid === h.guid && L.has(l.ledger)) || (a.p_guids || []).includes(h.guid)) T.due.add(h.guid); });
     return { ok: true, due: T.due.size }; },
   gst_share_pick: (a) => { W.heads.forEach((h: any) => { if (T.seen.has(h.guid) && T.seen.get(h.guid) !== sig(h)) T.due.add(h.guid); });
     const all = [...T.due].sort(), g = all.slice(0, a.p_limit);
     return { ok: true, at: new Date().toISOString(), guids: g, due: all.length, more: all.length > a.p_limit,
-      seen: g.map((x) => { const h = W.heads.find((z: any) => z.guid === x); return { guid: x, alter_id: h.alter_id, gst_alter_id: h.gst_alter_id, deleted: !!h.deleted_at, cancelled: !!h.cancelled, optional: !!h.optional, gone: false }; }) }; },
+      seen: g.map((x) => { const h = W.heads.find((z: any) => z.guid === x); return { guid: x, day: h.day, alter_id: h.alter_id, gst_alter_id: h.gst_alter_id, deleted: !!h.deleted_at, cancelled: !!h.cancelled, optional: !!h.optional, gone: false }; }) }; },
   gst_share_rows: (a) => pack(W.heads.filter((h: any) => a.p_guids.includes(h.guid))),
-  gst_share_put: (a) => { a.p_seen.forEach((x: any) => { T.shares.delete(x.guid); T.due.delete(x.guid); T.seen.set(x.guid, sig(W.heads.find((h: any) => h.guid === x.guid))); });
+  gst_share_put: (a) => { if (!leaseOk(a)) return { ok: false, error: "lease lost" }; T.errors = (T.errors || []).concat(a.p_errors || []); T.coSeen = T.lastCo; a.p_seen.forEach((x: any) => { T.shares.delete(x.guid); T.due.delete(x.guid); T.seen.set(x.guid, sig(W.heads.find((h: any) => h.guid === x.guid))); });
     a.p_shares.forEach((s: any) => { const l = T.shares.get(s.guid) || []; l.push(s); T.shares.set(s.guid, l); });
     return { ok: true, months: [...new Set(a.p_shares.map((s: any) => s.ym))] }; },
   gst_month_get: (a) => monthRows(a.p_ym),
   gst_parity_put: (a) => { T.parity.push(a); return T.parity.length; },
-  tally_calc_version: () => "bv1", gst_calc_prep_get: () => null, gst_calc_rows: () => pack(W.heads.filter((h: any) => !h.deleted_at || true)),
+  tally_calc_version: () => "bv1", gst_calc_prep_get: () => null, gst_calc_rows: () => Object.assign(pack(W.heads), T.padRows ? { pad: "x".repeat(30_000_000) } : {}),
   gst_cron_ok: (a) => a.k === "cron-164",
 };
 const REST: [RegExp, () => any][] = [
   [/^\/rest\/v1\/tally_books\?/, () => [book]],
+  [/^\/rest\/v1\/clients\?select=id,data&/, () => { T.lastCo = true; return [{ id: CLIENT, data: W.co }]; }],
   [/^\/rest\/v1\/clients\?/, () => [{ id: CLIENT, data: W.co, deleted: false }]],
+  [/^\/rest\/v1\/gst_month\?/, () => { const out: any[] = []; T.shares.forEach((l: any[]) => l.forEach((x) => out.push({ ym: x.ym, reg: x.reg }))); return out; }],
   [/^\/rest\/v1\/tally_ledgers\?/, () => W.ledgers], [/^\/rest\/v1\/tally_groups\?/, () => W.groups],
   [/^\/rest\/v1\/client_book_items\?/, () => W.items], [/^\/rest\/v1\/records\?/, () => []],
-  [/^\/rest\/v1\/(firms|subscriptions)\?/, () => []],
+  [/^\/rest\/v1\/firms\?/, () => T.paused ? [{ status: "paused", status_reason: "made-up pause" }] : []],
+  [/^\/rest\/v1\/subscriptions\?/, () => []],
 ];
 const fake = async (input: any, init?: any) => {
   const u = new URL(String(input)), p = u.pathname + u.search;
@@ -103,6 +113,37 @@ r = await call({ action: "share_sweep", book_id: BOOK });
 ok(r.j.ok && r.j.entries >= 1 && T.due.size === 0, "and the one after keeps the entry");
 const p2 = await call({ action: "share_parity", book_id: BOOK, ym: String(e2.day).replace(/-/g, "").slice(0, 6), reg: "07" });
 ok(p2.j.same, "its month the engine's");
+ok(T.coSeen === true && T.lease === null && T.leases > 10, "each run read the client's record for its batch, took the book's lease and let it go");
+// one run a book at a time: a book held by another run is skipped
+T.lease = { run: "other-run", until: Date.now() + 60000 };
+r = await call({ action: "share_sweep", book_id: BOOK });
+const rp = await call({ action: "share_parity", book_id: BOOK, ym: "202504" });
+ok(r.j.busy === true && rp.j.busy === true && T.lease.run === "other-run", "a book another run holds: share_sweep and share_parity skip it (busy), the other run's lease untouched");
+T.lease = null;
+// the nightly parity: every month the book has sums for, each registration and all
+const before = T.parity.length;
+r = await call({ action: "share_parity", book_id: BOOK });
+ok(r.j.ok && r.j.checked === W.months.length * 2 && r.j.same && T.parity.length === before + r.j.checked, "share_parity with no month: every month, 07 and all (" + r.j.checked + " checks), the engine's");
+// over the run's time: kept as not checked, the rest left
+const hs = handler({ env: (k) => ({ SUPABASE_URL: "http://fake.local", SUPABASE_SERVICE_ROLE_KEY: SERVICE, SUPABASE_ANON_KEY: "anon" } as any)[k], fetch: fake as any, total: 1 });
+const callS = async (body: any) => { const x = await hs(new Request("http://fn.local/gst-run", { method: "POST", headers: { Authorization: "Bearer " + SERVICE, "Content-Type": "application/json" }, body: JSON.stringify(body) })); return await x.json(); };
+const pr = await callS({ action: "share_parity", book_id: BOOK });
+const last = T.parity[T.parity.length - 1];
+ok(pr.ok && pr.skipped && last.p_ok === null && last.p_notes.skipped && last.p_notes.left > 0, "a parity over the run's time: kept as not checked (ok null), the months left said (" + last.p_notes.left + ")");
+// a context rebuild over the run's time: backs off, and is not tried again meanwhile
+T.ctxBump = "-2"; T.padRows = true;    // (a large answer: its reading alone is over the run's time)
+const c1 = await callS({ action: "share_sweep", book_id: BOOK });
+const c2 = await callS({ action: "share_sweep", book_id: BOOK });
+ok(c1.ok && c1.big && c1.backoff && T.backoff && T.backoff.what === "ctx" && c2.backoff && !c2.big, "a context rebuild over the run's time: backs off, the next run does not try it again");
+T.backoff = null; T.padRows = false;
+r = await call({ action: "share_sweep", book_id: BOOK });
+ok(r.j.ok && r.j.ctx === true && !T.backoff, "once the back-off is over a run within its time makes it, and clears it");
+await call({ action: "share_sweep", book_id: BOOK });
+// the firm paused: both refused
+T.paused = true;
+const g1 = await call({ action: "share_sweep", book_id: BOOK }), g2 = await call({ action: "share_parity", book_id: BOOK, ym: "202504" });
+ok(g1.j.kind === "gate" && g2.j.kind === "gate", "a paused firm: share_sweep and share_parity refused (the firm's switches)");
+T.paused = false;
 ok((await call({ action: "nope" })).status === 400 && (await call({ action: "month", client_id: CLIENT, reg: "07", ym: "202504" }, "anon")).status === 401, "the existing actions answer as before");
 console.log(fails ? fails + " FAILED" : "all ok");
 Deno.exit(fails ? 1 : 0);
