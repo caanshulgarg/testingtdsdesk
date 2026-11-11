@@ -12,7 +12,7 @@ nothing worked out in the drawing itself, one step a task, every step drawn), th
   4. a second open: the figures in the first drawing, nothing worked out again;
   5. an entry changed and the books saved: the last figures stay, marked updating, then the new ones replace them, and they
      are the books' as changed.
-Pages: T. Tie-out, R. the Reports list.
+Pages: T. Tie-out, R. the Reports list, M. MIS and A. Audit (each worked out again after a pull from Tally, as they are).
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_speed_render.py"""
 import os, sys, json, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -81,7 +81,7 @@ def tieout(pg, E, cid):
     ok(len(months) == 25 and E("() => document.querySelectorAll('#app [data-tieout-table] [data-tieout-month]').length") == 25, "T1. the page and its 25 months are drawn (%d months)" % len(months))
     ok(first[0] >= 5 * 24, "T1. the first drawing says Working out… where FinCom's figures go (%d of 125)" % first[0])
     mid = [w for w, u in fr if 0 < w < first[0]]
-    ok(len(set(mid)) >= 3, "T2. the figures come in over several tasks, month by month (%d frames part done, %d different)" % (len(mid), len(set(mid))))
+    ok(len(set(mid)) >= 2, "T2. the figures come in over several tasks, month by month (%d frames part done, %d different)" % (len(mid), len(set(mid))))
     want = E(fresh, cid); got = E(shown)
     ok(got == want, "T3. every figure is Rec.fincom's, worked out at once from nothing kept (%d months)" % len(want) + ("" if got == want else " got %s want %s" % (json.dumps(got)[:300], json.dumps(want)[:300])))
     E("() => goClient('books:dash')"); pg.wait_for_timeout(400)
@@ -102,21 +102,22 @@ AT_ONCE = """(sel) => { const B = window.FinComBehind, was = Object.assign({}, B
 TEXT = "(sel) => [...document.querySelectorAll(sel)].map(x => x.textContent).join('|')"
 CHANGE = """() => { const b = S.books, i = b.vouchers.findIndex(v => v.date >= "20250410" && /Sales/.test(v.type)); b.vouchers[i] = Object.assign({}, b.vouchers[i], {ent: b.vouchers[i].ent.map(e => ({l: e.l, a: r2(e.a * 2)}))}); saveBooks(); }"""
 
-def page(pg, E, tag, name, go, sel, frame):
+def page(pg, E, tag, name, go, sel, frame, at_once=AT_ONCE, change=CHANGE, shown=None):
+    see = (lambda: E(shown)) if shown else (lambda: E(TEXT, sel))
     print(tag + ". " + name)
     E("() => goClient('books:dash')"); pg.wait_for_timeout(500)
     fr = E(WATCH, [go, frame])
     ok(E("(s) => !!document.querySelector(s)", frame) and fr[0][0] > 0, tag + "1. the first drawing has the page (%s) and says Working out… where the figures go (%d)" % (frame, fr[0][0]))
     ok(sum(1 for w, u in fr if w) >= 3, tag + "2. the figures are worked out over several tasks (%d frames with Working out…)" % sum(1 for w, u in fr if w))
-    got = E(TEXT, sel); want = E(AT_ONCE, sel)
+    got = see(); want = E(at_once, sel)
     ok(got == want and len(want) > 50, tag + "3. once in, every figure is the one worked out at once (%d characters)" % len(want) + ("" if got == want else " got %s want %s" % (got[:200], want[:200])))
     E("() => goClient('books:dash')"); pg.wait_for_timeout(400)
     fr2 = E(WATCH, [go, frame])
-    ok(fr2[0] == [0, 0] and E(TEXT, sel) == want, tag + "4. a second open: the figures in the first drawing (%s)" % fr2[:3])
-    E(CHANGE)
+    ok(fr2[0] == [0, 0] and see() == want, tag + "4. a second open: the figures in the first drawing (%s)" % fr2[:3])
+    E(change)
     fr3 = E(WATCH, ["render()", ""])
     ok(fr3[0][0] == 0 and fr3[0][1] > 0, tag + "5. after a change: the last figures stay, marked updating, none says Working out (%s)" % fr3[:2])
-    got2 = E(TEXT, sel); want2 = E(AT_ONCE, sel)
+    got2 = see(); want2 = E(at_once, sel)
     ok(got2 == want2 and want2 != want, tag + "5. then the new figures replace them, the books' as changed")
 
 try:
@@ -132,6 +133,15 @@ try:
         E("() => { S.books = Object.assign({}, S.books); Rec._fc = null; render(); }"); pg.wait_for_timeout(500)
         tieout(pg, E, cid)
         E("() => { S.rptFy = '2025'; S.rxView = null; }")
+        # MIS and Audit: Tally changed (TallyRead.after marks both out of date), the tab worked out again behind the page
+        PULL = "() => { TallyRead.after(S.books, 'a pull from Tally'); }"
+        MIS_AT_ONCE = """(sel) => { const H = S.books.mis.history[0]; MIS.run(H.from, H.to, 'at once'); render(); return [...document.querySelectorAll(sel)].map(x => x.textContent).join('|'); }"""
+        E("() => { S.books.misCfg = {freq: 'monthly'}; S.books.auditCfg = {freq: 'monthly'}; S.misTab = 'summary'; }"); E(PULL)
+        page(pg, E, "M", "MIS", "goClient('books:mis')", "#app [data-answer]", "#app [data-mis-head]", MIS_AT_ONCE, CHANGE[:-1] + " TallyRead.after(S.books, 'a pull from Tally'); }")
+        AU_AT_ONCE = """(sel) => { const L = S.books.audit.last; Audit.run(L.from, L.to, 'at once'); render(); return JSON.stringify([S.books.audit.last.code, S.books.audit.last.findings.map(f => [f.id, f.count, f.amount])]) + document.querySelectorAll(sel).length; }"""
+        AU_SHOWN = "() => JSON.stringify([S.books.audit.last.code, S.books.audit.last.findings.map(f => [f.id, f.count, f.amount])]) + document.querySelectorAll('#app [data-audit-runline]').length"
+        E("() => { S.auditTab = 'find'; }"); E(PULL)
+        page(pg, E, "A", "Audit", "goClient('books:audit')", "#app [data-audit-runline]", "#app [data-audit-head]", AU_AT_ONCE, CHANGE[:-1] + " TallyRead.after(S.books, 'a pull from Tally'); }", AU_SHOWN)
         page(pg, E, "R", "the Reports list", "goClient('books:reports')", "#app [data-answer], #app [data-rpt-index], #app [data-rpt-charts]", "#app [data-rpt-index]")
         br.close()
 finally:

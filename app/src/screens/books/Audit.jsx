@@ -10,6 +10,7 @@ import CommitBox from "../../parts/CommitBox.jsx";
 import { AuditButton, AiLedgers } from "../../parts/Ai.jsx";
 import { CatchUp } from "../../parts/Notes.jsx";
 import { catchSoon } from "../../lib/catchSoon.js";
+import { behind } from "../../lib/behind.jsx";
 import Confirm from "../../parts/Confirm.jsx";
 import ListTable, { ListRows } from "../../parts/ListTable.jsx";
 import DateBox from "../../parts/DateBox.jsx";
@@ -161,15 +162,21 @@ function FindingsTable({ list, gone }) {
   </div>;
 }
 
-function Findings({ b }) {
+function Findings({ b, busy }) {
   const au = b.audit || {}, run = au.last;
   if (!run) return <><Head b={b} run={run} /><div className="bk-none" data-audit-empty="" style={{ marginTop: 12 }}>Not run yet for this period. <button className="linkbtn" onClick={() => FinComNav.go(() => doAct("auditRun"))}>Run now</button></div></>;
   // a run that no longer fits the books (other entries for its period, or the books or FinCom's checks changed) is worked
   // out again by itself for the same period, as MIS is; its old findings are not shown meanwhile (review of 02-Oct-2026:
   // "worked out on 1231 entries… the books now hold 4" asked the user to press Run again)
   // (round 69: not while a finding's Recheck is running: that run is the one worked out again, and the table stays meanwhile)
-  if (Audit.stale(run) && !Object.values(S.auditRecheck || {}).some((x) => x.busy && x.co === S.coId)) {
-    if (!Audit._again) { Audit._again = true; setTimeout(() => { try { Audit.run(run.from, run.to, "worked out again (the books changed since the run of " + fmtDate(String(run.at || "").slice(0, 10)) + ")"); saveBooks(); } catch (e) {} finally { Audit._again = false; render(); } }, 0); }
+  if (!busy && Audit.stale(run) && !Object.values(S.auditRecheck || {}).some((x) => x.busy && x.co === S.coId)) {
+    // next-speed-render: worked out behind the page, a check a step (Audit.runIn, the same run)
+    if (!Audit._again) {
+      Audit._again = true;
+      const how = "worked out again (the books changed since the run of " + fmtDate(String(run.at || "").slice(0, 10)) + ")", n = (Audit._againN = (Audit._againN || 0) + 1);
+      behind("audit-again", () => [b, n], function* () { try { yield* Audit.runIn(run.from, run.to, how); saveBooks(); } catch (e) { /* the tab shows what there is */ } finally { Audit._again = false; } return true; });
+    }
+    if (!Audit.stale(b.audit.last)) return <Findings b={b} />;
     return <><Head b={b} run={null} /><div className="bk-none" data-audit-again="" style={{ marginTop: 12 }}>{"Working out again for " + d(run.from) + " to " + d(run.to) + ": the books changed since the last run."}</div></>;
   }
   const f0 = run.findings, sev = (s) => f0.filter((f) => f.sev === s), sum = (l) => l.reduce((s, f) => s + f.amount, 0);
@@ -241,7 +248,10 @@ function Form3cd({ b }) {
 export default function Audit_({ b }) {
   // Tally changed since the last run: the tab says so while it is worked out again (TallyRead.catchUp, src/js/18)
   const catchUp = catchSoon(b, "audit");   // on screen only, at most once in 5 s (lib/catchSoon.js)
-  if (catchUp) return <CatchUp text={catchUp} />;
+  // next-speed-render: the tabs and the head drawn while the run is worked out behind the page
+  // the last run's findings stay, marked, until the new ones replace them; none yet: the words where they go
+  if (catchUp && !(b.audit || {}).last) return <><Tabs /><Head b={b} run={null} /><div data-working=""><CatchUp text={catchUp} /></div></>;
+  if (catchUp) return <><Tabs /><div data-updating=""><CatchUp text={catchUp} /></div><Findings b={b} busy /></>;
   const t = S.auditTab || "find";
   return <><Tabs />{t === "rel" ? <Related b={b} /> : t === "3cd" ? <Form3cd b={b} /> : t === "wp" ? <WorkingPapers b={b} /> : <Findings b={b} />}</>;
 }

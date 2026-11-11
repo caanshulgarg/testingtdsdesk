@@ -27,9 +27,10 @@ def ok(c, w):
 SETUP = """(bk) => { const c = newCompany({name: "ZZ TEST", gstin: "09AANFG3202D1ZR"}); S.companies[c.id] = c; S.coId = c.id; S.view = "company"; S.tab = "books"; S.loadingCo = false;
   S.books = Object.assign({loading: false, challans: [], alloc: {}}, bk, {cid: c.id}); S.books.map = Books.mapLedgers(bk.vouchers, {}); LedMaster.refresh(S.books); window.__bk = S.books;
   window.__runs = {mis: 0, audit: 0};
-  const m = MIS.runNow, a = Audit.runNow;
-  MIS.runNow = function(){ window.__runs.mis++; return m.apply(this, arguments); };
-  Audit.runNow = function(){ window.__runs.audit++; return a.apply(this, arguments); };
+  // next-speed-render: a run is MIS.runIn / Audit.runIn (in steps behind the page; runNow runs the same steps at once)
+  const m = MIS.runIn, a = Audit.runIn;
+  MIS.runIn = function(){ window.__runs.mis++; return m.apply(this, arguments); };
+  Audit.runIn = function(){ window.__runs.audit++; return a.apply(this, arguments); };
   window.__hidden = false; Object.defineProperty(document, "hidden", {configurable: true, get: () => window.__hidden});
   S.booksTab = "mis"; render(); }"""
 PULL = "(k) => { S.books = window.__bk; S.books.stale = {audit: 'after changes came from the cloud copy', mis: 'after changes came from the cloud copy', range: null}; S.booksTab = k; render(); }"

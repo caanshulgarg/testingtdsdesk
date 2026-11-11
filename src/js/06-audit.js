@@ -478,13 +478,17 @@ const Audit = {
   itemKey(f, r){ return f.id + "|" + [r.vid || "", r.party || "", r.date || "", r.no || "", r.type || ""].join("|"); },
   // run every check for a period; rules only, so the same books always give the same findings
   run(from, to, how){ return typeof memoScope === "function" ? memoScope(() => this.runNow(from, to, how)) : this.runNow(from, to, how); },
-  runNow(from, to, how){
+  runNow(from, to, how){ const it = this.runIn(from, to, how); let r; while (!(r = it.next()).done); return r.value; },
+  // the run in steps, a check a step (the Audit tab works it out behind the page: app/src/screens/books/Audit.jsx)
+  *runIn(from, to, how){
     const b = S.books;
     from = this.ymd(from); to = this.ymd(to);
     const V = this.vouchers(from, to).sort((a, c) => a.date.localeCompare(c.date) || String(a.id).localeCompare(String(c.id)));
     const ctx = {from, to, bal: this.balances(from, to)};
     const order = Object.keys(this.checks), findings = [], errors = [], ran = new Set();
-    order.forEach((id, k) => {
+    yield;
+    for (let k = 0; k < order.length; k++){
+      const id = order[k];
       try {
         const r = this.checks[id](this, V, ctx);
         ran.add(id);
@@ -496,7 +500,8 @@ const Audit = {
           findings.push(f);
         });
       } catch (e){ errors.push(id + ": " + (e && e.message)); }
-    });
+      yield;
+    }
     findings.sort((a, c) => this.SEV[c.sev] - this.SEV[a.sev] || a.order - c.order || a.id.localeCompare(c.id));
     const au = b.audit = b.audit || {st: {}, history: []};
     au.items = au.items || {};

@@ -9,7 +9,7 @@
 // books object) while sig() gives the same list (compared item by item: the books' save BOOKS_REV, the entries, ...), so a
 // second open is at once; when the books change, the last figures are handed out (old: true) while the new ones are
 // worked out, then drawn in their place. The books changed under a job: it stops, and the page's next drawing starts it
-// again. In a drawing the first steps run there (up to IN_MS, books of up to SMALL entries), so small books never show "Working out…".
+// again (the generator is closed: its finally blocks run). In a drawing the first steps run there (up to IN_MS, books of up to SMALL entries), so small books never show "Working out…".
 // Returns {v, done, old, part}: v the figures (or the last ones while new ones are worked out), part what the job has
 // said so far (what it yields). An error is thrown where the page asks, as working it out at once would.
 /* global S, IN_RENDER, JOB_MEMO, reactScopeEnd, soonRender, render */
@@ -42,7 +42,7 @@ function step(j, ms) {
 function soon(j) {
   const go = () => {
     if (jobs[j.key] !== j) return;
-    if (S.books !== j.b || !same(j.sigOf(), j.sig)) { delete jobs[j.key]; draw(); return; }
+    if (S.books !== j.b || !same(j.sigOf(), j.sig)) { delete jobs[j.key]; try { j.it.return(); } catch (e) { /* its own clean-up */ } draw(); return; }
     const p = j.part, done = step(j, BEHIND.STEP_MS);
     if (done || (j.part !== p && now() - j.drawn >= BEHIND.DRAW_MS)) { j.drawn = now(); draw(); }
     if (!done) soon(j);
@@ -60,7 +60,7 @@ export function behind(key, sig, make, inMs) {
     j = jobs[key] = { key, b, sig: s, sigOf: sig, it: make(), memo: new Map(), all, part: undefined, drawn: now() };
     // in a drawing only for books of up to SMALL entries (a step on large books can be long by itself)
     const ms = inMs != null ? inMs : b && (b.vouchers || []).length <= BEHIND.SMALL ? BEHIND.IN_MS : 0;
-    if (ms > 0 && step(j, ms)) return behind(key, sig, make, 0);
+    if (ms > 0 && step(j, ms)) { const d = all[key]; if (d.err) throw d.err; return { v: d.v, done: true }; }
     soon(j);
   }
   return { v: k && !k.err ? k.v : undefined, done: false, old: !!(k && !k.err), part: j.part };

@@ -470,7 +470,9 @@ const MIS = {
   },
   // one run: every table for the period, the same every time for the same books
   run(from, to, how){ return typeof memoScope === "function" ? memoScope(() => this.runNow(from, to, how)) : this.runNow(from, to, how); },
-  runNow(from, to, how){
+  runNow(from, to, how){ return this.runSteps(this.runIn(from, to, how)); },
+  // the run in steps (MIS works it out behind the page: app/src/screens/books/Mis.jsx): the same figures
+  *runIn(from, to, how){
     const b = S.books;
     from = Audit.ymd(from); to = Audit.ymd(to);
     const days = Audit.days(from, to) + 1, lyFrom = this.shift(from, -1), lyTo = this.shift(to, -1);
@@ -484,12 +486,23 @@ const MIS = {
     }
     const bal = Audit.balances(from, to), balTo = bal.ok ? bal.at(to) : null;
     const fyFrom = Audit.fyStart(to), mFrom = to.slice(0, 6) + "01";
-    const s = this.sales(from, to), pr = this.purchases(from, to), pl = this.pl(from, to);
-    const cmp = (f, t2) => this.covered(f) ? {sales: this.sales(f, t2).total, pl: this.pl(f, t2)} : null;
+    const s = yield* this.salesSteps(from, to);
+    yield;
+    const pr = this.purchases(from, to), pl = this.pl(from, to);
+    yield;
+    const cmp = function* (M, f, t2){ if (!M.covered(f)) return null; const st = yield* M.salesSteps(f, t2); yield; return {sales: st.total, pl: M.pl(f, t2)}; };
+    const prev = yield* cmp(this, pFrom, pTo), ly = yield* cmp(this, lyFrom, lyTo);
+    const mtd = this.covered(mFrom) ? (yield* this.salesSteps(mFrom, to)).total : null, ytd = this.covered(fyFrom) ? (yield* this.salesSteps(fyFrom, to)).total : null;
+    yield;
+    const cash = this.cashflow(from, to);
+    yield;
+    const recv = yield* this.ageingSteps(to, "r", balTo), pay = yield* this.ageingSteps(to, "p", balTo);
+    yield;
+    const comp = this.compliance(from, to);
+    yield;
     const r = {at: new Date().toISOString(), how: how || "run now", from, to, company: (b.meta || {}).company || CO().name,
-      sales: s, purchases: pr, pl, prev: cmp(pFrom, pTo), ly: cmp(lyFrom, lyTo), prevRange: [pFrom, pTo], lyRange: [lyFrom, lyTo],
-      mtd: this.covered(mFrom) ? this.sales(mFrom, to).total : null, ytd: this.covered(fyFrom) ? this.sales(fyFrom, to).total : null,
-      cash: this.cashflow(from, to), recv: this.ageing(to, "r", balTo), pay: this.ageing(to, "p", balTo), comp: this.compliance(from, to), dues: this.dues(),
+      sales: s, purchases: pr, pl, prev, ly, prevRange: [pFrom, pTo], lyRange: [lyFrom, lyTo],
+      mtd, ytd, cash, recv, pay, comp, dues: this.dues(),
       balances: bal.ok ? {src: bal.src, cash: Object.keys(balTo).filter(l => Audit.isCash(l)).sort().map(l => [l, r2(-balTo[l])]), bank: Object.keys(balTo).filter(l => Audit.isBankL(l)).sort().map(l => [l, r2(-balTo[l])])} : {why: bal.why}};
     // days of sales or purchases owed: from what is owed on balance; never below nought (an advance is not "negative days")
     // the headline owed to you and by you is the ledger balances (Parties.position), the same figure as Reports and
@@ -504,6 +517,7 @@ const MIS = {
     const goods = Object.entries(this.moves(from, to)).some(([l, x]) => Audit.under(l, /^purchase accounts$/i) && Math.abs(num(x.t)) >= 1);
     r.goods = goods;
     r.dpo = goods && r.pay.sum.owe > 0 && pr.total > 0 ? Math.round(r.pay.sum.owe / (pr.total / days)) : null;
+    yield;
     r.p2 = this.phase2(r, balTo, bal.ok ? r2(r.balances.cash.concat(r.balances.bank).reduce((s2, x) => s2 + x[1], 0)) : null);
     const md = this.cfg(b).msmeDays, msme = this.msme();
     // what is left of each bill after payments on account and advances (MIS.netOpen), as the ageing
