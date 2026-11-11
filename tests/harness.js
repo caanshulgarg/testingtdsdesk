@@ -2,6 +2,8 @@
 // real Books / GSTR / GSTAdv / GSTRev code runs against real Tally files.
 const fs = require("fs"), vm = require("vm");
 const CORE = ["namesDecode", "namesBreaks", "namesClean", "namesKey", "ledNm", "ledEnt", "ledClean", "ledKey", "LED_IDX", "ledIdx", "ledLook", "ledUnder", "ledGroupPath", "toDateObj", "MONTHS3"];
+// the names server/_shared/gst3b.js makes (its export line)
+const GST3B_NAMES = (() => { try { const t = fs.readFileSync(require("path").join(__dirname, "..", "server", "_shared", "gst3b.js"), "utf8"); return (t.match(/^export \{([^}]*)\};/m) || ["", ""])[1].split(",").map(x => x.trim()).filter(Boolean); } catch (e){ return []; } })();
 function load(htmlPath, names){
   const s = fs.readFileSync(htmlPath, "utf8");
   const i = s.indexOf('<script id="app-main">') + '<script id="app-main">'.length, j = s.indexOf("</script>", i);
@@ -9,6 +11,11 @@ function load(htmlPath, names){
   const re = /\n(?:async function|function|const|let|var|class) ([A-Za-z_$][\w$]*)/g;
   const decl = []; let m;
   while ((m = re.exec(js))) decl.push({name: m[1], at: m.index});
+  // next-cloud-gst: the 3B engine's objects are made in server/_shared/gst3b.js (at the head of the app) and the rest of
+  // each is put on it in src/js with "Object.assign(GSTR, {": each such block is loaded right after its object
+  const more = /\nObject\.assign\(([A-Za-z_$][\w$]*), \{\n/g;
+  while ((m = more.exec(js))) if (GST3B_NAMES.includes(m[1])) decl.push({name: "+" + m[1], at: m.index});
+  decl.sort((a, c) => a.at - c.at);
   // the ledger-name helpers every report uses to find a ledger's group (00-core.js): always loaded, so a test's list of
   // names need not know them
   names = CORE.filter(n => !names.includes(n) && decl.some(d => d.name === n)).concat(names);
@@ -21,15 +28,16 @@ function load(htmlPath, names){
   if (fi >= 0 && !names.includes("TDS26QFile") && decl.some(d => d.name === "TDS26QFile")) names = names.slice(0, fi + 1).concat(["TDS26QFile"], names.slice(fi + 1));
   const ri = names.indexOf("TDSReg");
   if (ri >= 0 && !names.includes("TDSRegActs") && decl.some(d => d.name === "TDSRegActs")) names = names.slice(0, ri + 1).concat(["TDSRegActs"], names.slice(ri + 1));
+  names = [].concat(...names.map(n => [n].concat(decl.filter(d => d.name === "+" + n).length && !names.includes("+" + n) ? ["+" + n] : [])));
   const parts = names.map(n => {
-    const k = decl.findIndex(d => d.name === n);
-    if (k < 0) throw new Error("not found: " + n);
-    return js.slice(decl[k].at, k + 1 < decl.length ? decl[k + 1].at : js.length);
+    const ks = decl.map((d, i) => d.name === n ? i : -1).filter(i => i >= 0);
+    if (!ks.length) throw new Error("not found: " + n);
+    return (n[0] === "+" ? ks : ks.slice(0, 1)).map(k => js.slice(decl[k].at, k + 1 < decl.length ? decl[k + 1].at : js.length)).join("\n");
   });
   const ctx = {console, TextDecoder, Intl, Math, JSON, Date, Set, Map, Array, Object, String, Number, RegExp, isFinite, parseFloat,
     S: {books: null, coId: "t"}, saveFile(){}, toast(){}, CO: () => ({name: "Test"})};
   vm.createContext(ctx);
-  vm.runInContext(parts.join("\n") + "\n;globalThis.__x = {" + names.join(",") + "};", ctx);
+  vm.runInContext(parts.join("\n") + "\n;globalThis.__x = {" + names.filter(n => n[0] !== "+").join(",") + "};", ctx);
   return {ctx, x: ctx.__x};
 }
 async function openBlob(p){ return fs.openAsBlob(p); }

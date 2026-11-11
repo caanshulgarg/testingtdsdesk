@@ -1,7 +1,8 @@
 /* ================================================================== */
 /* The client's books, read from Tally: vouchers, ledgers, mapping    */
 /* ================================================================== */
-const Books = {
+// Books's part the GSTR-3B engine runs is in server/_shared/gst3b.js (shared with the gst-run function); the rest is put on it here
+Object.assign(Books, {
   // round 64 (the owner's GB TEXCOAT, 16-Oct-2026): an entry of a voucher type with no accounting effect in Tally (an order, a
   // delivery or receipt note, a rejection, material in or out, a memorandum, a reversing journal) never moves a ledger in
   // Tally's books. Tally's export carries no field saying so, so it is read from the voucher type: Tally's own predefined
@@ -287,233 +288,11 @@ const Books = {
     }
     return {pans, gstins, under, states, groups, groupInfo, info, count: n};
   },
-  // what each ledger is: TDS section, GST tax, party or expense
-  mapLedgers(vouchers, saved){
-    const seen = new Map();
-    vouchers.forEach(v => v.ent.forEach(e => seen.set(e.l, (seen.get(e.l) || 0) + 1)));
-    const map = {};
-    seen.forEach((n, name) => {
-      const keep = (saved || {})[name];
-      if (keep && keep.byHand){ map[name] = Object.assign({n}, keep); return; }
-      map[name] = Object.assign({n}, this.guess(name), keep && keep.byHand ? keep : {});
-    });
-    // FinCom 2.4.1 (Cause A, 01-Oct-2026: 17 confirms wiped on one refresh): a ledger a person confirmed or set by hand
-    // that no entry uses (yet) is kept, with n:0. It was dropped here, LedMaster.refresh put it back as a guess, and the
-    // save wiped the confirm. No figure moves: no entry uses it
-    Object.keys(saved || {}).forEach(name => {
-      const keep = saved[name];
-      if (!seen.has(name) && keep && (keep.byHand || keep.ok)) map[name] = Object.assign({}, keep, {n: 0});
-    });
-    return map;
-  },
-  // the TDS or TCS section in a ledger's name: "194C", "206C1H"; and (2.4.1) the letter after a space, "TDS 194 T" is
-  // 194T, not 194 - but not the A of "194 A/C", nor a word ("194 TDS PAYABLE" is 194)
-  // Review H4 of next-241: after a space or a dash only a REAL section suffix counts ("TDS 192 ON SALARY" is 192, not
-  // 192ON; "195 TO", "194 OF" likewise; "194 Commission" 194); written on (194C, 194LBA) any letters as before. The owner's
-  // ruling of 09-Oct-2026, "TDS 194 C = 194C", covers the dash form too: "TDS 194-C" and "TDS 194 - C" are 194C (194 is
-  // dividends), as the ledger check (LedCheck.section) reads them, so the guess and the check agree
-  SEC_SUF: "LBA|LBB|LBC|BA|BB|DA|EE|IA|IB|IC|LA|LB|LC|LD|A|B|C|D|E|G|H|I|J|K|M|N|O|P|Q|R|S|T",
-  secIn(u){
-    const m = String(u || "").toUpperCase().match(new RegExp("\\b(19[2-9])(?:([A-Z]{1,3})\\b|\\s*-?\\s*(" + this.SEC_SUF + ")(?![\\w\\/])|\\b)|\\b(206C)([A-Z]{0,2})\\b"));
-    return !m ? "" : m[4] ? m[4] + (m[5] || "") : m[1] + (m[2] || m[3] || "");
-  },
-  guess(name){
-    const u = name.toUpperCase();
-    const sec = this.secIn(u);
-    if (/TDS|TCS/.test(u) && sec){
-      const rate = (u.match(/(\d+(?:\.\d+)?)\s*%/) || [])[1];
-      return {kind: /RECEIVABLE/.test(u) ? "tds_receivable" : "tds_payable", section: sec, rate: rate ? num(rate) : null};
-    }
-    // round 92 (C): a TDS ledger for salary with no section in its name ("TDS on Salary", "Salary TDS", "Income Tax (Salary)")
-    if (/SALAR/.test(u) && /\bTDS\b|INCOME[\s-]*TAX/.test(u) && !/RECEIVABLE|EXPENSE|INTEREST|ADVANCE/.test(u)) return {kind: "tds_payable", section: "192", rate: null};
-    const gst = u.match(/\b(\d{2})?\s*(CGST|SGST|UTGST|IGST|CESS)\s*(INPUT|OUTPUT)?\b/);
-    if (gst && /INPUT|OUTPUT/.test(u)) return {kind: "gst", reg: gst[1] || "", tax: gst[2] === "UTGST" ? "SGST" : gst[2], side: gst[3] === "INPUT" ? "input" : "output"};
-    if (/\bROUND\s*(ED)?\s*OFF\b/.test(u)) return {kind: "roundoff"};
-    if (/BANK|CASH\b/.test(u)) return {kind: "bank"};
-    return {kind: ""};
-  },
-  ledgerOf(name){
-    const b = S.books, m = (b && b.map && b.map[name]) || {};
-    // the owner's decision on H1 (09-Oct-2026, "Keep today's figures"): the books' own ledger map counts as in 2.3.3,
-    // whether or not the ledger check is saved or its switch set; the check's suggestions are kept apart (b.ledCheck) and
-    // count in no figure until confirmed, which writes them into the map (src/js/57)
-    return m;
-  },
-  // the purchase and sales side of a voucher, ready for GST and TDS
-  // build 193: an entry's lines are worked out once per drawing or calculation (the same entry is asked many times)
-  lines(v){
-    // next-fix-books-crash: a render React schedules by itself is a drawing too (reactScope, src/js/01)
-    if (typeof reactScope === "function") reactScope();
-    if (typeof IN_RENDER === "undefined" || !IN_RENDER) return this.linesNow(v);
-    // a job behind the page (app/src/lib/behind.jsx): the lines kept for the job's steps
-    const c = typeof JOB_MEMO !== "undefined" && JOB_MEMO ? perRender(this, "\u0001lc", () => ({map: new WeakMap()})) : this._lc && this._lc.gen === RENDER_GEN && this._lc.books === S.books ? this._lc : (this._lc = {gen: RENDER_GEN, books: S.books, map: new WeakMap()});
-    let r = c.map.get(v); if (!r){ r = this.linesNow(v); c.map.set(v, r); }
-    return r;
-  },
-  // the party's line(s) of an entry: the receivable on a sale, the payable on a bill. The owner's reconciliation of
-  // 22-Oct-2026 (a client's GSTR-1 at 20.52 crore against 8.64 crore filed): Tally keeps the buyer's name (the voucher's
-  // party) apart from the ledger debited ("The Oriental Insurance Co Ltd CG" on the invoice, "The Oriental Insurance
-  // Company Limited-CG" the ledger), so the party line is known by its place, not by that name alone: the ledger named as
-  // the party, and any other line on the party's side (opposite the tax; with no tax, a sale's debit or a bill's credit)
-  // whose ledger sits under Sundry Debtors or Sundry Creditors, or that carries the bill-wise allocation. Never a tax,
-  // TDS, bank or round-off line.
-  partyEnts(v){
-    const ent = v.ent || [], k = e => this.ledgerOf(e.l).kind, nm = ent.find(e => e.l === v.party);
-    let tax = 0;
-    ent.forEach(e => { if (/^(gst|gst_common|ineligible)$/.test(k(e))) tax += e.a; });
-    // the party's side: -1 debited, 1 credited
-    const side = Math.abs(tax) > 0.004 ? -Math.sign(tax) : nm ? (nm.a < 0 ? -1 : 1)
-      : /CREDIT NOTE/i.test(v.type) ? 1 : /DEBIT NOTE/i.test(v.type) ? -1 : this.isSale(v) ? -1 : this.isPurchase(v) ? 1 : 0;
-    return ent.filter(e => e.l === v.party || (side && Math.sign(e.a) === side && !k(e) && this.sundry(e)));
-  },
-  // a party's line by its place: its ledger under Sundry Debtors or Sundry Creditors, or a bill-wise allocation on it
-  // (partyEnts; TDS.led, src/js/09)
-  sundry(e){ return (e.b && e.b.length) || ledGroupPath(S.books || {}, e.l).some(g => /^\s*sundry\s+(debtors|creditors)\s*$/i.test(g)); },
-  linesNow(v){
-    const out = {taxable: 0, tax: {CGST: 0, SGST: 0, IGST: 0, CESS: 0}, tds: [], tdsPaid: [], tcs: [], tcsPaid: [], party: 0, rates: {}, roundoff: 0}, vals = [];
-    const pe = new Set(this.partyEnts(v));
-    v.ent.forEach(e => {
-      const m = Books.ledgerOf(e.l), amt = Math.abs(e.a), sign = e.a < 0 ? -1 : 1;
-      if (m.kind === "ineligible"){ out.ineligible = r2((out.ineligible || 0) + amt); out.taxable = r2(out.taxable + amt); return; }
-      // the reverse-charge liability credited beside the input tax is what we owe, not tax on the bill
-      if (m.kind === "gst" && m.rcm && m.side === "output"){ out.rcmOwed = r2((out.rcmOwed || 0) + amt); return; }
-      if (m.kind === "gst" || m.kind === "gst_common"){
-        // one ledger for CGST and SGST together (a "RCM Payable" of both): half each
-        const heads = m.tax === "CGST+SGST" ? [["CGST", amt / 2], ["SGST", amt / 2]] : [[m.tax, amt]];
-        heads.forEach(([h, a]) => { out.tax[h] = r2((out.tax[h] || 0) + a); });
-        if (m.kind === "gst_common"){ out.common = out.common || {CGST: 0, SGST: 0, IGST: 0, CESS: 0}; heads.forEach(([h, a]) => { out.common[h] = r2((out.common[h] || 0) + a); }); }
-        return;
-      }
-      if (m.kind === "tds_clearing"){
-        if (e.a < 0 && v.ent.some(z => Books.ledgerOf(z.l).kind === "bank")) out.tdsPaid.push({ledger: e.l, section: "", amount: amt});   // paid from the bank
-        return;
-      }
-      // the TDS check of 22-Oct-2026, H5: a pay head marked "Not TDS" (payTds false) is none, unless its name says TDS or
-      // income tax (Leads' "TDS 192B" stays the salary TDS; its "ESIC Employee Contribution" does not)
-      if (m.kind === "tds_payable" && !(m.payTds === false && !/\bTDS\b|INCOME[\s-]*TAX/i.test(e.l))){
-        // the month-end move of each section's TDS into a clearing account is neither a deduction nor a payment
-        if (e.a < 0 && v.ent.some(z => Books.ledgerOf(z.l).kind === "tds_clearing" && z.a > 0)) return;
-        if (e.a > 0) out.tds.push({ledger: e.l, section: m.section, rate: m.rate, amount: amt});   // credited: tax deducted
-        // debited without the bank: an adjustment, not a payment; against a party's or an expense's credit, the deduction
-        // undone (H4: TDS.unDo)
-        else if (!v.ent.some(z => Books.ledgerOf(z.l).kind === "bank")){ if (v.ent.some(z => z.a > 0 && !Books.ledgerOf(z.l).kind)) (out.tdsBack = out.tdsBack || []).push({ledger: e.l, section: m.section, amount: amt}); }
-        else out.tdsPaid.push({ledger: e.l, section: m.section, amount: amt});                      // debited: tax paid over
-        return;
-      }
-      if (m.kind === "roundoff"){ out.roundoff = r2(out.roundoff + e.a); return; }
-      // TCS collected on a sale (credited), or paid over from the bank (debited): for 27EQ; neither is part of the sale's value
-      if (m.kind === "tcs_payable"){
-        if (e.a > 0) out.tcs.push({ledger: e.l, section: m.section, rate: m.rate, amount: amt});
-        else if (v.ent.some(z => Books.ledgerOf(z.l).kind === "bank")) out.tcsPaid.push({ledger: e.l, section: m.section, amount: amt});
-        return;
-      }
-      if (m.kind === "tax_other" || m.kind === "tcs_receivable") return;
-      if (pe.has(e)){ out.party = r2(out.party + amt); return; }
-      if (m.kind === "bank" || m.kind === "tds_receivable") return;
-      out.taxable = r2(out.taxable + amt);
-      if (e.r){ const key = String(r2(e.r * 2)); out.rates[key] = r2((out.rates[key] || 0) + amt); }
-      vals.push({amt, h: e.h || "", gr: e.gr, sp: e.sp || "", hd: e.hd || "", q: num(e.q), u: e.u || ""});
-    });
-    out.total = r2(out.taxable + out.tax.CGST + out.tax.SGST + out.tax.IGST + out.tax.CESS + out.roundoff);
-    out.parts = this.parts(vals, out, v);
-    return out;
-  },
-  GST_RATES: [0, 0.1, 0.25, 1, 1.5, 3, 5, 6, 7.5, 12, 18, 28, 40],
-  // the nearest GST rate, when a worked-out rate is within a rounding of it
-  snapRate(r){ const n = this.GST_RATES.reduce((a, c) => Math.abs(c - r) < Math.abs(a - r) ? c : a, 0); return Math.abs(n - r) <= 0.05 ? n : r; },
-  // the value and tax of a voucher, rate by rate and HSN by HSN: from each item's rate where Tally has it,
-  // with the tax on the voucher shared out in proportion, so the parts always add up to the voucher
-  parts(vals, L, v){
-    const heads = ["IGST", "CGST", "SGST", "CESS"], taxAll = r2(heads.reduce((a, h) => a + L.tax[h], 0));
-    const g = {};
-    vals.forEach(x => { const k = (x.gr == null ? "?" : x.gr) + "|" + x.h; const q = g[k] = g[k] || {gr: x.gr, hsn: x.h, supply: x.sp, desc: x.hd, qty: 0, unit: x.u, taxable: 0};
-      q.taxable = r2(q.taxable + x.amt); q.qty = r2(q.qty + x.q); if (!q.supply) q.supply = x.sp; if (!q.desc) q.desc = x.hd; if (!q.unit) q.unit = x.u; });
-    let list = Object.values(g);
-    const vh = (v && v.hsn || [])[0] || "", vs = (v && v.supply) || "";
-    if (!list.length) list = [{gr: null, hsn: vh, supply: vs, taxable: 0}];
-    list.forEach(q => { if (!q.hsn) q.hsn = vh; if (!q.supply) q.supply = vs; });
-    // lines with no rate take whatever tax the rated lines do not explain
-    const known = list.filter(q => q.gr != null), unknown = list.filter(q => q.gr == null);
-    const expKnown = r2(known.reduce((a, q) => a + q.taxable * q.gr / 100, 0));
-    const unkTaxable = r2(unknown.reduce((a, q) => a + q.taxable, 0));
-    const unkTax = Math.max(0, r2(taxAll - expKnown - num(L.tax.CESS)));
-    const unkRate = unkTaxable ? this.snapRate(Math.round(unkTax / unkTaxable * 10000) / 100) : (known.length ? 0 : (L.taxable ? this.snapRate(Math.round(r2(taxAll - L.tax.CESS) / L.taxable * 10000) / 100) : 0));
-    unknown.forEach(q => { q.gr = unkRate; q.guessed = true; });
-    // one line per rate and HSN, the voucher's tax shared by what each should carry
-    const m = {};
-    list.forEach(q => { const k = q.gr + "|" + q.hsn; const x = m[k] = m[k] || {rate: q.gr, hsn: q.hsn, supply: q.supply, desc: q.desc || "", qty: 0, unit: q.unit || "", taxable: 0, guessed: !!q.guessed};
-      x.taxable = r2(x.taxable + q.taxable); x.qty = r2(x.qty + num(q.qty)); if (!x.desc) x.desc = q.desc || ""; if (!x.unit) x.unit = q.unit || ""; });
-    const out = Object.values(m).sort((a, c) => c.taxable - a.taxable);
-    const w = out.map(x => x.taxable * x.rate), ws = w.reduce((a, c) => a + c, 0), ts = out.reduce((a, x) => a + x.taxable, 0);
-    heads.forEach(h => {
-      const k = h === "IGST" ? "igst" : h === "CGST" ? "cgst" : h === "SGST" ? "sgst" : "cess";
-      let left = L.tax[h];
-      out.forEach((x, i) => { const share = i === out.length - 1 ? left : r2(L.tax[h] * (h === "CESS" || !ws ? (ts ? x.taxable / ts : 1 / out.length) : w[i] / ws)); x[k] = share; left = r2(left - share); });
-    });
-    return out;
-  },
-  // what part of the return a voucher belongs to
-  supplyClass(v){
-    const country = String(v.country || "").toLowerCase();
-    const exportish = /EXPORT/i.test(v.type) || (country && country !== "india");
-    if (exportish) return "export";
-    if (/SEZ/i.test(v.type) || /SEZ/i.test(v.regType || "") || /SEZ/i.test(v.nature || "")) return "sez";
-    if (/exempt/i.test(v.taxability || "")) return "exempt";
-    if (/nil/i.test(v.taxability || "")) return "nil";
-    if (/non.?gst/i.test(v.taxability || "")) return "nongst";
-    return "taxable";
-  },
-  // reverse charge: marked so in Tally, or the tax on the bill credited to a reverse-charge payable ledger
-  isRcm(v){
-    if (v.rcm) return true;
-    // a reverse-charge ledger on the voucher: the payable credited, or a reverse-charge input debited
-    return v.ent.some(e => { const m = this.ledgerOf(e.l); return m.kind === "gst" && m.rcm && (m.side === "output" ? e.a > 0.004 : e.a < -0.004); });
-  },
-  isImport(v){ const c = String(v.country || "").toLowerCase(); return !!c && c !== "india"; },
-  // orders and stock movements carry no accounts; they are never purchases or sales
-  NONACC: /ORDER|DELIVERY NOTE|RECEIPT NOTE|REJECTION|STOCK JOURNAL|PHYSICAL STOCK|MATERIAL (IN|OUT)|MEMO/i,
-  groupPath(l){ return ledGroupPath(S.books || {}, l); },
-  // a voucher type with its own name ("GST INWARD", "LOCAL", "IMPORT") is known by what it does:
-  // it debits a ledger under Purchase Accounts, or credits one under Sales Accounts
-  byContent(v, re, debit){
-    if (/JOURNAL|PAYMENT|RECEIPT|CONTRA/i.test(v.type)) return false;
-    return v.ent.some(e => (debit ? e.a < 0 : e.a > 0) && (this.groupPath(e.l).some(g => re.test(g)) || (!this.groupPath(e.l).length && (debit ? /PURCHASE/i : /\bSALES?\b/i).test(e.l))));
-  },
-  // round 43 (the TDS and GST proof on a real TallyPrime 7.1): a debit note raised on a CUSTOMER (more value on an invoice:
-  // the customer debited, a sales ledger and output tax credited) is an outward note (GSTR-1 9B, ntty D; 3B 3.1(a)), not a
-  // purchase that takes input tax away. Known by what it credits: a sales ledger, and no purchase ledger
-  saleNote(v){ return /DEBIT NOTE/i.test(v.type) && this.byContent(v, /^sales accounts$/i, false) && !this.byContent(v, /^purchase accounts$/i, false); },
-  isPurchase(v){
-    if (this.NONACC.test(v.type)) return false;
-    if (this.saleNote(v)) return false;
-    if (/PUR|PURCHASE/i.test(v.type) || /DEBIT NOTE/i.test(v.type)) return true;
-    if (/SALE|SALES|CREDIT NOTE|EXPORT/i.test(v.type)) return false;
-    return this.byContent(v, /^purchase accounts$/i, true);
-  },
   // review of 01-Oct-2026: the supplier's invoice number of a purchase or expense entry, for 2B reconciliation and the
   // inward register. Many clients keep it in the voucher number, or write it in the narration, not in Tally's Reference
   // field. Client setup > Tally says where (co.supInvFrom: "ref", "vno" or "narr"); whichever is chosen, an empty field
   // gives way to the next: Reference, the voucher number, then an invoice number found in the narration
   SUPINV: {ref: "Reference", vno: "Voucher no.", narr: "Narration"},
-  invInNarr(t){
-    const s = String(t || "");
-    const m = s.match(/\b(?:inv(?:oice)?|bill)\s*(?:no\.?|number|num|#)?\s*[:.\-#]?\s*([A-Z0-9][A-Z0-9\/\-_.]{0,29}\d[A-Z0-9\/\-_.]*)/i)
-      || s.match(/\b([A-Z]{1,8}[\/\-][A-Z0-9\/\-]{1,25}\d)\b/i);
-    return m ? m[1].replace(/[.\-\/]+$/, "") : "";
-  },
-  supInv(v, how){
-    how = how || ((typeof CO === "function" && CO()) || {}).supInvFrom || "ref";
-    const ref = String(v.ref || "").trim(), no = String(v.no || "").trim(), nr = () => this.invInNarr(v.narr);
-    if (how === "vno") return no || ref || nr();
-    if (how === "narr") return nr() || ref || no;
-    return ref || no || nr();
-  },
-  isSale(v){
-    if (this.NONACC.test(v.type)) return false;
-    if (/SALE|SALES|CREDIT NOTE|EXPORT/i.test(v.type) || this.saleNote(v)) return true;
-    if (/PUR|PURCHASE|DEBIT NOTE/i.test(v.type)) return false;
-    return this.byContent(v, /^sales accounts$/i, false);
-  },
   // books-speed (24-Oct-2026): the books of the last MEM clients opened in this page are kept in memory as last saved or
   // read here, so a client opened again in the same session (A -> B -> A) is not read from this browser's store again
   // (Leads: 4,414 entries, about 3 MB, read and copied on each opening). ver: this page's saves of each client's books
@@ -567,5 +346,5 @@ const Books = {
   // a client removed: its books leave this browser
   drop(cid){ this.gone[cid] = 1; this.forget(cid); delete this.vk[cid]; return IDBStore.write(this.K(cid).map(k => [k, null])).catch(() => {}); },
   forget(cid){ if (cid) this.mem.delete(cid); else this.mem.clear(); }
-};
+});
 

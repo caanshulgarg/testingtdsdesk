@@ -529,6 +529,11 @@ try:
     sent = (queued_calls() or [{}])[-1]
     ok(sent.get("p_book") == BQ and sent.get("p_device") == DA and len(sent.get("p_lines") or []) == 61 and (sent["p_lines"][0].get("vouchers") or [{}])[0].get("guid") == "qq-0" and "xml" not in sent["p_lines"][0]
        and (sent["p_lines"][0].get("lines") or [[None]])[0][0] == "qq-0", "20. the message holds the cleaned lines with their bodies read (parse.js), not the XML")
+    gq = lambda: [a for a in FS.ARGS.get("gst_calc_want_book", []) if a.get("p_book") == BQ and a.get("p_after")]
+    t1 = time.time()
+    while time.time() - t1 < 3 and not gq(): time.sleep(0.05)     # not waited on by the reply
+    ok(gq() and str(gq()[-1]["p_after"]) == db.one("select max(msg_id) from pgmq.q_tally_recorder") and gq()[-1].get("p_why") == "queued",
+       "20. (next-cloud-gst, migration 153) the 3B queued with the message: not worked out until the drain has applied it (%s)" % (gq()[-1:] or None))
     d = json.loads(db.one("select tally_recorder_drain(20000)::text"))
     ok(d.get("done") == 1 and qst("Q") == [("Q%02d" % i, "applied") for i in range(60)] + [("Q60", "applied")] and vq("qq-0").get("alter_id") == "4100"
        and db.one("select coalesce(sum(amount), 0) from tally_ledger_day where book_id = %s and ledger = 'Sales'" % q(BQ)) == str(sum(10 + i for i in range(50)) + sum(5 + i for i in range(1, 60)) + 99),

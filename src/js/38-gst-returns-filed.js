@@ -4,7 +4,8 @@
 /* ================================================================== */
 // The record (form, period, ARN, date, file name, where the file is) is kept with the books; the PDF itself is kept in this
 // browser's file store and sent to the firm's cloud documents, so it opens from any computer.
-const GSTV = {
+// GSTV's part the GSTR-3B engine runs is in server/_shared/gst3b.js (shared with the gst-run function); the rest is put on it here
+Object.assign(GSTV, {
   FORMS: {
     r1:     {l: "GSTR-1",  order: 1},
     iff:    {l: "IFF",     order: 2},
@@ -20,22 +21,6 @@ const GSTV = {
         january: 1, february: 2, march: 3, april: 4, june: 6, july: 7, august: 8, september: 9, october: 10, november: 11, december: 12},
   label(form){ return (this.FORMS[form] || {}).l || form || "?"; },
   isAnnual(form){ return !!(this.FORMS[form] || {}).annual; },
-  // every record, removed ones included (a removal is a soft delete: the record and its PDF are kept, marked removed)
-  all(){ const b = S.books || {}; b.gstVault = b.gstVault || []; this.fixIff(b.gstVault); return b.gstVault; },
-  // the records in use
-  list(){ return this.all().filter(x => !x.removed); },
-  // a quarterly (QRMP) filer's return for the first or second month of a quarter is an IFF, even when the portal's PDF
-  // prints "FORM GSTR-1" (request of 02-Oct-2026: the Apr-2025 and May-2025 IFFs of Testing AAD were filed as GSTR-1)
-  formFor(form, per, reg){
-    return form === "r1" && /^\d{6}$/.test(per) && reg && typeof GSTSet === "object" && GSTSet.typeOf(per, reg) === "qrmp" && !GSTSet.isQEnd(per) ? "iff" : form;
-  },
-  fixIff(list){
-    list.forEach(x => { const f = this.formFor(x.form, x.per, x.reg); if (f !== x.form){
-      x.formRead = x.form; x.form = f;
-      // the filing date went in as a GSTR-1's; it is the IFF's
-      const r = GSTF.rec(x.per, x.reg); if (x.arnDate && r.r1 === x.arnDate){ if (!r.iff) r.iff = x.arnDate; delete r.r1; }
-    } });
-  },
   // ---- the figures on a filed return's PDF (request of 02-Oct-2026), for the cross-check of GSTR-1 + IFF against 3B ----
   // GSTR-1 / IFF: the Total Liability line (value, IGST, CGST, SGST, cess). GSTR-3B: 3.1(a), 3.1(d), 4A(5), 4(C), and the
   // interest and late fee of 5.1. Amounts may be printed 1,23,456.78 or (1,234.00) for a negative.
@@ -127,8 +112,6 @@ const GSTV = {
     if (types.has("monthly") || types.has("qrmp")){ rows.push({form: "gstr9", per: fy, due: (y + 1) + "-12-31"}); rows.push({form: "gstr9c", per: fy, due: (y + 1) + "-12-31", optional: !big, note: big ? "" : "if turnover is above ₹5 crore"}); }
     return rows;
   },
-  // copies on file for a form and period, newest first
-  copies(reg, form, per){ return this.list().filter(x => x.reg === reg && x.form === form && x.per === per).sort((a, c) => String(c.at).localeCompare(String(a.at))); },
   // the filing date typed on the GST screens, for the returns that have one
   filedKey(form){ return ({r1: "r1", r3b: "r3b", iff: "iff", cmp08: "cmp08"})[form] || ""; },
   filedOn(reg, form, per){ const k = this.filedKey(form); return k && /^\d{6}$/.test(per) ? (GSTF.peek(per, reg)[k] || "") : ""; },
@@ -178,7 +161,7 @@ const GSTV = {
     const per = /^\d{6}$/.test(rec.per) ? rec.per.slice(0, 4) + "-" + rec.per.slice(4, 6) : rec.per;
     return co + "_" + g + "_" + this.label(rec.form).replace(/\s+/g, "-") + "_" + per + ".pdf";
   }
-};
+});
 // ---- reading the words of a PDF's first pages ----
 async function gstvPdfText(file, pages){
   const pdf = await getPdf(file); let text = "";

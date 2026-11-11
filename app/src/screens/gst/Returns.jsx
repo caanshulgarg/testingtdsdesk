@@ -10,6 +10,7 @@ import { Bills, R1Summary, partOf, R1_PARTS, R1_ORDER } from "./R1Bills.jsx";
 import R1Portal from "./R1Portal.jsx";
 import R3bPortal from "./R3bPortal.jsx";
 import { AdvLine } from "../../parts/AdvOptIn.jsx";
+import { cloud3b, cloud3bAt } from "./cloud3b.js";
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
 const day = (d) => fmtDate(tallyDate(d));
@@ -138,7 +139,12 @@ function Unclaimed({ reg, ym }) {
 
 export function Gstr3b({ b, sub }) {
   const onW = !sub || sub === "details";
-  const t = GSTR.threeB(S.gstYm || "", S.gstReg || ""), choice = ((b.itcBasis || {})[S.gstReg || ""]) || "2b";
+  // next-cloud-gst: Summary and Details show the cloud's 3B when it was worked out from these same books (cloud3b.js);
+  // the file tab, the checks and a figure opened to its bills work it out here
+  const c = (sub === "summary" || sub === "details") && !S.r3bOpen ? cloud3b(S.gstYm || "", S.gstReg || "") : null;
+  if (c && c.wait) return <p className="note" data-r3b-where="wait">Looking for this month’s 3B in FinCom’s cloud…</p>;
+  const t = c ? c.t : GSTR.threeB(S.gstYm || "", S.gstReg || ""), choice = ((b.itcBasis || {})[S.gstReg || ""]) || "2b";
+  const where = sub === "summary" || sub === "details" ? <p className="note" data-r3b-where={c ? "cloud" : "here"} style={{ margin: "0 2px 8px" }}>{c ? "Worked out in FinCom’s cloud " + cloud3bAt(c.at) : "Worked out here"}</p> : null;
   const ft = typeof GSTSet === "object" ? GSTSet.typeOf(S.gstYm || "", S.gstReg || "") : "monthly";
   const P = t.pay, months = GSTR.months(), first = months[0] === S.gstYm;
   const HD = [["igst", "Integrated tax"], ["cgst", "Central tax"], ["sgst", "State/UT tax"], ["cess", "Cess"]];
@@ -148,12 +154,13 @@ export function Gstr3b({ b, sub }) {
   if (sub === "diff") return <><Unclaimed reg={S.gstReg || ""} ym={S.gstYm || ""} /><Checks />
     <p className="note" style={{ marginTop: 12 }}>Bills against 2B, one by one: <button className="linkbtn" onClick={() => gstPartGo("r2b")}>2B reconciliation</button> · the credit for table 4: <button className="linkbtn" onClick={() => gstPartGo("itcfinal")}>Final credit for 3B</button> · the 3B as filed against this working: <button className="linkbtn" onClick={() => gstPartGo("filedcmp")}>Filed vs FinCom</button></p></>;
   return <>
+    {where}
     <div className="gf-ctl" style={{ marginBottom: 10 }}>
       <span className="note">Credit in table 4: <b>{choice === "2b" ? "as far as 2B shows it" : "as booked in Tally"}</b> · filing {typeof GSTSet === "object" ? GSTSet.typeLabel(ft).toLowerCase() : "monthly"} · <SetLink /></span>
       <span className="note">{t.basis === "2b" ? "This month’s 2B is here; bills not in it are held back." : t.basis === "no 2B" ? "No 2B for this month here, so the books are used; bring it in under 2B reconciliation." : "As booked."}</span>
     </div>
     {/* round 72: Summary is the return as the portal lays it out; Details how FinCom works it out (the steps, the typing) */}
-    {(!sub || sub === "summary") && <><R3bPortal b={b} t={t} /><AdvLine /></>}
+    {(!sub || sub === "summary") && <><R3bPortal b={b} t={t} cloud={!!c} /><AdvLine /></>}
     {onW && <div className="bk-tablewrap" style={{ marginTop: sub ? 0 : 12 }}><table className="bk-table" data-statement="">
       <thead><tr><th>3.1 Outward supplies and inward on reverse charge</th><th className="n">Taxable</th><th className="n">IGST</th><th className="n">CGST</th><th className="n">SGST</th></tr></thead>
       <tbody>

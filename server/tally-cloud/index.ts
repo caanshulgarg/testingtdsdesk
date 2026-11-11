@@ -515,6 +515,7 @@ async function bookForBeat(firm: string, name: string) {
 // not stopped, not test mode, "go-" only). Each book asked at most every 20 s. {company name: {book, serving}}; empty on a
 // cloud without 146 (asked again after 10 minutes) or on any error: the beat answers as before
 let servingMissing = 0;
+let guidFillMissing = 0;     // migration 155 found missing (asked again 10 minutes later)
 const servingMemo = new Map<string, { serving: any[]; t: number }>();
 async function servingFor(firm: string, b: any): Promise<Map<string, { book: string; serving: any[] }>> {
   const out = new Map<string, { book: string; serving: any[] }>();
@@ -2165,12 +2166,14 @@ async function periodHeads(book: string, body: any) {
     const per = !pe && (pd as any)?.ok === true ? pd as any : null;
     const want = [...new Set([...(Array.isArray(c.want) ? c.want : []), ...(body?.fetch === true && per && Array.isArray(per.want) ? per.want : [])].map(String))];
     const n = Number(c.n) || heads.length;
+    gstWant(book);
     return reply(200, { ok: true, n, held: Math.max(0, n - want.length), done: c.done === true && (!per || per.done === true), want });
   }
   const { data, error } = await db.rpc("tally_period_heads", { p_book: book, p_day: iso(day), p_heads: heads, p_via: via });
   if (error) return periodError(error);
   const d = (data || {}) as any;
   if (d.ok !== true) return reply(200, { ok: false, error: String(d.error || "not kept") });
+  gstWant(book);     // next-cloud-gst: the day's heads kept (deleted entries marked): the 3B queued
   return reply(200, { ok: true, n: d.n, held: d.held, done: d.done === true, want: body?.fetch === true && Array.isArray(d.want) ? d.want.map(String) : [] });
 }
 function periodError(error: any) {
@@ -2268,7 +2271,7 @@ async function periodEntries(book: string, body: any) {
   if (ce && !missingFn(String(ce.message || ""))) return periodError(ce);
   if (!ce && (ck as any)?.mine === true) {
     const c = ck as any;
-    if (c.ok === true && !c.locked) await periodEntriesRpc(pArgs);     // (a day not of the period: refused there in words, nothing done)
+    if (c.ok === true && !c.locked){ await periodEntriesRpc(pArgs); gstWant(book); }     // (a day not of the period: refused there in words, nothing done)
     if (bad.length) console.log("tally-ingest period_entries (upload check): " + bad.length + " entr" + (bad.length === 1 ? "y" : "ies") + " not taken (lines do not total zero)", book, day);
     if (c.ok !== true) return reply(200, { ok: false, locked: c.locked === true, error: String(c.error || "not stored") });
     if (c.locked === true) return reply(200, { ok: true, stored: 0, locked: true, upload: String(c.upload || PERIOD_ENTRY_WORDS(day)) });
@@ -2286,6 +2289,7 @@ async function periodEntries(book: string, body: any) {
   if (d.ok !== true) return reply(200, { ok: false, locked: d.locked === true, error: String(d.error || "not stored"), ...(bad.length ? { upload: PERIOD_ENTRY_WORDS(day) } : {}) });
   // a month locked in FinCom: the day is not fetched again; the one quiet line asks for it to be uploaded once unlocked
   if (d.locked === true) return reply(200, { ok: true, stored: 0, locked: true, upload: String(d.upload || PERIOD_ENTRY_WORDS(day)) });
+  if ((Number(d.stored) || 0) > 0) gstWant(book);
   // 2.5.12 (migration 154): the day's held entries: the day stays open (never done while one is held), tried again by itself
   const hk = held && !bad.length ? await periodHold(book, day, held, version) : null;
   if (held && held.length) console.log("tally-ingest period_entries: " + held.length + " entr" + (held.length === 1 ? "y" : "ies") + " held, the day stays open", book, day, hk?.manual ? "(the manual step)" : "");
@@ -3088,6 +3092,9 @@ async function recorderLines(dev: any, firm: string, book: string, body: any) {
     }
     if (error && notReady44(error)) return reply(503, { ok: false, notReady: true, error: "The cloud does not take recorder lines yet (migration 44)." });
     if (error) throw dbFail("recorder_lines " + via, error, "The cloud could not store these recorder lines just now; send them again.");
+    // stored now: queued for the 3B at once; queued for the drain (pg_cron every 30 s): queued with its message, and not
+    // taken while that message waits (gst_calc_held): the 3B is worked out once the drain has applied these lines
+    if (full) gstWant(book, data && typeof data.queued === "number" && Number(data.msg) > 0 ? Number(data.msg) : null);
     if (data && typeof data.queued === "number") {
       send.forEach((l: any, k: number) => { results[at[k]] = { line_id: String(l.line_id ?? ""), state: "queued", why: null, ...(found.has(String(l.line_id ?? "")) ? { guid: found.get(String(l.line_id ?? "")) } : {}) }; });
       const failed = results.filter((r) => r?.state === "failed").length;
@@ -3250,7 +3257,8 @@ async function retryHeldShort(firm: string, job: string) {
       await shortBodies(firm, book, lines);
       const { data: r, error: e2 } = await db.rpc("tally_recorder_short_retry", { p_firm: firm, p_book: book, p_lines: lines.map((l) => ({ row: l.row, line_id: l.line_id, vouchers: l.vouchers || [], lines: l.lines || [] })) });
       if (e2) console.log("tally-ingest posts_update: held short lines", job, String(e2.message || "").slice(0, 200));
-      else console.log("tally-ingest posts_update: held short lines retried", book, JSON.stringify({ applied: (r as any)?.applied, held: (r as any)?.held, skipped: (r as any)?.skipped }));
+      else if ((Number((r as any)?.applied) || 0) > 0) gstWant(book);
+      if (!e2) console.log("tally-ingest posts_update: held short lines retried", book, JSON.stringify({ applied: (r as any)?.applied, held: (r as any)?.held, skipped: (r as any)?.skipped }));
     }
   } catch (e) { console.log("tally-ingest posts_update: held short lines", job, (e as Error).message); }
 }
@@ -3315,6 +3323,7 @@ async function selfCheck(dev: any, firm: string, book: string, body: any) {
 async function ingestDays(firm: string, book: string, daysIn: unknown, check = false) {
   const r = await ingestDaysRaw(firm, book, daysIn);
   if (check && !r.error) await checkQueue(book, r.done);
+  if (!r.error && r.done.length) gstWant(book);
   return r.error ? reply(400, { ok: false, error: r.error }) : reply(200, { ok: true, done: r.done, bad: r.bad, ...(r.locked.length ? { locked: r.locked } : {}) });
 }
 // 30-Oct-2026 (the owner: "if anyone uploads any books and there is any difference.. it should find out the difference in
@@ -3328,6 +3337,20 @@ async function checkQueue(book: string, days: string[]) {
     const { error } = await db.rpc("tally_check_queue", { p_book: book, p_days: ds.map(iso), p_source: "upload" });
     if (error && !missingFn(String(error.message || ""))) fail("check_queue", error);
   } catch (e) { fail("check_queue", e); }
+}
+// next-cloud-gst (migration 153): a book's entries stored, its client's GSTR-3B is queued to be worked out again in the
+// cloud (gst-run). Never fails the ingest; a cloud without 153: nothing queued
+function gstWant(book: string, after: number | null = null) {
+  // not waited on (EdgeRuntime.waitUntil keeps it going after the reply), and given up after 2 s: never slows an ingest
+  const p = (async () => {
+    try {
+      const { error } = await db.rpc("gst_calc_want_book", { p_book: book, p_why: after ? "queued" : "books", p_after: after }).abortSignal(AbortSignal.timeout(2000));
+      if (error && !missingFn(String(error.message || ""))) console.log("tally-ingest gst_calc_want_book: " + String(error.message || "").slice(0, 200), book);
+    } catch (e) { console.log("tally-ingest gst_calc_want_book: " + String((e as Error)?.message || e).slice(0, 200), book); }
+  })();
+  const rt = (globalThis as any).EdgeRuntime;
+  if (rt && typeof rt.waitUntil === "function") rt.waitUntil(p);
+  return p;
 }
 // migration 44 (review M3): a day of a month the owner locked is refused by tally_ingest_day (nothing stored, nothing
 // marked). It is answered under `locked` [{day, why}], never under `done`, and logged as kept, not applied: the file stays
@@ -3399,7 +3422,9 @@ async function ingestDaysRaw(firm: string, book: string, daysIn: unknown): Promi
 // the day books already kept in the bucket, read again with today's parser: one month a call (a year is 12 calls), so
 // no call runs long. Nothing is asked of the computer with Tally; the files are the ones it sent
 async function reparseMonth(firm: string, book: string, monthIn: unknown) {
-  return reply(200, { ok: true, ...(await reparseMonthRaw(firm, book, monthIn)) });
+  const r = await reparseMonthRaw(firm, book, monthIn);
+  gstWant(book);
+  return reply(200, { ok: true, ...r });
 }
 async function keptMonths(firm: string, book: string) {
   const { data: months, error } = await db.storage.from("tally-days").list(`${firm}/${book}`, { limit: 1000, sortBy: { column: "name", order: "asc" } });
@@ -3586,9 +3611,11 @@ async function workPiece(m: any) {
     const r = await ingestDaysRaw(firm, book, m.days);
     if (r.error) throw new Error(r.error);
     await checkQueue(book, r.done);     // migration 133: the upload's days checked against Tally
+    if (r.done.length) gstWant(book);
     await jobStep(job, r.done.length + r.bad.length, r.bad);
   } else if (/^\d{6}$/.test(String(m.month || ""))) {
     const r = await reparseMonthRaw(firm, book, m.month);
+    gstWant(book);
     await jobStep(job, 1, r.bad || []);
   } else if (m.upload && typeof m.upload === "object") {
     await uploadPiece(job, firm, book, m.upload);
@@ -4532,6 +4559,17 @@ Deno.serve(sentry.wrap(async (req) => {
         const want = (dev as any).want_update_at, sent = (dev as any).want_sent_at;
         const updateNow = !!want && (!sent || Date.parse(want) > Date.parse(sent));
         await db.from("tally_devices").update(updateNow ? { info, want_sent_at: want } : { info }).eq("id", dev.id);
+        // migration 155 (the owner, 10-Nov-2026: a link belongs to the company and the firm, never to a person or a bridge): a
+        // linked company this bridge's own record lists open, whose link has no Tally GUID yet, takes the GUID from it (never
+        // over one; never one another linked book holds), so every bridge that opens it serves it. A cloud without 155: off
+        // (review B3: not waited for; never fails the beat. Kept alive after the answer by later(): EdgeRuntime.waitUntil.
+        // The names are matched as coTrim keeps them, the same rule in the function; look-alikes are never filled)
+        if ((me.entry as any)?.cos?.length && Date.now() - guidFillMissing >= 600000) {
+          later(Promise.resolve(db.rpc("tally_link_guid_fill", { p_firm: firm, p_device: dev.id, p_bridge: me.id })).then(({ data: gf, error: ge }: any) => {
+            if (ge) { if (missingFn(String(ge.message || ""))) guidFillMissing = Date.now(); else console.log("tally-ingest beat: the links' GUIDs not filled:", String(ge.message || "").slice(0, 160)); }
+            else if (Number(gf) > 0) console.log("tally-ingest beat: a link's Tally GUID filled from the bridge's record", dev.id, me.id, Number(gf));
+          }).catch((e: unknown) => console.log("tally-ingest beat: the links' GUIDs not filled:", String((e as Error)?.message || e).slice(0, 160))));
+        }
         // next-tally-linknow: the companies this beat says open that the firm's list lacks are registered now (they were
         // only by the "companies" message, every 5 minutes): a click on Link works within a beat of Tally opening it
         await registerOpenFromBeat(firm, dev, beat, prevInfo);

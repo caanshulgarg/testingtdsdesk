@@ -29,6 +29,7 @@ STORAGE_FAIL = {}         # {status, body, n}: the next n Storage GETs answer th
 FAIL_INSERT = {}          # table -> {message, code}: a POST answers this PostgREST error
 FAIL_DONE = {"upload": 0} # the next n tally_work_done of an upload piece fail
 FAIL_DAY = {}             # day -> n: the next n calls queuing a day file of that day fail (tally_work_send / tally_upload_advance)
+GST_WANT_FAIL = [False]    # gst_calc_want_book fails (tally-ingest must not)
 NO_FN = set()             # functions this database does not have yet (an older cloud): PostgREST's 404 PGRST202
 FAIL_SELECT = {}          # table -> {message, code}: a GET answers this PostgREST error (bridge 2.3.1 Lows: errors are logged)
 FAIL_RPC = {}             # function -> {message, code}: the call answers this PostgREST error (the database cannot be read)
@@ -64,6 +65,9 @@ def match(row, q):
 def rpc(fn, a):
     ARGS.setdefault(fn, []).append(a)
     if fn == "mfa_ok": return True
+    if fn == "gst_calc_want_book":    # migration 153: the book's client queued for its 3B in the cloud (gst-run)
+        if GST_WANT_FAIL[0]: raise RuntimeError("the queue is busy (test)")
+        return True
     if fn == "tally_ingest_ledgers_g": return {"ok": True, "ledgers": len(a.get("p_ledgers") or []), "groups": len(a.get("p_groups") or [])}
     if fn == "tally_year_openings": return {"ok": True, "moved": 0, "ledgers": 0, "twins": 0}
     if fn == "tally_book_for": return next((c["book_id"] for c in T["tally_companies"] if c["firm_id"] == a["p_firm"] and c["company"] == a["p_company"]), None)

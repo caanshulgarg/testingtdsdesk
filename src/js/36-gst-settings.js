@@ -9,44 +9,7 @@ function clientPan(co){ const c = co || (typeof CO === "function" ? CO() : null)
 // GSTINs that are not the client's: their PAN differs from the client's PAN (nothing is refused while the client has no PAN)
 function notThisClient(gstins, co){ const pan = clientPan(co); if (!pan) return []; return Array.from(new Set((gstins || []).map(g => String(g || "").toUpperCase()).filter(g => /^\d{2}[A-Z0-9]{13}$/.test(g) && g.slice(2, 12) !== pan))); }
 function panRefusal(what, bad, co){ const c = co || CO() || {}; return what + " is for " + bad.join(", ") + " (PAN " + bad[0].slice(2, 12) + "), not " + (c.name || "this client") + " (PAN " + clientPan(c) + "). Nothing was brought in."; }
-const GSTSet = {
-  TYPES: [["monthly", "Monthly"], ["qrmp", "Quarterly (QRMP)"], ["comp", "Composition"]],
-  // QRMP 3B falls due on the 22nd in these states and union territories, on the 24th elsewhere
-  Q22: new Set(["22", "23", "24", "25", "26", "27", "29", "30", "31", "32", "33", "34", "35", "36", "37"]),
-  store(reg){ const b = S.books; b.gstSet = b.gstSet || {}; return b.gstSet[reg || ""] = b.gstSet[reg || ""] || {}; },
-  peek(reg){ return (((S.books || {}).gstSet) || {})[reg || ""] || {}; },
-  qStart(ym){ const y = +ym.slice(0, 4), m = +ym.slice(4, 6), s = m >= 4 ? m - ((m - 4) % 3) : 1; return y + String(s).padStart(2, "0"); },
-  qEnd(ym){ const s = this.qStart(ym), y = +s.slice(0, 4), m = +s.slice(4, 6) + 2; return y + String(m).padStart(2, "0"); },
-  isQEnd(ym){ return this.qEnd(ym) === ym; },
-  qLabel(ym){ const m = +this.qStart(ym).slice(4, 6), y = +ym.slice(0, 4), fy = m >= 4 ? y : y - 1; return ({4: "Q1", 7: "Q2", 10: "Q3", 1: "Q4"})[m] + " " + fy + "-" + String(fy + 1).slice(2); },
-  // filing type in force for a month: the latest choice whose quarter has begun
-  history(reg){ return (this.peek(reg).filing || []).slice().sort((a, c) => a.from.localeCompare(c.from)); },
-  typeOf(ym, reg){ let t = "monthly"; this.history(reg).forEach(x => { if (x.from <= this.qStart(ym)) t = x.type; }); return t; },
-  typeLabel(t){ return (this.TYPES.find(x => x[0] === t) || [, t])[1]; },
-  // the window the portal allows to change between QRMP and monthly for a quarter:
-  // from the 1st of the second month of the quarter before, to the last day of the quarter's first month
-  window(q){ const s = this.qStart(q), p = GSTR.nextYm ? null : null, y = +s.slice(0, 4), m = +s.slice(4, 6);
-    const back = n => { let yy = y, mm = m - n; while (mm < 1){ mm += 12; yy--; } return yy + "-" + String(mm).padStart(2, "0"); };
-    const last = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
-    return {from: back(2) + "-01", to: last}; },
-  einvMode(reg){ return this.peek(reg).einv || "auto"; },
-  // a party's email and phone: typed in settings, else kept from earlier letters, else Tally's masters
-  contact(gstin, party, legacy){
-    const c = (((S.books || {}).gstContacts) || {})[String(gstin || "").toUpperCase()] || {}, l = legacy || {}, i = (((S.books || {}).ledInfo) || {})[party] || {};
-    return {email: c.email || l.email || i.email || "", phone: c.phone || l.phone || i.phone || i.mobile || ""};
-  },
-  // parties with a GSTIN in the GST working, suppliers and customers
-  parties(){
-    const b = S.books, key = (b.vouchers || []).length + "|" + (b.mapV || 0);
-    if (this._p && this._p.key === key && this._p.v === b.vouchers) return this._p.list;
-    const m = new Map();
-    (b.vouchers || []).forEach(v => { const g = String(v.gstin || "").toUpperCase(); if (!/^\d{2}[A-Z0-9]{13}$/.test(g) || !v.party) return;
-      const side = Books.isSale(v) ? "customer" : Books.isPurchase(v) ? "supplier" : ""; if (!side) return;
-      const x = m.get(g) || {gstin: g, party: v.party, sides: new Set(), n: 0}; x.sides.add(side); x.n++; m.set(g, x); });
-    const list = Array.from(m.values()).map(x => Object.assign(x, {sides: Array.from(x.sides).sort().join(" and ")})).sort((a, c) => c.n - a.n);
-    this._p = {key, v: b.vouchers, list}; return list;
-  }
-};
+// GSTSet: the whole object is in server/_shared/gst3b.js (the GSTR-3B engine, shared with the gst-run function)
 // The client's GSTINs: read from Tally, added in GST settings, or the one in Client setup. All must carry the client's PAN.
 const GSTRegs = {
   STATES: {"01": "Jammu and Kashmir", "02": "Himachal Pradesh", "03": "Punjab", "04": "Chandigarh", "05": "Uttarakhand", "06": "Haryana", "07": "Delhi", "08": "Rajasthan", "09": "Uttar Pradesh", "10": "Bihar", "11": "Sikkim", "12": "Arunachal Pradesh", "13": "Nagaland", "14": "Manipur", "15": "Mizoram", "16": "Tripura", "17": "Meghalaya", "18": "Assam", "19": "West Bengal", "20": "Jharkhand", "21": "Odisha", "22": "Chhattisgarh", "23": "Madhya Pradesh", "24": "Gujarat", "26": "Dadra and Nagar Haveli and Daman and Diu", "27": "Maharashtra", "29": "Karnataka", "30": "Goa", "31": "Lakshadweep", "32": "Kerala", "33": "Tamil Nadu", "34": "Puducherry", "35": "Andaman and Nicobar Islands", "36": "Telangana", "37": "Andhra Pradesh", "38": "Ladakh", "97": "Other Territory"},

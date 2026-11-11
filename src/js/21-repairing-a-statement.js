@@ -223,44 +223,7 @@ function checkBalances(rows, meta){
   return {bad, fixed, known, totDr, totCr, summaryOk};
 }
 /* ---------- narrations ---------- */
-const NORM_CACHE = new Map(), GRAM_CACHE = new Map();
-function normName(s){
-  const key = String(s || "");
-  let v = NORM_CACHE.get(key);
-  if (v !== undefined) return v;
-  v = normNameRaw(key);
-  if (NORM_CACHE.size > 50000) NORM_CACHE.clear();
-  NORM_CACHE.set(key, v);
-  return v;
-}
-function gramsOf(s){
-  let g = GRAM_CACHE.get(s);
-  if (g) return g;
-  const m = new Map();
-  for (let i = 0; i < s.length - 1; i++){ const k = s.slice(i, i + 2); m.set(k, (m.get(k) || 0) + 1); }
-  g = {m, n: Math.max(0, s.length - 1)};
-  if (GRAM_CACHE.size > 50000) GRAM_CACHE.clear();
-  GRAM_CACHE.set(s, g);
-  return g;
-}
-function normNameRaw(s){
-  return String(s || "").toLowerCase().replace(/\b(m\/s|ms|mr|mrs|shri|sh|smt)\b\.?/g, " ").replace(/\b(private|pvt|limited|ltd|llp|co|company|and|the|india|enterprises?|traders?)\b\.?/g, " ")
-    .replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
-}
-function nameSim(a, b){
-  a = normName(a).replace(/ /g, ""); b = normName(b).replace(/ /g, "");
-  if (!a || !b) return 0;
-  if (a === b) return 1;
-  if (a.length > 4 && b.length > 4 && (a.indexOf(b) >= 0 || b.indexOf(a) >= 0)) return 0.9;
-  const ga = gramsOf(a), gb = gramsOf(b);
-  if (!ga.n || !gb.n) return 0;
-  // quick bound: the score cannot exceed this, so skip hopeless pairs
-  if (2 * Math.min(ga.n, gb.n) / (ga.n + gb.n) < 0.5) return 0;
-  let inter = 0;
-  const [small, big] = ga.m.size <= gb.m.size ? [ga.m, gb.m] : [gb.m, ga.m];
-  small.forEach((v, k) => { const w = big.get(k); if (w) inter += Math.min(v, w); });
-  return 2 * inter / (ga.n + gb.n);
-}
+// NORM_CACHE, normName, gramsOf, normNameRaw, nameSim: server/_shared/gst3b.js (shared with the gst-run function)
 const NARR_STRIP = /\b(UPI|NEFT|RTGS|IMPS|MMT|P2A|P2M|DR|CR|TRF|TRANSFER|TO|BY|FROM|INB|IB|CHQ|CHEQUE|PAID|DEP|DEPOSIT|CLG|CLEARING|ACH|NACH|ECS|PAYMENT|PAY|SENT|RECEIVED|REF|UTR|NA|NO|OTHERS|OTHER|INR|RS|MICR|CTS|INWARD|OUTWARD|RETURN|REV|REVERSAL|FUND|FT|BIL|ONL|MB|NET|BANKING|MOBILE|SI|INFT|INF|POS|BRN)\b/gi;
 const IFSC_RE = /^[A-Z]{4}0[A-Z0-9]{6}$/;
 function decodeNarr(n, clientName){

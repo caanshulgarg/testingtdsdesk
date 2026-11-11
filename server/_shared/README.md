@@ -113,3 +113,33 @@ anything left (`tmReasons`), and what goes to Claude for the left-overs and how 
 `tmAiParse`, `tmAiCheck`). Plain JavaScript with no imports. The tds-challan-match function imports it; `build.py` puts it,
 without its export line, at the head of the app after match2b.js (`SHARED_JS`), where `TDSMatch` (src/js/86) calls it.
 `node tests/run_tds_match.js` checks the rules one by one; `python3 tests/run_tds_challan_match_server.py` the function.
+
+## gst3b.js: the GSTR-3B engine, one source for the app and gst-run
+
+`gst3b.js` (next-cloud-gst, 09-Nov-2026) is the part of the app's objects that a month's 3B and its carried credit reach
+(`GSTR.threeB`, `GSTR.creditIn`: GSTR, Books, GST2B, GSTSet, GSTQ, GSTF, ITCT, CustIMS, GSTAdv, GSTRev, GSTAmend, GSTV,
+M2B, and the plain helpers they call), with what makes the books from the cloud's rows (BookSrc.apply / ledgersInto,
+BookItems.join, Books.mapLedgers, LedMaster.refresh and the two members of Audit it calls); GSTAdv, GSTAmend, GSTF, GSTQ,
+GSTRev, GSTSet, ITCT, CustIMS and BookSrc are here whole. `build.py`
+puts it, without its export line, at the head of the app after tallyname.js (`SHARED_JS`), so these are the app's own
+top-level objects; the rest of each object (screens, files, buttons) is put on it in src/js with `Object.assign(GSTR, {`
+(tests/harness.js loads those blocks with their object). Plain JavaScript with no imports; it reads `S` and `CO()` and
+names.js's functions as globals at call time, and the app's perRender / reactScope / IN_RENDER / RENDER_GEN / ITCDec /
+whoAmI / TDSTally / GSTX only through `typeof`. A change to the 3B is made here, once. `server/gst-run` imports it (engine.js) and is
+deployed with `../_shared/gst3b.js`, `../_shared/gst3bprint.js`, `../_shared/names.js`, `../_shared/cors.ts` and
+`../_shared/firmgate.ts`; verify_jwt off (it checks the member's token, the service key or the timer's key itself); it
+needs migrations 151 and 153. It never works a month out while a page waits: a member's request reads what is kept
+(or queues the client), and background runs work out a month or two each from the credit kept for the month before.
+The queue (migration 153, no trigger on any table) is filled explicitly: tally-ingest after a book's entries are stored
+(`gst_calc_want_book`, never failing the ingest), the app after a GST item of the work is saved (`gst_calc_poke`, not
+waited on), and a member's miss; it is drained by migration 153's pg_cron job (every minute, made only where pg_cron,
+pg_net and the Vault secrets are) and by members' misses (a run never starts another; at most 3 at once); a client whose
+runs passed their budget twice, or were taken 3 times and never finished, is left to the app (too_big) until a day
+later or a new engine; it reads a book's entries in one compact answer (`gst_calc_rows`). Measured (tests/run_gst_cloud.js): a
+run on a small client takes tens of ms of CPU; on a 40,000-entry book about 0.9 to 1.25 s a month (under the 2 s limit, over
+the 1 s target: the year-wide work a month needs, 2B matching, rule 37's bills, advances, the ledger list, is done again
+in every run), with about 150 MB alive at the fullest. `gst3bprint.js` is the fingerprint of a 3B's inputs, made the same way from the app's open books and from
+the cloud's (an ES module, not in legacy.js): a page may show the cloud's 3B only when the two are the same and nothing
+is pending. After a change to gst-run's files, move `REV` in server/gst-run/engine.js and write
+`tests/gst_cloud_rev.json` again (`GST_REV_WRITE=1 node tests/run_gst_cloud.js`). `node tests/run_gst_cloud.js` checks the
+cloud's 3B is the app's, box for box; `python3 tests/run_migration153.py` the version it is kept by.

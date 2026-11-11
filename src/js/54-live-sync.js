@@ -17,7 +17,8 @@
 //     the 45-second round; the top bar says Saving..., Saved 14:05, or that the computer is offline.
 //   - A change by someone else is applied with a short note ("Updated by Rahul at 14:05"), never an error.
 // Without migration-12 on the database the books are shared as before (BookSync, the blob).
-const BookItems = {
+// BookItems's part the GSTR-3B engine runs is in server/_shared/gst3b.js (shared with the gst-run function); the rest is put on it here
+Object.assign(BookItems, {
   off: false,              // client_book_items not in the database: BookSync's blob as before
   st: {},                  // cid -> {seq, base: {itemKey: hash}, chain, timer, editAt, error}
   MAXI: 290,
@@ -45,14 +46,6 @@ const BookItems = {
       } else out.set(this.ik(k, ""), {k, i: "", d: v});
     });
     return out;
-  },
-  join(items){
-    const m = items.find(x => x.i === "");
-    if (!m) return undefined;
-    const t = m.d && typeof m.d === "object" && !Array.isArray(m.d) && Object.keys(m.d).length === 1 ? m.d.$t : null;
-    if (t === "obj"){ const o = {}; items.forEach(x => { if (x.i[0] === ".") o[x.i.slice(1)] = x.d; }); return o; }
-    if (t === "arr" || (Array.isArray(m.d) && !m.d.length && items.some(x => x.i[0] === "#"))) return items.filter(x => x.i[0] === "#").sort((a, c) => (a.o || 0) - (c.o || 0)).map(x => x.d);
-    return m.d;
   },
   // rows from the server into a books object: only the keys they touch are rebuilt
   put(b, rows){
@@ -249,6 +242,8 @@ const BookItems = {
         at = end;
       }
       s.error = ""; clean(); await this.keep(cid); Live.saved();
+      // next-cloud-gst: an item of the keys the 3B reads saved (gst3bprint.js GST3B_KEYS): the client's 3B queued to be worked out in the cloud (best effort, not waited on)
+      if (send.some(x => /^(advFix|amendFix|assets|filed|filed1a|gone|groups|gst3b|gstAato|gstApi|gstCashLedger|gstContacts|gstFiled|gstOpen|gstRegs|gstSet|gstVault|gstins|itcBasis|itcDec|itcTrack|ledCheck|ledInfo|ledInfoAt|map|outRej|pans|reco2b|rev|rule37On|states|twoBs|under)$/.test(x[2].k))) Cloud.api("rpc/gst_calc_poke", {method: "POST", body: {p_client: cid}}).catch(() => {});
     } catch (e){
       if (this.missing(e)){ this.off = true; BookSync.schedule(cid); return 0; }
       if (/not allowed|42501|permission/i.test(e.message)){ BookSync.of(cid).readonly = true; Live.saved(); return 0; }
@@ -272,7 +267,7 @@ const BookItems = {
     if (s.timer || Live.sv.state === "saving") return {t: "Saving…"};
     return Live.sv.at ? {t: "Saved " + fmtTime(Live.sv.at) + (Live.st === "live" ? " · changes by others appear here at once" : "")} : null;
   }
-};
+});
 
 /* ---------- Supabase Realtime: one connection a page (the Phoenix protocol, version 1) ---------- */
 const Live = {

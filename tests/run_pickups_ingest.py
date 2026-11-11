@@ -12,6 +12,7 @@ computer, bridges and books only. Checks:
   3. merged with the beat before: another bridge of the computer keeps its own (2 hours from when it was seen); this
      bridge's are what it says now; an older bridge (no pickups) leaves the others' as they were;
   4. a change is passed on at once on the firm's broadcast channel (the page's TLight.beatIn merges it into info.beat).
+  (9. migration 155: after the beat's record is kept, tally_link_guid_fill is asked for this bridge; a cloud without it: as before)
 Needs Deno (DENO, default: the deno on the PATH or /opt/deno/deno)."""
 import os, sys, json, time, hashlib, subprocess, threading, urllib.request, urllib.error, shutil, datetime
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
@@ -38,6 +39,10 @@ def rpc(name, a):
         if name in ("tally_check_next", "tally_check_next_open"): return CHECK.get(a["p_book"], [])[: a["p_max"]]
         if name == "tally_period_gate": return True
         return {"ok": True}
+    if name == "tally_link_guid_fill":     # migration 155 (section 9)
+        FS.ARGS.setdefault(name, []).append(a)
+        if name in FS.NO_FN: raise LookupError("PGRST202")
+        return 0
     return real(name, a)
 FS.rpc = rpc
 FS.T["tally_companies"] += [{"firm_id": FIRM, "company": "MADE UP CO", "client_id": "c1", "book_id": BOOK}]
@@ -204,6 +209,23 @@ try:
     call(dict(base, bridge=GB, pickups=[refused(code="noStart", kind="period", at=now)]))
     c, got = days8(companies=cos(altvchid=50, altmstid=20))
     ok("MADE UP CO" in got, "8. another bridge's noStart: not this bridge's (%s)" % got)
+
+    print("== 9. a link with no Tally GUID takes it from the bridge's own record (migration 155)")
+    FS.ARGS.pop("tally_link_guid_fill", None)
+    c, r = call(dict(base))
+    for i in range(40):     # (review B3: asked without the beat waiting for it)
+        if FS.ARGS.get("tally_link_guid_fill"): break
+        time.sleep(0.05)
+    g = FS.ARGS.get("tally_link_guid_fill") or []
+    ok(c == 200 and g and g[-1] == {"p_firm": FIRM, "p_device": DA, "p_bridge": GA["id"]}, "9. asked after the beat's record is kept, for this bridge (%s)" % g[-1:])
+    FS.ARGS.pop("tally_link_guid_fill", None)
+    c, r = call(dict(base, companies=[{"name": "MADE UP CO", "open": False, "guid": CG}])); time.sleep(0.5)
+    ok(c == 200 and not FS.ARGS.get("tally_link_guid_fill"), "9. not asked when the bridge's own record lists no company open")
+    FS.NO_FN.add("tally_link_guid_fill")
+    c, r = call(dict(base)); time.sleep(0.5); n1 = len(FS.ARGS.get("tally_link_guid_fill") or [])
+    c2, r2 = call(dict(base)); time.sleep(0.5)
+    ok(c == 200 and r.get("ok") is True and c2 == 200 and len(FS.ARGS.get("tally_link_guid_fill") or []) == n1, "9. a cloud without 155: the beat answers as before, not asked again for 10 minutes")
+    FS.NO_FN.discard("tally_link_guid_fill")
 finally:
     fn.terminate()
 if fails:
