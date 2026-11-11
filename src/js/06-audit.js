@@ -95,7 +95,11 @@ const Audit = {
       (b.vouchers || []).forEach(v => { if (v.date < start || v.date > d || v.opt || v.cancel) return; v.ent.forEach(e => { bal[e.l] = r2((bal[e.l] || 0) + e.a); }); });
       return bal;
     };
-    if (tb && tb.from <= from && tb.to >= to){
+    // the year in progress (staging, 11-Nov-2026: books from this 1 April showed no balance sheet): a balance as on a day
+    // still to come is the one to date, so balances kept to today answer for a period ending later (the entries up to
+    // each day are added as ever, a post-dated one too)
+    const today = this.today(), upTo = to > today ? today : to;
+    if (tb && tb.from <= from && tb.to >= upTo){
       const open = {}; Object.entries(tb.led || {}).forEach(([n, x]) => { open[n] = num(x.open); });
       // the openings from FinCom's copy (FinCom Bridge 2.1.4 asks Tally for no balance), or a trial balance file
       return {ok: true, src: (tb.src === "copy" ? "the opening balances in FinCom's copy, read on " : "Tally's balances read on ") + fmtDate(String(tb.at).slice(0, 10)), at: d => move(open, tb.from, d)};

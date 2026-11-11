@@ -270,6 +270,36 @@ try {
   eq(d.pl.dep.cy, 162500, "the profit and loss carries the depreciation: 1,50,000 + 12,500");
   ok(d.checks.every(z => z.value === 0), "every check reads 0: " + d.checks.filter(z => z.value !== 0).map(z => z.label + " " + z.value).join("; "));
   ok((d.tb.rows.find(r => r.ledger === "Furniture and Fixtures") || {}).depCr === 12500, "the TB row says what depreciation was credited to it (depCr, the Excel's column L)");
+
+  console.log("\nThe year in progress, from FinCom's cloud copy (staging, 11-Nov-2026: a company whose books begin this 1 April showed no balance sheet)");
+  // TCloud.load keeps the copy's openings as b.tb from the book's first day to TODAY (b.tb.to = Audit.today()); the full year
+  // asks for the balances to next 31 March, beyond today: the balances as on a day still to come are those to date
+  // (every entry here, a post-dated one too, up to that day), so the copy answers; before, it fell to the ledger masters
+  // (none in a cloud copy): "the ledger balances are not read yet"
+  {
+    const t = x.Audit.today(), fyc = String(Number(t.slice(0, 4)) - (Number(t.slice(4, 6)) < 4 ? 1 : 0)), Y1 = fyc + "0401", Y2 = String(Number(fyc) + 1) + "0331";
+    setCo(CO);
+    const led = {"Equity Share Capital": {open: 100000, close: 0, parent: "Capital Account"}, "Northbank Current A/c": {open: -100000, close: 0, parent: "Bank Accounts"},
+      "Design Fees": {open: 0, close: 0, parent: "Sales Accounts"}, "Rent": {open: 0, close: 0, parent: "Indirect Expenses"}};
+    const under = Object.fromEntries(Object.entries(led).map(([n, v]) => [n, v.parent]));
+    const cur = {cid: "c-cur", under, groups: {}, ledInfo: {}, meta: {from: Y1}, msme: {}, fs: {},
+      vouchers: [{id: "s1", date: Y1, type: "Sales", narr: "Fees", ent: [{l: "Northbank Current A/c", a: -50000}, {l: "Design Fees", a: 50000}]},
+        {id: "r1", date: t, type: "Payment", narr: "Rent", ent: [{l: "Rent", a: -20000}, {l: "Northbank Current A/c", a: 20000}]}],
+      tb: {from: Y1, to: t, at: new Date().toISOString(), src: "copy", led}};
+    ctx.S.books = cur;
+    const bal = x.Audit.balances(Y1, Y2);
+    ok(bal.ok, "the balances of the year in progress come from the copy (" + (bal.ok ? bal.src : bal.why) + ")");
+    const dc = FinSt.build(fyc, {unit: 1, dec: 2});
+    ok(!dc.error, "the statements of " + fyc + "-" + String(Number(fyc) + 1).slice(2) + " are built" + (dc.error ? ": " + dc.error : ""));
+    ok(!dc.error && dc.bs.total.eqL.cy === dc.bs.total.assets.cy && dc.bs.total.assets.cy === 130000, "... the balance sheet tallies at 1,30,000 (1,00,000 + 50,000 - 20,000): " + (dc.error ? "" : dc.bs.total.eqL.cy + " / " + dc.bs.total.assets.cy));
+    // a copy that begins after the year's first day still does not answer for the whole year
+    cur.tb.from = fyc + "0701"; cur.meta.from = fyc + "0701";
+    ok(!x.Audit.balances(Y1, Y2).ok, "a copy that begins on 1 July does not answer for the year from 1 April");
+    cur.tb.from = Y1; cur.meta.from = Y1;
+    // a copy kept to an earlier day (books not opened since) does not answer for the days after it
+    cur.tb.to = x.Audit.dayBefore(t);
+    ok(!x.Audit.balances(Y1, Y2).ok, "a copy kept only to yesterday does not answer past it");
+  }
 } catch (e){ console.error(e); fails++; }
 function r6(v){ return Math.round(v * 1e6) / 1e6; }
 
