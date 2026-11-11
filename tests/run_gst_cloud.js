@@ -177,6 +177,15 @@ const near0 = o => !o || H.every(h => Math.abs(Number(o[h]) || 0) < 0.005);
     const fpW = gst3bPrint(open(r4), ctx.S.sales.list, k.run);
     ok(KN.length && KN.every(r => r.result.src === x.GST3B_SRC) && /^s[0-9a-f]{16}$/.test(x.GST3B_SRC || ""), "every month the cloud kept carries the engine's source (GST3B_SRC " + x.GST3B_SRC + "), the app's own: the 3B page may use it");
   ok(!gst3bSame(fpX, k) && !gst3bSame(fpP, k) && fpP.pend > 0 && !gst3bSame(fpW, k), "and not the same when the app has an entry the cloud has not, a ledger whose kind is a guess (pending), or a figure typed only here");
+  // a place of supply typed under GST > What to fix (b.gstPosFix, migration 159): counted on both sides, so the app's
+  // fingerprint and the cloud's agree on books with the correction, and not on books without it or with another
+  { const sale = rows.heads.find(h => /sales/i.test(String(h.vtype || ""))) || rows.heads[0], id = String(sale.guid);
+    const withFix = (pos) => { const r = JSON.parse(JSON.stringify(rows)); r.work.gstPosFix = Object.assign({}, r.work.gstPosFix, {[id]: {pos, at: "2026-11-11T10:00:00Z"}}); r.items = items(r.work); return r; };
+    const r5 = withFix("27"), r6 = withFix("29");
+    const both = gst3bPrint(open(r5), ctx.S.sales.list, k.run), both2 = gst3bPrint(open(r5), ctx.S.sales.list, k.run), other = gst3bPrint(open(r6), ctx.S.sales.list, k.run), none = gst3bPrint(open(rows), ctx.S.sales.list, k.run);
+    ok(both.pend === 0 && gst3bSame(both, both2) && !gst3bSame(both, none) && !gst3bSame(both, other) && !gst3bSame(none, both),
+      "a place of supply corrected: both sides counting it agree; the books without it, or with another state, do not (the page works the month out itself)");
+  }
   }
 
   console.log("== 3. what the months cover (on the app's figures)");
@@ -227,7 +236,8 @@ const near0 = o => !o || H.every(h => Math.abs(Number(o[h]) || 0) < 0.005);
   const read = new Set(); for (const mm of eng3b.matchAll(/\b(?:b|S\.books|\(S\.books \|\| \{\}\)|\(\(S\.books \|\| \{\}\)|\(S\.books && S\.books)\s*\.\s*([A-Za-z_]\w*)/g)) read.add(mm[1]);
   const reads = BK.filter(k => read.has(k) && !["vouchers", "meta"].includes(k));
   ok(reads.every(k => GST3B_KEYS.includes(k)), "every work key the engine reads is one the version counts (" + reads.length + " read: " + reads.filter(k => !GST3B_KEYS.includes(k)).join(", ") + ")");
-  const sql = fs.readFileSync(path.join(ROOT, "server", "gst-run", "migration-153-gst-cloud.sql"), "utf8"), arr = (sql.match(/i\.key = any \(array\[([^\]]*)\]/) || ["", ""])[1].split(",").map(x => x.trim().replace(/^'|'$/g, "")).filter(Boolean);
+  // the version's keys as the latest migration has them (159 added gstPosFix to 153's)
+  const sql = fs.readFileSync(path.join(ROOT, "server", "gst-run", "migration-159-gst-posfix.sql"), "utf8"), arr = (sql.match(/i\.key = any \(array\[([^\]]*)\]/) || ["", ""])[1].split(",").map(x => x.trim().replace(/^'|'$/g, "")).filter(Boolean);
   ok(JSON.stringify(arr) === JSON.stringify(GST3B_KEYS), "gst_calc_version counts exactly gst3bprint.js's GST3B_KEYS (" + arr.length + ")");
   const poke = (fs.readFileSync(path.join(ROOT, "src", "js", "54-live-sync.js"), "utf8").match(/send\.some\(x => (\/\^\([^/]*\/)\.test\(x\[2\]\.k\)\)\) Cloud\.api\("rpc\/gst_calc_poke"/) || [])[1];
   const pre = poke ? new RegExp(poke.slice(1, -1)) : null;

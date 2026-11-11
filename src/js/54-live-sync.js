@@ -243,7 +243,7 @@ Object.assign(BookItems, {
       }
       s.error = ""; clean(); await this.keep(cid); Live.saved();
       // next-cloud-gst: an item of the keys the 3B reads saved (gst3bprint.js GST3B_KEYS): the client's 3B queued to be worked out in the cloud (best effort, not waited on)
-      if (send.some(x => /^(advFix|amendFix|assets|filed|filed1a|gone|groups|gst3b|gstAato|gstApi|gstCashLedger|gstContacts|gstFiled|gstOpen|gstRegs|gstSet|gstVault|gstins|itcBasis|itcDec|itcTrack|ledCheck|ledInfo|ledInfoAt|map|outRej|pans|reco2b|rev|rule37On|states|twoBs|under)$/.test(x[2].k))) Cloud.api("rpc/gst_calc_poke", {method: "POST", body: {p_client: cid}}).catch(() => {});
+      if (send.some(x => /^(advFix|amendFix|assets|filed|filed1a|gone|groups|gst3b|gstAato|gstApi|gstCashLedger|gstContacts|gstFiled|gstOpen|gstPosFix|gstRegs|gstSet|gstVault|gstins|itcBasis|itcDec|itcTrack|ledCheck|ledInfo|ledInfoAt|map|outRej|pans|reco2b|rev|rule37On|states|twoBs|under)$/.test(x[2].k))) Cloud.api("rpc/gst_calc_poke", {method: "POST", body: {p_client: cid}}).catch(() => {});
     } catch (e){
       if (this.missing(e)){ this.off = true; BookSync.schedule(cid); return 0; }
       if (/not allowed|42501|permission/i.test(e.message)){ BookSync.of(cid).readonly = true; Live.saved(); return 0; }

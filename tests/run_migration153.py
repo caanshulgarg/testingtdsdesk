@@ -45,7 +45,19 @@ ok(sorted(set(re.findall(r"create or replace function public\.(\w+)\(", code))) 
 ok("create trigger" not in code and "trigger" not in re.sub(r"drop trigger if exists gst_calc_\w+ on public\.\w+;|no trigger", "", code), "no trigger made on any table (the queue is filled explicitly; an earlier draft's are dropped)")
 ok("perform cron.schedule('gst-run-warm'" in code and "to_regprocedure('cron.schedule(text,text,text)') is null" in code and "gst_cron_key" in code and "fincom_project_url" in code, "the timer: pg_cron gst-run-warm, made only where pg_cron, pg_net and both Vault secrets are")
 KEYS = json.loads("[" + re.search(r"const GST3B_KEYS = \[([^\]]*)\]", open(os.path.join(ROOT, "server", "_shared", "gst3bprint.js")).read()).group(1) + "]")
-ok(re.search(r"i\.key = any \(array\[([^\]]*)\]", text).group(1).replace("'", '"').replace(" ", "") == json.dumps(KEYS).strip("[]").replace(" ", ""), "the version's keys are GST3B_KEYS (%d)" % len(KEYS))
+# keys added by later migrations (159: gstPosFix): 153's own list is GST3B_KEYS without them, 159's is GST3B_KEYS
+LATER = ["gstPosFix"]
+M159 = os.path.join(ROOT, "server", "gst-run", "migration-159-gst-posfix.sql"); t159 = open(M159).read()
+keys_of = lambda t: re.search(r"i\.key = any \(array\[([^\]]*)\]", t).group(1).replace("'", '"').replace(" ", "")
+ok(keys_of(text) == json.dumps([k for k in KEYS if k not in LATER]).strip("[]").replace(" ", ""), "153's keys are GST3B_KEYS without the later ones (%d)" % (len(KEYS) - len(LATER)))
+ok(keys_of(t159) == json.dumps(KEYS).strip("[]").replace(" ", ""), "159's keys are GST3B_KEYS (%d)" % len(KEYS))
+fn = lambda t: re.search(r"create or replace function public\.gst_calc_version\(.*?\$function\$;", t, re.S).group(0)
+c159 = "\n".join(l.split("--")[0] for l in t159.lower().splitlines())
+ok(fn(t159) == fn(text).replace("'gstOpen', 'gstRegs'", "'gstOpen', 'gstPosFix', 'gstRegs'"), "159: 153's gst_calc_version, its one change gstPosFix among the keys")
+ok(re.findall(r"create or replace function public\.(\w+)\(", c159) == ["gst_calc_version"] and not re.search(r"\b(drop|delete|truncate|alter|insert|update)\s", c159) and "create table" not in c159
+   and "revoke all on function public.gst_calc_version(uuid, text) from public, anon, authenticated;" in t159 and "grant execute on function public.gst_calc_version(uuid, text) to service_role;" in t159
+   and re.search(r"^begin;\s*\nset local lock_timeout = '10s';", t159, re.M) and t159.rstrip().endswith("commit;") and not re.search(r"supabase\.co|https?://|qbocskai|nrtczucr", t159.lower()),
+   "159: add-only, one transaction, gst_calc_version only, 153's grants (service role only), names no real database")
 ok(not re.search(r"supabase\.co|https?://|qbocskai|nrtczucr", text.lower()), "names no real database")
 
 m151 = os.path.join(ROOT, "server", "tally-cloud", "migration-151-cloud-calc-1.sql")
@@ -91,6 +103,7 @@ try:
     prev = subprocess.run(["git", "-C", ROOT, "show", "0dea4d712:server/gst-run/migration-153-gst-cloud.sql"], capture_output=True, text=True).stdout
     if prev.strip(): db.sql(prev)     # and the one reviewed before this (want's delay in seconds, an integer)
     db.sql(text); db.sql(text)
+    db.sql(t159); db.sql(t159)      # and 159 over it (gstPosFix counted), twice
     ok(not draft.strip() or (db.one("select count(*) from pg_trigger where tgname like 'gst_calc_%'") == "0" and db.one("select count(*) from pg_proc where proname in ('gst_calc_items_changed', 'gst_calc_vouchers_changed')") == "0"
        and db.one("select count(*) from information_schema.columns where table_name = 'gst_calc_queue' and column_name in ('attempts', 'too_big', 'big_n', 'rev', 'first_wanted', 'asked_at', 'after_msg')") == "7"
        and db.one("select count(*) from pg_proc where proname in ('gst_calc_want', 'gst_calc_want_book')") == "2"), "run over earlier drafts: their triggers and functions gone, the queue's new columns there, one gst_calc_want and one _want_book")

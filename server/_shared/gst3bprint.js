@@ -16,10 +16,10 @@
 // books and the cloud's can hold one day's entries in another order. The app's order is not changed here; the fingerprint
 // leaves the order out, and run_gst_cloud.js keeps the two orders the same.
 // the items of a client's work the 3B engine reads (server/_shared/gst3b.js: S.books.<key>), the ledger list (map) with
-// them; migration 153's gst_calc_version counts exactly these keys, and tests/run_gst_cloud.js checks the engine reads no
-// other and tests/run_migration153.py that each one moves the version
+// them; gst_calc_version (migration 153, its keys as migration 159 has them: gstPosFix added) counts exactly these keys,
+// and tests/run_gst_cloud.js checks the engine reads no other and tests/run_migration153.py that each one moves the version
 const GST3B_KEYS = ["advFix", "amendFix", "assets", "filed", "filed1a", "gone", "groups", "gst3b", "gstAato", "gstApi", "gstCashLedger", "gstContacts", "gstFiled",
-  "gstOpen", "gstRegs", "gstSet", "gstVault", "gstins", "itcBasis", "itcDec", "itcTrack", "ledCheck", "ledInfo", "ledInfoAt", "map", "outRej", "pans", "reco2b",
+  "gstOpen", "gstPosFix", "gstRegs", "gstSet", "gstVault", "gstins", "itcBasis", "itcDec", "itcTrack", "ledCheck", "ledInfo", "ledInfoAt", "map", "outRej", "pans", "reco2b",
   "rev", "rule37On", "states", "twoBs", "under"];
 const WORK = GST3B_KEYS.filter((k) => k !== "map");
 function gst3bHash(s) {
