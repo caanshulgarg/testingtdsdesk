@@ -828,3 +828,18 @@ call it), one daily job `cron-run-details-trim` (21:53 UTC) whose first night is
 schedules moved off minute 0 by `cron.alter_job` (same jobs, commands and frequency; only where the schedule is still
 the old one; the list old -> new is in the file's head). Independent of every other migration. Tested:
 `tests/run_migration157.py`.
+
+## 158: a held delete applied on the first day list; a gap closed by days listed after Tally's number (not run yet; branch next-fast-delete, 11-Nov-2026)
+
+**158, held delete fast** (11-Nov-2026, branch `next-fast-delete`; **written, not run yet**; file md5
+ffbd925f5720e87d3db92b353f3c5ef5): `server/tally-cloud/migration-158-held-delete-fast.sql`. A delete line without the
+entry's GUID waited for 133's SECOND whole-day list (3.5 minutes on staging), and the recorder's gap never closed after a
+delete (150 needs the copy's highest AlterID at Tally's number; a deleted entry leaves none). Adds `tally_held_delete_by_heads`
+(the delete applied on the first whole-day list when the line's MasterID, number and type name one live entry whose GUID
+Tally makes from that MasterID and the list has neither), `tally_held_front` (that day first in the beat, once per 3
+minutes, the sending bridge only), the table `tally_gap_numbers` (service_role only) with a trigger on `tally_sync_cursor`
+(the gap's days, at most 7, queued for the check, source 'gap'), and replaces 150's `tally_recorder_gap_asked` (same
+arguments and grants; OR: every day listed whole after Tally's number was first seen, matched, the gap explained by settled
+deletes, nothing held since). Add-only, one transaction, lock_timeout 10 s, safe twice. Needs 133, 135, 136 and 150. Deploy:
+158 first, then tally-ingest (without 158 the function says nothing new). No bridge release. Tested:
+`tests/run_migration158.py`, `tests/run_held_delete_fast_ingest.py`.
