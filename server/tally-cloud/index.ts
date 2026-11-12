@@ -245,6 +245,7 @@ import { isJsonText, jsonScanner, elemXml } from "../_shared/tallyjson.js";
 import { linkDevice, beatNewOpen, cleanCompany, latestEntryDay, linkPlace, coTrim } from "./linknow.js";   // next-tally-linknow: a company open in Tally is linked at a click
 import { gateTrack, checkWindow, busyWhy, peerNear } from "./updategate.js";   // migration 139: the gated rollout of bridge updates
 import { periodPace, speedOf, speedBooks, olderNextMax, fastOn } from "./periodpace.js";   // next-fast-entries: 30 days an answer by day to a bridge reading windows
+import { renameRefused } from "./renamerefusal.js";   // FINCOM-CLOUD-STAGING-7: a rename the guard refuses is an answer, not a fault (left out of Sentry)
 import { cleanFastMeasure, fastMeasurePass } from "./fastmeasure.js";   // next-fast-measure (migration 148): the fast-read measurement
 import { servingGate, beatOnly, lineFollows, followAskable } from "./readfollow.js";   // next-link-follow (migration 146): every bridge with the company open serves it
 import { startDecision, earliestKnown, booksFromDay, memoAnswers, movedWords, istDay, uuidOfHex, dayOf } from "./bookstart.js";   // next-book-start: a book's start (bookStartFromState)
@@ -1638,7 +1639,7 @@ async function applyLedgerList(firm: string, book: string, body: any, dev?: any,
         // migration-36: the rename was rolled back (the trial balance would not tie, or the book's does not); said,
         // the batch goes on, and the next round asks again (the GUID is still under the old name)
         notes.push(("rename " + from + " -> " + to + " not made: " + String(error.message || "")).slice(0, 300));
-        fail("ledger_rename", error); console.log("tally-ingest ledger_list: rename rolled back", book, from, "->", to, String(error.message || "").slice(0, 200));
+        if (!renameRefused(error)) fail("ledger_rename", error); console.log("tally-ingest ledger_list: rename rolled back", book, from, "->", to, String(error.message || "").slice(0, 200));
         return;
       }
       if (!missing34(error)) throw new Error(error.message);
@@ -2587,7 +2588,7 @@ async function applyLedgerChanges(firm: string, book: string, body: any) {
       } else {
         const why = re ? "it could not be made: " + String(re.message || "").slice(0, 120) : String((rn as any)?.words || (rn as any)?.note || "refused");
         kept.push(("'" + have.name + "' is named '" + r.name + "' in Tally now: not renamed (" + why + "); nothing was changed").slice(0, 300));
-        if (re) fail("ledger_rename", re);
+        if (re && !renameRefused(re)) fail("ledger_rename", re);
         console.log("tally-ingest ledger_changes: rename from Tally not made, held", book, have.name, "->", r.name, why.slice(0, 200));
       }
     }
