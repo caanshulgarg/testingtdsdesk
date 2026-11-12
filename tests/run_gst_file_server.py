@@ -277,20 +277,18 @@ try:
     r = call(dict(c4, action="proceed"))
     TP["delay"] = {}
     r2 = call(dict(c4, action="proceed")); r3 = call(dict(c4, action="summary"))
-    ok(not r.get("ok") and r.get("unclear") and row("3B", "062026")["status"] == "confirmed" and row("3B", "062026").get("offset_tried_at") and "Offset liability" in r.get("error", "")
-       and not r2.get("ok") and "Offset liability" in r2.get("error", "") and not r3.get("ok") and "set off" in r3.get("error", "") and n_of("RETOFFSET", "062026") == 1,
+    ok(not r.get("ok") and r.get("unclear") and row("3B", "062026")["status"] == "confirmed" and row("3B", "062026").get("offset_tried_at") and "will not pay again on its own" in r.get("error", "")
+       and not r2.get("ok") and "will not pay again on its own" in r2.get("error", "") and not r3.get("ok") and "set off" in r3.get("error", "") and n_of("RETOFFSET", "062026") == 1,
        "the set-off's answer lost, the ledgers unmoved: not sent again, what to check on the portal said, summary refused: %s | %s" % (r.get("error"), r2.get("error")))
     back = lambda form, per, col: [x.__setitem__(col, time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() - 11 * 60))) for x in F.T["gst_filings"] if x["form"] == form and x["period"] == per]
-    # 10 minutes on and the ledgers still unmoved: sent once more (only once)
+    # the owner's decision (12-Nov-2026): a lost set-off counts as paid and is never sent again by FinCom, however long after
     back("3B", "062026", "offset_tried_at"); r = call(dict(c4, action="proceed"))
-    ok(r.get("ok") and n_of("RETOFFSET", "062026") == 2 and row("3B", "062026")["status"] == "proceeded", "10 minutes after a lost set-off, the ledgers unmoved: sent once more, proceeded: " + str(r.get("error")))
-    c8 = {"gstin": G, "form": "3B", "period": "042026"}
-    call(dict(c8, action="save", payload=dict(R3B, ret_period="042026"))); call(dict(c8, action="summary")); call(dict(c8, action="confirm"))
-    TP["delay"]["RETOFFSET"] = 5
-    call(dict(c8, action="proceed")); back("3B", "042026", "offset_tried_at"); r = call(dict(c8, action="proceed"))
-    TP["delay"] = {}
-    back("3B", "042026", "offset_tried_at"); r2 = call(dict(c8, action="proceed"))
-    ok(r.get("unclear") and not r2.get("ok") and "Offset liability" in r2.get("error", "") and n_of("RETOFFSET", "042026") == 2, "a second lost set-off: not sent a third time, what to check said: " + str(r2.get("error")))
+    ok(not r.get("ok") and "FinCom did not get the portal's answer and will not pay again on its own. Check the Electronic Cash and Credit ledgers on the portal: if the tax was not set off, do the set-off on the portal, then press Check the status here." in r.get("error", "") and n_of("RETOFFSET", "062026") == 1 and row("3B", "062026")["status"] == "confirmed",
+       "10 minutes after a lost set-off, the ledgers unmoved: not sent again, the owner's words said: " + str(r.get("error")))
+    # the person sets it off on the portal (the ledgers fall by what the set-off uses) and presses Check the status
+    TP["spent"] = {"i": 100, "c": 20, "s": 20, "cash_igst": 80, "cash_cgst": 48, "cash_sgst": 48}
+    r = call(dict(c4, action="track")); TP["spent"] = {}
+    ok(r.get("ok") and row("3B", "062026")["status"] == "proceeded" and n_of("RETOFFSET", "062026") == 1, "set off on the portal, then Check the status: the ledgers show it, proceeded (nothing sent): " + str(r))
     # a GSP's own JSON error (GSTN timed out behind it): unclear, the mark kept; a refusal FinCom knows (RT-3BAS1070): cleared
     c9 = {"gstin": G, "form": "3B", "period": "032026"}
     call(dict(c9, action="save", payload=dict(R3B, ret_period="032026"))); call(dict(c9, action="summary")); call(dict(c9, action="confirm"))

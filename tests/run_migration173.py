@@ -45,7 +45,7 @@ try:
         e = fails_sql(text) or fails_sql(text)
         ok(not e, "1. runs after 94, and a second time" + (": " + e[-300:] if e else ""))
     cols = {r["column_name"]: r for r in db.rows("select column_name, is_nullable, column_default from information_schema.columns where table_name = 'gst_filings'")}
-    ok(all(c in cols for c in ("busy_token", "busy_action", "busy_until", "file_tried_at", "offset_tried_at", "offset_sends")) and cols.get("busy_until", {}).get("is_nullable") == "NO", "1. the six columns, busy_until not null")
+    ok(all(c in cols for c in ("busy_token", "busy_action", "busy_until", "file_tried_at", "offset_tried_at")) and cols.get("busy_until", {}).get("is_nullable") == "NO", "1. the five columns, busy_until not null")
     try: old = db.rows("select status, save_state, busy_until < now() as free from gst_filings where " + KEY)
     except RuntimeError as x: old = [{"err": str(x)[:100]}]
     ok(old == [{"status": "confirmed", "save_state": "P", "free": "t"}], "1. a row made before keeps its data and is free: %s" % old)

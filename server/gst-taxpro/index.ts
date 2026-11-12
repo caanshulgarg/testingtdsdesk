@@ -483,9 +483,10 @@ async function putHeld(w: Who, r: Ret, token: string, set: Record<string, unknow
 }
 // the portal's EVC OTP lasts 10 minutes (an older one is refused before anything is sent)
 const OTP_MS = 10 * 60000;
-// a write whose answer was lost and that the portal does not show done is sent again only this long after it was sent
-// (the portal may still be processing it); a set-off at most twice in all
-const RESEND_MS = 10 * 60000, OFFSET_SENDS = 2;
+// a File whose answer was lost and that the portal does not list yet is sent again only this long after the last try
+// (the portal may still be filing it). A set-off whose answer was lost is never sent again (the owner, 12-Nov-2026)
+const RESEND_MS = 10 * 60000;
+const LOST_OFFSET = "FinCom did not get the portal's answer and will not pay again on its own. Check the Electronic Cash and Credit ledgers on the portal: if the tax was not set off, do the set-off on the portal, then press Check the status here.";
 // every call logged: who, when, GSTIN, period, form, action, result, ARN; never the OTP
 async function logFiling(w: Who, r: Ret, action: string, ok1: boolean, result: string, extra: { arn?: string; ref?: string; otp?: string } = {}) {
   await admin.from("gst_filing_log").insert({ firm_id: w.firm, gstin: r.gstin, form: r.form, period: r.period, action, by_user: w.me, ok: ok1,
@@ -580,6 +581,20 @@ async function filingAction(w: Who, action: string, body: any, role: string) {
       const g = await getTrack(h, gstin, username, fy);
       return ((g.data.EFiledlist as any[]).find((e) => String(e.ret_prd) === period && f.track.includes(String(e.rtntype || "").toUpperCase()) && e.arn) || null) as any;
     };
+    // 3B, a set-off sent whose answer never came: the ledgers now beside the set-off's plan; "done" marks it proceeded
+    // (RETOFFSET is never sent again here)
+    const ledgerCheck = async () => {
+      const { h, username } = await session(w, r);
+      const b = await tpv("LEDGER", LEDGER_PATHS, { gstin, username, ret_period: period, action: "BAL" }, h);
+      if (!ret(b)) throw new Plain("The ledger balances could not be read: " + tpErr(b) + ". Nothing was sent; try again in a moment.");
+      const d = offsetDone(row.offset_plan, ledgersOf(b.j));
+      if (d === "done") {
+        await put({ status: "proceeded", proceeded_by: w.me, proceeded_at: new Date().toISOString(), error: null });
+        row.status = "proceeded";
+        await logFiling(w, r, "proceed", true, "the set-off sent " + row.offset_tried_at + " shows in the ledgers: proceeded (RETOFFSET not sent again)");
+      } else await logFiling(w, r, "proceed", false, "a set-off was sent " + row.offset_tried_at + "; the ledgers " + (d === "not" ? "have not moved" : "moved otherwise") + "; not sent again");
+      return d;
+    };
     const filedAtOf = (hit: any) => { const d = String(hit?.dof || ""); return new Date(/^\d{2}-\d{2}-\d{4}$/.test(d) ? d.split("-").reverse().join("-") + "T00:00:00+05:30" : Date.now()).toISOString(); };
     if (action === "save") {
       const payload = form === "3B" ? cleanR3b(body.payload, gstin, period) : cleanR1(body.payload, gstin, period);
@@ -628,29 +643,13 @@ async function filingAction(w: Who, action: string, body: any, role: string) {
     }
     // proceed, evc_otp and file: only what the person confirmed; the portal's summary is read again first
     if (action === "proceed" || action === "evc_otp" || action === "file") {
-      // 3B: a set-off was sent before and its answer never came (or was not kept): never sent again; the ledgers say
-      // whether it was done (then proceeded), else the person is told what to check on the portal
-      const mmyy = period.slice(0, 2) + "-" + period.slice(2);
-      const CHECK = "On the portal, open the Returns Dashboard, GSTR-3B for " + mmyy + ", Payment of tax. If the tax shows as paid there, press Proceed here again: FinCom reads the ledgers and goes on to file. " +
-        "If it does not, press Offset liability on the portal yourself, then press Proceed here (or file it on the portal and press Check the status on the portal).";
+      // 3B: a set-off was sent before and its answer never came (or was not kept): never sent again (the owner's decision
+      // of 12-Nov-2026: it counts as paid); the ledgers say whether it was done (then proceeded), else the person is told
+      // what to check on the portal
       if (action === "proceed" && form === "3B" && row.offset_tried_at && row.status === "confirmed") {
-        const { h, username } = await session(w, r);
-        const b = await tpv("LEDGER", LEDGER_PATHS, { gstin, username, ret_period: period, action: "BAL" }, h);
-        if (!ret(b)) throw new Plain("The ledger balances could not be read: " + tpErr(b) + ". Nothing was sent; try again in a moment.");
-        const d = offsetDone(row.offset_plan, ledgersOf(b.j)), age = Date.now() - Date.parse(row.offset_tried_at), sends = Number(row.offset_sends || 1);
-        if (d === "done") {
-          await put({ status: "proceeded", proceeded_by: w.me, proceeded_at: new Date().toISOString(), error: null });
-          await logFiling(w, r, "proceed", true, "the set-off sent " + row.offset_tried_at + " shows in the ledgers: proceeded (RETOFFSET not sent again)");
-          return { ok: true, found: true };
-        }
-        // the ledgers unmoved 10 minutes after: it was not done, so sent once more (at most OFFSET_SENDS in all), below
-        const again = d === "not" && age >= RESEND_MS && sends < OFFSET_SENDS;
-        if (!again) {
-          await logFiling(w, r, "proceed", false, "a set-off was sent " + row.offset_tried_at + " (" + sends + " in all); the ledgers " + (d === "not" ? "have not moved" : "moved otherwise") + "; not sent again");
-          return { ok: false, unclear: true, error: (d === "not" ? "The set-off sent earlier does not show in the ledgers (they have not moved). " : "The ledgers moved, but not as the set-off would move them (another payment or debit, or a different split), so FinCom cannot tell whether it was done. ") +
-            (d === "not" && sends < OFFSET_SENDS ? "If it was sent just now, wait a few minutes: FinCom sends it once more only if the ledgers still have not moved 10 minutes after. " : "FinCom does not send it again by itself. ") + CHECK };
-        }
-        await logFiling(w, r, "proceed", true, "the set-off sent " + row.offset_tried_at + " does not show in the ledgers after 10 minutes: sent once more");
+        const d = await ledgerCheck();
+        if (d === "done") return { ok: true, found: true };
+        return { ok: false, unclear: true, error: (d === "unknown" ? "The ledgers moved, but not as the set-off would move them (another payment or debit, or a different split), so FinCom cannot tell whether it was done. " : "") + LOST_OFFSET };
       }
       if (action === "proceed" ? row.status !== "confirmed" : row.status !== "proceeded") return { ok: false, error: action === "proceed" ? "A person must first confirm the portal's summary against FinCom's." : "Proceed to file first." };
       if (action === "evc_otp") {
@@ -718,13 +717,12 @@ async function filingAction(w: Who, action: string, body: any, role: string) {
           }
           // kept before the set-off goes (under this action's lease): if the worker stops or the write after it fails,
           // the next proceed asks the ledgers instead of sending it again
-          const sends0 = row.offset_tried_at ? Number(row.offset_sends || 1) : 0;
-          await put({ offset_tried_at: new Date().toISOString(), offset_plan: plan, offset_sends: sends0 + 1, error: null });
+          await put({ offset_tried_at: new Date().toISOString(), offset_plan: plan, error: null });
           try { x = await tpv(f.kind, f.paths, { gstin, username: s.username, ret_period: period, action: "RETOFFSET" }, s.h, BASE, "PUT", { gstin, ret_period: period, pdcash: plan.pdcash, pditc: plan.pditc }); }
           catch (e) {
             if (!(e instanceof SendErr && e.sent)) {   // it never left (Vault, the keys, DNS, connection refused): nothing sent
               const m = plain(e, "filing proceed");
-              await put({ offset_tried_at: row.offset_tried_at || null, offset_sends: sends0 });
+              await put({ offset_tried_at: null });
               await logFiling(w, r, "proceed", false, "not sent: " + m);
               return { ok: false, error: "Nothing was sent: " + m };
             }
@@ -738,9 +736,9 @@ async function filingAction(w: Who, action: string, body: any, role: string) {
             const m = "the portal's answer to the set-off was not received or not clear (" + (x?.j ? tpErr(x) : x?.http ? "HTTP " + x.http : "no answer") + ")";
             await put({ error: m });
             await logFiling(w, r, "proceed", false, m + "; not sent again");
-            return { ok: false, unclear: true, error: "The portal's answer to the set-off was not received, so FinCom will not send it again. " + CHECK };
+            return { ok: false, unclear: true, error: LOST_OFFSET };
           }
-          if (!done1) await put({ offset_tried_at: row.offset_tried_at || null, offset_sends: sends0 });   // refused before processing: not this time
+          if (!done1) await put({ offset_tried_at: null });   // refused before anything was processed: not set off
         } else {
           // GSTR-1 / IFF: proceed to file moves no money, so a lost answer may simply be tried again
           try { x = await tpv(f.kind, f.paths, { gstin, username: s.username, ret_period: period, action: "RETNEWPTF" }, s.h, BASE, "POST", { gstin, ret_period: period }); }
@@ -784,6 +782,10 @@ async function filingAction(w: Who, action: string, body: any, role: string) {
     }
     if (action === "track") {
       try { await repoll(); } catch (e) { await logFiling(w, r, "save", false, "RETSTATUS before track: " + plain(e, "filing track repoll")); }   // RETTRACK all the same
+      // 3B, a set-off sent whose answer never came (perhaps set off by hand on the portal since): the ledgers read
+      if (form === "3B" && row.offset_tried_at && row.status === "confirmed") {
+        try { await ledgerCheck(); } catch (e) { await logFiling(w, r, "track", false, "ledgers before track: " + plain(e, "filing track ledgers")); }
+      }
       const hit = await trackHit();
       if (hit && row.status !== "filed") await put({ status: "filed", arn: hit.arn, filed_at: filedAtOf(hit), error: null });
       await logFiling(w, r, "track", true, hit ? "on the portal: " + (hit.status || "filed") + ", ARN " + hit.arn : "not filed on the portal yet", { arn: hit?.arn });

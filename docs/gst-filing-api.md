@@ -95,10 +95,12 @@ Sent once (12-Nov-2026, item 1 of the state-machine review; `migration-173-gst-f
   payment and RT-3BAS1059 offset null; "insufficient cash/credit balance"; AUTH4xxx or an invalid/expired session or
   token; for File also OTPnnnn, "invalid OTP", "OTP expired"). Any other answer (timed out, connection lost, a 5xx, a
   GSP's own JSON error such as a GSTN timeout, the worker stopped, or the database write after it failed) keeps the
-  mark: the next Proceed reads the ledgers (BAL). If each head's credit and cash fell by what the set-off uses (within
-  ₹1 either way), it is marked proceeded; if nothing moved and 10 minutes have passed, it is sent once more (`offset_sends`;
-  never a third time); anything else ("cannot tell", e.g. another debit) tells the person what to check. If the figures
-  differ at File, the difference is said and nothing is filed.
+  mark, and the set-off counts as paid: FinCom never sends it again on its own (the owner, 12-Nov-2026). The next
+  Proceed, or Check the status, reads the ledgers (BAL): if each head's credit and cash fell by what the set-off uses
+  (within ₹1 either way), it is marked proceeded; otherwise the person is told: "FinCom did not get the portal's answer
+  and will not pay again on its own. Check the Electronic Cash and Credit ledgers on the portal: if the tax was not set
+  off, do the set-off on the portal, then press Check the status here." If the figures differ at File, the difference
+  is said and nothing is filed.
 - GSTR-1 / IFF (proceed to file moves no money): as before, a save after proceeding is taken, a changed summary at File
   goes back to the summary, and a lost RETNEWPTF answer may be tried again.
 - A save still processing (`IP`) stays `saved` with `save_state` `IP` and is asked again by summary and track (a track
@@ -109,11 +111,11 @@ Sent once (12-Nov-2026, item 1 of the state-machine review; `migration-173-gst-f
   waits at most 20 s (`TAXPRO_READ_WAIT_MS`), each write at most 60 s (`TAXPRO_WRITE_WAIT_MS`), and no write is begun with
   less than 20 s left. The lease lasts 10 minutes.
 
-**When the set-off's answer was lost (what the person does, as FinCom tells them):** on the portal, open the Returns
-Dashboard, GSTR-3B for the month, Payment of tax. If the tax shows as paid, press Proceed in FinCom again: it reads the
-ledgers and goes on to the OTP and File. If it does not, press Offset liability on the portal, then Proceed in FinCom
-(its check needs the ledgers to fall by what FinCom's set-off uses; a different split on the portal shows as "cannot
-tell"), or file the 3B on the portal itself and press "Check the status on the portal" (RETTRACK marks it filed with its ARN).
+**When the set-off's answer was lost (what the person does, as FinCom tells them):** check the Electronic Cash and
+Credit ledgers on the portal. If the tax was set off, press Check the status (or Proceed) in FinCom: it reads the ledgers
+and goes on to the OTP and File. If it was not, do the set-off on the portal, then press Check the status in FinCom (its
+check needs the ledgers to fall by what FinCom's set-off uses, within ₹1; a different split on the portal shows as
+"cannot tell"); or file the 3B on the portal itself and press Check the status (RETTRACK marks it filed with its ARN).
 
 ## DSC (companies and LLPs): what others do, and FinCom's way
 

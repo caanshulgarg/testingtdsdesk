@@ -1,6 +1,6 @@
 -- migration-173-gst-filing-once (12-Nov-2026, branch next-fix-gst-file-once; written, NOT run: the owner reads it and runs it
 -- BEFORE the gst-taxpro function that uses it is deployed). Item 1 of the GST filing state-machine review: filing through the
--- GST API never sends the tax set-off (RETOFFSET) or the filing (RETFILE) twice. Add-only: six columns on gst_filings
+-- GST API never sends the tax set-off (RETOFFSET) or the filing (RETFILE) twice. Add-only: five columns on gst_filings
 -- (migration-94), no status value added, no CHECK changed, no row's data changed. Safe to run twice.
 --   busy_token, busy_action, busy_until   the return's lease: each action that writes (save, summary, confirm, proceed,
 --                                         evc_otp, file, track) takes it with one conditional update (where busy_until <
@@ -11,8 +11,6 @@
 --   offset_tried_at                       3B: set just before RETOFFSET is sent (cleared only when the portal refused it or
 --                                         it never left): while set, the return never goes back and the set-off is never
 --                                         sent again; the next proceed reads the ledgers to see whether it was done
---   offset_sends                          3B: how many times RETOFFSET was sent without a clear answer: a second send only
---                                         when the ledgers have not moved 10 minutes after the first; never a third
 --   file_tried_at                         set just before RETFILE is sent: a File whose answer had no ARN is followed by
 --                                         RETTRACK (was it filed?) before RETFILE is sent again
 -- A save the portal is still processing stays status 'saved' with save_state 'IP' (asked again by summary and track), so
@@ -25,7 +23,6 @@ alter table public.gst_filings add column if not exists busy_action text;
 alter table public.gst_filings add column if not exists busy_until timestamptz not null default '1970-01-01 00:00:00+00';
 alter table public.gst_filings add column if not exists file_tried_at timestamptz;
 alter table public.gst_filings add column if not exists offset_tried_at timestamptz;
-alter table public.gst_filings add column if not exists offset_sends smallint not null default 0;
 
 comment on column public.gst_filings.busy_until is 'migration-173: the lease of the action running on this return (gst-taxpro); free when in the past';
 comment on column public.gst_filings.offset_tried_at is 'migration-173: when RETOFFSET was sent (3B); while set the set-off is never sent again';
