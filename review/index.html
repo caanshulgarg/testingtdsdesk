@@ -14,7 +14,7 @@
 <meta name="theme-color" content="#0B1120" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231F6F5C'/%3E%3Cpath d='M11 9v14M11 9h11M11 16h8' stroke='white' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
 <title>FinCom</title>
-<link rel="preload" as="script" href="./legacy.js?v=92f36c44d7d9">
+<link rel="preload" as="script" href="./legacy.js?v=8f1b88717920">
 <!-- steady open (stability batch 1, 11-Oct-2026): before the first paint, which frame to draw. The sign-in page when nobody is
      signed in and "without an account" was not chosen (signInNeeded, src/js/27), else the app; a client's frame when one was
      open last time; and whether this build has opened here before (then no FinCom loader: the files are in the cache).
@@ -26,7 +26,7 @@
      has answered (src/main.jsx), so the old build is never drawn and then replaced. The loader and the page's shape are timed from the first frame on screen (data-boot-shown). The vite plugin (vite.config.js, fincom-boot) puts in the storage prefix and the build id, and allows this script by
      its hash in the page's Content-Security-Policy. A page served from /next/ (the trial address, docs/RELEASE-FLOW.md) is marked data-trial: its strip says TRIAL. It also notes when the page has been read in full (__fincomDcl): the
      program runs deferred (round 73 B), and waits for that as it did when it ran before the end of the page (domLoading). -->
-<script id="fincom-boot">(function(){window.__fincomDcl=0;document.addEventListener("DOMContentLoaded",function(){window.__fincomDcl=1});var d=document.documentElement,P="tdsdesk-test:",ls=function(k){try{return localStorage.getItem(P+k)}catch(e){return null}},ss=function(k){try{return sessionStorage.getItem(P+k)}catch(e){return null}},j=function(t){try{return JSON.parse(t||"null")}catch(e){return null}};var c=j(ls("cloud"))||{},s=j(ss("cloudsess"))||j(ls("cloudsess")),h=String(location.hash||"").toLowerCase();var signin=!(s&&s.access_token)&&(c.gate!==false||h==="#register"||h==="#signin");if(/access_token=/.test(h)&&/type=(invite|recovery|signup|magiclink)/.test(h))signin=true;d.setAttribute("data-boot",signin?"signin":"app");if(/\/next\/(index\.html)?$/.test(location.pathname))d.setAttribute("data-trial","");try{requestAnimationFrame(function(){d.setAttribute("data-boot-shown","")})}catch(e){d.setAttribute("data-boot-shown","")}if(!signin&&ls("last")&&!/^#\/(today|clients|compliance|inbox|tally|settings|help|people|plan|rules|meetings|join)\b/.test(h))d.setAttribute("data-boot-co","");try{if(localStorage.getItem("fincom:opened")==="mwd37wtq-50b0ad")d.setAttribute("data-boot-quick","")}catch(e){}try{if(navigator.onLine!==false&&location.protocol!=="file:"&&window.fetch)window.__fincomBootCheck=fetch("build.json?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.json():null}).then(function(j){var k="fincom-reloaded-for";if(j&&j.build&&j.build!=="mwd37wtq-50b0ad"&&sessionStorage.getItem(k)!==j.build){sessionStorage.setItem(k,j.build);window.__fincomSwapping=true;var u=new URL(location.href);u.searchParams.set("v",j.build);location.replace(u.toString());return true}return false}).catch(function(){return false})}catch(e){}})();</script>
+<script id="fincom-boot">(function(){window.__fincomDcl=0;document.addEventListener("DOMContentLoaded",function(){window.__fincomDcl=1});var d=document.documentElement,P="tdsdesk-test:",ls=function(k){try{return localStorage.getItem(P+k)}catch(e){return null}},ss=function(k){try{return sessionStorage.getItem(P+k)}catch(e){return null}},j=function(t){try{return JSON.parse(t||"null")}catch(e){return null}};var c=j(ls("cloud"))||{},s=j(ss("cloudsess"))||j(ls("cloudsess")),h=String(location.hash||"").toLowerCase();var signin=!(s&&s.access_token)&&(c.gate!==false||h==="#register"||h==="#signin");if(/access_token=/.test(h)&&/type=(invite|recovery|signup|magiclink)/.test(h))signin=true;d.setAttribute("data-boot",signin?"signin":"app");if(/\/next\/(index\.html)?$/.test(location.pathname))d.setAttribute("data-trial","");try{requestAnimationFrame(function(){d.setAttribute("data-boot-shown","")})}catch(e){d.setAttribute("data-boot-shown","")}if(!signin&&ls("last")&&!/^#\/(today|clients|compliance|inbox|tally|settings|help|people|plan|rules|meetings|join)\b/.test(h))d.setAttribute("data-boot-co","");try{if(localStorage.getItem("fincom:opened")==="mwdbcwt7-4a4669")d.setAttribute("data-boot-quick","")}catch(e){}try{if(navigator.onLine!==false&&location.protocol!=="file:"&&window.fetch)window.__fincomBootCheck=fetch("build.json?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.json():null}).then(function(j){var k="fincom-reloaded-for";if(j&&j.build&&j.build!=="mwdbcwt7-4a4669"&&sessionStorage.getItem(k)!==j.build){sessionStorage.setItem(k,j.build);window.__fincomSwapping=true;var u=new URL(location.href);u.searchParams.set("v",j.build);location.replace(u.toString());return true}return false}).catch(function(){return false})}catch(e){}})();</script>
 <!-- never blank (27-Oct-2026, the owner's white page on Safari after a release: the service worker held up the page's
      own files, nothing ran, so nothing watched or reported it). This little script runs first and depends on nothing
      else. When the page has not been read to its end 4 s after opening (a file in its head held up: guard.js or the
@@ -37,16 +37,24 @@
      version". Without that pointer: one clean reload from the network. Once per build in a tab, never a loop (then the
      "FinCom did not open" note). Reported by a beacon of its own (the testing site's Sentry; on a local test server
      only when localStorage "fincom.report" is "on"). The vite plugin puts in the storage prefix, the build id and the
-     report address, and allows this script by its hash. -->
-<script id="fincom-heal">(function(){var W=window,D=document,B="mwd37wtq-50b0ad",R="https://o4512221111320576.ingest.us.sentry.io/api/4512221234724864/store/?sentry_version=7&sentry_key=7f2432ad2a6406244d931f4856c30933",KEY="fincom:healed",NOTE="fincom:healed-note",done=false,loaded=0;
+     report address, and allows this script by its hash.
+     next-fix-hang-home (FINCOM-APP-STAGING-B then -F, 12-Nov-2026 06:52 UTC): "not drawn" 15 s into an opening without a
+     worker (all files in at about 11 s, a slow line), so it cleared FinCom's copies and sent the page to the previous
+     build, which was held up in its turn. Not drawn while the program is still opening (window.__fincomStage, src/js/27's
+     start: reading this browser's saved work, a large firm's on a slow PC) is no fault: looked at again each second, until
+     45 s after the page opened at most (the "did not open" note, public/oldcheck.js, waits as long: then it says so and
+     the healer leaves it to the note). An opening that threw ("failed: …") is not still opening: healed as before. The
+     report says the stage. -->
+<script id="fincom-heal">(function(){var W=window,D=document,B="mwdbcwt7-4a4669",R="https://o4512221111320576.ingest.us.sentry.io/api/4512221234724864/store/?sentry_version=7&sentry_key=7f2432ad2a6406244d931f4856c30933",KEY="fincom:healed",NOTE="fincom:healed-note",done=false,loaded=0;
 var here=location.href.replace(/[?#].*$/,"").replace(/[^\/]*$/,""),path=here.replace(/^[a-z]+:\/\/[^\/]+/i,"");
 function ss(k,v){try{if(v===undefined)return sessionStorage.getItem(k);sessionStorage.setItem(k,v)}catch(e){return null}}
 function sw(){try{return!!(navigator.serviceWorker&&navigator.serviceWorker.controller)}catch(e){return false}}
 function parsed(){return!!D.getElementById("react-root")||!!W.__fincomOld}
 function drawn(){return parsed()&&!D.querySelector("[data-boot-part]")}
+function opening(){var s=String(W.__fincomStage||"");return!!s&&s!=="drawn"&&!/^(healing|file not loaded|failed)/.test(s)&&(!W.performance||!performance.now||performance.now()<45000)}
 function line(t,id){try{var d=D.getElementById(id||"fincom-heal-line");if(!d){d=D.createElement("div");d.id=id||"fincom-heal-line";d.setAttribute("role","status");d.setAttribute("data-heal-line","");d.style.cssText="position:fixed;left:50%;top:16px;transform:translateX(-50%);z-index:10001;padding:8px 14px;border-radius:8px;background:#1E2A25;color:#fff;font:13px/1.4 -apple-system,Segoe UI,Arial,sans-serif;max-width:calc(100vw - 32px);box-sizing:border-box";(D.body||D.documentElement).appendChild(d)}d.textContent=t}catch(e){}}
-function report(reason){try{var local=/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname),on=false;try{on=localStorage.getItem("fincom.report")==="on"}catch(e){}if(!R||(local&&!on))return;
-var body=JSON.stringify({message:"FinCom healed itself: "+reason,level:"warning",platform:"javascript",tags:{heal:reason.split(":")[0],build:B},extra:{ua:navigator.userAgent,url:path,sw:sw(),kept:D.documentElement.hasAttribute("data-boot-kept"),parsed:parsed(),loaded:!!loaded,ms:Math.round(W.performance&&performance.now?performance.now():0)}});
+function report(reason,stage){try{var local=/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname),on=false;try{on=localStorage.getItem("fincom.report")==="on"}catch(e){}if(!R||(local&&!on))return;
+var body=JSON.stringify({message:"FinCom healed itself: "+reason,level:"warning",platform:"javascript",tags:{heal:reason.split(":")[0],build:B},extra:{ua:navigator.userAgent,url:path,sw:sw(),kept:D.documentElement.hasAttribute("data-boot-kept"),parsed:parsed(),loaded:!!loaded,stage:String(stage||"").slice(0,40),ms:Math.round(W.performance&&performance.now?performance.now():0)}});
 W.__fincomHealReport=body;fetch(R,{method:"POST",mode:"no-cors",keepalive:true,headers:{"Content-Type":"text/plain"},body:body}).catch(function(){})}catch(e){}}
 function clear(next){var left=0,over=false,end=function(){if(!over){over=true;next()}},one=function(){if(--left<=0)end()};setTimeout(end,2500);
 try{if(navigator.serviceWorker&&navigator.serviceWorker.getRegistrations){left++;navigator.serviceWorker.getRegistrations().then(function(rs){return Promise.all(rs.filter(function(r){return r.scope===here}).map(function(r){return r.unregister()}))}).then(one,one)}}catch(e){}
@@ -55,12 +63,12 @@ if(!left)end()}
 function lastGood(next){var t=setTimeout(function(){next(null)},2500);try{fetch("last-good.json?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.json():null}).then(function(j){clearTimeout(t);next(j&&j.build&&j.path&&j.build!==B?j:null)},function(){clearTimeout(t);next(null)})}catch(e){clearTimeout(t);next(null)}}
 function heal(reason){if(done||W.__fincomOld||W.__fincomSwapping||D.documentElement.hasAttribute("data-guest"))return false;done=true;
 if(ss(KEY)===B){if(W.__fincomStuck)W.__fincomStuck(false);else line("FinCom did not open. Please reload the page.");return false}
-ss(KEY,B);W.__fincomStage="healing: "+reason;report(reason);line("FinCom is refreshing its files…");
+ss(KEY,B);var was=W.__fincomStage;W.__fincomStage="healing: "+reason;report(reason,was);line("FinCom is refreshing its files…");
 clear(function(){lastGood(function(j){if(j){try{localStorage.setItem(NOTE,String(Date.now()))}catch(e){}location.replace(new URL(j.path,here).toString())}else location.reload()})});return true}
 W.__fincomHeal=heal;
 try{var n=+localStorage.getItem(NOTE);if(n){localStorage.removeItem(NOTE);if(Date.now()-n<120000){var show=function(){line("FinCom updated; opened the last working version");setTimeout(function(){var d=D.getElementById("fincom-heal-line");if(d)d.remove()},12000)};if(D.body)show();else D.addEventListener("DOMContentLoaded",show)}}}catch(e){}
 setTimeout(function(){if(!parsed())heal("page held up"+(sw()?"":" (no worker)"))},sw()||D.documentElement.hasAttribute("data-boot-kept")?4000:12000);
-W.addEventListener("load",function(){loaded=1;setTimeout(function(){if(parsed()&&!drawn()&&!D.querySelector("[data-boot-stuck]")&&!W.__fincomLegacy)heal("not drawn")},D.documentElement.hasAttribute("data-boot-kept")?8000:4000)});})();</script>
+W.addEventListener("load",function(){loaded=1;var look=function(){if(!parsed()||drawn()||D.querySelector("[data-boot-stuck]")||W.__fincomLegacy)return;if(opening())return void setTimeout(look,1000);heal("not drawn")};setTimeout(look,D.documentElement.hasAttribute("data-boot-kept")?8000:4000)});})();</script>
 <style id="fincom-boot-css">
 /* The frame drawn from this page before the program has loaded (stability batch 1): the sidebar with the FinCom mark, the
    top bar with its fixed places (bell, Tally sign, firm), and the page's shape. The program draws over it in place.
@@ -123,13 +131,13 @@ html[data-boot="signin"] .shell .mainwrap{margin-left:0!important}
 .boot-signin .boot-btn{margin-top:24px;border:0;background:var(--accent-subtle,#EEF2FF)}
 </style>
 <script src="./guard.js"></script>
-  <link rel="modulepreload" crossorigin href="./assets/index-CiSEMXeo.js">
+  <link rel="modulepreload" crossorigin href="./assets/index-Ci52yhzQ.js">
   <link rel="stylesheet" crossorigin href="./assets/index-BNTXNElv.css">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-TFsI+TEGlNYBzTVvvDzkDhSvWJTg4ubKJLtc2W68uLI=' 'sha256-kSpuE4K1+DikHxvTdjCwo+/3NHYYSfSw5UlarKC3eQE=' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' data: blob: https://*.supabase.co wss://*.supabase.co http://127.0.0.1:* http://localhost:* https://o4512221111320576.ingest.us.sentry.io; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
-<style>.is-test .side-brand::after{content:"TEST";display:block;margin-top:4px;font-size:11px;letter-spacing:.14em;color:#E9A06A}.is-test header.top{box-shadow:inset 0 3px 0 #E2761B}body.is-test::after{content:"TESTING SITE · not for real client work · post only to a ZZ TEST company in Tally";position:fixed;left:0;right:0;bottom:0;z-index:70;background:#E2761B;color:#fff;font-size:12.5px;text-align:center;padding:3px 8px;letter-spacing:.04em;pointer-events:none}@media (max-width:600px){body.is-test::after{font-size:10.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:2px 6px}}</style><style>body.is-test::after{content:"Page freezes fixed (GST Year kept checks, MIS once after new entries) · staging database · not for real client work";background:#6B3FA0}.is-test .side-brand::after{content:"Page freezes fixed (GST Year kept checks, MIS once after new entries)";color:#C9A8F0}</style>
-<style>html[data-trial] body.is-test::after{content:"TRIAL · Page freezes fixed (GST Year kept checks, MIS once after new entries) · a new build on trial · staging database · not for real client work";background:#B42318}html[data-trial] .is-test .side-brand::after{content:"TRIAL";color:#F97066}html[data-trial] .is-test header.top{box-shadow:inset 0 3px 0 #B42318}</style>
-<link rel="preload" as="font" type="font/woff2" crossorigin href="./assets/geist-latin-wght-normal-BgDaEnEv.woff2">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-+BfSEJ3zUHaIOMzqAZsLykp4od359l+sN6h2KjlDlqE=' 'sha256-59Rb6YNQvhPOejLttOU9MnyvOT8YOm8INAQ1BdiTxio=' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' data: blob: https://*.supabase.co wss://*.supabase.co http://127.0.0.1:* http://localhost:* https://o4512221111320576.ingest.us.sentry.io; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
+<style>.is-test .side-brand::after{content:"TEST";display:block;margin-top:4px;font-size:11px;letter-spacing:.14em;color:#E9A06A}.is-test header.top{box-shadow:inset 0 3px 0 #E2761B}body.is-test::after{content:"TESTING SITE · not for real client work · post only to a ZZ TEST company in Tally";position:fixed;left:0;right:0;bottom:0;z-index:70;background:#E2761B;color:#fff;font-size:12.5px;text-align:center;padding:3px 8px;letter-spacing:.04em;pointer-events:none}@media (max-width:600px){body.is-test::after{font-size:10.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:2px 6px}}</style><style>body.is-test::after{content:"Clients page faster; self-repair waits for a slow opening · staging database · not for real client work";background:#6B3FA0}.is-test .side-brand::after{content:"Clients page faster; self-repair waits for a slow opening";color:#C9A8F0}</style>
+<style>html[data-trial] body.is-test::after{content:"TRIAL · Clients page faster; self-repair waits for a slow opening · a new build on trial · staging database · not for real client work";background:#B42318}html[data-trial] .is-test .side-brand::after{content:"TRIAL";color:#F97066}html[data-trial] .is-test header.top{box-shadow:inset 0 3px 0 #B42318}</style>
 <link rel="preload" as="font" type="font/woff2" crossorigin href="./assets/inter-latin-wght-normal-Dx4kXJAl.woff2">
+<link rel="preload" as="font" type="font/woff2" crossorigin href="./assets/geist-latin-wght-normal-BgDaEnEv.woff2">
 </head>
 <body class="is-test">
 <a class="skip" id="skipLink" href="#app">Skip to the work</a>
@@ -188,7 +196,7 @@ html[data-boot="signin"] .shell .mainwrap{margin-left:0!important}
 <div id="react-root"></div>
 <!-- the business logic (Tally, GST, TDS, bank), then the React screens on top of it. Both run once the page is read
      (round 73 B: legacy.js deferred, so it never holds up reading the page), still in this order -->
-<script defer src="./legacy.js?v=92f36c44d7d9"></script>
-<script type="module" crossorigin src="./assets/index-CiSEMXeo.js"></script>
+<script defer src="./legacy.js?v=8f1b88717920"></script>
+<script type="module" crossorigin src="./assets/index-Ci52yhzQ.js"></script>
 </body>
 </html>
