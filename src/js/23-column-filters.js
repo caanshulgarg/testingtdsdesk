@@ -656,8 +656,7 @@ function bankRowAct(a, id){
     const row = bankRow(id);
     if (row) unpostFromTally("bank", row, B().cid).then(ok => {
       if (!ok) return;
-      row.state = row.ledger ? "ready" : "attention"; row.sentAt = ""; row.postVerified = false; row.postByReply = false; row.tally = null;
-      if (B().postedTags) delete B().postedTags[fpHash(row.fp || row.id)];
+      bankClearPosting(row);
       saveBank({rows: true, posted: true}); render();
     });
     return true;
@@ -665,6 +664,7 @@ function bankRowAct(a, id){
   if (a === "post"){ postBankToTally([id]); return true; }
   {
     const r = bankRow(id); if (!r) return true;
+    if (bankInTally(r)){ toast(bankKeptWords(1)); return true; }
     b.undo = {what: a === "accept" ? "accept" : a, label: "1 entry", n: 1, others: 0, snaps: [rowSnapshot(r)], ruleKeys: [], oldRules: []};
     b.sticky.add(r.id);
     if (a === "accept"){

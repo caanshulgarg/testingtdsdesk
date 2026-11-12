@@ -44,7 +44,7 @@ function salesCols(s, list, nSel) {
   const act = (a, v) => () => salesRowAct(a, v.id);
   return [
     { k: "pick", role: "pick", cls: "ck", head: <input type="checkbox" aria-label="Select all" disabled={!list.length} title={list.length ? "Select all" : "No invoice shown to select"} checked={!!nSel && nSel === list.length} onChange={(ev) => salesSelAll(ev.target.checked)} />,
-      cell: (v) => <input type="checkbox" aria-label="Select" checked={s.sel.has(v.id)} disabled={v.status === "posted"} onChange={() => {}} onClick={(ev) => salesToggle(v.id, ev.target.checked, ev.shiftKey)} /> },
+      cell: (v) => <input type="checkbox" aria-label="Select" checked={s.sel.has(v.id)} disabled={v.status === "posted" || v.status === "intally"} onChange={() => {}} onClick={(ev) => salesToggle(v.id, ev.target.checked, ev.shiftKey)} /> },
     { k: "date", role: "date", label: "Date", cls: "dt", filter: <ColFunnel hideIdle t="sales" k="date" label="Date" />, v: (v) => v.x.date || "", td: (v) => ({ title: fmtDate(v.x.date) }), cell: (v) => v.x.date ? shortDate(v.x.date) : "—" },
     { k: "no", role: "number", label: "Invoice", cls: "pt", filter: <ColFunnel hideIdle t="sales" k="no" label="Invoice" />, v: (v) => v.x.number || "",
       cell: (v) => <><div className="pn"><button className="linkbtn strong" onClick={() => salesOpen(v.id)}>{v.x.number || "(no number)"}</button></div><div className="nr">{v.source === "created" ? "Created here" : v.fileName || "Uploaded"}</div></> },
@@ -66,7 +66,7 @@ function salesCols(s, list, nSel) {
     { k: "ac", role: "act", cls: "ac", cell: (v, p) => p.editable ? <>
         {v.status === "review" && v.customerLedger && !p.issue ? <button className="btn small primary" onClick={act("confirm", v)}>Confirm</button> : <button className="btn small" onClick={() => salesOpen(v.id)}>Open</button>}
         <button className="icon" title="Ignore" aria-label="Ignore" onClick={act("ignore", v)}>✕</button>
-      </> : <><button className="btn small" onClick={() => salesOpen(v.id)}>Open</button>{v.status !== "posted" && <button className="linkbtn" onClick={act("restore", v)}>Restore</button>}</> },
+      </> : <><button className="btn small" onClick={() => salesOpen(v.id)}>Open</button>{v.status === "ignored" && <button className="linkbtn" onClick={act("restore", v)}>Restore</button>}</> },
   ];
 }
 

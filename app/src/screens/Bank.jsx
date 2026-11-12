@@ -91,7 +91,8 @@ function RowActions({ r }) {
   if (r.state === "suggested") return <>{rule}{ignore}</>;
   if (r.state === "ready") return <>{live() && !BankOverlap.isOpen(r) && <><button className="btn small" onClick={act("post")}>Post</button> </>}{rule} <button className="linkbtn" onClick={act("unready")}>Undo</button></>;
   if (r.state === "attention") return <>{rule}{ignore}</>;
-  return r.state === "sent" ? null : <button className="linkbtn" onClick={act("restore")}>Restore</button>;
+  // a line in Tally is not brought back (it could be posted twice)
+  return r.state === "sent" || r.state === "intally" ? null : <button className="linkbtn" onClick={act("restore")}>Restore</button>;
 }
 
 // the statement's lines (spec K6: date, number, party, amount, status, then the rest, in ListTable.jsx's order)
@@ -532,7 +533,7 @@ export function BankBar() {
       <button className="btn" data-bulk-narr-apply="" title="Set this narration on the selected lines" onClick={(ev) => bulkNarr(ev.currentTarget.previousSibling.value)}>Set</button>
       {rows.some((r) => r.state === "suggested") && <button className="btn primary" onClick={() => bankAct("bankBulkAccept")}>Confirm</button>}
       {rows.some((r) => ["attention", "suggested", "ready"].includes(r.state)) && <button className="btn" onClick={() => bankAct("bankBulkIgnore")}>Ignore</button>}
-      {rows.some((r) => r.state === "ignored" || r.state === "intally") && <button className="btn" onClick={() => bankAct("bankBulkRestore")}>Restore</button>}
+      {rows.some((r) => r.state === "ignored") && <button className="btn" onClick={() => bankAct("bankBulkRestore")}>Restore</button>}
       {live() && ready > 0 && <button className="btn primary" disabled={noLed} title={noLed ? whyLed : undefined} onClick={() => bankAct("bankBulkPost")}>Post {ready} to Tally</button>}
     </>;
   } else {

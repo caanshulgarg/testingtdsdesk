@@ -196,7 +196,7 @@ function BillBar({ e }) {
       <button className="btn" onClick={() => doAct("notDup")}>Keep both</button>{next}
     </>;
   } else if (e.status === "approved") {
-    left = <><span className="tag ok">Approved</span> <span className="note">{e.exportedAt ? "Sent to Tally" : "Waiting in Send to Tally"}</span></>;
+    left = <><span className="tag ok">Approved</span> <span className="note">{e.exportedAt ? (e.postVerified || e.postByReply ? "Sent to Tally" : "Sent, not confirmed") : "Waiting in Send to Tally"}</span></>;
     right = <>{!e.exportedAt && <><button className="btn" onClick={() => doAct("undo")}>Undo approval</button><button className="btn" onClick={() => doAct("goExport")}>Send to Tally</button></>}{next}</>;
   } else {
     left = <span className="tag no">No entry</span>;

@@ -458,10 +458,14 @@ function exportSalesCsv(){
 /* ---------- Sales: clicks, fields, selection ---------- */
 function salesSnapshot(v){ return JSON.parse(JSON.stringify(v)); }
 function salesSetUndo(text, before){ SL().undo = {text, before}; }
+// an invoice posted or found in Tally is never taken back to an earlier state (Undo, bulk or row buttons), so it cannot be
+// posted twice (state-machine review, item 5)
+function salesInTally(v){ return !!v && (v.status === "posted" || v.status === "intally"); }
 function salesUndo(){
   const s = SL(), u = s.undo; if (!u) return;
-  u.before.forEach(old => { const i = s.list.findIndex(v => v.id === old.id); if (i >= 0) s.list[i] = old; else s.list.push(old); });
-  s.undo = null; saveSales(); toast("Undone."); render();
+  let kept = 0;
+  u.before.forEach(old => { const i = s.list.findIndex(v => v.id === old.id); if (i >= 0 && salesInTally(s.list[i]) && s.list[i].status !== old.status){ kept++; return; } if (i >= 0) s.list[i] = old; else s.list.push(old); });
+  s.undo = null; saveSales(); toast("Undone." + (kept ? " " + bankKeptWords(kept, "invoice") : "")); render();
 }
 // set a customer ledger; other open invoices of the same customer follow
 function setCustomerLedger(v, ledger){
@@ -477,19 +481,19 @@ function setCustomerLedger(v, ledger){
   return true;
 }
 function salesBulk(kind, ledger){
-  const s = SL(), rows = s.list.filter(v => s.sel.has(v.id) && v.status !== "posted");
+  const s = SL(), rows = s.list.filter(v => s.sel.has(v.id) && !salesInTally(v));
   if (!rows.length) return;
   const before = rows.map(salesSnapshot);
   let n = 0;
   rows.forEach(v => {
     s.sticky.add(v.id);
     if (kind === "ledger"){ v.customerLedger = ledger; v.userLedger = true; v.custSource = "Set by you"; mapInvoice(v); if (v.status === "review" && !(v.problems || []).length && !(v.ledgerIssues || []).length) v.status = "ready"; n++; }
-    if (kind === "confirm"){ mapInvoice(v); if (v.customerLedger && !(v.problems || []).length && !(v.ledgerIssues || []).length){ v.status = "ready"; learnCustomer(v); n++; } }
+    if (kind === "confirm" && v.status !== "ignored"){ mapInvoice(v); if (v.customerLedger && !(v.problems || []).length && !(v.ledgerIssues || []).length){ v.status = "ready"; learnCustomer(v); n++; } }
     if (kind === "ignore" && v.status !== "ignored"){ v.status = "ignored"; n++; }
   });
   if (kind === "delete"){
-    s.list.filter(v => s.sel.has(v.id) && v.status !== "posted").forEach(v => { if (typeof Cloud === "object") Cloud.delete("sales", s.cid, s.cid + ":" + v.id, "invoice deleted"); });
-    s.list = s.list.filter(v => !(s.sel.has(v.id) && v.status !== "posted")); n = rows.length;
+    rows.forEach(v => { if (typeof Cloud === "object") Cloud.delete("sales", s.cid, s.cid + ":" + v.id, "invoice deleted"); });
+    s.list = s.list.filter(v => !rows.includes(v)); n = rows.length;
   }
   salesSetUndo(n + " invoice" + (n === 1 ? " " : "s ") + ({ledger: "set to <b>" + esc(ledger) + "</b>", confirm: "confirmed", ignore: "ignored", delete: "deleted"}[kind]), before);
   if (kind === "confirm" && n < rows.length) toast((rows.length - n) + " could not be confirmed: open them to see what is missing.");
@@ -503,6 +507,7 @@ function salesRowAct(a, id, force){
     if (a === "print"){ withPart("invoice", "invoiceHtml", () => printInvoiceHtml(invoiceHtml(v.x, CO(s.cid), s.cfg), v.x.number)); return true; }
     if (a === "file"){ const f = S.files["sv:" + v.id]; if (f){ const u = blobUrl(f); window.open(u, "_blank"); setTimeout(() => URL.revokeObjectURL(u), 60000); } return true; }
     if (a === "edit"){ s.openId = null; startDraft(v.id); return true; }
+    if (salesInTally(v)){ toast(bankKeptWords(1, "invoice")); return true; }
     const before = [salesSnapshot(v)];
     if (a === "confirm"){
       mapInvoice(v);
@@ -533,7 +538,7 @@ function salesToggle(id, on, shift){
   else if (on) s.sel.add(id); else s.sel.delete(id);
   salesLastClicked = id; salesLightRefresh();
 }
-function salesSelAll(on){ const s = SL(); salesVisible().filter(v => v.status !== "posted").forEach(v => on ? s.sel.add(v.id) : s.sel.delete(v.id)); salesLightRefresh(); }
+function salesSelAll(on){ const s = SL(); salesVisible().filter(v => !salesInTally(v)).forEach(v => on ? s.sel.add(v.id) : s.sel.delete(v.id)); salesLightRefresh(); }
 // an invoice's customer ledger; false when it is not a Tally ledger (the box goes back)
 function salesSetCust(id, val){
   const s = SL(), v = inv(id); if (!v) return true;

@@ -163,7 +163,7 @@ async function bankCheckReview(opts){
       out.found.push(r);
     } else {
       const was = r.postReview && r.postReview.words && r.postReview.words.length ? " (Tally had said: " + r.postReview.words.join("; ") + ")" : "";
-      if (["sent", "intally"].includes(r.state)){ r.state = "ready"; r.tally = null; r.postedVia = ""; if (b.postedTags) delete b.postedTags[fpHash(r.fp || r.id)]; }
+      if (bankInTally(r)) bankClearPosting(r, "ready");
       r.release = {at: now, by: me || "FinCom", why: "Not in " + ledger + " at a check with Tally on " + fmtDate(now.slice(0, 10))};
       r.postError = "Not in Tally: " + ledger + " read on " + fmtDate(now.slice(0, 10)) + " for " + fmtDate(from) + " to " + fmtDate(to) + " has no entry for this line" + was + ". Post it again: the FinCom Bridge looks in Tally for it once more just before it posts it.";
       out.missing.push(r);

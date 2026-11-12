@@ -465,7 +465,7 @@ const PostCheck = {
     }
     if (Date.parse(r.readAt || 0) <= this.postedAt(e)){ const t = "Not posted again: the read of Tally (" + tallyHm(r.readAt) + ") is older than the posting."; postNote(co.id, t, "bad"); toast(t); render(); return false; }
     // not in Tally at a read made just now: waiting again, and posted (the bridge checks Tally once more as it posts)
-    e.exportedAt = null; e.postNote = ""; e.postVerified = false; e.postByReply = false; e.tallyCheck = null; e.postUnconfirmed = null; e.postError = ""; e.postCheckFailed = null; delete e.goneFromTally;
+    billClearPosting(e);
     Store.saveEntry(co.id, e); refreshStats(co.id);
     await postAllToTally({kind: "bill", id: e.id});
     return true;

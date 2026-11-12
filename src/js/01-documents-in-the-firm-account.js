@@ -3069,7 +3069,10 @@ function billMoveOn(e, said, list, undo){
     said + " Next: " + name + " (" + left.length + " left)", {kind: "approve", drawer: true, label: "Next →", noStay: true, actions: undo ? [undo] : []});
   render();
 }
-function unapply(e, cid){
+// a bill sent to Tally is not taken off its supplier's totals and put back to review here (it would be posted twice); o.deleting:
+// a bill deleted keeps what it was (softDeleteEntry), and billRestore puts it back (reapply)
+function unapply(e, cid, o){
+  if (e.exportedAt && !(o && o.deleting)){ toast("This entry was already sent to Tally. Delete it in Tally first, then undo here."); return false; }
   const a = e.applied, p = a && D(cid).parties[a.partyId];
   if (p && p.ytd && p.ytd[a.fy] && p.ytd[a.fy][a.natureId]){
     const cur = p.ytd[a.fy][a.natureId];
@@ -3080,20 +3083,27 @@ function unapply(e, cid){
   const k = invKey(e.x), co = CO(cid);
   if (k && co.keys && co.keys[k]){ delete co.keys[k]; Store.saveCompany(co); }
   e.status = "draft"; delete e.applied; delete e.snapshot; delete e.approvedAt;
+  return true;
+}
+// a posted bill deleted and restored: approved again as it was, on its supplier's totals (k: what softDeleteEntry kept)
+function reapply(e, cid, k){
+  const a = k.applied, p = a && D(cid).parties[a.partyId];
+  if (p){ p.ytd = p.ytd || {}; p.ytd[a.fy] = p.ytd[a.fy] || {}; const cur = p.ytd[a.fy][a.natureId] || {credited: 0, tdsBase: 0};
+    cur.credited = r2(num(cur.credited) + a.credited); cur.tdsBase = r2(num(cur.tdsBase) + a.tdsBase); p.ytd[a.fy][a.natureId] = cur; Store.saveParty(cid, p); }
+  const kk = invKey(e.x), co = CO(cid);
+  if (kk && k.approvedAt){ co.keys = co.keys || {}; co.keys[kk] = {d: k.approvedAt.slice(0, 10), e: e.id}; Store.saveCompany(co); }
+  Object.assign(e, {status: "approved", applied: a, snapshot: k.snapshot, approvedAt: k.approvedAt});
+}
+// the one way a bill's posting is undone here (taken back from Tally, Post again, Not in Tally, an automatic entry undone):
+// every posting field cleared alike
+function billClearPosting(e){
+  Object.assign(e, {exportedAt: null, postVerified: false, postByReply: false, tally: null, tallyVchNo: "", postNote: "", tallyCheck: null, postUnconfirmed: null, postError: "", postCheckFailed: null,
+    postedVia: "", postedInto: "", postAltered: false, postedOptional: false});
+  delete e.goneFromTally;
 }
 function undoApproval(e){
   const cid = S.coId;
-  if (e.exportedAt){ toast("This entry was already sent to Tally. Delete it in Tally first, then undo here."); return; }
-  const a = e.applied, p = a && D(cid).parties[a.partyId];
-  if (p && p.ytd && p.ytd[a.fy] && p.ytd[a.fy][a.natureId]){
-    const cur = p.ytd[a.fy][a.natureId];
-    cur.credited = r2(Math.max(0, num(cur.credited) - a.credited));
-    cur.tdsBase = r2(Math.max(0, num(cur.tdsBase) - a.tdsBase));
-    Store.saveParty(cid, p);
-  }
-  const k = invKey(e.x), co = CO(cid);
-  if (k && co.keys && co.keys[k]){ delete co.keys[k]; Store.saveCompany(co); }
-  e.status = "draft"; delete e.applied; delete e.snapshot; delete e.approvedAt;
+  if (!unapply(e, cid)) return;
   Store.saveEntry(cid, e); toast("Approval undone. The entry is back in drafts."); S.filter = "draft"; refreshStats(cid); render();
 }
 function setStatus(e, st, msg){ e.status = st; Store.saveEntry(S.coId, e); if (msg) toast(msg); if (st === "draft") S.filter = "draft"; refreshStats(S.coId); render(); }

@@ -1158,14 +1158,18 @@ function billDeleteAsk(e){
     read: () => ((document.getElementById("delWhy") || {}).value || "").trim(),
     validate: why => why.length < 3 ? "Write why the bill is deleted." : ""}).then(r => {
     if (!r) return;
-    if (e.status === "approved") unapply(e, S.coId);
+    // the status it had is kept before it is taken off its supplier's totals; a bill in Tally keeps what it was, so that
+    // Restore puts it back approved and posted, not to be posted again
+    const was = e.status, live = !!billLivePosting(e, S.coId), kept = was === "approved" && live ? {applied: e.applied, snapshot: e.snapshot, approvedAt: e.approvedAt} : null;
+    if (was === "approved") unapply(e, S.coId, {deleting: true});
     if (S.revSel) S.revSel.delete(e.id);
     if (S.drawerOpen && S.selected === e.id) S.drawerOpen = false;
-    softDeleteEntry(e, r.data); refreshStats(S.coId); toast("Deleted. It is under \u201cDeleted\u201d, where it can be restored."); render();
+    softDeleteEntry(e, r.data, {status: was, kept}); refreshStats(S.coId); toast("Deleted. It is under \u201cDeleted\u201d, where it can be restored."); render();
   });
 }
-function softDeleteEntry(e, why){
-  e.deleted = {at: new Date().toISOString(), by: whoAmI(), reason: String(why || "").slice(0, 200), status: e.status};
+function softDeleteEntry(e, why, o){
+  e.deleted = {at: new Date().toISOString(), by: whoAmI(), reason: String(why || "").slice(0, 200), status: (o && o.status) || e.status};
+  if (o && o.kept) e.deleted.kept = o.kept;
   e.status = "deleted";
   unregisterHash(S.coId, e.fileHash);            // the same file can be uploaded again
   if (S.selected === e.id) S.selected = null;
@@ -1178,12 +1182,16 @@ function billRestore(id){
   if (!e || e.status !== "deleted") return;
   if (!canDeleteBills()){ toast("Only the firm\u2019s owner can restore a deleted bill."); return; }
   e.restored = {at: new Date().toISOString(), by: whoAmI(), was: e.deleted};
-  // a bill already in Tally (cleared after 90 days) goes back to where it was, not to be posted again
-  e.status = e.exportedAt && e.deleted && e.deleted.status ? e.deleted.status : "draft"; e.deleted = null;
+  // a bill posted to Tally goes back to where it was (approved, on its supplier's totals), not to be posted again
+  const d = e.deleted || {};
+  if (d.kept && d.status === "approved") reapply(e, S.coId, d.kept);
+  else e.status = e.exportedAt && d.status ? d.status : "draft";
+  e.deleted = null;
   if (e.fileHash) registerHash(S.coId, e.fileHash, e.id);
   Store.saveEntry(S.coId, e);
   auditEvent("bill_restore", (e.x.vendorName || e.fileName || "") + " " + (e.x.invoiceNo || e.id), S.coId);
-  S.filter = "draft"; S.selected = e.id; refreshStats(S.coId); toast("Restored to To review."); render();
+  const back = e.status === "draft";
+  S.filter = back ? "draft" : e.status; S.selected = e.id; refreshStats(S.coId); toast(back ? "Restored to To review." : "Restored as it was: it is in Tally, so it is not posted again."); render();
 }
 // round 14c (C1, C2): the items of compute().missing that are a box on the bill (data-focus-field on its input), and the
 // click that puts the cursor there; the first missing one is marked bk-missing when the bill opens
@@ -1988,7 +1996,7 @@ function doAct(act, t){
         if (!e0) return;
         unpostFromTally("bill", e0, S.coId).then(ok => {
           if (!ok) return;
-          e0.exportedAt = null; e0.postVerified = false; e0.tally = null; e0.tallyVchNo = ""; e0.postNote = "";
+          billClearPosting(e0);
           Store.saveEntry(S.coId, e0); refreshStats(S.coId); render();
         });
       });
@@ -2025,9 +2033,12 @@ function doAct(act, t){
     case "camera": pickMode = "company"; document.getElementById("camIn").click(); break;
     case "manual": { const n = newEntry("Manual entry"); D().entries[n.id] = n; S.selected = n.id; S.filter = "draft"; Store.saveEntry(S.coId, n); refreshStats(S.coId); render(); break; }
     case "approve": if (e) approve(e); break;
-    case "reject": if (e){ const was = e.status; if (e.docPath){ CloudDocs.remove(e.docPath); delete e.docPath; } setStatus(e, "rejected");
+    case "reject": if (e){ if (billLivePosting(e, S.coId)){ toast("This bill is posted to Tally, so it cannot be marked No entry. Delete it in Tally first."); break; }
+      const was = e.status, cid = S.coId, path = e.docPath; setStatus(e, "rejected");
+      // its cloud document goes only once the status is saved and the Undo has passed (Undo keeps it)
+      if (path && e.status === "rejected") setTimeout(() => { if (e.status === "rejected" && e.docPath === path){ CloudDocs.remove(path); delete e.docPath; Store.saveEntry(cid, e); } }, 13000);
       billMoveOn(e, "Marked as no entry needed.", was === "draft" ? "draft" : was, {label: "Undo", run: () => { if (e.status === "rejected"){ setStatus(e, "draft"); S.selected = e.id; render(); } }}); } break;
-    case "restore": if (e){ const was = e.status; setStatus(e, "draft");
+    case "restore": if (e){ if (billLivePosting(e, S.coId)){ toast("This bill is posted to Tally, so it stays as it is."); break; } const was = e.status; setStatus(e, "draft");
       // the next bill set aside, if any (smart moves 5); this one waits in To review
       if (was === "rejected") billMoveOn(e, "Moved back to review.", "rejected"); } break;
     case "undo": if (e) undoApproval(e); break;

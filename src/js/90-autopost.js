@@ -651,26 +651,31 @@ const AutoPost = {
     }
     const job = w === "queued" ? (x.auto && x.auto.job) || this.jobOf(cid, [x.id], a.run) : null;
     if (job && typeof TCloud === "object"){
-      let r = null;
-      try { r = await TCloud.rpc("tally_post_cancel", {p_id: job}); } catch (e){ /* finished meanwhile: then it is in Tally */ }
-      // migration 174: its bridge had started it: part may be in Tally; the entry stays as it is (checked on the Post page)
-      // (fifth review L3) the entries that may be in Tally are named; with none (nothing of it reached Tally) the undo goes on
-      if (r && r.warn && (r.entries || []).length){
-        const rows = (B() && B().rows) || [], nm = id => { const o = rows.find(z => z.id === id); return (o && o.auto && o.auto.label) || (id === x.id && a.label) || id; };
-        return {ok: false, why: r.warn + " These stay with the cancelled posting until settled on the Post page: " + r.entries.map(nm).join(", ") + "."};
+      // not cancelled (the Tally computer took it meanwhile, or the cloud did not answer): it may be in Tally, so it stays
+      // (one cancel for the whole posting: the run's other entries of it, undone after, are cancelled with it)
+      this.cancelled = this.cancelled || {};
+      if (!this.cancelled[job]){
+        let c = null; try { c = await TCloud.rpc("tally_post_cancel", {p_id: job}); } catch (e){ /* not known */ }
+        // migration 174: its bridge had started it: part may be in Tally; the entries that may be are named, and stay
+        if (c && c.warn && (c.entries || []).length){
+          const rows = (B() && B().rows) || [], nm = id => { const o = rows.find(z => z.id === id); return (o && o.auto && o.auto.label) || (id === x.id && a.label) || id; };
+          return {ok: false, why: c.warn + " These stay with the cancelled posting until settled on the Post page: " + c.entries.map(nm).join(", ") + "."};
+        }
+        if (!(c && c.ok === true)) return {ok: false, why: "Its posting could not be cancelled: the Tally computer may have taken it, so it may already be in Tally. It was left as it is; once Tally answers, it can be undone from Tally."};
+        this.cancelled[job] = true;
       }
     }
     const at = new Date().toISOString(), who = typeof whoAmI === "function" ? whoAmI() : "";
     if (bank){
       const p = x.autoPrev || {};
-      Object.assign(x, {state: ["attention", "suggested"].includes(p.state) ? p.state : (x.ledger ? "suggested" : "attention"), ledger: p.ledger != null ? p.ledger : x.ledger, source: p.source || "", why: p.why || "", level: p.level || "", srcLabel: p.srcLabel || "",
-        vtype: p.vtype || x.vtype, billId: p.billId || null, billRef: p.billRef || "", tdsAtPay: p.tdsAtPay || 0, tdsLedger: p.tdsLedger || "", userSet: false, sentAt: "", postVerified: false, postByReply: false, tally: null, postError: ""});
-      if (S.bank && S.bank.postedTags) delete S.bank.postedTags[fpHash(x.fp || x.id)];
+      bankClearPosting(x, ["attention", "suggested"].includes(p.state) ? p.state : (x.ledger ? "suggested" : "attention"));
+      Object.assign(x, {ledger: p.ledger != null ? p.ledger : x.ledger, source: p.source || "", why: p.why || "", level: p.level || "", srcLabel: p.srcLabel || "",
+        vtype: p.vtype || x.vtype, billId: p.billId || null, billRef: p.billRef || "", tdsAtPay: p.tdsAtPay || 0, tdsLedger: p.tdsLedger || "", userSet: false});
       x.autoUndone = {at, by: who, was: x.auto || x.autoHold || null};
       delete x.auto; delete x.autoHold; delete x.autoPrev;
       saveBank({rows: true, posted: true});
     } else {
-      if (x.status === "approved"){ x.exportedAt = null; x.postVerified = false; x.tally = null; x.tallyVchNo = ""; x.postNote = ""; unapply(x, cid); }
+      if (x.status === "approved"){ billClearPosting(x); unapply(x, cid); }
       x.autoUndone = {at, by: who, was: x.auto || x.autoHold || null};
       delete x.auto; delete x.autoHold; Store.saveEntry(cid, x);
       if (typeof refreshStats === "function") refreshStats(cid);

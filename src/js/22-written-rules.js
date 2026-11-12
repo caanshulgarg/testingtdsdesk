@@ -650,6 +650,17 @@ function sameParty(a, b){
   const [short, long] = pa.length <= pb.length ? [pa, pb] : [pb, pa];
   return short.length >= 17 && long.startsWith(short);
 }
+// a line in Tally (posted from here, or found there) is never taken back to an earlier state by an Undo, a bulk button or
+// a line's button, so it cannot be posted twice (state-machine review, item 5)
+function bankInTally(r){ return !!r && (r.state === "sent" || r.state === "intally"); }
+function bankKeptWords(n, what){ return n + " " + (what || "line") + (n === 1 ? " is" : "s are") + " already in Tally and " + (n === 1 ? "was left as it is." : "were left as they are."); }
+// the one way from Tally back to "ready" (taken back from Tally, gone from Tally, not found at a check, an automatic entry
+// undone): every posting field cleared alike
+function bankClearPosting(r, state){
+  Object.assign(r, {state: state || (r.ledger ? "ready" : "attention"), sentAt: "", postVerified: false, postByReply: false, tally: null, postedVia: "", tallyRef: "", tallyHow: "", checking: false, postError: ""});
+  delete r.goneFromTally; delete r.tallyIdx;
+  const b = B(); if (b && b.postedTags) delete b.postedTags[fpHash(r.fp || r.id)];
+}
 function rowSnapshot(r){ return {id: r.id, rep: r.rep ? Object.assign({}, r.rep) : r.rep, ledger: r.ledger, state: r.state, userSet: r.userSet, why: r.why, source: r.source, vtype: r.vtype, billId: r.billId, billRef: r.billRef, tdsAtPay: r.tdsAtPay}; }
 // Set a ledger on some rows; every other open row of the same party follows, and a rule is kept for next time
 function setLedgerFor(rows, ledger, how){
@@ -701,13 +712,15 @@ function setRowLedger(row, ledger){
 function undoBank(){
   const b = B(), u = b.undo; if (!u) return;
   const byId = new Map(b.rows.map(r => [r.id, r]));
-  u.snaps.forEach(sn => { const r = byId.get(sn.id); if (r) Object.assign(r, sn); });
+  // a line posted since (the bridge, the XML file, an automatic posting) keeps its posting
+  let kept = 0;
+  (u.snaps || u.rows || []).forEach(sn => { const r = byId.get(sn.id); if (!r) return; if (bankInTally(r) && sn.state !== r.state){ kept++; return; } Object.assign(r, sn); });
   if (u.histPrev) restoreHist(u.histPrev);
   if (u.restoreAllRules) b.rules = u.restoreAllRules;
   else if (u.ruleKeys && u.ruleKeys.length){ b.rules = b.rules.filter(x => !u.ruleKeys.includes(x.key)).concat(u.oldRules || []); }
   b.undo = null;
   saveBank({rows: true, rules: true});
-  toast("Undone.");
+  toast("Undone." + (kept ? " " + bankKeptWords(kept) : ""));
 }
 function forgetUndoRule(){
   const b = B(), u = b.undo; if (!u) return;
@@ -721,15 +734,16 @@ function bulkAction(kind, ledger){
   const b = B(), rows = bankSelected();
   if (!rows.length) return;
   const snaps = rows.map(rowSnapshot);
-  let n = 0, skipped = 0;
-  if (kind === "ledger"){ n = setLedgerFor(rows.filter(r => !["sent"].includes(r.state)), ledger, "bulk"); }
+  let n = 0, inT = 0, ign = 0, noL = 0;
+  if (kind === "ledger"){ n = setLedgerFor(rows.filter(r => !bankInTally(r)), ledger, "bulk"); }
   else {
     rows.forEach(r => {
-      if (r.state === "sent"){ skipped++; return; }
+      if (bankInTally(r)){ inT++; return; }
       // accepted, set aside or brought back by hand: a person's choice, which no rule changes afterwards
-      if (kind === "accept"){ if (r.ledger){ r.state = "ready"; r.userSet = true; n++; } else skipped++; }
+      // (Confirm as one line's: a Tally ledger, never an ignored line)
+      if (kind === "accept"){ const l = exactLedger(r.ledger); if (r.state === "ignored"){ ign++; return; } if (!l){ noL++; return; } r.ledger = l; r.state = "ready"; r.userSet = true; n++; }
       if (kind === "ignore"){ if (r.state !== "ignored"){ r.prevState = r.state; r.state = "ignored"; r.userSet = true; n++; } }
-      if (kind === "restore"){ if (r.state === "ignored" || r.state === "intally"){ r.state = r.ledger ? "ready" : "attention"; r.userSet = true; delete r.tallyIdx; n++; } }
+      if (kind === "restore"){ if (r.state === "ignored"){ r.state = r.ledger ? "ready" : "attention"; r.userSet = true; n++; } }
       b.sticky.add(r.id);
     });
     b.undo = {what: kind, label: entries(rows.length), n, others: 0, snaps, ruleKeys: [], oldRules: []};
@@ -738,7 +752,8 @@ function bulkAction(kind, ledger){
     saveBank({rows: true});
   }
   const verb = {accept: "accepted", ignore: "ignored", restore: "restored", ledger: "set to " + ledger}[kind];
-  if (skipped) toast(skipped + " skipped" + (kind === "accept" ? " (no ledger yet)" : " (already posted)") + ".");
+  const why = [inT && inT + " already in Tally", ign && ign + " ignored (restore them first)", noL && noL + " with no Tally ledger yet"].filter(Boolean);
+  if (why.length) toast("Skipped " + why.join(", ") + ".");
   b.sel.clear();
   render();
 }
