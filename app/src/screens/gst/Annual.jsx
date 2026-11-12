@@ -39,7 +39,7 @@ export function Gst9({ b }) {
       <p className="note">{"Table 8C and 13 count bills of this year booked in Tally from April to November of the next year, and credit of this year’s bills kept in a “not shown in 2B” ledger that the books move to the input ledger then; table 12, this year’s credit reversed then (₹" + m(all4(b12)) + " in the books). Figures that are not in the books are typed below."}</p>
     </section>
     <Card title="Figures not in the books">
-      <p className="note">Amendments made on the portal, credit from an ISD, reversals under rules 37 and 39, refunds and demands, late fee. Typed here, they go into the tables above and into the PDF and Excel.{b12 && (b12.igst + b12.cgst + b12.sgst) ? " Table 12 is taken from the books unless typed." : ""}</p>
+      <p className="note">Amendments made on the portal, credit from an ISD, reversals under rules 37 and 39, refunds and demands, late fee. Typed here, they go into the tables above and into the PDF and Excel.{b12 && (b12.igst + b12.cgst + b12.sgst) ? " Table 12 is taken from the books unless typed." : ""}{d.T["6Gbooks"] && all4(d.T["6Gbooks"]) ? " Table 6G is the ISD's credit in the books (₹" + m(all4(d.T["6Gbooks"])) + ", 3B 4(A)(4)) unless typed." : ""}</p>
       <div className="bk-tablewrap"><table className="bk-table gf-off" data-statement="">
         <thead><tr><th>Table</th><th className="n">Value</th><th className="n">IGST</th><th className="n">CGST</th><th className="n">SGST</th><th className="n">Cess</th></tr></thead>
         <tbody>{GST9.TYPED.map(([k, l]) => <tr key={k}><td>{/^\d+[A-Z]? /.test(l) ? l : k + " " + l}</td>{["taxable", "igst", "cgst", "sgst", "cess"].map((f) => <td key={f} className="n"><Typed ty={ty} k={k} f={f} /></td>)}</tr>)}

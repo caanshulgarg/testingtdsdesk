@@ -19,7 +19,7 @@
 // No AI here: M2B.aiLinks only reads the pairs the gst-2b-match function already stored for the year.
 // GST3B_SRC: this file's and names.js's text (this value left out), hashed (tests/run_gst_cloud.js keeps it so): a 3B the
 // cloud worked out carries it, and the 3B page uses the cloud's only when its own is the same (app/src/screens/gst/cloud3b.js)
-const GST3B_SRC = "se0a2eeeebc1ffff0";
+const GST3B_SRC = "s2201e1d5957f43de";
 function num(v){ if (typeof v === "number") return isFinite(v) ? v : 0; const n = parseFloat(String(v == null ? "" : v).replace(/[^0-9.\-]/g, "")); return isFinite(n) ? n : 0; }
 function r2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
 const INR = new Intl.NumberFormat("en-IN", {minimumFractionDigits:2, maximumFractionDigits:2});
@@ -704,13 +704,7 @@ const GST2B = {
     this.all2b(reg).forEach(t => t.rows.forEach(r => (r.rej ? rejRows : portal).push(r)));
     const regs = (GSTR.gstins(b) || []).map(g => g.slice(0, 2));
     // next-gst-share (part B, gst-run's month step): the documents each entry keeps (S.books.shareSrc) in place of the book's
-    const docs = (b.shareSrc ? b.shareSrc.docs(regs) : this.bookDocs()).filter(d => !reg || d.reg === reg || (!d.reg && regs.length <= 1));
-    // next-gst-isd (the owner, 12-Nov-2026): only the financial years whose 2B is here for the registration are matched.
-    // A document booked in a year with no 2B (its month's year, M2B.fyOf) is no candidate, and is not "in the books, not
-    // in 2B" either: it is kept apart (noYear), as a month with no 2B shows its bills ("2B not brought in"). A year with
-    // any month's 2B here is matched as before, against every 2B here (another year's too)
-    const fys = new Set(this.all2b(reg).map(t => this.fyOf(t.ym)));
-    const books = docs.filter(d => fys.has(this.fyOf(d.ym))), noYear = docs.filter(d => !fys.has(this.fyOf(d.ym)));
+    const books = (b.shareSrc ? b.shareSrc.docs(regs) : this.bookDocs()).filter(d => !reg || d.reg === reg || (!d.reg && regs.length <= 1));
     const byId = new Map(books.map(d => [d.id, d]));
     const taken = new Set(), pairs = [], used2b = new Set();
     const taxOf = x => r2(num(x.igst) + num(x.cgst) + num(x.sgst) + num(x.cess));
@@ -820,14 +814,19 @@ const GST2B = {
       rejList.push({p, books: c, sum: sumOf(c)});
     });
     const only2b = portal.filter(p => !used2b.has(p.key));
-    const onlyBooks = books.filter(d => !taken.has(d.id));
+    // next-gst-isd (the owner, 12-Nov-2026; review of e9ebac1c7): the matching is as before, every document against every
+    // 2B row. Only the report changes: a document booked in a financial year with no 2B here for the registration (its
+    // month's year) that nothing matched is not "in the books, not in 2B": it is kept apart (noYear), as a month with no
+    // 2B shows its bills ("2B not brought in")
+    const fys = new Set(this.all2b(reg).map(t => this.fyOf(t.ym)));
+    const unmatched = books.filter(d => !taken.has(d.id)), onlyBooks = unmatched.filter(d => fys.has(this.fyOf(d.ym))), noYear = unmatched.filter(d => !fys.has(this.fyOf(d.ym)));
     // the same supplier's bill, same number and tax, booked more than once
     const dupes = {}, dk = {};
     const revIds = new Set(reversed.flat().map(d => d.id));
-    docs.forEach(d => { if (!d.noN || revIds.has(d.id)) return; const k = (d.gstin || d.party) + "|" + d.noN + "|" + d.dir + "|" + Math.round(taxOf(d)); (dk[k] = dk[k] || []).push(d); });
+    books.forEach(d => { if (!d.noN || revIds.has(d.id)) return; const k = (d.gstin || d.party) + "|" + d.noN + "|" + d.dir + "|" + Math.round(taxOf(d)); (dk[k] = dk[k] || []).push(d); });
     Object.values(dk).filter(l => l.length > 1 && taxOf(l[0]) > 0).forEach(l => l.forEach((d, i) => { dupes[d.id] = {n: l.length, first: i === 0, others: l.filter(z => z !== d).map(z => z.voucher + " of " + GSTAmend.dmy(z.bookDate))}; }));
     // a bill in 2B and in Tally, but booked with no input tax (the tax charged to the expense)
-    const docIds = new Set(docs.map(d => d.id)), gstMap = b.gstins || {};
+    const docIds = new Set(books.map(d => d.id)), gstMap = b.gstins || {};
     const noCredit = new Map();
     (b.vouchers || []).forEach(v => { if (docIds.has(v.id) || Books.isSale(v) || v.cancel || v.opt) return; const k = this.normNo(v.ref || v.no); if (k.length >= 3) (noCredit.get(k) || noCredit.set(k, []).get(k)).push(v); });
     portal.forEach(p => { delete p.bookedNoCredit; });
@@ -1530,6 +1529,7 @@ const GSTQ = {
     const keys = ["sale", "cn", "net", "adv", "zero", "nil", "nongst", "rcmOut", "rcmIn", "toUnreg", "impGoods", "impServ", "isd", "other", "blocked", "buy", "itc", "reversal", "rev1", "rev2", "reclaim", "na", "rules", "r42", "r43", "held", "released", "cn2b", "rejBack", "netItc"];
     const t = {quarter: true, months: ms, qEnd, basis: (ts[ts.length - 1] || {}).basis || "no 2B"};
     keys.forEach(k => { t[k] = sum(k); });
+    if (ts.some(x => x.isdAdj)) t.isdAdj = sum("isdAdj");
     t.inw5 = ts.reduce((a, x) => { Object.keys(x.inw5 || {}).forEach(k => { a[k] = r2((a[k] || 0) + num(x.inw5[k])); }); return a; }, {});
     const up = {}; ts.forEach(x => (x.unregPos || []).forEach(p => { const o = up[p.pos] = up[p.pos] || {pos: p.pos, taxable: 0, igst: 0}; o.taxable = r2(o.taxable + p.taxable); o.igst = r2(o.igst + p.igst); }));
     t.unregPos = Object.values(up).sort((a, c) => a.pos.localeCompare(c.pos));
@@ -1914,7 +1914,7 @@ const GSTR = {
   // or when a ledger on it carries FinCom's switch "ISD (Input Service Distributor)" (b.map[name].isd: the ISD's party
   // ledger, e.g. the head office's, or an input ledger kept for ISD credit; GST settings, FinCom's own, synced, never
   // written to Tally). Before 12-Nov-2026 FinCom had no ISD: such credit was in 4(A)(5)
-  ISD_RE: /INPUT\s*SERVICE\s*DISTRIBUTOR|^\s*ISD\b/i,
+  ISD_RE: /INPUT[\s_-]*SERVICE[\s_-]*DISTRIBUTOR|^\s*ISD\b/i,
   isISD(v){
     if (!v) return false;
     if (this.ISD_RE.test(String(v.regType || ""))) return true;
@@ -2112,10 +2112,11 @@ const GSTR = {
     const src = (S.books || {}).shareSrc, B = src ? src.base(ym, reg) : this.bookBase(ym, reg);
     const P31 = B.P31, {taxableOut, cn, zero, nil, nongst, rcmOut, toUnreg} = P31;
     const {rcmIn, impGoods, impServ, blocked, buy} = B.P4;
-    // next-gst-isd: 4(A)(4), the ISD's credit as the books have it (the 2B basis below, the decisions and adjustments stay
-    // with 4(A)(5), as before: 4(C) and table 6 are as they were). (A month kept by an engine before ISD has none: zero)
-    const isd = B.P4.isd || {n: 0, taxable: 0, cgst: 0, sgst: 0, igst: 0, cess: 0, ineligible: 0};
-    let other = B.P4.other;
+    // next-gst-isd: 4(A)(4), the ISD's credit: as the books have it, less what the 2B basis below holds back of the ISD's
+    // documents and plus what it takes now (review of e9ebac1c7, M4: as 4(A)(5) for the rest); 4(A) total, 4(C) and table
+    // 6 are as they were. (A month kept by an engine before ISD has none: zero)
+    let isd = B.P4.isd || {n: 0, taxable: 0, cgst: 0, sgst: 0, igst: 0, cess: 0, ineligible: 0};
+    let other = B.P4.other, isdAdj;
     // credit only as far as 2B shows it (section 16(2)(aa), rule 36(4)): bills not yet in 2B are held back,
     // and taken in the month their 2B carries them
     const basis = this.itcBasis(ym, reg), held = {igst: 0, cgst: 0, sgst: 0, cess: 0, n: 0, list: []}, released = {igst: 0, cgst: 0, sgst: 0, cess: 0, n: 0, list: []}, cn2b = {igst: 0, cgst: 0, sgst: 0, cess: 0, n: 0, list: []}, rejBack = {igst: 0, cgst: 0, sgst: 0, cess: 0, n: 0, list: []};
@@ -2125,6 +2126,8 @@ const GSTR = {
       // a bill the books hold ("NOT SHOWN IN 2B") took no credit: nothing to hold back or release (the books' move takes it)
       // (a document kept by its entry says whether it is an import: imp)
       const claimable = d => d.dir > 0 && !d.rcm && !d.ineligible && !d.held && !(d.imp !== undefined ? d.imp : (vById.get(d.id) && Books.isImport(vById.get(d.id))));
+      // an ISD's: a 2B row of 2B's ISD part, or a document of an ISD's entry (a document kept by its entry says so: isd)
+      const isdX = x => x.sec ? (x.sec === "isd" || x.sec === "isda") : !!(x.isd || (vById.get(x.id) && this.isISD(vById.get(x.id))));
       basis.res.onlyBooks.filter(d => d.ym === ym && claimable(d)).forEach(d => add(held, d));
       basis.res.pairs.forEach(x => { if (x.p.ym > ym) x.books.filter(d => d.ym === ym && claimable(d)).forEach(d => add(held, d));
         if (x.p.ym === ym) x.books.filter(d => d.ym < ym && basis.loaded.has(d.ym) && this.itcBasis(d.ym, reg, true) && claimable(d)).forEach(d => add(released, d)); });
@@ -2133,7 +2136,7 @@ const GSTR = {
         const bks = x.books.filter(d => d.ym === ym && claimable(d)); if (!bks.length || x.p.ym > ym) return;
         const bt = bks.reduce((a, d) => a + d.igst + d.cgst + d.sgst + d.cess, 0), pt = num(x.p.igst) + num(x.p.cgst) + num(x.p.sgst) + num(x.p.cess), ex = r2(bt - pt);
         if (ex < 1 || bt <= 0) return;
-        const f = ex / bt; bks.forEach(d => add(held, {id: d.id, no: d.no, party: d.party, igst: r2(d.igst * f), cgst: r2(d.cgst * f), sgst: r2(d.sgst * f), cess: r2(d.cess * f), excess: true}));
+        const f = ex / bt; bks.forEach(d => add(held, Object.assign({id: d.id, no: d.no, party: d.party, igst: r2(d.igst * f), cgst: r2(d.cgst * f), sgst: r2(d.sgst * f), cess: r2(d.cess * f), excess: true}, isdX(d) ? {isd: true} : {})));
       });
       // rejected in IMS: an invoice in Tally gives no credit (held, never released unless accepted again);
       // a credit note booked in Tally (as our debit note) does not reduce credit while it stays rejected
@@ -2147,6 +2150,14 @@ const GSTR = {
       // a supplier's credit note in this month's 2B, not in Tally, reduces credit unless it is rejected in IMS
       basis.res.only2b.filter(p => p.ym === ym && p.dir < 0 && p.itcavl !== "N" && (typeof ITCT !== "object" || ITCT.dec(reg, "P|" + p.gstin + "|" + p.noN + "|" + p.dir).act !== "reject")).forEach(p => add(cn2b, p));
       other = Object.assign({}, other, {igst: r2(other.igst - held.igst + released.igst - cn2b.igst + rejBack.igst), cgst: r2(other.cgst - held.cgst + released.cgst - cn2b.cgst + rejBack.cgst), sgst: r2(other.sgst - held.sgst + released.sgst - cn2b.sgst + rejBack.sgst), cess: r2(other.cess - held.cess + released.cess - cn2b.cess + rejBack.cess)});
+      // the ISD's documents' part of that: 4(A)(4)'s, taken back out of 4(A)(5) (isdAdj, kept only when there is one)
+      const dI = {igst: 0, cgst: 0, sgst: 0, cess: 0};
+      [[released, 1], [held, -1], [cn2b, -1], [rejBack, 1]].forEach(([o, f]) => o.list.filter(isdX).forEach(x => { ["igst", "cgst", "sgst", "cess"].forEach(h => { dI[h] = r2(dI[h] + f * num(x[h])); }); }));
+      if (["igst", "cgst", "sgst", "cess"].some(h => Math.abs(dI[h]) >= 0.005)){
+        isdAdj = dI;
+        isd = Object.assign({}, isd, {igst: r2(isd.igst + dI.igst), cgst: r2(isd.cgst + dI.cgst), sgst: r2(isd.sgst + dI.sgst), cess: r2(isd.cess + dI.cess)});
+        other = Object.assign({}, other, {igst: r2(other.igst - dI.igst), cgst: r2(other.cgst - dI.cgst), sgst: r2(other.sgst - dI.sgst), cess: r2(other.cess - dI.cess)});
+      }
     }
     // 4(D)(2): credit 2B says is not available (place of supply in another state, or after the section 16(4) time limit)
     const na = {igst: 0, cgst: 0, sgst: 0, cess: 0};
@@ -2186,7 +2197,7 @@ const GSTR = {
     const pay = this.setOff(net, rcmOut, netItc, opening);
     return {sale: taxableOut, cn, net, adv, amend: amd, custRej: cust, rules, r42: rul.r42, r43: rul.r43, zero, nil, nongst, rcmOut, rcmIn, toUnreg, impGoods, impServ, isd, other, blocked,
       buy, itc, reversal, rev1, rev2, reclaim, r37, na, inw5, unregPos: P31.unregPos,
-      basis: basis.on ? "2b" : basis.why, held, released, cn2b, rejBack, netItc, ineligible: buy.ineligible, opening, pay, payable: pay.cash};
+      basis: basis.on ? "2b" : basis.why, held, released, cn2b, rejBack, isdAdj, netItc, ineligible: buy.ineligible, opening, pay, payable: pay.cash};
   },
   // credit on the 2B basis for a month: on when that month's 2B is here and the client has not chosen the books basis
   itcBasis(ym, reg, quick){
@@ -2347,7 +2358,7 @@ function entryShares(v, ctx){
     const out = {id: v && v.id, ym: v ? String(v.date).slice(0, 6) : "", reg: "", rows: [], doc: null, bills: []};
     // an entry's document of the 2B matching (bookDocs takes a cancelled entry's too; the registration is filled at the
     // month, from the book's registrations, when neither a ledger nor the entry names it)
-    if (v && !v.opt && Array.isArray(v.ent)){ const d = GST2B.docOf(v, [], (S.books || {}).gstins || {}); if (d && typeof d === "object") out.doc = Object.assign(d, {imp: Books.isImport(v)}); }
+    if (v && !v.opt && Array.isArray(v.ent)){ const d = GST2B.docOf(v, [], (S.books || {}).gstins || {}); if (d && typeof d === "object") out.doc = Object.assign(d, {imp: Books.isImport(v)}, GSTR.isISD(v) ? {isd: true} : {}); }
     if (!v || v.opt || v.cancel || !Array.isArray(v.ent)) return out;
     out.reg = GSTR.regOf(v);
     out.bills = GSTF.billRecs(v, null);

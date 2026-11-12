@@ -31,7 +31,7 @@ import { ITCDec, DECS, DEC_LABEL } from "./itcSync.js";
 
 const H = ["igst", "cgst", "sgst", "cess"];
 export const HEADS = [["igst", "IGST"], ["cgst", "CGST"], ["sgst", "SGST"], ["cess", "Cess"]];
-export const LINES = [["4A1", "4(A)(1) Import of goods"], ["4A2", "4(A)(2) Import of services"], ["4A3", "4(A)(3) Inward supplies on reverse charge"], ["4A5", "4(A)(5) All other ITC"],
+export const LINES = [["4A1", "4(A)(1) Import of goods"], ["4A2", "4(A)(2) Import of services"], ["4A3", "4(A)(3) Inward supplies on reverse charge"], ["4A4", "4(A)(4) Inward supplies from ISD"], ["4A5", "4(A)(5) All other ITC"],
   ["4B1", "4(B)(1) Reversed: rules 38, 42, 43 and section 17(5)"], ["4B2", "4(B)(2) Reversed: others"], ["4D2", "4(D)(2) Ineligible ITC"]];
 export const LINE_LABEL = Object.fromEntries(LINES);
 export const CHIPS = [["matched", "Matched"], ["books", "In books, not in 2B"], ["2b", "In 2B, not in books"], ["diff", "Amount differs"], ["ims", "Rejected/Pending in IMS"], ["cf", "Carried forward"]];
@@ -265,6 +265,13 @@ export const Adj = {
   sum(reg, ym) { const o = {}; LINES.forEach(([k]) => { o[k] = z(); }); this.list(reg, ym).forEach((a) => { o[a.line][a.head] = R(o[a.line][a.head] + N(a.amt)); }); return o; },
 };
 
+// next-gst-isd: an ISD's document or 2B row (as GSTR.threeBm tells them: a 2B row of 2B's ISD part, a document of an
+// entry GSTR.isISD says is an ISD's), and a line of the reconciliation that is one (its documents; a line only in 2B: its row)
+let vMemo = null;
+const vOf = (id) => { const v = (S.books || {}).vouchers || []; if (!vMemo || vMemo.v !== v) vMemo = { v, m: new Map(v.map((x) => [x.id, x])) }; return vMemo.m.get(id); };
+export const isdDoc = (x) => !!x && (x.sec ? x.sec === "isd" || x.sec === "isda" : !!(x.isd || (typeof GSTR === "object" && GSTR.isISD && vOf(x.id) && GSTR.isISD(vOf(x.id)))));
+export const isdRow = (r) => !!r && ((r.docs && r.docs.length) ? r.docs.some(isdDoc) : !!(r.p && isdDoc(r.p)));
+
 // ---------- the wrap of GSTR.threeBm: 4(A)(5) from the decisions, the adjustments on every line, payment again
 function apply(t, ym, reg) {
   if (!t || t.quarter) return t;
@@ -272,25 +279,32 @@ function apply(t, ym, reg) {
   const hasDec = Object.keys(((S.books || {}).itcDec) || {}).some((k) => k.startsWith((reg || "") + "|"));
   const has2b = typeof GST2B === "object" && reg && GST2B.all2b(reg).length > 0;
   // the books' input tax of the month (what GSTR.threeBm started from), before anything for 2B
-  const g = (o) => o || z(), base = z();
-  H.forEach((k) => { base[k] = R(N(t.other[k]) + N(g(t.held)[k]) - N(g(t.released)[k]) + N(g(t.cn2b)[k]) - N(g(t.rejBack)[k]) - N(g(t.reclaim)[k])); });
-  if (!anyAdj && !hasDec && !has2b) return Object.assign(t, { itcBase: base, itcAdj: A });
+  // next-gst-isd (review of e9ebac1c7, M4): an ISD's documents are 4(A)(4)'s, held back or taken as GSTR.threeBm does for
+  // 4(A)(5): base (4(A)(5)'s) and baseI (4(A)(4)'s) are the books' credit of each before 2B
+  const g = (o) => o || z(), base = z(), part = (o) => ((o && o.list) || []).filter(isdDoc).reduce((a, x) => add(a, x), z());
+  const tI = { held: part(t.held), released: part(t.released), cn2b: part(t.cn2b), rejBack: part(t.rejBack) }, baseI = z();
+  H.forEach((k) => { base[k] = R(N(t.other[k]) + N(g(t.held)[k]) - tI.held[k] - N(g(t.released)[k]) + tI.released[k] + N(g(t.cn2b)[k]) - tI.cn2b[k] - N(g(t.rejBack)[k]) + tI.rejBack[k] - N(g(t.reclaim)[k]));
+    baseI[k] = R(N(g(t.isd)[k]) + tI.held[k] - tI.released[k] + tI.cn2b[k] - tI.rejBack[k]); });
+  if (!anyAdj && !hasDec && !has2b) return Object.assign(t, { itcBase: base, itcBaseIsd: baseI, itcAdj: A });
   const mo = has2b || hasDec ? month(reg, ym) : { cats: { held: [], excess: [], released: [], from2b: [], cn2b: [], rejBack: [] }, effect: z(), rows: [], rev: z(), revList: [] };
-  const c = mo.cats, held = sumCat(c.held.concat(c.excess)), released = sumCat(c.released.concat(c.from2b)), cn2b = sumCat(c.cn2b), rejBack = sumCat(c.rejBack);
-  const other = Object.assign({}, t.other);
-  H.forEach((k) => { other[k] = R(base[k] - held[k] + released[k] - cn2b[k] + rejBack[k] + N(g(t.reclaim)[k]) + A["4A5"][k]); });
+  const c0 = mo.cats, sp = (i) => { const o = {}; Object.keys(c0).forEach((k) => { o[k] = c0[k].filter((x) => isdRow(x.r) === i); }); return o; }, c = sp(false), cI = sp(true);
+  const held = sumCat(c0.held.concat(c0.excess)), released = sumCat(c0.released.concat(c0.from2b)), cn2b = sumCat(c0.cn2b), rejBack = sumCat(c0.rejBack);
+  const hI = sumCat(cI.held.concat(cI.excess)), rI = sumCat(cI.released.concat(cI.from2b)), nI = sumCat(cI.cn2b), bI = sumCat(cI.rejBack);
+  const other = Object.assign({}, t.other), isd = Object.assign({}, g(t.isd)), isdAdj = z();
+  H.forEach((k) => { other[k] = R(base[k] - (held[k] - hI[k]) + (released[k] - rI[k]) - (cn2b[k] - nI[k]) + (rejBack[k] - bI[k]) + N(g(t.reclaim)[k]) + A["4A5"][k]);
+    isdAdj[k] = R(rI[k] - hI[k] - nI[k] + bI[k]); isd[k] = R(baseI[k] + isdAdj[k] + A["4A4"][k]); });
   const plus = (o, a) => { const x = Object.assign({}, o || {}); H.forEach((k) => { x[k] = R(N(x[k]) + a[k]); }); return x; };
   const impGoods = plus(t.impGoods, A["4A1"]), impServ = plus(t.impServ, A["4A2"]), rcmIn = plus(t.rcmIn, A["4A3"]);
-  // (4(A)(4), the ISD's credit, as GSTR.threeBm has it: next-gst-isd)
-  const itc = {}; H.forEach((k) => { itc[k] = R(N(impGoods[k]) + N(impServ[k]) + N(rcmIn[k]) + N((t.isd || {})[k]) + N(other[k])); });
+  const itc = {}; H.forEach((k) => { itc[k] = R(N(impGoods[k]) + N(impServ[k]) + N(rcmIn[k]) + N(isd[k]) + N(other[k])); });
   const rev1 = plus(plus(t.rev1, A["4B1"]), mo.rev), rev2 = plus(t.rev2, A["4B2"]), na = plus(t.na, A["4D2"]);
   const netItc = {}; H.forEach((k) => { netItc[k] = R(itc[k] - N(rev1[k]) - N(rev2[k])); });
   const pay = GSTR.setOff(t.net, t.rcmOut, netItc, t.opening);
   // next-fix-toggles (the owner: "ineligible ITC to eligible ITC, it did not convert"): the 17(5) reversal is the person's
   // choice too where they set one, so the register's tie-out, GSTR-9 7E and the 3B workbook (they read t.reversal) agree
   const reversal = plus(t.reversal, mo.rev);
-  return Object.assign(t, { other, impGoods, impServ, rcmIn, itc, rev1, rev2, na, netItc, pay, payable: pay.cash, held, released, cn2b, rejBack, itcBase: base, itcAdj: A, reversal,
-    itcRev: sumCat(mo.revList), itcCats: { held: sumCat(c.held), excess: sumCat(c.excess), released: sumCat(c.released), from2b: sumCat(c.from2b), cn2b, rejBack } });
+  return Object.assign(t, { other, isd, isdAdj: H.some((k) => Math.abs(isdAdj[k]) >= 0.005) ? isdAdj : undefined, itcBaseIsd: baseI, impGoods, impServ, rcmIn, itc, rev1, rev2, na, netItc, pay, payable: pay.cash, held, released, cn2b, rejBack, itcBase: base, itcAdj: A, reversal,
+    itcRev: sumCat(mo.revList), itcCats: { held: sumCat(c.held), excess: sumCat(c.excess), released: sumCat(c.released), from2b: sumCat(c.from2b), cn2b: sumCat(c.cn2b), rejBack: sumCat(c.rejBack) },
+    itcCatsIsd: { held: sumCat(cI.held), excess: sumCat(cI.excess), released: sumCat(cI.released), from2b: sumCat(cI.from2b), cn2b: nI, rejBack: bI } });
 }
 if (typeof GSTR === "object" && GSTR.threeBm && !GSTR.threeBm.itcFinal) {
   const orig = GSTR.threeBm;
@@ -369,8 +383,8 @@ export const ITCF = {
       rows: lines.map((r) => ({ key: r.key, chip: r.chip, status: (CHIPS.find((c) => c[0] === r.chip) || [])[1] || "", kind: r.fixed ? "fixed" : r.kind, party: r.party || "", gstin: r.gstin || "",
         no: r.no || "", bookNo: r.bookNo || "", date: r.date || "", bm: lab(r.bm), tm: lab(r.tm), bTax: g(r.bTax), pTax: g(r.pTax), dec: r.show.code ? DEC_LABEL[r.show.code] : "", takeIn: lab(r.show.ym), note: (r.s && r.s.note) || "",
         def: lab(r.def), booksM: g((r.booksBy || {})[M]), lower: g(r.lower), full: g(r.full), later: g(r.laterAmt), defAmt: g(r.defAmt), fixed: r.fixed || "", allow: r.allow,
-        eff: g(r.eff), elig: r.fixed ? "" : ELIG_LABEL[r.el] || "", defE: r.fixed ? "" : ELIG_LABEL[r.defE] || "Eligible", def2: lab(r.def2), blkM: g((r.blkBy || {})[M]), rev: g(r.rev) })),
-      base: { "4A5": base, reclaim, "4A4": g(t.isd), "4A1": sansAdj(t.impGoods, "4A1"), "4A2": sansAdj(t.impServ, "4A2"), "4A3": sansAdj(t.rcmIn, "4A3"), "4B1": sub(sansAdj(t.rev1, "4B1"), g((t.itcRev || {}))), "4B2": sansAdj(t.rev2, "4B2"), "4D2": sansAdj(t.na, "4D2") },
+        eff: g(r.eff), line: isdRow(r) ? "4A4" : "4A5", elig: r.fixed ? "" : ELIG_LABEL[r.el] || "", defE: r.fixed ? "" : ELIG_LABEL[r.defE] || "Eligible", def2: lab(r.def2), blkM: g((r.blkBy || {})[M]), rev: g(r.rev) })),
+      base: { "4A5": base, reclaim, "4A4": g(t.itcBaseIsd || t.isd), "4A1": sansAdj(t.impGoods, "4A1"), "4A2": sansAdj(t.impServ, "4A2"), "4A3": sansAdj(t.rcmIn, "4A3"), "4B1": sub(sansAdj(t.rev1, "4B1"), g((t.itcRev || {}))), "4B2": sansAdj(t.rev2, "4B2"), "4D2": sansAdj(t.na, "4D2") },
       adj: Adj.list(reg, M).map((a) => ({ id: a.id, line: a.line, head: a.head, amt: a.amt, reason: a.reason })),
       table4: this.table4(reg, M).lines,
       inreg: typeof inregRows === "function" ? (() => { const keep = S.inregScope; S.inregScope = "month"; try { return inregRows(S.books).rows; } finally { S.inregScope = keep; } })().map((x) => {

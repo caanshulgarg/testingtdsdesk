@@ -38,12 +38,7 @@ port 31864 unless PG164_PORT; never a real database), made-up rows only, after m
      movement from the lines); the credit carried kept and read back on its engine and version only; a check kept as
      calc 'gst-itc'; an entry worked out again with no document loses its rows; a run that lost its lease refused;
      anon and authenticated may not; a member reads its own firm's gst_itc_month; gst_itc_inputs timed on a 30,000-
-     document book; a book deleted takes its rows
-  10. migration 172 (server/tally-cloud/migration-172-gst-itc-2b-years.sql, next-gst-isd; md5 printed): the file (one
-     transaction, lock_timeout, add-only: one new function, service role only, and one index; no real database); before
-     171 it stops; gst_itc_inputs_2b with no months is gst_itc_inputs word for word; with the months of a year it gives
-     only that year's documents (everything else the same), none for no months; anon and authenticated may not; timed
-     on the 30,000-document book, half of it in a year with no 2B"""
+     document book; a book deleted takes its rows"""
 import os, re, sys, json, time, hashlib, subprocess
 HERE = os.path.dirname(os.path.abspath(__file__)); ROOT = os.path.join(HERE, ".."); sys.path.insert(0, HERE)
 import pg_stand
@@ -136,8 +131,6 @@ try:
     print("== 1. order and reruns")
     try: db.sql(open(os.path.join(ROOT, "server", "tally-cloud", "migration-171-gst-share-itc.sql")).read()); ok(False, "171 before 164 should stop")
     except RuntimeError as e: ok("needs migration 164" in str(e), "171 before 164: stops and says so")
-    try: db.sql(open(os.path.join(ROOT, "server", "tally-cloud", "migration-172-gst-itc-2b-years.sql")).read()); ok(False, "172 before 171 should stop")
-    except RuntimeError as e: ok("needs migration 171" in str(e), "172 before 171: stops and says so")
     try: db.sql(text); ok(False, "164 without 72/73's columns should stop")
     except RuntimeError as e: ok("needs migration 153" in str(e), "without the entry columns of 72 and 73: stops and says so")
     db.sql("alter table tally_vouchers add column if not exists tds_tally jsonb, add column if not exists tds_tally_alter_id bigint;")
@@ -533,38 +526,6 @@ try:
     t0 = time.time(); n, kb = db.one("select jsonb_array_length(x->'docs') || ' ' || (length(x::text) / 1024) from (select gst_itc_inputs('%s', '07', 'e', 'v') x) q" % BC).split(); n = int(n); tI = time.time() - t0
     print("  (gst_itc_inputs on 30,000 documents, 30,000 allocations and 60,000 lines: %.2f s, %s KB)" % (tI, kb))
     ok(n == 30000 and tI < 5, "gst_itc_inputs on a 30,000-document book: every document, within a few seconds (%.2f s)" % tI)
-
-    print("== 10. migration 172: only the documents of the years whose 2B is here")
-    M172 = os.path.join(ROOT, "server", "tally-cloud", "migration-172-gst-itc-2b-years.sql")
-    t172 = open(M172).read()
-    print("  md5 of %s: %s (%d bytes)" % (os.path.basename(M172), hashlib.md5(t172.encode()).hexdigest(), len(t172.encode())))
-    c72 = "\n".join(l.split("--")[0] for l in t172.lower().splitlines())
-    ok(re.search(r"^begin;\s*\nset local lock_timeout = '10s';", t172, re.M) is not None and t172.rstrip().endswith("commit;") and c72.count("\nbegin;") == 1 and c72.count("commit;") == 1, "172: one transaction, lock_timeout 10 s")
-    ok(not re.search(r"\b(drop|truncate|delete|update|insert|alter)\b", c72) and "create table" not in c72 and "create trigger" not in c72
-       and re.findall(r"create index if not exists (\w+) on public\.(\w+)", c72) == [("gst_itc_doc_ym", "gst_itc_doc")], "172: add-only: no table, no trigger, nothing dropped, altered or written; one index on its own column")
-    S72 = "(uuid, text, text, text, text[])"
-    ok(re.findall(r"create or replace function public\.(\w+)\(", c72) == ["gst_itc_inputs_2b"] and ("revoke all on function public.gst_itc_inputs_2b%s from public, anon, authenticated;" % S72) in t172
-       and ("grant execute on function public.gst_itc_inputs_2b%s to service_role;" % S72) in t172 and c72.count("grant ") == 1 and "security definer set search_path to 'public', 'pg_temp'" in c72, "172: one new function, the service role's only")
-    ok(not re.search(r"supabase\.co|https?://|qbocskai|nrtczu", t172.lower()), "172: names no real database")
-    db.sql(t172); db.sql(t172)
-    in2 = lambda yms: json.loads(db.one("select gst_itc_inputs_2b('%s', '07', 'e-171', 'v1', %s)::text" % (B9, yms)))
-    a171 = json.loads(db.one("select gst_itc_inputs('%s', '07', 'e-171', 'v1')::text" % B9))
-    ok(in2("null") == a171, "172 runs, twice; with no months (null) gst_itc_inputs_2b is gst_itc_inputs, word for word")
-    yms9 = sorted(set(d["doc"]["ym"] for d in a171["docs"]))
-    half = yms9[: max(1, len(yms9) // 2)]
-    arr = lambda l: "array[%s]::text[]" % ",".join(q(x) for x in l) if l else "array[]::text[]"
-    g2 = in2(arr(half)); rest = dict((k, v) for k, v in g2.items() if k != "docs")
-    ok(rest == dict((k, v) for k, v in a171.items() if k != "docs") and g2["docs"] == [d for d in a171["docs"] if d["doc"]["ym"] in half] and 0 < len(g2["docs"]) < len(a171["docs"]),
-       "with the months of some years: only their documents (%d of %d), in the same order; everything else the same" % (len(g2["docs"]), len(a171["docs"])))
-    ok(in2(arr([]))["docs"] == [], "with no year (no 2B for the registration): no document")
-    for role in ("anon", "authenticated"):
-        try: db.sql("set role %s; select gst_itc_inputs_2b('%s', '07', '', '', null);" % (role, B9), U); ok(False, role + " may not call gst_itc_inputs_2b")
-        except RuntimeError as e: ok("permission denied" in str(e), role + " may not call gst_itc_inputs_2b")
-    db.sql("update gst_itc_doc set ym = to_char(date '2024-04-01' + (substr(guid, 3)::int %% 365), 'YYYYMM') where book_id = '%s' and substr(guid, 3)::int %% 2 = 0; analyze gst_itc_doc;" % BC)
-    y26 = arr(["2025%02d" % m for m in range(4, 13)] + ["2026%02d" % m for m in range(1, 4)])
-    t0 = time.time(); n2, kb2 = db.one("select jsonb_array_length(x->'docs') || ' ' || (length(x::text) / 1024) from (select gst_itc_inputs_2b('%s', '07', 'e', 'v', %s) x) q" % (BC, y26)).split(); tJ = time.time() - t0
-    print("  (gst_itc_inputs_2b on the same book, half of its documents in 2024-25 with no 2B: %.2f s, %s KB against %s KB)" % (tJ, kb2, kb))
-    ok(int(n2) == 15000 and int(kb2) < int(kb) and tJ < 5, "gst_itc_inputs_2b reads only 2025-26's 15,000 documents (%s KB, not %s KB), within a few seconds (%.2f s)" % (kb2, kb, tJ))
     db.sql("delete from tally_vouchers where book_id in ('%s', '%s'); delete from tally_lines where book_id in ('%s', '%s'); delete from tally_books where book_id in ('%s', '%s')" % (B9, BC, B9, BC, B9, BC))
     ok(all(db.one("select count(*) from %s where book_id in ('%s', '%s')" % (t, B9, BC)) == "0" for t in N71), "a book deleted takes every row of 171's tables with it")
 finally:

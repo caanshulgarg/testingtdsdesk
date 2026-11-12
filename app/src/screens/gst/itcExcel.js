@@ -44,6 +44,7 @@ const RC = (() => {
   const c = {}; let i = 0;
   ["key", "status", "party", "gstin", "no", "date", "bm", "tm", "bTax", "pTax", "dec", "takeIn", "elig", "note", "credit", "take", "kind", "def", "def2", "defE", "effDec", "effMonth", "effElig"].forEach((k) => { c[k] = i++; });
   ["booksM", "lower", "full", "later", "defAmt", "takeH", "eff", "blkM", "rev"].forEach((k) => { c[k] = i; i += 4; });
+  c.line = i++;   // next-gst-isd: the 3B line the effect goes to (4A4 an ISD's line, else 4A5)
   c.n = i; return c;
 })();
 // the input register sheet's columns: the books' facts locked; Eligible?, ITC to take, Take in month and Note to fill; a
@@ -106,8 +107,8 @@ export async function build(ExcelJS, d) {
   const names = []; names[RC.key] = "Key (do not change)"; names[RC.status] = "Status"; names[RC.party] = "Supplier"; names[RC.gstin] = "GSTIN"; names[RC.no] = "Invoice"; names[RC.date] = "Date";
   names[RC.bm] = "Books month"; names[RC.tm] = "2B month"; names[RC.bTax] = "ITC as per books"; names[RC.pTax] = "ITC as per 2B"; names[RC.dec] = "Decision"; names[RC.takeIn] = "Take in month"; names[RC.elig] = "Eligible?";
   names[RC.note] = "Note"; names[RC.credit] = "Credit month"; names[RC.take] = "ITC in " + d.label; names[RC.kind] = "Kind"; names[RC.def] = "FinCom's rule: month"; names[RC.def2] = "FinCom's rule: month if eligible";
-  names[RC.defE] = "As the books have it"; names[RC.effDec] = "Decision in force"; names[RC.effMonth] = "Month in force"; names[RC.effElig] = "Eligible? in force";
-  [["booksM", "In the books this month"], ["lower", "Lower of books and 2B"], ["full", "All of it"], ["later", "Taken in a later month"], ["defAmt", "FinCom's rule: amount"], ["takeH", "Taken this month"], ["eff", "Effect on 4(A)(5)"],
+  names[RC.defE] = "As the books have it"; names[RC.effDec] = "Decision in force"; names[RC.effMonth] = "Month in force"; names[RC.effElig] = "Eligible? in force"; names[RC.line] = "3B line";
+  [["booksM", "In the books this month"], ["lower", "Lower of books and 2B"], ["full", "All of it"], ["later", "Taken in a later month"], ["defAmt", "FinCom's rule: amount"], ["takeH", "Taken this month"], ["eff", "Effect on 4(A)(5) (4(A)(4): an ISD's)"],
     ["blkM", "Reversed in the books (17(5) in Tally)"], ["rev", "Effect on 4(B)(1)"]]
     .forEach(([k, w]) => H.forEach((h, i) => { names[RC[k] + i] = w + ": " + heads[i]; }));
   head(wr, names, []);
@@ -122,7 +123,7 @@ export async function build(ExcelJS, d) {
     const r = j + 2, v = [];
     v[RC.key] = x.key; v[RC.status] = x.status + (x.fixed ? " · " + x.fixed : ""); v[RC.party] = x.party; v[RC.gstin] = x.gstin; v[RC.no] = x.no || x.bookNo; v[RC.date] = day(x.date);
     v[RC.bm] = x.bm; v[RC.tm] = x.tm; v[RC.bTax] = tot(x.bTax); v[RC.pTax] = tot(x.pTax); v[RC.dec] = x.dec; v[RC.takeIn] = x.takeIn; v[RC.elig] = x.elig || ""; v[RC.note] = x.note; v[RC.kind] = x.kind;
-    v[RC.def] = x.def; v[RC.def2] = x.def2; v[RC.defE] = x.defE || "";
+    v[RC.def] = x.def; v[RC.def2] = x.def2; v[RC.defE] = x.defE || ""; v[RC.line] = x.line || "4A5";
     ["booksM", "lower", "full", "later", "defAmt", "blkM"].forEach((k) => H.forEach((h, i) => { v[RC[k] + i] = +((x[k] || {})[h]) || 0; }));
     const KI = "$" + L("kind") + r, C = "$" + L("credit") + r, DE = "$" + L("defE") + r;
     // the decision, month and eligibility in force: the input register's where it was changed there, else this sheet's
@@ -188,14 +189,16 @@ export async function build(ExcelJS, d) {
   const sumAt = (rows, i) => rows.map((x) => col(i + 1) + x).join("+");
   const plusAdj = (code) => C4((i) => ({ formula: num0(B[code], H[i]) + "+" + adjF(code, i) }));
   const rb = add("Bills in the books this month (all other ITC)", "base", C4((i) => num0(B["4A5"], H[i])));
-  const re = add("Effect of the decisions in 2B reconciliation", "eff", C4((i) => ({ formula: "SUM(" + rng("eff", H[i]) + ")" })));
+  const LN = Q(SH.reco) + "$" + col(RC.line) + "$2:$" + col(RC.line) + "$" + last;
+  const effOn = (code, i) => ({ formula: "SUMIFS(" + rng("eff", H[i]) + "," + LN + ',"' + code + '")' });
+  const re = add("Effect of the decisions in 2B reconciliation", "eff", C4((i) => effOn("4A5", i)));
   const rr = add("ITC reclaimed (also 4(D)(1))", "recl", C4((i) => num0(B.reclaim, H[i])));
   const ra = add("Adjustments to 4(A)(5)", "adj5", C4((i) => ({ formula: adjF("4A5", i) })));
   rn++;
   const r1 = add("4(A)(1) Import of goods", "4A1", plusAdj("4A1"));
   const r2a = add("4(A)(2) Import of services", "4A2", plusAdj("4A2"));
   const r3 = add("4(A)(3) Inward supplies on reverse charge", "4A3", plusAdj("4A3"));
-  const r4 = add("4(A)(4) Inward supplies from ISD", "4A4", C4((i) => num0(B["4A4"], H[i])));
+  const r4 = add("4(A)(4) Inward supplies from ISD", "4A4", C4((i) => ({ formula: num0(B["4A4"], H[i]) + "+" + effOn("4A4", i).formula + "+" + adjF("4A4", i) })));
   const r5 = add("4(A)(5) All other ITC", "4A5", C4((i) => ({ formula: sumAt([rb, re, rr, ra], i) })), true);
   const rA = add("4(A) Total ITC available", "4A", C4((i) => ({ formula: sumAt([r1, r2a, r3, r4, r5], i) })), true);
   const rb1 = add("4(B)(1) Reversed: rules 38, 42, 43 and section 17(5)", "4B1", C4((i) => ({ formula: num0(B["4B1"], H[i]) + "+" + adjF("4B1", i) + "+SUM(" + rng("rev", H[i]) + ")" })));

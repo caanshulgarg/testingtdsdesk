@@ -23,8 +23,6 @@
 //                          171, shadow): a month's 3B (tables 4, 5, 6) by today's engine on what the cloud keeps (the month
 //                          sums, each entry's document and allocations, the suppliers' movement, the credit carried in),
 //                          today's engine on the whole book for the same months, and every box of both to the paisa
-//   twoBYms(items, reg)    next-gst-isd (migration 172): the months of the years whose 2B is here for the registration,
-//                          the only documents the month step reads (the 2B matching takes no others)
 //   ENGINE                a hash of the engine's own text (gst3b.js, names.js, this file's books / step / boxes) and REV
 //                          (data.ts and handler.ts are counted through REV: tests/run_gst_cloud.js stops when one of the
 //                          files changes and REV and tests/gst_cloud_rev.json do not)
@@ -35,7 +33,7 @@ import * as E from "../_shared/gst3b.js";
 import { gst3bPrint } from "../_shared/gst3bprint.js";
 
 // the revision of the function around the engine (data.ts, handler.ts): moved by hand with tests/gst_cloud_rev.json
-export const REV = "172.1";
+export const REV = "171.3";
 
 const G = globalThis;
 // what the app's program has around the engine: names.js (put at its head by build.py too)
@@ -89,7 +87,7 @@ export function boxes(t) {
 // the engine's own text: a result worked out by another engine is worked out again
 export const ENGINE = (() => {
   let s = REV + "|" + books.toString() + boxes.toString() + step.toString() + gst3bPrint.toString() + ctxOf.toString() + contextOf.toString() + shares.toString() + engineSums.toString()
-    + itcRow.toString() + sumRows.toString() + addSum.toString() + shareSrc.toString() + monthBook.toString() + itcMonths.toString() + engineItc.toString() + twoBYms.toString();
+    + itcRow.toString() + sumRows.toString() + addSum.toString() + shareSrc.toString() + monthBook.toString() + itcMonths.toString() + engineItc.toString();
   const add = (v) => { if (typeof v === "function") s += v.toString(); else if (v && typeof v === "object") Object.keys(v).sort().forEach((k) => { const x = v[k]; s += k + (typeof x === "function" ? x.toString() : typeof x === "object" && x && !(x instanceof Map) && !(x instanceof WeakMap) ? JSON.stringify(x) : ""); }); };
   Object.keys(E).sort().forEach((k) => add(E[k]));
   Object.keys(names).sort().forEach((k) => add(names[k]));
@@ -398,17 +396,6 @@ export function shareSrc(inp) {
     moves() { const o = {}; Object.keys(inp.moves || {}).forEach((l) => { o[l] = inp.moves[l].map((x) => [String(x[0]), Number(x[1])]); }); return o; },
     carry(prev) { return carry[prev] ? { pay: { carry: Object.assign({}, carry[prev]) } } : null; },
   };
-}
-// next-gst-isd: the months of the financial years whose 2B is here for a registration (the client's work: its twoBs, as
-// GST2B.all2b reads them), the years GST2B.run matches: gst-run reads only those months' documents (gst_itc_inputs_2b,
-// migration 172). No 2B for the registration: none
-export function twoBYms(items, reg) {
-  const by = (items || []).filter((r) => r && !r.deleted && r.key === "twoBs").map((r) => ({ k: r.key, i: r.item || "", o: r.ord, d: r.data }));
-  const t = by.length ? E.BookItems.join(by) : null, fys = new Set();
-  Object.values(t && typeof t === "object" ? t : {}).forEach((x) => { if (x && /^\d{6}$/.test(String(x.ym || "")) && (!reg || String(x.gstin || "").slice(0, 2) === reg)) fys.add(E.GST2B.fyOf(x.ym)); });
-  const out = [];
-  [...fys].sort().forEach((fy) => { const y = +fy.slice(0, 4); for (let m = 4; m <= 15; m++) out.push((m <= 12 ? y : y + 1) + String(m <= 12 ? m : m - 12).padStart(2, "0")); });
-  return out;
 }
 // the books the month step reads: the client's work as books() puts it, the context (ledger list, groups, GSTINs, places
 // of supply typed) over it, no entries, and shareSrc

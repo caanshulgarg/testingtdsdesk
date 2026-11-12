@@ -10,21 +10,25 @@
 //        3. the cloud: the ISD entry's share is 4.isd (not 4.other), the context carries the switch; part A's and B's
 //           sums of the shares are today's engine (engineSums), and every month's 3B by the month step (itcMonths, as
 //           gst_itc_inputs gives its inputs) is today's engine's to the paisa (gst-run's parity)
-//   B. GSTR-2B matching only in the financial years whose 2B is here. Two years: bills of February and March 2025
-//      (2024-25) added, the March one in April 2025's 2B:
-//        4. 2B only for 2025-26: neither 2024-25 bill is matched or "in the books, not in 2B" (noYear); the April 2B row
-//           is then only in 2B; 2024-25's 3B takes them as booked (no 2B); the 2B reconciliation's year 2024-25 says
-//           "No 2B here"; the cloud's month step reads only 2025-26's documents (twoBYms) and is today's engine's
-//        5. a 2B of March 2025 brought in too: the March bill matches the April row of the other year (held in March,
-//           taken in April), the February bill is in the books and not in 2B; the month step reads both years and is
-//           today's engine's
+//   B. a year with no 2B (review of e9ebac1c7): the matching is the base's (every document against every 2B row); only
+//      the report changes. 2024-25 entries added (tests/gst_itc_world.js fy24): a March bill in April 2025's 2B (M3), a
+//      supplier's credit note of March in April's CDNR (H1), a March bill rejected in IMS in April's 2B (H2), a February
+//      bill in no 2B:
+//        4. 2B only for 2025-26: every box of every month is the base engine's; the three match as in the base; the
+//           February bill is not "in the books, not in 2B" (noYear) and the year says "No 2B here"; gst-run's parity
+//        5. a 2B of March 2025 too: the base's figures; the February bill is then in the books and not in 2B
+//   C. M4: an ISD's documents on the 2B basis go to 4(A)(4): a branch with only the ISD's credit, booked in March, in
+//      April's 2B: neither box negative, March 0/0, April 4(A)(4) 5,400; the JSON; the cloud's parity; the Final credit
+//      for 3B (app/src/lib/itcFinal.js): the same, a decision on the ISD's line, an adjustment on the new 4(A)(4) line
+//   D. M5: GSTX.unclaimed counts 4(A)(4) (and a filed 3B's ISD entry) as claimed
+//   E. Tally's registration type "Input-Service-Distributor" (hyphens)
 // Made-up names and figures only (no real client); about 400 entries.
 "use strict";
 const path = require("path");
 process.env.TZ = process.env.TZ || "Asia/Kolkata";
 const {load, HTML} = require("./harness");
 const {world} = require("./gst_cloud_world");
-const {itc} = require("./gst_itc_world");
+const {itc, fy24} = require("./gst_itc_world");
 const ROOT = path.join(__dirname, "..");
 let fails = 0; const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };
 const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "fmtDate", "tallyDate", "STATE_CODES", "RULE_DEFAULTS", "Books", "BookItems", "LedMaster", "Audit", "GSTR", "GSTAdv", "GSTRev", "GSTAmend", "GST2B", "GST9", "INR",
@@ -43,21 +47,22 @@ const H = ["igst", "cgst", "sgst", "cess"], ISD = "Kestrel Head Office ISD";
     const w = world({seed: 171}), g = itc(w);
     if (o.sw) w.work.map[ISD] = Object.assign({}, w.work.map[ISD] || {}, {isd: {by: "made-up", at: "2026-11-12T00:00:00.000Z"}});
     if (o.type){ const h = w.heads.find((z) => z.guid === g.isd); Object.assign(h, {gst_reg_type: "Input Service Distributor", gst_alter_id: h.alter_id}); }
-    const P = (n) => w.ledgers.find((l) => l.name === n), portalOf = (rp) => w.portal.find((j) => j.data.rtnprd === rp);
-    const inv = (rp, P0, doc) => { const dd = portalOf(rp).data.docdata, l = dd.b2b = dd.b2b || []; let s = l.find((z) => z.ctin === P0.gstin); if (!s){ s = {ctin: P0.gstin, trdnm: P0.name.toUpperCase(), supfildt: "11-05-2025", inv: []}; l.push(s); } s.inv.push(doc); };
-    let k = 0;
-    const add = (day, party, ref, val, tax) => { const guid = "fy24-" + (++k), p = P(party);
-      w.heads.push({guid, day, alter_id: 950000 + k, vtype: "Purchase", vno: "PUR/F" + k, party, narration: "Purchase (2024-25)", cancelled: false, optional: false, deleted_at: null, gstin: p.gstin, pos: "Delhi", ref, ref_date: day, cmp_gstin: w.OWN});
-      [[party, val + 2 * tax], ["Purchases", -val, {hsn: "4802", rate: 18}], ["Input CGST", -tax], ["Input SGST", -tax]].forEach(([l, a, m]) => w.lines.push({guid, ledger: l, amount: a, hsn: (m && m.hsn) || null, rate: m && m.rate != null ? m.rate : null}));
-      return guid; };
-    if (o.fy24){
-      g.mar = add("2025-03-20", "Alder Supply Co", "AS/MAR/9", 10000, 900);
-      g.feb = add("2025-02-10", "Dunmore Traders", "DT-FEB-2", 5000, 450);
-      inv("042025", P("Alder Supply Co"), {inum: "AS/MAR/9", dt: "20-03-2025", val: 11800, txval: 10000, igst: 0, cgst: 900, sgst: 900, cess: 0, pos: "07", rev: "N", itcavl: "Y"});
-    }
+    if (o.fy24) Object.assign(g, fy24(w));
     if (o.mar25){
-      w.portal.push({data: {gstin: w.OWN, rtnprd: "032025", gendt: "14-04-2025", docdata: {b2b: []}, docRejdata: {b2b: []}}});
-      inv("032025", P("Elmstead Paper"), {inum: "EP-MAR-1", dt: "28-03-2025", val: 1180, txval: 1000, igst: 0, cgst: 90, sgst: 90, cess: 0, pos: "07", rev: "N", itcavl: "Y"});
+      const P = (n) => w.ledgers.find((l) => l.name === n);
+      w.portal.push({data: {gstin: w.OWN, rtnprd: "032025", gendt: "14-04-2025", docdata: {b2b: [{ctin: P("Elmstead Paper").gstin, trdnm: "ELMSTEAD PAPER", supfildt: "11-04-2025",
+        inv: [{inum: "EP-MAR-1", dt: "28-03-2025", val: 1180, txval: 1000, igst: 0, cgst: 90, sgst: 90, cess: 0, pos: "07", rev: "N", itcavl: "Y"}]}]}, docRejdata: {b2b: []}}});
+    }
+    if (o.only){   // a branch with only the ISD's credit: its journal booked in March 2025, 2B's ISD part in April's 2B
+      const h = w.heads.find((z) => z.guid === g.isd), ls = w.lines.filter((l) => l.guid === g.isd);
+      Object.assign(h, {day: "2025-03-28", ref_date: "2025-03-28"});
+      // (and April's payment to the head office, so the books run to April)
+      const pay = Object.assign({}, h, {guid: "isd-pay-1", day: "2025-04-15", alter_id: 990001, vtype: "Payment", vno: "PAY/1", ref: "", ref_date: null, narration: "Paid to the head office"});
+      w.heads = [h, pay]; w.lines = ls.concat([{guid: pay.guid, ledger: ISD, amount: -5400, hsn: null, rate: null}, {guid: pay.guid, ledger: "Kestrel Bank", amount: 5400, hsn: null, rate: null}]); w.bills = [];
+      const isdP = w.ledgers.find((l) => l.name === ISD);
+      w.portal = [{data: {gstin: w.OWN, rtnprd: "032025", gendt: "14-04-2025", docdata: {b2b: []}, docRejdata: {b2b: []}}},
+        {data: {gstin: w.OWN, rtnprd: "042025", gendt: "14-05-2025", docdata: {isd: [{ctin: isdP.gstin, trdnm: ISD.toUpperCase(), supfildt: "11-05-2025", doclist: [{doctyp: "I", docnum: "ISD/25/044", docdt: "28-03-2025", igst: 5400, cgst: 0, sgst: 0, cess: 0, itcelg: "Y"}]}]}, docRejdata: {b2b: []}}}];
+      w.sales = [];
     }
     const twoBs = {};
     w.portal.forEach((j) => { const t = x.GST2B.fromJson(j); twoBs[t.gstin + "|" + t.period] = Object.assign(t, {source: "upload"}); });
@@ -137,6 +142,12 @@ const H = ["igst", "cgst", "sgst", "cess"], ISD = "Kestrel Head Office ISD";
   ok(av(j0, "ISD").iamt === 0 && av(j1, "ISD").iamt === 5400 && av(j1, "ISD").camt === 0 && j1.itc_elg.itc_avl.map((r) => r.ty).join(",") === "IMPG,IMPS,ISRC,ISD,OTH", "2. the GSTR-3B JSON: itc_avl ty ISD IGST 5,400 (none without the switch), in the portal's order (" + j1.itc_elg.itc_avl.map((r) => r.ty).join(",") + ")");
   ok(Math.round((av(j0, "OTH").iamt - av(j1, "OTH").iamt) * 100) / 100 === 5400 && JSON.stringify(j0.itc_elg.itc_net) === JSON.stringify(j1.itc_elg.itc_net) && JSON.stringify(j0.sup_details) === JSON.stringify(j1.sup_details),
     "2. ty OTH 5,400 less (" + av(j0, "OTH").iamt + " -> " + av(j1, "OTH").iamt + "); itc_net and 3.1 the same");
+  { json(B1.rows); const d9 = x.GST9.build("2025", "07"), T9 = d9.T; x.GST9.typed("2025", "07")["6G"] = {igst: 100}; const T9b = x.GST9.build("2025", "07").T;
+    json(B0.rows); const T90 = x.GST9.build("2025", "07").T;
+    ok(T9["6G"].igst === 5400 && Math.round((T90["6B-is"].igst + T90["6B-in"].igst - T9["6B-is"].igst - T9["6B-in"].igst) * 100) / 100 === 5400 && JSON.stringify(sumOf(T9["6I"])) === JSON.stringify(sumOf(T90["6I"])),
+      "2. GSTR-9: the ISD's 5,400 in 6G, out of 6B; 6I the same");
+    ok(T9b["6G"].igst === 100 && T9b["6Gbooks"].igst === 5400, "2. GSTR-9: 6G typed (100) is kept as typed, the books' 5,400 its hint (not added)"); }
+  json(B1.rows);
   const t9 = x.GSTR.threeBm("202509", "07");
   ok(t9.isd && t9.isd.igst === 5400, "2. the app's own threeBm (its copy of the engine): 4(A)(4) 5,400");
   const kept = inBooks(B1.rows, (b) => { const m = E.Books.mapLedgers(b.vouchers, b.map); return !!(m[ISD] || {}).isd; });
@@ -156,35 +167,78 @@ const H = ["igst", "cgst", "sgst", "cess"], ISD = "Kestrel Head Office ISD";
   ok(P1.cl.months.find((m) => m.ym === "202509").result.isd.igst === 5400, "3. the month step's September 4(A)(4): 5,400");
   parity(B2.rows, C2, "3. (Tally's type) gst-run's parity");
 
-  console.log("== B. 2B matching only in the years whose 2B is here");
+  console.log("== B. a year with no 2B: matched as before, not reported as not in 2B");
+  // the base's engine (git, as tests/run_gst_share_same.js takes it) on the same rows: the figures must be its own
+  const fsx = require("fs"), cpx = require("child_process"), BASE = process.env.GST_SAME_BASE || "origin/staging-next", BD = path.join(__dirname, "out", "isd-base");
+  ["server/_shared/gst3b.js", "server/_shared/names.js", "server/_shared/gst3bprint.js", "server/gst-run/engine.js"].forEach((f) => { const o2 = path.join(BD, f); fsx.mkdirSync(path.dirname(o2), {recursive: true});
+    fsx.writeFileSync(o2, cpx.execFileSync("git", ["show", BASE + ":" + f], {cwd: ROOT, maxBuffer: 64 << 20})); });
+  fsx.writeFileSync(path.join(BD, "package.json"), JSON.stringify({type: "module"}));
+  const engB = await import(path.join(BD, "server", "gst-run", "engine.js"));
+  const noIsd = (o) => JSON.stringify(o, (k, v) => (k === "isd" || k === "engine" || k === "src") ? undefined : v);
   const F1 = rowsOf({fy24: true}), F2 = rowsOf({fy24: true, mar25: true});
-  const run1 = inBooks(F1.rows, () => { const r = E.GST2B.run("07"); return {r, t3: E.GSTR.threeBm("202503", "07"), t2: E.GSTR.threeBm("202502", "07"), t4: E.GSTR.threeBm("202504", "07")}; });
-  const ids = (l) => new Set(l.map((d) => d.id)), r1 = run1.r, fy24 = [F1.g.mar, F1.g.feb];
-  ok(fy24.every((g) => !ids(r1.books).has(g) && !ids(r1.onlyBooks).has(g) && !r1.pairs.some((x) => x.books.some((d) => d.id === g))) && fy24.every((g) => ids(r1.noYear).has(g)) && r1.noYear.length === 2,
-    "4. 2B only for 2025-26: the February and March 2025 bills are neither matched nor in the books not in 2B (" + r1.noYear.length + " kept apart, noYear)");
-  ok(r1.only2b.some((p) => p.no === "AS/MAR/9" && p.ym === "202504"), "4. so April 2025's row of the March bill is only in 2B");
-  ok(run1.t3.basis === "no 2B" && run1.t3.held.n === 0 && run1.t3.other.cgst >= 900 && run1.t2.other.cgst >= 450 && run1.t4.released.n === 0, "4. 2024-25's 3Bs take the bills as booked (no 2B); April takes nothing of them");
+  const allF = monthsOf(F1.rows), h1 = eng.engineItc(F1.rows, "07", allF).months, b1 = engB.engineItc(F1.rows, "07", allF).months;
+  ok(allF.length === 14 && allF.every((m) => noIsd(h1[m]) === noIsd(b1[m])), "4. every box of all " + allF.length + " months (February 2025 to March 2026) is the base engine's: the matching is unchanged");
+  const run1 = inBooks(F1.rows, () => { const r = E.GST2B.run("07"); return {r, t4: E.GSTR.threeBm("202504", "07")}; }), r1 = run1.r, ids = (l) => new Set(l.map((d) => d.id));
+  const pairOf = (r, g) => r.pairs.find((x) => x.books.some((d) => d.id === g));
+  ok(pairOf(r1, F1.g.mar) && pairOf(r1, F1.g.mar).p.no === "AS/MAR/9" && !r1.only2b.some((p) => p.no === "AS/MAR/9"), "M3. the March 2025 bill matches April's 2B row (not \"in 2B, not in the books\")");
+  ok(pairOf(r1, F1.g.cnMar) && pairOf(r1, F1.g.cnMar).p.dir === -1 && !r1.only2b.some((p) => p.no === "GT-CN-MAR") && run1.t4.cn2b.list.every((p) => p.no !== "GT-CN-MAR") && run1.t4.cn2b.igst + run1.t4.cn2b.cgst === b1["202504"].cn2b.igst + b1["202504"].cn2b.cgst,
+    "H1. the supplier's credit note booked in March 2025 matches April's CDNR: April takes nothing off for it (cn2b as the base: " + run1.t4.cn2b.n + ")");
+  const rj = (r1.rejected || []).find((x) => x.p.no === "HS-REJ-3");
+  ok(rj && rj.books.some((d) => d.id === F1.g.rejMar) && JSON.stringify(h1["202504"].held) === JSON.stringify(b1["202504"].held), "H2. the March 2025 bill rejected in IMS in April's 2B is found: its credit is held back in April, as the base does");
+  ok(ids(r1.noYear).has(F1.g.feb) && r1.noYear.length === 1 && !ids(r1.onlyBooks).has(F1.g.feb), "4. the February 2025 bill, in no 2B and of a year with none: not \"in the books, not in 2B\" (kept apart, noYear)");
   const rec = (rows) => { const b = inBooks(rows, (bk) => clone(bk)); app.ctx.S.books = b; x.GST2B._memo = null; const r = x.GST2B.run("07");
-    return {noYear: r.noYear.map((d) => d.id), onlyBooks: r.onlyBooks.map((d) => d.id), y24: x.GSTX.twoBYear("07", "2024-25"), y25: x.GSTX.twoBYear("07", "2025-26")}; };
+    return {noYear: r.noYear.map((d) => d.id), onlyBooks: r.onlyBooks.map((d) => d.id), y24: x.GSTX.twoBYear("07", "2024-25"), y25: x.GSTX.twoBYear("07", "2025-26"), close: x.GSTX.yearEnd ? null : null}; };
   const a1 = rec(F1.rows);
-  ok(a1.noYear.length === 2 && !a1.onlyBooks.some((g) => fy24.includes(g)), "4. the app's own GST2B.run: the same");
-  ok(a1.y24.loaded === null && !a1.y24.onlyBooks.length && a1.y25.loaded.length === 10, "4. the 2B reconciliation's year 2024-25: no 2B here (its screen says so), no bill listed as not in 2B; 2025-26 has its 2Bs (10: the QRMP quarter's)");
-  const y1 = eng.twoBYms(F1.rows.items, "07");
-  ok(y1.length === 12 && y1[0] === "202504" && y1[11] === "202603" && eng.twoBYms(F1.rows.items, "09").length === 0, "4. the cloud reads only 2025-26's documents (twoBYms: " + y1[0] + " to " + y1[y1.length - 1] + "; none for a registration with no 2B)");
-  const CF1 = cloud(F1.rows);
-  const pf = parity(F1.rows, CF1, "4. gst-run's parity, 2025-26's documents only", y1);
-  ok(!pf.inp.docs.some((d) => fy24.includes(d.guid)) && CF1.sh.docs.some((d) => d.guid === F1.g.mar), "4. (the 2024-25 documents are kept by entry, and not read)");
-  parity(F1.rows, CF1, "4. and with every document read (before migration 172): the same");
-  const run2 = inBooks(F2.rows, () => { const r = E.GST2B.run("07"); return {r, t3: E.GSTR.threeBm("202503", "07"), t4: E.GSTR.threeBm("202504", "07")}; }), r2 = run2.r;
-  const pm = r2.pairs.find((p) => p.books.some((d) => d.id === F2.g.mar));
-  ok(pm && pm.p.no === "AS/MAR/9" && pm.p.ym === "202504" && pm.timing && pm.status === "matched" && !r2.noYear.length, "5. a 2B of March 2025 here too: the March bill matches April's row (the other year's), " + (pm ? pm.status + ", timing" : "none"));
-  ok(ids(r2.onlyBooks).has(F2.g.feb), "5. the February bill is in the books, not in 2B");
+  ok(a1.noYear.join() === F1.g.feb && !a1.onlyBooks.includes(F1.g.feb), "4. the app's own GST2B.run: the same");
+  ok(a1.y24.loaded === null && !a1.y24.onlyBooks.length && a1.y25.loaded.length === 10 && !a1.y25.only2b.some((p) => p.no === "AS/MAR/9"),
+    "4. the 2B reconciliation: 2024-25 \"No 2B here\", no bill of it listed as not in 2B; 2025-26 does not list April's row of the March bill as \"book this bill\"");
+  parity(F1.rows, cloud(F1.rows), "4. gst-run's parity (every document read, as the matching needs)");
+  const allF2 = monthsOf(F2.rows), h2 = eng.engineItc(F2.rows, "07", allF2).months, b2 = engB.engineItc(F2.rows, "07", allF2).months;
+  const r2 = inBooks(F2.rows, () => E.GST2B.run("07"));
+  ok(allF2.every((m) => noIsd(h2[m]) === noIsd(b2[m])) && ids(r2.onlyBooks).has(F2.g.feb) && !r2.noYear.length, "5. a 2B of March 2025 here too: every box the base's; the February bill is now in the books, not in 2B");
   const a2 = rec(F2.rows);
   ok(a2.y24.loaded.join() === "202503" && a2.y24.onlyBooks.map((d) => d.id).join() === F2.g.feb, "5. the 2B reconciliation's year 2024-25: March's 2B here, the February bill listed as not in 2B");
-  ok(run2.t3.basis === "2b" && run2.t3.held.list.some((d) => d.id === F2.g.mar) && run2.t4.released.list.some((d) => d.id === F2.g.mar), "5. March 2025's 3B holds the March bill back, April takes it (as before)");
-  const y2 = eng.twoBYms(F2.rows.items, "07");
-  ok(y2.length === 24 && y2[0] === "202404", "5. the cloud reads both years' documents (" + y2.length + " months)");
-  parity(F2.rows, cloud(F2.rows), "5. gst-run's parity", y2);
+  parity(F2.rows, cloud(F2.rows), "5. gst-run's parity");
+
+  console.log("== C. ISD documents on the 2B basis: in 4(A)(4)");
+  const O0 = rowsOf({only: true}), O1 = rowsOf({only: true, sw: true}), allO = monthsOf(O1.rows);
+  const o0 = eng.engineItc(O0.rows, "07", allO).months, o1 = eng.engineItc(O1.rows, "07", allO).months, mar = o1["202503"], apr = o1["202504"];
+  ok(mar.basis === "2b" && mar.held.n === 1 && JSON.stringify(sumOf(mar.isd)) === "[0,0,0,0]" && JSON.stringify(sumOf(mar.other)) === "[0,0,0,0]",
+    "M4. a branch with only the ISD's credit, booked in March, in April's 2B: March 4(A)(4) 0 (5,400 held back) and 4(A)(5) 0, neither negative (" + sumOf(mar.isd).join("/") + ", " + sumOf(mar.other).join("/") + ")");
+  ok(JSON.stringify(sumOf(apr.isd)) === "[5400,0,0,0]" && JSON.stringify(sumOf(apr.other)) === "[0,0,0,0]" && apr.released.n === 1, "M4. April: 4(A)(4) 5,400 taken now, 4(A)(5) 0");
+  ok(allO.every((m) => same(o1[m].itc, o0[m].itc) && same(o1[m].netItc, o0[m].netItc) && JSON.stringify(o1[m].pay) === JSON.stringify(o0[m].pay)) && JSON.stringify(sumOf(o0["202503"].other)) === "[0,0,0,0]",
+    "M4. 4(A) total, 4(C) and table 6 as without the switch, every month");
+  const jO = json(O1.rows), jM = (() => { const b = inBooks(O1.rows, (bk) => clone(bk)); app.ctx.S.books = b; x.GSTR._carry = null; x.GST2B._memo = null; return x.GSTR.threeBJson("202503", "07"); })();
+  ok(av(jM, "OTH").iamt === 0 && av(jM, "ISD").iamt === 0, "M4. March's JSON: OTH 0 and ISD 0, not negative");
+  parity(O1.rows, cloud(O1.rows), "M4. gst-run's parity of the branch (the document kept by its entry says ISD)");
+  // the Final credit for 3B (app/src/lib/itcFinal.js, the wrap of threeBm) on the app's own engine in its own context
+  const fin = load(HTML, NAMES), fx = fin.x, fc = fin.ctx, fsr = require("fs"), vmr = require("vm"), APP = path.join(ROOT, "app", "src", "lib");
+  const strp = (f) => fsr.readFileSync(path.join(APP, f), "utf8").replace(/^import .*$/mg, "").replace(/^export (const|function|async function) /mg, "$1 ");
+  fc.saveBooks = () => {}; fc.render = () => {}; fc.Cloud = {st: {email: "made-up@zz.test"}};
+  vmr.runInContext("globalThis.__sync = (function(){" + strp("itcSync.js") + "\n; return {DECS, DEC_LABEL}; })();\n(function(){ const {DECS, DEC_LABEL} = globalThis.__sync;\n" + strp("itcFinal.js") + "\n})();", fc);
+  const ITCF = fc.ITCF, Adj = fc.ITCAdj;
+  { const b = inBooks(O1.rows, (bk) => clone(bk)); fc.S.books = b; fc.S.coId = O1.rows.client; fc.S.companies = {[O1.rows.client]: Object.assign({}, O1.rows.co, {id: O1.rows.client})}; fc.CO = () => fc.S.companies[O1.rows.client]; }
+  const TF = (ym) => { fx.GSTR._carry = null; fx.GST2B._memo = null; return fx.GSTR.threeBm(ym, "07"); };
+  let fm = TF("202503"), fa = TF("202504");
+  ok(JSON.stringify(sumOf(fm.isd)) === "[0,0,0,0]" && JSON.stringify(sumOf(fm.other)) === "[0,0,0,0]" && JSON.stringify(sumOf(fa.isd)) === "[5400,0,0,0]" && JSON.stringify(sumOf(fa.other)) === "[0,0,0,0]",
+    "M4. Final credit for 3B, nothing decided: March 4(A)(4) 0 and 4(A)(5) 0, April 4(A)(4) 5,400 (" + sumOf(fm.isd).join("/") + " " + sumOf(fm.other).join("/") + " | " + sumOf(fa.isd).join("/") + ")");
+  const ln = ITCF.rows("07").find((r) => (r.docs || []).some((d) => d.id === O1.g.isd));
+  ITCF.decide("07", [ln], "booksnow", "202503", "202503");
+  fm = TF("202503"); fa = TF("202504");
+  ok(JSON.stringify(sumOf(fm.isd)) === "[5400,0,0,0]" && JSON.stringify(sumOf(fm.other)) === "[0,0,0,0]" && JSON.stringify(sumOf(fa.isd)) === "[0,0,0,0]" && JSON.stringify(sumOf(fa.other)) === "[0,0,0,0]",
+    "M4. the ISD's line taken in March as booked (a decision): March 4(A)(4) 5,400, April nothing; 4(A)(5) 0 both months");
+  const sv = Adj.save("07", "202504", {line: "4A4", head: "igst", amt: "100", reason: "made-up ISD adjustment"});
+  fa = TF("202504");
+  ok(sv.ok && sumOf(fa.isd)[0] === 100 && sumOf(fa.itc)[0] === 100 && fx.GSTR && ITCF.LINES.some(([k]) => k === "4A4") && ITCF.table4("07", "202504").lines.find(([k]) => k === "4A4")[1].igst === 100,
+    "M4. an adjustment on 4(A)(4) (the new line): April 4(A)(4) 100, in 4(A) and table 4");
+  console.log("== D. credit available in 2B and not claimed (GSTX.unclaimed)");
+  const unc = (rows, filed) => { const b = inBooks(rows, (bk) => clone(bk)); if (filed) b.filed3b = {[rows.w.OWN + "|202504"]: {json: {itc_elg: {itc_avl: [{ty: "OTH", iamt: 0, camt: 0, samt: 0, csamt: 0}, {ty: "ISD", iamt: 5400, camt: 0, samt: 0, csamt: 0}]}}}};
+    app.ctx.S.books = b; x.GSTR._carry = null; x.GST2B._memo = null; return x.GSTX.unclaimed("07", "202504"); };
+  O1.rows.w = O1.w;
+  const u1 = unc(O1.rows, false), u2 = unc(O1.rows, true);
+  ok(u1 && u1.total === 0 && u2 && u2.total === 0 && u2.source === "3B from the portal", "M5. the ISD's 5,400 in April's 2B: not \"unclaimed\", from FinCom's working (4(A)(4)) and from a filed 3B's ISD entry (" + (u1 && u1.total) + ", " + (u2 && u2.total) + ")");
+  console.log("== E. Tally's registration type, written with hyphens");
+  ok(inBooks(O0.rows, () => E.GSTR.isISD({regType: "Input-Service-Distributor", ent: []}) && E.GSTR.isISD({regType: "input service distributor", ent: []}) && !E.GSTR.isISD({regType: "Regular", ent: []})), "\"Input-Service-Distributor\" is an ISD's too; \"Regular\" is not");
   console.log(fails ? fails + " FAILED" : "all ok");
   process.exit(fails ? 1 : 0);
 })().catch((e) => { console.error(e); process.exit(1); });

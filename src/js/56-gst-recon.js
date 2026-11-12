@@ -254,8 +254,9 @@ const GSTX = {
   claimed3b(reg, qEnd){
     const f = this.fig(reg, "r3b", qEnd); if (f && f.itc) return {heads: f.itc, source: f.source === "pdf" ? "3B PDF" : "3B typed"};
     const j = ((S.books || {}).filed3b || {}); const g = (GSTR.gstins(S.books) || []).find(x => x.slice(0, 2) === reg) || "";
-    const x = j[g + "|" + qEnd]; const oth = x && x.json && ((x.json.itc_elg || {}).itc_avl || []).find(r => r.ty === "OTH");
-    return oth ? {heads: {igst: num(oth.iamt), cgst: num(oth.camt), sgst: num(oth.samt), cess: num(oth.csamt)}, source: "3B from the portal"} : null;
+    // (next-gst-isd: 4(A)(5) and 4(A)(4), ISD: 2B's credit available counts the ISD's part too)
+    const x = j[g + "|" + qEnd], av = (x && x.json && ((x.json.itc_elg || {}).itc_avl || [])) || [], oth = av.find(r => r.ty === "OTH"), isd = av.find(r => r.ty === "ISD") || {};
+    return oth ? {heads: {igst: r2(num(oth.iamt) + num(isd.iamt)), cgst: r2(num(oth.camt) + num(isd.camt)), sgst: r2(num(oth.samt) + num(isd.samt)), cess: r2(num(oth.csamt) + num(isd.csamt))}, source: "3B from the portal"} : null;
   },
   // what 2B makes available for a return period: Part A less Part B (credit notes), where credit is available
   avail2b(reg, per){
@@ -268,7 +269,7 @@ const GSTX = {
   unclaimed(reg, per){
     const av = this.avail2b(reg, per); if (!av) return null;
     const c = this.claimed3b(reg, per), t = GSTSet.typeOf(per, reg) === "qrmp" ? GSTQ.threeBQ(per, reg) : GSTR.threeB(per, reg);
-    const claimed = c ? c.heads : {igst: num(t.other.igst), cgst: num(t.other.cgst), sgst: num(t.other.sgst), cess: num(t.other.cess)};
+    const i4 = t.isd || {}, claimed = c ? c.heads : {igst: r2(num(t.other.igst) + num(i4.igst)), cgst: r2(num(t.other.cgst) + num(i4.cgst)), sgst: r2(num(t.other.sgst) + num(i4.sgst)), cess: r2(num(t.other.cess) + num(i4.cess))};
     const rows = this.H.map(h => ({h, avail: num(av[h]), claimed: num(claimed[h]), not: r2(num(av[h]) - num(claimed[h]))}));
     return {rows, source: c ? c.source : "FinCom's working (no filed 3B here)", total: r2(rows.reduce((a, r) => a + Math.max(0, r.not), 0))};
   },

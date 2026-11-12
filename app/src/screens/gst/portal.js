@@ -253,12 +253,13 @@ export function r3bBills(id, ym, reg, t) {
     case "4A1": bills = B(inn.filter((r) => r.import && r.supply === "Goods")); figure = S5(t.impGoods); break;
     case "4A2": bills = B(inn.filter((r) => r.import && r.supply !== "Goods")); figure = S5(t.impServ); break;
     case "4A3": bills = B(inn.filter((r) => r.rcm && !r.import)); figure = S5(t.rcmIn); break;
-    case "4A4": bills = B(inn.filter((r) => !r.import && !r.rcm && r.isd)); figure = S5(t.isd || {}); break;
+    case "4A4": bills = B(inn.filter((r) => !r.import && !r.rcm && r.isd)); if (t.isdAdj) A("2B basis on the ISD's documents: held back, taken now, notes", t.isdAdj); figure = S5(t.isd || {}); break;
     case "4A5": {
       bills = B(inn.filter((r) => !r.import && !r.rcm && !r.isd));
       if (t.basis === "2b") {
         A("Not taken this month: not in 2B, a later month, follow-up or reversed (or more tax in Tally than in 2B)", neg(t.held)); A("Taken now: booked in another month, or only in 2B", t.released);
         A("Suppliers' credit notes in 2B, not in Tally", neg(t.cn2b)); A("Credit notes rejected in IMS, not reducing credit", t.rejBack);
+        if (t.isdAdj) A("Of these, the ISD's documents: in 4(A)(4)", neg(t.isdAdj));
       }
       A("ITC reclaimed (shown again in 4(D)(1))", t.reclaim);
       figure = S5(t.other); figure.taxable = V(t.other, "taxable"); break; }

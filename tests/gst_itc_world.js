@@ -77,4 +77,30 @@ function itc(w){
   sup(portalOf("202511").docdata, "b2b", P("Dunmore Traders"), {inum: "DT-LATE-7", dt: dmy("202510", 22), val: 35400, txval: 30000, igst: 0, cgst: 2700, sgst: 2700, cess: 0, pos: "07", rev: "N", itcavl: "Y"});
   return g;
 }
-module.exports = {itc};
+// next-gst-isd (review of e9ebac1c7): an older year with no 2B, as clients who bring in only this year's 2Bs have.
+// fy24(w) adds to w (in place) entries of February and March 2025 (2024-25: no 2B of that year in w) and, to April 2025's
+// 2B, the rows they reach across the year end; returns their GUIDs:
+//   mar     a bill of March 2025 that April's 2B carries (matched across the year end)
+//   feb     a bill of February 2025 in no 2B
+//   cnMar   a supplier's credit note booked in March 2025 (our debit note), in April's CDNR (matched: credit taken off once)
+//   rejMar  a bill of March 2025 rejected in IMS in April's 2B (its credit reversed)
+function fy24(w){
+  let k = 0;
+  const P = (n) => w.ledgers.find((l) => l.name === n), portalOf = (rp) => w.portal.find((j) => j.data.rtnprd === rp).data;
+  const add = (day, vtype, party, ref, val, tax, sg) => { const guid = "fy24-" + (++k), p = P(party);
+    w.heads.push({guid, day, alter_id: 950000 + k, vtype, vno: vtype.slice(0, 3).toUpperCase() + "/F" + k, party, narration: vtype + " (2024-25)", cancelled: false, optional: false, deleted_at: null, gstin: p.gstin, pos: "Delhi", ref, ref_date: day, cmp_gstin: w.OWN});
+    [[party, sg * (val + 2 * tax)], ["Purchases", -sg * val, {hsn: "4802", rate: 18}], ["Input CGST", -sg * tax], ["Input SGST", -sg * tax]].forEach(([l, a, m]) => w.lines.push({guid, ledger: l, amount: a, hsn: (m && m.hsn) || null, rate: m && m.rate != null ? m.rate : null}));
+    return guid; };
+  const sec = (rp, key, P0, doc, list) => { const dd = rp === "rej" ? (portalOf("042025").docRejdata = portalOf("042025").docRejdata || {}) : portalOf(rp).docdata; const l = dd[key] = dd[key] || [];
+    let s = l.find((z) => z.ctin === P0.gstin); if (!s){ s = {ctin: P0.gstin, trdnm: P0.name.toUpperCase(), supfildt: "11-05-2025", inv: [], nt: []}; l.push(s); } s[list].push(doc); };
+  const g = {};
+  g.mar = add("2025-03-20", "Purchase", "Alder Supply Co", "AS/MAR/9", 10000, 900, 1);
+  g.feb = add("2025-02-10", "Purchase", "Dunmore Traders", "DT-FEB-2", 5000, 450, 1);
+  g.cnMar = add("2025-03-24", "Debit Note", "Glenrock Tools", "GT-CN-MAR", 5000, 450, -1);
+  g.rejMar = add("2025-03-26", "Purchase", "Hollyford Stationers", "HS-REJ-3", 8000, 720, 1);
+  sec("042025", "b2b", P("Alder Supply Co"), {inum: "AS/MAR/9", dt: "20-03-2025", val: 11800, txval: 10000, igst: 0, cgst: 900, sgst: 900, cess: 0, pos: "07", rev: "N", itcavl: "Y"}, "inv");
+  sec("042025", "cdnr", P("Glenrock Tools"), {ntnum: "GT-CN-MAR", typ: "C", dt: "24-03-2025", val: 5900, txval: 5000, igst: 0, cgst: 450, sgst: 450, cess: 0, pos: "07", rev: "N", itcavl: "Y"}, "nt");
+  sec("rej", "b2b", P("Hollyford Stationers"), {inum: "HS-REJ-3", dt: "26-03-2025", val: 9440, txval: 8000, igst: 0, cgst: 720, sgst: 720, cess: 0, pos: "07", rev: "N", itcavl: "Y"}, "inv");
+  return g;
+}
+module.exports = {itc, fy24};
