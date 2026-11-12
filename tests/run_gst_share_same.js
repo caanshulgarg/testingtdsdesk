@@ -7,14 +7,10 @@
 //   on the books step makes, inside one drawing: GSTR.threeB (the whole object, its lists too) and threeBm of every month,
 //   GSTR.one (GSTR-1), GSTR.inward / outward, GST2B.bookDocs with skipped, GST2B.run, GSTF.bills and rule37,
 //   GSTRev.turnoverNow / common / month
-// next-gst-isd (the owner, 12-Nov-2026) changes two things on purpose, and only those are taken out of the head's side
-// before it is compared (each counted, so the test says they are there): 3B's new box isd (4(A)(4), the ISD's credit:
-// zero in these worlds, none of whose entries is an ISD's) and the 2B run's report of a year with no 2B: its documents
-// nothing matched are kept apart (noYear) instead of in onlyBooks; put back in onlyBooks, in the books' order, the run is
-// the base's (the matching itself is unchanged). A fourth world has such a year (tests/gst_itc_world.js fy24: bills, a
-// supplier's credit note and a bill rejected in IMS of 2024-25, reaching April 2025's 2B, and one in no 2B). Everything
-// else stays byte for byte the base's. A fifth world (review of aba40df57, B1; tests/gst_itc_world.js isdCn) has a credit
-// note in 2B's ISD part that is not in Tally, with no ledger switched to ISD: byte for byte the base's too.
+// The worlds: the made-up client, with the inward cases of part B, a larger one, one with an older year with no 2B
+// (tests/gst_itc_world.js fy24) and one with a credit note in 2B's ISD part that is not in Tally, no ledger switched to
+// ISD (isdCn). next-gst-isd is in the base now (staging-next 85846e7b2): nothing is taken out of either side, every
+// output is compared byte for byte (before it, 4(A)(4)'s box and the 2B run's noYear were set aside as intended).
 // Made-up names only; nothing real is read.
 "use strict";
 const fs = require("fs"), path = require("path"), cp = require("child_process");
@@ -34,10 +30,6 @@ const items = (work) => [...x.BookItems.split(JSON.parse(JSON.stringify(work))).
 });
 fs.writeFileSync(path.join(DIR, "package.json"), JSON.stringify({type: "module"}));
 const strip = (o) => JSON.stringify(o, (k, v) => (k === "engine" || k === "src" || typeof v === "function") ? undefined : v);
-// the head's side: as strip, with the two intended differences taken out and counted (cut)
-const HEADS4 = ["taxable", "igst", "cgst", "sgst", "cess", "ineligible"], cut = {isd: 0, noYear: 0, kept: 0};
-const zeroSum = (v) => v && typeof v === "object" && !Array.isArray(v) && Number(v.n || 0) === 0 && HEADS4.every((h) => Math.abs(Number(v[h] || 0)) < 0.005) && Object.keys(v).every((k) => k === "n" || HEADS4.includes(k));
-const stripHead = (o) => JSON.stringify(JSON.parse(strip(o)), (k, v) => { if (k === "isd" && zeroSum(v)) { cut.isd++; return undefined; } if (k === "noYear" && Array.isArray(v) && !v.length) { cut.noYear++; return undefined; } return v; });
 
 (async () => {
   const mods = {};
@@ -67,23 +59,21 @@ const stripHead = (o) => JSON.stringify(JSON.parse(strip(o)), (k, v) => { if (k 
       E.GSTR.months().forEach((m) => { o[m] = {t: E.GSTR.threeB(m, reg), tm: E.GSTR.threeBm(m, reg), one: E.GSTR.one(m, reg), inward: E.GSTR.inward(m, reg), outward: E.GSTR.outward(m, reg),
         to: E.GSTRev.turnoverNow(m, reg), common: E.GSTRev.common(m, reg), rev: E.GSTRev.month(m, reg), r37: E.GSTF.rule37(m, reg)}; });
       o.docs = E.GST2B.bookDocs(); o.skipped = E.GST2B.skipped; o.run = E.GST2B.run(reg);
-      // the head's report of a year with no 2B put back as the base reports it (counted: cut.kept documents)
-      if (o.run.noYear){ const ids = new Set(o.run.onlyBooks.concat(o.run.noYear).map((d) => d.id)); cut.kept += o.run.noYear.length; o.run = Object.assign({}, o.run, {onlyBooks: o.run.books.filter((d) => ids.has(d.id)), noYear: []}); } o.bills = E.GSTF.bills(reg).map((z) => Object.assign({}, z, {v: z.v && z.v.id}));
+      o.bills = E.GSTF.bills(reg).map((z) => Object.assign({}, z, {v: z.v && z.v.id}));
       return strip(o);
     } finally { Object.assign(globalThis, was); Object.keys(was).forEach((k) => { if (was[k] === undefined) delete globalThis[k]; }); }
   };
   for (const [label, seed, scale, withItc, withOld, withCn] of [["the made-up client", 153, 0, false], ["with the inward cases of part B", 171, 0, true], ["a larger one (scale 30)", 183, 30, true], ["with an older year with no 2B (2024-25)", 172, 0, true, true], ["with a credit note in 2B's ISD part, not in Tally, no switch", 174, 0, true, false, true]]) {
     const rows = rowsOf(seed, scale, withItc, withOld, withCn);
     for (const reg of ["07", ""]) {
-      const a = strip(mods.base.eng.step(rows, reg, {}, {max: 99, ready: 1e15, total: 1e15}).months), c = stripHead(mods.head.eng.step(rows, reg, {}, {max: 99, ready: 1e15, total: 1e15}).months);
+      const a = strip(mods.base.eng.step(rows, reg, {}, {max: 99, ready: 1e15, total: 1e15}).months), c = strip(mods.head.eng.step(rows, reg, {}, {max: 99, ready: 1e15, total: 1e15}).months);
       ok(a === c && a.length > 1000, label + ", registration " + (reg || "all") + ": step() of every month, every box the base's (" + a.length + " characters)");
-      const p = calls(mods.base, rows, reg), q = stripHead(JSON.parse(calls(mods.head, rows, reg)));
+      const p = calls(mods.base, rows, reg), q = calls(mods.head, rows, reg);
       let i = 0; if (p !== q) while (p[i] === q[i]) i++;
       ok(p === q, label + ", registration " + (reg || "all") + ": threeB / threeBm (whole objects), GSTR-1, inward, outward, bookDocs and skipped, the 2B run, bills, rule 37, turnover, common credit, rules 42 and 43 the base's (" + p.length + " characters)"
         + (p === q ? "" : " - first difference at " + i + ": " + p.slice(Math.max(0, i - 80), i + 60) + " / " + q.slice(Math.max(0, i - 80), i + 60)));
     }
   }
-  ok(cut.isd > 100 && cut.noYear >= 8 && cut.kept === 2, "the intended differences are there and nothing else: 3B's 4(A)(4) box (isd, zero here) " + cut.isd + " times, the 2B run's noYear " + cut.noYear + " times, " + cut.kept + " documents of 2024-25 not reported as not in 2B (the February bill, twice: 07 and all; the rest matched)");
   console.log(fails ? fails + " FAILED" : "all ok");
   process.exit(fails ? 1 : 0);
 })().catch((e) => { console.error(e); process.exit(1); });
