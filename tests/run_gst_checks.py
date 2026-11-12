@@ -29,8 +29,10 @@ books = json.load(open(CACHE))
 CHECKS = "(a) => Object.fromEntries(GSTR.checks(a[0], a[1]).map(c => [c.what, {n: c.n, info: !!c.info, eg: c.rows.map(r => r.no)}]))"
 SALE = "(a) => S.books.vouchers.find(v => (v.no || v.ref) === a)"
 
+# the faults are planted in the entries in place, then the books saved as any change in the app saves them (next-fix-hang:
+# the year's checks are kept across drawings until the books are saved or changed, GSTR.keptYear, src/js/12)
 def grid(pg):
-    pg.evaluate("() => { S.booksTab = 'gst'; S.gstView = 'year'; S.gstReg = '07'; S.gstYm = '202603'; render(); }"); pg.wait_for_timeout(600)
+    pg.evaluate("() => { saveBooks(); S.booksTab = 'gst'; S.gstView = 'year'; S.gstReg = '07'; S.gstYm = '202603'; render(); }"); pg.wait_for_timeout(600)
 
 def cell(pg, k):
     return pg.evaluate("(k) => { const c = document.querySelector('#app [data-cell=\"' + k + '\"]'); return c ? [c.dataset.status, c.innerText.replace(/\\s+/g, ' ')] : null; }", k)

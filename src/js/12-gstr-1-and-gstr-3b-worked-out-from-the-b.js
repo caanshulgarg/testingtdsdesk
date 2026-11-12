@@ -93,10 +93,32 @@ Object.assign(GSTR, {
   // G-E1: the errors to fix before filing a month's GSTR-1 (sales side) and 3B (purchase side), for the year's grid
   // errorChecks: the checks it counts, each return's list (GST › What to fix shows the same list, so the counts are one)
   errorChecks(ym, reg){
-    const all = typeof perRender === "function" ? perRender(this, "chk|" + ym + "|" + reg, () => this.checks(ym, reg)) : this.checks(ym, reg);
+    const all = typeof perRender === "function" ? perRender(this, "chk|" + ym + "|" + reg, () => this.checksKept(ym, reg)) : this.checks(ym, reg);
     const of = ret => all.filter(c => !c.info && c.ret === ret);
     return {r1: of("r1"), r3b: of("r3b")};
   },
+  // next-fix-hang (FINCOM-APP-STAGING-K/-R/-Q, staging 5-11 Nov 2026: 2.0-2.4 s in a click): every drawing of GST › Year
+  // worked out each month's checks and its documents again (0.6-1 s for 12 months of 51,758 made-up entries, 2-4 s on an
+  // office PC), so a click that only opened the client switcher, a pop-up's Open Tally page or ← Back to the year held
+  // the page that long (back to the client: three drawings). In a drawing they are kept now for as long as what they are
+  // worked out from is the same, as TDS.kept keeps the TDS rows: the same books object and save (BOOKS_REV), every kept
+  // part of the books (BOOKS_KEYS) the same object, the same entries (the list, and each entry in its place), the client
+  // (CO(), by its contents but for its counts on the clients' list, refreshStats, which change on every opening), the
+  // marketplace sales (S.sales) and the day. Outside a drawing, as before, always fresh. tests/run_hang_gst_year.py
+  _ck: new WeakMap(),
+  keptYear(key, fn){
+    const b = S.books, V = b && b.vouchers;
+    if (!Array.isArray(V) || typeof IN_RENDER === "undefined" || !IN_RENDER || typeof BOOKS_KEYS === "undefined") return fn();
+    let co; try { const c = (typeof CO === "function" && CO()) || null; co = JSON.stringify(c, (k, x) => (k === "stats" && c && x === c.stats ? undefined : x)); } catch (e){ return fn(); }
+    const sl = S.sales, ids = [typeof BOOKS_REV === "number" ? BOOKS_REV : 0, S.coId, co, new Date().toDateString(), sl, sl && sl.cid, sl && sl.list, sl && sl.list && sl.list.length, b.mapV, b.ledInfoAt, V.length]
+      .concat(BOOKS_KEYS.map(k => b[k]), V);
+    let w = this._ck.get(b);
+    if (!w || w.ids.length !== ids.length || !w.ids.every((x, i) => x === ids[i])){ w = {ids, v: {}}; this._ck.set(b, w); }
+    return Object.prototype.hasOwnProperty.call(w.v, key) ? w.v[key] : (w.v[key] = fn());
+  },
+  checksKept(ym, reg){ return this.keptYear("chk|" + ym + "|" + reg, () => this.checks(ym, reg)); },
+  // the year's grid: a month's GSTR-1 documents, how many (GSTR.one's total.n)
+  docCount(ym, reg){ return this.keptYear("one|" + ym + "|" + reg, () => this.one(ym, reg).total.n); },
   errorsFor(ym, reg){
     const e = this.errorChecks(ym, reg), n = l => l.reduce((a, c) => a + c.n, 0);
     return {r1: n(e.r1), r3b: n(e.r3b)};

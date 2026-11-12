@@ -581,8 +581,14 @@ const TCloud = {
     try {
       const last = b.mis && b.mis.last;
       const how = "after the books came in from the cloud copy";
+      // next-fix-hang (FINCOM-APP-STAGING-H/-G, staging 9-11 Nov 2026: the page held 9.5 s in a timer, on any screen of a
+      // linked client): the year's MIS was worked out here at once (1.2-1.7 s on 51,758 made-up entries, about 4x that on
+      // an office PC) though TallyRead.after has just marked it out of date, and the MIS tab works it out again behind
+      // the page when it is shown (app/src/lib/catchSoon.js): done twice, the first time holding the page. Marked out of
+      // date: left to the tab. tests/run_hang_gst_year.py
+      if ((b.stale || {}).mis){ /* the MIS tab works it out when shown */ }
       // next-cloud-mis: from the cloud's figures when they fit these books (MIS.cloudGo: else worked out here, as before)
-      if (last && last.from && last.to){
+      else if (last && last.from && last.to){
         if (MIS.cloudOk(b) && window.loadPart) window.loadPart("mis").then(() => MIS.cloudGo(last.from, last.to, how, () => { MIS.run(last.from, last.to, how); saveBooks(); render(); })).catch(() => {});
         else MIS.run(last.from, last.to, how);
       } else MIS.maybeRun();

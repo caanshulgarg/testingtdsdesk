@@ -130,7 +130,7 @@ function Grid({ months, reg }) {
       const iff = t === "qrmp" && !GSTSet.isQEnd(m), c = status(reg, iff ? "iff" : "r1", m, inBooks(m), cmp);
       if (iff) c.lines = ["IFF"].concat(c.lines || []);
       else if (t === "qrmp") c.lines = ["GSTR-1, " + GSTSet.qLabel(m).split(" ")[0]].concat(c.lines || []);
-      if (inBooks(m) && c.st !== "none") { const g = GSTR.one(m, reg).total; c.lines = (c.lines || []).concat([g.n ? g.n + " document" + (g.n === 1 ? "" : "s") : "nil: no documents"]); }
+      if (inBooks(m) && c.st !== "none") { const n = GSTR.docCount(m, reg); c.lines = (c.lines || []).concat([n ? n + " document" + (n === 1 ? "" : "s") : "nil: no documents"]); }
       return c;
     }
     if (t === "qrmp" && !GSTSet.isQEnd(m)) return null;
