@@ -104,6 +104,12 @@ const POST_REASONS = [
     seen: "The posting stopped part-way (the computer or the bridge was restarted).",
     reason: "The posting stopped part-way (the Tally computer or the bridge was restarted)",
     fix: "Post again; what is already in Tally is not sent twice."},
+  // migration 174: cancelled after its bridge had it (tally_post_cancel's warn): no plain Post again, Tally is checked first
+  {id: "cancelledlate", kind: "stopped", again: false,
+    re: /^Cancelled after the Tally computer had started it/i,
+    seen: "Cancelled after the Tally computer had started it: part of it may be in Tally.",
+    reason: "Cancelled after it may have reached Tally",
+    fix: "Check Tally first: mark posted what is there; for what is not, Not in Tally – post again (the FinCom Bridge looks first)."},
   {id: "cancelled", kind: "stopped", again: true,
     re: /^Cancelled\b|cancelled in FinCom|posting was cancelled/i,
     seen: "Cancelled before the Tally computer took it · Cancelled in FinCom; nothing more is sent to Tally",
@@ -338,7 +344,8 @@ function postStatus(entry, job, ids, marks, ctx){
     if (backInReview) return null;
     if (job.status === "cancelled"){
       const why = postReasonText(job.message) || "cancelled";
-      return mk(9, "Cancelled on " + postWhenSay(job.updated_at || job.created_at) + (job.created_by ? " (posted by " + postWhoSay(job.created_by) + ")" : "") + ": " + why + ".", deleted || !bill ? null : again, {reason: postReasonFor(why) || null});
+      const cr = postReasonFor(why) || null, late = cr && cr.again === false;
+      return mk(9, "Cancelled on " + postWhenSay(job.updated_at || job.created_at) + (job.created_by ? " (posted by " + postWhoSay(job.created_by) + ")" : "") + ": " + why + "." + (late ? " " + cr.fix : ""), deleted || !bill ? null : late ? {kind: "settle", label: "It is in Tally: mark posted (Tally id)"} : again, {reason: cr});
     }
     if ((r && r.ok === false) || (it && it.state === "failed") || job.status === "failed" || (job.status === "done" && !okR)){
       const msg = (r && (postLineWords(r) || r.message)) || (it && it.reason) || job.message || "Tally did not answer for this entry";

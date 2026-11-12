@@ -651,7 +651,10 @@ const AutoPost = {
     }
     const job = w === "queued" ? (x.auto && x.auto.job) || this.jobOf(cid, [x.id], a.run) : null;
     if (job && typeof TCloud === "object"){
-      try { await TCloud.rpc("tally_post_cancel", {p_id: job}); } catch (e){ /* finished meanwhile: then it is in Tally */ }
+      let r = null;
+      try { r = await TCloud.rpc("tally_post_cancel", {p_id: job}); } catch (e){ /* finished meanwhile: then it is in Tally */ }
+      // migration 174: its bridge had started it: part may be in Tally; the entry stays as it is (checked on the Post page)
+      if (r && r.warn) return {ok: false, why: r.warn};
     }
     const at = new Date().toISOString(), who = typeof whoAmI === "function" ? whoAmI() : "";
     if (bank){

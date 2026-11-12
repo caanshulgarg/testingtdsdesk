@@ -82,6 +82,13 @@ alter table public.tally_post_jobs add column if not exists row_version bigint n
 alter table public.tally_post_jobs add column if not exists stop_reason text;
 alter table public.tally_post_jobs add column if not exists stop_at timestamptz;
 create index if not exists tally_post_jobs_firm_status on public.tally_post_jobs (firm_id, status);
+-- (fourth review PERF) the requeue's scans, every minute: the postings still in the queue only
+create index if not exists tally_post_jobs_live_age on public.tally_post_jobs (status, updated_at) where status in ('waiting', 'taken', 'running');
+-- (fourth review LOW 1) the take's history: set by every take (tally_post_take_for), never cleared, so a posting a bridge
+-- once had stays "once taken" though a Retry clears taken_at and a v1 bridge sets no taken_by. Rows taken before 174 have
+-- none: there taken_by / taken_at say it, as before (LOW 3: staging was read: no posting is both Retried after a v1 take
+-- and waiting, so none is misjudged)
+alter table public.tally_post_jobs add column if not exists first_taken_at timestamptz;
 
 -- ---------------------------------------------------------------- 3. the row's version
 -- (second review H1) and the stop flag (2b) is cleared whenever the posting leaves waiting / taken / running (failed, done,
@@ -132,8 +139,8 @@ revoke all on function public.tally_post_job_blocked(uuid) from public, anon, au
 grant execute on function public.tally_post_job_blocked(uuid) to service_role;
 
 -- ---------------------------------------------------------------- 2b. hold one posting (the caller holds its row lock)
--- 'failed' (waiting with no bridge holding it: no taken_by, no taken_at - never taken, or a person's Retry after it had
--- failed or was cancelled, when its bridge was told to stop -), 'stopped' (any other: the stop flag; never failed or
+-- 'failed' (waiting, never taken and never Retried: no taken_by, taken_at or first_taken_at, attempts 0; fourth review
+-- LOW 2), 'stopped' (any other: a Retried one is held by the requeue for checking 10 minutes after the stop: the stop flag; never failed or
 -- freed from here), null (may post)
 create or replace function public.tally_post_hold_job(p_job uuid)
 returns text language plpgsql security definer set search_path = public, pg_temp as $function$
@@ -141,7 +148,7 @@ declare why text := tally_post_job_blocked(p_job);
 begin
   if why is null then return null; end if;
   update tally_post_jobs set status = 'failed', updated_at = now(), message = left(why, 500)
-   where id = p_job and status = 'waiting' and taken_by is null and taken_at is null and stop_reason is null;
+   where id = p_job and status = 'waiting' and taken_by is null and taken_at is null and first_taken_at is null and coalesce(attempts, 0) = 0 and stop_reason is null;
   if found then return 'failed'; end if;
   -- (the bridge may have sent some of it already: the words do not say "nothing was sent")
   why := replace(why, ' Nothing of it was sent to Tally.', '');
@@ -221,17 +228,21 @@ create or replace function public.tally_post_reroute(p_id uuid, p_fail boolean)
 returns jsonb language plpgsql security definer set search_path = public, pg_temp as $function$
 declare j record; nb text; w text;
 begin
-  select x.id, x.device_id, x.target_bridge, x.company, x.taken_by, x.taken_at, x.attempts into j from tally_post_jobs x where x.id = p_id;
+  select x.id, x.device_id, x.target_bridge, x.company, x.taken_by, x.taken_at, x.attempts, x.first_taken_at, x.status into j from tally_post_jobs x where x.id = p_id;
   if not found then return jsonb_build_object('state', 'none'); end if;
   -- (third review MED 3, LOW 6) once taken (taken_by or taken_at set, or attempts > 0: a v1 bridge sets no taken_by and a
   -- Retry clears taken_at): ok only when the bridge that took it may still post; else held in words, never moved
-  if j.taken_by is not null or j.taken_at is not null or coalesce(j.attempts, 0) > 0 then
+  -- (fourth review LOW 1) once taken by the take's history (first_taken_at), not by attempts alone: a posting never taken,
+  -- failed and Retried, is moved as before
+  if j.taken_by is not null or j.taken_at is not null or j.first_taken_at is not null then
     if (j.taken_by is not null and tally_bridge_may_post(j.device_id, j.taken_by))
        or (j.taken_by is null and ((j.target_bridge is not null and tally_bridge_may_post(j.device_id, j.target_bridge))
                                    or (j.target_bridge is null and tally_device_may_post(j.device_id)))) then return jsonb_build_object('state', 'ok'); end if;
     -- (third review MED 4) the real ways forward
     w := 'Started on ' || coalesce(nullif(tally_bridge_words(j.device_id, coalesce(j.taken_by, j.target_bridge)), ''), 'the computer that took it')
-      || ', and that FinCom Bridge can no longer post; it is never moved to another bridge (part of it may be in Tally). Make that bridge able to post again (the main bridge again, or Changes only off), or check in Tally by hand: Mark posted what is there, Cancel this posting, then post the rest again.';
+      || ', and that FinCom Bridge can no longer post; it is never moved to another bridge (part of it may be in Tally). Make that bridge able to post again (the main bridge again, or Changes only off), or check in Tally by hand: Mark posted what is there, '
+      -- (fourth review LOW 4) a failed or cancelled posting (a Retry refused) cannot be cancelled: not said
+      || case when j.status in ('failed', 'cancelled') then 'then post the rest again.' else 'Cancel this posting, then post the rest again.' end;
     if coalesce(p_fail, false) then
       update tally_post_jobs set message = left(w, 500) where id = p_id and status = 'waiting' and message is distinct from left(w, 500);
     end if;
@@ -269,12 +280,12 @@ begin
     select j.id into jid from tally_post_jobs j
      where j.device_id = p_device and j.status = 'waiting' and tally_post_mine_ok(j.id, p_device, p_bridge, p_main)
        and j.firm_id = fm and j.stop_reason is null
-       and (j.taken_by = p_bridge or (j.taken_by is null and (j.taken_at is null or p_bridge !~ '^go-[0-9a-f]{6,32}$')))   -- once taken: only by the bridge that took it (H2a; a v1 take: a v1 bridge, LOW 6)
+       and (j.taken_by = p_bridge or (j.taken_by is null and ((j.taken_at is null and j.first_taken_at is null) or p_bridge !~ '^go-[0-9a-f]{6,32}$')))   -- once taken: only by the bridge that took it (H2a; a v1 take, by its history too: a v1 bridge, LOW 6 / fourth review LOW 1)
      order by j.created_at limit 1 for update skip locked;
     exit when jid is null;
     if tally_post_job_blocked(jid) is null then
       return query
-      update tally_post_jobs set status = 'taken', taken_at = now(), updated_at = now(), seq = null, message = 'Taken by the Tally computer',
+      update tally_post_jobs set status = 'taken', taken_at = now(), first_taken_at = coalesce(first_taken_at, now()), updated_at = now(), seq = null, message = 'Taken by the Tally computer',
              taken_by = case when p_bridge ~ '^go-[0-9a-f]{6,32}$' then p_bridge else taken_by end   -- final review M1: the bridge that took it
        where id = jid
       returning *;
@@ -291,7 +302,7 @@ begin
     if jid is null then return; end if;
     if tally_post_job_blocked(jid) is null then
       return query
-      update tally_post_jobs set status = 'taken', taken_at = now(), updated_at = now(), seq = null, device_id = p_device, target_bridge = p_bridge, taken_by = p_bridge,
+      update tally_post_jobs set status = 'taken', taken_at = now(), first_taken_at = coalesce(first_taken_at, now()), updated_at = now(), seq = null, device_id = p_device, target_bridge = p_bridge, taken_by = p_bridge,
              message = left('Taken by the FinCom Bridge that has ' || company || ' open now (the one it was queued for did not have it open)', 300)
        where id = jid and status = 'waiting' and taken_by is null and taken_at is null
       returning *;
@@ -352,7 +363,7 @@ begin
   -- 4a: waiting more than 6 hours: the reason, written only when it changes (updated_at not moved); never over a held
   -- posting's words ("Started on ..."); for one never taken: any bridge with the company open; once taken: its own
   update tally_post_jobs set message = w.t
-    from (select x.id, left(case when x.taken_by is null and x.taken_at is null and coalesce(x.attempts, 0) = 0
+    from (select x.id, left(case when x.taken_by is null and x.taken_at is null and x.first_taken_at is null
              then 'Still waiting after 6 hours (since ' || to_char(coalesce(x.updated_at, x.created_at) at time zone 'Asia/Kolkata', 'DD-Mon-YYYY HH24:MI') || ' IST): no FinCom Bridge with '
                   || x.company || ' open in Tally has taken it. Open ' || x.company || ' in Tally on a computer with FinCom Bridge, or cancel this posting.'
              else 'Still waiting after 6 hours (since ' || to_char(coalesce(x.updated_at, x.created_at) at time zone 'Asia/Kolkata', 'DD-Mon-YYYY HH24:MI') || ' IST) for '
@@ -381,17 +392,25 @@ end $function$;
 revoke all on function public.tally_post_rescue(uuid) from public, anon, authenticated;
 
 -- ---------------------------------------------------------------- MED 4. Cancel (116's text)
--- 116's tally_post_cancel; a posting once taken (its bridge had it: taken_by, taken_at or attempts) is cancelled with a
--- warning to check Tally first, in its message and in the answer (warn)
+-- 116's tally_post_cancel; a posting once taken (its bridge had it: taken_by, taken_at or first_taken_at) is cancelled with
+-- a warning to check Tally first, in its message and in the answer (warn), and its ids kept live until a person settles them
 create or replace function public.tally_post_cancel(p_id uuid)
 returns jsonb language plpgsql security definer set search_path = public as $$
 declare n int; started boolean; w text := 'Cancelled after the Tally computer had started it: part of it may be in Tally. Check Tally first; Mark posted what is there before posting it again.';
 begin
   if auth.uid() is not null and not can_write() then raise exception 'Only the firm''s owner or staff can cancel a posting to Tally.' using errcode = '42501'; end if;
-  select taken_by is not null or taken_at is not null or coalesce(attempts, 0) > 0 into started from tally_post_jobs where id = p_id and firm_id = my_firm() and status = 'waiting';
+  select taken_by is not null or taken_at is not null or first_taken_at is not null into started from tally_post_jobs where id = p_id and firm_id = my_firm() and status = 'waiting';
   update tally_post_jobs set status = 'cancelled', message = case when coalesce(started, false) then w else 'Cancelled before the Tally computer took it' end, updated_at = now()
    where id = p_id and firm_id = my_firm() and status = 'waiting';
   get diagnostics n = row_count;
+  -- (fourth review) its ids stay live (the cancel freed them: tally_post_ids_sync): a new posting of the same entries is
+  -- refused until a person settles them (Mark posted, or Not in Tally: the FinCom Bridge looks first); another posting's
+  -- live id is left as it is
+  if n > 0 and coalesce(started, false) then
+    update tally_post_ids i set live = true
+     where i.job_id = p_id and i.released_at is null and not i.live
+       and not exists (select 1 from tally_post_ids o where o.firm_id = i.firm_id and o.fincom_id = i.fincom_id and o.job_id <> p_id and o.live);
+  end if;
   return jsonb_build_object('ok', n > 0) || case when n > 0 and coalesce(started, false) then jsonb_build_object('warn', w) else '{}'::jsonb end;
 end $$;
 revoke all on function public.tally_post_cancel(uuid) from public, anon;

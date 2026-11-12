@@ -53,6 +53,7 @@ out.reasons = {
   ignored: [R("Tally ignored it (it may already exist).")],
   restarted: [R("The posting stopped part-way (the computer or the bridge was restarted). Resume to finish it; nothing already in Tally is sent again.")],
   cancelled: [R("Cancelled before the Tally computer took it")],
+  cancelledlate: [R("Cancelled after the Tally computer had started it: part of it may be in Tally. Check Tally first; Mark posted what is there before posting it again.")],
   notcreated: [R("Tally did not create it.")],
   many: [R("Waiting for Tally: GARG SHEKHAR & COMPANY is open in more than one Tally — close it in all but one, or choose your Tally in FinCom > Settings > Tally Bridge; it will be posted automatically")]
 };
@@ -85,6 +86,7 @@ out.status = {
   8: P(postStatus(bill("h"), job("j8", "failed", [{id: "h", ok: false, checkFailed: true, message: "Could not check Tally, not posted. Try again."}], [{id: "h", state: "failed"}]), {live: false, released_at: "x"}, [])),
   "8postonly": P(postStatus(bill("h2"), job("j8b", "failed", [{id: "h2", ok: false, message: "This computer posts only to ZZ TEST (PostOnly); posting to GARG SHEKHAR & COMPANY refused"}], []), null, [])),
   9: P(postStatus(bill("i"), job("j9", "cancelled", null, null, {message: "Cancelled before the Tally computer took it", updated_at: "2026-09-30T16:52:46Z"}), null, [])),
+  "9late": P(postStatus(bill("i2"), job("j9b", "cancelled", null, null, {message: "Cancelled after the Tally computer had started it: part of it may be in Tally. Check Tally first; Mark posted what is there before posting it again.", updated_at: "2026-11-12T16:52:46Z"}), {live: true}, [])),
   10: P(postStatus(bill("k", {status: "deleted", deleted: {at: "2026-10-03T10:00:00Z", reason: "duplicate"}}), job("j10", "done", [{id: "k", ok: true, verified: true, masterId: "26294"}], null), {live: true}, [])),
   "10missing": P(postStatus({id: "emupeho9q2sijk"}, job("j10b", "done", [{id: "emupeho9q2sijk", ok: true, verified: true, masterId: "26294", vchNumber: "FA/ELEC/013"}], null), {live: true}, [], {id: "emupeho9q2sijk", missing: true})),
   ready: P(postStatus(bill("r"), null, null, [])),
@@ -121,7 +123,8 @@ WANT = {"ledger": ("refused", True, "ledger", "Create the ledger"), "vchtype": (
         "noanswer": ("review", False, "No answer from Tally", "Day Book"), "incomplete": ("review", False, "reply was incomplete", "Day Book"),
         "checkfailed": ("stopped", True, "could not be checked", "post again"), "exception": ("refused", True, "exception", "Check the ledger names"),
         "ignored": ("refused", False, "same details already exists", "Look for the entry"), "restarted": ("stopped", True, "stopped part-way", "Post again"),
-        "cancelled": ("stopped", True, "cancelled", "Post again"), "notcreated": ("refused", True, "did not create", "post again"), "many": ("stopped", True, "more than one Tally", "Close it")}
+        "cancelled": ("stopped", True, "cancelled", "Post again"), "notcreated": ("refused", True, "did not create", "post again"), "many": ("stopped", True, "more than one Tally", "Close it"),
+        "cancelledlate": ("stopped", False, "may have reached Tally", "Check Tally first")}
 for k, (kind, again, reason, fix) in WANT.items():
     got = o["reasons"].get(k) or []
     good = got and all(g and g["id"] == k and g["kind"] == kind and g["again"] is again and reason.lower() in g["reason"].lower() and fix.lower() in g["fix"].lower() for g in got)
@@ -161,6 +164,7 @@ st("7nosafe", 7, "Not posted: Tally refused it", "errors", ("same details alread
 st("8", 8, "Not posted: stopped before sending", "errors", ("could not be checked",), "postAgain")
 st("8postonly", 8, "Not posted: stopped before sending", "errors", ("may not post to that company",), "postAgain")
 st("9", 9, "Cancelled", "errors", ("Cancelled on", "Cancelled before the Tally computer took it", "posted by Anshul garg"), "postAgain")
+st("9late", 9, "Cancelled", "errors", ("Cancelled after the Tally computer had started it", "Check Tally first", "Not in Tally"), "settle")
 st("10", 10, "Bill deleted in FinCom but entry is in Tally", "posted", ("Tally id 26294", "Restore the bill"), "restore", "26294")
 st("10missing", 10, "Bill deleted in FinCom but entry is in Tally", "posted", ("no longer in FinCom",), None, "26294")
 ok(S_["ready"] is None and S_["review"] is None, "C. a bill ready to post, or sent back to review, has no status on this page (it is To post's Ready table / the review list)")
