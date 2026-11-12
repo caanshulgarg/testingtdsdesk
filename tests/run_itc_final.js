@@ -16,7 +16,7 @@
 const fs = require("fs"), path = require("path"), vm = require("vm");
 const {load, HTML} = require("./harness");
 const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "fmtDate", "tallyDate", "STATE_CODES", "RULE_DEFAULTS", "Books", "LedMaster", "GSTR", "GSTAdv", "GSTRev", "GSTAmend", "GST2B", "INR",
-  "normName", "nameSim", "ITCT", "GSTSet", "CustIMS", "GSTF", "GSTQ", "inregRows"];
+  "normName", "nameSim", "ITCT", "GSTSet", "CustIMS", "GSTF", "GSTQ", "ITCLock", "inregRows"];
 let fails = 0; const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };
 const {ctx, x} = load(HTML, NAMES);
 const CMP = "09AAACZ1234A1Z5", reg = "09", G = x.GSTR, H = ["igst", "cgst", "sgst", "cess"];

@@ -127,8 +127,9 @@ const GSTLock = {
     try { auditEvent("gst_filed_changed", {reg, months: Array.from(new Set((months || []).filter(Boolean))).slice(0, 12), what: what || "", why: w, reason: ans.data || ""}, S.coId); } catch (e){}
     return true;
   },
-  // the checks that work a change out (src/js/47-gst-lock-checks.js) come with the GST and books screens; ready() loads them
-  // (gstChecksLoad, app/src/screens/index.js) and says whether they are here. now(reg): true when a change for reg may go
+  // the checks that work a change out (src/js/47-gst-lock-checks.js) come with the GST, books and settings screens (every
+  // screen that can make such a change imports them); ready() says whether they are here (gstChecksLoad: a loader, if one
+  // is ever given). now(reg): true when a change for reg may go
   // ahead to be checked (they are here, or nothing of reg is filed); else false: they start loading, the person is told to
   // try again, and the change is held, never made unchecked
   async ready(){ if (this.pair) return true; try { if (typeof gstChecksLoad === "function") await gstChecksLoad(); } catch (e){} return !!this.pair; },
@@ -147,6 +148,34 @@ const GSTLock = {
   }
 };
 if (typeof globalThis === "object") globalThis.GSTLock = GSTLock;
+// The ITC side's (app/src/lib/itcFinal.js, kept here for the size of the app's first file):
+//  toYm: the month a decision puts the credit in. Take now (or though not in 2B): the month on screen M, as always; Take now
+//        viewed from a month before the line's 2B month (on the 2B basis), the 2B month: never before it (Take now though
+//        not in 2B is the person's choice to take it before 2B: its month as before)
+//  w:    the words when the change from the line's decision in force to s1 moves a filed month's credit (GSTLock.itc,
+//        src/js/47-gst-lock-checks.js, with the GST screens); the check not loaded and a month filed: refused, try again
+//  decide: a decision on lines (ITCF.decide): set(keys, month) for those that may take it; {ok, refused, lock (the words of
+//        the first refused for a filed month), ahead (Take now went to a month after M: the screen says so)}
+const ITCLock = {
+  toYm(reg, r, code, ym, M){
+    return code === "later" ? ym || "" : code !== "now" && code !== "booksnow" ? "" :
+      code === "now" && r.tm && (!M || M < r.tm) && (((S.books || {}).itcBasis || {})[reg || ""] || "2b") === "2b" ? r.tm : M || r.tm || r.bm || "";
+  },
+  w(reg, r, s1){ return typeof GSTLock !== "object" || !r || r.fixed || !GSTLock.any(reg) ? "" : GSTLock.itc ? GSTLock.itc(reg, r, s1) : GSTLock.NOT; },
+  decide(reg, rows, code, ym, M, set){
+    const by = {}, refused = []; let lock = "", ahead = "";
+    rows.forEach(r => {
+      if (code && !(r.allow || []).includes(code)) { refused.push(r); return; }
+      const to = this.toYm(reg, r, code, ym, M), w = this.w(reg, r, Object.assign({}, r.s || {}, {d: code, ym: to}));
+      if (w){ lock = lock || w; refused.push(r); return; }
+      (by[to] = by[to] || []).push(r.key);
+      if (code === "now" && to > M) ahead = to;
+    });
+    Object.keys(by).forEach(to => set(by[to], to));
+    return {ok: rows.length - refused.length, refused, lock, ahead};
+  }
+};
+if (typeof globalThis === "object") globalThis.ITCLock = ITCLock;
 // Client setup, closed periods (app/src/screens/SettingsMore.jsx): the closing date, a warning on or off, a TDS return filed
 function closedSet(co, k, v){
   if (k === "to"){ ClosedP.set(co, "to", v); toast(v ? "Books closed up to " + fmtDate(v) + " for " + co.name + "." : "No closing date."); }

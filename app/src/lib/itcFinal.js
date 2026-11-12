@@ -350,36 +350,16 @@ function letter(reg, s) {
   return t;
 }
 
-// the month a decision puts the credit in. Take now (or though not in 2B): the month on screen M, as always; viewed from a
-// month before the line's 2B month (on the 2B basis), the 2B month: never before it
-const toYm = (reg, r, code, ym, M) => {
-  if (code === "later") return ym || "";
-  if (code !== "now" && code !== "booksnow") return "";
-  const books = (((S.books || {}).itcBasis || {})[reg || ""] || "2b") !== "2b";
-  return !books && r.tm && (!M || M < r.tm) ? r.tm : M || r.tm || r.bm || "";
-};
-// a filed GSTR-3B (GSTLock, src/js/47): the words when the change from the line's decision in force to s1 moves the credit
-// of a month whose 3B is filed: its 4(A)(5) or 4(B)(1) in the month the credit leaves, the month it lands in, and the bill's
-// own months (a 17(5) reversal made from Tally, r.blkBy, undone by its eligibility), else ""
-const lockW = (reg, r, s1) => {
-  if (typeof GSTLock !== "object" || !r || r.fixed || !GSTLock.any(reg)) return "";
-  const a = r.e || credit(r, r.s), c = credit(r, s1), ms = [];
-  new Set([a.C, c.C, r.bm].concat(Object.keys(r.blkBy || {})).filter(Boolean)).forEach((m) => {
-    const d1 = sub(a.C === m ? a.amt : z(), c.C === m ? c.amt : z()), d2 = sub(revEffect(r, a, m), revEffect(r, c, m));
-    if (H.some((k) => d1[k] || d2[k])) ms.push(m);
-  });
-  return GSTLock.why(reg, ms);
-};
-const withS = (r, o) => Object.assign({}, r.s || {}, o);
+// Take now's month, the ITC decision with the filed months kept as they are, and the check's words: ITCLock (src/js/47,
+// legacy.js), shared with the GST screens' checks
+const toYm = (...a) => ITCLock.toYm(...a), lockW = (reg, r, s1) => ITCLock.w(reg, r, s1), withS = (r, o) => Object.assign({}, r.s || {}, o);
 // ---------- what the screens, the Excel and the tests use
 export const ITCF = {
-  DECS, DEC_LABEL, LINES, LINE_LABEL, CHIPS, HEADS, ELIG, ELIG_LABEL, credit, shown, effect, revEffect, isdRow, isdTest,
+  DECS, DEC_LABEL, LINES, LINE_LABEL, CHIPS, HEADS, ELIG, ELIG_LABEL, credit, shown, effect, revEffect,
   // the line a bill of the books is decided on (the input register's Eligible?), and its eligibility set by a person
   lineOfDoc(reg, id) { const m = model(reg); return m ? m.rows.find((r) => !r.fixed && (r.docs || []).some((d) => d.id === id)) || null : null; },
   setElig(reg, r, el) { const w = lockW(reg, r, withS(r, { el: el === r.defE ? "" : el })); if (w) { toast(w); return false; } ITCDec.setEl(reg, r.key, el === r.defE ? "" : el, r.s); return true; },
   rows(reg) { const m = model(reg); return m ? m.rows : []; },
-  // the model worked out last, read and put back (GSTLock.pair keeps it warm after trying a change)
-  _memo(m) { if (arguments.length) memo = m; return memo; },
   month(reg, M) { return month(reg, M); },
   rowByTagKey(reg, k) { const m = model(reg); return m ? m.byTag.get(k) || null : null; },
   row(reg, key) { const m = model(reg); return m ? m.rows.find((r) => r.key === key) || null : null; },
@@ -393,20 +373,7 @@ export const ITCF = {
   },
   // a line's decision, set from the screen or the Excel (M: the month on screen; "Take now": toYm above). A line whose
   // credit is in a filed 3B, or that would go into one, is left as it is: lock says why (GSTLock, src/js/47)
-  decide(reg, rows, code, ym, M) {
-    const ok = new Map(), refused = []; let lock = "", note = "";
-    rows.forEach((r) => {
-      if (code && !(r.allow || []).includes(code)) { refused.push(r); return; }
-      const to = toYm(reg, r, code, ym, M), w = lockW(reg, r, withS(r, { d: code, ym: to }));
-      if (w) { lock = lock || w; refused.push(r); return; }
-      ok.set(to, (ok.get(to) || []).concat([r.key]));
-      if ((code === "now" || code === "booksnow") && to && M && to > M && !note) note = "Credit goes to " + lab(to) + ": it is in " + lab(to) + "’s 2B.";
-    });
-    ok.forEach((keys, to) => ITCDec.set(reg, keys, code, to));
-    return { ok: rows.length - refused.length, refused, lock, note };
-  },
-  // for the old entry points (r2Tag, itctSetAct: kept with no month)
-  lockFor(reg, r, code) { return lockW(reg, r, withS(r, { d: code, ym: "" })); },
+  decide(reg, rows, code, ym, M) { return ITCLock.decide(reg, rows, code, ym, M, (keys, to) => ITCDec.set(reg, keys, code, to)); },
   logSent(reg, key) { if (typeof ITCT !== "object") return; const st = ITCT.store(reg); st.sent[key] = (st.sent[key] || []).concat([ITCT.today()]); saveBooks(); },
   // ---- the Excel's data (the workbook itself is screens/gst/itcExcel.js, with ExcelJS)
   months(M) { const all = GSTR.months(), out = new Set(all); for (let i = 0, y = +M.slice(0, 4), m = +M.slice(4); i < 15; i++) { out.add(y + String(m).padStart(2, "0")); m++; if (m > 12) { m = 1; y++; } } return Array.from(out).sort(); },

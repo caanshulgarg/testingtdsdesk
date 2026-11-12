@@ -265,8 +265,9 @@ async function aihPay(n, yes){ await Drafts.direct(() => { if (yes) AIH.acceptPa
 async function aihPair(key, yes){
   const a = AIH.st(), s = a.pairs[key]; if (!s) return;
   // (a pair that would move the credit of a filed GSTR-3B is refused: GSTLock.pair, src/js/47)
-  if (yes && typeof GSTLock === "object" && GSTLock.any(S.gstReg || "") && !(await GSTLock.ready())){ toast(GSTLock.NOT); return; }
-  if (yes && typeof GSTLock === "object" && GSTLock.pair){ const w = GSTLock.pair((typeof r2Reg === "function" ? r2Reg(S.books) : "") || S.gstReg || "", [key], [s.id], st => { st.link[key] = [s.id]; delete st.confirm[key]; }); if (w){ toast(w); return; } }
+  const reg = (typeof r2Reg === "function" ? r2Reg(S.books) : "") || S.gstReg || "";
+  if (yes && typeof GSTLock === "object" && GSTLock.any(reg) && !(await GSTLock.ready())){ toast(GSTLock.NOT); return; }
+  if (yes && typeof GSTLock === "object" && GSTLock.pair){ const w = GSTLock.pair(reg, [key], [s.id], st => { st.link[key] = [s.id]; delete st.confirm[key]; }); if (w){ toast(w); return; } }
   if (yes){ const st = GST2B.state(); st.link[key] = [s.id]; delete st.confirm[key]; s.okBy = AIH.who(); s.okAt = new Date().toISOString(); AIH.log("accepted 2B pair", s.label); }
   else { s.no = true; AIH.log("rejected 2B pair", s.label); }
   await saveBooks(); render();

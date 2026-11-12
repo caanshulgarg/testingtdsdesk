@@ -80,18 +80,11 @@ export const ITCDec = {
 };
 
 // the old entry points, for anything still calling them: they now write the one store
+// (through ITCF.decide: a line whose credit is in a filed GSTR-3B is left as it is, GSTLock in src/js/47)
+const oldSet = (reg, row, key, d) => { const x = row ? ITCF.decide(reg, [row], d, "", "") : (ITCDec.set(reg, [key], d, ""), {}); if (x.lock) toast(x.lock); render(); };
 function r2Tag(key, tag) {
-  const reg = (typeof r2Reg === "function" ? r2Reg(S.books) : "") || S.gstReg || "";
-  const row = typeof ITCF === "object" ? ITCF.rowByTagKey(reg, key) : null;
-  // (a line whose credit is in a filed GSTR-3B is left as it is: ITCF.lockFor, GSTLock in src/js/47)
-  const w = row && ITCF.lockFor ? ITCF.lockFor(reg, row, TAG_DEC[tag] || "") : "";
-  if (w) { toast(w); return; }
-  if (row) { ITCDec.set(reg, [row.key], TAG_DEC[tag] || "", ""); render(); }
+  const reg = (typeof r2Reg === "function" ? r2Reg(S.books) : "") || S.gstReg || "", row = typeof ITCF === "object" ? ITCF.rowByTagKey(reg, key) : null;
+  if (row) oldSet(reg, row, row.key, TAG_DEC[tag] || "");
 }
-function itctSetAct(key, act) {
-  const reg = S.gstReg || "", d = (ACT_DEC[key[0]] || {})[act] || "", row = typeof ITCF === "object" ? ITCF.row(reg, key) : null;
-  const w = row && ITCF.lockFor ? ITCF.lockFor(reg, row, d) : "";
-  if (w) { toast(w); return; }
-  ITCDec.set(reg, [key], d, ""); render();
-}
+function itctSetAct(key, act) { const reg = S.gstReg || ""; oldSet(reg, ITCF.row(reg, key), key, (ACT_DEC[key[0]] || {})[act] || ""); }
 Object.assign(globalThis, { ITCDec, r2Tag, itctSetAct });

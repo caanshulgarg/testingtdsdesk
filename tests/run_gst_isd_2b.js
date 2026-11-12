@@ -44,7 +44,7 @@ const {itc, fy24, isdCn} = require("./gst_itc_world");
 const ROOT = path.join(__dirname, "..");
 let fails = 0; const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };
 const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "fmtDate", "tallyDate", "STATE_CODES", "RULE_DEFAULTS", "Books", "BookItems", "LedMaster", "Audit", "GSTR", "GSTAdv", "GSTRev", "GSTAmend", "GST2B", "GST9", "INR",
-  "normName", "nameSim", "ITCT", "GSTSet", "CustIMS", "GSTF", "GSTQ", "GSTV", "GSTX"];
+  "normName", "nameSim", "ITCT", "GSTSet", "CustIMS", "GSTF", "GSTQ", "GSTV", "GSTX", "ITCLock"];
 const app = load(HTML, NAMES), {x} = app;
 const items = (work) => [...x.BookItems.split(JSON.parse(JSON.stringify(work))).values()].map((r) => ({key: r.k, item: r.i, ord: r.o == null ? null : r.o, data: r.d, deleted: false}));
 const clone = (o) => JSON.parse(JSON.stringify(o));

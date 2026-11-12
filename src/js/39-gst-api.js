@@ -94,16 +94,16 @@ Object.assign(GSTAPI, {
   // 3B is filed), else ""; the return is counted as taken either way, so it is not brought in again and again
   take(r){
     const b = S.books; if (!b || !r || !r.data) return;
+    // another client's GSTIN (the all-clients page fetches for every client): never put into the books open, whatever the return
+    if (!(GSTR.gstins(b) || []).map(g => String(g).toUpperCase()).includes(String(r.gstin).toUpperCase())) return "not put in: " + r.gstin + " is not a GSTIN of " + ((CO() || {}).name || "the client open") + "; open that client and fetch it there.";
     const ym = /^\d{6}$/.test(r.period) ? r.period.slice(2, 6) + r.period.slice(0, 2) : r.period, at = r.fetched_at || new Date().toISOString();
     if (r.form === "2B"){
       const t = GST2B.fromJson({data: r.data});
       if (!t.gstin || !t.ym) return;
       // fetched on the server: a 2B that would change the table 4 of a filed 3B is held (Fetch 2B on the GST API card brings
       // it in, asked first); one that changes nothing filed goes in
-      // another client's GSTIN (the all-clients page fetches for every client): never put into the books open
-      if (!(GSTR.gstins(b) || []).map(g => String(g).toUpperCase()).includes(String(t.gstin).toUpperCase())) return "not put in: " + t.gstin + " is not a GSTIN of " + ((CO() || {}).name || "the client open") + "; open that client and fetch it there.";
       // the checks not here yet (nothing filed: none needed): held, fetched again next time
-      if (typeof GSTLock === "object" && GSTLock.any(t.gstin.slice(0, 2)) && !GSTLock.twoB) return "held: " + GSTLock.NOT;
+      if (typeof GSTLock === "object" && GSTLock.any(t.gstin.slice(0, 2)) && !GSTLock.twoB) return "held: the check of filed GST months is not loaded yet. It comes in by itself within 10 minutes; Fetch now spends a credit.";
       const lk = typeof GSTLock === "object" && GSTLock.twoB ? GSTLock.twoB(t) : null;
       if (lk){ b.apiTaken = Object.assign({}, b.apiTaken, {[r.gstin + "|" + r.form + "|" + r.period]: at}); return "not put in: it would change table 4 of the filed 3B of " + lk.months.map(m => GSTR.label(m)).join(", ") + ". Fetch 2B on the GST API card brings it in (it asks first)."; }
       b.twoBs = b.twoBs || {}; b.twoBs[t.gstin + "|" + t.period] = Object.assign(t, {source: "api", fetchedAt: at});
@@ -135,7 +135,7 @@ Object.assign(GSTAPI, {
       const had = (b.apiTaken || {})[r.gstin + "|" + r.form + "|" + r.period];
       if (had && had >= r.fetched_at) continue;
       const k = await this.call({action: "return", gstin: r.gstin, form: r.form, period: r.period});
-      if (k.ret && k.ret.status === "ok"){ const h = this.take(k.ret); if (h) held.push("2B " + h); n++; }
+      if (k.ret && k.ret.status === "ok"){ const h = this.take(k.ret); if (h) held.push((this.formOf[k.ret.form] || k.ret.form) + " " + h); n++; }
     }
     if (n) saveBooks();
     if (held.length) toast(held.join(" "));

@@ -7,7 +7,7 @@
 const fs = require("fs"), path = require("path"), vm = require("vm");
 const {load, HTML} = require("./harness");
 const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "fmtDate", "tallyDate", "STATE_CODES", "RULE_DEFAULTS", "Books", "LedMaster", "GSTR", "GSTAdv", "GSTRev", "GSTAmend", "GST2B", "INR",
-  "normName", "nameSim", "ITCT", "GSTSet", "CustIMS", "GSTF", "GSTQ", "GSTV", "GSTMark", "GSTLock", "GSTLockMore", "inregRows"];
+  "normName", "nameSim", "ITCT", "GSTSet", "CustIMS", "GSTF", "GSTQ", "GSTV", "GSTMark", "GSTLock", "GSTLockMore", "ITCLock", "inregRows"];
 let fails = 0, n = 0; const ok = (c, w) => { n++; if (!c) { console.log("  FAIL " + w); fails++; } };
 const {ctx, x} = load(HTML, NAMES);
 const CMP = "09AAACZ1234A1Z5", reg = "09";
@@ -47,10 +47,22 @@ const worlds = {
     twoBs: [tb("202603", []), tb("202604", [row("202604", S.M, "MIKE", "M/3", "20260310", 10000, 900), row("202604", S.B, "BETA", "B/7", "20260410", 20000, 1800), row("202604", S.I, "ISD HO", "I/1", "20260420", 5000, 450, {sec: "isd"})]),
       tb("202605", [row("202605", S.C, "GAMMA", "C/3", "20260502", 4000, 360)])],
     filed: ["202603", "202604"], ledgers: {"Isd HO": S.I}, then: () => { const r = ITCF.rows(reg).find((z) => z.no === "I/1"); if (r) ITCF.decide(reg, [r], "now", "", "202604"); }},
+  "an ISD supplier's credit note: April bill and June note, both filed": {
+    vs: [V("d1", "20260412", "D/9", "Delta", S.D, 30000, 2700), V("n1", "20260615", "CN/7", "Delta", S.D, 2000, 180, "Debit Note")],
+    twoBs: [tb("202604", [row("202604", S.D, "DELTA", "D/9", "20260412", 30000, 2700)]), tb("202606", [row("202606", S.D, "DELTA", "CN/7", "20260615", 2000, 180, {dir: -1})])],
+    filed: ["202604", "202606"]},
+  "an ISD supplier's credit note in no 2B": {
+    vs: [V("d1", "20260412", "D/9", "Delta", S.D, 30000, 2700), V("n1", "20260615", "CN/7", "Delta", S.D, 2000, 180, "Debit Note")],
+    twoBs: [tb("202604", [row("202604", S.D, "DELTA", "D/9", "20260412", 30000, 2700)]), tb("202606", [])],
+    filed: ["202604", "202606"]},
+  "QRMP April-June: a May bill and a June credit note": {
+    vs: [V("d1", "20260512", "D/9", "Delta", S.D, 30000, 2700), V("n1", "20260615", "CN/7", "Delta", S.D, 2000, 180, "Debit Note")],
+    twoBs: [tb("202606", [row("202606", S.D, "DELTA", "D/9", "20260512", 30000, 2700), row("202606", S.D, "DELTA", "CN/7", "20260615", 2000, 180, {dir: -1})])],
+    filed: ["202606"], gstSet: {[reg]: {filing: [{from: "202604", type: "qrmp"}]}}},
 };
 function setup(w) {
   const b = {cid: "t", vouchers: JSON.parse(JSON.stringify(w.vs)), meta: {from: "20250401", to: "20260930", gstins: [CMP], bills: 1}, under: {}, groups: {}, gstins: {}, states: {}, challans: [], alloc: {}, certs: [],
-    twoBs: {}, gstOpen: {[reg]: {igst: 0, cgst: 0, sgst: 0, cess: 0}}};
+    twoBs: {}, gstOpen: {[reg]: {igst: 0, cgst: 0, sgst: 0, cess: 0}}, gstSet: JSON.parse(JSON.stringify(w.gstSet || {}))};
   w.twoBs.forEach((t) => { b.twoBs[CMP + "|" + t.period] = JSON.parse(JSON.stringify(t)); });
   b.vouchers.forEach((v) => { b.gstins[v.party] = v.gstin; });
   Object.entries(w.ledgers || {}).forEach(([n, g]) => { b.gstins[n] = g; });

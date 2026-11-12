@@ -8,6 +8,8 @@
 // (coSetText, coCommit, coCommitRuleLedger, …) but saved, and sent to the cloud, only when Save at its foot is pressed;
 // leaving with unsaved changes asks. Sections not yet redrawn in React show the old screen's HTML through <Legacy>.
 import { SheetFormats } from "../parts/SheetPanel.jsx";
+// GSTLock's checks of a change (the ISD switch, GST API all clients): with this screen, as with the GST screens (build.py lazy_files)
+import "../../../src/js/47-gst-lock-checks.js";
 import HowPage from "../parts/HowPage.jsx";
 import { useState, Suspense, lazy } from "react";
 // Academy batches (calls, stage 1): in the calls' own small-windows file, loaded when the section is opened

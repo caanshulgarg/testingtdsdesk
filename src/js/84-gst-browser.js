@@ -141,7 +141,7 @@ const GSTB = {
       try { t = GST2B.fromJson(m.json && m.json.data ? {data: m.json.data} : m.json); } catch (e){ t = null; }
       if (!t || !t.gstin || !t.ym || t.gstin !== m.gstin){ toast("The 2B from the portal could not be read."); return; }
       // a 2B that would change the table 4 of a filed 3B: asked first, with a reason (GSTLock, src/js/47)
-      if (typeof GSTLock === "object" && !m.sure && GSTLock.any(reg) && !GSTLock.twoB){ GSTLock.ready().then(y => { if (y) this.onMsg(m, held); else toast(GSTLock.NOT); }); return; }
+      if (typeof GSTLock === "object" && !m.sure && GSTLock.any(reg) && !GSTLock.twoB){ GSTLock.ready().then(y => { if (y) this.onMsg(m, held); else { this.hold(m); toast(GSTLock.NOT); } }); return; }
       const lk = typeof GSTLock === "object" && GSTLock.twoB && !m.sure ? GSTLock.twoB(t) : null;
       if (lk){ GSTLock.ask(lk.reg, lk.months, ["r3b"], "2B for " + GSTR.label(t.ym) + " brought in by the helper", lk.w).then(y => { if (y) this.onMsg(Object.assign({}, m, {sure: true}), held); }); return; }
       const b = S.books; b.twoBs = b.twoBs || {}; b.twoBs[t.gstin + "|" + t.period] = Object.assign(t, {source: "helper", fetchedAt: new Date().toISOString()});

@@ -8,7 +8,7 @@ const fs = require("fs"), path = require("path"), vm = require("vm"), {execFileS
 const {load, HTML} = require("./harness");
 const ROOT = path.join(__dirname, "..");
 const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "fmtDate", "tallyDate", "STATE_CODES", "RULE_DEFAULTS", "Books", "LedMaster", "GSTR", "GSTAdv", "GSTRev", "GSTAmend", "GST2B", "INR",
-  "normName", "nameSim", "ITCT", "GSTSet", "CustIMS", "GSTF", "GSTQ", "GSTV", "inregRows"];
+  "normName", "nameSim", "ITCT", "GSTSet", "CustIMS", "GSTF", "GSTQ", "GSTV", "ITCLock", "inregRows"];
 // the steps whose figures are meant to differ, and why (the review of the filed marks, item 7 / H1)
 const INTENDED = {
   "Take now on Alpha (booked Apr, in May's 2B) from April": "Take now from a month before the line's 2B month goes into the 2B month, never before it (was: the month on screen, April); from its 2B month or later, the month on screen as before",
@@ -75,6 +75,7 @@ const STEPS = [
   ["Delta: the books' amount though 2B is lower", (w) => w.ITCF.decide(reg, [w.line("D/9")], "booksnow", "", "202604")],
   ["Delta: ask the supplier to correct", (w) => w.ITCF.decide(reg, [w.line("D/9")], "correct", "", "202604")],
   ["Take now on Alpha (booked Apr, in May's 2B) from April", (w) => w.ITCF.decide(reg, [w.line("A/101")], "now", "", "202604")],
+  ["Take now though not in 2B on Alpha (booked Apr, in May's 2B) from April", (w) => w.ITCF.decide(reg, [w.line("A/101")], "booksnow", "", "202604")],
   ["Take now on Alpha from May", (w) => w.ITCF.decide(reg, [w.line("A/101")], "now", "", "202605")],
   ["Take now on Hotel (booked Jun, in May's 2B) from May", (w) => w.ITCF.decide(reg, [w.line("H/4")], "now", "", "202605")],
   ["Take now on Hotel (booked Jun, in May's 2B) from June", (w) => w.ITCF.decide(reg, [w.line("H/4")], "now", "", "202606")],

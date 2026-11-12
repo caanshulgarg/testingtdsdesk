@@ -19,11 +19,13 @@ const tot = (o) => r2(H.reduce((a, k) => a + num((o || {})[k]), 0));
 const ORDER = { diff: 0, books: 1, "2b": 2, ims: 3, cf: 4, matched: 5 };
 const CHIP_CLS = { matched: "ok", books: "warn", "2b": "warn", diff: "bad", ims: "bad", cf: "info" };
 const later = (M) => ITCF.months(M).filter((m) => m > M);
+// Take now from a month before the line's 2B month: where the credit goes (ITCF.decide's ahead)
+const aheadNote = (m) => "Credit goes to " + GSTR.label(m) + ": it is in " + GSTR.label(m) + "’s 2B.";
 const next = (M) => later(M)[0] || M;
 
 function DecisionCell({ r, reg, M }) {
   if (r.fixed && !r.allow.length) return <span className="nr">{r.fixed}</span>;
-  const set = (code, ym) => { const x = ITCF.decide(reg, [r], code, ym, M); if (x.lock) toast(x.lock); else if (x.refused.length) toast("Not a choice for this line."); else if (x.note) toast(x.note); render(); };
+  const set = (code, ym) => { const x = ITCF.decide(reg, [r], code, ym, M); if (x.lock) toast(x.lock); else if (x.refused.length) toast("Not a choice for this line."); else if (x.ahead) toast(aheadNote(x.ahead)); render(); };
   const v = r.show.code || "", months = later(M);
   return <div className="ic-dec">
     <select aria-label="Decision" data-ic-dec={r.key} value={v} onChange={(ev) => { const c = ev.target.value; set(c, c === "later" ? r.show.ym && r.show.ym > M ? r.show.ym : next(M) : ""); }}>
@@ -106,7 +108,7 @@ export default function ItcReco({ reg }) {
     if (!bulk.code) { toast("Choose the decision."); return; }
     if (bulk.code === "later" && !bulk.ym) { toast("Pick the month."); return; }
     const x = ITCF.decide(reg, picked, bulk.code, bulk.ym, M);
-    toast(x.ok + " line" + (x.ok === 1 ? "" : "s") + " set to " + ITCF.DEC_LABEL[bulk.code] + (x.refused.length ? "; " + x.refused.length + " left as they were (" + (x.lock || "not a choice for them") + ")" : "") + "." + (x.note ? " " + x.note : ""));
+    toast(x.ok + " line" + (x.ok === 1 ? "" : "s") + " set to " + ITCF.DEC_LABEL[bulk.code] + (x.refused.length ? "; " + x.refused.length + " left as they were (" + (x.lock || "not a choice for them") + ")" : "") + "." + (x.ahead ? " " + aheadNote(x.ahead) : ""));
     S.icSel = {}; setBulk({ code: "", ym: "" }); render();
   };
   const free = mo.rows.length ? ITCF.rows(reg).filter((r) => r.kind === "books").flatMap((r) => r.docs) : [];

@@ -14,7 +14,7 @@
 const fs = require("fs"), path = require("path"), vm = require("vm");
 const {load, HTML} = require("./harness");
 const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "fmtDate", "tallyDate", "STATE_CODES", "RULE_DEFAULTS", "GST_STATES", "Books", "LedMaster", "GSTR", "GSTAdv", "GSTRev", "GSTAmend", "GST2B", "INR",
-  "normName", "nameSim", "ITCT", "GSTSet", "CustIMS", "GSTF", "GSTQ", "GSTV", "GSTMark", "GSTLock", "GSTLockMore", "gstfSet", "gstfSnap", "gstfUnsnap", "gqIffFiled", "gstFileRoute", "gstSignWith", "GSTFILE", "GSTB",
+  "normName", "nameSim", "ITCT", "GSTSet", "CustIMS", "GSTF", "GSTQ", "GSTV", "GSTMark", "GSTLock", "GSTLockMore", "ITCLock", "gstfSet", "gstfSnap", "gstfUnsnap", "gqIffFiled", "gstFileRoute", "gstSignWith", "GSTFILE", "GSTB",
   "gstvFind", "gstvFileIt", "gstvRemove", "gstvRestore", "gstvSetSort", "gqIffSkip", "ClosedP", "r2Reg", "r2Locked", "r2Do", "r2Confirm", "r2Unlink", "r2Link", "r2SetTol", "aihPair", "GSTAPI", "gsetIsd", "inregRows",
   "Audit", "TDS", "Certs", "TDS26Q", "TDS_FORMS", "TCS27EQ", "PAY_CODES", "NEW_FORMS_VALIDATED", "noPanRate", "NO_PAN_RATE", "NORM_CACHE", "normNameRaw", "TDSCH", "TDSRate", "TDSLdc", "TDSWatch",
   "TDSFiled", "TDSTally", "TDSReg", "TDS_SEC_CODES", "BOOKS_KEYS", "uid", "lsGet", "lsSet", "istParts", "p2ist", "istDay", "istToday"];
@@ -160,7 +160,7 @@ const F = (ym) => x.GSTF.peek(ym, reg);
   // "Take now": never before the line's 2B; the month on screen when that is later
   ITCF.decide(reg, [line("P/3")], "now", "", "202604");
   ok(decOf("P/3").ym === "202605", "C2. Take now on Papa's document (in May's 2B) from April: into May, its 2B month, not April (" + decOf("P/3").ym + ")");
-  ok(/Credit goes to May-2026: it is in May-2026.s 2B\./.test(ITCF.decide(reg, [line("P/3")], "now", "", "202604").note || ""), "C2. and the screen says so: “Credit goes to May-2026: it is in May-2026’s 2B.”");
+  ok(ITCF.decide(reg, [line("P/3")], "now", "", "202604").ahead === "202605", "C2. and the screen is told the month (it says “Credit goes to May-2026: it is in May-2026’s 2B.”, ItcReco.jsx)");
   b.itcDec = Object.assign({}, b.itcDec); delete b.itcDec[reg + "|" + line("P/3").key];
   if (x.GSTMark) x.GSTMark.set("202604", reg, "r3b", "2026-05-20", "AA0904260000099", "api"); else Object.assign(x.GSTF.rec("202604", reg), {r3b: "2026-05-20", r3bArn: "AA0904260000099", r3bVia: "api"});
   ok(!!Lk && Lk.filed(reg, "202604").arn === "AA0904260000099" && !Lk.filed(reg, "202605"), "C0. April's 3B filed (ARN); May open");
@@ -223,8 +223,9 @@ const F = (ym) => x.GSTF.peek(ym, reg);
   ok(st.confirm[kF] === "yes", "C4. 2B: Same on Foxtrot (May): kept");
   if (x.aihPair) {
     ctx.AIH = {st: () => ({pairs: {[kB]: {id: "e1", label: "Beta's 2B to Echo"}}}), who: () => "t", log() {}};
-    await x.aihPair(kB, true);
-    ok(!st.link[kB] && lastToast() === W, "C4. the AI's pair (Beta's April document to Echo's bill): refused too");
+    const gr = ctx.S.gstReg; delete ctx.S.gstReg;
+    await x.aihPair(kB, true); ctx.S.gstReg = gr;
+    ok(!st.link[kB] && lastToast() === W, "C4. the AI's pair (Beta's April document to Echo's bill), the GST screen never opened (no registration chosen): refused too");
   } else ok(false, "C4. aihPair loads");
   asked.length = 0; x.r2SetTol("2");
   ok(asked.length === 0 && Number(st.opt.tol) === 2, "C4. a 2B tolerance that moves nothing filed: set at once");
@@ -252,7 +253,7 @@ const F = (ym) => x.GSTF.peek(ym, reg);
     } else ok(false, "C4. gsetIsd loads");
   // H2: the checks of a change not loaded (their file blocked): every path holds the change, never makes it unchecked
   {
-    const keep = {pair: Lk.pair, twoB: Lk.twoB, isdMoves: Lk.isdMoves, guardBooks: Lk.guardBooks};
+    const keep = {pair: Lk.pair, twoB: Lk.twoB, isdMoves: Lk.isdMoves, guardBooks: Lk.guardBooks, itc: Lk.itc};
     Object.keys(keep).forEach((k) => { delete Lk[k]; }); ctx.gstChecksLoad = () => Promise.reject(new Error("blocked"));
     const s0 = JSON.stringify([st.confirm, st.link]); toasts.length = 0;
     x.r2Link(kB, "e1");
@@ -262,8 +263,11 @@ const F = (ym) => x.GSTF.peek(ym, reg);
     ok(/^held/.test(h) && !(b.apiTaken || {})[CMP + "|2B|042026|x"], "H2. the server's 2B: held, fetched again next time (" + h + ")");
     asked.length = 0; x.gsetIsd("Foxtrot Labs", true); await new Promise((r) => setTimeout(r, 60));
     ok(!(b.map["Foxtrot Labs"] || {}).isd && toasts.includes(Lk.NOT), "H2. the ISD switch: not made");
-    await x.aihPair(kB, true);
-    ok(!st.link[kB], "H2. the AI's pair: not made");
+    const gr2 = ctx.S.gstReg; delete ctx.S.gstReg;
+    await x.aihPair(kB, true); ctx.S.gstReg = gr2;
+    ok(!st.link[kB], "H2. the AI's pair, the GST screen never opened (no registration chosen): not made");
+    const rr = ITCF.decide(reg, [line("A/101")], "later", "202607", "202605");
+    ok(rr.lock === Lk.NOT && decOf("A/101").ym !== "202607", "H2. an ITC decision: refused, try again");
     Object.assign(Lk, keep); delete ctx.gstChecksLoad;
   }
   {

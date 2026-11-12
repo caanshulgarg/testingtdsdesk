@@ -5,16 +5,29 @@
 const GSTLockMore = {
   // the credit every ITC line gives each month (4(A)(5) and 4(B)(1), app/src/lib/itcFinal.js)
   // (only for the months fm says are filed, when given: the rest cannot refuse anything)
+  // an ITC decision or eligibility (app/src/lib/itcFinal.js lockW): the words when the change from the line's decision in
+  // force to s1 moves the credit of a filed month: its 4(A)(5) or 4(B)(1) in the month the credit leaves, the month it lands
+  // in, and the bill's own months (a 17(5) reversal made from Tally, r.blkBy, undone by its eligibility), else ""
+  itc(reg, r, s1){
+    const F = ITCF, a = r.e || F.credit(r, r.s), c = F.credit(r, s1), ms = [], z = {};
+    new Set([a.C, c.C, r.bm].concat(Object.keys(r.blkBy || {})).filter(Boolean)).forEach(m => {
+      const a1 = a.C === m ? a.amt : z, c1 = c.C === m ? c.amt : z, a2 = F.revEffect(r, a, m), c2 = F.revEffect(r, c, m);
+      if (this.H.some(h => Math.abs(num(a1[h]) - num(c1[h])) >= 0.005 || Math.abs(num(a2[h]) - num(c2[h])) >= 0.005)) ms.push(m);
+    });
+    return this.why(reg, ms);
+  },
   // two months' credit (credits) differ: 4(A)(5), 4(A)(4) (i) or 4(B)(1) (r)
   moves(a, c){ return this.H.some(h => ["", "i", "r"].some(p => Math.abs(((a || {})[p + h] || 0) - ((c || {})[p + h] || 0)) >= 0.005)); },
   credits(reg, fm){
     const F = typeof ITCF === "object" ? ITCF : null, by = {};
     if (!F) return by;
-    const iT = F.isdTest ? F.isdTest() : null;
+    // an ISD's line (GSTR.isdTest, as itcFinal.js isdRow): its documents' entries, else its 2B row
+    const vm = new Map(((S.books || {}).vouchers || []).map(v => [v.id, v])), iT = GSTR.isdTest ? GSTR.isdTest(id => vm.get(id)) : null;
+    const isdRow = r => (r.docs && r.docs.length ? r.docs.some(d => iT(d)) : !!(r.p && iT(r.p)));
     F.rows(reg).forEach(r => {
       if (r.fixed) return;
       // an ISD's line is 4(A)(4)'s, kept apart from 4(A)(5) (itcFinal.js isdRow): a switch between them is a move
-      const p = iT && F.isdRow(r, iT) ? "i" : "";
+      const p = iT && isdRow(r) ? "i" : "";
       const ms = new Set([r.e.C, r.bm, r.tm].concat(Object.keys(r.booksBy || {}), Object.keys(r.blkBy || {})).filter(m => m && (!fm || fm(m))));
       ms.forEach(m => { const a = F.effect(r, r.e, m), c = F.revEffect(r, r.e, m), o = by[m] = by[m] || {}; this.H.forEach(h => { o[p + h] = r2((o[p + h] || 0) + num(a[h])); o["r" + h] = r2((o["r" + h] || 0) + num(c[h])); }); });
     });
@@ -30,7 +43,7 @@ const GSTLockMore = {
     if (typeof ITCF !== "object" || typeof GST2B !== "object" || !S.books || !this.any(reg)) return "";
     const st = GST2B.state(), saved = JSON.stringify({confirm: st.confirm, link: st.link, opt: st.opt});
     const fc = new Map(), fm = m => { if (!fc.has(m)) fc.set(m, !!this.filed(reg, m)); return fc.get(m); };
-    const was = this.credits(reg, fm), m0 = GST2B._memo, i0 = ITCF._memo ? ITCF._memo() : null;
+    const was = this.credits(reg, fm), m0 = GST2B._memo;
     let w = "", done = false;
     try {
       if (change) change(st);
@@ -38,7 +51,7 @@ const GSTLockMore = {
       const ms = Array.from(new Set(Object.keys(was).concat(Object.keys(now)))).sort().filter(m => this.moves(was[m], now[m]));
       w = this.why(reg, ms); this.moved = ms.filter(m => this.filed(reg, m)); done = !w && keep !== false;
     } finally {
-      if (!done){ const o = JSON.parse(saved); st.confirm = o.confirm; st.link = o.link; if (o.opt === undefined) delete st.opt; else st.opt = o.opt; GST2B._memo = m0; if (ITCF._memo) ITCF._memo(i0); }
+      if (!done){ const o = JSON.parse(saved); st.confirm = o.confirm; st.link = o.link; if (o.opt === undefined) delete st.opt; else st.opt = o.opt; GST2B._memo = m0; }
     }
     return w;
   },
@@ -96,6 +109,7 @@ const GSTLockMore = {
         if (!(d.length ? d.some(x => ids.has(x.id)) : !!(g && r.p && String(r.p.gstin).toUpperCase() === g))) return;
         if (!r.fixed){ if (r.e) put(r.e.C, r.e.amt); }
         else if (r.full) Object.keys(r.booksBy || {}).forEach(m => put(m, r.booksBy[m]));
+        else d.forEach(x => put(x.eb || x.ym, x));     // a note (fixed, its tax in the books' month): each document's month
       });
       vs.forEach(v => { if (!seen.has(v.id) && (v.ent || []).some(e => { const m = Books.ledgerOf(e.l); return m.kind === "gst" && m.side === "input" && num(e.a); })) at[String(v.date).slice(0, 6)] = true; });
       const ms = Object.keys(at).sort().filter(m => this.filed(reg, m));
@@ -119,7 +133,7 @@ const GSTLockMore = {
     if (!GST2B.all2b(reg).length) x = this.tryBooks([reg], put, back);
     else {
       const fc = new Map(), fm = m => { if (!fc.has(m)) fc.set(m, !!this.filed(reg, m)); return fc.get(m); };
-      const was = this.credits(reg, fm), m0 = GST2B._memo, i0 = ITCF._memo();
+      const was = this.credits(reg, fm), m0 = GST2B._memo;
       let ok = false;
       try {
         put(); const now = this.credits(reg, fm);
@@ -128,7 +142,7 @@ const GSTLockMore = {
         const na = (x) => JSON.stringify(this.H.map(h => r2(((x && x.rows) || []).filter(r => r.itcavl === "N" && !r.rej).reduce((a, r) => a + r.dir * num(r[h]), 0))));
         if (na(old) !== na(t) && this.filed(reg, t.ym) && !ms.includes(t.ym)) ms.push(t.ym);
         if (ms.length) x = {w: this.why(reg, ms), reg, months: ms}; else { ok = true; this.kept = t; }
-      } finally { if (!ok){ back(); GST2B._memo = m0; ITCF._memo(i0); } }
+      } finally { if (!ok){ back(); GST2B._memo = m0; } }
     }
     if (x) x.w = "The 2B for " + GSTR.label(t.ym) + " would change table 4 of " + x.months.map(m => GSTR.label(m)).join(", ") + ". " + x.w;
     return x;
