@@ -167,8 +167,12 @@ Object.assign(GSTR, {
     let w = this._ck.get(b), co, ed;
     try { const c = (typeof CO === "function" && CO()) || null; co = JSON.stringify(c, (k, x) => (k === "stats" && c && x === c.stats ? undefined : x)); const M = b.map || {};
       ed = JSON.stringify(M, function (k, x){ return this !== M && (k === "n" || k === "why") ? undefined : x; }) + JSON.stringify([b.gstSet, b.gstPosFix]); } catch (e){ return null; }
-    if (!w) this._ck.set(b, w = {g: 0, all: 0, ids: null, ms: {}, V: null, arr: null, rev: null, seen: new WeakMap(), v: {}});
-    const sl = S.sales, ids = [typeof SALES_REV === "number" ? SALES_REV : 0, S.coId, co, ed, new Date().toDateString(), sl, sl && sl.cid, sl && sl.list, sl && sl.list && sl.list.length, b.ledInfoAt]
+    if (!w) this._ck.set(b, w = {g: 0, all: 0, ids: null, ms: {}, V: null, arr: null, rev: null, seen: new WeakMap(), v: {}, rd: null, rdRev: null});
+    // review of be773616d: the other parts the checks read, outside the entries, by their contents at every save (they are
+    // changed in place: the ledgers' GSTINs from the cloud copy, BookSrc.ledgersInto; the groups and ledgers' places,
+    // TallyRead; an advance's rate or "is an advance", advFix; the registrations and bill-wise flag of meta)
+    if (w.rdRev !== rev || !w.rd){ try { const m = b.meta || {}; w.rd = JSON.stringify([b.gstins, b.under, b.groups, b.states, b.stateOf, b.advFix, b.gstRegs, m.gstins, m.bills]); } catch (e){ return null; } w.rdRev = rev; }
+    const sl = S.sales, ids = [typeof SALES_REV === "number" ? SALES_REV : 0, S.coId, co, ed, w.rd, new Date().toDateString(), sl, sl && sl.cid, sl && sl.list, sl && sl.list && sl.list.length, b.ledInfoAt]
       .concat(BOOKS_KEYS.filter(k => k !== "map" && !this.NOT_GST.has(k)).map(k => b[k]));
     if (!w.ids || w.ids.length !== ids.length || !w.ids.every((x, i) => x === ids[i])){ w.ids = ids; w.g++; w.all++; }
     const was = w.V, same = !!was && was.length === V.length && V.every((v, i) => v === was[i]);

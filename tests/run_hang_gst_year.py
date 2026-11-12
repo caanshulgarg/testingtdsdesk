@@ -29,7 +29,10 @@ as run_gst_fix_list.py makes them. Checks:
      month, not worked out again, lists it as used twice), a B2C large invoice and a later month's note that adjusts it
      (a number too long, checked only because of that invoice) then the invoice deleted, a ledger's GST setting changed
      (every month again), the marketplace sales changed (every month again), an entry's line changed in place with a new
-     list of the same entries (Books.touch: every month again).
+     list of the same entries (Books.touch: every month again); and (review of be773616d) the parts read outside the
+     entries changed IN PLACE and saved, every month again: meta (bill-wise flag, advances shown), an advance marked and its
+     rate (advFix), a supplier's GSTIN from the cloud's ledger list (BookSrc.ledgersInto), a ledger's group and a group's
+     parent (b.under, b.groups).
   (months worked out: GSTR.checksMonth, the part of a month's checks worked out from its own entries; GSTR.checks on a
   build without it)
 Runs on the React build: app/dist-test (cd app && npm run legacy && npm run build:test), or TDSDESK_SITE.
@@ -249,6 +252,34 @@ try:
         # corrected in every line): every month again
         step("5i. a line's ledger renamed in place in an entry, Books.touch and saved", """() => { const v = S.books.vouchers.find(x => Books.isSale(x) && x.date >= '20250401' && x.date <= '20260331' && GSTR.outRow(x, '', '07') && x.ent.some(e => e.l === x.party));
   v.ent.find(e => e.l === v.party).l = 'ZZ Renamed Party Ledger'; Books.touch(S.books); saveBooks(); return v.id; }""", ck_min=12)
+        # j-m (review of be773616d): the parts of the books the checks read outside the entries, changed IN PLACE and saved
+        FR = "(w) => { const n = {}; GSTR.months().forEach(m => GSTR.checks(m, '07').forEach(c => { if (c.what === w) n[m] = c.n; })); return n; }"
+        ADV_ON = "Advances kept on account, not counted"
+        # j. advances shown (the client's choice), then the books' bill-wise flag (meta) set in place, and a receipt on account
+        pg.evaluate("""() => { const c = CO(); c.choices = Object.assign({}, c.choices, {advGst: {value: 'on'}}); const b = S.books, sale = b.vouchers.find(v => Books.isSale(v) && v.date.startsWith('202509') && v.ent.some(e => e.l === v.party) && !/CREDIT/i.test(v.type));
+          const bank = Object.keys(b.map).find(k => /bank/.test(b.map[k].kind || '')) || 'ZZ Bank';
+          b.vouchers.push({id: 'zzadv-1', date: '20250920', type: 'Receipt', no: 'ZR1', ref: '', party: sale.party, gstin: '', pos: '', cmp: '', narr: 'zz', ent: [{l: sale.party, a: 50000, b: [['', 'On Account', 50000]]}, {l: bank, a: -50000}]});
+          b.vouchers.sort((p, q) => String(p.date).localeCompare(String(q.date))); delete b.meta.bills; saveBooks(); render(); }""")
+        step("5j. the books' meta changed in place (bill-wise details read: meta.bills) and saved", "() => { S.books.meta.bills = true; saveBooks(); return GSTAdv.ready(); }", ck_min=12)
+        on0 = pg.evaluate(FR, ADV_ON)
+        ok(on0.get("202509"), "   advances shown: Sep-2025 lists the receipt on account (%s)" % on0)
+        # k. an advance corrected (advFix writes b.advFix in place and saves): is an advance, then its rate
+        step("5k. a receipt on account marked as an advance (advFix, in place)", "() => { advFix('zzadv-1:0:0', 'isAdv', true); return 'zzadv-1'; }", ck_min=12)
+        ok(pg.evaluate(FR, ADV_ON).get("202509", 0) == on0.get("202509", 0) - 1, "   Sep-2025 lists one receipt on account fewer (%s)" % pg.evaluate(FR, ADV_ON))
+        step("5k. its rate set (advFix, in place)", "() => { advFix('zzadv-1:0:0', 'rate', 5); return 'zzadv-1'; }", ck_min=12)
+        # l. a supplier ledger's GSTIN from the cloud copy's ledger list (BookSrc.ledgersInto writes b.gstins in place)
+        NOG = "Purchases with no supplier GSTIN"
+        g0 = pg.evaluate(FR, NOG)
+        r, n, t = step("5l. a supplier's GSTIN from the cloud copy's ledgers (BookSrc.ledgersInto, in place) and saved", """() => { const b = S.books;
+          const r = GSTR.months().map(m => GSTR.inward(m, '07')).flat().find(x => !x.gstin && !x.fromHold && (x.cgst || x.sgst || x.igst) && !(b.gstins || {})[x.party]);
+          const n = BookSrc.ledgersInto(b, [{name: r.party, gstin: '07AAJFQ3158R1ZH'}], '9999-12-31'); saveBooks(); return {party: r.party, n, ym: String(r.date).slice(0, 6)}; }""", ck_min=12)
+        g1 = pg.evaluate(FR, NOG)
+        ok(r["n"] >= 1 and g1.get(r["ym"], 0) < g0.get(r["ym"], 0), "   %s lists fewer purchases with no supplier GSTIN (%s -> %s)" % (r["ym"], g0.get(r["ym"]), g1.get(r["ym"])))
+        # m. a ledger's group and a group's parent changed in place (as TallyRead reads the balances) and saved
+        step("5m. a sales party ledger moved to another group in place (b.under) and saved", """() => { const b = S.books, v = b.vouchers.find(x => Books.isSale(x) && x.date >= '20250401' && x.date <= '20260331' && GSTR.outRow(x, '', '07'));
+          b.under = b.under || {}; b.under[v.party] = 'Sundry Creditors'; saveBooks(); return v.party; }""", ck_min=12)
+        step("5m. a group's parent changed in place (b.groups) and saved", """() => { const b = S.books; b.groups = b.groups || {}; const k = Object.keys(b.groups).find(g => /sales accounts/i.test(String(b.groups[g])) ) || Object.keys(b.groups)[0];
+          b.groups[k] = 'Indirect Incomes'; saveBooks(); return k; }""", ck_min=12)
         # h. the marketplace sales changed: every month again
         step("5h. marketplace sales added (saveSales)", """() => { S.sales = {cid: S.coId, list: [{id: 'zzmk5', source: 'market', status: 'review', x: {date: '2026-01-10', number: 'MK-0501', customerName: 'ZZ Buyer', customerGstin: '07AAJFQ3158R1ZJ', placeOfSupply: 'Delhi', cgst: 9, sgst: 9, igst: 0, taxable: 100, total: 118, hsn: '9983'}}], cfg: {}, sel: new Set(), sticky: new Set(), undo: null};
           saveSales(); return 'zzmk5'; }""", ck_min=12)
