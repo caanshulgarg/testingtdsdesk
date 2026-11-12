@@ -50,6 +50,7 @@
  "45-reports.js",
  "46-letters.js",
  "47-closed-periods.js",
+ "47-gst-lock-checks.js",
  "48-guide-and-keys.js",
  "49-tally-cloud.js",
  "51-tally-queue.js",

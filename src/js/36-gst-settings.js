@@ -89,9 +89,17 @@ function gsetSet(key, val, reg, sub){
 // next-gst-isd (the owner, 12-Nov-2026): a ledger's switch "ISD (Input Service Distributor)" (b.map[name].isd, GSTR.isISD):
 // the credit of every entry on it goes in 3B 4(A)(4). FinCom's own, saved with the books (synced), never written to Tally;
 // kept over a refresh of the ledger list (Books.mapLedgers). A name not in the ledger list is refused
-function gsetIsd(name, on){
+// (a switch that moves the table 4 of a filed 3B: asked first, with a reason, GSTLock.guardBooks in src/js/47; only the months
+// of the ledger's entries are compared)
+function gsetIsd(name, on, sure){
   const b = S.books; name = String(name || "").trim(); if (!b || !name) return false;
   if (on && !(b.map || {})[name]){ toast(name + " is not a ledger of these books: pick it from the list."); return false; }
+  if (!sure && typeof GSTLock === "object" && GSTLock.guardBooks){
+    const was = (b.map || {})[name], set = (v) => () => { b.map = Object.assign({}, b.map, {[name]: v}); if (!v) delete b.map[name]; b.mapV = (b.mapV || 0) + 1; GSTR._carry = null; };
+    const ms = Array.from(new Set((b.vouchers || []).filter(v => v.party === name || (v.ent || []).some(e => e.l === name)).map(v => String(v.date).slice(0, 6))));
+    GSTLock.guardBooks("ISD switch for " + name, set(Object.assign({n: 0}, was, on ? {isd: {at: ""}} : {isd: undefined})), set(was), () => gsetIsd(name, on, true), ms);
+    return true;
+  }
   b.map = Object.assign({}, b.map || {});
   const m = b.map[name] = Object.assign({n: 0}, b.map[name] || {});
   if (on) m.isd = {by: typeof whoAmI === "function" ? whoAmI() : "", at: new Date().toISOString()}; else delete m.isd;

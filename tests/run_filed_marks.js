@@ -14,12 +14,12 @@
 const fs = require("fs"), path = require("path"), vm = require("vm");
 const {load, HTML} = require("./harness");
 const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "fmtDate", "tallyDate", "STATE_CODES", "RULE_DEFAULTS", "GST_STATES", "Books", "LedMaster", "GSTR", "GSTAdv", "GSTRev", "GSTAmend", "GST2B", "INR",
-  "normName", "nameSim", "ITCT", "GSTSet", "CustIMS", "GSTF", "GSTQ", "GSTV", "GSTMark", "GSTLock", "gstfSet", "gstfSnap", "gstfUnsnap", "gqIffFiled", "gstFileRoute", "gstSignWith", "GSTFILE", "GSTB",
-  "gstvFind", "gstvFileIt", "gstvRemove", "gstvRestore", "gstvSetSort", "gqIffSkip", "ClosedP", "r2Reg", "r2Locked", "r2Do", "r2Confirm", "r2Unlink", "r2Link", "r2SetTol", "aihPair", "GSTAPI", "inregRows",
+  "normName", "nameSim", "ITCT", "GSTSet", "CustIMS", "GSTF", "GSTQ", "GSTV", "GSTMark", "GSTLock", "GSTLockMore", "gstfSet", "gstfSnap", "gstfUnsnap", "gqIffFiled", "gstFileRoute", "gstSignWith", "GSTFILE", "GSTB",
+  "gstvFind", "gstvFileIt", "gstvRemove", "gstvRestore", "gstvSetSort", "gqIffSkip", "ClosedP", "r2Reg", "r2Locked", "r2Do", "r2Confirm", "r2Unlink", "r2Link", "r2SetTol", "aihPair", "GSTAPI", "gsetIsd", "inregRows",
   "Audit", "TDS", "Certs", "TDS26Q", "TDS_FORMS", "TCS27EQ", "PAY_CODES", "NEW_FORMS_VALIDATED", "noPanRate", "NO_PAN_RATE", "NORM_CACHE", "normNameRaw", "TDSCH", "TDSRate", "TDSLdc", "TDSWatch",
   "TDSFiled", "TDSTally", "TDSReg", "TDS_SEC_CODES", "BOOKS_KEYS", "uid", "lsGet", "lsSet", "istParts", "p2ist", "istDay", "istToday"];
 let fails = 0; const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };
-const loads = NAMES.filter((n) => { try { load(HTML, [n]); return true; } catch (e) { return false; } });
+const loads = NAMES.filter((n) => { try { load(HTML, n === "GSTLockMore" ? ["GSTMark", "GSTLock", n] : [n]); return true; } catch (e) { return false; } });
 const missing = NAMES.filter((n) => !loads.includes(n));
 if (missing.length) console.log("  (not in this build: " + missing.join(", ") + ")");
 const {ctx, x} = load(HTML, loads);
@@ -239,6 +239,14 @@ const F = (ym) => x.GSTF.peek(ym, reg);
   ok(asked.length === 1 && /adjustment in the current month/.test(asked[0].body) && !went && !b.vouchers.find((v) => v.id === "b1").opt, "C4. a books setting that would move April's (filed) 4(A)(5): asked, saying to adjust in the current month; cancelled, not made");
   asked.length = 0; Lk.guardBooks("a test switch", ...flip("f1"), () => { went++; });
   ok(asked.length === 0 && went === 1, "C4. one that moves only May (open): made at once");
+  // the ISD ledger switch (src/js/36): Beta's April bill would move from 4(A)(5) to 4(A)(4) of filed April: asked
+  if (x.gsetIsd) {
+    asked.length = 0; answer = null; x.gsetIsd("Beta Traders", true); await flush();
+    ok(asked.length === 1 && /April|Apr-2026/.test(asked[0].body) && !((b.map["Beta Traders"] || {}).isd), "C4. the ISD switch on Beta's ledger (April entries, April filed): asked; cancelled, not switched");
+    asked.length = 0; x.gsetIsd("Foxtrot Labs", true);
+    ok(asked.length === 0 && !!(b.map["Foxtrot Labs"] || {}).isd, "C4. on Foxtrot's (May entries only): switched at once");
+    x.gsetIsd("Foxtrot Labs", false);
+  } else ok(false, "C4. gsetIsd loads");
   answer = {ok: true, data: "x"};
   // an allowed click leaves the matching worked out for the new state (the caller's same change is then free)
   const m1 = x.GST2B._memo; x.r2Link(kP, "e1");

@@ -19,6 +19,8 @@
 // State: S.gstYm (the month, YYYYMM), S.gstReg (the GSTIN's state code), S.gstView (year | return), S.gstPart,
 // S.gstSub (the tab of GSTR-1 or 3B), all kept in the address (Route.booksMore, src/js/52); a GSTIN or filing type seen
 // for the first time opens on its first part (S.gstSeen).
+// GSTLock's checks of a change (pair, twoB, guardBooks) come with the GST and books screens, not in legacy.js (build.py lazy_files)
+import "../../../src/js/47-gst-lock-checks.js";
 import { PreFileButton } from "../parts/PreFile.jsx";
 import NotRead from "../parts/NotRead.jsx";
 import { Notices } from "../parts/Ai.jsx";
