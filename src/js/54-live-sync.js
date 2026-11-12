@@ -201,11 +201,21 @@ Object.assign(BookItems, {
     // pass that left nothing to send (everything sent, nothing held back), with the same record of what the server has
     // (s.base: the same object, not written since: s.bv) and the same permissions to remove many items: nothing to send
     // again, so it is not cut into items and every item hashed again (14,446 items, 0.4 s, every 45 s)
-    const raw = BookSync.openWorkStr(cid), c = s.clean;
-    if (raw !== null && c && c.raw === raw && c.base === s.base && c.bv === (s.bv || 0) && c.mass === this.allowMass){ Live.saved(); return 0; }
+    // next-fix-hang-books (FINCOM-APP-STAGING-H, the owner's PC: ~10 s in this timer after the cloud copy brought new
+    // entries): any part changed (the ledger map, an allocation, the audit) and every part was cut into its items and every
+    // item hashed again (14,446 items, 0.4-0.6 s at full speed on 51,758 made-up entries). Now the text is kept part by part:
+    // a part whose text is the one of the last pass that left nothing to send (and nothing the server holds changed since:
+    // s.base the same, s.bv) has every item as the server holds it, so only the parts that changed are cut and hashed,
+    // and only their items are looked at for removal: the same items sent, the same removals (tests/run_hang_books_cloud.py)
+    const parts = BookSync.openWorkParts(cid), c = s.clean;
+    const valid = parts !== null && c && c.parts && c.base === s.base && c.bv === (s.bv || 0) && c.mass === this.allowMass;
+    const same = new Set(valid ? Object.keys(parts).filter(k => c.parts[k] === parts[k]) : []);
+    if (valid && same.size === Object.keys(parts).length && Object.keys(c.parts).length === same.size){ Live.saved(); return 0; }
     s.clean = null;
     const bv0 = s.bv || 0, base0 = s.base; let own = 0;
-    const work = raw !== null ? JSON.parse(raw) : await BookSync.localWork(cid);
+    let work;
+    if (parts !== null){ work = {}; Object.keys(parts).forEach(k => { work[k] = same.has(k) ? undefined : JSON.parse(parts[k]); }); }
+    else work = await BookSync.localWork(cid);
     if (!work) return 0;
     const mine = this.split(work), send = [], present = new Set(Object.keys(work));
     mine.forEach((x, key) => { const hh = this.h(x.d, x.o); if (s.base[key] !== hh) send.push([key, hh, {k: x.k, i: x.i, o: x.o, d: x.d}]); });
@@ -214,7 +224,7 @@ Object.assign(BookItems, {
     // (review of 02-Oct-2026: never infer a removal from absence)
     const out = {}, had = {};
     let held = false;
-    Object.keys(s.base).forEach(key => { if (s.base[key] === "gone") return; const k = key.split("\u0001")[0]; had[k] = (had[k] || 0) + 1; if (!mine.has(key)) (out[k] = out[k] || []).push(key); });
+    Object.keys(s.base).forEach(key => { if (s.base[key] === "gone") return; const k = key.split("\u0001")[0]; if (same.has(k)) return; had[k] = (had[k] || 0) + 1; if (!mine.has(key)) (out[k] = out[k] || []).push(key); });
     Object.entries(out).forEach(([k, keys]) => {
       if (!present.has(k)) return;
       const left = had[k] - keys.length;
@@ -226,7 +236,7 @@ Object.assign(BookItems, {
       }
       keys.forEach(key => send.push([key, "gone", {k, i: key.split("\u0001")[1], del: true}]));
     });
-    const clean = () => { if (raw === null || held || s.base !== base0 || (s.bv || 0) !== bv0 + own) return; Object.keys(this.st).forEach(k => { if (k !== cid && this.st[k]) this.st[k].clean = null; }); s.clean = {raw, base: s.base, bv: s.bv || 0, mass: this.allowMass}; };
+    const clean = () => { if (parts === null || held || s.base !== base0 || (s.bv || 0) !== bv0 + own) return; Object.keys(this.st).forEach(k => { if (k !== cid && this.st[k]) this.st[k].clean = null; }); s.clean = {parts, base: s.base, bv: s.bv || 0, mass: this.allowMass}; };
     if (!send.length){ clean(); Live.saved(); return 0; }
     Live.saving();
     try {

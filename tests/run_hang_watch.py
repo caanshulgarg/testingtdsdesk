@@ -161,13 +161,19 @@ def main():
         ok(pg.evaluate("() => !!window.__fincomHangWatch"), "the watch runs once Sentry is up")
         E("() => { navHome('clients'); }"); pg.wait_for_timeout(600)
         n0 = len(sent)
-        E("() => { function blockFor(ms){ const t = performance.now(); while (performance.now() - t < ms) {} } setTimeout(() => blockFor(2500), 10); }"); pg.wait_for_timeout(4000)
+        # next-fix-hang-books: the block in a timer set by a script file of the page's own (its function named), as the app's
+        # are: Sentry no longer wraps the timers, so the long frame names that function, not Sentry's wrapper "r"
+        pg.route("http://localhost:%d/__zzblock.js" % PORT, lambda r: r.fulfill(status=200, content_type="text/javascript",
+                 body="window.zzBlockSoon = function (ms) { setTimeout(function zzBlockedTimer() { const t = performance.now(); while (performance.now() - t < ms) {} }, 10); };"))
+        E("() => new Promise((ok) => { const s = document.createElement('script'); s.src = '/__zzblock.js'; s.onload = ok; document.head.appendChild(s); })")
+        E("() => zzBlockSoon(2500)"); pg.wait_for_timeout(4000)
         evs = [b for b in sent[n0:] if '"kind":"hang"' in b]
         print("      ", [b[-600:] for b in evs][:2])
         ok(len(evs) == 1, "a 2.5 s block: one warning (%d)" % len(evs))
         ev = evs[0] if evs else ""
         ok('"level":"warning"' in ev and '"where":"frame"' in ev and '"route":"home/' in ev and '"build":"' in ev and '"ms":"25' in ev, "kind hang, where frame, the page's name, the build, ms")
-        ok('"filename":"http://localhost:%d/' % PORT in ev or '"filename":"http' in ev, "the long frame's script as its frame")
+        ok('"filename":"http://localhost:%d/__zzblock.js' % PORT in ev and '"function":"zzBlockedTimer"' in ev and 'zzblock.js:zzBlockedTimer' in ev and 'sentry-' not in ev.split('"script":"')[-1][:40],
+           "the long frame's script as its frame: the page's own function in its own file (zzBlockedTimer), not Sentry's timer wrapper")
         n1 = len(sent)
         E("() => { function blockFor(ms){ const t = performance.now(); while (performance.now() - t < ms) {} } setTimeout(() => blockFor(2500), 10); }"); pg.wait_for_timeout(4000)
         ok(not [b for b in sent[n1:] if '"kind":"hang"' in b], "a second block within 10 minutes: nothing more")

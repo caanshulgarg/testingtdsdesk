@@ -4406,10 +4406,10 @@ let RENDER_GEN = 0, IN_RENDER = 0, JOB_MEMO = null;
 // last drawing when the open books, their saves and the client are the same as then (else as memoScope: worked out again)
 let BOOKS_REV = 0, LAST_DRAW = null;
 function drawStamp(){ LAST_DRAW = {gen: RENDER_GEN, books: S.books, rev: BOOKS_REV, co: S.coId}; }
+// (memoKept: whether memoKeep would draw with the last drawing's figures now)
+function memoKept(){ reactScopeEnd(); const d = LAST_DRAW; return !IN_RENDER && !!d && d.gen === RENDER_GEN && d.books === S.books && d.rev === BOOKS_REV && d.co === S.coId; }
 function memoKeep(fn){
-  reactScopeEnd();
-  const d = LAST_DRAW;
-  if (IN_RENDER || !d || d.gen !== RENDER_GEN || d.books !== S.books || d.rev !== BOOKS_REV || d.co !== S.coId) return memoScope(fn);
+  if (!memoKept()) return memoScope(fn);
   IN_RENDER++; try { return fn(); } finally { IN_RENDER--; }
 }
 // next-fix-books-crash (the owner, 25-Oct-2026 23:45 IST, Mac: TDS, GST, MIS "crashing", then "took too long"; no error

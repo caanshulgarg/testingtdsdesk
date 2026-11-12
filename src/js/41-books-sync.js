@@ -29,8 +29,10 @@ const BookSync = {
   // is 10 MB, its audit run 8.5 MB of it)
   work(b, keys){ return JSON.parse(this.workStr(b, keys)); },
   workStr(b, keys){ const w = {}; (keys || this.keys()).forEach(k => { if (b && b[k] !== undefined) w[k] = b[k]; }); return JSON.stringify(w); },
-  // the open client's work part as text (the plain data localWork hands out is JSON.parse of it), else null
-  openWorkStr(cid){ return S.books && S.books.cid === cid && (!S.books.loading || S.books.cached) ? this.workStr(S.books) : null; },
+  // the open client's work part as text, part by part ({key: its JSON}; the plain data localWork hands out is JSON.parse
+  // of each), else null; next-fix-hang-books: so a pass can tell which parts changed (BookItems.pushNow)
+  workParts(b, keys){ const o = {}; (keys || this.keys()).forEach(k => { if (b && b[k] !== undefined){ const t = JSON.stringify(b[k]); if (t !== undefined) o[k] = t; } }); return o; },
+  openWorkParts(cid){ return S.books && S.books.cid === cid && (!S.books.loading || S.books.cached) ? this.workParts(S.books) : null; },
   same(a, b){ return stableStr(a === undefined ? null : a) === stableStr(b === undefined ? null : b); },
   /* ---------- what this browser last agreed with the database ---------- */
   async loadBase(cid){

@@ -241,7 +241,11 @@ const TDSTally = {
     });
     const byKey = {}, byVid = {};
     b.challans.forEach(c => { byKey[this.keyOf(c)] = c; if (c.fromVoucher) (byVid[c.fromVoucher] = byVid[c.fromVoucher] || []).push(c); });
-    const use = TDS.challanUse ? TDS.challanUse() : {};
+    // next-fix-hang-books (FINCOM-APP-STAGING-H): what each challan already pays (every TDS row of the books: 1.7 s on 51,758
+    // made-up entries) is worked out only when a challan made from Tally is here to compare with Tally's figure, and the
+    // TDS rows below only when Tally links a deduction to a payment: the same answers, nothing worked out for books
+    // without them (tests/run_hang_books_cloud.py)
+    const use = tallyCh.some(t => !t.bad && byKey[t.key] && this.made(byKey[t.key])) && TDS.challanUse ? TDS.challanUse() : {};
     tallyCh.forEach(t => {
       if (t.bad){ res.bad.push(t); return; }
       // next-tds-excel: a challan removed by a person (an Excel brought back) is never made again from its Tally payment
@@ -287,9 +291,9 @@ const TDSTally = {
       b.challans.push(c); byKey[t.key] = c; (byVid[t.vid] = byVid[t.vid] || []).push(c); res.challans++;
     });
     // ---- the tags: a deduction Tally links to a payment that is one challan here
-    const rows = {}; TDSCH.rowsAll().forEach(r => { rows[r.id] = r; });
+    const links = this.links(b), rows = {}; if (links.length) TDSCH.rowsAll().forEach(r => { rows[r.id] = r; });
     const want = {};
-    this.links(b).forEach(l => {
+    links.forEach(l => {
       const chs = (byVid[l.vid] || []).filter(c => !c.deleted);
       if (!rows[l.row]) return;
       if (l.why && !l.many){ res.disagree.push({row: l.row, party: rows[l.row].party, date: rows[l.row].date, fincom: b.alloc[l.row] || "", tally: "", why: l.why}); return; }

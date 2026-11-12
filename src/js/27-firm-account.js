@@ -895,7 +895,8 @@ function openSwitcher(){ if (!Object.keys(S.companies).length){ goHome(); S.addi
 // takes it away, its own drawing shows the page without it (nothing is painted in between). tests/run_hang_leave_client.py
 function closeSwitcher(drawn){ const was = !!S.switcher; S.switcher = null; if (was && !drawn) renderSwitcher(); }
 
-async function openCompany(cid){
+// tab: the client's page to open on (saveNewCompany: its Tally card), drawn at once on it
+async function openCompany(cid, tab){
   loadDocq().catch(() => {});
   if (!S.companies[cid]) return;
   closeSwitcher(true);
@@ -905,6 +906,7 @@ async function openCompany(cid){
   if (changed){ S.tab = "dash"; S.filter = "draft"; S.selected = null; S.partySel = null; S.step = null;
     // the periods of the books pages are the client's own (smart moves round 1): chosen again for this client when shown
     S.tdsFy = ""; S.tdsQ = ""; S.tdsView = ""; S.tdsPickForm = ""; S.gstYm = ""; S.gstView = ""; S.gstPart = ""; S.gstSub = ""; S.misRange = null; S.rptFy = ""; }
+  if (tab) S.tab = tab;
   lsSet("tdsdesk:last", cid);
   const rec = recentIds().filter(x => x !== cid); rec.unshift(cid); lsSet("tdsdesk:recent", JSON.stringify(rec.slice(0, 10)));
   if (!D(cid).loaded){
@@ -2066,7 +2068,9 @@ function saveNewCompany(v){
   // round 39: the new client opens on its Tally card (Client setup → Tally). 23-Oct-2026: a Tally company the person
   // picked here (Pick from Tally) is linked at once: it is the person's own choice (tally_company_link, linked_by them);
   // the card then says what is next (open it in Tally, the ledgers, the entries)
-  openCompany(co.id); S.tab = "cotally"; render();
+  // next-fix-hang-books (FINCOM-APP-STAGING-K, 2,134 ms in this click on staging): opened on the card in one drawing; the
+  // client's dashboard was drawn first (the whole page, twice) and never seen (tests/run_hang_add_client.py)
+  openCompany(co.id, "cotally");
   if (tco && typeof tallyLinkClient === "function") tallyLinkClient(tco, co.id).then(ok => { if (!ok) toast(name + " was added; link it to " + tco + " on its Tally card."); });
   return true;
 }
