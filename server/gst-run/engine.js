@@ -33,7 +33,7 @@ import * as E from "../_shared/gst3b.js";
 import { gst3bPrint } from "../_shared/gst3bprint.js";
 
 // the revision of the function around the engine (data.ts, handler.ts): moved by hand with tests/gst_cloud_rev.json
-export const REV = "171.1";
+export const REV = "171.2";
 
 const G = globalThis;
 // what the app's program has around the engine: names.js (put at its head by build.py too)
@@ -219,7 +219,8 @@ export function shares(rows, ctx) {
         const x = E.entryShares(v);
         x.rows.forEach((r) => out.push(Object.assign({ guid: v.id, ym: x.ym, reg: x.reg }, r)));
         // part B: the entry's document (2B matching) and bill-wise allocations (rule 37), one row an entry (gst_itc_doc)
-        if (x.doc || x.bills.length) docs.push(itcRow(v.id, x));
+        // (an entry with no month of six digits, a cancelled one with an odd date: its document is its error, the rest go on)
+        if (x.doc || x.bills.length) { if (/^\d{6}$/.test(x.ym)) docs.push(itcRow(v.id, x)); else errors.push({ guid: v.id, error: "its document could not be kept: month " + (x.ym || "none") }); }
       } catch (e) { errors.push({ guid: v.id, error: String((e && e.message) || e).slice(0, 300) }); }
     });
     return { shares: out, docs, errors, unknown: [...unknown].sort() };
@@ -444,7 +445,8 @@ export function itcMonths(inp, reg, yms) {
 }
 // today's engine on the whole book (rows as for step, its 2B runs too), the months asked as step works them out (o.kept:
 // the 3Bs of earlier months it worked out before, as step's kept), and each month's outward month-level parts (advances,
-// amendments, customers' IMS) up to the last month asked, for the month step (o.out: those worked out before) ->
+// amendments, customers' IMS) up to the last month asked (from o.outFrom), for the month step (o.out: those worked out
+// before) ->
 // {months: {ym: boxes}, out: {ym: {adv, amd, cust}}, books}
 export function engineItc(rows, reg, yms, o) {
   o = o || {};
@@ -457,7 +459,7 @@ export function engineItc(rows, reg, yms, o) {
     const memo = new WeakMap();
     G.perRender = (obj, key, fn) => { let x = memo.get(obj); if (!x) memo.set(obj, x = new Map()); if (x.has(key)) return x.get(key); const v = fn(); x.set(key, v); return v; };
     const out = Object.assign({}, o.out || {}), last = yms.slice().sort().pop() || "";
-    E.GSTR.months().filter((m) => m <= last && !out[m]).forEach((m) => { S.gstYm = m; out[m] = boxes({ adv: E.GSTAdv.month(m, reg).net, amd: E.GSTR.amendDiff(m, reg), cust: typeof E.CustIMS === "object" ? E.CustIMS.month(m, reg) : null }); });
+    E.GSTR.months().filter((m) => m <= last && m >= (o.outFrom || "") && !out[m]).forEach((m) => { S.gstYm = m; out[m] = boxes({ adv: E.GSTAdv.month(m, reg).net, amd: E.GSTR.amendDiff(m, reg), cust: typeof E.CustIMS === "object" ? E.CustIMS.month(m, reg) : null }); });
     const months = {}; r.months.forEach((x) => { months[x.ym] = x.result; });
     return { months, out, books: r.books };
   } finally {

@@ -21,12 +21,19 @@
 --   gst_itc_bill         one row per bill-wise allocation of an entry (GSTF.billRecs): the ledger and the bill's name, nb
 --                        (a purchase bill's New Ref, which rule 37 follows), reg (the entry's registration), the amount
 --                        and day, rec (the record as the engine reads it). RLS on; service role only.
---   gst_itc_month        one row per month and registration: the credit the month carried out (carry) and its 3B as the
---                        month step worked it out (result), on the engine and version they were worked out on. RLS on;
+--   gst_itc_month        one row per month and registration: the credit the month carried out (carry), its 3B as the
+--                        month step worked it out (result) and as today's engine did (ref: the next month's check starts
+--                        from it, not from the whole year again), on the engine and version they were worked out on, kept
+--                        only when every month up to it was fresh. RLS on;
 --                        members read their own firm's rows; written by the service role only.
 --   gst_share_put_itc(book, run, at, shares, seen, errors, docs)   gst_share_put (164) and, once it is done, the entries'
 --                        documents and allocations: each seen entry's rows deleted and the new ones put, in the same
---                        transaction (a refusal of either keeps nothing)
+--                        transaction (a refusal of either keeps nothing; a document that cannot be kept is its entry's
+--                        error, as a share that failed, and the rest are kept)
+--   gst_itc_book(book) / gst_itc_mark(book, run) / gst_itc_unmark(book)   calc_seen's row ('book', 'itc'): every entry
+--                        of the book made due once since this migration (mark: under the book's lock and its lease), so
+--                        each entry's documents are kept whatever was deployed first; unmark when a put of the documents
+--                        was not found (a schema cache that did not know this yet)
 --   gst_itc_inputs(book, reg, engine, version)   what the month step reads for a registration: the book's first and last
 --                        month and its entries' GSTINs (as books() makes them), the registration's month rows (gst_month)
 --                        and each month's status, the documents (that registration's and those naming none), the
@@ -39,11 +46,12 @@
 --                        'gst-itc', the same table as part A's 'gst-share')
 --   gst_itc_ready()      true: gst-run's test that this migration is there
 -- No trigger: the entries' documents follow the sweep of 164 (tally_calc_dirty and calc_seen say what is due). Add-only:
--- three new tables, new functions; nothing of any other migration dropped, deleted or altered (deletes only of its own
--- tables' rows); safe to run twice. Needs migration 164 (gst_share_put, gst_month, calc_parity) and 153
+-- three new tables, new functions; nothing of any other migration dropped or altered (deletes only of its own tables'
+-- rows and of its own marker row in calc_seen; gst_itc_mark makes a book's entries due, as 164's functions do); safe
+-- to run twice. Needs migration 164 (gst_share_put, gst_month, calc_parity) and 153
 -- (gst_calc_version); stops and says so otherwise. A book deleted takes every row of these tables with it (on delete
--- cascade). Run it BEFORE deploying the gst-run that uses it (its new engine sweeps every entry again once, and keeps the
--- documents only where this is there).
+-- cascade). Either order of deploying works: gst-run sweeps a book's entries again once it finds this migration there
+-- and the book not marked (gst_itc_mark).
 -- Tested by tests/run_migration164.py (section 9, pg_stand), tests/run_gst_share.js (the month step on made-up books)
 -- and tests/run_gst_share_deno.ts (gst-run's actions).
 
@@ -95,6 +103,7 @@ create table if not exists public.gst_itc_month (
   version   text not null default '',
   carry     jsonb not null default '{}'::jsonb,
   result    jsonb,
+  ref       jsonb,
   at        timestamptz not null default now(),
   primary key (book_id, ym, reg)
 );
@@ -117,17 +126,23 @@ grant select, insert, update, delete on public.gst_itc_doc, public.gst_itc_bill,
 -- seen entry's documents and allocations made again (an entry with none now, deleted or gone: none kept)
 create or replace function public.gst_share_put_itc(p_book uuid, p_run text, p_at timestamptz, p_shares jsonb, p_seen jsonb, p_errors jsonb, p_docs jsonb)
 returns jsonb language plpgsql volatile security definer set search_path to 'public', 'pg_temp' as $function$
-declare f uuid; seen text[]; r jsonb; n_d int; n_b int; docs jsonb := coalesce(p_docs, '[]'::jsonb);
+declare f uuid; seen text[]; r jsonb; n_d int; n_b int; docs jsonb := coalesce(p_docs, '[]'::jsonb); bad jsonb;
 begin
   if jsonb_typeof(docs) is distinct from 'array' or jsonb_typeof(p_seen) is distinct from 'array' then
     return jsonb_build_object('ok', false, 'error', 'docs and seen are lists');
   end if;
   select coalesce(array_agg(distinct x->>'guid'), '{}') into seen from jsonb_array_elements(p_seen) x where coalesce(x->>'guid', '') <> '';
-  if exists (select 1 from jsonb_array_elements(docs) x where coalesce(x->>'guid', '') = '' or not coalesce((x->>'guid') = any(seen), false)
-                or coalesce(x->>'ym', '') !~ '^\d{6}$' or (x ? 'bills' and jsonb_typeof(x->'bills') is distinct from 'array')) then
-    return jsonb_build_object('ok', false, 'error', 'a document of an entry not seen (or with no GUID or month)');
+  if exists (select 1 from jsonb_array_elements(docs) x where coalesce(x->>'guid', '') = '' or not coalesce((x->>'guid') = any(seen), false)) then
+    return jsonb_build_object('ok', false, 'error', 'a document of an entry not seen (or with no GUID)');
   end if;
-  r := gst_share_put(p_book, p_run, p_at, p_shares, p_seen, p_errors);
+  -- (review of 8ba35788d, L5) a document that cannot be kept (no month of six digits, allocations not a list) is its
+  -- entry's error, as part A keeps an entry whose share failed; the rest of the batch is kept
+  select coalesce(jsonb_agg(jsonb_build_object('guid', x->>'guid', 'error', 'its document could not be kept: month ' || coalesce(x->>'ym', 'none'))), '[]'::jsonb) into bad
+    from jsonb_array_elements(docs) x where coalesce(x->>'ym', '') !~ '^\d{6}$' or (x ? 'bills' and jsonb_typeof(x->'bills') is distinct from 'array');
+  if jsonb_array_length(bad) > 0 then
+    docs := coalesce((select jsonb_agg(x) from jsonb_array_elements(docs) x where coalesce(x->>'ym', '') ~ '^\d{6}$' and not (x ? 'bills' and jsonb_typeof(x->'bills') is distinct from 'array')), '[]'::jsonb);
+  end if;
+  r := gst_share_put(p_book, p_run, p_at, p_shares, p_seen, coalesce(p_errors, '[]'::jsonb) || bad);
   if not coalesce((r->>'ok')::boolean, false) then return r; end if;
   select firm_id into f from tally_books where book_id = p_book;
   delete from gst_itc_doc d where d.book_id = p_book and d.guid = any(seen);
@@ -141,8 +156,39 @@ begin
          coalesce((b.v->>'amt')::numeric, 0), coalesce(b.v->>'date', ''), b.v
     from jsonb_array_elements(docs) x cross join lateral jsonb_array_elements(coalesce(x->'bills', '[]'::jsonb)) with ordinality b(v, ord);
   get diagnostics n_b = row_count;
-  return r || jsonb_build_object('docs', n_d, 'bills', n_b);
+  return r || jsonb_build_object('docs', n_d, 'bills', n_b, 'docErrors', jsonb_array_length(bad));
 end $function$;
+
+-- ---------------------------------------------------------------- the book's entries swept with their documents
+-- (review of 8ba35788d, M4) calc_seen's row ('book', 'itc') says every entry of the book was made due once with this
+-- migration there, so the sweep keeps their documents: gst-run deployed before 171, or an answer of a schema cache that
+-- did not know 171 yet, can never leave a book's documents empty for good. gst_itc_book: is it there; gst_itc_mark (under
+-- the book's lock, while the run holds the lease): every entry due, and the row kept; gst_itc_unmark: the row taken
+-- away (gst-run, when a put of the documents was not found)
+create or replace function public.gst_itc_book(p_book uuid)
+returns boolean language sql stable security definer set search_path to 'public', 'pg_temp' as $function$
+  select exists (select 1 from calc_seen s where s.book_id = p_book and s.calc = 'gst-share' and s.kind = 'book' and s.key = 'itc');
+$function$;
+
+create or replace function public.gst_itc_mark(p_book uuid, p_run text)
+returns jsonb language plpgsql volatile security definer set search_path to 'public', 'pg_temp' as $function$
+declare f uuid; n int;
+begin
+  perform pg_advisory_xact_lock(hashtext(p_book::text));
+  if not gst_share_holds(p_book, p_run) then return jsonb_build_object('ok', false, 'error', 'lease lost'); end if;
+  select firm_id into f from tally_books where book_id = p_book;
+  if f is null then return jsonb_build_object('ok', false, 'error', 'no such book'); end if;
+  update calc_seen s set due = true, due_at = now() where s.book_id = p_book and s.calc = 'gst-share' and s.kind = 'entry' and not s.due;
+  get diagnostics n = row_count;
+  insert into calc_seen (book_id, firm_id, calc, kind, key, stamp, at) values (p_book, f, 'gst-share', 'book', 'itc', 'docs', now())
+  on conflict (book_id, calc, kind, key) do update set stamp = excluded.stamp, at = now();
+  return jsonb_build_object('ok', true, 'due', n);
+end $function$;
+
+create or replace function public.gst_itc_unmark(p_book uuid)
+returns boolean language sql volatile security definer set search_path to 'public', 'pg_temp' as $function$
+  with d as (delete from calc_seen s where s.book_id = p_book and s.calc = 'gst-share' and s.kind = 'book' and s.key = 'itc' returning 1) select count(*) > 0 from d;
+$function$;
 
 -- ---------------------------------------------------------------- the month step's inputs
 create or replace function public.gst_itc_inputs(p_book uuid, p_reg text, p_engine text, p_version text)
@@ -172,18 +218,20 @@ returns jsonb language sql stable security definer set search_path to 'public', 
                      and not coalesce(l.cancelled, false) and not coalesce(l.optional, false)
                    group by x.ledger, to_char(l.day, 'YYYYMM')) q group by q.ledger) z),
     'carry', (select coalesce(jsonb_object_agg(c.ym, c.carry), '{}'::jsonb) from gst_itc_month c
-               where c.book_id = p_book and c.reg = coalesce(p_reg, '') and c.engine = coalesce(p_engine, '') and c.version = coalesce(p_version, '') and coalesce(p_version, '') <> ''));
+               where c.book_id = p_book and c.reg = coalesce(p_reg, '') and c.engine = coalesce(p_engine, '') and c.version = coalesce(p_version, '') and coalesce(p_version, '') <> ''),
+    'refs', (select coalesce(jsonb_object_agg(c.ym, c.ref), '{}'::jsonb) from gst_itc_month c
+               where c.book_id = p_book and c.reg = coalesce(p_reg, '') and c.engine = coalesce(p_engine, '') and c.version = coalesce(p_version, '') and coalesce(p_version, '') <> '' and c.ref is not null));
 $function$;
 
-create or replace function public.gst_itc_month_put(p_book uuid, p_ym text, p_reg text, p_engine text, p_version text, p_carry jsonb, p_result jsonb)
+create or replace function public.gst_itc_month_put(p_book uuid, p_ym text, p_reg text, p_engine text, p_version text, p_carry jsonb, p_result jsonb, p_ref jsonb)
 returns boolean language plpgsql volatile security definer set search_path to 'public', 'pg_temp' as $function$
 declare f uuid;
 begin
   select firm_id into f from tally_books where book_id = p_book;
   if f is null or coalesce(p_ym, '') !~ '^\d{6}$' or coalesce(p_reg, '') !~ '^\d{2}$' or jsonb_typeof(p_carry) is distinct from 'object' then return false; end if;
-  insert into gst_itc_month (book_id, firm_id, ym, reg, engine, version, carry, result, at)
-  values (p_book, f, p_ym, p_reg, coalesce(p_engine, ''), coalesce(p_version, ''), p_carry, p_result, now())
-  on conflict (book_id, ym, reg) do update set engine = excluded.engine, version = excluded.version, carry = excluded.carry, result = excluded.result, at = now();
+  insert into gst_itc_month (book_id, firm_id, ym, reg, engine, version, carry, result, ref, at)
+  values (p_book, f, p_ym, p_reg, coalesce(p_engine, ''), coalesce(p_version, ''), p_carry, p_result, p_ref, now())
+  on conflict (book_id, ym, reg) do update set engine = excluded.engine, version = excluded.version, carry = excluded.carry, result = excluded.result, ref = excluded.ref, at = now();
   return true;
 end $function$;
 
@@ -207,8 +255,14 @@ revoke all on function public.gst_share_put_itc(uuid, text, timestamptz, jsonb, 
 grant execute on function public.gst_share_put_itc(uuid, text, timestamptz, jsonb, jsonb, jsonb, jsonb) to service_role;
 revoke all on function public.gst_itc_inputs(uuid, text, text, text) from public, anon, authenticated;
 grant execute on function public.gst_itc_inputs(uuid, text, text, text) to service_role;
-revoke all on function public.gst_itc_month_put(uuid, text, text, text, text, jsonb, jsonb) from public, anon, authenticated;
-grant execute on function public.gst_itc_month_put(uuid, text, text, text, text, jsonb, jsonb) to service_role;
+revoke all on function public.gst_itc_month_put(uuid, text, text, text, text, jsonb, jsonb, jsonb) from public, anon, authenticated;
+grant execute on function public.gst_itc_month_put(uuid, text, text, text, text, jsonb, jsonb, jsonb) to service_role;
+revoke all on function public.gst_itc_book(uuid) from public, anon, authenticated;
+grant execute on function public.gst_itc_book(uuid) to service_role;
+revoke all on function public.gst_itc_mark(uuid, text) from public, anon, authenticated;
+grant execute on function public.gst_itc_mark(uuid, text) to service_role;
+revoke all on function public.gst_itc_unmark(uuid) from public, anon, authenticated;
+grant execute on function public.gst_itc_unmark(uuid) to service_role;
 revoke all on function public.gst_itc_parity_put(uuid, text, text, text, boolean, numeric, jsonb, jsonb) from public, anon, authenticated;
 grant execute on function public.gst_itc_parity_put(uuid, text, text, text, boolean, numeric, jsonb, jsonb) to service_role;
 revoke all on function public.gst_itc_ready() from public, anon, authenticated;

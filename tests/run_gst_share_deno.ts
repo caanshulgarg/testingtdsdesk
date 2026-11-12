@@ -61,10 +61,10 @@ const itcInputs = (reg: string, engine: string, version: string) => {
   const parties = new Set([...nb].map((k) => k.split("\u0001")[0])), on = new Map(live.filter((h: any) => !h.cancelled && !h.optional).map((h: any) => [h.guid, h])), mv: any = {};
   W.lines.forEach((l: any) => { const h: any = on.get(l.guid); if (!h || !parties.has(l.ledger)) return; const ym = String(h.day).replace(/-/g, "").slice(0, 6), m = mv[l.ledger] = mv[l.ledger] || {}; m[ym] = (m[ym] || 0) + Math.round(Number(l.amount) * 100); });
   const moves: any = {}; Object.keys(mv).forEach((l) => { moves[l] = Object.keys(mv[l]).sort().map((m) => [m, mv[l][m] / 100]); });
-  const carry: any = {}; T.itcMonth.forEach((x: any, k: string) => { const [ym, g] = k.split("|"); if (g === reg && x.engine === engine && x.version === version && version) carry[ym] = x.carry; });
+  const carry: any = {}, refs: any = {}; T.itcMonth.forEach((x: any, k: string) => { const [ym, g] = k.split("|"); if (g === reg && x.engine === engine && x.version === version && version) { carry[ym] = x.carry; if (x.ref) refs[ym] = x.ref; } });
   T.itcInputsN = (T.itcInputsN || 0) + 1;
   return { first: dated[0] || null, last: dated[dated.length - 1] || null, gstins: Array.from(new Set(live.filter((h: any) => h.cmp_gstin).map((h: any) => String(h.cmp_gstin).toUpperCase()))).sort(),
-    months, status, docs, bills, moves, carry };
+    months, status, docs, bills, moves, carry, refs };
 };
 const leaseOk = (a: any) => T.lease && T.lease.run === a.p_run && T.lease.until > Date.now();
 const RPC: Record<string, (a: any) => any> = {
@@ -95,17 +95,21 @@ const RPC: Record<string, (a: any) => any> = {
   gst_calc_version: () => "v-itc-" + (T.itcVer || 1),
   gst_share_put_itc: (a) => { if (!leaseOk(a)) return { ok: false, error: "lease lost" }; const seen = new Set(a.p_seen.map((x: any) => x.guid));
     if ((a.p_docs || []).some((d: any) => !seen.has(d.guid))) return { ok: false, error: "a document of an entry not seen" };
-    const r = RPC.gst_share_put(a); if (!r.ok) return r; T.docPuts = (T.docPuts || 0) + 1;
-    seen.forEach((g: any) => T.docs.delete(g)); (a.p_docs || []).forEach((d: any) => T.docs.set(d.guid, d)); return Object.assign(r, { docs: (a.p_docs || []).length }); },
+    const good = (a.p_docs || []).filter((d: any) => /^\d{6}$/.test(String(d.ym || ""))), bad = (a.p_docs || []).filter((d: any) => !good.includes(d)).map((d: any) => ({ guid: d.guid, error: "its document could not be kept" }));
+    const r = RPC.gst_share_put(Object.assign({}, a, { p_errors: (a.p_errors || []).concat(bad) })); if (!r.ok) return r; T.docPuts = (T.docPuts || 0) + 1;
+    seen.forEach((g: any) => T.docs.delete(g)); good.forEach((d: any) => T.docs.set(d.guid, d)); return Object.assign(r, { docs: good.length, docErrors: bad.length }); },
+  gst_itc_book: () => !!T.itcMarked,
+  gst_itc_mark: (a) => { if (!leaseOk(a)) return { ok: false, error: "lease lost" }; T.itcMarks = (T.itcMarks || 0) + 1; W.heads.forEach((h: any) => T.due.add(h.guid)); T.itcMarked = true; return { ok: true, due: T.due.size }; },
+  gst_itc_unmark: () => { const was = !!T.itcMarked; T.itcMarked = false; T.unmarks = (T.unmarks || 0) + 1; return was; },
   gst_itc_inputs: (a) => itcInputs(a.p_reg, a.p_engine, a.p_version),
-  gst_itc_month_put: (a) => { T.itcMonth.set(a.p_ym + "|" + a.p_reg, { engine: a.p_engine, version: a.p_version, carry: a.p_carry, result: a.p_result }); return true; },
+  gst_itc_month_put: (a) => { T.itcMonth.set(a.p_ym + "|" + a.p_reg, { engine: a.p_engine, version: a.p_version, carry: a.p_carry, result: a.p_result, ref: a.p_ref }); return true; },
   gst_itc_parity_put: (a) => { T.itcParity.push(a); return T.itcParity.length; },
   // migration 170: the engine gst-run runs (one row; true when it moved)
   gst_share_engine_put: (a) => { T.enginePuts = (T.enginePuts || 0) + 1; const moved = T.engine !== a.p_engine || T.engineRev !== a.p_rev; T.engine = a.p_engine; T.engineRev = a.p_rev; return moved; },
 };
 const REST: [RegExp, () => any][] = [
   // calc_parity: the months already checked tonight (T.done; empty unless a test sets it)
-  [/^\/rest\/v1\/calc_parity\?/, () => (T.done || [])],
+  [/^\/rest\/v1\/calc_parity\?/, () => /calc=eq\.gst-itc/.test(T.lastUrl) ? T.itcParity.filter((x: any) => x.p_ok !== null && x.p_engine === ENGINE).map((x: any) => ({ ym: x.p_ym, reg: x.p_reg })) : (T.done || [])],
   [/^\/rest\/v1\/tally_books\?/, () => [book]],
   [/^\/rest\/v1\/clients\?select=id,data&/, () => { T.lastCo = true; return [{ id: CLIENT, data: W.co }]; }],
   [/^\/rest\/v1\/clients\?/, () => [{ id: CLIENT, data: W.co, deleted: false }]],
@@ -232,15 +236,15 @@ console.log("== part B: the input tax credit side (migration 171)");
 {
   const B = JSON.parse(Deno.readTextFileSync(new URL("gst-itc-rows.json", OUT)));
   Object.assign(W, B); Object.assign(book, B.book, { firm_id: FIRM });
-  Object.assign(T, { ctx: null, seen: new Map(), due: new Set(W.heads.map((x: any) => x.guid)), shares: new Map(), docs: new Map(), itcMonth: new Map(), itcParity: [], parity: [], done: [], lease: null, backoff: null, ctxBump: "-itc", docPuts: 0 });
+  Object.assign(T, { ctx: null, seen: new Map(), due: new Set(W.heads.map((x: any) => x.guid)), shares: new Map(), docs: new Map(), itcMonth: new Map(), itcParity: [], parity: [], done: [], lease: null, backoff: null, ctxBump: "-itc", docPuts: 0, itcMarked: false, itcMarks: 0 });
   const BK = B.book.book_id;
   r = await call({ action: "share_sweep", book_id: BK });
   ok(r.j.ok && r.j.ctx === true && r.j.all === true, "the first run makes the part B client's context");
   const sw2: any[] = [];
   for (let k = 0; k < 20; k++) { r = await call({ action: "share_sweep", book_id: BK, limit: 60 }); sw2.push(r.j); if (!r.j.ok || !r.j.more) break; }
   const withDoc = [...T.docs.values()].filter((d: any) => d.doc).length;
-  ok(sw2.every((x) => x.ok && x.itc === true) && T.due.size === 0 && withDoc > 40 && T.docPuts === sw2.length && [...T.docs.values()].some((d: any) => d.bills.some((b: any) => b.nb)),
-    "the sweep keeps each entry's document and allocations with its shares (gst_share_put_itc, " + sw2.length + " runs): " + withDoc + " documents");
+  ok(sw2[0].itcMark === true && T.itcMarks === 1 && sw2.slice(1).every((x) => x.ok && x.itc === true) && T.due.size === 0 && withDoc > 40 && T.docPuts === sw2.length - 1 && [...T.docs.values()].some((d: any) => d.bills.some((b: any) => b.nb)),
+    "the sweep marks the book once (every entry due), then keeps each entry's document and allocations with its shares (gst_share_put_itc, " + (sw2.length - 1) + " runs): " + withDoc + " documents");
   const n0 = T.itcParity.length;
   let itcSame = 0;
   for (const ym of W.months) { const p = await call({ action: "share_parity", book_id: BK, ym, reg: "07" }); if (p.j.ok && p.j.same && p.j.itc && p.j.itc.same && p.j.itc.checked === 1) itcSame++; else console.log("   ", ym, JSON.stringify(p.j).slice(0, 600)); }
@@ -255,19 +259,58 @@ console.log("== part B: the input tax credit side (migration 171)");
   T.itcVer = 2;
   const p2 = await call({ action: "share_parity", book_id: BK, ym: "202512", reg: "07" }), last = T.itcParity[T.itcParity.length - 1];
   ok(p2.j.itc && p2.j.itc.same && last.p_notes.carryKept === 0, "on a new version nothing kept is read (the months before December worked out from the sums): the same");
-  // the nightly run: every month, both checks
-  const n1 = T.itcParity.length, nA = T.parity.length;
-  r = await call({ action: "share_parity", book_id: BK });
-  ok(r.j.ok && r.j.same && r.j.itc && r.j.itc.same && r.j.itc.checked === W.months.length && T.parity.length - nA === W.months.length * 2 && T.itcParity.length - n1 === W.months.length,
-    "the nightly share_parity: part A for every month (07 and all) and part B for each registration's month, the engine's (" + (r.j.itc && r.j.itc.checked) + ")");
-  // without migration 171: the shares alone, part A's parity alone
-  const keep = { put: RPC.gst_share_put_itc, ready: RPC.gst_itc_ready };
-  delete RPC.gst_share_put_itc; delete RPC.gst_itc_ready;
-  const e3 = W.heads.find((x: any) => x.vtype === "Purchase" && !x.deleted_at && T.docs.has(x.guid)); e3.alter_id += 3;
+  // the nightly runs, from nothing kept checked tonight: part A for every month at once, part B a month a run, in order,
+  // each from what the run before kept (today's engine's 3B and the carried credit of the month before), then nothing
+  T.itcParity = []; T.itcMonth = new Map(); T.done = [];
+  const nA = T.parity.length, nightly: any[] = [];
+  for (let k = 0; k < W.months.length + 3; k++) { r = await call({ action: "share_parity", book_id: BK }); nightly.push(r.j); if (!r.j.itc || !r.j.itc.checked) break; T.done = W.months.flatMap((m: string) => [{ ym: m, reg: "" }, { ym: m, reg: "07" }]); }
+  const ck = T.itcParity.filter((x: any) => x.p_ok !== null);
+  ok(nightly[0].same && T.parity.length - nA === W.months.length * 2 && nightly.slice(0, -1).every((x) => x.itc.checked === 1 && x.itc.same) && ck.length === W.months.length
+     && ck.map((x: any) => x.p_ym).join() === W.months.join() && ck.slice(1).every((x: any) => x.p_notes.refsKept > 0) && !(nightly.at(-1).itc || {}).checked,
+    "the nightly share_parity: part A every month (07 and all); part B one month a run, in order, each from the month before kept (" + ck.length + " runs), then nothing left");
+  // a run over its time, or a book with more documents than a run reads: part B kept as not checked, nothing worked out
+  const hb = (o: any) => handler({ env: (k) => ({ SUPABASE_URL: "http://fake.local", SUPABASE_SERVICE_ROLE_KEY: SERVICE, SUPABASE_ANON_KEY: "anon" } as any)[k], fetch: fake as any, ...o });
+  const callH = async (hh: any, body: any) => { const x = await hh(new Request("http://fn.local/gst-run", { method: "POST", headers: { Authorization: "Bearer " + SERVICE, "Content-Type": "application/json" }, body: JSON.stringify(body) })); return await x.json(); };
+  const mBefore = T.itcMonth.size, pBefore = T.itcParity.length;
+  const s1 = await callH(hb({ total: 1 }), { action: "share_parity", book_id: BK, ym: "202512", reg: "07" });
+  const s2 = await callH(hb({ itcDocs: 5 }), { action: "share_parity", book_id: BK, ym: "202512", reg: "07" });
+  const sk = T.itcParity.slice(pBefore);
+  ok(!(s1.itc && s1.itc.checked) && /run's/.test(String(s1.skipped || (s1.itc && s1.itc.skipped))) && /run's/.test(sk[0].p_notes.skipped) && s2.itc && s2.itc.checked === 0 && sk.length === 2 && sk.every((x: any) => x.p_ok === null && x.p_notes.skipped) && /documents/.test(sk[1].p_notes.skipped) && T.itcMonth.size === mBefore,
+    "part B over the run's time, or with more documents than a run reads: kept as not checked (" + sk.map((x: any) => x.p_notes.skipped.slice(0, 40)).join("; ") + "), nothing worked out");
+  // an entry not worked out yet (its month stale): checked, but nothing kept for the months after to start from
+  T.due.add(W.heads[0].guid); const kBefore = JSON.stringify([...T.itcMonth.entries()]);
+  const st = await call({ action: "share_parity", book_id: BK, ym: "202601", reg: "07" }), lastSt = T.itcParity[T.itcParity.length - 1];
+  ok(st.j.itc.checked === 1 && lastSt.p_notes.stale.length > 0 && lastSt.p_notes.kept === false && JSON.stringify([...T.itcMonth.entries()]) === kBefore, "a month checked while an entry is not worked out yet: its carried credit not kept (gst_itc_month as it was)");
+  T.due.delete(W.heads[0].guid);
+  // a document that cannot be kept (a month not of six digits): that entry's error, the rest of the batch kept
+  {
+    const e4 = W.heads.find((x: any) => x.vtype === "Purchase" && !x.deleted_at && T.docs.has(x.guid)), was = e4.day; e4.alter_id += 2; e4.cancelled = true; e4.vno = e4.vno || "P/odd";
+    T.errors = [];
+    const real = RPC.gst_share_rows; RPC.gst_share_rows = (a: any) => { const p = real(a); p.heads.forEach((h: any) => { if (h[0] === e4.guid) h[1] = null; }); return p; };
+    r = await call({ action: "share_sweep", book_id: BK });
+    RPC.gst_share_rows = real; e4.cancelled = false; e4.alter_id += 1; e4.day = was;
+    ok(r.j.ok && r.j.entries >= 1 && T.errors.some((x: any) => x.guid === e4.guid && /document/.test(x.error)), "a cancelled entry with an odd date: its document is its error, the batch kept");
+    await call({ action: "share_sweep", book_id: BK });
+  }
+  // deployed before migration 171: the shares alone, part A's parity alone; once 171 is there, every entry swept again
+  // with its document; and a put of the documents not found after the mark (a stale schema cache): the mark taken away
+  const keep = { put: RPC.gst_share_put_itc, ready: RPC.gst_itc_ready, book: RPC.gst_itc_book, mark: RPC.gst_itc_mark, unmark: RPC.gst_itc_unmark };
+  delete RPC.gst_share_put_itc; delete RPC.gst_itc_ready; delete RPC.gst_itc_book; delete RPC.gst_itc_mark; delete RPC.gst_itc_unmark;
+  T.docs = new Map(); T.itcMarked = false;
+  const e3 = W.heads.find((x: any) => x.vtype === "Purchase" && !x.deleted_at && T.shares.has(x.guid)); e3.alter_id += 3;
   r = await call({ action: "share_sweep", book_id: BK });
   const p3 = await call({ action: "share_parity", book_id: BK, ym: "202504", reg: "07" });
-  ok(r.j.ok && r.j.itc === false && r.j.entries === 1 && p3.j.ok && p3.j.same && p3.j.itc === null, "without migration 171: the sweep keeps the shares alone (itc false), the parity checks part A alone");
-  Object.assign(RPC, { gst_share_put_itc: keep.put, gst_itc_ready: keep.ready });
+  ok(r.j.ok && r.j.itc === false && r.j.entries === 1 && p3.j.ok && p3.j.same && p3.j.itc === null && T.docs.size === 0, "without migration 171: the sweep keeps the shares alone (itc false), the parity checks part A alone");
+  Object.assign(RPC, { gst_share_put_itc: keep.put, gst_itc_ready: keep.ready, gst_itc_book: keep.book, gst_itc_mark: keep.mark, gst_itc_unmark: keep.unmark });
+  const sw3: any[] = [];
+  for (let k = 0; k < 20; k++) { r = await call({ action: "share_sweep", book_id: BK, limit: 1000 }); sw3.push(r.j); if (!r.j.ok || !r.j.more) break; }
+  ok(sw3[0].itcMark === true && T.due.size === 0 && [...T.docs.values()].filter((d: any) => d.doc).length === withDoc, "171 there afterwards: the book marked, every entry swept again, every document kept (" + T.docs.size + ")");
+  delete RPC.gst_share_put_itc; e3.alter_id += 1;
+  r = await call({ action: "share_sweep", book_id: BK });
+  ok(r.j.ok && r.j.itc === false && T.itcMarked === false, "the put of the documents not found though the book was marked (a stale schema cache): the shares kept, the mark taken away");
+  RPC.gst_share_put_itc = keep.put;
+  r = await call({ action: "share_sweep", book_id: BK });
+  ok(r.j.itcMark === true && T.itcMarked === true, "and the next run marks it again (every entry due once more)");
 }
 console.log(fails ? fails + " FAILED" : "all ok");
 Deno.exit(fails ? 1 : 0);

@@ -430,8 +430,8 @@ try:
     ok(re.findall(r"create table if not exists public\.(\w+)", c71) == N71 and all(("alter table public.%s enable row level security" % t) in c71 for t in N71)
        and all(re.search(r"create table if not exists public\.%s \([^;]*references public\.tally_books \(book_id\) on delete cascade" % t, c71, re.S) for t in N71), "171: three new tables, RLS on, each goes with its book")
     ok(not re.search(r"\b(drop|truncate)\b", c71) and not re.search(r"alter\s+table\s+(?!public\.(%s)\s)" % "|".join(N71), c71) and "create trigger" not in c71
-       and all(d in N71 for d in re.findall(r"delete from (\w+)", c71)), "171: add-only: nothing dropped, no trigger, only its own tables altered and deleted from")
-    F71 = {"gst_share_put_itc": "(uuid, text, timestamptz, jsonb, jsonb, jsonb, jsonb)", "gst_itc_inputs": "(uuid, text, text, text)", "gst_itc_month_put": "(uuid, text, text, text, text, jsonb, jsonb)",
+       and all(d in N71 or (d == "calc_seen" and "s.key = 'itc'" in c71) for d in re.findall(r"delete from (\w+)", c71)), "171: add-only: nothing dropped, no trigger, only its own tables altered and deleted from (and its own marker row)")
+    F71 = {"gst_share_put_itc": "(uuid, text, timestamptz, jsonb, jsonb, jsonb, jsonb)", "gst_itc_inputs": "(uuid, text, text, text)", "gst_itc_month_put": "(uuid, text, text, text, text, jsonb, jsonb, jsonb)", "gst_itc_book": "(uuid)", "gst_itc_mark": "(uuid, text)", "gst_itc_unmark": "(uuid)",
            "gst_itc_parity_put": "(uuid, text, text, text, boolean, numeric, jsonb, jsonb)", "gst_itc_ready": "()"}
     ok(sorted(set(re.findall(r"create or replace function public\.(\w+)\(", c71))) == sorted(F71) and all(("revoke all on function public.%s%s from public, anon, authenticated;" % (f, s)) in t171
        and ("grant execute on function public.%s%s to service_role;" % (f, s)) in t171 for f, s in F71.items()), "171: its own functions only, each the service role's")
@@ -454,9 +454,31 @@ try:
     took = set(p["guids"])
     bad = putI(p, [], [dict(P9["docs"][0], guid="not-seen")])
     ok(not bad["ok"] and db.one("select count(*) from gst_share where book_id = '%s'" % B9) == "0", "a document of an entry not seen: refused, nothing kept")
-    r = putI(p, [s for s in P9["shares"] if s["guid"] in took], [d for d in P9["docs"] if d["guid"] in took])
+    # (review L5) a document that cannot be kept (no month of six digits): its entry's error, the rest of the batch kept
+    odd = next(d for d in P9["docs"] if d["doc"] and d["guid"] in took)
+    r = putI(p, [s for s in P9["shares"] if s["guid"] in took], [dict(d, ym="2025") if d is odd else d for d in P9["docs"] if d["guid"] in took])
     ndoc = sum(1 for d in P9["docs"] if d["doc"]); nbill = sum(len(d["bills"]) for d in P9["docs"])
-    ok(r["ok"] and r["docs"] == ndoc and r["bills"] == nbill and not p["more"], "gst_share_put_itc: the shares and, in the same call, %d documents and %d allocations" % (ndoc, nbill))
+    ok(r["ok"] and r["docErrors"] == 1 and r["docs"] == ndoc - 1 and db.one("select status || ' ' || coalesce(error, '') from calc_seen where book_id = '%s' and kind = 'entry' and key = %s" % (B9, q(odd["guid"]))).startswith("error its document could not be kept")
+       and db.one("select count(*) from gst_itc_doc where book_id = '%s' and guid = %s" % (B9, q(odd["guid"]))) == "0", "a document with no month of six digits: its entry kept as an error (as part A's), the other %d documents kept" % (ndoc - 1))
+    # (an entry kept as an error is not picked again until it changes, as part A's)
+    ok(json.loads(db.one("select gst_share_pick('%s', 5000)::text" % B9))["guids"] == [], "the entry in error is not picked again unchanged")
+    db.sql("update tally_vouchers set alter_id = alter_id + 1 where book_id = '%s' and guid = %s" % (B9, q(odd["guid"])))
+    p = json.loads(db.one("select gst_share_pick('%s', 5000)::text" % B9)); took = set(p["guids"])
+    r = putI(p, [s for s in P9["shares"] if s["guid"] in took], [d for d in P9["docs"] if d["guid"] in took])
+    ok(r["ok"] and odd["guid"] in took and db.one("select count(*) from gst_itc_doc where book_id = '%s'" % B9) == str(ndoc) and db.one("select count(*) from gst_itc_bill where book_id = '%s'" % B9) == str(nbill),
+       "every entry put: the shares and, in the same call, %d documents and %d allocations" % (ndoc, nbill))
+    # (review M4) the book marked once: every entry due, so a gst-run deployed before 171 still gets every document kept
+    ok(db.one("select gst_itc_book('%s')" % B9) == "f", "a book swept before: not marked")
+    mk = json.loads(db.one("select gst_itc_mark('%s', %s)::text" % (B9, q(R9))))
+    nent = db.one("select count(*) from calc_seen where book_id = '%s' and calc = 'gst-share' and kind = 'entry'" % B9)
+    ok(mk["ok"] and str(mk["due"]) == nent and db.one("select count(*) from calc_seen where book_id = '%s' and kind = 'entry' and due" % B9) == nent and db.one("select gst_itc_book('%s')" % B9) == "t",
+       "gst_itc_mark: every entry of the book due (%s), the book marked" % nent)
+    ok(not json.loads(db.one("select gst_itc_mark('%s', 'other-run')::text" % B9))["ok"], "not by a run without the lease")
+    p = json.loads(db.one("select gst_share_pick('%s', 5000)::text" % B9)); took = set(p["guids"])
+    ok(len(took) == int(nent) - sum(1 for h in P9["heads"] if h.get("deleted_at")) or len(took) >= len([g for g in set(x["guid"] for x in P9["docs"])]), "the next pick takes every entry again (%d)" % len(took))
+    r = putI(p, [s for s in P9["shares"] if s["guid"] in took], [d for d in P9["docs"] if d["guid"] in took])
+    ok(r["ok"] and db.one("select count(*) from gst_itc_doc where book_id = '%s'" % B9) == str(ndoc), "and keeps their documents")
+    ok(db.one("select gst_itc_unmark('%s')" % B9) == "t" and db.one("select gst_itc_book('%s')" % B9) == "f" and db.one("select gst_itc_unmark('%s')" % B9) == "f", "gst_itc_unmark takes the mark away (once)")
     got = json.loads(db.one("select gst_itc_inputs('%s', '07', 'e-171', '')::text" % B9)); want = P9["inputs"]
     fig = lambda rows: sorted(json.dumps([r["reg"], r["sec"], r["k1"], r["k2"], r["k3"], r["n"]] + ["%.2f" % float(r[f]) for f in ("taxable", "igst", "cgst", "sgst", "cess", "qty")]) for r in rows)
     ok(sorted(got["months"]) == sorted(want["months"]) and all(fig(got["months"][m]) == fig(want["months"][m]) for m in want["months"]), "gst_itc_inputs: the registration's month rows those the month step was checked on (%d months)" % len(want["months"]))
@@ -467,10 +489,12 @@ try:
     mv = lambda m: {k: [[x[0], round(float(x[1]), 2)] for x in v] for k, v in m.items()}
     ok(mv(got["moves"]) == mv(want["moves"]) and len(got["moves"]) > 3, "those suppliers' movement by month, from the lines (%d suppliers; deleted, cancelled and optional entries left out)" % len(got["moves"]))
     ok(got["carry"] == {}, "no credit kept yet")
-    ok(db.one("select gst_itc_month_put('%s', '202504', '07', 'e-171', 'v1', '{\"igst\": 10, \"cgst\": 0, \"sgst\": 0, \"cess\": 0}'::jsonb, '{}'::jsonb)" % B9) == "t"
-       and db.one("select gst_itc_month_put('%s', '202504', 'x', 'e-171', 'v1', '{}'::jsonb, null)" % B9) == "f", "gst_itc_month_put keeps a month's carried credit (not for a registration that is none)")
+    ok(db.one("select gst_itc_month_put('%s', '202504', '07', 'e-171', 'v1', '{\"igst\": 10, \"cgst\": 0, \"sgst\": 0, \"cess\": 0}'::jsonb, '{}'::jsonb, '{\"pay\": {}}'::jsonb)" % B9) == "t"
+       and db.one("select gst_itc_month_put('%s', '202504', 'x', 'e-171', 'v1', '{}'::jsonb, null, null)" % B9) == "f", "gst_itc_month_put keeps a month's carried credit and today's engine's 3B (not for a registration that is none)")
     car = lambda e, v: json.loads(db.one("select (gst_itc_inputs('%s', '07', %s, %s)->'carry')::text" % (B9, q(e), q(v))))
-    ok(car("e-171", "v1") == {"202504": {"igst": 10, "cgst": 0, "sgst": 0, "cess": 0}} and car("e-171", "v2") == {} and car("e-other", "v1") == {}, "read back on its engine and version only")
+    ref = lambda e, v: json.loads(db.one("select (gst_itc_inputs('%s', '07', %s, %s)->'refs')::text" % (B9, q(e), q(v))))
+    ok(car("e-171", "v1") == {"202504": {"igst": 10, "cgst": 0, "sgst": 0, "cess": 0}} and ref("e-171", "v1") == {"202504": {"pay": {}}} and car("e-171", "v2") == {} and ref("e-171", "v2") == {} and car("e-other", "v1") == {},
+       "read back (the carried credit and today's engine's 3B) on its engine and version only")
     ok(db.one("select gst_itc_parity_put('%s', '202504', '07', 'e-171', true, 0, '[]'::jsonb, '{}'::jsonb) is not null" % B9) == "t"
        and db.one("select count(*) from calc_parity where book_id = '%s' and calc = 'gst-itc'" % B9) == "1", "gst_itc_parity_put keeps a check as calc 'gst-itc'")
     # an entry altered: its documents made again with its shares (none now: gone); a late put of a run that lost its lease refused

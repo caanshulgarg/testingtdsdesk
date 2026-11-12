@@ -370,6 +370,22 @@ const clone = (o) => JSON.parse(JSON.stringify(o));
   // for tests/run_gst_share_deno.ts (part B): the part B client's rows as they stand
   fs.writeFileSync(path.join(OUT, "gst-itc-rows.json"), JSON.stringify({book: R5.book, co: R5.co, heads: R5.heads, lines: R5.lines, bills: R5.bills, ledgers: R5.ledgers, groups: R5.groups, items: R5.items, sales: R5.sales, runs: R5.runs, months: monthsOf(R5)}));
 
+  console.log("== 6. book-sized lists never spread as call arguments (review of 8ba35788d, H1)");
+  {
+    // a function-level check, not a book: 150,000 light entries (more than a call's arguments may be) through rule 37's
+    // bills and owing, as the browser runs them (no shareSrc)
+    const was = globalThis.S, wasCO = globalThis.CO, n = 150000, vs = new Array(n);
+    for (let i = 0; i < n; i++) vs[i] = {id: "light-" + i, date: "20250401", type: "Journal", ent: []};
+    vs[0] = {id: "light-bill", date: "20250401", type: "Purchase", refDate: "20250401", cmp: "07AAKCS4821Q1ZW", ent: [{l: "Made-up Supplier", a: 1180, b: [["LB-1", "New Ref", 1180]]}, {l: "Purchases", a: -1000}, {l: "Input IGST", a: -180}]};
+    globalThis.S = {books: {vouchers: vs, map: {"Input IGST": {kind: "gst", tax: "IGST", side: "input", reg: "07"}}}, coId: "light", companies: {light: {id: "light"}}, sales: {list: []}};
+    globalThis.CO = () => globalThis.S.companies.light;
+    E.GSTF._bills = null; E.GSTF._owe = null;
+    let err = null, list = [];
+    try { list = E.GSTF.bills("07"); E.GSTF.owing("07")("Made-up Supplier", "202504"); } catch (e){ err = e; }
+    E.GSTF._bills = null; E.GSTF._owe = null;
+    if (was === undefined) delete globalThis.S; else globalThis.S = was; if (wasCO === undefined) delete globalThis.CO; else globalThis.CO = wasCO;
+    ok(!err && list.length === 1 && list[0].ref === "LB-1", "rule 37's bills on " + n.toLocaleString("en-IN") + " entries: no call stack overflow, the one bill found" + (err ? " - " + String(err.message || err).slice(0, 120) : ""));
+  }
   // for tests/run_migration164.py: the shares and the month sums they give
   const months = {};
   monthsOf(rows).forEach((ym) => { months[ym] = month(st, ym); });
