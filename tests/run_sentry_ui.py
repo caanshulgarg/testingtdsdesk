@@ -96,6 +96,13 @@ with sync_playwright() as p:
     E("() => { S.view = 'home'; S.homeTab = 'tally'; render(); }"); pg.wait_for_timeout(1500)
     E(FORCE, [texts, "tally"]); pg.wait_for_timeout(600)
     E("(t) => window.__fincomReport(new Error(t), 'TallyHome')", texts[8])
+    # next-fix-hang-books: the timers and animation frames are not Sentry's wrappers (Long Animation Frames then names the
+    # page's own function, not "sentry-*.js:r"); an error thrown in one still reaches Sentry with its stack (the page's
+    # error handler, onerror)
+    wrapped = E("() => [setTimeout, setInterval, requestAnimationFrame].map(f => !!(f && f.__sentry_original__))")
+    E("""() => { setTimeout(function zzTimerThrow(){ throw new Error('timer one'); }, 0);
+      requestAnimationFrame(function zzFrameThrow(){ throw new Error('frame two'); });
+      const i = setInterval(function zzIntervalThrow(){ clearInterval(i); throw new Error('interval three'); }, 10); }""")
     pg.wait_for_timeout(3000)
     ctx.close()
 
@@ -139,6 +146,14 @@ with sync_playwright() as p:
     frames = [f for e in events for v in (e.get("exception") or {}).get("values", []) for f in (v.get("stacktrace") or {}).get("frames", [])]
     ok(frames and all(set(f) <= {"filename", "function", "module", "lineno", "colno", "in_app"} for f in frames), "stack frames: file, function, line, column (%d frames)" % len(frames))
     ok(any("Cannot" in json.dumps(e) or "Error" in json.dumps(e) for e in events), "the error's type is kept")
+    ok(wrapped == [False, False, False], "setTimeout, setInterval and requestAnimationFrame are the browser's own, not wrapped by Sentry (%s)" % wrapped)
+    # (the scrubber takes the words out of the message: found by the function in its stack)
+    for fn in ("zzTimerThrow", "zzFrameThrow", "zzIntervalThrow"):
+        hit = [v for e in events for v in (e.get("exception") or {}).get("values", []) if any(f.get("function") == fn for f in (v.get("stacktrace") or {}).get("frames", []))]
+        fr = [f for v in hit for f in (v.get("stacktrace") or {}).get("frames", [])]
+        mech = sorted(set((v.get("mechanism") or {}).get("type", "") for v in hit))
+        ok(len(hit) == 1 and mech and all("onerror" in m for m in mech),
+           "an error thrown in %s reaches Sentry once, with its stack (%s in %d frames), by the page's error handler (%s)" % (fn, fn, len(fr), mech))
 
     # ---- staging only: the same page on this host without the test's force sends nothing; nor with the browser's switch off
     for force, off, what in ((False, False, "another host than staging.fincom.live (no force)"), (True, True, "the browser's switch off (localStorage fincom.sentry = off)")):

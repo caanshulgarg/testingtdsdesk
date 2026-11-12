@@ -634,7 +634,12 @@ function viewTallyHome(){ return '<div data-react="TallyHome"></div>'; }
 
 // the top bar is drawn by React (app/src/TopBar.jsx); a change that touches only it redraws React alone
 // books-speed: the top bar's news is drawn with the figures of the last drawing when the books did not change (memoKeep)
-function renderTop(){ if (window.FinComReact) FinComReact.redraw({keep: true}); }
+// next-fix-hang-books (FINCOM-APP-STAGING-H): the top bar's news right after the books changed (Saving… after a save, a
+// background toast such as "Audit ran on its own") drew the whole page with every figure worked out again (GST › Year's
+// 12 months, the TDS rows: 2.1 s of 5 at full speed on 51,758 made-up entries), and the drawing that follows did it once
+// more. Then it is drawn with the next drawing (soonRender, at the next frame; a drawing meanwhile takes it along); with
+// the books as at the last drawing, at once as before (tests/run_hang_books_cloud.py)
+function renderTop(){ if (!window.FinComReact) return; if (IN_RENDER || memoKept() || typeof soonRender !== "function") FinComReact.redraw({keep: true}); else soonRender({quiet: true}); }
 
 /* ---------- Home: client list ---------- */
 /* ---------- Home: unsorted uploads ---------- */

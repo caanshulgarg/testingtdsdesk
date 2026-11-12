@@ -54,7 +54,11 @@ export function start() {
     sendClientReports: false,
     defaultIntegrations: false,
     integrations: [
-      functionToStringIntegration(), browserApiErrorsIntegration(), globalHandlersIntegration(), linkedErrorsIntegration(), dedupeIntegration(),
+      // next-fix-hang-books (FINCOM-APP-STAGING-H: ~10 s in a timer, the script named "sentry-*.js:r", Sentry's own wrapper):
+      // the timers and animation frames are left unwrapped, so Long Animation Frames names the page's own function. An
+      // error thrown in one still reaches Sentry, with its stack, through the page's error handlers (globalHandlers:
+      // onerror, unhandledrejection; tests/run_sentry_ui.py)
+      functionToStringIntegration(), browserApiErrorsIntegration({ setTimeout: false, setInterval: false, requestAnimationFrame: false }), globalHandlersIntegration(), linkedErrorsIntegration(), dedupeIntegration(),
       // console errors only (the scrubber drops the rest): no clicks or typing, no XHR / fetch addresses, no history
       breadcrumbsIntegration({ console: true, dom: false, fetch: false, history: false, sentry: false, xhr: false }),
     ],
