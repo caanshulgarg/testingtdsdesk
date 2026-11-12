@@ -740,7 +740,7 @@ function goChooseTallyCompany(){
   const c0 = CO(), offer = c0 && typeof postToOffer === "function" && !(choiceState(c0, "postTo") === "confirmed" && c0.postTo) ? postToOffer(c0) : null;
   if (offer && offer.companies.length === 1){ postToAllow(c0, offer.companies[0]); return; }
   Smart.setReturn(); const co = CO(); S.step = null; S.arm = null; if (co && tallyLinkOf(co).state !== "unlinked"){ S.tallyGuide = {}; openTallyFor(co.id); } else openConnectTally(4, co ? co.id : ""); window.scrollTo(0, 0); }
-function goTallyPage(){ closeSwitcher(); S.view = "home"; S.homeTab = "tally"; S.arm = null; render(); window.scrollTo(0, 0); }
+function goTallyPage(){ closeSwitcher(true); S.view = "home"; S.homeTab = "tally"; S.arm = null; render(); window.scrollTo(0, 0); }
 // the role of a bill's ledger line, as the table groups them
 const PV_ROLE = {party: "party", expense: "expense", gst: "gst", "rcm-in": "gst", "rcm-out": "gst", tds: "tds"};
 // the entries waiting or on their way: bills, the open statement's bank lines, and sales ready to post

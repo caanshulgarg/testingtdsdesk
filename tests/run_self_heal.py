@@ -9,7 +9,10 @@ Sentry: the page died before any script ran). FinCom never stays blank (index.ht
      page clears FinCom's worker and caches, opens the last good build (last-good.json -> ../review-prev/, docs/NEVER-BLANK.md), says "FinCom
      updated; opened the last working version", and reports it by its own beacon;
   4. a page held up in its head (the styles never come through the worker): the same, within about 10 s;
-  5. a broken build with no last-good.json: one clean reload from the network, then the "did not open" note, no loop.
+  5. a broken build with no last-good.json: one clean reload from the network, then the "did not open" note, no loop;
+  6. a slow opening (FINCOM-APP-STAGING-B, 12-Nov-2026: "not drawn" 15 s into an opening, then the previous build held up
+     too, -F): the program still reading this browser's saved work 12 s after the page's files came is not healed; FinCom
+     is drawn on its own build when the work is read, its worker kept.
 Served as Cloudflare serves main (tests/cf_pages.py rules: /review/legacy.js immutable as on main since 2d196fd33; an
 ETag from the content and no Last-Modified, as Workers static assets answer). Chromium only here.
   flock /tmp/fincom-app.lock python3 tests/run_self_heal.py   (TDSDESK_SITE defaults to ../app/dist-test)"""
@@ -231,6 +234,36 @@ with sync_playwright() as p:
         ok("FinCom did not open" in stuck, "the note comes (%r)" % stuck[:40])
         ok(len(loads) == 2, "one clean reload by itself (%d loads)" % len(loads))
         ok("/review/" not in regs(pg), "the worker unregistered (%s)" % regs(pg))
+        ctx.close()
+
+        print("6. a slow opening (next-fix-hang-home, FINCOM-APP-STAGING-B/-F, 12-Nov-2026 06:52 UTC): the program still opening")
+        print("   this browser's saved work 12 s after the page's files came: no healing; FinCom drawn when it is ready")
+        ctx = ctx_new(); sent = []
+        ctx.route("**/*.sentry.io/**", lambda r: (sent.append(r.request.post_data or ""), r.fulfill(status=200, body="{}")))
+        pg = browser_on(ctx, NEW)
+        # this browser's database answers 12 s late (a large firm's work read on a slow office PC), on the next opening only
+        ctx.add_init_script("""(() => { let ms = 0; try { ms = +sessionStorage.getItem('zz-slow-idb') || 0; sessionStorage.removeItem('zz-slow-idb'); } catch (e) {}
+          if (!ms || !window.indexedDB) return; const real = indexedDB.open.bind(indexedDB);
+          indexedDB.open = function (name, v) { if (String(name).indexOf('tdsdesk') < 0) return real(name, v);
+            let r = null; const f = { get result() { return r && r.result; }, get error() { return r && r.error; }, get readyState() { return r ? r.readyState : 'pending'; } };
+            setTimeout(() => { r = real(name, v); ['onupgradeneeded', 'onsuccess', 'onerror', 'onblocked'].forEach((k) => { r[k] = (e) => { if (typeof f[k] === 'function') f[k](e); }; }); }, ms);
+            return f; }; })()""")
+        pg.evaluate("sessionStorage.setItem('zz-slow-idb', '12000')")
+        t0 = time.time(); stages = set()
+        try: pg.reload(wait_until="commit")
+        except Exception: pass
+        good = False
+        while time.time() - t0 < 30 and not good:
+            st = ev(pg, "window.__fincomStage || ''", "")
+            if st: stages.add(st)
+            good = "/review/" in pg.url and drawn(pg, 500)
+            pg.wait_for_timeout(250)
+        secs = round(time.time() - t0, 1)
+        ok(good and build_of(pg) == "new" and "/review-prev/" not in pg.url, "FinCom drawn on the new build in %s s, still at review/ (%s; stages seen %s)" % (secs, pg.url, sorted(stages)))
+        ok(secs >= 11, "the opening waited for this browser's saved work (%s s)" % secs)
+        ok(not any("healed itself" in s for s in sent), "no healing reported (%s)" % [s[:70] for s in sent])
+        ok(not ev(pg, "!!document.querySelector('[data-heal-line], [data-boot-stuck]')"), "no healing line and no note")
+        ok("/review/" in regs(pg), "its worker kept (%s)" % regs(pg))
         ctx.close()
     finally:
         br.close(); srv.shutdown(); shutil.rmtree(TMP, ignore_errors=True)
