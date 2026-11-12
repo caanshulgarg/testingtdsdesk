@@ -60,6 +60,8 @@ const RPC: Record<string, (a: any) => any> = {
   gst_cron_ok: (a) => a.k === "cron-164",
 };
 const REST: [RegExp, () => any][] = [
+  // calc_parity: the months already checked tonight (T.done; empty unless a test sets it)
+  [/^\/rest\/v1\/calc_parity\?/, () => (T.done || [])],
   [/^\/rest\/v1\/tally_books\?/, () => [book]],
   [/^\/rest\/v1\/clients\?select=id,data&/, () => { T.lastCo = true; return [{ id: CLIENT, data: W.co }]; }],
   [/^\/rest\/v1\/clients\?/, () => [{ id: CLIENT, data: W.co, deleted: false }]],
@@ -124,6 +126,12 @@ T.lease = null;
 const before = T.parity.length;
 r = await call({ action: "share_parity", book_id: BOOK });
 ok(r.j.ok && r.j.checked === W.months.length * 2 && r.j.same && T.parity.length === before + r.j.checked, "share_parity with no month: every month, 07 and all (" + r.j.checked + " checks), the engine's");
+// the night's next run goes on where the last stopped: months checked in the last 20 hours are not checked again
+T.done = T.parity.filter((x: any) => x.p_ok !== null).slice(0, W.months.length).map((x: any) => ({ ym: x.p_ym, reg: x.p_reg }));
+const nDone = new Set(T.done.map((d: any) => d.ym + "|" + d.reg)).size, before2 = T.parity.length;
+r = await call({ action: "share_parity", book_id: BOOK });
+ok(r.j.ok && r.j.checked === W.months.length * 2 - nDone && T.parity.length === before2 + r.j.checked, "share_parity, the night's next run: the " + nDone + " checked tonight skipped, the other " + r.j.checked + " checked");
+T.done = [];
 // over the run's time: kept as not checked, the rest left
 const hs = handler({ env: (k) => ({ SUPABASE_URL: "http://fake.local", SUPABASE_SERVICE_ROLE_KEY: SERVICE, SUPABASE_ANON_KEY: "anon" } as any)[k], fetch: fake as any, total: 1 });
 const callS = async (body: any) => { const x = await hs(new Request("http://fn.local/gst-run", { method: "POST", headers: { Authorization: "Bearer " + SERVICE, "Content-Type": "application/json" }, body: JSON.stringify(body) })); return await x.json(); };

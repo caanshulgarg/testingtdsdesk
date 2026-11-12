@@ -240,6 +240,13 @@ export function handler(deps: Deps) {
       const ms = ((await rest("/rest/v1/gst_month?select=ym,reg&book_id=eq." + enc(book.book_id) + "&order=ym")) || []) as any[];
       const yms = Array.from(new Set(ms.map((m) => String(m.ym)))).sort(), regs = Array.from(new Set(ms.map((m) => String(m.reg)).filter(Boolean))).sort();
       asks = yms.flatMap((m) => [[m, ""] as [string, string]].concat(regs.map((g) => [m, g] as [string, string])));
+      // the night's later runs go on where the last one stopped: a month and registration this engine checked in the
+      // last 20 hours (ok true or false, not a skip) is not checked again (12-Nov-2026: one run's 1.5 s covers a few months)
+      const since = new Date(Date.now() - 20 * 3600 * 1000).toISOString();
+      const done = ((await rest("/rest/v1/calc_parity?select=ym,reg&calc=eq.gst-share&book_id=eq." + enc(book.book_id) + "&engine=eq." + enc(ENGINE) +
+        "&ok=not.is.null&at=gte." + enc(since))) || []) as any[];
+      const seen = new Set(done.map((d) => String(d.ym) + "|" + String(d.reg || "")));
+      asks = asks.filter(([m, g]) => !seen.has(m + "|" + g));
     }
     const skip = async (why: string, left: [string, string][]) => {
       for (const [m, g] of left.slice(0, 1)) await rpc("gst_parity_put", { p_book: book.book_id, p_ym: m, p_reg: g, p_engine: ENGINE, p_ok: null, p_max: 0, p_diffs: [],
