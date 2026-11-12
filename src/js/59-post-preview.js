@@ -279,7 +279,7 @@ function postLedgerList(cid){ return !!(cid === S.coId && S.bank && S.bank.cid =
 function postMissingLedgers(e){ return (e.snapshot ? e.snapshot.lines : []).filter(l => l.ledger && !exactLedger(l.ledger)); }
 function postBucket(e, ctx){
   if (!e || e.status !== "approved") return "";
-  if (e.deletedInTally && !e.deletedInTally.verified) return "attention";
+  if ((e.deletedInTally && !e.deletedInTally.verified) || e.ownerRelease) return "attention";
   const jr = ctx && ctx.jobs ? ctx.jobs.get(String(e.id)) : null, rb = jr && jr.reg && postRegBucket(e, jr); if (rb) return rb;
   if (billInTally(e)) return "intally";
   if (e.exportedAt) return "attention";
@@ -288,7 +288,7 @@ function postBucket(e, ctx){
   const js = ctx && ctx.jobs ? ctx.jobs.get(String(e.id)) : null;
   // put in by the cloud's posting and not yet marked here (a bill once marked posted here and taken back out of Tally
   // keeps postedVia, and is waiting again)
-  if (js && js.st === "posted" && !e.postedVia) return "intally";
+  if (js && js.st === "posted" && !e.postedVia && !postOld(e, js.job)) return "intally";
   if (js && js.st === "unknown") return "unknown";
   if (js && js.st === "review") return "review";
   if ((js && js.st === "sending") || (ctx && ctx.sending && ctx.sending.has(e.id))) return "sending";
@@ -633,7 +633,7 @@ function postReconcile(cid, quiet){
     const e = d && d.loaded && d.entries ? d.entries[id] : null;
     if (e){
       if (e.status !== "approved" || billInTally(e) || e.goneFromTally) return;
-      if (e.postedVia && !(e.exportedAt && e.postVerified !== true && e.postByReply !== true)) return;
+      if (postOld(e, j) || (e.postedVia && !(e.exportedAt && e.postVerified !== true && e.postByReply !== true))) return;
       billPosted(cid, e, x, j.company || "", at, {by, quiet: true});
       Store.saveEntry(cid, e); bills++;
       return;
@@ -717,6 +717,10 @@ async function postTestCopies(cid, id, n){
 // owner(job, id, why) (the id freed, the entry notfound, a mark 'released'). Both ask for the text first; the cloud
 // refuses anyone but an owner, and the page shows the buttons to owners only. A cloud without 36b says so.
 // owners of the firm alone (the cloud accepts only an active member with role owner; a superadmin who is not one is refused there)
+// a result of FinCom's cloud older than the bill's posting being cleared here (taken back, deleted in Tally, undone)
+function postOld(e, j){ return !!(e.postClearedAt && j && String(j.updated_at || j.created_at || "") < e.postClearedAt); }
+// the entries a check with Tally released: the bridge lets each go once more (it looks in Tally for it first)
+function postReleased(list){ return list.filter(x => x.release && x.release.at).map(x => ({id: x.id, at: x.release.at, by: x.release.by || "", why: x.release.why || ""})); }
 function postOwner(){ return !!(S.account && ((S.account.me || {}).role === "owner")); }
 // the owner's decision B (05-Oct-2026, migration 55): any member of the firm who may post (owner or staff: the cloud's
 // can_write) settles a posting whose result is uncertain: "Mark posted" (a Tally id) and "Not in Tally - post again"

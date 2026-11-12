@@ -1149,8 +1149,11 @@ function billDelete(id){
 }
 // "Deleted in Tally" (the bar under a posted bill): a person deleted its voucher in Tally. The posting is cleared and the
 // bill goes back to To review; nothing is posted again (unlike "Not in Tally – post again" in Post to Tally)
+// "Deleted in Tally": Tally read first (live, else the party ledger's kept entries); found: stays posted; not read: no change
+const billDelBusy = {};
 function billDeletedInTally(e){
   const cid = S.coId, co = CO(cid);
+  if (billDelBusy[e.id]) return;
   if (typeof postSending === "function" && postSending(cid).has(String(e.id))){ toast("Its posting to Tally is still being sent. Wait for it to finish."); return; }
   if (!billPostLive(e, cid)) return;
   askConfirm({title: "Deleted in Tally?", ok: "Deleted in Tally", danger: true,
@@ -1158,21 +1161,45 @@ function billDeletedInTally(e){
       '<label class="f" style="margin-top:8px"><span>What you did in Tally</span><input type="text" id="deletedWhy" maxlength="200" placeholder="For example: deleted in the Day Book on 12-Nov"></label>',
     read: () => ((document.getElementById("deletedWhy") || {}).value || "").trim(),
     validate: why => why.length < 3 ? "Say what you did in Tally." : ""}).then(async r => {
-    if (!r) return;
-    const vch = e.tallyVchNo || (e.tally && (e.tally.vchNo || e.tally.number)) || "", no = (e.x.vendorName || e.fileName || "") + " " + (e.x.invoiceNo || e.id);
-    e.deletedInTally = {at: new Date().toISOString(), by: whoAmI(), why: r.data, vch, checking: true}; Store.saveEntry(cid, e); render();
-    // a live read of Tally for this bill (PostCheck.repost's), newer than the posting
-    let x; try { x = await PostCheck.live(co, e, true); } catch (err){ x = {ok: false, why: plainMsg((err && err.message) || String(err))}; }
-    if (x.ok && !x.found && Date.parse(x.readAt || 0) <= PostCheck.postedAt(e)) x = {ok: false, why: "the read of Tally is older than the posting"};
-    if (!x.ok){ toast("Deleted in Tally \u2013 checking: Tally could not be read (" + x.why + "). It stays posted; press \u201cDeleted in Tally\u201d again to check."); render(); return; }
+    if (!r || billDelBusy[e.id]) return;
+    billDelBusy[e.id] = true; e.deletedInTally = {at: new Date().toISOString(), by: whoAmI(), why: r.data, vch: e.tallyVchNo || (e.tally && (e.tally.vchNo || e.tally.number)) || "", checking: true}; render();
+    let x;
+    try {
+      x = await PostCheck.live(co, e, true);
+      if (x.ok && !x.found && Date.parse(x.readAt || 0) <= PostCheck.postedAt(e)) x = {ok: false, why: "the read of Tally is older than the posting"};
+      if (!x.ok && e.partyLedger){
+        const d = e.x.invoiceDate, j = await tallyCall(co, "/ledgervouchers?company=" + encodeURIComponent(postCompanyName(co)) + "&ledger=" + encodeURIComponent(e.partyLedger) + "&from=" + isoToTally(addDays(d, -5)) + "&to=" + isoToTally(addDays(d, 5)));
+        if (j && Array.isArray(j.rows)){ const amt = r2(num(e.x.total)), hit = j.rows.find(v => String(v.date) === isoToTally(d) && Math.abs(num(v.cr || v.dr) - amt) < 0.01); x = {ok: true, found: hit ? {number: "", date: hit.date, type: hit.type} : null, readAt: new Date().toISOString()}; }
+      }
+    } catch (err){ x = {ok: false, why: plainMsg((err && err.message) || String(err))}; }
+    delete billDelBusy[e.id];
+    if (!x.ok){ delete e.deletedInTally; toast("Could not read Tally; nothing changed (" + x.why + ").", {actions: postOwner() ? [{label: "I checked in Tally: not there", run: () => billGoneFromTally(e, r.data + " (checked by hand)", "")}] : []}); render(); return; }
     if (x.found){ delete e.deletedInTally; PostCheck.markIn(co, e, x.found); toast("Tally still has it (" + PostCheck.vchSay(x.found) + "): it stays posted."); refreshStats(cid); render(); return; }
-    billClearPosting(e);
-    e.deletedInTally = Object.assign({}, e.deletedInTally, {checking: false, verified: x.readAt});
-    if (e.status === "approved") unapply(e, cid, {force: true});
-    Store.saveEntry(cid, e);
-    auditEvent("bill_deleted_in_tally", no + (vch ? " (voucher " + vch + ")" : "") + ": " + r.data, cid);
-    S.filter = "draft"; S.selected = e.id; refreshStats(cid); toast("Not in Tally: back in To review, not posted again."); render();
+    billGoneFromTally(e, r.data, x.readAt);
   });
+}
+// not in Tally: cleared, back to To review, released once (bridge: release; the cloud's id: the owner, Post to Tally > Errors)
+function billGoneFromTally(e, why, readAt){
+  const cid = S.coId, by = whoAmI(), at = new Date().toISOString(), vch = (e.deletedInTally || {}).vch || e.tallyVchNo || "";
+  const v = typeof postJobStates === "function" ? postJobStates(cid).get(String(e.id)) : null, held = !!(v && v.job) || (typeof postIdReleased === "function" && postIdReleased(e.id, cid) === false);
+  billClearPosting(e);
+  e.deletedInTally = {at, by, why, vch, verified: readAt || at, byHand: !readAt};
+  e.release = {at, by, why: "Deleted in Tally: " + why};
+  if (held) e.ownerRelease = {at, by, why, job: v && v.job ? v.job.id : ""};
+  if (e.status === "approved") unapply(e, cid, {force: true});
+  Store.saveEntry(cid, e);
+  auditEvent("bill_deleted_in_tally", (e.x.vendorName || e.fileName || "") + " " + (e.x.invoiceNo || e.id) + (vch ? " (voucher " + vch + ")" : "") + ": " + why, cid);
+  if (held && postOwner()) billOwnerRelease(e);
+  S.filter = "draft"; S.selected = e.id; refreshStats(cid); toast("Not in Tally: back in To review, not posted again."); render();
+}
+async function billOwnerRelease(e){
+  const cid = S.coId, o = e.ownerRelease; if (!o) return;
+  try {
+    const j = await TCloud.rpc("tally_post_id_release_owner", {p_job: o.job, p_id: String(e.id), p_why: "Deleted in Tally: " + o.why});
+    if (j && j.ok === false) throw new Error(j.error || "not released");
+    delete e.ownerRelease; Store.saveEntry(cid, e); toast("Released in FinCom\u2019s cloud: it can be posted once more.");
+  } catch (err){ toast("FinCom\u2019s cloud did not release it: " + String((err && err.message) || err).replace(/^ERROR:\s*/i, "")); }
+  render();
 }
 function billDeleteAsk(e){
   askConfirm({title: "Delete this bill?", ok: "Delete", danger: true,
@@ -1181,8 +1208,7 @@ function billDeleteAsk(e){
     read: () => ((document.getElementById("delWhy") || {}).value || "").trim(),
     validate: why => why.length < 3 ? "Write why the bill is deleted." : ""}).then(r => {
     if (!r) return;
-    // the status it had is kept before it is taken off its supplier's totals; a bill in Tally keeps what it was, so that
-    // Restore puts it back approved and posted, not to be posted again
+    // the status it had kept; a bill in Tally keeps what it was, so Restore puts it back approved and posted
     const was = e.status, live = !!billLivePosting(e, S.coId), kept = was === "approved" && live ? {applied: e.applied, snapshot: e.snapshot, approvedAt: e.approvedAt} : null;
     if (was === "approved") unapply(e, S.coId, {force: true});
     if (S.revSel) S.revSel.delete(e.id);
@@ -2002,7 +2028,7 @@ function doAct(act, t){
       askConfirm({title: "Delete " + ids.length + " bill" + (ids.length === 1 ? "" : "s") + " for good?", ok: "Delete", danger: true, body: '<p class="note">' + names.join("<br>") + (ids.length > 6 ? "<br>and " + (ids.length - 6) + " more" : "") +
         '</p><p class="note">They and their documents are removed from FinCom; this cannot be undone. The files can be uploaded again.</p>'}).then(ok => {
         if (!ok) return;
-        ids.forEach(id => { const e = D().entries[id]; if (!e) return; if (e.status === "approved") unapply(e, S.coId, {force: true}); removeEntry(e); });
+        ids.forEach(id => { const e = D().entries[id]; if (!e || billPostLive(e, S.coId)) return; if (e.status === "approved") unapply(e, S.coId, {force: true}); removeEntry(e); });
         S.revSel = new Set(); S.drawerOpen = false; refreshStats(S.coId); toast(ids.length + " deleted."); render();
       });
       break;
@@ -2058,8 +2084,7 @@ function doAct(act, t){
     case "approve": if (e) approve(e); break;
     case "reject": if (e){ if (billPostLive(e, S.coId)){ toast("This bill is posted to Tally. Delete it in Tally first, then press \u201cDeleted in Tally\u201d in the bar under this bill; after that you can mark it No entry."); break; }
       const was = e.status, cid = S.coId, id = e.id, path = e.docPath; setStatus(e, "rejected");
-      // its cloud document goes only once the status is saved and the message with Undo has gone unused (the bill read
-      // again then: still No entry, the same document)
+      // its cloud document goes once the message with Undo has gone unused (the bill read again then)
       const gone = () => { const x = (D(cid) || {}).entries && D(cid).entries[id]; if (x && x.status === "rejected" && path && x.docPath === path){ CloudDocs.remove(path); delete x.docPath; Store.saveEntry(cid, x); } };
       billMoveOn(e, "Marked as no entry needed.", was === "draft" ? "draft" : was, {label: "Undo", gone: e.status === "rejected" ? gone : null, run: () => { if (e.status === "rejected"){ setStatus(e, "draft"); S.selected = e.id; render(); } }}); } break;
     case "restore": if (e){ if (billPostLive(e, S.coId)){ toast("This bill is posted to Tally, so it stays as it is."); break; } const was = e.status; setStatus(e, "draft");

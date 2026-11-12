@@ -3095,7 +3095,7 @@ function unapply(e, cid, o){
   e.status = "draft"; delete e.applied; delete e.snapshot; delete e.approvedAt;
   return true;
 }
-// a posted bill deleted and restored: approved again as it was, on its supplier's totals (k: what softDeleteEntry kept)
+// a posted bill restored: approved again as it was (k: what softDeleteEntry kept)
 function reapply(e, cid, k){
   const a = k.applied, p = a && D(cid).parties[a.partyId];
   if (p){ p.ytd = p.ytd || {}; p.ytd[a.fy] = p.ytd[a.fy] || {}; const cur = p.ytd[a.fy][a.natureId] || {credited: 0, tdsBase: 0};
@@ -3104,11 +3104,11 @@ function reapply(e, cid, k){
   if (kk && k.approvedAt){ co.keys = co.keys || {}; co.keys[kk] = {d: k.approvedAt.slice(0, 10), e: e.id}; Store.saveCompany(co); }
   Object.assign(e, {status: "approved", applied: a, snapshot: k.snapshot, approvedAt: k.approvedAt});
 }
-// the one way a bill's posting is undone here (taken back from Tally, Post again, Not in Tally, an automatic entry undone):
-// every posting field cleared alike
+// the one way a bill's posting is undone here: every posting field cleared alike
 function billClearPosting(e){
+  // postedVia is kept: an older result of FinCom's cloud is not marked on it again (postReconcile, postBucket); postClearedAt too
   Object.assign(e, {exportedAt: null, postVerified: false, postByReply: false, tally: null, tallyVchNo: "", postNote: "", tallyCheck: null, postUnconfirmed: null, postError: "", postCheckFailed: null,
-    postedVia: "", postedInto: "", postAltered: false, postedOptional: false});
+    postedInto: "", postAltered: false, postedOptional: false, postClearedAt: new Date().toISOString()});
   delete e.goneFromTally;
 }
 function undoApproval(e){

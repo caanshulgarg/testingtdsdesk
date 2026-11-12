@@ -384,7 +384,8 @@ async function salesCheckTally(list){
   vs.forEach(x => [normInvNo(x.number), normInvNo(x.reference)].filter(Boolean).forEach(k => { if (!by.has(k)) by.set(k, []); if (!by.get(k).includes(x)) by.get(k).push(x); }));
   let n = 0;
   // a voucher a person said is not this invoice's (Not this Tally entry) is never matched to it again
-  list.forEach(v => { const no = normInvNo(v.x.number), not = v.notTally || [];
+  const keep = SL().cfg.notTally || {};
+  list.forEach(v => { const no = normInvNo(v.x.number), not = (v.notTally || []).concat(keep[no] || []);
     const hit = no && !not.includes("num:" + no) && (by.get(no) || []).find(x => !not.includes(salesTallyKey(x)));
     if (hit){ v.status = "intally"; v.postNote = "Already in Tally"; v.tallyMatch = {key: salesTallyKey(hit), date: String(hit.date || ""), number: String(hit.number || ""), amount: r2(Math.abs(num(hit.amount)))}; n++; } });
   return n;
@@ -400,7 +401,7 @@ function salesNotTally(id){
     (m.key ? "" : " FinCom did not keep which voucher it was, so every Tally voucher numbered " + esc(v.x.number || "") + " is left out for this invoice.") + "</p>"}).then(ok => {
     if (!ok || v.status !== "intally") return;
     // back to review: a person confirms it before it is posted
-    v.notTally = (v.notTally || []).concat(key); delete v.tallyMatch; v.postNote = ""; mapInvoice(v); v.status = "review";
+    v.notTally = (v.notTally || []).concat(key); const no = normInvNo(v.x.number); s.cfg.notTally = Object.assign({}, s.cfg.notTally, {[no]: v.notTally}); saveSales({cfg: true}); delete v.tallyMatch; v.postNote = ""; mapInvoice(v); v.status = "review";
     auditEvent("sales_not_tally", "Invoice " + (v.x.number || v.id) + ": not Tally entry " + words, s.cid);
     saveSales(); toast("Marked as not that Tally entry: it is not matched to it again."); render();
   });

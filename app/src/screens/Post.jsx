@@ -440,6 +440,17 @@ function EntryList({ co, tab, canPost, empty, title }) {
   </section>;
 }
 
+// bills deleted in Tally (not there at a read) whose FinCom id FinCom's cloud still holds: the owner releases each
+function OwnerRelease({ co }) {
+  const list = Object.values((D(co.id) || {}).entries || {}).filter((e) => e.ownerRelease);
+  if (!list.length) return null;
+  return <section className="post-sec" data-owner-release=""><h3>{"Deleted in Tally, held by FinCom's cloud (" + list.length + ")"}</h3><ul className="post-attn">
+    {list.map((e) => <li key={e.id}>
+      <span className="why"><b>{[e.x.vendorName, e.x.invoiceNo].filter(Boolean).join(" ")}</b>{" — not in Tally (" + (e.ownerRelease.by || "") + "); the cloud still holds its FinCom id, so it is not posted again until the owner releases it."}</span>
+      <span className="acts">{postOwner() ? <button className="btn small" data-owner-release-btn={e.id} onClick={() => billOwnerRelease(e)}>Owner: release this bill</button> : <span className="note">Waiting for the firm’s owner.</span>}</span>
+    </li>)}</ul></section>;
+}
+
 // the bills the last posting run could not post, first on the Errors tab (smart moves round 1), each with "Fix in bill →"
 function RunFailed({ co }) {
   const bp = S.billPost || {};
@@ -549,7 +560,7 @@ export function PostStep() {
       {/* upload-pages: Purchase → In Tally is this list (it was a page of its own, Done.jsx, which counted another way) */}
       {tab === "posted" && <div data-post-panel="posted" role="tabpanel" data-in-tally=""><AutoRuns co={co} /><History co={co} canPost={canPost} />
         <HomeLink id="sent" text={"Everything sent to Tally for " + co.name + ", with who sent it and when, is on the Tally page."} link="Everything sent to Tally" go={() => goTallyPage("sent")} /></div>}
-      {tab === "errors" && <div data-post-panel="errors" role="tabpanel"><Attention co={co} canPost={canPost} /></div>}
+      {tab === "errors" && <div data-post-panel="errors" role="tabpanel"><OwnerRelease co={co} /><Attention co={co} canPost={canPost} /></div>}
     </section>
   );
 }

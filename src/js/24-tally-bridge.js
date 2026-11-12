@@ -1251,7 +1251,7 @@ async function postBankToTally(ids){
       vouchers: rows.map(r => ({id: r.id, xml: bankVoucherXml(r, acc, co), bank: true})),
       // 30-Oct-2026: lines a check with Tally released (src/js/96): the bridge on this computer lets each go once more
       // (it looks in Tally for it first); the cloud's queue judges releases itself
-      released: rows.filter(r => r.release && r.release.at).map(r => ({id: r.id, at: r.release.at, by: r.release.by || "", why: r.release.why || ""}))}, pj => { b.busy = postingLine(pj, tname); refreshBusy(); },
+      released: postReleased(rows)}, pj => { b.busy = postingLine(pj, tname); refreshBusy(); },
       chk => bankAfterCheck(b.cid, st.id, chk, tname));
     // B14: stopped by the check of the company this client may post to: nothing sent, the lines stay ready
     if (j.notAllowed){
@@ -1384,7 +1384,7 @@ async function postBillsToTally(opts){
   // looking for (each is settled there, not sent again from here)
   const jobSt = typeof postJobStates === "function" ? postJobStates(co.id) : new Map();
   let list = Object.values(D().entries).filter(e => e.status === "approved" && !e.exportedAt && (!opts.ids || opts.ids.includes(e.id))
-    && !((st => st === "posted" ? !e.postedVia : ["review", "unknown", "sending"].includes(st))((jobSt.get(String(e.id)) || {}).st))).sort(byDate);
+    && !((v => v.st === "posted" ? !e.postedVia && !postOld(e, v.job) : ["review", "unknown", "sending"].includes(v.st))(jobSt.get(String(e.id)) || {}))).sort(byDate);
   if (!list.length){ S.billPost = null; toast("No approved entries are waiting."); render(); return; }
   canonicalizeBills(list);
   // review 21c: a bill whose GST, TDS or expense ledger comes from a Client setup choice that is only guessed waits,
@@ -1434,7 +1434,7 @@ async function postBillsToTally(opts){
       const used = new Set(todo.flatMap(e => e.snapshot.lines.map(l => String(l.ledger).toLowerCase())));
       const masters = B().newLed.filter(l => !l.sent && used.has(l.name.toLowerCase()));
       S.billPost = {busy: "Posting " + entries(todo.length) + " to " + tname + "…"}; render();
-      const j = await Bridge.post({company: tname, client: co.id, masters: masters.map(l => ({id: "led:" + l.name, xml: ledgerMasterXml(l)})), vouchers: todo.map(e => ({id: e.id, xml: voucherXml(e, co)}))},
+      const j = await Bridge.post({company: tname, client: co.id, masters: masters.map(l => ({id: "led:" + l.name, xml: ledgerMasterXml(l)})), vouchers: todo.map(e => ({id: e.id, xml: voucherXml(e, co)})), released: postReleased(todo)},
         pj => { S.billPost = {busy: postingLine(pj, tname)}; refreshBusy(); }, chk => billsAfterCheck(co.id, chk, tname));
       // B14: stopped by the check of the company this client may post to: nothing was sent, not Tally's reason; the
       // bills stay waiting under Post to Tally, as they were
@@ -1493,7 +1493,7 @@ function billPosted(cid, e, x, tname, now, o){
   o = o || {};
   const who = o.by || (Cloud.st && Cloud.st.email) || "";
   if (!o.quiet) logPosting({what: "bill", id: e.id, action: postAltered(x) ? "altered" : "posted", co: cid, ref: e.x.invoiceNo, party: e.x.vendorName, amount: num(e.x.total), tally: {guid: x.guid || "", masterId: x.masterId || "", vchType: x.vchType || "", vchDate: x.vchDate || "", company: x.company || tname}, by: who});
-  e.exportedAt = now; e.postError = ""; e.postUnconfirmed = null; e.postCheckFailed = null; e.postedVia = "bridge"; e.postedInto = x.company || tname; e.postedOptional = !!x.optional; e.postVerified = x.verified === true; e.postAltered = postAltered(x); e.tallyVchNo = x.vchNumber || "";
+  delete e.release; e.exportedAt = now; e.postError = ""; e.postUnconfirmed = null; e.postCheckFailed = null; e.postedVia = "bridge"; e.postedInto = x.company || tname; e.postedOptional = !!x.optional; e.postVerified = x.verified === true; e.postAltered = postAltered(x); e.tallyVchNo = x.vchNumber || "";
   // round 17a: posted by Tally's reply (bridge 2.1.8 does not read back): in Tally (billInTally), said so
   e.postByReply = x.verified !== true && x.byReply === true;
   e.tally = {guid: x.guid || "", masterId: x.masterId || "", vchType: x.vchType || "", vchDate: x.vchDate || "", at: now, by: who, company: x.company || tname};

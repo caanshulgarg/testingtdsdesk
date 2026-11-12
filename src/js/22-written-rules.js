@@ -593,15 +593,20 @@ async function importTallyBook(file){
 function bankTallyKeys(t){ const k = [t.date, t.vt, t.vn, r2(num(t.debit)), r2(num(t.credit))].join("|"); return t.guid ? [String(t.guid), k] : [k]; }
 function bankTallyKey(t){ return bankTallyKeys(t)[0]; }
 function bankNotHit(r, t){ return !!(r.notTally && bankTallyKeys(t).some(k => r.notTally.includes(k))); }
-function bankBookEntry(r){ const b = B(), book = (b.books[(curStmt() || {}).acctId] || {}).entries || []; return r.tallyKey ? book.find(x => bankTallyKey(x) === r.tallyKey) : book[r.tallyIdx]; }
+const BOOK_IDX = new WeakMap();
+function bankBookEntry(r){
+  const b = B(), book = (b.books[(curStmt() || {}).acctId] || {}).entries || [];
+  if (!r.tallyKey) return book[r.tallyIdx];
+  let m = BOOK_IDX.get(book); if (!m){ m = new Map(); book.forEach(x => { const k = bankTallyKey(x); if (!m.has(k)) m.set(k, x); }); BOOK_IDX.set(book, m); }
+  return m.get(r.tallyKey);
+}
 // FinCom's own posting ("I checked — it is not in Tally" is its way back): its tag a time or "unconfirmed:", matched by
 // FinCom's tag, or the entry carries the line's TDSDesk tag ("tally:" alone is a line found in Tally)
 function bankOwnPost(r){
   const b = B(), fp = fpHash(r.fp || r.id), tag = b && b.postedTags ? b.postedTags[fp] : undefined, t = bankBookEntry(r);
   return (tag != null && !/^tally:/.test(String(tag))) || r.tallyHow === "posted by FinCom earlier" || !!(t && String(t.narr || "").toUpperCase().includes("TDSDESK:" + fp.toUpperCase()));
 }
-// "Not this Tally entry" (owner, item 5): the entry is kept on the line (notTally), never matched to it again; the line
-// waits for a person (attention), and what was learnt from the wrong match is dropped
+// "Not this Tally entry": the entry kept on the line (notTally), never matched again; the line waits for a person
 function bankNotTally(id){
   const b = B(), r = bankRow(id);
   if (!r || r.state !== "intally" || bankOwnPost(r)) return;
@@ -613,7 +618,9 @@ function bankNotTally(id){
     r.notTally = (r.notTally || []).concat(keys); r.state = "attention"; r.userSet = false;
     delete r.tallyIdx; delete r.tallyKey; r.tallyHow = ""; r.tallyRef = "";
     const fp = fpHash(r.fp || r.id);
-    if (b.postedTags && /^tally:/.test(String(b.postedTags[fp] || ""))) delete b.postedTags[fp];
+    b.postedTags = b.postedTags || {};
+    if (/^tally:/.test(String(b.postedTags[fp] || ""))) delete b.postedTags[fp];
+    b.postedTags["nt:" + fp] = r.notTally.join("\n");
     if (b.hist && (b.hist.rows[r.fp] || {}).s === "tally"){ delete b.hist.rows[r.fp]; b.histVer++; }
     auditEvent("bank_not_tally", (r.dec.name || r.narr || r.id) + " " + money0(num(r.debit) || num(r.credit)) + " " + r.date + ": not Tally entry " + words, b.cid);
     saveBank({rows: true, posted: true, hist: true}); toast("Marked as not that Tally entry: it is not matched to it again. Choose its ledger and post it, or ignore it."); render();
@@ -635,6 +642,7 @@ function matchTallyBook(acc, rows, force){
   let n = 0;
   // an entry a person said is not this line's (Not this Tally entry) is never matched to it again
   const no = bankNotHit;
+  rows.forEach(r => { const s = b.postedTags && b.postedTags["nt:" + fpHash(r.fp || r.id)]; if (s && !r.notTally) r.notTally = s.split("\n"); });
   const take = (r, i, how) => {
     used.add(i); n++;
     const t = book.entries[i];
@@ -685,16 +693,14 @@ function sameParty(a, b){
   const [short, long] = pa.length <= pb.length ? [pa, pb] : [pb, pa];
   return short.length >= 17 && long.startsWith(short);
 }
-// a line in Tally (posted from here, or found there) is never taken back to an earlier state by an Undo, a bulk button or
-// a line's button, so it cannot be posted twice (state-machine review, item 5)
+// a line in Tally is never taken back to an earlier state (Undo, bulk or a line's button): never posted twice
 function bankInTally(r){ return !!r && (r.state === "sent" || r.state === "intally"); }
 function bankKeptWords(n, what){ return n + " " + (what || "line") + (n === 1 ? " is" : "s are") + " already in Tally and " + (n === 1 ? "was left as it is." : "were left as they are.") +
   (what ? " If one was matched to the wrong Tally entry, press \u201cNot this Tally entry\u201d on it." : " To change one, press \u201cTake it back\u201d or \u201cNot this Tally entry\u201d on the line."); }
 function bankKeptOne(r){ return "This line is already in Tally, so it was left as it is. " + (r.state === "intally" && !bankOwnPost(r) ? "If it was matched to the wrong Tally entry, press \u201cNot this Tally entry\u201d on the line." : "To post it again, press \u201cTake it back\u201d on the line first."); }
-// the one way from Tally back to "ready" (taken back from Tally, gone from Tally, not found at a check, an automatic entry
-// undone): every posting field cleared alike
+// the one way from Tally back to "ready": every posting field cleared alike
 function bankClearPosting(r, state){
-  Object.assign(r, {state: state || (r.ledger ? "ready" : "attention"), sentAt: "", postVerified: false, postByReply: false, tally: null, postedVia: "", tallyRef: "", tallyHow: "", checking: false, postError: ""});
+  Object.assign(r, {state: state || (r.ledger ? "ready" : "attention"), sentAt: "", postVerified: false, postByReply: false, tally: null, tallyRef: "", tallyHow: "", checking: false, postError: ""});
   delete r.goneFromTally; delete r.tallyIdx;
   const b = B(); if (b && b.postedTags) delete b.postedTags[fpHash(r.fp || r.id)];
 }
