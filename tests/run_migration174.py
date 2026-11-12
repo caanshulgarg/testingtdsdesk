@@ -43,8 +43,9 @@ RED = os.environ.get("RED_WITHOUT_174") == "1"
 src142 = open(os.path.join(HERE, "run_migration142.py")).read()
 FILES = eval(compile(src142.split("\nFILES = ", 1)[1].split("\nfails = []", 1)[0], "run_migration142.py(FILES)", "eval"), {"os": os, "SQLDIR": SQLDIR, "HERE": HERE, "ROOT": ROOT})
 FILES += [os.path.join(SQLDIR, f) for f in ("migration-142-post-any-bridge.sql", "migration-128-client-removed-frees-tally.sql", "migration-161-split-tally.sql")]
-TF_ADD, TF_GONE, RQ_ADD, RQ_GONE = 23, 4, 17, 3
-RR_ADD, RR_GONE = 6, 1   # reroute: 54's text with the once-taken hold   # take_for: the two hand-outs in a loop with the check; requeue: 2b, 4b, M1, 4a
+TF_ADD, TF_GONE, RQ_ADD, RQ_GONE = 23, 4, 40, 4
+RS_ADD, RS_GONE, CN_ADD, CN_GONE = 3, 3, 4, 3   # rescue: the held count; cancel: the warning
+RR_ADD, RR_GONE = 12, 1   # reroute: 54's text with the once-taken hold   # take_for: the two hand-outs in a loop with the check; requeue: 2b, 4b, M1, 4a
 fails = []
 def ok(c, w):
     print(("  ok   " if c else "  FAIL ") + w)
@@ -54,7 +55,9 @@ def part(path, name):
     s = open(path).read(); i = s.index(name + ' = r"""') if (name + ' = r"""') in s else s.index(name + ' = """')
     i = s.index('"""', i) + 3; return s[i:s.index('"""', i)]
 def fbody(t_, name):
-    i = t_.index("create or replace function public." + name + "("); return [l.strip() for l in t_[i:t_.index("$function$;", i)].splitlines() if l.strip()]   # compared as text, indentation aside
+    i = t_.index("create or replace function public." + name + "(")
+    ends = [k for k in (t_.find("$function$;", i), t_.find("$$;", i)) if k >= 0]
+    return [l.strip() for l in t_[i:min(ends)].splitlines() if l.strip()]   # compared as text, indentation aside
 
 text = open(M174).read() if os.path.exists(M174) else ""
 print("  md5 of %s: %s (%d bytes)" % (os.path.basename(M174), hashlib.md5(text.encode()).hexdigest(), len(text.encode())))
@@ -67,7 +70,9 @@ made = sorted(set(re.findall(r"create or replace function public\.(\w+)\(", code
 NEW = {"tally_post_job_blocked": "(uuid)", "tally_post_hold_job": "(uuid)", "tally_post_hold": "(uuid, text)", "tally_post_bridge_holds": "(uuid)"}
 REPL = {"tally_post_take_for": "(uuid, text, boolean)"}
 TRIG = ["tally_post_jobs_version", "tally_post_links_hold", "tally_post_split_hold"]
-ok(made == sorted(list(NEW) + list(REPL) + TRIG + ["tally_post_requeue", "tally_post_reroute"]), "makes or replaces only %s" % made)
+ok(made == sorted(list(NEW) + list(REPL) + TRIG + ["tally_post_requeue", "tally_post_reroute", "tally_post_rescue", "tally_post_cancel"]), "makes or replaces only %s" % made)
+ok("revoke all on function public.tally_post_rescue(uuid) from public, anon, authenticated;" in text and "revoke all on function public.tally_post_cancel(uuid) from public, anon;" in text and "grant execute on function public.tally_post_cancel(uuid) to authenticated;" in text,
+   "tally_post_rescue (nobody, as 54) and tally_post_cancel (authenticated, as 116): grants restated")
 ok("revoke all on function public.tally_post_reroute(uuid, boolean) from public, anon, authenticated;" in text and "grant execute on function public.tally_post_reroute" not in text, "tally_post_reroute: internal, granted to nobody, as 54")
 ok("tally_post_pickable_ok" not in made, "142's pick-up rule (tally_post_pickable_ok) is not replaced: another bridge only for a posting never taken")
 for fn, sig in list(NEW.items()) + list(REPL.items()):
@@ -75,13 +80,14 @@ for fn, sig in list(NEW.items()) + list(REPL.items()):
 for fn in TRIG + ["tally_post_requeue"]:
     ok(("revoke all on function public.%s() from public, anon, authenticated;" % fn) in text, "%s: nobody may call it" % fn)
 # started from the latest text: the lines added and removed against 142 (take_for, pickable_ok) and 36b (requeue)
+m116 = open(os.path.join(ROOT, "server", "security", "migration-116-write-checks.sql")).read()
 m54 = open(os.path.join(SQLDIR, "migration-54-post-target-bridge.sql")).read()
 m142, m36b = open(os.path.join(SQLDIR, "migration-142-post-any-bridge.sql")).read(), open(os.path.join(SQLDIR, "migration-36b-post-acceptance.sql")).read()
-for name, base, n_add, n_gone in (("tally_post_take_for", m142, TF_ADD, TF_GONE), ("tally_post_requeue", m36b, RQ_ADD, RQ_GONE), ("tally_post_reroute", m54, RR_ADD, RR_GONE)):
+for name, base, n_add, n_gone in (("tally_post_take_for", m142, TF_ADD, TF_GONE), ("tally_post_requeue", m36b, RQ_ADD, RQ_GONE), ("tally_post_reroute", m54, RR_ADD, RR_GONE), ("tally_post_rescue", m54, RS_ADD, RS_GONE), ("tally_post_cancel", m116, CN_ADD, CN_GONE)):
     if not text: ok(False, name + ": no file"); continue
     a, b = fbody(text, name), fbody(base, name)
     added, gone = [l for l in a if l not in b], [l for l in b if l not in a]
-    ok(len(added) == n_add and len(gone) == n_gone, "%s: the latest text (%s) with %d line(s) added, %d changed (%d / %d): %s" % (name, "142" if base is m142 else "36b" if base is m36b else "54", n_add, n_gone, len(added), len(gone), gone))
+    ok(len(added) == n_add and len(gone) == n_gone, "%s: the latest text (%s) with %d line(s) added, %d changed (%d / %d): %s" % (name, "142" if base is m142 else "36b" if base is m36b else "116" if base is m116 else "54", n_add, n_gone, len(added), len(gone), gone))
 
 F = "99999999-9999-9999-9999-999999999174"
 OWNER, STAFF = "55555555-5555-5555-5555-555555555174", "66666666-6666-6666-6666-666666666174"
@@ -211,9 +217,21 @@ try:
         ok(x["status"] == stt and x["stop"].startswith(WORDS) and "Nothing of it was sent" not in x["stop"] and x["message"].startswith(WORDS) and "told to stop" in x["message"] and live(n) == lv[n] and "true" in lv[n],
            "posting %d (%s): never failed nor freed (ids live %s), the stop flag and the reason set (%s / %s)" % (n, stt, live(n), x["status"], x["stop"][:60]))
     ok(take(DA, BA) is None and take(DB, BB) is None and row(36)["status"] == "waiting", "never handed out again (the flagged waiting one neither)")
-    db.sql("update tally_post_jobs set updated_at = now() - interval '3 hours' where id in (%s, %s, %s)" % (q(J(31)), q(J(34)), q(J(35))))
     requeue(); requeue()
-    ok(row(31)["status"] == "taken" and row(34)["status"] == "taken" and row(35)["status"] == "running" and row(31)["attempts"] == "0", "never requeued while flagged (left to its bridge's next word)")
+    ok(row(31)["status"] == "taken" and row(34)["status"] == "taken" and row(35)["status"] == "running" and row(36)["status"] == "waiting" and row(31)["attempts"] == "0", "fresh: left to its bridge's next word")
+    # (third review HIGH 1) its bridge no longer holds it: held for checking, never back to waiting, the flag kept, ids live
+    db.sql("update tally_post_jobs set updated_at = now() - interval '20 minutes' where id in (%s, %s)" % (q(J(31)), q(J(34))))
+    if not RED: db.sql("update tally_post_jobs set stop_at = now() - interval '11 minutes' where id = %s" % q(J(36)))
+    requeue()
+    ok(row(31)["status"] == "taken", "taken 20 minutes, reported, A heard (it holds it): left (%s)" % row(31)["status"])
+    for n in (34, 36):
+        x = row(n); ck = db.one("select checking::text from tally_post_jobs where id = %s" % q(J(n)))
+        ok(x["status"] == "done" and ck == "true" and x["stop"] != "" and x["message"].startswith("Stopped: " + WORDS) and "Mark posted" in x["message"] and "true" in live(n),
+           "HIGH 1: %d, its bridge silent: held for checking (done, checking), the flag kept, ids live (%s %s / %s)" % (n, x["status"], ck, x["message"][:80]))
+    db.sql("update tally_post_jobs set updated_at = now() - interval '3 hours' where id in (%s, %s)" % (q(J(31)), q(J(35))))
+    requeue()
+    ok(row(31)["status"] == "done" and row(35)["status"] == "done", "HIGH 1: 2 hours without a word though A beats: held too (%s %s)" % (row(31)["status"], row(35)["status"]))
+    ok(all(row(n)["status"] != "waiting" for n in (31, 34, 35, 36)), "never back to waiting")
     job(33, BA, DA)
     ok(take(DA, BA) is None and take(DB, BB) is None and row(33)["status"] == "failed", "queued straight in while stopped: never taken, failed at take")
     r = rpc(STAFF, "select tally_post_enqueue_to(%s::uuid, 'c1', %s::jsonb, null, null)::text" % (q(J(3)), q(json.dumps({"vouchers": [{"id": "V3", "xml": "<VOUCHER/>"}]}))))
@@ -272,7 +290,7 @@ try:
     requeue(); ok(row(62)["status"] == "taken", "held, 90 minutes without a report, A beating: left (%s)" % row(62)["status"])
     db.sql("update tally_post_jobs set updated_at = now() - interval '121 minutes' where id = %s" % q(J(62)))
     requeue(); requeue(); x = row(62)
-    ok(x["status"] == "waiting" and x["taken_by"] == BA and x["dev"] == DA and x["attempts"] == "0" and "restart FinCom Bridge on that computer, or cancel" in x["message"] and "never another computer" in x["message"],
+    ok(x["status"] == "waiting" and x["taken_by"] == BA and x["dev"] == DA and x["attempts"] == "0" and "restart FinCom Bridge on that computer" in x["message"] and "cancel" not in x["message"].lower() and "never posted from another computer" in x["message"],
        "M1: 2 hours without a report while A beats: back for A only, attempts kept, the owner told (%s)" % x)
     db.sql("update tally_post_jobs set updated_at = now() - interval '30 minutes' where id = %s" % q(J(62)))
     ok(take(DB, BB) is None and row(62)["dev"] == DA, "B (company open) never takes it")
@@ -331,22 +349,67 @@ try:
     requeue(); ok(row(102)["status"] == "waiting" and row(102)["taken_by"] == BA, "A sent part of it, went quiet: put back for A (%s)" % row(102)["status"])
     db.sql("update tally_devices set main_bridge = %s where id = %s" % (q(BA2), q(DA)))              # the main bridge switched to A2
     x = row(102)
-    ok(x["target_bridge"] == BA and x["status"] == "waiting" and x["message"].startswith("Started on ") and "can't be moved to another bridge safely" in x["message"], "not moved to A2: held, in plain words (%s / %s)" % (x["target_bridge"], x["message"]))
+    ok(x["target_bridge"] == BA and x["status"] == "waiting" and x["message"].startswith("Started on ") and "never moved to another bridge" in x["message"] and "Make that bridge able to post again" in x["message"] and "check-first" not in x["message"], "not moved to A2: held, in plain words (%s / %s)" % (x["target_bridge"], x["message"]))
     ok(row(103)["target_bridge"] == BA2, "the posting never taken: moved to A2 as before (%s)" % row(103)["target_bridge"])
     got = [take(DA, BA2) for _ in range(3)]
     ok([g["id"] for g in got if g] == [J(103)] and row(101)["status"] == "waiting" and row(102)["status"] == "waiting", "A2 takes only the one never taken; neither 101 (no bridge named, taken by A) nor 102 (%s)" % [g and g["id"] for g in got])
     ok(take(DB, BB) is None and row(102)["dev"] == DA, "B never takes it either")
     db.sql("update tally_post_jobs set status = 'failed' where id = %s" % q(J(102)))
     r = rpc(STAFF, "select tally_post_enqueue_to(%s::uuid, 'c1', %s::jsonb, null, null)::text" % (q(J(102)), q(json.dumps({"vouchers": [{"id": "V102", "xml": "<VOUCHER/>"}]}))))
-    ok(r.get("ok") is False and "can't be moved to another bridge safely" in str(r.get("error")) and row(102)["status"] == "failed", "a Retry is refused in those words (%s)" % (r.get("error") or r.get("_error")))
+    ok(r.get("ok") is False and "never moved to another bridge" in str(r.get("error")) and row(102)["status"] == "failed", "a Retry is refused in those words (%s)" % (r.get("error") or r.get("_error")))
     db.sql("update tally_devices set main_bridge = %s where id = %s" % (q(BA), q(DA)))
     clear()
-    job(104, BA, DA, status="waiting", attempts=1)                               # put back, no bridge recorded (taken_at, taken_by empty)
+    WORDS = "Not posted: posting into Tally was stopped for Made-up Osprey after this was queued."
+    job(104, BA, DA, status="waiting", attempts=1)                               # a person's Retry: no bridge holds it (taken_at, taken_by empty)
     ver = db.one("select version from tally_links where book_id = %s" % q(BK))
     rpc(OWNER, "select tally_link_posting(%s::uuid, false, %s)::text" % (q(BK), ver))
-    ok(row(104)["status"] == "waiting" and row(104)["stop"] != "", "attempts 1: stop-flagged, never failed (%s)" % row(104)["status"])
+    ok(row(104)["status"] == "failed" and row(104)["stop"] == "" and row(104)["message"].startswith(WORDS), "LOW 7: a Retried posting no bridge holds (taken_by, taken_at empty): failed plainly (%s / %s)" % (row(104)["status"], row(104)["message"][:60]))
     ver = db.one("select version from tally_links where book_id = %s" % q(BK))
     rpc(OWNER, "select tally_link_posting(%s::uuid, true, %s)::text" % (q(BK), ver))
+    setbeat(DA, beat("made-up-a", BA, [CO])); clear()
+
+    print("== 11. third review")
+    relink(); setbeat(DA, beat("made-up-a", BA, [CO])); setbeat(DB, beat("made-up-b", BB, [CO]))
+    db.sql("update tally_devices set main_bridge = %s where id = %s" % (q(BA), q(DA)))
+    two()
+    # MED 2: reported on by A (seq), A can no longer post (A2 the main bridge now), quiet 11 minutes: held, not requeued
+    job(110, BA, DA, status="taken", taken_by=BA, seq=2, ago=11)
+    db.sql("update tally_devices set main_bridge = %s where id = %s" % (q(BA2), q(DA)))
+    requeue(); x = row(110); ck = db.one("select checking::text from tally_post_jobs where id = %s" % q(J(110)))
+    ok(x["status"] == "done" and ck == "true" and "can no longer post" in x["message"] and "Mark posted" in x["message"], "MED 2: held for checking, not back to waiting (%s %s / %s)" % (x["status"], ck, x["message"][:90]))
+    # MED 3: a posting naming no bridge, taken by A, put back; A2 (another bridge of the key) the main now: held in words, not silent
+    db.sql("update tally_devices set main_bridge = %s where id = %s" % (q(BA), q(DA)))
+    job(111, None, DA, status="waiting", taken_by=BA, attempts=1, ago=12)
+    db.sql("update tally_devices set main_bridge = %s where id = %s" % (q(BA2), q(DA)))
+    x = row(111)
+    ok(x["status"] == "waiting" and x["message"].startswith("Started on ") and "can no longer post" in x["message"], "MED 3: judged by the bridge that took it (A): held in words (%s)" % x["message"][:90])
+    ok(take(DA, BA2) is None, "and A2 does not take it")
+    rr = json.loads(db.one("select tally_post_rescue(%s::uuid)::text" % q(DA)) or "{}")
+    ok(rr.get("held", 0) >= 1 and rr.get("failed") == 0, "LOW 8: the rescue counts it held, not failed (%s)" % rr)
+    # MED 4: Cancel of a posting once taken warns; one never taken is cancelled as before
+    r = rpc(STAFF, "select tally_post_cancel(%s)::text" % q(J(111)))
+    ok(r.get("ok") is True and "Check Tally first" in str(r.get("warn")) and row(111)["message"].startswith("Cancelled after the Tally computer had started it"), "MED 4: Cancel once taken: the warning (%s)" % r)
+    job(114, BA, DA)
+    r = rpc(STAFF, "select tally_post_cancel(%s)::text" % q(J(114)))
+    ok(r == {"ok": True} and row(114)["message"] == "Cancelled before the Tally computer took it", "a posting never taken: cancelled as before (%s)" % r)
+    clear()
+    # LOW 6: a v1 take (taken_by empty, taken_at set): never by a go- bridge; attempts > 0 counts as taken for the reroute
+    db.sql("update tally_devices set main_bridge = %s where id = %s" % (q(BA), q(DA)))
+    job(112, None, DA, status="waiting", ago=12); db.sql("update tally_post_jobs set taken_at = now() - interval '12 minutes', attempts = 1 where id = %s" % q(J(112)))
+    ok(take(DA, BA) is None and row(112)["status"] == "waiting", "LOW 6: a v1 bridge's posting (taken_at set, no taken_by): not taken by go- bridge A")
+    job(113, BA2, DA, status="waiting", attempts=1)          # Retried, for A2, A2 no longer able to post
+    ok(json.loads(db.one("select tally_post_reroute(%s, false)::text" % q(J(113))) or "{}").get("held") is True and row(113)["target_bridge"] == BA2, "LOW 6: attempts > 0: held, not moved (%s)" % row(113)["target_bridge"])
+    clear()
+    # LOW 5: the 6-hour words: once taken, its own bridge, never "cancel" or another computer; never over the held words; written once
+    db.sql("update tally_devices set main_bridge = %s where id = %s" % (q(BA), q(DA))); setbeat(DA, beat("made-up-a", BA, []))
+    job(115, BA, DA, status="waiting", taken_by=BA, attempts=1, ago=7 * 60); db.sql("update tally_post_jobs set taken_at = now() - interval '8 hours' where id = %s" % q(J(115)))
+    job(116, BA, DA, status="waiting", taken_by=BA, attempts=1, ago=7 * 60); db.sql("update tally_post_jobs set message = 'Started on X, and that FinCom Bridge can no longer post' where id = %s" % q(J(116)))
+    requeue(); v1 = db.one("select row_version::text from tally_post_jobs where id = %s" % q(J(115))) if not RED else "0"
+    requeue(); v2 = db.one("select row_version::text from tally_post_jobs where id = %s" % q(J(115))) if not RED else "1"
+    m = row(115)["message"]
+    ok(m.startswith("Still waiting after 6 hours") and "which started it" in m and "cancel" not in m.lower() and "never posted from another computer" in m, "LOW 5: once taken: its own bridge named, no cancel (%s)" % m)
+    ok(v1 == v2, "LOW 5: written once (row_version %s -> %s)" % (v1, v2))
+    ok(row(116)["message"].startswith("Started on X"), "LOW 5: the held words not overwritten")
     setbeat(DA, beat("made-up-a", BA, [CO])); clear()
 
     print("== 9. names and the index")

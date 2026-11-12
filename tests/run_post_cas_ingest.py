@@ -22,6 +22,9 @@ inside the report's own awaits (its stamp of an accepted entry, tally_post_id_ac
      M2: stop flag with every item waiting but an id of the posting stamped accepted before, or an earlier result sent:
      held (done, checking), never failed; a running report: held; M3: a posting of this firm moved to another key, and
      one for another bridge of this computer: acceptances stamped before "gone" / 403; another firm's posting: not
+  10. (third review) MED 2: a bridge that may no longer post (another is the main one): refused 403 notMain as before,
+     its acceptances stamped first; HIGH 1: a stop-flagged posting the cron held for checking (done, checking): its
+     bridge's late report is stored and the bridge told to stop
 Needs Deno (DENO, default: the deno on the PATH or /opt/deno/deno)."""
 import os, sys, json, time, hashlib, subprocess, urllib.request, urllib.error, shutil, threading, copy
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
@@ -178,6 +181,19 @@ try:
         c, r = update(jid, results=ACC, items=[{"id": "K1", "state": "unknown"}])
         st_ = [a_ for a_ in F.ARGS.get("tally_post_id_accept", []) if a_.get("p_job") == jid]
         ok(c == code and bool(st_) == want and row(jid)["status"] == "taken", "M3: %s answered %s %s, acceptances %s" % (jid, c, r.get("gone") and "gone" or r.get("error", "")[:40], "stamped" if st_ else "not stamped"))
+    print("== 10. third review")
+    dev = F.T["tally_devices"][0]
+    F.T["tally_post_jobs"].append(job("j101", "taken"))
+    dev["main_bridge"] = OTHER; dev["info"]["bridges"][OTHER] = {"at": "2026-11-12T10:00:00Z", "user": ME["user"]}
+    c, r = update("j101", results=ACC, items=[{"id": "K1", "state": "unknown"}])
+    st_ = [a_ for a_ in F.ARGS.get("tally_post_id_accept", []) if a_.get("p_job") == "j101"]
+    ok(c == 403 and r.get("notMain") is True and st_ and row("j101")["status"] == "taken", "MED 2: not the main bridge any more: 403 notMain, its acceptance stamped first (%s %s %d)" % (c, r.get("notMain"), len(st_)))
+    dev.pop("main_bridge"); dev["info"]["bridges"].pop(OTHER, None)
+    F.T["tally_post_jobs"].append(job("j102", "done", checking=True, stop_reason=WHY))
+    c, r = update("j102", status="running", results=ACC, items=[{"id": "K1", "state": "unknown"}, {"id": "K2", "state": "waiting"}])
+    x = row("j102")
+    ok(c == 200 and r.get("cancelled") is True and r.get("stopped") is True and x["status"] == "done" and x["checking"] is True and any(e["id"] == "K1" for e in x["results"]),
+       "HIGH 1: held by the cron, its bridge speaks again: stored, still held, the bridge told to stop (%s %s %s)" % (c, r, x["status"]))
 finally:
     fn.terminate()
     try: fn.wait(10)

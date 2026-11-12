@@ -4794,11 +4794,14 @@ Deno.serve(sentry.wrap(async (req) => {
       }
       case "posts_update": {
         const meUB = bridgeOf(dev, body, false), meU = meUB.id;
-        if (!mayPost(dev, meU, (meUB.entry as any).user)) return reply(403, { ok: false, notMain: true, error: "Another bridge of the same Windows user is the main bridge on this computer now (chosen in FinCom); this one reads only and does not post." });
+        // (third review MED 2, migration 174) a bridge that may no longer post (not the main one now) is refused as before,
+        // but only after this report's acceptances are stamped (below: a posting of this firm, its own ids), so a Cancel and a
+        // new posting never send again what Tally took
+        let refused: Response | null = null;
+        if (!mayPost(dev, meU, (meUB.entry as any).user)) refused = reply(403, { ok: false, notMain: true, error: "Another bridge of the same Windows user is the main bridge on this computer now (chosen in FinCom); this one reads only and does not post." });
         // migration 54: a posting for another bridge is never reported by this one (a cloud without the column: as before).
         // A bridge switched to changes only still reports a posting it took before the switch
-        let refused: Response | null = null;
-        {
+        if (!refused) {
           const { data: tj, error: te } = await db.from("tally_post_jobs").select("target_bridge").eq("id", String(body.id || "")).eq("device_id", dev.id).maybeSingle();
           if (te && !missingRel(te)) { fail("posts_update_target", te, "posts_update"); console.error("tally-ingest: posts_update target check not read", dev.id, String(body.id || "").slice(0, 60), String(te.message || "").slice(0, 200)); }     // 2.3.1: logged
           // second review M3: answered after this report's acceptances are stamped (below), never before
@@ -5035,7 +5038,8 @@ Deno.serve(sentry.wrap(async (req) => {
           // held the posting: this report is stored and stamped, then the bridge is told to stop. Nothing of it sent: failed
           // with the reason; anything that may be in Tally: held (done, being checked) for an owner, its ids kept. A posting
           // the bridge finished (done, nothing to check) is stored as it is
-          if (c.stop_reason && ["waiting", "taken", "running"].includes(c.status) && !(b.row.status === "done" && !b.row.checking)) {
+          // (third review HIGH 1) also once the cron held it for checking (done, checking; the flag kept): told to stop
+          if (c.stop_reason && (["waiting", "taken", "running"].includes(c.status) || (c.status === "done" && c.checking)) && !(b.row.status === "done" && !b.row.checking)) {
             const rs = (Array.isArray(b.row.results) ? b.row.results : []) as any[], xs = (Array.isArray(b.row.items) ? b.row.items : []) as any[];
             // (second review M2) failed only when the bridge says taken, every item still waiting, no result of it or before it
             // says sent or accepted, and no id of the posting was ever stamped accepted; anything else is held for checking
