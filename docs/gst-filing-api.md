@@ -89,16 +89,22 @@ Sent once (12-Nov-2026, item 1 of the state-machine review; `migration-173-gst-f
   lease (`busy_token`, `busy_until`: one conditional update); a second action at the same time is told it is already in
   progress, and every write is conditional on the lease. A database that cannot be read stops the action, nothing sent.
 - 3B (RETOFFSET moves money): `offset_tried_at` is kept just before the set-off is sent. From then on (and once
-  `proceeded`) a save, summary or confirm is refused and the return never goes back. It is cleared only when the portal
-  refused the set-off or the request never left (Vault, the keys, DNS, a refused connection). If the answer never came
-  (timed out, connection lost, a 5xx, the worker stopped, or the database write after it failed), the set-off is not
-  sent again: the next Proceed reads the ledgers (BAL) and, if credit and cash fell by what the set-off uses, marks it
-  proceeded. If the figures differ at File, the difference is said and nothing is filed.
+  `proceeded`) a save, summary or confirm is refused and the return never goes back. It is cleared only when the request
+  never left (Vault, the keys, DNS, a refused connection, too little time left) or the portal refused it in a way that
+  proves nothing was processed (filing.ts `refusedClearly`: error codes RT-3BAS<nnnn>, e.g. RT-3BAS1070 partial or excess
+  payment and RT-3BAS1059 offset null; "insufficient cash/credit balance"; AUTH4xxx or an invalid/expired session or
+  token; for File also OTPnnnn, "invalid OTP", "OTP expired"). Any other answer (timed out, connection lost, a 5xx, a
+  GSP's own JSON error such as a GSTN timeout, the worker stopped, or the database write after it failed) keeps the
+  mark: the next Proceed reads the ledgers (BAL). If each head's credit and cash fell by what the set-off uses (within
+  ₹1 either way), it is marked proceeded; if nothing moved and 10 minutes have passed, it is sent once more (`offset_sends`;
+  never a third time); anything else ("cannot tell", e.g. another debit) tells the person what to check. If the figures
+  differ at File, the difference is said and nothing is filed.
 - GSTR-1 / IFF (proceed to file moves no money): as before, a save after proceeding is taken, a changed summary at File
   goes back to the summary, and a lost RETNEWPTF answer may be tried again.
 - A save still processing (`IP`) stays `saved` with `save_state` `IP` and is asked again by summary and track (a track
   whose status poll fails still asks RETTRACK). `file_tried_at` is set before RETFILE; a File after one without an ARN
-  asks RETTRACK first. The EVC OTP is taken for 10 minutes after it is sent.
+  asks RETTRACK first, and if the portal does not list it yet, RETFILE is sent again only 10 minutes after the last try
+  (the person is told to wait and press Check the status). The EVC OTP is taken for 10 minutes after it is sent.
 - Time: the edge stops a worker at 150 s, so a filing action has 110 s in all (`TAXPRO_ACTION_BUDGET_MS`): each read
   waits at most 20 s (`TAXPRO_READ_WAIT_MS`), each write at most 60 s (`TAXPRO_WRITE_WAIT_MS`), and no write is begun with
   less than 20 s left. The lease lasts 10 minutes.

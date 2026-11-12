@@ -1,7 +1,7 @@
 // deno test tests/gst_file_unit.ts - the pure parts of filing through the GST API (server/gst-taxpro/filing.ts):
 // FinCom's figures from the GSTR-1 / 3B JSON, the portal's summary read the same way, the comparison a person confirms,
 // the set-off of sections 49 / 49A and rule 88A, and the rule that writes go to the sandbox unless switched on for live.
-import { r1Figures, r1PortalFigures, r3bFigures, compare, sameFigures, setoff, writeAllowed, cleanR1, cleanR3b, PROD_URL, SANDBOX_URL, safeText, reached, offsetDone } from "../server/gst-taxpro/filing.ts";
+import { r1Figures, r1PortalFigures, r3bFigures, compare, sameFigures, setoff, writeAllowed, cleanR1, cleanR3b, PROD_URL, SANDBOX_URL, safeText, reached, offsetDone, refusedClearly } from "../server/gst-taxpro/filing.ts";
 
 const eq = (a: unknown, b: unknown, what: string) => {
   const x = JSON.stringify(a), y = JSON.stringify(b);
@@ -150,6 +150,7 @@ Deno.test("a request that never left is told apart from one that may have reache
   yes(reached(new TypeError("error sending request: connection closed before message completed")) === true, "closed mid-answer: may have reached");
   yes(reached(new TypeError("error sending request: dns error: failed to lookup address information")) === false, "DNS: never reached");
   yes(reached(new Error("The GST service is not set up for FinCom yet.")) === false, "an error before any request (Vault, keys): never reached");
+  yes(reached(new TypeError("error sending request for url (http://dns-error.example/r?username=tcp%20connect%20error): connection closed before message completed")) === true, "the address's own words are not read as the error");
 });
 Deno.test("the ledgers say whether a set-off was done", () => {
   const plan = { pditc: { i_pdi: 100, i_pdc: 0, i_pds: 0, c_pdc: 20, c_pdi: 0, s_pds: 20, s_pdi: 0, cs_pdcs: 0 }, cashNeeded: { igst: 80, cgst: 48, sgst: 48, cess: 0 },
@@ -157,5 +158,15 @@ Deno.test("the ledgers say whether a set-off was done", () => {
   eq(offsetDone(plan, { itc: { igst: 0, cgst: 0, sgst: 0, cess: 0 }, cash: { igst: { tx: 20 }, cgst: { tx: 2 }, sgst: { tx: 2 }, cess: { tx: 0 } } }), "done", "credit and cash used as planned: done");
   eq(offsetDone(plan, { itc: plan.itc, cash: plan.cash }), "not", "nothing moved: not done");
   eq(offsetDone(plan, { itc: { igst: 0, cgst: 20, sgst: 20, cess: 0 }, cash: plan.cash }), "unknown", "some moved: unknown");
+  eq(offsetDone(plan, { itc: { igst: 0, cgst: 0, sgst: 0, cess: 0 }, cash: { igst: { tx: 0 }, cgst: { tx: 2 }, sgst: { tx: 2 }, cess: { tx: 0 } } }), "unknown", "a head fell by more than the set-off (another debit): cannot tell");
   eq(offsetDone({ ...plan, pditc: { i_pdi: 0 }, cashNeeded: { igst: 0, cgst: 0, sgst: 0, cess: 0 } }, { itc: plan.itc, cash: plan.cash }), "unknown", "a nil set-off: cannot tell");
+});
+Deno.test("portal refusals that prove nothing was processed", () => {
+  yes(refusedClearly({ status_cd: "0", error: { message: "Partial/excess payment", error_cd: "RT-3BAS1070" } }, "offset"), "RT-3BAS1070");
+  yes(refusedClearly({ status_cd: "0", error: { message: "Insufficient cash balance" } }, "offset"), "insufficient balance");
+  yes(refusedClearly({ status_cd: "0", error: { message: "Invalid session", error_cd: "AUTH4033" } }, "offset"), "a session refused before processing");
+  yes(!refusedClearly({ status_cd: "0", error: { message: "Request timed out at GSTN", error_cd: "GSP999" } }, "offset"), "a GSP's timeout: not proven");
+  yes(!refusedClearly(null, "offset"), "no answer: not proven");
+  yes(refusedClearly({ status_cd: "0", error: { message: "Invalid OTP", error_cd: "OTP0012" } }, "file"), "a wrong OTP at File");
+  yes(!refusedClearly({ status_cd: "0", error: { message: "Invalid OTP", error_cd: "OTP0012" } }, "offset"), "OTP codes only at File");
 });

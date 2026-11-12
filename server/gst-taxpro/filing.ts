@@ -147,8 +147,8 @@ export function setoff(liab: any[], itc: Partial<Heads>, cash: any) {
 // the cash ledger's balance of a head ({tx, intr, fee}, {tot}, a number, or <head>_tot_bal)
 export function cashBal(cash: any, h: string) { const c = cash?.[h]; return typeof c === "number" ? c : num(c?.tot ?? (num(c?.tx) + num(c?.intr) + num(c?.fee))) || num(cash?.[h + "_tot_bal"]); }
 // a set-off sent whose answer never came (12-Nov-2026, migration-173): the ledgers now beside those it was worked out on.
-// "done": every head's credit and cash fell by at least what the set-off uses (to the rupee); "not": no balance moved;
-// "unknown": anything else (some moved, or a nil set-off that moves nothing)
+// "done": every head's credit and cash fell by what the set-off uses, within ₹1 either way; "not": no balance moved;
+// "unknown": anything else (some moved, one fell by more, as another debit would, or a nil set-off that moves nothing)
 export function offsetDone(plan: any, now: { itc: Partial<Heads>; cash: any }): "done" | "not" | "unknown" {
   const u = plan?.pditc || {}, b = plan?.itc || {}, n = now?.itc || {};
   const credit: Heads = { igst: num(u.i_pdi) + num(u.i_pdc) + num(u.i_pds), cgst: num(u.c_pdc) + num(u.c_pdi), sgst: num(u.s_pds) + num(u.s_pdi), cess: num(u.cs_pdcs) };
@@ -158,8 +158,8 @@ export function offsetDone(plan: any, now: { itc: Partial<Heads>; cash: any }): 
     const dc = r2(num(b[h]) - num(n[h])), dk = r2(cashBal(plan?.cash, h) - cashBal(now?.cash, h));
     used += credit[h] + num(need[h]);
     if (Math.abs(dc) >= 0.01 || Math.abs(dk) >= 0.01) moved++;
-    if (credit[h] > 0 && dc < credit[h] - 1) all = false;
-    if (num(need[h]) > 0 && dk < num(need[h]) - 1) all = false;
+    if (Math.abs(dc - credit[h]) > 1) all = false;
+    if (Math.abs(dk - num(need[h])) > 1) all = false;
   }
   if (used <= 0) return "unknown";
   return all ? "done" : moved ? "unknown" : "not";
@@ -168,10 +168,29 @@ export function offsetDone(plan: any, now: { itc: Partial<Heads>; cash: any }): 
 // connection, a name not found or a failed TLS handshake never did; a timeout or a connection lost mid-way may have
 export function reached(e: unknown) {
   if (e instanceof Plain) return false;
-  const name = String((e as any)?.name || ""), msg = String((e as any)?.message ?? e);
+  const name = String((e as any)?.name || "");
+  // Deno: "error sending request for url (<the address>): <what went wrong>": only what went wrong is read (the address
+  // carries the GSTIN, the username and the path, which could hold any words)
+  let msg = String((e as any)?.message ?? e);
+  const at = msg.indexOf("for url ("), end = at >= 0 ? msg.indexOf("): ", at) : -1;
+  if (end >= 0) msg = msg.slice(0, at) + msg.slice(end + 3);
+  msg = msg.replace(/\bhttps?:\/\/\S+/gi, "");
   if (name === "TimeoutError" || name === "AbortError") return true;
   if (!(e instanceof TypeError) && !/error sending request|connection/i.test(msg)) return false;
   return !/connection refused|tcp connect error|dns error|failed to lookup|name or service not known|no such host|network is unreachable|invalid certificate|certificate|handshake|invalid url|relative url/i.test(msg);
+}
+// a portal answer that proves the write was refused before anything was processed, so it may be sent again. Only these;
+// any other error (a GSP's own timeout or gateway answer, an unknown code) may hide a write that went through.
+//   set-off: RT-3BAS<nnnn> (the 3B set-off's validation: RT-3BAS1070 partial or excess payment, RT-3BAS1059 offset null;
+//            docs/gst-filing-api.md), insufficient cash or credit balance, and the session or the GSP's keys refused
+//            (AUTH4xxx: invalid or expired session or token; checked before the request is processed)
+//   File:    the same session refusals, and the EVC OTP refused (OTPnnnn, "invalid OTP", "OTP expired")
+export function refusedClearly(j: any, kind: "offset" | "file") {
+  if (!j || String(j.status_cd) === "1") return false;
+  const e = j.error || {}, cd = String(e.error_cd || j.error_cd || "").toUpperCase(), m = String(e.message || j.message || "");
+  if (/^AUTH4\d{3}$/.test(cd) || /^(invalid|expired) (session|auth ?token|token)\b|^invalid asp\b/i.test(m)) return true;
+  if (kind === "offset") return /^RT-3BAS\d{4}$/.test(cd) || /\binsufficient (cash |credit |itc )?(ledger )?balance\b/i.test(m);
+  return /^OTP\d{4}$/.test(cd) || /\binvalid (evc )?otp\b|\botp (has )?expired\b/i.test(m);
 }
 // the credit and cash ledgers from the ledger balance answer (field names to confirm with TaxPro: docs question 7)
 export function ledgersOf(bal: any) {

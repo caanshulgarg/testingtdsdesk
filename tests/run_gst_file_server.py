@@ -29,7 +29,7 @@ ok(u.returncode == 0, "the pure parts (deno test tests/gst_file_unit.ts)" + ("" 
 
 G, PANS = "09AANFG3202D1ZR", "ABCPG1234K"
 OTP_OK, OTP_BAD = "246810", "111111"
-TP = {"calls": [], "saved": {}, "status_n": {}, "tamper": {}, "ip": set(), "delay": {}, "noarn": [False], "moves": [False], "spent": {}, "drop_status": set(), "cash": {"igst": {"tx": 0}, "cgst": {"tx": 0}, "sgst": {"tx": 0}, "cess": {"tx": 0}}, "offset": None, "filebody": None, "filed": []}
+TP = {"calls": [], "saved": {}, "status_n": {}, "tamper": {}, "ip": set(), "delay": {}, "noarn": [False], "moves": [False], "spent": {}, "drop_status": set(), "offset_answer": [None], "file504": [False], "cash": {"igst": {"tx": 0}, "cgst": {"tx": 0}, "sgst": {"tx": 0}, "cess": {"tx": 0}}, "offset": None, "filebody": None, "filed": []}
 def sec_sum(p):   # the portal's GSTR-1 summary of what was saved (as the portal adds it up)
     out = []
     def fig(name, docs, sign=lambda d: 1):
@@ -88,6 +88,8 @@ class TPH(http.server.BaseHTTPRequestHandler):
             sp = TP["spent"]; g = lambda k: sp.get(k, 0)
             return self.out({"status_cd": "1", "data": {"itc_blnc": {"igst_bal": 100 - g("i"), "cgst_bal": 20 - g("c"), "sgst_bal": 20 - g("s"), "cess_bal": 0 - g("cs")},
                 "cash_bal": {h: {"tx": round(TP["cash"][h]["tx"] - g("cash_" + h), 2)} for h in TP["cash"]}}})
+        if kind == "3B" and a == "RETOFFSET" and TP["offset_answer"][0]:
+            return self.out(*TP["offset_answer"][0])                        # an answer of the GSP's own (refused, or GSTN timed out)
         if kind == "3B" and a == "RETOFFSET":
             TP["offset"] = body
             if TP["moves"][0]:      # the ledgers move as the portal's do after a set-off
@@ -98,6 +100,8 @@ class TPH(http.server.BaseHTTPRequestHandler):
                         sp["cash_" + h] = sp.get("cash_" + h, 0) + sum(l.get(k, 0) for k in ks)
             return self.out({"status_cd": "1"})
         if kind == "R1" and a == "RETNEWPTF": return self.out({"status_cd": "1", "data": {"reference_id": "PTF1"}})
+        if kind and a == "RETFILE" and TP["file504"][0]:
+            return self.out({"message": "upstream timed out"}, 504)          # not filed, the answer lost
         if kind and a == "RETFILE":
             TP["filebody"] = body; sid = (body or {}).get("sid", "")
             if sid == PANS + "|" + OTP_OK:
@@ -276,6 +280,30 @@ try:
     ok(not r.get("ok") and r.get("unclear") and row("3B", "062026")["status"] == "confirmed" and row("3B", "062026").get("offset_tried_at") and "Offset liability" in r.get("error", "")
        and not r2.get("ok") and "Offset liability" in r2.get("error", "") and not r3.get("ok") and "set off" in r3.get("error", "") and n_of("RETOFFSET", "062026") == 1,
        "the set-off's answer lost, the ledgers unmoved: not sent again, what to check on the portal said, summary refused: %s | %s" % (r.get("error"), r2.get("error")))
+    back = lambda form, per, col: [x.__setitem__(col, time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() - 11 * 60))) for x in F.T["gst_filings"] if x["form"] == form and x["period"] == per]
+    # 10 minutes on and the ledgers still unmoved: sent once more (only once)
+    back("3B", "062026", "offset_tried_at"); r = call(dict(c4, action="proceed"))
+    ok(r.get("ok") and n_of("RETOFFSET", "062026") == 2 and row("3B", "062026")["status"] == "proceeded", "10 minutes after a lost set-off, the ledgers unmoved: sent once more, proceeded: " + str(r.get("error")))
+    c8 = {"gstin": G, "form": "3B", "period": "042026"}
+    call(dict(c8, action="save", payload=dict(R3B, ret_period="042026"))); call(dict(c8, action="summary")); call(dict(c8, action="confirm"))
+    TP["delay"]["RETOFFSET"] = 5
+    call(dict(c8, action="proceed")); back("3B", "042026", "offset_tried_at"); r = call(dict(c8, action="proceed"))
+    TP["delay"] = {}
+    back("3B", "042026", "offset_tried_at"); r2 = call(dict(c8, action="proceed"))
+    ok(r.get("unclear") and not r2.get("ok") and "Offset liability" in r2.get("error", "") and n_of("RETOFFSET", "042026") == 2, "a second lost set-off: not sent a third time, what to check said: " + str(r2.get("error")))
+    # a GSP's own JSON error (GSTN timed out behind it): unclear, the mark kept; a refusal FinCom knows (RT-3BAS1070): cleared
+    c9 = {"gstin": G, "form": "3B", "period": "032026"}
+    call(dict(c9, action="save", payload=dict(R3B, ret_period="032026"))); call(dict(c9, action="summary")); call(dict(c9, action="confirm"))
+    TP["offset_answer"][0] = ({"status_cd": "0", "error": {"message": "Request timed out at GSTN", "error_cd": "GSP999"}}, 200)
+    r = call(dict(c9, action="proceed")); TP["offset_answer"][0] = None
+    ok(not r.get("ok") and r.get("unclear") and row("3B", "032026").get("offset_tried_at") and row("3B", "032026")["status"] == "confirmed", "a 200 JSON error FinCom does not know: unclear, offset_tried_at kept: " + str(r.get("error")))
+    c10 = {"gstin": G, "form": "3B", "period": "022026"}
+    call(dict(c10, action="save", payload=dict(R3B, ret_period="022026"))); call(dict(c10, action="summary")); call(dict(c10, action="confirm"))
+    TP["offset_answer"][0] = ({"status_cd": "0", "error": {"message": "Partial/excess payment of liability", "error_cd": "RT-3BAS1070"}}, 200)
+    r = call(dict(c10, action="proceed")); TP["offset_answer"][0] = None
+    ok(not r.get("ok") and not r.get("unclear") and "RT-3BAS1070" in r.get("error", "") and not row("3B", "022026").get("offset_tried_at"), "RT-3BAS1070 (refused before anything was paid): the mark cleared: " + str(r.get("error")))
+    r = call(dict(c10, action="proceed"))
+    ok(r.get("ok") and n_of("RETOFFSET", "022026") == 2, "then proceed again: sent")
     # 3B for 052026: the set-off reaches the portal but the database write after it fails (or the worker dies): the next
     # proceed finds the ledgers moved by the set-off and marks it proceeded, without sending it again
     c5 = {"gstin": G, "form": "3B", "period": "052026"}
@@ -338,6 +366,14 @@ try:
     r = call(dict(c2, action="file", pan=PANS, otp=OTP_OK))
     ok(r.get("ok") and r.get("arn") == "AA09122025100042X" and n_of("RETFILE", "122025") == 1 and sum(1 for c in TP["calls"] if c["a"] == "RETTRACK") == nt + 1 and row("R1", "122025")["status"] == "filed",
        "the next File asks the portal first (RETTRACK): it was filed, so marked filed with its ARN and RETFILE not sent again: " + str(r))
+    # RETFILE's answer lost and the portal does not list it: File waits a few minutes before sending again
+    c11 = {"gstin": G, "form": "R1", "period": "082025"}
+    call(dict(c11, action="save", payload=dict(R1, fp="082025"))); call(dict(c11, action="summary")); call(dict(c11, action="confirm")); call(dict(c11, action="proceed")); call(dict(c11, action="evc_otp", pan=PANS))
+    TP["file504"][0] = True; call(dict(c11, action="file", pan=PANS, otp=OTP_OK)); TP["file504"][0] = False
+    r = call(dict(c11, action="file", pan=PANS, otp=OTP_OK))
+    ok(not r.get("ok") and "wait a few minutes" in r.get("error", "") and n_of("RETFILE", "082025") == 1, "File again within minutes of a lost answer, not listed yet: wait, not sent: " + str(r.get("error")))
+    back("R1", "082025", "file_tried_at"); r = call(dict(c11, action="file", pan=PANS, otp=OTP_OK))
+    ok(r.get("ok") and n_of("RETFILE", "082025") == 2, "10 minutes on, still not listed: sent again, filed")
     # a save the portal is still processing: kept as saved (state IP), never failed; polled again by summary and by track
     for per in ("012026", "112025"):
         TP["ip"].add("REF-R1" + per)

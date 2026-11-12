@@ -51,7 +51,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsFor } from "../_shared/cors.ts";   // the one list of headers for every function (server/_shared/cors.ts)
 import { after2b } from "./automatch.ts";
 import { firmGate, viaClient } from "../_shared/firmgate.ts";   // the console's switches (migration 118)
-import { r1Figures, r1PortalFigures, r3bFigures, compare, sameFigures, setoff, ledgersOf, writeAllowed, cleanR1, cleanR3b, safeText, Plain, reached, offsetDone } from "./filing.ts";
+import { r1Figures, r1PortalFigures, r3bFigures, compare, sameFigures, setoff, ledgersOf, writeAllowed, cleanR1, cleanR3b, safeText, Plain, reached, offsetDone, refusedClearly } from "./filing.ts";
 import { AsyncLocalStorage } from "node:async_hooks";
 
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
@@ -483,6 +483,9 @@ async function putHeld(w: Who, r: Ret, token: string, set: Record<string, unknow
 }
 // the portal's EVC OTP lasts 10 minutes (an older one is refused before anything is sent)
 const OTP_MS = 10 * 60000;
+// a write whose answer was lost and that the portal does not show done is sent again only this long after it was sent
+// (the portal may still be processing it); a set-off at most twice in all
+const RESEND_MS = 10 * 60000, OFFSET_SENDS = 2;
 // every call logged: who, when, GSTIN, period, form, action, result, ARN; never the OTP
 async function logFiling(w: Who, r: Ret, action: string, ok1: boolean, result: string, extra: { arn?: string; ref?: string; otp?: string } = {}) {
   await admin.from("gst_filing_log").insert({ firm_id: w.firm, gstin: r.gstin, form: r.form, period: r.period, action, by_user: w.me, ok: ok1,
@@ -634,15 +637,20 @@ async function filingAction(w: Who, action: string, body: any, role: string) {
         const { h, username } = await session(w, r);
         const b = await tpv("LEDGER", LEDGER_PATHS, { gstin, username, ret_period: period, action: "BAL" }, h);
         if (!ret(b)) throw new Plain("The ledger balances could not be read: " + tpErr(b) + ". Nothing was sent; try again in a moment.");
-        const d = offsetDone(row.offset_plan, ledgersOf(b.j));
+        const d = offsetDone(row.offset_plan, ledgersOf(b.j)), age = Date.now() - Date.parse(row.offset_tried_at), sends = Number(row.offset_sends || 1);
         if (d === "done") {
           await put({ status: "proceeded", proceeded_by: w.me, proceeded_at: new Date().toISOString(), error: null });
           await logFiling(w, r, "proceed", true, "the set-off sent " + row.offset_tried_at + " shows in the ledgers: proceeded (RETOFFSET not sent again)");
           return { ok: true, found: true };
         }
-        await logFiling(w, r, "proceed", false, "a set-off was sent " + row.offset_tried_at + "; the ledgers " + (d === "not" ? "have not moved" : "moved otherwise") + "; not sent again");
-        return { ok: false, unclear: true, error: (d === "not" ? "The set-off sent earlier does not show in the ledgers (they have not moved). " : "The ledgers moved, but not as the set-off would move them, so FinCom cannot tell whether it was done. ") +
-          "FinCom does not send it again by itself. " + CHECK };
+        // the ledgers unmoved 10 minutes after: it was not done, so sent once more (at most OFFSET_SENDS in all), below
+        const again = d === "not" && age >= RESEND_MS && sends < OFFSET_SENDS;
+        if (!again) {
+          await logFiling(w, r, "proceed", false, "a set-off was sent " + row.offset_tried_at + " (" + sends + " in all); the ledgers " + (d === "not" ? "have not moved" : "moved otherwise") + "; not sent again");
+          return { ok: false, unclear: true, error: (d === "not" ? "The set-off sent earlier does not show in the ledgers (they have not moved). " : "The ledgers moved, but not as the set-off would move them (another payment or debit, or a different split), so FinCom cannot tell whether it was done. ") +
+            (d === "not" && sends < OFFSET_SENDS ? "If it was sent just now, wait a few minutes: FinCom sends it once more only if the ledgers still have not moved 10 minutes after. " : "FinCom does not send it again by itself. ") + CHECK };
+        }
+        await logFiling(w, r, "proceed", true, "the set-off sent " + row.offset_tried_at + " does not show in the ledgers after 10 minutes: sent once more");
       }
       if (action === "proceed" ? row.status !== "confirmed" : row.status !== "proceeded") return { ok: false, error: action === "proceed" ? "A person must first confirm the portal's summary against FinCom's." : "Proceed to file first." };
       if (action === "evc_otp") {
@@ -676,6 +684,9 @@ async function filingAction(w: Who, action: string, body: any, role: string) {
             await put({ status: "filed", arn: hit.arn, filed_at: at, filed_by: w.me, error: null, signatory_pan: pan });
             return { ok: true, arn: hit.arn, filedAt: at, tracked: true };
           }
+          // not listed yet: the portal may still be filing it; sent again only 10 minutes after the last one
+          if (Date.now() - Date.parse(row.file_tried_at) < RESEND_MS)
+            return { ok: false, error: "The portal does not list " + f.label + " for " + period.slice(0, 2) + "-" + period.slice(2) + " as filed yet. If you just filed, wait a few minutes and press Check the status on the portal; File sends it again only 10 minutes after the last try." };
         }
       }
       const s = await portalSummary(w, r), portal = portalFigsOf(form, s.raw);
@@ -707,26 +718,29 @@ async function filingAction(w: Who, action: string, body: any, role: string) {
           }
           // kept before the set-off goes (under this action's lease): if the worker stops or the write after it fails,
           // the next proceed asks the ledgers instead of sending it again
-          await put({ offset_tried_at: new Date().toISOString(), offset_plan: plan, error: null });
+          const sends0 = row.offset_tried_at ? Number(row.offset_sends || 1) : 0;
+          await put({ offset_tried_at: new Date().toISOString(), offset_plan: plan, offset_sends: sends0 + 1, error: null });
           try { x = await tpv(f.kind, f.paths, { gstin, username: s.username, ret_period: period, action: "RETOFFSET" }, s.h, BASE, "PUT", { gstin, ret_period: period, pdcash: plan.pdcash, pditc: plan.pditc }); }
           catch (e) {
             if (!(e instanceof SendErr && e.sent)) {   // it never left (Vault, the keys, DNS, connection refused): nothing sent
               const m = plain(e, "filing proceed");
-              await put({ offset_tried_at: null });
+              await put({ offset_tried_at: row.offset_tried_at || null, offset_sends: sends0 });
               await logFiling(w, r, "proceed", false, "not sent: " + m);
               return { ok: false, error: "Nothing was sent: " + m };
             }
             x = { http: 0, j: null, text: String((e as Error)?.message || e) };
           }
-          // no clear answer (timed out, connection lost, not JSON, the gateway's 5xx): the set-off may have reached the
-          // portal, so it is never sent again; offset_tried_at stays and the next proceed reads the ledgers
-          if (!x || !x.j || x.http >= 500) {
-            const m = "the portal's answer to the set-off was not received (" + (x?.http ? "HTTP " + x.http : "no answer") + ")";
+          // anything but a success or a refusal that proves nothing was processed (refusedClearly: timed out, connection
+          // lost, not JSON, a 5xx, a GSP's own error): the set-off may have reached the portal, so it is not sent again;
+          // offset_tried_at stays and the next proceed reads the ledgers
+          const done1 = ok(x) || !!(x?.j && !x.j.error && (x.j.reference_id || x.j.data));
+          if (!done1 && !refusedClearly(x?.j, "offset")) {
+            const m = "the portal's answer to the set-off was not received or not clear (" + (x?.j ? tpErr(x) : x?.http ? "HTTP " + x.http : "no answer") + ")";
             await put({ error: m });
             await logFiling(w, r, "proceed", false, m + "; not sent again");
             return { ok: false, unclear: true, error: "The portal's answer to the set-off was not received, so FinCom will not send it again. " + CHECK };
           }
-          if (!ok(x) && !(x.j && !x.j.error && (x.j.reference_id || x.j.data))) await put({ offset_tried_at: null });   // refused by the portal: not set off
+          if (!done1) await put({ offset_tried_at: row.offset_tried_at || null, offset_sends: sends0 });   // refused before processing: not this time
         } else {
           // GSTR-1 / IFF: proceed to file moves no money, so a lost answer may simply be tried again
           try { x = await tpv(f.kind, f.paths, { gstin, username: s.username, ret_period: period, action: "RETNEWPTF" }, s.h, BASE, "POST", { gstin, ret_period: period }); }
@@ -745,8 +759,18 @@ async function filingAction(w: Who, action: string, body: any, role: string) {
       await put({ file_tried_at: new Date().toISOString() });
       let x: any;
       try { x = await tpv(f.kind, f.paths, { gstin, username: s.username, ret_period: period, action: "RETFILE" }, s.h, BASE, "POST", { data: s.raw, st: "EVC", sid: pan + "|" + otp }); }
-      catch (e) { x = { http: 0, j: null, text: String((e as Error)?.message || e) }; }
+      catch (e) {
+        if (!(e instanceof SendErr && e.sent)) {   // it never left (too little time, the keys, DNS, connection refused)
+          const m = safeText(plain(e, "filing file"), otp);
+          await put({ file_tried_at: row.file_tried_at || null });
+          await logFiling(w, r, "file", false, "not sent: " + m, { otp });
+          return { ok: false, error: "Nothing was sent, so nothing was filed: " + m };
+        }
+        x = { http: 0, j: null, text: String((e as Error)?.message || e) };
+      }
       const arn = String(x?.j?.ack_num ?? x?.j?.data?.ack_num ?? x?.j?.arn ?? x?.j?.data?.arn ?? "");
+      // refused before processing (a wrong or expired OTP, the session): not a lost answer, File may be pressed again
+      if (!arn && refusedClearly(x?.j, "file")) await put({ file_tried_at: row.file_tried_at || null });
       if (!arn) {
         const m = safeText(x?.j ? tpErr(x) : "the portal's answer was not received (" + (x?.http ? "HTTP " + x.http : "no answer") + "); File again asks the portal first whether it was filed", otp);
         await put({ error: m });
