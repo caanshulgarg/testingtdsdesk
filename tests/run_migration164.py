@@ -118,6 +118,8 @@ try:
     except RuntimeError as e: ok("needs migration 153" in str(e), "without the entry columns of 72 and 73: stops and says so")
     db.sql("alter table tally_vouchers add column if not exists tds_tally jsonb, add column if not exists tds_tally_alter_id bigint;")
     db.sql(text); db.sql(text)
+    M165 = os.path.join(ROOT, "server", "tally-cloud", "migration-165-gst-share-rows-speed.sql")
+    if os.path.exists(M165): db.sql(open(M165).read()); db.sql(open(M165).read())   # migration 165: gst_share_rows made fast, same answer
     ok(db.one("select count(*) from pg_trigger where tgname like '%_calc_dirty_%' and not tgisinternal") == "9", "after them: runs, twice; nine triggers (three tables x insert, update, delete), none twice")
 
     b_bulk, b_one = bulk(BKN, 100000, "n")
