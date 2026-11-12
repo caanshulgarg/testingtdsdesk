@@ -988,7 +988,7 @@ function auditFindingSet(id, key, v){
   const au = S.books.audit = S.books.audit || {st: {}};
   au.st = au.st || {}; const cur = Object.assign({s: "open"}, au.st[id]);
   if (key === "s") cur.s = v; else cur.note = v;
-  cur.at = new Date().toISOString(); au.st[id] = cur; saveBooks(); render();
+  cur.at = new Date().toISOString(); au.st[id] = cur; if (typeof Audit === "object" && Audit.quietSave) Audit.quietSave(); else saveBooks(); render();
 }
 // related parties: a ledger added (from the list or a guess), its relation, removed
 function relAdd(name){ const b = S.books; if (!(b.auditRel || []).some(x => x.name === name)) b.auditRel = (b.auditRel || []).concat([{name, relation: ""}]); saveBooks(); render(); }

@@ -628,8 +628,11 @@ Object.assign(Audit, {
     return au.final[k];
   },
   finalFor(from, to){ return ((S.books.audit || {}).final || {})[this.ymd(from) + "-" + this.ymd(to)] || null; },
+  // the day (here, as today()) a time kept as toISOString falls on: a run at 01:00 in India is kept as the day before in
+  // UTC, so compared as UTC the day's run seemed not done until 05:30 (review of e5e0eb0ed)
+  dayOf(at){ const d = new Date(at); return isNaN(d.getTime()) ? String(at || "").slice(0, 10).replace(/-/g, "") : d.getFullYear() + String(d.getMonth() + 1).padStart(2, "0") + String(d.getDate()).padStart(2, "0"); },
   due(b){
-    const c = this.cfg(b), last = b.audit && b.audit.last ? String(b.audit.last.at).slice(0, 10).replace(/-/g, "") : "";
+    const c = this.cfg(b), last = b.audit && b.audit.last ? this.dayOf(b.audit.last.at) : "";
     if (c.freq === "off" || !(b.vouchers || []).length) return false;
     if (!last) return true;
     const t = this.today();
@@ -665,9 +668,19 @@ Object.assign(Audit, {
   // steps sharing what they work out as one run does (JOB_MEMO, as lib/behind.jsx does). It is the same run (runIn), so
   // the same result as working it out at once. The books' audit is changed only by its last step: until then the last
   // run stays as it was (the Audit tab says it is checking). The books changed meanwhile (another list of entries, an
-  // entry replaced, any save of the books, a run by hand, the setting): it starts again from the books as they are now,
-  // if still due; another client opened: it stops, and nothing is written. tests/run_hang_audit_auto.py
-  AUTO: {SLICE_MS: 10, DRAW_MS: 500},
+  // entry replaced, any save of the books but one that only marks a finding (quiet), a run by hand, the setting): it
+  // starts again from the books as they are now, if still due; its last start (the MAX_STARTS-th: the books saved again
+  // and again) finishes whatever else changes, and is kept (the Audit tab then says if it no longer fits the books,
+  // stale). Another client opened: it stops, and nothing is written.
+  // While the cloud copy's entries are being brought into the books (TCloud.load, which changes them across awaits) it
+  // takes no step (autoWait). A task of steps is about SLICE_MS, less if the idle time runs out (timeRemaining), and
+  // HIDDEN_MS while the tab is hidden (its timers then come about once a second at best). tests/run_hang_audit_auto.py,
+  // tests/run_audit_auto_ist.py
+  AUTO: {SLICE_MS: 10, HIDDEN_MS: 150, WAIT_MS: 250, DRAW_MS: 500, MAX_STARTS: 6},
+  // saves of the books that change nothing the audit reads (a finding marked, its note): auditFindingSet
+  quiet: 0,
+  quietSave(){ this.quiet++; return saveBooks(); },
+  rev(){ return (typeof BOOKS_REV === "number" ? BOOKS_REV : 0) - this.quiet; },
   auto: null,
   maybeRun(){
     const b = S.books;
@@ -677,12 +690,18 @@ Object.assign(Audit, {
   // what the run is worked out from: compared before each task of steps
   autoSig(b){
     const V = b.vouchers || [];
-    return {b, cid: b.cid, co: S.coId, V, n: V.length, vs: V.slice(), rev: typeof BOOKS_REV === "number" ? BOOKS_REV : 0, last: (b.audit || {}).last || null, freq: this.cfg(b).freq};
+    return {b, cid: b.cid, co: S.coId, V, n: V.length, vs: V.slice(), rev: this.rev(), last: (b.audit || {}).last || null, freq: this.cfg(b).freq};
   },
+  // the same run and setting (no run by hand since, the setting not changed)
+  autoRun(x, b){ return !!x && x.b === b && S.books === b && S.coId === x.co && x.last === ((b.audit || {}).last || null) && x.freq === this.cfg(b).freq; },
   autoSame(x, b){
     const V = b.vouchers || [];
-    return !!x && x.b === b && S.books === b && S.coId === x.co && x.V === V && x.n === V.length && x.rev === (typeof BOOKS_REV === "number" ? BOOKS_REV : 0) &&
-      x.last === ((b.audit || {}).last || null) && x.freq === this.cfg(b).freq && x.vs.every((v, i) => v === V[i]);
+    return this.autoRun(x, b) && x.V === V && x.n === V.length && x.rev === this.rev() && x.vs.every((v, i) => v === V[i]);
+  },
+  // the books are being brought in from the cloud copy (changed across awaits): no step now
+  autoWait(b){
+    const T = typeof TCloud === "object" ? TCloud : null, f = typeof LK === "object" && LK.fr ? LK.fr() : null;
+    return !!((T && (T.opens > 0 || T.loads > 0)) || b.catchUp || (f && f.busy));
   },
   autoStart(b){
     const j = this.auto;
@@ -700,25 +719,40 @@ Object.assign(Audit, {
   },
   // the run on its own being worked out for these books (the Audit tab's "checking" line)
   autoFor(b){ const j = this.auto; return j && j.b === b && S.books === b ? j : null; },
-  autoSoon(j){
+  autoSoon(j, ms){
     const go = d => this.autoSlice(j, d);
-    if (typeof requestIdleCallback === "function" && !(typeof document === "object" && document.hidden)) requestIdleCallback(go, {timeout: 250});
+    if (ms) setTimeout(go, ms);
+    else if (typeof requestIdleCallback === "function" && !(typeof document === "object" && document.hidden)) requestIdleCallback(go, {timeout: 250});
     else setTimeout(go, 0);
   },
-  autoSlice(j){
+  autoBegin(j, b){
+    const r = this.defaultRange(b);
+    j.sig = this.autoSig(b); j.memo = new Map(); j.starts++;
+    j.it = this.runIn(r.from, r.to, "on its own (" + this.cfg(b).freq + ")", j.prog);
+  },
+  autoSlice(j, d){
     if (this.auto !== j) return;
     const b = j.b;
     // another client opened: stopped, nothing written
     if (S.books !== b || S.coId !== j.co){ this.autoStop(j); return; }
-    if (!j.it || !this.autoSame(j.sig, b)){
-      if (j.it){ try { j.it.return(); } catch (e){} j.it = null; }
-      // a run by hand since, the setting turned off, or no entries: nothing more to do
-      if (!this.due(b)){ this.autoStop(j); return; }
-      const r = this.defaultRange(b);
-      j.sig = this.autoSig(b); j.memo = new Map(); j.starts++;
-      j.it = this.runIn(r.from, r.to, "on its own (" + this.cfg(b).freq + ")", j.prog);
+    // the books are being brought in: looked at again in a moment, and then taken as changed (a load that stopped on the
+    // way may not have saved them)
+    if (this.autoWait(b)){ j.waited = true; this.autoSoon(j, this.AUTO.WAIT_MS); return; }
+    const waited = j.waited; j.waited = false;
+    if (!j.it || waited || !this.autoSame(j.sig, b)){
+      // its last start (started again often enough): it finishes whatever changes, but the books brought in meanwhile
+      if (j.it && j.final && !waited && this.autoRun(j.sig, b)){ /* on to the end */ }
+      else {
+        if (j.it){ try { j.it.return(); } catch (e){} j.it = null; }
+        // a run by hand since, the setting turned off, or no entries: nothing more to do
+        if (!this.due(b)){ this.autoStop(j); return; }
+        if (j.starts + 1 >= this.AUTO.MAX_STARTS) j.final = true;
+        this.autoBegin(j, b);
+      }
     }
     const now = () => (typeof performance === "object" ? performance.now() : Date.now()), t0 = now(), was = typeof JOB_MEMO === "undefined" ? null : JOB_MEMO;
+    const hidden = typeof document === "object" && !!document.hidden, idle = !hidden && d && !d.didTimeout && typeof d.timeRemaining === "function" ? d : null;
+    const ms = hidden ? this.AUTO.HIDDEN_MS : this.AUTO.SLICE_MS;
     let run = null, done = false;
     if (typeof reactScopeEnd === "function") reactScopeEnd();
     JOB_MEMO = j.memo; IN_RENDER++;
@@ -726,9 +760,13 @@ Object.assign(Audit, {
       for (;;){
         const r = j.it.next();
         if (r.done){ run = r.value; done = true; break; }
-        if (now() - t0 >= this.AUTO.SLICE_MS) break;
+        if (now() - t0 >= ms || (idle && idle.timeRemaining() <= 0)) break;
       }
-    } catch (e){ done = true; run = null; }
+    } catch (e){
+      done = true; run = null;
+      // as before, no run kept; said in the console and to Sentry (app/src/sentry.js), as the page's other parts say theirs
+      try { console.error("[FinCom] the day's audit on its own:", e); if (typeof window === "object" && typeof window.__fincomReport === "function") window.__fincomReport(e, "the day's audit on its own"); } catch (x){}
+    }
     finally { IN_RENDER--; JOB_MEMO = was; j.slices.push(Math.round(now() - t0)); }
     if (!done){
       // the Audit tab's line of how far it is, now and then
