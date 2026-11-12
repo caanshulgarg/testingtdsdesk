@@ -84,6 +84,15 @@ again before proceeding and before filing; if it changed since it was confirmed,
 again. Differences under ₹1.00 are rounding (no reason needed). A DSC client stops after proceed to file and is
 filed on the portal; the ARN is read back with `track`. Writes go to the sandbox: on the production host they are refused unless `TAXPRO_FILE_LIVE=yes` is set.
 
+Sent once (12-Nov-2026, item 1 of the state-machine review; `migration-173-gst-filing-once.sql`, run before the function):
+each action that writes takes the return's lease (`busy_token`, `busy_until`: one conditional update), so a second action
+on the same return at the same time is told it is already in progress, and every write is conditional on the lease. Once
+`proceeded` (3B: the tax set off) a save, summary, confirm or proceed is refused and the return never goes back; if the
+portal's figures differ at File, the difference is said and nothing is filed. A set-off whose answer never came counts as
+done (never sent twice). A save still processing (`IP`) stays `saved` with `save_state` `IP` and is asked again by summary
+and track. `file_tried_at` is set before RETFILE; a File after one without an ARN asks RETTRACK first. The EVC OTP is
+taken for 10 minutes after it is sent. Portal writes wait 120 s (`TAXPRO_WRITE_WAIT_MS`); the lease lasts 10 minutes.
+
 ## DSC (companies and LLPs): what others do, and FinCom's way
 
 The owner's answers of 17-Oct-2026: do not hide File for DSC clients; research how others file with DSC through an API;

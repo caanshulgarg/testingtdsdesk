@@ -43,6 +43,10 @@
 //   {action:"evc_otp", gstin, form, period, pan}                the signatory's EVC OTP asked for (the portal sends it)
 //   {action:"file", gstin, form, period, pan, otp}              a person's click: RETFILE with EVC; the ARN kept
 //   {action:"track", gstin, form, period}                       the portal's status of the return (RETTRACK), ARN
+// Sent once (item 1 of the state-machine review, 12-Nov-2026; migration-173): every action that writes takes the return's
+// lease first (busy_token / busy_until, a compare-and-set), so one action at a time runs on a return and a second is told
+// it is already in progress; each write is conditional on the lease. Once proceeded (3B: the tax set off), nothing goes
+// back before proceeded. A File whose answer had no ARN is followed by RETTRACK before RETFILE is sent again.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsFor } from "../_shared/cors.ts";   // the one list of headers for every function (server/_shared/cors.ts)
 import { after2b } from "./automatch.ts";
@@ -99,12 +103,14 @@ async function asp() {
 }
 const sessName = (firm: string, gstin: string) => `gsp:sess:${firm}:${gstin}`;
 
+// filing's writes to the portal (PUT, POST) wait this long for an answer, then count as answered unclearly (never sent again blindly)
+const WRITE_WAIT = Math.max(1000, Number(Deno.env.get("TAXPRO_WRITE_WAIT_MS") || 120000));
 // one call to TaxPro's GST API: query in the URL, ASP credentials and taxpayer details in headers
 // (filing: a PUT or POST with a JSON body; the body is never logged)
 async function tp(path: string, query: Record<string, string>, headers: Record<string, string>, base = BASE, method = "GET", body?: unknown) {
   const k = await asp();
   const r = await fetch(base + path + "?" + new URLSearchParams(query), {
-    method, body: body === undefined ? undefined : JSON.stringify(body),
+    method, body: body === undefined ? undefined : JSON.stringify(body), signal: method === "GET" ? undefined : AbortSignal.timeout(WRITE_WAIT),
     headers: { aspid: k.id, password: k.pw, txn: "FC" + Date.now() + Math.floor(Math.random() * 1e6), appver: "FinCom-1.0", ...(body === undefined ? {} : { "Content-Type": "application/json" }), ...headers },
   });
   const text = await r.text();
@@ -427,6 +433,30 @@ async function putFiling(w: Who, r: Ret, set: Record<string, unknown>) {
   const { error } = await admin.from("gst_filings").upsert({ firm_id: w.firm, gstin: r.gstin, form: r.form, period: r.period, updated_at: new Date().toISOString(), ...set });
   if (error) dbFail("gst_filings", error, "The filing could not be kept. Try again in a moment.");
 }
+// the return's lease (migration-173): taken by an update conditional on busy_until having passed, so of two actions at
+// once one gets it; released by the holder. 10 minutes: longer than any one action (each portal write waits at most
+// WRITE_WAIT), so a lease never runs out under an action still sending
+const LEASE_MS = 10 * 60000, LEASE_FREE = "1970-01-01T00:00:00.000Z";
+const pk = (q: any, w: Who, r: Ret) => q.eq("firm_id", w.firm).eq("gstin", r.gstin).eq("form", r.form).eq("period", r.period);
+async function takeLease(w: Who, r: Ret, action: string): Promise<string | null> {
+  const token = crypto.randomUUID(), now = Date.now();
+  const { data, error } = await pk(admin.from("gst_filings").update({ busy_token: token, busy_action: action, busy_until: new Date(now + LEASE_MS).toISOString() }), w, r)
+    .lt("busy_until", new Date(now).toISOString()).select("firm_id");
+  if (error) dbFail("gst_filings lease", error, "The filing could not be started. Try again in a moment.");
+  return data && data.length ? token : null;
+}
+async function dropLease(w: Who, r: Ret, token: string) {
+  const { error } = await pk(admin.from("gst_filings").update({ busy_token: null, busy_action: null, busy_until: LEASE_FREE }), w, r).eq("busy_token", token);
+  if (error) console.error(JSON.stringify({ fn: "gst-taxpro", where: "gst_filings release", code: error.code || null, error: String(error.message || "").slice(0, 500) }));
+}
+// a write under the lease: only while this action still holds it (compare-and-set)
+async function putHeld(w: Who, r: Ret, token: string, set: Record<string, unknown>) {
+  const { data, error } = await pk(admin.from("gst_filings").update({ updated_at: new Date().toISOString(), ...set }), w, r).eq("busy_token", token).select("firm_id");
+  if (error) dbFail("gst_filings", error, "The filing could not be kept. Try again in a moment.");
+  if (!data || !data.length) throw new Plain("Another action changed this return meanwhile; nothing more was done. Read where it stands again.");
+}
+// the portal's EVC OTP lasts 10 minutes (an older one is refused before anything is sent)
+const OTP_MS = 10 * 60000;
 // every call logged: who, when, GSTIN, period, form, action, result, ARN; never the OTP
 async function logFiling(w: Who, r: Ret, action: string, ok1: boolean, result: string, extra: { arn?: string; ref?: string; otp?: string } = {}) {
   await admin.from("gst_filing_log").insert({ firm_id: w.firm, gstin: r.gstin, form: r.form, period: r.period, action, by_user: w.me, ok: ok1,
@@ -466,7 +496,7 @@ async function filingAction(w: Who, action: string, body: any, role: string) {
   if (action === "filing") {
     const row = await filingRow(w, r);
     const { data: log } = await admin.from("gst_filing_log").select("action, by_user, at, ok, result, arn").eq("firm_id", w.firm).eq("gstin", gstin).eq("form", form).eq("period", period).order("at", { ascending: false }).limit(50);
-    if (row) delete row.payload;
+    if (row) { delete row.payload; delete row.busy_token; }
     return { ok: true, filing: row || null, log: log || [], host: BASE === SANDBOX_URL ? "sandbox" : writeAllowed(BASE, FILE_LIVE) ? "test" : "production" };
   }
   // the same rights as posting: an owner or staff member; a viewer may look, not file
@@ -475,9 +505,51 @@ async function filingAction(w: Who, action: string, body: any, role: string) {
     await logFiling(w, r, action, false, "refused: production host without TAXPRO_FILE_LIVE");
     return { ok: false, error: "Filing through the GST API is not switched on for this server yet (it files on the sandbox only)." };
   }
-  const row = await filingRow(w, r);
-  if (row?.status === "filed" && action !== "track") return { ok: false, error: f.label + " for " + period + " is already filed (ARN " + (row.arn || "?") + ")." };
+  const first = await filingRow(w, r);
+  if (first?.status === "filed" && action !== "track") return { ok: false, error: f.label + " for " + period + " is already filed (ARN " + (first.arn || "?") + ")." };
+  if (!first && action !== "save") return { ok: false, error: "Save the return to the portal first." };
+  // one action at a time on a return (migration-173): the lease, then the row as it stands now. A first save has no row
+  // to hold yet (nothing can be proceeded or filed before it)
+  let token: string | null = null;
+  if (first) {
+    token = await takeLease(w, r, action);
+    if (!token) {
+      const b = await filingRow(w, r);
+      await logFiling(w, r, action, false, "refused: " + (b?.busy_action || "another action") + " already in progress");
+      return { ok: false, busy: true, error: "Another action on this return (" + (b?.busy_action || "?") + ") is already in progress. Wait a moment, then read where it stands." };
+    }
+  }
+  const put = (set: Record<string, unknown>) => token ? putHeld(w, r, token, set) : putFiling(w, r, set);
   try {
+    const row = token ? await filingRow(w, r) : null;
+    if (row?.status === "filed" && action !== "track") return { ok: false, error: f.label + " for " + period + " is already filed (ARN " + (row.arn || "?") + ")." };
+    // once proceeded (3B: the tax set off on the portal) nothing goes back before it: no save, summary, confirm or proceed
+    const past = row?.status === "proceeded";
+    const PAST = form === "3B" ? "The tax for this return has already been set off on the portal; file it, or track it if it was filed."
+      : "This return has already been proceeded to file on the portal; file it, or track it if it was filed.";
+    if (past && (action === "save" || action === "summary" || action === "confirm" || action === "proceed")) {
+      await logFiling(w, r, action, false, "refused: already proceeded");
+      return { ok: false, error: PAST };
+    }
+    // a save the portal was still processing (IP): asked again (summary, track)
+    const repoll = async () => {
+      if (!row || row.save_state !== "IP" || !row.save_ref) return;
+      const { h, username } = await session(w, r);
+      const s1 = await tpv("STATUS", STATUS_PATHS, { gstin, username, ret_period: period, ref_id: row.save_ref, action: "RETSTATUS" }, h);
+      const st = statusOf(s1) || "IP";
+      if (st === "IP") return;
+      row.save_state = st;
+      await put({ save_state: st, save_errors: reportOf(s1), status: st === "P" ? (row.status === "failed" ? "saved" : row.status) : "failed", error: st === "P" ? null : "the portal found errors" });
+      if (st !== "P") row.status = "failed";
+      await logFiling(w, r, "save", st === "P", "RETSTATUS ref " + row.save_ref + ", status " + st, { ref: row.save_ref });
+    };
+    // the portal's own list of filed returns (RETTRACK): this return's entry with an ARN, or null
+    const trackHit = async () => {
+      const { h, username } = await session(w, r), fy = (() => { const m = +period.slice(0, 2), y = +period.slice(2); const s1 = m >= 4 ? y : y - 1; return s1 + "-" + String(s1 + 1).slice(2); })();
+      const g = await getTrack(h, gstin, username, fy);
+      return ((g.data.EFiledlist as any[]).find((e) => String(e.ret_prd) === period && f.track.includes(String(e.rtntype || "").toUpperCase()) && e.arn) || null) as any;
+    };
+    const filedAtOf = (hit: any) => { const d = String(hit?.dof || ""); return new Date(/^\d{2}-\d{2}-\d{4}$/.test(d) ? d.split("-").reverse().join("-") + "T00:00:00+05:30" : Date.now()).toISOString(); };
     if (action === "save") {
       const payload = form === "3B" ? cleanR3b(body.payload, gstin, period) : cleanR1(body.payload, gstin, period);
       const { h, username } = await session(w, r);
@@ -485,36 +557,32 @@ async function filingAction(w: Who, action: string, body: any, role: string) {
       const ref = String(x?.j?.reference_id ?? x?.j?.data?.reference_id ?? "");
       if (!ref) {
         const m = tpErr(x);
-        await putFiling(w, r, { status: "failed", error: m, payload, saved_by: w.me, saved_at: new Date().toISOString() });
+        await put({ status: "failed", error: m, payload, saved_by: w.me, saved_at: new Date().toISOString() });
         await logFiling(w, r, "save", false, m);
         return { ok: false, error: "The portal did not take the return: " + m };
       }
-      // RETSTATUS until processed (P), processed with errors (PE) or refused (ER)
+      // RETSTATUS until processed (P), processed with errors (PE) or refused (ER); still in progress (IP) is kept as saved
+      // with save_state IP (not failed) and asked again by the summary or track
       let st = "IP", rep: any = null;
       for (let i = 0; i < STATUS_TRIES && st === "IP"; i++) {
         if (i) await sleep(STATUS_WAIT);
         const s1 = await tpv("STATUS", STATUS_PATHS, { gstin, username, ret_period: period, ref_id: ref, action: "RETSTATUS" }, h);
         st = statusOf(s1) || "IP"; rep = reportOf(s1);
       }
-      const good = st === "P";
-      await putFiling(w, r, { status: good ? "saved" : "failed", save_ref: ref, save_state: st, save_errors: rep, payload, fincom_sum: figsOf(form, payload), portal_sum: null, diffs: null,
-        offset_plan: null, confirmed_by: null, confirmed_at: null, confirmed_sum: null, accepted: null, accept_note: null, proceeded_by: null, proceeded_at: null, otp_sent_at: null,
-        error: good ? null : st === "IP" ? "still being processed on the portal" : "the portal found errors", saved_by: w.me, saved_at: new Date().toISOString() });
-      await logFiling(w, r, "save", good, "RETSAVE ref " + ref + ", status " + st, { ref });
-      return { ok: good || st === "IP", saveState: st, ref, errors: rep, error: good ? undefined : st === "IP" ? "Saved; the portal is still processing it. Read the summary in a minute." : "The portal found errors in the return; nothing was filed." };
+      const good = st === "P", going = st === "IP";
+      await put({ status: good || going ? "saved" : "failed", save_ref: ref, save_state: st, save_errors: rep, payload, fincom_sum: figsOf(form, payload), portal_sum: null, diffs: null,
+        offset_plan: null, confirmed_by: null, confirmed_at: null, confirmed_sum: null, accepted: null, accept_note: null, proceeded_by: null, proceeded_at: null, otp_sent_at: null, file_tried_at: null,
+        error: good || going ? null : "the portal found errors", saved_by: w.me, saved_at: new Date().toISOString() });
+      await logFiling(w, r, "save", good || going, "RETSAVE ref " + ref + ", status " + st, { ref });
+      return { ok: good || going, saveState: st, ref, errors: rep, error: good ? undefined : going ? "Saved; the portal is still processing it. Read the summary in a minute." : "The portal found errors in the return; nothing was filed." };
     }
     if (!row) return { ok: false, error: "Save the return to the portal first." };
     if (action === "summary") {
-      if (row.save_state === "IP" && row.save_ref) {   // processed since?
-        const { h, username } = await session(w, r);
-        const s1 = await tpv("STATUS", STATUS_PATHS, { gstin, username, ret_period: period, ref_id: row.save_ref, action: "RETSTATUS" }, h);
-        row.save_state = statusOf(s1) || "IP";
-        await putFiling(w, r, { save_state: row.save_state, save_errors: reportOf(s1), status: row.save_state === "P" ? "saved" : row.status });
-      }
+      await repoll();
       if (row.save_state !== "P") return { ok: false, error: row.save_state === "IP" ? "The portal is still processing the save." : "The save was not processed; save again." };
       const s = await portalSummary(w, r), portal = portalFigsOf(form, s.raw), c = compare(row.fincom_sum || {}, portal, form);
       const plan = form === "3B" ? await offsetPlan(r, s.raw, s.h, s.username) : null;
-      await putFiling(w, r, { status: "summary", portal_sum: portal, diffs: c.differs, offset_plan: plan, confirmed_by: null, confirmed_at: null, confirmed_sum: null, accepted: null, accept_note: null, error: null });
+      await put({ status: "summary", portal_sum: portal, diffs: c.differs, offset_plan: plan, confirmed_by: null, confirmed_at: null, confirmed_sum: null, accepted: null, accept_note: null, error: null });
       await logFiling(w, r, "summary", true, (c.differs.length ? c.differs.length + " differences: " + c.differs.join(", ") : "matches FinCom") + (c.rounding.length ? "; rounding under ₹1: " + c.rounding.join(", ") : ""));
       return { ok: true, rows: c.rows, differs: c.differs, rounding: c.rounding, plan };
     }
@@ -524,7 +592,7 @@ async function filingAction(w: Who, action: string, body: any, role: string) {
       const missing = diffs.filter((d) => !acc.includes(d));
       if (missing.length) return { ok: false, error: "Accept each difference, or correct it and save again: " + missing.join(", ") + "." };
       if (diffs.length && !note) return { ok: false, error: "Say why the differences are accepted." };
-      await putFiling(w, r, { status: "confirmed", confirmed_by: w.me, confirmed_at: new Date().toISOString(), confirmed_sum: row.portal_sum, accepted: diffs, accept_note: note || null });
+      await put({ status: "confirmed", confirmed_by: w.me, confirmed_at: new Date().toISOString(), confirmed_sum: row.portal_sum, accepted: diffs, accept_note: note || null });
       await logFiling(w, r, "confirm", true, diffs.length ? "differences accepted (" + diffs.join(", ") + "): " + note : "the summary matches FinCom");
       return { ok: true };
     }
@@ -536,13 +604,45 @@ async function filingAction(w: Who, action: string, body: any, role: string) {
         if (!PAN.test(pan)) return { ok: false, error: "The authorised signatory's PAN is needed." };
         const { h, username } = await session(w, r);
         const x = await tp(EVC_PATH, { action: "EVCOTP", gstin, username, pan, form_type: f.formType }, h);
-        await putFiling(w, r, ok(x) ? { otp_sent_at: new Date().toISOString(), signatory_pan: pan } : { error: tpErr(x) });
+        await put(ok(x) ? { otp_sent_at: new Date().toISOString(), signatory_pan: pan } : { error: tpErr(x) });
         await logFiling(w, r, "evc_otp", ok(x), ok(x) ? "EVC OTP sent to the signatory (PAN " + pan + ")" : tpErr(x));
         return ok(x) ? { ok: true } : { ok: false, error: "The portal did not send the OTP: " + tpErr(x) };
       }
+      // file: the person's click, with the OTP the signatory received; sent once, kept nowhere. Checked before any call
+      const pan = String(body.pan || row.signatory_pan || "").toUpperCase().trim(), otp = String(body.otp || "").trim();
+      if (action === "file") {
+        if (!PAN.test(pan)) return { ok: false, error: "The authorised signatory's PAN is needed." };
+        if (!/^\d{6}$/.test(otp)) return { ok: false, error: "The EVC OTP has 6 digits." };
+        if (!row.otp_sent_at) return { ok: false, error: "Send the OTP first." };
+        if (!(Date.now() - Date.parse(row.otp_sent_at) < OTP_MS)) return { ok: false, error: "The OTP was sent more than 10 minutes ago and the portal no longer takes it. Send a new OTP." };
+        // a File sent before whose answer had no ARN (refused, lost, or timed out): the portal is asked first whether it
+        // was filed, and RETFILE is sent again only when it was not
+        if (row.file_tried_at) {
+          let hit: any;
+          try { hit = await trackHit(); } catch (e) {
+            const m = plain(e, "filing track before file");
+            await logFiling(w, r, "track", false, "before File: " + m);
+            return { ok: false, error: "Whether the earlier File reached the portal could not be checked (" + m + "). Nothing was sent; try again in a moment." };
+          }
+          await logFiling(w, r, "track", true, hit ? "before File: on the portal: " + (hit.status || "filed") + ", ARN " + hit.arn : "before File: not filed on the portal yet", { arn: hit?.arn });
+          if (hit) {
+            const at = filedAtOf(hit);
+            await put({ status: "filed", arn: hit.arn, filed_at: at, filed_by: w.me, error: null, signatory_pan: pan });
+            return { ok: true, arn: hit.arn, filedAt: at, tracked: true };
+          }
+        }
+      }
       const s = await portalSummary(w, r), portal = portalFigsOf(form, s.raw);
       if (!sameFigures(portal, row.confirmed_sum || {})) {
-        await putFiling(w, r, { status: "summary", portal_sum: portal, diffs: compare(row.fincom_sum || {}, portal, form).differs, confirmed_by: null, confirmed_at: null, confirmed_sum: null, accepted: null });
+        if (action === "file") {   // proceeded: never moved back; the difference said, nothing filed
+          const c = compare(row.confirmed_sum || {}, portal, form), keys = c.differs.concat(c.rounding);
+          const m = "the portal's summary is not the one confirmed (" + (keys.join(", ") || "its figures") + ")";
+          await put({ error: m });
+          await logFiling(w, r, "file", false, m + "; nothing sent");
+          return { ok: false, changed: true, differs: keys, error: "The portal's summary is not the one confirmed: " + (keys.join(", ") || "its figures") + ". " +
+            (form === "3B" ? "The tax is already set off" : "The return is already proceeded to file") + ", so FinCom does not go back: nothing was filed. Check the return on the portal." };
+        }
+        await put({ status: "summary", portal_sum: portal, diffs: compare(row.fincom_sum || {}, portal, form).differs, confirmed_by: null, confirmed_at: null, confirmed_sum: null, accepted: null });
         await logFiling(w, r, action, false, "the portal's summary changed since it was confirmed; nothing sent");
         return { ok: false, changed: true, error: "The portal's summary changed since it was confirmed. Nothing was sent: compare it again." };
       }
@@ -551,7 +651,7 @@ async function filingAction(w: Who, action: string, body: any, role: string) {
         if (form === "3B") {
           plan = await offsetPlan(r, s.raw, s.h, s.username);
           if (planKey(plan) !== planKey(row.offset_plan)) {
-            await putFiling(w, r, { status: "summary", offset_plan: plan, confirmed_by: null, confirmed_at: null, confirmed_sum: null, accepted: null });
+            await put({ status: "summary", offset_plan: plan, confirmed_by: null, confirmed_at: null, confirmed_sum: null, accepted: null });
             await logFiling(w, r, "proceed", false, "the set-off changed (ledgers or liability moved); nothing sent");
             return { ok: false, changed: true, error: "The ledgers or the liability changed since the summary was read, so the set-off changed. Nothing was sent: check it again.", plan };
           }
@@ -559,41 +659,46 @@ async function filingAction(w: Who, action: string, body: any, role: string) {
             await logFiling(w, r, "proceed", false, "cash short: " + JSON.stringify(plan.short));
             return { ok: false, error: "Not enough in the cash ledger: " + Object.entries(plan.short).map(([k, v]) => k.toUpperCase() + " ₹" + v).join(", ") + ". Pay by challan (PMT-06) first.", plan };
           }
-          x = await tpv(f.kind, f.paths, { gstin, username: s.username, ret_period: period, action: "RETOFFSET" }, s.h, BASE, "PUT", { gstin, ret_period: period, pdcash: plan.pdcash, pditc: plan.pditc });
+          await put({ error: null });   // still this action's return (the lease), just before the set-off goes
+          try { x = await tpv(f.kind, f.paths, { gstin, username: s.username, ret_period: period, action: "RETOFFSET" }, s.h, BASE, "PUT", { gstin, ret_period: period, pdcash: plan.pdcash, pditc: plan.pditc }); }
+          catch (e) { x = { http: 0, j: null, text: String((e as Error)?.message || e) }; }
+          // no clear answer (no reply, not JSON, the gateway's 5xx): the set-off may have reached the portal, so it counts
+          // as set off and is never sent again; RETFILE (or the portal) shows if it did not
+          if (!x || !x.j || x.http >= 500) {
+            const m = "the portal's answer to the set-off was not received (" + (x?.http ? "HTTP " + x.http : "no answer") + ")";
+            await put({ status: "proceeded", proceeded_by: w.me, proceeded_at: new Date().toISOString(), error: m });
+            await logFiling(w, r, "proceed", false, m + "; counted as set off, not sent again");
+            return { ok: false, unclear: true, error: "The portal's answer to the set-off was not received. FinCom counts the tax as set off and will not send it again: check the ledgers on the portal, then file or track the return." };
+          }
         } else {
           x = await tpv(f.kind, f.paths, { gstin, username: s.username, ret_period: period, action: "RETNEWPTF" }, s.h, BASE, "POST", { gstin, ret_period: period });
         }
         if (!ok(x) && !(x?.j && !x.j.error && (x.j.reference_id || x.j.data))) { await logFiling(w, r, "proceed", false, tpErr(x)); return { ok: false, error: "The portal refused: " + tpErr(x) }; }
-        await putFiling(w, r, { status: "proceeded", proceeded_by: w.me, proceeded_at: new Date().toISOString(), error: null });
+        await put({ status: "proceeded", proceeded_by: w.me, proceeded_at: new Date().toISOString(), error: null });
         await logFiling(w, r, "proceed", true, form === "3B" ? "liability offset (RETOFFSET)" : "proceeded to file (RETNEWPTF)");
         return { ok: true };
       }
-      // file: the person's click, with the OTP the signatory received; sent once, kept nowhere
-      const pan = String(body.pan || row.signatory_pan || "").toUpperCase().trim(), otp = String(body.otp || "").trim();
-      if (!PAN.test(pan)) return { ok: false, error: "The authorised signatory's PAN is needed." };
-      if (!/^\d{6}$/.test(otp)) return { ok: false, error: "The EVC OTP has 6 digits." };
-      if (!row.otp_sent_at) return { ok: false, error: "Send the OTP first." };
-      const x = await tpv(f.kind, f.paths, { gstin, username: s.username, ret_period: period, action: "RETFILE" }, s.h, BASE, "POST", { data: s.raw, st: "EVC", sid: pan + "|" + otp });
+      // file: marked tried before RETFILE goes (so a lost answer is tracked first next time), under this action's lease
+      await put({ file_tried_at: new Date().toISOString() });
+      let x: any;
+      try { x = await tpv(f.kind, f.paths, { gstin, username: s.username, ret_period: period, action: "RETFILE" }, s.h, BASE, "POST", { data: s.raw, st: "EVC", sid: pan + "|" + otp }); }
+      catch (e) { x = { http: 0, j: null, text: String((e as Error)?.message || e) }; }
       const arn = String(x?.j?.ack_num ?? x?.j?.data?.ack_num ?? x?.j?.arn ?? x?.j?.data?.arn ?? "");
       if (!arn) {
-        const m = safeText(tpErr(x), otp);
-        await putFiling(w, r, { error: m });
+        const m = safeText(x?.j ? tpErr(x) : "the portal's answer was not received (" + (x?.http ? "HTTP " + x.http : "no answer") + "); File again asks the portal first whether it was filed", otp);
+        await put({ error: m });
         await logFiling(w, r, "file", false, m, { otp });
         return { ok: false, error: "Not filed: " + m };
       }
       const at = new Date().toISOString();
-      await putFiling(w, r, { status: "filed", arn, filed_at: at, filed_by: w.me, error: null, signatory_pan: pan });
+      await put({ status: "filed", arn, filed_at: at, filed_by: w.me, error: null, signatory_pan: pan });
       await logFiling(w, r, "file", true, "filed with EVC (PAN " + pan + ")", { arn, otp });
       return { ok: true, arn, filedAt: at };
     }
     if (action === "track") {
-      const { h, username } = await session(w, r), fy = (() => { const m = +period.slice(0, 2), y = +period.slice(2); const s1 = m >= 4 ? y : y - 1; return s1 + "-" + String(s1 + 1).slice(2); })();
-      const g = await getTrack(h, gstin, username, fy);
-      const hit = (g.data.EFiledlist as any[]).find((e) => String(e.ret_prd) === period && f.track.includes(String(e.rtntype || "").toUpperCase()) && e.arn);
-      if (hit && row.status !== "filed") {
-        const d = String(hit.dof || ""), iso = /^\d{2}-\d{2}-\d{4}$/.test(d) ? d.split("-").reverse().join("-") + "T00:00:00+05:30" : new Date().toISOString();
-        await putFiling(w, r, { status: "filed", arn: hit.arn, filed_at: new Date(iso).toISOString(), error: null });
-      }
+      await repoll();
+      const hit = await trackHit();
+      if (hit && row.status !== "filed") await put({ status: "filed", arn: hit.arn, filed_at: filedAtOf(hit), error: null });
       await logFiling(w, r, "track", true, hit ? "on the portal: " + (hit.status || "filed") + ", ARN " + hit.arn : "not filed on the portal yet", { arn: hit?.arn });
       return { ok: true, filed: !!hit, arn: hit?.arn || row.arn || "", status: hit?.status || row.status, dof: hit?.dof || "" };
     }
@@ -602,6 +707,8 @@ async function filingAction(w: Who, action: string, body: any, role: string) {
     const m = safeText(plain(e, "filing " + action), String(body.otp || ""));
     await logFiling(w, r, action, false, m, { otp: String(body.otp || "") }).catch(() => {});
     return { ok: false, error: m };
+  } finally {
+    if (token) await dropLease(w, r, token);
   }
 }
 

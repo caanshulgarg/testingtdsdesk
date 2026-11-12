@@ -8,6 +8,10 @@ TaxPro that answers as the sandbox does. Never TaxPro itself. Also runs the pure
   - 3B: the set-off from the portal's liability and the ledgers (rule 88A); cash short -> refused; RETOFFSET as shown;
   - owner and staff may file, a viewer may not; every call logged with who, GSTIN, period, form, result and ARN;
   - track (RETTRACK): a return filed on the portal marked filed with its ARN.
+  - sent once (item 1 of the state-machine review, 12-Nov-2026; migration-173): once proceeded, a save, summary or proceed
+    is refused and never moves the return back; two proceeds or two Files at once send RETOFFSET / RETFILE once; a save
+    the portal is still processing is kept as saved (state IP), not failed, and polled again; a File without an ARN is
+    followed by RETTRACK before RETFILE is sent again; an EVC OTP older than 10 minutes is refused.
 Needs Deno (DENO, default: the deno on the PATH or /opt/deno/deno)."""
 import os, sys, json, time, shutil, threading, subprocess, http.server, urllib.request
 from urllib.parse import urlparse, parse_qs
@@ -25,7 +29,7 @@ ok(u.returncode == 0, "the pure parts (deno test tests/gst_file_unit.ts)" + ("" 
 
 G, PANS = "09AANFG3202D1ZR", "ABCPG1234K"
 OTP_OK, OTP_BAD = "246810", "111111"
-TP = {"calls": [], "saved": {}, "status_n": {}, "tamper": {}, "cash": {"igst": {"tx": 0}, "cgst": {"tx": 0}, "sgst": {"tx": 0}, "cess": {"tx": 0}}, "offset": None, "filebody": None, "filed": []}
+TP = {"calls": [], "saved": {}, "status_n": {}, "tamper": {}, "ip": set(), "delay": {}, "noarn": [False], "cash": {"igst": {"tx": 0}, "cgst": {"tx": 0}, "sgst": {"tx": 0}, "cess": {"tx": 0}}, "offset": None, "filebody": None, "filed": []}
 def sec_sum(p):   # the portal's GSTR-1 summary of what was saved (as the portal adds it up)
     out = []
     def fig(name, docs, sign=lambda d: 1):
@@ -43,11 +47,14 @@ def sec_sum(p):   # the portal's GSTR-1 summary of what was saved (as the portal
 class TPH(http.server.BaseHTTPRequestHandler):
     def log_message(self, *a): pass
     def out(self, obj, code=200):
-        b = json.dumps(obj).encode(); self.send_response(code); self.send_header("Content-Type", "application/json"); self.send_header("Content-Length", str(len(b))); self.end_headers(); self.wfile.write(b)
+        b = json.dumps(obj).encode()
+        try: self.send_response(code); self.send_header("Content-Type", "application/json"); self.send_header("Content-Length", str(len(b))); self.end_headers(); self.wfile.write(b)
+        except (BrokenPipeError, ConnectionResetError): pass      # the function stopped waiting (a write's answer lost)
     def handle_any(self):
         uu = urlparse(self.path); q = {k: v[0] for k, v in parse_qs(uu.query).items()}; p = uu.path; a = q.get("action", "")
         n = int(self.headers.get("Content-Length") or 0); body = json.loads(self.rfile.read(n)) if n else None
         TP["calls"].append({"m": self.command, "p": p, "a": a, "q": q, "body": body, "tok": self.headers.get("auth-token")})
+        if TP["delay"].get(a): time.sleep(TP["delay"][a])          # a slow portal: two calls at once overlap
         if self.headers.get("aspid") != "ASP-FROM-VAULT": return self.out({"status_cd": "0", "error": {"message": "Invalid ASP"}})
         if p == "/taxpayerapi/dec/v1.0/authenticate":
             if a == "OTPREQUEST": return self.out({"status_cd": "1"})
@@ -61,7 +68,7 @@ class TPH(http.server.BaseHTTPRequestHandler):
             return self.out({"status_cd": "1", "data": {"reference_id": "REF-" + kind + q["ret_period"]}})
         if p == "/taxpayerapi/dec/v1.0/returns" and a == "RETSTATUS":
             r = q.get("ref_id"); TP["status_n"][r] = TP["status_n"].get(r, 0) + 1
-            return self.out({"status_cd": "IP"} if TP["status_n"][r] < 2 else {"status_cd": "P"})
+            return self.out({"status_cd": "IP"} if TP["status_n"][r] < 2 or r in TP["ip"] else {"status_cd": "P"})
         if kind == "R1" and a == "RETSUM":
             p1 = TP["saved"].get(key)
             if not p1: return self.out({"status_cd": "0", "error": {"message": "Latest Summary is not available.", "error_cd": "RET09001"}})
@@ -82,10 +89,13 @@ class TPH(http.server.BaseHTTPRequestHandler):
         if kind and a == "RETFILE":
             TP["filebody"] = body; sid = (body or {}).get("sid", "")
             if sid == PANS + "|" + OTP_OK:
-                arn = "AA09" + q["ret_period"] + ("1" if kind == "R1" else "3") + "00042X"; TP["filed"].append((kind, q["ret_period"], arn)); return self.out({"status_cd": "1", "data": {"ack_num": arn}})
+                arn = "AA09" + q["ret_period"] + ("1" if kind == "R1" else "3") + "00042X"; TP["filed"].append((kind, q["ret_period"], arn))
+                if TP["noarn"][0]: return self.out({"message": "upstream timed out"}, 504)    # filed on the portal, the answer lost
+                return self.out({"status_cd": "1", "data": {"ack_num": arn}})
             return self.out({"status_cd": "0", "error": {"message": "Invalid OTP " + sid.split("|")[-1] + " for " + sid, "error_cd": "OTP0012"}})
         if p == "/taxpayerapi/dec/v1.0/returns" and a == "RETTRACK":
-            return self.out({"status_cd": "1", "data": {"EFiledlist": [{"valid": "Y", "mof": "ONLINE", "dof": "11-07-2026", "rtntype": "GSTR1", "ret_prd": "062026", "arn": "AA0906260000777", "status": "Filed"}]}})
+            return self.out({"status_cd": "1", "data": {"EFiledlist": [{"valid": "Y", "mof": "ONLINE", "dof": "11-07-2026", "rtntype": "GSTR1", "ret_prd": "062026", "arn": "AA0906260000777", "status": "Filed"}] +
+                [{"valid": "Y", "mof": "ONLINE", "dof": "12-11-2026", "rtntype": "GSTR1" if k == "R1" else "GSTR3B", "ret_prd": per, "arn": arn, "status": "Filed"} for k, per, arn in TP["filed"]]}})
         self.out({"message": "no such path " + p}, 404)
     def do_GET(self): self.handle_any()
     def do_PUT(self): self.handle_any()
@@ -99,7 +109,7 @@ F.SECRETS["gsp:taxpro:aspid"] = "ASP-FROM-VAULT"; F.SECRETS["gsp:taxpro:password
 F.start()
 env = dict(os.environ, SUPABASE_URL="http://127.0.0.1:%d" % F.PORT, SUPABASE_SERVICE_ROLE_KEY=F.SERVICE, SUPABASE_ANON_KEY="anon-key",
            TAXPRO_BASE_URL="http://127.0.0.1:9311", TAXPRO_EINV_URL="http://127.0.0.1:9311", TAXPRO_ASP_ID="", TAXPRO_ASP_PASSWORD="",
-           TAXPRO_STATUS_WAIT_MS="20", TAXPRO_R1_PATH="/taxpayerapi/dec/v4.0/returns/gstr1", TAXPRO_R3B_PATH="/taxpayerapi/dec/v4.0/returns/gstr3b")
+           TAXPRO_STATUS_WAIT_MS="20", TAXPRO_WRITE_WAIT_MS="4000", TAXPRO_R1_PATH="/taxpayerapi/dec/v4.0/returns/gstr1", TAXPRO_R3B_PATH="/taxpayerapi/dec/v4.0/returns/gstr3b")
 fn = subprocess.Popen([DENO, "run", "--allow-net", "--allow-env", "--allow-read", os.path.join(HERE, "..", "server", "gst-taxpro", "index.ts")], env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
 log = []
 threading.Thread(target=lambda: [log.append(l) for l in fn.stdout], daemon=True).start()
@@ -209,6 +219,77 @@ try:
     call(dict(t, action="save", payload=dict(R1, fp="062026")))
     r = call(dict(t, action="track"))
     ok(r.get("ok") and r.get("filed") and row("R1", "062026")["status"] == "filed" and row("R1", "062026")["arn"] == "AA0906260000777" and row("R1", "062026")["filed_at"].startswith("2026-07-10T18:30"), "track: filed on the portal (RETTRACK): marked filed with its ARN and date")
+    # ---- sent once (item 1 of the state-machine review; migration-173) ----
+    n_of = lambda a, per: sum(1 for c in TP["calls"] if c["a"] == a and c["q"].get("ret_period") == per)
+    def both(b1, b2):   # two calls at the same time
+        out = [None, None]
+        th = [threading.Thread(target=lambda i=i, b=b: out.__setitem__(i, call(b))) for i, b in ((0, b1), (1, b2))]
+        for t1 in th: t1.start()
+        for t1 in th: t1.join()
+        return out
+    # 3B for 072026: two proceeds at once send RETOFFSET once
+    c3 = {"gstin": G, "form": "3B", "period": "072026"}
+    call(dict(c3, action="save", payload=dict(R3B, ret_period="072026"))); call(dict(c3, action="summary")); call(dict(c3, action="confirm"))
+    TP["delay"]["RETOFFSET"] = 1.5
+    r = both(dict(c3, action="proceed"), dict(c3, action="proceed"))
+    TP["delay"] = {}
+    ok(n_of("RETOFFSET", "072026") == 1 and sum(1 for x in r if x.get("ok")) == 1 and any("already in progress" in (x.get("error") or "") for x in r) and row("3B", "072026")["status"] == "proceeded",
+       "two proceeds at once: RETOFFSET sent once, the other told it is already in progress: %s" % [x.get("error") for x in r])
+    # once proceeded, nothing goes back before it
+    sv = call(dict(c3, action="save", payload=dict(R3B, ret_period="072026"))); sm = call(dict(c3, action="summary")); pr = call(dict(c3, action="proceed"))
+    ok(all(not x.get("ok") and "already been set off" in (x.get("error") or "") for x in (sv, sm, pr)) and row("3B", "072026")["status"] == "proceeded" and n_of("RETOFFSET", "072026") == 1
+       and sum(1 for c in TP["calls"] if c["a"] == "RETSAVE" and c["p"].endswith("/gstr3b") and c["q"].get("ret_period") == "072026") == 1, "set off, then save, summary or proceed: refused, the return stays proceeded, nothing sent: %s" % [x.get("error") for x in (sv, sm, pr)])
+    # the portal's figures differ after the set-off: said, nothing filed, not moved back
+    call(dict(c3, action="evc_otp", pan=PANS))
+    TP["saved"][("3B", "072026")]["sup_details"]["osup_det"]["txval"] = 1500
+    r = call(dict(c3, action="file", pan=PANS, otp=OTP_OK))
+    ok(not r.get("ok") and r.get("changed") and "3.1(a)" in r.get("error", "") and row("3B", "072026")["status"] == "proceeded" and row("3B", "072026")["confirmed_by"] and n_of("RETFILE", "072026") == 0,
+       "the portal's 3B differs after the set-off: the difference said, nothing filed, still proceeded: " + str(r.get("error")))
+    TP["saved"][("3B", "072026")]["sup_details"]["osup_det"]["txval"] = 1000
+    # an OTP older than the portal's 10 minutes: refused, nothing sent
+    for x in F.T["gst_filings"]:
+        if x["form"] == "3B" and x["period"] == "072026": x["otp_sent_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() - 11 * 60))
+    r = call(dict(c3, action="file", pan=PANS, otp=OTP_OK))
+    ok(not r.get("ok") and "10 minutes" in r.get("error", "") and n_of("RETFILE", "072026") == 0, "an EVC OTP sent 11 minutes ago: refused, send a new one: " + str(r.get("error")))
+    call(dict(c3, action="evc_otp", pan=PANS)); r = call(dict(c3, action="file", pan=PANS, otp=OTP_OK))
+    ok(r.get("ok") and r.get("arn") and n_of("RETFILE", "072026") == 1, "a new OTP: filed")
+    # 3B for 062026: the set-off's answer never comes (the portal took longer than FinCom waits): counted as set off, never sent again
+    c4 = {"gstin": G, "form": "3B", "period": "062026"}
+    call(dict(c4, action="save", payload=dict(R3B, ret_period="062026"))); call(dict(c4, action="summary")); call(dict(c4, action="confirm"))
+    TP["delay"]["RETOFFSET"] = 5
+    r = call(dict(c4, action="proceed"))
+    TP["delay"] = {}
+    r2 = call(dict(c4, action="proceed"))
+    ok(not r.get("ok") and r.get("unclear") and row("3B", "062026")["status"] == "proceeded" and not r2.get("ok") and "already been set off" in r2.get("error", "") and n_of("RETOFFSET", "062026") == 1,
+       "the set-off's answer lost: counted as set off (proceeded, said so), a second proceed refused, RETOFFSET sent once: " + str(r.get("error")))
+    # R1 for 022026: two Files at once send RETFILE once
+    c1 = {"gstin": G, "form": "R1", "period": "022026"}
+    call(dict(c1, action="save", payload=dict(R1, fp="022026"))); call(dict(c1, action="summary")); call(dict(c1, action="confirm")); call(dict(c1, action="proceed")); call(dict(c1, action="evc_otp", pan=PANS))
+    TP["delay"]["RETFILE"] = 1.5
+    r = both(dict(c1, action="file", pan=PANS, otp=OTP_OK), dict(c1, action="file", pan=PANS, otp=OTP_OK))
+    TP["delay"] = {}
+    ok(n_of("RETFILE", "022026") == 1 and sum(1 for x in r if x.get("ok")) == 1 and any("already in progress" in (x.get("error") or "") for x in r) and row("R1", "022026")["status"] == "filed",
+       "two Files at once: RETFILE sent once, the other told it is already in progress: %s" % [x.get("error") for x in r])
+    # R1 for 122025: RETFILE's answer lost (filed on the portal, no ARN back); the next File asks RETTRACK first
+    c2 = {"gstin": G, "form": "R1", "period": "122025"}
+    call(dict(c2, action="save", payload=dict(R1, fp="122025"))); call(dict(c2, action="summary")); call(dict(c2, action="confirm")); call(dict(c2, action="proceed")); call(dict(c2, action="evc_otp", pan=PANS))
+    TP["noarn"][0] = True; r = call(dict(c2, action="file", pan=PANS, otp=OTP_OK)); TP["noarn"][0] = False
+    ok(not r.get("ok") and row("R1", "122025")["status"] == "proceeded", "RETFILE answered without an ARN: not marked filed")
+    nt = sum(1 for c in TP["calls"] if c["a"] == "RETTRACK")
+    r = call(dict(c2, action="file", pan=PANS, otp=OTP_OK))
+    ok(r.get("ok") and r.get("arn") == "AA09122025100042X" and n_of("RETFILE", "122025") == 1 and sum(1 for c in TP["calls"] if c["a"] == "RETTRACK") == nt + 1 and row("R1", "122025")["status"] == "filed",
+       "the next File asks the portal first (RETTRACK): it was filed, so marked filed with its ARN and RETFILE not sent again: " + str(r))
+    # a save the portal is still processing: kept as saved (state IP), never failed; polled again by summary and by track
+    for per in ("012026", "112025"):
+        TP["ip"].add("REF-R1" + per)
+        r = call({"gstin": G, "form": "R1", "period": per, "action": "save", "payload": dict(R1, fp=per)})
+        ok(r.get("ok") and r.get("saveState") == "IP" and row("R1", per)["status"] == "saved" and row("R1", per)["save_state"] == "IP" and not row("R1", per).get("error"),
+           "a save still processing on the portal (%s): ok, and kept as saved (state IP), not failed: %s" % (per, row("R1", per).get("status")))
+        TP["ip"].discard("REF-R1" + per)
+    r = call({"gstin": G, "form": "R1", "period": "012026", "action": "summary"})
+    ok(r.get("ok") and row("R1", "012026")["save_state"] == "P" and row("R1", "012026")["status"] == "summary", "the summary polls it again: processed, the summary read")
+    r = call({"gstin": G, "form": "R1", "period": "112025", "action": "track"})
+    ok(r.get("ok") and row("R1", "112025")["save_state"] == "P" and row("R1", "112025")["status"] == "saved", "track polls it again too: processed")
     # where a return stands, for the screen
     r = call(dict(base, action="filing"), "viewer")
     ok(r.get("ok") and r["filing"]["arn"] == "AA09082026100042X" and "payload" not in r["filing"] and r.get("host") == "test" and len(r["log"]) >= 8, "a viewer may see where a return stands and its log (not the payload)")
