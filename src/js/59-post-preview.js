@@ -719,7 +719,7 @@ async function postTestCopies(cid, id, n){
 // owners of the firm alone (the cloud accepts only an active member with role owner; a superadmin who is not one is refused there)
 // a result of FinCom's cloud older than the bill's posting being cleared here (taken back, deleted in Tally, undone)
 function postOld(e, j){ return !!(e.postClearedAt && j && String(j.updated_at || j.created_at || "") < e.postClearedAt); }
-// the entries a check with Tally released: the bridge lets each go once more (it looks in Tally for it first)
+// the entries a check with Tally released: the bridge lets each go once more (without looking in Tally)
 function postReleased(list){ return list.filter(x => x.release && x.release.at).map(x => ({id: x.id, at: x.release.at, by: x.release.by || "", why: x.release.why || ""})); }
 function postOwner(){ return !!(S.account && ((S.account.me || {}).role === "owner")); }
 // the owner's decision B (05-Oct-2026, migration 55): any member of the firm who may post (owner or staff: the cloud's

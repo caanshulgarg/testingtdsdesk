@@ -331,7 +331,12 @@ with sync_playwright() as p:
     # B3: the live read refused (reading off): the party ledger's kept entries (/ledgervouchers) decide
     E("() => { window.__live = {ok: false, why: 'reading entries is off'}; window.tallyCall = async (co, u) => /ledgervouchers/.test(u) ? {ok: true, rows: /Path%20Supplier%20l2/.test(u) ? [{date: '20260701', type: 'Purchase', other: 'Exp', dr: '', cr: '1000.00'}] : []} : {}; }")
     deleted_in_tally("l1")
-    ok(E("D().entries.l1.status") == "draft" and E("!!(D().entries.l1.release && D().entries.l1.release.at)"), "reading off: the party ledger has no such entry: back to To review, released once (%s)" % E("D().entries.l1.status"))
+    ok(E("D().entries.l1.status") == "approved" and E("!!D().entries.l1.exportedAt") and "Could not read Tally; nothing changed" in last(), "reading off: the party ledger's kept entries (no age) never say “not there”: nothing changed (%r)" % last())
+    E("""(cid) => { const l = {state: 'open', read: new Date(Date.now() + 60000).toISOString(), text: ''}; window.__tl0 = window.tallyLine; window.tallyLine = () => l; window.__ton = TCloud.on; TCloud.on = () => true;
+      window.__ctc = CloudTally.call; CloudTally.call = async () => ({vouchers: []}); }""", cid)
+    deleted_in_tally("l1")
+    ok(E("D().entries.l1.status") == "draft" and E("!!(D().entries.l1.release && D().entries.l1.release.at)"), "the cloud copy read after the posting has no such entry: back to To review, released once (%s)" % E("D().entries.l1.status"))
+    E("() => { window.tallyLine = window.__tl0; TCloud.on = window.__ton; CloudTally.call = window.__ctc; }")
     deleted_in_tally("l2")
     ok(E("D().entries.l2.status") == "approved" and E("!!D().entries.l2.exportedAt") and "Tally still has it" in last(), "reading off: the party ledger has it: stays posted (%r)" % last())
     # owner's override when nothing can be read
@@ -342,7 +347,7 @@ with sync_playwright() as p:
     if btn.count(): btn.click(); W(500)
     ok(E("D().entries.h1.status") == "draft" and E("!!(D().entries.h1.deletedInTally && D().entries.h1.deletedInTally.byHand)"), "the owner's word: back to To review, marked checked by hand")
     # B2: a release for the bridge on this computer
-    ok(E("postReleased([D().entries.l1]).length") == 1 and E("postReleased([D().entries.l1])[0].id") == "l1", "the bill goes to the bridge as released once (postReleased)")
+    ok(E("postReleased([D().entries.h1]).length") == 1 and E("postReleased([D().entries.h1])[0].id") == "h1", "the bill goes to the bridge as released once (postReleased)")
     src = open(os.path.join(HERE, "..", "src", "js", "24-tally-bridge.js")).read()
     ok("released: postReleased(todo)" in src and "released: postReleased(rows)" in src, "bills are passed as released like bank lines")
     # B2: the cloud's hold on its FinCom id: an owner releases it at once; a member's waits for the owner under Errors

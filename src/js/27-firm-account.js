@@ -1149,7 +1149,7 @@ function billDelete(id){
 }
 // "Deleted in Tally" (the bar under a posted bill): a person deleted its voucher in Tally. The posting is cleared and the
 // bill goes back to To review; nothing is posted again (unlike "Not in Tally – post again" in Post to Tally)
-// "Deleted in Tally": Tally read first (live, else the party ledger's kept entries); found: stays posted; not read: no change
+// "Deleted in Tally": Tally read first (newer than the posting); found: stays posted; not read: no change
 const billDelBusy = {};
 function billDeletedInTally(e){
   const cid = S.coId, co = CO(cid);
@@ -1167,9 +1167,17 @@ function billDeletedInTally(e){
     try {
       x = await PostCheck.live(co, e, true);
       if (x.ok && !x.found && Date.parse(x.readAt || 0) <= PostCheck.postedAt(e)) x = {ok: false, why: "the read of Tally is older than the posting"};
+      // the bridge sends a released id without looking in Tally (bridge-go/jobs.go A5): only a read newer than the posting
+      // says "not there": the cloud copy read after it; the party ledger's kept entries (no age) only say "still there"
+      const tn = postCompanyName(co), l = typeof tallyLine === "function" && tallyLine(co);
+      if (!x.ok && l && typeof TCloud === "object" && TCloud.on() && Date.parse(l.read || 0) > PostCheck.postedAt(e)){
+        const vs = [].concat((await CloudTally.call(co, PostCheck.vouchersUrl(co, tn, e)) || {}).vouchers || []).filter(v => !/^yes$/i.test(v.cancelled || ""));
+        x = {ok: true, found: PostCheck.match(e, vs), readAt: l.read};
+      }
       if (!x.ok && e.partyLedger){
-        const d = e.x.invoiceDate, j = await tallyCall(co, "/ledgervouchers?company=" + encodeURIComponent(postCompanyName(co)) + "&ledger=" + encodeURIComponent(e.partyLedger) + "&from=" + isoToTally(addDays(d, -5)) + "&to=" + isoToTally(addDays(d, 5)));
-        if (j && Array.isArray(j.rows)){ const amt = r2(num(e.x.total)), hit = j.rows.find(v => String(v.date) === isoToTally(d) && Math.abs(num(v.cr || v.dr) - amt) < 0.01); x = {ok: true, found: hit ? {number: "", date: hit.date, type: hit.type} : null, readAt: new Date().toISOString()}; }
+        const d = e.x.invoiceDate, j = await tallyCall(co, "/ledgervouchers?company=" + encodeURIComponent(tn) + "&ledger=" + encodeURIComponent(e.partyLedger) + "&from=" + isoToTally(addDays(d, -5)) + "&to=" + isoToTally(addDays(d, 5)));
+        const hit = j && [].concat(j.rows || []).find(v => String(v.date) === isoToTally(d) && Math.abs(num(v.cr || v.dr) - r2(num(e.x.total))) < 0.01);
+        if (hit) x = {ok: true, found: {number: "", date: hit.date, type: hit.type}};
       }
     } catch (err){ x = {ok: false, why: plainMsg((err && err.message) || String(err))}; }
     delete billDelBusy[e.id];
