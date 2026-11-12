@@ -33,23 +33,24 @@ const FirstOpen = {
   async fetchDay(book, d){
     await Cloud.fresh().catch(() => {});
     const c = Cloud.cfg(), url = c.url.replace(/\/+$/, "") + "/storage/v1/object/authenticated/tally-days/" + Cloud.st.firm + "/" + book + "/" + d.slice(0, 6) + "/" + d + ".xml.gz";
-    const get = () => fetch(url, {headers: {apikey: c.key, Authorization: "Bearer " + Cloud.sess().access_token}, cache: "no-store"});
+    // (TCloud.dayGet: given up when nothing comes for a minute, so a stalled day does not hold the load, nor the audit)
+    const get = () => TCloud.dayGet(url, {headers: {apikey: c.key, Authorization: "Bearer " + Cloud.sess().access_token}});
     let r = await get();
     if (r.status === 401 || r.status === 400){ await Cloud.refreshToken(Cloud.sess().access_token); r = await get(); }
     if (r.status === 404) return "";
     if (!r.ok) throw new Error("Could not fetch " + d + " from the cloud (" + r.status + ").");
-    return r.arrayBuffer();
+    return r.gz;
   },
   // a month of day files in one answer (tally-ingest month_days); unpack: FirstOpen.unpack, set by app/src/lib/firstOpen.js
   // from server/tally-cloud/monthpack.js (the server's own rule). A server without it answers 404 (no such client)
   async fetchMonth(book, ym){
     await Cloud.fresh().catch(() => {});
-    const c = Cloud.cfg(), go = () => fetch(TCloud.ingestUrl(), {method: "POST", cache: "no-store",
+    const c = Cloud.cfg(), go = () => TCloud.dayGet(TCloud.ingestUrl(), {method: "POST",
       headers: {apikey: c.key, Authorization: "Bearer " + Cloud.sess().access_token, "Content-Type": "application/json"}, body: JSON.stringify({kind: "month_days", book, month: ym})});
     let r = await go();
     if (r.status === 401){ await Cloud.refreshToken(Cloud.sess().access_token); r = await go(); }
-    if (!r.ok || !/octet-stream/.test(r.headers.get("content-type") || "")) throw new Error("FinCom's server gave no month of day files (" + r.status + ").");
-    return this.unpack(await r.arrayBuffer());
+    if (!r.ok || !/octet-stream/.test(r.type)) throw new Error("FinCom's server gave no month of day files (" + r.status + ").");
+    return this.unpack(r.gz);
   },
   // the ledger list as TCloud.load reads it (with the TDS settings, then without them, then without PAN and GSTIN)
   async ledgers(bk){

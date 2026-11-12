@@ -793,7 +793,7 @@ Object.assign(Audit, {
     j.it = null;
     // the last start's books changed on the way (prog.keep): not kept; once more from the books as they are, kept as it ends
     // (only when keep refused it: a step that threw ends it, as before)
-    if (!run && j.refused && this.autoRun(j.sig, b) && this.due(b)){ j.extra = true; this.autoBegin(j, b); this.autoSoon(j); return; }
+    if (!run && j.refused && !j.extra && this.autoRun(j.sig, b) && this.due(b)){ j.extra = true; this.autoBegin(j, b); this.autoSoon(j); return; }
     if (this.auto === j) this.auto = null;
     if (!run) return;
     j.run = run;
