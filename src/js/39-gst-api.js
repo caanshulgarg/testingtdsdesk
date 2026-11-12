@@ -68,8 +68,8 @@ const GSTAPI = {
     const j = await this.call({action: "2b", gstin, username: this.user(reg), period: ym.slice(4, 6) + ym.slice(0, 4)});
     const t = GST2B.fromJson({data: j.data});
     if (!t.gstin || !t.ym) throw new Error("The 2B for " + GSTR.label(ym) + " came back without its GSTIN or period.");
-    // a month whose 3B is filed: its bills would be matched again (asked, with a reason: GSTLock, src/js/47)
-    const lw = typeof GSTLock === "object" ? GSTLock.twoB(t.gstin, t.ym) : "";
+    // replacing the 2B of a month whose 3B is filed: its bills would be matched again (asked, with a reason: GSTLock, src/js/47)
+    const lw = typeof GSTLock === "object" && ((S.books || {}).twoBs || {})[t.gstin + "|" + t.period] ? GSTLock.twoB(t.gstin, t.ym) : "";
     if (lw && !(await GSTLock.ask(t.gstin.slice(0, 2), [t.ym], ["r3b"], "2B brought in again", lw))) throw new Error("Not brought in: " + lw);
     const b = S.books; b.twoBs = b.twoBs || {}; b.twoBs[t.gstin + "|" + t.period] = Object.assign(t, {source: "api", fetchedAt: new Date().toISOString()});
     delete b.twoB; GST2B._memo = null; GSTR._carry = null;
@@ -85,19 +85,20 @@ Object.assign(GSTAPI, {
     const j = await this.call({action: "fetch", gstin, form, period: ym.slice(4, 6) + ym.slice(0, 4)});
     if (j.status === "none") return {none: true, error: j.error};
     const k = await this.call({action: "return", gstin, form, period: ym.slice(4, 6) + ym.slice(0, 4)});
-    if (k.ret && k.ret.status === "ok") this.take(k.ret);
-    return {ok: true, ret: k.ret};
+    const held = k.ret && k.ret.status === "ok" ? this.take(k.ret) : "";
+    return {ok: true, ret: k.ret, held: held || ""};
   },
-  // put one kept return into the books
+  // put one kept return into the books. Returns the words when a 2B was not put in (it would replace the 2B of a month whose
+  // 3B is filed), else ""; the return is counted as taken either way, so it is not brought in again and again
   take(r){
     const b = S.books; if (!b || !r || !r.data) return;
     const ym = /^\d{6}$/.test(r.period) ? r.period.slice(2, 6) + r.period.slice(0, 2) : r.period, at = r.fetched_at || new Date().toISOString();
     if (r.form === "2B"){
       const t = GST2B.fromJson({data: r.data});
       if (!t.gstin || !t.ym) return;
-      // fetched by itself: a month whose 3B is filed keeps the 2B it has (fetch it by hand to bring it in, asked first)
+      // fetched on the server: a month whose 3B is filed keeps the 2B it has (Fetch 2B on the GST API card replaces it, asked first)
       const lw = typeof GSTLock === "object" && (b.twoBs || {})[t.gstin + "|" + t.period] ? GSTLock.twoB(t.gstin, t.ym) : "";
-      if (lw){ toast("The 2B for " + GSTR.label(t.ym) + " came from the portal again and was not put in: " + lw); return; }
+      if (lw){ b.apiTaken = Object.assign({}, b.apiTaken, {[r.gstin + "|" + r.form + "|" + r.period]: at}); return "not put in: " + GSTR.label(t.ym) + "’s 3B is filed, so its 2B is kept as it is. Fetch 2B on the GST API card replaces it (it asks first)."; }
       b.twoBs = b.twoBs || {}; b.twoBs[t.gstin + "|" + t.period] = Object.assign(t, {source: "api", fetchedAt: at});
       delete b.twoB; GST2B._memo = null; GSTR._carry = null;
       if (typeof M2B === "object") M2B.next = "fetched";
@@ -110,6 +111,7 @@ Object.assign(GSTAPI, {
       b.filed3b = Object.assign({}, b.filed3b, {[r.gstin + "|" + ym]: {gstin: r.gstin, ym, json: r.data, fetchedAt: at}});
     }
     b.apiTaken = Object.assign({}, b.apiTaken, {[r.gstin + "|" + r.form + "|" + r.period]: at});
+    return "";
   },
   // what the server has for this client's GSTINs and the books do not yet: brought in (at most every 10 minutes)
   async syncKept(){
@@ -119,15 +121,16 @@ Object.assign(GSTAPI, {
     this._sync = {key, at: Date.now()};
     const j = await this.call({action: "returns", gstins});
     this.kept = j.returns || [];
-    let n = 0;
+    let n = 0; const held = [];
     for (const r of this.kept){
       if (r.status !== "ok") continue;
       const had = (b.apiTaken || {})[r.gstin + "|" + r.form + "|" + r.period];
       if (had && had >= r.fetched_at) continue;
       const k = await this.call({action: "return", gstin: r.gstin, form: r.form, period: r.period});
-      if (k.ret && k.ret.status === "ok"){ this.take(k.ret); n++; }
+      if (k.ret && k.ret.status === "ok"){ const h = this.take(k.ret); if (h) held.push("2B " + h); n++; }
     }
     if (n) saveBooks();
+    if (held.length) toast(held.join(" "));
     return n;
   },
   // the portal's list of returns filed in a year: each one marked filed here with its ARN and date

@@ -350,23 +350,23 @@ function letter(reg, s) {
   return t;
 }
 
-// the month a decision puts the credit in. Take now (or though not in 2B): the line's own month, the later of its 2B's and
-// its bill's (on the books basis, its bill's), or M, the month on screen, when that is later; never before the line's 2B
+// the month a decision puts the credit in. Take now (or though not in 2B): the month on screen M, as always; viewed from a
+// month before the line's 2B month (on the 2B basis), the 2B month: never before it
 const toYm = (reg, r, code, ym, M) => {
   if (code === "later") return ym || "";
   if (code !== "now" && code !== "booksnow") return "";
-  const books = (((S.books || {}).itcBasis || {})[reg || ""] || "2b") !== "2b", own = books ? r.bm || r.tm || "" : [r.tm, r.bm].filter(Boolean).sort().pop() || "";
-  return own > (M || "") ? own : M || own;
+  const books = (((S.books || {}).itcBasis || {})[reg || ""] || "2b") !== "2b";
+  return !books && r.tm && (!M || M < r.tm) ? r.tm : M || r.tm || r.bm || "";
 };
 // a filed GSTR-3B (GSTLock, src/js/47): the words when the change from the line's decision in force to s1 moves the credit
-// of a month whose 3B is filed (its 4(A)(5) or 4(B)(1): the month it leaves and the month it lands in, as credit() works
-// them out), else ""
+// of a month whose 3B is filed: its 4(A)(5) or 4(B)(1) in the month the credit leaves, the month it lands in, and the bill's
+// own months (a 17(5) reversal made from Tally, r.blkBy, undone by its eligibility), else ""
 const lockW = (reg, r, s1) => {
-  if (typeof GSTLock !== "object" || !r || r.fixed) return "";
+  if (typeof GSTLock !== "object" || !r || r.fixed || !GSTLock.any(reg)) return "";
   const a = r.e || credit(r, r.s), c = credit(r, s1), ms = [];
-  new Set([a.C, c.C].filter(Boolean)).forEach((m) => {
+  new Set([a.C, c.C, r.bm].concat(Object.keys(r.blkBy || {})).filter(Boolean)).forEach((m) => {
     const d1 = sub(a.C === m ? a.amt : z(), c.C === m ? c.amt : z()), d2 = sub(revEffect(r, a, m), revEffect(r, c, m));
-    if (tot(d1) || tot(d2) || H.some((k) => d1[k] || d2[k])) ms.push(m);
+    if (H.some((k) => d1[k] || d2[k])) ms.push(m);
   });
   return GSTLock.why(reg, ms);
 };
@@ -378,6 +378,8 @@ export const ITCF = {
   lineOfDoc(reg, id) { const m = model(reg); return m ? m.rows.find((r) => !r.fixed && (r.docs || []).some((d) => d.id === id)) || null : null; },
   setElig(reg, r, el) { const w = lockW(reg, r, withS(r, { el: el === r.defE ? "" : el })); if (w) { toast(w); return false; } ITCDec.setEl(reg, r.key, el === r.defE ? "" : el, r.s); return true; },
   rows(reg) { const m = model(reg); return m ? m.rows : []; },
+  // the model worked out last, read and put back (GSTLock.pair keeps it warm after trying a change)
+  _memo(m) { if (arguments.length) memo = m; return memo; },
   month(reg, M) { return month(reg, M); },
   rowByTagKey(reg, k) { const m = model(reg); return m ? m.byTag.get(k) || null : null; },
   row(reg, key) { const m = model(reg); return m ? m.rows.find((r) => r.key === key) || null : null; },

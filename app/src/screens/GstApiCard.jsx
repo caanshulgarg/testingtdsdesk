@@ -29,6 +29,7 @@ async function fetchNow(gstin, form, ym) {
   const x = await GSTAPI.fetch(gstin, form, ym);
   if (x.none) return GSTAPI.formOf[form] + " for " + GSTR.label(ym) + " is not there yet: " + (x.error || "not filed or not made") + ".";
   saveBooks(); GSTAPI._sync = null;
+  if (x.held) return GSTAPI.formOf[form] + " for " + GSTR.label(ym) + " fetched, " + x.held;
   return GSTAPI.formOf[form] + " for " + GSTR.label(ym) + " fetched and kept on the firm's server.";
 }
 const DAYS = [1, 2, 7, 15, 30];

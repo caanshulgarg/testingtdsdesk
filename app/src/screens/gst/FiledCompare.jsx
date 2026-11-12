@@ -35,7 +35,7 @@ export default function FiledCompare({ b = S.books }) {
     for (const m of months) {
       if (form === "R1" ? rows.find((r) => r.ym === m).r1 : rows.find((r) => r.ym === m).r3b) continue;
       setBusy("Fetching " + GSTAPI.formOf[form] + " for " + GSTR.label(m) + "…");
-      try { const x = await GSTAPI.fetch(gstin, form, m); (x.none ? none : got).push(GSTR.label(m)); } catch (e) { bad.push(GSTR.label(m) + ": " + ((e && e.message) || e)); }
+      try { const x = await GSTAPI.fetch(gstin, form, m); (x.none ? none : x.held ? bad : got).push(GSTR.label(m) + (x.held ? ": " + x.held : "")); } catch (e) { bad.push(GSTR.label(m) + ": " + ((e && e.message) || e)); }
     }
     if (got.length) saveBooks();
     setBusy(""); S.gstCmpMsg = [got.length ? "Fetched: " + got.join(", ") + "." : "", none.length ? "Not filed yet: " + none.join(", ") + "." : "", bad.length ? "Not fetched — " + bad.join("; ") : ""].filter(Boolean).join(" ") || "Nothing left to fetch."; render();

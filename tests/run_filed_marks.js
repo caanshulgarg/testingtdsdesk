@@ -15,7 +15,7 @@ const fs = require("fs"), path = require("path"), vm = require("vm");
 const {load, HTML} = require("./harness");
 const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "fmtDate", "tallyDate", "STATE_CODES", "RULE_DEFAULTS", "GST_STATES", "Books", "LedMaster", "GSTR", "GSTAdv", "GSTRev", "GSTAmend", "GST2B", "INR",
   "normName", "nameSim", "ITCT", "GSTSet", "CustIMS", "GSTF", "GSTQ", "GSTV", "GSTMark", "GSTLock", "gstfSet", "gstfSnap", "gstfUnsnap", "gqIffFiled", "gstFileRoute", "gstSignWith", "GSTFILE", "GSTB",
-  "gstvFind", "gstvFileIt", "gstvRemove", "gstvRestore", "gstvSetSort", "gqIffSkip", "ClosedP", "r2Reg", "r2Locked", "r2Do", "r2Confirm", "r2Unlink", "r2Link", "r2SetTol", "aihPair", "inregRows",
+  "gstvFind", "gstvFileIt", "gstvRemove", "gstvRestore", "gstvSetSort", "gqIffSkip", "ClosedP", "r2Reg", "r2Locked", "r2Do", "r2Confirm", "r2Unlink", "r2Link", "r2SetTol", "aihPair", "GSTAPI", "inregRows",
   "Audit", "TDS", "Certs", "TDS26Q", "TDS_FORMS", "TCS27EQ", "PAY_CODES", "NEW_FORMS_VALIDATED", "noPanRate", "NO_PAN_RATE", "NORM_CACHE", "normNameRaw", "TDSCH", "TDSRate", "TDSLdc", "TDSWatch",
   "TDSFiled", "TDSTally", "TDSReg", "TDS_SEC_CODES", "BOOKS_KEYS", "uid", "lsGet", "lsSet", "istParts", "p2ist", "istDay", "istToday"];
 let fails = 0; const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };
@@ -46,7 +46,7 @@ const V = (id, date, no, party, gstin, taxable, cgst) => ({id, type: "Purchase",
   ent: [{l: "Office Expenses", a: -taxable}, {l: "Input CGST", a: -cgst}, {l: "Input SGST", a: -cgst}, {l: party, a: taxable + 2 * cgst}]});
 const GA = "09AABCA1111A1Z1", GB = "09AABCB2222B1Z2", GE = "09AABCE6666F1Z7", GO = "09AABCO4444D1Z4", GF = "09AABCF8888H1Z9";
 const vs = [V("a1", "20260405", "A/101", "Alpha Supplies", GA, 10000, 900), V("b1", "20260410", "B/7", "Beta Traders", GB, 20000, 1800),
-  V("e1", "20260418", "E/1", "Echo Stores", GE, 5000, 450), V("f1", "20260508", "F/2", "Foxtrot Labs", GF, 8000, 720),
+  V("e1", "20260418", "E/1", "Echo Stores", GE, 5000, 450), Object.assign(V("k1", "20260422", "K/1", "Kappa Caterers", "09AABCK1212K1Z5", 2000, 180), {ineligibleFlag: true}), V("f1", "20260508", "F/2", "Foxtrot Labs", GF, 8000, 720),
   {id: "s1", type: "Sales", date: "20260420", no: "S/1", party: "Kilo Retail", gstin: "", pos: "", cmp: CMP, narr: "", hsn: [], ent: [{l: "Kilo Retail", a: -236000}, {l: "Sales", a: 200000}, {l: "CGST", a: 18000}, {l: "SGST", a: 18000}]},
   {id: "rc1", type: "Receipt", date: "20260425", no: "R/1", party: "Lima Stores", gstin: "", pos: "", cmp: CMP, narr: "", hsn: [], ent: [{l: "Lima Stores", a: 5000}, {l: "Bank", a: -5000}]},
   {id: "s2", type: "Sales", date: "20260520", no: "S/2", party: "Lima Stores", gstin: "", pos: "", cmp: CMP, narr: "", hsn: [], ent: [{l: "Lima Stores", a: -118000}, {l: "Sales", a: 100000}, {l: "CGST", a: 9000}, {l: "SGST", a: 9000}]}];
@@ -54,11 +54,11 @@ const row = (ym, gstin, party, no, date, taxable, cgst) => ({no, noN: no.replace
   pos: reg, rcm: false, sec: "b2b", typ: "R", val: taxable + 2 * cgst, cess: 0, cgst, sgst: cgst, igst: 0, date, gstin, party, itcavl: "Y", taxable});
 const TWOB = {[CMP + "|042026"]: {ym: "202604", gstin: CMP, period: "042026", rows: [row("202604", GB, "BETA TRADERS", "B/7", "20260410", 20000, 1800), row("202604", GO, "OMEGA LOGISTICS", "O/5", "20260415", 5000, 450)]},
   [CMP + "|052026"]: {ym: "202605", gstin: CMP, period: "052026", rows: [row("202605", GA, "ALPHA SUPPLIES", "A/101", "20260405", 10000, 900), row("202605", GF, "FOXTROT LABS", "F/2", "20260508", 8000, 720),
-    row("202605", "09AABCP3333C1Z3", "PAPA PRINTS", "P/3", "20260512", 4000, 360)]}};
+    row("202605", "09AABCP3333C1Z3", "PAPA PRINTS", "P/3", "20260512", 4000, 360), row("202605", "09AABCK1212K1Z5", "KAPPA CATERERS", "K/1", "20260422", 2000, 180)]}};
 function books() {
   const b = {cid: "t", vouchers: vs, meta: {from: "20260401", to: "20260630", gstins: [CMP], bills: 1}, under: {}, groups: {}, gstins: {}, states: {}, challans: [], alloc: {}, certs: [], twoBs: JSON.parse(JSON.stringify(TWOB)),
     gstOpen: {[reg]: {igst: 0, cgst: 0, sgst: 0, cess: 0}}};
-  ["Alpha Supplies", "Beta Traders", "Echo Stores", "Foxtrot Labs"].forEach((p) => { b.under[p] = "Sundry Creditors"; });
+  ["Alpha Supplies", "Beta Traders", "Echo Stores", "Foxtrot Labs", "Kappa Caterers"].forEach((p) => { b.under[p] = "Sundry Creditors"; });
   b.under["Kilo Retail"] = "Sundry Debtors"; b.under["Lima Stores"] = "Sundry Debtors"; b.under.Sales = "Sales Accounts"; b.groups = {"Sundry Creditors": "Current Liabilities", "Sundry Debtors": "Current Assets", "Sales Accounts": "Primary"};
   b.map = x.Books.mapLedgers(vs, {});
   const set = (n, o) => { b.map[n] = Object.assign(b.map[n] || {n: 0}, o, {ok: true, byHand: true}); };
@@ -149,6 +149,8 @@ const F = (ym) => x.GSTF.peek(ym, reg);
   const line = (no) => ITCF.rows(reg).find((r) => r.no === no || r.bookNo === no);
   const decOf = (no) => (ITCDec.all()[reg + "|" + line(no).key] || {});
   ok(!!Lk && !Lk.filed(reg, "202604"), "C0. GSTLock: April open to start with");
+  if (Lk) { let calls = 0; const cr = Lk.credits; Lk.credits = function () { calls++; return cr.apply(this, arguments); };
+    ok(Lk.pair(reg, ["x"], ["y"], () => {}) === "" && calls === 0 && !Lk.any(reg), "C0. nothing filed for the registration: a 2B click is not worked out twice (no simulation)"); Lk.credits = cr; }
   // before April is filed: Echo's bill (not in April's 2B) taken in April; Alpha's (booked April, in May's 2B) left to follow up
   ITCF.decide(reg, [line("E/1")], "booksnow", "", "202604");
   ok(line("E/1").e.C === "202604", "C0. Echo's credit taken in April, though not in 2B");
@@ -171,6 +173,12 @@ const F = (ym) => x.GSTF.peek(ym, reg);
   ok(ITCF.setElig(reg, line("B/7"), "ineligible") === false && !decOf("B/7").el, "C1. Beta (credit in filed April) made ineligible: refused");
   ITCF.setElig(reg, line("F/2"), "ineligible");
   ok(decOf("F/2").el === "ineligible", "C1. eligibility of Foxtrot (June): set");
+  // HIGH 1: Kappa's bill (April, 17(5) in Tally: reversed in April's 4(B)(1)), in May's 2B; viewed from May
+  const rK = line("K/1");
+  ok(rK && rK.defE === "ineligible" && (rK.blkBy || {})["202604"], "C1. Kappa: booked in April, ineligible in Tally, reversed in April");
+  ok(ITCF.setElig(reg, rK, "eligible") === false && !decOf("K/1").el && lastToast() === W, "C1. Kappa made eligible from May: refused (it would undo April's filed 4(B)(1) reversal)");
+  let pvK = ITCF.preview(reg, "202605", {rows: [{key: rK.key, dec: "", takeIn: "", elig: "Eligible"}]});
+  ok(pvK.refused.some((z) => z.why === W) && !pvK.eligs.length, "C1. the same from the Excel brought back: refused there");
   // H2: a decision that sends the credit back to its default month, which is filed
   res = ITCF.decide(reg, [line("E/1")], "follow", "", "202605");
   ok(res.lock === W && decOf("E/1").d === "booksnow", "C1. Follow up on Echo (credit in filed April): refused");
@@ -217,6 +225,34 @@ const F = (ym) => x.GSTF.peek(ym, reg);
   asked.length = 0; x.r2SetTol("2");
   ok(asked.length === 0 && Number(st.opt.tol) === 2, "C4. a 2B tolerance that moves nothing filed: set at once");
   ok(!!Lk.twoB(CMP, "202604") && !Lk.twoB(CMP, "202605"), "C4. a 2B brought in again: April's (3B filed) is asked about, May's is not");
+  // a books setting that moves a filed month's table 4 (the ISD ledger switch on next-gst-isd-2b calls this): asked first
+  const flip = (id) => [() => { b.vouchers.find((v) => v.id === id).opt = true; b.mapV = (b.mapV || 0) + 1; x.GST2B._memo = null; }, () => { b.vouchers.find((v) => v.id === id).opt = false; b.mapV = (b.mapV || 0) + 1; x.GST2B._memo = null; }];
+  let went = 0; asked.length = 0; answer = null;
+  Lk.guardBooks("a test switch", ...flip("b1"), () => { went++; }); await flush();
+  ok(asked.length === 1 && /adjustment in the current month/.test(asked[0].body) && !went && !b.vouchers.find((v) => v.id === "b1").opt, "C4. a books setting that would move April's (filed) 4(A)(5): asked, saying to adjust in the current month; cancelled, not made");
+  asked.length = 0; Lk.guardBooks("a test switch", ...flip("f1"), () => { went++; });
+  ok(asked.length === 0 && went === 1, "C4. one that moves only May (open): made at once");
+  answer = {ok: true, data: "x"};
+  // an allowed click leaves the matching worked out for the new state (the caller's same change is then free)
+  const m1 = x.GST2B._memo; x.r2Link(kP, "e1");
+  ok(x.GST2B.run(reg) === x.GST2B._memo.res && x.GST2B._memo !== m1, "C4. an allowed link: the matching kept for the new state, not worked out again");
+  x.r2Unlink(kP, ["e1"]);
+  // the 2B fetched on the server (GSTAPI.take): replacing April's (filed) is held once, counted as taken; a first 2B goes in
+  if (x.GSTAPI) {
+    const fj = x.GST2B.fromJson; x.GST2B.fromJson = () => ({gstin: CMP, ym: "202604", period: "042026", rows: []});
+    const h = x.GSTAPI.take({form: "2B", gstin: CMP, period: "042026", data: {}, fetched_at: "2026-11-12T10:00:00Z"});
+    ok(/not put in/.test(h) && /Fetch 2B on the GST API card/.test(h) && b.twoBs[CMP + "|042026"].rows.length === 2 && (b.apiTaken || {})[CMP + "|2B|042026"], "C4. the server's 2B for filed April: not put in, the words name Fetch 2B, and it counts as taken (not brought in every 10 minutes): " + h);
+    delete b.twoBs[CMP + "|042026"]; x.GST2B._memo = null;
+    const h2 = x.GSTAPI.take({form: "2B", gstin: CMP, period: "042026", data: {}, fetched_at: "2026-11-12T10:00:00Z"});
+    ok(!h2 && b.twoBs[CMP + "|042026"], "C4. April with no 2B yet: the first 2B goes in, nothing asked");
+    b.twoBs[CMP + "|042026"] = JSON.parse(JSON.stringify(TWOB[CMP + "|042026"])); x.GST2B.fromJson = fj; x.GST2B._memo = null;
+  } else ok(false, "C4. GSTAPI loads");
+  // the kept copy of March removed while April (the next month) is filed: asked, and in the audit trail
+  ctx.S.gstYm = "202603"; x.GSTF.rec("202603", reg).r3b = "2026-04-20"; x.gstfSnap(); asked.length = 0; answer = null; x.gstfUnsnap(); await flush();
+  ok(asked.length === 1 && !!F("202603").snap, "C4. remove the kept copy of March, April filed: asked; cancelled, kept");
+  answer = {ok: true}; audits.length = 0; x.gstfUnsnap(); await flush();
+  ok(!F("202603").snap && F("202603").r3b && audits.some(([k]) => k === "gst_kept_copy_removed"), "C4. said yes: removed (the date stays), in the audit trail");
+  delete x.GSTF.rec("202603", reg).r3b; ctx.S.gstYm = "202604";
   // B2C summary marks and places of supply: asked, with a reason kept in the audit trail
   asked.length = 0; answer = null;
   G.b2cSumEntry("s1", true); await flush();

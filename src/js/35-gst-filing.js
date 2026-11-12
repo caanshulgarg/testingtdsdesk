@@ -48,10 +48,16 @@ function gstfSet(k, v){
 function gstfSnap(){ const ym = S.gstYm || "", r = GSTF.rec(ym, S.gstReg || ""); r.snap = GSTF.snapOf(GSTR.threeB(ym, S.gstReg || "")); r.snapAt = new Date().toISOString(); if (!r.r3b) r.r3b = GSTF.today(); GSTR._carry = null; saveBooks(); render(); toast("3B for " + GSTR.label(ym) + " kept as filed."); }
 // the kept copy removed (to keep it again from the books as they are now): the month stays filed, its date as it is. One
 // filed with an ARN keeps its copy (take the date off to take the whole mark off)
+// The next month's 3B carries its credit from this copy: with that one filed, asked first, and the audit trail records it
 function gstfUnsnap(){
-  const ym = S.gstYm || "", r = GSTF.rec(ym, S.gstReg || "");
+  const ym = S.gstYm || "", reg = S.gstReg || "", r = GSTF.rec(ym, reg);
   if (r.r3bArn){ toast("GSTR-3B for " + GSTR.label(ym) + " was filed with ARN " + r.r3bArn + ": its kept copy stays."); return; }
-  delete r.snap; delete r.snapAt; GSTR._carry = null; saveBooks(); render();
+  const go = () => { delete r.snap; delete r.snapAt; GSTR._carry = null; saveBooks(); render(); };
+  const nx = GSTR.nextYm(ym), w = typeof GSTLock === "object" ? GSTLock.why(reg, [nx]) : "";
+  if (!w) return go();
+  askConfirm({title: "Remove the kept copy?", ok: "Remove it", danger: true,
+    body: esc(w) + " Its credit carried forward came from this kept copy of " + esc(GSTR.label(ym)) + "; without it the carry is worked out from the books as they are now."})
+    .then(a => { if (!a || !a.ok) return; try { auditEvent("gst_kept_copy_removed", {reg, ym, nextFiled: nx}, S.coId); } catch (e){} go(); });
 }
 function gstfJournal(){
   const ym = S.gstYm || "", reg = S.gstReg || "", J = GSTF.journal(ym, reg); if (!J.lines.length){ toast("Nothing to set off this month."); return; }

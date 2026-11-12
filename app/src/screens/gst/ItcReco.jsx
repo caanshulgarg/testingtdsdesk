@@ -49,9 +49,10 @@ function Side({ no, date, sub, amt, none }) {
 function Acts({ r, free, reg }) {
   if (r.kind === "pair" && r.status === "probable") {
     const ids = r.docs.map((d) => d.id);
-    const told = (d) => { if (r.x && r.x.aiId && window.GSTAutoMatch) window.GSTAutoMatch.decide(reg, r.x.aiId, d); };
-    return <span className="rc-acts"><button className="btn small primary" data-reco-accept="" onClick={() => { told("accept"); r2Confirm(r.p.key); }}>Same</button>
-      <button className="btn small" data-reco-reject="" onClick={() => { told("reject"); r2Unlink(r.p.key, ids); }}>Not the same</button></span>;
+    const told = (d) => { if (r.x && r.x.aiId && window.GSTAutoMatch) window.GSTAutoMatch.decide(reg, r.x.aiId, d, true); };
+    // (the automatic run is told only when the pair was kept: one check, one message, src/js/27)
+    return <span className="rc-acts"><button className="btn small primary" data-reco-accept="" onClick={() => { if (r2Confirm(r.p.key) !== false) told("accept"); }}>Same</button>
+      <button className="btn small" data-reco-reject="" onClick={() => { if (r2Unlink(r.p.key, ids) !== false) told("reject"); }}>Not the same</button></span>;
   }
   if (r.kind === "2b" && !r.fixed) {
     const p = r.p, cands = free.filter((d) => d.dir === p.dir && (d.gstin === p.gstin || (!d.gstin && GST2B.lastDigits(d.no) === GST2B.lastDigits(p.no)) || (d.gstin && d.gstin.slice(2, 12) === String(p.gstin).slice(2, 12))))

@@ -33,7 +33,7 @@ export default function GstApiAll() {
   const count = (k) => clients.filter((c) => stateOf(c.gstin).k === k).length;
   const fetchNow = async (c, form) => {
     setBusy(c.gstin + form);
-    try { const x = await GSTAPI.fetch(c.gstin, form, ymOfPer(last)); setMsg(c.name + ": " + GSTAPI.formOf[form] + " for " + GSTR.label(ymOfPer(last)) + (x.none ? " is not there yet." : " fetched.")); }
+    try { const x = await GSTAPI.fetch(c.gstin, form, ymOfPer(last)); setMsg(c.name + ": " + GSTAPI.formOf[form] + " for " + GSTR.label(ymOfPer(last)) + (x.none ? " is not there yet." : x.held ? " fetched, " + x.held : " fetched.")); }
     catch (e) { setMsg(c.name + ": " + ((e && e.message) || e)); }
     setBusy(""); load();
   };

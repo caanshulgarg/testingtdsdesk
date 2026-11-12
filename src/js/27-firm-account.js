@@ -1274,8 +1274,9 @@ function r2SetTol(v){
 function r2Locked(keys, ids, change){ if (typeof GSTLock !== "object") return false; const w = GSTLock.pair((typeof r2Reg === "function" ? r2Reg(S.books) : "") || S.gstReg || "", keys, ids, change); if (w) toast(w); return !!w; }
 const r2Do = {confirm: (key) => (st) => { st.confirm[key] = "yes"; }, unlink: (key, ids) => (st) => { ids.forEach(id => { st.confirm[key + ">" + id] = "no"; }); delete st.link[key]; delete st.confirm[key]; },
   link: (key, ids) => (st) => { st.link[key] = ids.slice(); delete st.confirm[key]; }};
-function r2Confirm(key){ if (r2Locked([key], [], r2Do.confirm(key))) return; r2Do.confirm(key)(GST2B.state()); saveBooks(); render(); }
-function r2Unlink(key, ids){ if (r2Locked([key], ids, r2Do.unlink(key, ids))) return; r2Do.unlink(key, ids)(GST2B.state()); saveBooks(); render(); }
+// (true when done, false when refused: the 2B screen tells the automatic run only what was done)
+function r2Confirm(key){ if (r2Locked([key], [], r2Do.confirm(key))) return false; r2Do.confirm(key)(GST2B.state()); saveBooks(); render(); return true; }
+function r2Unlink(key, ids){ if (r2Locked([key], ids, r2Do.unlink(key, ids))) return false; r2Do.unlink(key, ids)(GST2B.state()); saveBooks(); render(); return true; }
 // a 2B document not found in Tally, linked by hand to the entry it was booked as
 function r2Link(key, id){ if (id && r2Locked([key], [id], r2Do.link(key, [id]))) return; if (id) r2Do.link(key, [id])(GST2B.state()); saveBooks(); render(); }
 // a remark on a document (r2Tag): app/src/lib/itcSync.js, the decision on that bill (ITCDec)

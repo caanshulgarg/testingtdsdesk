@@ -91,14 +91,14 @@ Object.assign(M2B, {
   },
   // a person's accept or reject of a probable pair (one, or all of them): kept on the server, and an accepted pair of one
   // 2B document is linked for the rest of the 2B screen as a link by hand is
-  async decide(reg, pairs, decision){
+  async decide(reg, pairs, decision, checked){
     const fy = this.fyNow(), s = this.st[this.key(reg, fy)];
     if (!s || !s.run || s.busy || !pairs.length) return;
     // a pair whose credit is in a GSTR-3B already filed stays as it is (GSTLock.pair, src/js/47)
-    if (typeof GSTLock === "object"){
+    if (typeof GSTLock === "object" && !checked){
       let w = "";
       pairs = pairs.filter(p => { const g = p.g || [], bk = p.b || [];
-        const x = GSTLock.pair(reg, g, bk, st => { g.forEach(k => { if (decision === "accept" && g.length === 1){ st.link[k] = bk.slice(); delete st.confirm[k]; } else bk.forEach(id => { st.confirm[k + ">" + id] = "no"; }); }); });
+        const x = GSTLock.pair(reg, g, bk, st => { g.forEach(k => { if (decision === "accept" && g.length === 1){ st.link[k] = bk.slice(); delete st.confirm[k]; } else bk.forEach(id => { st.confirm[k + ">" + id] = "no"; }); }); }, false);
         w = w || x; return !x; });
       if (w) toast(w); if (!pairs.length) return;
     }
@@ -126,11 +126,11 @@ const GSTAutoMatch = {
       .forEach(r => r.g.forEach(k => results.push({key2b: k, books: r.b.slice(), status: r.st, reason: (r.why || []).join("; "), confidence: null, id: r.id})));
     return {results};
   },
-  decide(reg, id, decision){ if (id) m2bDecide(reg, [id], decision); }
+  decide(reg, id, decision, checked){ if (id) m2bDecide(reg, [id], decision, checked); }
 };
 if (typeof window !== "undefined") window.GSTAutoMatch = GSTAutoMatch;
 function m2bAgain(reg){ M2B.sync(reg, "match again", true); }
-function m2bDecide(reg, ids, decision){
+function m2bDecide(reg, ids, decision, checked){
   const s = M2B.st[M2B.key(reg, M2B.fyNow())], rows = ((s && s.run && s.run.result && s.run.result.rows) || []).filter(r => r.st === "probable" && ids.includes(r.id));
-  M2B.decide(reg, rows, decision);
+  M2B.decide(reg, rows, decision, checked);
 }

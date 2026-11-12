@@ -11,7 +11,7 @@ const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "fmtDate", "tallyDate", "ST
   "normName", "nameSim", "ITCT", "GSTSet", "CustIMS", "GSTF", "GSTQ", "GSTV", "inregRows"];
 // the steps whose figures are meant to differ, and why (the review of the filed marks, item 7 / H1)
 const INTENDED = {
-  "Take now on Alpha (booked Apr, in May's 2B) from April": "Take now goes into the later of the line's 2B month and its bill's month, never before its 2B (was: the month on screen, April)",
+  "Take now on Alpha (booked Apr, in May's 2B) from April": "Take now from a month before the line's 2B month goes into the 2B month, never before it (was: the month on screen, April); from its 2B month or later, the month on screen as before",
   "Excel: Take now on Alpha from April": "the same rule for the Excel brought back",
 };
 let fails = 0; const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };
@@ -76,6 +76,7 @@ const STEPS = [
   ["Delta: ask the supplier to correct", (w) => w.ITCF.decide(reg, [w.line("D/9")], "correct", "", "202604")],
   ["Take now on Alpha (booked Apr, in May's 2B) from April", (w) => w.ITCF.decide(reg, [w.line("A/101")], "now", "", "202604")],
   ["Take now on Alpha from May", (w) => w.ITCF.decide(reg, [w.line("A/101")], "now", "", "202605")],
+  ["Take now on Hotel (booked Jun, in May's 2B) from May", (w) => w.ITCF.decide(reg, [w.line("H/4")], "now", "", "202605")],
   ["Take now on Hotel (booked Jun, in May's 2B) from June", (w) => w.ITCF.decide(reg, [w.line("H/4")], "now", "", "202606")],
   ["Foxtrot follow up, then cleared", (w) => { w.ITCF.decide(reg, [w.line("F/2")], "follow", "", "202605"); w.ITCF.decide(reg, [w.line("F/2")], "", "", "202605"); }],
   ["Beta marked ineligible", (w) => w.ITCF.setElig(reg, w.line("B/7"), "ineligible")],

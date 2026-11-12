@@ -103,7 +103,8 @@ const GSTLock = {
     return m ? {filed: true, form: "r1", per: m, on: "", arn: "", how: "portal"} : null;
   },
   words(x){
-    return ({r3b: "GSTR-3B", r1: "GSTR-1", iff: "IFF"})[x.form] + " for " + GSTR.label(x.per) + " is filed" + (x.arn ? " (ARN " + x.arn + ")" : x.on ? " (on " + fmtDate(x.on) + ")" : "") + ". " +
+    return ({r3b: "GSTR-3B", r1: "GSTR-1", iff: "IFF"})[x.form] + " for " + GSTR.label(x.per) + " is filed" + (x.arn ? " (ARN " + x.arn + ")" : x.on ? " (on " + fmtDate(x.on) + ")" : "") +
+      (x.how === "pdf" ? ", as the portal's PDF in Returns filed says (if that PDF is the wrong one, remove it or sort it again there)" : "") + ". " +
       (x.form === "r3b" ? "Changes to a filed 3B are made as an adjustment in the current month (ITC adjustments)." : "Changes go into the next return as an amendment.");
   },
   // the first filed return among these months, in words ("" when every one is open)
@@ -130,32 +131,68 @@ const GSTLock = {
   gate(reg, months, forms, what, go, w){ if (!(w = w || this.why(reg, months, forms))) return go(); this.ask(reg, months, forms, what, w).then(y => { if (y) go(); }); },
   // the months of these entries of the books (place of supply, B2C summary marks)
   months(ids){ const s = new Set(ids || []); return ((S.books || {}).vouchers || []).filter(v => s.has(v.id)).map(v => String(v.date).slice(0, 6)); },
-  // the credit the ITC lines give each month (4(A)(5) and 4(B)(1), app/src/lib/itcFinal.js): of the lines holding these
-  // documents (keys: 2B keys and Tally ids; null: every line), and those lines' other documents (K grows to them)
-  credits(reg, K){
+  // any GSTR-3B of the registration filed (a quick look, before anything is worked out)
+  any(reg){
+    const b = S.books || {};
+    if (Object.values((b.gstFiled || {})[reg || ""] || {}).some(r => r && (r.r3b || r.r3bArn || r.snap))) return true;
+    if (Object.keys(b.portalFiled || {}).some(k => k.indexOf(reg + "|r3b|") === 0) || Object.keys(b.filed3b || {}).some(k => k.slice(0, 2) === reg)) return true;
+    return typeof GSTV === "object" && GSTV.list().some(x => !x.sort && x.reg === reg && x.form === "r3b");
+  },
+  // the credit every ITC line gives each month (4(A)(5) and 4(B)(1), app/src/lib/itcFinal.js)
+  // (only for the months fm says are filed, when given: the rest cannot refuse anything)
+  credits(reg, fm){
     const F = typeof ITCF === "object" ? ITCF : null, by = {};
     if (!F) return by;
-    const rows = F.rows(reg).filter(r => !r.fixed && (!K || r.tagKeys.some(k => K.has(k))));
-    rows.forEach(r => {
-      if (K) r.tagKeys.forEach(k => K.add(k));
-      const ms = new Set([r.e.C, r.bm, r.tm].concat(Object.keys(r.booksBy || {}), Object.keys(r.blkBy || {})).filter(Boolean));
+    F.rows(reg).forEach(r => {
+      if (r.fixed) return;
+      const ms = new Set([r.e.C, r.bm, r.tm].concat(Object.keys(r.booksBy || {}), Object.keys(r.blkBy || {})).filter(m => m && (!fm || fm(m))));
       ms.forEach(m => { const a = F.effect(r, r.e, m), c = F.revEffect(r, r.e, m), o = by[m] = by[m] || {}; this.H.forEach(h => { o[h] = r2((o[h] || 0) + num(a[h])); o["r" + h] = r2((o["r" + h] || 0) + num(c[h])); }); });
     });
     return by;
   },
-  // a change to the 2B reconciliation (change(st): applied to GST2B.state(), then put back): the words when it would move
-  // the credit of a month whose 3B is filed, else "". Worked out, not guessed: a bill of a filed month whose credit was taken
-  // there, linked now to an open month's 2B, moves nothing filed and is allowed
-  pair(reg, keys, ids, change){
-    if (typeof ITCF !== "object" || typeof GST2B !== "object" || !S.books) return "";
-    const st = GST2B.state(), keep = JSON.stringify({confirm: st.confirm, link: st.link, opt: st.opt});
-    const K = keys || ids ? new Set((keys || []).concat(ids || [])) : null;
-    const was = this.credits(reg, K);
-    let now = {};
-    try { if (change) change(st); now = this.credits(reg, K); }
-    finally { const o = JSON.parse(keep); st.confirm = o.confirm; st.link = o.link; if (o.opt === undefined) delete st.opt; else st.opt = o.opt; GST2B._memo = null; }
-    const ms = Array.from(new Set(Object.keys(was).concat(Object.keys(now)))).sort().filter(m => this.H.some(h => Math.abs(((was[m] || {})[h] || 0) - ((now[m] || {})[h] || 0)) >= 0.005 || Math.abs(((was[m] || {})["r" + h] || 0) - ((now[m] || {})["r" + h] || 0)) >= 0.005));
-    return this.why(reg, ms);
+  // a change to the 2B reconciliation (change(st): applied to GST2B.state()): the words when it would move the credit of a
+  // month whose 3B is filed (every line compared: a re-match that runs on to other bills is caught), else "". Worked out,
+  // not guessed: a bill of a filed month whose credit was taken there, linked now to an open month's 2B, moves nothing filed.
+  // Nothing filed for the registration: "" at once. Allowed and keep (the default): the change stays applied, with the
+  // matching worked out for it (the caller's own same change then costs nothing); refused, or keep false: put back as it
+  // was, with the matching of before
+  pair(reg, keys, ids, change, keep){
+    if (typeof ITCF !== "object" || typeof GST2B !== "object" || !S.books || !this.any(reg)) return "";
+    const st = GST2B.state(), saved = JSON.stringify({confirm: st.confirm, link: st.link, opt: st.opt});
+    const fc = new Map(), fm = m => { if (!fc.has(m)) fc.set(m, !!this.filed(reg, m)); return fc.get(m); };
+    const was = this.credits(reg, fm), m0 = GST2B._memo, i0 = ITCF._memo ? ITCF._memo() : null;
+    let w = "", done = false;
+    try {
+      if (change) change(st);
+      const now = this.credits(reg, fm);
+      const ms = Array.from(new Set(Object.keys(was).concat(Object.keys(now)))).sort().filter(m => this.H.some(h => Math.abs(((was[m] || {})[h] || 0) - ((now[m] || {})[h] || 0)) >= 0.005 || Math.abs(((was[m] || {})["r" + h] || 0) - ((now[m] || {})["r" + h] || 0)) >= 0.005));
+      w = this.why(reg, ms); done = !w && keep !== false;
+    } finally {
+      if (!done){ const o = JSON.parse(saved); st.confirm = o.confirm; st.link = o.link; if (o.opt === undefined) delete st.opt; else st.opt = o.opt; GST2B._memo = m0; if (ITCF._memo) ITCF._memo(i0); }
+    }
+    return w;
+  },
+  // a change to the books' settings that moves credit between months or between the rows of table 4 (the ledger's ISD
+  // switch on next-gst-isd-2b, or anything like it): t4 is the 4(A)/4(B) rows of every filed 3B month of a registration as
+  // the books work them out now; guardBooks(what, apply, undo, go) applies the change, compares, undoes it (apply and undo
+  // must move b.mapV or whatever the 3B's caches are keyed on), then go() at once when no filed month moves, else asked
+  // with a reason (the words say a filed 3B is adjusted in the current month). For entries Tally types (not a click):
+  // t4 before the books are put in, t4Moved after, and the words shown as a warning
+  t4(reg){
+    const out = {};
+    (GSTR.months() || []).forEach(m => { if (!this.filed(reg, m)) return; GSTR._carry = null; const t = GSTR.threeBm(m, reg) || {};
+      out[m] = JSON.stringify(["impGoods", "impServ", "rcmIn", "isd", "other", "rev1", "rev2"].map(k => this.H.map(h => r2(num((t[k] || {})[h]))))); });
+    return out;
+  },
+  t4Moved(reg, was, now){ return this.why(reg, Object.keys(was).filter(m => was[m] !== now[m])); },
+  guardBooks(what, apply, undo, go){
+    const regs = (GSTR.gstins(S.books) || []).map(g => g.slice(0, 2)).filter(r => this.any(r));
+    if (!regs.length) return go();
+    const was = regs.map(r => this.t4(r)); let w = "", reg = regs[0];
+    try { apply(); regs.forEach((r, i) => { const x = this.t4Moved(r, was[i], this.t4(r)); if (x && !w){ w = x; reg = r; } }); }
+    finally { undo(); GSTR._carry = null; }
+    if (!w) return go();
+    this.ask(reg, [], ["r3b"], what, w).then(y => { if (y) go(); else render(); });
   },
   // a 2B brought in (again) for a month whose 3B is filed: the words, else "" (it would match that month's bills again)
   twoB(gstin, ym){ return gstin && ym ? this.why(String(gstin).slice(0, 2), [ym]) : ""; }
