@@ -33,7 +33,7 @@ import * as E from "../_shared/gst3b.js";
 import { gst3bPrint } from "../_shared/gst3bprint.js";
 
 // the revision of the function around the engine (data.ts, handler.ts): moved by hand with tests/gst_cloud_rev.json
-export const REV = "171.5";
+export const REV = "171.6";
 
 const G = globalThis;
 // what the app's program has around the engine: names.js (put at its head by build.py too)
@@ -219,6 +219,10 @@ export function shares(rows, ctx) {
     const b = ctxBooks(ctx, rows); S.books = b;
     const unknown = new Set();
     b.vouchers.forEach((v) => v.ent.forEach((e) => { if (!b.map[e.l]) unknown.add(e.l); }));
+    // (review of ee1fe32c5) a supplier Tally types ISD in this batch that the context does not list (isdTyped): the
+    // context is to be made again first, as for a ledger it has not got (handler.ts)
+    const typed = new Set(ctx.isdTyped || []), isdNew = new Set(), gs = b.gstins || {};
+    b.vouchers.forEach((v) => { const g = v.party && gs[v.party]; if (g && E.GSTR.ISD_RE.test(String(v.regType || "")) && !typed.has(String(g).toUpperCase().trim())) isdNew.add(String(g).toUpperCase().trim()); });
     const out = [];
     const errors = [], docs = [];
     b.vouchers.forEach((v) => {
@@ -230,7 +234,7 @@ export function shares(rows, ctx) {
         if (x.doc || x.bills.length) { if (/^\d{6}$/.test(x.ym)) docs.push(itcRow(v.id, x)); else errors.push({ guid: v.id, error: "its document could not be kept: month " + (x.ym || "none") }); }
       } catch (e) { errors.push({ guid: v.id, error: String((e && e.message) || e).slice(0, 300) }); }
     });
-    return { shares: out, docs, errors, unknown: [...unknown].sort() };
+    return { shares: out, docs, errors, unknown: [...unknown].sort(), isdNew: [...isdNew].sort() };
   } finally {
     Object.assign(G, was);
     Object.keys(was).forEach((k) => { if (was[k] === undefined) delete G[k]; });

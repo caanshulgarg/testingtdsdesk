@@ -245,10 +245,11 @@ export function handler(deps: Deps) {
     const r = shares({ client: String(book.client_id), co: (cl && cl.data) || {}, heads, lines, bills }, kept.ctx);
     // what is kept as seen: the copy at the pick (an entry changed since is picked again); gone from the copy: forgotten
     const seen = Array.isArray(pick.seen) ? pick.seen : [];
-    if (r.unknown.length) {
-      // a ledger the context has not got: the context made again first (nothing kept of this batch)
+    if (r.unknown.length || (r.isdNew || []).length) {
+      // a ledger the context has not got, or a supplier Tally types ISD that it does not list (review of ee1fe32c5; a
+      // type gone is migration 180's version): the context made again first (nothing kept of this batch)
       await rpc("gst_share_ctx_put", { p_book: book.book_id, p_run: run, p_stamp: "stale:" + stamp, p_engine: ENGINE, p_ctx: kept.ctx, p_ledgers: [], p_guids: [], p_all: false });
-      return { ok: true, book: book.book_id, entries: 0, unknown: r.unknown.slice(0, 20), more: true };
+      return { ok: true, book: book.book_id, entries: 0, unknown: r.unknown.slice(0, 20), isdNew: (r.isdNew || []).slice(0, 20), more: true };
     }
     const ms = Date.now() - t0;
     // part B: the entries' documents and allocations in the same transaction (migration 171); without it the shares alone

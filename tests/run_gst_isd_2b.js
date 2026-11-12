@@ -31,6 +31,9 @@
 //      part not in Tally: the engine and the cloud's month step both 4(A)(4) 2,400 (the context carries the GSTINs Tally
 //      types ISD, isdTyped; ctxDiff moves the supplier's ledger when it changes); any typed entry makes the supplier's
 //      other entries the ISD's too; no ISD: no isdTyped in the context
+//   H. review of ee1fe32c5: the context kept, the first entry Tally types ISD comes in (a batch reports it: isdNew; the new
+//      context moves the supplier's ledger, its entries of every month re-shared), then is deleted (and back); a GSTIN
+//      changed in place in the app (the ledger read) followed
 // Made-up names and figures only (no real client); about 400 entries.
 "use strict";
 const path = require("path");
@@ -58,6 +61,10 @@ const H = ["igst", "cgst", "sgst", "cess"], ISD = "Kestrel Head Office ISD";
     if (o.type){ const h = w.heads.find((z) => z.guid === g.isd); Object.assign(h, {gst_reg_type: "Input Service Distributor", gst_alter_id: h.alter_id}); }
     if (o.fy24) Object.assign(g, fy24(w));
     if (o.cn) Object.assign(g, isdCn(w));
+    if (o.isd2){   // a second distribution of the head office's, November, its entry with no type in Tally
+      const h0 = w.heads.find((z) => z.guid === g.isd), h = Object.assign({}, h0, {guid: "isd-nov-1", day: "2025-11-28", ref: "ISD/25/071", ref_date: "2025-11-28", alter_id: 990101, vno: "JOU/N1", gst_reg_type: null, gst_alter_id: null});
+      w.heads.push(h); w.lines.push({guid: h.guid, ledger: ISD, amount: 2000, hsn: null, rate: null}, {guid: h.guid, ledger: "Input IGST", amount: -2000, hsn: null, rate: null}); g.isd2 = h.guid; }
+    if (o.delTyped){ const h = w.heads.find((z) => z.guid === g.isd); h.deleted_at = "2026-11-12T00:00:00Z"; }
     if (o.cnSep){ const dd = w.portal.find((j) => j.data.rtnprd === "092025").data.docdata, s0 = (dd.isd || []).find((z) => z.ctin === w.ledgers.find((l) => l.name === ISD).gstin);
       s0.doclist.push({doctyp: "C", docnum: "ISD/CN/25/009", docdt: "30-09-2025", igst: 3000, cgst: 0, sgst: 0, cess: 0, itcelg: "Y"}); }
     if (o.mar25){
@@ -282,6 +289,27 @@ const H = ["igst", "cgst", "sgst", "cess"], ISD = "Kestrel Head Office ISD";
     const PT = parity(T1.rows, CT, "G. gst-run's parity (Tally's type only)");
     ok(PT.cl.months.find((m) => m.ym === "202509").result.isd.igst === 2400, "G. the month step's September 4(A)(4): 2,400, as the engine");
     ok(inBooks(T1.rows, () => E.GSTR.isISD({party: ISD, regType: "", ent: []})) && !inBooks(B0.rows, () => E.GSTR.isISD({party: ISD, regType: "", ent: []})), "G. an entry of a supplier Tally types ISD elsewhere is the ISD's too; with no type, not");
+  }
+  console.log("== H. the context kept: the first entry Tally types ISD comes in, then is deleted");
+  { const K0 = rowsOf({isd2: true}), K1 = rowsOf({isd2: true, type: true}), K2 = rowsOf({isd2: true, type: true, delTyped: true});
+    const c0 = eng.contextOf(K0.rows), c1 = eng.contextOf(K1.rows), c2 = eng.contextOf(K2.rows), gst = K1.w.ledgers.find((l) => l.name === ISD).gstin;
+    const batch = (R, guids) => { const S0 = new Set(guids); return {client: R.rows.client, co: R.rows.co, heads: R.rows.heads.filter((h) => S0.has(h.guid)), lines: R.rows.lines.filter((l) => S0.has(l.guid)), bills: R.rows.bills.filter((x) => S0.has(x.guid))}; };
+    const moved = (R, d) => { const L = new Set(d.ledgers); return [...new Set(R.rows.heads.filter((h) => L.has(h.party)).map((h) => h.guid).concat(R.rows.lines.filter((l) => L.has(l.ledger)).map((l) => l.guid)))].sort(); };
+    const secOf = (sh, guid) => sh.shares.filter((x) => x.guid === guid && /^4\.(isd|other)$/.test(x.sec)).map((x) => x.sec + ":" + x.igst).join(",");
+    const rIn = eng.shares(batch(K1, [K1.g.isd]), c0);
+    ok(JSON.stringify(rIn.isdNew) === JSON.stringify([gst]) && !eng.shares(batch(K0, [K0.g.isd]), c0).isdNew.length, "H. the typed entry in a batch on the kept context: reported (isdNew " + rIn.isdNew.join() + "), so the context is made again; untyped: not");
+    const d1 = eng.ctxDiff(c0, c1), m1 = moved(K1, d1);
+    ok(d1.ledgers.includes(ISD) && m1.includes(K1.g.isd) && m1.includes(K1.g.isd2), "H. the new context moves the supplier's ledger: both its entries (September and November) are due (" + m1.length + ")");
+    const s1 = eng.shares(batch(K1, m1), c1), full1 = eng.shares(batch(K1, K1.rows.heads.map((h) => h.guid)), c1);
+    ok(secOf(s1, K1.g.isd2) === "4.isd:2000" && secOf(s1, K1.g.isd) === "4.isd:5400" && m1.every((gd) => secOf(s1, gd) === secOf(full1, gd)), "H. re-shared: November's untyped entry of that supplier now 4.isd (" + secOf(s1, K1.g.isd2) + "), as the whole book's");
+    ok(JSON.stringify(c2.isdTyped || null) === "null", "H. the typed entry deleted: the context lists no ISD GSTIN");
+    const d2 = eng.ctxDiff(c1, c2), m2 = moved(K2, d2), s2 = eng.shares(batch(K2, m2), c2), s0 = eng.shares(batch(K0, [K0.g.isd2]), c0);
+    ok(d2.ledgers.includes(ISD) && m2.includes(K2.g.isd2) && secOf(s2, K2.g.isd2) === "4.other:2000" && secOf(s2, K2.g.isd2) === secOf(s0, K0.g.isd2), "H. and back: the ledger moves again, November's entry 4.other (" + secOf(s2, K2.g.isd2) + "), as before the type");
+    parity(K1.rows, cloud(K1.rows), "H. gst-run's parity, the type in");
+    parity(K2.rows, cloud(K2.rows), "H. gst-run's parity, the typed entry deleted");
+    // the app: the ledger read (ledRead) changes the GSTINs in place; the typed suppliers' GSTINs follow
+    const bk = inBooks(K1.rows, (b) => { const was = E.GSTR.isdTypedList(b).join(); const keep = b.gstins[ISD]; b.gstins[ISD] = "06AAKCS4821Q2ZX"; const now = E.GSTR.isdTypedList(b).join(); b.gstins[ISD] = keep; return [was, now]; });
+    ok(bk[0] === gst && bk[1] === "06AAKCS4821Q2ZX", "H. a GSTIN changed in place (the ledger read): the typed list follows (" + bk.join(" -> ") + ")");
   }
   console.log("== E. Tally's registration type, written with hyphens");
   ok(inBooks(O0.rows, () => E.GSTR.isISD({regType: "Input-Service-Distributor", ent: []}) && E.GSTR.isISD({regType: "input service distributor", ent: []}) && !E.GSTR.isISD({regType: "Regular", ent: []})), "\"Input-Service-Distributor\" is an ISD's too; \"Regular\" is not");
