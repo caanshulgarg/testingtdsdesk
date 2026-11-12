@@ -29,6 +29,7 @@ export default function Switcher() {
   useEffect(() => {
     if (!open) return;
     const keys = (ev) => {
+      if (!S.switcher) return;   // taken away by a page change (closeSwitcher(true)) that has not drawn yet
       const list = switcherList(), k = ev.key;
       if (k === "Escape") { ev.preventDefault(); ev.stopPropagation(); closeSwitcher(); }   // Esc closes the switcher only, not the client too
       else if (k === "ArrowDown") { ev.preventDefault(); S.switcher.idx = Math.min(list.length - (askOn() ? 0 : 1), S.switcher.idx + 1); renderSwitcher(); }
@@ -47,7 +48,7 @@ export default function Switcher() {
       <div ref={box} className="sw" role="dialog" aria-modal="true" aria-label="Select company">
         <div className="swhead"><b>Select company</b><span className="note">↑↓ to move, Enter to open, Esc to close</span></div>
         <input ref={input} type="text" placeholder="Type a client name or GSTIN" autoComplete="off" value={sw.q || ""}
-          onChange={(e) => { S.switcher.q = e.target.value; S.switcher.idx = 0; renderSwitcher(); }} />
+          onChange={(e) => { if (!S.switcher) return; S.switcher.q = e.target.value; S.switcher.idx = 0; renderSwitcher(); }} />
         <ul className="swlist" role="listbox">
           {list.length ? list.map((c, i) => {
             const st = c.stats || {}, on = i === sw.idx, recent = !sw.q && rec.indexOf(c.id) >= 0 && rec.indexOf(c.id) < 5;

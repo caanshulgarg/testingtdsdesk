@@ -25,7 +25,10 @@ built sw.js as Safari treats it; it fails on ab699ab25.
 It acts when any of these happens:
 
 - the page has not been read to its end 4 s after opening (a file in its head held up; 12 s without a service worker);
-- FinCom has not drawn 4 s after all its files came (8 s for the worker's kept copy of the page);
+- FinCom has not drawn 4 s after all its files came (8 s for the worker's kept copy of the page), and its program is not still
+  opening this browser's saved work (`window.__fincomStage`, neither "drawn" nor "failed: …"; looked at again each
+  second, until 45 s after the page opened at most, as the "did not open" note waits too, and FinCom drawn takes a note
+  away: 12-Nov-2026, FINCOM-APP-STAGING-B healed a slow opening and sent it to a previous build held up in its turn, -F);
 - guard.js finds that the program or the app's first file did not load.
 
 Then it:

@@ -887,12 +887,18 @@ function switcherList(){
 // the client switcher is drawn by React (app/src/Switcher.jsx), with its own keys
 function renderSwitcher(){ if (window.FinComReact) FinComReact.redraw(); }
 function openSwitcher(){ if (!Object.keys(S.companies).length){ goHome(); S.addingCo = true; render(); return; } S.switcher = {q:"", idx:0}; renderSwitcher(); }
-function closeSwitcher(){ S.switcher = null; renderSwitcher(); }
+// next-fix-hang-home (FINCOM-APP-STAGING-H, staging 12-Nov-2026 06:18 UTC: 2,124 ms in a timer, a click on the sidebar's
+// Clients from a large client's books): every page change (navHome, goHome, goSettings, goTallyPage, openCompany) closed
+// the switcher first, and that drew the whole page again, the client's screen being left with all its figures (the TDS
+// page: three quarters of the click), though no switcher was open and the page change draws the page itself at once.
+// Now the switcher is drawn closed only when one was open; a page change that draws right after (drawn: true) only
+// takes it away, its own drawing shows the page without it (nothing is painted in between). tests/run_hang_leave_client.py
+function closeSwitcher(drawn){ const was = !!S.switcher; S.switcher = null; if (was && !drawn) renderSwitcher(); }
 
 async function openCompany(cid){
   loadDocq().catch(() => {});
   if (!S.companies[cid]) return;
-  closeSwitcher();
+  closeSwitcher(true);
   const changed = S.coId !== cid;
   S.coId = cid; S.view = "company"; S.arm = null;
   if (changed && typeof TStale === "object") TStale.reset("prog:");   // (the rows' marks: reliability round)
@@ -926,7 +932,7 @@ async function openCompany(cid){
   // Client setup ledgers of the wrong tax head or section, or not in Tally, are set to the ones that fit (and saved)
   if (typeof Ledgers === "object") Ledgers.load(cid).then(() => { if (S.coId === cid && Ledgers.cid() === cid && autoMapCompanyLedgers(CO(cid)).length) render(); }, () => {});
 }
-function goHome(){ closeSwitcher(); S.view = "home"; S.arm = null; render(); }
+function goHome(){ closeSwitcher(true); S.view = "home"; S.arm = null; render(); }
 
 /* ------------------------------------------------------------------ */
 /* Events                                                              */
@@ -1104,8 +1110,8 @@ function goClient(to){
   if (S.view !== "company" || S.coId !== cid) openCompany(cid).then(go); else go();
 }
 // a section of the firm's Settings (the firm menu in the sidebar, and page links)
-function goSettings(sec){ closeSwitcher(); S.firmMenu = false; S.tallyPanel = false; S.view = "home"; S.homeTab = "rules"; S.settingsTab = sec || null; S.step = null; S.arm = null; render(); window.scrollTo(0, 0); }
-function navHome(tab){ if (tab === "help" && typeof SUP === "object" && !(S.view === "home" && S.homeTab === "help")) S.helpCtx = SUP.context(); closeSwitcher(); S.firmMenu = false; S.tallyPanel = false; S.view = "home"; S.homeTab = tab; S.step = null; S.addingCo = false; S.arm = null; if (tab === "rules") S.settingsTab = null; render(); window.scrollTo(0, 0); }
+function goSettings(sec){ closeSwitcher(true); S.firmMenu = false; S.tallyPanel = false; S.view = "home"; S.homeTab = "rules"; S.settingsTab = sec || null; S.step = null; S.arm = null; render(); window.scrollTo(0, 0); }
+function navHome(tab){ if (tab === "help" && typeof SUP === "object" && !(S.view === "home" && S.homeTab === "help")) S.helpCtx = SUP.context(); closeSwitcher(true); S.firmMenu = false; S.tallyPanel = false; S.view = "home"; S.homeTab = tab; S.step = null; S.addingCo = false; S.arm = null; if (tab === "rules") S.settingsTab = null; render(); window.scrollTo(0, 0); }
 function goTab(tab){ S.tab = tab; S.step = null; S.arm = null; render(); }
 function toggleSetup(){ S.step = null; S.tab = isSetupTab(S.tab) ? "invoices" : "settings"; render(); }
 // a control drawn by React answers its own events; these handlers take the old screens, and the old pieces a React
@@ -1501,7 +1507,7 @@ function doAct(act, t){
     case "nextBill": { const next = Object.values(D().entries).filter(o => o.status === "draft" && (!e || o.id !== e.id)).sort(byDate)[0]; if (next){ S.filter = "draft"; S.selected = next.id; render(); window.scrollTo(0, 0); } break; }
     case "goExport": S.tab = "export"; render(); window.scrollTo(0, 0); break;
     case "runSelfTest": runSelfTest(); break;
-    case "goSelfTest": closeSwitcher(); S.view = "home"; S.homeTab = "rules"; render(); { const el = document.getElementById("selfTestPane"); if (el && el.scrollIntoView) el.scrollIntoView(); } break;
+    case "goSelfTest": closeSwitcher(true); S.view = "home"; S.homeTab = "rules"; render(); { const el = document.getElementById("selfTestPane"); if (el && el.scrollIntoView) el.scrollIntoView(); } break;
     case "copyDiag": {
       const box = document.getElementById("diagBox"); const txt = box ? box.value : diagnosticReport();
       const done = () => toast("Report copied. Paste it into the chat.");
@@ -1986,10 +1992,10 @@ function doAct(act, t){
     }
     case "bridgeDiag": Bridge.diagnose().then(() => Bridge.refresh()).then(() => render()); break;
     // round 39: the open client's Link to Tally card (Client setup → Tally)
-    case "goTcloud": Smart.setReturn(); S.settingsTab = "tcloud"; S.firmMenu = false; S.tallyPanel = false; closeSwitcher(); S.view = "home"; S.homeTab = "rules"; S.arm = null; render(); window.scrollTo(0, 0); break;
-    case "openSettings": S.settingsTab = S.settingsTab || null; S.firmMenu = false; S.tallyPanel = false; closeSwitcher(); S.view = "home"; S.homeTab = "rules"; S.arm = null; render(); window.scrollTo(0, 0); break;
+    case "goTcloud": Smart.setReturn(); S.settingsTab = "tcloud"; S.firmMenu = false; S.tallyPanel = false; closeSwitcher(true); S.view = "home"; S.homeTab = "rules"; S.arm = null; render(); window.scrollTo(0, 0); break;
+    case "openSettings": S.settingsTab = S.settingsTab || null; S.firmMenu = false; S.tallyPanel = false; closeSwitcher(true); S.view = "home"; S.homeTab = "rules"; S.arm = null; render(); window.scrollTo(0, 0); break;
     case "dlStandalone": downloadStandalone(); break;
-    case "goReading": closeSwitcher(); S.view = "home"; S.homeTab = "rules"; S.settingsTab = "reading"; render(); { const r = document.getElementById("readingPane"); if (r && r.scrollIntoView) r.scrollIntoView(); } break;
+    case "goReading": closeSwitcher(true); S.view = "home"; S.homeTab = "rules"; S.settingsTab = "reading"; render(); { const r = document.getElementById("readingPane"); if (r && r.scrollIntoView) r.scrollIntoView(); } break;
     case "testReader": testReader(); break;
     case "testOcr": testFreeOcr(); break;
     case "testGoogle": testGoogle(); break;
@@ -2408,7 +2414,10 @@ window.addEventListener("hashchange", () => { applyEntryHash(); render(); });
   // the page is shown later), not on every open of FinCom used without an account
   if (!Cloud.on() && signInNeeded()) loadSignupInfo();
   render();
-})();
+// review of e67e50f9e: an opening that throws says so as its stage ("failed: …"), so the page's healer (app/index.html,
+// fincom-heal) does not take it for an opening still under way and opens the last good build as before; still thrown
+// (the "did not open" note and Sentry see it)
+})().catch(e => { window.__fincomStage = "failed: " + String((e && e.message) || e).slice(0, 60); throw e; });
 // whether new firms may sign up, and their starting credit (the sign-in page's "New here? Create an account" line)
 function loadSignupInfo(){
   if (Cloud.on() || S.signupInfo || S.signupAsked || navigator.onLine === false) return;   // no line: asked when it is back
