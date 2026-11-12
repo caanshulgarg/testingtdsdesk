@@ -11,6 +11,8 @@ export function clearBoot() {
   const sk = document.querySelector("#app .boot-skel"), ld = document.querySelector("#app .boot-loader");
   try { shapeShown = !!((sk && +getComputedStyle(sk).opacity > 0.5) || (ld && +getComputedStyle(ld).opacity > 0.05)); } catch (e) { shapeShown = false; }
   document.querySelectorAll("[data-boot-part]").forEach((el) => el.remove());
+  // review of e67e50f9e: a "FinCom did not open" note put up while the opening was slow (public/oldcheck.js) goes too: FinCom has opened
+  document.querySelectorAll("[data-boot-stuck]").forEach((el) => el.remove());
 }
 export function bootDone() {
   const d = document.documentElement;

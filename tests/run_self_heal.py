@@ -12,7 +12,11 @@ Sentry: the page died before any script ran). FinCom never stays blank (index.ht
   5. a broken build with no last-good.json: one clean reload from the network, then the "did not open" note, no loop;
   6. a slow opening (FINCOM-APP-STAGING-B, 12-Nov-2026: "not drawn" 15 s into an opening, then the previous build held up
      too, -F): the program still reading this browser's saved work 12 s after the page's files came is not healed; FinCom
-     is drawn on its own build when the work is read, its worker kept.
+     is drawn on its own build when the work is read, its worker kept;
+  7. (review of e67e50f9e) an opening that throws after its first step (start's stage set): healed to the last good build
+     as before, within about 10 s;
+  8. (review of e67e50f9e) a healthy opening drawn after the "did not open" note's 20 s (the program 9 s late on the line,
+     no worker, then this browser's saved work 13 s late): no note on screen, none reported, no healing.
 Served as Cloudflare serves main (tests/cf_pages.py rules: /review/legacy.js immutable as on main since 2d196fd33; an
 ETag from the content and no Last-Modified, as Workers static assets answer). Chromium only here.
   flock /tmp/fincom-app.lock python3 tests/run_self_heal.py   (TDSDESK_SITE defaults to ../app/dist-test)"""
@@ -100,7 +104,7 @@ class Folders(dict):
         if os.path.lexists(tmp): os.remove(tmp)
         os.symlink(v, tmp); os.replace(tmp, link)
 MAP = Folders(); MAP["review"] = NEW; MAP["review-prev"] = OLDD
-HOLD = {"css": False}
+HOLD = {"css": False, "legacy": 0}
 seen = []
 class H(cf_pages.PagesHandler):
     rules = RULES
@@ -110,6 +114,7 @@ class H(cf_pages.PagesHandler):
         # look "not modified" to a browser holding a newer one)
         if "If-Modified-Since" in self.headers: del self.headers["If-Modified-Since"]
         if HOLD["css"] and re.search(r"/review/assets/index-[\w-]+\.css", self.path): time.sleep(40); return None
+        if HOLD["legacy"] and re.search(r"^/review/legacy\.js", self.path): time.sleep(HOLD["legacy"])
         f = self.translate_path(urllib.parse.urlsplit(self.path).path)
         if os.path.isfile(f):
             tag = '"' + hashlib.md5(open(f, "rb").read()).hexdigest()[:16] + '"'
@@ -134,6 +139,12 @@ try{navigator.serviceWorker.getRegistration().then(function(r){if(r)r.update().c
 window.__zz={};try{navigator.serviceWorker.addEventListener('controllerchange',function(){__zz.cc=Math.round(performance.now())})}catch(e){}
 try{new MutationObserver(function(){if(!__zz.drawn&&document.querySelector('#app .react-host'))__zz.drawn=Math.round(performance.now());var d=document.querySelector('[data-heal-line]');if(d&&d.textContent){var o=sessionStorage.getItem('zz-said')||'';if(o.indexOf(d.textContent)<0)sessionStorage.setItem('zz-said',o+'|'+d.textContent)}}).observe(document,{childList:true,subtree:true,characterData:true})}catch(e){}
 document.addEventListener('DOMContentLoaded',function(){try{var t=(document.getElementById('fincom-boot')||{}).textContent||'';sessionStorage.setItem('zz-docs',(sessionStorage.getItem('zz-docs')||'')+' '+location.pathname.split('/')[1]+':'+(t.indexOf(%r)>=0?'new':t.indexOf(%r)>=0?'old':'?'))}catch(e){}})""" % (IDN, IDO)
+SLOW_IDB = """(() => { let ms = 0; try { ms = +sessionStorage.getItem('zz-slow-idb') || 0; sessionStorage.removeItem('zz-slow-idb'); } catch (e) {}
+  if (!ms || !window.indexedDB) return; const real = indexedDB.open.bind(indexedDB);
+  indexedDB.open = function (name, v) { if (String(name).indexOf('tdsdesk') < 0) return real(name, v);
+    let r = null; const f = { get result() { return r && r.result; }, get error() { return r && r.error; }, get readyState() { return r ? r.readyState : 'pending'; } };
+    setTimeout(() => { r = real(name, v); ['onupgradeneeded', 'onsuccess', 'onerror', 'onblocked'].forEach((k) => { r[k] = (e) => { if (typeof f[k] === 'function') f[k](e); }; }); }, ms);
+    return f; }; })()"""
 def drawn(pg, ms):
     try: pg.wait_for_function("() => !!document.querySelector('#app .react-host')", timeout=ms); return True
     except Exception: return False
@@ -242,12 +253,7 @@ with sync_playwright() as p:
         ctx.route("**/*.sentry.io/**", lambda r: (sent.append(r.request.post_data or ""), r.fulfill(status=200, body="{}")))
         pg = browser_on(ctx, NEW)
         # this browser's database answers 12 s late (a large firm's work read on a slow office PC), on the next opening only
-        ctx.add_init_script("""(() => { let ms = 0; try { ms = +sessionStorage.getItem('zz-slow-idb') || 0; sessionStorage.removeItem('zz-slow-idb'); } catch (e) {}
-          if (!ms || !window.indexedDB) return; const real = indexedDB.open.bind(indexedDB);
-          indexedDB.open = function (name, v) { if (String(name).indexOf('tdsdesk') < 0) return real(name, v);
-            let r = null; const f = { get result() { return r && r.result; }, get error() { return r && r.error; }, get readyState() { return r ? r.readyState : 'pending'; } };
-            setTimeout(() => { r = real(name, v); ['onupgradeneeded', 'onsuccess', 'onerror', 'onblocked'].forEach((k) => { r[k] = (e) => { if (typeof f[k] === 'function') f[k](e); }; }); }, ms);
-            return f; }; })()""")
+        ctx.add_init_script(SLOW_IDB)
         pg.evaluate("sessionStorage.setItem('zz-slow-idb', '12000')")
         t0 = time.time(); stages = set()
         try: pg.reload(wait_until="commit")
@@ -264,6 +270,47 @@ with sync_playwright() as p:
         ok(not any("healed itself" in s for s in sent), "no healing reported (%s)" % [s[:70] for s in sent])
         ok(not ev(pg, "!!document.querySelector('[data-heal-line], [data-boot-stuck]')"), "no healing line and no note")
         ok("/review/" in regs(pg), "its worker kept (%s)" % regs(pg))
+        ctx.close()
+
+        print("7. an opening that throws after its first step: the last good build, as before")
+        ctx = ctx_new(); sent = []
+        ctx.route("**/*.sentry.io/**", lambda r: (sent.append(r.request.post_data or ""), r.fulfill(status=200, body="{}")))
+        pg = browser_on(ctx, NEW)
+        # on review/ only, once: start() throws as it leaves its first step, "owner" (as a fault in LocalOwner.boot would: the firm never loaded)
+        ctx.add_init_script("""(() => { let on = false; try { on = /^\\/review\\//.test(location.pathname) && sessionStorage.getItem('zz-throw') === '1'; if (on) sessionStorage.removeItem('zz-throw'); } catch (e) {}
+          if (!on) return; let v; Object.defineProperty(window, '__fincomStage', { configurable: true, get() { return v; }, set(x) { v = x; if (x === 'store-init') throw new Error('zz made-up fault in the opening'); } }); })()""")
+        pg.evaluate("sessionStorage.setItem('zz-throw', '1')")
+        t0 = time.time(); stage = ""
+        try: pg.reload(wait_until="commit")
+        except Exception: pass
+        good = False
+        while time.time() - t0 < 25 and not good:
+            stage = ev(pg, "window.__fincomStage || ''", "") or stage
+            good = "/review-prev/" in pg.url and drawn(pg, 500)
+            pg.wait_for_timeout(250)
+        secs = round(time.time() - t0, 1)
+        ok(good and build_of(pg) == "old" and secs <= 12, "the last good build (review-prev/) drawn in %s s (%s; stage %r, %s)" % (secs, pg.url, stage, ev(pg, "[window.__fincomStage, !!document.querySelector('[data-boot-part]'), !!document.querySelector('#app .react-host'), !!document.querySelector('[data-boot-stuck]')]")))
+        ok(any("healed itself: not drawn" in s and "failed: zz made-up fault" in s for s in sent), "reported as \"not drawn\", its stage the failure (%s)" % [s[:200] for s in sent])
+        ctx.close()
+
+        print("8. a healthy opening drawn after the note's 20 s: no note, no healing")
+        ctx = ctx_new(); sent = []
+        ctx.route("**/*.sentry.io/**", lambda r: (sent.append(r.request.post_data or ""), r.fulfill(status=200, body="{}")))
+        ctx.add_init_script("try{if(!sessionStorage.getItem('zz-slow-once')){sessionStorage.setItem('zz-slow-once','1');sessionStorage.setItem('zz-slow-idb','13000')}}catch(e){}")
+        ctx.add_init_script(SLOW_IDB)
+        MAP["review"] = NEW; HOLD["legacy"] = 9
+        pg = ctx.new_page(); t0 = time.time(); notes = []
+        try: pg.goto(URL, wait_until="commit")
+        except Exception: pass
+        good = False
+        while time.time() - t0 < 45 and not good:
+            if ev(pg, "!!document.querySelector('[data-boot-stuck]')"): notes.append(round(time.time() - t0, 1))
+            good = drawn(pg, 500)
+            pg.wait_for_timeout(250)
+        HOLD["legacy"] = 0; secs = round(time.time() - t0, 1); pg.wait_for_timeout(1500)
+        ok(good and secs >= 20 and "/review/" in pg.url and "/review-prev/" not in pg.url, "FinCom drawn on its own build in %s s (after the note's 20 s), at %s" % (secs, pg.url))
+        ok(not notes and not ev(pg, "!!document.querySelector('[data-boot-stuck], [data-heal-line]')"), "no \"did not open\" note on the way or at the end (%s)" % notes[:3])
+        ok(not sent, "nothing reported (%s)" % [s[:70] for s in sent])
         ctx.close()
     finally:
         br.close(); srv.shutdown(); shutil.rmtree(TMP, ignore_errors=True)

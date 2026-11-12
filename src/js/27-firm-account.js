@@ -2414,7 +2414,10 @@ window.addEventListener("hashchange", () => { applyEntryHash(); render(); });
   // the page is shown later), not on every open of FinCom used without an account
   if (!Cloud.on() && signInNeeded()) loadSignupInfo();
   render();
-})();
+// review of e67e50f9e: an opening that throws says so as its stage ("failed: …"), so the page's healer (app/index.html,
+// fincom-heal) does not take it for an opening still under way and opens the last good build as before; still thrown
+// (the "did not open" note and Sentry see it)
+})().catch(e => { window.__fincomStage = "failed: " + String((e && e.message) || e).slice(0, 60); throw e; });
 // whether new firms may sign up, and their starting credit (the sign-in page's "New here? Create an account" line)
 function loadSignupInfo(){
   if (Cloud.on() || S.signupInfo || S.signupAsked || navigator.onLine === false) return;   // no line: asked when it is back

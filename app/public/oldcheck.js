@@ -92,6 +92,11 @@
     function stuck(timed) {
       // 24-Oct-2026: a meeting's guest page (data-guest, src/calls/guest.jsx) is drawn in place of FinCom: it has opened
       if (shown || window.__fincomOld || document.documentElement.hasAttribute("data-guest") || !document.querySelector("[data-boot-part]")) return;
+      // review of e67e50f9e: the program still opening (src/js/27's start, its stage not "drawn" nor "failed: …": a large
+      // firm's saved work read on a slow PC) is looked at again each second, until 45 s after the page opened, as the
+      // page's healer waits (app/index.html, fincom-heal); no note and no report meanwhile
+      var st = String(window.__fincomStage || "");
+      if (timed && st && st !== "drawn" && !/^(healing|file not loaded|failed)/.test(st) && window.performance && performance.now && performance.now() < 45000) { setTimeout(function () { stuck(true); }, 1000); return; }
       shown = true;
       var box = document.createElement("div");
       box.setAttribute("data-boot-stuck", "");
