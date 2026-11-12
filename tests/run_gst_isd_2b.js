@@ -27,6 +27,10 @@
 //      type), as a booked document. No switch: every box of every month the base's (4(A)(4) 0, 4(A)(5) takes it off).
 //      Switched: April's 4(A)(4) does not go below nothing (no ISD credit that month): the 8,000 stays in 4(A)(5), as
 //      the base has it; the engine, the Final credit for 3B and gst-run's parity alike
+//   G. third review of fe63bac61: the ISD by Tally's type only (no switch), a credit note of 3,000 in September's 2B ISD
+//      part not in Tally: the engine and the cloud's month step both 4(A)(4) 2,400 (the context carries the GSTINs Tally
+//      types ISD, isdTyped; ctxDiff moves the supplier's ledger when it changes); any typed entry makes the supplier's
+//      other entries the ISD's too; no ISD: no isdTyped in the context
 // Made-up names and figures only (no real client); about 400 entries.
 "use strict";
 const path = require("path");
@@ -54,6 +58,8 @@ const H = ["igst", "cgst", "sgst", "cess"], ISD = "Kestrel Head Office ISD";
     if (o.type){ const h = w.heads.find((z) => z.guid === g.isd); Object.assign(h, {gst_reg_type: "Input Service Distributor", gst_alter_id: h.alter_id}); }
     if (o.fy24) Object.assign(g, fy24(w));
     if (o.cn) Object.assign(g, isdCn(w));
+    if (o.cnSep){ const dd = w.portal.find((j) => j.data.rtnprd === "092025").data.docdata, s0 = (dd.isd || []).find((z) => z.ctin === w.ledgers.find((l) => l.name === ISD).gstin);
+      s0.doclist.push({doctyp: "C", docnum: "ISD/CN/25/009", docdt: "30-09-2025", igst: 3000, cgst: 0, sgst: 0, cess: 0, itcelg: "Y"}); }
     if (o.mar25){
       const P = (n) => w.ledgers.find((l) => l.name === n);
       w.portal.push({data: {gstin: w.OWN, rtnprd: "032025", gendt: "14-04-2025", docdata: {b2b: [{ctin: P("Elmstead Paper").gstin, trdnm: "ELMSTEAD PAPER", supfildt: "11-04-2025",
@@ -267,6 +273,15 @@ const H = ["igst", "cgst", "sgst", "cess"], ISD = "Kestrel Head Office ISD";
     }
     const ln = (() => { const b = inBooks(N0.rows, (bk) => clone(bk)); ffc.S.books = b; ffx.GST2B._memo = null; return ffc.ITCF.excelData("07", "202504").rows.find((r) => r.no === "ISD/CN/25/007"); })();
     ok(ln && ln.line === "4A5", "F. the Excel's line of the credit note with no switch: 4(A)(5) (" + (ln && ln.line) + ")");
+  }
+  console.log("== G. the ISD by Tally's type only, a 2B credit note in a month with ISD credit");
+  { const T1 = rowsOf({type: true, cnSep: true}), allT = monthsOf(T1.rows), t1 = eng.engineItc(T1.rows, "07", allT).months, CT = cloud(T1.rows);
+    ok(JSON.stringify(sumOf(t1["202509"].isd)) === "[2400,0,0,0]", "G. the engine: September 4(A)(4) 5,400 less the 3,000 credit note: " + sumOf(t1["202509"].isd).join("/"));
+    ok(JSON.stringify(CT.ctx.isdTyped) === JSON.stringify([T1.w.ledgers.find((l) => l.name === ISD).gstin]) && !("isdTyped" in C0.ctx) && !("isdTyped" in C1.ctx), "G. the context carries the GSTIN Tally types ISD (isdTyped); none without the type");
+    ok(eng.ctxDiff(C0.ctx, CT.ctx).ledgers.includes(ISD) && !eng.ctxDiff(C0.ctx, C0.ctx).ledgers.length, "G. Tally's type coming in moves the supplier's ledger (ctxDiff)");
+    const PT = parity(T1.rows, CT, "G. gst-run's parity (Tally's type only)");
+    ok(PT.cl.months.find((m) => m.ym === "202509").result.isd.igst === 2400, "G. the month step's September 4(A)(4): 2,400, as the engine");
+    ok(inBooks(T1.rows, () => E.GSTR.isISD({party: ISD, regType: "", ent: []})) && !inBooks(B0.rows, () => E.GSTR.isISD({party: ISD, regType: "", ent: []})), "G. an entry of a supplier Tally types ISD elsewhere is the ISD's too; with no type, not");
   }
   console.log("== E. Tally's registration type, written with hyphens");
   ok(inBooks(O0.rows, () => E.GSTR.isISD({regType: "Input-Service-Distributor", ent: []}) && E.GSTR.isISD({regType: "input service distributor", ent: []}) && !E.GSTR.isISD({regType: "Regular", ent: []})), "\"Input-Service-Distributor\" is an ISD's too; \"Regular\" is not");

@@ -33,7 +33,7 @@ import * as E from "../_shared/gst3b.js";
 import { gst3bPrint } from "../_shared/gst3bprint.js";
 
 // the revision of the function around the engine (data.ts, handler.ts): moved by hand with tests/gst_cloud_rev.json
-export const REV = "171.4";
+export const REV = "171.5";
 
 const G = globalThis;
 // what the app's program has around the engine: names.js (put at its head by build.py too)
@@ -158,7 +158,11 @@ const CTX_DROP = { n: 1, why: 1 };
 export function ctxOf(b) {
   const map = {};
   Object.keys(b.map || {}).sort().forEach((k) => { const m = b.map[k] || {}, o = {}; Object.keys(m).sort().forEach((j) => { if (!CTX_DROP[j] && m[j] !== undefined) o[j] = m[j]; }); map[k] = o; });
-  return { map, under: b.under || {}, groups: b.groups || {}, gstins: b.gstins || {}, gstPosFix: b.gstPosFix || {}, stateOf: b.stateOf || "" };
+  // (third review of fe63bac61) the GSTINs of the suppliers Tally types ISD (GSTR.isdTypedList), only when there are any,
+  // so the month step and a batch's shares see the set the whole book has
+  const typed = E.GSTR.isdTypedList(b), o = { map, under: b.under || {}, groups: b.groups || {}, gstins: b.gstins || {}, gstPosFix: b.gstPosFix || {}, stateOf: b.stateOf || "" };
+  if (typed.length) o.isdTyped = typed.slice();
+  return o;
 }
 // the whole book's context (rows as for step), with S set as step sets it
 export function contextOf(rows) {
@@ -174,7 +178,7 @@ export function contextOf(rows) {
 }
 // the books a batch of entries is worked out on: the context and the entries alone (BookSrc.apply, as books() puts them)
 function ctxBooks(ctx, rows) {
-  const b = { cid: rows.client, vouchers: [], map: ctx.map || {}, under: ctx.under || {}, groups: ctx.groups || {}, gstins: ctx.gstins || {}, gstPosFix: ctx.gstPosFix || {}, meta: {} };
+  const b = { cid: rows.client, vouchers: [], map: ctx.map || {}, under: ctx.under || {}, groups: ctx.groups || {}, gstins: ctx.gstins || {}, gstPosFix: ctx.gstPosFix || {}, isdTyped: ctx.isdTyped || [], meta: {} };
   if (ctx.stateOf) b.stateOf = ctx.stateOf;
   E.BookSrc.apply(b, rows.heads || [], rows.lines || [], rows.bills || []);
   return b;
@@ -187,6 +191,9 @@ export function ctxDiff(a, c) {
   const part = (x, n) => JSON.stringify([(x.map || {})[n] || null, E.ledGroupPath(x, n), (x.gstins || {})[n] || ""]);
   const names = new Set([].concat(Object.keys(a.map || {}), Object.keys(c.map || {}), Object.keys(a.under || {}), Object.keys(c.under || {}), Object.keys(a.gstins || {}), Object.keys(c.gstins || {})));
   const moved = [...names].filter((n) => part(a, n) !== part(c, n));
+  // a supplier that came into or left the GSTINs Tally types ISD (isdTyped): its ledgers move (their entries and 2B rows)
+  const tA = new Set(a.isdTyped || []), tC = new Set(c.isdTyped || []), up = (g) => String(g || "").toUpperCase().trim();
+  if (tA.size || tC.size) [...names].forEach((n) => { const g = up(((c.gstins || {})[n]) || ((a.gstins || {})[n])); if (g && tA.has(g) !== tC.has(g) && !moved.includes(n)) moved.push(n); });
   // the names the copy's lines and entries carry (tally_lines.ledger, tally_vouchers.party: Tally's text with only its
   // line breaks taken out, migration 23's tally_nm; "&amp;" can stay as it came) are the ledger list's own keys (made
   // from those lines); the groups and GSTINs are kept under the cleaned name (ledClean: "&"). A ledger moved under
@@ -406,7 +413,7 @@ function monthBook(inp) {
   (inp.items || []).forEach((r) => { if (r && !r.deleted && FROM_TALLY.indexOf(r.key) < 0) (by[r.key] = by[r.key] || []).push({ k: r.key, i: r.item || "", o: r.ord, d: r.data }); });
   Object.keys(by).sort().forEach((k) => { const v = E.BookItems.join(by[k]); if (v !== undefined) b[k] = v; });
   const c = inp.ctx || {};
-  Object.assign(b, { map: c.map || {}, under: c.under || {}, groups: c.groups || {}, gstins: c.gstins || {}, gstPosFix: c.gstPosFix || {} });
+  Object.assign(b, { map: c.map || {}, under: c.under || {}, groups: c.groups || {}, gstins: c.gstins || {}, gstPosFix: c.gstPosFix || {}, isdTyped: c.isdTyped || [] });
   if (c.stateOf) b.stateOf = c.stateOf;
   b.meta = Object.assign({}, b.meta || {}, { bills: 1, gstins: (inp.gstins || []).slice().sort() });
   b.shareSrc = shareSrc(inp);

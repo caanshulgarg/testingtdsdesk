@@ -19,7 +19,7 @@
 // No AI here: M2B.aiLinks only reads the pairs the gst-2b-match function already stored for the year.
 // GST3B_SRC: this file's and names.js's text (this value left out), hashed (tests/run_gst_cloud.js keeps it so): a 3B the
 // cloud worked out carries it, and the 3B page uses the cloud's only when its own is the same (app/src/screens/gst/cloud3b.js)
-const GST3B_SRC = "s25a0cfa417aa3dc2";
+const GST3B_SRC = "s0cfd736f4f950856";
 function num(v){ if (typeof v === "number") return isFinite(v) ? v : 0; const n = parseFloat(String(v == null ? "" : v).replace(/[^0-9.\-]/g, "")); return isFinite(n) ? n : 0; }
 function r2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
 const INR = new Intl.NumberFormat("en-IN", {minimumFractionDigits:2, maximumFractionDigits:2});
@@ -1915,11 +1915,34 @@ const GSTR = {
   // ledger, e.g. the head office's, or an input ledger kept for ISD credit; GST settings, FinCom's own, synced, never
   // written to Tally). Before 12-Nov-2026 FinCom had no ISD: such credit was in 4(A)(5)
   ISD_RE: /INPUT[\s_-]*SERVICE[\s_-]*DISTRIBUTOR|^\s*ISD\b/i,
+  // (third review of fe63bac61: a supplier with any entry Tally types ISD is an ISD for all its entries and its 2B rows,
+  // isdTyped; none such, nothing changes)
   isISD(v){
     if (!v) return false;
     if (this.ISD_RE.test(String(v.regType || ""))) return true;
-    const m = (S.books || {}).map || {};
-    return !!((v.party && (m[v.party] || {}).isd) || (v.ent || []).some(e => (m[e.l] || {}).isd));
+    const b = S.books || {}, m = b.map || {};
+    if ((v.party && (m[v.party] || {}).isd) || (v.ent || []).some(e => (m[e.l] || {}).isd)) return true;
+    const g = v.party && (b.gstins || {})[v.party];
+    return !!(g && this.isdTypedSet(b).has(String(g).toUpperCase().trim()));
+  },
+  // the GSTINs of the parties whose entries Tally types ISD (sorted): the book's own (b.isdTyped) where it has no entries
+  // of its own to read (the cloud's month step and a batch of shares: the context's, engine.js ctxOf), else read from
+  // its entries (kept while the entries are the same array and count)
+  isdTypedList(b){
+    b = b || S.books || {};
+    if (Array.isArray(b.isdTyped)) return b.isdTyped;
+    const vs = b.vouchers || [], k = this._isdT;
+    if (k && k.vs === vs && k.n === vs.length && k.g === b.gstins) return k.list;
+    const g = b.gstins || {}, s = new Set();
+    vs.forEach(v => { if (v && v.party && g[v.party] && this.ISD_RE.test(String(v.regType || ""))) s.add(String(g[v.party]).toUpperCase().trim()); });
+    const list = [...s].sort();
+    this._isdT = {vs, n: vs.length, g: b.gstins, list, set: new Set(list)};
+    return list;
+  },
+  isdTypedSet(b){
+    b = b || S.books || {};
+    if (Array.isArray(b.isdTyped)){ if (!b._isdTS || b._isdTS.l !== b.isdTyped) Object.defineProperty(b, "_isdTS", {value: {l: b.isdTyped, s: new Set(b.isdTyped)}, configurable: true, writable: true, enumerable: false}); return b._isdTS.s; }
+    this.isdTypedList(b); return this._isdT.set;
   },
   // the ledgers switched to ISD (GST settings)
   isdLedgers(b){ const m = (b || S.books || {}).map || {}; return Object.keys(m).filter(k => m[k] && m[k].isd).sort(); },
@@ -1927,7 +1950,7 @@ const GSTR = {
   isdGstins(){
     const b = S.books || {}, m = b.map || {}, g = b.gstins || {}, s = new Set(), up = x => String(x || "").toUpperCase().trim();
     Object.keys(m).forEach(k => { if (m[k] && m[k].isd && g[k]) s.add(up(g[k])); });
-    (b.vouchers || []).forEach(v => { if (v && v.party && g[v.party] && this.ISD_RE.test(String(v.regType || ""))) s.add(up(g[v.party])); });
+    this.isdTypedList(b).forEach(x => s.add(x));
     return s;
   },
   // (review of aba40df57, B1) the test of an ISD's document or 2B row, for 4(A)(4): a document when its entry is one (isISD;
