@@ -695,7 +695,7 @@ async function reconPost(){
   const ids = R.missing.filter(id => { const r = b.rows.find(x => x.id === id); return r && ["ready", "sent", "intally"].includes(r.state) && !bankAside(r) && !bankRepOpen(r) && r.ledger && exactLedger(r.ledger); });
   if (!ids.length) return;
   // lines marked as posted that Tally does not have: posted afresh
-  b.rows.forEach(r => { if (ids.includes(r.id) && ["sent", "intally"].includes(r.state)){ if (b.postedTags) delete b.postedTags[fpHash(r.fp || r.id)]; r.state = "ready"; r.tally = null; r.postVerified = false; r.postByReply = false; r.checking = false; r.tallyHow = ""; r.tallyRef = ""; delete r.tallyIdx; } });
+  b.rows.forEach(r => { if (ids.includes(r.id) && bankInTally(r)) bankClearPosting(r, "ready"); });
   b.tallyLook = null; lsDel(wideCheckKey());
   saveBank({rows: true, posted: true});
   await postBankToTally(ids);
@@ -727,7 +727,7 @@ async function reconDelete(which){
   if (which === "replace"){
     // the statement lines go in again with their own amount, only where the old entry really went
     const ids = R.differ.filter(d => gone.has(d.ti)).map(d => d.rowId);
-    b.rows.forEach(r => { if (ids.includes(r.id)){ if (b.postedTags) delete b.postedTags[fpHash(r.fp || r.id)]; r.state = r.ledger && exactLedger(r.ledger) ? "ready" : "attention"; r.tally = null; r.postVerified = false; r.postByReply = false; r.tallyHow = ""; r.tallyRef = ""; delete r.tallyIdx; } });
+    b.rows.forEach(r => { if (ids.includes(r.id)) bankClearPosting(r, r.ledger && exactLedger(r.ledger) ? "ready" : "attention"); });
     lsDel(wideCheckKey()); saveBank({rows: true, posted: true});
     await postBankToTally(ids.filter(id => (b.rows.find(r => r.id === id) || {}).state === "ready"));
   }
@@ -789,9 +789,7 @@ function goneBack(){
   b.rows.forEach(r => {
     if (!ids.has(r.id) || !["sent", "intally"].includes(r.state)) return;
     n++;
-    if (b.postedTags) delete b.postedTags[fpHash(r.fp || r.id)];
-    r.state = r.ledger && exactLedger(r.ledger) ? "ready" : "attention";
-    r.tally = null; r.postVerified = false; r.postByReply = false; r.checking = false; r.postError = ""; r.postedVia = ""; r.sentAt = ""; delete r.tallyIdx; r.tallyHow = ""; r.tallyRef = "";
+    bankClearPosting(r, r.ledger && exactLedger(r.ledger) ? "ready" : "attention");
   });
   b.gone = null; b.focus = null; b.filter = "ready"; b.tallyLook = null;
   lsDel(wideCheckKey());
@@ -910,7 +908,7 @@ async function removeTallyDuplicates(which){
   if (which === "wrong") b.rows.forEach(r => {
     if (!gone.has(r.id) || !d.badOnly.includes(r.id)) return;
     if (b.postedTags) delete b.postedTags[fpHash(r.fp || r.id)];
-    if (["sent", "intally"].includes(r.state)){ r.state = "ready"; r.tally = null; r.postedVia = ""; }
+    if (bankInTally(r)) bankClearPosting(r, "ready");
     r.postError = "";
   });
   saveBank({rows: true, posted: true});
@@ -1404,7 +1402,7 @@ async function postBillsToTally(opts){
   }
   const failed = [];
   const blocked = list.filter(e => e.snapshot.lines.some(l => !exactLedger(l.ledger)));
-  blocked.forEach(e => { const l = e.snapshot.lines.find(x => !exactLedger(x.ledger)); e.postError = "Ledger “" + (l.ledger || "(none)") + "” is not in Tally"; unapply(e, co.id); e.postFailedAt = new Date().toISOString(); Store.saveEntry(co.id, e); failed.push({id: e.id, no: e.x.invoiceNo, party: e.x.vendorName, msg: e.postError}); });
+  blocked.forEach(e => { const l = e.snapshot.lines.find(x => !exactLedger(x.ledger)); e.postError = "Ledger “" + (l.ledger || "(none)") + "” is not in Tally"; unapply(e, co.id, {force: true}); e.postFailedAt = new Date().toISOString(); Store.saveEntry(co.id, e); failed.push({id: e.id, no: e.x.invoiceNo, party: e.x.vendorName, msg: e.postError}); });
   let todo = list.filter(e => !blocked.includes(e));
   S.billPost = {busy: "Checking Tally for bills already booked…"}; render();
   try {
@@ -1473,7 +1471,7 @@ async function postBillsToTally(opts){
         else {
           e.postError = plainMsg(x && x.message) || "Tally did not confirm this entry.";
           failed.push({id: e.id, no: e.x.invoiceNo, party: e.x.vendorName, msg: e.postError});
-          unapply(e, co.id); e.postFailedAt = now;                          // back to review, with Tally's reason on it
+          unapply(e, co.id, {force: true}); e.postFailedAt = now;                          // back to review, with Tally's reason on it
         }
         Store.saveEntry(co.id, e);
       });

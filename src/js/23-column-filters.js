@@ -664,7 +664,7 @@ function bankRowAct(a, id){
   if (a === "post"){ postBankToTally([id]); return true; }
   {
     const r = bankRow(id); if (!r) return true;
-    if (bankInTally(r)){ toast(bankKeptWords(1)); return true; }
+    if (bankInTally(r)){ toast("This line is already in Tally, so it was left as it is."); return true; }
     b.undo = {what: a === "accept" ? "accept" : a, label: "1 entry", n: 1, others: 0, snaps: [rowSnapshot(r)], ruleKeys: [], oldRules: []};
     b.sticky.add(r.id);
     if (a === "accept"){

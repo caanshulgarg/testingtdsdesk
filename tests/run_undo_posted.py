@@ -12,7 +12,9 @@ twice. Made-up client, lines, invoices and bills. Checked, for each kind:
   purchase     - a posted bill deleted and restored comes back approved, still posted, on its supplier's totals; unapply
                  refuses a posted bill; No entry refuses a posted bill and removes the cloud document only after the
                  Undo has passed; the un-post paths (Take back, Post again, Not in Tally) leave the same fields; the bar
-                 says "Sent, not confirmed" for a bill sent and not read back
+                 says what tallyStateOf says (In Tally / In Tally, not confirmed / Not in Tally any more); a bill whose
+                 posting is still being checked or sent cannot be undone; Undo of a queued automatic entry reads the
+                 posting's status when the cancel is refused (cancelled: undone; taken: left)
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_undo_posted.py"""
 import os, threading, functools, http.server, json
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -37,10 +39,10 @@ BANK = r"""async () => {
   S.bank = {cid: c.id, loading: false, stmts: [{id: "s1", acctId: "a1", bank: "Undo Bank", acct: "1111", from: "2026-01-01", to: "2026-01-31"}], cur: "s1",
     rows: [row("u1"), row("u2"), row("u3", {state: "attention", ledger: ""}),
       row("m1"), row("m2", {state: "ignored", prevState: "suggested"}), posted("m3"), row("m4", {state: "intally", tallyIdx: 3}), row("m5", {state: "attention", ledger: ""}), row("m6", {ledger: "Not A Ledger"}),
-      posted("p1"), posted("p2"), posted("p3")],
+      posted("p1"), posted("p2"), posted("p3"), posted("p4")],
     rules: [], wrules: [], ledgers: {list: [{name: BK, group: "Bank Accounts"}, {name: PARTY, group: "Sundry Debtors"}], importedAt: new Date().toISOString(), live: true}, newLed: [], keys: {}, books: {},
     filter: "all", grouped: false, showSettings: false, q: "", limit: 500, pendingRule: null, busy: "", createFor: null, sel: new Set(), sticky: new Set(), undo: null, hist: {rows: {}}, histVer: 0, postedTags: {}, salesRef: []};
-  ["p1", "p2", "p3", "m3"].forEach(id => { S.bank.postedTags[fpHash("fp-" + id)] = "2026-01-06T10:00:00Z"; });
+  ["p1", "p2", "p3", "p4", "m3"].forEach(id => { S.bank.postedTags[fpHash("fp-" + id)] = "2026-01-06T10:00:00Z"; });
   window.ensureTallyCompany = async () => G; window.syncLedgersFromTally = async () => true; window.syncBankBookFromTally = async () => true; window.checkBankBalance = async () => null;
   window.__toasts = []; const t0 = window.toast; window.toast = (m, o) => { window.__toasts.push(String(m)); return t0 && t0(m, o); };
   return c.id;
@@ -69,6 +71,9 @@ BILLS = r"""async () => {
     return e; };
   mk("b1", "Posted Supplier", "B/1", "verified"); mk("b2", "Second Supplier", "B/2", "verified"); mk("b3", "Draft Supplier", "B/3", null); mk("b5", "Posted Five", "B/5", "verified");
   mk("u1", "Unpost One", "U/1", "verified"); mk("u2", "Unpost Two", "U/2", "verified"); mk("u3", "Unpost Three", "U/3", "verified"); mk("s1", "Sent Only", "S/1", "sent");
+  mk("b6", "Being Checked", "B/6", null); approve(S.data[c.id].entries.b6, {bulk: true}); S.data[c.id].entries.b6.postUnconfirmed = {at: "2026-10-01T10:00:00Z", company: "ZZ"};
+  mk("q1", "Still Sending", "Q/1", null); approve(S.data[c.id].entries.q1, {bulk: true});
+  mk("g1", "Gone Supplier", "G/1", "verified"); S.data[c.id].entries.g1.goneFromTally = "2026-10-05T10:00:00Z";
   S.data[c.id].entries.b3.docPath = c.id + "/b3-doc.pdf";
   window.__removed = []; CloudDocs.remove = async (p) => { window.__removed.push(p); };
   window.__toasts = []; const t0 = window.toast; window.toast = (m, o) => { window.__toasts.push(String(m)); return t0 && t0(m, o); };
@@ -97,6 +102,8 @@ with sync_playwright() as p:
     r = E(R, "u1")
     ok(r["state"] == "sent" and r["guid"] == "g-u1", "posted through the bridge, then Undo: still posted, with its Tally voucher (%s)" % r)
     ok("1 line is already in Tally and was left as it is." in last(), "the words: %r" % last())
+    E("() => { window.__toasts = []; bankRowAct('restore', 'u1'); }")
+    ok(last() == "This line is already in Tally, so it was left as it is.", "one line's button on a posted line: %r" % last())
     # the XML file marks the line sent the same way (exportBankXml)
     E("() => { bankRowAct('accept', 'u2'); const r = B().rows.find(x => x.id === 'u2'); r.state = 'sent'; r.sentAt = new Date().toISOString(); window.__toasts = []; undoBank(); }")
     ok(E(R, "u2")["state"] == "sent", "saved in an XML file for Tally, then Undo: still sent")
@@ -118,20 +125,25 @@ with sync_playwright() as p:
     # the un-post paths: Take back from Tally (unpost), posted again after it went from Tally (bankRepostGone), Undo of an automatic entry
     E("() => { window.unpostFromTally = async () => true; bankRowAct('unpost', 'p1'); }"); W(300)
     E("() => { B().rows.find(x => x.id === 'p2').goneFromTally = '2026-02-01T00:00:00Z'; bankRepostGone(); }"); W(200)
+    E("() => { B().gone = {ids: ['p4']}; goneBack(); }"); W(200)
     E("""async () => { const r = B().rows.find(x => x.id === 'p3'); r.auto = {run: 'run1', key: 'k', dir: 'in', label: 'CUST p3', amt: 500, cid: ''}; r.autoPrev = {state: 'suggested', ledger: 'Sundry Receipts'};
       window.bridgeLive = () => true; const c0 = Bridge.call; Bridge.call = async (p) => p === '/unpost' ? {ok: true} : c0.apply(Bridge, arguments);
       const ap = await loadAutoPost(); window.__ap = await ap.undo(S.coId, r, {noAsk: true}); Bridge.call = c0; }"""); W(300)
-    f = E("(F) => ['p1', 'p2', 'p3'].map(id => { const r = B().rows.find(x => x.id === id); const o = {}; F.forEach(k => { o[k] = r[k] === undefined ? null : r[k]; }); o.tag = !!B().postedTags[fpHash(r.fp)]; o.state = r.state; return o; })", json.loads(FIELDS.replace("'", '"')))
+    f = E("(F) => ['p1', 'p2', 'p3', 'p4'].map(id => { const r = B().rows.find(x => x.id === id); const o = {}; F.forEach(k => { o[k] = r[k] === undefined ? null : r[k]; }); o.tag = !!B().postedTags[fpHash(r.fp)]; o.state = r.state; return o; })", json.loads(FIELDS.replace("'", '"')))
     same = lambda a, b: {k: v for k, v in a.items() if k != "state"} == {k: v for k, v in b.items() if k != "state"}
-    ok(f[0]["state"] == "ready" and f[1]["state"] == "ready" and f[2]["state"] == "suggested" and same(f[0], f[1]) and same(f[0], f[2]) and f[0]["tally"] is None and not f[0]["tag"] and f[0]["postedVia"] in ("", None),
-       "the three un-post paths leave the same posting fields, cleared (%s)" % f)
+    ok(f[0]["state"] == "ready" and f[1]["state"] == "ready" and f[2]["state"] == "suggested" and same(f[0], f[1]) and same(f[0], f[2]) and f[3]["state"] == "ready" and same(f[0], f[3]) and f[0]["tally"] is None and not f[0]["tag"] and f[0]["postedVia"] in ("", None),
+       "the four un-post paths (Take back, gone from Tally, back to Post to Tally, automatic undo) leave the same posting fields, cleared (%s)" % f)
     # Undo of a queued automatic entry whose posting the Tally computer has already taken
     E("""async () => { const r = B().rows.find(x => x.id === 'm1'); r.state = 'ready'; r.auto = {run: 'run2', job: '00000000-0000-0000-0000-000000000009', key: 'k2', dir: 'in', label: 'CUST m1', amt: 500, cid: ''};
-      TCloud.rpc = async (fn) => fn === 'tally_post_cancel' ? {ok: false} : {ok: true};
+      TCloud.rpc = async (fn) => fn === 'tally_post_cancel' ? {ok: false} : {ok: true}; CloudPost.row = async () => ({id: 'j', status: 'taken', results: []});
       const ap = await loadAutoPost(); window.__ap2 = await ap.undo(S.coId, r, {}); }"""); W(300)
     a2 = E("window.__ap2")
     ok(E(R, "m1")["state"] == "ready" and E("!!B().rows.find(x => x.id === 'm1').auto") and a2 and a2.get("ok") is False and "may already be in Tally" in (a2.get("why") or ""),
        "Undo of a queued entry the Tally computer has taken: left as it is, 'may already be in Tally' (%s)" % a2)
+    E("""async () => { const r = B().rows.find(x => x.id === 'm1'); r.auto.job = '00000000-0000-0000-0000-000000000010'; CloudPost.row = async () => ({id: 'j', status: 'cancelled', results: []});
+      const ap = await loadAutoPost(); window.__ap3 = await ap.undo(S.coId, r, {}); }"""); W(300)
+    a3 = E("window.__ap3")
+    ok(a3 and a3.get("ok") is True and E(R, "m1")["state"] in ("suggested", "attention"), "the cancel refused but the posting already cancelled: undone (%s)" % a3)
 
     print("== sales invoices")
     E(SALES)
@@ -160,16 +172,29 @@ with sync_playwright() as p:
     E("() => { S.account = null; billRestore('b1'); }"); W(300)
     e1 = E("(() => { const e = D().entries.b1; return {status: e.status, exportedAt: e.exportedAt, applied: !!e.applied}; })()")
     ok(e1["status"] == "approved" and e1["exportedAt"] == "2026-10-01T10:00:00Z" and e1["applied"] and E(ytd, "b1") == y0, "restored: approved and posted as it was, back on its supplier's totals, not to be posted again (%s)" % e1)
+    E("billDelete('b6')"); W(500)
+    pg.fill("#confirmBox #cbxWhy", "wrong client"); pg.fill("#confirmBox #cbxName", "ZZ Bill Undo Co"); pg.click('#confirmBox [data-cbx="yes"]'); W(500)
+    pg.fill("#confirmBox #delWhy", "wrong client"); pg.click('#confirmBox [data-cbx="yes"]'); W(500)
+    E("() => { window.__toasts = []; billRestore('b6'); }"); W(300)
+    ok(E("D().entries.b6.status") == "approved" and "its posting is being checked" in last() and "in Tally" not in last(), "a bill posted and not yet confirmed, deleted and restored: approved, 'its posting is being checked' (%r)" % last())
+    E("(cid) => { window.__un2 = unapply(D().entries.b6, cid); }", cid)
+    ok(E("D().entries.b6.status") == "approved" and E("window.__un2") is False, "unapply refuses a bill whose posting is being checked")
+    E("(cid) => { const s0 = window.postSending; window.postSending = (c) => new Set(['q1']); window.__un3 = unapply(D().entries.q1, cid); window.__s0 = s0; }", cid)
+    ok(E("D().entries.q1.status") == "approved" and E("window.__un3") is False, "unapply refuses a bill whose cloud posting is still running")
     E("(cid) => { window.__un = unapply(D().entries.b2, cid); }", cid)
     ok(E("D().entries.b2.status") == "approved" and E("!!D().entries.b2.applied") and E("window.__un") is False, "unapply refuses a bill sent to Tally")
     E("() => { S.selected = 'b5'; doAct('reject'); }"); W(200)
-    ok(E("D().entries.b5.status") == "approved", "No entry refuses a posted bill (%s)" % last())
-    E("() => { S.selected = 'b3'; window.__removed = []; doAct('reject'); }"); W(300)
+    ok(E("D().entries.b5.status") == "approved" and last() == "This bill is posted to Tally. Delete it in Tally, then mark it Not in Tally here, before marking it No entry.", "No entry refuses a posted bill (%r)" % last())
+    E("() => { S.selected = 'b3'; window.__removed = []; doAct('reject'); }"); W(600)
     ok(E("D().entries.b3.status") == "rejected" and E("window.__removed.length") == 0 and E("!!D().entries.b3.docPath"), "No entry: the cloud document is not removed while Undo is offered")
-    E("() => { setStatus(D().entries.b3, 'draft'); }"); W(13500)
-    ok(E("D().entries.b3.status") == "draft" and E("window.__removed.length") == 0 and E("!!D().entries.b3.docPath"), "Undo of No entry: the bill and its cloud document are back, nothing removed")
-    E("() => { S.selected = 'b3'; doAct('reject'); }"); W(13500)
-    ok(E("D().entries.b3.status") == "rejected" and E("window.__removed.length") == 1 and not E("D().entries.b3.docPath"), "No entry kept: the cloud document removed once Undo has passed (%s)" % E("window.__removed"))
+    pg.hover("#toast"); W(14000)
+    ok(E("window.__removed.length") == 0 and pg.locator('#toast [data-toast-act="Undo"]').count() == 1, "the pointer on the message for 14 s: Undo still there, the document still kept")
+    pg.click('#toast [data-toast-act="Undo"]'); W(300)
+    E("() => toast('Something else.')"); W(400)
+    ok(E("D().entries.b3.status") == "draft" and E("window.__removed.length") == 0 and E("!!D().entries.b3.docPath"), "Undo of No entry: the bill and its cloud document are back, nothing removed after the message goes")
+    E("() => { S.selected = 'b3'; doAct('reject'); }"); W(600)
+    E("() => toast('Something else.')"); W(400)
+    ok(E("D().entries.b3.status") == "rejected" and E("window.__removed.length") == 1 and not E("D().entries.b3.docPath"), "No entry kept: the cloud document removed once the message with Undo has gone (%s)" % E("window.__removed"))
     # the three un-post paths
     E("""() => { window.unpostFromTally = async () => true; doAct('billUnpost'); }"""); W(500)
     pg.select_option("#unpostPick", "u1"); pg.click('#confirmBox [data-cbx="yes"]'); W(500)
@@ -183,13 +208,20 @@ with sync_playwright() as p:
         pg.fill("#confirmBox #releaseWhy", "not in the Day Book"); pg.click('#confirmBox [data-cbx="yes"]'); W(500)
     f = E("(F) => ['u1', 'u2', 'u3'].map(id => { const e = D().entries[id], o = {}; F.forEach(k => { o[k] = e[k] === undefined || e[k] === '' || e[k] === false ? null : e[k]; }); return o; })", json.loads(BF.replace("'", '"')))
     ok(has_owner and f[0] == f[1] == f[2] and f[0]["exportedAt"] is None and f[0]["tally"] is None, "the three un-post paths leave the same fields, cleared (%s)" % f)
-    # Sent, not confirmed
+    # the bar says what tallyStateOf says
+    bar = lambda: pg.inner_text("#app .actionbar") if pg.locator("#app .actionbar").count() else ""
     E("() => { goStep('review', 'bills'); S.filter = 'approved'; S.selected = 's1'; S.reviewTable = false; render(); }"); W(600)
-    t = pg.inner_text("#app .actionbar") if pg.locator("#app .actionbar").count() else ""
-    ok("Sent, not confirmed" in t, "a bill sent and not read back: 'Sent, not confirmed' (%r)" % t[:120])
+    t = bar(); ok("In Tally, not confirmed" in t and "Undo approval" not in t, "a bill sent and not read back: 'In Tally, not confirmed' (%r)" % t[:120])
     E("() => { S.selected = 'b2'; render(); }"); W(400)
-    t = pg.inner_text("#app .actionbar") if pg.locator("#app .actionbar").count() else ""
-    ok("Sent to Tally" in t and "not confirmed" not in t, "a bill read back in Tally: 'Sent to Tally' (%r)" % t[:120])
+    t = bar(); ok("In Tally" in t and "not confirmed" not in t, "a bill read back in Tally: 'In Tally' (%r)" % t[:120])
+    E("() => { S.selected = 'g1'; render(); }"); W(400)
+    t = bar(); ok("Not in Tally any more" in t, "a bill gone from Tally: 'Not in Tally any more' (%r)" % t[:120])
+    E("() => { S.selected = 'b6'; render(); }"); W(400)
+    t = bar(); ok("Undo approval" not in t, "a bill whose posting is being checked: no Undo approval (%r)" % t[:120])
+    E("() => { window.postSending = (c) => new Set(['q1']); S.selected = 'q1'; render(); }"); W(400)
+    t = bar(); ok("Undo approval" not in t, "a bill whose cloud posting is running: no Undo approval (%r)" % t[:120])
+    E("() => { window.postSending = window.__s0; render(); }"); W(400)
+    t = bar(); ok("Undo approval" in t, "the same bill once nothing is sending: Undo approval (%r)" % t[:120])
     ok(not errors, "no page errors %s" % errors[:2])
     br.close()
 srv.shutdown()

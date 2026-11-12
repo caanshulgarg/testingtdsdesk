@@ -661,6 +661,10 @@ const AutoPost = {
           const rows = (B() && B().rows) || [], nm = id => { const o = rows.find(z => z.id === id); return (o && o.auto && o.auto.label) || (id === x.id && a.label) || id; };
           return {ok: false, why: c.warn + " These stay with the cancelled posting until settled on the Post page: " + c.entries.map(nm).join(", ") + "."};
         }
+        // refused: the posting is no longer waiting. Cancelled already, or failed without this entry: nothing of it is in Tally
+        if (!(c && c.ok === true)){ let j = null; try { j = await CloudPost.row(job); } catch (e){ /* not known */ }
+          const mine = j && (j.results || []).some(r => r && String(r.id) === String(x.id) && r.ok);
+          if (j && (j.status === "cancelled" || (j.status === "failed" && !mine))) c = {ok: true}; }
         if (!(c && c.ok === true)) return {ok: false, why: "Its posting could not be cancelled: the Tally computer may have taken it, so it may already be in Tally. It was left as it is; once Tally answers, it can be undone from Tally."};
         this.cancelled[job] = true;
       }
@@ -702,7 +706,7 @@ const AutoPost = {
     const b = B(), rows = b && b.cid === cid ? b.rows.filter(r => r.auto && r.auto.run === run && r.id !== exceptId && r.state === "ready") : [];
     if (rows.length){ rows.forEach(r => { delete r.auto.job; }); await postBankToTally(rows.map(r => r.id)); rows.forEach(r => { if (r.state !== "sent") r.auto.job = this.jobOf(cid, [r.id]); }); saveBank({rows: true}); }
     const bills = Object.values(D(cid).entries).filter(e => e.auto && e.auto.run === run && e.id !== exceptId && e.status === "approved" && !e.exportedAt);
-    if (bills.length) await postBillsToTally({ids: bills.map(e => e.id)});
+    if (bills.length){ await postBillsToTally({ids: bills.map(e => e.id)}); bills.forEach(e => { if (!e.exportedAt && e.auto){ e.auto.job = this.jobOf(cid, [e.id]); Store.saveEntry(cid, e); } }); }
   },
   // the whole run: every entry of it, the queued first (one cancel), then those in Tally
   async undoRun(cid, run){

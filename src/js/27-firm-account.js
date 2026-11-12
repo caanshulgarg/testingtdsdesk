@@ -1161,7 +1161,7 @@ function billDeleteAsk(e){
     // the status it had is kept before it is taken off its supplier's totals; a bill in Tally keeps what it was, so that
     // Restore puts it back approved and posted, not to be posted again
     const was = e.status, live = !!billLivePosting(e, S.coId), kept = was === "approved" && live ? {applied: e.applied, snapshot: e.snapshot, approvedAt: e.approvedAt} : null;
-    if (was === "approved") unapply(e, S.coId, {deleting: true});
+    if (was === "approved") unapply(e, S.coId, {force: true});
     if (S.revSel) S.revSel.delete(e.id);
     if (S.drawerOpen && S.selected === e.id) S.drawerOpen = false;
     softDeleteEntry(e, r.data, {status: was, kept}); refreshStats(S.coId); toast("Deleted. It is under \u201cDeleted\u201d, where it can be restored."); render();
@@ -1191,7 +1191,7 @@ function billRestore(id){
   Store.saveEntry(S.coId, e);
   auditEvent("bill_restore", (e.x.vendorName || e.fileName || "") + " " + (e.x.invoiceNo || e.id), S.coId);
   const back = e.status === "draft";
-  S.filter = back ? "draft" : e.status; S.selected = e.id; refreshStats(S.coId); toast(back ? "Restored to To review." : "Restored as it was: it is in Tally, so it is not posted again."); render();
+  S.filter = back ? "draft" : e.status; S.selected = e.id; refreshStats(S.coId); toast(back ? "Restored to To review." : "Restored as it was: " + (e.exportedAt ? "it is in Tally" : "its posting is being checked") + ", so it is not posted again."); render();
 }
 // round 14c (C1, C2): the items of compute().missing that are a box on the bill (data-focus-field on its input), and the
 // click that puts the cursor there; the first missing one is marked bk-missing when the bill opens
@@ -1967,7 +1967,7 @@ function doAct(act, t){
     case "vchTallyDone": { const co = CO(); co.vchNumbering = "tally"; co.vchAutoAt = new Date().toISOString(); Store.saveCompany(co); toast("FinCom will leave voucher numbers to Tally."); render(); break; }
     case "vchUseBillNo": { const co = CO(); co.vchNumbering = ""; Store.saveCompany(co); toast("FinCom will send the supplier\u2019s bill number as the voucher number."); render(); break; }
     case "billBackAll": {
-      const list = Object.values(D().entries).filter(e => e.status === "approved" && !e.exportedAt);
+      const list = Object.values(D().entries).filter(e => e.status === "approved" && !billPostLive(e, S.coId));
       list.forEach(e => unapply(e, S.coId)); list.forEach(e => Store.saveEntry(S.coId, e));
       refreshStats(S.coId); toast(list.length + " bill" + (list.length === 1 ? "" : "s") + " back in To review."); render(); break;
     }
@@ -1979,7 +1979,7 @@ function doAct(act, t){
       askConfirm({title: "Delete " + ids.length + " bill" + (ids.length === 1 ? "" : "s") + " for good?", ok: "Delete", danger: true, body: '<p class="note">' + names.join("<br>") + (ids.length > 6 ? "<br>and " + (ids.length - 6) + " more" : "") +
         '</p><p class="note">They and their documents are removed from FinCom; this cannot be undone. The files can be uploaded again.</p>'}).then(ok => {
         if (!ok) return;
-        ids.forEach(id => { const e = D().entries[id]; if (!e) return; if (e.status === "approved") unapply(e, S.coId); removeEntry(e); });
+        ids.forEach(id => { const e = D().entries[id]; if (!e) return; if (e.status === "approved") unapply(e, S.coId, {force: true}); removeEntry(e); });
         S.revSel = new Set(); S.drawerOpen = false; refreshStats(S.coId); toast(ids.length + " deleted."); render();
       });
       break;
@@ -2033,11 +2033,12 @@ function doAct(act, t){
     case "camera": pickMode = "company"; document.getElementById("camIn").click(); break;
     case "manual": { const n = newEntry("Manual entry"); D().entries[n.id] = n; S.selected = n.id; S.filter = "draft"; Store.saveEntry(S.coId, n); refreshStats(S.coId); render(); break; }
     case "approve": if (e) approve(e); break;
-    case "reject": if (e){ if (billLivePosting(e, S.coId)){ toast("This bill is posted to Tally, so it cannot be marked No entry. Delete it in Tally first."); break; }
-      const was = e.status, cid = S.coId, path = e.docPath; setStatus(e, "rejected");
-      // its cloud document goes only once the status is saved and the Undo has passed (Undo keeps it)
-      if (path && e.status === "rejected") setTimeout(() => { if (e.status === "rejected" && e.docPath === path){ CloudDocs.remove(path); delete e.docPath; Store.saveEntry(cid, e); } }, 13000);
-      billMoveOn(e, "Marked as no entry needed.", was === "draft" ? "draft" : was, {label: "Undo", run: () => { if (e.status === "rejected"){ setStatus(e, "draft"); S.selected = e.id; render(); } }}); } break;
+    case "reject": if (e){ if (billLivePosting(e, S.coId)){ toast("This bill is posted to Tally. Delete it in Tally, then mark it Not in Tally here, before marking it No entry."); break; }
+      const was = e.status, cid = S.coId, id = e.id, path = e.docPath; setStatus(e, "rejected");
+      // its cloud document goes only once the status is saved and the message with Undo has gone unused (the bill read
+      // again then: still No entry, the same document)
+      const gone = () => { const x = (D(cid) || {}).entries && D(cid).entries[id]; if (x && x.status === "rejected" && path && x.docPath === path){ CloudDocs.remove(path); delete x.docPath; Store.saveEntry(cid, x); } };
+      billMoveOn(e, "Marked as no entry needed.", was === "draft" ? "draft" : was, {label: "Undo", gone: e.status === "rejected" ? gone : null, run: () => { if (e.status === "rejected"){ setStatus(e, "draft"); S.selected = e.id; render(); } }}); } break;
     case "restore": if (e){ if (billLivePosting(e, S.coId)){ toast("This bill is posted to Tally, so it stays as it is."); break; } const was = e.status; setStatus(e, "draft");
       // the next bill set aside, if any (smart moves 5); this one waits in To review
       if (was === "rejected") billMoveOn(e, "Moved back to review.", "rejected"); } break;

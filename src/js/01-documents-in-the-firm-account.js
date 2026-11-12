@@ -457,11 +457,14 @@ function toastTone(s){
 //  - a message that must stay until acted on (a newer FinCom: Reload) is {stay: true}: it stays, and comes back after
 //    any message that replaced it.
 let toastStay = null;
+// an action's gone(): run once when its message goes (expires, is closed or replaced) without the action pressed
+let toastGone = null;
+function toastGoneRun(){ const g = toastGone; toastGone = null; if (g) g.forEach(f => { try { f(); } catch (e){ console.error(e); } }); }
 function toastHide(){
   const t = document.getElementById("toast"); if (!t || t.classList.contains("hidden")) return;
   if (toastStay && t.dataset.stay === "1") return;
   clearTimeout(toastTimer); t.classList.remove("in"); t.classList.add("out");
-  toastTimer = setTimeout(() => { t.classList.add("hidden"); t.classList.remove("out"); t.style.transform = "";
+  toastTimer = setTimeout(() => { t.classList.add("hidden"); t.classList.remove("out"); t.style.transform = ""; toastGoneRun();
     if (toastStay){ const s = toastStay; toastStay = null; toast(s.msg, s.o); } }, 160);
 }
 function toastWire(t){
@@ -525,6 +528,7 @@ function toast(msg, o){
   // books-speed: the quiet line is the sidebar's (React): drawn with the page's figures as they are (renderTop, memoKeep),
   // not by working out the open client's TDS figures again for each note
   if (o && o.background){ S.quiet = {text: s, at: Date.now()}; try { if (typeof renderTop === "function" && window.FinComReact) renderTop(); else if (typeof render === "function") render(); } catch (e){} return; }
+  toastGoneRun();
   if (o && o.stay) toastStay = {msg, o};
   else if (toastStay && t.dataset.stay === "1") toastStay = Object.assign({}, toastStay);   // shown again after this one
   t.dataset.stay = o && o.stay ? "1" : "";
@@ -538,11 +542,12 @@ function toast(msg, o){
     t.appendChild(more);
   } else t.textContent = s;
   const acts = ((o && o.actions) || []).filter(a => a && a.label && typeof a.run === "function");
+  const gone = acts.map(a => a.gone).filter(f => typeof f === "function"); toastGone = gone.length ? gone : null;
   if (acts.length){
     const box = document.createElement("span"); box.className = "toast-acts"; box.dataset.toastActs = "";
     acts.forEach(a => {
       const b = document.createElement("button"); b.type = "button"; b.className = "toast-act"; b.textContent = a.label; b.dataset.toastAct = a.label;
-      b.addEventListener("click", ev => { ev.stopPropagation(); if (t.dataset.stay === "1"){ toastStay = null; t.dataset.stay = ""; } toastHide(); try { a.run(); } catch (e){ console.error(e); } });
+      b.addEventListener("click", ev => { ev.stopPropagation(); toastGone = null; if (t.dataset.stay === "1"){ toastStay = null; t.dataset.stay = ""; } toastHide(); try { a.run(); } catch (e){ console.error(e); } });
       box.appendChild(b);
     });
     t.appendChild(box);
@@ -3069,10 +3074,13 @@ function billMoveOn(e, said, list, undo){
     said + " Next: " + name + " (" + left.length + " left)", {kind: "approve", drawer: true, label: "Next →", noStay: true, actions: undo ? [undo] : []});
   render();
 }
-// a bill sent to Tally is not taken off its supplier's totals and put back to review here (it would be posted twice); o.deleting:
-// a bill deleted keeps what it was (softDeleteEntry), and billRestore puts it back (reapply)
+// a bill with a posting: sent, being checked, its id held by the cloud, or a cloud posting of it still running
+function billPostLive(e, cid){ return !!(e && (e.exportedAt || (typeof billLivePosting === "function" && billLivePosting(e, cid)) || (typeof postSending === "function" && postSending(cid).has(String(e.id))))); }
+// such a bill is not taken off its supplier's totals and put back to review here (it would be posted twice). o.force: a
+// bill deleted (it keeps what it was: softDeleteEntry; billRestore puts it back: reapply), or Tally's own refusal of
+// this posting (src/js/24)
 function unapply(e, cid, o){
-  if (e.exportedAt && !(o && o.deleting)){ toast("This entry was already sent to Tally. Delete it in Tally first, then undo here."); return false; }
+  if (!(o && o.force) && billPostLive(e, cid)){ toast(e.exportedAt ? "This entry was already sent to Tally. Delete it in Tally first, then undo here." : "Its posting to Tally is still being sent or checked. Wait for it to finish, then undo here."); return false; }
   const a = e.applied, p = a && D(cid).parties[a.partyId];
   if (p && p.ytd && p.ytd[a.fy] && p.ytd[a.fy][a.natureId]){
     const cur = p.ytd[a.fy][a.natureId];

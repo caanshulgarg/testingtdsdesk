@@ -507,7 +507,7 @@ function salesRowAct(a, id, force){
     if (a === "print"){ withPart("invoice", "invoiceHtml", () => printInvoiceHtml(invoiceHtml(v.x, CO(s.cid), s.cfg), v.x.number)); return true; }
     if (a === "file"){ const f = S.files["sv:" + v.id]; if (f){ const u = blobUrl(f); window.open(u, "_blank"); setTimeout(() => URL.revokeObjectURL(u), 60000); } return true; }
     if (a === "edit"){ s.openId = null; startDraft(v.id); return true; }
-    if (salesInTally(v)){ toast(bankKeptWords(1, "invoice")); return true; }
+    if (salesInTally(v)){ toast("This invoice is already in Tally, so it was left as it is."); return true; }
     const before = [salesSnapshot(v)];
     if (a === "confirm"){
       mapInvoice(v);
