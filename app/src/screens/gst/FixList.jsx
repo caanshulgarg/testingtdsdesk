@@ -3,10 +3,17 @@
 // counts, src/js/12), so the count here is the cell's; no rule is made here. Each kind of error is a group in plain words,
 // opening to its documents (date, number, party, amount), why the portal minds, what to do and the field to correct in
 // Tally; each document opens in Look up, found and opened. FixTop is the same count on top of the return's other tabs.
+import { useState } from "react";
 import { PosSet, PosCell, PosFixed } from "./PosPick.jsx";
 const POS_MISSING = "Outward invoices with no place of supply";
 // the invoice-number checks: a B2C large row in them can be marked a summary of many B2C sales (B2CS, no number)
 const NUM_CHECKS = /^Invoice numbers (longer than|with characters|used twice)/;
+const IRN_SUM = "Summary entries with an e-invoice (IRN)";
+// review of next-fix-b2cs-gstin: a B2B invoice made a summary leaves B2B, so it asks first; the party ledger's switch is
+// offered only where the entry looks like a summary (a range number, or marked so)
+const B2B_ASK = "Moves this entry from B2B to B2C small; the buyer will not get credit for it.";
+const markedSum = (id) => !!((((S.books || {}).gstPosFix || {})[id] || {}).b2cs || {}).on;
+const markSum = (d) => { if (d.kind === "B2B" && !window.confirm(B2B_ASK)) return; GSTR.b2cSumEntry(d.id, true); };
 const SUM_WHY = { range: (r) => "the number is a range" + ((GSTR.noRange(r.no) || {}).n ? " of " + GSTR.noRange(r.no).n + " invoices" : ""), ledger: () => "the party ledger is set as Consolidated B2C", entry: () => "marked here as a summary" };
 const money = (v) => "₹" + INR.format(r2(v || 0));
 const day = (d) => (d ? fmtDate(tallyDate(d)) : "");
@@ -84,8 +91,9 @@ function Group({ c, k, find, r3b }) {
         <tbody>{rows.map(([x, d], i) => <tr key={i} data-fix-row="" data-id={d.id || ""}>
           <td className="dt">{pos && d.id ? <label className="pos-tk"><input type="checkbox" data-pos-tick={d.id} aria-label={"Tick " + (d.no || "the invoice")} checked={!!tk[d.id]} onChange={(e) => tick(d.id, e.target.checked)} /> {day(d.date) || "—"}</label> : day(d.date) || "—"}</td>
           <td>{d.no || x.no || "—"}{r3b && d.voucher && d.voucher !== d.no ? <small className="nr"> voucher {d.voucher}</small> : null}
-            {!r3b && d.id && (d.kind === "B2CL" || (d.kind === "B2B" && d.cls === "taxable" && !d.rcm)) && NUM_CHECKS.test(c.what) ? <div className="nr"><button type="button" className="linkbtn" data-b2cs-mark="" title="One entry for many B2C sales (e.g. collected through a payment gateway): reported in B2C small as totals, with no invoice number" onClick={() => GSTR.b2cSumEntry(d.id, true)}>This is a summary of many B2C sales</button>
-              {" · "}<button type="button" className="linkbtn" data-b2cs-ledger-mark="" title={"Every taxable sale to " + d.party + " is a B2C summary, even with a GSTIN on it (the party ledger's switch; FinCom's own, not written to Tally)"} onClick={() => GSTR.b2cSumLedger(d.party, true)}>All sales to this party are summaries</button></div> : null}</td>
+            {!r3b && d.id && (d.kind === "B2CL" || (d.kind === "B2B" && d.cls === "taxable" && !d.rcm)) && NUM_CHECKS.test(c.what) ? <div className="nr"><button type="button" className="linkbtn" data-b2cs-mark="" title="One entry for many B2C sales (e.g. collected through a payment gateway): reported in B2C small as totals, with no invoice number" onClick={() => markSum(d)}>This is a summary of many B2C sales</button>
+              {(d.kind === "B2CL" || GSTR.noRange(d.no) || markedSum(d.id)) && <>{" · "}<button type="button" className="linkbtn" data-b2cs-ledger-mark="" title={"Every taxable sale to " + d.party + " is a B2C summary, even with a GSTIN on it (the party ledger's switch; FinCom's own, not written to Tally)"} onClick={() => GSTR.b2cSumLedger(d.party, true)}>All sales to this party are summaries</button></>}</div> : null}
+            {!r3b && d.id && c.what === IRN_SUM ? <div className="nr"><button type="button" className="linkbtn" data-b2cs-undo={d.id} title="One invoice, not a summary: reported in B2B with its e-invoice" onClick={() => GSTR.b2cSumEntry(d.id, false)}>Not a summary</button></div> : null}</td>
           <td>{d.party || x.party || "—"}{x.doc && x.no ? <small className="nr"> GSTIN {x.no}</small> : d.gstin && /GSTIN/.test(c.what) ? <small className="nr"> GSTIN {d.gstin}</small> : null}</td>
           <td className="n">{d.id ? money(amountOf(d)) : "—"}</td>
           {pos && <td><PosCell r={d} /></td>}
@@ -112,20 +120,36 @@ export function FixList({ ym, reg, ret, n }) {
     <p className="note">{name} for {GSTR.label(ym)}: {plural(n, "error")} to fix before filing{ids.size && ids.size !== n ? ", on " + plural(ids.size, "document") : ""}, by kind. Open a kind to see its documents; each opens in Look up. The fix is made in Tally and the books read again.</p>
     <ul className="fx-list">{list.map((c) => <Group key={c.what} c={c} k={ym + "|" + reg + "|" + ret + "|" + c.what} find={find} r3b={ret === "r3b"} />)}</ul>
     {ret === "r1" && <PosFixed rows={GSTR.outward(ym, reg).filter((r) => r.posFrom === "fincom")} />}
-    {ret === "r1" && <B2csSum rows={GSTR.outward(ym, reg).filter((r) => r.b2cSum)} />}
+    {ret === "r1" && (() => { const o = GSTR.outward(ym, reg), sp = GSTR.b2cSumParties(S.books || {});
+      return <B2csSum rows={o.filter((r) => r.b2cSum)} notes={o.filter((r) => r.b2cNote || ((r.kind === "CDNR" || r.kind === "DBNR") && r.gstin && r.cls === "taxable" && !r.rcm && sp.has(r.party)))} />; })()}
   </section>;
 }
 
 // the entries reported in B2CS as summaries of many B2C sales (GSTR.b2cSumWhy), each with the rule that made it so
-function B2csSum({ rows }) {
-  if (!rows.length) return null;
+function B2csSum({ rows, notes }) {
+  if (!rows.length && !notes.length) return null;
   return <div className="pos-fixed" data-b2cs-sum={rows.length}>
     <h4>Reported in B2C small as summaries of many sales ({rows.length})</h4>
     <p className="note">B2C small (table 7) is reported as totals by place of supply and rate, with no invoice number, so these are not checked for their numbers. A summary is never one B2C large invoice, even inter-state above the limit, nor a B2B invoice to the party (e.g. the payment gateway) whose GSTIN Tally put on it.</p>
     <ul>{rows.map((r) => <li key={r.id} data-b2cs-row={r.id} data-why={r.b2cSum}>{day(r.date)} · {r.no || "—"} · {r.party} · {money(r.total)}: <span className="note">B2CS, {SUM_WHY[r.b2cSum] ? SUM_WHY[r.b2cSum](r) : r.b2cSum}{r.sumGstin ? "; the GSTIN " + r.sumGstin + " on it is not a buyer's, so not used" : ""}</span>{" "}
       <button type="button" className="linkbtn" data-b2cs-undo={r.id} onClick={() => GSTR.b2cSumEntry(r.id, r.b2cSum === "entry" ? null : false)}>Not a summary</button>
-      {r.b2cSum === "ledger" && <>{" · "}<button type="button" className="linkbtn" data-b2cs-ledger-off={r.party} onClick={() => GSTR.b2cSumLedger(r.party, false)}>Switch off for the party</button></>}</li>)}</ul>
+      {r.b2cSum === "ledger" && <>{" · "}<button type="button" className="linkbtn" data-b2cs-ledger-off={r.party} onClick={() => GSTR.b2cSumLedger(r.party, false)}>Switch off for the party</button></>}
+      {" · "}<SumPos r={r} /></li>)}</ul>
+    {notes.length > 0 && <>
+      <p className="note">Credit and debit notes to these parties: a note that adjusts these summaries goes in B2C small too, not as a note to the party's GSTIN.</p>
+      <ul>{notes.map((r) => <li key={r.id} data-b2cs-note-row={r.id} data-why={r.b2cNote || ""}>{day(r.date)} · {r.no || "—"} · {r.party} · {money(r.total)}: <span className="note">{r.b2cNote ? "adjusts B2C summaries (" + (r.b2cNote === "ledger" ? "the party ledger is set as Consolidated B2C" : "marked here") + ")" : "a note to the GSTIN " + r.gstin}</span>{" "}
+        {r.b2cNote ? (r.b2cNote === "entry" ? <button type="button" className="linkbtn" data-b2cs-note-undo={r.id} onClick={() => GSTR.b2cSumEntry(r.id, null)}>Not a summary note</button> : null)
+          : <button type="button" className="linkbtn" data-b2cs-note={r.id} onClick={() => GSTR.b2cSumEntry(r.id, true)}>This adjusts B2C summaries</button>}</li>)}</ul></>}
   </div>;
+}
+
+// a summary's place of supply: FinCom's typed one wins over Tally's (Tally often fills the gateway's state), so it can be
+// set here even when Tally has one
+function SumPos({ r }) {
+  const [open, setOpen] = useState(false);
+  if (r.posFrom === "fincom" || !r.posCode) return <PosCell r={r} />;
+  return open ? <PosSet ids={[r.id]} label="Place of supply" onDone={() => setOpen(false)} />
+    : <button type="button" className="linkbtn" data-b2cs-pos={r.id} title={"Place of supply now " + (r.pos || "—") + "; FinCom's choice is used over Tally's for a summary"} onClick={() => setOpen(true)}>Change place of supply</button>;
 }
 
 // the same count on top of the return's other tabs, with its kinds, and the way to the list

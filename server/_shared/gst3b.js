@@ -19,7 +19,7 @@
 // No AI here: M2B.aiLinks only reads the pairs the gst-2b-match function already stored for the year.
 // GST3B_SRC: this file's and names.js's text (this value left out), hashed (tests/run_gst_cloud.js keeps it so): a 3B the
 // cloud worked out carries it, and the 3B page uses the cloud's only when its own is the same (app/src/screens/gst/cloud3b.js)
-const GST3B_SRC = "sfdb3973c4d3b0aaf";
+const GST3B_SRC = "se6a234fa5673ea03";
 function num(v){ if (typeof v === "number") return isFinite(v) ? v : 0; const n = parseFloat(String(v == null ? "" : v).replace(/[^0-9.\-]/g, "")); return isFinite(n) ? n : 0; }
 function r2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
 const INR = new Intl.NumberFormat("en-IN", {minimumFractionDigits:2, maximumFractionDigits:2});
@@ -1706,12 +1706,14 @@ const GSTR = {
   // SGST (or UTGST) charged: within the state, so the state of the registration the return is for; (4) the party's GSTIN,
   // on the entry or its ledger: that GSTIN's state; else "" (e.g. IGST to an unregistered buyer with no state).
   // {code, from: "tally"|"fincom"|"tax"|"gstin"|"", bad}: bad when the tax does not fit the place of supply known from
-  // Tally, the correction or the party's GSTIN (CGST and SGST to another state, or IGST within the own state)
+  // Tally, the correction or the party's GSTIN (CGST and SGST to another state, or IGST within the own state).
+  // o.sum (a B2C summary, or a note adjusting them; review of next-fix-b2cs-gstin): the correction comes before Tally's,
+  // since Tally often fills the gateway's state from the party ledger
   posCode(p){ const x = String(p == null ? "" : p).trim(); if (/^\d{1,2}$/.test(x)) return x.padStart(2, "0"); if (/^\d{2}\b/.test(x)) return x.slice(0, 2); return STATE_CODES[x.toUpperCase().replace(/&/g, "AND").replace(/\s+/g, " ")] || ""; },
   posName(c){ return (typeof GST_STATES === "object" && GST_STATES[c]) || (Object.keys(STATE_CODES).find(k => STATE_CODES[k] === c) || c || ""); },
   posFix(id){ const f = ((S.books || {}).gstPosFix || {})[id]; return f && /^\d{2}$/.test(String(f.pos || "")) ? f : null; },
   posOfSale(o){
-    const tally = this.posCode(o.pos), fix = this.posFix(o.id), own = String(o.own || ""), g = String(o.gstin || "").toUpperCase();
+    const fix = this.posFix(o.id), tally = o.sum && fix ? "" : this.posCode(o.pos), own = String(o.own || ""), g = String(o.gstin || "").toUpperCase();
     const gs = /^\d{2}[A-Z0-9]{13}$/.test(g) && !/^(97|99)/.test(g) ? g.slice(0, 2) : "";
     const i = Math.abs(num(o.igst)) > 0.005, cs = Math.abs(num(o.cgst)) + Math.abs(num(o.sgst)) > 0.005;
     const known = tally || (fix && fix.pos) || gs, from = tally ? "tally" : fix ? "fincom" : "";
@@ -1744,20 +1746,24 @@ const GSTR = {
     // even inter-state above the limit: it is not one invoice (b2cSumWhy says by which rule). next-fix-b2cs-gstin (the
     // owner, a CA, 12-Nov-2026): so even when the voucher or its party ledger has a GSTIN (Tally puts the gateway's GSTIN
     // on the entry, the gateway being the party): that GSTIN is not a buyer's, so the row has none (sumGstin keeps it): no
-    // B2B line to the gateway, no GSTIN check, and the place of supply as for an unregistered buyer, never the gateway's
-    // state. Never a credit or debit note, an export, SEZ, exempt, nil or non-GST supply, or reverse charge
+    // B2B line to the gateway, no GSTIN check, and the place of supply as for an unregistered buyer (but FinCom's typed
+    // one first: posOfSale's sum), never the gateway's state. Never an export, SEZ, exempt, nil or non-GST supply, or
+    // reverse charge. A credit or debit note is never a summary itself; but a note to a party whose ledger is set as
+    // Consolidated B2C, or marked so on What to fix ("This adjusts B2C summaries"; not by a range number), adjusts B2C
+    // summaries (b2cNote): no buyer GSTIN either, so it goes as the notes to unregistered buyers do (B2CS, cdnurTyp)
     const gstin0 = (v.gstin || "").toUpperCase(), gstinL = String((b.gstins || {})[v.party] || "").toUpperCase();
-    const sum = !note && !exp && cls === "taxable" && !Books.isRcm(v) ? this.b2cSumWhy(v.id, v.party, v.no || v.ref) : "";
-    const gstin = sum ? "" : gstin0;
+    const why = !exp && cls === "taxable" && !Books.isRcm(v) ? this.b2cSumWhy(v.id, v.party, v.no || v.ref) : "";
+    const sum = note ? "" : why, bnote = note && why !== "range" ? why : "";
+    const gstin = sum || bnote ? "" : gstin0;
     const interState = !!(gstin && v.cmp && gstin.slice(0, 2) !== String(v.cmp).slice(0, 2)) || (!gstin && v.pos && v.pos !== (b.stateOf || v.pos) && L.tax.IGST > 0);
     // B2C large: inter-state to an unregistered person above Rs 1 lakh from 1 August 2024 (Rs 2.5 lakh before)
     const b2cl = !gstin && L.tax.IGST > 0 && L.total > (String(v.date) >= "20240801" ? 100000 : 250000);
-    const P = this.posOfSale({id: v.id, pos: v.pos, own: reg || this.regOf(v), gstin: sum ? "" : gstin || gstinL, igst: L.tax.IGST, cgst: L.tax.CGST, sgst: L.tax.SGST, zero: cls === "sez" || cls === "export" || exp});
+    const P = this.posOfSale({id: v.id, pos: v.pos, own: reg || this.regOf(v), gstin: sum || bnote ? "" : gstin || gstinL, igst: L.tax.IGST, cgst: L.tax.CGST, sgst: L.tax.SGST, zero: cls === "sez" || cls === "export" || exp, sum: !!(sum || bnote)});
     return Object.assign({id: v.id, date: v.date, no: v.no || v.ref || "", party: v.party, gstin, pos: P.code ? (P.from === "tally" ? v.pos : this.posName(P.code)) : "", posCode: P.code, posFrom: P.from, posBad: P.bad, posTally: v.pos || "",
       cls, rcm: Books.isRcm(v), hsn: (parts[0] && parts[0].hsn) || (v.hsn || [])[0] || "", supply: (parts[0] && parts[0].supply) || v.supply || "", eco: "", tcs: 0, parts, mixed: new Set(parts.map(q => q.rate)).size > 1,
       kind: note ? (note === "credit" ? "CDNR" : "DBNR") : cls === "export" ? "EXP" : (cls === "sez" && gstin) ? "B2B" : cls === "sez" ? "EXP" : (cls === "exempt" || cls === "nil" || cls === "nongst") ? "NIL" : gstin ? "B2B" : b2cl && !sum ? "B2CL" : "B2C", b2cSum: sum,
       taxable: L.taxable, cgst: L.tax.CGST, sgst: L.tax.SGST, igst: L.tax.IGST, cess: L.tax.CESS,
-      rate, total: L.total, note, type: v.type, src: v.src === "bridge" ? "bridge" : "daybook"}, sum && (gstin0 || gstinL) ? {sumGstin: gstin0 || gstinL} : null);
+      rate, total: L.total, note, type: v.type, src: v.src === "bridge" ? "bridge" : "daybook"}, (sum || bnote) && (gstin0 || gstinL) ? {sumGstin: gstin0 || gstinL} : null, bnote ? {b2cNote: bnote} : null);
   },
   // next-gst-b2cs-summary (the owner, a CA, 11-Nov-2026): a sales entry that books many B2C sales at once (one entry for a
   // payment gateway's or a marketplace's collections, "2026-27/155 to 2026-27/182") is a B2C summary: reported in B2CS (by

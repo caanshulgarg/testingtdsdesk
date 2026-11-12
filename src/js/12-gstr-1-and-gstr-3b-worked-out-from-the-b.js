@@ -22,6 +22,9 @@ Object.assign(GSTR, {
     add("Invoices with items at more than one rate", out.filter(r => r.mixed), "Split rate by rate in the return, from each item's rate in Tally.");
     // G-A1, G-A2 (10-Oct-2026): what the portal refuses, found before the file is made
     add("Buyer GSTINs that are not valid", out.filter(r => r.gstin && !gstinValid(r.gstin)).map(r => ({no: r.gstin, party: r.party, doc: r})), "The 15th character (the check digit) or the form of the GSTIN is wrong, so the portal refuses the invoice. Correct the GSTIN on the party ledger in Tally.");
+    // review of next-fix-b2cs-gstin: a B2C summary with an e-invoice: the portal pre-fills the IRN in B2B, FinCom reports it in B2CS
+    const vIrn = new Map(this.vIn(ym).filter(v => v.irn).map(v => [v.id, v]));
+    add("Summary entries with an e-invoice (IRN)", vIrn.size ? out.filter(r => r.b2cSum && vIrn.has(r.id)) : [], "This summary entry has an e-invoice (IRN): the portal will pre-fill it in GSTR-1 as a B2B invoice, while FinCom reports it in B2C small. Cancel the IRN in Tally or on the e-invoice portal (within 24 hours of making it), or choose Not a summary if it is one invoice.");
     const dn = this.docNoIssues(ym, reg);
     add("Invoice numbers longer than 16 characters", dn.long, "The portal takes at most 16 characters. Shorten the number in Tally (and on the invoice), e.g. drop the year's prefix.");
     add("Invoice numbers with characters the portal does not take", dn.chars, "Only letters, digits, / and - are allowed, and a number cannot be only zeros. Change the number in Tally.");
@@ -83,6 +86,14 @@ Object.assign(GSTR, {
     if (on == null) delete cur.b2cs; else cur.b2cs = {on: !!on, by: typeof whoAmI === "function" ? whoAmI() : "", at: new Date().toISOString()};
     if (cur.pos || cur.b2cs) fx[id] = cur; else delete fx[id];
     saveBooks(); render();
+  },
+  // the parties with B2C summaries among their sales (the party ledger's switch, or a sale marked or numbered as a range):
+  // What to fix offers their credit and debit notes "This adjusts B2C summaries"
+  b2cSumParties(b){
+    const fx = b.gstPosFix || {}, m = b.map || {}, out = new Set(Object.keys(m).filter(k => m[k] && m[k].b2cSum));
+    (b.vouchers || []).forEach(v => { if (!v.party || v.cancel || out.has(v.party) || !Books.isSale(v) || /NOTE/i.test(v.type)) return;
+      const f = (fx[v.id] || {}).b2cs; if (f && typeof f === "object" ? f.on : this.noRange(v.no || v.ref)) out.add(v.party); });
+    return out;
   },
   // the party ledgers of sales with no GSTIN (the Ledgers tab offers them the switch); next-fix-b2cs-gstin: and those with
   // a GSTIN (a payment gateway's) with a sale that is a B2C summary by its own rule (numbered as a range, or marked)
