@@ -27,6 +27,7 @@ IGNORE_RANGE = [False]    # Storage answers 200 with the whole object, ignoring 
 SENT = []                 # (bucket/path, bytes written) of each 200 whole-object answer (stops when the client hangs up)
 STORAGE_FAIL = {}         # {status, body, n}: the next n Storage GETs answer this
 FAIL_INSERT = {}          # table -> {message, code}: a POST answers this PostgREST error
+FAIL_PATCH = {}           # table -> column: a PATCH that sets this column answers a PostgREST error (gst-taxpro: the write after a set-off fails)
 FAIL_DONE = {"upload": 0} # the next n tally_work_done of an upload piece fail
 FAIL_DAY = {}             # day -> n: the next n calls queuing a day file of that day fail (tally_work_send / tally_upload_advance)
 GST_WANT_FAIL = [False]    # gst_calc_want_book fails (tally-ingest must not)
@@ -232,11 +233,14 @@ class H(http.server.BaseHTTPRequestHandler):
                     if t == "tally_jobs":
                         d = dict({"id": str(uuid.uuid4()), "status": "queued", "total": 0, "done": 0, "sealed": False, "bad": [], "message": "", "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ")}, **d)
                     old = next((r for r in rows if keys and all(str(r.get(k)) == str(d.get(k)) for k in keys)), None)
+                    if old and t.startswith("gst_") and "resolution=ignore-duplicates" in (self.headers.get("Prefer") or ""): continue   # on conflict do nothing (gst-taxpro)
                     if old: old.update(d); out.append(old)
                     else: rows.append(d); out.append(d)
                 if "return=representation" in (self.headers.get("Prefer") or ""):
                     return self.send(201, out[0] if single else out)
                 return self.send(201)
+            if method == "PATCH" and t in FAIL_PATCH and FAIL_PATCH[t] in json.loads(raw or b"{}"):
+                return self.send(503, {"code": "57P01", "message": "terminating connection due to administrator command (test)", "details": None, "hint": None})
             if method == "PATCH":
                 d = json.loads(raw); hit = []
                 with LOCK:                                   # one UPDATE ... WHERE ... RETURNING: atomic

@@ -85,13 +85,29 @@ again. Differences under ₹1.00 are rounding (no reason needed). A DSC client s
 filed on the portal; the ARN is read back with `track`. Writes go to the sandbox: on the production host they are refused unless `TAXPRO_FILE_LIVE=yes` is set.
 
 Sent once (12-Nov-2026, item 1 of the state-machine review; `migration-173-gst-filing-once.sql`, run before the function):
-each action that writes takes the return's lease (`busy_token`, `busy_until`: one conditional update), so a second action
-on the same return at the same time is told it is already in progress, and every write is conditional on the lease. Once
-`proceeded` (3B: the tax set off) a save, summary, confirm or proceed is refused and the return never goes back; if the
-portal's figures differ at File, the difference is said and nothing is filed. A set-off whose answer never came counts as
-done (never sent twice). A save still processing (`IP`) stays `saved` with `save_state` `IP` and is asked again by summary
-and track. `file_tried_at` is set before RETFILE; a File after one without an ARN asks RETTRACK first. The EVC OTP is
-taken for 10 minutes after it is sent. Portal writes wait 120 s (`TAXPRO_WRITE_WAIT_MS`); the lease lasts 10 minutes.
+- One action at a time: each action (a first save makes the row first, on conflict doing nothing) takes the return's
+  lease (`busy_token`, `busy_until`: one conditional update); a second action at the same time is told it is already in
+  progress, and every write is conditional on the lease. A database that cannot be read stops the action, nothing sent.
+- 3B (RETOFFSET moves money): `offset_tried_at` is kept just before the set-off is sent. From then on (and once
+  `proceeded`) a save, summary or confirm is refused and the return never goes back. It is cleared only when the portal
+  refused the set-off or the request never left (Vault, the keys, DNS, a refused connection). If the answer never came
+  (timed out, connection lost, a 5xx, the worker stopped, or the database write after it failed), the set-off is not
+  sent again: the next Proceed reads the ledgers (BAL) and, if credit and cash fell by what the set-off uses, marks it
+  proceeded. If the figures differ at File, the difference is said and nothing is filed.
+- GSTR-1 / IFF (proceed to file moves no money): as before, a save after proceeding is taken, a changed summary at File
+  goes back to the summary, and a lost RETNEWPTF answer may be tried again.
+- A save still processing (`IP`) stays `saved` with `save_state` `IP` and is asked again by summary and track (a track
+  whose status poll fails still asks RETTRACK). `file_tried_at` is set before RETFILE; a File after one without an ARN
+  asks RETTRACK first. The EVC OTP is taken for 10 minutes after it is sent.
+- Time: the edge stops a worker at 150 s, so a filing action has 110 s in all (`TAXPRO_ACTION_BUDGET_MS`): each read
+  waits at most 20 s (`TAXPRO_READ_WAIT_MS`), each write at most 60 s (`TAXPRO_WRITE_WAIT_MS`), and no write is begun with
+  less than 20 s left. The lease lasts 10 minutes.
+
+**When the set-off's answer was lost (what the person does, as FinCom tells them):** on the portal, open the Returns
+Dashboard, GSTR-3B for the month, Payment of tax. If the tax shows as paid, press Proceed in FinCom again: it reads the
+ledgers and goes on to the OTP and File. If it does not, press Offset liability on the portal, then Proceed in FinCom
+(its check needs the ledgers to fall by what FinCom's set-off uses; a different split on the portal shows as "cannot
+tell"), or file the 3B on the portal itself and press "Check the status on the portal" (RETTRACK marks it filed with its ARN).
 
 ## DSC (companies and LLPs): what others do, and FinCom's way
 

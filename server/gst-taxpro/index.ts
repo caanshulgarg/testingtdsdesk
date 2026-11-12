@@ -51,7 +51,8 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsFor } from "../_shared/cors.ts";   // the one list of headers for every function (server/_shared/cors.ts)
 import { after2b } from "./automatch.ts";
 import { firmGate, viaClient } from "../_shared/firmgate.ts";   // the console's switches (migration 118)
-import { r1Figures, r1PortalFigures, r3bFigures, compare, sameFigures, setoff, ledgersOf, writeAllowed, cleanR1, cleanR3b, safeText, Plain } from "./filing.ts";
+import { r1Figures, r1PortalFigures, r3bFigures, compare, sameFigures, setoff, ledgersOf, writeAllowed, cleanR1, cleanR3b, safeText, Plain, reached, offsetDone } from "./filing.ts";
+import { AsyncLocalStorage } from "node:async_hooks";
 
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -103,17 +104,37 @@ async function asp() {
 }
 const sessName = (firm: string, gstin: string) => `gsp:sess:${firm}:${gstin}`;
 
-// filing's writes to the portal (PUT, POST) wait this long for an answer, then count as answered unclearly (never sent again blindly)
-const WRITE_WAIT = Math.max(1000, Number(Deno.env.get("TAXPRO_WRITE_WAIT_MS") || 120000));
+// time limits of a filing action (12-Nov-2026, migration-173): the worker is stopped at 150 s (the edge's wall clock), so
+// an action has ACTION_BUDGET in all; each read waits at most READ_WAIT and each write (PUT, POST) at most WRITE_WAIT, and a
+// write is not begun with less than WRITE_MIN left. A write whose answer did not come in time counts as answered unclearly
+// (never sent again blindly). Other actions (2B, fetch, e-invoices) have no limit, as before
+const WRITE_WAIT = Math.max(1000, Number(Deno.env.get("TAXPRO_WRITE_WAIT_MS") || 60000));
+const READ_WAIT = Math.max(1000, Number(Deno.env.get("TAXPRO_READ_WAIT_MS") || 20000));
+const ACTION_BUDGET = Math.max(5000, Number(Deno.env.get("TAXPRO_ACTION_BUDGET_MS") || 110000));
+const WRITE_MIN = Math.min(WRITE_WAIT, 20000);
+const deadline = new AsyncLocalStorage<number>();   // when the filing action running must be done (ms since 1970)
+const timeLeft = () => { const d = deadline.getStore(); return d === undefined ? Infinity : d - Date.now(); };
+// a call to the portal that failed: sent says whether it may have reached it (filing.ts reached())
+class SendErr extends Plain { constructor(msg: string, public sent: boolean) { super(msg); } }
 // one call to TaxPro's GST API: query in the URL, ASP credentials and taxpayer details in headers
 // (filing: a PUT or POST with a JSON body; the body is never logged)
 async function tp(path: string, query: Record<string, string>, headers: Record<string, string>, base = BASE, method = "GET", body?: unknown) {
   const k = await asp();
-  const r = await fetch(base + path + "?" + new URLSearchParams(query), {
-    method, body: body === undefined ? undefined : JSON.stringify(body), signal: method === "GET" ? undefined : AbortSignal.timeout(WRITE_WAIT),
-    headers: { aspid: k.id, password: k.pw, txn: "FC" + Date.now() + Math.floor(Math.random() * 1e6), appver: "FinCom-1.0", ...(body === undefined ? {} : { "Content-Type": "application/json" }), ...headers },
-  });
-  const text = await r.text();
+  const left = timeLeft(), write = method !== "GET";
+  if (left !== Infinity && left < (write ? WRITE_MIN : 1000)) throw new SendErr("The GST service is slow to answer today; nothing more was sent. Try again in a few minutes.", false);
+  const wait = left === Infinity ? (write ? WRITE_WAIT : 0) : Math.min(write ? WRITE_WAIT : READ_WAIT, left);
+  let r: Response, text: string;
+  try {
+    r = await fetch(base + path + "?" + new URLSearchParams(query), {
+      method, body: body === undefined ? undefined : JSON.stringify(body), signal: wait ? AbortSignal.timeout(wait) : undefined,
+      headers: { aspid: k.id, password: k.pw, txn: "FC" + Date.now() + Math.floor(Math.random() * 1e6), appver: "FinCom-1.0", ...(body === undefined ? {} : { "Content-Type": "application/json" }), ...headers },
+    });
+    text = await r.text();
+  } catch (e) {
+    const sent = reached(e);
+    console.log(JSON.stringify({ taxpro: path, action: query.action, failed: String((e as Error)?.name || "") + ": " + String((e as Error)?.message || e).slice(0, 200), sent }));
+    throw new SendErr(sent ? "The GST service did not answer in time." : "The GST service could not be reached.", sent);
+  }
   let j: any = null; try { j = JSON.parse(text); } catch { /* not JSON */ }
   // for the function's own logs, failures only (never return data, tokens, the credentials or an OTP)
   if (!j || j.error || String(j.status_cd) === "0") console.log(JSON.stringify({ taxpro: path, action: query.action, http: r.status, head: safeText(text.slice(0, 300), String((body as any)?.sid || "").split("|")[1] || "") }));
@@ -425,13 +446,18 @@ const STATUS_TRIES = Math.max(1, Number(Deno.env.get("TAXPRO_STATUS_TRIES") || 6
 const PAN = /^[A-Z]{5}\d{4}[A-Z]$/;
 type Who = { firm: string; me: string };
 type Ret = { gstin: string; form: string; period: string };
+// where the return stands; a database that cannot be read stops the action (never taken for "no row yet")
 async function filingRow(w: Who, r: Ret) {
-  const { data } = await admin.from("gst_filings").select("*").eq("firm_id", w.firm).eq("gstin", r.gstin).eq("form", r.form).eq("period", r.period).maybeSingle();
+  const { data, error } = await admin.from("gst_filings").select("*").eq("firm_id", w.firm).eq("gstin", r.gstin).eq("form", r.form).eq("period", r.period).maybeSingle();
+  if (error) dbFail("gst_filings read", error, "Where this return stands could not be read. Nothing was sent; try again in a moment.");
   return data as any;
 }
-async function putFiling(w: Who, r: Ret, set: Record<string, unknown>) {
-  const { error } = await admin.from("gst_filings").upsert({ firm_id: w.firm, gstin: r.gstin, form: r.form, period: r.period, updated_at: new Date().toISOString(), ...set });
-  if (error) dbFail("gst_filings", error, "The filing could not be kept. Try again in a moment.");
+// a first save: the row made (on conflict do nothing, so a row already there is never overwritten), then held by the
+// lease like any other; until the save's answer is kept it stands as failed, "not saved yet"
+async function newFiling(w: Who, r: Ret) {
+  const { error } = await admin.from("gst_filings").upsert({ firm_id: w.firm, gstin: r.gstin, form: r.form, period: r.period, status: "failed", error: "not saved yet", updated_at: new Date().toISOString() },
+    { onConflict: "firm_id,gstin,form,period", ignoreDuplicates: true });
+  if (error) dbFail("gst_filings new", error, "The filing could not be started. Try again in a moment.");
 }
 // the return's lease (migration-173): taken by an update conditional on busy_until having passed, so of two actions at
 // once one gets it; released by the holder. 10 minutes: longer than any one action (each portal write waits at most
@@ -505,30 +531,32 @@ async function filingAction(w: Who, action: string, body: any, role: string) {
     await logFiling(w, r, action, false, "refused: production host without TAXPRO_FILE_LIVE");
     return { ok: false, error: "Filing through the GST API is not switched on for this server yet (it files on the sandbox only)." };
   }
-  const first = await filingRow(w, r);
-  if (first?.status === "filed" && action !== "track") return { ok: false, error: f.label + " for " + period + " is already filed (ARN " + (first.arn || "?") + ")." };
-  if (!first && action !== "save") return { ok: false, error: "Save the return to the portal first." };
-  // one action at a time on a return (migration-173): the lease, then the row as it stands now. A first save has no row
-  // to hold yet (nothing can be proceeded or filed before it)
+  // one action at a time on a return (migration-173): the row (a first save makes it, never overwriting one), the
+  // lease, then the row as it stands now; every write after is conditional on the lease
   let token: string | null = null;
-  if (first) {
+  const put = (set: Record<string, unknown>) => { if (!token) throw new Plain(SORRY); return putHeld(w, r, token, set); };
+  try {
+    const first = await filingRow(w, r);
+    if (first?.status === "filed" && action !== "track") return { ok: false, error: f.label + " for " + period + " is already filed (ARN " + (first.arn || "?") + ")." };
+    if (!first && action !== "save") return { ok: false, error: "Save the return to the portal first." };
+    if (!first) await newFiling(w, r);
     token = await takeLease(w, r, action);
     if (!token) {
       const b = await filingRow(w, r);
       await logFiling(w, r, action, false, "refused: " + (b?.busy_action || "another action") + " already in progress");
       return { ok: false, busy: true, error: "Another action on this return (" + (b?.busy_action || "?") + ") is already in progress. Wait a moment, then read where it stands." };
     }
-  }
-  const put = (set: Record<string, unknown>) => token ? putHeld(w, r, token, set) : putFiling(w, r, set);
-  try {
-    const row = token ? await filingRow(w, r) : null;
-    if (row?.status === "filed" && action !== "track") return { ok: false, error: f.label + " for " + period + " is already filed (ARN " + (row.arn || "?") + ")." };
-    // once proceeded (3B: the tax set off on the portal) nothing goes back before it: no save, summary, confirm or proceed
-    const past = row?.status === "proceeded";
-    const PAST = form === "3B" ? "The tax for this return has already been set off on the portal; file it, or track it if it was filed."
-      : "This return has already been proceeded to file on the portal; file it, or track it if it was filed.";
-    if (past && (action === "save" || action === "summary" || action === "confirm" || action === "proceed")) {
-      await logFiling(w, r, action, false, "refused: already proceeded");
+    const row = await filingRow(w, r);
+    if (!row) return { ok: false, error: "Save the return to the portal first." };
+    if (row.status === "filed" && action !== "track") return { ok: false, error: f.label + " for " + period + " is already filed (ARN " + (row.arn || "?") + ")." };
+    // 3B only (RETOFFSET moves money; GSTR-1/IFF's proceed to file does not, so they may go back as before): once
+    // proceeded, or once a set-off was sent whatever its answer (offset_tried_at), nothing goes back before it: no save,
+    // summary or confirm; a proceed only asks the ledgers whether the set-off was done
+    const past = form === "3B" && (row.status === "proceeded" || !!row.offset_tried_at);
+    const PAST = row.status === "proceeded" ? "The tax for this return has already been set off on the portal; file it, or track it if it was filed."
+      : "A set-off was sent to the portal for this return and its answer did not come back, so it is not sent again and the return cannot go back. Press Proceed to have FinCom read the ledgers and see whether the tax was set off.";
+    if (past && (action === "save" || action === "summary" || action === "confirm" || (action === "proceed" && row.status === "proceeded"))) {
+      await logFiling(w, r, action, false, "refused: " + (row.status === "proceeded" ? "already set off" : "a set-off was sent (answer unclear)"));
       return { ok: false, error: PAST };
     }
     // a save the portal was still processing (IP): asked again (summary, track)
@@ -564,19 +592,18 @@ async function filingAction(w: Who, action: string, body: any, role: string) {
       // RETSTATUS until processed (P), processed with errors (PE) or refused (ER); still in progress (IP) is kept as saved
       // with save_state IP (not failed) and asked again by the summary or track
       let st = "IP", rep: any = null;
-      for (let i = 0; i < STATUS_TRIES && st === "IP"; i++) {
+      for (let i = 0; i < STATUS_TRIES && st === "IP" && timeLeft() > STATUS_WAIT + 5000; i++) {   // within the action's time; else kept IP
         if (i) await sleep(STATUS_WAIT);
         const s1 = await tpv("STATUS", STATUS_PATHS, { gstin, username, ret_period: period, ref_id: ref, action: "RETSTATUS" }, h);
         st = statusOf(s1) || "IP"; rep = reportOf(s1);
       }
       const good = st === "P", going = st === "IP";
       await put({ status: good || going ? "saved" : "failed", save_ref: ref, save_state: st, save_errors: rep, payload, fincom_sum: figsOf(form, payload), portal_sum: null, diffs: null,
-        offset_plan: null, confirmed_by: null, confirmed_at: null, confirmed_sum: null, accepted: null, accept_note: null, proceeded_by: null, proceeded_at: null, otp_sent_at: null, file_tried_at: null,
+        offset_plan: null, confirmed_by: null, confirmed_at: null, confirmed_sum: null, accepted: null, accept_note: null, proceeded_by: null, proceeded_at: null, otp_sent_at: null, file_tried_at: null, offset_tried_at: null,
         error: good || going ? null : "the portal found errors", saved_by: w.me, saved_at: new Date().toISOString() });
       await logFiling(w, r, "save", good || going, "RETSAVE ref " + ref + ", status " + st, { ref });
       return { ok: good || going, saveState: st, ref, errors: rep, error: good ? undefined : going ? "Saved; the portal is still processing it. Read the summary in a minute." : "The portal found errors in the return; nothing was filed." };
     }
-    if (!row) return { ok: false, error: "Save the return to the portal first." };
     if (action === "summary") {
       await repoll();
       if (row.save_state !== "P") return { ok: false, error: row.save_state === "IP" ? "The portal is still processing the save." : "The save was not processed; save again." };
@@ -598,6 +625,25 @@ async function filingAction(w: Who, action: string, body: any, role: string) {
     }
     // proceed, evc_otp and file: only what the person confirmed; the portal's summary is read again first
     if (action === "proceed" || action === "evc_otp" || action === "file") {
+      // 3B: a set-off was sent before and its answer never came (or was not kept): never sent again; the ledgers say
+      // whether it was done (then proceeded), else the person is told what to check on the portal
+      const mmyy = period.slice(0, 2) + "-" + period.slice(2);
+      const CHECK = "On the portal, open the Returns Dashboard, GSTR-3B for " + mmyy + ", Payment of tax. If the tax shows as paid there, press Proceed here again: FinCom reads the ledgers and goes on to file. " +
+        "If it does not, press Offset liability on the portal yourself, then press Proceed here (or file it on the portal and press Check the status on the portal).";
+      if (action === "proceed" && form === "3B" && row.offset_tried_at && row.status === "confirmed") {
+        const { h, username } = await session(w, r);
+        const b = await tpv("LEDGER", LEDGER_PATHS, { gstin, username, ret_period: period, action: "BAL" }, h);
+        if (!ret(b)) throw new Plain("The ledger balances could not be read: " + tpErr(b) + ". Nothing was sent; try again in a moment.");
+        const d = offsetDone(row.offset_plan, ledgersOf(b.j));
+        if (d === "done") {
+          await put({ status: "proceeded", proceeded_by: w.me, proceeded_at: new Date().toISOString(), error: null });
+          await logFiling(w, r, "proceed", true, "the set-off sent " + row.offset_tried_at + " shows in the ledgers: proceeded (RETOFFSET not sent again)");
+          return { ok: true, found: true };
+        }
+        await logFiling(w, r, "proceed", false, "a set-off was sent " + row.offset_tried_at + "; the ledgers " + (d === "not" ? "have not moved" : "moved otherwise") + "; not sent again");
+        return { ok: false, unclear: true, error: (d === "not" ? "The set-off sent earlier does not show in the ledgers (they have not moved). " : "The ledgers moved, but not as the set-off would move them, so FinCom cannot tell whether it was done. ") +
+          "FinCom does not send it again by itself. " + CHECK };
+      }
       if (action === "proceed" ? row.status !== "confirmed" : row.status !== "proceeded") return { ok: false, error: action === "proceed" ? "A person must first confirm the portal's summary against FinCom's." : "Proceed to file first." };
       if (action === "evc_otp") {
         const pan = String(body.pan || "").toUpperCase().trim();
@@ -634,13 +680,13 @@ async function filingAction(w: Who, action: string, body: any, role: string) {
       }
       const s = await portalSummary(w, r), portal = portalFigsOf(form, s.raw);
       if (!sameFigures(portal, row.confirmed_sum || {})) {
-        if (action === "file") {   // proceeded: never moved back; the difference said, nothing filed
+        if (action === "file" && form === "3B") {   // set off: never moved back; the difference said, nothing filed
           const c = compare(row.confirmed_sum || {}, portal, form), keys = c.differs.concat(c.rounding);
           const m = "the portal's summary is not the one confirmed (" + (keys.join(", ") || "its figures") + ")";
           await put({ error: m });
           await logFiling(w, r, "file", false, m + "; nothing sent");
           return { ok: false, changed: true, differs: keys, error: "The portal's summary is not the one confirmed: " + (keys.join(", ") || "its figures") + ". " +
-            (form === "3B" ? "The tax is already set off" : "The return is already proceeded to file") + ", so FinCom does not go back: nothing was filed. Check the return on the portal." };
+            "The tax is already set off, so FinCom does not go back: nothing was filed. Check the GSTR-3B for " + period.slice(0, 2) + "-" + period.slice(2) + " on the portal before filing it." };
         }
         await put({ status: "summary", portal_sum: portal, diffs: compare(row.fincom_sum || {}, portal, form).differs, confirmed_by: null, confirmed_at: null, confirmed_sum: null, accepted: null });
         await logFiling(w, r, action, false, "the portal's summary changed since it was confirmed; nothing sent");
@@ -659,19 +705,36 @@ async function filingAction(w: Who, action: string, body: any, role: string) {
             await logFiling(w, r, "proceed", false, "cash short: " + JSON.stringify(plan.short));
             return { ok: false, error: "Not enough in the cash ledger: " + Object.entries(plan.short).map(([k, v]) => k.toUpperCase() + " ₹" + v).join(", ") + ". Pay by challan (PMT-06) first.", plan };
           }
-          await put({ error: null });   // still this action's return (the lease), just before the set-off goes
+          // kept before the set-off goes (under this action's lease): if the worker stops or the write after it fails,
+          // the next proceed asks the ledgers instead of sending it again
+          await put({ offset_tried_at: new Date().toISOString(), offset_plan: plan, error: null });
           try { x = await tpv(f.kind, f.paths, { gstin, username: s.username, ret_period: period, action: "RETOFFSET" }, s.h, BASE, "PUT", { gstin, ret_period: period, pdcash: plan.pdcash, pditc: plan.pditc }); }
-          catch (e) { x = { http: 0, j: null, text: String((e as Error)?.message || e) }; }
-          // no clear answer (no reply, not JSON, the gateway's 5xx): the set-off may have reached the portal, so it counts
-          // as set off and is never sent again; RETFILE (or the portal) shows if it did not
+          catch (e) {
+            if (!(e instanceof SendErr && e.sent)) {   // it never left (Vault, the keys, DNS, connection refused): nothing sent
+              const m = plain(e, "filing proceed");
+              await put({ offset_tried_at: null });
+              await logFiling(w, r, "proceed", false, "not sent: " + m);
+              return { ok: false, error: "Nothing was sent: " + m };
+            }
+            x = { http: 0, j: null, text: String((e as Error)?.message || e) };
+          }
+          // no clear answer (timed out, connection lost, not JSON, the gateway's 5xx): the set-off may have reached the
+          // portal, so it is never sent again; offset_tried_at stays and the next proceed reads the ledgers
           if (!x || !x.j || x.http >= 500) {
             const m = "the portal's answer to the set-off was not received (" + (x?.http ? "HTTP " + x.http : "no answer") + ")";
-            await put({ status: "proceeded", proceeded_by: w.me, proceeded_at: new Date().toISOString(), error: m });
-            await logFiling(w, r, "proceed", false, m + "; counted as set off, not sent again");
-            return { ok: false, unclear: true, error: "The portal's answer to the set-off was not received. FinCom counts the tax as set off and will not send it again: check the ledgers on the portal, then file or track the return." };
+            await put({ error: m });
+            await logFiling(w, r, "proceed", false, m + "; not sent again");
+            return { ok: false, unclear: true, error: "The portal's answer to the set-off was not received, so FinCom will not send it again. " + CHECK };
           }
+          if (!ok(x) && !(x.j && !x.j.error && (x.j.reference_id || x.j.data))) await put({ offset_tried_at: null });   // refused by the portal: not set off
         } else {
-          x = await tpv(f.kind, f.paths, { gstin, username: s.username, ret_period: period, action: "RETNEWPTF" }, s.h, BASE, "POST", { gstin, ret_period: period });
+          // GSTR-1 / IFF: proceed to file moves no money, so a lost answer may simply be tried again
+          try { x = await tpv(f.kind, f.paths, { gstin, username: s.username, ret_period: period, action: "RETNEWPTF" }, s.h, BASE, "POST", { gstin, ret_period: period }); }
+          catch (e) {
+            const m = plain(e, "filing proceed");
+            await logFiling(w, r, "proceed", false, (e instanceof SendErr && e.sent ? "answer not received: " : "not sent: ") + m);
+            return { ok: false, error: e instanceof SendErr && e.sent ? "The portal's answer to proceed to file was not received; nothing changed here. Press Proceed again (it is safe to repeat for " + f.label + ")." : "Nothing was sent: " + m };
+          }
         }
         if (!ok(x) && !(x?.j && !x.j.error && (x.j.reference_id || x.j.data))) { await logFiling(w, r, "proceed", false, tpErr(x)); return { ok: false, error: "The portal refused: " + tpErr(x) }; }
         await put({ status: "proceeded", proceeded_by: w.me, proceeded_at: new Date().toISOString(), error: null });
@@ -696,7 +759,7 @@ async function filingAction(w: Who, action: string, body: any, role: string) {
       return { ok: true, arn, filedAt: at };
     }
     if (action === "track") {
-      await repoll();
+      try { await repoll(); } catch (e) { await logFiling(w, r, "save", false, "RETSTATUS before track: " + plain(e, "filing track repoll")); }   // RETTRACK all the same
       const hit = await trackHit();
       if (hit && row.status !== "filed") await put({ status: "filed", arn: hit.arn, filed_at: filedAtOf(hit), error: null });
       await logFiling(w, r, "track", true, hit ? "on the portal: " + (hit.status || "filed") + ", ARN " + hit.arn : "not filed on the portal yet", { arn: hit?.arn });
@@ -821,7 +884,7 @@ Deno.serve(async (req) => {
     const gstin = String(body.gstin || "").toUpperCase();
     if (!GSTIN.test(gstin)) return reply(400, { ok: false, error: "A GSTIN is needed." });
     if (["filing", "save", "summary", "confirm", "proceed", "evc_otp", "file", "track"].includes(action))
-      return reply(200, await filingAction({ firm, me }, action, body, who.role));
+      return reply(200, await deadline.run(Date.now() + ACTION_BUDGET, () => filingAction({ firm, me }, action, body, who.role)));
 
     if (action === "return") {
       const { data } = await admin.from("gst_returns").select("*").eq("firm_id", firm).eq("gstin", gstin).eq("form", String(body.form || "")).eq("period", String(body.period || "")).maybeSingle();

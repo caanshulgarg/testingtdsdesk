@@ -1,7 +1,7 @@
 // deno test tests/gst_file_unit.ts - the pure parts of filing through the GST API (server/gst-taxpro/filing.ts):
 // FinCom's figures from the GSTR-1 / 3B JSON, the portal's summary read the same way, the comparison a person confirms,
 // the set-off of sections 49 / 49A and rule 88A, and the rule that writes go to the sandbox unless switched on for live.
-import { r1Figures, r1PortalFigures, r3bFigures, compare, sameFigures, setoff, writeAllowed, cleanR1, cleanR3b, PROD_URL, SANDBOX_URL, safeText } from "../server/gst-taxpro/filing.ts";
+import { r1Figures, r1PortalFigures, r3bFigures, compare, sameFigures, setoff, writeAllowed, cleanR1, cleanR3b, PROD_URL, SANDBOX_URL, safeText, reached, offsetDone } from "../server/gst-taxpro/filing.ts";
 
 const eq = (a: unknown, b: unknown, what: string) => {
   const x = JSON.stringify(a), y = JSON.stringify(b);
@@ -140,4 +140,22 @@ Deno.test("payloads: only what the API takes; GSTIN and period must be this retu
 Deno.test("no OTP in any text kept", () => {
   eq(safeText("Invalid OTP 575757 for PAN AANFG3202D", "575757"), "Invalid OTP ****** for PAN AANFG3202D", "the OTP masked");
   eq(safeText("sid AANFG3202D|123456 refused", ""), "sid AANFG3202D|****** refused", "a PAN|OTP pair masked even when the OTP is not given");
+});
+
+// sent once (12-Nov-2026, migration-173): whether a failed request may have reached the portal, and whether a set-off shows
+Deno.test("a request that never left is told apart from one that may have reached the portal", async () => {
+  let e: unknown = null; try { await fetch("http://127.0.0.1:1/"); } catch (x) { e = x; }
+  yes(e && reached(e) === false, "connection refused: never reached (" + String(e) + ")");
+  yes(reached(new DOMException("signal timed out", "TimeoutError")) === true, "timed out waiting: may have reached");
+  yes(reached(new TypeError("error sending request: connection closed before message completed")) === true, "closed mid-answer: may have reached");
+  yes(reached(new TypeError("error sending request: dns error: failed to lookup address information")) === false, "DNS: never reached");
+  yes(reached(new Error("The GST service is not set up for FinCom yet.")) === false, "an error before any request (Vault, keys): never reached");
+});
+Deno.test("the ledgers say whether a set-off was done", () => {
+  const plan = { pditc: { i_pdi: 100, i_pdc: 0, i_pds: 0, c_pdc: 20, c_pdi: 0, s_pds: 20, s_pdi: 0, cs_pdcs: 0 }, cashNeeded: { igst: 80, cgst: 48, sgst: 48, cess: 0 },
+    itc: { igst: 100, cgst: 20, sgst: 20, cess: 0 }, cash: { igst: { tx: 100 }, cgst: { tx: 50 }, sgst: { tx: 50 }, cess: { tx: 0 } } };
+  eq(offsetDone(plan, { itc: { igst: 0, cgst: 0, sgst: 0, cess: 0 }, cash: { igst: { tx: 20 }, cgst: { tx: 2 }, sgst: { tx: 2 }, cess: { tx: 0 } } }), "done", "credit and cash used as planned: done");
+  eq(offsetDone(plan, { itc: plan.itc, cash: plan.cash }), "not", "nothing moved: not done");
+  eq(offsetDone(plan, { itc: { igst: 0, cgst: 20, sgst: 20, cess: 0 }, cash: plan.cash }), "unknown", "some moved: unknown");
+  eq(offsetDone({ ...plan, pditc: { i_pdi: 0 }, cashNeeded: { igst: 0, cgst: 0, sgst: 0, cess: 0 } }, { itc: plan.itc, cash: plan.cash }), "unknown", "a nil set-off: cannot tell");
 });

@@ -139,10 +139,39 @@ export function setoff(liab: any[], itc: Partial<Heads>, cash: any) {
     return { liab_ldg_id: l.id, trans_typ: l.ty, ipd: r2(t.igst), cpd: r2(t.cgst), spd: r2(t.sgst), cspd: r2(t.cess),
       i_intrpd: r2(l.intr.igst), c_intrpd: r2(l.intr.cgst), s_intrpd: r2(l.intr.sgst), cs_intrpd: r2(l.intr.cess), c_lfeepd: r2(l.fee.cgst), s_lfeepd: r2(l.fee.sgst) };
   });
-  const cashHave = (h: string) => { const c = cash?.[h]; return typeof c === "number" ? c : num(c?.tot ?? (num(c?.tx) + num(c?.intr) + num(c?.fee))) || num(cash?.[h + "_tot_bal"]); };
+  const cashHave = (h: string) => cashBal(cash, h);
   const short: Partial<Heads> = {};
   HD.forEach((h) => { const s = r2(need[h] - cashHave(h)); if (s > 0) short[h] = s; });
   return { pditc: { liab_ldg_id: main ? main.id : null, trans_typ: main ? main.ty : 30002, ...use }, pdcash, cashNeeded: need, short, left: cr };
+}
+// the cash ledger's balance of a head ({tx, intr, fee}, {tot}, a number, or <head>_tot_bal)
+export function cashBal(cash: any, h: string) { const c = cash?.[h]; return typeof c === "number" ? c : num(c?.tot ?? (num(c?.tx) + num(c?.intr) + num(c?.fee))) || num(cash?.[h + "_tot_bal"]); }
+// a set-off sent whose answer never came (12-Nov-2026, migration-173): the ledgers now beside those it was worked out on.
+// "done": every head's credit and cash fell by at least what the set-off uses (to the rupee); "not": no balance moved;
+// "unknown": anything else (some moved, or a nil set-off that moves nothing)
+export function offsetDone(plan: any, now: { itc: Partial<Heads>; cash: any }): "done" | "not" | "unknown" {
+  const u = plan?.pditc || {}, b = plan?.itc || {}, n = now?.itc || {};
+  const credit: Heads = { igst: num(u.i_pdi) + num(u.i_pdc) + num(u.i_pds), cgst: num(u.c_pdc) + num(u.c_pdi), sgst: num(u.s_pds) + num(u.s_pdi), cess: num(u.cs_pdcs) };
+  const need = plan?.cashNeeded || {};
+  let used = 0, moved = 0, all = true;
+  for (const h of HD) {
+    const dc = r2(num(b[h]) - num(n[h])), dk = r2(cashBal(plan?.cash, h) - cashBal(now?.cash, h));
+    used += credit[h] + num(need[h]);
+    if (Math.abs(dc) >= 0.01 || Math.abs(dk) >= 0.01) moved++;
+    if (credit[h] > 0 && dc < credit[h] - 1) all = false;
+    if (num(need[h]) > 0 && dk < num(need[h]) - 1) all = false;
+  }
+  if (used <= 0) return "unknown";
+  return all ? "done" : moved ? "unknown" : "not";
+}
+// whether a request that failed may have reached the portal: an error before any request (Vault, keys), a refused
+// connection, a name not found or a failed TLS handshake never did; a timeout or a connection lost mid-way may have
+export function reached(e: unknown) {
+  if (e instanceof Plain) return false;
+  const name = String((e as any)?.name || ""), msg = String((e as any)?.message ?? e);
+  if (name === "TimeoutError" || name === "AbortError") return true;
+  if (!(e instanceof TypeError) && !/error sending request|connection/i.test(msg)) return false;
+  return !/connection refused|tcp connect error|dns error|failed to lookup|name or service not known|no such host|network is unreachable|invalid certificate|certificate|handshake|invalid url|relative url/i.test(msg);
 }
 // the credit and cash ledgers from the ledger balance answer (field names to confirm with TaxPro: docs question 7)
 export function ledgersOf(bal: any) {
