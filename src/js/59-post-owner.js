@@ -126,6 +126,7 @@ const PostOwner = {
     if (!a || !a.ok) return;
     if (job) return this.call(cid, "tally_post_settle_ask", {p_job: job.id, p_id: String(e.id), p_why: a.data.why}, "The FinCom Bridge looks in " + co + " in Tally first; " + no + " is sent again only if it is not there.");
     if (!job){
+      if (!(await postClearReady())) return;
       e.postUndo = {why: a.data.why, at: new Date().toISOString(), by: postMyName()};
       billClearPosting(e);
       Store.saveEntry(cid, e); refreshStats(cid); toast(no + ": the posted mark is undone; it can be posted again."); render(); return;

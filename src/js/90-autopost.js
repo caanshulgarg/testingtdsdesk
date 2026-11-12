@@ -639,6 +639,7 @@ const AutoPost = {
     opts = opts || {};
     const co = CO(cid);
     if (!this.may(co, "undo")) return {ok: false, why: "Only the firm’s owner may undo an automatic entry here (Settings → Post automatically)."};
+    if (!(await postClearReady())) return {ok: false, why: "Try again in a moment: FinCom\u2019s cloud postings could not be read."};
     const bank = !!x.state, a = x.auto || x.autoHold || {}, w = this.where(x);
     const key = bank ? a.key + "|" + a.dir : a.key;
     if (w === "tally"){

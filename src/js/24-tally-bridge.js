@@ -783,7 +783,8 @@ async function checkMarkedInTally(opts){
   render();
   return g;
 }
-function goneBack(){
+async function goneBack(){
+  if (!(await postClearReady())) return;
   const b = B(), g = b.gone;
   if (!g) return;
   const ids = new Set(g.ids);

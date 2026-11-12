@@ -279,7 +279,7 @@ function postLedgerList(cid){ return !!(cid === S.coId && S.bank && S.bank.cid =
 function postMissingLedgers(e){ return (e.snapshot ? e.snapshot.lines : []).filter(l => l.ledger && !exactLedger(l.ledger)); }
 function postBucket(e, ctx){
   if (!e || e.status !== "approved") return "";
-  if ((e.deletedInTally && !e.deletedInTally.verified) || e.ownerRelease) return "attention";
+  if (e.ownerRelease) return "attention";
   const jr = ctx && ctx.jobs ? ctx.jobs.get(String(e.id)) : null, rb = jr && jr.reg && postRegBucket(e, jr); if (rb) return rb;
   if (billInTally(e)) return "intally";
   if (e.exportedAt) return "attention";
@@ -465,7 +465,8 @@ const PostCheck = {
       this.markIn(co, e, r.found); postNote(co.id, t); toast(t); refreshStats(co.id); render(); return false;
     }
     if (Date.parse(r.readAt || 0) <= this.postedAt(e)){ const t = "Not posted again: the read of Tally (" + tallyHm(r.readAt) + ") is older than the posting."; postNote(co.id, t, "bad"); toast(t); render(); return false; }
-    // not in Tally at a read made just now: waiting again, and posted (the bridge checks Tally once more as it posts)
+    // not in Tally at a read made just now: waiting again, and posted
+    if (!(await postClearReady())){ this.st[e.id].busy = false; return false; }
     billClearPosting(e);
     Store.saveEntry(co.id, e); refreshStats(co.id);
     await postAllToTally({kind: "bill", id: e.id});
@@ -719,8 +720,17 @@ async function postTestCopies(cid, id, n){
 // owners of the firm alone (the cloud accepts only an active member with role owner; a superadmin who is not one is refused there)
 // a result of FinCom's cloud older than the bill's posting being cleared here (taken back, deleted in Tally, undone)
 // (by the postings FinCom's cloud had then, else created before; older records: postedVia kept and not posted since)
-function postOld(x, j){ return !!j && (x.postClearedJobs ? x.postClearedJobs.includes(j.id) || String(j.created_at || "") < x.postClearedAt : !!x.postedVia && !x.exportedAt); }
-function postJobsOf(id){ return typeof CloudJobs === "object" ? (CloudJobs.list || []).filter(j => (CloudJobs.idsOf(j) || [].concat(j.results || [], j.items || []).map(r => String(r && r.id))).includes(String(id))).map(j => j.id) : []; }
+function postOld(x, j){ return !!j && j.id !== x.postJobNew && (x.postClearedJobs ? x.postClearedJobs.includes(j.id) || !(String(j.created_at || "") > (x.postClearedMark || "")) : !!x.postedVia && !x.exportedAt); }
+// what FinCom's cloud had when a posting is cleared: its postings of the entry, and the newest posting's time (server's)
+function postCleared(id){ const l = (typeof CloudJobs === "object" && CloudJobs.list) || []; return {postClearedJobs: l.filter(j => (CloudJobs.idsOf(j) || [].concat(j.results || [], j.items || []).map(r => String(r && r.id))).includes(String(id))).map(j => j.id), postClearedMark: l.reduce((m, j) => String(j.created_at || "") > m ? String(j.created_at) : m, "")}; }
+// before a posting is cleared: FinCom's cloud postings read now (else "Try again in a moment")
+async function postClearReady(){
+  if (typeof TCloud !== "object" || !TCloud.on()) return true;
+  try { await CloudJobs.load(true); } catch (e){}
+  if (!CloudJobs.list){ toast("Try again in a moment: FinCom\u2019s cloud postings could not be read."); return false; }
+  return true;
+}
+function postMarkNew(cid, ids, job){ const d = S.data[cid], b = S.bank && S.bank.cid === cid ? S.bank : null; ids.forEach(x => { const o = (d && d.entries && d.entries[x]) || (b && b.rows.find(r => String(r.id) === String(x))); if (o) o.postJobNew = job; }); }
 // the entries a check with Tally released: the bridge lets each go once more (without looking in Tally)
 function postReleased(list){ return list.filter(x => x.release && x.release.at).map(x => ({id: x.id, at: x.release.at, by: x.release.by || "", why: x.release.why || ""})); }
 function postOwner(){ return !!(S.account && ((S.account.me || {}).role === "owner")); }

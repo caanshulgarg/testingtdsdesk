@@ -654,7 +654,7 @@ function bankRowAct(a, id){
   }
   if (a === "unpost"){
     const row = bankRow(id);
-    if (row) unpostFromTally("bank", row, B().cid).then(ok => {
+    if (row) postClearReady().then(r => r && unpostFromTally("bank", row, B().cid)).then(ok => {
       if (!ok) return;
       bankClearPosting(row);
       saveBank({rows: true, posted: true}); render();

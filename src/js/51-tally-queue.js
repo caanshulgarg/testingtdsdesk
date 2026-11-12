@@ -67,6 +67,7 @@ const CloudPost = {
     if (r && !r.ok && r.notAllowed) return {ok: true, company: r.company || payload.company, notAllowed: true, viaCloud: true,
       results: ids.map(x => ({id: x, ok: false, notAllowed: true, message: r.error || "Choose the Tally company this client may post to (Client setup \u2192 Tally)."}))};
     if (!r || !r.ok) throw {code: "cloud_post", message: (r && r.error) || "The entries could not be queued."};
+    postMarkNew(cid, ids, id);
     try { lsSet("tdsdesk:cloudpost", JSON.stringify({id, cid, at: Date.now(), n: ids.length})); } catch (e){}
     const tell = j => { try { onProgress && onProgress(j); } catch (e){} };
     const t0 = Date.now();
@@ -368,7 +369,8 @@ const TallyProof = {
   }
 };
 // the bank lines no longer in Tally: back to "ready", to be posted again (Tally is checked for FinCom's tag first)
-function bankRepostGone(){
+async function bankRepostGone(){
+  if (!(await postClearReady())) return;
   const b = B(), gone = b.rows.filter(r => r.goneFromTally);
   gone.forEach(r => bankClearPosting(r, "ready"));
   saveBank({rows: true}); toast(gone.length + " line" + (gone.length === 1 ? " is" : "s are") + " ready to post again."); render();

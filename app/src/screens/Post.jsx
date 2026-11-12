@@ -446,8 +446,8 @@ function OwnerRelease({ co }) {
   if (!list.length) return null;
   return <section className="post-sec" data-owner-release=""><h3>{"Deleted in Tally, held by FinCom's cloud (" + list.length + ")"}</h3><ul className="post-attn">
     {list.map((e) => <li key={e.id}>
-      <span className="why"><b>{[e.x.vendorName, e.x.invoiceNo].filter(Boolean).join(" ")}</b>{" — not in Tally (" + (e.ownerRelease.by || "") + "); the cloud still holds its FinCom id, so it is not posted again until the owner releases it."}</span>
-      <span className="acts">{postOwner() ? <button className="btn small" data-owner-release-btn={e.id} onClick={() => billOwnerRelease(co.id, e)}>Owner: release this bill</button> : <span className="note">Waiting for the firm’s owner.</span>}</span>
+      <span className="why"><b>{[e.x.vendorName, e.x.invoiceNo].filter(Boolean).join(" ")}</b>{" — " + (e.ownerRelease.by || "") + ": not in Tally (" + (e.ownerRelease.why || "") + "). It is not posted again until the owner releases it."}</span>
+      <span className="acts">{postOwner() ? <button className="btn small" data-owner-release-btn={e.id} onClick={() => billOwnerAsk(co.id, e)}>Owner: release this bill</button> : <span className="note">Waiting for the firm’s owner.</span>}</span>
     </li>)}</ul></section>;
 }
 
