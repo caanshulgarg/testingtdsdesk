@@ -62,7 +62,7 @@ function TallyDiffs({ kind }) {
     <p className="note">Nothing here was changed: FinCom keeps what a person entered. Decide each, then change it in FinCom or in Tally.</p>
     <ul className="note">
       {tags.map((d) => <li key={"t" + d.row}>{d.party} ({day(d.date)}): {d.why ? d.why : <>Tally pays it with challan {d.tallyLabel}; FinCom has it on {d.fincomLabel}</>}</li>)}
-      {cs.map((c, i) => <li key={"c" + i}>{c.label}: {c.what} is {String(c.fincom)} in FinCom, {String(c.tally)} in Tally</li>)}
+      {cs.map((c, i) => <li key={"c" + i} data-tally-held={c.held ? "" : undefined}>{c.label}: {c.what} is {String(c.fincom)} in FinCom, {String(c.tally)} in Tally{c.held ? <> (held: {c.held} is marked filed and uses this challan; open a correction for it to take Tally’s figure)</> : null}</li>)}
       {bad.map((z, i) => <li key={"b" + i}>Tally's challan {z.bad}: not made in FinCom. Enter it by hand.</li>)}
     </ul></section>;
 }

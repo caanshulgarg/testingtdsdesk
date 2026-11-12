@@ -15,15 +15,19 @@ export function posMatches(q) {
   const word = all.filter(([c, n]) => !start.some((x) => x[0] === c) && n.toLowerCase().split(/[\s-]+/).some((w) => w.startsWith(t)));
   return start.concat(word);
 }
-export function posSave(ids, code) {
+// (an entry in a month whose GSTR-1 or 3B is filed: asked, with a reason, GSTLock.gate in src/js/47)
+const gate = (ids, what, go) => (typeof GSTLock === "object" ? GSTLock.gate(S.gstReg || "", GSTLock.months(ids), ["r1", "r3b"], what, go) : go());
+export function posSave(ids, code, sure) {
   const b = S.books; if (!b || !/^\d{2}$/.test(String(code || ""))) return;
+  if (!sure) return gate(ids, "place of supply " + code, () => posSave(ids, code, true));
   const fx = (b.gstPosFix = Object.assign({}, b.gstPosFix || {})), by = (typeof Cloud === "object" && Cloud.st && Cloud.st.email) || "", at = new Date().toISOString();
   // an entry's B2C summary mark (b2cs, GSTR.b2cSumEntry) is kept with it
   ids.forEach((id) => { if (id) fx[id] = Object.assign(fx[id] && fx[id].b2cs ? { b2cs: fx[id].b2cs } : {}, { pos: String(code), by, at }); });
   saveBooks(); render();
 }
-export function posClear(ids) {
+export function posClear(ids, sure) {
   const b = S.books; if (!b || !b.gstPosFix) return;
+  if (!sure) return gate(ids, "place of supply cleared", () => posClear(ids, true));
   const fx = (b.gstPosFix = Object.assign({}, b.gstPosFix));
   ids.forEach((id) => { if (fx[id] && fx[id].b2cs) fx[id] = { b2cs: fx[id].b2cs }; else delete fx[id]; });
   saveBooks(); render();

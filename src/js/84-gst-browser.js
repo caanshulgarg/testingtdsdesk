@@ -129,10 +129,9 @@ const GSTB = {
       saveBooks(); render(); return;
     }
     if (m.type === "arn"){
-      const form = m.form === "STATUS" ? (m.of || "3B") : m.form, r = GSTF.rec(ym, reg), today = GSTF.today();
-      if (form === "3B"){ r.r3bArn = m.arn; if (!r.r3b) r.r3b = today; if (!r.snap){ r.snap = GSTF.snapOf(GSTR.threeB(ym, reg)); r.snapAt = new Date().toISOString(); GSTR._carry = null; } }
-      else if (form === "IFF"){ r.iffArn = m.arn; if (!r.iff) r.iff = today; }
-      else { r.r1Arn = m.arn; if (!r.r1) r.r1 = today; }
+      const form = m.form === "STATUS" ? (m.of || "3B") : m.form;
+      // the whole mark at once: the date (kept if typed), the ARN, how it was filed, and the 3B as filed (GSTMark, src/js/35)
+      GSTMark.set(ym, reg, form === "3B" ? "r3b" : form === "IFF" ? "iff" : "r1", "", m.arn, "helper");
       this.put(reg, ym, form, {arn: m.arn, filedAt: m.at});
       this.log({form, gstin: m.gstin, ym, outcome: "filed", arn: m.arn, runId: m.jobId, note: "ARN read from the portal (" + (m.page || "") + ")"});
       saveBooks(); toast(this.FORMS[form] + " for " + GSTR.label(ym) + " filed: ARN " + m.arn + "."); render(); return;

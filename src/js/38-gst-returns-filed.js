@@ -126,8 +126,20 @@ Object.assign(GSTV, {
     const rec = Object.assign({id: "gv" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7), at: new Date().toISOString(), by: (typeof Cloud === "object" && Cloud.st && Cloud.st.email) || ""}, r);
     this.all().push(rec);
     const k = this.filedKey(rec.form);
-    if (k && rec.arnDate && /^\d{6}$/.test(rec.per) && rec.reg){ const f = GSTF.rec(rec.per, rec.reg); if (!f[k]) f[k] = rec.arnDate; }
+    if (k && rec.arnDate && /^\d{6}$/.test(rec.per) && rec.reg){ const f = GSTF.rec(rec.per, rec.reg); if (!f[k]){ f[k] = rec.arnDate; rec.setFiled = true; } }
     return rec;
+  },
+  // a record removed or restored: the filing date it filled in goes and comes back with it (only that record's date: one
+  // typed, filed through the API or the helper, or filled by another PDF of the same return stays)
+  unfile(x){
+    const k = this.filedKey(x.form); if (!k || !x.setFiled || !x.arnDate || !/^\d{6}$/.test(x.per)) return;
+    const r = GSTF.rec(x.per, x.reg); if (r[k] !== x.arnDate || r[k + "Arn"]) return;
+    if (this.copies(x.reg, x.form, x.per).some(z => z !== x && z.arnDate === x.arnDate)) return;
+    delete r[k]; GSTR._carry = null;
+  },
+  refile(x){
+    const k = this.filedKey(x.form); if (!k || !x.setFiled || !x.arnDate || !/^\d{6}$/.test(x.per)) return;
+    const r = GSTF.rec(x.per, x.reg); if (!r[k]){ r[k] = x.arnDate; GSTR._carry = null; }
   },
   status(row, reg){
     const have = this.copies(reg, row.form, row.per)[0], today = GSTF.today();
@@ -205,7 +217,7 @@ function gstvFileIt(id){
   const x = gstvFind(id); if (!x) return;
   const ok = x.form && (GSTV.isAnnual(x.form) ? /^\d{4}-\d{2}$/.test(x.per) : /^\d{4}(0[1-9]|1[0-2])$/.test(x.per));
   if (!ok){ toast(GSTV.isAnnual(x.form) ? "Give the year as 2025-26." : "Give the return and the period as YYYYMM, e.g. 202603 (for a quarter, its last month)."); return; }
-  x.sort = false; const k = GSTV.filedKey(x.form); if (k && x.arnDate){ const r = GSTF.rec(x.per, x.reg); if (!r[k]) r[k] = x.arnDate; }
+  x.sort = false; const k = GSTV.filedKey(x.form); if (k && x.arnDate){ const r = GSTF.rec(x.per, x.reg); if (!r[k]){ r[k] = x.arnDate; x.setFiled = true; } }
   saveBooks(); render();
 }
 // a soft delete (request of 02-Oct-2026: removals are soft deletes): the record leaves the list, marked removed with who,
@@ -217,10 +229,10 @@ async function gstvRemove(id){
       '<label class="f" style="margin-top:12px"><span>Reason</span><input type="text" id="cbxWhy" autocomplete="off" aria-label="Reason"></label>',
     read: () => ((document.getElementById("cbxWhy") || {}).value || "").trim()});
   if (!ans) return;
-  x.removed = {at: new Date().toISOString(), by: whoAmI(), reason: ans.data || ""};
+  x.removed = {at: new Date().toISOString(), by: whoAmI(), reason: ans.data || ""}; GSTV.unfile(x);
   saveBooks(); render();
 }
-function gstvRestore(id){ const x = GSTV.all().find(z => z.id === id); if (!x) return; delete x.removed; saveBooks(); toast("Restored: " + GSTV.label(x.form) + " " + GSTV.perLabel(x.form, x.per, x.reg) + "."); render(); }
+function gstvRestore(id){ const x = GSTV.all().find(z => z.id === id); if (!x) return; delete x.removed; GSTV.refile(x); saveBooks(); toast("Restored: " + GSTV.label(x.form) + " " + GSTV.perLabel(x.form, x.per, x.reg) + "."); render(); }
 // every PDF of the GSTIN and year in one zip
 async function gstvZip(){
   const reg = S.gstReg || "", fy = S.gstvFy, recs = GSTV.list().filter(x => x.reg === reg && !x.sort && GSTV.fyOfPer(x.per) === fy), files = [], missed = [];

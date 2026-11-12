@@ -45,36 +45,57 @@ const TDSFiled = {
     const why = this.problem(fy, q, on, token);
     if (why){ toast(why); return false; }
     const d = TDS.ymd(on), iso = d.slice(0, 4) + "-" + d.slice(4, 6) + "-" + d.slice(6, 8), t = String(token || "").replace(/\s/g, "");
-    const name = TDS.formShort(form, fy) + ", " + q + " " + fy, fee = TDS.lateFee(fy, q, d, form);
+    const name = TDS.formShort(form, fy) + ", " + q + " " + fy, fee = TDS.lateFee(fy, q, d, form), corr = typeof TDSReg === "object" && TDSReg.corrOpen(fy, q, form);
     const ok = await askConfirm({title: "Mark " + name + " filed?",
       body: "Filed on <b>" + esc(fmtDate(iso)) + "</b>" + (t ? ", token " + esc(t) : ", no token number given") + ".<br>" +
         "The year's grid shows it filed, and the late fee is worked out to this date" + (fee && fee.days > 0 ? " (<b>₹" + INR.format(fee.fee) + "</b>, " + fee.days + " days late)" : " (none: filed by the due date)") + "." +
         (this.closedOf(fy, q) ? "" : "<br>Settings › Closed periods gets this date for " + q + " " + fy + ", so FinCom warns before an entry of the quarter is posted.") +
-        (typeof TDSDrift === "object" ? "<br>A copy of the quarter's entries is kept, so a change made in Tally later is spotted." : ""),
-      ok: "Mark filed"});
+        (typeof TDSDrift === "object" ? "<br>A copy of the quarter's entries is kept, so a change made in Tally later is spotted." : "") +
+        (corr ? "<br><b>A correction is open for this return.</b> Marking it filed closes the correction (the trail records it), and its challan allocations are locked again." : ""),
+      ok: corr ? "Mark filed and close the correction" : "Mark filed"});
     if (!ok || !ok.ok) return false;
-    const b = S.books, fill = !this.closedOf(fy, q); b.tdsFiled = Object.assign({}, b.tdsFiled);
+    // the quarter's date is FinCom's to fill: none yet, or the one this return's earlier mark filled (marked again)
+    const b = S.books, cp0 = this.closedOf(fy, q), prev = (b.tdsFiled || {})[this.key(fy, q, form)], fill = !cp0 || !!(prev && prev.closedFilled && TDS.ymd(prev.on) === TDS.ymd(cp0)); b.tdsFiled = Object.assign({}, b.tdsFiled);
     b.tdsFiled[this.key(fy, q, form)] = Object.assign({on: iso, token: t, at: new Date().toISOString(), by: typeof whoAmI === "function" ? whoAmI() : ""}, fill ? {closedFilled: true} : {});
     if (typeof TDSDrift === "object") TDSDrift.keep(fy, q, form);
-    // tds-layout (14-Oct-2026): its challan allocations are locked from now (TDSReg, src/js/79); a correction open for it is
-    // closed by filing it, and the trail says each allocation is locked
-    if (typeof TDSReg === "object"){ if (b.tdsCorr && b.tdsCorr[TDSReg.corrKey(fy, q, form)]){ b.tdsCorr = Object.assign({}, b.tdsCorr); delete b.tdsCorr[TDSReg.corrKey(fy, q, form)]; } TDSReg.lockReturn(fy, q, form); }
-    try { const co = CO(); if (co && fill){ const f = Object.assign({}, ClosedP.cfg(co).tdsFiled); f[fy + "|" + q] = iso; ClosedP.set(co, "tdsFiled", f); } } catch (e){}
-    try { auditEvent("tds_return_filed", {form, fy, q, on: iso, token: t}, S.coId); } catch (e){}
-    saveBooks(); toast(name + " marked filed on " + fmtDate(iso) + "."); render();
+    // tds-layout (14-Oct-2026): its challan allocations are locked from now (TDSReg, src/js/79); a correction open for it was
+    // asked about above and is closed by filing it (closeCorrection: the trail says so, and each allocation is locked)
+    if (typeof TDSReg === "object"){ if (corr) TDSReg.closeCorrection(fy, q, form); else TDSReg.lockReturn(fy, q, form); }
+    try { auditEvent("tds_return_filed", Object.assign({form, fy, q, on: iso, token: t}, corr ? {correctionClosed: true} : {}), S.coId); } catch (e){}
+    saveBooks(); if (fill) this.quarterDate(fy, q, true); toast(name + " marked filed on " + fmtDate(iso) + "."); render();
     return true;
+  },
+  // the quarter's date under Settings › Closed periods (one for every form of the quarter; ClosedP.why reads it): one FinCom
+  // filled follows the returns of the quarter still marked filed (another form's date when this one's mark is taken off;
+  // cleared when none is left); one typed there by a person is never changed. The company record is written once, after
+  // the books (two stores: the books with the client's books, the date with the company)
+  quarterDate(fy, q, ours){
+    let co = null; try { co = CO(); } catch (e){}
+    if (!co || typeof ClosedP !== "object") return;
+    const b = S.books || {}, cp = this.closedOf(fy, q), mine = Object.keys(b.tdsFiled || {}).filter(k => k.indexOf(fy + "|" + q + "|") === 0 && b.tdsFiled[k] && b.tdsFiled[k].on).map(k => b.tdsFiled[k]);
+    if (cp && !ours && !mine.some(x => x.closedFilled && TDS.ymd(x.on) === TDS.ymd(cp))) return;
+    const pick = mine.slice().sort((a, c) => String(a.on).localeCompare(String(c.on)))[0], f = Object.assign({}, ClosedP.cfg(co).tdsFiled);
+    let ch = false; mine.forEach(x => { const want = x === pick; if (!!x.closedFilled !== want){ ch = true; if (want) x.closedFilled = true; else delete x.closedFilled; } });
+    if (pick) f[fy + "|" + q] = pick.on; else delete f[fy + "|" + q];
+    if (ch) saveBooks();
+    if ((f[fy + "|" + q] || "") !== cp) try { ClosedP.set(co, "tdsFiled", f); } catch (e){}
   },
   async unmark(fy, q, form){
     const name = TDS.formShort(form, fy) + ", " + q + " " + fy;
     const b = S.books, r = (b.tdsFiled || {})[this.key(fy, q, form)] || {}, cp = this.closedOf(fy, q);
     const clear = r.closedFilled && cp && TDS.ymd(cp) === TDS.ymd(r.on);
+    // another form of the quarter still marked filed keeps the quarter closed (its date in its place)
+    const other = Object.keys(b.tdsFiled || {}).filter(k => k !== this.key(fy, q, form) && k.indexOf(fy + "|" + q + "|") === 0 && (b.tdsFiled[k] || {}).on).map(k => k.split("|")[2]);
+    const corr = typeof TDSReg === "object" && TDSReg.corrOpen(fy, q, form);
     const ok = await askConfirm({title: "Take off the filed mark?", body: esc(name) + " goes back to not filed: the late fee is again worked out as if it were filed today." +
-      (clear ? " The date under Settings › Closed periods, filled when it was marked, is cleared too." : cp ? " The date under Settings › Closed periods is not changed." : ""), ok: "Take it off", danger: true});
+      (clear ? (other.length ? " The date under Settings › Closed periods stays: " + esc(other.join(", ")) + " of " + q + " " + fy + " is still marked filed." : " The date under Settings › Closed periods, filled when it was marked, is cleared too.") : cp ? " The date under Settings › Closed periods is not changed." : "") +
+      (corr ? " The correction open for it is closed too: a return not filed has nothing to correct." : ""), ok: "Take it off", danger: true});
     if (!ok || !ok.ok) return false;
     b.tdsFiled = Object.assign({}, b.tdsFiled); delete b.tdsFiled[this.key(fy, q, form)];
-    if (clear) try { const co = CO(), f = Object.assign({}, ClosedP.cfg(co).tdsFiled); delete f[fy + "|" + q]; ClosedP.set(co, "tdsFiled", f); } catch (e){}
     if (b.tdsSnap){ b.tdsSnap = Object.assign({}, b.tdsSnap); delete b.tdsSnap[this.key(fy, q, form)]; }
-    saveBooks(); render(); return true;
+    if (corr){ b.tdsCorr = Object.assign({}, b.tdsCorr); delete b.tdsCorr[TDSReg.corrKey(fy, q, form)]; TDSReg.log({act: "correction", form, fy, q, note: "correction closed: the return's filed mark was taken off"}); TDSReg.done(); }
+    try { auditEvent("tds_return_unfiled", {form, fy, q, on: r.on || "", token: r.token || "", correctionClosed: !!corr}, S.coId); } catch (e){}
+    saveBooks(); if (clear) this.quarterDate(fy, q, true); render(); return true;
   }
 };
 

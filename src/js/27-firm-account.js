@@ -1263,10 +1263,12 @@ function tdsNrSet(party, k, v){ const b = S.books; b.nrInfo = Object.assign({}, 
 function tdsTcsCode(ledger, code){ const b = S.books; b.tcsCodes = Object.assign({}, b.tcsCodes, {[ledger]: code}); saveBooks(); render(); }
 function r2SetTol(v){ const st = GST2B.state(); st.opt = Object.assign({}, st.opt, {tol: Math.max(0, num(v))}); saveBooks(); render(); }
 // "Same": a likely pair confirmed; "Not the same" or "Unlink": the 2B document and those Tally entries are kept apart
-function r2Confirm(key){ const st = GST2B.state(); st.confirm[key] = "yes"; saveBooks(); render(); }
-function r2Unlink(key, ids){ const st = GST2B.state(); ids.forEach(id => { st.confirm[key + ">" + id] = "no"; }); delete st.link[key]; delete st.confirm[key]; saveBooks(); render(); }
+// (a pair whose credit is in a GSTR-3B already filed is not changed: GSTLock.pair, src/js/47)
+function r2Locked(keys, ids){ if (typeof GSTLock !== "object") return false; const w = GSTLock.pair((typeof r2Reg === "function" ? r2Reg(S.books) : "") || S.gstReg || "", keys, ids); if (w) toast(w); return !!w; }
+function r2Confirm(key){ if (r2Locked([key], [])) return; const st = GST2B.state(); st.confirm[key] = "yes"; saveBooks(); render(); }
+function r2Unlink(key, ids){ if (r2Locked([key], ids)) return; const st = GST2B.state(); ids.forEach(id => { st.confirm[key + ">" + id] = "no"; }); delete st.link[key]; delete st.confirm[key]; saveBooks(); render(); }
 // a 2B document not found in Tally, linked by hand to the entry it was booked as
-function r2Link(key, id){ const st = GST2B.state(); if (id){ st.link[key] = [id]; delete st.confirm[key]; } saveBooks(); render(); }
+function r2Link(key, id){ if (id && r2Locked([key], [id])) return; const st = GST2B.state(); if (id){ st.link[key] = [id]; delete st.confirm[key]; } saveBooks(); render(); }
 // a remark on a document (r2Tag): app/src/lib/itcSync.js, the decision on that bill (ITCDec)
 // one setting of a page kept in S (S.inregF, S.inregScope, …); typed: the page follows a moment later
 function setAndShow(key, val, typed){ S[key] = val; if (typed){ FinComReact.redraw(); later(key, render, 250); } else render(); }

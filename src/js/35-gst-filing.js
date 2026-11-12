@@ -6,15 +6,41 @@
 // GSTF: the whole object is in server/_shared/gst3b.js (the GSTR-3B engine, shared with the gst-run function)
 // the filing card under GSTR-3B and GSTR-1A under Amendments: React (app/src/screens/gst/Filing.jsx)
 // a filing date (r1, r3b) or a figure from the portal (portalFee1, portalFee3, portalInt) for the month and GSTIN
+// the filed mark of a return (k: r1, r3b, iff) is ONE thing (the review of the filed marks, item 6): the date, the ARN, how
+// it was filed (k + "Via": api, helper) and what was kept with it (the 3B as filed, the IFF's documents). Set together;
+// taken off together, so marking it again (by hand, the GST API or the browser helper) starts afresh
+const GSTMark = {
+  set(ym, reg, k, on, arn, via){
+    const r = GSTF.rec(ym, reg);
+    r[k] = on || r[k] || GSTF.today();
+    if (arn){ r[k + "Arn"] = arn; if (via) r[k + "Via"] = via; else delete r[k + "Via"]; }
+    if (k === "r3b" && !r.snap && typeof GSTR === "object"){ r.snap = GSTF.snapOf(GSTR.threeB(ym, reg)); r.snapAt = new Date().toISOString(); }
+    if (k === "iff"){ delete r.iffSkip; if (typeof GSTQ === "object") GSTQ.iffSnap(ym, reg); }
+    GSTR._carry = null; return r;
+  },
+  clear(ym, reg, k){
+    const r = GSTF.rec(ym, reg), was = {on: r[k] || "", arn: r[k + "Arn"] || "", via: r[k + "Via"] || ""};
+    [k, k + "Arn", k + "Via"].concat(k === "r3b" ? ["snap", "snapAt"] : k === "iff" ? ["iffDocs", "iffSnapAt"] : []).forEach(f => { delete r[f]; });
+    GSTR._carry = null;
+    if (was.on || was.arn) try { auditEvent("gst_filed_mark_off", {reg, ym, form: k, on: was.on, arn: was.arn, via: was.via}, S.coId); } catch (e){}
+    return r;
+  }
+};
 function gstfSet(k, v){
   const r = GSTF.rec(S.gstYm || "", S.gstReg || "");
-  if (k === "r1" || k === "r3b") r[k] = v;
+  if (k === "r1" || k === "r3b"){ if (v === "") GSTMark.clear(S.gstYm || "", S.gstReg || "", k); else r[k] = v; }
   if (k === "portalFee1" || k === "portalFee3" || k === "portalInt"){ if (v === "") delete r[k]; else r[k] = num(v); }
   GSTR._carry = null; saveBooks(); render();
 }
 // after filing: keep the 3B as filed (or remove the kept copy), and the set-off journal for Tally
 function gstfSnap(){ const ym = S.gstYm || "", r = GSTF.rec(ym, S.gstReg || ""); r.snap = GSTF.snapOf(GSTR.threeB(ym, S.gstReg || "")); r.snapAt = new Date().toISOString(); if (!r.r3b) r.r3b = GSTF.today(); GSTR._carry = null; saveBooks(); render(); toast("3B for " + GSTR.label(ym) + " kept as filed."); }
-function gstfUnsnap(){ const r = GSTF.rec(S.gstYm || "", S.gstReg || ""); delete r.snap; delete r.snapAt; GSTR._carry = null; saveBooks(); render(); }
+// the kept copy and the filed mark go together: removing the copy takes the month back to not filed (one filed with an ARN
+// keeps both: the portal has it)
+function gstfUnsnap(){
+  const ym = S.gstYm || "", reg = S.gstReg || "", r = GSTF.rec(ym, reg);
+  if (r.r3bArn){ toast("GSTR-3B for " + GSTR.label(ym) + " was filed with ARN " + r.r3bArn + ": its kept copy stays."); return; }
+  GSTMark.clear(ym, reg, "r3b"); saveBooks(); render(); toast("GSTR-3B for " + GSTR.label(ym) + " is no longer marked filed; the kept copy is removed.");
+}
 function gstfJournal(){
   const ym = S.gstYm || "", reg = S.gstReg || "", J = GSTF.journal(ym, reg); if (!J.lines.length){ toast("Nothing to set off this month."); return; }
   if (!J.balanced){ toast("A ledger is missing in Tally (" + J.missing.join(", ") + "); the journal would not balance."); return; }

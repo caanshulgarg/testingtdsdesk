@@ -23,7 +23,7 @@ const next = (M) => later(M)[0] || M;
 
 function DecisionCell({ r, reg, M }) {
   if (r.fixed && !r.allow.length) return <span className="nr">{r.fixed}</span>;
-  const set = (code, ym) => { const x = ITCF.decide(reg, [r], code, ym, M); if (x.refused.length) toast("Not a choice for this line."); render(); };
+  const set = (code, ym) => { const x = ITCF.decide(reg, [r], code, ym, M); if (x.lock) toast(x.lock); else if (x.refused.length) toast("Not a choice for this line."); render(); };
   const v = r.show.code || "", months = later(M);
   return <div className="ic-dec">
     <select aria-label="Decision" data-ic-dec={r.key} value={v} onChange={(ev) => { const c = ev.target.value; set(c, c === "later" ? r.show.ym && r.show.ym > M ? r.show.ym : next(M) : ""); }}>
@@ -105,7 +105,7 @@ export default function ItcReco({ reg }) {
     if (!bulk.code) { toast("Choose the decision."); return; }
     if (bulk.code === "later" && !bulk.ym) { toast("Pick the month."); return; }
     const x = ITCF.decide(reg, picked, bulk.code, bulk.ym, M);
-    toast(x.ok + " line" + (x.ok === 1 ? "" : "s") + " set to " + ITCF.DEC_LABEL[bulk.code] + (x.refused.length ? "; " + x.refused.length + " left as they were (not a choice for them)" : "") + ".");
+    toast(x.ok + " line" + (x.ok === 1 ? "" : "s") + " set to " + ITCF.DEC_LABEL[bulk.code] + (x.refused.length ? "; " + x.refused.length + " left as they were (" + (x.lock || "not a choice for them") + ")" : "") + ".");
     S.icSel = {}; setBulk({ code: "", ym: "" }); render();
   };
   const free = mo.rows.length ? ITCF.rows(reg).filter((r) => r.kind === "books").flatMap((r) => r.docs) : [];

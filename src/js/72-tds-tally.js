@@ -255,12 +255,17 @@ const TDSTally = {
       if (have && this.made(have)){
         // Tally's new figure goes in only where nobody changed the challan in FinCom (it still equals what Tally gave
         // last), and a tax is never lowered below what is tagged to it; anything else shown
+        // a challan a TDS return marked filed uses (and not under correction: TDSReg.locked, src/js/79) keeps its figures, as
+        // a change by hand is refused (TDSReg.canEdit): Tally's new figure is held and shown, and goes in once a correction
+        // is opened for that return (what Tally gave last is not moved on, so the next sync takes it)
+        let lockW = null; const lockedBy = () => lockW !== null ? lockW : (lockW = typeof TDSReg === "object" ? TDSReg.filedUsing(have).map(u => u.form + " " + u.q + " " + u.fy).join(", ") : "");
         const was = have.tallyWas || {};
         let ch = false;
         FIELDS.forEach(k => {
           if (val(have, k) === val(fields, k)) { was[k] = fields[k]; return; }
           const untouched = !(k in was) || val(was, k) === val(have, k);
           const below = k === "tax" && this.p(fields.tax) < this.p(use[have.id] || 0);
+          if (untouched && !below && lockedBy()){ res.conflicts.push({kind: "challan", challan: have.id, what: k, fincom: k === "section" ? have[k] : num(have[k]), tally: fields[k], label: TDSCH.label(have), held: lockW}); return; }
           if (untouched && !below){ have[k] = fields[k]; was[k] = fields[k]; ch = true; }
           else { was[k] = fields[k]; res.conflicts.push({kind: "challan", challan: have.id, what: k, fincom: k === "section" ? have[k] : num(have[k]), tally: fields[k], label: TDSCH.label(have)}); }
         });

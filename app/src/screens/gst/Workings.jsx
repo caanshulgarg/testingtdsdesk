@@ -27,7 +27,7 @@ function FiledCopies({ all }) {
       <div className="row" style={{ gap: 8, margin: "8px 0" }}><button className="btn small primary" onClick={() => doAct("filedPick")}>Bring in filed GSTR-1 JSON</button></div>
       {all.length ? <ListRows name="filedCopies" unit={["copy", "copies"]} head={[{ label: "Month" }, { label: "Registration" }, { label: "Copy from" }, { label: "Kept on", role: "date", cls: "dt" }, { label: "Documents", cls: "n", sum: true, fmt: String }, { label: "B2C small", role: "amount", cls: "n" }, { label: "Not filed", role: "status" }]}>
         {all.map((f) => { const n = GSTAmend.norm(f.json), key = f.gstin + "|" + f.fp; return <tr key={key}>
-          <td>{GSTR.label(f.ym)}</td><td>{f.gstin}</td><td>{f.source === "portal" ? "brought in" : GSTAmend.proof(f.ym, String(f.gstin).slice(0, 2)) ? "downloaded here" : <span data-draft-copy="">Downloaded, not filed</span>}</td><td>{fmtDate(String(f.at).slice(0, 10))}</td>
+          <td>{GSTR.label(f.ym)}</td><td>{f.gstin}</td><td>{f.source === "portal" ? "brought in" : GSTAmend.proof(f.ym, String(f.gstin).slice(0, 2)) ? "downloaded here" : <span data-draft-copy="">{f.via === "api" ? "Saved on the portal, not filed" : "Downloaded, not filed"}</span>}</td><td>{fmtDate(String(f.at).slice(0, 10))}</td>
           <td className="n">{n.docs.size}</td><td className="n">{money(b2csTotal(n))}</td>
           <td><input type="checkbox" checked={!!f.notFiled} aria-label="This copy was not filed" onChange={(ev) => filedSetNotFiled(key, ev.target.checked)} /></td></tr>; })}
       </ListRows> : <p className="note lt-empty" data-list-empty="" style={{ border: 0 }}>None yet. Use Bring in filed GSTR-1 JSON above, or download this month’s JSON here.</p>}

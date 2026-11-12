@@ -96,15 +96,18 @@ Object.assign(GSTR, {
   // the switches of a B2C summary (b2cSumWhy, server/_shared/gst3b.js): the party ledger's (b.map[name].b2cSum) and
   // one entry's (b.gstPosFix[id].b2cs: on true "a summary", on false "not a summary", null cleared); FinCom's own, saved with
   // the books (synced), nothing written to Tally
-  b2cSumLedger(name, on){
+  // (a sale in a month whose GSTR-1 or 3B is filed: asked, with a reason, GSTLock.gate in src/js/47)
+  b2cSumLedger(name, on, sure){
     const b = S.books; if (!b || !name) return;
+    if (!sure && typeof GSTLock === "object") return GSTLock.gate(S.gstReg || "", (b.vouchers || []).filter(v => v.party === name).map(v => String(v.date).slice(0, 6)), ["r1", "r3b"], "B2C summary switch for " + name, () => this.b2cSumLedger(name, on, true));
     b.map = Object.assign({}, b.map || {});
     const m = b.map[name] = Object.assign({n: 0}, b.map[name] || {});
     if (on) m.b2cSum = {by: typeof whoAmI === "function" ? whoAmI() : "", at: new Date().toISOString()}; else delete m.b2cSum;
     b.mapV = (b.mapV || 0) + 1; saveBooks(); render();
   },
-  b2cSumEntry(id, on){
+  b2cSumEntry(id, on, sure){
     const b = S.books; if (!b || !id) return;
+    if (!sure && typeof GSTLock === "object") return GSTLock.gate(S.gstReg || "", GSTLock.months([id]), ["r1", "r3b"], "B2C summary mark", () => this.b2cSumEntry(id, on, true));
     const fx = b.gstPosFix = Object.assign({}, b.gstPosFix || {}), cur = Object.assign({}, fx[id] || {});
     if (on == null) delete cur.b2cs; else cur.b2cs = {on: !!on, by: typeof whoAmI === "function" ? whoAmI() : "", at: new Date().toISOString()};
     if (cur.pos || cur.b2cs) fx[id] = cur; else delete fx[id];

@@ -64,14 +64,14 @@ export const ITCDec = {
   setEl(reg, key, el, cur) {
     const b = S.books, id = (reg || "") + "|" + key, was = (b.itcDec || {})[id];
     b.itcDec = Object.assign({}, b.itcDec || {});
-    b.itcDec[id] = Object.assign({}, was || (cur && cur.src !== "you" && cur.d ? { d: cur.d, ym: cur.ym || "", note: cur.note || "" } : { d: "", ym: "" }), { el: el || "", at: (was && was.at) || (cur && cur.at) || new Date().toISOString(), elAt: new Date().toISOString(), by: who() });
+    b.itcDec[id] = Object.assign({}, was || (cur && cur.src !== "you" && cur.d ? { d: cur.d, ym: cur.ym || "", note: cur.note || "" } : { d: "", ym: "" }), { el: el || "", at: new Date().toISOString(), elAt: new Date().toISOString(), by: who() });
     saveBooks();
   },
   note(reg, key, note, cur) {
     const b = S.books, id = (reg || "") + "|" + key, was = (b.itcDec || {})[id];
     b.itcDec = Object.assign({}, b.itcDec || {});
     // a note alone keeps the decision as it is (the one in force, from wherever it came)
-    b.itcDec[id] = Object.assign({}, was || (cur && cur.src !== "you" && cur.d ? { d: cur.d, ym: cur.ym || "" } : { d: "", ym: "" }), { note: String(note || ""), at: (was && was.at) || (cur && cur.at) || new Date().toISOString(), by: who() });
+    b.itcDec[id] = Object.assign({}, was || (cur && cur.src !== "you" && cur.d ? { d: cur.d, ym: cur.ym || "" } : { d: "", ym: "" }), { note: String(note || ""), at: new Date().toISOString(), by: who() });
     saveBooks();
   },
   // what changed since: a signature of everything a decision is read from (the 3B's carried credit is kept against it)
@@ -82,10 +82,15 @@ export const ITCDec = {
 function r2Tag(key, tag) {
   const reg = (typeof r2Reg === "function" ? r2Reg(S.books) : "") || S.gstReg || "";
   const row = typeof ITCF === "object" ? ITCF.rowByTagKey(reg, key) : null;
+  // (a line whose credit is in a filed GSTR-3B is left as it is: ITCF.lockFor, GSTLock in src/js/47)
+  const w = row && ITCF.lockFor ? ITCF.lockFor(reg, row, TAG_DEC[tag] || "") : "";
+  if (w) { toast(w); return; }
   if (row) { ITCDec.set(reg, [row.key], TAG_DEC[tag] || "", ""); render(); }
 }
 function itctSetAct(key, act) {
-  const reg = S.gstReg || "", d = (ACT_DEC[key[0]] || {})[act] || "";
+  const reg = S.gstReg || "", d = (ACT_DEC[key[0]] || {})[act] || "", row = typeof ITCF === "object" ? ITCF.row(reg, key) : null;
+  const w = row && ITCF.lockFor ? ITCF.lockFor(reg, row, d) : "";
+  if (w) { toast(w); return; }
   ITCDec.set(reg, [key], d, ""); render();
 }
 Object.assign(globalThis, { ITCDec, r2Tag, itctSetAct });

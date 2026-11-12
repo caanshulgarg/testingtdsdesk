@@ -350,12 +350,17 @@ function letter(reg, s) {
   return t;
 }
 
+// a filed GSTR-3B (GSTLock, src/js/47): the words when one of these months is filed, else ""; the month a decision puts the
+// credit in (Take now: the month of the line's 2B, or M, the month on screen, for a bill not in 2B or when the 2B's month
+// has its 3B filed)
+const lockW = (reg, ms) => (typeof GSTLock === "object" ? GSTLock.why(reg, ms) : "");
+const toYm = (reg, r, code, ym, M) => code === "later" ? ym || "" : code !== "now" && code !== "booksnow" ? "" : r.tm && !lockW(reg, [r.tm]) ? r.tm : M || r.tm || "";
 // ---------- what the screens, the Excel and the tests use
 export const ITCF = {
   DECS, DEC_LABEL, LINES, LINE_LABEL, CHIPS, HEADS, ELIG, ELIG_LABEL, credit, shown, effect, revEffect,
   // the line a bill of the books is decided on (the input register's Eligible?), and its eligibility set by a person
   lineOfDoc(reg, id) { const m = model(reg); return m ? m.rows.find((r) => !r.fixed && (r.docs || []).some((d) => d.id === id)) || null : null; },
-  setElig(reg, r, el) { ITCDec.setEl(reg, r.key, el === r.defE ? "" : el, r.s); },
+  setElig(reg, r, el) { const w = lockW(reg, [r.e && r.e.C]); if (w) { toast(w); return false; } ITCDec.setEl(reg, r.key, el === r.defE ? "" : el, r.s); return true; },
   rows(reg) { const m = model(reg); return m ? m.rows : []; },
   month(reg, M) { return month(reg, M); },
   rowByTagKey(reg, k) { const m = model(reg); return m ? m.byTag.get(k) || null : null; },
@@ -368,13 +373,21 @@ export const ITCF = {
     const sumA = A.reduce((a, [, x]) => add(a, x), z());
     return { t, lines: A.concat([["4A", sumA], ["4B1", g(t.rev1)], ["4B2", g(t.rev2)], ["4C", g(t.netItc)], ["4D1", g(t.reclaim)], ["4D2", g(t.na)]]) };
   },
-  // a line's decision, set from the screen or the Excel (M: the month on screen; "now" there is that month)
+  // a line's decision, set from the screen or the Excel (M: the month on screen; "Take now": toYm above). A line whose
+  // credit is in a filed 3B, or that would go into one, is left as it is: lock says why (GSTLock, src/js/47)
   decide(reg, rows, code, ym, M) {
-    const ok = [], refused = [];
-    rows.forEach((r) => { if (!code || (r.allow || []).includes(code)) ok.push(r); else refused.push(r); });
-    if (ok.length) ITCDec.set(reg, ok.map((r) => r.key), code, code === "later" ? ym : code === "now" || code === "booksnow" ? M : "");
-    return { ok: ok.length, refused };
+    const ok = new Map(), refused = []; let lock = "";
+    rows.forEach((r) => {
+      if (code && !(r.allow || []).includes(code)) { refused.push(r); return; }
+      const to = toYm(reg, r, code, ym, M), w = lockW(reg, [r.e && r.e.C, to]);
+      if (w) { lock = lock || w; refused.push(r); return; }
+      ok.set(to, (ok.get(to) || []).concat([r.key]));
+    });
+    ok.forEach((keys, to) => ITCDec.set(reg, keys, code, to));
+    return { ok: rows.length - refused.length, refused, lock };
   },
+  // for the old entry points (r2Tag, itctSetAct: "now" kept with no month, so the line's own, credit0)
+  lockFor(reg, r, code) { return lockW(reg, [r.e && r.e.C, code === "now" || code === "booksnow" ? r.bm || r.tm : ""]); },
   logSent(reg, key) { if (typeof ITCT !== "object") return; const st = ITCT.store(reg); st.sent[key] = (st.sent[key] || []).concat([ITCT.today()]); saveBooks(); },
   // ---- the Excel's data (the workbook itself is screens/gst/itcExcel.js, with ExcelJS)
   months(M) { const all = GSTR.months(), out = new Set(all); for (let i = 0, y = +M.slice(0, 4), m = +M.slice(4); i < 15; i++) { out.add(y + String(m).padStart(2, "0")); m++; if (m > 12) { m = 1; y++; } } return Array.from(out).sort(); },
@@ -459,6 +472,8 @@ export const ITCF = {
     const changes = [], notes = [], eligs = [], fields = [];
     want.forEach((w, k) => {
       const r = byKey.get(k), c = curOf(r);
+      const lk = (w.code !== c.code || (w.ym || "") !== (c.ym || "") || (!r.fixed && w.el !== c.el)) && lockW(reg, [r.e && r.e.C, toYm(reg, r, w.code, w.ym, M)]);
+      if (lk) { refused.push({ r, why: lk }); w.code = c.code; w.ym = c.ym; w.el = c.el; }
       if (w.code !== c.code || (w.ym || "") !== (c.ym || "")) { changes.push({ r, from: { code: c.code, ym: c.ym }, to: { code: w.code, ym: w.ym } }); fields.push({ r, field: "Decision", from: c, to: w }); }
       if (w.note !== c.note) { notes.push({ r, note: w.note }); fields.push({ r, field: "Note", from: c.note, to: w.note }); }
       if (!r.fixed && w.el !== c.el) { eligs.push({ r, from: c.el, to: w.el }); fields.push({ r, field: "Eligible?", from: ELIG_LABEL[c.el] || "", to: ELIG_LABEL[w.el] || "" }); }
@@ -484,7 +499,7 @@ export const ITCF = {
     b.itcDec = Object.assign({}, b.itcDec || {});
     pv.changes.forEach(({ r, to }) => {
       const id = (reg || "") + "|" + r.key, was = b.itcDec[id] || {};
-      const ym = to.code === "later" ? to.ym || "" : to.code === "now" || to.code === "booksnow" ? M : "";
+      const ym = toYm(reg, r, to.code, to.ym, M);
       b.itcDec[id] = Object.assign({}, was, { d: to.code || "", ym, at, by, from: "excel" });
       if (was.note == null && r.s && r.s.note) b.itcDec[id].note = r.s.note;
     });

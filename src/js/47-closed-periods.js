@@ -71,6 +71,67 @@ const ClosedP = {
   }
 
 };
+// A GST month filed (the review of the filed marks, item 7): the ONE check every change to a month's GST figures asks
+// (ITC decisions, 2B pairs, B2C summary marks, places of supply). Built on the filed marks: the date typed, the ARN (GST API
+// or the browser helper), the 3B kept as filed, the portal's PDF in Returns filed; for GSTR-1 also a copy brought in from
+// the portal. A downloaded or API-saved copy is not a filing. A QRMP month's returns are the quarter's.
+// filed(reg, ym, form "r3b" | "r1") -> {filed, form, per, on, arn, how: api | helper | pdf | date | kept | portal} or null
+const GSTLock = {
+  per(reg, ym){ try { if (typeof GSTSet === "object" && GSTSet.typeOf(ym, reg) === "qrmp") return GSTSet.qEnd(ym); } catch (e){} return ym; },
+  filed(reg, ym, form){
+    form = form || "r3b";
+    if (!reg || !S.books || !/^\d{6}$/.test(String(ym || ""))) return null;
+    const one = (per, k) => {
+      const r = GSTF.peek(per, reg), v = typeof GSTV === "object" ? GSTV.copies(reg, k, per)[0] : null, arn = r[k + "Arn"] || (v && v.arn) || "";
+      const on = r[k] || (v && v.arnDate) || (k === "r3b" && r.snap ? String(r.snapAt || "").slice(0, 10) : "");
+      if (!on && !arn) return null;
+      return {filed: true, form: k, per, on, arn, how: r[k + "Via"] === "api" ? "api" : r[k + "Arn"] ? "helper" : v ? "pdf" : r[k] ? "date" : "kept"};
+    };
+    const per = this.per(reg, ym);
+    if (form === "r3b") return one(per, "r3b");
+    const x = (per !== ym && one(ym, "iff")) || one(per, "r1");
+    if (x) return x;
+    const p = Object.values(S.books.filed || {}).find(f => f && f.source === "portal" && !f.notFiled && String(f.gstin).slice(0, 2) === reg && (f.ym === ym || f.ym === per));
+    return p ? {filed: true, form: "r1", per: p.ym, on: "", arn: "", how: "portal"} : null;
+  },
+  words(x){
+    return ({r3b: "GSTR-3B", r1: "GSTR-1", iff: "IFF"})[x.form] + " for " + GSTR.label(x.per) + " is filed" + (x.arn ? " (ARN " + x.arn + ")" : x.on ? " (on " + fmtDate(x.on) + ")" : "") +
+      ". Changes go into the next return as an amendment.";
+  },
+  // the first filed return among these months, in words ("" when every one is open)
+  why(reg, months, forms){
+    for (const m of new Set((months || []).filter(Boolean))) for (const f of forms || ["r3b"]){ const x = this.filed(reg, m, f); if (x) return this.words(x); }
+    return "";
+  },
+  // refused: the words shown, true; open: false
+  refuse(reg, months, forms){ const w = this.why(reg, months, forms); if (w) toast(w); return !!w; },
+  // a change FinCom allows on a filed month when a person says so (B2C summary marks, places of supply: the filed GSTR-1
+  // stays as it is and the change goes as an amendment): asked, with a reason, and the audit trail records it. true: go on
+  async ask(reg, months, forms, what){
+    const w = this.why(reg, months, forms);
+    if (!w) return true;
+    const ans = await askConfirm({title: "Change a filed month?", ok: "Change anyway",
+      body: esc(w) + " The filed return is not changed." + '<label class="f" style="margin-top:12px"><span>Why (kept in the audit trail)</span><input type="text" id="cbxWhy" autocomplete="off" aria-label="Why"></label>',
+      read: () => ((document.getElementById("cbxWhy") || {}).value || "").trim(), validate: (d) => d ? "" : "Say why: it is kept in the audit trail."});
+    if (!ans || !ans.ok) return false;
+    try { auditEvent("gst_filed_changed", {reg, months: Array.from(new Set(months.filter(Boolean))).slice(0, 12), what: what || "", why: w, reason: ans.data || ""}, S.coId); } catch (e){}
+    return true;
+  },
+  // go() now when every month is open (no wait: the change is made in this call), else once asked as above
+  gate(reg, months, forms, what, go){ if (!this.why(reg, months, forms)) return go(); this.ask(reg, months, forms, what).then(y => { if (y) go(); }); },
+  // the months of these entries of the books (place of supply, B2C summary marks)
+  months(ids){ const s = new Set(ids || []); return ((S.books || {}).vouchers || []).filter(v => s.has(v.id)).map(v => String(v.date).slice(0, 6)); },
+  // a 2B document and the bills of the books it is paired with: the month the pair's credit falls in (the later of the
+  // two) and the months each line takes its credit in now (ITCF, app/src/lib/itcFinal.js)
+  pair(reg, keys, ids){
+    const F = typeof ITCF === "object" ? ITCF : null, ms = [], at = [];
+    (keys || []).concat(ids || []).forEach(k => { const r = F && F.rowByTagKey(reg, k); if (r){ if (r.e) ms.push(r.e.C); if (r.tm) at.push(r.tm); if (r.bm) at.push(r.bm); } });
+    (keys || []).forEach(k => { if (/^\d{6}\|/.test(k)) at.push(k.slice(2, 6) + k.slice(0, 2)); });
+    ms.push(at.sort().pop() || "");
+    return this.why(reg, ms);
+  }
+};
+if (typeof globalThis === "object") globalThis.GSTLock = GSTLock;
 // Client setup, closed periods (app/src/screens/SettingsMore.jsx): the closing date, a warning on or off, a TDS return filed
 function closedSet(co, k, v){
   if (k === "to"){ ClosedP.set(co, "to", v); toast(v ? "Books closed up to " + fmtDate(v) + " for " + co.name + "." : "No closing date."); }

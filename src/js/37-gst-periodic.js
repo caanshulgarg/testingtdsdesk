@@ -20,6 +20,7 @@ function gqIffJson(){
 }
 
 // IFF: filed (a date or ARN: its documents are recorded then), or not filed on purpose (they go in the quarter's GSTR-1)
-function gqIffFiled(ym, k, v){ const reg = S.gstReg || "", r = GSTF.rec(ym, reg); if (v === "") delete r[k]; else { r[k] = v; delete r.iffSkip; GSTQ.iffSnap(ym, reg); } GSTR._carry = null; saveBooks(); render(); }
+// (the date taken off takes the whole mark off: its ARN and the documents recorded, GSTMark in src/js/35)
+function gqIffFiled(ym, k, v){ const reg = S.gstReg || "", r = GSTF.rec(ym, reg); if (v === "" && k === "iff") GSTMark.clear(ym, reg, "iff"); else if (v === "") delete r[k]; else { r[k] = v; delete r.iffSkip; GSTQ.iffSnap(ym, reg); } GSTR._carry = null; saveBooks(); render(); }
 function gqIffSkip(ym, on){ const r = GSTF.rec(ym, S.gstReg || ""); if (on){ r.iffSkip = new Date().toISOString(); delete r.iff; delete r.iffArn; delete r.iffDocs; } else delete r.iffSkip; GSTR._carry = null; saveBooks(); render(); }
 function gqQuarterType(type){ GSTQ.setQuarterType(S.gstYm || "", S.gstReg || "", type); saveBooks(); render(); }

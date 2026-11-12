@@ -94,6 +94,8 @@ Object.assign(M2B, {
   async decide(reg, pairs, decision){
     const fy = this.fyNow(), s = this.st[this.key(reg, fy)];
     if (!s || !s.run || s.busy || !pairs.length) return;
+    // a pair whose credit is in a GSTR-3B already filed stays as it is (GSTLock.pair, src/js/47)
+    if (typeof GSTLock === "object"){ let w = ""; pairs = pairs.filter(p => { const x = GSTLock.pair(reg, p.g || [], p.b || []); w = w || x; return !x; }); if (w) toast(w); if (!pairs.length) return; }
     s.busy = true; render();
     try {
       const j = await this.call({action: "decide", client_id: S.books.cid, gstin: this.gstinOf(reg), fy, pairs: pairs.map(p => p.id), decision});
