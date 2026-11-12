@@ -29,7 +29,16 @@ port 31864 unless PG164_PORT; never a real database), made-up rows only, after m
      the old engine is not due (the staging case); after it, once gst-run has written its engine (gst_share_engine_put,
      written only when it moved), every book whose context another engine made is due, not those on that engine, still
      not leased, not backing off, at most n; after its sweep (context on the new engine, its entries worked out) not
-     due; gst_share_books_due(3) timed on 2,000 books before and after; anon and authenticated may not"""
+     due; gst_share_books_due(3) timed on 2,000 books before and after; anon and authenticated may not
+  9. migration 171 (server/tally-cloud/migration-171-gst-share-itc.sql, part B; md5 printed): the file (one transaction,
+     add-only, three new tables with RLS and explicit grants, no trigger, no real database); before 164 it stops; the
+     part B client tests/run_gst_share.js wrote (tests/out/gst-itc-inputs.json) put through gst_share_put_itc (a
+     document of an entry not seen refused, nothing kept); gst_itc_inputs gives exactly what the month step was checked
+     on there (month rows, first and last month, GSTINs, documents, the allocations rule 37 follows, the suppliers'
+     movement from the lines); the credit carried kept and read back on its engine and version only; a check kept as
+     calc 'gst-itc'; an entry worked out again with no document loses its rows; a run that lost its lease refused;
+     anon and authenticated may not; a member reads its own firm's gst_itc_month; gst_itc_inputs timed on a 30,000-
+     document book; a book deleted takes its rows"""
 import os, re, sys, json, time, hashlib, subprocess
 HERE = os.path.dirname(os.path.abspath(__file__)); ROOT = os.path.join(HERE, ".."); sys.path.insert(0, HERE)
 import pg_stand
@@ -120,6 +129,8 @@ try:
     a_bulk, a_one = bulk(BKM, 100000, "m")
 
     print("== 1. order and reruns")
+    try: db.sql(open(os.path.join(ROOT, "server", "tally-cloud", "migration-171-gst-share-itc.sql")).read()); ok(False, "171 before 164 should stop")
+    except RuntimeError as e: ok("needs migration 164" in str(e), "171 before 164: stops and says so")
     try: db.sql(text); ok(False, "164 without 72/73's columns should stop")
     except RuntimeError as e: ok("needs migration 153" in str(e), "without the entry columns of 72 and 73: stops and says so")
     db.sql("alter table tally_vouchers add column if not exists tds_tally jsonb, add column if not exists tds_tally_alter_id bigint;")
@@ -408,6 +419,91 @@ try:
                 try: db.sql("set role %s; %s;" % (role, s)); ok(False, role + " may not: " + s)
                 except RuntimeError as e: ok("permission denied" in str(e), role + " may not: " + s.split("(")[0][:40])
         ok(db.one("select has_function_privilege('service_role', 'public.gst_share_engine_put(text, text)', 'execute') and has_table_privilege('service_role', 'public.gst_share_engine', 'select')") == "t", "the service role may")
+
+    print("== 9. migration 171: part B, the input tax credit side")
+    M171 = os.path.join(ROOT, "server", "tally-cloud", "migration-171-gst-share-itc.sql")
+    t171 = open(M171).read()
+    print("  md5 of %s: %s (%d bytes)" % (os.path.basename(M171), hashlib.md5(t171.encode()).hexdigest(), len(t171.encode())))
+    c71 = "\n".join(l.split("--")[0] for l in t171.lower().splitlines())
+    N71 = ["gst_itc_doc", "gst_itc_bill", "gst_itc_month"]
+    ok(re.search(r"^begin;\s*\nset local lock_timeout = '10s';", t171, re.M) is not None and t171.rstrip().endswith("commit;") and c71.count("\nbegin;") == 1 and c71.count("commit;") == 1, "171: one transaction, lock_timeout 10 s")
+    ok(re.findall(r"create table if not exists public\.(\w+)", c71) == N71 and all(("alter table public.%s enable row level security" % t) in c71 for t in N71)
+       and all(re.search(r"create table if not exists public\.%s \([^;]*references public\.tally_books \(book_id\) on delete cascade" % t, c71, re.S) for t in N71), "171: three new tables, RLS on, each goes with its book")
+    ok(not re.search(r"\b(drop|truncate)\b", c71) and not re.search(r"alter\s+table\s+(?!public\.(%s)\s)" % "|".join(N71), c71) and "create trigger" not in c71
+       and all(d in N71 for d in re.findall(r"delete from (\w+)", c71)), "171: add-only: nothing dropped, no trigger, only its own tables altered and deleted from")
+    F71 = {"gst_share_put_itc": "(uuid, text, timestamptz, jsonb, jsonb, jsonb, jsonb)", "gst_itc_inputs": "(uuid, text, text, text)", "gst_itc_month_put": "(uuid, text, text, text, text, jsonb, jsonb)",
+           "gst_itc_parity_put": "(uuid, text, text, text, boolean, numeric, jsonb, jsonb)", "gst_itc_ready": "()"}
+    ok(sorted(set(re.findall(r"create or replace function public\.(\w+)\(", c71))) == sorted(F71) and all(("revoke all on function public.%s%s from public, anon, authenticated;" % (f, s)) in t171
+       and ("grant execute on function public.%s%s to service_role;" % (f, s)) in t171 for f, s in F71.items()), "171: its own functions only, each the service role's")
+    ok("revoke all on public.gst_itc_doc, public.gst_itc_bill, public.gst_itc_month from public, anon, authenticated;" in t171 and "grant select on public.gst_itc_month to authenticated;" in t171
+       and "grant select, insert, update, delete on public.gst_itc_doc, public.gst_itc_bill, public.gst_itc_month to service_role;" in t171 and c71.count("(select public.my_firm())") == 1, "171: explicit grants; members read their own firm's gst_itc_month only")
+    ok(not re.search(r"supabase\.co|https?://|qbocskai|nrtczu", t171.lower()), "171: names no real database")
+    db.sql(t171); db.sql(t171)
+    ok(db.one("select count(*) from pg_trigger where tgname like '%_calc_dirty_%' and not tgisinternal") == "9", "171 runs, twice; no trigger added")
+    P9 = json.load(open(os.path.join(HERE, "out", "gst-itc-inputs.json")))
+    B9, R9 = P9["book"], "run-171"
+    db.sql("insert into tally_books (book_id, firm_id, client_id, company, from_date, open_as_on) values ('%s', '%s', 'c171', 'Synthetic Traders B', '2025-04-01', '2025-04-01')" % (B9, F))
+    def hv(h): return "('%s', '%s', %s, %s, %d, %s, %s, %s, %s, %s, %s, %s, %s)" % (B9, F, q(h["guid"]), q(h["day"]), h["alter_id"], q(h["vtype"]), q(h["vno"]), q(h["party"]),
+        "true" if h["cancelled"] else "false", "true" if h["optional"] else "false", q(h["deleted_at"]) if h.get("deleted_at") else "null", q(h["cmp_gstin"]), str(h["gst_alter_id"]) if h.get("gst_alter_id") is not None else "null")
+    db.sql("insert into tally_vouchers (book_id, firm_id, guid, day, alter_id, vtype, vno, party, cancelled, optional, deleted_at, cmp_gstin, gst_alter_id) values %s;" % ",".join(hv(h) for h in P9["heads"]))
+    dayOf = {h["guid"]: h["day"] for h in P9["heads"]}
+    db.sql("insert into tally_lines (book_id, firm_id, guid, day, ledger, amount) values %s;" % ",".join("('%s', '%s', %s, %s, %s, %s)" % (B9, F, q(l["guid"]), q(dayOf[l["guid"]]), q(l["ledger"]), repr(l["amount"])) for l in P9["lines"]))
+    ok(db.one("select gst_share_lease('%s', %s, 600)" % (B9, q(R9))) == "t", "the run takes the part B book's lease")
+    p = json.loads(db.one("select gst_share_pick('%s', 5000)::text" % B9))
+    putI = lambda p, shares, docs, run=R9: json.loads(db.one("select gst_share_put_itc('%s', %s, %s, %s::jsonb, %s::jsonb, '[]'::jsonb, %s::jsonb)::text" % (B9, q(run), q(p["at"]), J(shares), J(p["seen"]), J(docs))))
+    took = set(p["guids"])
+    bad = putI(p, [], [dict(P9["docs"][0], guid="not-seen")])
+    ok(not bad["ok"] and db.one("select count(*) from gst_share where book_id = '%s'" % B9) == "0", "a document of an entry not seen: refused, nothing kept")
+    r = putI(p, [s for s in P9["shares"] if s["guid"] in took], [d for d in P9["docs"] if d["guid"] in took])
+    ndoc = sum(1 for d in P9["docs"] if d["doc"]); nbill = sum(len(d["bills"]) for d in P9["docs"])
+    ok(r["ok"] and r["docs"] == ndoc and r["bills"] == nbill and not p["more"], "gst_share_put_itc: the shares and, in the same call, %d documents and %d allocations" % (ndoc, nbill))
+    got = json.loads(db.one("select gst_itc_inputs('%s', '07', 'e-171', '')::text" % B9)); want = P9["inputs"]
+    fig = lambda rows: sorted(json.dumps([r["reg"], r["sec"], r["k1"], r["k2"], r["k3"], r["n"]] + ["%.2f" % float(r[f]) for f in ("taxable", "igst", "cgst", "sgst", "cess", "qty")]) for r in rows)
+    ok(sorted(got["months"]) == sorted(want["months"]) and all(fig(got["months"][m]) == fig(want["months"][m]) for m in want["months"]), "gst_itc_inputs: the registration's month rows those the month step was checked on (%d months)" % len(want["months"]))
+    ok(got["first"] == want["first"] and got["last"] == want["last"] and sorted(got["gstins"]) == want["gstins"] and set(got["status"].values()) == {"fresh"}, "the book's first and last month (%s to %s), its GSTINs, every month fresh" % (got["first"], got["last"]))
+    key = lambda l: sorted(l, key=lambda d: json.dumps(d, sort_keys=True))
+    ok(key(got["docs"]) == key(want["docs"]) and [d["doc"]["bookDate"] for d in got["docs"]] == sorted(d["doc"]["bookDate"] for d in got["docs"]), "the documents (%d), as the sweep kept them, by day" % len(got["docs"]))
+    ok(key(got["bills"]) == key(want["bills"]) and [b["rec"]["date"] for b in got["bills"]] == sorted(b["rec"]["date"] for b in got["bills"]), "the allocations of the bills rule 37 follows (%d), by day" % len(got["bills"]))
+    mv = lambda m: {k: [[x[0], round(float(x[1]), 2)] for x in v] for k, v in m.items()}
+    ok(mv(got["moves"]) == mv(want["moves"]) and len(got["moves"]) > 3, "those suppliers' movement by month, from the lines (%d suppliers; deleted, cancelled and optional entries left out)" % len(got["moves"]))
+    ok(got["carry"] == {}, "no credit kept yet")
+    ok(db.one("select gst_itc_month_put('%s', '202504', '07', 'e-171', 'v1', '{\"igst\": 10, \"cgst\": 0, \"sgst\": 0, \"cess\": 0}'::jsonb, '{}'::jsonb)" % B9) == "t"
+       and db.one("select gst_itc_month_put('%s', '202504', 'x', 'e-171', 'v1', '{}'::jsonb, null)" % B9) == "f", "gst_itc_month_put keeps a month's carried credit (not for a registration that is none)")
+    car = lambda e, v: json.loads(db.one("select (gst_itc_inputs('%s', '07', %s, %s)->'carry')::text" % (B9, q(e), q(v))))
+    ok(car("e-171", "v1") == {"202504": {"igst": 10, "cgst": 0, "sgst": 0, "cess": 0}} and car("e-171", "v2") == {} and car("e-other", "v1") == {}, "read back on its engine and version only")
+    ok(db.one("select gst_itc_parity_put('%s', '202504', '07', 'e-171', true, 0, '[]'::jsonb, '{}'::jsonb) is not null" % B9) == "t"
+       and db.one("select count(*) from calc_parity where book_id = '%s' and calc = 'gst-itc'" % B9) == "1", "gst_itc_parity_put keeps a check as calc 'gst-itc'")
+    # an entry altered: its documents made again with its shares (none now: gone); a late put of a run that lost its lease refused
+    g9 = next(d["guid"] for d in P9["docs"] if d["doc"] and d["bills"])
+    db.sql("update tally_vouchers set alter_id = alter_id + 1 where book_id = '%s' and guid = %s" % (B9, q(g9)))
+    p2 = json.loads(db.one("select gst_share_pick('%s', 5000)::text" % B9))
+    r2 = putI(p2, [s for s in P9["shares"] if s["guid"] in set(p2["guids"]) and s["guid"] != g9], [d for d in P9["docs"] if d["guid"] in set(p2["guids"]) and d["guid"] != g9])
+    ok(r2["ok"] and g9 in p2["guids"] and db.one("select count(*) from gst_itc_doc where book_id = '%s' and guid = %s" % (B9, q(g9))) == "0" and db.one("select count(*) from gst_itc_bill where book_id = '%s' and guid = %s" % (B9, q(g9))) == "0",
+       "an entry altered and worked out again with no document: its document and allocations gone")
+    db.sql("select gst_share_unlease('%s', %s)" % (B9, q(R9)))
+    db.sql("update tally_vouchers set alter_id = alter_id + 1 where book_id = '%s' and guid = %s" % (B9, q(g9)))
+    p3 = json.loads(db.one("select gst_share_pick('%s', 5000)::text" % B9)); n0 = db.one("select count(*) from gst_itc_doc where book_id = '%s'" % B9)
+    r3 = putI(p3, [], [d for d in P9["docs"] if d["guid"] == g9])
+    ok(not r3["ok"] and r3.get("error") == "lease lost" and db.one("select count(*) from gst_itc_doc where book_id = '%s'" % B9) == n0, "a put of a run that lost its lease: refused, documents as they were")
+    for role in ("anon", "authenticated"):
+        for s in ("select count(*) from gst_itc_doc", "select count(*) from gst_itc_bill", "select gst_itc_inputs('%s', '07', '', '')" % B9, "select gst_itc_ready()"):
+            try: db.sql("set role %s; %s;" % (role, s), U); ok(False, role + " may not: " + s)
+            except RuntimeError as e: ok("permission denied" in str(e), role + " may not: " + s.split("(")[0][:40])
+    ok(db.one("set role authenticated; select count(*) from gst_itc_month;", U) == "1" and db.one("set role authenticated; select count(*) from gst_itc_month;", U2) == "0", "a member reads its own firm's gst_itc_month only")
+    ok(db.one("select has_function_privilege('service_role', 'public.gst_share_put_itc(uuid, text, timestamptz, jsonb, jsonb, jsonb, jsonb)', 'execute') and has_table_privilege('service_role', 'public.gst_itc_doc', 'select') and gst_itc_ready()") == "t", "the service role may")
+    # the cost: a book with 30,000 documents and allocations, 60,000 lines
+    BC = "bbbbbbbb-0171-4000-8000-0000000000cc"
+    db.sql("""insert into tally_books (book_id, firm_id, client_id, company, from_date, open_as_on) values ('%(B)s', '%(F)s', 'c171c', 'Measure 171', '2025-04-01', '2025-04-01');
+      insert into tally_vouchers (book_id, firm_id, guid, day, alter_id, vtype, vno, party, cancelled, optional, cmp_gstin) select '%(B)s', '%(F)s', 'c-' || g, date '2025-04-01' + (g %% 365), g, 'Purchase', 'P/' || g, 'Made-up Supplier ' || (g %% 900), false, false, '07AAKCS4821Q1ZW' from generate_series(1, 30000) g;
+      insert into tally_lines (book_id, firm_id, guid, day, ledger, amount) select '%(B)s', '%(F)s', 'c-' || g, date '2025-04-01' + (g %% 365), case when k = 1 then 'Made-up Supplier ' || (g %% 900) else 'Purchases' end, case when k = 1 then 1180 else -1180 end from generate_series(1, 30000) g, generate_series(1, 2) k;
+      insert into gst_itc_doc (book_id, firm_id, guid, ym, reg, doc) select '%(B)s', '%(F)s', 'c-' || g, to_char(date '2025-04-01' + (g %% 365), 'YYYYMM'), '07', jsonb_build_object('id', 'c-' || g, 'no', 'B-' || g, 'igst', 180) from generate_series(1, 30000) g;
+      insert into gst_itc_bill (book_id, firm_id, guid, seq, ledger, name, nb, reg, amount, day, rec) select '%(B)s', '%(F)s', 'c-' || g, 0, 'Made-up Supplier ' || (g %% 900), 'B-' || g, true, '07', 1180, to_char(date '2025-04-01' + (g %% 365), 'YYYYMMDD'), jsonb_build_object('l', 'Made-up Supplier ' || (g %% 900), 'name', 'B-' || g, 'amt', 1180, 'nb', true) from generate_series(1, 30000) g;
+      analyze tally_vouchers; analyze tally_lines; analyze gst_itc_doc; analyze gst_itc_bill;""" % dict(B=BC, F=F))
+    t0 = time.time(); n, kb = db.one("select jsonb_array_length(x->'docs') || ' ' || (length(x::text) / 1024) from (select gst_itc_inputs('%s', '07', 'e', 'v') x) q" % BC).split(); n = int(n); tI = time.time() - t0
+    print("  (gst_itc_inputs on 30,000 documents, 30,000 allocations and 60,000 lines: %.2f s, %s KB)" % (tI, kb))
+    ok(n == 30000 and tI < 5, "gst_itc_inputs on a 30,000-document book: every document, within a few seconds (%.2f s)" % tI)
+    db.sql("delete from tally_vouchers where book_id in ('%s', '%s'); delete from tally_lines where book_id in ('%s', '%s'); delete from tally_books where book_id in ('%s', '%s')" % (B9, BC, B9, BC, B9, BC))
+    ok(all(db.one("select count(*) from %s where book_id in ('%s', '%s')" % (t, B9, BC)) == "0" for t in N71), "a book deleted takes every row of 171's tables with it")
 finally:
     db.stop()
 print("all ok" if not fails else "%d FAILED" % len(fails))

@@ -9,6 +9,12 @@
 // rebuild backed off; a new engine deployed (migration 170): share_engine (and every share_* call) writes the engine,
 // the book whose context the old engine made is due, the sweep makes it again and works every entry out again, then not
 // due; without 170 the sweep goes on; a paused firm refused by both; the existing actions still answer.
+// Part B (migration 171): the made-up client with the inward cases (tests/out/gst-itc-rows.json, written by
+// tests/run_gst_share.js, with its 2Bs and gst-2b-match's run): the sweep keeps each entry's document and allocations
+// (gst_share_put_itc); share_parity works each month's tables 4, 5 and 6 out by the month step on what the fake keeps
+// (gst_itc_inputs, answered as migration 171 does) against today's engine on the whole book: every month the same, kept
+// as calc 'gst-itc', the credit carried kept in order (gst_itc_month) and read back by the next month; the nightly run
+// checks both; without 171 the sweep keeps the shares alone (itc false) and the parity checks part A alone.
 // Made-up rows only; nothing real is called.
 import { handler } from "../server/gst-run/handler.ts";
 import { unpack, HEADS } from "../server/gst-run/data.ts";
@@ -30,7 +36,8 @@ const pack = (heads: any[]) => {
     W.bills.filter((b: any) => b.guid === h.guid).map((b: any) => [ix(b.ledger), b.name, b.type, b.amount, b.credit_days])])) };
 };
 // the fake cloud: migration 164's state
-const T: any = { ctx: null, seen: new Map<string, string>(), due: new Set<string>(W.heads.map((h: any) => h.guid)), shares: new Map<string, any[]>(), parity: [] as any[], calls: [] as string[] };
+const T: any = { ctx: null, seen: new Map<string, string>(), due: new Set<string>(W.heads.map((h: any) => h.guid)), shares: new Map<string, any[]>(), parity: [] as any[], calls: [] as string[],
+  docs: new Map<string, any>(), itcMonth: new Map<string, any>(), itcParity: [] as any[] };
 const sig = (h: any) => JSON.stringify([h.alter_id, h.gst_alter_id, h.deleted_at, h.cancelled, h.optional]);
 const monthRows = (ym: string) => {
   const m = new Map<string, any>();
@@ -38,6 +45,26 @@ const monthRows = (ym: string) => {
     const x = m.get(k) || { reg: s.reg, sec: s.sec, k1: s.k1, k2: s.k2, k3: s.k3, n: 0, taxable: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, qty: 0 };
     x.n += s.n; ["taxable", "igst", "cgst", "sgst", "cess", "qty"].forEach((f) => { x[f] = Math.round(x[f] * 100 + Number(s[f] || 0) * 100) / 100; }); m.set(k, x); }));
   return [...m.values()].concat([{ reg: "", sec: "*", k1: "", k2: "", k3: "", n: 0, status: T.due.size ? "stale" : "fresh" }]);
+};
+// gst_itc_inputs (migration 171) on the fake's rows: the book's months and GSTINs, the registration's month rows, the
+// documents, the allocations of the bills rule 37 follows, those suppliers' movement, the credit kept on this version
+const itcInputs = (reg: string, engine: string, version: string) => {
+  const live = W.heads.filter((h: any) => !h.deleted_at), withL = new Set(W.lines.filter((l: any) => l.ledger).map((l: any) => l.guid));
+  const dated = live.filter((h: any) => withL.has(h.guid) || (h.cancelled && h.vno)).map((h: any) => String(h.day).replace(/-/g, "").slice(0, 6)).sort();
+  const months: any = {}, status: any = {};
+  W.months.forEach((ym: string) => { const m = monthRows(ym).filter((r: any) => r.reg === reg && r.sec !== "*"); if (m.length) months[ym] = m; status[ym] = T.due.size ? "stale" : "fresh"; });
+  const docs = [...T.docs.values()].filter((d: any) => d.doc && (d.doc_reg === reg || d.doc_reg === "")).map((d: any) => ({ guid: d.guid, doc: d.doc }))
+    .sort((x: any, y: any) => String(x.doc.bookDate).localeCompare(String(y.doc.bookDate)) || (x.guid < y.guid ? -1 : 1));
+  const nb = new Set<string>(); T.docs.forEach((d: any) => d.bills.forEach((b: any) => { if (b.nb && b.reg === reg) nb.add(b.l + "\u0001" + b.name); }));
+  const bills: any[] = []; T.docs.forEach((d: any) => d.bills.forEach((b: any, i: number) => { if (nb.has(b.l + "\u0001" + b.name)) bills.push({ guid: d.guid, seq: i, rec: b }); }));
+  bills.sort((x, y) => String(x.rec.date).localeCompare(String(y.rec.date)) || (x.guid < y.guid ? -1 : x.guid > y.guid ? 1 : 0) || x.seq - y.seq);
+  const parties = new Set([...nb].map((k) => k.split("\u0001")[0])), on = new Map(live.filter((h: any) => !h.cancelled && !h.optional).map((h: any) => [h.guid, h])), mv: any = {};
+  W.lines.forEach((l: any) => { const h: any = on.get(l.guid); if (!h || !parties.has(l.ledger)) return; const ym = String(h.day).replace(/-/g, "").slice(0, 6), m = mv[l.ledger] = mv[l.ledger] || {}; m[ym] = (m[ym] || 0) + Math.round(Number(l.amount) * 100); });
+  const moves: any = {}; Object.keys(mv).forEach((l) => { moves[l] = Object.keys(mv[l]).sort().map((m) => [m, mv[l][m] / 100]); });
+  const carry: any = {}; T.itcMonth.forEach((x: any, k: string) => { const [ym, g] = k.split("|"); if (g === reg && x.engine === engine && x.version === version && version) carry[ym] = x.carry; });
+  T.itcInputsN = (T.itcInputsN || 0) + 1;
+  return { first: dated[0] || null, last: dated[dated.length - 1] || null, gstins: Array.from(new Set(live.filter((h: any) => h.cmp_gstin).map((h: any) => String(h.cmp_gstin).toUpperCase()))).sort(),
+    months, status, docs, bills, moves, carry };
 };
 const leaseOk = (a: any) => T.lease && T.lease.run === a.p_run && T.lease.until > Date.now();
 const RPC: Record<string, (a: any) => any> = {
@@ -62,6 +89,17 @@ const RPC: Record<string, (a: any) => any> = {
   gst_parity_put: (a) => { T.parity.push(a); return T.parity.length; },
   tally_calc_version: () => "bv1", gst_calc_prep_get: () => null, gst_calc_rows: () => Object.assign(pack(W.heads), T.padRows ? { pad: "x".repeat(30_000_000) } : {}),
   gst_cron_ok: (a) => a.k === "cron-164",
+  // migration 171 (part B), as its SQL answers
+  gst_itc_ready: () => true,
+  gst_calc_gstins: () => Array.from(new Set(W.heads.filter((h: any) => h.cmp_gstin).map((h: any) => String(h.cmp_gstin).toUpperCase()))).sort(),
+  gst_calc_version: () => "v-itc-" + (T.itcVer || 1),
+  gst_share_put_itc: (a) => { if (!leaseOk(a)) return { ok: false, error: "lease lost" }; const seen = new Set(a.p_seen.map((x: any) => x.guid));
+    if ((a.p_docs || []).some((d: any) => !seen.has(d.guid))) return { ok: false, error: "a document of an entry not seen" };
+    const r = RPC.gst_share_put(a); if (!r.ok) return r; T.docPuts = (T.docPuts || 0) + 1;
+    seen.forEach((g: any) => T.docs.delete(g)); (a.p_docs || []).forEach((d: any) => T.docs.set(d.guid, d)); return Object.assign(r, { docs: (a.p_docs || []).length }); },
+  gst_itc_inputs: (a) => itcInputs(a.p_reg, a.p_engine, a.p_version),
+  gst_itc_month_put: (a) => { T.itcMonth.set(a.p_ym + "|" + a.p_reg, { engine: a.p_engine, version: a.p_version, carry: a.p_carry, result: a.p_result }); return true; },
+  gst_itc_parity_put: (a) => { T.itcParity.push(a); return T.itcParity.length; },
   // migration 170: the engine gst-run runs (one row; true when it moved)
   gst_share_engine_put: (a) => { T.enginePuts = (T.enginePuts || 0) + 1; const moved = T.engine !== a.p_engine || T.engineRev !== a.p_rev; T.engine = a.p_engine; T.engineRev = a.p_rev; return moved; },
 };
@@ -74,12 +112,16 @@ const REST: [RegExp, () => any][] = [
   [/^\/rest\/v1\/gst_month\?/, () => { const out: any[] = []; T.shares.forEach((l: any[]) => l.forEach((x) => out.push({ ym: x.ym, reg: x.reg }))); return out; }],
   [/^\/rest\/v1\/tally_ledgers\?/, () => W.ledgers], [/^\/rest\/v1\/tally_groups\?/, () => W.groups],
   [/^\/rest\/v1\/client_book_items\?/, () => W.items], [/^\/rest\/v1\/records\?/, () => []],
+  // gst-2b-match's kept matching (part B's parity reads it, as warm does)
+  [/^\/rest\/v1\/gst_2b_runs\?/, () => { const g = (T.lastUrl.match(/gstin=eq\.([^&]+)/) || [])[1], fy = (T.lastUrl.match(/fy=eq\.([^&]+)/) || [])[1], r = (W.runs || {})[decodeURIComponent(g || "") + "|" + decodeURIComponent(fy || "")];
+    return r ? [{ id: r.id, status: r.status, done_at: r.at, queued_at: r.at, result: r.result }] : []; }],
+  [/^\/rest\/v1\/gst_2b_decisions\?/, () => []],
   [/^\/rest\/v1\/firms\?/, () => T.paused ? [{ status: "paused", status_reason: "made-up pause" }] : []],
   [/^\/rest\/v1\/subscriptions\?/, () => []],
 ];
 const fake = async (input: any, init?: any) => {
   const u = new URL(String(input)), p = u.pathname + u.search;
-  T.calls.push(u.pathname.replace("/rest/v1/", ""));
+  T.calls.push(u.pathname.replace("/rest/v1/", "")); T.lastUrl = p;
   const json = (x: any) => new Response(JSON.stringify(x), { status: 200, headers: { "Content-Type": "application/json" } });
   if (u.pathname.startsWith("/rest/v1/rpc/")) { const fn = u.pathname.slice(13), f = RPC[fn]; if (!f) return new Response(JSON.stringify({ message: "no " + fn }), { status: 404 }); return json(f(JSON.parse(init?.body || "{}"))); }
   if (/offset=(?!0\b)\d+/.test(u.search)) return json([]);
@@ -183,5 +225,49 @@ const g1 = await call({ action: "share_sweep", book_id: BOOK }), g2 = await call
 ok(g1.j.kind === "gate" && g2.j.kind === "gate", "a paused firm: share_sweep and share_parity refused (the firm's switches)");
 T.paused = false;
 ok((await call({ action: "nope" })).status === 400 && (await call({ action: "month", client_id: CLIENT, reg: "07", ym: "202504" }, "anon")).status === 401, "the existing actions answer as before");
+// part A's client: its months' part B checked too (no 2B: the books basis), every one the same
+ok(T.itcParity.length > 0 && T.itcParity.filter((x: any) => x.p_ok !== null).every((x: any) => x.p_ok === true), "part A's client: share_parity checked tables 4, 5 and 6 of its registration's months too (" + T.itcParity.filter((x: any) => x.p_ok !== null).length + " checks), every one the same");
+
+console.log("== part B: the input tax credit side (migration 171)");
+{
+  const B = JSON.parse(Deno.readTextFileSync(new URL("gst-itc-rows.json", OUT)));
+  Object.assign(W, B); Object.assign(book, B.book, { firm_id: FIRM });
+  Object.assign(T, { ctx: null, seen: new Map(), due: new Set(W.heads.map((x: any) => x.guid)), shares: new Map(), docs: new Map(), itcMonth: new Map(), itcParity: [], parity: [], done: [], lease: null, backoff: null, ctxBump: "-itc", docPuts: 0 });
+  const BK = B.book.book_id;
+  r = await call({ action: "share_sweep", book_id: BK });
+  ok(r.j.ok && r.j.ctx === true && r.j.all === true, "the first run makes the part B client's context");
+  const sw2: any[] = [];
+  for (let k = 0; k < 20; k++) { r = await call({ action: "share_sweep", book_id: BK, limit: 60 }); sw2.push(r.j); if (!r.j.ok || !r.j.more) break; }
+  const withDoc = [...T.docs.values()].filter((d: any) => d.doc).length;
+  ok(sw2.every((x) => x.ok && x.itc === true) && T.due.size === 0 && withDoc > 40 && T.docPuts === sw2.length && [...T.docs.values()].some((d: any) => d.bills.some((b: any) => b.nb)),
+    "the sweep keeps each entry's document and allocations with its shares (gst_share_put_itc, " + sw2.length + " runs): " + withDoc + " documents");
+  const n0 = T.itcParity.length;
+  let itcSame = 0;
+  for (const ym of W.months) { const p = await call({ action: "share_parity", book_id: BK, ym, reg: "07" }); if (p.j.ok && p.j.same && p.j.itc && p.j.itc.same && p.j.itc.checked === 1) itcSame++; else console.log("   ", ym, JSON.stringify(p.j).slice(0, 600)); }
+  const got = T.itcParity.slice(n0);
+  ok(itcSame === W.months.length && got.length === W.months.length && got.every((x: any) => x.p_ok === true && x.p_max === 0 && x.p_reg === "07" && x.p_engine === ENGINE),
+    "share_parity, month by month: tables 4, 5 and 6 by the month step the engine's (calc 'gst-itc' kept, " + itcSame + " months)");
+  ok(T.itcMonth.size === W.months.length && got.slice(1).every((x: any) => x.p_notes.carryKept > 0) && [...T.itcMonth.values()].every((x: any) => x.version === "v-itc-1" && x.engine === ENGINE),
+    "each month's carried credit kept in order (gst_itc_month, on the version) and read back by the months after (" + got.slice(1).map((x: any) => x.p_notes.carryKept).join(" ") + ")");
+  const carried = [...T.itcMonth.entries()].filter(([, x]: any) => ["igst", "cgst", "sgst"].some((h) => Number(x.carry[h]) > 0)).map(([k]: any) => k.slice(0, 6));
+  ok(carried.length >= 3 && got.some((x: any) => x.p_ym === "202603"), "credit carried out of " + carried.length + " months; the QRMP quarter checked");
+  // a new version (an entry or a decision changed): what was kept is not read, the months before are worked out from the sums
+  T.itcVer = 2;
+  const p2 = await call({ action: "share_parity", book_id: BK, ym: "202512", reg: "07" }), last = T.itcParity[T.itcParity.length - 1];
+  ok(p2.j.itc && p2.j.itc.same && last.p_notes.carryKept === 0, "on a new version nothing kept is read (the months before December worked out from the sums): the same");
+  // the nightly run: every month, both checks
+  const n1 = T.itcParity.length, nA = T.parity.length;
+  r = await call({ action: "share_parity", book_id: BK });
+  ok(r.j.ok && r.j.same && r.j.itc && r.j.itc.same && r.j.itc.checked === W.months.length && T.parity.length - nA === W.months.length * 2 && T.itcParity.length - n1 === W.months.length,
+    "the nightly share_parity: part A for every month (07 and all) and part B for each registration's month, the engine's (" + (r.j.itc && r.j.itc.checked) + ")");
+  // without migration 171: the shares alone, part A's parity alone
+  const keep = { put: RPC.gst_share_put_itc, ready: RPC.gst_itc_ready };
+  delete RPC.gst_share_put_itc; delete RPC.gst_itc_ready;
+  const e3 = W.heads.find((x: any) => x.vtype === "Purchase" && !x.deleted_at && T.docs.has(x.guid)); e3.alter_id += 3;
+  r = await call({ action: "share_sweep", book_id: BK });
+  const p3 = await call({ action: "share_parity", book_id: BK, ym: "202504", reg: "07" });
+  ok(r.j.ok && r.j.itc === false && r.j.entries === 1 && p3.j.ok && p3.j.same && p3.j.itc === null, "without migration 171: the sweep keeps the shares alone (itc false), the parity checks part A alone");
+  Object.assign(RPC, { gst_share_put_itc: keep.put, gst_itc_ready: keep.ready });
+}
 console.log(fails ? fails + " FAILED" : "all ok");
 Deno.exit(fails ? 1 : 0);

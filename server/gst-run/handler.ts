@@ -36,6 +36,15 @@
 //     registration and all; the timer's nightly run) by today's engine on the whole book against the sums
 //     (gst_month_get), every figure to the paisa, kept in calc_parity (gst_parity_put); a context that differs from the
 //     one kept with the same version (a guess that moved with the entries) marks its entries due. -> {ok, same, checked}
+//   next-gst-share (part B, SHADOW, migration 171): the sweep keeps each entry's document (2B matching) and bill-wise
+//     allocations (rule 37) beside its shares (gst_share_put_itc, one transaction with gst_share_put; without 171: only
+//     the shares, as before, and the reply says itc false). share_parity, for each registration's month, also works out
+//     3B tables 4, 5 and 6 by today's engine on what the cloud keeps (engine.js itcMonths: the month sums, the documents
+//     and allocations, the suppliers' movement, the 2Bs and decisions in the client's work, gst-2b-match's run, and the
+//     credit the month before carried, kept in order in gst_itc_month on the version: gst_itc_inputs) against today's
+//     engine on the whole book (engineItc), every box to the paisa, kept in calc_parity as calc 'gst-itc'
+//     (gst_itc_parity_put). The outward side's month-level parts of 3.1 (advances, GSTR-1 amendments, the customers'
+//     IMS) are not kept by entry yet: for table 6 they are taken from today's engine (notes.out says so).
 //   POST {action: "share_engine"} from the service role or the timer's key (migration 170's job, every 10 minutes): only
 //     writes the engine this function runs (gst_share_engine_put; every share_* call writes it too), so the books whose
 //     context another engine made are due (gst_share_books_due) soon after a deploy. -> {ok, moved, engine, rev}
@@ -48,7 +57,7 @@
 import { corsFor } from "../_shared/cors.ts";
 import { firmGate, viaRest } from "../_shared/firmgate.ts";
 // @ts-ignore plain JavaScript, shared with the Node test
-import { step, ENGINE, REV, contextOf, ctxOf, ctxDiff, shares, engineMonth, cloudSums, compare } from "./engine.js";
+import { step, ENGINE, REV, contextOf, ctxOf, ctxDiff, shares, engineMonth, cloudSums, compare, itcMonths, engineItc, itcCompare } from "./engine.js";
 import { load, pickBook, fyOf, unpack } from "./data.ts";
 
 export type Deps = { env: (k: string) => string | undefined, fetch: typeof fetch, now?: () => Date, later?: (p: Promise<unknown>) => void, max?: number, ready?: number, total?: number };
@@ -161,12 +170,14 @@ export function handler(deps: Deps) {
 
   // next-gst-share: the book, its client's record and the whole book's rows as "warm" reads them (no 2B: the shares
   // read none), with the entries gst_calc_prep keeps when current
-  const wholeBook = async (book: any) => {
+  // (part B's parity: with the 2B matching gst-2b-match kept for the client's GSTINs and the years asked, fys)
+  const wholeBook = async (book: any, fys?: string[]) => {
     const firm = String(book.firm_id), client = String(book.client_id);
     const cl = ((await rest("/rest/v1/clients?select=id,data,deleted&firm_id=eq." + enc(firm) + "&id=eq." + enc(client))) || [])[0];
     const bver = String(await rpc("tally_calc_version", { p_book: book.book_id }).catch(() => "") || "");
     const prep = bver ? await rpc("gst_calc_prep_get", { p_book: book.book_id, p_version: bver, p_engine: ENGINE }).catch(() => null) : null;
-    const rows = await load((p: string) => rest(p), rpc, firm, client, book, (cl && cl.data) || {}, [], [], Array.isArray(prep) ? prep : undefined);
+    const gstins: string[] = fys && fys.length ? ((await rpc("gst_calc_gstins", { p_book: book.book_id, p_client: client }).catch(() => [])) || []) : [];
+    const rows = await load((p: string) => rest(p), rpc, firm, client, book, (cl && cl.data) || {}, fys || [], gstins, Array.isArray(prep) ? prep : undefined);
     return { rows, cl };
   };
   const bookOf = async (id: string) => ((await rest("/rest/v1/tally_books?select=book_id,firm_id,client_id,company,from_date,open_as_on,ledgers_at&book_id=eq." + enc(id))) || [])[0] || null;
@@ -227,8 +238,12 @@ export function handler(deps: Deps) {
       return { ok: true, book: book.book_id, entries: 0, unknown: r.unknown.slice(0, 20), more: true };
     }
     const ms = Date.now() - t0;
-    const put = await rpc("gst_share_put", { p_book: book.book_id, p_run: run, p_at: pick.at, p_shares: r.shares, p_seen: seen, p_errors: r.errors });
-    return { ok: !!(put && put.ok), error: put && put.error, book: book.book_id, entries: seen.length, shares: r.shares.length, errors: r.errors.length, months: put && put.months, ms, spentMs: spent, more: !!pick.more };
+    // part B: the entries' documents and allocations in the same transaction (migration 171); without it the shares alone
+    const args = { p_book: book.book_id, p_run: run, p_at: pick.at, p_shares: r.shares, p_seen: seen, p_errors: r.errors };
+    let itc = true;
+    let put = await rpc("gst_share_put_itc", Object.assign({ p_docs: r.docs }, args)).catch((e: any) => { if (e && e.status === 404) { itc = false; return null; } throw e; });
+    if (!itc) put = await rpc("gst_share_put", args);
+    return { ok: !!(put && put.ok), error: put && put.error, book: book.book_id, entries: seen.length, shares: r.shares.length, docs: itc ? r.docs.length : 0, itc, errors: r.errors.length, months: put && put.months, ms, spentMs: spent, more: !!pick.more };
   }
   // ym "" (the timer's nightly run): every month the book has sums for, each registration and all, as far as the run's
   // time goes (the months left said in the last row's notes)
@@ -257,11 +272,18 @@ export function handler(deps: Deps) {
       return { ok: true, book: book.book_id, skipped: why, left: left.length };
     };
     if (!asks.length) return { ok: true, book: book.book_id, checked: 0 };
-    const { rows } = await wholeBook(book);
+    // part B (migration 171): the years of the registrations' months asked, for their 2B matching
+    const itcOn = asks.some(([, g]) => !!g) && (await rpc("gst_itc_ready", {}).catch(() => false)) === true;
+    const fyOfYm = (m: string) => { const y = +m.slice(0, 4), mo = +m.slice(4, 6), s0 = mo >= 4 ? y : y - 1; return s0 + "-" + String((s0 + 1) % 100).padStart(2, "0"); };
+    const { rows } = await wholeBook(book, itcOn ? Array.from(new Set(asks.filter(([, g]) => g).map(([m]) => fyOfYm(m)))).sort() : undefined);
     if (spent > SHARE_BUDGET * 0.7) return await skip("reading the book took " + spent + " ms of the run's " + SHARE_BUDGET, asks);
     const t0 = Date.now(), used = () => spent + Date.now() - t0;
-    let b: any = null, done = 0, same = 0, first: any = null;
+    let b: any = null, done = 0, same = 0, first: any = null, itcN = 0, itcSame = 0, itcFirst: any = null;
     const kept = (await rpc("gst_share_ctx_get", { p_book: book.book_id })) || null;
+    // part B: per registration, what the cloud keeps for its month step (gst_itc_inputs, read once a run), the 3Bs today's
+    // engine worked out in this run (each month takes the one before from them), and the version the carried credit is on
+    const itcIn: Record<string, any> = {}, engKept: Record<string, Record<string, any>> = {};
+    const version = itcOn ? String(await rpc("gst_calc_version", { p_book: book.book_id, p_client: String(book.client_id) }).catch(() => "") || "") : "";
     for (let k = 0; k < asks.length; k++) {
       if (k && used() > SHARE_BUDGET) return Object.assign(await skip("over the run's time after " + done + " checks", asks.slice(k)), { checked: done, same });
       const [m, g] = asks[k], e = engineMonth(rows, m, g, b ? { books: b } : undefined); b = e.books;
@@ -270,6 +292,25 @@ export function handler(deps: Deps) {
       const notes = { status: head ? head.status : "none", market: e.market, ms: used() };
       await rpc("gst_parity_put", { p_book: book.book_id, p_ym: m, p_reg: g, p_engine: ENGINE, p_ok: c.ok, p_max: c.max, p_diffs: c.diffs.slice(0, 500), p_notes: notes });
       done++; if (c.ok) same++; else if (!first) first = { ym: m, reg: g, diffs: c.diffs.slice(0, 5) };
+      // part B: tables 4, 5 and 6 of the registration's month, the month step against today's engine
+      if (itcOn && g && kept && kept.ctx) {
+        try {
+          const inp = itcIn[g] = itcIn[g] || ((await rpc("gst_itc_inputs", { p_book: book.book_id, p_reg: g, p_engine: ENGINE, p_version: version })) || {});
+          const ek = engKept[g] = engKept[g] || {};
+          const ref = engineItc(rows, g, [m], { books: b, kept: ek, out: inp.out });
+          Object.assign(ek, ref.months); inp.out = ref.out;
+          const cl = itcMonths({ client: String(book.client_id), co: rows.co, items: rows.items, ctx: kept.ctx, sales: rows.sales, runs: rows.runs, first: inp.first, last: inp.last, gstins: inp.gstins || [],
+            months: inp.months || {}, docs: inp.docs || [], bills: inp.bills || [], moves: inp.moves || {}, carry: inp.carry || {}, out: ref.out }, g, [m]).months[0];
+          const ic = itcCompare(ref.months[m], cl.result), stale = Object.keys(inp.status || {}).filter((x) => x <= m && inp.status[x] !== "fresh").sort();
+          await rpc("gst_itc_parity_put", { p_book: book.book_id, p_ym: m, p_reg: g, p_engine: ENGINE, p_ok: ic.ok, p_max: ic.max, p_diffs: ic.diffs.slice(0, 500),
+            p_notes: { tables: ic.tables, stale, out: "3.1's advances, amendments and customers' IMS from today's engine", carryKept: Object.keys(inp.carry || {}).length, docs: (inp.docs || []).length, ms: used() } });
+          await rpc("gst_itc_month_put", { p_book: book.book_id, p_ym: m, p_reg: g, p_engine: ENGINE, p_version: version, p_carry: cl.carry, p_result: cl.result });
+          (inp.carry = inp.carry || {})[m] = cl.carry;
+          itcN++; if (ic.ok) itcSame++; else if (!itcFirst) itcFirst = { ym: m, reg: g, diffs: ic.diffs.slice(0, 5) };
+        } catch (err) {
+          await rpc("gst_itc_parity_put", { p_book: book.book_id, p_ym: m, p_reg: g, p_engine: ENGINE, p_ok: null, p_max: 0, p_diffs: [], p_notes: { skipped: String((err as Error)?.message || err).slice(0, 300) } }).catch(() => null);
+        }
+      }
     }
     // the context the shares were made on against the whole book's now (the same version: a guess moved with the entries)
     let drift: any = null;
@@ -280,7 +321,7 @@ export function handler(deps: Deps) {
         await rpc("gst_share_ctx_put", { p_book: book.book_id, p_run: run, p_stamp: kept.stamp, p_engine: ENGINE, p_ctx: now, p_ledgers: d.ledgers, p_guids: d.guids, p_all: d.all });
       }
     }
-    return { ok: true, book: book.book_id, ym, reg, checked: done, same: same === done, sameN: same, first, drift, ms: used() };
+    return { ok: true, book: book.book_id, ym, reg, checked: done, same: same === done, sameN: same, first, drift, itc: itcOn ? { checked: itcN, same: itcSame === itcN, sameN: itcSame, first: itcFirst } : null, ms: used() };
   }
 
     return { rest, rpc, kick, warm, shareSweep, shareParity, underLease };
