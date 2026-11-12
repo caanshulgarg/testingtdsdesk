@@ -91,8 +91,9 @@ function RowActions({ r }) {
   if (r.state === "suggested") return <>{rule}{ignore}</>;
   if (r.state === "ready") return <>{live() && !BankOverlap.isOpen(r) && <><button className="btn small" onClick={act("post")}>Post</button> </>}{rule} <button className="linkbtn" onClick={act("unready")}>Undo</button></>;
   if (r.state === "attention") return <>{rule}{ignore}</>;
-  // a line in Tally is not brought back (it could be posted twice)
-  return r.state === "sent" || r.state === "intally" ? null : <button className="linkbtn" onClick={act("restore")}>Restore</button>;
+  // a line in Tally is not brought back (it could be posted twice); one matched to the wrong Tally entry is told so
+  if (r.state === "intally") return bankOwnPost(r) ? null : <button className="linkbtn" onClick={act("nottally")}>Not this Tally entry</button>;
+  return r.state === "sent" ? null : <button className="linkbtn" onClick={act("restore")}>Restore</button>;
 }
 
 // the statement's lines (spec K6: date, number, party, amount, status, then the rest, in ListTable.jsx's order)

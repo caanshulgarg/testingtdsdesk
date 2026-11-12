@@ -1143,12 +1143,8 @@ function billDelete(id){
   const e = D().entries[id];
   if (!e) return;
   if (!canDeleteBills()){ toast("Only the firm\u2019s owner can delete a bill. Mark it \u201cNo entry\u201d instead, or ask the owner."); return; }
-  const live = billLivePosting(e, S.coId);
-  if (live){
-    const words = "This bill is posted to Tally (voucher id " + (live.vch ? esc(live.vch) : "being checked") + "). Deleting it here does not remove it from Tally. Delete anyway?";
-    confirmTyped({title: "Delete a bill posted to Tally?", ok: "Delete anyway", body: '<p class="note" data-delete-posted="">' + words + "</p>"}).then(r => { if (r) billDeleteAsk(e); });
-    return;
-  }
+  // a bill with a posting is not deleted here (owner, item 5)
+  if (billPostLive(e, S.coId)){ toast("This bill is posted to Tally. Delete it in Tally first, then mark it Not in Tally here; after that you can delete it."); return; }
   billDeleteAsk(e);
 }
 function billDeleteAsk(e){
@@ -1972,7 +1968,7 @@ function doAct(act, t){
       refreshStats(S.coId); toast(list.length + " bill" + (list.length === 1 ? "" : "s") + " back in To review."); render(); break;
     }
     case "revDelete": {
-      const ids = Array.from(S.revSel || []).filter(id => D().entries[id] && !D().entries[id].exportedAt);
+      const ids = Array.from(S.revSel || []).filter(id => D().entries[id] && !billPostLive(D().entries[id], S.coId));
       if (!ids.length) break;
       // removed for good (not to Deleted): asked first, naming the bills (spec K9)
       const names = ids.slice(0, 6).map(id => { const x = D().entries[id].x || {}; return esc((x.vendorName || D().entries[id].fileName || "") + (x.invoiceNo ? " \u00b7 " + x.invoiceNo : "")); });

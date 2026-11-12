@@ -66,7 +66,7 @@ function salesCols(s, list, nSel) {
     { k: "ac", role: "act", cls: "ac", cell: (v, p) => p.editable ? <>
         {v.status === "review" && v.customerLedger && !p.issue ? <button className="btn small primary" onClick={act("confirm", v)}>Confirm</button> : <button className="btn small" onClick={() => salesOpen(v.id)}>Open</button>}
         <button className="icon" title="Ignore" aria-label="Ignore" onClick={act("ignore", v)}>✕</button>
-      </> : <><button className="btn small" onClick={() => salesOpen(v.id)}>Open</button>{v.status === "ignored" && <button className="linkbtn" onClick={act("restore", v)}>Restore</button>}</> },
+      </> : <><button className="btn small" onClick={() => salesOpen(v.id)}>Open</button>{v.status === "ignored" && <button className="linkbtn" onClick={act("restore", v)}>Restore</button>}{v.status === "intally" && <button className="linkbtn" onClick={act("nottally", v)}>Not this Tally entry</button>}</> },
   ];
 }
 

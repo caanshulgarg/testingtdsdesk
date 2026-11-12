@@ -1,7 +1,7 @@
-"""python3 run_bill_delete_posted.py - round 14c (C5b, C3 Restore): deleting a bill that has a live posting asks first,
-with the voucher named: "This bill is posted to Tally (voucher id N / being checked). Deleting it here does not remove it
-from Tally. Delete anyway?" (confirmTyped: the client's name and a reason), then the soft delete goes on as today; a bill
-with no posting asks only the usual reason. A member (not the firm's owner) sees Restore blocked with the words beside
+"""python3 run_bill_delete_posted.py - round 14c (C5b, C3 Restore), as changed by the owner (state-machine review, item 5):
+deleting a bill that has a live posting (in Tally, posted and not yet confirmed, or its FinCom id still held by the cloud)
+is refused: "This bill is posted to Tally. Delete it in Tally first, then mark it Not in Tally here; after that you can
+delete it."; a bill with no posting asks only the usual reason. A member (not the firm's owner) sees Restore blocked with the words beside
 it ("Only the firm's owner can restore a deleted bill."), not a toast on click.
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_bill_delete_posted.py"""
 import os, threading, functools, http.server
@@ -37,33 +37,19 @@ with sync_playwright() as p:
     def cancel():
         if pg.locator('#confirmBox [data-cbx="no"]').count(): pg.click('#confirmBox [data-cbx="no"]')
         pg.wait_for_timeout(300)
-    WARN = "Deleting it here does not remove it from Tally. Delete anyway?"
+    REFUSE = "This bill is posted to Tally. Delete it in Tally first, then mark it Not in Tally here; after that you can delete it."
+    last = lambda: E("window.__toasts.length ? window.__toasts[window.__toasts.length - 1] : ''")
     # a plain draft: the usual box only
     E("billDelete('d1')"); pg.wait_for_timeout(500)
-    ok("Delete this bill?" in box() and WARN not in box() and pg.locator("#confirmBox #delWhy").count() == 1, "a bill with no posting: the usual box (why is it deleted), no warning")
-    cancel()
-    # posted and not yet confirmed: "being checked"
-    E("billDelete('p1')"); pg.wait_for_timeout(500)
-    ok("This bill is posted to Tally (voucher id being checked). " + WARN in box() and pg.locator("#confirmBox #cbxName").count() == 1, "C5b. posted, not confirmed: 'This bill is posted to Tally (voucher id being checked). %s', the client's name asked (%s)" % (WARN, box()[:200]))
-    cancel()
-    # in Tally with a voucher number
-    E("billDelete('p2')"); pg.wait_for_timeout(500)
-    ok("This bill is posted to Tally (voucher id 4521). " + WARN in box(), "C5b. in Tally: the voucher id named (%s)" % box()[:160])
-    cancel()
-    # the cloud still holds its FinCom id
-    E("billDelete('p3')"); pg.wait_for_timeout(500)
-    ok("This bill is posted to Tally (voucher id being checked). " + WARN in box(), "C5b. the id still held in FinCom's cloud: 'being checked' (%s)" % box()[:160])
-    cancel()
-    # on confirm the soft delete proceeds as today (the reason box, then Deleted with the reason)
-    E("billDelete('p1')"); pg.wait_for_timeout(500)
-    pg.click('#confirmBox [data-cbx="yes"]'); pg.wait_for_timeout(300)
-    ok(pg.locator("#confirmBox .cbx-err").count() == 1 and E("D().entries['p1'].status") == "approved", "C5b. without the client's name typed: not deleted, the box says so")
-    pg.fill("#confirmBox #cbxWhy", "posted by mistake"); pg.fill("#confirmBox #cbxName", "ZZ Zeta Exports"); pg.click('#confirmBox [data-cbx="yes"]'); pg.wait_for_timeout(500)
-    ok("Delete this bill?" in box() and pg.locator("#confirmBox #delWhy").count() == 1, "C5b. confirmed: the usual box follows (why is it deleted)")
-    pg.fill("#confirmBox #delWhy", "posted by mistake"); pg.click('#confirmBox [data-cbx="yes"]'); pg.wait_for_timeout(600)
-    ok(E("D().entries['p1'].status") == "deleted" and E("D().entries['p1'].deleted.reason") == "posted by mistake", "C5b. deleted softly, with the reason, as today")
+    ok("Delete this bill?" in box() and pg.locator("#confirmBox #delWhy").count() == 1, "a bill with no posting: the usual box (why is it deleted)")
+    pg.fill("#confirmBox #delWhy", "uploaded twice"); pg.click('#confirmBox [data-cbx="yes"]'); pg.wait_for_timeout(600)
+    ok(E("D().entries['d1'].status") == "deleted" and E("D().entries['d1'].deleted.reason") == "uploaded twice", "deleted softly, with the reason, as today")
+    # posted and not yet confirmed, in Tally with a voucher number, the cloud still holding its FinCom id: refused (owner, item 5)
+    for b, what in (("p1", "posted, not confirmed"), ("p2", "in Tally"), ("p3", "the id still held in FinCom's cloud")):
+        E("() => { window.__toasts = []; }"); E("billDelete('%s')" % b); pg.wait_for_timeout(400)
+        ok(not box() and last() == REFUSE and E("D().entries['%s'].status" % b) == "approved", "%s: deleting is refused, no box, the bill stays (%r)" % (what, last()))
     # ---- C3 (Restore): a member who is not the firm's owner sees why Restore is blocked, beside the button
-    E("() => { Cloud.on = () => true; S.account = {me: {role: 'staff'}, firm: {name: 'Firm'}}; S.filter = 'deleted'; S.selected = 'p1'; S.reviewTable = false; render(); }"); pg.wait_for_timeout(600)
+    E("() => { Cloud.on = () => true; S.account = {me: {role: 'staff'}, firm: {name: 'Firm'}}; S.filter = 'deleted'; S.selected = 'd1'; S.reviewTable = false; render(); }"); pg.wait_for_timeout(600)
     rw = pg.locator("#app [data-restore-why]")
     ok(pg.locator("#app button:has-text('Restore')").count() == 1 and pg.locator("#app button:has-text('Restore')").is_disabled() and rw.count() == 1 and "Only the firm’s owner can restore a deleted bill." in rw.inner_text(),
        "C3. a member: Restore is disabled with 'Only the firm’s owner can restore a deleted bill.' beside it (%s)" % (rw.inner_text() if rw.count() else "-"))

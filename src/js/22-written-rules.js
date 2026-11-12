@@ -586,6 +586,29 @@ async function importTallyBook(file){
     render();
   } catch (e){ toast("Could not read the Tally bank book: " + ((e && e.message) || "unknown format")); }
 }
+// a Tally entry of the bank book, as a line remembers it (its GUID, else date, voucher and amounts)
+function bankTallyKey(t){ return String(t.guid || [t.date, t.vt, t.vn, r2(num(t.debit)), r2(num(t.credit))].join("|")); }
+// a line FinCom posted itself: "I checked — it is not in Tally" is its way back, not "Not this Tally entry"
+function bankOwnPost(r){ const b = B(); return /^posted by FinCom/.test(r.tallyHow || "") || !!(b && b.postedTags && b.postedTags[fpHash(r.fp || r.id)]); }
+// "Not this Tally entry" (owner, item 5): a line matched to the wrong Tally entry; the entry is kept on the line (notTally),
+// so no later read matches it again, and the line goes back to where it was before the match
+function bankNotTally(id){
+  const b = B(), r = bankRow(id);
+  if (!r || r.state !== "intally" || bankOwnPost(r)) return;
+  const book = (b.books[(curStmt() || {}).acctId] || {}).entries || [];
+  const t = r.tallyKey ? book.find(x => bankTallyKey(x) === r.tallyKey) : book[r.tallyIdx];
+  const key = r.tallyKey || (t && bankTallyKey(t));
+  if (!key){ toast("FinCom does not know which Tally entry this line was matched to. Read the Tally bank book again first."); return; }
+  const words = t ? [fmtDate(t.date), [t.vt, t.vn].filter(Boolean).join(" "), money0(num(t.debit) || num(t.credit))].filter(Boolean).join(" \u00b7 ") : r.tallyRef || key;
+  askConfirm({title: "Not this Tally entry?", ok: "Not that entry", body: '<p class="note">This bank line was matched to Tally entry ' + esc(words) + ". Mark it as NOT that entry?</p>"}).then(ok => {
+    if (!ok || r.state !== "intally") return;
+    r.notTally = (r.notTally || []).concat(key);
+    r.state = ["attention", "suggested", "ready"].includes(r.prevState) ? r.prevState : exactLedger(r.ledger) ? "ready" : r.ledger ? "suggested" : "attention";
+    delete r.tallyIdx; delete r.tallyKey; r.tallyHow = ""; r.tallyRef = "";
+    auditEvent("bank_not_tally", (r.dec.name || r.narr || r.id) + " " + money0(num(r.debit) || num(r.credit)) + " " + r.date + ": not Tally entry " + words, b.cid);
+    saveBank({rows: true}); toast("Marked as not that Tally entry: it is not matched to it again."); render();
+  });
+}
 // In Tally's bank ledger, a debit is money in and a credit is money out.
 function matchTallyBook(acc, rows, force){
   const b = B();
@@ -595,15 +618,17 @@ function matchTallyBook(acc, rows, force){
   const used = new Set();
   if (force){
     // a fresh copy of the Tally ledger: match everything again (an entry deleted in Tally becomes open again)
-    rows.forEach(r => { if (r.state === "intally"){ r.state = r.prevState && r.prevState !== "intally" ? r.prevState : (r.ledger ? "ready" : "attention"); delete r.tallyIdx; delete r.tallyHow; delete r.tallyRef; } });
+    rows.forEach(r => { if (r.state === "intally"){ r.state = r.prevState && r.prevState !== "intally" ? r.prevState : (r.ledger ? "ready" : "attention"); delete r.tallyIdx; delete r.tallyKey; delete r.tallyHow; delete r.tallyRef; } });
   } else rows.forEach(r => { if (r.state === "intally" && r.tallyIdx !== undefined) used.add(r.tallyIdx); });
   const refOf = s => String(s || "").toUpperCase().replace(/[^A-Z0-9]/g, "").replace(/^0+/, "");
   const days = (a1, b1) => Math.abs((new Date(a1) - new Date(b1)) / 864e5);
   let n = 0;
+  // an entry a person said is not this line's (Not this Tally entry) is never matched to it again
+  const no = (r, t) => !!(r.notTally && r.notTally.includes(bankTallyKey(t)));
   const take = (r, i, how) => {
     used.add(i); n++;
     const t = book.entries[i];
-    r.prevState = r.state; r.state = "intally"; r.tallyIdx = i; r.tallyHow = how;
+    r.prevState = r.state; r.state = "intally"; r.tallyIdx = i; r.tallyKey = bankTallyKey(t); r.tallyHow = how;
     r.tallyRef = [t.vt, t.vn, t.party].filter(Boolean).join(" \u00b7 ");
     if (t.party && !/as per details|^\(|^opening|^closing/i.test(t.party) && b.hist){ b.hist.rows[r.fp] = histEntry(r, t.party, "tally"); b.histVer++; learnedFromTally = true; }
   };
@@ -611,7 +636,7 @@ function matchTallyBook(acc, rows, force){
   // 1. posted by FinCom before (tag in the narration)
   open().forEach(r => {
     const tag = "TDSDESK:" + fpHash(r.fp || r.id).toUpperCase();
-    const i = book.entries.findIndex((t, k) => !used.has(k) && String(t.narr).toUpperCase().includes(tag));
+    const i = book.entries.findIndex((t, k) => !used.has(k) && !no(r, t) && String(t.narr).toUpperCase().includes(tag));
     if (i >= 0) take(r, i, "posted by FinCom earlier");
   });
   // 2. same UTR / cheque number and amount, within 45 days
@@ -619,7 +644,7 @@ function matchTallyBook(acc, rows, force){
     const refs = [r.dec.utr, r.dec.chq, r.ref].map(refOf).filter(x => x.length >= 6);
     if (!refs.length) return;
     const amt = r.debit || r.credit, out = !!r.debit;
-    const i = book.entries.findIndex((t, k) => !used.has(k) && Math.abs((out ? t.credit : t.debit) - amt) <= 0.01 && days(t.date, r.date) <= 45 && refs.some(x => refOf(t.inst).includes(x) || x.includes(refOf(t.inst) || "#") || refOf(t.narr).includes(x)));
+    const i = book.entries.findIndex((t, k) => !used.has(k) && !no(r, t) && Math.abs((out ? t.credit : t.debit) - amt) <= 0.01 && days(t.date, r.date) <= 45 && refs.some(x => refOf(t.inst).includes(x) || x.includes(refOf(t.inst) || "#") || refOf(t.narr).includes(x)));
     if (i >= 0) take(r, i, "same reference number");
   });
   // 3. same amount on a nearby date (cheques 15 days, others 3)
@@ -628,7 +653,7 @@ function matchTallyBook(acc, rows, force){
     const win = r.dec.mode === "CHQ" ? 15 : 3;
     let best = -1, bestGap = 1e9;
     book.entries.forEach((t, i) => {
-      if (used.has(i)) return;
+      if (used.has(i) || no(r, t)) return;
       if (Math.abs((out ? t.credit : t.debit) - amt) > 0.01) return;
       const gap = days(t.date, r.date);
       if (gap > win) return;

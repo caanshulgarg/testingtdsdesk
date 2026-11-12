@@ -38,10 +38,15 @@ BANK = r"""async () => {
     tally: {guid: "g-" + id, masterId: "77", vchType: "Receipt", vchDate: "20260105", at: "2026-01-06T10:00:00Z", by: "me", company: G}});
   S.bank = {cid: c.id, loading: false, stmts: [{id: "s1", acctId: "a1", bank: "Undo Bank", acct: "1111", from: "2026-01-01", to: "2026-01-31"}], cur: "s1",
     rows: [row("u1"), row("u2"), row("u3", {state: "attention", ledger: ""}),
-      row("m1"), row("m2", {state: "ignored", prevState: "suggested"}), posted("m3"), row("m4", {state: "intally", tallyIdx: 3}), row("m5", {state: "attention", ledger: ""}), row("m6", {ledger: "Not A Ledger"}),
+      row("m1"), row("m2", {state: "ignored", prevState: "suggested"}), posted("m3"), row("m4", {state: "intally", tallyIdx: 3}),
+      row("n1", {date: "2026-01-20", credit: 777, state: "intally", prevState: "suggested", tallyIdx: 0, tallyKey: "tg-1", tallyHow: "same amount and date", tallyRef: "Receipt · 11"}),
+      row("o1", {date: "2026-01-22", credit: 888, state: "intally", tallyHow: "posted by FinCom on 21-Jan-2026"}), row("m5", {state: "attention", ledger: ""}), row("m6", {ledger: "Not A Ledger"}),
       posted("p1"), posted("p2"), posted("p3"), posted("p4")],
     rules: [], wrules: [], ledgers: {list: [{name: BK, group: "Bank Accounts"}, {name: PARTY, group: "Sundry Debtors"}], importedAt: new Date().toISOString(), live: true}, newLed: [], keys: {}, books: {},
     filter: "all", grouped: false, showSettings: false, q: "", limit: 500, pendingRule: null, busy: "", createFor: null, sel: new Set(), sticky: new Set(), undo: null, hist: {rows: {}}, histVer: 0, postedTags: {}, salesRef: []};
+  S.bank.books.a1 = {entries: [{date: "2026-01-20", debit: 777, credit: 0, party: "Cust n1", vt: "Receipt", vn: "11", narr: "", inst: "", guid: "tg-1"},
+    {date: "2026-01-21", debit: 777, credit: 0, party: "Cust n1", vt: "Receipt", vn: "12", narr: "", inst: "", guid: "tg-2"}], importedAt: new Date().toISOString()};
+  window.__audit = []; const a0 = window.auditEvent; window.auditEvent = (k, t, c) => { window.__audit.push(k + ": " + t); return a0 && a0(k, t, c); };
   ["p1", "p2", "p3", "p4", "m3"].forEach(id => { S.bank.postedTags[fpHash("fp-" + id)] = "2026-01-06T10:00:00Z"; });
   window.ensureTallyCompany = async () => G; window.syncLedgersFromTally = async () => true; window.syncBankBookFromTally = async () => true; window.checkBankBalance = async () => null;
   window.__toasts = []; const t0 = window.toast; window.toast = (m, o) => { window.__toasts.push(String(m)); return t0 && t0(m, o); };
@@ -54,7 +59,8 @@ SALES = r"""() => {
   const cid = S.coId;
   const iv = (id, st) => ({id, status: st, source: "upload", fileName: id + ".pdf", x: {number: "S/" + id, date: "2026-07-01", customerName: "Alpha Retail", customerGstin: "", pos: "09", taxable: 1000, cgst: 90, sgst: 90, igst: 0, cess: 0, total: 1180, items: []},
     customerLedger: "Alpha Retail", problems: [], ledgerIssues: []});
-  S.sales = {cid, loading: false, list: [iv("v1", "review"), iv("m1", "review"), iv("m2", "ignored"), iv("m3", "intally"), iv("m4", "posted")], cfg: Object.assign({}, SALES_CFG_DEFAULT),
+  const n2 = Object.assign(iv("n2", "intally"), {postNote: "Already in Tally", tallyMatch: {key: "sv-1", date: "2026-07-01", number: "S/n2", amount: 1180}});
+  S.sales = {cid, loading: false, list: [n2, iv("v1", "review"), iv("m1", "review"), iv("m2", "ignored"), iv("m3", "intally"), iv("m4", "posted")], cfg: Object.assign({}, SALES_CFG_DEFAULT),
     filter: "all", q: "", sel: new Set(), sticky: new Set(), busy: "", openId: null, view: "list", draft: null, undo: null, hist: {}};
   window.mapInvoice = (v) => { v.problems = v.problems || []; v.ledgerIssues = v.ledgerIssues || []; };
   return 1;
@@ -122,6 +128,21 @@ with sync_playwright() as p:
     E("() => { B().undo = null; ['restore', 'ignore', 'accept', 'unready'].forEach(a => { bankRowAct(a, 'm4'); bankRowAct(a, 'm3'); }); }"); W(100)
     ok(E(R, "m4")["state"] == "intally" and E(R, "m3")["state"] == "sent" and E("B().undo") is None, "one line's Restore / Ignore / Confirm / Undo refuse a line in Tally or posted, with no Undo made (%s, %s)" % (E(R, "m4"), E(R, "m3")))
 
+    # Not this Tally entry: a wrong match, remembered for the line
+    box = lambda: pg.inner_text("#confirmBox").replace("\n", " ") if pg.locator("#confirmBox .cbx").count() else ""
+    E("() => { window.__toasts = []; bankRowAct('nottally', 'o1'); }"); W(300)
+    ok(not box() and E(R, "o1")["state"] == "intally", "never offered on a line FinCom posted (%r)" % last())
+    E("() => bankRowAct('nottally', 'n1')"); W(400)
+    ok("This bank line was matched to Tally entry" in box() and "Mark it as NOT that entry?" in box() and "777" in box(), "Not this Tally entry asks first, naming the entry (%r)" % box()[:200])
+    pg.click('#confirmBox [data-cbx="yes"]'); W(400)
+    n1 = E("(() => { const r = B().rows.find(x => x.id === 'n1'); return {state: r.state, not: r.notTally, idx: r.tallyIdx === undefined ? null : r.tallyIdx}; })()")
+    ok(n1["state"] == "suggested" and n1["not"] == ["tg-1"] and n1["idx"] is None and any("n1" in a or "777" in a for a in E("window.__audit")), "marked not that entry: back to suggested, the entry remembered on the line, audited (%s)" % n1)
+    E("() => { const b = B(); matchTallyBook((CO(b.cid).bankAccounts || [])[0], b.rows, true); }")
+    n1 = E("(() => { const r = B().rows.find(x => x.id === 'n1'); return {state: r.state, key: r.tallyKey}; })()")
+    ok(n1["state"] == "intally" and n1["key"] == "tg-2", "a fresh read of Tally: matched to the other entry, never the excluded one (%s)" % n1)
+    E("() => bankRowAct('nottally', 'n1')"); W(400); pg.click('#confirmBox [data-cbx="yes"]'); W(400)
+    E("() => { const b = B(); matchTallyBook((CO(b.cid).bankAccounts || [])[0], b.rows, true); matchTallyBook((CO(b.cid).bankAccounts || [])[0], b.rows, false); }")
+    ok(E(R, "n1")["state"] == "suggested" and E("B().rows.find(x => x.id === 'n1').notTally.length") == 2, "both excluded: the line stays open through every read (%s)" % E(R, "n1"))
     # the un-post paths: Take back from Tally (unpost), posted again after it went from Tally (bankRepostGone), Undo of an automatic entry
     E("() => { window.unpostFromTally = async () => true; bankRowAct('unpost', 'p1'); }"); W(300)
     E("() => { B().rows.find(x => x.id === 'p2').goneFromTally = '2026-02-01T00:00:00Z'; bankRepostGone(); }"); W(200)
@@ -159,24 +180,26 @@ with sync_playwright() as p:
     E("() => { SL().undo = null; ['restore', 'unready', 'ignore', 'confirm', 'delete'].forEach(a => { salesRowAct(a, 'm3'); salesRowAct(a, 'm4'); }); }"); W(100)
     ok(E(SV, "m3") == "intally" and E(SV, "m4") == "posted" and E("SL().undo") is None, "the row buttons refuse In Tally and posted invoices (%s, %s)" % (E(SV, "m3"), E(SV, "m4")))
 
+    box = lambda: pg.inner_text("#confirmBox").replace("\n", " ") if pg.locator("#confirmBox .cbx").count() else ""
+    E("() => salesRowAct('nottally', 'n2')"); W(400)
+    ok("This invoice was matched to Tally entry" in box() and "Mark it as NOT that entry?" in box(), "sales: Not this Tally entry asks first (%r)" % box()[:200])
+    pg.click('#confirmBox [data-cbx="yes"]'); W(400)
+    ok(E(SV, "n2") == "ready" and E("SL().list.find(v => v.id === 'n2').notTally") == ["sv-1"], "sales: back to ready, the entry remembered (%s)" % E(SV, "n2"))
+    E("""async () => { window.tallyVia = () => true; window.tallyCall = async () => ({vouchers: [{guid: 'sv-1', number: 'S/n2', date: '20260701'}]});
+      await salesCheckTally(SL().list.filter(v => v.id === 'n2')); }""")
+    ok(E(SV, "n2") == "ready", "sales: the excluded voucher is not matched again")
+    E("""async () => { window.tallyCall = async () => ({vouchers: [{guid: 'sv-1', number: 'S/n2', date: '20260701'}, {guid: 'sv-2', number: 'S/n2', date: '20260702'}]});
+      await salesCheckTally(SL().list.filter(v => v.id === 'n2')); }""")
+    ok(E(SV, "n2") == "intally" and E("SL().list.find(v => v.id === 'n2').tallyMatch.key") == "sv-2", "sales: another voucher of that number is matched")
+
     print("== purchase bills")
     cid = E(BILLS); W(800)
     box = lambda: pg.inner_text("#confirmBox").replace("\n", " ") if pg.locator("#confirmBox .cbx").count() else ""
     ytd = "(id) => { const e = D().entries[id], a = e.applied || (e.deleted && e.deleted.kept && e.deleted.kept.applied); const p = a && D().parties[a.partyId]; return p ? JSON.stringify(p.ytd) : ''; }"
-    y0 = E(ytd, "b1")
-    E("billDelete('b1')"); W(500)
-    pg.fill("#confirmBox #cbxWhy", "wrong client"); pg.fill("#confirmBox #cbxName", "ZZ Bill Undo Co"); pg.click('#confirmBox [data-cbx="yes"]'); W(500)
-    pg.fill("#confirmBox #delWhy", "wrong client"); pg.click('#confirmBox [data-cbx="yes"]'); W(500)
-    d = E("D().entries.b1.deleted || {}")
-    ok(E("D().entries.b1.status") == "deleted" and d.get("status") == "approved", "a posted bill deleted: Deleted, with the status it had (approved) kept (%s)" % d.get("status"))
-    E("() => { S.account = null; billRestore('b1'); }"); W(300)
-    e1 = E("(() => { const e = D().entries.b1; return {status: e.status, exportedAt: e.exportedAt, applied: !!e.applied}; })()")
-    ok(e1["status"] == "approved" and e1["exportedAt"] == "2026-10-01T10:00:00Z" and e1["applied"] and E(ytd, "b1") == y0, "restored: approved and posted as it was, back on its supplier's totals, not to be posted again (%s)" % e1)
-    E("billDelete('b6')"); W(500)
-    pg.fill("#confirmBox #cbxWhy", "wrong client"); pg.fill("#confirmBox #cbxName", "ZZ Bill Undo Co"); pg.click('#confirmBox [data-cbx="yes"]'); W(500)
-    pg.fill("#confirmBox #delWhy", "wrong client"); pg.click('#confirmBox [data-cbx="yes"]'); W(500)
-    E("() => { window.__toasts = []; billRestore('b6'); }"); W(300)
-    ok(E("D().entries.b6.status") == "approved" and "its posting is being checked" in last() and "in Tally" not in last(), "a bill posted and not yet confirmed, deleted and restored: approved, 'its posting is being checked' (%r)" % last())
+    REFUSE = "This bill is posted to Tally. Delete it in Tally first, then mark it Not in Tally here; after that you can delete it."
+    for b in ("b1", "b6"):
+        E("() => { window.__toasts = []; }"); E("billDelete('%s')" % b); W(400)
+        ok(not box() and last() == REFUSE and E("D().entries['%s'].status" % b) == "approved", "deleting a posted bill (%s) is refused, no box (%r)" % (b, last()))
     E("(cid) => { window.__un2 = unapply(D().entries.b6, cid); }", cid)
     ok(E("D().entries.b6.status") == "approved" and E("window.__un2") is False, "unapply refuses a bill whose posting is being checked")
     E("(cid) => { const s0 = window.postSending; window.postSending = (c) => new Set(['q1']); window.__un3 = unapply(D().entries.q1, cid); window.__s0 = s0; }", cid)

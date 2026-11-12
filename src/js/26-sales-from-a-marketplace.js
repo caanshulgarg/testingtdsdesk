@@ -379,10 +379,30 @@ async function salesCheckTally(list){
   if (!tallyVia(co) || !list.length) return 0;
   const dates = list.map(v => v.x.date).filter(Boolean).sort();
   const j = await tallyCall(co, "/vouchers?company=" + encodeURIComponent(tallyCoName(co)) + "&from=" + isoToTally(addDays(dates[0], -3)) + "&to=" + isoToTally(addDays(dates[dates.length - 1], 3)) + "&types=" + encodeURIComponent([SL().cfg.voucherType || "Sales", "Sales"].join(",")) + Bridge.pinQ());
-  const nums = new Set([].concat(j.vouchers || []).filter(v => !/^yes$/i.test(v.cancelled || "")).flatMap(v => [normInvNo(v.number), normInvNo(v.reference)]).filter(Boolean));
+  const vs = [].concat(j.vouchers || []).filter(v => !/^yes$/i.test(v.cancelled || ""));
+  const by = new Map();
+  vs.forEach(x => [normInvNo(x.number), normInvNo(x.reference)].filter(Boolean).forEach(k => { if (!by.has(k)) by.set(k, []); if (!by.get(k).includes(x)) by.get(k).push(x); }));
   let n = 0;
-  list.forEach(v => { if (nums.has(normInvNo(v.x.number))){ v.status = "intally"; v.postNote = "Already in Tally"; n++; } });
+  // a voucher a person said is not this invoice's (Not this Tally entry) is never matched to it again
+  list.forEach(v => { const no = normInvNo(v.x.number), not = v.notTally || [];
+    const hit = no && !not.includes("num:" + no) && (by.get(no) || []).find(x => !not.includes(salesTallyKey(x)));
+    if (hit){ v.status = "intally"; v.postNote = "Already in Tally"; v.tallyMatch = {key: salesTallyKey(hit), date: String(hit.date || ""), number: String(hit.number || ""), amount: r2(Math.abs(num(hit.amount)))}; n++; } });
   return n;
+}
+function salesTallyKey(x){ return String(x.guid || x.masterId || [x.date, x.type, x.number].join("|")); }
+// "Not this Tally entry" (owner, item 5): an invoice matched to the wrong Tally voucher; the voucher is kept on the invoice
+// (notTally) and it goes back to review or ready
+function salesNotTally(id){
+  const s = SL(), v = inv(id); if (!v || v.status !== "intally") return;
+  const m = v.tallyMatch || {}, key = m.key || "num:" + normInvNo(v.x.number), d = String(m.date || "");
+  const words = [d ? fmtDate(/^\d{8}$/.test(d) ? d.slice(0, 4) + "-" + d.slice(4, 6) + "-" + d.slice(6) : d) : "", m.number || v.x.number, m.amount ? money0(m.amount) : ""].filter(Boolean).join(" \u00b7 ");
+  askConfirm({title: "Not this Tally entry?", ok: "Not that entry", body: '<p class="note">This invoice was matched to Tally entry ' + esc(words) + ". Mark it as NOT that entry?</p>"}).then(ok => {
+    if (!ok || v.status !== "intally") return;
+    v.notTally = (v.notTally || []).concat(key); delete v.tallyMatch; v.postNote = ""; mapInvoice(v);
+    v.status = v.customerLedger && !(v.problems || []).length && !(v.ledgerIssues || []).length ? "ready" : "review";
+    auditEvent("sales_not_tally", "Invoice " + (v.x.number || v.id) + ": not Tally entry " + words, s.cid);
+    saveSales(); toast("Marked as not that Tally entry: it is not matched to it again."); render();
+  });
 }
 // asked: someone pressed Refresh from Tally. By itself (opening the page) Tally is not read, except a first ledger list;
 // sales already in Tally are still found when posting (build 190)
@@ -507,6 +527,7 @@ function salesRowAct(a, id, force){
     if (a === "print"){ withPart("invoice", "invoiceHtml", () => printInvoiceHtml(invoiceHtml(v.x, CO(s.cid), s.cfg), v.x.number)); return true; }
     if (a === "file"){ const f = S.files["sv:" + v.id]; if (f){ const u = blobUrl(f); window.open(u, "_blank"); setTimeout(() => URL.revokeObjectURL(u), 60000); } return true; }
     if (a === "edit"){ s.openId = null; startDraft(v.id); return true; }
+    if (a === "nottally"){ salesNotTally(v.id); return true; }
     if (salesInTally(v)){ toast("This invoice is already in Tally, so it was left as it is."); return true; }
     const before = [salesSnapshot(v)];
     if (a === "confirm"){

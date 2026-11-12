@@ -662,6 +662,7 @@ function bankRowAct(a, id){
     return true;
   }
   if (a === "post"){ postBankToTally([id]); return true; }
+  if (a === "nottally"){ bankNotTally(id); return true; }
   {
     const r = bankRow(id); if (!r) return true;
     if (bankInTally(r)){ toast("This line is already in Tally, so it was left as it is."); return true; }
