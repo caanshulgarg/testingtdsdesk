@@ -22,6 +22,9 @@ const GSTMark = {
     const r = GSTF.rec(ym, reg), was = {on: r[k] || "", arn: r[k + "Arn"] || "", via: r[k + "Via"] || ""};
     [k, k + "Arn", k + "Via"].concat(k === "r3b" ? ["snap", "snapAt"] : k === "iff" ? ["iffDocs", "iffSnapAt"] : []).forEach(f => { delete r[f]; });
     GSTR._carry = null;
+    // what the server fetched for the month is brought in again (its 2B, the return), now the month is open
+    const b = S.books, g = ((GSTR.gstins(b) || []).find(z => z.slice(0, 2) === reg) || "") + "|", fp = "|" + ym.slice(4, 6) + ym.slice(0, 4);
+    if (b && b.apiTaken && g.length > 1){ const a = Object.assign({}, b.apiTaken); Object.keys(a).forEach(x => { if (x.indexOf(g) === 0 && x.slice(-fp.length) === fp) delete a[x]; }); b.apiTaken = a; }
     if (was.on || was.arn) try { auditEvent("gst_filed_mark_off", {reg, ym, form: k, on: was.on, arn: was.arn, via: was.via}, S.coId); } catch (e){}
     return r;
   },

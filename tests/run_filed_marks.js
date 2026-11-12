@@ -79,6 +79,9 @@ const F = (ym) => x.GSTF.peek(ym, reg);
   const r0 = F("202604");
   ok(!r0.r3b && !r0.r3bArn && !r0.r3bVia && !r0.snap && !r0.snapAt, "A1. said yes: the whole mark is off (" + JSON.stringify(Object.keys(r0)) + ")");
   ok(audits.some(([k, d]) => k === "gst_filed_mark_off" && d.arn === "AA0904260000011"), "A1. taking the mark off is in the audit trail, with the ARN it had");
+  b.apiTaken = {[CMP + "|2B|042026"]: "x", [CMP + "|3B|042026"]: "x", [CMP + "|2B|052026"]: "x"};
+  x.GSTMark.clear("202604", reg, "r1");
+  ok(!b.apiTaken[CMP + "|2B|042026"] && !b.apiTaken[CMP + "|3B|042026"] && b.apiTaken[CMP + "|2B|052026"], "A1. a filed mark taken off: what the server fetched for that month is brought in again (May's left)");
   x.GSTFILE.markFiled("3B", "202604", reg, "AA0904260000011", "2026-05-21T10:00:00+05:30");
   ok(F("202604").r3b === "2026-05-21" && F("202604").r3bArn === "AA0904260000011" && !!F("202604").snap, "A1. marked again through the API with the same ARN: marked (it no longer stops at the ARN left behind)");
   x.gstfUnsnap();
@@ -157,6 +160,7 @@ const F = (ym) => x.GSTF.peek(ym, reg);
   // "Take now": never before the line's 2B; the month on screen when that is later
   ITCF.decide(reg, [line("P/3")], "now", "", "202604");
   ok(decOf("P/3").ym === "202605", "C2. Take now on Papa's document (in May's 2B) from April: into May, its 2B month, not April (" + decOf("P/3").ym + ")");
+  ok(/Credit goes to May-2026: it is in May-2026.s 2B\./.test(ITCF.decide(reg, [line("P/3")], "now", "", "202604").note || ""), "C2. and the screen says so: “Credit goes to May-2026: it is in May-2026’s 2B.”");
   b.itcDec = Object.assign({}, b.itcDec); delete b.itcDec[reg + "|" + line("P/3").key];
   if (x.GSTMark) x.GSTMark.set("202604", reg, "r3b", "2026-05-20", "AA0904260000099", "api"); else Object.assign(x.GSTF.rec("202604", reg), {r3b: "2026-05-20", r3bArn: "AA0904260000099", r3bVia: "api"});
   ok(!!Lk && Lk.filed(reg, "202604").arn === "AA0904260000099" && !Lk.filed(reg, "202605"), "C0. April's 3B filed (ARN); May open");
@@ -224,11 +228,14 @@ const F = (ym) => x.GSTF.peek(ym, reg);
   } else ok(false, "C4. aihPair loads");
   asked.length = 0; x.r2SetTol("2");
   ok(asked.length === 0 && Number(st.opt.tol) === 2, "C4. a 2B tolerance that moves nothing filed: set at once");
-  ok(!!Lk.twoB(CMP, "202604") && !Lk.twoB(CMP, "202605"), "C4. a 2B brought in again: April's (3B filed) is asked about, May's is not");
+  ok(!Lk.twoB(JSON.parse(JSON.stringify(TWOB[CMP + "|042026"]))) && !Lk.twoB(JSON.parse(JSON.stringify(TWOB[CMP + "|052026"]))), "C4. a 2B brought in again with the same documents: nothing filed moves, nothing asked");
   // a books setting that moves a filed month's table 4 (the ISD ledger switch on next-gst-isd-2b calls this): asked first
   const flip = (id) => [() => { b.vouchers.find((v) => v.id === id).opt = true; b.mapV = (b.mapV || 0) + 1; x.GST2B._memo = null; }, () => { b.vouchers.find((v) => v.id === id).opt = false; b.mapV = (b.mapV || 0) + 1; x.GST2B._memo = null; }];
   let went = 0; asked.length = 0; answer = null;
   Lk.guardBooks("a test switch", ...flip("b1"), () => { went++; }); await flush();
+  answer = {ok: true, data: "y"}; audits.length = 0; Lk.guardBooks("a test switch", ...flip("b1"), () => { went += 10; flip("b1")[1](); }); await flush(); await flush();
+  ok(went === 10 && audits.some(([k, d]) => k === "gst_filed_changed" && (d.months || []).includes("202604")), "C4. said yes: made, and the audit trail names April");
+  went = 0; answer = null; asked.length = 0; Lk.guardBooks("a test switch", ...flip("b1"), () => { went++; }); await flush();
   ok(asked.length === 1 && /adjustment in the current month/.test(asked[0].body) && !went && !b.vouchers.find((v) => v.id === "b1").opt, "C4. a books setting that would move April's (filed) 4(A)(5): asked, saying to adjust in the current month; cancelled, not made");
   asked.length = 0; Lk.guardBooks("a test switch", ...flip("f1"), () => { went++; });
   ok(asked.length === 0 && went === 1, "C4. one that moves only May (open): made at once");
@@ -237,14 +244,24 @@ const F = (ym) => x.GSTF.peek(ym, reg);
   const m1 = x.GST2B._memo; x.r2Link(kP, "e1");
   ok(x.GST2B.run(reg) === x.GST2B._memo.res && x.GST2B._memo !== m1, "C4. an allowed link: the matching kept for the new state, not worked out again");
   x.r2Unlink(kP, ["e1"]);
-  // the 2B fetched on the server (GSTAPI.take): replacing April's (filed) is held once, counted as taken; a first 2B goes in
+  // the 2B fetched on the server (GSTAPI.take) or fetched / brought in by hand: one that would change filed April's table 4
+  // is held (server) or asked about (by hand); one that changes nothing filed goes in without a word
   if (x.GSTAPI) {
-    const fj = x.GST2B.fromJson; x.GST2B.fromJson = () => ({gstin: CMP, ym: "202604", period: "042026", rows: []});
+    const fj = x.GST2B.fromJson, apr = JSON.parse(JSON.stringify(TWOB[CMP + "|042026"]));
+    x.GST2B.fromJson = () => JSON.parse(JSON.stringify(apr));
+    const t4a = () => { x.GSTR._carry = null; return JSON.stringify(x.GSTR.threeBm("202604", reg).other); };
+    const same = t4a(), h0 = x.GSTAPI.take({form: "2B", gstin: CMP, period: "042026", data: {}, fetched_at: "2026-11-12T09:00:00Z"});
+    ok(!h0 && t4a() === same, "C4. the server's April 2B, the same as the one here: put in without a word (nothing filed moves)");
+    delete b.twoBs[CMP + "|042026"]; x.GST2B._memo = null; const no2b = t4a();
+    ok(no2b !== same, "C4. (April's 4(A)(5) with no 2B differs from with it: " + no2b + " / " + same + ")");
     const h = x.GSTAPI.take({form: "2B", gstin: CMP, period: "042026", data: {}, fetched_at: "2026-11-12T10:00:00Z"});
-    ok(/not put in/.test(h) && /Fetch 2B on the GST API card/.test(h) && b.twoBs[CMP + "|042026"].rows.length === 2 && (b.apiTaken || {})[CMP + "|2B|042026"], "C4. the server's 2B for filed April: not put in, the words name Fetch 2B, and it counts as taken (not brought in every 10 minutes): " + h);
-    delete b.twoBs[CMP + "|042026"]; x.GST2B._memo = null;
-    const h2 = x.GSTAPI.take({form: "2B", gstin: CMP, period: "042026", data: {}, fetched_at: "2026-11-12T10:00:00Z"});
-    ok(!h2 && b.twoBs[CMP + "|042026"], "C4. April with no 2B yet: the first 2B goes in, nothing asked");
+    ok(/not put in/.test(h) && /Apr-2026/.test(h) && /Fetch 2B on the GST API card/.test(h) && !b.twoBs[CMP + "|042026"] && t4a() === no2b && (b.apiTaken || {})[CMP + "|2B|042026"], "C4. the FIRST 2B for filed April, which would move its 4(A)(5): held, said why (naming the month and Fetch 2B), counted as taken: " + h);
+    x.GSTAPI.call = async () => ({data: {}}); x.GSTAPI.live = () => ({}); x.GSTAPI.user = () => "u"; asked.length = 0; answer = null; let err = "";
+    try { await x.GSTAPI.twoB(reg, "202604"); } catch (e) { err = e.message; }
+    ok(asked.length === 1 && /The 2B for Apr-2026 would change table 4 of Apr-2026/.test(asked[0].body) && /adjustment in the current month/.test(asked[0].body) && !b.twoBs[CMP + "|042026"], "C4. Fetch 2B on the card: asked, naming the 2B, the month and saying to adjust in the current month; cancelled, not put in (" + err + ")");
+    answer = {ok: true, data: "the portal's 2B was regenerated"}; audits.length = 0;
+    await x.GSTAPI.twoB(reg, "202604");
+    ok(b.twoBs[CMP + "|042026"] && audits.some(([k, d]) => k === "gst_filed_changed" && (d.months || []).includes("202604")), "C4. said yes: put in, and the audit trail names the filed month");
     b.twoBs[CMP + "|042026"] = JSON.parse(JSON.stringify(TWOB[CMP + "|042026"])); x.GST2B.fromJson = fj; x.GST2B._memo = null;
   } else ok(false, "C4. GSTAPI loads");
   // the kept copy of March removed while April (the next month) is filed: asked, and in the audit trail

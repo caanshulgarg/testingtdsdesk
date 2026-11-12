@@ -394,15 +394,16 @@ export const ITCF = {
   // a line's decision, set from the screen or the Excel (M: the month on screen; "Take now": toYm above). A line whose
   // credit is in a filed 3B, or that would go into one, is left as it is: lock says why (GSTLock, src/js/47)
   decide(reg, rows, code, ym, M) {
-    const ok = new Map(), refused = []; let lock = "";
+    const ok = new Map(), refused = []; let lock = "", note = "";
     rows.forEach((r) => {
       if (code && !(r.allow || []).includes(code)) { refused.push(r); return; }
       const to = toYm(reg, r, code, ym, M), w = lockW(reg, r, withS(r, { d: code, ym: to }));
       if (w) { lock = lock || w; refused.push(r); return; }
       ok.set(to, (ok.get(to) || []).concat([r.key]));
+      if ((code === "now" || code === "booksnow") && to && M && to > M && !note) note = "Credit goes to " + lab(to) + ": it is in " + lab(to) + "’s 2B.";
     });
     ok.forEach((keys, to) => ITCDec.set(reg, keys, code, to));
-    return { ok: rows.length - refused.length, refused, lock };
+    return { ok: rows.length - refused.length, refused, lock, note };
   },
   // for the old entry points (r2Tag, itctSetAct: kept with no month)
   lockFor(reg, r, code) { return lockW(reg, r, withS(r, { d: code, ym: "" })); },

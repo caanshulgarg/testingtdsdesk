@@ -68,9 +68,9 @@ const GSTAPI = {
     const j = await this.call({action: "2b", gstin, username: this.user(reg), period: ym.slice(4, 6) + ym.slice(0, 4)});
     const t = GST2B.fromJson({data: j.data});
     if (!t.gstin || !t.ym) throw new Error("The 2B for " + GSTR.label(ym) + " came back without its GSTIN or period.");
-    // replacing the 2B of a month whose 3B is filed: its bills would be matched again (asked, with a reason: GSTLock, src/js/47)
-    const lw = typeof GSTLock === "object" && ((S.books || {}).twoBs || {})[t.gstin + "|" + t.period] ? GSTLock.twoB(t.gstin, t.ym) : "";
-    if (lw && !(await GSTLock.ask(t.gstin.slice(0, 2), [t.ym], ["r3b"], "2B brought in again", lw))) throw new Error("Not brought in: " + lw);
+    // a 2B (first or again) that would change the table 4 of a filed 3B: asked, with a reason (GSTLock, src/js/47)
+    const lk = typeof GSTLock === "object" ? GSTLock.twoB(t) : null;
+    if (lk && !(await GSTLock.ask(lk.reg, lk.months, ["r3b"], "2B for " + GSTR.label(t.ym) + " fetched", lk.w))) throw new Error("Not brought in: " + lk.w);
     const b = S.books; b.twoBs = b.twoBs || {}; b.twoBs[t.gstin + "|" + t.period] = Object.assign(t, {source: "api", fetchedAt: new Date().toISOString()});
     delete b.twoB; GST2B._memo = null; GSTR._carry = null;
     if (typeof M2B === "object") M2B.next = "fetched";          // matched by itself (src/js/85; the server ran it too)
@@ -96,9 +96,10 @@ Object.assign(GSTAPI, {
     if (r.form === "2B"){
       const t = GST2B.fromJson({data: r.data});
       if (!t.gstin || !t.ym) return;
-      // fetched on the server: a month whose 3B is filed keeps the 2B it has (Fetch 2B on the GST API card replaces it, asked first)
-      const lw = typeof GSTLock === "object" && (b.twoBs || {})[t.gstin + "|" + t.period] ? GSTLock.twoB(t.gstin, t.ym) : "";
-      if (lw){ b.apiTaken = Object.assign({}, b.apiTaken, {[r.gstin + "|" + r.form + "|" + r.period]: at}); return "not put in: " + GSTR.label(t.ym) + "’s 3B is filed, so its 2B is kept as it is. Fetch 2B on the GST API card replaces it (it asks first)."; }
+      // fetched on the server: a 2B that would change the table 4 of a filed 3B is held (Fetch 2B on the GST API card brings
+      // it in, asked first); one that changes nothing filed goes in
+      const lk = typeof GSTLock === "object" ? GSTLock.twoB(t) : null;
+      if (lk){ b.apiTaken = Object.assign({}, b.apiTaken, {[r.gstin + "|" + r.form + "|" + r.period]: at}); return "not put in: it would change table 4 of the filed 3B of " + lk.months.map(m => GSTR.label(m)).join(", ") + ". Fetch 2B on the GST API card brings it in (it asks first)."; }
       b.twoBs = b.twoBs || {}; b.twoBs[t.gstin + "|" + t.period] = Object.assign(t, {source: "api", fetchedAt: at});
       delete b.twoB; GST2B._memo = null; GSTR._carry = null;
       if (typeof M2B === "object") M2B.next = "fetched";

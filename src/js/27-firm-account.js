@@ -1267,7 +1267,7 @@ function r2SetTol(v){
   const go = () => { const st = GST2B.state(); st.opt = Object.assign({}, st.opt, {tol}); saveBooks(); render(); };
   const w = typeof GSTLock === "object" ? GSTLock.pair(reg, null, null, st => { st.opt = Object.assign({}, st.opt, {tol}); }) : "";
   if (!w) return go();
-  GSTLock.ask(reg, [], ["r3b"], "2B tolerance " + tol, w).then(y => { if (y) go(); else render(); });
+  GSTLock.ask(reg, GSTLock.moved || [], ["r3b"], "2B tolerance " + tol, w).then(y => { if (y) go(); else render(); });
 }
 // "Same": a likely pair confirmed; "Not the same" or "Unlink": the 2B document and those Tally entries are kept apart
 // (a change that would move the credit of a GSTR-3B already filed is refused: GSTLock.pair, src/js/47, works it out)

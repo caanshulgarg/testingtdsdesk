@@ -1391,13 +1391,13 @@ function booksChange(t){
     const files = Array.from(t.files || []); t.value = "";
     if (!files.length) return true;
     const b = S.books;
-    // one file after another: a 2B replacing the one of a month whose 3B is filed is asked about first, with a reason (GSTLock, src/js/47)
+    // one file after another: a 2B that would change the table 4 of a filed 3B is asked about first, with a reason (GSTLock, src/js/47)
     (async () => { const list = []; for (const f of files){ list.push(await f.text().then(async txt => {
       const x = GST2B.fromJson(JSON.parse(txt));
       if (!x.gstin || !x.ym) throw new Error("no period");
       if (notThisClient([x.gstin]).length) return "not taken: " + f.name + " is for " + x.gstin + ", another PAN";
-      const lw = typeof GSTLock === "object" && (b.twoBs || {})[x.gstin + "|" + x.period] ? GSTLock.twoB(x.gstin, x.ym) : "";
-      if (lw && !(await GSTLock.ask(x.gstin.slice(0, 2), [x.ym], ["r3b"], "2B brought in again", lw))) return "not taken: " + GSTR.label(x.ym) + " (its 3B is filed)";
+      const lk = typeof GSTLock === "object" ? GSTLock.twoB(x) : null;
+      if (lk && !(await GSTLock.ask(lk.reg, lk.months, ["r3b"], "2B for " + GSTR.label(x.ym) + " brought in", lk.w))) return "not taken: " + GSTR.label(x.ym) + " (it would change a filed 3B)";
       b.twoBs = b.twoBs || {};
       b.twoBs[x.gstin + "|" + x.period] = x;
       return GSTR.label(x.ym) + " (" + x.rows.length + ")";

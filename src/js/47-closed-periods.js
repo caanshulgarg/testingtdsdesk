@@ -166,7 +166,7 @@ const GSTLock = {
       if (change) change(st);
       const now = this.credits(reg, fm);
       const ms = Array.from(new Set(Object.keys(was).concat(Object.keys(now)))).sort().filter(m => this.H.some(h => Math.abs(((was[m] || {})[h] || 0) - ((now[m] || {})[h] || 0)) >= 0.005 || Math.abs(((was[m] || {})["r" + h] || 0) - ((now[m] || {})["r" + h] || 0)) >= 0.005));
-      w = this.why(reg, ms); done = !w && keep !== false;
+      w = this.why(reg, ms); this.moved = ms.filter(m => this.filed(reg, m)); done = !w && keep !== false;
     } finally {
       if (!done){ const o = JSON.parse(saved); st.confirm = o.confirm; st.link = o.link; if (o.opt === undefined) delete st.opt; else st.opt = o.opt; GST2B._memo = m0; if (ITCF._memo) ITCF._memo(i0); }
     }
@@ -180,22 +180,37 @@ const GSTLock = {
   // t4 before the books are put in, t4Moved after, and the words shown as a warning
   t4(reg){
     const out = {};
-    (GSTR.months() || []).forEach(m => { if (!this.filed(reg, m)) return; GSTR._carry = null; const t = GSTR.threeBm(m, reg) || {};
+    GSTR._carry = null;     // once: the months after it carry their credit from it, worked out in turn
+    (GSTR.months() || []).forEach(m => { if (!this.filed(reg, m)) return; const t = GSTR.threeBm(m, reg) || {};
       out[m] = JSON.stringify(["impGoods", "impServ", "rcmIn", "isd", "other", "rev1", "rev2"].map(k => this.H.map(h => r2(num((t[k] || {})[h]))))); });
     return out;
   },
-  t4Moved(reg, was, now){ return this.why(reg, Object.keys(was).filter(m => was[m] !== now[m])); },
-  guardBooks(what, apply, undo, go){
-    const regs = (GSTR.gstins(S.books) || []).map(g => g.slice(0, 2)).filter(r => this.any(r));
-    if (!regs.length) return go();
-    const was = regs.map(r => this.t4(r)); let w = "", reg = regs[0];
-    try { apply(); regs.forEach((r, i) => { const x = this.t4Moved(r, was[i], this.t4(r)); if (x && !w){ w = x; reg = r; } }); }
+  // the filed months whose table 4 moved (kept in this.moved for the audit trail), in words
+  t4Moved(reg, was, now){ const ms = Object.keys(was).filter(m => was[m] !== now[m]); this.moved = ms; return this.why(reg, ms); },
+  // apply() and undo() a change to the books, for the registrations with a filed 3B: {w, reg, months} when a filed month's
+  // table 4 would move, else null
+  tryBooks(regs, apply, undo){
+    regs = regs.filter(r => this.any(r));
+    if (!regs.length) return null;
+    const was = regs.map(r => this.t4(r)); let x = null;
+    try { apply(); regs.forEach((r, i) => { const w = this.t4Moved(r, was[i], this.t4(r)); if (w && !x) x = {w, reg: r, months: this.moved.slice()}; }); }
     finally { undo(); GSTR._carry = null; }
-    if (!w) return go();
-    this.ask(reg, [], ["r3b"], what, w).then(y => { if (y) go(); else render(); });
+    return x;
   },
-  // a 2B brought in (again) for a month whose 3B is filed: the words, else "" (it would match that month's bills again)
-  twoB(gstin, ym){ return gstin && ym ? this.why(String(gstin).slice(0, 2), [ym]) : ""; }
+  guardBooks(what, apply, undo, go){
+    const x = this.tryBooks((GSTR.gstins(S.books) || []).map(g => g.slice(0, 2)), apply, undo);
+    if (!x) return go();
+    this.ask(x.reg, x.months, ["r3b"], what, x.w).then(y => { if (y) go(); else render(); });
+  },
+  // a 2B (first, or in place of the one there) for a registration and month: {w, reg, months} when it would move the table 4
+  // of a month whose 3B is filed (the words name the 2B and the months), else null: then it goes in without a word
+  twoB(t){
+    const b = S.books; if (!b || !t || !t.gstin) return null;
+    const reg = String(t.gstin).slice(0, 2), k = t.gstin + "|" + t.period, tb = b.twoBs = b.twoBs || {}, had = Object.prototype.hasOwnProperty.call(tb, k), old = tb[k];
+    const x = this.tryBooks([reg], () => { tb[k] = t; GST2B._memo = null; }, () => { if (had) tb[k] = old; else delete tb[k]; GST2B._memo = null; });
+    if (x) x.w = "The 2B for " + GSTR.label(t.ym) + " would change table 4 of " + x.months.map(m => GSTR.label(m)).join(", ") + ". " + x.w;
+    return x;
+  }
 };
 if (typeof globalThis === "object") globalThis.GSTLock = GSTLock;
 // Client setup, closed periods (app/src/screens/SettingsMore.jsx): the closing date, a warning on or off, a TDS return filed
