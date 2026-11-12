@@ -122,6 +122,8 @@ try:
     if os.path.exists(M165): db.sql(open(M165).read()); db.sql(open(M165).read())   # migration 165: gst_share_rows made fast, same answer
     M166 = os.path.join(ROOT, "server", "tally-cloud", "migration-166-gst-share-rows-index.sql")
     if os.path.exists(M166): db.sql(open(M166).read()); db.sql(open(M166).read())   # migration 166: gst_share_rows by index per entry, same answer
+    M167 = os.path.join(ROOT, "server", "tally-cloud", "migration-167-gst-share-books-due.sql")
+    if os.path.exists(M167): db.sql(open(M167).read()); db.sql(open(M167).read())   # migration 167: a book with an entry never worked out is due
     ok(db.one("select count(*) from pg_trigger where tgname like '%_calc_dirty_%' and not tgisinternal") == "9", "after them: runs, twice; nine triggers (three tables x insert, update, delete), none twice")
 
     b_bulk, b_one = bulk(BKN, 100000, "n")
