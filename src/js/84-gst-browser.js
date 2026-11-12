@@ -140,6 +140,9 @@ const GSTB = {
       let t = null;
       try { t = GST2B.fromJson(m.json && m.json.data ? {data: m.json.data} : m.json); } catch (e){ t = null; }
       if (!t || !t.gstin || !t.ym || t.gstin !== m.gstin){ toast("The 2B from the portal could not be read."); return; }
+      // a month whose 3B is filed: asked first, with a reason (GSTLock, src/js/47)
+      const lw = typeof GSTLock === "object" && !m.sure ? GSTLock.twoB(t.gstin, t.ym) : "";
+      if (lw){ GSTLock.ask(reg, [t.ym], ["r3b"], "2B brought in by the helper", lw).then(y => { if (y) this.onMsg(Object.assign({}, m, {sure: true}), held); }); return; }
       const b = S.books; b.twoBs = b.twoBs || {}; b.twoBs[t.gstin + "|" + t.period] = Object.assign(t, {source: "helper", fetchedAt: new Date().toISOString()});
       delete b.twoB; GST2B._memo = null; GSTR._carry = null;
       this.put(reg, ym, "2B", {at: new Date().toISOString(), rows: t.rows.length});

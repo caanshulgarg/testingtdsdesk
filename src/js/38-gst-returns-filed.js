@@ -126,7 +126,8 @@ Object.assign(GSTV, {
     const rec = Object.assign({id: "gv" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7), at: new Date().toISOString(), by: (typeof Cloud === "object" && Cloud.st && Cloud.st.email) || ""}, r);
     this.all().push(rec);
     const k = this.filedKey(rec.form);
-    if (k && rec.arnDate && /^\d{6}$/.test(rec.per) && rec.reg){ const f = GSTF.rec(rec.per, rec.reg); if (!f[k]){ f[k] = rec.arnDate; rec.setFiled = true; } }
+    // (one still to sort is not a filing: its date is filled once it is filed away, gstvFileIt)
+    if (k && !rec.sort && rec.arnDate && /^\d{6}$/.test(rec.per) && rec.reg){ const f = GSTF.rec(rec.per, rec.reg); if (!f[k]){ f[k] = rec.arnDate; rec.setFiled = true; } }
     return rec;
   },
   // a record removed or restored: the filing date it filled in goes and comes back with it (only that record's date: one
@@ -136,6 +137,7 @@ Object.assign(GSTV, {
     const r = GSTF.rec(x.per, x.reg); if (r[k] !== x.arnDate || r[k + "Arn"]) return;
     if (this.copies(x.reg, x.form, x.per).some(z => z !== x && z.arnDate === x.arnDate)) return;
     delete r[k]; GSTR._carry = null;
+    try { auditEvent("gst_filed_mark_off", {reg: x.reg, ym: x.per, form: k, on: x.arnDate, arn: x.arn || "", via: "pdf", pdf: x.name || ""}, S.coId); } catch (e){}
   },
   refile(x){
     const k = this.filedKey(x.form); if (!k || !x.setFiled || !x.arnDate || !/^\d{6}$/.test(x.per)) return;
@@ -212,7 +214,8 @@ const gstvFind = id => GSTV.all().find(x => x.id === id);
 async function gstvOpen(id){ const x = gstvFind(id), f = x && await gstvFile(x); if (!f){ toast("This PDF is not on this computer and could not be fetched from the firm’s cloud documents."); return; } window.open(blobUrl(f), "_blank"); }
 async function gstvDownload(id){ const x = gstvFind(id), f = x && await gstvFile(x); if (!f){ toast("This PDF could not be found."); return; } saveFile(GSTV.fileName(x), f); }
 // a PDF that could not be read for sure: its GSTIN, return or period said by the user, then filed in its place
-function gstvSetSort(id, key, val){ const x = gstvFind(id); if (x){ x[key] = String(val).trim(); saveBooks(); if (key !== "per") render(); } }
+// (a record whose PDF filled a filing date: the date moves with it to its new return or period, GSTV.unfile / refile)
+function gstvSetSort(id, key, val){ const x = gstvFind(id); if (x){ const mv = x.setFiled && ["reg", "form", "per"].includes(key) && x[key] !== String(val).trim(); if (mv) GSTV.unfile(x); x[key] = String(val).trim(); if (mv && !x.sort) GSTV.refile(x); saveBooks(); if (key !== "per") render(); } }
 function gstvFileIt(id){
   const x = gstvFind(id); if (!x) return;
   const ok = x.form && (GSTV.isAnnual(x.form) ? /^\d{4}-\d{2}$/.test(x.per) : /^\d{4}(0[1-9]|1[0-2])$/.test(x.per));

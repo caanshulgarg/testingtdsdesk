@@ -24,22 +24,34 @@ const GSTMark = {
     GSTR._carry = null;
     if (was.on || was.arn) try { auditEvent("gst_filed_mark_off", {reg, ym, form: k, on: was.on, arn: was.arn, via: was.via}, S.coId); } catch (e){}
     return r;
+  },
+  // the date box emptied: a mark with an ARN (the GST API, the browser helper), the 3B kept as filed or the IFF's documents is asked about first,
+  // saying what goes with it; a date alone goes at once. go(): after it is taken off
+  ask(ym, reg, k, go){
+    const r = GSTF.peek(ym, reg), arn = r[k + "Arn"], kept = k === "r3b" && r.snap, docs = k === "iff" && r.iffDocs && Object.keys(r.iffDocs).length;
+    if (!arn && !kept && !docs){ this.clear(ym, reg, k); return go(); }
+    const how = r[k + "Via"] === "api" ? " (filed through the GST API)" : r[k + "Via"] === "helper" ? " (read from the portal by the browser helper)" : "";
+    const what = [arn ? "its ARN " + arn + how : "", kept ? "the 3B kept as filed (the next month’s carried credit and GSTR-9 then use the books as they are now)" : "", docs ? "the documents recorded as in the IFF" : ""].filter(Boolean);
+    askConfirm({title: "Take off the filed mark?", ok: "Take it off", danger: true,
+      body: esc(({r3b: "GSTR-3B", r1: "GSTR-1", iff: "IFF"})[k] + " for " + GSTR.label(ym) + " goes back to not filed. With the date go " + what.join(" and ") + ". The return on the portal is not touched.")})
+      .then(a => { if (a && a.ok){ this.clear(ym, reg, k); go(); } else render(); });
   }
 };
 function gstfSet(k, v){
-  const r = GSTF.rec(S.gstYm || "", S.gstReg || "");
-  if (k === "r1" || k === "r3b"){ if (v === "") GSTMark.clear(S.gstYm || "", S.gstReg || "", k); else r[k] = v; }
+  const ym = S.gstYm || "", reg = S.gstReg || "", r = GSTF.rec(ym, reg);
+  if ((k === "r1" || k === "r3b") && v === "") return GSTMark.ask(ym, reg, k, () => { saveBooks(); render(); });
+  if (k === "r1" || k === "r3b") r[k] = v;
   if (k === "portalFee1" || k === "portalFee3" || k === "portalInt"){ if (v === "") delete r[k]; else r[k] = num(v); }
   GSTR._carry = null; saveBooks(); render();
 }
 // after filing: keep the 3B as filed (or remove the kept copy), and the set-off journal for Tally
 function gstfSnap(){ const ym = S.gstYm || "", r = GSTF.rec(ym, S.gstReg || ""); r.snap = GSTF.snapOf(GSTR.threeB(ym, S.gstReg || "")); r.snapAt = new Date().toISOString(); if (!r.r3b) r.r3b = GSTF.today(); GSTR._carry = null; saveBooks(); render(); toast("3B for " + GSTR.label(ym) + " kept as filed."); }
-// the kept copy and the filed mark go together: removing the copy takes the month back to not filed (one filed with an ARN
-// keeps both: the portal has it)
+// the kept copy removed (to keep it again from the books as they are now): the month stays filed, its date as it is. One
+// filed with an ARN keeps its copy (take the date off to take the whole mark off)
 function gstfUnsnap(){
-  const ym = S.gstYm || "", reg = S.gstReg || "", r = GSTF.rec(ym, reg);
+  const ym = S.gstYm || "", r = GSTF.rec(ym, S.gstReg || "");
   if (r.r3bArn){ toast("GSTR-3B for " + GSTR.label(ym) + " was filed with ARN " + r.r3bArn + ": its kept copy stays."); return; }
-  GSTMark.clear(ym, reg, "r3b"); saveBooks(); render(); toast("GSTR-3B for " + GSTR.label(ym) + " is no longer marked filed; the kept copy is removed.");
+  delete r.snap; delete r.snapAt; GSTR._carry = null; saveBooks(); render();
 }
 function gstfJournal(){
   const ym = S.gstYm || "", reg = S.gstReg || "", J = GSTF.journal(ym, reg); if (!J.lines.length){ toast("Nothing to set off this month."); return; }

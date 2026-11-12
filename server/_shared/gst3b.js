@@ -2616,7 +2616,8 @@ const GSTV = {
     } });
   },
   // copies on file for a form and period, newest first
-  copies(reg, form, per){ return this.list().filter(x => x.reg === reg && x.form === form && x.per === per).sort((a, c) => String(c.at).localeCompare(String(a.at))); },
+  // (a PDF still to sort is not counted: its return and period are not sure yet)
+  copies(reg, form, per){ return this.list().filter(x => !x.sort && x.reg === reg && x.form === form && x.per === per).sort((a, c) => String(c.at).localeCompare(String(a.at))); },
 };
 // ITCT (src/js/32-itc-follow-up.js)
 const ITCT = {

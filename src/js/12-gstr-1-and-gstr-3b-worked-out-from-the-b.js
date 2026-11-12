@@ -99,7 +99,7 @@ Object.assign(GSTR, {
   // (a sale in a month whose GSTR-1 or 3B is filed: asked, with a reason, GSTLock.gate in src/js/47)
   b2cSumLedger(name, on, sure){
     const b = S.books; if (!b || !name) return;
-    if (!sure && typeof GSTLock === "object") return GSTLock.gate(S.gstReg || "", (b.vouchers || []).filter(v => v.party === name).map(v => String(v.date).slice(0, 6)), ["r1", "r3b"], "B2C summary switch for " + name, () => this.b2cSumLedger(name, on, true));
+    if (!sure && typeof GSTLock === "object") return GSTLock.gate(S.gstReg || "", (b.vouchers || []).filter(v => v.party === name && Books.isSale(v) && (!S.gstReg || GSTR.regOf(v) === S.gstReg)).map(v => String(v.date).slice(0, 6)), ["r1", "r3b"], "B2C summary switch for " + name, () => this.b2cSumLedger(name, on, true));
     b.map = Object.assign({}, b.map || {});
     const m = b.map[name] = Object.assign({n: 0}, b.map[name] || {});
     if (on) m.b2cSum = {by: typeof whoAmI === "function" ? whoAmI() : "", at: new Date().toISOString()}; else delete m.b2cSum;

@@ -15,7 +15,7 @@ const fs = require("fs"), path = require("path"), vm = require("vm");
 const {load, HTML} = require("./harness");
 const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "fmtDate", "tallyDate", "STATE_CODES", "RULE_DEFAULTS", "GST_STATES", "Books", "LedMaster", "GSTR", "GSTAdv", "GSTRev", "GSTAmend", "GST2B", "INR",
   "normName", "nameSim", "ITCT", "GSTSet", "CustIMS", "GSTF", "GSTQ", "GSTV", "GSTMark", "GSTLock", "gstfSet", "gstfSnap", "gstfUnsnap", "gqIffFiled", "gstFileRoute", "gstSignWith", "GSTFILE", "GSTB",
-  "gstvFind", "gstvFileIt", "gstvRemove", "gstvRestore", "ClosedP", "r2Reg", "r2Locked", "r2Confirm", "r2Unlink", "r2Link", "inregRows",
+  "gstvFind", "gstvFileIt", "gstvRemove", "gstvRestore", "gstvSetSort", "gqIffSkip", "ClosedP", "r2Reg", "r2Locked", "r2Do", "r2Confirm", "r2Unlink", "r2Link", "r2SetTol", "aihPair", "inregRows",
   "Audit", "TDS", "Certs", "TDS26Q", "TDS_FORMS", "TCS27EQ", "PAY_CODES", "NEW_FORMS_VALIDATED", "noPanRate", "NO_PAN_RATE", "NORM_CACHE", "normNameRaw", "TDSCH", "TDSRate", "TDSLdc", "TDSWatch",
   "TDSFiled", "TDSTally", "TDSReg", "TDS_SEC_CODES", "BOOKS_KEYS", "uid", "lsGet", "lsSet", "istParts", "p2ist", "istDay", "istToday"];
 let fails = 0; const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };
@@ -48,6 +48,7 @@ const GA = "09AABCA1111A1Z1", GB = "09AABCB2222B1Z2", GE = "09AABCE6666F1Z7", GO
 const vs = [V("a1", "20260405", "A/101", "Alpha Supplies", GA, 10000, 900), V("b1", "20260410", "B/7", "Beta Traders", GB, 20000, 1800),
   V("e1", "20260418", "E/1", "Echo Stores", GE, 5000, 450), V("f1", "20260508", "F/2", "Foxtrot Labs", GF, 8000, 720),
   {id: "s1", type: "Sales", date: "20260420", no: "S/1", party: "Kilo Retail", gstin: "", pos: "", cmp: CMP, narr: "", hsn: [], ent: [{l: "Kilo Retail", a: -236000}, {l: "Sales", a: 200000}, {l: "CGST", a: 18000}, {l: "SGST", a: 18000}]},
+  {id: "rc1", type: "Receipt", date: "20260425", no: "R/1", party: "Lima Stores", gstin: "", pos: "", cmp: CMP, narr: "", hsn: [], ent: [{l: "Lima Stores", a: 5000}, {l: "Bank", a: -5000}]},
   {id: "s2", type: "Sales", date: "20260520", no: "S/2", party: "Lima Stores", gstin: "", pos: "", cmp: CMP, narr: "", hsn: [], ent: [{l: "Lima Stores", a: -118000}, {l: "Sales", a: 100000}, {l: "CGST", a: 9000}, {l: "SGST", a: 9000}]}];
 const row = (ym, gstin, party, no, date, taxable, cgst) => ({no, noN: no.replace(/[^A-Z0-9]/gi, "").toUpperCase(), ym, dir: 1, ims: "N", key: ym.slice(4) + ym.slice(0, 4) + "|b2b|" + gstin + "|" + no + "|" + date,
   pos: reg, rcm: false, sec: "b2b", typ: "R", val: taxable + 2 * cgst, cess: 0, cgst, sgst: cgst, igst: 0, date, gstin, party, itcavl: "Y", taxable});
@@ -72,32 +73,40 @@ const F = (ym) => x.GSTF.peek(ym, reg);
   x.gstfSet("r3b", "2026-05-20");
   x.GSTFILE.markFiled("3B", "202604", reg, "AA0904260000011", "2026-05-20T10:00:00+05:30");
   ok(F("202604").r3bArn === "AA0904260000011" && F("202604").r3bVia === "api" && !!F("202604").snap, "A1. filed through the API: date, ARN, how and the 3B kept, together");
-  x.gstfSet("r3b", "");
+  asked.length = 0; answer = null; x.gstfSet("r3b", ""); await flush();
+  ok(asked.length === 1 && /ARN AA0904260000011/.test(asked[0].body) && /kept as filed/.test(asked[0].body) && F("202604").r3bArn, "A1. the date box emptied on a month filed with an ARN: asked first, saying the ARN and the kept 3B go too; cancelled, nothing changed");
+  answer = {ok: true}; x.gstfSet("r3b", ""); await flush();
   const r0 = F("202604");
-  ok(!r0.r3b && !r0.r3bArn && !r0.r3bVia && !r0.snap && !r0.snapAt, "A1. the filing date taken off takes the whole mark off: ARN, how and the kept 3B too (" + JSON.stringify(Object.keys(r0)) + ")");
+  ok(!r0.r3b && !r0.r3bArn && !r0.r3bVia && !r0.snap && !r0.snapAt, "A1. said yes: the whole mark is off (" + JSON.stringify(Object.keys(r0)) + ")");
   ok(audits.some(([k, d]) => k === "gst_filed_mark_off" && d.arn === "AA0904260000011"), "A1. taking the mark off is in the audit trail, with the ARN it had");
   x.GSTFILE.markFiled("3B", "202604", reg, "AA0904260000011", "2026-05-21T10:00:00+05:30");
   ok(F("202604").r3b === "2026-05-21" && F("202604").r3bArn === "AA0904260000011" && !!F("202604").snap, "A1. marked again through the API with the same ARN: marked (it no longer stops at the ARN left behind)");
   x.gstfUnsnap();
   ok(!!F("202604").snap && /ARN AA0904260000011/.test(lastToast()), "A2. a 3B filed with an ARN keeps its kept copy: “" + lastToast() + "”");
-  x.gstfSet("r3b", ""); ctx.S.gstYm = "202605"; x.gstfSnap();
+  answer = {ok: true}; x.gstfSet("r3b", ""); await flush(); ctx.S.gstYm = "202605"; x.gstfSnap();
   ok(!!F("202605").r3b && !!F("202605").snap, "A2. Mark this 3B as filed and keep a copy: date and copy");
-  x.gstfUnsnap();
-  ok(!F("202605").r3b && !F("202605").snap, "A2. remove the kept copy: the month is no longer marked filed either (“" + lastToast() + "”)");
+  const d5 = F("202605").r3b; x.gstfUnsnap();
+  ok(F("202605").r3b === d5 && !F("202605").snap, "A2. remove the kept copy: only the copy goes; the month stays filed on its date (no new date, late fee unchanged)");
+  asked.length = 0; x.gstfSet("r3b", "");
+  ok(asked.length === 0 && !F("202605").r3b, "A2. a date alone (no ARN, no kept copy) emptied: off at once");
   // the IFF
   x.gqIffFiled("202605", "iff", "2026-06-12"); x.gqIffFiled("202605", "iffArn", "AA0905260000022");
   ok(F("202605").iff && F("202605").iffArn && F("202605").iffDocs, "A3. IFF filed: its date, ARN and documents recorded");
-  x.gqIffFiled("202605", "iff", "");
-  ok(!F("202605").iff && !F("202605").iffArn && !F("202605").iffDocs, "A3. the IFF's date taken off: its ARN and documents go with it");
+  asked.length = 0; x.gqIffFiled("202605", "iff", ""); await flush();
+  ok(asked.length === 1 && !F("202605").iff && !F("202605").iffArn && !F("202605").iffDocs, "A3. the IFF's date taken off (asked: it has an ARN): its ARN and documents go with it");
+  x.gqIffFiled("202605", "iff", "2026-06-12"); x.gqIffFiled("202605", "iffArn", "AA0905260000022"); audits.length = 0;
+  x.gqIffSkip("202605", true);
+  ok(F("202605").iffSkip && !F("202605").iff && !F("202605").iffArn && !F("202605").iffDocs && audits.some(([k, d]) => k === "gst_filed_mark_off" && d.form === "iff"), "A3. IFF not filed: the whole IFF mark off, in the audit trail");
+  x.gqIffSkip("202605", false);
   // the browser helper
   if (x.GSTB) {
     x.GSTB.onMsg({type: "arn", form: "3B", gstin: CMP, ym: "202605", arn: "AA0905260000033", at: "2026-06-20T11:00:00Z"});
     ok(F("202605").r3bArn === "AA0905260000033" && F("202605").r3bVia === "helper" && !!F("202605").r3b && !!F("202605").snap, "A4. the browser helper's ARN: date, ARN, how (helper) and the kept 3B together (" + JSON.stringify(F("202605")).slice(0, 120) + ")");
-    x.gstfSet("r3b", ""); ctx.S.gstYm = "202605"; x.gstfSet("r3b", "");
-    ok(!F("202605").r3bArn && !F("202605").r3bVia, "A4. taken off: nothing of the helper's mark left");
+    asked.length = 0; ctx.S.gstYm = "202605"; x.gstfSet("r3b", ""); await flush();
+    ok(asked.length === 1 && /browser helper/.test(asked[0].body) && !F("202605").r3bArn && !F("202605").r3bVia, "A4. taken off (asked, saying the helper read it): nothing of the helper's mark left");
   } else ok(false, "A4. GSTB (the browser helper) loads");
-  // GSTR-1 saved through the API, or downloaded: not filed
-  x.gstfSet("r3b", ""); ctx.S.gstYm = "202604"; x.gstfSet("r3b", "");
+  // GSTR-1 saved through the API, or downloaded: not filed; the portal's status list and a 3B from the portal: filed
+  ctx.S.gstYm = "202604"; x.gstfSet("r3b", ""); await flush();
   const j6 = {gstin: CMP, fp: "062026", b2b: []};
   x.GSTAmend.keep(JSON.parse(JSON.stringify(j6)), "downloaded", {via: "api"});
   ok(x.GSTAmend.nextOpen("202605", reg) === "202606", "A5. GSTR-1 for Jun saved on the portal through the API, not filed: still the next open return (" + x.GSTAmend.nextOpen("202605", reg) + ")");
@@ -105,73 +114,109 @@ const F = (ym) => x.GSTF.peek(ym, reg);
   x.GSTAmend.keep(JSON.parse(JSON.stringify({gstin: CMP, fp: "072026", b2b: []})), "downloaded");
   ok(x.GSTAmend.nextOpen("202606", reg) === "202607", "A5. a draft download of Jul: not filed either");
   ctx.S.gstYm = "202606"; x.gstfSet("r1", "2026-07-11");
-  ok(x.GSTAmend.nextOpen("202605", reg) === "202607" && x.GSTLock && x.GSTLock.filed(reg, "202606", "r1"), "A5. Jun's GSTR-1 marked filed: now it counts (the next open is Jul)");
+  ok(x.GSTAmend.nextOpen("202605", reg) === "202607" && x.GSTLock && x.GSTLock.filed(reg, "202606", "r1"), "A5. Jun's GSTR-1 marked filed: now it counts for both (the next open is Jul)");
   x.gstfSet("r1", "");
+  x.GSTAmend.keep(JSON.parse(JSON.stringify({gstin: CMP, fp: "082026", b2b: []})), "portal");
+  ok(x.GSTLock && x.GSTLock.filed(reg, "202608", "r1") && x.GSTAmend.nextOpen("202607", reg) === "202609", "A5. a GSTR-1 brought in from the portal: filed for GSTLock as for GSTAmend");
+  b.portalFiled = {[reg + "|r3b|202609"]: {arn: "AA0909260000066", dof: "2026-10-20"}};
+  ok(x.GSTLock && (x.GSTLock.filed(reg, "202609") || {}).arn === "AA0909260000066", "A5. the portal's return status list says Sep's 3B is filed: GSTLock reads it");
+  b.filed3b = {[CMP + "|202610"]: {gstin: CMP, ym: "202610", json: {}, fetchedAt: "2026-11-21T10:00:00Z"}};
+  ok(x.GSTLock && x.GSTLock.filed(reg, "202610"), "A5. a 3B brought back from the portal (filed3b): filed");
+  b.portalFiled = {}; b.filed3b = {}; delete b.filed[CMP + "|082026"];
   // Returns filed: a PDF's date
   const rec = x.GSTV.addRecord({reg, form: "r3b", per: "202607", arn: "AA0907260000044", arnDate: "2026-08-18", name: "a.pdf", size: 10});
   ok(F("202607").r3b === "2026-08-18", "A6. a 3B PDF filed away fills the filing date (as before)");
-  answer = {ok: true, data: "the wrong PDF"}; await x.gstvRemove(rec.id);
-  ok(!F("202607").r3b, "A6. the PDF removed: the date it filled in goes with it (" + F("202607").r3b + ")");
+  answer = {ok: true, data: "the wrong PDF"}; audits.length = 0; await x.gstvRemove(rec.id);
+  ok(!F("202607").r3b && audits.some(([k, d]) => k === "gst_filed_mark_off" && d.via === "pdf"), "A6. the PDF removed: the date it filled in goes with it, in the audit trail (" + F("202607").r3b + ")");
   x.gstvRestore(rec.id);
   ok(F("202607").r3b === "2026-08-18", "A6. restored: the date is back");
+  x.gstvSetSort(rec.id, "per", "202608");
+  ok(!F("202607").r3b && F("202608").r3b === "2026-08-18", "A6. its period corrected to Aug: the date it filled moves with it");
+  x.gstvSetSort(rec.id, "per", "202607");
   x.GSTF.rec("202608", reg).r3b = "2026-09-19";
   const rec2 = x.GSTV.addRecord({reg, form: "r3b", per: "202608", arn: "AA0908260000055", arnDate: "2026-09-20", name: "b.pdf", size: 11});
   await x.gstvRemove(rec2.id);
   ok(F("202608").r3b === "2026-09-19", "A6. a date typed before the PDF came is not the PDF's: removing the PDF leaves it");
-  delete x.GSTF.rec("202607", reg).r3b; delete x.GSTF.rec("202608", reg).r3b; b.gstVault = [];
+  const rec3 = x.GSTV.addRecord({reg, form: "r3b", per: "202611", arn: "AA0911260000077", arnDate: "2026-12-20", name: "c.pdf", size: 12, sort: true});
+  ok(!F("202611").r3b && !(x.GSTLock && x.GSTLock.filed(reg, "202611")) && !x.GSTV.copies(reg, "r3b", "202611").length, "A6. a PDF still to sort: no filing date, not counted as filed, not a copy on file");
+  x.gstvFileIt(rec3.id);
+  ok(F("202611").r3b === "2026-12-20" && x.GSTLock && x.GSTLock.filed(reg, "202611"), "A6. filed away once sorted: the date, and filed");
+  ["202607", "202608", "202611"].forEach((m) => { delete x.GSTF.rec(m, reg).r3b; }); b.gstVault = [];
 
   // ================= C. a filed month: GSTLock in every path that changes its figures
   b = books(); ctx.S.gstReg = reg; ctx.S.gstYm = "202604";
   const Lk = x.GSTLock;
+  const line = (no) => ITCF.rows(reg).find((r) => r.no === no || r.bookNo === no);
+  const decOf = (no) => (ITCDec.all()[reg + "|" + line(no).key] || {});
   ok(!!Lk && !Lk.filed(reg, "202604"), "C0. GSTLock: April open to start with");
+  // before April is filed: Echo's bill (not in April's 2B) taken in April; Alpha's (booked April, in May's 2B) left to follow up
+  ITCF.decide(reg, [line("E/1")], "booksnow", "", "202604");
+  ok(line("E/1").e.C === "202604", "C0. Echo's credit taken in April, though not in 2B");
+  // "Take now": never before the line's 2B; the month on screen when that is later
+  ITCF.decide(reg, [line("P/3")], "now", "", "202604");
+  ok(decOf("P/3").ym === "202605", "C2. Take now on Papa's document (in May's 2B) from April: into May, its 2B month, not April (" + decOf("P/3").ym + ")");
+  b.itcDec = Object.assign({}, b.itcDec); delete b.itcDec[reg + "|" + line("P/3").key];
   if (x.GSTMark) x.GSTMark.set("202604", reg, "r3b", "2026-05-20", "AA0904260000099", "api"); else Object.assign(x.GSTF.rec("202604", reg), {r3b: "2026-05-20", r3bArn: "AA0904260000099", r3bVia: "api"});
   ok(!!Lk && Lk.filed(reg, "202604").arn === "AA0904260000099" && !Lk.filed(reg, "202605"), "C0. April's 3B filed (ARN); May open");
   const W = Lk ? Lk.why(reg, ["202604"]) : "";
-  ok(/GSTR-3B for Apr.*2026 is filed \(ARN AA0904260000099\)\. Changes go into the next return as an amendment\./.test(W), "C0. the words: “" + W + "”");
-  const line = (no) => ITCF.rows(reg).find((r) => r.no === no || r.bookNo === no);
-  const decOf = (no) => (ITCDec.all()[reg + "|" + line(no).key] || {});
+  ok(/^GSTR-3B for Apr.*2026 is filed \(ARN AA0904260000099\)\. Changes to a filed 3B are made as an adjustment in the current month \(ITC adjustments\)\.$/.test(W), "C0. the words: “" + W + "”");
   let rB = line("B/7"), d0 = JSON.stringify(decOf("B/7"));
   ok(rB && rB.e.C === "202604", "C1. Beta's credit is in April (" + (rB && rB.e.C) + ")");
   let res = ITCF.decide(reg, [rB], "later", "202606", "202604");
-  ok(JSON.stringify(decOf("B/7")) === d0 && res.refused.length === 1 && res.lock === W, "C1. ITC decision on a line whose credit is in filed April: refused, with the words (" + JSON.stringify(res.lock) + ")");
+  ok(JSON.stringify(decOf("B/7")) === d0 && res.refused.length === 1 && res.lock === W, "C1. ITC decision taking Beta's credit out of filed April: refused, with the words (" + JSON.stringify(res.lock) + ")");
+  res = ITCF.decide(reg, [rB], "now", "", "202604");
+  ok(!res.lock, "C1. Take now on Beta (its credit stays in April, the same amount): nothing filed moves, allowed");
   res = ITCF.decide(reg, [line("F/2")], "later", "202606", "202605");
-  ok(decOf("F/2").d === "later" && decOf("F/2").ym === "202606" && !res.lock, "C1. the same on Foxtrot (May, open): set");
-  ok(ITCF.setElig(reg, line("B/7"), "ineligible") === false && !decOf("B/7").el, "C1. eligibility of Beta (filed April): refused");
+  ok(decOf("F/2").d === "later" && decOf("F/2").ym === "202606" && !res.lock, "C1. Foxtrot (May, open) to June: set");
+  ok(ITCF.setElig(reg, line("B/7"), "ineligible") === false && !decOf("B/7").el, "C1. Beta (credit in filed April) made ineligible: refused");
   ITCF.setElig(reg, line("F/2"), "ineligible");
-  ok(decOf("F/2").el === "ineligible", "C1. eligibility of Foxtrot (May): set");
+  ok(decOf("F/2").el === "ineligible", "C1. eligibility of Foxtrot (June): set");
+  // H2: a decision that sends the credit back to its default month, which is filed
+  res = ITCF.decide(reg, [line("E/1")], "follow", "", "202605");
+  ok(res.lock === W && decOf("E/1").d === "booksnow", "C1. Follow up on Echo (credit in filed April): refused");
+  res = ITCF.decide(reg, [line("A/101")], "later", "202606", "202605");
+  ok(!res.lock && decOf("A/101").ym === "202606", "C1. Alpha (default May) to June: set");
+  ITCF.decide(reg, [line("A/101")], "", "", "202605");
+  ok(line("A/101").e.C === "202605", "C1. cleared: back to May (open)");
+  const dE = JSON.stringify(decOf("E/1"));
+  let pv = ITCF.preview(reg, "202604", {rows: [{key: line("E/1").key, dec: "Follow up with supplier", takeIn: ""}]});
+  ok(pv.refused.some((z) => z.why === W) && !pv.changes.length, "C1. the Excel brought back with Follow up on Echo: refused there, with the words");
+  ITCF.applyImport(reg, "202604", pv);
+  ok(JSON.stringify(decOf("E/1")) === dE, "C1. applied: Echo as it was");
   ctx.__sync.itctSetAct(line("B/7").key, "wait");
-  ok(JSON.stringify(decOf("B/7")) === d0 && lastToast() === W, "C1. the old follow-up entry point (itctSetAct) on Beta: refused too");
+  ok(lastToast() === W && line("B/7").e.C === "202604", "C1. the old follow-up entry point (itctSetAct) on Beta: refused too");
   ctx.__sync.r2Tag("b1", "Booked in a later month");
-  ok(JSON.stringify(decOf("B/7")) === d0, "C1. the old 2B remark entry point (r2Tag) on Beta: refused too");
-  // "Take now": the line's own 2B month, not the month on screen
-  let rO = line("O/5");
-  ITCF.decide(reg, [line("P/3")], "now", "", "202606");
-  ok(decOf("P/3").ym === "202605", "C2. Take now on Papa's bill (in May's 2B) while June is on screen: into May, its 2B month (" + decOf("P/3").ym + ")");
-  res = ITCF.decide(reg, [rO], "now", "", "202605");
-  ok(decOf("O/5").ym === "202605" && !res.lock, "C2. Take now on Omega (in April's 2B, April filed) from May: into May, the month on screen (" + decOf("O/5").ym + ")");
-  ITCF.decide(reg, [line("E/1")], "now", "", "202605");
-  ok(decOf("E/1").ym === "202605", "C2. a bill not in 2B (Echo) taken now from May: May");
-  // note and eligibility dated now
+  ok(line("B/7").e.C === "202604", "C1. the old 2B remark entry point (r2Tag) on Beta: refused too");
+  res = ITCF.decide(reg, [line("O/5")], "now", "", "202605");
+  ok(decOf("O/5").ym === "202605" && !res.lock, "C2. Take now on Omega (in April's 2B) from May: May, the month on screen (" + decOf("O/5").ym + ")");
+  ITCF.decide(reg, [line("O/5")], "", "", "202605");
+  // M4: a note or eligibility keeps the decision's time (which one is in force); when it was written is kept beside
   const id = reg + "|" + line("F/2").key, at1 = ITCDec.all()[id].at; await new Promise((r) => setTimeout(r, 5));
   ITCDec.note(reg, line("F/2").key, "asked the supplier", line("F/2").s);
-  const at2 = ITCDec.all()[id].at; await new Promise((r) => setTimeout(r, 5));
   ITCDec.setEl(reg, line("F/2").key, "", line("F/2").s);
-  ok(at2 > at1 && ITCDec.all()[id].at > at2, "C3. a note, then the eligibility, changed: the decision's time moves on each (" + [at1, at2, ITCDec.all()[id].at].join(" < ") + ")");
-  // 2B pairs
+  ok(ITCDec.all()[id].at === at1 && ITCDec.all()[id].noteAt > at1 && ITCDec.all()[id].elAt > at1, "C3. a note, then the eligibility, changed: the decision's time stays; noteAt and elAt say when");
+  // 2B pairs: refused only when they move a filed month's credit (worked out)
   const st = x.GST2B.state(), kB = TWOB[CMP + "|042026"].rows[0].key, kF = TWOB[CMP + "|052026"].rows[1].key, kP = TWOB[CMP + "|052026"].rows[2].key;
   const st0 = JSON.stringify([st.confirm, st.link]);
-  x.r2Confirm(kB);
-  ok(JSON.stringify([st.confirm, st.link]) === st0 && lastToast() === W, "C4. 2B: Same on Beta's pair (April, filed): refused (“" + lastToast() + "”)");
   x.r2Unlink(kB, ["b1"]);
-  ok(JSON.stringify([st.confirm, st.link]) === st0, "C4. 2B: Unlink on Beta's pair: refused");
-  x.r2Link(TWOB[CMP + "|042026"].rows[1].key, "e1");
-  ok(!st.link[TWOB[CMP + "|042026"].rows[1].key], "C4. 2B: Omega's April document linked to Echo's April bill: refused");
+  ok(JSON.stringify([st.confirm, st.link]) === st0 && lastToast() === W, "C4. 2B: Unlink Beta's April pair (its April credit would go): refused (“" + lastToast() + "”)");
+  ok(line("B/7").kind === "pair", "C4. and Beta is still paired");
+  x.r2Link(kB, "e1");
+  ok(!st.link[kB], "C4. 2B: Beta's April document linked to Echo's bill instead: refused (Beta's April credit would go)");
   x.r2Link(kP, "e1");
-  ok(JSON.stringify(st.link[kP]) === JSON.stringify(["e1"]), "C4. 2B: Papa's May document linked to Echo's April bill: the pair's credit is in May (open), so linked");
+  ok(JSON.stringify(st.link[kP]) === JSON.stringify(["e1"]) && line("E/1").e.C === "202604", "C4. 2B: Echo's April bill (credit taken in April) linked to Papa's document in May's 2B: April's credit does not move, so linked");
   x.r2Unlink(kP, ["e1"]);
-  ok(!st.link[kP], "C4. and unlinked again");
+  ok(!st.link[kP], "C4. and unlinked again (nothing filed moves)");
   x.r2Confirm(kF);
   ok(st.confirm[kF] === "yes", "C4. 2B: Same on Foxtrot (May): kept");
+  if (x.aihPair) {
+    ctx.AIH = {st: () => ({pairs: {[kB]: {id: "e1", label: "Beta's 2B to Echo"}}}), who: () => "t", log() {}};
+    await x.aihPair(kB, true);
+    ok(!st.link[kB] && lastToast() === W, "C4. the AI's pair (Beta's April document to Echo's bill): refused too");
+  } else ok(false, "C4. aihPair loads");
+  asked.length = 0; x.r2SetTol("2");
+  ok(asked.length === 0 && Number(st.opt.tol) === 2, "C4. a 2B tolerance that moves nothing filed: set at once");
+  ok(!!Lk.twoB(CMP, "202604") && !Lk.twoB(CMP, "202605"), "C4. a 2B brought in again: April's (3B filed) is asked about, May's is not");
   // B2C summary marks and places of supply: asked, with a reason kept in the audit trail
   asked.length = 0; answer = null;
   G.b2cSumEntry("s1", true); await flush();
@@ -186,7 +231,7 @@ const F = (ym) => x.GSTF.peek(ym, reg);
   G.b2cSumLedger("Kilo Retail", true); await flush();
   ok(asked.length === 1 && !((b.map["Kilo Retail"] || {}).b2cSum), "C5. the party switch for a party with April sales: asked; cancelled, not switched");
   G.b2cSumLedger("Lima Stores", true);
-  ok(!!(b.map["Lima Stores"] || {}).b2cSum, "C5. the party switch for a party with only May sales: switched at once");
+  ok(!!(b.map["Lima Stores"] || {}).b2cSum, "C5. the party switch for a party with only May sales (an April receipt is not a sale): switched at once");
   asked.length = 0; answer = null;
   POSF.posSave(["s1"], "27"); await flush();
   ok(asked.length === 1 && ((b.gstPosFix || {}).s1 || {}).pos !== "27", "C6. place of supply on April's sale: asked; cancelled, not set");

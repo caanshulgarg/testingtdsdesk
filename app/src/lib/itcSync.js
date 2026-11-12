@@ -64,14 +64,15 @@ export const ITCDec = {
   setEl(reg, key, el, cur) {
     const b = S.books, id = (reg || "") + "|" + key, was = (b.itcDec || {})[id];
     b.itcDec = Object.assign({}, b.itcDec || {});
-    b.itcDec[id] = Object.assign({}, was || (cur && cur.src !== "you" && cur.d ? { d: cur.d, ym: cur.ym || "", note: cur.note || "" } : { d: "", ym: "" }), { el: el || "", at: new Date().toISOString(), elAt: new Date().toISOString(), by: who() });
+    b.itcDec[id] = Object.assign({}, was || (cur && cur.src !== "you" && cur.d ? { d: cur.d, ym: cur.ym || "", note: cur.note || "" } : { d: "", ym: "" }), { el: el || "", at: (was && was.at) || (cur && cur.at) || new Date().toISOString(), elAt: new Date().toISOString(), by: who() });
     saveBooks();
   },
   note(reg, key, note, cur) {
     const b = S.books, id = (reg || "") + "|" + key, was = (b.itcDec || {})[id];
     b.itcDec = Object.assign({}, b.itcDec || {});
-    // a note alone keeps the decision as it is (the one in force, from wherever it came)
-    b.itcDec[id] = Object.assign({}, was || (cur && cur.src !== "you" && cur.d ? { d: cur.d, ym: cur.ym || "" } : { d: "", ym: "" }), { note: String(note || ""), at: new Date().toISOString(), by: who() });
+    // a note alone keeps the decision as it is (the one in force, from wherever it came): its time stays (it decides which
+    // decision is in force, ITCDec.get); when the note was written is noteAt
+    b.itcDec[id] = Object.assign({}, was || (cur && cur.src !== "you" && cur.d ? { d: cur.d, ym: cur.ym || "" } : { d: "", ym: "" }), { note: String(note || ""), at: (was && was.at) || (cur && cur.at) || new Date().toISOString(), noteAt: new Date().toISOString(), by: who() });
     saveBooks();
   },
   // what changed since: a signature of everything a decision is read from (the 3B's carried credit is kept against it)

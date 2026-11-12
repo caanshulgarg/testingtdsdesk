@@ -1261,14 +1261,23 @@ function clearFilter(id){ S[id] = {}; render(); }
 // 27Q: a non-resident deductee's details for the file; 27EQ: a TCS ledger's collection code
 function tdsNrSet(party, k, v){ const b = S.books; b.nrInfo = Object.assign({}, b.nrInfo); b.nrInfo[party] = Object.assign({}, b.nrInfo[party], {[k]: typeof v === "string" ? v.trim() : v}); saveBooks(); render(); }
 function tdsTcsCode(ledger, code){ const b = S.books; b.tcsCodes = Object.assign({}, b.tcsCodes, {[ledger]: code}); saveBooks(); render(); }
-function r2SetTol(v){ const st = GST2B.state(); st.opt = Object.assign({}, st.opt, {tol: Math.max(0, num(v))}); saveBooks(); render(); }
+// (a new tolerance re-matches every month: one that moves the credit of a filed 3B is asked first, with a reason)
+function r2SetTol(v){
+  const tol = Math.max(0, num(v)), reg = (typeof r2Reg === "function" ? r2Reg(S.books) : "") || S.gstReg || "";
+  const go = () => { const st = GST2B.state(); st.opt = Object.assign({}, st.opt, {tol}); saveBooks(); render(); };
+  const w = typeof GSTLock === "object" ? GSTLock.pair(reg, null, null, st => { st.opt = Object.assign({}, st.opt, {tol}); }) : "";
+  if (!w) return go();
+  GSTLock.ask(reg, [], ["r3b"], "2B tolerance " + tol, w).then(y => { if (y) go(); else render(); });
+}
 // "Same": a likely pair confirmed; "Not the same" or "Unlink": the 2B document and those Tally entries are kept apart
-// (a pair whose credit is in a GSTR-3B already filed is not changed: GSTLock.pair, src/js/47)
-function r2Locked(keys, ids){ if (typeof GSTLock !== "object") return false; const w = GSTLock.pair((typeof r2Reg === "function" ? r2Reg(S.books) : "") || S.gstReg || "", keys, ids); if (w) toast(w); return !!w; }
-function r2Confirm(key){ if (r2Locked([key], [])) return; const st = GST2B.state(); st.confirm[key] = "yes"; saveBooks(); render(); }
-function r2Unlink(key, ids){ if (r2Locked([key], ids)) return; const st = GST2B.state(); ids.forEach(id => { st.confirm[key + ">" + id] = "no"; }); delete st.link[key]; delete st.confirm[key]; saveBooks(); render(); }
+// (a change that would move the credit of a GSTR-3B already filed is refused: GSTLock.pair, src/js/47, works it out)
+function r2Locked(keys, ids, change){ if (typeof GSTLock !== "object") return false; const w = GSTLock.pair((typeof r2Reg === "function" ? r2Reg(S.books) : "") || S.gstReg || "", keys, ids, change); if (w) toast(w); return !!w; }
+const r2Do = {confirm: (key) => (st) => { st.confirm[key] = "yes"; }, unlink: (key, ids) => (st) => { ids.forEach(id => { st.confirm[key + ">" + id] = "no"; }); delete st.link[key]; delete st.confirm[key]; },
+  link: (key, ids) => (st) => { st.link[key] = ids.slice(); delete st.confirm[key]; }};
+function r2Confirm(key){ if (r2Locked([key], [], r2Do.confirm(key))) return; r2Do.confirm(key)(GST2B.state()); saveBooks(); render(); }
+function r2Unlink(key, ids){ if (r2Locked([key], ids, r2Do.unlink(key, ids))) return; r2Do.unlink(key, ids)(GST2B.state()); saveBooks(); render(); }
 // a 2B document not found in Tally, linked by hand to the entry it was booked as
-function r2Link(key, id){ if (id && r2Locked([key], [id])) return; const st = GST2B.state(); if (id){ st.link[key] = [id]; delete st.confirm[key]; } saveBooks(); render(); }
+function r2Link(key, id){ if (id && r2Locked([key], [id], r2Do.link(key, [id]))) return; if (id) r2Do.link(key, [id])(GST2B.state()); saveBooks(); render(); }
 // a remark on a document (r2Tag): app/src/lib/itcSync.js, the decision on that bill (ITCDec)
 // one setting of a page kept in S (S.inregF, S.inregScope, …); typed: the page follows a moment later
 function setAndShow(key, val, typed){ S[key] = val; if (typed){ FinComReact.redraw(); later(key, render, 250); } else render(); }
