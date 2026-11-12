@@ -27,11 +27,22 @@ const GSTMark = {
     if (b && b.apiTaken && g.length > 1){ const a = Object.assign({}, b.apiTaken); Object.keys(a).forEach(x => { if (x.indexOf(g) === 0 && x.slice(-fp.length) === fp) delete a[x]; }); b.apiTaken = a; }
     if (was.on || was.arn) try { auditEvent("gst_filed_mark_off", {reg, ym, form: k, on: was.on, arn: was.arn, via: was.via}, S.coId); } catch (e){}
     return r;
+  },
+  // the date box emptied: a mark with an ARN (the GST API, the browser helper), the 3B kept as filed or the IFF's documents is asked about first,
+  // saying what goes with it; a date alone goes at once. go(): after it is taken off
+  ask(ym, reg, k, go){
+    const r = GSTF.peek(ym, reg), arn = r[k + "Arn"], kept = k === "r3b" && r.snap, docs = k === "iff" && r.iffDocs && Object.keys(r.iffDocs).length;
+    if (!arn && !kept && !docs){ this.clear(ym, reg, k); return go(); }
+    const how = r[k + "Via"] === "api" ? " (filed through the GST API)" : r[k + "Via"] === "helper" ? " (read from the portal by the browser helper)" : "";
+    const what = [arn ? "its ARN " + arn + how : "", kept ? "the 3B kept as filed (the next month’s carried credit and GSTR-9 then use the books as they are now)" : "", docs ? "the documents recorded as in the IFF" : ""].filter(Boolean);
+    askConfirm({title: "Take off the filed mark?", ok: "Take it off", danger: true,
+      body: esc(({r3b: "GSTR-3B", r1: "GSTR-1", iff: "IFF"})[k] + " for " + GSTR.label(ym) + " goes back to not filed. With the date go " + what.join(" and ") + ". The return on the portal is not touched.")})
+      .then(a => { if (a && a.ok){ this.clear(ym, reg, k); go(); } else render(); });
   }
 };
 function gstfSet(k, v){
   const ym = S.gstYm || "", reg = S.gstReg || "", r = GSTF.rec(ym, reg);
-  if ((k === "r1" || k === "r3b") && v === "") return GSTMark.ask ? GSTMark.ask(ym, reg, k, () => { saveBooks(); render(); }) : (GSTMark.clear(ym, reg, k), saveBooks(), render());
+  if ((k === "r1" || k === "r3b") && v === "") return GSTMark.ask(ym, reg, k, () => { saveBooks(); render(); });
   if (k === "r1" || k === "r3b") r[k] = v;
   if (k === "portalFee1" || k === "portalFee3" || k === "portalInt"){ if (v === "") delete r[k]; else r[k] = num(v); }
   GSTR._carry = null; saveBooks(); render();

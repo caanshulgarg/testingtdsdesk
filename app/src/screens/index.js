@@ -16,6 +16,8 @@ import Unsorted from "../parts/Unsorted.jsx";
 import UploadBlock from "../parts/UploadBlock.jsx";
 import { Jobs, ReadingCheck, UploadOptions, Working } from "../parts/Reading.jsx";
 
+// GSTLock's checks of a change (src/js/47-gst-lock-checks.js), for legacy.js to load when a change needs them (GSTLock.ready)
+globalThis.gstChecksLoad = () => import("../../../src/js/47-gst-lock-checks.js");
 const books = lazyModule(() => import("./Books.jsx")), gst = lazyModule(() => import("./Gst.jsx")), tally = lazyModule(() => import("./Tally.jsx"));
 const settings = lazyModule(() => import("./Settings.jsx")), bank = lazyModule(() => import("./Bank.jsx")), sales = lazyModule(() => import("./Sales.jsx"));
 const post = lazyModule(() => import("./Post.jsx")), help = lazyModule(() => import("./Help.jsx")), txn = lazyModule(() => import("./Txn.jsx"));

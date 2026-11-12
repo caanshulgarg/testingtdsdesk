@@ -22,7 +22,7 @@ const V = (id, date, no, party, gstin, taxable, cgst, type = "Purchase") => ({id
     : [{l: "Office Expenses", a: -taxable}, {l: "Input CGST", a: -cgst}, {l: "Input SGST", a: -cgst}, {l: party, a: taxable + 2 * cgst}]});
 const row = (ym, gstin, party, no, date, taxable, cgst, o = {}) => Object.assign({no, noN: no.replace(/[^A-Z0-9]/gi, "").toUpperCase(), ym, dir: 1, ims: "N", key: ym.slice(4) + ym.slice(0, 4) + "|" + (o.dir < 0 ? "cdnr" : "b2b") + "|" + gstin + "|" + no + "|" + date,
   pos: reg, rcm: false, sec: o.dir < 0 ? "cdnr" : "b2b", typ: "R", val: taxable + 2 * cgst, cess: 0, cgst, sgst: cgst, igst: 0, date, gstin, party, itcavl: "Y", taxable}, o);
-const S = {A: "09AABCA1111A1Z1", B: "09AABCB2222B1Z2", C: "09AABCC3333C1Z3", D: "09AABCD5555E1Z6", E: "09AABCE6666F1Z7", X: "09AABCX7777X1Z9", R: "09AABCR8888R1Z8"};
+const S = {M: "09AABCM4444M1Z4", I: "09AABCI9999I1Z3", A: "09AABCA1111A1Z1", B: "09AABCB2222B1Z2", C: "09AABCC3333C1Z3", D: "09AABCD5555E1Z6", E: "09AABCE6666F1Z7", X: "09AABCX7777X1Z9", R: "09AABCR8888R1Z8"};
 const tb = (ym, rows) => ({ym, gstin: CMP, period: ym.slice(4) + ym.slice(0, 4), rows});
 // the worlds: vouchers, 2Bs, the months filed
 const worlds = {
@@ -42,15 +42,24 @@ const worlds = {
     vs: [V("r1", "20260412", "R/5", "Romeo", S.R, 6000, 540), V("d1", "20260412", "D/9", "Delta", S.D, 30000, 2700)],
     twoBs: [tb("202604", [row("202604", S.R, "ROMEO", "R/5", "20260412", 6000, 540, {ims: "R", rej: true}), row("202604", S.D, "DELTA", "D/9", "20260412", 25000, 2250)])],
     filed: ["202604"]},
+  "an ISD: a March bill in April's 2B, a 2B-only row of an ISD's GSTIN": {
+    vs: [V("m1", "20260310", "M/3", "Mike Supplies", S.M, 10000, 900), V("b1", "20260410", "B/7", "Beta", S.B, 20000, 1800), V("c1", "20260502", "C/3", "Gamma", S.C, 4000, 360)],
+    twoBs: [tb("202603", []), tb("202604", [row("202604", S.M, "MIKE", "M/3", "20260310", 10000, 900), row("202604", S.B, "BETA", "B/7", "20260410", 20000, 1800), row("202604", S.I, "ISD HO", "I/1", "20260420", 5000, 450, {sec: "isd"})]),
+      tb("202605", [row("202605", S.C, "GAMMA", "C/3", "20260502", 4000, 360)])],
+    filed: ["202603", "202604"], ledgers: {"Isd HO": S.I}, then: () => { const r = ITCF.rows(reg).find((z) => z.no === "I/1"); if (r) ITCF.decide(reg, [r], "now", "", "202604"); }},
 };
 function setup(w) {
   const b = {cid: "t", vouchers: JSON.parse(JSON.stringify(w.vs)), meta: {from: "20250401", to: "20260930", gstins: [CMP], bills: 1}, under: {}, groups: {}, gstins: {}, states: {}, challans: [], alloc: {}, certs: [],
     twoBs: {}, gstOpen: {[reg]: {igst: 0, cgst: 0, sgst: 0, cess: 0}}};
   w.twoBs.forEach((t) => { b.twoBs[CMP + "|" + t.period] = JSON.parse(JSON.stringify(t)); });
+  b.vouchers.forEach((v) => { b.gstins[v.party] = v.gstin; });
+  Object.entries(w.ledgers || {}).forEach(([n, g]) => { b.gstins[n] = g; });
   b.vouchers.forEach((v) => { b.under[v.party] = "Sundry Creditors"; });
   b.groups = {"Sundry Creditors": "Current Liabilities"}; b.map = x.Books.mapLedgers(b.vouchers, {});
+  Object.keys(w.ledgers || {}).forEach((n) => { b.map[n] = b.map[n] || {n: 0}; });
   ["CGST", "SGST"].forEach((t) => { b.map["Input " + t] = Object.assign(b.map["Input " + t] || {n: 0}, {what: "gst", kind: "gst", tax: t, side: "input", reg, ok: true, byHand: true}); });
   ctx.S.books = b; ctx.S.gstReg = reg; x.GSTR._carry = null; x.GST2B._memo = null;
+  ITCF.rows(reg); if (w.then) w.then();
   w.filed.forEach((m) => { x.GSTF.rec(m, reg).r3b = "2026-10-20"; });
   ITCF.rows(reg);
   return b;
@@ -61,6 +70,7 @@ const variants = (w, b) => {
     const c = (f) => { const y = JSON.parse(JSON.stringify(t)); f(y); return y; };
     out.push(["the same 2B for " + t.ym, c(() => {})]);
     if (t.rows.length) out.push(["2B for " + t.ym + " without its first document", c((y) => { y.rows.shift(); })]);
+    out.push(["2B for " + t.ym + " with a document whose credit is not available (4(D)(2))", c((y) => { y.rows.push(row(t.ym, S.E, "ECHO", "NA/1", t.ym + "15", 3000, 270, {itcavl: "N"})); })]);
     if (t.rows.length) out.push(["2B for " + t.ym + " with its first document's tax lower", c((y) => { y.rows[0].cgst -= 45; y.rows[0].sgst -= 45; y.rows[0].taxable -= 500; })]);
     b.vouchers.forEach((v, i) => { if (i < 3) out.push(["2B for " + t.ym + " with " + v.no + " in it", c((y) => { if (!y.rows.some((r) => r.no === v.no)) y.rows.push(row(t.ym, v.gstin, v.party.toUpperCase(), v.no, v.date, 10000, 900)); })]); });
   });
@@ -82,6 +92,23 @@ Object.entries(worlds).forEach(([name, w]) => {
     ok(a === c, name + " / " + what + ": the full compare says [" + a + "], the lines' compare [" + c + "]");
   });
 });
+// the ISD switch: GSTLock.isdMoves (the ledger's credit by month, nothing worked out again) against table 4 in full
+let isdN = 0, isdMoved = 0;
+Object.entries(worlds).forEach(([name, w]) => {
+  const b0 = setup(w), names = Array.from(new Set(b0.vouchers.map((v) => v.party).concat(Object.keys(w.ledgers || {}))));
+  names.forEach((led) => [true, false].forEach((on) => {
+    const b = setup(w);
+    if (!on) { b.map[led] = Object.assign({}, b.map[led], {isd: {at: "x"}}); b.mapV = (b.mapV || 0) + 1; x.GST2B._memo = null; x.GSTR._carry = null; ITCF.rows(reg); }
+    const was = b.map[led], flip = (v) => () => { b.map = Object.assign({}, b.map, {[led]: v}); b.mapV = (b.mapV || 0) + 1; x.GST2B._memo = null; x.GSTR._carry = null; };
+    const full = L.tryBooks([reg], flip(Object.assign({}, was, {isd: on ? {at: "x"} : undefined})), flip(was));
+    const red = L.isdMoves(led);
+    const a = full ? full.months.join(",") : "", c = red ? red.months.join(",") : ""; isdN++; if (a) isdMoved++;
+    if (process.env.SHOW) console.log("  ISD " + (on ? "on" : "off") + " " + name + " / " + led + ": " + a);
+    ok(a === c, "ISD switch " + (on ? "on" : "off") + ", " + name + " / " + led + ": the full compare says [" + a + "], the ledger's credit [" + c + "]");
+  }));
+});
+console.log("  ISD switch: " + isdN + " cases (" + isdMoved + " moving a filed month)");
+ok(isdMoved >= 4, "enough ISD cases move a filed month (" + isdMoved + ")");
 console.log("  " + (n - fails) + " of " + n + " cases agree (" + moved + " in which a filed month moves)");
 ok(moved >= 5, "enough of the cases move a filed month to mean something (" + moved + ")");
 console.log(fails ? fails + " FAILED" : "all passed");

@@ -89,16 +89,21 @@ function gsetSet(key, val, reg, sub){
 // next-gst-isd (the owner, 12-Nov-2026): a ledger's switch "ISD (Input Service Distributor)" (b.map[name].isd, GSTR.isISD):
 // the credit of every entry on it goes in 3B 4(A)(4). FinCom's own, saved with the books (synced), never written to Tally;
 // kept over a refresh of the ledger list (Books.mapLedgers). A name not in the ledger list is refused
-// (a switch that moves the table 4 of a filed 3B: asked first, with a reason, GSTLock.guardBooks in src/js/47; only the months
-// of the ledger's entries are compared)
+// (a switch that moves credit between 4(A)(4) and 4(A)(5) of a filed 3B: asked first, with a reason, GSTLock.isdMoves in
+// src/js/47-gst-lock-checks.js; false while it is checked or asked, the switch made once that is done)
 function gsetIsd(name, on, sure){
   const b = S.books; name = String(name || "").trim(); if (!b || !name) return false;
   if (on && !(b.map || {})[name]){ toast(name + " is not a ledger of these books: pick it from the list."); return false; }
-  if (!sure && typeof GSTLock === "object" && GSTLock.guardBooks){
-    const was = (b.map || {})[name], set = (v) => () => { b.map = Object.assign({}, b.map, {[name]: v}); if (!v) delete b.map[name]; b.mapV = (b.mapV || 0) + 1; GSTR._carry = null; };
-    const ms = Array.from(new Set((b.vouchers || []).filter(v => v.party === name || (v.ent || []).some(e => e.l === name)).map(v => String(v.date).slice(0, 6))));
-    GSTLock.guardBooks("ISD switch for " + name, set(Object.assign({n: 0}, was, on ? {isd: {at: ""}} : {isd: undefined})), set(was), () => gsetIsd(name, on, true), ms);
-    return true;
+  // (the check after the click is drawn, with a line saying so; refused, never made unchecked, when it cannot be worked out yet)
+  if (!sure && typeof GSTLock === "object" && (GSTR.gstins(b) || []).some(g => GSTLock.any(g.slice(0, 2)))){
+    toast("Checking filed 3Bs…");
+    setTimeout(() => GSTLock.ready().then(y => {
+      if (!y){ toast(GSTLock.NOT); return; }
+      const x = GSTLock.isdMoves(name);
+      if (!x) return gsetIsd(name, on, true);
+      GSTLock.ask(x.reg, x.months, ["r3b"], "ISD switch for " + name, x.w).then(ok => { if (ok) gsetIsd(name, on, true); else render(); });
+    }), 30);
+    return false;
   }
   b.map = Object.assign({}, b.map || {});
   const m = b.map[name] = Object.assign({n: 0}, b.map[name] || {});

@@ -95,6 +95,7 @@ Object.assign(M2B, {
     const fy = this.fyNow(), s = this.st[this.key(reg, fy)];
     if (!s || !s.run || s.busy || !pairs.length) return;
     // a pair whose credit is in a GSTR-3B already filed stays as it is (GSTLock.pair, src/js/47)
+    if (typeof GSTLock === "object" && !checked && GSTLock.any(reg) && !(await GSTLock.ready())){ toast(GSTLock.NOT); return; }
     if (typeof GSTLock === "object" && GSTLock.pair && !checked){
       let w = "";
       pairs = pairs.filter(p => { const g = p.g || [], bk = p.b || [];

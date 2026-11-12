@@ -3,28 +3,20 @@
 // tolerance (pair), a 2B brought in (twoB), a books setting such as the ISD ledger switch (guardBooks). Kept out of legacy.js
 // (its size budget): every place that calls them is on a GST or books screen, which loads this file (app/src/screens/Gst.jsx)
 const GSTLockMore = {
-  // a change FinCom allows on a filed month when a person says so (B2C summary marks, places of supply: the filed GSTR-1
-  // stays as it is and the change goes as an amendment; a 2B brought in again): asked, with a reason, and the audit trail
-  // records it. w: the words (else worked out from the months). true: go on
-  async ask(reg, months, forms, what, w){
-    w = w || this.why(reg, months, forms);
-    if (!w) return true;
-    const ans = await askConfirm({title: "Change a filed month?", ok: "Change anyway",
-      body: esc(w) + " The filed return is not changed." + '<label class="f" style="margin-top:12px"><span>Why (kept in the audit trail)</span><input type="text" id="cbxWhy" autocomplete="off" aria-label="Why"></label>',
-      read: () => ((document.getElementById("cbxWhy") || {}).value || "").trim(), validate: (d) => d ? "" : "Say why: it is kept in the audit trail."});
-    if (!ans || !ans.ok) return false;
-    try { auditEvent("gst_filed_changed", {reg, months: Array.from(new Set((months || []).filter(Boolean))).slice(0, 12), what: what || "", why: w, reason: ans.data || ""}, S.coId); } catch (e){}
-    return true;
-  },
   // the credit every ITC line gives each month (4(A)(5) and 4(B)(1), app/src/lib/itcFinal.js)
   // (only for the months fm says are filed, when given: the rest cannot refuse anything)
+  // two months' credit (credits) differ: 4(A)(5), 4(A)(4) (i) or 4(B)(1) (r)
+  moves(a, c){ return this.H.some(h => ["", "i", "r"].some(p => Math.abs(((a || {})[p + h] || 0) - ((c || {})[p + h] || 0)) >= 0.005)); },
   credits(reg, fm){
     const F = typeof ITCF === "object" ? ITCF : null, by = {};
     if (!F) return by;
+    const iT = F.isdTest ? F.isdTest() : null;
     F.rows(reg).forEach(r => {
       if (r.fixed) return;
+      // an ISD's line is 4(A)(4)'s, kept apart from 4(A)(5) (itcFinal.js isdRow): a switch between them is a move
+      const p = iT && F.isdRow(r, iT) ? "i" : "";
       const ms = new Set([r.e.C, r.bm, r.tm].concat(Object.keys(r.booksBy || {}), Object.keys(r.blkBy || {})).filter(m => m && (!fm || fm(m))));
-      ms.forEach(m => { const a = F.effect(r, r.e, m), c = F.revEffect(r, r.e, m), o = by[m] = by[m] || {}; this.H.forEach(h => { o[h] = r2((o[h] || 0) + num(a[h])); o["r" + h] = r2((o["r" + h] || 0) + num(c[h])); }); });
+      ms.forEach(m => { const a = F.effect(r, r.e, m), c = F.revEffect(r, r.e, m), o = by[m] = by[m] || {}; this.H.forEach(h => { o[p + h] = r2((o[p + h] || 0) + num(a[h])); o["r" + h] = r2((o["r" + h] || 0) + num(c[h])); }); });
     });
     return by;
   },
@@ -43,7 +35,7 @@ const GSTLockMore = {
     try {
       if (change) change(st);
       const now = this.credits(reg, fm);
-      const ms = Array.from(new Set(Object.keys(was).concat(Object.keys(now)))).sort().filter(m => this.H.some(h => Math.abs(((was[m] || {})[h] || 0) - ((now[m] || {})[h] || 0)) >= 0.005 || Math.abs(((was[m] || {})["r" + h] || 0) - ((now[m] || {})["r" + h] || 0)) >= 0.005));
+      const ms = Array.from(new Set(Object.keys(was).concat(Object.keys(now)))).sort().filter(m => this.moves(was[m], now[m]));
       w = this.why(reg, ms); this.moved = ms.filter(m => this.filed(reg, m)); done = !w && keep !== false;
     } finally {
       if (!done){ const o = JSON.parse(saved); st.confirm = o.confirm; st.link = o.link; if (o.opt === undefined) delete st.opt; else st.opt = o.opt; GST2B._memo = m0; if (ITCF._memo) ITCF._memo(i0); }
@@ -64,7 +56,7 @@ const GSTLockMore = {
       const out = {};
       GSTR._carry = null;     // once: the months after it carry their credit from it, worked out in turn
       (only || GSTR.months() || []).forEach(m => { if (!this.filed(reg, m)) return; const t = GSTR.threeBm(m, reg) || {};
-        out[m] = JSON.stringify(["impGoods", "impServ", "rcmIn", "isd", "other", "rev1", "rev2"].map(k => this.H.map(h => r2(num((t[k] || {})[h]))))); });
+        out[m] = JSON.stringify(["impGoods", "impServ", "rcmIn", "isd", "other", "rev1", "rev2", "na"].map(k => this.H.map(h => r2(num((t[k] || {})[h]))))); });
       return out;
     });
   },
@@ -86,6 +78,31 @@ const GSTLockMore = {
     if (!x) return go();
     this.ask(x.reg, x.months, ["r3b"], what, x.w).then(y => { if (y) go(); else render(); });
   },
+  // the ISD switch of a ledger (gsetIsd, src/js/36) only moves credit between 4(A)(4) and 4(A)(5): of each month, what the
+  // ledger's credit puts there. That is, line by line (the wrap of GSTR.threeBm, itcFinal.js apply(): the books' tax of the
+  // month plus each line's effect), the credit of every ITC line that is the ledger's (its entries' documents; a line with
+  // only a 2B row, by the ledger's GSTIN: GSTR.isdTest) in the month the line takes it (e.C, e.amt), a line taken as booked
+  // in its documents' months, and an entry of the ledger with input tax that is in no line, in its own month. Nothing is
+  // worked out again: {w, reg, months} when a filed month has any, else null
+  isdMoves(name){
+    const b = S.books || {}, g = String((b.gstins || {})[name] || "").toUpperCase().trim();
+    const vs = (b.vouchers || []).filter(v => !v.opt && !v.cancel && (v.party === name || (v.ent || []).some(e => e.l === name))), ids = new Set(vs.map(v => v.id));
+    for (const reg of (GSTR.gstins(b) || []).map(x => x.slice(0, 2))){
+      if (!this.any(reg)) continue;
+      const at = {}, put = (m, a) => { if (m && this.H.some(h => Math.abs(num((a || {})[h])) >= 0.005)) at[m] = true; }, seen = new Set();
+      ITCF.rows(reg).forEach(r => {
+        const d = r.docs || [];
+        d.forEach(x => seen.add(x.id));
+        if (!(d.length ? d.some(x => ids.has(x.id)) : !!(g && r.p && String(r.p.gstin).toUpperCase() === g))) return;
+        if (!r.fixed){ if (r.e) put(r.e.C, r.e.amt); }
+        else if (r.full) Object.keys(r.booksBy || {}).forEach(m => put(m, r.booksBy[m]));
+      });
+      vs.forEach(v => { if (!seen.has(v.id) && (v.ent || []).some(e => { const m = Books.ledgerOf(e.l); return m.kind === "gst" && m.side === "input" && num(e.a); })) at[String(v.date).slice(0, 6)] = true; });
+      const ms = Object.keys(at).sort().filter(m => this.filed(reg, m));
+      if (ms.length) return {w: this.why(reg, ms), reg, months: ms};
+    }
+    return null;
+  },
   // a 2B (first, or in place of the one there) for a registration and month: {w, reg, months} when it would move the table 4
   // of a month whose 3B is filed (the words name the 2B and the months), else null: then it is left in, with the matching
   // and the ITC lines worked out for it (what the screen draws next; the caller's own putting it in costs nothing more).
@@ -106,7 +123,10 @@ const GSTLockMore = {
       let ok = false;
       try {
         put(); const now = this.credits(reg, fm);
-        const ms = Array.from(new Set(Object.keys(was).concat(Object.keys(now)))).sort().filter(m => this.H.some(h => ["", "r"].some(p => Math.abs(((was[m] || {})[p + h] || 0) - ((now[m] || {})[p + h] || 0)) >= 0.005)));
+        const ms = Array.from(new Set(Object.keys(was).concat(Object.keys(now)))).sort().filter(m => this.moves(was[m], now[m]));
+        // 4(D)(2): the month's 2B rows whose credit is not available (GSTR.threeBm reads them from the 2B itself)
+        const na = (x) => JSON.stringify(this.H.map(h => r2(((x && x.rows) || []).filter(r => r.itcavl === "N" && !r.rej).reduce((a, r) => a + r.dir * num(r[h]), 0))));
+        if (na(old) !== na(t) && this.filed(reg, t.ym) && !ms.includes(t.ym)) ms.push(t.ym);
         if (ms.length) x = {w: this.why(reg, ms), reg, months: ms}; else { ok = true; this.kept = t; }
       } finally { if (!ok){ back(); GST2B._memo = m0; ITCF._memo(i0); } }
     }
@@ -115,18 +135,4 @@ const GSTLockMore = {
   }
 };
 Object.assign(GSTLock, GSTLockMore);
-// the filed mark taken off by emptying its date box (GSTMark, src/js/35): asked first when it has more than a date
-Object.assign(GSTMark, {
-  // the date box emptied: a mark with an ARN (the GST API, the browser helper), the 3B kept as filed or the IFF's documents is asked about first,
-  // saying what goes with it; a date alone goes at once. go(): after it is taken off
-  ask(ym, reg, k, go){
-    const r = GSTF.peek(ym, reg), arn = r[k + "Arn"], kept = k === "r3b" && r.snap, docs = k === "iff" && r.iffDocs && Object.keys(r.iffDocs).length;
-    if (!arn && !kept && !docs){ this.clear(ym, reg, k); return go(); }
-    const how = r[k + "Via"] === "api" ? " (filed through the GST API)" : r[k + "Via"] === "helper" ? " (read from the portal by the browser helper)" : "";
-    const what = [arn ? "its ARN " + arn + how : "", kept ? "the 3B kept as filed (the next month’s carried credit and GSTR-9 then use the books as they are now)" : "", docs ? "the documents recorded as in the IFF" : ""].filter(Boolean);
-    askConfirm({title: "Take off the filed mark?", ok: "Take it off", danger: true,
-      body: esc(({r3b: "GSTR-3B", r1: "GSTR-1", iff: "IFF"})[k] + " for " + GSTR.label(ym) + " goes back to not filed. With the date go " + what.join(" and ") + ". The return on the portal is not touched.")})
-      .then(a => { if (a && a.ok){ this.clear(ym, reg, k); go(); } else render(); });
-  }
-});
 /* @react-lazy: end */

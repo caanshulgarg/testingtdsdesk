@@ -1396,6 +1396,7 @@ function booksChange(t){
       const x = GST2B.fromJson(JSON.parse(txt));
       if (!x.gstin || !x.ym) throw new Error("no period");
       if (notThisClient([x.gstin]).length) return "not taken: " + f.name + " is for " + x.gstin + ", another PAN";
+      if (typeof GSTLock === "object" && GSTLock.any(x.gstin.slice(0, 2)) && !(await GSTLock.ready())) return "not taken: " + GSTR.label(x.ym) + " (" + GSTLock.NOT + ")";
       const lk = typeof GSTLock === "object" && GSTLock.twoB ? GSTLock.twoB(x) : null;
       if (lk && !(await GSTLock.ask(lk.reg, lk.months, ["r3b"], "2B for " + GSTR.label(x.ym) + " brought in", lk.w))) return "not taken: " + GSTR.label(x.ym) + " (it would change a filed 3B)";
       b.twoBs = b.twoBs || {};

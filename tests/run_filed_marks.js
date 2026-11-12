@@ -241,12 +241,36 @@ const F = (ym) => x.GSTF.peek(ym, reg);
   ok(asked.length === 0 && went === 1, "C4. one that moves only May (open): made at once");
   // the ISD ledger switch (src/js/36): Beta's April bill would move from 4(A)(5) to 4(A)(4) of filed April: asked
   if (x.gsetIsd) {
-    asked.length = 0; answer = null; x.gsetIsd("Beta Traders", true); await flush();
-    ok(asked.length === 1 && /April|Apr-2026/.test(asked[0].body) && !((b.map["Beta Traders"] || {}).isd), "C4. the ISD switch on Beta's ledger (April entries, April filed): asked; cancelled, not switched");
-    asked.length = 0; x.gsetIsd("Foxtrot Labs", true);
-    ok(asked.length === 0 && !!(b.map["Foxtrot Labs"] || {}).isd, "C4. on Foxtrot's (May entries only): switched at once");
-    x.gsetIsd("Foxtrot Labs", false);
-  } else ok(false, "C4. gsetIsd loads");
+    const nap = () => new Promise((r) => setTimeout(r, 60));
+    asked.length = 0; answer = null; toasts.length = 0;
+    ok(x.gsetIsd("Beta Traders", true) === false && toasts.includes("Checking filed 3Bs…"), "C4. the ISD switch on Beta's ledger: the click says it is checking (false: not switched yet)");
+    await nap(); await flush();
+    ok(asked.length === 1 && /Apr-2026/.test(asked[0].body) && !((b.map["Beta Traders"] || {}).isd), "C4. Beta's credit is in filed April: asked; cancelled, not switched");
+    asked.length = 0; x.gsetIsd("Foxtrot Labs", true); await nap();
+    ok(asked.length === 0 && !!(b.map["Foxtrot Labs"] || {}).isd, "C4. on Foxtrot's (credit in June): switched, nothing asked");
+    x.gsetIsd("Foxtrot Labs", false); await nap();
+    } else ok(false, "C4. gsetIsd loads");
+  // H2: the checks of a change not loaded (their file blocked): every path holds the change, never makes it unchecked
+  {
+    const keep = {pair: Lk.pair, twoB: Lk.twoB, isdMoves: Lk.isdMoves, guardBooks: Lk.guardBooks};
+    Object.keys(keep).forEach((k) => { delete Lk[k]; }); ctx.gstChecksLoad = () => Promise.reject(new Error("blocked"));
+    const s0 = JSON.stringify([st.confirm, st.link]); toasts.length = 0;
+    x.r2Link(kB, "e1");
+    ok(JSON.stringify([st.confirm, st.link]) === s0 && toasts.includes(Lk.NOT), "H2. the checks blocked: a 2B link is refused, “" + Lk.NOT + "”");
+    const fj0 = x.GST2B.fromJson; x.GST2B.fromJson = () => JSON.parse(JSON.stringify(TWOB[CMP + "|042026"]));
+    const h = x.GSTAPI.take({form: "2B", gstin: CMP, period: "042026", data: {}, fetched_at: "2026-11-13T10:00:00Z"}); x.GST2B.fromJson = fj0;
+    ok(/^held/.test(h) && !(b.apiTaken || {})[CMP + "|2B|042026|x"], "H2. the server's 2B: held, fetched again next time (" + h + ")");
+    asked.length = 0; x.gsetIsd("Foxtrot Labs", true); await new Promise((r) => setTimeout(r, 60));
+    ok(!(b.map["Foxtrot Labs"] || {}).isd && toasts.includes(Lk.NOT), "H2. the ISD switch: not made");
+    await x.aihPair(kB, true);
+    ok(!st.link[kB], "H2. the AI's pair: not made");
+    Object.assign(Lk, keep); delete ctx.gstChecksLoad;
+  }
+  {
+    const fj0 = x.GST2B.fromJson; x.GST2B.fromJson = () => Object.assign(JSON.parse(JSON.stringify(TWOB[CMP + "|042026"])), {gstin: "27AAACZ1234A1Z9"});
+    const h = x.GSTAPI.take({form: "2B", gstin: "27AAACZ1234A1Z9", period: "042026", data: {}, fetched_at: "2026-11-13T10:00:00Z"}); x.GST2B.fromJson = fj0;
+    ok(/not a GSTIN of/.test(h), "the server's 2B for another client's GSTIN: refused, said plainly (" + h + ")");
+  }
   answer = {ok: true, data: "x"};
   // an allowed click leaves the matching worked out for the new state (the caller's same change is then free)
   const m1 = x.GST2B._memo; x.r2Link(kP, "e1");

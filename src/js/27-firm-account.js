@@ -1264,6 +1264,7 @@ function tdsTcsCode(ledger, code){ const b = S.books; b.tcsCodes = Object.assign
 // (a new tolerance re-matches every month: one that moves the credit of a filed 3B is asked first, with a reason)
 function r2SetTol(v){
   const tol = Math.max(0, num(v)), reg = (typeof r2Reg === "function" ? r2Reg(S.books) : "") || S.gstReg || "";
+  if (typeof GSTLock === "object" && !GSTLock.now(reg)){ render(); return; }
   const go = () => { const st = GST2B.state(); st.opt = Object.assign({}, st.opt, {tol}); saveBooks(); render(); };
   const w = typeof GSTLock === "object" && GSTLock.pair ? GSTLock.pair(reg, null, null, st => { st.opt = Object.assign({}, st.opt, {tol}); }) : "";
   if (!w) return go();
@@ -1271,7 +1272,7 @@ function r2SetTol(v){
 }
 // "Same": a likely pair confirmed; "Not the same" or "Unlink": the 2B document and those Tally entries are kept apart
 // (a change that would move the credit of a GSTR-3B already filed is refused: GSTLock.pair, src/js/47, works it out)
-function r2Locked(keys, ids, change){ if (typeof GSTLock !== "object" || !GSTLock.pair) return false; const w = GSTLock.pair((typeof r2Reg === "function" ? r2Reg(S.books) : "") || S.gstReg || "", keys, ids, change); if (w) toast(w); return !!w; }
+function r2Locked(keys, ids, change){ const reg = (typeof r2Reg === "function" ? r2Reg(S.books) : "") || S.gstReg || ""; if (typeof GSTLock !== "object") return false; if (!GSTLock.now(reg)) return true; const w = GSTLock.pair ? GSTLock.pair(reg, keys, ids, change) : ""; if (w) toast(w); return !!w; }
 const r2Do = {confirm: (key) => (st) => { st.confirm[key] = "yes"; }, unlink: (key, ids) => (st) => { ids.forEach(id => { st.confirm[key + ">" + id] = "no"; }); delete st.link[key]; delete st.confirm[key]; },
   link: (key, ids) => (st) => { st.link[key] = ids.slice(); delete st.confirm[key]; }};
 // (true when done, false when refused: the 2B screen tells the automatic run only what was done)

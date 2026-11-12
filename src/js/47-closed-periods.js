@@ -114,8 +114,28 @@ const GSTLock = {
   },
   // refused: the words shown, true; open: false
   refuse(reg, months, forms){ const w = this.why(reg, months, forms); if (w) toast(w); return !!w; },
+  // a change FinCom allows on a filed month when a person says so (B2C summary marks, places of supply: the filed GSTR-1
+  // stays as it is and the change goes as an amendment; a 2B brought in again): asked, with a reason, and the audit trail
+  // records it. w: the words (else worked out from the months). true: go on
+  async ask(reg, months, forms, what, w){
+    w = w || this.why(reg, months, forms);
+    if (!w) return true;
+    const ans = await askConfirm({title: "Change a filed month?", ok: "Change anyway",
+      body: esc(w) + " The filed return is not changed." + '<label class="f" style="margin-top:12px"><span>Why (kept in the audit trail)</span><input type="text" id="cbxWhy" autocomplete="off" aria-label="Why"></label>',
+      read: () => ((document.getElementById("cbxWhy") || {}).value || "").trim(), validate: (d) => d ? "" : "Say why: it is kept in the audit trail."});
+    if (!ans || !ans.ok) return false;
+    try { auditEvent("gst_filed_changed", {reg, months: Array.from(new Set((months || []).filter(Boolean))).slice(0, 12), what: what || "", why: w, reason: ans.data || ""}, S.coId); } catch (e){}
+    return true;
+  },
+  // the checks that work a change out (src/js/47-gst-lock-checks.js) come with the GST and books screens; ready() loads them
+  // (gstChecksLoad, app/src/screens/index.js) and says whether they are here. now(reg): true when a change for reg may go
+  // ahead to be checked (they are here, or nothing of reg is filed); else false: they start loading, the person is told to
+  // try again, and the change is held, never made unchecked
+  async ready(){ if (this.pair) return true; try { if (typeof gstChecksLoad === "function") await gstChecksLoad(); } catch (e){} return !!this.pair; },
+  NOT: "The check of filed GST months could not be loaded yet: nothing was changed. Try again in a moment.",
+  now(reg){ if (this.pair || !this.any(reg)) return true; this.ready(); toast(this.NOT); return false; },
   // go() now when every month is open (no wait: the change is made in this call), else once asked as above
-  gate(reg, months, forms, what, go, w){ if (!(w = w || this.why(reg, months, forms)) || !this.ask) return go(); this.ask(reg, months, forms, what, w).then(y => { if (y) go(); }); },
+  gate(reg, months, forms, what, go, w){ if (!(w = w || this.why(reg, months, forms))) return go(); this.ask(reg, months, forms, what, w).then(y => { if (y) go(); }); },
   // the months of these entries of the books (place of supply, B2C summary marks)
   months(ids){ const s = new Set(ids || []); return ((S.books || {}).vouchers || []).filter(v => s.has(v.id)).map(v => String(v.date).slice(0, 6)); },
   // any GSTR-3B of the registration filed (a quick look, before anything is worked out)

@@ -373,7 +373,7 @@ const lockW = (reg, r, s1) => {
 const withS = (r, o) => Object.assign({}, r.s || {}, o);
 // ---------- what the screens, the Excel and the tests use
 export const ITCF = {
-  DECS, DEC_LABEL, LINES, LINE_LABEL, CHIPS, HEADS, ELIG, ELIG_LABEL, credit, shown, effect, revEffect,
+  DECS, DEC_LABEL, LINES, LINE_LABEL, CHIPS, HEADS, ELIG, ELIG_LABEL, credit, shown, effect, revEffect, isdRow, isdTest,
   // the line a bill of the books is decided on (the input register's Eligible?), and its eligibility set by a person
   lineOfDoc(reg, id) { const m = model(reg); return m ? m.rows.find((r) => !r.fixed && (r.docs || []).some((d) => d.id === id)) || null : null; },
   setElig(reg, r, el) { const w = lockW(reg, r, withS(r, { el: el === r.defE ? "" : el })); if (w) { toast(w); return false; } ITCDec.setEl(reg, r.key, el === r.defE ? "" : el, r.s); return true; },
