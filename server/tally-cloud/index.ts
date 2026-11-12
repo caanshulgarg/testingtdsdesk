@@ -4798,12 +4798,8 @@ Deno.serve(sentry.wrap(async (req) => {
         // migration 54: a posting for another bridge is never reported by this one (a cloud without the column: as before).
         // A bridge switched to changes only still reports a posting it took before the switch
         {
-          const { data: tj, error: te } = await db.from("tally_post_jobs").select("target_bridge, taken_by").eq("id", String(body.id || "")).eq("device_id", dev.id).maybeSingle();
+          const { data: tj, error: te } = await db.from("tally_post_jobs").select("target_bridge").eq("id", String(body.id || "")).eq("device_id", dev.id).maybeSingle();
           if (te && !missingRel(te)) { fail("posts_update_target", te, "posts_update"); console.error("tally-ingest: posts_update target check not read", dev.id, String(body.id || "").slice(0, 60), String(te.message || "").slice(0, 200)); }     // 2.3.1: logged
-          // migration 174 (item 4a): a posting the cron put back and another bridge of this computer took since (taken_by that
-          // bridge): this bridge's copy is told to stop (cancelled: bridge 2.5.5 stops its job on it), never to go on posting
-          if (!te && tj?.target_bridge && tj.target_bridge !== meU && tj.taken_by && tj.taken_by === tj.target_bridge)
-            return reply(403, { ok: false, cancelled: true, handedOver: true, error: "This posting was handed to another FinCom Bridge (" + String(tj.taken_by).slice(0, 40) + ") after this one went quiet; this one stops its copy." });
           if (!te && tj?.target_bridge && tj.target_bridge !== meU) return reply(403, { ok: false, error: "This posting is for another bridge on this computer; this one does not report it." });
         }
         const st = ["taken", "running", "done", "failed"].includes(body.status) ? body.status : "running";
@@ -4854,12 +4850,13 @@ Deno.serve(sentry.wrap(async (req) => {
         // a posting cancelled in FinCom, or gone: the bridge is told, and stops waiting for Tally
         const id = String(body.id || "");
         // migration 174 (item 3): the posting's version (row_version, moved on by every update of the row) is read with it,
-        // and the final write below is a compare-and-set on it: an owner's settlement or the cron's requeue made while this
-        // report was being worked on is never written over; a lost race reads the posting again and merges again. A cloud
-        // without 174 (no such column): read and written as before
+        // and the final write below is a compare-and-set on it: an owner's settlement made while this report was being
+        // worked on is never written over; a lost race reads the posting again and merges again. With it: stop_reason (174,
+        // item 2: posting into Tally stopped for the client while its bridge held the posting), taken_by / taken_at and
+        // resend_only (a posting back in the queue its own bridge reports on). A cloud without 174: read and written as before
         const readCur = async () => {
-          let q = await db.from("tally_post_jobs").select("status, checking, seq, results, items, row_version").eq("id", id).eq("device_id", dev.id).maybeSingle();
-          if (q.error && /row_version/.test(q.error.message)) q = await db.from("tally_post_jobs").select("status, checking, seq, results, items").eq("id", id).eq("device_id", dev.id).maybeSingle();
+          let q = await db.from("tally_post_jobs").select("status, checking, seq, results, items, row_version, stop_reason, taken_by, taken_at, resend_only").eq("id", id).eq("device_id", dev.id).maybeSingle();
+          if (q.error && /row_version|stop_reason/.test(q.error.message)) q = await db.from("tally_post_jobs").select("status, checking, seq, results, items").eq("id", id).eq("device_id", dev.id).maybeSingle();
           // seq (migration 36b) may be missing on an older cloud: read without it then
           if (q.error && /seq/.test(q.error.message)) q = await db.from("tally_post_jobs").select("status, checking, results, items").eq("id", id).eq("device_id", dev.id).maybeSingle();
           return q.data;
@@ -4879,13 +4876,12 @@ Deno.serve(sentry.wrap(async (req) => {
           // computer, resumed by itself and waiting for Tally, and held that computer's ledger read behind it. Nothing of
           // the row changes: a done posting stays done, its results as they are (the bridge's cancel leaves a done job done)
           if (["done", "failed"].includes(c.status) && !c.checking) return reply(200, { ok: true, stale: true, settled: true, status: c.status, cancelled: true });
-          // migration 174 (item 3): a posting put back in the queue (the cron's requeue, a check handed back) takes no report
-          // of the copy the bridge had: it waits to be taken again (the bridge that takes it keeps what it sent, by its own
-          // record), and nothing of the hand-back is written over
-          if (c.status === "waiting") return reply(200, { ok: true, stale: true, status: "waiting", requeued: true });
+          // migration 174: a posting handed back to send some entries again (resend_only, a check's "not in Tally") takes no
+          // report of the copy before it (its acceptances are stamped above all the same); it is taken again by posts_take.
+          // (A posting another bridge took cannot be reported here: the target check above refuses it)
+          if (c.status === "waiting" && Array.isArray(c.resend_only) && c.resend_only.length) return reply(200, { ok: true, stale: true, status: "waiting", handedBack: true });
           return null;
         };
-        { const end = endNow(cur); if (end) return end; }
         // 03-Oct-2026 (round 4): an entry Tally accepted is never stored as failed. An acceptance is ok, accepted (bridge
         // 2.1.6), a voucher id (lastVchId) / voucher number / master id / GUID, or CREATED / ALTERED with a voucher id in
         // Tally's words ("CREATED 0" is not one). The fault of the day: Tally replied CREATED with LASTVCHID 26298, the
@@ -4980,7 +4976,6 @@ Deno.serve(sentry.wrap(async (req) => {
         if (timing) row.timing = timing;
         return { row, status, stale };
         };
-        let { row, status, stale } = await build(cur);
         // F3: the posting's ids read once; only an id not yet stamped is stamped, only one not yet released is released
         // (the bridge reports every few seconds). Not readable (an older cloud): every one, as before
         let known: any[] | null = null;
@@ -4991,8 +4986,9 @@ Deno.serve(sentry.wrap(async (req) => {
         const rowOf = (a: string) => known ? known.find((r) => fid(r.fincom_id) === a || fid(r.entry_id) === a) : undefined;
         // the id of every accepted entry is stamped (tally_post_id_accept, migration 36b: the sync then never frees it);
         // before 36b the function is missing and the stamp is skipped. Stamped 0 (36b matches the tag's spelling, the
-        // bridge's and FinCom's entry id; none of the posting's ids is this one) is said in the log
-        for (const a of accepted) {
+        // bridge's and FinCom's entry id; none of the posting's ids is this one) is said in the log. Only a posting of this
+        // computer (cur: read by its key); none: gone, nothing stamped
+        if (cur) for (const a of accepted) {
           const k = rowOf(a);
           // stamped already and not released: nothing to do; released (by the owner, as history): stamped again, so that
           // a new acceptance after a Retry clears the release (36b judges by its own clock and the posting's taken_at)
@@ -5011,9 +5007,39 @@ Deno.serve(sentry.wrap(async (req) => {
           if (accErr && !/tally_post_id_accept|schema cache|does not exist/i.test(accErr.message)) { fail("tally_post_id_accept", accErr, "posts_update"); console.error(fnName, accErr.message); }
           else if (!accErr && accData && typeof accData === "object" && (accData as any).stamped === 0) console.warn(fnName + ": stamped 0 for " + a + " (" + s(r0.id || x0.id, 60) + ") in posting " + id + ": no id of the posting matches");
         }
+        // migration 174 (review B2): the stamps above come before every answer below, the early ones too (cancelled, late,
+        // settled, handed back): an entry Tally took is never forgotten because the posting changed in FinCom meanwhile
+        // the row to write on the posting as read (cur), or the answer that ends the report
+        const SENT_STATES = ["sending", "sent", "in_tally", "unknown", "posted", "needs_review"];
+        const prepare = async (c: any): Promise<{ end?: Response; row?: Record<string, unknown>; status?: string; stale?: boolean; stopped?: string }> => {
+          const end = endNow(c); if (end) return { end };
+          const b: any = await build(c);
+          // 174 (review B2): a posting back in the queue (the cron's requeue) its own bridge reports on (this computer, its
+          // target bridge, the target check above): taken back by that bridge, its report merged and written as any other
+          if (c.status === "waiting") {
+            if (/^go-[0-9a-f]{6,32}$/.test(meU)) b.row.taken_by = meU;
+            if (!c.taken_at) b.row.taken_at = new Date().toISOString();
+          }
+          // 174 (review H1): posting into Tally was stopped for the client (unlinked, stopped, earlier years) while its bridge
+          // held the posting: this report is stored and stamped, then the bridge is told to stop. Nothing of it sent: failed
+          // with the reason; anything that may be in Tally: held (done, being checked) for an owner, its ids kept. A posting
+          // the bridge finished (done, nothing to check) is stored as it is
+          if (c.stop_reason && ["waiting", "taken", "running"].includes(c.status) && !(b.row.status === "done" && !b.row.checking)) {
+            const rs = (Array.isArray(b.row.results) ? b.row.results : []) as any[], xs = (Array.isArray(b.row.items) ? b.row.items : []) as any[];
+            const anySent = accepted.size > 0 || rs.some((r) => r && (r.ok === true || r.sent === true || r.outcomeUnknown === true || r.accepted === true || SENT_STATES.includes(String(r.state || ""))))
+              || xs.some((x) => x && SENT_STATES.includes(String(x.state || "")));
+            const why = s(String(c.stop_reason), 400);
+            if (anySent) { b.row.status = "done"; b.row.checking = true; b.row.message = s("Stopped: " + why + " Part of it may be in Tally already: held for checking, not posted again; an owner marks it posted or releases it.", 500); }
+            else { b.row.status = "failed"; b.row.checking = false; b.row.message = s(why + " The FinCom Bridge stopped it before any of it reached Tally.", 500); }
+            b.status = b.row.status; b.stopped = why;
+          }
+          return b;
+        };
+        let { end: end0, row, status, stale, stopped } = await prepare(cur);
+        if (end0) return end0;
         // migration 174 (item 3): written only while the posting is still the version read (row_version); none changed it
-        // since, else read again, the guards and the merge done again on what is there now (an owner's settlement kept, a
-        // requeue not written over), five times at most (then 409: the bridge reports again on its next turn)
+        // since, else read again, the guards and the merge done again on what is there now (an owner's settlement kept),
+        // five times at most (then 409: the bridge reports again on its next turn)
         for (let round = 0; ; round++) {
           const ver = cur && typeof cur.row_version === "number" ? cur.row_version : null;
           const upd = (r: Record<string, unknown>) => { let qq = db.from("tally_post_jobs").update(r).eq("id", id).eq("device_id", dev.id).neq("status", "cancelled"); if (ver !== null) qq = qq.eq("row_version", ver); return qq.select("id"); };
@@ -5027,8 +5053,9 @@ Deno.serve(sentry.wrap(async (req) => {
           if (round >= 4) return reply(409, { ok: false, busy: true, error: "This posting changed in FinCom while this report came in; report again." });
           console.log("tally-ingest posts_update: the posting changed since it was read; read again", id, "round", round + 1);
           cur = await readCur();
-          { const end = endNow(cur); if (end) return end; }
-          ({ row, status, stale } = await build(cur));
+          let end1: Response | undefined;
+          ({ end: end1, row, status, stale, stopped } = await prepare(cur));
+          if (end1) return end1;
         }
         // migration 45: the posting window (Tally's change numbers before and after the job), saved only now: after the update's
         // own checks (not cancelled, not late, not settled) and its row stored (the review's L8)
@@ -5061,6 +5088,8 @@ Deno.serve(sentry.wrap(async (req) => {
         // that request); the answer keeps its shape, the register's states only logged
         const regAns = await registerCall("tally_post_register_apply", { p_job: id }, "posts_update");
         if (regAns && (regAns as any).changed) console.log("tally-ingest posts_update: posting register", id, JSON.stringify((regAns as any).states || {}));
+        // 174 (review H1): stored and stamped; now the bridge stops its copy (bridge 2.5.5 stops a job on cancelled)
+        if (stopped) return reply(200, { ok: false, cancelled: true, stopped: true, status, error: stopped });
         return reply(200, stale ? { ok: true, stale: true, status } : { ok: true });
       }
       case "companies": {

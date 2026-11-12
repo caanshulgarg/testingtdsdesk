@@ -1,17 +1,23 @@
-"""python3 run_post_cas_ingest.py - migration 174 (item 3, next-fix-post-jobs) in tally-ingest: posts_update writes the
-posting back as a compare-and-set on the version it read (tally_post_jobs.row_version), so an owner's settlement or the
-cron's requeue made while the report was being worked on is never written over. tally-ingest
+"""python3 run_post_cas_ingest.py - migration 174 (next-fix-post-jobs, reworked after the review of ae4949393) in
+tally-ingest's posts_update: the write is a compare-and-set on the version read (tally_post_jobs.row_version), acceptances
+are stamped before every answer, a posting back in the queue is taken back by its own bridge, and a stop-flagged posting
+(posting into Tally stopped for the client while its bridge held it) is stored, stamped, then stopped. tally-ingest
 (server/tally-cloud/index.ts) under Deno against the stand-in for Supabase (fake_supabase.py); the "meanwhile" is made
 inside the report's own awaits (its stamp of an accepted entry, tally_post_id_accept). Made-up names only. Checks:
   1. the normal path: nobody else wrote: the report is written once (status, results, seq), as before;
-  2. the owner settles the posting (done, Mark posted) meanwhile: the report's write misses, the posting is read again
-     and is settled: answered settled / cancelled, the owner's settlement kept as it was;
+  2. the owner settles the posting (done, Mark posted) meanwhile: the write misses, read again: settled: answered
+     settled / cancelled, the owner's settlement kept as it was;
   3. the owner marks one entry meanwhile while the posting goes on: read again, merged again: the owner's entry kept,
      the bridge's other entries written;
-  4. the cron puts the posting back (waiting) meanwhile: not written over, answered requeued;
-  5. a posting already waiting (handed back) takes no report of the bridge's old copy;
-  6. a cloud without 174 (no row_version): written as before, once;
-  7. a posting handed to another bridge of the same computer (taken_by it): this bridge is told to stop (cancelled).
+  4. the cron puts the posting back (waiting) meanwhile: its own bridge's report takes it back (running, taken_by it),
+     merged, not lost; a posting found waiting (requeued) when its own bridge reports: taken back the same way;
+  5. a posting handed back with a re-send list (resend_only): no report of the copy before it written, its acceptance
+     stamped all the same;
+  6. acceptances stamped before every early answer: cancelled, settled, late (seq);
+  7. stop flag: nothing of it sent: failed with the reason, the bridge told cancelled; an entry accepted: held (done,
+     checking), its id stamped, the bridge told cancelled; the bridge finished it all: stored as done, answered ok;
+  8. a cloud without 174 (no row_version): written as before, once; a posting for another bridge of this computer:
+     refused as before (no hand-over answer any more).
 Needs Deno (DENO, default: the deno on the PATH or /opt/deno/deno)."""
 import os, sys, json, time, hashlib, subprocess, urllib.request, urllib.error, shutil, threading, copy
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
@@ -93,32 +99,57 @@ try:
     ok(c == 200 and r.get("ok") is True and k1.get("byOwner") is True and k1.get("message") == "Marked posted by the owner" and k2.get("vchNumber") == "13" and x["seq"] == 2,
        "read again, merged again: the owner's K1 kept, the bridge's K2 written (%s %s | %s | %s)" % (c, r, k1, k2))
 
-    print("== 4. the cron puts it back meanwhile")
+    print("== 4. back in the queue: taken back by its own bridge")
     F.T["tally_post_jobs"].append(job("j4", "taken"))
-    def requeued(j): j.update(status="waiting", taken_by=None, taken_at=None, attempts=1, message="Sent to the Tally computer again: it had not answered for a while.", row_version=j["row_version"] + 1)
+    def requeued(j): j.update(status="waiting", attempts=1, message="Sent to the Tally computer again: it had not answered for a while.", row_version=j["row_version"] + 1)
     MEANWHILE["j4"] = requeued
-    c, r = update("j4")
+    c, r = update("j4", results=[{"id": "K1", "ok": False, "accepted": True, "lastVchId": "81", "message": "Tally replied CREATED 1 LASTVCHID 81"}], items=[{"id": "K1", "state": "unknown"}, {"id": "K2", "state": "waiting"}])
     x = row("j4")
-    ok(x["status"] == "waiting" and x["taken_by"] is None and x["seq"] == 1 and x["message"].startswith("Sent to the Tally computer again"), "the requeue not written over (%s / %s)" % (x["status"], x["message"]))
-    ok(c == 200 and r.get("requeued") is True and r.get("stale") is True, "answered requeued (%s %s)" % (c, r))
+    ok(not MEANWHILE and c == 200 and r.get("ok") is True and x["status"] == "running" and x["taken_by"] == ME["id"] and x["seq"] == 2 and [e["id"] for e in x["results"]] == ["K1"],
+       "requeued meanwhile: taken back by this bridge, its report merged (%s %s | %s %s)" % (c, r, x["status"], x.get("taken_by")))
+    ok(any(a_.get("p_job") == "j4" for a_ in F.ARGS.get("tally_post_id_accept", [])), "its acceptance stamped")
+    F.T["tally_post_jobs"].append(job("j41", "waiting", attempts=1, taken_at="2026-11-12T09:00:00Z", message="Sent to the Tally computer again: it had not answered for a while."))
+    c, r = update("j41")
+    x = row("j41")
+    ok(c == 200 and r == {"ok": True} and x["status"] == "running" and x["taken_by"] == ME["id"] and x["taken_at"] == "2026-11-12T09:00:00Z" and len(x["results"]) == 2, "found waiting (requeued): taken back, written (%s %s %s)" % (c, r, x["status"]))
 
-    print("== 5. already waiting (handed back): no report of the old copy")
+    print("== 5. handed back with a re-send list")
     F.T["tally_post_jobs"].append(job("j5", "waiting", resend_only=["K2"], message="Handed back: K2 to be sent again"))
-    n0 = patches("j5"); c, r = update("j5", status="done")
-    ok(c == 200 and r.get("requeued") is True and row("j5")["status"] == "waiting" and row("j5")["message"] == "Handed back: K2 to be sent again" and patches("j5") == n0, "nothing written (%s %s)" % (c, r))
+    n0 = patches("j5"); k0 = len([a_ for a_ in F.ARGS.get("tally_post_id_accept", []) if a_.get("p_job") == "j5"])
+    c, r = update("j5", status="done")
+    ok(c == 200 and r.get("handedBack") is True and row("j5")["status"] == "waiting" and row("j5")["message"] == "Handed back: K2 to be sent again" and patches("j5") == n0, "nothing written (%s %s)" % (c, r))
+    ok(len([a_ for a_ in F.ARGS.get("tally_post_id_accept", []) if a_.get("p_job") == "j5"]) > k0, "its acceptances stamped all the same")
 
-    print("== 6. a cloud without 174")
-    j6 = job("j6", "taken"); j6.pop("row_version"); F.T["tally_post_jobs"].append(j6)
-    n0 = patches("j6"); c, r = update("j6")
-    ok(c == 200 and r == {"ok": True} and row("j6")["status"] == "running" and patches("j6") - n0 == 1, "written as before, once (%s %s)" % (c, r))
+    print("== 6. stamped before every early answer")
+    for jid, st0, kw in (("j61", "cancelled", {}), ("j62", "done", {}), ("j63", "running", {"seq": 9})):
+        F.T["tally_post_jobs"].append(job(jid, st0, **kw))
+        c, r = update(jid, seq=2)
+        st_ = [a_ for a_ in F.ARGS.get("tally_post_id_accept", []) if a_.get("p_job") == jid]
+        ok(len(st_) >= 1 and row(jid)["status"] == st0 and (r.get("cancelled") or r.get("stale")), "%s (%s): answered %s, the acceptances stamped first (%d)" % (jid, st0, r, len(st_)))
 
-    print("== 7. handed to another bridge of this computer")
-    F.T["tally_post_jobs"].append(job("j7", "taken", target_bridge=OTHER, taken_by=OTHER))
-    n0 = patches("j7"); c, r = update("j7")
-    ok(c == 403 and r.get("cancelled") is True and r.get("handedOver") is True and row("j7")["status"] == "taken" and patches("j7") == n0, "this bridge told to stop its copy; nothing written (%s %s)" % (c, r))
-    F.T["tally_post_jobs"].append(job("j8", "waiting", target_bridge=OTHER, taken_by=None))
-    c, r = update("j8")
-    ok(c == 403 and not r.get("cancelled"), "a posting for the other bridge it never took: refused as before (%s %s)" % (c, r))
+    print("== 7. the stop flag")
+    WHY = "Not posted: posting into Tally was stopped for ZZ Osprey after this was queued. Allow it on the Tally page, then post again."
+    F.T["tally_post_jobs"].append(job("j71", "taken", stop_reason=WHY))
+    c, r = update("j71", status="taken", results=[], items=[{"id": "K1", "state": "waiting"}, {"id": "K2", "state": "waiting"}])
+    x = row("j71")
+    ok(c == 200 and r.get("cancelled") is True and r.get("stopped") is True and r.get("error") == WHY and x["status"] == "failed" and x["message"] == WHY + " The FinCom Bridge stopped it before any of it reached Tally.", "nothing sent: failed with the reason, the bridge told to stop (%s %s %s)" % (c, r, x["status"]))
+    F.T["tally_post_jobs"].append(job("j72", "running", stop_reason=WHY))
+    c, r = update("j72", status="running", results=[{"id": "K1", "ok": False, "accepted": True, "lastVchId": "90", "message": "Tally replied CREATED 1 LASTVCHID 90"}], items=[{"id": "K1", "state": "unknown"}, {"id": "K2", "state": "waiting"}])
+    x = row("j72")
+    ok(c == 200 and r.get("cancelled") is True and x["status"] == "done" and x["checking"] is True and x["message"].startswith("Stopped: " + WHY) and any(e["id"] == "K1" for e in x["results"]),
+       "an entry accepted: held for checking, its result stored, the bridge told to stop (%s %s %s)" % (c, r, x["status"]))
+    ok(any(a_.get("p_job") == "j72" for a_ in F.ARGS.get("tally_post_id_accept", [])), "its id stamped")
+    F.T["tally_post_jobs"].append(job("j73", "running", stop_reason=WHY))
+    c, r = update("j73", status="done")
+    ok(c == 200 and r == {"ok": True} and row("j73")["status"] == "done", "the bridge finished it all: stored done, answered ok (%s %s)" % (c, r))
+
+    print("== 8. a cloud without 174; another bridge's posting")
+    j6 = job("j8", "taken"); j6.pop("row_version"); F.T["tally_post_jobs"].append(j6)
+    n0 = patches("j8"); c, r = update("j8")
+    ok(c == 200 and r == {"ok": True} and row("j8")["status"] == "running" and patches("j8") - n0 == 1, "written as before, once (%s %s)" % (c, r))
+    F.T["tally_post_jobs"].append(job("j81", "taken", target_bridge=OTHER, taken_by=OTHER))
+    n0 = patches("j81"); c, r = update("j81")
+    ok(c == 403 and not r.get("cancelled") and row("j81")["status"] == "taken" and patches("j81") == n0, "for another bridge of this computer: refused as before (%s %s)" % (c, r))
 finally:
     fn.terminate()
     try: fn.wait(10)
