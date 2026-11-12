@@ -150,7 +150,7 @@ function postRegStatus(r, e, job, mk, tid, ctx){
     case "needs_review": {
       const ns = ctx.check && ctx.check.state === "notseen" ? ctx.check : null, ck = ctx.check && ctx.check.state === "waiting" ? ctx.check : null;
       const settle = {kind: "settle", label: "It is in Tally: mark posted (Tally id)"};
-      const why = {id: "review", reason: "Tally’s reply needs a look", fix: ""};
+      const why = (job.status === "cancelled" && typeof postReasonFor === "function" && postReasonFor(job.message)) || {id: "review", reason: "Tally’s reply needs a look", fix: ""};
       if (ns) return mk(6, (postReasonText(ns.words) || "Tally has no such voucher on that day. Look in Tally; if it is not there, press ‘I looked in Tally: not there – post again’ (reason required).") + (ns.checked_at ? " (The FinCom Bridge looked on " + when(ns.checked_at) + ".)" : ""), settle, Object.assign({reason: why, accepted: true, notSeen: ns}, more));
       if (ck) return mk(6, "Checking Tally before it is sent again: " + (postReasonText(ck.last_words) || "waiting for the FinCom Bridge to look in Tally") + ". Asked by " + (who(ck.asked_by) || "a member") + (ck.asked_at ? " on " + when(ck.asked_at) : "") + (ck.why ? " (" + ck.why + ")" : "") + ". Nothing is sent until the bridge finds it is not there.", settle, Object.assign({reason: why, accepted: true, check: ck}, more));
       return mk(6, (words ? "Tally’s words: " + words + ". " : "The outcome in Tally is not known. ") + "Look in Tally’s Day Book" + (bill && e.x.invoiceDate ? " for " + (typeof fmtDate === "function" ? fmtDate(e.x.invoiceDate) : e.x.invoiceDate) : "") + ": if it is there, mark it posted; if not, press Not in Tally – post again (the FinCom Bridge looks in Tally first).",

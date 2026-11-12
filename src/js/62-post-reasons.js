@@ -344,8 +344,9 @@ function postStatus(entry, job, ids, marks, ctx){
     if (backInReview) return null;
     if (job.status === "cancelled"){
       const why = postReasonText(job.message) || "cancelled";
-      const cr = postReasonFor(why) || null, late = cr && cr.again === false;
-      return mk(9, "Cancelled on " + postWhenSay(job.updated_at || job.created_at) + (job.created_by ? " (posted by " + postWhoSay(job.created_by) + ")" : "") + ": " + why + "." + (late ? " " + cr.fix : ""), deleted || !bill ? null : late ? {kind: "settle", label: "It is in Tally: mark posted (Tally id)"} : again, {reason: cr});
+      const cr = postReasonFor(why) || null, late = cr && cr.again === false, ck = late && ctx.check, cs = ck && ck.state;
+      return mk(9, "Cancelled on " + postWhenSay(job.updated_at || job.created_at) + (job.created_by ? " (posted by " + postWhoSay(job.created_by) + ")" : "") + ": " + why + "." + (late ? " " + (cs === "waiting" ? "Checking Tally: " + (postReasonText(ck.last_words) || "waiting for the FinCom Bridge to look in Tally") + "." : cs === "notseen" ? postReasonText(ck.words) || "" : cr.fix) : ""),
+        deleted || !bill ? null : late ? {kind: "settle", label: "It is in Tally: mark posted (Tally id)"} : again, {reason: cr, accepted: !!late, check: cs === "waiting" ? ck : null, notSeen: cs === "notseen" ? ck : null});
     }
     if ((r && r.ok === false) || (it && it.state === "failed") || job.status === "failed" || (job.status === "done" && !okR)){
       const msg = (r && (postLineWords(r) || r.message)) || (it && it.reason) || job.message || "Tally did not answer for this entry";

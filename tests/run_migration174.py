@@ -42,9 +42,10 @@ M174 = os.path.join(SQLDIR, "migration-174-post-jobs-safe.sql")
 RED = os.environ.get("RED_WITHOUT_174") == "1"
 src142 = open(os.path.join(HERE, "run_migration142.py")).read()
 FILES = eval(compile(src142.split("\nFILES = ", 1)[1].split("\nfails = []", 1)[0], "run_migration142.py(FILES)", "eval"), {"os": os, "SQLDIR": SQLDIR, "HERE": HERE, "ROOT": ROOT})
-FILES += [os.path.join(SQLDIR, f) for f in ("migration-142-post-any-bridge.sql", "migration-128-client-removed-frees-tally.sql", "migration-161-split-tally.sql")]
+FILES += [os.path.join(SQLDIR, f) for f in ("migration-111-post-register.sql", "migration-142-post-any-bridge.sql", "migration-128-client-removed-frees-tally.sql", "migration-161-split-tally.sql")]
 TF_ADD, TF_GONE, RQ_ADD, RQ_GONE = 25, 6, 40, 4
-RS_ADD, RS_GONE, CN_ADD, CN_GONE = 3, 3, 12, 3   # rescue: the held count; cancel: the warning
+JD_ADD, JD_GONE, CB_ADD, CB_GONE, CC_ADD, CC_GONE = 4, 2, 15, 2, 2, 1   # judge: the live id; check_bridge_ok: the gone bridge; confirm: the words
+RS_ADD, RS_GONE, CN_ADD, CN_GONE = 3, 3, 17, 3   # rescue: the held count; cancel: the warning
 RR_ADD, RR_GONE = 16, 1   # reroute: 54's text with the once-taken hold   # take_for: the two hand-outs in a loop with the check; requeue: 2b, 4b, M1, 4a
 fails = []
 def ok(c, w):
@@ -56,7 +57,7 @@ def part(path, name):
     i = s.index('"""', i) + 3; return s[i:s.index('"""', i)]
 def fbody(t_, name):
     i = t_.index("create or replace function public." + name + "(")
-    ends = [k for k in (t_.find("$function$;", i), t_.find("$$;", i)) if k >= 0]
+    ends = [k for k in (t_.find("$function$;", i), t_.find("$$;", i), t_.find("$judge$;", i)) if k >= 0]
     return [l.strip() for l in t_[i:min(ends)].splitlines() if l.strip()]   # compared as text, indentation aside
 
 text = open(M174).read() if os.path.exists(M174) else ""
@@ -67,10 +68,16 @@ ok(re.search(r"^begin;\s*\nset local lock_timeout = '10s';", text, re.M) is not 
 ok("delete from" not in code and not re.search(r"\b(drop|truncate)\s", code) and re.findall(r"alter table ([\w.]+) (\w+ \w+)", code) == [("public.tally_post_jobs", "add column")] * 4 and re.findall(r"create index if not exists (\w+)", code) == ["tally_post_jobs_firm_status", "tally_post_jobs_live_age"], "add-only: four columns and two indexes added, nothing dropped, deleted or truncated")
 ok(not re.search(r"supabase\.co|https?://|qbocskai|nrtczu|project[_ ]ref", text.lower()), "names no real database")
 made = sorted(set(re.findall(r"create or replace function public\.(\w+)\(", code)))
-NEW = {"tally_post_job_blocked": "(uuid)", "tally_post_hold_job": "(uuid)", "tally_post_hold": "(uuid, text)", "tally_post_bridge_holds": "(uuid)"}
+NEW = {"tally_post_job_blocked": "(uuid)", "tally_post_hold_job": "(uuid)", "tally_post_hold": "(uuid, text)", "tally_post_bridge_holds": "(uuid)",
+       "tally_post_entry_maybe_in": "(jsonb, jsonb, text, text)", "tally_post_check_bridge_gone": "(uuid)"}
 REPL = {"tally_post_take_for": "(uuid, text, boolean)"}
 TRIG = ["tally_post_jobs_version", "tally_post_links_hold", "tally_post_split_hold"]
-ok(made == sorted(list(NEW) + list(REPL) + TRIG + ["tally_post_requeue", "tally_post_reroute", "tally_post_rescue", "tally_post_cancel"]), "makes or replaces only %s" % made)
+ok(made == sorted(list(NEW) + list(REPL) + TRIG + ["tally_post_requeue", "tally_post_reroute", "tally_post_rescue", "tally_post_cancel", "tally_post_register_judged", "tally_post_check_bridge_ok", "tally_post_check_confirm", "tally_post_owner_release"]), "makes or replaces only %s" % made)
+ok("revoke all on function public.tally_post_owner_release(uuid, text, text) from public, anon;" in text and "grant execute on function public.tally_post_owner_release(uuid, text, text) to authenticated;" in text
+   and "revoke all on function public.tally_post_register_judged(public.tally_post_jobs) from public, anon, authenticated;" in text and "grant execute on function public.tally_post_register_judged(public.tally_post_jobs) to service_role;" in text
+   and "revoke all on function public.tally_post_check_bridge_ok(uuid, uuid, text, boolean) from public, anon, authenticated;" in text
+   and "revoke all on function public.tally_post_check_confirm(uuid, text, text) from public, anon;" in text and "grant execute on function public.tally_post_check_confirm(uuid, text, text) to authenticated;" in text,
+   "the owner's release (authenticated; an owner inside), the judge, the check functions: grants explicit, as before")
 ok("revoke all on function public.tally_post_rescue(uuid) from public, anon, authenticated;" in text and "revoke all on function public.tally_post_cancel(uuid) from public, anon;" in text and "grant execute on function public.tally_post_cancel(uuid) to authenticated;" in text,
    "tally_post_rescue (nobody, as 54) and tally_post_cancel (authenticated, as 116): grants restated")
 ok("revoke all on function public.tally_post_reroute(uuid, boolean) from public, anon, authenticated;" in text and "grant execute on function public.tally_post_reroute" not in text, "tally_post_reroute: internal, granted to nobody, as 54")
@@ -80,14 +87,15 @@ for fn, sig in list(NEW.items()) + list(REPL.items()):
 for fn in TRIG + ["tally_post_requeue"]:
     ok(("revoke all on function public.%s() from public, anon, authenticated;" % fn) in text, "%s: nobody may call it" % fn)
 # started from the latest text: the lines added and removed against 142 (take_for, pickable_ok) and 36b (requeue)
+m111 = open(os.path.join(SQLDIR, "migration-111-post-register.sql")).read(); m55 = open(os.path.join(SQLDIR, "migration-55-settle-and-lease.sql")).read()
 m116 = open(os.path.join(ROOT, "server", "security", "migration-116-write-checks.sql")).read()
 m54 = open(os.path.join(SQLDIR, "migration-54-post-target-bridge.sql")).read()
 m142, m36b = open(os.path.join(SQLDIR, "migration-142-post-any-bridge.sql")).read(), open(os.path.join(SQLDIR, "migration-36b-post-acceptance.sql")).read()
-for name, base, n_add, n_gone in (("tally_post_take_for", m142, TF_ADD, TF_GONE), ("tally_post_requeue", m36b, RQ_ADD, RQ_GONE), ("tally_post_reroute", m54, RR_ADD, RR_GONE), ("tally_post_rescue", m54, RS_ADD, RS_GONE), ("tally_post_cancel", m116, CN_ADD, CN_GONE)):
+for name, base, n_add, n_gone in (("tally_post_take_for", m142, TF_ADD, TF_GONE), ("tally_post_requeue", m36b, RQ_ADD, RQ_GONE), ("tally_post_reroute", m54, RR_ADD, RR_GONE), ("tally_post_rescue", m54, RS_ADD, RS_GONE), ("tally_post_cancel", m116, CN_ADD, CN_GONE), ("tally_post_register_judged", m111, JD_ADD, JD_GONE), ("tally_post_check_bridge_ok", m55, CB_ADD, CB_GONE), ("tally_post_check_confirm", m55, CC_ADD, CC_GONE)):
     if not text: ok(False, name + ": no file"); continue
     a, b = fbody(text, name), fbody(base, name)
     added, gone = [l for l in a if l not in b], [l for l in b if l not in a]
-    ok(len(added) == n_add and len(gone) == n_gone, "%s: the latest text (%s) with %d line(s) added, %d changed (%d / %d): %s" % (name, "142" if base is m142 else "36b" if base is m36b else "116" if base is m116 else "54", n_add, n_gone, len(added), len(gone), gone))
+    ok(len(added) == n_add and len(gone) == n_gone, "%s: the latest text (%s) with %d line(s) added, %d changed (%d / %d): %s" % (name, "142" if base is m142 else "36b" if base is m36b else "116" if base is m116 else "111" if base is m111 else "55" if base is m55 else "54", n_add, n_gone, len(added), len(gone), gone))
 
 F = "99999999-9999-9999-9999-999999999174"
 OWNER, STAFF = "55555555-5555-5555-5555-555555555174", "66666666-6666-6666-6666-666666666174"
@@ -164,6 +172,10 @@ try:
     db.sql("insert into tally_links (firm_id, book_id, client_id, company_guid, company_name, device_id, computer, posting_allowed, state, data_loc, data_folder, windows_user) values (%s, %s, 'c1', %s, %s, %s, 'SRV9', true, 'linked', %s, %s, 'SRV9\\made-up-a') on conflict (firm_id, book_id) do update set data_loc = excluded.data_loc, device_id = excluded.device_id, company_guid = excluded.company_guid, posting_allowed = true, state = 'linked', client_id = 'c1'"
            % (q(F), q(BK), q(GUID), q(CO), q(DA), q(loc), q(FOLDER)))
 
+    # fifth review M1: postings taken before 174 (its history backfilled), and one never taken
+    db.sql("insert into tally_post_jobs (id, firm_id, client_id, company, device_id, payload, n, status, target_bridge, taken_by, taken_at, attempts) values "
+           "(%s, %s, 'c1', %s, %s, '{}'::jsonb, 1, 'cancelled', %s, %s, now() - interval '2 days', 0), (%s, %s, 'c1', %s, %s, '{}'::jsonb, 1, 'cancelled', %s, null, null, 2), (%s, %s, 'c1', %s, %s, '{}'::jsonb, 1, 'cancelled', %s, null, null, 0)"
+           % (q(J(900)), q(F), q(CO), q(DA), q(BA), q(BA), q(J(901)), q(F), q(CO), q(DA), q(BA), q(J(902)), q(F), q(CO), q(DA), q(BA)))
     print("== 0. runs twice")
     for n in (1, 2):
         if RED: ok(False, "run %d (RED_WITHOUT_174: not run)" % n); continue
@@ -173,6 +185,8 @@ try:
         for rr in db.rows("select p.proname n, md5(p.prosrc) m, p.prosecdef::text d from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname = any(array[%s]) order by 1" % ",".join(q(f) for f in list(NEW) + list(REPL) + TRIG + ["tally_post_requeue"])):
             print("  read-back %(n)s md5(prosrc)=%(m)s definer=%(d)s" % rr)
         ok(all(priv("authenticated", "public.%s%s" % (f, s)) == "false" and priv("anon", "public.%s%s" % (f, s)) == "false" for f, s in list(NEW.items()) + list(REPL.items())), "not for anon or authenticated")
+        ok(db.one("select string_agg(case when first_taken_at is null then 'none' else 'kept' end, ',' order by id) from tally_post_jobs where id in (%s, %s, %s)" % (q(J(900)), q(J(901)), q(J(902)))) == "kept,kept,none",
+           "M1: the take's history backfilled for postings taken before (taken_at, or attempts), none for one never taken")
         ok(db.one("select count(*) from pg_trigger where not tgisinternal and tgname in ('tally_post_jobs_version', 'tally_post_links_hold', 'tally_post_split_hold')") == "3", "the three triggers, once (run twice)")
 
     print("== 1. the normal path")
@@ -322,7 +336,7 @@ try:
     ver = db.one("select version from tally_links where book_id = %s" % q(BK))
     rpc(OWNER, "select tally_link_posting(%s::uuid, false, %s)::text" % (q(BK), ver))
     ok(row(100)["stop"] != "", "stopped while taken: the flag set")
-    db.sql("update tally_post_jobs set status = 'failed', message = 'stopped' where id = %s" % q(J(100)))       # its bridge's last word (posts_update)
+    db.sql("update tally_post_jobs set status = 'failed', message = 'stopped', items = '[{\"id\": \"V100\", \"state\": \"failed\", \"reason\": \"stopped before it was sent\"}]' where id = %s" % q(J(100)))       # its bridge's last word (posts_update)
     ok(row(100)["stop"] == "" and row(100)["status"] == "failed", "failed by its bridge's last word: the flag cleared (%s)" % row(100)["stop"][:40])
     ver = db.one("select version from tally_links where book_id = %s" % q(BK))
     rpc(OWNER, "select tally_link_posting(%s::uuid, true, %s)::text" % (q(BK), ver))
@@ -409,7 +423,7 @@ try:
     ok(db.one("select (first_taken_at is not null)::text from tally_post_jobs where id = %s" % q(J(118))) == "true" if not RED else False, "the take records its history (first_taken_at)")
     clear()
     job(113, BA2, DA, status="waiting", attempts=1)          # Retried, never taken, for A2, A2 no longer able to post
-    ok(json.loads(db.one("select tally_post_reroute(%s, false)::text" % q(J(113))) or "{}").get("state") == "moved" and row(113)["target_bridge"] == BA, "LOW 1: never taken (no history), attempts 1: moved to the bridge that may post, as 54 (%s)" % row(113)["target_bridge"])
+    ok(json.loads(db.one("select tally_post_reroute(%s, false)::text" % q(J(113))) or "{}").get("held") is True and row(113)["target_bridge"] == BA2, "fifth review M1: attempts > 0 counts as once taken: held, not moved (%s)" % row(113)["target_bridge"])
     job(119, BA2, DA, status="waiting", attempts=1)
     if not RED: db.sql("update tally_post_jobs set first_taken_at = now() - interval '1 day' where id = %s" % q(J(119)))
     ok(json.loads(db.one("select tally_post_reroute(%s, false)::text" % q(J(119))) or "{}").get("held") is True and row(119)["target_bridge"] == BA2, "LOW 1: once taken by its history: held, not moved (%s)" % row(119)["target_bridge"])
@@ -427,6 +441,51 @@ try:
     setbeat(DA, beat("made-up-a", BA, [CO])); clear()
 
     ok(db.one("select count(*) from pg_indexes where indexname = 'tally_post_jobs_live_age' and indexdef like '%WHERE%'") == "1", "PERF: the partial index on (status, updated_at) for the queue")
+
+    print("== 12. fifth review")
+    if RED: ok(False, "12. (RED_WITHOUT_174: its columns are not there)")
+    else:
+        setbeat(DA, beat("made-up-a", BA, [CO])); setbeat(DB, beat("made-up-b", BB, [CO])); db.sql("update tally_devices set main_bridge = %s where id = %s" % (q(BA), q(DA)))
+        # H1: cancelled after a Retry (taken_at cleared): what may be in Tally stays live and is needs_review; the rest is free
+        pay = {"masters": [], "vouchers": [{"id": "K1", "xml": "<VOUCHER/>"}, {"id": "K2", "xml": "<VOUCHER/>"}, {"id": "K3", "xml": "<VOUCHER/>"}], "ledger": ""}
+        db.sql("insert into tally_post_jobs (id, firm_id, client_id, company, device_id, payload, n, status, target_bridge, taken_by, attempts, first_taken_at, results, items) values (%s, %s, 'c1', %s, %s, %s, 3, 'waiting', %s, %s, 1, now() - interval '1 day', %s, %s)"
+               % (q(J(120)), q(F), q(CO), q(DA), q(json.dumps(pay)), q(BA), q(BA), q(json.dumps([{"id": "K3", "ok": False, "message": "Ledger 'X' does not exist", "state": "failed"}])),
+                  q(json.dumps([{"id": "K1", "state": "sent"}, {"id": "K2", "state": "waiting"}, {"id": "K3", "state": "failed", "reason": "Ledger 'X' does not exist"}]))))
+        r = rpc(STAFF, "select tally_post_cancel(%s)::text" % q(J(120)))
+        lv = dict((x["e"], x["l"]) for x in db.rows("select entry_id e, live::text l from tally_post_ids where job_id = %s" % q(J(120))))
+        ok(r.get("ok") and r.get("warn") and lv == {"K1": "true", "K2": "false", "K3": "false"} and r.get("entries") == ["K1"], "H1: Cancel keeps live only K1 (sent); K2 (never sent) and K3 (refused) free; the answer names K1 (%s %s)" % (lv, r.get("entries")))
+        jd = dict((x["e"], x["s"]) for x in db.rows("select entry_id e, state s from tally_post_register_judged((select j from tally_post_jobs j where id = %s))" % q(J(120))))
+        ok(jd.get("K1") == "needs_review" and jd.get("K2") == "released" and jd.get("K3") == "refused", "H1: the register: K1 needs review (settle), K2 released, K3 refused (%s)" % jd)
+        # M2: the owner's own word; staff refused, a reason required, never while it is being sent
+        ok("only an owner" in rpc(STAFF, "select tally_post_owner_release(%s, 'K1', 'looked')::text" % q(J(120))).get("_error", ""), "M2: staff may not")
+        ok("say where" in rpc(OWNER, "select tally_post_owner_release(%s, 'K1', '')::text" % q(J(120))).get("_error", ""), "M2: a reason required")
+        r = rpc(OWNER, "select tally_post_owner_release(%s, 'K1', 'Day Book of 12-Nov searched')::text" % q(J(120)))
+        note = db.one("select note from tally_post_marks where job_id = %s and action = 'released' order by id desc limit 1" % q(J(120))) or ""
+        ok(r.get("ok") is True and r.get("owner") is True and db.one("select live::text from tally_post_ids where job_id = %s and entry_id = 'K1'" % q(J(120))) == "false" and "posted twice" in note,
+           "M2: an owner's 'I checked in Tally: not there': released, kept with the words (%s / %s)" % (r.get("error") or r.get("_error") or r.get("ok"), note[:80]))
+        jd = dict((x["e"], x["s"]) for x in db.rows("select entry_id e, state s from tally_post_register_judged((select j from tally_post_jobs j where id = %s))" % q(J(120))))
+        ok(jd.get("K1") == "released", "and the register then says released (%s)" % jd.get("K1"))
+        job(121, BA, DA)
+        ok("still being sent" in str(rpc(OWNER, "select tally_post_owner_release(%s, 'V121', 'x')::text" % q(J(121))).get("error")), "M2: not while it is being sent")
+        clear()
+        # M2: a check whose bridge (A) is gone may be answered by B, which has the very company (its GUID) open
+        job(122, BA, DA, status="done", taken_by=BA, seq=1)
+        ok_b = lambda: db.one("select tally_post_check_bridge_ok(%s, %s::uuid, %s, true)::text" % (q(J(122)), q(DB), q(BB)))
+        ok(ok_b() == "false", "M2: A may still post: B may not answer its check")
+        two(); db.sql("update tally_devices set main_bridge = %s where id = %s" % (q(BA2), q(DA)))
+        ok(ok_b() == "true", "M2: A can no longer post: B (the company open, its GUID) may answer the check")
+        setbeat(DB, beat("made-up-b", BB, [CO], guid="ffffffff-0000-0000-0000-000000000174"))
+        ok(ok_b() == "false", "M2: B with a company of that name under another GUID: may not")
+        setbeat(DB, beat("made-up-b", BB, [CO])); db.sql("update tally_devices set main_bridge = %s where id = %s" % (q(BA), q(DA)))
+        # L1: "I looked in Tally: not there" on a cancelled posting
+        pay2 = {"masters": [], "vouchers": [{"id": "K5", "xml": "<VOUCHER/>"}], "ledger": ""}
+        db.sql("insert into tally_post_jobs (id, firm_id, client_id, company, device_id, payload, n, status, target_bridge, taken_by, first_taken_at, items) values (%s, %s, 'c1', %s, %s, %s, 1, 'waiting', %s, %s, now(), %s)"
+               % (q(J(123)), q(F), q(CO), q(DA), q(json.dumps(pay2)), q(BA), q(BA), q(json.dumps([{"id": "K5", "state": "unknown"}]))))
+        rpc(STAFF, "select tally_post_cancel(%s)::text" % q(J(123)))
+        db.sql("insert into tally_post_checks (firm_id, job_id, entry_id, company, asked_by, why, state, checked_at, checked_bridge, checked_device) values (%s, %s, 'K5', %s, %s, 'looked', 'notseen', now(), %s, %s)" % (q(F), q(J(123)), q(CO), q(STAFF), q(BA), q(DA)))
+        r = rpc(STAFF, "select tally_post_check_confirm(%s, 'K5', 'Day Book searched')::text" % q(J(123)))
+        ok(r.get("ok") is True and r.get("words") == "released; you can post it again" and row(123)["status"] == "cancelled", "L1: cancelled: 'released; you can post it again', not sent again (%s / %s)" % (r.get("words") or r.get("error") or r.get("_error"), row(123)["status"]))
+        setbeat(DA, beat("made-up-a", BA, [CO])); clear()
 
     print("== 9. names and the index")
     relink(); setbeat(DA, beat("made-up-a", BA, [CO]))

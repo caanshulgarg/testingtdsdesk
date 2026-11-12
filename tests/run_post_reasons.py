@@ -86,6 +86,14 @@ out.status = {
   8: P(postStatus(bill("h"), job("j8", "failed", [{id: "h", ok: false, checkFailed: true, message: "Could not check Tally, not posted. Try again."}], [{id: "h", state: "failed"}]), {live: false, released_at: "x"}, [])),
   "8postonly": P(postStatus(bill("h2"), job("j8b", "failed", [{id: "h2", ok: false, message: "This computer posts only to ZZ TEST (PostOnly); posting to GARG SHEKHAR & COMPANY refused"}], []), null, [])),
   9: P(postStatus(bill("i"), job("j9", "cancelled", null, null, {message: "Cancelled before the Tally computer took it", updated_at: "2026-09-30T16:52:46Z"}), null, [])),
+  "9lateRaw": (() => { const m = "Cancelled after the Tally computer had started it: part of it may be in Tally. Check Tally first; Mark posted what is there before posting it again.";
+    const a = postStatus(bill("i3"), job("j9c", "cancelled", null, null, {message: m}), {live: true}, [], {check: {id: 7, state: "waiting", last_words: "Looking in GARG SHEKHAR & COMPANY"}});
+    const b = postStatus(bill("i4"), job("j9d", "cancelled", null, null, {message: m}), {live: true}, [], {check: {id: 8, state: "notseen", words: "Tally has no such voucher on that day."}});
+    const c = postStatus(bill("i5"), job("j9e", "cancelled", null, null, {message: m}), {live: true}, []);
+    const mk = (code, todo, action, more) => Object.assign({code, todo, action: action && action.kind}, more || {});
+    const reg = typeof postRegStatus === "function" ? postRegStatus({state: "needs_review", tally_words: m}, bill("i6"), job("j9f", "cancelled", null, null, {message: m}), mk, null, {}) : null;
+    return {aCheck: !!(a && a.check), aTodo: a && a.todo, aAct: a && a.action && a.action.kind, bNs: !!(b && b.notSeen), bTodo: b && b.todo, cAcc: !!(c && c.accepted),
+            reg: reg && {code: reg.code, act: reg.action, why: reg.reason && reg.reason.id}}; })(),
   "9late": P(postStatus(bill("i2"), job("j9b", "cancelled", null, null, {message: "Cancelled after the Tally computer had started it: part of it may be in Tally. Check Tally first; Mark posted what is there before posting it again.", updated_at: "2026-11-12T16:52:46Z"}), {live: true}, [])),
   10: P(postStatus(bill("k", {status: "deleted", deleted: {at: "2026-10-03T10:00:00Z", reason: "duplicate"}}), job("j10", "done", [{id: "k", ok: true, verified: true, masterId: "26294"}], null), {live: true}, [])),
   "10missing": P(postStatus({id: "emupeho9q2sijk"}, job("j10b", "done", [{id: "emupeho9q2sijk", ok: true, verified: true, masterId: "26294", vchNumber: "FA/ELEC/013"}], null), {live: true}, [], {id: "emupeho9q2sijk", missing: true})),
@@ -105,7 +113,7 @@ console.log(JSON.stringify(out));
 d = tempfile.mkdtemp(prefix="p23r-")
 try:
     try:
-        src = SHIM + "\n" + load("src/js/03-transactions.js") + "\n" + load("src/js/59-post-preview.js") + "\n" + load("src/js/62-post-reasons.js") + "\n" + TESTS
+        src = SHIM + "\n" + load("src/js/03-transactions.js") + "\n" + load("src/js/59-post-preview.js") + "\n" + load("src/js/62-post-reasons.js") + "\n" + (load("src/js/98-post-register.js") if os.path.exists(os.path.join(SRC, "src/js/98-post-register.js")) else "") + "\n" + TESTS
     except FileNotFoundError as e:
         ok(False, "the program has the reasons table and postStatus (src/js/62-post-reasons.js): %s" % e); raise SystemExit(1)
     path = os.path.join(d, "t.js"); open(path, "w").write(src)
@@ -165,6 +173,11 @@ st("8", 8, "Not posted: stopped before sending", "errors", ("could not be checke
 st("8postonly", 8, "Not posted: stopped before sending", "errors", ("may not post to that company",), "postAgain")
 st("9", 9, "Cancelled", "errors", ("Cancelled on", "Cancelled before the Tally computer took it", "posted by Anshul garg"), "postAgain")
 st("9late", 9, "Cancelled", "errors", ("Cancelled after the Tally computer had started it", "Check Tally first", "Not in Tally"), "settle")
+lr = S_.get("9lateRaw") or {}
+ok(lr.get("aCheck") and "Checking Tally" in (lr.get("aTodo") or "") and lr.get("aAct") == "settle", "H2. cancelled after it may have reached Tally, a check waiting: 'Checking Tally', the check passed on (%s)" % lr)
+ok(lr.get("bNs") and "no such voucher" in (lr.get("bTodo") or ""), "H2. ... the bridge did not see it: notSeen passed on (I looked in Tally: not there)")
+ok(lr.get("cAcc") is True, "L2. no Back to review until settled (accepted)")
+ok((lr.get("reg") or {}).get("why") == "cancelledlate" and (lr.get("reg") or {}).get("act") == "settle", "H1. the register's needs_review of a cancelled posting: cancelledlate, the settle buttons (%s)" % lr.get("reg"))
 st("10", 10, "Bill deleted in FinCom but entry is in Tally", "posted", ("Tally id 26294", "Restore the bill"), "restore", "26294")
 st("10missing", 10, "Bill deleted in FinCom but entry is in Tally", "posted", ("no longer in FinCom",), None, "26294")
 ok(S_["ready"] is None and S_["review"] is None, "C. a bill ready to post, or sent back to review, has no status on this page (it is To post's Ready table / the review list)")

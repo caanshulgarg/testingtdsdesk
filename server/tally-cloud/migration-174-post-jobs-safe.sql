@@ -63,8 +63,15 @@
 -- the real ways forward; Cancel of a posting once taken warns "check Tally first"; the 6-hour words written only when
 -- they change and never over the held words, and never tell an owner to cancel or use another computer for a posting
 -- once taken; a Retried posting no bridge holds is failed plainly when posting stops; the rescue counts held postings.
+-- Fifth review of 9582d4c3f: the take's history backfilled for postings taken before 174 (attempts > 0 also counts as taken
+-- in reroute, Cancel and the 6-hour words); Cancel keeps live only the ids of entries that may be in Tally
+-- (tally_post_entry_maybe_in), and the register's judge calls such an entry needs_review, never released; a check
+-- whose bridge is gone may be answered by another bridge of the firm with the very company (its GUID) open; "I looked in
+-- Tally: not there" on a cancelled posting says "released; you can post it again"; an owner's own "I checked in Tally:
+-- not there" (tally_post_owner_release: a reason, the name and time kept; "if it is in Tally, it will be posted twice").
 -- Replaced (each from its latest text, every line kept but those named): tally_post_take_for (142), tally_post_requeue (36b),
--- tally_post_reroute (54), tally_post_rescue (54), tally_post_cancel (116).
+-- tally_post_reroute (54), tally_post_rescue (54), tally_post_cancel (116), tally_post_register_judged (111),
+-- tally_post_check_bridge_ok (55), tally_post_check_confirm (55).
 -- New: tally_post_job_blocked, tally_post_hold_job, tally_post_hold, tally_post_bridge_holds, and the trigger functions
 -- tally_post_jobs_version, tally_post_links_hold, tally_post_split_hold; columns tally_post_jobs.row_version, stop_reason,
 -- stop_at; index tally_post_jobs_firm_status (firm_id, status). Nothing dropped or deleted; no row of data changed. Grants
@@ -89,6 +96,9 @@ create index if not exists tally_post_jobs_live_age on public.tally_post_jobs (s
 -- none: there taken_by / taken_at say it, as before (LOW 3: staging was read: no posting is both Retried after a v1 take
 -- and waiting, so none is misjudged)
 alter table public.tally_post_jobs add column if not exists first_taken_at timestamptz;
+-- (fifth review M1) the history of postings already taken before 174 (safe twice: only where none is kept yet)
+update public.tally_post_jobs set first_taken_at = coalesce(taken_at, updated_at, created_at)
+ where first_taken_at is null and (taken_at is not null or taken_by is not null or coalesce(attempts, 0) > 0);
 
 -- ---------------------------------------------------------------- 3. the row's version
 -- (second review H1) and the stop flag (2b) is cleared whenever the posting leaves waiting / taken / running (failed, done,
@@ -234,7 +244,7 @@ begin
   -- Retry clears taken_at): ok only when the bridge that took it may still post; else held in words, never moved
   -- (fourth review LOW 1) once taken by the take's history (first_taken_at), not by attempts alone: a posting never taken,
   -- failed and Retried, is moved as before
-  if j.taken_by is not null or j.taken_at is not null or j.first_taken_at is not null then
+  if j.taken_by is not null or j.taken_at is not null or j.first_taken_at is not null or coalesce(j.attempts, 0) > 0 then   -- (fifth review M1: attempts too)
     if (j.taken_by is not null and tally_bridge_may_post(j.device_id, j.taken_by))
        or (j.taken_by is null and ((j.target_bridge is not null and tally_bridge_may_post(j.device_id, j.target_bridge))
                                    or (j.target_bridge is null and tally_device_may_post(j.device_id)))) then return jsonb_build_object('state', 'ok'); end if;
@@ -363,7 +373,7 @@ begin
   -- 4a: waiting more than 6 hours: the reason, written only when it changes (updated_at not moved); never over a held
   -- posting's words ("Started on ..."); for one never taken: any bridge with the company open; once taken: its own
   update tally_post_jobs set message = w.t
-    from (select x.id, left(case when x.taken_by is null and x.taken_at is null and x.first_taken_at is null
+    from (select x.id, left(case when x.taken_by is null and x.taken_at is null and x.first_taken_at is null and coalesce(x.attempts, 0) = 0
              then 'Still waiting after 6 hours (since ' || to_char(coalesce(x.updated_at, x.created_at) at time zone 'Asia/Kolkata', 'DD-Mon-YYYY HH24:MI') || ' IST): no FinCom Bridge with '
                   || x.company || ' open in Tally has taken it. Open ' || x.company || ' in Tally on a computer with FinCom Bridge, or cancel this posting.'
              else 'Still waiting after 6 hours (since ' || to_char(coalesce(x.updated_at, x.created_at) at time zone 'Asia/Kolkata', 'DD-Mon-YYYY HH24:MI') || ' IST) for '
@@ -391,27 +401,293 @@ begin
 end $function$;
 revoke all on function public.tally_post_rescue(uuid) from public, anon, authenticated;
 
+-- ---------------------------------------------------------------- fifth review H1. may this entry be in Tally?
+-- what a posting's own results / items say of one entry (by its FinCom id or entry id): false only when Tally clearly did
+-- not take it (a refusal, nothing accepted, nothing sent without an answer) or it was never sent (its item still
+-- waiting); nothing said of it: it may be (its bridge had it). Internal
+create or replace function public.tally_post_entry_maybe_in(p_results jsonb, p_items jsonb, p_fid text, p_eid text)
+returns boolean language sql stable security definer set search_path = public, pg_temp as $function$
+  with k as (select regexp_replace(coalesce(p_fid, ''), '[^A-Za-z0-9]', '', 'g') kf, regexp_replace(coalesce(p_eid, ''), '[^A-Za-z0-9]', '', 'g') ke),
+  r as (select t.r from k, jsonb_array_elements(case when jsonb_typeof(p_results) = 'array' then p_results else '[]'::jsonb end) with ordinality t(r, o)
+         where jsonb_typeof(t.r) = 'object' and regexp_replace(coalesce(t.r ->> 'id', ''), '[^A-Za-z0-9]', '', 'g') <> ''
+           and regexp_replace(coalesce(t.r ->> 'id', ''), '[^A-Za-z0-9]', '', 'g') in (k.kf, k.ke) order by t.o desc limit 1),
+  i as (select t.i from k, jsonb_array_elements(case when jsonb_typeof(p_items) = 'array' then p_items else '[]'::jsonb end) t(i)
+         where jsonb_typeof(t.i) = 'object' and regexp_replace(coalesce(t.i ->> 'id', ''), '[^A-Za-z0-9]', '', 'g') <> ''
+           and regexp_replace(coalesce(t.i ->> 'id', ''), '[^A-Za-z0-9]', '', 'g') in (k.kf, k.ke) limit 1)
+  select case
+    when exists (select 1 from r) then (select tally_post_result_accepted(r.r) or tally_post_bool(r.r ->> 'ok') or tally_post_bool(r.r ->> 'sent') or tally_post_bool(r.r ->> 'outcomeUnknown')
+                                               or tally_post_bool(r.r ->> 'alreadySent') or tally_post_bool(r.r ->> 'held') or coalesce(r.r ->> 'state', '') in ('sending', 'sent', 'in_tally', 'unknown', 'posted', 'needs_review') from r)
+    when exists (select 1 from i) then (select case when coalesce(i.i ->> 'state', 'waiting') = 'waiting' then false
+                                                    when i.i ->> 'state' in ('failed', 'notfound') then tally_post_accept_text(i.i ->> 'reason') else true end from i)
+    else true end
+$function$;
+revoke all on function public.tally_post_entry_maybe_in(jsonb, jsonb, text, text) from public, anon, authenticated;
+grant execute on function public.tally_post_entry_maybe_in(jsonb, jsonb, text, text) to service_role;
+
+-- ---------------------------------------------------------------- fifth review H1. the posting register's judge (111's text)
+-- 111's tally_post_register_judged; changed: an entry of a posting cancelled after its bridge had it whose id
+-- tally_post_cancel kept live (it may be in Tally) is needs_review (settled by a person: Mark posted, or Not in Tally -
+-- post again), never released (Post again would be refused by the live id for ever)
+create or replace function public.tally_post_register_judged(j public.tally_post_jobs)
+returns table (fincom_id text, entry_id text, ord integer, state text, source text, master_id text, id_inferred boolean, words text,
+               by_user uuid, at timestamptz, vch_type text, vch_no text, vch_date date, amount numeric)
+language sql stable security definer set search_path = public, pg_temp as $judge$
+with vs as (
+  select tally_fincom_id(t.v) as fid, t.v->>'id' as eid, coalesce(t.v->>'xml', '') as xml, t.o::int as ord
+    from jsonb_array_elements(case when jsonb_typeof((j).payload->'vouchers') = 'array' then (j).payload->'vouchers' else '[]'::jsonb end) with ordinality as t(v, o)
+   where jsonb_typeof(t.v) = 'object' and tally_fincom_id(t.v) is not null),
+v1 as (
+  select distinct on (vs.fid) vs.fid, vs.eid, vs.xml, vs.ord, regexp_replace(vs.fid, '[^A-Za-z0-9]', '', 'g') as kf, regexp_replace(coalesce(vs.eid, ''), '[^A-Za-z0-9]', '', 'g') as ke
+    from vs order by vs.fid, vs.ord),
+rs as (
+  select t.r, t.o::int as ord, regexp_replace(t.r->>'id', '[^A-Za-z0-9]', '', 'g') as k,
+         (row_number() over (partition by t.r->>'sentAt', t.r->>'batchEnd', t.r->>'batchN' order by t.o))::int - 1 as pos,
+         (count(*) over (partition by t.r->>'sentAt', t.r->>'batchEnd', t.r->>'batchN'))::int as gn
+    from jsonb_array_elements(case when jsonb_typeof((j).results) = 'array' then (j).results else '[]'::jsonb end) with ordinality as t(r, o)
+   where jsonb_typeof(t.r) = 'object' and coalesce(t.r->>'id', '') <> '' and coalesce(t.r->>'kind', '') <> 'master'),
+its as (
+  select t.i, regexp_replace(t.i->>'id', '[^A-Za-z0-9]', '', 'g') as k
+    from jsonb_array_elements(case when jsonb_typeof((j).items) = 'array' then (j).items else '[]'::jsonb end) as t(i)
+   where jsonb_typeof(t.i) = 'object' and coalesce(t.i->>'id', '') <> ''),
+b as (
+  select v1.fid, v1.eid, v1.ord, v1.xml, r.r, r.pos, r.gn, it.i,
+         mk.action as mk_action, mk.vch as mk_vch, mk.note as mk_note, mk.by_user as mk_by, mk.at as mk_at,
+         pid.accepted_at, pid.released_at, pid.released_by, pid.matched_at, pid.matched_mid, pid.live as pid_live,
+         ((j).status in ('waiting', 'taken', 'running') and (jsonb_typeof((j).resend_only) is distinct from 'array' or jsonb_array_length((j).resend_only) = 0
+            or (j).resend_only ? coalesce(v1.eid, '') or (j).resend_only ? v1.fid)) as in_scope
+    from v1
+    left join lateral (select rs.r, rs.pos, rs.gn from rs where rs.k <> '' and (rs.k = v1.kf or rs.k = v1.ke) order by rs.ord desc limit 1) r on true
+    left join lateral (select its.i from its where its.k <> '' and (its.k = v1.kf or its.k = v1.ke) limit 1) it on true
+    left join lateral (select m.action, m.vch, m.note, m.by_user, m.at from tally_post_marks m
+                        where m.job_id = (j).id and regexp_replace(m.entry_id, '[^A-Za-z0-9]', '', 'g') in (v1.kf, v1.ke) order by m.at desc, m.id desc limit 1) mk on true
+    left join lateral (select p.accepted_at, p.released_at, p.released_by, p.matched_at, p.matched_mid, p.live from tally_post_ids p
+                        where p.job_id = (j).id and p.fincom_id = v1.fid limit 1) pid on true),
+c as (
+  select b.*,
+         (b.r is not null and lower(coalesce(b.r->>'byOwner', '')) in ('true', 't', '1')) or (b.i is not null and lower(coalesce(b.i->>'byOwner', '')) in ('true', 't', '1')) as own,
+         case when b.r->>'batchN' ~ '^\d{1,6}$' then (b.r->>'batchN')::int else 0 end as n,
+         case when b.r->>'created' ~ '^\d{1,9}$' then (b.r->>'created')::int else 0 end as created,
+         case when b.r->>'altered' ~ '^\d{1,9}$' then (b.r->>'altered')::int else 0 end as altered,
+         case when b.r->>'errors' ~ '^\d{1,9}$' then (b.r->>'errors')::int else 0 end as errs,
+         case when b.r->>'exceptions' ~ '^\d{1,9}$' then (b.r->>'exceptions')::int else 0 end as excs,
+         case when jsonb_typeof(b.r->'lineError') = 'array' then (select nullif(string_agg(x.t, '; '), '') from jsonb_array_elements_text(b.r->'lineError') as x(t) where x.t <> '')
+              else nullif(b.r->>'lineError', '') end as le,
+         coalesce(nullif(b.r->>'batchEnd', ''), nullif(b.r->>'lastVchId', '')) as lv,
+         (tally_post_bool(b.r->>'byReply') or tally_post_bool(b.r->>'needsReview')) as has_reply
+    from b),
+d as (
+  select c.*,
+         (c.has_reply and c.errs = 0 and c.excs = 0 and c.le is null and c.altered = 0 and c.n >= 1 and c.created = c.n) as clean,
+         case when c.r is null then null
+              when tally_post_bool(c.r->>'alreadySent') then 'needs_review'                                    -- the bridge's own record: sent before
+              when tally_post_bool(c.r->>'refused') and tally_post_bool(c.r->>'postOnly') then 'refused'       -- refused by the bridge, nothing sent
+              when c.has_reply and c.errs = 0 and c.excs = 0 and c.le is null and c.altered = 0 and c.n = 1 and c.created = 1 and coalesce(c.lv, '') ~ '^\d+$' then 'in_tally'
+              when c.has_reply and c.errs = 0 and c.excs = 0 and c.le is null and c.altered = 0 and c.n > 1 and c.created = c.n then 'in_tally'
+              when c.has_reply and c.created = 0 and c.altered = 0 and (c.errs + c.excs > 0 or c.le is not null) then 'refused'
+              when c.has_reply then 'needs_review'                                                             -- the proof's rule: never in_tally
+              when tally_post_bool(c.r->>'outcomeUnknown') or c.r->>'state' in ('unknown', 'sent') or tally_post_bool(c.r->>'sent') then
+                   case when tally_post_bool(c.r->>'ok') and tally_post_bool(c.r->>'verified') then 'in_tally' else 'needs_review' end
+              when tally_post_bool(c.r->>'ok') and (tally_post_bool(c.r->>'verified') or c.r->>'state' = 'in_tally' or tally_post_bool(c.r->>'already') or tally_post_bool(c.r->>'alreadyThere')) then 'in_tally'
+              when tally_post_bool(c.r->>'ok') then 'needs_review'                                             -- an older bridge: posted, not read back
+              when tally_post_bool(c.r->>'already') or coalesce(c.r->>'message', '') ~* '^Already in Tally \(voucher no\.' then 'in_tally'
+              when tally_post_result_accepted(c.r) then 'needs_review'                                        -- Tally accepted it, unconfirmed
+              else 'refused' end as rstate
+    from c),
+e as (
+  select d.*,
+         case
+           -- a person's word on this posting (Mark posted, Not in Tally): the mark, unless the bridge reported the entry again since
+           when d.own or (d.r is null and d.mk_action is not null and not d.in_scope) then
+             case when d.mk_action = 'posted' then 'in_tally' when d.mk_action = 'released' then 'released'
+                  when coalesce(d.r->>'state', d.i->>'state') = 'in_tally' then 'in_tally' when coalesce(d.r->>'state', d.i->>'state') = 'notfound' then 'released' else 'needs_review' end
+           when d.rstate is not null then d.rstate
+           when d.i is not null and d.i->>'state' in ('in_tally', 'posted') then 'in_tally'
+           when d.i is not null and d.i->>'state' in ('needs_review', 'unknown') then 'needs_review'
+           when d.i is not null and d.i->>'state' in ('failed', 'notfound') then case when tally_post_accept_text(d.i->>'reason') then 'needs_review' else 'refused' end
+           when (j).status = 'waiting' then 'queued'
+           when (j).status in ('taken', 'running') then 'sent'
+           -- (174, fifth review H1) cancelled after its bridge had it, the id kept live (tally_post_cancel): it may be in Tally
+           when (j).status = 'cancelled' and coalesce(d.pid_live, false) and d.released_at is null then 'needs_review'
+           when (j).status = 'cancelled' and (j).taken_at is null then 'released'
+           when (j).status in ('failed', 'cancelled') and (j).taken_at is null then 'refused'
+           else 'needs_review' end as s0,
+         case when d.own or (d.r is null and d.mk_action is not null and not d.in_scope) then 'owner'
+              when d.rstate is not null or (d.i is not null and d.i->>'state' in ('in_tally', 'posted', 'needs_review', 'unknown', 'failed', 'notfound')) then 'reply'
+              else 'status' end as src0
+    from d),
+f as (
+  select e.*,
+         case when e.in_scope and (j).status = 'waiting' and e.s0 not in ('in_tally', 'needs_review') then 'queued'
+              when e.in_scope and (j).status in ('taken', 'running') and e.s0 in ('released', 'queued') then 'sent'
+              when e.matched_at is not null and e.s0 in ('needs_review', 'refused', 'sent', 'in_tally') and e.src0 <> 'owner' then 'in_tally'
+              when e.accepted_at is not null and e.released_at is null and e.s0 = 'refused' and e.src0 <> 'owner' then 'needs_review'
+              when e.released_by = 'owner' and e.released_at is not null and e.mk_action is null and e.src0 <> 'owner' and e.s0 <> 'in_tally' and not e.in_scope then 'released'
+              else e.s0 end as st
+    from e)
+select f.fid, f.eid, f.ord, f.st,
+       case when f.in_scope and f.st in ('queued', 'sent') and f.s0 <> f.st then 'status'
+            when f.matched_at is not null and f.st = 'in_tally' and f.src0 <> 'owner' then 'recorder'
+            when f.src0 = 'owner' and coalesce(f.mk_note, '') like 'Found in % by the FinCom Bridge%' then 'bridge'
+            when f.released_by = 'owner' and f.st = 'released' and f.src0 <> 'owner' and f.s0 <> 'released' then 'owner'
+            else f.src0 end,
+       case when f.st <> 'in_tally' then null
+            when f.src0 = 'owner' then coalesce(nullif(btrim(f.mk_vch), ''), nullif(f.r->>'vchNumber', ''))
+            when f.matched_at is not null and nullif(f.matched_mid, '') is not null then f.matched_mid
+            when f.has_reply and f.n = 1 then coalesce(nullif(f.r->>'vchId', ''), f.lv)
+            when f.has_reply and f.n > 1 and f.gn = f.n and coalesce(f.lv, '') ~ '^\d{1,18}$' then (f.lv::bigint - (f.n - 1 - f.pos))::text
+            when f.has_reply then null
+            else coalesce(nullif(f.r->>'masterId', ''), nullif(f.matched_mid, '')) end,
+       (f.st = 'in_tally' and f.src0 = 'reply' and f.has_reply and f.n > 1 and f.matched_at is null),
+       case when f.src0 = 'owner' and f.st in ('in_tally', 'released', 'needs_review') then left(coalesce(nullif(f.mk_note, ''), nullif(f.r->>'reason', ''), nullif(f.i->>'reason', '')), 1000)
+            when f.st in ('in_tally', 'queued', 'sent') then null
+            else left(coalesce(nullif(f.r->>'message', ''), f.le, nullif(f.r->>'reason', ''), nullif(f.i->>'reason', ''),
+                               case when f.st = 'released' and f.released_why is not null then f.released_why end, nullif((j).message, '')), 1000) end,
+       case when f.src0 = 'owner' then f.mk_by end,
+       case when f.src0 = 'owner' then f.mk_at end,
+       coalesce(nullif(f.r->>'vchType', ''), nullif(substring(f.xml from '<VOUCHERTYPENAME>([^<]{1,100})</VOUCHERTYPENAME>'), ''), nullif(substring(f.xml from 'VCHTYPE="([^"]{1,100})"'), '')),
+       coalesce(nullif(f.r->>'vchNumber', ''), nullif(f.r->>'vchNo', ''), nullif(substring(f.xml from '<VOUCHERNUMBER>([^<]{1,60})</VOUCHERNUMBER>'), '')),
+       case when coalesce(nullif(f.r->>'vchDate', ''), substring(f.xml from '<DATE>(\d{8})</DATE>')) ~ '^(19|20)\d\d(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])$'
+            then to_date(coalesce(nullif(f.r->>'vchDate', ''), substring(f.xml from '<DATE>(\d{8})</DATE>')), 'YYYYMMDD') end,
+       (select max(abs(m.a[1]::numeric)) from regexp_matches(f.xml, '<AMOUNT>\s*(-?\d{1,15}(?:\.\d{1,4})?)\s*</AMOUNT>', 'g') as m(a))
+  from (select f0.*, (select p.released_why from tally_post_ids p where p.job_id = (j).id and p.fincom_id = f0.fid limit 1) as released_why from f f0) f
+ order by f.ord
+$judge$;
+revoke all on function public.tally_post_register_judged(public.tally_post_jobs) from public, anon, authenticated;
+grant execute on function public.tally_post_register_judged(public.tally_post_jobs) to service_role;
+
+-- ---------------------------------------------------------------- fifth review M2. the check when the bridge is gone
+-- the bridge that took (or is named in) a posting is gone: its key revoked, it may no longer post on it, or not heard
+-- from for 7 days (info.bridges[bridge].at). Internal
+create or replace function public.tally_post_check_bridge_gone(p_job uuid)
+returns boolean language sql stable security definer set search_path = public, pg_temp as $function$
+  select coalesce((select coalesce(d.revoked, false) or not tally_bridge_may_post(d.id, b.b)
+                          or not coalesce(case when coalesce(d.info -> 'bridges' -> b.b ->> 'at', '') ~ '^\d{4}-\d\d-\d\dT\d\d:\d\d'
+                                               then (d.info -> 'bridges' -> b.b ->> 'at')::timestamptz > now() - interval '7 days' end, false)
+                     from tally_post_jobs j cross join lateral (select coalesce(j.taken_by, j.target_bridge) b) b
+                     left join tally_devices d on d.id = j.device_id
+                    where j.id = p_job and b.b is not null), false)
+$function$;
+revoke all on function public.tally_post_check_bridge_gone(uuid) from public, anon, authenticated;
+grant execute on function public.tally_post_check_bridge_gone(uuid) to service_role;
+
+-- 55's tally_post_check_bridge_ok; changed: when that bridge is gone, another bridge of the firm with the very company open
+-- (its GUID) may answer the check (it only looks in Tally; the person's confirm still releases)
+create or replace function public.tally_post_check_bridge_ok(p_job uuid, p_device uuid, p_bridge text, p_main boolean)
+returns boolean language sql stable security definer set search_path = public, pg_temp as $function$
+  select exists (select 1 from tally_post_jobs j where j.id = p_job and p_device is not null and coalesce(p_bridge, '') <> '' and
+           (case when j.taken_by is not null then j.taken_by = p_bridge and (j.device_id = p_device or tally_bridge_device(j.firm_id, p_bridge) is not distinct from p_device)
+                when j.target_bridge is not null then j.target_bridge = p_bridge and j.device_id = p_device
+                else j.device_id = p_device and coalesce(p_main, false) and tally_bridge_takes_unnamed(p_device, p_bridge) end
+         -- (174, fifth review M2) the bridge that took it is gone (its key revoked, it may no longer post, or not heard for 7
+         -- days): another bridge of the same firm, bound to its key, that may post and has the very company open now (the
+         -- link's GUID known and named in its key's beat): it only looks in Tally; a person still confirms
+         or (coalesce(j.taken_by, j.target_bridge) is not null and p_bridge ~ '^go-[0-9a-f]{6,32}$' and p_bridge <> coalesce(j.taken_by, j.target_bridge)
+             and tally_post_check_bridge_gone(j.id)
+             and tally_bridge_device(j.firm_id, p_bridge) = p_device and tally_bridge_may_post(p_device, p_bridge)
+             and exists (select 1 from tally_links l join tally_companies tc on tc.firm_id = l.firm_id and tc.book_id = l.book_id
+                          join tally_devices d on d.id = p_device and d.firm_id = j.firm_id and not coalesce(d.revoked, false)
+                         where l.firm_id = j.firm_id and tc.company = j.company and l.state = 'linked' and nullif(btrim(coalesce(l.company_guid, '')), '') is not null
+                           and tally_bridge_serves(p_device, p_bridge, j.company, l.company_guid)
+                           and jsonb_typeof(d.info -> 'beat' -> 'companies') = 'array'
+                           and exists (select 1 from jsonb_array_elements(d.info -> 'beat' -> 'companies') c where jsonb_typeof(c) = 'object'
+                                        and lower(tally_nm(c ->> 'name')) = lower(tally_nm(j.company)) and lower(btrim(coalesce(c ->> 'guid', ''))) = lower(btrim(l.company_guid)))))))
+$function$;
+revoke all on function public.tally_post_check_bridge_ok(uuid, uuid, text, boolean) from public, anon, authenticated;
+
+-- ---------------------------------------------------------------- fifth review L1. "I looked in Tally: not there" (55's text)
+-- 55's tally_post_check_confirm; changed: its words for a cancelled posting ("released; you can post it again")
+create or replace function public.tally_post_check_confirm(p_job uuid, p_id text, p_why text)
+returns jsonb language plpgsql security definer set search_path to 'public', 'pg_temp' as $function$
+declare f uuid := my_firm(); v_why text := left(btrim(coalesce(p_why, '')), 500); j tally_post_jobs%rowtype; c tally_post_checks%rowtype; eid text; r jsonb; v_resent boolean := false; said text;
+begin
+  if f is null or not can_write() then raise exception 'only a member of the firm who may post can confirm this' using errcode = '42501'; end if;
+  if v_why = '' then raise exception 'give a reason: where you looked in Tally (kept with your name and the time)'; end if;
+  select * into j from tally_post_jobs where id = p_job and firm_id = f for update;
+  if not found then raise exception 'this posting is not in your firm (or not found)'; end if;
+  select v->>'id' into eid from jsonb_array_elements(coalesce(j.payload->'vouchers', '[]'::jsonb)) v where tally_post_id_match(tally_fincom_id(v), v->>'id', p_id) limit 1;
+  if eid is null then raise exception 'the entry % is not in this posting', p_id; end if;
+  select * into c from tally_post_checks k where k.job_id = p_job and k.entry_id = eid order by k.id desc limit 1 for update;
+  if c.id is null or c.state <> 'notseen' then
+    return jsonb_build_object('ok', false, 'state', coalesce(c.state, ''), 'error', 'Not sent again: the FinCom Bridge has not reported this entry as not seen in Tally (or that check was closed). Press "Not in Tally - post again" first: the bridge looks in Tally.');
+  end if;
+  if not tally_post_check_bridge_ok(p_job, c.checked_device, c.checked_bridge, true) then
+    return jsonb_build_object('ok', false, 'error', 'Not sent again: the check was not answered by the bridge that posts this posting.');
+  end if;
+  if exists (select 1 from tally_post_marks m where m.job_id = p_job and m.entry_id = eid and m.action = 'posted' and m.at > c.asked_at) then
+    return jsonb_build_object('ok', false, 'error', 'Not sent again: the entry was marked posted after the check was asked.');
+  end if;
+  r := tally_post_release_core(f, auth.uid(), p_job, eid,
+         left(v_why || ' (the FinCom Bridge did not see it in ' || j.company || ' on ' || to_char(c.checked_at at time zone 'Asia/Kolkata', 'DD-Mon-YYYY HH24:MI') || ' IST; confirmed by ' || tally_member_name(f, auth.uid()) || ')', 500));
+  select * into j from tally_post_jobs where id = p_job;
+  update tally_post_jobs set resend_only = case when coalesce(resend_only, '[]'::jsonb) @> jsonb_build_array(eid) then resend_only else coalesce(resend_only, '[]'::jsonb) || jsonb_build_array(eid) end,
+         target_bridge = case when c.checked_bridge ~ '^go-[0-9a-f]{6,32}$' then c.checked_bridge else target_bridge end, device_id = coalesce(c.checked_device, device_id)
+   where id = p_job;
+  if j.status in ('failed', 'done') and not coalesce(j.checking, false) then
+    begin
+      update tally_post_jobs set status = 'waiting', message = 'Not in Tally (looked by ' || tally_member_name(f, auth.uid()) || '): sent again', taken_at = null, updated_at = now(),
+             attempts = coalesce(attempts, 0) + 1 where id = p_job;
+      v_resent := true;
+    exception when others then
+      said := sqlerrm;
+    end;
+  else
+    -- (174, fifth review L1) a cancelled posting is not sent again: the entry is free to post anew
+    said := case when j.status = 'cancelled' then 'released; you can post it again' else 'released; it is sent again when the posting''s other entries are settled' end;
+  end if;
+  update tally_post_checks set state = 'confirmed', confirmed_by = auth.uid(), confirmed_at = now(), confirmed_why = v_why, resent = v_resent where id = c.id;
+  return jsonb_build_object('ok', true, 'state', 'confirmed', 'resent', v_resent, 'job', p_job, 'entry', eid, 'check', c.id, 'words', said);
+end $function$;
+revoke all on function public.tally_post_check_confirm(uuid, text, text) from public, anon;
+grant execute on function public.tally_post_check_confirm(uuid, text, text) to authenticated;
+
+-- ---------------------------------------------------------------- fifth review M2. the owner's own word
+-- "I checked in Tally: not there", an OWNER only, a reason required, kept with the name and the time (tally_post_marks, by
+-- tally_post_release_core): the entry's id is released with no check of the bridge (when the bridge that took it is gone
+-- and no check can be answered). If the entry is in Tally after all, it will be posted twice: the words say so. Not while
+-- the posting is still being sent
+create or replace function public.tally_post_owner_release(p_job uuid, p_id text, p_why text)
+returns jsonb language plpgsql security definer set search_path to 'public', 'pg_temp' as $function$
+declare f uuid := my_firm(); why text := left(btrim(coalesce(p_why, '')), 400); j tally_post_jobs%rowtype;
+begin
+  if f is null or not exists (select 1 from members m where m.user_id = auth.uid() and m.firm_id = f and m.role = 'owner' and coalesce(m.active, true)) then
+    raise exception 'only an owner of the firm can say this' using errcode = '42501'; end if;
+  if why = '' then raise exception 'say where you looked in Tally (kept with your name and the time)'; end if;
+  select * into j from tally_post_jobs where id = p_job and firm_id = f for update;
+  if not found then raise exception 'this posting is not in your firm (or not found)'; end if;
+  if j.status in ('waiting', 'taken', 'running') and not coalesce(j.checking, false) then
+    return jsonb_build_object('ok', false, 'error', 'This posting is still being sent to Tally; wait for it to finish, then settle the entry.');
+  end if;
+  return tally_post_release_core(f, auth.uid(), p_job, p_id, left('I checked in Tally: not there (' || why || '). If it is in Tally, it will be posted twice.', 500)) || jsonb_build_object('owner', true);
+end $function$;
+revoke all on function public.tally_post_owner_release(uuid, text, text) from public, anon;
+grant execute on function public.tally_post_owner_release(uuid, text, text) to authenticated;
+
 -- ---------------------------------------------------------------- MED 4. Cancel (116's text)
 -- 116's tally_post_cancel; a posting once taken (its bridge had it: taken_by, taken_at or first_taken_at) is cancelled with
 -- a warning to check Tally first, in its message and in the answer (warn), and its ids kept live until a person settles them
 create or replace function public.tally_post_cancel(p_id uuid)
 returns jsonb language plpgsql security definer set search_path = public as $$
-declare n int; started boolean; w text := 'Cancelled after the Tally computer had started it: part of it may be in Tally. Check Tally first; Mark posted what is there before posting it again.';
+declare n int; started boolean; j tally_post_jobs%rowtype; w text := 'Cancelled after the Tally computer had started it: part of it may be in Tally. Check Tally first; Mark posted what is there before posting it again.';
 begin
   if auth.uid() is not null and not can_write() then raise exception 'Only the firm''s owner or staff can cancel a posting to Tally.' using errcode = '42501'; end if;
-  select taken_by is not null or taken_at is not null or first_taken_at is not null into started from tally_post_jobs where id = p_id and firm_id = my_firm() and status = 'waiting';
+  select taken_by is not null or taken_at is not null or first_taken_at is not null or coalesce(attempts, 0) > 0 into started from tally_post_jobs where id = p_id and firm_id = my_firm() and status = 'waiting';
   update tally_post_jobs set status = 'cancelled', message = case when coalesce(started, false) then w else 'Cancelled before the Tally computer took it' end, updated_at = now()
    where id = p_id and firm_id = my_firm() and status = 'waiting';
   get diagnostics n = row_count;
+  select * into j from tally_post_jobs where id = p_id;
   -- (fourth review) its ids stay live (the cancel freed them: tally_post_ids_sync): a new posting of the same entries is
   -- refused until a person settles them (Mark posted, or Not in Tally: the FinCom Bridge looks first); another posting's
   -- live id is left as it is
   if n > 0 and coalesce(started, false) then
     update tally_post_ids i set live = true
      where i.job_id = p_id and i.released_at is null and not i.live
-       and not exists (select 1 from tally_post_ids o where o.firm_id = i.firm_id and o.fincom_id = i.fincom_id and o.job_id <> p_id and o.live);
+       and not exists (select 1 from tally_post_ids o where o.firm_id = i.firm_id and o.fincom_id = i.fincom_id and o.job_id <> p_id and o.live)
+       -- (fifth review H1) only an entry that may be in Tally; one Tally clearly refused, or never sent, is free as before
+       and (i.accepted_at is not null or tally_post_entry_maybe_in(j.results, j.items, i.fincom_id, i.entry_id));
   end if;
-  return jsonb_build_object('ok', n > 0) || case when n > 0 and coalesce(started, false) then jsonb_build_object('warn', w) else '{}'::jsonb end;
+  -- (fifth review L3) and the entries that stay with it (its FinCom entry ids)
+  return jsonb_build_object('ok', n > 0) || case when n > 0 and coalesce(started, false) then jsonb_build_object('warn', w,
+    'entries', (select coalesce(jsonb_agg(i.entry_id order by i.entry_id), '[]'::jsonb) from tally_post_ids i where i.job_id = p_id and i.live)) else '{}'::jsonb end;
 end $$;
 revoke all on function public.tally_post_cancel(uuid) from public, anon;
 grant execute on function public.tally_post_cancel(uuid) to authenticated;

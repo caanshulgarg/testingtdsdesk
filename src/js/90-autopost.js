@@ -654,7 +654,11 @@ const AutoPost = {
       let r = null;
       try { r = await TCloud.rpc("tally_post_cancel", {p_id: job}); } catch (e){ /* finished meanwhile: then it is in Tally */ }
       // migration 174: its bridge had started it: part may be in Tally; the entry stays as it is (checked on the Post page)
-      if (r && r.warn) return {ok: false, why: r.warn};
+      // (fifth review L3) the entries that may be in Tally are named; with none (nothing of it reached Tally) the undo goes on
+      if (r && r.warn && (r.entries || []).length){
+        const rows = (B() && B().rows) || [], nm = id => { const o = rows.find(z => z.id === id); return (o && o.auto && o.auto.label) || (id === x.id && a.label) || id; };
+        return {ok: false, why: r.warn + " These stay with the cancelled posting until settled on the Post page: " + r.entries.map(nm).join(", ") + "."};
+      }
     }
     const at = new Date().toISOString(), who = typeof whoAmI === "function" ? whoAmI() : "";
     if (bank){

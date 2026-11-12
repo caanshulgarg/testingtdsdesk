@@ -87,6 +87,19 @@ const PostOwner = {
     if (!a || !a.ok) return;
     return this.call(cid, "tally_post_check_confirm", {p_job: job.id, p_id: String(e.id), p_why: a.data.why}, no + " is sent again, once.");
   },
+  // migration 174 (fifth review M2): an owner's own "I checked in Tally: not there" when no check can be answered (the
+  // bridge that took the posting is gone): a reason required, kept with the name and the time; no bridge looks first
+  async ownerNotThere(cid, e, job){
+    if (!job) return;
+    const no = (e.x && e.x.invoiceNo) || e.id;
+    const a = await askConfirm({title: no + ": you checked in Tally and it is not there?", ok: "I checked in Tally: not there", danger: true,
+      body: "<p>" + esc("No FinCom Bridge looks first. If it is in Tally, it will be posted twice. Confirm only after looking in Tally (Day Book, or search the narration TDSDesk:" + String(e.id) + "); your name, the time and the reason are kept.") + "</p>" +
+        '<div class="bk-form one"><label><span>Reason (where you looked in Tally)</span><input id="ownerWhy" maxlength="400" placeholder="Searched TDSDesk:\u2026 in the Day Book"></label></div>',
+      read: () => ({why: ((document.getElementById("ownerWhy") || {}).value || "").trim()}), validate: d => d && d.why ? "" : "Say where you looked in Tally."});
+    if (!a || !a.ok) return;
+    if (typeof auditEvent === "function") auditEvent("post_owner_not_there", no + ": " + a.data.why, cid);
+    return this.call(cid, "tally_post_owner_release", {p_job: job.id, p_id: String(e.id), p_why: a.data.why}, no + " is released; it can be posted again.");
+  },
   // the final review of 2.3.0 (M2): the member who asked for a check, or an owner, withdraws it while it waits
   // (tally_post_check_withdraw: who, when and why kept); nothing is released or sent
   async withdrawCheck(cid, ck){
