@@ -15,6 +15,8 @@
 // (gst_itc_inputs, answered as migration 171 does) against today's engine on the whole book: every month the same, kept
 // as calc 'gst-itc', the credit carried kept in order (gst_itc_month) and read back by the next month; the nightly run
 // checks both; without 171 the sweep keeps the shares alone (itc false) and the parity checks part A alone.
+// Migration 172 (next-gst-isd): the month step reads only the documents of the years whose 2B is here
+// (gst_itc_inputs_2b, its months from the client's 2Bs); before 172 (404) gst_itc_inputs, the same figures.
 // Made-up rows only; nothing real is called.
 import { handler } from "../server/gst-run/handler.ts";
 import { unpack, HEADS } from "../server/gst-run/data.ts";
@@ -48,12 +50,12 @@ const monthRows = (ym: string) => {
 };
 // gst_itc_inputs (migration 171) on the fake's rows: the book's months and GSTINs, the registration's month rows, the
 // documents, the allocations of the bills rule 37 follows, those suppliers' movement, the credit kept on this version
-const itcInputs = (reg: string, engine: string, version: string) => {
+const itcInputs = (reg: string, engine: string, version: string, yms?: string[] | null) => {
   const live = W.heads.filter((h: any) => !h.deleted_at), withL = new Set(W.lines.filter((l: any) => l.ledger).map((l: any) => l.guid));
   const dated = live.filter((h: any) => withL.has(h.guid) || (h.cancelled && h.vno)).map((h: any) => String(h.day).replace(/-/g, "").slice(0, 6)).sort();
   const months: any = {}, status: any = {};
   W.months.forEach((ym: string) => { const m = monthRows(ym).filter((r: any) => r.reg === reg && r.sec !== "*"); if (m.length) months[ym] = m; status[ym] = T.due.size ? "stale" : "fresh"; });
-  const docs = [...T.docs.values()].filter((d: any) => d.doc && (d.doc_reg === reg || d.doc_reg === "")).map((d: any) => ({ guid: d.guid, doc: d.doc }))
+  const docs = [...T.docs.values()].filter((d: any) => d.doc && (d.doc_reg === reg || d.doc_reg === "") && (!yms || yms.includes(String(d.ym)))).map((d: any) => ({ guid: d.guid, doc: d.doc }))
     .sort((x: any, y: any) => String(x.doc.bookDate).localeCompare(String(y.doc.bookDate)) || (x.guid < y.guid ? -1 : 1));
   const nb = new Set<string>(); T.docs.forEach((d: any) => d.bills.forEach((b: any) => { if (b.nb && b.reg === reg) nb.add(b.l + "\u0001" + b.name); }));
   const bills: any[] = []; T.docs.forEach((d: any) => d.bills.forEach((b: any, i: number) => { if (nb.has(b.l + "\u0001" + b.name)) bills.push({ guid: d.guid, seq: i, rec: b }); }));
@@ -102,6 +104,8 @@ const RPC: Record<string, (a: any) => any> = {
   gst_itc_mark: (a) => { if (!leaseOk(a)) return { ok: false, error: "lease lost" }; T.itcMarks = (T.itcMarks || 0) + 1; W.heads.forEach((h: any) => T.due.add(h.guid)); T.itcMarked = true; return { ok: true, due: T.due.size }; },
   gst_itc_unmark: () => { const was = !!T.itcMarked; T.itcMarked = false; T.unmarks = (T.unmarks || 0) + 1; return was; },
   gst_itc_inputs: (a) => itcInputs(a.p_reg, a.p_engine, a.p_version),
+  // migration 172: only the documents of the months asked (the years whose 2B is here)
+  gst_itc_inputs_2b: (a) => { T.itc2bN = (T.itc2bN || 0) + 1; T.itc2bYms = a.p_yms; return itcInputs(a.p_reg, a.p_engine, a.p_version, a.p_yms); },
   gst_itc_month_put: (a) => { T.itcMonth.set(a.p_ym + "|" + a.p_reg, { engine: a.p_engine, version: a.p_version, carry: a.p_carry, result: a.p_result, ref: a.p_ref }); return true; },
   gst_itc_parity_put: (a) => { T.itcParity.push(a); return T.itcParity.length; },
   // migration 170: the engine gst-run runs (one row; true when it moved)
@@ -253,6 +257,14 @@ console.log("== part B: the input tax credit side (migration 171)");
     "share_parity, month by month: tables 4, 5 and 6 by the month step the engine's (calc 'gst-itc' kept, " + itcSame + " months)");
   ok(T.itcMonth.size === W.months.length && got.slice(1).every((x: any) => x.p_notes.carryKept > 0) && [...T.itcMonth.values()].every((x: any) => x.version === "v-itc-1" && x.engine === ENGINE),
     "each month's carried credit kept in order (gst_itc_month, on the version) and read back by the months after (" + got.slice(1).map((x: any) => x.p_notes.carryKept).join(" ") + ")");
+  ok(T.itc2bN >= W.months.length && Array.isArray(T.itc2bYms) && T.itc2bYms.length === 12 && T.itc2bYms[0] === "202504" && T.itc2bYms[11] === "202603",
+    "migration 172: the month step asked for the documents of the years whose 2B is here only (gst_itc_inputs_2b, " + (T.itc2bYms || []).length + " months: 2025-26)");
+  {
+    const was2b = RPC.gst_itc_inputs_2b, nOld = T.itcInputsN || 0; delete RPC.gst_itc_inputs_2b;
+    const p0 = await call({ action: "share_parity", book_id: BK, ym: "202510", reg: "07" });
+    RPC.gst_itc_inputs_2b = was2b;
+    ok(p0.j.ok && p0.j.itc && p0.j.itc.same && p0.j.itc.checked === 1 && (T.itcInputsN || 0) === nOld + 1, "before migration 172 (gst_itc_inputs_2b not there): gst_itc_inputs, every document, the same figures");
+  }
   const carried = [...T.itcMonth.entries()].filter(([, x]: any) => ["igst", "cgst", "sgst"].some((h) => Number(x.carry[h]) > 0)).map(([k]: any) => k.slice(0, 6));
   ok(carried.length >= 3 && got.some((x: any) => x.p_ym === "202603"), "credit carried out of " + carried.length + " months; the QRMP quarter checked");
   // a new version (an entry or a decision changed): what was kept is not read, the months before are worked out from the sums

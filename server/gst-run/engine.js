@@ -23,7 +23,9 @@
 //                          171, shadow): a month's 3B (tables 4, 5, 6) by today's engine on what the cloud keeps (the month
 //                          sums, each entry's document and allocations, the suppliers' movement, the credit carried in),
 //                          today's engine on the whole book for the same months, and every box of both to the paisa
-//   ENGINE                 a hash of the engine's own text (gst3b.js, names.js, this file's books / step / boxes) and REV
+//   twoBYms(items, reg)    next-gst-isd (migration 172): the months of the years whose 2B is here for the registration,
+//                          the only documents the month step reads (the 2B matching takes no others)
+//   ENGINE                a hash of the engine's own text (gst3b.js, names.js, this file's books / step / boxes) and REV
 //                          (data.ts and handler.ts are counted through REV: tests/run_gst_cloud.js stops when one of the
 //                          files changes and REV and tests/gst_cloud_rev.json do not)
 // The engine reads S and CO() as globals (as in the app): step() sets them, works its months out at once (no await in
@@ -33,7 +35,7 @@ import * as E from "../_shared/gst3b.js";
 import { gst3bPrint } from "../_shared/gst3bprint.js";
 
 // the revision of the function around the engine (data.ts, handler.ts): moved by hand with tests/gst_cloud_rev.json
-export const REV = "171.2";
+export const REV = "172.1";
 
 const G = globalThis;
 // what the app's program has around the engine: names.js (put at its head by build.py too)
@@ -87,7 +89,7 @@ export function boxes(t) {
 // the engine's own text: a result worked out by another engine is worked out again
 export const ENGINE = (() => {
   let s = REV + "|" + books.toString() + boxes.toString() + step.toString() + gst3bPrint.toString() + ctxOf.toString() + contextOf.toString() + shares.toString() + engineSums.toString()
-    + itcRow.toString() + sumRows.toString() + addSum.toString() + shareSrc.toString() + monthBook.toString() + itcMonths.toString() + engineItc.toString();
+    + itcRow.toString() + sumRows.toString() + addSum.toString() + shareSrc.toString() + monthBook.toString() + itcMonths.toString() + engineItc.toString() + twoBYms.toString();
   const add = (v) => { if (typeof v === "function") s += v.toString(); else if (v && typeof v === "object") Object.keys(v).sort().forEach((k) => { const x = v[k]; s += k + (typeof x === "function" ? x.toString() : typeof x === "object" && x && !(x instanceof Map) && !(x instanceof WeakMap) ? JSON.stringify(x) : ""); }); };
   Object.keys(E).sort().forEach((k) => add(E[k]));
   Object.keys(names).sort().forEach((k) => add(names[k]));
@@ -260,6 +262,8 @@ export function engineSums(ym, reg) {
   // kind, rule 42's common credit (GSTRev.common) and turnover by part (GSTRev.toPart: the entries', not the marketplace's)
   const P4 = E.GSTR.sec4(inn), q = (o) => Object.assign({}, o, { qty: o.ineligible });
   [["4.rcmIn", P4.rcmIn], ["4.impG", P4.impGoods], ["4.impS", P4.impServ], ["4.other", P4.other], ["4.blocked", P4.blocked], ["4.buy", P4.buy], ["4.rcm31", P.rcmOut]].forEach(([s4, o]) => put(s4, "", "", "", q(o), true));
+  // next-gst-isd: 4(A)(4), the ISD's entries (a month with none has no row, as the cloud's sums have none)
+  if (P4.isd && P4.isd.n) put("4.isd", "", "", "", q(P4.isd), true);
   const n5 = new Map();
   inn.filter((r) => E.GSTR.noTaxIn(r)).forEach((r) => { const p = E.GSTR.noTaxPart(r), k = p.k1 + "\u0001" + p.k2, x = n5.get(k) || { k1: p.k1, k2: p.k2, n: 0, taxable: 0 }; x.n++; x.taxable = E.r2(x.taxable + p.taxable); n5.set(k, x); });
   n5.forEach((x) => put("5.inw", x.k1, x.k2, "", x, true));
@@ -361,7 +365,7 @@ export function shareSrc(inp) {
         q.unregPos.forEach((p) => { const x = pos.get(p.pos) || { pos: p.pos, taxable: 0, igst: 0 }; x.taxable = E.r2(x.taxable + p.taxable); x.igst = E.r2(x.igst + p.igst); pos.set(p.pos, x); });
       }
       P31.unregPos = [...pos.values()].sort((a, c) => a.pos.localeCompare(c.pos));
-      const P4 = { rcmIn: S4("4.rcmIn"), impGoods: S4("4.impG"), impServ: S4("4.impS"), other: S4("4.other"), blocked: S4("4.blocked"), buy: S4("4.buy") };
+      const P4 = { rcmIn: S4("4.rcmIn"), impGoods: S4("4.impG"), impServ: S4("4.impS"), isd: S4("4.isd"), other: S4("4.other"), blocked: S4("4.blocked"), buy: S4("4.buy") };
       const no5 = rows.filter((r) => r.sec === "5.inw").map((r) => ({ k1: r.k1, k2: r.k2, taxable: Number(r.taxable || 0) }));
       return { P31, P4, no5 };
     },
@@ -394,6 +398,17 @@ export function shareSrc(inp) {
     moves() { const o = {}; Object.keys(inp.moves || {}).forEach((l) => { o[l] = inp.moves[l].map((x) => [String(x[0]), Number(x[1])]); }); return o; },
     carry(prev) { return carry[prev] ? { pay: { carry: Object.assign({}, carry[prev]) } } : null; },
   };
+}
+// next-gst-isd: the months of the financial years whose 2B is here for a registration (the client's work: its twoBs, as
+// GST2B.all2b reads them), the years GST2B.run matches: gst-run reads only those months' documents (gst_itc_inputs_2b,
+// migration 172). No 2B for the registration: none
+export function twoBYms(items, reg) {
+  const by = (items || []).filter((r) => r && !r.deleted && r.key === "twoBs").map((r) => ({ k: r.key, i: r.item || "", o: r.ord, d: r.data }));
+  const t = by.length ? E.BookItems.join(by) : null, fys = new Set();
+  Object.values(t && typeof t === "object" ? t : {}).forEach((x) => { if (x && /^\d{6}$/.test(String(x.ym || "")) && (!reg || String(x.gstin || "").slice(0, 2) === reg)) fys.add(E.GST2B.fyOf(x.ym)); });
+  const out = [];
+  [...fys].sort().forEach((fy) => { const y = +fy.slice(0, 4); for (let m = 4; m <= 15; m++) out.push((m <= 12 ? y : y + 1) + String(m <= 12 ? m : m - 12).padStart(2, "0")); });
+  return out;
 }
 // the books the month step reads: the client's work as books() puts it, the context (ledger list, groups, GSTINs, places
 // of supply typed) over it, no entries, and shareSrc
@@ -469,7 +484,7 @@ export function engineItc(rows, reg, yms, o) {
 }
 // the tables of a 3B: 4 (the credit, its reversals, ineligible, the 2B basis's held and released), 5, 3.1(d), 6 (the
 // payment, the credit carried in and out) and the rest (3.1, 3.2) -> the table of a box
-const ITC_TABLE = { impGoods: "4", impServ: "4", rcmIn: "4", other: "4", itc: "4", blocked: "4", reversal: "4", rules: "4", r42: "4", r43: "4", rev1: "4", rev2: "4", reclaim: "4", r37: "4", na: "4",
+const ITC_TABLE = { impGoods: "4", impServ: "4", rcmIn: "4", isd: "4", other: "4", itc: "4", blocked: "4", reversal: "4", rules: "4", r42: "4", r43: "4", rev1: "4", rev2: "4", reclaim: "4", r37: "4", na: "4",
   netItc: "4", ineligible: "4", held: "4", released: "4", cn2b: "4", rejBack: "4", buy: "4", basis: "4", inw5: "5", rcmOut: "3.1d", opening: "6", pay: "6", payable: "6", pmt: "6", cashAfter: "6", pmtLeft: "6" };
 // every box of both (the engine's and the month step's), to the paisa; the documents behind a box by their count
 export function itcCompare(eng, cloud) {

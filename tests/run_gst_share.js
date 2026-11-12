@@ -299,7 +299,7 @@ const clone = (o) => JSON.parse(JSON.stringify(o));
   const sh5 = (id) => s5.share.get(id) || [], has = (id, sec, f) => sh5(id).some((z) => z.sec === sec && (!f || f(z)));
   ok(has(G5.impG, "4.impG", (z) => z.igst === 90000) && !has(G5.impG, "4.other") && s5.docs.get(G5.impG).doc.imp === true, "an import of goods: 4(A)(1) IGST 90,000, not 4(A)(5); its document says import");
   ok(has(G5.impS, "4.impS", (z) => z.igst === 18000) && has(G5.impS, "4.rcm31", (z) => z.igst === 18000) && has(G5.impS, "3B.rcm"), "an import of services: 4(A)(2) and 3.1(d) IGST 18,000");
-  ok(has(G5.isd, "4.other", (z) => z.igst === 5400) && s5.docs.get(G5.isd).doc.gstin === "06AAKCS4821Q1ZY", "ISD credit: 4(A)(5) as today (the engine has no 4(A)(4) box), its document the ISD's GSTIN for 2B's ISD part");
+  ok(has(G5.isd, "4.other", (z) => z.igst === 5400) && s5.docs.get(G5.isd).doc.gstin === "06AAKCS4821Q1ZY", "ISD credit with no ISD switch on its ledger: 4(A)(5) (4(A)(4) once switched: tests/run_gst_isd_2b.js), its document the ISD's GSTIN for 2B's ISD part");
   ok(has(G5.blocked, "4.blocked", (z) => z.cgst === 63000 && z.sgst === 63000) && has(G5.blocked, "4.other") && s5.docs.get(G5.blocked).doc.blocked, "blocked by 17(5): 4.blocked (reversed in 4(B)(1)) and in 4(A)(5)");
   ok(has(G5.inel, "4.buy", (z) => z.qty === 3600) && has(G5.inel, "4.other", (z) => z.qty === 3600 && z.cgst === 0), "tax on a GST-ineligible ledger: 3,600 ineligible (qty), no credit");
   ok(has(G5.cnSup, "4.other", (z) => z.cgst === -900 && z.sgst === -900) && s5.docs.get(G5.cnSup).doc.dir === -1, "a supplier's credit note: 4(A)(5) less 900 + 900; its document a note (dir -1)");

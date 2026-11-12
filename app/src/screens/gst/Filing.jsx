@@ -60,7 +60,7 @@ export function Filing({ b, t }) {
   const ftype = typeof GSTSet === "object" ? GSTSet.typeOf(ym, reg) : "monthly";
   if (ftype === "comp") return <Card title="Filing"><p className="note">This GSTIN is set as <b>composition</b>: GSTR-1 and GSTR-3B do not apply. CMP-08 for {GSTSet.qLabel(ym)} is due {dmy(GSTF.due(ym, "cmp08", reg))} and GSTR-4 by 30 June after the year. FinCom does not prepare CMP-08 or GSTR-4 yet; the working above is for reference only. <SetLink /></p></Card>;
   if (ftype === "qrmp" && !GSTSet.isQEnd(ym)) return <Card title="Filing"><p className="note">This GSTIN files <b>quarterly (QRMP)</b>: no GSTR-1 or 3B for {GSTR.label(ym)}. Invoices to registered customers may go in IFF by {dmy(GSTF.due(ym, "iff", reg))}, and tax is paid by PMT-06 by {dmy(GSTF.due(ym, "pmt06", reg))}. GSTR-1 and 3B for {GSTSet.qLabel(ym)} are due {dmy(GSTF.due(GSTSet.qEnd(ym), "r1", reg))} and {dmy(GSTF.due(GSTSet.qEnd(ym), "r3b", reg))}. <SetLink /></p></Card>;
-  const nil3b = !(t.net.igst || t.net.cgst || t.net.sgst || t.rcmOut.igst || t.rcmOut.cgst || t.rcmOut.sgst || t.other.igst || t.other.cgst || t.other.sgst);
+  const nil3b = !(t.net.igst || t.net.cgst || t.net.sgst || t.rcmOut.igst || t.rcmOut.cgst || t.rcmOut.sgst || t.other.igst || t.other.cgst || t.other.sgst || num((t.isd || {}).igst) || num((t.isd || {}).cgst) || num((t.isd || {}).sgst));
   const nil1 = !GSTR.outward(ym, reg).length;
   const f1 = GSTF.lateFee(ym, reg, "r1", nil1), f3 = GSTF.lateFee(ym, reg, "r3b", nil3b), it = GSTF.interest(ym, reg, t), dr = GSTF.drc(ym, reg, t), a = GSTF.aato(GSTF.fyOf(ym));
   // interest and late fee are the portal's: FinCom's own estimate shows only if switched on in GST settings (off by default)

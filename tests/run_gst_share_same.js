@@ -7,6 +7,10 @@
 //   on the books step makes, inside one drawing: GSTR.threeB (the whole object, its lists too) and threeBm of every month,
 //   GSTR.one (GSTR-1), GSTR.inward / outward, GST2B.bookDocs with skipped, GST2B.run, GSTF.bills and rule37,
 //   GSTRev.turnoverNow / common / month
+// next-gst-isd (the owner, 12-Nov-2026) changes two things on purpose, and only those are taken out of the head's side
+// before it is compared (each counted, so the test says they are there): 3B's new box isd (4(A)(4), the ISD's credit:
+// zero in these worlds, none of whose entries is an ISD's) and the 2B run's noYear (the documents of a year with no 2B:
+// none here, every entry is of 2025-26, whose 2Bs are here). Everything else stays byte for byte the base's.
 // Made-up names only; nothing real is read.
 "use strict";
 const fs = require("fs"), path = require("path"), cp = require("child_process");
@@ -26,6 +30,10 @@ const items = (work) => [...x.BookItems.split(JSON.parse(JSON.stringify(work))).
 });
 fs.writeFileSync(path.join(DIR, "package.json"), JSON.stringify({type: "module"}));
 const strip = (o) => JSON.stringify(o, (k, v) => (k === "engine" || k === "src" || typeof v === "function") ? undefined : v);
+// the head's side: as strip, with the two intended differences taken out and counted (cut)
+const HEADS4 = ["taxable", "igst", "cgst", "sgst", "cess", "ineligible"], cut = {isd: 0, noYear: 0};
+const zeroSum = (v) => v && typeof v === "object" && !Array.isArray(v) && Number(v.n || 0) === 0 && HEADS4.every((h) => Math.abs(Number(v[h] || 0)) < 0.005) && Object.keys(v).every((k) => k === "n" || HEADS4.includes(k));
+const stripHead = (o) => JSON.stringify(JSON.parse(strip(o)), (k, v) => { if (k === "isd" && zeroSum(v)) { cut.isd++; return undefined; } if (k === "noYear" && Array.isArray(v) && !v.length) { cut.noYear++; return undefined; } return v; });
 
 (async () => {
   const mods = {};
@@ -61,14 +69,15 @@ const strip = (o) => JSON.stringify(o, (k, v) => (k === "engine" || k === "src" 
   for (const [label, seed, scale, withItc] of [["the made-up client", 153, 0, false], ["with the inward cases of part B", 171, 0, true], ["a larger one (scale 30)", 183, 30, true]]) {
     const rows = rowsOf(seed, scale, withItc);
     for (const reg of ["07", ""]) {
-      const a = strip(mods.base.eng.step(rows, reg, {}, {max: 99, ready: 1e15, total: 1e15}).months), c = strip(mods.head.eng.step(rows, reg, {}, {max: 99, ready: 1e15, total: 1e15}).months);
+      const a = strip(mods.base.eng.step(rows, reg, {}, {max: 99, ready: 1e15, total: 1e15}).months), c = stripHead(mods.head.eng.step(rows, reg, {}, {max: 99, ready: 1e15, total: 1e15}).months);
       ok(a === c && a.length > 1000, label + ", registration " + (reg || "all") + ": step() of every month, every box the base's (" + a.length + " characters)");
-      const p = calls(mods.base, rows, reg), q = calls(mods.head, rows, reg);
+      const p = calls(mods.base, rows, reg), q = stripHead(JSON.parse(calls(mods.head, rows, reg)));
       let i = 0; if (p !== q) while (p[i] === q[i]) i++;
       ok(p === q, label + ", registration " + (reg || "all") + ": threeB / threeBm (whole objects), GSTR-1, inward, outward, bookDocs and skipped, the 2B run, bills, rule 37, turnover, common credit, rules 42 and 43 the base's (" + p.length + " characters)"
         + (p === q ? "" : " - first difference at " + i + ": " + p.slice(Math.max(0, i - 80), i + 60) + " / " + q.slice(Math.max(0, i - 80), i + 60)));
     }
   }
+  ok(cut.isd > 100 && cut.noYear >= 6, "the intended differences are there and nothing else: 3B's 4(A)(4) box (isd, zero here) " + cut.isd + " times, the 2B run's noYear (empty here) " + cut.noYear + " times");
   console.log(fails ? fails + " FAILED" : "all ok");
   process.exit(fails ? 1 : 0);
 })().catch((e) => { console.error(e); process.exit(1); });

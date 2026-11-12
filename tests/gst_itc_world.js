@@ -3,7 +3,8 @@
 // client. itc(w) adds to w (in place) and returns the GUIDs of what it added:
 //   impG    an import of goods (a bill of entry, IGST paid at customs; in 2B's IMPG by its number)       4(A)(1)
 //   impS    an import of services (reverse charge, IGST paid by us and its credit taken)              3.1(d), 4(A)(2)
-//   isd     credit distributed by the head office's ISD registration (in 2B's ISD part)              4(A)(5) as today
+//   isd     credit distributed by the head office's ISD registration (in 2B's ISD part)              4(A)(5): its ledger not
+//           switched to ISD (switched: 4(A)(4), tests/run_gst_isd_2b.js)
 //   blocked a motor car bought (blocked by section 17(5): Tally's "ineligible" switch on the entry)       4(B)(1) / 4(D)
 //   inel    a bill with its tax booked to a GST-ineligible ledger                                     ineligible
 //   cnSup   a supplier's credit note, booked as our debit note (in 2B's CDNR: matched)                credit taken off

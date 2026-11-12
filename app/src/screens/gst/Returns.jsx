@@ -186,7 +186,7 @@ export function Gstr3b({ b, sub }) {
       <thead><tr><th>4 Input tax credit</th><th className="n">Value</th><th className="n">IGST</th><th className="n">CGST</th><th className="n">SGST</th></tr></thead>
       <tbody>
         <Row label="(A)(1) Import of goods" x={t.impGoods} /><Row label="(A)(2) Import of services" x={t.impServ} />
-        <Row label="(A)(3) Inward supplies on reverse charge" x={t.rcmIn} /><Row label="(A)(5) All other ITC" x={t.other} />
+        <Row label="(A)(3) Inward supplies on reverse charge" x={t.rcmIn} /><Row label="(A)(4) Inward supplies from ISD" x={t.isd || {}} /><Row label="(A)(5) All other ITC" x={t.other} />
         {heldNote ? <tr><td colSpan={5} className="nr" style={{ whiteSpace: "normal" }}>
           {t.held.n ? "Not taken this month (not in 2B, a later month, follow-up or reversed): " + t.held.n + " bill" + (t.held.n === 1 ? "" : "s") + ", " + money(all4(t.held)) + ". " : ""}
           {t.released.n ? "Taken now, booked in another month or only in 2B: " + t.released.n + ", " + money(all4(t.released)) + ". " : ""}

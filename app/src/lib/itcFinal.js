@@ -87,7 +87,8 @@ function build(reg) {
     else if (docs.some((d) => d.ru) && !rate) { r.rateUnknown = true; r.def = r.def2 = ""; }   // not taken until the rate is known (decided)
     rows.push(r);
   });
-  res.onlyBooks.forEach((d) => {
+  // (next-gst-isd: a document of a year with no 2B is not matched, res.noYear; shown as before, "2B not brought in")
+  res.onlyBooks.concat(res.noYear || []).forEach((d) => {
     const r = { key: bkey(d), alt: [], tagKeys: [d.id], kind: "books", docs: [d], party: d.party, gstin: d.gstin, bookNo: d.no, voucher: d.voucher, date: d.date, bm: d.ym, bTax: heads(d, d.dir || 1),
       nob: !loaded.has(d.ym) };
     if (!claim(d)) { r.fixed = why(d); rows.push(r); return; }
@@ -280,7 +281,8 @@ function apply(t, ym, reg) {
   H.forEach((k) => { other[k] = R(base[k] - held[k] + released[k] - cn2b[k] + rejBack[k] + N(g(t.reclaim)[k]) + A["4A5"][k]); });
   const plus = (o, a) => { const x = Object.assign({}, o || {}); H.forEach((k) => { x[k] = R(N(x[k]) + a[k]); }); return x; };
   const impGoods = plus(t.impGoods, A["4A1"]), impServ = plus(t.impServ, A["4A2"]), rcmIn = plus(t.rcmIn, A["4A3"]);
-  const itc = {}; H.forEach((k) => { itc[k] = R(N(impGoods[k]) + N(impServ[k]) + N(rcmIn[k]) + N(other[k])); });
+  // (4(A)(4), the ISD's credit, as GSTR.threeBm has it: next-gst-isd)
+  const itc = {}; H.forEach((k) => { itc[k] = R(N(impGoods[k]) + N(impServ[k]) + N(rcmIn[k]) + N((t.isd || {})[k]) + N(other[k])); });
   const rev1 = plus(plus(t.rev1, A["4B1"]), mo.rev), rev2 = plus(t.rev2, A["4B2"]), na = plus(t.na, A["4D2"]);
   const netItc = {}; H.forEach((k) => { netItc[k] = R(itc[k] - N(rev1[k]) - N(rev2[k])); });
   const pay = GSTR.setOff(t.net, t.rcmOut, netItc, t.opening);
@@ -342,7 +344,7 @@ export const ITCF = {
   // the figures of table 4 for the month, as GSTR-3B has them
   table4(reg, ym) {
     const t = GSTR.threeB(ym, reg), g = (o) => heads(o || z());
-    const A = [["4A1", g(t.impGoods)], ["4A2", g(t.impServ)], ["4A3", g(t.rcmIn)], ["4A5", g(t.other)]];
+    const A = [["4A1", g(t.impGoods)], ["4A2", g(t.impServ)], ["4A3", g(t.rcmIn)], ["4A4", g(t.isd)], ["4A5", g(t.other)]];
     const sumA = A.reduce((a, [, x]) => add(a, x), z());
     return { t, lines: A.concat([["4A", sumA], ["4B1", g(t.rev1)], ["4B2", g(t.rev2)], ["4C", g(t.netItc)], ["4D1", g(t.reclaim)], ["4D2", g(t.na)]]) };
   },
@@ -368,7 +370,7 @@ export const ITCF = {
         no: r.no || "", bookNo: r.bookNo || "", date: r.date || "", bm: lab(r.bm), tm: lab(r.tm), bTax: g(r.bTax), pTax: g(r.pTax), dec: r.show.code ? DEC_LABEL[r.show.code] : "", takeIn: lab(r.show.ym), note: (r.s && r.s.note) || "",
         def: lab(r.def), booksM: g((r.booksBy || {})[M]), lower: g(r.lower), full: g(r.full), later: g(r.laterAmt), defAmt: g(r.defAmt), fixed: r.fixed || "", allow: r.allow,
         eff: g(r.eff), elig: r.fixed ? "" : ELIG_LABEL[r.el] || "", defE: r.fixed ? "" : ELIG_LABEL[r.defE] || "Eligible", def2: lab(r.def2), blkM: g((r.blkBy || {})[M]), rev: g(r.rev) })),
-      base: { "4A5": base, reclaim, "4A1": sansAdj(t.impGoods, "4A1"), "4A2": sansAdj(t.impServ, "4A2"), "4A3": sansAdj(t.rcmIn, "4A3"), "4B1": sub(sansAdj(t.rev1, "4B1"), g((t.itcRev || {}))), "4B2": sansAdj(t.rev2, "4B2"), "4D2": sansAdj(t.na, "4D2") },
+      base: { "4A5": base, reclaim, "4A4": g(t.isd), "4A1": sansAdj(t.impGoods, "4A1"), "4A2": sansAdj(t.impServ, "4A2"), "4A3": sansAdj(t.rcmIn, "4A3"), "4B1": sub(sansAdj(t.rev1, "4B1"), g((t.itcRev || {}))), "4B2": sansAdj(t.rev2, "4B2"), "4D2": sansAdj(t.na, "4D2") },
       adj: Adj.list(reg, M).map((a) => ({ id: a.id, line: a.line, head: a.head, amt: a.amt, reason: a.reason })),
       table4: this.table4(reg, M).lines,
       inreg: typeof inregRows === "function" ? (() => { const keep = S.inregScope; S.inregScope = "month"; try { return inregRows(S.books).rows; } finally { S.inregScope = keep; } })().map((x) => {

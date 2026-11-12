@@ -19,7 +19,7 @@
 // No AI here: M2B.aiLinks only reads the pairs the gst-2b-match function already stored for the year.
 // GST3B_SRC: this file's and names.js's text (this value left out), hashed (tests/run_gst_cloud.js keeps it so): a 3B the
 // cloud worked out carries it, and the 3B page uses the cloud's only when its own is the same (app/src/screens/gst/cloud3b.js)
-const GST3B_SRC = "s6e7f6d0f421539e5";
+const GST3B_SRC = "se0a2eeeebc1ffff0";
 function num(v){ if (typeof v === "number") return isFinite(v) ? v : 0; const n = parseFloat(String(v == null ? "" : v).replace(/[^0-9.\-]/g, "")); return isFinite(n) ? n : 0; }
 function r2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
 const INR = new Intl.NumberFormat("en-IN", {minimumFractionDigits:2, maximumFractionDigits:2});
@@ -325,15 +325,16 @@ const Books = {
     seen.forEach((n, name) => {
       const keep = (saved || {})[name];
       if (keep && keep.byHand){ map[name] = Object.assign({n}, keep); return; }
-      // next-gst-b2cs-summary: the party ledger's "Consolidated B2C" switch (FinCom's own, b2cSum) is kept with the guess
-      map[name] = Object.assign({n}, this.guess(name), keep && keep.byHand ? keep : {}, keep && keep.b2cSum ? {b2cSum: keep.b2cSum} : {});
+      // next-gst-b2cs-summary: the party ledger's "Consolidated B2C" switch (FinCom's own, b2cSum) is kept with the guess;
+      // next-gst-isd: so is the ledger's "ISD (Input Service Distributor)" switch (isd, GSTR.isISD)
+      map[name] = Object.assign({n}, this.guess(name), keep && keep.byHand ? keep : {}, keep && keep.b2cSum ? {b2cSum: keep.b2cSum} : {}, keep && keep.isd ? {isd: keep.isd} : {});
     });
     // FinCom 2.4.1 (Cause A, 01-Oct-2026: 17 confirms wiped on one refresh): a ledger a person confirmed or set by hand
     // that no entry uses (yet) is kept, with n:0. It was dropped here, LedMaster.refresh put it back as a guess, and the
     // save wiped the confirm. No figure moves: no entry uses it
     Object.keys(saved || {}).forEach(name => {
       const keep = saved[name];
-      if (!seen.has(name) && keep && (keep.byHand || keep.ok || keep.b2cSum)) map[name] = Object.assign({}, keep, {n: 0});
+      if (!seen.has(name) && keep && (keep.byHand || keep.ok || keep.b2cSum || keep.isd)) map[name] = Object.assign({}, keep, {n: 0});
     });
     return map;
   },
@@ -600,6 +601,8 @@ const GST2B = {
     return letters + "|" + digits.join("-");
   },
   lastDigits(s){ const d = String(s || "").match(/\d+/g); return d ? String(num(d[d.length - 1])) : ""; },
+  // a month's financial year, "2025-26" (as M2B.fyOf)
+  fyOf(ym){ const y = +String(ym).slice(0, 4), m = +String(ym).slice(4, 6); const s = m >= 4 ? y : y - 1; return s + "-" + String((s + 1) % 100).padStart(2, "0"); },
   // every document in Tally that carries input tax: purchases, and expenses booked in journals or payments
   bookDocs(){
     const b = S.books;
@@ -701,7 +704,13 @@ const GST2B = {
     this.all2b(reg).forEach(t => t.rows.forEach(r => (r.rej ? rejRows : portal).push(r)));
     const regs = (GSTR.gstins(b) || []).map(g => g.slice(0, 2));
     // next-gst-share (part B, gst-run's month step): the documents each entry keeps (S.books.shareSrc) in place of the book's
-    const books = (b.shareSrc ? b.shareSrc.docs(regs) : this.bookDocs()).filter(d => !reg || d.reg === reg || (!d.reg && regs.length <= 1));
+    const docs = (b.shareSrc ? b.shareSrc.docs(regs) : this.bookDocs()).filter(d => !reg || d.reg === reg || (!d.reg && regs.length <= 1));
+    // next-gst-isd (the owner, 12-Nov-2026): only the financial years whose 2B is here for the registration are matched.
+    // A document booked in a year with no 2B (its month's year, M2B.fyOf) is no candidate, and is not "in the books, not
+    // in 2B" either: it is kept apart (noYear), as a month with no 2B shows its bills ("2B not brought in"). A year with
+    // any month's 2B here is matched as before, against every 2B here (another year's too)
+    const fys = new Set(this.all2b(reg).map(t => this.fyOf(t.ym)));
+    const books = docs.filter(d => fys.has(this.fyOf(d.ym))), noYear = docs.filter(d => !fys.has(this.fyOf(d.ym)));
     const byId = new Map(books.map(d => [d.id, d]));
     const taken = new Set(), pairs = [], used2b = new Set();
     const taxOf = x => r2(num(x.igst) + num(x.cgst) + num(x.sgst) + num(x.cess));
@@ -815,10 +824,10 @@ const GST2B = {
     // the same supplier's bill, same number and tax, booked more than once
     const dupes = {}, dk = {};
     const revIds = new Set(reversed.flat().map(d => d.id));
-    books.forEach(d => { if (!d.noN || revIds.has(d.id)) return; const k = (d.gstin || d.party) + "|" + d.noN + "|" + d.dir + "|" + Math.round(taxOf(d)); (dk[k] = dk[k] || []).push(d); });
+    docs.forEach(d => { if (!d.noN || revIds.has(d.id)) return; const k = (d.gstin || d.party) + "|" + d.noN + "|" + d.dir + "|" + Math.round(taxOf(d)); (dk[k] = dk[k] || []).push(d); });
     Object.values(dk).filter(l => l.length > 1 && taxOf(l[0]) > 0).forEach(l => l.forEach((d, i) => { dupes[d.id] = {n: l.length, first: i === 0, others: l.filter(z => z !== d).map(z => z.voucher + " of " + GSTAmend.dmy(z.bookDate))}; }));
     // a bill in 2B and in Tally, but booked with no input tax (the tax charged to the expense)
-    const docIds = new Set(books.map(d => d.id)), gstMap = b.gstins || {};
+    const docIds = new Set(docs.map(d => d.id)), gstMap = b.gstins || {};
     const noCredit = new Map();
     (b.vouchers || []).forEach(v => { if (docIds.has(v.id) || Books.isSale(v) || v.cancel || v.opt) return; const k = this.normNo(v.ref || v.no); if (k.length >= 3) (noCredit.get(k) || noCredit.set(k, []).get(k)).push(v); });
     portal.forEach(p => { delete p.bookedNoCredit; });
@@ -826,7 +835,7 @@ const GST2B = {
       const c = (noCredit.get(p.noN) || []).filter(v => (!p.date || days(p.date, v.date) <= 62) && (!gstMap[v.party] || String(gstMap[v.party]).toUpperCase() === p.gstin || pan(gstMap[v.party]) === pan(p.gstin)));
       if (c.length){ const v = c[0]; p.bookedNoCredit = {id: v.id, type: v.type, no: v.no, date: v.date, party: v.party}; }
     });
-    const res = {pairs, only2b, onlyBooks, portal, books, taxOf, dupes, reversed, rejected: rejList, loaded: this.all2b(reg).map(t => t.ym)};
+    const res = {pairs, only2b, onlyBooks, portal, books, taxOf, dupes, reversed, rejected: rejList, loaded: this.all2b(reg).map(t => t.ym), noYear};
     this._memo = {key, v: b.vouchers, res};
     return res;
   },
@@ -1518,7 +1527,7 @@ const GSTQ = {
   // and what was deposited by PMT-06 in the first two months used before any more cash is asked for
   threeBQ(qEnd, reg){
     const ms = this.months(qEnd), ts = ms.map(m => GSTR.threeBm(m, reg)), sum = k => ts.reduce((a, t) => this.add(a, t[k] || {}), this.z());
-    const keys = ["sale", "cn", "net", "adv", "zero", "nil", "nongst", "rcmOut", "rcmIn", "toUnreg", "impGoods", "impServ", "other", "blocked", "buy", "itc", "reversal", "rev1", "rev2", "reclaim", "na", "rules", "r42", "r43", "held", "released", "cn2b", "rejBack", "netItc"];
+    const keys = ["sale", "cn", "net", "adv", "zero", "nil", "nongst", "rcmOut", "rcmIn", "toUnreg", "impGoods", "impServ", "isd", "other", "blocked", "buy", "itc", "reversal", "rev1", "rev2", "reclaim", "na", "rules", "r42", "r43", "held", "released", "cn2b", "rejBack", "netItc"];
     const t = {quarter: true, months: ms, qEnd, basis: (ts[ts.length - 1] || {}).basis || "no 2B"};
     keys.forEach(k => { t[k] = sum(k); });
     t.inw5 = ts.reduce((a, x) => { Object.keys(x.inw5 || {}).forEach(k => { a[k] = r2((a[k] || 0) + num(x.inw5[k])); }); return a; }, {});
@@ -1900,6 +1909,20 @@ const GSTR = {
     this.vIn(ym).forEach(v => { const r = this.inRow(v, ym, reg); if (r) out.push(r); });
     return out;
   },
+  // next-gst-isd (the owner, 12-Nov-2026): credit distributed by an Input Service Distributor goes in 3B 4(A)(4), not
+  // 4(A)(5). An entry is the ISD's when Tally's registration type on it says so ("Input Service Distributor" or "ISD"),
+  // or when a ledger on it carries FinCom's switch "ISD (Input Service Distributor)" (b.map[name].isd: the ISD's party
+  // ledger, e.g. the head office's, or an input ledger kept for ISD credit; GST settings, FinCom's own, synced, never
+  // written to Tally). Before 12-Nov-2026 FinCom had no ISD: such credit was in 4(A)(5)
+  ISD_RE: /INPUT\s*SERVICE\s*DISTRIBUTOR|^\s*ISD\b/i,
+  isISD(v){
+    if (!v) return false;
+    if (this.ISD_RE.test(String(v.regType || ""))) return true;
+    const m = (S.books || {}).map || {};
+    return !!((v.party && (m[v.party] || {}).isd) || (v.ent || []).some(e => (m[e.l] || {}).isd));
+  },
+  // the ledgers switched to ISD (GST settings)
+  isdLedgers(b){ const m = (b || S.books || {}).map || {}; return Object.keys(m).filter(k => m[k] && m[k].isd).sort(); },
   // next-gst-share: one entry's row of inward (null when it has none): the body of inward, for entryShares as outRow
   inRow(v, ym, reg){
     const b = S.books, gst = b.gstins || {};
@@ -1939,11 +1962,13 @@ const GSTR = {
       parts = [{rate: rt, hsn: parts[0] ? parts[0].hsn : "", supply: v.supply || "", taxable, igst: L.tax.IGST, cgst: L.tax.CGST, sgst: L.tax.SGST, cess: L.tax.CESS, guessed}];
     } else if (ni) parts = [Object.assign({}, parts[0] || {}, {taxable, igst: L.tax.IGST, cgst: L.tax.CGST, sgst: L.tax.SGST, cess: L.tax.CESS})];
     if (!taxable && !tax) return null;
-    return {id: v.id, date: v.date, no: Books.supInv(v), voucher: v.no || "", type: v.type, party, gstin, refDate: v.refDate || "",
+    // (isd only on an ISD's entry, so every other row stays as it was)
+    const isd = this.isISD(v) ? {isd: true} : null;
+    return Object.assign({id: v.id, date: v.date, no: Books.supInv(v), voucher: v.no || "", type: v.type, party, gstin, refDate: v.refDate || "",
       taxable, cgst: L.tax.CGST, sgst: L.tax.SGST, igst: L.tax.IGST, cess: L.tax.CESS, parts, valueGuessed: guessed, bill: purch,
       cls: Books.supplyClass(v), rcm, import: Books.isImport(v), supply: v.supply || (parts[0] && parts[0].supply) || "",
       blocked: !!v.ineligibleFlag, hsn: (parts[0] && parts[0].hsn) || (v.hsn || [])[0] || "",
-      ineligible: L.ineligible || 0, common: L.common || null, dir: ni ? d : this.itcDir(v), note: (ni ? d : this.itcDir(v)) < 0 ? "debit" : "", narr: v.narr || "", taxOnly, fromHold: ni && ni.hold < 0 ? -ni.hold : 0, src: v.src === "bridge" ? "bridge" : "daybook"};
+      ineligible: L.ineligible || 0, common: L.common || null, dir: ni ? d : this.itcDir(v), note: (ni ? d : this.itcDir(v)) < 0 ? "debit" : "", narr: v.narr || "", taxOnly, fromHold: ni && ni.hold < 0 ? -ni.hold : 0, src: v.src === "bridge" ? "bridge" : "daybook"}, isd);
   },
   sum(rows){
     return rows.reduce((a, r) => ({n: a.n + 1, taxable: r2(a.taxable + num(r.taxable)), cgst: r2(a.cgst + num(r.cgst)),
@@ -2058,14 +2083,14 @@ const GSTR = {
     this.partsOf(out.filter(r => !r.gstin && r.igst > 0 && r.cls === "taxable")).forEach(q => { const r = q.row, k = posOf(r) || "97", sg = r.kind === "CDNR" ? -1 : 1, x = unregPos[k] = unregPos[k] || {pos: k, taxable: 0, igst: 0}; x.taxable = r2(x.taxable + sg * q.taxable); x.igst = r2(x.igst + sg * q.igst); });
     return {taxableOut, cn, zero, nil, nongst, rcmOut, toUnreg, unregPos: Object.values(unregPos).sort((a, c) => a.pos.localeCompare(c.pos))};
   },
-  // next-gst-share (part B): table 4's books part of a month's inward rows signed (signedIn): 4(A)(1) to (3) and (5) before
+  // next-gst-share (part B): table 4's books part of a month's inward rows signed (signedIn): 4(A)(1) to (5) before
   // the 2B basis, 17(5), and every inward row (buy: its ineligible is 3B's ineligible); threeBm's own, and what the
-  // cloud's sums of entryShares give (gst-run's month step)
+  // cloud's sums of entryShares give (gst-run's month step). next-gst-isd: 4(A)(4) the ISD's entries (isISD), out of (5)
   sec4(inn){
     const S2 = f => this.sum(inn.filter(f));
     return {rcmIn: S2(r => r.rcm && !r.import),                       // 4(A)(3): the credit of that tax, other than on imports
       impGoods: S2(r => r.import && r.supply === "Goods"), impServ: S2(r => r.import && r.supply !== "Goods"),
-      other: S2(r => !r.import && !r.rcm), blocked: S2(r => r.blocked), buy: this.sum(inn)};
+      isd: S2(r => !r.import && !r.rcm && r.isd), other: S2(r => !r.import && !r.rcm && !r.isd), blocked: S2(r => r.blocked), buy: this.sum(inn)};
   },
   // table 5: an inward row (signed) with no tax, from unregistered or composition suppliers, exempt, nil or non-GST
   noTaxIn(r){ return r.bill && !r.import && !r.rcm && r.dir > 0 && !(num(r.igst) || num(r.cgst) || num(r.sgst)) && r.taxable; },
@@ -2087,6 +2112,9 @@ const GSTR = {
     const src = (S.books || {}).shareSrc, B = src ? src.base(ym, reg) : this.bookBase(ym, reg);
     const P31 = B.P31, {taxableOut, cn, zero, nil, nongst, rcmOut, toUnreg} = P31;
     const {rcmIn, impGoods, impServ, blocked, buy} = B.P4;
+    // next-gst-isd: 4(A)(4), the ISD's credit as the books have it (the 2B basis below, the decisions and adjustments stay
+    // with 4(A)(5), as before: 4(C) and table 6 are as they were). (A month kept by an engine before ISD has none: zero)
+    const isd = B.P4.isd || {n: 0, taxable: 0, cgst: 0, sgst: 0, igst: 0, cess: 0, ineligible: 0};
     let other = B.P4.other;
     // credit only as far as 2B shows it (section 16(2)(aa), rule 36(4)): bills not yet in 2B are held back,
     // and taken in the month their 2B carries them
@@ -2147,8 +2175,8 @@ const GSTR = {
     const net = {taxable: r2(taxableOut.taxable - cn.taxable + adv.taxable + cx("taxable") + amd.out.taxable), cgst: r2(taxableOut.cgst - cn.cgst + adv.cgst + cx("cgst") + amd.out.cgst), sgst: r2(taxableOut.sgst - cn.sgst + adv.sgst + cx("sgst") + amd.out.sgst),
       igst: r2(taxableOut.igst - cn.igst + adv.igst + cx("igst") + amd.out.igst), cess: r2(taxableOut.cess - cn.cess + adv.cess + cx("cess") + amd.out.cess)};
     ["taxable", "igst", "cgst", "sgst", "cess"].forEach(k => { zero[k] = r2(num(zero[k]) + amd.zero[k]); });
-    const itc = {cgst: r2(impGoods.cgst + impServ.cgst + rcmIn.cgst + other.cgst), sgst: r2(impGoods.sgst + impServ.sgst + rcmIn.sgst + other.sgst),
-                 igst: r2(impGoods.igst + impServ.igst + rcmIn.igst + other.igst), cess: r2(impGoods.cess + impServ.cess + rcmIn.cess + other.cess)};
+    const itc = {cgst: r2(impGoods.cgst + impServ.cgst + rcmIn.cgst + isd.cgst + other.cgst), sgst: r2(impGoods.sgst + impServ.sgst + rcmIn.sgst + isd.sgst + other.sgst),
+                 igst: r2(impGoods.igst + impServ.igst + rcmIn.igst + isd.igst + other.igst), cess: r2(impGoods.cess + impServ.cess + rcmIn.cess + isd.cess + other.cess)};
     // 4(B)(1): rules 38, 42 and 43 and section 17(5), reversed for good; 4(B)(2): other reversals, which may come back
     const reversal = {cgst: blocked.cgst, sgst: blocked.sgst, igst: blocked.igst, cess: blocked.cess};
     const rules = rul.total;
@@ -2156,7 +2184,7 @@ const GSTR = {
     const netItc = {cgst: r2(itc.cgst - rev1.cgst - rev2.cgst), sgst: r2(itc.sgst - rev1.sgst - rev2.sgst), igst: r2(itc.igst - rev1.igst - rev2.igst), cess: r2(itc.cess - rev1.cess - rev2.cess)};
     const opening = this.creditIn(ym, reg);
     const pay = this.setOff(net, rcmOut, netItc, opening);
-    return {sale: taxableOut, cn, net, adv, amend: amd, custRej: cust, rules, r42: rul.r42, r43: rul.r43, zero, nil, nongst, rcmOut, rcmIn, toUnreg, impGoods, impServ, other, blocked,
+    return {sale: taxableOut, cn, net, adv, amend: amd, custRej: cust, rules, r42: rul.r42, r43: rul.r43, zero, nil, nongst, rcmOut, rcmIn, toUnreg, impGoods, impServ, isd, other, blocked,
       buy, itc, reversal, rev1, rev2, reclaim, r37, na, inw5, unregPos: P31.unregPos,
       basis: basis.on ? "2b" : basis.why, held, released, cn2b, rejBack, netItc, ineligible: buy.ineligible, opening, pay, payable: pay.cash};
   },
@@ -2303,6 +2331,7 @@ const GSTR = {
 // (GSTR.sec4, noTaxIn) reads it; for each of these qty is the row's ineligible credit (sum's ineligible):
 //     4.impG / 4.impS / 4.rcmIn / 4.other / 4.blocked / 4.buy     sec4's impGoods, impServ, rcmIn, other (before the 2B
 //                                                                 basis), blocked (17(5)) and buy (every inward row)
+//     4.isd                                                        sec4's isd (4(A)(4), next-gst-isd: an ISD's entry)
 //     4.rcm31                                                      3.1(d) (as 3B.rcm, with its ineligible)
 //     5.inw    k1 the supplier's state, k2 ng|gst                  table 5's parts (noTaxPart), inter or intra by the month
 //     42.common                                                    rule 42's common credit (GSTRev.common), a debit note off
@@ -2352,7 +2381,8 @@ function entryShares(v, ctx){
         if (r.rcm && !r.import) four("4.rcmIn");
         if (r.import && r.supply === "Goods") four("4.impG");
         if (r.import && r.supply !== "Goods") four("4.impS");
-        if (!r.import && !r.rcm) four("4.other");
+        if (!r.import && !r.rcm && !r.isd) four("4.other");
+        if (!r.import && !r.rcm && r.isd) four("4.isd");
         if (r.blocked) four("4.blocked");
         four("4.buy");
         if (GSTR.noTaxIn(r)){ const p = GSTR.noTaxPart(r); add("5.inw", p.k1, p.k2, "", {taxable: p.taxable}, 1); }

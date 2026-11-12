@@ -65,7 +65,7 @@ export default function ItcFinal({ b }) {
         <thead><tr><th>Table 4</th><th className="n">IGST</th><th className="n">CGST</th><th className="n">SGST</th><th className="n">Cess</th><th className="n">Total</th></tr></thead>
         <tbody>
           <tr className="tg-group"><td colSpan={6}><b>(A) ITC available</b></td></tr>
-          <Line id="4A1" label="(1) Import of goods" /><Line id="4A2" label="(2) Import of services" /><Line id="4A3" label="(3) Inward supplies on reverse charge" /><Line id="4A5" label="(5) All other ITC" />
+          <Line id="4A1" label="(1) Import of goods" /><Line id="4A2" label="(2) Import of services" /><Line id="4A3" label="(3) Inward supplies on reverse charge" /><Line id="4A4" label="(4) Inward supplies from ISD" /><Line id="4A5" label="(5) All other ITC" />
           <Line id="4A" label="Total (A)" bold />
           <tr className="tg-group"><td colSpan={6}><b>(B) ITC reversed</b></td></tr>
           <Line id="4B1" label="(1) Rules 38, 42, 43 and section 17(5)" minus /><Line id="4B2" label="(2) Others" minus />

@@ -202,7 +202,7 @@ export function r3bTables(t, j) {
         { id: "4A1", label: "(1) Import of goods", ...row5(t.impGoods), value: V(t.impGoods, "taxable") },
         { id: "4A2", label: "(2) Import of services", ...row5(t.impServ), value: V(t.impServ, "taxable") },
         { id: "4A3", label: "(3) Inward supplies liable to reverse charge (other than 1 & 2 above)", ...A3, value: V(t.rcmIn, "taxable"), fileDiff },
-        { id: "4A4", label: "(4) Inward supplies from ISD", ...row5({}) },
+        { id: "4A4", label: "(4) Inward supplies from ISD", ...row5(t.isd || {}), value: V(t.isd, "taxable") },
         { id: "4A5", label: "(5) All other ITC", ...row5(t.other), value: V(t.other, "taxable") },
         { id: "4B", label: "B. ITC Reversed", group: true },
         { id: "4B1", label: "(1) As per rules 38, 42 & 43 of CGST Rules and section 17(5)", ...row5(t.rev1) },
@@ -253,8 +253,9 @@ export function r3bBills(id, ym, reg, t) {
     case "4A1": bills = B(inn.filter((r) => r.import && r.supply === "Goods")); figure = S5(t.impGoods); break;
     case "4A2": bills = B(inn.filter((r) => r.import && r.supply !== "Goods")); figure = S5(t.impServ); break;
     case "4A3": bills = B(inn.filter((r) => r.rcm && !r.import)); figure = S5(t.rcmIn); break;
+    case "4A4": bills = B(inn.filter((r) => !r.import && !r.rcm && r.isd)); figure = S5(t.isd || {}); break;
     case "4A5": {
-      bills = B(inn.filter((r) => !r.import && !r.rcm));
+      bills = B(inn.filter((r) => !r.import && !r.rcm && !r.isd));
       if (t.basis === "2b") {
         A("Not taken this month: not in 2B, a later month, follow-up or reversed (or more tax in Tally than in 2B)", neg(t.held)); A("Taken now: booked in another month, or only in 2B", t.released);
         A("Suppliers' credit notes in 2B, not in Tally", neg(t.cn2b)); A("Credit notes rejected in IMS, not reducing credit", t.rejBack);

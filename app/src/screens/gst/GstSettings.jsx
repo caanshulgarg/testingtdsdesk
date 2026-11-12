@@ -1,7 +1,7 @@
 // GST settings, in Client setup: the client's GSTINs, and what stays the same month after month for each GSTIN (filing
 // type, portal username, credit basis, opening credit, rule 37, e-invoicing, the cash ledger) and for the client
 // (API mode, estimates, turnover, rule 42, contacts for letters). Were viewGstSettings and viewGstRegs (src/js/36).
-// Changes go through gsetFilingAdd, gsetShared, gsetSet, gregAdd, gregRemove, gcontSet (36).
+// Changes go through gsetFilingAdd, gsetShared, gsetSet, gsetIsd, gregAdd, gregRemove, gcontSet (36).
 //
 // State: S.gsetReg (the GSTIN whose settings are shown), S.gsetFrom / S.gsetType (a filing type being chosen),
 // S.gcontQ (the contacts search).
@@ -138,9 +138,23 @@ function ForClient({ b }) {
       <p className="note">Ledgers carrying common credit are marked “GST, common credit” on the Tally ledgers tab.</p>
       <H4>Advances received before the invoice</H4><AdvOptIn co={CO()} />
       <p className="note">Off: GSTR-1 tables 11A and 11B, and the tax on advances in 3B 3.1(a), stay empty for this client. Turn on to work them out from the receipts in Tally (GST page → Advances).</p>
+      <IsdLedgers b={b} />
       <H4>Blocked credit, section 17(5)</H4><p className="note">Reported in 3B table 4(B)(1), with rules 38, 42 and 43. Which kinds of purchase are blocked for this client is set further down this page.</p>
     </section>
   );
+}
+
+// next-gst-isd: the ledgers whose entries are credit from an Input Service Distributor (GSTR.isISD: 3B 4(A)(4)); an entry
+// whose registration type in Tally is "Input Service Distributor" is ISD credit without a switch
+function IsdLedgers({ b }) {
+  const on = GSTR.isdLedgers(b), names = Object.keys(b.map || {}).filter((n) => !on.includes(n)).sort();
+  return <>
+    <H4>ISD (Input Service Distributor)</H4>
+    <p className="note">Credit distributed by an ISD (a head office’s ISD registration) goes in 3B table 4(A)(4), not 4(A)(5). Switch on the ledger the ISD’s entries are booked on (its party ledger, or an input ledger kept for ISD credit). Entries Tally marks with the registration type “Input Service Distributor” are counted without a switch.</p>
+    {on.length > 0 && <ul data-isd-ledgers="">{on.map((n) => <li key={n} data-isd-ledger={n}>{n}{" · "}<button type="button" className="linkbtn" data-isd-off={n} onClick={() => gsetIsd(n, false)}>Switch off</button></li>)}</ul>}
+    <Row><CommitBox aria-label="ISD ledger" data-fk="gset-isd" list="gset-isd-names" value="" placeholder="Ledger to switch on" style={{ width: 320 }} onCommit={(v) => (v ? gsetIsd(v, true) : true)} /></Row>
+    <datalist id="gset-isd-names">{names.slice(0, 2000).map((n) => <option key={n} value={n} />)}</datalist>
+  </>;
 }
 
 function Contacts({ b }) {

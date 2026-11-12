@@ -293,7 +293,9 @@ Object.assign(GSTR, {
           {ty: "OTH", iamt: r2(t.na.igst), camt: r2(t.na.cgst), samt: r2(t.na.sgst), csamt: r2(t.na.cess)}]},
       inward_sup: {isup_details: [{ty: "GST", inter: r2(t.inw5.gstInter), intra: r2(t.inw5.gstIntra)}, {ty: "NONGST", inter: r2(t.inw5.ngInter), intra: r2(t.inw5.ngIntra)}]}
     };
-    out.itc_elg.itc_avl.splice(3, 0, {ty: "ISD", iamt: 0, camt: 0, samt: 0, csamt: 0});
+    // 4(A)(4) inward supplies from ISD (next-gst-isd, GSTR.isISD; none: zeros, as before)
+    const isd = t.isd || {};
+    out.itc_elg.itc_avl.splice(3, 0, {ty: "ISD", iamt: r2(num(isd.igst)), camt: r2(num(isd.cgst)), samt: r2(num(isd.sgst)), csamt: r2(num(isd.cess))});
     if (t.unregPos.length) out.inter_sup = {unreg_details: t.unregPos.filter(x => Math.abs(x.taxable) >= 0.01).map(x => ({pos: x.pos, txval: r2(x.taxable), iamt: r2(x.igst)})), comp_details: [], uin_details: []};
     return out;
   },
@@ -338,6 +340,7 @@ Object.assign(GSTR, {
       [], ["4(A)(1) Import of goods", t.impGoods.taxable, t.impGoods.igst, t.impGoods.cgst, t.impGoods.sgst, t.impGoods.cess],
       ["4(A)(2) Import of services", t.impServ.taxable, t.impServ.igst, t.impServ.cgst, t.impServ.sgst, t.impServ.cess],
       ["4(A)(3) Inward on reverse charge", t.rcmIn.taxable, t.rcmIn.igst, t.rcmIn.cgst, t.rcmIn.sgst, t.rcmIn.cess],
+      ["4(A)(4) Inward supplies from ISD", num((t.isd || {}).taxable), num((t.isd || {}).igst), num((t.isd || {}).cgst), num((t.isd || {}).sgst), num((t.isd || {}).cess)],
       ["4(A)(5) All other ITC", t.other.taxable, t.other.igst, t.other.cgst, t.other.sgst, t.other.cess],
       ["4(B)(1) Reversed: rule 42", "", t.r42.igst, t.r42.cgst, t.r42.sgst, t.r42.cess],
       ["4(B)(1) Reversed: rule 43", "", t.r43.igst, t.r43.cgst, t.r43.sgst, t.r43.cess],

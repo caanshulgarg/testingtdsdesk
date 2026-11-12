@@ -86,6 +86,17 @@ function gsetSet(key, val, reg, sub){
   if (key === "d2") b.rev = Object.assign({}, b.rev, {d2: !!val});
   GSTR._carry = null; saveBooks(); render();
 }
+// next-gst-isd (the owner, 12-Nov-2026): a ledger's switch "ISD (Input Service Distributor)" (b.map[name].isd, GSTR.isISD):
+// the credit of every entry on it goes in 3B 4(A)(4). FinCom's own, saved with the books (synced), never written to Tally;
+// kept over a refresh of the ledger list (Books.mapLedgers). A name not in the ledger list is refused
+function gsetIsd(name, on){
+  const b = S.books; name = String(name || "").trim(); if (!b || !name) return false;
+  if (on && !(b.map || {})[name]){ toast(name + " is not a ledger of these books: pick it from the list."); return false; }
+  b.map = Object.assign({}, b.map || {});
+  const m = b.map[name] = Object.assign({n: 0}, b.map[name] || {});
+  if (on) m.isd = {by: typeof whoAmI === "function" ? whoAmI() : "", at: new Date().toISOString()}; else delete m.isd;
+  b.mapV = (b.mapV || 0) + 1; GSTR._carry = null; saveBooks(); render(); return true;
+}
 // GSTR-1 table 14 (17-Oct-2026): the GSTIN of an e-commerce operator for a registration (its TCS registration in that
 // state), typed beside 14(a) when a marketplace's report does not carry it; "" removes it
 function ecoGstinSet(reg, eco, g){

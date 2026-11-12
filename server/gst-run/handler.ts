@@ -59,7 +59,7 @@
 import { corsFor } from "../_shared/cors.ts";
 import { firmGate, viaRest } from "../_shared/firmgate.ts";
 // @ts-ignore plain JavaScript, shared with the Node test
-import { step, ENGINE, REV, contextOf, ctxOf, ctxDiff, shares, engineMonth, cloudSums, compare, itcMonths, engineItc, itcCompare } from "./engine.js";
+import { step, ENGINE, REV, contextOf, ctxOf, ctxDiff, shares, engineMonth, cloudSums, compare, itcMonths, engineItc, itcCompare, twoBYms } from "./engine.js";
 import { load, pickBook, fyOf, unpack } from "./data.ts";
 
 export type Deps = { env: (k: string) => string | undefined, fetch: typeof fetch, now?: () => Date, later?: (p: Promise<unknown>) => void, max?: number, ready?: number, total?: number, itcMax?: number, itcDocs?: number };
@@ -335,7 +335,10 @@ export function handler(deps: Deps) {
         const wantG = want.filter(([, x]) => x === g).map(([m]) => m).sort();
         if (used() > SHARE_BUDGET * 0.5) return Object.assign(out, await itcSkip(wantG[0], g, "over the run's time before part B (" + used() + " ms)"), { checked: out.checked });
         let inp: any;
-        try { inp = (await rpc("gst_itc_inputs", { p_book: book.book_id, p_reg: g, p_engine: ENGINE, p_version: version })) || {}; }
+        // next-gst-isd: only the documents of the years whose 2B is here (the matching takes no other: GST2B.run), by
+        // migration 172's gst_itc_inputs_2b; before 172 (404) every document, as 171 gives them (the engine leaves the rest)
+        const args = { p_book: book.book_id, p_reg: g, p_engine: ENGINE, p_version: version };
+        try { inp = (await rpc("gst_itc_inputs_2b", Object.assign({ p_yms: twoBYms(rows.items, g) }, args)).catch((e: any) => { if (e && e.status === 404) return rpc("gst_itc_inputs", args); throw e; })) || {}; }
         catch (err) { await itcSkip(wantG[0], g, String((err as Error)?.message || err).slice(0, 300)); continue; }
         const docsN = (inp.docs || []).length;
         if (docsN > ITC_DOCS) { await itcSkip(wantG[0], g, "too many documents for one run (" + docsN + ")"); out.skipped = "documents"; continue; }

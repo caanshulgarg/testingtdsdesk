@@ -11,7 +11,7 @@ const money = (v) => "₹" + INR.format(r2(v || 0));
 const H = ["igst", "cgst", "sgst", "cess"];
 const tot = (o) => r2(H.reduce((a, k) => a + num((o || {})[k]), 0));
 const z = () => ({ igst: 0, cgst: 0, sgst: 0, cess: 0 });
-export const FIG_LABEL = { "4A1": "4(A)(1) Import of goods", "4A2": "4(A)(2) Import of services", "4A3": "4(A)(3) Inward supplies on reverse charge", "4A5": "4(A)(5) All other ITC", "4A": "4(A) Total ITC available",
+export const FIG_LABEL = { "4A1": "4(A)(1) Import of goods", "4A2": "4(A)(2) Import of services", "4A3": "4(A)(3) Inward supplies on reverse charge", "4A4": "4(A)(4) Inward supplies from ISD", "4A5": "4(A)(5) All other ITC", "4A": "4(A) Total ITC available",
   "4B1": "4(B)(1) Reversed: rules 38, 42, 43 and section 17(5)", "4B2": "4(B)(2) Reversed: others", "4C": "4(C) Net ITC available", "4D1": "4(D)(1) ITC reclaimed, reversed under 4(B)(2) earlier", "4D2": "4(D)(2) Ineligible ITC: section 16(4) and place of supply" };
 
 const why = (r) => { const s = r.show || {}; return (s.code ? ITCF.DEC_LABEL[s.code] + (s.code === "later" && s.ym ? " · " + GSTR.label(s.ym) : "") : r.fixed || "") + (r.e && r.e.auto ? " (FinCom's rule)" : ""); };
@@ -29,9 +29,9 @@ function Part({ label, lines, sign = 1, open: open0 = false, id }) {
   </div>;
 }
 
-// id: 4A1 4A2 4A3 4A5 4B1 4B2 4D1 4D2 4A 4C; t: GSTR.threeB of the month
+// id: 4A1 4A2 4A3 4A4 4A5 4B1 4B2 4D1 4D2 4A 4C; t: GSTR.threeB of the month
 export default function FigureDetail({ id, reg, M, t, onGo }) {
-  const fig = { "4A1": t.impGoods, "4A2": t.impServ, "4A3": t.rcmIn, "4A5": t.other, "4B1": t.rev1, "4B2": t.rev2, "4C": t.netItc, "4D1": t.reclaim, "4D2": t.na, "4A": t.itc }[id] || z();
+  const fig = { "4A1": t.impGoods, "4A2": t.impServ, "4A3": t.rcmIn, "4A4": t.isd, "4A5": t.other, "4B1": t.rev1, "4B2": t.rev2, "4C": t.netItc, "4D1": t.reclaim, "4D2": t.na, "4A": t.itc }[id] || z();
   const go = <p className="note" style={{ margin: "10px 0 0" }}><button type="button" className="linkbtn" data-pop-go="r2b" onClick={() => { onGo && onGo(); gstPartGo("r2b"); }}>Open in 2B reconciliation</button>
     {" · "}<button type="button" className="linkbtn" data-pop-go="itcfinal" onClick={() => { onGo && onGo(); gstPartGo("itcfinal"); }}>Final credit for 3B</button></p>;
   const head = <div className="itc-fig-head" data-fig={id}><b>{FIG_LABEL[id] || id}</b><span>{H.map((k) => <span key={k}>{(k === "cess" ? "Cess" : k.toUpperCase()) + " " + money(fig[k])}</span>)}<b data-fig-total="">{money(tot(fig))}</b></span></div>;
@@ -50,7 +50,7 @@ export default function FigureDetail({ id, reg, M, t, onGo }) {
       <p className={off ? "bad" : "note"} data-fig-check={off ? "off" : "ok"}>{off ? "These add up to " + money(tot(sum)) + ", not the figure: tell support." : "These add up to the figure: " + money(tot(sum)) + "."}</p>{go}</div>;
   }
   if (id === "4A" || id === "4C") {
-    const rowsOf = id === "4A" ? [["4A1", t.impGoods, 1], ["4A2", t.impServ, 1], ["4A3", t.rcmIn, 1], ["4A5", t.other, 1]] : [["4A", t.itc, 1], ["4B1", t.rev1, -1], ["4B2", t.rev2, -1]];
+    const rowsOf = id === "4A" ? [["4A1", t.impGoods, 1], ["4A2", t.impServ, 1], ["4A3", t.rcmIn, 1], ["4A4", t.isd, 1], ["4A5", t.other, 1]] : [["4A", t.itc, 1], ["4B1", t.rev1, -1], ["4B2", t.rev2, -1]];
     return <div data-fig-detail={id}>{head}<LinesTable lines={rowsOf.map(([k, o, s]) => ({ key: k, party: FIG_LABEL[k], no: s < 0 ? "less" : "", amt: H.reduce((a, h) => { a[h] = r2(num((o || {})[h]) * s); return a; }, {}) }))} />{go}</div>;
   }
   const x = r3bBills(id, M, reg, t) || { bills: [], adj: [] };

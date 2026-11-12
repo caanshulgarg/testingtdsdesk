@@ -195,8 +195,9 @@ export async function build(ExcelJS, d) {
   const r1 = add("4(A)(1) Import of goods", "4A1", plusAdj("4A1"));
   const r2a = add("4(A)(2) Import of services", "4A2", plusAdj("4A2"));
   const r3 = add("4(A)(3) Inward supplies on reverse charge", "4A3", plusAdj("4A3"));
+  const r4 = add("4(A)(4) Inward supplies from ISD", "4A4", C4((i) => num0(B["4A4"], H[i])));
   const r5 = add("4(A)(5) All other ITC", "4A5", C4((i) => ({ formula: sumAt([rb, re, rr, ra], i) })), true);
-  const rA = add("4(A) Total ITC available", "4A", C4((i) => ({ formula: sumAt([r1, r2a, r3, r5], i) })), true);
+  const rA = add("4(A) Total ITC available", "4A", C4((i) => ({ formula: sumAt([r1, r2a, r3, r4, r5], i) })), true);
   const rb1 = add("4(B)(1) Reversed: rules 38, 42, 43 and section 17(5)", "4B1", C4((i) => ({ formula: num0(B["4B1"], H[i]) + "+" + adjF("4B1", i) + "+SUM(" + rng("rev", H[i]) + ")" })));
   const rb2 = add("4(B)(2) Reversed: others", "4B2", plusAdj("4B2"));
   add("4(C) Net ITC available, (A) less (B)", "4C", C4((i) => ({ formula: col(i + 1) + rA + "-" + col(i + 1) + rb1 + "-" + col(i + 1) + rb2 })), true);

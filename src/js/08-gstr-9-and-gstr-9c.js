@@ -48,7 +48,8 @@ const GST9 = {
     T["6A"] = sumT(t => t.itc);
     const cap = r => { const v = (S.books.vouchers || []).find(z => z.id === r.id); return !!(v && v.ent.some(e => e.a < 0 && Audit.isFixed(e.l))); };
     const kindOf = r => cap(r) ? "cg" : (r.supply === "Services" || /^99/.test(r.hsn || "")) ? "is" : "in";
-    const inward = inn.filter(r => !r.rcm && !r.import && !r.blocked), sgn = r => r.note === "debit" ? -1 : 1;
+    // (next-gst-isd: credit from an ISD is 6G, as 3B's 4(A)(4), not 6B)
+    const inward = inn.filter(r => !r.rcm && !r.import && !r.blocked && !r.isd), sgn = r => r.note === "debit" ? -1 : 1;
     ["in", "cg", "is"].forEach(k => { T["6B-" + k] = inward.filter(r => kindOf(r) === k).reduce((a, r) => this.add(a, r, sgn(r)), this.Z()); });
     const rc = inn.filter(r => r.rcm && !r.import);                 // imported services are 6F, not 6C or 6D
     T["6C"] = rc.filter(r => !r.gstin).reduce((a, r) => this.add(a, r, sgn(r)), this.Z());
@@ -56,7 +57,7 @@ const GST9 = {
     T["6E"] = inn.filter(r => r.import && r.supply !== "Services").reduce((a, r) => this.add(a, r), this.Z());
     T["6F"] = inn.filter(r => r.import && r.supply === "Services").reduce((a, r) => this.add(a, r), this.Z());
     // 6H: credit reclaimed in 3B 4(D)(1) (rule 37 and typed) is already inside 6A, so it is listed here too
-    T["6G"] = tz("6G"); T["6H"] = this.add(tz("6H"), sumT(t => t.reclaim || {}));
+    T["6G"] = inn.filter(r => r.isd && !r.rcm && !r.import && !r.blocked).reduce((a, r) => this.add(a, r, sgn(r)), tz("6G")); T["6H"] = this.add(tz("6H"), sumT(t => t.reclaim || {}));
     T["6I"] = ["6B-in", "6B-cg", "6B-is", "6C", "6D", "6E", "6F", "6G", "6H"].reduce((a, k) => this.add(a, T[k]), this.Z());
     T["6J"] = this.add(T["6A"], T["6I"], -1);
     T["6O"] = T["6I"];

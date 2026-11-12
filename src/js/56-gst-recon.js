@@ -283,7 +283,8 @@ const GSTX = {
     });
     const onlyBooks = r.onlyBooks.filter(x => months.has(x.ym));
     const taxOnly = []; this.fyMonths(fy).forEach(ym => GSTR.inward(ym, reg).filter(x => x.taxOnly).forEach(x => taxOnly.push(Object.assign({ym}, x))));
-    return {only2b, onlyBooks, taxOnly, loaded: r.loaded,
+    // (next-gst-isd: the year's own 2Bs; none: "No 2B here for the year", and its bills are not matched, GST2B.run)
+    return {only2b, onlyBooks, taxOnly, loaded: r.loaded.filter(m => months.has(m)).length ? r.loaded.filter(m => months.has(m)) : null,
       tot: {only2b: {igst: this.sumH(only2b, "igst"), cgst: this.sumH(only2b, "cgst"), sgst: this.sumH(only2b, "sgst")}, onlyBooks: {igst: this.sumH(onlyBooks, "igst"), cgst: this.sumH(onlyBooks, "cgst"), sgst: this.sumH(onlyBooks, "sgst")}}};
   },
 
