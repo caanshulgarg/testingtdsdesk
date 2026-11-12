@@ -183,7 +183,7 @@ export function UndoLine({ b }) {
 // the other ledgers (not tax), folded: Change marks one as tax
 export function Others({ b, rows }) {
   const shown = rows.slice(0, 300);
-  // a party ledger of sales with no GSTIN: the switch "Consolidated B2C" (GSTR.b2cSumLedger; its sales go in B2C small as
+  // a party ledger of sales with no GSTIN (or with one and a sale numbered as a range or marked a summary): the switch "Consolidated B2C" (GSTR.b2cSumLedger; its sales go in B2C small as
   // totals, never as one B2C large invoice, and their numbers are not checked), FinCom's own
   const b2c = GSTR.b2cParties(b);
   return <details className="led-fold" data-led-other="" open={!!S.ledQ || (!!S.ledEdit && rows.some((r) => r.n === S.ledEdit))}>

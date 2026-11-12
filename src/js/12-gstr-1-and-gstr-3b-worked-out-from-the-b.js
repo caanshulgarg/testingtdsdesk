@@ -84,10 +84,12 @@ Object.assign(GSTR, {
     if (cur.pos || cur.b2cs) fx[id] = cur; else delete fx[id];
     saveBooks(); render();
   },
-  // the party ledgers of sales with no GSTIN (the Ledgers tab offers them the switch)
+  // the party ledgers of sales with no GSTIN (the Ledgers tab offers them the switch); next-fix-b2cs-gstin: and those with
+  // a GSTIN (a payment gateway's) with a sale that is a B2C summary by its own rule (numbered as a range, or marked)
   b2cParties(b){
-    const g = b.gstins || {}, out = new Set();
-    (b.vouchers || []).forEach(v => { if (!v.gstin && !g[v.party] && v.party && !v.cancel && Books.isSale(v)) out.add(v.party); });
+    const g = b.gstins || {}, fx = b.gstPosFix || {}, out = new Set();
+    (b.vouchers || []).forEach(v => { if (!v.party || v.cancel || out.has(v.party) || !Books.isSale(v)) return;
+      if ((!v.gstin && !g[v.party]) || ((fx[v.id] || {}).b2cs || {}).on || this.noRange(v.no || v.ref)) out.add(v.party); });
     return out;
   },
   // G-E1: the errors to fix before filing a month's GSTR-1 (sales side) and 3B (purchase side), for the year's grid

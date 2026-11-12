@@ -84,8 +84,8 @@ function Group({ c, k, find, r3b }) {
         <tbody>{rows.map(([x, d], i) => <tr key={i} data-fix-row="" data-id={d.id || ""}>
           <td className="dt">{pos && d.id ? <label className="pos-tk"><input type="checkbox" data-pos-tick={d.id} aria-label={"Tick " + (d.no || "the invoice")} checked={!!tk[d.id]} onChange={(e) => tick(d.id, e.target.checked)} /> {day(d.date) || "—"}</label> : day(d.date) || "—"}</td>
           <td>{d.no || x.no || "—"}{r3b && d.voucher && d.voucher !== d.no ? <small className="nr"> voucher {d.voucher}</small> : null}
-            {!r3b && d.id && d.kind === "B2CL" && NUM_CHECKS.test(c.what) ? <div className="nr"><button type="button" className="linkbtn" data-b2cs-mark="" title="One entry for many B2C sales (e.g. collected through a payment gateway): reported in B2C small as totals, with no invoice number" onClick={() => GSTR.b2cSumEntry(d.id, true)}>This is a summary of many B2C sales</button>
-              {" · "}<button type="button" className="linkbtn" data-b2cs-ledger-mark="" title={"Every sale to " + d.party + " with no GSTIN is a B2C summary (the party ledger's switch; FinCom's own, not written to Tally)"} onClick={() => GSTR.b2cSumLedger(d.party, true)}>All sales to this party are summaries</button></div> : null}</td>
+            {!r3b && d.id && (d.kind === "B2CL" || (d.kind === "B2B" && d.cls === "taxable" && !d.rcm)) && NUM_CHECKS.test(c.what) ? <div className="nr"><button type="button" className="linkbtn" data-b2cs-mark="" title="One entry for many B2C sales (e.g. collected through a payment gateway): reported in B2C small as totals, with no invoice number" onClick={() => GSTR.b2cSumEntry(d.id, true)}>This is a summary of many B2C sales</button>
+              {" · "}<button type="button" className="linkbtn" data-b2cs-ledger-mark="" title={"Every taxable sale to " + d.party + " is a B2C summary, even with a GSTIN on it (the party ledger's switch; FinCom's own, not written to Tally)"} onClick={() => GSTR.b2cSumLedger(d.party, true)}>All sales to this party are summaries</button></div> : null}</td>
           <td>{d.party || x.party || "—"}{x.doc && x.no ? <small className="nr"> GSTIN {x.no}</small> : d.gstin && /GSTIN/.test(c.what) ? <small className="nr"> GSTIN {d.gstin}</small> : null}</td>
           <td className="n">{d.id ? money(amountOf(d)) : "—"}</td>
           {pos && <td><PosCell r={d} /></td>}
@@ -121,8 +121,8 @@ function B2csSum({ rows }) {
   if (!rows.length) return null;
   return <div className="pos-fixed" data-b2cs-sum={rows.length}>
     <h4>Reported in B2C small as summaries of many sales ({rows.length})</h4>
-    <p className="note">B2C small (table 7) is reported as totals by place of supply and rate, with no invoice number, so these are not checked for their numbers. A summary is never one B2C large invoice, even inter-state above the limit.</p>
-    <ul>{rows.map((r) => <li key={r.id} data-b2cs-row={r.id} data-why={r.b2cSum}>{day(r.date)} · {r.no || "—"} · {r.party} · {money(r.total)}: <span className="note">B2CS, {SUM_WHY[r.b2cSum] ? SUM_WHY[r.b2cSum](r) : r.b2cSum}</span>{" "}
+    <p className="note">B2C small (table 7) is reported as totals by place of supply and rate, with no invoice number, so these are not checked for their numbers. A summary is never one B2C large invoice, even inter-state above the limit, nor a B2B invoice to the party (e.g. the payment gateway) whose GSTIN Tally put on it.</p>
+    <ul>{rows.map((r) => <li key={r.id} data-b2cs-row={r.id} data-why={r.b2cSum}>{day(r.date)} · {r.no || "—"} · {r.party} · {money(r.total)}: <span className="note">B2CS, {SUM_WHY[r.b2cSum] ? SUM_WHY[r.b2cSum](r) : r.b2cSum}{r.sumGstin ? "; the GSTIN " + r.sumGstin + " on it is not a buyer's, so not used" : ""}</span>{" "}
       <button type="button" className="linkbtn" data-b2cs-undo={r.id} onClick={() => GSTR.b2cSumEntry(r.id, r.b2cSum === "entry" ? null : false)}>Not a summary</button>
       {r.b2cSum === "ledger" && <>{" · "}<button type="button" className="linkbtn" data-b2cs-ledger-off={r.party} onClick={() => GSTR.b2cSumLedger(r.party, false)}>Switch off for the party</button></>}</li>)}</ul>
   </div>;

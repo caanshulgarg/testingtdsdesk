@@ -19,7 +19,7 @@
 // No AI here: M2B.aiLinks only reads the pairs the gst-2b-match function already stored for the year.
 // GST3B_SRC: this file's and names.js's text (this value left out), hashed (tests/run_gst_cloud.js keeps it so): a 3B the
 // cloud worked out carries it, and the 3B page uses the cloud's only when its own is the same (app/src/screens/gst/cloud3b.js)
-const GST3B_SRC = "s62de96d336828df1";
+const GST3B_SRC = "sfdb3973c4d3b0aaf";
 function num(v){ if (typeof v === "number") return isFinite(v) ? v : 0; const n = parseFloat(String(v == null ? "" : v).replace(/[^0-9.\-]/g, "")); return isFinite(n) ? n : 0; }
 function r2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
 const INR = new Intl.NumberFormat("en-IN", {minimumFractionDigits:2, maximumFractionDigits:2});
@@ -1737,22 +1737,27 @@ const GSTR = {
     if (!L.taxable && !tax) return null;
     const note = /CREDIT NOTE/i.test(v.type) ? "credit" : /DEBIT NOTE/i.test(v.type) ? "debit" : "";
     const exp = /EXPORT/i.test(v.type);
-    const gstin = (v.gstin || "").toUpperCase();
     const parts = L.parts || [];
     const rate = parts.length === 1 ? parts[0].rate : L.taxable ? Books.snapRate(Math.round(tax / L.taxable * 10000) / 100) : 0;
     const cls = Books.supplyClass(v);
+    // a consolidated B2C entry (many B2C sales in one, e.g. through a payment gateway) is reported in B2C small, as totals,
+    // even inter-state above the limit: it is not one invoice (b2cSumWhy says by which rule). next-fix-b2cs-gstin (the
+    // owner, a CA, 12-Nov-2026): so even when the voucher or its party ledger has a GSTIN (Tally puts the gateway's GSTIN
+    // on the entry, the gateway being the party): that GSTIN is not a buyer's, so the row has none (sumGstin keeps it): no
+    // B2B line to the gateway, no GSTIN check, and the place of supply as for an unregistered buyer, never the gateway's
+    // state. Never a credit or debit note, an export, SEZ, exempt, nil or non-GST supply, or reverse charge
+    const gstin0 = (v.gstin || "").toUpperCase(), gstinL = String((b.gstins || {})[v.party] || "").toUpperCase();
+    const sum = !note && !exp && cls === "taxable" && !Books.isRcm(v) ? this.b2cSumWhy(v.id, v.party, v.no || v.ref) : "";
+    const gstin = sum ? "" : gstin0;
     const interState = !!(gstin && v.cmp && gstin.slice(0, 2) !== String(v.cmp).slice(0, 2)) || (!gstin && v.pos && v.pos !== (b.stateOf || v.pos) && L.tax.IGST > 0);
     // B2C large: inter-state to an unregistered person above Rs 1 lakh from 1 August 2024 (Rs 2.5 lakh before)
     const b2cl = !gstin && L.tax.IGST > 0 && L.total > (String(v.date) >= "20240801" ? 100000 : 250000);
-    // a consolidated B2C entry (many B2C sales in one, e.g. through a payment gateway) is reported in B2C small, as totals,
-    // even inter-state above the limit: it is not one invoice (b2cSumWhy says by which rule)
-    const sum = !gstin && !note && !exp && cls === "taxable" && !(b.gstins || {})[v.party] ? this.b2cSumWhy(v.id, v.party, v.no || v.ref) : "";
-    const P = this.posOfSale({id: v.id, pos: v.pos, own: reg || this.regOf(v), gstin: gstin || String((b.gstins || {})[v.party] || ""), igst: L.tax.IGST, cgst: L.tax.CGST, sgst: L.tax.SGST, zero: cls === "sez" || cls === "export" || exp});
-    return {id: v.id, date: v.date, no: v.no || v.ref || "", party: v.party, gstin, pos: P.code ? (P.from === "tally" ? v.pos : this.posName(P.code)) : "", posCode: P.code, posFrom: P.from, posBad: P.bad, posTally: v.pos || "",
+    const P = this.posOfSale({id: v.id, pos: v.pos, own: reg || this.regOf(v), gstin: sum ? "" : gstin || gstinL, igst: L.tax.IGST, cgst: L.tax.CGST, sgst: L.tax.SGST, zero: cls === "sez" || cls === "export" || exp});
+    return Object.assign({id: v.id, date: v.date, no: v.no || v.ref || "", party: v.party, gstin, pos: P.code ? (P.from === "tally" ? v.pos : this.posName(P.code)) : "", posCode: P.code, posFrom: P.from, posBad: P.bad, posTally: v.pos || "",
       cls, rcm: Books.isRcm(v), hsn: (parts[0] && parts[0].hsn) || (v.hsn || [])[0] || "", supply: (parts[0] && parts[0].supply) || v.supply || "", eco: "", tcs: 0, parts, mixed: new Set(parts.map(q => q.rate)).size > 1,
       kind: note ? (note === "credit" ? "CDNR" : "DBNR") : cls === "export" ? "EXP" : (cls === "sez" && gstin) ? "B2B" : cls === "sez" ? "EXP" : (cls === "exempt" || cls === "nil" || cls === "nongst") ? "NIL" : gstin ? "B2B" : b2cl && !sum ? "B2CL" : "B2C", b2cSum: sum,
       taxable: L.taxable, cgst: L.tax.CGST, sgst: L.tax.SGST, igst: L.tax.IGST, cess: L.tax.CESS,
-      rate, total: L.total, note, type: v.type, src: v.src === "bridge" ? "bridge" : "daybook"};
+      rate, total: L.total, note, type: v.type, src: v.src === "bridge" ? "bridge" : "daybook"}, sum && (gstin0 || gstinL) ? {sumGstin: gstin0 || gstinL} : null);
   },
   // next-gst-b2cs-summary (the owner, a CA, 11-Nov-2026): a sales entry that books many B2C sales at once (one entry for a
   // payment gateway's or a marketplace's collections, "2026-27/155 to 2026-27/182") is a B2C summary: reported in B2CS (by
@@ -1760,7 +1765,8 @@ const GSTR = {
   // rule, in order: "entry" - marked so on GST > What to fix (b.gstPosFix[id].b2cs = {on: true}; {on: false} is "not a
   // summary" and wins over the others); "ledger" - the party ledger's switch "Consolidated B2C (summary of many sales)"
   // (b.map[party].b2cSum, FinCom's own, synced, never written to Tally); "range" - the number is a range (noRange). Only
-  // for a taxable sale to a party with no GSTIN (the caller sees to that); "" when none
+  // for a taxable sale, not a note, export or reverse charge, with or without a GSTIN (next-fix-b2cs-gstin: the gateway's
+  // GSTIN on the entry does not make it B2B; the caller sees to that); "" when none
   b2cSumWhy(id, party, no){
     const b = S.books || {}, f = ((b.gstPosFix || {})[id] || {}).b2cs;
     if (f && typeof f === "object") return f.on ? "entry" : "";
