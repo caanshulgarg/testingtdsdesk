@@ -589,7 +589,9 @@ async function importTallyBook(file){
 // a Tally entry of the bank book, as a line remembers it (its GUID, else date, voucher and amounts)
 function bankTallyKey(t){ return String(t.guid || [t.date, t.vt, t.vn, r2(num(t.debit)), r2(num(t.credit))].join("|")); }
 // a line FinCom posted itself: "I checked — it is not in Tally" is its way back, not "Not this Tally entry"
-function bankOwnPost(r){ const b = B(); return /^posted by FinCom/.test(r.tallyHow || "") || !!(b && b.postedTags && b.postedTags[fpHash(r.fp || r.id)]); }
+// (its posted tag: a time, or "unconfirmed:" a time; "tally:" is a line only found in Tally)
+function bankOwnPost(r){ const b = B(), tag = b && b.postedTags ? b.postedTags[fpHash(r.fp || r.id)] : undefined;
+  return tag != null ? !/^tally:/.test(String(tag)) : /^posted by FinCom/.test(r.tallyHow || ""); }
 // "Not this Tally entry" (owner, item 5): a line matched to the wrong Tally entry; the entry is kept on the line (notTally),
 // so no later read matches it again, and the line goes back to where it was before the match
 function bankNotTally(id){
@@ -600,13 +602,15 @@ function bankNotTally(id){
   const key = r.tallyKey || (t && bankTallyKey(t));
   if (!key){ toast("FinCom does not know which Tally entry this line was matched to. Read the Tally bank book again first."); return; }
   const words = t ? [fmtDate(t.date), [t.vt, t.vn].filter(Boolean).join(" "), money0(num(t.debit) || num(t.credit))].filter(Boolean).join(" \u00b7 ") : r.tallyRef || key;
-  askConfirm({title: "Not this Tally entry?", ok: "Not that entry", body: '<p class="note">This bank line was matched to Tally entry ' + esc(words) + ". Mark it as NOT that entry?</p>"}).then(ok => {
+  askConfirm({title: "Not this Tally entry?", ok: "Not that entry", body: '<p class="note">This bank line was matched to Tally entry ' + esc(words) + ". Mark it as NOT that entry? If this entry really is it, posting will put it in Tally twice.</p>"}).then(ok => {
     if (!ok || r.state !== "intally") return;
     r.notTally = (r.notTally || []).concat(key);
-    r.state = ["attention", "suggested", "ready"].includes(r.prevState) ? r.prevState : exactLedger(r.ledger) ? "ready" : r.ledger ? "suggested" : "attention";
+    // a person decides what it is now (never posted automatically): needs attention, not set by anyone
+    r.state = "attention"; r.userSet = false;
     delete r.tallyIdx; delete r.tallyKey; r.tallyHow = ""; r.tallyRef = "";
+    if (b.postedTags && /^tally:/.test(String(b.postedTags[fpHash(r.fp || r.id)] || ""))) delete b.postedTags[fpHash(r.fp || r.id)];
     auditEvent("bank_not_tally", (r.dec.name || r.narr || r.id) + " " + money0(num(r.debit) || num(r.credit)) + " " + r.date + ": not Tally entry " + words, b.cid);
-    saveBank({rows: true}); toast("Marked as not that Tally entry: it is not matched to it again."); render();
+    saveBank({rows: true, posted: true}); toast("Marked as not that Tally entry: it is not matched to it again. Choose its ledger and post it, or ignore it."); render();
   });
 }
 // In Tally's bank ledger, a debit is money in and a credit is money out.
@@ -678,7 +682,9 @@ function sameParty(a, b){
 // a line in Tally (posted from here, or found there) is never taken back to an earlier state by an Undo, a bulk button or
 // a line's button, so it cannot be posted twice (state-machine review, item 5)
 function bankInTally(r){ return !!r && (r.state === "sent" || r.state === "intally"); }
-function bankKeptWords(n, what){ return n + " " + (what || "line") + (n === 1 ? " is" : "s are") + " already in Tally and " + (n === 1 ? "was left as it is." : "were left as they are."); }
+function bankKeptWords(n, what){ return n + " " + (what || "line") + (n === 1 ? " is" : "s are") + " already in Tally and " + (n === 1 ? "was left as it is." : "were left as they are.") +
+  (what ? " If one was matched to the wrong Tally entry, press \u201cNot this Tally entry\u201d on it." : " To change one, press \u201cTake it back\u201d or \u201cNot this Tally entry\u201d on the line."); }
+function bankKeptOne(r){ return "This line is already in Tally, so it was left as it is. " + (r.state === "intally" && !bankOwnPost(r) ? "If it was matched to the wrong Tally entry, press \u201cNot this Tally entry\u201d on the line." : "To post it again, press \u201cTake it back\u201d on the line first."); }
 // the one way from Tally back to "ready" (taken back from Tally, gone from Tally, not found at a check, an automatic entry
 // undone): every posting field cleared alike
 function bankClearPosting(r, state){

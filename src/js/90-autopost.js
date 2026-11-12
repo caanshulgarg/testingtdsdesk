@@ -199,6 +199,8 @@ const AutoPost = {
     const dir = this.dir(r), key = this.bankKey(r, env), a = out.amt;
     out.key = key; out.dir = dir;
     // a person's own decision or change is never overwritten
+    // a person said the Tally entry it was matched to is not its own: a person decides (it may be in Tally after all)
+    if (r.notTally && r.notTally.length) stop("a person said it is not the Tally entry it was matched to");
     if (r.userSet || r.prevState || r.autoUndone) stop(r.autoUndone ? "a person took the automatic entry back" : "a person set or changed this line");
     if (r.repaired || r.balOk === false || r.notRead) stop(r.balOk === false ? "the line does not agree with the running balance" : "the amount was read from the balance change");
     if (/^(ai|claude)$/i.test(String(r.source || ""))) stop("the ledger is an AI suggestion");
@@ -663,8 +665,10 @@ const AutoPost = {
         }
         // refused: the posting is no longer waiting. Cancelled already, or failed without this entry: nothing of it is in Tally
         if (!(c && c.ok === true)){ let j = null; try { j = await CloudPost.row(job); } catch (e){ /* not known */ }
+          // failed: only when nothing of the page's own record says this entry went or may have gone (postJobStates)
           const mine = j && (j.results || []).some(r => r && String(r.id) === String(x.id) && r.ok);
-          if (j && (j.status === "cancelled" || (j.status === "failed" && !mine))) c = {ok: true}; }
+          const ps = typeof postJobStates === "function" ? (postJobStates(cid).get(String(x.id)) || {}).st : "";
+          if (j && (j.status === "cancelled" || (j.status === "failed" && !mine && (!ps || ps === "refused")))) c = {ok: true}; }
         if (!(c && c.ok === true)) return {ok: false, why: "Its posting could not be cancelled: the Tally computer may have taken it, so it may already be in Tally. It was left as it is; once Tally answers, it can be undone from Tally."};
         this.cancelled[job] = true;
       }
@@ -679,7 +683,8 @@ const AutoPost = {
       delete x.auto; delete x.autoHold; delete x.autoPrev;
       saveBank({rows: true, posted: true});
     } else {
-      if (x.status === "approved"){ billClearPosting(x); unapply(x, cid); }
+      // removed from Tally or taken off the queue: back to review even while the cloud still lists the posting
+      if (x.status === "approved"){ billClearPosting(x); if (!unapply(x, cid, {force: true})) return {ok: false, why: "The bill could not be put back to review."}; }
       x.autoUndone = {at, by: who, was: x.auto || x.autoHold || null};
       delete x.auto; delete x.autoHold; Store.saveEntry(cid, x);
       if (typeof refreshStats === "function") refreshStats(cid);

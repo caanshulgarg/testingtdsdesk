@@ -547,7 +547,8 @@ function toast(msg, o){
     const box = document.createElement("span"); box.className = "toast-acts"; box.dataset.toastActs = "";
     acts.forEach(a => {
       const b = document.createElement("button"); b.type = "button"; b.className = "toast-act"; b.textContent = a.label; b.dataset.toastAct = a.label;
-      b.addEventListener("click", ev => { ev.stopPropagation(); toastGone = null; if (t.dataset.stay === "1"){ toastStay = null; t.dataset.stay = ""; } toastHide(); try { a.run(); } catch (e){ console.error(e); } });
+      // the other buttons' gone() run (their moment has passed); the one pressed is dropped
+      b.addEventListener("click", ev => { ev.stopPropagation(); const g = (toastGone || []).filter(f => f !== a.gone); toastGone = g.length ? g : null; toastGoneRun(); if (t.dataset.stay === "1"){ toastStay = null; t.dataset.stay = ""; } toastHide(); try { a.run(); } catch (e){ console.error(e); } });
       box.appendChild(b);
     });
     t.appendChild(box);
@@ -3045,7 +3046,7 @@ function approve(e, o){
   cur.credited = r2(num(cur.credited) + c.base);
   cur.tdsBase = r2(num(cur.tdsBase) + addBase);
   party.ytd[c.fy][c.rule.id] = cur;
-  e.status = "approved"; delete e.notRead;
+  e.status = "approved"; delete e.notRead; delete e.deletedInTally;
   e.approvedAt = new Date().toISOString();
   const k = invKey(e.x), co = CO(cid);
   // the bill's id is kept with the date (02-Oct-2026), so a later copy can name and open this one
@@ -3075,12 +3076,13 @@ function billMoveOn(e, said, list, undo){
   render();
 }
 // a bill with a posting: sent, being checked, its id held by the cloud, or a cloud posting of it still running
-function billPostLive(e, cid){ return !!(e && (e.exportedAt || (typeof billLivePosting === "function" && billLivePosting(e, cid)) || (typeof postSending === "function" && postSending(cid).has(String(e.id))))); }
+// (a bill a person marked "Deleted in Tally" is not held by the cloud's record of it any more)
+function billPostLive(e, cid){ return !!(e && (e.exportedAt || (typeof postSending === "function" && postSending(cid).has(String(e.id))) || (!e.deletedInTally && typeof billLivePosting === "function" && billLivePosting(e, cid)))); }
 // such a bill is not taken off its supplier's totals and put back to review here (it would be posted twice). o.force: a
 // bill deleted (it keeps what it was: softDeleteEntry; billRestore puts it back: reapply), or Tally's own refusal of
 // this posting (src/js/24)
 function unapply(e, cid, o){
-  if (!(o && o.force) && billPostLive(e, cid)){ toast(e.exportedAt ? "This entry was already sent to Tally. Delete it in Tally first, then undo here." : "Its posting to Tally is still being sent or checked. Wait for it to finish, then undo here."); return false; }
+  if (!(o && o.force) && billPostLive(e, cid)){ toast(e.exportedAt ? "This bill is posted to Tally. Delete it in Tally first, then press \u201cDeleted in Tally\u201d in the bar under this bill: it comes back to To review." : "Its posting to Tally is still being sent or checked. Wait for it to finish, then undo here."); return false; }
   const a = e.applied, p = a && D(cid).parties[a.partyId];
   if (p && p.ytd && p.ytd[a.fy] && p.ytd[a.fy][a.natureId]){
     const cur = p.ytd[a.fy][a.natureId];

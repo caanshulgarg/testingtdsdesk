@@ -652,7 +652,9 @@ async function reconcileBank(opts){
       if (pairOf.has(r.id)) return;
       const win = pass === 0 ? 0 : (r.dec && r.dec.mode === "CHQ" ? 15 : 4);
       let best = null;
-      T.forEach(t => { if (used.has(t.i) || t.tag && byTag.has(t.tag) || Math.abs(t.eff - bankEffect(r)) >= 0.01) return; const d = days(t.date, r.date); if (d <= win && (!best || d < best.d)) best = {t, d}; });
+      // (never an entry a person said is not this line's: Not this Tally entry)
+      const no = t => r.notTally && r.notTally.includes(bankTallyKey({guid: t.guid, date: t.date, vt: t.type, vn: t.number, debit: t.eff > 0 ? t.eff : 0, credit: t.eff < 0 ? -t.eff : 0}));
+      T.forEach(t => { if (used.has(t.i) || t.tag && byTag.has(t.tag) || no(t) || Math.abs(t.eff - bankEffect(r)) >= 0.01) return; const d = days(t.date, r.date); if (d <= win && (!best || d < best.d)) best = {t, d}; });
       if (best){ pairOf.set(r.id, best.t.i); used.add(best.t.i); }
     }));
     const missing = rows.filter(r => !pairOf.has(r.id)).map(r => r.id);
@@ -662,7 +664,7 @@ async function reconcileBank(opts){
     b.postedTags = b.postedTags || {};
     rows.forEach(r => {
       if (pairOf.has(r.id)){
-        if (["ready", "attention", "suggested"].includes(r.state)){ r.prevState = r.state; r.state = "intally"; r.tallyHow = "found in Tally when reconciling"; const t = T[pairOf.get(r.id)]; r.tallyRef = [t.type, t.number, t.party].filter(Boolean).join(" · "); }
+        if (["ready", "attention", "suggested"].includes(r.state)){ r.prevState = r.state; r.state = "intally"; r.tallyHow = "found in Tally when reconciling"; const t = T[pairOf.get(r.id)]; if (t.guid) r.tallyKey = t.guid; r.tallyRef = [t.type, t.number, t.party].filter(Boolean).join(" · "); }
         if (r.state === "intally" || r.state === "sent") b.postedTags[fpHash(r.fp || r.id)] = b.postedTags[fpHash(r.fp || r.id)] || "tally:" + now;
       }
     });

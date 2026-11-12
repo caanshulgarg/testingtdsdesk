@@ -197,7 +197,7 @@ function BillBar({ e }) {
     </>;
   } else if (e.status === "approved") {
     left = <><span className="tag ok">Approved</span> <span className="note">{e.exportedAt || e.goneFromTally ? tallyStateOf(e)[1] : "Waiting in Send to Tally"}</span></>;
-    right = <>{!billPostLive(e, S.coId) && <button className="btn" onClick={() => doAct("undo")}>Undo approval</button>}{!e.exportedAt && <button className="btn" onClick={() => doAct("goExport")}>Send to Tally</button>}{next}</>;
+    right = <>{!billPostLive(e, S.coId) && <button className="btn" onClick={() => doAct("undo")}>Undo approval</button>}{!e.exportedAt && <button className="btn" onClick={() => doAct("goExport")}>Send to Tally</button>}{billPostLive(e, S.coId) && <button className="btn" title="You deleted its voucher in Tally: back to To review, not posted again" onClick={() => doAct("billDeletedInTally")}>Deleted in Tally</button>}{next}</>;
   } else {
     left = <span className="tag no">No entry</span>;
     right = <><button className="btn" onClick={() => doAct("restore")}>Move back to review</button>{next}</>;

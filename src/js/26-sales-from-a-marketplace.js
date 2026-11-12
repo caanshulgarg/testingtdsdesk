@@ -396,10 +396,11 @@ function salesNotTally(id){
   const s = SL(), v = inv(id); if (!v || v.status !== "intally") return;
   const m = v.tallyMatch || {}, key = m.key || "num:" + normInvNo(v.x.number), d = String(m.date || "");
   const words = [d ? fmtDate(/^\d{8}$/.test(d) ? d.slice(0, 4) + "-" + d.slice(4, 6) + "-" + d.slice(6) : d) : "", m.number || v.x.number, m.amount ? money0(m.amount) : ""].filter(Boolean).join(" \u00b7 ");
-  askConfirm({title: "Not this Tally entry?", ok: "Not that entry", body: '<p class="note">This invoice was matched to Tally entry ' + esc(words) + ". Mark it as NOT that entry?</p>"}).then(ok => {
+  askConfirm({title: "Not this Tally entry?", ok: "Not that entry", body: '<p class="note">This invoice was matched to Tally entry ' + esc(words) + ". Mark it as NOT that entry? If this entry really is it, posting will put it in Tally twice." +
+    (m.key ? "" : " FinCom did not keep which voucher it was, so every Tally voucher numbered " + esc(v.x.number || "") + " is left out for this invoice.") + "</p>"}).then(ok => {
     if (!ok || v.status !== "intally") return;
-    v.notTally = (v.notTally || []).concat(key); delete v.tallyMatch; v.postNote = ""; mapInvoice(v);
-    v.status = v.customerLedger && !(v.problems || []).length && !(v.ledgerIssues || []).length ? "ready" : "review";
+    // back to review: a person confirms it before it is posted
+    v.notTally = (v.notTally || []).concat(key); delete v.tallyMatch; v.postNote = ""; mapInvoice(v); v.status = "review";
     auditEvent("sales_not_tally", "Invoice " + (v.x.number || v.id) + ": not Tally entry " + words, s.cid);
     saveSales(); toast("Marked as not that Tally entry: it is not matched to it again."); render();
   });
@@ -528,7 +529,7 @@ function salesRowAct(a, id, force){
     if (a === "file"){ const f = S.files["sv:" + v.id]; if (f){ const u = blobUrl(f); window.open(u, "_blank"); setTimeout(() => URL.revokeObjectURL(u), 60000); } return true; }
     if (a === "edit"){ s.openId = null; startDraft(v.id); return true; }
     if (a === "nottally"){ salesNotTally(v.id); return true; }
-    if (salesInTally(v)){ toast("This invoice is already in Tally, so it was left as it is."); return true; }
+    if (salesInTally(v)){ toast("This invoice is already in Tally, so it was left as it is." + (v.status === "intally" ? " If it was matched to the wrong Tally entry, press \u201cNot this Tally entry\u201d on it." : "")); return true; }
     const before = [salesSnapshot(v)];
     if (a === "confirm"){
       mapInvoice(v);

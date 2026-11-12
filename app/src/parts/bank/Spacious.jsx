@@ -183,7 +183,8 @@ export function Drawer({ rows }) {
       {isOpen && <button className="btn small" data-drawer-act="rule" onClick={act("rule")}>Make a rule</button>}
       {isOpen && <button className="btn small" data-drawer-act="split" onClick={() => { b.splitOpen = r.id; b.drawer = null; render(); }}>Split</button>}
       {(r.state === "attention" || r.state === "suggested") && <button className="btn small" data-drawer-act="ignore" onClick={act("ignore")}>Ignore</button>}
-      {(r.state === "ignored" || r.state === "intally") && <button className="btn small" data-drawer-act="restore" onClick={act("restore")}>Restore</button>}
+      {r.state === "ignored" && <button className="btn small" data-drawer-act="restore" onClick={act("restore")}>Restore</button>}
+      {r.state === "intally" && !bankOwnPost(r) && <button className="btn small" data-drawer-act="nottally" onClick={act("nottally")}>Not this Tally entry</button>}
       {r.state === "sent" && r.tally && r.tally.guid && live() && <button className="btn small" data-drawer-act="unpost" onClick={act("unpost")}>Take it back</button>}
     </div>}
   </aside>;

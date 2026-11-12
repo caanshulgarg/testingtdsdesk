@@ -69,7 +69,7 @@ export function installAutopost() {
   // 2. a person's change of an entry
   wrap("setLedgerFor", (f) => function (rows) { (rows || []).forEach((r) => personTouch(r, "ledger changed")); return f.apply(this, arguments); });
   wrap("bankRowAct", (f) => function (a, id) {
-    if (["accept", "ignore", "restore", "unready", "unpost"].includes(a) && W.B && W.B()) personTouch(W.B().rows.find((r) => r.id === id), a);
+    if (["accept", "ignore", "restore", "unready", "unpost", "nottally"].includes(a) && W.B && W.B()) personTouch(W.B().rows.find((r) => r.id === id), a);
     return f.apply(this, arguments);
   });
   wrap("bulkAction", (f) => function () { if (W.B && W.B()) W.bankSelected().forEach((r) => personTouch(r, "changed in bulk")); return f.apply(this, arguments); });

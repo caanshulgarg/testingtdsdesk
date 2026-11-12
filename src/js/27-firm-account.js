@@ -1144,8 +1144,29 @@ function billDelete(id){
   if (!e) return;
   if (!canDeleteBills()){ toast("Only the firm\u2019s owner can delete a bill. Mark it \u201cNo entry\u201d instead, or ask the owner."); return; }
   // a bill with a posting is not deleted here (owner, item 5)
-  if (billPostLive(e, S.coId)){ toast("This bill is posted to Tally. Delete it in Tally first, then mark it Not in Tally here; after that you can delete it."); return; }
+  if (billPostLive(e, S.coId)){ toast("This bill is posted to Tally. Delete it in Tally first, then press \u201cDeleted in Tally\u201d in the bar under this bill; after that you can delete it."); return; }
   billDeleteAsk(e);
+}
+// "Deleted in Tally" (the bar under a posted bill): a person deleted its voucher in Tally. The posting is cleared and the
+// bill goes back to To review; nothing is posted again (unlike "Not in Tally – post again" in Post to Tally)
+function billDeletedInTally(e){
+  const cid = S.coId;
+  if (typeof postSending === "function" && postSending(cid).has(String(e.id))){ toast("Its posting to Tally is still being sent. Wait for it to finish."); return; }
+  if (!billPostLive(e, cid)) return;
+  askConfirm({title: "Deleted in Tally?", ok: "Deleted in Tally", danger: true,
+    body: '<p class="note">' + esc(e.x.vendorName || e.fileName || "") + (e.x.invoiceNo ? " \u00b7 " + esc(e.x.invoiceNo) : "") + ": you deleted its voucher in Tally. FinCom clears its posting and puts it back in To review; it is not posted again. If the voucher is still in Tally, posting it later puts it in Tally twice.</p>" +
+      '<label class="f" style="margin-top:8px"><span>What you did in Tally</span><input type="text" id="deletedWhy" maxlength="200" placeholder="For example: deleted in the Day Book on 12-Nov"></label>',
+    read: () => ((document.getElementById("deletedWhy") || {}).value || "").trim(),
+    validate: why => why.length < 3 ? "Say what you did in Tally." : ""}).then(r => {
+    if (!r) return;
+    const was = {vch: e.tallyVchNo || (e.tally && e.tally.guid) || "", at: e.exportedAt || (e.postUnconfirmed && e.postUnconfirmed.at) || ""};
+    billClearPosting(e);
+    e.deletedInTally = {at: new Date().toISOString(), by: whoAmI(), why: r.data, was};
+    if (e.status === "approved") unapply(e, cid, {force: true});
+    Store.saveEntry(cid, e);
+    auditEvent("bill_deleted_in_tally", (e.x.vendorName || e.fileName || "") + " " + (e.x.invoiceNo || e.id) + ": " + r.data, cid);
+    S.filter = "draft"; S.selected = e.id; refreshStats(cid); toast("Marked as deleted in Tally: back in To review, not posted again."); render();
+  });
 }
 function billDeleteAsk(e){
   askConfirm({title: "Delete this bill?", ok: "Delete", danger: true,
@@ -2029,16 +2050,17 @@ function doAct(act, t){
     case "camera": pickMode = "company"; document.getElementById("camIn").click(); break;
     case "manual": { const n = newEntry("Manual entry"); D().entries[n.id] = n; S.selected = n.id; S.filter = "draft"; Store.saveEntry(S.coId, n); refreshStats(S.coId); render(); break; }
     case "approve": if (e) approve(e); break;
-    case "reject": if (e){ if (billLivePosting(e, S.coId)){ toast("This bill is posted to Tally. Delete it in Tally, then mark it Not in Tally here, before marking it No entry."); break; }
+    case "reject": if (e){ if (billPostLive(e, S.coId)){ toast("This bill is posted to Tally. Delete it in Tally first, then press \u201cDeleted in Tally\u201d in the bar under this bill; after that you can mark it No entry."); break; }
       const was = e.status, cid = S.coId, id = e.id, path = e.docPath; setStatus(e, "rejected");
       // its cloud document goes only once the status is saved and the message with Undo has gone unused (the bill read
       // again then: still No entry, the same document)
       const gone = () => { const x = (D(cid) || {}).entries && D(cid).entries[id]; if (x && x.status === "rejected" && path && x.docPath === path){ CloudDocs.remove(path); delete x.docPath; Store.saveEntry(cid, x); } };
       billMoveOn(e, "Marked as no entry needed.", was === "draft" ? "draft" : was, {label: "Undo", gone: e.status === "rejected" ? gone : null, run: () => { if (e.status === "rejected"){ setStatus(e, "draft"); S.selected = e.id; render(); } }}); } break;
-    case "restore": if (e){ if (billLivePosting(e, S.coId)){ toast("This bill is posted to Tally, so it stays as it is."); break; } const was = e.status; setStatus(e, "draft");
+    case "restore": if (e){ if (billPostLive(e, S.coId)){ toast("This bill is posted to Tally, so it stays as it is."); break; } const was = e.status; setStatus(e, "draft");
       // the next bill set aside, if any (smart moves 5); this one waits in To review
       if (was === "rejected") billMoveOn(e, "Moved back to review.", "rejected"); } break;
     case "undo": if (e) undoApproval(e); break;
+    case "billDeletedInTally": if (e) billDeletedInTally(e); break;
     case "delete": if (e) billDelete(e.id); break;
     case "addParty": { const id = "p-new-" + Date.now().toString(36); D().parties[id] = {id, name:"New supplier", pan:"", gstin:"", ledgerName:"", natureDefault:"", expenseLedger:"", ldcRate:"", ldcValidTo:"", ytd:{}}; S.partySel = id; Store.saveParty(S.coId, D().parties[id]); render(); break; }
     case "closeParty": S.partySel = null; render(); break;
