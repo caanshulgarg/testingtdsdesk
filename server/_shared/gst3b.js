@@ -19,7 +19,7 @@
 // No AI here: M2B.aiLinks only reads the pairs the gst-2b-match function already stored for the year.
 // GST3B_SRC: this file's and names.js's text (this value left out), hashed (tests/run_gst_cloud.js keeps it so): a 3B the
 // cloud worked out carries it, and the 3B page uses the cloud's only when its own is the same (app/src/screens/gst/cloud3b.js)
-const GST3B_SRC = "s3dcdea9d1d71550a";
+const GST3B_SRC = "sa8f3dbe30cb4af92";
 function num(v){ if (typeof v === "number") return isFinite(v) ? v : 0; const n = parseFloat(String(v == null ? "" : v).replace(/[^0-9.\-]/g, "")); return isFinite(n) ? n : 0; }
 function r2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
 const INR = new Intl.NumberFormat("en-IN", {minimumFractionDigits:2, maximumFractionDigits:2});
@@ -1914,7 +1914,10 @@ const GSTR = {
   // or when a ledger on it carries FinCom's switch "ISD (Input Service Distributor)" (b.map[name].isd: the ISD's party
   // ledger, e.g. the head office's, or an input ledger kept for ISD credit; GST settings, FinCom's own, synced, never
   // written to Tally). Before 12-Nov-2026 FinCom had no ISD: such credit was in 4(A)(5)
-  ISD_RE: /INPUT[\s_-]*SERVICE[\s_-]*DISTRIBUTOR|^\s*ISD\b/i,
+  // (review of c0d037200: the same strings as migration 180/181's SQL pattern, character classes spelled out: ASCII
+  // spaces, tabs, line breaks, "_" and "-" between the words; "ISD" at the start not followed by a letter, digit or "_";
+  // tests/isd_types.json)
+  ISD_RE: /INPUT[ \t\n\r_-]*SERVICE[ \t\n\r_-]*DISTRIBUTOR|^[ \t\n\r]*ISD(?![A-Za-z0-9_])/i,
   // (third review of fe63bac61: a supplier with any entry Tally types ISD is an ISD for all its entries and its 2B rows,
   // isdTyped; none such, nothing changes)
   isISD(v){

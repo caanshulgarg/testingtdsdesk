@@ -312,6 +312,8 @@ const H = ["igst", "cgst", "sgst", "cess"], ISD = "Kestrel Head Office ISD";
     ok(bk[0] === gst && bk[1] === "06AAKCS4821Q2ZX", "H. a GSTIN changed in place (the ledger read): the typed list follows (" + bk.join(" -> ") + ")");
   }
   console.log("== E. Tally's registration type, written with hyphens");
+  { const T = require("./isd_types.json").cases, bad = T.filter(([t, want]) => E.GSTR.ISD_RE.test(t) !== want || x.GSTR.ISD_RE.test(t) !== want);
+    ok(T.length >= 10 && !bad.length, "the " + T.length + " types of tests/isd_types.json (the SQL pattern of migrations 180 and 181 is checked on the same list): the engine's and the app's ISD_RE read each as listed" + (bad.length ? " - not: " + JSON.stringify(bad) : "")); }
   ok(inBooks(O0.rows, () => E.GSTR.isISD({regType: "Input-Service-Distributor", ent: []}) && E.GSTR.isISD({regType: "input service distributor", ent: []}) && !E.GSTR.isISD({regType: "Regular", ent: []})), "\"Input-Service-Distributor\" is an ISD's too; \"Regular\" is not");
   console.log(fails ? fails + " FAILED" : "all ok");
   process.exit(fails ? 1 : 0);

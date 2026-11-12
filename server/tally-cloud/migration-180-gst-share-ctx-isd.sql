@@ -8,6 +8,8 @@
 -- deleted) whose type reads ISD, as GSTR.ISD_RE does ("Input Service Distributor", hyphens or underscores between the
 -- words, or "ISD" at the start). A book with no such entry keeps exactly migration 164's version (nothing is made
 -- again for it); a book with one gets a new version once, and again whenever that set changes.
+-- The pattern is GSTR.ISD_RE's (tests/isd_types.json), and migration 181's index's, character for character: run 181
+-- (the index, made concurrently) before this file, so the version reads the few ISD-typed entries by it.
 -- Replaces only this function (same signature, same grants, restated). Nothing else changes. Safe to run twice.
 begin;
 set local lock_timeout = '10s';
@@ -37,7 +39,7 @@ returns text language sql stable security definer set search_path to 'public', '
              (select md5(string_agg(t.p || '~' || t.r, '|' order by t.p, t.r))
                 from (select distinct coalesce(v.party, '^') as p, v.gst_reg_type as r from tally_vouchers v
                        where v.book_id = b.book_id and v.deleted_at is null
-                         and v.gst_reg_type ~* '(input[[:space:]_-]*service[[:space:]_-]*distributor|^[[:space:]]*isd([^[:alnum:]_]|$))') t) as isd
+                         and v.gst_reg_type ~* '(input[ \t\n\r_-]*service[ \t\n\r_-]*distributor|^[ \t\n\r]*isd([^A-Za-z0-9_]|$))') t) as isd
         from tally_books b where b.book_id = p_book) x;
 $function$;
 

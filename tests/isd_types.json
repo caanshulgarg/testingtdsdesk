@@ -1,0 +1,11 @@
+{"_": "Tally registration types and whether each reads ISD: GSTR.ISD_RE (server/_shared/gst3b.js) and migration 180/181's SQL pattern must agree on every one (tests/run_gst_isd_2b.js part E, tests/run_migration181.py). Made-up strings.",
+ "cases": [
+  ["Input Service Distributor", true], ["input service distributor", true], ["INPUT SERVICE DISTRIBUTOR", true],
+  ["Input-Service-Distributor", true], ["Input_Service_Distributor", true], ["InputServiceDistributor", true],
+  ["Input  Service\tDistributor", true], ["Registered Input Service Distributor", true], ["ISD", true], ["isd", true],
+  ["  ISD", true], ["ISD (Input Service Distributor)", true], ["ISD-Registered", true], ["ISD Regular", true],
+  ["Regular", false], ["Unregistered", false], ["Composition", false], ["Consumer", false], ["", false],
+  ["ISDN Line", false], ["ISD_Unit", false], ["ISD2", false], ["Disdain Traders", false], ["Regular ISD", false],
+  ["Input Service", false], ["Service Distributor", false], ["Input Service Distributors", true], ["ISDé", true],
+  ["Input Service Distributor", false]
+ ]}
