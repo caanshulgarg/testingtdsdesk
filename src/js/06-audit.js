@@ -680,7 +680,7 @@ Object.assign(Audit, {
   // once more, kept as it ends; the run's basis and count are those of its start, so the Audit tab says when it no
   // longer fits the books, stale). Another client opened: it stops, and nothing is written.
   // While the cloud copy's entries are being brought into the books (TCloud.load, which changes them across awaits) it
-  // takes no step (autoWait), for at most WAIT_MAX_MS together: then on, if the books are as they were. A task of steps is about SLICE_MS, less if the idle time runs out (timeRemaining), and
+  // takes no step (autoLoading); a busy line that says so holds it for at most WAIT_MAX_MS (autoBusy). A task of steps is about SLICE_MS, less if the idle time runs out (timeRemaining), and
   // HIDDEN_MS while the tab is hidden (its timers then come about once a second at best). tests/run_hang_audit_auto.py,
   // tests/run_audit_auto_ist.py
   AUTO: {SLICE_MS: 10, HIDDEN_MS: 150, WAIT_MS: 250, WAIT_MAX_MS: 120000, DRAW_MS: 500, MAX_STARTS: 6},
@@ -705,11 +705,12 @@ Object.assign(Audit, {
     const V = b.vouchers || [];
     return this.autoRun(x, b) && x.V === V && x.n === V.length && x.rev === this.rev() && x.vs.every((v, i) => v === V[i]);
   },
-  // the books are being brought in from the cloud copy (changed across awaits): no step now
-  autoWait(b){
-    const T = typeof TCloud === "object" ? TCloud : null, f = typeof LK === "object" && LK.fr ? LK.fr() : null;
-    return !!((T && (T.opens > 0 || T.loads > 0)) || b.catchUp || (f && f.busy));
-  },
+  // the books are being brought in from the cloud copy (changed across awaits): no step now. A load (TCloud.load,
+  // openLoad: counted in try/finally) always holds it; a busy line (b.catchUp, Look up's) only for WAIT_MAX_MS, since
+  // a line can stay after its work
+  autoLoading(){ const T = typeof TCloud === "object" ? TCloud : null; return !!(T && (T.opens > 0 || T.loads > 0)); },
+  autoBusy(b){ const f = typeof LK === "object" && LK.fr ? LK.fr() : null; return !!(b.catchUp || (f && f.busy)); },
+  autoWait(b){ return this.autoLoading() || this.autoBusy(b); },
   autoStart(b){
     const j = this.auto;
     if (j && j.b === b) return j;
@@ -735,8 +736,10 @@ Object.assign(Audit, {
   autoBegin(j, b){
     const r = this.defaultRange(b);
     j.sig = this.autoSig(b); j.memo = new Map(); j.starts++;
-    // kept only if the books are as they were when it started (they can change only on its last start, or its very last)
-    j.prog.keep = () => !!j.extra || this.autoSame(j.sig, b);
+    // kept only if no load is running and the books are as they were when it started (they can change only on its last
+    // start, or its very last); refused: once more (autoSlice)
+    j.refused = false;
+    j.prog.keep = () => { const ok = !this.autoLoading() && (!!j.extra || this.autoSame(j.sig, b)); if (!ok) j.refused = true; return ok; };
     j.it = this.runIn(r.from, r.to, "on its own (" + this.cfg(b).freq + ")", j.prog);
   },
   autoSlice(j, d){
@@ -744,12 +747,13 @@ Object.assign(Audit, {
     const b = j.b;
     // another client opened: stopped, nothing written
     if (S.books !== b || S.coId !== j.co){ this.autoStop(j); return; }
-    // the books are being brought in: looked at again in a moment (after WAIT_MAX_MS of waiting, on if the books are as
-    // they were: a load that hangs, or a line that stayed, does not hold the audit for the session); after, it goes on
-    // if they are as they were, else it starts again as for any change
-    if (this.autoWait(b)){
+    // the books are being brought in: looked at again in a moment. A load always holds it; a busy line for at most
+    // WAIT_MAX_MS (a line that stayed does not hold the audit for the session). After, it goes on if the books are as
+    // they were, else it starts again from them as for any change
+    if (this.autoLoading()){ this.autoSoon(j, this.AUTO.WAIT_MS); return; }
+    if (this.autoBusy(b)){
       const t = Date.now(); j.waitFrom = j.waitFrom || t;
-      if (t - j.waitFrom < this.AUTO.WAIT_MAX_MS || (j.it && !this.autoSame(j.sig, b))){ this.autoSoon(j, this.AUTO.WAIT_MS); return; }
+      if (t - j.waitFrom < this.AUTO.WAIT_MAX_MS){ this.autoSoon(j, this.AUTO.WAIT_MS); return; }
     } else j.waitFrom = 0;
     if (!j.it || !this.autoSame(j.sig, b)){
       // its last start (started again often enough): it goes on whatever changes (kept only if nothing did: prog.keep)
@@ -788,7 +792,8 @@ Object.assign(Audit, {
     }
     j.it = null;
     // the last start's books changed on the way (prog.keep): not kept; once more from the books as they are, kept as it ends
-    if (!run && !j.extra && j.final && !this.autoSame(j.sig, b) && this.autoRun(j.sig, b) && this.due(b)){ j.extra = true; this.autoBegin(j, b); this.autoSoon(j); return; }
+    // (only when keep refused it: a step that threw ends it, as before)
+    if (!run && j.refused && this.autoRun(j.sig, b) && this.due(b)){ j.extra = true; this.autoBegin(j, b); this.autoSoon(j); return; }
     if (this.auto === j) this.auto = null;
     if (!run) return;
     j.run = run;

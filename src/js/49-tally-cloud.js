@@ -277,6 +277,21 @@ const TCloud = {
   // one kept before as text ({at, text}) is read as it is
   unzip(z){ return new Response(new Blob([z]).stream().pipeThrough(new DecompressionStream("gzip"))).text(); },
   DAY_MS: 60000,
+  // {status, ok, gz (the body, an ArrayBuffer, when ok)}: given up when no byte comes for DAY_MS
+  async dayGet(url, token, key){
+    const ac = typeof AbortController === "function" ? new AbortController() : null;
+    let tm = null; const poke = () => { if (!ac) return; clearTimeout(tm); tm = setTimeout(() => ac.abort(), this.DAY_MS); };
+    try {
+      poke();
+      const r = await fetch(url, {headers: {apikey: key, Authorization: "Bearer " + token}, cache: "no-store", signal: ac ? ac.signal : undefined});
+      if (!r.ok) return {status: r.status, ok: false};
+      if (!r.body || !r.body.getReader) return {status: r.status, ok: true, gz: await r.arrayBuffer()};
+      const rd = r.body.getReader(), parts = []; let n = 0;
+      for (;;){ poke(); const x = await rd.read(); if (x.done) break; parts.push(x.value); n += x.value.length; }
+      const out = new Uint8Array(n); let at = 0; parts.forEach(p => { out.set(p, at); at += p.length; });
+      return {status: r.status, ok: true, gz: out.buffer};
+    } finally { clearTimeout(tm); }
+  },
   async day(bk, d, at, seen){
     const k = "tcday:" + bk + ":" + d;
     let kept = null, kt;
@@ -284,13 +299,13 @@ const TCloud = {
     await Cloud.fresh().catch(() => {});
     const c = Cloud.cfg(), s = Cloud.sess();
     const url = c.url.replace(/\/+$/, "") + "/storage/v1/object/authenticated/tally-days/" + Cloud.st.firm + "/" + bk + "/" + d.slice(0, 6) + "/" + d + ".xml.gz";
-    // a day that does not come in a minute (the body too) is an error, not a load that never ends (review of 8869affa5)
-    const sig = () => (typeof AbortSignal === "function" && AbortSignal.timeout ? AbortSignal.timeout(this.DAY_MS) : undefined);
-    let r = await fetch(url, {headers: {apikey: c.key, Authorization: "Bearer " + s.access_token}, cache: "no-store", signal: sig()});
-    if (r.status === 401 || r.status === 400){ await Cloud.refreshToken(s.access_token); r = await fetch(url, {headers: {apikey: c.key, Authorization: "Bearer " + Cloud.sess().access_token}, cache: "no-store", signal: sig()}); }
+    // a day from which nothing comes for DAY_MS (no answer, or the body stalls) is an error, not a load that never ends;
+    // a large day on a slow line still comes in, however long it takes (reviews of 8869affa5 and 425fe18db)
+    let r = await this.dayGet(url, s.access_token, c.key);
+    if (r.status === 401 || r.status === 400){ await Cloud.refreshToken(s.access_token); r = await this.dayGet(url, Cloud.sess().access_token, c.key); }
     if (r.status === 404) return "";
     if (!r.ok) throw new Error("Could not fetch " + d + " from the cloud (" + r.status + ").");
-    const gz = await r.arrayBuffer(), text = await this.unzip(gz);
+    const gz = r.gz, text = await this.unzip(gz);
     if (seen && kept && kt === text) seen[d] = true;
     try { await IDBStore.write([[k, {at, gz}]]); } catch (e){}
     return text;

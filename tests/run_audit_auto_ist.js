@@ -13,9 +13,12 @@
 //      entry added on that one too: kept, and the Audit tab sees it no longer fits (Audit.stale: count and basis of
 //      the start);
 //   6. while the cloud copy's entries are being brought in (TCloud.loads) it takes no step; after, it goes on (a load
-//      that changed nothing: not started again), or starts again (a load that brought an entry); a load that never
-//      ends holds it at most WAIT_MAX_MS, then it goes on if the books are as they were;
-//   7. an error in a step: no run kept, as before, and it is said (console and window.__fincomReport);
+//      that changed nothing: not started again), or starts again (a load that brought an entry); a load in stages
+//      (the latest year first, as FirstOpen.preview, then the rest) holds it however long, past WAIT_MAX_MS too, and
+//      the run is the one at once on the whole books; a busy line that stays holds it at most WAIT_MAX_MS, then it goes
+//      on if the books are as they were, or starts again on them if they changed;
+//   7. an error in a step: no run kept, as before, and it is said (console and window.__fincomReport); on the last
+//      start too, and no run once more for it;
 //   8. MIS.due compares the local day of the last pack's time, as Audit.due.
 "use strict";
 process.env.TZ = "Asia/Kolkata";
@@ -126,21 +129,40 @@ ctx.TCloud = {opens: 0, loads: 0};
   A.maybeRun(); const j = A.auto;
   tasks(1000, () => j.prog.k >= 2); ctx.TCloud.loads = 1; tasks(10); addOne(6); ctx.TCloud.loads = 0; drain();
   ok(j.starts === 2 && A.auto === null && text(b.audit) === once(au), "   a load that brought an entry: started again (" + j.starts + " starts), the run at once on the books with it"); }
-{ yday(); Q = []; const keepW = A.AUTO.WAIT_MAX_MS;
-  A.maybeRun(); const j = A.auto;
-  tasks(1000, () => j.prog.k >= 2); ctx.TCloud.loads = 1; tasks(20); const k = j.prog.k;
-  A.AUTO.WAIT_MAX_MS = 0; drain(); A.AUTO.WAIT_MAX_MS = keepW;
-  ok(A.auto === null && j.starts === 1 && b.audit.last.how === "on its own (daily)" && ctx.TCloud.loads === 1, "   a load that never ends: after WAIT_MAX_MS (" + keepW + " ms), on as the books are as they were (" + k + " checks while it waited, then done)"); }
+{ yday(); const au = copy(b.audit), keepW = A.AUTO.WAIT_MAX_MS, all = b.vouchers; Q = [];
+  A.AUTO.WAIT_MAX_MS = 0;
+  // the load's first stage: the latest entries only (as FirstOpen.preview), the books not saved yet; the run due meanwhile
+  ctx.TCloud.loads = 1; b.vouchers = all.filter(v => v.date >= "20260101");
+  A.maybeRun(); const j = A.auto; tasks(200);
+  const held = j.starts === 0 && j.prog.k === 0 && A.auto === j && b.audit.last.at === au.last.at;
+  // and in a stage between, a run on its way (started before the load): no step either
+  b.vouchers = all.concat([]); ctx.TCloud.loads = 0; tasks(1000, () => j.prog.k >= 2); const k = j.prog.k;
+  ctx.TCloud.loads = 1; b.vouchers = all.filter(v => v.date >= "20260101"); tasks(200);
+  const held2 = j.prog.k === k && A.auto === j && b.audit.last.at === au.last.at;
+  b.vouchers = all.concat([]); addOne(7); ctx.TCloud.loads = 0; ctx.saveBooks(); drain(); A.AUTO.WAIT_MAX_MS = keepW;
+  ok(held && held2 && A.auto === null && j.starts === 2 && text(b.audit) === once(au) && b.audit.last.vouchers === A.vouchers(r.from, r.to).length,
+    "   a load in stages, past WAIT_MAX_MS: no start and no step while it ran (200 tasks each, " + k + " checks before the second), then on the whole books; the run at once on them (" + b.audit.last.vouchers + " entries)"); }
 delete ctx.TCloud;
+{ const fr = {busy: "Handing the day book to FinCom’s server (100%)…"}; ctx.LK = {fr: () => fr};
+  const keepW = A.AUTO.WAIT_MAX_MS;
+  yday(); Q = []; A.maybeRun(); const j = A.auto; tasks(50); const k = j.prog.k;
+  A.AUTO.WAIT_MAX_MS = 0; drain(); A.AUTO.WAIT_MAX_MS = keepW;
+  ok(k === 0 && A.auto === null && j.starts === 1 && b.audit.last.how === "on its own (daily)", "   a busy line that stays: no step for WAIT_MAX_MS (" + keepW + " ms), then on (" + j.starts + " start)");
+  yday(); const au = copy(b.audit); Q = []; fr.busy = ""; A.maybeRun(); const j2 = A.auto; tasks(1000, () => j2.prog.k >= 2);
+  fr.busy = "Bringing in…"; tasks(20); addOne(8); A.AUTO.WAIT_MAX_MS = 0; drain(); A.AUTO.WAIT_MAX_MS = keepW;
+  ok(A.auto === null && j2.starts === 2 && text(b.audit) === once(au), "   the books changed under a busy line that stays: after WAIT_MAX_MS, started again on them (" + j2.starts + " starts)");
+  delete ctx.LK; }
 
 // 7. an error in a step
 yday(); Q = []; reported.length = 0; const last7 = b.audit.last;
 const runIn = A.runIn; A.runIn = function* (){ yield; throw new Error("made-up step error"); };
 const ce = console.error, said = []; console.error = (...a) => said.push(a.map(String).join(" "));
 A.maybeRun(); drain();
+const t7 = A.auto;
+{ const keepMax = A.AUTO.MAX_STARTS; A.AUTO.MAX_STARTS = 1; yday(); Q = []; A.maybeRun(); var j7 = A.auto; drain(); A.AUTO.MAX_STARTS = keepMax; }
 console.error = ce; A.runIn = runIn;
-ok(A.auto === null && b.audit.last === last7 && reported.length === 1 && reported[0][0] === "made-up step error" && /audit on its own/.test(reported[0][1]) && said.some(s => /made-up step error/.test(s)),
-  "7. an error in a step: no run kept, said once to the console and the reporter (" + J(reported) + ")");
+ok(t7 === null && A.auto === null && j7.final && j7.starts === 1 && !j7.extra && b.audit.last === last7 && reported.length === 2 && reported[0][0] === "made-up step error" && /audit on its own/.test(reported[0][1]) && said.some(s => /made-up step error/.test(s)),
+  "7. an error in a step: no run kept, said to the console and the reporter; on the last start too, and no run once more (" + J(reported) + ")");
 
 // 8. MIS.due
 { const keep = b.mis, cfg = b.misCfg; b.misCfg = {freq: "daily"};
