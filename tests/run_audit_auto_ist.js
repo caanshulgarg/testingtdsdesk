@@ -7,10 +7,16 @@
 //      started again and written over it);
 //   3. the run in steps at 01:00 IST is the run at once (the times aside);
 //   4. a finding marked while it runs (a save that changes nothing it reads: Audit.quietSave) does not start it again;
-//   5. the books saved at every step: started again MAX_STARTS times, the last start finishes and is kept once; the
-//      result is the one at once on the books as they are at the end (the entries were added before the last start);
-//   6. while the cloud copy's entries are being brought in (TCloud.loads) it takes no step; after, it starts again;
-//   7. an error in a step: no run kept, as before, and it is said (console and window.__fincomReport).
+//   5. the books saved at every step: started again MAX_STARTS times; the last start's books changed on the way, so it
+//      is not kept and runs once more, kept once; the result is the one at once on the books as they are at the end;
+//      an entry added on the last start: not kept, once more, the run at once on the books with it (not stale); an
+//      entry added on that one too: kept, and the Audit tab sees it no longer fits (Audit.stale: count and basis of
+//      the start);
+//   6. while the cloud copy's entries are being brought in (TCloud.loads) it takes no step; after, it goes on (a load
+//      that changed nothing: not started again), or starts again (a load that brought an entry); a load that never
+//      ends holds it at most WAIT_MAX_MS, then it goes on if the books are as they were;
+//   7. an error in a step: no run kept, as before, and it is said (console and window.__fincomReport);
+//   8. MIS.due compares the local day of the last pack's time, as Audit.due.
 "use strict";
 process.env.TZ = "Asia/Kolkata";
 process.env.TDSDESK_CACHE = process.env.TDSDESK_CACHE || "/dev/null";
@@ -91,20 +97,40 @@ A.maybeRun(); const j5 = A.auto; let saves = 0, added = 0;
 const src = b.vouchers.find(v => x.Books.isSale(v) && v.date >= r.from && v.date <= r.to);
 // an entry added at each of the first 3 saves, then the books only saved again
 while (Q.length && saves < 20000){ const g = Q.shift(); g(); if (A.auto === j5){ if (added < 3){ b.vouchers = b.vouchers.concat([Object.assign(copy(src), {id: "zzsave-" + added, no: "ZS" + added})]); added++; } ctx.saveBooks(); saves++; } }
-ok(A.auto === null && j5.starts === A.AUTO.MAX_STARTS && b.audit.last.how === "on its own (daily)" && text(b.audit) === once(au5) && b.vouchers.length === f.books.vouchers.length && toasts.filter(t => /Audit ran on its own/.test(t)).length === 1,
-  "5. the books saved at every step (" + saves + " saves, " + added + " entries added): " + j5.starts + " starts (at most " + A.AUTO.MAX_STARTS + "), kept once; the run at once on the books as they are (" + b.audit.last.vouchers + " entries)");
+ok(A.auto === null && j5.starts === A.AUTO.MAX_STARTS + 1 && b.audit.last.how === "on its own (daily)" && text(b.audit) === once(au5) && b.vouchers.length === f.books.vouchers.length && toasts.filter(t => /Audit ran on its own/.test(t)).length === 1,
+  "5. the books saved at every step (" + saves + " saves, " + added + " entries added): " + j5.starts + " starts (" + A.AUTO.MAX_STARTS + ", then once more), kept once; the run at once on the books as they are (" + b.audit.last.vouchers + " entries)");
+
+// 5b. an entry added on the last start (MAX_STARTS 1: the first start is the last), then on the one more too
+const addOne = (k) => { b.vouchers = b.vouchers.concat([Object.assign(copy(src), {id: "zzlast-" + k, no: "ZL" + k})]); };
+{ const keepMax = A.AUTO.MAX_STARTS; A.AUTO.MAX_STARTS = 1;
+  yday(); const au = copy(b.audit); Q = []; toasts.length = 0;
+  A.maybeRun(); const j = A.auto; tasks(1000, () => j.prog.k >= 3); addOne(1); drain();
+  ok(j.starts === 2 && j.extra && b.audit.last.how === "on its own (daily)" && text(b.audit) === once(au) && A.stale(b.audit.last) === null && toasts.filter(t => /Audit ran on its own/.test(t)).length === 1,
+    "5b. an entry added on the last start: not kept, once more (" + j.starts + " starts), the run at once on the books with it, fits the books");
+  yday(); Q = [];
+  A.maybeRun(); const j2 = A.auto; tasks(1000, () => j2.prog.k >= 3); addOne(2); tasks(1000, () => j2.extra); tasks(5); addOne(3); drain();
+  const st = A.stale(b.audit.last);
+  ok(j2.starts === 2 && A.auto === null && b.audit.last.how === "on its own (daily)" && !!st && st.now === st.was + 1,
+    "    an entry added on that one too: kept as it ends, and seen not to fit the books (" + JSON.stringify(st) + ")");
+  A.AUTO.MAX_STARTS = keepMax; }
 
 // 6. the cloud copy being brought in
-yday(); Q = [];
-ctx.TCloud = {opens: 0, loads: 1};
-A.maybeRun(); const j6 = A.auto;
-ctx.TCloud.loads = 0; tasks(1000, () => j6.prog.k >= 2); ctx.TCloud.loads = 1;
-const k6 = j6.prog.k;
-tasks(50);
-const still = j6.prog.k === k6 && A.auto === j6;
-ctx.TCloud.loads = 0; const s6 = j6.starts;
-drain();
-ok(still && k6 >= 2 && j6.starts === s6 + 1 && A.auto === null && b.audit.last.how === "on its own (daily)", "6. no step while the cloud copy's entries come in (" + k6 + " checks, then none in 50 tasks); after, started again and kept (" + j6.starts + " starts)");
+ctx.TCloud = {opens: 0, loads: 0};
+{ yday(); Q = [];
+  A.maybeRun(); const j = A.auto;
+  tasks(1000, () => j.prog.k >= 2); ctx.TCloud.loads = 1;
+  const k = j.prog.k; tasks(50); const still = j.prog.k === k && A.auto === j;
+  ctx.TCloud.loads = 0; drain();
+  ok(still && k >= 2 && j.starts === 1 && A.auto === null && b.audit.last.how === "on its own (daily)", "6. no step while the cloud copy's entries come in (" + k + " checks, then none in 50 tasks); a load that changed nothing: on, not started again (" + j.starts + " start)"); }
+{ yday(); const au = copy(b.audit); Q = [];
+  A.maybeRun(); const j = A.auto;
+  tasks(1000, () => j.prog.k >= 2); ctx.TCloud.loads = 1; tasks(10); addOne(6); ctx.TCloud.loads = 0; drain();
+  ok(j.starts === 2 && A.auto === null && text(b.audit) === once(au), "   a load that brought an entry: started again (" + j.starts + " starts), the run at once on the books with it"); }
+{ yday(); Q = []; const keepW = A.AUTO.WAIT_MAX_MS;
+  A.maybeRun(); const j = A.auto;
+  tasks(1000, () => j.prog.k >= 2); ctx.TCloud.loads = 1; tasks(20); const k = j.prog.k;
+  A.AUTO.WAIT_MAX_MS = 0; drain(); A.AUTO.WAIT_MAX_MS = keepW;
+  ok(A.auto === null && j.starts === 1 && b.audit.last.how === "on its own (daily)" && ctx.TCloud.loads === 1, "   a load that never ends: after WAIT_MAX_MS (" + keepW + " ms), on as the books are as they were (" + k + " checks while it waited, then done)"); }
 delete ctx.TCloud;
 
 // 7. an error in a step
@@ -115,5 +141,13 @@ A.maybeRun(); drain();
 console.error = ce; A.runIn = runIn;
 ok(A.auto === null && b.audit.last === last7 && reported.length === 1 && reported[0][0] === "made-up step error" && /audit on its own/.test(reported[0][1]) && said.some(s => /made-up step error/.test(s)),
   "7. an error in a step: no run kept, said once to the console and the reporter (" + J(reported) + ")");
+
+// 8. MIS.due
+{ const keep = b.mis, cfg = b.misCfg; b.misCfg = {freq: "daily"};
+  b.mis = {last: {at: "2026-11-11T19:00:00.000Z"}}; const a = x.MIS.due(b);
+  b.mis = {last: {at: "2026-11-11T18:00:00.000Z"}}; const c = x.MIS.due(b);
+  b.misCfg = {freq: "monthly"}; b.mis = {last: {at: "2026-10-31T19:00:00.000Z"}}; const m = x.MIS.due(b);
+  b.mis = keep; b.misCfg = cfg;
+  ok(a === false && c === true && m === false, "8. MIS.due at 01:00 IST: the last pack at 00:30 IST today not due, at 23:30 IST yesterday due; monthly, at 00:30 IST on 1-Nov: not due"); }
 
 console.log("\n" + (fails ? fails + " FAILED" : "all passed")); process.exit(fails ? 1 : 0);

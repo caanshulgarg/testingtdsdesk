@@ -521,10 +521,15 @@ Object.assign(Audit, {
   // for the run as one calculation keeps it (perRender): the balances on the two days, each year's TDS limits
   // (TDSWatch.yearSteps), the suppliers' bills (MIS.ageingSteps). The books are changed only in the last step, all at
   // once, so a run stopped on the way leaves the last run as it was. prog (optional): {k, of}, the checks done of all
+  // (prog.keep, optional: asked before the last step; false: nothing is written and the run gives null.) The run's
+  // basis and its count of entries are those of the books when it starts, so a run whose books changed on the way
+  // no longer fits them (stale)
   *runIn(from, to, how, prog){
     const b = S.books;
     from = this.ymd(from); to = this.ymd(to);
     const V = this.vouchers(from, to);
+    yield;
+    const basis = MIS.basis();
     yield;
     V.sort((a, c) => a.date.localeCompare(c.date) || String(a.id).localeCompare(String(c.id)));
     yield;
@@ -591,6 +596,7 @@ Object.assign(Audit, {
       if (d ? (d >= from && d <= to) : (to >= it.to && from <= it.from)) gone.push(it);
     });
     yield;
+    if (prog && prog.keep && !prog.keep()) return null;
     // the last step: the books' audit, all at once
     const au = b.audit = b.audit || {st: {}, history: []};
     au.items = au.items || {};
@@ -607,7 +613,7 @@ Object.assign(Audit, {
     gone.forEach(it => { it.solved = at; });
     const solvedBy = {};
     Object.values(au.items).filter(it => it.solved).forEach(it => { (solvedBy[it.f] = solvedBy[it.f] || []).push(it); });
-    const run = {at, from, to, how: how || "run now", basis: MIS.basis(), findings, errors, vouchers: V.length, balances: ctx.bal.ok ? ctx.bal.src : "",
+    const run = {at, from, to, how: how || "run now", basis, findings, errors, vouchers: V.length, balances: ctx.bal.ok ? ctx.bal.src : "",
       notes: [ctx.bal.ok ? "" : "Balance checks were not run: " + ctx.bal.why + ".", this.mastersIn() ? "" : "The ledger masters are not read, so ledgers are recognised by name only."].filter(Boolean),
       solved: Object.entries(solvedBy).map(([fid, list]) => ({id: fid, title: list[0].title || fid, area: list[0].area, sev: list[0].sev, n: list.length, amount: r2(list.reduce((s2, it) => s2 + num(it.row && it.row.amount), 0)),
         items: list.sort((a, c) => String(a.solved).localeCompare(String(c.solved)) || String((a.row || {}).date).localeCompare(String((c.row || {}).date))).slice(-300)}))};
@@ -670,13 +676,14 @@ Object.assign(Audit, {
   // run stays as it was (the Audit tab says it is checking). The books changed meanwhile (another list of entries, an
   // entry replaced, any save of the books but one that only marks a finding (quiet), a run by hand, the setting): it
   // starts again from the books as they are now, if still due; its last start (the MAX_STARTS-th: the books saved again
-  // and again) finishes whatever else changes, and is kept (the Audit tab then says if it no longer fits the books,
-  // stale). Another client opened: it stops, and nothing is written.
+  // and again) goes on whatever else changes, and is kept only if the books are as they were when it started (else
+  // once more, kept as it ends; the run's basis and count are those of its start, so the Audit tab says when it no
+  // longer fits the books, stale). Another client opened: it stops, and nothing is written.
   // While the cloud copy's entries are being brought into the books (TCloud.load, which changes them across awaits) it
-  // takes no step (autoWait). A task of steps is about SLICE_MS, less if the idle time runs out (timeRemaining), and
+  // takes no step (autoWait), for at most WAIT_MAX_MS together: then on, if the books are as they were. A task of steps is about SLICE_MS, less if the idle time runs out (timeRemaining), and
   // HIDDEN_MS while the tab is hidden (its timers then come about once a second at best). tests/run_hang_audit_auto.py,
   // tests/run_audit_auto_ist.py
-  AUTO: {SLICE_MS: 10, HIDDEN_MS: 150, WAIT_MS: 250, DRAW_MS: 500, MAX_STARTS: 6},
+  AUTO: {SLICE_MS: 10, HIDDEN_MS: 150, WAIT_MS: 250, WAIT_MAX_MS: 120000, DRAW_MS: 500, MAX_STARTS: 6},
   // saves of the books that change nothing the audit reads (a finding marked, its note): auditFindingSet
   quiet: 0,
   quietSave(){ this.quiet++; return saveBooks(); },
@@ -728,6 +735,8 @@ Object.assign(Audit, {
   autoBegin(j, b){
     const r = this.defaultRange(b);
     j.sig = this.autoSig(b); j.memo = new Map(); j.starts++;
+    // kept only if the books are as they were when it started (they can change only on its last start, or its very last)
+    j.prog.keep = () => !!j.extra || this.autoSame(j.sig, b);
     j.it = this.runIn(r.from, r.to, "on its own (" + this.cfg(b).freq + ")", j.prog);
   },
   autoSlice(j, d){
@@ -735,13 +744,16 @@ Object.assign(Audit, {
     const b = j.b;
     // another client opened: stopped, nothing written
     if (S.books !== b || S.coId !== j.co){ this.autoStop(j); return; }
-    // the books are being brought in: looked at again in a moment, and then taken as changed (a load that stopped on the
-    // way may not have saved them)
-    if (this.autoWait(b)){ j.waited = true; this.autoSoon(j, this.AUTO.WAIT_MS); return; }
-    const waited = j.waited; j.waited = false;
-    if (!j.it || waited || !this.autoSame(j.sig, b)){
-      // its last start (started again often enough): it finishes whatever changes, but the books brought in meanwhile
-      if (j.it && j.final && !waited && this.autoRun(j.sig, b)){ /* on to the end */ }
+    // the books are being brought in: looked at again in a moment (after WAIT_MAX_MS of waiting, on if the books are as
+    // they were: a load that hangs, or a line that stayed, does not hold the audit for the session); after, it goes on
+    // if they are as they were, else it starts again as for any change
+    if (this.autoWait(b)){
+      const t = Date.now(); j.waitFrom = j.waitFrom || t;
+      if (t - j.waitFrom < this.AUTO.WAIT_MAX_MS || (j.it && !this.autoSame(j.sig, b))){ this.autoSoon(j, this.AUTO.WAIT_MS); return; }
+    } else j.waitFrom = 0;
+    if (!j.it || !this.autoSame(j.sig, b)){
+      // its last start (started again often enough): it goes on whatever changes (kept only if nothing did: prog.keep)
+      if (j.it && j.final && this.autoRun(j.sig, b)){ /* on to the end */ }
       else {
         if (j.it){ try { j.it.return(); } catch (e){} j.it = null; }
         // a run by hand since, the setting turned off, or no entries: nothing more to do
@@ -775,6 +787,8 @@ Object.assign(Audit, {
       return;
     }
     j.it = null;
+    // the last start's books changed on the way (prog.keep): not kept; once more from the books as they are, kept as it ends
+    if (!run && !j.extra && j.final && !this.autoSame(j.sig, b) && this.autoRun(j.sig, b) && this.due(b)){ j.extra = true; this.autoBegin(j, b); this.autoSoon(j); return; }
     if (this.auto === j) this.auto = null;
     if (!run) return;
     j.run = run;

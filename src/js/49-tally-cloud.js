@@ -276,6 +276,7 @@ const TCloud = {
   // fast-firstopen (25-Oct-2026): a day is kept packed as it came ({at, gz}: Leads' 560 days 6 MB, not 55 MB of text);
   // one kept before as text ({at, text}) is read as it is
   unzip(z){ return new Response(new Blob([z]).stream().pipeThrough(new DecompressionStream("gzip"))).text(); },
+  DAY_MS: 60000,
   async day(bk, d, at, seen){
     const k = "tcday:" + bk + ":" + d;
     let kept = null, kt;
@@ -283,8 +284,10 @@ const TCloud = {
     await Cloud.fresh().catch(() => {});
     const c = Cloud.cfg(), s = Cloud.sess();
     const url = c.url.replace(/\/+$/, "") + "/storage/v1/object/authenticated/tally-days/" + Cloud.st.firm + "/" + bk + "/" + d.slice(0, 6) + "/" + d + ".xml.gz";
-    let r = await fetch(url, {headers: {apikey: c.key, Authorization: "Bearer " + s.access_token}, cache: "no-store"});
-    if (r.status === 401 || r.status === 400){ await Cloud.refreshToken(s.access_token); r = await fetch(url, {headers: {apikey: c.key, Authorization: "Bearer " + Cloud.sess().access_token}, cache: "no-store"}); }
+    // a day that does not come in a minute (the body too) is an error, not a load that never ends (review of 8869affa5)
+    const sig = () => (typeof AbortSignal === "function" && AbortSignal.timeout ? AbortSignal.timeout(this.DAY_MS) : undefined);
+    let r = await fetch(url, {headers: {apikey: c.key, Authorization: "Bearer " + s.access_token}, cache: "no-store", signal: sig()});
+    if (r.status === 401 || r.status === 400){ await Cloud.refreshToken(s.access_token); r = await fetch(url, {headers: {apikey: c.key, Authorization: "Bearer " + Cloud.sess().access_token}, cache: "no-store", signal: sig()}); }
     if (r.status === 404) return "";
     if (!r.ok) throw new Error("Could not fetch " + d + " from the cloud (" + r.status + ").");
     const gz = await r.arrayBuffer(), text = await this.unzip(gz);
@@ -574,11 +577,18 @@ const TCloud = {
     f.cat = Date.now();
     let r = false;
     const b = S.books, empty = b && b.cid === cid && !(b.vouchers || []).length;
-    if (empty){ f.busy = b.busy = "Looking for the books in FinCom's cloud…"; render(); }
+    // the lines this opening shows (each cleared at its end, whatever it says: "Handing the day book to FinCom’s server
+    // (100%)…" stayed, and held Look up and the day's audit, review of 8869affa5)
+    const mine = new Set(), say = t => { mine.add(t); f.busy = b.busy = t; render(); };
+    if (empty) say("Looking for the books in FinCom's cloud…");
     // a day book chosen on this computer that has not reached the cloud yet goes first
-    try { if (await TCloudUp.retry(cid, t => { if (S.books && S.books.cid === cid){ f.busy = S.books.busy = t; render(); } })) this.st[cid] = {}; } catch (e){}
+    try { if (await TCloudUp.retry(cid, t => { if (S.books && S.books.cid === cid){ mine.add(t); f.busy = S.books.busy = t; render(); } })) this.st[cid] = {}; } catch (e){}
     try { await this.status(cid, true); if (this.has(cid) && S.books && S.books.cid === cid){ if (empty) f.busy = ""; r = await this.load(true, !(o && o.full)); } } catch (e){}
-    if (S.books && S.books.cid === cid && /FinCom.s cloud/.test(S.books.busy || "")){ f.busy = S.books.busy = ""; render(); }
+    const ours = t => !!t && (mine.has(t) || /FinCom.s cloud/.test(t));
+    let cl = false;
+    if (ours(f.busy)){ f.busy = ""; cl = true; }
+    if (S.books && S.books.cid === cid && ours(S.books.busy)){ S.books.busy = ""; cl = true; }
+    if (cl) render();
     if (r === "new" && S.books && S.books.cid === cid) this.rework(S.books);
     // how long until every entry was in (said on the books' first line, with the time to open)
     if (S.books && S.books.cid === cid && S.books.openAt){ S.books.readyMs = Date.now() - S.books.openAt; render(); }

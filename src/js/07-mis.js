@@ -571,7 +571,7 @@ const MIS = {
   cloudOn(){ return typeof Cloud === "object" && Cloud.on() && !!Cloud.sess(); },
   cloudOk(b){ const m = b && b.meta && b.meta.cloud; return !!(m && m.ver && !m.big && m.verWork === this.cloudWork(b) && this.cloudOn()); },
   due(b){
-    const c = this.cfg(b), last = b.mis && b.mis.last ? String(b.mis.last.at).slice(0, 10).replace(/-/g, "") : "", t = Audit.today();
+    const c = this.cfg(b), last = b.mis && b.mis.last ? Audit.dayOf(b.mis.last.at) : "", t = Audit.today();      // the local day (Audit.dayOf)
     if (c.freq === "off" || !(b.vouchers || []).length) return false;
     if (!last) return true;
     if (c.freq === "daily") return last < t;
