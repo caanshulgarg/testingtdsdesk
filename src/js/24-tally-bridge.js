@@ -1384,7 +1384,7 @@ async function postBillsToTally(opts){
   // looking for (each is settled there, not sent again from here)
   const jobSt = typeof postJobStates === "function" ? postJobStates(co.id) : new Map();
   let list = Object.values(D().entries).filter(e => e.status === "approved" && !e.exportedAt && (!opts.ids || opts.ids.includes(e.id))
-    && !((v => v.st === "posted" ? !e.postedVia && !postOld(e, v.job) : ["review", "unknown", "sending"].includes(v.st))(jobSt.get(String(e.id)) || {}))).sort(byDate);
+    && !((v => v.st === "posted" ? !postOld(e, v.job) : ["review", "unknown", "sending"].includes(v.st))(jobSt.get(String(e.id)) || {}))).sort(byDate);
   if (!list.length){ S.billPost = null; toast("No approved entries are waiting."); render(); return; }
   canonicalizeBills(list);
   // review 21c: a bill whose GST, TDS or expense ledger comes from a Client setup choice that is only guessed waits,

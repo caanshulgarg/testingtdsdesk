@@ -700,7 +700,7 @@ function bankKeptWords(n, what){ return n + " " + (what || "line") + (n === 1 ? 
 function bankKeptOne(r){ return "This line is already in Tally, so it was left as it is. " + (r.state === "intally" && !bankOwnPost(r) ? "If it was matched to the wrong Tally entry, press \u201cNot this Tally entry\u201d on the line." : "To post it again, press \u201cTake it back\u201d on the line first."); }
 // the one way from Tally back to "ready": every posting field cleared alike
 function bankClearPosting(r, state){
-  Object.assign(r, {state: state || (r.ledger ? "ready" : "attention"), sentAt: "", postVerified: false, postByReply: false, tally: null, tallyRef: "", tallyHow: "", checking: false, postError: ""});
+  Object.assign(r, {state: state || (r.ledger ? "ready" : "attention"), sentAt: "", postVerified: false, postByReply: false, tally: null, tallyRef: "", tallyHow: "", checking: false, postError: "", postClearedAt: new Date().toISOString(), postClearedJobs: postJobsOf(r.id)});
   delete r.goneFromTally; delete r.tallyIdx;
   const b = B(); if (b && b.postedTags) delete b.postedTags[fpHash(r.fp || r.id)];
 }

@@ -288,7 +288,7 @@ function postBucket(e, ctx){
   const js = ctx && ctx.jobs ? ctx.jobs.get(String(e.id)) : null;
   // put in by the cloud's posting and not yet marked here (a bill once marked posted here and taken back out of Tally
   // keeps postedVia, and is waiting again)
-  if (js && js.st === "posted" && !e.postedVia && !postOld(e, js.job)) return "intally";
+  if (js && js.st === "posted" && !postOld(e, js.job)) return "intally";
   if (js && js.st === "unknown") return "unknown";
   if (js && js.st === "review") return "review";
   if ((js && js.st === "sending") || (ctx && ctx.sending && ctx.sending.has(e.id))) return "sending";
@@ -633,14 +633,14 @@ function postReconcile(cid, quiet){
     const e = d && d.loaded && d.entries ? d.entries[id] : null;
     if (e){
       if (e.status !== "approved" || billInTally(e) || e.goneFromTally) return;
-      if (postOld(e, j) || (e.postedVia && !(e.exportedAt && e.postVerified !== true && e.postByReply !== true))) return;
+      if (postOld(e, j)) return;
       billPosted(cid, e, x, j.company || "", at, {by, quiet: true});
       Store.saveEntry(cid, e); bills++;
       return;
     }
     const r = b ? b.rows.find(q => String(q.id) === id) : null;
     if (!r || r.goneFromTally || r.postVerified === true || r.postByReply === true) return;
-    if (!((r.state === "ready" && !r.postedVia) || (r.state === "sent" && !r.checking))) return;
+    if (!((r.state === "ready" && !postOld(r, j)) || (r.state === "sent" && !r.checking))) return;
     if (typeof bankPosted === "function"){ bankPosted(cid, r, x, j.company || "", at, {by, quiet: true}); lines++; }
   });
   const n = bills + lines;
@@ -718,7 +718,9 @@ async function postTestCopies(cid, id, n){
 // refuses anyone but an owner, and the page shows the buttons to owners only. A cloud without 36b says so.
 // owners of the firm alone (the cloud accepts only an active member with role owner; a superadmin who is not one is refused there)
 // a result of FinCom's cloud older than the bill's posting being cleared here (taken back, deleted in Tally, undone)
-function postOld(e, j){ return !!(e.postClearedAt && j && String(j.updated_at || j.created_at || "") < e.postClearedAt); }
+// (by the postings FinCom's cloud had then, else created before; older records: postedVia kept and not posted since)
+function postOld(x, j){ return !!j && (x.postClearedJobs ? x.postClearedJobs.includes(j.id) || String(j.created_at || "") < x.postClearedAt : !!x.postedVia && !x.exportedAt); }
+function postJobsOf(id){ return typeof CloudJobs === "object" ? (CloudJobs.list || []).filter(j => (CloudJobs.idsOf(j) || [].concat(j.results || [], j.items || []).map(r => String(r && r.id))).includes(String(id))).map(j => j.id) : []; }
 // the entries a check with Tally released: the bridge lets each go once more (without looking in Tally)
 function postReleased(list){ return list.filter(x => x.release && x.release.at).map(x => ({id: x.id, at: x.release.at, by: x.release.by || "", why: x.release.why || ""})); }
 function postOwner(){ return !!(S.account && ((S.account.me || {}).role === "owner")); }

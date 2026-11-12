@@ -3108,7 +3108,7 @@ function reapply(e, cid, k){
 function billClearPosting(e){
   // postedVia is kept: an older result of FinCom's cloud is not marked on it again (postReconcile, postBucket); postClearedAt too
   Object.assign(e, {exportedAt: null, postVerified: false, postByReply: false, tally: null, tallyVchNo: "", postNote: "", tallyCheck: null, postUnconfirmed: null, postError: "", postCheckFailed: null,
-    postedInto: "", postAltered: false, postedOptional: false, postClearedAt: new Date().toISOString()});
+    postedInto: "", postAltered: false, postedOptional: false, postClearedAt: new Date().toISOString(), postClearedJobs: postJobsOf(e.id)});
   delete e.goneFromTally;
 }
 function undoApproval(e){

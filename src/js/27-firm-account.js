@@ -1149,59 +1149,69 @@ function billDelete(id){
 }
 // "Deleted in Tally" (the bar under a posted bill): a person deleted its voucher in Tally. The posting is cleared and the
 // bill goes back to To review; nothing is posted again (unlike "Not in Tally – post again" in Post to Tally)
-// "Deleted in Tally": Tally read first (newer than the posting); found: stays posted; not read: no change
+// "Deleted in Tally": "not there" only from (a) this computer's bridge reading those days now, or (b) the cloud copy having
+// read those days again after the posting (TallyProof.check's test); the party ledger's kept entries only say "still there"
 const billDelBusy = {};
+async function billTallyGone(co, e){
+  const t = e.tally || {}, days = [...new Set([String(t.vchDate || "").replace(/-/g, ""), isoToTally(e.x.invoiceDate)].filter(Boolean))].sort(), tn = postCompanyName(co);
+  if (tallyVia(co) === "bridge" && Bridge.on() && Bridge.up()){
+    try {
+      const j = await Bridge.call("/vouchers?company=" + encodeURIComponent(tn) + "&from=" + days[0] + "&to=" + days[days.length - 1] + Bridge.pinQ(), null, 120000);
+      return {found: PostCheck.match(e, [].concat(j.vouchers || []).filter(v => !/^yes$/i.test(v.cancelled || "")))};
+    } catch (err){
+      if (e.partyLedger){ const j = await Bridge.call("/ledgervouchers?company=" + encodeURIComponent(tn) + "&ledger=" + encodeURIComponent(e.partyLedger) + "&from=" + days[0] + "&to=" + days[days.length - 1] + Bridge.pinQ()).catch(() => null);
+        const hit = j && [].concat(j.rows || []).find(v => days.includes(String(v.date)) && Math.abs(num(v.cr || v.dr) - r2(num(e.x.total))) < 0.01);
+        if (hit) return {found: {number: "", date: hit.date, type: hit.type}}; }
+    }
+  }
+  const bk = typeof TCloud === "object" && TCloud.on() && TCloud.has(co.id) ? TCloud.book(co.id) : null, st = (bk && bk.state) || {}, sk = new Set([].concat(st.skipped || []));
+  if (bk && t.guid && Date.parse(bk.daysAt || 0) > PostCheck.postedAt(e) && days.every(d => String(st.doneTo || "") >= d && !sk.has(d))){
+    const rows = await TallyProof.live("tally_vouchers?select=guid,cancelled&book_id=eq." + encodeURIComponent(bk.book) + "&guid=in.(" + encodeURIComponent('"' + String(t.guid).replace(/"/g, "") + '"') + ")");
+    return {found: (rows || []).some(x => !x.cancelled) ? {number: e.tallyVchNo, date: t.vchDate} : null};
+  }
+  return null;
+}
 function billDeletedInTally(e){
   const cid = S.coId, co = CO(cid);
   if (billDelBusy[e.id]) return;
   if (typeof postSending === "function" && postSending(cid).has(String(e.id))){ toast("Its posting to Tally is still being sent. Wait for it to finish."); return; }
   if (!billPostLive(e, cid)) return;
-  askConfirm({title: "Deleted in Tally?", ok: "Deleted in Tally", danger: true,
-    body: '<p class="note">' + esc(e.x.vendorName || e.fileName || "") + (e.x.invoiceNo ? " \u00b7 " + esc(e.x.invoiceNo) : "") + ": you deleted its voucher in Tally. FinCom reads Tally first: only if it is not there is its posting cleared and the bill put back in To review; it is not posted again.</p>" +
-      '<label class="f" style="margin-top:8px"><span>What you did in Tally</span><input type="text" id="deletedWhy" maxlength="200" placeholder="For example: deleted in the Day Book on 12-Nov"></label>',
-    read: () => ((document.getElementById("deletedWhy") || {}).value || "").trim(),
-    validate: why => why.length < 3 ? "Say what you did in Tally." : ""}).then(async r => {
+  billWhy("Deleted in Tally?", "Deleted in Tally", ": you deleted its voucher in Tally. FinCom reads Tally first: only if it is not there is its posting cleared and the bill put back in To review; it is not posted again.", e).then(async r => {
     if (!r || billDelBusy[e.id]) return;
-    billDelBusy[e.id] = true; e.deletedInTally = {at: new Date().toISOString(), by: whoAmI(), why: r.data, vch: e.tallyVchNo || (e.tally && (e.tally.vchNo || e.tally.number)) || "", checking: true}; render();
-    let x;
-    try {
-      x = await PostCheck.live(co, e, true);
-      if (x.ok && !x.found && Date.parse(x.readAt || 0) <= PostCheck.postedAt(e)) x = {ok: false, why: "the read of Tally is older than the posting"};
-      // the bridge sends a released id without looking in Tally (bridge-go/jobs.go A5): only a read newer than the posting
-      // says "not there": the cloud copy read after it; the party ledger's kept entries (no age) only say "still there"
-      const tn = postCompanyName(co), l = typeof tallyLine === "function" && tallyLine(co);
-      if (!x.ok && l && typeof TCloud === "object" && TCloud.on() && Date.parse(l.read || 0) > PostCheck.postedAt(e)){
-        const vs = [].concat((await CloudTally.call(co, PostCheck.vouchersUrl(co, tn, e)) || {}).vouchers || []).filter(v => !/^yes$/i.test(v.cancelled || ""));
-        x = {ok: true, found: PostCheck.match(e, vs), readAt: l.read};
-      }
-      if (!x.ok && e.partyLedger){
-        const d = e.x.invoiceDate, j = await tallyCall(co, "/ledgervouchers?company=" + encodeURIComponent(tn) + "&ledger=" + encodeURIComponent(e.partyLedger) + "&from=" + isoToTally(addDays(d, -5)) + "&to=" + isoToTally(addDays(d, 5)));
-        const hit = j && [].concat(j.rows || []).find(v => String(v.date) === isoToTally(d) && Math.abs(num(v.cr || v.dr) - r2(num(e.x.total))) < 0.01);
-        if (hit) x = {ok: true, found: {number: "", date: hit.date, type: hit.type}};
-      }
-    } catch (err){ x = {ok: false, why: plainMsg((err && err.message) || String(err))}; }
+    billDelBusy[e.id] = true; e.deletedInTally = {checking: true, vch: e.tallyVchNo || (e.tally && (e.tally.vchNo || e.tally.number)) || ""}; render();
+    let x = null; try { x = await billTallyGone(co, e); } catch (err){ x = null; }
     delete billDelBusy[e.id];
-    if (!x.ok){ delete e.deletedInTally; toast("Could not read Tally; nothing changed (" + x.why + ").", {actions: postOwner() ? [{label: "I checked in Tally: not there", run: () => billGoneFromTally(e, r.data + " (checked by hand)", "")}] : []}); render(); return; }
-    if (x.found){ delete e.deletedInTally; PostCheck.markIn(co, e, x.found); toast("Tally still has it (" + PostCheck.vchSay(x.found) + "): it stays posted."); refreshStats(cid); render(); return; }
-    billGoneFromTally(e, r.data, x.readAt);
+    const vch = e.deletedInTally.vch; delete e.deletedInTally;
+    if (!x){ toast("Could not confirm from Tally; nothing changed.", {actions: postOwner() ? [{label: "I checked in Tally: not there. If it is in Tally, it will be posted twice", run: () =>
+      billWhy("Not in Tally?", "Not in Tally", ": you looked in Tally yourself and it is not there. If it is in Tally, it will be posted twice.", e).then(a => { if (a) billGoneFromTally(cid, e, a.data + " (checked by hand)", "", vch); })}] : []}); render(); return; }
+    if (x.found){ PostCheck.markIn(co, e, x.found); toast("Tally still has it (" + PostCheck.vchSay(x.found) + "): it stays posted."); refreshStats(cid); render(); return; }
+    billGoneFromTally(cid, e, r.data, new Date().toISOString(), vch);
   });
 }
+function billWhy(title, ok, words, e){
+  return askConfirm({title, ok, danger: true,
+    body: '<p class="note">' + esc(e.x.vendorName || e.fileName || "") + (e.x.invoiceNo ? " \u00b7 " + esc(e.x.invoiceNo) : "") + words + "</p>" +
+      '<label class="f" style="margin-top:8px"><span>What you did in Tally</span><input type="text" id="deletedWhy" maxlength="200" placeholder="For example: deleted in the Day Book on 12-Nov"></label>',
+    read: () => ((document.getElementById("deletedWhy") || {}).value || "").trim(),
+    validate: why => why.length < 3 ? "Say what you did in Tally." : ""});
+}
 // not in Tally: cleared, back to To review, released once (bridge: release; the cloud's id: the owner, Post to Tally > Errors)
-function billGoneFromTally(e, why, readAt){
-  const cid = S.coId, by = whoAmI(), at = new Date().toISOString(), vch = (e.deletedInTally || {}).vch || e.tallyVchNo || "";
+function billGoneFromTally(cid, e, why, readAt, vch){
+  const by = whoAmI(), at = new Date().toISOString();
   const v = typeof postJobStates === "function" ? postJobStates(cid).get(String(e.id)) : null, held = !!(v && v.job) || (typeof postIdReleased === "function" && postIdReleased(e.id, cid) === false);
   billClearPosting(e);
-  e.deletedInTally = {at, by, why, vch, verified: readAt || at, byHand: !readAt};
+  e.deletedInTally = {at, by, why, vch: vch || "", verified: readAt || at, byHand: !readAt};
   e.release = {at, by, why: "Deleted in Tally: " + why};
   if (held) e.ownerRelease = {at, by, why, job: v && v.job ? v.job.id : ""};
   if (e.status === "approved") unapply(e, cid, {force: true});
   Store.saveEntry(cid, e);
   auditEvent("bill_deleted_in_tally", (e.x.vendorName || e.fileName || "") + " " + (e.x.invoiceNo || e.id) + (vch ? " (voucher " + vch + ")" : "") + ": " + why, cid);
-  if (held && postOwner()) billOwnerRelease(e);
-  S.filter = "draft"; S.selected = e.id; refreshStats(cid); toast("Not in Tally: back in To review, not posted again."); render();
+  if (held && postOwner()) billOwnerRelease(cid, e);
+  if (S.coId === cid){ S.filter = "draft"; S.selected = e.id; }
+  refreshStats(cid); toast("Not in Tally: back in To review, not posted again."); render();
 }
-async function billOwnerRelease(e){
-  const cid = S.coId, o = e.ownerRelease; if (!o) return;
+async function billOwnerRelease(cid, e){
+  const o = e.ownerRelease; if (!o) return;
   try {
     const j = await TCloud.rpc("tally_post_id_release_owner", {p_job: o.job, p_id: String(e.id), p_why: "Deleted in Tally: " + o.why});
     if (j && j.ok === false) throw new Error(j.error || "not released");
