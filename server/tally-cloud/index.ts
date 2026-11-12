@@ -4798,8 +4798,12 @@ Deno.serve(sentry.wrap(async (req) => {
         // migration 54: a posting for another bridge is never reported by this one (a cloud without the column: as before).
         // A bridge switched to changes only still reports a posting it took before the switch
         {
-          const { data: tj, error: te } = await db.from("tally_post_jobs").select("target_bridge").eq("id", String(body.id || "")).eq("device_id", dev.id).maybeSingle();
+          const { data: tj, error: te } = await db.from("tally_post_jobs").select("target_bridge, taken_by").eq("id", String(body.id || "")).eq("device_id", dev.id).maybeSingle();
           if (te && !missingRel(te)) { fail("posts_update_target", te, "posts_update"); console.error("tally-ingest: posts_update target check not read", dev.id, String(body.id || "").slice(0, 60), String(te.message || "").slice(0, 200)); }     // 2.3.1: logged
+          // migration 174 (item 4a): a posting the cron put back and another bridge of this computer took since (taken_by that
+          // bridge): this bridge's copy is told to stop (cancelled: bridge 2.5.5 stops its job on it), never to go on posting
+          if (!te && tj?.target_bridge && tj.target_bridge !== meU && tj.taken_by && tj.taken_by === tj.target_bridge)
+            return reply(403, { ok: false, cancelled: true, handedOver: true, error: "This posting was handed to another FinCom Bridge (" + String(tj.taken_by).slice(0, 40) + ") after this one went quiet; this one stops its copy." });
           if (!te && tj?.target_bridge && tj.target_bridge !== meU) return reply(403, { ok: false, error: "This posting is for another bridge on this computer; this one does not report it." });
         }
         const st = ["taken", "running", "done", "failed"].includes(body.status) ? body.status : "running";
@@ -4849,25 +4853,39 @@ Deno.serve(sentry.wrap(async (req) => {
           ...(x?.outcomeUnknown ? { outcomeUnknown: true } : {}), ...(x?.postOnly ? { postOnly: true, refused: true } : {}) })) : null;
         // a posting cancelled in FinCom, or gone: the bridge is told, and stops waiting for Tally
         const id = String(body.id || "");
-        let cur: any = null;
-        {
+        // migration 174 (item 3): the posting's version (row_version, moved on by every update of the row) is read with it,
+        // and the final write below is a compare-and-set on it: an owner's settlement or the cron's requeue made while this
+        // report was being worked on is never written over; a lost race reads the posting again and merges again. A cloud
+        // without 174 (no such column): read and written as before
+        const readCur = async () => {
+          let q = await db.from("tally_post_jobs").select("status, checking, seq, results, items, row_version").eq("id", id).eq("device_id", dev.id).maybeSingle();
+          if (q.error && /row_version/.test(q.error.message)) q = await db.from("tally_post_jobs").select("status, checking, seq, results, items").eq("id", id).eq("device_id", dev.id).maybeSingle();
           // seq (migration 36b) may be missing on an older cloud: read without it then
-          let q = await db.from("tally_post_jobs").select("status, checking, seq, results, items").eq("id", id).eq("device_id", dev.id).maybeSingle();
           if (q.error && /seq/.test(q.error.message)) q = await db.from("tally_post_jobs").select("status, checking, results, items").eq("id", id).eq("device_id", dev.id).maybeSingle();
-          cur = q.data;
-        }
-        if (!cur) return reply(200, { ok: false, gone: true, error: "This posting is no longer in FinCom." });
-        if (cur.status === "cancelled") return reply(200, { ok: false, cancelled: true, error: "This posting was cancelled in FinCom." });
+          return q.data;
+        };
+        let cur: any = await readCur();
         // round 7 (F4, H1): an update never goes back in time. The bridge numbers its updates per posting (seq): a lower
         // one is late and ignored. A posting finished (done or failed, nothing being checked) takes no bridge update at
         // all: what is there (an owner's settlement among it) stands
         const seq = body.seq === undefined || body.seq === null || !Number.isFinite(Number(body.seq)) ? null : Math.floor(Number(body.seq));
-        if (seq !== null && typeof cur.seq === "number" && seq < cur.seq) return reply(200, { ok: true, stale: true, seq: cur.seq });
-        // next-fix-first-read (07-Nov-2026, staging): ... and cancelled too, so the bridge stops its own copy (bridge 2.5.5
-        // stops a job only on cancelled or gone). A posting failed here ("did not finish after 5 tries") lived on in the
-        // computer, resumed by itself and waiting for Tally, and held that computer's ledger read behind it. Nothing of
-        // the row changes: a done posting stays done, its results as they are (the bridge's cancel leaves a done job done)
-        if (["done", "failed"].includes(cur.status) && !cur.checking) return reply(200, { ok: true, stale: true, settled: true, status: cur.status, cancelled: true });
+        // the answers that end a report with nothing written (asked again after a lost race, on the posting read again)
+        const endNow = (c: any) => {
+          if (!c) return reply(200, { ok: false, gone: true, error: "This posting is no longer in FinCom." });
+          if (c.status === "cancelled") return reply(200, { ok: false, cancelled: true, error: "This posting was cancelled in FinCom." });
+          if (seq !== null && typeof c.seq === "number" && seq < c.seq) return reply(200, { ok: true, stale: true, seq: c.seq });
+          // next-fix-first-read (07-Nov-2026, staging): ... and cancelled too, so the bridge stops its own copy (bridge 2.5.5
+          // stops a job only on cancelled or gone). A posting failed here ("did not finish after 5 tries") lived on in the
+          // computer, resumed by itself and waiting for Tally, and held that computer's ledger read behind it. Nothing of
+          // the row changes: a done posting stays done, its results as they are (the bridge's cancel leaves a done job done)
+          if (["done", "failed"].includes(c.status) && !c.checking) return reply(200, { ok: true, stale: true, settled: true, status: c.status, cancelled: true });
+          // migration 174 (item 3): a posting put back in the queue (the cron's requeue, a check handed back) takes no report
+          // of the copy the bridge had: it waits to be taken again (the bridge that takes it keeps what it sent, by its own
+          // record), and nothing of the hand-back is written over
+          if (c.status === "waiting") return reply(200, { ok: true, stale: true, status: "waiting", requeued: true });
+          return null;
+        };
+        { const end = endNow(cur); if (end) return end; }
         // 03-Oct-2026 (round 4): an entry Tally accepted is never stored as failed. An acceptance is ok, accepted (bridge
         // 2.1.6), a voucher id (lastVchId) / voucher number / master id / GUID, or CREATED / ALTERED with a voucher id in
         // Tally's words ("CREATED 0" is not one). The fault of the day: Tally replied CREATED with LASTVCHID 26298, the
@@ -4931,6 +4949,9 @@ Deno.serve(sentry.wrap(async (req) => {
           for (const x of theirs) if (!mine.some((m) => fid(m.id) === fid(x.id))) out.push(x);
           return out;
         };
+        // the row to write, from the posting as read (cur): merged with the owner's settlements and the entries kept; built
+        // again on the posting read again after a lost race (migration 174)
+        const build = async (cur: any) => {
         let mergedResults = merge(results as any[], ownerOf(cur.results)), mergedItems = items ? merge(items as any[], ownerOf(cur.items)) : null;
         // final review M1 / L2: a posting handed back to send only some entries again (resend_only): the bridge reports those;
         // every other entry's result stands as it was (never rewritten as missing)
@@ -4957,6 +4978,9 @@ Deno.serve(sentry.wrap(async (req) => {
         if (mergedItems) row.items = mergedItems;
         if (seq !== null) row.seq = seq;
         if (timing) row.timing = timing;
+        return { row, status, stale };
+        };
+        let { row, status, stale } = await build(cur);
         // F3: the posting's ids read once; only an id not yet stamped is stamped, only one not yet released is released
         // (the bridge reports every few seconds). Not readable (an older cloud): every one, as before
         let known: any[] | null = null;
@@ -4987,12 +5011,25 @@ Deno.serve(sentry.wrap(async (req) => {
           if (accErr && !/tally_post_id_accept|schema cache|does not exist/i.test(accErr.message)) { fail("tally_post_id_accept", accErr, "posts_update"); console.error(fnName, accErr.message); }
           else if (!accErr && accData && typeof accData === "object" && (accData as any).stamped === 0) console.warn(fnName + ": stamped 0 for " + a + " (" + s(r0.id || x0.id, 60) + ") in posting " + id + ": no id of the posting matches");
         }
-        let { error } = await db.from("tally_post_jobs").update(row).eq("id", id).eq("device_id", dev.id).neq("status", "cancelled");
-        // before migration-36b there is no seq column, before migration-24 no items column: the rest is kept as before
-        if (error && "timing" in row && /timing/.test(error.message)) { delete row.timing; ({ error } = await db.from("tally_post_jobs").update(row).eq("id", id).eq("device_id", dev.id).neq("status", "cancelled")); }
-        if (error && "seq" in row && /seq/.test(error.message)) { delete row.seq; ({ error } = await db.from("tally_post_jobs").update(row).eq("id", id).eq("device_id", dev.id).neq("status", "cancelled")); }
-        if (error && items && /items/.test(error.message)) { delete row.items; ({ error } = await db.from("tally_post_jobs").update(row).eq("id", id).eq("device_id", dev.id).neq("status", "cancelled")); }
-        if (error) throw new Error(error.message);
+        // migration 174 (item 3): written only while the posting is still the version read (row_version); none changed it
+        // since, else read again, the guards and the merge done again on what is there now (an owner's settlement kept, a
+        // requeue not written over), five times at most (then 409: the bridge reports again on its next turn)
+        for (let round = 0; ; round++) {
+          const ver = cur && typeof cur.row_version === "number" ? cur.row_version : null;
+          const upd = (r: Record<string, unknown>) => { let qq = db.from("tally_post_jobs").update(r).eq("id", id).eq("device_id", dev.id).neq("status", "cancelled"); if (ver !== null) qq = qq.eq("row_version", ver); return qq.select("id"); };
+          let { data: wrote, error } = await upd(row);
+          // before migration-36b there is no seq column, before migration-24 no items column: the rest is kept as before
+          if (error && "timing" in row && /timing/.test(error.message)) { delete row.timing; ({ data: wrote, error } = await upd(row)); }
+          if (error && "seq" in row && /seq/.test(error.message)) { delete row.seq; ({ data: wrote, error } = await upd(row)); }
+          if (error && items && /items/.test(error.message)) { delete row.items; ({ data: wrote, error } = await upd(row)); }
+          if (error) throw new Error(error.message);
+          if (ver === null || (Array.isArray(wrote) && wrote.length > 0)) break;
+          if (round >= 4) return reply(409, { ok: false, busy: true, error: "This posting changed in FinCom while this report came in; report again." });
+          console.log("tally-ingest posts_update: the posting changed since it was read; read again", id, "round", round + 1);
+          cur = await readCur();
+          { const end = endNow(cur); if (end) return end; }
+          ({ row, status, stale } = await build(cur));
+        }
         // migration 45: the posting window (Tally's change numbers before and after the job), saved only now: after the update's
         // own checks (not cancelled, not late, not settled) and its row stored (the review's L8)
         if (body.window !== undefined && body.window !== null) await postWindow(firm, dev, id, body.window);
