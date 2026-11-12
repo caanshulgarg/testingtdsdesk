@@ -331,6 +331,7 @@ async function readSalesFile(file, cid, progress, pageList, force){
   if (isPdf(file)){ const r = await pdfPages(file, pageList || [1, 2]); text = r.text; canvases = r.canvases; kind = text.replace(/\s/g, "").length >= 80 ? "pdf_text" : "pdf_scan"; }
   else if (isImage(file)){ canvases = [await imageToCanvas(file)]; kind = "photo"; }
   else throw {code: "sales_type"};
+  await readerLoad();   // freeParse: the bill reader, the first time (src/js/82)
   let best = null;
   const tryText = (t, label) => {
     const fp = freeParse(t, cid, file.name, {ocr: kind !== "pdf_text"});

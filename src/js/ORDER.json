@@ -1,6 +1,7 @@
 [
  "00-core.js",
  "01-documents-in-the-firm-account.js",
+ "01-reading-bills.js",
  "02-the-layout.js",
  "03-transactions.js",
  "04-the-client-s-books-read-from-tally.js",

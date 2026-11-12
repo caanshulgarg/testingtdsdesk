@@ -55,6 +55,9 @@ window.loadBridgeFollow = () => import("./lib/bridgeFollow.js");
 // src/js/82): GSTR-9 and 9C (with the 9C screen, for its PDF), the MIS pack, the printed sales invoice
 window.loadPart = (k) => (k === "gst9" ? import("./screens/gst/Annual.jsx") : k === "mis" ? import("../../src/js/18-mis-pack.js") : import("../../src/js/26-sales-invoice.js")).catch((e) => { staleReload(e, true); throw e; });
 window.loadRegisters = () => import("./lib/registers.js").catch((e) => { staleReload(e, true); throw e; });
+// next-legacy-room: the bill reader (src/js/01-reading-bills.js), loaded the first time a bill is read (readerLoad, src/js/82).
+// Not refreshed by itself when it cannot come: bills waiting in the reading queue would be lost; the bill says why instead
+window.loadReader = () => import("../../src/js/01-reading-bills.js");
 // ROUND 99: the financial statements' Excel and PDF (src/lib/finExport.js, FinSt with it), loaded the first time they
 // are asked for. Until then FinXlsx / FinPdf load it and pass the call on; the PDF's window is opened at once (a pop-up
 // opened after a wait is blocked) and filled when the module is in. A module that cannot be loaded rejects with

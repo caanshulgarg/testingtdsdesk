@@ -10,6 +10,14 @@ function registersLoad(){
   if (typeof SheetImport === "object") return Promise.resolve();
   return typeof window.loadRegisters === "function" ? window.loadRegisters() : Promise.reject(new Error("registers are read in the app only"));
 }
+// the bill reader (src/js/01-reading-bills.js: freeParse, extract, readWithRetry …) the same way: in the React app its own
+// file, loaded the first time a bill is read (window.loadReader, app/src/main.jsx); in the one-file site already here.
+// A file that cannot come rejects with {code: "reader_unavailable"} (errText says it in plain words)
+function readerLoad(){
+  if (typeof readWithRetry === "function") return Promise.resolve();
+  if (typeof window.loadReader !== "function") return Promise.reject({code: "reader_unavailable"});
+  return window.loadReader().then(() => { if (typeof readWithRetry !== "function") throw new Error("reader not in its file"); }).catch(() => { throw {code: "reader_unavailable"}; });
+}
 // a screen's own part of the program (GSTR-9 and 9C's PDF and Excel, the MIS pack, the printed sales invoice) comes with
 // that screen's file (build.py @react-lazy; window.loadPart, app/src/main.jsx), not in this one: an action asked for
 // before its file is in loads it first ("Loading…"), then does what was asked; once it is in, at once, as before
