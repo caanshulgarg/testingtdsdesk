@@ -93,6 +93,9 @@ export default function FileApi({ form = S.gstFileForm || "R1", ym = S.gstYm || 
     <p className="note" style={{ margin: "6px 0 0" }}>{"Through FinCom’s browser helper: open the GST portal in your own browser and sign in yourself; the helper works only in that tab and never presses Submit or File, or types a captcha or OTP — you do. Or download the JSON and upload it on the portal as before."}</p></section>;
   if (!ready) return <section className="dash-card gq gfile" data-gst-file={form} data-route="api" data-ready="0" style={{ marginTop: 12 }}>{head}
     <p className="note" style={{ margin: "6px 0 0" }}>{"This client files through the GST API, but " + gstin + " is not connected now. Connect it with the taxpayer’s OTP under 2B & ITC → GST API (the taxpayer allows API access on the portal; it lasts up to 30 days). Until then, use the browser helper or the JSON."}</p></section>;
+  // 3B: once the tax is set off, or a set-off was sent whose answer did not come back, the return does not go back
+  // (gst-taxpro, migration-173): no save, summary or confirm; Proceed then only reads the ledgers again
+  const locked = form === "3B" && (st === "proceeded" || !!(fl && fl.offset_tried_at));
   const btn = (k, text, fn, primary, off) => <button className={"btn small" + (primary ? " primary" : "")} data-gfile={k} disabled={busy || !may || off} onClick={fn}>{s.busy === k ? text + "…" : text}</button>;
   return <section className="dash-card gq gfile" data-gst-file={form} data-route="api" data-status={st || "new"} style={{ marginTop: 12 }}>{head}
     {s.host && s.host !== "production" && <p className="note" style={{ margin: "4px 0 0" }} data-gfile-host={s.host}>{"Filing on the GST sandbox (test), not the live portal."}</p>}
@@ -100,10 +103,10 @@ export default function FileApi({ form = S.gstFileForm || "R1", ym = S.gstYm || 
     <Step n={1} title="Save to the portal" done={at(st, "saved") && fl.save_state === "P"}>
       <p className="note" style={{ margin: 0 }}>{"Sends the return FinCom made (the same as the JSON download) to the portal. Nothing is filed."}</p>
       {fl && fl.save_state && fl.save_state !== "P" && <p className="bad">{fl.save_state === "IP" ? "The portal is still processing the save." : "The portal found errors; correct them and save again."}</p>}
-      {btn("save", at(st, "saved") ? "Save again" : "Save to portal", () => GSTFILE.save(form, ym, reg), !st)}
+      {btn("save", at(st, "saved") ? "Save again" : "Save to portal", () => GSTFILE.save(form, ym, reg), !st, locked)}
     </Step>
     <Step n={2} title="Compare the portal’s summary with FinCom" done={at(st, "confirmed")} on={at(st, "saved")}>
-      {btn("summary", cmp ? "Read the summary again" : "Read the portal’s summary", () => GSTFILE.summary(form, ym, reg), st === "saved", !at(st, "saved"))}
+      {btn("summary", cmp ? "Read the summary again" : "Read the portal’s summary", () => GSTFILE.summary(form, ym, reg), st === "saved", !at(st, "saved") || locked)}
       {cmp && <Compare cmp={cmp} form={form} />}
       {cmp && cmp.plan && <Plan plan={cmp.plan} />}
       {st === "summary" && cmp && (differs.length ? <div className="gfile-accept" style={{ marginTop: 8 }}>
@@ -116,7 +119,8 @@ export default function FileApi({ form = S.gstFileForm || "R1", ym = S.gstYm || 
     </Step>
     <Step n={3} title={form === "3B" ? "Proceed to file: set off the liability" : "Proceed to file"} done={at(st, "proceeded")} on={st === "confirmed"}>
       <p className="note" style={{ margin: 0 }}>{form === "3B" ? "Pays the tax from the credit and cash ledgers as shown above. After this the 3B cannot be changed." : "The portal makes the return ready to file. The portal’s summary is read again first; if it changed, nothing is sent."}</p>
-      {btn("proceed", "Proceed to file", () => GSTFILE.proceed(form, ym, reg), st === "confirmed", st !== "confirmed")}
+      {locked && st === "confirmed" && <p className="bad" data-gfile-unclear="">{"A set-off was sent to the portal and its answer did not come back, so FinCom will not send it again. Press Proceed: FinCom reads the ledgers and goes on if the tax was set off; if not, it says what to check on the portal."}</p>}
+      {btn("proceed", locked && st === "confirmed" ? "Proceed: read the ledgers" : "Proceed to file", () => GSTFILE.proceed(form, ym, reg), st === "confirmed", st !== "confirmed")}
     </Step>
     {dsc ? <>
     <Step n={4} title="File with DSC on the portal" on={st === "proceeded"}>
