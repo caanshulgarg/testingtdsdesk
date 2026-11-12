@@ -12,13 +12,26 @@ as run_gst_fix_list.py makes them. Checks:
      month and ← Back to the year work no month's checks out again (0 GSTR.checks), each within ACT_MS (default 450) at
      full speed;
   2. the kept checks are the ones worked out afresh (every month of the year, outside a drawing);
-  3. a change saved (an entry's GSTIN made invalid, saveBooks): the next drawing works the checks out again and the
-     grid's count moves by one; an entry replaced in place without a save, the client's GSTIN changed, marketplace
-     sales added, the ledger map or the GST settings edited in place: worked out again too; a marketplace invoice changed
+  3. a change saved (an entry's GSTIN made invalid, saveBooks): the next drawing works that month's checks out again
+     (that month alone, next-fix-gst-year-save) and the grid's count moves by one; an entry replaced in place without a
+     save: its month again; the client's GSTIN changed, marketplace sales added, the ledger map or the GST settings
+     edited in place: every month again; a marketplace invoice changed
      in place as Sales changes it (ignored, restored, its buyer GSTIN typed, Undo; then saveSales): the grid, What to
      fix and the count worked out afresh agree;
   4. TCloud.rework after new entries (TallyRead.after marked MIS out of date): no MIS.run at once (the tab does it when
      shown), the mark kept, within REWORK_MS (default 600); books with no mark: MIS.run as before.
+  5. next-fix-gst-year-save (the cloud copy's new entries drew GST › Year with its 12 months worked out again, twice, 0.6 s
+     each here, 2.6 s on the owner's office PC): a change to the entries of one month works out that month alone, and the
+     drawing after new entries came into one month (BookSrc.apply, then the save) within MONTH_MS (default 150). After each
+     of a sequence of changes, every month of the books' kept checks (GSTR.checksKept, all of them, with their documents)
+     and document counts are the ones worked out afresh: an invoice edited and saved, an entry changed in place and saved,
+     new entries from the cloud copy, an entry deleted, an invoice renumbered to another month's number (the other
+     month, not worked out again, lists it as used twice), a B2C large invoice and a later month's note that adjusts it
+     (a number too long, checked only because of that invoice) then the invoice deleted, a ledger's GST setting changed
+     (every month again), the marketplace sales changed (every month again), an entry's line changed in place with a new
+     list of the same entries (Books.touch: every month again).
+  (months worked out: GSTR.checksMonth, the part of a month's checks worked out from its own entries; GSTR.checks on a
+  build without it)
 Runs on the React build: app/dist-test (cd app && npm run legacy && npm run build:test), or TDSDESK_SITE.
 BIG_DIR=a folder with Master.xml and DayBook.xml from mis_big_books.py (made in a temporary folder when not given)."""
 import os, sys, json, time, shutil, tempfile, threading, functools, subprocess, http.server
@@ -31,6 +44,7 @@ SITE = os.environ.get("TDSDESK_SITE", os.path.join(HERE, "..", "app", "dist-test
 PORT = int(os.environ.get("HANG_GST_PORT") or 8331)
 ACT_MS = int(os.environ.get("ACT_MS") or 450)
 REWORK_MS = int(os.environ.get("REWORK_MS") or 600)
+MONTH_MS = int(os.environ.get("MONTH_MS") or 150)
 fails, errors = [], []
 def ok(c, w):
     print(("  ok   " if c else "  FAIL ") + w, flush=True)
@@ -65,7 +79,8 @@ SEED = """async () => {
   b.map = Books.mapLedgers(b.vouchers, {}); S.books = b; LedMaster.refresh(b); S.lk = null; render();
   return {n: out.length, cid: c.id}; }"""
 # GSTR.checks and MIS.run counted; the long animation frames
-INSTR = """() => { window.__ck = 0; window.__mis = 0; const f = GSTR.checks; GSTR.checks = function(){ window.__ck++; return f.apply(this, arguments); };
+INSTR = """() => { window.__ck = 0; window.__mis = 0; window.__one = 0; const nm = typeof GSTR.checksMonth === 'function' ? 'checksMonth' : 'checks', f = GSTR[nm]; GSTR[nm] = function(){ window.__ck++; return f.apply(this, arguments); };
+  const o = GSTR.one; GSTR.one = function(){ window.__one++; return o.apply(this, arguments); };
   const m = MIS.run; MIS.run = function(){ window.__mis++; return m.apply(this, arguments); };
   window.__lf = []; try { new PerformanceObserver((l) => l.getEntries().forEach((e) => window.__lf.push(Math.round(e.duration)))).observe({type: 'long-animation-frame'}); } catch (e) {} }"""
 GRID = "() => Array.from(document.querySelectorAll('#app [data-gst-grid] [data-cell]')).map(c => { const m = /^Errors (\\d+)/.exec(c.querySelector('.rp-s') ? c.querySelector('.rp-s').innerText : ''); return [c.dataset.cell, m ? +m[1] : 0]; })"
@@ -119,12 +134,13 @@ try:
         ok(moved is not None, "an invoice's buyer GSTIN made invalid and saved (%s)" % moved)
         pg.evaluate("() => { window.__ck = 0; render(); }"); pg.wait_for_timeout(800)
         g1 = dict(pg.evaluate(GRID)); n0 = dict(grid0)[k1]
-        ok(pg.evaluate("window.__ck") >= 12 and g1[k1] == n0 + 1, "after the save the checks are worked out again and %s counts %d (was %d)" % (k1, g1[k1], n0))
+        ok(pg.evaluate("window.__ck") == 1 and g1[k1] == n0 + 1, "after the save that month's checks alone are worked out again (%d) and %s counts %d (was %d)" % (pg.evaluate("window.__ck"), k1, g1[k1], n0))
         ok(pg.evaluate(SAME)["same"], "and they are the ones worked out afresh")
         # an entry replaced by another without a save: worked out again (each entry compared)
         pg.evaluate("""(id) => { const V = S.books.vouchers, i = V.findIndex(x => x.id === id), w = JSON.parse(JSON.stringify(V[i])); w.gstin = ''; V[i] = w; }""", moved)
         pg.evaluate("() => { window.__ck = 0; render(); }"); pg.wait_for_timeout(800)
-        ok(pg.evaluate("window.__ck") >= 12 and pg.evaluate(SAME)["same"], "an entry replaced in the list (no save): worked out again, as afresh")
+        ck1 = pg.evaluate("window.__ck")
+        ok(ck1 == 1 and pg.evaluate(SAME)["same"], "an entry replaced in the list (no save): its month worked out again (%d), as afresh" % ck1)
         # the client's own GSTIN changed (a company field, not the books): worked out again
         pg.evaluate("() => { window.__ck = 0; const c = CO(); c.__g = c.gstin; c.gstin = '07AAGCL4827M2Z2'; render(); }"); pg.wait_for_timeout(800)
         ok(pg.evaluate("window.__ck") >= 12 and pg.evaluate(SAME)["same"], "the client's GSTIN changed: worked out again, as afresh")
@@ -163,6 +179,80 @@ try:
         pg.evaluate("() => { window.__ck = 0; S.books.gstSet = S.books.gstSet || {}; S.books.gstSet.zz = {t: 1}; render(); }"); pg.wait_for_timeout(500)
         ok(pg.evaluate("window.__ck") >= 12, "the GST settings changed in place (no save): worked out again (%d)" % pg.evaluate("window.__ck"))
         pg.evaluate("() => { delete S.books.gstSet.zz; S.sales = null; render(); }"); pg.wait_for_timeout(500)
+        # 5. one month changed: that month alone worked out again; every month's kept checks = afresh after each change
+        ALLSAME = """() => { const ms = GSTR.months(), reg = '07', J = (l) => JSON.stringify(l.map(c => [c.what, c.n, c.how, !!c.info, c.ret || '', (c.all || []).map(r => (r.doc || r).id || r.no || '')]));
+          const fresh = ms.map(m => J(GSTR.checks(m, reg))), docsF = ms.map(m => GSTR.one(m, reg).total.n);
+          const kept = memoScope(() => ms.map(m => J(typeof GSTR.checksKept === 'function' ? GSTR.checksKept(m, reg) : GSTR.checks(m, reg)))), docsK = memoScope(() => ms.map(m => GSTR.docCount(m, reg)));
+          return {n: ms.length, bad: ms.filter((m, i) => fresh[i] !== kept[i] || docsF[i] !== docsK[i])}; }"""
+        # what a month's kept checks list: {what: [ids]}
+        KEPT = "(ym) => memoScope(() => Object.fromEntries(GSTR.checksKept(ym, '07').map(c => [c.what, (c.all || []).map(r => (r.doc || r).id)])))"
+        # (the months worked out by the change, a drawing of its own included, and by the drawing after it; that drawing timed)
+        def step(name, js, arg=None, ck=None, ck_min=None, ms_max=None):
+            pg.evaluate("() => { window.__ck = 0; window.__one = 0; }")
+            r = pg.evaluate(js, arg) if arg is not None else pg.evaluate(js)
+            t = pg.evaluate("() => { S.booksTab = 'gst'; S.gstView = 'year'; S.gstReg = '07'; S.gstYm = '202603'; const t0 = performance.now(); render(); return Math.round(performance.now() - t0); }")
+            pg.wait_for_timeout(400)
+            n = pg.evaluate("() => ({ck: window.__ck, one: window.__one})")
+            good = (ck is None or n["ck"] == ck) and (ck_min is None or n["ck"] >= ck_min) and (ms_max is None or t <= ms_max)
+            s5 = pg.evaluate(ALLSAME)
+            ok(good and not s5["bad"] and s5["n"] >= 20, "%s (%s): %d months worked out (%s), the drawing %d ms%s; every month's kept checks and counts as afresh (%d months; differ: %s)"
+               % (name, r, n["ck"], ("want %d" % ck) if ck is not None else ("want at least %d" % ck_min), t, (" (at most %d)" % ms_max) if ms_max else "", s5["n"], s5["bad"]))
+            return r, n, t
+        pg.evaluate("() => { S.booksTab = 'gst'; S.gstView = 'year'; S.gstReg = '07'; S.gstYm = '202603'; render(); }"); pg.wait_for_timeout(800)
+        # a. an invoice edited (replaced by its edited copy, as Tally's next version comes) and saved
+        step("5a. an invoice of Sep-2025 edited (buyer GSTIN made invalid) and saved", """() => { const V = S.books.vouchers, i = V.findIndex(x => Books.isSale(x) && GSTR.inP(x.date, '202509') && x.gstin && gstinValid(x.gstin) && GSTR.outRow(x, '202509', '07'));
+          const w = JSON.parse(JSON.stringify(V[i])); w.gstin = w.gstin.slice(0, 14) + (w.gstin[14] === 'A' ? 'B' : 'A'); V[i] = w; saveBooks(); return w.id; }""", ck=1)
+        # b. an entry changed in place, then saved
+        step("5b. an entry of Oct-2025 changed in place (its party's GSTIN cleared) and saved", """() => { const v = S.books.vouchers.find(x => Books.isSale(x) && GSTR.inP(x.date, '202510') && x.gstin && GSTR.outRow(x, '202510', '07'));
+          v.gstin = ''; saveBooks(); return v.id; }""", ck=1)
+        # c. new entries from the cloud copy, all in one month (the cloud's apply, then the save), timed
+        # (twice, each time 3 more: the faster drawing is held to MONTH_MS, as one drawing can meet the garbage collector)
+        CLOUD3 = """(j) => { const b = S.books, src = b.vouchers.filter(v => Books.isSale(v) && GSTR.inP(v.date, '202602') && (v.ent || []).length >= 2 && GSTR.outRow(v, '202602', '07') && !/^zzyr/.test(v.id)).slice(0, 3);
+  const iso = d => d.slice(0, 4) + '-' + d.slice(4, 6) + '-' + d.slice(6, 8), n0 = b.vouchers.length;
+  const heads = src.map((v, k) => ({guid: 'zzyr-' + j + '-' + k, day: iso(v.date), alter_id: 700 + k, vtype: v.type, vno: 'ZY' + j + k, party: v.party, narration: 'zz new', cancelled: false, optional: false, deleted_at: null,
+    gstin: v.gstin || '', pos: v.pos || '', ref: '', ref_date: null, cmp_gstin: v.cmp || '', irn: '', irn_ack_date: null}));
+  const lines = []; src.forEach((v, k) => v.ent.forEach(e => lines.push({guid: 'zzyr-' + j + '-' + k, ledger: e.l, amount: e.a, hsn: e.h || null, rate: e.gr == null ? null : e.gr})));
+  const got = BookSrc.apply(b, heads, lines, []); saveBooks(); return {got, more: b.vouchers.length - n0}; }"""
+        r, n, t1 = step("5c. 3 new entries from the cloud copy, all in Feb-2026 (BookSrc.apply, saved)", CLOUD3, 1, ck=1)
+        ok(r["more"] == 3, "   the 3 entries are in the books (%s)" % r)
+        r, n, t2 = step("5c. 3 more, again in Feb-2026", CLOUD3, 2, ck=1)
+        ok(r["more"] == 3 and min(t1, t2) <= MONTH_MS, "   the drawing after new entries came into one month: %d ms (at most %d; the two: %d, %d ms)" % (min(t1, t2), MONTH_MS, t1, t2))
+        # d. an entry deleted
+        step("5d. an invoice of Nov-2025 deleted (saved)", """() => { const b = S.books, v = b.vouchers.find(x => Books.isSale(x) && GSTR.inP(x.date, '202511') && GSTR.outRow(x, '202511', '07'));
+          b.vouchers = b.vouchers.filter(x => x !== v); saveBooks(); return v.id; }""", ck=1)
+        # e. an invoice renumbered to the number of an invoice of another month of the year: that month, not worked out
+        # again, lists it too
+        DUP = "Invoice numbers used twice in the financial year"
+        r, n, t = step("5e. an invoice renumbered to another month's invoice number (saved)", """() => { const V = S.books.vouchers, B2B = (v) => { const r = Books.isSale(v) && v.date >= '20250401' && v.date <= '20260331' && GSTR.outRow(v, '', '07'); return r && r.kind === 'B2B' && r.no && !/^zz/.test(v.id); };
+  const x = V.find(B2B), i = V.findIndex(v => B2B(v) && v.date.slice(0, 6) !== x.date.slice(0, 6)), w = JSON.parse(JSON.stringify(V[i])); w.no = x.no; V[i] = w; saveBooks(); return {a: x.id, am: x.date.slice(0, 6), b: w.id, bm: w.date.slice(0, 6), no: x.no}; }""", ck=1)
+        ka = pg.evaluate(KEPT, r["am"]); kb = pg.evaluate(KEPT, r["bm"])
+        ok(r["a"] in ka.get(DUP, []) and r["b"] in kb.get(DUP, []), "   %s (kept) and %s both list the number as used twice (%s, %s)" % (r["am"], r["bm"], ka.get(DUP), kb.get(DUP)))
+        # f. a B2C large invoice (Jul-2025) and a later note to the same buyer without a GSTIN (Aug-2025, its number too long):
+        # the note's number is checked only because of that invoice (cdnurTyp); the invoice deleted, Aug is not worked out again
+        # yet its check goes
+        LONG = "Invoice numbers longer than 16 characters"
+        r, n, t = step("5f. a B2C large invoice in Jul-2025 and a note adjusting it in Aug-2025 added (saved)", """() => { const b = S.books, V = b.vouchers;
+          const v = V.find(x => { const r = Books.isSale(x) && GSTR.outRow(x, '', '07'); return r && r.igst > 0 && r.total > 100000 && r.kind === 'B2B' && r.posCode; });
+          const inv = JSON.parse(JSON.stringify(v)), cn = JSON.parse(JSON.stringify(v));
+          Object.assign(inv, {id: 'zzb2cl-1', guid: 'zzb2cl-1', date: '20250715', gstin: '', no: 'ZZL/0001'});
+          Object.assign(cn, {id: 'zzcn-1', guid: 'zzcn-1', date: '20250812', gstin: '', type: 'Credit Note', no: 'ZZCN/2025-26/00001', ref: '', refDate: ''}); cn.ent = cn.ent.map(e => Object.assign({}, e, {a: -e.a}));
+          b.vouchers = V.concat([inv, cn]).sort((p, q) => String(p.date).localeCompare(String(q.date))); saveBooks();
+          return memoScope(() => ({inv: GSTR.outRow(inv, '', '07').kind, cn: GSTR.outRow(cn, '', '07').kind, cnIgst: GSTR.outRow(cn, '', '07').igst, typ: GSTR.cdnurTyp(GSTR.outRow(cn, '', '07'))})); }""", ck=2)
+        ok(r["inv"] == "B2CL" and r["typ"] == "B2CL", "   the invoice is B2C large and the note adjusts it (%s)" % r)
+        ok("zzcn-1" in pg.evaluate(KEPT, "202508").get(LONG, []), "   Aug-2025 lists the note's number as too long")
+        step("5f. then the B2C large invoice deleted (saved)", """() => { const b = S.books; b.vouchers = b.vouchers.filter(x => x.id !== 'zzb2cl-1'); saveBooks(); return 'zzb2cl-1'; }""", ck=1)
+        ok("zzcn-1" not in pg.evaluate(KEPT, "202508").get(LONG, []), "   Aug-2025 (kept, not worked out again) no longer checks the note's number")
+        # g. a ledger's GST setting changed: every month again
+        step("5g. a party ledger set as Consolidated B2C (GSTR.b2cSumLedger)", """() => { const v = S.books.vouchers.find(x => Books.isSale(x) && x.date >= '20250401' && x.date <= '20260331' && !x.gstin && GSTR.outRow(x, '', '07')); window.__p = v.party; GSTR.b2cSumLedger(v.party, true); return v.party; }""", ck_min=12)
+        step("5g. and set back", "() => { GSTR.b2cSumLedger(window.__p, false); return window.__p; }", ck_min=12)
+        # i. the entries' lines changed in place, then a new list of the same entries (Books.touch, as a ledger's name is
+        # corrected in every line): every month again
+        step("5i. a line's ledger renamed in place in an entry, Books.touch and saved", """() => { const v = S.books.vouchers.find(x => Books.isSale(x) && x.date >= '20250401' && x.date <= '20260331' && GSTR.outRow(x, '', '07') && x.ent.some(e => e.l === x.party));
+  v.ent.find(e => e.l === v.party).l = 'ZZ Renamed Party Ledger'; Books.touch(S.books); saveBooks(); return v.id; }""", ck_min=12)
+        # h. the marketplace sales changed: every month again
+        step("5h. marketplace sales added (saveSales)", """() => { S.sales = {cid: S.coId, list: [{id: 'zzmk5', source: 'market', status: 'review', x: {date: '2026-01-10', number: 'MK-0501', customerName: 'ZZ Buyer', customerGstin: '07AAJFQ3158R1ZJ', placeOfSupply: 'Delhi', cgst: 9, sgst: 9, igst: 0, taxable: 100, total: 118, hsn: '9983'}}], cfg: {}, sel: new Set(), sticky: new Set(), undo: null};
+          saveSales(); return 'zzmk5'; }""", ck_min=12)
+        pg.evaluate("() => { S.sales = null; render(); }"); pg.wait_for_timeout(300)
         # 4. the cloud copy's new entries: rework
         pg.evaluate("() => { const r = MIS.autoRange(S.books), a = Audit.defaultRange(S.books); MIS.run(r.from, r.to, 'by hand'); Audit.run(a.from, a.to, 'by hand'); saveBooks(); }")
         # (on Look up: the drawing after the new entries works the shown page out again, as it must)

@@ -19,7 +19,8 @@ Measured at full speed here (an office PC is about 4x slower):
 Checks:
   1. the new entries come in (5 more entries), and the screen shows them: the GST grid as a fresh drawing draws it;
   2. no frame of the whole run (LoAF) over PIPE_MS (default 1200 here; it was 1,947: the load's tail with TDSTally.sync;
-     now 700-800, the drawings of GST › Year after the save), GST › Year's 12 months worked out at most twice in the run;
+     then 700-800, the drawings of GST › Year after the save; now about 300), GST › Year's months worked out at most twice
+     in the run (next-fix-gst-year-save: only the months the new entries are in; it was the year's 12 months, twice);
   3. pushNow after the change: its work before the first item is sent within PUSH_MS (default 200; it was 430, 14,449
      items hashed; now about 120, 2,497: the ledger map), and what the server holds afterwards (s.base) is, item for item, the hash a full pass gives of the books' work now; a change in place to one item sends that item
      alone, a removed item is sent as removed, nothing changed sends nothing;
@@ -101,7 +102,7 @@ CLOUD = r"""(NEW) => {
   try { Live.start = () => {}; } catch (e) {}
   return {heads: heads.length, thin: thin.length};
 }"""
-INSTR = """() => { window.__ck = 0; const f = GSTR.checks; GSTR.checks = function(){ window.__ck++; return f.apply(this, arguments); };
+INSTR = """() => { window.__ck = 0; const nm = typeof GSTR.checksMonth === 'function' ? 'checksMonth' : 'checks', f = GSTR[nm]; GSTR[nm] = function(){ window.__ck++; return f.apply(this, arguments); };
   window.__push = []; const p = BookItems.pushNow; BookItems.pushNow = async function(cid){ const t0 = performance.now(); let h = 0; const hh = BookItems.h; BookItems.h = function(){ h++; return hh.apply(this, arguments); };
     window.__sendAt = 0; try { return await p.apply(this, arguments); } finally { BookItems.h = hh; window.__push.push({ms: Math.round((window.__sendAt || performance.now()) - t0), hashed: h}); } };
   window.__lf = []; new PerformanceObserver((l) => l.getEntries().forEach((e) => { if (e.duration > 100) window.__lf.push([Math.round(e.duration), ((e.scripts || []).slice().sort((a, c) => c.duration - a.duration)[0] || {}).invoker || '']); })).observe({type: 'long-animation-frame'}); }"""
@@ -141,7 +142,8 @@ try:
         grid = pg.evaluate(GRID); pg.evaluate("() => render()"); pg.wait_for_timeout(500)
         ok(m["n"] == 5 and grid and grid == pg.evaluate(GRID), "1. the 5 new entries came in, the GST grid shown is the one a fresh drawing draws (%d cells)" % len(grid))
         longest = max([x[0] for x in m["lf"]] or [0])
-        ok(longest <= PIPE_MS and m["ck"] <= 24, "2. the longest frame %d ms (at most %d), GST › Year's months worked out %d times (at most 24, one year twice); frames %s" % (longest, PIPE_MS, m["ck"], m["lf"]))
+        # (next-fix-gst-year-save: only the months the new entries are in, once; it was the year's 12 months twice)
+        ok(longest <= PIPE_MS and m["ck"] <= 2, "2. the longest frame %d ms (at most %d), GST › Year's months worked out %d times (at most 2: the months of the new entries; it was 24, the year twice); frames %s" % (longest, PIPE_MS, m["ck"], m["lf"]))
         pu = [x for x in m["push"] if x["hashed"] or x["ms"] > 20]
         ok(pu and max(x["ms"] for x in pu) <= PUSH_MS, "3. pushNow after the new entries: %s (at most %d ms)" % (m["push"], PUSH_MS))
         f1 = pg.evaluate(FULL)

@@ -76,7 +76,7 @@ async function loadSales(cid){
 }
 let salesSaveTimer = null;
 // next-fix-hang (review of bb5a5c53d): moved by every save of the sales (and their loading), so the GST figures kept
-// across drawings (GSTR.keptYear, src/js/12) see a marketplace invoice changed in place (ignored, its GSTIN typed, undone)
+// across drawings (GSTR.keptState, src/js/12) see a marketplace invoice changed in place (ignored, its GSTIN typed, undone)
 let SALES_REV = 0;
 function saveSales(what){
   SALES_REV++;

@@ -30,7 +30,7 @@ CHECKS = "(a) => Object.fromEntries(GSTR.checks(a[0], a[1]).map(c => [c.what, {n
 SALE = "(a) => S.books.vouchers.find(v => (v.no || v.ref) === a)"
 
 # the faults are planted in the entries in place, then the books saved as any change in the app saves them (next-fix-hang:
-# the year's checks are kept across drawings until the books are saved or changed, GSTR.keptYear, src/js/12)
+# the year's checks are kept across drawings until the entries or the books' settings change, GSTR.keptState, src/js/12)
 def grid(pg):
     pg.evaluate("() => { saveBooks(); S.booksTab = 'gst'; S.gstView = 'year'; S.gstReg = '07'; S.gstYm = '202603'; render(); }"); pg.wait_for_timeout(600)
 
