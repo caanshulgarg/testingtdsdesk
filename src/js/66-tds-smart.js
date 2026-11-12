@@ -409,9 +409,11 @@ const TDSWatch = {
     });
     return out;
   },
-  yearNow(fy){
+  yearNow(fy){ const it = this.yearSteps(fy); let r; while (!(r = it.next()).done); return r.value; },
+  // the same in steps, every 2,500 entries and every 500 parties (the day's audit on its own works it out so: Audit.runIn)
+  *yearSteps(fy){
     const b = S.books || {}, agg = {}, start = fy.slice(0, 4) + "0401", end = (num(fy.slice(0, 4)) + 1) + "0331";
-    (b.vouchers || []).forEach(v => {
+    const V = b.vouchers || [], each = v => {
       if (v.opt || v.cancel || Books.isSale(v)) return;
       // round 69: an entry that names no party (a journal "Freight Dr / Sharma Roadways Cr"): the one supplier it credits, as
       // the audit's own check took it before the audit came to read this list. The party: its ledger (TDS.led), the name the
@@ -434,10 +436,12 @@ const TDSWatch = {
         x.credits.push({date: d, amount: a, voucher: v.no || v.ref || "", vid: v.id, ledger: e.l}); x.ledgers.add(e.l);
       });
       Object.keys(bill).forEach(k => { agg[k].max = Math.max(agg[k].max, bill[k]); agg[k].credits.filter(c => c.vid === v.id).forEach(c => { c.bill = bill[k]; }); });
-    });
+    };
+    for (let i = 0; i < V.length; i++){ each(V[i]); if (i % 2500 === 2499) yield; }
     // a deduction counts for the year of the bill it is for (a TDS entry of its own after the bill: r.credit, TDSSep)
     const rows = TDS.allRows().filter(r => (r.credit ? TDS.fyOf(r.credit) : r.fy) === fy), today = TDSFiled.todayIst(), out = [];
-    Object.values(agg).forEach(x => {
+    yield;
+    const party = x => {
       let R = RULE_DEFAULTS.find(z => z.id === x.rule); if (!R || R.basis === "never") return;
       // the TDS check of 22-Oct-2026, M7: FY 2024-25 at that year's limits (the Finance Act, 2025 raised them from 1-Apr-2025)
       if (fy < "2025-26") R = Object.assign({}, R, this.LIMIT_OLD[TDS.sec(R.old)] || {});
@@ -474,7 +478,9 @@ const TDSWatch = {
         uncovered, due: r2(uncovered * rate / 100), short: mine.some(r => r.sepShort), interest: r2(interest), disallow: r2(uncovered * 0.3),
         // each credit marked whether it counts towards the TDS (round 69: the audit's entries behind the finding)
         credits: x.credits.map(c => Object.assign({}, c, {counts: !!over && !!counts(c)}))});
-    });
+    };
+    const xs = Object.values(agg);
+    for (let n = 0; n < xs.length; n++){ party(xs[n]); if (n % 500 === 499) yield; }
     return out.sort((a, c) => c.used - a.used);
   },
   // the parties to look at: over the limit or at 80% of it

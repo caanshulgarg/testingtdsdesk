@@ -301,25 +301,37 @@ const TDS = {
   // another (each entry compared by itself). An entry changed in place is seen at the save that follows it, as every
   // figure kept for the page's drawings (memoKeep). Outside a drawing, as before, always fresh
   _kept: new WeakMap(),
-  kept(name, fn, extra, setExtra){
+  kept(name, fn, extra, setExtra){ const it = this.keptIn(name, function* (){ return fn(); }, extra, setExtra); let r; while (!(r = it.next()).done); return r.value; },
+  // the same, the working given in steps (make(): a generator; the day's audit on its own: TDS.allRowsIn)
+  *keptIn(name, make, extra, setExtra){
     const b = S.books, V = b && b.vouchers;
-    if (!Array.isArray(V) || typeof IN_RENDER === "undefined" || !IN_RENDER) return fn();
+    if (!Array.isArray(V) || typeof IN_RENDER === "undefined" || !IN_RENDER) return yield* make();
     let co = {}, k, sig; try { co = CO() || {}; } catch (e){}
     const x = typeof TCloud === "object" && TCloud.tdsl && TCloud.tdsl[b.cid], J = v => { try { return JSON.stringify(v); } catch (e){ return null; } };
     try { k = J([co.supInvFrom, typeof ClosedP === "object" ? ClosedP.cfg(co).tdsFiled : 0, Object.keys(b.pans || {}).length, b.mapV, b.ledInfoAt, b.cid].concat(["alloc", "allocFrom", "tdsSplits", "tdsEdits", "tdsAdded", "panFix", "tdsFiled", "filedOn", "tcsCodes", "tcsCodesFixed", "tdsPayKind", "nrInfo"].map(z => b[z]))); } catch (e){ k = null; }
     const ids = [typeof BOOKS_REV === "number" ? BOOKS_REV : 0, b.map, b.under, b.groups, b.ledInfo, b.pans, b.salary, b.payroll, x && x.rows, V].concat(V);
     const all = this._kept.get(b) || {}, w = all[name];
     if (k !== null && w && w.k === k && w.ids.length === ids.length && w.ids.every((z, i) => z === ids[i]) && (sig = J([w.v, w.x])) !== null && sig === w.sig){ if (setExtra) setExtra(w.x); return w.v; }
-    const v = fn(), xx = extra ? extra() : undefined;
+    const v = yield* make(), xx = extra ? extra() : undefined;
     if (k !== null && (sig = J([v, xx])) !== null){ all[name] = {k, ids, v, x: xx, sig}; this._kept.set(b, all); }
     return v;
   },
-  allRowsNow(){
+  allRowsNow(){ const pre = this._pre; if (pre){ this._pre = null; return pre.v; } const it = this.allRowsSteps(); let r; while (!(r = it.next()).done); return r.value; },
+  // next-audit-steps: the rows worked out in steps (2,000 entries a step), kept as allRows keeps them; for a job behind
+  // the page (JOB_MEMO), which then has them as allRows hands them out (the day's audit on its own: Audit.runIn). What is
+  // put over allRowsNow (app/src/lib/tdsEdit.js) is put over these too: allRowsNow is asked, handed the rows worked out
+  *allRowsIn(){
+    const T = this, make = function* (){ const v = yield* T.allRowsSteps(); T._pre = {v}; try { return T.allRowsNow(); } finally { T._pre = null; } };
+    if (typeof perRender !== "function") return yield* make();
+    const v = yield* this.keptIn("allRows", make, () => this._rev, x => { this._rev = x; });
+    return perRender(this, "allRows", () => v);
+  },
+  *allRowsSteps(){
     const b = S.books;
     if (!b || !b.vouchers) return [];
     const out = [];
     const back = [];
-    b.vouchers.forEach(v => {
+    const each = v => {
       // the TDS check of 22-Oct-2026, H2: an optional or cancelled entry is no deduction
       if (v.opt || v.cancel) return;
       const L = Books.lines(v);
@@ -350,14 +362,18 @@ const TDS = {
           pay: typeof TDSRate === "object" ? TDSRate.payType(t, v) : ""
         });
       });
-    });
+    };
+    for (let i = 0, V = b.vouchers; i < V.length; i++){ each(V[i]); if (i % 2000 === 1999) yield; }
+    yield;
     // the TDS review of 14-Oct-2026, M2: a TDS entry of its own after the bill (nothing paid or credited in it): the bill it
     // was deducted for (TDSInt.lateDeduct: the party's latest bill before it whose amount fits the section's rate) gives the
     // amount paid or credited and its date (credit); the date of deduction stays the TDS entry's
     // the owner, 19-Oct-2026: a TDS entry of its own is matched to the bills it was deducted on (TDSSep.link: the bill named,
     // else the TDS fitting a bill, else a month's bills together); the others as before
     this.unDo(out, back);
+    yield;
     if (typeof TDSSep === "object") TDSSep.link(out);
+    yield;
     if (typeof TDSInt === "object") out.forEach(r => {
       if (r.paid > 0 || !(r.tds > 0) || r.sep) return;
       const hit = TDSInt.lateDeduct(r);

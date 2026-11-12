@@ -162,13 +162,21 @@ function FindingsTable({ list, gone }) {
   </div>;
 }
 
+// next-audit-steps: the day's audit on its own, worked out behind the page (Audit.autoStart, src/js/06): the last run's
+// findings stay until the new ones are all in
+const AutoLine = ({ j }) => <div className="note" role="status" data-audit-auto="" style={{ margin: "10px 0 0" }}>
+  {"Checking the books for today’s audit" + (j.prog && j.prog.of ? " (" + j.prog.k + " of " + j.prog.of + " checks)" : "") + "…" + ((j.b.audit || {}).last ? " The last run is shown until it is done." : "")}</div>;
+
 function Findings({ b, busy }) {
-  const au = b.audit || {}, run = au.last;
+  const au = b.audit || {}, run = au.last, auto = Audit.autoFor && Audit.autoFor(b);
+  if (!run && auto) return <><Head b={b} run={null} /><AutoLine j={auto} /></>;
   if (!run) return <><Head b={b} run={run} /><div className="bk-none" data-audit-empty="" style={{ marginTop: 12 }}>Not run yet for this period. <button className="linkbtn" onClick={() => FinComNav.go(() => doAct("auditRun"))}>Run now</button></div></>;
   // a run that no longer fits the books (other entries for its period, or the books or FinCom's checks changed) is worked
   // out again by itself for the same period, as MIS is; its old findings are not shown meanwhile (review of 02-Oct-2026:
   // "worked out on 1231 entries… the books now hold 4" asked the user to press Run again)
   // (round 69: not while a finding's Recheck is running: that run is the one worked out again, and the table stays meanwhile)
+  // next-audit-steps: the day's run on its own being worked out: it is the run worked out again, and its line says so
+  if (auto && Audit.stale(run)) return <><Head b={b} run={null} /><AutoLine j={auto} /></>;
   if (!busy && Audit.stale(run) && !Object.values(S.auditRecheck || {}).some((x) => x.busy && x.co === S.coId)) {
     // next-speed-render: worked out behind the page, a check a step (Audit.runIn, the same run)
     if (!Audit._again) {
@@ -190,6 +198,7 @@ function Findings({ b, busy }) {
   // chips beside the status, not a second row of tabs)
   return <>
     <Head b={b} run={run} />
+    {auto && <AutoLine j={auto} />}
     {/* clean-up batch 2: the run in one line; its result code and notes under Details */}
     <div className="note audit-runline" data-audit-runline="" style={{ margin: "10px 0" }}>{"Last run on " + fmtDateTime(run.at) + " (" + Audit.howLabel(run) + ") for " + d(run.from) + " to " + d(run.to) + ", " + run.vouchers + " vouchers. "}
       {(run.errors || []).length > 0 && <><span className="bad">Some checks could not run: {run.errors.join("; ")}</span>{" "}</>}

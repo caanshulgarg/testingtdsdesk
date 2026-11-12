@@ -244,6 +244,7 @@ const MIS = {
     // the balances on the day, as everywhere else (Parties.position) when the caller has none
     if (!bal){ const P = Parties.position(asOn); if (P.ok) bal = P.at; }
     const bills = yield* this.billsSteps(asOn, side), by = {}, msme = this.msme();
+    yield;
     bills.forEach(x => {
       const p = by[x.party] = by[x.party] || {party: x.party, total: 0, b: [0, 0, 0, 0, 0], adv: 0, unalloc: 0, pre: 0, oldest: 0, bills: [], msme: msme[x.party] || ""};
       if (!x.ref){ p.unalloc = r2(p.unalloc + x.amt); }
@@ -261,6 +262,7 @@ const MIS = {
     if (bal) rows.forEach(p => { const tb = bal[p.party]; if (tb != null){ p.tally = r2(side === "r" ? -tb : tb); p.diff = r2(p.tally - p.total); } });
     rows.forEach(p => { p.bills.sort((a, c) => String(a.date).localeCompare(String(c.date)) || String(a.ref).localeCompare(String(c.ref))); });
     rows.sort((a, c) => c.total - a.total || a.party.localeCompare(c.party));
+    yield;
     const sum = rows.reduce((s, p) => ({total: r2(s.total + p.total), b: s.b.map((v, i) => r2(v + p.b[i])), adv: r2(s.adv + p.adv), unalloc: r2(s.unalloc + p.unalloc), pre: r2(s.pre + p.pre), tally: p.tally != null ? r2((s.tally || 0) + p.tally) : s.tally}), {total: 0, b: [0, 0, 0, 0, 0], adv: 0, unalloc: 0, pre: 0, tally: null});
     sum.open = r2(sum.b.reduce((a, v) => a + v, 0));
     // review of 01-Oct-2026 / 02-Oct-2026: what each party owes on balance (Tally's balance when known, else its bills),
@@ -268,11 +270,12 @@ const MIS = {
     // set against the oldest bills first (MIS.netOpen, the same as the 13-week forecast); an amount owed that no bill
     // dates is "not bill-wise". A party whose balance runs the other way (a supplier with a debit balance) owes nothing
     // here: it is an advance, shown on its own, as a positive figure
-    rows.forEach(p => {
-      const o = this.netOpen(p), nb = this.BUCKETS.map(() => 0);
+    for (let n = 0; n < rows.length; n++){
+      const p = rows[n], o = this.netOpen(p), nb = this.BUCKETS.map(() => 0);
       o.open.forEach(x => { const a = x.od != null ? x.od : x.age, i = this.BUCKETS.findIndex(([d]) => a <= d); nb[i] = r2(nb[i] + x.left); });
       p.net = o.net; p.open = o.open; p.nb = nb; p.und = o.und; p.advance = o.advance; p.owe = o.owe;
-    });
+      if (n % 300 === 299) yield;
+    }
     sum.owe = r2(rows.reduce((a, p) => a + Math.max(0, p.net), 0));
     sum.advance = r2(rows.reduce((a, p) => a + p.advance, 0));
     sum.nb = MIS.BUCKETS.map((_, i) => r2(rows.reduce((a, p) => a + p.nb[i], 0)));
@@ -915,7 +918,8 @@ Object.assign(MIS, {
 Object.assign(Audit.checks, {
   // section 43B(h): what is owed to a micro or small enterprise beyond the agreed time is allowed only when paid
   msme43Bh(A, V, ctx){
-    const msme = MIS.msme(), days = MIS.cfg(S.books).msmeDays, ag = MIS.ageing(ctx.to, "p", null), rows = [];
+    // (ctx.ageP: the same bills, worked out in steps before the checks by Audit.runIn)
+    const msme = MIS.msme(), days = MIS.cfg(S.books).msmeDays, ag = ctx.ageP || MIS.ageing(ctx.to, "p", null), rows = [];
     ag.rows.forEach(p => {
       if (!/micro|small/i.test(msme[p.party] || "")) return;
       (p.open || []).filter(x => x.age > days).forEach(x => rows.push({vid: "", date: x.date, no: x.ref, type: msme[p.party], party: p.party, amount: x.left,

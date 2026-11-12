@@ -129,45 +129,8 @@ Object.assign(Audit, {
   exists(l){ return !!((S.books.ledInfo || {})[l] || (S.books.map || {})[l]); },
   // ---------------------------------------------------------------- the checks
   checks: {
-    cash40A3(A, V, ctx){
-      const byDay = {};
-      V.forEach(v => {
-        if (/CONTRA/i.test(v.type)) return;
-        const paid = v.ent.filter(e => A.isCash(e.l) && e.a > 0).reduce((s, e) => s + e.a, 0);
-        if (!paid) return;
-        v.ent.filter(e => e.a < 0 && !A.isCash(e.l) && !A.isBankL(e.l) && !A.isLoan(e.l) && !A.isCapital(e.l) && !A.isDuties(e.l) && !A.isDebtor(e.l) && !/IMPREST|ADVANCE|SECURITY DEPOSIT/i.test(e.l)).forEach(e => {
-          const k = v.date + "|" + e.l + (A.isExpense(e.l) ? "|" + v.id : ""), x = byDay[k] = byDay[k] || {date: v.date, l: e.l, amt: 0, vs: []};
-          x.amt = r2(x.amt + Math.min(-e.a, paid)); x.vs.push(v);
-        });
-      });
-      const rows = Object.values(byDay).filter(x => x.amt > (/TRANSPORT|ROADWAYS|LOGISTIC|CARRIER|GOODS CARRIAGE|TRUCK/i.test(x.l) ? 35000 : 10000));
-      if (!rows.length) return null;
-      const amt = rows.reduce((s, x) => s + x.amt, 0);
-      return {area: "cash", sev: "high", clause: "3CD 21(d); section 40A(3)", title: "Cash payments above \u20b910,000 to one party in a day",
-        problem: rows.length + " cash payments over \u20b910,000 (\u20b935,000 for transporters): to one party in a day, or in one voucher where the expense ledger names no payee.",
-        impact: "Disallowed under section 40A(3) unless a rule 6DD exception applies; for a capital asset, left out of its cost (section 43(1)).", amount: amt,
-        suggestion: "Pay these by bank. For the year, add the amount to income in the computation, or record the rule 6DD exception that applies.", je: null,
-        rows: rows.map(x => A.row(x.vs[0], {party: x.l, amount: x.amt, note: x.vs.length + " voucher" + (x.vs.length === 1 ? "" : "s") + " that day"}))};
-    },
-    cashLoans(A, V){
-      const taken = [], repaid = [];
-      V.forEach(v => {
-        const cashIn = v.ent.filter(e => A.isCash(e.l) && e.a < 0).reduce((s, e) => s - e.a, 0), cashOut = v.ent.filter(e => A.isCash(e.l) && e.a > 0).reduce((s, e) => s + e.a, 0);
-        v.ent.forEach(e => {
-          if (!A.isLoan(e.l) || /BANK|FINANCE|NBFC|CAPITAL LTD|HOUSING/i.test(e.l)) return;
-          if (cashIn >= 20000 && e.a > 0) taken.push(A.row(v, {party: e.l, amount: Math.min(e.a, cashIn)}));
-          if (cashOut >= 20000 && e.a < 0) repaid.push(A.row(v, {party: e.l, amount: Math.min(-e.a, cashOut)}));
-        });
-      });
-      const out = [];
-      if (taken.length) out.push({key: "269SS", area: "cash", sev: "high", clause: "3CD 31(a); section 269SS", title: "Loans or deposits taken in cash, \u20b920,000 or more",
-        problem: taken.length + " loans or deposits received in cash.", impact: "Penalty under section 271D equal to the amount taken.", amount: taken.reduce((s, r) => s + r.amount, 0),
-        suggestion: "Take loans only by bank. Report each in clause 31(a); where there is a reasonable cause, keep the explanation on file.", je: null, rows: taken});
-      if (repaid.length) out.push({key: "269T", area: "cash", sev: "high", clause: "3CD 31(b), 31(c); section 269T", title: "Loans or deposits repaid in cash, \u20b920,000 or more",
-        problem: repaid.length + " repayments made in cash.", impact: "Penalty under section 271E equal to the amount repaid.", amount: repaid.reduce((s, r) => s + r.amount, 0),
-        suggestion: "Repay only by bank. Report each in clause 31.", je: null, rows: repaid});
-      return out;
-    },
+    cash40A3(A, V, ctx){ return Audit.drain(Audit.checkSteps.cash40A3(A, V, ctx)); },
+    cashLoans(A, V){ return Audit.drain(Audit.checkSteps.cashLoans(A, V)); },
     cash269ST(A, V){
       const byDay = {};
       V.forEach(v => {
@@ -184,22 +147,7 @@ Object.assign(Audit, {
         problem: rows.length + " receipts.", impact: "Penalty under section 271DA equal to the amount received.", amount: rows.reduce((s, x) => s + x.amt, 0),
         suggestion: "Receive these amounts by bank only.", je: null, rows: rows.map(x => A.row(x.v, {party: x.l, amount: x.amt}))};
     },
-    cashNegative(A, V, ctx){
-      if (!ctx.bal.ok) return null;
-      const cash = Array.from(new Set(Object.keys(S.books.ledInfo || {}).concat(Object.keys((S.books.tb || {}).led || {})))).filter(l => A.isCash(l)).sort();
-      if (!cash.length) return null;
-      const start = ctx.bal.at(A.dayBefore(ctx.from)), bal = {}; cash.forEach(l => { bal[l] = num(start[l]); });
-      const rows = [];
-      const all = (S.books.vouchers || []).filter(v => v.date >= ctx.from && v.date <= ctx.to && !v.opt && !v.cancel).sort((a, c) => a.date.localeCompare(c.date) || String(a.no).localeCompare(String(c.no)));
-      let day = "";
-      const close = () => { if (day >= ctx.from) cash.forEach(l => { if (bal[l] > 1) rows.push({vid: "", date: day, no: "", type: "", party: l, amount: bal[l], note: "cash balance at the end of the day: " + A.money(-bal[l])}); }); };
-      all.forEach(v => { if (v.date !== day){ if (day) close(); day = v.date; } v.ent.forEach(e => { if (bal[e.l] != null) bal[e.l] = r2(bal[e.l] + e.a); }); });
-      if (day) close();
-      if (!rows.length) return null;
-      return {area: "cash", sev: "high", title: "Cash in hand below zero", clause: "books of account", problem: rows.length + " days on which the cash book closed in credit.",
-        impact: "Cash cannot be negative: entries are missing, dated wrongly, or the cash is not real. Auditors report this, and it can lead to additions as unexplained money.",
-        amount: Math.max.apply(null, rows.map(r => r.amount)), suggestion: "Find the receipts or withdrawals that were not entered, or correct the dates.", je: null, rows: rows.slice(0, 300)};
-    },
+    cashNegative(A, V, ctx){ return Audit.drain(Audit.checkSteps.cashNegative(A, V, ctx)); },
     // round 69 (the owner, 16-Oct-2026: "Should have deducted" belongs in the audit): one TDS answer. The parties past a TDS
     // limit with no TDS to cover it are TDSWatch.missed (src/js/66), the TDS page's own list, for each financial year the
     // period touches: a finding per party, section and year (its id stays the same run to run), the TDS due its amount,
@@ -316,29 +264,7 @@ Object.assign(Audit, {
         impact: "The tax is payable by you, with interest, and credit can be taken only after it is paid.", amount: rows.reduce((s, r) => s + r.amount, 0),
         suggestion: "Pay the tax under reverse charge in 3B 3.1(d) and take the credit in 4(A)(3). Where the supplier charged GST under forward charge, record their GSTIN so this stops showing. The entries below assume the supply is within the state; use IGST where it is not.", je, rows};
     },
-    gstRule37(A, V, ctx){
-      const bills = {};
-      (S.books.vouchers || []).filter(v => v.date <= ctx.to && !v.opt && !v.cancel).forEach(v => v.ent.forEach(e => (e.b || []).forEach(([name, type, amt]) => {
-        if (!name) return;
-        const k = e.l + "|" + name, x = bills[k] = bills[k] || {party: e.l, ref: name, billed: 0, paid: 0, v: null, tax: []};
-        if (type === "New Ref" && amt > 0 && Books.isPurchase(v)){ x.billed = r2(x.billed + amt); x.v = v; x.tax = v.ent.filter(z => { const m = Books.ledgerOf(z.l); return z.a < 0 && (m.kind === "gst" || m.kind === "gst_common") && m.side === "input"; }); }
-        else if (amt < 0) x.paid = r2(x.paid - amt);
-      })));
-      const rows = [], je = [];
-      Object.values(bills).forEach(x => {
-        if (!x.v || !x.tax.length || x.billed - x.paid < 1) return;
-        const age = A.days(x.v.refDate || x.v.date, ctx.to);
-        if (age <= 180) return;
-        const share = (x.billed - x.paid) / x.billed, t = r2(x.tax.reduce((s, e) => s - e.a, 0) * share);
-        if (t < 1) return;
-        rows.push(A.row(x.v, {party: x.party, amount: t, note: "bill " + x.ref + ", " + age + " days, " + A.money(x.billed - x.paid) + " unpaid"}));
-        je.push({date: ctx.to, narr: "Credit reversed under rule 37: bill " + x.ref + " of " + x.party + " unpaid after 180 days", lines: [{l: "ITC REVERSED RULE 37 (TO RECLAIM)", dr: t}].concat(x.tax.map(e => ({l: e.l, cr: r2(-e.a * share)})))});
-      });
-      if (!rows.length) return null;
-      return {area: "gst", sev: "high", clause: "rule 37; 3B 4(B)(2)", title: "Suppliers unpaid after 180 days, credit still taken",
-        problem: rows.length + " purchase bills still unpaid 180 days after the invoice date.", impact: "The credit on the unpaid part is to be reversed with interest; it can be taken again once the supplier is paid.",
-        amount: rows.reduce((s, r) => s + r.amount, 0), suggestion: "Pay the suppliers, or reverse the credit in 3B table 4(B)(2) and reclaim it in 4(A)(5) after payment.", je, rows};
-    },
+    gstRule37(A, V, ctx){ return Audit.drain(Audit.checkSteps.gstRule37(A, V, ctx)); },
     gst2b(A, V, ctx){
       if (!Object.keys(S.books.twoBs || {}).length) return null;
       const months = []; for (let m = ctx.from.slice(0, 6); m <= ctx.to.slice(0, 6); m = String(num(m.slice(4)) === 12 ? num(m.slice(0, 4)) + 1 + "01" : m.slice(0, 4) + String(num(m.slice(4)) + 1).padStart(2, "0"))) months.push(m);
@@ -366,9 +292,112 @@ Object.assign(Audit, {
       return {area: "books", sev: "low", clause: "", title: "GST and TDS ledgers not confirmed", problem: p.length + " ledgers are still guessed.", impact: "Every tax figure in this report rests on how these ledgers are read.",
         amount: 0, suggestion: "Confirm them under Tally ledgers.", je: null, rows: p.map(([n, m]) => ({vid: "", date: "", no: "", type: LedMaster.label(m.what), party: n, amount: 0, note: m.why || ""}))};
     },
-    duplicates(A, V){
+    duplicates(A, V){ return Audit.drain(Audit.checkSteps.duplicates(A, V)); },
+    gaps(A, V){ return Audit.drain(Audit.checkSteps.gaps(A, V)); },
+    trail(A, V, ctx){
+      const after = V.filter(v => v.upd && v.upd > ctx.to), late = V.filter(v => v.upd && (Books.isSale(v) || Books.isPurchase(v)) && A.days(v.date, v.upd) > 60 && v.upd <= ctx.to);
+      const out = [];
+      if (after.length) out.push({key: "after", total: after.length, area: "books", sev: "medium", clause: "audit trail, rule 3(1)", title: "Entries changed after the period ended",
+        problem: after.length + " vouchers of the period were created or altered after " + fmtDate(tallyDate(ctx.to)) + ".", impact: "Returns already filed may no longer agree with the books; for companies, each change has to be traceable in the audit trail.",
+        amount: 0, suggestion: "Review each; where a return was filed, check whether an amendment is needed.", je: null,
+        rows: after.slice(0, 500).map(v => A.row(v, {amount: 0, note: "changed on " + fmtDate(tallyDate(v.upd)) + (v.by ? " by " + v.by : "")}))});
+      if (late.length) out.push({key: "late", total: late.length, area: "books", sev: "low", clause: "", title: "Bills entered more than 60 days after their date", problem: late.length + " sales and purchase entries.",
+        impact: "Late entries make monthly returns wrong and are where omissions hide.", amount: 0, suggestion: "Enter bills in the month they belong to.", je: null,
+        rows: late.slice(0, 500).map(v => A.row(v, {amount: 0, note: "entered " + fmtDate(tallyDate(v.upd)) + ", " + A.days(v.date, v.upd) + " days later" + (v.by ? " by " + v.by : "")}))});
+      const cx = V.filter(v => v.cancel || v.opt);
+      if (cx.length) out.push({key: "cancel", area: "books", sev: "low", clause: "", title: "Cancelled or optional vouchers", problem: cx.length + " vouchers.", impact: "They are left out of every return here; make sure that is right.", amount: 0,
+        suggestion: "Check that optional vouchers are not real transactions.", je: null, rows: cx.map(v => A.row(v, {amount: 0, note: v.cancel ? "cancelled" : "optional"}))});
+      return out;
+    },
+    odd(A, V){ return Audit.drain(Audit.checkSteps.odd(A, V)); },
+    balances(A, V, ctx){ return Audit.drain(Audit.checkSteps.balances(A, V, ctx)); }
+  },
+  // next-audit-steps: the checks that read every entry of the year, in steps (each: Audit.each, 4,000 entries a step);
+  // Audit.checks has each of them worked out at once (the same answer), for whoever asks a check by itself
+  checkSteps: {
+    *cash40A3(A, V, ctx){
+      const byDay = {};
+      yield* Audit.each(V, v => {
+        if (/CONTRA/i.test(v.type)) return;
+        const paid = v.ent.filter(e => A.isCash(e.l) && e.a > 0).reduce((s, e) => s + e.a, 0);
+        if (!paid) return;
+        v.ent.filter(e => e.a < 0 && !A.isCash(e.l) && !A.isBankL(e.l) && !A.isLoan(e.l) && !A.isCapital(e.l) && !A.isDuties(e.l) && !A.isDebtor(e.l) && !/IMPREST|ADVANCE|SECURITY DEPOSIT/i.test(e.l)).forEach(e => {
+          const k = v.date + "|" + e.l + (A.isExpense(e.l) ? "|" + v.id : ""), x = byDay[k] = byDay[k] || {date: v.date, l: e.l, amt: 0, vs: []};
+          x.amt = r2(x.amt + Math.min(-e.a, paid)); x.vs.push(v);
+        });
+      });
+      const rows = Object.values(byDay).filter(x => x.amt > (/TRANSPORT|ROADWAYS|LOGISTIC|CARRIER|GOODS CARRIAGE|TRUCK/i.test(x.l) ? 35000 : 10000));
+      if (!rows.length) return null;
+      const amt = rows.reduce((s, x) => s + x.amt, 0);
+      return {area: "cash", sev: "high", clause: "3CD 21(d); section 40A(3)", title: "Cash payments above \u20b910,000 to one party in a day",
+        problem: rows.length + " cash payments over \u20b910,000 (\u20b935,000 for transporters): to one party in a day, or in one voucher where the expense ledger names no payee.",
+        impact: "Disallowed under section 40A(3) unless a rule 6DD exception applies; for a capital asset, left out of its cost (section 43(1)).", amount: amt,
+        suggestion: "Pay these by bank. For the year, add the amount to income in the computation, or record the rule 6DD exception that applies.", je: null,
+        rows: rows.map(x => A.row(x.vs[0], {party: x.l, amount: x.amt, note: x.vs.length + " voucher" + (x.vs.length === 1 ? "" : "s") + " that day"}))};
+    },
+    *cashLoans(A, V){
+      const taken = [], repaid = [];
+      yield* Audit.each(V, v => {
+        const cashIn = v.ent.filter(e => A.isCash(e.l) && e.a < 0).reduce((s, e) => s - e.a, 0), cashOut = v.ent.filter(e => A.isCash(e.l) && e.a > 0).reduce((s, e) => s + e.a, 0);
+        v.ent.forEach(e => {
+          if (!A.isLoan(e.l) || /BANK|FINANCE|NBFC|CAPITAL LTD|HOUSING/i.test(e.l)) return;
+          if (cashIn >= 20000 && e.a > 0) taken.push(A.row(v, {party: e.l, amount: Math.min(e.a, cashIn)}));
+          if (cashOut >= 20000 && e.a < 0) repaid.push(A.row(v, {party: e.l, amount: Math.min(-e.a, cashOut)}));
+        });
+      });
+      const out = [];
+      if (taken.length) out.push({key: "269SS", area: "cash", sev: "high", clause: "3CD 31(a); section 269SS", title: "Loans or deposits taken in cash, \u20b920,000 or more",
+        problem: taken.length + " loans or deposits received in cash.", impact: "Penalty under section 271D equal to the amount taken.", amount: taken.reduce((s, r) => s + r.amount, 0),
+        suggestion: "Take loans only by bank. Report each in clause 31(a); where there is a reasonable cause, keep the explanation on file.", je: null, rows: taken});
+      if (repaid.length) out.push({key: "269T", area: "cash", sev: "high", clause: "3CD 31(b), 31(c); section 269T", title: "Loans or deposits repaid in cash, \u20b920,000 or more",
+        problem: repaid.length + " repayments made in cash.", impact: "Penalty under section 271E equal to the amount repaid.", amount: repaid.reduce((s, r) => s + r.amount, 0),
+        suggestion: "Repay only by bank. Report each in clause 31.", je: null, rows: repaid});
+      return out;
+    },
+    *cashNegative(A, V, ctx){
+      if (!ctx.bal.ok) return null;
+      const cash = Array.from(new Set(Object.keys(S.books.ledInfo || {}).concat(Object.keys((S.books.tb || {}).led || {})))).filter(l => A.isCash(l)).sort();
+      if (!cash.length) return null;
+      const start = ctx.bal.at(A.dayBefore(ctx.from)), bal = {}; cash.forEach(l => { bal[l] = num(start[l]); });
+      const rows = [];
+      yield;
+      const all = (S.books.vouchers || []).filter(v => v.date >= ctx.from && v.date <= ctx.to && !v.opt && !v.cancel).sort((a, c) => a.date.localeCompare(c.date) || String(a.no).localeCompare(String(c.no)));
+      let day = "";
+      const close = () => { if (day >= ctx.from) cash.forEach(l => { if (bal[l] > 1) rows.push({vid: "", date: day, no: "", type: "", party: l, amount: bal[l], note: "cash balance at the end of the day: " + A.money(-bal[l])}); }); };
+      yield;
+      yield* Audit.each(all, v => { if (v.date !== day){ if (day) close(); day = v.date; } v.ent.forEach(e => { if (bal[e.l] != null) bal[e.l] = r2(bal[e.l] + e.a); }); });
+      if (day) close();
+      if (!rows.length) return null;
+      return {area: "cash", sev: "high", title: "Cash in hand below zero", clause: "books of account", problem: rows.length + " days on which the cash book closed in credit.",
+        impact: "Cash cannot be negative: entries are missing, dated wrongly, or the cash is not real. Auditors report this, and it can lead to additions as unexplained money.",
+        amount: Math.max.apply(null, rows.map(r => r.amount)), suggestion: "Find the receipts or withdrawals that were not entered, or correct the dates.", je: null, rows: rows.slice(0, 300)};
+    },
+    *gstRule37(A, V, ctx){
+      const bills = {};
+      yield* Audit.each((S.books.vouchers || []).filter(v => v.date <= ctx.to && !v.opt && !v.cancel), v => v.ent.forEach(e => (e.b || []).forEach(([name, type, amt]) => {
+        if (!name) return;
+        const k = e.l + "|" + name, x = bills[k] = bills[k] || {party: e.l, ref: name, billed: 0, paid: 0, v: null, tax: []};
+        if (type === "New Ref" && amt > 0 && Books.isPurchase(v)){ x.billed = r2(x.billed + amt); x.v = v; x.tax = v.ent.filter(z => { const m = Books.ledgerOf(z.l); return z.a < 0 && (m.kind === "gst" || m.kind === "gst_common") && m.side === "input"; }); }
+        else if (amt < 0) x.paid = r2(x.paid - amt);
+      })));
+      const rows = [], je = [];
+      yield* Audit.each(Object.values(bills), x => {
+        if (!x.v || !x.tax.length || x.billed - x.paid < 1) return;
+        const age = A.days(x.v.refDate || x.v.date, ctx.to);
+        if (age <= 180) return;
+        const share = (x.billed - x.paid) / x.billed, t = r2(x.tax.reduce((s, e) => s - e.a, 0) * share);
+        if (t < 1) return;
+        rows.push(A.row(x.v, {party: x.party, amount: t, note: "bill " + x.ref + ", " + age + " days, " + A.money(x.billed - x.paid) + " unpaid"}));
+        je.push({date: ctx.to, narr: "Credit reversed under rule 37: bill " + x.ref + " of " + x.party + " unpaid after 180 days", lines: [{l: "ITC REVERSED RULE 37 (TO RECLAIM)", dr: t}].concat(x.tax.map(e => ({l: e.l, cr: r2(-e.a * share)})))});
+      });
+      if (!rows.length) return null;
+      return {area: "gst", sev: "high", clause: "rule 37; 3B 4(B)(2)", title: "Suppliers unpaid after 180 days, credit still taken",
+        problem: rows.length + " purchase bills still unpaid 180 days after the invoice date.", impact: "The credit on the unpaid part is to be reversed with interest; it can be taken again once the supplier is paid.",
+        amount: rows.reduce((s, r) => s + r.amount, 0), suggestion: "Pay the suppliers, or reverse the credit in 3B table 4(B)(2) and reclaim it in 4(A)(5) after payment.", je, rows};
+    },
+    *duplicates(A, V){
       const by = {}, near = {};
-      V.forEach(v => {
+      yield* Audit.each(V, v => {
         if (Books.isSale(v) || /RECEIPT|PAYMENT|CONTRA/i.test(v.type)) return;
         const p = v.ent.find(e => e.a > 0 && (A.isCreditor(e.l) || (S.books.gstins || {})[e.l]));
         if (!p) return;
@@ -390,7 +419,8 @@ Object.assign(Audit, {
           suggestion: "Check each pair; delete the second entry in Tally, or pass the reversal below.", je, rows});
       }
       const rows2 = [];
-      Object.values(near).forEach(l => {
+      yield;
+      yield* Audit.each(Object.values(near), l => {
         if (l.length < 2) return;
         l.sort((a, c) => a.date.localeCompare(c.date));
         for (let i = 1; i < l.length; i++) if (A.days(l[i - 1].date, l[i].date) <= 3 && GST2B.normNo(l[i].ref) !== GST2B.normNo(l[i - 1].ref) && l[i].ent.find(e => e.a > 0).a >= 5000)
@@ -400,9 +430,9 @@ Object.assign(Audit, {
         impact: "If they are repeats, expense and credit are overstated.", amount: rows2.reduce((s, r) => s + r.amount, 0), suggestion: "Check the bills; most will be genuine, but repeats show up here first.", je: null, rows: rows2});
       return out;
     },
-    gaps(A, V){
+    *gaps(A, V){
       const series = {};
-      V.forEach(v => {
+      yield* Audit.each(V, v => {
         if (!Books.isSale(v) || /CREDIT/i.test(v.type)) return;
         const m = String(v.no).match(/^(.*?)(\d+)(\D*)$/);
         if (!m) return;
@@ -410,7 +440,8 @@ Object.assign(Audit, {
         (series[k] = series[k] || {pre: m[1], suf: m[3], nums: new Set(), type: v.type, reg: GSTR.regOf(v)}).nums.add(num(m[2]));
       });
       const rows = [];
-      Object.values(series).forEach(s => {
+      yield;
+      yield* Audit.each(Object.values(series), s => {
         const n = Array.from(s.nums).sort((a, c) => a - c);
         if (n.length < 5) return;
         for (let i = 1; i < n.length; i++) if (n[i] - n[i - 1] > 1 && n[i] - n[i - 1] < 50){
@@ -423,27 +454,13 @@ Object.assign(Audit, {
         impact: "Every number issued is to be accounted for; a missing number is an unrecorded or cancelled invoice.", amount: 0,
         suggestion: "Enter the missing invoices, or mark them cancelled in Tally so GSTR-1 table 13 reports them.", je: null, rows};
     },
-    trail(A, V, ctx){
-      const after = V.filter(v => v.upd && v.upd > ctx.to), late = V.filter(v => v.upd && (Books.isSale(v) || Books.isPurchase(v)) && A.days(v.date, v.upd) > 60 && v.upd <= ctx.to);
-      const out = [];
-      if (after.length) out.push({key: "after", total: after.length, area: "books", sev: "medium", clause: "audit trail, rule 3(1)", title: "Entries changed after the period ended",
-        problem: after.length + " vouchers of the period were created or altered after " + fmtDate(tallyDate(ctx.to)) + ".", impact: "Returns already filed may no longer agree with the books; for companies, each change has to be traceable in the audit trail.",
-        amount: 0, suggestion: "Review each; where a return was filed, check whether an amendment is needed.", je: null,
-        rows: after.slice(0, 500).map(v => A.row(v, {amount: 0, note: "changed on " + fmtDate(tallyDate(v.upd)) + (v.by ? " by " + v.by : "")}))});
-      if (late.length) out.push({key: "late", total: late.length, area: "books", sev: "low", clause: "", title: "Bills entered more than 60 days after their date", problem: late.length + " sales and purchase entries.",
-        impact: "Late entries make monthly returns wrong and are where omissions hide.", amount: 0, suggestion: "Enter bills in the month they belong to.", je: null,
-        rows: late.slice(0, 500).map(v => A.row(v, {amount: 0, note: "entered " + fmtDate(tallyDate(v.upd)) + ", " + A.days(v.date, v.upd) + " days later" + (v.by ? " by " + v.by : "")}))});
-      const cx = V.filter(v => v.cancel || v.opt);
-      if (cx.length) out.push({key: "cancel", area: "books", sev: "low", clause: "", title: "Cancelled or optional vouchers", problem: cx.length + " vouchers.", impact: "They are left out of every return here; make sure that is right.", amount: 0,
-        suggestion: "Check that optional vouchers are not real transactions.", je: null, rows: cx.map(v => A.row(v, {amount: 0, note: v.cancel ? "cancelled" : "optional"}))});
-      return out;
-    },
-    odd(A, V){
+    *odd(A, V){
       const HOL = ["0126", "0815", "1002"], out = [];
       const sun = V.filter(v => (Books.isSale(v) || Books.isPurchase(v) || /RECEIPT|PAYMENT/i.test(v.type)) && (new Date(A.iso(v.date) + "T00:00:00").getDay() === 0 || HOL.includes(v.date.slice(4))));
       if (sun.length > 0) out.push({key: "sunday", area: "books", sev: "low", clause: "", title: "Entries dated on a Sunday or a national holiday", problem: sun.length + " entries.",
         impact: "Usually a wrong date; sometimes a sign of back-dating.", amount: 0, suggestion: "Check the dates against the bills and bank.", je: null,
         rows: sun.slice(0, 300).map(v => A.row(v, {amount: Math.abs((v.ent[0] || {}).a || 0), note: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][new Date(A.iso(v.date) + "T00:00:00").getDay()]}))});
+      yield;
       const jr = V.filter(v => /JOURNAL/i.test(v.type)).map(v => ({v, amt: v.ent.filter(e => e.a > 0).reduce((s, e) => s + e.a, 0)}));
       const round = jr.filter(x => x.amt >= 100000 && x.amt % 10000 === 0 && x.v.ent.some(e => A.isExpense(e.l) || A.isIncome(e.l)));
       if (round.length) out.push({key: "round", area: "books", sev: "low", clause: "", title: "Round-sum journal entries of \u20b91 lakh or more", problem: round.length + " journals to income or expense ledgers.",
@@ -454,11 +471,12 @@ Object.assign(Audit, {
         suggestion: "Add a narration in Tally.", je: null, rows: bare.map(x => A.row(x.v, {amount: x.amt}))});
       return out;
     },
-    balances(A, V, ctx){
+    *balances(A, V, ctx){
       if (!ctx.bal.ok) return null;
       const bal = ctx.bal.at(ctx.to), out = [], P = Parties.position(ctx.to);
       // every supplier in debit and customer in credit, as Parties.position counts them (review of 02-Oct-2026: only those
       // above Rs 10,000 were counted, so the audit's totals differed from MIS and Reports)
+      yield;
       const cr = Object.entries(bal).filter(([l, v]) => A.isCreditor(l) && v < -0.5), dr = Object.entries(bal).filter(([l, v]) => A.isDebtor(l) && v > 0.5);
       if (cr.length) out.push({key: "crDr", area: "bal", sev: "low", clause: "Schedule III", title: "Suppliers with a debit balance", problem: cr.length + " suppliers owe you money.",
         impact: "In the balance sheet these are advances to suppliers, not a reduction of trade payables.", amount: P.ok ? P.supAdv : cr.reduce((s, [, v]) => s - v, 0),
@@ -468,6 +486,7 @@ Object.assign(Audit, {
         impact: "These are advances from customers \u2014 a liability, and possibly tax on advances for services.", amount: P.ok ? P.custAdv : dr.reduce((s, [, v]) => s + v, 0),
         suggestion: "Confirm the balances; show them as advances from customers, and see GST \u2192 Advances.", je: [{date: ctx.to, narr: "Customers with credit balances shown as advances", lines: dr.map(([l, v]) => ({l, dr: r2(v)})).concat([{l: "ADVANCE FROM CUSTOMERS", cr: r2(dr.reduce((s, [, v]) => s + v, 0))}])}],
         rows: dr.map(([l, v]) => ({vid: "", date: ctx.to, no: "", type: "", party: l, amount: v, note: "credit balance"}))});
+      yield;
       const sus = Object.entries(bal).filter(([l, v]) => (A.under(l, /^suspense a\/c$/i) || /SUSPENSE/i.test(l)) && Math.abs(v) >= 1);
       if (sus.length) out.push({key: "suspense", area: "bal", sev: "medium", clause: "", title: "Suspense balances not cleared", problem: sus.length + " suspense ledgers carry a balance.",
         impact: "Unexplained balances are reported by the auditor and can be treated as unexplained income or expense.", amount: sus.reduce((s, [, v]) => s + Math.abs(v), 0),
@@ -479,24 +498,69 @@ Object.assign(Audit, {
       return out;
     }
   },
+  *each(list, f, n){ n = n || 4000; for (let i = 0; i < list.length; i++){ f(list[i], i); if (i % n === n - 1) yield; } },
+  drain(it){ let r; while (!(r = it.next()).done); return r.value; },
   // the fingerprint of a result: the same books give the same code, every time
   hash(str){ let h = 2166136261; for (let i = 0; i < str.length; i++){ h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0).toString(16).toUpperCase().padStart(8, "0"); },
   itemKey(f, r){ return f.id + "|" + [r.vid || "", r.party || "", r.date || "", r.no || "", r.type || ""].join("|"); },
   // run every check for a period; rules only, so the same books always give the same findings
   run(from, to, how){ return typeof memoScope === "function" ? memoScope(() => this.runNow(from, to, how)) : this.runNow(from, to, how); },
   runNow(from, to, how){ const it = this.runIn(from, to, how); let r; while (!(r = it.next()).done); return r.value; },
-  // the run in steps, a check a step (the Audit tab works it out behind the page: app/src/screens/books/Audit.jsx)
-  *runIn(from, to, how){
+  // the ledger tests of one run, each answer kept for the run by ledger name (next-audit-steps: the cash checks asked
+  // isCash, isLoan... of every line of the year again, 20-100 ms a check on 51,758 made-up entries). Within a run the
+  // books do not change (the day's run on its own starts again when they do: autoSlice), so the answers are the same
+  ASK: ["isCash", "isBankL", "isLoan", "isCapital", "isDuties", "isCreditor", "isDebtor", "isExpense", "isFixed", "isIncome"],
+  runA(){
+    const A = Object.create(this), um = new Map();
+    this.ASK.forEach(f => { const m = new Map(), g = this[f]; A[f] = function(l){ let x = m.get(l); if (x === undefined){ x = g.call(this, l); m.set(l, x); } return x; }; });
+    A.under = function(l, re){ const k = re.source + "/" + re.flags + "\u0001" + l; let x = um.get(k); if (x === undefined){ x = Audit.under.call(this, l, re); um.set(k, x); } return x; };
+    return A;
+  },
+  // the run in steps, a check a step (the Audit tab works it out behind the page: app/src/screens/books/Audit.jsx; the
+  // day's run on its own: autoStart). What several checks read is worked out first, each in steps of its own, and kept
+  // for the run as one calculation keeps it (perRender): the balances on the two days, each year's TDS limits
+  // (TDSWatch.yearSteps), the suppliers' bills (MIS.ageingSteps). The books are changed only in the last step, all at
+  // once, so a run stopped on the way leaves the last run as it was. prog (optional): {k, of}, the checks done of all
+  *runIn(from, to, how, prog){
     const b = S.books;
     from = this.ymd(from); to = this.ymd(to);
-    const V = this.vouchers(from, to).sort((a, c) => a.date.localeCompare(c.date) || String(a.id).localeCompare(String(c.id)));
-    const ctx = {from, to, bal: this.balances(from, to)};
-    const order = Object.keys(this.checks), findings = [], errors = [], ran = new Set();
+    const V = this.vouchers(from, to);
     yield;
+    V.sort((a, c) => a.date.localeCompare(c.date) || String(a.id).localeCompare(String(c.id)));
+    yield;
+    const ctx = {from, to, bal: this.balances(from, to)}, A = this.runA();
+    const order = Object.keys(this.checks), findings = [], errors = [], ran = new Set();
+    if (prog){ prog.k = 0; prog.of = order.length; }
+    // (an error here is the check's own: it asks again, and says it)
+    const warm = f => { try { f(); } catch (e){} };
+    // the balances on the two days the checks ask for, by way of each quarter's end from the books' first day (each a
+    // step: the entries are added in order and kept on the way, moveKept, so the figures are the ones asked at once)
+    if (ctx.bal.ok){
+      const ends = [], last = this.dayBefore(from), m0 = String((b.meta || {}).from || from).slice(0, 6);
+      for (let y = num(m0.slice(0, 4)), m = num(m0.slice(4, 6)); ; ){
+        m += 3; if (m > 12){ m -= 12; y++; }
+        const d = this.dayBefore(String(y) + String(m).padStart(2, "0") + "01");
+        if (d >= to) break;
+        ends.push(d);
+      }
+      for (const d of ends.filter(d => d < last).concat([last], ends.filter(d => d > last), [to])){ warm(() => ctx.bal.at(d)); yield; }
+    }
+    if (typeof TDSWatch === "object" && TDSWatch.yearSteps && this.checks.tdsMissed){
+      if (TDS.allRowsIn){ try { yield* TDS.allRowsIn(); } catch (e){} } yield;
+      if (typeof perRender === "function" && TDSWatch.byLedger){ warm(() => perRender(TDSWatch, "byLedger", () => TDSWatch.byLedger())); yield; }
+      const y0 = num(TDS.fyOf(from).slice(0, 4)), y1 = num(TDS.fyOf(to).slice(0, 4));
+      for (let y = y0; y <= y1; y++){
+        const fy = y + "-" + String(y + 1).slice(2);
+        let r = null; try { r = yield* TDSWatch.yearSteps(fy); } catch (e){ r = null; }
+        if (r && typeof perRender === "function") perRender(TDSWatch, "y|" + fy, () => r);
+        yield;
+      }
+    }
+    if (this.checks.msme43Bh && typeof MIS === "object" && MIS.ageingSteps){ try { ctx.ageP = yield* MIS.ageingSteps(to, "p", null); } catch (e){ delete ctx.ageP; } yield; }
     for (let k = 0; k < order.length; k++){
       const id = order[k];
       try {
-        const r = this.checks[id](this, V, ctx);
+        const f = this.checks[id], r = f.steps ? yield* f.steps(A, V, ctx) : f(A, V, ctx);
         ran.add(id);
         [].concat(r || []).filter(Boolean).forEach(f => {
           f.id = id + (f.key ? ":" + f.key : ""); f.check = id; f.order = k; f.amount = r2(f.amount || 0);
@@ -506,36 +570,48 @@ Object.assign(Audit, {
           findings.push(f);
         });
       } catch (e){ errors.push(id + ": " + (e && e.message)); }
+      if (prog) prog.k = k + 1;
       yield;
     }
     findings.sort((a, c) => this.SEV[c.sev] - this.SEV[a.sev] || a.order - c.order || a.id.localeCompare(c.id));
-    const au = b.audit = b.audit || {st: {}, history: []};
-    au.items = au.items || {};
-    const at = new Date().toISOString(), seen = new Set();
-    const prev = au.last ? Object.fromEntries(au.last.findings.map(f => [f.id, f.count])) : {};
-    findings.forEach(f => {
-      f.isNew = !(f.id in prev); f.more = prev[f.id] != null ? f.count - prev[f.id] : 0;
-      f.rows.forEach(r => {
-        seen.add(r.key);
-        const it = au.items[r.key];
-        if (!it) au.items[r.key] = {f: f.id, title: f.title, area: f.area, sev: f.sev, first: at, last: at, from, to, row: {date: r.date, no: r.no, party: r.party, amount: r.amount, note: r.note, type: r.type}};
-        else { it.last = at; it.to = to; if (it.solved){ it.reopened = at; delete it.solved; } it.row = {date: r.date, no: r.no, party: r.party, amount: r.amount, note: r.note, type: r.type}; }
-      });
-      f.rows.splice(1000);
-    });
-    // an item found before and not found now, in a period this run covers, has been put right
-    Object.entries(au.items).forEach(([k, it]) => {
+    // every row goes to the items; a finding keeps its first 1,000 (the result code is worked out from those)
+    const full = findings.map(f => f.rows.slice());
+    findings.forEach(f => { f.rows.splice(1000); });
+    yield;
+    const code = this.hash(JSON.stringify(findings.map(f => [f.id, f.count, f.amount, f.rows.map(r => r.key + "=" + r.amount)])));
+    yield;
+    // what the last step writes, worked out first (nothing of the books' audit changed yet): each row's item, and the
+    // items found before and not now, in a period this run covers (put right)
+    const au0 = b.audit || {}, items0 = au0.items || {}, seen = new Set(), recs = full.map(rows => rows.map(r => { seen.add(r.key); return [r.key, {date: r.date, no: r.no, party: r.party, amount: r.amount, note: r.note, type: r.type}]; }));
+    yield;
+    const gone = [];
+    Object.entries(items0).forEach(([k, it]) => {
       if (seen.has(k) || it.solved || !ran.has(String(it.f).split(":")[0])) return;
       const d = it.row && it.row.date;
-      if (d ? (d >= from && d <= to) : (to >= it.to && from <= it.from)) it.solved = at;
+      if (d ? (d >= from && d <= to) : (to >= it.to && from <= it.from)) gone.push(it);
     });
+    yield;
+    // the last step: the books' audit, all at once
+    const au = b.audit = b.audit || {st: {}, history: []};
+    au.items = au.items || {};
+    const at = new Date().toISOString();
+    const prev = au.last ? Object.fromEntries(au.last.findings.map(f => [f.id, f.count])) : {};
+    findings.forEach((f, i) => {
+      f.isNew = !(f.id in prev); f.more = prev[f.id] != null ? f.count - prev[f.id] : 0;
+      recs[i].forEach(([key, row]) => {
+        const it = au.items[key];
+        if (!it) au.items[key] = {f: f.id, title: f.title, area: f.area, sev: f.sev, first: at, last: at, from, to, row};
+        else { it.last = at; it.to = to; if (it.solved){ it.reopened = at; delete it.solved; } it.row = row; }
+      });
+    });
+    gone.forEach(it => { it.solved = at; });
     const solvedBy = {};
     Object.values(au.items).filter(it => it.solved).forEach(it => { (solvedBy[it.f] = solvedBy[it.f] || []).push(it); });
     const run = {at, from, to, how: how || "run now", basis: MIS.basis(), findings, errors, vouchers: V.length, balances: ctx.bal.ok ? ctx.bal.src : "",
       notes: [ctx.bal.ok ? "" : "Balance checks were not run: " + ctx.bal.why + ".", this.mastersIn() ? "" : "The ledger masters are not read, so ledgers are recognised by name only."].filter(Boolean),
       solved: Object.entries(solvedBy).map(([fid, list]) => ({id: fid, title: list[0].title || fid, area: list[0].area, sev: list[0].sev, n: list.length, amount: r2(list.reduce((s2, it) => s2 + num(it.row && it.row.amount), 0)),
         items: list.sort((a, c) => String(a.solved).localeCompare(String(c.solved)) || String((a.row || {}).date).localeCompare(String((c.row || {}).date))).slice(-300)}))};
-    run.code = this.hash(JSON.stringify(findings.map(f => [f.id, f.count, f.amount, f.rows.map(r => r.key + "=" + r.amount)])));
+    run.code = code;
     au.last = run;
     au.history = [{at, from, to, how: run.how, n: findings.length, high: findings.filter(f => f.sev === "high").length, amount: r2(findings.reduce((s2, f) => s2 + f.amount, 0)), code: run.code,
       solved: Object.values(au.items).filter(it => it.solved === at).length}].concat(au.history || []).slice(0, 30);
@@ -582,14 +658,93 @@ Object.assign(Audit, {
     return null;
   },
   howLabel(run){ return !run || !run.how || run.how === "run now" ? "run by hand" : run.how; },
+  // next-audit-steps (owner-approved, 12-Nov-2026): the day's first audit on its own ran in one go right after new
+  // entries came in from the cloud copy (TCloud.rework) or the books opened, and held the page for it (1.4 s on 51,758
+  // made-up entries here, 5.6 s on the owner's PC). Now it is worked out in small steps between the page's own work
+  // (requestIdleCallback, else a timer; about SLICE_MS of steps a task, each step a part of a check's working), with the
+  // steps sharing what they work out as one run does (JOB_MEMO, as lib/behind.jsx does). It is the same run (runIn), so
+  // the same result as working it out at once. The books' audit is changed only by its last step: until then the last
+  // run stays as it was (the Audit tab says it is checking). The books changed meanwhile (another list of entries, an
+  // entry replaced, any save of the books, a run by hand, the setting): it starts again from the books as they are now,
+  // if still due; another client opened: it stops, and nothing is written. tests/run_hang_audit_auto.py
+  AUTO: {SLICE_MS: 10, DRAW_MS: 500},
+  auto: null,
   maybeRun(){
     const b = S.books;
     if (!b || !b.vouchers || !this.due(b)) return;
-    const r = this.defaultRange(b), run = this.run(r.from, r.to, "on its own (" + this.cfg(b).freq + ")");
+    this.autoStart(b);
+  },
+  // what the run is worked out from: compared before each task of steps
+  autoSig(b){
+    const V = b.vouchers || [];
+    return {b, cid: b.cid, co: S.coId, V, n: V.length, vs: V.slice(), rev: typeof BOOKS_REV === "number" ? BOOKS_REV : 0, last: (b.audit || {}).last || null, freq: this.cfg(b).freq};
+  },
+  autoSame(x, b){
+    const V = b.vouchers || [];
+    return !!x && x.b === b && S.books === b && S.coId === x.co && x.V === V && x.n === V.length && x.rev === (typeof BOOKS_REV === "number" ? BOOKS_REV : 0) &&
+      x.last === ((b.audit || {}).last || null) && x.freq === this.cfg(b).freq && x.vs.every((v, i) => v === V[i]);
+  },
+  autoStart(b){
+    const j = this.auto;
+    if (j && j.b === b) return j;
+    if (j) this.autoStop(j);
+    const job = this.auto = {b, cid: b.cid, co: S.coId, it: null, sig: null, memo: null, prog: {k: 0, of: Object.keys(this.checks).length}, starts: 0, slices: [], drawn: 0, t0: Date.now()};
+    this.autoSoon(job);
+    return job;
+  },
+  autoStop(j){
+    if (!j) return;
+    if (j.it){ try { j.it.return(); } catch (e){} }
+    j.it = null;
+    if (this.auto === j) this.auto = null;
+  },
+  // the run on its own being worked out for these books (the Audit tab's "checking" line)
+  autoFor(b){ const j = this.auto; return j && j.b === b && S.books === b ? j : null; },
+  autoSoon(j){
+    const go = d => this.autoSlice(j, d);
+    if (typeof requestIdleCallback === "function" && !(typeof document === "object" && document.hidden)) requestIdleCallback(go, {timeout: 250});
+    else setTimeout(go, 0);
+  },
+  autoSlice(j){
+    if (this.auto !== j) return;
+    const b = j.b;
+    // another client opened: stopped, nothing written
+    if (S.books !== b || S.coId !== j.co){ this.autoStop(j); return; }
+    if (!j.it || !this.autoSame(j.sig, b)){
+      if (j.it){ try { j.it.return(); } catch (e){} j.it = null; }
+      // a run by hand since, the setting turned off, or no entries: nothing more to do
+      if (!this.due(b)){ this.autoStop(j); return; }
+      const r = this.defaultRange(b);
+      j.sig = this.autoSig(b); j.memo = new Map(); j.starts++;
+      j.it = this.runIn(r.from, r.to, "on its own (" + this.cfg(b).freq + ")", j.prog);
+    }
+    const now = () => (typeof performance === "object" ? performance.now() : Date.now()), t0 = now(), was = typeof JOB_MEMO === "undefined" ? null : JOB_MEMO;
+    let run = null, done = false;
+    if (typeof reactScopeEnd === "function") reactScopeEnd();
+    JOB_MEMO = j.memo; IN_RENDER++;
+    try {
+      for (;;){
+        const r = j.it.next();
+        if (r.done){ run = r.value; done = true; break; }
+        if (now() - t0 >= this.AUTO.SLICE_MS) break;
+      }
+    } catch (e){ done = true; run = null; }
+    finally { IN_RENDER--; JOB_MEMO = was; j.slices.push(Math.round(now() - t0)); }
+    if (!done){
+      // the Audit tab's line of how far it is, now and then
+      if (Date.now() - j.drawn >= this.AUTO.DRAW_MS && typeof document === "object" && document.querySelector("[data-audit-auto]")){ j.drawn = Date.now(); if (typeof soonRender === "function") soonRender({now: true}); }
+      this.autoSoon(j);
+      return;
+    }
+    j.it = null;
+    if (this.auto === j) this.auto = null;
+    if (!run) return;
+    j.run = run;
     saveBooks();
     const hi = run.findings.filter(f => f.sev === "high").length;
     // it ran by itself: the sidebar's quiet line, not a toast (stability batch 3)
     toast("Audit ran on its own: " + run.findings.length + " findings" + (hi ? ", " + hi + " serious" : "") + ". See Audit.", {background: true});
+    if (typeof soonRender === "function") soonRender(); else render();
   },
   status(id){ const st = ((S.books.audit || {}).st || {})[id]; return st || {s: "open"}; },
   // the journal entries marked to pass, as a file Tally imports
@@ -660,4 +815,5 @@ Object.assign(Audit, {
     saveFile(CO().name.replace(/[^A-Za-z0-9]+/g, "-") + "-audit-" + run.from + "-" + run.to + ".xlsx", new Blob([out], {type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));
   }
 });
-
+// a check that has its steps (checkSteps) is worked out in them by Audit.runIn (a check put in its place has none)
+Object.keys(Audit.checkSteps).forEach(k => { Audit.checks[k].steps = Audit.checkSteps[k]; });
