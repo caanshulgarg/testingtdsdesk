@@ -103,4 +103,19 @@ function fy24(w){
   sec("rej", "b2b", P("Hollyford Stationers"), {inum: "HS-REJ-3", dt: "26-03-2025", val: 9440, txval: 8000, igst: 0, cgst: 720, sgst: 720, cess: 0, pos: "07", rev: "N", itcavl: "Y"}, "inv");
   return g;
 }
-module.exports = {itc, fy24};
+// review of aba40df57 (B1): a credit note in 2B's ISD part that is not in Tally. isdCn(w) (after itc(w)) adds to w (in
+// place) an April 2025 bill (CGST and SGST 900 each, in April's 2B) and, in April's 2B, a credit note of the head office's
+// ISD, IGST 8,000, booked nowhere; returns {apr}. 2B's own section says ISD; the books say so only when the head office's
+// ledger is switched (or Tally types its entries ISD): with no switch every figure is the base's (4(A)(5) takes it off)
+function isdCn(w){
+  const P = (n) => w.ledgers.find((l) => l.name === n), dd = w.portal.find((j) => j.data.rtnprd === "042025").data.docdata;
+  const guid = "isdcn-1", p = P("Alder Supply Co");
+  w.heads.push({guid, day: "2025-04-12", alter_id: 960001, vtype: "Purchase", vno: "PUR/C1", party: p.name, narration: "Purchase (made-up, ISD credit note world)", cancelled: false, optional: false, deleted_at: null,
+    gstin: p.gstin, pos: "Delhi", ref: "AS/APR/12", ref_date: "2025-04-12", cmp_gstin: w.OWN});
+  [[p.name, 11800], ["Purchases", -10000, 1], ["Input CGST", -900], ["Input SGST", -900]].forEach(([l, a, m]) => w.lines.push({guid, ledger: l, amount: a, hsn: m ? "4802" : null, rate: m ? 18 : null}));
+  const S0 = (key, P0, list, doc) => { const l = dd[key] = dd[key] || []; let s = l.find((z) => z.ctin === P0.gstin); if (!s){ s = {ctin: P0.gstin, trdnm: P0.name.toUpperCase(), supfildt: "11-05-2025", inv: [], nt: [], doclist: []}; l.push(s); } s[list] = s[list] || []; s[list].push(doc); };
+  S0("b2b", p, "inv", {inum: "AS/APR/12", dt: "12-04-2025", val: 11800, txval: 10000, igst: 0, cgst: 900, sgst: 900, cess: 0, pos: "07", rev: "N", itcavl: "Y"});
+  S0("isd", P("Kestrel Head Office ISD"), "doclist", {doctyp: "C", docnum: "ISD/CN/25/007", docdt: "25-04-2025", igst: 8000, cgst: 0, sgst: 0, cess: 0, itcelg: "Y"});
+  return {apr: guid};
+}
+module.exports = {itc, fy24, isdCn};

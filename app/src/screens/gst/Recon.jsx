@@ -65,7 +65,12 @@ function TaxType({ reg, fy }) {
 
 function TwoB({ reg, fy }) {
   const t = GSTX.twoBYear(reg, fy);
-  if (!t.loaded) return <None>No 2B here for {fy}. Bring it in on the 2B page, or connect the GST API.</None>;
+  // (review of aba40df57, L2: with no 2B for the year, the input tax with no supplier GSTIN is still listed: it is the books')
+  const taxOnly = t.taxOnly.length > 0 && <><h4 style={{ marginTop: 14 }}>Input tax with no supplier GSTIN ({t.taxOnly.length}): counted in the books, never in 2B</h4>
+      <Table id="reconTaxOnly" head={["Date|date", "Type", "Number|number", "Ledger|party", "IGST|sum", "CGST|sum", "SGST|sum"]}>
+        {t.taxOnly.map((x, i) => <tr key={i}><td>{d(x.date)}</td><td>{x.type}</td><td>{x.voucher}</td><td>{x.party}</td><td className="n">{m(x.igst)}</td><td className="n">{m(x.cgst)}</td><td className="n">{m(x.sgst)}</td></tr>)}
+      </Table></>;
+  if (!t.loaded) return <><None>No 2B here for {fy}. Bring it in on the 2B page, or connect the GST API.</None>{taxOnly}</>;
   return <>
     <h4>In 2B, no entry in the books ({t.only2b.length}) · IGST {m(t.tot.only2b.igst)} · CGST {m(t.tot.only2b.cgst)} · SGST {m(t.tot.only2b.sgst)}</h4>
     <Table id="recon2b" head={["2B period", "Supplier|party", "GSTIN", "Number|number", "Date|date", "Taxable value|amount", "IGST|sum", "CGST|sum", "SGST|sum", "In the books|status"]}>
@@ -76,10 +81,7 @@ function TwoB({ reg, fy }) {
     <Table id="reconBooks" head={["Month", "Supplier|party", "GSTIN", "Bill number|number", "Date|date", "Taxable value|amount", "IGST|sum", "CGST|sum", "SGST|sum"]}>
       {t.onlyBooks.map((x, i) => <tr key={i}><td>{GSTR.label(x.ym)}</td><td>{x.party}</td><td>{x.gstin}</td><td>{x.no}</td><td>{d(x.date)}</td><td className="n">{m(x.taxable)}</td><td className="n">{m(x.igst)}</td><td className="n">{m(x.cgst)}</td><td className="n">{m(x.sgst)}</td></tr>)}
     </Table>
-    {t.taxOnly.length > 0 && <><h4 style={{ marginTop: 14 }}>Input tax with no supplier GSTIN ({t.taxOnly.length}): counted in the books, never in 2B</h4>
-      <Table id="reconTaxOnly" head={["Date|date", "Type", "Number|number", "Ledger|party", "IGST|sum", "CGST|sum", "SGST|sum"]}>
-        {t.taxOnly.map((x, i) => <tr key={i}><td>{d(x.date)}</td><td>{x.type}</td><td>{x.voucher}</td><td>{x.party}</td><td className="n">{m(x.igst)}</td><td className="n">{m(x.cgst)}</td><td className="n">{m(x.sgst)}</td></tr>)}
-      </Table></>}
+    {taxOnly}
   </>;
 }
 

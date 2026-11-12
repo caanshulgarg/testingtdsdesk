@@ -269,7 +269,9 @@ Object.assign(Audit, {
       if (!Object.keys(S.books.twoBs || {}).length) return null;
       const months = []; for (let m = ctx.from.slice(0, 6); m <= ctx.to.slice(0, 6); m = String(num(m.slice(4)) === 12 ? num(m.slice(0, 4)) + 1 + "01" : m.slice(0, 4) + String(num(m.slice(4)) + 1).padStart(2, "0"))) months.push(m);
       const rows = [];
-      ((S.books.meta || {}).gstins || [""]).forEach(g => { const sc = GST2B.scope(g.slice(0, 2), months); sc.onlyBooks.forEach(d => rows.push({vid: d.id, date: d.date, no: d.no, type: d.type, party: d.party, amount: r2(d.igst + d.cgst + d.sgst + d.cess) * d.dir, note: d.gstin ? "not in 2B" : "no GSTIN in Tally"})); });
+      ((S.books.meta || {}).gstins || [""]).forEach(g => { const sc = GST2B.scope(g.slice(0, 2), months), noY = new Set(sc.noYear || []);
+        // (review of aba40df57, L3: a bill of a year with no 2B here is listed, "2B not brought in")
+        (sc.unmatched || sc.onlyBooks).forEach(d => rows.push({vid: d.id, date: d.date, no: d.no, type: d.type, party: d.party, amount: r2(d.igst + d.cgst + d.sgst + d.cess) * d.dir, note: noY.has(d) ? "2B not brought in" : d.gstin ? "not in 2B" : "no GSTIN in Tally"})); });
       if (!rows.length) return null;
       return {area: "gst", sev: "medium", clause: "section 16(2)(aa); rule 36(4)", title: "Credit in the books that is not in GSTR-2B", problem: rows.length + " documents.",
         impact: "Credit can be taken only when the supplier reports the invoice; what is not in 2B by the 30 November after the year is lost.", amount: rows.reduce((s, r) => s + r.amount, 0),

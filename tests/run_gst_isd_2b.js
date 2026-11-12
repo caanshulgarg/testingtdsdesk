@@ -22,13 +22,18 @@
 //      for 3B (app/src/lib/itcFinal.js): the same, a decision on the ISD's line, an adjustment on the new 4(A)(4) line
 //   D. M5: GSTX.unclaimed counts 4(A)(4) (and a filed 3B's ISD entry) as claimed
 //   E. Tally's registration type "Input-Service-Distributor" (hyphens)
+//   F. review of aba40df57 (B1): a credit note in 2B's ISD part (IGST 8,000, April 2025), not in Tally, and an April bill
+//      (CGST and SGST 900): a 2B row is the ISD's only when the books say so (the supplier's ledger switched, or Tally's
+//      type), as a booked document. No switch: every box of every month the base's (4(A)(4) 0, 4(A)(5) takes it off).
+//      Switched: April's 4(A)(4) does not go below nothing (no ISD credit that month): the 8,000 stays in 4(A)(5), as
+//      the base has it; the engine, the Final credit for 3B and gst-run's parity alike
 // Made-up names and figures only (no real client); about 400 entries.
 "use strict";
 const path = require("path");
 process.env.TZ = process.env.TZ || "Asia/Kolkata";
 const {load, HTML} = require("./harness");
 const {world} = require("./gst_cloud_world");
-const {itc, fy24} = require("./gst_itc_world");
+const {itc, fy24, isdCn} = require("./gst_itc_world");
 const ROOT = path.join(__dirname, "..");
 let fails = 0; const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };
 const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "fmtDate", "tallyDate", "STATE_CODES", "RULE_DEFAULTS", "Books", "BookItems", "LedMaster", "Audit", "GSTR", "GSTAdv", "GSTRev", "GSTAmend", "GST2B", "GST9", "INR",
@@ -48,6 +53,7 @@ const H = ["igst", "cgst", "sgst", "cess"], ISD = "Kestrel Head Office ISD";
     if (o.sw) w.work.map[ISD] = Object.assign({}, w.work.map[ISD] || {}, {isd: {by: "made-up", at: "2026-11-12T00:00:00.000Z"}});
     if (o.type){ const h = w.heads.find((z) => z.guid === g.isd); Object.assign(h, {gst_reg_type: "Input Service Distributor", gst_alter_id: h.alter_id}); }
     if (o.fy24) Object.assign(g, fy24(w));
+    if (o.cn) Object.assign(g, isdCn(w));
     if (o.mar25){
       const P = (n) => w.ledgers.find((l) => l.name === n);
       w.portal.push({data: {gstin: w.OWN, rtnprd: "032025", gendt: "14-04-2025", docdata: {b2b: [{ctin: P("Elmstead Paper").gstin, trdnm: "ELMSTEAD PAPER", supfildt: "11-04-2025",
@@ -237,6 +243,31 @@ const H = ["igst", "cgst", "sgst", "cess"], ISD = "Kestrel Head Office ISD";
   O1.rows.w = O1.w;
   const u1 = unc(O1.rows, false), u2 = unc(O1.rows, true);
   ok(u1 && u1.total === 0 && u2 && u2.total === 0 && u2.source === "3B from the portal", "M5. the ISD's 5,400 in April's 2B: not \"unclaimed\", from FinCom's working (4(A)(4)) and from a filed 3B's ISD entry (" + (u1 && u1.total) + ", " + (u2 && u2.total) + ")");
+  console.log("== F. a credit note in 2B's ISD part, not in Tally");
+  { const N0 = rowsOf({cn: true}), N1 = rowsOf({cn: true, sw: true}), N2 = rowsOf({cn: true, type: true}), allN = monthsOf(N0.rows);
+    const n0 = eng.engineItc(N0.rows, "07", allN).months, nb = engB.engineItc(N0.rows, "07", allN).months, n1 = eng.engineItc(N1.rows, "07", allN).months, n2 = eng.engineItc(N2.rows, "07", allN).months;
+    const A0 = n0["202504"], AB = nb["202504"];
+    ok(AB.cn2b.igst === 8000 && allN.every((m) => noIsd(n0[m]) === noIsd(nb[m]) && n0[m].isdAdj === undefined && sumOf(n0[m].isd).every((v) => v === 0)),
+      "F. no switch: every box of all " + allN.length + " months is the base engine's; 4(A)(4) 0 every month; April's 4(A)(5) " + sumOf(A0.other).join("/") + " as the base's " + sumOf(AB.other).join("/"));
+    for (const [lab, e] of [["switched", n1], ["Tally's type", n2]]){
+      const a = e["202504"];
+      ok(sumOf(a.isd).every((v) => v >= 0) && JSON.stringify(sumOf(a.isd)) === "[0,0,0,0]" && same(a.other, AB.other) && same(a.itc, AB.itc) && JSON.stringify(a.pay) === JSON.stringify(AB.pay),
+        "F. " + lab + ": April 4(A)(4) never below nothing (" + sumOf(a.isd).join("/") + "), the 8,000 stays in 4(A)(5) (" + sumOf(a.other).join("/") + "), as the base");
+      ok(allN.every((m) => same(e[m].itc, nb[m].itc) && same(e[m].netItc, nb[m].netItc)) && sumOf(e["202509"].isd)[0] === 5400, "F. " + lab + ": 4(A) total and 4(C) the base's every month; September's ISD 5,400 still in 4(A)(4)");
+    }
+    parity(N0.rows, cloud(N0.rows), "F. (no switch) gst-run's parity");
+    parity(N1.rows, cloud(N1.rows), "F. (switched) gst-run's parity");
+    const FF = load(HTML, NAMES), ffx = FF.x, ffc = FF.ctx;
+    ffc.saveBooks = () => {}; ffc.render = () => {}; ffc.Cloud = {st: {email: "made-up@zz.test"}};
+    vmr.runInContext("globalThis.__sync = (function(){" + strp("itcSync.js") + "\n; return {DECS, DEC_LABEL}; })();\n(function(){ const {DECS, DEC_LABEL} = globalThis.__sync;\n" + strp("itcFinal.js") + "\n})();", ffc);
+    for (const [lab, R0, e] of [["no switch", N0, n0], ["switched", N1, n1]]){
+      const b = inBooks(R0.rows, (bk) => clone(bk)); ffc.S.books = b; ffc.S.coId = R0.rows.client; ffc.S.companies = {[R0.rows.client]: Object.assign({}, R0.rows.co, {id: R0.rows.client})}; ffc.CO = () => ffc.S.companies[R0.rows.client];
+      ffx.GSTR._carry = null; ffx.GST2B._memo = null; const t = ffx.GSTR.threeBm("202504", "07");
+      ok(JSON.stringify(sumOf(t.isd)) === "[0,0,0,0]" && same(t.other, e["202504"].other) && same(t.itc, e["202504"].itc), "F. Final credit for 3B (" + lab + "): April 4(A)(4) " + sumOf(t.isd).join("/") + ", 4(A)(5) " + sumOf(t.other).join("/") + " as the engine");
+    }
+    const ln = (() => { const b = inBooks(N0.rows, (bk) => clone(bk)); ffc.S.books = b; ffx.GST2B._memo = null; return ffc.ITCF.excelData("07", "202504").rows.find((r) => r.no === "ISD/CN/25/007"); })();
+    ok(ln && ln.line === "4A5", "F. the Excel's line of the credit note with no switch: 4(A)(5) (" + (ln && ln.line) + ")");
+  }
   console.log("== E. Tally's registration type, written with hyphens");
   ok(inBooks(O0.rows, () => E.GSTR.isISD({regType: "Input-Service-Distributor", ent: []}) && E.GSTR.isISD({regType: "input service distributor", ent: []}) && !E.GSTR.isISD({regType: "Regular", ent: []})), "\"Input-Service-Distributor\" is an ISD's too; \"Regular\" is not");
   console.log(fails ? fails + " FAILED" : "all ok");

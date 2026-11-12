@@ -15,7 +15,10 @@ Object.assign(GST2B, {
     const r = this.run(reg), inM = ym => !months || months.includes(ym);
     const pairs = r.pairs.filter(x => inM(x.p.ym) || x.books.some(d => inM(d.ym)));
     const lastLoaded = r.loaded[r.loaded.length - 1] || "";
-    return {all: r, pairs, matched: pairs.filter(x => x.status === "matched"), diff: pairs.filter(x => x.status === "diff"), probable: pairs.filter(x => x.status === "probable"),
+    // (next-gst-isd; review of aba40df57, L3) a bill of a year with no 2B here that nothing matched (noYear): listed with
+    // the books-only, "2B not brought in"; unmatched: both, in the books' order
+    const noYear = (r.noYear || []).filter(d => inM(d.ym)), un = new Set(r.onlyBooks.concat(noYear));
+    return {noYear, unmatched: noYear.length ? (r.books || []).filter(d => un.has(d) && inM(d.ym)) : r.onlyBooks.filter(d => inM(d.ym)),all: r, pairs, matched: pairs.filter(x => x.status === "matched"), diff: pairs.filter(x => x.status === "diff"), probable: pairs.filter(x => x.status === "probable"),
       timing: pairs.filter(x => x.timing), only2b: r.only2b.filter(p => inM(p.ym)), onlyBooks: r.onlyBooks.filter(d => inM(d.ym)),
       laterMissing: r.onlyBooks.filter(d => inM(d.ym) && d.ym >= lastLoaded).length, taxOf: r.taxOf, reversed: (r.reversed || []).filter(pr => pr.some(d => inM(d.ym))), rejected: (r.rejected || []).filter(x => inM(x.p.ym) || x.books.some(d => inM(d.ym)))};
   },
@@ -50,11 +53,11 @@ Object.assign(GST2B, {
       GSTR.label(x.p.ym) + " / " + Array.from(new Set(x.books.map(b => GSTR.label(b.ym)))).join(", ")];
     const wb = XLSX.utils.book_new();
     const sheet = (name, rows) => XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), name.slice(0, 31));
-    const st = this.state();
+    const st = this.state(), noY = new Set(sc.noYear || []);
     sheet("B2B", [head, cols].concat(sc.pairs.filter(x => x.p.dir === 1 && !/^cdnr/.test(x.p.sec)).map(line)));
     sheet("CDNR", [head, cols].concat(sc.pairs.filter(x => /^cdnr/.test(x.p.sec)).map(line)));
     sheet("ITC Taken But Not Shown In 2B", [["GSTIN NO.", "PARTY NAME", "INV. NO.", "INV DATE", "VCH NO.", "VCH TYPE", "RATE", "TAXABLE", "IGST", "CGST", "SGST", "Remarks", "Note"]]
-      .concat(sc.onlyBooks.map(x => [x.gstin || "not in Tally", x.party, x.no, d(x.date), x.voucher, x.type, rate(x), x.taxable, x.igst, x.cgst, x.sgst, x.gstin ? "ITC BOOKED IN TALLY" : "ITC BOOKED, NO GSTIN IN TALLY", ((st.tag[x.id] || {}).tag || "")])));
+      .concat((sc.unmatched || sc.onlyBooks).map(x => [x.gstin || "not in Tally", x.party, x.no, d(x.date), x.voucher, x.type, rate(x), x.taxable, x.igst, x.cgst, x.sgst, noY.has(x) ? "2B NOT BROUGHT IN" : x.gstin ? "ITC BOOKED IN TALLY" : "ITC BOOKED, NO GSTIN IN TALLY", ((st.tag[x.id] || {}).tag || "")])));
     sheet("In 2B Not In Books", [["GSTIN NO.", "PARTY NAME", "INV. NO.", "INV DATE", "INV VALUE", "RATE", "TAXABLE", "IGST", "CGST", "SGST", "2B month", "Section", "ITC available", "Reason", "IMS", "Supplier filed", "Remarks"]]
       .concat(sc.only2b.map(x => [x.gstin, x.party, x.no, d(x.date), x.val, rate(x), x.taxable, x.igst, x.cgst, x.sgst, GSTR.label(x.ym), x.sec, x.itcavl, this.RSN[x.rsn] || x.rsn, this.IMS[x.ims] || x.ims, x.filedOn,
         ((st.tag[x.key] || {}).tag || "ITC NOT TAKEN")])));

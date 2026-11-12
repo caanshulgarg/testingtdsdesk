@@ -19,7 +19,7 @@
 // No AI here: M2B.aiLinks only reads the pairs the gst-2b-match function already stored for the year.
 // GST3B_SRC: this file's and names.js's text (this value left out), hashed (tests/run_gst_cloud.js keeps it so): a 3B the
 // cloud worked out carries it, and the 3B page uses the cloud's only when its own is the same (app/src/screens/gst/cloud3b.js)
-const GST3B_SRC = "s2201e1d5957f43de";
+const GST3B_SRC = "s25a0cfa417aa3dc2";
 function num(v){ if (typeof v === "number") return isFinite(v) ? v : 0; const n = parseFloat(String(v == null ? "" : v).replace(/[^0-9.\-]/g, "")); return isFinite(n) ? n : 0; }
 function r2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
 const INR = new Intl.NumberFormat("en-IN", {minimumFractionDigits:2, maximumFractionDigits:2});
@@ -1923,6 +1923,26 @@ const GSTR = {
   },
   // the ledgers switched to ISD (GST settings)
   isdLedgers(b){ const m = (b || S.books || {}).map || {}; return Object.keys(m).filter(k => m[k] && m[k].isd).sort(); },
+  // the GSTINs of the ISDs: a party ledger switched to ISD, or a party whose entries Tally types "Input Service Distributor"
+  isdGstins(){
+    const b = S.books || {}, m = b.map || {}, g = b.gstins || {}, s = new Set(), up = x => String(x || "").toUpperCase().trim();
+    Object.keys(m).forEach(k => { if (m[k] && m[k].isd && g[k]) s.add(up(g[k])); });
+    (b.vouchers || []).forEach(v => { if (v && v.party && g[v.party] && this.ISD_RE.test(String(v.regType || ""))) s.add(up(g[v.party])); });
+    return s;
+  },
+  // (review of aba40df57, B1) the test of an ISD's document or 2B row, for 4(A)(4): a document when its entry is one (isISD;
+  // a document kept by its entry says so: isd); a 2B row (sec) only when its supplier is an ISD by the books (isdGstins),
+  // whichever part of 2B it is in, so 2B's own ISD part moves nothing unless the books say ISD. vOf: an entry by its id
+  isdTest(vOf){
+    let gs = null;
+    return x => {
+      if (!x) return false;
+      if (x.sec){ if (!gs) gs = this.isdGstins(); return gs.size > 0 && gs.has(String(x.gstin || "").toUpperCase().trim()); }
+      if (x.isd) return true;
+      const v = x.id != null ? vOf(x.id) : null;
+      return !!(v && this.isISD(v));
+    };
+  },
   // next-gst-share: one entry's row of inward (null when it has none): the body of inward, for entryShares as outRow
   inRow(v, ym, reg){
     const b = S.books, gst = b.gstins || {};
@@ -2127,7 +2147,7 @@ const GSTR = {
       // (a document kept by its entry says whether it is an import: imp)
       const claimable = d => d.dir > 0 && !d.rcm && !d.ineligible && !d.held && !(d.imp !== undefined ? d.imp : (vById.get(d.id) && Books.isImport(vById.get(d.id))));
       // an ISD's: a 2B row of 2B's ISD part, or a document of an ISD's entry (a document kept by its entry says so: isd)
-      const isdX = x => x.sec ? (x.sec === "isd" || x.sec === "isda") : !!(x.isd || (vById.get(x.id) && this.isISD(vById.get(x.id))));
+      const isdX = this.isdTest(id => vById.get(id));
       basis.res.onlyBooks.filter(d => d.ym === ym && claimable(d)).forEach(d => add(held, d));
       basis.res.pairs.forEach(x => { if (x.p.ym > ym) x.books.filter(d => d.ym === ym && claimable(d)).forEach(d => add(held, d));
         if (x.p.ym === ym) x.books.filter(d => d.ym < ym && basis.loaded.has(d.ym) && this.itcBasis(d.ym, reg, true) && claimable(d)).forEach(d => add(released, d)); });
@@ -2153,6 +2173,9 @@ const GSTR = {
       // the ISD's documents' part of that: 4(A)(4)'s, taken back out of 4(A)(5) (isdAdj, kept only when there is one)
       const dI = {igst: 0, cgst: 0, sgst: 0, cess: 0};
       [[released, 1], [held, -1], [cn2b, -1], [rejBack, 1]].forEach(([o, f]) => o.list.filter(isdX).forEach(x => { ["igst", "cgst", "sgst", "cess"].forEach(h => { dI[h] = r2(dI[h] + f * num(x[h])); }); }));
+      // (review of aba40df57, B1) 2B never takes 4(A)(4) below nothing: what it takes off beyond the ISD's credit stays in
+      // 4(A)(5), as it was before ISD (4(A)(5) may go below nothing, as ever; the 4(A) total is the same either way)
+      ["igst", "cgst", "sgst", "cess"].forEach(h => { if (dI[h] < 0) dI[h] = r2(Math.max(dI[h], -Math.max(0, num(isd[h])))); });
       if (["igst", "cgst", "sgst", "cess"].some(h => Math.abs(dI[h]) >= 0.005)){
         isdAdj = dI;
         isd = Object.assign({}, isd, {igst: r2(isd.igst + dI.igst), cgst: r2(isd.cgst + dI.cgst), sgst: r2(isd.sgst + dI.sgst), cess: r2(isd.cess + dI.cess)});

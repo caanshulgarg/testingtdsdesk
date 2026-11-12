@@ -33,7 +33,7 @@ import * as E from "../_shared/gst3b.js";
 import { gst3bPrint } from "../_shared/gst3bprint.js";
 
 // the revision of the function around the engine (data.ts, handler.ts): moved by hand with tests/gst_cloud_rev.json
-export const REV = "171.3";
+export const REV = "171.4";
 
 const G = globalThis;
 // what the app's program has around the engine: names.js (put at its head by build.py too)
