@@ -40,13 +40,15 @@ BANK = r"""async () => {
     rows: [row("u1"), row("u2"), row("u3", {state: "attention", ledger: ""}),
       row("m1"), row("m2", {state: "ignored", prevState: "suggested"}), posted("m3"), row("m4", {state: "intally", tallyIdx: 3}),
       row("n1", {date: "2026-01-20", credit: 777, state: "intally", prevState: "suggested", tallyIdx: 0, tallyKey: "tg-1", tallyHow: "same amount and date", tallyRef: "Receipt · 11"}),
-      row("o1", {date: "2026-01-22", credit: 888, state: "intally", tallyHow: "posted by FinCom on 21-Jan-2026"}),
+      row("o1", {date: "2026-01-22", credit: 888, state: "intally", tallyHow: "posted by FinCom earlier"}),
+      row("o3", {date: "2026-01-26", credit: 555, state: "intally", tallyIdx: 2, tallyKey: "tg-o3", tallyHow: "same amount and date"}),
       row("o2", {date: "2026-01-23", credit: 999, state: "intally", tallyHow: "posted by FinCom on 23-Jan-2026"}), row("c1", {date: "2026-01-25", credit: 333, state: "ready"}), row("f1", {date: "2026-01-24", credit: 444, state: "intally", prevState: "ready", tallyKey: "tg-9", tallyHow: "found in Tally when reconciling", tallyRef: "Receipt · 31"}), row("m5", {state: "attention", ledger: ""}), row("m6", {ledger: "Not A Ledger"}),
       posted("p1"), posted("p2"), posted("p3"), posted("p4")],
     rules: [], wrules: [], ledgers: {list: [{name: BK, group: "Bank Accounts"}, {name: PARTY, group: "Sundry Debtors"}], importedAt: new Date().toISOString(), live: true}, newLed: [], keys: {}, books: {},
     filter: "all", grouped: false, showSettings: false, q: "", limit: 500, pendingRule: null, busy: "", createFor: null, sel: new Set(), sticky: new Set(), undo: null, hist: {rows: {}}, histVer: 0, postedTags: {}, salesRef: []};
   S.bank.books.a1 = {entries: [{date: "2026-01-20", debit: 777, credit: 0, party: "Cust n1", vt: "Receipt", vn: "11", narr: "", inst: "", guid: "tg-1"},
-    {date: "2026-01-21", debit: 777, credit: 0, party: "Cust n1", vt: "Receipt", vn: "12", narr: "", inst: "", guid: "tg-2"}], importedAt: new Date().toISOString()};
+    {date: "2026-01-21", debit: 777, credit: 0, party: "Cust n1", vt: "Receipt", vn: "12", narr: "", inst: "", guid: "tg-2"},
+    {date: "2026-01-26", debit: 555, credit: 0, party: "Cust o3", vt: "Receipt", vn: "13", narr: "TDSDesk:" + fpHash("fp-o3").toUpperCase(), inst: "", guid: "tg-o3"}], importedAt: new Date().toISOString()};
   window.__audit = []; const a0 = window.auditEvent; window.auditEvent = (k, t, c) => { window.__audit.push(k + ": " + t); return a0 && a0(k, t, c); };
   S.bank.postedTags[fpHash("fp-o2")] = "2026-01-23T10:00:00Z"; S.bank.postedTags[fpHash("fp-f1")] = "tally:2026-01-24T10:00:00Z";
   ["p1", "p2", "p3", "p4", "m3"].forEach(id => { S.bank.postedTags[fpHash("fp-" + id)] = "2026-01-06T10:00:00Z"; });
@@ -64,7 +66,7 @@ SALES = r"""() => {
   const n2 = Object.assign(iv("n2", "intally"), {postNote: "Already in Tally", tallyMatch: {key: "sv-1", date: "2026-07-01", number: "S/n2", amount: 1180}});
   S.sales = {cid, loading: false, list: [n2, iv("v1", "review"), iv("m1", "review"), iv("m2", "ignored"), iv("m3", "intally"), iv("m4", "posted")], cfg: Object.assign({}, SALES_CFG_DEFAULT),
     filter: "all", q: "", sel: new Set(), sticky: new Set(), busy: "", openId: null, view: "list", draft: null, undo: null, hist: {}};
-  window.mapInvoice = (v) => { v.problems = v.problems || []; v.ledgerIssues = v.ledgerIssues || []; };
+  window.__mi0 = window.__mi0 || window.mapInvoice; window.mapInvoice = (v) => { v.problems = v.problems || []; v.ledgerIssues = v.ledgerIssues || []; };
   return 1;
 }"""
 SV = "(id) => (SL().list.find(v => v.id === id) || {}).status || 'gone'"
@@ -136,6 +138,9 @@ with sync_playwright() as p:
     box = lambda: pg.inner_text("#confirmBox").replace("\n", " ") if pg.locator("#confirmBox .cbx").count() else ""
     E("() => { window.__toasts = []; bankRowAct('nottally', 'o1'); }"); W(300)
     ok(not box() and E(R, "o1")["state"] == "intally", "never offered on a line FinCom posted (%r)" % last())
+    S0 = "() => { B().postedTags[fpHash('fp-o3')] = 'tally:2026-01-26T10:00:00Z'; bankRowAct('nottally', 'o3'); }"
+    E(S0); W(300)
+    ok(not box() and E(R, "o3")["state"] == "intally", "nor on FinCom's own posting found again (tally: tag, its entry carries the line's TDSDesk tag)")
     E("() => { bankRowAct('nottally', 'o2'); }"); W(300)
     ok(not box() and E(R, "o2")["state"] == "intally", "nor on one whose tag says FinCom posted it")
     E("() => bankRowAct('nottally', 'f1')"); W(400)
@@ -148,19 +153,26 @@ with sync_playwright() as p:
     n1 = E("(() => { const r = B().rows.find(x => x.id === 'n1'); return {state: r.state, not: r.notTally, idx: r.tallyIdx === undefined ? null : r.tallyIdx, user: !!r.userSet}; })()")
     st0 = E("""async () => { const ap = await loadAutoPost(); const r = B().rows.find(x => x.id === 'n1'); const r2 = Object.assign({}, r, {prevState: undefined, userSet: false}); return ap.bankCheck(r2, {cfg: Object.assign({}, ap.DEF, {on: true}), idx: new Map(), env: {partyKey: () => '', exactLedger: (n) => n, ledgerInfo: () => null}}).stops.join('; '); }""")
     ok("not the Tally entry" in (st0 or ""), "Post automatically never takes a line marked not that entry (%r)" % st0)
-    ok(n1["state"] == "attention" and not n1["user"] and n1["not"] == ["tg-1"] and n1["idx"] is None and any("n1" in a or "777" in a for a in E("window.__audit")), "marked not that entry: to attention (a person decides), not set by a person, the entry remembered on the line, audited (%s)" % n1)
+    E("() => { suggestAll(B().rows.filter(x => x.id === 'n1')); }")
+    ok(E(R, "n1")["state"] in ("attention", "suggested"), "suggestions afterwards never make it ready (%s)" % E(R, "n1"))
+    E("() => { const r = B().rows.find(x => x.id === 'n1'); r.state = 'attention'; }")
+    ok(n1["state"] == "attention" and not n1["user"] and "tg-1" in (n1["not"] or []) and n1["idx"] is None and any("n1" in a or "777" in a for a in E("window.__audit")), "marked not that entry: to attention (a person decides), not set by a person, the entry remembered on the line, audited (%s)" % n1)
     E("() => { const b = B(); matchTallyBook((CO(b.cid).bankAccounts || [])[0], b.rows, true); }")
     n1 = E("(() => { const r = B().rows.find(x => x.id === 'n1'); return {state: r.state, key: r.tallyKey}; })()")
     ok(n1["state"] == "intally" and n1["key"] == "tg-2", "a fresh read of Tally: matched to the other entry, never the excluded one (%s)" % n1)
     E("() => bankRowAct('nottally', 'n1')"); W(400); pg.click('#confirmBox [data-cbx="yes"]'); W(400)
     E("() => { const b = B(); matchTallyBook((CO(b.cid).bankAccounts || [])[0], b.rows, true); matchTallyBook((CO(b.cid).bankAccounts || [])[0], b.rows, false); }")
-    ok(E(R, "n1")["state"] == "attention" and E("B().rows.find(x => x.id === 'n1').notTally.length") == 2, "both excluded: the line stays open through every read (%s)" % E(R, "n1"))
+    ok(E(R, "n1")["state"] == "attention" and E("B().rows.find(x => x.id === 'n1').notTally.includes('tg-2')"), "both excluded: the line stays open through every read (%s)" % E(R, "n1"))
     # reconciling pairs a line with a Tally entry by amount and date: never with one excluded for it
     E("""async () => { const b = B(); b.rows.find(x => x.id === 'n1').ledger = 'Sundry Receipts'; window.tallyBankBalance = async () => ({});
       const c0 = Bridge.call; Bridge.call = async (u, ...a) => /^\/(ledgerlines|vouchers)/i.test(u) ? {vouchers: [{guid: 'tg-1', type: 'Receipt', number: '11', date: '20260120', entries: [{ledger: 'Undo Bank', amount: '-777'}, {ledger: 'Cust n1', amount: '777'}]},
         {guid: 'tg-c', type: 'Receipt', number: '15', date: '20260125', entries: [{ledger: 'Undo Bank', amount: '-333'}, {ledger: 'Cust c1', amount: '333'}]}]} : {};
       try { window.__rec = await reconcileBank({stay: true}); } catch (e){ window.__recErr = String(e && e.message || e); } Bridge.call = c0; }"""); W(300)
-    ok(E(R, "n1")["state"] != "intally" and E(R, "c1")["state"] == "intally", "reconcile: an excluded Tally entry is not paired with the line; another line pairs as before (%s, %s)" % (E(R, "n1"), E(R, "c1")))
+    E("""async () => { const b = B(), r = b.rows.find(x => x.id === 'c1'); r.state = 'ready'; delete r.tallyKey; r.notTally = ['2026-01-25|Receipt|15|333|0'];
+      const c0 = Bridge.call; Bridge.call = async (u, ...a) => /^\\/(ledgerlines|vouchers)/i.test(u) ? {vouchers: [{guid: 'tg-c', type: 'Receipt', number: '15', date: '20260125', entries: [{ledger: 'Undo Bank', amount: '-333'}, {ledger: 'Cust c1', amount: '333'}]}]} : {};
+      try { await reconcileBank({stay: true}); } catch (e){} Bridge.call = c0; }"""); W(300)
+    ok(E(R, "c1")["state"] == "ready", "an entry excluded from a file-imported book (no GUID) is not paired by the bridge's read either (%s)" % E(R, "c1"))
+    ok(E(R, "n1")["state"] != "intally", "reconcile: an excluded Tally entry is not paired with the line (%s)" % E(R, "n1"))
     # the un-post paths: Take back from Tally (unpost), posted again after it went from Tally (bankRepostGone), Undo of an automatic entry
     E("() => { window.unpostFromTally = async () => true; bankRowAct('unpost', 'p1'); }"); W(300)
     E("() => { B().rows.find(x => x.id === 'p2').goneFromTally = '2026-02-01T00:00:00Z'; bankRepostGone(); }"); W(200)
@@ -203,6 +215,10 @@ with sync_playwright() as p:
     ok("This invoice was matched to Tally entry" in box() and "Mark it as NOT that entry?" in box() and "posting will put it in Tally twice" in box(), "sales: Not this Tally entry asks first (%r)" % box()[:200])
     pg.click('#confirmBox [data-cbx="yes"]'); W(400)
     ok(E(SV, "n2") == "review" and E("SL().list.find(v => v.id === 'n2').notTally") == ["sv-1"], "sales: back to review (a person confirms it), the entry remembered (%s)" % E(SV, "n2"))
+    E("""() => { const v = SL().list.find(x => x.id === 'n2'); const m1 = window.mapInvoice; window.mapInvoice = window.__mi0; const h = [hasLedgerList, ledgerProblems, invoiceProblems, customerLedgerFor];
+      window.hasLedgerList = () => true; window.ledgerProblems = () => []; window.invoiceProblems = () => []; window.customerLedgerFor = () => ({ledger: 'Alpha Retail', sure: true, label: 'match'});
+      try { mapInvoice(v); } finally { [window.hasLedgerList, window.ledgerProblems, window.invoiceProblems, window.customerLedgerFor] = h; window.mapInvoice = m1; } }""")
+    ok(E(SV, "n2") == "review", "sales: working out the invoice again keeps it in review until a person sets its ledger (%s)" % E(SV, "n2"))
     E("""async () => { window.tallyVia = () => true; window.tallyCall = async () => ({vouchers: [{guid: 'sv-1', number: 'S/n2', date: '20260701'}]});
       await salesCheckTally(SL().list.filter(v => v.id === 'n2')); }""")
     ok(E(SV, "n2") == "review", "sales: the excluded voucher is not matched again")
@@ -269,22 +285,38 @@ with sync_playwright() as p:
     t = bar(); ok("Undo approval" not in t, "a bill whose cloud posting is running: no Undo approval (%r)" % t[:120])
     E("() => { window.postSending = window.__s0; render(); }"); W(400)
     t = bar(); ok("Undo approval" in t, "the same bill once nothing is sending: Undo approval (%r)" % t[:120])
-    # Deleted in Tally, on the bill: not posted again, back to To review; then it can be deleted
+    # Deleted in Tally, on the bill: Tally is read first; not there: back to To review, not posted again
     E("() => { goStep('review', 'bills'); S.filter = 'approved'; S.selected = 'b5'; S.reviewTable = false; render(); }"); W(500)
     ok(pg.locator('#app .actionbar button:has-text("Deleted in Tally")').count() == 1, "a posted bill: “Deleted in Tally” in the bar under it")
-    E("() => { window.__posted = 0; window.postAllToTally = async () => { window.__posted++; }; }")
+    E("() => { window.__posted = 0; window.postAllToTally = async () => { window.__posted++; }; window.__live = {ok: true, found: {number: '4521', date: '20260701', guid: 'g-b5'}, readAt: new Date(Date.now() + 60000).toISOString()}; PostCheck.live = async () => window.__live; }")
     pg.click('#app .actionbar button:has-text("Deleted in Tally")'); W(400)
-    ok("not posted again" in box(), "it asks first, saying it is not posted again (%r)" % box()[:200])
-    pg.fill("#confirmBox #deletedWhy", "deleted it in the Day Book"); pg.click('#confirmBox [data-cbx="yes"]'); W(500)
-    b5 = E("(() => { const e = D().entries.b5; return {status: e.status, exp: e.exportedAt || null, tally: e.tally || null, mark: !!e.deletedInTally}; })()")
-    ok(b5 == {"status": "draft", "exp": None, "tally": None, "mark": True} and E("window.__posted") == 0, "marked deleted in Tally: back to To review, the posting cleared, nothing posted (%s)" % b5)
+    ok("not posted again" in box() and "reads Tally first" in box(), "it asks first, saying Tally is read first and it is not posted again (%r)" % box()[:220])
+    pg.fill("#confirmBox #deletedWhy", "deleted it in the Day Book"); pg.click('#confirmBox [data-cbx="yes"]'); W(600)
+    ok(E("D().entries.b5.status") == "approved" and E("!!D().entries.b5.exportedAt") and not E("D().entries.b5.deletedInTally") and "Tally still has it" in last(), "Tally still has it: it stays posted, said so (%r)" % last())
+    E("() => { window.__live = {ok: false, why: 'FinCom Bridge did not answer'}; }")
+    pg.click('#app .actionbar button:has-text("Deleted in Tally")'); W(400); pg.fill("#confirmBox #deletedWhy", "deleted it"); pg.click('#confirmBox [data-cbx="yes"]'); W(600)
+    t = bar()
+    ok(E("D().entries.b5.status") == "approved" and E("!!D().entries.b5.exportedAt") and "Deleted in Tally – checking" in t, "Tally not read: still posted, the bar says “Deleted in Tally – checking” (%r)" % t[:160])
+    ok(E("postBucket(D().entries.b5, {})") == "attention", "while checking it is not ready to post (%s)" % E("postBucket(D().entries.b5, {})"))
+    E("() => { window.__live = {ok: true, found: null, readAt: new Date(Date.now() + 60000).toISOString()}; }")
+    pg.click('#app .actionbar button:has-text("Deleted in Tally")'); W(400); pg.fill("#confirmBox #deletedWhy", "deleted it"); pg.click('#confirmBox [data-cbx="yes"]'); W(600)
+    b5 = E("(() => { const e = D().entries.b5; return {status: e.status, exp: e.exportedAt || null, tally: e.tally || null, ok: !!(e.deletedInTally && e.deletedInTally.verified)}; })()")
+    ok(b5 == {"status": "draft", "exp": None, "tally": None, "ok": True} and E("window.__posted") == 0, "not in Tally at a fresh read: back to To review, the posting cleared, nothing posted (%s)" % b5)
+    ap = E("""async () => { const ap = await loadAutoPost(); return ap.billCheck(D().entries.b5, {cfg: Object.assign({}, ap.DEF, {on: true}), entries: D().entries, env: {}}).stops.join('; '); }""")
+    ok("deleted in Tally" in (ap or ""), "Post automatically never takes a bill marked deleted in Tally (%r)" % ap)
+    E("() => { approve(D().entries.b5, {bulk: true}); }")
+    ok(E("!!D().entries.b5.deletedInTally"), "approving it again keeps the mark")
+    E("() => { setStatus(D().entries.b5, 'draft'); }")
     E("billDelete('b5')"); W(400)
     ok("Delete this bill?" in box(), "then it can be deleted (%r)" % box()[:80])
     pg.click('#confirmBox [data-cbx="no"]'); W(300)
     E("() => { window.postIdReleased = (id) => id === 'b6' ? false : undefined; S.selected = 'b6'; render(); }"); W(400)
     pg.click('#app .actionbar button:has-text("Deleted in Tally")'); W(400)
-    pg.fill("#confirmBox #deletedWhy", "deleted in Tally"); pg.click('#confirmBox [data-cbx="yes"]'); W(500)
-    ok(E("D().entries.b6.status") == "draft" and not E("billPostLive(D().entries.b6, S.coId)"), "a bill whose id the cloud still holds: marked deleted in Tally, no longer live")
+    pg.fill("#confirmBox #deletedWhy", "deleted in Tally"); pg.click('#confirmBox [data-cbx="yes"]'); W(600)
+    ok(E("D().entries.b6.status") == "draft" and not E("billPostLive(D().entries.b6, S.coId)"), "a bill whose id the cloud still holds: not in Tally at a fresh read, no longer live here")
+    E("() => { window.postSending = (c) => new Set(['b2']); S.selected = 'b2'; render(); }"); W(400)
+    ok(pg.locator('#app .actionbar button:has-text("Deleted in Tally")').count() == 0, "no “Deleted in Tally” while its cloud posting is still sending")
+    E("() => { window.postSending = window.__s0; render(); }")
     # Undo of an automatic bill in Tally whose id the cloud still holds: back to To review, not left approved
     E("""async (cid) => { const e = D().entries.u1; approve(e, {bulk: true}); Object.assign(e, {exportedAt: '2026-10-02T10:00:00Z', tally: {guid: 'g-au', vchType: 'Purchase', vchDate: '20260701', company: 'ZZ'}, auto: {run: 'r9', key: 'kb', label: 'Unpost One', amt: 1000, cid: ''}});
       window.postIdReleased = (id) => id === 'u1' ? false : undefined; window.bridgeLive = () => true; const c0 = Bridge.call; Bridge.call = async (p, ...a) => p === '/unpost' ? {ok: true} : c0.call(Bridge, p, ...a);

@@ -653,7 +653,7 @@ async function reconcileBank(opts){
       const win = pass === 0 ? 0 : (r.dec && r.dec.mode === "CHQ" ? 15 : 4);
       let best = null;
       // (never an entry a person said is not this line's: Not this Tally entry)
-      const no = t => r.notTally && r.notTally.includes(bankTallyKey({guid: t.guid, date: t.date, vt: t.type, vn: t.number, debit: t.eff > 0 ? t.eff : 0, credit: t.eff < 0 ? -t.eff : 0}));
+      const no = t => bankNotHit(r, {guid: t.guid, date: t.date, vt: t.type, vn: t.number, debit: t.eff > 0 ? t.eff : 0, credit: t.eff < 0 ? -t.eff : 0});
       T.forEach(t => { if (used.has(t.i) || t.tag && byTag.has(t.tag) || no(t) || Math.abs(t.eff - bankEffect(r)) >= 0.01) return; const d = days(t.date, r.date); if (d <= win && (!best || d < best.d)) best = {t, d}; });
       if (best){ pairOf.set(r.id, best.t.i); used.add(best.t.i); }
     }));
@@ -664,7 +664,7 @@ async function reconcileBank(opts){
     b.postedTags = b.postedTags || {};
     rows.forEach(r => {
       if (pairOf.has(r.id)){
-        if (["ready", "attention", "suggested"].includes(r.state)){ r.prevState = r.state; r.state = "intally"; r.tallyHow = "found in Tally when reconciling"; const t = T[pairOf.get(r.id)]; if (t.guid) r.tallyKey = t.guid; r.tallyRef = [t.type, t.number, t.party].filter(Boolean).join(" · "); }
+        if (["ready", "attention", "suggested"].includes(r.state)){ r.prevState = r.state; r.state = "intally"; const t = T[pairOf.get(r.id)]; r.tallyHow = t.tag && t.tag === fpHash(r.fp || r.id) ? "posted by FinCom earlier" : "found in Tally when reconciling"; if (t.guid) r.tallyKey = t.guid; r.tallyRef = [t.type, t.number, t.party].filter(Boolean).join(" · "); }
         if (r.state === "intally" || r.state === "sent") b.postedTags[fpHash(r.fp || r.id)] = b.postedTags[fpHash(r.fp || r.id)] || "tally:" + now;
       }
     });
@@ -1214,7 +1214,7 @@ async function postBankToTally(ids){
   const skipped = b.rows.filter(r => r.state === "intally").length - inTallyBefore;
   const movedBack = b.rows.filter(r => readyBefore.has(r.id) && ["attention", "suggested"].includes(r.state)).length;
   // checked again: a line marked Possible repeat that became ready during the awaits above is not sent
-  let rows = b.rows.filter(r => r.state === "ready" && (!ids || ids.includes(r.id)) && !bankRepOpen(r));
+  let rows = b.rows.filter(r => r.state === "ready" && (!ids || ids.includes(r.id)) && !bankRepOpen(r) && !(r.notTally && !r.userSet));
   const failed = [];
   rows = rows.filter(r => {
     // 26-Oct-2026: a line whose ledger is this bank account's own is never posted (a Contra to and from itself)

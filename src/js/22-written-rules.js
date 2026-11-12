@@ -371,6 +371,8 @@ function suggestAll(rows, onlyOpen){
     r.state = s.level === "auto" && co.bankAuto !== false ? "ready" : s.level === "none" ? "attention" : "suggested";
     if (isOwnBank(r, r.ledger)) dropOwnBank(r);
   });
+  // a line a person said is not the Tally entry it was matched to is never made ready but by a person
+  rows.forEach(r => { if (r.notTally && !r.userSet && r.state === "ready") r.state = "suggested"; });
   countRuleUse(rows);
 }
 /* ---------- upload ---------- */
@@ -587,30 +589,34 @@ async function importTallyBook(file){
   } catch (e){ toast("Could not read the Tally bank book: " + ((e && e.message) || "unknown format")); }
 }
 // a Tally entry of the bank book, as a line remembers it (its GUID, else date, voucher and amounts)
-function bankTallyKey(t){ return String(t.guid || [t.date, t.vt, t.vn, r2(num(t.debit)), r2(num(t.credit))].join("|")); }
-// a line FinCom posted itself: "I checked — it is not in Tally" is its way back, not "Not this Tally entry"
-// (its posted tag: a time, or "unconfirmed:" a time; "tally:" is a line only found in Tally)
-function bankOwnPost(r){ const b = B(), tag = b && b.postedTags ? b.postedTags[fpHash(r.fp || r.id)] : undefined;
-  return tag != null ? !/^tally:/.test(String(tag)) : /^posted by FinCom/.test(r.tallyHow || ""); }
-// "Not this Tally entry" (owner, item 5): a line matched to the wrong Tally entry; the entry is kept on the line (notTally),
-// so no later read matches it again, and the line goes back to where it was before the match
+// a Tally entry's keys: its GUID (a read through the bridge) and date|voucher|amounts (a file has no GUID)
+function bankTallyKeys(t){ const k = [t.date, t.vt, t.vn, r2(num(t.debit)), r2(num(t.credit))].join("|"); return t.guid ? [String(t.guid), k] : [k]; }
+function bankTallyKey(t){ return bankTallyKeys(t)[0]; }
+function bankNotHit(r, t){ return !!(r.notTally && bankTallyKeys(t).some(k => r.notTally.includes(k))); }
+function bankBookEntry(r){ const b = B(), book = (b.books[(curStmt() || {}).acctId] || {}).entries || []; return r.tallyKey ? book.find(x => bankTallyKey(x) === r.tallyKey) : book[r.tallyIdx]; }
+// FinCom's own posting ("I checked — it is not in Tally" is its way back): its tag a time or "unconfirmed:", matched by
+// FinCom's tag, or the entry carries the line's TDSDesk tag ("tally:" alone is a line found in Tally)
+function bankOwnPost(r){
+  const b = B(), fp = fpHash(r.fp || r.id), tag = b && b.postedTags ? b.postedTags[fp] : undefined, t = bankBookEntry(r);
+  return (tag != null && !/^tally:/.test(String(tag))) || r.tallyHow === "posted by FinCom earlier" || !!(t && String(t.narr || "").toUpperCase().includes("TDSDESK:" + fp.toUpperCase()));
+}
+// "Not this Tally entry" (owner, item 5): the entry is kept on the line (notTally), never matched to it again; the line
+// waits for a person (attention), and what was learnt from the wrong match is dropped
 function bankNotTally(id){
   const b = B(), r = bankRow(id);
   if (!r || r.state !== "intally" || bankOwnPost(r)) return;
-  const book = (b.books[(curStmt() || {}).acctId] || {}).entries || [];
-  const t = r.tallyKey ? book.find(x => bankTallyKey(x) === r.tallyKey) : book[r.tallyIdx];
-  const key = r.tallyKey || (t && bankTallyKey(t));
-  if (!key){ toast("FinCom does not know which Tally entry this line was matched to. Read the Tally bank book again first."); return; }
-  const words = t ? [fmtDate(t.date), [t.vt, t.vn].filter(Boolean).join(" "), money0(num(t.debit) || num(t.credit))].filter(Boolean).join(" \u00b7 ") : r.tallyRef || key;
+  const t = bankBookEntry(r), keys = t ? bankTallyKeys(t) : r.tallyKey ? [r.tallyKey] : [];
+  if (!keys.length){ toast("FinCom does not know which Tally entry this line was matched to. Read the Tally bank book again first."); return; }
+  const words = t ? [fmtDate(t.date), [t.vt, t.vn].filter(Boolean).join(" "), money0(num(t.debit) || num(t.credit))].filter(Boolean).join(" \u00b7 ") : r.tallyRef || keys[0];
   askConfirm({title: "Not this Tally entry?", ok: "Not that entry", body: '<p class="note">This bank line was matched to Tally entry ' + esc(words) + ". Mark it as NOT that entry? If this entry really is it, posting will put it in Tally twice.</p>"}).then(ok => {
     if (!ok || r.state !== "intally") return;
-    r.notTally = (r.notTally || []).concat(key);
-    // a person decides what it is now (never posted automatically): needs attention, not set by anyone
-    r.state = "attention"; r.userSet = false;
+    r.notTally = (r.notTally || []).concat(keys); r.state = "attention"; r.userSet = false;
     delete r.tallyIdx; delete r.tallyKey; r.tallyHow = ""; r.tallyRef = "";
-    if (b.postedTags && /^tally:/.test(String(b.postedTags[fpHash(r.fp || r.id)] || ""))) delete b.postedTags[fpHash(r.fp || r.id)];
+    const fp = fpHash(r.fp || r.id);
+    if (b.postedTags && /^tally:/.test(String(b.postedTags[fp] || ""))) delete b.postedTags[fp];
+    if (b.hist && (b.hist.rows[r.fp] || {}).s === "tally"){ delete b.hist.rows[r.fp]; b.histVer++; }
     auditEvent("bank_not_tally", (r.dec.name || r.narr || r.id) + " " + money0(num(r.debit) || num(r.credit)) + " " + r.date + ": not Tally entry " + words, b.cid);
-    saveBank({rows: true, posted: true}); toast("Marked as not that Tally entry: it is not matched to it again. Choose its ledger and post it, or ignore it."); render();
+    saveBank({rows: true, posted: true, hist: true}); toast("Marked as not that Tally entry: it is not matched to it again. Choose its ledger and post it, or ignore it."); render();
   });
 }
 // In Tally's bank ledger, a debit is money in and a credit is money out.
@@ -628,7 +634,7 @@ function matchTallyBook(acc, rows, force){
   const days = (a1, b1) => Math.abs((new Date(a1) - new Date(b1)) / 864e5);
   let n = 0;
   // an entry a person said is not this line's (Not this Tally entry) is never matched to it again
-  const no = (r, t) => !!(r.notTally && r.notTally.includes(bankTallyKey(t)));
+  const no = bankNotHit;
   const take = (r, i, how) => {
     used.add(i); n++;
     const t = book.entries[i];

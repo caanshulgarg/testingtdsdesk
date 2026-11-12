@@ -3046,7 +3046,7 @@ function approve(e, o){
   cur.credited = r2(num(cur.credited) + c.base);
   cur.tdsBase = r2(num(cur.tdsBase) + addBase);
   party.ytd[c.fy][c.rule.id] = cur;
-  e.status = "approved"; delete e.notRead; delete e.deletedInTally;
+  e.status = "approved"; delete e.notRead;
   e.approvedAt = new Date().toISOString();
   const k = invKey(e.x), co = CO(cid);
   // the bill's id is kept with the date (02-Oct-2026), so a later copy can name and open this one
@@ -3076,8 +3076,8 @@ function billMoveOn(e, said, list, undo){
   render();
 }
 // a bill with a posting: sent, being checked, its id held by the cloud, or a cloud posting of it still running
-// (a bill a person marked "Deleted in Tally" is not held by the cloud's record of it any more)
-function billPostLive(e, cid){ return !!(e && (e.exportedAt || (typeof postSending === "function" && postSending(cid).has(String(e.id))) || (!e.deletedInTally && typeof billLivePosting === "function" && billLivePosting(e, cid)))); }
+// (a bill found not in Tally at a fresh read after "Deleted in Tally" is not held by the cloud's record of it)
+function billPostLive(e, cid){ return !!(e && (e.exportedAt || e.postUnconfirmed || (typeof postSending === "function" && postSending(cid).has(String(e.id))) || (!(e.deletedInTally && e.deletedInTally.verified) && typeof billLivePosting === "function" && billLivePosting(e, cid)))); }
 // such a bill is not taken off its supplier's totals and put back to review here (it would be posted twice). o.force: a
 // bill deleted (it keeps what it was: softDeleteEntry; billRestore puts it back: reapply), or Tally's own refusal of
 // this posting (src/js/24)

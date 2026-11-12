@@ -277,6 +277,7 @@ const AutoPost = {
   billCheck(e, ctx){
     const env = ctx.env || {}, cfg = ctx.cfg, x = e.x || {}, out = {kind: "bill", id: e.id, amt: r2(num(x.total)), stops: []};
     const stop = w => { out.stops.push(w); };
+    if (e.deletedInTally) stop("a person marked it deleted in Tally");
     if (e.touchedBy || e.autoUndone) stop(e.autoUndone ? "a person took the automatic entry back" : "a person changed this bill");
     const key = this.supplierKey(x, env); out.key = key;
     const all = Object.values(ctx.entries || {});

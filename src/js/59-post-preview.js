@@ -279,6 +279,7 @@ function postLedgerList(cid){ return !!(cid === S.coId && S.bank && S.bank.cid =
 function postMissingLedgers(e){ return (e.snapshot ? e.snapshot.lines : []).filter(l => l.ledger && !exactLedger(l.ledger)); }
 function postBucket(e, ctx){
   if (!e || e.status !== "approved") return "";
+  if (e.deletedInTally && !e.deletedInTally.verified) return "attention";
   const jr = ctx && ctx.jobs ? ctx.jobs.get(String(e.id)) : null, rb = jr && jr.reg && postRegBucket(e, jr); if (rb) return rb;
   if (billInTally(e)) return "intally";
   if (e.exportedAt) return "attention";

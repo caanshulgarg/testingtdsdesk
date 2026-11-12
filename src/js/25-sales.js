@@ -235,7 +235,8 @@ function mapInvoice(v){
   }
   v.problems = invoiceProblems(v);
   v.ledgerIssues = hasLedgerList() ? ledgerProblems(v) : ["Tally ledger list not loaded"];
-  const sure = v.problems.length === 0 && v.ledgerIssues.length === 0 && (v.custSure || v.userLedger || v.source === "created");
+  // (an invoice a person said is not the Tally entry it was matched to waits for a person to set its ledger)
+  const sure = v.problems.length === 0 && v.ledgerIssues.length === 0 && (v.custSure || v.userLedger || v.source === "created") && !(v.notTally && !v.userLedger);
   if (v.status !== "ready" || v.problems.length || v.ledgerIssues.length) v.status = sure && SL().cfg.auto !== false ? "ready" : "review";
 }
 function learnCustomer(v){
