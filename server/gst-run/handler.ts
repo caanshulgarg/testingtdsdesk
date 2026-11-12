@@ -36,6 +36,9 @@
 //     registration and all; the timer's nightly run) by today's engine on the whole book against the sums
 //     (gst_month_get), every figure to the paisa, kept in calc_parity (gst_parity_put); a context that differs from the
 //     one kept with the same version (a guess that moved with the entries) marks its entries due. -> {ok, same, checked}
+//   POST {action: "share_engine"} from the service role or the timer's key (migration 170's job, every 10 minutes): only
+//     writes the engine this function runs (gst_share_engine_put; every share_* call writes it too), so the books whose
+//     context another engine made are due (gst_share_books_due) soon after a deploy. -> {ok, moved, engine, rev}
 //   Both: one run a book at a time (gst_share_lease; a book busy is skipped: {busy: true}); the firm's switches as
 //     above; within the run's own time (deps.total, 1500 ms): a rebuild of the context that cannot finish backs off
 //     (gst_share_backoff: 10 minutes, doubling to a day), a parity that cannot is kept as not checked (ok null,
@@ -300,10 +303,14 @@ export function handler(deps: Deps) {
         if (!inside) return reply(401, { ok: false, error: "Not allowed." });
         return reply(200, await warm());
       }
-      if (action === "share_sweep" || action === "share_parity") {
+      if (action === "share_sweep" || action === "share_parity" || action === "share_engine") {
         const ck = req.headers.get("x-cron-key") || "";
         const inside = (SERVICE && jwt === SERVICE) || (ck && (await rpc("gst_cron_ok", { k: ck }).catch(() => false)) === true);
         if (!inside) return reply(401, { ok: false, error: "Not allowed." });
+        // the engine this function runs, kept for gst_share_books_due (migration 170: a book whose context another engine
+        // made is due); written only when it moved. Without 170: nothing kept, the share actions go on as before
+        const said = await rpc("gst_share_engine_put", { p_engine: ENGINE, p_rev: REV }).then((m) => ({ ok: true, moved: m === true }), (e) => ({ ok: false, error: String((e as Error)?.message || e).slice(0, 300) }));
+        if (action === "share_engine") return reply(200, { ...said, engine: ENGINE, rev: REV });
         const id = String(body.book_id || "");
         if (!/^[0-9a-f-]{36}$/i.test(id)) return reply(400, { ok: false, error: "Say the book (book_id)." });
         if (action === "share_sweep") { const n = Math.max(1, Math.min(5000, Number(body.limit) || 3000)); return reply(200, await underLease(id, (run) => shareSweep(id, n, run))); }

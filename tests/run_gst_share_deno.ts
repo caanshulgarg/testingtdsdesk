@@ -6,10 +6,14 @@
 // the parity of every month is the engine's (calc_parity kept, same); an entry changed is the only one taken again;
 // a ledger the context has not got: nothing kept, the context made again; the client's record read; the book's lease
 // (a book busy skipped); the nightly parity of every month; over the run's time: a parity kept as not checked, a context
-// rebuild backed off; a paused firm refused by both; the existing actions still answer.
+// rebuild backed off; a new engine deployed (migration 170): share_engine (and every share_* call) writes the engine,
+// the book whose context the old engine made is due, the sweep makes it again and works every entry out again, then not
+// due; without 170 the sweep goes on; a paused firm refused by both; the existing actions still answer.
 // Made-up rows only; nothing real is called.
 import { handler } from "../server/gst-run/handler.ts";
 import { unpack, HEADS } from "../server/gst-run/data.ts";
+// @ts-ignore plain JavaScript
+import { ENGINE, REV } from "../server/gst-run/engine.js";
 
 const OUT = new URL("./out/", import.meta.url);
 const W = JSON.parse(Deno.readTextFileSync(new URL("gst-share-rows.json", OUT)));
@@ -58,6 +62,8 @@ const RPC: Record<string, (a: any) => any> = {
   gst_parity_put: (a) => { T.parity.push(a); return T.parity.length; },
   tally_calc_version: () => "bv1", gst_calc_prep_get: () => null, gst_calc_rows: () => Object.assign(pack(W.heads), T.padRows ? { pad: "x".repeat(30_000_000) } : {}),
   gst_cron_ok: (a) => a.k === "cron-164",
+  // migration 170: the engine gst-run runs (one row; true when it moved)
+  gst_share_engine_put: (a) => { T.enginePuts = (T.enginePuts || 0) + 1; const moved = T.engine !== a.p_engine || T.engineRev !== a.p_rev; T.engine = a.p_engine; T.engineRev = a.p_rev; return moved; },
 };
 const REST: [RegExp, () => any][] = [
   // calc_parity: the months already checked tonight (T.done; empty unless a test sets it)
@@ -147,6 +153,30 @@ T.backoff = null; T.padRows = false;
 r = await call({ action: "share_sweep", book_id: BOOK });
 ok(r.j.ok && r.j.ctx === true && !T.backoff, "once the back-off is over a run within its time makes it, and clears it");
 await call({ action: "share_sweep", book_id: BOOK });
+// a new engine deployed (migration 170): the book's context and gst-run's engine row both name the old one
+console.log("== a new engine deployed");
+T.ctx.engine = "e-made-up-old"; T.engine = "e-made-up-old"; T.due.clear();
+// migration 170's gst_share_books_due for this one book (no days written here): entries due, or the context on another engine
+const bookDue = () => T.due.size > 0 || (T.engine != null && !!T.ctx && T.ctx.engine !== T.engine);
+ok(!bookDue(), "before gst-run says its engine: the book is not due (the staging case)");
+ok((await call({ action: "share_engine" }, "someone")).status === 401, "share_engine: refused without the service role or the timer's key");
+r = await call({ action: "share_engine" }, "x", { "x-cron-key": "cron-164" });
+ok(r.status === 200 && r.j.ok && r.j.engine === ENGINE && r.j.moved === true && T.engine === ENGINE && T.engineRev === REV, "share_engine (the timer's key): the engine and REV gst-run runs written");
+ok(bookDue(), "now the book whose context is on the old engine is due");
+r = await call({ action: "share_engine" });
+ok(r.j.ok && r.j.moved === false, "said again: nothing moved");
+const sw: any[] = [];
+for (let k = 0; k < 30; k++) { r = await call({ action: "share_sweep", book_id: BOOK, limit: 1000 }); sw.push(r.j); if (!r.j.ok || !r.j.more) break; }
+ok(sw[0].ctx === true && sw[0].all === true && sw.at(-1).ok && !sw.at(-1).more && T.ctx.engine === ENGINE && T.due.size === 0 && !bookDue(),
+   "the sweep: the context made again on the new engine, every entry worked out again (" + sw.length + " runs); then not due");
+T.engine = "e-made-up-other";
+await call({ action: "share_sweep", book_id: BOOK });
+ok(T.engine === ENGINE, "share_sweep says the engine too");
+const put0 = RPC.gst_share_engine_put; delete RPC.gst_share_engine_put;
+r = await call({ action: "share_sweep", book_id: BOOK });
+const se = await call({ action: "share_engine" });
+ok(r.j.ok && se.status === 200 && se.j.ok === false, "without migration 170: share_sweep goes on; share_engine says it could not");
+RPC.gst_share_engine_put = put0;
 // the firm paused: both refused
 T.paused = true;
 const g1 = await call({ action: "share_sweep", book_id: BOOK }), g2 = await call({ action: "share_parity", book_id: BOOK, ym: "202504" });

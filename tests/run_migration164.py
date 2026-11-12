@@ -23,7 +23,13 @@ port 31864 unless PG164_PORT; never a real database), made-up rows only, after m
      not backing off; nightly: books with sums); a parity not checked kept with ok null
   6. a book deleted takes every row of the new tables
   7. the triggers' cost: 100,000 entries (and 200,000 lines) inserted in one statement each, and 2,000 entries one
-     statement each (as the recorder), with and without the triggers"""
+     statement each (as the recorder), with and without the triggers
+  8. migration 170 (server/tally-cloud/migration-170-gst-share-engine.sql; md5 printed): the file (one transaction,
+     add-only, service role only, the 10-minute share_engine timer as 164's, no real database); before it a book swept on
+     the old engine is not due (the staging case); after it, once gst-run has written its engine (gst_share_engine_put,
+     written only when it moved), every book whose context another engine made is due, not those on that engine, still
+     not leased, not backing off, at most n; after its sweep (context on the new engine, its entries worked out) not
+     due; gst_share_books_due(3) timed on 2,000 books before and after; anon and authenticated may not"""
 import os, re, sys, json, time, hashlib, subprocess
 HERE = os.path.dirname(os.path.abspath(__file__)); ROOT = os.path.join(HERE, ".."); sys.path.insert(0, HERE)
 import pg_stand
@@ -327,6 +333,81 @@ try:
     db.sql("delete from tally_vouchers where book_id = '%s'; delete from tally_lines where book_id = '%s'; delete from tally_books where book_id = '%s'" % (BK, BK, BK))
     db.sql("delete from tally_vouchers where book_id = '%s'; delete from tally_books where book_id = '%s'" % (B3, B3))
     ok(all(db.one("select count(*) from %s where book_id = '%s'" % (t, BK)) == "0" for t in NEW), "takes every row of the new tables with it")
+
+    print("== 8. migration 170: a new engine")
+    db.sql("update tally_books set client_id = null where book_id in ('%s', '%s')" % (BKM, BKN))   # the cost books (never swept) out of the way
+    # books the sweep has done (every entry and day seen, nothing due) on the engine they were made by; many, for the cost
+    E_OLD, E_NEW = "e-made-up-old", "e-made-up-new"
+    def swept(prefix, n, engine):
+        ids = "('bbbbbbbb-0170-4000-8000-' || %s || lpad(g::text, 11, '0'))::uuid" % q(prefix); like = q("bbbbbbbb-0170-4000-8000-" + prefix + "%")
+        db.sql("""insert into tally_books (book_id, firm_id, client_id, company, from_date, open_as_on)
+                  select %(ids)s, '%(F)s', 'c170-' || %(p)s || g, 'Made-up 170 ' || g, '2025-04-01', '2025-04-01' from generate_series(1, %(n)d) g;
+                  insert into tally_vouchers (book_id, firm_id, guid, day, alter_id, vtype, vno, party, cancelled, optional)
+                  select %(ids)s, '%(F)s', 'g170-' || k, date '2025-04-01' + k, k, 'Sales', 'S/' || k, 'Made-up Party', false, false from generate_series(1, %(n)d) g, generate_series(1, 3) k;
+                  insert into calc_seen (book_id, firm_id, calc, kind, key, alter_id, day)
+                  select v.book_id, v.firm_id, 'gst-share', 'entry', v.guid, v.alter_id, v.day from tally_vouchers v where v.book_id::text like %(like)s;
+                  insert into calc_seen (book_id, firm_id, calc, kind, key, stamp)
+                  select d.book_id, '%(F)s', 'gst-share', 'day', d.day::text, d.changed_at::text from tally_calc_dirty d where d.book_id::text like %(like)s
+                  on conflict (book_id, calc, kind, key) do update set stamp = excluded.stamp;
+                  insert into calc_seen (book_id, firm_id, calc, kind, key, stamp, data)
+                  select b.book_id, b.firm_id, 'gst-share', 'book', 'ctx', 'ctx-v', jsonb_build_object('engine', %(e)s, 'ctx', '{}'::jsonb) from tally_books b where b.book_id::text like %(like)s;
+               """ % dict(ids=ids, F=F, p=q(prefix), n=n, like=like, e=q(engine)))
+        return ["bbbbbbbb-0170-4000-8000-%s%s" % (prefix, str(g).rjust(11, "0")) for g in range(1, n + 1)]
+    OLD = swept("1", 2, E_OLD); NEWB = swept("2", 1, E_NEW)
+    due5 = lambda: sorted(r["book_id"] for r in db.rows("select book_id from gst_share_books_due(5)"))
+    ok(due5() == [], "before 170 (167's rule): every book swept is not due, the two on the old engine too (the staging case)")
+    def cost(label):
+        best = min(json.loads(db.one("explain (analyze, format json) select * from gst_share_books_due(3)"))[0]["Execution Time"] for _ in range(5))
+        print("  (gst_share_books_due(3), %s: %.2f ms)" % (label, best)); return best
+    db.sql("analyze tally_books; analyze calc_seen; analyze tally_vouchers; analyze tally_calc_dirty")
+    MANY = swept("3", 2000, E_NEW)
+    db.sql("analyze tally_books; analyze calc_seen; analyze tally_vouchers; analyze tally_calc_dirty")
+    c167 = cost("167, %d books, none due" % (len(MANY) + 3))
+    M170 = os.path.join(ROOT, "server", "tally-cloud", "migration-170-gst-share-engine.sql")
+    t170 = open(M170).read() if os.path.exists(M170) else ""
+    ok(bool(t170), "the migration file is there (%s)" % os.path.basename(M170))
+    if t170:
+        print("  md5 of %s: %s (%d bytes)" % (os.path.basename(M170), hashlib.md5(t170.encode()).hexdigest(), len(t170.encode())))
+        c70 = "\n".join(l.split("--")[0] for l in t170.lower().splitlines())
+        ok(re.search(r"^begin;\s*\nset local lock_timeout = '10s';", t170, re.M) is not None and t170.rstrip().endswith("commit;") and c70.count("\nbegin;") == 1 and c70.count("commit;") == 1, "170: one transaction, lock_timeout 10 s")
+        ok(re.findall(r"create table if not exists public\.(\w+)", c70) == ["gst_share_engine"] and "alter table public.gst_share_engine enable row level security" in c70
+           and not re.search(r"\b(drop|truncate|delete\s+from)\b", c70) and not re.search(r"alter\s+table\s+(?!public\.gst_share_engine\s)", c70), "170: add-only: one new table (RLS on); nothing dropped, deleted or altered")
+        ok(sorted(set(re.findall(r"create or replace function public\.(\w+)\(", c70))) == ["gst_share_books_due", "gst_share_engine_put"], "170: one new function, 167's replaced")
+        ok(all(("revoke all on function public.%s from public, anon, authenticated;" % f) in t170 and ("grant execute on function public.%s to service_role;" % f) in t170 for f in ("gst_share_engine_put(text, text)", "gst_share_books_due(integer)"))
+           and "revoke all on public.gst_share_engine from public, anon, authenticated;" in t170 and "grant select, insert, update, delete on public.gst_share_engine to service_role;" in t170, "170: explicit grants, service role only")
+        ok("cron.schedule('gst-share-engine', '*/10 * * * *'" in t170 and c70.count("'x-cron-key'") == 1 and "'action', 'share_engine'" in t170 and "gst-share-sweep" not in c70
+           and "where name = 'gst_cron_key')" in t170 and "where name = 'fincom_project_url')" in t170, "170: the timer: share_engine every 10 minutes, gst-taxpro's cron key, as 164's; the sweep's job untouched")
+        ok(not re.search(r"supabase\.co|https?://|qbocskai|nrtczu", t170.lower()), "170: names no real database")
+        db.sql(t170); db.sql(t170)
+        ok(db.one("select count(*) from cron.job where jobname = 'gst-share-engine'") == "0" if db.one("select to_regclass('cron.job') is not null") == "t" else True, "170 runs, twice (here no pg_cron: no timer)")
+        ok(due5() == [], "after 170, before gst-run has said its engine: nothing due by engine")
+        w = db.one("select gst_share_engine_put(%s, '164.9')" % q(E_OLD)); d = due5()
+        ok(w == "t" and len(d) == 5 and NEWB[0] in d and not set(d) & set(OLD) and set(d) <= set(NEWB + MANY), "the old engine written (the deploy before): only books made by another engine are due (the new one's, 5 at a time)")
+        ok(db.one("select gst_share_engine_put(%s, '164.9')" % q(E_OLD)) == "f" and db.one("select count(*) from gst_share_engine") == "1", "written again unchanged: nothing written (false), one row")
+        ok(db.one("select gst_share_engine_put(%s, '170.1')" % q(E_NEW)) == "t" and due5() == sorted(OLD) and db.one("select engine || ' ' || rev from gst_share_engine") == E_NEW + " 170.1",
+           "a new engine written: every book whose context is on the old engine is due (%d), not those on the new" % len(OLD))
+        ok(len(db.rows("select book_id from gst_share_books_due(1)")) == 1 and len(db.rows("select book_id from gst_share_books_due(50)")) == 2, "still at most n (and never over 5)")
+        ok(db.one("select gst_share_lease('%s', 'run-170', 600)" % OLD[0]) == "t" and due5() == [OLD[1]], "a book leased by a run going: not due")
+        # the sweep on the new engine: the context made again (all: every entry due), then the batch, then nothing
+        r = json.loads(db.one("select gst_share_ctx_put('%s', 'run-170', 'ctx-v', %s, '{}'::jsonb, '{}', '{}', true)::text" % (OLD[0], q(E_NEW))))
+        ok(r["ok"] and r["due"] == 3, "the sweep: the context on the new engine, all: every entry due (%s)" % r.get("due"))
+        p = json.loads(db.one("select gst_share_pick('%s', 3000)::text" % OLD[0]))
+        r = json.loads(db.one("select gst_share_put('%s', 'run-170', %s, '[]'::jsonb, %s::jsonb, '[]'::jsonb)::text" % (OLD[0], q(p["at"]), J(p["seen"]))))
+        db.sql("select gst_share_unlease('%s', 'run-170')" % OLD[0])
+        ok(r["ok"] and OLD[0] not in due5() and due5() == [OLD[1]], "after its sweep: that book not due; the other still is")
+        db.sql("select gst_share_backoff('%s', 'ctx', 'made-up: too big')" % OLD[1])
+        ok(due5() == [], "a book backing off: not due")
+        db.sql("select gst_share_backoff_clear('%s', 'ctx')" % OLD[1])
+        c170 = cost("170, %d books, none due by engine" % (len(MANY) + 3))
+        db.sql("select gst_share_engine_put('e-made-up-newer', '170.2')")
+        ok(len(db.rows("select book_id from gst_share_books_due(5)")) == 5, "a newer engine: every book on another engine is due (5 at a time)")
+        c170b = cost("170, %d books, all due by engine" % (len(MANY) + 3))
+        ok(max(c170, c170b) < max(3 * c167, c167 + 20) and max(c170, c170b) < 200, "fast enough for every minute (%.2f / %.2f ms; 167: %.2f ms)" % (c170, c170b, c167))
+        for role in ("anon", "authenticated"):
+            for s in ("select gst_share_engine_put('x', 'y')", "select count(*) from gst_share_engine"):
+                try: db.sql("set role %s; %s;" % (role, s)); ok(False, role + " may not: " + s)
+                except RuntimeError as e: ok("permission denied" in str(e), role + " may not: " + s.split("(")[0][:40])
+        ok(db.one("select has_function_privilege('service_role', 'public.gst_share_engine_put(text, text)', 'execute') and has_table_privilege('service_role', 'public.gst_share_engine', 'select')") == "t", "the service role may")
 finally:
     db.stop()
 print("all ok" if not fails else "%d FAILED" % len(fails))
