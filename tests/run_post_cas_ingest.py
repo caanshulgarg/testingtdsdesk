@@ -18,6 +18,10 @@ inside the report's own awaits (its stamp of an accepted entry, tally_post_id_ac
      checking), its id stamped, the bridge told cancelled; the bridge finished it all: stored as done, answered ok;
   8. a cloud without 174 (no row_version): written as before, once; a posting for another bridge of this computer:
      refused as before (no hand-over answer any more).
+  9. (second review) M1: a hand-back taken and put back since (taken_at set): taken back by its bridge and merged;
+     M2: stop flag with every item waiting but an id of the posting stamped accepted before, or an earlier result sent:
+     held (done, checking), never failed; a running report: held; M3: a posting of this firm moved to another key, and
+     one for another bridge of this computer: acceptances stamped before "gone" / 403; another firm's posting: not
 Needs Deno (DENO, default: the deno on the PATH or /opt/deno/deno)."""
 import os, sys, json, time, hashlib, subprocess, urllib.request, urllib.error, shutil, threading, copy
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
@@ -150,6 +154,30 @@ try:
     F.T["tally_post_jobs"].append(job("j81", "taken", target_bridge=OTHER, taken_by=OTHER))
     n0 = patches("j81"); c, r = update("j81")
     ok(c == 403 and not r.get("cancelled") and row("j81")["status"] == "taken" and patches("j81") == n0, "for another bridge of this computer: refused as before (%s %s)" % (c, r))
+    print("== 9. second review: M1, M2, M3")
+    F.T["tally_post_jobs"].append(job("j91", "waiting", resend_only=["K2"], taken_at="2026-11-12T09:30:00Z", attempts=2, message="Sent to the Tally computer again: it had not answered for a while."))
+    c, r = update("j91")
+    x = row("j91")
+    ok(c == 200 and r == {"ok": True} and x["status"] == "running" and x["taken_by"] == ME["id"] and len(x["results"]) == 2, "M1: handed back, taken and put back since: taken back and merged (%s %s %s)" % (c, r, x["status"]))
+    F.T.setdefault("tally_post_ids", []).append({"job_id": "j92", "fincom_id": "K1", "entry_id": "K1", "accepted_at": "2026-11-12T08:00:00Z", "released_at": None})
+    F.T["tally_post_jobs"].append(job("j92", "taken", stop_reason=WHY))
+    c, r = update("j92", status="taken", results=[], items=[{"id": "K1", "state": "waiting"}, {"id": "K2", "state": "waiting"}])
+    x = row("j92")
+    ok(c == 200 and r.get("cancelled") is True and x["status"] == "done" and x["checking"] is True, "M2: every item waiting but an id stamped accepted before: held for checking, not failed (%s %s)" % (x["status"], x["checking"]))
+    F.T["tally_post_jobs"].append(job("j93", "taken", stop_reason=WHY, results=[{"id": "K1", "ok": False, "sent": True, "state": "sent"}]))
+    c, r = update("j93", status="taken", results=[], items=[{"id": "K1", "state": "waiting"}, {"id": "K2", "state": "waiting"}])
+    ok(row("j93")["status"] == "done" and row("j93")["checking"] is True, "M2: an earlier result said sent: held (%s)" % row("j93")["status"])
+    F.T["tally_post_jobs"].append(job("j94", "running", stop_reason=WHY))
+    c, r = update("j94", status="running", results=[], items=[{"id": "K1", "state": "waiting"}, {"id": "K2", "state": "waiting"}])
+    ok(row("j94")["status"] == "done" and row("j94")["checking"] is True, "M2: a running report, nothing shown sent: held, not failed (%s)" % row("j94")["status"])
+    ACC = [{"id": "K1", "ok": False, "accepted": True, "lastVchId": "95", "message": "Tally replied CREATED 1 LASTVCHID 95"}]
+    F.T["tally_post_jobs"].append(job("j95", "taken", device_id="d-other"))                 # this firm's, moved to another key
+    F.T["tally_post_jobs"].append(dict(job("j96", "taken", device_id="d-x"), firm_id="f-another"))   # another firm's
+    F.T["tally_post_jobs"].append(job("j97", "taken", target_bridge=OTHER, taken_by=OTHER))   # another bridge of this computer
+    for jid, want, code in (("j95", True, 200), ("j96", False, 200), ("j97", True, 403)):
+        c, r = update(jid, results=ACC, items=[{"id": "K1", "state": "unknown"}])
+        st_ = [a_ for a_ in F.ARGS.get("tally_post_id_accept", []) if a_.get("p_job") == jid]
+        ok(c == code and bool(st_) == want and row(jid)["status"] == "taken", "M3: %s answered %s %s, acceptances %s" % (jid, c, r.get("gone") and "gone" or r.get("error", "")[:40], "stamped" if st_ else "not stamped"))
 finally:
     fn.terminate()
     try: fn.wait(10)

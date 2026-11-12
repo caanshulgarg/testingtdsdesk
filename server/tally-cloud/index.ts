@@ -4797,10 +4797,12 @@ Deno.serve(sentry.wrap(async (req) => {
         if (!mayPost(dev, meU, (meUB.entry as any).user)) return reply(403, { ok: false, notMain: true, error: "Another bridge of the same Windows user is the main bridge on this computer now (chosen in FinCom); this one reads only and does not post." });
         // migration 54: a posting for another bridge is never reported by this one (a cloud without the column: as before).
         // A bridge switched to changes only still reports a posting it took before the switch
+        let refused: Response | null = null;
         {
           const { data: tj, error: te } = await db.from("tally_post_jobs").select("target_bridge").eq("id", String(body.id || "")).eq("device_id", dev.id).maybeSingle();
           if (te && !missingRel(te)) { fail("posts_update_target", te, "posts_update"); console.error("tally-ingest: posts_update target check not read", dev.id, String(body.id || "").slice(0, 60), String(te.message || "").slice(0, 200)); }     // 2.3.1: logged
-          if (!te && tj?.target_bridge && tj.target_bridge !== meU) return reply(403, { ok: false, error: "This posting is for another bridge on this computer; this one does not report it." });
+          // second review M3: answered after this report's acceptances are stamped (below), never before
+          if (!te && tj?.target_bridge && tj.target_bridge !== meU) refused = reply(403, { ok: false, error: "This posting is for another bridge on this computer; this one does not report it." });
         }
         const st = ["taken", "running", "done", "failed"].includes(body.status) ? body.status : "running";
         const s = (v: unknown, n: number) => typeof v === "string" ? v.slice(0, n) : "";
@@ -4879,7 +4881,9 @@ Deno.serve(sentry.wrap(async (req) => {
           // migration 174: a posting handed back to send some entries again (resend_only, a check's "not in Tally") takes no
           // report of the copy before it (its acceptances are stamped above all the same); it is taken again by posts_take.
           // (A posting another bridge took cannot be reported here: the target check above refuses it)
-          if (c.status === "waiting" && Array.isArray(c.resend_only) && c.resend_only.length) return reply(200, { ok: true, stale: true, status: "waiting", handedBack: true });
+          // (second review M1) only while it has not been taken since (taken_at empty, as the hand-back leaves it); taken
+          // and put back after that: a requeued posting of this bridge, taken back below
+          if (c.status === "waiting" && Array.isArray(c.resend_only) && c.resend_only.length && !c.taken_at) return reply(200, { ok: true, stale: true, status: "waiting", handedBack: true });
           return null;
         };
         // 03-Oct-2026 (round 4): an entry Tally accepted is never stored as failed. An acceptance is ok, accepted (bridge
@@ -4987,8 +4991,14 @@ Deno.serve(sentry.wrap(async (req) => {
         // the id of every accepted entry is stamped (tally_post_id_accept, migration 36b: the sync then never frees it);
         // before 36b the function is missing and the stamp is skipped. Stamped 0 (36b matches the tag's spelling, the
         // bridge's and FinCom's entry id; none of the posting's ids is this one) is said in the log. Only a posting of this
-        // computer (cur: read by its key); none: gone, nothing stamped
-        if (cur) for (const a of accepted) {
+        // computer (cur: read by its key), or (second review M3) one of this firm that moved to another key or bridge
+        // (re-pairing, a hand-back to the bridge that checked): tally_post_id_accept stamps only this posting's own ids
+        let stampOk = !!cur && !refused;
+        if (!stampOk && accepted.size) {
+          const { data: fj } = await db.from("tally_post_jobs").select("firm_id").eq("id", id).maybeSingle();
+          stampOk = !!fj && fj.firm_id === firm;
+        }
+        if (stampOk) for (const a of accepted) {
           const k = rowOf(a);
           // stamped already and not released: nothing to do; released (by the owner, as history): stamped again, so that
           // a new acceptance after a Retry clears the release (36b judges by its own clock and the posting's taken_at)
@@ -5009,6 +5019,7 @@ Deno.serve(sentry.wrap(async (req) => {
         }
         // migration 174 (review B2): the stamps above come before every answer below, the early ones too (cancelled, late,
         // settled, handed back): an entry Tally took is never forgotten because the posting changed in FinCom meanwhile
+        if (refused) return refused;
         // the row to write on the posting as read (cur), or the answer that ends the report
         const SENT_STATES = ["sending", "sent", "in_tally", "unknown", "posted", "needs_review"];
         const prepare = async (c: any): Promise<{ end?: Response; row?: Record<string, unknown>; status?: string; stale?: boolean; stopped?: string }> => {
@@ -5026,8 +5037,15 @@ Deno.serve(sentry.wrap(async (req) => {
           // the bridge finished (done, nothing to check) is stored as it is
           if (c.stop_reason && ["waiting", "taken", "running"].includes(c.status) && !(b.row.status === "done" && !b.row.checking)) {
             const rs = (Array.isArray(b.row.results) ? b.row.results : []) as any[], xs = (Array.isArray(b.row.items) ? b.row.items : []) as any[];
-            const anySent = accepted.size > 0 || rs.some((r) => r && (r.ok === true || r.sent === true || r.outcomeUnknown === true || r.accepted === true || SENT_STATES.includes(String(r.state || ""))))
-              || xs.some((x) => x && SENT_STATES.includes(String(x.state || "")));
+            // (second review M2) failed only when the bridge says taken, every item still waiting, no result of it or before it
+            // says sent or accepted, and no id of the posting was ever stamped accepted; anything else is held for checking
+            const sentRes = (r: any) => r && (r.ok === true || r.sent === true || r.outcomeUnknown === true || r.accepted === true || r.held === true || SENT_STATES.includes(String(r.state || "")));
+            const prior = ([] as any[]).concat(Array.isArray(c.results) ? c.results : [], Array.isArray(c.items) ? c.items : []);
+            let everAccepted = false;
+            { const { data: ids0, error: idsErr } = await db.from("tally_post_ids").select("accepted_at").eq("job_id", id);
+              everAccepted = !!idsErr || (ids0 || []).some((r: any) => r && r.accepted_at); }
+            const anySent = st !== "taken" || accepted.size > 0 || everAccepted || rs.some(sentRes) || prior.some(sentRes)
+              || xs.some((x) => !x || String(x.state || "waiting") !== "waiting");
             const why = s(String(c.stop_reason), 400);
             if (anySent) { b.row.status = "done"; b.row.checking = true; b.row.message = s("Stopped: " + why + " Part of it may be in Tally already: held for checking, not posted again; an owner marks it posted or releases it.", 500); }
             else { b.row.status = "failed"; b.row.checking = false; b.row.message = s(why + " The FinCom Bridge stopped it before any of it reached Tally.", 500); }

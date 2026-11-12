@@ -49,7 +49,15 @@
 --      owner (restart FinCom Bridge on that computer, or cancel the posting). Not when Tally took an entry of it that is
 --      not confirmed (36b's resend guard: an owner settles those).
 --
--- Replaced (each from its latest text, every line kept but those named): tally_post_take_for (142), tally_post_requeue (36b).
+-- Second review of acfb96e8c: the stop flag is cleared whenever the posting leaves waiting / taken / running and when a
+-- Retry or a check's re-send brings it back (the version trigger); a posting once taken goes back only to the bridge that
+-- took it on its own key too (take: taken_by empty or this bridge; tally_post_reroute, 54's text, no longer moves or fails
+-- a posting once taken when its bridge can no longer post - the main bridge switched, changes only, the posts_take
+-- refusal's rescue -: it is held for the owner, "Started on <computer>; it can't be moved to another bridge safely. Open
+-- it on that computer, or check in Tally and Retry with check-first."; a posting never taken is moved as before);
+-- "never taken" for the hold is taken_by and taken_at empty and attempts 0.
+-- Replaced (each from its latest text, every line kept but those named): tally_post_take_for (142), tally_post_requeue (36b),
+-- tally_post_reroute (54).
 -- New: tally_post_job_blocked, tally_post_hold_job, tally_post_hold, tally_post_bridge_holds, and the trigger functions
 -- tally_post_jobs_version, tally_post_links_hold, tally_post_split_hold; columns tally_post_jobs.row_version, stop_reason,
 -- stop_at; index tally_post_jobs_firm_status (firm_id, status). Nothing dropped or deleted; no row of data changed. Grants
@@ -69,9 +77,15 @@ alter table public.tally_post_jobs add column if not exists stop_at timestamptz;
 create index if not exists tally_post_jobs_firm_status on public.tally_post_jobs (firm_id, status);
 
 -- ---------------------------------------------------------------- 3. the row's version
+-- (second review H1) and the stop flag (2b) is cleared whenever the posting leaves waiting / taken / running (failed, done,
+-- cancelled: settled by its bridge's last word or a person) and whenever it comes back to them from there (a person's
+-- Retry, a check's re-send): a posting stopped once is never skipped for ever by the take, the requeue or the triggers
 create or replace function public.tally_post_jobs_version() returns trigger language plpgsql security definer set search_path = public, pg_temp as $function$
 begin
   new.row_version := coalesce(old.row_version, 0) + 1;
+  if new.status not in ('waiting', 'taken', 'running') or (old.status not in ('waiting', 'taken', 'running') and new.status is distinct from old.status) then
+    new.stop_reason := null; new.stop_at := null;
+  end if;
   return new;
 end $function$;
 revoke all on function public.tally_post_jobs_version() from public, anon, authenticated;
@@ -108,14 +122,14 @@ revoke all on function public.tally_post_job_blocked(uuid) from public, anon, au
 grant execute on function public.tally_post_job_blocked(uuid) to service_role;
 
 -- ---------------------------------------------------------------- 2b. hold one posting (the caller holds its row lock)
--- 'failed' (waiting, never taken), 'stopped' (any other: the stop flag; never failed or freed from here), null (may post)
+-- 'failed' (waiting, never taken: no taken_by, no taken_at, attempts 0), 'stopped' (any other: the stop flag; never failed or freed from here), null (may post)
 create or replace function public.tally_post_hold_job(p_job uuid)
 returns text language plpgsql security definer set search_path = public, pg_temp as $function$
 declare why text := tally_post_job_blocked(p_job);
 begin
   if why is null then return null; end if;
   update tally_post_jobs set status = 'failed', updated_at = now(), message = left(why, 500)
-   where id = p_job and status = 'waiting' and taken_at is null and stop_reason is null;
+   where id = p_job and status = 'waiting' and taken_by is null and taken_at is null and coalesce(attempts, 0) = 0 and stop_reason is null;
   if found then return 'failed'; end if;
   -- (the bridge may have sent some of it already: the words do not say "nothing was sent")
   why := replace(why, ' Nothing of it was sent to Tally.', '');
@@ -185,6 +199,44 @@ $function$;
 revoke all on function public.tally_post_bridge_holds(uuid) from public, anon, authenticated;
 grant execute on function public.tally_post_bridge_holds(uuid) to service_role;
 
+-- ---------------------------------------------------------------- 4c. a waiting posting whose bridge can no longer post
+-- (second review H2b) 54's tally_post_reroute (the main bridge switched, changes only, the posts_take refusal's rescue, a
+-- Retry): its text kept for a posting NEVER taken (moved to the same Windows user's bridge that may post, else stranded);
+-- a posting once taken (taken_by or taken_at set, or put back: attempts > 0 with a bridge named) is never moved to another
+-- bridge nor failed here: it is held for the owner in plain words, state 'stranded' (a Retry is refused with them)
+create or replace function public.tally_post_reroute(p_id uuid, p_fail boolean)
+returns jsonb language plpgsql security definer set search_path = public, pg_temp as $function$
+declare j record; nb text; w text;
+begin
+  select x.id, x.device_id, x.target_bridge, x.company, x.taken_by, x.taken_at, x.attempts into j from tally_post_jobs x where x.id = p_id;
+  if not found then return jsonb_build_object('state', 'none'); end if;
+  if (j.target_bridge is not null and tally_bridge_may_post(j.device_id, j.target_bridge))
+     or (j.target_bridge is null and tally_device_may_post(j.device_id)) then return jsonb_build_object('state', 'ok'); end if;
+  if j.taken_by is not null or j.taken_at is not null then
+    w := 'Started on ' || coalesce(nullif(tally_bridge_words(j.device_id, coalesce(j.taken_by, j.target_bridge)), ''), 'the computer that took it')
+      || '; it can''t be moved to another bridge safely. Open it on that computer, or check in Tally and Retry with check-first.';
+    if coalesce(p_fail, false) then
+      update tally_post_jobs set message = left(w, 300) where id = p_id and status = 'waiting' and message is distinct from left(w, 300);
+    end if;
+    return jsonb_build_object('state', 'stranded', 'held', true, 'words', w);
+  end if;
+  nb := case when j.target_bridge is not null then tally_bridge_poster(j.device_id, tally_bridge_user(j.device_id, j.target_bridge)) end;
+  if nb is not null then
+    -- a bridge 1.15.0 ("v1") has no id of its own: the posting then names none (the computer's main bridge)
+    update tally_post_jobs set target_bridge = case when nb ~ '^go-[0-9a-f]{6,32}$' then nb end, updated_at = now(),
+           message = left('Moved to ' || coalesce(nullif(tally_bridge_words(j.device_id, nb), ''), nb) || ' (the same Windows user, the same computer): the bridge it was for can no longer post', 300)
+     where id = p_id;
+    return jsonb_build_object('state', 'moved', 'bridge', nb);
+  end if;
+  w := tally_post_stranded_words(j.device_id, j.target_bridge);
+  if coalesce(p_fail, false) then
+    update tally_post_jobs set status = 'failed', taken_at = null, updated_at = now(), message = 'Not posted into ' || j.company || ': ' || w
+     where id = p_id and status = 'waiting';
+  end if;
+  return jsonb_build_object('state', 'stranded', 'words', w);
+end $function$;
+revoke all on function public.tally_post_reroute(uuid, boolean) from public, anon, authenticated;
+
 -- ---------------------------------------------------------------- 2d. the hand-out, per bridge (142's, with the rule)
 create or replace function public.tally_post_take_for(p_device uuid, p_bridge text, p_main boolean)
 returns setof public.tally_post_jobs language plpgsql security definer set search_path = public, pg_temp as $function$
@@ -198,6 +250,7 @@ begin
     select j.id into jid from tally_post_jobs j
      where j.device_id = p_device and j.status = 'waiting' and tally_post_mine_ok(j.id, p_device, p_bridge, p_main)
        and j.firm_id = fm and j.stop_reason is null
+       and (j.taken_by is null or j.taken_by = p_bridge)      -- (second review H2a) once taken: only by the bridge that took it
      order by j.created_at limit 1 for update skip locked;
     exit when jid is null;
     if tally_post_job_blocked(jid) is null then
