@@ -43,9 +43,6 @@ const clone = (o) => JSON.parse(JSON.stringify(o));
       extra.noPos = add("2025-08-12", "Sales", "Walk-in Customers", [["Walk-in Customers", -141600], ["Sales - Goods", 120000, {hsn: "8471", rate: 18}], ["Output IGST", 21600]]);
       // a B2C summary numbered as a range (B2CS, not B2C large), inter-state to Uttar Pradesh
       extra.range = add("2025-09-03", "Sales", "Walk-in Customers", [["Walk-in Customers", -236000], ["Sales - Services", 200000, {hsn: "9983", rate: 18}], ["Output IGST", 36000]], {vno: "WEB/155 to WEB/182", pos: "Uttar Pradesh"});
-      // next-fix-b2cs-gstin: the same, with a (made-up) payment gateway's GSTIN on the voucher, IGST, Tally's place of
-      // supply Karnataka: still B2CS under 29 (not B2B to the gateway, not the gateway's state 27), and in 3.2
-      extra.rangeG = add("2025-09-05", "Sales", "PayGate Ltd", [["PayGate Ltd", -118000], ["Sales - Services", 100000, {hsn: "9983", rate: 18}], ["Output IGST", 18000]], {vno: "PG/301 to     PG/340", pos: "Karnataka", gstin: "27AAFCP4821K1Z8"});
       // a credit note to an unregistered inter-state buyer (3.2 taken off)
       extra.cnU = add("2025-09-20", "Credit Note", "Walk-in Customers", [["Walk-in Customers", 11800], ["Sales - Goods", -10000, {hsn: "8471", rate: 18}], ["Output IGST", -1800]], {pos: "Uttar Pradesh"});
       // a debit note raised on a customer (R1 DBNR)
@@ -54,6 +51,10 @@ const clone = (o) => JSON.parse(JSON.stringify(o));
       // a party whose name came from Tally with its "&" escaped (the copy keeps it so: tally_nm takes out line breaks only)
       extra.amp = add("2025-11-09", "Sales", "Oak &amp; Fern Traders", [["Oak &amp; Fern Traders", -11800], ["Sales - Goods", 10000, {hsn: "8471", rate: 18}], ["Output CGST", 900], ["Output SGST", 900]], {pos: "Delhi"});
       extra.ng = add("2025-11-04", "Sales", "Birchwood Retail", [["Birchwood Retail", -8000], ["Sales - Exempt", 8000]], {gstin: "07AABCB7310K1Z2", pos: "Delhi", gst_taxability: "Non-GST", gst_alter_id: 900099});
+      // next-fix-b2cs-gstin (added last, so the entries above keep their GUIDs, which tests/run_migration164.py picks by
+      // place): a B2C summary numbered as a range with a (made-up) payment gateway's GSTIN on the voucher, IGST, Tally's place of
+      // supply Karnataka: still B2CS under 29 (not B2B to the gateway, not the gateway's state 27), and in 3.2
+      extra.rangeG = add("2025-09-05", "Sales", "PayGate Ltd", [["PayGate Ltd", -118000], ["Sales - Services", 100000, {hsn: "9983", rate: 18}], ["Output IGST", 18000]], {vno: "PG/301 to     PG/340", pos: "Karnataka", gstin: "27AAFCP4821K1Z8"});
     }
     const ledgers = extra ? w.ledgers.concat([{name: "Oak &amp; Fern Traders", parent: "Sundry Debtors", open: 0, gstin: "07AACCO1234F1Z5"}, {name: "PayGate Ltd", parent: "Sundry Debtors", open: 0, gstin: "27AAFCP4821K1Z8"}]) : w.ledgers;
     return {client: CLIENT, co: w.co, book: Object.assign({}, w.book, {book_id: "bbbbbbbb-0164-4000-8000-000000000001", client_id: CLIENT}), heads, lines, bills, ledgers, groups: w.groups,
