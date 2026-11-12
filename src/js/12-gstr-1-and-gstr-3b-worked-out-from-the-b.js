@@ -104,16 +104,23 @@ Object.assign(GSTR, {
   // worked out from is the same, as TDS.kept keeps the TDS rows: the same books object and save (BOOKS_REV), every kept
   // part of the books (BOOKS_KEYS) the same object, the same entries (the list, and each entry in its place), the client
   // (CO(), by its contents but for its counts on the clients' list, refreshStats, which change on every opening), the
-  // marketplace sales (S.sales) and the day. Outside a drawing, as before, always fresh. tests/run_hang_gst_year.py
-  _ck: new WeakMap(),
+  // marketplace sales (S.sales, and SALES_REV: every save of them, src/js/25, as an invoice is ignored or its GSTIN typed in
+  // place) and the day; the parts edited in place (the ledger map, the GST settings, the place-of-supply fixes) also by
+  // their contents. Asked once per drawing (the year asks 24 times). Outside a drawing, as before, always fresh.
+  // tests/run_hang_gst_year.py
+  _ck: new WeakMap(), _ckAt: null,
   keptYear(key, fn){
     const b = S.books, V = b && b.vouchers;
     if (!Array.isArray(V) || typeof IN_RENDER === "undefined" || !IN_RENDER || typeof BOOKS_KEYS === "undefined") return fn();
-    let co; try { const c = (typeof CO === "function" && CO()) || null; co = JSON.stringify(c, (k, x) => (k === "stats" && c && x === c.stats ? undefined : x)); } catch (e){ return fn(); }
-    const sl = S.sales, ids = [typeof BOOKS_REV === "number" ? BOOKS_REV : 0, S.coId, co, new Date().toDateString(), sl, sl && sl.cid, sl && sl.list, sl && sl.list && sl.list.length, b.mapV, b.ledInfoAt, V.length]
-      .concat(BOOKS_KEYS.map(k => b[k]), V);
-    let w = this._ck.get(b);
-    if (!w || w.ids.length !== ids.length || !w.ids.every((x, i) => x === ids[i])){ w = {ids, v: {}}; this._ck.set(b, w); }
+    let w = this._ckAt && this._ckAt.b === b && this._ckAt.gen === RENDER_GEN && this._ckAt.rev === BOOKS_REV ? this._ckAt.w : null;
+    if (!w){
+      let co, ed; try { const c = (typeof CO === "function" && CO()) || null; co = JSON.stringify(c, (k, x) => (k === "stats" && c && x === c.stats ? undefined : x)); ed = JSON.stringify([b.map, b.gstSet, b.gstPosFix]); } catch (e){ return fn(); }
+      const sl = S.sales, ids = [typeof BOOKS_REV === "number" ? BOOKS_REV : 0, typeof SALES_REV === "number" ? SALES_REV : 0, S.coId, co, ed, new Date().toDateString(), sl, sl && sl.cid, sl && sl.list, sl && sl.list && sl.list.length, b.mapV, b.ledInfoAt, V.length]
+        .concat(BOOKS_KEYS.map(k => b[k]), V);
+      w = this._ck.get(b);
+      if (!w || w.ids.length !== ids.length || !w.ids.every((x, i) => x === ids[i])){ w = {ids, v: {}}; this._ck.set(b, w); }
+      this._ckAt = {b, gen: RENDER_GEN, rev: BOOKS_REV, w};
+    }
     return Object.prototype.hasOwnProperty.call(w.v, key) ? w.v[key] : (w.v[key] = fn());
   },
   checksKept(ym, reg){ return this.keptYear("chk|" + ym + "|" + reg, () => this.checks(ym, reg)); },

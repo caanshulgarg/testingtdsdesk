@@ -14,7 +14,9 @@ as run_gst_fix_list.py makes them. Checks:
   2. the kept checks are the ones worked out afresh (every month of the year, outside a drawing);
   3. a change saved (an entry's GSTIN made invalid, saveBooks): the next drawing works the checks out again and the
      grid's count moves by one; an entry replaced in place without a save, the client's GSTIN changed, marketplace
-     sales added: worked out again too;
+     sales added, the ledger map or the GST settings edited in place: worked out again too; a marketplace invoice changed
+     in place as Sales changes it (ignored, restored, its buyer GSTIN typed, Undo; then saveSales): the grid, What to
+     fix and the count worked out afresh agree;
   4. TCloud.rework after new entries (TallyRead.after marked MIS out of date): no MIS.run at once (the tab does it when
      shown), the mark kept, within REWORK_MS (default 600); books with no mark: MIS.run as before.
 Runs on the React build: app/dist-test (cd app && npm run legacy && npm run build:test), or TDSDESK_SITE.
@@ -128,9 +130,39 @@ try:
         ok(pg.evaluate("window.__ck") >= 12 and pg.evaluate(SAME)["same"], "the client's GSTIN changed: worked out again, as afresh")
         pg.evaluate("() => { const c = CO(); c.gstin = c.__g; delete c.__g; render(); }"); pg.wait_for_timeout(500)
         # marketplace sales (S.sales) added: worked out again
-        pg.evaluate("""() => { window.__ck = 0; S.sales = {cid: S.coId, list: [{id: 'zzmk1', source: 'market', status: 'ready', x: {date: '2026-03-10', number: 'MK/0000000000000001', customerName: 'ZZ Buyer', customerGstin: '07AAGCL4827M1Z3', placeOfSupply: 'Delhi', cgst: 9, sgst: 9, igst: 0, taxable: 100, hsn: ''}}]}; render(); }"""); pg.wait_for_timeout(800)
+        pg.evaluate("""() => { window.__ck = 0; S.sales = {cid: S.coId, list: [{id: 'zzmk1', source: 'market', status: 'review', x: {date: '2026-03-10', number: 'MK-0001', customerName: 'ZZ Buyer', customerGstin: '07AAJFQ3158R1ZJ', placeOfSupply: 'Delhi', cgst: 9, sgst: 9, igst: 0, taxable: 100, total: 118, hsn: '9983'}}], cfg: {}, sel: new Set(), sticky: new Set(), undo: null};
+          saveSales(); render(); }"""); pg.wait_for_timeout(800)
         ok(pg.evaluate("window.__ck") >= 1 and pg.evaluate(SAME)["same"], "marketplace sales added: worked out again, as afresh")
-        pg.evaluate("() => { S.sales = null; render(); }"); pg.wait_for_timeout(500)
+        # (review of bb5a5c53d) a marketplace invoice changed IN PLACE, as Sales does (then saveSales): the grid and What to fix follow
+        KM = "GSTR-1|202603"
+        def mk_state(label):
+            pg.evaluate("() => { S.booksTab = 'gst'; S.gstView = 'year'; S.gstReg = '07'; S.gstYm = '202603'; render(); }"); pg.wait_for_timeout(500)
+            n = dict(pg.evaluate(GRID)).get(KM, 0)
+            pg.evaluate("() => document.querySelector('#app [data-cell=\"%s\"]').click()" % KM); pg.wait_for_timeout(500)
+            fx = pg.evaluate("() => { const p = document.querySelector('#app [data-fix-list]'); return p ? +p.dataset.fixN : 0; }")
+            fresh = pg.evaluate("() => GSTR.errorsFor('202603', '07').r1")
+            pg.evaluate("() => { const b = document.querySelector('#app [data-back-year]'); if (b) b.click(); }"); pg.wait_for_timeout(300)
+            return n, fx, fresh
+        n_bad, fx_bad, fr_bad = mk_state("bad")
+        ok(n_bad == fx_bad == fr_bad, "the marketplace invoice with an invalid buyer GSTIN: grid %d = What to fix %d = afresh %d" % (n_bad, fx_bad, fr_bad))
+        pg.evaluate("() => { const v = S.sales.list[0]; v.status = 'ignored'; saveSales(); render(); }")
+        n_ig, fx_ig, fr_ig = mk_state("ignored")
+        ok(n_ig == fx_ig == fr_ig == n_bad - 1, "ignored in place (saveSales): grid %d, What to fix %d, afresh %d (one fewer than %d)" % (n_ig, fx_ig, fr_ig, n_bad))
+        pg.evaluate("() => { const v = S.sales.list[0]; v.status = 'review'; saveSales(); render(); }")
+        n_re, fx_re, fr_re = mk_state("restored")
+        ok(n_re == fx_re == fr_re == n_bad, "restored in place: grid %d, What to fix %d, afresh %d (%d again)" % (n_re, fx_re, fr_re, n_bad))
+        pg.evaluate("() => { const s = S.sales, v = s.list[0]; s.undo = {text: 'zz', before: [JSON.parse(JSON.stringify(v))]}; v.x.customerGstin = '07AAJFQ3158R1ZH'; saveSales(); render(); }")
+        n_fx, fx_fx, fr_fx = mk_state("GSTIN typed")
+        ok(n_fx == fx_fx == fr_fx == n_bad - 1, "its buyer GSTIN corrected in place: grid %d, What to fix %d, afresh %d" % (n_fx, fx_fx, fr_fx))
+        pg.evaluate("() => salesUndo()"); pg.wait_for_timeout(300)
+        n_un, fx_un, fr_un = mk_state("undone")
+        ok(n_un == fx_un == fr_un == n_bad, "Undo (salesUndo): grid %d, What to fix %d, afresh %d (%d again)" % (n_un, fx_un, fr_un, n_bad))
+        # the ledger map and the GST settings edited in place (their contents compared): worked out again
+        pg.evaluate("() => { window.__ck = 0; const m = S.books.map, k = Object.keys(m)[0]; m[k] = Object.assign({}, m[k], {zz: 1}); render(); }"); pg.wait_for_timeout(500)
+        ok(pg.evaluate("window.__ck") >= 12, "a ledger's mapping changed in place (no save): worked out again (%d)" % pg.evaluate("window.__ck"))
+        pg.evaluate("() => { window.__ck = 0; S.books.gstSet = S.books.gstSet || {}; S.books.gstSet.zz = {t: 1}; render(); }"); pg.wait_for_timeout(500)
+        ok(pg.evaluate("window.__ck") >= 12, "the GST settings changed in place (no save): worked out again (%d)" % pg.evaluate("window.__ck"))
+        pg.evaluate("() => { delete S.books.gstSet.zz; S.sales = null; render(); }"); pg.wait_for_timeout(500)
         # 4. the cloud copy's new entries: rework
         pg.evaluate("() => { const r = MIS.autoRange(S.books), a = Audit.defaultRange(S.books); MIS.run(r.from, r.to, 'by hand'); Audit.run(a.from, a.to, 'by hand'); saveBooks(); }")
         # (on Look up: the drawing after the new entries works the shown page out again, as it must)

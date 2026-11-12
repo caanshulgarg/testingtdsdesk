@@ -67,7 +67,7 @@ async function loadSales(cid){
   if (!S.bank || S.bank.cid !== cid) await loadBank(cid);   // the client's Tally ledgers live with the bank data
   const [list, cfg, hist] = await Promise.all([BankDB.get("sales:" + cid), BankDB.get("salescfg:" + cid), BankDB.get("saleshist:" + cid)]);
   if (!S.sales || S.sales.cid !== cid) return;
-  Object.assign(S.sales, {list: list || [], cfg: Object.assign({}, SALES_CFG_DEFAULT, cfg || {}), hist: hist || {}, loading: false});
+  SALES_REV++; Object.assign(S.sales, {list: list || [], cfg: Object.assign({}, SALES_CFG_DEFAULT, cfg || {}), hist: hist || {}, loading: false});
   // invoices filed from elsewhere are matched now
   const pend = S.sales.list.filter(v => v.needsMap);
   if (pend.length){ pend.forEach(v => { v.needsMap = false; mapInvoice(v); }); saveSales(); }
@@ -75,7 +75,11 @@ async function loadSales(cid){
   if (bridgeLive(CO(cid))) salesAutoSync();
 }
 let salesSaveTimer = null;
+// next-fix-hang (review of bb5a5c53d): moved by every save of the sales (and their loading), so the GST figures kept
+// across drawings (GSTR.keptYear, src/js/12) see a marketplace invoice changed in place (ignored, its GSTIN typed, undone)
+let SALES_REV = 0;
 function saveSales(what){
+  SALES_REV++;
   const s = SL(); if (!s) return;
   const cid = s.cid, list = s.list;
   if (typeof cloudSoon === "function") cloudSoon();

@@ -177,7 +177,9 @@ const FirstOpen = {
     const line = () => nAll ? "Loading entries from Tally: " + fmt(Math.min(inN, nAll)) + " of " + fmt(nAll) + "…" : "Loading entries from Tally: " + got + " of " + want.length + " days…";
     const progress = () => {
       if (!st.ready){ if (got % 10 === 0 || got === want.length) say(line()); return; }
-      if (got % 5 === 0 || got === want.length) this.tell(st, "Books: " + st.fy + " ready · " + line());
+      // (next-fix-hang: the older year stays named whichever line is said last: this one or the preview's "loading …")
+      const n = nAll ? fmt(Math.min(inN, nAll)) + " of " + fmt(nAll) + " entries" : got + " of " + want.length + " days";
+      if (got % 5 === 0 || got === want.length) this.tell(st, "Books: " + st.fy + " ready · " + (got === want.length ? "putting " + st.older + " in…" : "loading " + st.older + "… (" + n + ")"));
     };
     // a day in: kept (packed, many to a write), and its month read once its last day is in
     const take = (x, v, keep) => {
