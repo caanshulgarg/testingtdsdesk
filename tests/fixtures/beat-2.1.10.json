@@ -83,6 +83,7 @@
   "postBatchBills": 10,
   "postOnly": [],
   "postedRecord": "",
+  "postsUnreadable": [],
   "readDays": false,
   "readStopped": null,
   "recorderBodyFetch": {},
