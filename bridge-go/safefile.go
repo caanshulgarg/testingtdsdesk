@@ -486,9 +486,13 @@ func durableFlushNow(path string) error {
 	return nil
 }
 
-// the file flushed to the disk once, and its folder
+// the file flushed to the disk once, and its folder; no file (a computer that never noted a voucher, a masters-only
+// posting before any): nothing to keep, no failure
 func flushFileOnce(path string, syncFn func(*os.File) error) error {
 	h, err := openForSync(path)
+	if os.IsNotExist(err) {
+		return nil
+	}
 	if err != nil {
 		return err
 	}
