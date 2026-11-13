@@ -128,6 +128,8 @@ input[type=search]:focus-visible, select:focus-visible, textarea:focus-visible {
   border-radius: var(--radius-control); background: var(--warn-soft); color: var(--foreground); font-size: 13.5px; }
 .bk-alert.not-read { padding-block: 6px; }   /* the books-not-read line stays one row (the notice rule: 40px at most) */
 .bk-alert.bad { border-color: color-mix(in oklab, var(--bad) 40%, var(--border)); background: var(--bad-soft); }
+/* ux-wins: a notice with nothing waiting on it (Post to Tally's line on an empty list): calm, never red */
+.bk-alert.calm { border-color: var(--border); background: var(--surface-muted); color: var(--text-secondary); }
 .bk-alert.ok { border-color: color-mix(in oklab, var(--ok) 38%, var(--border)); background: var(--ok-soft); }
 
 /* the old HTML pieces (parts/Legacy.jsx): GST Annual (GSTR-9's tables), Books → Accounts (the statements) and

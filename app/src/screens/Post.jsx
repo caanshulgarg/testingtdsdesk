@@ -43,8 +43,11 @@ function StatusLine({ co, noProblem }) {
   const s = postStatusFor(co), p0 = noProblem ? null : s.problem;
   const tally = p0 && !DECIDE.includes(p0.kind);
   const p = p0 && (!tally || S.postTried === co.id) ? (tally ? Object.assign({}, p0, { text: plainLine(co) }) : p0) : null;
+  // ux-wins (the review: a red "Posting waits…" on an empty list teaches people to ignore red): red only while bills
+  // wait to be posted (or a posting was stopped); with nothing waiting the same line is a calm note
+  let waiting = 1; try { waiting = p && p.kind !== "stop" ? postBills(co.id).ready.length + num(postTabCounts(co.id).errors) : 1; } catch (e) { waiting = 1; }
   return <>
-    {p && <div className="bk-alert bad post-problem" data-post-problem={p.kind} data-not-allowed={p.kind === "stop" ? "" : undefined} data-guessed={p.kind === "stop" && !p.msg ? "" : undefined}>
+    {p && <div className={"bk-alert post-problem " + (waiting ? "bad" : "calm")} data-post-calm={waiting ? undefined : ""} data-post-problem={p.kind} data-not-allowed={p.kind === "stop" ? "" : undefined} data-guessed={p.kind === "stop" && !p.msg ? "" : undefined}>
       <span>{p.msg ? <><b>Not sent to Tally: choose the Tally company.</b> {notAllowedRest(p.msg)} The bills are still waiting here.</> : p.text}</span>
       {p.button && p.go && <button className="btn small" data-post-action="" data-choose-company={p.kind === "stop" ? "" : undefined} onClick={p.go}>{p.button}</button>}
       {(p.offer || []).map((o) => <button key={o.company} className="btn small" data-post-allow={o.company} onClick={o.go}>{o.company}</button>)}
