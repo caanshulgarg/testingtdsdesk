@@ -119,6 +119,6 @@ function ZohoPage() {
 }
 
 export default function Integrations() {
-  if (!(typeof Cloud === "object" && Cloud.on() && S.account)) return <div className="pane" data-pane="integrations"><h2>Integrations</h2><p className="note">Sign in to the firm account to see its integrations.</p></div>;
+  if (!(typeof Cloud === "object" && Cloud.on() && S.account)) return null;
   return S.integPage === "zoho" ? <ZohoPage /> : <Hub />;
 }

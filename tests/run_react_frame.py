@@ -70,7 +70,7 @@ with sync_playwright() as p:
     ok(pg.evaluate("!!S.tallyPanel") is False, "the Tally icon opens its popover, not the side panel")
     pg.click("#cobar [data-tally-pop-page]"); pg.wait_for_timeout(600)
     # 23-Oct-2026 (next-tally-suvit): it opens the client's own Tally card, which lists the companies in Tally with Link
-    ok(pg.evaluate("[S.view, S.homeTab, (S.tallyGuide || {}).cid]") == ["home", "tally", cid0] and pg.locator("#app [data-tco-list=firm], #app [data-connect-guide=signin]").count() == 1, "the Tally sign of a client not linked opens the Tally page's list for it (24-Oct-2026: the one place)")
+    ok(pg.evaluate("[S.view, S.homeTab, (S.tallyGuide || {}).cid]") == ["home", "tally", cid0] and pg.locator("#app [data-tco-list=firm], #app [data-tpg-dl-head]").count() == 1, "the Tally sign of a client not linked opens the Tally page's list for it (24-Oct-2026: the one place)")
     pg.evaluate("(c) => { S.view = 'company'; S.coId = c; S.tab = 'cotally'; render(); }", cid0); pg.wait_for_timeout(600)
     pg.evaluate("() => doAct('tallyPanel')"); pg.wait_for_timeout(400)
     ok(pg.locator(".tallypanel").count() == 1 and "Tally connection" in pg.inner_text(".tallypanel"), "the Tally panel opens")

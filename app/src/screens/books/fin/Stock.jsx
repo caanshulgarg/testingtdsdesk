@@ -67,8 +67,7 @@ function TallyBar({ s }) {
   return <div className="fin-stock-tally" data-fin-stocktally="">
     {has ? <span data-fin-stockread="">Opening stock {inr(t.opening)} · Closing stock {inr(t.closing)} · from Tally {when}</span>
       : <span className="note">Tally works the stock out itself (its stock summary): FinCom asks it once for {dmy(s.from)} to {dmy(s.to)} when you click.</span>}
-    {cloudOn() ? <Button className="btn small" disabled={busy} onClick={() => click(has)} data-fin-stockask={has ? "again" : "bring"}>{busy ? "Asking Tally…" : has ? "Ask Tally again" : "Bring stock from Tally"}</Button>
-      : <span className="note">Sign in to the firm account to bring the stock from Tally.</span>}
+    {cloudOn() ? <Button className="btn small" disabled={busy} onClick={() => click(has)} data-fin-stockask={has ? "again" : "bring"}>{busy ? "Asking Tally…" : has ? "Ask Tally again" : "Bring stock from Tally"}</Button> : null}
     {(msg || failed) ? <p className="fin-bad" data-fin-stockmsg="">{msg || failed}</p> : null}
   </div>;
 }

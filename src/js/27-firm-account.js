@@ -59,12 +59,6 @@ const Cloud = {
     out.push(dec.decode());
     return out.join("");
   },
-  // the review of 07041bcdd: the token's refresh is never cut at 20 s (Supabase may already have made the new token: the
-  // old refresh token is then spent, and sending it again after its short grace ends the session). It has a minute
-  // (refreshWait) and is sent once a refresh token: a refresh whose answer never came is remembered (in this browser,
-  // for every tab: fincom:refresh-sent), and that refresh token is not sent again; another tab's new session is taken as
-  // it is, else the person signs in again
-  refreshWait: 60000,
   async authCall(path, body, wait){
     const c = this.cfg();
     const [r, j] = await this.timed(wait || this.WAIT, async (signal, alive) => {
@@ -102,36 +96,7 @@ const Cloud = {
     await this.whoAmI();
     return true;
   },
-  // A new access token from the refresh token. One refresh at a time: requests that fail together (opening a bill
-  // fetches its document while the sync runs) share it, and a token another tab has refreshed meanwhile is used as
-  // it is. Two refreshes with the same refresh token can make Supabase end the session (review: signed out after
-  // the page was left idle). used: the token a failed request carried; skipped when the session already has a newer one.
-  refreshToken(used){
-    const s0 = this.sess();
-    if (used && s0 && s0.access_token && s0.access_token !== used) return Promise.resolve();
-    if (this._refreshing) return this._refreshing;
-    this._refreshing = (async () => {
-      const s = this.sess();
-      if (!s || !s.refresh_token) throw new Error("Signed out");
-      const tag = String(s.refresh_token).slice(-16), SENT = "fincom:refresh-sent";
-      if (lsGet(SENT) === tag){
-        const e = new Error("FinCom could not renew your sign-in (no answer came). Sign in again."); e.signIn = true; throw e;
-      }
-      lsSet(SENT, tag);
-      let j;
-      try { j = await this.authCall("token?grant_type=refresh_token", {refresh_token: s.refresh_token}, this.refreshWait); }
-      catch (e){
-        // the server answered (it refused): nothing was spent, a later try may send it; no answer: never again
-        if (!(e && (e.timedOut || e.name === "TypeError" || e.name === "AbortError"))) lsDel(SENT);
-        throw e;
-      }
-      lsDel(SENT);
-      const now = this.sess();
-      if (!now || now.refresh_token !== s.refresh_token) return;      // signed out, or another tab got there first
-      this.setSess(Object.assign({}, s, {access_token: j.access_token, refresh_token: j.refresh_token || s.refresh_token, at: Date.now(), expires_in: j.expires_in || 3600}));
-    })().finally(() => { this._refreshing = null; });
-    return this._refreshing;
-  },
+  // refreshToken(used): src/js/43 (one at a time across tabs; a network error never signs out)
   // before a request: a token that has run out, or will within two minutes, is refreshed first (a page left idle for
   // an hour no longer sends an expired token and depends on the 401 to recover)
   async fresh(){
@@ -144,7 +109,7 @@ const Cloud = {
   // never the firm's data; cleared all the same, so nothing of this sign-in stays behind). Only this address's own
   // (fincom-files:/review/ or /next/, the worker's RUNTIME): the trial build never clears the live one's; the other tab
   // is signed out too (the shared sign-in) and clears its own
-  signOut(){ try { Live.stop(); } catch (e){} try { lsDel("fincom:refresh-sent"); if (typeof TStale === "object") TStale.reset(); } catch (e){} try { if (window.caches) caches.delete("fincom-files:" + new URL("./", location.href).pathname).catch(() => {}); } catch (e){} this.setSess(null); this.st = {state: "off", email: "", role: "", firm: "", lastSync: 0, pending: 0, error: "", busy: "", members: []}; },
+  signOut(){ try { Live.stop(); } catch (e){} try { if (typeof TStale === "object") TStale.reset(); } catch (e){} try { if (window.caches) caches.delete("fincom-files:" + new URL("./", location.href).pathname).catch(() => {}); } catch (e){} this.setSess(null); this.st = {state: "off", email: "", role: "", firm: "", lastSync: 0, pending: 0, error: "", busy: "", members: []}; },
   // speed round 2 (27-Oct-2026, client_timings: about 20 reads sent at the same moment as the page opened, each 150-280 ms
   // alone but up to 1.3 s together, and 5 s for alert_dismissals_list, tally_post_jobs and tally_post_row_flags): the
   // reads of things the first page does not show (alerts and their dismissals, posting flags and payloads, ledgers Tally
@@ -727,6 +692,7 @@ async function cloudSync(manual){
 function startCloudSync(){
   clearInterval(cloudTimer);
   if (!Cloud.on()) return;
+  Cloud.keepFresh();
   Cloud.checkMfa().then(m => { if (m) render(); else startCloudSync2(); }, () => startCloudSync2());
 }
 function startCloudSync2(){
@@ -864,8 +830,7 @@ Cloud.signupCoupon = function(){
     () => toast("The coupon " + code + " could not be applied just now." + again));
 };
 Cloud.oauth = function(provider){
-  const box = document.querySelector('[data-cloud="keep"]');
-  if (box) lsSet("tdsdesk:keep", box.checked ? "1" : "0");
+  keepChoice();
   window.loadAuthLink().then(m => m.startOAuth(provider)).catch(e => { Cloud.st.error = e.message; render(); });
 };
 
@@ -1538,6 +1503,8 @@ function doAct(act, t){
     }
     // the coordinator's screenshot review (14-Oct-2026): no floating box; the sidebar's foot says it (Side.jsx FootLine)
     case "useOffline": Cloud.setCfg({gate: false}); render(); break;
+    // the top bar's "Sign in again" (TopBar.jsx SaveState): the sign-in page, then back to this page (Route.pending)
+    case "signAgain": if (Cloud.on()) cloudSync(false); else { Route.pending = Route.of(); Cloud.setCfg({gate: true}); } render(); break;
     case "dropKeysList": Cloud.rpc("my_drop_keys").then(r => { S.dropKeys = [].concat(r || []); render(); }, e => toast(e.message)); break;
     case "dropKeyNew": {
       askConfirm({title: "Make a drop key", ok: "Make it", body: '<div class="bk-form one"><label><span>What is it for?</span><input type="text" id="dkLabel" value="Cowork agent"></label></div>',

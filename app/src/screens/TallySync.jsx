@@ -57,7 +57,7 @@ function SyncFlow({ flow: all, canApply, busy }) {
 export default function SyncActivity() {
   // the filter is S.syncFilter, so a link elsewhere can open the list on it (Rec.openActivity(cid, "held"))
   const f = S.syncFilter || "all", setF = (v) => { S.syncFilter = v; render(); };
-  if (!TCloud.on()) return <div className="pane" data-sync-activity=""><h3 style={{ marginTop: 0 }}>Sync activity</h3><p className="note">Sign in to the firm account to see the changes Tally sent.</p></div>;
+  if (!TCloud.on()) return null;
   const a = Rec.actOf(), canApply = Rec.canWrite();
   const cos = Object.values(S.companies || {}).filter((c) => !c.deleted).sort((x, y) => x.name.localeCompare(y.name));
   const pick = <select data-sync-client="" aria-label="Client" value={S.syncClient || ""} onChange={(ev) => { S.syncClient = ev.target.value; Rec.act.at = 0; render(); }}>

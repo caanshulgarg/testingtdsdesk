@@ -255,8 +255,7 @@ export default function OlderEntries({ cid, say = false }) {
     return () => { on = false; }; }, [heldSig]);
   const heldRetry = (day) => { setHeldBusy(day); rpc("tally_period_held_retry", { p_book: book, p_day: day.slice(0, 4) + "-" + day.slice(4, 6) + "-" + day.slice(6, 8) })
     .then(() => rpc("tally_period_held_list", { p_book: book })).then((r) => { if (r && r.ok && Array.isArray(r.held)) { setHeld(r.held); setHeldOk(true); } summary(true); }, (e) => setErr(errWords(e))).finally(() => setHeldBusy("")); };
-  if (!b) return say ? <p className="note" data-older-none={SUM.off ? "off" : SUM.books ? "none" : "reading"}>{!(typeof TCloud === "object" && TCloud.on && TCloud.on()) ? "Sign in to the firm account first: books come from Tally through FinCom’s cloud."
-    : SUM.off ? "Bring another year is not in FinCom’s cloud yet. Use Upload a Day Book file instead."
+  if (!b) return say && typeof TCloud === "object" && TCloud.on() ? <p className="note" data-older-none={SUM.off ? "off" : SUM.books ? "none" : "reading"}>{SUM.off ? "Bring another year is not in FinCom’s cloud yet. Use Upload a Day Book file instead."
     : SUM.books ? "FinCom’s cloud has no books of this client from Tally yet: press Update now first, then come back here." : "Reading the books from FinCom’s cloud…"}</p> : null;
   // staging, 11-Nov-2026 (the owner: "while bringing another year, I am not able to see previous periods"): the years are
   // this one and the five before it, whatever day FinCom's book starts on (b.from is the day FinCom began the book, chosen

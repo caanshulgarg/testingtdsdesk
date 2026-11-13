@@ -132,7 +132,7 @@ def signin_page(pg): return pg.locator('[data-act="cloudSignIn"]').count() > 0
 def sign_in(pg, email, keep=None, wait=4500):
     pg.wait_for_selector('[data-act="cloudSignIn"]', timeout=15000)
     pg.fill('[data-cloud="email"]', email); pg.click('[data-act="cloudSignIn"]'); pg.fill('[data-cloud="password"]', "pw12345678")
-    if keep is not None: pg.set_checked('[data-cloud="keep"]', keep)
+    if keep is not None: pg.set_checked('[data-cloud="shared"]', not keep)
     pg.click('[data-act="cloudSignIn"]'); pg.wait_for_timeout(wait)
     pg.wait_for_load_state("load"); pg.wait_for_timeout(800)
 def names(pg):
@@ -191,7 +191,10 @@ with sync_playwright() as p:
     REFUSE.add("a@firm-a.in")
     pg.evaluate("() => Cloud.setSess(Object.assign({}, Cloud.sess(), {at: Date.now() - 7200e3}))")
     pg.evaluate("() => Cloud.api('records?select=id&limit=1').catch(() => 0)"); pg.wait_for_timeout(1200)
-    ok(signin_page(pg), "A's session refused: the sign-in page")
+    # stay signed in (13-Nov-2026): the page stays, one "Sign in again" in the top bar leads to the sign-in page
+    ok(not signin_page(pg) and pg.locator('[data-save="signedout"]').count() == 1, "A's session refused: one 'Sign in again' in the top bar")
+    pg.click('[data-save="signedout"]'); pg.wait_for_timeout(600)
+    ok(signin_page(pg), "… which opens the sign-in page")
     sign_in(pg, "b@firm-b.in")
     nb = names(pg)
     ok(nb == B_NAMES and not any(n in shown(pg) for n in A_NAMES), "B signs in over A's ended session: B's clients only (%s)" % sorted(nb))

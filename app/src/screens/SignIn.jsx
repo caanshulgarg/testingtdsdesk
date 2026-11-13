@@ -76,10 +76,10 @@ const Step = ({ children }) => <div className="signin-step" key={step()} data-st
 const Bot = __TURNSTILE_KEY__ ? lazy(() => import("../lib/bot.jsx")) : null;
 export const BotBox = ({ action }) => Bot ? <Suspense fallback={null}><Bot action={action} /></Suspense> : null;
 export const Err = () => Cloud.st.error ? <div className="signin-error" role="alert" data-signin-error=""><Msg text={Cloud.st.error} /></div> : null;
-// "Keep me signed in" (section D, 03-Oct-2026): ticked, the session is kept on this computer (localStorage) until you sign
-// out; unticked, in this tab only (sessionStorage), gone when the browser closes. Read by Cloud.signIn (src/js/43).
-// Nothing signs you out by itself either way.
-export const KeepBox = () => <label className="chk keep-box"><input type="checkbox" data-cloud="keep" defaultChecked /><span>Keep me signed in</span></label>;
+// Stay signed in (the owner, 13-Nov-2026): the session is kept on this computer (localStorage) until you sign out;
+// "This is a shared computer" ticked (off by default), in this tab only (sessionStorage), gone when the browser closes.
+// Read by keepChoice (src/js/43). Nothing signs you out by itself either way.
+export const KeepBox = () => <label className="chk keep-box"><input type="checkbox" data-cloud="shared" /><span>This is a shared computer</span></label>;
 // "Forgot password?": there is no reset by email of one's own; the firm's admin sends the link (Settings, Account). The
 // link sits beside the password's label, its one line under the box
 const ForgotLink = () => <button type="button" className="linkbtn signin-forgot" aria-expanded={!!S.signinForgot} aria-controls="si-forgot-note" onClick={() => { S.signinForgot = !S.signinForgot; render(); }}>Forgot password?</button>;

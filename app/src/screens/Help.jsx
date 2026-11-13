@@ -31,7 +31,7 @@ function Guide() {
     {hits && !hits.length && <p className="note">{"Nothing in the guide for “" + q + "”."}</p>}
     {groups.map(([a, xs]) => <div key={a} style={{ display: "contents" }}><h4 className="sp-area">{a}</h4>{xs.map((x) => <button key={x.k} className={"sp-art" + (x.k === s.art ? " on" : "")} onClick={() => supArt(x.k)}>{x.t}</button>)}</div>)}
   </div><div className="sp-gright">{art ? <Article x={art} /> : <p className="note">Choose a topic on the left, or search.</p>}
-    <div className="sp-still"><b>Did not find the answer?</b> {SUP.on() ? <><Sup a="new">Raise a ticket</Sup>{(Cloud.st.role === "owner" || Cloud.st.role === "staff") && <> or <button className="btn small" onClick={() => Calls.start({ kind: "help", title: "Help call" })} data-help-call="">Start help call</button></>}</> : <span className="note">Sign in to the firm account to raise a ticket.</span>}</div></div></div>;
+    {SUP.on() && <div className="sp-still"><b>Did not find the answer?</b> <Sup a="new">Raise a ticket</Sup>{(Cloud.st.role === "owner" || Cloud.st.role === "staff") && <> or <button className="btn small" onClick={() => Calls.start({ kind: "help", title: "Help call" })} data-help-call="">Start help call</button></>}</div>}</div></div>;
 }
 
 // the tickets: the one list table (spec K6): updated (date), ticket no., status, then the rest; a click on a row opens it
@@ -183,13 +183,12 @@ export default function Help() {
   let body;
   if (s.newOpen) body = <NewTicket />;
   else if (s.open) body = <Ticket />;
-  else if (s.tab === "guide") body = <Guide />;
-  else if (!SUP.on()) body = <div className="bk-none">Sign in to the firm account (top right) to raise tickets and follow them. The guide works without it.</div>;
+  else if (s.tab === "guide" || !SUP.on()) body = <Guide />;
   else if (s.list === null) { if (!s.loading) { s.loading = true; SUP.load(true).then(() => { s.loading = false; render(); }); } body = <Loading what="tickets" />; }
   else body = s.tab === "desk" ? <Desk /> : <Mine />;
   const tabs = [["guide", "Guide"], ["tickets", "My tickets", !adm && n ? n : null]].concat(adm ? [["desk", "Support desk", n || null]] : []);
   return <div className="pane" style={{ marginTop: 0 }}><div className="sp-head"><div><p className="note" style={{ margin: "2px 0 0" }}>Search the guide; if it does not answer it, raise a ticket to FinCom support.</p></div>
     {SUP.on() && <Sup a="new" className="btn primary">+ New ticket</Sup>}</div>
-    <nav className="sbar" aria-label="Help">{tabs.map(([id, l, c]) => <button key={id} aria-selected={s.tab === id} onClick={() => supTab(id)}>{l}{c ? <> <span className="sbar-n">{c}</span></> : null}</button>)}</nav>
+    {SUP.on() && <nav className="sbar" aria-label="Help">{tabs.map(([id, l, c]) => <button key={id} aria-selected={s.tab === id} onClick={() => supTab(id)}>{l}{c ? <> <span className="sbar-n">{c}</span></> : null}</button>)}</nav>}
     {body}</div>;
 }

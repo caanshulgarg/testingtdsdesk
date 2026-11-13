@@ -137,12 +137,14 @@ export function StatusTabs() {
 // Saving (spec H3): "Saving…" while saving, "Not saved: <reason>" in red on a failure (a click opens Settings → Sign-in),
 // and since round 3 A a quiet "Saved 08:07" once saved, the rest in its tooltip. No cloud sign and no "live" (54-live-sync.js keeps doing its work).
 function saveWhy(err, fallback) { const p = typeof plainError === "function" ? plainError(err) : null; return p ? p.text : String(err || "").trim() || fallback; }
+// Stay signed in (the owner, 13-Nov-2026): a sign-in the firm account no longer takes is said here once, "Sign in again"
+// (src/js/43 sessionEnded), never on the screens; it opens the sign-in page and comes back to the same page
 function SaveState() {
-  if (!Cloud.on()) return null;
   const st = Cloud.st || {}, sv = Live.sv || {};
+  if (st.state === "signedout") return <button className="tsave bad" data-save="signedout" title="Your work is kept here" onClick={() => doAct("signAgain")}>Sign in again</button>;
+  if (!Cloud.on()) return null;
   // one line, shortened (src/css/app.css .tsave.bad): the whole sentence, and the server's own words, in its tip
   const bad = (kind, why, title) => <button className="tsave bad" data-save={kind} title={"Not saved: " + why + (title && title !== why ? " (" + title + ")" : "")} onClick={() => doAct("openSettings")}>{"Not saved: " + why}</button>;
-  if (st.state === "signedout") return bad("signedout", "you are signed out. Sign in again to save your work to the firm account.");
   if (sv.state === "offline") return bad("offline", "no internet on this computer. Your changes are kept here and saved when it is back.", sv.err || "");
   if (sv.state === "error") return bad("error", saveWhy(sv.err, "the server did not take the change. It is kept here and sent again on its own."), sv.err || "");
   if (st.error) return bad("error", saveWhy(st.error, "the firm account could not be reached."), st.error);

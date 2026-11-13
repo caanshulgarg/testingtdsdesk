@@ -14,8 +14,7 @@ export default function GstPortalLogin({ gstin, portalUser }) {
   const signed = typeof Cloud === "object" && Cloud.on();
   useEffect(() => { if (signed) GSTB.loadLogins(); });
   if (!gstin) return null;
-  if (!signed) return <div data-portal-login={gstin}><H4>GST portal login (for the browser helper)</H4>
-    <p className="note">Sign in to the firm account to save the client’s GST portal login. Without it, log in on the portal yourself; the helper works the same.</p></div>;
+  if (!signed) return null;
   const a = GSTB.loginOf(gstin), owner = ((S.account || {}).me || {}).role === "owner";
   const members = ((Cloud.st || {}).members || []).filter((m) => m.role === "staff" && m.active !== false);
   const allowed = staff || (a && a.staff_allowed) || [];
