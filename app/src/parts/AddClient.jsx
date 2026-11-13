@@ -3,7 +3,7 @@
 // 24-Oct-2026 (next-tally-one-page): a client from Tally is added on the Tally page only; here one button opens it.
 // ux-wins (13-Nov-2026, the UI review and the owner's decisions), in its own file (the first file is at its size budget):
 //   - "Track returns from which month?" (this month unless changed), kept as the client's trackFrom (yyyymm): Compliance
-//     shows nothing of an earlier period as overdue (DueList.items, src/js/68). A new client no longer opens on a year of
+//     shows nothing unfiled that fell due before that month began (DueList.items, src/js/68). A new client no longer opens on a year of
 //     "overdue" returns;
 //   - what is wrong is said under its own box (aria-invalid, role=alert), the box focused; it was a message in a corner;
 //   - Esc cancels, as Cancel does; the first lines say the two ways in a few words.
@@ -49,7 +49,7 @@ export default function AddClient() {
         <span>{dups[0].why === "gstin" ? dups[0].client.name + " already has this GSTIN." : dups[0].why === "same" ? dups[0].client.name + " already exists." : "A client with a similar name exists: " + dups[0].client.name + "."}</span>
         <button className="linkbtn" data-add-dup-open={dups[0].client.id} onClick={() => openIt(dups[0].client)}>Open it</button></div>}
       <label className="f"><span>Track returns from which month?</span><input type="month" id="ncFrom" data-add-from="" value={v.from} max={monthNow()} onChange={set("from")} />
-        <span className="note" style={{ margin: "2px 0 0" }}>Nothing before it shows as overdue.</span></label>
+        <span className="note" style={{ margin: "2px 0 0" }}>Returns due before it are not shown.</span></label>
       {others.length > 0 && <label className="f wide"><span>Copy ledger names from</span>
         <select value={v.copyFrom} onChange={set("copyFrom")}><option value="">Standard names</option>{others.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
       </label>}
