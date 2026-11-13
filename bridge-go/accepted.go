@@ -50,8 +50,11 @@ var (
 	acceptedRecheck    = 5 * time.Second // while it cannot be read: looked at again at most this often
 )
 
-const postedUnreadableWords = "FinCom Bridge can't read its record of posted entries; posting paused. Nothing is sent to Tally until the record " +
-	"(sync\\posted-ids.json or its copy posted-ids.json.bak) can be read again: ask FinCom support to restore it. Postings wait and go on by themselves then."
+const postedUnreadableWords = "FinCom Bridge can't read its record of posted entries; posting paused. Nothing is sent to Tally meanwhile, so " +
+	"nothing can be posted twice. What to do: on the Tally computer, close any program that may be holding the file (an antivirus scan, a backup " +
+	"or sync program), then restart FinCom Bridge from its tray icon. If this message stays, the file sync\\posted-ids.json (and its copy " +
+	"posted-ids.json.bak) in FinCom Bridge's folder is damaged: put it back from a backup of that folder, or call FinCom support. The waiting " +
+	"postings then go on by themselves."
 
 var errPostedUnreadable = errors.New(postedUnreadableWords)
 

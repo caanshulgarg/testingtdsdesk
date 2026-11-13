@@ -4586,6 +4586,9 @@ Deno.serve(sentry.wrap(async (req) => {
           // FinCom Bridge 2.4.5: each tally.ini and what the bridge did with FinCom's add-on line in it (Help & support:
           // "User TDL = No" left alone), and the older entries being read (per company the day and its phase; the days to upload)
           ...tallyIniOf(b), ...periodPullOf(b, speedBooks), ...oldDaysTestOf(b), ...updateOf(b),
+          // FinCom Bridge 2.5.15 (item 4, review L1): posting paused because its record of posted entries cannot be read, in
+          // the bridge's own words (what to do included; 600 letters at most); none when it can be read
+          ...(typeof b.postedRecord === "string" && b.postedRecord.trim() ? { postedRecord: b.postedRecord.slice(0, 600) } : {}),
           // next-fix-read-any-bridge (bridge 2.5.5): why its run waits before reading Tally, and an Update now queued behind it
           ...keepWaitOf(b),
           // bridge 2.5.10: why its last run ended, when it ran again (lastStopOf)

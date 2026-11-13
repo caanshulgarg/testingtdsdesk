@@ -2,7 +2,9 @@
 Deno, against the stand-in for Supabase, fake_supabase.py). Made-up computer and bridge only. Checks:
   1. item 5: the beat's update.failed (the update the bridge could not put in place) kept, cleaned: version and from
      (versions only), step (download, sha, signature, apply; else other), words (300 letters at most), at, tries;
-     anything else dropped; without a version: none; without failed: the update as before (no failed).
+     anything else dropped; without a version: none; without failed: the update as before (no failed);
+  2. item 4 (review L1): postedRecord (posting paused, the record unreadable, with what to do) kept (600 letters at most);
+     an empty one: none.
 Needs Deno (DENO, default: the deno on the PATH or /opt/deno/deno)."""
 import os, sys, json, time, hashlib, subprocess, threading, urllib.request, urllib.error, shutil
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
@@ -49,6 +51,12 @@ try:
     c, r = call(dict(base, update=up))
     u = kept().get("update") or {}
     ok("failed" not in u and u.get("offered") == "2.5.16", "without failed: as before (%s)" % u)
+    print("== 2. postedRecord")
+    W = "FinCom Bridge can't read its record of posted entries; posting paused. What to do: " + "w" * 700
+    c, r = call(dict(base, postedRecord=W))
+    ok(c == 200 and kept().get("postedRecord", "").startswith("FinCom Bridge can't read") and len(kept()["postedRecord"]) == 600, "kept (%d letters)" % len(kept().get("postedRecord", "")))
+    c, r = call(dict(base, postedRecord=""))
+    ok("postedRecord" not in kept(), "an empty one: none (%s)" % kept().get("postedRecord"))
 finally:
     fn.terminate()
 if fails:
