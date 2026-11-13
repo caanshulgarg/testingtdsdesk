@@ -38,8 +38,28 @@ func acceptedKey(id, xml string) string {
 // forgets what is loaded (a test's new home; the file is read again at the next use)
 func acceptedReset() {
 	acceptedMu.Lock()
-	acceptedNotes, acceptedLoaded = nil, ""
+	acceptedNotes, acceptedLoaded, acceptedBroken = nil, "", nil
 	acceptedMu.Unlock()
+}
+
+// 2.5.15 item 4 (the owner's approval of 13-Nov-2026): posted-ids.json there but neither it nor its copy readable
+var acceptedBroken error
+
+const postedUnreadableWords = "FinCom Bridge can't read its record of posted entries; posting paused. Nothing is sent to Tally until the record " +
+	"(sync\\posted-ids.json or its copy posted-ids.json.bak) can be read again: ask FinCom support to restore it. Postings wait and go on by themselves then."
+
+var errPostedUnreadable = errors.New(postedUnreadableWords)
+
+// nil when this computer's record of what it sent can be read (or there is none yet: a computer that never posted);
+// errPostedUnreadable otherwise. Read again on every call while it cannot be read (a restored file is seen at once)
+func postedRecordErr() error {
+	acceptedMu.Lock()
+	defer acceptedMu.Unlock()
+	acceptedAll()
+	if acceptedBroken != nil {
+		return errPostedUnreadable
+	}
+	return nil
 }
 
 // under the lock: the notes, loaded once from the file (verified ones older than 180 days dropped)
@@ -48,7 +68,21 @@ func acceptedAll() M {
 	if acceptedNotes != nil && acceptedLoaded == f {
 		return acceptedNotes
 	}
-	all := readObjFileBak(f) // 2.5.15: the file, else its copy (.bak) when the file is missing or not whole
+	// 2.5.15: the file, else its copy (.bak) when the file is missing or not whole. Item 4 (the owner's approval of
+	// 13-Nov-2026): the record there but neither copy readable is NEVER taken as empty: nothing is posted until it can be
+	// read (postedRecordErr), and nothing is written over it (acceptedWrite); a throwaway map answers meanwhile
+	all, _, err := readObjFileBakErr(f)
+	if err != nil {
+		if acceptedBroken == nil {
+			writeLog("POSTED IDS NOT READABLE: " + f + " (and its copy " + bakOf(f) + ") cannot be read (" + err.Error() + "). " + postedUnreadableWords)
+		}
+		acceptedBroken = err
+		return M{}
+	}
+	if acceptedBroken != nil {
+		writeLog("Posted ids: " + f + " can be read again; posting goes on")
+		acceptedBroken = nil
+	}
 	if all == nil {
 		all = M{}
 	}
@@ -71,6 +105,10 @@ func acceptedAll() M {
 
 // under the lock: the notes written through, a temporary file renamed over the old one; the old file stays on a failure
 func acceptedWrite() error {
+	// 2.5.15 item 4: a record that could not be read is never written over (the notes in memory are not the record)
+	if acceptedBroken != nil || acceptedNotes == nil || acceptedLoaded != acceptedFile() {
+		return errPostedUnreadable
+	}
 	// 2.5.15 (safefile.go): flushed to the disk and put in place by one rename, then the same text as posted-ids.json.bak
 	return saveFileMirror(acceptedFile(), jsonText(acceptedNotes))
 }

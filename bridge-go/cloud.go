@@ -1365,7 +1365,9 @@ func beatBody(tally bool, tstate, tsince string, open, ports, cos []any) M {
 		// 2.5.10: each book's days as taken from FinCom's answer: started (when, the first day) or why not (pickack.go)
 		"pickups": pickBeat(),
 		// 2.5.10: why the last run ended and when it ran again, for 6 hours (selfheal.go; null when nothing to say)
-		"lastStop": lastStopBeat()}
+		"lastStop": lastStopBeat(),
+		// 2.5.15 item 4: this computer's record of what it sent cannot be read: posting paused, in plain words ("" when it can)
+		"postedRecord": map[bool]string{true: postedUnreadableWords, false: ""}[postedRecordErr() != nil]}
 }
 
 // --- the posting queue (build 199): postings queued in FinCom on any computer, taken one at a time

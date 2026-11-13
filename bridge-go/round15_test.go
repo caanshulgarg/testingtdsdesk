@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -873,8 +874,19 @@ func TestNoSendWhenRecordNotWritable(t *testing.T) {
 	td := today()
 	f := newStandTally(t)
 	standBridge(t, f, `,"PostWaitMs":200`)
-	_ = os.MkdirAll(acceptedFile(), 0o755)
-	t.Cleanup(func() { _ = os.RemoveAll(acceptedFile()) })
+	// 2.5.15 item 4: a record that cannot be READ pauses posting before anything (r2515record_test.go); here the record
+	// reads but cannot be written: every write of posted-ids.json refused
+	_ = saveFile(acceptedFile(), "{}")
+	oldRn := renameFn
+	var refuse atomic.Bool
+	refuse.Store(true)
+	renameFn = func(a, b string) error {
+		if refuse.Load() && filepath.Base(b) == "posted-ids.json" {
+			return os.ErrPermission
+		}
+		return oldRn(a, b)
+	}
+	t.Cleanup(func() { renameFn = oldRn })
 	acceptedReset()
 	r := postOne(t, "nw0", finVoucher("nw0", fgParty, "NW-0", td, "1.00"))
 	if r["ok"] == true || r["notSent"] != true || !strings.Contains(str(r["message"]), "record not written; nothing sent") || f.n("Import") != 0 {
@@ -898,7 +910,7 @@ func TestNoSendWhenRecordNotWritable(t *testing.T) {
 	if logLines("record not written; nothing sent") < 1 {
 		t.Fatal("the log does not say why nothing was sent")
 	}
-	_ = os.RemoveAll(acceptedFile())
+	refuse.Store(false)
 	acceptedReset()
 	p = waitJob(t, "job-r15-norecord")
 	if str(p["status"]) != "done" || f.n("Import") != 1 {

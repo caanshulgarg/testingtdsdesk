@@ -70,6 +70,10 @@ func postingAllowedFor(company string) error {
 	if why := postOnlyRefusal(company); why != "" {
 		return errors.New(why)
 	}
+	// 2.5.15 item 4: never a posting while this computer's record of what it sent cannot be read
+	if err := postedRecordErr(); err != nil {
+		return err
+	}
 	return nil
 }
 

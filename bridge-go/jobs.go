@@ -409,8 +409,12 @@ func cancelAsked(id, why string) (M, error) {
 	return r, nil
 }
 
-// the posting going on now, in its one line (the tray, /status); "" when none
+// the posting going on now, in its one line (the tray, /status); "" when none. 2.5.15 item 4: while this computer's
+// record of what it sent cannot be read, that is said (posting paused), with or without a posting waiting
 func postingNow() string {
+	if postedRecordErr() != nil {
+		return postedUnreadableWords
+	}
 	for _, j := range activeJobs() {
 		o := obj(j)
 		if st := str(o["status"]); st == "waiting" || st == "running" || st == "queued" {
@@ -593,6 +597,23 @@ func jobWorker(dir string) {
 			why = nil
 		}
 	}
+	// 2.5.15 item 4: this computer's record of what it sent (posted-ids.json) cannot be read: the posting waits ("posting
+	// paused", said to FinCom and in the tray), asking again as for Tally, and nothing is sent; never taken as empty
+	waitRecord := func() bool {
+		for r := 0; ; r++ {
+			if cancelled() || stopping() {
+				return false
+			}
+			if postedRecordErr() == nil {
+				return true
+			}
+			setStatus("waiting", postedUnreadableWords)
+			if !pause(waitPause(r)) {
+				cancelled()
+				return false
+			}
+		}
+	}
 	setRes()
 	if err := postingAllowed(); err != nil {
 		finish("failed", "Failed: "+err.Error())
@@ -606,6 +627,10 @@ func jobWorker(dir string) {
 		}
 		writeLog("Posting job " + jobID + ": " + why)
 		finish("failed", why)
+		return
+	}
+	// 2.5.15 item 4: before Tally or FinCom's lease is asked for anything (the lease is never held while the record waits)
+	if !waitRecord() {
 		return
 	}
 	// 2.3.1 (inflight.go): a Tally still on an earlier request the bridge stopped waiting for is waited for, in plain words
@@ -657,6 +682,9 @@ func jobWorker(dir string) {
 	defer wl.Unlock()
 	keepAwake(true)
 	defer keepAwake(false)
+	if !waitRecord() {
+		return
+	}
 	todo := itemsToSend(all, results)
 	// A5: this computer's record (sync\posted-ids.json): a voucher this computer already sent is refused, with the date
 	// and Tally's id when known; nothing is asked of Tally. An owner's release handed with the job (the cloud is the
@@ -722,6 +750,9 @@ func jobWorker(dir string) {
 		}
 		// the port found again on every try; Tally gone meanwhile: waited for
 		if !waitTally(nil) {
+			return
+		}
+		if !waitRecord() { // 2.5.15 item 4
 			return
 		}
 		if !waitLease(asked, setStatus, pause) {
