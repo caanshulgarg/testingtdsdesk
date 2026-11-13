@@ -21,40 +21,47 @@ func r2515LogHere(t *testing.T, dir string) {
 	loadConfig()
 }
 
-// every write flushed to the disk, after the save returned (the owner's decision of 13-Nov-2026: no save slower than
-// 2.5.14's): the save never waits for the flush; a flush that fails is logged, the file written whole stays; nothing
-// temporary left beside the file
+// a posting's record flushed to the disk after the save returned (the owner's decision of 13-Nov-2026: no save slower
+// than 2.5.14's), the save never waiting for it; a flush that fails is logged, the file written whole stays; a plain
+// saveFile is left as 2.5.14 left it (nothing flushed or kept after it: review M3 of b41667d51); nothing temporary left
 func TestR2515SaveFileFlushes(t *testing.T) {
 	dir := t.TempDir()
 	r2515LogHere(t, dir)
 	var n atomic.Int64
 	release := make(chan struct{})
-	old := syncFileFn
-	syncFileFn = func(h *os.File) error {
-		if filepath.Base(h.Name()) != "note.txt" { // the settings the test's own home saves are flushed too
+	r2515SetSync(t, func(h *os.File) error {
+		if filepath.Base(h.Name()) != "note.txt" { // only the main file counted (not its .bak)
 			return h.Sync()
 		}
 		<-release
 		n.Add(1)
 		return h.Sync()
+	})
+	plain := filepath.Join(dir, "a", "plain.txt")
+	if err := saveFile(plain, "one"); err != nil || readText(plain) != "one" {
+		t.Fatalf("saveFile: %v %q", err, readText(plain))
 	}
-	t.Cleanup(func() { syncFileFn = old })
+	durMu.Lock()
+	queued := durQueue[plain] != nil || durCur == plain
+	durMu.Unlock()
+	if queued || exists(bakOf(plain)) {
+		t.Fatal("a plain saveFile was flushed or kept after it")
+	}
 	f := filepath.Join(dir, "a", "note.txt")
-	if err := saveFile(f, "one"); err != nil || readText(f) != "one" || n.Load() != 0 {
-		t.Fatalf("saveFile: %v %q, %d flushes before it returned", err, readText(f), n.Load())
+	if err := saveFileMirror(f, "one"); err != nil || readText(f) != "one" || n.Load() != 0 {
+		t.Fatalf("saveFileMirror: %v %q, %d flushes before it returned", err, readText(f), n.Load())
 	}
 	close(release)
 	durableWait(f)
-	if n.Load() != 1 {
-		t.Fatalf("%d flushes after the save", n.Load())
+	if n.Load() != 1 || readText(bakOf(f)) != "one" {
+		t.Fatalf("%d flushes after the save, copy %q", n.Load(), readText(bakOf(f)))
 	}
 	// a flush that fails: said in the log; the file the save wrote stays
-	syncFileFn = func(h *os.File) error { return errors.New("disk full (stand)") }
-	if err := saveFile(f, "two"); err != nil || readText(f) != "two" {
+	r2515SetSync(t, func(h *os.File) error { return errors.New("disk full (stand)") })
+	if err := saveFileMirror(f, "two"); err != nil || readText(f) != "two" {
 		t.Fatalf("a save waited for its flush: %v %q", err, readText(f))
 	}
 	durableWait(f)
-	syncFileFn = old
 	if logLines("note.txt: not flushed to the disk (disk full (stand))") != 1 {
 		t.Fatal("the failed flush is not logged")
 	}

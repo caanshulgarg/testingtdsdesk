@@ -206,6 +206,23 @@ func TestR2515SaveLatencyAs2514(t *testing.T) {
 	}
 }
 
+// the test sheet's Windows check (Defender on): 200 saves of posted-ids.json back to back, each followed by its flush in
+// the background; no rename of a save is tried again (on Windows a handle open for a flush, or a scan after it, would)
+func TestR2515RenameRetriesBackToBack(t *testing.T) {
+	standBridge(t, newStandTally(t), "")
+	t.Cleanup(durableWaitAll)
+	before := renameRetries.Load()
+	for i := 0; i < 200; i++ {
+		if err := noteSent(fmt.Sprintf("Back%d", i), zz, "job-r2515-back", "", 1, "", ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+	durableWaitAll()
+	if n := renameRetries.Load() - before; n != 0 {
+		t.Fatalf("%d renames of posted-ids.json tried again in 200 saves", n)
+	}
+}
+
 // go test -run XXX -bench R2515Save: each hot path's save now and as 2.5.14 wrote it
 func BenchmarkR2515Save(b *testing.B) {
 	for _, mode := range []string{"now", "2.5.14"} {

@@ -95,6 +95,7 @@ func TestJobFileSharedReplaceRefusedNeverLost(t *testing.T) {
 		t.Fatal(err)
 	}
 	var refuse atomic.Bool
+	durableWaitAll() // 2.5.15: no flush running while the rename is swapped (safefile.go)
 	old := renameFn
 	renameFn = func(a, b string) error {
 		if refuse.Load() && filepath.Base(b) == "progress.json" {
@@ -102,7 +103,7 @@ func TestJobFileSharedReplaceRefusedNeverLost(t *testing.T) {
 		}
 		return old(a, b)
 	}
-	t.Cleanup(func() { renameFn = old })
+	t.Cleanup(func() { durableWaitAll(); renameFn = old })
 	refuse.Store(true)
 	p["done"] = 2
 	err := writeProgress(dir, p)
@@ -180,7 +181,7 @@ func TestJobFileSharedFlushNeverOverNewer(t *testing.T) {
 		}
 		return old(a, b)
 	}
-	t.Cleanup(func() { renameFn = old })
+	t.Cleanup(func() { durableWaitAll(); renameFn = old })
 	refuse.Store(true)
 	if err := jobFileSave(path, `{"done":1}`); err == nil {
 		t.Fatal("T1 said written")

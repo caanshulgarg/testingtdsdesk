@@ -28,14 +28,16 @@ func openShared(path string) (*os.File, error) {
 	return os.NewFile(uintptr(h), path), nil
 }
 
-// 2.5.15 (safefile.go): a saved file opened for its flush to the disk in the background (FlushFileBuffers needs write
-// access), sharing read, write AND delete, so a save of the same file meanwhile (its rename over it) is never refused
+// 2.5.15 (safefile.go): a posting's record opened for its flush to the disk in the background, with the least access a
+// flush needs (FILE_WRITE_DATA: NtFlushBuffersFile asks for write or append access; nothing is written through it),
+// sharing read, write AND delete so a save of the same file meanwhile (its rename over it) is not refused; closed at once
+// (review M2 of b41667d51)
 func openForSync(path string) (*os.File, error) {
 	p, err := windows.UTF16PtrFromString(path)
 	if err != nil {
 		return nil, err
 	}
-	h, err := windows.CreateFile(p, windows.GENERIC_WRITE, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE, nil,
+	h, err := windows.CreateFile(p, windows.FILE_WRITE_DATA, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE, nil,
 		windows.OPEN_EXISTING, windows.FILE_ATTRIBUTE_NORMAL|windows.FILE_FLAG_OPEN_REPARSE_POINT, 0)
 	if err != nil {
 		return nil, &os.PathError{Op: "open", Path: path, Err: err}
