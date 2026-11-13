@@ -318,6 +318,17 @@ const LK = {
       x.res = this.copyNone(x, "FinCom\u2019s copy of these books is not in the cloud yet; it comes with the next update from Tally");
     } else if (!have){
       toast("Bring in the books from Tally first (From Tally), or wait for FinCom\u2019s copy to come in."); return;
+    } else if (x.kind === "ledger" && typeof Engine === "object" && (S.books.vouchers || []).length > Engine.SMALL && Engine.can(LK)){
+      // next-speed-worker (the owner's speed work: screens never freeze): a ledger of large books (20,000 lines of
+      // 100,000 made-up entries: 0.2-0.6 s in one task) worked out in the engine's worker (src/js/06 Engine.calc) while
+      // the page says so, the same account; the books changed meanwhile, another lookup, or no worker: here, as before
+      const b = S.books, V = b.vouchers, rev = typeof BOOKS_REV === "number" ? BOOKS_REV : 0, want = [x.led, x.from, x.to];
+      x.busy = "Working out " + x.led + " from the books\u2026"; render();
+      let r = null; try { r = await Engine.calc("ledger", want); } catch (e){ r = null; }
+      x.busy = "";
+      if (S.lk !== x) return;
+      if (!(S.books === b && b.vouchers === V && (typeof BOOKS_REV === "number" ? BOOKS_REV : 0) === rev && x.kind === "ledger" && x.led === want[0] && x.from === want[1] && x.to === want[2])) r = null;
+      x.res = r || this.ledgerBooks(x.led, x.from, x.to);
     } else {
       x.res = x.kind === "ledger" ? this.ledgerBooks(x.led, x.from, x.to) : x.kind === "group" ? this.group(x.grp, x.from, x.to) : x.kind === "tb" ? this.tbBooks(x.asOn)
         : x.kind === "monthly" ? this.monthly(x.led, x.grp, x.from, x.to) : x.kind === "bills" ? this.bills(x.led, x.asOn) : this.find(x.q, x.from, x.to, x.typ);

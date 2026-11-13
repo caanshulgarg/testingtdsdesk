@@ -5,7 +5,7 @@
 // lkMonth, lkOpen, lkSrc, and typing through lkType (src/js/44).
 //
 // State: S.lk (kind, led, grp, from, to, asOn, q, typ, side, ask, heard, src, busy, res: the answer, open: entries opened).
-import { Component, Fragment, useEffect } from "react";
+import { Component, Fragment, useEffect, useState } from "react";
 // hotfix 11-Nov-2026 (Look up "Cannot read properties of undefined (reading 'map')" on a client's real books): a part that
 // cannot be drawn says so in plain words, with Clear, and the rest of the page stays
 class Part extends Component {
@@ -57,8 +57,25 @@ function earlier(r, x) {
 }
 const ShowEarly = ({ n, fs, cols }) => <tr className="lk-early" data-lk-early=""><td colSpan={cols}>{n + (n === 1 ? " entry" : " entries") + " before " + FC.when(fs) + " · "}<button className="linkbtn" onClick={() => { LK.st().early = true; render(); }}>Show earlier years</button></td></tr>;
 
+// next-speed-worker (the owner's speed work: screens never freeze): a long account drawn in parts, GROW rows a frame, up
+// to the same LIMIT (the first drawing of 1,500 rows of a 20,000-line ledger: 106 ms on 100,000 made-up entries, with
+// its layout after it 190 ms); a new answer starts again. The page ends as before; GROW rows or fewer, at once
+const GROW = 300;
+function useGrow(key, all) {
+  const [g, set] = useState({ key, n: Math.min(all, GROW) });
+  const n = g.key === key ? g.n : Math.min(all, GROW);
+  useEffect(() => {
+    if (g.key !== key) { set({ key, n: Math.min(all, GROW) }); return undefined; }
+    if (n >= all) return undefined;
+    const t = requestAnimationFrame(() => set({ key, n: Math.min(all, n + GROW) }));
+    return () => cancelAnimationFrame(t);
+  }, [key, n, all]);
+  return n;
+}
+
 function Body({ r: r0, x }) {
   const LIMIT = gfN(1500), r = Object.assign({}, r0, { rows: L(r0.rows), groups: L(r0.groups) });
+  const shown = useGrow(r0, Math.min(LIMIT, r.rows.length));
   // the opening and the closing each shown once: in the table's first and last rows when there are entries, else as tiles
   if (r.kind === "ledger") { const E = earlier(r, x); return <>
     <div className="dash-tiles">{!r.rows.length && <Tile l="Opening" v={r.open == null ? "not known" : FC.drcr(r.open)} />}<Tile l="Debits" v={FC.amt(r.dr) || "0.00"} /><Tile l="Credits" v={FC.amt(r.cr) || "0.00"} />{(!r.rows.length || r.close == null) && <Tile l="Closing" v={r.close == null ? FC.drcr(r.dr - r.cr) + " (movement)" : FC.drcr(r.close)} />}</div>
@@ -67,7 +84,7 @@ function Body({ r: r0, x }) {
         {r.open != null && <tr className="lk-ob"><td>{FC.when(r.from)}</td><td><b>Opening balance</b></td><td></td><td></td><td className="n">{r.open > 0 ? FC.amt(r.open) : ""}</td><td className="n">{r.open < 0 ? FC.amt(-r.open) : ""}</td><td className="n">{FC.drcr(r.open)}</td></tr>}
         {E.n > 0 && <tr className="lk-early" data-lk-early=""><td>{FC.when(E.last.date)}</td><td colSpan={3}>{E.n + (E.n === 1 ? " entry" : " entries") + " before " + FC.when(E.fs) + " · "}<button className="linkbtn" onClick={() => { LK.st().early = true; render(); }}>Show earlier years</button></td>
           <td className="n">{FC.amt(E.dr)}</td><td className="n">{FC.amt(E.cr)}</td><td className="n">{r.open == null ? "" : FC.drcr(E.last.run)}</td></tr>}
-        {E.rows.slice(0, LIMIT).map((v, i) => <VoucherRow key={v.id + ":" + i} r={v} x={x}><td>{FC.when(v.date)}</td><td><span className="lk-part">{v.part}</span>{x.narr && v.narr && <span className="nr">{shownNarr(v.narr)}</span>}</td><td>{v.type}</td><td>{v.no || ""}</td>
+        {E.rows.slice(0, Math.min(LIMIT, shown)).map((v, i) => <VoucherRow key={v.id + ":" + i} r={v} x={x}><td>{FC.when(v.date)}</td><td><span className="lk-part">{v.part}</span>{x.narr && v.narr && <span className="nr">{shownNarr(v.narr)}</span>}</td><td>{v.type}</td><td>{v.no || ""}</td>
           <td className="n">{FC.amt(v.dr)}</td><td className="n">{FC.amt(v.cr)}</td><td className="n">{r.open == null ? "" : FC.drcr(v.run)}</td></VoucherRow>)}
         <tr className="lk-tot"><td></td><td><b>Total</b></td><td></td><td></td><td className="n"><b>{FC.amt(r.dr)}</b></td><td className="n"><b>{FC.amt(r.cr)}</b></td><td className="n"><b>{r.close == null ? "" : FC.drcr(r.close)}</b></td></tr>
       </Wrap>

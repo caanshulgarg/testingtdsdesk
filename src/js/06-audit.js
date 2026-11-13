@@ -957,7 +957,7 @@ const Engine = {
   // the page's engine as loaded (taken once legacy.js has run; the MIS screen's own when it loads: 18-mis-pack.js). The
   // job's own functions (auto*, maybeRun, runSoon) run here only, so they are not compared
   // GSTR (the GST engine, which the MIS reads too): taken once the React app's GST wraps are on it (app/src/main.jsx)
-  OBJ: () => [["MIS", MIS], ["Audit", Audit], ["checks", Audit.checks], ["checkSteps", Audit.checkSteps], ["Parties", Parties], ["GSTR", GSTR]],
+  OBJ: () => [["MIS", MIS], ["Audit", Audit], ["checks", Audit.checks], ["checkSteps", Audit.checkSteps], ["Parties", Parties], ["GSTR", GSTR], ["LK", LK]],
   PAGE: /^(auto[A-Z]|maybeRun$|runSoon$|wantSay$)/,
   // (more: a screen's own functions put on MIS or Audit (name) when its file loads: 18-mis-pack.js's, 77-audit.js's)
   keep(more, name){
@@ -972,7 +972,7 @@ const Engine = {
       return Object.keys(o).every(k => typeof o[k] !== "function" || m.has(k) || this.PAGE.test(k)); });
   },
   src(){ const s = typeof document === "object" && document.querySelector('script[src*="legacy.js"]'); return s ? s.src : ""; },
-  can(A){ return this.st !== "off" && typeof Worker === "function" && !/^__/.test(this.URL) && !!this.src() && (A === Audit || A === MIS || A === GSTR) && this.pure(); },
+  can(A){ return this.st !== "off" && typeof Worker === "function" && !/^__/.test(this.URL) && !!this.src() && (A === Audit || A === MIS || A === GSTR || A === LK) && this.pure(); },
   off(why){
     this.st = "off"; this.why = String(why || ""); this.gSent = undefined; this.stV = null;
     try { if (this.w) this.w.terminate(); } catch (e){}
@@ -1074,18 +1074,32 @@ const Engine = {
     const L = au.last;
     return {st: au.st, last: L ? {at: L.at, from: L.from, to: L.to, vouchers: L.vouchers, basis: L.basis, findings: (L.findings || []).map(f => ({id: f.id, sev: f.sev})), solved: (L.solved || []).map(x => ({id: x.id, n: x.n}))} : L};
   },
-  ask(kind, from, to, how, prog){
+  ask(kind, from, to, how, prog, args){
     const a = {id: ++this.nid, kind, prog, res: null, full: null, all: {}, end: false, err: "", t0: Date.now()};
     this.jobs.set(a.id, a);
     const n = ((S.books || {}).vouchers || []).length, ms = Math.max(this.JOB_MS + n * this.JOB_PER, 3 * (this.took[kind] || 0), this.JOB_MS);
     a.timer = setTimeout(() => { if (this.jobs.get(a.id) === a && !a.end) this.off("a job of the worker took too long (" + kind + ", " + Math.round(ms / 1000) + " s)"); }, ms);
-    try { this.post({t: "run", id: a.id, kind, from, to, how}); } catch (e){ clearTimeout(a.timer); this.jobs.delete(a.id); throw e; }
+    try { this.post({t: "run", id: a.id, kind, from, to, how, args}); } catch (e){ clearTimeout(a.timer); this.jobs.delete(a.id); throw e; }
     return a;
   },
   // what the worker holds now (a test's look: tests/run_speed_worker.py): {books, n, s: S's fields, ls: settings' keys}
   peek(){ return new Promise(ok => { if (!this.w || this.st !== "ok"){ ok(null); return; } const f = e => { if ((e.data || {}).t === "state"){ this.w && this.w.removeEventListener("message", f); ok(e.data.r); } }; this.w.addEventListener("message", f); this.post({t: "state"}); }); },
   // (answered: how long it took, for the next one's time)
   done(a){ clearTimeout(a.timer); this.took[a.kind] = Math.max(this.took[a.kind] || 0, Date.now() - a.t0); },
+  // a figure of the books worked out in the worker for a page that waits for it (Look up's ledger: LK.run): its answer,
+  // or null when the worker could not (then worked out here). Its rows come in parts (lrows)
+  calc(kind, args){
+    const E = this;
+    return this.drive((function* (){
+      let a = null;
+      try {
+        if (!(yield* E.ready()) || !(yield* E.sendIn(S.books))) return null;
+        a = E.ask(kind, "", "", "", null, args);
+        while (!a.end && !a.err && E.st === "ok") yield E.WAIT;
+        return a.end ? a.res : null;
+      } finally { if (a){ if (a.end) E.jobs.delete(a.id); else E.cancel(a); } }
+    })());
+  },
   // ---------- the books written to this browser's store by the worker (Books.save, src/js/04)
   canStore(data){ return this.st !== "off" && typeof Worker === "function" && !/^__/.test(this.URL) && !!this.src() && !!data && Array.isArray(data.vouchers) && data.vouchers.length > this.SMALL && typeof LocalOwner === "object" && !LocalOwner.stale && typeof IDBStore === "object"; },
   // a generator of the engine's (WAIT: until the worker's next word) run as a small job of its own: its answer
@@ -1211,6 +1225,9 @@ const Engine = {
       else if (m.t === "gpart"){ a.all[m.k] = m.v; }
       else if (m.t === "gst"){ a.res = Object.assign(m.r, a.all); a.end = true; this.done(a); }
       else if (m.t === "stored"){ a.res = {s: m.s, wrote: m.wrote}; a.end = true; this.done(a); }
+      else if (m.t === "lhead"){ a.res = m.r; a.full = []; }
+      else if (m.t === "lrows"){ for (let i = 0; i < m.rows.length; i++) a.full.push(m.rows[i]); }
+      else if (m.t === "lend" && a.res){ a.res.rows = a.full; a.end = true; this.done(a); }
       else if (m.t === "audit"){ a.res = m.c; a.full = m.n.map(() => []); }
       else if (m.t === "rows"){ const f = a.full[m.i]; for (let i = 0; i < m.rows.length; i++) f.push(m.rows[i]); }
       else if (m.t === "end" && a.res){
