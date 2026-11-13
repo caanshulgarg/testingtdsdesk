@@ -912,6 +912,32 @@ async function heldOwnLines(dev: any, firm: string, bridge: string, max: number,
     return [];
   }
 }
+// migration 196 (next-fix-no-held): the book's held lines run again through tally_recorder_line's current rules
+// (tally_recorder_held_rerun: idempotent, a line whose state and words stay is not rewritten; a book another session holds is
+// left for the next time), once per book in each new isolate (so after every deploy) and then at most every 30 minutes.
+// Without the migration (said once; asked again 10 minutes later) or on any error: the beat never fails for it
+const HELD_RERUN_MS = 1800000;
+const heldRerunAt = new Map<string, number>();
+let heldRerunMissing = 0;
+async function heldRerun(book: string) {
+  if (Date.now() - heldRerunMissing < 600000) return;
+  const t = heldRerunAt.get(book);
+  if (t && Date.now() - t < HELD_RERUN_MS) return;
+  if (heldRerunAt.size > 5000) heldRerunAt.clear();
+  heldRerunAt.set(book, Date.now());
+  try {
+    const { data, error } = await db.rpc("tally_recorder_held_rerun", { p_book: book, p_max: 200 });
+    if (error) {
+      const m = String(error.message || "");
+      if (missingFn(m)) { if (!heldRerunMissing) console.log("tally-ingest beat: held lines not run again: migration 196 is not applied"); heldRerunMissing = Date.now(); }
+      else { heldRerunAt.delete(book); fail("held_rerun", error); }
+      return;
+    }
+    const d = data as any;
+    if (d?.busy === true) { heldRerunAt.delete(book); return; }
+    if (Number(d?.settled) > 0) console.log("tally-ingest beat: held lines run again", book, JSON.stringify({ rerun: d.rerun, settled: d.settled, states: d.states }));
+  } catch (e) { heldRerunAt.delete(book); fail("held_rerun", e); }
+}
 async function recorderGaps(dev: any, firm: string, bridge: string, changes: BeatChange[]) {
   const out: Record<string, unknown> = {};
   for (const c of changes.filter((c) => c.altvchid !== null || (c.start && c.guid)).slice(0, 20)) {
@@ -920,6 +946,7 @@ async function recorderGaps(dev: any, firm: string, bridge: string, changes: Bea
     if (!book) continue;
     // migration 110: a second data location of the same company records no starting point or gap
     try { const { data: here, error: pe } = await db.rpc("tally_link_place_check", { p_firm: firm, p_book: book, p_device: dev.id, p_bridge: bridge }); if (!pe && here === false) continue; } catch { /* as before */ }
+    await heldRerun(book);     // migration 196
     let started = false;
     const sAlt = c.start ? c.start.altvchid : c.altvchid, sMst = c.start ? c.start.altmstid : c.altmstid, key = book + "|" + c.guid;
     const sd = startDone.get(key);
