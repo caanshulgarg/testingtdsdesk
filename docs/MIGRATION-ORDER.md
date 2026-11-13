@@ -864,7 +864,7 @@ Tested: `tests/run_migration160.py`, `tests/run_gap_autoread_ingest.py`.
 
 ## 182: the gap after FinCom's own posting, read back and read on the right days (not run yet; branch next-fix-gap-after-post, 13-Nov-2026)
 
-**182, gap after post** (13-Nov-2026, branch `next-fix-gap-after-post`; **written, not run yet**; file md5 23ddaa33a134edf46e3fed6b0df88922):
+**182, gap after post** (13-Nov-2026, branch `next-fix-gap-after-post`; **written, not run yet**; file md5 a5085efa1122322b9795429deedfe50e):
 `server/tally-cloud/migration-182-gap-after-post.sql`. Staging, Client CL: a posting window's credit closed the gap as a
 match though none of FinCom's 42 posted entries was matched or read back; 110 later changes on older dates; the page asked
 for the Day Book of the gap's own (empty) days; 98's count never counted October again; 160's gap read held by an old
@@ -872,7 +872,8 @@ over2s stop and given up after 6 hours; a stale "checking". The owner's rules of
 reads may go while people work as long as nobody feels them. The extra ("light") reads (a posting's read back, a gap's
 older days asked by From Tally, the recount, the retry after a 2 s stop, a gap open over 6 hours) go only when tally-ingest
 says the computer is idle (p_idle: no typing for 5 s, 60 s when the bridge's last request took over 0.3 s; nothing
-posting), one day at a time a book, one every 25 s, 120 an hour, 600 a day. Adds the tables `tally_gap_retries`,
+posting), one day at a time a book (the next only once the bridge picked the last one up, or 10 minutes on), one every 25 s,
+120 an hour, 600 a day. Adds the tables `tally_gap_retries`,
 `tally_light_days`, `tally_light_pace` (service_role only), the trigger `tally_post_job_read_back` (no check started for a
 book without one), `tally_light_may` / `tally_light_took`, `tally_day_read_for`, `tally_gap_own_read` (day or split
 lists), `tally_gap_state` (checking with `checkUntil`, posted days for 24 hours and only with a computer reading older
@@ -889,5 +890,6 @@ tally-ingest (p_idle; without 182 it falls back to 160's call), then the app (ch
 release needed; for bridge 2.5.17 (not in this branch): its own typing gate for these reads is DayPullIdleSec (60 s by
 default), so today a light read waits 60 s after typing on the bridge whatever the cloud says; 2.5.17 could take 5 s for
 a company whose requests were measured at 0.3 s or less (60 s otherwise), and say the last keystroke's time in the beat
-(the cloud now sees typing only while a read waits for it). Tested: `tests/run_migration182.py`,
+(the cloud now sees typing only while a read waits for it); and pickRefused (pickack.go) should refresh
+the refusal's time (a.at) when a day is refused for `typing` again, so the cloud sees the typing go on. Tested: `tests/run_migration182.py`,
 `tests/run_gap_post_ingest.py`, `tests/run_gap_older_page.py`.

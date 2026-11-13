@@ -141,8 +141,8 @@ def posting(k, vouchers, a0, a1, accepted=True):
     return jid
 def done(jid): db.sql("update tally_post_jobs set status = 'done' where id = %s" % q(jid))
 light = lambda book: {r["day"]: r for r in (db.rows("select day::text as day, why, (handed_at is not null) as handed from tally_light_days where book_id = %s" % q(book)) if text else [])}
-def repace(book):      # the 25 s between light days passed
-    if text: db.sql("update tally_light_pace set last_at = now() - interval '30 seconds' where book_id = %s" % q(book))
+def repace(book):      # the 25 s between light days passed, and the 10 minutes a light day not picked up holds the next
+    if text: db.sql("update tally_light_pace set last_at = now() - interval '11 minutes' where book_id = %s" % q(book))
 heads_of = lambda vs: [H(v["guid"], int(v["guid"][-8:], 16), v["alter"]) for v in vs]
 try:
     db.sql(part(os.path.join(HERE, "run_migration33.py"), "SCHEMA")); db.sql(part(os.path.join(HERE, "run_migration35.py"), "SCHEMA")); db.sql(part(os.path.join(HERE, "run_migration37.py"), "SCHEMA_X"))
@@ -214,6 +214,16 @@ try:
     ok(fr == [], "1. idle again at once: none (one light day every 25 s) (%s)" % fr)
     repace(book)
     ok(days_of(FRONT(book, 3, True)) == [D8(41)] and cday(book, 41).get("source") == "post" and cday(book, 41).get("done") == "f", "1. 25 s on: the next, put in the check (a day read before: read again) (%s)" % cday(book, 41))
+    if text: db.sql("update tally_light_pace set last_at = now() - interval '30 seconds' where book_id = %s" % q(book))
+    ok(FRONT(book, 3, True) == [], "1. 30 s on, the last light day not picked up by the bridge (refused for typing): none (one at a time)")
+    if text: db.sql("update tally_light_pace set last_at = now() - interval '9 minutes' where book_id = %s" % q(book))
+    ok(FRONT(book, 3, True) == [], "1. 9 minutes on, still not picked up: none (refusals all hour: at most 6 an hour)")
+    if text: db.sql("update tally_light_pace set last_at = now() - interval '10 minutes 5 seconds' where book_id = %s" % q(book))
+    ok(days_of(FRONT(book, 3, True)) == [D8(42)], "1. 10 minutes on: the next light day")
+    db.sql("update tally_check_days set listed_at = now() where book_id = %s and day = %s" % (q(book), q(D(42))))
+    if text: db.sql("update tally_light_pace set last_at = now() - interval '30 seconds' where book_id = %s" % q(book))
+    db.sql("insert into tally_light_days (book_id, firm_id, day, why) values (%s, %s, %s, 'post')" % (q(book), q(F), q(D(43)))) if text else None
+    ok(days_of(FRONT(book, 3, True)) == [D8(43)], "1. the last one picked up (Tally listed it): the next after 25 s")
     if text: db.sql("update tally_light_pace set hour_n = 120, hour_at = now() - interval '10 minutes' where book_id = %s" % q(book))
     repace(book)
     ok(FRONT(book, 3, True) == [], "1. 120 light days this hour: none (the hour's cap)")
@@ -290,13 +300,13 @@ try:
     ok(ST().get("paced") is True, "3. the page is told the check reads on the idle pace (run.paced: Read now)")
     if text: db.sql("update tally_light_pace set idle_at = null where book_id = %s" % q(book))
     ok(CN() == [], "3. (guard) the resumed check, someone typing: none of its earlier days")
-    if text: db.sql("update tally_light_pace set idle_at = now(), last_at = now() - interval '30 seconds' where book_id = %s" % q(book))
+    if text: db.sql("update tally_light_pace set idle_at = now(), last_at = now() - interval '11 minutes' where book_id = %s" % q(book))
     ok(days_of(CN()) == [D8(5)], "3. idle: one of its earlier days (the idle pace)")
     ok(CN() == [], "3. (guard) at once again: none (25 s)")
     db.sql("insert into tally_check_days (book_id, firm_id, day, source, queued_at) values (%s, %s, %s, 'held', now())" % (q(book), q(F), q(D(20))))
     if text: db.sql("update tally_light_pace set idle_at = null where book_id = %s" % q(book))
     ok(days_of(CN()) == [D8(20)], "3. a day queued since (a held entry's day): at the check's own pace, idle or not")
-    if text: db.sql("update tally_light_pace set idle_at = now(), last_at = now() - interval '30 seconds' where book_id = %s" % q(book))
+    if text: db.sql("update tally_light_pace set idle_at = now(), last_at = now() - interval '11 minutes' where book_id = %s" % q(book))
     ok(days_of(CN()) == [D8(20), D8(6)], "3. idle: the day queued since, then one earlier day")
     st = j("select tally_check_stop(%s, %s, 'over2s', 'Tally took too long', %s)::text" % (q(book), q(D(6)), q(ca2 or "2000-01-01")))
     ok(db.one("select state || ' ' || coalesce(stop_why, '-') from tally_check_runs where book_id = %s" % q(book)) == "stopped over2s"

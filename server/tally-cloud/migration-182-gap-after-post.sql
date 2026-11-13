@@ -83,6 +83,8 @@ create table if not exists public.tally_light_pace (
   idle_at    timestamptz,                               -- the last beat that found the computer idle (null: not idle)
   last_at    timestamptz,                               -- the last light day handed out
   hour_at    timestamptz,
+  last_day   date,                                     -- the last light day handed out, and what reads it ('check' | 'period')
+  last_kind  text check (last_kind is null or last_kind in ('check', 'period')),
   hour_n     integer not null default 0 check (hour_n >= 0),
   day_on     date,
   day_n      integer not null default 0 check (day_n >= 0)
@@ -96,12 +98,19 @@ grant select, insert, update, delete on public.tally_light_pace to service_role;
 
 -- ---------------------------------------------------------------- 2. the light pace
 -- a light day may be handed out now: the computer idle (its last beat, 45 s), no posting of the company waiting or running
--- (touched in the last 30 minutes),
+-- (touched in the last 30 minutes), the last light day picked up by the bridge (Tally listed it since: tally_check_days.
+-- listed_at, or 98's tally_period_days.counted_at; or it is done) or handed out 10 minutes ago or more (one at a time:
+-- a day refused for typing again and again takes no more of the hour),
 -- none in the last 25 s, under 120 this hour and 600 today (India's)
 create or replace function public.tally_light_may(p_book uuid) returns boolean
 language sql stable security definer set search_path = public, pg_temp as $function$
   select coalesce((select x.idle_at > now() - interval '45 seconds'
                       and (x.last_at is null or x.last_at <= now() - interval '25 seconds')
+                      and (x.last_at is null or x.last_day is null or x.last_at <= now() - interval '10 minutes'
+                           or case when x.last_kind = 'period'
+                                   then exists (select 1 from tally_period_days d where d.book_id = p_book and d.day = x.last_day and d.counted_at >= x.last_at)
+                                   else exists (select 1 from tally_check_days k where k.book_id = p_book and k.day = x.last_day
+                                                  and (k.listed_at >= x.last_at or k.done_at is not null or k.upload_at is not null)) end)
                       and (x.hour_at is null or x.hour_at <= now() - interval '1 hour' or x.hour_n < 120)
                       and (x.day_on is distinct from (now() at time zone 'Asia/Kolkata')::date or x.day_n < 600)
                       and not exists (select 1 from tally_books b join tally_post_jobs j on j.firm_id = b.firm_id and j.company = b.company
@@ -116,9 +125,9 @@ language sql stable security definer set search_path = public, pg_temp as $funct
    where t.book_id = p_book and t.resumed_at is not null and t.stopped_at is null and r.state = 'going' and r.chosen_at = t.chosen_at
      and exists (select 1 from tally_check_days k where k.book_id = p_book and k.done_at is null and k.upload_at is null and k.queued_at <= t.resumed_at)
 $function$;
-create or replace function public.tally_light_took(p_book uuid) returns void
+create or replace function public.tally_light_took(p_book uuid, p_day date, p_kind text) returns void
 language sql security definer set search_path = public, pg_temp as $function$
-  update tally_light_pace set last_at = now(),
+  update tally_light_pace set last_at = now(), last_day = p_day, last_kind = case when p_kind = 'period' then 'period' else 'check' end,
          hour_n = case when hour_at is null or hour_at <= now() - interval '1 hour' then 1 else hour_n + 1 end,
          hour_at = case when hour_at is null or hour_at <= now() - interval '1 hour' then now() else hour_at end,
          day_n = case when day_on is distinct from (now() at time zone 'Asia/Kolkata')::date then 1 else day_n + 1 end,
@@ -398,6 +407,8 @@ declare c tally_sync_cursor%rowtype; bk tally_books%rowtype; r tally_check_runs%
 begin
   if auth.role() <> 'service_role' then raise exception 'not allowed' using errcode = '42501'; end if;
   if p_book is null or lim = 0 then return out; end if;
+  -- the book's rows written under the lock 135's tally_check_request and tally_fill_request take first (one order for all)
+  perform pg_advisory_xact_lock(hashtext('tally_check_request:' || p_book::text));
   -- 182 (the owner's decision of 13-Nov-2026): a retry whose day Tally gave whole (the bridge stops a request over 2 s, so
   -- a day listed is one given in time) and not stopped resumes the check by itself, under the retry's choice time
   select * into t from tally_gap_retries where book_id = p_book;
@@ -410,8 +421,9 @@ begin
     end if;
   end if;
   -- postings first: none while a posting of the book's company waits or runs (touched in the last 30 minutes: one stuck
-  -- for hours never holds the reads all day; and the computer is not idle for the light reads); 182: whether the book's computer is idle now, kept at every beat for every book (98's recount and 135's check
-  -- of a resumed check read it), gap or not
+  -- for hours never holds the reads all day; and the computer is not idle for the light reads);
+  -- 182: whether the book's computer is idle now, kept at every beat for every book (98's recount and 135's check of a
+  -- resumed check read it), gap or not
   select * into bk from tally_books where book_id = p_book;
   if not found then return out; end if;
   posting := exists (select 1 from tally_post_jobs j where j.firm_id = bk.firm_id and j.company = bk.company and j.status in ('waiting', 'taken', 'running')
@@ -419,8 +431,6 @@ begin
   insert into tally_light_pace (book_id, firm_id, idle_at) values (p_book, bk.firm_id, case when idle and not posting then now() end)
   on conflict (book_id) do update set idle_at = excluded.idle_at;
   if posting then return out; end if;
-  -- (the book's days written under tally_fill_request's lock of it: one order for both)
-  perform pg_advisory_xact_lock(hashtext('tally_check_request:' || p_book::text));
   select * into c from tally_sync_cursor where book_id = p_book;
   if not found or c.gap is null or c.gap_at is null then return out; end if;
   if c.gap_at > now() - interval '2 minutes' or coalesce(c.gap->>'since', '') !~ '^\d{4}-\d\d-\d\d' then return out; end if;
@@ -480,7 +490,7 @@ begin
   else
     ca := coalesce(case when has_p and p.state = 'going' then p.chosen_at end, case when has_r then r.chosen_at end, c.gap_at);
   end if;
-  if retry or old or array_length(lights, 1) > 0 then perform tally_light_took(p_book); end if;
+  if retry or old or array_length(lights, 1) > 0 then perform tally_light_took(p_book, days[1], 'check'); end if;
   select coalesce(jsonb_agg(jsonb_build_object('day', to_char(d, 'YYYYMMDD'), 'fetch', true, 'chosenAt', ca, 'check', true, 'gap', true)
                             || case when retry then jsonb_build_object('retry', true) else '{}'::jsonb end order by o), '[]'::jsonb) into out
     from unnest(days) with ordinality u(d, o);
@@ -570,7 +580,7 @@ begin
               order by (x.asked_at is not null and x.asked_at > now() - interval '2 minutes'), x.day desc limit 1 loop
       out := out || jsonb_build_array(jsonb_build_object('day', to_char(d, 'YYYYMMDD'), 'fetch', false, 'chosenAt', p.chosen_at));
       nr := 1;
-      perform tally_light_took(p_book);
+      perform tally_light_took(p_book, d, 'period');
     end loop;
   end if;
   if n = 0 and not exists (select 1 from generate_series(least(fy_to, today), p.fy_start, interval '-1 day') g
@@ -635,7 +645,7 @@ begin
       for d in select x.day from tally_check_days x where x.book_id = p_book and x.done_at is null and x.upload_at is null and x.day <= today and x.queued_at <= ra
                 order by (x.asked_at is not null and x.asked_at > now() - interval '2 minutes'), x.day desc limit 1 loop
         out := out || jsonb_build_array(jsonb_build_object('day', to_char(d, 'YYYYMMDD'), 'fetch', true, 'chosenAt', ca, 'check', true));
-        perform tally_light_took(p_book);
+        perform tally_light_took(p_book, d, 'check');
       end loop;
     end if;
   end if;
@@ -731,9 +741,9 @@ begin
 end $function$;
 
 -- ---------------------------------------------------------------- 7. who may call
-revoke all on function public.tally_gap_own_read(uuid, jsonb), public.tally_gap_state(uuid, jsonb, timestamptz), public.tally_light_may(uuid), public.tally_light_took(uuid),
+revoke all on function public.tally_gap_own_read(uuid, jsonb), public.tally_gap_state(uuid, jsonb, timestamptz), public.tally_light_may(uuid), public.tally_light_took(uuid, date, text),
   public.tally_day_read_for(uuid, date, timestamptz), public.tally_check_paced(uuid) from public, anon, authenticated;
-grant execute on function public.tally_gap_own_read(uuid, jsonb), public.tally_gap_state(uuid, jsonb, timestamptz), public.tally_light_may(uuid), public.tally_light_took(uuid),
+grant execute on function public.tally_gap_own_read(uuid, jsonb), public.tally_gap_state(uuid, jsonb, timestamptz), public.tally_light_may(uuid), public.tally_light_took(uuid, date, text),
   public.tally_day_read_for(uuid, date, timestamptz), public.tally_check_paced(uuid) to service_role;
 revoke all on function public.tally_gap_front(uuid, integer, boolean), public.tally_gap_front(uuid, integer) from public, anon, authenticated;
 grant execute on function public.tally_gap_front(uuid, integer, boolean), public.tally_gap_front(uuid, integer) to service_role;
