@@ -344,8 +344,13 @@ function postStatus(entry, job, ids, marks, ctx){
     if (backInReview) return null;
     if (job.status === "cancelled"){
       const why = postReasonText(job.message) || "cancelled";
-      const cr = postReasonFor(why) || null, late = cr && cr.again === false, ck = late && ctx.check, cs = ck && ck.state;
-      return mk(9, "Cancelled on " + postWhenSay(job.updated_at || job.created_at) + (job.created_by ? " (posted by " + postWhoSay(job.created_by) + ")" : "") + ": " + why + "." + (late ? " " + (cs === "waiting" ? "Checking Tally: " + (postReasonText(ck.last_words) || "waiting for the FinCom Bridge to look in Tally") + "." : cs === "notseen" ? postReasonText(ck.words) || "" : cr.fix) : ""),
+      const cr0 = postReasonFor(why) || null, late0 = cr0 && cr0.again === false;
+      // migration 174 (sixth review): of a posting cancelled after it may have reached Tally, an entry whose id the cancel
+      // freed (never sent, or Tally clearly refused it) is posted again as any cancelled entry; only one whose id stays
+      // live is settled (no id row known: settled, the safe side)
+      const freed = late0 && !!(ids && (!ids.live || ids.released_at)), late = late0 && !freed, ck = late && ctx.check, cs = ck && ck.state;
+      const cr = freed ? postReasonFor("Cancelled before the Tally computer took it") || cr0 : cr0;
+      return mk(9, "Cancelled on " + postWhenSay(job.updated_at || job.created_at) + (job.created_by ? " (posted by " + postWhoSay(job.created_by) + ")" : "") + ": " + why + "." + (late ? " " + (cs === "waiting" ? "Checking Tally: " + (postReasonText(ck.last_words) || "waiting for the FinCom Bridge to look in Tally") + "." : cs === "notseen" ? postReasonText(ck.words) || "" : cr.fix) : freed ? " This entry is not in Tally (never sent, or Tally refused it): post it again." : ""),
         deleted || !bill ? null : late ? {kind: "settle", label: "It is in Tally: mark posted (Tally id)"} : again, {reason: cr, accepted: !!late, check: cs === "waiting" ? ck : null, notSeen: cs === "notseen" ? ck : null});
     }
     if ((r && r.ok === false) || (it && it.state === "failed") || job.status === "failed" || (job.status === "done" && !okR)){

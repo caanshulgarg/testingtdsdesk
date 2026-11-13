@@ -44,8 +44,8 @@ src142 = open(os.path.join(HERE, "run_migration142.py")).read()
 FILES = eval(compile(src142.split("\nFILES = ", 1)[1].split("\nfails = []", 1)[0], "run_migration142.py(FILES)", "eval"), {"os": os, "SQLDIR": SQLDIR, "HERE": HERE, "ROOT": ROOT})
 FILES += [os.path.join(SQLDIR, f) for f in ("migration-111-post-register.sql", "migration-142-post-any-bridge.sql", "migration-128-client-removed-frees-tally.sql", "migration-161-split-tally.sql")]
 TF_ADD, TF_GONE, RQ_ADD, RQ_GONE = 25, 6, 40, 4
-JD_ADD, JD_GONE, CB_ADD, CB_GONE, CC_ADD, CC_GONE = 4, 2, 15, 2, 2, 1   # judge: the live id; check_bridge_ok: the gone bridge; confirm: the words
-RS_ADD, RS_GONE, CN_ADD, CN_GONE = 3, 3, 17, 3   # rescue: the held count; cancel: the warning
+JD_ADD, JD_GONE, CB_ADD, CB_GONE, CC_ADD, CC_GONE = 4, 2, 18, 2, 10, 3   # judge: the live id; check_bridge_ok: the gone bridge; confirm: the words
+RS_ADD, RS_GONE, CN_ADD, CN_GONE = 3, 3, 21, 3   # rescue: the held count; cancel: the warning
 RR_ADD, RR_GONE = 16, 1   # reroute: 54's text with the once-taken hold   # take_for: the two hand-outs in a loop with the check; requeue: 2b, 4b, M1, 4a
 fails = []
 def ok(c, w):
@@ -447,13 +447,17 @@ try:
     else:
         setbeat(DA, beat("made-up-a", BA, [CO])); setbeat(DB, beat("made-up-b", BB, [CO])); db.sql("update tally_devices set main_bridge = %s where id = %s" % (q(BA), q(DA)))
         # H1: cancelled after a Retry (taken_at cleared): what may be in Tally stays live and is needs_review; the rest is free
-        pay = {"masters": [], "vouchers": [{"id": "K1", "xml": "<VOUCHER/>"}, {"id": "K2", "xml": "<VOUCHER/>"}, {"id": "K3", "xml": "<VOUCHER/>"}], "ledger": ""}
-        db.sql("insert into tally_post_jobs (id, firm_id, client_id, company, device_id, payload, n, status, target_bridge, taken_by, attempts, first_taken_at, results, items) values (%s, %s, 'c1', %s, %s, %s, 3, 'waiting', %s, %s, 1, now() - interval '1 day', %s, %s)"
+        pay = {"masters": [], "vouchers": [{"id": "K1", "xml": "<VOUCHER/>"}, {"id": "K2", "xml": "<VOUCHER/>"}, {"id": "K3", "xml": "<VOUCHER/>"}, {"id": "K4", "xml": "<VOUCHER/>"}], "ledger": ""}   # K4: no result, no item
+        db.sql("insert into tally_post_jobs (id, firm_id, client_id, company, device_id, payload, n, status, target_bridge, taken_by, attempts, first_taken_at, results, items) values (%s, %s, 'c1', %s, %s, %s, 4, 'waiting', %s, %s, 1, now() - interval '1 day', %s, %s)"
                % (q(J(120)), q(F), q(CO), q(DA), q(json.dumps(pay)), q(BA), q(BA), q(json.dumps([{"id": "K3", "ok": False, "message": "Ledger 'X' does not exist", "state": "failed"}])),
                   q(json.dumps([{"id": "K1", "state": "sent"}, {"id": "K2", "state": "waiting"}, {"id": "K3", "state": "failed", "reason": "Ledger 'X' does not exist"}]))))
         r = rpc(STAFF, "select tally_post_cancel(%s)::text" % q(J(120)))
         lv = dict((x["e"], x["l"]) for x in db.rows("select entry_id e, live::text l from tally_post_ids where job_id = %s" % q(J(120))))
-        ok(r.get("ok") and r.get("warn") and lv == {"K1": "true", "K2": "false", "K3": "false"} and r.get("entries") == ["K1"], "H1: Cancel keeps live only K1 (sent); K2 (never sent) and K3 (refused) free; the answer names K1 (%s %s)" % (lv, r.get("entries")))
+        ok(r.get("ok") and r.get("warn") and lv == {"K1": "true", "K2": "false", "K3": "false", "K4": "true"} and r.get("entries") == ["K1", "K4"], "H1: Cancel keeps live only K1 (sent) and K4 (no word of it); K2 (never sent) and K3 (refused) free; the answer names them (%s %s)" % (lv, r.get("entries")))
+        # sixth review H-A: the STORED register (what the page reads), not the judge: judged again after the ids went live
+        reg = lambda: dict((x["e"], x["s"]) for x in db.rows("select entry_id e, state s from tally_post_register where job_id = %s" % q(J(120))))
+        sr = reg()
+        ok(sr.get("K1") == "needs_review" and sr.get("K4") == "needs_review" and sr.get("K2") == "released" and sr.get("K3") == "refused", "H-A: the stored register after Cancel: K1, K4 needs_review (the settle buttons), K2 released, K3 refused (%s)" % sr)
         jd = dict((x["e"], x["s"]) for x in db.rows("select entry_id e, state s from tally_post_register_judged((select j from tally_post_jobs j where id = %s))" % q(J(120))))
         ok(jd.get("K1") == "needs_review" and jd.get("K2") == "released" and jd.get("K3") == "refused", "H1: the register: K1 needs review (settle), K2 released, K3 refused (%s)" % jd)
         # M2: the owner's own word; staff refused, a reason required, never while it is being sent
@@ -464,9 +468,11 @@ try:
         ok(r.get("ok") is True and r.get("owner") is True and db.one("select live::text from tally_post_ids where job_id = %s and entry_id = 'K1'" % q(J(120))) == "false" and "posted twice" in note,
            "M2: an owner's 'I checked in Tally: not there': released, kept with the words (%s / %s)" % (r.get("error") or r.get("_error") or r.get("ok"), note[:80]))
         jd = dict((x["e"], x["s"]) for x in db.rows("select entry_id e, state s from tally_post_register_judged((select j from tally_post_jobs j where id = %s))" % q(J(120))))
-        ok(jd.get("K1") == "released", "and the register then says released (%s)" % jd.get("K1"))
+        ok(jd.get("K1") == "released" and reg().get("K1") == "released" and reg().get("K4") == "needs_review", "and the register then says released (judged %s, stored %s)" % (jd.get("K1"), reg()))
         job(121, BA, DA)
         ok("still being sent" in str(rpc(OWNER, "select tally_post_owner_release(%s, 'V121', 'x')::text" % q(J(121))).get("error")), "M2: not while it is being sent")
+        job(124, BA, DA, status="taken", taken_by=BA, seq=1); db.sql("update tally_post_jobs set checking = true where id = %s" % q(J(124)))
+        ok("still being sent" in str(rpc(OWNER, "select tally_post_owner_release(%s, 'V124', 'x')::text" % q(J(124))).get("error")) and live(124) == "true", "M-B: nor while it is taken and held for checking (%s)" % live(124))
         clear()
         # M2: a check whose bridge (A) is gone may be answered by B, which has the very company (its GUID) open
         job(122, BA, DA, status="done", taken_by=BA, seq=1)
@@ -476,6 +482,20 @@ try:
         ok(ok_b() == "true", "M2: A can no longer post: B (the company open, its GUID) may answer the check")
         setbeat(DB, beat("made-up-b", BB, [CO], guid="ffffffff-0000-0000-0000-000000000174"))
         ok(ok_b() == "false", "M2: B with a company of that name under another GUID: may not")
+        # sixth review H-B: the same GUID in another data folder (a restored backup, a copied folder): may not
+        setbeat(DB, beat("made-up-b", BB, [CO], folder="D:\\Restored\\Backup"))
+        ok(ok_b() == "false", "H-B: the very GUID but another data location: may not")
+        setbeat(DB, beat("made-up-b", BB, [CO])); ok(ok_b() == "true", "H-B: back in the link's data location: may")
+        db.sql("update tally_links set data_loc = null where firm_id = %s and book_id = %s" % (q(F), q(BK)))
+        ok(ok_b() == "false", "H-B: the link's data location not known: may not")
+        db.sql("update tally_links set data_loc = %s where firm_id = %s and book_id = %s" % (q(loc), q(F), q(BK)))
+        # sixth review M-A: B's "not seen", confirmed: released only; the posting stays with A (never waiting for nobody)
+        db.sql("insert into tally_post_checks (firm_id, job_id, entry_id, company, asked_by, why, state, checked_at, checked_bridge, checked_device) values (%s, %s, 'V122', %s, %s, 'looked', 'notseen', now(), %s, %s)" % (q(F), q(J(122)), q(CO), q(STAFF), q(BB), q(DB)))
+        r = rpc(STAFF, "select tally_post_check_confirm(%s, 'V122', 'Day Book searched')::text" % q(J(122)))
+        x = row(122)
+        ok(r.get("ok") is True and r.get("resent") is False and r.get("words") == "released; you can post it again" and x["status"] != "waiting" and x["target_bridge"] == BA and x["taken_by"] == BA and x["dev"] == DA and live(122) == "false",
+           "M-A: answered by B: released, not sent again nor moved (%s / %s %s %s %s)" % (r.get("words") or r.get("error") or r.get("_error"), x["status"], x["target_bridge"], x["dev"], live(122)))
+        setbeat(DB, beat("made-up-b", BB, [CO]))
         setbeat(DB, beat("made-up-b", BB, [CO])); db.sql("update tally_devices set main_bridge = %s where id = %s" % (q(BA), q(DA)))
         # L1: "I looked in Tally: not there" on a cancelled posting
         pay2 = {"masters": [], "vouchers": [{"id": "K5", "xml": "<VOUCHER/>"}], "ledger": ""}

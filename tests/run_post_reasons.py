@@ -92,7 +92,11 @@ out.status = {
     const c = postStatus(bill("i5"), job("j9e", "cancelled", null, null, {message: m}), {live: true}, []);
     const mk = (code, todo, action, more) => Object.assign({code, todo, action: action && action.kind}, more || {});
     const reg = typeof postRegStatus === "function" ? postRegStatus({state: "needs_review", tally_words: m}, bill("i6"), job("j9f", "cancelled", null, null, {message: m}), mk, null, {}) : null;
+    const d = postStatus(bill("i7"), job("j9g", "cancelled", null, null, {message: m}), {live: false}, []);
+    const d2 = postStatus(bill("i8"), job("j9h", "cancelled", null, null, {message: m}), {live: false, released_at: "x"}, []);
+    const dn = postStatus(bill("i9"), job("j9i", "cancelled", null, null, {message: m}), null, []);
     return {aCheck: !!(a && a.check), aTodo: a && a.todo, aAct: a && a.action && a.action.kind, bNs: !!(b && b.notSeen), bTodo: b && b.todo, cAcc: !!(c && c.accepted),
+            dAct: d && d.action && d.action.kind, dAcc: !!(d && d.accepted), dTodo: d && d.todo, d2Act: d2 && d2.action && d2.action.kind, dnAct: dn && dn.action && dn.action.kind,
             reg: reg && {code: reg.code, act: reg.action, why: reg.reason && reg.reason.id}}; })(),
   "9late": P(postStatus(bill("i2"), job("j9b", "cancelled", null, null, {message: "Cancelled after the Tally computer had started it: part of it may be in Tally. Check Tally first; Mark posted what is there before posting it again.", updated_at: "2026-11-12T16:52:46Z"}), {live: true}, [])),
   10: P(postStatus(bill("k", {status: "deleted", deleted: {at: "2026-10-03T10:00:00Z", reason: "duplicate"}}), job("j10", "done", [{id: "k", ok: true, verified: true, masterId: "26294"}], null), {live: true}, [])),
@@ -177,6 +181,9 @@ lr = S_.get("9lateRaw") or {}
 ok(lr.get("aCheck") and "Checking Tally" in (lr.get("aTodo") or "") and lr.get("aAct") == "settle", "H2. cancelled after it may have reached Tally, a check waiting: 'Checking Tally', the check passed on (%s)" % lr)
 ok(lr.get("bNs") and "no such voucher" in (lr.get("bTodo") or ""), "H2. ... the bridge did not see it: notSeen passed on (I looked in Tally: not there)")
 ok(lr.get("cAcc") is True, "L2. no Back to review until settled (accepted)")
+ok(lr.get("dAct") == "postAgain" and lr.get("dAcc") is False and "This entry is not in Tally" in (lr.get("dTodo") or "") and lr.get("d2Act") == "postAgain",
+   "sixth review LOW: an entry of a late-cancelled posting whose id the cancel freed (or released): Post again, not settled (%s)" % lr)
+ok(lr.get("dnAct") == "settle", "sixth review LOW: no id row known: settled, the safe side (%s)" % lr.get("dnAct"))
 ok((lr.get("reg") or {}).get("why") == "cancelledlate" and (lr.get("reg") or {}).get("act") == "settle", "H1. the register's needs_review of a cancelled posting: cancelledlate, the settle buttons (%s)" % lr.get("reg"))
 st("10", 10, "Bill deleted in FinCom but entry is in Tally", "posted", ("Tally id 26294", "Restore the bill"), "restore", "26294")
 st("10missing", 10, "Bill deleted in FinCom but entry is in Tally", "posted", ("no longer in FinCom",), None, "26294")
