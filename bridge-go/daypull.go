@@ -226,7 +226,10 @@ var pull = struct {
 	// 2.5.14: the listed days set aside in this pass because their own company cannot be asked now (closed in Tally, no
 	// starting point ...): the other companies' days go first; looked at again once the pass is through, or at the next list
 	aside map[string]bool
-}{aside: map[string]bool{}, released: map[string]int{}, empAt: map[string]time.Time{}, stopped: map[int]string{}, upload: map[string]M{}, tell: map[string]M{}, stopCo: map[string]M{}, done: map[string]time.Time{}, state: map[string]M{}, said: map[string]string{}}
+	// 2.5.16 (daystop2516.go): the days stopped here for 24 hours after Tally was too slow for them: key -> {company, day,
+	// why, words, fails, atN, untilN}
+	retry map[string]M
+}{retry: map[string]M{}, aside: map[string]bool{}, released: map[string]int{}, empAt: map[string]time.Time{}, stopped: map[int]string{}, upload: map[string]M{}, tell: map[string]M{}, stopCo: map[string]M{}, done: map[string]time.Time{}, state: map[string]M{}, said: map[string]string{}}
 
 // --- the beat answer: periodDays [{company, company_guid, day, fetch, types}], at most 3
 func applyPeriodDays(j M) {
@@ -270,6 +273,10 @@ func applyPeriodDays(j M) {
 				refuse(it, "otherCompany")
 			}
 			continue
+		}
+		if pullRetryHeld(it) {
+			refuse(it, "dayRetry")
+			continue // 2.5.16 (daystop2516.go): Tally was slow for this day: asked again after its 24 hours
 		}
 		if pullStoppedFor(co, str(e["chosenAt"])) {
 			refuse(it, "stopped")
@@ -798,10 +805,10 @@ func pullHeadsStep(w *pullWork, port int) (bool, bool) {
 		pullRangeNoteFail(it) // 2.5.12: the sparse evidence starts again (range2512.go)
 		// ROUND 103 (1b, the owner's freeze safety): a day's list over 2 s stops reading older entries of this company;
 		// the days still missing are to be uploaded by hand (one quiet line); never asked again by itself
-		pullStopCompany(w, "over2s", form)
+		pullStopDay(w, "over2s", form)
 		return true, false
 	case holdMs >= 2000:
-		pullStopCompany(w, "window", fmt.Sprintf("Tally's window did not answer for %.1f s", float64(holdMs)/1000))
+		pullStopDay(w, "window", fmt.Sprintf("Tally's window did not answer for %.1f s", float64(holdMs)/1000))
 		return true, false
 	case err == nil:
 	default:
@@ -825,15 +832,21 @@ func pullHeadsStep(w *pullWork, port int) (bool, bool) {
 		}
 		return true, false
 	}
-	rows, bad := pullRowsOf(raw, it.Day)
+	// 2.5.16 (daystop2516.go; the owner's YES of 13-Nov-2026): a row of another date is skipped and the day's own rows are
+	// taken; an answer with no row of the day asked (the date was not applied) is a day not read, asked again later (5
+	// such answers: left for FinCom to list again); single days are never stopped on this Tally for it
+	rows, skipped, bad := pullRowsSkip(raw, it.Day)
 	raw = ""
-	if bad != "" {
-		pull.mu.Lock()
-		pull.stopped[port] = "an entry of " + liveDay(bad) + " came for " + liveDay(it.Day)
-		pull.mu.Unlock()
-		writeLog(fmt.Sprintf("Older entries of %s: Tally answered the request for %s (%s, FinComDayHeads) with an entry dated %s: the date was not applied. The answer is dropped, nothing is stored or sent, and no single day is asked of this Tally until the bridge restarts", it.Company, liveDay(it.Day), form, liveDay(bad)))
-		pullMarkUpload(w, "dates", "")
+	if skipped > 0 && len(rows) == 0 {
+		w.fails++
+		writeLog(fmt.Sprintf("Older entries of %s: Tally answered the request for %s (%s, FinComDayHeads) with entries of another date only (%s): the date was not applied. Nothing is stored or sent; asked again later", it.Company, liveDay(it.Day), form, liveDay(bad)))
+		if w.fails >= 5 {
+			pullDrop(w)
+		}
 		return true, false
+	}
+	if skipped > 0 {
+		writeLog(fmt.Sprintf("Older entries of %s: %s: %d entr%s of another date (%s) in Tally's list skipped; the day's own %d taken", it.Company, liveDay(it.Day), skipped, map[bool]string{true: "y", false: "ies"}[skipped == 1], liveDay(bad), len(rows)))
 	}
 	for _, h := range rows {
 		if len(w.heads) >= pullHeadsMax() {
@@ -1011,10 +1024,10 @@ func pullFetchStep(w *pullWork, port int) (bool, bool) {
 	case errors.Is(err, errRecorderStop):
 		// ROUND 103 (1b, review): an entry's request over 2 s stops the period too (the freeze safety covers every
 		// request of it, not only the day's list)
-		pullStopCompany(w, "over2s", "the entry with MasterID "+mid)
+		pullStopDay(w, "over2s", "the entry with MasterID "+mid)
 		return true, false
 	case holdMs >= limit:
-		pullStopCompany(w, "window", fmt.Sprintf("Tally's window did not answer for %.1f s while the entry with MasterID %s was read", float64(holdMs)/1000, mid))
+		pullStopDay(w, "window", fmt.Sprintf("Tally's window did not answer for %.1f s while the entry with MasterID %s was read", float64(holdMs)/1000, mid))
 		return true, false
 	case err == nil:
 	case errors.Is(err, errFastShape):
@@ -1145,10 +1158,10 @@ func pullEmployeesStep(w *pullWork, port int) (bool, bool) {
 	_, reqs, err := employeesCheckWith(it.Company, port, empOpt{guid: it.CGUID, port: port, maxReqs: 1, ask: ask})
 	switch {
 	case errors.Is(err, errRecorderStop):
-		pullStopCompany(w, "over2s", "the payroll's employees")
+		pullStopDay(w, "over2s", "the payroll's employees")
 		return true, false
 	case holdMs >= recorderLimitMs():
-		pullStopCompany(w, "window", fmt.Sprintf("Tally's window did not answer for %.1f s while the payroll's employees were read", float64(holdMs)/1000))
+		pullStopDay(w, "window", fmt.Sprintf("Tally's window did not answer for %.1f s while the payroll's employees were read", float64(holdMs)/1000))
 		return true, false
 	case reqs == 0 && (gaveWay(err) || errors.Is(err, errRetryWait) || errors.Is(err, errReadStopped)):
 		return false, false // nothing reached Tally; the day waits
@@ -1313,6 +1326,10 @@ func pullFinish(w *pullWork, how string) {
 		pull.work = nil
 	}
 	pull.done[w.it.key()] = nowFn()
+	if _, ok := pull.retry[w.it.key()]; ok && how == "" {
+		delete(pull.retry, w.it.key()) // 2.5.16: read whole after its hold: no longer held
+		pullSaveLocked()
+	}
 	st := pull.state[companyKey(w.it.Company)]
 	if st != nil {
 		st["phase"] = or(how, "sent")
@@ -1400,6 +1417,17 @@ func pullStoppedFor(company, chosenAt string) bool {
 	if st == nil {
 		return false
 	}
+	// 2.5.16 (daystop2516.go; the owner's YES of 13-Nov-2026): a stop lifts here by itself after 24 hours (made by an
+	// earlier bridge, or with a cloud without migration 197)
+	if a := toI64(st["atN"]); a > 0 && nowFn().UnixNano()-a >= int64(pullRetryHold) {
+		pull.mu.Lock()
+		delete(pull.stopCo, companyKey(company))
+		delete(pull.tell, "stop|"+companyKey(company))
+		pullSaveLocked()
+		pull.mu.Unlock()
+		writeLog("Older entries of " + company + ": the stop of " + liveDay(str(st["day"])) + " is over 24 hours old: lifted; read again, one day at a time")
+		return false
+	}
 	// a different choice than the one stopped (FinCom's own time of the choice, compared as FinCom gives it: no clock of
 	// this computer is involved); the stop of the old choice is not told again
 	if chosenAt != "" && chosenAt != str(st["chosenAt"]) {
@@ -1427,7 +1455,12 @@ func pullSaveLocked() {
 	for k, v := range pull.stopCo {
 		stop[k] = v
 	}
-	pullSaveText.Store(jsonText(M{"upload": up, "tell": tell, "stop": stop}))
+	pullRetryTrimLocked()
+	retry := M{}
+	for k, v := range pull.retry {
+		retry[k] = v
+	}
+	pullSaveText.Store(jsonText(M{"upload": up, "tell": tell, "stop": stop, "retry": retry}))
 	go pullSaveNow()
 }
 
@@ -1473,6 +1506,11 @@ func pullLoad() {
 	for k, v := range obj(j["stop"]) {
 		if e := obj(v); e != nil {
 			pull.stopCo[k] = e
+		}
+	}
+	for k, v := range obj(j["retry"]) {
+		if e := obj(v); e != nil && toI64(e["untilN"]) > 0 {
+			pull.retry[k] = e // 2.5.16: kept across a restart and an update (FinCom keeps its own hold too)
 		}
 	}
 	if len(older) > 0 {
@@ -1559,7 +1597,7 @@ func pullBeatLocked() M {
 	for _, v := range pull.stopCo {
 		stopCo = append(stopCo, v)
 	}
-	return M{"companies": cos, "uploadDays": pullUploadListLocked(), "stopped": stopped, "stoppedCompanies": stopCo}
+	return M{"companies": cos, "uploadDays": pullUploadListLocked(), "stopped": stopped, "stoppedCompanies": stopCo, "retryDays": pullRetryBeatLocked()}
 }
 
 func pullUploadList() []any {

@@ -208,8 +208,26 @@ export function MastersCell({ row }) {
     {sub2 && <span className="tpg-sub2">{sub2}</span>}
   </div>;
 }
+// bridge 2.5.16 (migration 197): the days FinCom is bringing in from Tally by itself in the day (missed days: a period's
+// days and checked days whose entries FinCom does not hold whole), from FinCom's cloud each minute while the company is
+// open in Tally: "Bringing in 12 missed days from Tally, 3 left"; "" when none are left, or the cloud does not count them
+const CU = {};
+export const catchupWords = (v) => {
+  const n = Math.max(Number(v && v.n) || 0, Number(v && v.left) || 0), l = Number(v && v.left) || 0;
+  return l > 0 ? "Bringing in " + nf(n) + " missed day" + (n === 1 ? "" : "s") + " from Tally, " + nf(l) + " left" : "";
+};
+export function catchupOf(cid, company) {
+  const bk = ledBook(cid); if (!bk || !bk.book || typeof TCloud !== "object" || !TCloud.rpc) return "";
+  const k = CU[cid] && CU[cid].book === bk.book ? CU[cid] : (CU[cid] = { book: bk.book, at: 0, v: null, busy: false, off: false });
+  if (!k.busy && !k.off && seen() && openNow(company) && Date.now() - k.at > 60000) {
+    const was = JSON.stringify(k.v);
+    k.busy = cloudAsk("cu:" + bk.book, () => TCloud.rpc("tally_catchup_status", { p_book: bk.book }).then((v) => { k.v = v || null; }, (e) => { if (missing(e)) k.off = true; })
+      .finally(() => { k.at = Date.now(); k.busy = false; if (JSON.stringify(k.v) !== was) soonDraw(); }));
+  }
+  return catchupWords(k.v);
+}
 export function EntriesCell({ row }) {
-  const ms = mastersOf(row.cid, row.company), e = entriesOf(row.cid, ms, row.last), p = e.p;
+  const ms = mastersOf(row.cid, row.company), e = entriesOf(row.cid, ms, row.last), p = e.p, cu = catchupOf(row.cid, row.company);
   const xy = p && Number(p.y) ? nf(Math.min(Number(p.x || 0), Number(p.y))) + " of " + nf(p.y) : p && p.counting ? "counting the year in Tally" : "";
   let head, sub = "", cls = "";
   if (e.st === "behind") { head = e.words; cls = " warn"; sub = e.sub; }
@@ -227,6 +245,7 @@ export function EntriesCell({ row }) {
     <span className={"tpg-words" + cls} data-tpg-ew="">{head}</span>
     {p && !p.done && (e.st === "going" || e.st === "after" || e.st === "paused") && <Bar pct={e.pct} kind={e.st === "going" ? "read" : "wait"} label={"Entries of " + row.client} />}
     {sub && <span className="tpg-sub" data-tpg-es="">{sub}</span>}
+    {cu && <span className="tpg-sub" data-tpg-catchup="" role="status">{cu}</span>}
     {wait && <span className="tpg-sub2 warn" data-tpg-ewait="" role="status">{wait}</span>}
   </div>;
 }

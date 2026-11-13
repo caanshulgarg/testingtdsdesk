@@ -244,8 +244,9 @@ func pullReset() {
 	pull.released = map[string]int{} // 2.5.13
 	pull.aside = map[string]bool{}   // 2.5.14
 	pull.empAt, pull.night, pull.nightAt, pull.beatAt = map[string]time.Time{}, false, time.Time{}, time.Time{}
-	pickReset() // 2.5.10 (pickack.go)
-	paceReset() // 2.5.16 (daypace2516.go)
+	pickReset()                 // 2.5.10 (pickack.go)
+	paceReset()                 // 2.5.16 (daypace2516.go)
+	pull.retry = map[string]M{} // 2.5.16 (daystop2516.go)
 	pullSaveMu.Lock()
 	pullSaveText.Store("")
 	_ = os.Remove(pullFile())
@@ -375,6 +376,9 @@ func TestR103PullOver2sStopsCompany(t *testing.T) {
 	c.mu.Lock()
 	prev := c.other
 	c.other = func(k string, b M) (int, M) {
+		if k == "period_day_stop" { // 2.5.16: a cloud without migration 197 (the period stops as before)
+			return 503, M{"ok": false, "notReady": true}
+		}
 		if k == "period_stop" {
 			stops = append(stops, b)
 			return 200, M{"ok": true}
@@ -470,6 +474,9 @@ func TestR103PullWindowHoldStopsCompany(t *testing.T) {
 	c.mu.Lock()
 	prev := c.other
 	c.other = func(k string, b M) (int, M) {
+		if k == "period_day_stop" { // 2.5.16: a cloud without migration 197 (the period stops as before)
+			return 503, M{"ok": false, "notReady": true}
+		}
 		if k == "period_stop" {
 			stops = append(stops, b)
 			return 200, M{"ok": true}
@@ -511,9 +518,10 @@ func TestR103PullSwitchOff(t *testing.T) {
 	}
 }
 
-// the date not applied: the whole answer dropped (nothing counted or fetched), the day marked "upload", and no single day
-// asked of that Tally again until the bridge restarts
-func TestR245PullDateNotAppliedStops(t *testing.T) {
+// the date not applied (Tally's list holds other days' entries too). 2.5.16 (daystop2516.go; the owner's YES of
+// 13-Nov-2026): the rows of another date are skipped and the day's own rows taken; the day is not marked "upload" and
+// single days go on being read from that Tally (before: the answer dropped and day reading stopped until a restart)
+func TestR245PullDateNotAppliedRowsSkipped(t *testing.T) {
 	f, _, m := pullBridge(t)
 	pullDay(f, "20250510", 1200, "Sales")
 	pullDay(f, "20250511", 1300, "Sales")
@@ -522,19 +530,17 @@ func TestR245PullDateNotAppliedStops(t *testing.T) {
 	f.mu.Unlock()
 	applyPeriodDays(pullList("20250510", "20250511"))
 	pullRun(t, 10)
-	if f.n(dayHeadsID) != 1 || f.n(vchObjectID) != 0 || len(m.entries) != 0 || m.n["20250510"] != 0 {
-		t.Fatalf("after a wrong date: %v %v", f.ids(), m.n)
+	if m.n["20250510"] != 1 || m.n["20250511"] != 1 || f.n(vchObjectID) != 2 || len(m.upload) != 0 {
+		t.Fatalf("after other dates in the list: %v %v %v", f.ids(), m.n, m.upload)
 	}
-	if up := m.upload["20250510"]; up == nil || str(up["why"]) != "dates" {
-		t.Fatalf("the mark: %v", m.upload)
+	if !strings.Contains(readText(logFile()), "of another date") {
+		t.Fatal("no log line names the skipped rows")
 	}
-	if !strings.Contains(readText(logFile()), "the date was not applied") {
-		t.Fatal("no log line names it")
-	}
-	applyPeriodDays(pullList("20250511"))
-	pullRun(t, 5)
-	if f.n(dayHeadsID) != 1 {
-		t.Fatal("another day asked of the same Tally")
+	pull.mu.Lock()
+	n := len(pull.stopped)
+	pull.mu.Unlock()
+	if n != 0 {
+		t.Fatal("single days stopped on this Tally")
 	}
 }
 

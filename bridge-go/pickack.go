@@ -50,10 +50,11 @@ var pickWords = map[string]string{
 	"otherCompany":   "the company open in Tally here is another copy than the book's (its GUID differs)",
 	"stopped":        "reading older entries of this company was stopped because Tally was too slow; choose it again in FinCom",
 	"queued":         "other days are being read first, one day at a time; this follows by itself",
+	"dayRetry":       "Tally was slow for this day; FinCom Bridge tries it again by itself after a day (no action needed)",
 }
 
 // the reasons that are about one company (the rest hold every book of this computer alike)
-var pickOwnCompany = map[string]bool{"noStart": true, "slow": true, "notOpen": true, "otherLogin": true, "otherCompany": true, "stopped": true}
+var pickOwnCompany = map[string]bool{"noStart": true, "slow": true, "notOpen": true, "otherLogin": true, "otherCompany": true, "stopped": true, "dayRetry": true}
 
 type pickAck struct {
 	company, guid, kind, chosenAt string

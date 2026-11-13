@@ -78,6 +78,16 @@ tally-ingest of the same branch. Use a test company with made-up entries only.
     Check B: keep typing without a pause of 5 seconds for a minute. You should see: nothing is read meanwhile; FinCom's
     Tally page says someone is working in Tally.
     Check C: save a Journal of Rs 1 while older days are being read. You should see: it is in FinCom in a few seconds.
+ 7. A slow day no longer stops the whole year. When Tally takes over 2 seconds for one day (or its window stops
+    answering for 2 seconds), only that day waits; FinCom tries it again by itself after a day, while Tally is left
+    alone, and the other days go on. You are asked to upload that day's Day Book only after it failed on 3 separate
+    days ("Tally could not send 14-Oct-2026 in time on 3 days. Upload that day's Day Book to finish it."). An entry of
+    another date in Tally's list of a day is skipped (the day's own entries are taken) instead of stopping day reading
+    until the bridge restarts. A company marked slow is measured again by itself after a day. FinCom's Tally page shows
+    "Bringing in N missed days from Tally, M left" beside the entries while it works. FinCom's cloud needs migration 197.
+    Check A: on a big test company, choose Bring books. You should see: the page's count goes down; a day Tally was slow
+    for says "Tally was slow for this day; FinCom Bridge tries it again by itself after a day (no action needed)".
+    Check B: the log ("Show log") says "<day> stopped (...): this day only; asked again after 24 hours".
 
 WINDOWS ONLY (the automatic tests cannot run these; check them on a real Windows PC):
   - item 1: Check with FVU runs a copy of the FVU from your own temporary folder (removed after); Java must be
@@ -90,6 +100,8 @@ WINDOWS ONLY (the automatic tests cannot run these; check them on a real Windows
   - item 6: the real last-key time and the window in front come from Windows (the tests stand in for them); the
     service version takes them from the tray. Checks A-C on a real Tally, and the beat's lastKeyAt on FinCom's Tally
     page record.
+  - item 7: a real slow day needs a big company on a real Tally (the tests stand in for Tally's time); Check A on the
+    test PC with a day of many entries.
 
 -------------------------------------------------------------------------------------------------------------------
 

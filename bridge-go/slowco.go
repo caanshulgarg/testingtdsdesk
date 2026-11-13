@@ -179,11 +179,45 @@ func slowSaveLocked() {
 	}
 }
 
+// 2.5.16 (daystop2516.go; the owner's YES of 13-Nov-2026): a mark lifts by itself SlowRecheckHours (24) after it was
+// made: the company's entries are asked again and measured again, each request under its 2 s stop (a payroll entry 3 s)
+func slowRecheck() time.Duration {
+	return time.Duration(maxI(1, keepNum("SlowRecheckHours", 24))) * time.Hour
+}
+
+// under slowSt.mu: the marks a day old lifted (their log lines said after the lock is let go)
+func slowLiftLocked() []string {
+	var out []string
+	for k, m := range slowSt.marks {
+		t, err := time.Parse(time.RFC3339, m.Since)
+		if err != nil || nowFn().Sub(t) < slowRecheck() {
+			continue
+		}
+		delete(slowSt.marks, k)
+		if st := slowSt.cos[k]; st != nil {
+			st.stops, st.occ = nil, 0
+		}
+		out = append(out, m.Company)
+	}
+	if len(out) > 0 {
+		slowSaveLocked()
+	}
+	return out
+}
+
+func slowSayLifted(cos []string) {
+	for _, c := range cos {
+		writeLog("Recorder: " + c + ": the mark \"entry fetch stopped: over 2 s\" is a day old: lifted; its entries are asked of Tally again and measured again (each request still stopped at 2 s)")
+	}
+}
+
 // whether the company's entries are not asked of Tally (marked); a company of that name under another GUID is not
 func slowMarked(company, cguid string) bool {
 	slowSt.mu.Lock()
-	defer slowSt.mu.Unlock()
 	slowFresh()
+	lifted := slowLiftLocked()
+	defer slowSayLifted(lifted)
+	defer slowSt.mu.Unlock()
 	m := slowSt.marks[companyKey(company)]
 	if m == nil {
 		return false
@@ -340,7 +374,7 @@ func slowDecideLocked(now time.Time) []string {
 			if st.lastMs >= 0 {
 				last = fmt.Sprintf("last answered in %d ms", st.lastMs)
 			}
-			out = append(out, fmt.Sprintf("%s: entry fetch stopped: over 2 s (stopped %d times, %s). No entry of it is asked of Tally any more; its lines go up held (upload that day's Day Book to settle them). This lifts when a newer FinCom Bridge is installed",
+			out = append(out, fmt.Sprintf("%s: entry fetch stopped: over 2 s (stopped %d times, %s). No entry of it is asked of Tally for a day; its lines go up held meanwhile. This lifts by itself after 24 hours, or when a newer FinCom Bridge is installed",
 				st.name, st.over, last))
 		}
 	}

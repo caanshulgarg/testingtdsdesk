@@ -30,6 +30,7 @@ const (
 	paceObject  = "object"  // FinComVoucherObject, one entry
 	paceBatch   = "batch"   // FinComVoucherBatch (always heavy)
 	pacePayroll = "payroll" // the payroll's employees and entries (always heavy)
+	paceRetry   = "retry"   // any request of a day tried again after Tally was slow for it (daystop2516.go; always heavy)
 )
 
 func pullSmallIdleSec() int { return maxI(1, minI(keepNum("DayPullSmallIdleSec", 5), 60)) }
@@ -179,6 +180,9 @@ func pullFormOf(it pullItem) string {
 	pull.mu.Lock()
 	w := pull.work
 	pull.mu.Unlock()
+	if pullRetryOnce(it) {
+		return paceRetry
+	}
 	if w != nil && w.it.key() == it.key() {
 		return pullNextForm(w)
 	}

@@ -164,6 +164,9 @@ func TestR245NightOver2sStillStops(t *testing.T) {
 	c.mu.Lock()
 	prev := c.other
 	c.other = func(k string, b M) (int, M) {
+		if k == "period_day_stop" { // 2.5.16: a cloud without migration 197 (the period stops as before)
+			return 503, M{"ok": false, "notReady": true}
+		}
 		if k == "period_stop" {
 			stops = append(stops, b)
 			return 200, M{"ok": true}
@@ -335,6 +338,9 @@ func TestR245PullPayrollLimitOnlyPayroll(t *testing.T) {
 		c.mu.Lock()
 		prev := c.other
 		c.other = func(k string, b M) (int, M) {
+			if k == "period_day_stop" { // 2.5.16: a cloud without migration 197 (the period stops as before)
+				return 503, M{"ok": false, "notReady": true}
+			}
 			if k == "period_stop" {
 				stops = append(stops, b)
 				return 200, M{"ok": true}
@@ -372,6 +378,9 @@ func TestR245PullPayrollWindowThreshold(t *testing.T) {
 		c.mu.Lock()
 		prev := c.other
 		c.other = func(k string, b M) (int, M) {
+			if k == "period_day_stop" { // 2.5.16: a cloud without migration 197 (the period stops as before)
+				return 503, M{"ok": false, "notReady": true}
+			}
 			if k == "period_stop" {
 				stops = append(stops, b)
 				return 200, M{"ok": true}

@@ -440,11 +440,11 @@ func pullRangeStep(w *pullWork, port int) (handled, sent, more bool) {
 	case holdMs >= 2000:
 		// review 2 (L3): Tally's window held 2 s stops the company exactly as for one day's list (also when the range was
 		// stopped at 2 s, and while Tally finished it)
-		pullStopCompany(w, "window", fmt.Sprintf("Tally's window did not answer for %.1f s while %s were read", float64(holdMs)/1000, form))
+		pullStopDay(w, "window", fmt.Sprintf("Tally's window did not answer for %.1f s while %s were read", float64(holdMs)/1000, form))
 		return true, true, false
 	case unfinished:
 		// review 2 (M2): as the group read, Tally had not finished the range it was stopped on: the company's period stops
-		pullStopCompany(w, "over2s", fmt.Sprintf("the day lists of %s: Tally had not finished them %d s after the 2 s stop (or could not be watched)", form, int(pullAwaitBound(abandonWait()).Seconds())))
+		pullStopDay(w, "over2s", fmt.Sprintf("the day lists of %s: Tally had not finished them %d s after the 2 s stop (or could not be watched)", form, int(pullAwaitBound(abandonWait()).Seconds())))
 		return true, true, false
 	case errors.Is(err, errRecorderStop):
 		return busy("over the 2-second stop")

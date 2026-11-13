@@ -536,10 +536,10 @@ func pullBatchStep(w *pullWork, port int) (handled, sent, more bool) {
 		pullDrop(w)
 		return true, true, false
 	case holdMs >= limit:
-		pullStopCompany(w, "window", fmt.Sprintf("Tally's window did not answer for %.1f s while %d entries of the day were read (%s)", float64(holdMs)/1000, len(g), form))
+		pullStopDay(w, "window", fmt.Sprintf("Tally's window did not answer for %.1f s while %d entries of the day were read (%s)", float64(holdMs)/1000, len(g), form))
 		return true, true, false
 	case unfinished:
-		pullStopCompany(w, "over2s", fmt.Sprintf("a group of %d entries (%s): Tally had not finished it %d s after the 2 s stop (or could not be watched)", len(g), form, int(pullAwaitBound(abandonWait()).Seconds())))
+		pullStopDay(w, "over2s", fmt.Sprintf("a group of %d entries (%s): Tally had not finished it %d s after the 2 s stop (or could not be watched)", len(g), form, int(pullAwaitBound(abandonWait()).Seconds())))
 		return true, true, false
 	case errors.Is(err, errRecorderStop):
 		// the owner's approval of 29-Oct-2026, point 4: halve, then one by one (review R1-4: for the company's next days too)

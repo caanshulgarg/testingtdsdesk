@@ -2037,6 +2037,19 @@ async function booksFromFor(firm: string, body: any): Promise<Record<string, str
 let daysClaimMissing = 0;
 let heldFrontMissing = 0, heldHeadsMissing = 0;     // migration 158 (tally_held_front / tally_held_delete_by_heads) not applied
 let gapFrontMissing = 0;                             // migration 160 (tally_gap_front) not applied
+let dayRetryMissing = 0;                             // migration 197 (tally_period_retry_days / tally_period_day_stop) not applied
+// bridge 2.5.16 (migration 197): a book's days held for their 24 hours after Tally was too slow for them (yyyymmdd); none
+// when 197 is not applied (asked again after 10 minutes) or the read fails
+async function dayRetryHeld(book: string): Promise<Set<string>> {
+  const out = new Set<string>();
+  if (Date.now() - dayRetryMissing < 600000) return out;
+  try {
+    const { data, error } = await db.rpc("tally_period_retry_days", { p_book: book });
+    if (error) { if (missingFn(String(error.message || ""))) dayRetryMissing = Date.now(); return out; }
+    for (const d of Array.isArray(data) ? data : []) if (isDay(String(d))) out.add(String(d));
+  } catch { /* none held then */ }
+  return out;
+}
 let gapIdleMissing = 0;                              // migration 182 (tally_gap_front with p_idle) not applied
 // next-fix-gap-after-post (the owner, 13-Nov-2026: reads may go while people work, as long as nobody feels them): a light
 // read is handed out only when the beat shows the bridge's typing gate quiet and FinCom saw no typing for 5 s, or 60 s when
@@ -2113,6 +2126,9 @@ async function periodDaysFor(firm: string, body: any, stopped: boolean, max = 3,
       if (recorded && beatGuid && recorded.toLowerCase() !== beatGuid.toLowerCase()) continue;
       const guid = recorded || beatGuid;
       if (!guid) continue;     // the bridge asks only for the company it holds under that GUID
+      // bridge 2.5.16 (migration 197): the days held for their 24 hours are never handed out; the lists are asked for that
+      // many more days so the held ones never fill the answer
+      const held = await dayRetryHeld(book), more = held.size;
       // review 245 R12 / R15 (L4): at night every company's call says so (p_night: the pace for the status line), and it is
       // asked only for the days left of the answer, so every day it stamps as handed out is handed out
       // next-fast-entries: the pace said is the computer's own hours (night), not the answer's size (a fast bridge by day
@@ -2126,7 +2142,7 @@ async function periodDaysFor(firm: string, body: any, stopped: boolean, max = 3,
         for (const d of Array.isArray(hf) ? hf as any[] : []) {
           if (out.length >= max) break;
           const day = String(d?.day || "");
-          if (!isDay(day) || out.some((x) => x.company === company && x.day === day)) continue;
+          if (!isDay(day) || held.has(day) || out.some((x) => x.company === company && x.day === day)) continue;
           out.push({ company, company_guid: guid, day, fetch: true, types: CHECK_TYPES, ...chosenOf(d), ...(markCheck ? { check: true } : {}), kind: "check" });
         }
         if (out.length >= max) continue;
@@ -2150,18 +2166,19 @@ async function periodDaysFor(firm: string, body: any, stopped: boolean, max = 3,
         for (const d of Array.isArray(gf) ? gf as any[] : []) {
           if (out.length >= max) break;
           const day = String(d?.day || "");
-          if (!isDay(day) || out.some((x) => x.company === company && x.day === day)) continue;
+          if (!isDay(day) || held.has(day) || out.some((x) => x.company === company && x.day === day)) continue;
           out.push({ company, company_guid: guid, day, fetch: true, types: CHECK_TYPES, ...chosenOf(d), ...(markCheck ? { check: true } : {}), kind: "check" });
         }
         if (out.length >= max) continue;
       }
       const byClaim = !!claim && claim.shared.has(company) && Date.now() - daysClaimMissing >= 600000;
       const dArgs = byClaim ? { p_firm: firm, p_book: book, p_device: claim!.dev.id, p_bridge: claim!.bridge } : null;
-      let { data, error } = byClaim ? await db.rpc("tally_days_claim", { ...dArgs, p_kind: "period", p_max: max - out.length, p_night: night })
-        : await db.rpc("tally_period_next_paced", { p_book: book, p_max: max - out.length, p_night: night });
+      const pMax = Math.min(30, max - out.length + more);
+      let { data, error } = byClaim ? await db.rpc("tally_days_claim", { ...dArgs, p_kind: "period", p_max: pMax, p_night: night })
+        : await db.rpc("tally_period_next_paced", { p_book: book, p_max: pMax, p_night: night });
       if (byClaim && error && missingFn(String(error.message || ""))) {
         daysClaimMissing = Date.now();
-        ({ data, error } = await db.rpc("tally_period_next_paced", { p_book: book, p_max: max - out.length, p_night: night }));
+        ({ data, error } = await db.rpc("tally_period_next_paced", { p_book: book, p_max: pMax, p_night: night }));
       }
       if (error && missingFn(String(error.message || ""))) {
         // a database with an earlier copy of 98 (no tally_period_next_paced): as before
@@ -2176,7 +2193,7 @@ async function periodDaysFor(firm: string, body: any, stopped: boolean, max = 3,
       }
       for (const d of Array.isArray(data) ? data as any[] : []) {
         if (out.length >= max) break;
-        if (!isDay(String(d?.day || "")) || out.some((x) => x.company === company && x.day === String(d.day))) continue;
+        if (!isDay(String(d?.day || "")) || held.has(String(d.day)) || out.some((x) => x.company === company && x.day === String(d.day))) continue;
         // review 245 R1: "&", "<" and ">" pass (the bridge escapes the request); never a quote mark or a control character
         const types = (Array.isArray(d?.types) ? d.types : []).filter((t: unknown) => typeof t === "string" && t.length > 0 && t.length <= 60 && t === t.trim() && !/["\u0000-\u001f\u007f]/.test(t)).slice(0, 40);
         // 30-Oct-2026 (migration 133): the choice time travels with the day (the bridge's stop names it; without it a stop
@@ -2192,7 +2209,7 @@ async function periodDaysFor(firm: string, body: any, stopped: boolean, max = 3,
         // 30-Oct-2026 (migration 135, the owner's "Check for changes in Tally"): tally_check_next_open, 133's own rule except
         // that a "Bring books from Tally" stopped before the person's press no longer holds the check; a cloud without 135:
         // 133's tally_check_next as before (asked again after 10 minutes)
-        const cArgs = { p_book: book, p_max: Math.min(30, max - out.length + out.filter((x) => x.company === company).length) };
+        const cArgs = { p_book: book, p_max: Math.min(30, max - out.length + out.filter((x) => x.company === company).length + more) };
         let got: any = null;
         if (byClaim && Date.now() - daysClaimMissing >= 600000) {
           got = await db.rpc("tally_days_claim", { ...dArgs, p_kind: "check", p_max: cArgs.p_max, p_night: false });
@@ -2215,7 +2232,7 @@ async function periodDaysFor(firm: string, body: any, stopped: boolean, max = 3,
           for (const d of rows) {
             if (out.length >= max) break;
             const day = String(d?.day || "");
-            if (out.some((x) => x.company === company && x.day === day)) continue;
+            if (held.has(day) || out.some((x) => x.company === company && x.day === day)) continue;
             // next-fast-entries (review 7): to a fast bridge a check day says so (its speed counts the period's own days only)
             out.push({ company, company_guid: guid, day, fetch: true, types: CHECK_TYPES, ...chosenOf(d), ...(markCheck ? { check: true } : {}), kind: fills.has(day) ? "fill" : "check" });
           }
@@ -2268,6 +2285,8 @@ const PICK_WORDS: Record<string, string> = {
   otherCompany: "the company open in Tally here is another copy than the book's (its GUID differs)",
   stopped: "reading older entries of this company was stopped because Tally was too slow; choose it again in FinCom",
   queued: "other days are being read first, one day at a time; this follows by itself",
+  // bridge 2.5.16 (migration 197)
+  dayRetry: "Tally was slow for this day; FinCom Bridge tries it again by itself after a day (no action needed)",
 };
 const PICK_CODES = Object.keys(PICK_WORDS);
 const ISO_T = /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?(Z|[+-]\d\d:\d\d)$/;
@@ -2399,6 +2418,22 @@ async function periodStop(book: string, body: any) {
   if (ce && !missingFn(String(ce.message || ""))) fail("check_stop", ce);
   console.log("tally-ingest period_stop: older entries stopped by the bridge", book, day, why);
   return reply(200, { ok: !!(data as any)?.ok });
+}
+// bridge 2.5.16 (migration 197; the owner's YES of 13-Nov-2026): Tally was too slow for one day (its list or an entry over
+// the 2 s stop, or Tally's window held 2 s): only that day stops, for 24 hours; the other days go on; on the 3rd day it
+// fails the day is marked to upload (its words). Without 197: 503 notReady (the bridge then stops the period as before)
+async function periodDayStop(book: string, body: any) {
+  const day = String(body?.day || "");
+  if (!isDay(day)) return reply(400, { ok: false, error: "not a day" });
+  const why = ["over2s", "window"].includes(String(body?.why)) ? String(body.why) : "other";
+  const { data, error } = await db.rpc("tally_period_day_stop", { p_book: book, p_day: iso(day), p_why: why });
+  if (error) {
+    if (missingFn(String(error.message || ""))) return reply(503, { ok: false, notReady: true, error: "The cloud does not hold a slow day for later yet (migration 197)." });
+    throw new Error(String(error.message || ""));
+  }
+  const d = (data || {}) as any;
+  console.log("tally-ingest period_day_stop: one day held for later", book, day, why, d.fails);
+  return reply(200, { ok: d.ok === true, fails: Number(d.fails) || 0, upload: d.upload === true, retryAt: String(d.retryAt || ""), ...(d.upload === true ? { words: String(d.words || "").slice(0, 300) } : {}) });
 }
 // the entries FinCom lacked, as FinComVoucherObject's answers kept them (the bridge's strip): read as a Day Book's entries
 // (parse.js), never a salary payment's bank details, each dated the day (another date: refused whole, nothing stored), each
@@ -5426,7 +5461,7 @@ Deno.serve(sentry.wrap(async (req) => {
         { const elsewhere = await otherPlace(firm, book, dev, body); if (elsewhere) return reply(409, elsewhere); }
         return await applyEmployees(book, body);
       }
-      case "period_heads": case "period_entries": case "ledger_progress": case "period_stop": {
+      case "period_heads": case "period_entries": case "ledger_progress": case "period_stop": case "period_day_stop": {
         // FinCom Bridge 2.4.5 (migration 98): older entries for the period the person chose; the ledger read's progress
         if (!periodAllowed(String(dev.id))) return reply(429, { ok: false, error: "This computer has sent too many older-entries calls in the last minute; try again in a minute." });
         const book = await bookFor(firm, String(body.company || ""));
@@ -5440,6 +5475,7 @@ Deno.serve(sentry.wrap(async (req) => {
         if (recorded && sent.toLowerCase() !== recorded.toLowerCase()) return reply(409, { ok: false, otherGuid: true, error: "This Tally company's GUID is not the one FinCom keeps for this client's books." });
         if (body.kind === "ledger_progress") return await ledgerProgress(book, dev, body);
         if (body.kind === "period_stop") return await periodStop(book, body);
+        if (body.kind === "period_day_stop") return await periodDayStop(book, body);
         if (body.kind === "period_heads") return await periodHeads(book, body, String(dev.id), bridgeOf(dev, body, false).id);   // 158: only the lines of this computer and bridge
         const stored = await periodEntries(book, body);
         // next-book-start: after the entries are stored, the day just sent counted when they were taken
