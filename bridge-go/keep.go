@@ -231,6 +231,9 @@ func keepList(tc *TC, company string, port int, from, to string, after int64) ([
 	if err != nil {
 		return nil, err
 	}
+	if !wholeEnvelope(raw) || reTallyLineErr.MatchString(raw) { // 2.5.15 item 2: never a month of no entries from a cut answer
+		return nil, errors.New(cutAnswerWords)
+	}
 	var out []kentry
 	for _, m := range reVchBlock.FindAllString(raw, -1) {
 		g := strings.TrimSpace(tagRaw(m, "GUID"))

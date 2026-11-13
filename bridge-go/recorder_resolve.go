@@ -141,7 +141,7 @@ func fetchVoucherByNumber(tc *TC, company string, port int, date, typ, no string
 	if err != nil {
 		return nil, err
 	}
-	if !strings.Contains(raw, "<ENVELOPE") {
+	if !wholeEnvelope(raw) { // 2.5.15 item 2: a cut answer is not "not found"
 		return nil, errors.New("Tally's answer could not be read: " + cut(flat(raw), 120))
 	}
 	var out []string

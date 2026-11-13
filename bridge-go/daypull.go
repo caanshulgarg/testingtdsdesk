@@ -810,7 +810,8 @@ func pullHeadsStep(w *pullWork, port int) (bool, bool) {
 	}
 	// review of 0de692f49 (2), the per-day path too: an answer that is a Tally error (LINEERROR) is a failure, never a day
 	// of no entries (the same handling as an answer that cannot be read)
-	if !strings.Contains(raw, "<ENVELOPE") || reTallyLineErr.MatchString(raw) {
+	// 2.5.15 item 2: and an answer cut short (its envelope not closed) is a day not read, never a day of fewer or no entries
+	if !wholeEnvelope(raw) || reTallyLineErr.MatchString(raw) {
 		w.fails++
 		liveSayOnce("pull|unread|"+it.key(), "Older entries of "+it.Company+": Tally's answer for "+liveDay(it.Day)+" could not be read; asked again later")
 		if w.fails >= 5 {

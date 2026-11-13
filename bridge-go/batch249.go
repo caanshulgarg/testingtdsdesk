@@ -340,6 +340,9 @@ func fetchVoucherBatch(tc *TC, company string, port int, day string, mids []stri
 	if !strings.Contains(raw, "<ENVELOPE") {
 		return nil, nil, errors.New("Tally's answer could not be read: " + cut(flat(raw), 120))
 	}
+	if !wholeEnvelope(raw) { // 2.5.15 item 2
+		return nil, nil, errors.New(cutAnswerWords)
+	}
 	asked := map[string]bool{}
 	for _, m := range mids {
 		asked[m] = true

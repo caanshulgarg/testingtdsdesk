@@ -1780,6 +1780,9 @@ func liveSourceB(company string, port int) (int, error) {
 	if !strings.Contains(raw, "<ENVELOPE") {
 		return 0, errors.New("Tally's answer could not be read: " + cut(flat(raw), 120))
 	}
+	if !wholeEnvelope(raw) { // 2.5.15 item 2: a cut list is not "no changes" (the counter would move past them)
+		return 0, errors.New(cutAnswerWords)
+	}
 	type ent struct {
 		guid, date string
 		mid, aid   int64
@@ -1917,6 +1920,15 @@ func fastNotFound(mid string) string {
 	return "<ERRORMSG>Could not find Voucher:ID:" + mid + "!</ERRORMSG>"
 }
 
+// 2.5.15 item 2 (the owner's approval of 13-Nov-2026): an answer of Tally is a whole one only when its envelope is opened
+// and closed. An answer cut short (the connection dropped, Tally stopped part-way) is a read that failed, to be read
+// again: never a day, a list or an entry with fewer (or no) entries in it
+func wholeEnvelope(raw string) bool {
+	return strings.Contains(raw, "<ENVELOPE") && strings.Contains(raw, "</ENVELOPE>")
+}
+
+const cutAnswerWords = "Tally's answer was cut short (its envelope not closed); read again, never taken as no entries"
+
 // 2.3.4 (re-review 2 L-d; the owner's answer of 08-Oct-2026: "Delete fix: yes. The leading-zero refusal and the company
 // check close real ways a delete could be proven wrongly"): a delete whose MasterID Tally did not find is proven gone only
 // when Tally, asked a second time, gives exactly the same "Could not find Voucher" answer, with the company open in this
@@ -2045,6 +2057,9 @@ func fetchVouchersByMasterListed(tc *TC, company string, port int, date string, 
 	if !strings.Contains(raw, "<ENVELOPE") {
 		return nil, errors.New("Tally's answer could not be read: " + cut(flat(raw), 120))
 	}
+	if !wholeEnvelope(raw) { // 2.5.15 item 2: never an entry taken as gone from a cut answer
+		return nil, errors.New(cutAnswerWords)
+	}
 	out := map[string]string{}
 	blocks := reVchBlock.FindAllString(raw, -1)
 	if len(blocks) == 0 && (strings.Contains(raw, "<MASTERID") || strings.Contains(raw, "<ERRORMSG") || strings.Contains(raw, "<LINEERROR")) {
@@ -2067,6 +2082,11 @@ func fetchVouchersByMasterListed(tc *TC, company string, port int, date string, 
 		if id := tagNum(v, "MASTERID"); id != "" && v != "" {
 			out[id] = v
 		}
+	}
+	// 2.5.15 item 2: only Tally's exact "Could not find Voucher" (above) says an entry is gone; a whole answer that does not
+	// hold the entry asked (no voucher, or another one) is an answer that could not be read, asked again
+	if out[mids[0]] == "" {
+		return nil, errors.New("Tally's answer did not hold the entry asked (MasterID " + mids[0] + "); read again, never taken as gone")
 	}
 	return out, nil
 }

@@ -568,7 +568,15 @@ func pushCloudCompany(company, dir string, budget time.Duration) error {
 		size := 0
 		for i < len(q) && len(batch) < 31 {
 			d := q[i]
-			t := dropBankDetails(readText(filepath.Join(dir, "days", d+".xml"))) // 2.4.4: a day file an older bridge wrote
+			// 2.5.15 item 2: a day file that is there but cannot be read now (another program holding it, a disk error) is
+			// not an empty day: it is not sent now and stays queued, sent at the next turn (never as empty:true)
+			raw, rerr := os.ReadFile(filepath.Join(dir, "days", d+".xml"))
+			if rerr != nil && !os.IsNotExist(rerr) {
+				writeLog("Cloud: " + company + " " + d + ": its day file could not be read (" + rerr.Error() + "); not sent now, never as an empty day")
+				i++
+				continue
+			}
+			t := dropBankDetails(strings.TrimPrefix(string(raw), "\ufeff")) // 2.4.4: a day file an older bridge wrote
 			var one M
 			var n int
 			// packed here (gzip); a day the cloud could not open that way is sent again as plain text
@@ -596,6 +604,9 @@ func pushCloudCompany(company, dir string, budget time.Duration) error {
 			batch, bdays = append(batch, one), append(bdays, d)
 			size += n
 			i++
+		}
+		if len(batch) == 0 {
+			break // 2.5.15: only days whose files could not be read were left (sent at the next turn)
 		}
 		r := invokeCloud(M{"kind": "days", "company": company, "days": batch}, 180)
 		if r.code == 409 {

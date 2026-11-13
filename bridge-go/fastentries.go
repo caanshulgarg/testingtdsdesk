@@ -851,7 +851,7 @@ func fastSkip(e *fastEng, single map[string]bool) {
 // a group's answer: exactly the entries asked, each once, each dated as its head and with its head's GUID; each kept as
 // FinComVoucherObject's answer would be (batchEntry), or left for one by one
 func fastParse(company, raw string, g []string, heads map[string]pullHead, from, to string) (map[string]string, map[string]bool, error) {
-	if !strings.Contains(raw, "<ENVELOPE") {
+	if !wholeEnvelope(raw) { // 2.5.15 item 2: a cut answer is not used (its entries read one by one)
 		return nil, nil, batchInexactError{"Tally's answer could not be read: " + cut(flat(raw), 120)}
 	}
 	asked := map[string]bool{}
@@ -944,6 +944,8 @@ func tallyCollectionWhy(raw string) string {
 	switch {
 	case !strings.Contains(raw, "<ENVELOPE"):
 		return "Tally's answer could not be read"
+	case !wholeEnvelope(raw): // 2.5.15 item 2
+		return cutAnswerWords
 	case reTallyLineErr.MatchString(raw):
 		return "Tally answered with an error: " + cut(flat(group(`(?is)<LINEERROR(?:\s[^>]*)?>(.*?)</LINEERROR>`, raw, 1)), 160)
 	case !reTallyColl.MatchString(raw):
