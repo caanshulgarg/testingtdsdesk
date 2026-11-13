@@ -89,8 +89,8 @@ def item1(br):
                 if f.endswith((".js", ".jsx")): src += open(os.path.join(root, f), encoding="utf8").read() + "\n"
     msgs = sorted(set(m for m in re.findall(r'toast\("([^"\\]*\bfirst\b[^"\\]*)"\)', src) if not re.search(r"sign(ed)? in", m, re.I)))
     ok(len(msgs) >= 20, "%d plain refusals ending in 'first' found in the source (sign-in ones left out)" % len(msgs))
-    # on a client's page (Bank, with no statement): the ones that lead to another page each have its button
-    E("() => goClient('bank')"); settle(pg)
+    # on a client's page (its Overview): the ones that lead to another page each have its button
+    E("() => goClient('dash')"); settle(pg)
     GO = {"Open a statement first.": ("Open Bank", "bank"), "Open a bank statement first.": ("Open Bank", "bank"),
           "Choose the Tally ledger for this bank account first.": ("Open Bank settings", "bankset"), "Set the Tally ledger for this bank account first.": ("Open Bank settings", "bankset"),
           "Read the day book first (From Tally).": ("Open From Tally", "import"), "Open the client's books first (From Tally).": ("Open From Tally", "import"),
@@ -98,13 +98,20 @@ def item1(br):
           "Add a client first, so uploads have somewhere to go.": ("Add client", "clients")}
     for m, (label, where) in GO.items():
         ok(m in msgs or m == "Open a bank statement first.", "   in the source: %r" % m)
-        E("() => goClient('bank')"); pg.wait_for_timeout(250)
+        E("() => goClient('dash')"); pg.wait_for_timeout(250)
         E("(m) => toast(m)", m); t = E(TOAST)
         ok(bool(t) and t["acts"] == [label], "   %r has the button %r (%s)" % (m, label, t and t["acts"]))
         if t and t["acts"]:
             pg.click("#toast [data-toast-act]"); settle(pg, 500)
             at = E("() => S.view === 'home' ? S.homeTab : S.tab === 'books' ? S.booksTab : S.tab")
             ok(at == where and E(TOAST) is None, "      and it opens %s (now %s), the message gone" % (where, at))
+    # already on Bank (review): never "Open Bank" there; the statement's upload is shown
+    E("() => goClient('bank')"); settle(pg); E("() => toast('Open a statement first.')"); t = E(TOAST)
+    ok(bool(t) and "Open Bank" not in t["acts"] and t["acts"] in ([], ["Show me"]), "on Bank itself: no 'Open Bank' (%s)" % (t and t["acts"]))
+    if t and t["acts"] == ["Show me"]:
+        pg.click("#toast [data-toast-act]"); pg.wait_for_timeout(200)
+        ok(E("() => !!document.querySelector('[data-show-me]') && /upload|statement/i.test(document.querySelector('[data-show-me]').outerHTML)"), "   Show me marks the statement's upload")
+    else: ok(False, "   Show me for the statement's upload on Bank (%s)" % t)
     # a step on the same page: Show me, the box focused; never a button that leads nowhere
     E("() => navHome('clients')"); settle(pg); pg.click("[data-add-client]"); pg.wait_for_selector("#ncName"); pg.evaluate("() => document.activeElement && document.activeElement.blur()")
     E("() => toast('Type the narration first.')"); t = E(TOAST)
@@ -130,6 +137,18 @@ def item1(br):
     E("() => toast('Could not read the file.')"); pg.wait_for_timeout(300); E("() => toast('Client saved.')"); t = E(TOAST)
     ok(bool(t) and t["words"] == "Client saved.", "   the next message takes its place")
     pg.wait_for_timeout(6000); ok(E(TOAST) is None, "a plain message still leaves by itself")
+    # only a real failure stays (review): not a word somewhere in it, not a hint the caller says fades
+    pg.mouse.move(700, 300)   # (off the message: the pointer over it keeps any message, as before)
+    E("() => toast('No error found in the books.')"); t = E(TOAST); pg.wait_for_timeout(6500)
+    ok(bool(t) and "Close" not in t["acts"] and E(TOAST) is None, "'No error found…' fades as before (%s)" % (t and t["acts"]))
+    src2 = open(os.path.join(HERE, "..", "app", "src", "parts", "TallySimple.jsx"), encoding="utf8").read()
+    ok('toast("Could not copy; type " + a.free + ".", {sticky: false})' in src2, "the copy fallback is marked as one that fades")
+    E("() => toast('Could not copy; type 9000.', {sticky: false})"); t = E(TOAST); pg.wait_for_timeout(6500)
+    ok(bool(t) and "Close" not in t["acts"] and E(TOAST) is None, "'Could not copy; type 9000.' fades as before")
+    E("() => { window.__u = 0; toast('Failed to post 3 bills.', {actions: [{label: 'Try again', run() { window.__u++; }}]}); }"); t = E(TOAST)
+    ok(bool(t) and t["acts"] == ["Close", "Try again"], "a failure with its own button has Close too (%s)" % (t and t["acts"]))
+    pg.keyboard.press("Escape"); pg.wait_for_timeout(400)
+    ok(E(TOAST) is None, "Esc closes a message that stays")
     ctx.close()
 
 def item2(br):
@@ -161,8 +180,13 @@ def item3(br):
     # Add client: the question, this month by default
     E("() => navHome('clients')"); settle(pg); pg.click("[data-add-client]"); pg.wait_for_selector("#ncName")
     lab = pg.inner_text("label:has([data-add-from])")
-    ok("Track returns from which month?" in lab and pg.input_value("[data-add-from]") == TODAY[:7], "Add client asks 'Track returns from which month?', this month chosen (%s)" % pg.input_value("[data-add-from]"))
+    ok("Track returns and payments from which month?" in lab and "payments that fell due before it are not shown" in lab and pg.input_value("[data-add-from]") == TODAY[:7], "Add client asks 'Track returns and payments from which month?', this month chosen, and says payments too (%s)" % pg.input_value("[data-add-from]"))
     pg.fill("#ncName", "ZZ Made Up New Client")
+    # a month still to come is refused in plain words
+    E("() => document.getElementById('ncFrom').removeAttribute('max')"); pg.fill("#ncFrom", "2027-02"); pg.click("text=Add and open"); pg.wait_for_timeout(300)
+    fe = pg.inner_text("[data-add-err=from]") if pg.locator("[data-add-err=from]").count() else ""
+    ok(fe == "Choose this month or an earlier one." and E("() => !Object.values(S.companies).some((c) => c.name === 'ZZ Made Up New Client')"), "a month still to come is refused: %r, nothing added" % fe)
+    pg.fill("#ncFrom", TODAY[:7])
     pg.click("text=Add and open"); settle(pg, 1500)
     new = E("() => { const c = Object.values(S.companies).find((x) => x.name === 'ZZ Made Up New Client'); return c ? {id: c.id, from: c.trackFrom || '', open: S.coId === c.id} : null; }")
     ok(bool(new) and new["from"] == "202611" and new["open"], "the client is added and open, tracked from 202611 (%s)" % new)
@@ -184,7 +208,21 @@ def item3(br):
     E("() => navHome('compliance')"); settle(pg, 1500); pg.select_option("[data-due-client]", cid); pg.wait_for_timeout(400)
     n0 = int(pg.inner_text("[data-due-chip=overdue] .sbar-n"))
     ok(pg.locator("[data-track-open]").count() == 1 and n0 == len(over0), "Compliance: 'Start tracking from…' under the figures; %d overdue of the older client" % n0)
-    pg.click("[data-track-open]"); pg.select_option("[data-track-client]", cid); pg.fill("[data-track-month]", "2026-10"); pg.click("[data-track-save]"); settle(pg, 1500); pg.select_option("[data-due-client]", cid); pg.wait_for_timeout(400)
+    pg.click("[data-track-open]"); pg.wait_for_timeout(200)
+    ok(E("() => document.activeElement && document.activeElement.hasAttribute('data-track-client')") and "Track returns and payments from which month?" in pg.inner_text("[data-track-from]"), "the panel opens with the cursor in it, the same question")
+    E("() => document.activeElement.blur()"); pg.keyboard.press("Escape"); pg.wait_for_timeout(300)
+    ok(pg.locator("[data-track-from]").count() == 0 and E("() => document.activeElement && document.activeElement.hasAttribute('data-track-open')"), "Esc closes it (wherever the cursor was) and the cursor is back on its button")
+    pg.click("[data-track-open]"); pg.select_option("[data-track-client]", cid)
+    E("() => document.querySelector('[data-track-month]').removeAttribute('max')"); pg.fill("[data-track-month]", "2027-01"); pg.click("[data-track-save]"); pg.wait_for_timeout(400)
+    te = pg.inner_text("[data-track-err]") if pg.locator("[data-track-err]").count() else ""
+    ok(te == "Choose this month or an earlier one." and not E("(id) => S.companies[id].trackFrom", cid), "a month still to come is refused there too (%r)" % te)
+    # not saved: it says so, nothing changes, no "tracked from"
+    E("() => { window.__put = Store.put; Store.put = function (p) { if (/^companies\\/[^/]+$/.test(p)) { Store.failed = true; return; } return window.__put.apply(this, arguments); }; }")
+    pg.fill("[data-track-month]", "2026-10"); pg.click("[data-track-save]"); pg.wait_for_timeout(600)
+    te = pg.inner_text("[data-track-err]") if pg.locator("[data-track-err]").count() else ""; t = E(TOAST)
+    ok(te.startswith("Not saved") and not E("(id) => S.companies[id].trackFrom", cid) and not (t and "tracked from" in t["words"]), "a save that fails: 'Not saved…', nothing changed, never 'tracked from' (%r)" % te)
+    E("() => { Store.put = window.__put; Store.failed = false; }")
+    pg.fill("[data-track-month]", "2026-10"); pg.click("[data-track-save]"); settle(pg, 1500); pg.select_option("[data-due-client]", cid); pg.wait_for_timeout(400)
     n1 = int(pg.inner_text("[data-due-chip=overdue] .sbar-n")); co = E("(id) => S.companies[id].trackFrom", cid); t = E(TOAST)
     left = [x for x in E(DUE) if x["cid"] == cid and x["st"] == "overdue"]
     ok(co == "202610" and n1 < n0 and all(x["pm"] >= "2026-10" for x in left) and n1 == len(left), "saved (202610): overdue %d -> %d, all due from 1-Oct-2026 (%s); it says so: %s" % (n0, n1, [(x["what"], x["per"]) for x in left][:3], t and t["words"]))
@@ -196,6 +234,8 @@ def item3(br):
     ok(pg.input_value("[data-track-month]") == "2026-10" and pg.locator("[data-track-clear]").count() == 1, "opened again: the month kept, and 'Track every period'")
     pg.click("[data-track-clear]"); settle(pg, 1500); pg.select_option("[data-due-client]", cid); pg.wait_for_timeout(400)
     ok(int(pg.inner_text("[data-due-chip=overdue] .sbar-n")) == n0, "Track every period: the %d overdue are back" % n0)
+    tc = open(os.path.join(HERE, "..", "app", "src", "parts", "TallyCompanies.jsx"), encoding="utf8").read()
+    ok("co.trackFrom = String(DueList.today()).slice(0, 7).replace(\"-\", \"\")" in tc, "a client added from the Tally page is tracked from this month too")
     ctx.close()
 
 def item4(br):
@@ -214,6 +254,9 @@ def item4(br):
             ok(st["view"] == "home" and st["tab"] == "clients" and st["sort"] == {"k": col, "dir": "desc"} and "ZZ Alpha" in first, "%s (two clients have some): the Clients list, the most first (%s | %s)" % (label, st["sort"], first[:40].replace("\n", " ")))
         else:
             ok(st["view"] == "company" and st["co"].startswith("ZZ "), "%s (one client has some): that client is opened (%s, %s)" % (label, st["co"], st["tab"]))
+    E("() => { S.listSort = Object.assign({}, S.listSort, {clients: {k: 'name', dir: 'asc'}}); navHome('today'); }"); settle(pg, 400)
+    pg.locator(".today .metrics button.metric", has_text="To review").click(); settle(pg, 700)
+    ok(E("() => S.homeTab === 'clients' && JSON.stringify(S.listSort.clients)") == '{"k":"name","dir":"asc"}', "an order the person chose on Clients is kept")
     E("() => navHome('today')"); settle(pg, 400); pg.locator(".today .metrics button.metric", has_text="To read").click(); settle(pg, 600)
     ok(E("() => S.view === 'home' && S.homeTab === 'inbox'"), "To read opens the Inbox, as before")
     ctx.close()
@@ -233,15 +276,16 @@ def tally_scene(pg, which):
         d = T.dev(8, PC, "made-up-b", tally="open", opened=(KESTREL,), version="2.5.4", rec=(KESTREL,), beat={"bridgePort": 9150, "windowsUser": UB, "tallyPort": 9070},
                   ports=[{"port": 9070, "ok": True, "skipped": False, "n": 1, "error": "", "reason": "open"}])
         d["info"]["bridges"]["go-8"]["tallyPort"] = 9070; return d
+    ver = "2.5.3" if which == "older" else "2.5.4"
     def adev(ports, opened=()):
-        return T.dev(7, PC, "made-up-a", tally="open", opened=opened, version="2.5.4", rec=opened, beat={"bridgePort": 9101, "windowsUser": UA, "tallyWhy": "", "tallyConnectSay": ""}, ports=ports)
+        return T.dev(7, PC, "made-up-a", tally="open", opened=opened, version=ver, rec=opened, beat={"bridgePort": 9101, "windowsUser": UA, "tallyWhy": "", "tallyConnectSay": ""}, ports=ports)
     cos = [{"company": KESTREL, "client_id": None, "device_id": "d0000000-0000-4000-8000-000000000008", "gstin": "", "last_seen": "ago:0.5"}]
     up = {"port": 9041, "ok": True, "skipped": False, "n": 0, "error": "", "reason": "open"}
     if which == "step1": devs, c, pings = [adev([]), bdev()], cos, {"9150": TS.ping(9150, False, UB, version="2.5.4")}
     else:
         dA = adev([up], opened=(ORBIT_CO,)); devs = [dA, bdev()]
         c = cos + [{"company": ORBIT_CO, "client_id": "NAME:" + ORBIT, "device_id": dA["id"], "gstin": "", "last_seen": "ago:0.5"}]
-        pings = {"9101": TS.ping(9101, True, UA, version="2.5.4", bridgeId="go-7"), "9150": TS.ping(9150, False, UB, version="2.5.4")}
+        pings = {"9101": TS.ping(9101, True, UA, version=ver, bridgeId="go-7"), "9150": TS.ping(9150, False, UB, version="2.5.4")}
     ids = E(T.SETUP, [devs, c, [], "owner", [ORBIT, ACME], True, {}])
     E("() => { window.__linksApi = false; }"); E(TS.EXTRA, [[], [], [], {}, []]); E(TS.PINGS, pings); E(TS.FORGET)
     E("() => { try { localStorage.removeItem('tdsdesk:bridge'); } catch (e) {} if (window.__bridge0) Object.assign(Bridge, window.__bridge0); Bridge.setCfg({key: '', bridgeId: '', url: 'http://127.0.0.1:9100'}); }")
@@ -291,6 +335,13 @@ def item5(br):
     ok(bool(cells) and not ("Up to date" in cells["m"] and re.search(r"\b0 ledgers", cells["m"])), "Masters: never 'Up to date' over 0 ledgers (%s)" % (cells and cells["m"]))
     ok(bool(cells) and not (cells["last"] == "Never" and re.search(r"Up to|Up to date|in FinCom", cells["e"])), "Last entry: never 'Never' beside entries in FinCom (%s | %s)" % (cells and cells["e"], cells and cells["last"]))
     # the two cells' own rules, with what FinCom holds given
+    # an older bridge running (review): "Download it to update" has its Download right there, and the big one shows
+    tally_scene(pg, "older"); pg.click("#app [data-tsm-steps-link]"); pg.wait_for_timeout(700)
+    s1 = pg.inner_text("#app [data-tsm-guide] [data-tsm-step='1']") if n("#app [data-tsm-guide] [data-tsm-step='1']") else ""
+    ok("Download it to update" in s1 and n("#app [data-tsm-guide] [data-tsm-step='1'] a[download]") == 1 and vis("#app [data-tpg-download]"), "an older bridge (2.5.3, 2.5.4 ready): step 1 has a Download, and the page's Download shows (%s)" % s1.replace("\n", " ")[:120])
+    ts = open(os.path.join(HERE, "..", "app", "src", "parts", "TallySimple.jsx"), encoding="utf8").read()
+    ok('now.hook === "checking") btn = download' in ts and "in step 1 above" not in src, "step 1 keeps a Download while FinCom is still looking; no 'in step 1 above'")
+    tally_scene(pg, "connected")
     h = E("(row) => { const e = document.querySelector(row + ' .tpt-st'); return e ? Math.round(e.getBoundingClientRect().height) : 0; }", row)
     ok(0 < h <= 110, "the State cell is short (%d px high)" % h)
     ctx.close()

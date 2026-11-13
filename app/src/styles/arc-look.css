@@ -24,10 +24,10 @@ button[data-arc="button"].small { min-height: var(--control-height-sm); padding-
 button[data-arc="button"]:not(.small) { min-height: var(--control-height-md); padding-inline: 14px; font-size: 14px; }
 
 /* ---------- text boxes and lists (Arc's input look; native boxes kept for the keyboard and the old code) ---------- */
-input[type=text], input[type=password], input[type=number], input[type=email], input[type=search], input[type=date], select, textarea {
+input[type=text], input[type=password], input[type=number], input[type=email], input[type=search], input[type=date], input[type=month], select, textarea {
   border-color: var(--border-strong); border-radius: var(--radius-control); background-color: var(--surface); color: var(--foreground);
   transition: border-color var(--duration-fast) var(--ease-standard); }
-input[type=text]:focus, input[type=password]:focus, input[type=number]:focus, input[type=email]:focus, input[type=search]:focus, input[type=date]:focus, select:focus, textarea:focus {
+input[type=text]:focus, input[type=password]:focus, input[type=number]:focus, input[type=email]:focus, input[type=search]:focus, input[type=date]:focus, input[type=month]:focus, select:focus, textarea:focus {
   border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 16%, transparent); }
 input[data-arc="input"] { min-height: 0; padding: 6px 8px; font-size: inherit; }
 select { appearance: none; -webkit-appearance: none; padding-right: 28px; cursor: pointer;
