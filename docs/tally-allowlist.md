@@ -46,7 +46,7 @@ The owner's approval of 2026-10-08 (the 13 fields above, in the entry request): 
 
 (re-measured on 2026-11-13 for 2.5.15: no request was measured again and none needed it: no request added and no request shape changed, every row's shape is 2.5.14's (TestAllowListUnchanged); only the FinComStockInHand row's version word (unchanged in 2.5.15) and the table hash with it (14c1533dab71...); allowed for 2.5.15 by the owner's standing decision of 2026-10-06)
 
-(re-measured on 2026-11-11 for 2.5.14: no request was measured again and none needed it: no request added and no request shape changed, every row's shape is 2.5.13's (TestAllowListUnchanged); only the FinComStockInHand row's version word (unchanged in 2.5.14) and the table hash with it (be03b5caced7...); 2.5.14 allowed by the owner's standing decision of 2026-10-06)
+(re-measured on 2026-11-11 for 2.5.14: no request was measured again and none needed it: no request added and no request shape changed, every row's shape is 2.5.13's (TestAllowListUnchanged); only the FinComStockInHand row's version word (unchanged in 2.5.14) and the table hash with it (be03b5caced7...); allowed for 2.5.14 by the owner's standing decision of 2026-10-06)
 
 (re-measured on 2026-11-10 for 2.5.13: FinComLedgers dated a later year than the company's own books' first year (FinCom's first day of the book when Tally gives no BOOKSFROM, else, with no first day known anywhere, the first day of the current financial year, that round's openings not sent): the request's bytes are 2.5.12's but for the date; 2.5.13 allowed by the owner's decision of 2026-11-10 (same request, dates only; evidence g250 run 41016133667))
 
