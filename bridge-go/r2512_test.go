@@ -294,7 +294,7 @@ func TestR2512Version(t *testing.T) {
 			t.Fatal(c)
 		}
 	}
-	if BridgeVersion != "2.5.14" { // 2.5.14 (r2514_test.go); 2.5.13 (r2513_test.go)
+	if BridgeVersion != "2.5.15" { // 2.5.15 (r2515_test.go); 2.5.14 (r2514_test.go); 2.5.13 (r2513_test.go)
 		t.Fatalf("version %s", BridgeVersion)
 	}
 	if _, err := os.Stat("../docs/bridge-2.5.12-test-sheet.txt"); err != nil {

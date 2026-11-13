@@ -29,7 +29,7 @@ const (
 )
 
 func TestR2514Version(t *testing.T) {
-	if BridgeVersion != "2.5.14" || !newerVersion("2.5.14", "2.5.13") || newerVersion("2.5.13", "2.5.14") {
+	if BridgeVersion != "2.5.15" || !newerVersion("2.5.14", "2.5.13") || newerVersion("2.5.13", "2.5.14") { // 2.5.15 (r2515_test.go)
 		t.Fatalf("version %s", BridgeVersion)
 	}
 	if _, err := os.Stat("../docs/bridge-2.5.14-test-sheet.txt"); err != nil {

@@ -199,7 +199,7 @@ func TestR2513NoReReadLoop(t *testing.T) {
 
 // the version
 func TestR2513Version(t *testing.T) {
-	if BridgeVersion != "2.5.14" || !newerVersion("2.5.13", "2.5.12") || newerVersion("2.5.12", "2.5.13") {
+	if BridgeVersion != "2.5.15" || !newerVersion("2.5.13", "2.5.12") || newerVersion("2.5.12", "2.5.13") {
 		t.Fatalf("version %s", BridgeVersion)
 	}
 	if _, err := os.Stat("../docs/bridge-2.5.13-test-sheet.txt"); err != nil {
