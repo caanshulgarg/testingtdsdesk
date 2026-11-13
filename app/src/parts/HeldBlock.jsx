@@ -33,6 +33,9 @@ function heldStatus() {
 }
 Rec.heldReload = () => { HS.at = 1; render(); };
 const bookOf = (cid) => (HS.books || []).find((b) => b && b.client === cid) || null;
+// migration 196 (the owner, 13-Nov-2026: no entry is ever held): the client's entries being brought from Tally with a retry
+// scheduled (tally_held_status.fetching: its day check queued, its candidate search going, or its computer asking it)
+export function bringingOf(cid) { if (!cid) return 0; heldStatus(); const b = bookOf(cid); return (b && Number(b.fetching)) || 0; }
 // a renumbering item is settled once every alert of its company is checked since it (136)
 Rec.renOk = (g) => { const b = g && g.cid && bookOf(g.cid), rn = (b && b.renumber) || []; return rn.length > 0 && rn.every((a) => a.checked === true); };
 
