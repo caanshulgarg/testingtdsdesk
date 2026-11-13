@@ -74,6 +74,7 @@ function stand(o: { resend?: boolean, failReads?: number, due?: any[], member?: 
     if (p.startsWith("/rest/v1/call_participants")) { st.asked.push(decodeURIComponent(p)); return json((o.verified || []).filter((e) => decodeURIComponent(p).includes('"' + e + '"')).map((email) => ({ email }))); }
     if (p.startsWith("/rest/v1/platform_secrets")) return json(o.resend && /resend_api_key/.test(p) ? [{ value: "re_key" }] : []);
     if (p.startsWith("/rest/v1/members")) return json(/user_id=eq\./.test(p) ? [{ firm_id: FIRM, role: decodeURIComponent(p).includes(LOOK) ? "readonly" : "owner", active: true }] : [{ user_id: OWNER, email: "anshul@firm.example" }]);
+    if (p.startsWith("/rest/v1/mis_schedules") && p.includes("client_id=eq.")) return json(decodeURIComponent(p).includes("firm_id=eq." + FIRM) && p.includes("client_id=eq.c-1") ? (o.due || [SCHED()]) : []);
     if (p.startsWith("/rest/v1/mis_schedules")) return json(decodeURIComponent(p).includes("firm_id=eq." + FIRM) && p.includes("id=eq.s-1") ? [SCHED()] : []);
     if (p.startsWith("/rest/v1/client_book_items")) return json([{ data: { id: "m1", name: "Monthly MIS", def: DEF, ...(o.report || {}) } }]);
     if (p.startsWith("/rest/v1/clients")) return json([{ name: "Larkspur Made-up Events", data: { deductor: { person: { email: "Director@Client.example" } } }, ...(o.client || {}) }]);
@@ -175,6 +176,19 @@ Deno.test("M5: email goes to the firm's members, the client's saved addresses an
   await none.call({ action: "due" }, { "x-cron-key": "k-123" });
   eq([none.st.resend.length, none.st.runs[0].email, none.st.runs[0].sent_to, none.st.runs[0].status], [0, "no recipients", [], "ok"], "no one to send to; the files and the run are as before");
   assert(/2 addresses left out/.test(none.st.alerts[0].words), none.st.alerts[0].words);
+});
+
+Deno.test("who: for a client's schedules, the typed addresses FinCom will leave out, read as a run reads them; a signed-in member of the firm only", async () => {
+  const due = [SCHED({ id: "s-1", recipients: { members: [OWNER], emails: ["director@client.example", "Guest@Joined.example", "stranger@elsewhere.example", "anshul@firm.example"] } }),
+    SCHED({ id: "s-2", recipients: { members: [OWNER], emails: ["director@client.example"] } }), SCHED({ id: "s-3", recipients: { members: [], emails: ["a@elsewhere.example", "not an address"] } })];
+  const { st, call } = stand({ resend: true, due, verified: ["guest@joined.example"] });
+  const r = await call({ action: "who", client_id: "c-1" }, { Authorization: "Bearer tok-look" });
+  eq([r.status, await r.json()], [200, { ok: true, left: { "s-1": ["stranger@elsewhere.example"], "s-3": ["a@elsewhere.example"] } }], "the addresses left out, by schedule (a look-only member reads them too)");
+  eq([st.resend.length, st.runs.length, st.uploads.length], [0, 0, 0], "nothing is run or sent by it");
+  assert(st.asked.length === 1 && st.asked[0].includes("firm_id=eq." + FIRM) && st.asked[0].includes("verified=is.true"), "confirmed addresses asked once, of the firm's own");
+  eq((await (await call({ action: "who", client_id: "c-other" }, { Authorization: "Bearer tok-owner" })).json()).left, {}, "another client: nothing");
+  eq((await call({ action: "who", client_id: "c-1" })).status, 401, "not signed in: refused");
+  eq((await call({ action: "who", client_id: "c-1" }, { Authorization: "Bearer tok-owner-aal1" })).status, 403, "two-step sign-in not finished: refused");
 });
 
 Deno.test("M5: the subject is FinCom's own words; the report's and the client's names reach the email only as plain words", async () => {

@@ -14,16 +14,26 @@ const ord = (n) => n + (n % 10 === 1 && n !== 11 ? "st" : n % 10 === 2 && n !== 
 export const ruleWords = (r) => (r.freq === "daily" ? "Every day" : r.freq === "weekly" ? "Every " + DAYS[+r.weekday] : "Every month on the " + (+r.day >= 31 ? "last day" : ord(+r.day))) + " at " + r.time + " IST";
 const missing = (e) => /PGRST205|PGRST202|does not exist|schema cache|404/i.test(String((e && e.message) || e));
 const enc = encodeURIComponent;
+// to whom FinCom's cloud emails a report (server/_shared/mailrules.ts)
+const WHO = "FinCom emails the members you tick, and of the addresses typed here only those it knows: an address saved in this client's details, a member's, or one its owner confirmed with a code when joining a call of your firm. Any other address is left out, and the list above says so.";
+const WHO_NOT = "not saved in this client's details and not confirmed on a call of your firm. Save the address in the client's details, or send the report to it yourself.";
 
 export default function MisSchedule({ cid, report, ro }) {
   const [st, setSt] = useState({ loading: true, list: [], runs: [], err: "", off: false });
   const [f, setF] = useState({ freq: "monthly", weekday: "1", day: "1", time: "08:45", period: "lastMonth", members: [], emails: "" });
   const [busy, setBusy] = useState("");
+  const [left, setLeft] = useState({});   // schedule id -> the typed addresses FinCom will not email (the cloud's own reading: mis-run "who")
+  const fn = async (body) => {
+    const c = Cloud.cfg(), ss = Cloud.sess();
+    const r = await fetch(String(c.url).replace(/\/+$/, "") + "/functions/v1/mis-run", { method: "POST", headers: { apikey: c.key, Authorization: "Bearer " + ss.access_token, "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    return [r, await r.json().catch(() => ({}))];
+  };
   const load = async () => {
     try {
       const list = await Cloud.api("mis_schedules?select=*&client_id=eq." + enc(cid) + "&report_id=eq." + enc(report.id) + "&order=created_at.asc") || [];
       const runs = await Cloud.api("mis_runs?select=*&client_id=eq." + enc(cid) + "&report_id=eq." + enc(report.id) + "&order=at.desc&limit=12") || [];
       setSt({ loading: false, list: [].concat(list), runs: [].concat(runs), err: "", off: false });
+      if ([].concat(list).some((x) => ((x.recipients || {}).emails || []).length)) fn({ action: "who", client_id: cid }).then(([r, j]) => setLeft((r.ok && j.left) || {}), () => {}); else setLeft({});
     } catch (e) { setSt({ loading: false, list: [], runs: [], err: missing(e) ? "" : (e && e.message) || String(e), off: missing(e) }); }
   };
   useEffect(() => { if (Cloud.on()) load(); else setSt({ loading: false, list: [], runs: [], err: "", off: true }); }, [cid, report.id]);
@@ -45,9 +55,7 @@ export default function MisSchedule({ cid, report, ro }) {
     setBusy("run:" + s.id);
     try {
       await Cloud.fresh().catch(() => {});
-      const c = Cloud.cfg(), ss = Cloud.sess();
-      const r = await fetch(String(c.url).replace(/\/+$/, "") + "/functions/v1/mis-run", { method: "POST", headers: { apikey: c.key, Authorization: "Bearer " + ss.access_token, "Content-Type": "application/json" }, body: JSON.stringify({ action: "run", schedule_id: s.id }) });
-      const j = await r.json().catch(() => ({}));
+      const [r, j] = await fn({ action: "run", schedule_id: s.id });
       if (!r.ok || !j.ok) toast("It could not be prepared: " + (j.error || r.status)); else toast("Prepared: it is in the list below and in the bell.");
       await load();
     } catch (e) { toast("It could not be prepared: " + ((e && e.message) || e)); }
@@ -68,7 +76,8 @@ export default function MisSchedule({ cid, report, ro }) {
     {st.list.length > 0 && <ul className="mm-sched-list">{st.list.map((s) => <li key={s.id} data-mm-sched-row={s.id} className={s.enabled ? "" : "off"}>
       <div><b>{ruleWords(s.rule)}</b> · {(PERIOD.find((p) => p[0] === s.period) || [, s.period])[1].toLowerCase()}
         <div className="note">{(s.recipients.members || []).length + (s.recipients.emails || []).length ? "To " + [...(s.recipients.members || []).map((u) => (members.find((m) => m.user_id === u) || {}).name || "a member"), ...(s.recipients.emails || [])].join(", ") : "No one by email: the bell and this page only"}
-          {" · "}{s.enabled ? "next " + ist(s.next_run) : "turned off"}</div></div>
+          {" · "}{s.enabled ? "next " + ist(s.next_run) : "turned off"}</div>
+        {(left[s.id] || []).length > 0 && <div className="bad" data-mm-sched-left={s.id}>Not emailed to {left[s.id].join(", ")}: {WHO_NOT}</div>}</div>
       {!ro && <span className="mm-sched-acts"><Button className="btn small" data-mm-sched-now={s.id} disabled={!!busy} onClick={() => now(s)}>{busy === "run:" + s.id ? "Preparing…" : "Send now"}</Button>
         <Button className="btn small" data-mm-sched-toggle={s.id} disabled={!!busy} onClick={() => toggle(s)}>{s.enabled ? "Turn off" : "Turn on"}</Button></span>}
     </li>)}</ul>}
@@ -80,6 +89,7 @@ export default function MisSchedule({ cid, report, ro }) {
       <label className="mm-f"><span className="mm-l">Covering</span><select aria-label="Period covered" value={f.period} onChange={(e) => setF({ ...f, period: e.target.value })}>{PERIOD.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label>
       {members.length > 0 && <div className="mm-f"><span className="mm-l">Send to members</span><div className="mm-ticks">{members.map((m) => <label key={m.user_id}><input type="checkbox" checked={f.members.includes(m.user_id)} onChange={(e) => setF({ ...f, members: e.target.checked ? f.members.concat([m.user_id]) : f.members.filter((x) => x !== m.user_id) })} /> {m.name || m.email}</label>)}</div></div>}
       <label className="mm-f"><span className="mm-l">and to these addresses (e.g. the client's director)</span><input aria-label="Email addresses" placeholder="director@client.com, accounts@client.com" value={f.emails} onChange={(e) => setF({ ...f, emails: e.target.value })} /></label>
+      <p className="note" data-mm-sched-who="">{WHO}</p>
       <Button className="btn small primary" data-mm-sched-add="" disabled={!!busy} onClick={add}>{busy === "add" ? "Saving…" : "Add the schedule"}</Button>
       <p className="note">FinCom prepares it in the cloud from the books there, on time, even with this page closed: the Excel and the PDF are kept here and the bell says when it is ready. Email goes out once the email service is set up.</p>
     </div>}

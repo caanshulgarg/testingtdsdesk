@@ -4,7 +4,8 @@ mis_runs, the mis-run function and the bucket mis-reports, as migration 100 and 
   1. a report not saved yet says to save it first; saved, "Send on a schedule" opens under it;
   2. a schedule added: monthly on the 1st at 08:45 IST, covering last month, to a member and the client's director: the row
      sent is exactly that (the firm is the database's to fill), and the list says it in words with the next time in IST;
-     a wrong address is refused before anything is sent;
+     a wrong address is refused before anything is sent; the form says which addresses FinCom emails, and a schedule
+     with an address it will leave out is marked in the list (the mis-run function's "who");
   3. Send now: the mis-run function is asked to run that schedule; the run is listed with its Excel and PDF, which download;
   4. turn off and on (never deleted);
   5. a look-only member sees the schedules and runs, no form and no buttons;
@@ -34,7 +35,11 @@ CLOUD = r"""(off) => {
   const real = window.fetch;
   window.fetch = (u, o) => {
     u = String(u);
-    if (/\/functions\/v1\/mis-run$/.test(u)) { const b = JSON.parse(o.body); window.__fnCalls.push(b);
+    if (/\/functions\/v1\/mis-run$/.test(u)) { const b = JSON.parse(o.body);
+      // "who": the typed addresses the cloud will leave out, by schedule (here: any address at elsewhere.example)
+      if (b.action === "who") { window.__who = (window.__who || []).concat([b]); const left = {}; window.__sched.forEach((s) => { const out = (s.recipients.emails || []).filter((e) => /@elsewhere\.example$/.test(e)); if (out.length) left[s.id] = out; });
+        return Promise.resolve(new Response(JSON.stringify({ok: true, left}), {headers: {"content-type": "application/json"}})); }
+      window.__fnCalls.push(b);
       window.__runs.unshift({id: window.__runs.length + 1, at: "2026-10-22T05:00:00Z", status: "ok", email: "not set up", sent_to: [], report_id: window.__sched[0].report_id, period: {from: "20260901", to: "20260930"},
         files: [{kind: "xlsx", path: "f-1/c/20261022-mis.xlsx", name: "mis.xlsx"}, {kind: "pdf", path: "f-1/c/20261022-mis.pdf", name: "mis.pdf"}]});
       return Promise.resolve(new Response(JSON.stringify({ok: true, run: {id: 1}}), {headers: {"content-type": "application/json"}})); }
@@ -65,6 +70,14 @@ with sync_playwright() as p:
                   "recipients": {"members": ["u-1"], "emails": ["director@client.example"]}}, "the row sent: monthly on the 1st at 08:45, last month, the member and the director (%s)" % json.dumps(posted))
     t = pg.locator("[data-mm-sched-list], .mm-sched-list").first.inner_text() if pg.locator(".mm-sched-list").count() else ""
     ok("Every month on the 1st at 08:45 IST" in t and "last month" in t and "Anshul" in t and "director@client.example" in t and "next 01 Nov 2026" in t, "listed in words, with the next time in IST: " + t.replace("\n", " | "))
+    who = pg.locator("[data-mm-sched-who]").inner_text()
+    ok("saved in this client's details" in who and "a member's" in who and "confirmed with a code" in who and "left out" in who, "the form says which addresses FinCom emails: " + who)
+    ok(pg.evaluate("window.__who") == [{"action": "who", "client_id": pg.evaluate("S.coId")}] and pg.locator("[data-mm-sched-left]").count() == 0, "the cloud is asked which addresses it leaves out: none of this schedule's")
+    pg.evaluate("window.__sched[0].recipients.emails.push('stranger@elsewhere.example')"); pg.click("[data-mm-sched-toggle]"); W(pg, 700); pg.click("[data-mm-sched-toggle]"); W(pg, 900)
+    flag = pg.locator('[data-mm-sched-left="s-1"]').inner_text() if pg.locator('[data-mm-sched-left="s-1"]').count() else ""
+    ok("Not emailed to stranger@elsewhere.example" in flag and "director@client.example" not in flag, "a schedule with an address FinCom will leave out is marked in the list: " + flag)
+    pg.evaluate("window.__sched[0].recipients.emails.pop()"); pg.click("[data-mm-sched-toggle]"); W(pg, 700); pg.click("[data-mm-sched-toggle]"); W(pg, 900)
+    ok(pg.locator("[data-mm-sched-left]").count() == 0, "and not marked once the address is gone")
     shot(pg, "mymis-schedule")
     print("\n3. Send now")
     pg.click("[data-mm-sched-now]"); W(pg, 1200)

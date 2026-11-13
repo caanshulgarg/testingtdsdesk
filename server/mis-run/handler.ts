@@ -4,6 +4,8 @@
 //     schedules that are due (mis_take: each moved on to its next time at once, so nothing is sent twice) and runs each.
 //   POST from a signed-in owner or staff member: {action: "run", schedule_id} runs one of the firm's schedules now (its
 //     next time stays as it is). A look-only member may not.
+//   POST from a signed-in member: {action: "who", client_id} for the page's list of that client's schedules: the typed
+//     addresses of each that will not be emailed ({left: {<schedule id>: [addresses]}}), read as a run reads them.
 //   POST from a signed-in member (next-cloud-calc1, migration 151): {action: "now", client, from, to} MIS's figures for
 //     the period worked out in the database, kept while the books stay the same (misNow below)
 // A run: the saved report (client_book_items, key misCustom, item "#<report id>") for the schedule's period (last month,
@@ -69,6 +71,28 @@ export function handler(deps: Deps) {
   };
   const secret = async (name: string) => { const r = await rest("/rest/v1/platform_secrets?select=value&name=eq." + enc(name)).catch(() => []); return (r && r[0] && r[0].value) || ""; };
 
+  // the addresses typed on a schedule, as FinCom reads them
+  const typedOf = (s: any) => Array.from(new Set((((s.recipients || {}).emails || []) as unknown[]).map(lowEmail).filter((e) => e.length <= 200 && EMAIL_STRICT.test(e)))).slice(0, 50);
+  // the firm's active members, and the addresses the firm is known to write to: a member's, one saved in the client's
+  // details, or one (of those asked about) its owner confirmed with a code on one of the firm's calls
+  async function knownTo(firmId: string, clientData: unknown, typed: string[]) {
+    const mem = ((await rest("/rest/v1/members?select=user_id,email&firm_id=eq." + enc(firmId) + "&active=is.true").catch(() => [])) || []) as any[];
+    const known = savedEmails(clientData); mem.forEach((m) => { if (m.email) known.add(lowEmail(m.email)); });
+    const ask = typed.filter((e) => !known.has(e));
+    if (ask.length) {
+      const conf = ((await rest("/rest/v1/call_participants?select=email&firm_id=eq." + enc(firmId) + "&verified=is.true&email=" + emailIn(ask)).catch(() => [])) || []) as any[];
+      conf.forEach((c) => known.add(lowEmail(c.email)));
+    }
+    return { mem, known };
+  }
+  // a schedule's email: to whom it goes (to), and which typed addresses are left out (left)
+  async function whoGets(s: any, clientData: unknown) {
+    const ids = ((s.recipients || {}).members || []).filter((x: string) => /^[0-9a-f-]{36}$/.test(x));
+    const typed = typedOf(s), { mem, known } = await knownTo(String(s.firm_id), clientData, typed);
+    const chosen = mem.filter((m) => ids.includes(m.user_id)).map((m) => lowEmail(m.email)).filter(Boolean);
+    return { to: Array.from(new Set([...chosen, ...typed.filter((e) => known.has(e))])).slice(0, 50), left: typed.filter((e) => !known.has(e)) };
+  }
+
   // one run of one schedule: worked out, the files kept, the bell, the email; the log row returned
   async function once(s: any, by: string, attempt: number) {
     const items = await rest("/rest/v1/client_book_items?select=data&firm_id=eq." + enc(s.firm_id) + "&client_id=eq." + enc(s.client_id) + "&key=eq.misCustom&item=eq." + enc("#" + s.report_id) + "&deleted=eq.false");
@@ -94,20 +118,9 @@ export function handler(deps: Deps) {
     const files = [{ kind: "xlsx", path: base + ".xlsx", name: slug(res.company) + "-" + slug(def.name) + ".xlsx", bytes: xlsx.length }, { kind: "pdf", path: base + ".pdf", name: slug(res.company) + "-" + slug(def.name) + ".pdf", bytes: pdf.length }];
     const title = def.name + " for " + (res.company || "the client") + " is ready (" + res.periodLabel + ")";
     // to whom: the members chosen (their sign-in addresses), and of the addresses typed only those the firm is known
-    // to write to: a member's, one saved in the client's details, or one its owner confirmed with a code on a call
-    const ids = ((s.recipients || {}).members || []).filter((x: string) => /^[0-9a-f-]{36}$/.test(x));
-    const mem = ((await rest("/rest/v1/members?select=user_id,email&firm_id=eq." + enc(s.firm_id) + "&active=is.true").catch(() => [])) || []) as any[];
-    const low = lowEmail;
-    const chosen = mem.filter((m) => ids.includes(m.user_id)).map((m) => low(m.email)).filter(Boolean);
-    const typed = Array.from(new Set((((s.recipients || {}).emails || []) as unknown[]).map(low).filter((e) => e.length <= 200 && EMAIL_STRICT.test(e)))).slice(0, 50);
-    const known = savedEmails(client.data); mem.forEach((m) => { if (m.email) known.add(low(m.email)); });
-    const ask = typed.filter((e) => !known.has(e));
-    if (ask.length) {
-      const conf = ((await rest("/rest/v1/call_participants?select=email&firm_id=eq." + enc(s.firm_id) + "&verified=is.true&email=" + emailIn(ask)).catch(() => [])) || []) as any[];
-      conf.forEach((c) => known.add(low(c.email)));
-    }
-    const to = Array.from(new Set([...chosen, ...typed.filter((e) => known.has(e))])).slice(0, 50);
-    const leftOut = typed.filter((e) => !known.has(e)).length;
+    // to write to (whoGets)
+    const { to, left: leftList } = await whoGets(s, client.data);
+    const leftOut = leftList.length;
     let email = "no recipients", sent: string[] = [], why = "";
     if (to.length) {
       const key = await secret("resend_api_key");
@@ -283,7 +296,7 @@ export function handler(deps: Deps) {
       return reply(200, { ok: true, runs: out });
     }
     if (action === "now") return reply(...(await misNow(body, jwt)));
-    if (action !== "run") return reply(400, { ok: false, error: "Unknown action." });
+    if (action !== "run" && action !== "who") return reply(400, { ok: false, error: "Unknown action." });
     if (!jwt || jwt === ANON || jwt === SERVICE) return reply(401, { ok: false, kind: "auth", error: "Sign in to the firm account first." });
     let user: any;
     try { user = await rest("/auth/v1/user", jwt); } catch { return reply(401, { ok: false, kind: "auth", error: "Sign in again." }); }
@@ -292,10 +305,23 @@ export function handler(deps: Deps) {
     const mem = (await rest("/rest/v1/members?select=firm_id,role,active&user_id=eq." + enc(user.id)).catch(() => [])) as any[];
     const member = (mem || []).find((m) => m.active);
     if (!member) return reply(403, { ok: false, kind: "firm", error: "This account is not part of a firm." });
+    // who: for the page's list of a client's schedules, the typed addresses of each that FinCom will leave out (the same
+    // reading as a run's; any active member of the firm, as the list itself)
+    if (action === "who") {
+      const cid = String(body.client_id || "");
+      const list = ((await rest("/rest/v1/mis_schedules?select=id,firm_id,recipients&client_id=eq." + enc(cid) + "&firm_id=eq." + enc(member.firm_id) + "&limit=100").catch(() => [])) || []) as any[];
+      const left: Record<string, string[]> = {};
+      if (list.some((x) => typedOf(x).length)) {
+        const client = ((await rest("/rest/v1/clients?select=data&firm_id=eq." + enc(member.firm_id) + "&id=eq." + enc(cid)).catch(() => [])) || [])[0] || {};
+        const { known } = await knownTo(String(member.firm_id), client.data, Array.from(new Set(list.flatMap(typedOf))).slice(0, 200));
+        for (const x of list) { const out = typedOf(x).filter((e) => !known.has(e)); if (out.length) left[x.id] = out; }
+      }
+      return reply(200, { ok: true, left });
+    }
     if (!["owner", "staff"].includes(member.role)) return reply(403, { ok: false, kind: "role", error: "Look-only access: ask the firm's owner or staff to run it." });
     const s = ((await rest("/rest/v1/mis_schedules?select=*&id=eq." + enc(String(body.schedule_id || "")) + "&firm_id=eq." + enc(member.firm_id)).catch(() => [])) || [])[0];
     if (!s) return reply(404, { ok: false, error: "No such schedule in your firm." });
-    // M5: Run now, a few times in ten minutes at most for one schedule (the count cannot be reached: the run goes on; the
+    // Run now, a few times in ten minutes at most for one schedule (the count cannot be reached: the run goes on; the
     // day's email count is the limit on what is sent)
     const fits = await rpc("auth_rate_hit", { p_bucket: "mis-run-now", p_key: await sha256hex("mis-run-now:" + s.id), p_max: RUN_NOW.max, p_window_s: RUN_NOW.windowS }).catch(() => true);
     if (fits === false) return reply(429, { ok: false, kind: "rate", error: "This report was run a few times just now. Try again in ten minutes." });
