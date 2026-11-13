@@ -180,21 +180,16 @@ const SheetFmt = {
       if (!r || !r.some(c => String(c == null ? "" : c).trim())) return;
       const no = String(get(r, "no") || "").trim(), first = String(r.find(c => String(c == null ? "" : c).trim()) || "");
       if (!no || /^(grand\s*)?total|^sub\s*total|^net\s*total/i.test(first)){ skipped.push({row: hi + 2 + n, why: /total/i.test(first) ? "a total row" : "no invoice number"}); return; }
-      const typ = String(get(r, "doctype") || "").toLowerCase();
-      // the kind of row (the owner, 13-Nov-2026): a note when the document-type column says so (credit note, CN, CRN,
-      // return; debit note, DN, DBN), or, with no such column, when the invoice total is negative (its amounts are then
-      // taken positive). On Purchase every note is one kind: a purchase return, our debit note or the supplier's credit
-      // note is a Debit Note in Tally, every line reversed (noteKind "credit", src/js/01 voucherXml)
-      // (only these words of the document-type column, never a voucher type's name: review M3/M4)
-      const saysD = /debit\s*note|\b(dn|dbn)\b|purchase\s*return/.test(typ), says = !saysD && /credit\s*note|\b(cn|crn)\b|return/.test(typ);
-      const neg = idx.doctype < 0 && (this.amount(get(r, "total")) < 0 || (idx.total < 0 && this.amount(get(r, "taxable")) < 0));
-      const credit = says || neg || (saysD && side === "purchase"), debit = saysD && side !== "purchase";
-      const key = no + "|" + (credit ? "C" : debit ? "D" : "I") + (t.groupByNo === false ? "|" + n : "");
+      // the kind the document-type column says (the owner, 13-Nov-2026): never a voucher type's name, and by whole
+      // words only ("Non-returnable" is no return, "Credit" alone no credit note). A negative total is looked at on
+      // the whole invoice, once its lines are added up (below)
+      const kind = this.kind(get(r, "doctype"), side);
+      const key = no + "|" + kind + (t.groupByNo === false ? "|" + n : "");
       const a = f => this.amount(get(r, f));
       const d = docs.get(key) || {no, date: this.date(get(r, "date"), t.date), party: String(get(r, "party") || "").trim(), gstin: String(get(r, "gstin") || "").toUpperCase().replace(/[^A-Z0-9]/g, ""),
         pos: this.pos(get(r, "pos")), hsn: String(get(r, "hsn") || "").trim(), ledger: String(get(r, "ledger") || "").trim(), against: String(get(r, "against") || "").trim(),
         sledger: String(get(r, "sledger") || "").trim(), vch: String(get(r, "vchtype") || "").trim(),
-        note: credit ? "credit" : debit ? "debit" : "", taxable: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, total: 0, rates: [], lines: 0, rows: [], lineTotals: []};
+        note: kind === "C" ? "credit" : kind === "D" ? "debit" : "", hold: kind === "?" ? "“" + String(get(r, "doctype")).trim() + "” on a sales sheet: is this a credit note or a debit note? Set it in the Type column" : "", taxable: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, total: 0, rates: [], lines: 0, rows: [], lineTotals: []};
       let taxable = a("taxable"), igst = a("igst"), cgst = a("cgst"), sgst = a("sgst"), cess = a("cess"), total = a("total");
       const rate = this.amount(get(r, "rate"));
       // one tax column: split by the place of supply (the same state as the client: CGST + SGST, else IGST)
@@ -205,17 +200,35 @@ const SheetFmt = {
       }
       // no taxable column: the rate and the total tell it
       if (!taxable && total && rate) taxable = r2(total / (1 + rate / 100));
-      // (a credit document is kept negative here, whichever way the sheet writes it; the entry made takes it positive)
-      const sign = credit && [taxable, total].every(x => x >= 0) ? -1 : 1;
-      d.taxable = r2(d.taxable + sign * taxable); d.igst = r2(d.igst + sign * igst); d.cgst = r2(d.cgst + sign * cgst); d.sgst = r2(d.sgst + sign * sgst); d.cess = r2(d.cess + sign * cess);
-      d.lineTotals = (d.lineTotals || []).concat([sign * total]);
+      d.taxable = r2(d.taxable + taxable); d.igst = r2(d.igst + igst); d.cgst = r2(d.cgst + cgst); d.sgst = r2(d.sgst + sgst); d.cess = r2(d.cess + cess);
+      d.lineTotals = (d.lineTotals || []).concat([total]);
       if (rate && !d.rates.includes(rate)) d.rates.push(rate);
       d.lines++; d.rows.push(hi + 2 + n);
       docs.set(key, d);
     });
-    const out = Array.from(docs.values()).map(d => this.finish(d));
+    const out = Array.from(docs.values()).map(d => this.signed(this.finish(d), idx.doctype >= 0));
     out.skipped = skipped;
     return out;
+  },
+  // the kind a document-type cell says: "C" a credit note (credit note, cr note, C.N., CN, CRN, return, sales return,
+  // refund), "D" a debit note (debit note, dr note, D.N., DN, DBN), "I" anything else; whole words, any case. On
+  // Purchase every note is one kind: a purchase return, our debit note or the supplier's credit note is a Debit Note in
+  // Tally, every line reversed (noteKind "credit", src/js/01 voucherXml). "Purchase Return" on a sales sheet is "?":
+  // held for a person
+  kind(v, side){
+    const w = " " + String(v == null ? "" : v).toLowerCase().replace(/\./g, "").replace(/[^a-z0-9]+/g, " ").trim() + " ";
+    const pr = / purchase returns? /.test(w), d = pr || / (debit note|dr note|dn|dbn) /.test(w), c = !d && / (credit note|cr note|cn|crn|returns?|refund) /.test(w);
+    if (side === "purchase") return c || d ? "C" : "I";
+    return pr ? "?" : c ? "C" : d ? "D" : "I";
+  },
+  // an invoice's sign, on the whole invoice (its lines added up: a discount line does not make a note of it). A credit
+  // note is kept negative here whichever way the sheet writes it, its net taken (the entry made takes it positive). A
+  // negative invoice is a credit note only in a sheet with no document-type column; with one (blank, or "Sales") it is
+  // held for a person with the reason said, never turned positive by itself
+  signed(d, typed){
+    if (!d.note && d.total < 0){ if (typed) d.hold = d.hold || "Negative amount: is this a return? Set it in the Type column"; else d.note = "credit"; }
+    if (d.note === "credit" && d.total > 0) ["taxable", "igst", "cgst", "sgst", "cess", "total"].forEach(k => { d[k] = r2(-d[k]); });
+    return d;
   },
   pos(v){
     const s = String(v == null ? "" : v).trim();
@@ -390,9 +403,11 @@ const SheetPost = {
   toBills(docs, cid, fileName){
     const res = {added: 0, held: 0, ids: []};
     docs.forEach(d => {
-      const e = newEntry(fileName);
+      const e = newEntry(fileName), ab = x => d.hold ? x : Math.abs(x);   // (a held document keeps the sheet's own figures)
       Object.assign(e.x, {vendorName: d.party, vendorGstin: d.gstin, vendorPan: d.gstin ? d.gstin.slice(2, 12) : "", invoiceNo: d.no, invoiceDate: d.date,
-        taxable: Math.abs(d.taxable), cgst: Math.abs(d.cgst), sgst: Math.abs(d.sgst), igst: Math.abs(d.igst), cess: Math.abs(d.cess), total: Math.abs(d.total), hsn: d.hsn});
+        taxable: ab(d.taxable), cgst: ab(d.cgst), sgst: ab(d.sgst), igst: ab(d.igst), cess: ab(d.cess), total: ab(d.total), hsn: d.hsn});
+      // a negative bill in a sheet whose Type column does not call it a return: held, said on the bill, its total to check
+      if (d.hold){ e.readNote = d.hold + "."; e.uncertain = ["total"]; e.hold = d.hold; }
       if (d.note) e.noteKind = d.note;
       e.readMode = "sheet"; e.sheet = {file: fileName, rows: d.rows, check: d.check, sec: d.sec || "", itc: d.itc || null};
       if (d.itc && d.itc.available === false){ e.itcBlocked = d.itc.why; e.readNote = "ITC not available in GSTR-2B (" + d.itc.why + "): its tax is ineligible input tax."; }
@@ -422,12 +437,13 @@ const SheetPost = {
     const s = SL(), res = {added: 0, held: 0, again: 0, ids: []};
     docs.forEach(d => {
       const no = d.no + (d.note === "credit" && !/^cn/i.test(d.no) ? " (CN)" : "");
+      const ab = x => d.hold ? x : Math.abs(x);   // (a held document keeps the sheet's own figures)
       // already here: the same number and date AND the same party (its GSTIN, else its name) AND the same total (review
       // H1 of cf58b7cc9: number and date alone let another party's invoice of that number be written over). Anything
       // else of that number is a new invoice (the number said "already exists" on it, as for any upload)
       const pk = (g, n) => GSTIN_RE.test(g || "") ? g : normName(n || ""), name = d.party || (d.gstin ? "" : "Retail customer");
       const was = s.list.find(v => normInv(v.x.number) === normInv(no) && (!v.x.date || !d.date || v.x.date === d.date)
-        && pk(v.x.customerGstin, v.x.customerName) === pk(d.gstin, name) && Math.abs(num(v.x.total) - Math.abs(d.total)) < 0.005);
+        && pk(v.x.customerGstin, v.x.customerName) === pk(d.gstin, name) && Math.abs(num(v.x.total) - (d.hold ? d.total : Math.abs(d.total))) < 0.005 && (v.x.noteKind || "") === (d.note || ""));
       // never added again. One from a sheet still waiting (To review / Ready) takes this sheet's ledgers where no person
       // set one (M2), so the invoices an old, wrong layout left stuck are put right by uploading the sheet again; a
       // Ready invoice whose ledger changed so goes back to To review, to be looked at before it is posted
@@ -441,7 +457,7 @@ const SheetPost = {
         return;
       }
       const v = newInvoice({number: no, date: d.date, customerName: d.party || (d.gstin ? "" : "Retail customer"), customerGstin: GSTIN_RE.test(d.gstin) ? d.gstin : "", pos: d.pos,
-        hsn: d.hsn, taxable: Math.abs(d.taxable), cgst: Math.abs(d.cgst), sgst: Math.abs(d.sgst), igst: Math.abs(d.igst), cess: Math.abs(d.cess), total: Math.abs(d.total),
+        hsn: d.hsn, taxable: ab(d.taxable), cgst: ab(d.cgst), sgst: ab(d.sgst), igst: ab(d.igst), cess: ab(d.cess), total: ab(d.total),
         rate: d.rate, noteKind: d.note || "", againstInvoice: d.against || ""}, "sheet", {fileName, sheet: {rows: d.rows, check: d.check, sec: d.sec || ""}});
       this.ledgersTo(v, d);
       s.list.push(v); mapInvoice(v); res.added++; res.ids.push(v.id);
@@ -452,14 +468,15 @@ const SheetPost = {
   // an invoice's ledgers from its row of the sheet: the customer (answered, found, or to create), the sheet's own sales
   // ledger for each of its rates, and Tally's voucher type
   ledgersTo(v, d, again){
-    // (on an invoice already here, a ledger a person set stands: only the old layout's mark, an income or expense ledger
-    // in the customer's place, is not a person's)
-    const keep = again && v.userLedger && SheetFmt.cls(v.customerLedger) === "party";
+    // (on an invoice already here, a ledger a person set stands, whatever its group (Cash, a bank): "Set by you" is the
+    // mark the Sales page and the panel's own answers leave; what an old layout or a rule put there is not a person's)
+    const keep = again && v.userLedger && v.custSource === "Set by you";
     const led = keep ? "" : d.mapped || this.partyLedger(d, "sales");
-    if (led){ v.customerLedger = led; v.userLedger = true; }
+    if (led){ v.customerLedger = led; v.userLedger = true; v.custSource = d.mapped ? "Set by you" : "From the sheet"; }
     // a customer to create: the bank page's list of new ledgers (made in Tally with the first posting, as today)
-    else if (!keep && d.newLedger){ v.customerLedger = this.pend(d.newLedger, "Sundry Debtors", d); v.userLedger = true; }
-    else if (again && v.userLedger && !["party", ""].includes(SheetFmt.cls(v.customerLedger))){ v.customerLedger = ""; v.userLedger = false; }
+    else if (!keep && d.newLedger){ v.customerLedger = this.pend(d.newLedger, "Sundry Debtors", d); v.userLedger = true; v.custSource = "Set by you"; }
+    else if (!keep && again && v.userLedger && !["party", ""].includes(SheetFmt.cls(v.customerLedger))){ v.customerLedger = ""; v.userLedger = false; }
+    if (d.hold) v.hold = d.hold;
     const sl = d.sledMapped || this.salesLedger(d) || (d.newSled ? this.pend(d.newSled, "Sales Accounts") : "");
     // (a sales ledger already on the invoice, a Tally ledger, stands too)
     if (sl){ const had = (again && v.salesLedgers) || {}; v.salesLedgers = {}; salesTotals(v.x).forEach(g => { v.salesLedgers[g.rate] = exactLedger(had[g.rate]) || sl; }); }

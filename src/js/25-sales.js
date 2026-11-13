@@ -212,6 +212,7 @@ function salesLines(v){
 }
 function invoiceProblems(v){
   const co = CO(SL().cid), x = v.x, p = [];
+  if (v.hold) p.push(v.hold);   // a sheet's row held for a person (a negative amount its Type column does not explain)
   if (!x.number) p.push("invoice number missing");
   if (!x.date) p.push("invoice date missing");
   if (!(num(x.total) > 0)) p.push("total missing");

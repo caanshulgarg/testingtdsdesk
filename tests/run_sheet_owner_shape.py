@@ -26,7 +26,9 @@ their GST ledgers and some parties in sub-groups (Sales Local under Sales Accoun
  10. Purchase as Journal (the owner, 13-Nov-2026): the panel's "Post as: Purchase / Journal" starts at the client's own
      setting for its bills (Journal there: Journal) and is kept in that setting; chosen Journal, the bill goes as the
      bills' own journal voucher (balanced, the party credited with its bill reference); a return is still a Debit Note;
-     a second Post posts nothing, and a journal of that reference already in Tally is found.
+     a second Post posts nothing, and a journal of that reference already in Tally is found;
+ 11. held for a person (re-review of d8281e4ea): a negative amount in a sheet whose Type column does not call it a
+     return, and "Purchase Return" on a sales sheet, wait in To review with the reason said, never turned positive.
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_sheet_owner_shape.py"""
 import os, sys, json, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -55,7 +57,7 @@ FAKE_AI = """async () => { await registersLoad(); window.__ai = []; SheetAI.map 
 # the client's ledgers as Tally keeps them: the sales, purchase and GST ledgers and some parties in sub-groups
 LEDGERS = """() => { const L = [["Asha Textiles Pvt Ltd", "Debtors UP"], ["Chitra Foods (Lucknow)", "Sundry Debtors"], ["Consulting Income (A)", "Sales Local"], ["Consulting Income (B)", "Sales Local"],
     ["Output CGST", "GST Output"], ["Output SGST", "GST Output"], ["Output IGST", "GST Output"], ["Input CGST", "GST Input"], ["Input SGST", "GST Input"], ["Input IGST", "GST Input"],
-    ["Purchase of Goods (UP)", "Purchase UP"], ["Dev Packaging", "Creditors UP"], ["Rent Received", "Indirect Incomes"], ["ICICI Bank", "Bank Accounts"]];
+    ["Purchase of Goods (UP)", "Purchase UP"], ["Dev Packaging", "Creditors UP"], ["Rent Received", "Indirect Incomes"], ["Cash", "Cash-in-Hand"], ["ICICI Bank", "Bank Accounts"]];
   S.bank.ledgers = {list: L.map(([name, group]) => ({name, group})), parents: {"Debtors UP": "Sundry Debtors", "Sales Local": "Sales Accounts", "GST Output": "Duties & Taxes", "GST Input": "Duties & Taxes",
     "Purchase UP": "Purchase Accounts", "Creditors UP": "Sundry Creditors"}, importedAt: new Date().toISOString(), live: true};
   S.bank.newLed = []; Ledgers.st[S.coId] = null; delete Ledgers.busy[S.coId]; }"""
@@ -312,8 +314,8 @@ with sync_playwright() as p:
       Object.assign(g(1).x, {customerName: "Chitra Foods"}); Object.assign(g(1), {customerLedger: "Chitra Foods (Lucknow)", userLedger: true, salesLedgers: {18: "Consulting Income (B)"}, id: "keep1"});
       // 4: the same customer and number, another amount (H1: the total differs)
       Object.assign(g(4).x, {taxable: 1000, cgst: 90, sgst: 90, total: 1180}); Object.assign(g(4), {salesLedgers: {18: "Consulting Income (B)"}, id: "keep4"});
-      // 2: the person chose another customer ledger and sales ledger (M2: theirs stand)
-      Object.assign(g(2), {customerLedger: "Chitra Foods (Lucknow)", userLedger: true, salesLedgers: {18: "Consulting Income (B)"}, status: "ready"});
+      // 2: the person chose the customer ledger on the Sales page (its mark: "Set by you"), in any group (Cash), and a sales ledger: theirs stand
+      Object.assign(g(2), {customerLedger: "Cash", userLedger: true, custSource: "Set by you", salesLedgers: {18: "Consulting Income (B)"}, status: "ready"});
       // 3: a Ready invoice whose customer FinCom had only matched (not a person's): the upload sets it (M2: back to To review)
       Object.assign(g(3), {customerLedger: "Asha Textiles Pvt Ltd", userLedger: false, custSure: true, status: "ready"});
       saveSales(); render(); }"""); W(300)
@@ -330,7 +332,7 @@ with sync_playwright() as p:
     n1 = one(lambda v: v["no"] == "UP/26-27/0001" and v["id"] != "keep1"); n4 = one(lambda v: v["no"] == "UP/26-27/0004" and v["id"] != "keep4")
     ok(n1["cust"] == "Asha Textiles Pvt Ltd" and n1["total"] == 1180 and n4["total"] == 3540 and "already exists" in n1["p"] and n1["st"] == "review", "the new ones carry the sheet's figures and say the number already exists: To review, never posted by themselves (%s)" % [n1, n4])
     v2 = one(lambda v: v["no"] == "UP/26-27/0002")
-    ok(v2["cust"] == "Chitra Foods (Lucknow)" and v2["sl"] == "Consulting Income (B)" and v2["st"] == "ready", "M2: the customer ledger and sales ledger a person set are not replaced (%s)" % v2)
+    ok(v2["cust"] == "Cash" and v2["sl"] == "Consulting Income (B)" and v2["st"] == "ready", "M2: the customer ledger a person set (“Set by you”, whatever its group: Cash) and their sales ledger are not replaced (%s)" % v2)
     v3 = one(lambda v: v["no"] == "UP/26-27/0003")
     ok(v3["cust"] == "Bharat Tools LLP" and v3["st"] == "review", "M2: a Ready invoice whose ledger the upload changed goes back to To review (%s)" % v3)
     E("SheetImport.close()"); W(200)
@@ -379,6 +381,29 @@ with sync_playwright() as p:
       const vs = [{type: "Journal", number: "77", reference: "DP/802", party: "Dev Packaging", date: "20261025", amount: 1180, guid: "gj", narration: ""}, {type: "Journal", number: "78", reference: "ZZ/1", party: "Dev Packaging", date: "20261025", amount: 1180, guid: "other"}];
       return {url: decodeURIComponent(PostCheck.vouchersUrl(co, "T", e)), r: JSON.stringify(PostCheck.match(e, vs) || null).slice(0, 300)}; }""", j2["id"])
     ok("Journal" in found["url"].split("types=")[-1] and "gj" in found["r"], "the already-booked check asks Tally for Journal vouchers and finds the journal by its reference (%s; %s)" % (found["url"][-70:], found["r"][:160]))
+
+    print("11. held for a person: a negative amount the Type column does not explain; Purchase Return on Sales")
+    E("(id) => { S.tab = 'sales'; S.step = null; SL().list = []; SL().filter = 'review'; saveSales(); render(); }", cid); W(600)
+    upload("sales_held.xlsx", "#salesIn")
+    hold = E("Object.fromEntries([...document.querySelectorAll('#app [data-sheet-hold]')].map(x => [x.getAttribute('data-sheet-vt'), x.innerText]))")
+    ok(sorted(hold) == ["UP/26-27/0031", "UP/26-27/0032"] and "Negative amount: is this a return? Set it in the Type column" in hold.get("UP/26-27/0031", "") and "Purchase Return" in hold.get("UP/26-27/0032", "") and vts().get("UP/26-27/0033") == "Sales",
+       "the panel says which rows wait for a person and why; “Non-returnable” is a plain Sales invoice (%s)" % hold)
+    if pg.locator("#app [data-sheet-add]:not([disabled])").count(): pg.click("#app [data-sheet-add]"); W(900)
+    hs = E("Object.fromEntries(SL().list.map(v => [v.x.number, [v.status, (v.problems || [])[0] || '', v.x.total, v.x.noteKind || '']]))")
+    ok(hs.get("UP/26-27/0031") == ["review", "Negative amount: is this a return? Set it in the Type column", -472, ""], "the negative invoice waits in To review with the plain reason, its amount as the sheet has it: not turned positive, not a credit note by itself (%s)" % hs.get("UP/26-27/0031"))
+    ok((hs.get("UP/26-27/0032") or ["", "", 0, ""])[0] == "review" and "credit note or a debit note" in (hs.get("UP/26-27/0032") or ["", ""])[1] and hs.get("UP/26-27/0033") == ["ready", "", 118, ""], "“Purchase Return” on Sales waits too; the plain invoice is Ready (%s)" % [hs.get("UP/26-27/0032"), hs.get("UP/26-27/0033")])
+    E("() => { SheetImport.close(); SL().list = SL().list.filter(v => v.status !== 'ready'); render(); }"); W(400)
+    wt = pg.inner_text("#app [data-post-why]") if pg.locator("#app [data-post-why]").count() else ""
+    ok("2 invoices need a correction" in wt, "and Post says why nothing is ready (%s)" % wt)
+    E("() => { S.tab = null; goStep('review', 'bills'); }"); W(600)
+    upload("purchase_held.xlsx", "#fileIn")
+    hold = E("[...document.querySelectorAll('#app [data-sheet-hold]')].map(x => x.innerText)")
+    ok(len(hold) == 1 and "Negative amount" in hold[0], "Purchase: the negative bill its Type column calls “Purchase UP” is held the same way (%s)" % hold)
+    if pg.locator("#app [data-sheet-add]:not([disabled])").count(): pg.click("#app [data-sheet-add]"); W(900)
+    hb = E("""() => { const e = Object.values(D().entries).find(e => e.x.invoiceNo === 'DP/901'); if (!e) return null; e.natureId = "none"; try { approve(e); } catch (x){}
+      return [e.x.total, e.noteKind || "", e.readNote || "", e.status, (e.uncertain || []).join()]; }""")
+    ok(hb and hb[0] == -472 and hb[1] == "" and "Negative amount: is this a return?" in hb[2] and hb[3] == "draft", "the bill keeps the sheet's figure, says the reason, and cannot be approved as it is (%s)" % hb)
+    E("SheetImport.close()"); W(200)
     ok(not errors, "no page errors " + str(errors[:2]))
     br.close()
 srv.shutdown()
