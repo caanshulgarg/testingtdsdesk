@@ -38,12 +38,17 @@ func acceptedKey(id, xml string) string {
 // forgets what is loaded (a test's new home; the file is read again at the next use)
 func acceptedReset() {
 	acceptedMu.Lock()
-	acceptedNotes, acceptedLoaded, acceptedBroken = nil, "", nil
+	acceptedNotes, acceptedLoaded, acceptedBroken, acceptedBrokenFile = nil, "", nil, ""
 	acceptedMu.Unlock()
 }
 
 // 2.5.15 item 4 (the owner's approval of 13-Nov-2026): posted-ids.json there but neither it nor its copy readable
-var acceptedBroken error
+var (
+	acceptedBroken     error
+	acceptedBrokenAt   time.Time
+	acceptedBrokenFile string
+	acceptedRecheck    = 5 * time.Second // while it cannot be read: looked at again at most this often
+)
 
 const postedUnreadableWords = "FinCom Bridge can't read its record of posted entries; posting paused. Nothing is sent to Tally until the record " +
 	"(sync\\posted-ids.json or its copy posted-ids.json.bak) can be read again: ask FinCom support to restore it. Postings wait and go on by themselves then."
@@ -71,8 +76,12 @@ func acceptedAll() M {
 	// 2.5.15: the file, else its copy (.bak) when the file is missing or not whole. Item 4 (the owner's approval of
 	// 13-Nov-2026): the record there but neither copy readable is NEVER taken as empty: nothing is posted until it can be
 	// read (postedRecordErr), and nothing is written over it (acceptedWrite); a throwaway map answers meanwhile
+	if acceptedBroken != nil && acceptedBrokenFile == f && time.Since(acceptedBrokenAt) < acceptedRecheck {
+		return M{} // looked at a moment ago (each look may wait 1.5 s for a file held by another program)
+	}
 	all, _, err := readObjFileBakErr(f)
 	if err != nil {
+		acceptedBrokenAt, acceptedBrokenFile = time.Now(), f
 		if acceptedBroken == nil {
 			writeLog("POSTED IDS NOT READABLE: " + f + " (and its copy " + bakOf(f) + ") cannot be read (" + err.Error() + "). " + postedUnreadableWords)
 		}
@@ -85,6 +94,22 @@ func acceptedAll() M {
 	}
 	if all == nil {
 		all = M{}
+	}
+	// review M1: both copies read: a note the copy holds and the file lacks (a write of the file's copy that failed, or a
+	// file put back from an older backup) is kept too, the file's own note winning; posting never forgets a sent entry
+	if bk, err := readFileRetry(bakOf(f)); err == nil {
+		if bm := parseObj(string(bk)); bm != nil {
+			n := 0
+			for k, v := range bm {
+				if _, has := all[k]; !has && obj(v) != nil {
+					all[k] = v
+					n++
+				}
+			}
+			if n > 0 {
+				writeLog(fmt.Sprintf("Posted ids: %d note(s) found only in %s kept too (never sent again)", n, bakOf(f)))
+			}
+		}
 	}
 	cut := time.Now().AddDate(0, 0, -acceptedKeepDays)
 	for k, v := range all {

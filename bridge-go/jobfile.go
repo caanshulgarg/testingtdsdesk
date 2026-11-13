@@ -75,10 +75,14 @@ func jobFileWriteOnce(path, text string, mkdir bool) error {
 	}
 	fsyncDir(filepath.Dir(path))
 	// the same text as progress.json.bak: a posting's record is never one request behind in its copy
-	if tb, err := writeTempSynced(bakOf(path), []byte(text)); err == nil {
-		if renameFn(tb, bakOf(path)) != nil {
+	tb, err := writeTempSynced(bakOf(path), []byte(text))
+	if err == nil {
+		if err = renameFn(tb, bakOf(path)); err != nil {
 			_ = os.Remove(tb)
 		}
+	}
+	if err != nil { // review M1: said; progress.json itself is whole and is read first
+		writeLog("Safe files: the copy " + bakOf(path) + " could not be written (" + err.Error() + "); progress.json itself is whole")
 	}
 	return nil
 }
@@ -187,20 +191,27 @@ func jobFileReadW(path string, waitMissing bool) M {
 			return m
 		}
 	}
+	unwhole := false
 	for i := 0; i < 40; i++ {
 		b, err := readTail(path, 256<<20, false)
 		if err == nil {
 			if m := parseObj(strings.TrimPrefix(string(b), "\ufeff")); m != nil {
 				return m
 			}
+			unwhole = true
 		} else if os.IsNotExist(err) {
 			if fi, derr := os.Stat(filepath.Dir(path)); !waitMissing || derr != nil || !fi.IsDir() || i >= 8 {
 				return jobFileBak(path)
 			}
+		} else {
+			unwhole = false // there but not opened (another program holding it): never the backup (review M1)
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
-	return jobFileBak(path)
+	if unwhole {
+		return jobFileBak(path)
+	}
+	return nil
 }
 
 // 2.5.15: the file missing (its folder still there) or not whole after the tries: the copy before it (.bak), when whole

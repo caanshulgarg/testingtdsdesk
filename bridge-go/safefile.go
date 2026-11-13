@@ -134,14 +134,37 @@ func saidBak(path, why string) {
 // errFileDamaged: the file is there but cannot be read whole, and its backup cannot either
 var errFileDamaged = errors.New("the file is there but cannot be read whole, nor its backup")
 
+// errFileBusy (review M1): the file is there but could not be opened now (another program holding it, a disk error):
+// never its backup then (the backup may be older), only the file itself, asked again
+var errFileBusy = errors.New("the file is there but could not be opened now (another program holding it)")
+
+// the waits between tries of a file that is there but could not be opened (about 1.5 s in all)
+var readRetryWaits = []time.Duration{50 * time.Millisecond, 100 * time.Millisecond, 200 * time.Millisecond, 400 * time.Millisecond, 800 * time.Millisecond}
+
+// the file's bytes, tried again for a moment while it is there but cannot be opened (missing: at once)
+func readFileRetry(path string) ([]byte, error) {
+	b, err := os.ReadFile(path)
+	for _, d := range readRetryWaits {
+		if err == nil || os.IsNotExist(err) {
+			break
+		}
+		time.Sleep(d)
+		b, err = os.ReadFile(path)
+	}
+	return b, err
+}
+
 // a kept JSON object read back: the file, else its backup when the file is missing or not whole. found: the file or
-// its backup was there; err: errFileDamaged when one was there but neither could be read
+// its backup was there; err: errFileDamaged when one was there but neither could be read; errFileBusy when the file
+// is there but could not be opened (its backup is never read for it: review M1)
 func readObjFileBakErr(path string) (m M, found bool, err error) {
-	b, e1 := os.ReadFile(path)
+	b, e1 := readFileRetry(path)
 	if e1 == nil {
 		if m = parseObj(string(b)); m != nil {
 			return m, true, nil
 		}
+	} else if !os.IsNotExist(e1) {
+		return nil, true, fmt.Errorf("%w (%v)", errFileBusy, e1)
 	}
 	bb, e2 := os.ReadFile(bakOf(path))
 	if e2 == nil {
@@ -170,8 +193,10 @@ func readObjFileBak(path string) M {
 }
 
 // a kept text read back: the file, else its backup when the file is missing or fails whole
+// (the list of postings taken from FinCom's queue: a file there but not opened after the tries is read from its backup,
+// a list of ids to report, better than none; posted-ids.json and progress.json never are: review M1)
 func readTextBak(path string, whole func([]byte) bool) string {
-	b, err := os.ReadFile(path)
+	b, err := readFileRetry(path)
 	if err == nil && (whole == nil || whole(b)) {
 		return strings.TrimPrefix(string(b), "\ufeff")
 	}
@@ -202,8 +227,13 @@ func saveFileMirror(path, text string) error {
 	if err := renameInPlace(tmp, path); err != nil {
 		return err
 	}
-	if tb, err := writeTempSynced(bakOf(path), []byte(text)); err == nil {
-		_ = renameInPlace(tb, bakOf(path))
+	// review M1: a backup not written is said (the file itself is whole and is read first)
+	tb, err := writeTempSynced(bakOf(path), []byte(text))
+	if err == nil {
+		err = renameInPlace(tb, bakOf(path))
+	}
+	if err != nil {
+		writeLog("Safe files: the copy " + bakOf(path) + " could not be written (" + err.Error() + "); " + filepath.Base(path) + " itself is whole")
 	}
 	return nil
 }
