@@ -140,13 +140,16 @@ func TestJobFileSharedReplaceRefusedNeverLost(t *testing.T) {
 func TestJobFileSharedReadWaitsForMissing(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "job-late-1")
 	_ = os.MkdirAll(dir, 0o755)
+	wrote := make(chan struct{})
 	go func() {
+		defer close(wrote)
 		time.Sleep(150 * time.Millisecond)
 		_ = writeProgress(dir, M{"id": "job-late-1", "status": "queued"})
 	}()
 	if m := readProgress(dir); m == nil || str(m["status"]) != "queued" {
 		t.Fatalf("the read did not wait: %v", m)
 	}
+	<-wrote // 2.5.15: the writer ends with progress.json.bak (safefile.go) after the file itself: the folder freed after it
 	t0 := time.Now()
 	if m := readProgress(filepath.Join(t.TempDir(), "never")); m != nil || time.Since(t0) > 100*time.Millisecond {
 		t.Fatalf("no job: %v after %s", m, time.Since(t0))
