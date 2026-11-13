@@ -803,6 +803,7 @@ async function charge(code, qty, ref, note){
       S.creditStop = {at: Date.now(), needed: r.needed, balance: r.balance, code};
       toast("Credit finished: " + INR.format(num(r.needed)) + " needed, " + INR.format(num(r.balance)) + " left. Ask the administrator to add credit.");
     } else if (r && r.reason === "module_off") toast("This part is switched off for your firm.");
+    else if (r && r.reason === "look_only") toast("Your sign-in can look only, so it cannot use a paid feature. Ask the firm's owner.");   // migration 195
     else if (r && r.reason === "firm_off") toast("This firm's account is switched off. Contact the administrator.");
     else if (r && r.reason === "read_only") toast("Your FinCom account is read-only until the monthly fee is paid. Everything can still be seen and exported. Ask the administrator to add credit.");
     render();

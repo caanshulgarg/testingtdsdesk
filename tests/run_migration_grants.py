@@ -62,6 +62,9 @@ KNOWN = set(BEFORE) | {
     "books-sync/migration-17-trash.sql",               # its client_trash is not on staging (not in the snapshot)
     # staging-only cron schedules (no tables)
     "zoho-books/migration-75b-zoho-cron-staging.sql", "gst-2b-match/migration-95b-gst-2b-match-cron-staging.sql",
+    # 186 (the database review of 13-Nov-2026) takes back from anon and the server's own tables what the snapshot of
+    # 20-Oct-2026 still shows; it runs after 97 on every database and has its own test (tests/run_migration186.py)
+    "security/migration-186-default-grants.sql",
     # this file
     "security/migration-97-explicit-grants.sql"}
 KNOWN |= {os.path.relpath(p, SERVER) for p in glob.glob(os.path.join(SERVER, "security", "migration-*.sql"))

@@ -1,5 +1,5 @@
 // node tests/run_call_private_channel.mjs - the calls' small Realtime client (app/src/calls/realtime.js) on a private
-// channel (the database review of 13-Nov-2026, M5; migration 186), against a made-up WebSocket that keeps every frame:
+// channel (the database review of 13-Nov-2026, M5; migration 194), against a made-up WebSocket that keeps every frame:
 //   1. a public channel joins as before: private false, no sign-in sent, nothing asked of getToken
 //   2. a private channel asks for the sign-in first and joins with private true and that sign-in
 //   3. the sign-in is asked again every few minutes and sent on (an access_token frame) only when it changed

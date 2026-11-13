@@ -81,7 +81,7 @@ export function handler(deps: Deps) {
   const insert = async (table: string, row: unknown) => ((await svc("/rest/v1/" + table, { method: "POST", headers: { Prefer: "return=representation" }, body: JSON.stringify(row) })) as any[])[0];
   const patch = async (table: string, filter: string, row: unknown) => (await svc("/rest/v1/" + table + "?" + filter, { method: "PATCH", headers: { Prefer: "return=representation" }, body: JSON.stringify(row) })) as any[];
   const rpc = (fn: string, args: Record<string, unknown>, token = SERVICE) => rest("/rest/v1/rpc/" + fn, token, { method: "POST", body: JSON.stringify(args) });
-  // private channels (migration 186; the database review of 13-Nov-2026): on once the function is given the project's
+  // private channels (migration 194; the database review of 13-Nov-2026): on once the function is given the project's
   // JWT secret (CALLS_CHANNEL_JWT_SECRET), with which it signs a guest's channel pass. Every answer that gives a
   // channel's name says so (private); a member joins with their own sign-in, a guest with the pass (rt). Without the
   // secret the channels are public, as before.

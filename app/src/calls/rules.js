@@ -128,7 +128,7 @@ export async function verifyGuest(secret, token, nowSecs) {
   if (!(exp > nowSecs)) return null;
   return { room: m[1], participant: m[2], exp };
 }
-// a guest's pass for the call's private channel (migration 186): a JWT (HS256, with the project's own JWT secret, which
+// a guest's pass for the call's private channel (migration 194): a JWT (HS256, with the project's own JWT secret, which
 // only fincom-call holds) that Supabase Realtime checks before it asks the database's policy. It says no more than the
 // project's public key does (role anon), plus the one room and participant the policy looks up. Short: the app asks
 // for a new one (the `topic` step) while the call goes on.

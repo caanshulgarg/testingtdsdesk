@@ -1,28 +1,23 @@
-"""python3 tests/run_migration186.py - server/video-calls/migration-186-call-private-channels.sql (13-Nov-2026, branch
-next-sec-db): who may listen and speak on a call's private Realtime channel. On a throwaway PostgreSQL (pg_stand, port
-31886 unless PG186_PORT; never a real database), made-up people and rooms only; a stand-in for Realtime's own table and
-its realtime.topic() (a setting, as Realtime gives it), asked the way Realtime asks: as the person's role, with their
-sign-in's claims and the channel's name set, a read and a write of realtime.messages.
-  0. the file: one transaction, lock_timeout 10 s; add-only (three functions, two policies); names no real database;
-     its md5
+"""python3 tests/run_migration186.py - server/security/migration-186-default-grants.sql (13-Nov-2026, branch next-sec-db):
+what a new table of public gives by default, the server's own tables, and anon. On a throwaway PostgreSQL (pg_stand,
+port 31186 unless PG186_PORT; never a real database), made-up rows only. The stand is given staging's shape first: the
+default privileges of the roles that make tables give anon and authenticated everything, the server's tables (row
+security on, no policy) hold it, tables with a policy hold what migration 97 wrote.
+  0. the file: one transaction, lock_timeout 10 s; nothing dropped, deleted or created, no policy or function touched;
+     names no real database; its md5
   1. runs, and a second time
-  2. the names: call_topic and call_lobby_topic give what app/src/calls/rules.js (topicFor, sha256Hex) and fincom-call
-     give for the same key, epoch and firm (asked of rules.js itself, with node)
-  3. members: the people in the call listen and speak on its channel, on working together while it is on, and on their
-     firm's lobby; a member of the firm not in the call only the lobby; another firm's member, a removed one, one who
-     left, one whose two-step is not done: no; a person away too long (not yet back): yes; the name before someone was
-     removed, an ended room: nobody
-  4. guests: the admitted guest with a pass for that room: its call channel only (never working together, a lobby or
-     another room); waiting or removed, a pass naming another room or a member's row, a pass that is not readable,
-     no pass: no
-  5. only broadcast and presence; the two policies and no other; nothing may be changed or removed through them
-  6. grants: call_channel_ok for anon and authenticated (the policies ask it as them); the two name functions for
-     nobody; a database without Realtime: the file runs
-RED_WITHOUT_186=1: the same checks without running 186 (2, 3 and 4's yes cases, 5 and 6 fail)."""
-import os, re, sys, json, hashlib, subprocess, shutil
-HERE = os.path.dirname(os.path.abspath(__file__)); ROOT = os.path.normpath(os.path.join(HERE, "..")); sys.path.insert(0, HERE)
+  2. a table and a sequence made afterwards (by postgres, by supabase_admin): nothing for anon or authenticated;
+     service_role as before
+  3. the server's tables: nothing for public, anon or authenticated (a read refused for both), service_role unchanged
+  4. anon: no privilege on any table, view, column or sequence of public
+  5. authenticated: reads and writes what it did (a table with a policy, its rows only; an insert through a serial, an
+     identity and a column grant), cannot set a sequence, holds no sequence of a table it cannot insert into
+  6. every policy, every function's grants and everything service_role holds: the same before and after
+RED_WITHOUT_186=1: the same checks without running 186 (2, 3, 4 and 5's sequence checks fail)."""
+import os, re, sys, hashlib
+HERE = os.path.dirname(os.path.abspath(__file__)); ROOT = os.path.join(HERE, ".."); sys.path.insert(0, HERE)
 import pg_stand
-M186 = os.path.join(ROOT, "server", "video-calls", "migration-186-call-private-channels.sql")
+M186 = os.path.join(ROOT, "server", "security", "migration-186-default-grants.sql")
 RED = os.environ.get("RED_WITHOUT_186") == "1"
 fails = []
 def ok(c, w):
@@ -34,139 +29,128 @@ code = "\n".join(l.split("--")[0] for l in text.lower().splitlines())
 print("== 0. the file")
 ok(code.count("begin;") == 1 and code.count("commit;") == 1 and code.strip().startswith("begin;") and code.strip().endswith("commit;")
    and "set local lock_timeout = '10s';" in code, "one transaction, lock_timeout 10 s")
-ok(not re.search(r"\bdrop\b|\btruncate\b|delete\s+from|create\s+(table|index|trigger)|alter\s+|\binsert\s+into\b|\bupdate\s+[a-z_.]+\s+set\b", code)
-   and len(re.findall(r"create or replace function", code)) == 3 and len(re.findall(r"create policy", code)) == 2, "add-only: three functions, two policies, nothing else")
+ok(not re.search(r"\bdrop\b|\btruncate\b|delete\s+from|\bcreate\b|alter\s+(table|policy|function)|\binsert\s+into\b|\bupdate\s+[a-z_.]+\s+set\b", code),
+   "nothing dropped, deleted, created or altered but the default privileges; no policy or function touched")
+ok(not re.search(r"\bto\s+(anon|public)\b", code) and not re.search(r"grant\s+(?!usage on sequence %s to authenticated)", code.replace("execute format('", "")),
+   "its only grant: usage on the sequences authenticated inserts through")
 ok(not re.search(r"supabase\.co|qbocskaiewaxqcvaunzc", text.lower()), "names no real database")
 
-F1, F2 = "99999999-9999-4999-8999-999999990186", "88888888-8888-4888-8888-888888880186"
-U = {k: "aaaaaaaa-0186-4000-8000-%012d" % i for i, k in enumerate(["host", "staff", "idle", "other", "removed", "stale", "left", "aal1"], 1)}
-P = {k: "bbbbbbbb-0186-4000-8000-%012d" % i for i, k in enumerate(["host", "staff", "removed", "stale", "left", "aal1", "g_in", "g_wait", "g_removed", "g_stale", "other", "g_other"], 1)}
-RA, RB, RC = ("cccccccc-0186-4000-8000-00000000000%d" % i for i in (1, 2, 3))
-KA, KB, KC = "madeupkeyA0186" * 4, "madeupkeyB0186" * 4, "madeupkeyC0186" * 4
-SECRET = "made-up-guest-signing-secret-0186-0186-0186-0186"
-q = lambda s: "'" + str(s).replace("'", "''") + "'"
-NODE = shutil.which("node")
-js = """import(%s).then(async (R) => { const o = { call2: await R.topicFor(%s, 2), call1: await R.topicFor(%s, 1), cowork3: await R.topicFor(%s, 3, "cowork"), cowork2: await R.topicFor(%s, 2, "cowork"),
-  ended: await R.topicFor(%s, 1), other: await R.topicFor(%s, 1), lobby1: "lobby:" + (await R.sha256Hex(%s + ":lobby:" + %s)).slice(0, 40), lobby2: "lobby:" + (await R.sha256Hex(%s + ":lobby:" + %s)).slice(0, 40) };
-  console.log(JSON.stringify(o)); });""" % tuple(json.dumps(x) for x in ("file://" + os.path.join(ROOT, "app", "src", "calls", "rules.js"), KA, KA, KA, KA, KB, KC, SECRET, F1, SECRET, F2))
-T = json.loads(subprocess.run([NODE, "--input-type=module", "-e", js], capture_output=True, text=True, check=True).stdout)
-
+SERVER_ONLY = ["tally_check_asks", "tally_check_days", "tally_check_runs", "tally_fetch_log", "tally_gap_closes", "tally_gap_numbers", "tally_gap_retries",
+               "tally_held_reads", "tally_light_days", "tally_light_pace", "tally_period_skips"]
+F1, F2 = "99999999-9999-4999-8999-999999990183", "88888888-8888-4888-8888-888888880183"
+U1, U2 = "aaaaaaaa-0183-4000-8000-000000000001", "aaaaaaaa-0183-4000-8000-000000000002"
 SETUP = """
-do $x$ begin if not exists (select 1 from pg_roles where rolname = 'service_role') then create role service_role; end if; end $x$;
+do $x$ declare r text; begin foreach r in array array['service_role', 'supabase_admin'] loop
+  if not exists (select 1 from pg_roles where rolname = r) then execute format('create role %%I', r); end if; end loop; end $x$;
+alter role service_role bypassrls;
 grant usage on schema public, auth to anon, authenticated, service_role;
-create table platform_secrets (name text primary key, value text); alter table platform_secrets enable row level security;
-insert into platform_secrets values ('call_guest_secret', %(secret)s);
--- two-step: a member whose sign-in has not done it has no firm (as the real my_firm())
-create table t_aal1 (user_id uuid primary key);
-create or replace function my_firm() returns uuid language sql stable security definer set search_path = public as $f$
-  select firm_id from members where user_id = auth.uid() and active and not exists (select 1 from t_aal1 a where a.user_id = auth.uid()) $f$;
-create table call_rooms (id uuid primary key, firm_id uuid not null, kind text default 'meeting', status text not null default 'open', chan_key text not null, chan_epoch int not null default 1,
-  cowork_on boolean not null default false, cowork_epoch int not null default 1, host_user uuid);
-create table call_participants (id uuid primary key, room_id uuid not null references call_rooms(id), firm_id uuid not null, user_id uuid, name text default '', role text not null, state text not null default 'waiting',
-  admitted_at timestamptz, left_at timestamptz, left_why text);
-alter table call_rooms enable row level security; alter table call_participants enable row level security;
--- Realtime's own: the table its policies are written on, and the channel's name as it hands it to them
-create schema realtime;
-create table realtime.messages (id uuid default gen_random_uuid(), topic text not null, extension text not null, payload jsonb, event text, private boolean default true, inserted_at timestamptz default now());
-alter table realtime.messages enable row level security;
-create function realtime.topic() returns text language sql stable as $f$ select nullif(current_setting('realtime.topic', true), '') $f$;
-grant usage on schema realtime to anon, authenticated, service_role;
-grant select, insert, update, delete on realtime.messages to anon, authenticated;
-insert into firms values (%(F1)s, 'Made-up Firm One'), (%(F2)s, 'Made-up Firm Two');
-insert into members (user_id, firm_id, name, role) values (%(host)s, %(F1)s, 'Made-up Host', 'owner'), (%(staff)s, %(F1)s, 'Made-up Staff', 'staff'), (%(idle)s, %(F1)s, 'Made-up Idle', 'staff'),
-  (%(removed)s, %(F1)s, 'Made-up Removed', 'staff'), (%(stale)s, %(F1)s, 'Made-up Away', 'staff'), (%(left)s, %(F1)s, 'Made-up Left', 'staff'), (%(aal1)s, %(F1)s, 'Made-up One Step', 'staff'),
-  (%(other)s, %(F2)s, 'Made-up Other', 'owner');
-insert into t_aal1 values (%(aal1)s);
-insert into call_rooms (id, firm_id, status, chan_key, chan_epoch, cowork_on, cowork_epoch, host_user) values
-  (%(RA)s, %(F1)s, 'open', %(KA)s, 2, true, 3, %(host)s), (%(RB)s, %(F1)s, 'ended', %(KB)s, 1, false, 1, %(host)s), (%(RC)s, %(F2)s, 'open', %(KC)s, 1, false, 1, %(other)s);
-insert into call_participants (id, room_id, firm_id, user_id, role, state, admitted_at, left_why) values
-  (%(p_host)s, %(RA)s, %(F1)s, %(host)s, 'host', 'admitted', now(), null), (%(p_staff)s, %(RA)s, %(F1)s, %(staff)s, 'member', 'admitted', now(), null),
-  (%(p_removed)s, %(RA)s, %(F1)s, %(removed)s, 'member', 'removed', now(), null), (%(p_stale)s, %(RA)s, %(F1)s, %(stale)s, 'member', 'left', now(), 'stale'),
-  (%(p_left)s, %(RA)s, %(F1)s, %(left)s, 'member', 'left', now(), null), (%(p_aal1)s, %(RA)s, %(F1)s, %(aal1)s, 'member', 'admitted', now(), null),
-  (%(p_g_in)s, %(RA)s, %(F1)s, null, 'guest', 'admitted', now(), null), (%(p_g_wait)s, %(RA)s, %(F1)s, null, 'guest', 'waiting', null, null),
-  (%(p_g_removed)s, %(RA)s, %(F1)s, null, 'guest', 'removed', now(), null), (%(p_g_stale)s, %(RA)s, %(F1)s, null, 'guest', 'left', now(), 'stale'),
-  (%(p_other)s, %(RC)s, %(F2)s, %(other)s, 'host', 'admitted', now(), null), (%(p_g_other)s, %(RC)s, %(F2)s, null, 'guest', 'admitted', now(), null),
-  (gen_random_uuid(), %(RB)s, %(F1)s, %(host)s, 'host', 'admitted', now(), null);
-""" % dict({k: q(v) for k, v in U.items()}, **{"p_" + k: q(v) for k, v in P.items()}, F1=q(F1), F2=q(F2), RA=q(RA), RB=q(RB), RC=q(RC), KA=q(KA), KB=q(KB), KC=q(KC), secret=q(SECRET))
-
-db = pg_stand.start(int(os.environ.get("PG186_PORT") or 31886))
-def may(topic, uid=None, pass_=None, ext="broadcast", raw_claims=None):
-    """-> (listen, speak) as Realtime asks: the role, the claims, the channel's name; a write (rolled back) and a read"""
-    claims = raw_claims if raw_claims is not None else json.dumps(dict({"role": "authenticated" if uid else "anon"}, **({"sub": uid} if uid else {}), **({"fincom_call": pass_} if pass_ is not None else {})))
-    pre = "begin; set local role %s; set local fincom.uid = %s; set local request.jwt.claims = %s; set local realtime.topic = %s;" % ("authenticated" if uid else "anon", q(uid or ""), q(claims), q(topic))
-    try: speak = db.one(pre + " insert into realtime.messages (topic, extension, event) values (%s, %s, 'made-up') returning 'yes'; rollback;" % (q(topic), q(ext))) == "yes"
-    except RuntimeError: speak = False
-    try: listen = int(db.one(pre + " select count(*) from realtime.messages where topic = %s and extension = %s; rollback;" % (q(topic), q(ext)))) > 0
-    except RuntimeError: listen = False
-    return listen, speak
-YES, NO = (True, True), (False, False)
+grant create on schema public to supabase_admin;
+-- staging's default privileges (13-Nov-2026): the roles that make tables give everything
+alter default privileges for role postgres in schema public grant all on tables to anon, authenticated, service_role;
+alter default privileges for role postgres in schema public grant all on sequences to anon, authenticated, service_role;
+alter default privileges for role supabase_admin in schema public grant all on tables to anon, authenticated, service_role;
+alter default privileges for role supabase_admin in schema public grant all on sequences to anon, authenticated, service_role;
+grant select on members, firms to anon, authenticated;
+insert into firms values ('%(F1)s', 'Made-up Firm One'), ('%(F2)s', 'Made-up Firm Two');
+insert into members values ('%(U1)s', '%(F1)s', 'Made-up Owner', 'owner', true), ('%(U2)s', '%(F2)s', 'Made-up Other', 'owner', true);
+-- the server's own tables: row security on, no policy, the default privileges left on them
+%(server_only)s
+create table tally_fetch_log2 (id bigserial primary key, firm_id uuid, what text); alter table tally_fetch_log2 enable row level security;
+-- tables with a policy, as migration 97 wrote them (anon: select; authenticated: what the app uses)
+create table t_rows (firm_id uuid, id text, data jsonb, primary key (firm_id, id));
+alter table t_rows enable row level security;
+create policy t_rows_read on t_rows for select to authenticated using (firm_id = my_firm());
+revoke all on t_rows from anon, authenticated; grant select on t_rows to anon, authenticated;
+create table client_timings (id bigserial primary key, firm_id uuid, user_id uuid, what text);
+alter table client_timings enable row level security;
+create policy client_timings_insert_own on client_timings for insert to authenticated with check (user_id = auth.uid() and firm_id = my_firm());
+create policy client_timings_read on client_timings for select to authenticated using (firm_id = my_firm());
+revoke all on client_timings from anon, authenticated; grant select, insert on client_timings to authenticated;
+revoke all on sequence client_timings_id_seq from anon, authenticated; grant usage on sequence client_timings_id_seq to authenticated;
+create table activity (id bigserial primary key, firm_id uuid, user_id uuid, what text, at timestamptz default now());
+alter table activity enable row level security;
+create policy activity_add on activity for insert to authenticated with check (firm_id = my_firm());
+create policy activity_read on activity for select to authenticated using (firm_id = my_firm());
+revoke all on activity from anon, authenticated; grant select on activity to anon, authenticated; grant insert (firm_id, user_id, what) on activity to authenticated;
+create table app_alert_dismissals (id bigint generated always as identity primary key, firm_id uuid, user_id uuid);
+alter table app_alert_dismissals enable row level security;
+create policy app_alert_dismissals_own on app_alert_dismissals for all to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
+revoke all on app_alert_dismissals from anon; revoke all on sequence app_alert_dismissals_id_seq from anon;
+create view t_rows_view with (security_invoker = true) as select firm_id, id from t_rows;
+grant select (name) on firms to anon;
+create or replace function t_open() returns int language sql security definer set search_path = public as $f$ select 1 $f$;
+revoke all on function t_open() from public; grant execute on function t_open() to anon, authenticated;
+insert into t_rows values ('%(F1)s', 'a', '{}'), ('%(F2)s', 'b', '{}');
+""" % dict(F1=F1, F2=F2, U1=U1, U2=U2, server_only="\n".join(
+    "create table %s (%s firm_id uuid, book_id uuid, note text); alter table %s enable row level security;"
+    % (t, "id bigserial primary key," if t in ("tally_fetch_log", "tally_gap_closes") else "", t) for t in SERVER_ONLY))
+ACL = """select c.relname as n, g.rolname as ro, string_agg(lower(a.privilege_type), ',' order by lower(a.privilege_type)) as p
+  from pg_class c cross join lateral aclexplode(c.relacl) a join pg_roles g on g.oid = a.grantee
+ where c.relnamespace = 'public'::regnamespace and c.relkind in ('r', 'p', 'v', 'S') and g.rolname = any(%s) group by 1, 2 order by 1, 2"""
+def acl(db, roles):
+    return {(r["n"], r["ro"]): r["p"] for r in db.rows(ACL % ("array[" + ",".join("'%s'" % x for x in roles) + "]"))}
+def refused(db, sql):
+    try: db.sql(sql); return ""
+    except RuntimeError as e: return str(e)
+db = pg_stand.start(int(os.environ.get("PG186_PORT") or 31186))
 try:
     db.sql(SETUP)
-    db.sql("insert into realtime.messages (topic, extension, event) select t, e, 'made-up' from unnest(array[%s]) t cross join unnest(array['broadcast', 'presence', 'postgres_changes']) e;" % ", ".join(q(v) for v in T.values()))
+    pol0 = db.rows("select tablename, policyname, cmd, roles::text, qual, with_check from pg_policies where schemaname = 'public' order by 1, 2")
+    fn0 = db.rows("select p.oid::regprocedure::text as f, coalesce(p.proacl::text, '') as a from pg_proc p where p.pronamespace = 'public'::regnamespace order by 1")
+    svc0 = acl(db, ["service_role"])
     print("== 1. runs")
     if not RED:
         e = ""
         try: db.sql(text); db.sql(text)
         except RuntimeError as x: e = str(x)
         ok(not e, "runs, and a second time" + (": " + e[-400:] if e else ""))
-    print("== 2. the names")
-    try:
-        n = db.rows("select public.call_topic(%s, 2) as call2, public.call_topic(%s, 3, 'cowork') as cowork3, public.call_lobby_topic(%s) as lobby1, public.call_lobby_topic(%s) as lobby2" % (q(KA), q(KA), q(F1), q(F2)))[0]
-    except RuntimeError: n = {}
-    ok(n == {k: T[k] for k in ("call2", "cowork3", "lobby1", "lobby2")}, "call, working together and lobby names equal rules.js's and fincom-call's (%s)" % T["call2"])
-    ok(len(set(T.values())) == len(T), "every name different (another epoch, part, room or firm)")
-    try: short = db.one("update platform_secrets set value = 'short'; select coalesce(public.call_lobby_topic(%s), 'none'); " % q(F1))
-    except RuntimeError: short = "?"
-    db.sql("update platform_secrets set value = %s;" % q(SECRET))
-    ok(short == "none", "no lobby name while the server has no signing secret")
-    print("== 3. members")
-    for who in ("host", "staff"):
-        ok(may(T["call2"], U[who]) == YES and may(T["call2"], U[who], ext="presence") == YES and may(T["cowork3"], U[who]) == YES and may(T["lobby1"], U[who]) == YES,
-           "%s in the call: its channel (broadcast and presence), working together, the firm's lobby" % who)
-    ok(may(T["call2"], U["idle"]) == NO and may(T["cowork3"], U["idle"]) == NO and may(T["lobby1"], U["idle"]) == YES, "a member of the firm not in the call: the lobby only")
-    ok(all(may(T[t], U["other"]) == NO for t in ("call2", "cowork3", "lobby1")) and may(T["lobby2"], U["other"]) == YES and may(T["other"], U["other"]) == YES, "another firm's member: nothing of this firm; their own lobby and call")
-    ok(may(T["other"], U["host"]) == NO and may(T["lobby2"], U["host"]) == NO, "and this firm's host nothing of theirs")
-    ok(may(T["call2"], U["removed"]) == NO and may(T["cowork3"], U["removed"]) == NO, "a removed member: no")
-    ok(may(T["call2"], U["left"]) == NO, "one who left: no")
-    ok(may(T["call2"], U["stale"]) == YES, "one away too long, not yet back: yes")
-    ok(may(T["call2"], U["aal1"]) == NO and may(T["lobby1"], U["aal1"]) == NO, "one whose two-step is not done: no")
-    ok(may(T["call1"], U["host"]) == NO and may(T["cowork2"], U["host"]) == NO, "the names before someone was removed: nobody")
-    ok(may(T["ended"], U["host"]) == NO, "an ended room: nobody")
-    db.sql("update call_rooms set cowork_on = false where id = %s;" % q(RA))
-    ok(may(T["cowork3"], U["host"]) == NO and may(T["call2"], U["host"]) == YES, "working together off: its channel closed, the call's open")
-    db.sql("update call_rooms set cowork_on = true where id = %s;" % q(RA))
-    ok(may("call:" + "0" * 40, U["host"]) == NO and may("anything", U["host"]) == NO and may(T["call2"].upper(), U["host"]) == NO, "a name that is not a room's: no")
-    print("== 4. guests")
-    gp = lambda p, r=RA: {"room": r, "participant": P[p]}
-    ok(may(T["call2"], None, gp("g_in")) == YES and may(T["call2"], None, gp("g_in"), ext="presence") == YES, "the admitted guest with its pass: the call's channel")
-    ok(may(T["cowork3"], None, gp("g_in")) == NO and may(T["lobby1"], None, gp("g_in")) == NO and may(T["other"], None, gp("g_in")) == NO and may(T["call1"], None, gp("g_in")) == NO,
-       "never working together, the lobby, another room or an old name")
-    ok(may(T["call2"], None, gp("g_wait")) == NO and may(T["call2"], None, gp("g_removed")) == NO, "a waiting or removed guest: no")
-    ok(may(T["call2"], None, gp("g_stale")) == YES, "a guest away too long, not yet back: yes")
-    ok(may(T["call2"], None, gp("g_other", RC)) == NO and may(T["call2"], None, gp("g_other", RA)) == NO and may(T["call2"], None, gp("g_in", RC)) == NO, "a pass for another room, or naming a room the guest is not in: no")
-    ok(may(T["call2"], None, gp("host")) == NO and may(T["call2"], None, gp("staff")) == NO, "a pass naming a member's row: no")
-    ok(may(T["call2"], None, {"room": "x", "participant": "y"}) == NO and may(T["call2"], None, "text") == NO and may(T["call2"], None, {}) == NO and may(T["call2"], None, None) == NO
-       and may(T["call2"], None, raw_claims="") == NO, "a pass that is not readable, an empty one, none: no (and no error)")
-    print("== 5. broadcast and presence only; the policies")
-    ok(may(T["call2"], U["host"], ext="postgres_changes") == NO and may(T["call2"], None, gp("g_in"), ext="postgres_changes") == NO, "another kind of message: no")
-    pol = db.rows("select policyname, cmd, roles::text as roles, permissive from pg_policies where schemaname = 'realtime' and tablename = 'messages' order by 1")
-    ok([(p["policyname"], p["cmd"]) for p in pol] == [("fincom_call_listen", "SELECT"), ("fincom_call_speak", "INSERT")] and all(p["roles"] == "{anon,authenticated}" for p in pol), "two policies, listen (select) and speak (insert): %s" % [(p["policyname"], p["cmd"], p["roles"]) for p in pol])
-    pre = "set role authenticated; set fincom.uid = %s; set request.jwt.claims = %s; set realtime.topic = %s;" % (q(U["host"]), q(json.dumps({"role": "authenticated", "sub": U["host"]})), q(T["call2"]))
-    n0 = db.one("select count(*) from realtime.messages")
-    db.sql(pre + " update realtime.messages set event = 'changed'; delete from realtime.messages;")
-    ok(db.one("select count(*)::text || ':' || count(*) filter (where event = 'changed') from realtime.messages") == n0 + ":0", "nothing changed or removed through them")
-    print("== 6. grants")
-    g = {r["f"]: r["a"] for r in db.rows("select p.proname as f, coalesce((select string_agg(case when a.grantee = 0 then 'public' else a.grantee::regrole::text end, ',' order by 1) from aclexplode(p.proacl) a where a.grantee <> p.proowner), '') as a from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname in ('call_topic', 'call_lobby_topic', 'call_channel_ok')")}
-    ok(g == {"call_topic": "", "call_lobby_topic": "", "call_channel_ok": "anon,authenticated,service_role"}, "call_channel_ok for anon and authenticated; the name functions for nobody: %s" % g)
-    try: leak = db.one("set role authenticated; set fincom.uid = %s; select public.call_lobby_topic(%s)" % (q(U["other"]), q(F1)))
-    except RuntimeError as x: leak = "refused" if "permission denied" in str(x) else "?"
-    ok(leak == "refused", "a signed-in person cannot ask for a firm's lobby name")
-    if not RED:
-        db.sql("alter schema realtime rename to realtime_away;")
-        e = ""
-        try: db.sql(text)
-        except RuntimeError as x: e = str(x)
-        ok(not e, "a database without Realtime: the file runs" + (": " + e[-300:] if e else ""))
+    print("== 2. made afterwards")
+    db.sql("create table t_after (id bigserial primary key, firm_id uuid); set role supabase_admin; create table t_after_admin (id bigserial primary key); reset role;")
+    a = acl(db, ["anon", "authenticated", "service_role"])
+    left = sorted(k for k in a if k[0].startswith("t_after") and k[1] != "service_role")
+    ok(not left, "a table and its sequence made by postgres or supabase_admin: nothing for anon or authenticated" + (": " + str(left) if left else ""))
+    ok(all((n, "service_role") in a for n in ("t_after", "t_after_id_seq", "t_after_admin", "t_after_admin_id_seq")), "service_role on them as before")
+    d = db.rows("select distinct d.defaclrole::regrole::text as r, d.defaclobjtype::text as t from pg_default_acl d cross join lateral aclexplode(d.defaclacl) a join pg_roles g on g.oid = a.grantee where d.defaclnamespace = 'public'::regnamespace and g.rolname in ('anon', 'authenticated')")
+    ok(not d, "no default privilege of public names anon or authenticated" + (": " + str(d) if d else ""))
+    print("== 3. the server's tables")
+    a = acl(db, ["anon", "authenticated", "service_role"])
+    held = sorted(k for k in a if k[0] in SERVER_ONLY + ["tally_fetch_log2"] and k[1] != "service_role")
+    ok(not held, "the %d tables with row security and no policy: nothing for anon or authenticated%s" % (len(SERVER_ONLY) + 1, ": " + str(held[:6]) if held else ""))
+    pub = db.one("select count(*) from pg_class c cross join lateral aclexplode(c.relacl) a where c.relnamespace = 'public'::regnamespace and a.grantee = 0 and c.relkind in ('r', 'p')")
+    ok(pub == "0", "nor for public")
+    for ro in ("anon", "authenticated"):
+        e = refused(db, "set role %s; set fincom.uid = '%s'; select count(*) from tally_check_asks; insert into tally_gap_closes (note) values ('x');" % (ro, U1))
+        ok("permission denied" in e, "%s: a read of tally_check_asks is refused" % ro)
+    ok(db.one("set role service_role; insert into tally_gap_closes (note) values ('made-up') returning note") == "made-up", "service_role writes them as before")
+    print("== 4. anon")
+    n = sorted(k[0] for k in acl(db, ["anon"]))
+    ok(not n, "no privilege on any table, view or sequence of public" + (": " + " ".join(n[:10]) if n else ""))
+    c = db.one("select count(*) from pg_attribute a join pg_class k on k.oid = a.attrelid cross join lateral aclexplode(a.attacl) x join pg_roles g on g.oid = x.grantee where k.relnamespace = 'public'::regnamespace and g.rolname = 'anon'")
+    ok(c == "0", "nor on a column")
+    ok(db.one("set role anon; select t_open()") == "1", "a function open to anon still answers")
+    print("== 5. authenticated")
+    r = db.rows("set role authenticated; set fincom.uid = '%s'; select id from t_rows" % U1)
+    ok([x["id"] for x in r] == ["a"], "a table with a policy: its own firm's rows only")
+    ok(db.one("set role authenticated; set fincom.uid = '%s'; select count(*) from t_rows_view" % U1) == "1", "and through the view")
+    e = refused(db, "set role authenticated; set fincom.uid = '%s'; insert into client_timings (firm_id, user_id, what) values ('%s', '%s', 'open');"
+                    "insert into activity (firm_id, user_id, what) values ('%s', '%s', 'made-up'); insert into app_alert_dismissals (firm_id, user_id) values ('%s', '%s');" % (U1, F1, U1, F1, U1, F1, U1))
+    ok(not e, "inserts through a serial (client_timings), a column grant (activity) and an identity (app_alert_dismissals)" + (": " + e[-300:] if e else ""))
+    e = refused(db, "set role authenticated; set fincom.uid = '%s'; insert into client_timings (firm_id, user_id, what) values ('%s', '%s', 'other firm');" % (U1, F2, U1))
+    ok("row-level security" in e, "an insert for another firm is refused by the policy as before")
+    e = refused(db, "set role authenticated; select setval('client_timings_id_seq', 1);")
+    ok("permission denied" in e, "cannot set a sequence")
+    a = acl(db, ["authenticated"])
+    seqs = {k[0]: v for k, v in a.items() if k[0].endswith("_seq")}
+    ok(seqs == {"client_timings_id_seq": "usage", "activity_id_seq": "usage", "app_alert_dismissals_id_seq": "usage"}, "holds usage on the sequences it inserts through and no other: %s" % seqs)
+    ok(a.get(("t_rows", "authenticated")) == "select" and a.get(("client_timings", "authenticated")) == "insert,select", "its table privileges with a policy: as before")
+    print("== 6. unchanged")
+    pol1 = db.rows("select tablename, policyname, cmd, roles::text, qual, with_check from pg_policies where schemaname = 'public' order by 1, 2")
+    fn1 = db.rows("select p.oid::regprocedure::text as f, coalesce(p.proacl::text, '') as a from pg_proc p where p.pronamespace = 'public'::regnamespace order by 1")
+    ok(pol0 == pol1 and len(pol0) == 6, "every policy (%d)" % len(pol1))
+    ok(fn0 == fn1, "every function's grants (%d)" % len(fn1))
+    svc1 = acl(db, ["service_role"])
+    ok(all(svc1.get(k) == v for k, v in svc0.items()), "everything service_role held")
+    ok(db.one("select count(*) from pg_class c where c.relnamespace = 'public'::regnamespace and c.relkind in ('r', 'p') and not c.relrowsecurity and c.relname like 'tally_%' and c.relname = any(array[" + ",".join("'%s'" % t for t in SERVER_ONLY) + "])") == "0", "row security still on the server's tables")
 finally:
     db.stop()
 print("\nall passed" if not fails else "\nFAILED: %d" % len(fails)); sys.exit(1 if fails else 0)

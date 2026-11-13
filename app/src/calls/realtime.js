@@ -2,7 +2,7 @@
 // (Phoenix channels, JSON, vsn 1.0.0). FinCom has no supabase-js; this is the part calls need (about 3 KB, in the calls
 // chunk only). It reconnects by itself with back-off when the line drops, joins the channel again and tracks presence
 // again; the call screen says "Reconnecting…" meanwhile.
-// A private channel (migration 186: fincom-call says so with the channel's name) is joined with a sign-in: `getToken`
+// A private channel (migration 194: fincom-call says so with the channel's name) is joined with a sign-in: `getToken`
 // gives it (a member's own access token, a guest's channel pass), asked again before every join and every few minutes,
 // and sent on when it changes, so a long call outlives the token it began with. A public one as before.
 //   const ch = channel({url, key, topic, presenceKey, onStatus, private, getToken});

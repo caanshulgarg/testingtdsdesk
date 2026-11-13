@@ -1,4 +1,4 @@
--- migration-184-console-last-used.sql (13-Nov-2026, branch next-sec-db; the database review of 13-Nov-2026, item M2).
+-- migration-187-console-last-used.sql (13-Nov-2026, branch next-sec-db; the database review of 13-Nov-2026, item M2).
 -- Written, NOT run yet: the owner reads it and runs it. Needs migration 122.
 -- Why: the console's Keys page shows when each platform key was last used (console_secret_last_used, migration 122). It
 -- read each time through console_try_ts(p_sql), a helper that ran the text it was given. Only this file's own fixed
@@ -12,7 +12,7 @@
 --                                nothing that names it fails); taken back from the service role.
 -- The Keys page needs no change (server/console/modules/keys.ts calls console_secret_last_used as before).
 -- Add-only: one new function, two replaced with the same arguments; no table, column or row changed; grants restated.
--- One transaction, lock_timeout 10 s; safe twice. Tested by tests/run_migration184.py (pg_stand).
+-- One transaction, lock_timeout 10 s; safe twice. Tested by tests/run_migration187.py (pg_stand).
 begin;
 set local lock_timeout = '10s';
 

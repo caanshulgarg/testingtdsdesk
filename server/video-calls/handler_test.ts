@@ -929,7 +929,7 @@ Deno.test("AI control centre: the summary and subtitles switched off by FinCom a
   eq([ok.status, ok.j.summary.model], [200, "claude-opus-5-5"], "the console's model made the summary");
 });
 
-// the database review of 13-Nov-2026 (M5; migration 186): private channels once the function holds the project's JWT secret
+// the database review of 13-Nov-2026 (M5; migration 194): private channels once the function holds the project's JWT secret
 Deno.test("private channels: off without the secret (as before); with it every channel name says private, a guest gets a signed channel pass, a member none", async () => {
   const jwt = async (t: string, secret: string) => {
     const [h, b, sig] = String(t).split(".");

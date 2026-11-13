@@ -1,4 +1,4 @@
--- migration-186-call-private-channels.sql (13-Nov-2026, branch next-sec-db; the database review of 13-Nov-2026, item M5).
+-- migration-194-call-private-channels.sql (13-Nov-2026, branch next-sec-db; the database review of 13-Nov-2026, item M5).
 -- Written, NOT run yet: the owner reads it and runs it. Needs migrations 102 and 106 (call_rooms, call_participants).
 -- Why: a call's signalling, presence and "working together" go over Supabase Realtime channels (broadcast and presence).
 -- They were public channels: who may listen or speak rested on the channel's name alone (made from the room's key and
@@ -27,9 +27,9 @@
 -- A person removed from a call fails both ways: their row says removed, and the room's name has moved on.
 -- By itself this changes nothing for a call: public channels do not ask these policies. The channels become private
 -- when fincom-call is given the project's JWT secret (CALLS_CHANNEL_JWT_SECRET) and the app of this branch is out;
--- then "Allow public access" can be switched off in the project's Realtime settings (docs/MIGRATION-ORDER.md, 186).
+-- then "Allow public access" can be switched off in the project's Realtime settings (docs/MIGRATION-ORDER.md, 194).
 -- Add-only: three new functions, two new policies; no table, column or row changed. One transaction, lock_timeout 10 s;
--- safe twice. Tested by tests/run_migration186.py (pg_stand; the names against rules.js itself).
+-- safe twice. Tested by tests/run_migration194.py (pg_stand; the names against rules.js itself).
 begin;
 set local lock_timeout = '10s';
 
@@ -83,7 +83,7 @@ grant execute on function public.call_channel_ok(text) to anon, authenticated, s
 do $pol$
 begin
   if to_regclass('realtime.messages') is null or to_regprocedure('realtime.topic()') is null then
-    raise notice 'migration 186: Realtime (realtime.messages, realtime.topic()) is not on this database; no policy made';
+    raise notice 'migration 194: Realtime (realtime.messages, realtime.topic()) is not on this database; no policy made';
     return;
   end if;
   if not exists (select 1 from pg_policies where schemaname = 'realtime' and tablename = 'messages' and policyname = 'fincom_call_listen') then

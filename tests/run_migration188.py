@@ -1,6 +1,6 @@
-"""python3 tests/run_migration185.py - server/mis-run/migration-185-mis-timer-address.sql (13-Nov-2026, branch
+"""python3 tests/run_migration188.py - server/mis-run/migration-188-mis-timer-address.sql (13-Nov-2026, branch
 next-sec-db): the timer of the scheduled MIS reports calls this project's own address from Vault, and a signed-in person
-reads only the open row of app_settings. On a throwaway PostgreSQL (pg_stand, port 31885 unless PG185_PORT; never a real
+reads only the open row of app_settings. On a throwaway PostgreSQL (pg_stand, port 31188 unless PG188_PORT; never a real
 database), with stand-ins for pg_cron (run_migration157's), pg_net (the call is written down, nothing is sent) and Vault
 (zoho_stand's); made-up addresses and keys only. The job is first made as migration 100 makes it (its command cut from
 100's file), at 157's minutes.
@@ -14,20 +14,20 @@ database), with stand-ins for pg_cron (run_migration157's), pg_net (the call is 
      SECURITY DEFINER reader every row; anon nothing more than before
   5. Vault without fincom_project_url, or with one that is not https://host: the job is left as it was (said, no error)
   6. no pg_cron: the file runs, the policy is made
-RED_WITHOUT_185=1: the same checks without running 185 (2, 3 and 4 fail)."""
+RED_WITHOUT_188=1: the same checks without running 188 (2, 3 and 4 fail)."""
 import os, re, sys, json, hashlib
 HERE = os.path.dirname(os.path.abspath(__file__)); ROOT = os.path.join(HERE, ".."); sys.path.insert(0, HERE)
 import pg_stand
 import zoho_stand as Z
 M100 = os.path.join(ROOT, "server", "mis-run", "migration-100-mis-schedules.sql")
-M185 = os.path.join(ROOT, "server", "mis-run", "migration-185-mis-timer-address.sql")
-RED = os.environ.get("RED_WITHOUT_185") == "1"
+M188 = os.path.join(ROOT, "server", "mis-run", "migration-188-mis-timer-address.sql")
+RED = os.environ.get("RED_WITHOUT_188") == "1"
 fails = []
 def ok(c, w):
     print(("  ok   " if c else "  FAIL ") + w)
     if not c: fails.append(w)
-text = open(M185).read()
-print("  md5 of %s: %s (%d bytes)" % (os.path.basename(M185), hashlib.md5(text.encode()).hexdigest(), len(text.encode())))
+text = open(M188).read()
+print("  md5 of %s: %s (%d bytes)" % (os.path.basename(M188), hashlib.md5(text.encode()).hexdigest(), len(text.encode())))
 code = "\n".join(l.split("--")[0] for l in text.lower().splitlines())
 print("== 0. the file")
 ok(code.count("begin;") == 1 and code.count("commit;") == 1 and code.strip().startswith("begin;") and code.strip().endswith("commit;")
@@ -75,7 +75,7 @@ def fire(db):
     db.sql("truncate net.calls;")
     db.sql(db.rows("select command from cron.job where jobname = 'mis-run-due'")[0]["command"] + ";")
     return db.rows("select url, headers::text as headers, body::text as body, timeout_milliseconds as t from net.calls order by id")
-db = pg_stand.start(int(os.environ.get("PG185_PORT") or 31885))
+db = pg_stand.start(int(os.environ.get("PG188_PORT") or 31188))
 try:
     db.sql(SETUP)
     before = db.rows(JOBS)

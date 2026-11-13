@@ -1,4 +1,4 @@
--- migration-183-default-grants.sql (13-Nov-2026, branch next-sec-db; the database review of 13-Nov-2026, item M1).
+-- migration-186-default-grants.sql (13-Nov-2026, branch next-sec-db; the database review of 13-Nov-2026, item M1).
 -- Written, NOT run yet: the owner reads it and runs it.
 -- Why: a table or sequence made in schema public was given to anon and authenticated by the default privileges of the
 -- role that made it, so a table's row-level security was its only protection; eleven tables that only the server uses
@@ -21,7 +21,7 @@
 -- table with a policy, anything service_role holds.
 -- Order: after every other migration, and again after any later run of migration 97 (97 gives anon its SELECTs back).
 -- Add-only in the sense of the house rule: no table, column, row, policy or function is dropped or changed; privileges
--- are taken back and restated. One transaction, lock_timeout 10 s; safe twice. Tested by tests/run_migration183.py.
+-- are taken back and restated. One transaction, lock_timeout 10 s; safe twice. Tested by tests/run_migration186.py.
 begin;
 set local lock_timeout = '10s';
 
@@ -35,7 +35,7 @@ begin
       alter default privileges for role supabase_admin in schema public revoke all on tables from anon, authenticated;
       alter default privileges for role supabase_admin in schema public revoke all on sequences from anon, authenticated;
     exception when insufficient_privilege then
-      raise notice 'migration 183: this role may not change supabase_admin''s default privileges (no table of public is made by it); left as they are';
+      raise notice 'migration 186: this role may not change supabase_admin''s default privileges (no table of public is made by it); left as they are';
     end;
   end if;
 end $do$;

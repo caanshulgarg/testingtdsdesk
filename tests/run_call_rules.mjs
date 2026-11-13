@@ -37,7 +37,7 @@ const later = t.replace(/\.(\d{10})\./, (m, n) => "." + (Number(n) + 99999) + ".
 ok((await R.verifyGuest(secret, later, 1_800_000_100)) === null, "a later expiry put in: refused");
 let threw = false; try { await R.signGuest("short", room, p, 0); } catch (e) { threw = true; }
 ok(threw, "no pass is signed with a short secret");
-// a guest's pass for the private channel (migration 186): a JWT Realtime can check with the project's secret
+// a guest's pass for the private channel (migration 194): a JWT Realtime can check with the project's secret
 const cp = await R.signChannelPass(secret, room, p, 1_800_000_000.9);
 const [cph, cpb, cps] = cp.split("."), un = (x) => JSON.parse(Buffer.from(x, "base64url").toString());
 const { createHmac } = await import("node:crypto");

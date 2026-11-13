@@ -1,28 +1,28 @@
-"""python3 tests/run_migration184.py - server/console/migration-184-console-last-used.sql (13-Nov-2026, branch
+"""python3 tests/run_migration187.py - server/console/migration-187-console-last-used.sql (13-Nov-2026, branch
 next-sec-db): the console's "last used" of each platform key read by named, fixed readings; 122's helper that took a text
-runs nothing any more. On a throwaway PostgreSQL (pg_stand, port 31884 unless PG184_PORT; never a real database), made-up
+runs nothing any more. On a throwaway PostgreSQL (pg_stand, port 31187 unless PG187_PORT; never a real database), made-up
 rows only, with migration 122's own two functions first (cut from its file).
   0. the file: one transaction, lock_timeout 10 s; add-only (functions only, no table touched); names no real database;
-     every text 122 passed to its helper is one of 184's fixed readings, word for word; its md5
+     every text 122 passed to its helper is one of 187's fixed readings, word for word; its md5
   1. runs, and a second time
   2. the Keys page's answer (console_secret_last_used) is the same as 122's, key for key, with a table and two columns
      that are not on the database (null, never an error), and as the service role
   3. console_try_ts: answers null and runs nothing whatever it is given; the service role may not call it
   4. console_last_ts: a name only (a query, an unknown name, null: null and nothing run); only the database's owner
   5. grants: nothing for public, anon or authenticated on the three; the service role on console_secret_last_used only
-RED_WITHOUT_184=1: the same checks without running 184 (3, 4 and 5 fail)."""
+RED_WITHOUT_187=1: the same checks without running 187 (3, 4 and 5 fail)."""
 import os, re, sys, json, hashlib
 HERE = os.path.dirname(os.path.abspath(__file__)); ROOT = os.path.join(HERE, ".."); sys.path.insert(0, HERE)
 import pg_stand
 M122 = os.path.join(ROOT, "server", "console", "migration-122-console-ops.sql")
-M184 = os.path.join(ROOT, "server", "console", "migration-184-console-last-used.sql")
-RED = os.environ.get("RED_WITHOUT_184") == "1"
+M187 = os.path.join(ROOT, "server", "console", "migration-187-console-last-used.sql")
+RED = os.environ.get("RED_WITHOUT_187") == "1"
 fails = []
 def ok(c, w):
     print(("  ok   " if c else "  FAIL ") + w)
     if not c: fails.append(w)
-t122, text = open(M122).read(), open(M184).read()
-print("  md5 of %s: %s (%d bytes)" % (os.path.basename(M184), hashlib.md5(text.encode()).hexdigest(), len(text.encode())))
+t122, text = open(M122).read(), open(M187).read()
+print("  md5 of %s: %s (%d bytes)" % (os.path.basename(M187), hashlib.md5(text.encode()).hexdigest(), len(text.encode())))
 code = "\n".join(l.split("--")[0] for l in text.lower().splitlines())
 print("== 0. the file")
 ok(code.count("begin;") == 1 and code.count("commit;") == 1 and code.strip().startswith("begin;") and code.strip().endswith("commit;")
@@ -34,7 +34,7 @@ f122 = lambda name: re.search(r"create or replace function public\.%s\(.*?\nend 
 old_used, old_try = f122("console_secret_last_used"), f122("console_try_ts")
 passed = [x.replace("''", "'") for x in re.findall(r"console_try_ts\('((?:[^']|'')*)'\)", old_used)]
 fixed = re.findall(r"then \$q\$(.*?)\$q\$", text)
-ok(len(passed) == 18 and len(fixed) == 17 and set(passed) == set(fixed), "the %d texts 122 passed (%d different) are 184's %d fixed readings, word for word" % (len(passed), len(set(passed)), len(fixed)))
+ok(len(passed) == 18 and len(fixed) == 17 and set(passed) == set(fixed), "the %d texts 122 passed (%d different) are 187's %d fixed readings, word for word" % (len(passed), len(set(passed)), len(fixed)))
 ok(re.findall(r"\bexecute\s+(?!on function)\S+", code) == ["execute q"] and len(re.findall(r"p_sql", code)) == 1, "one execute, of a fixed reading only; the text given to console_try_ts is never used")
 
 SETUP = """
@@ -58,7 +58,7 @@ create or replace function t_mark() returns timestamptz language plpgsql securit
 def refused(db, sql):
     try: db.sql(sql); return ""
     except RuntimeError as e: return str(e)
-db = pg_stand.start(int(os.environ.get("PG184_PORT") or 31884))
+db = pg_stand.start(int(os.environ.get("PG187_PORT") or 31187))
 try:
     db.sql(SETUP); db.sql(old_try + "\n" + old_used)
     db.sql("revoke all on function console_try_ts(text), console_secret_last_used() from public; grant execute on function console_try_ts(text), console_secret_last_used() to service_role;")

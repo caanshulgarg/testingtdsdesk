@@ -893,3 +893,35 @@ a company whose requests were measured at 0.3 s or less (60 s otherwise), and sa
 (the cloud now sees typing only while a read waits for it); and pickRefused (pickack.go) should refresh
 the refusal's time (a.at) when a day is refused for `typing` again, so the cloud sees the typing go on. Tested: `tests/run_migration182.py`,
 `tests/run_gap_post_ingest.py`, `tests/run_gap_older_page.py`.
+
+**186, 187, 188, 194, 195: the database review of 13-Nov-2026** (branch `next-sec-db`; **written, not run yet**). Five
+files, each on its own, each with `tests/run_migrationNNN.py` on pg_stand (RED_WITHOUT_NNN=1 fails). Add-only, one
+transaction, lock_timeout 10 s, safe twice. Any order among them; 186 last of all and again after any later run of 97.
+- **186, default grants** (md5 38ba5128c6bdac3a2442fe0d74eb1bbf): `server/security/migration-186-default-grants.sql`. Tables and sequences made from now on in public give
+  nothing to anon or authenticated by default (postgres; supabase_admin where this role may say so); the server's own
+  tables (row security on, no policy) hold nothing for public, anon or authenticated; anon holds no table or sequence of
+  public; authenticated loses MAINTAIN and keeps USAGE only on the sequences it inserts through. **From now on a new
+  table the app reads or writes directly needs its GRANT in its own migration** (the rule since 97), or the app gets
+  "permission denied". Migration 97 gives anon its SELECTs back: run 186 again after any run of 97.
+  `tests/run_migration_grants.py` knows 186 (its snapshot of 20-Oct-2026 is from before it).
+- **187, console last used** (md5 f3bb626b24bf5a96ca0ae93fd8be26ea): `server/console/migration-187-console-last-used.sql`. Needs 122. The Keys page's "last used" by named, fixed
+  readings (`console_last_ts`); `console_try_ts(text)` runs nothing any more and is the owner's only. No console change.
+- **188, MIS timer address** (md5 203910649457b8b36bb3f4a6cfed3750): `server/mis-run/migration-188-mis-timer-address.sql`. Needs 100. `mis-run-due` calls Vault's
+  `fincom_project_url` + `/functions/v1/mis-run` (same job, minutes, key and body); a signed-in person reads only the
+  row `signup` of `app_settings` (one restrictive policy). Before running: `fincom_project_url` is `https://host`, no
+  slash at its end; the row `mis_run` is no longer read by anything.
+- **194, call private channels** (md5 ef38b558ad299a31af3623b661a92af3): `server/video-calls/migration-194-call-private-channels.sql`. Needs 102 and 106. `call_channel_ok` and two policies
+  on `realtime.messages` (listen, speak): a call's channel for the people in it, working together while it is on, the
+  firm's lobby for its members, a guest with the channel pass fincom-call signs. By itself it changes nothing. To switch
+  the channels to private, in this order: (1) run 194; (2) deploy `fincom-call` of this branch (without the secret it
+  answers as before); (3) publish the app of this branch and wait until no older app is open (an older app joins the
+  public channel and would not meet people on the private one); (4) set the function secret
+  `CALLS_CHANNEL_JWT_SECRET` to the project's JWT secret (32 characters or more; the legacy HS256 secret Realtime
+  verifies with); (5) after a call with a guest worked, switch off "Allow public access" in the project's Realtime
+  settings. To go back: remove the secret.
+- **195, the review's small items** (md5 eb9a813621d162c3970643869385634a): `server/security/migration-195-review-lows.sql`. Needs 1, 47, 77, 101, 108, 118, 119.
+  `autopost_claim` / `autopost_mark` ask the two-step sign-in and `can_write()`; `charge_usage` answers a look-only
+  member `look_only` (the app of this branch says so); `post_inbox` takes an https link or a plain path only (its own
+  text kept as `post_inbox_base`); the upload policies of doc-inbox and tally-uploads ask `can_write()`; trigger
+  functions not executable by anon or authenticated; search_path fixed on five functions; four policies ask
+  `auth.uid()` once a query; two indexes. Agents that post to the inbox must send https links.
