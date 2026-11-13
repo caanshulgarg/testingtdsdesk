@@ -150,13 +150,17 @@ func TestR2516ServiceSettingsAllowList(t *testing.T) {
 	if toInt(c.Get("Port")) != 9104 || str(c.Get("InstanceId")) != "abcdef0123456789" || str(c.Get("KeepDailyAt")) != "21:30" {
 		t.Fatalf("plain choices not kept: %v", c.keys)
 	}
-	for _, k := range []string{"Key", "CloudUrl", "CloudKey", "UpdateUrl", "FvuJar", "FvuJarSha256", "JavaExe", "FvuOut", "PairedBrowsers", "PostOnly", "TallyMaxSec"} {
+	for _, k := range []string{"CloudUrl", "CloudKey", "UpdateUrl", "FvuJar", "FvuJarSha256", "JavaExe", "FvuOut", "PostOnly", "TallyMaxSec"} {
 		if c.Has(k) {
 			t.Errorf("%s taken", k)
 		}
 	}
+	// the browsers' keys go on working; the link to FinCom waits for FinCom (here not FinCom's address: none)
+	if str(c.Get("Key")) != "keyvalue-not-taken" || !c.Has("PairedBrowsers") || c.Has("PendingCloudKey") {
+		t.Fatalf("keys: %v", c.keys)
+	}
 	l := strings.Join(lines, "\n")
-	if !strings.Contains(l, "CloudKey") || strings.Contains(l, "valuenottaken") || strings.Contains(l, "keyvalue") {
+	if !strings.Contains(l, "UpdateUrl") || strings.Contains(l, "valuenottaken") || strings.Contains(l, "keyvalue") {
 		t.Fatalf("log: %s", l)
 	}
 	if c := serviceSettingsFrom(osTree{}, filepath.Join(dir, "none.json"), func(string) {}); len(c.keys) != 0 {
@@ -195,5 +199,74 @@ func TestR2516ServiceCopyCapped(t *testing.T) {
 		if winDeviceName(n) {
 			t.Errorf("%s is not a device name", n)
 		}
+	}
+}
+
+// the link to FinCom from the earlier settings: kept apart, and taken only when FinCom confirms it; refused: dropped
+// (connect again); FinCom not reached: asked again later, never used meanwhile
+func TestR2516PendingCloudLink(t *testing.T) {
+	const u = "https://qbocskaiewaxqcvaunzc.supabase.co/functions/v1/tally-ingest"
+	key := "fcd_" + strings.Repeat("ab", 24)
+	dir := t.TempDir()
+	p := filepath.Join(dir, "old.json")
+	_ = os.WriteFile(p, []byte(`{"CloudUrl": "`+u+`", "CloudKey": "`+key+`", "InstanceId": "abcdef0123456789"}`), 0o644)
+	c := serviceSettingsFrom(osTree{}, p, func(string) {})
+	if str(c.Get("PendingCloudUrl")) != u || str(c.Get("PendingCloudKey")) != key || c.Has("CloudKey") {
+		t.Fatalf("not kept apart: %v", c.keys)
+	}
+	r2515LogHere(t, dir)
+	old := pendingCheckFn
+	t.Cleanup(func() { pendingCheckFn = old })
+	var asked []M
+	answer := func(code int, j M) {
+		pendingCheckFn = func(gu, gk string, b M) (int, M) {
+			if gu != u || gk != key || str(b["kind"]) != "key_check" || obj(b["bridge"])["id"] == nil {
+				t.Fatalf("asked %s %s %v", gu, gk, b)
+			}
+			asked = append(asked, b)
+			return code, j
+		}
+	}
+	set := func() {
+		setCfg("CloudUrl", "")
+		setCfg("CloudKey", "")
+		setCfg("PendingCloudUrl", u)
+		setCfg("PendingCloudKey", key)
+		pendingMu.Lock()
+		pendingAsked = time.Time{}
+		pendingMu.Unlock()
+	}
+	// not reached, busy, an older cloud: later; nothing used
+	for _, a := range []struct {
+		code int
+		j    M
+	}{{0, nil}, {503, M{"busy": true}}, {400, M{"ok": false, "error": "unknown kind"}}, {409, M{"ok": false, "notReady": true}}} {
+		set()
+		answer(a.code, a.j)
+		if r := checkPendingCloud(); r != "later" || cloudOn() || cfgS("PendingCloudKey") == "" {
+			t.Fatalf("%d: %s, cloudOn %v", a.code, r, cloudOn())
+		}
+	}
+	// asked at most every two minutes
+	n := len(asked)
+	if checkPendingCloud(); len(asked) != n {
+		t.Fatal("asked again at once")
+	}
+	// refused: dropped
+	for _, a := range []struct {
+		code int
+		j    M
+	}{{200, M{"ok": true, "known": false}}, {401, M{"ok": false}}, {409, M{"ok": false, "idRefused": true}}} {
+		set()
+		answer(a.code, a.j)
+		if r := checkPendingCloud(); r != "dropped" || cloudOn() || cfgS("PendingCloudKey") != "" {
+			t.Fatalf("%d: %s", a.code, r)
+		}
+	}
+	// confirmed: the link, nothing to do
+	set()
+	answer(200, M{"ok": true, "known": true})
+	if r := checkPendingCloud(); r != "taken" || !cloudOn() || cloudKey() != key || cfgS("CloudUrl") != u || cfgS("PendingCloudKey") != "" {
+		t.Fatalf("confirmed: %s", r)
 	}
 }

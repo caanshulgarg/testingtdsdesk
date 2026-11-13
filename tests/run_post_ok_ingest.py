@@ -15,6 +15,7 @@ post_ok, the bridge's read-only question before it sends each part of a posting 
   9. (review L3) posts_update of a posting another FinCom Bridge took (taken_by): answered cancelled (notYours), its
      acceptances stamped first, nothing of the row written;
  10. (2.5.16) posts_update from a bridge in test mode: refused, its acceptances (a posting of this firm only) stamped first.
+ 11. (2.5.16) key_check: known for a bridge id this computer key holds, not for another, and asking binds nothing.
 Needs Deno (DENO, default: the deno on the PATH or /opt/deno/deno)."""
 import os, sys, json, time, hashlib, subprocess, urllib.request, urllib.error, shutil, threading
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
@@ -128,6 +129,16 @@ try:
     F.T["tally_post_jobs"].append(dict(job("p11", "running"), firm_id="f-other"))
     c, r = call({"kind": "posts_update", "shadow": True, "version": "2.5.16", "bridge": ME, "id": "p11", "status": "running", "results": [{"id": "K1", "ok": True}]})
     ok(c == 403 and not [a for a in F.ARGS.get("tally_post_id_accept", []) if a.get("p_job") == "p11"], "another firm's posting: refused, nothing stamped")
+    print("== 11. key_check (2.5.16): read only, before the id is bound")
+    c, r = call({"kind": "key_check", "version": "2.5.16", "bridge": ME})
+    ok(c == 200 and r == {"ok": True, "known": True}, "this computer's own bridge id: known (%s %s)" % (c, r))
+    NEW = dict(ME, id="go-cccc002516")
+    c, r = call({"kind": "key_check", "version": "2.5.16", "bridge": NEW})
+    c2, r2 = call({"kind": "key_check", "version": "2.5.16", "bridge": NEW})
+    ok(c == 200 and r == {"ok": True, "known": False} and r2 == {"ok": True, "known": False}
+       and not any(x.get("bridge_id") == NEW["id"] for x in F.T.get("tally_bridge_ids", [])), "an id this key never held: not known, and not bound by asking")
+    c, r = call({"kind": "key_check", "version": "2.5.16", "bridge": dict(ME, id="nope")})
+    ok(c == 400, "not a bridge id: refused (%s)" % c)
 finally:
     fn.terminate()
     try: fn.wait(10)

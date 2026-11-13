@@ -28,15 +28,15 @@ only.
     "FinCom Bridge state <letters>" instead). Windows and administrators may change it; you may only read it.
     At the first start of 2.5.16 the copy of your books and postings is copied there from
     <your user folder>\AppData\Local\TDS Desk Bridge, with your own rights (the old folder is left as it was).
-    From the old settings only plain choices are kept (the port, the reading times). FinCom must be connected again
-    once: right-click the icon, Connect FinCom on this computer..., type the code. If the FVU was set in the settings,
-    set it again.
+    From the old settings the plain choices (the port, the reading times) and the browsers' keys are kept: nothing to
+    do. The link to FinCom is used once FinCom confirms it is this computer's (within a few minutes of the first start);
+    only if FinCom says no does the tray ask to connect FinCom again. If the FVU was set in the settings, set it again.
     The first start of 2.5.16 needs you signed in to Windows. Until its folder is ready the service does not start
     the bridge: the icon stays red, and Windows' Event Viewer (Windows Logs > Application, source FinComBridge) says
     why; it tries again every minute.
     "Only my own Tally" is always on for the service.
     Check: after the update, open C:\ProgramData\FinCom Bridge\state. You should see: one folder; the bridge on the
-    same port; after Connect FinCom, FinCom shows the computer again. Try to change tds-bridge.config.json there as
+    same port; FinCom shows the computer connected again by itself, and the log says "FinCom confirmed the link". Try to change tds-bridge.config.json there as
     yourself (not as administrator): Windows refuses. The tray icon's own lines go to
     %LOCALAPPDATA%\FinCom Bridge\tray.log.
  3. Each Windows user's recorder files are their own. In C:\ProgramData\FinCom\recorder each user's Tally may add its
@@ -73,7 +73,7 @@ WINDOWS ONLY (the automatic tests cannot run these; check them on a real Windows
     installed under Program Files (Oracle, Eclipse Adoptium, Microsoft and the like do so); with the bridge for all
     users it runs only while you are signed in.
   - item 2: the first start copies with your rights, waits while you are not signed in (Event Viewer line), uses a
-    fresh folder when the usual one is not usable; FinCom connected again once.
+    fresh folder when the usual one is not usable; FinCom's link confirmed by FinCom, with nothing to do.
   - item 3: the recorder files' owners, failed.txt's permissions, another user's file not read.
   - item 4: Disconnect a browser... in the tray; signing out of FinCom disconnects that browser.
 

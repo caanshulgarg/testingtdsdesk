@@ -10,9 +10,9 @@
 //
 // The one copy from the earlier folder is read with the owner's rights (impersonated: nothing the owner may not read
 // is copied), refuses links and junctions at every level, leaves out the bridge's logs and settings files, and stops
-// at serviceCopyMaxBytes / serviceCopyMaxFiles. From the earlier settings file only plain choices are taken
-// (serviceSettingsAllowed); FinCom's link, the bridge key, the FVU, the update address and the paired browsers are
-// set again (FinCom is connected again once).
+// at serviceCopyMaxBytes / serviceCopyMaxFiles. From the earlier settings file only plain choices and the browsers' keys
+// are taken (serviceSettingsAllowed); FinCom's link waits until FinCom confirms it (cloudpending.go); the FVU, the update
+// address and PostOnly are set again.
 //
 // Whatever the settings file says, the service also keeps these fixed (applyServicePolicy): only its owner's own Tally
 // (OnlyMySession), its owner as the install recorded it in HKLM (Owner, OwnerSid), Tally on this computer (TallyHost
@@ -268,12 +268,14 @@ func copyServiceHome(rd treeReader, old, dir string, log func(string)) error {
 }
 
 // the settings the service takes from a settings file it does not protect (the owner's folder of an earlier version):
-// these only. Everything else is the standard value or set again by the setup or FinCom: the computer's link to FinCom
-// (CloudUrl, CloudKey) and its bridge key are not taken, so FinCom is connected again once; the FVU, the update address,
-// the paired browsers and the PostOnly list neither
+// these only. The link to FinCom (CloudUrl, CloudKey) is kept apart until FinCom confirms it (cloudpending.go); the
+// FVU, the update address and the PostOnly list are set again by the setup, the owner or FinCom
 var serviceSettingsAllowed = []string{"Port", "TallyPorts", "FallbackPorts", "PairWindowMin", "GentleMs", "StatusCacheSec", "TallyTimeoutSec",
 	"KeepInStep", "KeepSchedule", "KeepDailyAt", "KeepModes", "KeepCompanies", "KeepFrom", "KeepLightMin", "KeepWatchSec",
-	"KeepOfficeFrom", "KeepOfficeTo", "SyncCompanies", "InstanceId", "Mode", "ClaimMain", "FinComUrl"}
+	"KeepOfficeFrom", "KeepOfficeTo", "SyncCompanies", "InstanceId", "Mode", "ClaimMain", "FinComUrl",
+	// the browsers' keys: a key only lets a page act for this same owner, whose file it was, so a browser that works
+	// keeps working until it pairs again (browserkeys.go)
+	"Key", "PairedBrowsers", "LegacyKeyRetired"}
 
 // the allowed settings of a file the service does not protect (opened without following a link, 1 MB at most); the
 // names left out are logged (never their values)
@@ -294,18 +296,31 @@ func serviceSettingsFrom(rd treeReader, path string, log func(string)) *Ordered 
 	for _, k := range serviceSettingsAllowed {
 		allowed[k] = true
 	}
+	// the link to FinCom: kept apart until FinCom confirms it is this computer's (cloudpending.go)
+	pend := map[string]bool{"CloudUrl": true, "CloudKey": true, "CloudKeyGo": true}
+	if u := str(in.Get("CloudUrl")); reCloudURL.MatchString(u) {
+		k := str(in.Get("CloudKeyGo"))
+		if k == "" || unprotectKey(k) == "" {
+			k = str(in.Get("CloudKey"))
+		}
+		if k != "" {
+			out.Set("PendingCloudUrl", u)
+			out.Set("PendingCloudKey", k)
+		}
+	}
 	var left []string
 	for _, k := range in.keys {
-		if allowed[k] {
+		switch {
+		case allowed[k]:
 			out.Set(k, in.Get(k))
-		} else {
+		case pend[k]:
+		default:
 			left = append(left, k)
 		}
 	}
 	if len(left) > 0 {
 		sort.Strings(left)
-		log("Service state: from the earlier settings only the plain choices are kept; set again by the setup or FinCom: " + cutRunes(strings.Join(left, ", "), 600) +
-			" (FinCom is connected again once: Connect FinCom on this computer... in the tray icon)")
+		log("Service state: from the earlier settings only the plain choices are kept; set again by the setup, the owner or FinCom: " + cutRunes(strings.Join(left, ", "), 600))
 	}
 	return out
 }

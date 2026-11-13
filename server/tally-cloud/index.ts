@@ -1336,6 +1336,21 @@ async function ownKey(dev: any, firm: string, body: any) {
   console.log("tally-ingest: own_key", bid, old.id, "->", dev.id, JSON.stringify(data));
   return reply(data && (data as any).ok === false ? 409 : 200, data);
 }
+// FinCom Bridge 2.5.16: {kind: "key_check", bridge: {id, user}}, read only, answered before the id is bound: whether this
+// computer key already holds this bridge id (tally_bridge_ids, migration 54: bound to this computer) and, when its beat
+// named a Windows user for it, the same user. {ok, known}. The service's first start of 2.5.16 asks it before it takes
+// over the link to FinCom kept in its earlier settings; known: false and it is connected again by the person
+async function keyCheck(dev: any, firm: string, body: any) {
+  const me = body?.bridge && typeof body.bridge === "object" ? body.bridge : {};
+  const bid = String(me.id || "");
+  if (!/^go-[0-9a-f]{6,32}$/.test(bid)) return reply(400, { ok: false, error: "Not a FinCom Bridge id." });
+  const { data, error } = await db.from("tally_bridge_ids").select("device_id").eq("bridge_id", bid).eq("firm_id", firm);
+  if (error) return missingRel(error) ? reply(409, { ok: false, notReady: true, error: "FinCom's cloud is not ready for this yet (migration 54)." }) : busyReply();
+  const bound = (data || []).some((r: any) => r.device_id === dev.id);
+  const seen = dev?.info?.bridges && typeof dev.info.bridges === "object" ? dev.info.bridges[bid] : null;
+  const sameUser = !seen || !seen.user || !me.user || winUser(seen.user) === winUser(me.user);
+  return reply(200, { ok: true, known: bound && sameUser });
+}
 // a bridge makes itself the main one (its menu: Switch to main bridge): from now on the others on this key do not post
 async function makeMain(dev: any, id: string) {
   if (id === "v1") return reply(400, { ok: false, error: "Only FinCom Bridge 2.x can be made the main bridge from its menu." });
@@ -4601,6 +4616,11 @@ Deno.serve(sentry.wrap(async (req) => {
   // final review M3 (migration 54): the bridge moves itself to its new computer key. This call comes with the NEW key; its
   // body holds the OLD key the bridge id is bound to: only a program holding both keys can ask (a member alone cannot move
   // a bridge, and no owner is needed for one's own). Answered before the id is bound to the new key
+  // FinCom Bridge 2.5.16: the service's first start asks, read only, whether the link it carries over is this
+  // computer's own, before the bridge id is bound to the key (keyCheck)
+  if (body?.kind === "key_check") {
+    try { return await keyCheck(dev, firm, body); } catch (e) { fail("key_check", e, "key_check", firm); console.error("tally-ingest key_check", (e as Error).message); return busyReply(); }
+  }
   if (body?.kind === "own_key") {
     try { return await ownKey(dev, firm, body); } catch (e) { fail("own_key", e, "own_key", firm); console.error("tally-ingest own_key", (e as Error).message); return reply(500, { ok: false, error: (e as Error).message }); }
   }

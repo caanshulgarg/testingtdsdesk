@@ -919,6 +919,9 @@ func beatLoop() {
 					crashReport("heartbeat", r)
 				}
 			}()
+			if !cloudOn() && checkPendingCloud() == "taken" { // 2.5.16: a link carried over, once FinCom confirms it (cloudpending.go)
+				writeLog("Cloud: connected to FinCom again with the link kept from before")
+			}
 			if cloudOn() {
 				beatOnce()
 				claimMainOnce()
