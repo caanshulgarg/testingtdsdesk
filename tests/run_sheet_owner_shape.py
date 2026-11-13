@@ -22,7 +22,11 @@ their GST ledgers and some parties in sub-groups (Sales Local under Sales Accoun
      line reversed; the same type asked of Tally in the already-booked check, a note matched only to a note;
   9. the sheet uploaded again over invoices still waiting (review of cf58b7cc9): another party's or another amount's
      invoice of the same number is never written over (it is a new invoice); a ledger a person set is never replaced;
-     a Ready invoice whose ledger the upload changed goes back to To review.
+     a Ready invoice whose ledger the upload changed goes back to To review;
+ 10. Purchase as Journal (the owner, 13-Nov-2026): the panel's "Post as: Purchase / Journal" starts at the client's own
+     setting for its bills (Journal there: Journal) and is kept in that setting; chosen Journal, the bill goes as the
+     bills' own journal voucher (balanced, the party credited with its bill reference); a return is still a Debit Note;
+     a second Post posts nothing, and a journal of that reference already in Tally is found.
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_sheet_owner_shape.py"""
 import os, sys, json, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -213,11 +217,18 @@ with sync_playwright() as p:
     if step() == "map": pg.click("#app [data-sheet-save]"); W(800)
     qs = qids()
     ok([q[0] for q in qs] == ["party:esha"], "asked: only the supplier not in Tally; Dev Packaging (under Creditors UP) and the purchase ledger are found (%s)" % qs)
+    pa = lambda: pg.locator("#app [data-sheet-postas]").input_value() if pg.locator("#app [data-sheet-postas]").count() else None
+    vt7 = lambda: sorted(set(E("[...document.querySelectorAll('#app [data-sheet-vt]')].map(x => x.innerText)")))
+    ok(E("CO().voucherType") == "Journal" and pa() == "Journal" and vt7() == ["Journal"] and pg.locator("#app [data-sheet-postas-note]").count() == 0,
+       "Post as: the client's own setting for its bills is Journal, so the switch starts at Journal and the rows say Journal (%s, %s, %s)" % (E("CO().voucherType"), pa(), vt7()))
+    if pa(): pg.select_option("#app [data-sheet-postas]", "Purchase"); W(300)
+    note = pg.inner_text("#app [data-sheet-postas-note]") if pg.locator("#app [data-sheet-postas-note]").count() else ""
+    ok(pa() == "Purchase" and vt7() == ["Purchase"] and E("CO().voucherType") == "Purchase" and "also changes it for bills of this client" in note, "Purchase chosen: the rows say Purchase, it is kept in the client's setting, and the panel says it changes the bills too (%s)" % note)
     if pg.locator('#app [data-sheet-q="party:esha"]').count(): answer("party:esha", "create")
     if pg.locator("#app [data-sheet-add]:not([disabled])").count(): pg.click("#app [data-sheet-add]"); W(900)
     bills = E("Object.values(D().entries).filter(e => e.readMode === 'sheet').map(e => [e.x.invoiceNo, e.partyLedger, e.expenseLedger, vchTypeOf(e, CO()), e.status])")
     ok(sorted(bills) == [["DP/501", "Dev Packaging", "Purchase of Goods (UP)", "Purchase", "draft"], ["ET/77", "Esha Traders", "Purchase of Goods (UP)", "Purchase", "draft"]],
-       "the bills: the supplier (found, created), the sheet's purchase ledger; a Purchase voucher (the sheet says “Purchase UP”, the client's setting Journal) (%s)" % bills)
+       "the bills: the supplier (found, created), the sheet's purchase ledger; a Purchase voucher as chosen (the sheet says “Purchase UP”: never used) (%s)" % bills)
     W(600)
     bills2 = E("Object.values(D().entries).filter(e => e.readMode === 'sheet').map(e => [e.x.invoiceNo, e.partyLedger, e.expenseLedger])")
     ok(sorted(bills2) == [b[:3] for b in sorted(bills)], "and they stay so when the books are looked at again (%s)" % bills2)
@@ -257,8 +268,8 @@ with sync_playwright() as p:
     if pg.locator("#app [data-sheet-add]:not([disabled])").count(): pg.click("#app [data-sheet-add]"); W(900)
     pn = E("Object.values(D().entries).filter(e => /^DP\\/70/.test(e.x.invoiceNo)).map(e => [e.x.invoiceNo, vchTypeOf(e, CO()), e.x.taxable, e.x.igst, e.x.total]).sort()")
     ok(pn == [["DP/701", "Purchase", 1000, 180, 1180], ["DP/702", "Debit Note", 400, 72, 472]], "and its amounts are taken positive (%s)" % pn)
-    pu = E("() => { const e = Object.values(D().entries).find(e => e.x.invoiceNo === 'DP/702'); return decodeURIComponent(PostPreview.vouchersUrl ? PostPreview.vouchersUrl(CO(), 'T', e) : ''); }") if E("typeof PostPreview === 'object' && !!PostPreview.vouchersUrl") else "types=Journal,Purchase,Debit Note"
-    ok("Purchase" in pu and "Debit Note" in pu, "the already-booked check asks Tally for Purchase and Debit Note vouchers (%s)" % pu[-60:])
+    pu = E("() => { const e = Object.values(D().entries).find(e => e.x.invoiceNo === 'DP/702'); return decodeURIComponent(PostCheck.vouchersUrl(CO(), 'T', e)); }")
+    ok("Purchase" in pu and "Debit Note" in pu and "Journal" in pu, "the already-booked check asks Tally for Purchase, Journal and Debit Note vouchers (%s)" % pu[-60:])
     # -- Sales, a type column
     E("(id) => { S.tab = 'sales'; S.step = null; SL().list = []; saveSales(); render(); }", cid); W(600)
     upload("sales_notes.xlsx", "#salesIn")
@@ -323,6 +334,51 @@ with sync_playwright() as p:
     v3 = one(lambda v: v["no"] == "UP/26-27/0003")
     ok(v3["cust"] == "Bharat Tools LLP" and v3["st"] == "review", "M2: a Ready invoice whose ledger the upload changed goes back to To review (%s)" % v3)
     E("SheetImport.close()"); W(200)
+
+    print("10. Purchase as Journal: chosen on the panel, the bills' own journal voucher; never posted twice")
+    E("() => { SheetImport.close(); S.tab = null; goStep('review', 'bills'); }"); W(600)
+    upload("purchase_journal.xlsx", "#fileIn")
+    ok(step() == "check" and pa() == "Purchase", "the choice made before is remembered for the client: Purchase (%s)" % pa())
+    if pa(): pg.select_option("#app [data-sheet-postas]", "Journal"); W(300)
+    ok(pa() == "Journal" and E("CO().voucherType") == "Journal" and vts() == {"DP/801": "Journal", "DP/802": "Journal", "DP/PR8": "Debit Note"} and pg.locator("#app [data-sheet-postas-note]").count() == 1,
+       "Journal chosen: the rows say Journal, the return still Debit Note; kept in the client's setting, and said (%s)" % vts())
+    for q in qids(): answer(q[0], "create")
+    if pg.locator("#app [data-sheet-add]:not([disabled])").count(): pg.click("#app [data-sheet-add]"); W(900)
+    oth = E("Object.values(D().entries).filter(e => /^DP\\/(5|6|7)0/.test(e.x.invoiceNo) && !e.noteKind && e.status !== 'duplicate').map(e => [e.x.invoiceNo, vchTypeOf(e, CO())]).sort()")
+    ok(oth == [["DP/501", "Journal"], ["DP/601", "Journal"], ["DP/701", "Journal"]], "the client's other bills waiting follow the same setting: bills and sheets agree (%s)" % oth)
+    APPROVE = """(no) => { const co = CO(), e = Object.values(D().entries).find(e => e.x.invoiceNo === no); e.natureId = "none"; if (e.status === "draft") approve(e);
+      (e.snapshot.lines || []).forEach(l => { const ck = l.ck || (/^Client setup/.test(l.why || "") ? (l.role === "gst" && l.head ? "gst:" + l.head.toLowerCase() : "") : ""); if (ck && l.ledger) choiceConfirm(co, ck, l.ledger); });
+      const x = voucherXml(e, co), amts = [...x.matchAll(/<ALLLEDGERENTRIES\.LIST>\s*<LEDGERNAME>([^<]*)<\/LEDGERNAME>\s*<ISDEEMEDPOSITIVE>(\w+)<\/ISDEEMEDPOSITIVE>[\s\S]*?<AMOUNT>(-?[\d.]+)<\/AMOUNT>/g)].map(m => [m[1], m[2], Number(m[3])]);
+      return {id: e.id, type: (x.match(/VCHTYPE="([^"]*)"/) || [])[1], name: (x.match(/<VOUCHERTYPENAME>([^<]*)</) || [])[1], lines: amts, sum: Math.round(amts.reduce((a, l) => a + l[2], 0) * 100) / 100,
+        ref: /<BILLALLOCATIONS\.LIST>\s*<NAME>([^<]*)</.test(x) ? x.match(/<BILLALLOCATIONS\.LIST>\s*<NAME>([^<]*)</)[1] : "", note: vchTypeOf(e, co)}; }"""
+    j1 = E(APPROVE, "DP/801")
+    L = {l[0]: l for l in j1["lines"]}
+    ok(j1["type"] == "Journal" and j1["name"] == "Journal", "the voucher as it goes to Tally is a Journal (%s)" % j1["type"])
+    ok(j1["sum"] == 0 and L.get("Dev Packaging", [0, "", 0])[1:] == ["No", 2360] and L.get("Purchase of Goods (UP)", [0, "", 0])[1:] == ["Yes", -2000] and L.get("Input CGST", [0, "", 0])[1:] == ["Yes", -180] and L.get("Input SGST", [0, "", 0])[1:] == ["Yes", -180] and j1["ref"] == "DP/801",
+       "the bills' own journal: Dr the purchase ledger 2,000 and input CGST / SGST 180 each, Cr the party 2,360 with its bill reference; balanced (%s, ref %s)" % (j1["lines"], j1["ref"]))
+    r8 = E(APPROVE, "DP/PR8")
+    ok(r8["type"] == "Debit Note" and r8["sum"] == 0 and {l[0]: l[1] for l in r8["lines"]}.get("Dev Packaging") == "Yes", "the return is still a Debit Note, the party debited (%s)" % r8["type"])
+    E("""(id) => { Object.values(D().entries).forEach(e => { if (e.readMode === 'sheet' && e.status === 'approved' && e.id !== id){ e.status = 'draft'; e.snapshot = null; } });
+      Ledgers.st[S.coId] = null; delete Ledgers.busy[S.coId]; window.__enq.length = 0; refreshStats(S.coId); S.postTabs[S.coId] = "topost"; goStep("post", "bills"); }""", j1["id"]); W(900)
+    def post_bills():
+        if not pg.locator("#app [data-post-main]").count() or not pg.locator("#app [data-post-main]").is_enabled(): return
+        pg.click("#app [data-post-main]"); W(800)
+        for i in range(30):
+            if pg.locator('#confirmBox [data-cbx="yes"]').count() and pg.locator('#confirmBox [data-cbx="yes"]').is_visible(): pg.click('#confirmBox [data-cbx="yes"]')
+            W(300)
+            if not E("!!(S.billPost && S.billPost.busy)") and not (pg.locator('#confirmBox [data-cbx="yes"]').count() and pg.locator('#confirmBox [data-cbx="yes"]').is_visible()): break
+    post_bills()
+    enq = E("window.__enq")
+    ok(len(enq) == 1 and [v["id"] for v in enq[0]["vouchers"]] == [j1["id"]] and 'VCHTYPE="Journal"' in enq[0]["vouchers"][0]["xml"], "Post: one posting, the Journal voucher (%s; %s)" % (len(enq), (E("window.__toasts") or [])[-2:]))
+    E("""() => { S.postTabs[S.coId] = "topost"; goStep("post", "bills"); }"""); W(600)
+    post_bills(); E("() => postBillsToTally()"); W(1200)
+    ok(len(E("window.__enq")) == 1, "a second Post posts nothing: the journal is not sent twice (%d)" % len(E("window.__enq")))
+    # a journal of that reference and party already in Tally (posted from elsewhere): found by reference, as a bill's is
+    j2 = E(APPROVE, "DP/802")
+    found = E("""(id) => { const e = D().entries[id], co = CO();
+      const vs = [{type: "Journal", number: "77", reference: "DP/802", party: "Dev Packaging", date: "20261025", amount: 1180, guid: "gj", narration: ""}, {type: "Journal", number: "78", reference: "ZZ/1", party: "Dev Packaging", date: "20261025", amount: 1180, guid: "other"}];
+      return {url: decodeURIComponent(PostCheck.vouchersUrl(co, "T", e)), r: JSON.stringify(PostCheck.match(e, vs) || null).slice(0, 300)}; }""", j2["id"])
+    ok("Journal" in found["url"].split("types=")[-1] and "gj" in found["r"], "the already-booked check asks Tally for Journal vouchers and finds the journal by its reference (%s; %s)" % (found["url"][-70:], found["r"][:160]))
     ok(not errors, "no page errors " + str(errors[:2]))
     br.close()
 srv.shutdown()

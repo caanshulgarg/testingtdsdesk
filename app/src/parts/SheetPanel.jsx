@@ -80,6 +80,9 @@ function CheckStep({ st }) {
         { k: "total", role: "amount", label: "Total", cls: "n", v: (d) => num(d.total), cell: (d) => money2(d.total) },
         { k: "chk", role: "status", label: "Check", v: (d) => (d.check && d.check.ok ? "adds up" : "does not add up"), cell: (d) => d.check && d.check.ok ? <span className="tag ok">adds up{d.check.roundOff ? " (round-off " + d.check.roundOff + ")" : ""}</span> : <span className="tag bad" title={d.check && d.check.text}>does not add up</span> },
       ]} />
+    {st.side === "purchase" && <p style={{ marginTop: 10 }}><label className="chk"><span>Post as</span> <select aria-label="Post as" data-sheet-postas="" value={SheetPost.postAs()} onChange={(ev) => SheetPost.setPostAs(ev.target.value)}>
+      <option value="Purchase">Purchase</option><option value="Journal">Journal</option></select></label>
+      {st.postAsChanged && <span className="note" data-sheet-postas-note=""> This also changes it for bills of this client.</span>}</p>}
     <div className="row" style={{ gap: 8, marginTop: 12 }}>
       <Button className="btn primary" data-sheet-add="" disabled={open.length > 0 || !add.length} title={open.length ? "Answer the questions first" : undefined} onClick={() => SheetImport.add()}>{"Add " + add.length + " to To review"}</Button>
       <Button className="btn" onClick={() => SheetImport.close()}>Cancel</Button>

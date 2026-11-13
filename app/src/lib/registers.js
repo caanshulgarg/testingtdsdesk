@@ -360,7 +360,17 @@ const SheetPost = {
   vchName(d, side){
     const cfg = (side === "sales" && typeof SL === "function" && SL() && SL().cfg) || {}, co = CO() || {};
     if (side === "sales") return d.note === "credit" ? cfg.creditNoteType || "Credit Note" : d.note === "debit" ? cfg.debitNoteType || "Debit Note" : cfg.voucherType || "Sales";
-    return d.note === "credit" ? co.debitNoteType || "Debit Note" : "Purchase";
+    return d.note === "credit" ? co.debitNoteType || "Debit Note" : this.postAs();
+  },
+  // a purchase sheet's bills post as Purchase or as Journal (the owner, 13-Nov-2026): the client's own setting for its
+  // bills (co.voucherType, Client setup → Tally: Journal there, or nothing set, is Journal; anything else Purchase),
+  // chosen on the panel and kept in that same setting, so bills and sheets agree. The voucher is the bills' own form
+  // either way (voucherXml, src/js/01): Dr the expense and input GST ledgers, Cr the party with its bill reference, TDS
+  // as the bill engine adds it
+  postAs(){ const co = CO() || {}; return /^journal$/i.test(String(co.voucherType || "Journal").trim()) ? "Journal" : "Purchase"; },
+  setPostAs(v){
+    const co = CO(), st = S.sheetImp; if (!co || !["Purchase", "Journal"].includes(v) || v === this.postAs()) return;
+    co.voucherType = v; Store.saveCompany(co); if (st) st.postAsChanged = true; render();
   },
   // the sales (or purchase) ledger the sheet names: Tally's own spelling, or the ledger answered for that name before
   sledKey(d){ return d.sledger ? "sled:" + SheetFmt.norm(d.sledger) : ""; },
@@ -399,7 +409,9 @@ const SheetPost = {
       const own = d.sledMapped || (d.newSled ? this.pend(d.newSled, "Purchase Accounts") : ""), fromSheet = own ? "" : this.salesLedger(d);
       if (own){ e.expenseLedger = own; e.expenseUserSet = true; }
       else if (["expense", "asset"].includes(SheetFmt.cls(fromSheet))) e.expenseLedger = fromSheet;
-      if (!d.note) e.vchType = "Purchase";   // the Purchase screen's voucher type (vchTypeOf, src/js/03), whatever the sheet says
+      // the voucher type is the client's setting for its bills (Purchase or Journal: postAs), never the sheet's; a
+      // client whose setting names another type of its own posts a sheet's bills as Purchase (vchTypeOf, src/js/03)
+      if (!d.note && this.postAs() === "Purchase" && (CO(cid) || {}).voucherType !== "Purchase") e.vchType = "Purchase";
       finishNewEntry(e, cid, null);
       res.ids.push(e.id);
       if (e.status === "duplicate") res.held++; else res.added++;
