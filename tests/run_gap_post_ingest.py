@@ -129,6 +129,23 @@ try:
     time.sleep(5.2); c, r = call(dict(quiet, paused=True))
     ok(all(x.get("p_idle") is not True for x in gf_calls()[np:]), "2. (guard) reading paused: never idle (%s)" % gf_calls()[np:])
 
+    print("== 2b. bridge 2.5.16: the beat's lastKeyAt (the last key or click seen in Tally)")
+    agoz = lambda sec: (datetime.datetime.utcnow() - datetime.timedelta(seconds=sec)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    d0["info"] = dict(d0.get("info") or {}, typingAt=agoz(600))
+    time.sleep(5.2); c, r = call(dict(quiet, lastKeyAt=agoz(2)))
+    ok(last_gf().get("p_idle") is False, "2b. a key 2 s ago, no refusal: p_idle false (%s)" % last_gf())
+    d0 = next(d for d in FS.T["tally_devices"] if d["id"] == DA)
+    ok((d0.get("info") or {}).get("beat", {}).get("lastKeyAt", "")[:4] == agoz(2)[:4], "2b. lastKeyAt kept on the beat (%s)" % (d0.get("info") or {}).get("beat", {}).get("lastKeyAt"))
+    d0["info"] = dict(d0.get("info") or {}, typingAt=agoz(600))
+    time.sleep(5.2); c, r = call(dict(quiet, lastKeyAt=agoz(8)))
+    ok(last_gf().get("p_idle") is True, "2b. a key 8 s ago, the last request fast: p_idle true (%s)" % last_gf())
+    d0 = next(d for d in FS.T["tally_devices"] if d["id"] == DA)
+    d0["info"] = dict(d0.get("info") or {}, typingAt=agoz(600))
+    time.sleep(5.2); c, r = call(dict(quiet, lastKeyAt="2099-01-01T00:00:00Z"))
+    ok(last_gf().get("p_idle") is False, "2b. a lastKeyAt ahead of now counts as now (%s)" % last_gf())
+    d0 = next(d for d in FS.T["tally_devices"] if d["id"] == DA)
+    d0["info"] = dict(d0.get("info") or {}, typingAt=agoz(600))
+
     print("== 3. a cloud without 182")
     NIGHT_MISSING[0] = True
     n0 = len(gf_calls())

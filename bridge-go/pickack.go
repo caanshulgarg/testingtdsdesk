@@ -172,6 +172,11 @@ func pickRefused(it pullItem, code string) {
 			continue
 		}
 		if a.state == "refused" && a.code == code {
+			if code == "typing" {
+				// 2.5.16: the typing goes on: its time is the latest look (FinCom's idle look, migration 182, counts
+				// a typing refusal only while it is fresh); no early beat for it, the next beat carries it
+				a.at = now
+			}
 			continue
 		}
 		if a.state == "started" && !own {

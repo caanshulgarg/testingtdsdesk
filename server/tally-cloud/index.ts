@@ -2062,6 +2062,9 @@ function lightIdle(b: any, prevInfo: any, now = Date.now()): { idle: boolean; ty
   let at = Math.max(t(prevInfo?.typingAt) || 0, ...fresh.values());
   const waits = cos ? Object.entries(cos).some(([k, c]: [string, any]) => typeof c?.waiting === "string" && /someone is working in tally/i.test(c.waiting) && fresh.has(key(k))) : false;
   if (waits || b?.keepWait?.reason === "userInTally") at = now;
+  // bridge 2.5.16: the last key or click its own look saw in Tally (lastKeyAt; never ahead of now)
+  const lk = Math.min(now, t(b?.lastKeyAt));
+  if (lk > at) at = lk;
   const typingAt = at > 0 ? new Date(at).toISOString() : null;
   const ms = Number(b?.reqs?.last?.ms), known = !!pick && !!cos && b?.reqs?.last && Number.isFinite(ms) && ms >= 0;
   const quiet = at > 0 ? now - at : Infinity;
@@ -4751,6 +4754,8 @@ Deno.serve(sentry.wrap(async (req) => {
           ...keepWaitOf(b),
           // bridge 2.5.10: why its last run ended, when it ran again (lastStopOf)
           ...(lastStopOf(b) ? { lastStop: lastStopOf(b) } : {}),
+          // bridge 2.5.16: when a key or click was last seen in Tally (the page tells typing from a stuck bridge)
+          ...(typeof b.lastKeyAt === "string" && !isNaN(Date.parse(b.lastKeyAt)) ? { lastKeyAt: new Date(Math.min(Date.now(), Date.parse(b.lastKeyAt))).toISOString() } : {}),
           windowsUser: s(b.windowsUser, 60), bridgePort: Math.max(0, Math.min(65535, Math.floor(Number(b.bridgePort) || 0))), tallyPort: Math.max(0, Math.min(65535, Math.floor(Number(b.tallyPort) || 0))), dataFolder: s(b.dataFolder, 260) };
         if (pickups.length) (beat as any).pickups = pickups;
         if (co) (me.entry as any).changesOnly = true;

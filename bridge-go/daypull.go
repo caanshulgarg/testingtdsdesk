@@ -447,9 +447,14 @@ func pullMayAskWhy(it pullItem) (int, string, string) {
 		case "stopped":
 			return 0, "readingStopped", h
 		case "userInTally":
-			return 0, "typing", h
+			// 2.5.16 (daypace2516.go): the copier's 15 s typing hold gives way to the request's own tier, looked at
+			// just above (pullBusyPerson: 5 s for a small request, 60 s for a heavy one)
+			if isFake() {
+				return 0, "typing", h
+			}
+		default:
+			return 0, "held", h
 		}
-		return 0, "held", h
 	}
 	if !pullWindowOK() {
 		return 0, "notAnswering", "Tally's window is not answering"
@@ -494,16 +499,11 @@ func pullPortWhy(it pullItem) (int, string, string) {
 	return p, "", ""
 }
 
-// the person at Tally comes first: a recorder line for the company (a save in Tally) in the last minute, or typing in
-// Tally (Tally the window in front, the keyboard or mouse used) in the last minute
+// the person at Tally comes first: a recorder line for the company (a save in Tally), or typing in Tally (Tally the
+// window in front, the keyboard or mouse used), within the wait of the next request's tier (2.5.16, daypace2516.go: 5 s
+// for a request measured at 0.3 s or less for the company, else 60 s)
 func pullBusyPerson(it pullItem) bool {
-	idle := time.Duration(pullIdleSec()) * time.Second
-	if _, last := recorderHolding(it.Company, it.CGUID); last != "" {
-		if t, err := time.ParseInLocation("2006-01-02T15:04:05", last, time.Local); err == nil && time.Since(t) < idle {
-			return true
-		}
-	}
-	return platFrontIsTally() && platIdleSec() < idle.Seconds()
+	return !pullTierOK(it, pullFormOf(it))
 }
 
 // said once per company while the reason lasts (no notice: only the log)
@@ -784,7 +784,13 @@ func pullHeadsStep(w *pullWork, port int) (bool, bool) {
 	}
 	pullNoteWatched(holdMs)
 	pullNoteLook(err == nil && took > 0, holdMs)
-	_ = typ
+	if took > 0 {
+		pf := paceHeads
+		if typ != "" {
+			pf = paceSplit
+		}
+		paceNote(it.Company, pf, int(took*1000), holdMs, err == nil) // 2.5.16: the form's tier for the company
+	}
 	switch {
 	case gaveWay(err) || errors.Is(err, errRetryWait) || errors.Is(err, errReadStopped) || errors.Is(err, errDayHeadsRefused):
 		return false, false // nothing reached Tally; the day waits
@@ -917,9 +923,13 @@ func pullCloudOK(w *pullWork, r cloudResp, what string) bool {
 func pullFetchStep(w *pullWork, port int) (bool, bool) {
 	it := w.it
 	// 2.4.9 (the owner's approval of 29-Oct-2026): up to 100 of the day's wanted entries in one request (batch249.go);
-	// payroll entries, a day read by type, and a day gone one by one: one entry a request as below
-	if handled, sent, more := pullBatchStep(w, port); handled {
-		return sent, more
+	// payroll entries, a day read by type, and a day gone one by one: one entry a request as below. 2.5.16
+	// (daypace2516.go): a group is the heavy tier: only once Tally has been left alone 60 s; before that the entries go
+	// one by one (the small tier)
+	if pullTierOK(it, paceBatch) {
+		if handled, sent, more := pullBatchStep(w, port); handled {
+			return sent, more
+		}
 	}
 	mid := w.want[0]
 	// ROUND 103 (B, the owner's decision of 12-Oct-2026 kept for older days): a payroll voucher (its type as Tally's list of
@@ -927,6 +937,21 @@ func pullFetchStep(w *pullWork, port int) (bool, bool) {
 	// payroll path: its employees read and taken by FinCom first, its entry request stopped at 3 s and its window watched
 	// against 3 s; every other entry 2 s
 	pay := payrollEntry(it.Company, w.heads[mid].Type)
+	if pay {
+		// 2.5.16: the payroll's requests are the heavy tier: the day's other entries first, then the payroll once Tally
+		// has been left alone 60 s
+		for i := 1; i < len(w.want); i++ {
+			if !payrollEntry(it.Company, w.heads[w.want[i]].Type) {
+				w.want[0], w.want[i] = w.want[i], w.want[0]
+				return false, true
+			}
+		}
+		if !pullTierOK(it, pacePayroll) {
+			pullSayWait(it, "someone is working in Tally")
+			pickRefused(it, "typing")
+			return false, false
+		}
+	}
 	if pay && !pullEmpReady(it) {
 		// review 245 R15 (M1): the day's other entries first, while the payroll's employees are not in FinCom yet
 		for i := 1; i < len(w.want); i++ {
@@ -969,6 +994,9 @@ func pullFetchStep(w *pullWork, port int) (bool, bool) {
 	}
 	pullNoteWatched(holdMs)
 	pullNoteLook(err == nil && took > 0, holdMs)
+	if took > 0 && !pay && (err == nil || errors.Is(err, errRecorderStop)) {
+		paceNote(it.Company, paceObject, int(took*1000), holdMs, err == nil) // 2.5.16: the form's tier for the company
+	}
 	if err != nil || holdMs >= limit {
 		w.coAt = time.Time{}
 	} else if !listed {

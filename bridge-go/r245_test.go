@@ -245,6 +245,7 @@ func pullReset() {
 	pull.aside = map[string]bool{}   // 2.5.14
 	pull.empAt, pull.night, pull.nightAt, pull.beatAt = map[string]time.Time{}, false, time.Time{}, time.Time{}
 	pickReset() // 2.5.10 (pickack.go)
+	paceReset() // 2.5.16 (daypace2516.go)
 	pullSaveMu.Lock()
 	pullSaveText.Store("")
 	_ = os.Remove(pullFile())

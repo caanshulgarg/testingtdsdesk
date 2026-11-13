@@ -371,6 +371,9 @@ func pullRangeStep(w *pullWork, port int) (handled, sent, more bool) {
 	if pullRangeTake(w) {
 		return true, false, true
 	}
+	if !pullTierOK(it, paceRange) {
+		return false, false, false // 2.5.16 (daypace2516.go): a range of days is the heavy tier; the day alone goes first
+	}
 	per, why := pullRangeMay(it)
 	if why != "" {
 		return false, false, false
@@ -421,6 +424,9 @@ func pullRangeStep(w *pullWork, port int) (handled, sent, more bool) {
 	pullNoteWatched(holdMs)
 	pullNoteLook(err == nil && took > 0, holdMs)
 	ms := int(took * 1000)
+	if took > 0 && (err == nil || errors.Is(err, errRecorderStop)) {
+		paceNote(it.Company, paceRange, ms, holdMs, err == nil) // 2.5.16 (daypace2516.go)
+	}
 	busy := func(what string) (bool, bool, bool) {
 		// the review's point 1: a range over 2 s (Tally finished it, its window answering) or cut is not a stop of the
 		// company; as Tally being busy: single days for the rest of the run

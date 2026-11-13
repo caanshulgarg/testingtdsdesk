@@ -520,6 +520,9 @@ func pullBatchStep(w *pullWork, port int) (handled, sent, more bool) {
 	}
 	pullNoteWatched(holdMs)
 	pullNoteLook(err == nil && took > 0, holdMs)
+	if took > 0 && (err == nil || errors.Is(err, errRecorderStop)) {
+		paceNote(it.Company, paceBatch, int(took*1000), holdMs, err == nil) // 2.5.16 (daypace2516.go)
+	}
 	if err != nil || holdMs >= limit {
 		w.coAt = time.Time{}
 	} else if !listed {

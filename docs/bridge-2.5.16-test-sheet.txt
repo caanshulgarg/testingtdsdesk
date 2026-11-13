@@ -3,10 +3,10 @@ FINCOM BRIDGE 2.5.16 - TEST SHEET (2.5.15's sheet below, with 2.5.16's changes f
 File:        FinComBridge-Setup-2.5.16.exe
 Fingerprint: SHA-256 (filled in when the setup is built; compare with the .sha256 file next to the setup)
 
-2.5.16: safety changes from the bridge's security review. Nothing new is asked of Tally: no new request and no request
-changed (the requests are 2.5.15's), the same 2-second stop, one request at a time, postings first, never while someone
-is typing in Tally. FinCom's cloud needs the tally-ingest of the same branch. Use a test company with made-up entries
-only.
+2.5.16: safety changes from the bridge's security review, and older days read in the day while people work (items 6
+on). Nothing new is asked of Tally: no new request and no request changed (the requests are 2.5.15's), the same
+2-second stop, one request at a time, postings first, never while someone is typing in Tally. FinCom's cloud needs the
+tally-ingest of the same branch. Use a test company with made-up entries only.
 
  1. Check with FVU uses only the FVU on this computer. FinCom no longer tells the bridge where the FVU is.
     The FVU must be in <your user folder>\TDS-Desk\FVU (the file FVU_STANDALONE.jar; its results go into
@@ -67,6 +67,17 @@ only.
     later instead of being dropped from the list of postings in progress; a bridge in test mode that reports a posting
     has the entries Tally accepted recorded in FinCom before it is refused.
     Nothing to check by hand.
+ 6. Older days are read in the day, between keystrokes. A small read (one that took Tally 0.3 s or less for that
+    company before) goes 5 seconds after the last key or click in Tally; a larger read (a group of entries, a payroll
+    entry, a range of days, or a read never timed for the company) still waits until Tally has been left alone for a
+    minute. The day's list goes first, then the missing entries one at a time; groups of entries only after a minute.
+    A read that holds Tally's window for 1 second or more is treated as large for that company from then on, until it
+    is quick again. Each request is still stopped at 2 seconds, one at a time, postings first.
+    Check A: choose Bring books for the test company. Type in a voucher screen, stopping now and then for about 10
+    seconds. You should see: the progress moves during the pauses; typing never feels slower.
+    Check B: keep typing without a pause of 5 seconds for a minute. You should see: nothing is read meanwhile; FinCom's
+    Tally page says someone is working in Tally.
+    Check C: save a Journal of Rs 1 while older days are being read. You should see: it is in FinCom in a few seconds.
 
 WINDOWS ONLY (the automatic tests cannot run these; check them on a real Windows PC):
   - item 1: Check with FVU runs a copy of the FVU from your own temporary folder (removed after); Java must be
@@ -76,6 +87,9 @@ WINDOWS ONLY (the automatic tests cannot run these; check them on a real Windows
     fresh folder when the usual one is not usable; FinCom's link confirmed by FinCom, with nothing to do.
   - item 3: the recorder files' owners, failed.txt's permissions, another user's file not read.
   - item 4: Disconnect a browser... in the tray; signing out of FinCom disconnects that browser.
+  - item 6: the real last-key time and the window in front come from Windows (the tests stand in for them); the
+    service version takes them from the tray. Checks A-C on a real Tally, and the beat's lastKeyAt on FinCom's Tally
+    page record.
 
 -------------------------------------------------------------------------------------------------------------------
 
