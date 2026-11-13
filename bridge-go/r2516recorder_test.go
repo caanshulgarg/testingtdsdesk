@@ -92,3 +92,31 @@ func TestR2516SharedIniNoAddon(t *testing.T) {
 		t.Fatalf("one person's computer: %v %v", e, err)
 	}
 }
+
+// the owner's rule: a tally.ini in TallyPrime's program folder (beside tally.exe, or under Program Files) is shared
+// even when one person is signed in: never written, neither the add-on line nor the connection settings
+func TestR2516ProgramFolderIniNeverWritten(t *testing.T) {
+	f := newStandTally(t)
+	standBridge(t, f, "")
+	orig := "[Tally]\r\nUser TDL = Yes\r\nClient Server = None\r\n"
+	d, p := r253Ini(t, orig)
+	old := iniSharedFn
+	iniSharedFn = func() bool { return false } // one person signed in
+	t.Cleanup(func() { iniSharedFn = old })
+	_ = os.WriteFile(filepath.Join(d, "tally.exe"), []byte("stand-in"), 0o644)
+	e, err := tallyIniApply(p, addonIniPath())
+	if err != nil || str(e["state"]) != iniStateShared || str(e["connect"]) == connectEnabled || r253Read(t, p) != orig {
+		t.Fatalf("beside tally.exe: %v %v\n%s", e, err, r253Read(t, p))
+	}
+	_ = os.Remove(filepath.Join(d, "tally.exe"))
+	t.Setenv("ProgramFiles", filepath.Dir(d))
+	if e, _ := tallyIniApply(p, addonIniPath()); str(e["state"]) != iniStateShared || r253Read(t, p) != orig {
+		t.Fatalf("under Program Files: %v", e)
+	}
+	if _, err := os.Stat(p + ".fincom-bak"); err == nil {
+		t.Fatal("a backup was made though nothing was written")
+	}
+	if !iniInProgramFolder(p) || iniInProgramFolder(filepath.Join(t.TempDir(), "tally.ini")) {
+		t.Fatal("iniInProgramFolder")
+	}
+}

@@ -48,7 +48,26 @@ var (
 	reIniUserTDL = regexp.MustCompile(`(?i)^\s*User\s+TDL\s*=\s*(\S*)`)
 )
 
-// 2.5.16: a tally.ini every user of this computer shares: FinCom's line not added, and what a user does instead
+// 2.5.16 (the owner's rule: never write a shared tally.ini): a tally.ini is shared when it sits in TallyPrime's program
+// folder (beside tally.exe, or anywhere under Program Files: every Windows account that runs that Tally reads it) or
+// the computer is one several people use (iniconnect254.go). Such a file is never written: neither FinCom's add-on line
+// nor the connection settings; its state says how a user loads the add-on in their own Tally. A hook for the tests
+var iniFileSharedFn = func(path string) bool { return iniSharedFn() || iniInProgramFolder(path) }
+
+func iniInProgramFolder(path string) bool {
+	dir := filepath.Dir(filepath.Clean(path))
+	if exists(filepath.Join(dir, "tally.exe")) {
+		return true
+	}
+	for _, b := range []string{os.Getenv("ProgramFiles"), os.Getenv("ProgramFiles(x86)"), os.Getenv("ProgramW6432")} {
+		if b != "" && pathInside(dir, b) {
+			return true
+		}
+	}
+	return false
+}
+
+// a tally.ini that is shared: FinCom's line not added, and what a user does instead
 const (
 	iniStateShared = "shared"
 	iniSharedWhy   = "every user of this computer shares this TallyPrime's settings, so FinCom does not add its add-on there: load it in your own Tally (F1 Help > TDLs & Add-ons, the file C:\\ProgramData\\FinCom\\addon\\FinComRecorder.tdl) or ask the computer's administrator"
@@ -227,9 +246,9 @@ func tallyIniApply(path, addon string) (M, error) {
 		return e, err
 	}
 	nb, state, added := iniAddAddon(raw, addon)
-	// 2.5.16: never in a tally.ini every user of the computer shares (iniconnect254.go): only a Tally one person uses gets
-	// the line; the words say how a user loads the add-on in their own Tally
-	if state == "added" && iniSharedFn() {
+	// 2.5.16: never in a shared tally.ini (iniFileSharedFn); the words say how a user loads the add-on in their own Tally
+	shared := iniFileSharedFn(path)
+	if state == "added" && shared {
 		state, nb, added = iniStateShared, nil, nil
 		e["why"] = iniSharedWhy
 	}
@@ -242,7 +261,7 @@ func tallyIniApply(path, addon string) (M, error) {
 	cb, cstate, cport, cchg := iniConnectPref(base, iniPortUsed(path), iniLoginPortFn) // 2.5.5: this login's own port first
 	// 2.5.4 (iniconnect254.go): never in a tally.ini every user of the computer shares; the port the file names is
 	// reported, none is chosen for it
-	if cstate == connectEnabled && iniSharedFn() {
+	if cstate == connectEnabled && shared {
 		cstate, cb, cchg = connectSharedOff, nil, nil
 		cport = toInt(tallyIni(filepath.Join(filepath.Dir(path), "tally.exe"))["port"])
 	}
@@ -498,8 +517,8 @@ func tallyIniRecheckDue() bool {
 			switch state {
 			case "added":
 				e["state"] = "notadded" // FinCom's line is not there (read only: not added here)
-				if iniSharedFn() {
-					e["state"], e["why"] = iniStateShared, iniSharedWhy // 2.5.16: and never added on a shared computer
+				if iniFileSharedFn(p) {
+					e["state"], e["why"] = iniStateShared, iniSharedWhy // 2.5.16: and never added to a shared file
 				}
 			case "usertdl-no":
 				e["state"] = "usertdl-no"
