@@ -31,14 +31,23 @@ Use a test company with made-up entries only.
     Tally only when Tally itself says "Could not find Voucher".
     Check: while older entries are being read (Tally page), close Tally in the middle of a day. You should see: no
     entry of that day shown as deleted in FinCom; after Tally is opened again the day comes in complete.
- 3. Files are written safely. Every file FinCom Bridge keeps is written in full and saved to the disk before it
-    replaces the old one. The important ones keep a backup copy next to them (".bak"): the record of posted entries
-    (sync\posted-ids.json), each posting's progress, the settings, and the copy's state files. If a file is damaged
-    (power cut, disk or antivirus trouble), the bridge reads its backup instead and the log says so once. The kept
-    day files (days\*.xml) and the log have no backup (the days are read from Tally again).
+ 3. Files are written safely, and no save is slower than in 2.5.14 (the owner's decision of 13-Nov-2026). Every file
+    FinCom Bridge keeps is written in full and then replaces the old one, as in 2.5.14. Right after, in the
+    background, the important ones get a backup copy next to them (".bak", saved to the disk): the record of posted
+    entries (sync\posted-ids.json), each posting's progress, the postings taken from FinCom, the settings, and the
+    copy's state files; the record of posted entries, each posting's progress and the postings taken are also saved
+    to the disk themselves. Before each request that posts to Tally, the bridge waits until the record of posted
+    entries (with that request's own entries) is on the disk, so a power cut never makes it post an entry twice. If a
+    file is damaged (power cut, disk or antivirus trouble), the bridge reads its backup instead and the log says so
+    once. The kept day files (days\*.xml) and the log have no backup (the days are read from Tally again).
     Check: stop FinCom Bridge, open tds-bridge.config.json in Notepad, delete its last few characters, save, start
     the bridge again. You should see: it starts with the same settings (still connected to FinCom, same port), and the
     file is whole again.
+    Windows check (before the pilot, on a Windows computer with Microsoft Defender's real-time protection ON, Go
+    installed, in the bridge-go folder of the sources): go test -count=1 -run TestR2515RenameRetriesBackToBack -v .
+    It saves the record of posted entries 200 times back to back, each followed by its save to the disk in the
+    background. You should see: "--- PASS", i.e. no save had to try its rename again (0 retries). A FAIL names the
+    number of retries: do not pilot; tell the developer.
  4. Posting pauses if the record of posted entries cannot be read. If sync\posted-ids.json and its backup both cannot
     be read, FinCom Bridge posts nothing and says "FinCom Bridge can't read its record of posted entries; posting
     paused" (on the posting in FinCom, on FinCom's Tally page, in the tray, in the log), with what to do: close any
