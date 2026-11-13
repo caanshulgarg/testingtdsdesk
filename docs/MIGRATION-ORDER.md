@@ -894,28 +894,50 @@ a company whose requests were measured at 0.3 s or less (60 s otherwise), and sa
 the refusal's time (a.at) when a day is refused for `typing` again, so the cloud sees the typing go on. Tested: `tests/run_migration182.py`,
 `tests/run_gap_post_ingest.py`, `tests/run_gap_older_page.py`.
 
-## 189: sign-in attempts counted where the password is checked; a wait per email and address (not run yet; branch next-sec-server, 13-Nov-2026)
+## 189, 190, 191: sign-in attempts, upload limits, a shared count taken in one step (not run yet; branch next-sec-server, 13-Nov-2026)
 
-**189, sign-in attempts** (13-Nov-2026, branch `next-sec-server`, security review M4; **written, not run yet**; file md5 80306ab9472f285ca56172d0a926f216):
+**Before these: migration 112** (`server/security/migration-112-auth-rate-limits.sql`, the shared counts' table
+`auth_rate_hits` and its functions) must be on the database. The functions of this branch count in it: signin (failed
+sign-ins per address), support-mail (a message emailed once, a ticket's emails a day), mis-run and fincom-call (a firm's
+emails a day, through 191's `auth_rate_take`), mis-run's Run now, signup and gst-api. 191 does not run without 112's
+table. Order: **112 (when it is not there yet), then 189, 190, 191**, then the functions, then the hook in the dashboard.
+Without 112: signin skips the per-address count; support-mail still sends and logs that the count is missing; mis-run
+makes the report and fincom-call schedules the meeting, and neither emails (the bell, and the invite's note, say the
+count could not be read).
+
+**189, sign-in attempts** (13-Nov-2026, branch `next-sec-server`; **written, not run yet**; file md5 eb2b37f2109287c8ffdbf3119ae27ce7):
 `server/security/migration-189-signin-attempts.sql`. Adds the tables `auth_signin_fails` and `auth_signin_pass` (emails
 and addresses kept only as SHA-256; service_role only) and `auth_signin_begin` / `auth_signin_fail` / `auth_signin_ok`
 (the sign-in function's: the wait belongs to one email from one address: none for four wrong passwords, then 30 s, 1, 2,
-5 and at most 15 minutes; a try during a wait is refused and not counted), `auth_password_attempt_hook` (Supabase Auth's
-"password verification attempt" hook: every wrong password counted for the account whichever way it reached Auth; after 10
-within 15 minutes a right password is taken only with the sign-in function's ten-second pass; ends by itself),
-`auth_signin_sweep` (hourly by pg_cron where installed). Replaces migration 3's `auth_lockout_clear` (same arguments and
-grant): the owner's unlock also ends the email's waits and counts here. Add-only, one transaction, lock_timeout 10 s, safe
-twice. Needs migration 3 (numbers 183 to 188 belong to other branches; 189 needs none of them). Deploy: 189, then the signin function, then switch the hook on in the dashboard (Authentication ->
-Hooks -> Password Verification Attempt -> `public.auth_password_attempt_hook`). Without 189 the function counts as before.
-Tested: `tests/run_migration189.py` (RED_WITHOUT_189=1 fails), `server/security/functions/signin/handler_test.ts`.
+5 and at most 15 minutes; a try during a wait is refused and not counted; begin and fail take an advisory lock per
+pair), `auth_password_attempt_hook` (Supabase Auth's "password verification attempt" hook: every wrong password counted
+for the account; a pass of the sign-in function lasts ten seconds and serves one password check; a check without a pass
+on an account with 10 wrong passwords within 15 minutes is refused with one message, the password right or wrong; ends
+by itself), `auth_signin_sweep` (hourly by pg_cron where installed). Replaces migration 3's `auth_lockout_clear` (same
+arguments and grant): the owner's unlock also ends the email's waits and counts here. Add-only, one transaction,
+lock_timeout 10 s, safe twice. Needs migration 3 (numbers 183 to 188 belong to other branches; 189 needs none of them).
+Deploy: 112 when it is not there, 189, then the signin function (it answers the console's two sites too), then the app
+and the console (both sign in through the function: the console's page from `console/`, the app's from `src/js/27`),
+and only then switch the hook on in the dashboard (Authentication -> Hooks -> Password Verification Attempt ->
+`public.auth_password_attempt_hook`): a page that still sent passwords straight to Auth would carry no pass. Without
+189 the function counts with migration 3's lockout.
+Tested: `tests/run_migration189.py` (RED_WITHOUT_189=1 fails), `server/security/functions/signin/handler_test.ts`,
+`tests/run_console_ui.py`, `tests/run_phase2.py`.
 
-## 190: upload limits on two Storage buckets (not run yet; branch next-sec-server, 13-Nov-2026)
-
-**190, upload limits** (13-Nov-2026, branch `next-sec-server`, security review L8; **written, not run yet**; file md5 81608dd5328a5baba8f376bbad1e372c):
+**190, upload limits** (13-Nov-2026, branch `next-sec-server`; **written, not run yet**; file md5 7628ac48ae6f8a4eb00d9ffc1b48cd92):
 `server/security/migration-190-upload-limits.sql`. Fills in two bucket settings where they were empty: `call-files` takes
-only the listed types (the app's `STORE_TYPES`, plain bytes, audio and video; fincom-call tells the page the type to put a
-chat file under, anything not listed as `application/octet-stream`), and `tally-days` gets a 64 MB size limit. No other
-bucket is touched (`assistant-files` keeps any type). Nothing else is changed; one transaction, lock_timeout 10 s, safe
-twice and without Storage. Deploy: the app and fincom-call first (an older page puts a file under the browser's own type,
-which Storage would then refuse when it is not listed), then 190. Tested: `tests/run_migration190.py` (RED_WITHOUT_190=1
-fails), `server/video-calls/handler_test.ts`.
+only the listed types (the app's `STORE_TYPES`, plain bytes, audio and video; XML is not on the list; fincom-call tells
+the page the type to put a chat file under, anything not listed as `application/octet-stream`), and `tally-days` gets a
+64 MB size limit. No other bucket is touched (`assistant-files` keeps any type). Nothing else is changed; one
+transaction, lock_timeout 10 s, safe twice and without Storage. Needs nothing of 112 or 189. Deploy: the app and
+fincom-call first (an older page puts a file under the browser's own type, which Storage would then refuse when it is
+not listed), then 190. Tested: `tests/run_migration190.py` (RED_WITHOUT_190=1 fails), `server/video-calls/handler_test.ts`.
+
+**191, a shared count taken in one step** (13-Nov-2026, branch `next-sec-server`; **written, not run yet**; file md5 4868384da7ecbeeb992347a788bce5e8):
+`server/security/migration-191-rate-take.sql`. Adds `auth_rate_take(bucket, key, n, max, window_s)` (service_role only):
+under the advisory lock of 112's `auth_rate_hit`, n rows are written only when they fit under max within the window, and
+the answer says which. **Needs migration 112.** Used by `server/_shared/mailrules.ts` for the emails FinCom sends for a
+firm (mis-run, fincom-call): the day's places are taken before the email goes out. Add-only (one function), one
+transaction, lock_timeout 10 s, safe twice. Deploy: 112, 191, then mis-run and fincom-call (without 191 they make the
+report or the meeting and send no email, and say the count could not be read). Tested: `tests/run_migration191.py`
+(RED_WITHOUT_191=1 fails), `server/mis-run/handler_test.ts`, `server/video-calls/handler_test.ts`.

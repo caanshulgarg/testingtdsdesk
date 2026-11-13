@@ -49,6 +49,16 @@ fincom-assistant, fincom-transcribe, gst-2b-match, tds-challan-match, mis-run, z
 | support-mail | server/support-mail | index.ts, handler.ts, ../_shared/cors.ts, ../_shared/errors.ts | `*` |
 | fincom-call | server/video-calls | a one-line index.ts importing server/video-calls/index.ts from GitHub at a pinned commit and calling main() (its own imports: ./handler.ts, ../../app/src/calls/rules.js (the rules the app keeps too), ../assistant/models.ts, ../assistant/router.ts, ../_shared/cors.ts); verify_jwt off (it checks the member's token, or a guest's signed pass, itself); keys from platform_secrets only: cf_realtime_app_id / cf_realtime_token (Cloudflare Realtime SFU; without them calls run peer to peer), cf_turn_key_id / cf_turn_key_token (optional TURN), resend_api_key / resend_from (guest codes and invites; without them the host copies the link), call_guest_secret (made by the function itself), groq via fincom-transcribe, claude_api_key for the summary | the list |
 
+**13-Nov-2026 (branch next-sec-server): what these functions need on the database, and two more shared files.**
+Migration 112 (`auth_rate_hits` and its functions, the shared counts) is needed by signin, signup, support-mail, mis-run,
+fincom-call and gst-api; migration 191 (`auth_rate_take`, which needs 112) by mis-run and fincom-call for a firm's emails
+of a day; migration 189 by signin. Run 112, 189, 190, 191 before deploying them (docs/MIGRATION-ORDER.md says what each
+function does when one is missing). `mailrules.ts` (to whom, how many, in whose words) goes with mis-run and fincom-call
+as `server/_shared/mailrules.ts`; `clientip.ts` with signin, signup and gst-api; `errors.ts` with admin, signup and
+support-mail. signin's own `cors.ts` adds the console's two sites (`CONSOLE_ORIGINS` here) to the list: the console
+signs in through signin. mis-run answers a third action, `who` (the typed addresses of a client's schedules that it
+will not email), beside `run` and `now`.
+
 The `*` functions take only the header list from here: each call carries a sign-in token or a device key (no cookies),
 and tally-ingest and gst-taxpro are also called by the Tally bridge and the database's timer.
 `signup` (by invitation only since 26-Oct-2026, audit H3) is in `server/signup/` (index.ts, handler.ts, and ../_shared/errors.ts and ../_shared/clientip.ts since 13-Nov-2026; v10's source kept as v10-deployed.ts.txt); fyn-relay is a Node server called only by
