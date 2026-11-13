@@ -717,11 +717,13 @@ Object.assign(Audit, {
   // the audit's last run)
   autoLoading(){ const T = typeof TCloud === "object" ? TCloud : null; return !!(T && (T.opens > 0 || T.loads > 0)); },
   autoBusy(b){ const f = typeof LK === "object" && LK.fr ? LK.fr() : null; return !!(b.catchUp || (f && f.busy) || (this !== Audit && Audit.auto)); },
-  autoStart(b){
+  // want (the MIS's runs asked for: MIS.runSoon): {from, to, how}, a run of that period and words, due or not; one asked
+  // while another runs takes its place
+  autoStart(b, want){
     const j = this.auto;
-    if (j && j.b === b) return j;
+    if (j && j.b === b && !want) return j;
     if (j) this.autoStop(j);
-    const job = this.auto = {b, cid: b.cid, co: S.coId, it: null, sig: null, memo: null, prog: {k: 0, of: Object.keys(this.checks || 0).length}, starts: 0, slices: [], drawn: 0, t0: Date.now()};
+    const job = this.auto = {b, want, cid: b.cid, co: S.coId, it: null, sig: null, memo: null, prog: {k: 0, of: Object.keys(this.checks || 0).length}, starts: 0, slices: [], drawn: 0, t0: Date.now()};
     this.autoSoon(job);
     return job;
   },
@@ -732,6 +734,8 @@ Object.assign(Audit, {
     if (this.auto === j) this.auto = null;
   },
   // the run on its own being worked out for these books (the Audit tab's "checking" line)
+  // still wanted: a run asked for, until a run is written since it began (autoRun); else while due
+  autoDue(j, b){ return j.want ? !j.sig || this.autoRun(j.sig, b) : this.due(b); },
   autoFor(b){ const j = this.auto; return j && j.b === b && S.books === b ? j : null; },
   autoSoon(j, ms){
     const go = d => this.autoSlice(j, d);
@@ -740,13 +744,13 @@ Object.assign(Audit, {
     else setTimeout(go, 0);
   },
   autoBegin(j, b){
-    const r = this.autoRange ? this.autoRange(b) : this.defaultRange(b);
+    const r = j.want || (this.autoRange ? this.autoRange(b) : this.defaultRange(b));
     j.sig = this.autoSig(b); j.memo = new Map(); j.starts++;
     // kept only if no load is running and the books are as they were when it started (they can change only on its last
     // start, or its very last); refused: once more (autoSlice)
     j.refused = false;
     j.prog.keep = () => { const ok = !this.autoLoading() && (!!j.extra || this.autoSame(j.sig, b)); if (!ok) j.refused = true; return ok; };
-    j.it = (this.steps || this.runIn).call(this, r.from, r.to, "on its own (" + this.cfg(b).freq + ")", j.prog);
+    j.it = (this.steps || this.runIn).call(this, r.from, r.to, j.want ? j.want.how : "on its own (" + this.cfg(b).freq + ")", j.prog);
   },
   autoSlice(j, d){
     if (this.auto !== j) return;
@@ -767,7 +771,7 @@ Object.assign(Audit, {
       else {
         if (j.it){ try { j.it.return(); } catch (e){} j.it = null; }
         // a run by hand since, the setting turned off, or no entries: nothing more to do
-        if (!this.due(b)){ this.autoStop(j); return; }
+        if (!this.autoDue(j, b)){ this.autoStop(j); return; }
         if (j.starts + 1 >= this.AUTO.MAX_STARTS) j.final = true;
         this.autoBegin(j, b);
       }
@@ -799,7 +803,7 @@ Object.assign(Audit, {
     j.it = null;
     // the last start's books changed on the way (prog.keep): not kept; once more from the books as they are, kept as it ends
     // (only when keep refused it: a step that threw ends it, as before)
-    if (!run && j.refused && !j.extra && this.autoRun(j.sig, b) && this.due(b)){ j.extra = true; this.autoBegin(j, b); this.autoSoon(j); return; }
+    if (!run && j.refused && !j.extra && this.autoRun(j.sig, b) && this.autoDue(j, b)){ j.extra = true; this.autoBegin(j, b); this.autoSoon(j); return; }
     if (this.auto === j) this.auto = null;
     if (!run) return;
     j.run = run;

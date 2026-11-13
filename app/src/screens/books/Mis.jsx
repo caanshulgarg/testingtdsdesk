@@ -400,7 +400,8 @@ export default function Mis({ b }) {
   const r0 = (b.mis || {}).last;
   // the last run's figures stay on the page, marked, until the new ones replace them; none yet: the words where they go
   if (catchUp && !r0) return <>{tabs}<Head b={b} r={null} rg={rg} /><div data-working=""><CatchUp text={catchUp} /></div></>;
-  const busy = catchUp ? <div data-updating=""><CatchUp text={catchUp} /></div> : null, stale = !catchUp && MIS.stale(b);
+  // a run asked for elsewhere (MIS.runSoon: an MSME type, Reports, the cloud copy's entries) being worked out behind the page
+  const busy = catchUp ? <div data-updating=""><CatchUp text={catchUp} /></div> : MIS.autoFor(b) ? <div data-updating="" data-mis-auto=""><CatchUp text="Working out the MIS…" /></div> : null, stale = !catchUp && MIS.stale(b);
   // a saved run from other books or older working: worked out again now, its figures not shown meanwhile
   if (stale && !MIS._again) misGo(r0.from, r0.to, "worked out again (the books or FinCom changed since " + fmtDate(r0.at.slice(0, 10)) + ")");
   if (stale && MIS.stale(b)) return <>{tabs}<Head b={b} r={null} rg={rg} /><div className="bk-none" data-mis-again="" style={{ marginTop: 12 }}>{"Working out again: the books or FinCom’s working changed since the run of " + fmtDate(r0.at.slice(0, 10)) + " (result code " + r0.code + ")."}</div></>;

@@ -1681,7 +1681,7 @@ function doAct(act, t){
     case "misRun": {
       const b = S.books, rg = S.misRange || (x => ({from: Audit.iso(x.from), to: Audit.iso(x.to)}))(misRangeQuick("ytd", b));
       if (!rg.from || !rg.to || rg.from > rg.to){ toast("Choose a period: from a date to a later one."); break; }
-      MIS.run(rg.from, rg.to, "run now"); saveBooks(); render(); break;
+      MIS.runSoon(b, {from: rg.from, to: rg.to, how: "run now"}); render(); break;
     }
     case "misBudFill": {
       const b = S.books, r = (b.mis || {}).last; if (!r) break;
