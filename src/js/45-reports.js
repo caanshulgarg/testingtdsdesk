@@ -130,7 +130,8 @@ const RPT = {
     if (to.mis){
       if (!(b.vouchers || []).length){ FC.go("import"); return; }
       const last = (b.mis || {}).last;
-      if (R && !(last && last.from === R.from && last.to === R.to)){ try { MIS.run(R.from, R.to, "opened from Reports"); saveBooks(); } catch (e){ toast("Could not work out the MIS: " + e.message); } }
+      // (in steps behind the page: MIS.runSoon; the MIS tab says it is working it out)
+      if (R && !(last && last.from === R.from && last.to === R.to)) MIS.runSoon(b, {from: R.from, to: R.to, how: "opened from Reports"});
       if (R) S.misRange = {from: FC.iso(R.from), to: FC.iso(R.to)};
       FC.go("mis", {misTab: to.mis, misLed: ""}); return;
     }

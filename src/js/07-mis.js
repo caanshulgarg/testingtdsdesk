@@ -478,6 +478,9 @@ const MIS = {
   runNow(from, to, how){ return this.runSteps(this.runIn(from, to, how)); },
   // the run in steps (MIS works it out behind the page: app/src/screens/books/Mis.jsx): the same figures
   *runIn(from, to, how, prog){
+    // the run's basis is the books' when it starts, as the audit's (next-fix-mis-rework): a run whose books changed on the
+    // way no longer fits them (stale)
+    const basis = this.basis();
     from = Audit.ymd(from); to = Audit.ymd(to);
     const days = Audit.days(from, to) + 1, lyFrom = this.shift(from, -1), lyTo = this.shift(to, -1);
     // the period before: whole months when the period is whole months, else the same number of days
@@ -504,7 +507,7 @@ const MIS = {
     yield;
     const comp = this.compliance(from, to);
     yield;
-    return yield* this.madeIn(from, to, how, bal, balTo, {sales: s, purchases: pr, pl, prev, ly, prevRange: [pFrom, pTo], lyRange: [lyFrom, lyTo], mtd, ytd, cash, recv, pay, comp, prog});
+    return yield* this.madeIn(from, to, how, bal, balTo, {sales: s, purchases: pr, pl, prev, ly, prevRange: [pFrom, pTo], lyRange: [lyFrom, lyTo], mtd, ytd, cash, recv, pay, comp, prog, basis});
   },
   // next-cloud-mis: the rest of a run, the same whether its figures were worked out here (runIn) or in FinCom's cloud
   // (fromCloud): w holds sales to comp (and, from the cloud, owed, goods and the cash flow, flow); in steps (madeIn) for a
@@ -544,7 +547,7 @@ const MIS = {
       Object.entries(b.tb.led).forEach(([l, x]) => { const d = r2((num(x.close) - num(x.open)) - ((mv[l] || {}).t || 0)); if (Math.abs(d) >= 1){ n++; amt = r2(amt + Math.abs(d)); list.push([l, d]); } });
       r.control = {ok: n === 0, n, amt, list: list.slice(0, 50)};
     } else r.control = null;
-    r.basis = this.basis(b);
+    r.basis = w.basis || this.basis(b);
     // a run on its own whose books changed on the way (prog.keep, Audit.autoBegin): nothing written
     if (w.prog && !w.prog.keep()) return null;
     r.code = Audit.hash(JSON.stringify([s.total, pr.total, pl.pat.t, r.recv.sum, r.pay.sum, s.rows.slice(0, 50).map(x => [x.party, x.t]), r.p2.cash.net, r.p2.fc.weeks.map(w => w.net), r.p2.cc.rows.map(x => [x.name, x.profit])]));
@@ -590,9 +593,14 @@ const MIS = {
   // on 51,758 made-up entries, about 4x on a slow office PC). Now in idle steps as the day's audit on its own (Audit.autoStart,
   // its auto* taken below: the same restarts, waits and keep rules), the same run (runIn). tests/run_hang_mis_auto.py
   // Its steps (MIS.steps) come with the MIS screen's file (src/js/18-mis-pack.js), loaded first
-  maybeRun(){
-    const b = S.books, go = () => { if (S.books === b) this.autoStart(b); };
-    if (b && b.vouchers && this.due(b)) this.steps || typeof loadPart !== "function" ? go() : loadPart("mis").then(go, go);
+  maybeRun(){ const b = S.books; if (b && b.vouchers && this.due(b)) this.runSoon(b); },
+  // next-fix-mis-rework: every run asked for without the MIS tab's own (the cloud copy's new entries, an MSME type, Run
+  // now by doAct, Reports): the same job, with its period and words (want). The MIS screen's file loaded quietly (a failed
+  // fetch is no reason to reload the page from a job behind it, app/src/main.jsx loadPart): tried again later, 5 times
+  runSoon(b, want, n){
+    const go = () => { if (S.books === b) this.autoStart(b, want); };
+    if (this.steps || typeof loadPart !== "function") go();
+    else loadPart("mis", true).then(go, () => { if ((n || 0) < 5) setTimeout(() => { if (S.books === b) this.runSoon(b, want, (n || 0) + 1); }, this.AUTO.WAIT_MAX_MS / 2); });
   },
   lastRun(b){ return (b.mis || {}).last || null; },
   say: "the month's MIS on its own"

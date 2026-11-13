@@ -632,8 +632,10 @@ const TCloud = {
       if ((b.stale || {}).mis){ /* the MIS tab works it out when shown */ }
       // next-cloud-mis: from the cloud's figures when they fit these books (MIS.cloudGo: else worked out here, as before)
       else if (last && last.from && last.to){
-        if (MIS.cloudOk(b) && window.loadPart) window.loadPart("mis").then(() => MIS.cloudGo(last.from, last.to, how, () => { MIS.run(last.from, last.to, how); saveBooks(); render(); })).catch(() => {});
-        else MIS.run(last.from, last.to, how);
+        // (worked out here: in steps behind the page, MIS.runSoon, next-fix-mis-rework)
+        const go = () => MIS.runSoon(b, {from: last.from, to: last.to, how});
+        if (MIS.cloudOk(b) && window.loadPart) window.loadPart("mis", true).then(() => MIS.cloudGo(last.from, last.to, how, go)).catch(() => {});
+        else go();
       } else MIS.maybeRun();
       Audit.maybeRun(); saveBooks(); render();
     } catch (e){}
