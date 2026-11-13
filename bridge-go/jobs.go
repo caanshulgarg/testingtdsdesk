@@ -801,6 +801,9 @@ func jobWorker(dir string) {
 			// F1: the job's progress (its in-flight ids) could not be written: nothing is sent; waited for like Tally
 			o = importOutcome{err: fmt.Errorf("%w (progress.json: %v)", errRecordNotWritten, err)}
 		} else {
+			// 2.5.15 (review H1 of b41667d51): the in-flight ids on the disk before the request goes (a restart after a
+			// power cut finds them); the posting's record itself is waited for in sendImport
+			durableWait(filepath.Join(dir, "progress.json"))
 			gate := postGate(port) // the browser's /import and this job never interleave a record check and a send
 			gate.Lock()
 			o = sendImport(port, company, jobID, r)

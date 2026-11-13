@@ -66,9 +66,7 @@ func r2515Median(d []time.Duration) time.Duration {
 func TestR2515SavesNeverWaitForFlush(t *testing.T) {
 	standBridge(t, newStandTally(t), "")
 	var n atomic.Int64
-	old := syncFileFn
-	syncFileFn = func(h *os.File) error { time.Sleep(200 * time.Millisecond); n.Add(1); return h.Sync() }
-	t.Cleanup(func() { durableWaitAll(); syncFileFn = old })
+	r2515SetSync(t, func(h *os.File) error { time.Sleep(200 * time.Millisecond); n.Add(1); return h.Sync() })
 	for name, save := range r2515HotPaths(t) {
 		t0 := time.Now()
 		path, err := save(1)
@@ -85,19 +83,50 @@ func TestR2515SavesNeverWaitForFlush(t *testing.T) {
 	}
 }
 
-// posted-ids.json: the save does not wait, the next send to Tally does (a power cut never loses an acceptance)
+// the flush function swapped for a test (under the worker's lock; every flush finished first and at the end)
+func r2515SetSync(t *testing.T, f func(*os.File) error) {
+	t.Helper()
+	durableWaitAll()
+	durMu.Lock()
+	old := syncFileFn
+	syncFileFn = f
+	durMu.Unlock()
+	t.Cleanup(func() {
+		durableWaitAll()
+		durMu.Lock()
+		syncFileFn = old
+		durMu.Unlock()
+	})
+}
+
+// posted-ids.json: the save does not wait; a send to Tally does, for every earlier note and for its own "sent, no answer
+// yet" note (review H1 of b41667d51): the file as it is when Tally gets the request is the one flushed last
 func TestR2515PostedFlushedBeforeNextSend(t *testing.T) {
 	f := newStandTally(t)
 	standBridge(t, f, "")
 	release := make(chan struct{})
-	old := syncFileFn
-	syncFileFn = func(h *os.File) error {
+	var flushed atomic.Value
+	flushed.Store("")
+	r2515SetSync(t, func(h *os.File) error {
 		if strings.HasPrefix(filepath.Base(h.Name()), "posted-ids.json") {
 			<-release
 		}
+		if filepath.Base(h.Name()) == "posted-ids.json" {
+			b, _ := os.ReadFile(h.Name())
+			flushed.Store(string(b))
+		}
 		return h.Sync()
+	})
+	var atImport atomic.Value
+	f.mu.Lock()
+	f.slow = func(id, body string) time.Duration {
+		if id == "Import" {
+			cur := readText(acceptedFile())
+			atImport.Store(fmt.Sprintf("%v %v", cur == flushed.Load().(string), strings.Count(cur, `"sent"`)))
+		}
+		return 0
 	}
-	t.Cleanup(func() { syncFileFn = old })
+	f.mu.Unlock()
 	t0 := time.Now()
 	if err := noteSent("Fast0", zz, "job-r2515-prev", "", 1, "", ""); err != nil || time.Since(t0) > 100*time.Millisecond {
 		t.Fatalf("the save of posted-ids.json waited for its flush: %v after %s", err, time.Since(t0))
@@ -109,7 +138,7 @@ func TestR2515PostedFlushedBeforeNextSend(t *testing.T) {
 	}()
 	time.Sleep(150 * time.Millisecond)
 	if f.n("Import") != 0 {
-		t.Fatal("sent to Tally before the previous posted-ids.json was on the disk")
+		t.Fatal("sent to Tally before posted-ids.json was on the disk")
 	}
 	close(release)
 	select {
@@ -120,9 +149,23 @@ func TestR2515PostedFlushedBeforeNextSend(t *testing.T) {
 	case <-time.After(10 * time.Second):
 		t.Fatal("the send never went after the flush")
 	}
-	if f.n("Import") != 1 {
-		t.Fatalf("%d imports after the flush", f.n("Import"))
+	// at the Import: the file Tally's request went with is the one flushed, and it holds fs1's note beside Fast0's
+	if f.n("Import") != 1 || atImport.Load() != "true 2" {
+		t.Fatalf("%d imports; at the import (file flushed, notes): %v", f.n("Import"), atImport.Load())
 	}
+}
+
+// the cost of that wait, a request to Tally (one flush of posted-ids.json, its copy and its folder), on this disk
+func TestR2515PostedFlushCost(t *testing.T) {
+	standBridge(t, newStandTally(t), "")
+	var d []time.Duration
+	for i := 0; i < 50; i++ {
+		_ = noteSent(fmt.Sprintf("Cost%d", i), zz, "job-r2515-cost", "", 1, "", "")
+		t0 := time.Now()
+		postedDurableWait()
+		d = append(d, time.Since(t0))
+	}
+	t.Logf("posted-ids.json flush before a request to Tally: median %s, worst %s", r2515Median(d), d[len(d)-1])
 }
 
 // the save on each hot path costs what 2.5.14's did (median of 200, alternated with 2.5.14's write of the same text to

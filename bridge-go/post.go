@@ -297,14 +297,15 @@ func sendImport(port int, company, job string, r importReq) importOutcome {
 	// bridge that dies while the request is in flight never sends them again; the reply rewrites the note. The record
 	// not written (F1): nothing is sent (a "not reached" error: the job waits and tries later)
 	keys := r.keys()
-	// 2.5.15 (safefile.go; the owner's decision of 13-Nov-2026): the previous save of posted-ids.json is on the disk before
-	// the next send to Tally (a power cut never loses an acceptance); the saves themselves never wait for the flush
-	postedDurableWait()
 	if r.kind == "voucher" {
 		if err := noteSentMany(keys, company, job, "", len(r.items), "", ""); err != nil {
 			return importOutcome{err: errRecordNotWritten}
 		}
 	}
+	// 2.5.15 (safefile.go; the owner's decision of 13-Nov-2026; review H1 of b41667d51): posted-ids.json on the disk, this
+	// request's own note with every earlier one, before the request goes (a power cut mid-request never loses the note,
+	// so nothing is sent twice): one flush a request to Tally; the saves themselves never wait for it
+	postedDurableWait()
 	t0 := time.Now()
 	sentAt := t0.Format(time.RFC3339)
 	raw, err := invokeTally(fin, port, r.envelope(company), importTimeoutSec(len(r.items)))
