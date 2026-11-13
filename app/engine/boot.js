@@ -30,6 +30,25 @@ put("innerWidth", 1400); put("innerHeight", 900);
 // bank, files, rules, drafts, sales; this browser's store and settings; a file to save) throws here: a run that tried
 // would fail in the worker and be worked out on the page instead. (fetch, XHR and WebSocket refuse: no network either)
 export const DENIED = ["saveBooks", "saveBank", "saveBridgeSetup", "saveDraft", "saveFile", "saveNewCompany", "saveRules", "saveSales", "flushAuditLater", "flushBillSaves", "flushBillSavesAndSend", "lsSet", "lsDel"];
+// Books.save's records for the page (worker.js storeMsg, Engine.store): the one write the worker makes, with this
+// browser's indexedDB as the worker found it (taken before denyWrites). One transaction, given up as a whole on an error
+const IDB = self.indexedDB;
+export function storeTx(name, f) {
+  return new Promise((ok, no) => {
+    if (!IDB || !name) { no(new Error("no store to write to")); return; }
+    const r = IDB.open(name, 1);
+    r.onupgradeneeded = () => { if (!r.result.objectStoreNames.contains("docs")) r.result.createObjectStore("docs"); };
+    r.onerror = () => no(r.error || new Error("the store did not open"));
+    r.onblocked = () => {};
+    r.onsuccess = () => {
+      const db = r.result; let t;
+      try { t = db.transaction("docs", "readwrite"); } catch (e) { db.close(); no(e); return; }
+      t.oncomplete = () => { db.close(); ok(); };
+      t.onabort = t.onerror = () => { db.close(); no(t.error || new Error("the save was given up")); };
+      try { f(t.objectStore("docs"), t); } catch (e) { try { t.abort(); } catch (x) { /* given up */ } }
+    };
+  });
+}
 const STORES = () => [["Store", typeof Store === "object" ? Store : null], ["IDBStore", typeof IDBStore === "object" ? IDBStore : null], ["BankDB", typeof BankDB === "object" ? BankDB : null], ["FileStore", typeof FileStore === "object" ? FileStore : null]];
 const no = (what) => function () { throw new Error("the engine's worker writes nothing (" + what + ")"); };
 function denyWrites() {

@@ -974,7 +974,7 @@ const Engine = {
   src(){ const s = typeof document === "object" && document.querySelector('script[src*="legacy.js"]'); return s ? s.src : ""; },
   can(A){ return this.st !== "off" && typeof Worker === "function" && !/^__/.test(this.URL) && !!this.src() && (A === Audit || A === MIS || A === GSTR) && this.pure(); },
   off(why){
-    this.st = "off"; this.why = String(why || ""); this.gSent = undefined;
+    this.st = "off"; this.why = String(why || ""); this.gSent = undefined; this.stV = null;
     try { if (this.w) this.w.terminate(); } catch (e){}
     this.w = null; this.sent = null; this.jobs.forEach(a => clearTimeout(a.timer)); this.jobs.clear(); this.wake();
   },
@@ -1086,6 +1086,77 @@ const Engine = {
   peek(){ return new Promise(ok => { if (!this.w || this.st !== "ok"){ ok(null); return; } const f = e => { if ((e.data || {}).t === "state"){ this.w && this.w.removeEventListener("message", f); ok(e.data.r); } }; this.w.addEventListener("message", f); this.post({t: "state"}); }); },
   // (answered: how long it took, for the next one's time)
   done(a){ clearTimeout(a.timer); this.took[a.kind] = Math.max(this.took[a.kind] || 0, Date.now() - a.t0); },
+  // ---------- the books written to this browser's store by the worker (Books.save, src/js/04)
+  canStore(data){ return this.st !== "off" && typeof Worker === "function" && !/^__/.test(this.URL) && !!this.src() && !!data && Array.isArray(data.vouchers) && data.vouchers.length > this.SMALL && typeof LocalOwner === "object" && !LocalOwner.stale && typeof IDBStore === "object"; },
+  // a generator of the engine's (WAIT: until the worker's next word) run as a small job of its own: its answer
+  drive(it){
+    return new Promise((ok, no) => {
+      const step = () => {
+        const t0 = Date.now();
+        try {
+          for (;;){
+            const r = it.next();
+            if (r.done){ ok(r.value); return; }
+            if (r.value === this.WAIT){ this.sleep(() => setTimeout(step, 0)); return; }
+            if (Date.now() - t0 >= 10){ setTimeout(step, 0); return; }
+          }
+        } catch (e){ no(e); }
+      };
+      setTimeout(step, 0);
+    });
+  },
+  // a value in words of at most BIG items each: a plain object of more than BIG keys or a list of more than BIG items,
+  // the value itself or one of its own (the audit's items), comes in parts after it (its place kept, so its keys keep
+  // their order)
+  BIG: 5000,
+  big(x){ return !!x && typeof x === "object" && (Array.isArray(x) ? x.length > this.BIG : Object.getPrototypeOf(x) === Object.prototype && Object.keys(x).length > this.BIG); },
+  *postPart(id, key, v){
+    const sub = []; let top = v;
+    if (this.big(v)){ top = Array.isArray(v) ? [] : {}; sub.push(["", v]); }
+    else if (v && typeof v === "object" && !Array.isArray(v) && Object.getPrototypeOf(v) === Object.prototype){
+      const kk = Object.keys(v).filter(x => this.big(v[x]));
+      if (kk.length){ top = Object.assign({}, v); kk.forEach(x => { top[x] = null; sub.push([x, v[x]]); }); }
+    }
+    this.post({t: "sk", id, k: key, v: top}); yield;
+    for (const [at, x] of sub){
+      this.post({t: "sa", id, k: key, at, arr: Array.isArray(x)});
+      if (Array.isArray(x)) for (let i = 0; i < x.length; i += this.BIG){ this.post({t: "sp", id, k: key, at, v: x.slice(i, i + this.BIG)}); yield; }
+      else { const ks = Object.keys(x); for (let i = 0; i < ks.length; i += this.BIG){ const o = {}; for (let j = i; j < i + this.BIG && j < ks.length; j++) o[ks[j]] = x[ks[j]]; this.post({t: "sp", id, k: key, at, v: o}); yield; } }
+    }
+  },
+  // Books.save's records for a client (k: Books.vk, the version of the entries last written or read here): {s, wrote},
+  // or null when the worker could not (then written here). The entries go only when the worker does not hold this very
+  // list: the one it last wrote (stV), or the one the engine has (sent)
+  store(cid, data, k){ return this.drive(this.storeIn(cid, data, k)); },
+  *storeIn(cid, data, k){
+    if (!(yield* this.ready())) return null;
+    while (this.sending) yield this.WAIT;
+    this.sending = true;
+    let a = null;
+    try {
+      const V = data.vouchers, n = V.length, sameAs = p => !!p && p.V === V && p.n === n && p.vs.every((x, i) => x === V[i]);
+      const same = !!k && k.r === V && n === k.a.length && V.every((x, i) => x === k.a[i]);
+      a = {id: ++this.nid, kind: "store", res: null, end: false, err: "", t0: Date.now()}; this.jobs.set(a.id, a);
+      // (its time, as any job's: the worker ends when it does not answer, review of part 1; the save is written here)
+      const ms = Math.max(this.JOB_MS + n * this.JOB_PER, 3 * (this.took.store || 0), this.JOB_MS);
+      a.timer = setTimeout(() => { if (this.jobs.get(a.id) === a && !a.end) this.off("a save of the worker took too long (" + Math.round(ms / 1000) + " s)"); }, ms);
+      // (the copy of this browser's store the page has open: its name as IDBStore opens it)
+      this.post({t: "sbegin", id: a.id, cid, db: LocalOwner.db("tdsdesk-work")});
+      yield;
+      for (const key of Object.keys(data)){ if (key === "vouchers") continue; yield* this.postPart(a.id, key, data[key]); if (this.st !== "ok") return null; }
+      let vfrom = "kept";
+      if (!(this.stV && this.stV.cid === cid && sameAs(this.stV))){
+        if (sameAs(this.sent)) vfrom = "engine";
+        else { vfrom = "parts"; for (let i = 0; i < n; i += this.PART){ this.post({t: "sv", id: a.id, v: V.slice(i, i + this.PART)}); if (this.st !== "ok") return null; yield; } }
+      }
+      this.stV = null;
+      this.post({t: "send", id: a.id, ks: k ? k.s : null, same, vfrom});
+      while (!a.end && !a.err && this.st === "ok") yield this.WAIT;
+      if (a.err || !a.end) return null;
+      this.stV = {cid, V, n, vs: V.slice()};
+      return a.res;
+    } finally { this.sending = false; if (a){ clearTimeout(a.timer); this.jobs.delete(a.id); } this.wake(); }
+  },
   // GSTR-3B's figures for a month (GSTR.workReady, src/js/12): the carry and the month's checks; done(answer, or null
   // when the worker could not), not called when a newer ask took its place (GSTR._work). Stepped in idle time as a run
   // on its own is, its own small job
@@ -1139,6 +1210,7 @@ const Engine = {
       // (GSTR-3B's figures in three words: the month's 3B, its checks across the year, the rest)
       else if (m.t === "gpart"){ a.all[m.k] = m.v; }
       else if (m.t === "gst"){ a.res = Object.assign(m.r, a.all); a.end = true; this.done(a); }
+      else if (m.t === "stored"){ a.res = {s: m.s, wrote: m.wrote}; a.end = true; this.done(a); }
       else if (m.t === "audit"){ a.res = m.c; a.full = m.n.map(() => []); }
       else if (m.t === "rows"){ const f = a.full[m.i]; for (let i = 0; i < m.rows.length; i++) f.push(m.rows[i]); }
       else if (m.t === "end" && a.res){
