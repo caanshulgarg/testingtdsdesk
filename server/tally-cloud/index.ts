@@ -945,7 +945,24 @@ async function heldRerun(book: string) {
 // the beat's typing gate is quiet (lightIdle: 5 s after the last keystroke, Tally not busy). The database keeps the count (3
 // rounds of 5 at most; a new round only after the gap check sees a new AlterID). Handed before the refetch, the 20 together.
 // Without the migration (said once; asked again 10 minutes later) or on any error: none, the beat never fails for it
-let probeMissing = 0;
+let probeMissing = 0, ledgerAsksMissing = 0;
+// migration 196: the ledger lines being fetched, brought to an end by Tally's ledgers: their names asked by name (FinComLedgerByName,
+// in ledgersWanted) and, for a book whose ledger line waits over an hour with no whole list since, the full list (the existing wake),
+// only while the typing gate is quiet. Without the migration or on any error: none
+async function ledgerAsksFor(dev: any, firm: string, bridge: string, idle: boolean): Promise<{ names: Record<string, string>[]; full: string[] }> {
+  const none = { names: [] as Record<string, string>[], full: [] as string[] };
+  if (!idle || !bridge || Date.now() - ledgerAsksMissing < 600000) return none;
+  try {
+    const { data, error } = await db.rpc("tally_recorder_ledger_asks", { p_firm: firm, p_device: dev.id, p_bridge: bridge, p_idle: idle });
+    if (error) { if (missingFn(String(error.message || ""))) ledgerAsksMissing = Date.now(); else fail("ledger_asks", error); return none; }
+    const d = data as any, s = (v: unknown, n: number) => typeof v === "string" ? v.trim().slice(0, n) : "";
+    return {
+      names: (Array.isArray(d?.names) ? d.names : []).map((x: any) => ({ company: s(x?.company, 200), company_guid: s(x?.company_guid, 100), name: s(x?.name, 300) }))
+        .filter((x: Record<string, string>) => x.company && x.company_guid && x.name && askableName(x.name)),
+      full: (Array.isArray(d?.full) ? d.full : []).map((x: unknown) => s(x, 200)).filter(Boolean),
+    };
+  } catch (e) { fail("ledger_asks", e); return none; }
+}
 async function probesFor(dev: any, firm: string, bridge: string, idle: boolean) {
   if (!idle || !bridge || Date.now() - probeMissing < 600000) return [];
   try {
@@ -4797,7 +4814,11 @@ Deno.serve(sentry.wrap(async (req) => {
         // 15-Oct-2026 (migration 89): the ledgers the live entries use that FinCom lacks, in the room left of the 20, or the
         // full ledger list ("ledgers", as the ledger chooser asks it); nothing while reading is paused or stopped
         const auto = await autoLedgersFor(firm, bRead, held, !!beat.paused || !!beat.readStopped || !!(info as any).readStop);
-        const wantedAll = [...(held || []), ...auto.names].slice(0, LEDGERS_WANTED_MAX), ledgersWanted = wantedAll.length ? wantedAll : null;
+        // migration 196: the ledger lines' own names, and their books' full lists (the wake below)
+        const la = await ledgerAsksFor(dev, firm, me.id, quiet.idle);
+        for (const c of la.full) if (!auto.full.includes(c)) auto.full.push(c);
+        const wk = new Set([...(held || []), ...auto.names].map((x) => x.company + "|" + x.name));
+        const wantedAll = [...(held || []), ...auto.names, ...la.names.filter((x) => !wk.has(x.company + "|" + x.name))].slice(0, LEDGERS_WANTED_MAX), ledgersWanted = wantedAll.length ? wantedAll : null;
         // FinCom Bridge 2.4.5 (migration 98): the days of the period the person chose (never while reading is paused or stopped),
         // and the ledger read's progress the beat carries (in case a ledger_progress call was lost)
         // ROUND 103 (1c): only on a computer whose owner switched reading older entries on (tally_devices.period_fetch,

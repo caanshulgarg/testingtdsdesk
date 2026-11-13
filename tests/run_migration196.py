@@ -67,13 +67,16 @@ if not text:
 low = text.lower()
 ok(re.search(r"^begin;\s*\nset local lock_timeout = '10s';", text, re.M) is not None and text.rstrip().endswith("commit;") and low.count("\nbegin;") == 1 and low.count("\ncommit;") == 1, "0. begin; set local lock_timeout = '10s'; ... commit; (one transaction)")
 ok(low.count("delete from") == 0 and not re.search(r"\bdrop\s+(table|function|column|index|trigger)\b", low) and not re.search(r"\btruncate\b", low), "0. no row, table, function, column, index or trigger removed")
-ok(re.findall(r"create table if not exists public\.(\w+)", text) == ["tally_recorder_probes"] and re.findall(r"alter table (public\.\w+) (\w+)", text) == [("public.tally_recorder_lines", "drop"), ("public.tally_recorder_probes", "enable")]
+TABLES = ["tally_recorder_probes", "tally_recorder_tries", "tally_recorder_ledger_lists"]
+ok(re.findall(r"create table if not exists public\.(\w+)", text) == TABLES and re.findall(r"alter table (public\.\w+) (\w+)", text) == [("public.tally_recorder_lines", "drop")] + [("public." + t, "enable") for t in TABLES]
    and "drop constraint %I, add constraint %I check (state in (" in text,
-   "0. one new table (tally_recorder_probes, RLS on); the only other table change is the state check's new value (%s)" % re.findall(r"alter table (public\.\w+) (\w+)", text))
+   "0. three new tables (RLS on each); the only other table change is the state check's new value (%s)" % re.findall(r"alter table (public\.\w+) (\w+)", text))
 ok("'replaced'', ''fetching''))" in text, "0. the state check keeps every value it had and adds 'fetching'")
 ok(not re.search(r"supabase\.co|\.supabase\.|project[_ ]ref|qbocskaiewaxqcvaunzc", low), "0. names no real database")
 for g in ("grant execute on function public.tally_recorder_held_rerun(uuid, integer) to service_role;", "grant execute on function public.tally_recorder_probe_take(uuid, uuid, text, boolean, integer) to service_role;",
-          "grant select, insert, update on public.tally_recorder_probes to service_role;", "revoke all on public.tally_recorder_probes from public, anon, authenticated;"):
+          "grant select, insert, update on public.tally_recorder_probes to service_role;", "revoke all on public.tally_recorder_probes from public, anon, authenticated;",
+          "grant select, insert, update on public.tally_recorder_tries to service_role;", "grant select, insert, update on public.tally_recorder_ledger_lists to service_role;",
+          "grant execute on function public.tally_recorder_ledger_asks(uuid, uuid, text, boolean) to service_role;"):
     ok(g in text, "0. explicit grant: " + g[:90])
 def block(t, name):
     i = [m.start() for m in re.finditer(r"create or replace function public\." + name + r"\(", t)][-1]
@@ -122,6 +125,11 @@ def line(lid): return (db.rows("select id::text, state, coalesce(held_why, '') a
 def prosrc(fn="tally_recorder_line(uuid, uuid, jsonb, bigint)"): return db.one("select md5(prosrc) from pg_proc where oid = 'public.%s'::regprocedure" % fn)
 def can(fn, role): return db.one("select has_function_privilege(%s, %s, 'execute')" % (q(role), q(fn)))
 def snapshot(): return db.rows("select id::text, state, coalesce(held_why, '') as why from tally_recorder_lines where book_id = %s order by id" % q(B))
+def sq(x):
+    """a setup statement; under RED_WITHOUT=1 one on a table or state 196 adds fails, the check after it then fails (never a crash)"""
+    try: db.sql(x)
+    except RuntimeError:
+        if not RED: raise
 def rerun(mx=200): return j("select tally_recorder_held_rerun(%s, %d)::text" % (q(B), mx))
 def take(idle=True):
     x = j("select tally_recorder_probe_take(%s, %s, %s, %s, 3)::text" % (q(F), q(D1), q(BR), "true" if idle else "false"))
@@ -250,20 +258,20 @@ try:
     # no match: 5 asks, then none until a new AlterID; never more than 15
     res(apply([L("mn", "altered", 830, None, d="20261012", no="801", typ="Journal", guid="", why=NOSAVE % 830)]))
     n = 0
-    for k in range(8):
+    for k in range(14):
         unpace(); n += len([x for x in (take() or []) if x["line_id"].startswith("mn.")])
     ok(n == 5 and probe("mn") == {"round": "1", "handed": "5"}, "5. no match: 5 asks in round 1, then none (%s %s)" % (n, probe("mn")))
     ok("none matched yet: asked again after Tally's next new entry" in line("mn")["why"] and line("mn")["state"] == "fetching", "5. in plain words, not held: %s" % line("mn")["why"][-160:])
     dq = lambda d: db.one("select count(*) from tally_check_days where book_id = %s and day = %s and source = 'held'" % (q(B), q(d)))
     res(apply([L("q-new", "altered", 840, None, d="20261015", no="811", typ="Journal", guid="", why=NOSAVE % 840)]))
-    ok(dq("2026-10-15") == "0" and dq("2026-10-12") == "1", "5. its round found nothing: that one date queued for 136's day check (FinComDayHeads of that day, then the entries FinCom lacks, by GUID); a line still in its first round is not (%s %s)" % (dq("2026-10-15"), dq("2026-10-12")))
+    ok(dq("2026-10-15") == "1" and dq("2026-10-12") == "1", "5. every GUID-less entry line's date queued for 136's day check (FinComDayHeads of that day, then the entries FinCom lacks, by GUID), whatever its words (%s %s)" % (dq("2026-10-15"), dq("2026-10-12")))
     r = res(apply([L("nn-nomid", "created", 0, None, d="20261014", no="902", typ="Journal", guid="", why="not found by its type and number: Reading entries from Tally is off on this computer (FinCom reads entries only as they change; history comes from the Day Book upload).")]))
     ok(r[0][0] == "fetching" and dq("2026-10-14") == "1", "5. no MasterID to search from: 'fetching', its date queued for the day check at once (%s)" % r)
     # the day check brings the new entry in (133: the entry FinCom lacked, by its GUID); the re-run settles the line
     res(apply([L("nn-day", "created", 870, 60870, d="20261014", no="902", typ="Journal", body=("902", "2026-10-14"))]))
     for alt in (90001, 90002, 90003, 90004):
         db.sql("update tally_sync_cursor set gap = jsonb_build_object('tally_altvchid', %d, 'missing', 1), gap_at = now() where book_id = %s" % (alt, q(B)))
-        for k in range(6):
+        for k in range(12):
             unpace(); n += len([x for x in (take() or []) if x["line_id"].startswith("mn.")])
     ok(n == 15 and probe("mn") == {"round": "3", "handed": "15"}, "5. a new AlterID opens the next round: 15 asks in all, never more (%s %s)" % (n, probe("mn")))
 
@@ -316,7 +324,98 @@ try:
     ok(isinstance(c, dict) and c.get("busy") is True and c.get("rerun") == 0, "10. another session holds the book: nothing done (%s)" % json.dumps(c)[:200])
     hs = json.loads((db.rows("select tally_held_status(null)::text as x", OWNER) or [{"x": "{}"}])[0]["x"])
     nf = int(db.one("select count(*) from tally_recorder_lines where book_id = %s and state = 'fetching'" % q(B)))
-    ok(nf > 0 and any(bk.get("fetching") == nf for bk in hs.get("books", [])), "10. tally_held_status says %d being fetched (%s)" % (nf, json.dumps(hs)[:200]))
+    ok(nf > 0 and any(0 < (bk.get("fetching") or 0) <= nf for bk in hs.get("books", [])), "10. tally_held_status says how many of the %d are being fetched with a retry scheduled (%s)" % (nf, json.dumps(hs)[:200]))
+    def hsn():
+        x = json.loads((db.rows("select tally_held_status(null)::text as x", OWNER) or [{"x": "{}"}])[0]["x"])
+        return sum((bk.get("fetching") or 0) for bk in x.get("books", []))
+
+    print("== 11. every line being fetched has an end")
+    dq = lambda d: db.one("select count(*) from tally_check_days where book_id = %s and day = %s and source = 'held'" % (q(B), q(d)))
+    ok(dq("2026-10-13") == "1", "11. a GUID-less line held for 'Tally busy' (no MasterID): its date queued for the day check whatever its words")
+    res(apply([L("c-busy", "altered", 850, None, d="20261016", no="851", typ="Journal", guid="", why="waiting: Tally busy; FinCom asks again at 14:10")]))
+    got = []
+    for k in range(10):
+        unpace(); got += [x["line_id"] for x in (take() or []) if x["line_id"].startswith("c-busy.")]
+    ok(got[:1] == ["c-busy.p1c1"], "11. a line with a MasterID gets the candidate search whatever its words (%s)" % got[:3])
+    res(apply([L("c-res:resolved", "created", 860, None, d="20261017", no="861", typ="Journal", guid="", why="Tally did not give this entry when asked again; upload that day's Day Book to settle it")]))
+    got = []
+    for k in range(12):
+        unpace(); got += [x["line_id"] for x in (take() or []) if x["line_id"].startswith("c-res:resolved.")]
+    ok(got[:1] == ["c-res:resolved.p1c1"], "11. a ':resolved' row too (%s)" % got[:2])
+    r = res(apply([answer("c-res:resolved.p1c1", 861, "861", "2026-10-17")]))
+    ok(r[0][0] == "applied" and line("c-res:resolved")["state"] == "replaced", "11. its match applied, the ':resolved' row replaced (%s %s)" % (r, line("c-res:resolved")["state"]))
+    # the day check of 20-Oct runs cleanly after these lines came: the copy is Tally's for that day
+    res(apply([L("dc-none", "created", 0, None, d="20261020", no="950", typ="Journal", guid="", why="waiting: Tally busy; FinCom asks again at 14:20"),
+               L("dc-nonum", "created", 0, None, d="20261020", no="", typ="Journal", guid="", why="the line has no MasterID and the entry no voucher number, so Tally cannot be asked for it"),
+               L("dc-guid", "altered", 980, 60980, d="20261020", no="981", typ="Journal", why="Tally did not answer in time for this entry when asked again; upload that day's Day Book to settle it")]))
+    ok(dq("2026-10-20") == "1" and all(line(k)["state"] == "fetching" for k in ("dc-none", "dc-nonum", "dc-guid")), "11. three lines of 20-Oct being fetched, the day queued")
+    sq("update tally_check_days set via = 'day', lists = 1, tally_n = 0, listed_at = now() + interval '1 second', done_at = now() + interval '1 second', same = true where book_id = %s and day = '2026-10-20'" % q(B))
+    rerun(1000)
+    sts = {k: line(k) for k in ("dc-none", "dc-nonum", "dc-guid")}
+    ok(sts["dc-none"]["state"] == "stale" and sts["dc-none"]["why"].startswith("No such entry in Tally for 20-Oct-2026 (checked "), "11. no such entry after the day check: 'stale', in plain words (%s)" % (sts["dc-none"],))
+    ok(sts["dc-guid"]["state"] == "stale" and sts["dc-guid"]["why"].startswith("No such entry in Tally for 20-Oct-2026"), "11. a GUID the day check did not bring: 'stale' (%s)" % (sts["dc-guid"],))
+    ok(sts["dc-nonum"]["state"] == "stale" and "named no voucher number" in sts["dc-nonum"]["why"], "11. a line with no number: 'stale' once the day is Tally's (%s)" % (sts["dc-nonum"],))
+    # the ceiling: no date (nothing to check), 7 days on
+    res(apply([L("ce-old", "created", 0, None, d="", no="", typ="", guid="", why="waiting for the entry's details from FinCom Bridge (it asks Tally again on its next run)")]))
+    c0 = hsn()
+    ok(line("ce-old")["state"] == "fetching" and c0 == hsn(), "11. a line with nothing to ask by: fetching, and not counted as being brought (%s)" % c0)
+    rerun(1000)
+    ok(line("ce-old")["state"] == "fetching", "11. an old line's first tries do not close it (the ceiling counts 7 days of tries)")
+    sq("update tally_recorder_tries set first_at = now() - interval '8 days' where line_row = (select id from tally_recorder_lines where book_id = %s and line_id = 'ce-old')" % q(B))
+    rerun(1000)
+    ok(line("ce-old")["state"] == "stale" and "could not bring this from Tally in 7 days" in line("ce-old")["why"], "11. 7 days on: 'stale', in plain words (%s)" % (line("ce-old"),))
+    c0 = hsn()
+    res(apply([L("hs-new", "altered", 0, None, d="20261021", no="990", typ="Journal", guid="", why="waiting: Tally busy")]))
+    ok(hsn() == c0 + 1, "11. a line with its day check queued is counted as being brought (%s -> %s)" % (c0, hsn()))
+
+    print("== 12. ledger lines brought to an end")
+    def asks(idle=True): return j("select tally_recorder_ledger_asks(%s, %s, %s, %s)::text" % (q(F), q(D1), q(BR), "true" if idle else "false"))
+    r = res(apply([dict(L("lg-new", "ledger_created", 0, None, guid=""), name="Party New", vch_type="", vch_no="", vch_date="")]))
+    a1 = asks()
+    ok(r[0][0] == "fetching" and isinstance(a1, dict) and {"company": CO, "company_guid": CG, "name": "Party New"} in a1.get("names", []) and a1.get("full") == [], "12. its name asked of Tally (FinComLedgerByName); no full list yet (%s %s)" % (r, json.dumps(a1)[:200]))
+    ok(asks(False) == {"names": [], "full": []}, "12. nothing while typing")
+    sq("update tally_recorder_lines set received_at = now() - interval '2 hours' where book_id = %s and line_id = 'lg-new'" % q(B))
+    a2 = asks(); a3 = asks()
+    ok(isinstance(a2, dict) and a2.get("full") == [CO] and isinstance(a3, dict) and a3.get("full") == [], "12. an hour on with no whole list since: the full list asked once, not again within 30 minutes (%s %s)" % (a2.get("full") if isinstance(a2, dict) else a2, a3.get("full") if isinstance(a3, dict) else a3))
+    sq("""insert into tally_recorder_lines (firm_id, client_id, book_id, device_id, bridge, pc, company_guid, company, line_id, event, object_guid, master_id, alter_id, state, held_why, body, received_at)
+              values (%(F)s, 'c1', %(B)s, %(D)s, %(BR)s, 'PC-1', %(CG)s, %(CO)s, 'lg-del', 'ledger_deleted', %(G)s, '3003', 991, 'fetching', 'kept by the guard: it has entries', '{"name": "Party C"}', now() - interval '2 hours'),
+                     (%(F)s, 'c1', %(B)s, %(D)s, %(BR)s, 'PC-1', %(CG)s, %(CO)s, 'lg-ren', 'ledger_renamed', null, '', null, 'fetching', 'a rename is applied by the bridge (tally_ledger_rename), not by a release: the next ledger list makes it', '{"from": "Party Old", "to": "Party C"}', now() - interval '2 hours')"""
+           % {"F": q(F), "B": q(B), "D": q(D1), "BR": q(BR), "CG": q(CG), "CO": q(CO), "G": q(CG + "-00000bbb")})
+    sq("update tally_books set ledgers_at = now() where book_id = %s" % q(B))
+    rerun(1000)
+    ok(line("lg-del")["state"] == "stale" and line("lg-del")["why"].startswith("Tally kept the ledger"), "12. a delete the guard kept: 'stale', Tally kept the ledger (%s)" % (line("lg-del"),))
+    ok(line("lg-ren")["state"] == "duplicate" and "Party C" in line("lg-ren")["why"], "12. a rename / merge: settled to the list's name (%s)" % (line("lg-ren"),))
+    ok(line("lg-new")["state"] == "stale" and "has no such ledger (Party New)" in line("lg-new")["why"], "12. a ledger that never appeared after the whole list: 'stale' (%s)" % (line("lg-new"),))
+
+    print("== 13. FinCom id lines; the re-run's rotation")
+    r = res(apply([L("sb", "created", 990, 60990, no="15", body=("15", "2026-10-03"), fid="nopost3", short="true")]))
+    ok(r[0][0] == "fetching" and vrow(990) is None, "13. a body FinCom built from its posting's XML, no such posting: never applied as Tally's; 'fetching' (Tally's asked by GUID) (%s)" % r)
+    JOB = "abababab-0000-4000-8000-000000000196"
+    sq("insert into tally_post_jobs (id, firm_id, client_id, company, payload, n, status) values (%s, %s, 'c1', %s, '{}'::jsonb, 1, 'waiting')" % (q(JOB), q(F), q(CO)))
+    sq("insert into tally_post_ids (firm_id, client_id, fincom_id, job_id, entry_id) values (%s, 'c1', 'early1', %s, 'early1')" % (q(F), q(JOB)))
+    r = res(apply([L("sp", "created", 991, 60991, no="16", fid="early1")]))
+    ok(r[0][0] == "fetching" and "FinCom id early1 matches no posting of this firm" in r[0][1], "13. a posting not accepted yet: the line waits for it, fetching (%s)" % r)
+    sq("update tally_post_ids set accepted_at = now() where fincom_id = 'early1'")
+    sh = j("select tally_recorder_short_held(%s, %s)::text" % (q(F), q(JOB)))
+    ok(isinstance(sh, dict) and [x.get("line", {}).get("line_id") for x in sh.get("lines", [])] == ["sp"], "13. on its acceptance the early-posting retry finds it by state and FinCom id (%s)" % json.dumps(sh)[:200])
+    nf0 = int(db.one("select count(*) from tally_recorder_lines where book_id = %s and state = 'fetching'" % q(B)))
+    seen = set()
+    for k in range(3):
+        rerun(1)
+        try: seen.add(db.one("select line_row::text from tally_recorder_tries where book_id = %s order by tried_at desc limit 1" % q(B)))
+        except RuntimeError:
+            if not RED: raise
+    ok(nf0 >= 3 and len(seen) == 3, "13. three re-runs of one line each try three different lines (the least recently tried first) (%s of %s)" % (len(seen), nf0))
+
+    print("== 14. the candidate search takes the book's lock")
+    res(apply([L("lk", "altered", 870, None, d="20261022", no="871", typ="Journal", guid="", why=NOSAVE % 870)]))
+    unpace()
+    busy = subprocess.Popen(["runuser", "-u", "postgres", "--", pg_stand.BIN + "/psql", "-h", "127.0.0.1", "-p", str(db.port), "-U", "postgres", "-d", "postgres", "-q", "-c",
+                             "begin; select pg_advisory_xact_lock(hashtext(%s)); select pg_sleep(4); commit;" % q(B)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    time.sleep(1.5); tk = take(); busy.wait()
+    ok(tk == [], "14. the book held by another session: nothing handed (%s)" % (json.dumps(tk)[:120],))
+    unpace(); tk = take()
+    ok(isinstance(tk, list) and len(tk) > 0, "14. free again: handed")
 finally:
     db.stop()
 print("\nall passed" if not fails else "\nFAILED: %d" % len(fails)); raise SystemExit(1 if fails else 0)

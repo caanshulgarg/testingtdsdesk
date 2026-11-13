@@ -14,15 +14,24 @@
 --      is applied only when Tally's type, number and date are the line's, and replaces the line; any other answer is 'stale'.
 --   c. a delete / cancel without a GUID that nothing in the copy can be: applied, nothing deleted; one WITH a GUID the copy does
 --      not hold: applied, nothing to remove (57 deletes a later copy of that GUID again).
---   d. a FinCom id naming no posting of this firm (or one matched to another entry): a plain Tally entry by its GUID.
+--   d. a FinCom id naming no posting of this firm at all (or one matched to another entry): a plain Tally entry by its GUID, with
+--      Tally's body only (a body FinCom built from its posting's XML is asked again by the GUID); one naming a posting not accepted
+--      yet waits for it (tally_recorder_short_held / _retry find it by state and FinCom id).
 --   e. a filed (locked) month: applied anyway, and an alert "Entry changed in Tally in a filed month: <type> <no> <date>".
 --   f. ledger lines the ledger list holds (by name, or by GUID at the line's AlterID or above): 'duplicate' / 'stale'; a delete of
 --      a ledger the list does not hold: applied, nothing to mark.
--- Also: tally_month_locked passes the lock for tally_recorder_line's own calls only; tally_recorder_probes, _probe_words and
--- _probe_take (the candidate search, handed through tally-ingest's beat refetch while its typing gate is quiet); the readers of
--- held lines (136's day check of a line's date with FinComDayHeads, 158, 92, 53, 54, 45, 146, 137) read 'fetching' alike;
--- tally_held_status says the count being fetched; tally_recorder_held_rerun(book, max), service_role only, called by tally-ingest's
--- beat once per book in each new isolate (after every deploy), then every 10 minutes. Tested on pg_stand: tests/run_migration196.py.
+--   g. every 'fetching' line ends: (1) its date's day check done after it came (FinComDayHeads of that day, the entries FinCom lacked
+--      taken by GUID): settled by the copy, else 'stale' "No such entry in Tally for <date> (checked <time>)"; (2) a ledger line
+--      once Tally's whole ledger list was stored after it: settled to the list ("Tally kept the ledger", the list's name, or 'stale');
+--      (3) 7 days of tries (from its first re-run) still being fetched: 'stale' in plain words.
+-- Also: tally_month_locked passes the lock for tally_recorder_line's own calls only; the candidate search (tally_recorder_probes,
+-- _probe_words, _probe_take: every GUID-less line with a MasterID, MasterID +1..+5 by GUID through tally-ingest's refetch while its
+-- typing gate is quiet, the book's lock taken and the line's state checked); the day check (136) takes every GUID-less entry line;
+-- the ledger asks (tally_recorder_ledger_asks: names by FinComLedgerByName, the full list at most once in 30 minutes a book); the
+-- readers of held lines (45, 50, 53, 54, 92, 136, 137, 146, 158) read 'fetching' alike; tally_held_status counts the lines being
+-- fetched with a retry scheduled; tally_recorder_held_rerun(book, max), service_role only, the least recently tried first
+-- (tally_recorder_tries), called by tally-ingest's beat once per book in each new isolate (after every deploy), then every 10
+-- minutes. Tested on pg_stand: tests/run_migration196.py.
 
 begin;
 set local lock_timeout = '10s';     -- never queue long behind a session holding a table here (a timeout rolls the whole file back: run it again)
@@ -65,9 +74,9 @@ $function$;
 revoke all on function public.tally_month_locked(uuid, date[]) from public, anon, authenticated;
 
 -- ---------------------------------------------------------------- 196 c: the candidate search (existing XML only)
--- Tally's own GUID is the company GUID, a dash and the MasterID as 8 hex digits. The add-on's line of a new entry that carries the
--- entry before it's MasterID (the bridge proved it: "not saved after this line" / "an older entry, not this save"): the new
--- entry is asked for by the MasterIDs after it, +1 to +5, one at a time, through the beat's existing refetch (FinCom Bridge asks
+-- Tally's own GUID is the company GUID, a dash and the MasterID as 8 hex digits. A line being fetched without its entry's GUID but
+-- with a MasterID (whatever its words; a ":resolved" row too: the add-on's line of a new entry often carries the entry before it's
+-- MasterID): the entry is asked for by the MasterIDs after it, +1 to +5, one at a time, through the beat's existing refetch (FinCom Bridge asks
 -- FinComVoucherObject by that MasterID, one request, and takes the answer only when type, number and date are the line's:
 -- liveVoucherWrong), each as a line of its own ("<line id>.p<round>c<k>"), handed only while the beat's typing gate is quiet
 -- (lightIdle: 5 s after the last keystroke, Tally not busy, no posting), at most one a line every 2 minutes. A round of 5
@@ -115,11 +124,13 @@ begin
               and coalesce(r.master_id, '') ~ '^[0-9]{1,9}$' and r.master_id::bigint between 1 and 4294967290
               and nullif(btrim(r.vch_type), '') is not null and nullif(btrim(r.vch_no), '') is not null and r.vch_date is not null
               and nullif(r.company_guid, '') is not null and nullif(r.company, '') is not null
-              and (coalesce(r.held_why, '') ~ '(was not saved after this line|an older entry, not this save)'
-                   or coalesce(r.payload->>'heldWhy', '') ~ '(was not saved after this line|an older entry, not this save)')
             -- the line asked least recently first (one never asked before all), so no line waits behind others
             order by (select pr.last_at from tally_recorder_probes pr where pr.line_row = r.id) asc nulls first, r.id limit 50 loop
     exit when n >= lim;
+    -- the book free (no apply, re-run or release running on it) and the line still being fetched, under its row lock
+    continue when not pg_try_advisory_xact_lock(hashtext(l.book_id::text));
+    perform 1 from tally_recorder_lines x where x.id = l.id and x.state in ('held', 'fetching') for update;
+    continue when not found;
     select * into p from tally_recorder_probes where line_row = l.id for update;
     if not found then
       select case when coalesce(c.gap->>'tally_altvchid', '') ~ '^[0-9]{1,15}$' then (c.gap->>'tally_altvchid')::bigint end into ga from tally_sync_cursor c where c.book_id = l.book_id;
@@ -154,6 +165,61 @@ begin
 end $function$;
 revoke all on function public.tally_recorder_probe_take(uuid, uuid, text, boolean, integer) from public, anon, authenticated;
 grant execute on function public.tally_recorder_probe_take(uuid, uuid, text, boolean, integer) to service_role;
+
+-- ---------------------------------------------------------------- 196 e: every line's last try (the re-run takes the least recently tried first)
+create table if not exists public.tally_recorder_tries (
+  line_row  bigint primary key references public.tally_recorder_lines(id) on delete cascade,
+  book_id   uuid not null,
+  first_at  timestamptz not null default now(),                 -- its first try (the 7-day ceiling counts from it)
+  tried_at  timestamptz not null default now(),
+  n         integer not null default 0
+);
+alter table public.tally_recorder_tries enable row level security;
+revoke all on public.tally_recorder_tries from public, anon, authenticated;
+grant select, insert, update on public.tally_recorder_tries to service_role;
+
+-- ---------------------------------------------------------------- 196 f: ledger lines brought to an end by Tally's ledgers
+-- The ledger lines being fetched end once the ledger list settles them (tally_recorder_line, rule (2)). What to ask this bridge for,
+-- only while its typing gate is quiet: names, the new or current name of each of its ledger lines the list lacks (FinComLedgerByName,
+-- one small request a name: tally-ingest's ledgersWanted, at most 20); full, the companies whose book has a ledger line being fetched
+-- for over an hour with no whole ledger list stored since it came (the existing full-list wake: FinComLedgerList, 2,000 ledgers a
+-- request), asked at most once in 30 minutes a book
+create table if not exists public.tally_recorder_ledger_lists (
+  book_id   uuid primary key references public.tally_books(book_id) on delete cascade,
+  firm_id   uuid not null,
+  asked_at  timestamptz not null default now()
+);
+alter table public.tally_recorder_ledger_lists enable row level security;
+revoke all on public.tally_recorder_ledger_lists from public, anon, authenticated;
+grant select, insert, update on public.tally_recorder_ledger_lists to service_role;
+
+create or replace function public.tally_recorder_ledger_asks(p_firm uuid, p_device uuid, p_bridge text, p_idle boolean)
+returns jsonb language plpgsql security definer set search_path = public, pg_temp as $function$
+declare names jsonb := '[]'::jsonb; full_ jsonb := '[]'::jsonb; x record;
+begin
+  if auth.role() <> 'service_role' then raise exception 'not allowed' using errcode = '42501'; end if;
+  if not coalesce(p_idle, false) or p_firm is null or p_device is null or coalesce(p_bridge, '') = '' then return jsonb_build_object('names', names, 'full', full_); end if;
+  select coalesce(jsonb_agg(jsonb_build_object('company', q.company, 'company_guid', q.company_guid, 'name', q.nm) order by q.at), '[]'::jsonb) into names from (
+    select distinct on (r.book_id, nm) r.company, r.company_guid, nm, r.received_at as at
+      from tally_recorder_lines r, lateral (select left(coalesce(nullif(btrim(r.body->>'to'), ''), nullif(btrim(r.body->>'name'), '')), 300) as nm) n
+     where r.firm_id = p_firm and r.device_id = p_device and r.bridge = p_bridge and r.state in ('held', 'fetching')
+       and r.event in ('ledger_created', 'ledger_altered', 'ledger_renamed') and r.received_at > now() - interval '30 days'
+       and n.nm is not null and nullif(r.company, '') is not null and nullif(r.company_guid, '') is not null
+       and not exists (select 1 from tally_ledgers l where l.book_id = r.book_id and l.name = n.nm and l.deleted_at is null)
+     order by r.book_id, nm, r.received_at limit 20) q;
+  for x in select b.book_id, b.company from tally_books b
+            where b.firm_id = p_firm
+              and exists (select 1 from tally_recorder_lines r where r.book_id = b.book_id and r.device_id = p_device and r.bridge = p_bridge and r.state in ('held', 'fetching')
+                           and r.event like 'ledger\_%' and r.received_at < now() - interval '1 hour' and (b.ledgers_at is null or b.ledgers_at < r.received_at))
+              and not exists (select 1 from tally_recorder_ledger_lists a where a.book_id = b.book_id and a.asked_at > now() - interval '30 minutes')
+            order by b.book_id limit 5 loop
+    insert into tally_recorder_ledger_lists (book_id, firm_id, asked_at) values (x.book_id, p_firm, now()) on conflict (book_id) do update set asked_at = now();
+    full_ := full_ || to_jsonb(x.company);
+  end loop;
+  return jsonb_build_object('names', names, 'full', full_);
+end $function$;
+revoke all on function public.tally_recorder_ledger_asks(uuid, uuid, text, boolean) from public, anon, authenticated;
+grant execute on function public.tally_recorder_ledger_asks(uuid, uuid, text, boolean) to service_role;
 
 -- ---------------------------------------------------------------- 196 d: every reader of a held line reads a 'fetching' one alike
 -- (each the text of its latest migration, staging's own; only the lines marked "196" changed)
@@ -615,7 +681,7 @@ begin
                  || jsonb_strip_nulls(jsonb_build_object('line_id', r.line_id, 'event', r.event, 'object_guid', r.object_guid, 'alter_id', r.alter_id, 'master_id', r.master_id,
                                                          'vch_no', r.vch_no, 'vch_date', to_char(r.vch_date, 'YYYY-MM-DD'), 'fid', r.payload->>'fid', 'short', true)) as line
             from tally_recorder_lines r join tally_books b on b.book_id = r.book_id and b.firm_id = p_firm and b.company = j.company
-           where r.firm_id = p_firm and r.state in ('held', 'fetching') and r.held_why like 'FinCom id % matches no posting of this firm'     -- 196
+           where r.firm_id = p_firm and r.state in ('held', 'fetching')     -- 196
              and r.event in ('created', 'imported') and coalesce(r.payload->>'fid', '') <> ''
              and exists (select 1 from tally_post_live_for(p_firm, r.book_id, r.payload->>'fid') m where m.post_job = p_job)
            order by r.id limit 1000) x;
@@ -635,7 +701,7 @@ begin
     rw := case when coalesce(x->>'row', '') ~ '^[0-9]{1,18}$' then (x->>'row')::bigint end;
     r := null;
     select * into r from tally_recorder_lines l where l.id = rw and l.book_id = p_book and l.firm_id = p_firm and l.state in ('held', 'fetching')     -- 196
-       and l.held_why like 'FinCom id % matches no posting of this firm' and l.event in ('created', 'imported') and coalesce(l.payload->>'fid', '') <> '';
+       and coalesce(l.held_why, '') not like 'FinCom posting % matched%' and l.event in ('created', 'imported') and coalesce(l.payload->>'fid', '') <> '';     -- 196
     if r.id is null then
       res := res || jsonb_build_array(jsonb_build_object('row', rw, 'line_id', x->>'line_id', 'state', 'skipped', 'why', 'not a held short line of this book'));
       continue;
@@ -672,7 +738,7 @@ begin
     select count(*)::int as n, count(*) filter (where l.event in ('deleted', 'cancelled'))::int as dels, count(*) filter (where l.event not in ('deleted', 'cancelled'))::int as ents,
            min(l.vch_date) as d0, max(l.vch_date) as d1, coalesce(jsonb_agg(distinct to_char(l.vch_date, 'YYYYMMDD')), '[]'::jsonb) as days
       into h from tally_recorder_lines l
-     where l.book_id = b.book_id and l.state = 'held' and tally_held_line_ours(l.event, l.object_guid, l.vch_date, l.held_why); select count(*)::int into fn from tally_recorder_lines l where l.book_id = b.book_id and l.state = 'fetching';     -- 196
+     where l.book_id = b.book_id and l.state = 'held' and tally_held_line_ours(l.event, l.object_guid, l.vch_date, l.held_why); select count(*)::int into fn from tally_recorder_lines l where l.book_id = b.book_id and l.state = 'fetching' and (exists (select 1 from tally_check_days k where k.book_id = l.book_id and k.day = l.vch_date and k.done_at is null and k.upload_at is null) or exists (select 1 from tally_recorder_probes p where p.line_row = l.id and p.handed < p.round * 5) or (l.event like 'ledger\_%' and l.received_at > now() - interval '7 days') or (l.received_at > now() - interval '7 days' and (coalesce(l.master_id, '') ~ '^[1-9][0-9]{0,9}$' or (l.object_guid is not null and l.object_guid !~ '-0{8}$')) and exists (select 1 from tally_devices d where d.id = l.device_id and d.last_seen > now() - interval '10 minutes')));     -- 196
     select count(*)::int as total, count(*) filter (where d.done_at is not null and d.upload_at is null)::int as done_n,
            count(*) filter (where d.done_at is null and d.upload_at is null)::int as waiting, count(*) filter (where d.upload_at is not null)::int as upload,
            least(30, extract(epoch from now() - min(coalesce(d.first_asked_at, d.asked_at))) / 60) as mins
@@ -706,7 +772,7 @@ create or replace function public.tally_held_line_ours(p_event text, p_guid text
 language sql immutable set search_path = public, pg_temp as $function$
   select p_day is not null and coalesce(p_why, '') not like 'month locked%' and coalesce(p_why, '') not like 'FinCom id %'
      and ((p_event in ('deleted', 'cancelled') and (p_guid is null or p_guid ~ '-0{8}$'))
-       or (p_event in ('created', 'altered', 'imported') and p_guid is not null and p_guid !~ '-0{8}$') or (p_event in ('created', 'altered', 'imported') and (p_guid is null or p_guid ~ '-0{8}$') and coalesce(p_why, '') ~ '(none matched yet|no match after 15 asks|not found by its type and number)'))     -- 196
+       or (p_event in ('created', 'altered', 'imported') and p_guid is not null and p_guid !~ '-0{8}$') or (p_event in ('created', 'altered', 'imported') and (p_guid is null or p_guid ~ '-0{8}$')))     -- 196
 $function$;
 
 create or replace function public.tally_recorder_line(p_book uuid, p_device uuid, p_line jsonb, p_row bigint)
@@ -966,7 +1032,14 @@ begin
         -- entry, applied by its own GUID with Tally's body (never matched to a posting, never a second entry of one)
         if is_short then     -- 196
           select r.post_job, r.post_guid into m_job, m_guid from tally_post_live_for(b.firm_id, p_book, lf) r;     -- 196
-          if m_job is null or (m_guid is not null and m_guid <> og) then is_short := false; plain := true; end if;     -- 196
+          -- a posting of this firm with that id not accepted yet: the line waits for it (tally_recorder_short_held re-runs it on the
+          -- acceptance); none at all, or one matched to another Tally entry: a plain entry. A body FinCom built from its posting's XML
+          -- (short) is never taken as Tally's: Tally's own version is asked by the GUID first ('fetching')
+          if (m_job is null and not exists (select 1 from tally_post_ids pi where pi.firm_id = b.firm_id and pi.live and pi.released_at is null and (pi.fincom_id = lf or pi.entry_id = lf)))     -- 196
+             or (m_guid is not null and m_guid <> og) then     -- 196
+            is_short := false; plain := true;     -- 196
+            if coalesce(p_line->>'short', rp->>'short', '') = 'true' then vs := '[]'::jsonb; end if;     -- 196
+          end if;     -- 196
           m_job := null; m_guid := null;     -- 196
         end if;     -- 196
         sh_changed := is_short and (ev = 'altered' or c_found);
@@ -1089,6 +1162,8 @@ begin
       wy := format('the ledger list holds this ledger at AlterID %s already (the line''s %s)', l_alt, alt);     -- 196
     elsif stt is null and ev in ('ledger_created', 'ledger_altered') then
       stt := 'held'; wy := 'ledger lines applied by the next ledger list';
+    elsif stt is null and ev = 'ledger_deleted' and rid is not null and b.ledgers_at > r_at then     -- 196
+      stt := 'held'; wy := 'Tally''s ledger list, read after this line, decides';     -- 196
     elsif stt is null and ev = 'ledger_deleted' then
       select l.name, l.deleted_at into l_name, l_del from tally_ledgers l where l.book_id = p_book and l.tally_guid = og order by (l.deleted_at is null) desc limit 1;
       if l_name is null then stt := 'held'; wy := 'unknown ledger: not in the copy, so nothing to mark deleted; the next ledger list from FinCom Bridge brings the ledgers up to date';
@@ -1297,6 +1372,43 @@ begin
       on conflict do nothing;     -- 196
     end if;     -- 196
   end if;     -- 196
+  -- 196: every line being fetched has an end. (1) Its date's day check done after the line came (133 / 136: Tally listed that day
+  -- whole and FinCom took every entry it lacked, by GUID): FinCom holds that day as Tally has it, so the line is settled by the copy
+  if stt = 'held' and rid is not null and vd is not null and ev in ('created', 'altered', 'imported') and not (lf is not null and not plain)     -- 196
+     and exists (select 1 from tally_check_days k where k.book_id = p_book and k.day = vd and k.done_at is not null and k.upload_at is null and k.via is not null and k.listed_at > r_at) then     -- 196
+    select to_char(max(k.listed_at) at time zone 'Asia/Kolkata', 'DD-Mon-YYYY HH24:MI') into dt from tally_check_days k where k.book_id = p_book and k.day = vd;     -- 196
+    if og is not null and not ph then     -- 196
+      if exists (select 1 from tally_vouchers v where v.book_id = p_book and v.guid = og and v.deleted_at is null) then     -- 196
+        stt := 'duplicate'; wy := format('FinCom holds this entry as Tally has it (checked %s)', dt);     -- 196
+      else stt := 'stale'; wy := format('No such entry in Tally for %s (checked %s)', to_char(vd, 'DD-Mon-YYYY'), dt); end if;     -- 196
+    elsif lt is null or lno is null then     -- 196
+      stt := 'stale'; wy := format('FinCom holds %s as Tally has it (checked %s); this line named no %s to bring', to_char(vd, 'DD-Mon-YYYY'), dt, case when lt is null then 'voucher type' else 'voucher number' end);     -- 196
+    elsif exists (select 1 from tally_vouchers v where v.book_id = p_book and v.day = vd and lower(btrim(v.vtype)) = lower(lt) and left(btrim(v.vno), 60) = lno and v.deleted_at is null) then     -- 196
+      stt := 'duplicate'; wy := format('the copy holds %s already (checked against Tally %s)', lw, dt);     -- 196
+    else stt := 'stale'; wy := format('No such entry in Tally for %s (checked %s)', to_char(vd, 'DD-Mon-YYYY'), dt);     -- 196
+    end if;     -- 196
+  end if;     -- 196
+  -- (2) a ledger line once Tally's whole ledger list was stored after it (tally_books.ledgers_at): settled to the list's names
+  if stt = 'held' and rid is not null and ev in ('ledger_created', 'ledger_altered', 'ledger_renamed', 'ledger_deleted') and b.ledgers_at > r_at then     -- 196
+    dt := to_char(b.ledgers_at at time zone 'Asia/Kolkata', 'DD-Mon-YYYY HH24:MI');     -- 196
+    l_name := null;     -- 196
+    if og is not null then select l.name into l_name from tally_ledgers l where l.book_id = p_book and l.tally_guid = og and l.deleted_at is null order by l.name limit 1; end if;     -- 196
+    if l_name is null then     -- 196
+      select l.name into l_name from tally_ledgers l where l.book_id = p_book and l.deleted_at is null     -- 196
+         and l.name in (left(btrim(coalesce(p_line->>'to', '')), 300), left(btrim(coalesce(p_line->>'name', '')), 300)) order by (l.name = left(btrim(coalesce(p_line->>'to', '')), 300)) desc limit 1;     -- 196
+    end if;     -- 196
+    if ev = 'ledger_deleted' then     -- 196
+      if l_name is not null then stt := 'stale'; wy := format('Tally kept the ledger: its ledger list (read %s) still has %s', dt, l_name);     -- 196
+      else stt := 'applied'; wy := format('the ledger is gone from Tally''s ledger list (read %s)', dt); end if;     -- 196
+    elsif l_name is not null then stt := 'duplicate'; wy := format('settled to Tally''s ledger list (read %s): %s', dt, l_name);     -- 196
+    else stt := 'stale'; wy := format('Tally''s ledger list (read %s) has no such ledger (%s)', dt, coalesce(nullif(btrim(coalesce(p_line->>'to', p_line->>'name', '')), ''), og, 'no name'));     -- 196
+    end if;     -- 196
+  end if;     -- 196
+  -- (3) the ceiling: 7 days of tries (from its first re-run; the day check could not run: a date before the books, the company
+  -- never opened...)
+  if stt = 'held' and rid is not null and exists (select 1 from tally_recorder_tries t where t.line_row = rid and t.first_at < now() - interval '7 days') then     -- 196
+    stt := 'stale'; wy := left(format('FinCom could not bring this from Tally in 7 days (%s); closed, nothing in the books changed for it', coalesce(nullif(wy, ''), 'no answer')), 600);     -- 196
+  end if;     -- 196
   if stt = 'held' then stt := 'fetching'; end if;     -- 196: never 'held': being fetched, retried by the cloud and the bridge by themselves
   if stt = 'applied' and renum and og is not null then     -- 196
     update tally_recorder_lines r set state = 'replaced', held_why = format('replaced by line %s (Tally renumbered the entry at the same AlterID %s)', rid, alt)     -- 196
@@ -1312,7 +1424,8 @@ end $function$;
 revoke all on function public.tally_recorder_line(uuid, uuid, jsonb, bigint) from public, anon, authenticated, service_role;
 
 -- ---------------------------------------------------------------- 196: the cloud's re-run of a book's held and fetching lines
--- Every line of the book still 'held' or 'fetching', oldest first, at most p_max (1..1000, 200 when null), run through the rules
+-- Every line of the book still 'held' or 'fetching', the least recently tried first (tally_recorder_tries; never tried: first, then
+-- the oldest), at most p_max (1..1000, 200 when null), run through the rules
 -- above as an owner's release runs it (tally_recorder_release_held, 54: its stored fields and body), each in a sub-transaction of
 -- its own: a run that would end 'failed' is rolled back and the line stays as it was. After it no line is 'held': each ends
 -- applied, duplicate, stale, replaced, or 'fetching' (asked again by itself). An applied line whose ids belong together raises the
@@ -1329,8 +1442,10 @@ begin
   end if;
   for r in select * from tally_recorder_lines l
             where l.book_id = p_book and l.state in ('held', 'fetching')
-            order by l.id limit mx loop
+            order by (select t.tried_at from tally_recorder_tries t where t.line_row = l.id) asc nulls first, l.id limit mx loop
     n := n + 1;
+    insert into tally_recorder_tries (line_row, book_id, first_at, tried_at, n) values (r.id, p_book, clock_timestamp(), clock_timestamp(), 1)
+    on conflict (line_row) do update set tried_at = clock_timestamp(), n = tally_recorder_tries.n + 1;
     begin
       perform set_config('fincom.recorder_release', r.id::text, true);
       one := tally_recorder_line(r.book_id, r.device_id, jsonb_build_object('line_id', r.line_id, 'event', r.event, 'object_guid', r.object_guid, 'alter_id', r.alter_id,
