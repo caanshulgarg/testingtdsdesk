@@ -491,16 +491,36 @@ function backTo(back: string, hash: string) {
   try { const x = new URL(back); if (allowedOrigins().includes(x.origin)) u = x.origin + x.pathname; } catch (_) { u = ""; }
   return (u || "https://staging.fincom.live/") + hash;
 }
-async function callback(url: URL) {
+// 13-Nov-2026 (security review, M3): the sign-in to Zoho is completed only by the FinCom session that began it.
+//  - connect_start takes the hash of a value the page keeps for the tab (nonce_hash); the state it hands to Zoho is a
+//    random part plus the page to come back to, and is kept only as sha256(state + ":" + nonce_hash);
+//  - Zoho's redirect (a plain GET, no FinCom sign-in with it) exchanges nothing and stores nothing: it only sends the
+//    browser on to FinCom's own page with Zoho's code and the state in the address's fragment;
+//  - that page asks connect_finish with the person's FinCom sign-in and the tab's value: the code is exchanged, and the
+//    organisation's access stored, only when the state was begun by that same person with that same value.
+const STATE_RE = /^[0-9a-f]{48}\.[A-Za-z0-9_-]{0,440}$/;
+const b64u = (t: string) => btoa(String.fromCharCode(...new TextEncoder().encode(t))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+function backOfState(st: string) {
+  try { const b = atob(st.slice(st.indexOf(".") + 1).replace(/-/g, "+").replace(/_/g, "/")); return new TextDecoder().decode(Uint8Array.from(b, (c) => c.charCodeAt(0))); } catch (_) { return ""; }
+}
+function callback(url: URL) {
   const st = url.searchParams.get("state") || "", code = url.searchParams.get("code") || "", err = url.searchParams.get("error") || "";
-  const s = st ? await rpc("zoho_state_take", { p_state_hash: await sha256(st) }) : null;
-  const go = (hash: string) => new Response(null, { status: 302, headers: { Location: backTo(s?.back || "", hash) } });
-  if (!s) return go("#/integrations/zoho?zoho=expired");
-  if (err || !code) return go("#/integrations/zoho?zoho=refused");
+  const okState = STATE_RE.test(st);
+  const go = (hash: string) => new Response(null, { status: 302, headers: { Location: backTo(okState ? backOfState(st) : "", hash), "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" } });
+  if (!okState) return go("#/integrations/zoho?zoho=expired");
+  if (err || !code || code.length > 2000) return go("#/integrations/zoho?zoho=refused");
   const loc = (url.searchParams.get("location") || "in").toLowerCase();
   if (loc && loc !== "in") return go("#/integrations/zoho?zoho=not-india");
+  return go("#/integrations/zoho?zcode=" + encodeURIComponent(code) + "&zstate=" + encodeURIComponent(st));
+}
+// the signed-in person's own page finishing the sign-in it began: why (as the page's words) or the grant
+async function connectFinish(user: string, body: any): Promise<{ ok: boolean; why?: string; grant?: string }> {
+  const st = String(body.state || ""), code = String(body.code || ""), nonce = String(body.nonce || "");
+  if (!STATE_RE.test(st) || !/^[0-9a-f]{64}$/.test(nonce) || !code || code.length > 2000) return { ok: false, why: "expired" };
+  const s = await rpc("zoho_state_take", { p_state_hash: await sha256(st + ":" + await sha256(nonce)) });
+  if (!s || String(s.user) !== user) return { ok: false, why: "expired" };
   const { status, j } = await form(ACCOUNTS + "/oauth/v2/token", { code, client_id: clientId(), client_secret: clientSecret(), redirect_uri: REDIRECT, grant_type: "authorization_code" });
-  if (status !== 200 || !j.access_token || !j.refresh_token) return go("#/integrations/zoho?zoho=failed");
+  if (status !== 200 || !j.access_token || !j.refresh_token) return { ok: false, why: "failed" };
   // the organisations this sign-in reaches (names and GSTINs only)
   let orgs: any[] = [];
   try {
@@ -512,7 +532,7 @@ async function callback(url: URL) {
   const g = await rpc("zoho_grant_save", { p_firm: s.firm, p_user: s.user, p_scopes: String(j.scope || SCOPES.join(",")), p_orgs: orgs, p_expires: until });
   await rpc("zoho_secret_put", { p_name: secretName(s.firm, g, "refresh"), p_value: j.refresh_token });
   await rpc("zoho_secret_put", { p_name: secretName(s.firm, g, "access"), p_value: j.access_token });
-  return go("#/integrations/zoho?grant=" + encodeURIComponent(g));
+  return { ok: true, grant: String(g) };
 }
 // the daily cap by plan (Zoho: Free 1,000; Standard 2,000; Professional 5,000; Premium and above 10,000)
 function capOf(o: any) { const p = String(o.plan_name || "").toLowerCase(); return /premium|elite|ultimate/.test(p) ? 10000 : /professional/.test(p) ? 5000 : /standard/.test(p) ? 2000 : 1000; }
@@ -532,7 +552,7 @@ Deno.serve(async (req) => {
   const url = new URL(req.url);
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsFor(req) });
   try {
-    if (req.method === "GET" && (url.searchParams.has("code") || url.searchParams.has("error")) && url.searchParams.has("state")) return await callback(url);
+    if (req.method === "GET" && (url.searchParams.has("code") || url.searchParams.has("error")) && url.searchParams.has("state")) return callback(url);
     if (req.method !== "POST") return json(405, { ok: false, error: "POST only" }, req);
     const hook = url.searchParams.get("hook");
     if (hook) { const ok = await rpc("zoho_hook", { p_hash: await sha256(hook) }); return json(ok ? 200 : 404, { ok: !!ok }, req); }
@@ -559,18 +579,24 @@ Deno.serve(async (req) => {
     if (kind === "config") return json(200, { ok: true, configured: configured(), redirectUri: REDIRECT, scopes: SCOPES, dc: "India (accounts.zoho.in)" }, req);
     // console phase 1b: a paused firm (FinCom's console) connects, reads into its books and posts nothing; it may still
     // give up a connection (disconnect). The service role skips can_write(), so it is asked here
-    if (["connect_start", "link", "sync_now", "hook_new", "post"].includes(kind)) {
+    if (["connect_start", "connect_finish", "link", "sync_now", "hook_new", "post"].includes(kind)) {
       const mine = await rpc("zoho_member", { p_user: me.user }).catch(() => null);
       const gate = mine && mine.firm ? await firmGate(viaClient(db), String(mine.firm), body.client ? String(body.client) : null) : null;
       if (gate) return json(gate.status, { ok: false, reason: gate.reason, error: gate.error }, req);
     }
     if (!configured() && kind !== "disconnect") return json(200, { ok: false, notSetUp: true, error: "Zoho Books is not set up for FinCom yet: the owner's Zoho API client id and secret are not in place." }, req);
     if (kind === "connect_start") {
-      const st = randomHex(24);
-      await rpc("zoho_state_new", { p_user: me.user, p_state_hash: await sha256(st), p_back: String(body.back || "") });
+      // M3: the page's own value for the tab (its SHA-256) goes into what is kept of the state; without one nothing is begun
+      const nh = String(body.nonce_hash || "");
+      if (!/^[0-9a-f]{64}$/.test(nh)) return json(400, { ok: false, error: "Reload FinCom and connect Zoho Books again." }, req);
+      let back = "";
+      try { const x = new URL(String(body.back || "")); if (allowedOrigins().includes(x.origin)) back = (x.origin + x.pathname).slice(0, 300); } catch (_) { back = ""; }
+      const st = randomHex(24) + "." + b64u(back);
+      await rpc("zoho_state_new", { p_user: me.user, p_state_hash: await sha256(st + ":" + nh), p_back: back });
       const q = new URLSearchParams({ scope: SCOPES.join(","), client_id: clientId(), response_type: "code", access_type: "offline", prompt: "consent", redirect_uri: REDIRECT, state: st });
       return json(200, { ok: true, url: ACCOUNTS + "/oauth/v2/auth?" + q.toString() }, req);
     }
+    if (kind === "connect_finish") return json(200, await connectFinish(me.user, body), req);
     if (kind === "link") {
       const r = await rpc("zoho_link", { p_user: me.user, p_grant: String(body.grant || ""), p_org: String(body.org || ""), p_client: String(body.client || ""), p_from: body.from || null });
       // the first read starts now (as much as fits; the schedule carries on)

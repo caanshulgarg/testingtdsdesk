@@ -178,6 +178,12 @@ const Route = {
         const qs = new URLSearchParams(String(h || "").split("?")[1] || "");
         if (qs.get("grant")) S.zohoGrant = qs.get("grant");
         if (qs.get("zoho")) S.zohoBack = qs.get("zoho");
+        // 13-Nov-2026 (M3): Zoho's code and the state come back in the address; kept for the page to finish
+        // (ZohoB.finish, with the person's sign-in) and taken out of the address and the history at once
+        if (qs.get("zcode") && qs.get("zstate")){
+          S.zohoFinish = {code: qs.get("zcode"), state: qs.get("zstate")};
+          try { history.replaceState(history.state, "", location.pathname + location.search + "#/integrations/zoho"); } catch (e){}
+        }
       }
       else if (["clients", "today", "compliance", "inbox", "tally", "help", "meetings"].includes(p[0])){ S.view = "home"; S.homeTab = p[0]; S.step = null; S.tallyOld = p[0] === "tally" && p[1] === "bridge-1.15"; if (p[0] === "tally") S.tallyTab = p[1] === "activity" || p[1] === "sent" ? p[1] : "computers"; }
       else return false;

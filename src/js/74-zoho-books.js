@@ -8,7 +8,7 @@
 //   ZohoB.load()            the firm's Zoho sign-ins and organisations (zoho_status: never a token, a key or a hash)
 //   ZohoB.connFor(cid)      the organisation linked to a client, or null
 //   ZohoB.isZoho(co)        the client's books come from Zoho (its cloud book is a Zoho one)
-//   ZohoB.connect()         the owner: Zoho's own approval page (India data centre); back on #/integrations/zoho?grant=
+//   ZohoB.connect()         the owner: Zoho's own approval page (India data centre); back on #/integrations/zoho?zcode=…&zstate=… (finish()), then the grant: ?grant=
 //   ZohoB.link(grant, org, cid), disconnect(conn), syncNow(conn), hookNew(conn)
 //   ZohoB.post(co, payload, onProgress)    what Bridge.post hands over for a Zoho client: each voucher as Tally would get
 //                           it (voucherPreview: date, number, reference, each ledger Dr / Cr), posted by the function as a
@@ -60,9 +60,28 @@ const ZohoB = {
   },
   async connect(){
     if (!this.owner()) { toast("Only the firm's owner can connect Zoho Books."); return; }
-    const j = await this.call({kind: "connect_start", back: location.origin + location.pathname});
+    // 13-Nov-2026 (security review, M3): a random value kept for this tab only; the function is given its hash now and
+    // asks for the value itself when the sign-in comes back, so only this tab, signed in as this person, can finish it
+    const nonce = Array.from(crypto.getRandomValues(new Uint8Array(32)), x => x.toString(16).padStart(2, "0")).join("");
+    try { sessionStorage.setItem(this.NONCE_KEY, nonce); } catch (e){ toast("Zoho Books could not be started: this browser does not keep the tab's data."); return; }
+    const j = await this.call({kind: "connect_start", back: location.origin + location.pathname, nonce_hash: await this.sha256(nonce)});
     if (!j.ok){ toast(j.error || "Zoho Books could not be started."); return; }
     location.href = j.url;
+  },
+  NONCE_KEY: "fincom.zoho.connect",
+  async sha256(t){ const b = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(t)); return Array.from(new Uint8Array(b), x => x.toString(16).padStart(2, "0")).join(""); },
+  // Zoho's sign-in came back to this page (#/integrations/zoho?zcode=…&zstate=…, kept in S.zohoFinish by the router and
+  // taken out of the address): finished here, with this person's FinCom sign-in and the tab's value. Once only
+  async finish(){
+    const f = S.zohoFinish; S.zohoFinish = null;
+    if (!f || !f.code || !f.state) return null;
+    let nonce = "";
+    try { nonce = sessionStorage.getItem(this.NONCE_KEY) || ""; sessionStorage.removeItem(this.NONCE_KEY); } catch (e){}
+    if (!nonce){ S.zohoBack = "expired"; return {ok: false, why: "expired"}; }
+    let j = null;
+    try { j = await this.call({kind: "connect_finish", code: f.code, state: f.state, nonce}); } catch (e){ j = {ok: false, why: "failed"}; }
+    if (j && j.ok && j.grant) S.zohoGrant = j.grant; else S.zohoBack = (j && j.why) || "failed";
+    return j;
   },
   async link(grant, org, cid){
     const j = await this.call({kind: "link", grant, org, client: cid});

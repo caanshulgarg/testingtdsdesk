@@ -73,7 +73,8 @@ function PickOrg({ grant }) {
 function ZohoPage() {
   const [, tick] = useState(0), [hook, setHook] = useState({}), [busy, setBusy] = useState("");
   const redraw = () => tick((n) => n + 1);
-  useEffect(() => { ZohoB.load(true).then(redraw); ZohoB.config().then(redraw); }, []);
+  // a sign-in to Zoho coming back is finished first (ZohoB.finish: this person's sign-in and the tab's own value), then read
+  useEffect(() => { Promise.resolve(S.zohoFinish ? ZohoB.finish() : null).catch(() => {}).then(() => ZohoB.load(true)).then(redraw); ZohoB.config().then(redraw); }, []);
   const cfg = ZohoB.st.cfg, data = ZohoB.st.data;
   const back = { expired: "The Zoho sign-in took too long or was used already. Connect again.", refused: "Zoho Books access was not given. Nothing changed.",
     failed: "Zoho did not confirm the sign-in. Connect again.", "not-india": "That Zoho account is not on Zoho's India data centre (zoho.in). FinCom reads Indian organisations only." }[S.zohoBack || ""];
