@@ -320,6 +320,14 @@ html { scroll-padding-bottom: max(calc(150px + var(--bottom-banner-h, 0px)), var
 
 /* files attached like Claude's (the owner, 31-Oct-2026): chips inside the question box until Send, then under the question */
 .asst-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 0 4px; min-width: 0; }
+form.asst-ask .asst-chips { max-height: 132px; overflow-y: auto; overscroll-behavior: contain; }
+.asst-chip.queued { opacity: .75; }
+.asst-chip-txt small.asst-chip-note { color: var(--warning, var(--text-secondary)); white-space: normal; max-width: 200px; }
+.asst-upbar { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-secondary); padding: 2px 0 4px; }
+.asst-upbar-track { flex: 1 1 auto; height: 4px; border-radius: 4px; background: color-mix(in oklab, var(--foreground) 10%, transparent); overflow: hidden; }
+.asst-upbar-fill { display: block; height: 100%; background: var(--accent); transition: width .2s ease; }
+.asst-cost { margin: 0 0 4px; font-size: 12px; }
+.asst-attach-notes { margin: 4px 0 0; padding-left: 16px; font-size: 12px; }
 .asst-chip { position: relative; display: inline-flex; align-items: center; gap: 8px; max-width: min(260px, 100%); min-width: 0; padding: 5px 6px 5px 5px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-muted); color: var(--foreground); font: inherit; text-align: left; overflow: hidden; }
 .asst-chip.failed { border-color: color-mix(in oklab, var(--danger) 50%, var(--border)); background: color-mix(in oklab, var(--danger) 6%, var(--surface)); }
 .asst-chip-thumb { width: 32px; height: 32px; flex: 0 0 auto; border-radius: 6px; object-fit: cover; background: var(--surface); }

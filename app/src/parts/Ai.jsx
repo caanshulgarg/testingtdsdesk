@@ -3,6 +3,8 @@
 // Was AIH.viewLedgers, coverageCard, auditButton, r2bBar, pairCell, viewNotices and viewSettings (src/js/50); the work
 // is AIH; buttons and boxes go through aihAct, aihAccept, aihPay, aihPair, aihFix, aihNote, aihNotice, aihReply, aihSet,
 // aihCo (src/js/50).
+// next-room-2: AI help's own working and buttons (not in the program every page loads)
+import "../../../src/js/50-ai-help-page.js";
 import { useRef } from "react";
 import CommitBox from "./CommitBox.jsx";
 import { ListRows } from "./ListTable.jsx";

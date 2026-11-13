@@ -38,7 +38,7 @@ function BalanceInner({ st }) {
   const line = t && (t.line || (typeof copyLine === "function" ? copyLine(b.cid) : ""));
   const when = <>{line && <span className="muted" data-copy-line="" style={{ display: "block" }}>{line}</span>}{t && t.at && <span className="muted">{"checked " + fmtDateTime(t.at)}</span>}</>;
   const Box = ({ cls, children }) => <div className={"bk-balbox bk-bal" + (cls ? " " + cls : "")}>{children}{btn}<button className="icon bk-x" title="Close" aria-label="Close" onClick={() => bankAct("balHide")}>×</button></div>;
-  if (!t) return <Box><div><b>Balance in FinCom's copy:</b> <span className="muted">{"not checked yet." + (copy ? " FinCom checks it after every posting, once the entries posted are read back." : " Sign in to the firm account to check it.")}</span></div></Box>;
+  if (!t) return <Box><div><b>Balance in FinCom's copy:</b> <span className="muted">{"not checked yet." + (copy ? " FinCom checks it after every posting, once the entries posted are read back." : "")}</span></div></Box>;
   if (t.pending) return <Box><div data-bal-pending=""><b>Posted · balance not yet checked</b> <span className="muted">{"(" + plural2(t.pending, " entry", " entries") + " posted, not read back yet: the balance is checked once " + (t.pending === 1 ? "it is" : "they are") + " confirmed in Tally and in FinCom's copy)"}</span></div></Box>;
   // not answered yet (or a check from before, with Tally's error): said, never as an error
   if (t.notYet || t.error) return <Box><div data-bal-notyet=""><b>Balance not yet checked</b> <span className="muted">{"· " + (t.notYet || "FinCom's copy has not answered yet") + "."}</span>{when}</div></Box>;

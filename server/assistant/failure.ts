@@ -36,7 +36,10 @@ export function classify(e: unknown, trace?: TurnTrace): Failure {
   else if (status === 404 || (status === 400 && apiType === "not_found_error")) {
     kind = "model_unavailable"; message = "The platform's Claude account cannot use the AI model FinCom asks for" + (model ? " (" + model + ")" : "") + "." + ADMIN;
   }
-  else if (status === 413) { kind = "too_long"; message = "This question and its attachments are too large for the AI; ask about a shorter period or attach less."; }
+  // the question with its files is longer than the model can read at once (the API's 400 "prompt is too long", or 413)
+  else if (status === 413 || (status === 400 && /prompt is too long|too many (input )?tokens|context (length|window)|maximum context|exceeds? the (model'?s )?(maximum|context)/i.test(apiText))) {
+    kind = "too_long"; message = "This question and its files are too long for the AI to read at once. Attach fewer files (or shorter ones), or ask about one file at a time.";
+  }
   else if (status !== undefined && status >= 400 && status < 500) { kind = "ai_request"; message = "The AI service turned this request down (a fault on FinCom's side; it has been reported). Ask again in other words, or use FinCom's own reports for now."; }
   else if (status !== undefined && status >= 500) { kind = "overloaded"; message = "Claude is overloaded just now; try again in a few minutes."; }
   else if (/Timeout/.test(errorClass) || x.name === "AbortError" || x.name === "TimeoutError") { kind = "timeout"; message = "The AI took too long to answer; try again, or ask about a shorter period."; }

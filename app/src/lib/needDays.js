@@ -20,13 +20,15 @@ export function needDays(b, cid) {
   // the cloud's gap: entries made in Tally that never reached FinCom, from that day to today
   if (typeof Rec === "object" && Rec.gapFor && typeof TCloud === "object" && TCloud.on()) {
     Rec.gapFor(cid).forEach((g) => {
-      const since = String(Rec.ymdLocal((g.gap && (g.gap.since || g.gap.last_match_at)) || g.gapAt || Date.now()) || "").replace(/-/g, ""), today = String(Rec.ymdLocal(Date.now())).replace(/-/g, "");
+      // next-fix-gap-after-post (migration 182): the changes on older dates (the gap's own days match Tally): from their day
+      const x = g.gap || {}, o = x.older, since = String(Rec.ymdLocal(o ? o.from : x.since || x.last_match_at || g.gapAt || Date.now()) || "").replace(/-/g, ""), today = String(Rec.ymdLocal(Date.now())).replace(/-/g, "");
       if (!since) return;
-      let n = 0; for (let x = since; x <= today; x = BridgeSeed.add(x, 1)) n++;
-      const k = Number((g.gap && (g.gap.missingMax || g.gap.missing)) || 0);
-      // next-gap-autoread (migration 160): FinCom reads Tally's Day Book of these days by itself (checking: no action needed)
-      const checking = !!(g.gap && g.gap.checking === true);
-      out.push({ from: since, to: today, days: n, ...(checking ? { checking: true } : {}), say: (k ? plural(k, "entry", "entries") : "Entries") + " made in Tally since then " + (k === 1 ? "is" : "are") + " not in FinCom" + (checking ? "; FinCom is checking with Tally (no action needed)" : "") });
+      let n = 0; for (let d = since; d <= today; d = BridgeSeed.add(d, 1)) n++;
+      const k = Number(x.missingMax || x.missing || 0);
+      // next-gap-autoread (migration 160): FinCom reads Tally's Day Book of these days by itself (checking: no action needed;
+      // 182: until checkUntil, Rec.gapChecking)
+      const checking = !o && Rec.gapChecking(x);
+      out.push({ from: since, to: today, days: n, ...(checking ? { checking: true } : {}), say: o ? o.say + " " + o.fix : (k ? plural(k, "entry", "entries") : "Entries") + " made in Tally since then " + (k === 1 ? "is" : "are") + " not in FinCom" + (checking ? "; FinCom is checking with Tally (no action needed)" : "") });
     });
   }
   // the dates between the files brought in

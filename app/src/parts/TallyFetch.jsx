@@ -255,8 +255,7 @@ export default function OlderEntries({ cid, say = false }) {
     return () => { on = false; }; }, [heldSig]);
   const heldRetry = (day) => { setHeldBusy(day); rpc("tally_period_held_retry", { p_book: book, p_day: day.slice(0, 4) + "-" + day.slice(4, 6) + "-" + day.slice(6, 8) })
     .then(() => rpc("tally_period_held_list", { p_book: book })).then((r) => { if (r && r.ok && Array.isArray(r.held)) { setHeld(r.held); setHeldOk(true); } summary(true); }, (e) => setErr(errWords(e))).finally(() => setHeldBusy("")); };
-  if (!b) return say ? <p className="note" data-older-none={SUM.off ? "off" : SUM.books ? "none" : "reading"}>{!(typeof TCloud === "object" && TCloud.on && TCloud.on()) ? "Sign in to the firm account first: books come from Tally through FinCom’s cloud."
-    : SUM.off ? "Bring another year is not in FinCom’s cloud yet. Use Upload a Day Book file instead."
+  if (!b) return say && typeof TCloud === "object" && TCloud.on() ? <p className="note" data-older-none={SUM.off ? "off" : SUM.books ? "none" : "reading"}>{SUM.off ? "Bring another year is not in FinCom’s cloud yet. Use Upload a Day Book file instead."
     : SUM.books ? "FinCom’s cloud has no books of this client from Tally yet: press Update now first, then come back here." : "Reading the books from FinCom’s cloud…"}</p> : null;
   // staging, 11-Nov-2026 (the owner: "while bringing another year, I am not able to see previous periods"): the years are
   // this one and the five before it, whatever day FinCom's book starts on (b.from is the day FinCom began the book, chosen
@@ -401,7 +400,7 @@ export function UploadCheck({ cid }) {
   // (reliability: its own read too on the one shared poll: not while the tab is hidden)
   useLive(waiting, bk, { sum: 15000, run: () => { if (bk) load(); } });
   if (!has) return null;
-  const s = st || Object.assign({ lines: [] }, b.check), run = s.run || {}, stopped = run.state === "stopped" || (s.period === "stopped");
+  const s = st || Object.assign({ lines: [] }, b.check), run = s.run || {}, stopped = run.state === "stopped" || (!run.paced && s.period === "stopped");
   const fixed = (s.lines || []).filter((x) => x.state === "fixed"), same = (s.lines || []).filter((x) => x.state === "same"), up = (s.lines || []).filter((x) => x.state === "upload");
   const resume = () => { setBusy(true);
     const p = b.pull, again = p && p.state === "stopped" ? rpc("tally_period_choose", { p_book: bk, p_fy_start: fyOf8(p.fy) + "-04-01", p_part: p.part || "year" }) : Promise.resolve();
@@ -413,6 +412,8 @@ export function UploadCheck({ cid }) {
       (s.same ? " · " + plural(s.same, "day", "days") + " the same ✓" : "") + (s.fixed ? " · " + plural(s.fixed, "day", "days") + " corrected to Tally" : "") + (s.upload ? " · " + plural(s.upload, "day", "days") + " to upload again" : "")}</p>
     {waiting && !stopped && <p className="note" data-check-waiting="" style={{ margin: "0 0 6px" }}>{plural(s.waiting, "day is", "days are") + " waiting: FinCom Bridge checks them one at a time, only while Tally is free (the computer with this company must have reading older entries on)."}
       {why && " " + why}<TurnOn b={b} /></p>}
+    {run.paced && !stopped && <p className="note" data-check-paced="" style={{ margin: "0 0 6px" }}>{"Tally was slow earlier, so FinCom reads these days again one at a time, only while nobody is working in Tally. "}
+      {may() && <button className="btn small" data-check-readnow="" disabled={busy} onClick={resume}>{busy ? "Starting…" : "Read now"}</button>}</p>}
     {stopped && <p className="note bad" data-check-stopped="" style={{ margin: "0 0 6px" }}>{"Stopped: Tally was busy; press Resume. "}
       {may() && <button className="btn small primary" data-check-resume="" disabled={busy} onClick={resume}>{busy ? "Resuming…" : "Resume"}</button>}</p>}
     {fixed.length > 0 && <ul className="tfx-check-list" data-check-list="" style={{ margin: "0 0 6px", paddingLeft: 18 }}>

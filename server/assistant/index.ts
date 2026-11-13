@@ -1,6 +1,6 @@
 // fincom-assistant: FinCom Assistant's function (the owner's approval of AI in the app, 13-Oct-2026; never called by the
 // bridge or the Tally add-on). One POST per question; the answer streams back as server-sent events (agent.ts).
-//   {action: "ask", question, client_id | null, history: [{role, content}], thread: {fs: {from, to, cmp, notes} | null, files:
+//   {action: "ask", question, asked (what was typed, when the page added its working to the question), client_id | null, history: [{role, content}], thread: {fs: {from, to, cmp, notes} | null, files:
 //    [{path, name, type, kind, summary}]}, attachments: [{path, name, type}], firm: {name, lines},
 //    lang: the voice language chosen ("en-IN", "hi-IN", "hinglish", "mr-IN", …: agent.ts LANGS), a hint for the reply's language}
 //   {action: "report", client_id, question, note, tools, entries}      the "Wrong answer?" button
@@ -32,6 +32,8 @@ import { FREE_SOURCES } from "./citations.ts";
 import { classifyUpload } from "./upload.ts";
 import { DocSpec, makeFile, MIME, safeName } from "./files.ts";
 import { isSheetName, readSheetFile, renderSheetFile, SheetFile } from "./filetable.ts";
+import { ATTACH, fitAttachments, NATIVE, sniff, textTokens, zipSizes, zipTooBig } from "../_shared/attachrules.js";
+import { PDFDocument } from "npm:pdf-lib@1.17.1";
 import { PARTY_FIELDS, PARTY_SYSTEM, parseSheetMap, sheetPrompt, SHEET_SYSTEM } from "./sheetmap.ts";
 import { guessLedgers, LEDGER_GUESS_V } from "./ledgers.ts";
 import { capWords, costUsd as priceUsd, HAIKU, SONNET } from "./models.ts";
@@ -188,6 +190,10 @@ export function handler(deps: Deps) {
     if (action !== "ask" && action !== "classify" && action !== "sheet_map") return reply(400, { ok: false, error: "Unknown request" });
     const question = action === "classify" ? "(what is this upload: " + String(body.name || "a file").slice(0, 120) + ")" : action === "sheet_map" ? "sheet_map" : String(body.question || "").trim().slice(0, 4000);
     if (!question) return reply(400, { ok: false, error: "Type a question." });
+    // what the user typed, for the log and the Mismatches list: the page adds FinCom's own working to a question (two
+    // statements compared, asst-compare.js: the files' figures) for the AI alone, and says what was typed in "asked"
+    const typed = String(body.asked || "").trim().slice(0, 4000);
+    const asked = action === "ask" && typed && question.startsWith(typed) ? typed : question;
     // FinCom's switches for this request's feature (and My MIS when one is asked for), before any key or model
     for (const code of [action === "classify" ? "upload_classify" : action === "sheet_map" ? "sheet_map" : "assistant", ...(action === "ask" && misAsked(question) && !fsAsked(question) ? ["mis_describe"] : [])]) {
       const p = await policy.aiAllowed(firm, code);
@@ -236,7 +242,8 @@ export function handler(deps: Deps) {
     // <firm>/<client or _firm>/uploads/...; never sent to the model as they are (the tool reads them)
     const uploads: { path: string, name: string, type: string }[] = [];
     const isUpload = (p: string) => p.startsWith(firm + "/") && !p.includes("..") && /^[^/]+\/[^/]+\/uploads\//.test(p);
-    for (const a of [...(Array.isArray(body.uploads) ? body.uploads : []), ...(Array.isArray(body.attachments) ? body.attachments : [])].slice(0, 40)) {
+    // (the conversation's last 60 and this message's up to 30)
+    for (const a of [...(Array.isArray(body.uploads) ? body.uploads : []).slice(-60), ...(Array.isArray(body.attachments) ? body.attachments : []).slice(0, ATTACH.files)]) {
       const path = String(a?.path || "");
       if (!/\/uploads\//.test(path)) continue;
       if (!isUpload(path)) return reply(403, { ok: false, kind: "file", error: "That file is not one of your firm's uploads." });
@@ -254,29 +261,88 @@ export function handler(deps: Deps) {
     };
     // a file of the chat's uploads the thread does not list yet is listed by its name
     for (const u of uploads) if (!thread.files!.some((f) => f.path === u.path)) thread.files!.push({ ...u, kind: "", summary: "" });
-    // a file from the Upload asked about (it says its kind) is read as an attachment too; the certificate tool's files are not
-    for (const a of (Array.isArray(body.attachments) ? body.attachments : []).filter((a: any) => !/\/uploads\//.test(String(a?.path || "")) || typeof a?.kind === "string").slice(0, 3)) {
+    // the files sent with the question (the owner, 13-Nov-2026: 30 a message, any type; the rules: ../_shared/attachrules.js,
+    // the same file the panel runs). A file from the Upload (it says its kind) is read; the certificate tool's files are not.
+    // PDFs and pictures go to the model as they are while they fit (pages, bytes, half the budget); a sheet as FinCom's
+    // table (rows and column letters, so make_file can copy its cells); anything else as the text the page took out of it
+    // (a Word file, JSON, XML, a zip's list and the files in it); a file nothing could be read of by its name, type and
+    // size. The texts share the context budget, a long one cut and the model told so; the user is told too (attachNotes).
+    const sent = (Array.isArray(body.attachments) ? body.attachments : []).filter((a: any) => !/\/uploads\//.test(String(a?.path || "")) || typeof a?.kind === "string");
+    if (sent.length > ATTACH.files) return reply(413, { ok: false, kind: "file", error: "Up to " + ATTACH.files + " files a message: " + sent.length + " were sent. Send the rest in the next message." });
+    for (const a of sent) {
       const path = String(a?.path || "");
       // a notice (…/notices/) or any other upload (…/uploads/) of the firm, read with the user's own token
       if (!path.startsWith(firm + "/") || !/\/(notices|uploads)\//.test(path) || path.includes("..")) return reply(403, { ok: false, kind: "file", error: "That file is not one of your firm's uploads." });
-      const r = await doFetch(URL_ + "/storage/v1/object/authenticated/" + BUCKET + "/" + path.split("/").map(encodeURIComponent).join("/"), { headers: { apikey: ANON, Authorization: "Bearer " + jwt } });
-      if (!r.ok) { await r.body?.cancel(); return reply(403, { ok: false, kind: "file", error: "The notice could not be read (" + r.status + ")." }); }
-      const buf = new Uint8Array(await r.arrayBuffer());
+    }
+    // before anything is downloaded or opened (the review of 13-Nov-2026): asks with files are counted per user and per
+    // firm (auth_rate_hit, migration 112; else in this running copy), and a firm at its AI limit is told at once
+    if (sent.length && action === "ask") {
+      const lim = await attachRateOk((b, k, max, win) => rpc("auth_rate_hit", { p_bucket: b, p_key: k, p_max: max, p_window_s: win }, SERVICE), user.id, firm);
+      if (!lim.ok) return reply(429, { ok: false, kind: "rate_limit", error: lim.error });
+      const over = await capOver(async (q) => (await rest("/rest/v1/" + q, SERVICE).catch(() => null)) as any[] | null, firm, deps.now ? deps.now() : new Date());
+      if (over) return reply(429, { ok: false, kind: "cap", error: capWords(over.why, over.cap_inr, over.cap) + " The files are kept; send them again then." });
+    }
+    type Got = { a: any, path: string, name: string, type: string, size: number, bytes: Uint8Array | null, native: string, pages: number, text: string, full: number, sheet: SheetFile | null, why: string, noNative: string, sheetCut: boolean };
+    const got: Got[] = [];
+    let downloaded = 0, nativeBytes = 0;
+    for (const a of sent) {
+      const path = String(a.path), name = String(a?.name || path.split("/").pop() || "file").slice(0, 120);
+      const g: Got = { a, path, name, type: String(a?.type || "").slice(0, 120), size: Math.max(0, Number(a?.size) || 0), bytes: null, native: "", pages: 0,
+        text: typeof a?.text === "string" ? a.text.slice(0, ATTACH.textChars) : "", full: 0, sheet: null, why: "", noNative: "", sheetCut: false };
+      // the text's whole length: the page keeps at most ATTACH.textChars of a file and says how long it was (full)
+      g.full = Math.max(typeof a?.text === "string" ? a.text.length : 0, Math.min(Number(a?.full) || 0, 1e9));
+      got.push(g);
       noticePath = noticePath || path;
-      if (buf.length > MAX_NOTICE) return reply(413, { ok: false, kind: "file", error: "The notice is larger than 20 MB." });
-      const type = String(a?.type || r.headers.get("content-type") || "");
-      const b64 = btoa(Array.from(buf, (c) => String.fromCharCode(c)).join(""));
-      if (/pdf/i.test(type) || /\.pdf$/i.test(path)) attachments.push({ type: "document", source: { type: "base64", media_type: "application/pdf", data: b64 }, title: String(a?.name || "notice").slice(0, 120) });
-      else if (/^image\/(png|jpeg|webp|gif)$/.test(type)) attachments.push({ type: "image", source: { type: "base64", media_type: type, data: b64 } });
+      // the bytes are read for a PDF or a picture (sent as they are), a sheet (its cells) or a file the page could not read
+      const wantBytes = /pdf|^image\//i.test(g.type) || /\.(pdf|png|jpe?g|webp|gif)$/i.test(name) || isSheetName(name, g.type) || !g.text;
+      if (!wantBytes) continue;
+      if (g.size > ATTACH.fileBytes) { g.why = "Not read: larger than " + ATTACH.fileBytes / 1048576 + " MB."; continue; }
+      if (downloaded + g.size > ATTACH.totalBytes) { g.why = "Not read: the message's files are over " + ATTACH.totalBytes / 1048576 + " MB together."; continue; }
+      const r = await doFetch(URL_ + "/storage/v1/object/authenticated/" + BUCKET + "/" + path.split("/").map(encodeURIComponent).join("/"), { headers: { apikey: ANON, Authorization: "Bearer " + jwt } });
+      // one file that cannot be fetched does not stop the others (it is said, and sent as its page text when there is one)
+      if (!r.ok) { await r.body?.cancel(); if (!g.text) g.why = "Not read: it could not be fetched from the firm's folder (" + r.status + ")."; continue; }
+      if (Number(r.headers.get("content-length") || 0) > ATTACH.fileBytes) { await r.body?.cancel(); g.why = "Not read: larger than " + ATTACH.fileBytes / 1048576 + " MB."; continue; }
+      const buf = new Uint8Array(await r.arrayBuffer());
+      g.size = buf.length;
+      if (buf.length > ATTACH.fileBytes) { g.why = "Not read: larger than " + ATTACH.fileBytes / 1048576 + " MB."; continue; }
+      downloaded += buf.length;
+      if (downloaded > ATTACH.totalBytes) { g.why = "Not read: the message's files are over " + ATTACH.totalBytes / 1048576 + " MB together."; continue; }
+      const kind = sniff(buf.subarray(0, 16), name, g.type);
+      // a PDF or a picture is kept only while it can go as it is (the bytes together, a picture's own size): else it is
+      // dropped here at once and goes as its text (memory: never 30 files' bytes held)
+      if (kind === "application/pdf" || NATIVE.test(kind)) {
+        g.native = kind === "application/pdf" ? "pdf" : "image"; g.type = kind;
+        g.noNative = g.native === "image" && buf.length > ATTACH.imageBytes ? "a picture over 5 MB cannot be shown to the AI"
+          : nativeBytes + buf.length > ATTACH.nativeBytes ? "the PDFs and pictures are over " + Math.round(ATTACH.nativeBytes / 1048576) + " MB together" : "";
+        if (!g.noNative) { if (g.native === "pdf") g.pages = await pdfPages(buf); g.bytes = buf; nativeBytes += buf.length; }
+        else g.pages = 1;
+      }
+      // an .xlsx is a zip: one that unpacks to far more than its size is not opened by ExcelJS here (the page's text instead)
+      else if (isSheetName(name, g.type) && kind === "xlsx" && zipTooBig(zipSizes(buf))) {
+        if ((g.sheet = await readSheetFile(sheets.length + 1, name, g.type, null, g.text))) { sheets.push(g.sheet); g.text = sheetText(g.sheet, ATTACH.textChars); }
+      }
       // a sheet: FinCom reads it itself (the bytes; else the page's text) and shows it with row numbers and column letters,
       // so make_file can copy its cells (filetable.ts); masked by the agent like the question
-      else if (isSheetName(String(a?.name || path), type) && (sf = await readSheetFile(sheets.length + 1, String(a?.name || path.split("/").pop() || "sheet").slice(0, 120), type, buf, typeof a?.text === "string" ? a.text : ""))) {
-        sheets.push(sf);
-        attachments.push({ type: "text", text: renderSheetFile(sf) });
-      }
-      // a Word file: the text FinCom took out of it on the page (masked by the agent like the question)
-      else if (typeof a?.text === "string" && a.text.trim()) attachments.push({ type: "text", text: "[The file " + String(a?.name || "uploaded").slice(0, 120) + ", as FinCom read it]\n" + String(a.text).slice(0, 20000) });
-      else if (action !== "classify") return reply(415, { ok: false, kind: "file", error: "That file can be asked about as a PDF, a picture (PNG, JPEG, WebP), a sheet or a Word file." });
+      else if (isSheetName(name, g.type) && (g.sheet = await readSheetFile(sheets.length + 1, name, g.type, buf, g.text))) { sheets.push(g.sheet); g.text = sheetText(g.sheet, ATTACH.textChars); g.sheetCut = /are not shown to you;/.test(g.text); }
+      // a text file the page did not read: its words, when it is text
+      else if (!g.text) { g.text = textOf(buf, ATTACH.textChars); g.full = g.text.length < ATTACH.textChars ? g.text.length : Math.max(g.text.length, Math.round(buf.length * 0.9)); }
+    }
+    const fit = fitAttachments(got.map((g) => ({ name: g.name, size: g.size, native: g.native, pages: g.pages, chars: g.text.length, tokens: textTokens(g.text), why: g.why, noNative: g.noNative, read: !!(g.native || g.text) })));
+    const attachNotes: { name: string, why: string }[] = [];
+    for (const [i, g] of got.entries()) {
+      const p = fit.plan[i], n = i + 1, full = Math.max(g.full, g.text.length), shown = Math.min(p.chars, g.text.length), cut = p.mode === "text" && !g.sheet && shown < full, size = g.size >= 1048576 ? (g.size / 1048576).toFixed(1) + " MB" : g.size >= 1024 ? Math.round(g.size / 1024) + " KB" : g.size + " bytes";
+      const pct = Math.max(1, Math.min(99, Math.round(shown * 100 / (full || 1))));
+      const why = cut && !p.cut ? (p.why ? p.why + " " : "") + "Shortened to fit: the AI reads about the first " + pct + "% of it."
+        : g.sheetCut && !p.cut ? (p.why ? p.why + " " : "") + "Shortened to fit: the AI reads the first rows of a long sheet." : p.why;
+      if (why) attachNotes.push({ name: g.name, why: cut ? why.replace(/about the first \d+%/, "about the first " + pct + "%") : why });
+      if (p.mode === "native" && g.native === "pdf") attachments.push({ type: "document", source: { type: "base64", media_type: "application/pdf", data: b64(p.cut ? await firstPages(g.bytes as Uint8Array, p.pages) : g.bytes as Uint8Array) }, title: g.name + (p.cut ? " (its first " + p.pages + " of " + g.pages + " pages)" : "") });
+      else if (p.mode === "native") attachments.push({ type: "image", source: { type: "base64", media_type: g.type, data: b64(g.bytes as Uint8Array) } });
+      else if (p.mode === "text") {
+        const body0 = g.sheet ? sheetText(g.sheet, p.chars) : g.text.slice(0, shown);
+        attachments.push({ type: "text", text: "[The file " + n + ": " + g.name + ", as FinCom read it" + (cut ? "; shortened to fit: about the first " + pct + "% is shown" : "") + "]\n" + body0
+          + (cut ? "\n[The rest of " + g.name + " is not shown to you. Say so if the answer may depend on it.]" : "") });
+      } else attachments.push({ type: "text", text: "[The file " + n + ": " + g.name + " (" + (g.type || "type not known") + ", " + size + "): FinCom could not read this file" + (g.why ? " (" + g.why.replace(/^Not read: /, "").replace(/\.$/, "") + ")" : "") + "; only its name, type and size are given. Tell the user it could not be read.]" });
+      g.bytes = null;
     }
 
     // an upload FinCom's own rules could not tell: what it is, in one line (upload.ts); nothing else is done with it
@@ -333,7 +399,7 @@ export function handler(deps: Deps) {
         if (hit && Array.isArray(hit.events)) {
           const evs = hit.events as Ev[];
           const done = evs.find((e) => e.t === "done") as any;
-          try { await rpc("asst_log_add", { p_firm: firm, p_user: user.id, p_client: clientId, p_question: question, p_tools: (done && done.tools) || [], p_in: 0, p_out: 0, p_calls: 0, p_ms: Date.now() - t0,
+          try { await rpc("asst_log_add", { p_firm: firm, p_user: user.id, p_client: clientId, p_question: asked, p_tools: (done && done.tools) || [], p_in: 0, p_out: 0, p_calls: 0, p_ms: Date.now() - t0,
             p_feature: "cache", p_route: "cache", p_models: [], p_cache_read: 0, p_cache_write: 0, p_cost_inr: 0, p_fell_through: false }, SERVICE); } catch { /* the answer still stands */ }
           const out = [{ t: "start", client: clientId, clientName, cached: true }, ...evs.map((e) => e.t === "done" ? { ...e, cached: String(hit.made_at || ""), usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, calls: 0 } } : e)];
           return new Response(out.map((e) => "data: " + JSON.stringify(e) + "\n\n").join(""), { headers: { ...cors, "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-cache" } });
@@ -419,7 +485,7 @@ export function handler(deps: Deps) {
           recordMismatch: async (m) => {
             try {
               const row = (await rest("/rest/v1/assistant_mismatches", SERVICE, { method: "POST", headers: { Prefer: "return=representation" }, body: JSON.stringify({
-                firm_id: firm, client_id: clientId, user_id: user.id, kind: "auto", question, ...m }) })) as any[];
+                firm_id: firm, client_id: clientId, user_id: user.id, kind: "auto", question: asked, ...m }) })) as any[];
               const id = row && row[0] && row[0].id;
               if (id) sentry.mismatch("assistant-mismatch", { figureKey: m.figure_key, tool: m.tool, id, entries: m.entry_ids, firm, client: clientId || "" });
               return id || null;
@@ -447,6 +513,7 @@ export function handler(deps: Deps) {
         };
         try {
           emit({ t: "start", client: clientId, clientName });
+          if (attachNotes.length) emit({ t: "attach", notes: attachNotes });
           const r = await runTurn(ctx);
           tools.push(...r.tools); usage = r.usage; calls = r.calls; route = r.route; models = r.models; costUsd = r.costUsd; feature = r.feature; fellThrough = r.fellThrough;
           // kept for the next time the same question is asked on the same books (only answers that cost something)
@@ -468,7 +535,7 @@ export function handler(deps: Deps) {
           console.log(JSON.stringify({ evt: "assistant_failed", kind: f.kind, ...f.tags, error: f.errorClass }));
         }
         // one line: the question, the tools, the tokens and the time (never the answer or a figure)
-        try { await rpc("asst_log_add", { p_firm: firm, p_user: user.id, p_client: clientId, p_question: question, p_tools: tools, p_in: usage.input, p_out: usage.output, p_calls: calls, p_ms: Date.now() - t0,
+        try { await rpc("asst_log_add", { p_firm: firm, p_user: user.id, p_client: clientId, p_question: asked, p_tools: tools, p_in: usage.input, p_out: usage.output, p_calls: calls, p_ms: Date.now() - t0,
           p_feature: feature, p_route: route, p_models: models, p_cache_read: usage.cacheRead, p_cache_write: usage.cacheWrite, p_cost_inr: costInr, p_fell_through: fellThrough }, SERVICE); } catch { /* the answer still stands */ }
         console.log(JSON.stringify({ evt: "assistant", route, calls, tools: tools.length, in: usage.input, out: usage.output, cache_read: usage.cacheRead, usd: Math.round(costUsd * 1e4) / 1e4, ms: Date.now() - t0 }));
         try { ctl.close(); } catch { /* closed */ }
@@ -486,6 +553,60 @@ export function main() {
   Deno.serve(sentry.wrap(handler({ env: (k) => Deno.env.get(k), fetch: (...a) => fetch(...a), sentry })));
 }
 if (import.meta.main) main();
+
+// base64 of a file, in pieces (a 18 MB file as one string of characters would not fit)
+function b64(buf: Uint8Array): string {
+  let s = "";
+  for (let i = 0; i < buf.length; i += 0x8000) s += String.fromCharCode(...buf.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+// a PDF's first n pages, as a PDF of their own (a scanned file too long for the budget: its first pages go as they are)
+export async function firstPages(buf: Uint8Array, n: number): Promise<Uint8Array> {
+  const src = await PDFDocument.load(buf, { updateMetadata: false }), out = await PDFDocument.create();
+  for (const pg of await out.copyPages(src, Array.from({ length: Math.min(n, src.getPageCount()) }, (_x, i) => i))) out.addPage(pg);
+  return await out.save();
+}
+// asks with files, per user and per firm in an hour (the review of 13-Nov-2026): counted in the database (auth_rate_hit,
+// migration 112), the ids hashed; where that is not there, in this running copy (logged)
+export const ATTACH_RATE = { user: 60, firm: 300, windowS: 3600 };
+const rateHere = new Map<string, number[]>();
+export async function attachRateOk(hit: (bucket: string, key: string, max: number, windowS: number) => Promise<unknown>, uid: string, firm: string): Promise<{ ok: boolean, error?: string }> {
+  for (const [bucket, id, max] of [["asst-attach-user", uid, ATTACH_RATE.user], ["asst-attach-firm", firm, ATTACH_RATE.firm]] as [string, string, number][]) {
+    let allowed: boolean;
+    try { allowed = (await hit(bucket, await sha256(bucket + ":" + id), max, ATTACH_RATE.windowS)) === true; }
+    catch {
+      const now = Date.now(), k = bucket + ":" + id, seen = (rateHere.get(k) || []).filter((t) => now - t < ATTACH_RATE.windowS * 1000);
+      allowed = seen.length < max; if (allowed) seen.push(now); rateHere.set(k, seen);
+    }
+    if (!allowed) return { ok: false, error: bucket === "asst-attach-user" ? "You have sent " + max + " questions with files in the last hour. Wait a while, then send it again." : "Your firm has sent " + max + " questions with files in the last hour. Wait a while, then send it again." };
+  }
+  return { ok: true };
+}
+// the firm's AI limit, read without taking a call (asst_cap_take takes one when the model is asked): the month's rupees
+// or today's calls used up -> {why, cap_inr, cap}; null while there is room (or when it cannot be read: the turn checks)
+export async function capOver(get: (q: string) => Promise<any[] | null>, firm: string, now: Date): Promise<{ why: string, cap_inr: number, cap: number } | null> {
+  const day = now.toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" }), m0 = day.slice(0, 8) + "01";
+  const caps = await get("assistant_caps?select=daily_calls,monthly_inr&firm_id=eq." + firm), use = await get("assistant_usage?select=day,calls,cost_inr&firm_id=eq." + firm + "&day=gte." + m0);
+  if (!use) return null;
+  const c = (caps && caps[0]) || {}, calls = Number(c.daily_calls ?? 500), inr = Number(c.monthly_inr ?? 3000);
+  const spent = use.reduce((a, u) => a + Number(u.cost_inr || 0), 0), today = use.find((u) => String(u.day).slice(0, 10) === day);
+  if (spent >= inr) return { why: "inr", cap_inr: inr, cap: calls };
+  if (today && Number(today.calls || 0) >= calls) return { why: "calls", cap_inr: inr, cap: calls };
+  return null;
+}
+// a PDF's pages (0: it cannot be opened as it is: locked or damaged)
+async function pdfPages(buf: Uint8Array): Promise<number> {
+  try { return (await PDFDocument.load(buf, { ignoreEncryption: false, updateMetadata: false })).getPageCount(); } catch { return 0; }
+}
+// a file's words when it is text (UTF-8, no NUL in its first 8 KB); "" when it is not
+function textOf(buf: Uint8Array, max: number): string {
+  if (buf.subarray(0, 8192).includes(0)) return "";
+  try { return new TextDecoder("utf-8", { fatal: true }).decode(buf.subarray(0, max * 4), { stream: true }).slice(0, max); } catch { return ""; }
+}
+// a sheet for the model: its sheets named with their rows first (a long one is cut, and the model is told), then the table
+function sheetText(f: SheetFile, max: number): string {
+  return "[" + f.name + ": " + f.sheets.length + " sheet" + (f.sheets.length === 1 ? "" : "s") + ": " + f.sheets.map((g) => "\"" + g.name + "\" (" + g.rows.length + " rows)").join(", ") + "]\n" + renderSheetFile(f, max);
+}
 
 async function sha256(s: string): Promise<string> {
   const h = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));

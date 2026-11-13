@@ -1924,7 +1924,37 @@ async function booksFromFor(firm: string, body: any): Promise<Record<string, str
 let daysClaimMissing = 0;
 let heldFrontMissing = 0, heldHeadsMissing = 0;     // migration 158 (tally_held_front / tally_held_delete_by_heads) not applied
 let gapFrontMissing = 0;                             // migration 160 (tally_gap_front) not applied
-async function periodDaysFor(firm: string, body: any, stopped: boolean, max = 3, night = max > 3, markCheck = false, claim?: { dev: any; bridge: string; shared: Set<string> }): Promise<Record<string, unknown>[] | null> {
+let gapIdleMissing = 0;                              // migration 182 (tally_gap_front with p_idle) not applied
+// next-fix-gap-after-post (the owner, 13-Nov-2026: reads may go while people work, as long as nobody feels them): a light
+// read is handed out only when the beat shows the bridge's typing gate quiet and FinCom saw no typing for 5 s, or 60 s when
+// the bridge's last request took more than 0.3 s (reqs.last.ms); never while reading is paused or Tally is busy. Typing, as
+// today's bridge says it: a day refused for it (pickups [{company, state: "refused", code: "typing", at}], pickack.go; a
+// refusal older than 2 minutes is stale: the bridge keeps it up to 30), and a run waiting for it (keepWait.reason
+// "userInTally", cleared when the run goes on). An older-entries day's waiting words ("someone is working in Tally",
+// daypull.go) stay until that company's next day starts, so they count only beside a fresh refusal of the same company.
+// Fail safe: a beat without pickups, periodPull or the last request's time is never idle. Today's bridge keeps its own
+// typing gate on top (DayPullIdleSec, 60 s by default)
+const TYPING_STALE_MS = 120000;
+function lightIdle(b: any, prevInfo: any, now = Date.now()): { idle: boolean; typingAt: string | null } {
+  const t = (v: unknown) => typeof v === "string" && !isNaN(Date.parse(v)) ? Date.parse(v) : NaN;
+  const key = (v: unknown) => typeof v === "string" ? v.trim().toLowerCase().split(/\s+/).join(" ") : "";     // (the bridge's companyKey)
+  const pick = Array.isArray(b?.pickups) ? b.pickups : null;
+  const cos = b?.periodPull && typeof b.periodPull === "object" && b.periodPull.companies && typeof b.periodPull.companies === "object" ? b.periodPull.companies : null;
+  // the fresh typing refusals, by company: when each was refused (never ahead of now)
+  const fresh = new Map<string, number>();
+  for (const x of (pick || []).slice(0, 50) as any[]) {
+    const at = Math.min(now, t(x?.at));
+    if (x?.state === "refused" && x?.code === "typing" && at > now - TYPING_STALE_MS) fresh.set(key(x?.company), Math.max(fresh.get(key(x?.company)) || 0, at));
+  }
+  let at = Math.max(t(prevInfo?.typingAt) || 0, ...fresh.values());
+  const waits = cos ? Object.entries(cos).some(([k, c]: [string, any]) => typeof c?.waiting === "string" && /someone is working in tally/i.test(c.waiting) && fresh.has(key(k))) : false;
+  if (waits || b?.keepWait?.reason === "userInTally") at = now;
+  const typingAt = at > 0 ? new Date(at).toISOString() : null;
+  const ms = Number(b?.reqs?.last?.ms), known = !!pick && !!cos && b?.reqs?.last && Number.isFinite(ms) && ms >= 0;
+  const quiet = at > 0 ? now - at : Infinity;
+  return { idle: !!known && !b?.paused && b?.tallyState !== "busy" && quiet >= (ms <= 300 ? 5000 : 60000), typingAt };
+}
+async function periodDaysFor(firm: string, body: any, stopped: boolean, max = 3, night = max > 3, markCheck = false, claim?: { dev: any; bridge: string; shared: Set<string> }, idle = false): Promise<Record<string, unknown>[] | null> {
   const out: Record<string, unknown>[] = [];
   max = Math.max(1, Math.min(30, Math.floor(Number(max) || 3)));
   let unsure = false;
@@ -1990,8 +2020,16 @@ async function periodDaysFor(firm: string, body: any, stopped: boolean, max = 3,
       // before the period's days, read by the bridge itself as check days (the same whole-day read: no new Tally request);
       // a read that matches closes the gap ("checked against Tally"), one that shows a missing entry brings it in. A cloud
       // without 160: as before (asked again in 10 minutes)
+      // next-fix-gap-after-post (migration 182): whether nobody would feel a read now (p_idle, lightIdle): the light reads
+      // (a posting's read back, a gap's older days, the recount, the retry after a 2 s stop) go only then, one at a time,
+      // paced by the cloud; a cloud without 182: 160's call (asked again in 10 minutes)
       if (Date.now() - gapFrontMissing >= 600000 && out.length < max) {
-        const { data: gf, error: ge } = await db.rpc("tally_gap_front", { p_book: book, p_max: max - out.length });
+        const idle182 = Date.now() - gapIdleMissing >= 600000;
+        let { data: gf, error: ge } = await db.rpc("tally_gap_front", idle182 ? { p_book: book, p_max: max - out.length, p_idle: idle } : { p_book: book, p_max: max - out.length });
+        if (idle182 && ge && missingFn(String(ge.message || ""))) {
+          gapIdleMissing = Date.now();
+          ({ data: gf, error: ge } = await db.rpc("tally_gap_front", { p_book: book, p_max: max - out.length }));
+        }
         if (ge) { if (missingFn(String(ge.message || ""))) gapFrontMissing = Date.now(); else fail("gap_front", ge); }
         for (const d of Array.isArray(gf) ? gf as any[] : []) {
           if (out.length >= max) break;
@@ -4601,6 +4639,9 @@ Deno.serve(sentry.wrap(async (req) => {
         // migration 139: the gate's record of this bridge (its requests' last change, its start as seen here)
         const ug = gateTrack(prevInfo, beat, Date.now());
         const info = { ...prevInfo, ...ctl.info, beat, history: beatHistory(prevInfo, beat), bridges: bridgesWith(prevInfo, me.id, me.entry), updGate: ug };
+        // next-fix-gap-after-post (migration 182): when typing was last seen, and whether a light read may go now
+        const quiet = lightIdle(b, prevInfo);
+        if (quiet.typingAt) (info as any).typingAt = quiet.typingAt;
         // bridge 2.5.10 (review 5): the computer's first heartbeat of India's day (migration 149 says a stop only of a computer
         // that had been beating earlier that day)
         { const today = istDay(Date.now()), df = (prevInfo as any).dayFirst;
@@ -4735,7 +4776,7 @@ Deno.serve(sentry.wrap(async (req) => {
         // next-fast-entries (periodpace.js): a bridge whose beat says its fast read is on (FastEntries) is handed up to 30 days
         // by day too; every other bridge as before (3 by day, 30 at night)
         const pace = periodPace(periodNight, b);
-        const periodDays = !periodFetch ? [] : periodStopped || await periodGate(dev.id) ? await periodDaysFor(firm, bRead, periodStopped, pace.max, pace.night, fastOn(b), { dev, bridge: me.id, shared: gate.shared }) : null;
+        const periodDays = !periodFetch ? [] : periodStopped || await periodGate(dev.id) ? await periodDaysFor(firm, bRead, periodStopped, pace.max, pace.night, fastOn(b), { dev, bridge: me.id, shared: gate.shared }, quiet.idle) : null;
         await ledgerProgressFromBeat(firm, dev, b);
         // bridge 2.5.1: FinCom's first day of each open company's book (the period of the ledger requests; booksFromFor)
         let booksFrom: Record<string, string> | null = null;

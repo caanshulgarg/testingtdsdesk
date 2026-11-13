@@ -9,7 +9,7 @@ button full width, errors under the box they are about, a link to the other page
      any browser, in the test build or the production build (TDSDESK_SITE_LIVE, app/dist); the mode itself is kept
   2. step by step: the email and Continue; a bad email is said under the box; Continue (or Enter) brings the password
      step into the same card, the email shown as a line with Edit, the focus in the password box; Edit goes back
-  3. the password step: "Forgot password?" beside the label opens one line; the show / hide eye; "Keep me signed in",
+  3. the password step: "Forgot password?" beside the label opens one line; the show / hide eye; "This is a shared computer",
      ticked; an empty password said under the box; a wrong password said in the card; a locked account said to be
      locked, and only then; while the answer is awaited the button shows a spinner, disabled, its words kept
   4. sign-up: the same frame, "Create your FinCom account", the email, then name, firm name and password; empty boxes
@@ -139,8 +139,8 @@ with sync_playwright() as pw:
     fp.click(); A.wait_for_timeout(250)
     note = A.locator("#app [data-forgot-note]")
     ok(re.search(r"Ask your firm.s admin to send you a reset link", note.inner_text()) and fp.get_attribute("aria-expanded") == "true", "Forgot password? opens one line: Ask your firm's admin to send you a reset link")
-    kb = A.locator('#app input[data-cloud="keep"]')
-    ok(kb.count() == 1 and kb.is_checked() and A.locator("#app .keep-box").inner_text().strip() == "Keep me signed in", "Keep me signed in: the box, ticked, those words only")
+    kb = A.locator('#app input[data-cloud="shared"]')
+    ok(kb.count() == 1 and not kb.is_checked() and A.locator("#app .keep-box").inner_text().strip() == "This is a shared computer", "This is a shared computer: the box, not ticked, those words only (stay signed in)")
     A.fill('#app input[data-cloud="password"]', "secret-1")
     eye = A.locator("#app [data-pw-toggle]")
     ok(eye.get_attribute("aria-label") == "Show password" and A.get_attribute('#app input[data-cloud="password"]', "type") == "password", "the eye: Show password")
@@ -176,7 +176,7 @@ with sync_playwright() as pw:
     K.focus("#app [data-signin-edit]")
     for _ in range(7):
         seq.append(K.evaluate(ACTIVE)); K.keyboard.press("Tab")
-    ok(seq == ["edit", "forgot", "password", "eye", "keep", "cloudSignIn", "showSignUp"], "Tab: Edit, Forgot password?, password, the eye, Keep me signed in, Sign in, Create an account (%s)" % seq)
+    ok(seq == ["edit", "forgot", "password", "eye", "shared", "cloudSignIn", "showSignUp"], "Tab: Edit, Forgot password?, password, the eye, This is a shared computer, Sign in, Create an account (%s)" % seq)
     K.focus('#app input[data-cloud="password"]'); K.keyboard.type("not-it-1"); K.keyboard.press("Enter"); K.wait_for_timeout(1200)
     ok(SIGNINS[-1:] == ["ravi@firm.test"] and K.locator("#app [data-signin-error]").count() == 1, "type the password, Enter: sent, the answer shown (%s)" % SIGNINS[-1:])
     K.focus("#app [data-signin-edit]"); K.keyboard.press("Shift+Tab"); K.keyboard.press("Tab")

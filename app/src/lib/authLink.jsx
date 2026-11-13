@@ -13,7 +13,7 @@
 //     "choose your password" first, for the login it names, and nothing is kept until the password is saved.
 // Its own file, loaded only for these (SignIn.jsx's loadAuthLink; src/js/27 start(), Cloud.oauth, Cloud.signUp).
 import Msg from "../parts/Msg.jsx";
-import { Box } from "../screens/SignIn.jsx";
+import { Box, KeepBox } from "../screens/SignIn.jsx";
 
 export const NOT_HERE = "This sign-in link was not started on this browser — sign in again.";
 export const CONFIRMED = "Email confirmed — now sign in.";
@@ -81,7 +81,7 @@ export async function takeReturn() {
   if (confirm) {
     let v = null; try { v = localStorage.getItem(SIGNUP()); } catch (e) { /* */ }
     if (v) {
-      try { signedIn(await trade(code, v), "signup"); try { localStorage.removeItem(SIGNUP()); } catch (e) { /* */ } return; } catch (e) { /* not this browser's: as below */ }
+      try { keepChoice(); signedIn(await trade(code, v), "signup"); try { localStorage.removeItem(SIGNUP()); } catch (e) { /* */ } return; } catch (e) { /* not this browser's: as below */ }
     }
     S.signedOutWhy = CONFIRMED; Cloud.setCfg({ gate: true });
     return;
@@ -108,6 +108,7 @@ async function save() {
     const j = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(j.msg || j.error_description || j.message || "The password could not be saved.");
     const email = String(j.email || f.email || ""), uid = String(j.id || claims(s.access_token).sub || "");
+    keepChoice();   // this page's "This is a shared computer" (KeepBox), never an earlier sign-in's choice
     Cloud.setSess(Object.assign({}, s, { email, user_id: uid }));
     Cloud.setCfg({ email });
     S.setPassword = null; Cloud.st.busy = "";
@@ -132,6 +133,7 @@ export function SetPassword() {
     <form className="signin-form" noValidate onSubmit={(ev) => { ev.preventDefault(); if (!busy) save(); }}>
       {box("spw1", "New password", "10 characters or more, with letters and digits.", true)}
       {box("spw2", "Repeat the new password")}
+      <KeepBox />
       <button type="submit" className="btn primary signin-submit" data-act="setPasswordGo" disabled={!!busy}>{busy ? "Saving…" : "Save and continue"}</button>
       {f.error && !at && <div className="signin-error" role="alert" data-signin-error=""><Msg text={f.error} /></div>}</form></Box>;
 }

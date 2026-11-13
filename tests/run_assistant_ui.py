@@ -330,7 +330,7 @@ try:
         ok(db.one("select status || ' ' || ack_no from assistant_notices order by created_at desc limit 1") == "filed AA0711260045678", "marked filed with the acknowledgement (FinCom filed nothing)")
         shot(pg, "05b-notice-filed", "[data-asst-notice]")
         # ---------- files attached like Claude's (the owner, 31-Oct-2026; one Upload of 14-Oct-2026 before it): chips in the
-        # question box, up to 3 a message, each told by FinCom's rules (the AI only for the two the rules cannot tell);
+        # question box, up to 30 a message (13-Nov-2026; run_assistant_attach30.py), each told by FinCom's rules (the AI only for the two the rules cannot tell);
         # nothing in the conversation until Send; the next steps as buttons under the answer; nothing done by itself
         import make_uploads
         fx = make_uploads.make(os.path.join(OUT, "uploads"))
@@ -350,10 +350,8 @@ try:
             return got
         AI_DONE = "AUpload.pending().every(u => u.by)"
         attach(["bill.pdf", "sales-register.xlsx", "bank-statement.csv"])
-        # a fourth file: refused (the server reads the first 3 of a message)
-        pg.evaluate("() => { window.__toasts = []; const t0 = window.toast; window.toast = (m, ...r) => { window.__toasts.push(String(m)); return t0(m, ...r); }; }")
-        pg.set_input_files("[data-asst-upload-input]", [fx["26as.txt"]]); pg.wait_for_timeout(400)
-        ok(pg.evaluate("AUpload.pending().length") == 3 and any("Up to 3 files" in x for x in pg.evaluate("window.__toasts")), "a fourth file in one message is refused, said so")
+        # more files can still be added (30 a message; the 30 themselves: run_assistant_attach30.py)
+        ok(not pg.locator("[data-asst-upload-btn]").is_disabled(), "Attach stays open with 3 files in the box (30 a message)")
         tA = ask(pg, "What are these files?")
         ok(len(tA.get("filesIn") or []) == 3 and pg.locator(".asst-turn.latest [data-asst-sent-chip]").count() == 3 and pg.locator("[data-asst-chips] [data-asst-chip]").count() == 0, "Send: one message with the 3 files' chips; the box is empty")
         attach(["26as.txt", "certificate-format.docx", "gstr2b-032026.json"])
@@ -516,14 +514,18 @@ try:
         pg.keyboard.press("Escape"); pg.wait_for_timeout(300)
         # ---------- Check before filing on the TDS return page
         pg.evaluate("S.step = null; S.tab = 'books'; S.booksTab = 'tds'; S.tdsFy = '2025-26'; S.tdsQ = 'Q4'; S.tdsForm = '26Q'; S.tdsView = 'return'; S.tdsTab = 'file'; render()"); pg.wait_for_timeout(800)
-        ok(pg.locator('[data-prefile-btn="tds"]').count() >= 1, "TDS return page: Check before filing (Validate & file › Online checks)")
+        ok(pg.locator('[data-val-morechecks] [data-prefile-btn="tds"]').count() == 1, "TDS return page: Check before filing (Validate & file › More checks)")
         if pg.locator('[data-prefile-btn="tds"]').count():
+            # "More checks" is folded until asked for (run_tds_validate.py checks that): open it as a person would
+            if not pg.evaluate("(document.querySelector('[data-val-morechecks]') || {}).open"): pg.click('[data-val-morechecks] > summary'); pg.wait_for_timeout(200)
+            ok(pg.locator('[data-prefile-btn="tds"]').first.is_visible(), "the button shows once More checks is opened")
             pg.locator('[data-prefile-btn="tds"]').first.click(); pg.wait_for_timeout(800)
             ok(pg.locator("[data-prefile] [data-prefile-line]").count() >= 5, "it opens the checklist")
             shot(pg, "11-prefile-tds", "body")
         # ---------- nothing of the answers in the log
         logs = db.one("select coalesce(string_agg(question || ' ' || coalesce(array_to_string(tools, ','), ''), ' | '), '') from assistant_log")
-        ok("Ashvattha" not in logs and "40,000" not in logs and "3,600" not in logs, "the log holds questions and tools, no figures or names from the answers")
+        ok("Ashvattha" not in logs and "40,000" not in logs and "3,600" not in logs, "the log holds questions and tools, no figures or names from the answers" + "".join(" [%s in: %s]" % (w, q[:90]) for w in ("Ashvattha", "40,000", "3,600") for q in logs.split(" | ") if w in q))
+        ok(int(db.one("select count(*) from assistant_log where question = 'Compare these two financial statements'") or 0) == 1, "compare: the log keeps the question as typed, not FinCom's differences sent with it")
         ok(not errors, "no page errors" + ("" if not errors else ": " + errors[0]))
         br.close()
 finally:

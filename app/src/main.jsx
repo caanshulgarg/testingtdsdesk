@@ -42,6 +42,15 @@ import { installAutopost } from "./lib/autopostBoot.js";
 // the registers' and reconciliations' engine, loaded the first time it is needed (registersLoad, src/js/82-registers.js)
 // fast-firstopen: a client's books new to this browser, brought in newest year first (lib/firstOpen.js; TCloud.load)
 window.loadFirstOpen = () => import("./lib/firstOpen.js");
+// next-fix-client-open-freeze: how each ledger of a client's books is used (LedMaster.usage), worked out 8,000 entries a
+// task while the books open (openBooksNow, src/js/18): the same figures as at once, or 0 when the books, their entries or
+// ledger map changed meanwhile (worked out at once there)
+window.usageSoon = async (b) => {
+  const V = b.vouchers, m = b.map, u = {};
+  if (!V || !V.length || !m) return 0;
+  try { for (let i = 0; i < V.length; i += 8000) { await new Promise((ok) => setTimeout(ok, 0)); if (S.books !== b) return 0; LedMaster.usage(b, u, i, i + 8000); } } catch (e) { return 0; }
+  return b.vouchers === V && b.map === m && u;
+};
 // next-split-years: a client's earlier-years company joined into its books (TCloud.load, src/js/49), only for such a client
 window.loadSplit = () => import("./lib/splitBooks.js");
 // next-bank-overlap: an upload's overlap with the statements already here (src/js/96, with the Bank screen too)

@@ -10,6 +10,9 @@ the parts of the program used on one screen only come with that screen's file (b
      file), Sales (the printed invoice), Post to Tally (who holds a posting); an action asked for before its screen's file
      is in loads the file first, says "Loading…" meanwhile, and then does what was asked (the GSTR-9 Excel);
   4. offline, with the files the service worker kept: each of those screens opens and has its part.
+next-room-2: the same for the working only the GST screens call (GSTX: Filed vs books; GSTV: taking in a filed return's PDF),
+AI help's asking and buttons (AIH), the deductions-only Excel of a TDS return (TDSEdit, out of the first file) and the In
+Tally page of documents other than bills (screens/Done.jsx, its own file: drawn on a slow line after the page's shape).
 Run on the React build (app/dist-test, or TDSDESK_SITE)."""
 import os, sys, re, json, gzip, glob, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -25,7 +28,14 @@ def ok(c, w):
 
 # each moved part: its name, and the screen that brings it (what is set before render())
 PARTS = {"GST9": "gst", "GST9C": "gst", "gst9PackHtml": "gst", "gst9Excel": "gst", "gst9Where": "gst", "gst9Typed": "gst", "gst9cSet": "gst",
-         "misPackHtml": "mis", "misExcel": "mis", "TDS24Q_FILE": "tds", "payFvuDownload": "tds", "invoiceHtml": "sales", "PostOwner": "post"}
+         "misPackHtml": "mis", "misExcel": "mis", "TDS24Q_FILE": "tds", "payFvuDownload": "tds", "invoiceHtml": "sales", "PostOwner": "post",
+         # next-room-2: Filed vs books' import, Returns filed's taking in of PDFs, AI help's buttons (with the GST screens)
+         "gstxImport": "gst", "gstvTake": "gst", "aihAct": "gst"}
+# next-room-2: the parts of GSTX, GSTV, AIH (src/js/56, 38, 50) and TDSEdit (app/src/lib) only their own pages call, put on
+# the same objects by those pages' files; and what the rest of the program calls, which stays in the page from the start
+LATER = ["GSTX.cross", "GSTX.r1Match", "GSTX.corrections", "GSTV.detect", "GSTV.addRecord", "AIH.reviewLedgers", "AIH.readNotice", "TDSEdit.read", "TDSEdit.applyAll"]
+STAYS = ["GSTX.fig", "GSTX.portal", "GSTX.takePortal", "GSTV.expected", "GSTV.filedOn", "GSTV.copies", "AIH.enabled", "AIH.ready", "AIH.tdsRule", "AIH.blocked", "TDSEdit.apply", "TDSEdit.problems"]
+METH = "(ns) => Object.fromEntries(ns.map((n) => { const [o, m] = n.split('.'); return [n, typeof (0, eval)(o)[m]]; }))"
 OPEN = {"gst": "S.tab = 'books'; S.booksTab = 'gst'; S.gstPart = 'g9'; S.gstYm = '202603'; S.gstReg = '07';",
         "mis": "S.tab = 'books'; S.booksTab = 'mis';",
         "tds": "S.tab = 'books'; S.booksTab = 'tds';",
@@ -46,6 +56,11 @@ inleg = [n for n in PARTS if defined(n, leg)]
 ok(not inleg, "none defined in legacy.js (%s)" % ", ".join(inleg))
 main_txt = "".join(open(f, encoding="utf8").read() for f in main_js)
 ok("GSTR-9C for " not in main_txt, "the GSTR-9C screen is not in the first file (it comes with the GST screen)")
+# next-room-2: a line of each part moved out (as the minified files keep them: words shown to the person)
+for w, what in [("_GST-book-corrections_", "Filed vs books' corrections Excel"), ("AI could not draft the reply", "AI help's draft of a reply"), ("This PDF is not on this computer", "Returns filed's opening of a PDF")]:
+    ok(w not in leg, "%s is not in legacy.js" % what)
+for w, what in [("-to-correct.xlsx", "the deductions-only Excel of a TDS return"), ("Posted lately", "the In Tally page of other documents")]:
+    ok(w not in main_txt, "%s is not in the first file" % what)
 sw = open(os.path.join(SITE, "sw.js"), encoding="utf8").read()
 kept = set(re.findall(r'"\./(assets/[^"]+\.js)"', sw))
 files = {os.path.relpath(f, SITE).replace(os.sep, "/"): open(f, encoding="utf8").read() for f in glob.glob(os.path.join(SITE, "assets", "*.js"))}
@@ -91,11 +106,21 @@ try:
         pg = ctx.new_page(); pg.on("pageerror", lambda e: errors.append(str(e)))
         start(pg); seed(pg); pg.wait_for_timeout(2500)
         k0 = kinds(pg)
+        m0, s0 = pg.evaluate(METH, LATER), pg.evaluate(METH, STAYS)
+        ok(all(v == "undefined" for v in m0.values()), "nor the pages' own parts of GSTX, GSTV, AIH and TDSEdit (%s)" % ", ".join(n for n, v in m0.items() if v != "undefined"))
+        ok(all(v == "function" for v in s0.values()), "what the rest of the program calls is there from the start (%s)" % ", ".join(n for n, v in s0.items() if v != "function"))
         ok(all(v == "undefined" for v in k0.values()), "on the Overview none of them is in the page yet (%s)" % ", ".join(n for n, v in k0.items() if v != "undefined"))
         for k in ["gst", "mis", "tds", "sales", "post"]:
             open_screen(pg, k)
             kk = kinds(pg); want = [n for n in PARTS if PARTS[n] == k]
             ok(all(kk[n] != "undefined" for n in want), "%s: the screen brings %s" % (k, ", ".join("%s (%s)" % (n, kk[n]) for n in want)))
+        m1 = pg.evaluate(METH, LATER)
+        ok(all(v == "function" for v in m1.values()), "the screens bring their own parts of GSTX, GSTV, AIH and TDSEdit (%s)" % ", ".join(n for n, v in m1.items() if v != "function"))
+        # the In Tally page of documents other than bills (screens/Done.jsx): its own file now, drawn when it comes
+        pg.evaluate("() => { S.view = 'company'; S.step = null; S.tab = 'done'; S.postFocus = 'bank'; render(); }")
+        try: pg.wait_for_selector("#app [data-in-tally]", timeout=15000)
+        except Exception: pass
+        ok(pg.locator("#app [data-in-tally]").count() == 1 and "Posted lately" in pg.inner_text("#app"), "the In Tally page of other documents is drawn from its own file")
         open_screen(pg, "gst")
         t = pg.inner_text("#app")
         ok("GSTR-9 for 2025-26" in t, "GSTR-9 is drawn for the year")
@@ -115,6 +140,21 @@ try:
         sv, ts = pg.evaluate("window.__saved"), pg.evaluate("window.__toasts")
         ok(any("GSTR-9" in n for n in sv), "the file is loaded, then the Excel made (%s)" % sv)
         ok(ts and ts[0].startswith("Loading"), "“Loading…” is said meanwhile (%s)" % ts[:3])
+        ctx.close()
+
+        # a slow line: the file of the In Tally page held back 2 s; the page's shape meanwhile, then the page, nothing lost
+        ctx = br.new_context(viewport={"width": 1440, "height": 900}); ctx.add_init_script(SAVE_DATA)
+        pg = ctx.new_page(); pg.on("pageerror", lambda e: errors.append(str(e)))
+        held = []
+        pg.route("**/assets/Done-*.js", lambda route: held.append(route))
+        start(pg); seed(pg); pg.wait_for_timeout(1500)
+        pg.evaluate("() => { S.view = 'company'; S.step = null; S.tab = 'done'; S.postFocus = 'bank'; render(); }")
+        pg.wait_for_timeout(2000)
+        ok(len(held) == 1 and pg.locator("#app [data-in-tally]").count() == 0 and pg.locator("#app [data-page-skeleton]").count() == 1, "on a slow line the In Tally page shows the page's shape while its file comes (held 2 s)")
+        for r in held: r.continue_()
+        try: pg.wait_for_selector("#app [data-in-tally]", timeout=15000)
+        except Exception: pass
+        ok(pg.locator("#app [data-in-tally]").count() == 1 and pg.locator("#app [data-lazy-failed]").count() == 0, "and is drawn when it has come")
         ctx.close()
 
         print("4. offline, with the files the service worker kept")
@@ -139,6 +179,12 @@ try:
             kk = kinds(pg); want = [n for n in PARTS if PARTS[n] == k]
             ok(all(kk[n] != "undefined" for n in want) and pg.locator("#app [data-lazy-failed]").count() == 0, "offline, %s: the screen opens with %s" % (k, ", ".join(want)))
         ok("GSTR-9" in (open_screen(pg, "gst") or pg.inner_text("#app")), "offline, GSTR-9 is drawn")
+        mo = pg.evaluate(METH, LATER)
+        ok(all(v == "function" for v in mo.values()), "offline, the pages' own parts of GSTX, GSTV, AIH and TDSEdit are there (%s)" % ", ".join(n for n, v in mo.items() if v != "function"))
+        pg.evaluate("() => { S.view = 'company'; S.step = null; S.tab = 'done'; S.postFocus = 'bank'; render(); }")
+        try: pg.wait_for_selector("#app [data-in-tally]", timeout=15000)
+        except Exception: pass
+        ok(pg.locator("#app [data-in-tally]").count() == 1 and pg.locator("#app [data-lazy-failed]").count() == 0, "offline, the In Tally page of other documents opens")
         ctx.set_offline(False); ctx.close()
         br.close()
 finally:

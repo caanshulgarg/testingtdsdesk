@@ -953,9 +953,9 @@ function PageMore({ rows, latest, m, cards, old = 0, connectStep }) {
       {/* round 89: deductions on challans the server does not have, after fetching the challans again (54-live-sync.js heal) */}
       {typeof BookItems === "object" && Object.entries(BookItems.st || {}).filter(([, x]) => x && x.chMiss > 0).map(([cid, x]) => <p key={cid} className="note bad" data-sync-chmiss={cid}>
         {((S.companies[cid] || {}).name || cid) + ": deductions point at " + x.chMiss + " challan" + (x.chMiss === 1 ? "" : "s") + " not on the server; they are listed under Not on any challan (TDS › Deductions) to choose again."}</p>)}
-      <H id="activity">Activity</H>
+      {TCloud.on() && <><H id="activity">Activity</H>
       <nav className="row tadv-links" aria-label="Tally, for support" style={{ gap: 8, flexWrap: "wrap", margin: "0 0 4px" }}>
-        {TALLY_TABS.filter(([id]) => id !== "computers").map(([id, label]) => <button key={id} className="btn small" data-tally-tab={id} onClick={() => goTab(id)}>{label}</button>)}</nav>
+        {TALLY_TABS.filter(([id]) => id !== "computers").map(([id, label]) => <button key={id} className="btn small" data-tally-tab={id} onClick={() => goTab(id)}>{label}</button>)}</nav></>}
       {(cards.length > 0 || old > 0) && <H id="computers">Each computer</H>}
       {cards.length > 0 && <BridgeLines cards={cards} latest={latest} m={m} />}
       {old > 0 && <p className="note" data-old-computers={old} style={{ margin: "4px 0" }}>{nOf(old, "older bridge", "older bridges") + " not heard from for over 7 days: hidden here (listed under Every bridge below)."}</p>}
@@ -1077,7 +1077,7 @@ function BlockedHelp() {
     <p className="note" style={{ margin: "0 0 6px" }}>The setup keeps a log of every step at <code>%LOCALAPPDATA%\FinCom Bridge\install.log</code> (paste that into the Explorer address bar). Its last page has <b>Send install log to FinCom</b>; if this computer is not connected to FinCom yet, drop the file here instead and FinCom support sees exactly what went wrong.</p>
     {TCloud.on() ? <label className="btn small" data-install-log="" style={{ cursor: "pointer" }}>Send an install log…
       <input type="file" accept=".log,.txt,text/plain" style={{ display: "none" }} onChange={(ev) => { const f = ev.target.files && ev.target.files[0]; ev.target.value = ""; TCloud.sendInstallLog(f); }} /></label>
-      : <p className="note">Sign in to the firm account to send an install log.</p>}
+      : null}
     {ls && (ls.busy ? <p className="note">Sending…</p> : ls.err ? <p className="bk-warn"><Msg text={ls.err} /></p> : <p className="note ok" data-install-log-sent="">{"Sent " + ls.name + " to FinCom support (reference " + ls.ref + ")."}</p>)}
   </div>;
 }
@@ -1190,7 +1190,7 @@ const when = (s) => s ? fmtDateTime(s) : "never";
 // the books in FinCom's cloud: the computers that send, and which client each Tally company is
 export function CloudBooks() {
   const p = TCloud.pane;
-  if (!TCloud.on()) return <div className="pane"><p className="note">Sign in to the firm account to keep the books in FinCom’s cloud.</p></div>;
+  if (!TCloud.on()) return null;
   // read again when opened after a minute, so a link made elsewhere (another computer, the auto-link) shows
   if (!p.err) TCloud.paneTick();
   const cos = Object.values(S.companies || {}).filter((c) => !c.deleted).sort((a, c) => a.name.localeCompare(c.name));
@@ -1236,14 +1236,13 @@ export default function TallyHome({ connectStep = null, sourcesSlot = null }) {
   paneFresh();
   const rows = TCloud.on() ? TCloud.bridgesHeard() : [], latest = m && m.setup ? m.setup.version : "";
   const tab = TALLY_TABS.some(([id]) => id === S.tallyTab) ? S.tallyTab : "computers";
-  if (tab !== "computers") return <>
+  if (tab !== "computers" && TCloud.on()) return <>
     <nav className="sbar" aria-label="Tally">{TALLY_TABS.map(([id, label]) =>
       <button key={id} data-tally-tab={id} aria-selected={tab === id} onClick={() => goTab(id)}>{id === "computers" ? "← Tally" : label}</button>)}</nav>
     {tab === "activity" ? <SyncActivity /> : <PostLog />}</>;
-  // signed out: Connect Tally needs the firm account (the link is kept in FinCom’s cloud); this browser's own bridge
-  // connect is only under Advanced (for support)
-  if (!TCloud.on()) return <><DownloadHead set={setupOf(m)} m={m} /><div className="pane tguide" data-connect-guide="signin"><h3 style={{ margin: "0 0 4px" }}>Connect Tally</h3>
-    <p className="note" style={{ margin: 0 }}>Sign in to the firm account first: Tally is connected through FinCom’s cloud, for every computer.</p></div>
+  // signed out: Connect Tally needs the firm account (the link is kept in FinCom’s cloud), so it is not shown and nothing
+  // asks to sign in (stay signed in, the owner, 13-Nov-2026); this browser's own bridge connect is under Advanced
+  if (!TCloud.on()) return <><DownloadHead set={setupOf(m)} m={m} />
     <ForSupport><InstallAgain m={m} rows={rows} /><PageMore rows={rows} latest={latest} m={m} cards={[]} connectStep={connectStep} /></ForSupport></>;
   // the computers heard in the last 7 days; the older ones are under Advanced (every bridge heard from)
   const cards = cardsOf(rows), week = cards.filter(heardThisWeek), ctl = TCloud.pane.ctl || {};

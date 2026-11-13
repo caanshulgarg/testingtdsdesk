@@ -132,7 +132,7 @@ def signin_page(pg): return pg.locator('[data-act="cloudSignIn"]').count() > 0
 def sign_in(pg, email, keep=None, wait=4500):
     pg.wait_for_selector('[data-act="cloudSignIn"]', timeout=15000)
     pg.fill('[data-cloud="email"]', email); pg.click('[data-act="cloudSignIn"]'); pg.fill('[data-cloud="password"]', "pw12345678")
-    if keep is not None: pg.set_checked('[data-cloud="keep"]', keep)
+    if keep is not None: pg.set_checked('[data-cloud="shared"]', not keep)
     pg.click('[data-act="cloudSignIn"]'); pg.wait_for_timeout(wait)
     pg.wait_for_load_state("load"); pg.wait_for_timeout(800)
 def names(pg):

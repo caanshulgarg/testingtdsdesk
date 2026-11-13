@@ -859,3 +859,61 @@ Deno.test("the statements asked with last year's balance sheet attached to the q
   const fs = ofType(r.events, "fs")[0];
   eq([!!fs, fs?.py?.path, c.calls.length + c.routerCalls.length], [true, path, 0], "the statements card with the attached file as last year's; no model");
 });
+
+// ---- 30 files a message, any type (the owner's request of 13-Nov-2026; rules in server/_shared/attachrules.js)
+const put = async (name: string, bytes: Uint8Array, type: string) => {
+  const path = FIRM + "/" + CLIENT + "/uploads/m30-" + name;
+  await (await fetch(STAND + "/storage/v1/object/assistant-files/" + path, { method: "POST", headers: { Authorization: "Bearer tok-" + ME, "Content-Type": type }, body: bytes as unknown as BodyInit })).text();
+  return path;
+};
+const PNG = Uint8Array.from(atob("iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAEUlEQVR4nGO4Wc72H4QZYAwAVAQJVQuSXX0AAAAASUVORK5CYII="), (c) => c.charCodeAt(0));
+Deno.test("30 files a message, any type: PDFs and pictures as they are, the rest as text within the budget, the unreadable by name; 31 refused; over 20 MB said", async () => {
+  const pdf = await Deno.readFile(new URL("../../tests/fixtures/assistant/asmt10-notice.pdf", import.meta.url));
+  const enc2 = new TextEncoder();
+  const att: Record<string, unknown>[] = [];
+  att.push({ path: await put("notice.pdf", pdf, "application/pdf"), name: "made-up notice.pdf", type: "application/pdf", kind: "other", text: "A made-up notice", size: pdf.length });
+  att.push({ path: await put("receipt.png", PNG, "image/png"), name: "receipt.png", type: "image/png", kind: "other", size: PNG.length });
+  const csv = "Invoice no,Party,Taxable\n" + Array.from({ length: 30 }, (_x, i) => "INV-" + i + ",Made-up Traders " + i + "," + (1000 + i)).join("\n") + "\n";
+  att.push({ path: await put("register.csv", enc2.encode(csv), "text/csv"), name: "register.csv", type: "text/csv", kind: "other", size: csv.length });
+  const big = "Made-up ledger line of the year, nothing real. ".repeat(9000);       // ~423,000 characters: more than a file may keep
+  att.push({ path: await put("big.txt", enc2.encode(big), "text/plain"), name: "big.txt", type: "text/plain", kind: "other", text: big, size: big.length });
+  att.push({ path: await put("data.json", enc2.encode('{"made_up": true}'), "application/json"), name: "data.json", type: "application/json", kind: "other", text: '{"made_up": true}', size: 17 });
+  att.push({ path: await put("tally.xml", enc2.encode("<ROOT><X>made up</X></ROOT>"), "application/octet-stream"), name: "tally.xml", type: "text/xml", kind: "other", text: "<ROOT><X>made up</X></ROOT>", size: 27 });
+  const blob = Uint8Array.from({ length: 4000 }, (_x, i) => (i * 37) % 256);
+  att.push({ path: await put("blob.bin", blob, "application/octet-stream"), name: "blob.bin", type: "", kind: "other", size: blob.length });
+  att.push({ path: await put("bundle.zip", enc2.encode("PK\x05\x06" + "\0".repeat(18)), "application/zip"), name: "bundle.zip", type: "application/zip", kind: "other", text: "[The zip bundle.zip: 1 file]\n--- a.txt ---\nmade-up text inside", size: 22 });
+  const over = new Uint8Array(20 * 1024 * 1024 + 10); over.set(enc2.encode("%PDF-1.4"));
+  att.push({ path: await put("over.pdf", over, "application/pdf"), name: "over.pdf", type: "application/pdf", kind: "other", size: over.length });
+  // one not in the folder (the review: one unreadable file does not fail the whole question)
+  att.push({ path: FIRM + "/" + CLIENT + "/uploads/m30-gone.pdf", name: "gone.pdf", type: "application/pdf", kind: "other", size: 5000 });
+  while (att.length < 30) { const n = att.length; att.push({ path: await put("n" + n + ".txt", enc2.encode("Made-up note " + n), "text/plain"), name: "note-" + n + ".txt", type: "text/plain", kind: "other", text: "Made-up note " + n, size: 15 }); }
+  eq(att.length, 30, "30 files");
+  // 31: refused before anything is read or a model is asked
+  const c31 = new MockClaude([]);
+  const r31 = await ask(c31, { question: "What do these files say?", client_id: CLIENT, attachments: [...att, att[29]] });
+  eq([r31.status, c31.calls.length], [413, 0], "31 files are refused, no model asked");
+  assert(/30 files/.test(JSON.parse(r31.raw).error), "said plainly: " + r31.raw);
+  // 30: read
+  const c = new MockClaude([[text("The made-up files are read.")]]);
+  const r = await ask(c, { question: "What do these files say?", client_id: CLIENT, attachments: att });
+  eq(r.status, 200, "30 files are read: " + r.raw.slice(0, 300));
+  const content = ((c.calls[0]?.messages as any[]) || [])[0]?.content as any[] || [];
+  const docs = content.filter((b) => b.type === "document"), imgs = content.filter((b) => b.type === "image"), texts = content.filter((b) => b.type === "text").map((b) => String(b.text));
+  eq([docs.length, imgs.length], [1, 1], "the PDF and the picture go as they are (the PDF over 20 MB does not)");
+  assert(texts.some((t) => /register\.csv/.test(t) && /INV-29/.test(t) && /\t/.test(t)), "the CSV as a table with its rows");
+  const bt = texts.find((t) => t.includes("big.txt")) || "";
+  assert(/shortened/i.test(bt) && bt.length < big.length, "the long text shortened, and the AI told so (" + bt.length + " chars)");
+  assert(texts.some((t) => t.includes("data.json") && t.includes('"made_up"')) && texts.some((t) => t.includes("tally.xml") && t.includes("<X>made up</X>")), "JSON and XML as text");
+  assert(texts.some((t) => t.includes("bundle.zip") && t.includes("made-up text inside")), "the zip as the list and the files FinCom read in it");
+  assert(texts.some((t) => t.includes("blob.bin") && /could not read/i.test(t) && /4[,.]?0|KB|bytes/.test(t)), "an unknown binary: its name, type and size only, and the AI told it could not be read");
+  assert(texts.some((t) => t.includes("over.pdf") && /20 MB/.test(t)), "over 20 MB: the AI told it was not read");
+  assert(texts.filter((t) => /^\[The file \d+: note-\d+\.txt/.test(t)).length === 20, "the 20 notes, each its own text");
+  assert(texts.some((t) => t.includes("gone.pdf") && /could not be fetched/.test(t)), "a file not in the folder: said, the others still read");
+  const chars = texts.reduce((a, t) => a + t.length, 0);
+  assert(chars / 3.5 + 2 * 2000 <= 100_000 + 30 * 200, "within the context budget (" + chars + " characters of text)");
+  const notes = (ofType(r.events, "attach")[0]?.notes || []) as { name: string, why: string }[];
+  const why = (n: string) => (notes.find((x) => x.name === n) || { why: "" }).why;
+  assert(/20 MB/.test(why("over.pdf")) && /could not read/i.test(why("blob.bin")) && /Shortened/.test(why("big.txt")), "the user is told which files were not read or were shortened: " + JSON.stringify(notes));
+  assert(!notes.some((x) => /note-|receipt|register/.test(x.name)), "files read whole are not listed");
+  assert(/could not be fetched/.test(why("gone.pdf")), "the user is told which file could not be fetched");
+});

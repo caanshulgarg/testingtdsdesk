@@ -80,8 +80,8 @@ with sync_playwright() as p:
     ok("Connecting Tally" in pg.inner_text(".sp-gright") and "9000" in pg.inner_text(".sp-gright"), "search finds the article and shows it: " + pg.inner_text(".sp-gright")[:40])
     pg.fill('input[aria-label="Search the guide"]', "rule 37"); pg.wait_for_timeout(500)
     ok("GSTR-3B" in pg.inner_text(".sp-gleft"), "a tab guide is found by its content (rule 37 → GSTR-3B)")
-    pg.click('nav[aria-label="Help"] button:has-text("My tickets")'); pg.wait_for_timeout(500)
-    ok("Sign in to the firm account" in pg.inner_text("#app"), "without the firm account: tickets need signing in; the guide works")
+    # stay signed in (the owner, 13-Nov-2026): without the firm account the guide alone, no tickets tab, nothing asks to sign in
+    ok(pg.locator('nav[aria-label="Help"]').count() == 0 and "Sign in to the firm account" not in pg.inner_text("#app"), "without the firm account: the guide only, no tickets tab, no sign-in message")
     # firm A, from a GST screen of a client
     pg.evaluate(SIGN, "tok-a"); pg.wait_for_timeout(500)
     pg.evaluate("""() => { const c = newCompany({name: "ZZ Client", gstin: "09AANFG3202D1ZR"}); S.companies[c.id] = c; S.coId = c.id; S.view = "company"; S.tab = "books"; S.booksTab = "gst"; S.gstPart = "r2b"; S.loadingCo = false;

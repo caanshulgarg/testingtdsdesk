@@ -202,10 +202,18 @@ async function openBooksNow(cid){
     if (late && held && Live.sv.state !== "offline") first.then(() => { if (S.books && S.books.cid === cid && !(typeof BookItems === "object" && BookItems.on())) render(); });
     else if (late || Live.sv.state === "offline"){ S.books.offline = true; toast("The server could not be reached: this is this computer’s copy of the books, as last saved here. It is brought up to date as soon as the server answers.", {background: true}); pull.then(() => { if (S.books && S.books.cid === cid){ S.books.offline = false; render(); } }); }
   }
-  S.books.loading = false; delete S.books.cached; S.books.openMs = Date.now() - t0; S.books.openAt = t0;
   // names kept with line breaks or entities (a copy from before they were cleaned) cleaned once (TallyRead.cleanNames)
-  try { if (TallyRead.cleanNames(S.books)) saveBooks(); } catch (e){}
-  if (S.books.vouchers && S.books.vouchers.length) try { LedMaster.refresh(S.books); } catch (e){}
+  const b = S.books;
+  try { if (TallyRead.cleanNames(b)) saveBooks(); } catch (e){}
+  // next-fix-client-open-freeze (FINCOM-APP-STAGING-V, staging 13-Nov-2026: 2,022 ms in IDBRequest.onsuccess on opening
+  // a client): the opening worked out how each ledger is used (LedMaster.usage, every entry: 100-150 ms at full speed on
+  // 51,758 made-up entries) with the drawing (the Overview's TDS figure, now parts/DashTds.jsx) in the task that read the
+  // books or, books kept in memory (Books.mem), the client's bills. Now worked out a part a task while the books are still
+  // opening (usageSoon, app/src/main.jsx): the same figures, or 0 if the books changed meanwhile (worked out at once)
+  const u = typeof usageSoon === "function" ? await usageSoon(b) : 0;
+  if (S.books !== b) return;
+  S.books.loading = false; delete S.books.cached; S.books.openMs = Date.now() - t0; S.books.openAt = t0;
+  if (S.books.vouchers && S.books.vouchers.length) try { LedMaster.refresh(S.books, u); } catch (e){}
   // server-books: the cloud copy is where the books are; this browser's copy is only a cache of it
   if (typeof TCloud === "object" && TCloud.on()) drawn.then(() => { TCloud.openLoad(cid).catch(() => {}); });
   setTimeout(() => { try { if (typeof CloudDocs === "object" && CloudDocs.on() && S.coId === cid) CloudDocs.sendPending(cid, true); } catch (e){} }, 3000);

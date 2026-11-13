@@ -4,7 +4,7 @@
 //   1. two-step sign-in is checked exactly as the gateway does (rpc mfa_ok must be true): refused when it is not
 //   2. a look-only member may read (status, returns, return, einv-status, einvoices, filing) and nothing else
 //   3. the owner and staff may do the rest
-//   4. the self-test needs a signed-in member
+//   4. the self-test needs a signed-in owner, at most 5 times an hour per firm (security review L7)
 //   5. error replies are plain; the raw detail goes to the log only
 type Row = Record<string, any>;
 function assert(c: unknown, w: string): asserts c { if (!c) throw new Error(w); }
@@ -19,6 +19,7 @@ const S = {
   members: [{ user_id: "u-owner", firm_id: FIRM, role: "owner", active: true }, { user_id: "u-staff", firm_id: FIRM, role: "staff", active: true },
     { user_id: "u-look", firm_id: FIRM, role: "readonly", active: true }] as Row[],
   tpCalls: [] as string[], writes: [] as string[], failTable: "" as string,
+  rate: {} as Record<string, number>,   // auth_rate_hit (migration-112): tries counted per bucket and key
 };
 const out = (code: number, j: unknown) => new Response(JSON.stringify(j), { status: code, headers: { "Content-Type": "application/json" } });
 globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
@@ -38,6 +39,7 @@ globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) =>
     if (fn === "gsp_secret_get") return out(200, body.p_name.startsWith("gsp:taxpro:") ? "asp-secret" : "");
     if (fn === "gsp_secret_put") { S.writes.push("vault " + body.p_name); return out(200, "sid-1"); }
     if (fn === "gst_cron_ok") return out(200, false);
+    if (fn === "auth_rate_hit") { const k = body.p_bucket + ":" + body.p_key, n = S.rate[k] || 0; if (n >= body.p_max) return out(200, false); S.rate[k] = n + 1; return out(200, true); }
     return out(404, { message: "no function " + fn });
   }
   const table = u.pathname.replace("/rest/v1/", "");
@@ -50,6 +52,8 @@ globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) =>
     const id = (u.searchParams.get("user_id") || "").replace(/^eq\./, "");
     return out(200, S.members.filter((m) => m.user_id === id));
   }
+  // the firm's one client, known by its GSTIN G (PAN AAACT1234A): asked for by the PAN (pan=ilike.PAN or gstin=ilike.__PAN%)
+  if (table === "clients") return out(200, u.searchParams.get("firm_id") === "eq." + FIRM && /AAACT1234A/i.test((u.searchParams.get("gstin") || "") + (u.searchParams.get("pan") || "")) ? [{ id: "c-1", deleted: false, status: "active" }] : []);
   if (table === "gst_einv_accounts") return out(200, [{ firm_id: FIRM, gstin: G, username: "irp", token_until: null }]);
   if (table === "gst_einvoices") return out(200, [{ firm_id: FIRM, gstin: G, doc_key: "d1", irn: "IRN1", irn_status: "active", ack_dt: new Date().toISOString() }]);
   return out(200, []);
@@ -139,7 +143,7 @@ Deno.test("F3: the owner and staff may write where a look-only member may not", 
   }
 });
 
-Deno.test("F11: the self-test needs a signed-in member with the two-step sign-in", T, async () => {
+Deno.test("F11, L7: the self-test needs a signed-in owner with the two-step sign-in, at most 5 times an hour", T, async () => {
   reset();
   let r = await call(null, null, "?selftest=1");
   assert(r.status === 401 && !S.tpCalls.length, "no token: " + JSON.stringify(r));
@@ -147,9 +151,26 @@ Deno.test("F11: the self-test needs a signed-in member with the two-step sign-in
   assert(r.status === 401 && !S.tpCalls.length, "unknown token: " + JSON.stringify(r));
   r = await call("jwt-owner-aal1", null, "?selftest=1");
   assert(r.status === 403 && !S.tpCalls.length, "no two-step: " + JSON.stringify(r));
-  r = await call("jwt-staff", null, "?selftest=1");
-  assert(r.status === 200 && S.tpCalls.length > 0, "a member: it runs: " + JSON.stringify(r));
+  for (const jwt of ["jwt-staff", "jwt-look"]) {
+    r = await call(jwt, null, "?selftest=1");
+    assert(r.status === 403 && /owner/.test(r.j.error) && !S.tpCalls.length, jwt + ": not an owner, refused: " + JSON.stringify(r));
+  }
+  S.rate = {};
+  r = await call("jwt-owner", null, "?selftest=1");
+  assert(r.status === 200 && S.tpCalls.length > 0, "the owner: it runs: " + JSON.stringify(r));
   assert(!JSON.stringify(r.j).includes(TP), "the hosts in use are not given out: " + JSON.stringify(r.j));
+  for (let i = 0; i < 4; i++) assert((await call("jwt-owner", null, "?selftest=1")).status === 200, "run " + (i + 2) + " of 5");
+  reset();
+  r = await call("jwt-owner", null, "?selftest=1");
+  assert(r.status === 429 && /Try again in an hour/.test(r.j.error) && !S.tpCalls.length, "the 6th in an hour: refused, nothing sent: " + JSON.stringify(r));
+});
+
+Deno.test("H1: an OTP or a sign-in only for a GSTIN of the firm's clients", T, async () => {
+  for (const b of [{ action: "otp", gstin: "27AAACX9999X1Z5", username: "user1" }, { action: "auth", gstin: "27AAACX9999X1Z5", username: "user1", otp: "575757" }]) {
+    reset(); S.rate = {};
+    const r = await call("jwt-owner", b);
+    assert(r.status === 403 && /not one of your firm's clients/.test(r.j.error) && !S.tpCalls.length && !S.writes.length, b.action + ": " + JSON.stringify(r));
+  }
 });
 
 Deno.test("F11: error replies are plain; the database's own words go to the log only", T, async () => {

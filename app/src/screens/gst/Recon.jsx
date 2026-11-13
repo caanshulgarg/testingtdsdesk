@@ -4,6 +4,10 @@
 // Tally when the filed returns are final. The working is GSTX (src/js/56-gst-recon.js).
 //
 // State: S.reconTab (which list), S.reconSt (the sales filter), S.gstvFy (the year, shared with Returns filed).
+// next-room-2: GSTX's working for the GST screens (not in the program every page loads)
+// next-room-2: taking in, filing and zipping the returns' PDFs (not in the program every page loads)
+import "../../../../src/js/38-gst-returns-filed-page.js";
+import "../../../../src/js/56-gst-recon-filed.js";
 import ExcelTools from "../../parts/ExcelTools.jsx";
 import { useEffect } from "react";
 import { ListRows } from "../../parts/ListTable.jsx";

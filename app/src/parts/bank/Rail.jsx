@@ -52,7 +52,7 @@ export function railItems() {
     { k: "reports", label: "Reports", Icon: ChartColumn, subs: [["Financial statements", () => { S.fsTab = ""; goClient("books:fs"); }], ["MIS", client("books:mis")], ["My MIS", client("books:mymis")],
       ["Audit", client("books:audit")], ["Look up", client("books:lookup")], ["Reports", client("books:reports")], ["From Tally", client("books:import")], ["Letters", client("books:letters")]] },
     { k: "settings", label: "Settings", Icon: Settings, subs: [["Firm settings", () => goSettings(null)], ["People", () => goSettings("account")], ["Plan and credit", () => goSettings("plan")],
-      ["Tally", () => { S.tallyFocus = ""; navHome("tally"); }], ["Integrations", () => goIntegrations("")]] },
+      ["Tally", () => { S.tallyFocus = ""; navHome("tally"); }], ...(Cloud.on() ? [["Integrations", () => goIntegrations("")]] : [])] },
     { k: "help", label: "Help", Icon: CircleHelp, subs: [["Help", () => navHome("help")]] },
   ];
 }

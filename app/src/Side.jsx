@@ -68,7 +68,7 @@ function tree() {
       ...(meetOn() ? [{ icon: "meetings", label: "Meetings", on: t === "meetings", go: () => navHome("meetings"), title: "Video calls: start one, share a link or a code, join with a code" }] : []),
       { icon: "books", label: "Tally", on: t === "tally", go: () => { S.tallyFocus = ""; navHome("tally"); }, bar: true },
       // zoho-books (13-Oct-2026): Tally, Zoho Books and what comes next, one page (src/js/74, screens/Integrations.jsx)
-      { icon: "integrations", label: "Integrations", on: t === "integrations", go: () => goIntegrations(""), title: "Tally, Zoho Books and other books" },
+      ...(Cloud.on() ? [{ icon: "integrations", label: "Integrations", on: t === "integrations", go: () => goIntegrations(""), title: "Tally, Zoho Books and other books" }] : []),
       // People and Plan and credit are sections of Settings (and the firm menu's own items)
       { icon: "settings", label: "Settings", on: t === "rules", go: () => goSettings(null), title: "The firm's settings, people, plan and credit" },
     ]], ["sep", [help]]];

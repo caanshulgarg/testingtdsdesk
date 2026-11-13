@@ -1,6 +1,6 @@
 // node tests/run_cloud_wait_unit.mjs - the reliability round of 11-Nov-2026, the two small pieces by themselves (the code
 // is read out of src/js, as the page runs it):
-// 1. Cloud.timed / Cloud.waitFor (src/js/27): a request with no answer is given up after its wait with e.timedOut and
+// 1. Cloud.timed / Cloud.waitFor (src/js/27), and the token's refresh (src/js/43): a request with no answer is given up after its wait with e.timedOut and
 //    words a person can read, and is itself stopped; an answer or a failure in time passes through as it is and stops
 //    nothing; the wait: 20 s, a second more for each 8 KB sent, two minutes at most, or the caller's own.
 // 2. TStale / tallyMark (src/js/49): a read that failed is "Could not check just now, trying again" as of the last good
@@ -57,36 +57,48 @@ console.log("== 1b. the review of 07041bcdd: a slow answer that keeps coming is 
   ok(await Cloud.readText({ text: async () => "plain" }, () => {}) === "plain", "an answer without a stream: its text");
 }
 
-console.log("== 1c. the token's refresh: never cut short, never sent twice with the same refresh token");
+console.log("== 1c. the token's refresh (src/js/43, the only one): one at a time; a network or server error never ends the sign-in");
 {
-  const LS = {}, now0 = Date.now();
+  // stay signed in (the owner, 13-Nov-2026): a refresh whose answer never came is tried again later with the same refresh
+  // token (Supabase Auth gives back the session it made for it); only the firm account's own refusal ends the sign-in
+  const LS = {}, now0 = Date.now(), s43 = src("43-two-step.js");
   const R = new Function("num", "lsGet", "lsSet", "lsDel", "switchedOff", "fetch",
-    "return ({" + cut(src("27-firm-account.js"), "  WAIT: 20000,", "  // through the sign-in function") + cut(src("27-firm-account.js"), "  refreshToken(used){", "  // before a request:") + "});");
-  let answer = null, sent = [];
+    "return ({" + cut(src("27-firm-account.js"), "  WAIT: 20000,", "  // through the sign-in function") + "});");
+  let answer = null, sent = [], ended = [];
   const fetchS = (url, o) => { sent.push(JSON.parse(o.body).refresh_token); return answer(); };
   const C = R((x) => Number(x) || 0, (k) => LS[k] || null, (k, v) => { LS[k] = v; }, (k) => { delete LS[k]; }, () => "", fetchS);
+  new Function("Cloud", "lsGet", "lsSet", "lsDel", "num", "sessionEnded", "window", "const SESS_KEY = \"tdsdesk:cloudsess\";\n" + cut(s43, "const sessLock = {", "// a session that cannot continue"))(
+    C, (k) => LS[k] || null, (k, v) => { LS[k] = v; }, (k) => { delete LS[k]; }, (x) => Number(x) || 0, (why, code) => { ended.push(why + "|" + code); sess = null; }, { addEventListener() {}, removeEventListener() {} });
   let sess = { access_token: "a1", refresh_token: "r1-aaaaaaaaaaaaaaaaaaaa", at: now0 };
   C.cfg = () => ({ url: "https://cloud.test", key: "k" }); C.sess = () => sess; C.setSess = (s) => { sess = s; };
-  ok(C.refreshWait >= 60000, "the refresh waits a minute at least (" + C.refreshWait + ")");
-  // the server answers once two requests asked together: one is sent
+  ok(/grant_type=refresh_token", \{refresh_token: s\.refresh_token\}, 6e4\)/.test(s43), "the refresh waits a minute (not the 20 s of a read)");
   answer = async () => { await sleep(30); return new Response(JSON.stringify({ access_token: "a2", refresh_token: "r2-bbbbbbbbbbbbbbbbbbbbbb", expires_in: 3600 }), { status: 200 }); };
   await Promise.all([C.refreshToken(), C.refreshToken(), C.refreshToken("a1")]);
   ok(sent.length === 1 && sess.refresh_token.startsWith("r2"), "three asking together: one refresh sent, the new session kept (" + sent.length + ")");
-  // no answer at all (the line dropped after sending): the token is not sent again
   sent = []; answer = async () => { throw new TypeError("Failed to fetch"); };
-  let e1 = null; await C.refreshToken().catch((e) => { e1 = e; });
-  let e2 = null; await C.refreshToken().catch((e) => { e2 = e; });
-  ok(sent.length === 1 && e1 && e2, "a refresh with no answer: the same refresh token is never sent a second time (" + sent.length + " sent)");
-  ok(e2 && e2.signIn === true && /sign in again/i.test(e2.message), "the next asks: sign in again, in words (" + (e2 && e2.message) + ")");
-  // another tab got the new session meanwhile: used as it is, nothing sent
-  sess = Object.assign({}, sess, { access_token: "a3", refresh_token: "r3-cccccccccccccccccccc" });
-  answer = async () => new Response(JSON.stringify({ access_token: "a4", refresh_token: "r4-dddddddddddddddddddd" }), { status: 200 });
-  sent = []; await C.refreshToken();
-  ok(sent.length === 1 && sess.refresh_token.startsWith("r4"), "a new refresh token: refreshed as before (" + sent.length + ")");
-  // an answer that says no (the server answered): the outcome is known, a later try may send it again
-  answer = async () => new Response(JSON.stringify({ msg: "busy" }), { status: 500 }); sent = [];
-  await C.refreshToken().catch(() => {}); await C.refreshToken().catch(() => {});
-  ok(sent.length === 2, "an answer that refused it: tried again later (" + sent.length + ")");
+  let e1 = null; await C.refreshToken().catch((e) => { e1 = e; }); await C.refreshToken().catch(() => {});
+  ok(e1 && sent.length === 2 && sess && sess.refresh_token.startsWith("r2") && !ended.length, "no answer (no internet): the session stays and is tried again (" + sent.length + " sent, ended " + ended.length + ")");
+  sent = []; answer = async () => new Response(JSON.stringify({ message: "upstream unavailable" }), { status: 503 });
+  await C.refreshToken().catch(() => {});
+  ok(sent.length === 1 && sess && !ended.length, "a server error (503): the session stays");
+  answer = async () => new Response(JSON.stringify({ code: 500, error_code: "unexpected_failure", msg: "Database error finding session" }), { status: 500 });
+  await C.refreshToken().catch(() => {});
+  ok(sess && !ended.length, "a 500 whose words name the session: the session stays (decided by the status and code, not the words)");
+  answer = async () => new Response(JSON.stringify({ access_token: "" }), { status: 200 });
+  await C.refreshToken().catch(() => {});
+  ok(sess && sess.refresh_token.startsWith("r2") && !ended.length, "a 200 without an access token: the session stays as it was");
+  answer = async () => new Response(JSON.stringify({ code: 429, error_code: "over_request_rate_limit", msg: "Request rate limit reached" }), { status: 429 });
+  await C.refreshToken().catch(() => {});
+  ok(sess && !ended.length, "too many requests (429): the session stays");
+  answer = async () => new Response(JSON.stringify({ error: "invalid_grant", error_description: "Invalid Refresh Token: Refresh Token Not Found" }), { status: 400 });
+  let e3 = null; await C.refreshToken().catch((e) => { e3 = e; });
+  ok(e3 && ended.length === 1 && /Refresh Token Not Found/.test(ended[0]), "the firm account refused the refresh token: the sign-in ends, once (" + ended.length + ")");
+  sess = { access_token: "a9", refresh_token: "r9-eeeeeeeeeeeeeeeeeeee", at: now0 }; ended = [];
+  answer = async () => new Response(JSON.stringify({ code: 400, error_code: "user_banned", msg: "User is banned" }), { status: 400 });
+  await C.refreshToken().catch(() => {});
+  ok(ended.length === 1 && /\|user_banned$/.test(ended[0]), "a banned login: ended with its code, so it is told it is switched off (" + ended[0] + ")");
+  // the lock outlasts a refresh of a minute: renewed every 5 s while held
+  ok(/own\(\)\{ clearInterval\(this\.b\); this\.b = setInterval\(\(\) => this\.mark\(\), 5e3\)/.test(s43) && /Date\.now\(\) - t0 < 7e4/.test(s43), "the refresh lock is renewed every 5 s while held, and waited for up to 70 s");
 }
 
 console.log("== 2. TStale, tallyMark");

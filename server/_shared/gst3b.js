@@ -2681,10 +2681,11 @@ const LedMaster = {
     if (info && /^(GST|TDS|TCS)$/i.test(info.taxType || "")) return true;
     return /\b(C|S|I|UT)\s*\.?\s*GST\b|\bGST\b|\bCESS\b|\bTDS\b|\bTCS\b|\b19[2-9][A-Z]{0,2}\b|\b206C/i.test(name) && !/\bSALARY\s+PAYABLE\b/i.test(name);
   },
-  // how each ledger is used in the day book: which side, which registration, which rate
-  usage(b){
-    const u = {};
-    (b.vouchers || []).forEach(v => {
+  // how each ledger is used in the day book: which side, which registration, which rate. With u, i and j: the entries
+  // i to j added to u (the client's opening works the books out a part a task, openBooksNow: the same u at the end)
+  usage(b, u, i, j){
+    u = u || {};
+    (b.vouchers || []).slice(i, j).forEach(v => {
       const sale = Books.isSale(v), purch = Books.isPurchase(v), reg = (sale || purch) ? String(v.cmp || "").slice(0, 2) : "";
       let value = 0;
       v.ent.forEach(e => { const k = (b.map[e.l] || {}).kind; if (!k && e.l !== v.party) value += Math.abs(e.a); });
@@ -2801,10 +2802,12 @@ const LedMaster = {
     if (!this.isGst(w)){ delete m.tax; delete m.side; delete m.gstRate; }
     return m;
   },
-  // fill every ledger not yet confirmed with the best guess; what the user set by hand is kept
-  refresh(b){
+  // fill every ledger not yet confirmed with the best guess; what the user set by hand is kept (u: usage(b), worked out
+  // already for these books as they are)
+  refresh(b, u){
     b.map = b.map || {};
-    const regs = ((b.meta || {}).gstins || []).map(g => g.slice(0, 2)), info = b.ledInfo || {}, u = this.usage(b);
+    const regs = ((b.meta || {}).gstins || []).map(g => g.slice(0, 2)), info = b.ledInfo || {};
+    u = u || this.usage(b);
     const names = new Set(Object.keys(b.map).concat(Object.keys(info).filter(n => this.taxLike(n, null, info[n]))));
     names.forEach(n => {
       const m = b.map[n] = b.map[n] || {n: 0};

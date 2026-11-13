@@ -18,6 +18,7 @@ WORK_KEY = "work-key-" + "c" * 32
 CALLS = []
 BCAST = []            # the Realtime broadcasts sent (POST /realtime/v1/api/broadcast), as JSON
 ARGS = {}             # function -> the arguments of each call (the names sent to the ingest functions, migration-23)
+RATE = []             # (bucket, key, when) of each try auth_rate_hit counted (migration-112)
 SECRETS = {}          # Vault: name -> value (gsp_secret_put / gsp_secret_get, migration-16)
 CRON_KEY = "cron-key-" + "d" * 32
 # round 21 (docs/reviews/migration-47-48-review.md): hooks for the upload worker's failure cases
@@ -66,6 +67,11 @@ def match(row, q):
 def rpc(fn, a):
     ARGS.setdefault(fn, []).append(a)
     if fn == "mfa_ok": return True
+    if fn == "auth_rate_hit":   # migration-112: allowed (and counted) while the key has under max tries in the window
+        t, w = now(), a["p_window_s"]
+        seen = [x for x in RATE if x[0] == a["p_bucket"] and x[1] == a["p_key"] and t - x[2] < w]
+        if len(seen) >= a["p_max"]: return False
+        RATE.append((a["p_bucket"], a["p_key"], t)); return True
     if fn == "gst_calc_want_book":    # migration 153: the book's client queued for its 3B in the cloud (gst-run)
         if GST_WANT_FAIL[0]: raise RuntimeError("the queue is busy (test)")
         return True

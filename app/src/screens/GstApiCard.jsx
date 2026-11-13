@@ -47,7 +47,7 @@ export default function GstApiCard() {
 
   const msg = S.gstApiMsg ? <p className="note">{S.gstApiMsg}</p> : null, busy = !!S.gstApiBusy;
   const card = (body) => <section className="dash-card" style={{ marginBottom: 12 }}><h3>Fetch 2B from the portal</h3>{body}</section>;
-  if (!signedIn) return card(<p className="note">Sign in to the firm account (top right) to fetch 2B straight from the GST portal through the firm’s GST API connection. Until then, bring in the JSON files downloaded from the portal.</p>);
+  if (!signedIn) return null;
 
   const user = GSTAPI.user(r), live = GSTAPI.live(gstin), cur = GSTAPI.sess[gstin], pend = !!(cur && cur.sentAt && !live);
   if (!user) return card(<p className="note">Type {gstin}’s GST portal username in <button className="linkbtn" onClick={() => goGstSettings()}>GST settings</button> to connect. The taxpayer must also allow API access on the portal (My Profile → Manage API Access).</p>);

@@ -9,10 +9,14 @@
 /* asked only when they cannot tell. Then the next steps as buttons:  */
 /* nothing is posted, filed or added by itself.                       */
 /* ================================================================== */
+// 30 files a message, any type (the owner, 13-Nov-2026): the limits, the stored type, what the AI is given of each file
+// and what it costs are server/_shared/attachrules.js, the same file fincom-assistant runs
+import { ATTACH, ZIP, attachInr, fitAttachments, sniff, storeType, textTokens } from "../../../server/_shared/attachrules.js";
 const AUpload = window.AUpload = {
   KIND: {notice: "Notice", bill: "Bill or invoice", register: "Register", bank: "Bank statement", as26: "26AS / AIS / TRACES", certificate: "Certificate format", other: "Other document"},
-  MAX: 20 * 1024 * 1024,
-  ACCEPT: ".pdf,.png,.jpg,.jpeg,.webp,.xlsx,.xls,.csv,.docx,.txt,.json,.xml,application/pdf,image/png,image/jpeg,image/webp",
+  MAX: ATTACH.fileBytes,
+  ACCEPT: "",                         // any type
+
   // a tax department's notice, intimation, show cause or order (the words such a notice carries; a bill does not)
   NOTICE: /\b(ASMT-?1[01]|DRC-?0[1-7]A?|REG-?(0?3|17|31)|ADT-?0[12]|show\s*cause\s*notice|notice\s+(u\/s|under\s+section)|intimation\s+u\/s|under\s+section\s+(143|148A?|142|133\(6\)|73|74|61|65)\b[^\n]{0,80}\bnotice|document\s+identification\s+number|\bDIN\s*[:\-]?\s*(ITBA|CBIC|ZD)|demand\s+order|scrutiny\s+notice|reply\s+(by|within)[^\n]{0,40}(days|\d{2}[-\/.]\d{2}))/i,
   AS26: /Annual\s+Tax\s+Statement|Form\s*(No\.?\s*)?26AS|Annual\s+Information\s+Statement|Taxpayer\s+Information\s+Summary|\bTRACES\b/i,
@@ -21,8 +25,8 @@ const AUpload = window.AUpload = {
   CERT: /\bthis\s+is\s+to\s+certify\b|\bwe\s+(hereby\s+)?certify\b|\bcertificate\b[^\n]{0,60}\b(format|template)\b|\bUDIN\b/i,
   BLANK: /_{4,}|\.{6,}|\[[A-Za-z][A-Za-z .\/]{1,30}\]|\{\{[^}]{1,40}\}\}|<<[^>]{1,40}>>|\bXX+\b/g,
 
-  // files per message: the server reads the first 3 attached to a question into the AI (server/assistant/index.ts)
-  LIMIT: 3,
+  // files a message (fincom-assistant refuses more: server/assistant/index.ts)
+  LIMIT: ATTACH.files,
   st(){ const a = ASST.st(); a.uploads = a.uploads || []; return a; },
   // the files of the earlier Upload, shown as their own items in the thread (sessions before 02-Nov-2026): none are added now
   list(){ const k = ASST.key(), a = this.st(); return a.uploads.filter(u => u.key === k && !u.chip); },
@@ -33,37 +37,118 @@ const AUpload = window.AUpload = {
   isWord(f){ return this.ext(f) === "docx" || /wordprocessingml/.test(f.type || ""); },
 
   // ---------------- what FinCom can read of the file, on this computer ----------------
-  async docxText(file){
-    // a .docx is a zip; word/document.xml holds the text (paragraphs, table cells)
-    const buf = new Uint8Array(await file.arrayBuffer()), dv = new DataView(buf.buffer);
+  // a zip's files, from its central directory: {name, method, csize, usize, flags, at (the local header)}
+  zipList(buf){
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
     let eocd = -1;
     for (let i = buf.length - 22; i >= Math.max(0, buf.length - 66000); i--) if (dv.getUint32(i, true) === 0x06054b50){ eocd = i; break; }
-    if (eocd < 0) throw new Error("not a Word file");
+    if (eocd < 0) throw new Error("not a zip file");
+    const n = dv.getUint16(eocd + 10, true), out = [];
     let p = dv.getUint32(eocd + 16, true);
-    const n = dv.getUint16(eocd + 10, true);
-    for (let k = 0; k < n; k++){
-      const method = dv.getUint16(p + 10, true), csize = dv.getUint32(p + 20, true), nl = dv.getUint16(p + 28, true), xl = dv.getUint16(p + 30, true), cl = dv.getUint16(p + 32, true), off = dv.getUint32(p + 42, true);
-      const name = new TextDecoder().decode(buf.subarray(p + 46, p + 46 + nl));
+    for (let k = 0; k < n && p + 46 <= buf.length && dv.getUint32(p, true) === 0x02014b50; k++){
+      const nl = dv.getUint16(p + 28, true), xl = dv.getUint16(p + 30, true), cl = dv.getUint16(p + 32, true);
+      out.push({name: new TextDecoder().decode(buf.subarray(p + 46, p + 46 + nl)), flags: dv.getUint16(p + 8, true), method: dv.getUint16(p + 10, true),
+        csize: dv.getUint32(p + 20, true), usize: dv.getUint32(p + 24, true), at: dv.getUint32(p + 42, true)});
       p += 46 + nl + xl + cl;
-      if (name !== "word/document.xml") continue;
-      const start = off + 30 + dv.getUint16(off + 26, true) + dv.getUint16(off + 28, true), raw = buf.subarray(start, start + csize);
-      let xml;
-      if (method === 0) xml = new TextDecoder().decode(raw);
-      else if (method === 8 && typeof DecompressionStream === "function") xml = await new Response(new Blob([raw]).stream().pipeThrough(new DecompressionStream("deflate-raw"))).text();
-      else throw new Error("this Word file cannot be read here");
-      return xml.replace(/<\/w:p>/g, "\n").replace(/<w:tab\/>|<\/w:tc>/g, "\t").replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, "\"").replace(/&apos;/g, "'");
     }
-    throw new Error("not a Word file");
+    return out;
+  },
+  // one file of a zip, unpacked; never more than max bytes (a size the zip states is not trusted: the unpacking stops)
+  async unzip(buf, e, max){
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength), at = e.at;
+    if (at + 30 > buf.length || dv.getUint32(at, true) !== 0x04034b50) throw new Error("damaged");
+    const start = at + 30 + dv.getUint16(at + 26, true) + dv.getUint16(at + 28, true), raw = buf.subarray(start, start + e.csize);
+    if (e.method === 0){ if (raw.length > max) throw new Error("too large"); return raw.slice(); }
+    if (e.method !== 8 || typeof DecompressionStream !== "function") throw new Error("packed in a way FinCom cannot open here");
+    const rd = new Blob([raw]).stream().pipeThrough(new DecompressionStream("deflate-raw")).getReader(), parts = [];
+    let len = 0;
+    for (;;){
+      const {done, value} = await rd.read();
+      if (done) break;
+      len += value.length;
+      if (len > max){ try { rd.cancel(); } catch (x){} throw new Error("too large"); }
+      parts.push(value);
+    }
+    const out = new Uint8Array(len); let o = 0; for (const x of parts){ out.set(x, o); o += x.length; }
+    return out;
+  },
+  async docxText(file){
+    // a .docx is a zip; word/document.xml holds the text (paragraphs, table cells)
+    const buf = new Uint8Array(await file.arrayBuffer()), e = this.zipList(buf).find(x => x.name === "word/document.xml");
+    if (!e) throw new Error("not a Word file");
+    const xml = new TextDecoder().decode(await this.unzip(buf, e, ZIP.entryBytes));
+    return xml.replace(/<\/w:p>/g, "\n").replace(/<w:tab\/>|<\/w:tc>/g, "\t").replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, "\"").replace(/&apos;/g, "'");
+  },
+  // a file's words when it is text (no NUL in its first 8 KB): {text, full}; "" when it is not
+  async plainText(file){
+    const cap = ATTACH.textChars * 3, buf = new Uint8Array(await file.slice(0, cap).arrayBuffer());
+    if (buf.subarray(0, 8192).includes(0)) return {text: "", full: 0};
+    const text = new TextDecoder().decode(buf);
+    return {text, full: file.size > cap ? Math.round(text.length * file.size / cap) : text.length};
+  },
+  // every sheet's rows (SheetJS, as gridsFromSheet), with its name
+  async sheets(file){
+    await ensureXlsx();
+    if (!window.XLSX) throw {code: "xlsx_missing"};
+    const plain = /\.(csv|txt)$/i.test(file.name) || /text\/(csv|plain)/.test(file.type);
+    const wb = XLSX.read(await file.arrayBuffer(), plain ? {type: "array", raw: true} : {type: "array", cellDates: true, raw: false, dateNF: "dd/mm/yyyy"});
+    return wb.SheetNames.map(n => ({name: n, rows: XLSX.utils.sheet_to_json(wb.Sheets[n], {header: 1, raw: true, defval: "", blankrows: false})}));
+  },
+  // rows on lines, cells by tabs, sheets apart by a blank line (fincom-assistant reads an .xls from it: filetable.ts)
+  gridText(grids){ return grids.map(g => g.slice(0, 20000).map(r => r.map(c => cellText(c)).join("\t")).join("\n")).join("\n\n"); },
+  // a zip: its list of files, then the text of the files FinCom can read in it, within the zip limits (ZIP: how many,
+  // how large unpacked, a zip bomb, how deep)
+  async zipText(buf, name, depth, seen){
+    // seen: what this zip and the zips in it have opened together (the limits hold across the levels, not for each)
+    seen = seen || {opened: 0, total: 0};
+    const ents = this.zipList(buf).filter(e => !e.name.endsWith("/")), out = ["[The zip " + name + ": " + ents.length + " file" + (ents.length === 1 ? "" : "s") + (ents.length > ZIP.entries ? ", the first " + ZIP.entries + " listed" : "") + "]"];
+    ents.slice(0, ZIP.entries).forEach(e => out.push("  " + e.name + " (" + kbOf(e.usize) + ")"));
+    for (const e of ents.slice(0, ZIP.entries)){
+      const ext = (e.name.toLowerCase().match(/\.([a-z0-9]+)$/) || [])[1] || "";
+      const skip = (why) => out.push("--- " + e.name + ": " + why + " ---");
+      if (/^(png|jpe?g|webp|gif|heic|bmp|tiff?)$/.test(ext)){ skip("a picture: not read inside a zip"); continue; }
+      if (/^(exe|dll|so|bin|dmg|iso|msi|apk|jar|class|mp[34]|mov|avi|wav)$/.test(ext)){ skip("not read (not a document)"); continue; }
+      if (seen.opened >= ZIP.open){ skip("not opened: FinCom reads " + ZIP.open + " files of a zip"); continue; }
+      if (e.flags & 1){ skip("locked with a password: not opened"); continue; }
+      if (e.usize > 4096 && e.usize > Math.max(1, e.csize) * ZIP.ratio){ skip("not opened: it unpacks to far more than its size (a zip bomb?)"); continue; }
+      if (e.usize === 0xffffffff || e.usize > ZIP.entryBytes){ skip("too large to open here"); continue; }
+      if (seen.total + e.usize > ZIP.totalBytes){ skip("not opened: the zip's files are too large together"); continue; }
+      if (ext === "zip" && depth >= ZIP.depth){ skip("a zip inside a zip inside a zip: listed only"); continue; }
+      try {
+        const b = await this.unzip(buf, e, Math.min(ZIP.entryBytes, ZIP.totalBytes - seen.total));
+        seen.opened++; seen.total += b.length;
+        const f = new File([b], e.name.split("/").pop(), {type: ""}), k = sniff(b.subarray(0, 16), e.name, "");
+        // a zip by its bytes too (a zip named .dat): opened one level down at most
+        if (k === "application/zip" && ext !== "zip" && depth >= ZIP.depth){ skip("a zip inside a zip inside a zip: listed only"); continue; }
+        let t = "";
+        if (ext === "zip" || k === "application/zip") t = await this.zipText(b, e.name, depth + 1, seen);
+        else if (k === "application/pdf") t = (await AS26.pdfLines(f)).join("\n");
+        else if (k === "xlsx" || /^(xlsx|xlsm|xls|csv)$/.test(ext)) t = this.gridText((await this.sheets(f)).map(x => x.rows));
+        else if (k === "docx") t = await this.docxText(f);
+        else t = (await this.plainText(f)).text;
+        if (t.trim()) out.push("--- " + e.name + " ---", t.slice(0, ATTACH.textChars)); else skip("nothing FinCom can read in it");
+      } catch (x){ skip(/too large/.test(String(x && x.message)) ? "not opened: it unpacks to more than " + kbOf(ZIP.entryBytes) : "could not be read (" + ((x && (x.message || x.code)) || "damaged") + ")"); }
+    }
+    return out.join("\n");
+  },
+  // a PDF's pages (0 when it cannot be opened: locked or damaged)
+  async pdfPages(file){
+    try { return (await window.pdfjsLib.getDocument({data: new Uint8Array(await file.arrayBuffer()), isEvalSupported: false, enableXfa: false}).promise).numPages || 0; } catch (e){ return 0; }
   },
   async read(file){
-    const out = {lines: [], grids: [], text: "", locked: false, pdf: isPdf(file), image: isImage(file)};
+    const head = new Uint8Array(await file.slice(0, 16).arrayBuffer()), k = sniff(head, file.name, file.type);
+    const out = {lines: [], grids: [], text: "", full: 0, pages: 0, locked: false, pdf: k === "application/pdf", image: /^image\//.test(k), sniffed: k};
     try {
-      if (out.pdf) out.lines = await AS26.pdfLines(file);
-      else if (this.isSheet(file)) out.grids = await gridsFromSheet(file);
-      else if (this.isWord(file)) out.lines = (await this.docxText(file)).split("\n");
-      else if (!out.image && file.size < 5 * 1024 * 1024) out.text = await file.text();
+      if (out.pdf){ out.lines = await AS26.pdfLines(file); out.pages = await this.pdfPages(file); }
+      else if (out.image){ /* a picture: the AI sees it as it is */ }
+      else if (k === "xlsx" || (this.isSheet(file) && k !== "docx" && k !== "application/zip")) out.grids = (await this.sheets(file)).map(x => x.rows);
+      else if (k === "docx" || this.isWord(file)) out.lines = (await this.docxText(file)).split("\n");
+      else if (k === "application/zip") out.text = await this.zipText(new Uint8Array(await file.arrayBuffer()), file.name, 1);
+      else if (!isImage(file)) Object.assign(out, await this.plainText(file));
     } catch (e){ if (e && /pdf_(wrong_)?password/.test(e.code || "")) out.locked = true; out.err = (e && (e.code || e.message)) || "unreadable"; }
-    if (!out.text) out.text = out.lines.length ? out.lines.join("\n") : out.grids.map(g => g.slice(0, 200).map(r => r.map(c => cellText(c)).join("\t")).join("\n")).join("\n\n");
+    if (!out.text) out.text = out.lines.length ? out.lines.join("\n") : this.gridText(out.grids);
+    out.full = Math.max(out.full || 0, out.text.length);
+    out.text = out.text.slice(0, ATTACH.textChars);
     return out;
   },
 
@@ -183,6 +268,7 @@ const AUpload = window.AUpload = {
   // ---------------- the question box's files: chips, sent with the question as one message ----------------
   // Chosen, dropped or pasted, each file is a chip in the box (its name, size, the upload's progress, ×): read here, told by
   // FinCom's rules, stored in the firm's private folder; nothing is in the conversation until Send. Up to LIMIT a message.
+  // at most ATTACH.upAtOnce read and upload at the same time; the others wait ("queued")
   add(files){
     const a = this.st(), cid = ASST.cid();
     files = Array.from(files || []).filter(Boolean);
@@ -190,54 +276,97 @@ const AUpload = window.AUpload = {
     if (!Cloud.on()){ toast("Sign in to the firm account to attach files."); return; }
     const room = this.LIMIT - this.pending().length;
     if (room <= 0 || files.length > room) toast("Up to " + this.LIMIT + " files a message: " + (room <= 0 ? "send these first, or take one off." : "the first " + room + " " + (room === 1 ? "is" : "are") + " attached."));
+    let total = this.pending().filter(u => u.state !== "failed").reduce((t, u) => t + (u.size || 0), 0);
     for (const file of files.slice(0, Math.max(0, room))){
       const u = {id: "u" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), key: ASST.key(), cid, chip: true, name: file.name, size: file.size, type: file.type || "", file,
-        state: "uploading", progress: 0, kind: "", by: "", summary: "", acts: [], done: {}, at: new Date().toISOString()};
+        state: "queued", progress: 0, kind: "", by: "", summary: "", acts: [], done: {}, at: new Date().toISOString()};
       try { if (isImage(file) && URL.createObjectURL) u.thumb = URL.createObjectURL(file); } catch (e){}
+      // what can never be sent: said on its chip at once, with no Retry
+      const no = !file.size ? "it is empty, 0 bytes" : file.size > this.MAX ? "larger than " + this.MAX / 1048576 + " MB" : total + file.size > ATTACH.totalBytes ? "the files of this message would be over " + ATTACH.totalBytes / 1048576 + " MB together" : "";
+      // over the message's total: Retry once others are taken off (it is checked again); empty or too large: never
+      if (no) Object.assign(u, {state: "failed", error: no, fatal: !/together/.test(no), overTotal: /together/.test(no)}); else total += file.size;
       a.uploads.push(u);
-      this.run(u);
     }
+    this.pump();
     ASST.draw();
     setTimeout(() => { const el = document.getElementById("asstQ"); if (el && document.activeElement !== el) el.focus({preventScroll: true}); }, 30);
+  },
+  pump(){
+    const a = this.st();
+    let n = a.uploads.filter(u => u.chip && u.state === "uploading" && !u.dropped).length;
+    for (const u of a.uploads) if (n < ATTACH.upAtOnce && u.chip && u.state === "queued" && !u.dropped){ n++; this.run(u); }
   },
   async run(u){
     const co = (u.cid && CO(u.cid)) || {}, file = u.file;
     Object.assign(u, {state: "uploading", progress: 0, error: ""}); ASST.draw();
     try {
-      if (file.size > this.MAX) throw new Error("larger than 20 MB");
-      if (!file.size) throw new Error("the file is empty");
       const r = await this.read(file);
-      u.excerpt = String(r.text || "").slice(0, 20000); u.pdf = r.pdf;
+      u.excerpt = String(r.text || ""); u.full = r.full; u.pdf = r.pdf; u.native = r.pdf ? "pdf" : r.image ? "image" : ""; u.pages = r.pages;
+      u.unread = !r.pdf && !r.image && !u.excerpt.trim(); u.tokens = textTokens(u.excerpt); u.sniffed = r.sniffed;
       const k = this.rules(file, r, co);
       if (k) Object.assign(u, k, {by: "rules"});
-      else if (!r.pdf && !r.image && !String(r.text || "").trim()) Object.assign(u, {kind: "other", by: "rules", summary: "FinCom could not read this file" + (r.err ? " (" + r.err + ")" : "") + "."});
-      u.path = await this.store(file, u.cid, k && k.kind === "notice" ? "notices" : "uploads", p => { u.progress = p; ASST.draw(); });
+      else if (u.unread) Object.assign(u, {kind: "other", by: "rules", summary: "FinCom could not read this file" + (r.err ? " (" + r.err + ")" : "") + "."});
+      u.path = await this.store(file, u.cid, k && k.kind === "notice" ? "notices" : "uploads", p => { u.progress = p; ASST.draw(); }, /^(application\/pdf|image\/)/.test(r.sniffed || "") ? r.sniffed : "");
       if (u.dropped) return;
       u.state = "ready"; u.acts = u.kind ? this.actions(u) : [];
       ASST.draw();
       // what the rules could not tell: the AI's one line, in the background (Send does not wait for it); the buttons under
-      // the answer follow when it comes
-      if (!u.kind){ Object.assign(u, {kind: "other"}, await this.classify(u, r)); u.acts = this.actions(u); }
+      // the answer follow when it comes. Only for a few files at a time (30 would be 30 calls); the others are "other"
+      if (!u.kind){ Object.assign(u, {kind: "other"}, this.pending().length <= 3 ? await this.classify(u, r) : {by: "rules", summary: ""}); u.acts = this.actions(u); }
       this.record(u).catch(() => {});
     } catch (e){ u.state = "failed"; u.error = (e && e.message) || String(e); }
+    finally { this.pump(); }
     ASST.draw();
   },
-  retry(u){ if (u && u.state === "failed") this.run(u); },
-  drop(u){ const a = this.st(); u.dropped = true; a.uploads = a.uploads.filter(x => x !== u); try { if (u.thumb && !u.sent) URL.revokeObjectURL(u.thumb); } catch (e){} ASST.draw(); },
-  // Send: the files in the box go with the question (75-assistant.js ask). null with none, false while one is not ready
+  retry(u){
+    if (!u || u.state !== "failed" || u.fatal) return;
+    if (u.overTotal){
+      const total = this.pending().filter(x => x !== u && x.state !== "failed").reduce((t, x) => t + (x.size || 0), 0);
+      if (total + u.size > ATTACH.totalBytes){ toast("Still over " + ATTACH.totalBytes / 1048576 + " MB together: take another file off first."); return; }
+      u.overTotal = false;
+    }
+    u.state = "queued"; this.pump(); ASST.draw();
+  },
+  drop(u){ const a = this.st(); u.dropped = true; a.uploads = a.uploads.filter(x => x !== u); try { if (u.thumb && !u.sent) URL.revokeObjectURL(u.thumb); } catch (e){} this.pump(); ASST.draw(); },
+  // the box's upload, all files together: {n, done, pct} while any is waiting or uploading, else null
+  progress(){
+    const list = this.pending().filter(u => u.state !== "failed");
+    if (!list.some(u => u.state === "queued" || u.state === "uploading")) return null;
+    const all = list.reduce((t, u) => t + (u.size || 1), 0), got = list.reduce((t, u) => t + (u.size || 1) * (u.state === "ready" ? 1 : u.state === "uploading" ? (u.progress || 0) : 0), 0);
+    return {n: list.length, done: list.filter(u => u.state === "ready").length, up: list.filter(u => u.state === "uploading").length, pct: Math.round(got * 100 / (all || 1))};
+  },
+  // what the AI will be given of the box's files, and about what it costs (attachrules.js: the server does the same):
+  // {notes: {id: line}, tokens, inr}
+  fit(){
+    const list = this.pending().filter(u => u.state === "ready");
+    const f = fitAttachments(list.map(u => ({name: u.name, size: u.size, native: u.native || "", pages: u.pages, chars: (u.excerpt || "").length, tokens: u.tokens, read: !u.unread})));
+    const notes = {};
+    list.forEach((u, i) => {
+      let w = f.plan[i].why;
+      // kept to ATTACH.textChars on this computer already: shortened too
+      if (f.plan[i].mode === "text" && (u.full || 0) > (u.excerpt || "").length){ const pct = Math.max(1, Math.round(f.plan[i].chars * 100 / u.full)); w = (f.plan[i].cut ? w.replace(/\d+% of it/, pct + "% of it") : (w ? w + " " : "") + "Shortened to fit: the AI reads about the first " + pct + "% of it."); }
+      if (w) notes[u.id] = w;
+    });
+    return {notes, tokens: f.tokens, inr: list.length ? attachInr(f.tokens, list.some(u => u.kind === "notice")) : 0};
+  },
+  // Send: the files in the box go with the question (75-assistant.js ask). null with none, false while one is not ready.
+  // A file that could not be uploaded is not sent (it stays in the box, said so); the others go
   prep(q){
-    const a = ASST.st(), list = this.pending();
-    if (!list.length) return null;
+    const a = ASST.st(), all = this.pending();
+    if (!all.length) return null;
     if (a.busy) return false;
-    if (list.some(u => u.state === "uploading")){ toast("Wait for the files to upload, then send."); return false; }
-    if (list.some(u => u.state === "failed")){ toast("A file was not uploaded: Retry it, or take it off with ×."); return false; }
+    if (all.some(u => u.state === "uploading" || u.state === "queued")){ toast("Wait for the files to upload, then send."); return false; }
+    const list = all.filter(u => u.state === "ready"), bad = all.filter(u => u.state === "failed");
+    if (bad.length) toast((bad.length === 1 ? "1 file is" : bad.length + " files are") + " not sent: " + bad.map(u => u.name + " (" + u.error + ")").join("; ") + (list.length ? ". The others are sent." : "."));
+    if (!list.length){ if (!String(q || "").trim()) return false; return null; }
     const notice = list.find(u => u.kind === "notice");
     q = q || (notice && list.length === 1 ? "Read this notice: what does it ask, by when, and check it against the books. Then draft a reply." : list.length === 1 ? "Read this file" : "Read these files");
     list.forEach(u => { u.sent = true; if (u.kind !== "notice" && !ASST.ups().some(x => x.path === u.path)) ASST.ups().push({path: u.path, name: u.name, type: u.type || ""}); });
-    // read into the AI: a notice first (the notice flow keys on the first file), each with its kind; a Word file as its text
+    // read into the AI: a notice first (the notice flow keys on the first file), each with its kind and size; with the text
+    // FinCom read of it (a PDF's too: it goes as its text when it cannot go as it is) and how long that text was
     const att = list.slice().sort((x, y) => (y.kind === "notice") - (x.kind === "notice")).map(u => {
-      const x = {path: u.path, name: u.name, type: u.type || (u.pdf ? "application/pdf" : ""), kind: u.kind || "other"};
-      if (!/^(application\/pdf|image\/(png|jpeg|webp|gif))$/.test(x.type) && !u.pdf) x.text = u.excerpt || "";
+      const x = {path: u.path, name: u.name, type: u.type || (u.pdf ? "application/pdf" : ""), kind: u.kind || "other", size: u.size};
+      if (u.native !== "image" && u.excerpt){ x.text = u.excerpt; x.full = u.full || u.excerpt.length; }
       return x;
     });
     const fx = {q, files: list, att};
@@ -259,7 +388,8 @@ const AUpload = window.AUpload = {
     return fx;
   },
   // into the firm's private bucket; the upload's progress (0..1) to onProgress (XMLHttpRequest: fetch tells no progress)
-  async store(file, cid, folder, onProgress){
+  // sniffed: the type the file's own bytes say (a PDF or a picture); else the browser's, kept only when it is a safe one
+  async store(file, cid, folder, onProgress, sniffed){
     await Cloud.fresh().catch(() => {});
     const c = Cloud.cfg(), s = Cloud.sess(), name = String(file.name || "file").replace(/[^A-Za-z0-9._-]+/g, "-").slice(-80);
     const path = Cloud.st.firm + "/" + (cid || "_firm") + "/" + folder + "/" + Date.now().toString(36) + "-" + name;
@@ -267,7 +397,7 @@ const AUpload = window.AUpload = {
     const status = await new Promise((ok, no) => {
       const x = new XMLHttpRequest();
       x.open("POST", url);
-      x.setRequestHeader("apikey", c.key); x.setRequestHeader("Authorization", "Bearer " + s.access_token); x.setRequestHeader("Content-Type", file.type || "application/octet-stream");
+      x.setRequestHeader("apikey", c.key); x.setRequestHeader("Authorization", "Bearer " + s.access_token); x.setRequestHeader("Content-Type", storeType(file.name, sniffed || (/^(application\/pdf|image\/(png|jpeg|webp|gif))$/.test(file.type) ? "application/octet-stream" : file.type)));   // never served back as a page
       if (onProgress && x.upload) x.upload.onprogress = (e) => { if (e.lengthComputable && e.total) onProgress(Math.min(1, e.loaded / e.total)); };
       x.onload = () => ok(x.status); x.onerror = () => no(new Error("the connection failed")); x.ontimeout = () => no(new Error("the upload took too long"));
       x.timeout = 120000;
@@ -284,7 +414,7 @@ const AUpload = window.AUpload = {
       await Cloud.fresh().catch(() => {});
       const c = Cloud.cfg(), s = Cloud.sess(), bin = r.pdf || /^image\/(png|jpeg|webp|gif)$/.test(u.type);
       const res = await fetch(ASST.url(), {method: "POST", headers: {apikey: c.key, Authorization: "Bearer " + s.access_token, "Content-Type": "application/json"},
-        body: JSON.stringify({action: "classify", client_id: u.cid, name: u.name, excerpt: bin ? "" : u.excerpt, attachments: bin ? [{path: u.path, name: u.name, type: u.type || (r.pdf ? "application/pdf" : ""), kind: "upload"}] : []})});
+        body: JSON.stringify({action: "classify", client_id: u.cid, name: u.name, excerpt: bin ? (r.pdf ? String(u.excerpt || "").slice(0, 12000) : "") : u.excerpt, attachments: bin ? [{path: u.path, name: u.name, type: u.type || (r.pdf ? "application/pdf" : ""), kind: "upload"}] : []})});
       const j = await res.json().catch(() => ({}));
       if (!res.ok || !j.ok) return {kind: "other", by: "rules", summary: (j.error || "FinCom could not tell what this file is just now") + "", aiError: true};
       return {kind: AUpload.KIND[j.kind] ? j.kind : "other", by: "ai", summary: String(j.summary || "").slice(0, 300)};
@@ -344,7 +474,14 @@ const AUpload = window.AUpload = {
 };
 // "compare", "differences", "vs": a comparison of the files asked for
 const CMP_WORDS = /\b(compare|comparison|compared|comparing|differences?|differ|vs\.?|versus|reconcile|changed?|changes)\b/i;
+const kbOf = n => n >= 1048576 ? (n / 1048576).toFixed(1) + " MB" : n >= 1024 ? Math.round(n / 1024) + " KB" : n + " bytes";
 ASST.upload = files => AUpload.add(files);
+// the answer's stream says which files were not read or were shortened (server/assistant/index.ts: {t: "attach", notes})
+if (!ASST.take.attachNotes){
+  const take = ASST.take;
+  ASST.take = function (t, e){ if (e && e.t === "attach"){ t.attachNotes = Array.isArray(e.notes) ? e.notes.slice(0, 30) : []; return; } return take.call(this, t, e); };
+  ASST.take.attachNotes = true;
+}
 ASST.prep = function (q){ return AUpload.prep(q); };
 
 export default AUpload;

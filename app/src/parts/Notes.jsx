@@ -30,7 +30,7 @@ export function GstDriftNote({ b }) {
 // whether the TDS and GST work is kept for the firm, or only in this browser
 export function SyncNote({ cid, tab }) {
   const info = !tab, note = (t, cls) => <p className={"note" + (cls ? " " + cls : "")} style={{ margin: "6px 0" }}>{t}</p>;
-  if (!(typeof Cloud === "object" && Cloud.on())) return info ? note("TDS and GST work is kept in this browser only. Sign in to the firm account to share it with your colleagues.") : null;
+  if (!(typeof Cloud === "object" && Cloud.on())) return null;
   if (BookSync.off) return info ? note("The firm’s database is not set up for shared TDS and GST work yet: it is kept in this browser only.") : null;
   const s = BookSync.st[cid] || {};
   if (s.readonly) return note("Look-only access: changes here are not saved for the firm.");

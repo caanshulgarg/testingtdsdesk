@@ -36,7 +36,7 @@ with sync_playwright() as p:
       S.books = Object.assign({loading: false, challans: [], alloc: {}}, bk, {cid: c.id, misCfg: {freq: "off"}, auditCfg: {freq: "off"}, twoBs: {}}); S.books.map = Books.mapLedgers(bk.vouchers, {}); LedMaster.refresh(S.books); window.__bk = S.books;
       S.booksTab = "gst"; S.gstPart = "r2b"; S.gstYm = "202603"; S.gstReg = "07"; render(); }""", books)
     pg.wait_for_timeout(1500); pg.evaluate("S.books = window.__bk; S.gstPart = 'r2b'; render();"); pg.wait_for_timeout(2500)
-    ok("Fetch 2B from the portal" in pg.inner_text("#app") and "Sign in to the firm account" in pg.inner_text("#app"), "without the firm account: the card says to sign in; files can still be brought in")
+    ok("Fetch 2B from the portal" not in pg.inner_text("#app") and "Sign in to the firm account" not in pg.inner_text("#app"), "without the firm account: no Fetch 2B card and no sign-in message (stay signed in); files can still be brought in")
     # the firm account, as signed in
     pg.evaluate("() => { Cloud.on = () => true; Cloud.cfg = () => ({url: 'https://example.supabase.co', key: 'anon'}); Cloud.sess = () => ({access_token: 'tok-firm'}); Cloud.refreshToken = async () => {}; S.account = {email: 'a@b.c'}; render(); }"); pg.wait_for_timeout(800)
     ok("GST portal username in" in pg.inner_text("#app"), "signed in, no username yet: points to GST settings")

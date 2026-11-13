@@ -15,7 +15,7 @@ export default function GstApiAll() {
     .map((c) => ({ id: c.id, name: c.name, gstin: String(c.gstin).toUpperCase() })).sort((a, b) => a.name.localeCompare(b.name));
   const load = () => GSTAPI.firmStatus(clients.map((c) => c.gstin)).then(setSt, (e) => setMsg("Could not ask the server: " + ((e && e.message) || e)));
   useEffect(() => { if (GSTAPI.on() && !st) load(); }, []);
-  if (!GSTAPI.on()) return <div className="pane"><h2>GST API, all clients</h2><p className="note">Sign in to the firm account to see every client's GST portal connection.</p></div>;
+  if (!GSTAPI.on()) return null;
   const sess = {}, ret = {}, acc = {};
   ((st && st.sessions) || []).forEach((s) => { sess[s.gstin] = s; });
   ((st && st.returns) || []).forEach((r) => { ret[r.gstin + "|" + r.form + "|" + r.period] = r; });

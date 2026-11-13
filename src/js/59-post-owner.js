@@ -134,11 +134,14 @@ const PostOwner = {
   }
 };
 // Fix C (state-machine review, item 5), loaded when it is asked for (postPart, src/js/59-post-preview.js): "Deleted in
-// Tally" under a posted bill, the owner's release of it (Post to Tally > Errors), "Not this Tally entry" (bank, sales).
+// Tally" under a posted bill, its release by a member who may post (Post to Tally > Errors), "Not this Tally entry" (bank, sales).
 // FinCom reads Tally only to find the bill still there (any read, any match); it never decides by itself that it is gone:
-// the owner says so ("I checked in Tally: not there – release": a reason, the risk said, audited), a member asks the owner
+// a member who may post says so ("I checked in Tally: not there – release": a reason, the risk said, audited naming who;
+// the owner's decision of 13-Nov-2026, migration 183); a look-only member may not (nor ask: the cloud refuses its saves)
 Object.assign(PostOwner, {
   delBusy: {},
+  mayRelease(){ const a = S.account, r = a && (a.me || {}).role; return !a || r === "owner" || r === "staff"; },
+  LOOK: " A look-only member cannot release it: ask a member of the firm who may post.",
   // Undo that left some lines / invoices in Tally as they are
   keptWords(n, what){ return n + " " + (what || "line") + (n === 1 ? " is" : "s are") + " already in Tally and " + (n === 1 ? "was left as it is." : "were left as they are.") +
     (what ? " If one was matched to the wrong Tally entry, press \u201cNot this Tally entry\u201d on it." : " To change one, press \u201cTake it back\u201d or \u201cNot this Tally entry\u201d on the line."); },
@@ -191,20 +194,19 @@ Object.assign(PostOwner, {
     delete P.delBusy[e.id];
     if (r.found){ PostCheck.markIn(co, e, r.found); toast("Tally still has it (" + PostCheck.vchSay(r.found) + "): it stays posted."); refreshStats(cid); render(); return; }
     const said = [r.read.length && "nothing found in " + r.read.join(", "), r.failed.length && "could not read " + r.failed.join(", ")].filter(Boolean).join("; ") || "nothing here can read Tally";
-    toast("FinCom could not find it, but cannot be sure it is gone (" + said + ").", {actions: [postOwner() ? {label: "I checked in Tally: not there – release", run: () => P.ownerAsk(cid, e)}
-      : {label: "Ask the owner to release", run: () => P.why("Ask the owner to release it?", "Ask the owner", ": you looked in Tally and it is not there. The firm’s owner checks and releases it (Post to Tally › Errors).", e).then(a => {
-        if (!a) return; e.ownerRelease = {at: new Date().toISOString(), by: whoAmI(), why: a.data, ask: true}; Store.saveEntry(cid, e);
-        auditEvent("bill_release_asked", (e.x.vendorName || "") + " " + (e.x.invoiceNo || e.id) + ": " + a.data, cid); toast("Sent to the owner: Post to Tally › Errors."); render(); })}]});
+    const may = P.mayRelease();
+    toast("FinCom could not find it, but cannot be sure it is gone (" + said + ")." + (may ? "" : P.LOOK), {actions: may ? [{label: "I checked in Tally: not there – release", run: () => P.ownerAsk(cid, e)}] : []});
   },
-  // the owner: a fresh reason, the risk said, then the release (a bill already cleared: only the cloud's id)
+  // a member who may post: a fresh reason, the risk said, then the release (a bill already cleared: only the cloud's id)
   ownerAsk(cid, e){
-    if (!postOwner()){ toast("Only the firm’s owner can release it."); return; }
+    if (!PostOwner.mayRelease()){ toast(PostOwner.LOOK.trim()); return; }
+    if (postSending(cid).has(String(e.id))){ toast("Its posting to Tally is still being sent. Wait for it to finish."); return; }
     if (!billPostLive(e, cid)) return PostOwner.ownerRelease(cid, e);
     PostOwner.why("Not in Tally?", "Release", ": you looked in Tally yourself and it is not there. If it is in Tally, it will be posted twice.", e).then(a => { if (a) PostOwner.goneFromTally(cid, e, a.data); });
   },
-  // the owner keeps it posted: a member's ask is dismissed
+  // a member who may post keeps it posted: an ask (made before 183) is dismissed
   dismissAsk(cid, e){
-    if (!postOwner() || !e.ownerRelease || !e.ownerRelease.ask) return;
+    if (!PostOwner.mayRelease() || !e.ownerRelease || !e.ownerRelease.ask) return;
     delete e.ownerRelease; Store.saveEntry(cid, e); auditEvent("bill_release_ask_dismissed", (e.x.vendorName || "") + " " + (e.x.invoiceNo || e.id), cid);
     toast("Dismissed: it stays posted."); render();
   },
@@ -215,7 +217,7 @@ Object.assign(PostOwner, {
       read: () => ((document.getElementById("deletedWhy") || {}).value || "").trim(),
       validate: why => why.length < 3 ? "Say what you did in Tally." : ""});
   },
-  // the owner's word: cleared, back to To review, released once (the bridge: e.release; the cloud's id: ownerRelease)
+  // the member's word: cleared, back to To review, released once (the bridge: e.release; the cloud's id: ownerRelease)
   async goneFromTally(cid, e, why){
     if (!(await postClearReady())) return;
     const by = whoAmI(), at = new Date().toISOString(), vch = e.tallyVchNo || (e.tally && (e.tally.vchNo || e.tally.number)) || "";
@@ -227,12 +229,12 @@ Object.assign(PostOwner, {
     if (held) e.ownerRelease = {at, by, why, job: job ? job.id : ""}; else delete e.ownerRelease;
     if (e.status === "approved") unapply(e, cid, {force: true});
     Store.saveEntry(cid, e);
-    auditEvent("bill_deleted_in_tally", (e.x.vendorName || e.fileName || "") + " " + (e.x.invoiceNo || e.id) + (vch ? " (voucher " + vch + ")" : "") + ": I checked in Tally: not there (" + why + "). If it is in Tally, it will be posted twice.", cid);
+    auditEvent("bill_deleted_in_tally", (e.x.vendorName || e.fileName || "") + " " + (e.x.invoiceNo || e.id) + (vch ? " (voucher " + vch + ")" : "") + ", released by " + by + ": I checked in Tally: not there (" + why + "). If it is in Tally, it will be posted twice.", cid);
     if (S.coId === cid){ S.filter = "draft"; S.selected = e.id; }
     refreshStats(cid); toast("Not in Tally: back in To review, not posted again."); render();
     if (held) await PostOwner.ownerRelease(cid, e);
   },
-  // FinCom's cloud frees the id (migration 174: tally_post_owner_release, an owner only, a reason, refused while sending);
+  // FinCom's cloud frees the id (tally_post_owner_release: 174, 183 any member who may post; a reason, refused while sending);
   // refused or not there yet: the server's words, and it waits under Post to Tally > Errors
   async ownerRelease(cid, e){
     const o = e.ownerRelease; if (!o) return;

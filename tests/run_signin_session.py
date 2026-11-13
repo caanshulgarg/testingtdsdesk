@@ -9,8 +9,8 @@ localStorage) are opened against it.
      come back after signing in, and the sign-out reason reaches the activity log
   4. no automatic sign-out: 31 minutes without a click, still signed in; no such control in Settings
   5. "Sign out of all devices": the owner sees it and it calls logout?scope=global; a member does not see it
-  6. "Keep me signed in": ticked (default) = session in localStorage; unticked = sessionStorage (a new tab is not signed
-     in, a reload is)
+  6. "This is a shared computer": not ticked (default) = session in localStorage; ticked = sessionStorage (a new tab is
+     not signed in, a reload is)
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_signin_session.py"""
 import os, json, time, threading, functools, http.server
 from urllib.parse import urlparse, parse_qs
@@ -86,7 +86,7 @@ def ok(c, w):
 def signin_page(pg): return pg.locator('[data-act="cloudSignIn"]').count() > 0
 def sign_in(pg, keep=None):
     pg.fill('[data-cloud="email"]', "owner@firm.in"); pg.click('[data-act="cloudSignIn"]'); pg.fill('[data-cloud="password"]', "pw12345678")
-    if keep is not None: pg.set_checked('[data-cloud="keep"]', keep)
+    if keep is not None: pg.set_checked('[data-cloud="shared"]', not keep)
     pg.click('[data-act="cloudSignIn"]'); pg.wait_for_timeout(1800)
 def storage(pg): return pg.evaluate("() => ({local: !!localStorage.getItem('tdsdesk-test:cloudsess'), session: !!sessionStorage.getItem('tdsdesk-test:cloudsess'), on: Cloud.on()})")
 def open_settings(pg): pg.evaluate("() => { S.view = 'home'; S.homeTab = 'rules'; S.settingsTab = 'account'; render(); }"); pg.wait_for_timeout(500)
@@ -99,7 +99,7 @@ with sync_playwright() as p:
     A.goto("http://localhost:%d/" % PAGE_PORT); A.wait_for_timeout(2500)
     # step by step (27-Oct-2026): the email, Continue, then the password and "Keep me signed in"; Edit goes back
     A.fill('[data-cloud="email"]', "owner@firm.in"); A.click('[data-act="cloudSignIn"]')
-    ok(signin_page(A) and A.locator('[data-cloud="keep"]').count() == 1 and A.is_checked('[data-cloud="keep"]'), "the sign-in form has 'Keep me signed in', ticked by default")
+    ok(signin_page(A) and A.locator('[data-cloud="shared"]').count() == 1 and not A.is_checked('[data-cloud="shared"]'), "the sign-in form has 'This is a shared computer', not ticked by default")
     A.click('[data-signin-edit]')
     sign_in(A)
     st = storage(A)
