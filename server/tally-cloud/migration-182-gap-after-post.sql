@@ -24,7 +24,8 @@
 --      From Tally), before the gap's own days. A gap open more than 6 hours, or a check stopped by a 2 s stop (over2s,
 --      window) an hour or more ago, is no longer given up: one day at a time as a light read; for the stop a retry under
 --      its own choice time (tally_gap_retries), at most every 3 hours; the bridge's stop of it stops the retry only
---      (tally_check_stop, 133's text plus that). tally_gap_front(book, max) (160's arguments): the same, not idle.
+--      (tally_check_stop, 133's text plus that); a retry day Tally gave in time resumes the check by itself (the owner's
+--      decision of 13-Nov-2026), under the retry's choice time. tally_gap_front(book, max) (160's arguments): the same, not idle.
 --      tally_period_next_paced (98's text plus the recount): a book whose gap's own days match Tally (C) has its days
 --      counted before Tally's number now was first seen counted again, one light day at a time: once a book and number.
 --      tally_fill_request (135's text plus): each day goes to the client's book whose year has it (the latest book before);
@@ -56,7 +57,9 @@ create table if not exists public.tally_gap_retries (
   started_at timestamptz not null default now(),
   stopped_at timestamptz,
   stop_day   date,
-  stop_why   text check (stop_why is null or length(stop_why) <= 40)
+  stop_why   text check (stop_why is null or length(stop_why) <= 40),
+  day        date,                                      -- the day the retry read
+  resumed_at timestamptz                                -- the retry's day read (within 2 s): the check resumed
 );
 -- the light days of a book: read only while the computer is idle, one at a time (A, B)
 create table if not exists public.tally_light_days (
@@ -379,6 +382,15 @@ declare c tally_sync_cursor%rowtype; bk tally_books%rowtype; r tally_check_runs%
 begin
   if auth.role() <> 'service_role' then raise exception 'not allowed' using errcode = '42501'; end if;
   if p_book is null or lim = 0 then return out; end if;
+  -- 182 (the owner's decision of 13-Nov-2026): a retry whose day Tally gave whole (the bridge stops a request over 2 s, so
+  -- a day listed is one given in time) and not stopped resumes the check by itself, under the retry's choice time
+  select * into t from tally_gap_retries where book_id = p_book;
+  if found and t.stopped_at is null and t.resumed_at is null and t.day is not null
+     and exists (select 1 from tally_check_days k where k.book_id = p_book and k.day = t.day and k.via is not null and k.listed_at >= t.started_at) then
+    update tally_check_runs set state = 'going', chosen_at = t.chosen_at, stopped_at = null, stop_day = null, stop_why = null, stop_words = null
+     where book_id = p_book and state = 'stopped' and coalesce(stop_why, '') in ('over2s', 'window');
+    update tally_gap_retries set resumed_at = now() where book_id = p_book;
+  end if;
   select * into c from tally_sync_cursor where book_id = p_book;
   if not found or c.gap is null or c.gap_at is null then return out; end if;
   -- 182: whether the book's computer is idle now (98's recount reads it too)
@@ -437,8 +449,9 @@ begin
   end loop;
   if coalesce(array_length(days, 1), 0) = 0 then return out; end if;
   if retry then
-    insert into tally_gap_retries (book_id, firm_id, chosen_at, started_at) values (p_book, c.firm_id, now(), now())
-    on conflict (book_id) do update set chosen_at = excluded.chosen_at, started_at = excluded.started_at, stopped_at = null, stop_day = null, stop_why = null;
+    insert into tally_gap_retries (book_id, firm_id, chosen_at, started_at, day) values (p_book, c.firm_id, now(), now(), days[1])
+    on conflict (book_id) do update set chosen_at = excluded.chosen_at, started_at = excluded.started_at, stopped_at = null, stop_day = null, stop_why = null,
+      day = excluded.day, resumed_at = null;
     ca := now();
   else
     ca := coalesce(case when has_p and p.state = 'going' then p.chosen_at end, case when has_r then r.chosen_at end, c.gap_at);

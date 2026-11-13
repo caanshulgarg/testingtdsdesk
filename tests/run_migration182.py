@@ -15,7 +15,8 @@ Checks:
      600 a day; the read back closes the gap as a match.
   2. (D) posted days keep the gap "checking" for 24 hours only, and only with a computer reading older entries.
   3. (B) a 2 s stop (over2s, window) an hour old: one idle day read again under its own choice time, at most every 3
-     hours; its stop stops the retry only; a gap open 7 hours: read when idle, not given up.
+     hours; its stop stops the retry only, a retry day given in time resumes the check; a gap open 7 hours: read when
+     idle, not given up.
   4. (C) a day of the gap read whole (or type by type) after Tally's number was seen is not asked again; the gap says
      "Changes were made in Tally on older dates. Upload the Day Book from <the book's own year's first day> to today".
   5. (B) 98's count: once the gap's own days match, the days counted before Tally's number was seen are counted again,
@@ -275,6 +276,12 @@ try:
     ok(days_of(again("window", "2 hours")) == [D8(0)], "3. Tally's window held 2 s (window): the same")
     ok(again("person", "2 hours") == [], "3. (guard) stopped by a person: none")
     ok(again("over2s", "10 minutes") == [], "3. (guard) an over2s stop 10 minutes old: none")
+    fr = again("over2s", "2 hours")
+    ca2 = fr[0].get("chosenAt") if fr and isinstance(fr[0], dict) else None
+    ok(days_of(fr) == [D8(0)] and db.one("select state from tally_check_runs where book_id = %s" % q(book)) == "stopped", "3. (step) the retry's day handed out; the check still stopped")
+    HEADS(book, 0, []); FRONT(book, 3, False)
+    ok(db.one("select state || ' ' || (chosen_at = %s::timestamptz)::text || ' ' || (stop_why is null)::text from tally_check_runs where book_id = %s" % (q(ca2 or "2000-01-01"), q(book))) == "going true true",
+       "3. the retry's day given in time (read whole, not stopped): the check resumes by itself, under the retry's choice time")
     book, cg = gapbook(4)
     r, c = gap(book, 42873); age_gap(book, 7 * 60); unask(book)
     ok(FRONT(book, 3, False) == [] and days_of(FRONT(book, 3, True)) == [D8(0)], "3. a gap open 7 hours: read when idle (one light day), not given up")
