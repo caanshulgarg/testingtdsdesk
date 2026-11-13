@@ -14,6 +14,9 @@ import { Plug, BookOpen, CircleDashed, ArrowLeft, RefreshCw } from "lucide-react
 import Button from "../parts/Button.jsx";
 import Loading from "../parts/Loading.jsx";
 import "./integrations.css";
+// ZohoB's connect, finish, link, disconnect, syncNow and hookNew (src/js/74-zoho-connect.js) come with this screen's
+// file, not in legacy.js (build.py lazy_files)
+import "../../../src/js/74-zoho-connect.js";
 
 const ICON = { tally: BookOpen, zoho: Plug, busy: CircleDashed };
 const isOwner = () => !!(S.account && S.account.me && S.account.me.role === "owner");

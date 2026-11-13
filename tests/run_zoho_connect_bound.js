@@ -1,6 +1,6 @@
-// node tests/run_zoho_connect_bound.js - the page's side of connecting Zoho Books (13-Nov-2026, security review M3):
+// node tests/run_zoho_connect_bound.js - the page's side of connecting Zoho Books (13-Nov-2026):
 // the sign-in to Zoho is begun with the hash of a value kept for the tab, and finished by the same tab with the value
-// itself and the person's FinCom sign-in. src/js/74-zoho-books.js and the router's lines, run here with stand-ins
+// itself and the person's FinCom sign-in. src/js/74-zoho-books.js, 74-zoho-connect.js and the router's lines, run here with stand-ins
 // (no browser, no network).
 const fs = require("fs"), path = require("path"), vm = require("vm"), crypto = require("crypto");
 const ROOT = path.join(__dirname, "..");
@@ -17,7 +17,7 @@ function page() {
     crypto: crypto.webcrypto, TextEncoder, toast: (t) => toasts.push(t), render: () => {}, console,
   };
   vm.createContext(ctx);
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "src/js/74-zoho-books.js"), "utf8") + "\n;globalThis.ZohoB = ZohoB;", ctx);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "src/js/74-zoho-books.js"), "utf8") + "\n" + fs.readFileSync(path.join(ROOT, "src/js/74-zoho-connect.js"), "utf8") + "\n;globalThis.ZohoB = ZohoB;", ctx);
   ctx.answer = { ok: true, url: "https://accounts.zoho.in/oauth/v2/auth?state=s" };
   ctx.ZohoB.call = async (b) => { calls.push(JSON.parse(JSON.stringify(b))); return ctx.answer; };
   return ctx;
