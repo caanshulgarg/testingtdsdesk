@@ -329,3 +329,8 @@ func winDeviceName(name string) bool {
 	}
 	return len(b) > 3 && (strings.HasPrefix(b, "COM") || strings.HasPrefix(b, "LPT")) && strings.ContainsAny(b[3:], "¹²³")
 }
+
+// the service's command line: this program and its settings file, each quoted whole (createService's form)
+func serviceCommandLine(exe, cfgPath string) string {
+	return `"` + exe + `" service --config "` + cfgPath + `"`
+}

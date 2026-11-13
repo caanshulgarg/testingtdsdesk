@@ -157,9 +157,13 @@ func recordServiceState(home, cfgPath string) {
 		return
 	}
 	defer s.Close()
-	if c, err := s.Config(); err == nil && !strings.Contains(strings.ToLower(c.BinaryPathName), strings.ToLower(cfgPath)) {
-		if i := strings.Index(c.BinaryPathName, " service"); i > 0 {
-			c.BinaryPathName = c.BinaryPathName[:i] + ` service --config "` + cfgPath + `"`
+	exe, err := os.Executable()
+	if err != nil {
+		return
+	}
+	if c, err := s.Config(); err == nil {
+		if want := serviceCommandLine(exe, cfgPath); c.BinaryPathName != want {
+			c.BinaryPathName = want // made whole from this program and the settings, never cut out of the old line
 			_ = s.UpdateConfig(c)
 		}
 	}

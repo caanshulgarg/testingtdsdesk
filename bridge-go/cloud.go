@@ -1379,7 +1379,9 @@ func beatBody(tally bool, tstate, tsince string, open, ports, cos []any) M {
 		// 2.5.10: why the last run ended and when it ran again, for 6 hours (selfheal.go; null when nothing to say)
 		"lastStop": lastStopBeat(),
 		// 2.5.15 item 4: this computer's record of what it sent cannot be read: posting paused, in plain words ("" when it can)
-		"postedRecord": map[bool]string{true: postedUnreadableWords, false: ""}[postedRecordErr() != nil]}
+		"postedRecord": map[bool]string{true: postedUnreadableWords, false: ""}[postedRecordErr() != nil],
+		// 2.5.16: postings whose progress.json cannot be read (their ids and since when)
+		"postsUnreadable": progressUnreadableBeat()}
 }
 
 // --- the posting queue (build 199): postings queued in FinCom on any computer, taken one at a time
@@ -1393,6 +1395,62 @@ func cloudPostsFile() string { return sp("cloud-posts.txt") }
 
 // a posting's view as syncCloudPosts reads it (a hook for the tests)
 var jobViewFn = jobView
+
+// 2.5.16: postings whose progress.json is there but not read: since when
+var unreadableProg = struct {
+	sync.Mutex
+	since map[string]time.Time
+}{since: map[string]time.Time{}}
+
+var unreadableNow = time.Now
+
+// a posting's progress.json not read this turn: true once it has not been read for 24 hours and was moved aside
+// (progress.json.bad and progress.json.bak.bad, kept), so the posting is let go; false: tried again at a later turn
+func progressUnreadable(id, dir string) bool {
+	now := unreadableNow()
+	unreadableProg.Lock()
+	t, seen := unreadableProg.since[id]
+	if !seen {
+		unreadableProg.since[id] = now
+		t = now
+	}
+	unreadableProg.Unlock()
+	if !seen {
+		writeLog("Posting " + id + ": its progress.json could not be read (held by another program, or damaged); kept and tried again; moved aside as .bad after 24 hours if it stays so")
+	}
+	if now.Sub(t) < 24*time.Hour {
+		return false
+	}
+	p := filepath.Join(dir, "progress.json")
+	for _, f := range []string{p, bakOf(p)} {
+		if exists(f) {
+			bad := f + ".bad"
+			for i := 2; exists(bad); i++ {
+				bad = fmt.Sprintf("%s.bad%d", f, i)
+			}
+			if err := os.Rename(f, bad); err != nil {
+				writeLog("Posting " + id + ": " + filepath.Base(f) + " could not be moved aside (" + err.Error() + "); tried again later")
+				return false
+			}
+		}
+	}
+	writeLog("Posting " + id + ": its progress.json could not be read for 24 hours: moved aside as progress.json.bad (kept); the posting is no longer followed here (posted-ids.json still guards every entry)")
+	unreadableProg.Lock()
+	delete(unreadableProg.since, id)
+	unreadableProg.Unlock()
+	return true
+}
+
+// for the beat: [{id, since}]
+func progressUnreadableBeat() []any {
+	unreadableProg.Lock()
+	defer unreadableProg.Unlock()
+	out := []any{}
+	for id, t := range unreadableProg.since {
+		out = append(out, M{"id": id, "since": t.Format(time.RFC3339)})
+	}
+	return out
+}
 
 func getCloudPosts() map[string]string {
 	if cloudPosts == nil {
@@ -1504,7 +1562,11 @@ func syncCloudPosts() {
 		}
 		v := jobViewFn(dir)
 		if v == nil && (exists(filepath.Join(dir, "progress.json")) || exists(bakOf(filepath.Join(dir, "progress.json")))) {
-			continue // 2.5.16: there but held by another program a moment: reported at the next turn, never dropped
+			// 2.5.16: there but not read (held by another program, or damaged): reported at a later turn, never dropped;
+			// said once and in the beat; after 24 hours moved aside as .bad (kept, never deleted) and let go
+			if !progressUnreadable(id, dir) {
+				continue
+			}
 		}
 		if v == nil {
 			delete(cp, id)

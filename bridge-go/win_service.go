@@ -730,7 +730,7 @@ func createService(exe, cfgPath string) error {
 	s, err := m.OpenService(serviceName)
 	if err == nil {
 		c, _ := s.Config()
-		c.BinaryPathName = `"` + exe + `" service --config "` + cfgPath + `"`
+		c.BinaryPathName = serviceCommandLine(exe, cfgPath)
 		c.StartType = mgr.StartAutomatic
 		c.DisplayName = "FinCom Bridge"
 		c.Description = "Connects TallyPrime on this computer with FinCom (FinCom Bridge " + BridgeVersion + ")."
