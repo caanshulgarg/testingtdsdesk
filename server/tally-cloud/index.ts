@@ -2478,7 +2478,7 @@ async function ledgerProgressFromBeat(firm: string, dev: any, body: any) {
 function tallyIniOf(b: any) {
   if (!Array.isArray(b?.tallyIni)) return {};
   const s = (v: unknown, n: number) => typeof v === "string" ? v.slice(0, n) : "";
-  const st = ["added", "already", "notadded", "usertdl-no", "failed", "refused", "unreadable", "missing"];
+  const st = ["added", "already", "notadded", "usertdl-no", "failed", "refused", "unreadable", "missing", "shared"];   // bridge 2.5.16: "shared" (a tally.ini every user shares: left as it is)
   // bridge 2.5.3: TallyPrime's connection in the file ("enabled; Tally needs one restart", "already", "cannot write",
   // "unreadable") and the port it names
   // bridge 2.5.4: "off; shared by every user of this computer, not changed", and the plain words (connectWhy)

@@ -3,7 +3,8 @@ under Deno, against the stand-in for Supabase, fake_supabase.py). Made-up comput
   1. the beat's update (why a bridge did or did not update) kept, cleaned: checked, message (200 letters at most),
      offered (a version only), applying, checking, noAutoUpdate, next; anything else dropped; not an object: none;
   2. tallyWhy "connection off" kept (an unknown reason still dropped), tallyConnectSay with it;
-  3. tallyIni[].connect "off; shared by every user of this computer, not changed" and connectWhy (300 letters at most) kept.
+  3. tallyIni[].connect "off; shared by every user of this computer, not changed" and connectWhy (300 letters at most) kept;
+     (2.5.16) the state "shared" kept with its words.
 Needs Deno (DENO, default: the deno on the PATH or /opt/deno/deno)."""
 import os, sys, json, time, hashlib, subprocess, threading, urllib.request, urllib.error, shutil
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
@@ -60,6 +61,10 @@ try:
     ti = kept().get("tallyIni") or []
     ok(len(ti) == 2 and ti[0].get("connect") == SHARED and ti[0].get("connectWhy", "").startswith("Tally's connection is off") and len(ti[0]["connectWhy"]) == 300
        and ti[0].get("serverPort") == 9000 and "connect" not in ti[1] and "connectWhy" not in ti[1], "3. kept, cleaned (%s)" % ti)
+    # bridge 2.5.16: "shared" (a tally.ini every user shares, FinCom's add-on line not added) kept with its words
+    c, r = call(dict(base, tallyIni=[{"path": r"C:\Program Files\TallyPrime\tally.ini", "state": "shared", "why": "load it in your own Tally"}]))
+    ti = kept().get("tallyIni") or []
+    ok(len(ti) == 1 and ti[0].get("state") == "shared" and ti[0].get("why") == "load it in your own Tally", "3. 2.5.16 shared kept (%s)" % ti)
 finally:
     fn.terminate()
 if fails:

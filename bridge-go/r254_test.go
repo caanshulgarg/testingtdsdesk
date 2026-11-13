@@ -174,20 +174,7 @@ func TestR254SharedIniNotWritten(t *testing.T) {
 	}
 }
 
-// a shared file with the add-on line missing: only the add-on line is added (2.4.5), never the connection
-func TestR254SharedIniAddonOnly(t *testing.T) {
-	f := newStandTally(t)
-	standBridge(t, f, "")
-	_, p := r253Ini(t, "[Tally]\r\nUser TDL = Yes\r\nClient Server = None\r\n")
-	old := iniSharedFn
-	iniSharedFn = func() bool { return true }
-	t.Cleanup(func() { iniSharedFn = old })
-	e, err := tallyIniApply(p, addonIniPath())
-	got := r253Read(t, p)
-	if err != nil || str(e["state"]) != "added" || str(e["connect"]) != connectSharedOff || !strings.Contains(got, "Client Server = None") || strings.Contains(got, "ServerPort") {
-		t.Fatalf("apply: %v %v\n%s", e, err, got)
-	}
-}
+// (2.5.16: a shared file with the add-on line missing gets nothing at all: r2516recorder_test.go)
 
 // "cannot write" has plain words in the beat
 func TestR254CannotWriteWords(t *testing.T) {

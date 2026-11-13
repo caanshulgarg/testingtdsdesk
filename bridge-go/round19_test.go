@@ -513,7 +513,7 @@ func TestRecorderFolderLinkRefused(t *testing.T) {
 		}
 	}
 	all := strings.Join(rec, " | ")
-	for _, want := range []string{"/inheritance:r", "*S-1-5-18:(OI)(CI)F", "*S-1-5-32-544:(OI)(CI)F", "*S-1-5-32-545:(RX,WD)", "*S-1-5-32-545:(OI)(IO)M"} {
+	for _, want := range []string{"/inheritance:r", "*S-1-5-18:(OI)(CI)F", "*S-1-5-32-544:(OI)(CI)F", "*S-1-5-32-545:(RX,WD)", "*S-1-3-0:(OI)(IO)M"} {
 		if !strings.Contains(all, want) {
 			t.Fatalf("recorder's permissions lack %s: %s", want, all)
 		}

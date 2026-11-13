@@ -360,7 +360,7 @@ func TestFolderACLResetFirst(t *testing.T) {
 		fc + " /setowner *S-1-5-32-544 /L /Q",
 		rec + " /reset /L /Q",
 		rec + " /inheritance:r /grant:r *S-1-5-18:(OI)(CI)F *S-1-5-32-544:(OI)(CI)F *S-1-5-32-545:(RX,WD) /L /Q",
-		rec + " /grant *S-1-5-32-545:(OI)(IO)M /L /Q",
+		rec + " /grant *S-1-3-0:(OI)(IO)M /L /Q",
 		rec + " /setowner *S-1-5-32-544 /L /Q",
 		add + " /reset /L /Q",
 		add + " /inheritance:r /grant:r *S-1-5-18:(OI)(CI)F *S-1-5-32-544:(OI)(CI)F *S-1-5-32-545:(OI)(CI)RX /L /Q",

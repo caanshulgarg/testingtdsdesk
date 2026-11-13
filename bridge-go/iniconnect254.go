@@ -12,7 +12,7 @@
 // connectSharedOff, its plain words say what to do (connectWhy, and why when the add-on step left none), and while the
 // user's Tally does not answer the beat says "Tally's connection is off" with the fix (owntally254.go). On a computer
 // one person uses, the 2.5.3 step stays as it was (a port no other tally.ini names and nothing listens on, read back).
-// FinCom's add-on line (2.4.5) is unchanged. Nothing is sent to Tally.
+// 2.5.16: FinCom's add-on line (2.4.5) is not added to such a file either (tallyini.go). Nothing is sent to Tally.
 package main
 
 import (

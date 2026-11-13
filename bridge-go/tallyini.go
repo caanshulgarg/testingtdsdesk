@@ -48,6 +48,12 @@ var (
 	reIniUserTDL = regexp.MustCompile(`(?i)^\s*User\s+TDL\s*=\s*(\S*)`)
 )
 
+// 2.5.16: a tally.ini every user of this computer shares: FinCom's line not added, and what a user does instead
+const (
+	iniStateShared = "shared"
+	iniSharedWhy   = "every user of this computer shares this TallyPrime's settings, so FinCom does not add its add-on there: load it in your own Tally (F1 Help > TDLs & Add-ons, the file C:\\ProgramData\\FinCom\\addon\\FinComRecorder.tdl) or ask the computer's administrator"
+)
+
 func iniNorm(p string) string {
 	return strings.ToLower(strings.ReplaceAll(strings.Trim(strings.TrimSpace(p), `"`), "/", `\`))
 }
@@ -221,6 +227,12 @@ func tallyIniApply(path, addon string) (M, error) {
 		return e, err
 	}
 	nb, state, added := iniAddAddon(raw, addon)
+	// 2.5.16: never in a tally.ini every user of the computer shares (iniconnect254.go): only a Tally one person uses gets
+	// the line; the words say how a user loads the add-on in their own Tally
+	if state == "added" && iniSharedFn() {
+		state, nb, added = iniStateShared, nil, nil
+		e["why"] = iniSharedWhy
+	}
 	e["state"] = state
 	// 2.5.3 (iniconnect253.go): TallyPrime's connection switched on in the same write (Client Server = Both, a Server Port)
 	base := raw
@@ -357,6 +369,8 @@ func tallyIniStep(log func(string)) []M {
 		case "usertdl-no":
 			e["why"] = "this Tally is set not to load any add-on (User TDL = No); left as it is, so FinCom's add-on is not loaded automatically on this computer"
 			log("tally.ini " + p + ": User TDL = No: the file is left as it is (FinCom's add-on is not loaded automatically; Help & support shows it)")
+		case iniStateShared:
+			log("tally.ini " + p + ": every user of this computer shares this file, so FinCom's add-on line is not added (2.5.16); " + iniSharedWhy)
 		default:
 			if err != nil {
 				e["why"] = cutRunes(err.Error(), 200)
@@ -484,6 +498,9 @@ func tallyIniRecheckDue() bool {
 			switch state {
 			case "added":
 				e["state"] = "notadded" // FinCom's line is not there (read only: not added here)
+				if iniSharedFn() {
+					e["state"], e["why"] = iniStateShared, iniSharedWhy // 2.5.16: and never added on a shared computer
+				}
 			case "usertdl-no":
 				e["state"] = "usertdl-no"
 				e["why"] = "this Tally is set not to load any add-on (User TDL = No); left as it is, so FinCom's add-on is not loaded automatically on this computer"

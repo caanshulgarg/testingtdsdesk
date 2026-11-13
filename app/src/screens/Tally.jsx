@@ -862,7 +862,7 @@ function cardState(r, n) {
 // added or already there says nothing.
 const INI_WORDS = { notadded: "does not have FinCom's add-on line yet; FinCom adds it when Tally is closed.", "usertdl-no": "says User TDL = No, so FinCom left it untouched: Tally does not load FinCom's add-on when it starts.",
   failed: "could not be changed; FinCom's add-on is not loaded when Tally starts.", refused: "is not an ordinary file; FinCom left it untouched.",
-  unreadable: "could not be read; FinCom left it untouched." };
+  unreadable: "could not be read; FinCom left it untouched.", shared: "is shared by every user of this computer, so FinCom left it untouched: load the add-on in your own Tally (F1 Help > TDLs & Add-ons)." };
 function TallyIniLines({ r }) {
   const l = [].concat((((r.device || {}).info || {}).beat || {}).tallyIni || []).filter((x) => x && INI_WORDS[x.state]);
   return l.map((x, i) => <div key={i} className="row" style={ROW}><span className="note" data-tally-ini={x.state}>{"tally.ini " + (x.path || "") + " " + INI_WORDS[x.state]}</span></div>);

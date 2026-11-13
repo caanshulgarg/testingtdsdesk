@@ -2,9 +2,10 @@
 // install step (FinComBridge.exe install, run by the setup) instead of the setup script:
 //
 //	C:\ProgramData\FinCom           SYSTEM and Administrators full, Users read (all users)
-//	C:\ProgramData\FinCom\recorder  SYSTEM and Administrators full; Users read and add files to the folder itself
-//	                                (RX,WD: no DELETE on the folder, no subfolders) and Modify on the files only
-//	                                ((OI)(IO)M), so Tally's add-on (running as the desk user) writes its holding files
+//	C:\ProgramData\FinCom\recorder  SYSTEM and Administrators full; Users list the folder and add files to it
+//	                                (RX,WD: no DELETE on the folder, no subfolders); 2.5.16: each file is its maker's
+//	                                only (CREATOR OWNER (OI)(IO)M), so each user's Tally add-on writes its own holding
+//	                                files and no other user may read or change them
 //	C:\ProgramData\FinCom\addon     SYSTEM and Administrators full, Users read; the add-on's .tdl files (built in)
 //
 // Any user may create folders under C:\ProgramData, so before the setup runs someone could have made FinCom, or a link
@@ -48,6 +49,8 @@ const (
 	sidSystem = "*S-1-5-18"
 	sidAdmins = "*S-1-5-32-544"
 	sidUsers  = "*S-1-5-32-545"
+	// 2.5.16: CREATOR OWNER (each file's maker)
+	sidCreatorOwner = "*S-1-3-0"
 )
 
 // icacls (a function so the tests see the calls); args[0] is the folder
@@ -123,12 +126,22 @@ func prepareFinComFolders(base string, allUsers bool) ([]string, error) {
 		}
 	}
 	if allUsers {
+		// 2.5.16: each file is its maker's own: CREATOR OWNER Modify on the files (each Windows user's Tally writes and reads
+		// back its own), Users only list the folder and add files to it; the files already there take these again
 		if err := setACL(say, rec, [][]string{
 			{"/reset"},
 			{"/inheritance:r", "/grant:r", sidSystem + ":(OI)(CI)F", sidAdmins + ":(OI)(CI)F", sidUsers + ":(RX,WD)"},
-			{"/grant", sidUsers + ":(OI)(IO)M"},
+			{"/grant", sidCreatorOwner + ":(OI)(IO)M"},
 			{"/setowner", sidAdmins}}); err != nil {
 			return lines, err
+		}
+		if ents, _ := os.ReadDir(rec); len(ents) > 0 {
+			args := []string{filepath.Join(rec, "*"), "/reset", "/L", "/Q"}
+			if out, err := icaclsFn(args...); err != nil {
+				say(fmt.Sprintf("icacls %s: %v %s (the files already there keep their permissions)", strings.Join(args, " "), err, out))
+			} else {
+				say("icacls " + strings.Join(args, " "))
+			}
 		}
 		if err := setACL(say, add, [][]string{{"/reset"}, {"/inheritance:r", "/grant:r", sidSystem + ":(OI)(CI)F", sidAdmins + ":(OI)(CI)F", sidUsers + ":(OI)(CI)RX"}, {"/setowner", sidAdmins}}); err != nil {
 			return lines, err
@@ -147,7 +160,7 @@ func prepareFinComFolders(base string, allUsers bool) ([]string, error) {
 		say("the add-on " + e.Name() + " written in " + add)
 	}
 	keepLegacyAddon(add, say)
-	say(fmt.Sprintf("the recorder folder %s and the add-on folder %s are ready (%s)", rec, add, map[bool]string{true: "all users: Users may add files to the recorder folder only", false: "just for this user"}[allUsers]))
+	say(fmt.Sprintf("the recorder folder %s and the add-on folder %s are ready (%s)", rec, add, map[bool]string{true: "all users: each user may add files to the recorder folder and read or change only their own", false: "just for this user"}[allUsers]))
 	return lines, nil
 }
 
