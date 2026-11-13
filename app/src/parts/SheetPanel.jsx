@@ -73,7 +73,9 @@ function CheckStep({ st }) {
       cols={[
         { k: "date", role: "date", label: "Date", v: (d) => d.date, cell: (d) => (d.date ? fmtDate(d.date) : "—") },
         { k: "no", role: "number", label: "No.", v: (d) => d.no, cell: (d) => <>{d.no}{d.note && <> <span className="tag">{d.note === "credit" ? "credit note" : "debit note"}</span></>}{d.itc && d.itc.available === false && <> <span className="tag warn" title={d.itc.why}>no ITC</span></>}</> },
-        { k: "vt", label: "Posts as", v: (d) => SheetPost.vchName(d, st.side), cell: (d) => d.hold ? <span className="tag warn" data-sheet-vt={d.no} data-sheet-hold="">{"To review: " + d.hold}</span> : <span data-sheet-vt={d.no}>{SheetPost.vchName(d, st.side)}</span> },
+        { k: "vt", label: "Posts as", v: (d) => SheetPost.vchName(d, st.side), cell: (d) => d.hold ? <><span className="tag warn" data-sheet-vt={d.no} data-sheet-hold="">{"To review: " + d.hold}</span>{" "}
+            <select aria-label={"Edit type of " + d.no} data-edit-type={d.no} value="" onChange={(ev) => SheetPost.setKind(d, ev.target.value)}><option value="">Edit type…</option>
+              <option value="invoice">{st.side === "sales" ? "Invoice" : "Bill"}</option><option value="credit">{st.side === "sales" ? "Credit Note" : "Debit Note (a return)"}</option>{st.side === "sales" && <option value="debit">Debit Note</option>}</select></> : <span data-sheet-vt={d.no}>{SheetPost.vchName(d, st.side)}</span> },
         { k: "party", role: "party", label: "Party", v: (d) => d.party || d.gstin, cell: (d) => <>{d.party || "—"}<div className="nr">{d.gstin || ""}</div></> },
         { k: "taxable", role: "amount", label: "Taxable", cls: "n", v: (d) => num(d.taxable), cell: (d) => money2(d.taxable) },
         { k: "tax", label: "Tax", cls: "n", v: tax, sum: tax, cell: (d) => money2(tax(d)) },
@@ -124,7 +126,7 @@ export default function SheetPanel() {
       {st.step === "check" && <CheckStep st={st} />}
       {st.step === "party" && <PartyStep st={st} />}
       {st.step === "done" && st.result && <section data-sheet-step="done">
-        <p data-sheet-result="">{[st.result.added + " added to To review", st.result.held ? st.result.held + " held as duplicates" : "", st.result.again ? st.result.again + " already here, not added again" : ""].filter(Boolean).join(" · ")}</p>
+        <p data-sheet-result="">{[st.result.added + " added to To review", st.result.held ? st.result.held + " held as duplicates" : "", st.result.again ? st.result.again + " already here, not added again" : "", st.result.fixed ? st.result.fixed + " held before, now put right" : ""].filter(Boolean).join(" · ")}</p>
         <Button className="btn primary" onClick={() => { SheetImport.close(); if (st.side === "sales") goState("review", "sales"); else goStep("review", "bills"); }}>Open To review</Button>
       </section>}
     </div>

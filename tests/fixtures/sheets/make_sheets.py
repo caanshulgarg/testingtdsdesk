@@ -88,7 +88,16 @@ try:
         [D(28), A, "Purchase Return", "UP/26-27/0032", CI, 998311, 300, 54, DASH, DASH, 354],
         [D(29), A, "Non-returnable", "UP/26-27/0033", CI, 998311, 100, 18, DASH, DASH, 118]])
     shape("purchase_held.xlsx", "Supplier Name", "Purchase Ledger", [
-        [D(27), "Dev Packaging", "Purchase UP", "DP/901", PG, 4819, -400, -72, DASH, DASH, -472]])
+        [D(27), "Dev Packaging", "Purchase UP", "DP/901", PG, 4819, -400, -72, DASH, DASH, -472],
+        [D(28), "Dev Packaging", "Purchase UP", "DP/902", PG, 4819, -100, -18, DASH, DASH, -118]])
+    # the same sheets with the Type column put right: uploaded again, the held rows are put right in place
+    shape("sales_held_fixed.xlsx", "Customer Name", "Sales Ledger", [
+        [D(27), A, "Credit Note", "UP/26-27/0031", CI, 998311, -400, -72, DASH, DASH, -472],
+        [D(28), A, "Debit Note", "UP/26-27/0032", CI, 998311, 300, 54, DASH, DASH, 354],
+        [D(29), A, "Non-returnable", "UP/26-27/0033", CI, 998311, 100, 18, DASH, DASH, 118]])
+    shape("purchase_held_fixed.xlsx", "Supplier Name", "Purchase Ledger", [
+        [D(27), "Dev Packaging", "Purchase Return", "DP/901", PG, 4819, -400, -72, DASH, DASH, -472],
+        [D(28), "Dev Packaging", "Purchase Return", "DP/902", PG, 4819, -100, -18, DASH, DASH, -118]])
     shape("purchase_negative.xlsx", "Supplier Name", "Purchase Ledger", [
         [D(20), "Dev Packaging", "", "DP/701", PG, 4819, 1000, 180, DASH, DASH, 1180],
         [D(21), "Dev Packaging", "", "DP/702", PG, 4819, -400, -72, DASH, DASH, -472]], typed=False)

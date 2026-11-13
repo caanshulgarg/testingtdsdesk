@@ -32,6 +32,14 @@ function sheetStart(files, side, opts){ return registersLoad().then(() => SheetI
 function reconGo(side){ S.step = null; S.tab = "books"; S.booksTab = "recon"; S.reconTab = side === "customer" ? "customers" : "vendors"; render(); window.scrollTo(0, 0); }
 // the vendor reconciliation's old place, and the vendor's and the bank reconciliation's Excel (src/js/42, loaded with
 // the screens that use it: app/src/lib/vendorRecon.js; these stay here for the first file's screens and the tests)
+// "Edit type" on a bill held for a person (a sheet's negative amount its Type column did not explain): a bill, or a
+// Debit Note (a return); its amounts are taken positive and it is held no more (app/src/screens/Bill.jsx)
+function billSetKind(id, k){
+  const e = D().entries[id]; if (!e || !k) return;
+  ["taxable", "cgst", "sgst", "igst", "cess", "total"].forEach(f => { e.x[f] = Math.abs(num(e.x[f])); });
+  if (k === "credit") e.noteKind = "credit"; else delete e.noteKind;
+  delete e.hold; e.readNote = ""; e.uncertain = []; Store.saveEntry(S.coId, e); refreshStats(S.coId); render();
+}
 function vrOpen(){ S.vrec = null; if (typeof reconGo === "function") reconGo("vendor"); else render(); }
 function vrExcel(){ vendorReconExcel().catch(e => toast("Could not make the file: " + (e.message || e))); }
 function reconExcelGo(){ bankReconExcel().catch(e => toast("Could not make the file: " + (e.message || e))); }

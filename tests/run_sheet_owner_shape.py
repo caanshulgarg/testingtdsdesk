@@ -28,7 +28,9 @@ their GST ledgers and some parties in sub-groups (Sales Local under Sales Accoun
      bills' own journal voucher (balanced, the party credited with its bill reference); a return is still a Debit Note;
      a second Post posts nothing, and a journal of that reference already in Tally is found;
  11. held for a person (re-review of d8281e4ea): a negative amount in a sheet whose Type column does not call it a
-     return, and "Purchase Return" on a sales sheet, wait in To review with the reason said, never turned positive.
+     return, and "Purchase Return" on a sales sheet, wait in To review with the reason said, never turned positive;
+     "Edit type" on the held row sets what it is, there; the sheet uploaded again with its Type put right puts the held
+     row right in place (by number, date and party: nothing deleted by hand, nothing added twice).
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_sheet_owner_shape.py"""
 import os, sys, json, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -395,14 +397,49 @@ with sync_playwright() as p:
     E("() => { SheetImport.close(); SL().list = SL().list.filter(v => v.status !== 'ready'); render(); }"); W(400)
     wt = pg.inner_text("#app [data-post-why]") if pg.locator("#app [data-post-why]").count() else ""
     ok("2 invoices need a correction" in wt, "and Post says why nothing is ready (%s)" % wt)
+    # Edit type on the held row, there
+    id32 = E("SL().list.find(v => v.x.number === 'UP/26-27/0032').id")
+    ok(pg.locator("#app select[data-edit-type]").count() == 2, "each held row has “Edit type” (%d)" % pg.locator("#app select[data-edit-type]").count())
+    if pg.locator('#app select[data-edit-type="%s"]' % id32).count(): pg.select_option('#app select[data-edit-type="%s"]' % id32, "debit"); W(400)
+    v32 = E("(id) => { const v = SL().list.find(v => v.id === id); return [v.x.noteKind, v.x.total, v.hold || '', v.status, (v.problems || []).length, (salesVoucherXml(v, CO()).match(/VCHTYPE=\"([^\"]*)\"/) || [])[1]]; }", id32)
+    ok(v32 == ["debit", 354, "", "ready", 0, "Debit Note"], "Edit type → Debit Note: the row is a debit note, held no more, Ready (%s)" % v32)
+    # the sheet again with its Type column put right: the held row is put right in place
+    id31 = E("SL().list.find(v => v.x.number === 'UP/26-27/0031').id")
+    upload("sales_held_fixed.xlsx", "#salesIn")
+    ok(pg.locator("#app [data-sheet-hold]").count() == 0, "the corrected sheet holds nothing")
+    if pg.locator("#app [data-sheet-add]:not([disabled])").count(): pg.click("#app [data-sheet-add]"); W(900)
+    res = pg.inner_text("#app [data-sheet-result]") if pg.locator("#app [data-sheet-result]").count() else ""
+    L = E("SL().list.map(v => [v.id, v.x.number, v.x.noteKind || '', v.x.total, v.hold || '', v.status])")
+    v31 = ([x for x in L if x[0] == id31] or [[]])[0]
+    ok(v31[1:] == ["UP/26-27/0031 (CN)", "credit", 472, "", "ready"] and len(L) == 3 and "1 held before, now put right" in res and "1 added" in res and "1 already here" in res,
+       "the held invoice itself becomes the credit note (the same row: nothing deleted by hand, nothing twice); the one set by Edit type is already here (%s; %s)" % (v31, res))
+    E("SheetImport.close()"); W(200)
     E("() => { S.tab = null; goStep('review', 'bills'); }"); W(600)
     upload("purchase_held.xlsx", "#fileIn")
     hold = E("[...document.querySelectorAll('#app [data-sheet-hold]')].map(x => x.innerText)")
-    ok(len(hold) == 1 and "Negative amount" in hold[0], "Purchase: the negative bill its Type column calls “Purchase UP” is held the same way (%s)" % hold)
+    ok(len(hold) == 2 and "Negative amount" in hold[0], "Purchase: the negative bills their Type column calls “Purchase UP” are held the same way (%s)" % hold)
+    ok(pg.locator("#app [data-sheet-panel] select[data-edit-type]").count() == 2, "and the panel's held rows have “Edit type” too")
     if pg.locator("#app [data-sheet-add]:not([disabled])").count(): pg.click("#app [data-sheet-add]"); W(900)
     hb = E("""() => { const e = Object.values(D().entries).find(e => e.x.invoiceNo === 'DP/901'); if (!e) return null; e.natureId = "none"; try { approve(e); } catch (x){}
       return [e.x.total, e.noteKind || "", e.readNote || "", e.status, (e.uncertain || []).join()]; }""")
     ok(hb and hb[0] == -472 and hb[1] == "" and "Negative amount: is this a return?" in hb[2] and hb[3] == "draft", "the bill keeps the sheet's figure, says the reason, and cannot be approved as it is (%s)" % hb)
+    # Edit type on the held bill, and the sheet again with its Type put right
+    id902 = E("Object.values(D().entries).find(e => e.x.invoiceNo === 'DP/902').id")
+    E("() => { SheetImport.close(); goStep('review', 'bills'); }"); W(500)
+    E("(id) => { S.filter = 'draft'; S.selected = id; S.drawerOpen = true; render(); }", id902); W(700)
+    ok(pg.locator('#app select[data-edit-type="%s"]' % id902).count() == 1, "the held bill has “Edit type”")
+    if pg.locator('#app select[data-edit-type="%s"]' % id902).count(): pg.select_option('#app select[data-edit-type="%s"]' % id902, "credit"); W(400)
+    else: E("(id) => billSetKind(id, 'credit')", id902)
+    E("() => { S.drawerOpen = false; S.selected = null; render(); }"); W(300)
+    b902 = E("(id) => { const e = D().entries[id]; return [e.noteKind || '', e.x.total, e.hold || '', vchTypeOf(e, CO())]; }", id902)
+    ok(b902 == ["credit", 118, "", "Debit Note"], "Edit type → Debit Note (a return): the bill is one, its amount positive, held no more (%s)" % b902)
+    id901 = E("Object.values(D().entries).find(e => e.x.invoiceNo === 'DP/901').id")
+    E("() => goStep('review', 'bills')"); W(400)
+    upload("purchase_held_fixed.xlsx", "#fileIn")
+    if pg.locator("#app [data-sheet-add]:not([disabled])").count(): pg.click("#app [data-sheet-add]"); W(900)
+    res = pg.inner_text("#app [data-sheet-result]") if pg.locator("#app [data-sheet-result]").count() else ""
+    b = E("Object.values(D().entries).filter(e => /^DP\\/90/.test(e.x.invoiceNo) && e.status !== 'duplicate').map(e => [e.id, e.x.invoiceNo, e.noteKind || '', e.x.total, e.hold || '', e.status]).sort((a, b) => a[1].localeCompare(b[1]))")
+    ok(len(b) == 2 and b[0] == [id901, "DP/901", "credit", 472, "", "draft"] and "1 held before, now put right" in res, "the corrected sheet puts the held bill right in place; the other is not added twice (%s; %s)" % (b, res))
     E("SheetImport.close()"); W(200)
     ok(not errors, "no page errors " + str(errors[:2]))
     br.close()
