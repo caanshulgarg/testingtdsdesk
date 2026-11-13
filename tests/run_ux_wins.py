@@ -149,6 +149,18 @@ def item1(br):
     ok(bool(t) and t["acts"] == ["Close", "Try again"], "a failure with its own button has Close too (%s)" % (t and t["acts"]))
     pg.keyboard.press("Escape"); pg.wait_for_timeout(400)
     ok(E(TOAST) is None, "Esc closes a message that stays")
+    # the final review: a failed count or "not posted" anywhere stays; the save failure stays; Esc closes only the message
+    for m in ["Posted 4 bills to Tally, 2 failed.", "Posted 5; could not post 3.", "1 entry is marked Possible repeat and was not posted."]:
+        E("(m) => toast(m)", m); t = E(TOAST); pg.wait_for_timeout(100)
+        ok(bool(t) and "Close" in t["acts"] and E("() => document.getElementById('toast').dataset.sticky") == "1", "stays, with Close: %r" % m)
+    E("() => toast('Posted 4 bills to Tally.')"); t = E(TOAST); ok(bool(t) and "Close" not in t["acts"], "'Posted 4 bills to Tally.' fades as before")
+    leg = open(os.path.join(SITE, "legacy.js"), encoding="utf8").read()
+    ok(len(re.findall(r'A change could not be saved[^"]*"\s*,\s*\{sticky:\s*(?:true|!0)\}', leg)) == 2, "'A change could not be saved…' (both) is marked to stay")
+    E("() => navHome('clients')"); settle(pg, 500); pg.click("[data-add-client]"); pg.wait_for_selector("#ncName")
+    E("() => toast('Could not save the client.')"); pg.focus("#ncName"); pg.keyboard.press("Escape"); pg.wait_for_timeout(400)
+    ok(E(TOAST) is None and pg.locator("#ncName").count() == 1, "Esc with a message open closes the message only (the form under it stays)")
+    pg.keyboard.press("Escape"); pg.wait_for_timeout(400)
+    ok(pg.locator("#ncName").count() == 0, "   the next Esc closes the form")
     ctx.close()
 
 def item2(br):

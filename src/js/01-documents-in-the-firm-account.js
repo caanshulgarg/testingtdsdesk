@@ -308,14 +308,14 @@ const Store = {
         this.failed = true;
         toast(e && e.code === "quota_exceeded"
           ? "Storage is full. Download the register, then clear sent invoices in Send to Tally."
-          : "A change could not be saved. Check your connection and try again.");
+          : "A change could not be saved. Check your connection and try again.", {sticky: true});
       });
     } else if (S.storeKind === "idb"){
       // each record is written on its own, in the background, in order: nothing waits, nothing is rewritten in full
       const body = obj ? clone(obj) : null;
       this.chains[path] = (this.chains[path] || Promise.resolve()).then(() => IDBStore.write([[path, body]])).catch(e => {
         this.failed = true;
-        toast(e && /quota/i.test(e.name || e.message || "") ? "This browser\u2019s storage is full. Download the register, then clear sent invoices." : "A change could not be saved on this computer. Reload the page and try again.");
+        toast(e && /quota/i.test(e.name || e.message || "") ? "This browser\u2019s storage is full. Download the register, then clear sent invoices." : "A change could not be saved on this computer. Reload the page and try again.", {sticky: true});
       });
     } else if (S.storeKind === "local"){
       clearTimeout(this.lsTimer);
@@ -472,7 +472,9 @@ function toastWire(t){
   t.addEventListener("mouseenter", () => clearTimeout(toastTimer));
   t.addEventListener("mouseleave", () => { if (!t.classList.contains("hidden") && !t.dataset.sticky) { clearTimeout(toastTimer); toastTimer = setTimeout(toastHide, 2000); } });
   t.addEventListener("click", toastHide);
-  document.addEventListener("keydown", ev => { if (ev.key === "Escape" && t.dataset.sticky && !t.classList.contains("hidden")) toastHide(); });
+  // Esc closes the topmost thing only: a message showing is closed, and the key goes no further (not also the dialog,
+  // the panel or the client under it)
+  window.addEventListener("keydown", ev => { if (ev.key === "Escape" && !t.classList.contains("hidden") && !t.classList.contains("out") && !(toastStay && t.dataset.stay === "1")){ ev.preventDefault(); ev.stopImmediatePropagation(); toastHide(); } }, true);
   let y0 = null;
   t.addEventListener("pointerdown", ev => { y0 = ev.clientY; clearTimeout(toastTimer); });
   // tds-layout: the message sits in a corner now, not centred, so a swipe moves it down only
@@ -550,7 +552,9 @@ function toast(msg, o){
   // own (plain), one that begins with the failure ("Could not…", "Failed…"), or one the caller says (o.sticky); never by
   // a word somewhere in it ("No error found"), and not one the caller says fades (o.sticky false: "Could not copy; type …").
   // It always has Close, and Esc closes it
-  const sticky = !(o && o.stay) && (o && o.sticky != null ? !!o.sticky : !!plain || /^(could not|couldn.t|cannot|can.t|failed|error)\b/i.test(s));
+  const sticky = !(o && o.stay) && (o && o.sticky != null ? !!o.sticky : !!plain || /^(could not|couldn.t|cannot|can.t|failed|error)\b/i.test(s)
+    // a count that failed ("3 failed", "2 bills failed", "could not post 3"), or work "not posted": anywhere in the words
+    || /\b\d+ (\w+ )?failed\b|could not \w+ \d+|not posted/i.test(s));
   if (sticky && !acts.some(a => a.label === "Close")) acts.unshift({label: "Close", run(){}});
   t.dataset.sticky = sticky ? "1" : "";
   if (acts.length){
