@@ -142,9 +142,9 @@ RULES_HELP = r"""() => { const Z = window.__zz, b = S.books;
   Z.due = (A) => { const r = A === MIS ? MIS.autoRange(b) : Audit.defaultRange(b); if (A === MIS) b.misCfg = {freq: "monthly"}; else b.auditCfg = {freq: "daily"};
     const L = A.lastRun(b) || (A.run(r.from, r.to, "by hand"), A.lastRun(b)), y = new Date(Date.now() - (A === MIS ? 40 : 1) * 86400000).toISOString(); L.at = y; (A === MIS ? b.mis : b.audit).history[0].at = y; return r; };
   Z.once = (A, k0, r) => { const keep = b[k0]; b[k0] = Z.copy(A === MIS ? Z.m0 : Z.a0); memoScope(() => A.runNow(r.from, r.to, "on its own (" + A.cfg(b).freq + ")")); const t = Z.text(b[k0]); b[k0] = keep; return t; };
-  Z.state = () => ({audit: !!Audit.auto, mis: !!MIS.auto, soon: !!MIS._soon, st: Engine.st, why: Engine.why, jobs: Engine.jobs.size, again: !!MIS._again, b: S.books === b});
+  Z.state = () => ({audit: !!Audit.auto, mis: !!MIS.auto, soon: !!MIS._soon, st: typeof Engine === "object" && Engine.st, jobs: typeof Engine === "object" && Engine.jobs.size, again: !!MIS._again, b: S.books === b});
   // (the engine as at the start: a part that turned it off and failed leaves it so)
-  Z.fresh = () => { if (Engine.st === "off"){ Engine.st = ""; Engine.why = ""; } };
+  Z.fresh = () => { if (typeof Engine === "object" && Engine.st === "off"){ Engine.st = ""; Engine.why = ""; } };
   Z.bk = b; return true; }"""
 RULES = [
  ("edit", r"""async () => { const Z = window.__zz, b = Z.bk; Z.fresh();
@@ -256,7 +256,7 @@ try:
                     try: e = pg.evaluate(js)
                     except Exception as x: e = {"error": str(x).split("\n")[0][:200], "state": pg.evaluate("() => window.__zz.state()")}
                     ok("error" not in e and WANT[name](e), "%s (%s)" % (SAY[name], e))
-                eng = pg.evaluate("() => Engine.URL")
+                eng = pg.evaluate("() => typeof Engine === 'object' ? Engine.URL : ''")
                 f = os.path.join(SITE, eng[2:]) if eng.startswith("./assets/engine-") else ""
                 leg = open(os.path.join(SITE, "legacy.js"), encoding="utf8").read()
                 ok(bool(f) and os.path.exists(f) and "importScripts" not in leg and eng[2:] in open(os.path.join(SITE, "sw.js"), encoding="utf8").read(),
