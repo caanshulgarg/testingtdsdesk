@@ -347,3 +347,18 @@ header.top .headrow > .tbar { flex: 1 1 auto; min-width: min(100%, max-content);
   .is-test .side:not(.side-folded) .side-brand { flex-wrap: wrap; }
   .is-test .side:not(.side-folded) .side-brand::after { order: 4; flex-basis: 100%; padding-left: 38px; margin-top: -4px; }
 }
+
+/* ux-wins (the UI review, a phone): Today no longer scrolls sideways (a client's GSTIN wraps under its name), and the
+   totals at the foot of its list say what each figure is */
+.today .today-gstin { overflow-wrap: anywhere; }
+@media (max-width: 600px) {
+  .today .today-gstin { display: block; flex-basis: 100%; }
+  #app .today table.lt tbody td:first-child { flex-wrap: wrap; min-width: 0; }
+  #app .today table.lt tfoot td { display: flex; justify-content: space-between; gap: 12px; }
+  #app .today table.lt tfoot td:first-child::before { content: "Total"; color: var(--text-muted); font-size: 12px; font-weight: 500; }
+  #app .today table.lt tfoot td:nth-child(2)::before { content: "To read"; }
+  #app .today table.lt tfoot td:nth-child(3)::before { content: "To review"; }
+  #app .today table.lt tfoot td:nth-child(4)::before { content: "Ready to post"; }
+  #app .today table.lt tfoot td:nth-child(5)::before { content: "Needs you"; }
+  #app .today table.lt tfoot td:nth-child(n+2)::before { color: var(--text-muted); font-size: 12px; font-weight: 500; }
+}

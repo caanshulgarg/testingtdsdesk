@@ -57,7 +57,7 @@ export default function Today() {
         {/* the one list table (spec K6) */}
         <ListTable name="today" className="data" rows={rows} rowKey={(r) => r.c.id} unit={["client", "clients"]}
           cols={[
-            { k: "name", role: "party", label: "Client", v: (r) => r.c.name, cell: (r) => <><span className="today-co" data-initials={initials(r.c.name)}><button className="linkbtn" onClick={() => openAt(r.c.id, "review")}><b>{r.c.name}</b></button></span>{r.c.gstin && <> <span className="note">{r.c.gstin}</span></>}</> },
+            { k: "name", role: "party", label: "Client", v: (r) => r.c.name, cell: (r) => <><span className="today-co" data-initials={initials(r.c.name)}><button className="linkbtn" onClick={() => openAt(r.c.id, "review")}><b>{r.c.name}</b></button></span>{r.c.gstin && <> <span className="note today-gstin">{r.c.gstin}</span></>}</> },
             { k: "read", label: "To read", cls: "n", v: (r) => r.read, sum: true, fmt: String, cell: (r) => cell(r, "read", "collect") },
             { k: "review", label: "To review", cls: "n", v: (r) => r.review, sum: true, fmt: String, cell: (r) => cell(r, "review", "review") },
             { k: "post", label: "Ready to post", cls: "n", v: (r) => r.post, sum: true, fmt: String, cell: (r) => cell(r, "post", "post") },
