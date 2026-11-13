@@ -1390,6 +1390,10 @@ var (
 )
 
 func cloudPostsFile() string { return sp("cloud-posts.txt") }
+
+// a posting's view as syncCloudPosts reads it (a hook for the tests)
+var jobViewFn = jobView
+
 func getCloudPosts() map[string]string {
 	if cloudPosts == nil {
 		cloudPosts = map[string]string{}
@@ -1498,7 +1502,10 @@ func syncCloudPosts() {
 			saveCloudPosts()
 			continue
 		}
-		v := jobView(dir)
+		v := jobViewFn(dir)
+		if v == nil && (exists(filepath.Join(dir, "progress.json")) || exists(bakOf(filepath.Join(dir, "progress.json")))) {
+			continue // 2.5.16: there but held by another program a moment: reported at the next turn, never dropped
+		}
 		if v == nil {
 			delete(cp, id)
 			offlineTold.Delete(id) // review L7

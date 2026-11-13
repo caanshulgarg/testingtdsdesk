@@ -13,7 +13,8 @@ post_ok, the bridge's read-only question before it sends each part of a posting 
   7. a cloud without 174 (no stop_reason): read without it, as before;
   8. posts_update with offlineSends: kept in the timing; without it the timing as before;
   9. (review L3) posts_update of a posting another FinCom Bridge took (taken_by): answered cancelled (notYours), its
-     acceptances stamped first, nothing of the row written.
+     acceptances stamped first, nothing of the row written;
+ 10. (2.5.16) posts_update from a bridge in test mode: refused, its acceptances (a posting of this firm only) stamped first.
 Needs Deno (DENO, default: the deno on the PATH or /opt/deno/deno)."""
 import os, sys, json, time, hashlib, subprocess, urllib.request, urllib.error, shutil, threading
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
@@ -116,6 +117,17 @@ try:
     st = [a for a in F.ARGS.get("tally_post_id_accept", []) if a.get("p_job") == "p9"]
     ok(c == 200 and r.get("cancelled") is True and r.get("notYours") is True and st and row("p9")["status"] == "running" and row("p9")["taken_by"] == OTHER and patches() == n0,
        "answered cancelled, stamped first, nothing written (%s %s, %d stamps)" % (c, r, len(st)))
+    print("== 10. posts_update from a bridge in test mode (2.5.16)")
+    F.T["tally_post_jobs"].append(job("p10", "running"))
+    n0 = patches()
+    c, r = call({"kind": "posts_update", "shadow": True, "version": "2.5.16", "bridge": ME, "id": "p10", "status": "running", "done": 1, "message": "Posting", "seq": 2,
+                 "results": [{"id": "K1", "ok": False, "accepted": True, "lastVchId": "92", "message": "Tally replied CREATED 1 LASTVCHID 92"}, {"id": "K2", "ok": False, "message": "refused"}]})
+    st = [a for a in F.ARGS.get("tally_post_id_accept", []) if a.get("p_job") == "p10"]
+    ok(c == 403 and len(st) == 1 and st[0].get("p_vch") == "92" and row("p10")["status"] == "running" and patches() == n0,
+       "refused, the acceptance stamped first, nothing written (%s %s, %s)" % (c, r, st))
+    F.T["tally_post_jobs"].append(dict(job("p11", "running"), firm_id="f-other"))
+    c, r = call({"kind": "posts_update", "shadow": True, "version": "2.5.16", "bridge": ME, "id": "p11", "status": "running", "results": [{"id": "K1", "ok": True}]})
+    ok(c == 403 and not [a for a in F.ARGS.get("tally_post_id_accept", []) if a.get("p_job") == "p11"], "another firm's posting: refused, nothing stamped")
 finally:
     fn.terminate()
     try: fn.wait(10)

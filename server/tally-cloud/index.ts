@@ -1345,6 +1345,36 @@ async function makeMain(dev: any, id: string) {
   return reply(200, { ok: true, main: id });
 }
 
+// posts_update's rules for an entry Tally accepted (used by posts_update and, 2.5.16, by shadowCall): see posts_update
+const postFid = (v: string) => String(v || "").replace(/[^A-Za-z0-9]/g, "");
+const postAcceptedMsg = (m: string) => (/\b(CREATED|ALTERED)\b/i.test(m) && (/\b(LASTVCHID|VCHID|MASTERID|voucher(?: no\.?| number| id)?)\D{0,6}[1-9]\d*/i.test(m) || /\b(CREATED|ALTERED)\b\D{0,4}[1-9]\d*/i.test(m) || /cannot be found/i.test(m)))
+  || /replied '(created|altered)'/i.test(m);
+const postAcceptedRes = (r: any) => r.alreadySent === true || (!(r.refused === true && r.postOnly === true) && !(r.needsReview === true && r.accepted !== true)
+  && !!(r.ok || r.accepted || r.held || r.created > 0 || r.altered > 0 || r.lastVchId || r.vchNumber || r.masterId || r.guid || postAcceptedMsg(r.message) || postAcceptedMsg(r.reason)));
+const postBatchN = (r: any) => Math.floor(Number(r && r.batchN) || 0);
+const postVchOf = (r: any) => r.alreadySent === true ? (postBatchN(r) === 1 ? String(r.vchId || "") : "")
+  : postBatchN(r) > 1 ? String(r.vchId || "")     // an entry of a batch: its words name the request's LASTVCHID, not its own id
+  : String(r.vchId || r.lastVchId || r.vchNumber || r.masterId || ((String(r.message || "") + " " + String(r.reason || "")).match(/\b(?:LASTVCHID|VCHID|MASTERID|voucher(?: no\.?| number)?)\D{0,6}([1-9]\d*)/i) || [])[1] || "");
+// FinCom Bridge 2.5.16 (the 2.5.15 review's low): a posts_update from a bridge in test mode is refused, but only after the
+// acceptances it reports for a posting of this firm are stamped (tally_post_id_accept), as posts_update does before
+// every early answer: an entry Tally took is never freed and sent again because the bridge went to test mode
+async function stampShadowAcceptances(firm: string, body: any) {
+  const id = String(body?.id || "").slice(0, 64);
+  if (!id) return;
+  const s = (v: unknown, n: number) => typeof v === "string" ? v.slice(0, n) : "";
+  const rs = (Array.isArray(body.results) ? body.results : []).slice(0, 5000).filter((r: any) => r && typeof r === "object" && s(r.id, 200)).map((r: any) => ({
+    id: s(r.id, 200), ok: !!r.ok, accepted: !!r.accepted, held: !!r.held, alreadySent: !!r.alreadySent, refused: !!r.refused, postOnly: !!r.postOnly, needsReview: !!r.needsReview,
+    created: Math.max(0, Math.floor(Number(r.created) || 0)), altered: Math.max(0, Math.floor(Number(r.altered) || 0)), lastVchId: s(r.lastVchId, 30), vchId: s(r.vchId, 30),
+    vchNumber: s(r.vchNumber, 60), masterId: s(r.masterId, 30), guid: s(r.guid, 100), message: s(r.message, 1000), reason: s(r.reason, 500), batchN: Math.max(0, Math.min(500, Math.floor(Number(r.batchN) || 0))) }));
+  const acc = rs.filter(postAcceptedRes);
+  if (!acc.length) return;
+  const { data: fj } = await db.from("tally_post_jobs").select("firm_id").eq("id", id).maybeSingle();
+  if (!fj || fj.firm_id !== firm) return;
+  for (const r of acc) {
+    const { error } = await db.rpc("tally_post_id_accept", { p_job: id, p_id: postFid(r.id), p_vch: postVchOf(r) });
+    if (error && !/tally_post_id_accept|schema cache|does not exist/i.test(error.message)) { fail("tally_post_id_accept", error, "posts_update"); console.error("tally_post_id_accept (shadow)", error.message); }
+  }
+}
 // go-bridge: a call from FinCom Bridge 2.0.0 in test mode ("shadow"). It runs beside bridge 1.15.0 with the same computer
 // key to be compared with it, so nothing it sends may change what 1.15.0 keeps:
 //   - postings: never handed to it (only one bridge may ever post);
@@ -1355,6 +1385,7 @@ async function shadowCall(dev: any, firm: string, body: any) {
   const kind = String(body.kind || "");
   if (kind === "posts_take" || kind === "posts_update" || kind === "post_check" || kind === "post_ok") {
     if (kind === "posts_take") await rescuePosts(dev);   // review M-B: a posting for this bridge before it went to test mode is not left waiting
+    if (kind === "posts_update") await stampShadowAcceptances(firm, body);   // 2.5.16: its acceptances stamped first
     return reply(403, { ok: false, error: "A bridge in test mode does not post." });
   }
   if (kind === "support") return await supportPack(firm, dev, body);
@@ -5065,23 +5096,19 @@ Deno.serve(sentry.wrap(async (req) => {
         // moved it back to 'waiting' after 30 minutes and the bridge sent it again: a second copy in Tally. The requeue
         // never looks at 'done'; the app treats a job with checking as still going on). A verified entry holds nothing:
         // a posting with one verified and one plainly refused entry is failed, as before.
-        const fid = (v: string) => String(v || "").replace(/[^A-Za-z0-9]/g, "");
+        const fid = postFid;
         // Tally's words with a voucher id, or the 2.1.5 bridge's own ("Tally replied 'created', but the entry cannot be
         // found in '…'": that build sent no voucher id; it is the build on NWS144)
-        const acceptedMsg = (m: string) => (/\b(CREATED|ALTERED)\b/i.test(m) && (/\b(LASTVCHID|VCHID|MASTERID|voucher(?: no\.?| number| id)?)\D{0,6}[1-9]\d*/i.test(m) || /\b(CREATED|ALTERED)\b\D{0,4}[1-9]\d*/i.test(m) || /cannot be found/i.test(m)))
-          || /replied '(created|altered)'/i.test(m);
+        const acceptedMsg = postAcceptedMsg;
         // 2.1.8: a needsReview result WITHOUT accepted (Tally created nothing) is never an acceptance, whatever its counts or words
         // (finding 5) an alreadySent refusal (this computer sent the entry before, on its own record) is an acceptance: locked, never released
-        const acceptedRes = (r: any) => r.alreadySent === true || (!(r.refused === true && r.postOnly === true) && !(r.needsReview === true && r.accepted !== true)
-          && !!(r.ok || r.accepted || r.held || r.created > 0 || r.altered > 0 || r.lastVchId || r.vchNumber || r.masterId || r.guid || acceptedMsg(r.message) || acceptedMsg(r.reason)));
+        const acceptedRes = postAcceptedRes;
         const accepted = new Set<string>(results.filter((r: any) => r.id && acceptedRes(r)).map((r: any) => fid(r.id)));
         // the voucher id to stamp: the exact one (vchId); lastVchId only when the result is not an entry of a batch (finding 4: the
         // bridge puts the request's LASTVCHID on every entry of a batch, and a batch end is never an entry's voucher id); an
         // alreadySent refusal gives vchId alone, and only when its request held one voucher (never an inferred id)
-        const batchN = (r: any) => Math.floor(Number(r && r.batchN) || 0);
-        const vchOf = (r: any) => r.alreadySent === true ? (batchN(r) === 1 ? String(r.vchId || "") : "")
-          : batchN(r) > 1 ? String(r.vchId || "")     // an entry of a batch: its words name the request's LASTVCHID, not its own id
-          : String(r.vchId || r.lastVchId || r.vchNumber || r.masterId || ((String(r.message || "") + " " + String(r.reason || "")).match(/\b(?:LASTVCHID|VCHID|MASTERID|voucher(?: no\.?| number)?)\D{0,6}([1-9]\d*)/i) || [])[1] || "");
+        const batchN = postBatchN;
+        const vchOf = postVchOf;
         if (items) for (const x of items as any[]) if (x.id && !x.postOnly && (x.state === "failed" || x.state === "notfound") && acceptedMsg(x.reason)) accepted.add(fid(x.id));
         // the accepted entries not confirmed: the ones that hold the posting
         const itemOf = (a: string) => ((items || []) as any[]).find((x) => fid(x.id) === a);
