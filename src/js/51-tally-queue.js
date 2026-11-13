@@ -51,7 +51,7 @@ const CloudPost = {
   async row(id){ const r = await Cloud.api("tally_post_jobs?select=id,status,done,n,message,results,checking,company&id=eq." + id); return (r || [])[0] || null; },
   // the same answer as Bridge.postChecked: {ok, company, results: [{id, ok, message, ...}], checking, job}
   async run(cid, payload, onProgress, onChecked){
-    const id = this.uuid(), sleep = ms => new Promise(r => setTimeout(r, ms));
+    let id = this.uuid(); const sleep = ms => new Promise(r => setTimeout(r, ms));
     const ids = [].concat(payload.masters || [], payload.vouchers || []).map(x => x.id);
     // FinCom Bridge 2.3.0 (migration 54): the bridge it goes through (the owner's pick, else the member's own): named;
     // none: the cloud chooses the poster's own bridge, or says what to do
@@ -66,26 +66,44 @@ const CloudPost = {
     // and it is not Tally's reason; the entries stay waiting
     if (r && !r.ok && r.notAllowed) return {ok: true, company: r.company || payload.company, notAllowed: true, viaCloud: true,
       results: ids.map(x => ({id: x, ok: false, notAllowed: true, message: r.error || "Choose the Tally company this client may post to (Client setup \u2192 Tally)."}))};
-    if (!r || !r.ok) throw {code: "cloud_post", message: (r && r.error) || "The entries could not be queued."};
-    postMarkNew(cid, ids, id);
+    // migration 184 (item C): the entries an earlier posting holds (r.dupes: [{id, job, status}]) are not queued again:
+    // each is followed in the posting that holds it (every one of them, not only the first), beside the new posting
+    const dup = new Map([].concat((r && r.dupes) || []).map(d => [d.id, d]));
+    if (!(r && r.none && dup.size) && (!r || !r.ok)) throw {code: "cloud_post", message: (r && r.error) || "The entries could not be queued."};
+    const own = r.none ? "" : id, jobOf = x => dup.has(x) ? dup.get(x).job : own, rows = new Map();
+    ids.forEach(x => { if (jobOf(x)){ rows.set(jobOf(x), null); postMarkNew(cid, [x], jobOf(x)); } });
+    id = own || dup.values().next().value.job;
     try { lsSet("tdsdesk:cloudpost", JSON.stringify({id, cid, at: Date.now(), n: ids.length})); } catch (e){}
     const tell = j => { try { onProgress && onProgress(j); } catch (e){} };
-    const t0 = Date.now();
+    const t0 = Date.now(), fin = j => !!j && ["done", "failed", "cancelled"].includes(j.status), far = j => /^Queued: posts/.test((j && j.message) || "");
+    // waiting for Tally: the cloud's own words when it is queued for no computer (migration 185), else the company and
+    // the computer it waits for
+    const waits = j => far(j) ? j.message : "Waiting for " + ((j && j.company) || payload.company) + " to be opened in Tally on " + ((trow && trow.computer) || "the Tally computer");
     let j = null;
     for (;;){
       await sleep(j ? 2500 : 1200);
-      try { j = await this.row(id) || j; } catch (e){ /* the internet: tried again */ }
-      if (!j) continue;
-      if (["done", "failed", "cancelled"].includes(j.status)) break;
-      const waitMin = Math.floor((Date.now() - t0) / 60000);
-      tell({done: j.done || 0, total: j.n || ids.length, message: j.status === "waiting"
-        ? "Queued for the Tally computer; it takes it within a minute when Tally is open" + (waitMin >= 2 ? " (waiting " + waitMin + " min: is Tally open there?)" : "")
-        : (j.message || "Posting on the Tally computer")});
-      if (Date.now() - t0 > 30 * 60000){ j = Object.assign({}, j, {status: "failed", message: "Still waiting for the Tally computer after 30 minutes. The posting stays queued and runs when Tally is open there; entries already in Tally are never posted twice."}); break; }
+      for (const k of rows.keys()) if (!fin(rows.get(k))){ try { rows.set(k, await this.row(k) || rows.get(k)); } catch (e){ /* the internet: tried again */ } }
+      const open = [...rows.values()].filter(x => !fin(x));
+      j = rows.get(id) || j;
+      if (!open.length) break;
+      const w = open.find(x => x);
+      if (w) tell({done: w.done || 0, total: w.n || ids.length, message: w.status === "waiting" ? waits(w) : (w.message || "Posting on the Tally computer")});
+      // item A: a posting still waiting for Tally (30 minutes; queued for no computer: a minute) is never called failed
+      // here: it stays queued in the cloud, its entries stay as they are (held), and its result is marked on them when it
+      // comes (postReconcile)
+      // (taken or running that long: the same; nothing is ever sent again from here)
+      if (Date.now() - t0 > (open.every(x => x && x.status === "waiting") && open.some(far) ? 1 : 30) * 60000) break;
     }
-    const why = j.status === "done" ? "Not posted." : (j.message || "The posting stopped.");
-    const resultsOf = jj => { const got = new Map([].concat(jj.results || []).map(x => [x.id, x])); return ids.map(x => got.get(x) || {id: x, ok: false, message: why}); };
-    const results = resultsOf(j);
+    j = j || {};
+    const resultsOf = at => ids.filter(jobOf).map(x => {
+      const jj = (at && jobOf(x) === id ? at : rows.get(jobOf(x))) || {}, got = [].concat(jj.results || []).find(y => y.id === x);
+      if (got) return got;
+      const o = {id: x, ok: false, job: jobOf(x), status: jj.status};
+      if (!fin(jj)) return Object.assign(o, {held: true, message: (!jj.status ? "Not heard from the cloud for 30 minutes" : jj.status === "waiting" ? waits(jj) : "Being posted " + (dup.has(x) ? "in an earlier posting" : "on the Tally computer")) + ": it stays queued and posts by itself."});
+      if (dup.has(x) && jj.status === "done") return Object.assign(o, {held: true, message: "Already posted in an earlier posting (it stays queued there until its result is marked here); not sent twice."});
+      return Object.assign(o, {message: jj.status === "done" ? "Not posted." : (jj.message || "The posting stopped.")});
+    });
+    const results = resultsOf();
     if (j.checking){
       results.forEach(x => { if (x.ok && x.verified == null) x.pendingCheck = true; });
       (async () => {
@@ -95,7 +113,7 @@ const CloudPost = {
           if (k && !k.checking){ try { lsDel("tdsdesk:cloudpost"); } catch (e){} try { onChecked && onChecked({results: resultsOf(k)}); } catch (e){} return; }
         }
       })();
-    } else { try { lsDel("tdsdesk:cloudpost"); } catch (e){} }
+    } else if (fin(j)){ try { lsDel("tdsdesk:cloudpost"); } catch (e){} }
     return {ok: true, company: j.company || payload.company, results, checking: !!j.checking, viaCloud: true, job: {id, status: j.status, message: j.message}};
   }
 };

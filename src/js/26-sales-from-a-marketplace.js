@@ -393,8 +393,20 @@ async function salesCheckTally(list){
 function salesTallyKey(x){ return String(x.guid || x.masterId || [x.date, x.type, x.number].join("|")); }
 // asked: someone pressed Refresh from Tally. By itself (opening the page) Tally is not read, except a first ledger list;
 // sales already in Tally are still found when posting (build 190)
+// invoices held by a posting in FinCom's cloud (v.postJob): that posting's result marked on them once it has one
+async function salesQueuedSync(){
+  const s = SL(); let n = 0;
+  for (const v of s.list.filter(x => x.postJob && x.status === "ready")){
+    let j = null; try { j = await CloudPost.row(v.postJob); } catch (e){ continue; }
+    const r = j && [].concat(j.results || []).find(x => x && x.id === v.id);
+    if (r && r.ok){ n++; v.status = "posted"; v.postedAt = new Date().toISOString(); v.postError = ""; v.postedInto = j.company || ""; delete v.postJob; }
+    else if (j && ["failed", "cancelled"].includes(j.status)){ n++; v.postError = plainMsg((r && r.message) || j.message); delete v.postJob; }
+  }
+  if (n){ saveSales(); render(); }
+}
 async function salesAutoSync(checkOnly, asked){
   const s = SL(), co = CO(s.cid);
+  try { await salesQueuedSync(); } catch (e){ /* the next refresh */ }
   if (!bridgeLive(co)) return;
   try {
     if (!checkOnly && (asked || !(B().ledgers.list || []).length)) await syncLedgersFromTally(true);
@@ -425,13 +437,14 @@ async function postSalesToTally(){
     const by = new Map([].concat(j.results || []).map(r => [r.id, r]));
     const now = new Date().toISOString();
     masters.forEach(l => { const r = by.get("led:" + l.name); if (r && r.ok){ l.sent = true; l.sentAt = now; } });
-    let ok = 0, bad = 0;
+    let ok = 0, bad = 0, queued = 0;
     let optionalN = 0;
-    list.forEach(v => { const r = by.get(v.id); if (r && r.ok && r.verified !== true){ bad++; const x = r; v.postError = "Failed: not found in Tally when read back, so it is not marked as posted. Look in Tally (Day Book, and Display More Reports \u2192 Exception Reports \u2192 Optional Vouchers). If it is not there, post it again." + (x.verifyNote ? " [" + x.verifyNote + "]" : ""); return; } if (r && r.ok){ ok++; v.status = "posted"; v.postedAt = now; v.postError = ""; v.postedInto = r.company || ""; v.postedOptional = !!r.optional; if (r.optional) optionalN++; learnCustomer(v); } else { bad++; v.postError = plainMsg(r && r.message) || "Tally did not confirm this invoice."; } });
+    list.forEach(v => { const r = by.get(v.id); if (r && r.ok && r.verified !== true){ bad++; const x = r; v.postError = "Failed: not found in Tally when read back, so it is not marked as posted. Look in Tally (Day Book, and Display More Reports \u2192 Exception Reports \u2192 Optional Vouchers). If it is not there, post it again." + (x.verifyNote ? " [" + x.verifyNote + "]" : ""); return; } if (r && r.ok){ ok++; v.status = "posted"; v.postedAt = now; v.postError = ""; v.postedInto = r.company || ""; v.postedOptional = !!r.optional; if (r.optional) optionalN++; learnCustomer(v); } else if (r && r.held){ queued++; v.postError = plainMsg(r.message); v.postJob = r.job; }   /* held by a posting still going on in FinCom's cloud: queued, not failed */
+      else { bad++; v.postError = plainMsg(r && r.message) || "Tally did not confirm this invoice."; } });
     saveBank({newLed: true});
     s.busy = ""; saveSales();
-    toast(ok + " posted to Tally" + (optionalN ? " (" + optionalN + " as Optional vouchers: Display More Reports \u2192 Exception Reports \u2192 Optional Vouchers)" : "") + (bad ? "; " + bad + " not posted (see the red notes)" : "") + ".");
-    if (!bad) s.filter = "done";
+    toast(ok + " posted to Tally" + (optionalN ? " (" + optionalN + " as Optional vouchers: Display More Reports \u2192 Exception Reports \u2192 Optional Vouchers)" : "") + (queued ? "; " + queued + " queued, posts by itself" : "") + (bad ? "; " + bad + " not posted (see the red notes)" : "") + ".");
+    if (!bad && !queued) s.filter = "done";
     syncLedgersFromTally(true);
   } catch (e){ s.busy = ""; toast("Posting failed: " + e.message); }
   render();

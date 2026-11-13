@@ -104,6 +104,7 @@ function postWord(x){
   if (x.zoho && x.ok) return x.already ? "Already in Zoho Books (not sent again)" : "Posted to Zoho Books" + (x.zoho.number ? " (" + x.zoho.kind + " " + x.zoho.number + ")" : "");
   if (postAlready(x)) return plainMsg(x.message) || "Already in Tally (not sent again)";
   if (postCheckFail(x)) return plainMsg(x.message) || "Could not check Tally, not posted. Try again.";
+  if (x.held) return plainMsg(x.message);          // held by a posting still going on in FinCom's cloud: not failed
   if (!x.ok) return "Failed: " + (plainMsg(x.message) || "Tally did not confirm it");
   if (x.existed) return "Already in Tally (not sent again)";
   if (postAltered(x)) return "Altered in Tally";

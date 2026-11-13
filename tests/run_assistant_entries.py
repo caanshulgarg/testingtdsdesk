@@ -194,7 +194,7 @@ with sync_playwright() as p:
         pg.wait_for_timeout(100)
     pg.wait_for_timeout(1800)
     busy = pg.inner_text(CARD + " [data-ent-busy]") if pg.locator(CARD + " [data-ent-busy]").count() else ""
-    ok(pg.locator(CARD + " [data-ent-status='sent']").count() == 2 and "Queued for the Tally computer" in busy, "   live in the card: each voucher 'Sent', the posting's progress (%r)" % busy)
+    ok(pg.locator(CARD + " [data-ent-status='sent']").count() == 2 and "Waiting for " in busy and "to be opened in Tally" in busy, "   live in the card: each voucher 'Sent', the posting's progress (%r)" % busy)
     shot(pg, "entries-sending-desktop", CARD)
     e = enq(pg)
     ok(len(e) == 1 and e[0][0] == "tally_post_enqueue" and e[0][1]["p_client"] == cid and len(e[0][1]["p_payload"]["vouchers"]) == 2 and e[0][1]["p_payload"]["masters"] == [],

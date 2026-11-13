@@ -209,6 +209,24 @@ with sync_playwright() as p:
     E("() => { window.tallyCall = window.__tcOld; Bridge.post = window.__bpOld; }")
     ok(rf["ids"] == ["f1"] and not rf["err"] and rf["exp"], "(f) with reading off on the bridge, the pre-check is skipped and the bill is posted (%s)" % rf)
     ok("could not be checked" in rf["note"], "(f) and the result says the check against Tally could not be made (%s)" % rf["note"])
+    # next-post-queue-anyway (review H1, plan item A): an entry held by a posting still going on in FinCom's cloud (waiting
+    # for Tally, or an earlier posting has it) is NOT failed: the bill is not sent back to review, the bank line keeps its
+    # release, and auto-posting reads it as queued
+    E("""() => { window.__tcH = window.tallyCall; window.tallyCall = async () => ({vouchers: []}); window.__mk("h1", "Alpha Consultants", "H/1", 900); window.__bpH = Bridge.post; window.__cpH = CloudPost.run;
+      const held = v => ({id: v.id, ok: false, held: true, job: "jHeld", status: "waiting", message: "Waiting for GARG SHEKHAR & COMPANY to be opened in Tally on NWS144: it stays queued and posts by itself."});
+      Bridge.post = async (p) => ({ok: true, company: p.company, viaCloud: true, job: {id: "jHeld", status: "waiting"}, results: p.vouchers.map(held)});
+      CloudPost.run = async (cid, p) => ({ok: true, company: "GARG SHEKHAR & COMPANY", viaCloud: true, checking: false, job: {id: "jHeld", status: "waiting"}, results: p.vouchers.map(held)});
+      B().rows.push({id: "s1-9", fp: "q9", date: "2026-07-05", narr: "NEFT DR HELD", debit: 700, credit: 0, ledger: "Office Rent", state: "ready", userSet: true, balOk: true, dec: {name: "Office Rent"}, release: {at: "2026-07-06T00:00:00Z", by: "owner", why: "not in Tally"}}); }""")
+    st0 = E("D().entries.h1.status")
+    E("() => postBillsToTally(['h1'])"); pg.wait_for_timeout(1500)
+    hb = E("(() => { const e = D().entries.h1, p = S.billPost || {}; return {st: e.status, err: e.postError || '', failedAt: !!e.postFailedAt, bad: p.bad, failed: (p.failed || []).length, perr: p.error || ''}; })()")
+    ok(hb["st"] == st0 and st0 == "approved" and not hb["failedAt"] and not hb["bad"] and not hb["failed"] and not hb["perr"] and "stays queued" in hb["err"],
+       "(h) a held bill: not sent back to review, not counted failed, the words on it (%s)" % hb)
+    E("() => postBankToTally(['s1-9'])"); pg.wait_for_timeout(1500)
+    hr = E("(() => { const r = B().rows.find(x => x.id === 's1-9'), rep = B().postReport || {}; return {st: r.state, rel: !!r.release, err: r.postError || '', failed: (rep.failed || []).filter(f => f.id === 's1-9').length}; })()")
+    ok(hr["st"] == "ready" and hr["rel"] and "stays queued" in hr["err"] and hr["failed"] == 0, "(h) a held bank line: stays as it is, its release kept, not counted failed (%s)" % hr)
+    ok(E("AutoPost.QUEUED.test(D().entries.h1.postError)") is True and E("postWord({ok: false, held: true, message: 'Being posted in an earlier posting: it stays queued and posts by itself.'})").startswith("Being posted"), "(h) auto-posting reads it as queued; its word is not \"Failed\"")
+    E("() => { Bridge.post = window.__bpH; CloudPost.run = window.__cpH; window.tallyCall = window.__tcH; delete D().entries.h1; B().rows = B().rows.filter(r => r.id !== 's1-9'); S.billPost = null; B().postReport = null; }")
     # round 17 (follow-up): the line posted by Tally's reply is done (not left on Ready), and the bank balance check does
     # not count it as "sent by the bridge, not read back" (the part that waits for a read after the posting stays)
     rt = E("(() => { const r = B().rows.find(x => x.id === 's1-0'); const q = Object.assign({}, r, {sentAt: ''}); return {tab: bankTabOf(r), nrb: bankNotReadBack([q], S.coId).length}; })()")

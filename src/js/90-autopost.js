@@ -543,8 +543,8 @@ const AutoPost = {
     sent.forEach(r => { r.auto.done = true; });
     await this.mark(cid, run, sent.map(r => r.auto.cid), "posted", job);
     const queued = left.filter(r => job && (!r.postError || this.QUEUED.test(r.postError)));
-    queued.forEach(r => { r.auto.job = job; });
-    await this.mark(cid, run, queued.map(r => r.auto.cid), "queued", job);
+    queued.forEach(r => { r.auto.job = r.postJobNew || job; r.auto.held = r.auto.job !== job; });   // the posting that holds it (an earlier one, when held)
+    for (const r of queued) await this.mark(cid, run, [r.auto.cid], "queued", r.auto.job);
     const failed = left.filter(r => !queued.includes(r));
     failed.forEach(r => { r.auto.failed = r.postError || "not posted"; });
     await this.mark(cid, run, failed.map(r => r.auto.cid), "failed", job);
@@ -584,8 +584,8 @@ const AutoPost = {
     sent.forEach(e => { e.auto.done = true; Store.saveEntry(cid, e); });
     await this.mark(cid, run, sent.map(e => e.auto.cid), "posted", job);
     const queued = left.filter(e => e.status === "approved" && job && (!e.postError || this.QUEUED.test(e.postError)));
-    queued.forEach(e => { e.auto.job = job; Store.saveEntry(cid, e); });
-    await this.mark(cid, run, queued.map(e => e.auto.cid), "queued", job);
+    queued.forEach(e => { e.auto.job = e.postJobNew || job; e.auto.held = e.auto.job !== job; Store.saveEntry(cid, e); });
+    for (const e of queued) await this.mark(cid, run, [e.auto.cid], "queued", e.auto.job);
     const failed = left.filter(e => !queued.includes(e));
     failed.forEach(e => { e.auto.failed = e.postError || "not posted"; Store.saveEntry(cid, e); });
     await this.mark(cid, run, failed.map(e => e.auto.cid), "failed", job);
@@ -653,12 +653,20 @@ const AutoPost = {
       const done = opts.noAsk ? await this.unpostQuiet(bank ? "bank" : "bill", x, cid) : await unpostFromTally(bank ? "bank" : "bill", x, cid);
       if (!done) return {ok: false, why: "Tally did not remove it."};
     }
-    const job = w === "queued" ? (x.auto && x.auto.job) || this.jobOf(cid, [x.id], a.run) : null;
+    const job = w === "queued" ? (x.auto && x.auto.job) || x.postJobNew || this.jobOf(cid, [x.id], a.run) : null;
     if (job && typeof TCloud === "object"){
       // not cancelled (the Tally computer took it meanwhile, or the cloud did not answer): it may be in Tally, so it stays
       // (one cancel for the whole posting: the run's other entries of it, undone after, are cancelled with it)
       this.cancelled = this.cancelled || {};
       if (!this.cancelled[job]){
+        // a posting that is not this run's own (an earlier one holds the entry: auto.held): cancelled only when every
+        // entry of it belongs to this run; else it is someone else's, and stays
+        if (a.held){
+          if (typeof CloudJobs === "object" && !(CloudJobs.list || []).some(j => j.id === job)){ try { await CloudJobs.load(true); } catch (e){ /* judged below */ } }
+          const hj = typeof CloudJobs === "object" ? (CloudJobs.list || []).find(j => j.id === job) : null, hids = hj && CloudJobs.idsOf(hj);
+          const run = new Set([].concat((B() && B().cid === cid && B().rows) || [], Object.values((D(cid) || {}).entries || {})).filter(o => o.auto && o.auto.run === a.run).map(o => String(o.id)));
+          if (!hids || !hids.every(i => run.has(i))) return {ok: false, why: "This entry is in a posting someone else made; undo it from Post to Tally"};
+        }
         let c = null; try { c = await TCloud.rpc("tally_post_cancel", {p_id: job}); } catch (e){ /* not known */ }
         // migration 174: its bridge had started it: part may be in Tally; the entries that may be are named, and stay
         if (c && c.warn && (c.entries || []).length){
@@ -711,9 +719,9 @@ const AutoPost = {
   },
   async requeue(cid, run, exceptId){
     const b = B(), rows = b && b.cid === cid ? b.rows.filter(r => r.auto && r.auto.run === run && r.id !== exceptId && r.state === "ready") : [];
-    if (rows.length){ rows.forEach(r => { delete r.auto.job; }); await postBankToTally(rows.map(r => r.id)); rows.forEach(r => { if (r.state !== "sent") r.auto.job = this.jobOf(cid, [r.id]); }); saveBank({rows: true}); }
+    if (rows.length){ rows.forEach(r => { delete r.auto.job; }); await postBankToTally(rows.map(r => r.id)); rows.forEach(r => { if (r.state !== "sent") r.auto.job = r.postJobNew || this.jobOf(cid, [r.id]); }); saveBank({rows: true}); }
     const bills = Object.values(D(cid).entries).filter(e => e.auto && e.auto.run === run && e.id !== exceptId && e.status === "approved" && !e.exportedAt);
-    if (bills.length){ await postBillsToTally({ids: bills.map(e => e.id)}); bills.forEach(e => { if (!e.exportedAt && e.auto){ e.auto.job = this.jobOf(cid, [e.id]); Store.saveEntry(cid, e); } }); }
+    if (bills.length){ await postBillsToTally({ids: bills.map(e => e.id)}); bills.forEach(e => { if (!e.exportedAt && e.auto){ e.auto.job = e.postJobNew || this.jobOf(cid, [e.id]); Store.saveEntry(cid, e); } }); }
   },
   // the whole run: every entry of it, the queued first (one cancel), then those in Tally
   async undoRun(cid, run){

@@ -893,3 +893,23 @@ a company whose requests were measured at 0.3 s or less (60 s otherwise), and sa
 (the cloud now sees typing only while a read waits for it); and pickRefused (pickack.go) should refresh
 the refusal's time (a.at) when a day is refused for `typing` again, so the cloud sees the typing go on. Tested: `tests/run_migration182.py`,
 `tests/run_gap_post_ingest.py`, `tests/run_gap_older_page.py`.
+
+## 184: a posting partly held by an earlier one queues the rest (not run yet; branch next-post-queue-anyway, 13-Nov-2026)
+
+**184, post dupes** (13-Nov-2026, branch `next-post-queue-anyway`, item C of the posting reliability plan; **written, not
+run yet**; file md5 ea08232917c915d08c4470d25a0cefed): `server/tally-cloud/migration-184-post-dupes.sql`. One entry of a new
+posting found in an earlier posting refused them all. Replaces only 161's `tally_post_enqueue_core` (the same arguments,
+service_role only): an advisory lock for the firm and client to the end of the transaction (two pages posting overlapping
+entries at the same moment: the second waits, then sees the first); the entries an earlier posting holds (a posting of the
+client waiting, taken or running with the entry id; or the FinCom id live in another posting, `tally_post_ids`) are left
+out and answered as `dupes: [{id, job, status}]`, the others queued; every entry held: nothing inserted,
+`{ok: false, none: true, dupes, error}`. Nothing is queued twice (the id's unique index stays the last guard). Add-only,
+one transaction, lock_timeout 10 s, safe twice. Needs 161 and 174. Deploy: 184, then the app (src/js/51 follows the earlier
+posting when every entry is held; an older page shows the words). No bridge or tally-ingest change. Tested:
+`tests/run_migration184.py` (RED_WITHOUT_184=1 fails), `tests/run_cloud_post_ui.py`, `tests/run_post_byreply.py` (h).
+The page of this branch (src/js/51, 24, 59; with plan item A): each held entry is followed in the posting that holds it
+and answered `held` (never failed: a bill is not sent back to review, a bank line keeps its release, auto-posting reads
+it as queued); a posting still waiting for Tally after 30 minutes is never called failed in the browser: its entries stay
+held ("Waiting for <company> to be opened in Tally on <computer>") and its result is marked when it comes.
+Sales invoices and Ask FinCom's entries treat a held entry the same way (queued, not failed); auto-posting's Undo cancels
+the posting that really holds the entry; the page stops waiting after 30 minutes whatever the posting's state.
