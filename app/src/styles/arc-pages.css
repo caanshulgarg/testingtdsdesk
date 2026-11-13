@@ -160,3 +160,7 @@ ol.setup li::marker { color: var(--text-muted); font-weight: 600; }
 ol.setup li div { color: var(--text-secondary); }
 ol.setup li div b { color: var(--foreground); }
 ol.setup li .btn.small { vertical-align: baseline; }
+
+/* ux-wins (Add client): what is wrong is said under its own box */
+.f .f-err { display: block; margin-top: 3px; color: var(--bad); font-size: 12.5px; }
+.f input[aria-invalid="true"] { border-color: var(--bad); }
