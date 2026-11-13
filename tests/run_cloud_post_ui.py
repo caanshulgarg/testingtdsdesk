@@ -100,9 +100,19 @@ with sync_playwright() as p:
     r0 = (w["j"].get("results") or [{}])[0]
     ok(w["j"]["job"]["status"] == "waiting" and r0.get("held") is True and r0.get("ok") is False and "stays queued" in r0.get("message", "") and "failed" not in json.dumps(w["j"]).lower(), "waiting 30 minutes: the posting stays waiting, its entry held, nothing failed (%s)" % r0)
     ok(any("Waiting for ZZ QUEUE LTD to be opened in Tally on the Tally computer" in (m or "") for m in w["prog"]), "while it waits: \"Waiting for <company> to be opened in Tally on <computer>\" (%s)" % w["prog"][-1:])
+    # item D (migration 185): queued for no computer: the cloud's own words while it waits; held after a minute
+    u = pg.evaluate("""async () => { window.__prog = []; const D0 = Date.now;
+      const W = "Queued: posts by itself when ZZ QUEUE LTD is opened in Tally on SRV9 (C:\\\\Data) with FinCom Bridge";
+      window.__jobs = {}; window.__jobs.own = {status: "waiting", done: 0, n: 1, message: W, results: null};
+      TCloud.rpc = async (fn, a) => ({ok: true, id: a.p_id, company: "ZZ QUEUE LTD", unrouted: true, note: W});
+      setTimeout(() => { Date.now = () => D0() + 61000; }, 3000);
+      const j = await Bridge.post({company: "ZZ QUEUE LTD", client: S.coId, masters: [], vouchers: [{id: "u1", xml: "<VOUCHER VCHTYPE=\\"Payment\\"><DATE>20250601</DATE></VOUCHER>"}]}, pj => window.__prog.push(pj.message));
+      Date.now = D0; return {prog: window.__prog, r: j.results[0], W}; }""")
+    ok(u["prog"] and all(m == u["W"] for m in u["prog"]) and u["r"].get("held") is True and u["r"]["message"].startswith(u["W"]) and "stays queued" in u["r"]["message"],
+       "queued for no computer: the cloud's words while it waits; after a minute the entry is held, the page free (%s)" % u["r"])
     # auto-posting's rule for "queued" (src/js/90, loaded with its screen on the React build: its pattern then read here)
     aq = pg.evaluate("""(msgs) => { const Q = typeof AutoPost === "object" ? AutoPost.QUEUED : /stays queued|queued for the Tally computer|Still waiting for the Tally computer/i; return msgs.every(m => Q.test(m)); }""",
-                     [ra.get("d2", {}).get("message", ""), ra.get("d3", {}).get("message", ""), rb.get("p1", {}).get("message", ""), r0.get("message", "")])
+                     [ra.get("d2", {}).get("message", ""), ra.get("d3", {}).get("message", ""), rb.get("p1", {}).get("message", ""), r0.get("message", ""), u["r"].get("message", "")])
     ok(aq is True, "auto-posting reads every held entry as queued, not failed (waiting, being posted, already posted, queued for no computer)")
     # L-3: taken (or running) for 30 minutes: the page stops waiting, the entry held; nothing sent again
     k = pg.evaluate("""async () => { const D0 = Date.now; window.__calls = [];

@@ -913,3 +913,26 @@ it as queued); a posting still waiting for Tally after 30 minutes is never calle
 held ("Waiting for <company> to be opened in Tally on <computer>") and its result is marked when it comes.
 Sales invoices and Ask FinCom's entries treat a held entry the same way (queued, not failed); auto-posting's Undo cancels
 the posting that really holds the entry; the page stops waiting after 30 minutes whatever the posting's state.
+
+## 185: a posting is queued even when no computer has the company open (not run yet; branch next-post-queue-anyway, 13-Nov-2026)
+
+**185, post unrouted** (13-Nov-2026, branch `next-post-queue-anyway`, item D of the posting reliability plan; **written,
+not run yet**; file md5 711aa0481b05c823394e9caae20f4595): `server/tally-cloud/migration-185-post-unrouted.sql`. With no FinCom
+Bridge having the company open, a bridge named that cannot post, or the company's computer key removed, a posting was
+refused; a waiting posting never taken whose bridge could no longer post was failed. Now it is queued for no computer
+(`device_id` null, no bridge named; "Queued: posts by itself when <company> is opened in Tally on <computer> (<data
+folder>) with FinCom Bridge": the link record's place), only when the link record has the company's GUID and data
+location and a FinCom Bridge 2.x was seen reading that location (`tally_link_places`) or reports it now (else refused as
+before). One partial index (`tally_post_jobs_unrouted`). New
+(service_role): `tally_post_unrouted_words`, `tally_post_unrouted_can`, `tally_post_unrouted_ok` (a "go-" bridge
+bound to its key that may post, heard within 3 minutes with the company open, the link's GUID named in the bridge's own list (cos; else its key's beat), its data
+location the link's: 174's check, all required). Replaced from their latest text: 174's `tally_post_take_for` (a third
+loop: row locked skip locked, taken in one update that holds only while waiting, for no computer and never taken; then
+that bridge's own, 174's rule from there), 142's `tally_post_count_for` (counts them for a "go-" bridge; a 1.15.0 bridge
+never sees one), 174's `tally_post_reroute` / `tally_post_rescue` (never taken and stranded: queued for no computer,
+not failed; once taken: as 174; one already so queued whose link can no longer prove the company: stranded in words;
+both now granted to service_role explicitly), 184's `tally_post_enqueue_core` and 142's `tally_post_enqueue_to` (a bridge named that was not used: the answer and the
+posting say why, `targetWhy`). Add-only, one
+transaction, lock_timeout 10 s, safe twice. Needs 174 and 184. Deploy: 184, 185, then the app (src/js/51 shows the words
+while it waits). No bridge or tally-ingest change. Tested: `tests/run_migration185.py` (RED_WITHOUT_185=1 fails; two
+takes at the same moment: exactly one), `tests/run_cloud_post_ui.py`.
