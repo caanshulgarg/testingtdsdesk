@@ -96,7 +96,7 @@ export function changeRow(b, r) {
 // separate small Undo (✓ itself is not a button)
 function RowAct({ b, r }) {
   if (S.ledEdit === r.n) return null;
-  const change = <button className="linkbtn" data-led-change={r.n} onClick={() => changeRow(b, r)}>Change</button>;
+  const change = <button className="linkbtn" data-led-change={r.n} aria-label={"Change " + r.n} onClick={() => changeRow(b, r)}>Change</button>;
   if (r.ok) {
     const m = r.m || {};
     return <span className="led-act led-act-ok">
@@ -196,7 +196,7 @@ export function Others({ b, rows }) {
           {(b2c.has(r.n) || (r.m && r.m.b2cSum)) && <label className="chk nr" title="One entry books many B2C sales (e.g. a payment gateway's or a marketplace's collections): GSTR-1 reports its sales in B2C small as totals, with no invoice number. FinCom's own setting, not written to Tally">
             <input type="checkbox" data-b2cs-ledger={r.n} checked={!!(r.m && r.m.b2cSum)} onChange={(ev) => GSTR.b2cSumLedger(r.n, ev.target.checked)} /> Consolidated B2C (summary of many sales)</label>}</td>
         <td className="n">{r.used ? Number(r.used).toLocaleString("en-IN") : ""}</td>
-        <td className="ac">{S.ledEdit === r.n ? null : <button className="linkbtn" data-led-change={r.n} onClick={() => changeRow(b, r)}>Change</button>}</td></tr>)}</tbody></table>
+        <td className="ac">{S.ledEdit === r.n ? null : <button className="linkbtn" data-led-change={r.n} aria-label={"Change " + r.n} onClick={() => changeRow(b, r)}>Change</button>}</td></tr>)}</tbody></table>
     {rows.length > shown.length && <p className="note">{"The first " + shown.length + " are shown, the most used first; find the rest by name."}</p>}
   </details>;
 }

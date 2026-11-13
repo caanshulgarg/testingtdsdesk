@@ -359,3 +359,13 @@ html.lt-resizing, html.lt-resizing * { cursor: col-resize !important; user-selec
 @media (max-width: 600px) { #app .xl-tools { flex-wrap: wrap; } }
 #app .r1x-undo { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
 #app .fbar .fb-end .xl-tools { margin-left: 0; }
+
+/* ux-wins (13-Nov-2026, the UI review), the small ones:
+   - the bell's (and the inbox's, the Tally sign's) count in dark mode was white on a light slate (2.56:1): dark figures there;
+   - small links people tap are at least 32 px high: a breadcrumb's (its line stays its height: the tap area reaches
+     over and under it), a return's name on Compliance, a ledger's Change */
+:root[data-theme="dark"] .bell-n { color: #0B1220; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .bell-n { color: #0B1220; } }
+#cobar .tbar-title .crumbs { padding-block: 6px; margin-block: -6px; }
+#cobar .tbar-title .crumbs .linkbtn { padding-block: 6px; margin-block: -6px; }
+#app [data-due-open], #app [data-led-change] { display: inline-flex; align-items: center; min-height: 32px; }

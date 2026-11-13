@@ -171,7 +171,7 @@ export default function Aoc4({ co }) {
     try {
       const r = await readSheet(file), g = guessSheets(r.sheets), up = linesOfSheets(r.file, r.sheets, g.bs, g.pl);
       // a new file starts again: the figures changed by hand for the upload go (asked first)
-      if (Object.keys(editsOf("upload")).length && !window.confirm("A new file: the figures you changed by hand for the upload will be cleared. Go on?")) return;
+      if (Object.keys(editsOf("upload")).length && !(await askConfirm({ title: "Use the new file?", ok: "Use the new file", cancel: "Keep my figures", body: "<p>The figures you changed by hand for the upload will be cleared.</p>" }))) return;
       setRaw(r); change({ source: "upload", upload: up, editsBy: { books: editsOf("books"), upload: {} }, edits: undefined, figuresOk: false });
     } catch (x) { setErr(String((x && x.message) || x)); } finally { setBusy(""); }
   };
