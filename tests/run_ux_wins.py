@@ -6,7 +6,7 @@ stand-in cloud, made-up logins). One part for each item; "python3 tests/run_ux_w
      (the box is focused); a message saying something failed stays until closed, with Close;
   2. Sales: "Connect FinCom Bridge first." and "Tally is not connected." name no menu that is gone, and open the Tally page;
   3. Add client asks "Track returns from which month?" (this month); the client keeps it; Compliance and Today show
-     nothing of an earlier period as overdue; "Start tracking from…" on Compliance sets it for a client already there;
+     nothing unfiled that fell due before that month; "Start tracking from…" on Compliance sets it for a client already there;
   4. Today: each of the four figures opens its list (one client with such bills: that client at that step);
   5. the Tally page: one name, "Update from Tally" (never "Update now", "Bring ledgers from Tally", "Sync now"); the big
      Download FinCom Bridge only while it is needed; one Check again, one Advanced (for support); no "Up to date" over
@@ -171,29 +171,30 @@ def item3(br):
         E("""([books, id]) => { const b = Object.assign({loading: false, challans: [], alloc: {}}, JSON.parse(JSON.stringify(books)), {cid: id}); const c = S.companies[id]; c.gstin = '07AAACZ9999Z1Z9'; c.tan = 'DELZ12345A';
           S.books = b; b.map = Books.mapLedgers(b.vouchers, {}); LedMaster.refresh(b); saveBooks(); render(); }""", [books, new["id"]]); pg.wait_for_timeout(800)
         items = [x for x in E(DUE) if x["cid"] == new["id"]]
-        early = [x for x in items if x["st"] != "filed" and x["pm"] <= "2026-11"]
+        early = [x for x in items if x["st"] != "filed" and x["pm"] < "2026-11"]
         over = [x for x in items if x["st"] == "overdue"]
-        ok(not early and not over, "its list: nothing that fell due by the end of Nov-2026, nothing overdue (%d items; overdue %s)" % (len(items), over[:2]))
-        ok(any(x["pm"] > "2026-11" for x in items), "   what is due from Nov-2026 on is listed (%s)" % [(x["what"], x["per"]) for x in items][:4])
+        ok(not early and 0 < len(over) < 10 and all(x["due"] >= "2026-11-01" for x in over), "its list: nothing unfiled that fell due before 1-Nov-2026; overdue only what fell due in November (%d items; overdue %s)" % (len(items), [(x["what"], x["due"]) for x in over][:3]))
+        ok(any(x["pm"] == "2026-11" and x["st"] == "due" for x in items) and any(x["pm"] > "2026-11" for x in items), "   what falls due in Nov-2026 and after is listed (%s)" % [(x["what"], x["per"]) for x in items][:4])
         E("() => navHome('compliance')"); settle(pg, 1500)
         pg.select_option("[data-due-client]", new["id"]); pg.wait_for_timeout(500)
         n_over = pg.inner_text("[data-due-chip=overdue] .sbar-n")
-        ok(n_over == "0", "Compliance, that client: Overdue %s" % n_over)
+        ok(n_over == str(len(over)), "Compliance, that client: Overdue %s (those due in November)" % n_over)
         pg.select_option("[data-due-client]", ""); pg.wait_for_timeout(300)
     # "Start tracking from…" for a client already there
-    E("() => navHome('compliance')"); settle(pg, 1500)
+    E("() => navHome('compliance')"); settle(pg, 1500); pg.select_option("[data-due-client]", cid); pg.wait_for_timeout(400)
     n0 = int(pg.inner_text("[data-due-chip=overdue] .sbar-n"))
     ok(pg.locator("[data-track-open]").count() == 1 and n0 == len(over0), "Compliance: 'Start tracking from…' under the figures; %d overdue of the older client" % n0)
-    pg.click("[data-track-open]"); pg.select_option("[data-track-client]", cid); pg.fill("[data-track-month]", "2026-10"); pg.click("[data-track-save]"); settle(pg, 1500)
+    pg.click("[data-track-open]"); pg.select_option("[data-track-client]", cid); pg.fill("[data-track-month]", "2026-10"); pg.click("[data-track-save]"); settle(pg, 1500); pg.select_option("[data-due-client]", cid); pg.wait_for_timeout(400)
     n1 = int(pg.inner_text("[data-due-chip=overdue] .sbar-n")); co = E("(id) => S.companies[id].trackFrom", cid); t = E(TOAST)
     left = [x for x in E(DUE) if x["cid"] == cid and x["st"] == "overdue"]
-    ok(co == "202610" and n1 < n0 and all(x["pm"] > "2026-10" for x in left) and n1 == len(left), "saved (202610): overdue %d -> %d, all of Oct-2026 on (%s); it says so: %s" % (n0, n1, [(x["what"], x["per"]) for x in left][:3], t and t["words"]))
+    ok(co == "202610" and n1 < n0 and all(x["pm"] >= "2026-10" for x in left) and n1 == len(left), "saved (202610): overdue %d -> %d, all due from 1-Oct-2026 (%s); it says so: %s" % (n0, n1, [(x["what"], x["per"]) for x in left][:3], t and t["words"]))
     E("() => navHome('today')"); settle(pg, 1500)
     line = pg.inner_text("[data-due-line]")
-    ok((str(n1) + " return") in line or (n1 == 0 and "Nothing overdue" in line), "Today's line says the same (%s)" % line.replace("\n", " "))
+    allover = len([x for x in E(DUE) if x["st"] == "overdue"])
+    ok((str(allover) + " return") in line, "Today's line counts the same, every client (%d: %s)" % (allover, line.replace("\n", " ")))
     E("() => navHome('compliance')"); settle(pg, 1200); pg.click("[data-track-open]"); pg.select_option("[data-track-client]", cid)
     ok(pg.input_value("[data-track-month]") == "2026-10" and pg.locator("[data-track-clear]").count() == 1, "opened again: the month kept, and 'Track every period'")
-    pg.click("[data-track-clear]"); settle(pg, 1500)
+    pg.click("[data-track-clear]"); settle(pg, 1500); pg.select_option("[data-due-client]", cid); pg.wait_for_timeout(400)
     ok(int(pg.inner_text("[data-due-chip=overdue] .sbar-n")) == n0, "Track every period: the %d overdue are back" % n0)
     ctx.close()
 

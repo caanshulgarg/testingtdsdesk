@@ -61,8 +61,8 @@ const DueList = {
       if (x.optional && st.status === "overdue") return;
       // ux-wins (the owner, 13-Nov-2026: a client added today showed 84 "overdue" back to Apr-2025): the client's "Track
       // returns from" month (co.trackFrom, yyyymm: asked when the client is added, changed on Compliance): a return or a
-      // payment of an earlier period (one that falls due by the end of that month) is listed only once filed
-      if (st.status !== "filed" && x.kind !== "task" && x.due.slice(0, 7).replace("-", "") <= co.trackFrom) return;
+      // payment that fell due before that month began is listed only once filed; what falls due in it or later stays
+      if (st.status !== "filed" && x.kind !== "task" && x.due.slice(0, 7).replace("-", "") < co.trackFrom) return;
       out.push(Object.assign({cid: co.id, client: co.name}, x, st));
     };
     const fys = this.fysBetween(from, until);
