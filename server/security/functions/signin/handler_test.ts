@@ -16,7 +16,7 @@ function sharedStore() {
     add: async (bucket: string, key: string) => { rows.push({ bucket, key, at: now }); },
   };
 }
-// migration 183 in memory (auth_signin_begin / _fail / _ok): one email from one address; the same waits as the SQL
+// migration 189 in memory (auth_signin_begin / _fail / _ok): one email from one address; the same waits as the SQL
 const WAITS = (n: number) => (n < 5 ? 0 : n === 5 ? 30 : n === 6 ? 60 : n === 7 ? 120 : n === 8 ? 300 : 900);
 function attemptStore() {
   const fails: { pair: string; at: number }[] = [], passes = new Set<string>(), calls: string[] = [];
@@ -97,7 +97,7 @@ Deno.test("Auth refusing the token (its bot protection on) is said so, and never
   eq(log.fails.length, 0, "no lockout failure"); eq(store.rows.length, 0, "no address failure");
 });
 
-Deno.test("migration 183 not run yet: wrong passwords are counted as before (5 → locked)", async () => {
+Deno.test("migration 189 not run yet: wrong passwords are counted as before (5 → locked)", async () => {
   const { handler } = fake({ attemptsDown: true });
   let r: any;
   for (let i = 0; i < 5; i++) r = await read(await handler(post({ email: "a@b.in", password: "wrong" })));
@@ -183,7 +183,7 @@ Deno.test("M4: wrong passwords from one address do not keep the person out: the 
   eq(r.status, 200); eq(r.body.access_token, "T");
 });
 
-Deno.test("M4: each try is announced before Auth is asked and closed after it (the pass of migration 183); a right password ends the pair's count", async () => {
+Deno.test("M4: each try is announced before Auth is asked and closed after it (the pass of migration 189); a right password ends the pair's count", async () => {
   const { handler, att } = fake();
   await handler(post({ email: "a@b.in", password: "wrong" }));
   eq(att.calls, ["begin", "fail"]); eq(att.passes.size, 0, "a wrong password leaves no pass");

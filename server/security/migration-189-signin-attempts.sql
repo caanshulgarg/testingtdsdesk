@@ -1,6 +1,6 @@
 -- Sign-in attempts counted where the password is checked, and a wait that is the address's own (13-Nov-2026, branch
 -- next-sec-server; security review of 13-Nov-2026, M4). NOT run on staging by the app's builders: the owner runs it.
--- Runs after 182 (staging ... -> 182 -> 183); needs migration 3 (public.auth_lockout and its functions) and nothing else.
+-- Runs after 182 (183 to 188 are other branches'; staging ... -> 182 -> ... -> 189; it needs nothing of theirs); needs migration 3 (public.auth_lockout and its functions) and nothing else.
 --
 -- Before: wrong passwords were counted only by FinCom's sign-in function, and five of them locked the email for
 -- everyone for 15 minutes. Now:

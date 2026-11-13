@@ -1,9 +1,9 @@
-"""python3 run_migration183.py - migration-183-signin-attempts (13-Nov-2026, branch next-sec-server; security review M4).
+"""python3 run_migration189.py - migration-189-signin-attempts (13-Nov-2026, branch next-sec-server; security review M4).
 Wrong passwords are counted where Supabase Auth checks the password (its "password verification attempt" hook), so a
 sign-in that does not come through FinCom's sign-in function is counted too; and the account is no longer locked for
 everyone by a few wrong passwords: the wait is per email and address together, it grows, and it ends by itself.
-On a throwaway PostgreSQL (pg_stand, port 31183 unless PG183_PORT; never a real database), with the lockout pieces of
-migration 3 as they are, then 183 (twice). Made-up emails only. Written before the file.
+On a throwaway PostgreSQL (pg_stand, port 31189 unless PG189_PORT; never a real database), with the lockout pieces of
+migration 3 as they are, then 189 (twice). Made-up emails only. Written before the file.
 Checks:
   0. the file: one transaction (lock_timeout 10 s), add-only, names no real database, explicit grants, runs twice.
   1. one address and one email: 4 wrong passwords, no wait; the 5th: 30 s, then 60 s, 2 min, 5 min, 15 min at most; a try
@@ -13,13 +13,13 @@ Checks:
      right password is taken only with the sign-in function's pass (begin), which is the pair's own and short-lived.
   4. the owner's unlock (auth_lockout_clear) ends every wait and count of that email.
   5. nothing kept in the clear (emails and addresses as SHA-256); anon and authenticated can run or read none of it.
-RED_WITHOUT_183=1: the same checks without the file (they fail; (guard) checks hold what stays as it was)."""
+RED_WITHOUT_189=1: the same checks without the file (they fail; (guard) checks hold what stays as it was)."""
 import os, re, sys, json, hashlib
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 import pg_stand
 SEC = os.path.join(HERE, "..", "server", "security")
-M = os.environ.get("M183_FILE") or os.path.join(SEC, "migration-183-signin-attempts.sql")
-RED = os.environ.get("RED_WITHOUT_183") == "1"
+M = os.environ.get("M189_FILE") or os.path.join(SEC, "migration-189-signin-attempts.sql")
+RED = os.environ.get("RED_WITHOUT_189") == "1"
 fails = []
 def ok(c, w):
     print(("  ok   " if c else "  FAIL ") + w)
@@ -40,7 +40,7 @@ if text:
     ok(sorted(set(re.findall(r"create or replace function public\.(\w+)\s*\(", text))) == FNS, "0. the functions")
     ok(all(re.search(r"revoke (all|execute) on function public\.%s\([^)]*\) from public, anon, authenticated;" % f, text) for f in FNS), "0. every function taken from public, anon and authenticated")
 
-db = pg_stand.start(int(os.environ.get("PG183_PORT") or 31183))
+db = pg_stand.start(int(os.environ.get("PG189_PORT") or 31189))
 def j(s):
     try: x = db.one(s)
     except RuntimeError as e: return {"_error": str(e)[-300:]}
@@ -51,7 +51,7 @@ def run(s):
     except RuntimeError as e: return str(e)[-300:]
 IP1, IP2 = "a1" * 32, "b2" * 32
 A, B = "asha@firm.test", "Ravi@Firm.test"
-UA, UB = "11111111-1111-4111-8111-000000000183", "22222222-2222-4222-8222-000000000183"
+UA, UB = "11111111-1111-4111-8111-000000000189", "22222222-2222-4222-8222-000000000189"
 begin = lambda e, ip: j("select public.auth_signin_begin(%s, %s)::text" % (q(e), q(ip)))
 fail = lambda e, ip: j("select public.auth_signin_fail(%s, %s)::text" % (q(e), q(ip)))
 done = lambda e, ip: run("select public.auth_signin_ok(%s, %s);" % (q(e), q(ip)))
@@ -125,7 +125,7 @@ try:
     ok(hook(UB, True).get("decision") == "reject", "3. a pass lasts ten seconds")
     age(901)
     ok(hook(UB, True) == CONT, "3. 15 minutes on: the account's count has ended by itself")
-    ok(hook("33333333-3333-4333-8333-000000000183", True) == CONT and hook("", False) == CONT, "3. (guard) a login it does not know: left to Auth")
+    ok(hook("33333333-3333-4333-8333-000000000189", True) == CONT and hook("", False) == CONT, "3. (guard) a login it does not know: left to Auth")
     # ---- 4. the owner's unlock
     print("== 4. the owner's unlock")
     for i in range(10): hook(UA, False)
