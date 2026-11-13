@@ -15,6 +15,7 @@ import Button from "./Button.jsx";
 import { PreFileList } from "./PreFile.jsx";
 import "./assistant.css";
 import "./asst-upload.js";   // AUpload: the panel's Upload (window.AUpload, ASST.upload)
+import { ATTACH } from "../../../server/_shared/attachrules.js";
 import "./asst-memory.js";   // the conversation each question carries (ASST.history / ASST.thread) and the statements card's event
 import { useDismiss } from "./dismiss.js";
 import { AssistantLauncher } from "./AssistantLauncher.jsx";
@@ -200,13 +201,14 @@ function SentChips({ t }) {
     onClick={() => (f.file && typeof saveFile === "function" ? saveFile(f.name, f.file) : f.path ? ASST.download(f) : null)}>
     <ChipIcon f={f} /><span className="asst-chip-txt"><b>{f.name}</b><small>{[extOf(f.name), kb(f.size)].filter(Boolean).join(" · ")}</small></span></button>)}</div>;
 }
-function BoxChip({ u }) {
+function BoxChip({ u, note }) {
   const pct = Math.round((u.progress || 0) * 100);
   return <span className={"asst-chip " + u.state} data-asst-chip={u.state} data-name={u.name} role="group" aria-label={u.name}>
     <ChipIcon f={u} />
     <span className="asst-chip-txt"><b title={u.name}>{u.name}</b>
-      <small>{u.state === "uploading" ? "Uploading… " + pct + "%" : u.state === "failed" ? "Not uploaded: " + u.error : [extOf(u.name), kb(u.size)].join(" · ")}</small></span>
-    {u.state === "failed" && <button type="button" className="asst-chip-btn" data-asst-chip-retry="" title="Upload it again" aria-label={"Retry " + u.name} onClick={() => AUpload.retry(u)}><RotateCw size={13} aria-hidden="true" /> Retry</button>}
+      <small>{u.state === "queued" ? "Waiting…" : u.state === "uploading" ? "Uploading… " + pct + "%" : u.state === "failed" ? (u.fatal ? "Not sent: " : "Not uploaded: ") + u.error : [extOf(u.name), kb(u.size)].join(" · ")}</small>
+      {note && u.state === "ready" && <small className="asst-chip-note" data-asst-chip-note="" title={note}>{note}</small>}</span>
+    {u.state === "failed" && !u.fatal && <button type="button" className="asst-chip-btn" data-asst-chip-retry="" title="Upload it again" aria-label={"Retry " + u.name} onClick={() => AUpload.retry(u)}><RotateCw size={13} aria-hidden="true" /> Retry</button>}
     <button type="button" className="asst-chip-x" data-asst-chip-x="" title="Remove" aria-label={"Remove " + u.name} onClick={() => AUpload.drop(u)}><X size={13} aria-hidden="true" /></button>
     {u.state === "uploading" && <i className="asst-chip-bar" style={{ width: Math.max(4, pct) + "%" }} aria-hidden="true" />}
   </span>;
@@ -227,6 +229,7 @@ function Turn({ t, latest }) {
       <span className="asst-who"><span className="asst-av" aria-hidden="true"><User size={12} strokeWidth={2.4} /></span><span>You</span>{t.at && <time dateTime={t.at} className="asst-time">{when(t.at)}</time>}</span>
       <p className="asst-q" data-asst-q="">{t.q}</p>
       <SentChips t={t} />
+      {(t.attachNotes || []).length > 0 && <ul className="note asst-attach-notes" data-asst-attach-notes="">{t.attachNotes.map((x, i) => <li key={i}><b>{x.name}</b>: {x.why}</li>)}</ul>}
     </header>
     <div className="asst-a" data-asst-answer="">
     <div className="asst-who asst-fincom" aria-hidden="true"><span className="asst-mark"><Sparkles size={12} strokeWidth={2.4} /></span><span>FinCom</span></div>
@@ -349,7 +352,8 @@ export default function Assistant() {
   // the question box keeps the cursor: after Ask (Enter, the button, "Which one?") it stays in the box, so the next
   // question can be typed straight away (it was greyed out while FinCom answered, which threw the cursor out of it).
   // Voice typing stops first: a word heard after Ask never lands in the next question (AssistantVoice.jsx).
-  const box0 = AUpload.pending(), boxWait = box0.some((u) => u.state !== "ready");
+  const box0 = AUpload.pending(), boxWait = box0.some((u) => u.state === "uploading" || u.state === "queued"), boxOk = box0.some((u) => u.state === "ready");
+  const upAll = AUpload.progress(), fit = box0.length ? AUpload.fit() : null;
   // Esc while files are dragged over the panel takes the overlay away (and does not close the panel: esc above)
   useEffect(() => {
     if (!a.dragOver) return undefined;
@@ -366,7 +370,7 @@ export default function Assistant() {
           onDragLeave={(e) => { if (e.currentTarget.contains(e.relatedTarget)) return; a.dragOver = false; ASST.draw(); }}
           onDrop={(e) => { if (!hasFiles(e)) return; e.preventDefault(); a.dragOver = false; ASST.upload(Array.from(e.dataTransfer.files || [])); }}>
           {a.dragOver && <div className="asst-dropzone" data-asst-dropzone=""><Paperclip size={22} aria-hidden="true" /><b>Drop files here</b>
-            <span className="note">They go in the question box{co && cid ? " for " + co.name : ""}: up to {AUpload.LIMIT} a message (PDF, picture, Excel, CSV, Word)</span></div>}
+            <span className="note">They go in the question box{co && cid ? " for " + co.name : ""}: up to {AUpload.LIMIT} a message, any type</span></div>}
           <div className="asst-scope" data-asst-head="">
             {co ? <div className="seg" role="tablist" aria-label="What to ask about">
               <button role="tab" aria-selected={a.scope === "client"} className={a.scope === "client" ? "on" : ""} title={co.name} onClick={() => ASST.setScope("client")}>{co.name}</button>
@@ -394,18 +398,21 @@ export default function Assistant() {
           </div>
           </div>
           <form className="asst-ask" onSubmit={(e) => { e.preventDefault(); ask(); }}>
-            {box0.length > 0 && <div className="asst-chips" data-asst-chips="" aria-label={"Files to send with the question (" + box0.length + " of " + AUpload.LIMIT + ")"}>{box0.map((u) => <BoxChip key={u.id} u={u} />)}</div>}
+            {upAll && <div className="asst-upbar" data-asst-upbar="" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={upAll.pct}>
+              <span>{"Uploading " + (upAll.done + upAll.up) + " of " + upAll.n + " files… " + upAll.pct + "%"}</span><i className="asst-upbar-track"><i className="asst-upbar-fill" style={{ width: Math.max(2, upAll.pct) + "%" }} /></i></div>}
+            {box0.length > 0 && <div className="asst-chips" data-asst-chips="" aria-label={"Files to send with the question (" + box0.length + " of " + AUpload.LIMIT + ")"}>{box0.map((u) => <BoxChip key={u.id} u={u} note={fit && fit.notes[u.id]} />)}</div>}
+            {fit && !upAll && fit.inr >= ATTACH.costWarnInr && <p className="note asst-cost" data-asst-cost="">{"These files will use about ₹" + Math.round(fit.inr) + " of AI credit (about " + Math.round(fit.tokens / 1000) + ",000 tokens to read)"}{Object.keys(fit.notes).length ? "; files too long are shortened to fit." : "."}</p>}
             <label htmlFor="asstQ" className="sr-only">Your question</label>
             <textarea id="asstQ" ref={box} rows={1} value={a.q} placeholder={cid ? "Ask about " + co.name + "'s books, tax, or a notice…" : "Ask a tax or accounting question…"}
               aria-describedby="asstHint" onChange={(e) => { a.q = e.target.value; ASST.draw(); }}
               onPaste={(e) => { const fs = Array.from((e.clipboardData && e.clipboardData.files) || []); if (fs.length) { e.preventDefault(); ASST.upload(fs); } }} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); ask(); } }} />
             <div className="asst-askbar">
-              {<><input ref={file} type="file" multiple accept={AUpload.ACCEPT} hidden data-asst-upload-input="" onChange={(e) => { const fs = Array.from(e.target.files || []); e.target.value = ""; ASST.upload(fs); }} />
-                <button type="button" className="asst-act asst-upbtn" data-asst-upload-btn="" data-asst-upload="" title={"Attach files to the question: a notice, bills, a bank statement, 26AS or AIS, a register, financial statements or any other document (PDF, picture, Excel, CSV, Word), up to " + AUpload.LIMIT + " a message. Or drop or paste them."} onClick={() => file.current && file.current.click()} disabled={box0.length >= AUpload.LIMIT} aria-label="Attach files"><Paperclip size={15} aria-hidden="true" /> Attach</button>
+              {<><input ref={file} type="file" multiple accept={AUpload.ACCEPT || undefined} hidden data-asst-upload-input="" onChange={(e) => { const fs = Array.from(e.target.files || []); e.target.value = ""; ASST.upload(fs); }} />
+                <button type="button" className="asst-act asst-upbtn" data-asst-upload-btn="" data-asst-upload="" title={"Attach files to the question: a notice, bills, a bank statement, 26AS or AIS, a register, financial statements or any other file (PDF, picture, Excel, CSV, Word, XML, JSON, a zip…), up to " + AUpload.LIMIT + " a message. Or drop or paste them."} onClick={() => file.current && file.current.click()} disabled={box0.length >= AUpload.LIMIT} aria-label="Attach files"><Paperclip size={15} aria-hidden="true" /> Attach</button>
                 {a.attach && <span className="note asst-attached" data-asst-attached=""><Paperclip size={13} /> {a.attach.name} <button type="button" className="linkbtn" title="Do not attach" onClick={() => { a.attach = null; ASST.draw(); }}>×</button></span>}</>}
               <VoiceInput a={a} client={ASST.cid()} onText={(s) => { a.q = s; ASST.draw(); }} />
               <span className="asst-hint" id="asstHint">{a.busy ? "FinCom is answering… you can type the next question" : <><kbd>Enter</kbd> to ask · <kbd>Shift</kbd>+<kbd>Enter</kbd> new line</>}</span>
-              <Button type="submit" className="btn small primary asst-send" data-busy={a.busy ? "" : undefined} disabled={a.busy || boxWait || (!String(a.q || "").trim() && !box0.length)} title={a.busy ? "FinCom is answering the last question" : boxWait ? "Wait for the files to upload (or take off the one not uploaded)" : !String(a.q || "").trim() && !box0.length ? "Type a question first" : "Ask (Enter)"}>
+              <Button type="submit" className="btn small primary asst-send" data-busy={a.busy ? "" : undefined} disabled={a.busy || boxWait || (!String(a.q || "").trim() && !boxOk)} title={a.busy ? "FinCom is answering the last question" : boxWait ? "Wait for the files to upload" : !String(a.q || "").trim() && !boxOk ? "Type a question first" : "Ask (Enter)"}>
                 {a.busy ? <span className="asst-spin" aria-hidden="true" /> : <Send size={14} aria-hidden="true" />} Ask</Button>
             </div>
           </form>

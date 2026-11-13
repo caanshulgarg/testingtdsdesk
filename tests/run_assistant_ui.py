@@ -330,7 +330,7 @@ try:
         ok(db.one("select status || ' ' || ack_no from assistant_notices order by created_at desc limit 1") == "filed AA0711260045678", "marked filed with the acknowledgement (FinCom filed nothing)")
         shot(pg, "05b-notice-filed", "[data-asst-notice]")
         # ---------- files attached like Claude's (the owner, 31-Oct-2026; one Upload of 14-Oct-2026 before it): chips in the
-        # question box, up to 3 a message, each told by FinCom's rules (the AI only for the two the rules cannot tell);
+        # question box, up to 30 a message (13-Nov-2026; run_assistant_attach30.py), each told by FinCom's rules (the AI only for the two the rules cannot tell);
         # nothing in the conversation until Send; the next steps as buttons under the answer; nothing done by itself
         import make_uploads
         fx = make_uploads.make(os.path.join(OUT, "uploads"))
@@ -350,10 +350,8 @@ try:
             return got
         AI_DONE = "AUpload.pending().every(u => u.by)"
         attach(["bill.pdf", "sales-register.xlsx", "bank-statement.csv"])
-        # a fourth file: refused (the server reads the first 3 of a message)
-        pg.evaluate("() => { window.__toasts = []; const t0 = window.toast; window.toast = (m, ...r) => { window.__toasts.push(String(m)); return t0(m, ...r); }; }")
-        pg.set_input_files("[data-asst-upload-input]", [fx["26as.txt"]]); pg.wait_for_timeout(400)
-        ok(pg.evaluate("AUpload.pending().length") == 3 and any("Up to 3 files" in x for x in pg.evaluate("window.__toasts")), "a fourth file in one message is refused, said so")
+        # more files can still be added (30 a message; the 30 themselves: run_assistant_attach30.py)
+        ok(not pg.locator("[data-asst-upload-btn]").is_disabled(), "Attach stays open with 3 files in the box (30 a message)")
         tA = ask(pg, "What are these files?")
         ok(len(tA.get("filesIn") or []) == 3 and pg.locator(".asst-turn.latest [data-asst-sent-chip]").count() == 3 and pg.locator("[data-asst-chips] [data-asst-chip]").count() == 0, "Send: one message with the 3 files' chips; the box is empty")
         attach(["26as.txt", "certificate-format.docx", "gstr2b-032026.json"])

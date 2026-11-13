@@ -8,8 +8,8 @@ stream the test feeds), the storage upload stood in by a fake XMLHttpRequest (it
   2. a chip taken off with × before sending; Send: ONE message, the question with its file chips under it; the box is empty;
      the files go to fincom-assistant with the question (attachments, with their kind); a sent chip opens the file
   3. a file alone, no words: Send still works ("Read this file")
-  4. at most 3 files a message (the server reads the first 3): a fourth is refused with a line saying so
-  5. an upload that fails says so on its chip with Retry; Retry uploads it; Send waits meanwhile
+  4. more than 3 files a message (up to 30 since 13-Nov-2026; the 30 and the types: run_assistant_attach30.py)
+  5. an upload that fails says so on its chip with Retry; Retry uploads it; Send is not held up by it (it is left out)
   6. files dragged over the panel: the "Drop files here" overlay; Esc takes it away; dropped, the file is a chip; pasted too
   7. the next steps of a file sent (Add to Bank for review) are buttons under the answer, not a card in the thread
   8. an old conversation (a question with a file attached the earlier way, and the earlier Upload's card) still shows
@@ -170,13 +170,13 @@ with sync_playwright() as p:
        "3: the file alone is sent: the question is 'Read this file' (%r)" % b["question"])
     pg.evaluate(ANSWER, "Notes about the GST working."); pg.wait_for_timeout(400)
 
-    # ---------- 4. three a message
+    # ---------- 4. more than three a message (up to 30)
     pg.set_input_files("[data-asst-upload-input]", [files["a.txt"], files["b.txt"], files["c.txt"], files["d.txt"]])
-    wait(pg, "() => document.querySelectorAll('[data-asst-chips] [data-asst-chip=\"ready\"]').length === 3")
+    wait(pg, "() => document.querySelectorAll('[data-asst-chips] [data-asst-chip=\"ready\"]').length === 4")
     pg.wait_for_timeout(300)
-    ok(pg.locator("[data-asst-chips] [data-asst-chip]").count() == 3 and any("Up to 3 files" in t for t in pg.evaluate("window.__toasts")), "4: at most 3 files a message, said so (%s)" % pg.evaluate("window.__toasts"))
-    ok(pg.locator("[data-asst-upload-btn]").is_disabled(), "4: Attach is greyed with 3 in the box")
-    for _ in range(3): pg.locator("[data-asst-chips] [data-asst-chip-x]").first.click(); pg.wait_for_timeout(100)
+    ok(pg.locator("[data-asst-chips] [data-asst-chip]").count() == 4 and not any("Up to" in t for t in pg.evaluate("window.__toasts")), "4: four files in one message, none refused (%s)" % pg.evaluate("window.__toasts"))
+    ok(not pg.locator("[data-asst-upload-btn]").is_disabled(), "4: Attach still open with 4 in the box (30 a message)")
+    for _ in range(4): pg.locator("[data-asst-chips] [data-asst-chip-x]").first.click(); pg.wait_for_timeout(100)
     ok(pg.locator("[data-asst-chips] [data-asst-chip]").count() == 0 and pg.evaluate(TURNS) == 2, "4: all taken off: nothing was sent")
 
     # ---------- 5. an upload fails: said on the chip, with Retry
@@ -185,7 +185,7 @@ with sync_playwright() as p:
     wait(pg, "() => !!document.querySelector('[data-asst-chip=\"failed\"]')")
     ok(pg.locator('[data-asst-chip="failed"]').count() == 1 and "Not uploaded" in pg.inner_text('[data-asst-chip="failed"]') and pg.locator('[data-asst-chip="failed"] [data-asst-chip-retry]').count() == 1, "5: a failed upload says so on its chip, with Retry")
     pg.fill("#asstQ", "and this?")
-    ok(pg.locator(".asst-send").is_disabled(), "5: Send waits while a file is not uploaded")
+    ok(not pg.locator(".asst-send").is_disabled(), "5: Send is not held up by a file not uploaded (it is left out, said so)")
     shot(pg, "04-failed-retry", "form.asst-ask")
     pg.click('[data-asst-chip="failed"] [data-asst-chip-retry]')
     ok(wait(pg, "() => !!document.querySelector('[data-asst-chips] [data-asst-chip=\"ready\"]')"), "5: Retry uploads it")

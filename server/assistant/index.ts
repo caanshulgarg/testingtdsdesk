@@ -32,6 +32,8 @@ import { FREE_SOURCES } from "./citations.ts";
 import { classifyUpload } from "./upload.ts";
 import { DocSpec, makeFile, MIME, safeName } from "./files.ts";
 import { isSheetName, readSheetFile, renderSheetFile, SheetFile } from "./filetable.ts";
+import { ATTACH, fitAttachments, NATIVE, sniff } from "../_shared/attachrules.js";
+import { PDFDocument } from "npm:pdf-lib@1.17.1";
 import { PARTY_FIELDS, PARTY_SYSTEM, parseSheetMap, sheetPrompt, SHEET_SYSTEM } from "./sheetmap.ts";
 import { guessLedgers, LEDGER_GUESS_V } from "./ledgers.ts";
 import { capWords, costUsd as priceUsd, HAIKU, SONNET } from "./models.ts";
@@ -236,7 +238,8 @@ export function handler(deps: Deps) {
     // <firm>/<client or _firm>/uploads/...; never sent to the model as they are (the tool reads them)
     const uploads: { path: string, name: string, type: string }[] = [];
     const isUpload = (p: string) => p.startsWith(firm + "/") && !p.includes("..") && /^[^/]+\/[^/]+\/uploads\//.test(p);
-    for (const a of [...(Array.isArray(body.uploads) ? body.uploads : []), ...(Array.isArray(body.attachments) ? body.attachments : [])].slice(0, 40)) {
+    // (the conversation's last 60 and this message's up to 30)
+    for (const a of [...(Array.isArray(body.uploads) ? body.uploads : []).slice(-60), ...(Array.isArray(body.attachments) ? body.attachments : []).slice(0, ATTACH.files)]) {
       const path = String(a?.path || "");
       if (!/\/uploads\//.test(path)) continue;
       if (!isUpload(path)) return reply(403, { ok: false, kind: "file", error: "That file is not one of your firm's uploads." });
@@ -254,30 +257,68 @@ export function handler(deps: Deps) {
     };
     // a file of the chat's uploads the thread does not list yet is listed by its name
     for (const u of uploads) if (!thread.files!.some((f) => f.path === u.path)) thread.files!.push({ ...u, kind: "", summary: "" });
-    // a file from the Upload asked about (it says its kind) is read as an attachment too; the certificate tool's files are not
-    for (const a of (Array.isArray(body.attachments) ? body.attachments : []).filter((a: any) => !/\/uploads\//.test(String(a?.path || "")) || typeof a?.kind === "string").slice(0, 3)) {
+    // the files sent with the question (the owner, 13-Nov-2026: 30 a message, any type; the rules: ../_shared/attachrules.js,
+    // the same file the panel runs). A file from the Upload (it says its kind) is read; the certificate tool's files are not.
+    // PDFs and pictures go to the model as they are while they fit (pages, bytes, half the budget); a sheet as FinCom's
+    // table (rows and column letters, so make_file can copy its cells); anything else as the text the page took out of it
+    // (a Word file, JSON, XML, a zip's list and the files in it); a file nothing could be read of by its name, type and
+    // size. The texts share the context budget, a long one cut and the model told so; the user is told too (attachNotes).
+    const sent = (Array.isArray(body.attachments) ? body.attachments : []).filter((a: any) => !/\/uploads\//.test(String(a?.path || "")) || typeof a?.kind === "string");
+    if (sent.length > ATTACH.files) return reply(413, { ok: false, kind: "file", error: "Up to " + ATTACH.files + " files a message: " + sent.length + " were sent. Send the rest in the next message." });
+    for (const a of sent) {
       const path = String(a?.path || "");
       // a notice (…/notices/) or any other upload (…/uploads/) of the firm, read with the user's own token
       if (!path.startsWith(firm + "/") || !/\/(notices|uploads)\//.test(path) || path.includes("..")) return reply(403, { ok: false, kind: "file", error: "That file is not one of your firm's uploads." });
-      const r = await doFetch(URL_ + "/storage/v1/object/authenticated/" + BUCKET + "/" + path.split("/").map(encodeURIComponent).join("/"), { headers: { apikey: ANON, Authorization: "Bearer " + jwt } });
-      if (!r.ok) { await r.body?.cancel(); return reply(403, { ok: false, kind: "file", error: "The notice could not be read (" + r.status + ")." }); }
-      const buf = new Uint8Array(await r.arrayBuffer());
+    }
+    type Got = { a: any, path: string, name: string, type: string, size: number, bytes: Uint8Array | null, native: string, pages: number, text: string, full: number, sheet: SheetFile | null, why: string };
+    const got: Got[] = [];
+    let downloaded = 0;
+    for (const a of sent) {
+      const path = String(a.path), name = String(a?.name || path.split("/").pop() || "file").slice(0, 120);
+      const g: Got = { a, path, name, type: String(a?.type || "").slice(0, 120), size: Math.max(0, Number(a?.size) || 0), bytes: null, native: "", pages: 0,
+        text: typeof a?.text === "string" ? a.text.slice(0, ATTACH.textChars) : "", full: 0, sheet: null, why: "" };
+      // the text's whole length: the page keeps at most ATTACH.textChars of a file and says how long it was (full)
+      g.full = Math.max(typeof a?.text === "string" ? a.text.length : 0, Math.min(Number(a?.full) || 0, 1e9));
+      got.push(g);
       noticePath = noticePath || path;
-      if (buf.length > MAX_NOTICE) return reply(413, { ok: false, kind: "file", error: "The notice is larger than 20 MB." });
-      const type = String(a?.type || r.headers.get("content-type") || "");
-      const b64 = btoa(Array.from(buf, (c) => String.fromCharCode(c)).join(""));
-      if (/pdf/i.test(type) || /\.pdf$/i.test(path)) attachments.push({ type: "document", source: { type: "base64", media_type: "application/pdf", data: b64 }, title: String(a?.name || "notice").slice(0, 120) });
-      else if (/^image\/(png|jpeg|webp|gif)$/.test(type)) attachments.push({ type: "image", source: { type: "base64", media_type: type, data: b64 } });
+      // the bytes are read for a PDF or a picture (sent as they are), a sheet (its cells) or a file the page could not read
+      const wantBytes = /pdf|^image\//i.test(g.type) || /\.(pdf|png|jpe?g|webp|gif)$/i.test(name) || isSheetName(name, g.type) || !g.text;
+      if (!wantBytes) continue;
+      if (g.size > ATTACH.fileBytes) { g.why = "Not read: larger than " + ATTACH.fileBytes / 1048576 + " MB."; continue; }
+      if (downloaded + g.size > ATTACH.totalBytes) { g.why = "Not read: the message's files are over " + ATTACH.totalBytes / 1048576 + " MB together."; continue; }
+      const r = await doFetch(URL_ + "/storage/v1/object/authenticated/" + BUCKET + "/" + path.split("/").map(encodeURIComponent).join("/"), { headers: { apikey: ANON, Authorization: "Bearer " + jwt } });
+      if (!r.ok) { await r.body?.cancel(); return reply(403, { ok: false, kind: "file", error: "The file " + name + " could not be read (" + r.status + ")." }); }
+      if (Number(r.headers.get("content-length") || 0) > ATTACH.fileBytes) { await r.body?.cancel(); g.why = "Not read: larger than " + ATTACH.fileBytes / 1048576 + " MB."; continue; }
+      const buf = new Uint8Array(await r.arrayBuffer());
+      g.size = buf.length;
+      if (buf.length > ATTACH.fileBytes) { g.why = "Not read: larger than " + ATTACH.fileBytes / 1048576 + " MB."; continue; }
+      downloaded += buf.length;
+      if (downloaded > ATTACH.totalBytes) { g.why = "Not read: the message's files are over " + ATTACH.totalBytes / 1048576 + " MB together."; continue; }
+      const kind = sniff(buf.subarray(0, 16), name, g.type);
+      if (kind === "application/pdf") { g.native = "pdf"; g.type = kind; g.pages = await pdfPages(buf); g.bytes = buf; }
+      else if (NATIVE.test(kind)) { g.native = "image"; g.type = kind; g.bytes = buf; }
       // a sheet: FinCom reads it itself (the bytes; else the page's text) and shows it with row numbers and column letters,
       // so make_file can copy its cells (filetable.ts); masked by the agent like the question
-      else if (isSheetName(String(a?.name || path), type) && (sf = await readSheetFile(sheets.length + 1, String(a?.name || path.split("/").pop() || "sheet").slice(0, 120), type, buf, typeof a?.text === "string" ? a.text : ""))) {
-        sheets.push(sf);
-        attachments.push({ type: "text", text: renderSheetFile(sf) });
-      }
-      // a Word file: the text FinCom took out of it on the page (masked by the agent like the question)
-      else if (typeof a?.text === "string" && a.text.trim()) attachments.push({ type: "text", text: "[The file " + String(a?.name || "uploaded").slice(0, 120) + ", as FinCom read it]\n" + String(a.text).slice(0, 20000) });
-      else if (action !== "classify") return reply(415, { ok: false, kind: "file", error: "That file can be asked about as a PDF, a picture (PNG, JPEG, WebP), a sheet or a Word file." });
+      else if (isSheetName(name, g.type) && (g.sheet = await readSheetFile(sheets.length + 1, name, g.type, buf, g.text))) { sheets.push(g.sheet); g.text = sheetText(g.sheet, ATTACH.textChars); }
+      // a text file the page did not read: its words, when it is text
+      else if (!g.text) { g.text = textOf(buf, ATTACH.textChars); g.full = g.text.length < ATTACH.textChars ? g.text.length : Math.max(g.text.length, Math.round(buf.length * 0.9)); }
     }
+    const fit = fitAttachments(got.map((g) => ({ name: g.name, size: g.size, native: g.native, pages: g.pages, chars: g.text.length, why: g.why, read: !!(g.native || g.text) })));
+    const attachNotes: { name: string, why: string }[] = [];
+    got.forEach((g, i) => {
+      const p = fit.plan[i], n = i + 1, full = Math.max(g.full, g.text.length), shown = Math.min(p.chars, g.text.length), cut = p.mode === "text" && !g.sheet && shown < full, size = g.size >= 1048576 ? (g.size / 1048576).toFixed(1) + " MB" : g.size >= 1024 ? Math.round(g.size / 1024) + " KB" : g.size + " bytes";
+      const pct = Math.max(1, Math.min(99, Math.round(shown * 100 / (full || 1))));
+      const why = cut && !p.cut ? (p.why ? p.why + " " : "") + "Shortened to fit: the AI reads about the first " + pct + "% of it." : p.why;
+      if (why) attachNotes.push({ name: g.name, why: cut ? why.replace(/about the first \d+%/, "about the first " + pct + "%") : why });
+      if (p.mode === "native" && g.native === "pdf") attachments.push({ type: "document", source: { type: "base64", media_type: "application/pdf", data: b64(g.bytes as Uint8Array) }, title: g.name });
+      else if (p.mode === "native") attachments.push({ type: "image", source: { type: "base64", media_type: g.type, data: b64(g.bytes as Uint8Array) } });
+      else if (p.mode === "text") {
+        const body0 = g.sheet ? sheetText(g.sheet, p.chars) : g.text.slice(0, shown);
+        attachments.push({ type: "text", text: "[The file " + n + ": " + g.name + ", as FinCom read it" + (cut ? "; shortened to fit: about the first " + pct + "% is shown" : "") + "]\n" + body0
+          + (cut ? "\n[The rest of " + g.name + " is not shown to you. Say so if the answer may depend on it.]" : "") });
+      } else attachments.push({ type: "text", text: "[The file " + n + ": " + g.name + " (" + (g.type || "type not known") + ", " + size + "): FinCom could not read this file" + (g.why ? " (" + g.why.replace(/^Not read: /, "").replace(/\.$/, "") + ")" : "") + "; only its name, type and size are given. Tell the user it could not be read.]" });
+      g.bytes = null;
+    });
 
     // an upload FinCom's own rules could not tell: what it is, in one line (upload.ts); nothing else is done with it
     if (action === "classify") {
@@ -447,6 +488,7 @@ export function handler(deps: Deps) {
         };
         try {
           emit({ t: "start", client: clientId, clientName });
+          if (attachNotes.length) emit({ t: "attach", notes: attachNotes });
           const r = await runTurn(ctx);
           tools.push(...r.tools); usage = r.usage; calls = r.calls; route = r.route; models = r.models; costUsd = r.costUsd; feature = r.feature; fellThrough = r.fellThrough;
           // kept for the next time the same question is asked on the same books (only answers that cost something)
@@ -486,6 +528,26 @@ export function main() {
   Deno.serve(sentry.wrap(handler({ env: (k) => Deno.env.get(k), fetch: (...a) => fetch(...a), sentry })));
 }
 if (import.meta.main) main();
+
+// base64 of a file, in pieces (a 18 MB file as one string of characters would not fit)
+function b64(buf: Uint8Array): string {
+  let s = "";
+  for (let i = 0; i < buf.length; i += 0x8000) s += String.fromCharCode(...buf.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+// a PDF's pages (0: it cannot be opened as it is: locked or damaged)
+async function pdfPages(buf: Uint8Array): Promise<number> {
+  try { return (await PDFDocument.load(buf, { ignoreEncryption: false, updateMetadata: false })).getPageCount(); } catch { return 0; }
+}
+// a file's words when it is text (UTF-8, no NUL in its first 8 KB); "" when it is not
+function textOf(buf: Uint8Array, max: number): string {
+  if (buf.subarray(0, 8192).includes(0)) return "";
+  try { return new TextDecoder("utf-8", { fatal: true }).decode(buf.subarray(0, max * 4), { stream: true }).slice(0, max); } catch { return ""; }
+}
+// a sheet for the model: its sheets named with their rows first (a long one is cut, and the model is told), then the table
+function sheetText(f: SheetFile, max: number): string {
+  return "[" + f.name + ": " + f.sheets.length + " sheet" + (f.sheets.length === 1 ? "" : "s") + ": " + f.sheets.map((g) => "\"" + g.name + "\" (" + g.rows.length + " rows)").join(", ") + "]\n" + renderSheetFile(f, max);
+}
 
 async function sha256(s: string): Promise<string> {
   const h = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));

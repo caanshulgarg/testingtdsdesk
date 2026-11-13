@@ -6,8 +6,9 @@
 //     steps, the audit, 3CD, Schedule III and DCF.
 // Thinking is adaptive on all three (neither Sonnet 5.5 nor Opus 5.5 can switch it off; Haiku is only routing, at low
 // effort). The server-side refusal fallback ("default") is on for Sonnet and Opus; Haiku has none (the API rejects it).
-// Plain module: no Deno; its one import is the router's law rule (also plain).
+// Plain module: no Deno; its imports are the router's law rule and the prices (both plain).
 import { lawQuestion } from "./router.ts";
+import { PRICES as PRICES_USD } from "../_shared/attachrules.js";
 
 export type Task = "route" | "book" | "general" | "file" | "notice" | "heavy";
 export type Plan = { task: Task, model: string, effort: "low" | "medium" | "high", maxTokens: number, fallbacks: boolean, feature: string, web: boolean };
@@ -15,12 +16,9 @@ export type Plan = { task: Task, model: string, effort: "low" | "medium" | "high
 export const HAIKU = "claude-haiku-5-5", SONNET = "claude-sonnet-5-5", OPUS = "claude-opus-5-5";
 
 // US dollars per million tokens (platform.claude.com pricing as of Oct 2026): input, output, cache read; a 1-hour cache
-// write is 2x input, a 5-minute one 1.25x. Web search: $10 per 1,000 searches.
-export const PRICES: Record<string, { in: number, out: number, read: number }> = {
-  [HAIKU]: { in: 0.10, out: 0.50, read: 0.01 },
-  [SONNET]: { in: 2, out: 10, read: 0.20 },
-  [OPUS]: { in: 4, out: 20, read: 0.20 },
-};
+// write is 2x input, a 5-minute one 1.25x. Web search: $10 per 1,000 searches. Kept in server/_shared/attachrules.js, so
+// the panel's estimate for attached files ("about ₹X of AI credit") is worked out with the prices the bill uses.
+export const PRICES: Record<string, { in: number, out: number, read: number }> = PRICES_USD;
 export const WEB_SEARCH_USD = 0.01;
 
 // The user asked for a long answer (the owner, 15-Oct-2026: "should not be so long until asked specifically in detail"):
