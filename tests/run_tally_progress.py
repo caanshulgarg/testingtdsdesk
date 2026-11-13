@@ -152,6 +152,10 @@ def main():
         ok(n(dl + " .tpg-title") == 0 and n("#app h2.tpg-title") == 0 and n(dl + " [data-tpg-download]") == 1 and txt(dl + " [data-tpg-download]") == "Download FinCom Bridge 2.5.5"
            and re.match(r"assets/bridge-go/FinComBridge-Setup-2\.5\.5\.exe\?v=cdcdcdcdcdcd$", pg.get_attribute(dl + " [data-tpg-download]", "href") or ""),
            "1 (review 6). no second 'Tally' title; the dark Download FinCom Bridge 2.5.5 (its fingerprinted link) (%s | %s)" % (txt(dl), pg.get_attribute(dl + " [data-tpg-download]", "href")))
+        # ux-wins (13-Nov-2026): connected, this login's bridge running: the big Download is not shown (it is under Advanced);
+        # shown for the checks of its place below, as it shows while it is needed
+        ok(not pg.locator(dl + " [data-tpg-download]").is_visible() and pg.get_attribute("#app [data-tally-simple]", "data-tsm-dl") == "have", "1 (ux-wins). connected: the big Download is not shown")
+        E("() => document.querySelector('#app [data-tally-simple]').removeAttribute('data-tsm-dl')")
         ok(E("(s) => { const h = document.querySelector(s).getBoundingClientRect(), b = document.querySelector(s + ' [data-tpg-download]').getBoundingClientRect(); return Math.abs(h.right - b.right) <= 2 && b.left > h.left + h.width / 2; }", dl),
            "1 (review 6). the Download right-aligned")
         # (the owner's Mac, 08-Nov-2026) the Download never under the sticky top bar, the page scrolled a little or a lot
