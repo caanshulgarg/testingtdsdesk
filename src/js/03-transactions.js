@@ -8,8 +8,11 @@ function billVt(co){ const own = co.voucherType || "Journal", p = co.postAs; ret
 function vchTypeOf(e, co){
   if (e.noteKind === "credit") return co.debitNoteType || "Debit Note";
   if (e.noteKind === "debit") return "Purchase";
-  // (e.vchType: stamped on a few sheet bills before the choice was kept on the client; they stay as they are)
-  return e.vchType || billVt(co);
+  // an approved bill keeps the type it was approved with (stamped by approve, src/js/01: a change of the client's type
+  // after that is for the bills approved after it); one sent back to To review takes the client's type again. (A few
+  // sheet bills were stamped before the choice was kept on the client, and bills approved before 13-Nov-2026 carry no
+  // stamp: both stay as they are)
+  return (e.vchStamp && e.status !== "approved" ? "" : e.vchType) || billVt(co);
 }
 // in Tally: posted and confirmed there (or found there already), and not since missing from Tally's own entries in
 // FinCom's cloud copy (review of 02-Oct-2026: FA/ELEC/013 posted on 29-Sep was deleted in Tally and still counted).

@@ -3054,6 +3054,7 @@ function approve(e, o){
   cur.tdsBase = r2(num(cur.tdsBase) + addBase);
   party.ytd[c.fy][c.rule.id] = cur;
   e.status = "approved"; delete e.notRead;
+  if (!e.noteKind && (!e.vchType || e.vchStamp)){ e.vchType = billVt(CO(cid)); e.vchStamp = 1; }   // the type it is approved with (vchTypeOf, src/js/03)
   e.approvedAt = new Date().toISOString();
   const k = invKey(e.x), co = CO(cid);
   // the bill's id is kept with the date (02-Oct-2026), so a later copy can name and open this one
