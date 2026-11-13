@@ -21,12 +21,14 @@ function whenSeen() {
   document.addEventListener("visibilitychange", onVis);
 }
 // the tab's working again, in steps: the period of the last run, then the mark taken off and the books saved. The MIS's
-// holds MIS._again (a run asked for meanwhile, MIS.runSoon, takes its place: MIS.tabRun in the job's sig)
-function* catchSteps(b, k) {
+// holds MIS._again (a run asked for meanwhile, MIS.runSoon, takes its place: MIS.tabRun in the job's sig); set here
+// only when not set, and cleared only by the job that set it (held: its number)
+let held = 0;
+function* catchSteps(b, k, n) {
   const st = b.stale || {};
   try {
     if (k === "audit" && Audit.cfg(b).freq !== "off") { const L = (b.audit || {}).last, r = st.range || (L && L.from ? L : Audit.defaultRange(b)); yield* Audit.runIn(r.from, r.to, st.audit); }
-    if (k === "mis") { const H = ((b.mis || {}).history || [])[0], r = H && H.from ? H : MIS.autoRange(b); if (r && r.from) { MIS._again = true; try { yield* MIS.steps(r.from, r.to, st.mis); } finally { MIS._again = false; } } }
+    if (k === "mis") { const H = ((b.mis || {}).history || [])[0], r = H && H.from ? H : MIS.autoRange(b); if (r && r.from) { const mine = !MIS._again; if (mine) { MIS._again = true; held = n; } try { yield* MIS.steps(r.from, r.to, st.mis); } finally { if (mine) { MIS._again = false; held = 0; } } } }
   } catch (e) { /* the mark goes, the tab shows what there is */ }
   delete st[k]; saveBooks();
   return true;
@@ -36,11 +38,12 @@ export function catchSoon(b, k) {
   if (!b || !(b.stale || {})[k]) return "";
   const now = Date.now(), wait = CATCH_MS - (now - (last[k] || 0)), id = k + "|" + b.cid;
   if (typeof document === "object" && document.hidden) { whenSeen(); return WORDS; }
-  // not while a run asked for is worked out (MIS.runSoon): drawn again when it ends
-  if (k === "mis" && (MIS.autoFor(b) || (MIS._soon && MIS._soon.b === b))) return WORDS;
+  // not while a run asked for is worked out (MIS.runSoon), nor while the tab's Run now is (MIS._again, not this job's):
+  // drawn again when it ends
+  if (k === "mis" && (MIS.autoFor(b) || (MIS._soon && MIS._soon.b === b) || (MIS._again && held !== on[id]))) return WORDS;
   // a run being worked out goes on to its end (a pull meanwhile marks the books again: the next run, CATCH_MS after)
   if (!on[id]) { if (wait > 0) { again(k, wait); return WORDS; } last[k] = now; on[id] = ++runs; }
-  const n = on[id], job = behind("catch:" + id, () => [S.books, n, k === "mis" ? MIS.tabRun : 0], () => catchSteps(b, k));
+  const n = on[id], job = behind("catch:" + id, () => [S.books, n, k === "mis" ? MIS.tabRun : 0], () => catchSteps(b, k, n));
   if (!job.done) return WORDS;
   delete on[id];
   return (b.stale || {})[k] ? catchSoon(b, k) : "";
