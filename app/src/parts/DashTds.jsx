@@ -5,12 +5,18 @@
 // made-up entries), in the task that opened the client, and again in the next frame once the books were saved. It is
 // worked out behind the page now, in steps (TDS.allRowsIn, as the day's audit and MIS use it), and kept for the books as
 // they are: "Working out…" in its place until then. The same figure as before (the same rows, the same sum).
-/* global S, TDS, TCloud, CO, BOOKS_REV, num, goClient */
+/* global S, TDS, TCloud, CO, ClosedP, BOOKS_REV, num, goClient */
 import { behind, Working } from "../lib/behind.jsx";
 
+// what the figure is worked out from: the same things TDS.keptIn (src/js/09) compares before it hands out the rows it
+// kept: the settings and the edits by their words (k), the books' parts and every entry by itself
+const EDITS = ["alloc", "allocFrom", "tdsSplits", "tdsEdits", "tdsAdded", "panFix", "tdsFiled", "filedOn", "tcsCodes", "tcsCodesFixed", "tdsPayKind", "nrInfo"];
 const sig = (b, fy) => () => {
-  const x = typeof TCloud === "object" && TCloud.tdsl && TCloud.tdsl[b.cid], co = CO() || {};
-  return [S.books, typeof BOOKS_REV === "number" ? BOOKS_REV : 0, b.vouchers, b.vouchers.length, b.map, b.mapV, b.under, b.groups, b.ledInfo, b.ledInfoAt, b.pans, b.salary, b.payroll, x && x.rows, co, co.supInvFrom, fy];
+  const x = typeof TCloud === "object" && TCloud.tdsl && TCloud.tdsl[b.cid], V = b.vouchers || [];
+  let co = {}, k = null; try { co = CO() || {}; } catch (e) { /* no client open */ }
+  try { k = JSON.stringify([co.supInvFrom, typeof ClosedP === "object" ? ClosedP.cfg(co).tdsFiled : 0, Object.keys(b.pans || {}).length, b.mapV, b.ledInfoAt, b.cid].concat(EDITS.map((z) => b[z]))); } catch (e) { k = null; }
+  // (words that cannot be compared: a list that never matches, worked out again each time, as keptIn does)
+  return [S.books, fy, k === null ? {} : k, typeof BOOKS_REV === "number" ? BOOKS_REV : 0, b.map, b.under, b.groups, b.ledInfo, b.pans, b.salary, b.payroll, x && x.rows, V].concat(V);
 };
 function* tdsSteps(fy) {
   try { yield* TDS.allRowsIn(); return TDS.rows().filter((r) => r.fy === fy).reduce((a, r) => a + num(r.tds), 0); } catch (e) { return null; }

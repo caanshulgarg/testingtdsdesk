@@ -47,7 +47,8 @@ window.loadFirstOpen = () => import("./lib/firstOpen.js");
 // ledger map changed meanwhile (worked out at once there)
 window.usageSoon = async (b) => {
   const V = b.vouchers, m = b.map, u = {};
-  if (!V || !V.length || !m) return 0;
+  // (a tab in the background: its timers wait a second or more each; worked out at once there)
+  if (!V || !V.length || !m || document.hidden) return 0;
   try { for (let i = 0; i < V.length; i += 8000) { await new Promise((ok) => setTimeout(ok, 0)); if (S.books !== b) return 0; LedMaster.usage(b, u, i, i + 8000); } } catch (e) { return 0; }
   return b.vouchers === V && b.map === m && u;
 };

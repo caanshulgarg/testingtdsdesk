@@ -7,9 +7,11 @@ import HowPage from "../parts/HowPage.jsx";
 import { OnbCard } from "../parts/Notes.jsx";
 import PageSkeleton from "../parts/PageSkeleton.jsx";
 import { Inbox, ReceiptText, Send, Landmark } from "lucide-react";
-import { Suspense, lazy } from "react";
-// the TDS card: its books figure worked out behind the page (next-fix-client-open-freeze, parts/DashTds.jsx)
-const DashTds = lazy(() => import("../parts/DashTds.jsx"));
+import { Suspense } from "react";
+import { lazyModule } from "./lazy.js";
+// the TDS card: its books figure worked out behind the page (next-fix-client-open-freeze, parts/DashTds.jsx). Its file
+// is asked for as the screens' files are (lazyModule: once more when it does not come, fetched ahead with them)
+const DashTds = lazyModule(() => import("../parts/DashTds.jsx"))();
 
 const money = (x) => "₹" + INR.format(r2(x || 0));
 const sumTotal = (list) => money(list.reduce((a, e) => a + num(e.x.total), 0));
