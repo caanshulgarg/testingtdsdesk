@@ -16,7 +16,11 @@ run on its own: tests/run_hang_mis_auto.py). Review of 4e0d40f74: these still wo
      tab, then a run asked for elsewhere: the tab's run stops, nothing of it written, the newer one kept;
   8. a run asked for that fails is said (H2): the toast, the MIS tab's line with Run now in place of the busy line, the
      page drawn again, the earlier run kept; the MIS screen's file not loading after 5 tries: said the same way, the
-     busy line shown while it is tried.
+     busy line shown while it is tried;
+  9. the run on its own while Run now on the tab is worked out (re-review of 930d205b0): it waits, the tab's run kept;
+ 10. Run now on the tab awaiting FinCom's cloud, then a run asked for elsewhere: the cloud's wait over, the tab's run
+     gives way (never worked out for its period), the newer kept;
+ 11. Run now on the tab, at once a run asked for elsewhere: MIS._again does not stay set, the newer one runs.
 Made-up books only (as run_hang_mis_auto.py). Runs on the React build (app/dist-test, or TDSDESK_SITE)."""
 import os, sys, json, shutil, tempfile, threading, functools, subprocess, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -173,6 +177,40 @@ LOADFAIL = r"""async () => {
     res = {busy, calls: calls.length, quiet: calls.every(q => q === true), toasts: Z.toasts.filter(x => /Could not load the MIS/.test(x)), line: line ? line.innerText : "", job: !!MIS.auto}; }
   finally { window.loadPart = lp; MIS.steps = steps; Audit.AUTO.WAIT_MAX_MS = wm; }
   return res; }"""
+# 9-11 (from the re-review's probe)
+
+AUTOVSTAB = r"""async () => {
+  const Z = window.__zz, b = Z.books.big; Z.open("big"); S.booksTab = "mis"; S.misTab = "summary";
+  const r = Z.kept(b); const y = new Date(Date.now() - 40 * 86400000).toISOString(); b.mis.last.at = y; b.mis.history[0].at = y;
+  const to = b.meta.to, from = to.slice(0, 6) + "01"; S.misRange = {from: Audit.iso(from), to: Audit.iso(to)}; render(); await new Promise(z => setTimeout(z, 1500));
+  Z.toasts = []; Z.steps = []; const bt = Array.from(document.querySelectorAll("#app button")).find(x => x.innerText.trim() === "Run now"); bt.click();
+  await Z.wait(() => MIS._again, 3000).catch(() => null); await new Promise(z => setTimeout(z, 200)); const tab = !!MIS._again, due = MIS.due(b);
+  MIS.maybeRun();
+  await new Promise(z => setTimeout(z, 300)); await Z.quiet(); await new Promise(z => setTimeout(z, 500)); await Z.quiet();
+  return {tab, due, wantFrom: from, gotFrom: b.mis.last.from, gotTo: b.mis.last.to, how: b.mis.last.how, steps: Z.steps.slice(), toasts: Z.toasts.slice()}; }"""
+CLOUDWAIT = r"""async () => {
+  const Z = window.__zz, b = Z.books.big; Z.open("big"); S.booksTab = "mis"; S.misTab = "summary";
+  const r = Z.kept(b); S.misRange = {from: Audit.iso(r.from), to: Audit.iso(r.to)}; render(); await new Promise(z => setTimeout(z, 1500));
+  const ok = MIS.cloudOk, ask = MIS.cloudAsk; MIS.cloudOk = () => true; MIS.cloudAsk = () => new Promise(z => setTimeout(() => z(null), 1500));
+  Z.toasts = []; Z.steps = []; let res;
+  try { const bt = Array.from(document.querySelectorAll("#app button")).find(x => x.innerText.trim() === "Run now"); bt.click();
+    await Z.wait(() => MIS._again, 3000).catch(() => null); const tab = !!MIS._again;
+    const to = b.meta.to, from = to.slice(0, 6) + "01"; MIS.runSoon(b, {from, to, how: "opened from Reports"});
+    await new Promise(z => setTimeout(z, 2500)); await Z.quiet(); await new Promise(z => setTimeout(z, 500)); await Z.quiet();
+    res = {tab, wantFrom: from, gotFrom: b.mis.last.from, how: b.mis.last.how, steps: Z.steps.slice(), toasts: Z.toasts.slice()}; }
+  finally { MIS.cloudOk = ok; MIS.cloudAsk = ask; }
+  return res; }"""
+LEAK = r"""async () => {
+  const Z = window.__zz, b = Z.books.big; Z.open("big"); S.booksTab = "mis"; S.misTab = "summary";
+  const r = Z.kept(b); S.misRange = {from: Audit.iso(r.from), to: Audit.iso(r.to)}; render(); await new Promise(z => setTimeout(z, 1500));
+  Z.toasts = []; Z.steps = []; const bt = Array.from(document.querySelectorAll("#app button")).find(x => x.innerText.trim() === "Run now"); bt.click();
+  let n = 0; while (!MIS._again && n < 200) { await Promise.resolve(); n++; }
+  const sync = !!MIS._again, to = b.meta.to, from = to.slice(0, 6) + "01";
+  MIS.runSoon(b, {from, to, how: "opened from Reports"});
+  await new Promise(z => setTimeout(z, 5000));
+  const res = {sync, n, again: !!MIS._again, auto: !!MIS.auto, starts: MIS.auto ? MIS.auto.starts : null, how: b.mis.last.how, line: (document.querySelector("#app [data-mis-auto]") || {}).innerText || "", steps: Z.steps.slice()};
+  MIS._again = false; await Z.quiet().catch(() => null);
+  return res; }"""
 
 try:
     with sync_playwright() as p:
@@ -218,6 +256,14 @@ try:
         msg = "Could not load the MIS. Check your internet connection, then press Run now."
         ok(l["busy"] and l["calls"] == 6 and l["quiet"] and l["toasts"] == [msg] and msg in l["line"] and not l["job"],
            "   the file not loading: the busy line meanwhile, %d tries, then said once and on the tab (%s)" % (l["calls"], l["toasts"]))
+        a = pg.evaluate(AUTOVSTAB)
+        ok(a["tab"] and a["due"] and a["gotFrom"] == a["wantFrom"] and a["how"] == "run now" and not any(x.startswith("on its own") for x in a["steps"]),
+           "9. the run on its own while the tab's Run now runs: the tab's run kept (%s, %s)" % (a["how"], a["steps"]))
+        c = pg.evaluate(CLOUDWAIT)
+        ok(c["gotFrom"] == c["wantFrom"] and c["how"] == "opened from Reports" and "run now" not in c["steps"],
+           "10. the tab's Run now awaiting the cloud, then a run asked for: the newer kept, the tab's never worked out (%s, %s)" % (c["how"], c["steps"]))
+        k = pg.evaluate(LEAK)
+        ok(not k["again"] and k["how"] == "opened from Reports", "11. Run now then at once a run asked for: _again not left set, the newer ran (%s)" % k)
         br.close()
 finally:
     srv.shutdown(); shutil.rmtree(root, ignore_errors=True)

@@ -719,11 +719,12 @@ Object.assign(Audit, {
   autoBusy(b){ const f = typeof LK === "object" && LK.fr ? LK.fr() : null; return !!(b.catchUp || (f && f.busy) || (this !== Audit && (Audit.auto || this._again))); },
   // want (the MIS's runs asked for: MIS.runSoon): {from, to, how}, a run of that period and words, due or not; one asked
   // while another runs takes its place
-  autoStart(b, want){
+  // (k: when it was asked for, MIS.asked; one asked for earlier than the job running gives way to it)
+  autoStart(b, want, k){
     const j = this.auto;
-    if (j && j.b === b && !want) return j;
+    if (j && j.b === b && (!want || j.k > k)) return j;
     if (j) this.autoStop(j);
-    const job = this.auto = {b, want, cid: b.cid, co: S.coId, it: null, sig: null, memo: null, prog: {k: 0, of: Object.keys(this.checks || 0).length}, starts: 0, slices: [], drawn: 0, t0: Date.now()};
+    const job = this.auto = {b, want, k, cid: b.cid, co: S.coId, it: null, sig: null, memo: null, prog: {k: 0, of: Object.keys(this.checks || 0).length}, starts: 0, slices: [], drawn: 0, t0: Date.now()};
     this.autoSoon(job);
     return job;
   },

@@ -74,7 +74,9 @@ const MisCloud = {
   // MIS tab's line (failed). Here, with the job's steps (MIS.steps), not in legacy.js
   wantSay(j, k){
     const w = j.want, p = fmtDate(tallyDate(Audit.ymd(w.from))) + " to " + fmtDate(tallyDate(Audit.ymd(w.to)));
-    const t = k === "fail" ? "Could not work out the MIS for " + p + ". The figures shown are from the earlier run. Press Run now to try again." : "The MIS for " + p + " was not worked out: another run or client came first.";
+    // (the earlier run no longer fits the books: its figures are not shown; the setting changed: the run on its own follows it)
+    const t = k === "fail" ? "Could not work out the MIS for " + p + "." + (this.stale(j.b) ? "" : " The figures shown are from the earlier run.") + " Press Run now to try again."
+      : j.sig && j.sig.freq !== this.cfg(j.b).freq ? "The MIS settings changed; it will run again with the new setting." : "The MIS for " + p + " was not worked out: another run or client came first.";
     this.failed = k === "drop" ? null : {b: j.b, t};
     toast(t);
   },

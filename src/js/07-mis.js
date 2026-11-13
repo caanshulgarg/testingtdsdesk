@@ -593,15 +593,22 @@ const MIS = {
   // on 51,758 made-up entries, about 4x on a slow office PC). Now in idle steps as the day's audit on its own (Audit.autoStart,
   // its auto* taken below: the same restarts, waits and keep rules), the same run (runIn). tests/run_hang_mis_auto.py
   // Its steps (MIS.steps) come with the MIS screen's file (src/js/18-mis-pack.js), loaded first
-  maybeRun(){ const b = S.books; if (b && b.vouchers && !this._soon && this.due(b)) this.runSoon(b); },
+  // (not while a run asked for, or the MIS tab's own, is pending for these books)
+  maybeRun(){ const b = S.books, s = this._soon, j = this.auto; if (b && b.vouchers && !this._again && !(s && s.b === b) && !(j && j.want) && this.due(b)) this.runSoon(b); },
   // next-fix-mis-rework: every run asked for without the MIS tab's own (the cloud copy's new entries, an MSME type, Run
   // now by doAct, Reports): the same job, with its period and words (want: {from, to, how}). One at a time: the newest
   // asked for (t, _soon, while the file loads) takes the place of any other, the MIS tab's own run too (MIS._again: its
   // jobs stop when tabRun changes, Mis.jsx runSplit, catchSoon.js). The MIS screen's file loaded quietly (a failed fetch
   // is no reason to reload the page from a job behind it, app/src/main.jsx loadPart): tried again later, 5 times, then said
+  // A run asked for counts (asked: a cloud answer awaited meanwhile then gives way, Mis.jsx misGo, TCloud.rework); one on
+  // its own (no want) neither counts nor stops the tab's run. A load for another client's books that gives way is said,
+  // and the run on its own looked at for the books open then
   runSoon(b, want, n, t){
-    if (!t){ t = this._soon = {b, want}; this.failed = null; if (this._again) this.tabRun = (this.tabRun || 0) + 1; }
-    const go = () => { if (this._soon !== t) return; this._soon = null; if (S.books === b) this.autoStart(b, want); };
+    if (!t){
+      const o = this._soon; if (o && o.want && o.b !== b && this.wantSay) this.wantSay(o, "drop");
+      t = this._soon = {b, want, k: want ? (this.asked = (this.asked || 0) + 1) : this.asked}; this.failed = null; if (want && this._again) this.tabRun = (this.tabRun || 0) + 1;
+    }
+    const go = () => { if (this._soon !== t) return; this._soon = null; if (S.books === b) this.autoStart(b, want, t.k); else { if (want && this.wantSay) this.wantSay(t, "drop"); this.maybeRun(); } };
     if (this.steps || typeof loadPart !== "function") return go();
     loadPart("mis", true).then(go, () => { if (this._soon !== t) return;
       if ((n || 0) < 5) setTimeout(() => this.runSoon(b, want, (n || 0) + 1, t), this.AUTO.WAIT_MAX_MS / 2);
