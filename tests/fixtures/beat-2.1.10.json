@@ -37,7 +37,7 @@
   "every": 30,
   "keepWait": null,
   "kind": "beat",
-  "lastKeyAt": "",
+  "lastKeySec": null,
   "lastRead": "",
   "lastRun": "",
   "lastStop": null,

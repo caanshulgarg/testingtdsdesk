@@ -405,6 +405,7 @@ func pullRangeStep(w *pullWork, port int) (handled, sent, more bool) {
 	var took float64
 	htc := recorderTC(func(sec float64) { took += sec })
 	htc.gentleMs = pullGentleMs()
+	htc.sendYield = pullYield(it, paceRange) // 2.5.16: looked at again right before the send
 	raw, err := invokeTally(htc, port, x, 5)
 	pull.mu.Lock()
 	pull.rangeAsk = ""
@@ -425,7 +426,7 @@ func pullRangeStep(w *pullWork, port int) (handled, sent, more bool) {
 	pullNoteLook(err == nil && took > 0, holdMs)
 	ms := int(took * 1000)
 	if took > 0 && (err == nil || errors.Is(err, errRecorderStop)) {
-		paceNote(it.Company, paceRange, ms, holdMs, err == nil) // 2.5.16 (daypace2516.go)
+		paceNote(it.Company, it.CGUID, paceRange, ms, holdMs, err == nil) // 2.5.16 (daypace2516.go)
 	}
 	busy := func(what string) (bool, bool, bool) {
 		// the review's point 1: a range over 2 s (Tally finished it, its window answering) or cut is not a stop of the
@@ -473,12 +474,12 @@ func pullRangeStep(w *pullWork, port int) (handled, sent, more bool) {
 		}
 		if !in[h.Date] {
 			// the review's point 4: the single-day rule's "date not applied", as for one day
+			// 2.5.16 (the code review's L1): the answer is dropped and the day held 24 hours (daystop2516.go), as for one
+			// day's list; single days are never stopped on this Tally for it
 			bad := or(h.Date, "no date")
-			pull.mu.Lock()
-			pull.stopped[port] = "an entry of " + liveDay(bad) + " came for " + form
-			pull.mu.Unlock()
-			writeLog(fmt.Sprintf("Older entries of %s: Tally answered the request for %s with an entry dated %s: the date was not applied. The answer is dropped, nothing is stored or sent, and no day is asked of this Tally until the bridge restarts", it.Company, form, liveDay(bad)))
-			pullMarkUpload(w, "dates", "")
+			writeLog(fmt.Sprintf("Older entries of %s: Tally answered the request for %s with an entry dated %s: the date was not applied. The answer is dropped and nothing is stored or sent", it.Company, form, liveDay(bad)))
+			w.noRange = true
+			pullStopDay(w, "dates", form+": an entry dated "+liveDay(bad))
 			return true, true, false
 		}
 		if h.Mid == "" || h.GUID == "" {

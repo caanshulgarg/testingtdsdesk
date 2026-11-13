@@ -7,11 +7,19 @@
 --      fails the day is marked to upload (tally_period_days upload_why 'slow3', and an open check day of it), with the
 --      words "Tally could not send <d-Mon-yyyy> in time on 3 days. Upload that day's Day Book to finish it.";
 --   3. tally_period_retry_days: the days of a book held now (tally-ingest leaves them out of the days it hands out);
+--   5. (the code review's H1) a day's list read one voucher type at a time (via 'split') never closes the day: it may lack
+--      a type not asked (a Credit Note, a type of the book's own). Such a day is marked split_open (tally_period_days and
+--      tally_check_days, a trigger on each): its done_at stays empty and its earlier count is kept; only a whole list of
+--      the day (via 'day': the one-day list, the gap's or the recount's read) clears the mark, and the day is then done
+--      as before. The bridge also holds such a day 24 hours (why 'split', not counted as a failed day);
+--   6. (the code review's L5) tally_period_unstamp: the days a list handed back that tally-ingest left out because they
+--      are held keep the time they were last really handed out (the speed and the "asked in the last 2 minutes" order);
 --   4. tally_catchup_status: for the page's line "Bringing in N missed days from Tally, M left": the days being brought in
 --      (period and check days Tally lists entries for that FinCom does not hold whole yet: left), and those brought in
 --      today (finished after they were first counted), for one of the firm's own books.
--- Add-only: one new table (row security on, service_role only), four new functions; no existing function, table or row
--- changed except the marks of item 2. One transaction, lock_timeout 10 s, safe twice. Tested by tests/run_migration197.py.
+-- Add-only: one new table (row security on, service_role only), a split_open column on tally_period_days and
+-- tally_check_days (default false), one trigger function with a trigger on each of those tables, five new functions; no
+-- existing function changed; rows changed only by items 2, 5 and 6. One transaction, lock_timeout 10 s, safe twice. Tested by tests/run_migration197.py.
 -- Deploy order: 197, then the tally-ingest of the same branch (without 197 that tally-ingest asks the bridge to stop the
 -- book's period as before: the bridge falls back to period_stop).
 begin;
@@ -33,7 +41,29 @@ alter table public.tally_period_day_retry enable row level security;
 revoke all on table public.tally_period_day_retry from public, anon, authenticated;
 grant select, insert, update, delete on public.tally_period_day_retry to service_role;
 
--- the bridge's day stop: {ok, fails, upload, retryAt, words}
+-- 5. a split list never closes a day (before insert or update of the day): the mark set by a split list, cleared by a
+-- whole one; while it is set the day is not done and a split keeps the count it had
+alter table public.tally_period_days add column if not exists split_open boolean not null default false;
+alter table public.tally_check_days add column if not exists split_open boolean not null default false;
+create or replace function public.tally_day_split_open() returns trigger
+language plpgsql security definer set search_path = public, pg_temp as $function$
+begin
+  if tg_op = 'UPDATE' and new.via is not distinct from old.via and new.heads is not distinct from old.heads then
+    new.split_open := old.split_open;                 -- not a new list (entries taken, a mark): the mark as it was
+  elsif new.via = 'split' then
+    new.split_open := true;
+    if tg_op = 'UPDATE' and old.tally_n is not null then new.tally_n := old.tally_n; end if;   -- the earlier count kept
+  elsif new.via = 'day' then
+    new.split_open := false;
+  end if;
+  if new.split_open then new.done_at := null; end if;
+  return new;
+end $function$;
+revoke all on function public.tally_day_split_open() from public, anon, authenticated, service_role;
+create or replace trigger tally_period_days_split_open before insert or update on public.tally_period_days for each row execute function public.tally_day_split_open();
+create or replace trigger tally_check_days_split_open before insert or update on public.tally_check_days for each row execute function public.tally_day_split_open();
+
+-- the bridge's day stop: {ok, fails, upload, retryAt, words}. why 'split': only held (not a failed day)
 create or replace function public.tally_period_day_stop(p_book uuid, p_day date, p_why text) returns jsonb
 language plpgsql security definer set search_path = public, pg_temp as $function$
 declare f uuid; r tally_period_day_retry%rowtype; n int; up boolean := false; w text;
@@ -46,7 +76,7 @@ begin
   on conflict (book_id, day) do nothing;
   select * into r from tally_period_day_retry where book_id = p_book and day = p_day for update;
   -- one try a day: a stop within 20 hours of the last one counted is the same day's
-  n := case when r.fails = 0 or r.last_at <= now() - interval '20 hours' then r.fails + 1 else r.fails end;
+  n := case when p_why = 'split' then r.fails when r.fails = 0 or r.last_at <= now() - interval '20 hours' then r.fails + 1 else r.fails end;
   update tally_period_day_retry set fails = n, last_at = case when n > r.fails then now() else last_at end, retry_at = now() + interval '24 hours',
          why = left(coalesce(p_why, ''), 40)
    where book_id = p_book and day = p_day;
@@ -60,6 +90,21 @@ begin
      where book_id = p_book and day = p_day and done_at is null and upload_at is null;
   end if;
   return jsonb_build_object('ok', true, 'fails', n, 'upload', up, 'retryAt', now() + interval '24 hours', 'words', w);
+end $function$;
+
+-- 6. the held days a list handed back that were not handed out: their last real hand-out time again
+create or replace function public.tally_period_unstamp(p_book uuid, p_days date[]) returns jsonb
+language plpgsql security definer set search_path = public, pg_temp as $function$
+declare a int; b int;
+begin
+  if not tally_service_or_owner() then raise exception 'not allowed' using errcode = '42501'; end if;
+  update tally_period_days d set asked_at = r.retry_at - interval '24 hours' from tally_period_day_retry r
+   where d.book_id = p_book and d.day = any(coalesce(p_days, '{}')) and r.book_id = d.book_id and r.day = d.day and r.retry_at > now();
+  get diagnostics a = row_count;
+  update tally_check_days d set asked_at = r.retry_at - interval '24 hours' from tally_period_day_retry r
+   where d.book_id = p_book and d.day = any(coalesce(p_days, '{}')) and r.book_id = d.book_id and r.day = d.day and r.retry_at > now();
+  get diagnostics b = row_count;
+  return jsonb_build_object('ok', true, 'days', a, 'checkDays', b);
 end $function$;
 
 -- the days of a book held now (yyyymmdd), at most 400
@@ -102,6 +147,8 @@ end $function$;
 
 revoke all on function public.tally_period_day_stop(uuid, date, text) from public, anon, authenticated;
 grant execute on function public.tally_period_day_stop(uuid, date, text) to service_role;
+revoke all on function public.tally_period_unstamp(uuid, date[]) from public, anon, authenticated;
+grant execute on function public.tally_period_unstamp(uuid, date[]) to service_role;
 revoke all on function public.tally_period_retry_days(uuid) from public, anon, authenticated;
 grant execute on function public.tally_period_retry_days(uuid) to service_role;
 revoke all on function public.tally_catchup_status_of(uuid) from public, anon, authenticated, service_role;

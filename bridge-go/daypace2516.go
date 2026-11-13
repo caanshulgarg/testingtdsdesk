@@ -13,9 +13,11 @@ package main
 // its 2 s stop (3 s a payroll entry), postings and saves first, the six conditions before every request.
 //
 // The measurements are kept in sync\day-pace.json and start again when the bridge version changes. The beat says when a
-// key or click was last seen in Tally (lastKeyAt), so FinCom can tell typing from a stuck bridge.
+// key or click was last seen in Tally (lastKeySec: seconds since, on the bridge's own clock), so FinCom can tell typing
+// from a stuck bridge.
 
 import (
+	"strings"
 	"sync"
 	"time"
 )
@@ -47,8 +49,12 @@ var pace = struct {
 	dirty  bool
 }{}
 
-func paceFile() string                 { return sp("day-pace.json") }
-func paceKey(company, f string) string { return companyKey(company) + "|" + f }
+func paceFile() string { return sp("day-pace.json") }
+
+// per company GUID (a restored or test copy of the same name is another company), and form
+func paceKey(company, guid, f string) string {
+	return companyKey(company) + "|" + strings.ToLower(strings.TrimSpace(guid)) + "|" + f
+}
 
 // under pace.mu: this sync folder's measurements, loaded once; another version's are dropped
 func paceFreshLocked() {
@@ -81,7 +87,7 @@ func paceReset() {
 }
 
 // one request of the day pull answered (ok) or stopped (not ok), with Tally's window held holdMs while it was at Tally
-func paceNote(company, f string, ms, holdMs int, ok bool) {
+func paceNote(company, guid, f string, ms, holdMs int, ok bool) {
 	if company == "" {
 		return
 	}
@@ -93,7 +99,7 @@ func paceNote(company, f string, ms, holdMs int, ok bool) {
 	}
 	pace.mu.Lock()
 	paceFreshLocked()
-	k := paceKey(company, f)
+	k := paceKey(company, guid, f)
 	p := pace.m[k]
 	if p == nil {
 		p = &paceForm{Avg: ms}
@@ -126,11 +132,11 @@ func paceTextLocked() string {
 
 // the prediction (ms) for the company's form: the slower of the last answer and the moving average; known false when
 // never measured
-func pacePredict(company, f string) (int, bool) {
+func pacePredict(company, guid, f string) (int, bool) {
 	pace.mu.Lock()
 	defer pace.mu.Unlock()
 	paceFreshLocked()
-	p := pace.m[paceKey(company, f)]
+	p := pace.m[paceKey(company, guid, f)]
 	if p == nil || p.N == 0 {
 		return 0, false
 	}
@@ -138,19 +144,19 @@ func pacePredict(company, f string) (int, bool) {
 }
 
 // the small tier: measured, and predicted 0.3 s or less (a by-type list, a group, a range and the payroll never)
-func paceSmall(company, f string) bool {
+func paceSmall(company, guid, f string) bool {
 	switch f {
 	case paceHeads, paceObject:
 	default:
 		return false
 	}
-	ms, known := pacePredict(company, f)
+	ms, known := pacePredict(company, guid, f)
 	return known && ms <= paceSmallMs
 }
 
 // how long Tally must have been left alone before the form goes (seconds)
-func paceNeedSec(company, f string) int {
-	if paceSmall(company, f) {
+func paceNeedSec(company, guid, f string) int {
+	if paceSmall(company, guid, f) {
 		return minI(pullSmallIdleSec(), pullIdleSec())
 	}
 	return pullIdleSec()
@@ -211,7 +217,7 @@ func pullQuietSec(it pullItem) float64 {
 
 // the form may go now: Tally left alone for its tier's wait
 func pullTierOK(it pullItem, f string) bool {
-	return pullQuietSec(it) >= float64(paceNeedSec(it.Company, f))
+	return pullQuietSec(it) >= float64(paceNeedSec(it.Company, it.CGUID, f))
 }
 
 var pullFrontFn = platFrontIsTally // Tally is the window in front (the tests replace it)
@@ -228,7 +234,7 @@ func keyNote() {
 	if idle < 0 || idle >= 99999 || !pullFrontFn() {
 		return
 	}
-	t := time.Now().Add(-time.Duration(idle * float64(time.Second))).Truncate(time.Second)
+	t := time.Now().Add(-time.Duration(idle * float64(time.Second))) // (the monotonic clock: the beat says seconds since)
 	keyAt.mu.Lock()
 	if t.After(keyAt.t) {
 		keyAt.t = t
@@ -236,13 +242,24 @@ func keyNote() {
 	keyAt.mu.Unlock()
 }
 
-// RFC3339 (UTC) of the last key or click seen in Tally in this run; "" when none was seen
-func lastKeyBeat() string {
+// the whole seconds since the last key or click seen in Tally in this run, on this computer's own running clock (never
+// a time of day: FinCom works out the moment on its own clock, so a computer whose clock is wrong never misleads it);
+// nil when none was seen
+func lastKeyBeat() any {
 	keyNote()
 	keyAt.mu.Lock()
 	defer keyAt.mu.Unlock()
 	if keyAt.t.IsZero() {
-		return ""
+		return nil
 	}
-	return keyAt.t.UTC().Format(time.RFC3339)
+	return int(time.Since(keyAt.t) / time.Second)
+}
+
+// 2.5.16 (the code review's M1): the day pull's yield, looked at after the wait for Tally's lock and after the rest,
+// right before each send: a posting or a save waiting to go, or typing within the form's tier since the six conditions
+// were looked at: nothing is sent (the day waits for the next look)
+func pullYield(it pullItem, f string) func() bool {
+	return func() bool {
+		return postingGoing() || importsInFlight.Load() > 0 || liveQueueReady() || !pullTierOK(it, f)
+	}
 }

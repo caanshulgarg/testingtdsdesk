@@ -118,7 +118,7 @@ func TestR2516SlowDayStopsThatDayOnly(t *testing.T) {
 	// after 24 hours: asked again, but only once Tally has been left alone a minute (the heavy tier)
 	r2516At(t, t0.Add(25*time.Hour))
 	r2516Person(t, 20)
-	paceNote(zz, paceHeads, 50, 0, true) // the list measured small: still heavy for a retried day
+	paceNote(zz, b220CoGUID, paceHeads, 50, 0, true) // the list measured small: still heavy for a retried day
 	applyPeriodDays(l)
 	pullRun(t, 5)
 	if f.n(dayHeadsID) != n0 {
@@ -215,7 +215,7 @@ func TestR2516RowsOfAnotherDate(t *testing.T) {
 	}
 }
 
-// a slow mark lifts by itself after a day; the entries are asked again
+// a slow mark is probed once a day with one entry (L3): lifted only when it answers in time
 func TestR2516SlowMarkLiftsAfterADay(t *testing.T) {
 	pullBridge(t)
 	t0 := nowFn()
@@ -229,14 +229,34 @@ func TestR2516SlowMarkLiftsAfterADay(t *testing.T) {
 		slowSt.mu.Unlock()
 	})
 	r2516At(t, t0.Add(23*time.Hour))
-	if !slowMarked(zz, b220CoGUID) {
-		t.Fatal("lifted within the day")
+	if !slowMarked(zz, b220CoGUID) || slowProbing(zz) {
+		t.Fatal("probed within the day")
 	}
+	// a day on: the probe opens (one entry may go; no group), its answer stopped at 2 s: the mark stays
 	r2516At(t, t0.Add(25*time.Hour))
-	if slowMarked(zz, b220CoGUID) {
-		t.Fatal("not lifted after a day")
+	if slowMarked(zz, b220CoGUID) || !slowProbing(zz) {
+		t.Fatal("no probe after a day")
 	}
-	if !strings.Contains(readText(logFile()), "is a day old: lifted") {
-		t.Fatal("no log line")
+	x := voucherObjectRequest(zz, "123")
+	slowNote(9000, x, true, 2*time.Second, errRecorderStop, recorderLimitMs())
+	if !slowMarked(zz, b220CoGUID) || slowProbing(zz) {
+		t.Fatal("a stopped probe lifted the mark")
+	}
+	r2516At(t, t0.Add(40*time.Hour))
+	if !slowMarked(zz, b220CoGUID) {
+		t.Fatal("probed again within the day of the last probe")
+	}
+	// the next day's probe answered in time: lifted
+	r2516At(t, t0.Add(50*time.Hour))
+	if slowMarked(zz, b220CoGUID) || !slowProbing(zz) {
+		t.Fatal("no second probe")
+	}
+	slowNote(9000, x, true, 60*time.Millisecond, nil, recorderLimitMs())
+	if slowMarked(zz, b220CoGUID) || slowProbing(zz) {
+		t.Fatal("not lifted after a probe answered in time")
+	}
+	l := readText(logFile())
+	if !strings.Contains(l, "one entry is asked of Tally to measure it again") || !strings.Contains(l, "the mark stays") || !strings.Contains(l, "is lifted") {
+		t.Fatal("the log lines")
 	}
 }

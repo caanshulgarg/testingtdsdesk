@@ -2075,8 +2075,9 @@ function lightIdle(b: any, prevInfo: any, now = Date.now()): { idle: boolean; ty
   let at = Math.max(t(prevInfo?.typingAt) || 0, ...fresh.values());
   const waits = cos ? Object.entries(cos).some(([k, c]: [string, any]) => typeof c?.waiting === "string" && /someone is working in tally/i.test(c.waiting) && fresh.has(key(k))) : false;
   if (waits || b?.keepWait?.reason === "userInTally") at = now;
-  // bridge 2.5.16: the last key or click its own look saw in Tally (lastKeyAt; never ahead of now)
-  const lk = Math.min(now, t(b?.lastKeyAt));
+  // bridge 2.5.16: seconds since the last key or click its own look saw in Tally (lastKeySec, the bridge's own running
+  // clock: the moment is worked out here, so a computer whose clock is wrong never misleads)
+  const ks = Number(b?.lastKeySec), lk = Number.isFinite(ks) && ks >= 0 && ks < 1e7 ? now - Math.floor(ks) * 1000 : NaN;
   if (lk > at) at = lk;
   const typingAt = at > 0 ? new Date(at).toISOString() : null;
   const ms = Number(b?.reqs?.last?.ms), known = !!pick && !!cos && b?.reqs?.last && Number.isFinite(ms) && ms >= 0;
@@ -2128,7 +2129,14 @@ async function periodDaysFor(firm: string, body: any, stopped: boolean, max = 3,
       if (!guid) continue;     // the bridge asks only for the company it holds under that GUID
       // bridge 2.5.16 (migration 197): the days held for their 24 hours are never handed out; the lists are asked for that
       // many more days so the held ones never fill the answer
-      const held = await dayRetryHeld(book), more = held.size;
+      const held = await dayRetryHeld(book), more = held.size, skipped = new Set<string>();
+      // (the code review's L5: a held day a list handed back was stamped as handed out: its last real hand-out kept)
+      const isHeld = (d: string) => { if (!held.has(d)) return false; skipped.add(d); return true; };
+      const unstamp = async () => {
+        if (!skipped.size) return;
+        const days = [...skipped].map(iso); skipped.clear();
+        try { const { error } = await db.rpc("tally_period_unstamp", { p_book: book, p_days: days }); if (error && !missingFn(String(error.message || ""))) fail("period_unstamp", error); } catch (e) { fail("period_unstamp", e); }
+      };
       // review 245 R12 / R15 (L4): at night every company's call says so (p_night: the pace for the status line), and it is
       // asked only for the days left of the answer, so every day it stamps as handed out is handed out
       // next-fast-entries: the pace said is the computer's own hours (night), not the answer's size (a fast bridge by day
@@ -2142,10 +2150,10 @@ async function periodDaysFor(firm: string, body: any, stopped: boolean, max = 3,
         for (const d of Array.isArray(hf) ? hf as any[] : []) {
           if (out.length >= max) break;
           const day = String(d?.day || "");
-          if (!isDay(day) || held.has(day) || out.some((x) => x.company === company && x.day === day)) continue;
+          if (!isDay(day) || isHeld(day) || out.some((x) => x.company === company && x.day === day)) continue;
           out.push({ company, company_guid: guid, day, fetch: true, types: CHECK_TYPES, ...chosenOf(d), ...(markCheck ? { check: true } : {}), kind: "check" });
         }
-        if (out.length >= max) continue;
+        if (out.length >= max) { await unstamp(); continue; }
       }
       // next-gap-autoread (migration 160): the recorder's gap (Tally's number ahead of FinCom's) open 2 minutes, nothing of
       // the book held, no posting of its company waiting: its days (newest first, each at most once per 15 minutes) next,
@@ -2166,10 +2174,10 @@ async function periodDaysFor(firm: string, body: any, stopped: boolean, max = 3,
         for (const d of Array.isArray(gf) ? gf as any[] : []) {
           if (out.length >= max) break;
           const day = String(d?.day || "");
-          if (!isDay(day) || held.has(day) || out.some((x) => x.company === company && x.day === day)) continue;
+          if (!isDay(day) || isHeld(day) || out.some((x) => x.company === company && x.day === day)) continue;
           out.push({ company, company_guid: guid, day, fetch: true, types: CHECK_TYPES, ...chosenOf(d), ...(markCheck ? { check: true } : {}), kind: "check" });
         }
-        if (out.length >= max) continue;
+        if (out.length >= max) { await unstamp(); continue; }
       }
       const byClaim = !!claim && claim.shared.has(company) && Date.now() - daysClaimMissing >= 600000;
       const dArgs = byClaim ? { p_firm: firm, p_book: book, p_device: claim!.dev.id, p_bridge: claim!.bridge } : null;
@@ -2193,7 +2201,7 @@ async function periodDaysFor(firm: string, body: any, stopped: boolean, max = 3,
       }
       for (const d of Array.isArray(data) ? data as any[] : []) {
         if (out.length >= max) break;
-        if (!isDay(String(d?.day || "")) || held.has(String(d.day)) || out.some((x) => x.company === company && x.day === String(d.day))) continue;
+        if (!isDay(String(d?.day || "")) || isHeld(String(d.day)) || out.some((x) => x.company === company && x.day === String(d.day))) continue;
         // review 245 R1: "&", "<" and ">" pass (the bridge escapes the request); never a quote mark or a control character
         const types = (Array.isArray(d?.types) ? d.types : []).filter((t: unknown) => typeof t === "string" && t.length > 0 && t.length <= 60 && t === t.trim() && !/["\u0000-\u001f\u007f]/.test(t)).slice(0, 40);
         // 30-Oct-2026 (migration 133): the choice time travels with the day (the bridge's stop names it; without it a stop
@@ -2232,12 +2240,13 @@ async function periodDaysFor(firm: string, body: any, stopped: boolean, max = 3,
           for (const d of rows) {
             if (out.length >= max) break;
             const day = String(d?.day || "");
-            if (held.has(day) || out.some((x) => x.company === company && x.day === day)) continue;
+            if (isHeld(day) || out.some((x) => x.company === company && x.day === day)) continue;
             // next-fast-entries (review 7): to a fast bridge a check day says so (its speed counts the period's own days only)
             out.push({ company, company_guid: guid, day, fetch: true, types: CHECK_TYPES, ...chosenOf(d), ...(markCheck ? { check: true } : {}), kind: fills.has(day) ? "fill" : "check" });
           }
         }
       }
+      await unstamp();
     }
   } catch (e) {
     fail("period_next", e); console.log("tally-ingest beat: the days of the period not worked out:", String((e as Error)?.message || e).slice(0, 200));
@@ -2387,14 +2396,15 @@ async function periodHeads(book: string, body: any, device = "", bridge = "") {
     const want = [...new Set([...(Array.isArray(c.want) ? c.want : []), ...(body?.fetch === true && per && Array.isArray(per.want) ? per.want : [])].map(String))];
     const n = Number(c.n) || heads.length;
     gstWant(book);
-    return reply(200, { ok: true, n, held: Math.max(0, n - want.length), done: c.done === true && (!per || per.done === true), want });
+    // bridge 2.5.16 (migration 197): a list read one voucher type at a time never closes the day (it may lack a type)
+    return reply(200, { ok: true, n, held: Math.max(0, n - want.length), done: via === "day" && c.done === true && (!per || per.done === true), want, ...(via === "split" ? { partial: true } : {}) });
   }
   const { data, error } = await db.rpc("tally_period_heads", { p_book: book, p_day: iso(day), p_heads: heads, p_via: via });
   if (error) return periodError(error);
   const d = (data || {}) as any;
   if (d.ok !== true) return reply(200, { ok: false, error: String(d.error || "not kept") });
   gstWant(book);     // next-cloud-gst: the day's heads kept (deleted entries marked): the 3B queued
-  return reply(200, { ok: true, n: d.n, held: d.held, done: d.done === true, want: body?.fetch === true && Array.isArray(d.want) ? d.want.map(String) : [] });
+  return reply(200, { ok: true, n: d.n, held: d.held, done: via === "day" && d.done === true, want: body?.fetch === true && Array.isArray(d.want) ? d.want.map(String) : [], ...(via === "split" ? { partial: true } : {}) });
 }
 function periodError(error: any) {
   const m = String(error?.message || "");
@@ -2425,7 +2435,8 @@ async function periodStop(book: string, body: any) {
 async function periodDayStop(book: string, body: any) {
   const day = String(body?.day || "");
   if (!isDay(day)) return reply(400, { ok: false, error: "not a day" });
-  const why = ["over2s", "window"].includes(String(body?.why)) ? String(body.why) : "other";
+  // (split: a day read type by type, held only; dates: Tally did not apply the date, a failed day as a slow one)
+  const why = ["over2s", "window", "dates", "split"].includes(String(body?.why)) ? String(body.why) : "other";
   const { data, error } = await db.rpc("tally_period_day_stop", { p_book: book, p_day: iso(day), p_why: why });
   if (error) {
     if (missingFn(String(error.message || ""))) return reply(503, { ok: false, notReady: true, error: "The cloud does not hold a slow day for later yet (migration 197)." });
@@ -4790,7 +4801,7 @@ Deno.serve(sentry.wrap(async (req) => {
           // bridge 2.5.10: why its last run ended, when it ran again (lastStopOf)
           ...(lastStopOf(b) ? { lastStop: lastStopOf(b) } : {}),
           // bridge 2.5.16: when a key or click was last seen in Tally (the page tells typing from a stuck bridge)
-          ...(typeof b.lastKeyAt === "string" && !isNaN(Date.parse(b.lastKeyAt)) ? { lastKeyAt: new Date(Math.min(Date.now(), Date.parse(b.lastKeyAt))).toISOString() } : {}),
+          ...(Number.isFinite(Number(b.lastKeySec)) && b.lastKeySec !== null && Number(b.lastKeySec) >= 0 && Number(b.lastKeySec) < 1e7 ? { lastKeyAt: new Date(Date.now() - Math.floor(Number(b.lastKeySec)) * 1000).toISOString() } : {}),
           // bridge 2.5.16: this login's Tally listens on a port its tally.ini does not name ({port, iniPort, words})
           ...(b.tallyPortNotSaved && typeof b.tallyPortNotSaved === "object" && Number(b.tallyPortNotSaved.port) > 0 ? { tallyPortNotSaved: { port: Math.min(65535, Math.floor(Number(b.tallyPortNotSaved.port))), iniPort: Math.max(0, Math.min(65535, Math.floor(Number(b.tallyPortNotSaved.iniPort) || 0))), words: s(b.tallyPortNotSaved.words, 400) } } : {}),
           windowsUser: s(b.windowsUser, 60), bridgePort: Math.max(0, Math.min(65535, Math.floor(Number(b.bridgePort) || 0))), tallyPort: Math.max(0, Math.min(65535, Math.floor(Number(b.tallyPort) || 0))), dataFolder: s(b.dataFolder, 260) };

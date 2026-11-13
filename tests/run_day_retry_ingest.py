@@ -5,6 +5,7 @@ Checks:
      a cloud without 197: 503 notReady (the bridge then stops the period as before); not a day: 400.
   2. a day held (tally_period_retry_days) is never handed out (period, check or gap day), and the period's and the check's
      lists are asked for that many more days; a cloud without 197: as before (asked again after 10 minutes).
+  1b. a period_heads list read by type (via split) answers done false and partial.
   3. a pick-up refused with code dayRetry keeps FinCom's own words.
   4. the beat's tallyPortNotSaved (bridge 2.5.16) kept on the computer's beat, cleaned.
 Needs Deno (DENO). Made-up books only."""
@@ -95,6 +96,14 @@ try:
     c, r = call(dict(base, kind="period_day_stop", company="MADE UP CO", company_guid=CG, day="20250831", why="over2s", chosenAt=CA))
     ok(c == 503 and r.get("notReady") is True, "1. a cloud without 197: 503 notReady (%s)" % r)
     FS.NO_FN.discard("tally_period_day_stop")
+    for why in ("dates", "split"):
+        c, r = call(dict(base, kind="period_day_stop", company="MADE UP CO", company_guid=CG, day="20250831", why=why, chosenAt=CA))
+        a = (FS.ARGS.get("tally_period_day_stop") or [{}])[-1]
+        ok(c == 200 and a.get("p_why") == why, "1. why %s passed on (%s)" % (why, a))
+    print("== 1b. a list read type by type never closes the day")
+    c, r = call(dict(base, kind="period_heads", company="MADE UP CO", company_guid=CG, day="20250831", via="split", partial=True, n=1, heads=[["g-1", 11, 5, "Sales"]], fetch=True))
+    ph = (FS.ARGS.get("tally_period_heads") or [{}])[-1]
+    ok(c == 200 and r.get("done") is False and r.get("partial") is True and ph.get("p_via") == "split", "1b. via split: done false, partial (%s; %s)" % (r, ph.get("p_via")))
     print("== 2. a held day is not handed out")
     time.sleep(5.2)
     np, nc = len(FS.ARGS.get("tally_period_next_paced") or []), len(FS.ARGS.get("tally_check_next_open") or [])
@@ -103,6 +112,8 @@ try:
     ok(c == 200 and "20250831" not in d and len(d) == 3, "2. 31-Aug held: not listed, 3 others are (%s)" % d)
     pa = (FS.ARGS.get("tally_period_next_paced") or [{}])[-1]
     ok(len(FS.ARGS.get("tally_period_next_paced") or []) > np and pa.get("p_max") == 4, "2. the period asked for one more day (%s)" % pa)
+    un = (FS.ARGS.get("tally_period_unstamp") or [{}])[-1]
+    ok(un.get("p_book") == BOOK and "2025-08-31" in (un.get("p_days") or []), "2. the held day a list handed back: its hand-out undone (%s)" % un)
     FS.NO_FN.add("tally_period_retry_days")
     time.sleep(5.2); c, r = call(beat)
     ok(c == 200 and "20250831" in days_of(r), "2. a cloud without 197: as before (%s)" % days_of(r))

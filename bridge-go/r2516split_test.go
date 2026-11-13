@@ -54,17 +54,22 @@ func TestR2516SplitReadsABigDayByType(t *testing.T) {
 			t.Fatalf("by-type list %d is not F2 as built:\n%s", i, b)
 		}
 	}
-	if len(x.dayStops) != 0 || len(x.stops) != 0 {
-		t.Fatalf("stopped: %v %v", x.dayStops, x.stops)
+	// (the code review's H1) the day is never done on a split list: told partial, then held 24 hours (not a failed day)
+	if len(x.stops) != 0 || len(x.dayStops) != 1 || str(x.dayStops[0]["why"]) != "split" {
+		t.Fatalf("after the split: day stops %v, period stops %v", x.dayStops, x.stops)
 	}
 	var via string
+	partial := false
 	for _, h := range m.heads {
 		if str(h["day"]) == "20250831" && !truthy(h["upload"]) {
-			via = str(h["via"])
+			via, partial = str(h["via"]), h["partial"] == true
 		}
 	}
-	if m.n["20250831"] != 4 || via != "split" || f.n(vchObjectID) != 4 {
-		t.Fatalf("the day by type: n %v via %q, %d entries asked", m.n, via, f.n(vchObjectID))
+	if m.n["20250831"] != 4 || via != "split" || !partial || f.n(vchObjectID) != 4 {
+		t.Fatalf("the day by type: n %v via %q partial %v, %d entries asked", m.n, via, partial, f.n(vchObjectID))
+	}
+	if !pullRetryHeld(pullItem{Company: zz, CGUID: b220CoGUID, Day: "20250831"}) {
+		t.Fatal("the split day is not held for its one-day list a day later")
 	}
 	if !strings.Contains(readText(logFile()), "asked again one voucher type at a time") {
 		t.Fatal("no log line")
@@ -105,7 +110,7 @@ func TestR2516SplitTypeOver2sStopsTheDay(t *testing.T) {
 // the split is the heavy tier: not 10 s after typing, even with the day's list measured small
 func TestR2516SplitIsHeavy(t *testing.T) {
 	f, _, _ := r2516SplitDay(t)
-	paceNote(zz, paceHeads, 50, 0, true)
+	paceNote(zz, b220CoGUID, paceHeads, 50, 0, true)
 	r2516Person(t, 10)
 	applyPeriodDays(pullList("20250831"))
 	pullRun(t, 5)

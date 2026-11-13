@@ -29,17 +29,25 @@ func pullRetryWords(it pullItem) string {
 	return "Tally was slow for " + liveDay(it.Day) + "; FinCom tries it again tomorrow (no action needed)."
 }
 
-// the day stops for 24 hours; the other days go on
+// the day stops for 24 hours; the other days go on. why: over2s | window | dates (a failed day: counted toward the 3,
+// and toward the company's brake) or split (read type by type: not a failure, only held so its one-day list is asked
+// again a day later; FinCom never closes a day on a split list)
 func pullStopDay(w *pullWork, why, what string) {
 	it := w.it
 	words := pullRetryWords(it)
+	if why == "split" {
+		words = liveDay(it.Day) + " was read one voucher type at a time; FinCom checks the whole day again tomorrow (no action needed)."
+	}
 	body := M{"kind": "period_day_stop", "company": it.Company, "company_guid": it.CGUID, "day": it.Day, "why": why, "words": words, "chosenAt": it.ChosenAt, "pick": it.Kind}
 	r := invokeCloud(body, 10)
 	older := r.code == 503 && r.json != nil && truthy(r.json["notReady"]) ||
 		r.code == 400 && r.json != nil && strings.Contains(str(r.json["error"]), "unknown kind")
-	if older {
+	if older && why != "split" {
 		pullStopCompany(w, why, what) // a cloud without migration 197: as before
 		return
+	}
+	if why != "split" {
+		pullBrakeNote(it)
 	}
 	writeLog(fmt.Sprintf("Older entries of %s: %s stopped (%s): this day only; asked again after 24 hours, while Tally is left alone; the other days go on", it.Company, liveDay(it.Day), what))
 	if r.code == 200 && r.json != nil && truthy(r.json["ok"]) && truthy(r.json["upload"]) {
@@ -58,9 +66,47 @@ func pullStopDay(w *pullWork, why, what string) {
 	pullSaveLocked()
 	pull.mu.Unlock()
 	pullFinish(w, "retry")
-	if !(r.code == 200 && r.json != nil && truthy(r.json["ok"])) {
+	if !older && !(r.code == 200 && r.json != nil && truthy(r.json["ok"])) {
 		pullTell("daystop|"+it.key(), body) // told again until FinCom takes it (the day is held here meanwhile)
 	}
+}
+
+// 2.5.16 (the code review's L2): a company whose days failed 3 times within an hour waits an hour (its days are not
+// asked; the other companies go on)
+const (
+	pullBrakeStops = 3
+	pullBrakeSpan  = time.Hour
+)
+
+func pullBrakeNote(it pullItem) {
+	k := pullEmpKey(it)
+	now := nowFn()
+	pull.mu.Lock()
+	var keep []time.Time
+	for _, t := range pull.brake[k] {
+		if now.Sub(t) < pullBrakeSpan && !now.Before(t) {
+			keep = append(keep, t)
+		}
+	}
+	keep = append(keep, now)
+	pull.brake[k] = keep
+	on := len(keep) == pullBrakeStops
+	pull.mu.Unlock()
+	if on {
+		writeLog(fmt.Sprintf("Older entries of %s: Tally was too slow for %d days of it within an hour: its older days wait an hour; the other companies go on", it.Company, pullBrakeStops))
+	}
+}
+
+// the company waits: its last pullBrakeStops day stops all within an hour, the last under an hour ago
+func pullBraked(it pullItem) bool {
+	pull.mu.Lock()
+	defer pull.mu.Unlock()
+	l := pull.brake[pullEmpKey(it)]
+	if len(l) < pullBrakeStops {
+		return false
+	}
+	first, last, now := l[len(l)-pullBrakeStops], l[len(l)-1], nowFn()
+	return last.Sub(first) < pullBrakeSpan && now.Sub(last) < pullBrakeSpan && !now.Before(last)
 }
 
 // the day is held here now (its 24 hours not over)

@@ -83,7 +83,9 @@ tally-ingest of the same branch. Use a test company with made-up entries only.
     alone, and the other days go on. You are asked to upload that day's Day Book only after it failed on 3 separate
     days ("Tally could not send 14-Oct-2026 in time on 3 days. Upload that day's Day Book to finish it."). An entry of
     another date in Tally's list of a day is skipped (the day's own entries are taken) instead of stopping day reading
-    until the bridge restarts. A company marked slow is measured again by itself after a day. FinCom's Tally page shows
+    until the bridge restarts; a list with only other dates' entries (the date not applied) holds that day a day, as a
+    slow day. Three slow days of one company within an hour: that company's older days wait an hour. A company marked
+    slow is measured again once a day with one entry; it is unmarked only when that entry comes in time. FinCom's Tally page shows
     "Bringing in N missed days from Tally, M left" beside the entries while it works. FinCom's cloud needs migration 197.
     Check A: on a big test company, choose Bring books. You should see: the page's count goes down; a day Tally was slow
     for says "Tally was slow for this day; FinCom Bridge tries it again by itself after a day (no action needed)".
@@ -91,7 +93,9 @@ tally-ingest of the same branch. Use a test company with made-up entries only.
  8. A very big day is read one voucher type at a time again. When Tally takes over 2 seconds for a day's list, the
     same day is asked again type by type (Sales, Purchase, Receipt, ...: the request of 2.4.5, measured at about 1
     second at worst), only while Tally is left alone a minute, each under its own 2-second stop. A type still over 2
-    seconds stops that day only (item 7). To switch it off on a computer: DayPullSplit false in the bridge's settings.
+    seconds stops that day only (item 7). A day read type by type is never taken as complete (a type not asked, such as
+    a Credit Note, could be missing): its one-day list is asked again a day later, and FinCom closes the day only on a
+    whole list. To switch it off on a computer: DayPullSplit false in the bridge's settings.
     Check A: on the big test company, a day of several thousand entries. You should see: the log says "the day's list
     took Tally over 2 s; asked again one voucher type at a time"; the day's entries arrive in FinCom.
  9. Tally's port. FinCom Bridge looks at Windows' list of ports about every 3 seconds and tells FinCom at once when your

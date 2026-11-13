@@ -230,7 +230,8 @@ var pull = struct {
 	// 2.5.16 (daystop2516.go): the days stopped here for 24 hours after Tally was too slow for them: key -> {company, day,
 	// why, words, fails, atN, untilN}
 	retry map[string]M
-}{retry: map[string]M{}, aside: map[string]bool{}, released: map[string]int{}, empAt: map[string]time.Time{}, stopped: map[int]string{}, upload: map[string]M{}, tell: map[string]M{}, stopCo: map[string]M{}, done: map[string]time.Time{}, state: map[string]M{}, said: map[string]string{}}
+	brake map[string][]time.Time // 2.5.16 (the code review's L2): each company's day stops in the last hour
+}{brake: map[string][]time.Time{}, retry: map[string]M{}, aside: map[string]bool{}, released: map[string]int{}, empAt: map[string]time.Time{}, stopped: map[int]string{}, upload: map[string]M{}, tell: map[string]M{}, stopCo: map[string]M{}, done: map[string]time.Time{}, state: map[string]M{}, said: map[string]string{}}
 
 // --- the beat answer: periodDays [{company, company_guid, day, fetch, types}], at most 3
 func applyPeriodDays(j M) {
@@ -275,7 +276,7 @@ func applyPeriodDays(j M) {
 			}
 			continue
 		}
-		if pullRetryHeld(it) {
+		if pullRetryHeld(it) || pullBraked(it) {
 			refuse(it, "dayRetry")
 			continue // 2.5.16 (daystop2516.go): Tally was slow for this day: asked again after its 24 hours
 		}
@@ -444,6 +445,9 @@ func pullMayAskWhy(it pullItem) (int, string, string) {
 	}
 	if _, ok := startPointOf(it.Company); !ok {
 		return 0, "noStart", "the company's starting point is not recorded yet"
+	}
+	if pullBraked(it) {
+		return 0, "dayRetry", "Tally was slow for 3 days of this company within an hour: its older days wait an hour"
 	}
 	if slowMarked(it.Company, it.CGUID) {
 		return 0, "slow", "this company's entries are not asked (finding one took longer than 2 s)"
@@ -647,7 +651,7 @@ func pullCurrent() *pullWork {
 
 // 2.5.14 (head-of-line): the reasons that are one company's own, for which its day gives way to the other companies'
 // days (pickack.go pickOwnCompany's, less the two applyPeriodDays already filters)
-var pullOwnRefusal = map[string]bool{"noStart": true, "slow": true, "notOpen": true, "otherLogin": true}
+var pullOwnRefusal = map[string]bool{"noStart": true, "slow": true, "notOpen": true, "otherLogin": true, "dayRetry": true}
 
 // the current day cannot be asked for its own company's reason (said and reported as always, by the caller). Nothing
 // asked of Tally for it yet: set aside for this pass, and the next listed day is taken. Already begun: what was read goes
@@ -773,6 +777,12 @@ func pullStep() (sent bool, more bool) {
 		pullMarkUpload(w, "payroll", "")
 		return false, true
 	}
+	if w.split {
+		// 2.5.16 (the code review's H1): a day read type by type may lack entries of a type not asked: it is not done;
+		// held 24 hours, then its one-day list is asked again (FinCom closes it only on a whole list)
+		pullStopDay(w, "split", "read one voucher type at a time")
+		return false, true
+	}
 	pullFinish(w, "")
 	return false, true
 }
@@ -793,7 +803,8 @@ func pullHeadsStep(w *pullWork, port int) (bool, bool) {
 	held := windowHoldFn()
 	var took float64
 	htc := recorderTC(func(sec float64) { took += sec })
-	htc.gentleMs = pullGentleMs() // ROUND 104 (b): the night's shorter rest before the send
+	htc.gentleMs = pullGentleMs()                 // ROUND 104 (b): the night's shorter rest before the send
+	htc.sendYield = pullYield(it, pullFormOf(it)) // 2.5.16: looked at again right before the send
 	raw, err := invokeTally(htc, port, x, 5)
 	holdMs := held(time.Now().Add(-time.Duration(took * float64(time.Second))))
 	if took == 0 {
@@ -806,7 +817,7 @@ func pullHeadsStep(w *pullWork, port int) (bool, bool) {
 		if typ != "" {
 			pf = paceSplit
 		}
-		paceNote(it.Company, pf, int(took*1000), holdMs, err == nil) // 2.5.16: the form's tier for the company
+		paceNote(it.Company, it.CGUID, pf, int(took*1000), holdMs, err == nil) // 2.5.16: the form's tier for the company
 	}
 	switch {
 	case gaveWay(err) || errors.Is(err, errRetryWait) || errors.Is(err, errReadStopped) || errors.Is(err, errDayHeadsRefused):
@@ -856,11 +867,10 @@ func pullHeadsStep(w *pullWork, port int) (bool, bool) {
 	rows, skipped, bad := pullRowsSkip(raw, it.Day)
 	raw = ""
 	if skipped > 0 && len(rows) == 0 {
-		w.fails++
-		writeLog(fmt.Sprintf("Older entries of %s: Tally answered the request for %s (%s, FinComDayHeads) with entries of another date only (%s): the date was not applied. Nothing is stored or sent; asked again later", it.Company, liveDay(it.Day), form, liveDay(bad)))
-		if w.fails >= 5 {
-			pullDrop(w)
-		}
+		// (the code review's M2): the date was not applied: the day is held 24 hours as a slow day is (one look a day,
+		// counted toward the 3 days before the person is asked to upload it), never asked again at once
+		writeLog(fmt.Sprintf("Older entries of %s: Tally answered the request for %s (%s, FinComDayHeads) with entries of another date only (%s): the date was not applied. Nothing is stored or sent", it.Company, liveDay(it.Day), form, liveDay(bad)))
+		pullStopDay(w, "dates", form+": entries of another date only")
 		return true, false
 	}
 	if skipped > 0 {
@@ -906,7 +916,11 @@ func pullSendHeads(w *pullWork) bool {
 	if w.split {
 		via = "split"
 	}
-	r := invokeCloud(M{"kind": "period_heads", "company": it.Company, "company_guid": it.CGUID, "day": it.Day, "via": via, "n": len(rows), "heads": rows, "fetch": it.Fetch}, 60)
+	body := M{"kind": "period_heads", "company": it.Company, "company_guid": it.CGUID, "day": it.Day, "via": via, "n": len(rows), "heads": rows, "fetch": it.Fetch}
+	if w.split {
+		body["partial"] = true // 2.5.16 (the code review's H1): only the types asked: never the day's whole count
+	}
+	r := invokeCloud(body, 60)
 	if !pullCloudOK(w, r, "the day's list") {
 		return false
 	}
@@ -957,7 +971,7 @@ func pullFetchStep(w *pullWork, port int) (bool, bool) {
 	// payroll entries, a day read by type, and a day gone one by one: one entry a request as below. 2.5.16
 	// (daypace2516.go): a group is the heavy tier: only once Tally has been left alone 60 s; before that the entries go
 	// one by one (the small tier)
-	if pullTierOK(it, paceBatch) {
+	if pullTierOK(it, paceBatch) && !slowProbing(it.Company) { // (2.5.16, L3: a slow company's daily probe is one entry)
 		if handled, sent, more := pullBatchStep(w, port); handled {
 			return sent, more
 		}
@@ -1004,7 +1018,8 @@ func pullFetchStep(w *pullWork, port int) (bool, bool) {
 	var took float64
 	tc.timed = func(sec float64) { took += sec }
 	tc = entryTC(tc, it.Company, w.heads[mid].Type)
-	tc.gentleMs = pullGentleMs() // ROUND 104 (b): the night's shorter rest before the send (entryTC gives a copy or tc)
+	tc.gentleMs = pullGentleMs()                 // ROUND 104 (b): the night's shorter rest before the send (entryTC gives a copy or tc)
+	tc.sendYield = pullYield(it, pullFormOf(it)) // 2.5.16: looked at again right before the send
 	limit := recorderLimitMs()
 	if pay {
 		limit = tc.limitMs
@@ -1026,7 +1041,7 @@ func pullFetchStep(w *pullWork, port int) (bool, bool) {
 	pullNoteWatched(holdMs)
 	pullNoteLook(err == nil && took > 0, holdMs)
 	if took > 0 && !pay && (err == nil || errors.Is(err, errRecorderStop)) {
-		paceNote(it.Company, paceObject, int(took*1000), holdMs, err == nil) // 2.5.16: the form's tier for the company
+		paceNote(it.Company, it.CGUID, paceObject, int(took*1000), holdMs, err == nil) // 2.5.16: the form's tier for the company
 	}
 	if err != nil || holdMs >= limit {
 		w.coAt = time.Time{}
@@ -1165,7 +1180,9 @@ func pullEmployeesStep(w *pullWork, port int) (bool, bool) {
 	ask := func(port int, x string) (string, error) {
 		held := windowHoldFn()
 		var took float64
-		raw, err := invokeTally(recorderTC(func(sec float64) { took += sec }), port, x, empSec())
+		etc := recorderTC(func(sec float64) { took += sec })
+		etc.sendYield = pullYield(it, pacePayroll) // 2.5.16: looked at again right before the send
+		raw, err := invokeTally(etc, port, x, empSec())
 		holdMs = held(time.Now().Add(-time.Duration(took * float64(time.Second))))
 		if took == 0 {
 			holdMs = 0

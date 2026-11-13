@@ -1385,8 +1385,9 @@ func beatBody(tally bool, tstate, tsince string, open, ports, cos []any) M {
 		"postedRecord": map[bool]string{true: postedUnreadableWords, false: ""}[postedRecordErr() != nil],
 		// 2.5.16: postings whose progress.json cannot be read (their ids and since when)
 		"postsUnreadable": progressUnreadableBeat(),
-		// 2.5.16 (daypace2516.go): when a key or click was last seen in Tally (RFC3339 UTC; "" when none in this run)
-		"lastKeyAt": lastKeyBeat(),
+		// 2.5.16 (daypace2516.go): seconds since a key or click was last seen in Tally, on this computer's own running
+		// clock (null when none in this run)
+		"lastKeySec": lastKeyBeat(),
 		// 2.5.16 (portwatch2516.go): this login's Tally listens on a port its tally.ini does not name ({port, iniPort,
 		// words}; null when it does, or when Windows cannot tell)
 		"tallyPortNotSaved": portNotSavedBeat()}

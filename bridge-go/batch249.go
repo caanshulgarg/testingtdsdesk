@@ -502,6 +502,7 @@ func pullBatchStep(w *pullWork, port int) (handled, sent, more bool) {
 	var took float64
 	tc.timed = func(sec float64) { took += sec }
 	tc.gentleMs = pullGentleMs()
+	tc.sendYield = pullYield(it, paceBatch) // 2.5.16: looked at again right before the send
 	limit := recorderLimitMs()
 	listed := pullCoListed(w, port)
 	held := windowHoldFn()
@@ -521,7 +522,7 @@ func pullBatchStep(w *pullWork, port int) (handled, sent, more bool) {
 	pullNoteWatched(holdMs)
 	pullNoteLook(err == nil && took > 0, holdMs)
 	if took > 0 && (err == nil || errors.Is(err, errRecorderStop)) {
-		paceNote(it.Company, paceBatch, int(took*1000), holdMs, err == nil) // 2.5.16 (daypace2516.go)
+		paceNote(it.Company, it.CGUID, paceBatch, int(took*1000), holdMs, err == nil) // 2.5.16 (daypace2516.go)
 	}
 	if err != nil || holdMs >= limit {
 		w.coAt = time.Time{}

@@ -282,6 +282,10 @@ type TC struct {
 	// round 19 (review finding 8): a background read asks this right after it took the Tally lock; true: it gives the
 	// lock back and backs off (a posting job started, or the company's lease was taken, while it waited)
 	yield func() bool
+	// 2.5.16 (the day pull): looked at after the wait for Tally's lock and again after the rest, right before the send;
+	// true: nothing is sent (errBackoff / errPreempted; a posting, a save waiting to go, or typing since the conditions
+	// were looked at)
+	sendYield func() bool
 	// 2.2.0 (the owner's rule for the recorder's source B): told the wall time from the send to the full answer (or
 	// the failure), the wait for Tally's lock not counted
 	timed func(seconds float64)
@@ -1115,6 +1119,13 @@ func invokeTallyNow(tc *TC, port int, x string, timeoutSec int) (string, error) 
 	if tc.trial && tc.yield != nil {
 		ctx = context.WithValue(ctx, trialYieldKey{}, tc.yield)
 	}
+	if tc.sendYield != nil {
+		y0, sy := tc.yield, tc.sendYield
+		if !tc.trial {
+			y0 = nil
+		}
+		ctx = context.WithValue(ctx, trialYieldKey{}, func() bool { return (y0 != nil && y0()) || sy() })
+	}
 	// 2.3.1 (inflight.go): a background read is not sent into a Tally still on an earlier request it was given up on
 	if tc.copier && !tc.person {
 		if err := earlierRefusal(port); err != nil {
@@ -1147,7 +1158,7 @@ func invokeTallyNow(tc *TC, port int, x string, timeoutSec int) (string, error) 
 		unlock()
 		return "", errBackoff
 	}
-	if tc.yield != nil && tc.yield() {
+	if (tc.yield != nil && tc.yield()) || (tc.sendYield != nil && tc.sendYield()) {
 		unlock()
 		return "", errBackoff
 	}

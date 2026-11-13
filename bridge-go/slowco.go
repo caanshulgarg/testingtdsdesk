@@ -75,6 +75,10 @@ type slowMark struct {
 	Company, GUID, Since, Why string
 	TimesOver                 int
 	LastMs                    int64 // -1: never answered
+	// 2.5.16 (the code review's L3): the last daily probe (one entry request, FinComVoucherObject, under its 2 s stop),
+	// and until when the probe's one request may go (this run only)
+	ProbeAt    time.Time
+	probeUntil time.Time
 }
 
 var slowSt = struct {
@@ -116,6 +120,7 @@ func slowFresh() {
 	for k, v := range obj(o["marks"]) {
 		e := obj(v)
 		m := &slowMark{Company: str(e["company"]), GUID: str(e["guid"]), Since: str(e["since"]), Why: str(e["why"]), TimesOver: toInt(e["timesOver"]), LastMs: -1}
+		m.ProbeAt, _ = time.Parse(time.RFC3339, str(e["probeAt"]))
 		if e["lastMs"] != nil {
 			m.LastMs = toI64(e["lastMs"])
 		}
@@ -155,6 +160,9 @@ func slowSaveLocked() {
 	marks, seen := M{}, M{}
 	for k, m := range slowSt.marks {
 		e := M{"company": m.Company, "guid": m.GUID, "since": m.Since, "why": m.Why, "timesOver": m.TimesOver}
+		if !m.ProbeAt.IsZero() {
+			e["probeAt"] = m.ProbeAt.Format(time.RFC3339)
+		}
 		if m.LastMs >= 0 {
 			e["lastMs"] = m.LastMs
 		}
@@ -179,24 +187,32 @@ func slowSaveLocked() {
 	}
 }
 
-// 2.5.16 (daystop2516.go; the owner's YES of 13-Nov-2026): a mark lifts by itself SlowRecheckHours (24) after it was
-// made: the company's entries are asked again and measured again, each request under its 2 s stop (a payroll entry 3 s)
+// 2.5.16 (daystop2516.go; the owner's YES of 13-Nov-2026, the code review's L3): a mark is probed once a day
+// (SlowRecheckHours, 24, after it was made or last probed): ONE entry request (FinComVoucherObject, under its 2 s stop)
+// may go; answered in time: the mark lifts; stopped: the mark stays and is probed again a day later. The probe's window
+// is 10 minutes; nothing came of it: probed again a day later. Groups of entries are not asked while it is open
 func slowRecheck() time.Duration {
 	return time.Duration(maxI(1, keepNum("SlowRecheckHours", 24))) * time.Hour
 }
 
-// under slowSt.mu: the marks a day old lifted (their log lines said after the lock is let go)
+const slowProbeWindow = 10 * time.Minute
+
+// under slowSt.mu: the probes that open now (their log lines said after the lock is let go)
 func slowLiftLocked() []string {
 	var out []string
-	for k, m := range slowSt.marks {
-		t, err := time.Parse(time.RFC3339, m.Since)
-		if err != nil || nowFn().Sub(t) < slowRecheck() {
+	now := nowFn()
+	for _, m := range slowSt.marks {
+		if now.Before(m.probeUntil) {
 			continue
 		}
-		delete(slowSt.marks, k)
-		if st := slowSt.cos[k]; st != nil {
-			st.stops, st.occ = nil, 0
+		from := m.ProbeAt
+		if from.IsZero() {
+			from, _ = time.Parse(time.RFC3339, m.Since)
 		}
+		if from.IsZero() || now.Sub(from) < slowRecheck() {
+			continue
+		}
+		m.ProbeAt, m.probeUntil = now, now.Add(slowProbeWindow)
 		out = append(out, m.Company)
 	}
 	if len(out) > 0 {
@@ -207,8 +223,17 @@ func slowLiftLocked() []string {
 
 func slowSayLifted(cos []string) {
 	for _, c := range cos {
-		writeLog("Recorder: " + c + ": the mark \"entry fetch stopped: over 2 s\" is a day old: lifted; its entries are asked of Tally again and measured again (each request still stopped at 2 s)")
+		writeLog("Recorder: " + c + ": the mark \"entry fetch stopped: over 2 s\" is a day old: one entry is asked of Tally to measure it again (stopped at 2 s); answered in time, the mark lifts")
 	}
+}
+
+// the company's daily probe is open (one entry may be asked; no group)
+func slowProbing(company string) bool {
+	slowSt.mu.Lock()
+	defer slowSt.mu.Unlock()
+	slowFresh()
+	m := slowSt.marks[companyKey(company)]
+	return m != nil && nowFn().Before(m.probeUntil)
 }
 
 // whether the company's entries are not asked of Tally (marked); a company of that name under another GUID is not
@@ -221,6 +246,9 @@ func slowMarked(company, cguid string) bool {
 	m := slowSt.marks[companyKey(company)]
 	if m == nil {
 		return false
+	}
+	if nowFn().Before(m.probeUntil) {
+		return false // the daily probe's window: its one entry may go
 	}
 	g := strings.TrimSpace(cguid)
 	return m.GUID == "" || g == "" || strings.EqualFold(m.GUID, g)
@@ -291,6 +319,17 @@ func slowNote(port int, x string, sent bool, took time.Duration, err error, limi
 			slowSt.cos[co] = st
 		}
 		st.name = name
+		if m := slowSt.marks[co]; m != nil && now.Before(m.probeUntil) && (ok || stopped) {
+			// 2.5.16 (L3): the daily probe's answer: in time, the mark lifts; stopped, it stays (probed again a day later)
+			m.probeUntil = time.Time{}
+			if ok {
+				delete(slowSt.marks, co)
+				marked = append(marked, name+": the probe of its entry fetch answered in "+fmt.Sprint(took.Milliseconds())+" ms: the mark \"over 2 s\" is lifted")
+			} else {
+				marked = append(marked, name+": the probe of its entry fetch was stopped at 2 s: the mark stays; probed again a day later")
+			}
+			save = true
+		}
 		switch {
 		case ok:
 			st.answered++
@@ -305,7 +344,7 @@ func slowNote(port int, x string, sent bool, took time.Duration, err error, limi
 			save = true
 		}
 	}
-	marked = slowDecideLocked(now)
+	marked = append(marked, slowDecideLocked(now)...)
 	if len(marked) > 0 || save || time.Since(slowSt.saveAt) > time.Minute {
 		slowSaveLocked()
 	}

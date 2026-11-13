@@ -44,12 +44,15 @@ if text:
     low = text.lower(); code = "\n".join(l.split("--")[0] for l in low.splitlines())
     ok(re.search(r"^begin;\s*\nset local lock_timeout = '10s';", text, re.M) is not None and text.rstrip().endswith("commit;") and code.count("\nbegin;") == 1 and code.count("commit;") == 1, "0. one transaction, lock_timeout 10 s")
     alters = sorted(re.findall(r"\balter\s+table\b[^;]*;", code))
-    ok("delete from" not in code and not re.search(r"\b(drop|truncate)\b", code) and alters == ["alter table public.tally_period_day_retry enable row level security;"], "0. add-only (%s)" % alters)
+    ok("delete from" not in code and not re.search(r"\b(drop|truncate)\b", code) and alters == ["alter table public.tally_check_days add column if not exists split_open boolean not null default false;",
+       "alter table public.tally_period_day_retry enable row level security;", "alter table public.tally_period_days add column if not exists split_open boolean not null default false;"], "0. add-only: the new table's row security, two columns added (%s)" % alters)
+    ok(sorted(re.findall(r"create or replace trigger (\w+)", code)) == ["tally_check_days_split_open", "tally_period_days_split_open"], "0. the two split_open triggers (create or replace)")
     ok(not re.search(r"supabase\.co|\.supabase\.|https?://|project[_ ]ref", low), "0. names no real database")
     ok(sorted(re.findall(r"create table if not exists public\.(\w+)", text)) == ["tally_period_day_retry"], "0. one new table")
     ok("grant select, insert, update, delete on public.tally_period_day_retry to service_role;" in text and "revoke all on table public.tally_period_day_retry from public, anon, authenticated;" in text, "0. its own grants (service_role only)")
     FNS = sorted(set(re.findall(r"create or replace function public\.(\w+)\s*\(", text)))
-    ok(FNS == ["tally_catchup_status", "tally_catchup_status_of", "tally_period_day_stop", "tally_period_retry_days"], "0. four new functions, none replaced (%s)" % FNS)
+    ok(FNS == ["tally_catchup_status", "tally_catchup_status_of", "tally_day_split_open", "tally_period_day_stop", "tally_period_retry_days", "tally_period_unstamp"], "0. six new functions, none replaced (%s)" % FNS)
+    ok("grant execute on function public.tally_period_unstamp(uuid, date[]) to service_role;" in text and "revoke all on function public.tally_day_split_open() from public, anon, authenticated, service_role;" in text, "0. unstamp service_role only; the trigger's function nobody's")
     ok("grant execute on function public.tally_period_day_stop(uuid, date, text) to service_role;" in text and "revoke all on function public.tally_period_day_stop(uuid, date, text) from public, anon, authenticated;" in text
        and "grant execute on function public.tally_period_retry_days(uuid) to service_role;" in text and "revoke all on function public.tally_period_retry_days(uuid) from public, anon, authenticated;" in text, "0. the bridge's two functions: service_role only")
     ok("revoke all on function public.tally_catchup_status_of(uuid) from public, anon, authenticated, service_role;" in text and "grant execute on function public.tally_catchup_status(uuid) to authenticated, service_role;" in text
@@ -108,14 +111,56 @@ try:
     cd = db.rows("select upload_words, (upload_at is not null) as up from tally_check_days where book_id = %s and day = %s" % (q(B), q(D(5)))) if text else []
     ok(bool(cd) and cd[0]["up"] in (True, "t") and cd[0]["upload_words"] == words, "1. its open check day too (%s)" % cd)
 
+    a = j("select tally_period_day_stop(%s, %s, 'split')::text" % (q(B), q(D(12))))
+    ok(a.get("fails") == 0 and a.get("upload") is False, "1. a day read type by type: held, not a failed day (%s)" % a)
+    if text: db.sql("update tally_period_day_retry set last_at = now() - interval '21 hours' where book_id = %s and day = %s" % (q(B), q(D(12))))
+    a = j("select tally_period_day_stop(%s, %s, 'dates')::text" % (q(B), q(D(12))))
+    ok(a.get("fails") == 1, "1. the date not applied: a failed day (%s)" % a)
+
     print("== 2. the days held now")
     j("select tally_period_day_stop(%s, %s, 'over2s')::text" % (q(B), q(D(6))))
     j("select tally_period_day_stop(%s, %s, 'over2s')::text" % (q(B), q(D(7))))
     if text: db.sql("update tally_period_day_retry set retry_at = now() - interval '1 minute' where book_id = %s and day = %s" % (q(B), q(D(7))))
     r = j("select tally_period_retry_days(%s)::text" % q(B))
-    want = [(TODAY - datetime.timedelta(days=n)).strftime("%Y%m%d") for n in (5, 6)]
+    want = [(TODAY - datetime.timedelta(days=n)).strftime("%Y%m%d") for n in (5, 6, 12)]
     ok(r == want, "2. the days held: %s (want %s)" % (r, want))
     ok(j("select tally_period_retry_days(%s)::text" % q(BK[2])) == [], "2. another book: none")
+
+    print("== 2b. a held day handed back keeps its last real hand-out")
+    if text:
+        db.sql("insert into tally_period_days (book_id, firm_id, day, asked_at) values (%s, %s, %s, now()) on conflict (book_id, day) do update set asked_at = now()" % (q(B), q(F), q(D(6))))
+        db.sql("update tally_period_day_retry set retry_at = now() + interval '20 hours' where book_id = %s and day = %s" % (q(B), q(D(6))))
+    u = j("select tally_period_unstamp(%s, array[%s, %s]::date[])::text" % (q(B), q(D(6)), q(D(7))))
+    st = db.rows("select (asked_at between now() - interval '4 hours 1 minute' and now() - interval '3 hours 59 minutes') as back from tally_period_days where book_id = %s and day = %s" % (q(B), q(D(6)))) if text else []
+    ok(u.get("days") == 1 and bool(st) and st[0]["back"] in (True, "t"), "2b. the held day's hand-out time is its stop's, a day not held is left (%s %s)" % (u, st))
+
+    print("== H1. a day read type by type is never closed by that list (a Credit Note not asked)")
+    B2 = BK[2]
+    if text:
+        db.sql("insert into tally_period_pulls (book_id, firm_id, fy_start, part, state) values (%s, %s, %s, 'year', 'going') on conflict do nothing" % (q(B2), q(F), q(FY.isoformat())))
+    G = lambda n: "g197-%04d" % n
+    SALES = [[G(1), 1, 5, "Sales"], [G(2), 2, 5, "Sales"]]
+    r = j("select tally_period_heads(%s, %s, %s::jsonb, 'split')::text" % (q(B2), q(D(3)), q(json.dumps(SALES))))
+    pd = lambda: (db.rows("select tally_n, (done_at is not null) as done, split_open from tally_period_days where book_id = %s and day = %s" % (q(B2), q(D(3)))) or [{}])[0] if text else {}
+    ok(r.get("ok") is True and pd().get("split_open") in (True, "t") and pd().get("done") in (False, "f"), "H1. a split list of a new day: split, partial, not done (%s %s)" % (r, pd()))
+    if text: db.sql("insert into tally_vouchers (book_id, firm_id, guid, day, alter_id, vtype) values (%s, %s, %s, %s, 5, 'Sales'), (%s, %s, %s, %s, 5, 'Sales')" % (q(B2), q(F), q(G(1)), q(D(3)), q(B2), q(F), q(G(2)), q(D(3))))
+    r = j("select tally_period_heads(%s, %s, %s::jsonb, 'split')::text" % (q(B2), q(D(3)), q(json.dumps(SALES))))
+    ok(pd().get("done") in (False, "f") and str(pd().get("tally_n")) == "2", "H1. FinCom holds every entry the split listed: still not done (%s)" % pd())
+    if text: db.sql("update tally_period_days set seen = seen || '{}'::jsonb where book_id = %s and day = %s" % (q(B2), q(D(3))))
+    ok(pd().get("done") in (False, "f"), "H1. a later write of the day (entries taken) does not close it (%s)" % pd())
+    WHOLE = SALES + [[G(3), 3, 6, "Credit Note"]]
+    r = j("select tally_period_heads(%s, %s, %s::jsonb, 'day')::text" % (q(B2), q(D(3)), q(json.dumps(WHOLE))))
+    ok(pd().get("split_open") in (False, "f") and pd().get("done") in (False, "f") and str(pd().get("tally_n")) == "3" and [str(x) for x in r.get("want") or []] == ["3"], "H1. the whole list names the Credit Note: counted 3, wanted, not done (%s %s)" % (r, pd()))
+    if text: db.sql("insert into tally_vouchers (book_id, firm_id, guid, day, alter_id, vtype) values (%s, %s, %s, %s, 6, 'Credit Note')" % (q(B2), q(F), q(G(3)), q(D(3))))
+    r = j("select tally_period_heads(%s, %s, %s::jsonb, 'day')::text" % (q(B2), q(D(3)), q(json.dumps(WHOLE))))
+    ok(pd().get("done") in (True, "t"), "H1. a whole list FinCom holds whole: done (%s)" % pd())
+    r = j("select tally_period_heads(%s, %s, %s::jsonb, 'split')::text" % (q(B2), q(D(3)), q(json.dumps(SALES))))
+    ok(pd().get("done") in (False, "f") and str(pd().get("tally_n")) == "3", "H1. a split list after it keeps the whole count, opens the day (%s)" % pd())
+    if text:
+        db.sql("insert into tally_check_days (book_id, firm_id, day, source) values (%s, %s, %s, 'gap')" % (q(B2), q(F), q(D(4))))
+        db.sql("update tally_check_days set via = 'split', heads = %s::jsonb, tally_n = 2, done_at = now() where book_id = %s and day = %s" % (q(json.dumps(SALES)), q(B2), q(D(4))))
+    cd2 = (db.rows("select (done_at is not null) as done, split_open from tally_check_days where book_id = %s and day = %s" % (q(B2), q(D(4)))) or [{}])[0] if text else {}
+    ok(cd2.get("done") in (False, "f") and cd2.get("split_open") in (True, "t"), "H1. a check day's split list does not close it either (%s)" % cd2)
 
     print("== 3. the catch-up's count")
     B3 = BK[3]
