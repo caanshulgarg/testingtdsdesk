@@ -37,7 +37,8 @@ func TestR2514Version(t *testing.T) {
 	}
 	al := readText("../docs/tally-allowlist.md")
 	line := group(`(?m)^(First table: .*)$`, al, 1)
-	for _, w := range []string{"allowed for 2.5.14 by the owner's standing decision of 2026-10-06", "the requests are 2.5.13's", "as for 2.5.13 by the owner's standing decision of 2026-10-06"} {
+	for _, w := range []string{"as for 2.5.14 by the owner's standing decision of 2026-10-06", "the requests are 2.5.13's", // 2.5.15 names the line (r2515_test.go)
+		"as for 2.5.13 by the owner's standing decision of 2026-10-06"} {
 		if !strings.Contains(line, w) {
 			t.Errorf("the decision line does not say %q", w)
 		}

@@ -1229,10 +1229,9 @@ func TestRecorderVersion220Sheets(t *testing.T) {
 		t.Error("the 2.2.0 test sheet has neither the fingerprint placeholder nor the setup's SHA-256")
 	}
 	al := readText("../docs/tally-allowlist.md")
-	// 2.5.15: the decision line is the allow-list's own version's (2.5.14: the allow-list left unchanged, r2515_test.go)
-	if !regexp.MustCompile(`not yet measured[^;]*; allowed for `+regexp.QuoteMeta(allowListVersion)+` (only )?by the owner's (standing )?decision of \d{4}-\d{2}-\d{2}`).MatchString(al) || !strings.Contains(al, vchObjectID) ||
+	if !regexp.MustCompile(`not yet measured[^;]*; allowed for `+regexp.QuoteMeta(BridgeVersion)+` (only )?by the owner's (standing )?decision of \d{4}-\d{2}-\d{2}`).MatchString(al) || !strings.Contains(al, vchObjectID) ||
 		!strings.Contains(al, vchByNumberID) {
-		t.Fatal("docs/tally-allowlist.md: no decision line for " + allowListVersion + ", or no FinComVoucherObject / FinComVoucherByNumber row")
+		t.Fatal("docs/tally-allowlist.md: no decision line for " + BridgeVersion + ", or no FinComVoucherObject / FinComVoucherByNumber row")
 	}
 }
 

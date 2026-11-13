@@ -6,23 +6,33 @@ package main
 //  3. safe file writes: fsync, rename, one .bak (r2515safe_test.go)
 //  4. posting paused while posted-ids.json cannot be read (r2515record_test.go)
 //  5. the self-update tried a second way, retried, and told to FinCom (r2515update_test.go; tests/run_beat2515_ingest.py)
-// The allow-list (docs/tally-allowlist.md) is 2.5.14's, unchanged (TestAllowListUnchanged): no request added or changed.
+// The allow-list (docs/tally-allowlist.md): wording only (the decision and dated lines, the stock row), no request changed.
 import (
+	"os"
+	"regexp"
 	"strings"
 	"testing"
 )
-
-// the version the allow-list's decision lines name: 2.5.14's, left as it was by 2.5.15 (the owner's instruction of
-// 13-Nov-2026: docs/tally-allowlist.md and TestAllowListUnchanged unchanged). A later release that changes a request
-// (or the owner's decision to name 2.5.15 there) moves it with the doc
-const allowListVersion = "2.5.14"
 
 func TestR2515Version(t *testing.T) {
 	if BridgeVersion != "2.5.15" || !newerVersion("2.5.15", "2.5.14") || newerVersion("2.5.14", "2.5.15") {
 		t.Fatalf("version %s", BridgeVersion)
 	}
-	// the allow-list is not touched by this release: its decision line still names 2.5.14's decision
-	if al := readText("../docs/tally-allowlist.md"); !strings.Contains(al, "allowed for 2.5.14 by the owner's standing decision of 2026-10-06") || strings.Contains(al, "2.5.15") {
-		t.Fatal("the allow-list was changed by 2.5.15")
+	if _, err := os.Stat("../docs/bridge-2.5.15-test-sheet.txt"); err != nil {
+		t.Fatal(err)
+	}
+	// the allow-list: wording only (the decision line, the dated line, the stock row's version word), no request changed
+	al := readText("../docs/tally-allowlist.md")
+	line := group(`(?m)^(First table: .*)$`, al, 1)
+	for _, w := range []string{"allowed for 2.5.15 by the owner's standing decision of 2026-10-06", "the requests are 2.5.14's", "as for 2.5.14 by the owner's standing decision of 2026-10-06"} {
+		if !strings.Contains(line, w) {
+			t.Errorf("the decision line does not say %q", w)
+		}
+	}
+	if !regexp.MustCompile(`re-measured on 2026-11-13 for 2\.5\.15: no request was measured again[^\n]*allowed for 2\.5\.15 by the owner's standing decision of 2026-10-06`).MatchString(al) {
+		t.Error("no dated line for 2.5.15")
+	}
+	if strings.Contains(line, "allowed for 2.5.14 by") {
+		t.Error("2.5.14's line is still worded as the current one")
 	}
 }

@@ -317,7 +317,7 @@ func allowListRows2511() string {
 			l = strings.Replace(l, r2513LedgersWords, "", 1)
 		}
 		if strings.HasPrefix(l, "| "+stockID+" |") {
-			l = strings.Replace(l, "unchanged in 2.5.14)", "unchanged in 2.5.11)", 1)
+			l = strings.Replace(l, "unchanged in 2.5.15)", "unchanged in 2.5.11)", 1)
 		}
 		o = append(o, l)
 	}

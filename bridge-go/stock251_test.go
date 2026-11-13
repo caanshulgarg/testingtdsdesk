@@ -533,9 +533,7 @@ func TestStock251FiguresAndExceptions(t *testing.T) {
 	// the decision line, and the class
 	a := tallyAllowList[stockID]
 	// 2.5.3: the row says it, as history ("2.5.2 allowed by ...; unchanged in 2.5.3"); the decision line names 2.5.3
-	// 2.5.15: the allow-list is left as 2.5.14 wrote it (no request added or changed; the owner's instruction of 13-Nov-2026:
-	// the allow-list and TestAllowListUnchanged unchanged): the row names the allow-list's own version (r2515_test.go)
-	if !strings.Contains(a.purpose, "2.5.2 allowed by the owner's decision of 2026-10-30 (person's click only; unchanged in "+allowListVersion+")") || a.measureOnly || a.maxSec <= 0 ||
+	if !strings.Contains(a.purpose, "2.5.2 allowed by the owner's decision of 2026-10-30 (person's click only; unchanged in "+BridgeVersion+")") || a.measureOnly || a.maxSec <= 0 ||
 		!strings.Contains(a.measuredOn, "41009967960") || requestClass[stockID] != "exception" || BridgeVersion != "2.5.15" { // 2.5.15 (r2515_test.go); 2.5.14 (r2514_test.go); 2.5.13 (r2513_test.go); 2.5.12 (r2512_test.go); 2.5.11 (r2511_test.go); 2.5.10 (r2510pick_test.go); 2.5.9 (fastmeasure_test.go); 2.5.8 (nocompany258_test.go); 2.5.7 (fastentries_test.go); 2.5.6 (firstread_test.go); 2.5.5 (ledgers255_test.go, loginport255_test.go); 2.5.4 (r254_test.go); 2.5.3 (r253owntally_test.go)
 		t.Fatalf("the allow-list row: %+v, class %q, version %s", a, requestClass[stockID], BridgeVersion)
 	}
