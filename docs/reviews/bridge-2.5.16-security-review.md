@@ -4,7 +4,7 @@ Status: independent review pending. The coordinator's full security review of Fi
 of the security items; their fixes, and the day-reading and port items added on 13-Nov-2026, are to be reviewed
 independently before the release exe is built and release-check.sh is run.
 
-Range: c851cd1dc..76cb7fe46 (origin/staging-next with 2.5.15 at c851cd1dc, which holds 2.5.15's signed commit 2bf75a4c7; the whole of 2.5.16 through the code and security reviews' fixes)
+Range: c851cd1dc..053994f5d (origin/staging-next with 2.5.15 at c851cd1dc, which holds 2.5.15's signed commit 2bf75a4c7; the whole of 2.5.16 through the code and security reviews' fixes)
 
 Areas for the reviewer (no finding details are written here; the repository is public):
 - The security items of 2.5.16 (e0c77945d to d2b7fd47a): local settings and files the bridge trusts, the Windows
@@ -30,3 +30,5 @@ The security review of 2.5.16 (no critical or high finding) and what was done, a
   tally-ingest answers key_check at most 30 times an hour for one computer key; a bridge id with no Windows user
   recorded (or none said) is not known: the person connects FinCom again.
 
+The re-review of the fixes (053994f5d): the deferred read of the earlier settings keeps their bridge id, browser keys, port
+and link to FinCom over what the setup made new; key_check's limit is counted in the database (auth_rate_hit).

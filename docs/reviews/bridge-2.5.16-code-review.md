@@ -4,7 +4,7 @@ Status: independent review pending. This file names the range to be reviewed; th
 coordinator's signature are added after the independent review. The release exe is built and release-check.sh is run
 only after that review.
 
-Range: c851cd1dc..76cb7fe46 (origin/staging-next with 2.5.15 at c851cd1dc, which holds 2.5.15's signed commit 2bf75a4c7; the whole of 2.5.16 through the code and security reviews' fixes)
+Range: c851cd1dc..053994f5d (origin/staging-next with 2.5.15 at c851cd1dc, which holds 2.5.15's signed commit 2bf75a4c7; the whole of 2.5.16 through the code and security reviews' fixes)
 
 What the range holds:
 1. The security work of 2.5.16 (e0c77945d to d2b7fd47a): the FVU path kept in local settings with its file checked;
@@ -42,6 +42,8 @@ The code review of d2b7fd47a to a87fd2260 (not ready: H1, M1, M2, L1-L7) and wha
   sends F2 again only for the day being read by type after its one-day list was stopped at 2 s, a type of that day's
   list, under its own 2 s stop (daypull.go dayHeadsExact). No request was added or changed (TestAllowListUnchanged).
 - L7: the day-pace measures are kept per company GUID.
+- The re-review (053994f5d): lastKeySec null is no key seen; a day read type by type counts toward the 3 days, so a day
+  whose whole list never comes in time is offered for upload on the 3rd.
 
 The owner's rules, as the author kept them (to be confirmed by the reviewer):
 - Each Tally request 2 s at most (3 s a payroll entry), one in flight, postings and saves first, the typing gate kept.
