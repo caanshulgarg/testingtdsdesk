@@ -20,8 +20,16 @@ const covers = (h, list) => { const have = String(h || "").toLowerCase().split("
   for (const fn of ["gateway", "admin", "signin"]) {
     const dir = path.join(ROOT, "server/security/functions", fn);
     const m = await import(path.join(dir, "cors.ts"));
-    const src = fs.readFileSync(path.join(dir, "index.ts"), "utf8");
-    ok(/import \{ corsFor \} from "\.\/cors\.ts"/.test(src) && /req\.method === "OPTIONS"\) return new Response\("ok", \{ headers: cors \}\)/.test(src), fn + ": index.ts answers OPTIONS with corsFor(req)");
+    // where the function answers a request: admin in index.ts; gateway and signin in handler.ts since their rules moved
+    // there for the Deno tests (13-Nov-2026, security review I3: the two checks looked in index.ts and guarded nothing)
+    const idx = fs.readFileSync(path.join(dir, "index.ts"), "utf8");
+    const hasHandler = fs.existsSync(path.join(dir, "handler.ts")), src = hasHandler ? fs.readFileSync(path.join(dir, "handler.ts"), "utf8") : idx;
+    const where = hasHandler ? "handler.ts" : "index.ts";
+    const imported = /import \{ corsFor \} from "\.\/cors\.ts"/.test(src) || (/import \{ corsFor \} from "\.\/cors\.ts"/.test(idx) && /cors: corsFor\b/.test(idx));
+    const options = /const cors = (corsFor\(req\)|d\.cors\(req\));[\s\S]{0,400}?req\.method === "OPTIONS"\) return new Response\("ok", \{ headers: cors \}\)/.test(src);
+    const first = src.indexOf('req.method === "OPTIONS"'), auth = src.search(/getUser\(|authToken\(|\.rpc\(/);
+    ok(imported && options, fn + ": " + where + " answers OPTIONS with corsFor(req)");
+    ok(first > 0 && (auth < 0 || first < src.indexOf("getUser(", first) || src.indexOf("getUser(", first) < 0) && !/\bOPTIONS\b[\s\S]{0,200}"Access-Control-Allow-Origin": "\*"/.test(src), fn + ": the preflight is answered before any sign-in check, with the list's headers (never \"*\")");
     ok(!/const ALLOWED\s*=/.test(fs.readFileSync(path.join(dir, "cors.ts"), "utf8")), fn + ": keeps no list of its own");
     for (const o of SITES) {
       const h = m.corsFor(req(o));
