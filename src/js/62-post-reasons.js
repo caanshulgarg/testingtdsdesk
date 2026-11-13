@@ -346,12 +346,15 @@ function postStatus(entry, job, ids, marks, ctx){
       const why = postReasonText(job.message) || "cancelled";
       const cr0 = postReasonFor(why) || null, late0 = cr0 && cr0.again === false;
       // migration 174 (sixth review): of a posting cancelled after it may have reached Tally, an entry whose id the cancel
-      // freed (never sent, or Tally clearly refused it) is posted again as any cancelled entry; only one whose id stays
-      // live is settled (no id row known: settled, the safe side)
-      const freed = late0 && !!(ids && (!ids.live || ids.released_at)), late = late0 && !freed, ck = late && ctx.check, cs = ck && ck.state;
+      // freed (Tally clearly refused it) is posted again as any cancelled entry; only one whose id stays live is settled
+      // (no id row known: settled, the safe side). The register's word comes first (seventh review): needs_review is
+      // settled whatever the id says; released is free. Freed but held live by another posting: being posted there
+      const rs = ctx.reg && ctx.reg.state;
+      const freed = late0 && rs !== "needs_review" && (rs === "released" || !!(ids && (!ids.live || ids.released_at))), late = late0 && !freed, ck = late && ctx.check, cs = ck && ck.state;
+      const elsewhere = freed && ctx.held === true;
       const cr = freed ? postReasonFor("Cancelled before the Tally computer took it") || cr0 : cr0;
-      return mk(9, "Cancelled on " + postWhenSay(job.updated_at || job.created_at) + (job.created_by ? " (posted by " + postWhoSay(job.created_by) + ")" : "") + ": " + why + "." + (late ? " " + (cs === "waiting" ? "Checking Tally: " + (postReasonText(ck.last_words) || "waiting for the FinCom Bridge to look in Tally") + "." : cs === "notseen" ? postReasonText(ck.words) || "" : cr.fix) : freed ? " This entry is not in Tally (never sent, or Tally refused it): post it again." : ""),
-        deleted || !bill ? null : late ? {kind: "settle", label: "It is in Tally: mark posted (Tally id)"} : again, {reason: cr, accepted: !!late, check: cs === "waiting" ? ck : null, notSeen: cs === "notseen" ? ck : null});
+      return mk(9, "Cancelled on " + postWhenSay(job.updated_at || job.created_at) + (job.created_by ? " (posted by " + postWhoSay(job.created_by) + ")" : "") + ": " + why + "." + (late ? " " + (cs === "waiting" ? "Checking Tally: " + (postReasonText(ck.last_words) || "waiting for the FinCom Bridge to look in Tally") + "." : cs === "notseen" ? postReasonText(ck.words) || "" : cr.fix) : elsewhere ? " Being posted in another posting." : freed ? " This entry is not in Tally (Tally refused it): post it again." : ""),
+        deleted || !bill || elsewhere ? null : late ? {kind: "settle", label: "It is in Tally: mark posted (Tally id)"} : again, {reason: cr, accepted: !!late, check: cs === "waiting" ? ck : null, notSeen: cs === "notseen" ? ck : null});
     }
     if ((r && r.ok === false) || (it && it.state === "failed") || job.status === "failed" || (job.status === "done" && !okR)){
       const msg = (r && (postLineWords(r) || r.message)) || (it && it.reason) || job.message || "Tally did not answer for this entry";

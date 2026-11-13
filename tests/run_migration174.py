@@ -45,7 +45,7 @@ FILES = eval(compile(src142.split("\nFILES = ", 1)[1].split("\nfails = []", 1)[0
 FILES += [os.path.join(SQLDIR, f) for f in ("migration-111-post-register.sql", "migration-142-post-any-bridge.sql", "migration-128-client-removed-frees-tally.sql", "migration-161-split-tally.sql")]
 TF_ADD, TF_GONE, RQ_ADD, RQ_GONE = 25, 6, 40, 4
 JD_ADD, JD_GONE, CB_ADD, CB_GONE, CC_ADD, CC_GONE = 4, 2, 18, 2, 10, 3   # judge: the live id; check_bridge_ok: the gone bridge; confirm: the words
-RS_ADD, RS_GONE, CN_ADD, CN_GONE = 3, 3, 21, 3   # rescue: the held count; cancel: the warning
+RS_ADD, RS_GONE, CN_ADD, CN_GONE = 3, 3, 23, 3   # rescue: the held count; cancel: the warning
 RR_ADD, RR_GONE = 16, 1   # reroute: 54's text with the once-taken hold   # take_for: the two hand-outs in a loop with the check; requeue: 2b, 4b, M1, 4a
 fails = []
 def ok(c, w):
@@ -69,7 +69,7 @@ ok("delete from" not in code and not re.search(r"\b(drop|truncate)\s", code) and
 ok(not re.search(r"supabase\.co|https?://|qbocskai|nrtczu|project[_ ]ref", text.lower()), "names no real database")
 made = sorted(set(re.findall(r"create or replace function public\.(\w+)\(", code)))
 NEW = {"tally_post_job_blocked": "(uuid)", "tally_post_hold_job": "(uuid)", "tally_post_hold": "(uuid, text)", "tally_post_bridge_holds": "(uuid)",
-       "tally_post_entry_maybe_in": "(jsonb, jsonb, text, text)", "tally_post_check_bridge_gone": "(uuid)"}
+       "tally_post_entry_maybe_in": "(jsonb, jsonb, text, text, boolean)", "tally_post_check_bridge_gone": "(uuid)"}
 REPL = {"tally_post_take_for": "(uuid, text, boolean)"}
 TRIG = ["tally_post_jobs_version", "tally_post_links_hold", "tally_post_split_hold"]
 ok(made == sorted(list(NEW) + list(REPL) + TRIG + ["tally_post_requeue", "tally_post_reroute", "tally_post_rescue", "tally_post_cancel", "tally_post_register_judged", "tally_post_check_bridge_ok", "tally_post_check_confirm", "tally_post_owner_release"]), "makes or replaces only %s" % made)
@@ -453,13 +453,20 @@ try:
                   q(json.dumps([{"id": "K1", "state": "sent"}, {"id": "K2", "state": "waiting"}, {"id": "K3", "state": "failed", "reason": "Ledger 'X' does not exist"}]))))
         r = rpc(STAFF, "select tally_post_cancel(%s)::text" % q(J(120)))
         lv = dict((x["e"], x["l"]) for x in db.rows("select entry_id e, live::text l from tally_post_ids where job_id = %s" % q(J(120))))
-        ok(r.get("ok") and r.get("warn") and lv == {"K1": "true", "K2": "false", "K3": "false", "K4": "true"} and r.get("entries") == ["K1", "K4"], "H1: Cancel keeps live only K1 (sent) and K4 (no word of it); K2 (never sent) and K3 (refused) free; the answer names them (%s %s)" % (lv, r.get("entries")))
+        ok(r.get("ok") and r.get("warn") and lv == {"K1": "true", "K2": "true", "K3": "false", "K4": "true"} and r.get("entries") == ["K1", "K2", "K4"], "H1: Cancel keeps live K1 (sent), K2 (waiting in a posting once taken: seventh review) and K4 (no word of it); K3 (refused) free; the answer names them (%s %s)" % (lv, r.get("entries")))
         # sixth review H-A: the STORED register (what the page reads), not the judge: judged again after the ids went live
         reg = lambda: dict((x["e"], x["s"]) for x in db.rows("select entry_id e, state s from tally_post_register where job_id = %s" % q(J(120))))
         sr = reg()
-        ok(sr.get("K1") == "needs_review" and sr.get("K4") == "needs_review" and sr.get("K2") == "released" and sr.get("K3") == "refused", "H-A: the stored register after Cancel: K1, K4 needs_review (the settle buttons), K2 released, K3 refused (%s)" % sr)
+        ok(sr.get("K1") == "needs_review" and sr.get("K4") == "needs_review" and sr.get("K2") == "needs_review" and sr.get("K3") == "refused", "H-A: the stored register after Cancel: K1, K2, K4 needs_review (the settle buttons), K3 refused (%s)" % sr)
+        # seventh review MED: the cron put it back (taken_at kept), then Cancel: a waiting item's id stays live, the register agrees
+        db.sql("insert into tally_post_jobs (id, firm_id, client_id, company, device_id, payload, n, status, target_bridge, taken_by, attempts, taken_at, first_taken_at, items) values (%s, %s, 'c1', %s, %s, %s, 1, 'waiting', %s, %s, 0, now() - interval '3 hours', now() - interval '3 hours', %s)"
+               % (q(J(125)), q(F), q(CO), q(DA), q(json.dumps({"masters": [], "vouchers": [{"id": "K6", "xml": "<VOUCHER/>"}], "ledger": ""})), q(BA), q(BA), q(json.dumps([{"id": "K6", "state": "waiting"}]))))
+        r = rpc(STAFF, "select tally_post_cancel(%s)::text" % q(J(125)))
+        sr6 = db.one("select state from tally_post_register where job_id = %s and entry_id = 'K6'" % q(J(125)))
+        jd6 = db.one("select state from tally_post_register_judged((select j from tally_post_jobs j where id = %s)) where entry_id = 'K6'" % q(J(125)))
+        ok(r.get("ok") and live(125) == "true" and sr6 == "needs_review" and jd6 == "needs_review" and r.get("entries") == ["K6"], "seventh review MED: taken 3 h ago, put back, item waiting, Cancel: id live, stored and judged needs_review (%s %s %s %s)" % (r, live(125), sr6, jd6))
         jd = dict((x["e"], x["s"]) for x in db.rows("select entry_id e, state s from tally_post_register_judged((select j from tally_post_jobs j where id = %s))" % q(J(120))))
-        ok(jd.get("K1") == "needs_review" and jd.get("K2") == "released" and jd.get("K3") == "refused", "H1: the register: K1 needs review (settle), K2 released, K3 refused (%s)" % jd)
+        ok(jd.get("K1") == "needs_review" and jd.get("K2") == "needs_review" and jd.get("K3") == "refused", "H1: the register: K1, K2 need review (settle), K3 refused (%s)" % jd)
         # M2: the owner's own word; staff refused, a reason required, never while it is being sent
         ok("only an owner" in rpc(STAFF, "select tally_post_owner_release(%s, 'K1', 'looked')::text" % q(J(120))).get("_error", ""), "M2: staff may not")
         ok("say where" in rpc(OWNER, "select tally_post_owner_release(%s, 'K1', '')::text" % q(J(120))).get("_error", ""), "M2: a reason required")

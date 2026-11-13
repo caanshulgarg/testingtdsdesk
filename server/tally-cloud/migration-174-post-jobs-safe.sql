@@ -73,6 +73,8 @@
 -- settle actions); the other bridge's check also needs the link's data location (never a copy of the data elsewhere); a
 -- check answered by another bridge releases only (never re-sent to a posting nobody can take); the owner's word never
 -- while the posting is waiting, taken or running.
+-- Seventh review: an item still waiting in a posting once taken may be in Tally (its id kept live by Cancel, the
+-- register's needs_review and the page's settle actions agree).
 -- Replaced (each from its latest text, every line kept but those named): tally_post_take_for (142), tally_post_requeue (36b),
 -- tally_post_reroute (54), tally_post_rescue (54), tally_post_cancel (116), tally_post_register_judged (111),
 -- tally_post_check_bridge_ok (55), tally_post_check_confirm (55).
@@ -409,8 +411,10 @@ revoke all on function public.tally_post_rescue(uuid) from public, anon, authent
 -- ---------------------------------------------------------------- fifth review H1. may this entry be in Tally?
 -- what a posting's own results / items say of one entry (by its FinCom id or entry id): false only when Tally clearly did
 -- not take it (a refusal, nothing accepted, nothing sent without an answer) or it was never sent (its item still
--- waiting); nothing said of it: it may be (its bridge had it). Internal
-create or replace function public.tally_post_entry_maybe_in(p_results jsonb, p_items jsonb, p_fid text, p_eid text)
+-- waiting, in a posting never taken); nothing said of it: it may be (its bridge had it). (seventh review) An item still
+-- waiting in a posting once taken (p_taken: first_taken_at, taken_at or attempts > 0) may be in Tally too: its bridge
+-- may have sent it after its last report. Internal
+create or replace function public.tally_post_entry_maybe_in(p_results jsonb, p_items jsonb, p_fid text, p_eid text, p_taken boolean)
 returns boolean language sql stable security definer set search_path = public, pg_temp as $function$
   with k as (select regexp_replace(coalesce(p_fid, ''), '[^A-Za-z0-9]', '', 'g') kf, regexp_replace(coalesce(p_eid, ''), '[^A-Za-z0-9]', '', 'g') ke),
   r as (select t.r from k, jsonb_array_elements(case when jsonb_typeof(p_results) = 'array' then p_results else '[]'::jsonb end) with ordinality t(r, o)
@@ -422,12 +426,12 @@ returns boolean language sql stable security definer set search_path = public, p
   select case
     when exists (select 1 from r) then (select tally_post_result_accepted(r.r) or tally_post_bool(r.r ->> 'ok') or tally_post_bool(r.r ->> 'sent') or tally_post_bool(r.r ->> 'outcomeUnknown')
                                                or tally_post_bool(r.r ->> 'alreadySent') or tally_post_bool(r.r ->> 'held') or coalesce(r.r ->> 'state', '') in ('sending', 'sent', 'in_tally', 'unknown', 'posted', 'needs_review') from r)
-    when exists (select 1 from i) then (select case when coalesce(i.i ->> 'state', 'waiting') = 'waiting' then false
+    when exists (select 1 from i) then (select case when coalesce(i.i ->> 'state', 'waiting') = 'waiting' then coalesce(p_taken, false)
                                                     when i.i ->> 'state' in ('failed', 'notfound') then tally_post_accept_text(i.i ->> 'reason') else true end from i)
     else true end
 $function$;
-revoke all on function public.tally_post_entry_maybe_in(jsonb, jsonb, text, text) from public, anon, authenticated;
-grant execute on function public.tally_post_entry_maybe_in(jsonb, jsonb, text, text) to service_role;
+revoke all on function public.tally_post_entry_maybe_in(jsonb, jsonb, text, text, boolean) from public, anon, authenticated;
+grant execute on function public.tally_post_entry_maybe_in(jsonb, jsonb, text, text, boolean) to service_role;
 
 -- ---------------------------------------------------------------- fifth review H1. the posting register's judge (111's text)
 -- 111's tally_post_register_judged; changed: an entry of a posting cancelled after its bridge had it whose id
@@ -700,7 +704,9 @@ begin
      where i.job_id = p_id and i.released_at is null and not i.live
        and not exists (select 1 from tally_post_ids o where o.firm_id = i.firm_id and o.fincom_id = i.fincom_id and o.job_id <> p_id and o.live)
        -- (fifth review H1) only an entry that may be in Tally; one Tally clearly refused, or never sent, is free as before
-       and (i.accepted_at is not null or tally_post_entry_maybe_in(j.results, j.items, i.fincom_id, i.entry_id));
+       -- (seventh review) an item still waiting counts as maybe in: the posting was once taken
+       and (i.accepted_at is not null or tally_post_entry_maybe_in(j.results, j.items, i.fincom_id, i.entry_id,
+                                                                   j.first_taken_at is not null or j.taken_at is not null or coalesce(j.attempts, 0) > 0));
     -- (sixth review H-A) the status change's triggers judged the register while those ids were free ("released"): judged
     -- again now they are live, so the stored register says needs_review and the page offers the settle actions
     select * into j from tally_post_jobs where id = p_id;
