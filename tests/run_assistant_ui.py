@@ -514,14 +514,18 @@ try:
         pg.keyboard.press("Escape"); pg.wait_for_timeout(300)
         # ---------- Check before filing on the TDS return page
         pg.evaluate("S.step = null; S.tab = 'books'; S.booksTab = 'tds'; S.tdsFy = '2025-26'; S.tdsQ = 'Q4'; S.tdsForm = '26Q'; S.tdsView = 'return'; S.tdsTab = 'file'; render()"); pg.wait_for_timeout(800)
-        ok(pg.locator('[data-prefile-btn="tds"]').count() >= 1, "TDS return page: Check before filing (Validate & file › Online checks)")
+        ok(pg.locator('[data-val-morechecks] [data-prefile-btn="tds"]').count() == 1, "TDS return page: Check before filing (Validate & file › More checks)")
         if pg.locator('[data-prefile-btn="tds"]').count():
+            # "More checks" is folded until asked for (run_tds_validate.py checks that): open it as a person would
+            if not pg.evaluate("(document.querySelector('[data-val-morechecks]') || {}).open"): pg.click('[data-val-morechecks] > summary'); pg.wait_for_timeout(200)
+            ok(pg.locator('[data-prefile-btn="tds"]').first.is_visible(), "the button shows once More checks is opened")
             pg.locator('[data-prefile-btn="tds"]').first.click(); pg.wait_for_timeout(800)
             ok(pg.locator("[data-prefile] [data-prefile-line]").count() >= 5, "it opens the checklist")
             shot(pg, "11-prefile-tds", "body")
         # ---------- nothing of the answers in the log
         logs = db.one("select coalesce(string_agg(question || ' ' || coalesce(array_to_string(tools, ','), ''), ' | '), '') from assistant_log")
-        ok("Ashvattha" not in logs and "40,000" not in logs and "3,600" not in logs, "the log holds questions and tools, no figures or names from the answers")
+        ok("Ashvattha" not in logs and "40,000" not in logs and "3,600" not in logs, "the log holds questions and tools, no figures or names from the answers" + "".join(" [%s in: %s]" % (w, q[:90]) for w in ("Ashvattha", "40,000", "3,600") for q in logs.split(" | ") if w in q))
+        ok(int(db.one("select count(*) from assistant_log where question = 'Compare these two financial statements'") or 0) == 1, "compare: the log keeps the question as typed, not FinCom's differences sent with it")
         ok(not errors, "no page errors" + ("" if not errors else ": " + errors[0]))
         br.close()
 finally:

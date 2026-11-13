@@ -1,6 +1,6 @@
 // fincom-assistant: FinCom Assistant's function (the owner's approval of AI in the app, 13-Oct-2026; never called by the
 // bridge or the Tally add-on). One POST per question; the answer streams back as server-sent events (agent.ts).
-//   {action: "ask", question, client_id | null, history: [{role, content}], thread: {fs: {from, to, cmp, notes} | null, files:
+//   {action: "ask", question, asked (what was typed, when the page added its working to the question), client_id | null, history: [{role, content}], thread: {fs: {from, to, cmp, notes} | null, files:
 //    [{path, name, type, kind, summary}]}, attachments: [{path, name, type}], firm: {name, lines},
 //    lang: the voice language chosen ("en-IN", "hi-IN", "hinglish", "mr-IN", …: agent.ts LANGS), a hint for the reply's language}
 //   {action: "report", client_id, question, note, tools, entries}      the "Wrong answer?" button
@@ -190,6 +190,10 @@ export function handler(deps: Deps) {
     if (action !== "ask" && action !== "classify" && action !== "sheet_map") return reply(400, { ok: false, error: "Unknown request" });
     const question = action === "classify" ? "(what is this upload: " + String(body.name || "a file").slice(0, 120) + ")" : action === "sheet_map" ? "sheet_map" : String(body.question || "").trim().slice(0, 4000);
     if (!question) return reply(400, { ok: false, error: "Type a question." });
+    // what the user typed, for the log and the Mismatches list: the page adds FinCom's own working to a question (two
+    // statements compared, asst-compare.js: the files' figures) for the AI alone, and says what was typed in "asked"
+    const typed = String(body.asked || "").trim().slice(0, 4000);
+    const asked = action === "ask" && typed && question.startsWith(typed) ? typed : question;
     // FinCom's switches for this request's feature (and My MIS when one is asked for), before any key or model
     for (const code of [action === "classify" ? "upload_classify" : action === "sheet_map" ? "sheet_map" : "assistant", ...(action === "ask" && misAsked(question) && !fsAsked(question) ? ["mis_describe"] : [])]) {
       const p = await policy.aiAllowed(firm, code);
@@ -395,7 +399,7 @@ export function handler(deps: Deps) {
         if (hit && Array.isArray(hit.events)) {
           const evs = hit.events as Ev[];
           const done = evs.find((e) => e.t === "done") as any;
-          try { await rpc("asst_log_add", { p_firm: firm, p_user: user.id, p_client: clientId, p_question: question, p_tools: (done && done.tools) || [], p_in: 0, p_out: 0, p_calls: 0, p_ms: Date.now() - t0,
+          try { await rpc("asst_log_add", { p_firm: firm, p_user: user.id, p_client: clientId, p_question: asked, p_tools: (done && done.tools) || [], p_in: 0, p_out: 0, p_calls: 0, p_ms: Date.now() - t0,
             p_feature: "cache", p_route: "cache", p_models: [], p_cache_read: 0, p_cache_write: 0, p_cost_inr: 0, p_fell_through: false }, SERVICE); } catch { /* the answer still stands */ }
           const out = [{ t: "start", client: clientId, clientName, cached: true }, ...evs.map((e) => e.t === "done" ? { ...e, cached: String(hit.made_at || ""), usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, calls: 0 } } : e)];
           return new Response(out.map((e) => "data: " + JSON.stringify(e) + "\n\n").join(""), { headers: { ...cors, "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-cache" } });
@@ -481,7 +485,7 @@ export function handler(deps: Deps) {
           recordMismatch: async (m) => {
             try {
               const row = (await rest("/rest/v1/assistant_mismatches", SERVICE, { method: "POST", headers: { Prefer: "return=representation" }, body: JSON.stringify({
-                firm_id: firm, client_id: clientId, user_id: user.id, kind: "auto", question, ...m }) })) as any[];
+                firm_id: firm, client_id: clientId, user_id: user.id, kind: "auto", question: asked, ...m }) })) as any[];
               const id = row && row[0] && row[0].id;
               if (id) sentry.mismatch("assistant-mismatch", { figureKey: m.figure_key, tool: m.tool, id, entries: m.entry_ids, firm, client: clientId || "" });
               return id || null;
@@ -531,7 +535,7 @@ export function handler(deps: Deps) {
           console.log(JSON.stringify({ evt: "assistant_failed", kind: f.kind, ...f.tags, error: f.errorClass }));
         }
         // one line: the question, the tools, the tokens and the time (never the answer or a figure)
-        try { await rpc("asst_log_add", { p_firm: firm, p_user: user.id, p_client: clientId, p_question: question, p_tools: tools, p_in: usage.input, p_out: usage.output, p_calls: calls, p_ms: Date.now() - t0,
+        try { await rpc("asst_log_add", { p_firm: firm, p_user: user.id, p_client: clientId, p_question: asked, p_tools: tools, p_in: usage.input, p_out: usage.output, p_calls: calls, p_ms: Date.now() - t0,
           p_feature: feature, p_route: route, p_models: models, p_cache_read: usage.cacheRead, p_cache_write: usage.cacheWrite, p_cost_inr: costInr, p_fell_through: fellThrough }, SERVICE); } catch { /* the answer still stands */ }
         console.log(JSON.stringify({ evt: "assistant", route, calls, tools: tools.length, in: usage.input, out: usage.output, cache_read: usage.cacheRead, usd: Math.round(costUsd * 1e4) / 1e4, ms: Date.now() - t0 }));
         try { ctl.close(); } catch { /* closed */ }

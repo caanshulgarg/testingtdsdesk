@@ -64,7 +64,7 @@ const ASST = {
       if (fx && fx.cmp) await fx.cmp(turn);   // two statements compared line by line first (asst-compare.js)
       const c = Cloud.cfg(), s = Cloud.sess();
       const r = await fetch(this.url(), {method: "POST", headers: {apikey: c.key, Authorization: "Bearer " + s.access_token, "Content-Type": "application/json"},
-        body: JSON.stringify({action: "ask", question: (fx && fx.sendQ) || q, client_id: fx && fx.noBooks ? null : turn.cid, history: this.history(), thread: this.thread ? this.thread() : null, attachments: fx ? fx.att : attach ? [attach] : [], uploads: this.ups(), firm: this.letterhead(), lang: a.lang || "en-IN"})});
+        body: JSON.stringify({action: "ask", question: (fx && fx.sendQ) || q, asked: fx && fx.sendQ ? q : undefined, client_id: fx && fx.noBooks ? null : turn.cid, history: this.history(), thread: this.thread ? this.thread() : null, attachments: fx ? fx.att : attach ? [attach] : [], uploads: this.ups(), firm: this.letterhead(), lang: a.lang || "en-IN"})});
       if (!r.ok || !String(r.headers.get("content-type") || "").includes("event-stream")){
         const j = await r.json().catch(() => ({}));
         throw Object.assign(new Error(j.error || ("The assistant could not be reached (" + r.status + ").")), {kind: j.kind || "other"});
