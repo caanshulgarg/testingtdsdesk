@@ -5,7 +5,7 @@ and kept (a return not filed yet is "none", a later failure never takes away one
 is used; the daily run (2B from the 14th, last three months' returns) and the reminder 3 days before the access period
 ends; renewal failing ends the session; IRN made, a second request gives the same IRN, e-way bill by IRN, cancellation.
 Needs Deno (DENO, default: the deno on the PATH or /opt/deno/deno)."""
-import os, sys, json, time, shutil, threading, subprocess, http.server, urllib.request
+import os, sys, json, time, shutil, socket, threading, subprocess, http.server, urllib.request
 from urllib.parse import urlparse, parse_qs
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 import fake_supabase as F
@@ -23,6 +23,7 @@ def per(n):  # MMYYYY n months back, India time
     while m < 1: m += 12; y -= 1
     return "%02d%d" % (m, y)
 FILED = {per(1), per(2)}          # GSTR-1 and 3B filed for the last two months, not the third
+ist_now = lambda: time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(time.time() + 5.5 * 3600))   # the IRP's AckDt, India time (an IRN is cancellable 24 hours)
 class TPH(http.server.BaseHTTPRequestHandler):
     def log_message(self, *a): pass
     def out(self, code, obj):
@@ -30,6 +31,11 @@ class TPH(http.server.BaseHTTPRequestHandler):
     def handle_any(self):
         u = urlparse(self.path); q = {k: v[0] for k, v in parse_qs(u.query).items()}; p = u.path
         n = int(self.headers.get("Content-Length") or 0); body = json.loads(self.rfile.read(n)) if n else None
+        if "drop" in (q.get("username"), q.get("user_name"), self.headers.get("username")):   # a network failure: the connection cut, no answer
+            TP["dropped"] = TP.get("dropped", 0) + 1; self.close_connection = True
+            try: self.connection.shutdown(socket.SHUT_RDWR)
+            except OSError: pass
+            return
         TP["calls"].append((p, q.get("action", ""), self.headers.get("aspid"), self.headers.get("password") or q.get("password")))
         if (self.headers.get("aspid") or q.get("aspid")) != "ASP-FROM-VAULT": return self.out(200, {"status_cd": "0", "error": {"message": "Invalid ASP", "error_cd": "AUTH4033"}, "Status": 0})
         if p == "/taxpayerapi/dec/v1.0/authenticate":
@@ -64,10 +70,10 @@ class TPH(http.server.BaseHTTPRequestHandler):
             no = body["DocDtls"]["No"]
             if no in TP["irn_made"]: return self.out(200, {"Status": 0, "ErrorDetails": [{"ErrorCode": "2150", "ErrorMessage": "Duplicate IRN"}]})
             TP["irn_made"][no] = "IRN-" + no
-            return self.out(200, {"Status": 1, "Data": json.dumps({"AckNo": 112010000000001, "AckDt": "2026-10-01 12:00:00", "Irn": "IRN-" + no, "SignedQRCode": "QR-" + no, "SignedInvoice": "SI"})})
+            return self.out(200, {"Status": 1, "Data": json.dumps({"AckNo": 112010000000001, "AckDt": ist_now(), "Irn": "IRN-" + no, "SignedQRCode": "QR-" + no, "SignedInvoice": "SI"})})
         if p == "/eicore/dec/v1.03/Invoice/irnbydocdetails":
             irn = TP["irn_made"].get(q.get("docnum"))
-            return self.out(200, {"Status": 1, "Data": {"AckNo": 112010000000001, "AckDt": "2026-10-01 12:00:00", "Irn": irn, "SignedQRCode": "QR-again"}} if irn else {"Status": 0, "ErrorDetails": [{"ErrorMessage": "not found"}]})
+            return self.out(200, {"Status": 1, "Data": {"AckNo": 112010000000001, "AckDt": ist_now(), "Irn": irn, "SignedQRCode": "QR-again"}} if irn else {"Status": 0, "ErrorDetails": [{"ErrorMessage": "not found"}]})
         if p == "/eicore/dec/v1.03/Invoice/Cancel": return self.out(200, {"Status": 1, "Data": {"Irn": body["Irn"], "CancelDate": "2026-10-01 13:00:00"}})
         if p == "/eiewb/dec/v1.03/ewaybill":
             return self.out(200, {"Status": 1, "Data": {"EwbNo": 331000000001, "EwbDt": "2026-10-01 12:30:00", "EwbValidTill": "2026-10-02 23:59:00"}} if body.get("Irn") and body.get("Distance") else {"Status": 0, "ErrorDetails": [{"ErrorMessage": "Distance is required"}]})
@@ -80,6 +86,10 @@ tps = http.server.ThreadingHTTPServer(("127.0.0.1", 9310), TPH); threading.Threa
 FIRM, USER, JWT = "f-1", "u-1", "user-jwt-1"
 F.USERS[JWT] = {"id": USER, "email": "a@b.c"}
 F.T["members"].append({"user_id": USER, "firm_id": FIRM, "active": True, "role": "owner"})
+# the firm's clients' GSTINs (an OTP or a sign-in only for these: security review H1); G_OTHER is another firm's client
+G_MORE = ["07AAACT1234A2Z5", "07AAACT1234A3Z5", "07AAACT1234A4Z5", "07AAACT1234A5Z5"]; G_OTHER = "27AAACX9999X1Z5"
+for i, g in enumerate(["07AAACT1234A1Z5"] + G_MORE): F.T["clients"].append({"id": "c-%d" % i, "firm_id": FIRM, "gstin": g, "deleted": False})
+F.T["clients"].append({"id": "c-x", "firm_id": "f-2", "gstin": G_OTHER, "deleted": False})
 F.SECRETS["gsp:taxpro:aspid"] = "ASP-FROM-VAULT"; F.SECRETS["gsp:taxpro:password"] = "ASP-PASS-FROM-VAULT"
 F.start()
 env = dict(os.environ, SUPABASE_URL="http://127.0.0.1:%d" % F.PORT, SUPABASE_SERVICE_ROLE_KEY=F.SERVICE, SUPABASE_ANON_KEY="anon-key",
@@ -111,6 +121,31 @@ try:
     au = s.get("access_until", ""); ok(au[:10] == time.strftime("%Y-%m-%d", time.gmtime(time.time() + 7 * 86400)), "the access period ends 7 days from now (%s)" % au[:10])
     st = call({"action": "status", "gstins": [G]})["sessions"][0]
     ok(st["accessDays"] == 7 and st["accessUntil"] and "token" not in json.dumps(st).lower().replace("token_", ""), "status: the access period, never the token")
+    # security review H1: an OTP or a sign-in only for a GSTIN of one of the firm's clients, and OTPs not without limit
+    n0 = len(TP["calls"]); otps = lambda: sum(1 for c in TP["calls"][n0:] if c[1] == "OTPREQUEST")
+    r = call({"action": "otp", "gstin": G_OTHER, "username": "user9"})
+    ok(not r.get("ok") and "not one of your firm's clients" in r.get("error", "") and otps() == 0, "an OTP for a GSTIN that is not the firm's client (another firm's): refused, nothing sent: %s" % r)
+    r = call({"action": "auth", "gstin": G_OTHER, "username": "user9", "otp": "575757"})
+    ok(not r.get("ok") and "not one of your firm's clients" in r.get("error", "") and not any(c[1] == "AUTHTOKEN" for c in TP["calls"][n0:])
+       and not any(x["gstin"] == G_OTHER for x in F.T.get("gst_sessions", [])), "a sign-in for that GSTIN: refused, no session kept: %s" % r)
+    rs = [call({"action": "otp", "gstin": G, "username": "user1"}) for _ in range(3)]
+    ok(rs[0].get("ok") and rs[1].get("ok") and not rs[2].get("ok") and "Try again in 15 minutes" in rs[2].get("error", "") and otps() == 2,
+       "one GSTIN: 3 OTPs in 15 minutes, the 4th refused with when to try again: %s" % rs[2])
+    rs = [call({"action": "otp", "gstin": g, "username": "user1"}) for g in G_MORE for _ in range(2)]
+    ok([x.get("ok") for x in rs] == [True] * 7 + [False] and "Try again in an hour" in rs[-1].get("error", "") and otps() == 9,
+       "the firm: 10 OTPs an hour (any GSTINs), the 11th refused with when to try again: %s" % rs[-1])
+    rs = [call({"action": "auth", "gstin": G_MORE[0], "username": "user1", "otp": "111111"}) for _ in range(6)]
+    ok(all("Invalid OTP" in x.get("error", "") for x in rs[:5]) and "Try again in 15 minutes" in rs[5].get("error", "") and sum(1 for c in TP["calls"][n0:] if c[1] == "AUTHTOKEN") == 5,
+       "sign-in with an OTP: 5 tries in 15 minutes per GSTIN, the 6th refused: %s" % rs[5])
+    # security review M1: a network failure never puts the OTP, the ASP password or the e-invoice password in a log or a reply
+    r1 = call({"action": "auth", "gstin": G_MORE[1], "username": "drop", "otp": "246810"})
+    r2 = call({"action": "einv-login", "gstin": G_MORE[1], "username": "drop", "password": "irp-drop-secret"})
+    time.sleep(0.5); said = json.dumps([r1, r2]) + "".join(log)
+    ok(TP.get("dropped", 0) >= 2 and not r1.get("ok") and not r2.get("ok"), "the network failures happened, and are said as failures: %s %s" % (r1, r2))
+    leaks = [w for w in ("246810", "irp-drop-secret", "ASP-PASS-FROM-VAULT", "ASP-FROM-VAULT") if w in said]
+    if leaks: print("   leaked:", leaks, [l.strip()[:300] for l in log if any(w in l for w in leaks)][:3])
+    ok(not leaks, "after a network failure: no OTP, ASP id or password, or e-invoice password in the function's log or the reply")
+    ok(any("/eivital/dec/v1.04/auth" in l for l in log) and any("authenticate" in l and "AUTHTOKEN" in l for l in log), "each failure is still logged, cleaned (the path and the action)")
     # Fetch now: 2B, GSTR-1 (the version that answers), 3B; a month not filed is "none"
     r = call({"action": "fetch", "gstin": G, "form": "2B", "period": per(1)})
     ok(r.get("ok") and ret("2B", per(1))["status"] == "ok" and ret("2B", per(1))["data"]["docdata"]["b2b"][0]["ctin"] == "09AAACB1234C1Z5", "2B fetched and kept on the server")

@@ -122,6 +122,7 @@ FIRM = "f-1"; USERS = {"owner": ("u-1", "jwt-owner"), "staff": ("u-2", "jwt-staf
 for role, (uid, jwt) in USERS.items():
     F.USERS[jwt] = {"id": uid, "email": role + "@b.c"}; F.T["members"].append({"user_id": uid, "firm_id": FIRM, "active": True, "role": role})
 F.SECRETS["gsp:taxpro:aspid"] = "ASP-FROM-VAULT"; F.SECRETS["gsp:taxpro:password"] = "ASP-PASS"
+F.T["clients"].append({"id": "c-1", "firm_id": FIRM, "gstin": G, "deleted": False})   # an OTP only for the firm's clients (security review H1)
 F.start()
 env = dict(os.environ, SUPABASE_URL="http://127.0.0.1:%d" % F.PORT, SUPABASE_SERVICE_ROLE_KEY=F.SERVICE, SUPABASE_ANON_KEY="anon-key",
            TAXPRO_BASE_URL="http://127.0.0.1:9311", TAXPRO_EINV_URL="http://127.0.0.1:9311", TAXPRO_ASP_ID="", TAXPRO_ASP_PASSWORD="",
@@ -372,6 +373,13 @@ try:
     ok(not r.get("ok") and "wait a few minutes" in r.get("error", "") and n_of("RETFILE", "082025") == 1, "File again within minutes of a lost answer, not listed yet: wait, not sent: " + str(r.get("error")))
     back("R1", "082025", "file_tried_at"); r = call(dict(c11, action="file", pan=PANS, otp=OTP_OK))
     ok(r.get("ok") and n_of("RETFILE", "082025") == 2, "10 minutes on, still not listed: sent again, filed")
+    # security review L7: the signatory's EVC OTP at most 5 times an hour for one return; the 6th refused, with when to try again
+    c12 = {"gstin": G, "form": "R1", "period": "072025"}
+    call(dict(c12, action="save", payload=dict(R1, fp="072025"))); call(dict(c12, action="summary")); call(dict(c12, action="confirm")); call(dict(c12, action="proceed"))
+    e0 = sum(1 for c in TP["calls"] if c["a"] == "EVCOTP")
+    rs = [call(dict(c12, action="evc_otp", pan=PANS)) for _ in range(6)]
+    ok([x.get("ok") for x in rs] == [True] * 5 + [False] and "Try again in an hour" in rs[-1].get("error", "") and sum(1 for c in TP["calls"] if c["a"] == "EVCOTP") - e0 == 5,
+       "EVC OTP for one return: 5 an hour, the 6th refused and not sent: %s" % rs[-1])
     # a save the portal is still processing: kept as saved (state IP), never failed; polled again by summary and by track
     for per in ("012026", "112025"):
         TP["ip"].add("REF-R1" + per)
