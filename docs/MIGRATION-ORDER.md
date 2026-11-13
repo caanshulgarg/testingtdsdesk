@@ -864,7 +864,7 @@ Tested: `tests/run_migration160.py`, `tests/run_gap_autoread_ingest.py`.
 
 ## 182: the gap after FinCom's own posting, read back and read on the right days (not run yet; branch next-fix-gap-after-post, 13-Nov-2026)
 
-**182, gap after post** (13-Nov-2026, branch `next-fix-gap-after-post`; **written, not run yet**; file md5 45a574ffcbdbfed2b1f90e1f635046c6):
+**182, gap after post** (13-Nov-2026, branch `next-fix-gap-after-post`; **written, not run yet**; file md5 30d179f5a37b50d3af6157325bde21b8):
 `server/tally-cloud/migration-182-gap-after-post.sql`. Staging, Client CL: a posting window's credit closed the gap as a
 match though none of FinCom's 42 posted entries was matched or read back; 110 later changes on older dates; the page asked
 for the Day Book of the gap's own (empty) days; 98's count never counted October again; 160's gap read held by an old
@@ -880,7 +880,9 @@ entries; `older` {from, say, fix} from the book's own year) and `tally_gap_front
 arguments and grants: 150's `tally_recorder_gap_check` (a window credits only entries matched or read back above its
 floor), 98's `tally_period_next_paced` (the recount, once a book and Tally number), 133's `tally_check_stop` (a retry's
 stop stops the retry only; a retry day given in time resumes the check by itself), 135's `tally_check_next_open` (a check so
-resumed stays on the idle pace until it finishes or the person presses Resume), 135's `tally_fill_request` (each day to the client's book whose year has it; never again once
+resumed reads the days queued before the resume on the idle pace, later days at its own pace, until the person
+presses Read now / Resume; stopped over 2 s again it stops as 133 does), 133's `tally_check_status_of` (run.paced: the page's
+Read now); idle is kept for every book at every beat, never while a posting waits, 135's `tally_fill_request` (each day to the client's book whose year has it; never again once
 read for Tally's number; older days light), 160's `tally_gap_front(uuid, integer)` and `tally_sync_cursor_gap_checking`.
 Add-only, one transaction, lock_timeout 10 s, safe twice. Needs 98, 133, 135, 150, 158 and 160. Deploy: 182, then
 tally-ingest (p_idle; without 182 it falls back to 160's call), then the app (checking only until checkUntil). No bridge

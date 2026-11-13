@@ -193,6 +193,13 @@ def main():
         ok(txt(ck + " [data-check-stopped]").startswith("Stopped: Tally was busy; press Resume."), "2. stopped said (%s)" % txt(ck + " [data-check-stopped]"))
         pg.click(ck + " [data-check-resume]"); pg.wait_for_timeout(600)
         ok(calls("tally_check_resume")[-1:] == [{"p_book": "bk-zz"}], "2. Resume")
+        # next-fix-gap-after-post (migration 182): a check resumed after Tally was slow reads its days on the idle pace: said, with Read now
+        state(sb(pull=GOING, check={"total": 20, "same": 15, "fixed": 3, "waiting": 2, "upload": 0, "run": {"state": "going", "paced": True}}), dict(CHECK, run={"state": "going", "paced": True}), 1400)
+        nres = len(calls("tally_check_resume"))
+        ok(txt(ck + " [data-check-paced]").startswith("Tally was slow earlier, so FinCom reads these days again one at a time, only while nobody is working in Tally.")
+           and n(ck + " [data-check-stopped]") == 0, "2. a check on the idle pace said (%s)" % txt(ck + " [data-check-paced]"))
+        pg.click(ck + " [data-check-readnow]"); pg.wait_for_timeout(600)
+        ok(len(calls("tally_check_resume")) == nres + 1 and calls("tally_check_resume")[-1] == {"p_book": "bk-zz"}, "2. Read now: the person's Resume (the check's own pace)")
         pg.set_viewport_size({"width": 390, "height": 800}); pg.wait_for_timeout(600)
         ok(E("() => document.documentElement.scrollWidth <= window.innerWidth + 1"), "2. 390 wide: no sideways scroll")
         shot("from-tally-390")

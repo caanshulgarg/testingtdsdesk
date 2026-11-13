@@ -413,6 +413,8 @@ export function UploadCheck({ cid }) {
       (s.same ? " · " + plural(s.same, "day", "days") + " the same ✓" : "") + (s.fixed ? " · " + plural(s.fixed, "day", "days") + " corrected to Tally" : "") + (s.upload ? " · " + plural(s.upload, "day", "days") + " to upload again" : "")}</p>
     {waiting && !stopped && <p className="note" data-check-waiting="" style={{ margin: "0 0 6px" }}>{plural(s.waiting, "day is", "days are") + " waiting: FinCom Bridge checks them one at a time, only while Tally is free (the computer with this company must have reading older entries on)."}
       {why && " " + why}<TurnOn b={b} /></p>}
+    {run.paced && !stopped && <p className="note" data-check-paced="" style={{ margin: "0 0 6px" }}>{"Tally was slow earlier, so FinCom reads these days again one at a time, only while nobody is working in Tally. "}
+      {may() && <button className="btn small" data-check-readnow="" disabled={busy} onClick={resume}>{busy ? "Starting…" : "Read now"}</button>}</p>}
     {stopped && <p className="note bad" data-check-stopped="" style={{ margin: "0 0 6px" }}>{"Stopped: Tally was busy; press Resume. "}
       {may() && <button className="btn small primary" data-check-resume="" disabled={busy} onClick={resume}>{busy ? "Resuming…" : "Resume"}</button>}</p>}
     {fixed.length > 0 && <ul className="tfx-check-list" data-check-list="" style={{ margin: "0 0 6px", paddingLeft: 18 }}>

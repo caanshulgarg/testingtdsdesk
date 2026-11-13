@@ -1923,18 +1923,23 @@ let heldFrontMissing = 0, heldHeadsMissing = 0;     // migration 158 (tally_held
 let gapFrontMissing = 0;                             // migration 160 (tally_gap_front) not applied
 let gapIdleMissing = 0;                              // migration 182 (tally_gap_front with p_idle) not applied
 // next-fix-gap-after-post (the owner, 13-Nov-2026: reads may go while people work, as long as nobody feels them): a light
-// read is handed out only when this beat shows no typing in Tally (keepWait userInTally, or an older-entries day waiting
-// for typing) and none for 5 s (the time the cloud last saw it, info.typingAt), or 60 s when the bridge's last request took
-// more than 0.3 s (reqs.last.ms; unknown: as slow); never while reading is paused or Tally is busy. Today's bridge keeps its
-// own typing gate on top (DayPullIdleSec, 60 s by default)
+// read is handed out only when the beat shows the bridge's typing gate quiet and FinCom saw no typing for 5 s, or 60 s when
+// the bridge's last request took more than 0.3 s (reqs.last.ms); never while reading is paused or Tally is busy. Typing, as
+// today's bridge says it: a day refused for it (pickups [{state: "refused", code: "typing", at}], pickack.go), an
+// older-entries day waiting for it (periodPull.companies[*].waiting "someone is working in Tally ...", daypull.go), a
+// run waiting for it (keepWait.reason "userInTally"). Fail safe: a beat without pickups, periodPull or the last request's
+// time is never idle. Today's bridge keeps its own typing gate on top (DayPullIdleSec, 60 s by default)
 function lightIdle(b: any, prevInfo: any, now = Date.now()): { idle: boolean; typingAt: string | null } {
-  const typing = b?.keepWait?.reason === "userInTally" ||
-    Object.values(b?.periodPull?.companies && typeof b.periodPull.companies === "object" ? b.periodPull.companies : {}).some((c: any) => c?.waiting === "typing");
-  const was = typeof prevInfo?.typingAt === "string" && !isNaN(Date.parse(prevInfo.typingAt)) ? prevInfo.typingAt : null;
-  const typingAt = typing ? new Date(now).toISOString() : was;
-  const ms = Number(b?.reqs?.last?.ms), fast = Number.isFinite(ms) && ms >= 0 && ms <= 300;
-  const quiet = typingAt ? now - Date.parse(typingAt) : Infinity;
-  return { idle: !typing && !b?.paused && b?.tallyState !== "busy" && quiet >= (fast ? 5000 : 60000), typingAt };
+  const t = (v: unknown) => typeof v === "string" && !isNaN(Date.parse(v)) ? Date.parse(v) : NaN;
+  const pick = Array.isArray(b?.pickups) ? b.pickups : null;
+  const cos = b?.periodPull && typeof b.periodPull === "object" && b.periodPull.companies && typeof b.periodPull.companies === "object" ? b.periodPull.companies : null;
+  const waits = cos ? Object.values(cos).some((c: any) => typeof c?.waiting === "string" && /someone is working in tally/i.test(c.waiting)) : false;
+  let at = Math.max(t(prevInfo?.typingAt) || 0, ...(pick || []).filter((x: any) => x?.state === "refused" && x?.code === "typing").map((x: any) => Math.min(now, t(x?.at) || now)));
+  if (waits || b?.keepWait?.reason === "userInTally") at = now;
+  const typingAt = at > 0 ? new Date(at).toISOString() : null;
+  const ms = Number(b?.reqs?.last?.ms), known = !!pick && !!cos && b?.reqs?.last && Number.isFinite(ms) && ms >= 0;
+  const quiet = at > 0 ? now - at : Infinity;
+  return { idle: !!known && !b?.paused && b?.tallyState !== "busy" && quiet >= (ms <= 300 ? 5000 : 60000), typingAt };
 }
 async function periodDaysFor(firm: string, body: any, stopped: boolean, max = 3, night = max > 3, markCheck = false, claim?: { dev: any; bridge: string; shared: Set<string> }, idle = false): Promise<Record<string, unknown>[] | null> {
   const out: Record<string, unknown>[] = [];
