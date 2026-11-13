@@ -95,12 +95,13 @@ function inv(id){ const s = SL(); return s && s.list.find(v => v.id === id); }
 /* ---------- ledgers (exact Tally names only) ---------- */
 // (by the whole group chain: a client keeps its sales ledgers under "Sales Local" under Sales Accounts, its GST under "GST Output")
 // (worked out once for a ledger list: it is asked for every line of every invoice)
-let ledInKept = {};
+// and afresh when the list or any source of the groups' parents changes (Ledgers.chain's: the list's own, the books', the cloud's)
+let ledInKept = [];
 function ledgersIn(re){
   const b = B(); if (!b) return [];
-  const L = b.ledgers.list || [], G = S.books && S.books.groups, k = Ledgers.ver + "|" + re;
-  if (ledInKept.L !== L || ledInKept.G !== G) ledInKept = {L, G};
-  return ledInKept[k] || (ledInKept[k] = L.filter(l => re.test(l.group || "") || Ledgers.chain(b.cid, l.name).some(g => re.test(g))));
+  const L = b.ledgers.list || [], K = [L, b.ledgers.parents, S.books && S.books.groups, (Ledgers.st[b.cid] || 0).parents, Ledgers.ver];
+  if (K.some((x, i) => x !== ledInKept[i])) (ledInKept = K).m = {};
+  return ledInKept.m[re] || (ledInKept.m[re] = L.filter(l => re.test(l.group || "") || Ledgers.chain(b.cid, l.name).some(g => re.test(g))));
 }
 function rateTag(rate){ return String(rate).replace(/\.0+$/, ""); }
 // sales ledger for a GST rate, local or inter-state

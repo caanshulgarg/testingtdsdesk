@@ -171,7 +171,7 @@ function Detail({ v }) {
             <tr><td><b>Total</b></td><td className="n"><b>{INR.format(tot("Dr"))}</b></td><td className="n"><b>{INR.format(tot("Cr"))}</b></td></tr>
           </tbody>
         </table></div>
-        <p className="note">Voucher type “{s.cfg.voucherType || "Sales"}” · bill-wise New Ref {x.number}{co.createOptional ? " · posted as Optional" : ""}</p>
+        <p className="note">Voucher type “{salesVt(x)}” · bill-wise New Ref {x.number}{co.createOptional ? " · posted as Optional" : ""}</p>
       </section>
       <EinvPanel v={v} />
       {(v.trace || []).length > 0 && <section><h3>How it was read</h3><ol className="note">{v.trace.map((t, i) => <li key={i}>{t.ok ? "✔ " : "✖ "}{t.step}: {t.note || ""}</li>)}</ol></section>}

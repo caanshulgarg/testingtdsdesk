@@ -118,7 +118,13 @@ ok(ds.length === 1 && ds[0].sledger === "Consulting Income (A)" && ds[0].ledger 
   "the document: its sales ledger and voucher type, no party's ledger; the dash cells nil; the Total row left out (" + JSON.stringify(ds.map((d) => [d.sledger, d.vch, d.ledger, d.cgst, d.total])) + ")");
 ok(F.fix({no: "no", ledger: "partyledger", doctype: "doctype"}, ["No", "Party Ledger", "Doc Type"], [["1", "X Traders", "Invoice"]]) === null && F.fix(fx || {}, gs[hs], gs.slice(hs + 1)) === null, "a party's ledger column and a document type are left as they are; a corrected mapping is not corrected again");
 const cnv = F.apply({map: {no: "no", vchtype: "vchtype", taxable: "amt", total: "amt"}, transforms: {}}, [["No", "Vch Type", "Amt"], ["C1", "Credit Note", 100]], 0, co, "sales");
-ok(cnv[0].note === "credit" && cnv[0].vch === "Credit Note" && cnv[0].total === -100, "a credit note is still known by the voucher type column");
+ok(cnv[0].note === "" && cnv[0].total === 100, "a column mapped as a voucher type tells nothing: its “Credit Note” is not taken for a credit note");
+const dt = (v, side, amt) => F.apply({map: {no: "no", doctype: "type", taxable: "amt", total: "amt"}, transforms: {}}, [["No", "Type", "Amt"], ["X1", v, amt || 100]], 0, co, side || "sales")[0];
+ok(["Credit Note", "CN", "crn", "Sales Return", "credit  note"].every((v) => dt(v).note === "credit" && dt(v).total === -100) && ["Debit Note", "DN", "dbn"].every((v) => dt(v).note === "debit" && dt(v).total === 100)
+  && ["Sales UP", "Tax Invoice", "Credit sale", "Indirect", "Scn"].every((v) => dt(v).note === ""), "the document-type column: credit note, CN, CRN, return; debit note, DN, DBN (any case); no other word makes a note");
+ok(["Purchase Return", "Debit Note", "DBN", "Credit Note"].every((v) => dt(v, "purchase").note === "credit" && dt(v, "purchase").total === -100) && dt("Purchase UP", "purchase").note === "", "on Purchase every note is the one kind (a Debit Note in Tally)");
+ok(dt("Tax Invoice", "sales", -100).note === "" && F.apply({map: {no: "no", taxable: "amt", total: "amt"}, transforms: {}}, [["No", "Amt"], ["N1", -100], ["N2", 100]], 0, co, "sales").map((d) => d.note + d.total).join() === "credit-100,100",
+  "a negative total is a note only in a sheet with no document-type column");
 ok(F.fieldsFor("sales").some((f) => f[0] === "sledger" && f[1] === "Sales ledger") && F.fieldsFor("purchase").some((f) => f[0] === "sledger" && /Purchase/.test(f[1])) && F.fieldsFor("sales").some((f) => f[0] === "vchtype"), "the fields offered: the sales (or purchase) ledger and the voucher type, each its own");
 
 console.log(fails ? "\nFAILED: " + fails : "\nall passed");
