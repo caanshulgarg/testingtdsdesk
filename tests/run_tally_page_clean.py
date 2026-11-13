@@ -219,10 +219,10 @@ def main():
         bt = without("[data-tsm-table]")
         rows_twice = E("(w) => [...document.querySelectorAll('#app [data-tsm-table] tr[data-tsm-row]')].filter(r => r.innerText.split(w).length > 2).length", "Reading is paused")
         ok(all(bt.count(w) == 1 for w in once) and rows_twice == 0, "each problem's words once on the page, and once in each row it holds (%s; rows saying it twice: %d)" % ([(w, bt.count(w)) for w in once], rows_twice))
-        gone = ["needs its Day Book", "entries waiting", "entries of", "Install FinCom Bridge 2.4.4", "Update now", "Tally not open on NWS144", "Seen, not linked", "Clients not linked", "Needs you", "Clients and their Tally company"]
+        gone = ["needs its Day Book", "entries waiting", "entries of", "Install FinCom Bridge 2.4.4", "Update from Tally", "Tally not open on NWS144", "Seen, not linked", "Clients not linked", "Needs you", "Clients and their Tally company"]
         # (Advanced (for support) holds the day check's own words, "each linked client's entries of this year checked")
         bg = without("[data-for-support]")
-        ok(not [w for w in gone if w in bg], "no Day Book counts, no Update now per client, nothing said twice (%s)" % [w for w in gone if w in bg])
+        ok(not [w for w in gone if w in bg], "no Day Book counts, no Update from Tally per client, nothing said twice (%s)" % [w for w in gone if w in bg])
         ok(n("#app [data-all-good]") == 0, "something needs him: no All good")
         # round 66: the reading table and the clients' table are in Help & support (closed by default): open it
         ok(n("#app [data-reading]") == 0 and n("#app [data-tally-clients]") == 0, "round 66: fold closed: no reading table, no clients' table on the page")
@@ -344,7 +344,7 @@ def main():
         wk = [w for w in E("window.__wakes") if w.get("kind") == "wake"]
         ok(wk == [{"kind": "wake", "what": "ledgers", "client": T}], "Link: the ledgers-only wake, one call (%s)" % wk)
         ok(n(row5 + " [data-tco-sync=running] .tco-bar") == 1 and txt(row5 + " [data-tco-sync-words]").startswith("Reading ledgers from Tally\u2026"), "while reading: the moving bar (26-Oct-2026: the ledgers' one bar) (%s)" % txt(row5 + " [data-tco-sync]"))
-        ok(not [c for c in E("window.__calls") if c[0] in ("tally_update_now", "tally_want_update")], "not the full Update now")
+        ok(not [c for c in E("window.__calls") if c[0] in ("tally_update_now", "tally_want_update")], "not the full Update from Tally")
         shot("row-first-sync-reading")
         E("""(t) => { window.__books[t] = [Object.assign(window.__books[t][0], {ledgersAt: new Date().toISOString(), days: 190, to: new Date().toISOString().slice(0, 10), entries: 4000})];
             window.__ledgers['bk-GB TEXCOAT'] = Array.from({length: 1240}, (_, i) => ({name: 'Ledger ' + (i + 1), parent: 'Sundry Creditors'})); }""", T)
@@ -377,7 +377,7 @@ def main():
                                 (None, "not started", "FinCom Bridge did not read GB TEXCOAT\u2019s ledgers: background reading is paused in the tray")):
             ids = scene([d6], unl, books=five); T = ids["GB TEXCOAT"]
             if ans: E("(a) => { window.__wakeAns = a; }", ans)
-            else: E("() => { window.__askT = window.__askT || Ledgers.askTally; Ledgers.askTally = async (cid) => ({cid, via: 'bridge', ans: {ok: true, started: false, why: 'background reading is paused in the tray (Update now still reads the ledger list)'}}); }")
+            else: E("() => { window.__askT = window.__askT || Ledgers.askTally; Ledgers.askTally = async (cid) => ({cid, via: 'bridge', ans: {ok: true, started: false, why: 'background reading is paused in the tray (Update from Tally still reads the ledger list)'}}); }")
             link5(); pg.wait_for_timeout(1500)
             st = txt(row5 + ' [data-tco-sync=stuck][data-tco-stuck="error"]')
             ok(st.startswith(words) and n(row5 + " .tco-bar") == 0 and n(row5 + " [data-tco-sync-again]") == 1, "the reply '%s': stopped at once with the reason, Try again (%s)" % (why, st))

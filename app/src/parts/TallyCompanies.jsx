@@ -41,7 +41,7 @@ import { TITLES } from "../lib/connectSteps.js";
 import { PostingWait } from "./StuckJobs.jsx";
 import { noAnswer } from "../lib/readFollow.js";
 // next-split-years (migration 161): a client's earlier-years company (a split Tally) beside its current one
-import { splitOf, isSplitCo, splitLink, splitUnlink, endsGuess, sameGuid, dayWords, checkLine } from "../lib/splitLink.js";   // next-link-follow (migration 146): Update now says at once when no Tally can answer
+import { splitOf, isSplitCo, splitLink, splitUnlink, endsGuess, sameGuid, dayWords, checkLine } from "../lib/splitLink.js";   // next-link-follow (migration 146): Update from Tally says at once when no Tally can answer
 // 30-Oct-2026 (the owner): a client's row says the books being brought from Tally (the bar and its time) and what FinCom
 // received from Tally today
 import { OlderLine, TodayLine } from "./TallyFetch.jsx";
@@ -351,7 +351,7 @@ export const unlink = (r) => {
 // Change Tally company… (next-fix-tally-links, 29-Oct-2026; the owner: "I am not able to see and change the tally
 // company"): the client linked to another company FinCom has seen for the firm, by the same link as every other
 // (linkClient: link_now for a company the cloud has no row for yet, then tallyLinkClient, which lets the client's old
-// company go); asked once only when the company is another client's; then Update now (syncNow), as after any link
+// company go); asked once only when the company is another client's; then Update from Tally (syncNow), as after any link
 export async function changeTo(co, r) {
   const other = r.client && r.client !== co.id, was = typeof tallyLinkOf === "function" ? (tallyLinkOf(co) || {}).company || "" : "";
   if (other) {
@@ -438,7 +438,7 @@ function CloudSays({ cid }) {
       : "read again: " + Number(r.n || 0).toLocaleString("en-IN") + " day" + (Number(r.n) === 1 ? "" : "s") + " of " + Number(r.months || 0) + " month" + (Number(r.months) === 1 ? "" : "s") + ", " + fmtTime(r.at) + (r.bad ? ", " + r.bad + " could not be read" : "") + (r.host ? " (cloud " + r.host + ")" : "")}</p>}
   </>;
 }
-// Sync now: Suvit's two syncs at once (the masters: the ledgers' wake; the vouchers: Update now)
+// Sync now: Suvit's two syncs at once (the masters: the ledgers' wake; the vouchers: Update from Tally)
 export function syncNow(cid, company) { firstSync(cid, company); tallyUpdateNow(cid); }   // (tallyUpdateNow asks tally_want_update, as Send ledgers does)
 
 // a click on a company its computer has not sent to FinCom's cloud yet: kept, and done by itself when it is sent
@@ -491,10 +491,10 @@ const sameLp = (a, b) => !!a && !!b && a.round === b.round && String(a.at) === S
 // nor any button to bring them"). Staging, a shared server: the "ledgers" wake reached the computers, but a bridge reads
 // the ledger list only for a company it already keeps in step (bridge-go events.go wakeLedgers: "this company is not kept
 // in step on this computer"); a company just opened and linked is not kept yet, and the cloud's wake has no answer to say
-// so, so nothing came and nothing asked again. The bridge here already falls back to Update now for it (askTally: POST
-// /keep {now, company}); through FinCom's cloud the same fallback is the existing Update now (tally_want_update: the
+// so, so nothing came and nothing asked again. The bridge here already falls back to Update from Tally for it (askTally: POST
+// /keep {now, company}); through FinCom's cloud the same fallback is the existing Update from Tally (tally_want_update: the
 // bridge's "now" run makes its kept state and reads the ledger list first). Asked by itself once when the wake brought no
-// progress in 45 seconds, and at once on a person's click (opts.now: "Bring ledgers from Tally", Try again). Nothing new
+// progress in 45 seconds, and at once on a person's click (opts.now: "Update from Tally", Try again). Nothing new
 // is asked of the bridge or of Tally.
 const UP_MS = 45000;
 async function askUpdate(x) {
@@ -697,14 +697,14 @@ const hm = (ms) => { const t = typeof tallyHm === "function" ? tallyHm(ms) : "";
 
 // ---------- next-tally-basics (06-Nov-2026; the owner: "the masters in Tally should get updated, and right now I can't tell
 // whether they update or not"): the client's ONE masters line, on Books › From Tally (the client's Tally section):
-//   "Ledgers & groups from Tally: 1,240 ledgers, 38 groups · updated 06-Nov 10:42 (by itself: …)" and one Update now.
-// Update now is the existing ledgers read (firstSync: the bridge here, else the cloud's "ledgers" wake, then Update now
+//   "Ledgers & groups from Tally: 1,240 ledgers, 38 groups · updated 06-Nov 10:42 (by itself: …)" and one Update from Tally.
+// Update from Tally is the existing ledgers read (firstSync: the bridge here, else the cloud's "ledgers" wake, then Update from Tally
 // for a company not kept yet); the bridge reads in its own gate (postings first, one request at a time). Its result:
 // "Updated: 3 new, 1 changed" from the cloud's own counts before and after and the round's rows (tally_ledger_rounds:
 // rows_received are the new or changed ledgers), or the plain reason it could not (the bar's stallWhy). By itself: the
 // bridge's light check (every 10 minutes per company open in Tally, and when a company is first seen open) sends the
 // ledgers created or altered since Tally's master counter last moved; the whole list (groups too) each night and on
-// Update now. Nothing new is asked of the bridge or of Tally; the counts are reads of FinCom's cloud.
+// Update from Tally. Nothing new is asked of the bridge or of Tally; the counts are reads of FinCom's cloud.
 export const AUTO_WORDS = "by itself: new and changed ledgers every 10 minutes while the company is open in Tally; the whole list, groups too, each night";
 // r: the rounds of this read, {changed: the rows of the rounds that sent only the new or changed ledgers (rows_received
 // below rows_read, the rule of ledgerChanges and firstSync), full: the ledgers of a round that sent the whole list (0: none)};
@@ -761,10 +761,10 @@ const dtWords = (ms) => { if (!ms) return ""; const t = new Date(ms + 5.5 * 3600
   return (today ? "today " : t.getUTCDate() + "-" + MON[t.getUTCMonth()] + " ") + hm(ms); };
 const MR = {}, PRESS = {};
 // next-tally-page-redesign (the owner: "I don't know whether reading masters or ledgers is working. I tried, there was no
-// progress bar, nothing was happening"): one Update now, the same on the Tally page's table and on Books › From Tally,
+// progress bar, nothing was happening"): one Update from Tally, the same on the Tally page's table and on Books › From Tally,
 // that is never silent. runPress: the counts before (for the result), then the existing reads: firstSync (the ledgers'
-// read with its progress; the cloud's Update now for a company not kept yet) and, with entries, tallyUpdateNow (the
-// entries' Update now) as Sync now did. runSettle: the result once the read ends. runWords: the words of each moment.
+// read with its progress; the cloud's Update from Tally for a company not kept yet) and, with entries, tallyUpdateNow (the
+// entries' Update from Tally) as Sync now did. runSettle: the result once the read ends. runWords: the words of each moment.
 export async function runPress(cid, company, opts) {
   if (PRESS[cid]) return; PRESS[cid] = 1;
   try {
@@ -815,7 +815,7 @@ export function runSettle(cid, company, done) {
   Promise.all([cloudLedgerCount(cid, true).catch(() => null), groupCount(cid, true).catch(() => null), roundRows(cid, m.at - 60000)])
     .then(([n1, g1, rr]) => { m.say = mastersResult(m.b, { n: n1 == null ? m.b.n : n1, g: g1 == null ? m.b.g : g1 }, rr); m.ok = true; done(); });
 }
-// {phase: asking | reading | waiting | done | why, text} of this client's Update now, or null when none was pressed
+// {phase: asking | reading | waiting | done | why, text} of this client's Update from Tally, or null when none was pressed
 // next-masters-progress (the owner, 09-Nov-2026: a client relinked from a split company's older part to its newer one
 // kept saying "Not started: '<the older part>' is not open"): a read asked for another Tally company than the client's
 // link now is not this link's read: nothing of it is said or counted
@@ -856,9 +856,9 @@ export function MastersLine({ cid }) {
   const x = readOf(cid, company), running = !!(x && !x.end && !x.err && !x.late), m = MR[cid];
   const bk = ledBook(cid) || {}, n = Math.max(ledgersOf(cid), (x && x.led > 0 && x.led) || 0), g = (GRP[cid] || {}).n;
   useEffect(() => { let on = true; Promise.all([cloudLedgerCount(cid).catch(() => null), groupCount(cid).catch(() => null)]).then(() => { if (on) tick((k) => k + 1); }); return () => { on = false; }; }, [cid, bk.book, bk.ledgersAt]);
-  // the result once this Update now's read is done (counts read again, the rounds since the press)
+  // the result once this Update from Tally's read is done (counts read again, the rounds since the press)
   useEffect(() => { runSettle(cid, company, () => tick((k) => k + 1)); });
-  // (each second while an Update now is on its way: its words move from Asking Tally… to the count, the reason or the result)
+  // (each second while an Update from Tally is on its way: its words move from Asking Tally… to the count, the reason or the result)
   const rw0 = runWords(cid, company), live = !!(rw0 && rw0.phase !== "done" && rw0.phase !== "why");
   useEffect(() => { if (!live) return; const t = setInterval(() => tick((k) => k + 1), 1000); return () => clearInterval(t); }, [live]);
   const may = !(S.account && S.account.me) || ["owner", "staff"].includes(S.account.me.role);
@@ -885,8 +885,8 @@ export function MastersLine({ cid }) {
     {/* (the step line may go while it checks: "Checking…" and the words stay here) */}
     {(said || ck) && <p className="note" data-checked="" role="status" style={{ margin: "0 0 4px" }}>{ck ? "Checking…" : said}</p>}
     <p style={{ margin: "0 0 4px" }}><b data-masters-head="">{head}</b>{" "}<span className="note" data-masters-auto="">{"(" + AUTO_WORDS + (lt ? "; last checked " + lt : "") + ")"}</span>{" "}
-      {may && <button type="button" className="btn small" data-masters-update="" disabled={running || pressing} onClick={press}>{running || pressing ? "Updating…" : "Update now"}</button>}</p>
-    {/* next-fix-stuck-jobs: a posting this computer's bridge holds, beside Update now (only where that bridge answers) */}
+      {may && <button type="button" className="btn small" data-masters-update="" disabled={running || pressing} onClick={press}>{running || pressing ? "Updating…" : "Update from Tally"}</button>}</p>
+    {/* next-fix-stuck-jobs: a posting this computer's bridge holds, beside Update from Tally (only where that bridge answers) */}
     <PostingWait beat={(() => { try { return (ownBridge() || {}).beat || null; } catch (e) { return null; } })()} hook="masters" />
     {m && m.say && x && x.at === m.at ? <><p className={"note" + (m.ok ? " ok" : " bad")} data-masters-result={m.ok ? "ok" : "why"} role="status" style={{ margin: "0 0 4px" }}>{m.say}</p><LaterLine cid={cid} /></>
       : <>{rw && rw.phase !== "done" && rw.phase !== "why" && <p className={"note" + (rw.phase === "waiting" ? " bad" : "")} data-masters-progress={rw.phase} role="status" style={{ margin: "0 0 4px" }}>{rw.text}</p>}
@@ -1092,7 +1092,7 @@ export function CompanyRow({ r, rows = null, forCo = null, focus = false, onDone
     // next-fix-clientremove (the owner: "no visibility of which client it's linked to"): a labelled line, the name opens the client
     client = <span className="tco-linked-to" data-tco-linked-label={co.id}><span className="note">Linked to client:</span> <button className="linkbtn tco-client" data-tco-client={co.id} title={"Open " + co.name} onClick={() => openCompany(co.id)}>{co.name}</button></span>;
     acts = split ? (may ? <SplitUnlink co={co} /> : null) : <>
-      {may && <button className="btn small" data-tco-sync-now={co.id} disabled={!!syncing} onClick={() => syncNow(co.id, r.company)}>{syncing ? "Syncing…" : "Sync now"}</button>}
+      {may && <button className="btn small" data-tco-sync-now={co.id} disabled={!!syncing} onClick={() => syncNow(co.id, r.company)}>{syncing ? "Syncing…" : "Update from Tally"}</button>}
       <LinkedMenu r={r} co={co} may={may} onPick={setPick} onChange={() => setChg(true)} computer={pc} /></>;
   }
   else if (!may) client = <span className="note">A member of the firm who may make changes adds it.</span>;
@@ -1210,7 +1210,7 @@ function LinkedClientRow({ co, r, k, more, earlier, here, open, onOpen, hooks })
           {split ? <button className="danger" data-tlk-split-unlink={co.id} onClick={close(() => unlinkSplit(co))}>Unlink earlier years<small>{co.name + " keeps its current company alone."}</small></button>
             : <button className="danger" data-tlk-unlink={co.id} data-tco-unlink={r.company} onClick={close(() => unlink(r))}>Unlink<small>The company is free to link again.</small></button>}
           {/* (kept from the quiet rows before: Sync now, and the Day Book while days of this year are missing) */}
-          <button data-tco-sync-now={co.id} onClick={close(() => syncNow(co.id, r.company))}>Sync now<small>Masters and vouchers, when the company is open in Tally.</small></button>
+          <button data-tco-sync-now={co.id} onClick={close(() => syncNow(co.id, r.company))}>Update from Tally<small>Masters and vouchers, when the company is open in Tally.</small></button>
           {oldDaysMissing(co.id) && <button data-tco-daybook={co.id} onClick={close(() => openFromTally(co.id))}>Upload older entries (Day Book)<small>Days of this year not in FinCom yet: upload Tally’s Day Book once.</small></button>}
         </div></details></span>}
     </div>

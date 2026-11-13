@@ -1,8 +1,8 @@
 """python3 run_tally_line_stop.py - the per-client Tally line when FinCom has stopped reading on the client's computer
 (plan piped-moseying-frost, round 4, item 25). A stop from FinCom (tally_read_stops for the computer, or for all computers;
-the computer's info.readStop) shows on every client of that computer, in place of "Tally open on NWS144 … Update now":
+the computer's info.readStop) shows on every client of that computer, in place of "Tally open on NWS144 … Update from Tally":
   "Reading stopped by <name> at <time>: <reason> · Resume" (Resume for owners only; it calls tally_read_resume for the
-  computer, or for all computers when the stop is for all). Update now, while stopped, does nothing and says
+  computer, or for all computers when the stop is for all). Update from Tally, while stopped, does nothing and says
   "Reading is stopped by <name> (<reason>); resume it on the Tally page". On the Post page the second line says the same.
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_tally_line_stop.py"""
 import os, threading, functools, http.server
@@ -60,8 +60,8 @@ with sync_playwright() as p:
     # the line as before while nothing is stopped
     # next-tally-icon: the line is no longer on the page; its words (postStatusFor), read as the line was
     pl = lambda: E("""() => { const s = postStatusFor(CO()); return 'Posting into ' + s.company + (s.on ? ' on ' + s.on : '') + (s.where ? ' · ' + s.where : '') +
-      (s.reading ? ' · Reading now…' : s.read ? ' · read ' + tallyHm(s.read) : '') + (s.where ? ' · Update now' : ''); }""")
-    ok(pl().startswith("Posting into ZZ TEST on NWS144 (tally) · Linked") and "Update now" in pl(), "no stop: the line, with the one word Linked (%s)" % pl())
+      (s.reading ? ' · Reading now…' : s.read ? ' · read ' + tallyHm(s.read) : '') + (s.where ? ' · Update from Tally' : ''); }""")
+    ok(pl().startswith("Posting into ZZ TEST on NWS144 (tally) · Linked") and "Update from Tally" in pl(), "no stop: the line, with the one word Linked (%s)" % pl())
     # ---- FinCom stopped reading on the computer (tally_read_stops, with who and when; the beat's readStop too)
     E("""() => { window.__stops = [{id: 7, device_id: window.__dev.id, action: "stop", reason: "Tally hangs on the bank ledger", stopped_at: new Date(Date.now() - 40 * 60000).toISOString(), stopped_by: "u-anshul", cleared_at: null, cleared_by: null}];
       window.__dev.info.readStop = {by: "fincom", reason: "Tally hangs on the bank ledger", at: new Date(Date.now() - 40 * 60000).toISOString()}; }""")
@@ -76,18 +76,18 @@ with sync_playwright() as p:
         return txt("[data-panel-tally-line]") if pg.locator("[data-panel-tally-line]").count() else ""
     pl = cl(cid)
     ok(any(("Reading stopped by Anshul at %s: Tally hangs on the bank ledger" % hm(m)) in pl for m in (40, 41)), "the client's Tally line says so (%s)" % pl)
-    ok(pg.locator("[data-panel-tally-line] [data-update-now]").count() == 0 and txt("[data-panel-tally-line] [data-read-resume-line]") == "Resume", "the line has Resume, not Update now (owner)")
+    ok(pg.locator("[data-panel-tally-line] [data-update-now]").count() == 0 and txt("[data-panel-tally-line] [data-read-resume-line]") == "Resume", "the line has Resume, not Update from Tally (owner)")
     pg.click("[data-panel-tally-line] [data-read-resume-line]"); pg.wait_for_timeout(600)
     ok(["tally_read_resume", {"p_device": DEV}] in E("window.__rpc"), "Resume -> tally_read_resume(p_device) for the computer (%s)" % E("window.__rpc"))
-    # Update now, while stopped: nothing is asked, the toast says who and why
+    # Update from Tally, while stopped: nothing is asked, the toast says who and why
     E("() => { window.__rpc = []; window.__toasts = []; window.__keep = []; tallyUpdateNow(S.companies['%s'].id); }" % oid); pg.wait_for_timeout(400)
     ok(not E("window.__rpc") and not E("window.__keep") and E("window.__toasts") == ["Reading is stopped by Anshul (Tally hangs on the bank ledger); resume it on the Tally page"],
-       "Update now (another client of the computer): nothing asked, 'Reading is stopped by <name> (<reason>); resume it on the Tally page' (%s)" % E("window.__toasts"))
+       "Update from Tally (another client of the computer): nothing asked, 'Reading is stopped by <name> (<reason>); resume it on the Tally page' (%s)" % E("window.__toasts"))
     E("() => { window.__rpc = []; window.__toasts = []; window.__keep = []; tallyUpdateNow(S.coId); }"); pg.wait_for_timeout(400)
-    ok(not E("window.__rpc") and not E("window.__keep") and E("window.__toasts") and E("window.__toasts")[0].startswith("Reading is stopped by Anshul"), "Update now for the open client (keepNow's way): refused the same way, the bridge here not asked")
-    # the other callers of keepNow (TopBar "Refresh books", FromTally "Update now", Books): the same refusal, the bridge here not asked
+    ok(not E("window.__rpc") and not E("window.__keep") and E("window.__toasts") and E("window.__toasts")[0].startswith("Reading is stopped by Anshul"), "Update from Tally for the open client (keepNow's way): refused the same way, the bridge here not asked")
+    # the other callers of keepNow (TopBar "Refresh books", FromTally "Update from Tally", Books): the same refusal, the bridge here not asked
     E("() => { window.__rpc = []; window.__toasts = []; window.__keep = []; doAct('keepNow'); }"); pg.wait_for_timeout(400)
-    ok(not E("window.__rpc") and not E("window.__keep") and E("window.__toasts") and E("window.__toasts")[0].startswith("Reading is stopped by Anshul"), "doAct('keepNow') (Refresh books, FromTally's Update now): refused the same way (%s)" % E("window.__toasts"))
+    ok(not E("window.__rpc") and not E("window.__keep") and E("window.__toasts") and E("window.__toasts")[0].startswith("Reading is stopped by Anshul"), "doAct('keepNow') (Refresh books, FromTally's Update from Tally): refused the same way (%s)" % E("window.__toasts"))
     # the Post page's second line
     E("async (id) => { await openCompany(id); goStep('post', 'bills'); }", cid); pg.wait_for_timeout(700)
     # next-tally-icon: said on the page once Post was pressed, in plain words (who and why: the Tally page and the panel)
@@ -101,11 +101,11 @@ with sync_playwright() as p:
     ok(any(("Reading stopped by neha@fincom.in at %s: Bridge update" % hm(m)) in cl(cid) for m in (2, 3)), "a stop for all computers: said with who and when (%s)" % cl(cid))
     E("() => { window.__rpc = []; }"); pg.click("[data-panel-tally-line] [data-read-resume-line]"); pg.wait_for_timeout(600)
     ok(["tally_read_resume", {"p_device": None}] in E("window.__rpc"), "Resume on an all-computers stop -> tally_read_resume(null)")
-    # ---- a member: the words, no Resume; Update now refused the same way
+    # ---- a member: the words, no Resume; Update from Tally refused the same way
     cid, oid = E(SETUP, ["member"]); pg.wait_for_timeout(600)
     E("""() => { window.__stops = [{id: 7, device_id: window.__dev.id, action: "stop", reason: "Tally hangs on the bank ledger", stopped_at: new Date(Date.now() - 40 * 60000).toISOString(), stopped_by: "u-anshul", cleared_at: null, cleared_by: null}]; }""")
     refresh(); E("() => { S.tallyMore = {support: true, page: true}; navHome('tally'); }"); pg.wait_for_timeout(1200)
-    ok("Reading stopped by Anshul" in cl(cid) and pg.locator("[data-panel-tally-line] [data-read-resume-line], [data-panel-tally-line] [data-update-now]").count() == 0, "a member: the words, no Resume, no Update now (%s)" % cl(cid))
+    ok("Reading stopped by Anshul" in cl(cid) and pg.locator("[data-panel-tally-line] [data-read-resume-line], [data-panel-tally-line] [data-update-now]").count() == 0, "a member: the words, no Resume, no Update from Tally (%s)" % cl(cid))
     # ---- no tally_read_stops rows readable (before migration-35): the beat's readStop alone, without a name
     E("""() => { Cloud.api = async (p) => { if (/^tally_devices/.test(p)) return [JSON.parse(JSON.stringify(window.__dev))]; if (/^tally_read_stops/.test(p)) throw new Error("relation public.tally_read_stops does not exist"); return []; };
       TCloud.pane.stops = []; TCloud.pane.noControl = true;   // the Tally page read nothing either on that cloud

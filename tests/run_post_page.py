@@ -1,5 +1,5 @@
 """python3 run_post_page.py - review of 02-Oct-2026, C15-C18, B11, B14: the Post to Tally page and where postings go.
-  - one line: "Posting into GARG SHEKHAR & COMPANY · Tally open on NWS144 · Update now" (the bridge's version and "Ready"
+  - one line: "Posting into GARG SHEKHAR & COMPANY · Tally open on NWS144 · Update from Tally" (the bridge's version and "Ready"
     under More, second pass of 02-Oct-2026), and a second line only for the action to take ("Tally not open on NWS144",
     "Choose the Tally company", "Install FinCom Bridge");
   - one table of the bills ready to post (date, party, bill no., amount, the ledgers on one line, Preview / Back to review);

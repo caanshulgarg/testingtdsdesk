@@ -44,7 +44,7 @@ function lastEntryDate(b) {
 }
 
 // how up to date the books are, on every tab but From Tally (round 3 A, the owner 14-Oct-2026): no status line on the page.
-// "Books up to … · read …", Update now and the timing are in the top bar's Tally panel (parts/TallyLine.jsx PanelBooks);
+// "Books up to … · read …", Update from Tally and the timing are in the top bar's Tally panel (parts/TallyLine.jsx PanelBooks);
 // here only the books' own warnings, and one amber line when the books are stale or reading has stopped (BooksStale)
 // unknown: false on the ledgers page, whose Needs you lists those ledgers one line each (Ledgers.jsx)
 // round 63 (Tally messages only where needed): with fresh books nothing about Tally; one quiet "Books up to <date>"

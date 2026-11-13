@@ -82,7 +82,7 @@ def main():
         g = guide()
         ok(g["now"] == "1" and g["states"] == ["now", "later", "later", "later", "later", "later"], "1. step 1 now, the rest later (%s %s)" % (g["now"], g["states"]))
         ok(g["say"] == "Step 1: FinCom Bridge is not running in this Windows login: start it, or install it. Download installs it just for you: no administrator is needed.", "1. the words: %s" % g["say"])
-        ok(n(G + " .tsm-now-act [data-tsm-download]") == 1 and n("#app [data-tsm-recheck]") == 1, "1. one Download in the step, and Check again")
+        ok(n(G + " .tsm-now-act [data-tsm-download]") == 1 and n("#app [data-tsm-top-check]") == 1 and n("#app [data-tsm-recheck]") == 0 and not pg.locator("#app [data-tpg-download]").is_visible(), "1. one Download in the step (the page's big one not shown), and one Check again (the top card's)")
         ok(n("#app [data-tsm-head] [data-tsm-bridge-say]") == 0, "1. the header does not say it a second time")
         never_b("1", g)
         E("() => { window.__probed = []; }"); pg.wait_for_timeout(4000)

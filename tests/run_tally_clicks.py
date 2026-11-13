@@ -8,12 +8,12 @@ sent with their "<- Tally"), clicked one at a time from a fresh scene, as an own
 (paused, Tally not answering, a client not linked) and in an all-connected scene. For each click:
   - no page error;
   - something happens: the page, tab, step or fold changes, a question is asked (answered Yes, with its boxes filled), a
-    call goes out (RPC spy, the bridge's wake, a read of the computers, doAct, Update now, a toast), or the page's words
+    call goes out (RPC spy, the bridge's wake, a read of the computers, doAct, Update from Tally, a toast), or the page's words
     change; a download is the setup's link (not followed);
   - the expected effect where there is one (next-tally-suvit: Add as client / Link on a company's row -> tally_company_link,
-    Sync now -> Update now, Today's not-linked line -> the client's Tally card): Link -> tally_company_link, Check again -> the wake and a read, Resume ->
+    Sync now -> Update from Tally, Today's not-linked line -> the client's Tally card): Link -> tally_company_link, Check again -> the wake and a read, Resume ->
     tally_read_resume, Unlink -> its question then tally_company_link with no client, Hold / Roll back / Stop reading ->
-    their question then their RPC, Update now -> tallyUpdateNow;
+    their question then their RPC, Update from Tally -> tallyUpdateNow;
   - staff see no owner-only control and no owner-only RPC goes out.
 A control with no effect is a dead button: the test fails and names it. The full list of what was clicked and what
 happened is printed. All made up in the page (the RPC spies of run_tally_page_clean.py); no Tally, no staging.
@@ -65,7 +65,7 @@ FIND = """([scope, name, nth]) => { const root = document.querySelector(scope); 
     const t = (e.innerText || e.getAttribute('aria-label') || '').replace(/[\u25b2\u25bc]/g, '').replace(/\\s+/g, ' ').trim().slice(0, 50);
     return e.tagName.toLowerCase() + (d.length ? '[' + d[0] + (e.getAttribute(d[0]) ? '=' + e.getAttribute(d[0]).slice(0, 40) : '') + ']' : '') + ' ' + JSON.stringify(t); };
   let hits = els.filter(e => nm(e) === name);
-  // a control whose words change by themselves (Update now -> Reading now...): found again by its data- hook
+  // a control whose words change by themselves (Update from Tally -> Reading now...): found again by its data- hook
   if (!hits[nth] && /\[/.test(name)) { const hook = name.split(' ')[0]; hits = els.filter(e => nm(e).split(' ')[0] === hook); }
   const e = hits[nth]; if (!e) return false;
   // a control inside a folded part (a closed <details>) is reached as a person does: the fold opened first
@@ -81,17 +81,17 @@ def expect(name, d, calls, fx):
     if "[data-release-hold]" in name: return "tally_release_hold" in rpc and d["asked"], "Hold -> asked, then tally_release_hold"
     if "[data-release-rollback]" in name: return "tally_release_rollback" in rpc and d["asked"], "Roll back -> asked, then tally_release_rollback"
     if "[data-read-stop-all]" in name or "[data-read-stop=" in name: return "tally_read_stop" in rpc and d["asked"], "Stop reading -> asked, then tally_read_stop"
-    if "[data-update-now]" in name: return "tallyUpdateNow" in fxn or "doAct" in fxn, "Update now -> tallyUpdateNow"
+    if "[data-update-now]" in name: return "tallyUpdateNow" in fxn or "doAct" in fxn, "Update from Tally -> tallyUpdateNow"
     # next-tally-icon: the popover's actions, done in place (never the side panel)
     if "[data-tally-pop-act=link]" in name: return "tally_company_link" in rpc and not d["panel"], "the popover's Link -> tally_company_link, in place"
-    if "[data-tally-pop-act=update]" in name: return ("tallyUpdateNow" in fxn or "doAct" in fxn) and not d["panel"], "the popover's Update now -> tallyUpdateNow, in place"
+    if "[data-tally-pop-act=update]" in name: return ("tallyUpdateNow" in fxn or "doAct" in fxn) and not d["panel"], "the popover's Update from Tally -> tallyUpdateNow, in place"
     if "[data-tally-pop-page]" in name: return d["home"] == "tally", "the popover's Open Tally page -> the Tally page"
     if "[data-tally-icon=" in name: return d["pop"] and not d["panel"], "the Tally icon -> its popover, no side panel"
-    # next-tally-suvit: Add as client / Link on a company's row: the link (tally_company_link); Sync now: Update now
+    # next-tally-suvit: Add as client / Link on a company's row: the link (tally_company_link); Sync now: Update from Tally
     # Task D (28-Oct-2026): "Link to client…" only opens the clients to choose from (nothing linked yet): no effect to check
     if "[data-tco-act=pick]" in name: return None, ""
     if "[data-tco-act=" in name or "[data-tco-relink]" in name or "[data-tco-add-new=" in name: return "tally_company_link" in rpc, "Link / + New client with this name -> tally_company_link"
-    if "[data-tco-sync-now=" in name or "[data-tally-sync-now=" in name: return "tallyUpdateNow" in fxn or "doAct" in fxn or "tally_want_update" in rpc, "Sync now -> Update now"
+    if "[data-tco-sync-now=" in name or "[data-tally-sync-now=" in name: return "tallyUpdateNow" in fxn or "doAct" in fxn or "tally_want_update" in rpc, "Sync now -> Update from Tally"
     # next-tally-one-page: Today's chip, a client's one Tally line and its chips: the Tally page (the one place)
     if "[data-not-linked-go]" in name or "[data-tally-one-go]" in name: return d["home"] == "tally", "-> the Tally page"
     if "[data-open-connect" in name or "[data-client-link=" in name: return '"step"' in d["guide"] and d["home"] == "tally", "-> Connect Tally"

@@ -18,7 +18,7 @@ import DateBox from "../../parts/DateBox.jsx";
 import { needDays } from "../../lib/needDays.js";
 // 26-Oct-2026: the ledgers' one bar (reading / done / stuck / today's changes), as on the Tally page's row; loaded with
 // the Tally screen's own code, so the app's first file stays within its budget
-// next-tally-basics: the masters' one line ("Ledgers & groups from Tally: N ledgers, M groups · updated …", Update now and its
+// next-tally-basics: the masters' one line ("Ledgers & groups from Tally: N ledgers, M groups · updated …", Update from Tally and its
 // result); its bar while a read runs
 const LedgerBar = lazy(() => import("../../parts/TallyCompanies.jsx").then((m) => ({ default: m.MastersLine })));
 // 30-Oct-2026 (the owner: books brought from Tally with a progress bar and its timing; an upload checked against Tally and
@@ -53,13 +53,13 @@ function Status({ b, days }) {
   if (n && (m.parts || []).length && !(b.tb && Object.keys(b.tb.led || {}).length)) bits.push("opening balances not uploaded");
   const k = days.reduce((a, x) => a + x.days, 0);
   if (k) bits.push(k + (k === 1 ? " day needs" : " days need") + " a Day Book");
-  // Update now (24-Oct-2026: the link line that carried it is gone; the Tally page's row has Sync now too)
+  // Update from Tally (24-Oct-2026: the link line that carried it is gone; the Tally page's row has Sync now too)
   const linked = typeof tallyLinkOf === "function" && tallyLinkOf(CO()).state !== "unlinked";
   const can = n > 0 && (linked || (typeof Bridge === "object" && Bridge.on() && Bridge.up()) || (typeof TCloud === "object" && S.coId && TCloud.has(S.coId)));
   return <p className="up-status" style={{ margin: "10px 0 12px" }}><b data-up-status="">{bits.join(" · ")}</b>
     {can && <>{" "}<UpdateNow /></>}</p>;
 }
-// next-buttons (the owner: every Tally button does something visible): Update now's result beside it, not only a toast.
+// next-buttons (the owner: every Tally button does something visible): Update from Tally's result beside it, not only a toast.
 // The same asks as before (doAct keepNow: the bridge here, else tally_want_update through FinCom's cloud), its answer said
 function UpdateNow() {
   const [said, setSaid] = useState(null), [busy, setBusy] = useState(false), cid = S.coId;
@@ -82,7 +82,7 @@ function UpdateNow() {
     catch (e) { const m = String((e && e.message) || e || ""); setSaid({ bad: true, text: /not allowed|42501/i.test(m) ? "Only an owner or staff of the firm can do this." : /PGRST202|schema cache|does not exist/i.test(m) ? "FinCom’s cloud is not ready for this yet. Try again later." : "Couldn’t reach FinCom. Check the internet and try again." }); }
     finally { setBusy(false); }
   };
-  return <><button className="linkbtn" data-update-now="" disabled={busy} onClick={go}>{busy ? "Asking…" : "Update now"}</button>
+  return <><button className="linkbtn" data-update-now="" disabled={busy} onClick={go}>{busy ? "Asking…" : "Update from Tally"}</button>
     {said && <span className={"note" + (said.bad ? " bad" : "")} data-update-said={said.bad ? "bad" : "ok"} role="status" style={{ display: "block", fontWeight: 400 }}>{said.text}</span>}</>;
 }
 
@@ -123,7 +123,7 @@ function Upload({ b }) {
   // from Getting ready's "Read the balances" (smart moves round 1): where the opening balances come from, said here
   const opening = S.upFocus === "opening" && !(b.tb && Object.keys(b.tb.led || {}).length);
   return <section className="dash-card" data-up-card="" style={{ marginBottom: 12 }}><h3>Bring in from Tally</h3>
-    {opening && <p className="bk-alert" data-up-opening="" style={{ margin: "0 0 10px" }}><b>Opening balances:</b> in Tally, open <b>Trial Balance</b> as on the day before the books here start, press <b>Ctrl+E</b>, choose <b>XML</b>, and drop the file below; FinCom asks whether to use it as the opening balances. With FinCom Bridge linked, Update now reads them by itself.</p>}
+    {opening && <p className="bk-alert" data-up-opening="" style={{ margin: "0 0 10px" }}><b>Opening balances:</b> in Tally, open <b>Trial Balance</b> as on the day before the books here start, press <b>Ctrl+E</b>, choose <b>XML</b>, and drop the file below; FinCom asks whether to use it as the opening balances. With FinCom Bridge linked, Update from Tally reads them by itself.</p>}
     {/* 26-Oct-2026: the Day Book upload, said in one line. 30-Oct-2026 (the owner): books also come from Tally by
         themselves (Bring books from Tally, above), and an upload is checked against Tally (Upload checked against Tally) */}
     <p className="note" data-up-older="" style={{ margin: "0 0 8px" }}>Older entries: in Tally open Day Book, choose the period (Alt+F2), E: Export → File Format (F8): XML or JSON, then drop the file here.</p>
@@ -203,7 +203,7 @@ function BridgeKeep() {
       ? <>Catches up each night at <input type="time" aria-label="Nightly catch-up at" defaultValue={at} key={at} style={{ width: 104 }} onChange={(ev) => keepAtSet(ev.target.value)} /> (last: {last}).</>
       : k.schedule === "continuous" ? "Reads Tally’s changes every minute."
       : <>Updates from Tally once a day at <input type="time" aria-label="Daily update at" defaultValue={at} key={at} style={{ width: 104 }} onChange={(ev) => keepAtSet(ev.target.value)} /> (last: {last}). Nothing is asked of Tally during the day.</>}
-      {!busy && <>{" "}<button className="btn small" onClick={() => doAct("keepNow")}>Update now</button></>}</>;
+      {!busy && <>{" "}<button className="btn small" onClick={() => doAct("keepNow")}>Update from Tally</button></>}</>;
   }
   return <div className="bk-menu-sub note" data-bridge-keep="" style={{ padding: "8px 10px", whiteSpace: "normal" }}><b>FinCom Bridge on this computer</b><br />{body}</div>;
 }

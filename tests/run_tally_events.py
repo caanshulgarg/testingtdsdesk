@@ -1,12 +1,12 @@
 """python3 run_tally_events.py - FinCom Bridge 2.1.3 reads Tally only after an event, so FinCom says how a client's Tally
-stands in one line, from the bridge's heartbeat, with one button, Update now:
+stands in one line, from the bridge's heartbeat, with one button, Update from Tally:
   - "Tally open on NWS144 · last read 15:34", "Tally is closed on NWS144", "NWS144 is offline",
     "Tally is not answering on NWS144 since 12:28", "Background reading paused on NWS144";
-  - on the Post page's status line ("Posting into ZZ TEST · Tally open on NWS144 · read 15:34 IST · Update now", what is
+  - on the Post page's status line ("Posting into ZZ TEST · Tally open on NWS144 · read 15:34 IST · Update from Tally", what is
     wrong on a second line: second pass of 02-Oct-2026), in the Tally panel of the top bar, and on the Tally page;
-  - Update now sends the event (tally_want_update for the client); opening the client wakes its Tally computer once
+  - Update from Tally sends the event (tally_want_update for the client); opening the client wakes its Tally computer once
     (tally-ingest, kind "wake", what "open"), and not again within five minutes;
-  - "Books as of 15:34 · Update now" where the client's books figures are shown (MIS).
+  - "Books as of 15:34 · Update from Tally" where the client's books figures are shown (MIS).
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_tally_events.py"""
 import os, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -64,16 +64,16 @@ with sync_playwright() as p:
     # 1. Tally open, with the last read
     line = lambda sel="#app [data-post-problem]": pg.inner_text(sel).replace("\n", " ").strip() if pg.locator(sel).count() else ""
     # next-tally-icon (27-Oct-2026): no status line on the page; its words are postStatusFor's, read here as the line was;
-    # Update now is in the header's Tally icon's popover; what stops a posting is said once Post was pressed, plainly
+    # Update from Tally is in the header's Tally icon's popover; what stops a posting is said once Post was pressed, plainly
     PL = """() => { const s = postStatusFor(CO()); return 'Posting into ' + s.company + (s.on ? ' on ' + s.on : '') + (s.where ? ' · ' + s.where : '') +
-      (s.reading ? ' · Reading now…' : s.read ? ' · read ' + tallyHm(s.read) : '') + (s.where ? ' · Update now' : ''); }"""
+      (s.reading ? ' · Reading now…' : s.read ? ' · read ' + tallyHm(s.read) : '') + (s.where ? ' · Update from Tally' : ''); }"""
     pline = lambda: E(PL)
     # the steady sign (11-Oct-2026): the connection in the sign's words
-    ok(pline() == "Posting into ZZ TEST on NWS144 (anshul) · Linked · read 15:34 IST · Update now" and line() == "" and pg.locator("#app [data-post-line]").count() == 0, "Post page: the line's words, not on the page: %r" % pline())
+    ok(pline() == "Posting into ZZ TEST on NWS144 (anshul) · Linked · read 15:34 IST · Update from Tally" and line() == "" and pg.locator("#app [data-post-line]").count() == 0, "Post page: the line's words, not on the page: %r" % pline())
     pg.click("header.top [data-tally-icon]"); pg.wait_for_selector("header.top [data-tally-pop-act=update]", timeout=15000)
-    ok(pg.locator("header.top [data-tally-pop-act=update]").count() == 1, "the header's Tally icon: one button, Update now")
+    ok(pg.locator("header.top [data-tally-pop-act=update]").count() == 1, "the header's Tally icon: one button, Update from Tally")
     pg.click("header.top [data-tally-pop-act=update]"); pg.wait_for_timeout(400); pg.keyboard.press("Escape")
-    ok(["tally_want_update", {"p_client": cid}] in E("window.__rpc"), "Update now sends the event (tally_want_update for the client)")
+    ok(["tally_want_update", {"p_client": cid}] in E("window.__rpc"), "Update from Tally sends the event (tally_want_update for the client)")
     # 2. Tally closed
     E(STATE, {"beat": {"tallyState": "closed", "tally": False}}); pg.wait_for_timeout(300)
     ok(line() == "", "Tally closed, before Post is pressed: nothing on the page (%r)" % line())
@@ -89,7 +89,7 @@ with sync_playwright() as p:
     ok(l4 == "Not sent to Tally. Tally is not answering.", "Tally not answering: %r" % l4)
     # 5. background reading paused in the tray
     E(STATE, {"beat": {"paused": True}}); pg.wait_for_timeout(300)
-    ok(line().startswith("Not sent to Tally. Reading from Tally is paused.") and pg.locator("#app [data-post-problem] [data-post-action]").inner_text() == "Update now", "paused: %r" % line())
+    ok(line().startswith("Not sent to Tally. Reading from Tally is paused.") and pg.locator("#app [data-post-problem] [data-post-action]").inner_text() == "Update from Tally", "paused: %r" % line())
     E(STATE, {}); pg.wait_for_timeout(300)
     # the Tally panel of the top bar says the same line
     E("() => doAct('tallyPanel')"); pg.wait_for_timeout(400)
@@ -97,21 +97,21 @@ with sync_playwright() as p:
     ok(pl == "Connected · Tally open on NWS144 · last read 15:34 IST", "the Tally panel: %r" % pl)
     E("() => doAct('tallyPanelClose')"); pg.wait_for_timeout(300)
     # round 66: the outdated "Clients' Tally" lines on the Tally page are gone; another client's own line (its Tally panel)
-    # has Update now, for that client
+    # has Update from Tally, for that client
     E("async (id) => { await openCompany(id); S.tallyPanel = true; render(); }", oid); pg.wait_for_timeout(900)
     ol = line("[data-panel-tally-line] [data-tally-line-text]")
     ok("Tally open on NWS144" in ol, "another client's Tally panel: its line (%r)" % ol)
     E("() => { window.__rpc = []; }")
     pg.locator('[data-overlay="tallypanel"] [data-update-now]').first.click(); pg.wait_for_timeout(400)
-    ok(["tally_want_update", {"p_client": oid}] in E("window.__rpc"), "Update now on another client's line asks for that client")
-    # round 3 A (14-Oct-2026): not on the page (MIS) any more; "Books up to … · read 15:34 · Update now" in the Tally panel,
+    ok(["tally_want_update", {"p_client": oid}] in E("window.__rpc"), "Update from Tally on another client's line asks for that client")
+    # round 3 A (14-Oct-2026): not on the page (MIS) any more; "Books up to … · read 15:34 · Update from Tally" in the Tally panel,
     # "Books as of 15:34" and why under its Details
     E("(id) => { S.books = {cid: id, vouchers: [], meta: {}, busy: ''}; goClient('books:mis'); }", cid); pg.wait_for_timeout(800)
     ok(pg.locator("#app [data-books-asof]").count() == 0 and "Books as of" not in pg.inner_text("#app"), "MIS: no 'Books as of' line on the page")
     E("() => { S.tallyPanel = true; render(); }"); pg.wait_for_timeout(700)
     PB = '[data-overlay="tallypanel"] [data-panel-books]'
     ao = pg.inner_text(PB) if pg.locator(PB).count() else ""
-    ok("read 15:34" in ao and "Update now" in ao, "the Tally panel: %r" % ao)
+    ok("read 15:34" in ao and "Update from Tally" in ao, "the Tally panel: %r" % ao)
     tip = pg.get_attribute(PB + " [data-books-asof]", "title") if pg.locator(PB + " [data-books-asof]").count() else ""
     ok("Tally cannot send its changes by itself" in (tip or ""), "it says why (Details): entries made in Tally come in at the next update")
     E("() => { S.tallyPanel = false; render(); }"); pg.wait_for_timeout(400)

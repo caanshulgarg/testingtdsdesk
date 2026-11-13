@@ -391,7 +391,7 @@ async function salesCheckTally(list){
   return n;
 }
 function salesTallyKey(x){ return String(x.guid || x.masterId || [x.date, x.type, x.number].join("|")); }
-// asked: someone pressed Refresh from Tally. By itself (opening the page) Tally is not read, except a first ledger list;
+// asked: someone pressed Update from Tally. By itself (opening the page) Tally is not read, except a first ledger list;
 // sales already in Tally are still found when posting (build 190)
 // invoices held by a posting in FinCom's cloud (v.postJob): that posting's result marked on them once it has one
 async function salesQueuedSync(){

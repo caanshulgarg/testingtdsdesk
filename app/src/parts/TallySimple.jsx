@@ -8,7 +8,7 @@
 //   3. the foot: "One main button per client. More ▾ opens the rest." and Advanced (for support)
 // Before (next-tally-simple, 02-Nov-2026, "Tally — Yes or No"):
 //   1. the header: "Tally", "N clients are fine. M need you.", Check Tally now (the day check of every client:
-//      tally_check_request, the same as each client's "Check for changes in Tally"; a cloud without it: Update now)
+//      tally_check_request, the same as each client's "Check for changes in Tally"; a cloud without it: Update from Tally)
 //   2. Connect a company to Tally: four steps that move on by themselves from real state (no bridge heard → 1, Download;
 //      a bridge, nothing open that no client has → 2; a company open that no client has → 3, "Connect it to client X?";
 //      just linked → 4). Small once every company is connected
@@ -78,7 +78,7 @@ export async function checkTallyNow(rows, checkAgain) {
         const x = await rpc("tally_check_request", { p_client: r.cid, p_from: a, p_to: z });
         if (!(x && x.ok === false)) n++; else bad++;
       } catch (e) {
-        // the day check is not in this cloud: Update now (tally_want_update), as each client's own button
+        // the day check is not in this cloud: Update from Tally (tally_want_update), as each client's own button
         if (missing(e)) { fallback = true; try { await TCloud.rpc("tally_want_update", { p_client: r.cid }); n++; } catch (e2) { bad++; err = e2; } }
         else { bad++; err = e; }
       }
@@ -124,7 +124,11 @@ function Guide({ cs, collapsed, forced, asked, connectPanel, download, checkAgai
   // (once for each bridge it finds, and only a 2.5.3 one saying it is this session's: never a look that starts another look)
   useEffect(() => { const A = HERE.lastAny, m = A && A.h && A.h.mine, k = m ? String(m.bridgeId || m.port || "") : "";
     if (cs.now && cs.now.n === 1 && m && m.sameSession === true && k && k !== Guide.seen && !(localBridges() || []).some((x) => x && x.sameSession === true)) { Guide.seen = k; rescanLocal(); } });
-  const recheck = <><button type="button" className="linkbtn" data-tsm-recheck="" disabled={ck} onClick={again}>{ck ? "Checking…" : "Check again"}</button>{said && !ck && <span className="tsm-note" data-checked="" role="status">{said}</span>}</>;
+  // ux-wins (13-Nov-2026, the review: Check again twice in a row of the page): the top card's Check again is the page's
+  // one; this card keeps its own link only where it stands alone (a laptop, the steps not worked out), and says what a
+  // check found either way
+  const saidNote = said && !ck ? <span className="tsm-note" data-checked="" role="status">{said}</span> : null;
+  const recheck = cs.mode === "login" ? saidNote : <><button type="button" className="linkbtn" data-tsm-recheck="" disabled={ck} onClick={again}>{ck ? "Checking…" : "Check again"}</button>{saidNote}</>;
   const another = <div className="tsm-now" data-tsm-another=""><div className="tsm-now-text">On another computer or Windows login: download FinCom Bridge there and run it in the login that runs TallyPrime. Its own six steps show there.</div>
     <span className="tsm-now-act">{download}</span></div>;
   if (cs.mode === "laptop") return <section className="tsm-card tsm-guide tsm-guide-small" aria-label="Connect Tally" data-tsm-guide="laptop" data-tsm-forced={forced ? "" : undefined}>
@@ -170,8 +174,8 @@ function Guide({ cs, collapsed, forced, asked, connectPanel, download, checkAgai
       data-now={s.state === "now" ? "" : undefined} data-done={s.state === "done" ? "" : undefined} aria-current={s.state === "now" ? "step" : undefined}>
       <div className="tsm-step-top"><span className="tsm-mark" aria-hidden="true">{s.state === "done" ? TICK : s.n}</span><span className="tsm-step-title">{s.title}</span></div>
       <div className="tsm-step-text">{s.state === "done" ? (s.doneSay || STATE_WORD.done) + " ✓" : STATE_WORD[s.state]}</div>
-      {/* step 1 always has the Download (to install, to update, or for another login); the step to do now has it below */}
-      {s.n === 1 && s.state !== "now" && <div className="tsm-step-dl" data-tsm-step-dl="">{download}</div>}
+      {/* ux-wins: no Download under a step 1 that is done (it is under Advanced, and "Connect another computer" brings
+          its own); the step to do now has it below */}
       {s.state === "now" && nowBlock}</li>)}</ol>
     {a && a.kind === "link" && canWrite() && pick && <div className="tsm-pick" data-tsm-guide-pick=""><Pick r={a.r} co={null} pre="" onClose={() => setPick(false)} /></div>}
     {/* Set up again / another computer (openConnectTally(1)): the one Download for that other login */}
@@ -198,7 +202,7 @@ function Strip({ r, best, more }) {
 // and how to connect or link each one. If a company is already a client and Tally hasn't connected, there should be a
 // button to tell it to connect again"). ONE panel under the steps, from THIS login's own Tally only (ownState: its own
 // bridge's sessions, else its own beat; never another login's): each Tally running here with its port and state, the
-// companies open in it (linked: the client, Reading / Up to date, Update now; a client matches: Connect; none: Link), and
+// companies open in it (linked: the client, Reading / Up to date, Update from Tally; a client matches: Connect; none: Link), and
 // the clients linked but not connected now, each with Connect again (the shared look and the steps' Check again, then
 // what is missing in plain words and the step that is stuck; the company open under a close name: link to it). The
 // strip it replaces said only the first company not linked. Nothing new is polled or asked of the bridge or Tally.
@@ -367,15 +371,15 @@ function LocalConnect() {
 function SetUp() {
   return <div><button type="button" className="linkbtn tsm-small" data-tsm-setup="" onClick={() => { if (typeof openConnectTally === "function") openConnectTally(1, ""); window.scrollTo(0, 0); }}>Set it up</button></div>;
 }
-// next-tally-ledgers-button (04-Nov-2026): "Bring ledgers from Tally" under "Ledgers received?" (not yet, or stuck): the
-// first sync again on a person's click (firstSync, now: the ledgers wake, and Update now through the cloud); it cannot
+// next-tally-ledgers-button (04-Nov-2026): "Update from Tally" under "Ledgers received?" (not yet, or stuck): the
+// first sync again on a person's click (firstSync, now: the ledgers wake, and Update from Tally through the cloud); it cannot
 // run while no computer has the company open in Tally: the button is off and one plain line says so
 function Bring({ row }) {
   const [busy, setBusy] = useState(false), l = row.l;
   if (!canWrite()) return null;
   const go = async () => { if (busy) return; setBusy(true); try { await firstSync(row.cid, row.company, { now: true }); } catch (e) { say("led:" + row.cid, errWords(e), true); } finally { setBusy(false); } };
   return <div className="tsm-bring" data-tsm-bring={row.cid}>
-    <button type="button" className="btn small primary" data-tsm-bring-btn="" disabled={busy || !l.can} title={!l.can ? l.why || "Needs the company open in Tally" : undefined} onClick={go}>{busy ? "Asking Tally…" : "Bring ledgers from Tally"}</button>
+    <button type="button" className="btn small primary" data-tsm-bring-btn="" disabled={busy || !l.can} title={!l.can ? l.why || "Needs the company open in Tally" : undefined} onClick={go}>{busy ? "Asking Tally…" : "Update from Tally"}</button>
     {!l.can && l.why && <div className="tsm-note" data-tsm-bring-why="">{l.why}</div>}<Said k={"led:" + row.cid} hook="ledgers" /></div>;
 }
 // ---------- next-tally-page-redesign (07-Nov-2026; the owner: "please make sure the reconnect button is in that table...
@@ -383,7 +387,7 @@ function Bring({ row }) {
 // table, "Clients and Tally". A row a client (linked, or open in Tally and not linked) and a row a company open in this
 // login's own Tally that no client has. Client | Tally company | State (a dot and plain words; the reason on a second
 // line) | Last entry | ONE button and ⋯ (Details, Unlink). The button:
-//   linked, its company open (here or on any computer FinCom hears now): Update now (runPress: "Asking Tally…", the
+//   linked, its company open (here or on any computer FinCom hears now): Update from Tally (runPress: "Asking Tally…", the
 //     ledgers' count, the result or why; never silent), Reading… while one runs;
 //   linked, not connected now (its company open nowhere), or its ledgers stuck: Connect again (the shared look and Check
 //     again, then a new read where the company is open), what is missing in plain words, a close name to link to;
@@ -419,14 +423,14 @@ export function pageOf(row, seen) {
       btn: "again", label: up ? "Check again" : "Connect again", note: up ? "Open it in Tally first" : "", need: true }; }
   if (stuck) return { kind: "stuck", dot: "warn", say: "Not reading", why: row.l.note || "Nothing came from Tally", btn: "again", label: "Connect again", need: true };
   const reading = row.l.w === NOTYET || row.e.w === NOTYET;
-  if (row.need || row.e.w === NO || (row.open && row.open.state === "differ")) return { kind: "need", dot: "warn", say: row.e.w === NO ? "Entries missing" : row.open && row.open.state === "differ" ? "Opening balances differ" : "Needs you", why: row.todo && /Bring ledgers from Tally/.test(row.todo) ? "Ledgers not in FinCom yet: press Update now." : row.todo && !/^Nothing/.test(row.todo) ? row.todo : row.e.note || "", btn: "update", need: true };
+  if (row.need || row.e.w === NO || (row.open && row.open.state === "differ")) return { kind: "need", dot: "warn", say: row.e.w === NO ? "Entries missing" : row.open && row.open.state === "differ" ? "Opening balances differ" : "Needs you", why: row.todo && /Update from Tally/.test(row.todo) ? "Ledgers not in FinCom yet: press Update from Tally." : row.todo && !/^Nothing/.test(row.todo) ? row.todo : row.e.note || "", btn: "update", need: true };
   if (reading) return { kind: "reading", dot: "ok", say: "Connected", why: row.l.w === NOTYET ? row.l.note || "" : row.e.note || "", btn: "update" };
   return { kind: "ok", dot: "ok", say: "Connected", why: "", btn: "update" };
 }
 // a row's one button: {main, label} (update | upload | bring | again | connect | link)
 export function mainOf(row, pg) {
   if (pg.btn === "update" && row.act && (row.act.kind === "upload" || row.act.kind === "bring")) return { main: row.act.kind, label: row.act.label };
-  if (pg.btn === "update") return { main: "update", label: "Update now" };
+  if (pg.btn === "update") return { main: "update", label: "Update from Tally" };
   if (pg.btn === "again") return { main: "again", label: pg.label || "Connect again" };
   if (pg.kind === "open" || (pg.kind === "company" && row.best && !row.ask)) return { main: "connect", label: "Connect" };
   return { main: "link", label: "Link" };
@@ -494,7 +498,7 @@ function MoreRow({ row, linked, e, main, det, running, download, oneDl, onAnswer
     <div className="tpt-light-links">
       {linked && <span className="tpt-range" data-tpt-range="">{"Entries in FinCom: " + (range || "none yet")}</span>}
       {linked && main !== "masters" && <BringMasters row={row} link />}
-      {linked && canWrite() && SHOW_UPDATE.includes(main) && !running && <button type="button" className="linkbtn" data-tpt-update-more={row.cid} onClick={() => runPress(row.cid, row.company, { entries: true }).catch(() => {}).then(() => render())}>Update now</button>}
+      {linked && canWrite() && SHOW_UPDATE.includes(main) && !running && <button type="button" className="linkbtn" data-tpt-update-more={row.cid} onClick={() => runPress(row.cid, row.company, { entries: true }).catch(() => {}).then(() => render())}>Update from Tally</button>}
       {linked && canWrite() && <button type="button" className="linkbtn" data-tpg-another-year={row.cid} aria-expanded={ex("year")} onClick={() => flip("year")}>Bring another year</button>}
       {linked && <button type="button" className="linkbtn" data-tpt-daybook={row.cid} aria-expanded={ex("daybook")} onClick={() => flip("daybook")}>Upload a Day Book file</button>}
       {linked && <button type="button" className="linkbtn" data-tpt-history={row.cid} aria-expanded={ex("history")} onClick={() => flip("history")}>Update history</button>}
@@ -526,7 +530,7 @@ function Row({ row, download, oneDl, seen, cs, x, checkAgain }) {
   // a first sync going: read every 10 seconds (its count, done, or stuck after 3 minutes with the button)
   useEffect(() => { if (!row.l || !row.l.syncing) return; const t = setInterval(() => syncPoll(row.cid), 10000); return () => clearInterval(t); }, [row.cid, row.l && row.l.syncing]);
   const pg = pageOf(row, seen), linked = row.kind === "client" && row.c.w === YES;
-  // this client's Update now: its words each second while it is on its way (Asking Tally… → the count → the result)
+  // this client's Update from Tally: its words each second while it is on its way (Asking Tally… → the count → the result)
   const rw = linked ? runWords(row.cid, row.company) : null, live = !!(rw && rw.phase !== "done" && rw.phase !== "why");
   useEffect(() => { if (!live) return; const t = setInterval(() => tick((k) => k + 1), 1000); return () => clearInterval(t); }, [live]);
   useEffect(() => { if (linked) runSettle(row.cid, row.company, () => tick((k) => k + 1)); });
@@ -551,12 +555,12 @@ function Row({ row, download, oneDl, seen, cs, x, checkAgain }) {
   // Bring books going or paused: Pause / Resume (Stop under More)
   else if (pg.btn === "update" && p && (p.state === "going" || p.state === "paused")) { btn = <PullButtons e={e} only={[p.state === "going" ? "pause" : "resume"]} main />; main = p.state === "going" ? "pause" : "resume"; }
   // masters not in FinCom yet: Bring masters (the masters' read; entries follow by themselves). Only for a book FinCom
-  // knows with no ledgers: a client whose book is not known yet keeps Update now, which brings them too
+  // knows with no ledgers: a client whose book is not known yet keeps Update from Tally, which brings them too
   else if (pg.btn === "update" && linked && !runningRead && ledBook(row.cid) && !ledgersHeld(row.cid)) { btn = <BringMasters row={row} />; main = "masters"; if (!(row.o && row.o.w === YES) && !(readWhere(row.company) || {}).reader) note = "Needs the company open in Tally"; }
   else if (pg.btn === "update" && runningRead) { btn = <button type="button" className="btn tpt-btn" data-tpt-main="reading" disabled title={READING_WHY}>Reading…</button>; main = "reading"; }
   // this year's days missing in FinCom, or Bring books stopped: Bring books (again)
   else if (pg.btn === "update" && linked && e.b && e.b.book && (e.st === "behind" || e.st === "stopped" || (e.st === "none" && m.st === "done"))) { btn = <BringBooks row={row} e={e} />; main = "books"; }
-  else if (pg.btn === "update") { btn = <button type="button" className="btn tpt-btn" data-tpt-main="update" data-tsm-update={row.cid} onClick={() => runPress(row.cid, row.company, { entries: true }).catch(() => {}).then(() => tick((k) => k + 1))}>Update now</button>; main = "update"; }
+  else if (pg.btn === "update") { btn = <button type="button" className="btn tpt-btn" data-tpt-main="update" data-tsm-update={row.cid} onClick={() => runPress(row.cid, row.company, { entries: true }).catch(() => {}).then(() => tick((k) => k + 1))}>Update from Tally</button>; main = "update"; }
   else if (pg.kind === "open") { btn = <ConnectBtn r={row.r} co={row.co} label="Connect" hook={{ "data-tsm-connect": row.cid, "data-tpt-main": "connect" }} />; main = "connect"; }
   else if (pg.kind === "company" && row.best && !row.ask) { btn = <ConnectBtn r={row.r} co={row.best} label="Connect" hook={{ "data-tsm-act": "connect", "data-tsm-act-client": row.best.id, "data-tpt-main": "connect" }} />; main = "connect"; }
   else { btn = <ActLink row={row} />; main = "link"; }
@@ -580,9 +584,9 @@ function Row({ row, download, oneDl, seen, cs, x, checkAgain }) {
       <span className="tpt-state">
         {/* (not linked: the client line says so; the state line only when it adds to it) */}
         {pg.kind !== "free" && <span className={"tpt-say " + pg.dot} data-tpt-state={pg.kind}><Dot k={pg.dot} />{rw && rw.phase !== "done" && rw.phase !== "why" ? (rw.phase === "waiting" ? "Waiting for Tally" : "Updating") : pg.say}</span>}
-        {why && <span className={"tpt-why" + (rw && (rw.phase === "why" || rw.phase === "waiting") ? " bad" : "")} data-tpt-why={rw ? "run-" + rw.phase : aw ? (aw.step ? "step" + aw.step.n : "why") : ""} role={rw ? "status" : undefined}>{why}
+        {why && <span title={typeof why === "string" ? why : undefined} className={"tpt-why" + (rw && (rw.phase === "why" || rw.phase === "waiting") ? " bad" : "")} data-tpt-why={rw ? "run-" + rw.phase : aw ? (aw.step ? "step" + aw.step.n : "why") : ""} role={rw ? "status" : undefined}>{why}
           {aw && aw.step && <>{" "}<button type="button" className="linkbtn" data-tsm-away-steps={aw.step.n} onClick={() => { set({ open: true }); window.scrollTo(0, 0); }}>See step {aw.step.n}</button></>}</span>}
-        {held && <span className="tpt-why" data-tpt-held="">{held}</span>}
+        {held && <span className="tpt-why" title={held} data-tpt-held="">{held}</span>}
         {/* next-bell-tally: opened for a control only Advanced has (the bell's lines waiting, a company in two places): "More settings" to it */}
         {row.focus && S.tallyAdv && S.tallyAdv.cid === row.cid && <span className="tpt-why"><button type="button" className="linkbtn" data-tally-more-go={S.tallyAdv.to}
           onClick={() => moreGo(S.tallyAdv)}>More settings</button></span>}
@@ -595,7 +599,7 @@ function Row({ row, download, oneDl, seen, cs, x, checkAgain }) {
     <td className="tpt-td tpt-io-td" data-label="In Tally">{io ? <span className={"tpt-io " + io} data-tpt-intally={io}>{io === "open" ? "Open" : "Not open"}<span className="tpt-io-x">{" in Tally"}</span></span> : null}</td>
     <td className="tpt-td tpt-masters" data-label="Masters">{linked ? <MastersCell row={row} /> : <span className="tpg-sub">—</span>}</td>
     <td className="tpt-td tpt-entries" data-label="Entries">{linked ? <EntriesCell row={row} /> : <span className="tpg-sub">—</span>}</td>
-    <td className="tpt-td tpt-last" data-label="Last entry" data-tpt-last={row.last || ""}>{linked ? (row.last ? lastWords(row.last) : "Never") : "—"}</td>
+    <td className="tpt-td tpt-last" data-label="Last entry" data-tpt-last={row.last || ""}>{linked ? (row.last ? lastWords(row.last) : e && e.st !== "none" ? <span title="Entries are in FinCom; when the last one came is not known">—</span> : "Never") : "—"}</td>
     <td className="tpt-td tpt-act" data-label="">
       <div className="tpt-act-in">{btn}{note && <span className="tpt-note" data-tpt-note="">{note}</span>}
         {/* next-buttons: what came of Bring books / Bring missing days, kept with the row whatever its button turns into */}
@@ -851,7 +855,8 @@ function Table({ rows, download, oneDl, cs, x, checkAgain }) {
     </div>
   </section>;
 }
-// the foot: one line, and Advanced (for support) (the page's own fold, below: opened and brought into view)
+// (ux-wins: no longer drawn: a second "Advanced (for support)" right above the fold of that name, Tally.jsx ForSupport)
+// eslint-disable-next-line no-unused-vars
 function Foot() {
   // (next-buttons: the run_tally_clicks dead button: pressed while already open it did nothing visible; now it closes it)
   const open = !!(S.tallyMore || {}).support;
@@ -995,13 +1000,15 @@ export default function SimpleTally({ installed, ready = true, pcs, download, sh
   const officeUp = cs.mode === "laptop" && bridgesOf().some((b) => b.at && Date.now() - Date.parse(b.at) < 3 * 60000);
   const showGuide = cs.mode === "laptop" ? !officeUp || forced || ui.open || asked : cs.mode !== "login" || down || forced || ui.open || asked;
   const beat = ((own.own || {}).beat) || null;
-  return <div className="tsm" data-tally-simple="" data-tsm-own={own.state} data-tsm-own-from={own.from || undefined} data-tsm-own-how={(own.own && own.own.how) || undefined} data-tsm-rows={R.extra ? "done" : "quick"}>
+  // ux-wins: the big Download FinCom Bridge above the page shows only while it is needed (tallySimple.css): not while
+  // step 1 has the one Download ("step"), nor once this login's bridge runs ("have": it is under Advanced then)
+  const dl = !ready ? undefined : oneDl ? "step" : cs.mode === "login" && cs.steps[0] && cs.steps[0].state === "done" ? "have" : undefined;
+  return <div className="tsm" data-tally-simple="" data-tsm-dl={dl} data-tsm-own={own.state} data-tsm-own-from={own.from || undefined} data-tsm-own-how={(own.own && own.own.how) || undefined} data-tsm-rows={R.extra ? "done" : "quick"}>
     <Part name="top" v={v}><Top cs={cs} own={own} rows={rows} checkAgain={checkAgain} ready={ready} shown={!!ready && showGuide} beat={beat} /></Part>
     <StaleNote />
     {strip && !(ready && R.extra && cs.mode === "login") && <Part name="strip" v={v}><Strip key={coKey(open.company)} r={open} best={best} more={unlinked.length - 1} /></Part>}
     {ready && showGuide && <Part name="guided box" v={v}><Guide cs={cs} collapsed={!expanded} forced={forced} asked={!!g.at && (g.step || 0) <= 3 && now - g.at < GUIDE_MS} connectPanel={connectPanel} download={download} checkAgain={checkAgain} /></Part>}
     {down && ready && R.extra && !rows.length ? <Part name="short" v={v}><ShortCard rows={rows} cs={cs} /></Part>
       : <Part name="table" v={v} fallback={() => <PlainTable />}><Table rows={rows} download={download} oneDl={oneDl} cs={cs} x={R.extra} checkAgain={checkAgain} /></Part>}
-    <Foot />
   </div>;
 }

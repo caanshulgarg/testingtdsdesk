@@ -342,7 +342,7 @@ try:
     led = {r["name"]: r for r in db.rows("select name, pan, gstin from tally_ledgers where book_id = %s" % q(BOOK))}
     fsled = {r["name"]: r for r in FS.T.get("tally_ledgers", []) if r.get("book_id") == BOOK}
     pan2 = (fsled.get("Sigma Landlord") or led.get("Sigma Landlord") or {}).get("pan")
-    row("Cloud copy (bridge)", "p2 Sigma Landlord's PAN corrected in Tally -> FinCom's ledger list", "ABCPS9999F", pan2, "the ledger list the bridge sends at Update now")
+    row("Cloud copy (bridge)", "p2 Sigma Landlord's PAN corrected in Tally -> FinCom's ledger list", "ABCPS9999F", pan2, "the ledger list the bridge sends at Update from Tally")
 
     # ================================================================ B. the Day Book upload, the day files, FinCom's TDS and GST code
     print("== B. the Day Book uploaded, read back as the app reads it, FinCom's TDS and GST code on it")

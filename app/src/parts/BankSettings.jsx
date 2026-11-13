@@ -27,7 +27,7 @@ function Panel({ inline }) {
 }
 function PanelBody({ b, co, std, pendingNew, nh }) {
   return <>
-    <section><h3>Tally ledger list</h3>{bridgeLive(co) ? <><p className="note">{"Live from Tally (" + Bridge.openFor(co).name + "): " + b.ledgers.list.length + " ledgers, updated " + (b.ledgers.importedAt ? fmtDateTime(b.ledgers.importedAt) : "—") + "."}</p><Btn act="bankSync">Refresh from Tally</Btn></>
+    <section><h3>Tally ledger list</h3>{bridgeLive(co) ? <><p className="note">{"Live from Tally (" + Bridge.openFor(co).name + "): " + b.ledgers.list.length + " ledgers, updated " + (b.ledgers.importedAt ? fmtDateTime(b.ledgers.importedAt) : "—") + "."}</p><Btn act="bankSync">Update from Tally</Btn></>
       : <>{hasLedgerList() ? <p className="note">{b.ledgers.list.length + " ledgers, imported " + fmtDate(b.ledgers.importedAt.slice(0, 10)) + " from " + (b.ledgers.file || "Tally") + "." + (Date.now() - new Date(b.ledgers.importedAt) > 30 * 864e5 ? " Over 30 days old: update it." : "")}</p>
         : <p className="note">Not imported yet. In Tally: Display More Reports → List of Accounts → Export (Excel or XML).</p>}
         {hasLedgerList() ? <Btn act="ledPick">Update ledger list</Btn> : <><button className="btn small" data-go-from-tally="" onClick={() => goClient("books:import")}>Bring in from Tally</button>{" "}<Btn act="ledPick" className="linkbtn">Import ledger list from Excel</Btn></>}

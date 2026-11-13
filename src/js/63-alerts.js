@@ -242,7 +242,7 @@ const AlertHub = {
         // changes wait, in the bridge's own plain words; gone by itself when the list answers in time again
         const ownFp = AlertClear.ownwaitFp(d.id, !!beat.recorderWaitWords, beat.recorderWaitSince, beat.recorderWaitStarts);
         if (beat.recorderWaitWords) out.push({key: "ownwait:" + d.id, fp: ownFp, sev: "warn", cid: "", selfClear: true, at: beat.at || "", details: label,
-          text: String(beat.recorderWaitWords).replace(/\.?$/, "."), fix: "Nothing is lost: they go by themselves once Tally answers in time. Close any open window or report in Tally on that computer, or press Update now there."});
+          text: String(beat.recorderWaitWords).replace(/\.?$/, "."), fix: "Nothing is lost: they go by themselves once Tally answers in time. Close any open window or report in Tally on that computer, or press Update from Tally there."});
         const pcFp = kind => AlertClear.fp(["pc:" + d.id + ":" + kind]);
         const base = {key: "pc:" + d.id, details: [label, old && old.reason, beat.notAnsweringSince && "not answering since " + fmtDateTime(beat.notAnsweringSince)].filter(Boolean).join(" · "), selfClear: true, at: beat.at || ""};
         if (retry) out.push(Object.assign(base, {fp: pcFp("retry:" + istDay(retry.since || retry.at || Date.now())), sev: "warn", text: String(retry.words).replace(/\.?$/, ".") + " (one computer)", fix: "Nothing to do: it tries again by itself; postings go on."}));

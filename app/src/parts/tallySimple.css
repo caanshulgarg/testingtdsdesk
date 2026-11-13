@@ -339,3 +339,11 @@
 @media (prefers-color-scheme: dark) {
   #app .tpf-chip.on.warn { background: color-mix(in srgb, var(--warning, #B45309) 14%, var(--surface)); color: var(--warning, #B45309); }
 }
+
+/* ux-wins (13-Nov-2026, the UI review): the big "Download FinCom Bridge" above the page only while it is needed: not once
+   this login's bridge runs (it is under Advanced then), nor while step 1 shows the one Download (TallySimple.jsx data-tsm-dl) */
+#app .tpg-dl-head:has(~ .tsm[data-tsm-dl]) { display: none; }
+/* the State cell: each reason one line until the row's More is opened (the words in full on hover, and under More) */
+@media (min-width: 761px) {
+  #app .tpt-tr:not(.tpt-open) .tpt-why:not(:has(button, select)) { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+}

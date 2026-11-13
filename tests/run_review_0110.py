@@ -92,7 +92,7 @@ with sync_playwright() as p:
     pg.click(row + " [data-tco-more] summary"); pg.wait_for_timeout(300)
     ok(pg.locator(row + ' button:has-text("Send ledgers and groups now")').count() == 1, "the linked company's row: ⋯ Sync master, “Send ledgers and groups now”")
     pg.click(row + ' button:has-text("Send ledgers and groups now")'); pg.wait_for_timeout(2500)
-    ok(["tally_want_update", {"p_client": cid}] in pg.evaluate("window.__allAsked"), "from another computer it asks the Tally computer through the cloud, as Update now does (%s)" % pg.evaluate("window.__allAsked")[:3])
+    ok(["tally_want_update", {"p_client": cid}] in pg.evaluate("window.__allAsked"), "from another computer it asks the Tally computer through the cloud, as Update from Tally does (%s)" % pg.evaluate("window.__allAsked")[:3])
     pg.click(row + " [data-tco-more] summary"); pg.wait_for_timeout(300); pg.click(row + " [data-tco-cloud-check]"); pg.wait_for_timeout(1500)
     ok("In the cloud: 28 groups · 290 of 300 ledgers with a group" in pg.inner_text("#app"), "and What is in the cloud? shows the groups, and ledgers with a group")
     # "Read the kept day books again" (owners): FinCom's cloud reads month after month until there is no next

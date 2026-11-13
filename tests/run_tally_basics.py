@@ -5,7 +5,7 @@ port problem of a shared server). Made-up firm, logins, clients and companies on
 one shared Windows server SRV01, login A (this browser's, made-up-a) and login B (made-up-b, its own Tally with Kestrel).
    1. Open in your Tally now (made-up-a): A's Tally and its port, connected; each company open in it: a client matches:
       Connect; none: Link (the picker); never B's company; the old one-company strip is not drawn beside it.
-   2. a company linked: the client, Reading / Up to date, Update now.
+   2. a company linked: the client, Reading / Up to date, Update from Tally.
    3. a client linked but not connected now (its company not open anywhere): Connect again, what is missing in plain
       words; its company open in A's Tally under the next year's name: Link the client to it.
    4. A's Tally running with its connection off / its port held by B's Tally: said on the panel (connection off / port taken).
@@ -150,18 +150,18 @@ def main():
         E("() => { S.tsm = Object.assign(S.tsm || {}, {open: true}); render(); }"); pg.wait_for_timeout(600)   # (See the 6 steps)
         ok("(port 9041): this login’s own" in guide()["all"], "1c. step 3 done: this login's own port (%s)" % re.findall(r"connection is on[^✓]*", guide()["all"])[:1])
 
-        print("== 2. a company linked: the client, its state, Update now")
+        print("== 2. a company linked: the client, its state, Update from Tally")
         dA = adev([up], opened=(ORB, NOVA))
         c2 = cos + [{"company": ORB, "client_id": "NAME:" + ORBIT, "device_id": dA["id"], "gstin": "", "last_seen": "ago:0.5"},
                     {"company": NOVA, "client_id": None, "device_id": dA["id"], "gstin": "", "last_seen": "ago:0.5"}]
         ids = ids0 = scene([dA, bdev()], c2, CL, A_PINGS)
         R2 = RW(ORBIT)
-        ok(attr(R2, "data-tsm-kind") == "client" and txt(R2 + " [data-tsm-client]") == ORBIT and mains(ORBIT) in (["update"], ["reading"]), "2. linked: client, Update now (%s)" % txt(R2)[:160])
+        ok(attr(R2, "data-tsm-kind") == "client" and txt(R2 + " [data-tsm-client]") == ORBIT and mains(ORBIT) in (["update"], ["reading"]), "2. linked: client, Update from Tally (%s)" % txt(R2)[:160])
         st = attr(R2 + " [data-tpt-state]", "data-tpt-state")
         ok(st in ("reading", "ok", "need") and re.search(r"Connected|Needs you|Entries", txt(R2 + " [data-tpt-state]")), "2. its state in words (%s: %s)" % (st, txt(R2 + " [data-tpt-state]")))
         E("() => { window.__upd = []; window.__tun0 = window.tallyUpdateNow; window.tallyUpdateNow = (c) => window.__upd.push(c); S.tcoSync = {}; render(); }"); pg.wait_for_timeout(400)
         if n(R2 + ' [data-tpt-main="update"]'): pg.click(R2 + ' [data-tpt-main="update"]'); pg.wait_for_timeout(1500)
-        ok(E("() => window.__upd") == [ids[ORBIT]], "2. Update now asks the existing update for that client (%s)" % E("() => window.__upd"))
+        ok(E("() => window.__upd") == [ids[ORBIT]], "2. Update from Tally asks the existing update for that client (%s)" % E("() => window.__upd"))
         E("() => { window.tallyUpdateNow = window.__tun0; S.tcoSync = {}; }")
 
         print("== 3. a client linked but not connected now: Connect again, the reason, and the company open under the next year's name")
@@ -180,14 +180,14 @@ def main():
         ok(len(E("() => window.__probed || []")) >= 1, "3. Connect again looks again (the shared look of this login's bridge)")
         ok(E("() => document.querySelectorAll('#app [data-tsm-table] [data-tsm-away-again]').length") == 1, "3. only the client not connected has Connect again")
 
-        print("== 8. the client's Tally section (Books › From Tally): the masters' one line, Update now, by itself when")
+        print("== 8. the client's Tally section (Books › From Tally): the masters' one line, Update from Tally, by itself when")
         dA["info"]["beat"]["changeNumbers"] = {ORB: {"altvchid": 10, "altmstid": 4, "at": "2026-11-06T15:04:05"}}
         scene([dA, bdev()], c2, CL, A_PINGS)
         E("(c) => { location.hash = '#/c/' + encodeURIComponent(c) + '/from-tally'; if (typeof Route === 'object' && Route.apply) Route.apply(location.hash); else openCompany(c).then(() => { S.tab = 'books'; S.booksTab = 'import'; render(); }); }", ids0[ORBIT]); pg.wait_for_timeout(4000)
         M = "#app [data-upload-page] [data-masters]"
         mt = txt(M)
         ok(n(M) == 1 and mt.startswith("Ledgers & groups from Tally:") and "every 10 minutes while the company is open in Tally" in mt, "8. the masters' one line, and when it updates by itself (%s)" % mt[:200])
-        ok(n(M + " [data-masters-update]") == 1 or "not linked" in mt or "not in FinCom yet" in mt, "8. one Update now (%s)" % mt[:120])
+        ok(n(M + " [data-masters-update]") == 1 or "not linked" in mt or "not in FinCom yet" in mt, "8. one Update from Tally (%s)" % mt[:120])
         ok(n("#app [data-upload-page] [data-up-drop]") == 1, "8. the upload (the fallback) is on the same page")
         ok(n("#app [data-upload-page] [data-tco-masters]") == 0, "8 (review 10). no second masters uploader beside the drop")
         lt = re.search(r"last checked ([^;)]*)", mt)
@@ -215,7 +215,7 @@ def main():
         E("(c) => { location.hash = '#/c/' + encodeURIComponent(c) + '/from-tally'; if (typeof Route === 'object' && Route.apply) Route.apply(location.hash); else openCompany(c).then(() => { S.tab = 'books'; S.booksTab = 'import'; render(); }); }", ids8[ORBIT]); pg.wait_for_timeout(4000)
         ok(n("#app [data-upload-page] [data-masters]") == 1 and n("#app [data-upload-page] [data-masters-step]") == 0, "8b. a client whose Tally is on another computer: no step of this login (%s)" % txt("#app [data-masters]")[:160])
 
-        print("== 8d (re-review 1). From Tally, a read stuck with this login's step 2 not done: Update now, 30 s, Try again: no login, no port")
+        print("== 8d (re-review 1). From Tally, a read stuck with this login's step 2 not done: Update from Tally, 30 s, Try again: no login, no port")
         skipped_b2 = {"port": 9070, "ok": False, "skipped": True, "n": 0, "error": "Tally of made-up-b", "reason": "another user"}
         dA2 = adev([skipped_b2], why="no tally running in this login", tally="closed")
         cd = cos + [{"company": ORB, "client_id": "NAME:" + ORBIT, "device_id": dA2["id"], "gstin": "", "last_seen": "ago:30"}]
@@ -312,7 +312,7 @@ def main():
         ok(n("#app [data-led-read]") == 0 and n("#app [data-unk-read]") == 0, "10. no Read again now, no Read the ledgers now")
         ok(txt("#app [data-led-go='cloud']") == "Update ledgers in Books › From Tally", "10. the status line: 'Update ledgers in Books › From Tally' (%s)" % txt("#app [data-led-status]")[:160])
         ok(txt("#app [data-led-line=unknown] [data-unk-go]") == "Update ledgers in Books › From Tally" and n("#app [data-led-line=unknown] [data-unk-why]") == 1, "10. the unknown-ledgers box: the same link, its reason kept (%s)" % txt("#app [data-led-line=unknown]")[:160])
-        # every way a read could be asked, recorded (the bridge here, the cloud's RPCs and wakes, the ledgers read, Update now)
+        # every way a read could be asked, recorded (the bridge here, the cloud's RPCs and wakes, the ledgers read, Update from Tally)
         HOOK = """() => { const R = window.__reads10 = []; const wrap = (o, k, tag) => { if (!o || typeof o[k] !== 'function' || o[k].__h10) return; const f = o[k];
             const g = function () { R.push(tag + ':' + String(arguments[0] || '').slice(0, 60)); return f.apply(this, arguments); }; g.__h10 = true; o[k] = g; };
           wrap(window.Bridge, 'call', 'bridge'); wrap(window.TCloud, 'rpc', 'rpc'); wrap(window.TCloudUp, 'post', 'post'); wrap(window.Ledgers, 'askTally', 'askTally');
@@ -330,11 +330,11 @@ def main():
         reads = E("() => window.__reads10.filter(x => !/^rpc:(tally_status|tally_period_status|tally_check_status)|^bridge:\\/status/.test(x))")
         wants = E("() => window.__rpc.slice(window.__rpc0).filter(c => c && c[0] === 'tally_want_update').length")
         ok(E("() => S.tab === 'books' && booksTab() === 'import'") and n("#app [data-upload-page]") == 1, "10. the link opens Books › From Tally")
-        ok(not reads and wants == 0, "10. the link asks nothing of Tally: no bridge call, wake, ledgers read or Update now, no tally_want_update (%s, %s)" % (reads[:5], wants))
-        # (the check catches a read: Update now asked here is recorded)
+        ok(not reads and wants == 0, "10. the link asks nothing of Tally: no bridge call, wake, ledgers read or Update from Tally, no tally_want_update (%s, %s)" % (reads[:5], wants))
+        # (the check catches a read: Update from Tally asked here is recorded)
         E("() => { window.__reads10.length = 0; try { tallyUpdateNow(S.coId); } catch (e) {} }"); pg.wait_for_timeout(800)
         ok(len(E("() => window.__reads10")) > 0, "10. control: a read asked is seen by the same check (%s)" % E("() => window.__reads10")[:3])
-        ok(n("#app [data-upload-page] [data-masters] [data-masters-update]") == 1, "10. From Tally has the masters' one Update now")
+        ok(n("#app [data-upload-page] [data-masters] [data-masters-update]") == 1, "10. From Tally has the masters' one Update from Tally")
     print("\npage errors: %s" % errors[:5])
     ok(not errors, "no page errors")
     print("\n%s: %d" % ("FAILED" if fails else "PASSED", len(fails)) + ("" if fails else " failures"))

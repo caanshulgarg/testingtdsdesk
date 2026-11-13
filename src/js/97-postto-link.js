@@ -34,7 +34,7 @@ function postLineFor(co){
 }
 const PostPage = {paneAt: 0};
 // ---------- the status line of Post to Tally (review of 02-Oct-2026, item 1): one line, "Posting into GARG SHEKHAR &
-// COMPANY · Tally open on NWS144 · read 17:43 · Update now"; a second line only when something is wrong, saying what to
+// COMPANY · Tally open on NWS144 · read 17:43 · Update from Tally"; a second line only when something is wrong, saying what to
 // do, with one button where it helps. The bridge's version and "Ready" are under More.
 // {company, where, read, reading, more, problem: {text, button, go, kind} | null}
 function postStatusFor(co){
@@ -90,8 +90,8 @@ function postStatusFor(co){
     const T = {offline: [l.text + ": start that computer, or FinCom Bridge on it. Nothing can be posted or checked until then.", "", null],
       closed: [l.text + ": open TallyPrime there, with " + pl.company + ".", "", null],
       notanswering: [l.text + ": close any message box in Tally there; FinCom carries on by itself.", "", null],
-      paused: [l.text + ": resume it from the FinCom Bridge icon there. Update now still reads.", "Update now", () => tallyUpdateNow(co.id)],
-      stopped: [l.text + ". This is FinCom\u2019s Stop, set by an owner of the firm: an owner resumes it on the Tally page; posting goes on, Update now does not read until then.", "", null]}[l.state] || [l.text, "", null];
+      paused: [l.text + ": resume it from the FinCom Bridge icon there. Update from Tally still reads.", "Update from Tally", () => tallyUpdateNow(co.id)],
+      stopped: [l.text + ". This is FinCom\u2019s Stop, set by an owner of the firm: an owner resumes it on the Tally page; posting goes on, Update from Tally does not read until then.", "", null]}[l.state] || [l.text, "", null];
     out.problem = p(T[0], T[1], T[2], l.state); return out;
   }
   if (!pl.state && pl.action && !(sg && sg.on)){ out.problem = p(pl.action + ".", pl.go === "tally" ? "Open the Tally page" : "", pl.go === "tally" ? goTallyPage : null, "bridge"); return out; }

@@ -255,7 +255,7 @@ const Ledgers = {
     const h = this.cur(cid), bk = typeof TCloud === "object" && TCloud.on() ? TCloud.book(cid) : null;
     return Math.max(h ? Date.parse(h.srcAt || h.at || h.importedAt || "") || 0 : 0, bk ? Date.parse(bk.ledgersAt || "") || 0 : 0);
   },
-  // the ledgers-only wake (no full Update now): the bridge here when it has the company open (POST /ledgers/refresh),
+  // the ledgers-only wake (no full Update from Tally): the bridge here when it has the company open (POST /ledgers/refresh),
   // else the client's Tally computer through FinCom's cloud (tally-ingest wake, what "ledgers"). One call. Used by the
   // bill's chooser (staleAsk) and Connect Tally's step 5 (round 63, Import ledgers)
   async askTally(cid){
@@ -269,7 +269,7 @@ const Ledgers = {
         r.ans = await Bridge.call("/ledgers/refresh", {company}, 30000);
         // next-tally-linknow (28-Oct-2026; staging: "FinCom Bridge did not read Salesify Marketing LLP 2026-27's ledgers: this
         // company is not kept in step on this computer", right after it was linked): a company this bridge has never kept
-        // is started with Update now for it (POST /keep {now, company}, the request Update now sends): the run makes its
+        // is started with Update from Tally for it (POST /keep {now, company}, the request Update from Tally sends): the run makes its
         // kept state and reads its ledger list first (keep.go step: FinComCompany, then the ledgers), its progress as usual
         if (r.ans && r.ans.started === false && /not kept in step/i.test(String(r.ans.why || ""))){
           const k = await Bridge.call("/keep", {now: true, company}, 30000);

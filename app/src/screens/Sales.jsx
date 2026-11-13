@@ -337,7 +337,7 @@ export default function Sales() {
         <button className="btn small" onClick={() => salesAct("salesNew")}>Create invoice</button>
         <button className="btn small" onClick={() => salesAct("salesSettings")}>Settings</button>
         <details className="bk-menu"><summary className="btn small">More</summary><div className="bk-menu-list">
-          {bridgeLive(co) && <><button onClick={() => salesAct("salesSync")}>Refresh from Tally</button><button onClick={() => salesAct("salesFile")}>Create Tally file instead</button></>}
+          {bridgeLive(co) && <><button onClick={() => salesAct("salesSync")}>Update from Tally</button><button onClick={() => salesAct("salesFile")}>Create Tally file instead</button></>}
           <button onClick={() => salesAct("salesCsv")}>Download sales register (CSV)</button>
         </div></details>
       </div>

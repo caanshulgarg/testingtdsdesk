@@ -5,7 +5,7 @@
 //                 after masters / Bringing with its bar, ✓ Up to date with the last entry, Not brought yet.
 //   BringMasters, BringBooks, PullButtons   the row's actions (the masters' read, this year's missing days, Pause /
 //                 Resume / Stop of Bring books), the same RPCs as before.
-//   History       the Update history (tally_ledger_rounds, Bring books, the Update now pressed here, the bridge's wait),
+//   History       the Update history (tally_ledger_rounds, Bring books, the Update from Tally pressed here, the bridge's wait),
 //                 read from FinCom's cloud only while it is open under More.
 //   DayBookDrop   "Or drop a Day Book file here" (next-tally-daybook), unchanged.
 // The numbers are the cloud's and the bridge's own (FinCom's counts of ledgers and groups, the read's progress, the
@@ -39,7 +39,7 @@ const mayChange = () => !(typeof S === "object" && S.account && S.account.me) ||
 // ---------- next-masters-progress (the owner, 11-Nov-2026: "reading masters does not have progress bar.. we could not know
 // whether it is working or not"): the ledgers' read as FinCom's cloud holds it (tally_ledger_progress, read with
 // tally_period_status's ledger, as the press's own bar reads it), for a read nobody pressed on this page: the bridge's own
-// count (Import ledgers, the cloud's "ledgers" wake) or tally-ingest's from each ledger_list batch (Update now, the nightly
+// count (Import ledgers, the cloud's "ledgers" wake) or tally-ingest's from each ledger_list batch (Update from Tally, the nightly
 // run). Read every 5 s while it moves, every 20 s while the company is open in Tally on a computer that is on (a company
 // open nowhere is not read by any bridge: not asked). {st: reading | empty | done, read, of, at}, or null
 const LP = {}, FRESH_MS = 3 * 60000;
@@ -127,7 +127,7 @@ export function mastersOf(cid, company) {
     if (read > 0) return Object.assign(base, { st: "reading", read, of: 0, pct: 0, words: "Reading… " + nf(read) + " so far" });
     // next-masters-progress: a bridge that sends no progress (it reads on its own, or an older one): FinCom's own count of
     // the ledgers arrived so far (read again each 10 s while the cell shows it), never a blank "Reading…". Only on a first
-    // read (no masters in FinCom before it: x.la0 "", known once the read took its snapshot): an Update now's count would be the old ones
+    // read (no masters in FinCom before it: x.la0 "", known once the read took its snapshot): an Update from Tally's count would be the old ones
     if (nKnown && n > 0 && x && x.la0 === "" && !(rw && rw.phase === "waiting")) return Object.assign(base, { st: "reading", read: n, of: 0, pct: 0, words: "Reading… " + nf(n) + " so far" });
     // (the read asked, nothing from Tally yet and a reason known: "Not started yet: …", amber)
     if (rw && rw.phase === "waiting") return Object.assign(base, { st: "waiting", read: 0, of: 0, pct: 0, words: rw.text });
@@ -192,7 +192,8 @@ export function MastersCell({ row }) {
   const mBook = (ledBook(row.cid) || {}).book || "";
   useEffect(() => () => { if (mBook && typeof TStale === "object") TStale.forget("prog:" + mBook); }, [mBook]);
   let head, sub = "", sub2 = "", cls = "";
-  if (m.st === "done") { head = "✓ Up to date"; cls = " ok"; sub = countWords(m.n, m.g); sub2 = m.readLine || (m.at ? "Updated " + whenIn(m.at) : ""); }
+  // ux-wins (the review: "✓ Up to date" over "0 ledgers · 0 groups"): a read that brought no ledger is not "up to date"
+  if (m.st === "done" && m.n !== 0) { head = "✓ Up to date"; cls = " ok"; sub = countWords(m.n, m.g); sub2 = m.readLine || (m.at ? "Updated " + whenIn(m.at) : ""); }
   // (the groups only once FinCom holds this client's masters: a first read has no count yet, never "0 groups")
   else if (m.st === "reading") { head = "Reading now"; cls = " read"; sub = (m.of > 0 || m.read > 0 ? readingWords(m.read, m.of) : m.words) + (m.held && m.g != null ? " · " + nf(m.g) + (m.g === 1 ? " group" : " groups") : ""); }
   else if (m.st === "waiting") { head = "Waiting"; cls = " warn"; sub = m.words; }
@@ -235,7 +236,7 @@ export function rangeWords(cid) {
   if (!/^\d{8}$/.test(from) || !/^\d{8}$/.test(to)) return "";
   return MON[Number(from.slice(4, 6)) - 1] + " " + from.slice(0, 4) + " – " + (daysBetween(to, today8()) <= 1 ? "today" : day8w(to));
 }
-// Bring masters (= Bring ledgers & groups, masters missing): the masters' read, as Update now (FinCom's Update now: never
+// Bring masters (= Bring ledgers & groups, masters missing): the masters' read, as Update from Tally (FinCom's Update from Tally: never
 // a second read)
 export function BringMasters({ row, primary = true, link = false }) {
   const [busy, setBusy] = useState(false), x = readOf(row.cid, row.company), running = busy || runBusy(row.cid) || !!(x && !x.end && !x.err && !x.late);
@@ -286,13 +287,13 @@ export function BringBooks({ row, e, main = true }) {
     return { text: "Asked: FinCom brings this year’s missing days from Tally. The Tally computer starts within a minute, while nobody is working in Tally.",
       watch: { started, cid: row.cid, company: row.company, acks } };
   }, undefined, "choose:" + book);
-  const off = !book ? "FinCom’s cloud has no books of this client from Tally yet: press Update now first." : "";
+  const off = !book ? "FinCom’s cloud has no books of this client from Tally yet: press Update from Tally first." : "";
   return <>
     <button type="button" className={main ? "btn tpt-btn primary" : "linkbtn"} data-tpt-main={main ? "books" : undefined} data-tpg-bring-books={row.cid} disabled={busy || held || !book} title={off || (held ? HELD_WHY : undefined)} onClick={start}>{busy ? "Starting…" : "Bring books"}</button>
     {off && <div className="tsm-note" data-tpg-books-why="">{off}</div>}
   </>;
 }
-// the update history: the rounds of the ledgers' reads (tally_ledger_rounds), Bring books, the Update now pressed here
+// the update history: the rounds of the ledgers' reads (tally_ledger_rounds), Bring books, the Update from Tally pressed here
 function useRounds(cid) {
   const [st, setSt] = useState({ rows: null, err: "" }), bk = ledBook(cid) || {};
   useEffect(() => { let on = true, t = 0;
@@ -318,7 +319,7 @@ export function historyRows(rounds, m, e, kw) {
       : live ? "Reading · " + nf(rec) + (total ? " of " + nf(total) : " so far") : "Not finished (" + nf(rec) + " received)";
     out.push({ at: r.started_at, what: "Masters", how, res, k: r.complete ? "ok" : live ? "live" : "wait" });
   }
-  if (m.done) out.unshift({ at: new Date().toISOString(), what: "Masters", how: "Update now (here)", res: m.done, k: "ok" });
+  if (m.done) out.unshift({ at: new Date().toISOString(), what: "Masters", how: "Update from Tally (here)", res: m.done, k: "ok" });
   const p = e && e.p;
   if (p && p.chosenAt) out.push({ at: p.chosenAt, what: "Entries " + partWords(p), how: "Bring books", k: p.done ? "ok" : p.state === "stopped" ? "wait" : "live",
     res: p.done ? "All in FinCom" : (p.state === "going" ? "Bringing" : p.state === "paused" ? "Paused" : "Stopped") + (Number(p.y) ? " at " + nf(Math.min(Number(p.x || 0), Number(p.y))) + " of " + nf(p.y) : "") });

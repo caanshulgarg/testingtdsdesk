@@ -430,7 +430,7 @@ const Rec = {
   //        while FinCom still has that ledger;
   //     c. a person confirmed it on the GST and TDS ledgers page (b.map[name].ok: the answer the returns read);
   //     d. it arrives in FinCom's list (the ledger list, or a ledger_changes): the next read (a minute) drops it.
-  //   - the way to Books › From Tally, whose Update now reads the ledger list (next-tally-basics); what stops it is said
+  //   - the way to Books › From Tally, whose Update from Tally reads the ledger list (next-tally-basics); what stops it is said
   //     beside it (unkCan).
   unk: {},                 // per list: "firm" (p_book null) or "b:<book ids>" (a client's books, one call a book): {rows, known, at, busy, none, err}
   unkKey(books){ return books && books.length ? "b:" + books.join(",") : "firm"; },
@@ -544,9 +544,9 @@ const Rec = {
     if (l.state === "offline") return {ok: false, kind: "offline", pc, text: "Tally can't be read now: " + pc + " is offline. Once FinCom Bridge runs there again, use Books › From Tally."};
     if (l.state === "stopped") return {ok: false, kind: "stopped", pc, text: "Tally can't be read now: reading is stopped from FinCom on " + pc + (l.stop && l.stop.reason ? " (" + l.stop.reason + ")" : "") + ". An owner resumes it on the Tally page; then the ledgers come in and this line goes by itself."};
     if (l.state === "closed") return {ok: false, kind: "closed", pc, text: "Tally can't be read now: it is not open on " + pc + ". Open " + name + " in Tally there, then use Books › From Tally."};
-    if (l.state === "paused") return {ok: true, kind: "paused", pc, text: "Background reading is paused on " + pc + ", so new ledgers do not come in by themselves. From Tally's Update now reads them once. To keep them coming: right-click the FinCom icon near the clock → Resume background reading."};
-    if (l.state === "notanswering") return {ok: true, kind: "notanswering", pc, text: l.text + "; From Tally's Update now goes once Tally answers."};
-    return {ok: true, kind: "open", pc, text: "Update now on Books › From Tally reads Tally's ledger list on " + pc + "."};
+    if (l.state === "paused") return {ok: true, kind: "paused", pc, text: "Background reading is paused on " + pc + ", so new ledgers do not come in by themselves. From Tally's Update from Tally reads them once. To keep them coming: right-click the FinCom icon near the clock → Resume background reading."};
+    if (l.state === "notanswering") return {ok: true, kind: "notanswering", pc, text: l.text + "; From Tally's Update from Tally goes once Tally answers."};
+    return {ok: true, kind: "open", pc, text: "Update from Tally on Books › From Tally reads Tally's ledger list on " + pc + "."};
   },
 
   // ---------------------------------------------------------------- F36 / N102: is each PC recording?
