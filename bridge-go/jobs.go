@@ -800,10 +800,12 @@ func jobWorker(dir string) {
 		if err := save(); err != nil {
 			// F1: the job's progress (its in-flight ids) could not be written: nothing is sent; waited for like Tally
 			o = importOutcome{err: fmt.Errorf("%w (progress.json: %v)", errRecordNotWritten, err)}
+		} else if err := durableFlushNow(filepath.Join(dir, "progress.json")); err != nil {
+			// 2.5.15 (review H1 of b41667d51, M1/M2 of 68308695f): the in-flight ids on the disk before the request goes
+			// (a restart after a power cut finds them); not on the disk: nothing is sent, waited for like Tally
+			writeLog("Posting: progress.json could not be saved to the disk (" + err.Error() + "); nothing was sent to Tally")
+			o = importOutcome{err: errRecordNotFlushed}
 		} else {
-			// 2.5.15 (review H1 of b41667d51): the in-flight ids on the disk before the request goes (a restart after a
-			// power cut finds them); the posting's record itself is waited for in sendImport
-			durableWait(filepath.Join(dir, "progress.json"))
 			gate := postGate(port) // the browser's /import and this job never interleave a record check and a send
 			gate.Lock()
 			o = sendImport(port, company, jobID, r)

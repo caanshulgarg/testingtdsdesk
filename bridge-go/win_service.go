@@ -112,7 +112,7 @@ func undoFailedUpdate() {
 		if os.Rename(exe, bad) == nil && os.Rename(old, exe) == nil {
 			_ = os.Remove(pf)
 			_ = saveFile(filepath.Join(dir, "update-undone.json"), jsonText(M{"version": BridgeVersion, "back": p["from"], "at": nowS()}))
-			os.Exit(5) // Windows starts the previous version again
+			exitDrained(5) // Windows starts the previous version again
 		}
 	}
 	p["starts"] = n
@@ -136,7 +136,7 @@ func updateHealth() {
 		// a main loop that does not turn never ends by itself: the process ends after 30 s (Windows' recovery, or the
 		// per-user supervisor, starts it again)
 		time.Sleep(30 * time.Second)
-		os.Exit(9)
+		exitDrained(9)
 	}
 	from := str(readObjFile(pf)["from"])
 	_ = os.Remove(pf)

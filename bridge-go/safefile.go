@@ -25,6 +25,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -435,19 +436,91 @@ func durableWaitFor(d time.Duration) bool {
 	}
 }
 
+// the process ends, the files still being flushed first (2 s at most): every way out of the bridge (review L6 of
+// 68308695f)
+func exitDrained(code int) {
+	durableWaitFor(2 * time.Second)
+	os.Exit(code)
+}
+
 // before a send to Tally: posted-ids.json on the disk, with this request's own "sent, no answer yet" note and every
-// earlier one (a power cut never loses a note, so nothing is sent twice); the saves themselves never wait
-func postedDurableWait() { durableWait(acceptedFile()) }
+// earlier one (a power cut never loses a note, so nothing is sent twice); the saves themselves never wait. Not on the
+// disk (a flush failed twice, or not done in durFlushLimit): an error, and nothing is sent (review M1/M2 of 68308695f)
+func postedDurableWait() error { return durableFlushNow(acceptedFile()) }
 
-var reBakTmp = regexp.MustCompile(`\.bak\.(\d+)\.\d+\.tmp$`)
+// the time a send to Tally waits at most for a posting's record to reach the disk (within the 2-second rule)
+var durFlushLimit = 1500 * time.Millisecond
 
-// at the start: the temporary .bak files a run before left (stopped part-way) removed, in the copies' and the postings'
-// folders and beside the settings; another live process's never (its own number is in the name)
+// a posting's record flushed now, by the caller itself (review M2/M3 of 68308695f: never behind the worker's queue or a
+// .bak's rename, and only the one flush: the .bak follows in the background): tried once more when it fails; an error
+// when it is still not on the disk, or not within durFlushLimit
+func durableFlushNow(path string) error {
+	start := time.Now()
+	durMu.Lock()
+	syncFn := syncFileFn
+	durMu.Unlock()
+	done := make(chan error, 1)
+	go func() {
+		err := flushFileOnce(path, syncFn)
+		if err != nil {
+			err = flushFileOnce(path, syncFn)
+		}
+		done <- err
+	}()
+	t := time.NewTimer(durFlushLimit)
+	defer t.Stop()
+	select {
+	case err := <-done:
+		if err != nil {
+			return err
+		}
+	case <-t.C:
+		return fmt.Errorf("%s not on the disk within %s", filepath.Base(path), durFlushLimit)
+	}
+	// flushed: a flush still waiting for the same text is not done again (its .bak still is)
+	durMu.Lock()
+	if j := durQueue[path]; j != nil && j.last.Before(start) {
+		j.flush = false
+	}
+	durMu.Unlock()
+	return nil
+}
+
+// the file flushed to the disk once, and its folder
+func flushFileOnce(path string, syncFn func(*os.File) error) error {
+	h, err := openForSync(path)
+	if err != nil {
+		return err
+	}
+	err = syncFn(h)
+	if cerr := h.Close(); err == nil {
+		err = cerr
+	}
+	if err == nil {
+		fsyncDir(filepath.Dir(path))
+	}
+	return err
+}
+
+// a save's temporary file (writeInPlace, jobfile.go, a .bak's): <name>.<process>.<n>.tmp (review L2 of 68308695f)
+var reBakTmp = regexp.MustCompile(`\.(\d+)\.\d+\.tmp$`)
+
+// at the start: the temporary files of saves a run before left (stopped part-way) removed, in the copies' and the
+// postings' folders and beside the settings; never this run's or another live process's (its number is in the name:
+// review L3 of 68308695f)
 func sweepBakTmp() {
-	me := fmt.Sprint(os.Getpid())
+	me := os.Getpid()
 	n := 0
 	one := func(p, name string) {
-		if m := reBakTmp.FindStringSubmatch(name); m != nil && m[1] != me && os.Remove(p) == nil {
+		m := reBakTmp.FindStringSubmatch(name)
+		if m == nil {
+			return
+		}
+		pid, err := strconv.Atoi(m[1])
+		if err != nil || pid == me || pidAlive(pid) {
+			return
+		}
+		if os.Remove(p) == nil {
 			n++
 		}
 	}

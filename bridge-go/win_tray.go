@@ -391,7 +391,7 @@ func restartTray() {
 	tr.mu.Lock()
 	pShellNotifyIcon.Call(nimDelete, uintptr(unsafe.Pointer(&tr.nid)))
 	tr.mu.Unlock()
-	os.Exit(0)
+	exitDrained(0)
 }
 
 func shellOpen(file, params string) {
@@ -1048,7 +1048,7 @@ func (t *tray) command(id int, st M) {
 		pShellNotifyIcon.Call(nimDelete, uintptr(unsafe.Pointer(&t.nid)))
 		t.mu.Unlock()
 		pPostQuitMessage.Call(0)
-		os.Exit(0)
+		exitDrained(0)
 	}
 }
 
@@ -1157,7 +1157,7 @@ func runTray(args []string) int {
 			tr.mu.Lock()
 			pShellNotifyIcon.Call(nimDelete, uintptr(unsafe.Pointer(&tr.nid)))
 			tr.mu.Unlock()
-			os.Exit(0)
+			exitDrained(0)
 		}()
 	}
 	hinst, _, _ := windows.NewLazySystemDLL("kernel32.dll").NewProc("GetModuleHandleW").Call(0)

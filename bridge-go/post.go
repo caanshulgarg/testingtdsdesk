@@ -167,6 +167,9 @@ func (r importReq) keys() []string {
 // the record (posted-ids.json) could not be written before a send: nothing is sent (never tallyNoAnswer: the job waits)
 var errRecordNotWritten = errors.New("the record of what was sent (posted-ids.json) could not be written: record not written; nothing sent")
 
+// 2.5.15 (review M1 of 68308695f): the record written but not on the disk before the send: nothing is sent, as above
+var errRecordNotFlushed = fmt.Errorf("Could not save the posting record on this computer; nothing was sent to Tally (%w)", errRecordNotWritten)
+
 func (r importReq) envelope(company string) string {
 	var b strings.Builder
 	b.WriteString(`<TALLYMESSAGE xmlns:UDF="TallyUDF">`)
@@ -305,7 +308,14 @@ func sendImport(port int, company, job string, r importReq) importOutcome {
 	// 2.5.15 (safefile.go; the owner's decision of 13-Nov-2026; review H1 of b41667d51): posted-ids.json on the disk, this
 	// request's own note with every earlier one, before the request goes (a power cut mid-request never loses the note,
 	// so nothing is sent twice): one flush a request to Tally; the saves themselves never wait for it
-	postedDurableWait()
+	if err := postedDurableWait(); err != nil {
+		// review M1/M2 of 68308695f: the record not on the disk (twice, or not in 1.5 s): nothing goes to Tally
+		if r.kind == "voucher" {
+			acceptedForgetMany(keys)
+		}
+		writeLog("Posting: posted-ids.json could not be saved to the disk (" + err.Error() + "); nothing was sent to Tally")
+		return importOutcome{err: errRecordNotFlushed}
+	}
 	t0 := time.Now()
 	sentAt := t0.Format(time.RFC3339)
 	raw, err := invokeTally(fin, port, r.envelope(company), importTimeoutSec(len(r.items)))

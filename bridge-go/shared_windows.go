@@ -45,6 +45,24 @@ func openForSync(path string) (*os.File, error) {
 	return os.NewFile(uintptr(h), path), nil
 }
 
+// a process of this number runs (another bridge's temporary files are never swept: safefile.go); one Windows will not
+// let us look at is taken as running
+func pidAlive(pid int) bool {
+	if pid <= 0 {
+		return false
+	}
+	h, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION, false, uint32(pid))
+	if err != nil {
+		return errors.Is(err, windows.ERROR_ACCESS_DENIED)
+	}
+	defer windows.CloseHandle(h)
+	var code uint32
+	if windows.GetExitCodeProcess(h, &code) != nil {
+		return true
+	}
+	return code == 259 // STILL_ACTIVE
+}
+
 // opened to append (created when missing), sharing read and write; a reparse point at the path is opened as itself,
 // never followed (appendNoFollow then refuses it)
 func openAppendNoFollow(path string) (*os.File, error) {

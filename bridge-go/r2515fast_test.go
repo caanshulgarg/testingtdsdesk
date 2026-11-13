@@ -4,6 +4,7 @@ package main
 // did on the caller's path (a temporary file, then one rename); the flush to the disk and the .bak follow in the
 // background (safefile.go). Only posted-ids.json is waited for, before the next send to Tally. Made-up names only.
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -156,6 +157,88 @@ func TestR2515PostedFlushedBeforeNextSend(t *testing.T) {
 	}
 }
 
+// review M1/M2 of 68308695f: posted-ids.json not on the disk before a send: a flush that fails once is tried again and
+// the send goes; one that fails twice, or takes longer than the limit, sends nothing and says so in words
+func TestR2515PostedNotFlushedNothingSent(t *testing.T) {
+	f := newStandTally(t)
+	standBridge(t, f, "")
+	oldLimit := durFlushLimit
+	durFlushLimit = 300 * time.Millisecond
+	t.Cleanup(func() { durFlushLimit = oldLimit })
+	var fails atomic.Int64
+	var slow atomic.Bool
+	r2515SetSync(t, func(h *os.File) error {
+		if filepath.Base(h.Name()) == "posted-ids.json" {
+			if slow.Load() {
+				time.Sleep(time.Second)
+			}
+			if fails.Load() > 0 {
+				fails.Add(-1)
+				return errors.New("disk error (stand)")
+			}
+		}
+		return h.Sync()
+	})
+	post := func(id string) (M, error) {
+		return invokeImport(M{"company": zz, "vouchers": []any{M{"id": id, "xml": finVoucher(id, fgParty, strings.ToUpper(id), today(), "1.00")}}})
+	}
+	fails.Store(1) // once: tried again, sent
+	if res, err := post("nf1"); err != nil || f.n("Import") != 1 || len(arr(res["results"])) != 1 {
+		t.Fatalf("a flush that failed once was not tried again: %v, %d imports", err, f.n("Import"))
+	}
+	words := "Could not save the posting record on this computer; nothing was sent to Tally"
+	check := func(what, id string) {
+		t.Helper()
+		t0 := time.Now()
+		res, err := post(id)
+		got := fmt.Sprint(err, res)
+		if f.n("Import") != 1 || !strings.Contains(got, words) {
+			t.Fatalf("%s: %d imports; %s", what, f.n("Import"), got)
+		}
+		if time.Since(t0) > 1500*time.Millisecond {
+			t.Fatalf("%s: the send waited %s", what, time.Since(t0))
+		}
+		if acceptedInfo(acceptedKey(id, finVoucher(id, fgParty, strings.ToUpper(id), today(), "1.00"))) != nil {
+			t.Fatalf("%s: the note of what was never sent is kept", what)
+		}
+	}
+	fails.Store(2) // twice: nothing sent
+	check("failed twice", "nf2")
+	fails.Store(0)
+	slow.Store(true) // longer than the limit: nothing sent
+	check("too slow", "nf3")
+	slow.Store(false)
+	if logLines("posted-ids.json could not be saved to the disk") < 2 {
+		t.Fatal("not said in the log")
+	}
+}
+
+// the posting path, from the request to its send to Tally, on this disk (the owner's rule: no slower posting): the
+// median of 40 postings (TestR2515PostingPath2514, run on 2.5.14's sources, is the same measure there)
+func TestR2515PostingPathTime(t *testing.T) {
+	f := newStandTally(t)
+	standBridge(t, f, "")
+	var at atomic.Int64
+	f.mu.Lock()
+	f.slow = func(id, body string) time.Duration {
+		if id == "Import" {
+			at.Store(time.Now().UnixNano())
+		}
+		return 0
+	}
+	f.mu.Unlock()
+	var d []time.Duration
+	for i := 0; i < 40; i++ {
+		id := fmt.Sprintf("pp%d", i)
+		t0 := time.Now()
+		if _, err := invokeImport(M{"company": zz, "vouchers": []any{M{"id": id, "xml": finVoucher(id, fgParty, fmt.Sprintf("PP-%d", i), today(), "1.00")}}}); err != nil {
+			t.Fatal(err)
+		}
+		d = append(d, time.Duration(at.Load()-t0.UnixNano()))
+	}
+	t.Logf("POSTPATH median %s (request to its send to Tally, 40 postings)", r2515Median(d))
+}
+
 // the cost of that wait, a request to Tally (one flush of posted-ids.json, its copy and its folder), on this disk
 func TestR2515PostedFlushCost(t *testing.T) {
 	standBridge(t, newStandTally(t), "")
@@ -163,7 +246,9 @@ func TestR2515PostedFlushCost(t *testing.T) {
 	for i := 0; i < 50; i++ {
 		_ = noteSent(fmt.Sprintf("Cost%d", i), zz, "job-r2515-cost", "", 1, "", "")
 		t0 := time.Now()
-		postedDurableWait()
+		if err := postedDurableWait(); err != nil {
+			t.Fatal(err)
+		}
 		d = append(d, time.Since(t0))
 	}
 	t.Logf("posted-ids.json flush before a request to Tally: median %s, worst %s", r2515Median(d), d[len(d)-1])

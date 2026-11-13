@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync/atomic"
@@ -71,22 +72,39 @@ func TestR2515SaveFileFlushes(t *testing.T) {
 	}
 }
 
-// the temporary copies a run stopped part-way left are removed at the start; this run's own never
+// the temporary files of saves a run stopped part-way left are removed at the start (a .bak's and a save's own:
+// review L2 of 68308695f); this run's and another live process's never (L3)
 func TestR2515SweepBakTmp(t *testing.T) {
 	dir := t.TempDir()
 	r2515LogHere(t, dir)
+	gone := exec.Command("true")
+	if err := gone.Run(); err != nil {
+		t.Skip("no 'true' to run here")
+	}
+	dead, live := gone.Process.Pid, os.Getppid()
 	co := filepath.Join(syncDir(), "Made Co")
 	_ = os.MkdirAll(co, 0o755)
-	old := filepath.Join(co, "keep.json.bak.1.7.tmp")
+	oldBak := filepath.Join(co, fmt.Sprintf("keep.json.bak.%d.7.tmp", dead))
+	oldSave := filepath.Join(co, fmt.Sprintf("keep.json.%d.9.tmp", dead))
+	oldJob := filepath.Join(jobsDir(), "job-made", fmt.Sprintf("progress.json.%d.3.tmp", dead))
+	cfgOld := fmt.Sprintf("%s.bak.%d.3.tmp", ConfigPath, dead)
 	mine := filepath.Join(co, fmt.Sprintf("keep.json.bak.%d.8.tmp", os.Getpid()))
-	cfgOld := ConfigPath + ".bak.2.3.tmp"
-	other := filepath.Join(co, "keep.json.1.9.tmp") // not a copy's: left as it is
-	for _, p := range []string{old, mine, cfgOld, other} {
+	other := filepath.Join(co, fmt.Sprintf("keep.json.%d.4.tmp", live))
+	plain := filepath.Join(co, "notes.tmp")
+	_ = os.MkdirAll(filepath.Dir(oldJob), 0o755)
+	for _, p := range []string{oldBak, oldSave, oldJob, cfgOld, mine, other, plain} {
 		_ = os.WriteFile(p, []byte("x"), 0o644)
 	}
 	sweepBakTmp()
-	if exists(old) || exists(cfgOld) || !exists(mine) || !exists(other) {
-		t.Fatalf("swept: old %v, settings' %v, this run's %v, other %v", !exists(old), !exists(cfgOld), !exists(mine), !exists(other))
+	for _, p := range []string{oldBak, oldSave, oldJob, cfgOld} {
+		if exists(p) {
+			t.Errorf("left by a run that ended, not swept: %s", filepath.Base(p))
+		}
+	}
+	for _, p := range []string{mine, other, plain} {
+		if !exists(p) {
+			t.Errorf("swept, but it is this run's, a live process's or not a save's: %s", filepath.Base(p))
+		}
 	}
 }
 

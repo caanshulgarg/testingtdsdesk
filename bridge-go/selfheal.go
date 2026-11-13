@@ -222,7 +222,7 @@ func beatFresh() {
 
 // the heartbeat loop's own watchdog: a heartbeat that has not moved for hangBeat ends this worker (with the reason
 // written down) when something starts it again (the supervisor, Windows' service recovery); by hand it only says so
-var beatWatchExit = func(code int) { os.Exit(code) }
+var beatWatchExit = func(code int) { exitDrained(code) } // 2.5.15: the files still being flushed first (safefile.go)
 
 const exitStall = 13 // the worker ended itself: its heartbeat stalled (the supervisor starts it again at once)
 

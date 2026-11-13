@@ -88,23 +88,23 @@ func main() {
 		fmt.Println(BridgeVersion)
 		return
 	case "stop":
-		os.Exit(stopCmd(rest))
+		exitDrained(stopCmd(rest))
 	case "restart-service":
-		os.Exit(restartServiceCmd())
+		exitDrained(restartServiceCmd())
 	case "tray":
-		os.Exit(runTray(rest))
+		exitDrained(runTray(rest))
 	case "install":
 		installPostOnly = flagValue(rest, "postonly")
-		os.Exit(installCmd(rest))
+		exitDrained(installCmd(rest))
 	case "uninstall":
-		os.Exit(uninstallCmd(rest))
+		exitDrained(uninstallCmd(rest))
 	}
 	setPaths(*config, *home)
 	switch cmd {
 	case "sendlog":
-		os.Exit(sendLogCmd(rest))
+		exitDrained(sendLogCmd(rest))
 	case "connect":
-		os.Exit(connectCmd(rest)) // 2.4.6: the setup's Finish page (pairopen.go)
+		exitDrained(connectCmd(rest)) // 2.4.6: the setup's Finish page (pairopen.go)
 	case "log":
 		loadConfigRO()
 		openFile(logFile())
@@ -116,36 +116,36 @@ func main() {
 		if contains(rest, "--show") {
 			openFile(filepath.Join(Home, "compare-report.txt"))
 		}
-		os.Exit(code)
+		exitDrained(code)
 	case "measure":
-		os.Exit(measureCmd(rest))
+		exitDrained(measureCmd(rest))
 	case "sync":
 		loadConfig()
 		r := nightlySync()
 		fmt.Printf("Nightly copy: %d done, %d failed.\n", len(arr(r["done"])), len(arr(r["failed"])))
 		return
 	case "run":
-		os.Exit(runBridge(true))
+		exitDrained(runBridge(true))
 	case "service":
-		os.Exit(runService(rest)) // Windows starts it as "FinComBridge.exe service --config ..."
+		exitDrained(runService(rest)) // Windows starts it as "FinComBridge.exe service --config ..."
 	case "user":
-		os.Exit(runUser(rest)) // the start at sign-in: HKCU\...\Run runs "FinComBridge.exe user"
+		exitDrained(runUser(rest)) // the start at sign-in: HKCU\...\Run runs "FinComBridge.exe user"
 	case "worker":
-		os.Exit(runWorker(rest))
+		exitDrained(runWorker(rest))
 	case "keepalive":
-		os.Exit(keepAliveCmd(rest)) // 2.5.10: the keep-alive task's run (keepalive.go)
+		exitDrained(keepAliveCmd(rest)) // 2.5.10: the keep-alive task's run (keepalive.go)
 	case "":
 		if isWindowsService() {
-			os.Exit(runService(rest))
+			exitDrained(runService(rest))
 		}
 		// installed just for this user: a double-click on the program starts it the same way as at sign-in
 		if perUserInstall() {
-			os.Exit(runUser(rest))
+			exitDrained(runUser(rest))
 		}
-		os.Exit(runBridge(true))
+		exitDrained(runBridge(true))
 	default:
 		fmt.Println("Unknown command: " + cmd)
-		os.Exit(2)
+		exitDrained(2)
 	}
 }
 
