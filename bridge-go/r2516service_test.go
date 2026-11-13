@@ -27,7 +27,7 @@ func TestR2516ServiceSettingsFixed(t *testing.T) {
 	dir := t.TempDir()
 	r2516AsService(t)
 	oldC, oldH := ConfigPath, Home
-	t.Cleanup(func() { ConfigPath, Home = oldC, oldH; runMode = "window"; loadConfigRO() })
+	t.Cleanup(func() { durableWaitAll(); ConfigPath, Home = oldC, oldH; runMode = "window"; loadConfigRO() })
 	ConfigPath, Home = filepath.Join(dir, "tds-bridge.config.json"), dir
 	file := `{"OnlyMySession": false, "OwnerSid": "S-1-5-21-9-9-9-500", "Owner": "PC-MADEUP\\someone", "TallyHost": "192.0.2.7",
 	 "DevOrigins": true, "LogFile": "/var/elsewhere/x.log", "SyncDir": "/var/elsewhere/sync", "JobsDir": "..", "PsHome": "/var/elsewhere"}`
@@ -61,7 +61,7 @@ func TestR2516NotServiceSettingsAsSet(t *testing.T) {
 	was := runMode
 	runMode = "user"
 	oldC, oldH := ConfigPath, Home
-	t.Cleanup(func() { runMode = was; ConfigPath, Home = oldC, oldH; loadConfigRO() })
+	t.Cleanup(func() { durableWaitAll(); runMode = was; ConfigPath, Home = oldC, oldH; loadConfigRO() })
 	ConfigPath, Home = filepath.Join(dir, "tds-bridge.config.json"), dir
 	_ = os.WriteFile(ConfigPath, []byte(`{"OnlyMySession": false, "LogFile": "`+filepath.ToSlash(filepath.Join(dir, "own.log"))+`"}`), 0o644)
 	loadConfig()
@@ -90,6 +90,7 @@ func TestR2516ServiceStateCopied(t *testing.T) {
 	_ = os.Link(filepath.Join(outside, "secret.txt"), filepath.Join(old, "two-names.json"))
 	var lines []string
 	log := func(s string) { lines = append(lines, s) }
+	t.Cleanup(durableWaitAll)
 	if err := copyServiceHome(old, dst, log); err != nil {
 		t.Fatal(err)
 	}
