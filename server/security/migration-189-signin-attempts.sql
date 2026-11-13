@@ -1,27 +1,30 @@
--- Sign-in attempts counted where the password is checked, and a wait that is the address's own (13-Nov-2026, branch
--- next-sec-server; security review of 13-Nov-2026, M4). NOT run on staging by the app's builders: the owner runs it.
--- Runs after 182 (183 to 188 are other branches'; staging ... -> 182 -> ... -> 189; it needs nothing of theirs); needs migration 3 (public.auth_lockout and its functions) and nothing else.
+-- Sign-in attempts: counted where the password is checked; a wait that belongs to one email from one address
+-- (13-Nov-2026, branch next-sec-server). NOT run on staging by the app's builders: the owner runs it.
+-- Runs after 182 (183 to 188 are other branches'; it needs nothing of theirs). Needs migration 3 (public.auth_lockout
+-- and its functions) and nothing else.
 --
--- Before: wrong passwords were counted only by FinCom's sign-in function, and five of them locked the email for
--- everyone for 15 minutes. Now:
 --   auth_signin_fails   one row per wrong password: the email (as a SHA-256) and the address it came from (as the
 --                       SHA-256 the sign-in function sends; '' when Supabase Auth's own hook counted it), and when.
---   auth_signin_pass    the sign-in function's short pass for one email and address (ten seconds): "this try came
---                       through the function, from an address that is not waiting".
+--   auth_signin_pass    the sign-in function's pass for one email and address: it lasts ten seconds and serves one
+--                       password check.
 --   auth_signin_begin(email, ip_key)   asked by the function before the password goes to Supabase Auth: whether this
 --                       email may be tried from this address now ({allowed, fails, wait_s, until}); when it may, the
---                       pass is written. Wrong passwords of one email from one address within 15 minutes: the first
---                       four cost nothing, then the wait after each is 30 s, 60 s, 2 min, 5 min and 15 min at most.
---                       A try during a wait is refused and not counted. Another address is not held by it.
+--                       pair's pass is written. Wrong passwords of one email from one address within 15 minutes: the
+--                       first four cost nothing, then the wait after each is 30 s, 60 s, 2 min, 5 min and 15 min at
+--                       most. A try during a wait is refused and not counted. Another address is not held by it.
+--                       One call at a time for a pair (an advisory lock, as auth_rate_hit of migration 112 takes).
 --   auth_signin_fail(email, ip_key)    a wrong password: counted for the pair, its pass ended; answers the wait.
 --   auth_signin_ok(email, ip_key)      a right password: the pair's count and pass ended.
---   auth_password_attempt_hook(event)  Supabase Auth's "password verification attempt" hook ({user_id, valid}), so
---                       every password check is counted, whichever way it reached Auth. A wrong one: counted for the
---                       account. A right one: goes on, unless the account had 10 wrong ones within 15 minutes and the
---                       try carries no pass; it ends by itself as the wrong ones age. Switched on in the dashboard:
+--   auth_password_attempt_hook(event)  Supabase Auth's "password verification attempt" hook ({user_id, valid}), run
+--                       at every password check, whichever way it reached Auth. A wrong password is counted for the
+--                       account. A check uses up one pass of the account (the oldest that is still good; Auth tells
+--                       the hook the account, not the address). A check with no pass, on an account that had 10 wrong
+--                       passwords within 15 minutes, is refused with one message, the password right or wrong; that
+--                       ends by itself as the wrong ones age. Switched on in the dashboard:
 --                       Authentication -> Hooks -> Password Verification Attempt -> public.auth_password_attempt_hook
---   auth_lockout_clear(email, by)      the owner's unlock, from migration 3 (its latest definition), which now also
---                       ends the email's waits, counts and passes here.
+--                       Every page that signs people in goes through the sign-in function (the app and the console).
+--   auth_lockout_clear(email, by)      the owner's unlock, from migration 3 (its latest definition), which also ends
+--                       the email's waits, counts and passes here.
 --   auth_signin_sweep()                removes rows older than 2 days; pg_cron runs it hourly where it is installed.
 -- The functions: service role only; the hook: Supabase Auth only. anon and authenticated nothing. Grants explicit.
 -- Add-only: two new tables, seven new functions, one function replaced from its latest definition with its grants
@@ -72,6 +75,7 @@ returns jsonb language plpgsql security definer set search_path = '' as $$
 declare k text := public.auth_signin_key(p_email); n integer; last timestamptz; w integer;
 begin
   if coalesce(p_ip_key, '') !~ '^[0-9a-f]{64}$' then raise exception 'auth_signin_begin: the address as a SHA-256'; end if;
+  perform pg_advisory_xact_lock(hashtextextended('auth_signin:' || k || ':' || p_ip_key, 0));
   select count(*), max(at) into n, last from public.auth_signin_fails
    where email_key = k and ip_key = p_ip_key and at > now() - interval '15 minutes';
   w := public.auth_signin_wait(n);
@@ -89,6 +93,7 @@ returns jsonb language plpgsql security definer set search_path = '' as $$
 declare k text := public.auth_signin_key(p_email); n integer; w integer;
 begin
   if coalesce(p_ip_key, '') !~ '^[0-9a-f]{64}$' then raise exception 'auth_signin_fail: the address as a SHA-256'; end if;
+  perform pg_advisory_xact_lock(hashtextextended('auth_signin:' || k || ':' || p_ip_key, 0));
   delete from public.auth_signin_pass where email_key = k and ip_key = p_ip_key;
   delete from public.auth_signin_fails where email_key = k and at < now() - interval '2 days';
   insert into public.auth_signin_fails (email_key, ip_key) values (k, p_ip_key);
@@ -107,24 +112,24 @@ begin
 end $$;
 
 -- Supabase Auth's hook. Payload {user_id, valid}; answer {decision: continue} or {decision: reject, message,
--- should_logout_user} (Supabase Auth docs, auth-hooks/password-verification-hook)
+-- should_logout_user} (Supabase Auth docs, auth-hooks/password-verification-hook).
+-- One pass serves one check: the oldest good pass of the account is removed here, the password right or wrong. A check
+-- without one, on an account with 10 wrong passwords in 15 minutes, gets the same refusal either way.
 create or replace function public.auth_password_attempt_hook(event jsonb)
 returns jsonb language plpgsql security definer set search_path = '' as $$
-declare uid uuid; em text; k text; n integer;
+declare uid uuid; em text; k text; n integer; right_one boolean := coalesce(event->>'valid', '') = 'true'; had boolean;
 begin
   begin uid := nullif(event->>'user_id', '')::uuid; exception when others then uid := null; end;
   if uid is not null then select lower(u.email) into em from auth.users u where u.id = uid; end if;
   if em is null or em = '' then return jsonb_build_object('decision', 'continue'); end if;
   k := public.auth_signin_key(em);
-  if coalesce(event->>'valid', '') <> 'true' then
-    insert into public.auth_signin_fails (email_key, ip_key) values (k, '');
-    return jsonb_build_object('decision', 'continue');
-  end if;
-  if exists (select 1 from public.auth_signin_pass p where p.email_key = k and p.until > now()) then
-    return jsonb_build_object('decision', 'continue');
-  end if;
+  with one as (select p.email_key, p.ip_key from public.auth_signin_pass p
+                where p.email_key = k and p.until > now() order by p.until limit 1 for update skip locked)
+  delete from public.auth_signin_pass p using one where p.email_key = one.email_key and p.ip_key = one.ip_key
+  returning true into had;
   select count(*) into n from public.auth_signin_fails where email_key = k and ip_key = '' and at > now() - interval '15 minutes';
-  if n >= 10 then
+  if not right_one then insert into public.auth_signin_fails (email_key, ip_key) values (k, ''); end if;
+  if had is not true and n >= 10 then
     return jsonb_build_object('decision', 'reject', 'should_logout_user', false,
       'message', 'Too many wrong passwords for this account. Sign in from FinCom''s own sign-in page, or try again in 15 minutes.');
   end if;

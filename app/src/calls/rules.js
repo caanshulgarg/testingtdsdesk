@@ -155,12 +155,12 @@ export function chatParts(text) {
   if (at < s.length) out.push({ text: s.slice(at) });
   return out;
 }
-// 13-Nov-2026 (security review L8): the type a call's file is kept under. Any file may be sent in a chat; a type on
-// this list is kept as it is, anything else (a page, a script, a picture that can carry one, a type not known) is kept
-// as plain bytes (application/octet-stream), so Storage never serves it as something a browser runs. The bucket's own
-// list (migration 190) is this one.
+// The type a call's file is kept under. Any file may be sent in a chat; a type on this list is kept as it is, anything
+// else (a page, a script, a picture that can carry one, XML, a type not known) is kept as plain bytes
+// (application/octet-stream), so Storage never serves it as something a browser runs. The bucket's own list
+// (migration 190) is this one with plain bytes, audio and video.
 export const STORE_TYPES = ["application/pdf", "image/png", "image/jpeg", "image/gif", "image/webp", "image/heic", "image/bmp", "image/tiff", "text/plain", "text/csv",
-  "application/zip", "application/json", "application/xml", "text/xml", "application/msword", "application/vnd.ms-excel", "application/vnd.ms-powerpoint",
+  "application/zip", "application/json", "application/msword", "application/vnd.ms-excel", "application/vnd.ms-powerpoint",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   "application/vnd.openxmlformats-officedocument.presentationml.presentation"];
 export const PLAIN_BYTES = "application/octet-stream";

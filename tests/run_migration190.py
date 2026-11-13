@@ -1,8 +1,8 @@
-"""python3 run_migration190.py - migration-190-upload-limits (13-Nov-2026, branch next-sec-server; security review L8).
+"""python3 run_migration190.py - migration-190-upload-limits (13-Nov-2026, branch next-sec-server).
 The call's chat files are kept only under the listed types (anything else as plain bytes: app/src/calls/rules.js
 STORE_TYPES, the same list), and the bucket of the day books gets a size limit where it had none.
 On a throwaway PostgreSQL (pg_stand, port 31190 unless PG190_PORT; never a real database), with a stand-in for
-storage.buckets as Supabase has it. Written before the file.
+storage.buckets as Supabase has it.
 Checks:
   0. the file: one transaction (lock_timeout 10 s), nothing dropped or deleted, names no real database, runs twice.
   1. call-files: its types are the app's list plus plain bytes, audio and video (the microphone pieces); its size

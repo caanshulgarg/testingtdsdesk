@@ -1,16 +1,16 @@
-"""python3 run_migration189.py - migration-189-signin-attempts (13-Nov-2026, branch next-sec-server; security review M4).
-Wrong passwords are counted where Supabase Auth checks the password (its "password verification attempt" hook), so a
-sign-in that does not come through FinCom's sign-in function is counted too; and the account is no longer locked for
-everyone by a few wrong passwords: the wait is per email and address together, it grows, and it ends by itself.
+"""python3 run_migration189.py - migration-189-signin-attempts (13-Nov-2026, branch next-sec-server).
+Wrong passwords are counted where Supabase Auth checks the password (its "password verification attempt" hook); the
+wait belongs to one email from one address, grows, and ends by itself.
 On a throwaway PostgreSQL (pg_stand, port 31189 unless PG189_PORT; never a real database), with the lockout pieces of
-migration 3 as they are, then 189 (twice). Made-up emails only. Written before the file.
+migration 3 as they are, then 189 (twice). Made-up emails only.
 Checks:
   0. the file: one transaction (lock_timeout 10 s), add-only, names no real database, explicit grants, runs twice.
   1. one address and one email: 4 wrong passwords, no wait; the 5th: 30 s, then 60 s, 2 min, 5 min, 15 min at most; a try
      during a wait is refused without being counted; after 15 minutes without a failure the count starts again.
   2. the wait is the address's own: the same email from another address is not held; a right password ends the pair's count.
-  3. the hook: a wrong password is counted for the account; a right one goes on; after 10 wrong ones in 15 minutes a
-     right password is taken only with the sign-in function's pass (begin), which is the pair's own and short-lived.
+  3. the hook: a wrong password is counted for the account; after 10 wrong ones in 15 minutes a check without the
+     sign-in function's pass is refused with one message, the password right or wrong (a wrong one still counted); a
+     pass is the pair's own, lasts ten seconds and serves one check.
   4. the owner's unlock (auth_lockout_clear) ends every wait and count of that email.
   5. nothing kept in the clear (emails and addresses as SHA-256); anon and authenticated can run or read none of it.
 RED_WITHOUT_189=1: the same checks without the file (they fail; (guard) checks hold what stays as it was)."""
@@ -111,18 +111,27 @@ try:
     ok(hook(UB, True) == CONT, "3. nine wrong in 15 minutes: a right password still goes on")
     hook(UB, False)
     r = hook(UB, True)
-    ok(r.get("decision") == "reject" and r.get("should_logout_user") is False and "wrong passwords" in str(r.get("message")) and B.lower() not in json.dumps(r).lower(), "3. ten wrong: a right password that did not come through the sign-in function is not taken (%s)" % r)
+    ok(r.get("decision") == "reject" and r.get("should_logout_user") is False and "wrong passwords" in str(r.get("message")) and B.lower() not in json.dumps(r).lower(), "3. ten wrong: a check without the sign-in function's pass is refused (%s)" % r)
+    n0 = db.one("select count(*) from public.auth_signin_fails where ip_key = ''") if text else None
+    w = hook(UB, False)
+    ok(w == r and text and db.one("select count(*) from public.auth_signin_fails where ip_key = ''") == str(int(n0) + 1), "3. a wrong password then gets the same answer as a right one, and is still counted")
     ok(hook(UA, True) == CONT, "3. another account is not held")
     b = begin(B, IP2)
-    ok(b.get("allowed") is True and hook(UB, True) == CONT, "3. through the sign-in function (its pass): the right password is taken, so the person is not kept out")
+    ok(b.get("allowed") is True and hook(UB, True) == CONT, "3. through the sign-in function (its pass): the right password is taken")
+    ok(hook(UB, True) == r and hook(UB, False) == r, "3. a pass serves one check: the next one, right or wrong, is refused")
     done(B, IP2)
-    ok(hook(UB, True).get("decision") == "reject", "3. the pass ends with that sign-in")
+    begin(B, IP2)
+    ok(hook(UB, False) == CONT and hook(UB, True) == r, "3. a wrong password uses the pass up too (Auth refuses it in its own words)")
     begin(B, IP2); fail(B, IP2)
-    ok(hook(UB, True).get("decision") == "reject", "3. a wrong password through the function ends its pass at once")
+    ok(hook(UB, True) == r, "3. a wrong password through the function ends its pass")
     begin(B, IP1); begin(B, IP2); fail(B, IP1)
-    ok(hook(UB, True) == CONT, "3. a pass is the pair's own: another address's failure does not end it")
+    ok(db.one("select count(*) from public.auth_signin_pass where ip_key = %s" % q(IP2)) == "1" and db.one("select count(*) from public.auth_signin_pass where ip_key = %s" % q(IP1)) == "0" if text else False, "3. a pass is the pair's own: another address's failure does not end it")
+    ok(hook(UB, True) == CONT and db.one("select count(*) from public.auth_signin_pass") == "0" if text else False, "3. and one check uses it up")
+    done(B, IP2); begin(B, IP2)
     age(11, "false")
-    ok(hook(UB, True).get("decision") == "reject", "3. a pass lasts ten seconds")
+    ok(hook(UB, True) == r, "3. a pass lasts ten seconds")
+    begin(B, IP1); begin(B, IP2)
+    ok(hook(UB, True) == CONT and hook(UB, True) == CONT and hook(UB, True) == r, "3. two addresses' passes: two checks")
     age(901)
     ok(hook(UB, True) == CONT, "3. 15 minutes on: the account's count has ended by itself")
     ok(hook("33333333-3333-4333-8333-000000000189", True) == CONT and hook("", False) == CONT, "3. (guard) a login it does not know: left to Auth")
