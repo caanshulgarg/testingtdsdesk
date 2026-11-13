@@ -1,11 +1,20 @@
-// FinCom Bridge 2.5.16: the Windows service's settings and state in %ProgramData%\FinCom Bridge\state\<owner SID>\,
-// made by the installer or by the service itself (both elevated): SYSTEM and Administrators may change it, the owner may
-// read it (the tray icon reads the settings), nobody else may. Until 2.5.15 the service kept them in the owner's
-// %LOCALAPPDATA%\TDS Desk Bridge. At the first start of 2.5.16 (or its setup) the files there are copied over once
-// (plain files only: links, junctions and files with more than one name are left out, and the bridge's logs stay where
-// they are); the old folder is left as it was and is no longer read by the service.
+// FinCom Bridge 2.5.16: the Windows service's settings and state in its own folder, %ProgramData%\FinCom Bridge\state\
+// <owner SID>\ (or a folder of the same kind the elevated step made fresh and recorded in HKLM), made by the installer
+// or by the service itself (both elevated): SYSTEM and Administrators may change it, the owner may read it (the tray
+// icon reads the settings), nobody else may. Until 2.5.15 the service kept them in the owner's %LOCALAPPDATA%\TDS Desk
+// Bridge.
 //
-// Whatever the settings file says, the service also keeps these fixed (servicePolicy): only its owner's own Tally
+// The service never runs from a folder or settings file its owner may change: until its own folder is ready (the
+// owner recorded, the folder made safe, the earlier files copied once) it does not start the bridge, says why in
+// Windows' event log, and tries again every minute (servicestate_windows.go).
+//
+// The one copy from the earlier folder is read with the owner's rights (impersonated: nothing the owner may not read
+// is copied), refuses links and junctions at every level, leaves out the bridge's logs and settings files, and stops
+// at serviceCopyMaxBytes / serviceCopyMaxFiles. From the earlier settings file only plain choices are taken
+// (serviceSettingsAllowed); FinCom's link, the bridge key, the FVU, the update address and the paired browsers are
+// set again (FinCom is connected again once).
+//
+// Whatever the settings file says, the service also keeps these fixed (applyServicePolicy): only its owner's own Tally
 // (OnlyMySession), its owner as the install recorded it in HKLM (Owner, OwnerSid), Tally on this computer (TallyHost
 // 127.0.0.1), no development origins, and its log, copy and postings folders inside its own folder (LogFile, SyncDir,
 // JobsDir by their plain names), bridge 1.15.0's folder from the owner's profile (PsHome).
@@ -17,11 +26,15 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 )
 
 // the service's folder for one owner
 func serviceStateDir(sid string) string {
+	if d := platRecordedStateDir(sid); d != "" {
+		return d // made fresh by the elevated step when the usual place was not safe (HKLM StateDir)
+	}
 	return filepath.Join(programDataDir(), "FinCom Bridge", "state", sid)
 }
 
@@ -44,7 +57,7 @@ var (
 // a folder or file of the service's own: its plain name under Home (the default when the setting is no plain name)
 func underHome(v any, def string) string {
 	b := filepath.Base(strings.ReplaceAll(str(v), `\`, "/"))
-	if str(v) == "" || !re(`^[A-Za-z0-9][\w.-]{0,63}$`).MatchString(b) || strings.Contains(b, "..") {
+	if str(v) == "" || !re(`^[A-Za-z0-9][\w.-]{0,63}$`).MatchString(b) || strings.Contains(b, "..") || winDeviceName(b) {
 		b = def
 	}
 	return filepath.Join(Home, b)
@@ -81,29 +94,68 @@ func pathInside(p, dir string) bool {
 	return p == dir || strings.HasPrefix(p, dir+string(os.PathSeparator))
 }
 
-// the bridge's own logs (left where they are when the folder is copied)
-var reOwnLogName = re(`(?i)^(tds|go)-bridge\.log(\..+)?$`)
+// the bridge's own logs and settings files (never copied with the folder: the settings go through serviceSettingsFrom)
+var (
+	reOwnLogName      = re(`(?i)^(tds|go)-bridge\.log(\..+)?$`)
+	reOwnSettingsName = re(`(?i)^(tds|go)-bridge\.config\.json(\..+)?$`)
+)
 
-// the plain files of src copied into dst (made new, never over a file): folders are walked without following a link or
-// junction; a link, a junction, any other kind, and a file with more than one name are left out and named in skipped
-func copyPlainTree(src, dst string, skip func(rel string) bool) (copied int, skipped []string, err error) {
+// the copy's limits (variables for the tests)
+var (
+	serviceCopyMaxBytes int64 = 4 << 30
+	serviceCopyMaxFiles       = 200000
+)
+
+// how the old folder is read. On Windows the service reads it with its owner's rights only (servicestate_windows.go:
+// impersonated), so nothing the owner may not read is ever copied; links and junctions are refused at every level
+// either way. The default (other systems, tests): the process's own rights
+type treeReader interface {
+	Lstat(p string) (os.FileInfo, error)
+	ReadDir(p string) ([]os.DirEntry, error)
+	Open(p string) (*os.File, error) // without following a link (openNoLink)
+}
+
+type osTree struct{}
+
+func (osTree) Lstat(p string) (os.FileInfo, error)     { return os.Lstat(p) }
+func (osTree) ReadDir(p string) ([]os.DirEntry, error) { return os.ReadDir(p) }
+func (osTree) Open(p string) (*os.File, error)         { return openNoLink(p, false) }
+
+// the plain files of src copied into dst (made new, never over a file): every folder and file looked at without following
+// a link or junction (and opened the same way); a link, a junction, any other kind, a Windows device name and a file
+// with more than one name are left out and named in skipped; the copy stops at serviceCopyMaxBytes / MaxFiles
+func copyPlainTree(rd treeReader, src, dst string, skip func(rel string) bool) (copied int, skipped []string, err error) {
+	var bytes int64
+	full := false
 	var walk func(rel string, depth int) error
 	walk = func(rel string, depth int) error {
 		if depth > 16 {
 			skipped = append(skipped, rel+" (too deep)")
 			return nil
 		}
-		ents, err := os.ReadDir(filepath.Join(src, rel))
+		dp := filepath.Join(src, rel)
+		if fi, err := rd.Lstat(dp); err != nil || !fi.IsDir() || isReparse(dp, fi) {
+			skipped = append(skipped, rel+" (not a plain folder)")
+			return nil
+		}
+		ents, err := rd.ReadDir(dp)
 		if err != nil {
 			return err
 		}
 		for _, e := range ents {
+			if full {
+				return nil
+			}
 			r := filepath.Join(rel, e.Name())
 			if skip != nil && skip(r) {
 				continue
 			}
+			if winDeviceName(e.Name()) {
+				skipped = append(skipped, r+" (a device name)")
+				continue
+			}
 			p := filepath.Join(src, r)
-			fi, err := os.Lstat(p)
+			fi, err := rd.Lstat(p)
 			if err != nil {
 				skipped = append(skipped, r)
 				continue
@@ -122,10 +174,17 @@ func copyPlainTree(src, dst string, skip func(rel string) bool) (copied int, ski
 					return err
 				}
 			case fi.Mode().IsRegular():
-				if why := copyPlainFile(p, filepath.Join(dst, r), fi); why != "" {
+				if copied >= serviceCopyMaxFiles || bytes+fi.Size() > serviceCopyMaxBytes {
+					full = true
+					skipped = append(skipped, fmt.Sprintf("the rest (more than %d files or %d MB)", serviceCopyMaxFiles, serviceCopyMaxBytes>>20))
+					return nil
+				}
+				n, why := copyPlainFile(rd, p, filepath.Join(dst, r), fi)
+				if why != "" {
 					skipped = append(skipped, r+" ("+why+")")
 					continue
 				}
+				bytes += n
 				copied++
 			default:
 				skipped = append(skipped, r+" (not a plain file)")
@@ -133,66 +192,140 @@ func copyPlainTree(src, dst string, skip func(rel string) bool) (copied int, ski
 		}
 		return nil
 	}
-	if fi, err := os.Lstat(src); err != nil || !fi.IsDir() || isReparse(src, fi) {
+	if fi, err := rd.Lstat(src); err != nil || !fi.IsDir() || isReparse(src, fi) {
 		return 0, nil, errors.New(src + " is not a plain folder")
 	}
 	err = walk("", 0)
 	return copied, skipped, err
 }
 
-// one plain file copied: opened without following a link, the one looked at, one name only; "" when copied
-func copyPlainFile(from, to string, fi os.FileInfo) string {
-	f, err := openNoLink(from, false)
+// one plain file copied: opened without following a link, the one looked at, one name only, no more than its size;
+// its bytes ("" when copied)
+func copyPlainFile(rd treeReader, from, to string, fi os.FileInfo) (int64, string) {
+	f, err := rd.Open(from)
 	if err != nil {
-		return "not opened"
+		return 0, "not opened"
 	}
 	defer f.Close()
 	st, err := f.Stat()
 	if err != nil || !os.SameFile(fi, st) {
-		return "changed while it was opened"
+		return 0, "changed while it was opened"
 	}
 	if linkCount(f) > 1 {
-		return "more than one name"
+		return 0, "more than one name"
 	}
 	h, err := os.OpenFile(to, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
 	if os.IsExist(err) {
-		return "" // copied by an earlier try
+		return 0, "" // copied by an earlier try
 	}
 	if err != nil {
-		return "not written: " + err.Error()
+		return 0, "not written: " + err.Error()
 	}
-	_, err = io.Copy(h, f)
+	n, err := io.Copy(h, io.LimitReader(f, st.Size()))
 	if cerr := h.Close(); err == nil {
 		err = cerr
 	}
 	if err != nil {
 		_ = os.Remove(to)
-		return "not written: " + err.Error()
+		return 0, "not written: " + err.Error()
 	}
-	return ""
+	return n, ""
 }
 
 // the old folder's files copied into the service's folder once (until its marker is written: a copy cut short is
-// finished at the next try); the bridge's logs stay where they are
+// finished at the next try); the bridge's logs and settings files are not copied
 const serviceCopiedMarker = "copied-from-user-folder.txt"
 
-func copyServiceHome(old, dir string, log func(string)) error {
+func copyServiceHome(rd treeReader, old, dir string, log func(string)) error {
 	marker := filepath.Join(dir, serviceCopiedMarker)
-	if exists(marker) || old == "" || !exists(old) || pathInside(old, dir) {
+	if exists(marker) {
 		return nil
 	}
-	n, skipped, err := copyPlainTree(old, dir, func(rel string) bool {
-		return reOwnLogName.MatchString(filepath.Base(rel)) || rel == serviceCopiedMarker
+	if old == "" || pathInside(old, dir) {
+		return saveFile(marker, "nothing to copy\r\n"+nowS()+"\r\n")
+	}
+	if _, err := rd.Lstat(old); err != nil {
+		return saveFile(marker, "nothing to copy\r\n"+nowS()+"\r\n")
+	}
+	n, skipped, err := copyPlainTree(rd, old, dir, func(rel string) bool {
+		b := filepath.Base(rel)
+		return reOwnLogName.MatchString(b) || reOwnSettingsName.MatchString(b) || rel == serviceCopiedMarker
 	})
-	log(fmt.Sprintf("Service state: %d files copied from %s into %s (the old folder is kept as it was and not read by the service any more)", n, old, dir))
+	log(fmt.Sprintf("Service state: %d files copied from %s into %s (the old folder is kept as it was and not read by the service any more)", n, logPath(old), logPath(dir)))
 	if len(skipped) > 0 {
 		if len(skipped) > 20 {
 			skipped = append(skipped[:20], fmt.Sprintf("and %d more", len(skipped)-20))
 		}
-		log("Service state: left out (not plain files): " + strings.Join(skipped, ", "))
+		for i := range skipped {
+			skipped[i] = logPath(skipped[i])
+		}
+		log("Service state: left out: " + strings.Join(skipped, ", "))
 	}
 	if err != nil {
 		return err
 	}
 	return saveFile(marker, old+"\r\n"+nowS()+"\r\n")
+}
+
+// the settings the service takes from a settings file it does not protect (the owner's folder of an earlier version):
+// these only. Everything else is the standard value or set again by the setup or FinCom: the computer's link to FinCom
+// (CloudUrl, CloudKey) and its bridge key are not taken, so FinCom is connected again once; the FVU, the update address,
+// the paired browsers and the PostOnly list neither
+var serviceSettingsAllowed = []string{"Port", "TallyPorts", "FallbackPorts", "PairWindowMin", "GentleMs", "StatusCacheSec", "TallyTimeoutSec",
+	"KeepInStep", "KeepSchedule", "KeepDailyAt", "KeepModes", "KeepCompanies", "KeepFrom", "KeepLightMin", "KeepWatchSec",
+	"KeepOfficeFrom", "KeepOfficeTo", "SyncCompanies", "InstanceId", "Mode", "ClaimMain", "FinComUrl"}
+
+// the allowed settings of a file the service does not protect (opened without following a link, 1 MB at most); the
+// names left out are logged (never their values)
+func serviceSettingsFrom(rd treeReader, path string, log func(string)) *Ordered {
+	out := newOrdered()
+	f, err := rd.Open(path)
+	if err != nil {
+		return out
+	}
+	b, err := io.ReadAll(io.LimitReader(f, 1<<20))
+	f.Close()
+	in := newOrdered()
+	if err != nil || in.UnmarshalText(string(b)) != nil {
+		log("Service state: the earlier settings " + logPath(path) + " could not be read; the standard settings are used")
+		return out
+	}
+	allowed := map[string]bool{}
+	for _, k := range serviceSettingsAllowed {
+		allowed[k] = true
+	}
+	var left []string
+	for _, k := range in.keys {
+		if allowed[k] {
+			out.Set(k, in.Get(k))
+		} else {
+			left = append(left, k)
+		}
+	}
+	if len(left) > 0 {
+		sort.Strings(left)
+		log("Service state: from the earlier settings only the plain choices are kept; set again by the setup or FinCom: " + cutRunes(strings.Join(left, ", "), 600) +
+			" (FinCom is connected again once: Connect FinCom on this computer... in the tray icon)")
+	}
+	return out
+}
+
+// a path or name as the log shows it: one line, cut
+func logPath(p string) string { return logOrigin(p) }
+
+// a Windows device name (CON, PRN, AUX, NUL, COM1-9, LPT1-9, also with an extension or trailing dots and spaces)
+func winDeviceName(name string) bool {
+	b := strings.ToUpper(strings.TrimRight(name, ". "))
+	if i := strings.IndexByte(b, '.'); i >= 0 {
+		b = b[:i]
+	}
+	b = strings.TrimRight(b, " ")
+	switch b {
+	case "CON", "PRN", "AUX", "NUL", "CONIN$", "CONOUT$":
+		return true
+	}
+	if len(b) == 4 && (strings.HasPrefix(b, "COM") || strings.HasPrefix(b, "LPT")) && b[3] >= '0' && b[3] <= '9' {
+		return true
+	}
+	return len(b) > 3 && (strings.HasPrefix(b, "COM") || strings.HasPrefix(b, "LPT")) && strings.ContainsAny(b[3:], "¹²³")
 }

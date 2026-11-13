@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -305,6 +306,9 @@ func logFile() string {
 
 var logEcho = true
 
+// 2.5.16: no log file at all (the service until its own folder is ready)
+var logOff atomic.Bool
+
 func writeLog(msg string) {
 	line := time.Now().Format("2006-01-02 15:04:05") + "  " + protectLogText(msg)
 	lastLogText.Store(line) // 2.5.10: its kind (never its words) is said after a stall (selfheal.go)
@@ -312,6 +316,9 @@ func writeLog(msg string) {
 	defer logMu.Unlock()
 	if logEcho {
 		fmt.Println(line)
+	}
+	if logOff.Load() {
+		return // 2.5.16: the service before its own folder is ready writes no file (servicestate.go)
 	}
 	f := logFile()
 	if fi, err := os.Stat(f); err == nil && fi.Mode().IsRegular() {

@@ -91,10 +91,11 @@ func TestR2516ServiceStateCopied(t *testing.T) {
 	var lines []string
 	log := func(s string) { lines = append(lines, s) }
 	t.Cleanup(durableWaitAll)
-	if err := copyServiceHome(old, dst, log); err != nil {
+	if err := copyServiceHome(osTree{}, old, dst, log); err != nil {
 		t.Fatal(err)
 	}
-	if readText(filepath.Join(dst, "tds-bridge.config.json")) != `{"Port": 9100}` || !exists(filepath.Join(dst, "sync", "ZZ HERON CO", "manifest.json")) {
+	// the settings file never goes with the folder (serviceSettingsFrom takes its plain choices)
+	if exists(filepath.Join(dst, "tds-bridge.config.json")) || !exists(filepath.Join(dst, "sync", "ZZ HERON CO", "manifest.json")) {
 		t.Fatalf("plain files not copied: %v", lines)
 	}
 	for _, n := range []string{"tds-bridge.log", "tds-bridge.log.2026-11-12", filepath.Join("sync", "link.json"), "jobs", "two-names.json"} {
@@ -107,7 +108,7 @@ func TestR2516ServiceStateCopied(t *testing.T) {
 	}
 	// once: a later change of the old folder is not copied again
 	_ = os.WriteFile(filepath.Join(old, "late.json"), []byte(`{}`), 0o644)
-	_ = copyServiceHome(old, dst, log)
+	_ = copyServiceHome(osTree{}, old, dst, log)
 	if exists(filepath.Join(dst, "late.json")) {
 		t.Fatal("copied a second time")
 	}
@@ -132,6 +133,67 @@ func TestR2516ServiceStateACL(t *testing.T) {
 			if strings.Contains(a, ":(OI)(CI)M") || strings.Contains(a, ":(OI)(CI)W") || (strings.Contains(a, "S-1-5-32-545") && !strings.HasSuffix(a, "RX")) {
 				t.Fatalf("a grant that lets a user change it: %s", a)
 			}
+		}
+	}
+}
+
+// from a settings file the service does not protect, only the plain choices; the link to FinCom, the keys, the FVU,
+// the update address and the paired browsers are not taken (their names logged, never their values)
+func TestR2516ServiceSettingsAllowList(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "tds-bridge.config.json")
+	_ = os.WriteFile(p, []byte(`{"Port": 9104, "InstanceId": "abcdef0123456789", "KeepDailyAt": "21:30", "Key": "keyvalue-not-taken",
+	 "CloudUrl": "https://example.invalid", "CloudKey": "fcd_valuenottaken", "UpdateUrl": "https://example.invalid/u", "FvuJar": "C:\\x\\y.jar",
+	 "FvuJarSha256": "00", "JavaExe": "C:\\x\\java.exe", "FvuOut": "C:\\x", "PairedBrowsers": [{"id": "a"}], "PostOnly": [], "TallyMaxSec": 99}`), 0o644)
+	var lines []string
+	c := serviceSettingsFrom(osTree{}, p, func(s string) { lines = append(lines, s) })
+	if toInt(c.Get("Port")) != 9104 || str(c.Get("InstanceId")) != "abcdef0123456789" || str(c.Get("KeepDailyAt")) != "21:30" {
+		t.Fatalf("plain choices not kept: %v", c.keys)
+	}
+	for _, k := range []string{"Key", "CloudUrl", "CloudKey", "UpdateUrl", "FvuJar", "FvuJarSha256", "JavaExe", "FvuOut", "PairedBrowsers", "PostOnly", "TallyMaxSec"} {
+		if c.Has(k) {
+			t.Errorf("%s taken", k)
+		}
+	}
+	l := strings.Join(lines, "\n")
+	if !strings.Contains(l, "CloudKey") || strings.Contains(l, "valuenottaken") || strings.Contains(l, "keyvalue") {
+		t.Fatalf("log: %s", l)
+	}
+	if c := serviceSettingsFrom(osTree{}, filepath.Join(dir, "none.json"), func(string) {}); len(c.keys) != 0 {
+		t.Fatal("a missing file gave settings")
+	}
+}
+
+// the copy stops at its limits, and leaves device names and the settings files out
+func TestR2516ServiceCopyCapped(t *testing.T) {
+	base := t.TempDir()
+	old, dst := filepath.Join(base, "old"), filepath.Join(base, "new")
+	_ = os.MkdirAll(old, 0o755)
+	_ = os.MkdirAll(dst, 0o755)
+	for i := 0; i < 10; i++ {
+		_ = os.WriteFile(filepath.Join(old, "f"+itoa(i)+".json"), []byte(strings.Repeat("x", 100)), 0o644)
+	}
+	_ = os.WriteFile(filepath.Join(old, "tds-bridge.config.json.bak"), []byte("{}"), 0o644)
+	_ = os.WriteFile(filepath.Join(old, "CON.json"), []byte("x"), 0o644)
+	ob, of := serviceCopyMaxBytes, serviceCopyMaxFiles
+	t.Cleanup(func() { serviceCopyMaxBytes, serviceCopyMaxFiles = ob, of; durableWaitAll() })
+	serviceCopyMaxBytes = 450
+	var lines []string
+	if err := copyServiceHome(osTree{}, old, dst, func(s string) { lines = append(lines, s) }); err != nil {
+		t.Fatal(err)
+	}
+	m, _ := filepath.Glob(filepath.Join(dst, "f*.json"))
+	if len(m) != 4 || exists(filepath.Join(dst, "tds-bridge.config.json.bak")) || exists(filepath.Join(dst, "CON.json")) || !strings.Contains(strings.Join(lines, " "), "the rest") {
+		t.Fatalf("copied %d, lines %v", len(m), lines)
+	}
+	for _, n := range []string{"CON", "nul.txt", "COM1.log", "lpt9", "Con .x"} {
+		if !winDeviceName(n) {
+			t.Errorf("%s is a device name", n)
+		}
+	}
+	for _, n := range []string{"CONS", "COM10", "console.txt", "sync"} {
+		if winDeviceName(n) {
+			t.Errorf("%s is not a device name", n)
 		}
 	}
 }

@@ -43,7 +43,12 @@ func (service) Execute(args []string, req <-chan svc.ChangeRequest, st chan<- sv
 		}()
 		// round 20 (the re-review's Medium 1): at the first start of a new version (a bridge that updated itself never
 		// ran the install step) the recorder trial's folders are checked and made safe, once, before anything runs
-		serviceStateAtStart(writeLog) // 2.5.16: the settings and state in the service's own folder (servicestate.go)
+		// 2.5.16 (servicestate.go): the bridge starts only from the service's own folder; until it is ready nothing is
+		// written and the reason is in Windows' event log
+		if !serviceWaitForState() {
+			done <- 0
+			return
+		}
 		if exe, err := os.Executable(); err == nil {
 			foldersAfterUpdate(filepath.Dir(exe), writeLog)
 			tallyIniAfterUpdate(filepath.Dir(exe), writeLog) // 2.4.5: FinCom's add-on in tally.ini (tallyini.go)
@@ -89,6 +94,7 @@ func runService(args []string) int {
 	asService = true
 	runMode = "service"
 	logEcho = false
+	logOff.Store(true) // until the service's own folder is ready (servicestate_windows.go)
 	undoFailedUpdate()
 	if err := svc.Run(serviceName, service{}); err != nil {
 		writeLog("The service could not run: " + err.Error())
@@ -434,19 +440,14 @@ func installCmd(args []string) int {
 	stopService()
 	// 2.5.16 (servicestate.go): the service's settings and state in its own folder (the owner may read it, not change it);
 	// the earlier folder's files copied there once
-	home := o.home
-	if d, err := prepareServiceStateDir(o.sid, installLog); err != nil {
-		installLog("Install: the service's own folder could not be made safe (" + err.Error() + "); the settings stay in " + o.home + " for now (the service tries again at its start)")
-	} else {
-		cur := installedConfig()
-		if cur == "" || !exists(cur) {
-			cur = filepath.Join(o.home, "tds-bridge.config.json")
-		}
-		if err := copyServiceHome(filepath.Dir(cur), d, installLog); err != nil {
-			installLog("Install: the earlier settings could not all be copied into " + d + " (" + err.Error() + ")")
-		}
-		o.cfgDir, home = d, d
+	// 2.5.16 (servicestate.go): the service's settings in its own folder (the owner may read it, not change it); the
+	// earlier folder's files are copied by the service at its start, with the owner's rights
+	d, err := prepareServiceStateDir(o.sid, installLog)
+	if err != nil {
+		return installFailed(3, "The service's own folder could not be made safe ("+err.Error()+").", "Run the setup again as an administrator; if it fails again, send the install log to FinCom.")
 	}
+	o.cfgDir = d
+	home := d
 	cfgPath, code := writeSettings(o, mode, fincom)
 	if code != 0 {
 		return code
@@ -491,11 +492,23 @@ func writeSettings(o ownerInfo, mode, fincom string) (string, int) {
 		dir = o.cfgDir // 2.5.16: the service's own folder (bridge 1.15.0's settings still read from its own)
 	}
 	var cfgPath string
+	// 2.5.16: the service's settings start from the plain choices of the earlier settings only (servicestate.go)
+	earlier := func(c *Ordered, from string) {
+		if o.cfgDir != "" {
+			*c = *serviceSettingsFrom(osTree{}, from, installLog)
+			return
+		}
+		_ = c.UnmarshalText(readText(from))
+	}
 	if mode == "test" {
 		cfgPath = filepath.Join(dir, "go-bridge.config.json")
 		c := newOrdered()
 		if exists(cfgPath) {
 			_ = c.UnmarshalText(readText(cfgPath))
+		} else if o.cfgDir != "" && exists(filepath.Join(o.home, "go-bridge.config.json")) {
+			earlier(c, filepath.Join(o.home, "go-bridge.config.json"))
+		} else if exists(psCfg) && o.cfgDir != "" {
+			earlier(c, psCfg)
 		} else if exists(psCfg) {
 			pc := newOrdered()
 			if pc.UnmarshalText(readText(psCfg)) == nil {
@@ -523,7 +536,7 @@ func writeSettings(o ownerInfo, mode, fincom string) (string, int) {
 		if exists(cfgPath) {
 			_ = c.UnmarshalText(readText(cfgPath))
 		} else if exists(psCfg) {
-			_ = c.UnmarshalText(readText(psCfg))
+			earlier(c, psCfg)
 		}
 		// switched from test mode: the same bridge for FinCom (the id FinCom made the main one)
 		carryInstanceID(c, filepath.Join(dir, "go-bridge.config.json"))

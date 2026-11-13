@@ -127,5 +127,6 @@ func platFvuRunAsOwner(q fvuReq) M {
 }
 
 // 2.5.16 (servicestate.go): no service here
-func platServiceOwner() (string, string)   { return "", "" }
-func platServiceOldHome(sid string) string { return "" }
+func platServiceOwner() (string, string)     { return "", "" }
+func platServiceOldHome(sid string) string   { return "" }
+func platRecordedStateDir(sid string) string { return "" }
