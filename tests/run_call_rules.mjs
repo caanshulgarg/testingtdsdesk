@@ -37,6 +37,15 @@ const later = t.replace(/\.(\d{10})\./, (m, n) => "." + (Number(n) + 99999) + ".
 ok((await R.verifyGuest(secret, later, 1_800_000_100)) === null, "a later expiry put in: refused");
 let threw = false; try { await R.signGuest("short", room, p, 0); } catch (e) { threw = true; }
 ok(threw, "no pass is signed with a short secret");
+// a guest's pass for the private channel (migration 186): a JWT Realtime can check with the project's secret
+const cp = await R.signChannelPass(secret, room, p, 1_800_000_000.9);
+const [cph, cpb, cps] = cp.split("."), un = (x) => JSON.parse(Buffer.from(x, "base64url").toString());
+const { createHmac } = await import("node:crypto");
+ok(cp.split(".").length === 3 && same(un(cph), { alg: "HS256", typ: "JWT" }) && cps === createHmac("sha256", secret).update(cph + "." + cpb).digest("base64url"), "a channel pass: a JWT signed HS256 with the secret (checked with node's own HMAC)");
+ok(same(un(cpb), { role: "anon", iat: 1_800_000_000, exp: 1_800_000_000 + R.CHANNEL_PASS_SECS, fincom_call: { room, participant: p } }) && R.CHANNEL_PASS_SECS === 1800, "it says: role anon, one room, one participant, 30 minutes; nothing else");
+threw = false; try { await R.signChannelPass("short", room, p, 0); } catch (e) { threw = true; }
+let threw2 = false; try { await R.signChannelPass(secret, "not-a-room", p, 0); } catch (e) { threw2 = true; }
+ok(threw && threw2, "none is signed with a short secret or for ids that are not ids");
 const lk = R.randomToken(32);
 ok(R.linkTokenOk(lk) && !R.linkTokenOk(lk.slice(1)) && R.randomToken(32) !== lk, "a link token: 32 random bytes, base64url");
 ok((await R.sha256Hex("abc")) === "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad", "sha256 as the database keeps it");

@@ -5,6 +5,12 @@ const cfg = () => (typeof Cloud === "object" && Cloud.cfg ? Cloud.cfg() : { url:
 export const base = () => String(cfg().url || "").replace(/\/+$/, "");
 export const publicKey = () => String(cfg().key || "");
 
+// the sign-in a private channel is joined with (migration 186): a member's own, kept fresh by Cloud
+export async function memberToken() {
+  try { if (typeof Cloud === "object" && Cloud.fresh) await Cloud.fresh(); } catch (e) { /* the one in hand */ }
+  try { const s = Cloud.sess(); return String((s && s.access_token) || ""); } catch (e) { return ""; }
+}
+
 export function makeApi(guest) {
   // guest: {gt} once the guest has a pass; null for a member
   async function call(action, body) {

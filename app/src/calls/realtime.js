@@ -2,14 +2,20 @@
 // (Phoenix channels, JSON, vsn 1.0.0). FinCom has no supabase-js; this is the part calls need (about 3 KB, in the calls
 // chunk only). It reconnects by itself with back-off when the line drops, joins the channel again and tracks presence
 // again; the call screen says "Reconnecting…" meanwhile.
-//   const ch = channel({url, key, topic, presenceKey, onStatus});
+// A private channel (migration 186: fincom-call says so with the channel's name) is joined with a sign-in: `getToken`
+// gives it (a member's own access token, a guest's channel pass), asked again before every join and every few minutes,
+// and sent on when it changes, so a long call outlives the token it began with. A public one as before.
+//   const ch = channel({url, key, topic, presenceKey, onStatus, private, getToken});
 //   ch.on("signal", (payload) => …); ch.onPresence((list) => …); ch.send("signal", {…}); ch.track({name, …}); ch.close();
-export function channel({ url, key, topic, presenceKey, onStatus, token }) {
+export const TOKEN_EVERY_MS = 4 * 60 * 1000;
+export function channel({ url, key, topic, presenceKey, onStatus, token, private: priv, getToken }) {
   const wsUrl = String(url).replace(/^http/, "ws").replace(/\/+$/, "") + "/realtime/v1/websocket?apikey=" + encodeURIComponent(key) + "&vsn=1.0.0";
   const full = "realtime:" + topic;
   const handlers = {}, presenceHandlers = [];
   let ws = null, ref = 0, joinRef = null, joined = false, closed = false, tries = 0, beat = null, tracked = null, queue = [], timer = null;
   let presence = {};
+  let tok = token || "", tokTimer = null, refusals = 0;
+  const freshToken = async () => { if (getToken) { try { const t = await getToken(); if (t) tok = String(t); } catch (e) { /* the one in hand */ } } return tok; };
   const status = (s) => { try { onStatus && onStatus(s); } catch (e) { /* */ } };
   const raw = (msg) => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(msg)); };
   const push = (event, payload) => {
@@ -25,10 +31,13 @@ export function channel({ url, key, topic, presenceKey, onStatus, token }) {
     if (closed) return;
     status(tries ? "reconnecting" : "connecting");
     try { ws = new WebSocket(wsUrl); } catch (e) { return later(); }
-    ws.onopen = () => {
+    const mine = ws;
+    ws.onopen = async () => {
+      if (priv) await freshToken();
+      if (closed || ws !== mine || mine.readyState !== 1) return;
       joinRef = String(++ref);
       raw({ topic: full, event: "phx_join", ref: joinRef, join_ref: joinRef, payload: {
-        config: { broadcast: { ack: false, self: false }, presence: { key: presenceKey || "" }, postgres_changes: [], private: false }, ...(token ? { access_token: token } : {}) } });
+        config: { broadcast: { ack: false, self: false }, presence: { key: presenceKey || "" }, postgres_changes: [], private: !!priv }, ...(tok ? { access_token: tok } : {}) } });
       clearInterval(beat);
       beat = setInterval(() => raw({ topic: "phoenix", event: "heartbeat", payload: {}, ref: String(++ref) }), 25000);
     };
@@ -37,10 +46,14 @@ export function channel({ url, key, topic, presenceKey, onStatus, token }) {
       if (m.topic !== full) return;
       if (m.event === "phx_reply" && m.ref === joinRef) {
         if (m.payload && m.payload.status === "ok") {
-          joined = true; tries = 0; status("joined");
+          joined = true; tries = 0; refusals = 0; status("joined");
           const q = queue; queue = []; q.forEach((x) => raw(Object.assign(x, { join_ref: joinRef })));
           if (tracked) push("presence", { type: "presence", event: "track", payload: tracked });
-        } else { status("refused"); }
+        } else {
+          status("refused");
+          // a private channel refused: the sign-in may have just run out; a few more tries with a new one
+          if (priv && ++refusals <= 5) { try { ws.close(4001, "refused"); } catch (e) { /* */ } }
+        }
         return;
       }
       if (m.event === "broadcast" && m.payload) {
@@ -68,6 +81,11 @@ export function channel({ url, key, topic, presenceKey, onStatus, token }) {
   // back on line: at once, not after the back-off
   const online = () => { if (!joined && !closed) { clearTimeout(timer); open(); } };
   if (typeof window !== "undefined") window.addEventListener("online", online);
+  // the sign-in kept fresh on the channel: sent on only when it changed
+  if (priv && getToken) tokTimer = setInterval(async () => {
+    const before = tok; await freshToken();
+    if (!closed && joined && tok && tok !== before) raw({ topic: full, event: "access_token", payload: { access_token: tok }, ref: String(++ref), join_ref: joinRef });
+  }, TOKEN_EVERY_MS);
   open();
   return {
     topic,
@@ -77,7 +95,7 @@ export function channel({ url, key, topic, presenceKey, onStatus, token }) {
     track(meta) { tracked = meta; if (joined) push("presence", { type: "presence", event: "track", payload: meta }); },
     get joined() { return joined; },
     close() {
-      closed = true; clearInterval(beat); clearTimeout(timer);
+      closed = true; clearInterval(beat); clearTimeout(timer); clearInterval(tokTimer);
       if (typeof window !== "undefined") window.removeEventListener("online", online);
       try { if (joined) raw({ topic: full, event: "phx_leave", payload: {}, ref: String(++ref), join_ref: joinRef }); ws && ws.close(1000, "left"); } catch (e) { /* */ }
     },

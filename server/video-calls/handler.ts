@@ -81,6 +81,12 @@ export function handler(deps: Deps) {
   const insert = async (table: string, row: unknown) => ((await svc("/rest/v1/" + table, { method: "POST", headers: { Prefer: "return=representation" }, body: JSON.stringify(row) })) as any[])[0];
   const patch = async (table: string, filter: string, row: unknown) => (await svc("/rest/v1/" + table + "?" + filter, { method: "PATCH", headers: { Prefer: "return=representation" }, body: JSON.stringify(row) })) as any[];
   const rpc = (fn: string, args: Record<string, unknown>, token = SERVICE) => rest("/rest/v1/rpc/" + fn, token, { method: "POST", body: JSON.stringify(args) });
+  // private channels (migration 186; the database review of 13-Nov-2026): on once the function is given the project's
+  // JWT secret (CALLS_CHANNEL_JWT_SECRET), with which it signs a guest's channel pass. Every answer that gives a
+  // channel's name says so (private); a member joins with their own sign-in, a guest with the pass (rt). Without the
+  // secret the channels are public, as before.
+  const CHAN_SECRET = String(env("CALLS_CHANNEL_JWT_SECRET") || ""), PRIVATE = CHAN_SECRET.length >= 32;
+  const chanPass = async (r: any, p: any) => PRIVATE && p && p.role === "guest" ? { rt: await R.signChannelPass(CHAN_SECRET, r.id, p.id, Math.floor(now() / 1000)) } : {};
   const policy = aiPolicy((fn, args) => rpc(fn, args));
   // FinCom's switch for an AI feature of a call: refused (thrown) in plain words, else the console's model (or null)
   const aiGate = async (firm: string, feature: string) => {
@@ -221,8 +227,8 @@ export function handler(deps: Deps) {
   // "someone is waiting / was answered in room X": to the firm's lobby channel and the call's own (the room's id only)
   const ping = async (r: any) => {
     try {
-      const msgs = [{ topic: await lobbyTopic(r.firm_id), event: "knock", payload: { room_id: r.id }, private: false }];
-      if (r.chan_key) msgs.push({ topic: await R.topicFor(r.chan_key, r.chan_epoch), event: "knock", payload: { room_id: r.id }, private: false });
+      const msgs = [{ topic: await lobbyTopic(r.firm_id), event: "knock", payload: { room_id: r.id }, private: PRIVATE }];
+      if (r.chan_key) msgs.push({ topic: await R.topicFor(r.chan_key, r.chan_epoch), event: "knock", payload: { room_id: r.id }, private: PRIVATE });
       const res = await doFetch(URL_ + "/realtime/v1/api/broadcast", { method: "POST", headers: { apikey: SERVICE, Authorization: "Bearer " + SERVICE, "Content-Type": "application/json" }, body: JSON.stringify({ messages: msgs }) });
       await res.body?.cancel();
     } catch { /* the lists are asked for every few seconds anyway */ }
@@ -261,7 +267,7 @@ export function handler(deps: Deps) {
     return {
       ok: true, room: { id: r.id, kind: r.kind, title: r.title, client_id: r.client_id, batch_id: r.batch_id, status: r.status, host_user: r.host_user, cowork_on: r.cowork_on, started_at: r.started_at,
         code: r.code || null, scheduled_at: r.scheduled_at || null, minutes: r.minutes || null },
-      me: { id: p.id, role: p.role, name: p.name, state: p.state }, topic: await R.topicFor(r.chan_key, r.chan_epoch), ice: await iceServers(), mode, max: R.maxPeople(mode),
+      me: { id: p.id, role: p.role, name: p.name, state: p.state }, topic: await R.topicFor(r.chan_key, r.chan_epoch), private: PRIVATE, ...(await chanPass(r, p)), ice: await iceServers(), mode, max: R.maxPeople(mode),
       recording: rec ? { id: rec.id, started_at: rec.started_at, notes: rec.mime === R.NOTES_MIME, notice: rec.mime === R.NOTES_MIME ? R.NOTES_TEXT : R.CONSENT_TEXT } : null, ...extra,
     };
   };
@@ -474,7 +480,7 @@ export function handler(deps: Deps) {
       await admittedIn(r, m);
       const on = b.on === true;
       const [x] = await patch("call_rooms", "id=eq." + r.id, { cowork_on: on, cowork_at: on ? new Date(now()).toISOString() : r.cowork_at, cowork_epoch: Number(r.cowork_epoch || 1) + 1 });
-      return { ok: true, on, topic: on ? await R.topicFor(x.chan_key, x.cowork_epoch, "cowork") : null };
+      return { ok: true, on, topic: on ? await R.topicFor(x.chan_key, x.cowork_epoch, "cowork") : null, private: PRIVATE };
     },
     // a signed-in member of the firm who can read the client follows; never a guest (they have no member token)
     async cowork_join(m, b) {
@@ -482,7 +488,7 @@ export function handler(deps: Deps) {
       const p = await admittedIn(r, m);
       if (!r.cowork_on) fail(409, "The host has not started working together.", "cowork");
       if (!R.mayCowork({ member: true, guest: p.role === "guest" }, await clientReadable(m.jwt, r.client_id))) fail(403, "You cannot open this client, so you cannot work together on it.", "client");
-      return { ok: true, topic: await R.topicFor(r.chan_key, r.cowork_epoch, "cowork"), host_user: r.host_user, client_id: r.client_id };
+      return { ok: true, topic: await R.topicFor(r.chan_key, r.cowork_epoch, "cowork"), private: PRIVATE, host_user: r.host_user, client_id: r.client_id };
     },
     async rec_start(m, b) {
       const r = await room(b.room_id, m.firm, m);
@@ -648,7 +654,7 @@ export function handler(deps: Deps) {
         for (const p of ws.filter((x) => x.room_id === r.id)) knocks.push({ id: p.id, room_id: r.id, title: r.title, code: r.code || null, name: p.name, email: p.email, verified: !!p.verified, joined_at: p.joined_at, mine, host_online: online });
       }
       knocks.sort((a, b) => String(a.joined_at).localeCompare(String(b.joined_at)));
-      return { ok: true, topic: await lobbyTopic(m.firm), knocks, every: R.LOBBY.watchSecs };
+      return { ok: true, topic: await lobbyTopic(m.firm), private: PRIVATE, knocks, every: R.LOBBY.watchSecs };
     },
     async batch_list(m) {
       const all = (await svc("/rest/v1/call_batches?select=id,name,retention_days,archived&firm_id=eq." + m.firm + "&archived=is.false&order=created_at")) as any[] || [];
@@ -714,7 +720,7 @@ export function handler(deps: Deps) {
     // someone removed: the channel's name moves on, so they hear nothing more; the others ask for the new name
     if (state === "removed") {
       const [x] = await patch("call_rooms", "id=eq." + r.id, { chan_epoch: Number(r.chan_epoch) + 1, cowork_epoch: Number(r.cowork_epoch || 1) + 1 });
-      return { ok: true, rekey: true, topic: await R.topicFor(x.chan_key, x.chan_epoch) };
+      return { ok: true, rekey: true, topic: await R.topicFor(x.chan_key, x.chan_epoch), private: PRIVATE };
     }
     return { ok: true };
   }
@@ -801,8 +807,8 @@ export function handler(deps: Deps) {
   const shared: Record<string, (w: Member | Guest, b: any, ctx: Ctx) => Promise<unknown>> = {
     async topic(w, b) {
       const r = await room(w.kind === "guest" ? w.room : b.room_id, w.kind === "member" ? w.firm : undefined, w.kind === "member" ? w : undefined);
-      await admittedIn(r, w);
-      return { ok: true, topic: await R.topicFor(r.chan_key, r.chan_epoch), status: r.status };
+      const p = await admittedIn(r, w);
+      return { ok: true, topic: await R.topicFor(r.chan_key, r.chan_epoch), private: PRIVATE, ...(await chanPass(r, p)), status: r.status };
     },
     async leave(w, b) {
       const r = await room(w.kind === "guest" ? w.room : b.room_id, w.kind === "member" ? w.firm : undefined, w.kind === "member" ? w : undefined);

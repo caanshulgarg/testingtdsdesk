@@ -25,8 +25,8 @@ export function pathOf(el) {
   return "#app > " + parts.join(" > ");
 }
 
-export function startCowork({ url, key, topic, me, name, hostId, isHost, onState }) {
-  const ch = channel({ url, key, topic, presenceKey: me });
+export function startCowork({ url, key, topic, me, name, hostId, isHost, onState, private: priv, getToken }) {
+  const ch = channel({ url, key, topic, presenceKey: me, private: !!priv, getToken: priv ? getToken : null });
   let follow = !isHost, people = [], last = "", stopped = false, applying = false;
   const ptrs = new Map(), focus = new Map();
   ch.track({ id: me, name, host: !!isHost });

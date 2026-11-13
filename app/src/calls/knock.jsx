@@ -14,7 +14,7 @@ import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { X } from "lucide-react";
 import { channel } from "./realtime.js";
-import { base, publicKey } from "./api.js";
+import { base, publicKey, memberToken } from "./api.js";
 import { LOBBY, knockText } from "./rules.js";
 import { Calls } from "./launch.js";
 import "./calls.css";
@@ -40,11 +40,11 @@ function alertNow(k) {
   try { if (document.hidden && window.Notification && Notification.permission === "granted") new Notification("FinCom: someone is asking to join", { body: knockText(k.name, k.title), tag: "knock-" + k.id }); } catch (e) { /* */ }
 }
 
-function listen(topic) {
+function listen(topic, priv) {
   if (st.ch) st.ch.close();
-  st.topic = topic;
+  st.topic = topic; st.priv = !!priv;
   let t = null;
-  st.ch = channel({ url: base(), key: publicKey(), topic, presenceKey: "", onStatus: () => {} });
+  st.ch = channel({ url: base(), key: publicKey(), topic, presenceKey: "", onStatus: () => {}, private: !!priv, getToken: priv ? memberToken : null });
   st.ch.on("knock", () => { clearTimeout(t); t = setTimeout(refresh, 250); });
 }
 // speed round (27-Oct-2026, staging: fincom-call asked 407 times in 45 minutes by one browser): the firm's lobby channel
@@ -75,7 +75,7 @@ export async function refresh() {
   st.busy = true;
   try {
     const j = await call("lobby", {});
-    if (j.topic && j.topic !== st.topic) listen(j.topic);
+    if (j.topic && (j.topic !== st.topic || !!j.private !== !!st.priv)) listen(j.topic, j.private);
     const list = j.knocks || [];
     const fresh = list.filter((k) => !st.seen.has(k.id));
     fresh.forEach((k) => st.seen.add(k.id));

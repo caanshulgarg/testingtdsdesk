@@ -23,7 +23,7 @@ const uuid = () => "eeeeeeee-0000-4000-8000-" + String(++uuidN).padStart(12, "0"
 type Row = Record<string, any>;
 
 function stand(o: { cf?: boolean, mail?: boolean, ai?: boolean, aiOff?: boolean, aiAnswer?: string, transcribe?: (n: number) => Response, look429?: boolean,
-  groq?: boolean, stt?: (form: FormData, n: number) => Response, chat?: (body: any, n: number) => Response, noLobby?: boolean, noDiag?: boolean, fincom?: (a: any) => any } = {}) {
+  groq?: boolean, chanSecret?: string, stt?: (form: FormData, n: number) => Response, chat?: (body: any, n: number) => Response, noLobby?: boolean, noDiag?: boolean, fincom?: (a: any) => any } = {}) {
   const T: Record<string, Row[]> = {
     members: Object.values(USERS).map((u) => ({ user_id: u.id, firm_id: u.firm, role: u.role, active: true, name: u.name, email: u.email })),
     firms: [{ id: FIRM, name: "Garg & Co" }, { id: FIRM2, name: "B" }],
@@ -154,7 +154,7 @@ function stand(o: { cf?: boolean, mail?: boolean, ai?: boolean, aiOff?: boolean,
     return J({ message: "not stubbed " + input }, 599);
   }) as typeof fetch;
   let clock = Date.parse("2026-10-23T05:00:00Z");
-  const h = handler({ env: (k) => ({ SUPABASE_URL: SUPA, SUPABASE_SERVICE_ROLE_KEY: "service-key", SUPABASE_ANON_KEY: "anon-key" } as Record<string, string>)[k], fetch: fake, now: () => clock });
+  const h = handler({ env: (k) => ({ SUPABASE_URL: SUPA, SUPABASE_SERVICE_ROLE_KEY: "service-key", SUPABASE_ANON_KEY: "anon-key", ...(o.chanSecret ? { CALLS_CHANNEL_JWT_SECRET: o.chanSecret } : {}) } as Record<string, string>)[k], fetch: fake, now: () => clock });
   const call = async (body: unknown, tok?: string, ip = "203.0.113.7") => {
     const res = await h(new Request("https://fn.test/fincom-call", { method: "POST", headers: { "Content-Type": "application/json", Origin: "https://staging.fincom.live", "x-forwarded-for": ip + ", 10.0.0.1", ...(tok ? { Authorization: "Bearer " + tok } : {}) }, body: JSON.stringify(body) }));
     return { status: res.status, j: await res.json() as any };
@@ -927,4 +927,55 @@ Deno.test("AI control centre: the summary and subtitles switched off by FinCom a
   m.T.call_transcripts.push({ room_id: b.j.room.id, firm_id: FIRM, lines: [{ who: "A", start_ms: 0, text: "hi" }] });
   const ok = await m.call({ action: "summarise", room_id: b.j.room.id }, "tok-staff");
   eq([ok.status, ok.j.summary.model], [200, "claude-opus-5-5"], "the console's model made the summary");
+});
+
+// the database review of 13-Nov-2026 (M5; migration 186): private channels once the function holds the project's JWT secret
+Deno.test("private channels: off without the secret (as before); with it every channel name says private, a guest gets a signed channel pass, a member none", async () => {
+  const jwt = async (t: string, secret: string) => {
+    const [h, b, sig] = String(t).split(".");
+    const dec = (x: string) => JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(x.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0))));
+    const k = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["verify"]);
+    const good = await crypto.subtle.verify("HMAC", k, Uint8Array.from(atob(sig.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0)), new TextEncoder().encode(h + "." + b));
+    return { head: dec(h), body: dec(b), good };
+  };
+  // without the secret: public, no pass (what the app before this branch expects)
+  const s0 = stand();
+  const a0 = await s0.call({ action: "start", kind: "help" }, "tok-staff");
+  eq([a0.j.private, a0.j.rt], [false, undefined], "no secret: the call's channel is public, no pass");
+  eq([(await s0.call({ action: "lobby" }, "tok-owner")).j.private, (await s0.call({ action: "topic", room_id: a0.j.room.id }, "tok-staff")).j.private], [false, false], "the lobby and a new name too");
+  eq(stand({ chanSecret: "too-short" }).call !== undefined && (await stand({ chanSecret: "too-short" }).call({ action: "start", kind: "help" }, "tok-staff")).j.private, false, "a secret under 32 characters counts as none");
+  // with it
+  const SECRET = "made-up-project-jwt-secret-0186-0186-0186";
+  const s = stand({ chanSecret: SECRET });
+  const made = await s.call({ action: "create", title: "Meeting with a guest" }, "tok-owner");
+  const a = await s.call({ action: "join", room_id: made.j.room_id }, "tok-owner");
+  eq([a.status, a.j.private, a.j.rt], [200, true, undefined], "a member: private, joined with their own sign-in (no pass)");
+  assert(!JSON.stringify(a.j).includes(SECRET), "the secret never leaves the function");
+  const g = await s.call({ action: "guest_start", code: made.j.code, name: "Made-up Guest", email: "guest@x.test" });
+  const ping = s.log.broadcast.at(-1)!;
+  assert(ping.body.messages.length >= 1 && ping.body.messages.every((m: any) => m.private === true), "the function's own pings go to the private channels: " + JSON.stringify(ping.body));
+  const waiting = await s.call({ action: "guest_poll", gt: g.j.gt });
+  eq([waiting.j.state, waiting.j.topic, waiting.j.rt], ["waiting", undefined, undefined], "a waiting guest: no channel, no pass");
+  const lobby = await s.call({ action: "lobby" }, "tok-owner");
+  eq([lobby.j.private, lobby.j.rt], [true, undefined], "the lobby: private, the member's own sign-in");
+  eq((await s.call({ action: "admit", room_id: made.j.room_id, participant_id: lobby.j.knocks[0].id }, "tok-owner")).status, 200, "admitted");
+  const in1 = await s.call({ action: "guest_poll", gt: g.j.gt });
+  eq([in1.j.state, in1.j.topic, in1.j.private], ["admitted", a.j.topic, true], "the admitted guest: the call's channel, private");
+  const p1 = await jwt(in1.j.rt, SECRET);
+  const nowS = Math.floor(Date.parse("2026-10-23T05:00:00Z") / 1000);
+  assert(p1.good && p1.head.alg === "HS256" && p1.head.typ === "JWT", "with a pass signed with the project's secret (HS256): " + JSON.stringify(p1.head));
+  eq(p1.body, { role: "anon", iat: nowS, exp: nowS + R.CHANNEL_PASS_SECS, fincom_call: { room: made.j.room_id, participant: lobby.j.knocks[0].id } }, "the pass: role anon, this room and this guest only, " + R.CHANNEL_PASS_SECS / 60 + " minutes");
+  assert(!(await jwt(in1.j.rt, SECRET + "x")).good, "another secret does not verify it");
+  s.tick(10 * 60 * 1000);
+  const t2 = await s.call({ action: "topic", gt: g.j.gt });
+  const p2 = await jwt(t2.j.rt, SECRET);
+  eq([t2.status, t2.j.private, p2.good, p2.body.exp], [200, true, true, nowS + 600 + R.CHANNEL_PASS_SECS], "asked again while the call goes on: a new pass with a later end");
+  const tm = await s.call({ action: "topic", room_id: made.j.room_id }, "tok-owner");
+  eq([tm.j.private, tm.j.rt], [true, undefined], "a member asking again: no pass");
+  const cw = await s.call({ action: "cowork", room_id: made.j.room_id, on: true }, "tok-owner");
+  eq([cw.j.private, cw.j.rt, /^cowork:/.test(cw.j.topic)], [true, undefined, true], "working together: private, members only");
+  const rm = await s.call({ action: "remove", room_id: made.j.room_id, participant_id: lobby.j.knocks[0].id }, "tok-owner");
+  eq([rm.j.rekey, rm.j.private, rm.j.topic !== a.j.topic], [true, true, true], "removed: a new private name for the others");
+  const gone = await s.call({ action: "topic", gt: g.j.gt });
+  eq([gone.j.kind, gone.j.rt, gone.j.topic], ["notin", undefined, undefined], "the removed guest gets no new name and no new pass");
 });

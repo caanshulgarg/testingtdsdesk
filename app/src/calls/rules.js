@@ -128,6 +128,19 @@ export async function verifyGuest(secret, token, nowSecs) {
   if (!(exp > nowSecs)) return null;
   return { room: m[1], participant: m[2], exp };
 }
+// a guest's pass for the call's private channel (migration 186): a JWT (HS256, with the project's own JWT secret, which
+// only fincom-call holds) that Supabase Realtime checks before it asks the database's policy. It says no more than the
+// project's public key does (role anon), plus the one room and participant the policy looks up. Short: the app asks
+// for a new one (the `topic` step) while the call goes on.
+export const CHANNEL_PASS_SECS = 30 * 60;
+const b64uText = (s) => b64u(new TextEncoder().encode(s));
+export async function signChannelPass(secret, room, participant, nowSecs, secs = CHANNEL_PASS_SECS) {
+  if (!secret || secret.length < 32) throw new Error("no signing secret");
+  if (!isUuid(room) || !isUuid(participant)) throw new Error("bad ids");
+  const iat = Math.floor(nowSecs);
+  const body = b64uText(JSON.stringify({ alg: "HS256", typ: "JWT" })) + "." + b64uText(JSON.stringify({ role: "anon", iat, exp: iat + secs, fincom_call: { room, participant } }));
+  return body + "." + await hmac(secret, body);
+}
 export function otpCode() { const a = new Uint32Array(1); crypto.getRandomValues(a); return String(a[0] % 1000000).padStart(6, "0"); }
 export const emailOk = (e) => /^[^@\s,;<>]+@[^@\s,;<>]+\.[a-z]{2,}$/i.test(String(e || "")) && String(e).length <= 200;
 export const nameOk = (n) => { const s = String(n || "").trim(); return s.length >= 2 && s.length <= 60 && !/[<>]/.test(s); };

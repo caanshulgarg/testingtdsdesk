@@ -17,7 +17,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { Mic, MicOff, Video, VideoOff, MonitorUp, Hand, Smile, Captions, EllipsisVertical, PhoneOff, Info, Users, MessageSquare, Sparkles, X } from "lucide-react";
-import { makeApi, base, publicKey } from "./api.js";
+import { makeApi, base, publicKey, memberToken } from "./api.js";
 import { channel } from "./realtime.js";
 import { createMedia } from "./media.js";
 import { makeVoices } from "./voice.js";
@@ -233,9 +233,20 @@ function Call({ opts, onClose }) {
     send: (ev, p) => { if (R.ch) R.ch.send(ev, p); },
     on: (ev, f) => { (R.sigHandlers[ev] = R.sigHandlers[ev] || []).push(f); return () => { R.sigHandlers[ev] = R.sigHandlers[ev].filter((x) => x !== f); }; },
   }), []);
-  function openChannel(topic) {
+  // t: what fincom-call gave with the channel's name ({topic, private, rt}: a private channel is joined with a member's
+  // own sign-in, or a guest's channel pass, asked for again while the call goes on)
+  function openChannel(t) {
     if (R.ch) R.ch.close();
-    const ch = channel({ url: base(), key: publicKey(), topic, presenceKey: R.sess ? R.sess.me.id : "x", onStatus: (s) => setStatus(s === "joined" ? "" : s) });
+    const topic = t.topic, room = ((R.sess || sess || {}).room || {}).id;
+    R.pass = { rt: t.rt || "", at: Date.now() };
+    const guestPass = async () => {
+      if (R.pass.rt && Date.now() - R.pass.at < 5 * 60 * 1000) return R.pass.rt;
+      const n = await api.call("topic", { room_id: room });
+      if (n.rt) R.pass = { rt: n.rt, at: Date.now() };
+      return R.pass.rt;
+    };
+    const ch = channel({ url: base(), key: publicKey(), topic, presenceKey: R.sess ? R.sess.me.id : "x", onStatus: (s) => setStatus(s === "joined" ? "" : s),
+      private: !!t.private, getToken: t.private ? (guest ? guestPass : memberToken) : null });
     for (const ev of ["rtc", "sfu", "sfu-ask", "chat", "hand", "react", "rec", "kick", "rekey", "end", "mute-all", "cowork", "cap", "remote", "rdid", "sub", "knock"]) ch.on(ev, (p) => (R.sigHandlers[ev] || []).forEach((f) => f(p)));
     ch.onPresence((list) => { setPresence(list); if (R.media) list.forEach((p) => p.pid && R.media.meet(p.pid)); });
     R.ch = ch; trackMe();
@@ -322,7 +333,7 @@ function Call({ opts, onClose }) {
 
   useEffect(() => {
     if (phase !== "in" || !sess) return;
-    openChannel(sess.topic);
+    openChannel(sess);
     const local = new MediaStream([...(R.raw ? R.raw.getAudioTracks() : []), ...(outVideo() && cam ? [outVideo()] : [])]);
     // the others' voices: each in its own <audio> element (voice.js), the pictures' <video> elements always muted
     if (R.voices) R.voices.stop();
@@ -339,7 +350,7 @@ function Call({ opts, onClose }) {
       sig.on("react", (m) => { setReacts((r) => Object.assign({}, r, { [m.pid]: { e: m.e, at: Date.now() } })); setTimeout(() => setReacts((r) => { const x = Object.assign({}, r); if (x[m.pid] && Date.now() - x[m.pid].at > 2900) delete x[m.pid]; return x; }), 3000); }),
       sig.on("rec", (m) => { if (m.on) { setRec((r) => (r && r.id === m.id ? r : { id: m.id, notes: !!m.notes })); } else { setRec(null); setAcked(false); stopMic(); } }),
       sig.on("kick", (m) => { if (m.pid === sess.me.id) { leave(false, "The host removed you from the call."); } else R.media && R.media.forget(m.pid); }),
-      sig.on("rekey", async () => { try { const t = await api.call("topic", { room_id: sess.room.id }); openChannel(t.topic); } catch (e) { /* removed: the kick says so */ } }),
+      sig.on("rekey", async () => { try { const t = await api.call("topic", { room_id: sess.room.id }); openChannel(t); } catch (e) { /* removed: the kick says so */ } }),
       sig.on("end", () => leave(false, "The host ended the call.")),
       sig.on("mute-all", (m) => { if (m.from !== sess.me.id) { setMic(false); say("The host muted everyone. Unmute when you speak."); } }),
       sig.on("cowork", (m) => { if (m.on) joinCowork(); else stopCowork(); }),
@@ -576,7 +587,7 @@ function Call({ opts, onClose }) {
     try {
       if (cowork) { await api.call("cowork", { room_id: sess.room.id, on: false }); sig.send("cowork", { on: false }); stopCowork(); return; }
       const j = await api.call("cowork", { room_id: sess.room.id, on: true });
-      R.cw = startCowork({ url: base(), key: publicKey(), topic: j.topic, me: sess.me.id, name: myName, hostId: sess.me.id, isHost: true, onState: setCowork });
+      R.cw = startCowork({ url: base(), key: publicKey(), topic: j.topic, private: !!j.private, getToken: memberToken, me: sess.me.id, name: myName, hostId: sess.me.id, isHost: true, onState: setCowork });
       sig.send("cowork", { on: true, host: sess.me.id });
       setMin(true);
     } catch (e) { say(e.message); }
@@ -586,7 +597,7 @@ function Call({ opts, onClose }) {
     try {
       const j = await api.call("cowork_join", { room_id: sess.room.id });
       const hostPid = (presence.find((p) => p.role === "host") || {}).pid || "";
-      R.cw = startCowork({ url: base(), key: publicKey(), topic: j.topic, me: sess.me.id, name: myName, hostId: hostPid || findHostPid(), isHost: false, onState: setCowork });
+      R.cw = startCowork({ url: base(), key: publicKey(), topic: j.topic, private: !!j.private, getToken: memberToken, me: sess.me.id, name: myName, hostId: hostPid || findHostPid(), isHost: false, onState: setCowork });
       setMin(true);
     } catch (e) { say(e.message); }
   }
@@ -827,7 +838,7 @@ function Call({ opts, onClose }) {
         <h4>In the call ({pres.length + 1})</h4>
         <div className="call-person"><span>{myName} (you){isHost ? " · host" : ""}</span></div>
         {pres.map((p) => <div key={p.pid} className="call-person" data-person={p.name}><span>{p.name}{p.guest ? " (guest)" : ""}{p.role === "host" ? " · host" : ""}{p.hand ? " ✋" : ""}{p.mic === false ? " · muted" : ""}</span>
-          {isHost && <button type="button" className="call-btn small danger" onClick={async () => { if (!confirm("Remove " + p.name + " from the call?")) return; try { await api.call("remove", { room_id: sess.room.id, participant_id: p.pid }); sig.send("kick", { pid: p.pid }); R.media && R.media.forget(p.pid); sig.send("rekey", {}); const t = await api.call("topic", { room_id: sess.room.id }); openChannel(t.topic); } catch (e) { say(e.message); } }} data-remove="">Remove</button>}
+          {isHost && <button type="button" className="call-btn small danger" onClick={async () => { if (!confirm("Remove " + p.name + " from the call?")) return; try { await api.call("remove", { room_id: sess.room.id, participant_id: p.pid }); sig.send("kick", { pid: p.pid }); R.media && R.media.forget(p.pid); sig.send("rekey", {}); const t = await api.call("topic", { room_id: sess.room.id }); openChannel(t); } catch (e) { say(e.message); } }} data-remove="">Remove</button>}
           {amHost && canStaff && !remote && <button type="button" className="call-btn small" onClick={() => { const reason = prompt("Remote help for " + p.name + ": why do you need to control their computer? (kept in the log)"); if (reason) startRemote(reason, p); }} data-remote-start="">Remote help</button>}</div>)}
         {amHost && <button type="button" className="call-btn small" onClick={() => { sig.send("mute-all", { from: sess.me.id }); say("Everyone else is muted."); }} data-mute-all="">Mute all</button>}
       </aside>}
