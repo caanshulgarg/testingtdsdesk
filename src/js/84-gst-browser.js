@@ -71,12 +71,35 @@ const GSTB = {
     const gstin = this.gstinOf(reg);
     this.msg = "Reading the saved login…"; render();
     let r = null;
-    try { r = await Cloud.rpc("gst_portal_login_read", {p_client: S.coId, p_gstin: gstin}); }
+    try {
+      r = await Cloud.rpc("gst_portal_login_read", {p_client: S.coId, p_gstin: gstin});
+      // migration 192: the server gives a saved password only within 10 minutes of the person's own two-step code: the
+      // code is asked for here, and the login read once more
+      if (r && r.need === "two_step"){
+        if (!(await this.twoStep())){ this.msg = "Not done: the two-step code was not given."; render(); return; }
+        this.msg = "Reading the saved login…"; render();
+        r = await Cloud.rpc("gst_portal_login_read", {p_client: S.coId, p_gstin: gstin});
+      }
+    }
     catch (e){ this.msg = "Not done: " + ((e && e.message) || e); render(); return; }
     if (!r || !r.ok){ this.msg = (r && r.error) || "No login saved."; render(); return; }
     this.port.postMessage({type: "login", gstin, username: r.username, password: r.password});
     r.password = null; r = null;
     this.msg = "The portal's login page is opening in a new tab with the user id and password typed. Type the captcha there (and the OTP if the portal asks)."; render();
+  },
+  // the person's two-step code (the authenticator app's), checked by the server: the sign-in kept here becomes a fresh one
+  async twoStep(){
+    const f = (await Cloud.factors()).find(x => x.status === "verified");
+    if (!f) throw new Error("Turn on two-step sign-in first (Settings), then log in to the portal from here.");
+    const ans = await askConfirm({title: "Your two-step code", ok: "Continue",
+      html: 'A saved GST portal login is used only right after your two-step code. Type the 6-digit code from your authenticator app.<br><input type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="8" id="gstbCode" aria-label="Two-step code" style="margin-top:8px;width:100%">',
+      read: () => ((document.getElementById("gstbCode") || {}).value || "").replace(/\s+/g, ""), validate: v => /^\d{6}$/.test(v) ? "" : "Type the 6-digit code."});
+    if (!ans || !ans.ok) return false;
+    const ch = await Cloud.authApi("factors/" + f.id + "/challenge", "POST", {});
+    const j = await Cloud.authApi("factors/" + f.id + "/verify", "POST", {challenge_id: ch.id, code: ans.data});
+    const s = Cloud.sess();
+    Cloud.setSess(Object.assign({}, s, {access_token: j.access_token, refresh_token: j.refresh_token || s.refresh_token, at: Date.now(), expires_in: j.expires_in || 3600}));
+    return true;
   },
   put(reg, ym, form, patch){
     const b = S.books; b.gstHelper = b.gstHelper || {};
