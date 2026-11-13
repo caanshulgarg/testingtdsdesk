@@ -12,7 +12,9 @@ answers the link functions as migration 110 does (run_migration110.py tests the 
      it is and the gate still allows; its "Stop posting" from an out-of-date view is refused and read again.
   4. The posting gate reads the record: posting stopped in the record while clients.data still names the company ->
      refused in the record's words, nothing queued; the gate's one button allows it in the record; then the bill posts.
-  5. One word per client (the owner's step 2): Linked (reading · posting allowed · last entry HH:MM) / Waiting for Tally
+  5. One word per client (the owner's step 2): Linked (here "Books up to date · last entry HH:MM": the company is read in
+     another's Tally of the firm; "reading · posting allowed · …" when it is open in this person's own Tally:
+     next-tally-own-status, 13-Nov-2026, tests/run_tally_own_status.py) / Waiting for Tally
      (one plain line "Open <company> in TallyPrime on <PC>": Tally closed, the company not open, the computer offline) /
      Needs you (one line, one button: posting stopped, the bridge cannot reach Tally on its port) / Not linked (Link); a
      Tally on port 4125 the bridge reaches is fine; the same word on the header's Tally icon, the Clients list, the Tally
@@ -227,7 +229,7 @@ def main():
         ok("posting_allowed" not in snap and GA not in snap and "company_guid" not in snap, "the record is no part of the client's saved copy")
         client_page(pg, CA)
         st = status(pg)
-        ok(chip(pg) == "connected" and word(pg) == "Linked" and st and st["state"] == "linked" and st["words"].startswith("Connected to Tally · last entry "),
+        ok(chip(pg) == "connected" and word(pg) == "Linked" and st and st["state"] == "linked" and st["words"].startswith("Last entry from Tally received "),
            "the client's Tally icon: Linked, and its line '%s'" % (st or {}).get("words"))
         here_ok(pg, "Linked")
         shot(pg, "1-linked-title", "header.top")
@@ -256,7 +258,7 @@ def main():
         ok(pg.locator(R(ALPHA) + " [data-tco-renamed]").count() == 1, "marked 'renamed in Tally'")
         ok(E("(c) => postToProblem(S.companies[c], %r)" % ALPHA2, CA) == "", "posting into the new name is allowed")
         rw = T(pg, R(ALPHA) + " .tco-pill")
-        ok(rw.startswith("Linked reading · posting allowed"), "the row: %s" % rw)
+        ok(rw.startswith("Linked Last entry from Tally received "), "the row: %s" % rw)
         shot(pg, "2-renamed-row", R(ALPHA))
         client_page(pg, CA)
         st = status(pg)
@@ -324,9 +326,9 @@ def main():
             E(SETUP, [s5, "owner", ME, CLIENTS]); client_page(pg, CA)
             return status(pg)
         st = scene([dev(OPEN, BEAT)])
-        ok(st["state"] == "linked" and re.fullmatch(r"Connected to Tally · last entry \d{1,2}:\d\d [ap]m", st["words"]) and st["buttons"] == ["update"], "Linked · %s (Update from Tally)" % st["words"])
+        ok(st["state"] == "linked" and st["words"].startswith("Last entry from Tally received ") and st["buttons"] == ["update"], "Linked · %s (Update from Tally)" % st["words"])
         ok(st["title"].startswith("Tally: Linked — " + st["words"]), "its whole line on hover: %r" % st["title"])
-        ok(re.fullmatch(r"Linked — reading · posting allowed · last entry \d\d:\d\d", lw(pg, CA)), "the record's words (the Tally page): %r" % lw(pg, CA))
+        ok(lw(pg, CA).startswith("Linked — Last entry from Tally received "), "the record's words (the Tally page): %r" % lw(pg, CA))
         OPENW = "Open %s in TallyPrime on NWS144" % ALPHA
         for label, devs in [("Tally closed", [dev([], BEAT, tally="closed")]), ("the company not open", [dev([ITS], BEAT)]), ("the computer offline", [dev(OPEN, BEAT, at="ago:30")])]:
             st = scene(devs)
@@ -347,11 +349,15 @@ def main():
         # the bridge itself reports it cannot reach Tally on its port
         st = scene([dev([], BEAT, tally="closed", port=9005, ports=[{"port": 9005, "ok": False, "skipped": False, "n": 0, "error": "connection refused", "state": "closed"}])])
         m = re.fullmatch(r"FinCom Bridge cannot reach Tally on port 9005\. Use a port between 9000 and 9999 — (90\d\d) is free", lw(pg, CA).replace("Needs you — ", "", 1))
-        ok(st["state"] == "needs" and m and st["buttons"] == ["check"] and "port" not in st["text"].lower() and "9005" not in st["text"], "the bridge cannot reach Tally on 9005: Needs you; the port only on the Tally page (%r, %r)" % (st["words"], lw(pg, CA)))
+        # (next-tally-own-status M2/M4: the company is on another's bridge: the data's line, never that Tally's state)
+        real = pg.evaluate("(c) => { const w = LinkWord(CO(c)); return [w.kind, w.line]; }", CA)
+        ok(st["words"].startswith("Last entry from Tally received ") and "port" not in st["text"].lower() and "9005" not in st["text"] and real[0] == "needs" and "port 9005" in real[1],
+           "another's bridge cannot reach its Tally on 9005: the data's line here; the real state kept for posting (%r, %r)" % (st["words"], real))
         shot(pg, "5-port-unreachable", "header.top")
         ravi = {"go-2": {"at": "ago:5", "version": "2.4.7", "computer": "NWS144", "user": "ravi", "mode": "main", "tallyState": "open", "open": ["RAVI CO"], "tallyPort": 9005}}
         st = scene([dev([], BEAT, tally="closed", port=9005, bridges=ravi, ports=[{"port": 9005, "ok": False, "skipped": False, "n": 0, "error": "taken", "state": "closed"}, {"port": 9005, "ok": False, "skipped": True, "n": 0, "error": "", "state": ""}])])
-        ok(st["state"] == "needs" and "FinCom Bridge cannot reach Tally on port 9005 (ravi's Tally is on it)" in lw(pg, CA), "a clash with ravi's Tally: said on the Tally page's words (%s)" % lw(pg, CA))
+        real = pg.evaluate("(c) => LinkWord(CO(c)).line", CA)
+        ok("ravi" not in st["text"] and st["words"].startswith("Last entry from Tally received ") and "FinCom Bridge cannot reach Tally on port 9005 (ravi's Tally is on it)" in real, "a clash on another's bridge: not said here; the real words kept (%s)" % real)
         E(SETUP, [store(), "owner", ME, CLIENTS]); client_page(pg, CU)
         st = status(pg)
         ok(st["state"] == "unlinked" and st["buttons"] == ["link"] and chip(pg) == "unlinked" and word(pg) == "Not linked", "not linked: the icon says it, one button Link (%s)" % st)

@@ -142,15 +142,17 @@ with sync_playwright() as p:
        "no bridge here, the client Linked: idle, and the header says nothing of this computer (%s)" % (s,))
     ok("NWS144" not in s["text"] and not re.search(r"\b(via|through)\b", s["text"]), "the sign never names another computer (%s)" % s["text"])
     c = card()
-    ok(c and c["other"] == "Posting goes through NWS144 (Ranjeet).", "the hover's quiet second line: “Posting goes through NWS144 (Ranjeet).” (%s)" % ((c or {}).get("other"),))
+    # next-tally-own-status (the owner, 13-Nov-2026): no second line about the firm's other computers ("Posting goes
+    # through …", "Also ready: …", "No computer of the firm has Tally ready"): a person hears of their own Tally only
+    ok(c and not c["other"], "no second line about another computer (%s)" % ((c or {}).get("other"),))
     ok(c and c["next"] and c["next"][0] == ["tallyConnect", "Tally page"], "its button: Open Connect Tally (%s)" % ((c or {}).get("next"),))
     # two computers: still "not on this computer", the second line counts them
     put(None, [dev("d2", "NWS144 · NW144\\Ranjeet", "NWS144", "NW144\\Ranjeet"), dev("d3", "Accounts", "NWS210", "NWS210\\kiran")])
     s = watch("two"); c = card()
-    ok(s["code"] == "none" and c and "NWS144 (Ranjeet)" in c["other"] and "NWS210 (kiran)" in c["other"], "two computers serve: the sign the same, the second line names both (%s)" % ((c or {}).get("other"),))
+    ok(s["code"] == "none" and c and not c["other"], "two computers serve: the sign the same, neither is named (%s)" % ((c or {}).get("other"),))
     # nobody
     put(None, []); sign(); tick(61)
-    c = card(); ok(c and "No computer of the firm has Tally ready" in c["other"], "no computer at all: the second line says so (%s)" % ((c or {}).get("other"),))
+    c = card(); ok(c and not c["other"], "no computer at all: no second line either (%s)" % ((c or {}).get("other"),))
     # Connect this computer: the Tally page's connect steps, and the way back
     put(None, [dev("d2", "NWS144 · NW144\\Ranjeet", "NWS144", "NW144\\Ranjeet")])
     pg.evaluate("() => { location.hash = '#/c/' + S.coId + '/dash'; }"); pg.wait_for_timeout(200)
@@ -192,7 +194,8 @@ with sync_playwright() as p:
     b = pg.evaluate("(cid) => tallySign(S.companies[cid]).on", cid)
     ok(a is True and b is False, "no beat for 200 s: off, but only once that held a minute (%s then %s)" % (a, b))
     st = pg.evaluate("(cid) => tallyStatus(S.companies[cid]).state", cid)
-    ok(st == "offline", "tallyStatus then: offline (%s)" % st)
+    # (next-tally-own-status: tallyStatus is this person's own bridge's; another's computer going offline is not said)
+    ok(st == "far", "tallyStatus then: nothing of another's computer (%s)" % st)
 
     # 9. posting reads the real state, never the steady one
     pg.evaluate("TallySteady.reset()")

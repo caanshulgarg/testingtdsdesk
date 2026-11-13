@@ -178,7 +178,8 @@ def main():
         scene([dA, bdev()], c1, CLx, A_PINGS)
         ok(n("#app [data-for-support]") == 1 and n("#app [data-support-body]") == 0 and "Advanced (for support)" in txt("#app [data-for-support]"), "4. Advanced (for support), closed")
         pg.click("#app [data-support-toggle]"); pg.wait_for_timeout(800)
-        ok(n("#app [data-support-body] [data-tsm-check]") == 1 and n("#app [data-support-body] [data-tsm-pcs]") == 1, "4. the day check of every client and the computers")
+        # (next-tally-own-status (the owner, 13-Nov-2026): the line "Computers with Tally: N connected" is gone)
+        ok(n("#app [data-support-body] [data-tsm-check]") == 1 and n("#app [data-tsm-pcs]") == 0, "4. the day check of every client; no line of the firm's computers")
         ok(n("#app [data-support-body] [data-page-more]") == 1, "4. every support tool")
         if n("#app [data-page-more] [data-more-toggle=page]"): pg.click("#app [data-page-more] [data-more-toggle=page]"); pg.wait_for_timeout(800)
         for sel, what in (("[data-tally-tab=activity]", "sync activity"), ("[data-tally-tab=sent]", "everything sent"), ("[data-guide-again]", "install on another computer"), ("[data-help-part=versions]", "versions"), ("[data-help-part=this-computer]", "this computer")):
@@ -258,12 +259,15 @@ def main():
               {"company": NOVA, "client_id": "NAME:" + NOVA_C, "device_id": o2["id"], "gstin": "", "last_seen": "ago:0.5"},
               {"company": "LARKSPUR CO", "client_id": "NAME:" + LARK, "device_id": o1["id"], "gstin": "", "last_seen": "ago:3000"}]
         scene([o1, o2], c9, [ORBIT, NOVA_C, LARK], {}, books={ORBIT: T.book(ORBIT), NOVA_C: T.book(NOVA_C)})
-        ok(txt("#app [data-tsm-top-title]") == "Connected through the office Tally", "9. the top line: through the office Tally, Tally open in 2 of 2 bridges (%s)" % txt("#app [data-tsm-top]")[:160])
+        # (next-tally-own-status (the owner, 13-Nov-2026): a computer with no bridge of its own says so, grey, with the data's line; nothing of the office's Tally)
+        top9 = txt("#app [data-tsm-top]")
+        ok(txt("#app [data-tsm-top-title]") == "No Tally on this computer" and "clients linked" in top9 and not re.search(r"office Tally|compan(y|ies) open", top9), "9. the top line: No Tally on this computer, the clients linked, nothing of the office's Tally (%s)" % top9[:160])
         ok(n("#app [data-tsm-guide]") == 0 and txt("#app [data-tsm-steps-link='laptop']") == "How to connect", "9. the six steps folded: 'How to connect'")
         sts = {nm: attr(R(nm) + " [data-tpt-state]", "data-tpt-state") for nm in (ORBIT, NOVA_C)}
         ok(all(v in ("ok", "reading") for v in sts.values()) and n(R(ORBIT) + ".tpt-need") + n(R(NOVA_C) + ".tpt-need") == 0, "9. both clients open in the office's Tally fine or reading, not 'needs you' (%s)" % sts)
         ok(all(mains(nm) in (["update"], ["reading"]) for nm in (ORBIT, NOVA_C)), "9. each its Update from Tally (%s)" % [mains(nm) for nm in (ORBIT, NOVA_C)])
-        ok("this Windows login" not in txt(TB) and "on the Tally computer" in txt(R(LARK) + " .tpt-why"), "9. no bridge here: a company open nowhere, 'on the Tally computer', never 'this Windows login' (%s)" % txt(R(LARK) + " .tpt-why"))
+        # (next-tally-own-status M4: with no bridge of one's own, a company open nowhere is the data's line, grey)
+        ok("this Windows login" not in txt(TB) and "entry from Tally received" in txt(R(LARK)), "9. no bridge here: a company open nowhere: the data's line, never 'this Windows login' (%s)" % txt(R(LARK))[:120])
         shot("tally-redesign-nobridge.png", 1280, 900)
         pg.set_viewport_size({"width": 1440, "height": 900})
         pg.click("#app [data-tsm-steps-link='laptop']"); pg.wait_for_timeout(600)

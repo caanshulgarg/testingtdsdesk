@@ -90,7 +90,8 @@ with sync_playwright() as p:
       TLight.st.devs = [{id: "d1", name: "Office", last_seen: new Date().toISOString(), info: {beat: {at: new Date().toISOString(), tally: true, companies: []}}}];
       TLight.st.cos = [{company: "GARG SHEKHAR & COMPANY", client_id: cid, gstin: "09AANFG3202D1ZR"}];
       return [tallyStatus(S.companies[cid]).state, tallyStatus(S.companies[nog]).label]; }""", [cid, nog])
-    ok(st[0] in ("ok", "waiting") and st[1] == "Connected \u2013 company not linked", "5. linked client: connected; a client with only a Tally name typed: “Connected – company not linked” (" + str(st) + ")")
+    # (next-tally-own-status: the firm's computer is not this person's own: nothing of "Connected"; "far" is the data's state)
+    ok(st[0] in ("ok", "waiting", "far") and st[1] == "Company not linked", "5. linked client: in sync; a client with only a Tally name typed: “Company not linked” (" + str(st) + ")")
     pg.evaluate("(cid) => openCompany(cid).then(() => { S.tab = 'books'; S.booksTab = 'import'; render(); })", nog); pg.wait_for_timeout(1200)
     # The owner's simpler upload page (08-Oct-2026, next-uploadpage 143a104b; docs/ui-pass/uploadpage/README.md row 12)
     # removed step 4 and its Tally pill from From Tally: the top bar's Tally sign is the one status on the page. Item 5

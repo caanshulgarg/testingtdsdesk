@@ -2,9 +2,11 @@
 // like Suvit.. every step.. don't need extra steps in connection"). Used by every place that says how a company or a
 // client stands with Tally, so the words never disagree: the Tally page's Companies in Tally, the client's Tally card, the
 // Clients list's chip and the top bar's sign.
-//   Connected                                                  the company is open in Tally on a computer whose FinCom
-//                                                              Bridge beat within about two minutes (devState: online or
-//                                                              one beat late)
+//   Connected                                                  the company is open in THIS person's own Tally (their own
+//                                                              bridge: lib/ownBridge.js, window.FCOwn)
+//   Reading — Read from Tally                                  open only in another's Tally of the firm: the data's
+//                                                              words, never "Connected" (next-tally-own-status)
+//   Seen in Tally · last seen …                                another's computer offline or without it: grey
 //   Disconnected — not open in Tally on NWS144 (last seen 20-Oct)   the computer is on, the company is not open there
 //   Disconnected — computer offline since 14:02                the computer that keeps it has not beaten for 2 minutes
 //   Disconnected — not seen in Tally yet                       no computer of the firm has reported it
@@ -71,22 +73,30 @@ function tallyCoStateNow(company) {
   const seen = rows.map((r) => String(r.last_seen || "")).sort().pop() || "";
   // (next-link-record: or its other name, a company renamed in Tally: the link record's LinkRec.same)
   const has = (d) => openHas(d, k, company) && (typeof devState !== "function" || devState(d).tally !== "closed");
-  const o = (state, text, d) => ({ state, level: state === "connected" ? "ok" : "bad", word: state === "connected" ? "Connected" : "Disconnected", text, computer: d ? pcOf(d) : "", seen });
+  const o = (state, text, d) => ({ state, level: state === "connected" ? "ok" : "bad", word: state === "connected" ? text : "Disconnected", text, computer: d ? pcOf(d) : "", seen });
   const on = devs.find((d) => pcLive(d) && has(d));
-  if (on) return o("connected", "Connected", on);
+  if (on) return hereOpen(k) || (globalThis.FCOwn && FCOwn.has(company)) ? o("connected", "Connected", on) : Object.assign(o("connected", "Read from Tally", on), { word: "Reading", level: "no" });
   const dev = devs.find((d) => rows.some((r) => r.device_id === d.id)) || devs.find(has);
   // FinCom Bridge on this computer, answering here, with the company open (no word from the cloud for it)
   if (hereOpen(k)) return Object.assign(o("connected", "Connected", null), { computer: "this computer" });
   if (!dev) return o("unseen", "Disconnected — not seen in Tally yet", null);
+  // (M4: another's computer offline, or its Tally without the company: the data's words, grey; red only of the person's
+  // own bridge's computer; the owner too sees other bridges only in the management cards: the own-bridge test, as linkWord's)
+  const ob = globalThis.FCOwn && FCOwn.bridge();
+  if (!(ob && ob.dev && ob.dev.id === dev.id)) return Object.assign(o(pcLive(dev) ? "notopen" : "offline", "Seen in Tally" + (seen ? " · last seen " + seenWords(seen) : ""), dev), { word: "Seen in Tally", level: "no" });
   if (!pcLive(dev)) { const at = ((dev.info || {}).beat || {}).at || dev.last_seen || "";
     return o("offline", "Disconnected — computer offline" + (at && typeof tallyHm === "function" ? " since " + String(tallyHm(at)).replace(/ IST$/, "") : ""), dev); }
   return o("notopen", "Disconnected — not open in Tally on " + pcOf(dev) + (seen ? " (last seen " + seenWords(seen) + ")" : ""), dev);
 }
 // a client's: its linked company's state; "Not linked" when it has none (the bridge on this computer counts when FinCom's
 // cloud is not in use)
-export function clientTallyState(co) {
+// next-tally-own-status (review of 1d3bce162, M2): the one line about the DATA for a client read in another's Tally (or seen
+// by a person with no bridge of their own): never "Books up to date", never another computer's state
+export const farLine = (at) => (at ? "Last entry from Tally received " + (typeof fmtDateTime === "function" ? fmtDateTime(at) : at) : "No entry from Tally received yet");
+// (real: what stops a posting, asked by the Post page: the company's computer's own state, not the line that is shown)
+export function clientTallyState(co, real) {
   // next-link-record: one word everywhere (Linked / Waiting for Tally / Needs you), lib/linkStatus.js once loaded
-  const w = globalThis.LinkWord && LinkWord(co); if (w) return mark(w);
+  const w = globalThis.LinkWord && LinkWord(co, undefined, !real); if (w) return mark(w);
   const k = co && typeof tallyLinkOf === "function" ? tallyLinkOf(co) : null;
   if (!k || k.state === "unlinked") return { state: "unlinked", level: "warn", word: "Not linked", text: "Not linked to its company in Tally yet", computer: "", seen: "", company: "" };
   const cloud = typeof TCloud === "object" && TCloud.on();

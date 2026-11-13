@@ -94,13 +94,14 @@ with sync_playwright() as p:
     # the Tally panel of the top bar says the same line
     E("() => doAct('tallyPanel')"); pg.wait_for_timeout(400)
     pl = line("[data-panel-tally-line] [data-tally-line-text]")
-    ok(pl == "Connected · Tally open on NWS144 · last read 15:34 IST", "the Tally panel: %r" % pl)
+    # (next-tally-own-status: the company is read in another's Tally of the firm: the data's words, never "Tally open")
+    ok(pl.startswith("Last entry from Tally received "), "the Tally panel: %r" % pl)
     E("() => doAct('tallyPanelClose')"); pg.wait_for_timeout(300)
     # round 66: the outdated "Clients' Tally" lines on the Tally page are gone; another client's own line (its Tally panel)
     # has Update from Tally, for that client
     E("async (id) => { await openCompany(id); S.tallyPanel = true; render(); }", oid); pg.wait_for_timeout(900)
     ol = line("[data-panel-tally-line] [data-tally-line-text]")
-    ok("Tally open on NWS144" in ol, "another client's Tally panel: its line (%r)" % ol)
+    ok(ol.startswith("Last entry from Tally received "), "another client's Tally panel: its line (%r)" % ol)
     E("() => { window.__rpc = []; }")
     pg.locator('[data-overlay="tallypanel"] [data-update-now]').first.click(); pg.wait_for_timeout(400)
     ok(["tally_want_update", {"p_client": oid}] in E("window.__rpc"), "Update from Tally on another client's line asks for that client")

@@ -28,6 +28,9 @@ TDSDESK_SITE=../app/dist-test python3 run_tally_links_ui.py"""
 import json, os, re, sys, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
 from playwright.sync_api import sync_playwright
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from own_seed import OWN_DEV
+
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 import run_tally_page_clean as T
 SITE = os.environ.get("TDSDESK_SITE", os.path.join(HERE, "..", "app", "dist-test"))
@@ -55,6 +58,7 @@ def main():
             pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(800)
             pg.set_default_timeout(5000); return pg
         def scene(pg, books=T.HELD_ALL):
+            pg.evaluate(OWN_DEV, d6)   # next-tally-own-status (13-Nov-2026): the made-up Tally computer here is this person's own (own_seed.py)
             ids = pg.evaluate(T.SETUP, [[d6], cos, [], "owner", T.CLIENTS, True, books])
             # the stand-in cloud keeps a link it took (as tally_companies does), so a read after it says the same
             pg.evaluate("""() => { const rpc = TCloud.rpc; TCloud.rpc = async (fn, a) => { const r = await rpc(fn, a);
@@ -180,7 +184,9 @@ def main():
             hits = [w for w in ("NWS144", "LAPTOP", "anshul", "oldlogin", "ravi", "All computers", "This computer") if w in main]
             ok(not hits, "the main area names no computer and no login (%s): %s" % (hits, main[:300]))
             card = txt("#app [data-status-card]")
-            ok(card.startswith("FinCom Bridge 2.4.7") and "Connected" in card and n("#app [data-tsc-all], #app .tpc-one") == 0 and n("#app [data-scope-pick]") == 0, "the card: one plain state, no computer rows, no switch (%s)" % card[:160])
+            # (next-tally-own-status: with another Windows login's bridge on the same computer, a bridge older than 2.5.3 is not
+            # known to be this login's: the card then says "No Tally on this computer", never the firm's best computer)
+            ok(card.startswith("FinCom Bridge") and ("Connected" in card or "No Tally on this computer" in card) and n("#app [data-tsc-all], #app .tpc-one") == 0 and n("#app [data-scope-pick]") == 0, "the card: one plain state, no computer rows, no switch (%s)" % card[:160])
             shot(pg, "desktop-1440-light-two-bridges")
             if n("[data-tally-icon]"):
                 pg.click("[data-tally-icon]"); pg.wait_for_timeout(1200)

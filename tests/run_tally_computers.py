@@ -8,9 +8,12 @@ pilot, no approval) Hold version X, Let version X go, Roll back to <version>, Cl
 (X: the setup on this site, assets/bridge-go/latest.json); a member sees none of them. Each button calls its RPC (migration-35) with the right
 arguments; a refusal is shown in plain words, and an older cloud without the RPCs says FinCom's cloud is not ready.
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_tally_computers.py"""
-import json, os, threading, functools, http.server
+import sys, json, os, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
 from playwright.sync_api import sync_playwright
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from own_seed import OWN_DEV
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 SITE = os.environ.get("TDSDESK_SITE", os.path.join(HERE, "..", "app", "dist-test"))
 class Q(http.server.SimpleHTTPRequestHandler):
@@ -96,12 +99,13 @@ with sync_playwright() as p:
     more = lambda: [(pg.evaluate("() => document.querySelectorAll('#app [data-more-toggle][aria-expanded=\"false\"]').forEach(b => b.click())"), pg.wait_for_timeout(500)) for _ in range(3)]   # next-tally-simple: For support, then its folds
     txt = lambda sel: pg.inner_text(sel).replace("\n", " ").strip() if pg.locator(sel).count() else ""
     line = lambda d: txt('#app [data-computer="%s"]' % d)
+    E(OWN_DEV, DEVS[0])   # next-tally-own-status (13-Nov-2026): the made-up Tally computer here is this person's own (own_seed.py)
     E(SETUP, [DEVS, STOPS, [], "owner"]); pg.wait_for_timeout(600)
     # ---- reachable as All clients -> Tally
     side = pg.locator('#side button[aria-label="Tally"]')
     ok(E("S.view") == "home" and E("S.homeTab") == "clients" and side.count() >= 1, "All clients has Tally in its menu")
     side.first.click(); pg.wait_for_timeout(1500); more()
-    ok(E("S.homeTab") == "tally" and E("location.hash") == "#/tally" and pg.locator("#app [data-tsm-pcs]").count() == 1, "All clients -> Tally: the page with its one line of the computers (%s)" % E("location.hash"))
+    ok(E("S.homeTab") == "tally" and E("location.hash") == "#/tally" and pg.locator("#app [data-tally-simple]").count() == 1 and pg.locator("#app [data-tsm-pcs]").count() == 0, "All clients -> Tally: the page, with no line of the firm's computers (%s)" % E("location.hash"))
     ok(pg.locator("#app [data-computer]").count() == 5, "one line a computer (%d)" % pg.locator("#app [data-computer]").count())
     hm = lambda m: E("(m) => tallyHm(Date.now() - m * 60000)", m)
     # the fixture times were set when the page loaded; if the minute turned since, the line shows the earlier minute
@@ -245,10 +249,13 @@ with sync_playwright() as p:
     # ---- a member: the lines, no buttons
     E(SETUP, [DEVS, STOPS, [], "member"]); pg.wait_for_timeout(300)
     E("() => navHome('tally')"); pg.wait_for_timeout(1500); more()
-    ok(pg.locator("#app [data-computer]").count() == 5 and "Reading stopped from FinCom: Tally hangs on the bank ledger" in line(D4), "a member sees the lines")
+    # next-tally-own-status (the owner, 13-Nov-2026): a member of staff finds only their own bridge's card (DEVS[0] here)
+    ok(pg.locator("#app [data-computer]").count() == 1 and pg.locator('#app [data-computer="%s"]' % D1).count() == 1, "a member sees their own bridge's lines, nobody else's (%d)" % pg.locator("#app [data-computer]").count())
     ok("Posts only to: ZZ TEST" in line(D1), "a member sees Posts only to: ZZ TEST too (information, not a control)")
     ok(sel("[data-read-stop], [data-read-stop-all], [data-read-resume], [data-read-resume-all], [data-release-pilot], [data-release-approve], [data-release-hold], [data-release-rollback]").count() == 0, "a member sees none of the owner's buttons")
-    # ---- live: a beat passed on by FinCom's cloud changes the line at once
+    # ---- live: a beat passed on by FinCom's cloud changes the line at once (the owner's view: each bridge's settings card)
+    E(SETUP, [DEVS, STOPS, [], "owner"]); pg.wait_for_timeout(300)
+    E("() => navHome('tally')"); pg.wait_for_timeout(1500); more()
     E("""() => TLight.beatIn({device: '%s', beat: {at: new Date().toISOString(), bridge: 'go-%s', paused: false, readStopped: null, tallyRetry: {words: 'Tally did not answer in time at 12:14; trying again by itself at 12:15', at: '', next: '', tries: 1},
       reqs: {day: new Date().toISOString().slice(0, 10), last: {kind: 'probe', ms: 120000, at: new Date().toISOString()}, longest: {kind: 'probe', ms: 120000, at: new Date().toISOString()}, over20: 1, n: 5}}})""" % (D2, D2))
     pg.wait_for_timeout(400)
@@ -309,8 +316,8 @@ with sync_playwright() as p:
     # a member sees the words, none of the buttons
     E(SETUP, [DEVS, STOPS2, REL_A, "member", X]); pg.wait_for_timeout(300)
     E("() => navHome('tally')"); pg.wait_for_timeout(1500); more()
-    ok(inAny("Stopped by Anshul at %s", 40, line(D4)) and "goes to every computer by itself" in txt("#app [data-release]") and "Needs a fresh baseline since" in txt('#app [data-baseline="%s"]' % BOOKS[0]["book_id"]),
-       "a member sees who and when, the withdrawal and the baseline words")
+    ok(pg.locator('#app [data-computer="%s"]' % D4).count() == 0 and "goes to every computer by itself" in txt("#app [data-release]") and "Needs a fresh baseline since" in txt('#app [data-baseline="%s"]' % BOOKS[0]["book_id"]),
+       "a member sees the withdrawal and their own bridge's baseline words; nothing of another's computer")
     ok(sel("[data-release-withdraw], [data-baseline-clear]").count() == 0, "a member has no Withdraw and no Clear")
     # an older cloud (migration 37 not applied): the page works, and says FinCom's cloud is not ready for what it cannot do
     E(SETUP, [DEVS, STOPS2, REL, "owner", dict(X, old=True)]); pg.wait_for_timeout(300)

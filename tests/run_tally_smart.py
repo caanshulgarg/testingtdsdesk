@@ -18,6 +18,9 @@ Options: --shots DIR saves the scenes. Run on the React build: TDSDESK_SITE=../a
 import json, os, re, sys, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
 from playwright.sync_api import sync_playwright
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from own_seed import OWN_DEV
+
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 import run_tally_page_clean as T
 SITE = os.environ.get("TDSDESK_SITE", os.path.join(HERE, "..", "app", "dist-test"))
@@ -55,6 +58,7 @@ def main():
         n = lambda sel: pg.locator(sel).count()
         body = lambda: E("() => { const a = document.querySelector('#app').cloneNode(true); a.querySelectorAll('[data-advanced]').forEach(e => e.remove()); return a.innerText.replace(/\\s+/g, ' '); }")
         def scene(devs, cos, role="owner", books=None):
+            E(OWN_DEV, devs[0] if devs else None)   # next-tally-own-status (13-Nov-2026): the made-up Tally computer here is this person's own (own_seed.py)
             ids = E(T.SETUP, [devs, cos, [], role, T.CLIENTS, True, books or {}]); pg.wait_for_timeout(1800); return ids
         def shot(name):
             if SHOTS: os.makedirs(SHOTS, exist_ok=True); pg.evaluate("() => { if (typeof toastHide === 'function') toastHide(); }"); pg.screenshot(path=os.path.join(SHOTS, name + ".png"), full_page=True)

@@ -302,7 +302,8 @@ def main():
         pl = E("""() => new Promise((done) => { const b = Bridge.blocked; Bridge.blocked = () => true; Bridge.setCfg({key: ''});
           Object.assign(FCTallySimple.LOCALB, {list: null, busy: false, at: 0, ports: '', sig: '', n: 0, cut: false}); FCTallySimple.lookOnce();
           setTimeout(() => { const v = FCTallySimple.placeOf(); Bridge.blocked = b; done(v); }, 300); })""")
-        ok(pl == "unknown", "16. a browser that may not reach this computer: not a laptop (%s)" % pl)
+        # (next-tally-own-status: this login's own bridge was found here before (remembered above): a Tally computer)
+        ok(pl in ("unknown", "pc"), "16. a browser that may not reach this computer: not a laptop (%s)" % pl)
     print("\npage errors: %s" % errors[:5])
     ok(not errors, "no page errors")
     print("\n%s: %d" % ("FAILED" if fails else "PASSED", len(fails)) + ("" if fails else " failures"))

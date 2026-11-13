@@ -52,6 +52,9 @@ def main():
         E = lambda js, *a: pg.evaluate(js, *a)
 
         print("== 4. light: the remembered address and this login's own port first")
+        # (next-tally-own-status: the app's own start is over before the card's looks are counted: nothing paired or
+        # remembered here yet, so it asked nothing by itself)
+        pg.wait_for_function("() => !!window.FCOwn", timeout=30000); pg.wait_for_timeout(7500)
         own = {"id": "go-9104abcdef", "port": 9104, "user": U(1)}
         E(SCENE, {"url": 9104, "own": own, "p": {"9104": ping(9104, True, U(1)), "9100": ping(9100, False, U(0))}})
         r = E(LOOK, False)

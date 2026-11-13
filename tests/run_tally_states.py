@@ -11,6 +11,8 @@ Offline, a made-up client, the React test build (app/dist-test)."""
 import os, sys, threading, functools, http.server, datetime
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
 from playwright.sync_api import sync_playwright
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from own_seed import OWN
 H = functools.partial(http.server.SimpleHTTPRequestHandler, directory=os.environ.get("TDSDESK_SITE", os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "app", "dist-test"))); H.log_message = lambda *a: None
 srv = http.server.ThreadingHTTPServer(("localhost", 8173), H); threading.Thread(target=srv.serve_forever, daemon=True).start()
 fails, errors = [], []
@@ -22,9 +24,10 @@ with sync_playwright() as p:
     br = p.chromium.launch(); pg = br.new_page(viewport={"width": 1400, "height": 950}); pg.on("pageerror", lambda e: errors.append(str(e)))
     pg.goto("http://localhost:8173/"); pg.wait_for_timeout(2500); pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(1200)
     cid = pg.evaluate("""() => { const c = newCompany({name: "Testing AAD", gstin: "09AANFG3202D1ZR"}); S.companies[c.id] = c; S.data[c.id] = {parties: {}, entries: {}, loaded: true}; c.stats = {}; return c.id; }""")
-    # a Tally computer of the firm, beating every 30 s
+    # this person's own Tally computer (next-tally-own-status: the status is their own bridge's, own_seed.py), beating every 30 s
+    pg.evaluate(OWN, ["go-1", "office"]); pg.wait_for_function("() => !!window.FCOwn", timeout=30000)
     setup = """(a) => { const [cid, beat] = a; TCloud.on = () => true; TLight.refresh = () => {}; TLight.st.at = Date.now();
-      TLight.st.devs = [{id: "d1", name: "OFFICE-PC", last_seen: beat.at, info: {beat, history: a[2] || []}}];
+      TLight.st.devs = [{id: "d1", name: "OFFICE-PC", last_seen: beat.at, main_bridge: "go-1", info: {beat, history: a[2] || [], bridges: {"go-1": {at: beat.at, user: "office"}}}}];
       TLight.st.cos = [{company: "TESTING AAD", client_id: cid}]; for (const k in BeatSeen) delete BeatSeen[k]; return tallyStatus(S.companies[cid]); }"""
     st = pg.evaluate(setup, [cid, {"at": iso(5), "every": 30, "tally": True, "tallyState": "open", "companies": [], "open": ["TESTING AAD"]}])
     ok(st["state"] == "ok" and st["parts"] == {"bridge": "online", "tally": "open", "company": "linked", "busySince": ""}, "a beat 5 s ago: Bridge online, Tally open, Company linked (%s)" % st["label"])

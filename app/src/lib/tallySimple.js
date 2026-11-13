@@ -13,7 +13,11 @@ import { needDays } from "./needDays.js";
 import { heldFor } from "../parts/HeldBlock.jsx";
 import { soonDraw } from "./soonDraw.js";
 import { QUIET } from "./quietReads.js";
-import { HERE, ownHint, lastMine } from "./tallyConnect.js";
+// next-tally-own-status: this person's own bridge and own Tally (the look on this computer, ownBridge, ownState, placeOf)
+// are lib/ownBridge.js's, loaded at the app's start; the Tally page's tables and words here read them as before
+import { NOT_MINE, AWAY, NOT_SET, lc, sameUser, fresh, bridgesOf, cfgOf, LOCALB, lookOnce, rescanLocal, localPick, rememberedOwn, day, ownBridge, NEED_V, BLOCKED, bridgeSay,
+  NO_CO, NO_CO_HELP, NO_TALLY, placeOf, onTallyPc, ownState, localOpen, vk } from "./ownBridge.js";
+export * from "./ownBridge.js";
 // next-link-follow (migration 146): where a linked book is read from, and when nothing can answer
 import { readWhere, followFetch, reasked } from "./readFollow.js";
 
@@ -187,131 +191,6 @@ const iso = (x) => { const s = d8(x); return s.length === 8 ? s.slice(0, 4) + "-
 // The header, the filters, the strip and the guided box are made from the same answer; For support still lists every
 // bridge, and postings still go through FinCom's cloud to whichever bridge holds the company (unchanged).
 //   ownState(): {state: "ok", from: "here" | "beat", names: Map coKey -> name} | {state: "checking" | "away" | "none"}
-export const NOT_MINE = "Not open in your Tally", AWAY = "Your FinCom Bridge is not connected now", NOT_SET = "Your FinCom Bridge is not set up.";
-const lc = (s) => String(s || "").trim().toLowerCase();
-// "PC1\usera" and "usera" are the same login (one side may say no computer); two computers' are not
-const sameUser = (a, b) => { const x = lc(a), y = lc(b); if (!x || !y) return null; if (x.includes("\\") && y.includes("\\")) return x === y; return x.split("\\").pop() === y.split("\\").pop(); };
-const fresh = (at) => !!at && Date.now() - Date.parse(at) < 3 * 60000;
-// every bridge on the firm's computers (revoked ones left out by tallyDevs): {dev, id, user, open, at, port, beat}
-export function bridgesOf() {
-  const out = [];
-  tallyDevs().forEach((d) => {
-    const info = d.info || {}, beat = info.beat || {}, br = info.bridges || {}, ids = Object.keys(br);
-    ids.forEach((id) => {
-      const b = br[id] || {}, user = b.user || (ids.length === 1 ? info.user || beat.windowsUser : "") || "";
-      // the computer's beat is this bridge's when it is the only one there, the main one, or of the same Windows user
-      const beatMine = ids.length === 1 || d.main_bridge === id || sameUser(beat.windowsUser, user) === true;
-      const at = [b.at || "", beatMine ? beat.at || "" : ""].sort().pop();
-      const open = Array.isArray(b.open) ? b.open : beatMine ? [].concat(beat.open || []) : [];
-      // bridge 2.5.3: each Windows login's bridge has its own port of 9100..9199, said in its beat (bridgePort)
-      const port = Number(b.bridgePort || (beatMine ? beat.bridgePort : 0)) || 0;
-      out.push({ dev: d, id, user, open: open.map((n) => String((n && n.name) || n || "")).filter(Boolean), at, port, beat: beatMine ? beat : b,
-        version: String(b.version || (beatMine ? beat.version : "") || ""), pc: String(b.computer || info.computer || beat.computer || "") });
-    });
-  });
-  return out;
-}
-const cfgOf = () => { try { return (typeof Bridge === "object" && Bridge.cfg && Bridge.cfg()) || {}; } catch (e) { return {}; } };
-
-// ---------- bridge 2.5.3 (next-tally-samesession; the owner, 03-Nov-2026: one FinCom login for everyone on the shared
-// server, each Windows login its own bridge): the browser finds its OWN Windows login's bridge by itself. /ping (nothing
-// secret sent) on 127.0.0.1 at the firm's bridges' ports (their beats' bridgePort), 9103 and 9100..9110, all at once,
-// short waits. The bridge says sameSession: true (this browser runs in its owner's Windows session), false (another
-// session: never this user's), "unknown" (Windows did not say). 2.5.2 and older say nothing: as before.
-// next-fix-probe-loop (03-Nov-2026; build mw0mxsrv-dd8f8d at review/: "Site is crashing.. not working properly", rolled
-// back): drawing the page NEVER asks the network. The look was started from inside ownState(), i.e. from every drawing of
-// the Tally page, and its answer drew the whole app again (render), so a drawing could start a look whose answer drew the
-// page, which looked again (2-minute clock, a beat with another port) and drew again. Now: localBridges() only reads; the
-// look runs once per tab (lookOnce, from the Tally page once its computers are read) and on an explicit ask (rescanLocal:
-// Connect, I have opened it), one at a time; its answer draws the page only when it changed and the Tally page is shown.
-export const LOCALB = { list: null, busy: false, at: 0, ports: "", sig: "", n: 0 };
-const PROBE_MS = 900;
-const isNew = (b) => !!b && Object.prototype.hasOwnProperty.call(b, "sameSession");
-function portsToTry() {
-  const ps = new Set([9103]);
-  for (let p = 9100; p <= 9110; p++) ps.add(p);
-  bridgesOf().forEach((b) => { if (b.port >= 9100 && b.port <= 9199) ps.add(b.port); });
-  return [...ps].sort((a, b) => a - b);
-}
-// what the last look found (null: not looked yet); reads only, whoever calls it, as often as the page is drawn
-export const localBridges = () => LOCALB.list;
-const sigOf = (xs) => JSON.stringify(xs.map((x) => [Number(x.bridgePort || x.port) || 0, x.bridgeId || "", x.sameSession, x.windowsUser || "", x.version || ""]));
-function look() {
-  if (typeof Bridge !== "object" || !Bridge.probe || (Bridge.blocked && Bridge.blocked())) { LOCALB.blocked = true; if (LOCALB.list === null) LOCALB.list = []; return; }
-  LOCALB.blocked = false;
-  if (LOCALB.busy) return;            // an ask while asking is that same look
-  LOCALB.busy = true;
-  const gen = ++LOCALB.n, ports = portsToTry(); LOCALB.ports = ports.join(",");
-  // next-hang-watch: Chrome's own leave for a site to reach this computer's apps (Local Network Access; Chrome 142+): a
-  // page that may not reach 127.0.0.1 finds no bridge, and says so in those words (bridgeSay)
-  permOf().then((v) => { LOCALB.perm = v; }, () => {});
-  // next-tally-table: the look never holds the page. Each /ping stops at PROBE_MS; whatever has not settled after 5 s (a
-  // browser that holds a request to this computer while it asks the person) counts as nothing found, and the page says so
-  setTimeout(() => { if (gen === LOCALB.n && LOCALB.busy) { LOCALB.busy = false; LOCALB.cut = true; if (LOCALB.list === null) { LOCALB.list = []; soonDraw(); } } }, 5000);
-  // next-tally-other-login (05-Nov-2026): the remembered address first: this browser's address and this login's own bridge's
-  // port; the firm's other ports only when neither answers as this login's bridge (sameSession true)
-  const ask = (ps) => Promise.all(ps.map((p) => Promise.resolve().then(() => Bridge.probe(p, PROBE_MS)).catch(() => null)));
-  const sure = (xs) => xs.some((x) => x && x.sameSession === true);
-  // the one-click card's look in flight (lib/tallyConnect.js lookHere, the same remembered address first) is waited for
-  // and its answers used: no port asked twice. A new start meanwhile (resetHere) or another address: asked again from
-  // that address, never the other ports for the old one
-  const g = HERE.gen, u0 = String(cfgOf().url || ""), asked = new Set();
-  // (waited for at most a second: a card's look gone on to the range, or a Tally that never answers, never holds this one)
-  const stage1 = Promise.race([Promise.resolve(HERE.busy || lastMine()).catch(() => null), new Promise((ok) => setTimeout(() => ok(null), 1000))]).then((h) => {
-    if (HERE.gen !== g) return null;   // (a new start while waiting: asked again, from the new start)
-    const had = h && !h.stale && h.gen === HERE.gen ? [].concat(h.all || []).filter(Boolean) : [];
-    if (h && !h.stale && h.gen === HERE.gen) [].concat(h.asked || [], had.map((x) => Number(x.port) || 0)).forEach((p) => asked.add(p));
-    if (sure(had)) return had;
-    let hint = []; try { hint = ownHint().ports; } catch (e) { hint = []; }
-    const first = [...new Set([Bridge.urlPort ? Bridge.urlPort(cfgOf().url || "") : 0].concat(hint))].filter((p) => p >= 1 && !asked.has(p));
-    first.forEach((p) => asked.add(p));
-    return ask(first).then((ys) => had.concat(ys.filter(Boolean)));
-  });
-  // its answer is every caller's a moment later (HERE.last), and the card's look waits for it (HERE.lookP)
-  const lp = HERE.lookP = stage1.then((xs) => { const m = (xs || []).find((x) => x && x.sameSession === true);
-    if (m && HERE.gen === g) HERE.last = { at: Date.now(), gen: g, base: u0.replace(/\/+$/, ""), h: { mine: m, other: null, old: null, known: false, hint: { id: "", user: "", ports: [] }, all: xs, asked: [...asked], gen: g } }; }, () => {})
-    .finally(() => { if (HERE.lookP === lp) HERE.lookP = null; });
-  stage1.then(async (xs) => (!xs ? null : sure(xs) ? xs : HERE.gen !== g || String(cfgOf().url || "") !== u0 ? null : xs.concat(await ask(ports.filter((p) => !asked.has(p))))))
-    .then((xs) => xs && xs.filter((x) => x && (x.bridge || x.version)), () => [])
-    .then((list) => {
-      if (gen !== LOCALB.n) return;    // (a look started over meanwhile: its answer counts, not this one)
-      if (!list) { LOCALB.busy = false; look(); return; }
-      fixRemembered(list, ports);
-      const sig = sigOf(list), changed = LOCALB.list === null || sig !== LOCALB.sig;
-      Object.assign(LOCALB, { list, sig, at: Date.now(), busy: false, cut: false });
-      // (a later task: never inside the drawing that asked; only when it changes what the Tally page or a picker shows)
-      if (changed && typeof document === "object" && document.querySelector("#app [data-tally-simple], [data-tlk-pick-box], [data-tally-pop-link]")) soonDraw();
-    }, () => { LOCALB.busy = false; if (LOCALB.list === null) LOCALB.list = []; });
-}
-// next-tally-connectfix (finding 3; staging: after another login's bridge took this login's old port 9102, this browser's
-// remembered bridge address pointed at that login's bridge until a full scan): the look found this login's own bridge
-// (sameSession true) and the remembered address (Bridge.cfg().url) is another login's now, or silent on a port just asked:
-// the own bridge's address is remembered instead, at once
-function fixRemembered(list, ports) {
-  try {
-    const pk = localPick(list);
-    if (!pk || !pk.sure || typeof Bridge !== "object" || !Bridge.setCfg) return;
-    const norm = (u) => String(u || "").replace(/\/+$/, ""), u = norm(cfgOf().url), mineU = norm(pk.x.url || "http://127.0.0.1:" + Number(pk.x.bridgePort || pk.x.port));
-    // (localhost and 127.0.0.1 at the same port are the same address: kept as saved)
-    if (!mineU || u === mineU || (Bridge.localUrl && !Bridge.localUrl(u)) || (/^https?:\/\/(127\.0\.0\.1|localhost)[:/]/.test(u) && Bridge.urlPort(u) === Bridge.urlPort(mineU))) return;
-    const at = list.find((x) => norm(x.url) === u), port = Bridge.urlPort ? Bridge.urlPort(u) : 0;
-    const otherNow = at ? at.sameSession === false || (!!at.windowsUser && !!pk.x.windowsUser && sameUser(at.windowsUser, pk.x.windowsUser) === false) : ports.includes(port);
-    if (otherNow) { Bridge.setCfg({ url: mineU }); Bridge.foundAt = 0; }
-  } catch (e) { /* kept as it was */ }
-}
-function permOf() {
-  try {
-    if (typeof navigator !== "object" || !navigator.permissions || !navigator.permissions.query) return Promise.resolve("");
-    const q = (name) => navigator.permissions.query({ name }).then((r) => r.state, () => "");
-    return q("loopback-network").then((a) => a || q("local-network-access"));
-  } catch (e) { return Promise.resolve(""); }
-}
-// once for this tab (the Tally page, once the firm's computers are read: their ports are asked too)
-export const lookOnce = () => { if (!LOCALB.n) look(); };
-// Connect / I have opened it: asked again now
-// next-tally-connectfix (finding 4): and the one-click card's look of the whole range 9100-9199 (lib/tallyConnect.js
-// lookHere, otherwise once a tab) asked again with it
-export const rescanLocal = () => { HERE.again = true; HERE.last = null; look(); };   // (a person's ask: never a moment-old answer)
 // next-tally-page-redesign (the owner: "Check Tally is not working… after refresh it connected"). Each Check again did half
 // of what opening the page does: the Tally page's looked for this login's bridge on 127.0.0.1 again and read the cloud's
 // beats, but never asked the bridge this browser is paired with for its status again, so Bridge.st kept the failed answer
@@ -322,13 +201,12 @@ export const rescanLocal = () => { HERE.again = true; HERE.last = null; look(); 
 // and links read again, and the page drawn. Nothing new is asked of Tally (the status is the one the page start asks).
 const pause = (ms) => new Promise((ok) => setTimeout(ok, ms));
 // next-fix-check-again (the owner on a Mac: "Check again is not working anywhere"): each Check again ends in words, even
-// when nothing changed: "Checked 14:32: the office Tally is connected (2 bridges, Tally open in 2). This computer has no
-// FinCom Bridge." From the bridges' Tally (a bridge heard but Tally closed is not "connected"); "This computer's FinCom
-// Bridge" only for one found here (never the member's link to an office bridge); the browser's block and a look still
-// going said so. lead: a sentence first (the Tally box: the client's own state)
+// when nothing changed: "Checked 14:32: your Tally is connected. This computer's FinCom Bridge is connected." A login hears
+// of its own bridge and its own Tally only; a computer with none: "Checked 14:32: No Tally on this computer." (never the
+// office's Tally: next-tally-own-status). "This computer's FinCom Bridge" only for one found here (never the member's
+// link to an office bridge); the browser's block and a look still going said so. lead: a sentence first (the Tally box:
+// the client's own state)
 const hhmm = () => { const d = new Date(), p = (x) => String(x).padStart(2, "0"); return p(d.getHours()) + ":" + p(d.getMinutes()); };
-// a bridge of the firm (bridgesOf) whose Tally is open: a company open there, or its beat's ports say so
-export const tallyOpenOn = (b) => !!(b.open.length || upBeat(b.beat || {}));
 // bridge 2.5.11: a beat saying its login's Tally is open but takes no connection (tallyWhy "connection off", or its
 // details tallyOff): the bridge's words ("" otherwise)
 export const offSay = (x) => { const b = x || {}; return lc(b.tallyWhy) === "connection off" || (b.tallyOff && typeof b.tallyOff === "object") ? shown(b.tallyConnectSay) || "its connection is off." : ""; };
@@ -336,14 +214,11 @@ export function checkedSay(lead) {
   const at = "Checked " + hhmm() + ": ";
   try {
     const o = ownState(), own = o.own || {}, here = o.from === "here" || !!own.local || own.how === "found" || own.how === "unsure";
-    const on = bridgesOf().filter((b) => b.at && Date.now() - Date.parse(b.at) < 3 * 60000), k = on.filter(tallyOpenOn).length;
-    // (bridge 2.5.11: a fresh beat whose Tally runs but takes no connection is never "Tally is not open")
-    const off = k ? "" : on.map((b) => offSay(b.beat)).find(Boolean);
     // next-own-bridge-words (the owner, 09-Nov-2026: "you don't need to tell me whose bridge is opened other than me.. if
     // there would be 20 bridges opened then I will be confused.. it should remain with the person whose FinCom and bridge
     // is opened"): a login with its own bridge hears only about its own bridge and its own Tally; no count of the firm's
-    // bridges anywhere (a computer with none: the office's Tally, without counts)
-    // (a login linked to an office bridge, tally_member_bridges, has no bridge of its own: it hears of the office's Tally)
+    // bridges anywhere. next-tally-own-status (13-Nov-2026): a computer with no bridge of its own hears "No Tally on this
+    // computer" and nothing of the office's Tally, open or closed (a login linked to an office bridge neither)
     // ownState's own reading (the bridge's answer here, else its fresh beat): names, why (whyOf), say, noCo
     const mineB = o.own && o.own.how !== "linked" && ["ok", "away", "checking"].includes(o.state) ? o.own : null;
     const nm = o.names instanceof Map ? o.names.size : 0, why = String(o.why || "");
@@ -351,18 +226,16 @@ export function checkedSay(lead) {
       : nm > 0 ? "your Tally is connected." : o.noCo ? "your Tally is open, but no company is open in it."
       : /connection off/i.test(why) || offSay(mineB.beat) ? "your Tally is open but takes no connection: " + (shown(o.say) || offSay(mineB.beat) || "its connection is off.")
       : why ? why : "your Tally is not open.";
-    const office = mineB ? mineSay
-      : !on.length ? "no FinCom Bridge of the firm is online." : k ? "the office Tally is connected."
-      : off ? "the office Tally is open but takes no connection: " + off : "the office Tally is not open.";
+    const office = mineB ? mineSay : "";
     const me = LOCALB.busy ? "Still looking on this computer." : LOCALB.perm === "denied" ? BLOCKED
       : here ? (o.state === "ok" ? "This computer's FinCom Bridge is connected." : mineB ? "" : "This computer's FinCom Bridge is not answering.")
       : own.how === "linked" ? "This computer has no FinCom Bridge: your login uses the office's."
-      : o.own ? "This computer's FinCom Bridge does not answer here." : "This computer has no FinCom Bridge.";
-    return at + (lead ? lead + ". " + office.charAt(0).toUpperCase() + office.slice(1) : office) + (me ? " " + me : "");
+      : o.own ? "This computer's FinCom Bridge does not answer here." : NO_TALLY + ".";
+    return at + [lead ? lead + "." : "", lead ? office.charAt(0).toUpperCase() + office.slice(1) : office, me].filter(Boolean).join(" ");
   } catch (e) { return at + "could not tell, see above."; }
 }
 // the connection as the words saw it: the words go when it changes (Tally page: UI().said)
-export function connSig() { try { const o = ownState(); return [o.state, (o.own || {}).how, bridgesOf().filter((b) => b.at && Date.now() - Date.parse(b.at) < 3 * 60000).length, LOCALB.perm].join("|"); } catch (e) { return ""; } }
+export function connSig() { try { const o = ownState(); return [o.state, (o.own || {}).how, LOCALB.perm].join("|"); } catch (e) { return ""; } }
 // one check at a time, shared by every Check again (a second press while one runs gets the same answer); never rejects
 // (a part that never answers is waited for 10 s at most: the words come all the same)
 let inFlight = null;
@@ -385,95 +258,8 @@ async function checkRun(checkAgain) {
   try { if (typeof render === "function") render(); } catch (e) { /* */ }
   return checkedSay();
 }
-// the firm's bridge (bridgesOf) a local /ping answer is: its id (given with "yours"), its port, else its Windows user
-function cloudOf(x, all) {
-  return (x.bridgeId && all.find((b) => b.id === x.bridgeId)) || (Number(x.bridgePort || x.port) && all.find((b) => b.port && b.port === Number(x.bridgePort || x.port)))
-    || (x.windowsUser && all.find((b) => sameUser(b.user, x.windowsUser) === true)) || null;
-}
-// the local answer that is this firm's bridge b (or null)
-function localOf(b, list) {
-  return (list || []).find((x) => (x.bridgeId && x.bridgeId === b.id) || (b.port && Number(x.bridgePort || x.port) === b.port) || (x.windowsUser && sameUser(b.user, x.windowsUser) === true)) || null;
-}
-// this browser's own bridge among the local answers: {x, sure} | null
-export function localPick(list) {
-  const xs = list || [], t = xs.filter((x) => x.sameSession === true);
-  if (t.length) return { x: t[0], sure: true };
-  if (xs.length === 1 && xs[0].sameSession === "unknown") return { x: xs[0], sure: false };
-  return null;
-}
-// next-hang-watch (04-Nov-2026; the owner, in one Windows login of the shared server: "while tally is open still system is not
-// recognising the tally"): the own bridge a 2.5.3 look found (sameSession true) is remembered in this browser. Each Windows
-// login has its own browser profile, so its own storage: when a later look finds nothing (the bridge stopped, or the
-// browser did not let the page reach 127.0.0.1), the page still knows which bridge is this login's and shows its beat
-// from FinCom's cloud, saying so (ownState: from "beat", how "remembered")
-const OWNKEY = () => ((typeof LocalOwner === "object" && LocalOwner && LocalOwner.P) || "tdsdesk:") + "ownbridge";
-function rememberOwn(x) {
-  try { const v = JSON.stringify({ id: x.bridgeId || "", port: Number(x.bridgePort || x.port) || 0, user: x.windowsUser || "" });
-    if (localStorage.getItem(OWNKEY()) !== v) localStorage.setItem(OWNKEY(), v); } catch (e) { /* storage blocked: looked for each time */ }
-}
-export function rememberedOwn() { try { const v = JSON.parse(localStorage.getItem(OWNKEY()) || "null"); return v && (v.id || v.port) ? v : null; } catch (e) { return null; } }
-// next-tally-other-login (05-Nov-2026): a bridge older than 2.5.3 cannot tell whose Tally it reads (no sameSession; 2.5.1
-// takes every Tally for Windows session 0's), so on a computer where another Windows login has a bridge of the firm its
-// companies are never this login's: the page says it is old (bridgeSay), with the Download
-const day = (at) => !!at && Date.now() - Date.parse(at) < 864e5;
-const shared = (b, all) => !!b.pc && all.some((x) => x !== b && day(x.at) && lc(x.pc) === lc(b.pc) && sameUser(x.user, b.user) === false);
-const unproven = (b, all) => !!b && (!b.version || vk(b.version) < vk(NEED_V)) && shared(b, all);
-export function ownBridge() {
-  const all = bridgesOf();
-  const b = ownBridgeAny(all);
-  return b && !b.local && unproven(b, all) ? null : b;
-}
 // next-tally-link-any-bridge: src/js/98-link-record.js tallyServe prefers this browser's own bridge
 if (typeof globalThis === "object") globalThis.tallyOwnBridge = ownBridge;
-function ownBridgeAny(all) {
-  const c = cfgOf(), list = localBridges() || [];
-  // (0) bridge 2.5.3: the local bridge in this browser's own Windows session (beats the pairing and the member link)
-  const pk = localPick(list);
-  if (pk) {
-    if (pk.sure) rememberOwn(pk.x);
-    const b = cloudOf(pk.x, all);
-    const base = b || { dev: null, id: pk.x.bridgeId || "", user: pk.x.windowsUser || "", open: [], at: "", port: Number(pk.x.bridgePort || pk.x.port) || 0, beat: {} };
-    return Object.assign({}, base, { how: pk.sure ? "found" : "unsure", local: pk.x });
-  }
-  // a bridge saying sameSession false is never this user's
-  const notMine = (b) => { const x = localOf(b, list); return !!x && x.sameSession === false; };
-  // (0b) the bridge found here before (rememberOwn), while no local bridge says it is this session's
-  const m = rememberedOwn();
-  const rb = m ? all.find((b) => (m.id && b.id === m.id) || (!m.id && m.port && b.port === m.port && sameUser(b.user, m.user) !== false)) : null;
-  if (rb && !notMine(rb)) return Object.assign({ how: "remembered" }, rb);
-  // (a) paired in this browser
-  const a = c.key && c.bridgeId ? all.find((b) => b.id === c.bridgeId) : null;
-  if (a && !notMine(a)) return Object.assign({ how: "paired" }, a);
-  // (b) linked to the signed-in member: only when no 2.5.3 bridge answers here (the owner's laptop; older bridges: as before)
-  if (list.some(isNew)) return null;
-  const me = typeof TCloud === "object" && TCloud.me ? TCloud.me() : "";
-  const l = me && ((typeof TCloud === "object" && TCloud.pane && TCloud.pane.links) || []).find((x) => x && x.user_id === me && x.bridge_id);
-  const b = l ? all.find((x) => x.id === l.bridge_id && (!l.device_id || x.dev.id === l.device_id)) : null;
-  // next-tally-other-login (staging, 05-Nov-2026: one FinCom login for every Windows login, linked to one login's bridge;
-  // a browser in another login that did not find its own bridge showed that login's Tally): never on a computer where
-  // another Windows login has a bridge of the firm (the link names one login of many); a laptop keeps it
-  const pl = placeOf();
-  return b && !notMine(b) && pl !== "unknown" && !(pl === "pc" && shared(b, all)) ? Object.assign({ how: "linked" }, b) : null;
-}
-// what this browser's look on 127.0.0.1 says when it found no bridge of this Windows login (null when it found one, or has
-// not looked yet): an older bridge that is this Windows user's (2.5.2 and older say nothing of the session, so FinCom can't
-// tell which login's Tally it serves) | none of this login's answering (other logins' bridges did) | nothing answered at all
-export const NEED_V = "2.5.3";
-// the newest FinCom Bridge (this site's latest.json, as the Tally page reads it; lib/connectSteps.js keeps it), named
-// when a bridge here is too old
-export const BRIDGE = { latest: "2.5.4" };
-export const BLOCKED = "This browser does not let FinCom reach FinCom Bridge on this computer. Allow it: the icon left of the address › Site settings › Local network access › Allow, then reload this page.";
-export function bridgeSay(list0) {
-  const list = list0 === undefined ? localBridges() : list0;
-  if (!list || localPick(list)) return null;
-  // next-tally-connectfix (audit item 8): the browser's leave to reach this computer refused: that, never "not running"
-  if (LOCALB.perm === "denied") return { kind: "blocked", words: BLOCKED };
-  const old = list.find((x) => !isNew(x) && x.yours !== false);
-  if (old) return { kind: "old", version: String(old.version || ""), words: "Your FinCom Bridge is old (" + (old.version || "before " + NEED_V) + "). Install " + BRIDGE.latest + " to connect this login’s Tally." };
-  if (!list.length && LOCALB.perm === "denied") return { kind: "blocked", words: BLOCKED };
-  return { kind: list.length ? "notrunning" : "nothing", words: "FinCom Bridge is not running in this Windows login: start it, or install it." +
-    (list.length ? "" : " If it is running, choose Allow when the browser asks to let this site reach apps on this computer.") };
-}
 // a client's Tally open in ANOTHER Windows login of the computer that serves it (the owner, 04-Nov-2026: a linked client's
 // Tally "is not working at all"; its Tally ran under another Windows user, which this login's bridge leaves
 // alone): from the beats' ports only (error "Tally of <user>", reason "another user"), the user whose name is the client's
@@ -493,48 +279,6 @@ export function otherLoginOf(client, company) {
   });
   return hit;
 }
-// (c) the bridge answering this browser, when it is the own bridge (else null)
-function hereIfOwn(own) {
-  try {
-    if (typeof Bridge !== "object" || Bridge.blocked() || !Bridge.on()) return null;
-    const st = Bridge.st || {};
-    if (st.state !== "ok") return null;
-    // found by its session (2.5.3): the bridge this browser reads is it when it is at its address
-    if (own.local) { const p = Bridge.urlPort ? Bridge.urlPort(cfgOf().url || "") : 0; return p && p === Number(own.local.port) && st.sameSession !== false ? st : null; }
-    const u = sameUser(st.user, own.user), id = !!cfgOf().bridgeId && cfgOf().bridgeId === own.id;
-    return u === true || (u === null && id) ? st : null;
-  } catch (e) { return null; }
-}
-// bridge 2.5.3's plain reasons: why none of this user's Tallys answers (tallyWhy, each port's reason), and Tally's
-// connection switched on (tallyConnectSay)
-function whyOf(src) {
-  const s = src || {}, why = shown(s.tallyWhy), say = shown(s.tallyConnectSay);
-  let words = "";
-  if (why) {
-    if (/^no tally running/i.test(why)) words = "Tally is not open in your Windows login.";
-    else {
-      const per = [...new Set([].concat(s.ports || s.sessions || []).filter((p) => p && (p.reason || p.error) && lc(p.reason || "") === lc(why))
-        .map((p) => shown(p.error && lc(p.error).startsWith(lc(p.reason || why)) ? p.error : p.reason || p.error)).filter(Boolean))];
-      words = "Tally is open but FinCom can’t use it: " + (per.length ? per.join("; ") : why);
-    }
-  }
-  return { why: words, say };
-}
-// next-tally-other-login: this login's own Tally open with no company loaded: said plainly (never another login's company)
-export const NO_CO = "Tally is open, but no company is open in it. Open your company in TallyPrime: it shows here within a minute.";
-// bridge 2.5.8 (asks again within 30 s while Tally names no company): step 4's help when it stays
-export const NO_CO_HELP = "If the company is already open and this stays more than a minute: in TallyPrime press Alt+F3, then F3 to make sure it is loaded (enter its password or TallyVault if asked), then press Check again.";
-const noCo = (o, up) => (up && !o.names.size && !o.why ? Object.assign(o, { noCo: true, why: NO_CO }) : o);
-// this login's own Tally answers: its bridge's own sessions (another user's never), else (an older answer) Tally up
-const upHere = (st) => { const s = [].concat(st.sessions || []).filter((x) => x && !x.skipped && x.mine !== false); return (st.sessions || []).length ? s.some((x) => x.ok) : !!st.tallyUp; };
-const upBeat = (b) => { const p = [].concat(b.ports || []); return p.length ? p.some((x) => x && x.ok && !x.skipped) : b.tally === true || b.tallyState === "open"; };
-// where this browser is: "pc" a Tally computer (a bridge answers here, or one is paired here), "laptop" (the look found
-// none), "unknown" (not looked yet, the look cut at 5 s, or the browser does not let the page reach this computer)
-export function placeOf() {
-  if (cfgOf().key || (LOCALB.list || []).length) return "pc";
-  return LOCALB.list === null || LOCALB.cut || LOCALB.blocked || LOCALB.perm === "denied" ? "unknown" : "laptop";
-}
-export const onTallyPc = () => placeOf() === "pc";
 // the companies open in THIS login's own Tally, for the lists that offer a company to link: {keys, noCo, has, open, theirs}.
 // has(r): open in this login's own Tally (what a picker chooses first). open(r): what a list calls open: this login's own
 // only (a laptop: the firm's, as before). theirs(r): open now in another Windows login's Tally of this very computer: not
@@ -564,23 +308,6 @@ function openNow(o) {
   return { keys, noCo: !!o.noCo, has, laptop: place === "laptop", open: (r) => (place === "laptop" ? !!r.open : has(r)), theirs: (r) => !mine(r) && sib.has(coKey(r.company)),
     elsewhere: (r) => place !== "laptop" && !!r.open && !mine(r) };
 }
-export function ownState() {
-  const list = localBridges();
-  // the first look on this computer not done yet (at most a second)
-  if (list === null && LOCALB.busy) return { state: "checking" };
-  const own = ownBridge(), say = bridgeSay(list);
-  if (!own) return { state: "none", say };
-  const st = hereIfOwn(own), unsure = own.how === "unsure";
-  // (another Windows user's Tally on this computer, when the bridge says so, is not this user's)
-  const by = (ns) => new Map(ns.filter(Boolean).map((n) => [coKey(n), String(n)]));
-  if (st) return noCo(Object.assign({ state: "ok", from: "here", own, unsure, names: by([].concat(st.open || []).filter((x) => x && x.mine !== false).map((x) => x.name)) }, whyOf(st.tallyWhy != null ? st : own.beat)), upHere(st));
-  if (fresh(own.at)) return noCo(Object.assign({ state: "ok", from: "beat", own, unsure, names: by(own.open), far: own.how === "remembered" && !!say && (say.kind === "blocked" ? "blocked" : "far") }, whyOf(own.beat)),
-    upBeat(own.beat || {}));
-  // this browser holds the own bridge's key, its first answer not read yet
-  const c = cfgOf(), b = typeof Bridge === "object" ? Bridge.st || {} : {};
-  if (!own.local && c.key && c.bridgeId === own.id && b.state === "off" && !b.error) return { state: "checking", own };
-  return { state: "away", own, unsure, say };
-}
 // Connect in the column: the bridge found here is the one asked (/status?fresh=1 through the local connect flow)
 export function aimLocal(own) {
   try {
@@ -590,13 +317,6 @@ export function aimLocal(own) {
     if (String(cfgOf().url || "").replace(/\/+$/, "") !== u.replace(/\/+$/, "")) { Bridge.setCfg({ url: u }); Bridge.foundAt = 0; }
   } catch (e) { /* the connect says why */ }
 }
-// "yes" | "no" | "checking" | "away" | "none" for a company (own: ownState(), read once for the whole table)
-export function localOpen(company, own) {
-  const o = own || ownState();
-  if (o.state !== "ok") return o.state;
-  const k = coKey(company);
-  return o.names.has(k) || [...o.names.values()].some((n) => !!(globalThis.LinkRec && LinkRec.same(n, company))) ? "yes" : "no";
-}
 export const BRING_WHY = "Open this company in Tally first";
 // next-tally-connectfix (finding 6): why the computer a company is linked to does not bring its ledgers, in words, only
 // when its beat (heard now) shows it cannot: the company not open in its Tally and none of the Tallys it sees answering
@@ -605,7 +325,6 @@ export const BRING_WHY = "Open this company in Tally first";
 // in the linked Windows login can't see this Tally". No computer or login named on this page (the owner's rule; For
 // support names them). "" when nothing says so (or not known)
 export const WAIT_OLD = "Waiting for FinCom Bridge in the linked Windows login to update to ", WAIT_BLIND = "FinCom Bridge in the linked Windows login can’t see this Tally";
-const vk = (v) => String(v || "").split(".").map((n) => String(Number(n) || 0).padStart(3, "0")).join(".");
 export function firstLinkWait(company, all) {
   const k = coKey(company), r = [].concat(all || []).find((x) => x && coKey(x.company) === k);
   const dev = r && r.device ? tallyDevs().find((d) => d.id === r.device) : null;

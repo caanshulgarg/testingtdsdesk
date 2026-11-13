@@ -9,7 +9,8 @@ with Kestrel open). The Tally page's checklist (data-tsm-guide), in A's browser:
    5. A's port held by B's Tally: names B, proposes a port no beat on SRV01 uses; never "ask the administrator";
    6. set but not on yet: close and reopen once; 7. Tally open with no company; 8. a company open, not linked: Link;
    9. linked and reading (step 6); and step 6 done (up to date) from the rows;
-  10. a laptop (no bridge answers here): where to do the steps, the firm's state, no per-login step;
+  10. a laptop (no bridge answers here): where to do the steps, no per-login step, and nothing of the firm's other
+      bridges (next-tally-own-status, 13-Nov-2026: no "For the firm now: N FinCom Bridges are connected");
   11. never B's company, and never the firm's state as A's, in any step; the top bar's Tally icon, its popover and a
       client's box say the same step's words (one source: lib/connectSteps.js), with the way to the steps; drawing the
       page asks nothing of 127.0.0.1 by itself.
@@ -201,7 +202,7 @@ def main():
         ok(n("#app [data-tsm-guide]") == 0 and n("#app [data-tsm-steps-link='laptop']") == 1, "10. the steps folded behind Connect Tally on this computer"); pg.click("#app [data-tsm-steps-link='laptop']"); pg.wait_for_timeout(600)
         g = guide(); fw = txt("#app [data-tsm-firm]")
         ok(g["now"] == "laptop" and "Do these steps on the computer or server where TallyPrime runs" in g["all"], "10. where to do them (%s)" % g["all"][:200])
-        ok(fw.startswith("For the firm now: 2 FinCom Bridges are connected") and n(G + " [data-tsm-state]") == 0 and n("#app [data-tsm-now]") == 0, "10. the firm's state, no per-login step (%s)" % fw)
+        ok(fw == "" and "For the firm now" not in g["all"] and n(G + " [data-tsm-state]") == 0 and n("#app [data-tsm-now]") == 0, "10. no per-login step, nothing of the firm's bridges (%s)" % fw)
         ok(E("() => FCConnectNow()") is None, "10. no login's step said elsewhere on a laptop")
         print("== 12. FinCom Bridge 2.5.3: it switched the connection on, Tally not reopened yet (no Tally running, it says)")
         SAY253 = "FinCom switched on Tally's connection. Close and reopen Tally once."

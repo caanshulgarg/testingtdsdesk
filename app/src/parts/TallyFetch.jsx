@@ -183,7 +183,8 @@ export function reachWords(devs) {
   const ids = new Set([].concat(devs || []).filter((d) => d && d.fetchOn).map((d) => d.id));
   for (const d of tallyDevs()) {
     const bt = ((d && d.info) || {}).beat || {}, why = String(bt.tallyWhy || "").trim().toLowerCase();
-    if (!ids.has(d.id) || !why || !bt.at || Date.now() - Date.parse(bt.at) > 3 * 60000) continue;
+    // (review of 1d3bce162, M3: another's bridge's Tally is said to the owner and to the person whose bridge it is only)
+    if (!ids.has(d.id) || !why || !bt.at || Date.now() - Date.parse(bt.at) > 3 * 60000 || !(globalThis.FCOwn && FCOwn.sees(d.id))) continue;
     return "FinCom Bridge can’t reach your Tally: " + (String(bt.tallyConnectSay || "").replace(/\s+/g, " ").trim() || REACH[why] || why);
   }
   return "";

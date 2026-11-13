@@ -5,9 +5,12 @@ Bridge is heard from, one line a computer (computer, Windows user, version, stat
 Details (every bridge heard from, Make this the main bridge, this computer's connection); a computer with only an older
 bridge says to install FinCom Bridge, with the card; the hidden #/tally/bridge-1.15 shows bridge 1.15.0's setup.
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_bridges_page.py"""
-import json, os, threading, functools, http.server
+import sys, json, os, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
 from playwright.sync_api import sync_playwright
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from own_seed import OWN_DEV
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 SITE = os.environ.get("TDSDESK_SITE", os.path.join(HERE, "..", "app", "dist-test"))
 class Q(http.server.SimpleHTTPRequestHandler):
@@ -64,6 +67,7 @@ with sync_playwright() as p:
     ok(not [x for x in OLD if x in t], "2. nothing of the older bridges on the page (%s)" % [x for x in OLD if x in t])
     ok("without an administrator" in pg.inner_text(card), "4. it says: just for you, without an administrator")
     # 5. FinCom Bridge heard from: one line, the rest under More
+    E(OWN_DEV, NWS_NEW[0])   # next-tally-own-status (13-Nov-2026): the made-up Tally computer here is this person's own (own_seed.py)
     E(SETUP, NWS_NEW); pg.wait_for_timeout(1200)
     E("() => { S.tallyMore = {support: true}; render(); }"); pg.wait_for_timeout(500)   # fold Advanced (for support) again
     # 15-Oct-2026 (the calm page): one line a computer on the page; its card (Details) under Advanced
@@ -77,8 +81,9 @@ with sync_playwright() as p:
     t = pg.inner_text("#app")
     ok(not [x for x in OLD if x in t], "2. nothing of the older bridges (%s)" % [x for x in OLD if x in t])
     pg.click("#app [data-bridge-details]"); pg.wait_for_timeout(500)
-    ok(pg.locator("#app [data-bridges] tbody tr").count() == 1 and "FinCom Bridge on this computer" in pg.inner_text("#app [data-bridge-more]") and pg.locator(card).count() == 1,
-       "5. More: every bridge heard from, this computer's connection, and the download again")
+    # (next-tally-own-status, the owner, 13-Nov-2026: no list of every bridge heard from)
+    ok(pg.locator("#app [data-bridges]").count() == 0 and "FinCom Bridge on this computer" in pg.inner_text("#app [data-bridge-more]") and pg.locator(card).count() == 1,
+       "5. More: this computer's connection and the download again; no list of every bridge")
     # offline: the line says what to do
     E("() => { TCloud.pane.devices[0].info.bridges['go-3fa9c1d2e4b7'].at = new Date(Date.now() - 3600000).toISOString(); render(); }"); pg.wait_for_timeout(500)
     st = pg.inner_text("#app [data-bridge-line]")

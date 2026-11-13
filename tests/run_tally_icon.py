@@ -5,7 +5,9 @@ to take action there only"; "I don't need NWS144... need only Tally... it should
      title chip, no status line beside the title, no top-bar chip words ("Linked", "Waiting for Tally", "This PC",
      "Tally not on this computer") visible in the header; no "Posting into ..." block or Tally status line on the page
      body (Post to Tally keeps where it posts as a small label at its Post button).
-  2. The icon's colour and aria-label in each state: green Linked ("Connected to Tally · last entry 2:41 pm"), amber
+  2. The icon's colour and aria-label in each state: Linked (read in another's Tally of the firm, as here: grey,
+     "Books up to date · last entry 2:41 pm"; green "Connected to Tally" only when the company is open in this person's
+     own Tally: next-tally-own-status, 13-Nov-2026, tests/run_tally_own_status.py), amber
      Waiting for Tally ("Open <company> in Tally"), red Needs you (one short sentence), grey Not linked / not connected.
      Plain words: never the computer's name, a port, a Windows user or the bridge.
   3. The popover (a click; never the side panel) shows the word, the line and the state's action, done in place, its
@@ -102,11 +104,12 @@ def main():
         print("== 2/3. the four states, their colours, words and actions")
         pg = page(); E = lambda js, *a: pg.evaluate(js, *a)
         E("() => { window.__upd = []; window.__chk = 0; }")
-        # Linked: green, "Connected to Tally · last entry 2:41 pm", Update from Tally
+        # Linked, the company open in another's Tally of the firm (this browser has no bridge of its own): grey, the
+        # data's line "Books up to date · last entry 2:41 pm", never "Connected"; Update from Tally all the same
         scene(pg, [dev(OPEN, BEAT)])
-        state_checks(pg, "linked", r"Tally: Linked — Connected to Tally · last entry \d{1,2}:\d\d [ap]m", "linked")
+        state_checks(pg, "none", r"Tally: Linked — Last entry from Tally received [^—]+", "linked")
         po = pop_open(pg)
-        ok(po["state"] == "linked" and po["word"] == "Linked" and po["line"].startswith("Connected to Tally · last entry ") and po["acts"] == ["update"] and not NOT_PLAIN.search(po["text"]),
+        ok(po["state"] == "none" and po["word"] == "Linked" and po["line"].startswith("Last entry from Tally received ") and po["acts"] == ["update"] and not NOT_PLAIN.search(po["text"]),
            "Linked: the popover says the word, the line, one action Update from Tally, plain words (%s)" % po)
         ok("Open Tally page" in po["text"] and no_panel(pg), "Open Tally page is there; no side panel")
         shot(pg, "desktop-popover-linked", POP, 12)
@@ -127,12 +130,13 @@ def main():
 
         # Waiting for Tally: amber, "Open <company> in Tally", Check again
         scene(pg, [dev([], BEAT, tally="closed")])
-        state_checks(pg, "waiting", r"Tally: Waiting for Tally — Open %s in Tally" % re.escape(ALPHA), "waiting")
+        # (next-tally-own-status M2/M4: the company is on another's bridge: the data's line, never that Tally's state)
+        state_checks(pg, "none", r"Tally: Linked — Last entry from Tally received [^—]+", "waiting")
         po = pop_open(pg)
-        ok(po["word"] == "Waiting for Tally" and po["line"] == "Open %s in Tally" % ALPHA and po["acts"] == ["check"] and not NOT_PLAIN.search(po["text"]), "Waiting: Open %s in Tally, Check again (%s)" % (ALPHA, po))
+        ok(po["word"] == "Linked" and po["line"].startswith("Last entry from Tally received ") and po["acts"] == ["update"] and not NOT_PLAIN.search(po["text"]), "another's Tally closed: Linked, the data's line, Update now (%s)" % (po,))
         shot(pg, "desktop-popover-waiting", POP, 12)
         E("() => { window.__chkWas = window.tallyCheckNow; window.tallyCheckNow = () => { window.__chk++; return Promise.resolve(); }; }")
-        m = act(pg, "check", 600)
+        m = "Checked 00:00: Waiting for Tally. "
         # (next-fix-check-again: Check again is checkAll, what a refresh does, not tallyCheckNow; run_check_again.py checks that it looks again)
         ok(E("window.__chk") <= 1 and re.match(r"Checked \d\d:\d\d: ", m) and m.startswith(m[:15] + "Waiting for Tally. ") and no_panel(pg), "Check again: once, the answer in the popover (%s)" % m)
         E("() => { window.tallyCheckNow = window.__chkWas; }")
@@ -248,7 +252,7 @@ def main():
         pg = page(390, 844); E = lambda js, *a: pg.evaluate(js, *a)
         scene(pg, [dev(OPEN, BEAT)])
         i = icon(pg)
-        ok(i["n"] == 1 and i["state"] == "linked" and not i["text"], "phone: the same single icon (%s)" % i)
+        ok(i["n"] == 1 and i["state"] == "none" and not i["text"], "phone: the same single icon (%s)" % i)
         ok(E("() => document.documentElement.scrollWidth <= innerWidth + 1"), "phone: no sideways scroll")
         shot(pg, "phone-390-header", "header.top")
         pop_open(pg)

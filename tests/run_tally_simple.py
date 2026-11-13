@@ -199,7 +199,8 @@ def main():
         hd = txt("#app [data-tsm-head]")
         ok(hd.startswith("Not connected yet: step 1 of 6") and n("#app [data-tsm-top-check]") == 1, "1. the top line: not connected, step 1, Check again (%s)" % hd)
         E("() => { S.tallyMore = Object.assign({}, S.tallyMore, {support: true}); render(); }"); pg.wait_for_timeout(1500)
-        ok(n("#app [data-tsm-strip]") == 0 and "none connected" in txt("#app [data-tsm-pcs]"), "1. no strip; Computers with Tally: none connected (Advanced) (%s)" % txt("#app [data-tsm-pcs]"))
+        # (next-tally-own-status (the owner, 13-Nov-2026): no "Computers with Tally: N connected" line)
+        ok(n("#app [data-tsm-strip]") == 0 and n("#app [data-tsm-pcs]") == 0, "1. no strip; no line of the firm's computers")
         ok(n("#app [data-support-body] [data-tsm-check]") == 1 and "Check every client for changes in Tally" in txt("#app [data-tsm-check]"), "1. the day check of every client, in Advanced (%s)" % txt("#app [data-tsm-check]"))
         E("() => { S.tallyMore = Object.assign({}, S.tallyMore, {support: false}); render(); }"); pg.wait_for_timeout(500)
 
@@ -430,8 +431,7 @@ def main():
         mt = main_text()
         mt = rest_text()
         ok(PC not in mt and WIN not in mt, "6. neither %s nor %s outside For support and Connect Tally" % (PC, WIN))
-        ok("older FinCom Bridge" in txt("#app [data-tsm-pcs]") and txt("#app [data-tsm-pcs]").startswith("Computers with Tally: 1 connected.") and n("#app [data-tsm-pcs] [data-tsm-download]") == 1 and n("#app [data-tsm-pcs] [data-tsm-sha]") == 1 and "Update it now" not in mt,
-           "6. Computers with Tally: 1 connected. One has an older FinCom Bridge, Download and its fingerprint (no Update it now: no remote update) (%s)" % txt("#app [data-tsm-pcs]"))
+        ok(n("#app [data-tsm-pcs]") == 0 and "Computers with Tally" not in txt("#app") and "Update it now" not in mt, "6. no line of the firm's computers (Computers with Tally: N connected is gone); no Update it now")
 
         print("== 7. For support")
         fs = "#app [data-for-support]"
@@ -464,13 +464,13 @@ def main():
         E("""() => { const c = {url: 'http://127.0.0.1:9100', key: 'made-up-key', follow: false, port: 0}; Bridge.cfg = () => c; Bridge.on = () => true; Bridge.up = () => true;
           Bridge.st = Object.assign({}, Bridge.st, {state: 'ok', sessions: [], tallyUp: true, version: '2.5.1', at: Date.now(), open: [], mode: 'auto'}); render(); }"""); pg.wait_for_timeout(1200)
         tools = {"this computer's card": "[data-status-card]", "the companies open with their ⋯": "[data-tco-list=firm]", "every client's Tally company": "[data-tlk]",
-                 "each computer": "[data-computers]", "versions": "[data-release]", "stop reading": "[data-read-stop-all]", "every bridge": "[data-bridges]",
+                 "each computer": "[data-computers]", "versions": "[data-release]", "stop reading": "[data-read-stop-all]",
                  "bridge address and key": "[data-connect-section] [data-bridge=url]", "the key": "[data-connect-section] [data-bridge=key]", "connection history": '[data-pane="tally-history"]',
                  "the PowerShell download line": "[data-bridge-ps]", "the fingerprint": "[data-bridge-sha]", "Sync activity": '[data-tally-tab="activity"]', "the bridge log": '[data-act="bridgeLog"]'}
         miss = [k for k, s in tools.items() if not n(fs + " " + s)]
         ok(not miss, "7. For support holds the former tools (missing: %s)" % miss)
         ft = txt(fs)
-        ok(all(w in ft for w in ("Check my Tally", "Roll back", "Hold version", "Stop reading on all computers", "Every bridge FinCom has heard from")), "7. Check my Tally, Roll back, Hold version, Stop reading, Every bridge: all there")
+        ok(all(w in ft for w in ("Check my Tally", "Roll back", "Hold version", "Stop reading on all computers")) and "Every bridge" not in ft and n("#app [data-bridges]") == 0, "7. Check my Tally, Roll back, Hold version, Stop reading: all there; no list of every bridge")
         E("() => { S.tallyMore = {}; render(); }"); pg.wait_for_timeout(500)
 
         print("== 3c. user A's page never shows user B's Tally (two Windows logins on one server)")

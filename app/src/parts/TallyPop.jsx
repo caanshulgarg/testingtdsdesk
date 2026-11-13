@@ -112,7 +112,7 @@ function Actions({ co, s, run, busy }) {
     const rw = co && s.company ? readWhere(s.company) : null, na = rw && !rw.reader ? noAnswer(s.company) : "";
     return na ? { bad: true, text: "Asked at " + now() + ", but " + na.charAt(0).toLowerCase() + na.slice(1) } : "Asked Tally for its new entries at " + now() + ". They come within a few minutes."; }, true);
   if (!co) return s.icon === "none" ? <Download /> : s.icon === "linked" ? null : row(check(true));
-  if (s.icon === "linked") return row(update());
+  if (s.icon === "linked" || s.far) return row(update());   // (far: linked, read in another's Tally: Update now all the same)
   if (s.icon === "waiting") return row(check(true));
   if (s.icon === "none") return s.p && (s.p.kind === "unlinked" || s.p.state === "unlinked") ? <LinkPick co={co} run={run} busy={busy} /> : <Download />;
   const w = s.p || {}, b = w.button || {}, l = typeof tallyLine === "function" ? tallyLine(co) : null;
@@ -150,7 +150,7 @@ export default function TallyPop({ co, nOpen, close, back }) {
     <p className="tally-pop-head"><span className={"tsign-dot " + TONE[s.icon]} aria-hidden="true" /><b data-tally-pop-word="">{s.word}</b></p>
     {line && <p className="tally-pop-line" data-tally-pop-line="">{line}</p>}
     {/* next-fix-clientremove (the owner: "no visibility of which client it's linked to"): the company linked, and where */}
-    {co && s.icon !== "none" && s.company && <p className="tally-pop-co" data-tally-pop-company="">{"Tally company: "}<b>{s.company}</b></p>}
+    {co && (s.icon !== "none" || s.far) && s.company && <p className="tally-pop-co" data-tally-pop-company="">{"Tally company: "}<b>{s.company}</b></p>}
     <Actions co={co} s={s} run={run} busy={busy} />
     {/* next-tally-connect-steps: this login's step not done: its words above, and the way to the six steps */}
     {/* next-tally-basics: the steps' Check again here too, where the actions above have none (the manual "Tally is open, check now") */}

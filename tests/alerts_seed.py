@@ -25,6 +25,9 @@ HELD_OURS = {"id": 501, "client_id": "G", "book_id": "b1", "device_id": D1, "pc"
              "held_why": "no entry body on the line: waiting for the entry's details from FinCom Bridge (it asks Tally again on its next run); or upload this day's Day Book"}
 
 SETUP = """async ([s, role]) => {
+  // next-tally-own-status (13-Nov-2026): the made-up Tally computer is the signed-in person's own (its bridge found here
+  // before: remembered), so its lines, its card and the bell's words about it are theirs to see
+  try { localStorage.setItem(((typeof LocalOwner === 'object' && LocalOwner && LocalOwner.P) || 'tdsdesk:') + 'ownbridge', JSON.stringify({id: 'go-1', port: 0, user: 'tally'})); } catch (e) {}
   const now = Date.now(), ago = m => new Date(now - m * 60000).toISOString();
   const ist = new Date(now + 330 * 60000), today = ist.toISOString().slice(0, 10), y = new Date(now + 330 * 60000 - 86400000).toISOString().slice(0, 10);
   const at08 = new Date(Date.parse(today + "T08:00:00+05:30")).toISOString();

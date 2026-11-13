@@ -166,28 +166,13 @@ function ReviewLink() {
   return <button className="treview" data-review-link="" title="Open Post to Tally → Errors" onClick={go}>{n + (n === 1 ? " Tally error" : " Tally errors")}</button>;
 }
 
-// the one Tally sign (spec H1, H2): green connected / red not connected (tallySign, src/js/49), naming the computer (round
-// 3, 05-Oct-2026): "Tally connected on this computer", "… through Office computer (NWS144)", "… through 2 computers",
-// "Tally not connected. Last seen on …", "Tally is open on … with a different company"; on a phone the dot and the
-// computer's name. The detail on hover, and in the Tally panel on a click
-export function TallyDetail({ s, link = null }) {
-  // round 3 (05-Oct-2026): connected through more than one computer: each, with its company and last contact
-  if (s.many) return <dl className="tdetail" data-tally-detail="" data-tally-reason="">
-    {s.many.map((m) => <span key={m.computer} style={{ display: "contents" }}><dt>Computer</dt><dd>{m.computer}</dd><dt>Company</dt><dd>{m.company || "\u2014"}</dd><dt>Last contact</dt><dd>{m.at || "never"}</dd></span>)}
-  </dl>;
-  return <dl className="tdetail" data-tally-detail="" data-tally-reason={s.on ? "" : s.code}>
-    <dt>Computer</dt><dd>{s.computer || "none heard from"}</dd>
-    <dt>Company</dt><dd>{s.company || "\u2014"}</dd>
-    {link && <><dt>Link</dt><dd data-tally-link-word={link.state}>{link.word}</dd></>}
-    <dt>Last contact</dt><dd>{s.at || "never"}</dd>
-    {!s.on && <><dt>Why</dt><dd className="why">{s.reason}</dd><dt>What to do</dt><dd>{s.fix}</dd></>}
-  </dl>;
-}
+// next-tally-own-status (the owner, 13-Nov-2026): the panel's list of the firm's Tally computers (TallyDetail: each
+// computer, its company, its last contact) is gone: a person sees only their own Tally
 // the Tally panel's card of THIS computer (the owner, 11-Oct-2026: steady, tallyHere, src/js/49; it was the top bar's chip
 // until next-tally-icon, which made the top bar's sign an icon, parts/TallyIcon.jsx):
 // green "Tally ready"; amber "Tally closed", "Tally busy", "Company not open", "Company not linked", "No internet"; red
 // "Bridge stopped"; grey "Tally not on this computer" (no bridge here: not an alarm). The hover card: the company, the
-// Windows user, when last confirmed, the next step as a button, and the firm's other computers in one quiet line
+// Windows user, when last confirmed, the next step as a button
 export function HereCard({ h, link = null }) {
   const pc = h.computer ? tallyPcShort(h.computer, h.user) : "";
   return <div className="there" data-tally-here-card={h.code}>
@@ -199,7 +184,6 @@ export function HereCard({ h, link = null }) {
       {h.code !== "none" && <><dt>Last confirmed</dt><dd data-tally-confirmed="">{h.confirmed ? tallyIst(h.confirmed) : "\u2014"}</dd></>}
     </dl>
     {h.hint && <p className="note there-hint" data-tally-hint="">{h.hint}</p>}
-    {h.other && <p className="note there-other" data-tally-other="">{h.other}</p>}
     {h.next.length > 0 && <div className="there-acts">{h.next.map((n, i) => <button key={n.act} type="button" data-tally-next={n.act}
       className={"btn small" + (i === 0 && h.level !== "ok" && n.act !== "tallyCheck" ? " primary" : "")} onClick={(ev) => { ev.stopPropagation(); doAct(n.act); }}>{n.label}</button>)}</div>}
   </div>;
@@ -276,8 +260,6 @@ function TallyPanel({ open }) {
       {open && <><div className="tp-body">
         {/* Task D (the owner, 28-Oct-2026: "No suggestion to add clients"): no offers of companies not linked here */}
         <HereCard h={tallyHere(co)} link={co ? Object.assign({}, tallyLinkOf(co), { pill: clientTallyState(co) }) : null} />
-        <p className="note" style={{ margin: "10px 0 4px" }}><b>The firm’s Tally computers</b></p>
-        <div data-tally-firm=""><TallyDetail s={tallySign(co)} /></div>
         <p><TallyPill co={co} /></p>{co && typeof tallyLine === "function" && tallyLine(co) && <p data-panel-tally-line=""><TallyLine co={co} update={!panelBooksShown(co.id)} /></p>}
         {/* round 3 A: the client's books, Books up to … · read …, Update from Tally; the rest under Details */}
         {co && <PanelBooks cid={co.id} />}<PanelUpload co={co} /><p className="note">{tallyStatus(co).say}</p>

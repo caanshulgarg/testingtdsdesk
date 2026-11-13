@@ -19,8 +19,10 @@ export function TallyStates({ co }) {
     return <span className={"tag " + lv} data-part={what} data-state={v} title={(SAY[what] || {})[v] || ""}>{txt}</span>;
   };
   return <div className="row tstates" style={{ gap: 14, flexWrap: "wrap", alignItems: "center" }}>
+    {/* next-tally-own-status: the parts are this person's own bridge and Tally; with none of their own, only that is said */}
+    {t.state === "far" ? <span className="note" data-part="bridge" data-state="none">{globalThis.FCOwn ? FCOwn.icon().word : "Checking"}</span> : <>
     <span><b>Bridge</b> {chip("bridge", BRIDGE, p.bridge || "none")}</span>
-    <span><b>Tally</b> {chip("tally", TALLY, p.tally || "closed")}{p.tally === "busy" && p.busySince ? <span className="note"> since {fmtDateTime(Date.parse(p.busySince))}</span> : null}</span>
+    <span><b>Tally</b> {chip("tally", TALLY, p.tally || "closed")}{p.tally === "busy" && p.busySince ? <span className="note"> since {fmtDateTime(Date.parse(p.busySince))}</span> : null}</span></>}
     {co && <span><b>Company</b> {chip("company", COMPANY, p.company || "unlinked")}</span>}
   </div>;
 }

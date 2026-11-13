@@ -22,6 +22,9 @@ Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_tally_suvit.py
 import json, os, re, sys, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
 from playwright.sync_api import sync_playwright
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from own_seed import OWN_DEV
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 SITE = os.environ.get("TDSDESK_SITE", os.path.join(HERE, "..", "app", "dist-test"))
 SHOTS = sys.argv[sys.argv.index("--shots") + 1] if "--shots" in sys.argv else ""
@@ -103,6 +106,7 @@ def main():
         # the first sync's wake (Ledgers.askTally); "active" (FinCom in use) and "open" (a client opened) are TWake's own
         wakes = lambda: [c for c in calls("post") if c[1].get("kind") == "wake" and c[1].get("what") == "ledgers"]
         def scene(companies, devs=None, books=None, ledn=None):
+            E(OWN_DEV, dev() if devs is None else (devs[0] if devs else None))   # next-tally-own-status (13-Nov-2026): the made-up Tally computer here is this person's own (own_seed.py)
             E(SETUP, [[dev(), dev(D2, "LAPTOP", at="ago:42", opened=())] if devs is None else devs, companies, books or {}, ledn or {}]); pg.wait_for_timeout(300)
         def tally_page():
             E("() => { S.tallyGuide = {}; S.tallyTab = 'computers'; (S.tallyMore = Object.assign({}, S.tallyMore, {support: true}), navHome('tally')); }"); pg.wait_for_timeout(1200)
