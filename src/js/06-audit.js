@@ -1005,7 +1005,8 @@ const Engine = {
     this.sent = null;
     this.post({t: "begin", ver, keepV, keep});
     try { this.post({t: "S", s: S0.s, ls: S0.ls}); }
-    catch (e){ Object.keys(S0.s).forEach(k => { try { structuredClone(S0.s[k]); } catch (x){ delete S0.s[k]; } }); this.post({t: "S", s: S0.s, ls: S0.ls}); }
+    // (a field that cannot be copied left out; with no structuredClone, Safari 14, each tried in a word of its own)
+    catch (e){ Object.keys(S0.s).forEach(k => { try { if (typeof structuredClone === "function") structuredClone(S0.s[k]); else this.post({t: "S", s: {[k]: S0.s[k]}, ls: {}}); } catch (x){ delete S0.s[k]; } }); this.post({t: "S", s: S0.s, ls: S0.ls}); }
     yield;
     for (const k of keys){
       if (keep.includes(k)) continue;
