@@ -191,3 +191,29 @@ header.top .tbar-title .note { min-height: 20px; }
 .side .side-quiet.side-one { display: block; height: auto; white-space: nowrap; text-overflow: ellipsis; -webkit-line-clamp: unset; }
 .side .side-data { font-size: inherit; color: var(--text-muted); text-decoration: underline; text-underline-offset: 2px; }
 .side .side-data:hover { color: var(--foreground); }
+
+/* ux-wins (13-Nov-2026, the UI review: on a phone the header took 124-159 px of an 812 px screen: Back and the title, then
+   a second line of the three signs and the firm's name). One line now: Back as its arrow, the title, the three signs and
+   the firm as its first letter (its menu as before; its name is in the title's line on the firm's pages and in More);
+   the page's own buttons (Upload…) keep a line of their own only where a page has them */
+@media (max-width: 600px) {
+  header.top .headrow, header.top .headrow:not(:has(> .sbar)) { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "t g" "p p"; gap: 4px 8px; }
+  header.top .topright > .tb-page { justify-content: flex-start; flex-wrap: wrap; }
+  header.top .topright > .tb-page:empty { display: none; }
+  header.top .topright > .tb-global { gap: 6px; }
+  header.top .headrow > .tbar { gap: 8px; flex-wrap: nowrap; }
+  header.top .tbar > .tbar-back { flex: none; width: 34px; min-width: 34px; height: 34px; padding: 0; overflow: hidden; white-space: nowrap; text-indent: -999px; position: relative; }
+  header.top .tbar > .tbar-back::after { content: "←"; position: absolute; inset: 0; display: grid; place-items: center; text-indent: 0; }
+  header.top .tbar-title h2 { font-size: 20px; }
+  .tb-slot.tb-firm { width: 34px; }
+  .tb-slot.tb-firm .firmbtn { width: 34px; height: 34px; padding: 0; justify-content: center; align-items: center; border-radius: 50%; }
+  .tb-slot.tb-firm .firmbtn small { display: none; }
+  .tb-slot.tb-firm .firmbtn b { font-size: 0; text-align: center; }
+  .tb-slot.tb-firm .firmbtn b::first-letter { font-size: 14px; }
+  /* the firm's pages: the line over the title only names the firm (it is in More and the firm's menu) */
+  header.top .tbar:not([data-crumb="client-nav"]) .tbar-title > .note { display: none; }
+  header.top .tbar > .tbar-title { flex: 1 1 auto; min-width: 0; overflow: hidden; }
+  /* a client's line: the client and the page (Clients is in the bar at the foot). The client's name stays on its own
+     line over the title: on one line with it, both were cut at 375 px (tried in the review of next-ux-wins) */
+  #cobar .tbar-title .crumbs > [data-crumb-clients], #cobar .tbar-title .crumbs > [data-crumb-clients] + span { display: none; }
+}

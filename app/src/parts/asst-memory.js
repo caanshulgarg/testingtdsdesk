@@ -1,15 +1,15 @@
 // Ask FinCom's memory of the conversation (the owner, 29-Oct-2026: "multiple times I asked.. no previous memory.. nothing..
 // it was so dumb that I had to ask every time"). Loaded with the panel (Assistant.jsx), it gives ASST (src/js/75-assistant.js)
 // what each question carries to fincom-assistant:
-//   history()  the last six exchanges of this panel's conversation (this client, or the whole firm), short: the question,
-//              the answer's words cut at 700 characters, and what FinCom showed under it ("[Shown: the statements card,
+//   history()  the last 20 exchanges of this panel's conversation (this client, or the whole firm), short: the question,
+//              the answer's words cut at 1,200 characters (13-Nov-2026: it asked again what the owner had answered), and what FinCom showed under it ("[Shown: the statements card,
 //              01-Apr-2026 to 30-Sep-2026 …; table Profit and loss …; file X.xlsx; attached Y.pdf]"), so "this" and "the
 //              earlier message" have something to point at. The server bounds it again (agent.ts boundHistory);
 //   thread()   the statements shown last (their period, comparative and notes: "an excel copy of this" is those
 //              statements) and the files attached in this conversation with what FinCom found each to be (the Upload's
 //              kind and summary), so "the balance sheet I attached in the earlier message" is that file.
 // It also takes the answer's statements card event ("fs", server/assistant/fsask.ts) onto the turn.
-const TURNS = 6, Q_MAX = 500, A_MAX = 700, SHOWN_MAX = 600;
+const TURNS = 20, Q_MAX = 1000, A_MAX = 1200, SHOWN_MAX = 600;
 const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const dmy = (d) => (/^\d{4}-\d{2}-\d{2}/.test(String(d || "")) ? d.slice(8, 10) + "-" + MON[+d.slice(5, 7) - 1] + "-" + d.slice(0, 4) : "");
 

@@ -980,8 +980,9 @@ function fsStockSet(which, v){ const b = S.books, c = FS.cfg(b); c.stock = Objec
 function misRangeSet(key, v){ const x = misRangeQuick("ytd", S.books); S.misRange = Object.assign({from: Audit.iso(x.from), to: Audit.iso(x.to)}, S.misRange, {[key]: v}); Smart.keep("mis", S.misRange); render(); }
 function misQuickGo(k){ const x = misRangeQuick(k, S.books); S.misRange = {from: Audit.iso(x.from), to: Audit.iso(x.to)}; Smart.keep("mis", S.misRange); render(); }
 function misTabGo(id){ S.misTab = id; S.misQ = ""; S.misF = ""; render(); }
-function misFreqSet(v){ const b = S.books; b.misCfg = Object.assign({}, b.misCfg, {freq: v}); saveBooks(); render(); }
-function misMsmeSet(party, v){ const b = S.books; b.msme = Object.assign({}, b.msme, {[party]: v}); const r = (b.mis || {}).last; if (r) MIS.run(r.from, r.to, r.how); saveBooks(); render(); }
+// (the run on its own looked at again with the new setting: MIS.maybeRun, next-fix-mis-rework)
+function misFreqSet(v){ const b = S.books; b.misCfg = Object.assign({}, b.misCfg, {freq: v}); saveBooks(); MIS.maybeRun(); render(); }
+function misMsmeSet(party, v){ const b = S.books; b.msme = Object.assign({}, b.msme, {[party]: v}); const r = (b.mis || {}).last; saveBooks(); if (r) MIS.runSoon(b, {from: r.from, to: r.to, how: r.how}); render(); }
 function misBudSet(h2, mm, v){ const b = S.books, fy = Audit.fyStart(mm + "01").slice(0, 4); b.budget = b.budget || {}; b.budget[fy] = b.budget[fy] || {}; b.budget[fy][h2] = Object.assign({}, b.budget[fy][h2], {[mm]: v === "" ? "" : num(v)}); saveBooks(); render(); }
 function auditRangeSet(key, v){ const dr = Audit.defaultRange(S.books); S.auditRange = Object.assign({from: Audit.iso(dr.from), to: Audit.iso(dr.to)}, S.auditRange, {[key]: v}); }
 function auditFreqSet(v){ const b = S.books; b.auditCfg = Object.assign({}, b.auditCfg, {freq: v}); saveBooks(); render(); }

@@ -1,4 +1,4 @@
-"""python3 run_update_btn.py - build 197: Update now on a computer without Tally asks the Tally computer through the cloud."""
+"""python3 run_update_btn.py - build 197: Update from Tally on a computer without Tally asks the Tally computer through the cloud."""
 import os, sys, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
 from playwright.sync_api import sync_playwright
@@ -16,7 +16,7 @@ with sync_playwright() as p:
       window.__rpc = []; TCloud.has = () => true; TCloud.rpc = (fn, a) => { window.__rpc.push([fn, a]); return Promise.resolve({ok: true, devices: 1}); };
       Bridge.on = () => false; }""")
     h = pg.evaluate("booksFreshLine({vouchers: [{}], meta: {to: '20260930', at: new Date().toISOString()}})")
-    ok('data-act="keepNow"' in h, "Update now is shown on a computer without Tally when the client's books are in the cloud")
+    ok('data-act="keepNow"' in h, "Update from Tally is shown on a computer without Tally when the client's books are in the cloud")
     pg.evaluate("() => { const b = document.createElement('button'); b.dataset.act = 'keepNow'; document.getElementById('app').appendChild(b); b.click(); }")
     pg.wait_for_timeout(600)
     r = pg.evaluate("window.__rpc")

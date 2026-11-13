@@ -16,6 +16,10 @@
 // was there, the server's changes, the cloud copy's check and its day files, the time computing), wrapped around
 // legacy.js's own functions at run time from here (legacy.js itself is not changed); installed as the app starts.
 
+// ux-wins: the next step's button of a message ("Open a statement first." + Open Bank): lib/toastNext.js, with this
+// file because both come as the app starts and the first file has no room for another import
+import "./toastNext.js";
+
 // the histogram's upper bounds in ms; the last bucket is everything above 30 s. migration 108 has the same list
 export const BOUNDS = [25, 50, 75, 100, 150, 200, 300, 400, 500, 700, 1000, 1500, 2000, 3000, 5000, 8000, 15000, 30000];
 export const EVERY = 15 * 60 * 1000;

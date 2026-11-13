@@ -41,7 +41,8 @@ function step(j, ms) {
 }
 function soon(j) {
   const go = () => {
-    if (jobs[j.key] !== j) return;
+    // another job in its place: this one closed (its finally blocks run: MIS._again, next-fix-mis-rework)
+    if (jobs[j.key] !== j) { try { j.it.return(); } catch (e) { /* its own clean-up */ } return; }
     if (S.books !== j.b || !same(j.sigOf(), j.sig)) { delete jobs[j.key]; try { j.it.return(); } catch (e) { /* its own clean-up */ } draw(); return; }
     const p = j.part, done = step(j, BEHIND.STEP_MS);
     if (done || (j.part !== p && now() - j.drawn >= BEHIND.DRAW_MS)) { j.drawn = now(); draw(); }

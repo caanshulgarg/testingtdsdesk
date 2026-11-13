@@ -15,7 +15,7 @@ PAUSED from the tray. Checked:
   3. no "2.3.1" anywhere;
   4. the way to Books › From Tally (next-tally-basics: the one place that updates the ledgers; it asks nothing of Tally
      itself); with reading paused on NWS144 its plain reason (the tray's Resume background reading) and that From Tally's
-     Update now still reads them once;
+     Update from Tally still reads them once;
   5. self-clearing, with no Clear pressed:
      a. a ledger confirmed on the GST/TDS ledgers page (b.map ok) leaves the line at once;
      b. a ledger arriving in FinCom's list under Tally's other capitals or spaces ("Input CGST" for "INPUT CGST", as on
@@ -97,7 +97,7 @@ with sync_playwright() as p:
     ok("2.3.1" not in pg.inner_text("#app"), "3. no '2.3.1' on the page")
     # ---------- 4. the action and its reason while paused
     why = alltxt(box + " [data-unk-why]")
-    ok(why and "paused on NWS144" in why[0] and "Resume background reading" in why[0] and "From Tally's Update now reads them once" in why[0], "4. paused: the plain reason, and that From Tally's Update now still reads them once (%s)" % why)
+    ok(why and "paused on NWS144" in why[0] and "Resume background reading" in why[0] and "Update from Tally reads them once" in why[0], "4. paused: the plain reason, and that Update from Tally still reads them once (%s)" % why)
     # next-tally-basics (the owner): Books › From Tally is the one place that updates the ledgers: the box's way there
     ok(E("(s) => { const b = document.querySelector(s + ' [data-unk-go]'); return !!b && b.innerText.trim(); }", box) == "Update ledgers in Books \u203a From Tally" and E("(s) => !document.querySelector(s + ' [data-unk-read]')", box),
        "4. Update ledgers in Books › From Tally (no Read the ledgers now of its own)")

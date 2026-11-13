@@ -5,7 +5,7 @@ a posting that failed in FinCom's cloud on 05-Nov stayed active in the bridge, a
   1. the bridge here holds 4 postings: a cloud job that failed (auto-cancelled; tdsdesk:bridgejob naming it cleared), one
      the page handed over itself (no cloud row: only Cancel), one the cloud shows running and one done but still checking
      (both untouched); "Waiting for a posting on this computer: <company> · <status>" in the top line, See postings, Cancel
-     with "Stop this posting? Nothing more is sent to Tally for it."; Books › From Tally beside Update now the same.
+     with "Stop this posting? Nothing more is sent to Tally for it."; Books › From Tally beside Update from Tally the same.
   2. a Mac (no bridge here): nothing shown, the bridge never asked.
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_stuck_jobs.py"""
 import os, re, sys, json, threading, functools, http.server
@@ -107,10 +107,10 @@ def main():
         ok(BR["cancels"] == [FAILED, DIRECT], "1. Stop it: the page's own posting cancelled (POST /jobs/cancel) (%s)" % BR["cancels"])
         ok(RUNNING not in BR["cancels"] and txt("#app [data-stuck-jobs=panel]").startswith("Waiting for a posting on this computer: %s · running" % ORB), "1. the running one still listed, untouched (%s)" % txt("#app [data-stuck-jobs=panel]")[:120])
         E("() => { window.askConfirm = window.__askWas; }")
-        # Books › From Tally: the same, beside Update now
+        # Books › From Tally: the same, beside Update from Tally
         E("(c) => { location.hash = '#/c/' + encodeURIComponent(c) + '/from-tally'; if (typeof Route === 'object' && Route.apply) Route.apply(location.hash); else openCompany(c).then(() => { S.tab = 'books'; S.booksTab = 'import'; render(); }); }", ids[ORBIT])
         pg.wait_for_timeout(4000)
-        ok(txt("#app [data-masters] [data-stuck-jobs=masters]").startswith("Waiting for a posting on this computer: %s · running" % ORB), "1. Books › From Tally: beside Update now (%s)" % txt("#app [data-masters]")[:200])
+        ok(txt("#app [data-masters] [data-stuck-jobs=masters]").startswith("Waiting for a posting on this computer: %s · running" % ORB), "1. Books › From Tally: beside Update from Tally (%s)" % txt("#app [data-masters]")[:200])
 
         # the postings finished by themselves, the bridge no longer waits for one: the line goes without a reload
         BR["jobs"] = []; g1 = BR["gets"]

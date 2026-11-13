@@ -69,7 +69,7 @@ function Acts({ r, free, reg }) {
 function Letters({ reg, rows, onClose }) {
   const L = ITCF.letters(reg, rows), [open, setOpen] = useState("");
   const write = (how, s) => {
-    if (how === "copy") (navigator.clipboard ? navigator.clipboard.writeText(s.text) : Promise.reject()).then(() => toast("Letter copied."), () => toast("Could not copy."));
+    if (how === "copy") (navigator.clipboard ? navigator.clipboard.writeText(s.text) : Promise.reject()).then(() => toast("Letter copied."), () => toast("Could not copy.", {sticky: false}));
     if (how === "mail") { if (!s.email) { toast("Add the supplier's email in GST settings, contacts."); return; } window.open("mailto:" + encodeURIComponent(s.email) + "?subject=" + encodeURIComponent("GST: invoices to report or correct") + "&body=" + encodeURIComponent(s.text), "_blank"); }
     if (how === "wa") { const ph = String(s.phone || "").replace(/\D/g, ""); if (!ph) { toast("Add the supplier's phone in GST settings, contacts."); return; } window.open("https://wa.me/" + (ph.length === 10 ? "91" + ph : ph) + "?text=" + encodeURIComponent(s.text), "_blank"); }
     ITCF.logSent(reg, s.key); render();

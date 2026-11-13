@@ -205,6 +205,22 @@ with sync_playwright() as p:
     E("(cid) => postReconcile(cid, true)", cid)
     ok(E(R, "c1")["state"] == "ready" and not E("B().rows.find(x => x.id === 'c1').postJobNew"), "queued here, then Take it back: that posting is old, the line stays ready (%s)" % E(R, "c1"))
     E("() => { CloudJobs.list = null; }")
+    # next-post-queue-anyway: an automatic entry held by an EARLIER posting (auto.held): Undo cancels that posting only when
+    # every entry of it belongs to this run; else it is someone else's posting and is left alone
+    E("""async () => { const r = B().rows.find(x => x.id === 'm1'), keep = {state: r.state, auto: r.auto, rpc: TCloud.rpc, list: CloudJobs.list, load: CloudJobs.load};
+      r.state = 'ready'; r.auto = {run: 'runH', job: 'holder-1', held: true, key: 'k2', dir: 'in', label: 'CUST m1', amt: 500, cid: ''};
+      const calls = []; TCloud.rpc = async (fn, a) => { calls.push(fn); return {ok: true}; }; CloudJobs.load = async () => {};
+      const ap = await loadAutoPost();
+      CloudJobs.list = [{id: 'holder-1', client_id: S.coId, status: 'waiting', entry_ids: ['m1', 'someone-elses']}];
+      const other = await ap.undo(S.coId, r, {}); const n1 = calls.filter(f => f === 'tally_post_cancel').length, still = !!r.auto;
+      CloudJobs.list = [{id: 'holder-1', client_id: S.coId, status: 'waiting', entry_ids: ['m1']}];
+      const own = await ap.undo(S.coId, r, {}); const n2 = calls.filter(f => f === 'tally_post_cancel').length;
+      window.__apH = {other, n1, still, own, n2};
+      r.state = keep.state; r.auto = keep.auto; TCloud.rpc = keep.rpc; CloudJobs.list = keep.list; CloudJobs.load = keep.load; ap.cancelled = {}; }"""); W(300)
+    aH = E("window.__apH")
+    ok(aH["other"].get("ok") is False and aH["other"].get("why") == "This entry is in a posting someone else made; undo it from Post to Tally" and aH["n1"] == 0 and aH["still"],
+       "Undo of an entry held by a posting with someone else's entries: refused in words, that posting not cancelled (%s)" % aH["other"])
+    ok(aH["n2"] == 1, "the holder holds only this run's entries: it is cancelled (%s)" % aH["own"])
     # Undo of a queued automatic entry whose posting the Tally computer has already taken
     E("""async () => { const r = B().rows.find(x => x.id === 'm1'); r.state = 'ready'; r.auto = {run: 'run2', job: '00000000-0000-0000-0000-000000000009', key: 'k2', dir: 'in', label: 'CUST m1', amt: 500, cid: ''};
       TCloud.rpc = async (fn) => fn === 'tally_post_cancel' ? {ok: false} : {ok: true}; CloudPost.row = async () => ({id: 'j', status: 'taken', results: []});
@@ -257,7 +273,7 @@ with sync_playwright() as p:
     cid = E(BILLS); W(800)
     box = lambda: pg.inner_text("#confirmBox").replace("\n", " ") if pg.locator("#confirmBox .cbx").count() else ""
     ytd = "(id) => { const e = D().entries[id], a = e.applied || (e.deleted && e.deleted.kept && e.deleted.kept.applied); const p = a && D().parties[a.partyId]; return p ? JSON.stringify(p.ytd) : ''; }"
-    REFUSE = "This bill is posted to Tally. Delete it in Tally first, then press “Deleted in Tally” in the bar under this bill; after that you can delete it."
+    REFUSE = "Posted to Tally. Delete it in Tally first, then press “Deleted in Tally” under this bill."
     for b in ("b1", "b6"):
         E("() => { window.__toasts = []; }"); E("billDelete('%s')" % b); W(400)
         ok(not box() and last() == REFUSE and E("D().entries['%s'].status" % b) == "approved", "deleting a posted bill (%s) is refused, no box (%r)" % (b, last()))
@@ -268,7 +284,7 @@ with sync_playwright() as p:
     E("(cid) => { window.__un = unapply(D().entries.b2, cid); }", cid)
     ok(E("D().entries.b2.status") == "approved" and E("!!D().entries.b2.applied") and E("window.__un") is False, "unapply refuses a bill sent to Tally")
     E("() => { S.selected = 'b5'; doAct('reject'); }"); W(200)
-    ok(E("D().entries.b5.status") == "approved" and last() == "This bill is posted to Tally. Delete it in Tally first, then press “Deleted in Tally” in the bar under this bill; after that you can mark it No entry.", "No entry refuses a posted bill (%r)" % last())
+    ok(E("D().entries.b5.status") == "approved" and last() == "Posted to Tally. Delete it in Tally first, then press “Deleted in Tally” under this bill.", "No entry refuses a posted bill (%r)" % last())
     E("() => { S.selected = 'b3'; window.__removed = []; doAct('reject'); }"); W(600)
     ok(E("D().entries.b3.status") == "rejected" and E("window.__removed.length") == 0 and E("!!D().entries.b3.docPath"), "No entry: the cloud document is not removed while Undo is offered")
     pg.hover("#toast"); W(14000)

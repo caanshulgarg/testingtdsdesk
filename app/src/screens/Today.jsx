@@ -33,6 +33,9 @@ export default function Today() {
     return { c, read: docqCount(c.id), review: s.drafts || 0, post: s.waiting || 0, look: (s.dups || 0) + (s.check || 0) };
   }).sort((a, b) => (b.read + b.review + b.post + b.look) - (a.read + a.review + a.post + a.look));
   const sum = (k) => rows.reduce((a, r) => a + r[k], 0);
+  // ux-wins (the review: three of the four figures looked like buttons and did nothing): a figure opens its list: the one
+  // client that has such bills, at that step; else the Clients list, the most of them first (an order the person chose there is kept)
+  const go = (k, ck, step) => () => { const w = rows.filter((r) => r[k]); if (w.length === 1) return openAt(w[0].c.id, step); if (!(S.listSort || {}).clients) S.listSort = { ...S.listSort, clients: { k: ck, dir: "desc" } }; navHome("clients"); };
   const cell = (r, key, step) => r[key]
     ? <button className="linkbtn tcell" onClick={() => openAt(r.c.id, step)}>{r[key]}</button>
     : <span className="muted">—</span>;
@@ -44,9 +47,9 @@ export default function Today() {
       </div>
       <div className="metrics">
         <Metric label="To read" n={inboxTotal()} onClick={() => navHome("inbox")} tone="violet" Icon={Inbox} />
-        <Metric label="To review" n={sum("review")} tone="amber" Icon={ReceiptText} />
-        <Metric label="Ready to post" n={sum("post")} tone="indigo" Icon={Send} />
-        <Metric label="Needs you" n={sum("look")} warn tone="rose" Icon={TriangleAlert} />
+        <Metric label="To review" n={sum("review")} onClick={go("review", "drafts", "review")} tone="amber" Icon={ReceiptText} />
+        <Metric label="Ready to post" n={sum("post")} onClick={go("post", "waiting", "post")} tone="indigo" Icon={Send} />
+        <Metric label="Needs you" n={sum("look")} onClick={go("look", "check", "review")} warn tone="rose" Icon={TriangleAlert} />
       </div>
       <AutoToday />
       <MeetToday />
@@ -54,13 +57,13 @@ export default function Today() {
         {/* the one list table (spec K6) */}
         <ListTable name="today" className="data" rows={rows} rowKey={(r) => r.c.id} unit={["client", "clients"]}
           cols={[
-            { k: "name", role: "party", label: "Client", v: (r) => r.c.name, cell: (r) => <><span className="today-co" data-initials={initials(r.c.name)}><button className="linkbtn" onClick={() => openAt(r.c.id, "review")}><b>{r.c.name}</b></button></span>{r.c.gstin && <> <span className="note">{r.c.gstin}</span></>}</> },
+            { k: "name", role: "party", label: "Client", v: (r) => r.c.name, cell: (r) => <><span className="today-co" data-initials={initials(r.c.name)}><button className="linkbtn" onClick={() => openAt(r.c.id, "review")}><b>{r.c.name}</b></button></span>{r.c.gstin && <> <span className="note today-gstin">{r.c.gstin}</span></>}</> },
             { k: "read", label: "To read", cls: "n", v: (r) => r.read, sum: true, fmt: String, cell: (r) => cell(r, "read", "collect") },
             { k: "review", label: "To review", cls: "n", v: (r) => r.review, sum: true, fmt: String, cell: (r) => cell(r, "review", "review") },
             { k: "post", label: "Ready to post", cls: "n", v: (r) => r.post, sum: true, fmt: String, cell: (r) => cell(r, "post", "post") },
             { k: "look", label: "Needs you", cls: "n", v: (r) => r.look, sum: true, fmt: String, cell: (r) => cell(r, "look", "review") },
           ]} />
-        <p className="note" style={{ marginTop: 8 }}>Counts cover clients opened on this computer; open a client to bring its figures up to date.</p>
+        <p className="note" style={{ marginTop: 8 }}>Counts are as of each client’s last open here.</p>
         {/* round 46: the returns due are on the Compliance page; Today keeps one line */}
         <DueLine />
         <NotLinkedLine />

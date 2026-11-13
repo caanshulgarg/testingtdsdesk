@@ -237,7 +237,7 @@ def main():
         ok(wait("() => window.__calls.some(c => c[0] === 'link')") and wait("() => !!document.querySelector(\"#app [data-tco-row='%s'] [data-tco-linked-label]\")" % VMS, 5000), "3b. Link again: linked, the row says so (%s)" % txt("#app [data-tco-row='%s']" % VMS))
         # 12. next-tally-linknow (Task C; staging: "FinCom Bridge did not read Salesify Marketing LLP 2026-27's ledgers: this
         # company is not kept in step on this computer"): linked, the ledgers are taken by themselves: the bridge here starts
-        # keeping the company (POST /keep {now, company}, Update now's request), and the bar shows the count as it comes
+        # keeping the company (POST /keep {now, company}, Update from Tally's request), and the bar shows the count as it comes
         bridge_reset(kept=False, cloudKey="fcd_" + "0a" * 24, beat={"on": True, "last": time.strftime("%Y-%m-%dT%H:%M:%S"), "missedSince": "", "every": 30})
         open_tally(MINE)
         cid = E("() => { Object.keys(S.companies).forEach(k => { if (/^VMS Events/i.test(S.companies[k].name)) delete S.companies[k]; }); const co = newCompany({name: 'VMS Events Private Limited', gstin: '', tallyName: %s}); S.companies[co.id] = co; S.data[co.id] = {parties: {}, entries: {}, loaded: true}; co.stats = {}; window.__books = [{book: 'bk-vms', company: %s, from: '2026-04-01', to: '2026-10-28', days: 0, ledgersAt: ''}]; window.__lp = null; render(); return co.id; }" % (json.dumps(VMS), json.dumps(VMS)))

@@ -167,7 +167,7 @@ const ASST = {
     const lines = [t.q, "", this.plain(t.text)];
     t.results.forEach(r => { lines.push("", r.title || r.tool); lines.push(r.columns.map(c => c.label).join("\t")); r.rows.forEach(row => lines.push(r.columns.map(c => this.cell(c, row[c.k])).join("\t"))); });
     const txt = lines.join("\n");
-    (navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject()).then(() => toast("Copied."), () => toast("Could not copy here."));
+    (navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject()).then(() => toast("Copied."), () => toast("Could not copy here.", {sticky: false}));
   },
   cell(c, v){ if (v == null) return ""; if (c.t === "amount") return INR.format(r2(num(v))); if (c.t === "date") return this.dmy(v); return String(v); },
   dmy(v){ const s = String(v || ""); return /^\d{4}-\d{2}-\d{2}/.test(s) ? fmtDate(s.slice(0, 10)) : s; },

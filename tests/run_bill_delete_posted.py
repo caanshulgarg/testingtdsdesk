@@ -1,7 +1,6 @@
 """python3 run_bill_delete_posted.py - round 14c (C5b, C3 Restore), as changed by the owner (state-machine review, item 5):
 deleting a bill that has a live posting (in Tally, posted and not yet confirmed, or its FinCom id still held by the cloud)
-is refused: "This bill is posted to Tally. Delete it in Tally first, then press “Deleted in Tally” in the bar under this
-bill; after that you can delete it."; a bill with no posting asks only the usual reason. A member (not the firm's owner) sees Restore blocked with the words beside
+is refused: "Posted to Tally. Delete it in Tally first, then press “Deleted in Tally” under this bill."; a bill with no posting asks only the usual reason. A member (not the firm's owner) sees Restore blocked with the words beside
 it ("Only the firm's owner can restore a deleted bill."), not a toast on click.
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_bill_delete_posted.py"""
 import os, threading, functools, http.server
@@ -37,7 +36,7 @@ with sync_playwright() as p:
     def cancel():
         if pg.locator('#confirmBox [data-cbx="no"]').count(): pg.click('#confirmBox [data-cbx="no"]')
         pg.wait_for_timeout(300)
-    REFUSE = "This bill is posted to Tally. Delete it in Tally first, then press “Deleted in Tally” in the bar under this bill; after that you can delete it."
+    REFUSE = "Posted to Tally. Delete it in Tally first, then press “Deleted in Tally” under this bill."
     last = lambda: E("window.__toasts.length ? window.__toasts[window.__toasts.length - 1] : ''")
     # a plain draft: the usual box only
     E("billDelete('d1')"); pg.wait_for_timeout(500)

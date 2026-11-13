@@ -43,6 +43,8 @@ const LABELS = {
   mis: ["neutral", "a layout drafted by AI from your words – every figure worked out by FinCom from the books"],
   // two financial statements attached and compared by FinCom line by line (asst-compare.js): the files' figures, not the books
   compare: ["neutral", "the two statements you attached – compared line by line by FinCom, figures as printed"],
+  // projected statements (server/assistant/tools/projection.ts): the books' last year carried forward on stated assumptions
+  projection: ["warn", "projected – from the books and the assumptions listed, not actual figures"],
 };
 const money = (v) => (v == null || v === "" ? "" : INR.format(r2(num(v))));
 const isNum = (t) => t === "amount" || t === "int" || t === "pct";

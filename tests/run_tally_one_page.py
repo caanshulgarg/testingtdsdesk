@@ -309,7 +309,7 @@ def main():
         ok([c[1].get("what") for c in calls("post")] == ["ledgers"] and calls("tally_want_update") == [["tally_want_update", {"p_client": gs}]], "6. Sync master: the ledgers' wake, and the existing Send ledgers and groups now (tally_want_update)")
         E("() => { window.__calls = []; }")
         more(GSC, "[data-tco-sync-vouchers]")
-        ok(calls("tally_want_update") == [["tally_want_update", {"p_client": gs}]] and not calls("post"), "6. Sync vouchers alone: Update now")
+        ok(calls("tally_want_update") == [["tally_want_update", {"p_client": gs}]] and not calls("post"), "6. Sync vouchers alone: Update from Tally")
         more(GSC, "[data-tco-post-stop]"); confirm()
         ok(E("(c) => { const k = S.companies[c], p = choiceGet(k, 'postTo'); return [k.postTo, p && p.state]; }", gs) == ["", "confirmed"] and "Post entries here" in menu(GSC), "6. Stop posting here: asked, then stopped (a person's stop is kept); ⋯ says Post entries here")
         more(GSC, "[data-tco-post-here]"); confirm()

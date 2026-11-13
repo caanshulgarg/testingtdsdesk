@@ -1109,7 +1109,7 @@ function billDelete(id){
   if (!e) return;
   if (!canDeleteBills()){ toast("Only the firm\u2019s owner can delete a bill. Mark it \u201cNo entry\u201d instead, or ask the owner."); return; }
   // a bill with a posting is not deleted here (owner, item 5)
-  if (billPostLive(e, S.coId)){ toast("This bill is posted to Tally. Delete it in Tally first, then press \u201cDeleted in Tally\u201d in the bar under this bill; after that you can delete it."); return; }
+  if (billPostLive(e, S.coId)){ toast("Posted to Tally. Delete it in Tally first, then press \u201cDeleted in Tally\u201d under this bill."); return; }
   billDeleteAsk(e);
 }
 function billDeleteAsk(e){
@@ -1681,7 +1681,7 @@ function doAct(act, t){
     case "misRun": {
       const b = S.books, rg = S.misRange || (x => ({from: Audit.iso(x.from), to: Audit.iso(x.to)}))(misRangeQuick("ytd", b));
       if (!rg.from || !rg.to || rg.from > rg.to){ toast("Choose a period: from a date to a later one."); break; }
-      MIS.run(rg.from, rg.to, "run now"); saveBooks(); render(); break;
+      MIS.runSoon(b, {from: rg.from, to: rg.to, how: "run now"}); render(); break;
     }
     case "misBudFill": {
       const b = S.books, r = (b.mis || {}).last; if (!r) break;
@@ -1982,7 +1982,7 @@ function doAct(act, t){
     case "camera": pickMode = "company"; document.getElementById("camIn").click(); break;
     case "manual": { const n = newEntry("Manual entry"); D().entries[n.id] = n; S.selected = n.id; S.filter = "draft"; Store.saveEntry(S.coId, n); refreshStats(S.coId); render(); break; }
     case "approve": if (e) approve(e); break;
-    case "reject": if (e){ if (billPostLive(e, S.coId)){ toast("This bill is posted to Tally. Delete it in Tally first, then press \u201cDeleted in Tally\u201d in the bar under this bill; after that you can mark it No entry."); break; }
+    case "reject": if (e){ if (billPostLive(e, S.coId)){ toast("Posted to Tally. Delete it in Tally first, then press \u201cDeleted in Tally\u201d under this bill."); break; }
       const was = e.status, cid = S.coId, id = e.id, path = e.docPath; setStatus(e, "rejected");
       // its cloud document goes once the message with Undo has gone unused (the bill read again then)
       const gone = () => { const x = (D(cid) || {}).entries && D(cid).entries[id]; if (x && x.status === "rejected" && path && x.docPath === path){ CloudDocs.remove(path); delete x.docPath; Store.saveEntry(cid, x); } };

@@ -209,7 +209,7 @@ async function mfaAction(act){
     done();
   } else if (act === "mfaCopyKey"){
     const k = ((Cloud.st.mfa || {}).secret || "").replace(/\s+/g, "");
-    try { await navigator.clipboard.writeText(k); toast("Key copied."); } catch (e){ toast("Could not copy: select the key and copy it."); }
+    try { await navigator.clipboard.writeText(k); toast("Key copied."); } catch (e){ toast("Could not copy: select the key and copy it.", {sticky: false}); }
   } else if (act === "mfaCancel"){ Cloud.st.mfa = null; Cloud.st.error = ""; render(); }
   else if (act === "mfaSignOut"){ signOutHere("Signed out."); }
   else if (act === "mfaOptIn"){ Cloud.st.mfa = {need: "enrol", required: false}; render(); }

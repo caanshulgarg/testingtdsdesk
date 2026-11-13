@@ -41,7 +41,7 @@ function Detail({ r }) {
 
 function Act({ b, r }) {
   if (S.ledEdit === r.n) return null;
-  const change = <button className="linkbtn" data-led-change={r.n} onClick={() => changeRow(b, r)}>Change</button>;
+  const change = <button className="linkbtn" data-led-change={r.n} aria-label={"Change " + r.n} onClick={() => changeRow(b, r)}>Change</button>;
   if (r.ok) return <span className="led-act led-act-ok">
     <span className="cfm-ok" data-led-okby="" data-choice-state="confirmed">{"✓ Confirmed" + (r.okBy ? " by " + r.okBy : "") + (r.okAt ? ", " + fmtDateTime(r.okAt) : "")}</span>
     <button className="linkbtn" data-led-unconfirm={r.n} title="Back to “to confirm”, keeping this answer" onClick={() => TaxLed.unconfirm(b, r.n)}>Unconfirm</button>{change}
@@ -171,7 +171,7 @@ export default function TaxLedgers({ b, kind: pageKind }) {
         <p className="note">{"Other ledgers in Tally matching “" + S.ledQ + "”: choose Change to count one as a TDS or GST ledger."}</p>
         <table className="led-t nocards"><tbody>{tallyHits.map((l) => <tr key={l.name} data-tl-tally-hit={l.name}><td><span className="led-name">{l.name}</span>{l.group && <div className="nr">{l.group}</div>}</td>
           <td>{S.ledEdit === l.name ? <Editor b={b} n={l.name} /> : <span className="note">{(b.map || {})[l.name] && b.map[l.name].what ? LedMaster.label(b.map[l.name].what) : "Not tax"}</span>}</td>
-          <td className="ac">{S.ledEdit === l.name ? null : <button className="linkbtn" data-led-change={l.name} onClick={() => changeRow(b, { n: l.name, ok: !!((b.map || {})[l.name] || {}).ok, used: ((b.map || {})[l.name] || {}).n || 0, m: (b.map || {})[l.name] })}>Change</button>}</td></tr>)}</tbody></table>
+          <td className="ac">{S.ledEdit === l.name ? null : <button className="linkbtn" data-led-change={l.name} aria-label={"Change " + l.name} onClick={() => changeRow(b, { n: l.name, ok: !!((b.map || {})[l.name] || {}).ok, used: ((b.map || {})[l.name] || {}).n || 0, m: (b.map || {})[l.name] })}>Change</button>}</td></tr>)}</tbody></table>
       </div>}
     </section>
     {more.length > 0 && <section className="led-sec" data-led-section="unclear">

@@ -47,10 +47,35 @@ const FILE = /\b(excel|xlsx|spreadsheet|pdf|download|copy|file|print)\b/i;
 const TALLY_DIFF = /\b(differ\w*|different|mismatch\w*|not\s+match\w*|doesn'?t\s+match|don'?t\s+match|not\s+tally\w*|wrong|not\s+same|not\s+agree\w*)\b[^.?!]{0,60}\btally\b|\btally\b[^.?!]{0,60}\b(differ\w*|different|mismatch\w*|shows?|says?|gives?)\b/i;
 const ATTACHED = /\battach\w*\b|\bupload\w*\b|\bearlier\s+message\b|\bsent\s+(you\s+)?(earlier|before)\b|\baudited\b|\bfinal\s+balance\s+sheet\b/i;
 
-// a request for the statements (not a question about the law: "what is Schedule III?" stays with the model)
-export function fsAsked(q: string, thread?: FsThread | null): boolean {
+// projected statements (the owner, 13-Nov-2026: "prepare a projected balance sheet", asked 4-5 times, never made): a
+// projection, forecast, CMA data, an estimated or budgeted statement, statements for next / coming years (in English,
+// Hinglish or Devanagari, with the common typos), or statements for a financial year or a date after today. These are not
+// the statements card's (the books' own figures): the model makes them with projected_statements (tools/projection.ts).
+const PROJ = /\b(projected|projeted|projcted|porjected|prjected|projectd|projecetd|projections?|projecton|projction|forecast(ed|s|ing)?|forcast(ed|s|ing)?|forecaste|cma(\s+data)?|pro[\s-]?forma|estimated\s+(balance|bal|p\s*&\s*l|profit|financials?|statements?|cash)|budget(ed)?\s+(balance|p\s*&\s*l|profit|financials?))\b/i;
+const NEXT = /\b(next|coming|future|following|upcoming|agle|agla|aane\s*wale|aanewale|aagami)\s+(\d+\s+|two\s+|three\s+|four\s+|five\s+|few\s+|do\s+|teen\s+)?(financial\s+)?(years?|yrs?|fy|saal|sal|varsh|varsho|baras)\b|\bfuture\b/i;
+const DEV_PROJ = /(प्रक्षेपित|अनुमानित|पूर्वानुमान|प्रोजेक्टेड|प्रोजेक्टिड|प्रोजेक्शन)/;
+const DEV_NEXT = /(अगले|आने\s*वाले|आगामी|भविष्य)/;
+const STMT = /(बैलेंस\s*शीट|बेलेंस\s*शीट|तुलन\s*पत्र|लाभ\s*(और|एवं|व)?\s*हानि|वित्तीय\s*विवरण|कैश\s*फ्लो)/;
+const stmtIn = (s: string) => BS.test(s) || FSW.test(s) || PL.test(s) || /\bcash\s*flow\b/i.test(s) || STMT.test(s);
+// a financial year or a date after today ("balance sheet for FY 2027-28", "as on 31 March 2028")
+function futureIn(s: string, today: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(today || "")) return false;
+  const running = fyOf(today);
+  let m = /\b(?:fy\s*)?(20\d{2})\s*[-–/]\s*(20\d{2}|\d{2})\b/i.exec(s);
+  if (m && Number(m[2].slice(-2)) === (Number(m[1]) + 1) % 100 && Number(m[1]) > running) return true;
+  m = /\bfy\s*'?(\d{2})\b(?!\s*[-–/])/i.exec(s);
+  if (m && 2000 + Number(m[1]) - 1 > running) return true;
+  return datesIn(s, today).some((t) => t.y != null && iso(t.y, t.m, Math.min(t.d, lastDay(t.y, t.m))) > today);
+}
+export const projAsked = (q: string, today?: string): boolean => {
   const s = String(q || "");
-  if (!s.trim()) return false;
+  return PROJ.test(s) || DEV_PROJ.test(s) || ((NEXT.test(s) || DEV_NEXT.test(s) || (!!today && futureIn(s, today))) && stmtIn(s));
+};
+
+// a request for the statements (not a question about the law: "what is Schedule III?" stays with the model)
+export function fsAsked(q: string, thread?: FsThread | null, today?: string): boolean {
+  const s = String(q || "");
+  if (!s.trim() || projAsked(s, today)) return false;
   if (LAWQ.test(s) && !ASKING.test(s)) return false;
   if (BS.test(s) || FSW.test(s)) return true;
   // "BS" for the balance sheet: in capitals, or beside a P&L, "provisional" or Schedule ("P&L with BS for H1")
@@ -152,7 +177,7 @@ function voiceAlt(to: string, earlier: string[]): string | null {
 
 export function fsRequest(q: string, o: { anchor: string, today?: string, thread?: FsThread | null, history?: { role: string, content: string }[] }): FsReq | null {
   const s = String(q || ""), thread = o.thread || null;
-  if (!fsAsked(s, thread)) return null;
+  if (!fsAsked(s, thread, o.today)) return null;
   const anchor0 = /^\d{4}-\d{2}-\d{2}$/.test(o.anchor || "") ? o.anchor : (o.today || new Date().toISOString().slice(0, 10));
   const prev = thread && thread.fs ? thread.fs : null;
   // the dates of the earlier questions (and the earlier statements) of this conversation

@@ -2,7 +2,7 @@
 // live by Rec.unkGroups, src/js/61). The owner, 15-Oct-2026, on 221 near-identical lines for one client: "there should be
 // some smart way to show it.. everywhere it is showing like that.. and there is no option to rectify this also".
 //   ONE line a client: "9 ledgers used in Tally are not in FinCom yet (INPUT IGST, INPUT CGST, … · 327 entries)", the way
-//   to Books › From Tally, whose Update now reads the ledgers (next-tally-basics), with what stops it said plainly; expanded, one
+//   to Books › From Tally, whose Update from Tally reads the ledgers (next-tally-basics), with what stops it said plainly; expanded, one
 //   row a ledger with its entry count and "see entries". Never a line an entry.
 //   Where: the client's Books page (above every tab but Ledgers) and Books -> Ledgers' Please check (UnknownBody), the GST
 //   and TDS ledgers pages' Please check; the bell has the count only (AlertHub, src/js/63). Not on Sync activity.

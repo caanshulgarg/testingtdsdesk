@@ -527,7 +527,7 @@ function checkAgain() {
 // ---------------------------------------------------------------------------------------------------------------------
 // FinCom Bridge 2.4.4 (bridge-go/mode.go paused() and its callers: wakeOpen, the ledger events, the nightly catch-up and
 // the bank-date night work): a pause stops the background reads only; the live recorder (the add-on's lines) still sends
-// what is saved in Tally, and postings and Update now still work
+// what is saved in Tally, and postings and Update from Tally still work
 const PAUSE_SAYS = "While paused, FinCom does not read Tally in the background; entries saved in Tally still come in, and postings still work.";
 const RESUME_TRAY = "right-click the FinCom icon near the clock → Resume background reading";
 // a company open now in another bridge of the firm than this card's (src/js/98-link-record.js tallyServe)
@@ -937,7 +937,7 @@ function BridgeLines({ cards, latest, m, focusDev }) {
 // support", closed by default, its parts under small headings: the reading table and the clients' table (folded as
 // before), activity, each computer heard this week (a bridge not heard for 7 days is only counted here, and listed in
 // Every bridge), versions, this browser's own bridge, install on another computer. The outdated "Clients' Tally" lines
-// ("reads only when needed… nightly catch-up", wrong since 2.2) are gone: Update now is on each client's pages.
+// ("reads only when needed… nightly catch-up", wrong since 2.2) are gone: Update from Tally is on each client's pages.
 // next-tally-simple (02-Nov-2026): the page before the simple one lives under ONE closed "For support" (ForSupport, below):
 // this computer's card with its connect, Find Tally and port, the steps with the port, the companies open in Tally with their
 // ⋯, every client's Tally company with Change and Unlink, and this fold ("Every support tool") as before; the computers'
@@ -1141,7 +1141,7 @@ function BridgeLog() {
   const load = () => { setLg({ busy: true }); Bridge.call("/logtail?n=200", null, 20000).then((j) => setLg({ file: j.file || "", lines: j.lines || [] }),
     (e) => setLg({ error: /unknown|not found|404/i.test(String((e && e.message) || "")) ? "This bridge cannot show its log here: install FinCom Bridge from the Tally page (or right-click its icon → Show log)." : ((e && e.message) || String(e)) })); };
   const text = lg && lg.lines ? lg.lines.join("\n") : "";
-  const copy = () => (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject()).then(() => toast("Log copied."), () => toast("Could not copy; select the text and copy it."));
+  const copy = () => (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject()).then(() => toast("Log copied."), () => toast("Could not copy; select the text and copy it.", {sticky: false}));
   return <div className="bridge-log" style={{ marginTop: 10 }}>
     <div className="row" style={{ gap: 8, alignItems: "center" }}><button className="linkbtn" data-act="bridgeLog" onClick={load} disabled={!!(lg && lg.busy)}>{lg && lg.lines ? "Show bridge log again" : "Show bridge log"}</button>
       {lg && lg.lines && <><button className="btn small" onClick={copy}>Copy</button><button className="linkbtn" onClick={() => setLg(null)}>Hide</button></>}</div>
@@ -1257,7 +1257,7 @@ export default function TallyHome({ connectStep = null, sourcesSlot = null }) {
   const dl = set ? <a className="btn" data-tsm-download="" href={set.href} download={set.file}>Download FinCom Bridge</a> : <DownloadBtn m={m} />;
   // next-tally-progress (the owner's single page): the bridge's Download, top right in every state
   const head = <DownloadHead set={set} m={m} />;
-  const panel = <ConnectThisComputer download={<span className="note">Use the Download FinCom Bridge button above.</span>} linked={gx.done.install && Bridge.on()} />;
+  const panel = <ConnectThisComputer download={<span className="note">Press Download FinCom Bridge, in the step marked “Do this now”.</span>} linked={gx.done.install && Bridge.on()} />;
   return <>
     {head}
     <GuideRefresh />

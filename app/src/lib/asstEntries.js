@@ -208,10 +208,12 @@ async function postNow(co, d, todo, company, g, at, draw) {
     [].concat(rs || []).forEach((x) => {
       if (!x || !x.id || !todo.some((v) => v.id === x.id)) return;
       d.results[x.id] = x.ok ? { ok: true, state: "posted", tallyId: tallyIdOf(x), checking: !!x.pendingCheck, msg: String(x.word || "In Tally").slice(0, 200), at: at() }
+        // held by a posting still going on in FinCom's cloud (waiting for Tally, or an earlier posting has it): sent, not failed
+        : x.held ? { ok: false, state: "sent", msg: String(x.message || "").slice(0, 300), job: x.job, at: at() }
         : { ok: false, state: "failed", msg: plainWhy(x.message || x.word, co.id).slice(0, 400), said: String(x.message || "").slice(0, 300), at: at() };
     });
     const okN = d.vouchers.filter((v) => (d.results[v.id] || {}).ok).length;
-    d.state = okN === d.vouchers.length ? "posted" : okN ? "partly" : "failed";
+    d.state = okN === d.vouchers.length ? "posted" : okN ? "partly" : d.vouchers.some((v) => (d.results[v.id] || {}).job) && !d.vouchers.some((v) => (d.results[v.id] || {}).state === "failed") ? "posting" : "failed";
     draw();
   };
   let out;

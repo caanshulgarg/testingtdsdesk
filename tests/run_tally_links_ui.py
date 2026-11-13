@@ -9,7 +9,7 @@ EVENTS open, GB TEXCOAT and ABC TRADERS linked, ABC TRADERS not open, OLD CO see
      and its Tally company on the right, "open now" / "not open in Tally · last entry <date>", ⋯ with Change Tally company…
      and Unlink; no computer's name, no "Add as client"
   2. Change Tally company…: a picker of the companies FinCom has seen for the firm (open now first, then the others with
-     when they were last seen); a free company is linked in ONE link call (the client's old company let go), Update now
+     when they were last seen); a free company is linked in ONE link call (the client's old company let go), Update from Tally
      runs, the row shows the new company; a company linked to another client is asked once (No: nothing is sent)
   3. Unlink: asked, then the company is free (one unlink call) and the row goes
   4. the open companies' rows of a linked company: Change Tally company… beside Link to another client in ⋯
@@ -108,7 +108,7 @@ def main():
             ok(len(to) == 1 and to[0].get("p_company") == "VMS EVENTS", "a free company: ONE link call, VMS EVENTS → ABC TRADERS, nothing asked (%s)" % lk)
             ok({"p_company": "ABC TRADERS", "p_client": None} in lk, "its old company is let go (%s)" % lk)
             ok(n("#confirmBox [data-cbx=yes]:visible") == 0, "nothing asked for a free company")
-            ok(any(c[0] == "tally_want_update" for c in E("window.__calls")), "Update now runs after linking (%s)" % sorted(set(c[0] for c in E("window.__calls"))))
+            ok(any(c[0] == "tally_want_update" for c in E("window.__calls")), "Update from Tally runs after linking (%s)" % sorted(set(c[0] for c in E("window.__calls"))))
             ok(txt(ab + " [data-tlk-side=tally]") == "VMS EVENTS" and txt(ab + " [data-tlk-state]").startswith("open now"), "the row shows the new company, open now (%s)" % txt(ab))
             # a company taken by another client: asked once; No sends nothing; Yes moves it
             pg.click(ab + " [data-tlk-more] summary"); pg.wait_for_timeout(250); pg.click(ab + " [data-tlk-change]"); pg.wait_for_timeout(400)

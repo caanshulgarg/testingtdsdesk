@@ -8,7 +8,7 @@
 //     id) as done or failed, and not checking: that job is over, the bridge's copy is stale. A job the cloud shows
 //     waiting, taken or running, or one it has no row for (a posting the page handed over itself), only gets Cancel,
 //     with "Stop this posting? Nothing more is sent to Tally for it."
-//   - "Waiting for a posting on this computer: <company> · <status>" beside Update now and in the Tally page's top line,
+//   - "Waiting for a posting on this computer: <company> · <status>" beside Update from Tally and in the Tally page's top line,
 //     with See postings: the list, a Cancel each.
 // Nothing new is asked of Tally.
 import { useEffect, useState } from "react";

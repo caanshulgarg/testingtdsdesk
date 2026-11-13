@@ -7,7 +7,7 @@ export type Col = { k: string, label: string, t?: "text" | "amount" | "int" | "d
 // a table FinCom computed (never a figure from the AI): shown under the answer, right-aligned amounts, a date opens the entry
 export type ToolTable = { tool: string, title: string, columns: Col[], rows: Record<string, unknown>[], summary?: Record<string, number | string | boolean | null>,
   basis?: string, period?: { from?: string | null, to?: string | null, as_on?: string | null },
-  label?: "confirm" | "certificate" };   // neutral, not green: figures not all computed from the books (the certificates); a row with books_check: true is the books' own figure
+  label?: "confirm" | "certificate" | "projection" };   // neutral, not green: figures not all computed from the books (the certificates); a row with books_check: true is the books' own figure; projection: projected statements (projection.ts) from the books and stated assumptions
 export type FileOut = { id: string, name: string, kind: string, path: string, expires: string, bytes?: number };
 
 export type ExtCtx = {

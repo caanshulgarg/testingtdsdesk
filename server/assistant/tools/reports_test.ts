@@ -1,7 +1,7 @@
 // deno test --allow-read --allow-run server/assistant/tools/reports_test.ts
 // The report tools through a mock Assistant context: the made-up company of tests/reports_fixtures.js served as the SQL of
 // migration 79 would return it. The tools' figures equal FSX's in the app to the paisa; files come back; a missing
-// assumption is refused, never filled in. Test data only.
+// DCF assumption is a stated default (act first), bounded. Test data only.
 import { TOOLS } from "./reports.ts";
 const root = new URL("../../../", import.meta.url).pathname;
 const out = new Deno.Command("node", { args: ["-e", `const F=require('./tests/reports_fixtures');const X=F.loadFSX();const c=F.company();const st=F.confirmed(X,c);
@@ -48,9 +48,9 @@ Deno.test("tax_audit_draft: a DRAFT with questions for the user", async () => {
   const r = await tool("tax_audit_draft").run({ client: null, year: "2025-26" }, ctx);
   assert(!r.error && r.tables![0].rows.length === 60 && r.tables![0].rows.some((x: any) => x.src === "for you") && r.files!.length === 2, r.forModel!);
 });
-Deno.test("dcf_model: refuses a missing assumption; values with them", async () => {
+Deno.test("dcf_model: acts first (the owner, 13-Nov-2026): a missing assumption is a stated default; values with the user's", async () => {
   const none = await tool("dcf_model").run({ client: null, assumptions: { years: 3 } }, ctx);
-  assert(!!none.error && /never assumes/.test(none.error!), "refused: " + none.error!.slice(0, 80));
+  assert(!none.error && none.tables!.length === 2 && /Forecast of 3 years \(as you said\)/.test(none.tables![1].rows.map((x: any) => x.item).join(" ")), "valued with stated defaults: " + (none.error || "").slice(0, 80));
   const r = await tool("dcf_model").run({ client: null, assumptions: { years: 3, revGrowth: [10, 10, 10], ebitdaMargin: [15, 15, 15], depPct: 3, capexPct: 4, nwcPct: 18, taxRate: 25, tg: 5, shares: 120000, valuationDate: "2026-03-31", method: "FCFF", wacc: 14, netDebt: 900000 } }, ctx);
   assert(!r.error && (r.tables![0].rows.find((x: any) => x.item === "Value per share") as any).amount > 0 && r.files!.length === 2, r.forModel || r.error || "");
 });

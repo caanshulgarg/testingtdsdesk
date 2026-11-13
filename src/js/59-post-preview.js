@@ -104,6 +104,7 @@ function postWord(x){
   if (x.zoho && x.ok) return x.already ? "Already in Zoho Books (not sent again)" : "Posted to Zoho Books" + (x.zoho.number ? " (" + x.zoho.kind + " " + x.zoho.number + ")" : "");
   if (postAlready(x)) return plainMsg(x.message) || "Already in Tally (not sent again)";
   if (postCheckFail(x)) return plainMsg(x.message) || "Could not check Tally, not posted. Try again.";
+  if (x.held) return plainMsg(x.message);          // held by a posting still going on in FinCom's cloud: not failed
   if (!x.ok) return "Failed: " + (plainMsg(x.message) || "Tally did not confirm it");
   if (x.existed) return "Already in Tally (not sent again)";
   if (postAltered(x)) return "Altered in Tally";
@@ -347,7 +348,7 @@ function goSetupFor(msg){ Smart.setReturn(); S.postStop = null; S.step = null; S
 // FA/ELEC/013 (Fingate, 25,535.00, 01-Jul-2026) was offered to be posted again on the strength of a read of 15:34,
 // made while bridge 2.1.1 was timing out: a duplicate in real books. Now, before such a bill is shown, Tally is read
 // afresh for it: the bridge here asked directly when it has the company open; else the client's Tally computer asked to
-// read now (Update now) and its new read waited for. "Not found in Tally at the 17:43 read" only after such a read,
+// read now (Update from Tally) and its new read waited for. "Not found in Tally at the 17:43 read" only after such a read,
 // made after the posting; otherwise "Not checked yet" with why, and no Post again.
 const PostCheck = {
   st: {},                  // entry id -> {busy, at, ok, found, vch, readAt, why, said}

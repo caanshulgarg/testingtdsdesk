@@ -11,6 +11,7 @@ import "../../../src/js/80-assets.js";
 
 import type { ExtCtx, ExtResult, ExtTool, ToolTable } from "./types.ts";
 import { dmy } from "../fsask.ts";
+import { manyOf, numOf, oneOf } from "./num.ts";
 type Ctx = ExtCtx; type Result = ExtResult; type ReportTool = ExtTool;
 // deno-lint-ignore no-explicit-any
 const FSX: any = (globalThis as any).FSX;
@@ -30,10 +31,21 @@ const safe = (s: string) => String(s || "client").replace(/[^A-Za-z0-9]+/g, "-")
 const rs = (p: number) => Math.round(p) / 100;
 const N = (t: unknown) => t == null ? null : t;
 
-// "2025", "2025-26", "FY 2025-26" -> "2025" (the year from 1 April)
+// the financial year (the year from 1 April) a text names: "2025-26", "2025-2026", "FY 2025-26", "FY25-26", "FY26" (2025-26),
+// a date in it ("31 March 2026", "31-03-2026", "2026-03-31": 2025-26), or "2025" -> "2025"; the last year ended when none
+const MONS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+const fyFrom = (y: number, mo: number) => String(mo >= 4 ? y : y - 1);
 export function fyOf(y: unknown, today: string): string {
-  const m = /(\d{4})/.exec(String(y || ""));
-  if (m) return m[1];
+  const s = String(y || "").toLowerCase();
+  let m: RegExpExecArray | null;
+  if ((m = /\b(20\d{2})-(\d{2})-(\d{2})\b/.exec(s))) return fyFrom(+m[1], +m[2]);
+  if ((m = /\b(\d{1,2})[./-](\d{1,2})[./-](20\d{2})\b/.exec(s)) && +m[2] >= 1 && +m[2] <= 12) return fyFrom(+m[3], +m[2]);
+  if ((m = /\b\d{1,2}(?:st|nd|rd|th)?[\s-]+(?:of\s+)?(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?,?[\s-]+(20\d{2})\b/.exec(s))) return fyFrom(+m[2], MONS.indexOf(m[1]) + 1);
+  if ((m = /\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2}(?:st|nd|rd|th)?,?\s+(20\d{2})\b/.exec(s))) return fyFrom(+m[2], MONS.indexOf(m[1]) + 1);
+  if ((m = /\b(20\d{2})\s*[-–/]\s*(20\d{2}|\d{2})\b/.exec(s)) && +m[2].slice(-2) === (+m[1] + 1) % 100) return m[1];
+  if ((m = /\bfy\s*'?(\d{2})\s*[-–/]\s*(\d{2})\b/.exec(s)) && +m[2] === (+m[1] + 1) % 100) return String(2000 + +m[1]);
+  if ((m = /\bfy\s*'?(\d{2})\b/.exec(s))) return String(2000 + +m[1] - 1);
+  if ((m = /\b(20\d{2})\b/.exec(s))) return m[1];
   const t = today || new Date().toISOString().slice(0, 10), yr = Number(t.slice(0, 4)), mo = Number(t.slice(5, 7));
   return String(mo >= 4 ? yr - 1 : yr - 2);          // the last year that has ended
 }
@@ -46,7 +58,7 @@ const tbRows = (rows: any[], msme: Record<string, unknown>) => rows.map((r) => {
 }).filter((t) => t.o || t.d || t.c || t.po || t.pd || t.pc);
 
 // the statements' input for a year, from the books and what the app keeps for the client
-async function inputFor(ctx: Ctx, fy: string, layout?: string | null) {
+export async function inputFor(ctx: Ctx, fy: string, layout?: string | null) {
   const from = fy + "-04-01", to = (Number(fy) + 1) + "-03-31";
   const [tb, saved, far] = await Promise.all([ctx.rpc("rpt_tb", { p_client: ctx.clientId, p_from: from, p_to: to }), ctx.rpc("rpt_saved", { p_client: ctx.clientId }), farFor(ctx, fy)]);
   if (!tb || !tb.ok) return { error: "No books for " + FSX.fyLabel(fy) + ": " + ((tb && tb.why) || "the trial balance could not be read") + "." };
@@ -61,8 +73,84 @@ async function upload(ctx: Ctx, bytes: Uint8Array | string, name: string, kind: 
 }
 const strict = (props: Record<string, unknown>) => ({ type: "object", additionalProperties: false, required: Object.keys(props), properties: props });
 const S = (d: string) => ({ type: ["string", "null"], description: d });
-const NUM = (d: string) => ({ type: ["number", "null"], description: d });
-const ARR = (d: string) => ({ type: ["array", "null"], items: { type: "number" }, description: d });
+const NUM = (d: string) => ({ type: ["number", "string", "null"], description: d });
+const ARR = (d: string) => ({ type: ["array", "null"], items: { type: ["number", "string"] }, description: d });
+
+// the DCF's assumptions (the owner, 13-Nov-2026: act first, as the projections do): what the user gave, read and bounded
+// (tools/num.ts), and a stated default for every one missing, from the books where they can give it
+// deno-lint-ignore no-explicit-any
+export function dcfAssume(A0: Record<string, unknown>, hist: any[], nm: Record<string, number>, kind: string, said: string[]): Record<string, any> {
+  const one = (k: string, lo: number, hi: number, w: string, int = false) => oneOf(A0[k], lo, hi, w, said, int);
+  const many = (k: string, lo: number, hi: number, w: string) => manyOf(A0[k], lo, hi, w, said, 10);
+  const pct = (v: number) => Math.round(v * 100) / 100 + "%", L = (k: string) => (Number(nm["L_" + k + "_CY"]) || 0) / 100;
+  const inr = (v: number) => "₹" + new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 }).format(Math.round(v));
+  const h = hist[hist.length - 1], p = hist.length > 1 ? hist[hist.length - 2] : null, rev = h.rev || 0;
+  // deno-lint-ignore no-explicit-any
+  const A: Record<string, any> = {};
+  const years = one("years", 1, 10, "Forecast years", true);
+  A.years = years ?? 5;
+  said.push("Forecast of " + A.years + " years" + (years != null ? " (as you said)." : "."));
+  const n = Number(A.years), fill = (a: number[]) => Array.from({ length: n }, (_, i) => a[Math.min(i, a.length - 1)]);
+  const g = many("revGrowth", -50, 200, "Revenue growth %");
+  const trend = p && p.rev > 0 && rev > 0 ? (rev / p.rev - 1) * 100 : null, g0 = trend == null ? 10 : Math.max(-10, Math.min(25, trend));
+  A.revGrowth = g ? fill(g) : fill([g0]);
+  said.push(g ? "Revenue growth " + A.revGrowth.map(pct).join(", ") + " (as you said)."
+    : "Revenue grows " + pct(g0) + " a year (" + (trend == null ? "no earlier year with sales to take a trend from: a moderate 10%" : "last year's growth was " + pct(trend) + (g0 !== trend ? ", capped at " + pct(g0) : "")) + ").");
+  const m = many("ebitdaMargin", -100, 100, "EBITDA margin %"), m0 = rev > 0 ? h.ebitda / rev * 100 : 0;
+  A.ebitdaMargin = m ? fill(m) : fill([Math.max(-100, Math.min(100, m0))]);
+  said.push(m ? "EBITDA margin " + A.ebitdaMargin.map(pct).join(", ") + " (as you said)." : "EBITDA margin " + pct(A.ebitdaMargin[0]) + " each year (last year's).");
+  const share = (k: string, lo: number, hi: number, w: string, v0: number, why: string) => {
+    const v = one(k, lo, hi, w);
+    if (v != null) { said.push(w + " " + pct(v) + " (as you said)."); return v; }
+    const d = Math.max(lo, Math.min(hi, v0));
+    said.push(w + " " + pct(d) + " (" + why + ").");
+    return d;
+  };
+  A.depPct = share("depPct", 0, 100, "Depreciation as % of revenue:", rev > 0 ? h.dep / rev * 100 : 0, "last year's");
+  A.capexPct = share("capexPct", 0, 100, "Capital expenditure as % of revenue:", A.depPct, "equal to depreciation: the assets kept up, no expansion");
+  A.nwcPct = share("nwcPct", -100, 100, "Net working capital as % of revenue:", rev > 0 ? (h.nwc || 0) / rev * 100 : 0, "last year's");
+  A.taxRate = share("taxRate", 0, 60, "Tax rate:", kind === "company" ? 25.17 : 31.2, kind === "company" ? "section 115BAA rate with surcharge and cess" : "30% with cess");
+  A.method = String(A0.method || "").toUpperCase() === "FCFE" ? "FCFE" : "FCFF";
+  said.push(A.method === "FCFE" ? "Method: FCFE (as you said)." : "Method: FCFF (free cash flow to the firm)" + (A0.method ? " (as you said)." : "."));
+  const debt = L("ltb") + L("stb"), cash = L("cash"), eq = L("share") + L("reserves") + L("capital") + L("current");
+  for (const [k, lo, hi, w] of [["rf", 0, 20, "Risk-free rate %"], ["beta", 0, 5, "Beta"], ["erp", 0, 20, "Equity risk premium %"], ["kd", 0, 40, "Cost of debt %"], ["de", 0, 20, "Debt / equity"]] as [string, number, number, string][]) {
+    const v = one(k, lo, hi, w);
+    if (v != null) A[k] = v;
+  }
+  const wacc = one("wacc", 1, 50, "WACC %"), ke = one("ke", 1, 50, "Cost of equity %");
+  const BASIS = "risk-free 7% + beta 1 x equity risk premium 7%, a common basis for an unlisted Indian company";
+  if (A.method === "FCFE") {
+    if (ke != null) { A.ke = ke; said.push("Cost of equity " + pct(ke) + " (as you said)."); }
+    else if (A.rf == null || A.beta == null || A.erp == null) { A.ke = 14; said.push("Cost of equity 14% (" + BASIS + ")."); }
+    const ip = one("interestPct", 0, 100, "Interest % of revenue");
+    A.interestPct = ip ?? (rev > 0 ? Math.round((h.fin || 0) / rev * 1000) / 10 : 0);
+    said.push("Interest " + pct(A.interestPct) + " of revenue" + (ip != null ? " (as you said)." : " (last year's)."));
+    const nb = many("netBorrowing", -1e13, 1e13, "Net borrowing");
+    A.netBorrowing = nb ? fill(nb) : fill([0]);
+    if (!nb) said.push("No new net borrowing in the forecast years.");
+  } else if (wacc != null) { A.wacc = wacc; said.push("WACC " + pct(wacc) + " (as you said)."); }
+  else if (A.rf != null || A.beta != null || A.erp != null || A.kd != null || A.de != null) {
+    const kd0 = debt > 0 ? Math.min(40, (h.fin || 0) / debt * 100) : 10, de0 = eq > 0 ? debt / eq : 0;
+    A.rf = A.rf ?? 7; A.beta = A.beta ?? 1; A.erp = A.erp ?? 7; A.kd = A.kd ?? Math.round(kd0 * 10) / 10; A.de = A.de ?? Math.round(de0 * 100) / 100;
+    said.push("WACC built from risk-free " + pct(A.rf) + ", beta " + A.beta + ", equity risk premium " + pct(A.erp) + ", cost of debt " + pct(A.kd) + ", debt/equity " + A.de + " (yours where given; else 7%, 1, 7%, the books' interest rate and debt/equity).");
+  } else { A.wacc = 14; said.push("Discount rate (WACC) 14% (" + BASIS + "; not weighted for debt)."); }
+  const rate = A.method === "FCFE" ? Number(A.ke ?? (A.rf + A.beta * A.erp)) : A.wacc != null ? Number(A.wacc) : (1 / (1 + A.de)) * (A.rf + A.beta * A.erp) + (A.de / (1 + A.de)) * A.kd * (1 - A.taxRate / 100);
+  let tg = one("tg", -5, 10, "Terminal growth %");
+  if (tg == null) { tg = 4; said.push("Terminal growth 4% a year after the forecast (long-run growth, below the discount rate)."); } else said.push("Terminal growth " + pct(tg) + " (as you said).");
+  if (tg >= rate) { const t2 = Math.round((rate - 2) * 10) / 10; said.push("Terminal growth " + pct(tg) + " is not below the discount rate " + pct(rate) + "; " + pct(t2) + " is used."); tg = t2; }
+  A.tg = tg;
+  const nd = numOf(A0.netDebt);
+  A.netDebt = nd ?? Math.round(debt - cash);
+  said.push("Net debt " + inr(A.netDebt) + (nd != null ? " (as you said)." : " (borrowings less cash and bank in the books at the year end)."));
+  const sh = oneOf(A0.shares, 1, 1e12, "Number of equity shares", said, true);
+  if (sh != null) { A.shares = sh; said.push("Equity shares " + sh + " (as you said)."); }
+  else if (L("share") > 0) { A.shares = Math.max(1, Math.round(L("share") / 10)); said.push("Equity shares " + A.shares + ": share capital " + inr(L("share")) + " at a face value of ₹10 (tell me the real number)."); }
+  else { A.shares = 1; said.push("No share capital in the books (a firm or proprietor): the value per share is the equity value."); }
+  const vd = typeof A0.valuationDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(A0.valuationDate) ? A0.valuationDate : (Number(h.fy) + 1) + "-03-31";
+  A.valuationDate = vd;
+  said.push("Valuation date " + vd + (vd === A0.valuationDate ? " (as you said)." : " (the end of the last year in the books)."));
+  return A;
+}
 
 export const TOOLS: ReportTool[] = [
   {
@@ -152,29 +240,35 @@ export const TOOLS: ReportTool[] = [
   },
   {
     name: "dcf_model",
-    description: "A DCF valuation working (FCFF or FCFE): 3-5 years of history from the books, the user's assumptions (never assumed: ask the user for every one that is missing), Excel with live formulas (cash flows, discounting, terminal value, equity value, value per share, WACC x growth grid) and a Word draft that must be issued by a registered valuer / merchant banker.",
-    input_schema: strict({ client: S("the client (the one open when null)"), assumptions: strict({ years: NUM("forecast years"), revGrowth: ARR("revenue growth % for each year"), ebitdaMargin: ARR("EBITDA margin % for each year"), depPct: NUM("depreciation % of revenue"),
-      capexPct: NUM("capex % of revenue"), nwcPct: NUM("net working capital % of revenue"), taxRate: NUM("tax rate %"), tg: NUM("terminal growth %"), shares: NUM("number of equity shares"), valuationDate: S("YYYY-MM-DD"),
+    description: "A DCF valuation working (FCFF or FCFE) for the client open: 3-5 years of history from the books, the assumptions, Excel with live formulas (cash flows, discounting, terminal value, equity value, value per share, WACC x growth grid) and a Word draft that must be issued by a registered valuer / merchant banker. Call it at once with what the user said in this conversation and null for the rest: FinCom fills every missing assumption with a stated default (growth and margins from the books' trend, a 14% discount rate, 4% terminal growth, the tax rate for the entity, net debt and shares from the books) and lists them all. Never ask for assumptions first. Percentages as numbers (14 for 14%).",
+    input_schema: strict({ client: S("the client (the one open when null)"), assumptions: strict({ years: NUM("forecast years, 1 to 10"), revGrowth: ARR("revenue growth % for each year, -50 to 200"), ebitdaMargin: ARR("EBITDA margin % for each year"), depPct: NUM("depreciation % of revenue"),
+      capexPct: NUM("capex % of revenue"), nwcPct: NUM("net working capital % of revenue"), taxRate: NUM("tax rate %, 0 to 60"), tg: NUM("terminal growth %, -5 to 10"), shares: NUM("number of equity shares"), valuationDate: S("YYYY-MM-DD"),
       method: { type: ["string", "null"], enum: ["FCFF", "FCFE", null] }, wacc: NUM("WACC %"), rf: NUM("risk-free rate %"), beta: NUM("beta"), erp: NUM("equity risk premium %"), kd: NUM("pre-tax cost of debt %"), de: NUM("debt / equity"),
       netDebt: NUM("net debt at the valuation date"), ke: NUM("cost of equity % (FCFE)"), interestPct: NUM("interest % of revenue (FCFE)"), netBorrowing: ARR("net borrowing each year (FCFE)") }) }),
     task: "heavy", label: "books", words: /\b(dcf|valuation|value per share|discounted cash flow)\b/i,
     async run(input, ctx) {
-      const A = Object.fromEntries(Object.entries((input.assumptions || {}) as Record<string, unknown>).filter(([, v]) => v != null));
       const last = fyOf(null, ctx.today), hist: any[] = [];
+      let nm: Record<string, number> = {}, kind = "company";
       for (let y = Number(last) - 4; y <= Number(last); y++) {
         const got = await inputFor(ctx, String(y));
         if ("error" in got) continue;
-        hist.push(FSX.histFrom([FSX.run(got.inp).model])[0]);
+        const M = FSX.run(got.inp).model;
+        hist.push(FSX.histFrom([M])[0]);
+        nm = M.nm; kind = String(got.inp.entity.kind || "company");
       }
-      if (!hist.length) return { error: "No year of books to take the history from." };
+      if (!hist.length) return { error: "No year of books to take the history from: link the client's Tally company or upload its books, then ask again." };
+      const said: string[] = [], A = dcfAssume((input.assumptions || {}) as Record<string, unknown>, hist, nm, kind, said);
       const d = FSX.dcf(hist, A);
       if (d.error) return { error: d.error };
+      d.notes = said;
       const base = safe(ctx.clientName) + "-DCF-" + String(A.valuationDate || "");
       const files = [...await upload(ctx, FSX.dcfExcel(d, { name: ctx.clientName }), base + ".xlsx", "xlsx"), ...await upload(ctx, FSX.dcfWord(d, { name: ctx.clientName }), base + "-draft-report.docx", "docx")];
       const t: ToolTable = { tool: "dcf_model", title: "DCF (" + (d.fcfe ? "FCFE" : "FCFF") + "): value", columns: [{ k: "item", label: "Particulars" }, { k: "amount", label: "Amount", t: "amount" }],
         rows: [["Sum of present values", d.sumPv], ["Present value of the terminal value", d.pvTv], [d.fcfe ? "Equity value" : "Enterprise value", d.ev], ["Equity value", d.equity], ["Value per share", d.perShare]].map(([item, v]) => ({ item, amount: Math.round(Number(v) * 100) / 100 })),
-        summary: { rate: Math.round(d.rate * 1e6) / 1e6, terminal_growth: d.g, years_of_history: hist.length }, basis: "history from the books (" + hist.map((h) => FSX.fyLabel(h.fy)).join(", ") + "); assumptions from the user" };
-      return { tables: [t], files, forModel: "DCF " + (d.fcfe ? "FCFE" : "FCFF") + ": value per share " + (Math.round(d.perShare * 100) / 100) + ", equity value " + Math.round(d.equity) + ", rate " + (Math.round(d.rate * 10000) / 100) + "%. A draft: it must be issued by a registered valuer / merchant banker." };
+        summary: { rate: Math.round(d.rate * 1e6) / 1e6, terminal_growth: d.g, years_of_history: hist.length }, basis: "history from the books (" + hist.map((h) => FSX.fyLabel(h.fy)).join(", ") + "); the assumptions listed (the user's, else FinCom's stated defaults)" };
+      const at: ToolTable = { tool: "dcf_model", title: "Assumptions (tell me any to change and I'll redo it)", columns: [{ k: "n", label: "No.", t: "int" }, { k: "item", label: "Assumption" }], rows: said.map((item, i) => ({ n: i + 1, item })) };
+      return { tables: [t, at], files, forModel: JSON.stringify({ result: "DCF " + (d.fcfe ? "FCFE" : "FCFF") + ": value per share " + (Math.round(d.perShare * 100) / 100) + ", equity value " + Math.round(d.equity) + ", rate " + (Math.round(d.rate * 10000) / 100) + "%. A draft: it must be issued by a registered valuer / merchant banker.",
+        assumptions: said, say: "In two or three lines give the value and what drives it; list the assumptions in short bullets; end with: Tell me any assumption to change and I'll redo it." }) };
     },
   },
 ];

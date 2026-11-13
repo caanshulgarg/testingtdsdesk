@@ -600,7 +600,7 @@ async function bankAutoSync(force){
   } finally { bankSyncing = false; }
   // lines marked as posted that were deleted in Tally since: looked for quietly, at most every 3 minutes per statement
   const st = curStmt();
-  // build 190: only when someone asks (Refresh from Tally); not every 3 minutes by itself (it read the day book each time)
+  // build 190: only when someone asks (Update from Tally); not every 3 minutes by itself (it read the day book each time)
   if (force && st && bridgeVer(Bridge.st.version) >= bridgeVer("1.12.3") && b.rows.some(r => ["sent", "intally"].includes(r.state))){
     const k = st.id, last = (b.goneAt || {})[k] || 0;
     if (Date.now() - last > 3 * 60000){ b.goneAt = Object.assign({}, b.goneAt, {[k]: Date.now()}); try { await checkMarkedInTally({quiet: true}); } catch (e){} }
@@ -1180,6 +1180,8 @@ async function postBankToTally(ids){
       // check that could not be made leaves the line ready, with the bridge's one line (below, as any refusal)
       const x1 = byId.get(r.id), x0 = x1 && postTaken(x1) ? Object.assign({}, x1, {vchGuess: guesses.get(String(r.id)) || "", jobId}) : x1;
       const x = postAlready(x0) ? Object.assign({}, x0, {ok: true, verified: true, vchNumber: x0.vchNumber || x0.vchNo || ""}) : x0;
+      // held by a posting still going on in FinCom's cloud: the line stays as it is (its release too), with those words
+      if (x && x.held){ r.postError = plainMsg(x.message); return; }
       // the resend guard held it back ("already sent from this computer … job X"), or the job's answer for it never came
       // here: settled below from that job's record on the bridge, never sent again
       if (x && !x.ok && (x.alreadySent === true || (x.notAnswered === true && x.jobId))){
@@ -1374,6 +1376,9 @@ async function postBillsToTally(opts){
         else if (x && x.ok){ unverified++; e.postUnconfirmed = {at: now, company: x.company || tname, optional: /Optional/.test(x.verifyNote || ''), pending: !!x.pendingCheck};
           e.postError = (/Optional/.test(x.verifyNote || '') && x.message) ? plainMsg(x.message) : x.pendingCheck ? "In Tally, not yet read back: FinCom reads it back from Tally by itself in a moment." : "In Tally, not yet read back: Tally took it, but FinCom has not found it in Tally since, so it is not counted as posted. Look in Tally (Day Book, and Display More Reports → Exception Reports → Optional Vouchers). If it is not there, post it again." + (x.verifyNote ? " [" + x.verifyNote + "]" : "");
           failed.push({id: e.id, no: e.x.invoiceNo, party: e.x.vendorName, msg: "In Tally, not yet read back", unread: true}); }
+        // held by a posting still going on in FinCom's cloud (waiting for Tally, or an earlier posting has it): the bill
+        // stays as it is, with those words; that posting's result is marked on it when it comes (postReconcile)
+        else if (x && x.held) e.postError = plainMsg(x.message);
         else {
           e.postError = plainMsg(x && x.message) || "Tally did not confirm this entry.";
           failed.push({id: e.id, no: e.x.invoiceNo, party: e.x.vendorName, msg: e.postError});

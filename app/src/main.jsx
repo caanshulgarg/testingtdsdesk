@@ -47,7 +47,8 @@ window.loadFirstOpen = () => import("./lib/firstOpen.js");
 // ledger map changed meanwhile (worked out at once there)
 window.usageSoon = async (b) => {
   const V = b.vouchers, m = b.map, u = {};
-  if (!V || !V.length || !m) return 0;
+  // (a tab in the background: its timers wait a second or more each; worked out at once there)
+  if (!V || !V.length || !m || document.hidden) return 0;
   try { for (let i = 0; i < V.length; i += 8000) { await new Promise((ok) => setTimeout(ok, 0)); if (S.books !== b) return 0; LedMaster.usage(b, u, i, i + 8000); } } catch (e) { return 0; }
   return b.vouchers === V && b.map === m && u;
 };
@@ -63,7 +64,8 @@ window.loadBridgeFollow = () => import("./lib/bridgeFollow.js");
 // next-size-room: a screen's own part of the program, for an action asked for before that screen's file is in (withPart,
 // src/js/82): GSTR-9 and 9C (with the 9C screen, for its PDF), the MIS pack, Post to Tally's settling (postPart, src/js/59),
 // the printed sales invoice
-window.loadPart = (k) => (k === "gst9" ? import("./screens/gst/Annual.jsx") : k === "mis" ? import("../../src/js/18-mis-pack.js") : k === "post" ? import("../../src/js/59-post-owner.js") : import("../../src/js/26-sales-invoice.js")).catch((e) => { staleReload(e, true); throw e; });
+// (q: quietly, for a job behind the page, MIS.runSoon: a failed fetch is said to it, the page not reloaded)
+window.loadPart = (k, q) => (k === "gst9" ? import("./screens/gst/Annual.jsx") : k === "mis" ? import("../../src/js/18-mis-pack.js") : k === "post" ? import("../../src/js/59-post-owner.js") : import("../../src/js/26-sales-invoice.js")).catch((e) => { if (!q) staleReload(e, true); throw e; });
 window.loadRegisters = () => import("./lib/registers.js").catch((e) => { staleReload(e, true); throw e; });
 // next-legacy-room: the bill reader (src/js/01-reading-bills.js), loaded the first time a bill is read (readerLoad, src/js/82).
 // Not refreshed by itself when it cannot come: bills waiting in the reading queue would be lost; the bill says why instead

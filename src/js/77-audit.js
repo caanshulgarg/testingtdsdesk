@@ -380,4 +380,23 @@ const AuditWP = {
   pdf(res){ printView((res.client || "Client") + " audit working papers " + res.from + "-" + res.to, this.html(res, S.books)); },
 };
 if (typeof globalThis === "object") globalThis.AuditWP = AuditWP;
+// the Audit screen's (app/src/screens/books/Audit.jsx: the related parties), put on Audit (moved from src/js/07-mis.js
+// with next-fix-mis-rework for legacy.js's budget; only that screen asks for it)
+const AuditRel = {
+  // who might be related: people and firms in loans, capital and director ledgers
+  relatedGuess(){
+    const b = S.books, have = new Set((b.auditRel || []).map(x => x.name)), out = [];
+    Object.keys(Object.assign({}, b.ledInfo || {}, b.map || {})).sort().forEach(l => {
+      if (have.has(l)) return;
+      let why = "";
+      if (/DIRECTOR|PARTNER|PROPRIETOR|DRAWINGS|\(CAPITAL\)|CURRENT A\/C/i.test(l)) why = "the name";
+      else if (this.under(l, /^(unsecured loans)$/i)) why = "an unsecured loan";
+      else if (this.under(l, /^loans & advances \(asset\)$/i) && !/DEDUCTION|STAFF|EMPLOYEE/i.test(l)) why = "a loan given";
+      else if (this.under(l, /^loans \(liability\)$/i) && !/BANK|FINANCE|FINNACE|NBFC|HOUSING|CAPITAL|SERVICES/i.test(l)) why = "a loan from a person";
+      if (why) out.push({name: l, why});
+    });
+    return out;
+  }
+};
+if (typeof Audit === "object") Object.assign(Audit, AuditRel);
 /* @react-lazy: end */

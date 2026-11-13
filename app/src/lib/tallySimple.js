@@ -677,8 +677,8 @@ function clientRow(co, all, opts) {
   const x = firstSyncOf(cid), running = !!(x && !x.end && !x.err && !x.late), stuck = !!(x && !x.end && (x.err || x.late));
   const n = Math.max(ledgersOf(cid), ledN(cid), (x && x.led > 0 && x.led) || 0), held = ledgersHeld(cid) || !!(x && x.end);
   const ch = held ? changeWords(cid) : { known: false, words: "" };
-  // next-tally-ledgers-button (04-Nov-2026): not yet or stuck, the button "Bring ledgers from Tally" (firstSync, now: the
-  // ledgers wake and, through the cloud, Update now); it can run when the company is open in Tally on this user's own
+  // next-tally-ledgers-button (04-Nov-2026): not yet or stuck, the button "Update from Tally" (firstSync, now: the
+  // ledgers wake and, through the cloud, Update from Tally); it can run when the company is open in Tally on this user's own
   // computer or on any computer FinCom hears now, else one plain line
   // next-link-follow (migration 146): where the book is read from (another login's Tally when the linked one is offline or
   // lacks it), or the linked computer offline with the company open in no other Tally: said on the row, never a silent queue
@@ -744,8 +744,8 @@ function clientRow(co, all, opts) {
   // what to do (at most one button), else plain words (the entries being asked again: their own words above)
   if (!row.act && !again) {
     if (wait && row.l.w !== YES) { row.todo = wait + "."; row.upload = true; }
-    else if (stuck && !held) { row.todo = "Keep the company open in Tally, then press Bring ledgers from Tally."; row.upload = true; }
-    else if (row.l.bring && anyOpen && !p && !(fill && Number(fill.waiting) > 0)) { row.todo = "Press Bring ledgers from Tally."; row.upload = true; }
+    else if (stuck && !held) { row.todo = "Keep the company open in Tally, then press Update from Tally."; row.upload = true; }
+    else if (row.l.bring && anyOpen && !p && !(fill && Number(fill.waiting) > 0)) { row.todo = "Press Update from Tally."; row.upload = true; }
     else if (row.e.w === NOTYET || row.l.w === NOTYET) {
       // (next-tally-page-redesign; the owner on a Mac with no bridge: "0 clients are fine. 8 need you"): a company open in
       // ANY of the firm's Tallys FinCom hears now comes in by itself; only one open nowhere needs opening

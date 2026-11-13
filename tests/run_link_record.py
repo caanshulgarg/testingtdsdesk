@@ -324,7 +324,7 @@ def main():
             E(SETUP, [s5, "owner", ME, CLIENTS]); client_page(pg, CA)
             return status(pg)
         st = scene([dev(OPEN, BEAT)])
-        ok(st["state"] == "linked" and re.fullmatch(r"Connected to Tally · last entry \d{1,2}:\d\d [ap]m", st["words"]) and st["buttons"] == ["update"], "Linked · %s (Update now)" % st["words"])
+        ok(st["state"] == "linked" and re.fullmatch(r"Connected to Tally · last entry \d{1,2}:\d\d [ap]m", st["words"]) and st["buttons"] == ["update"], "Linked · %s (Update from Tally)" % st["words"])
         ok(st["title"].startswith("Tally: Linked — " + st["words"]), "its whole line on hover: %r" % st["title"])
         ok(re.fullmatch(r"Linked — reading · posting allowed · last entry \d\d:\d\d", lw(pg, CA)), "the record's words (the Tally page): %r" % lw(pg, CA))
         OPENW = "Open %s in TallyPrime on NWS144" % ALPHA

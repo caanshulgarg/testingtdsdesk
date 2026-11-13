@@ -96,7 +96,7 @@ export function changeRow(b, r) {
 // separate small Undo (✓ itself is not a button)
 function RowAct({ b, r }) {
   if (S.ledEdit === r.n) return null;
-  const change = <button className="linkbtn" data-led-change={r.n} onClick={() => changeRow(b, r)}>Change</button>;
+  const change = <button className="linkbtn" data-led-change={r.n} aria-label={"Change " + r.n} onClick={() => changeRow(b, r)}>Change</button>;
   if (r.ok) {
     const m = r.m || {};
     return <span className="led-act led-act-ok">
@@ -150,12 +150,12 @@ export function Status({ b }) {
   // (a list that is only the masters uploaded on Books, Ledgers.list's fallback since 25-Oct-2026, is said as the file)
   if (!lines.length && st.n && !(st.masters && nInfo)) lines = [{ k: "list", label: "", n: st.n, at: Ledgers.listAt(cid) || st.at }];
   if (!lines.length && nInfo) lines = [{ k: "file", label: "", n: nInfo, at: b.ledInfoAt, file: true }];
-  // next-tally-ledgers-button (04-Nov-2026): no ledgers yet from a connected client: "Bring ledgers from Tally", the same
+  // next-tally-ledgers-button (04-Nov-2026): no ledgers yet from a connected client: "Update from Tally", the same
   // first sync as the Tally page's (firstSync, now; loaded with the Tally screen's own code)
   const bringNow = () => import("../../parts/TallyCompanies.jsx").then((m) => m.firstSync(cid, "", { now: true }));
   // (a book in the cloud with no ledger yet, "Ledgers from Tally: 0", is the same empty state)
   if (cloud && !lines.some((x) => Number(x.n) > 0)) lines = [];
-  const again = cloud && !lines.length ? <button className="btn small primary" data-led-bring="" onClick={bringNow}>Bring ledgers from Tally</button>
+  const again = cloud && !lines.length ? <button className="btn small primary" data-led-bring="" onClick={bringNow}>Update from Tally</button>
     // next-tally-basics (the owner): Books › From Tally is the one place that updates the ledgers; here, the way there
     : live || cloud ? <button className="linkbtn" data-led-go={live ? "bridge" : "cloud"} data-go-from-tally="" onClick={() => goClient("books:import")}>Update ledgers in Books › From Tally</button> : null;
   return <div className="led-status" data-led-status="">
@@ -196,7 +196,7 @@ export function Others({ b, rows }) {
           {(b2c.has(r.n) || (r.m && r.m.b2cSum)) && <label className="chk nr" title="One entry books many B2C sales (e.g. a payment gateway's or a marketplace's collections): GSTR-1 reports its sales in B2C small as totals, with no invoice number. FinCom's own setting, not written to Tally">
             <input type="checkbox" data-b2cs-ledger={r.n} checked={!!(r.m && r.m.b2cSum)} onChange={(ev) => GSTR.b2cSumLedger(r.n, ev.target.checked)} /> Consolidated B2C (summary of many sales)</label>}</td>
         <td className="n">{r.used ? Number(r.used).toLocaleString("en-IN") : ""}</td>
-        <td className="ac">{S.ledEdit === r.n ? null : <button className="linkbtn" data-led-change={r.n} onClick={() => changeRow(b, r)}>Change</button>}</td></tr>)}</tbody></table>
+        <td className="ac">{S.ledEdit === r.n ? null : <button className="linkbtn" data-led-change={r.n} aria-label={"Change " + r.n} onClick={() => changeRow(b, r)}>Change</button>}</td></tr>)}</tbody></table>
     {rows.length > shown.length && <p className="note">{"The first " + shown.length + " are shown, the most used first; find the rest by name."}</p>}
   </details>;
 }

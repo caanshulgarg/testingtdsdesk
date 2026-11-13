@@ -59,6 +59,10 @@ const DueList = {
       // filed or paid long ago: not listed; not filed and fallen due before the window: still listed (it is overdue)
       if (st.status === "filed" && x.due < from) return;
       if (x.optional && st.status === "overdue") return;
+      // ux-wins (the owner, 13-Nov-2026: a client added today showed 84 "overdue" back to Apr-2025): the client's "Track
+      // returns from" month (co.trackFrom, yyyymm: asked when the client is added, changed on Compliance): a return or a
+      // payment that fell due before that month began is listed only once filed; what falls due in it or later stays
+      if (st.status !== "filed" && x.kind !== "task" && x.due.slice(0, 7).replace("-", "") < co.trackFrom) return;
       out.push(Object.assign({cid: co.id, client: co.name}, x, st));
     };
     const fys = this.fysBetween(from, until);
@@ -115,7 +119,7 @@ const DueList = {
   cache: {},          // cid -> {key, items}
   keyOf(b){ return b ? [b.cid, (b.vouchers || []).length, b.mapV || 0, fpHash(JSON.stringify([b.gstFiled, b.portalFiled, b.tdsFiled, b.challans, b.alloc, b.gstSet, b.gstRegs, (b.gstVault || []).length, (b.salary || []).length, (b.payroll || {}).at || ""])), this.today()].join("|") : ""; },
   forClient(co, b){
-    const k = this.keyOf(b), c = this.cache[co.id];
+    const k = this.keyOf(b) + co.trackFrom, c = this.cache[co.id];
     if (c && c.key === k && c.b === b) return c.items;
     const items = this.withBooks(co.id, b, () => this.items(co, b));
     this.cache[co.id] = {key: k, b, items};

@@ -255,7 +255,7 @@ function Form3cd({ b }) {
 
 // named Audit_ so the audit checks (the global Audit) stay in reach inside this file
 export default function Audit_({ b }) {
-  // Tally changed since the last run: the tab says so while it is worked out again (TallyRead.catchUp, src/js/18)
+  // Tally changed since the last run: the tab says so while it is worked out again (lib/catchSoon.js)
   const catchUp = catchSoon(b, "audit");   // on screen only, at most once in 5 s (lib/catchSoon.js)
   // next-speed-render: the tabs and the head drawn while the run is worked out behind the page
   // the last run's findings stay, marked, until the new ones replace them; none yet: the words where they go

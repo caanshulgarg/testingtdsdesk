@@ -142,36 +142,36 @@ def main():
         ok(n("#app [data-tsm-guide]") == 0 or txt("#app [data-tsm-steps-link]") == "How to connect", "1. Hide how to connect: the steps fold away")
         no_rejections("1. the six steps")
 
-        print("== 2. Update now, Bring masters, Check again on a row")
-        ok(mains(ORBIT) == ["update"], "2. Orbit: Update now (%s)" % mains(ORBIT))
+        print("== 2. Update from Tally, Bring masters, Check again on a row")
+        ok(mains(ORBIT) == ["update"], "2. Orbit: Update from Tally (%s)" % mains(ORBIT))
         pg.click(R(ORBIT) + " [data-tsm-update]")
         st = seen(R(ORBIT) + " .tpt-state", r"Updating|Waiting for Tally|Asking Tally|Not (started|updated)", 5000)
-        ok(st != "", "2. Update now: the row says it is updating, within 5 s (%s)" % st)
+        ok(st != "", "2. Update from Tally: the row says it is updating, within 5 s (%s)" % st)
         pg.click(R(ORBIT) + ' [data-tpt-main]', timeout=1500) if n(R(ORBIT) + ' [data-tpt-main]:not([disabled])') else None   # (a second click: nothing more)
         # nothing reported in 2 minutes, the bridge beating with the company open (an older bridge reports no progress):
         # waiting, never "Not started"
         E("(c) => { const m = window.FCRunState[c], x = (S.tcoSync || {})[c]; if (m) m.at -= 130000; if (x) { x.at -= 130000; x.prog = null; x.late = false; x.err = ''; x.end = 0; } render(); }", cid(ORBIT))
         pg.wait_for_timeout(1500)
         ok(not re.search(r"Not started", txt(R(ORBIT) + " .tpt-state")) and txt(R(ORBIT) + " [data-tpt-state]") in ("Updating", "Waiting for Tally"),
-           "2. Update now, no progress reported in 2 minutes but the bridge beats with it open: still updating, not 'Not started' (%s)" % txt(R(ORBIT) + " .tpt-state"))
+           "2. Update from Tally, no progress reported in 2 minutes but the bridge beats with it open: still updating, not 'Not started' (%s)" % txt(R(ORBIT) + " .tpt-state"))
         # evidence: no bridge of the firm heard (its beats 10 minutes old): Not started, with why
         E("() => { window.__devs0 = JSON.parse(JSON.stringify(TLight.st.devs)); TLight.st.devs.forEach(d => { const t = new Date(Date.now() - 600000).toISOString(); d.last_seen = t; if (d.info && d.info.beat) d.info.beat.at = t; }); render(); }")
         late = seen(R(ORBIT) + " [data-tpt-why]", r"^Not (started|updated)", 8000)
-        ok(late != "", "2. Update now, no bridge heard and nothing in 2 minutes: 'Not started: <why>' (%s)" % (late or txt(R(ORBIT) + " .tpt-state")))
+        ok(late != "", "2. Update from Tally, no bridge heard and nothing in 2 minutes: 'Not started: <why>' (%s)" % (late or txt(R(ORBIT) + " .tpt-state")))
         E("() => { TLight.st.devs = window.__devs0; render(); }")
-        no_rejections("2. Update now")
+        no_rejections("2. Update from Tally")
         # FinCom not reached: said in the row, never a silent row
         E("(c) => { delete window.FCRunState[c]; if (S.tcoSync) delete S.tcoSync[c]; window.__up0 = TCloudUp.post; TCloudUp.post = () => Promise.reject(new TypeError('Failed to fetch')); window.__lk0 = Ledgers.askTally; Ledgers.askTally = () => Promise.reject(new TypeError('Failed to fetch')); render(); }", cid(KES))
         fail({"*": "net"}); pg.wait_for_timeout(400)
         if mains(KES) == ["update"]:
             pg.click(R(KES) + " [data-tsm-update]")
             w = seen(R(KES) + " .tpt-state", r"Updating|Waiting|Asking|Not (started|updated)|Could not", 5000)
-            ok(w != "", "2. Update now, FinCom not reached: words in the row within 5 s (%s)" % w)
+            ok(w != "", "2. Update from Tally, FinCom not reached: words in the row within 5 s (%s)" % w)
             w2 = seen(R(KES) + " [data-tpt-why]", r"^Not updated", 12000)
-            ok(w2 != "", "2. Update now, FinCom not reached: 'Not updated: …' (%s)" % w2)
-        else: ok(False, "2. Kestrel: Update now expected (%s)" % mains(KES))
+            ok(w2 != "", "2. Update from Tally, FinCom not reached: 'Not updated: …' (%s)" % w2)
+        else: ok(False, "2. Kestrel: Update from Tally expected (%s)" % mains(KES))
         fail({}); E("() => { TCloudUp.post = window.__up0; Ledgers.askTally = window.__lk0; }")
-        no_rejections("2. Update now, FinCom not reached")
+        no_rejections("2. Update from Tally, FinCom not reached")
         ok(mains(NIMB) == ["masters"], "2. Nimbus: Bring masters (%s)" % mains(NIMB))
         pg.click(R(NIMB) + ' [data-tpt-main="masters"]')
         ok(seen(R(NIMB) + " .tpt-state, " + R(NIMB) + " [data-tpg-masters]", r"Updating|Waiting|Reading|Asking|Not (started|updated)", 5000) != "", "2. Bring masters: the row says it reads (%s)" % txt(R(NIMB) + " .tpt-state"))
@@ -390,7 +390,7 @@ def main():
         no_rejections("6. Connect / Link")
 
         print("== 7. Advanced (for support): Check every client, the owner's release actions")
-        pg.click("#app [data-tpt-advanced]"); pg.wait_for_timeout(800)
+        pg.click("#app [data-support-toggle]"); pg.wait_for_timeout(800)
         ok(n("#app [data-tsm-check]") == 1, "7. Advanced opens: Check every client for changes in Tally")
         fail({"tally_check_request": "net"})
         pg.click("#app [data-tsm-check]")
@@ -477,7 +477,7 @@ def main():
         ok(vn and all(v == "View only: an owner or staff of the firm makes changes." for v in vn), "9. a viewer: each row says why there is no button (%s)" % vn[:2])
         E("() => { S.account.me.role = 'owner'; render(); }"); pg.wait_for_timeout(500)
 
-        print("== 10. the top bar's Tally popover: Update now")
+        print("== 10. the top bar's Tally popover: Update from Tally")
         E("(c) => { openCompany(c); S.view = 'company'; S.tab = 'dash'; render(); }", cid(ORBIT)); pg.wait_for_timeout(1500)
         if n("header.top [data-tally-icon]"):
             pg.click("header.top [data-tally-icon]")
@@ -496,15 +496,15 @@ def main():
 
         pg.keyboard.press("Escape"); pg.wait_for_timeout(300)
         if n("header.top [data-tally-pop]"): pg.click("#app", position={"x": 5, "y": 400}); pg.wait_for_timeout(300)
-        print("== 11. Books › From Tally: Update now")
+        print("== 11. Books › From Tally: Update from Tally")
         E("() => { S.books = Object.assign({}, S.books || {}, {vouchers: [{date: '20261001', type: 'Sales', no: '1'}], meta: {}}); S.tab = 'books'; S.booksTab = 'import'; render(); }"); pg.wait_for_timeout(1500)
         if n("#app [data-up-status] ~ [data-update-now], #app .up-status [data-update-now]"):
             fail({"tally_want_update": "net"})
             pg.click("#app .up-status [data-update-now]")
             w = seen("#app [data-update-said]", r"\S", 5000)
-            ok(w != "", "11. From Tally's Update now: its result beside it (%s)" % w)
+            ok(w != "", "11. From Tally's Update from Tally: its result beside it (%s)" % w)
             fail({})
-        else: print("  note: Books › From Tally has no Update now in this scene (no linked client books here)")
+        else: print("  note: Books › From Tally has no Update from Tally in this scene (no linked client books here)")
         no_rejections("11. From Tally")
 
         ok(not errors, "no page errors (%s)" % errors[:3])

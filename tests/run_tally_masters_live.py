@@ -1,6 +1,6 @@
 """python3 run_tally_masters_live.py - next-masters-progress (the owner: "reading masters does not have progress bar.. we
 could not know whether it is working or not"). The Tally page's Masters cell shows the ledgers' read FinCom's cloud holds
-(tally_ledger_progress, read with tally_period_status's ledger) also for a read nobody pressed on this page (Update now from
+(tally_ledger_progress, read with tally_period_status's ledger) also for a read nobody pressed on this page (Update from Tally from
 another place, the nightly run, Import ledgers). Made-up firm, login, clients and companies only (the stand-in cloud of
 run_tally_simple.py). Written before the code. Checks:
   1. a company open in Tally, its read going (not done, fresh): "Reading now · Reading masters from Tally: 1,200 of 4,191
@@ -9,7 +9,7 @@ run_tally_simple.py). Written before the code. Checks:
   3. a read that ended with nothing (done at 0 of 0): "No masters from Tally · Tally gave no masters for this company — is
      the right Tally company linked?", never ✓;
   4. a company open nowhere: its progress never asked (no bridge reads it);
-  5. Update now pressed here, the read ending with nothing: the same words, never "✓ Up to date".
+  5. Update from Tally pressed here, the read ending with nothing: the same words, never "✓ Up to date".
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_tally_masters_live.py"""
 import os, re, sys, json, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -101,7 +101,7 @@ def main():
         print("== 4. a company open nowhere")
         ok(not E("() => window.__lpAsked['bk-Quill Papers'] || 0"), "4. Quill (open nowhere): its progress never asked (%s)" % E("() => window.__lpAsked"))
 
-        print("== 5. Update now pressed here, the read ending with nothing")
+        print("== 5. Update from Tally pressed here, the read ending with nothing")
         E("() => { window.__lp['bk-Pine Logistics'] = {round: 'r-p', read: 0, of: 0, done: true, now: true}; }")
         pg.click(R(PINE) + ' [data-tpt-main="update"]'); pg.wait_for_timeout(6000)
         mp, why = txt(MC(PINE)), txt(R(PINE) + " .tpt-why")

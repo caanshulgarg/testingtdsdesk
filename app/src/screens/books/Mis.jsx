@@ -72,27 +72,35 @@ function Head({ b, r, rg }) {
 // parties, the TDS rows, the days to pay, the cash flow and the cost centres, then MIS.runIn: 5,000 entries of the sales
 // and the ages a step), then the save. Only for the books it began on: when the client changes (or its books are
 // loading) it stops, and nothing is written to the other books. One at a time: a click meanwhile is ignored, and
-// MIS._again stays set until the run is done or stopped
+// MIS._again stays set until the run is done or stopped. next-fix-mis-rework: a run asked for elsewhere (MIS.runSoon)
+// and this one: the newest takes the place of the other (this stops MIS's job; MIS.tabRun stops this)
 let runN = 0;
 function runSplit(from, to, how) {
   const b = S.books;
   if (MIS._again || !b || b.loading) return;
-  MIS._again = true; FinComNav.start();
+  if (MIS.auto) MIS.autoStop(MIS.auto);
+  MIS._soon = null; MIS.failed = null;
   const n = ++runN;
-  behind("mis-run", () => [b, n, b.loading], function* () {
-    try { yield* MIS.steps(from, to, how); } finally { MIS._again = false; FinComNav.done(); }
+  // MIS._again set and cleared by the job's own steps (a job stopped or put aside is closed: lib/behind.jsx), so it
+  // never stays set; its first step taken here (inMs 1: it only sets MIS._again), so a run asked for at once after the
+  // click (MIS.runSoon) sees it and takes its place
+  behind("mis-run", () => [b, n, b.loading, MIS.tabRun], function* () {
+    MIS._again = true; FinComNav.start();
+    try { yield; yield* MIS.steps(from, to, how); } finally { MIS._again = false; FinComNav.done(); }
     // the save names its books: done even when the client changes after the run
     saveBooks(null, b).catch(() => {});
     // (a run that ends inside its first step, small books, ends before any drawing of the job: the page drawn again with it)
     setTimeout(() => { if (S.books === b) render(); }, 0);
     return true;
-  });
+  }, 1);
 }
 // next-cloud-mis: the figures from FinCom's cloud when its answer fits these books exactly (MIS.cloudGo, src/js/07: the
 // same book, version and working), else worked out here in parts (runSplit) and the cloud asked again for next time
-const misGo = (from, to, how) => FinComNav.track(MIS.cloudGo(from, to, how, () => runSplit(from, to, how)));
+// (worked out here only when no run was asked for elsewhere since the click, k, while the page was drawn or the cloud's
+// answer awaited: MIS.asked)
+const misGo = (from, to, how, k = MIS.asked) => FinComNav.track(MIS.cloudGo(from, to, how, () => { if (MIS.asked === k) runSplit(from, to, how); }));
 // Run now: the period chosen, else doAct says what is wrong with it
-const runNow = (rg) => FinComNav.go(() => rg.from && rg.to && rg.from <= rg.to ? misGo(rg.from, rg.to, "run now") : doAct("misRun"));
+const runNow = (rg) => { const k = MIS.asked; FinComNav.go(() => rg.from && rg.to && rg.from <= rg.to ? misGo(rg.from, rg.to, "run now", k) : doAct("misRun")); };
 // where the figures were worked out, in plain words: the cloud's time (with its day when not today), or here
 const hhmm = (at) => { const t = fmtTime(at).replace(/ IST$/, ""), day = fmtDateTime(at).split(" ")[0]; return t + (day !== fmtDateTime(new Date().toISOString()).split(" ")[0] ? " on " + day : ""); };
 const Where = ({ r }) => <span data-mis-where={r.cloud ? "cloud" : "here"}>{r.cloud ? "Worked out in FinCom’s cloud at " + hhmm(r.cloud.at) : "Worked out here"}</span>;
@@ -387,7 +395,7 @@ function Compliance({ r }) {
 }
 
 export default function Mis({ b }) {
-  // Tally changed since the last run: the tab says so while it is worked out again (TallyRead.catchUp, src/js/18)
+  // Tally changed since the last run: the tab says so while it is worked out again (lib/catchSoon.js)
   // the period: the one chosen (kept for the client), else this financial year to date (smart moves round 1)
   if (!S.misRange) { const k = Smart.recall("mis"); S.misRange = k && k.from && k.to ? k : ((x) => ({ from: Audit.iso(x.from), to: Audit.iso(x.to) }))(misRangeQuick("ytd", b)); }
   const rg = S.misRange, tab = S.misTab || "summary";
@@ -400,9 +408,14 @@ export default function Mis({ b }) {
   const r0 = (b.mis || {}).last;
   // the last run's figures stay on the page, marked, until the new ones replace them; none yet: the words where they go
   if (catchUp && !r0) return <>{tabs}<Head b={b} r={null} rg={rg} /><div data-working=""><CatchUp text={catchUp} /></div></>;
-  const busy = catchUp ? <div data-updating=""><CatchUp text={catchUp} /></div> : null, stale = !catchUp && MIS.stale(b);
-  // a saved run from other books or older working: worked out again now, its figures not shown meanwhile
-  if (stale && !MIS._again) misGo(r0.from, r0.to, "worked out again (the books or FinCom changed since " + fmtDate(r0.at.slice(0, 10)) + ")");
+  // a run asked for elsewhere (MIS.runSoon: an MSME type, Reports, the cloud copy's entries) being worked out behind the
+  // page, or its file loading (MIS._soon); one that failed: what went wrong, and Run now (MIS.failed)
+  const pend = !!MIS.autoFor(b) || !!(MIS._soon && MIS._soon.b === b), fl = MIS.failed && MIS.failed.b === b ? MIS.failed.t : "";
+  const busy = catchUp ? <div data-updating=""><CatchUp text={catchUp} /></div> : pend ? <div data-updating="" data-mis-auto=""><CatchUp text="Working out the MIS…" /></div>
+    : fl ? <div className="bk-warn" data-mis-failed="" role="status">{fl} <button className="btn small" onClick={() => runNow(rg)}>Run now</button></div> : null, stale = !catchUp && MIS.stale(b);
+  // a saved run from other books or older working: worked out again now, its figures not shown meanwhile (not while a
+  // run asked for is worked out: its period is the one wanted, next-fix-mis-rework)
+  if (stale && !MIS._again && !pend) misGo(r0.from, r0.to, "worked out again (the books or FinCom changed since " + fmtDate(r0.at.slice(0, 10)) + ")");
   if (stale && MIS.stale(b)) return <>{tabs}<Head b={b} r={null} rg={rg} /><div className="bk-none" data-mis-again="" style={{ marginTop: 12 }}>{"Working out again: the books or FinCom’s working changed since the run of " + fmtDate(r0.at.slice(0, 10)) + " (result code " + r0.code + ")."}</div></>;
   const r = (b.mis || {}).last;
   // the books in FinCom end before the period starts: one line, not an empty page (nor an older run's figures)

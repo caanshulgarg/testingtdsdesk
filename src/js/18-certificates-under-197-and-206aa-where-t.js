@@ -380,20 +380,8 @@ const TallyRead = {
     const fresh = d.filter(x => !seen.has(x.ym + "|" + x.gstin + "|" + x.n));
     if (fresh.length) toast(GSTAmend.driftLine(fresh[0]) + (fresh.length > 1 ? " " + (fresh.length - 1) + " more filed return" + (fresh.length > 2 ? "s" : "") + " changed: see GST → Amendments." : ""));
   },
-  // an out-of-date audit or MIS, worked out again once its tab is on the screen (the page is drawn first)
-  catchUp(b, k){
-    const st = b.stale || {};
-    if (!st[k] || this._catching) return "";
-    this._catching = true;
-    setTimeout(() => {
-      try {
-        if (k === "audit" && Audit.cfg(b).freq !== "off"){ const L = (b.audit || {}).last, r = st.range || (L && L.from ? L : Audit.defaultRange(b)); Audit.run(r.from, r.to, st.audit); }
-        if (k === "mis"){ const H = ((b.mis || {}).history || [])[0], r = H && H.from ? H : MIS.autoRange(b); if (r && r.from) MIS.run(r.from, r.to, st.mis); }
-      } catch (e){}
-      delete st[k]; this._catching = false; saveBooks(); render();
-    }, 60);
-    return '<p class="bk-warn" role="status">Tally has changed since this was worked out; working it out again\u2026</p>';
-  },
+  // (catchUp, the tabs' working again at once, called by nothing since app/src/lib/catchSoon.js: taken out with
+  // next-fix-mis-rework for legacy.js's budget)
   soon(k, b, fn){
     const t = this._soon = this._soon || {}, x = t[k] = t[k] || {at: 0}, wait = 180000 - (Date.now() - x.at);
     const go = () => { x.at = Date.now(); x.timer = 0; if (S.books !== b) return; try { fn(); } catch (e){} };
@@ -534,7 +522,7 @@ function setupKeepFor(co){
   }
   return ks;
 }
-// the time of the bridge's daily update from Tally (build 188: Tally is read once a day, or on Update now)
+// the time of the bridge's daily update from Tally (build 188: Tally is read once a day, or on Update from Tally)
 function keepAtSet(v){ if (/^\d{2}:\d{2}$/.test(v)) LK.keepSet({dailyAt: v}, "Tally will be updated every day at " + v + "."); }
 // the Tally ledgers and Audit tabs: React (app/src/screens/books/Ledgers.jsx, Audit.jsx)
 function gstParts(b){
