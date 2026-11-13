@@ -949,11 +949,15 @@ const Engine = {
   // a job the worker does not answer in time (JOB_MS, and 0.5 ms an entry; after one has been answered, 3 times the
   // longest of its kind, never less than JOB_MS) ends the worker: the run is worked out here in steps (review of part 1)
   JOB_MS: 20000, JOB_PER: 0.5, took: {},
+  // a figure a page waits for (GSTR-3B: GSTR.workReady) only on books larger than this: smaller ones are worked out at
+  // once in well under 100 ms (GST 3B cold: about 60 ms at 5,000 made-up entries), with no "Working out" line, as before
+  SMALL: 5000,
   WAIT: {engine: "wait"},
   st: "", why: "", w: null, nid: 0, ver: 0, sent: null, jobs: new Map(), wakers: new Set(), base: null,
   // the page's engine as loaded (taken once legacy.js has run; the MIS screen's own when it loads: 18-mis-pack.js). The
   // job's own functions (auto*, maybeRun, runSoon) run here only, so they are not compared
-  OBJ: () => [["MIS", MIS], ["Audit", Audit], ["checks", Audit.checks], ["checkSteps", Audit.checkSteps], ["Parties", Parties]],
+  // GSTR (the GST engine, which the MIS reads too): taken once the React app's GST wraps are on it (app/src/main.jsx)
+  OBJ: () => [["MIS", MIS], ["Audit", Audit], ["checks", Audit.checks], ["checkSteps", Audit.checkSteps], ["Parties", Parties], ["GSTR", GSTR]],
   PAGE: /^(auto[A-Z]|maybeRun$|runSoon$|wantSay$)/,
   // (more: a screen's own functions put on MIS or Audit (name) when its file loads: 18-mis-pack.js's, 77-audit.js's)
   keep(more, name){
@@ -968,7 +972,7 @@ const Engine = {
       return Object.keys(o).every(k => typeof o[k] !== "function" || m.has(k) || this.PAGE.test(k)); });
   },
   src(){ const s = typeof document === "object" && document.querySelector('script[src*="legacy.js"]'); return s ? s.src : ""; },
-  can(A){ return this.st !== "off" && typeof Worker === "function" && !/^__/.test(this.URL) && !!this.src() && (A === Audit || A === MIS) && this.pure(); },
+  can(A){ return this.st !== "off" && typeof Worker === "function" && !/^__/.test(this.URL) && !!this.src() && (A === Audit || A === MIS || A === GSTR) && this.pure(); },
   off(why){
     this.st = "off"; this.why = String(why || ""); this.gSent = undefined;
     try { if (this.w) this.w.terminate(); } catch (e){}
@@ -1025,8 +1029,13 @@ const Engine = {
     return {s, ls, g};
   },
   // the books to the worker, a part a step; false (work it out here): the worker went, or anything could not be sent
-  *sendIn(b){ try { return yield* this.sendParts(b); } catch (e){ this.sent = null; if (!this.w && this.st === "ok") this.st = ""; return false; } },
-  *sendParts(b){
+  // (one send at a time: a run asked for meanwhile waits for it, so the worker's books are always one version, whole)
+  *sendIn(b){
+    while (this.sending) yield this.WAIT;
+    this.sending = true;
+    try { return yield* this.sendNow(b); } catch (e){ this.sent = null; if (!this.w && this.st === "ok") this.st = ""; return false; } finally { this.sending = false; this.wake(); }
+  },
+  *sendNow(b){
     // (the books of another client or person than the worker holds: it is cleared first, review of part 1)
     const own = this.ownerNow(b);
     if (this.owner && this.owner !== own) this.clear("another client or person");
@@ -1066,7 +1075,7 @@ const Engine = {
     return {st: au.st, last: L ? {at: L.at, from: L.from, to: L.to, vouchers: L.vouchers, basis: L.basis, findings: (L.findings || []).map(f => ({id: f.id, sev: f.sev})), solved: (L.solved || []).map(x => ({id: x.id, n: x.n}))} : L};
   },
   ask(kind, from, to, how, prog){
-    const a = {id: ++this.nid, kind, prog, res: null, full: null, end: false, err: "", t0: Date.now()};
+    const a = {id: ++this.nid, kind, prog, res: null, full: null, all: {}, end: false, err: "", t0: Date.now()};
     this.jobs.set(a.id, a);
     const n = ((S.books || {}).vouchers || []).length, ms = Math.max(this.JOB_MS + n * this.JOB_PER, 3 * (this.took[kind] || 0), this.JOB_MS);
     a.timer = setTimeout(() => { if (this.jobs.get(a.id) === a && !a.end) this.off("a job of the worker took too long (" + kind + ", " + Math.round(ms / 1000) + " s)"); }, ms);
@@ -1077,6 +1086,36 @@ const Engine = {
   peek(){ return new Promise(ok => { if (!this.w || this.st !== "ok"){ ok(null); return; } const f = e => { if ((e.data || {}).t === "state"){ this.w && this.w.removeEventListener("message", f); ok(e.data.r); } }; this.w.addEventListener("message", f); this.post({t: "state"}); }); },
   // (answered: how long it took, for the next one's time)
   done(a){ clearTimeout(a.timer); this.took[a.kind] = Math.max(this.took[a.kind] || 0, Date.now() - a.t0); },
+  // GSTR-3B's figures for a month (GSTR.workReady, src/js/12): the carry and the month's checks; done(answer, or null
+  // when the worker could not), not called when a newer ask took its place (GSTR._work). Stepped in idle time as a run
+  // on its own is, its own small job
+  gst(at, ym, reg, done){
+    const E = this;
+    let a = null;
+    const it = (function* (){
+      try {
+        if (!(yield* E.ready()) || !(yield* E.sendIn(at.b))) return null;
+        a = E.ask("gst", ym, ym, reg, null);
+        while (!a.end && !a.err && E.st === "ok") yield E.WAIT;
+        return a.end ? a.res : null;
+      } finally { if (a){ if (a.end) E.jobs.delete(a.id); else E.cancel(a); } }
+    })();
+    const step = () => {
+      if (GSTR._work !== at){ try { it.return(); } catch (e){} return; }
+      const t0 = Date.now(); let r;
+      try {
+        for (;;){
+          r = it.next();
+          if (r.done) break;
+          // (woken by the worker's word: the next step in a task of its own, not in the word's)
+          if (r.value === E.WAIT){ E.sleep(() => setTimeout(step, 0)); return; }
+          if (Date.now() - t0 >= 10){ setTimeout(step, 0); return; }
+        }
+      } catch (e){ r = {value: null}; }
+      done(r.value || null);
+    };
+    setTimeout(step, 0);
+  },
   cancel(a){ clearTimeout(a.timer); this.jobs.delete(a.id); if (this.w && this.st === "ok") try { this.post({t: "cancel", id: a.id}); } catch (e){} },
   // the page's job sleeps until the worker's next word, or NAP_MS (it looks at the books again then)
   sleep(go){
@@ -1097,6 +1136,9 @@ const Engine = {
       else if (m.t === "err"){ clearTimeout(a.timer); a.err = m.e || "the engine's worker failed"; }
       else if (m.t === "dropped"){ clearTimeout(a.timer); a.dropped = true; }
       else if (m.t === "mis"){ a.res = m.r; a.end = true; this.done(a); }
+      // (GSTR-3B's figures in three words: the month's 3B, its checks across the year, the rest)
+      else if (m.t === "gpart"){ a.all[m.k] = m.v; }
+      else if (m.t === "gst"){ a.res = Object.assign(m.r, a.all); a.end = true; this.done(a); }
       else if (m.t === "audit"){ a.res = m.c; a.full = m.n.map(() => []); }
       else if (m.t === "rows"){ const f = a.full[m.i]; for (let i = 0; i < m.rows.length; i++) f.push(m.rows[i]); }
       else if (m.t === "end" && a.res){

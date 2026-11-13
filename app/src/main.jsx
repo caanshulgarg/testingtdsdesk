@@ -34,7 +34,10 @@ import "./lib/itcSync.js";
 import "./lib/itcFinal.js";
 // next-gstr1-excel: FinCom's GSTR-1 corrections (an Excel brought back) laid over GSTR.toJson and 3B's 3.1 (wraps them).
 // Its own file (the first file is at its size budget), fetched at once; the GST screen imports it too
-import("./lib/gstr1Fix.js").then(() => { try { if (typeof S === "object" && S.books && S.books.r1Fix) render(); } catch (e) { /* drawn later */ } }).catch((e) => staleReload(e, true));
+// (next-speed-worker: the GST engine as the page has it with both wraps on, so a function of it replaced later keeps the
+// engine's work on the page: src/js/06-audit.js Engine.pure)
+import("./lib/gstr1Fix.js").then(() => { try { if (typeof Engine === "object" && typeof GSTR === "object") Engine.keep(GSTR, "GSTR"); } catch (e) { /* the worker is not used */ }
+  try { if (typeof S === "object" && S.books && S.books.r1Fix) render(); } catch (e) { /* drawn later */ } }).catch((e) => staleReload(e, true));
 // next-24q-ready: the payroll read for the 24Q pages and TCloud.load (PayLoad, src/lib/payLoad.js)
 import "./lib/payLoad.js";
 // Post automatically: who approved and how, the run, the bell (lib/autopostBoot.js; the rules load when needed)

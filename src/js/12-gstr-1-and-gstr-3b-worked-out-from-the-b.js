@@ -269,8 +269,9 @@ Object.assign(GSTR, {
     return j;
   },
   // GSTR-3B in the shape the portal takes
-  threeBJson(ym, reg){
-    const t = this.threeB(ym, reg);
+  // (t: the month's 3B when the caller has it: the GSTR-3B page's drawing, next-speed-worker)
+  threeBJson(ym, reg, t0){
+    const t = t0 || this.threeB(ym, reg);
     const gstin = (GSTR.gstins(S.books) || []).find(x => !reg || x.slice(0, 2) === reg) || "";
     const sup = (txval, iamt, camt, samt, csamt) => ({txval: r2(txval), iamt: r2(iamt), camt: r2(camt), samt: r2(samt), csamt: r2(csamt)});
     const out = {gstin, ret_period: ym.slice(4, 6) + ym.slice(0, 4),
@@ -356,3 +357,56 @@ Object.assign(GSTR, {
   }
 });
 
+// next-speed-worker (the owner's speed work: screens never freeze). GSTR-3B opened cold was one drawing of 0.9-1.4 s on
+// 100,000 made-up entries: the credit carried in, worked out from the books' first month (creditIn, its months kept in
+// GSTR._carry), and the month's checks (checksKept, kept in keptState). Opened with those not kept, they are worked out
+// in the engine's worker (Engine, src/js/06-audit.js; app/engine/worker.js), a month a step, while the page says so
+// (workReady), and put into those same two places: the carry with the key the worker's creditIn made (the page's
+// creditIn compares it with its own at every ask and works the months out again when anything differs: as for its own
+// carry, and every reset of it stays as it is), the checks with the page's own stamps, only if nothing they are worked
+// out from changed meanwhile. No worker, or the engine changed on the page (Engine.can): worked out here at once, as
+// before. tests/run_speed_worker.py
+Object.assign(GSTR, {
+  aiKey(reg){ return typeof M2B === "object" && M2B.aiSig ? M2B.aiSig(reg || "") : ""; },
+  // GSTR-3B's drawing (Gstr3b): the month's 3B the worker worked out with them, while nothing it is worked out from has
+  // changed (the same books, entries, save, GST's kept state, the carry put in, the year's 2B matching run); else here
+  threeBShown(ym, reg){
+    const p = this._work, w = p && p.t ? this.keptState() : null;
+    if (w && !p.fail && p.b === S.books && p.V === S.books.vouchers && p.rev === BOOKS_REV && p.all === w.all && p.g === w.g && p.ym === ym && p.reg === (reg || "") && p.ai === this.aiKey(reg) && this._carry === p.carry) return p.t;
+    return this.threeB(ym, reg);
+  },
+  workKeys(ym, reg){ reg = reg || ""; return {irn: "irn|" + reg, chk: "chk|" + ym + "|" + reg, join: "join|" + ym + "|" + reg}; },
+  workKept(w, ym, reg){
+    const K = this.workKeys(ym, reg), v = w.v, st = w.ms[ym] ? w.ms[ym].st : 0, all = k => v[k] && v[k].all === w.all, c = this._carry;
+    return !!c && c.v === S.books.vouchers && !!c.m[ym] && String(c.key || "").split("|")[0] === (reg || "") && all(K.irn) && all(K.join) && !!v[K.chk] && v[K.chk].g === w.g && v[K.chk].st === st && v[K.chk].x === v[K.irn].r;
+  },
+  // in a drawing: true when the page may work them out now (kept, no worker, or the worker could not: at once as before);
+  // false while the worker works them out (asked once for the books as they are now)
+  workReady(ym, reg){
+    const w = this.keptState();
+    if (!w || !/^\d{6}$/.test(String(ym)) || typeof Engine !== "object" || (S.books.vouchers || []).length <= Engine.SMALL || !Engine.can(GSTR) || this.workKept(w, ym, reg)) return true;
+    const at = {b: S.books, V: S.books.vouchers, rev: BOOKS_REV, all: w.all, g: w.g, st: w.ms[ym] ? w.ms[ym].st : 0, ym, reg: reg || "", ai: this.aiKey(reg)}, p = this._work;
+    if (p && p.b === at.b && p.V === at.V && p.rev === at.rev && p.all === at.all && p.ym === ym && p.reg === at.reg && p.ai === at.ai) return !!p.fail;
+    this._work = at;
+    Engine.gst(at, ym, reg || "", r => this.workTake(at, r));
+    return false;
+  },
+  workTake(at, r){
+    if (this._work !== at) return;
+    let ok = false;
+    if (r) memoScope(() => {
+      const w = this.keptState(), b = S.books;
+      if (!w || b !== at.b || b.vouchers !== at.V || BOOKS_REV !== at.rev || w.all !== at.all || w.g !== at.g || (w.ms[at.ym] ? w.ms[at.ym].st : 0) !== at.st || this.aiKey(at.reg) !== at.ai) return;
+      const K = this.workKeys(at.ym, at.reg), m0 = this.months()[0];
+      // (asked once first for the books' first month, which carries nothing in: the React app's wrap of creditIn,
+      // app/src/lib/gstr1Fix.js, drops the carry at its first ask; then the worker's put in its place)
+      if (m0) this.creditIn(m0, at.reg);
+      this._carry = at.carry = {key: r.carry.key, v: b.vouchers, m: r.carry.m}; at.t = r.t;
+      w.v[K.irn] = {all: w.all, r: r.irn}; w.v[K.join] = {all: w.all, r: r.join}; w.v[K.chk] = {g: w.g, st: at.st, x: r.irn, r: r.chk};
+      ok = true;
+    });
+    // (not kept: worked out here at once at the next drawing, so the page is never left waiting)
+    if (!ok) at.fail = true;
+    if (typeof soonRender === "function") soonRender();
+  }
+});
