@@ -2129,6 +2129,8 @@ function coSetText(path, v){
 // a client's setting chosen or finished (ticked, picked, or a box left): checked, saved, and the page drawn again
 function coCommit(path, v){
   const co = CO(); if (!co) return;
+  // the voucher type chosen in Client setup is the client's: a "Post as" chosen on a purchase sheet over the old one goes
+  if (path === "voucherType") delete co.postAs;
   if (v !== undefined) setPath(co, path, /^(gstin|pan|tan|tds26q\.(personPan|gstin))$/.test(path) ? String(v).toUpperCase().trim() : v);
   if (path === "gstin"){
     const g = String(co.gstin || "").toUpperCase().trim();

@@ -234,9 +234,11 @@ function Company() {
 // review item 36: bills for services post as a Journal or as a Purchase voucher, as the client books them in Tally; a
 // client with its own voucher type (say "Purchase - Services", made under Purchase in Tally) types its name
 function VoucherType({ co }) {
-  const vt = co.voucherType || "Journal", known = vt === "Journal" || vt === "Purchase";
+  // what bills really post as (billVt, src/js/03: the client's type, or the "Post as" a purchase sheet chose over it);
+  // any choice made here is the client's, and that "Post as" goes (coCommit)
+  const vt = billVt(co), known = vt === "Journal" || vt === "Purchase";
   const [other, setOther] = useState(!known);
-  const pick = (v) => { setOther(v === null); if (v) coCommit("voucherType", v); };
+  const pick = (v) => { setOther(v === null); coCommit("voucherType", v || co.voucherType || "Journal"); };
   return <fieldset className="f wide vtype" style={{ border: 0, padding: 0, margin: "0 0 12px" }}>
     <legend style={{ fontWeight: 600, marginBottom: 6 }}>Post purchase bills (goods and services) as</legend>
     <label className="chk"><input type="radio" name="vtype" checked={!other && vt === "Journal"} onChange={() => pick("Journal")} /> Journal voucher</label>

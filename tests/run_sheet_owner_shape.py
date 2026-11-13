@@ -354,7 +354,7 @@ with sync_playwright() as p:
     for q in qids(): answer(q[0], "create")
     if pg.locator("#app [data-sheet-add]:not([disabled])").count(): pg.click("#app [data-sheet-add]"); W(900)
     oth = E("Object.values(D().entries).filter(e => /^DP\\/(5|6|7)0/.test(e.x.invoiceNo) && !e.noteKind && e.status !== 'duplicate').map(e => [e.x.invoiceNo, vchTypeOf(e, CO())]).sort()")
-    ok(oth == [["DP/501", "Journal"], ["DP/601", "Journal"], ["DP/701", "Journal"]], "the client's other bills waiting follow the same setting: bills and sheets agree (%s)" % oth)
+    ok(oth == [["DP/501", "Purchase"], ["DP/601", "Purchase"], ["DP/701", "Journal"]], "the client's other bill still waiting follows the same setting (bills and sheets agree); the two approved while it was Purchase keep Purchase (%s)" % oth)
     APPROVE = """(no) => { const co = CO(), e = Object.values(D().entries).find(e => e.x.invoiceNo === no); e.natureId = "none"; if (e.status === "draft") approve(e);
       (e.snapshot.lines || []).forEach(l => { const ck = l.ck || (/^Client setup/.test(l.why || "") ? (l.role === "gst" && l.head ? "gst:" + l.head.toLowerCase() : "") : ""); if (ck && l.ledger) choiceConfirm(co, ck, l.ledger); });
       const x = voucherXml(e, co), amts = [...x.matchAll(/<ALLLEDGERENTRIES\.LIST>\s*<LEDGERNAME>([^<]*)<\/LEDGERNAME>\s*<ISDEEMEDPOSITIVE>(\w+)<\/ISDEEMEDPOSITIVE>[\s\S]*?<AMOUNT>(-?[\d.]+)<\/AMOUNT>/g)].map(m => [m[1], m[2], Number(m[3])]);
@@ -511,6 +511,27 @@ with sync_playwright() as p:
     ok(a == ["Purchase", "Purchase GST", "Debit Note"] and b == ["Journal", "Journal", "Purchase GST", "Journal"] and c == ["Purchase", "Purchase GST", "Purchase GST", "Purchase GST", None],
        "a client whose own type is “Purchase GST”: Purchase posts as it; Journal chosen leaves the name alone; Purchase chosen back posts as it again (%s %s %s)" % (a, b, c))
     E("() => { SheetImport.close(); CO().voucherType = 'Journal'; delete CO().postAs; }"); W(200)
+
+    print("13. Client setup undoes the panel's Post as; an approved bill keeps the type it was approved with")
+    E("() => { const co = CO(); co.voucherType = 'Journal'; delete co.postAs; SheetPost.setPostAs('Purchase'); }"); W(200)
+    a = [E("CO().voucherType"), E("billVt(CO())")]
+    E("() => goTab('cotally')"); W(700)
+    radios = lambda: E("[...document.querySelectorAll('#app input[name=vtype]')].map(r => r.checked)")
+    txt = pg.inner_text("#app .vtype") if pg.locator("#app .vtype").count() else ""
+    ok(a == ["Journal", "Purchase"] and radios() == [False, True, False] and "“Purchase” vouchers" in txt, "Client setup shows what bills really post as: Purchase, chosen on a sheet over the client's Journal (%s %s)" % (a, radios()))
+    if pg.locator("#app input[name=vtype]").count(): pg.locator("#app input[name=vtype]").nth(0).check(); W(400)
+    b = [E("CO().voucherType"), E("billVt(CO())"), E("CO().postAs || null")]
+    ok(b == ["Journal", "Journal", None] and radios() == [True, False, False], "Journal chosen in Client setup: bills post as Journal again; the sheet's choice is gone (%s)" % b)
+    E("() => { const co = CO(); co.voucherType = 'Purchase GST'; delete co.postAs; SheetPost.setPostAs('Journal'); coCommit('voucherType', 'Purchase GST'); }"); W(200)
+    ok(E("billVt(CO())") == "Purchase GST" and E("CO().postAs || null") is None, "and the client's own name typed there again undoes a sheet's Journal (%s)" % E("billVt(CO())"))
+    # an approved bill keeps its type: QP/1 approved under Journal, then the client's type changed
+    st = E("""() => { const co = CO(); co.voucherType = "Journal"; delete co.postAs; const e = Object.values(D().entries).find(e => e.x.invoiceNo === "QP/1" && e.status === "draft"); if (!e) return null;
+      e.natureId = "none"; approve(e); const a = [e.status, vchTypeOf(e, co), (voucherXml(e, co).match(/VCHTYPE="([^"]*)"/) || [])[1]];
+      coCommit("voucherType", "Purchase"); const b = [vchTypeOf(e, co), (voucherXml(e, co).match(/VCHTYPE="([^"]*)"/) || [])[1]];
+      const d = Object.values(D().entries).find(x => x.x.invoiceNo === "DP/801" && x.status === "draft") || Object.values(D().entries).find(x => x.status === "draft" && !x.noteKind && !x.hold);
+      const c = d ? vchTypeOf(d, co) : "no draft"; e.status = "draft"; const back = vchTypeOf(e, co); coCommit("voucherType", "Journal"); return [a, b, c, back]; }""")
+    ok(st and st[0] == ["approved", "Journal", "Journal"] and st[1] == ["Journal", "Journal"] and st[2] == "Purchase" and st[3] == "Purchase",
+       "a bill approved as Journal still posts as Journal after the client's type is changed to Purchase; a bill waiting, and that bill sent back to To review, take Purchase (%s)" % st)
     ok(not errors, "no page errors " + str(errors[:2]))
     br.close()
 srv.shutdown()
