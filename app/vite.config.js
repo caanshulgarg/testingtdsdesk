@@ -59,7 +59,9 @@ function engine() {
     // the page's alone, not in the worker: the GSTR-1 file's upload part (never fetched there), and the MIS screen's pack
     // and Excel (put on globalThis by the MIS screen's own file; left out here, so only that file has them)
     plugins: [{ name: "engine-page-only", setup(b) {
-      b.onResolve({ filter: /gzUpload\.js$/ }, () => ({ path: "./gzUpload.js", external: true }));
+      // (an empty module in its place: no import() left in the worker, a classic script)
+      b.onResolve({ filter: /gzUpload\.js$/ }, () => ({ path: "gzUpload", namespace: "engine-none" }));
+      b.onLoad({ filter: /.*/, namespace: "engine-none" }, () => ({ contents: "export {};", loader: "js" }));
       b.onLoad({ filter: /18-mis-pack\.js$/ }, (a) => {
         const src = fs.readFileSync(a.path, "utf8"), out = src.replace(/^if \(typeof (misPackHtml|misExcel) !== "undefined"\) globalThis\.\1 = \1;$/gm, "");
         if (src.length - out.length < 40) throw new Error("18-mis-pack.js: its globalThis.misPackHtml / misExcel lines not found for the engine's worker");
