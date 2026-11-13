@@ -6,7 +6,9 @@ post_ok, the bridge's read-only question before it sends each part of a posting 
   2. stopped (stop_reason, migration 174): post false, stop "stopped", the reason as the words;
   3. cancelled; done / failed (nothing being checked): settled; not there (or another key's): gone;
   4. taken by another bridge, or queued for another bridge of this computer: notYours;
-  5. done and being checked (checking), and waiting (put back for this same bridge): post true;
+  5. done and being checked (checking): post false, stop "checking" (review L2: an owner may release or post it
+     again), unless handed back to send some entries again (resend_only): post true; waiting (put back for this same
+     bridge): post true;
   6. not the main bridge any more (another of the same Windows user chosen): notMain;
   7. a cloud without 174 (no stop_reason): read without it, as before;
   8. posts_update with offlineSends: kept in the timing; without it the timing as before.
@@ -73,8 +75,11 @@ try:
         ok(c == 200 and r.get("post") is False and r.get("stop") == "notYours", "%s: notYours (%s)" % (jid, r))
     print("== 5. being checked; put back for this bridge")
     F.T["tally_post_jobs"].append(job("p51", "done", checking=True))
+    c, r = ask("p51")
+    ok(c == 200 and r.get("post") is False and r.get("stop") == "checking", "p51 held for checking: stop (%s)" % r)
+    F.T["tally_post_jobs"].append(job("p53", "done", checking=True, resend_only=["K1"]))
     F.T["tally_post_jobs"].append(job("p52", "waiting", attempts=1, taken_at="2026-11-13T09:00:00Z"))
-    for jid in ("p51", "p52"):
+    for jid in ("p53", "p52"):
         c, r = ask(jid)
         ok(c == 200 and r.get("post") is True, "%s: post true (%s)" % (jid, r))
     print("== 6. not the main bridge any more")

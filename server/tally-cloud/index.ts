@@ -78,7 +78,7 @@
 //   {kind:"posts_take"}                              -> {job: {id, company, payload} | null}: the next posting queued in
 //                                                       FinCom for this computer (build 199); the beat says how many wait
 //   {kind:"post_ok", id}                             -> {post: true} | {post: false, stop: notMain|gone|cancelled|stopped|
-//                                                       settled|notYours, error}: asked before each part of a posting is
+//                                                       settled|checking|notYours, error}: asked before each part of a posting is
 //                                                       sent (bridge 2.5.15; read only)
 //   {kind:"posts_update", id, status, done, message, results, checking} -> how a posting taken by this computer is going
 //    FinCom Bridge 2.1.8 (round 15, migration 43: posting by Tally's reply): a result may also carry byReply, vchId, batchEnd,
@@ -4795,15 +4795,18 @@ Deno.serve(sentry.wrap(async (req) => {
         if (!mayPost(dev, meO, (meOB.entry as any).user)) return no("notMain", "Another bridge of the same Windows user is the main bridge on this computer now (chosen in FinCom); this one does not post.");
         if (await changesOnly(dev, meO)) return no("notMain", CHANGES_ONLY);
         const id = String(body.id || "").slice(0, 64);
-        let q: any = await db.from("tally_post_jobs").select("status, checking, stop_reason, taken_by, target_bridge").eq("id", id).eq("device_id", dev.id).maybeSingle();
-        // a cloud without 174 (stop_reason) or 54 (target_bridge): read without them
-        if (q.error && /stop_reason|taken_by|target_bridge/.test(String(q.error.message || ""))) q = await db.from("tally_post_jobs").select("status, checking").eq("id", id).eq("device_id", dev.id).maybeSingle();
+        let q: any = await db.from("tally_post_jobs").select("status, checking, stop_reason, taken_by, target_bridge, resend_only").eq("id", id).eq("device_id", dev.id).maybeSingle();
+        // a cloud without 174 (stop_reason) or 54 (target_bridge, resend_only): read without them
+        if (q.error && /stop_reason|taken_by|target_bridge|resend_only/.test(String(q.error.message || ""))) q = await db.from("tally_post_jobs").select("status, checking").eq("id", id).eq("device_id", dev.id).maybeSingle();
         if (q.error) return reply(500, { ok: false, error: String(q.error.message || "").slice(0, 200) });
         const j = q.data;
         if (!j) return no("gone", "This posting is no longer in FinCom.");
         if (j.status === "cancelled") return no("cancelled", "This posting was cancelled in FinCom.");
         if (j.stop_reason) return no("stopped", String(j.stop_reason).slice(0, 400));
         if (["done", "failed"].includes(j.status) && !j.checking) return no("settled", "This posting is settled in FinCom (" + j.status + ").");
+        // (review L2) held for checking (done, checking): an owner may release or post it again meanwhile: nothing more is
+        // sent, unless it was handed back to send some entries again (resend_only)
+        if (j.status === "done" && j.checking && !(Array.isArray(j.resend_only) && j.resend_only.length)) return no("checking", "This posting is held for checking in FinCom; nothing more is sent until an owner settles it.");
         if ((j.target_bridge && j.target_bridge !== meO) || (j.taken_by && /^go-/.test(String(j.taken_by)) && j.taken_by !== meO)) return no("notYours", "This posting was taken by another FinCom Bridge; only that bridge may post it.");
         return reply(200, { ok: true, post: true });
       }
