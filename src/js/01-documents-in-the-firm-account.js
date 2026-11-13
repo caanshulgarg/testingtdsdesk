@@ -470,13 +470,14 @@ function toastHide(){
 function toastWire(t){
   if (t._wired) return; t._wired = true;
   t.addEventListener("mouseenter", () => clearTimeout(toastTimer));
-  t.addEventListener("mouseleave", () => { if (!t.classList.contains("hidden") && t.dataset.tone !== "stop") { clearTimeout(toastTimer); toastTimer = setTimeout(toastHide, 2000); } });
+  t.addEventListener("mouseleave", () => { if (!t.classList.contains("hidden") && !t.dataset.sticky) { clearTimeout(toastTimer); toastTimer = setTimeout(toastHide, 2000); } });
   t.addEventListener("click", toastHide);
+  document.addEventListener("keydown", ev => { if (ev.key === "Escape" && t.dataset.sticky && !t.classList.contains("hidden")) toastHide(); });
   let y0 = null;
   t.addEventListener("pointerdown", ev => { y0 = ev.clientY; clearTimeout(toastTimer); });
   // tds-layout: the message sits in a corner now, not centred, so a swipe moves it down only
   t.addEventListener("pointermove", ev => { if (y0 == null) return; const d = Math.max(0, ev.clientY - y0); t.style.transform = "translateY(" + d + "px)"; t.style.opacity = String(Math.max(.3, 1 - d / 80)); });
-  const end = ev => { if (y0 == null) return; const d = ev.clientY - y0; y0 = null; t.style.opacity = ""; if (d > 40) toastHide(); else { t.style.transform = ""; if (t.dataset.tone !== "stop") toastTimer = setTimeout(toastHide, 2000); } };
+  const end = ev => { if (y0 == null) return; const d = ev.clientY - y0; y0 = null; t.style.opacity = ""; if (d > 40) toastHide(); else { t.style.transform = ""; if (!t.dataset.sticky) toastTimer = setTimeout(toastHide, 2000); } };
   t.addEventListener("pointerup", end); t.addEventListener("pointercancel", end);
 }
 // Messages in plain words (owner's spec K4, 04-Oct-2026): what happened, why, what to do. The common raw words of the
@@ -545,6 +546,13 @@ function toast(msg, o){
   // the next step's from the app's table (toastNext, app/src/lib/toastNext.js, its own file)
   const acts = ((o && o.actions) || (window.toastNext ? toastNext(s) : [])).filter(a => a && a.label && typeof a.run === "function");
   const gone = acts.map(a => a.gone).filter(f => typeof f === "function"); toastGone = gone.length ? gone : null;
+  // only a real failure stays until closed (the review of next-ux-wins): one FinCom put in plain words from the system's
+  // own (plain), one that begins with the failure ("Could not…", "Failed…"), or one the caller says (o.sticky); never by
+  // a word somewhere in it ("No error found"), and not one the caller says fades (o.sticky false: "Could not copy; type …").
+  // It always has Close, and Esc closes it
+  const sticky = !(o && o.stay) && (o && o.sticky != null ? !!o.sticky : !!plain || /^(could not|couldn.t|cannot|can.t|failed|error)\b/i.test(s));
+  if (sticky && !acts.some(a => a.label === "Close")) acts.unshift({label: "Close", run(){}});
+  t.dataset.sticky = sticky ? "1" : "";
   if (acts.length){
     const box = document.createElement("span"); box.className = "toast-acts"; box.dataset.toastActs = "";
     acts.forEach(a => {
@@ -560,7 +568,7 @@ function toast(msg, o){
   t.classList.remove("hidden", "out", "in"); t.style.transform = ""; void t.offsetWidth; t.classList.add("in");
   // a message with buttons stays long enough to reach them; one that must stay, stays; so does one saying something failed
   // (until it is closed, or the next message)
-  if (!(o && o.stay) && t.dataset.tone !== "stop") toastTimer = setTimeout(toastHide, Math.min(acts.length ? 12000 : 9000, (acts.length ? 7000 : 4000) + s.length * 35));
+  if (!(o && o.stay) && !sticky) toastTimer = setTimeout(toastHide, Math.min(acts.length ? 12000 : 9000, (acts.length ? 7000 : 4000) + s.length * 35));
 }
 function byDate(a, b){ return String(a.x.invoiceDate || a.createdAt).localeCompare(String(b.x.invoiceDate || b.createdAt)); }
 function lsGet(k){ try { return localStorage.getItem(k); } catch(e){ return null; } }

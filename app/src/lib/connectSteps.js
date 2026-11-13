@@ -120,7 +120,7 @@ export function connectSteps(opts) {
   const b = own.own || null, ver = String((b && (b.version || (b.local && b.local.version))) || "");
   // (this login's own bridge, found and heard: done, whatever its version; an older one is said, never a block: one that
   // cannot tell whose Tally it reads on a shared computer is never taken as this login's, ownBridge)
-  if (own.state === "ok") put("bridge", true, "", null, "", "FinCom Bridge" + (ver ? " " + ver : "") + " is running in this login" + (ver && o0.latest && vk(ver) < vk(o0.latest) ? " (" + o0.latest + " is ready: Download it to update)" : ""));
+  if (own.state === "ok") put("bridge", true, "", null, ver && o0.latest && vk(ver) < vk(o0.latest) ? "older" : "", "FinCom Bridge" + (ver ? " " + ver : "") + " is running in this login" + (ver && o0.latest && vk(ver) < vk(o0.latest) ? " (" + o0.latest + " is ready: Download it to update)" : ""));
   else if (own.state === "checking" || (localBridges() === null && !LOCALB.cut)) put("bridge", false, WORDS.checking, null, "checking");
   else {
     const s = own.say || bridgeSay() || { kind: "nothing" };

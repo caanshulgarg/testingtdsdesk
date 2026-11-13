@@ -4,7 +4,7 @@
 //   - a step on another page ("Open a statement first.", "Connect FinCom Bridge first.") gets the button that opens it;
 //   - a step on this page ("Choose the Tally ledger first.", "Tick the parties first.") gets "Show me": the box to fill
 //     is scrolled to, focused and marked for a moment; no button when no such box is on the page;
-//   - a message saying something failed stays until closed (toast, src/js/01): it gets a Close button.
+//   - a message saying something failed stays until closed, with Close (toast itself, src/js/01).
 // Its own file (the first file and legacy.js are at their size budgets), fetched with lib/timings.js as the app starts.
 // Sign-in messages are not touched here (they are going away: next-ux-stay-signed-in).
 const inClient = () => typeof S === "object" && S.view === "company" && !!S.coId;
@@ -14,7 +14,8 @@ const bankSet = ["Open Bank settings", () => { S.step = null; S.tab = "bankset";
 
 // [the message's words, the button, what it does, (when it applies)]
 const GO = [
-  [/^Open a (bank )?statement first/i, "Open Bank", () => goClient("bank"), inClient],
+  // (already on Bank: the upload box is shown, below)
+  [/^Open a (bank )?statement first/i, "Open Bank", () => goClient("bank"), () => inClient() && S.tab !== "bank"],
   [/Tally ledger for this bank account first/i, ...bankSet],
   [/\(From Tally\)|books first \(|Books › Tally\)|Read the Tally bank book again first/i, ...fromTally],
   [/^Connect FinCom Bridge first|^Tally is not connected|^Open a company in Tally first/i, ...tallyPage],
@@ -23,6 +24,7 @@ const GO = [
 ];
 // a step on this page: the words, and the boxes to look for (the first one showing, an empty one before a filled one)
 const HERE = [
+  [/^Open a (bank )?statement first/i, "[data-upload=bank], #app main [data-dropzone], #app main .dropzone, #app main .dz"],
   [/ledgers? first|Tally ledger on this bill first/i, "input[list], input[role=combobox], input[placeholder*=ledger i], select[aria-label*=ledger i], input[aria-label*=ledger i]"],
   [/Tick the parties first/i, "#app main table input[type=checkbox]"],
   [/email first/i, "input[type=email], input[placeholder*=mail i]"],
@@ -51,8 +53,6 @@ export function toastNext(words) {
   if (/sign(ed)? in/i.test(s)) return [];
   for (const [re, label, run, when] of GO) if (re.test(s) && (!when || when())) return [{ label, run }];
   if (/\bfirst\b/i.test(s)) for (const [re, sel] of HERE) if (re.test(s)) { const el = boxFor(sel); return el ? [{ label: "Show me", run: () => { const now = boxFor(sel) || el; show(now); } }] : []; }
-  // something failed: the message stays until closed
-  if (typeof toastTone === "function" && (toastTone(s) === "stop" || (typeof plainMessage === "function" && /could not|cannot/i.test(s) && plainMessage(s)))) return [{ label: "Close", run() {} }];
   return [];
 }
 window.toastNext = toastNext;

@@ -157,8 +157,10 @@ function Guide({ cs, collapsed, forced, asked, connectPanel, download, checkAgai
   if (a && a.kind === "download") btn = download;
   else if (a && a.kind === "link" && canWrite()) btn = a.co ? <ConnectBtn r={a.r} co={a.co} label="Link" hook={{ "data-tsm-go": "connect", "data-tsm-go-client": a.co.id }} />
     : <button type="button" className="btn primary" data-tsm-go="choose" onClick={() => setPick(!pick)} aria-expanded={pick}>Choose the client</button>;
+  // (still looking for this login's bridge: the Download stays in reach meanwhile)
+  else if (now && now.n === 1 && now.hook === "checking") btn = download;
   else if (a && a.kind === "check") btn = <>{now.n === 1 && download}<button type="button" className={"btn" + (now.n === 1 ? "" : " primary")} data-tsm-go="check" disabled={ck} onClick={again}>{ck ? "Checking…" : "Check again"}</button></>;
-  const copy = a && a.free ? <button type="button" className="linkbtn" data-tsm-port-copy={a.free} onClick={() => (navigator.clipboard ? navigator.clipboard.writeText(String(a.free)) : Promise.reject()).then(() => toast("Port " + a.free + " copied."), () => toast("Could not copy; type " + a.free + "."))}>{"Copy " + a.free}</button> : null;
+  const copy = a && a.free ? <button type="button" className="linkbtn" data-tsm-port-copy={a.free} onClick={() => (navigator.clipboard ? navigator.clipboard.writeText(String(a.free)) : Promise.reject()).then(() => toast("Port " + a.free + " copied."), () => toast("Could not copy; type " + a.free + ".", {sticky: false}))}>{"Copy " + a.free}</button> : null;
   // (the step to do now says what to do inside its own row, as the approved design)
   const nowBlock = now && <div className="tsm-now">
       <div className="tsm-now-text" data-tsm-now={now.n} data-tsm-now-hook={now.hook || undefined}>{"Step " + now.n + ": " + now.say}</div>
@@ -175,7 +177,9 @@ function Guide({ cs, collapsed, forced, asked, connectPanel, download, checkAgai
       <div className="tsm-step-top"><span className="tsm-mark" aria-hidden="true">{s.state === "done" ? TICK : s.n}</span><span className="tsm-step-title">{s.title}</span></div>
       <div className="tsm-step-text">{s.state === "done" ? (s.doneSay || STATE_WORD.done) + " ✓" : STATE_WORD[s.state]}</div>
       {/* ux-wins: no Download under a step 1 that is done (it is under Advanced, and "Connect another computer" brings
-          its own); the step to do now has it below */}
+          its own), unless a newer bridge is ready ("Download it to update": the button is right there); the step to do
+          now has it below */}
+      {s.n === 1 && s.state === "done" && s.hook === "older" && <div className="tsm-step-dl" data-tsm-step-dl="">{download}</div>}
       {s.state === "now" && nowBlock}</li>)}</ol>
     {a && a.kind === "link" && canWrite() && pick && <div className="tsm-pick" data-tsm-guide-pick=""><Pick r={a.r} co={null} pre="" onClose={() => setPick(false)} /></div>}
     {/* Set up again / another computer (openConnectTally(1)): the one Download for that other login */}
@@ -1002,7 +1006,7 @@ export default function SimpleTally({ installed, ready = true, pcs, download, sh
   const beat = ((own.own || {}).beat) || null;
   // ux-wins: the big Download FinCom Bridge above the page shows only while it is needed (tallySimple.css): not while
   // step 1 has the one Download ("step"), nor once this login's bridge runs ("have": it is under Advanced then)
-  const dl = !ready ? undefined : oneDl ? "step" : cs.mode === "login" && cs.steps[0] && cs.steps[0].state === "done" ? "have" : undefined;
+  const dl = !ready ? undefined : oneDl ? "step" : cs.mode === "login" && cs.steps[0] && cs.steps[0].state === "done" && cs.steps[0].hook !== "older" ? "have" : undefined;
   return <div className="tsm" data-tally-simple="" data-tsm-dl={dl} data-tsm-own={own.state} data-tsm-own-from={own.from || undefined} data-tsm-own-how={(own.own && own.own.how) || undefined} data-tsm-rows={R.extra ? "done" : "quick"}>
     <Part name="top" v={v}><Top cs={cs} own={own} rows={rows} checkAgain={checkAgain} ready={ready} shown={!!ready && showGuide} beat={beat} /></Part>
     <StaleNote />

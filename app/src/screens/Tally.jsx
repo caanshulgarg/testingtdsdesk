@@ -1141,7 +1141,7 @@ function BridgeLog() {
   const load = () => { setLg({ busy: true }); Bridge.call("/logtail?n=200", null, 20000).then((j) => setLg({ file: j.file || "", lines: j.lines || [] }),
     (e) => setLg({ error: /unknown|not found|404/i.test(String((e && e.message) || "")) ? "This bridge cannot show its log here: install FinCom Bridge from the Tally page (or right-click its icon → Show log)." : ((e && e.message) || String(e)) })); };
   const text = lg && lg.lines ? lg.lines.join("\n") : "";
-  const copy = () => (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject()).then(() => toast("Log copied."), () => toast("Could not copy; select the text and copy it."));
+  const copy = () => (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject()).then(() => toast("Log copied."), () => toast("Could not copy; select the text and copy it.", {sticky: false}));
   return <div className="bridge-log" style={{ marginTop: 10 }}>
     <div className="row" style={{ gap: 8, alignItems: "center" }}><button className="linkbtn" data-act="bridgeLog" onClick={load} disabled={!!(lg && lg.busy)}>{lg && lg.lines ? "Show bridge log again" : "Show bridge log"}</button>
       {lg && lg.lines && <><button className="btn small" onClick={copy}>Copy</button><button className="linkbtn" onClick={() => setLg(null)}>Hide</button></>}</div>
@@ -1257,7 +1257,7 @@ export default function TallyHome({ connectStep = null, sourcesSlot = null }) {
   const dl = set ? <a className="btn" data-tsm-download="" href={set.href} download={set.file}>Download FinCom Bridge</a> : <DownloadBtn m={m} />;
   // next-tally-progress (the owner's single page): the bridge's Download, top right in every state
   const head = <DownloadHead set={set} m={m} />;
-  const panel = <ConnectThisComputer download={<span className="note">Use Download FinCom Bridge in step 1 above.</span>} linked={gx.done.install && Bridge.on()} />;
+  const panel = <ConnectThisComputer download={<span className="note">Press Download FinCom Bridge, in the step marked “Do this now”.</span>} linked={gx.done.install && Bridge.on()} />;
   return <>
     {head}
     <GuideRefresh />

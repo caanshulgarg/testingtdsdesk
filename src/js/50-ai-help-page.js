@@ -227,7 +227,7 @@ async function aihNote(how, id){
   if (how === "del"){ const r = await askConfirm({title: "Remove this notice?", ok: "Remove", body: '<p class="note">The notice and its draft reply are removed from FinCom.</p>'}); if (!r || !r.ok) return; a.notices = a.notices.filter(z => z !== n); try { FileStore.drop(CO().id, n.id); } catch (x){} AIH.log("removed a notice", n.name); await saveBooks(); render(); return; }
   if (how === "retry"){ const f = await file(); if (!f){ toast("The notice file is not here any more; add it again."); return; } a.notices = a.notices.filter(z => z !== n); AIH.readNotice(f, n.kind); return; }
   if (how === "redo"){ n.figures = AIH.noticeFigures(n); AIH.draft(n); return; }
-  if (how === "copy"){ try { await navigator.clipboard.writeText(n.reply || ""); toast("Copied."); } catch (x){ toast("Could not copy; select the text and copy it."); } return; }
+  if (how === "copy"){ try { await navigator.clipboard.writeText(n.reply || ""); toast("Copied."); } catch (x){ toast("Could not copy; select the text and copy it.", {sticky: false}); } return; }
   if (how === "dl") saveFile("Reply " + String((n.fields || {}).form || "notice").replace(/[^\w.-]+/g, "_") + ".txt", new Blob([n.reply || ""], {type: "text/plain"}));
 }
 if (typeof aihSet !== "undefined") globalThis.aihSet = aihSet;

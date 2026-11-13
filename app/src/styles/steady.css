@@ -213,6 +213,7 @@ header.top .tbar-title .note { min-height: 20px; }
   /* the firm's pages: the line over the title only names the firm (it is in More and the firm's menu) */
   header.top .tbar:not([data-crumb="client-nav"]) .tbar-title > .note { display: none; }
   header.top .tbar > .tbar-title { flex: 1 1 auto; min-width: 0; overflow: hidden; }
-  /* a client's line: the client and the page (Clients is in the bar at the foot) */
+  /* a client's line: the client and the page (Clients is in the bar at the foot). The client's name stays on its own
+     line over the title: on one line with it, both were cut at 375 px (tried in the review of next-ux-wins) */
   #cobar .tbar-title .crumbs > [data-crumb-clients], #cobar .tbar-title .crumbs > [data-crumb-clients] + span { display: none; }
 }

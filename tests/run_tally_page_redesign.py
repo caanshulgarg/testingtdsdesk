@@ -202,7 +202,7 @@ def main():
         scene([adev([up], opened=(ORB, NOVA, ZETA), version="2.5.3"), bdev()], c1, CLx, P253)
         if n("#app [data-tsm-steps-link]"): pg.click("#app [data-tsm-steps-link]"); pg.wait_for_timeout(600)
         else: E("() => { S.tsm = Object.assign(S.tsm || {}, {open: true}); render(); }"); pg.wait_for_timeout(600)
-        ok(n("#app [data-tsm-guide] [data-tsm-step='1'] [data-tsm-download]") == 0, "7. the six steps: step 1 done, no Download under it (ux-wins: it is under Advanced) (%s)" % txt("#app [data-tsm-step='1']")[:120])
+        ok(vis("#app [data-tsm-guide] [data-tsm-step='1'] [data-tsm-step-dl] [data-tsm-download]"), "7. the six steps: step 1 done with an older bridge (a newer one ready): its Download is there (ux-wins: none under a step 1 with the latest) (%s)" % txt("#app [data-tsm-step='1']")[:120])
         if not n("#app [data-support-body]"): pg.click("#app [data-support-toggle]"); pg.wait_for_timeout(800)
         ok(n("#app [data-support-body] [data-install-again]") == 1 and "Install again or on another computer" in txt("#app [data-install-again]") and vis("#app [data-install-again] a, #app [data-install-again] button"),
            "7. Advanced: Install again or on another computer, its Download, without a second fold (%s)" % txt("#app [data-install-again]")[:160])

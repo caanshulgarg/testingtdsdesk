@@ -34,8 +34,8 @@ export default function Today() {
   }).sort((a, b) => (b.read + b.review + b.post + b.look) - (a.read + a.review + a.post + a.look));
   const sum = (k) => rows.reduce((a, r) => a + r[k], 0);
   // ux-wins (the review: three of the four figures looked like buttons and did nothing): a figure opens its list: the one
-  // client that has such bills, at that step; else the Clients list, the most of them first
-  const go = (k, ck, step) => () => { const w = rows.filter((r) => r[k]); if (w.length === 1) return openAt(w[0].c.id, step); S.listSort = { ...S.listSort, clients: { k: ck, dir: "desc" } }; navHome("clients"); };
+  // client that has such bills, at that step; else the Clients list, the most of them first (an order the person chose there is kept)
+  const go = (k, ck, step) => () => { const w = rows.filter((r) => r[k]); if (w.length === 1) return openAt(w[0].c.id, step); if (!(S.listSort || {}).clients) S.listSort = { ...S.listSort, clients: { k: ck, dir: "desc" } }; navHome("clients"); };
   const cell = (r, key, step) => r[key]
     ? <button className="linkbtn tcell" onClick={() => openAt(r.c.id, step)}>{r[key]}</button>
     : <span className="muted">—</span>;

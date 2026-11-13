@@ -300,6 +300,9 @@ export async function addAsClient(r) {
   const co = newCompany({ name, gstin, tallyName: r.company, turnover10cr: false });
   S.companies[co.id] = co; S.data[co.id] = { parties: {}, entries: {}, loaded: true };
   co.stats = { drafts: 0, check: 0, waiting: 0, tdsFy: 0, invoicesFy: 0, records: 1, fy: fyOf(null) };
+  // ux-wins: a client added from Tally is tracked from this month too, as Add client's question answers by default
+  // (its years of books would show every old return overdue); changed on Compliance, "Start tracking from…"
+  if (typeof DueList === "object") co.trackFrom = String(DueList.today()).slice(0, 7).replace("-", "");
   Store.saveCompany(co);
   render();
   const ok = await linkClient(r.company, co.id);
