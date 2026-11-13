@@ -8,7 +8,7 @@ const acts = {
   // to an earlier version (until cleared), and clears that rollback
   async releaseHold(v){
     const a = await askConfirm({title: "Hold version " + v + "?", ok: "Hold it",
-      body: "<p>No bridge of the firm takes FinCom Bridge " + esc(v) + " until you let it go; the ones running it keep running.</p>" +
+      html: "<p>No bridge of the firm takes FinCom Bridge " + esc(v) + " until you let it go; the ones running it keep running.</p>" +
         '<div class="bk-form one"><label><span>Why (kept with the version, shown on this page)</span><input id="holdWhy" maxlength="500" placeholder="What went wrong"></label></div>',
       read: () => ({why: ((document.getElementById("holdWhy") || {}).value || "").trim()}), validate: d => d && d.why ? "" : "Say why the version is held."});
     if (!a || !a.ok) return;
@@ -16,7 +16,7 @@ const acts = {
   },
   async releaseUnhold(v){
     const a = await askConfirm({title: "Let version " + v + " go?", ok: "Let it go",
-      body: "<p>Every bridge of the firm takes FinCom Bridge " + esc(v) + " by itself again, within a few hours.</p>" +
+      html: "<p>Every bridge of the firm takes FinCom Bridge " + esc(v) + " by itself again, within a few hours.</p>" +
         '<div class="bk-form one"><label><span>Note (kept)</span><input id="unholdWhy" maxlength="500" placeholder="What was put right"></label></div>',
       read: () => ({why: ((document.getElementById("unholdWhy") || {}).value || "").trim()})});
     if (!a || !a.ok) return;
@@ -24,7 +24,7 @@ const acts = {
   },
   async releaseRollback(){
     const a = await askConfirm({title: "Roll every bridge back to an earlier version?", ok: "Roll back",
-      body: "<p>Each bridge of the firm that keeps that version from its last update puts it back by itself, and no bridge takes a newer version until you clear the rollback. A bridge that does not keep it stays as it is and says so in its log.</p>" +
+      html: "<p>Each bridge of the firm that keeps that version from its last update puts it back by itself, and no bridge takes a newer version until you clear the rollback. A bridge that does not keep it stays as it is and says so in its log.</p>" +
         '<div class="bk-form one"><label><span>Version (like 2.2.4)</span><input id="rollbackVersion" maxlength="20" placeholder="2.2.4"></label>' +
         '<label><span>Why (kept, shown on this page)</span><input id="rollbackWhy" maxlength="500" placeholder="What went wrong"></label></div>',
       read: () => ({version: ((document.getElementById("rollbackVersion") || {}).value || "").trim(), why: ((document.getElementById("rollbackWhy") || {}).value || "").trim()}),
@@ -33,7 +33,7 @@ const acts = {
     await this.control("tally_release_rollback", {p_version: a.data.version, p_why: a.data.why}, "Every bridge goes back to version " + a.data.version + " (where it is kept); no newer version until you clear it.");
   },
   async releaseRollbackClear(){
-    const a = await askConfirm({title: "Clear the rollback?", ok: "Clear it", body: "<p>Every bridge takes the newest version by itself again, within a few hours.</p>"});
+    const a = await askConfirm({title: "Clear the rollback?", ok: "Clear it", html: "<p>Every bridge takes the newest version by itself again, within a few hours.</p>"});
     if (!a || !a.ok) return;
     await this.control("tally_release_rollback_clear", {p_why: ""}, "The rollback is cleared; the bridges update themselves again.");
   },
@@ -41,7 +41,7 @@ const acts = {
   // to no computer any more; a new pilot of it is allowed)
   async releaseWithdraw(v){
     const a = await askConfirm({title: "Withdraw version " + v + "?", ok: "Withdraw it",
-      body: "<p>No computer of the firm gets FinCom Bridge " + esc(v) + " from FinCom\u2019s cloud any more; the ones running it keep running. It can be tried on one computer again later.</p>" +
+      html: "<p>No computer of the firm gets FinCom Bridge " + esc(v) + " from FinCom\u2019s cloud any more; the ones running it keep running. It can be tried on one computer again later.</p>" +
         '<div class="bk-form one"><label><span>Why (kept with the version, shown on this page)</span><input id="withdrawWhy" maxlength="500" placeholder="What went wrong"></label></div>',
       read: () => ({why: ((document.getElementById("withdrawWhy") || {}).value || "").trim()}), validate: d => d && d.why ? "" : "Say why the version is withdrawn."});
     if (!a || !a.ok) return;
@@ -50,7 +50,7 @@ const acts = {
   // item 10: an owner clears "needs a fresh baseline" on a book (with a note); the bridge reads the company afresh
   async baselineClear(book, company){
     const a = await askConfirm({title: "Clear the baseline of " + company + "?", ok: "Clear it",
-      body: "<p>FinCom\u2019s cloud stops holding " + esc(company) + " back; the bridge reads the whole company again from Tally at its next round, and the copy here follows it.</p>" +
+      html: "<p>FinCom\u2019s cloud stops holding " + esc(company) + " back; the bridge reads the whole company again from Tally at its next round, and the copy here follows it.</p>" +
         '<div class="bk-form one"><label><span>Note (why it is cleared; kept with the book)</span><input id="baselineNote" maxlength="500" placeholder="What happened in Tally"></label></div>',
       read: () => ({note: ((document.getElementById("baselineNote") || {}).value || "").trim()})});
     if (!a || !a.ok) return;
@@ -61,7 +61,7 @@ const acts = {
   async makeMain(r){
     const others = this.bridgesHeard().filter(x => x.device.id === r.device.id && x.id !== r.id);
     const ok = await askConfirm({title: "Make this the main bridge?", ok: "Make it the main bridge",
-      body: "<p><b>FinCom Bridge " + esc(r.version) + "</b> on <b>" + esc(r.computer) + "</b>" + (r.user ? " (Windows user " + esc(r.user) + ")" : "") + " will read Tally <b>and post</b> to it.</p>" +
+      html: "<p><b>FinCom Bridge " + esc(r.version) + "</b> on <b>" + esc(r.computer) + "</b>" + (r.user ? " (Windows user " + esc(r.user) + ")" : "") + " will read Tally <b>and post</b> to it.</p>" +
         (others.length ? "<p>" + others.map(x => "Bridge " + esc(x.version || "?") + (x.user ? " of " + esc(x.user) : "")).join(", ") + " on this computer stops posting at once: FinCom gives postings to the main bridge only. " +
           "Within a minute the new bridge also stops any older bridge for its Windows user and takes over its pairing, settings and copy of the books.</p>" : "") +
         "<p>Only one bridge may ever post to Tally.</p>"});

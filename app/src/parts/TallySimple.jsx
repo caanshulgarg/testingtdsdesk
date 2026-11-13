@@ -323,7 +323,7 @@ function OpenLine({ row, list, onList }) {
   const go = (action) => async () => {
     const use = action === "use";
     const ok = await askConfirm({ title: use ? "Use Tally’s opening balances?" : "Keep FinCom’s opening balances?", ok: use ? "Use Tally’s" : "Keep FinCom’s",
-      body: use ? "<p>" + o.s.n + " ledger" + (o.s.n === 1 ? "’s" : "s’") + " opening balances in FinCom change to Tally’s. Each change is kept in history. Nothing in Tally changes.</p>"
+      html: use ? "<p>" + o.s.n + " ledger" + (o.s.n === 1 ? "’s" : "s’") + " opening balances in FinCom change to Tally’s. Each change is kept in history. Nothing in Tally changes.</p>"
         : "<p>FinCom keeps its own opening balances, and Tally’s are set aside (kept, not deleted). Nothing in Tally changes.</p>" });
     if (!ok) return;
     setBusy(action); setErr("");

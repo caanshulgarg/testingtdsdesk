@@ -630,3 +630,7 @@ run_tally_look_heard.py               180  TDSDESK_SITE=../app/dist-test
 run_catch_soon.py                     180  TDSDESK_SITE=../app/dist-test
 run_daybook_slices.py                 180  TDSDESK_SITE=../app/dist-test
 run_items_own_seq.py                  180  TDSDESK_SITE=../app/dist-test
+# next-sec-client (13-Nov-2026): the web app's hardening (run_sec_client.py), and a saved GST portal login given only
+# right after a two-step code and a few a minute (migration 192)
+run_sec_client.py                     300  TDSDESK_SITE=../app/dist-test
+run_migration192.py                   240

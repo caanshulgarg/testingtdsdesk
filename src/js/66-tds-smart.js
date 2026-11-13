@@ -47,7 +47,7 @@ const TDSFiled = {
     const d = TDS.ymd(on), iso = d.slice(0, 4) + "-" + d.slice(4, 6) + "-" + d.slice(6, 8), t = String(token || "").replace(/\s/g, "");
     const name = TDS.formShort(form, fy) + ", " + q + " " + fy, fee = TDS.lateFee(fy, q, d, form), corr = typeof TDSReg === "object" && TDSReg.corrOpen(fy, q, form);
     const ok = await askConfirm({title: "Mark " + name + " filed?",
-      body: "Filed on <b>" + esc(fmtDate(iso)) + "</b>" + (t ? ", token " + esc(t) : ", no token number given") + ".<br>" +
+      html: "Filed on <b>" + esc(fmtDate(iso)) + "</b>" + (t ? ", token " + esc(t) : ", no token number given") + ".<br>" +
         "The year's grid shows it filed, and the late fee is worked out to this date" + (fee && fee.days > 0 ? " (<b>₹" + INR.format(fee.fee) + "</b>, " + fee.days + " days late)" : " (none: filed by the due date)") + "." +
         (this.closedOf(fy, q) ? "" : "<br>Settings › Closed periods gets this date for " + q + " " + fy + ", so FinCom warns before an entry of the quarter is posted.") +
         (typeof TDSDrift === "object" ? "<br>A copy of the quarter's entries is kept, so a change made in Tally later is spotted." : "") +
@@ -87,7 +87,7 @@ const TDSFiled = {
     // another form of the quarter still marked filed keeps the quarter closed (its date in its place)
     const other = Object.keys(b.tdsFiled || {}).filter(k => k !== this.key(fy, q, form) && k.indexOf(fy + "|" + q + "|") === 0 && (b.tdsFiled[k] || {}).on).map(k => k.split("|")[2]);
     const corr = typeof TDSReg === "object" && TDSReg.corrOpen(fy, q, form);
-    const ok = await askConfirm({title: "Take off the filed mark?", body: esc(name) + " goes back to not filed: the late fee is again worked out as if it were filed today." +
+    const ok = await askConfirm({title: "Take off the filed mark?", html: esc(name) + " goes back to not filed: the late fee is again worked out as if it were filed today." +
       (clear ? (other.length ? " The date under Settings › Closed periods stays: " + esc(other.join(", ")) + " of " + q + " " + fy + " is still marked filed." : " The date under Settings › Closed periods, filled when it was marked, is cleared too.") : cp ? " The date under Settings › Closed periods is not changed." : "") +
       (corr ? " The correction open for it is closed too: a return not filed has nothing to correct." : ""), ok: "Take it off", danger: true});
     if (!ok || !ok.ok) return false;
@@ -546,7 +546,7 @@ const TDSDrift = {
   },
   async corrected(fy, q, form){
     const d = this.check(fy, q, form); if (!d || !d.rows.length) return false;
-    const ok = await askConfirm({title: "Correction filed?", body: "The copy of " + esc(TDS.formShort(form, fy) + ", " + q + " " + fy) + " is taken again from the books as they are now, and the " + d.rows.length + " change" + (d.rows.length === 1 ? "" : "s") + " listed stop showing. Do this once the correction statement is filed.", ok: "Correction filed"});
+    const ok = await askConfirm({title: "Correction filed?", html: "The copy of " + esc(TDS.formShort(form, fy) + ", " + q + " " + fy) + " is taken again from the books as they are now, and the " + d.rows.length + " change" + (d.rows.length === 1 ? "" : "s") + " listed stop showing. Do this once the correction statement is filed.", ok: "Correction filed"});
     if (!ok || !ok.ok) return false;
     this.keep(fy, q, form);
     const k = TDSFiled.key(fy, q, form), f = (S.books.tdsFiled || {})[k];

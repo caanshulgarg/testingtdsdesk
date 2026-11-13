@@ -630,8 +630,8 @@ function salesClick(t){
       rows.forEach(v => { v.status = "ready"; s.sticky.add(v.id); learnCustomer(v); });
       salesSetUndo(rows.length + " invoices confirmed", before); saveSales(); render(); return true;
     }
-    case "salesForget": askConfirm({title: "Forget customer memory?", ok: "Forget", body: "FinCom forgets which ledger was used for each customer. Invoices keep their ledgers."}).then(a => { if (a){ s.hist = {}; saveSales({hist: true}); toast("Forgotten."); } }); return true;
-    case "salesDelAll": askConfirm({title: "Delete all " + s.list.length + " sales invoices?", danger: true, ok: "Delete all", body: "They are removed from FinCom. Tally is not changed."}).then(a => { if (a){ s.list = []; s.openId = null; s.showSettings = false; saveSales(); render(); } }); return true;
+    case "salesForget": askConfirm({title: "Forget customer memory?", ok: "Forget", html: "FinCom forgets which ledger was used for each customer. Invoices keep their ledgers."}).then(a => { if (a){ s.hist = {}; saveSales({hist: true}); toast("Forgotten."); } }); return true;
+    case "salesDelAll": askConfirm({title: "Delete all " + s.list.length + " sales invoices?", danger: true, ok: "Delete all", html: "They are removed from FinCom. Tally is not changed."}).then(a => { if (a){ s.list = []; s.openId = null; s.showSettings = false; saveSales(); render(); } }); return true;
   }
   return false;
 }
@@ -808,7 +808,7 @@ async function ensureTallyCompany(co){
   const open = Bridge.st.open;
   if (!open.length){ toast("No company is open in your Tally. Open " + co.name + " in TallyPrime."); return null; }
   const ans = await askConfirm({title: "Which Tally company is " + co.name + "?", ok: "Use this company",
-    body: '<p class="note" style="margin:0 0 10px">FinCom could not match <b>' + esc(co.name) + "</b> to a company open in your Tally by name or GSTIN. Choose it once; it is remembered.</p>" +
+    html: '<p class="note" style="margin:0 0 10px">FinCom could not match <b>' + esc(co.name) + "</b> to a company open in your Tally by name or GSTIN. Choose it once; it is remembered.</p>" +
       '<div class="bk-form one"><label><span>Company open in Tally</span><select id="tcoPick">' + open.map(x => '<option value="' + esc(x.name) + '">' + esc(x.name) + " (port " + x.port + ")</option>").join("") + "</select></label></div>",
     read: () => ({name: (document.getElementById("tcoPick") || {}).value || ""})});
   if (!ans || !ans.data.name) return null;

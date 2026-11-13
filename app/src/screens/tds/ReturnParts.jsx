@@ -40,7 +40,7 @@ export async function openCorrection(fy, q, form) {
   const filed = TDSReg.filed(fy, q, form);
   if (!filed) return;
   const ok = await askConfirm({ title: "Open a correction for " + form + " " + q + " " + fy + "?", ok: "Open a correction",
-    body: "The return is marked filed on " + esc(day(filed.on)) + ". Opening a correction lets its challans change; each change goes to the trail. File the correction statement on TRACES, then mark it filed again: that locks the return once more." });
+    html: "The return is marked filed on " + esc(day(filed.on)) + ". Opening a correction lets its challans change; each change goes to the trail. File the correction statement on TRACES, then mark it filed again: that locks the return once more." });
   if (!ok || !ok.ok) return;
   TDSReg.openCorrection(fy, q, form); toast("Correction opened for " + form + " " + q + " " + fy + "."); render();
 }

@@ -30,7 +30,7 @@ function AddClient() {
   const save = async () => {
     const same = dups.find((d) => d.why === "same");
     if (same && !(await askConfirm({ title: same.client.name + " already exists", ok: "Add another",
-      body: "<p>A client named <b>" + esc(same.client.name) + "</b> is already in FinCom. Open it from Clients instead, or add another client with this name.</p>" }))) return;
+      html: "<p>A client named <b>" + esc(same.client.name) + "</b> is already in FinCom. Open it from Clients instead, or add another client with this name.</p>" }))) return;
     saveNewCompany({ ...v, dupOk: !!same });
   };
   return <>

@@ -117,7 +117,7 @@ try:
         ok(not J("!!ASST.st().open") and in_client(), "Esc closes it, the client stays")
 
         print("4. a confirm step")
-        J("() => { window.__cf = 'open'; askConfirm({title: 'Delete it?', body: '<input type=text id=cfReason aria-label=Reason>', ok: 'Delete', read: () => document.getElementById('cfReason').value}).then(r => { window.__cf = r ? 'ok' : 'cancel'; }); }"); W(300)
+        J("() => { window.__cf = 'open'; askConfirm({title: 'Delete it?', html: '<input type=text id=cfReason aria-label=Reason>', ok: 'Delete', read: () => document.getElementById('cfReason').value}).then(r => { window.__cf = r ? 'ok' : 'cancel'; }); }"); W(300)
         pg.fill("#cfReason", "typed twice"); pg.mouse.click(20, 20); W(300)
         ok(J("window.__cf") == "open" and pg.locator("#confirmBox [data-cbx=yes]").is_visible(), "with a reason typed, a click outside leaves it open (never OK)")
         pg.keyboard.press("Escape"); W(300)

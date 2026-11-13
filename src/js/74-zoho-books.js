@@ -76,7 +76,7 @@ const ZohoB = {
   async disconnect(c){
     if (!this.owner()) { toast("Only the firm's owner can disconnect Zoho Books."); return; }
     if (!(await askConfirm({title: "Disconnect " + (c.orgName || "this organisation") + "?", ok: "Disconnect",
-      body: "<p>FinCom stops reading and posting to this Zoho organisation and gives up its access (the sign-in is revoked at Zoho). Nothing is deleted: the entries already read stay in FinCom, and nothing in Zoho is touched.</p>"}))) return;
+      html: "<p>FinCom stops reading and posting to this Zoho organisation and gives up its access (the sign-in is revoked at Zoho). Nothing is deleted: the entries already read stay in FinCom, and nothing in Zoho is touched.</p>"}))) return;
     const j = await this.call({kind: "disconnect", connection: c.id});
     toast(j.ok ? (j.message || "Disconnected.") : (j.error || "Could not disconnect."));
     await this.load(true); render();

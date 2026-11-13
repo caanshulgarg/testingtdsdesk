@@ -6,7 +6,8 @@ const Bridge = {
   lastOpenKey: null,
   cfg(){ let c = {}; try { c = JSON.parse(lsGet("tdsdesk:bridge") || "{}"); } catch (e){} return Object.assign({url: "http://127.0.0.1:9100", key: "", follow: true}, c); },
   setCfg(p){ lsSet("tdsdesk:bridge", JSON.stringify(Object.assign(this.cfg(), p))); },
-  blocked(){ return !!window.claude; },
+  // inside claude.ai (its own object with functions; never an element of the page that happens to be named "claude")
+  blocked(){ const c = window.claude; return !!c && typeof (c.use || c.complete) === "function"; },
   on(){ return !this.blocked() && !!this.cfg().key; },
   up(){ return this.st.state === "ok"; },
   pinQ(){ const pp = this.cfg().port; return pp ? "&port=" + pp : ""; },
@@ -24,6 +25,9 @@ const Bridge = {
   localUrl(u){ const m = String(u || "").match(/^http:\/\/(127\.0\.0\.1|localhost):(\d+)\/*$/); return !!m && this.PORTS.includes(+m[2]); },
   urlPort(u){ const m = String(u || "").match(/^https?:\/\/[^/:]+:(\d+)/); return m ? +m[1] : 0; },
   nonce(){ const a = new Uint8Array(24); crypto.getRandomValues(a); return Array.from(a, x => x.toString(16).padStart(2, "0")).join(""); },
+  async sha256(t){ return Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(t)))), x => x.toString(16).padStart(2, "0")).join(""); },
+  // 2.5.16: on sign-out this browser's key is forgotten by the bridge and here
+  forget(){ const c = this.cfg(); if (!c.key) return; this.call("/forget", {}, 3000).catch(() => {}).then(() => this.setCfg({key: ""})); },
   async hmac(secret, msg){
     const enc = new TextEncoder(), k = await crypto.subtle.importKey("raw", enc.encode(String(secret)), {name: "HMAC", hash: "SHA-256"}, false, ["sign"]);
     return Array.from(new Uint8Array(await crypto.subtle.sign("HMAC", k, enc.encode(msg))), x => x.toString(16).padStart(2, "0")).join("");
@@ -38,6 +42,8 @@ const Bridge = {
       if (!j || j.ok === false) return null;
       const o = Object.assign({port, url: base.replace(/\/+$/, "")}, j, {proven: false, pairProven: false});
       if (key && typeof j.proof === "string" && typeof j.bridgeId === "string" && Number(j.port) === port) o.proven = j.proof === await this.hmac(key, n + j.bridgeId + port);
+      // FinCom Bridge 2.5.16: one key per browser; the bridge proves itself over this key's SHA-256
+      if (key && !o.proven && Array.isArray(j.proofs) && j.proofs.length && typeof j.bridgeId === "string" && Number(j.port) === port) { const h = await this.sha256(key), want = await this.hmac(h, n + j.bridgeId + port); o.proven = j.proofs.includes(want); }
       // review M1 of 2.3.0: the pairing code's proof is bound to the bridge's id and this port too
       // FinCom Bridge 2.4.7: code may be "<6 digits>-<the window's 32-hex secret>" (FinCom opened by the bridge): the
       // bridge proves the secret (pairProofS); a 2.4.7 bridge gives no proof over the 6 digits (an offline test for
@@ -976,7 +982,7 @@ async function unpostFromTally(what, obj, cid){
   const tname = await ensureTallyCompany(co);
   if (!tname) return false;
   const ans = await askConfirm({title: "Remove this entry from Tally?", ok: "Remove it",
-    body: '<p class="note">Voucher ' + esc(t.vchType || "") + " " + esc(obj.tallyVchNo || t.masterId || "") + " dated " + esc(t.vchDate ? fmtDate(tallyToIso(t.vchDate)) : "") +
+    html: '<p class="note">Voucher ' + esc(t.vchType || "") + " " + esc(obj.tallyVchNo || t.masterId || "") + " dated " + esc(t.vchDate ? fmtDate(tallyToIso(t.vchDate)) : "") +
       " will be deleted from <b>" + esc(t.company || tname) + "</b>. It then comes back here as waiting to be posted.</p>"});
   if (!ans) return false;
   try {
@@ -1440,7 +1446,7 @@ async function setAutoNumbering(){
   const tname = await ensureTallyCompany(co);
   if (!tname) return;
   const ok = await askConfirm({title: "Set automatic voucher numbering in Tally?", ok: "Set it in Tally",
-    body: '<p>In <b>' + esc(tname) + '</b>, these voucher types will number their vouchers automatically: ' + AUTO_TYPES.join(", ") + ".</p>" +
+    html: '<p>In <b>' + esc(tname) + '</b>, these voucher types will number their vouchers automatically: ' + AUTO_TYPES.join(", ") + ".</p>" +
       '<p class="note">This changes the company in Tally for everyone who uses it. Vouchers already in Tally keep their numbers. Take a Tally backup first if you are unsure.</p>'});
   if (!ok) return;
   toast("Setting automatic numbering in " + tname + "\u2026");
@@ -1454,7 +1460,7 @@ async function setAutoNumbering(){
       logPosting && logPosting({what: "setting", id: "vchauto", action: "automatic numbering", co: co.id, ref: done.join(", "), party: tname, amount: 0, tally: {company: tname}});
     }
     if (!done.length && bad.some(x => /Only VOUCHER, LEDGER or GROUP/.test(x.message || ""))){
-      await askConfirm({title: "FinCom Bridge on the Tally computer needs updating", ok: "Got it", body:
+      await askConfirm({title: "FinCom Bridge on the Tally computer needs updating", ok: "Got it", html:
         '<p>This needs FinCom Bridge 2.1. Install FinCom Bridge from the Tally page and run it on the computer where Tally runs.</p>' +
         '<p><b>Or set it in Tally yourself</b>, for each voucher type (Purchase, Journal, Payment, Receipt, Contra, Sales, Debit Note, Credit Note):</p>' +
         '<ol><li>Gateway of Tally \u2192 <b>Alter</b> \u2192 <b>Voucher Type</b>, and choose the type.</li><li>Set <b>Method of voucher numbering</b> to <b>Automatic</b>.</li><li>Press Ctrl + A to save.</li></ol>' +

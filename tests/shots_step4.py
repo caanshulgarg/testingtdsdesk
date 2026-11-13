@@ -24,9 +24,9 @@ PAGES = [
        setTimeout(() => { const b = document.querySelector('input[aria-label="Certificate valid to"]'); if (b) b.scrollIntoView({block: 'center'}); }, 300); }""" % CO),
     ("logo", "() => { goSettings(null); }"),
     ("confirm", """() => { askConfirm({title: 'Post 3 entries to Tally?', ok: 'Post 3 entries', check: 'Also mark them as checked',
-       body: 'They go to <b>Testing AAD</b> in Tally now. Entries already in Tally are skipped.'}); }"""),
+       html: 'They go to <b>Testing AAD</b> in Tally now. Entries already in Tally are skipped.'}); }"""),
     ("confirm-typed", """() => { confirmTyped({title: 'Delete this statement?', ok: 'Delete statement',
-       body: '<b>HDFC Bank</b>, 01-Apr-2026 to 30-Sep-2026 (statement.pdf, 214 rows).<br>It leaves the list; More \u2192 Restore a deleted statement puts it back.'}); }"""),
+       html: '<b>HDFC Bank</b>, 01-Apr-2026 to 30-Sep-2026 (statement.pdf, 214 rows).<br>It leaves the list; More \u2192 Restore a deleted statement puts it back.'}); }"""),
     ("leave-ask", "() => { Drafts.ask([{id: 'x', label: 'Firm details'}, {id: 'y', label: 'TDS rates'}]); }"),
 ]
 bad = 0

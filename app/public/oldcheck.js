@@ -47,6 +47,32 @@
   // 17-Oct-2026 (Mac Safari stuck on "Opening FinCom"): when the program does not start, the page's frame stayed for ever with
   // no word. If after 20 s the frame is still there (app/src/boot.js clearBoot removes it), say so with a way out, and on the
   // testing site report the browser and the first error (the error reports of src/sentry.js start only once the app is up)
+  // What the report may say (this report goes straight to Sentry, past the app's own scrubber, server/_shared/
+  // sentry-scrub.js, which is not loaded yet): of the first error only the words of error messages, error class names,
+  // the browser features a build may miss (by their fixed names) and this build's file names; any other word (a name, a number, an id, a link) becomes "…".
+  // Of the address's "#…" part only what kind it is (client, pair, join, …), never what follows it. Plain old JavaScript.
+  function safeWords(s) {
+    var WORDS = " a an the of to in on at by for from with is are was not no and or it its can cannot can't could if this that" +
+      " error errors failed fail failure loading load loaded script style link font file module import imported dynamically fetch fetching" +
+      " unexpected token identifier end input syntax invalid missing expected undefined null object function property properties" +
+      " read reading set setting find found variable defined reference type range promise uncaught unhandled rejection evaluating" +
+      " call called calling constructor argument arguments string number value values stack size exceeded maximum memory out" +
+      " network request response aborted timeout timed quota storage access denied security operation insecure blocked chunk css js" +
+      " globalthis structuredclone replaceall allsettled matchall flatmap fromentries bigint weakref queuemicrotask abortcontroller" +
+      " resizeobserver intersectionobserver decompressionstream compressionstream textencoder textdecoder crypto subtle randomuuid" +
+      " findlast tosorted hasown indexeddb localstorage sessionstorage serviceworker symbol proxy reflect async await ";
+    var out = [], ws = String(s == null ? "" : s).slice(0, 600).replace(/<[^>]{0,400}>/g, " … ").split(/\s+/), i, w, c, last = "";
+    for (i = 0; i < ws.length; i++) {
+      w = ws[i]; if (!w) continue;
+      c = w.replace(/^[(\[{'"`]+|[)\]}'"`:;,.!?]+$/g, "");
+      if (!(WORDS.indexOf(" " + c.toLowerCase() + " ") >= 0 && /^[A-Za-z']+$/.test(c)) && !/^[A-Z][A-Za-z]{0,30}Error$/.test(c)
+        && !/^(?:legacy|guard|oldcheck|sw|index-[A-Za-z0-9_-]{6,12})\.(?:js|css)$/.test(c)) w = "…";
+      if (w !== "…" || last !== "…") out.push(w);
+      last = w;
+    }
+    return out.join(" ").slice(0, 200);
+  }
+  function hashKind(h) { var m = /^#\/?([a-z_]{1,20})(?=[\/=&?]|$)/.exec(String(h || "")); return m ? m[1] : h ? "other" : ""; }
   function watch() {
     var first = null, me = document.currentScript, report = me && me.getAttribute("data-report"), shown = false;
     // 24-Oct-2026: a file that did not load (a script, style or font: the event has no words) is named by its element and file
@@ -114,11 +140,11 @@
       // "swapping" when the page was being swapped for a newer build), whether React started, and the page's state
       var stage = window.__fincomSwapping ? "swapping" : window.__fincomStage || (typeof S === "object" ? "program, not started" : "no program");
       var where = { stage: stage, react: !!document.querySelector("#react-root > *, .react-host"), hidden: document.visibilityState || "",
-        kept: document.documentElement.hasAttribute("data-boot-kept"), sw: !!(navigator.serviceWorker && navigator.serviceWorker.controller), hash: String(location.hash || "").slice(0, 12), framed: window.top !== window,
+        kept: document.documentElement.hasAttribute("data-boot-kept"), sw: !!(navigator.serviceWorker && navigator.serviceWorker.controller), hash: hashKind(location.hash), framed: window.top !== window,
         early: !timed, healed: (function () { try { return (sessionStorage.getItem("fincom:file-heal") || "") + " " + (sessionStorage.getItem("fincom:file-heal-net") || ""); } catch (x) { return ""; } })() };
       if (report && location.hostname === "staging.fincom.live") try {
         fetch(report, { method: "POST", mode: "no-cors", keepalive: true, headers: { "Content-Type": "text/plain" },
-          body: JSON.stringify({ message: "FinCom did not open" + (timed ? " in 20 s: " : ": ") + (first || "no error seen"), level: "error", platform: "javascript",
+          body: JSON.stringify({ message: "FinCom did not open" + (timed ? " in 20 s: " : ": ") + (first ? safeWords(first) : "no error seen"), level: "error", platform: "javascript",
             tags: { boot: "stuck", stage: stage }, extra: { ua: navigator.userAgent, url: location.pathname, where: where } }) });
       } catch (e) { /* nothing more to do */ }
     }

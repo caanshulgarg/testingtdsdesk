@@ -133,7 +133,7 @@ const Rec = {
   },
   async lock(cid, month){
     const a = await askConfirm({title: "Lock " + GSTR.label(month.slice(0, 4) + month.slice(5, 7)) + "?", ok: "Lock the month",
-      body: "<p>Changes made in Tally to entries of this month are held, not applied to FinCom’s copy, until you approve each one (Tally page → Sync activity → Apply now) or unlock the month.</p>" +
+      html: "<p>Changes made in Tally to entries of this month are held, not applied to FinCom’s copy, until you approve each one (Tally page → Sync activity → Apply now) or unlock the month.</p>" +
         '<div class="bk-form one"><label><span>Note (kept with the lock)</span><input id="lockNote" maxlength="300" placeholder="Why the month is locked"></label></div>',
       read: () => ({note: ((document.getElementById("lockNote") || {}).value || "").trim()})});
     if (!a || !a.ok) return;
@@ -141,7 +141,7 @@ const Rec = {
   },
   async unlock(cid, month){
     const a = await askConfirm({title: "Unlock " + GSTR.label(month.slice(0, 4) + month.slice(5, 7)) + "?", ok: "Unlock",
-      body: "<p>Changes made in Tally to this month are applied to FinCom’s copy again as they come. Lines already held stay held until you apply them.</p>" +
+      html: "<p>Changes made in Tally to this month are applied to FinCom’s copy again as they come. Lines already held stay held until you apply them.</p>" +
         '<div class="bk-form one"><label><span>Note (optional)</span><input id="unlockNote" maxlength="300"></label></div>',
       read: () => ({note: ((document.getElementById("unlockNote") || {}).value || "").trim()})});
     if (!a || !a.ok) return;

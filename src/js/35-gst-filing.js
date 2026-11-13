@@ -36,7 +36,7 @@ const GSTMark = {
     const how = r[k + "Via"] === "api" ? " (filed through the GST API)" : r[k + "Via"] === "helper" ? " (read from the portal by the browser helper)" : "";
     const what = [arn ? "its ARN " + arn + how : "", kept ? "the 3B kept as filed (the next month’s carried credit and GSTR-9 then use the books as they are now)" : "", docs ? "the documents recorded as in the IFF" : ""].filter(Boolean);
     askConfirm({title: "Take off the filed mark?", ok: "Take it off", danger: true,
-      body: esc(({r3b: "GSTR-3B", r1: "GSTR-1", iff: "IFF"})[k] + " for " + GSTR.label(ym) + " goes back to not filed. With the date go " + what.join(" and ") + ". The return on the portal is not touched.")})
+      html: esc(({r3b: "GSTR-3B", r1: "GSTR-1", iff: "IFF"})[k] + " for " + GSTR.label(ym) + " goes back to not filed. With the date go " + what.join(" and ") + ". The return on the portal is not touched.")})
       .then(a => { if (a && a.ok){ this.clear(ym, reg, k); go(); } else render(); });
   }
 };
@@ -59,7 +59,7 @@ function gstfUnsnap(){
   const nx = GSTR.nextYm(ym), w = typeof GSTLock === "object" ? GSTLock.why(reg, [nx]) : "";
   if (!w) return go();
   askConfirm({title: "Remove the kept copy?", ok: "Remove it", danger: true,
-    body: esc(w) + " Its credit carried forward came from this kept copy of " + esc(GSTR.label(ym)) + "; without it the carry is worked out from the books as they are now."})
+    html: esc(w) + " Its credit carried forward came from this kept copy of " + esc(GSTR.label(ym)) + "; without it the carry is worked out from the books as they are now."})
     .then(a => { if (!a || !a.ok) return; try { auditEvent("gst_kept_copy_removed", {reg, ym, nextFiled: nx}, S.coId); } catch (e){} go(); });
 }
 function gstfJournal(){

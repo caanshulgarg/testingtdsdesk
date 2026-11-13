@@ -520,7 +520,7 @@ const SheetImport = {
   async remove(id){
     const f = this.fmtById(id); if (!f) return;
     const r = await askConfirm({title: "Delete the format “" + f.name + "”?", danger: true, ok: "Delete",
-      body: '<p>It is kept, marked deleted, with who and why. The next sheet of this format asks for its columns again.</p><label class="f"><span>Why</span><input type="text" id="sfWhy"></label>',
+      html: '<p>It is kept, marked deleted, with who and why. The next sheet of this format asks for its columns again.</p><label class="f"><span>Why</span><input type="text" id="sfWhy"></label>',
       read: () => (document.getElementById("sfWhy") || {}).value || "", validate: (v) => String(v || "").trim() ? "" : "Say why."});
     const why = r && r.data;
     if (!why) return;

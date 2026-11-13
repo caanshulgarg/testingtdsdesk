@@ -3,7 +3,7 @@
 // budget; the words unchanged). Cloud and askConfirm are the business logic's globals (legacy.js).
 export default function yourData() {
   const signed = typeof Cloud === "object" && Cloud.on();
-  askConfirm({ title: "Your data", ok: "Close", body:
+  askConfirm({ title: "Your data", ok: "Close", html:
     "<p><b>Where it is kept.</b> In this browser, on this computer" + (signed ? ", and in your firm’s FinCom account, so the firm’s people can open it on their own computers." : ". It stays on this computer only until you sign in to a firm account (Settings).") + "</p>" +
     "<p><b>Who can see it.</b> " + (signed ? "The people your firm’s owner has added (Settings → People), each with their role. Other firms using FinCom cannot open it." : "Only someone using this browser on this computer.") + "</p>" +
     "<p><b>On a shared computer.</b> " + (signed ? "Sign out when you finish (the firm menu at the top right → Sign out)." : "Use your own Windows account, or sign in to a firm account and sign out when you finish.") + "</p>" +

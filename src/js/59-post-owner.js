@@ -25,14 +25,14 @@ const PostOwner = {
     const no = String((e && e.x && e.x.invoiceNo) || "").trim();
     if (!no || no !== v) return true;
     const a = await askConfirm({title: "The Tally id is the same as the bill number", ok: "Use " + v + " anyway",
-      body: "<p>" + esc("You typed " + v + ", which is the bill number. Tally's id is the number Tally gives the entry (for example 26301). Use " + v + " anyway?") + "</p>"});
+      html: "<p>" + esc("You typed " + v + ", which is the bill number. Tally's id is the number Tally gives the entry (for example 26301). Use " + v + " anyway?") + "</p>"});
     return !!(a && (a === true || a.ok));
   },
   // why: a reason is required (Mark posted, decision B); a correction carries its own ("Correction: the Tally id is ...")
   async askId(e, title, ok, pre, intro, why){
     why = why !== false;
     const a = await askConfirm({title, ok,
-      body: "<p>" + intro + "</p>" +
+      html: "<p>" + intro + "</p>" +
         '<div class="bk-form one"><label><span>Tally id</span><input id="markVch" maxlength="20" inputmode="numeric" placeholder="Digits only, as Tally shows it" value="' + esc(pre || "") + '"></label>' +
         '<label><span>' + (why ? "Reason (kept with your name)" : "Note (optional)") + '</span><input id="markNote" maxlength="300" placeholder="Where you saw it in Tally"></label></div>',
       read: () => ({vch: ((document.getElementById("markVch") || {}).value || "").trim(), note: ((document.getElementById("markNote") || {}).value || "").trim()}),
@@ -81,7 +81,7 @@ const PostOwner = {
     if (!job) return;
     const no = (e.x && e.x.invoiceNo) || e.id, co = job.company || "the company";
     const a = await askConfirm({title: no + ": you looked in Tally and it is not there?", ok: "I looked in Tally: not there \u2013 post again", danger: true,
-      body: "<p>" + esc("The FinCom Bridge did not see this entry in " + co + " on its date, but it cannot see other dates. Confirm only after looking in Tally (Day Book, or search the narration TDSDesk:" + String(e.id) + "). It is then sent again, once; your name, the time and the reason are kept.") + "</p>" +
+      html: "<p>" + esc("The FinCom Bridge did not see this entry in " + co + " on its date, but it cannot see other dates. Confirm only after looking in Tally (Day Book, or search the narration TDSDesk:" + String(e.id) + "). It is then sent again, once; your name, the time and the reason are kept.") + "</p>" +
         '<div class="bk-form one"><label><span>Reason (where you looked in Tally)</span><input id="confirmWhy" maxlength="500" placeholder="Searched TDSDesk:\u2026 in the Day Book"></label></div>',
       read: () => ({why: ((document.getElementById("confirmWhy") || {}).value || "").trim()}), validate: d => d && d.why ? "" : "Say where you looked in Tally."});
     if (!a || !a.ok) return;
@@ -93,7 +93,7 @@ const PostOwner = {
     if (!job) return;
     const no = (e.x && e.x.invoiceNo) || e.id;
     const a = await askConfirm({title: no + ": you checked in Tally and it is not there?", ok: "I checked in Tally: not there", danger: true,
-      body: "<p>" + esc("No FinCom Bridge looks first. If it is in Tally, it will be posted twice. Confirm only after looking in Tally (Day Book, or search the narration TDSDesk:" + String(e.id) + "); your name, the time and the reason are kept.") + "</p>" +
+      html: "<p>" + esc("No FinCom Bridge looks first. If it is in Tally, it will be posted twice. Confirm only after looking in Tally (Day Book, or search the narration TDSDesk:" + String(e.id) + "); your name, the time and the reason are kept.") + "</p>" +
         '<div class="bk-form one"><label><span>Reason (where you looked in Tally)</span><input id="ownerWhy" maxlength="400" placeholder="Searched TDSDesk:\u2026 in the Day Book"></label></div>',
       read: () => ({why: ((document.getElementById("ownerWhy") || {}).value || "").trim()}), validate: d => d && d.why ? "" : "Say where you looked in Tally."});
     if (!a || !a.ok) return;
@@ -105,7 +105,7 @@ const PostOwner = {
   async withdrawCheck(cid, ck){
     if (!ck || !ck.id) return;
     const a = await askConfirm({title: "Withdraw the check?", ok: "Withdraw the check",
-      body: "<p>The FinCom Bridge stops looking in Tally for this entry. Nothing is released or sent; your name and the time are kept.</p>" +
+      html: "<p>The FinCom Bridge stops looking in Tally for this entry. Nothing is released or sent; your name and the time are kept.</p>" +
         '<div class="bk-form one"><label><span>Reason (optional)</span><input id="withdrawWhy" maxlength="300" placeholder="Found it in Tally myself"></label></div>',
       read: () => ({why: ((document.getElementById("withdrawWhy") || {}).value || "").trim()})});
     if (!a || !a.ok) return;
@@ -119,7 +119,7 @@ const PostOwner = {
     const no = (e.x && e.x.invoiceNo) || e.id;
     const co = (job && job.company) || "the company";
     const a = await askConfirm({title: no + ": not in Tally, post it again?", ok: "Not in Tally \u2013 post again", danger: true,
-      body: "<p>" + (job ? "Before anything is sent, the FinCom Bridge looks in " + esc(co) + " in Tally for this entry. If it is there, it is marked posted with Tally\u2019s id; if it is not, it is sent again, once. If Tally cannot be asked now, it waits and looks again by itself. Your name, the time and the reason are kept."
+      html: "<p>" + (job ? "Before anything is sent, the FinCom Bridge looks in " + esc(co) + " in Tally for this entry. If it is there, it is marked posted with Tally\u2019s id; if it is not, it is sent again, once. If Tally cannot be asked now, it waits and looks again by itself. Your name, the time and the reason are kept."
           : "You looked in Tally and this entry is not there. FinCom undoes its posted mark so it can be posted again; the reason is kept with the entry. Nothing is sent to Tally now.") + "</p>" +
         '<div class="bk-form one"><label><span>Reason (what you saw in Tally)</span><input id="releaseWhy" maxlength="500" placeholder="Not in the Day Book of …"></label></div>',
       read: () => ({why: ((document.getElementById("releaseWhy") || {}).value || "").trim()}), validate: d => d && d.why ? "" : "Say what you saw in Tally."});
@@ -210,7 +210,7 @@ Object.assign(PostOwner, {
   },
   why(title, ok, words, e){
     return askConfirm({title, ok, danger: true,
-      body: '<p class="note">' + esc(e.x.vendorName || e.fileName || "") + (e.x.invoiceNo ? " · " + esc(e.x.invoiceNo) : "") + words + "</p>" +
+      html: '<p class="note">' + esc(e.x.vendorName || e.fileName || "") + (e.x.invoiceNo ? " · " + esc(e.x.invoiceNo) : "") + words + "</p>" +
         '<label class="f" style="margin-top:8px"><span>What you did in Tally</span><input type="text" id="deletedWhy" maxlength="200" placeholder="For example: deleted in the Day Book on 12-Nov"></label>',
       read: () => ((document.getElementById("deletedWhy") || {}).value || "").trim(),
       validate: why => why.length < 3 ? "Say what you did in Tally." : ""});
@@ -255,7 +255,7 @@ Object.assign(PostOwner, {
     const t = bankBookEntry(r), keys = t ? bankTallyKeys(t) : r.tallyKey ? [r.tallyKey] : [];
     if (!keys.length){ toast("FinCom does not know which Tally entry this line was matched to. Read the Tally bank book again first."); return; }
     const words = t ? [fmtDate(t.date), [t.vt, t.vn].filter(Boolean).join(" "), money0(num(t.debit) || num(t.credit))].filter(Boolean).join(" \u00b7 ") : r.tallyRef || keys[0];
-    askConfirm({title: "Not this Tally entry?", ok: "Not that entry", body: '<p class="note">This bank line was matched to Tally entry ' + esc(words) + ". Mark it as NOT that entry? If this entry really is it, posting will put it in Tally twice.</p>"}).then(ok => {
+    askConfirm({title: "Not this Tally entry?", ok: "Not that entry", html: '<p class="note">This bank line was matched to Tally entry ' + esc(words) + ". Mark it as NOT that entry? If this entry really is it, posting will put it in Tally twice.</p>"}).then(ok => {
       if (!ok || r.state !== "intally") return;
       r.notTally = (r.notTally || []).concat(keys); r.state = "attention"; r.userSet = false;
       delete r.tallyIdx; delete r.tallyKey; r.tallyHow = ""; r.tallyRef = "";
@@ -274,7 +274,7 @@ Object.assign(PostOwner, {
     const s = SL(), v = inv(id); if (!v || v.status !== "intally") return;
     const m = v.tallyMatch || {}, key = m.key || "num:" + normInvNo(v.x.number), d = String(m.date || "");
     const words = [d ? fmtDate(/^\d{8}$/.test(d) ? d.slice(0, 4) + "-" + d.slice(4, 6) + "-" + d.slice(6) : d) : "", m.number || v.x.number, m.amount ? money0(m.amount) : ""].filter(Boolean).join(" \u00b7 ");
-    askConfirm({title: "Not this Tally entry?", ok: "Not that entry", body: '<p class="note">This invoice was matched to Tally entry ' + esc(words) + ". Mark it as NOT that entry? If this entry really is it, posting will put it in Tally twice." +
+    askConfirm({title: "Not this Tally entry?", ok: "Not that entry", html: '<p class="note">This invoice was matched to Tally entry ' + esc(words) + ". Mark it as NOT that entry? If this entry really is it, posting will put it in Tally twice." +
       (m.key ? "" : " FinCom did not keep which voucher it was, so every Tally voucher numbered " + esc(v.x.number || "") + " is left out for this invoice.") + "</p>"}).then(ok => {
       if (!ok || v.status !== "intally") return;
       // back to review: a person confirms it before it is posted

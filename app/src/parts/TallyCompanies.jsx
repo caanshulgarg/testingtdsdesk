@@ -311,7 +311,7 @@ export async function addAsClient(r) {
 export async function addNew(r) {
   const tw = !twinOf(r, true) && twinOf(r);
   if (tw && !(await askConfirm({ title: "Add " + shown(r.company) + " as a separate client?", ok: "Add a separate client",
-    body: "<p><b>" + esc(tw.name) + "</b> is already in FinCom. <b>" + esc(shown(r.company)) + "</b> is a separate company in Tally (a split or another year). To keep one client, choose " + esc(tw.name) + " and Link instead.</p>" }))) return "";
+    html: "<p><b>" + esc(tw.name) + "</b> is already in FinCom. <b>" + esc(shown(r.company)) + "</b> is a separate company in Tally (a split or another year). To keep one client, choose " + esc(tw.name) + " and Link instead.</p>" }))) return "";
   return addAsClient(r);
 }
 // Link (to a client already in FinCom). The client linked to another company: a newer year of it is linked beside it
@@ -323,7 +323,7 @@ export async function linkTo(r, co, opts) {
     if (yearKey(was) === yearKey(r.company)) opts.keep = true;
     else if (!opts.asked) {
       const ok = await askConfirm({ title: "Link " + co.name + " to " + shown(r.company) + "?", ok: "Link this company",
-        body: "<p>" + esc(co.name) + " is linked to <b>" + esc(was) + "</b> now. It will be linked to <b>" + esc(shown(r.company)) + "</b> instead, and " + esc(was) + " unlinked. Nothing in Tally changes.</p>" });
+        html: "<p>" + esc(co.name) + " is linked to <b>" + esc(was) + "</b> now. It will be linked to <b>" + esc(shown(r.company)) + "</b> instead, and " + esc(was) + " unlinked. Nothing in Tally changes.</p>" });
       if (!ok) return null;   // (next-buttons: the person said no: null, not a failure)
     }
   }
@@ -337,7 +337,7 @@ export async function moveTo(r, co) {
   // asked once: what the client it goes to had linked is said in the same question (a year of it stays beside it)
   const was = typeof tallyLinkOf === "function" ? (tallyLinkOf(co) || {}).company || "" : "", also = was && coKey(was) !== coKey(r.company) && yearKey(was) !== yearKey(r.company);
   const ok = await askConfirm({ title: "Move " + shown(r.company) + " to " + co.name + "?", ok: "Move it",
-    body: "<p><b>" + esc(shown(r.company)) + "</b> is linked to <b>" + esc((from && from.name) || "another client") + "</b> now. Its books will go to <b>" + esc(co.name) + "</b> instead" + (also ? ", and " + esc(was) + " is unlinked from " + esc(co.name) : "") + ". Nothing in Tally changes.</p>" });
+    html: "<p><b>" + esc(shown(r.company)) + "</b> is linked to <b>" + esc((from && from.name) || "another client") + "</b> now. Its books will go to <b>" + esc(co.name) + "</b> instead" + (also ? ", and " + esc(was) + " is unlinked from " + esc(co.name) : "") + ". Nothing in Tally changes.</p>" });
   if (!ok) return null;
   return linkTo(r, co, { move: true, asked: true });
 }
@@ -345,7 +345,7 @@ export const unlink = (r) => {
   const co = S.companies[r.client];
   return askConfirm({ title: "Unlink " + shown(r.company) + " from " + ((co && co.name) || "its client") + "?", ok: "Unlink", danger: true,
     // next-fix-tally-links2 (the owner: "I have unlinked the tally but clients also erased"): said plainly
-    body: "<p><b>The client stays in FinCom; only the link to Tally is removed.</b> Its books stop coming to " + esc((co && co.name) || "the client") + " from " + esc(shown(r.company)) + " until it is linked again. Nothing in Tally changes.</p>" })
+    html: "<p><b>The client stays in FinCom; only the link to Tally is removed.</b> Its books stop coming to " + esc((co && co.name) || "the client") + " from " + esc(shown(r.company)) + " until it is linked again. Nothing in Tally changes.</p>" })
     .then((ok) => (ok ? linkClient(r.company, null) : null));   // (next-buttons: no, null; a failure, false)
 };
 // Change Tally company… (next-fix-tally-links, 29-Oct-2026; the owner: "I am not able to see and change the tally
@@ -357,7 +357,7 @@ export async function changeTo(co, r) {
   if (other) {
     const o = S.companies[r.client];
     const ok = await askConfirm({ title: "Link " + co.name + " to " + shown(r.company) + "?", ok: "Link this company",
-      body: "<p><b>" + esc(shown(r.company)) + "</b> is linked to <b>" + esc((o && o.name) || "another client") + "</b> now. It will be linked to <b>" + esc(co.name) + "</b> instead"
+      html: "<p><b>" + esc(shown(r.company)) + "</b> is linked to <b>" + esc((o && o.name) || "another client") + "</b> now. It will be linked to <b>" + esc(co.name) + "</b> instead"
         + (was && coKey(was) !== coKey(r.company) ? ", and " + esc(shown(was)) + " unlinked from " + esc(co.name) : "") + ". Nothing in Tally changes.</p>" });
     if (!ok) return false;
   }
@@ -412,11 +412,11 @@ export function postHere(co, company, on) {
   // next-link-record: the company's link record (tally_link_posting), asked first as before
   const rec = typeof LinkRec === "object" && LinkRec.ready() ? LinkRec.forClient(co.id).find((x) => LinkRec.isName(x, company)) : null;
   if (rec) return askConfirm({ title: on ? "Post " + co.name + "’s entries into " + shown(LinkRec.nameOf(rec)) + "?" : "Stop posting for " + co.name + "?", ok: on ? "Allow" : "Stop posting",
-    body: on ? "<p>FinCom and the bridge will post this client’s bills, bank lines and sales into the Tally company <b>" + esc(shown(LinkRec.nameOf(rec))) + "</b>. A posting meant for any other company is refused.</p>"
+    html: on ? "<p>FinCom and the bridge will post this client’s bills, bank lines and sales into the Tally company <b>" + esc(shown(LinkRec.nameOf(rec))) + "</b>. A posting meant for any other company is refused.</p>"
       : "<p>Nothing will be posted for this client into " + esc(shown(LinkRec.nameOf(rec))) + " until posting is allowed again.</p>" })
     .then((ok) => (ok ? linkPostingSet(co, rec, on) : false));
   return askConfirm({ title: v ? "Post " + co.name + "’s entries into " + shown(v) + "?" : "Stop posting for " + co.name + "?", ok: v ? "Allow" : "Stop posting",
-    body: v ? "<p>FinCom and the bridge will post this client’s bills, bank lines and sales <b>only</b> into the Tally company <b>" + esc(shown(v)) + "</b>. A posting meant for any other company is refused.</p>"
+    html: v ? "<p>FinCom and the bridge will post this client’s bills, bank lines and sales <b>only</b> into the Tally company <b>" + esc(shown(v)) + "</b>. A posting meant for any other company is refused.</p>"
       : "<p>Nothing will be posted for this client until a company is chosen again.</p>" })
     .then((ok) => { if (!ok) return; choiceConfirm(co, "postTo", v); if (S.postStop && S.postStop.cid === co.id) S.postStop = null; toast(v ? "Posting allowed into " + shown(v) + "." : "Posting stopped."); render(); });
 }
@@ -966,7 +966,7 @@ function TwoPlaces({ co, company }) {
 async function unlinkSplit(co, setBusy) {
   const sp = splitOf(co.id); if (!sp) return;
   const ok = await askConfirm({ title: "Unlink the earlier years of " + co.name + "?", ok: "Unlink", danger: true,
-    body: "<p>" + esc(shown(sp.company)) + "’s entries leave " + esc(co.name) + "’s books; " + esc(co.name) + " keeps " + esc(shown(sp.currentCompany || "its current company")) + " alone. Nothing in Tally changes.</p>" });
+    html: "<p>" + esc(shown(sp.company)) + "’s entries leave " + esc(co.name) + "’s books; " + esc(co.name) + " keeps " + esc(shown(sp.currentCompany || "its current company")) + " alone. Nothing in Tally changes.</p>" });
   if (!ok) return;
   if (setBusy) setBusy(true);
   const r = await splitUnlink(co.id);

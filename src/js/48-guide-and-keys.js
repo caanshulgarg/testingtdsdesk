@@ -38,7 +38,7 @@ const KEYS = [
 // a new client's first steps hidden (app/src/parts/Notes.jsx)
 function onbHide(){ const co = CO(); if (co){ co.onbHide = true; Store.saveCompany(co); render(); } }
 function showKeys(){
-  askConfirm({title: "Keyboard shortcuts", ok: "Close", body: '<table class="bk-table keys-t"><tbody>' + KEYS.map(([k, d]) => "<tr><td>" + k.split(" or ").map(x => "<kbd>" + esc(x) + "</kbd>").join(" or ") + "</td><td>" + esc(d) + "</td></tr>").join("") + "</tbody></table>"});
+  askConfirm({title: "Keyboard shortcuts", ok: "Close", html: '<table class="bk-table keys-t"><tbody>' + KEYS.map(([k, d]) => "<tr><td>" + k.split(" or ").map(x => "<kbd>" + esc(x) + "</kbd>").join(" or ") + "</td><td>" + esc(d) + "</td></tr>").join("") + "</tbody></table>"});
 }
 if (typeof document !== "undefined"){
   document.addEventListener("click", e => {

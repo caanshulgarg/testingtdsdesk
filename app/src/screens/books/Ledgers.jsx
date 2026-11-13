@@ -88,7 +88,7 @@ export function openEditor(b, n) { S.ledEdit = n; S.ledEditPrev = { cid: b.cid, 
 export function changeRow(b, r) {
   const n = r.used || 0;
   if (!r.ok || !n) { openEditor(b, r.n); return; }
-  askConfirm({ title: "Change a confirmed ledger?", ok: "Change it", body: esc("This ledger is used in " + plural(n, "entry", "entries") + "; your " + (LedMaster.isTds((r.m || {}).what) ? "TDS" : "GST") + " figures will change. Change it?") })
+  askConfirm({ title: "Change a confirmed ledger?", ok: "Change it", html: esc("This ledger is used in " + plural(n, "entry", "entries") + "; your " + (LedMaster.isTds((r.m || {}).what) ? "TDS" : "GST") + " figures will change. Change it?") })
     .then((yes) => { if (yes) openEditor(b, r.n); });
 }
 

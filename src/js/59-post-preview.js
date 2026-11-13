@@ -133,7 +133,7 @@ const PostGate = {
     });
     if (create.length && !this.approved(create.map(m => m.name), payload.company)){
       const a = await askConfirm({title: "Create " + (create.length === 1 ? "a new ledger" : create.length + " new ledgers") + " in " + payload.company + "?", ok: "Create and post", wide: true,
-        body: '<div data-create-masters="">' + create.map(m => "<p style=\"margin:0 0 6px\">" + this.createLine(m, payload.company) + (m.like ? ' <span class="tag warn">Tally has “' + esc(m.like) + "”</span>" : "") + "</p>").join("") +
+        html: '<div data-create-masters="">' + create.map(m => "<p style=\"margin:0 0 6px\">" + this.createLine(m, payload.company) + (m.like ? ' <span class="tag warn">Tally has “' + esc(m.like) + "”</span>" : "") + "</p>").join("") +
           '<p class="note" style="margin:10px 0 0">Nothing is sent to Tally until you confirm. Cancel, and choose the Tally ledger instead if it already exists under another name.</p></div>'});
       if (!a) return {cancelled: true, masters: keep, results};
     }
@@ -682,7 +682,7 @@ function postTestCopiesOk(co){
 async function postTrialConfirm(co, n){
   const company = String((co && co.postTo) || "").trim() || postCompanyName(co);
   const a = await askConfirm({title: "Add test entries?", ok: "Continue",
-    body: "<p>" + esc("This will add " + n + (n === 1 ? " test entry" : " test entries") + " to " + company + ". Continue?") + "</p>" +
+    html: "<p>" + esc("This will add " + n + (n === 1 ? " test entry" : " test entries") + " to " + company + ". Continue?") + "</p>" +
       "<p>Their narration starts with TRIAL.</p>"});
   return !!(a && a.ok);
 }
@@ -830,7 +830,7 @@ async function postPreview(co, rows, opts){
   const items = rows.filter(r => r.xml).map(r => ({kind: r.kind, id: r.id, xml: r.xml, e: r.e}));
   const nWarn = () => document.querySelectorAll("#confirmBox [data-pv-warn] li").length;
   const a = await askConfirm({title: opts.view ? "Preview: " + (rows[0] ? (rows[0].no || rows[0].party) : "") : "Post " + entries(items.length) + " to " + company + "?", ok: opts.view ? "Close" : "Post", wide: true,
-    body: '<div data-post-preview="" style="max-height:60vh;overflow:auto">' + (opts.view ? "" : '<p style="margin:0 0 8px">Each entry exactly as it goes to Tally, into <b>' + esc(company) + "</b>." + (typeof postThroughWords === "function" && postThroughWords(co) ? " " + esc(postThroughWords(co)) : "") + "</p>" + postTargetHtml(co, company)) + PostGate.html(items, co, masters, company) + "</div>",
+    html: '<div data-post-preview="" style="max-height:60vh;overflow:auto">' + (opts.view ? "" : '<p style="margin:0 0 8px">Each entry exactly as it goes to Tally, into <b>' + esc(company) + "</b>." + (typeof postThroughWords === "function" && postThroughWords(co) ? " " + esc(postThroughWords(co)) : "") + "</p>" + postTargetHtml(co, company)) + PostGate.html(items, co, masters, company) + "</div>",
     onReady: box => { postTargetWire(box, co, company); if (opts.view){ const no = box.querySelector('[data-cbx="no"]'); if (no) no.remove(); } else { const n = nWarn(); if (n){ const p = document.createElement("p"); p.className = "bk-warn"; p.setAttribute("data-pv-count", ""); p.textContent = n + " warning" + (n === 1 ? "" : "s") + " above: look at them before posting."; box.querySelector(".cbx .row").before(p); } } }});
   if (!a || opts.view) return false;
   PostGate.approve(masters.map(m => m.name), company);

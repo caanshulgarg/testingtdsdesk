@@ -168,7 +168,7 @@ function RunLine() {
   const run = auto.reduce((a, r) => (String(r.auto.at) > String(a.auto.at) ? r : a)).auto.run, n = auto.filter((r) => r.auto.run === run).length;
   const day = istDay(Date.now()), today = auto.filter((r) => istDay(r.auto.at) === day).length;
   return <p className="ap-runline" data-ap-runline="">{today} posted automatically today · <button className="linkbtn" data-ap-undo-run={run} onClick={() => askConfirm({ title: "Undo this automatic run?", ok: "Undo the run",
-    body: "<p class='note'>" + n + " entries: queued ones are taken off the queue; ones in Tally are deleted from Tally through the bridge on this computer. They come back as “Waiting for me”, and each party's rule is paused until you approve one again.</p>" })
+    html: "<p class='note'>" + n + " entries: queued ones are taken off the queue; ones in Tally are deleted from Tally through the bridge on this computer. They come back as “Waiting for me”, and each party's rule is paused until you approve one again.</p>" })
     .then((a) => a && loadAP().then((ap) => ap.undoRun(b.cid, run)).then((r) => { toast(r.words || r.why); render(); }))}>Undo this run ({n})</button></p>;
 }
 

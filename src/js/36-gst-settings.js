@@ -39,7 +39,7 @@ async function gsetApply(reg, what, fn){
   const regs = GSTR.gstins(S.books), others = regs.filter(g => g.slice(0, 2) !== reg), me = regs.find(g => g.slice(0, 2) === reg) || reg;
   if (!others.length || typeof document === "undefined"){ fn(reg); return true; }
   const r = await askConfirm({title: "Apply to which GSTINs?", ok: "Save",
-    body: "<p>" + esc(what) + " for " + esc(me) + ".</p>" +
+    html: "<p>" + esc(what) + " for " + esc(me) + ".</p>" +
       '<label class="chk" style="display:block"><input type="radio" name="gapto" value="one" checked> Only ' + esc(me) + "</label>" +
       '<label class="chk" style="display:block"><input type="radio" name="gapto" value="all"> All ' + regs.length + " GSTINs of the client</label>" +
       '<label class="chk" style="display:block"><input type="radio" name="gapto" value="some"> ' + esc(me) + " and the GSTINs ticked:</label>" +

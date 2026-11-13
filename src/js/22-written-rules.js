@@ -203,7 +203,7 @@ async function copyRulesTo(rules){
   if (!others.length){ toast("There is only one client at the moment."); return; }
   const fixed = rules.filter(r => r.then.ledger && !r.then.kind).length;
   const ans = await askConfirm({title: "Copy " + rules.length + " rule" + (rules.length === 1 ? "" : "s") + " to other clients", ok: "Copy the rules", wide: true,
-    body: (fixed ? '<p class="bk-warn">' + fixed + " of these name a ledger directly. In a client whose Tally has no ledger of that name, matching lines will simply wait in To review \u2014 nothing wrong is posted.</p>" : "") +
+    html: (fixed ? '<p class="bk-warn">' + fixed + " of these name a ledger directly. In a client whose Tally has no ledger of that name, matching lines will simply wait in To review \u2014 nothing wrong is posted.</p>" : "") +
       '<p class="note">Rules are added at the top of each client\u2019s list. Nothing already decided is changed.</p>' +
       '<div class="row" style="margin:6px 0"><button class="btn small" type="button" id="cpAll">Tick all</button><button class="btn small" type="button" id="cpNone">Untick all</button></div>' +
       '<div style="max-height:320px;overflow:auto;border:1px solid var(--rule);border-radius:8px;padding:8px">' +
@@ -275,7 +275,7 @@ async function openRuleEditor(rule, isNew){
     '<label><span>Voucher type</span><select id="rlVtype"><option value="">decide from the ledger</option>' + ["Payment", "Receipt", "Contra", "Journal"].map(v => '<option' + (rule.then.vtype === v ? " selected" : "") + ">" + v + "</option>").join("") + "</select></label></div>" +
     '<label class="chk" style="margin-top:8px"><input type="checkbox" id="rlReady"' + (rule.then.ready ? " checked" : "") + "> Mark matching lines ready to post (untick to have them shown for checking first)</label>" +
     '<div id="rlPreview" class="bdiag" style="margin-top:10px">Fill in the words above to see what this would match.</div>';
-  const ans = await askConfirm({title: isNew ? "New rule" : "Change this rule", ok: isNew ? "Save the rule" : "Save changes", wide: true, body,
+  const ans = await askConfirm({title: isNew ? "New rule" : "Change this rule", ok: isNew ? "Save the rule" : "Save changes", wide: true, html: body,
     onReady: () => { rulePreviewLive(); ["rlV0", "rlV1", "rlOp0", "rlOp1", "rlDir", "rlMode", "rlMin", "rlMax", "rlAcc"].forEach(id => {
       const el = document.getElementById(id); if (el){ el.addEventListener("input", rulePreviewLive); el.addEventListener("change", rulePreviewLive); } }); },
     read: () => readRuleForm(rule)});

@@ -402,7 +402,7 @@ async function postRemoveAsk(co, rows) {
   if (!ok.length) { toast("These rows cannot be removed: their posting is still going on."); return; }
   const n = ok.length, kept = rows.length - n;
   const a = await askConfirm({ title: n === 1 ? "Remove this row from the list?" : "Remove " + n + " rows?", ok: "Remove", danger: true,
-    body: "<p>" + esc(n === 1 ? "Remove this row from the list? The entry in Tally is not affected. You can restore it from Removed." : "Remove " + n + " rows from this list? The entries in Tally are not affected. You can restore them from Removed.") + "</p>" +
+    html: "<p>" + esc(n === 1 ? "Remove this row from the list? The entry in Tally is not affected. You can restore it from Removed." : "Remove " + n + " rows from this list? The entries in Tally are not affected. You can restore them from Removed.") + "</p>" +
       (kept ? "<p>" + esc(kept === 1 ? "1 row is left as it is: its posting is still going on." : kept + " rows are left as they are: their posting is still going on.") + "</p>" : "") +
       '<div class="bk-form one"><label><span>Why (optional)</span><input id="removeWhy" maxlength="300" placeholder="Seen and done"></label></div>',
     read: () => ({ why: ((document.getElementById("removeWhy") || {}).value || "").trim() }) });

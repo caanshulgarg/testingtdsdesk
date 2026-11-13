@@ -139,14 +139,14 @@ function AddList({ c, rows, m, form, locked, probs }) {
   const moveHere = async (r) => {
     const o = byId[r.challan], ob = TDSReg.balance(o, cx).tax;
     if (r.tds > left + 0.005) { toast(money(left) + " left on this challan: " + money(r.tds) + " does not fit."); return; }
-    if (Math.abs(ob) < 0.005 && !(await askConfirm({ title: "Move it off challan " + o.serial + "?", body: esc("Challan " + o.serial + " · " + day(o.date) + " is fully used now; it would then have " + money(r.tds) + " not on any deduction."), ok: "Move here" }))) return;
+    if (Math.abs(ob) < 0.005 && !(await askConfirm({ title: "Move it off challan " + o.serial + "?", html: esc("Challan " + o.serial + " · " + day(o.date) + " is fully used now; it would then have " + money(r.tds) + " not on any deduction."), ok: "Move here" }))) return;
     const y = TDSMatch.move([r.id], c.id); if (!y.ok) toast(y.why); render();
   };
   // the ticked rows moved here in one go (TDSMatch.move: refused beyond the balance), one Undo for all of them
   const bulk = async () => {
     if (!picked.length || tot > left + 0.005) return;
     const full = Array.from(new Set(picked.filter((x) => x.o).map((x) => x.o))).filter((o) => Math.abs(TDSReg.balance(o, cx).tax) < 0.005);
-    if (full.length && !(await askConfirm({ title: "Move " + picked.length + " deduction" + (picked.length === 1 ? "" : "s") + " here?", body: esc("Challan " + full.map((o) => o.serial + " · " + day(o.date)).join(", ") + (full.length === 1 ? " is" : " are") + " fully used now; it would then have tax not on any deduction."), ok: "Move here" }))) return;
+    if (full.length && !(await askConfirm({ title: "Move " + picked.length + " deduction" + (picked.length === 1 ? "" : "s") + " here?", html: esc("Challan " + full.map((o) => o.serial + " · " + day(o.date)).join(", ") + (full.length === 1 ? " is" : " are") + " fully used now; it would then have tax not on any deduction."), ok: "Move here" }))) return;
     const was = picked.map((x) => [x.r.id, x.o ? x.o.id : ""]);
     const y = TDSMatch.move(picked.map((x) => x.r.id), c.id);
     if (!y.ok) { toast(y.why); render(); return; }
@@ -218,7 +218,7 @@ async function fixEarly(rows) {
   const plan = earlyPlan(rows);
   if (!plan.length) return;
   const line = (x) => esc((x.r.party || x.r.employee || "?") + " · " + day(x.r.date) + " · " + money(x.r.tds) + ": " + x.from.serial + " (" + day(x.from.date) + ") → " + (x.to ? x.to.serial + " (" + day(x.to.date) + ")" : "no challan fits: Pay a challan"));
-  const ok = await askConfirm({ title: "Put " + plan.length + " on the right challans?", ok: "Move", body: "<ul style=\"margin:0;padding-left:18px\">" + plan.map((x) => "<li>" + line(x) + "</li>").join("") + "</ul>" });
+  const ok = await askConfirm({ title: "Put " + plan.length + " on the right challans?", ok: "Move", html: "<ul style=\"margin:0;padding-left:18px\">" + plan.map((x) => "<li>" + line(x) + "</li>").join("") + "</ul>" });
   if (!ok || !ok.ok) return;
   const was = plan.map((x) => [x.r.id, x.from.id]); let n = 0;
   plan.forEach((x) => { const y = x.to ? TDSMatch.move([x.r.id], x.to.id) : TDSMatch.takeOff([x.r.id]); if (y && y.ok) n++; else if (y) toast(y.why); });

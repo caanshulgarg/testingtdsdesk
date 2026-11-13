@@ -149,7 +149,7 @@ with sync_playwright() as p:
         # a dialog open: no move
         E("(c) => openCompany(c).then(() => goStep('collect', 'bills'))", cid); W(500)
         up3 = E("location.hash"); b6 = E(MK, [cid, [["Tau Co", "U/1", "2026-09-28", 1000], ["Phi Co", "F/1", "2026-09-28", 1000]]])
-        E("() => { window.__dlg = askConfirm({title: 'A question', ok: 'Yes', body: '<p>?</p>'}); }"); W(300)
+        E("() => { window.__dlg = askConfirm({title: 'A question', ok: 'Yes', html: '<p>?</p>'}); }"); W(300)
         E(JOBS, [cid, b6, up3]); W(500)
         ok(E("location.hash") == up3 and toast_words().startswith("2 bills read"), "a dialog open: the page stays (%s)" % E("location.hash"))
         pg.keyboard.press("Escape"); W(300)
@@ -182,7 +182,7 @@ with sync_playwright() as p:
         pg.click('#toast [data-toast-act="Undo"]'); W(600)
         ok(E("(a) => D().entries[a].status", q[1]) == "draft" and E("S.selected") == q[1], "Undo: the bill is To review again, and open")
         # a dialog open when the bill is approved (an approval asked from elsewhere): the page stays, the toast offers Next
-        E("() => { askConfirm({title: 'A question', ok: 'Yes', body: '<p>?</p>'}); }"); W(300)
+        E("() => { askConfirm({title: 'A question', ok: 'Yes', html: '<p>?</p>'}); }"); W(300)
         E("(a) => approve(D().entries[a])", q[1]); W(500)
         ok(E("(a) => D().entries[a].status", q[1]) == "approved" and E("S.selected") == q[1] and "Next →" in toast_acts(), "approved with a dialog open: the bill stays, toast with Next → (%r)" % toast_acts())
         hide_safe()

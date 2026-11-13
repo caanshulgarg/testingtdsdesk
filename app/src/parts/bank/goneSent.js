@@ -35,7 +35,7 @@ async function bankGoneAsk(b, ids) {
   if (!pick.length) return ids;
   const dates = [...new Set(pick.map((r) => whenOf(r.goneSent.at)).filter(Boolean))].slice(0, 3).join(", ");
   const yes = await askConfirm({ title: pick.length + (pick.length === 1 ? " entry was" : " entries were") + " posted before; post again?", ok: "Post again",
-    body: (pick.length === 1 ? "This entry was" : "These " + pick.length + " entries were") + " posted to Tally" + (dates ? " on " + dates : "") +
+    html: (pick.length === 1 ? "This entry was" : "These " + pick.length + " entries were") + " posted to Tally" + (dates ? " on " + dates : "") +
       " from a statement that has since been deleted. Tally still has them unless they were removed there: posting again makes a second voucher for each." +
       " Choose Cancel to post the other lines only." });
   if (yes) { pick.forEach((r) => { r.goneSent.ok = true; }); saveBank({ rows: true }); return ids; }

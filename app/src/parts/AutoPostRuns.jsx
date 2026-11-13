@@ -43,7 +43,7 @@ export default function AutoRuns({ co }) {
         <h3>Automatic run · {fmtDateTime(r.at)} · {live.length} {live.length === 1 ? "entry" : "entries"} <span className="tag stamp">Auto</span></h3>
         <p className="note" style={{ margin: "0 0 8px" }}>{[r.bank && r.bank + " bank line" + (r.bank === 1 ? "" : "s"), r.bills && r.bills + " bill" + (r.bills === 1 ? "" : "s")].filter(Boolean).join(" and ")} of {co.name}. {r.inTally} in Tally{r.queued ? ", " + r.queued + " queued (they go when Tally is open on the Tally computer)" : ""}{r.failed ? ", " + r.failed + " not posted" : ""}.</p>
         {live.length > 0 && <button className="btn small" data-ap-undo-run={r.run} onClick={() => askConfirm({ title: "Undo the whole run?", ok: "Undo " + live.length,
-          body: "<p class='note'>Queued entries are taken off the queue. Entries in Tally are deleted from Tally through the bridge on this computer, and come back as “Waiting for me”. Each party's rule is paused until you approve one again.</p>" })
+          html: "<p class='note'>Queued entries are taken off the queue. Entries in Tally are deleted from Tally through the bridge on this computer, and come back as “Waiting for me”. Each party's rule is paused until you approve one again.</p>" })
           .then((ok) => ok && ap.undoRun(co.id, r.run).then((x) => { setMsg(x.refused && x.refused.length ? x.refused[0] : ""); toast(x.words || x.why); render(); }))}>Undo the whole run ({live.length})</button>}
         <table><thead><tr><th>Entry</th><th className="n">Amount</th><th>Where</th><th>Undo does</th><th></th></tr></thead>
           <tbody>{r.entries.map((x) => <Row key={x.id} cid={co.id} x={x} ap={ap} onMsg={setMsg} />)}</tbody></table>

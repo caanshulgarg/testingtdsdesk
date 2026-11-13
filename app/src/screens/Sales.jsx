@@ -128,7 +128,7 @@ function EinvPanel({ v }) {
           <button className="btn small" disabled={!!busy || !num(t.distance) || (!t.vehicleNo && !t.transporterId)} onClick={go("ewb", async () => { const j = await EINV.ewb(v, t); return "E-way bill " + j.ewbNo + " made."; })}>{busy === "ewb" ? "Making…" : "Make the e-way bill"}</button>
         </div>}
         {canCancel && <button className="linkbtn" style={{ marginTop: 6 }} disabled={!!busy} onClick={go("cancel", async () => {
-          const ok = await askConfirm({ title: "Cancel this IRN?", ok: "Cancel the IRN", body: '<p class="note">Within 24 hours of the IRN only. The invoice number cannot be used again for another invoice.</p>' });
+          const ok = await askConfirm({ title: "Cancel this IRN?", ok: "Cancel the IRN", html: '<p class="note">Within 24 hours of the IRN only. The invoice number cannot be used again for another invoice.</p>' });
           if (!ok) return ""; await EINV.cancel(v, "2", "Cancelled from FinCom"); return "IRN cancelled.";
         })}>Cancel the IRN</button>}
       </>}

@@ -43,18 +43,43 @@ const TRF = {
     for (let i = 0; i < data.length; i++){ const t = (k2 | 2) & 0xffff, kb = (Math.imul(t, t ^ 1) >>> 8) & 0xff, c = data[i] ^ kb; upd(c); out[i] = c; }
     return out;
   },
-  async inflate(data){
+  // What one upload may open to (a zip of a few KB can be made to open to gigabytes, or to hold itself for ever): 200 MB
+  // and 2,000 files in all, the zips inside it counted too, and a zip inside a zip, never deeper (TRACES' own downloads:
+  // a zip holding a zip of PDFs). More than that is refused in plain words (zipWords) before the page runs out of memory.
+  ZIP_MAX: 200 * 1024 * 1024, ZIP_FILES: 2000, ZIP_DEEP: 2,
+  zipRoom(){ return {left: this.ZIP_MAX, files: this.ZIP_FILES}; },
+  // room: what is left of the upload's allowance; the stream is stopped as soon as it gives more than that
+  async inflate(data, room){
     if (typeof DecompressionStream !== "function") throw {code: "zip_unsupported"};
-    const s = new Blob([data]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
-    return new Uint8Array(await new Response(s).arrayBuffer());
+    room = room || this.zipRoom();
+    const rd = new Blob([data]).stream().pipeThrough(new DecompressionStream("deflate-raw")).getReader(), parts = [];
+    let n = 0;
+    for (;;){
+      const x = await rd.read();
+      if (x.done) break;
+      n += x.value.length;
+      if (n > room.left){ try { await rd.cancel(); } catch (e){} throw {code: "zip_big"}; }
+      parts.push(x.value);
+    }
+    room.left -= n;
+    const out = new Uint8Array(n); let at = 0;
+    for (const p of parts){ out.set(p, at); at += p.length; }
+    return out;
   },
   // [{name, data: Uint8Array}]; a password asked once if a file in it is locked
-  async unzip(bytes, ask){
+  async unzip(bytes, ask, room){
+    room = room || this.zipRoom();
     const u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes), dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
     let e = -1; for (let i = u8.length - 22; i >= Math.max(0, u8.length - 65557); i--) if (dv.getUint32(i, true) === 0x06054b50){ e = i; break; }
     if (e < 0) throw {code: "zip_broken"};
     const n = dv.getUint16(e + 10, true); let p = dv.getUint32(e + 16, true);
     const out = []; let password = null;
+    // the sizes the zip's own list states, before anything is opened (the stream's own count still decides: inflate)
+    if ((room.files -= n) < 0) throw {code: "zip_big"};
+    for (let i = 0, q = p, sum = 0; i < n && q + 46 <= u8.length && dv.getUint32(q, true) === 0x02014b50; i++){
+      if ((sum += dv.getUint32(q + 24, true)) > room.left) throw {code: "zip_big"};
+      q += 46 + dv.getUint16(q + 28, true) + dv.getUint16(q + 30, true) + dv.getUint16(q + 32, true);
+    }
     for (let i = 0; i < n; i++){
       if (dv.getUint32(p, true) !== 0x02014b50) throw {code: "zip_broken"};
       const flags = dv.getUint16(p + 8, true), method = dv.getUint16(p + 10, true), crc = dv.getUint32(p + 16, true), csize = dv.getUint32(p + 20, true);
@@ -73,33 +98,37 @@ const TRF = {
         if (d[11] !== check) throw {code: "zip_password"};
         data = d.subarray(12);
       }
-      if (method === 8) data = await this.inflate(data);
+      if (method === 8) data = await this.inflate(data, room);
       else if (method !== 0) throw {code: "zip_unsupported"};
+      else if ((room.left -= data.length) < 0) throw {code: "zip_big"};
       out.push({name: name.split("/").pop(), data});
     }
     return out;
   },
   async askPassword(what){
     const ans = await askConfirm({title: "This zip has a password", ok: "Open",
-      body: esc(what) + " is locked. Type the password TRACES gave with the download.<br><input type=\"password\" id=\"trfpw\" aria-label=\"Zip password\" style=\"margin-top:8px;width:100%\">",
+      html: esc(what) + " is locked. Type the password TRACES gave with the download.<br><input type=\"password\" id=\"trfpw\" aria-label=\"Zip password\" style=\"margin-top:8px;width:100%\">",
       read: () => (document.getElementById("trfpw") || {}).value || "", validate: v => v ? "" : "Type the password."});
     return ans && ans.ok ? ans.data : null;
   },
   // every file of an upload: a zip opened (and a zip inside it), anything else as it is
-  async expand(file){
+  async expand(file, room, deep){
     const isZip = /\.zip$/i.test(file.name || "") || file.type === "application/zip";
     if (!isZip) return [file];
-    const parts = await this.unzip(new Uint8Array(await file.arrayBuffer()), () => this.askPassword(file.name));
+    room = room || this.zipRoom(); deep = deep || 1;
+    if (deep > this.ZIP_DEEP || file.size > room.left) throw {code: "zip_big"};
+    const parts = await this.unzip(new Uint8Array(await file.arrayBuffer()), () => this.askPassword(file.name), room);
     const out = [];
     for (const x of parts){
       const f = new File([x.data], x.name, {type: /\.pdf$/i.test(x.name) ? "application/pdf" : /\.zip$/i.test(x.name) ? "application/zip" : "text/plain"});
-      if (/\.zip$/i.test(x.name)) (await this.expand(f)).forEach(y => out.push(y)); else out.push(f);
+      if (/\.zip$/i.test(x.name)) (await this.expand(f, room, deep + 1)).forEach(y => out.push(y)); else out.push(f);
     }
     return out;
   },
   zipWords(e){
     const c = e && e.code;
     return c === "zip_aes" ? "it is locked with AES, which FinCom cannot open: unzip it on the computer (7-Zip or WinZip, with TRACES' password) and upload the files inside."
+      : c === "zip_big" ? "it opens to more than FinCom reads in one upload (200 MB, 2,000 files, a zip inside a zip): unzip it on the computer and upload the files inside."
       : c === "zip_password" ? "the password did not open it." : c === "zip_cancelled" ? "no password was given." : c === "zip_unsupported" ? "it is packed in a way FinCom cannot open: unzip it on the computer and upload the files inside."
       : "it could not be opened as a zip.";
   },
@@ -326,7 +355,7 @@ const TRF = {
   remove(key, id){
     const b = S.books, list = Array.isArray(b[key]) ? b[key] : [], x = list.find(r => r.id === id);
     if (!x) return Promise.resolve(false);
-    return askConfirm({title: "Take this out?", body: esc(x.file || x.name || "") + " leaves FinCom. Upload it again to bring it back.", ok: "Take it out"}).then(ok => {
+    return askConfirm({title: "Take this out?", html: esc(x.file || x.name || "") + " leaves FinCom. Upload it again to bring it back.", ok: "Take it out"}).then(ok => {
       if (!ok || !ok.ok) return false;
       b[key] = list.filter(r => r.id !== id);
       if (key === "f16a") try { FileStore.drop((CO() || {}).id, id); if (x.docPath && typeof CloudDocs === "object") CloudDocs.remove(x.docPath); } catch (e){}

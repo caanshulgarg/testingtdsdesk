@@ -228,7 +228,7 @@ function gstvFileIt(id){
 async function gstvRemove(id){
   const x = gstvFind(id); if (!x) return;
   const ans = await askConfirm({title: "Remove this PDF from the list?", ok: "Remove", danger: true,
-    body: esc(GSTV.label(x.form) + " " + GSTV.perLabel(x.form, x.per, x.reg) + " — " + x.name) + " leaves the list. The PDF is kept and can be restored. The return on the portal is not touched." +
+    html: esc(GSTV.label(x.form) + " " + GSTV.perLabel(x.form, x.per, x.reg) + " — " + x.name) + " leaves the list. The PDF is kept and can be restored. The return on the portal is not touched." +
       '<label class="f" style="margin-top:12px"><span>Reason</span><input type="text" id="cbxWhy" autocomplete="off" aria-label="Reason"></label>',
     read: () => ((document.getElementById("cbxWhy") || {}).value || "").trim()});
   if (!ans) return;

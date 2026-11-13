@@ -28,7 +28,7 @@ function confirmOpen() { const c = typeof document !== "undefined" && document.g
 async function ask(top) {
   // "Discard?" for typed input; window.askConfirm is the app's own confirm box (src/js/23)
   if (typeof window.askConfirm !== "function") return window.confirm("Discard what you typed?");
-  const r = await window.askConfirm({ title: "Discard what you typed?", body: "It is not saved.", ok: "Discard", cancel: "Keep editing" });
+  const r = await window.askConfirm({ title: "Discard what you typed?", html: "It is not saved.", ok: "Discard", cancel: "Keep editing" });
   return !!(r && r.ok);
 }
 async function tryClose(top, how) {

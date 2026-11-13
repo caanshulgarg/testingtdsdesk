@@ -41,7 +41,7 @@ const PostReg = {
   async markPosted(cid, x){
     const no = (x.d && x.d.no) || x.id;
     const a = await askConfirm({title: "Mark " + no + " as posted in Tally?", ok: "Mark posted",
-      body: "<p>You saw this entry in Tally. FinCom records it as posted, with who marked it and when; nothing is sent to Tally.</p>" +
+      html: "<p>You saw this entry in Tally. FinCom records it as posted, with who marked it and when; nothing is sent to Tally.</p>" +
         '<div class="bk-form one"><label><span>Tally id</span><input id="regVch" maxlength="20" inputmode="numeric" placeholder="Digits only, as Tally shows it"></label>' +
         '<label><span>Reason (kept with your name)</span><input id="regNote" maxlength="300" placeholder="Where you saw it in Tally"></label></div>',
       read: () => ({vch: ((document.getElementById("regVch") || {}).value || "").trim(), note: ((document.getElementById("regNote") || {}).value || "").trim()}),
@@ -52,7 +52,7 @@ const PostReg = {
   async release(cid, x){
     const no = (x.d && x.d.no) || x.id;
     const a = await askConfirm({title: no + ": not in Tally?", ok: "Not in Tally – post again", danger: true,
-      body: "<p>Before anything is sent, the FinCom Bridge looks in Tally for this entry. If it is there, it is marked posted with Tally’s id; if it is not, a person confirms and it is sent again, once. Your name, the time and the reason are kept.</p>" +
+      html: "<p>Before anything is sent, the FinCom Bridge looks in Tally for this entry. If it is there, it is marked posted with Tally’s id; if it is not, a person confirms and it is sent again, once. Your name, the time and the reason are kept.</p>" +
         '<div class="bk-form one"><label><span>Reason (what you saw in Tally)</span><input id="regWhy" maxlength="500" placeholder="Not in the Day Book of …"></label></div>',
       read: () => ({why: ((document.getElementById("regWhy") || {}).value || "").trim()}), validate: d => d && d.why ? "" : "Say what you saw in Tally."});
     if (!a || !a.ok) return;

@@ -277,7 +277,7 @@ async function aihNote(how, id){
   const a = AIH.st(), n = a.notices.find(z => z.id === id); if (!n) return;
   const file = async () => FileStore.get(CO().id, n.id, n.docPath, n.name);
   if (how === "open"){ const f = await file(); if (!f){ toast("The notice is not on this computer and could not be fetched."); return; } window.open(blobUrl(f), "_blank"); return; }
-  if (how === "del"){ const r = await askConfirm({title: "Remove this notice?", ok: "Remove", body: '<p class="note">The notice and its draft reply are removed from FinCom.</p>'}); if (!r || !r.ok) return; a.notices = a.notices.filter(z => z !== n); try { FileStore.drop(CO().id, n.id); } catch (x){} AIH.log("removed a notice", n.name); await saveBooks(); render(); return; }
+  if (how === "del"){ const r = await askConfirm({title: "Remove this notice?", ok: "Remove", html: '<p class="note">The notice and its draft reply are removed from FinCom.</p>'}); if (!r || !r.ok) return; a.notices = a.notices.filter(z => z !== n); try { FileStore.drop(CO().id, n.id); } catch (x){} AIH.log("removed a notice", n.name); await saveBooks(); render(); return; }
   if (how === "retry"){ const f = await file(); if (!f){ toast("The notice file is not here any more; add it again."); return; } a.notices = a.notices.filter(z => z !== n); AIH.readNotice(f, n.kind); return; }
   if (how === "redo"){ n.figures = AIH.noticeFigures(n); AIH.draft(n); return; }
   if (how === "copy"){ try { await navigator.clipboard.writeText(n.reply || ""); toast("Copied."); } catch (x){ toast("Could not copy; select the text and copy it."); } return; }

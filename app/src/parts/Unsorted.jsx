@@ -10,7 +10,7 @@ export default function Unsorted() {
   const drop = (id) => { delete S.inbox[id]; delete S.files[id]; Store.deleteInbox(id); render(); };
   // deleting removes the file for good, so it is asked first, naming the file (spec K9)
   const ask = (i) => askConfirm({ title: "Delete " + i.fileName + "?", ok: "Delete", danger: true,
-    body: '<p class="note">The file and what was read from it are removed from FinCom. This cannot be undone.</p>' }).then((a) => { if (a && a.ok !== false) drop(i.id); });
+    html: '<p class="note">The file and what was read from it are removed from FinCom. This cannot be undone.</p>' }).then((a) => { if (a && a.ok !== false) drop(i.id); });
   // the one list table (spec K6): date, number (the file), party, amount, then the rest
   return <ListTable name="unsorted" className="data" rows={items} rowKey={(i) => i.id} unit={["file", "files"]}
     cols={[

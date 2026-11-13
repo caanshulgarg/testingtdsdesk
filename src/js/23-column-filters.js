@@ -261,7 +261,7 @@ async function openCreateLedger(name, rowId, targetFk, opts){
   const ifsc = row ? ((row.narr.toUpperCase().match(/\b([A-Z]{4}0[A-Z0-9]{6})\b/) || [])[1] || "") : "";
   const near = Array.from(knownLedgers().values()).map(l => ({l, s: nameSim(l.name, name)})).filter(x => x.s >= 0.7).sort((a, c) => c.s - a.s).slice(0, 3);
   const ans = await askConfirm({title: "Create a ledger in Tally", ok: "Create ledger",
-    body: (near.length ? '<p class="bk-warn">Similar ledgers already in Tally: ' + near.map(x => "<b>" + esc(x.l.name) + "</b>").join(", ") + ". Make sure this is a different party.</p>" : "") +
+    html: (near.length ? '<p class="bk-warn">Similar ledgers already in Tally: ' + near.map(x => "<b>" + esc(x.l.name) + "</b>").join(", ") + ". Make sure this is a different party.</p>" : "") +
       '<div class="bk-form one"><label><span>Ledger name</span><input type="text" id="nlName" value="' + esc(name) + '"></label>' +
       '<label><span>Under (group)</span><select id="nlGroup">' + groups.map(g => "<option" + (g === guess ? " selected" : "") + ">" + esc(g) + "</option>").join("") + "</select></label>" +
       '<label><span>PAN (optional)</span><input type="text" id="nlPan" maxlength="10" value="' + esc(opts.gstin && gstinValid(opts.gstin) ? opts.gstin.slice(2, 12) : "") + '"></label><label><span>GSTIN (optional)</span><input type="text" id="nlGstin" maxlength="15" value="' + esc(opts.gstin || "") + '"></label>' +
@@ -424,7 +424,7 @@ document.addEventListener("scroll", () => { if (AC.fk) acDraw(acInput()); }, tru
 function confirmTyped(o){
   const name = String((CO() || {}).name || "").trim();
   return askConfirm(Object.assign({danger: true}, o, {
-    body: o.body + '<label class="f" style="margin-top:12px"><span>Reason (kept with what is removed)</span><input type="text" id="cbxWhy" autocomplete="off" aria-label="Reason" placeholder="e.g. read again from Tally"></label>' +
+    html: o.html + '<label class="f" style="margin-top:12px"><span>Reason (kept with what is removed)</span><input type="text" id="cbxWhy" autocomplete="off" aria-label="Reason" placeholder="e.g. read again from Tally"></label>' +
       '<label class="f" style="margin-top:10px"><span>To go ahead, type the client\u2019s name: <b>' + esc(name) + '</b></span><input type="text" id="cbxName" autocomplete="off" aria-label="Type the client\u2019s name"></label>',
     read: () => ({name: ((document.getElementById("cbxName") || {}).value || "").trim(), reason: ((document.getElementById("cbxWhy") || {}).value || "").trim()}),
     validate: v => v.name.toLowerCase().replace(/\s+/g, " ") === name.toLowerCase().replace(/\s+/g, " ") ? "" : "Type the client\u2019s name exactly as shown: " + name + "."
@@ -495,11 +495,12 @@ const Trash = {
   say(x){ return x.label + " \u00b7 removed " + fmtDateTime(x.at) + (x.by ? " by " + x.by : "") + (x.reason ? " \u00b7 " + x.reason : "") + (x.server ? "" : " \u00b7 kept in this browser only"); }
 };
 function askConfirm(o){
+  // o.body is plain words (shown as typed, never read as HTML); o.html is HTML its caller made, every value in it escaped
   return new Promise(done => {
     let box = document.getElementById("confirmBox");
     if (!box){ box = document.createElement("div"); box.id = "confirmBox"; document.body.appendChild(box); }
     box.innerHTML = '<div class="cbx' + (o.wide ? " wide" : "") + '" role="dialog" aria-modal="true" aria-labelledby="cbxT"><h2 id="cbxT">' + esc(o.title) + "</h2>" +
-      '<div class="note" style="font-size:14px;line-height:1.5">' + o.body + "</div>" +
+      '<div class="note" style="font-size:14px;line-height:1.5">' + (o.html || esc(o.body)) + "</div>" +
       (o.check ? '<label class="chk" style="margin-top:10px"><input type="checkbox" id="cbxCheck"> ' + esc(o.check) + "</label>" : "") +
       '<div class="row" style="justify-content:flex-end;margin-top:16px"><button class="btn" data-cbx="no">Cancel</button><button class="btn ' + (o.danger ? "danger-fill" : "primary") + '" data-cbx="yes">' + esc(o.ok || "OK") + "</button></div></div>";
     box.style.display = "flex";
@@ -528,7 +529,7 @@ async function deleteStatement(sid){
   const sent = rows.filter(r => r.state === "sent").length;
   const acc = (CO(b.cid).bankAccounts || []).find(a => a.id === st.acctId) || {};
   const ans = await confirmTyped({title: "Delete this statement?", ok: "Delete statement",
-    body: "<b>" + esc(acc.ledger || st.bank) + "</b>, " + fmtDate(st.from) + " to " + fmtDate(st.to) + " (" + esc(st.fileName) + ", " + st.n + " rows).<br>" +
+    html: "<b>" + esc(acc.ledger || st.bank) + "</b>, " + fmtDate(st.from) + " to " + fmtDate(st.to) + " (" + esc(st.fileName) + ", " + st.n + " rows).<br>" +
       "It leaves the list with the ledger choices made on its rows; they are kept, and <b>More \u2192 Restore a deleted statement</b> puts it back. Saved rules and new ledgers stay." +
       (sent ? "<br><br><b>" + sent + " entries from it were already sent to Tally.</b> Tally is not changed: if you upload it again, those rows could be sent twice. Match with the Tally bank book first." : "")});
   if (!ans) return;
@@ -568,7 +569,7 @@ async function clearStatement(){
   if (!st) return;
   const sent = b.rows.filter(r => r.state === "sent").length;
   const ans = await askConfirm({title: "Clear all decisions on this statement?", ok: "Clear decisions",
-    body: "Every row goes back to the start: ledgers you set, accepted and ignored rows are reset, what was learnt from this statement is forgotten, and the suggestions are worked out again." +
+    html: "Every row goes back to the start: ledgers you set, accepted and ignored rows are reset, what was learnt from this statement is forgotten, and the suggestions are worked out again." +
       (sent ? " The " + sent + " rows already sent to Tally stay as they are." : "") + "<br>You can undo this from the bottom bar.",
     check: "Also forget the saved rules for this client (otherwise they fill rows again straight away)"});
   if (!ans) return;
@@ -597,7 +598,7 @@ async function deleteAllStatements(){
   const b = B();
   if (!b.stmts.length){ toast("There are no statements to delete."); return; }
   const ans = await askConfirm({title: "Delete all bank statements of " + CO(b.cid).name + "?", danger: true, ok: "Delete all " + b.stmts.length,
-    body: b.stmts.length + " statements and every decision on them are removed. Tally is not changed.",
+    html: b.stmts.length + " statements and every decision on them are removed. Tally is not changed.",
     check: "Also delete saved rules, learnt history, new ledgers not yet sent, and the Tally bank books"});
   if (!ans) return;
   clearTimeout(bankSaveTimer); bankSaveTimer = null;
@@ -612,7 +613,7 @@ async function clearHistory(){
   const b = B(), n = Object.keys(b.hist.rows).length;
   if (!n){ toast("Nothing has been learnt yet."); return; }
   const ans = await askConfirm({title: "Forget the learnt history?", danger: true, ok: "Forget history",
-    body: n + " past decisions are forgotten. Rows already filled keep their ledgers; saved rules stay."});
+    html: n + " past decisions are forgotten. Rows already filled keep their ledgers; saved rules stay."});
   if (!ans) return;
   b.hist = {rows: {}, gone: b.hist.gone}; b.histVer++;
   saveBank({hist: true});
@@ -623,7 +624,7 @@ async function clearRules(){
   const b = B();
   if (!b.rules.length){ toast("There are no saved rules."); return; }
   const ans = await askConfirm({title: "Forget all " + b.rules.length + " saved rules?", danger: true, ok: "Forget rules",
-    body: "Rows already filled keep their ledgers. New statements will no longer be filled from these rules."});
+    html: "Rows already filled keep their ledgers. New statements will no longer be filled from these rules."});
   if (!ans) return;
   b.rules = [];
   saveBank({rules: true});
@@ -714,7 +715,7 @@ function ruleAct(what, id){
   if (!r) return;
   if (what === "toggle"){ r.off = !r.off; saveRules(r.scope); runRules(null, {force: true}); toast(r.off ? "Rule paused." : "Rule in use again."); render(); return; }
   if (what === "del"){
-    askConfirm({title: "Delete the rule \u201c" + ruleLabel(r) + "\u201d?", ok: "Delete", body: '<p class="note">Lines already set keep their ledger. Future statements will not use this rule.</p>'}).then(a => {
+    askConfirm({title: "Delete the rule \u201c" + ruleLabel(r) + "\u201d?", ok: "Delete", html: '<p class="note">Lines already set keep their ledger. Future statements will not use this rule.</p>'}).then(a => {
       if (!a) return;
       list.splice(i, 1); saveRules(r.scope); toast("Rule deleted."); render();
     });
@@ -1017,7 +1018,7 @@ async function companyGate(fc, b, co, fname, quiet){
       const why = n(had.name) === n(fc.name)
         ? fname + " is from another Tally company that has the same name (\u201c" + fc.name + "\u201d). Choose the file exported from the company these books came from."
         : fname + " is from the Tally company \u201c" + (fc.name || "another company") + "\u201d; the books here are from \u201c" + (had.name || "another company") + "\u201d. Choose the file exported from that company.";
-      if (!quiet) askConfirm({title: "This file is from another Tally company", ok: "Close", body: '<p class="note">' + esc(why) + "</p>"});
+      if (!quiet) askConfirm({title: "This file is from another Tally company", ok: "Close", html: '<p class="note">' + esc(why) + "</p>"});
       return {ok: false, why};
     }
     return {ok: true};
@@ -1026,7 +1027,7 @@ async function companyGate(fc, b, co, fname, quiet){
   const gstOk = fc.gstin && co && co.gstin && fc.gstin.slice(2, 12) === String(co.gstin).toUpperCase().slice(2, 12);
   if (!fc.name || gstOk || names.some(x => x && (x === n(fc.name) || x.includes(n(fc.name)) || n(fc.name).includes(x)))) return {ok: true};
   if (quiet) return {ok: true};                       // the upload for several clients: the person matched it there
-  const r = await askConfirm({title: "Is this the right company?", ok: "Yes, take it", body: '<p class="note">' + esc(fname) + " was exported from the Tally company <b>" + esc(fc.name) + "</b>. The client open here is <b>" + esc((co && co.name) || "") + "</b>" + (co && co.tallyName ? " (in Tally: " + esc(co.tallyName) + ")" : "") + ". Take it into this client\u2019s books?</p>"});
+  const r = await askConfirm({title: "Is this the right company?", ok: "Yes, take it", html: '<p class="note">' + esc(fname) + " was exported from the Tally company <b>" + esc(fc.name) + "</b>. The client open here is <b>" + esc((co && co.name) || "") + "</b>" + (co && co.tallyName ? " (in Tally: " + esc(co.tallyName) + ")" : "") + ". Take it into this client\u2019s books?</p>"});
   return r && r.ok ? {ok: true} : {ok: false, why: "not taken: it is from " + fc.name};
 }
 // a Day Book brought in on this computer, sent to FinCom's cloud (handOver: through Storage, cut into pieces of at most
@@ -1095,7 +1096,7 @@ async function bringDayBookFile(f, from0, to0, opts){
   if (!gate.ok){ b.busy = ""; render(); return {refused: gate.why}; }
     return Books.importDayBook(f, m => { b.busy = m; softRender(); }).then(async res => {
       const bad = notThisClient((res.meta || {}).gstins);
-      if (bad.length){ b.busy = ""; render(); if (opts.quiet) return {refused: panRefusal("The day book " + f.name, bad)}; askConfirm({title: "This day book is not this client\u2019s", ok: "Close", body: '<p class="note">' + esc(panRefusal("The day book " + f.name, bad)) + " Choose the day book exported from this client\u2019s company in Tally, or correct the client\u2019s GSTIN and PAN in Client setup.</p>"}); return {refused: panRefusal("The day book " + f.name, bad)}; }
+      if (bad.length){ b.busy = ""; render(); if (opts.quiet) return {refused: panRefusal("The day book " + f.name, bad)}; askConfirm({title: "This day book is not this client\u2019s", ok: "Close", html: '<p class="note">' + esc(panRefusal("The day book " + f.name, bad)) + " Choose the day book exported from this client\u2019s company in Tally, or correct the client\u2019s GSTIN and PAN in Client setup.</p>"}); return {refused: panRefusal("The day book " + f.name, bad)}; }
       // a part: the dates chosen (or the file's own first and last date); only those dates are replaced, the rest stays
       const ds = res.vouchers.map(v => v.date).filter(Boolean).sort();
       if (!ds.length){ b.busy = ""; render(); if (loud) toast("There are no entries in " + f.name + "."); return {refused: "there are no entries in " + f.name}; }
@@ -1156,7 +1157,7 @@ async function bringTbFile(f, on, opts){
   if (!/^\d{8}$/.test(on)) return no("Give the date of the trial balance (the day before the first date of the books) first.");
   let text; try { text = await Books.text(f); } catch (e){ return no("Could not read that file: " + ((e && e.message) || e)); }
   const r = TBFile.read(text, b);
-  const odd = TBFile.foreign(r, b); if (odd){ askConfirm({title: "This trial balance does not look like this client’s", ok: "Close", body: '<p class="note">' + esc(odd) + "</p>"}); return {refused: odd}; }
+  const odd = TBFile.foreign(r, b); if (odd){ askConfirm({title: "This trial balance does not look like this client’s", ok: "Close", html: '<p class="note">' + esc(odd) + "</p>"}); return {refused: odd}; }
   if (!r.rows.length) return no(r.groupsSeen ? "This trial balance shows only groups. In Tally, press Alt+F5 (detailed) so each ledger is shown, then export it again." : "No ledger balances found in " + f.name + ". Export the Trial Balance from Tally as XML.");
   const next = (t => t.getFullYear() + String(t.getMonth() + 1).padStart(2, "0") + String(t.getDate()).padStart(2, "0"))(new Date(+on.slice(0, 4), +on.slice(4, 6) - 1, +on.slice(6, 8) + 1));
   const to = (b.meta || {}).to || next;
@@ -1181,7 +1182,7 @@ async function checkTbFile(f, on, opts){
   if (!/^\d{8}$/.test(on)) return no("Give the date of the trial balance first.");
   let text; try { text = await Books.text(f); } catch (e){ return no("Could not read that file: " + ((e && e.message) || e)); }
   const r = TBFile.read(text, b);
-  const odd = TBFile.foreign(r, b); if (odd){ askConfirm({title: "This trial balance does not look like this client’s", ok: "Close", body: '<p class="note">' + esc(odd) + "</p>"}); return {refused: odd}; }
+  const odd = TBFile.foreign(r, b); if (odd){ askConfirm({title: "This trial balance does not look like this client’s", ok: "Close", html: '<p class="note">' + esc(odd) + "</p>"}); return {refused: odd}; }
   if (!r.rows.length) return no(r.groupsSeen ? "This trial balance shows only groups. In Tally, press Alt+F5 (detailed) so each ledger is shown, then export it again." : "No ledger balances found in " + f.name + ".");
   b.tbCheck = TBCheck.run(b, r.rows, on, f.name);
   await saveBooks(); render();

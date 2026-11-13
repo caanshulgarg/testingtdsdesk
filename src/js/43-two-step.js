@@ -218,6 +218,7 @@ function signOutHere(msg, clearLocal, why, local){
   if (!local) auditSignOut(msg || "Signed out.", s);
   // tell the server too, so the refresh token cannot be used again
   if (!local && s && s.access_token){ const c = Cloud.cfg(); fetch(c.url.replace(/\/+$/, "") + "/auth/v1/logout", {method: "POST", headers: {apikey: c.key, Authorization: "Bearer " + s.access_token}}).catch(() => {}); }
+  if (!local) try { Bridge.forget(); } catch (e){}   // bridge 2.5.16: this browser's own key forgotten
   Cloud.signOut(); clearInterval(cloudTimer); S.account = null; S.backups = null; FirmGate.st = null; FirmGate.co = {}; S.settingsTab = null;
   Cloud.setCfg({gate: true});
   S.signedOutWhy = why || "";
@@ -227,7 +228,9 @@ function signOutHere(msg, clearLocal, why, local){
   const kept = clearLocal ? "" : " This browser\u2019s copy of " + (fn || "your firm") + " is kept for you only.";
   const after = () => { toast((msg || "Signed out.") + kept); render(); };
   // the page is reloaded after clearing, so nothing of the firm stays in memory either
-  if (clearLocal) clearLocalCopy().then(() => location.reload(), () => location.reload()); else after();
+  // ...once the bridge's key is forgotten too (Bridge.forget above is still asking the bridge: 4 s at most)
+  let n = 80; const again = () => Bridge.cfg().key && n-- ? setTimeout(again, 50) : location.reload();
+  if (clearLocal) clearLocalCopy().then(again, again); else after();
 }
 // The sign-out goes to the activity log with the token in hand, before the session is cleared (auditEvent would read
 // the session after it is gone and send nothing: the log showed sign-ins and never a sign-out). When the server will
@@ -253,7 +256,7 @@ function flushAuditLater(){
 // Settings → Firm account, the owner: every computer and phone signed in to this account is signed out (Settings
 // screen: app/src/screens/Account.jsx)
 async function signOutAll(){
-  const a = await askConfirm({title: "Sign out of all devices?", ok: "Sign out everywhere", body: '<p class="note">Every computer and phone signed in to your account is signed out, this one too. Work already synced stays in the firm account.</p>'});
+  const a = await askConfirm({title: "Sign out of all devices?", ok: "Sign out everywhere", html: '<p class="note">Every computer and phone signed in to your account is signed out, this one too. Work already synced stays in the firm account.</p>'});
   if (!a) return;
   try { await Cloud.authApi("logout?scope=global", "POST"); }
   catch (e){ toast("Could not reach the firm account: " + e.message); return; }

@@ -28,7 +28,7 @@ export default function AutoPostSettings() {
   const postTo = typeof choiceUsable === "function" ? choiceUsable(co, "postTo") : co.postTo;
   const save = async () => {
     if (!saved.on && v.on) {
-      const ok = await askConfirm({ title: "Post automatically for " + co.name + "?", ok: "Switch it on", body: "<p class='note'>Posts to <b>" + esc(postTo || tname) + "</b> by itself what copies an entry a person approved before. You can undo any entry.</p>" });
+      const ok = await askConfirm({ title: "Post automatically for " + co.name + "?", ok: "Switch it on", html: "<p class='note'>Posts to <b>" + esc(postTo || tname) + "</b> by itself what copies an entry a person approved before. You can undo any entry.</p>" });
       if (!ok) return;
     }
     const r = ap.save(co, v);

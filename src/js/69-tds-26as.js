@@ -233,7 +233,7 @@ const AS26 = {
     catch (e){
       if (e && e.code === "pdf_password"){
         const ans = await askConfirm({title: "This PDF has a password", ok: "Open",
-          body: "TRACES and the compliance portal lock these PDFs. Type the password (26AS: the date of birth or incorporation as DDMMYYYY; AIS: the PAN in small letters followed by it).<br><input type=\"password\" id=\"as26pw\" aria-label=\"PDF password\" style=\"margin-top:8px;width:100%\">",
+          html: "TRACES and the compliance portal lock these PDFs. Type the password (26AS: the date of birth or incorporation as DDMMYYYY; AIS: the PAN in small letters followed by it).<br><input type=\"password\" id=\"as26pw\" aria-label=\"PDF password\" style=\"margin-top:8px;width:100%\">",
           read: () => (document.getElementById("as26pw") || {}).value || "", validate: v => v ? "" : "Type the password."});
         if (!ans || !ans.ok) return null;
         try { f = await this.read(file, ans.data); }
@@ -252,7 +252,7 @@ const AS26 = {
   },
   async remove(id){
     const f = this.files().find(x => x.id === id); if (!f) return false;
-    const ok = await askConfirm({title: "Take this file out?", body: esc(f.kind + " " + (f.pan || "") + " " + (f.fy || "") + " (" + f.file + ")") + " leaves the reconciliation. Upload it again to bring it back.", ok: "Take it out"});
+    const ok = await askConfirm({title: "Take this file out?", html: esc(f.kind + " " + (f.pan || "") + " " + (f.fy || "") + " (" + f.file + ")") + " leaves the reconciliation. Upload it again to bring it back.", ok: "Take it out"});
     if (!ok || !ok.ok) return false;
     S.books.tds26as = this.files().filter(x => x.id !== id); saveBooks(); render(); return true;
   },

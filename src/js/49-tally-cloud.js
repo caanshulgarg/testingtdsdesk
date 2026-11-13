@@ -874,7 +874,7 @@ const TCloud = {
   async changesOnly(r, on){
     if (on){
       const a = await askConfirm({title: "Changes only for " + this.bridgeWords(r) + "?", ok: "Changes only",
-        body: "<p>This bridge keeps reading Tally\u2019s changes for FinCom but is never given a posting, and the Post screen never offers it. A posting it is running now finishes.</p>"});
+        html: "<p>This bridge keeps reading Tally\u2019s changes for FinCom but is never given a posting, and the Post screen never offers it. A posting it is running now finishes.</p>"});
       if (!a || !a.ok) return;
     }
     await this.control("tally_bridge_changes_only", {p_device: r.device.id, p_bridge: r.id, p_on: !!on},
@@ -895,7 +895,7 @@ const TCloud = {
   // Fix 2b: an owner releases a bridge's identity: the next computer that reports the id gets it (kept with who, when, why)
   async releaseIdentity(r){
     const a = await askConfirm({title: "Release the identity of " + this.bridgeWords(r) + "?", ok: "Release it",
-      body: "<p>FinCom keeps bridge " + esc(r.id) + " tied to the computer key that reported it first. Released, the next computer that reports this id gets it. Who released it, when and why are kept.</p>" +
+      html: "<p>FinCom keeps bridge " + esc(r.id) + " tied to the computer key that reported it first. Released, the next computer that reports this id gets it. Who released it, when and why are kept.</p>" +
         '<div class="bk-form one"><label><span>Why (kept with the release)</span><input id="releaseWhy" maxlength="300" placeholder="e.g. the computer was set up again"></label></div>',
       read: () => ({why: ((document.getElementById("releaseWhy") || {}).value || "").trim()}), validate: d => d && d.why ? "" : "Say why the identity is released."});
     if (!a || !a.ok) return;
@@ -1010,7 +1010,7 @@ const TCloud = {
     const names = this.postSettingsNames(v.only), was = this.postSettingsNames(v.only0), touched = JSON.stringify(names) !== JSON.stringify(was);
     if (touched && !names.length && was.length){
       const a = await askConfirm({title: "Posting to any company from this computer?", ok: "Yes, any company", danger: true,
-        body: "<p>" + esc(dev.name || "This computer") + " now posts only to " + esc(was.join(", ")) + ". With the list empty, FinCom Bridge there posts into whichever Tally company a client is set to, and the list set by its installer goes.</p>"});
+        html: "<p>" + esc(dev.name || "This computer") + " now posts only to " + esc(was.join(", ")) + ". With the list empty, FinCom Bridge there posts into whichever Tally company a client is set to, and the list set by its installer goes.</p>"});
       if (!a || !a.ok) return "Nothing sent: the list stays as it was.";
     }
     await this.control("tally_device_post_settings", {p_device: dev.id, p_post_only: touched ? names : null, p_bills: Math.floor(num(v.bills)), p_bank: Math.floor(num(v.bank))},
@@ -1035,7 +1035,7 @@ const TCloud = {
   async readStop(r){
     const all = !r, where = all ? "every computer" : r.computer;
     const a = await askConfirm({title: all ? "Stop reading Tally on all computers?" : "Stop reading Tally on " + r.computer + "?", ok: "Stop reading",
-      body: "<p>FinCom Bridge on " + esc(where) + " stops reading Tally at its next heartbeat (within 30 seconds). Posting to Tally goes on. Reading starts again only when an owner presses Resume reading.</p>" +
+      html: "<p>FinCom Bridge on " + esc(where) + " stops reading Tally at its next heartbeat (within 30 seconds). Posting to Tally goes on. Reading starts again only when an owner presses Resume reading.</p>" +
         '<div class="bk-form one"><label><span>Why (shown on the Tally page and by the bridge)</span><input id="readStopWhy" maxlength="300" placeholder="Stopped from FinCom"></label></div>',
       read: () => ({why: ((document.getElementById("readStopWhy") || {}).value || "").trim()})});
     if (!a || !a.ok) return;
@@ -1122,7 +1122,7 @@ const TCloud = {
     return false;
   },
   async revoke(id, name){
-    const r = await askConfirm({title: "Remove " + name + "?", ok: "Remove it", danger: true, body: "<p>That computer will not be able to send anything to the cloud any more. What it sent stays. To send again, connect it again.</p>"});
+    const r = await askConfirm({title: "Remove " + name + "?", ok: "Remove it", danger: true, html: "<p>That computer will not be able to send anything to the cloud any more. What it sent stays. To send again, connect it again.</p>"});
     if (!r || !r.ok) return;
     try { await this.rpc("tally_device_revoke", {p_id: id}); toast(name + " removed."); } catch (e){ toast("Could not remove it: " + ((e && e.message) || e)); }
     await this.refreshPane();
