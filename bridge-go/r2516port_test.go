@@ -26,7 +26,15 @@ func r2516PortFake(t *testing.T, path string, ports ...int) {
 	t.Setenv("TDSBRIDGE_FAKE", f)
 }
 
+// the log in the test's own folder (never the package folder)
+func r2516Log(t *testing.T) {
+	t.Helper()
+	logFileOverride = filepath.Join(t.TempDir(), "tds-bridge.log")
+	t.Cleanup(func() { logFileOverride = "" })
+}
+
 func TestR2516PortWatchBeatsWhenTheTallyPortMoves(t *testing.T) {
+	r2516Log(t)
 	r2511Fake(t, `{"pid": 10, "name": "tally", "session": 1}`, ``)
 	portWatchReset()
 	t.Cleanup(portWatchReset)
@@ -61,6 +69,7 @@ func TestR2516PortWatchBeatsWhenTheTallyPortMoves(t *testing.T) {
 }
 
 func TestR2516PortNotSaved(t *testing.T) {
+	r2516Log(t)
 	r2511Fake(t, `{"pid": 10, "name": "tally", "session": 1}`, ``)
 	pf, _ := r2511Dirs(t)
 	dir := filepath.Join(pf, "TallyPrime")
