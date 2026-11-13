@@ -4,7 +4,7 @@ Status: independent review pending. This file names the range to be reviewed; th
 coordinator's signature are added after the independent review. The release exe is built and release-check.sh is run
 only after that review.
 
-Range: c851cd1dc..1fd25c431 (origin/staging-next with 2.5.15 at c851cd1dc, which holds 2.5.15's signed commit 2bf75a4c7; the whole of 2.5.16 through the port items and their test fix)
+Range: c851cd1dc..76cb7fe46 (origin/staging-next with 2.5.15 at c851cd1dc, which holds 2.5.15's signed commit 2bf75a4c7; the whole of 2.5.16 through the code and security reviews' fixes)
 
 What the range holds:
 1. The security work of 2.5.16 (e0c77945d to d2b7fd47a): the FVU path kept in local settings with its file checked;
@@ -23,6 +23,25 @@ What the range holds:
    read by type after its list was stopped at 2 s, heavy tier only, each under its 2 s stop.
 5. Tally's port (bf0ebdf00, portwatch2516.go): Windows' port list watched every 3 s with a beat at once on a move;
    tallyPortNotSaved in the beat; the page tries its own bridge's port first and shows Copy port / Check it works.
+
+The code review of d2b7fd47a..a87fd2260 (not ready: H1, M1, M2, L1-L7) and what was done (959101269):
+- H1: a by-type list never closes a day: the bridge says partial; migration 197 marks the day split_open (a trigger on
+  tally_period_days and tally_check_days): not done, its earlier count kept, until a whole list of the day clears it; the
+  bridge holds the day 24 hours and asks its one-day list again. Tests: run_migration197.py "H1" (a Credit Note day),
+  r2516review_test.go TestR2516SplitWithCreditNoteNotDone.
+- M1: postings, saves waiting and the typing tier looked at again after the lock wait and the rest, right before the
+  send (TC.sendYield). Test: TestR2516TypingDuringLockWait.
+- M2 and L1: a list (one day or a range) with only another date's entries holds the day 24 hours through the day stop,
+  counted toward the 3 days. Test: TestR2516DateNotAppliedHeld.
+- L2: 3 day stops of one company within an hour: an hour's wait (TestR2516CompanyBrake).
+- L3: a slow mark probed once a day with one entry; lifted only if it comes in time (TestR2516SlowMarkLiftsAfterADay).
+- L4: the beat sends lastKeySec (seconds since, on the bridge's own clock); the cloud works out the moment.
+- L5: held days a list handed back keep their last real hand-out (tally_period_unstamp).
+- L6: docs/tally-allowlist.md is left as it is (the owner's rule). Note on its FinComDayHeads row: the row covers F1 and
+  the by-type form F2 under the one id and the one measured time; since ROUND 103 F2 was refused at the gate. 2.5.16
+  sends F2 again only for the day being read by type after its one-day list was stopped at 2 s, a type of that day's
+  list, under its own 2 s stop (daypull.go dayHeadsExact). No request was added or changed (TestAllowListUnchanged).
+- L7: the day-pace measures are kept per company GUID.
 
 The owner's rules, as the author kept them (to be confirmed by the reviewer):
 - Each Tally request 2 s at most (3 s a payroll entry), one in flight, postings and saves first, the typing gate kept.

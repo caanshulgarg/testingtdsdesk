@@ -4,7 +4,7 @@ Status: independent review pending. The coordinator's full security review of Fi
 of the security items; their fixes, and the day-reading and port items added on 13-Nov-2026, are to be reviewed
 independently before the release exe is built and release-check.sh is run.
 
-Range: c851cd1dc..1fd25c431 (origin/staging-next with 2.5.15 at c851cd1dc, which holds 2.5.15's signed commit 2bf75a4c7; the whole of 2.5.16 through the port items and their test fix)
+Range: c851cd1dc..76cb7fe46 (origin/staging-next with 2.5.15 at c851cd1dc, which holds 2.5.15's signed commit 2bf75a4c7; the whole of 2.5.16 through the code and security reviews' fixes)
 
 Areas for the reviewer (no finding details are written here; the repository is public):
 - The security items of 2.5.16 (e0c77945d to d2b7fd47a): local settings and files the bridge trusts, the Windows
@@ -17,3 +17,16 @@ Areas for the reviewer (no finding details are written here; the repository is p
 - The port items (bf0ebdf00): Windows' own lists only, nothing sent to Tally, no tally.ini written; the beat's new
   fields (lastKeyAt, tallyPortNotSaved) carry no secret; the page still requires the bridge to prove itself at the port
   FinCom's cloud names before anything secret is sent.
+
+The security review of 2.5.16 (no critical or high finding) and what was done, as the code now does it:
+- M1: the setup for all users reads the owner's earlier settings with the owner's rights (impersonated); the owner not
+  signed in: the service reads them at its first start with the owner's rights. Windows only: on the test sheet.
+- L1: FinCom's address (FinComUrl) is not carried over from the earlier settings; the setup sets it from its build.
+- L2: the FVU file is looked at and fingerprinted with the owner's rights (the service: impersonated).
+- L3: the FVU's Class-Path entries are percent-decoded before they are checked; a jar the FVU loads that names jars of
+  its own is refused.
+- L4: the /tray/ routes take the tray's own one-use proof only, never a browser's key.
+- L5: the earlier link is taken only if, under the settings' lock after FinCom answered, no newer link was made;
+  tally-ingest answers key_check at most 30 times an hour for one computer key; a bridge id with no Windows user
+  recorded (or none said) is not known: the person connects FinCom again.
+
