@@ -74,6 +74,7 @@ func pullTypeOK(t string) bool {
 }
 
 func pullIdleSec() int      { return keepNum("DayPullIdleSec", 60) }
+func pullSplitOn() bool     { v := cfg("DayPullSplit"); return v == nil || truthy(v) } // 2.5.16: the by-type split (on unless set false)
 func pullPerTurnDay() int   { return maxI(1, keepNum("DayPullPerTurn", 40)) }
 func pullFlushAtDay() int   { return maxI(1, minI(keepNum("DayPullBatch", 50), 200)) }
 func pullNightDays() int    { return maxI(1, minI(keepNum("DayPullNightDays", 30), 30)) }
@@ -369,6 +370,15 @@ func dayHeadsExact(tc *TC, x string) bool {
 		}
 		if x == dayHeadsRequest(co, a) {
 			return true // ROUND 103: F1 only; the by-type form is no longer sent (the gate refuses it)
+		}
+		// 2.5.16 (the owner's YES of 13-Nov-2026): F2, the same day one voucher type at a time, only for the day being read
+		// by type (its one-day list was stopped at 2 s), for a type of that day's list
+		if w := pull.work; w != nil && w.split && w.it.key() == it.key() && pullSplitOn() {
+			for _, t := range it.types() {
+				if x == dayHeadsTypeRequest(co, a, t) {
+					return true
+				}
+			}
 		}
 	}
 	return false
@@ -801,6 +811,14 @@ func pullHeadsStep(w *pullWork, port int) (bool, bool) {
 	switch {
 	case gaveWay(err) || errors.Is(err, errRetryWait) || errors.Is(err, errReadStopped) || errors.Is(err, errDayHeadsRefused):
 		return false, false // nothing reached Tally; the day waits
+	case errors.Is(err, errRecorderStop) && holdMs < 2000 && !w.split && pullSplitOn() && len(it.types()) > 0:
+		// 2.5.16 (the owner's YES of 13-Nov-2026: the voucher-type split back on for very big days): the day's list over
+		// 2 s: the same day is asked one voucher type at a time (F2, measured at 1.08 s at worst), in the heavy tier, each
+		// under its own 2 s stop; a type over 2 s stops the day (below)
+		pullRangeNoteFail(it)
+		w.split, w.typeIdx, w.heads = true, 0, map[string]pullHead{}
+		writeLog(fmt.Sprintf("Older entries of %s: %s: the day's list took Tally over 2 s; asked again one voucher type at a time (%d types)", it.Company, liveDay(it.Day), len(it.types())))
+		return true, false
 	case errors.Is(err, errRecorderStop):
 		pullRangeNoteFail(it) // 2.5.12: the sparse evidence starts again (range2512.go)
 		// ROUND 103 (1b, the owner's freeze safety): a day's list over 2 s stops reading older entries of this company;

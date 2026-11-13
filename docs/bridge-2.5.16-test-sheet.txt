@@ -88,6 +88,12 @@ tally-ingest of the same branch. Use a test company with made-up entries only.
     Check A: on a big test company, choose Bring books. You should see: the page's count goes down; a day Tally was slow
     for says "Tally was slow for this day; FinCom Bridge tries it again by itself after a day (no action needed)".
     Check B: the log ("Show log") says "<day> stopped (...): this day only; asked again after 24 hours".
+ 8. A very big day is read one voucher type at a time again. When Tally takes over 2 seconds for a day's list, the
+    same day is asked again type by type (Sales, Purchase, Receipt, ...: the request of 2.4.5, measured at about 1
+    second at worst), only while Tally is left alone a minute, each under its own 2-second stop. A type still over 2
+    seconds stops that day only (item 7). To switch it off on a computer: DayPullSplit false in the bridge's settings.
+    Check A: on the big test company, a day of several thousand entries. You should see: the log says "the day's list
+    took Tally over 2 s; asked again one voucher type at a time"; the day's entries arrive in FinCom.
 
 WINDOWS ONLY (the automatic tests cannot run these; check them on a real Windows PC):
   - item 1: Check with FVU runs a copy of the FVU from your own temporary folder (removed after); Java must be
@@ -102,6 +108,7 @@ WINDOWS ONLY (the automatic tests cannot run these; check them on a real Windows
     page record.
   - item 7: a real slow day needs a big company on a real Tally (the tests stand in for Tally's time); Check A on the
     test PC with a day of many entries.
+  - item 8: the time Tally takes for a big day, and by type, on real TallyPrime 3.0 to 7.1.
 
 -------------------------------------------------------------------------------------------------------------------
 

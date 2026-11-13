@@ -186,7 +186,8 @@ func pullBridge(t *testing.T) (*standTally, *standCloud, *pullModel) {
 
 func pullBridgeWith(t *testing.T, extra string) (*standTally, *standCloud, *pullModel) {
 	t.Helper()
-	_, f, c := liveBridge(t, `,"DayPullGapMs":0,"KeepRestMs":1`+extra)
+	// 2.5.16: the by-type split after a slow day's list is off here (r2516split_test.go turns it on)
+	_, f, c := liveBridge(t, `,"DayPullGapMs":0,"KeepRestMs":1,"DayPullSplit":false`+extra)
 	at := time.Date(2026, 10, 21, 10, 0, 0, 0, liveZone)
 	nowFn = func() time.Time { return at }
 	t.Cleanup(func() { nowFn = time.Now })
