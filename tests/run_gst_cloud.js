@@ -215,6 +215,7 @@ const near0 = o => !o || H.every(h => Math.abs(Number(o[h]) || 0) < 0.005);
   ok(cloud.hits.every(c => c.ok && c.cached && c.result), "the member's months given back as kept, nothing worked out");
   ok(cloud.changed.ok && cloud.changed.pending && cloud.changed.version !== cloud.miss.version, "a new entry moves the version: a miss again, queued");
   ok(cloud.other.status === 404 && cloud.noauth.status === 401 && cloud.nomember.status === 403, "another firm's client 404, no sign-in 401, not a member 403");
+  ok(cloud.aal1 && cloud.aal1.status === 403 && cloud.aal1.kind === "mfa" && !cloud.aal1.result && !cloud.aal1.book, "L1: a member's password-only session (two-step not finished) gets 403 and no figures (" + JSON.stringify(cloud.aal1).slice(0, 120) + ")");
   ok(cloud.warmNoKey.status === 401 && cloud.warmCron.status === 200, "a background run: the service key or the timer's key only");
   ok(cloud.clientOff.status === 403 && cloud.clientOff.reason === "company_off" && cloud.clientOffWarm.kind === "gate", "a switched-off client: refused, by the member's request and the background run");
   ok(cloud.firmPaused.status === 403 && cloud.firmPaused.reason === "firm_paused", "a paused firm: refused");

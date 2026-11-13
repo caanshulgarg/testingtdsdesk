@@ -184,6 +184,8 @@ export function handler(deps: Deps) {
     let user: any;
     try { user = await rest("/auth/v1/user", jwt); } catch { return [401, { ok: false, kind: "auth", error: "Sign in again." }]; }
     if (!user?.id) return [401, { ok: false, kind: "auth", error: "Sign in again." }];
+    // two-step sign-in finished (security review of 13-Nov-2026, L1), as every other member function asks
+    if ((await rpc("mfa_ok", {}, jwt).catch(() => false)) !== true) return [403, { ok: false, kind: "mfa", error: "Finish the two-step sign-in first." }];
     const client = String(body?.client || ""), from = String(body?.from || "").replace(/-/g, ""), to = String(body?.to || "").replace(/-/g, "");
     if (!client || !/^\d{8}$/.test(from) || !/^\d{8}$/.test(to) || from > to) return [400, { ok: false, error: "Give the client and the period (from, to)." }];
     const nMonths = (+to.slice(0, 4) - +from.slice(0, 4)) * 12 + (+to.slice(4, 6) - +from.slice(4, 6)) + 1;
@@ -286,6 +288,7 @@ export function handler(deps: Deps) {
     let user: any;
     try { user = await rest("/auth/v1/user", jwt); } catch { return reply(401, { ok: false, kind: "auth", error: "Sign in again." }); }
     if (!user?.id) return reply(401, { ok: false, kind: "auth", error: "Sign in again." });
+    if ((await rpc("mfa_ok", {}, jwt).catch(() => false)) !== true) return reply(403, { ok: false, kind: "mfa", error: "Finish the two-step sign-in first." });
     const mem = (await rest("/rest/v1/members?select=firm_id,role,active&user_id=eq." + enc(user.id)).catch(() => [])) as any[];
     const member = (mem || []).find((m) => m.active);
     if (!member) return reply(403, { ok: false, kind: "firm", error: "This account is not part of a firm." });

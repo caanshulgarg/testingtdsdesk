@@ -103,7 +103,9 @@ const fake = async (input: string | URL | Request, init?: RequestInit): Promise<
     const u = new URL(String(input)), auth = String((init?.headers as any)?.Authorization || "");
     const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { "Content-Type": "application/json" } });
     if (u.pathname === "/functions/v1/gst-run") { kicks.push(JSON.parse(String(init!.body))); return json({ ok: true }); }
-    if (u.pathname === "/auth/v1/user") { const t = auth.replace("Bearer ", ""); return t === "tok-member" ? json({ id: USER }) : t === "tok-outsider" ? json({ id: OUTSIDER }) : json({ msg: "bad jwt" }, 401); }
+    if (u.pathname === "/auth/v1/user") { const t = auth.replace("Bearer ", ""); return t === "tok-member" || t === "tok-member-aal1" ? json({ id: USER }) : t === "tok-outsider" ? json({ id: OUTSIDER }) : json({ msg: "bad jwt" }, 401); }
+    // two-step sign-in (security review of 13-Nov-2026, L1), asked with the person's own token: tok-member-aal1 is a password-only session
+    if (u.pathname === "/rest/v1/rpc/mfa_ok") return json(auth === "Bearer tok-member" || auth === "Bearer tok-outsider");
     if (auth !== "Bearer service-key") return json({ message: "service role only here" }, 401);
     // gst_calc_prep_get returns the kept text as it is (the column's text cast to json: PostgREST sends it unchanged)
     if (u.pathname === "/rest/v1/rpc/gst_calc_prep_get") { const a = JSON.parse(String(init!.body || "{}")), p = T.gst_calc_prep.find((x) => x.book_id === a.p_book && x.version === a.p_version && x.engine === a.p_engine);
@@ -196,6 +198,7 @@ if (!IN.timing) {
   out.other = await month("202603").then(() => call({ action: "month", client_id: "cli-other", reg: "07", ym: "202603" }));
   out.noauth = await month("202603", "");
   out.nomember = await month("202603", "tok-outsider");
+  out.aal1 = await month("202603", "tok-member-aal1");
   out.warmNoKey = await call({ action: "warm" }, "tok-member");
   out.warmCron = await call({ action: "warm" }, "anon-key", { "x-cron-key": "cron-key" });
   // the console's switches: a switched-off client, a paused firm (the member's request and the background run)

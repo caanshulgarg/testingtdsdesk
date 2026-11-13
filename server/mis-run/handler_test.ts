@@ -43,7 +43,7 @@ const DEF = { id: "m1", name: "Monthly MIS", period: { kind: "ytd" }, units: { u
 const SCHED = (o: any = {}) => ({ id: "s-1", firm_id: FIRM, client_id: "c-1", report_id: "m1", report_name: "Monthly MIS", rule: { freq: "monthly", day: "1", time: "08:45" }, period: "lastMonth",
   recipients: { members: [OWNER], emails: ["director@client.example"] }, enabled: true, created_by: OWNER, ...o });
 
-function stand(o: { resend?: boolean, failReads?: number, due?: any[], member?: string, client?: any, report?: any, rate?: any[], rateDown?: boolean, verified?: string[] } = {}) {
+function stand(o: { resend?: boolean, failReads?: number, due?: any[], member?: string, client?: any, report?: any, rate?: any[], rateDown?: boolean, verified?: string[], mfaDown?: boolean } = {}) {
   const st: any = { uploads: [] as any[], alerts: [] as any[], runs: [] as any[], resend: [] as any[], takes: 0, reads: 0, rate: o.rate || [] as any[], asked: [] as string[] };
   const NOW = Date.parse("2026-10-01T03:15:00Z");
   const within = (b: any, w: number) => st.rate.filter((r: any) => r.bucket === b.p_bucket && r.key === b.p_key && r.at > NOW - w * 1000).length;
@@ -52,7 +52,9 @@ function stand(o: { resend?: boolean, failReads?: number, due?: any[], member?: 
     const u = new URL(String(input)), p = u.pathname + u.search, auth = String((init.headers || {}).Authorization || "");
     if (u.host === "api.resend.com") { st.resend.push(JSON.parse(init.body)); return json({ id: "re_1" }); }
     if (p.startsWith("/storage/v1/object/mis-reports/")) { st.uploads.push({ path: decodeURIComponent(u.pathname.slice("/storage/v1/object/mis-reports/".length)), type: init.headers["Content-Type"], bytes: init.body }); return json({ Key: "x" }); }
-    if (p === "/auth/v1/user") return auth === "Bearer tok-owner" ? json({ id: OWNER }) : auth === "Bearer tok-look" ? json({ id: LOOK }) : json({ msg: "bad" }, 401);
+    if (p === "/auth/v1/user") return auth === "Bearer tok-owner" || auth === "Bearer tok-owner-aal1" ? json({ id: OWNER }) : auth === "Bearer tok-look" ? json({ id: LOOK }) : json({ msg: "bad" }, 401);
+    // two-step sign-in: tok-owner-aal1 is the owner's password-only session
+    if (p.startsWith("/rest/v1/rpc/mfa_ok")) return o.mfaDown ? json({ message: "no function" }, 404) : json(auth === "Bearer tok-owner" || auth === "Bearer tok-look");
     if (p.startsWith("/rest/v1/rpc/gst_cron_ok")) return json(JSON.parse(init.body).k === "k-123");
     if (p.startsWith("/rest/v1/rpc/mis_take")) { st.takes++; return json(st.takes === 1 ? (o.due || [SCHED()]) : []); }
     if (p.startsWith("/rest/v1/rpc/mis_cloud_gst")) return json({ months: [] });
@@ -217,4 +219,15 @@ Deno.test("M5: Run now: a schedule is run by a person at most " + RUN_NOW.max + 
   const r = await go(), j = await r.json();
   eq([r.status, j.ok, j.kind], [429, false, "rate"], "one more: refused");
   eq([st.runs.length, st.resend.length], [RUN_NOW.max, RUN_NOW.max], "nothing run or sent by the refused call");
+});
+
+// ---------- 13-Nov-2026 (security review, L1): two-step sign-in ----------
+Deno.test("L1: Run now needs the two-step sign-in finished: a password-only session runs and sends nothing", async () => {
+  const { st, call } = stand({ resend: true });
+  const r = await call({ action: "run", schedule_id: "s-1" }, { Authorization: "Bearer tok-owner-aal1" }), j = await r.json();
+  eq([r.status, j.ok, j.kind, j.error], [403, false, "mfa", "Finish the two-step sign-in first."], "refused");
+  eq([st.runs.length, st.resend.length, st.uploads.length, st.alerts.length], [0, 0, 0, 0], "nothing run, sent, kept or said");
+  const down = stand({ resend: true, mfaDown: true });
+  eq((await down.call({ action: "run", schedule_id: "s-1" }, { Authorization: "Bearer tok-owner" })).status, 403, "the check cannot be made: refused");
+  eq((await call({ action: "run", schedule_id: "s-1" }, { Authorization: "Bearer tok-owner" })).status, 200, "with it: run");
 });

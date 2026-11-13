@@ -422,6 +422,8 @@ export function handler(deps: Deps) {
       let user: any;
       try { user = await rest("/auth/v1/user", jwt); } catch { return reply(401, { ok: false, kind: "auth", error: "Sign in again." }); }
       if (!user?.id) return reply(401, { ok: false, kind: "auth", error: "Sign in again." });
+      // two-step sign-in finished (security review of 13-Nov-2026, L1), as every other member function asks
+      if ((await rest("/rest/v1/rpc/mfa_ok", jwt, { method: "POST", body: "{}" }).catch(() => false)) !== true) return reply(403, { ok: false, kind: "mfa", error: "Finish the two-step sign-in first." });
       const mem = (await rest("/rest/v1/members?select=firm_id,role,active&user_id=eq." + enc(user.id)).catch(() => [])) as any[];
       const member = (mem || []).find((m) => m.active);
       if (!member) return reply(403, { ok: false, kind: "firm", error: "This account is not part of a firm." });

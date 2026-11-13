@@ -24,7 +24,7 @@ const PART: Record<string, any> = {
   tops: { mtd: 10, ytd: 20 }, cash: { cash: { rec: 5, pay: 4 }, flow: { rows: [], net: 1 } },
   comp: { gst: [{ ym: "202604", pay: 9 }], tds: [], tdsRoll: { open: 0 } }, msme: { days: 45, rows: [{ party: "Made-up Supplier", amt: 7 }] }, control: { control: null },
 };
-function fake(opts: { kept?: any, none?: boolean, firm?: string, company?: string, no152?: boolean, noMasters?: boolean, failing?: string }) {
+function fake(opts: { kept?: any, none?: boolean, firm?: string, company?: string, no152?: boolean, noMasters?: boolean, failing?: string, aal1?: boolean }) {
   const calls: { fn: string, args: any, token: string }[] = [], reads: string[] = [];
   const busy = { now: 0, most: 0 };
   const fetchFn = async (input: any, init: any = {}) => {
@@ -42,6 +42,8 @@ function fake(opts: { kept?: any, none?: boolean, firm?: string, company?: strin
     const m = url.match(/\/rest\/v1\/rpc\/(\w+)$/);
     if (!m) return json({ message: "not here" }, 404);
     const args = JSON.parse(init.body || "{}");
+    // two-step sign-in (L1): asked with the member's own token; AAL1 is a password-only session
+    if (m[1] === "mfa_ok") return json(token === JWT && !opts.aal1);
     calls.push({ fn: m[1], args, token });
     if (m[1] === "tally_now") {
       if (opts.none) return json({ none: true });
@@ -169,4 +171,12 @@ Deno.test("now: a partial answer is given back and never kept (152 not run, a pa
   const f = fake({ kept: { v: 3, partial: true, kind: "mis-now.2", x: 1 }, failing: "cash" });
   const r = await f.ask(P);
   eq([r.body.kept, r.body.result.partial], [false, true], "a partial answer kept by mistake is not served as kept");
+});
+
+// 13-Nov-2026 (security review, L1)
+Deno.test("now: the two-step sign-in must be finished: a password-only session is refused before anything is read", async () => {
+  const f = fake({ aal1: true });
+  const r = await f.ask(P);
+  eq([r.status, r.body.kind], [403, "mfa"], "refused");
+  eq([f.calls.length, f.reads.length], [0, 0], "no figures asked, nothing read");
 });
