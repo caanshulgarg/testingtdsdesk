@@ -593,14 +593,19 @@ const MIS = {
   // on 51,758 made-up entries, about 4x on a slow office PC). Now in idle steps as the day's audit on its own (Audit.autoStart,
   // its auto* taken below: the same restarts, waits and keep rules), the same run (runIn). tests/run_hang_mis_auto.py
   // Its steps (MIS.steps) come with the MIS screen's file (src/js/18-mis-pack.js), loaded first
-  maybeRun(){ const b = S.books; if (b && b.vouchers && this.due(b)) this.runSoon(b); },
+  maybeRun(){ const b = S.books; if (b && b.vouchers && !this._soon && this.due(b)) this.runSoon(b); },
   // next-fix-mis-rework: every run asked for without the MIS tab's own (the cloud copy's new entries, an MSME type, Run
-  // now by doAct, Reports): the same job, with its period and words (want). The MIS screen's file loaded quietly (a failed
-  // fetch is no reason to reload the page from a job behind it, app/src/main.jsx loadPart): tried again later, 5 times
-  runSoon(b, want, n){
-    const go = () => { if (S.books === b) this.autoStart(b, want); };
-    if (this.steps || typeof loadPart !== "function") go();
-    else loadPart("mis", true).then(go, () => { if ((n || 0) < 5) setTimeout(() => { if (S.books === b) this.runSoon(b, want, (n || 0) + 1); }, this.AUTO.WAIT_MAX_MS / 2); });
+  // now by doAct, Reports): the same job, with its period and words (want: {from, to, how}). One at a time: the newest
+  // asked for (t, _soon, while the file loads) takes the place of any other, the MIS tab's own run too (MIS._again: its
+  // jobs stop when tabRun changes, Mis.jsx runSplit, catchSoon.js). The MIS screen's file loaded quietly (a failed fetch
+  // is no reason to reload the page from a job behind it, app/src/main.jsx loadPart): tried again later, 5 times, then said
+  runSoon(b, want, n, t){
+    if (!t){ t = this._soon = {b, want}; this.failed = null; if (this._again) this.tabRun = (this.tabRun || 0) + 1; }
+    const go = () => { if (this._soon !== t) return; this._soon = null; if (S.books === b) this.autoStart(b, want); };
+    if (this.steps || typeof loadPart !== "function") return go();
+    loadPart("mis", true).then(go, () => { if (this._soon !== t) return;
+      if ((n || 0) < 5) setTimeout(() => this.runSoon(b, want, (n || 0) + 1, t), this.AUTO.WAIT_MAX_MS / 2);
+      else { this._soon = null; if (want) toast((this.failed = {b, t: "Could not load the MIS. Check your internet connection, then press Run now."}).t); soonRender(); } });
   },
   lastRun(b){ return (b.mis || {}).last || null; },
   say: "the month's MIS on its own"
@@ -1010,20 +1015,7 @@ Object.assign(Audit.checks, {
   }
 });
 Object.assign(Audit, {
-  // who might be related: people and firms in loans, capital and director ledgers
-  relatedGuess(){
-    const b = S.books, have = new Set((b.auditRel || []).map(x => x.name)), out = [];
-    Object.keys(Object.assign({}, b.ledInfo || {}, b.map || {})).sort().forEach(l => {
-      if (have.has(l)) return;
-      let why = "";
-      if (/DIRECTOR|PARTNER|PROPRIETOR|DRAWINGS|\(CAPITAL\)|CURRENT A\/C/i.test(l)) why = "the name";
-      else if (this.under(l, /^(unsecured loans)$/i)) why = "an unsecured loan";
-      else if (this.under(l, /^loans & advances \(asset\)$/i) && !/DEDUCTION|STAFF|EMPLOYEE/i.test(l)) why = "a loan given";
-      else if (this.under(l, /^loans \(liability\)$/i) && !/BANK|FINANCE|FINNACE|NBFC|HOUSING|CAPITAL|SERVICES/i.test(l)) why = "a loan from a person";
-      if (why) out.push({name: l, why});
-    });
-    return out;
-  },
+  // (relatedGuess: with the Audit screen, src/js/77-audit.js, next-fix-mis-rework for legacy.js's budget)
   // the Form 3CD draft: the clauses the books answer, filled from them
   form3cd(run){
     const b = S.books, from = run.from, to = run.to, f = id => run.findings.find(x => x.id === id), m = v => INR.format(r2(v || 0)), C = [];

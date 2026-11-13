@@ -4,7 +4,7 @@ import Button from "./Button.jsx";
 // Small notes shared by several screens: ledgers still to confirm (TDS, GST), filed GST returns the books no longer
 // match, whether the TDS and GST work is saved for the firm, Tally having changed since a tab was worked out, a new
 // client's first steps, and bringing in day books for several clients at once. Was ledgerBanner, gstDriftNote,
-// TallyRead.catchUp's message (src/js/18), BookSync.note (src/js/41), ONB.card (src/js/48) and MultiUp.view (src/js/23).
+// catchSoon's message (lib/catchSoon.js), BookSync.note (src/js/41), ONB.card (src/js/48) and MultiUp.view (src/js/23).
 
 // the ledgers still to be confirmed, above the TDS or GST work that uses them
 export function LedgerBanner({ b, which }) {
@@ -41,7 +41,7 @@ export function SyncNote({ cid, tab }) {
   return null;
 }
 
-// Tally changed since a tab was worked out: it is worked out again, and says so meanwhile (TallyRead.catchUp)
+// Tally changed since a tab was worked out: it is worked out again, and says so meanwhile (lib/catchSoon.js)
 export function CatchUp({ text }) {
   return <p className="bk-warn" role="status">{text}</p>;
 }
