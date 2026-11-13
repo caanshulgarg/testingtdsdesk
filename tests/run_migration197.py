@@ -112,10 +112,13 @@ try:
     ok(bool(cd) and cd[0]["up"] in (True, "t") and cd[0]["upload_words"] == words, "1. its open check day too (%s)" % cd)
 
     a = j("select tally_period_day_stop(%s, %s, 'split')::text" % (q(B), q(D(12))))
-    ok(a.get("fails") == 0 and a.get("upload") is False, "1. a day read type by type: held, not a failed day (%s)" % a)
+    ok(a.get("fails") == 1 and a.get("upload") is False, "1. a day read type by type: held, counted toward the 3 (its whole list not had in time) (%s)" % a)
     if text: db.sql("update tally_period_day_retry set last_at = now() - interval '21 hours' where book_id = %s and day = %s" % (q(B), q(D(12))))
     a = j("select tally_period_day_stop(%s, %s, 'dates')::text" % (q(B), q(D(12))))
-    ok(a.get("fails") == 1, "1. the date not applied: a failed day (%s)" % a)
+    ok(a.get("fails") == 2, "1. the date not applied: a failed day (%s)" % a)
+    if text: db.sql("update tally_period_day_retry set last_at = now() - interval '21 hours' where book_id = %s and day = %s" % (q(B), q(D(12))))
+    a = j("select tally_period_day_stop(%s, %s, 'split')::text" % (q(B), q(D(12))))
+    ok(a.get("fails") == 3 and a.get("upload") is True, "1. the 3rd day its whole list could not be had: to upload (%s)" % a)
 
     print("== 2. the days held now")
     j("select tally_period_day_stop(%s, %s, 'over2s')::text" % (q(B), q(D(6))))

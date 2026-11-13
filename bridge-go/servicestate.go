@@ -282,6 +282,34 @@ var serviceSettingsAllowed = []string{"Port", "TallyPorts", "FallbackPorts", "Pa
 // start with the owner's rights (the owner was not signed in when the setup ran)
 const earlierSettingsKey = "EarlierSettingsFrom"
 
+// (the re-review of the security fixes) the settings the person's links hang on: the bridge's id, the browsers' keys,
+// the bridge's port and the link to FinCom kept apart. When the setup could not read the earlier file (it left a note,
+// earlierSettingsKey) it made these new; the earlier file's own values then win, so nothing has to be connected again
+var earlierWins = map[string]bool{"InstanceId": true, "Key": true, "PairedBrowsers": true, "LegacyKeyRetired": true, "Port": true, "PendingCloudUrl": true, "PendingCloudKey": true}
+
+// the service's first start: the earlier settings the setup could not read, read now (rd: with the owner's rights)
+// and taken into cur: the earlierWins names from the earlier file, the others only where cur has none. Only a file in
+// the owner's own earlier folder (old) is read. True when cur changed (to be written)
+func applyEarlierSettings(rd treeReader, cur *Ordered, old string, log func(string)) bool {
+	f := str(cur.Get(earlierSettingsKey))
+	if f == "" {
+		return false
+	}
+	cur.Delete(earlierSettingsKey)
+	if old == "" || !strings.EqualFold(filepath.Clean(filepath.Dir(f)), filepath.Clean(old)) {
+		log("Service state: the earlier settings noted by the setup are not in the owner's earlier folder; not read")
+		return true
+	}
+	e := serviceSettingsFrom(rd, f, log)
+	for _, k := range e.keys {
+		if v := e.Get(k); !cur.Has(k) || (earlierWins[k] && str(v) != "" && str(v) != "[]") {
+			cur.Set(k, v)
+		}
+	}
+	log("Service state: the earlier settings were read at the first start, with the owner's rights (the bridge's id, the browsers' keys and the link kept)")
+	return true
+}
+
 // the allowed settings of a file the service does not protect (opened without following a link, 1 MB at most); the
 // names left out are logged (never their values)
 func serviceSettingsFrom(rd treeReader, path string, log func(string)) *Ordered {

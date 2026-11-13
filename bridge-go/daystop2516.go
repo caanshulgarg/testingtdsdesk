@@ -30,8 +30,9 @@ func pullRetryWords(it pullItem) string {
 }
 
 // the day stops for 24 hours; the other days go on. why: over2s | window | dates (a failed day: counted toward the 3,
-// and toward the company's brake) or split (read type by type: not a failure, only held so its one-day list is asked
-// again a day later; FinCom never closes a day on a split list)
+// and toward the company's brake) or split (read type by type: its one-day list is asked again a day later; FinCom
+// never closes a day on a split list, and counts the day toward the 3, so a day whose whole list never comes in time
+// is offered for upload on the 3rd; not toward the brake)
 func pullStopDay(w *pullWork, why, what string) {
 	it := w.it
 	words := pullRetryWords(it)

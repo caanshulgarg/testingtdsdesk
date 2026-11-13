@@ -1353,9 +1353,15 @@ async function keyCheck(dev: any, firm: string, body: any) {
   const sameUser = !!seen && !!seen.user && !!me.user && winUser(seen.user) === winUser(me.user);
   return reply(200, { ok: true, known: bound && sameUser });
 }
-// (L5) at most 30 key_check calls an hour for one computer key
+// (L5) at most 30 key_check calls an hour for one computer key: counted in the database (auth_rate_hit, migration 112:
+// one count across the function's running copies, the key's id hashed); where that is not there, in this running copy
 const keyCheckAt = new Map<string, number[]>();
-function keyCheckAllowed(devId: string) {
+async function keyCheckAllowed(devId: string) {
+  try {
+    const { data, error } = await db.rpc("auth_rate_hit", { p_bucket: "tally-key-check", p_key: await sha256("tally-key-check:" + devId), p_max: 30, p_window_s: 3600 });
+    if (!error) return data === true;
+    console.log("tally-ingest key_check: the limit is counted in this running copy only:", String(error.message || "").slice(0, 200));
+  } catch (e) { console.log("tally-ingest key_check: the limit is counted in this running copy only:", String((e as Error)?.message || e).slice(0, 200)); }
   const now = Date.now(), had = (keyCheckAt.get(devId) || []).filter((t) => now - t < 3600000);
   if (had.length >= 30) { keyCheckAt.set(devId, had); return false; }
   had.push(now); keyCheckAt.set(devId, had);
@@ -2087,7 +2093,8 @@ function lightIdle(b: any, prevInfo: any, now = Date.now()): { idle: boolean; ty
   if (waits || b?.keepWait?.reason === "userInTally") at = now;
   // bridge 2.5.16: seconds since the last key or click its own look saw in Tally (lastKeySec, the bridge's own running
   // clock: the moment is worked out here, so a computer whose clock is wrong never misleads)
-  const ks = Number(b?.lastKeySec), lk = Number.isFinite(ks) && ks >= 0 && ks < 1e7 ? now - Math.floor(ks) * 1000 : NaN;
+  // (null or absent: no key seen by this bridge; Number(null) would read as "a key just now")
+  const kv = b?.lastKeySec, ks = typeof kv === "number" ? kv : NaN, lk = Number.isFinite(ks) && ks >= 0 && ks < 1e7 ? now - Math.floor(ks) * 1000 : NaN;
   if (lk > at) at = lk;
   const typingAt = at > 0 ? new Date(at).toISOString() : null;
   const ms = Number(b?.reqs?.last?.ms), known = !!pick && !!cos && b?.reqs?.last && Number.isFinite(ms) && ms >= 0;
@@ -4678,7 +4685,7 @@ Deno.serve(sentry.wrap(async (req) => {
   // FinCom Bridge 2.5.16: the service's first start asks, read only, whether the link it carries over is this
   // computer's own, before the bridge id is bound to the key (keyCheck)
   if (body?.kind === "key_check") {
-    if (!keyCheckAllowed(String(dev.id))) return reply(429, { ok: false, error: "This computer key has asked thirty times in the last hour; try again later." });
+    if (!(await keyCheckAllowed(String(dev.id)))) return reply(429, { ok: false, error: "This computer key has asked thirty times in the last hour; try again later." });
     try { return await keyCheck(dev, firm, body); } catch (e) { fail("key_check", e, "key_check", firm); console.error("tally-ingest key_check", (e as Error).message); return busyReply(); }
   }
   if (body?.kind === "own_key") {
@@ -4812,7 +4819,7 @@ Deno.serve(sentry.wrap(async (req) => {
           // bridge 2.5.10: why its last run ended, when it ran again (lastStopOf)
           ...(lastStopOf(b) ? { lastStop: lastStopOf(b) } : {}),
           // bridge 2.5.16: when a key or click was last seen in Tally (the page tells typing from a stuck bridge)
-          ...(Number.isFinite(Number(b.lastKeySec)) && b.lastKeySec !== null && Number(b.lastKeySec) >= 0 && Number(b.lastKeySec) < 1e7 ? { lastKeyAt: new Date(Date.now() - Math.floor(Number(b.lastKeySec)) * 1000).toISOString() } : {}),
+          ...(typeof b.lastKeySec === "number" && Number.isFinite(b.lastKeySec) && b.lastKeySec >= 0 && b.lastKeySec < 1e7 ? { lastKeyAt: new Date(Date.now() - Math.floor(b.lastKeySec) * 1000).toISOString() } : {}),
           // bridge 2.5.16: this login's Tally listens on a port its tally.ini does not name ({port, iniPort, words})
           ...(b.tallyPortNotSaved && typeof b.tallyPortNotSaved === "object" && Number(b.tallyPortNotSaved.port) > 0 ? { tallyPortNotSaved: { port: Math.min(65535, Math.floor(Number(b.tallyPortNotSaved.port))), iniPort: Math.max(0, Math.min(65535, Math.floor(Number(b.tallyPortNotSaved.iniPort) || 0))), words: s(b.tallyPortNotSaved.words, 400) } } : {}),
           windowsUser: s(b.windowsUser, 60), bridgePort: Math.max(0, Math.min(65535, Math.floor(Number(b.bridgePort) || 0))), tallyPort: Math.max(0, Math.min(65535, Math.floor(Number(b.tallyPort) || 0))), dataFolder: s(b.dataFolder, 260) };

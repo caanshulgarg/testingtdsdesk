@@ -146,6 +146,16 @@ try:
     d0 = next(d for d in FS.T["tally_devices"] if d["id"] == DA)
     d0["info"] = dict(d0.get("info") or {}, typingAt=agoz(600))
 
+    time.sleep(5.2); c, r = call(dict(quiet, lastKeySec=None))
+    ok(last_gf().get("p_idle") is True, "2b. lastKeySec null (no key seen by the bridge): not typing (%s)" % last_gf())
+    d0 = next(d for d in FS.T["tally_devices"] if d["id"] == DA)
+    ok("lastKeyAt" not in ((d0.get("info") or {}).get("beat") or {}), "2b. lastKeySec null: no lastKeyAt kept")
+    d0["info"] = dict(d0.get("info") or {}, typingAt=agoz(600))
+    time.sleep(5.2); c, r = call(dict(quiet, lastKeySec="3"))
+    ok(last_gf().get("p_idle") is True, "2b. lastKeySec as text: not used (%s)" % last_gf())
+    d0 = next(d for d in FS.T["tally_devices"] if d["id"] == DA)
+    d0["info"] = dict(d0.get("info") or {}, typingAt=agoz(600))
+
     print("== 3. a cloud without 182")
     NIGHT_MISSING[0] = True
     n0 = len(gf_calls())

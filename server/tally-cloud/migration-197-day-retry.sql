@@ -11,7 +11,9 @@
 --      a type not asked (a Credit Note, a type of the book's own). Such a day is marked split_open (tally_period_days and
 --      tally_check_days, a trigger on each): its done_at stays empty and its earlier count is kept; only a whole list of
 --      the day (via 'day': the one-day list, the gap's or the recount's read) clears the mark, and the day is then done
---      as before. The bridge also holds such a day 24 hours (why 'split', not counted as a failed day);
+--      as before. The bridge also holds such a day 24 hours (why 'split'). A day whose whole list Tally never gives in
+--      time is read type by type day after day and never confirmed: each such day counts toward the 3 (the re-review's
+--      low point), so on the 3rd the person is offered the upload of that day;
 --   6. (the code review's L5) tally_period_unstamp: the days a list handed back that tally-ingest left out because they
 --      are held keep the time they were last really handed out (the speed and the "asked in the last 2 minutes" order);
 --   4. tally_catchup_status: for the page's line "Bringing in N missed days from Tally, M left": the days being brought in
@@ -63,7 +65,8 @@ revoke all on function public.tally_day_split_open() from public, anon, authenti
 create or replace trigger tally_period_days_split_open before insert or update on public.tally_period_days for each row execute function public.tally_day_split_open();
 create or replace trigger tally_check_days_split_open before insert or update on public.tally_check_days for each row execute function public.tally_day_split_open();
 
--- the bridge's day stop: {ok, fails, upload, retryAt, words}. why 'split': only held (not a failed day)
+-- the bridge's day stop: {ok, fails, upload, retryAt, words}. Every why counts, once a day (split too: its whole list
+-- could not be had in time that day)
 create or replace function public.tally_period_day_stop(p_book uuid, p_day date, p_why text) returns jsonb
 language plpgsql security definer set search_path = public, pg_temp as $function$
 declare f uuid; r tally_period_day_retry%rowtype; n int; up boolean := false; w text;
@@ -76,7 +79,7 @@ begin
   on conflict (book_id, day) do nothing;
   select * into r from tally_period_day_retry where book_id = p_book and day = p_day for update;
   -- one try a day: a stop within 20 hours of the last one counted is the same day's
-  n := case when p_why = 'split' then r.fails when r.fails = 0 or r.last_at <= now() - interval '20 hours' then r.fails + 1 else r.fails end;
+  n := case when r.fails = 0 or r.last_at <= now() - interval '20 hours' then r.fails + 1 else r.fails end;
   update tally_period_day_retry set fails = n, last_at = case when n > r.fails then now() else last_at end, retry_at = now() + interval '24 hours',
          why = left(coalesce(p_why, ''), 40)
    where book_id = p_book and day = p_day;

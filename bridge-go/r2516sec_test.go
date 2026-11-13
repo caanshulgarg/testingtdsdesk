@@ -119,3 +119,45 @@ func TestR2516PendingLinkNeverOverwritesANewerOne(t *testing.T) {
 		t.Fatalf("the newer link overwritten: %q, pending %q", cfgS("CloudKey"), cfgS("PendingCloudKey"))
 	}
 }
+
+// the re-review: the setup (elevated, not the owner) could not read the owner's earlier settings and made a new id,
+// key and port; the service's first start reads them with the owner's rights: the earlier id, keys, browsers, port
+// and link win, nothing is connected again; a note naming another folder is never read
+func TestR2516DeferredEarlierSettingsKeepTheLinks(t *testing.T) {
+	const u = "https://qbocskaiewaxqcvaunzc.supabase.co/functions/v1/tally-ingest"
+	key := "fcd_" + strings.Repeat("cd", 24)
+	old := t.TempDir()
+	f := filepath.Join(old, "tds-bridge.config.json")
+	_ = os.WriteFile(f, []byte(`{"InstanceId": "0123456789abcdef", "Key": "earlier-key", "PairedBrowsers": [{"id": "b1", "sha": "s1"}], "Port": 9104,
+	 "KeepDailyAt": "21:30", "CloudUrl": "`+u+`", "CloudKey": "`+key+`", "FinComUrl": "https://example.invalid/"}`), 0o644)
+	cur := newOrdered() // as the setup wrote it, the earlier file not read
+	cur.Set("InstanceId", "fedcba9876543210")
+	cur.Set("Port", 9100)
+	cur.Set("Key", "made-by-setup")
+	cur.Set("FinComUrl", "https://app.fincom.live/")
+	cur.Set("KeepDailyAt", "02:00")
+	cur.Set(earlierSettingsKey, f)
+	var lines []string
+	if !applyEarlierSettings(osTree{}, cur, old, func(s string) { lines = append(lines, s) }) {
+		t.Fatal("not applied")
+	}
+	if str(cur.Get("InstanceId")) != "0123456789abcdef" || str(cur.Get("Key")) != "earlier-key" || toInt(cur.Get("Port")) != 9104 || !cur.Has("PairedBrowsers") {
+		t.Fatalf("the bridge's id, key, port or browsers lost: %v", cur.vals)
+	}
+	if str(cur.Get("PendingCloudUrl")) != u || str(cur.Get("PendingCloudKey")) != key || cur.Has("CloudKey") {
+		t.Fatalf("the link to FinCom: %v", cur.vals)
+	}
+	if str(cur.Get("FinComUrl")) != "https://app.fincom.live/" || str(cur.Get("KeepDailyAt")) != "02:00" || cur.Has(earlierSettingsKey) {
+		t.Fatalf("the setup's own choices, or the note: %v", cur.vals)
+	}
+	// a note naming a file outside the owner's earlier folder: dropped, nothing read
+	other := newOrdered()
+	other.Set("InstanceId", "fedcba9876543210")
+	other.Set(earlierSettingsKey, f)
+	if !applyEarlierSettings(osTree{}, other, t.TempDir(), func(string) {}) || str(other.Get("InstanceId")) != "fedcba9876543210" || other.Has(earlierSettingsKey) {
+		t.Fatalf("another folder's file read: %v", other.vals)
+	}
+	if applyEarlierSettings(osTree{}, newOrdered(), old, func(string) {}) {
+		t.Fatal("applied with no note")
+	}
+}
