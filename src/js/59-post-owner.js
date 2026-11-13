@@ -1,7 +1,7 @@
 /* @react-lazy: begin 59-post-owner.js (the React app loads this file with its Post to Tally screen (app/src/screens/Post.jsx): build.py react_parts) */
 /* Post to Tally: who holds a posting (was in src/js/59) */
 const PostOwner = {
-  notReady(m){ return /tally_post_job_mark_posted|tally_post_id_release_owner|tally_post_settle_ask|tally_post_check_withdraw|tally_post_check_confirm|PGRST202|Could not find the function|schema cache|does not exist|\b404\b/i.test(String(m || "")); },
+  notReady(m){ return /tally_post_job_mark_posted|tally_post_id_release_owner|tally_post_owner_release|tally_post_settle_ask|tally_post_check_withdraw|tally_post_check_confirm|PGRST202|Could not find the function|schema cache|does not exist|\b404\b/i.test(String(m || "")); },
   async call(cid, fn, args, done){
     try {
       const r = await TCloud.rpc(fn, args);
@@ -133,6 +133,152 @@ const PostOwner = {
     }
   }
 };
+// Fix C (state-machine review, item 5), loaded when it is asked for (postPart, src/js/59-post-preview.js): "Deleted in
+// Tally" under a posted bill, the owner's release of it (Post to Tally > Errors), "Not this Tally entry" (bank, sales).
+// FinCom reads Tally only to find the bill still there (any read, any match); it never decides by itself that it is gone:
+// the owner says so ("I checked in Tally: not there – release": a reason, the risk said, audited), a member asks the owner
+Object.assign(PostOwner, {
+  delBusy: {},
+  // a bank line's or an invoice's own button on one in Tally: left as it is, the next step named
+  keptOne(r, inv){
+    const next = inv ? (r.status === "intally" ? "If it was matched to the wrong Tally entry, press \u201cNot this Tally entry\u201d on it." : "")
+      : r.state === "intally" && !bankOwnPost(r) ? "If it was matched to the wrong Tally entry, press \u201cNot this Tally entry\u201d on the line." : "To post it again, press \u201cTake it back\u201d on the line first.";
+    return "This " + (inv ? "invoice" : "line") + " is already in Tally, so it was left as it is." + (next ? " " + next : "");
+  },
+  // Retry of an old posting: refused when an entry of it was taken back, undone, put to No entry or posted again since
+  retryChanged(j, ids, ents){
+    for (const id of ids){
+      const e = ents[id], r = !e && S.bank && S.bank.cid === j.client_id ? S.bank.rows.find(x => String(x.id) === id) : null, x = e || r;
+      if (x && ((x.postClearedJobs || []).includes(j.id) || (e ? e.status !== "approved" || e.exportedAt || e.postUnconfirmed : r.state !== "ready")))
+        return "Retry not possible: " + (e ? [e.x.vendorName, e.x.invoiceNo].filter(Boolean).join(" ") || "a bill" : "a bank line") + " of this posting was changed since (taken back, undone, No entry or posted again). Post it from To post if it is still to go.";
+    }
+    return "";
+  },
+  // {found} from any read that has it; else {found: null, read: [read, nothing found], failed: [could not be read]}
+  async tallyHas(co, e){
+    const t = e.tally || {}, days = [tallyToIso(t.vchDate || ""), e.x.invoiceDate].filter(Boolean).sort(), tn = postCompanyName(co), read = [], failed = [];
+    const q = (what, p) => Promise.resolve().then(() => p()).then(x => { read.push(what); return x; }, () => { failed.push(what); return null; });
+    const hit = vs => { vs = [].concat(vs || []).filter(v => !/^yes$/i.test(v.cancelled || "")); return PostCheck.match(e, vs) || vs.find(v => (t.guid && v.guid === t.guid) || (t.masterId && String(v.masterId || v.masterid || "") === String(t.masterId))); };
+    const span = "&from=" + isoToTally(addDays(days[0], -5)) + "&to=" + isoToTally(addDays(days[days.length - 1], 5)) + Bridge.pinQ();
+    if (Bridge.on() && Bridge.up()){
+      const j = await q("the FinCom Bridge’s read of Tally", () => Bridge.call("/vouchers?company=" + encodeURIComponent(tn) + span, null, 120000)), f = j && hit(j.vouchers);
+      if (f) return {found: f};
+      const l = e.partyLedger && await q("the party’s ledger in Tally", () => Bridge.call("/ledgervouchers?company=" + encodeURIComponent(tn) + "&ledger=" + encodeURIComponent(e.partyLedger) + span));
+      const h = l && [].concat(l.rows || []).find(v => days.map(isoToTally).includes(String(v.date)) && Math.abs(num(v.cr || v.dr) - r2(num(e.x.total))) < 0.01);
+      if (h) return {found: {number: "", date: h.date, type: h.type}};
+    }
+    if (typeof TCloud === "object" && TCloud.on() && TCloud.has(co.id)){
+      const bk = TCloud.book(co.id), g = bk && t.guid && await q("FinCom’s cloud copy of Tally", () => TallyProof.live("tally_vouchers?select=guid,cancelled&book_id=eq." + encodeURIComponent(bk.book) + "&guid=in.(" + encodeURIComponent('"' + String(t.guid).replace(/"/g, "") + '"') + ")"));
+      if (g && g.some(x => !x.cancelled)) return {found: {number: e.tallyVchNo, date: t.vchDate}};
+      const j = await q("the Tally computer’s read", () => CloudTally.call(co, PostCheck.vouchersUrl(co, tn, e))), f = j && hit(j.vouchers);
+      if (f) return {found: f};
+    }
+    return {found: null, read, failed};
+  },
+  async deletedInTally(e){
+    const P = PostOwner, cid = S.coId, co = CO(cid);
+    if (P.delBusy[e.id]) return;
+    if (postSending(cid).has(String(e.id))){ toast("Its posting to Tally is still being sent. Wait for it to finish."); return; }
+    if (!billPostLive(e, cid)) return;
+    if (!(e.tally && e.tally.vchDate) && !e.x.invoiceDate){ toast("This bill has no date to look for in Tally: give it its bill date first."); return; }
+    P.delBusy[e.id] = true; toast("Looking in Tally…");
+    let r; try { r = await P.tallyHas(co, e); } catch (err){ r = {found: null, read: [], failed: ["Tally (" + plainMsg((err && err.message) || String(err)) + ")"]}; }
+    delete P.delBusy[e.id];
+    if (r.found){ PostCheck.markIn(co, e, r.found); toast("Tally still has it (" + PostCheck.vchSay(r.found) + "): it stays posted."); refreshStats(cid); render(); return; }
+    const said = [r.read.length && "nothing found in " + r.read.join(", "), r.failed.length && "could not read " + r.failed.join(", ")].filter(Boolean).join("; ") || "nothing here can read Tally";
+    toast("FinCom could not find it, but cannot be sure it is gone (" + said + ").", {actions: [postOwner() ? {label: "I checked in Tally: not there – release", run: () => P.ownerAsk(cid, e)}
+      : {label: "Ask the owner to release", run: () => P.why("Ask the owner to release it?", "Ask the owner", ": you looked in Tally and it is not there. The firm’s owner checks and releases it (Post to Tally › Errors).", e).then(a => {
+        if (!a) return; e.ownerRelease = {at: new Date().toISOString(), by: whoAmI(), why: a.data, ask: true}; Store.saveEntry(cid, e);
+        auditEvent("bill_release_asked", (e.x.vendorName || "") + " " + (e.x.invoiceNo || e.id) + ": " + a.data, cid); toast("Sent to the owner: Post to Tally › Errors."); render(); })}]});
+  },
+  // the owner: a fresh reason, the risk said, then the release (a bill already cleared: only the cloud's id)
+  ownerAsk(cid, e){
+    if (!postOwner()){ toast("Only the firm’s owner can release it."); return; }
+    if (!billPostLive(e, cid)) return PostOwner.ownerRelease(cid, e);
+    PostOwner.why("Not in Tally?", "Release", ": you looked in Tally yourself and it is not there. If it is in Tally, it will be posted twice.", e).then(a => { if (a) PostOwner.goneFromTally(cid, e, a.data); });
+  },
+  // the owner keeps it posted: a member's ask is dismissed
+  dismissAsk(cid, e){
+    if (!postOwner() || !e.ownerRelease || !e.ownerRelease.ask) return;
+    delete e.ownerRelease; Store.saveEntry(cid, e); auditEvent("bill_release_ask_dismissed", (e.x.vendorName || "") + " " + (e.x.invoiceNo || e.id), cid);
+    toast("Dismissed: it stays posted."); render();
+  },
+  why(title, ok, words, e){
+    return askConfirm({title, ok, danger: true,
+      body: '<p class="note">' + esc(e.x.vendorName || e.fileName || "") + (e.x.invoiceNo ? " · " + esc(e.x.invoiceNo) : "") + words + "</p>" +
+        '<label class="f" style="margin-top:8px"><span>What you did in Tally</span><input type="text" id="deletedWhy" maxlength="200" placeholder="For example: deleted in the Day Book on 12-Nov"></label>',
+      read: () => ((document.getElementById("deletedWhy") || {}).value || "").trim(),
+      validate: why => why.length < 3 ? "Say what you did in Tally." : ""});
+  },
+  // the owner's word: cleared, back to To review, released once (the bridge: e.release; the cloud's id: ownerRelease)
+  async goneFromTally(cid, e, why){
+    if (!(await postClearReady())) return;
+    const by = whoAmI(), at = new Date().toISOString(), vch = e.tallyVchNo || (e.tally && (e.tally.vchNo || e.tally.number)) || "";
+    const job = postJobOf(cid, e.id), held = !!job || postIdReleased(e.id, cid) === false;
+    billClearPosting(e);
+    e.deletedInTally = {at, by, why, vch, verified: at};
+    e.release = {at, by, why: "Deleted in Tally: " + why};
+    // a bill posted through the bridge only: nothing held by the cloud, a member's ask settled here
+    if (held) e.ownerRelease = {at, by, why, job: job ? job.id : ""}; else delete e.ownerRelease;
+    if (e.status === "approved") unapply(e, cid, {force: true});
+    Store.saveEntry(cid, e);
+    auditEvent("bill_deleted_in_tally", (e.x.vendorName || e.fileName || "") + " " + (e.x.invoiceNo || e.id) + (vch ? " (voucher " + vch + ")" : "") + ": I checked in Tally: not there (" + why + "). If it is in Tally, it will be posted twice.", cid);
+    if (S.coId === cid){ S.filter = "draft"; S.selected = e.id; }
+    refreshStats(cid); toast("Not in Tally: back in To review, not posted again."); render();
+    if (held) await PostOwner.ownerRelease(cid, e);
+  },
+  // FinCom's cloud frees the id (migration 174: tally_post_owner_release, an owner only, a reason, refused while sending);
+  // refused or not there yet: the server's words, and it waits under Post to Tally > Errors
+  async ownerRelease(cid, e){
+    const o = e.ownerRelease; if (!o) return;
+    const job = o.job || ((postJobOf(cid, e.id) || {}).id || "");
+    if (!job){
+      if (postIdReleased(e.id, cid) === false){ toast("FinCom’s cloud holds it, but its posting is not found here yet: open Post to Tally and try again."); return; }
+      delete e.ownerRelease; Store.saveEntry(cid, e); toast("Released: FinCom’s cloud does not hold it."); render(); return;
+    }
+    try {
+      const j = await TCloud.rpc("tally_post_owner_release", {p_job: job, p_id: String(e.id), p_why: o.why});
+      if (!j || j.ok === false) throw new Error((j && j.error) || "not released");
+      delete e.ownerRelease; Store.saveEntry(cid, e); toast("Released in FinCom’s cloud: it can be posted once more.");
+    } catch (err){ o.job = job; Store.saveEntry(cid, e); toast("FinCom’s cloud did not release it: " + String((err && err.message) || err).replace(/^ERROR:\s*/i, "") + ". It waits under Post to Tally › Errors."); }
+    render();
+  },
+  // "Not this Tally entry": the entry kept on the line (notTally), never matched again; the line waits for a person
+  bankNotTally(id){
+    const b = B(), r = bankRow(id);
+    if (!r || r.state !== "intally" || bankOwnPost(r)) return;
+    const t = bankBookEntry(r), keys = t ? bankTallyKeys(t) : r.tallyKey ? [r.tallyKey] : [];
+    if (!keys.length){ toast("FinCom does not know which Tally entry this line was matched to. Read the Tally bank book again first."); return; }
+    const words = t ? [fmtDate(t.date), [t.vt, t.vn].filter(Boolean).join(" "), money0(num(t.debit) || num(t.credit))].filter(Boolean).join(" \u00b7 ") : r.tallyRef || keys[0];
+    askConfirm({title: "Not this Tally entry?", ok: "Not that entry", body: '<p class="note">This bank line was matched to Tally entry ' + esc(words) + ". Mark it as NOT that entry? If this entry really is it, posting will put it in Tally twice.</p>"}).then(ok => {
+      if (!ok || r.state !== "intally") return;
+      r.notTally = (r.notTally || []).concat(keys); r.state = "attention"; r.userSet = false;
+      delete r.tallyIdx; delete r.tallyKey; r.tallyHow = ""; r.tallyRef = "";
+      const fp = fpHash(r.fp || r.id);
+      b.postedTags = b.postedTags || {};
+      if (/^tally:/.test(String(b.postedTags[fp] || ""))) delete b.postedTags[fp];
+      b.postedTags["nt:" + fp] = r.notTally.join("\n");
+      if (b.hist && (b.hist.rows[r.fp] || {}).s === "tally"){ delete b.hist.rows[r.fp]; b.histVer++; }
+      auditEvent("bank_not_tally", (r.dec.name || r.narr || r.id) + " " + money0(num(r.debit) || num(r.credit)) + " " + r.date + ": not Tally entry " + words, b.cid);
+      saveBank({rows: true, posted: true, hist: true}); toast("Marked as not that Tally entry: it is not matched to it again. Choose its ledger and post it, or ignore it."); render();
+    });
+  },
+  // "Not this Tally entry" (owner, item 5): an invoice matched to the wrong Tally voucher; the voucher is kept on the invoice
+  // (notTally) and it goes back to review or ready
+  salesNotTally(id){
+    const s = SL(), v = inv(id); if (!v || v.status !== "intally") return;
+    const m = v.tallyMatch || {}, key = m.key || "num:" + normInvNo(v.x.number), d = String(m.date || "");
+    const words = [d ? fmtDate(/^\d{8}$/.test(d) ? d.slice(0, 4) + "-" + d.slice(4, 6) + "-" + d.slice(6) : d) : "", m.number || v.x.number, m.amount ? money0(m.amount) : ""].filter(Boolean).join(" \u00b7 ");
+    askConfirm({title: "Not this Tally entry?", ok: "Not that entry", body: '<p class="note">This invoice was matched to Tally entry ' + esc(words) + ". Mark it as NOT that entry? If this entry really is it, posting will put it in Tally twice." +
+      (m.key ? "" : " FinCom did not keep which voucher it was, so every Tally voucher numbered " + esc(v.x.number || "") + " is left out for this invoice.") + "</p>"}).then(ok => {
+      if (!ok || v.status !== "intally") return;
+      // back to review: a person confirms it before it is posted
+      v.notTally = (v.notTally || []).concat(key); const no = normInvNo(v.x.number); s.cfg.notTally = Object.assign({}, s.cfg.notTally, {[no]: v.notTally}); saveSales({cfg: true}); delete v.tallyMatch; v.postNote = ""; mapInvoice(v); v.status = "review";
+      auditEvent("sales_not_tally", "Invoice " + (v.x.number || v.id) + ": not Tally entry " + words, s.cid);
+      saveSales(); toast("Marked as not that Tally entry: it is not matched to it again."); render();
+    });
+  },
+});
 if (typeof PostOwner !== "undefined") globalThis.PostOwner = PostOwner;
 // (each name only when declared: a test's harness loads a file's names one by one, tests/harness.js)
 /* @react-lazy: end */

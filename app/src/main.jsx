@@ -52,8 +52,9 @@ window.loadTallyJson = () => import("./lib/tallyJson.js").catch((e) => { staleRe
 // the bridge follows the FinCom login using it (migration 115; TCloud.autoOwn)
 window.loadBridgeFollow = () => import("./lib/bridgeFollow.js");
 // next-size-room: a screen's own part of the program, for an action asked for before that screen's file is in (withPart,
-// src/js/82): GSTR-9 and 9C (with the 9C screen, for its PDF), the MIS pack, the printed sales invoice
-window.loadPart = (k) => (k === "gst9" ? import("./screens/gst/Annual.jsx") : k === "mis" ? import("../../src/js/18-mis-pack.js") : import("../../src/js/26-sales-invoice.js")).catch((e) => { staleReload(e, true); throw e; });
+// src/js/82): GSTR-9 and 9C (with the 9C screen, for its PDF), the MIS pack, Post to Tally's settling (postPart, src/js/59),
+// the printed sales invoice
+window.loadPart = (k) => (k === "gst9" ? import("./screens/gst/Annual.jsx") : k === "mis" ? import("../../src/js/18-mis-pack.js") : k === "post" ? import("../../src/js/59-post-owner.js") : import("../../src/js/26-sales-invoice.js")).catch((e) => { staleReload(e, true); throw e; });
 window.loadRegisters = () => import("./lib/registers.js").catch((e) => { staleReload(e, true); throw e; });
 // next-legacy-room: the bill reader (src/js/01-reading-bills.js), loaded the first time a bill is read (readerLoad, src/js/82).
 // Not refreshed by itself when it cannot come: bills waiting in the reading queue would be lost; the bill says why instead

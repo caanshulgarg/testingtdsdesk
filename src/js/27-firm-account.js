@@ -1147,81 +1147,6 @@ function billDelete(id){
   if (billPostLive(e, S.coId)){ toast("This bill is posted to Tally. Delete it in Tally first, then press \u201cDeleted in Tally\u201d in the bar under this bill; after that you can delete it."); return; }
   billDeleteAsk(e);
 }
-// "Deleted in Tally" (the bar under a posted bill): a person deleted its voucher in Tally. The posting is cleared and the
-// bill goes back to To review; nothing is posted again (unlike "Not in Tally – post again" in Post to Tally)
-// "Deleted in Tally": FinCom reads Tally only to find it still there (any read, any match); it never decides by itself that
-// it is gone: the owner says so ("I checked in Tally: not there – release"), a member asks the owner
-const billDelBusy = {};
-async function billTallyHas(co, e){
-  const t = e.tally || {}, days = [tallyToIso(t.vchDate || ""), e.x.invoiceDate].filter(Boolean).sort(), tn = postCompanyName(co), q = s => s.catch(() => null);
-  const hit = vs => { vs = [].concat(vs || []).filter(v => !/^yes$/i.test(v.cancelled || "")); return PostCheck.match(e, vs) || vs.find(v => (t.guid && v.guid === t.guid) || (t.masterId && String(v.masterId || v.masterid || "") === String(t.masterId))); };
-  const span = "&from=" + isoToTally(addDays(days[0], -5)) + "&to=" + isoToTally(addDays(days[days.length - 1], 5)) + Bridge.pinQ();
-  if (Bridge.on() && Bridge.up()){
-    const j = await q(Bridge.call("/vouchers?company=" + encodeURIComponent(tn) + span, null, 120000)), f = j && hit(j.vouchers);
-    if (f) return f;
-    const l = e.partyLedger && await q(Bridge.call("/ledgervouchers?company=" + encodeURIComponent(tn) + "&ledger=" + encodeURIComponent(e.partyLedger) + span));
-    const h = l && [].concat(l.rows || []).find(v => days.map(isoToTally).includes(String(v.date)) && Math.abs(num(v.cr || v.dr) - r2(num(e.x.total))) < 0.01);
-    if (h) return {number: "", date: h.date, type: h.type};
-  }
-  if (typeof TCloud === "object" && TCloud.on() && TCloud.has(co.id)){
-    const bk = TCloud.book(co.id), g = bk && t.guid && await q(TallyProof.live("tally_vouchers?select=guid,cancelled&book_id=eq." + encodeURIComponent(bk.book) + "&guid=in.(" + encodeURIComponent('"' + String(t.guid).replace(/"/g, "") + '"') + ")"));
-    if (g && g.some(x => !x.cancelled)) return {number: e.tallyVchNo, date: t.vchDate};
-    const j = await q(CloudTally.call(co, PostCheck.vouchersUrl(co, tn, e))), f = j && hit(j.vouchers);
-    if (f) return f;
-  }
-  return null;
-}
-async function billDeletedInTally(e){
-  const cid = S.coId, co = CO(cid);
-  if (billDelBusy[e.id]) return;
-  if (typeof postSending === "function" && postSending(cid).has(String(e.id))){ toast("Its posting to Tally is still being sent. Wait for it to finish."); return; }
-  if (!billPostLive(e, cid)) return;
-  if (!(e.tally && e.tally.vchDate) && !e.x.invoiceDate){ toast("This bill has no date to look for in Tally: give it its bill date first."); return; }
-  billDelBusy[e.id] = true; toast("Looking in Tally\u2026");
-  let f = null; try { f = await billTallyHas(co, e); } catch (err){ f = null; }
-  delete billDelBusy[e.id];
-  if (f){ PostCheck.markIn(co, e, f); toast("Tally still has it (" + PostCheck.vchSay(f) + "): it stays posted."); refreshStats(cid); render(); return; }
-  toast("FinCom could not find it, but cannot be sure it is gone.", {actions: [postOwner() ? {label: "I checked in Tally: not there \u2013 release", run: () => billOwnerAsk(cid, e)}
-    : {label: "Ask the owner to release", run: () => billWhy("Ask the owner to release it?", "Ask the owner", ": you looked in Tally and it is not there. The firm\u2019s owner checks and releases it (Post to Tally \u203a Errors).", e).then(a => {
-      if (!a) return; e.ownerRelease = {at: new Date().toISOString(), by: whoAmI(), why: a.data, ask: true}; Store.saveEntry(cid, e); toast("Sent to the owner: Post to Tally \u203a Errors."); render(); })}]});
-}
-// the owner: a fresh reason, the risk said, then the release (a bill already cleared: only the cloud's id)
-function billOwnerAsk(cid, e){
-  if (!billPostLive(e, cid)) return billOwnerRelease(cid, e);
-  billWhy("Not in Tally?", "Release", ": you looked in Tally yourself and it is not there. If it is in Tally, it will be posted twice.", e).then(a => { if (a) billGoneFromTally(cid, e, a.data); });
-}
-function billWhy(title, ok, words, e){
-  return askConfirm({title, ok, danger: true,
-    body: '<p class="note">' + esc(e.x.vendorName || e.fileName || "") + (e.x.invoiceNo ? " \u00b7 " + esc(e.x.invoiceNo) : "") + words + "</p>" +
-      '<label class="f" style="margin-top:8px"><span>What you did in Tally</span><input type="text" id="deletedWhy" maxlength="200" placeholder="For example: deleted in the Day Book on 12-Nov"></label>',
-    read: () => ((document.getElementById("deletedWhy") || {}).value || "").trim(),
-    validate: why => why.length < 3 ? "Say what you did in Tally." : ""});
-}
-// not in Tally: cleared, back to To review, released once (bridge: release; the cloud's id: the owner, Post to Tally > Errors)
-async function billGoneFromTally(cid, e, why){
-  if (!(await postClearReady())) return;
-  const by = whoAmI(), at = new Date().toISOString(), vch = e.tallyVchNo || (e.tally && (e.tally.vchNo || e.tally.number)) || "";
-  const v = typeof postJobStates === "function" ? postJobStates(cid).get(String(e.id)) : null, held = !!(v && v.job) || (typeof postIdReleased === "function" && postIdReleased(e.id, cid) === false);
-  billClearPosting(e);
-  e.deletedInTally = {at, by, why, vch, verified: at, byHand: true};
-  e.release = {at, by, why: "Deleted in Tally: " + why};
-  if (held) e.ownerRelease = {at, by, why, job: v && v.job ? v.job.id : ""};
-  if (e.status === "approved") unapply(e, cid, {force: true});
-  Store.saveEntry(cid, e);
-  auditEvent("bill_deleted_in_tally", (e.x.vendorName || e.fileName || "") + " " + (e.x.invoiceNo || e.id) + (vch ? " (voucher " + vch + ")" : "") + ": " + why, cid);
-  if (held && postOwner()) billOwnerRelease(cid, e);
-  if (S.coId === cid){ S.filter = "draft"; S.selected = e.id; }
-  refreshStats(cid); toast("Not in Tally: back in To review, not posted again."); render();
-}
-async function billOwnerRelease(cid, e){
-  const o = e.ownerRelease; if (!o) return;
-  try {
-    const j = await TCloud.rpc("tally_post_id_release_owner", {p_job: o.job, p_id: String(e.id), p_why: "Deleted in Tally: " + o.why});
-    if (j && j.ok === false) throw new Error(j.error || "not released");
-    delete e.ownerRelease; Store.saveEntry(cid, e); toast("Released in FinCom\u2019s cloud: it can be posted once more.");
-  } catch (err){ toast("FinCom\u2019s cloud did not release it: " + String((err && err.message) || err).replace(/^ERROR:\s*/i, "")); }
-  render();
-}
 function billDeleteAsk(e){
   askConfirm({title: "Delete this bill?", ok: "Delete", danger: true,
     body: '<p class="note">' + esc(e.x.vendorName || e.fileName || "") + (e.x.invoiceNo ? " \u00b7 " + esc(e.x.invoiceNo) : "") + ". It moves to \u201cDeleted\u201d with its document, and can be restored from there.</p>" +
@@ -1229,17 +1154,14 @@ function billDeleteAsk(e){
     read: () => ((document.getElementById("delWhy") || {}).value || "").trim(),
     validate: why => why.length < 3 ? "Write why the bill is deleted." : ""}).then(r => {
     if (!r) return;
-    // the status it had kept; a bill in Tally keeps what it was, so Restore puts it back approved and posted
-    const was = e.status, live = !!billLivePosting(e, S.coId), kept = was === "approved" && live ? {applied: e.applied, snapshot: e.snapshot, approvedAt: e.approvedAt} : null;
-    if (was === "approved") unapply(e, S.coId, {force: true});
+    if (e.status === "approved") unapply(e, S.coId, {force: true});
     if (S.revSel) S.revSel.delete(e.id);
     if (S.drawerOpen && S.selected === e.id) S.drawerOpen = false;
-    softDeleteEntry(e, r.data, {status: was, kept}); refreshStats(S.coId); toast("Deleted. It is under \u201cDeleted\u201d, where it can be restored."); render();
+    softDeleteEntry(e, r.data); refreshStats(S.coId); toast("Deleted. It is under \u201cDeleted\u201d, where it can be restored."); render();
   });
 }
-function softDeleteEntry(e, why, o){
-  e.deleted = {at: new Date().toISOString(), by: whoAmI(), reason: String(why || "").slice(0, 200), status: (o && o.status) || e.status};
-  if (o && o.kept) e.deleted.kept = o.kept;
+function softDeleteEntry(e, why){
+  e.deleted = {at: new Date().toISOString(), by: whoAmI(), reason: String(why || "").slice(0, 200), status: e.status};
   e.status = "deleted";
   unregisterHash(S.coId, e.fileHash);            // the same file can be uploaded again
   if (S.selected === e.id) S.selected = null;
@@ -1252,16 +1174,12 @@ function billRestore(id){
   if (!e || e.status !== "deleted") return;
   if (!canDeleteBills()){ toast("Only the firm\u2019s owner can restore a deleted bill."); return; }
   e.restored = {at: new Date().toISOString(), by: whoAmI(), was: e.deleted};
-  // a bill posted to Tally goes back to where it was (approved, on its supplier's totals), not to be posted again
-  const d = e.deleted || {};
-  if (d.kept && d.status === "approved") reapply(e, S.coId, d.kept);
-  else e.status = e.exportedAt && d.status ? d.status : "draft";
-  e.deleted = null;
+  // a bill already in Tally (cleared after 90 days) goes back to where it was, not to be posted again
+  e.status = e.exportedAt && e.deleted && e.deleted.status ? e.deleted.status : "draft"; e.deleted = null;
   if (e.fileHash) registerHash(S.coId, e.fileHash, e.id);
   Store.saveEntry(S.coId, e);
   auditEvent("bill_restore", (e.x.vendorName || e.fileName || "") + " " + (e.x.invoiceNo || e.id), S.coId);
-  const back = e.status === "draft";
-  S.filter = back ? "draft" : e.status; S.selected = e.id; refreshStats(S.coId); toast(back ? "Restored to To review." : "Restored as it was: " + (e.exportedAt ? "it is in Tally" : "its posting is being checked") + ", so it is not posted again."); render();
+  S.filter = "draft"; S.selected = e.id; refreshStats(S.coId); toast("Restored to To review."); render();
 }
 // round 14c (C1, C2): the items of compute().missing that are a box on the bill (data-focus-field on its input), and the
 // click that puts the cursor there; the first missing one is marked bk-missing when the bill opens
@@ -2112,7 +2030,7 @@ function doAct(act, t){
       // the next bill set aside, if any (smart moves 5); this one waits in To review
       if (was === "rejected") billMoveOn(e, "Moved back to review.", "rejected"); } break;
     case "undo": if (e) undoApproval(e); break;
-    case "billDeletedInTally": if (e) billDeletedInTally(e); break;
+    case "billDeletedInTally": if (e) postPart(P => P.deletedInTally(e)); break;
     case "delete": if (e) billDelete(e.id); break;
     case "addParty": { const id = "p-new-" + Date.now().toString(36); D().parties[id] = {id, name:"New supplier", pan:"", gstin:"", ledgerName:"", natureDefault:"", expenseLedger:"", ldcRate:"", ldcValidTo:"", ytd:{}}; S.partySel = id; Store.saveParty(S.coId, D().parties[id]); render(); break; }
     case "closeParty": S.partySel = null; render(); break;

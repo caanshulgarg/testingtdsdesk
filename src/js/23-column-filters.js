@@ -662,10 +662,10 @@ function bankRowAct(a, id){
     return true;
   }
   if (a === "post"){ postBankToTally([id]); return true; }
-  if (a === "nottally"){ bankNotTally(id); return true; }
+  if (a === "nottally"){ postPart(P => P.bankNotTally(id)); return true; }
   {
     const r = bankRow(id); if (!r) return true;
-    if (bankInTally(r)){ toast(bankKeptOne(r)); return true; }
+    if (bankInTally(r)){ postPart(P => toast(P.keptOne(r))); return true; }
     b.undo = {what: a === "accept" ? "accept" : a, label: "1 entry", n: 1, others: 0, snaps: [rowSnapshot(r)], ruleKeys: [], oldRules: []};
     b.sticky.add(r.id);
     if (a === "accept"){

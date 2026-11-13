@@ -691,51 +691,6 @@ async function reconcileBank(opts){
   if (!opts.stay) window.scrollTo({top: 0, behavior: "smooth"});
   return rec;
 }
-async function reconPost(){
-  const b = B(), R = S.recon;
-  if (!R) return;
-  const ids = R.missing.filter(id => { const r = b.rows.find(x => x.id === id); return r && ["ready", "sent", "intally"].includes(r.state) && !bankAside(r) && !bankRepOpen(r) && r.ledger && exactLedger(r.ledger); });
-  if (!ids.length) return;
-  // lines marked as posted that Tally does not have: posted afresh
-  b.rows.forEach(r => { if (ids.includes(r.id) && bankInTally(r)) bankClearPosting(r, "ready"); });
-  b.tallyLook = null; lsDel(wideCheckKey());
-  saveBank({rows: true, posted: true});
-  await postBankToTally(ids);
-  await reconcileBank({stay: true});
-}
-async function reconDelete(which){
-  const b = B(), R = S.recon;
-  if (!R) return;
-  const list = which === "replace" ? R.differ.map(d => R.T[d.ti]) : Array.from(R.pick).map(i => R.T[i]);
-  if (!list.length) return;
-  const total = list.reduce((a, t) => a + Math.abs(t.eff), 0);
-  const a = await askConfirm({title: which === "replace" ? "Replace " + list.length + " entr" + (list.length === 1 ? "y" : "ies") + " in " + R.company + "?" : "Delete " + list.length + " entr" + (list.length === 1 ? "y" : "ies") + " from " + R.company + "?", ok: which === "replace" ? "Replace them" : "Delete them",
-    body: '<p class="note">' + list.slice(0, 12).map(t => esc(fmtDate(t.date) + " " + [t.type, t.number].filter(Boolean).join(" ") + " " + t.party + " " + INR.format(Math.abs(t.eff)))).join("<br>") + (list.length > 12 ? "<br>and " + (list.length - 12) + " more" : "") +
-      "<br><br>" + (which === "replace" ? "Each Tally entry is deleted and the statement line is posted again with the statement’s amount." : "Total " + INR.format(total) + ".") + " This cannot be undone from FinCom: take a Tally backup first if you have not.</p>"});
-  if (!a) return;
-  let ok = 0, bad = 0;
-  const why = [], gone = new Set();
-  for (let k = 0; k < list.length; k++){
-    const t = list[k];
-    b.busy = (which === "replace" ? "Replacing " : "Deleting ") + (k + 1) + " of " + list.length + " in Tally…"; render();
-    try {
-      const j = await Bridge.call("/unpost", {company: R.company, guid: t.guid, masterId: t.masterId, vchType: t.type, vchDate: t.vdate, vchNumber: t.number}, 60000);
-      if (j && j.ok !== false){ ok++; gone.add(t.i); logPosting({what: "bank", id: t.guid, action: "removed", co: b.cid, ref: "reconciliation " + [t.type, t.number].join(" "), party: t.party, amount: Math.abs(t.eff), tally: {guid: t.guid, vchType: t.type, vchDate: t.vdate, company: R.company}, by: (Cloud.st && Cloud.st.email) || ""}); }
-      else { bad++; why.push(fmtDate(t.date) + " " + [t.type, t.number].filter(Boolean).join(" ") + ": " + ((j && (j.message || j.error)) || "Tally did not delete it")); }
-    } catch (e){ bad++; why.push(fmtDate(t.date) + " " + [t.type, t.number].filter(Boolean).join(" ") + ": " + (e.message || e)); }
-  }
-  b.busy = ""; b.tallyLook = null;
-  toast(ok + (which === "replace" ? " removed from Tally" : " deleted from Tally") + (bad ? "; " + bad + " not deleted \u2014 Tally\u2019s reason is shown in the reconciliation" : "") + ".");
-  if (which === "replace"){
-    // the statement lines go in again with their own amount, only where the old entry really went
-    const ids = R.differ.filter(d => gone.has(d.ti)).map(d => d.rowId);
-    b.rows.forEach(r => { if (ids.includes(r.id)) bankClearPosting(r, r.ledger && exactLedger(r.ledger) ? "ready" : "attention"); });
-    lsDel(wideCheckKey()); saveBank({rows: true, posted: true});
-    await postBankToTally(ids.filter(id => (b.rows.find(r => r.id === id) || {}).state === "ready"));
-  }
-  const R2 = await reconcileBank({stay: true});
-  if (R2 && why.length){ R2.deleteProblems = why; render(); }
-}
 
 /* ---------- lines marked as posted that are no longer in Tally (deleted there) ---------- */
 // Every line FinCom posted carries its tag in Tally's narration; a line matched to an entry typed in Tally is found by
@@ -782,23 +737,6 @@ async function checkMarkedInTally(opts){
   if (!opts.quiet){ b.busy = ""; toast(g.ids.length ? g.ids.length + " line" + (g.ids.length === 1 ? " is" : "s are") + " no longer in Tally." : "All " + g.marked + " posted lines are still in Tally."); }
   render();
   return g;
-}
-async function goneBack(){
-  if (!(await postClearReady())) return;
-  const b = B(), g = b.gone;
-  if (!g) return;
-  const ids = new Set(g.ids);
-  let n = 0;
-  b.rows.forEach(r => {
-    if (!ids.has(r.id) || !["sent", "intally"].includes(r.state)) return;
-    n++;
-    bankClearPosting(r, r.ledger && exactLedger(r.ledger) ? "ready" : "attention");
-  });
-  b.gone = null; b.focus = null; b.filter = "ready"; b.tallyLook = null;
-  lsDel(wideCheckKey());
-  saveBank({rows: true, posted: true});
-  toast(n + " line" + (n === 1 ? " is" : "s are") + " back in Post to Tally. Press Post to send " + (n === 1 ? "it" : "them") + " to Tally again.");
-  render();
 }
 /* ---------- finding double entries, and entries Tally holds under the wrong date ---------- */
 // Reads this bank ledger from Tally over a wide window (not only the statement's dates), so an entry FinCom sent that
@@ -885,42 +823,6 @@ async function findTallyDuplicates(){
   if (S.dupFind && !S.dupFind.notChecked && !S.dupFind.extra.length && !S.dupFind.wrongDate.length) lsSet(wideCheckKey(), String(Date.now()));
   render();
 }
-async function removeTallyDuplicates(which){
-  const d = S.dupFind;
-  const list = d ? (which === "wrong" ? d.wrongDate : d.extra) : [];
-  if (!list.length) return;
-  const what = which === "wrong" ? list.length + " wrong-date entr" + (list.length === 1 ? "y" : "ies") : list.length + " extra cop" + (list.length === 1 ? "y" : "ies");
-  const a = await askConfirm({title: "Remove " + what + " from " + d.company + "?", ok: "Remove them",
-    body: '<p class="note">' + (which === "wrong" ? "Only the copies under the wrong date are removed. The lines then show as not posted, and Post puts them in with the right date." : "Only the later copy of each double entry is removed; the first stays.") + " This cannot be undone from FinCom, so take a Tally backup first if you have not.</p>"});
-  if (!a) return;
-  const b = B();
-  let ok = 0, bad = 0;
-  const gone = new Set();
-  for (let i = 0; i < list.length; i++){
-    const v = list[i];
-    b.busy = "Removing " + (i + 1) + " of " + list.length + "…"; render();
-    try {
-      const j = await Bridge.call("/unpost", {company: d.company, guid: v.guid || "", vchType: v.type, vchDate: v.date, vchNumber: v.number || ""}, 60000);
-      if (j && j.ok !== false){
-        ok++; if (v.rowId) gone.add(v.rowId);
-        logPosting({what: "bank", id: v.guid, action: "removed", co: b.cid, ref: (which === "wrong" ? "wrong date " : "double entry ") + (v.number || ""), party: v.party, amount: d.amountOf(v), tally: {guid: v.guid, vchType: v.type, vchDate: v.date, company: d.company}, by: (Cloud.st && Cloud.st.email) || ""});
-      } else bad++;
-    } catch (e){ bad++; }
-  }
-  // a line whose only copy in Tally was under a wrong date is not posted any more: back to ready, so Post sends it
-  if (which === "wrong") b.rows.forEach(r => {
-    if (!gone.has(r.id) || !d.badOnly.includes(r.id)) return;
-    if (b.postedTags) delete b.postedTags[fpHash(r.fp || r.id)];
-    if (bankInTally(r)) bankClearPosting(r, "ready");
-    r.postError = "";
-  });
-  saveBank({rows: true, posted: true});
-  b.busy = "";
-  toast(ok + " removed from Tally" + (bad ? ", " + bad + " could not be removed — delete those in Tally" : "") + "." + (which === "wrong" && ok ? " Post the lines again to put them in with the right date." : ""));
-  S.dupFind = null;
-  lsDel(wideCheckKey());
-  render();
-}
 
 // a bank line Tally has (or is reading back: pendingCheck): sent, with Tally's voucher. Round 17a: Tally's reply (bridge
 // 2.1.8, byReply) is posted, said so (r.postByReply); o: {by, quiet} for a line marked afterwards from FinCom's cloud
@@ -928,7 +830,7 @@ async function removeTallyDuplicates(which){
 function bankPosted(cid, r, x, tname, now, o){
   o = o || {};
   const b = B(), who = o.by || (Cloud.st && Cloud.st.email) || "";
-  r.state = "sent"; r.sentAt = now; r.postedVia = "bridge"; r.postError = ""; delete r.postJob; r.postedOptional = !!x.optional; r.postVerified = x.verified === true; r.checking = !!x.pendingCheck;
+  r.state = "sent"; r.sentAt = now; r.postedVia = "bridge"; r.postError = ""; delete r.postJob; delete r.postJobNew; r.postedOptional = !!x.optional; r.postVerified = x.verified === true; r.checking = !!x.pendingCheck;
   r.postByReply = x.verified !== true && x.byReply === true;
   if (b && b.cid === cid){ b.postedTags = b.postedTags || {}; b.postedTags[fpHash(r.fp || r.id)] = now; }
   if (!o.quiet) logPosting({what: "bank", id: r.id, action: "posted", co: cid, ref: String(r.narr || "").slice(0, 40), party: r.ledger, amount: num(r.debit || r.credit), tally: {guid: x.guid || "", masterId: x.masterId || "", vchType: x.vchType || "", vchDate: x.vchDate || "", company: tname}, by: who});
@@ -1494,7 +1396,7 @@ function billPosted(cid, e, x, tname, now, o){
   o = o || {};
   const who = o.by || (Cloud.st && Cloud.st.email) || "";
   if (!o.quiet) logPosting({what: "bill", id: e.id, action: postAltered(x) ? "altered" : "posted", co: cid, ref: e.x.invoiceNo, party: e.x.vendorName, amount: num(e.x.total), tally: {guid: x.guid || "", masterId: x.masterId || "", vchType: x.vchType || "", vchDate: x.vchDate || "", company: x.company || tname}, by: who});
-  delete e.release; e.exportedAt = now; e.postError = ""; e.postUnconfirmed = null; e.postCheckFailed = null; e.postedVia = "bridge"; e.postedInto = x.company || tname; e.postedOptional = !!x.optional; e.postVerified = x.verified === true; e.postAltered = postAltered(x); e.tallyVchNo = x.vchNumber || "";
+  delete e.release; delete e.postJobNew; if (e.deletedInTally) delete e.deletedInTally.verified; e.exportedAt = now; e.postError = ""; e.postUnconfirmed = null; e.postCheckFailed = null; e.postedVia = "bridge"; e.postedInto = x.company || tname; e.postedOptional = !!x.optional; e.postVerified = x.verified === true; e.postAltered = postAltered(x); e.tallyVchNo = x.vchNumber || "";
   // round 17a: posted by Tally's reply (bridge 2.1.8 does not read back): in Tally (billInTally), said so
   e.postByReply = x.verified !== true && x.byReply === true;
   e.tally = {guid: x.guid || "", masterId: x.masterId || "", vchType: x.vchType || "", vchDate: x.vchDate || "", at: now, by: who, company: x.company || tname};

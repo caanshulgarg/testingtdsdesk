@@ -369,9 +369,3 @@ const TallyProof = {
   }
 };
 // the bank lines no longer in Tally: back to "ready", to be posted again (Tally is checked for FinCom's tag first)
-async function bankRepostGone(){
-  if (!(await postClearReady())) return;
-  const b = B(), gone = b.rows.filter(r => r.goneFromTally);
-  gone.forEach(r => bankClearPosting(r, "ready"));
-  saveBank({rows: true}); toast(gone.length + " line" + (gone.length === 1 ? " is" : "s are") + " ready to post again."); render();
-}

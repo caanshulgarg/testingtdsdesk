@@ -124,6 +124,7 @@ async function bankCheckReview(opts){
   if (!ledger){ out.error = "Choose the Tally ledger for this bank account first."; toast(out.error); return out; }
   const rows = b.rows.filter(r => opts.all ? ["sent", "intally"].includes(r.state) || (r.state === "ready" && (r.postReview || bankJobOf(r))) : r.state === "ready" && (r.postReview || bankJobOf(r)));
   if (!rows.length){ toast("No lines wait for a check with Tally."); return out; }
+  if (!(await postClearReady())){ out.error = "FinCom\u2019s cloud postings could not be read"; return out; }
   const ds = rows.map(r => r.date).filter(Boolean).sort(), from = addDays(ds[0], -15), to = addDays(ds[ds.length - 1], 15);
   const tname = (typeof tallyCoName === "function" ? tallyCoName(co) : "") || co.tallyName || co.name;
   b.busy = "Reading " + ledger + " from Tally for " + fmtDate(from) + " to " + fmtDate(to) + "…"; render();
@@ -229,5 +230,110 @@ async function bankHealOpen(){
   if (h.n && B() === b){ b.postReport = {at: Date.now(), posted: 0, skipped: 0, movedBack: 0, failed: [], already: h.n, alreadyLine: bankAlreadyLine(h), dismiss: "bankReportOk"}; render(); }
   return h.n;
 }
-if (typeof globalThis === "object") Object.assign(globalThis, {bankPartialSplit, bankBatchGuesses, bankJobAnswers, bankJobOf, bankSentHeal, bankAlreadyLine, bankHealOpen, bankInReview, bankReviewWords, bankReviewMark, bankCheckReview});
+// the Bank screen's actions that take lines out of Tally or post them afresh (were in src/js/24 and 51): with that screen
+async function reconPost(){
+  const b = B(), R = S.recon;
+  if (!R) return;
+  const ids = R.missing.filter(id => { const r = b.rows.find(x => x.id === id); return r && ["ready", "sent", "intally"].includes(r.state) && !bankAside(r) && !bankRepOpen(r) && r.ledger && exactLedger(r.ledger); });
+  if (!ids.length || !(await postClearReady())) return;
+  // lines marked as posted that Tally does not have: posted afresh
+  b.rows.forEach(r => { if (ids.includes(r.id) && bankInTally(r)) bankClearPosting(r, "ready"); });
+  b.tallyLook = null; lsDel(wideCheckKey());
+  saveBank({rows: true, posted: true});
+  await postBankToTally(ids);
+  await reconcileBank({stay: true});
+}
+async function reconDelete(which){
+  const b = B(), R = S.recon;
+  if (!R) return;
+  const list = which === "replace" ? R.differ.map(d => R.T[d.ti]) : Array.from(R.pick).map(i => R.T[i]);
+  if (!list.length) return;
+  const total = list.reduce((a, t) => a + Math.abs(t.eff), 0);
+  const a = await askConfirm({title: which === "replace" ? "Replace " + list.length + " entr" + (list.length === 1 ? "y" : "ies") + " in " + R.company + "?" : "Delete " + list.length + " entr" + (list.length === 1 ? "y" : "ies") + " from " + R.company + "?", ok: which === "replace" ? "Replace them" : "Delete them",
+    body: '<p class="note">' + list.slice(0, 12).map(t => esc(fmtDate(t.date) + " " + [t.type, t.number].filter(Boolean).join(" ") + " " + t.party + " " + INR.format(Math.abs(t.eff)))).join("<br>") + (list.length > 12 ? "<br>and " + (list.length - 12) + " more" : "") +
+      "<br><br>" + (which === "replace" ? "Each Tally entry is deleted and the statement line is posted again with the statement’s amount." : "Total " + INR.format(total) + ".") + " This cannot be undone from FinCom: take a Tally backup first if you have not.</p>"});
+  if (!a || which === "replace" && !(await postClearReady())) return;
+  let ok = 0, bad = 0;
+  const why = [], gone = new Set();
+  for (let k = 0; k < list.length; k++){
+    const t = list[k];
+    b.busy = (which === "replace" ? "Replacing " : "Deleting ") + (k + 1) + " of " + list.length + " in Tally…"; render();
+    try {
+      const j = await Bridge.call("/unpost", {company: R.company, guid: t.guid, masterId: t.masterId, vchType: t.type, vchDate: t.vdate, vchNumber: t.number}, 60000);
+      if (j && j.ok !== false){ ok++; gone.add(t.i); logPosting({what: "bank", id: t.guid, action: "removed", co: b.cid, ref: "reconciliation " + [t.type, t.number].join(" "), party: t.party, amount: Math.abs(t.eff), tally: {guid: t.guid, vchType: t.type, vchDate: t.vdate, company: R.company}, by: (Cloud.st && Cloud.st.email) || ""}); }
+      else { bad++; why.push(fmtDate(t.date) + " " + [t.type, t.number].filter(Boolean).join(" ") + ": " + ((j && (j.message || j.error)) || "Tally did not delete it")); }
+    } catch (e){ bad++; why.push(fmtDate(t.date) + " " + [t.type, t.number].filter(Boolean).join(" ") + ": " + (e.message || e)); }
+  }
+  b.busy = ""; b.tallyLook = null;
+  toast(ok + (which === "replace" ? " removed from Tally" : " deleted from Tally") + (bad ? "; " + bad + " not deleted \u2014 Tally\u2019s reason is shown in the reconciliation" : "") + ".");
+  if (which === "replace"){
+    // the statement lines go in again with their own amount, only where the old entry really went
+    const ids = R.differ.filter(d => gone.has(d.ti)).map(d => d.rowId);
+    b.rows.forEach(r => { if (ids.includes(r.id)) bankClearPosting(r, r.ledger && exactLedger(r.ledger) ? "ready" : "attention"); });
+    lsDel(wideCheckKey()); saveBank({rows: true, posted: true});
+    await postBankToTally(ids.filter(id => (b.rows.find(r => r.id === id) || {}).state === "ready"));
+  }
+  const R2 = await reconcileBank({stay: true});
+  if (R2 && why.length){ R2.deleteProblems = why; render(); }
+}
+async function goneBack(){
+  if (!(await postClearReady())) return;
+  const b = B(), g = b.gone;
+  if (!g) return;
+  const ids = new Set(g.ids);
+  let n = 0;
+  b.rows.forEach(r => {
+    if (!ids.has(r.id) || !["sent", "intally"].includes(r.state)) return;
+    n++;
+    bankClearPosting(r, r.ledger && exactLedger(r.ledger) ? "ready" : "attention");
+  });
+  b.gone = null; b.focus = null; b.filter = "ready"; b.tallyLook = null;
+  lsDel(wideCheckKey());
+  saveBank({rows: true, posted: true});
+  toast(n + " line" + (n === 1 ? " is" : "s are") + " back in Post to Tally. Press Post to send " + (n === 1 ? "it" : "them") + " to Tally again.");
+  render();
+}
+async function removeTallyDuplicates(which){
+  const d = S.dupFind;
+  const list = d ? (which === "wrong" ? d.wrongDate : d.extra) : [];
+  if (!list.length) return;
+  const what = which === "wrong" ? list.length + " wrong-date entr" + (list.length === 1 ? "y" : "ies") : list.length + " extra cop" + (list.length === 1 ? "y" : "ies");
+  const a = await askConfirm({title: "Remove " + what + " from " + d.company + "?", ok: "Remove them",
+    body: '<p class="note">' + (which === "wrong" ? "Only the copies under the wrong date are removed. The lines then show as not posted, and Post puts them in with the right date." : "Only the later copy of each double entry is removed; the first stays.") + " This cannot be undone from FinCom, so take a Tally backup first if you have not.</p>"});
+  if (!a || which === "wrong" && !(await postClearReady())) return;
+  const b = B();
+  let ok = 0, bad = 0;
+  const gone = new Set();
+  for (let i = 0; i < list.length; i++){
+    const v = list[i];
+    b.busy = "Removing " + (i + 1) + " of " + list.length + "…"; render();
+    try {
+      const j = await Bridge.call("/unpost", {company: d.company, guid: v.guid || "", vchType: v.type, vchDate: v.date, vchNumber: v.number || ""}, 60000);
+      if (j && j.ok !== false){
+        ok++; if (v.rowId) gone.add(v.rowId);
+        logPosting({what: "bank", id: v.guid, action: "removed", co: b.cid, ref: (which === "wrong" ? "wrong date " : "double entry ") + (v.number || ""), party: v.party, amount: d.amountOf(v), tally: {guid: v.guid, vchType: v.type, vchDate: v.date, company: d.company}, by: (Cloud.st && Cloud.st.email) || ""});
+      } else bad++;
+    } catch (e){ bad++; }
+  }
+  // a line whose only copy in Tally was under a wrong date is not posted any more: back to ready, so Post sends it
+  if (which === "wrong") b.rows.forEach(r => {
+    if (!gone.has(r.id) || !d.badOnly.includes(r.id)) return;
+    if (b.postedTags) delete b.postedTags[fpHash(r.fp || r.id)];
+    if (bankInTally(r)) bankClearPosting(r, "ready");
+    r.postError = "";
+  });
+  saveBank({rows: true, posted: true});
+  b.busy = "";
+  toast(ok + " removed from Tally" + (bad ? ", " + bad + " could not be removed — delete those in Tally" : "") + "." + (which === "wrong" && ok ? " Post the lines again to put them in with the right date." : ""));
+  S.dupFind = null;
+  lsDel(wideCheckKey());
+  render();
+}
+async function bankRepostGone(){
+  if (!(await postClearReady())) return;
+  const b = B(), gone = b.rows.filter(r => r.goneFromTally);
+  gone.forEach(r => bankClearPosting(r, "ready"));
+  saveBank({rows: true}); toast(gone.length + " line" + (gone.length === 1 ? " is" : "s are") + " ready to post again."); render();
+}
+if (typeof globalThis === "object") Object.assign(globalThis, {reconPost, reconDelete, goneBack, removeTallyDuplicates, bankRepostGone, bankPartialSplit, bankBatchGuesses, bankJobAnswers, bankJobOf, bankSentHeal, bankAlreadyLine, bankHealOpen, bankInReview, bankReviewWords, bankReviewMark, bankCheckReview});
 /* @react-lazy: end */

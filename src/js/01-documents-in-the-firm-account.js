@@ -3075,11 +3075,13 @@ function billMoveOn(e, said, list, undo){
     said + " Next: " + name + " (" + left.length + " left)", {kind: "approve", drawer: true, label: "Next →", noStay: true, actions: undo ? [undo] : []});
   render();
 }
-// a bill with a posting: sent, being checked, its id held by the cloud, or a cloud posting of it still running
-// (a bill found not in Tally at a fresh read after "Deleted in Tally" is not held by the cloud's record of it)
+// a bill with a posting: sent, being checked, its id held by the cloud, or a cloud posting of it still running (after the
+// owner's "Deleted in Tally" (deletedInTally.verified) the cloud's record of that posting no longer holds it; billPosted ends it)
 function billPostLive(e, cid){ return !!(e && (e.exportedAt || e.postUnconfirmed || (typeof postSending === "function" && postSending(cid).has(String(e.id))) || (!(e.deletedInTally && e.deletedInTally.verified) && typeof billLivePosting === "function" && billLivePosting(e, cid)))); }
+// the bar under an approved bill (app/src/screens/Review.jsx)
+function billBar(e){ const l = billPostLive(e, S.coId); return {note: e.exportedAt || e.goneFromTally ? tallyStateOf(e)[1] : "Waiting in Send to Tally", undo: !l, del: l && !postSending(S.coId).has(String(e.id))}; }
 // such a bill is not taken off its supplier's totals and put back to review here (it would be posted twice). o.force: a
-// bill deleted (it keeps what it was: softDeleteEntry; billRestore puts it back: reapply), or Tally's own refusal of
+// bill deleted (a posted bill cannot be: billDelete), or Tally's own refusal of
 // this posting (src/js/24)
 function unapply(e, cid, o){
   if (!(o && o.force) && billPostLive(e, cid)){ toast(e.exportedAt ? "This bill is posted to Tally. Delete it in Tally first, then press \u201cDeleted in Tally\u201d in the bar under this bill: it comes back to To review." : "Its posting to Tally is still being sent or checked. Wait for it to finish, then undo here."); return false; }
@@ -3095,21 +3097,12 @@ function unapply(e, cid, o){
   e.status = "draft"; delete e.applied; delete e.snapshot; delete e.approvedAt;
   return true;
 }
-// a posted bill restored: approved again as it was (k: what softDeleteEntry kept)
-function reapply(e, cid, k){
-  const a = k.applied, p = a && D(cid).parties[a.partyId];
-  if (p){ p.ytd = p.ytd || {}; p.ytd[a.fy] = p.ytd[a.fy] || {}; const cur = p.ytd[a.fy][a.natureId] || {credited: 0, tdsBase: 0};
-    cur.credited = r2(num(cur.credited) + a.credited); cur.tdsBase = r2(num(cur.tdsBase) + a.tdsBase); p.ytd[a.fy][a.natureId] = cur; Store.saveParty(cid, p); }
-  const kk = invKey(e.x), co = CO(cid);
-  if (kk && k.approvedAt){ co.keys = co.keys || {}; co.keys[kk] = {d: k.approvedAt.slice(0, 10), e: e.id}; Store.saveCompany(co); }
-  Object.assign(e, {status: "approved", applied: a, snapshot: k.snapshot, approvedAt: k.approvedAt});
-}
 // the one way a bill's posting is undone here: every posting field cleared alike
 function billClearPosting(e){
   // postedVia is kept: an older result of FinCom's cloud is not marked on it again (postReconcile, postBucket: postCleared)
   Object.assign(e, {exportedAt: null, postVerified: false, postByReply: false, tally: null, tallyVchNo: "", postNote: "", tallyCheck: null, postUnconfirmed: null, postError: "", postCheckFailed: null,
     postedInto: "", postAltered: false, postedOptional: false}, postCleared(e.id));
-  delete e.goneFromTally;
+  delete e.goneFromTally; delete e.postJobNew;
 }
 function undoApproval(e){
   const cid = S.coId;

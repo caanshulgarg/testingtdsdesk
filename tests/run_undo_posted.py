@@ -15,6 +15,12 @@ twice. Made-up client, lines, invoices and bills. Checked, for each kind:
                  says what tallyStateOf says (In Tally / In Tally, not confirmed / Not in Tally any more); a bill whose
                  posting is still being checked or sent cannot be undone; Undo of a queued automatic entry reads the
                  posting's status when the cancel is refused (cancelled: undone; taken: left)
+  Deleted in Tally - reads only say "still there" (the words name the reads that failed and those that found nothing); the
+                 owner's "I checked in Tally: not there" goes to tally_post_owner_release(p_job, p_id, p_why) (migration
+                 174; without it the server's words, kept under Post to Tally > Errors); a member's ask on a bill posted
+                 through the bridge only is settled by the owner without the cloud, or dismissed
+  queued here    - a posting this page queued (postMarkNew), marked, then taken back / undone automatically / deleted in
+                 Tally: that posting is old, never marked again; a Retry of it is refused
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_undo_posted.py"""
 import os, threading, functools, http.server, json
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -83,7 +89,7 @@ BILLS = r"""async () => {
   mk("u1", "Unpost One", "U/1", "verified"); mk("u2", "Unpost Two", "U/2", "verified"); mk("u3", "Unpost Three", "U/3", "verified"); mk("s1", "Sent Only", "S/1", "sent");
   mk("b6", "Being Checked", "B/6", null); approve(S.data[c.id].entries.b6, {bulk: true}); S.data[c.id].entries.b6.postUnconfirmed = {at: "2026-10-01T10:00:00Z", company: "ZZ"};
   mk("q1", "Still Sending", "Q/1", null); approve(S.data[c.id].entries.q1, {bulk: true});
-  ["k1", "k2", "k3", "k4", "h1", "l1", "l2", "c6", "c7"].forEach((id, i) => mk(id, "Path Supplier " + id, "K/" + i, "verified"));
+  ["k1", "k2", "k3", "k4", "h1", "l1", "l2", "c6", "c7", "c8", "c9", "j1", "j2"].forEach((id, i) => mk(id, "Path Supplier " + id, "K/" + i, "verified"));
   mk("k5", "Control Supplier", "K/9", null); approve(S.data[c.id].entries.k5, {bulk: true});
   mk("g1", "Gone Supplier", "G/1", "verified"); S.data[c.id].entries.g1.goneFromTally = "2026-10-05T10:00:00Z";
   S.data[c.id].entries.b3.docPath = c.id + "/b3-doc.pdf";
@@ -114,9 +120,9 @@ with sync_playwright() as p:
     r = E(R, "u1")
     ok(r["state"] == "sent" and r["guid"] == "g-u1", "posted through the bridge, then Undo: still posted, with its Tally voucher (%s)" % r)
     ok("1 line is already in Tally and was left as it is." in last(), "the words: %r" % last())
-    E("() => { window.__toasts = []; bankRowAct('restore', 'u1'); }")
+    E("() => { window.__toasts = []; bankRowAct('restore', 'u1'); }"); W(400)
     ok(last() == "This line is already in Tally, so it was left as it is. To post it again, press “Take it back” on the line first.", "one line's button on a posted line names the next step: %r" % last())
-    E("() => { window.__toasts = []; bankRowAct('restore', 'f1'); }")
+    E("() => { window.__toasts = []; bankRowAct('restore', 'f1'); }"); W(300)
     ok(last() == "This line is already in Tally, so it was left as it is. If it was matched to the wrong Tally entry, press “Not this Tally entry” on the line.", "on a line found in Tally: %r" % last())
     # the XML file marks the line sent the same way (exportBankXml)
     E("() => { bankRowAct('accept', 'u2'); const r = B().rows.find(x => x.id === 'u2'); r.state = 'sent'; r.sentAt = new Date().toISOString(); window.__toasts = []; undoBank(); }")
@@ -189,6 +195,14 @@ with sync_playwright() as p:
     same = lambda a, b: {k: v for k, v in a.items() if k != "state"} == {k: v for k, v in b.items() if k != "state"}
     ok(f[0]["state"] == "ready" and f[1]["state"] == "ready" and f[2]["state"] == "suggested" and same(f[0], f[1]) and same(f[0], f[2]) and f[3]["state"] == "ready" and same(f[0], f[3]) and f[0]["tally"] is None and not f[0]["tag"] and f[0]["postedVia"] == "bridge",
        "the four un-post paths (Take back, gone from Tally, back to Post to Tally, automatic undo) leave the same posting fields, cleared (postedVia kept, so an old cloud result is not marked again) (%s)" % f)
+    # H2: a posting this page queued (postMarkNew), marked posted from its result, then taken back: never marked again by it
+    E("""(cid) => { postMarkNew(cid, ['c1'], 'job-b1'); const t = new Date().toISOString();
+      CloudJobs.list = [{id: 'job-b1', client_id: cid, status: 'done', created_at: t, updated_at: t, entry_ids: ['c1'], results: [{id: 'c1', ok: true, verified: true, guid: 'g-c1', vchType: 'Receipt', vchDate: '20260125'}]}]; postReconcile(cid, true); }""", cid)
+    ok(E(R, "c1")["state"] == "sent", "queued here: marked posted from the cloud's result (%s)" % E(R, "c1"))
+    E("() => { window.unpostFromTally = async () => true; bankRowAct('unpost', 'c1'); }"); W(300)
+    E("(cid) => postReconcile(cid, true)", cid)
+    ok(E(R, "c1")["state"] == "ready" and not E("B().rows.find(x => x.id === 'c1').postJobNew"), "queued here, then Take it back: that posting is old, the line stays ready (%s)" % E(R, "c1"))
+    E("() => { CloudJobs.list = null; }")
     # Undo of a queued automatic entry whose posting the Tally computer has already taken
     E("""async () => { const r = B().rows.find(x => x.id === 'm1'); r.state = 'ready'; r.auto = {run: 'run2', job: '00000000-0000-0000-0000-000000000009', key: 'k2', dir: 'in', label: 'CUST m1', amt: 500, cid: ''};
       TCloud.rpc = async (fn) => fn === 'tally_post_cancel' ? {ok: false} : {ok: true}; CloudPost.row = async () => ({id: 'j', status: 'taken', results: []});
@@ -311,7 +325,7 @@ with sync_playwright() as p:
         E("(id) => { S.selected = id; render(); }", bid); W(300)
         pg.click('#app .actionbar button:has-text("Deleted in Tally")'); W(900)
     st_of = lambda bid: E("(id) => { const e = D().entries[id]; return [e.status, !!e.exportedAt]; }", bid)
-    NOTSURE = "FinCom could not find it, but cannot be sure it is gone."
+    NOTSURE = "FinCom could not find it, but cannot be sure it is gone ("
     E("() => { goStep('review', 'bills'); S.filter = 'approved'; S.selected = 'b5'; S.reviewTable = false; render(); }"); W(500)
     ok(pg.locator('#app .actionbar button:has-text("Deleted in Tally")').count() == 1, "a posted bill: “Deleted in Tally” in the bar under it")
     # any read that finds it: still there, the voucher named (the bridge's read, the bridge's kept entries, the cloud copy)
@@ -333,6 +347,10 @@ with sync_playwright() as p:
     for js, what in cases:
         T(js); press("b5")
         ok(st_of("b5") == ["approved", True] and NOTSURE in last() and E("window.__posted") == 0, "%s: nothing released, '%s' (%r)" % (what, NOTSURE, last()))
+    T("{mode: 'bridge', refused: true, lv: []}"); press("b5"); said_failed = last()
+    T("{mode: 'bridge', refused: false, vouchers: [], lv: []}"); press("b5"); said_none = last()
+    ok("could not read the FinCom Bridge’s read of Tally" in said_failed and "nothing found in the party’s ledger in Tally" in said_failed and "nothing found in the FinCom Bridge’s read of Tally" in said_none and "could not read" not in said_none,
+       "the words say which reads failed and which found nothing (%r | %r)" % (said_failed, said_none))
     ok(E("postBucket(D().entries.b5, {})") == "intally", "and it reads as in Tally, as before")
     # a member: "Ask the owner to release" (a reason), to Post to Tally > Errors; nothing changes on the bill
     T("{mode: 'bridge', refused: false, vouchers: [], lv: []}")
@@ -343,17 +361,22 @@ with sync_playwright() as p:
     if ask.count(): ask.click(); W(400)
     if box(): pg.fill("#confirmBox #deletedWhy", "not in the Day Book"); pg.click('#confirmBox [data-cbx="yes"]'); W(400)
     ok(st_of("c7") == ["approved", True] and E("!!(D().entries.c7.ownerRelease && D().entries.c7.ownerRelease.ask)"), "asked: still posted, waiting for the owner")
+    for bid in ("c8", "c9"):
+        press(bid)
+        if pg.locator('#toast [data-toast-act="Ask the owner to release"]').count(): pg.locator('#toast [data-toast-act="Ask the owner to release"]').click(); W(400)
+        if box(): pg.fill("#confirmBox #deletedWhy", "not in the Day Book"); pg.click('#confirmBox [data-cbx="yes"]'); W(400)
+    ok(E("!!(D().entries.c8.ownerRelease && D().entries.c9.ownerRelease)") and any("bill_release_asked" in a for a in E("window.__audit || []") or []) or E("!!(D().entries.c8.ownerRelease && D().entries.c9.ownerRelease)"), "two more asks (bills posted through the bridge only)")
     # the owner: a fresh reason, the risk said, then released (the bridge's release, the cloud's id)
-    E("""(cid) => { S.account = {me: {role: 'owner'}, firm: {name: 'Firm'}}; window.__rpc = []; TCloud.rpc = async (fn, a) => { window.__rpc.push([fn, a]); return {ok: true}; };
-      CloudJobs.list = [{id: 'job-c', client_id: cid, status: 'done', created_at: '2026-10-01T10:00:00Z', updated_at: '2026-10-01T10:00:00Z', entry_ids: ['c6', 'c7'], results: [{id: 'c6', ok: true, verified: true, guid: 'g6'}, {id: 'c7', ok: true, verified: true, guid: 'g7'}]}]; }""", cid)
+    E("""(cid) => { S.account = {me: {role: 'owner'}, firm: {name: 'Firm'}}; window.__rpc = []; TCloud.rpc = async (fn, a) => { window.__rpc.push([fn, a]); if (window.__no174) throw new Error("Could not find the function public." + fn + "(p_id, p_job, p_why) in the schema cache"); return {ok: true, owner: true}; };
+      window.__no174 = true; CloudJobs.list = [{id: 'job-c', client_id: cid, status: 'done', created_at: '2026-10-01T10:00:00Z', updated_at: '2026-10-01T10:00:00Z', entry_ids: ['c6', 'c7'], results: [{id: 'c6', ok: true, verified: true, guid: 'g6'}, {id: 'c7', ok: true, verified: true, guid: 'g7'}]}]; }""", cid)
     press("h1")
     btn = pg.locator('#toast [data-toast-act^="I checked in Tally: not there"]')
     ok(btn.count() == 1 and st_of("h1") == ["approved", True], "an owner: “I checked in Tally: not there – release”, nothing changed yet")
     if btn.count(): btn.click(); W(400)
     ok("it will be posted twice" in box() and pg.locator("#confirmBox #deletedWhy").count() == 1, "it asks a fresh reason and says the risk (%r)" % box()[:160])
     if box(): pg.fill("#confirmBox #deletedWhy", "looked in the Day Book myself"); pg.click('#confirmBox [data-cbx="yes"]'); W(500)
-    h1 = E("(() => { const e = D().entries.h1; return {status: e.status, exp: e.exportedAt || null, rel: !!(e.release && e.release.at), hand: !!(e.deletedInTally && e.deletedInTally.byHand)}; })()")
-    ok(h1 == {"status": "draft", "exp": None, "rel": True, "hand": True} and any("bill_deleted_in_tally" in a for a in E("window.__audit || []")) or h1 == {"status": "draft", "exp": None, "rel": True, "hand": True}, "the owner's word: back to To review, released once for the bridge (%s)" % h1)
+    h1 = E("(() => { const e = D().entries.h1; return {status: e.status, exp: e.exportedAt || null, rel: !!(e.release && e.release.at), mark: !!(e.deletedInTally && e.deletedInTally.at)}; })()")
+    ok(h1 == {"status": "draft", "exp": None, "rel": True, "mark": True}, "the owner's word: back to To review, released once for the bridge, marked deleted in Tally (%s)" % h1)
     ap = E("""async () => { const ap = await loadAutoPost(); return ap.billCheck(D().entries.h1, {cfg: Object.assign({}, ap.DEF, {on: true}), entries: D().entries, env: {}}).stops.join('; '); }""")
     ok("deleted in Tally" in (ap or ""), "Post automatically never takes a bill marked deleted in Tally (%r)" % ap)
     E("() => { approve(D().entries.h1, {bulk: true}); }")
@@ -366,7 +389,12 @@ with sync_playwright() as p:
     if pg.locator('#toast [data-toast-act^="I checked in Tally: not there"]').count(): pg.locator('#toast [data-toast-act^="I checked in Tally: not there"]').click(); W(400)
     if box(): pg.fill("#confirmBox #deletedWhy", "deleted it"); pg.click('#confirmBox [data-cbx="yes"]'); W(600)
     rp = E("window.__rpc")
-    ok(E("D().entries.c6.status") == "draft" and any(x[0] == "tally_post_id_release_owner" and x[1]["p_job"] == "job-c" and x[1]["p_id"] == "c6" for x in rp) and not E("D().entries.c6.ownerRelease"), "a cloud posting: the owner's release goes through tally_post_id_release_owner (%s)" % rp)
+    sent = [x for x in rp if x[0] == "tally_post_owner_release"]
+    ok(E("D().entries.c6.status") == "draft" and sent == [["tally_post_owner_release", {"p_job": "job-c", "p_id": "c6", "p_why": "deleted it"}]] and not [x for x in rp if x[0] == "tally_post_id_release_owner"],
+       "a cloud posting: the owner's word goes to tally_post_owner_release(p_job, p_id, p_why) (migration 174), never to 55's tally_post_id_release_owner (%s)" % rp)
+    ok(E("D().entries.c6.ownerRelease && D().entries.c6.ownerRelease.job") == "job-c" and "Could not find the function public.tally_post_owner_release" in last() and "Post to Tally › Errors" in last(),
+       "a cloud without 174 refuses: the server's words, the release waits under Post to Tally › Errors (%r)" % last())
+    E("() => { window.__no174 = false; }")
     E("() => { window.postSending = (c) => new Set(['b2']); S.selected = 'b2'; render(); }"); W(400)
     ok(pg.locator('#app .actionbar button:has-text("Deleted in Tally")').count() == 0, "no “Deleted in Tally” while its cloud posting is still sending")
     E("() => { window.postSending = window.__s0; render(); }")
@@ -380,7 +408,17 @@ with sync_playwright() as p:
     ok(rb.count() == 1 and "Owner: release this bill" in rb.inner_text(), "Post to Tally > Errors: “Owner: release this bill” for the owner (%d)" % rb.count())
     if rb.count(): rb.click(); W(600)
     if box(): pg.fill("#confirmBox #deletedWhy", "checked the Day Book"); pg.click('#confirmBox [data-cbx="yes"]'); W(600)
-    ok(any(x[0] == "tally_post_id_release_owner" and x[1]["p_id"] == "c7" for x in E("window.__rpc")) and not E("D().entries.c7.ownerRelease") and E("D().entries.c7.status") == "draft", "the owner's press (a fresh reason) releases it")
+    ok(["tally_post_owner_release", {"p_job": "job-c", "p_id": "c7", "p_why": "checked the Day Book"}] in E("window.__rpc") and not E("D().entries.c7.ownerRelease") and E("D().entries.c7.status") == "draft", "the owner's press (a fresh reason) releases it through tally_post_owner_release")
+    n0 = len(E("window.__rpc"))
+    rb = pg.locator('[data-owner-release-btn="c8"]')
+    if rb.count(): rb.click(); W(600)
+    if box(): pg.fill("#confirmBox #deletedWhy", "checked the Day Book"); pg.click('#confirmBox [data-cbx="yes"]'); W(600)
+    ok(not E("D().entries.c8.ownerRelease") and E("D().entries.c8.status") == "draft" and E("!!D().entries.c8.release") and len(E("window.__rpc")) == n0,
+       "a member's ask on a bill posted through the bridge only: the owner's release settles it, no call to FinCom's cloud (%s)" % E("window.__rpc")[n0:])
+    dm = pg.locator('[data-owner-release-dismiss="c9"]')
+    ok(dm.count() == 1, "the owner may dismiss a member's ask")
+    if dm.count(): dm.click(); W(400)
+    ok(not E("D().entries.c9.ownerRelease") and st_of("c9") == ["approved", True] and pg.locator('[data-owner-release-btn="c9"]').count() == 0, "dismissed: it stays posted, off Errors")
     E("() => { S.account = null; goStep('review', 'bills'); S.filter = 'approved'; S.reviewTable = false; render(); }"); W(500)
     # MED 1: the cloud's earlier posting of each bill is known when it is cleared (four paths); a later posting is marked
     E("""(cid) => { window.unpostFromTally = async () => true; CloudJobs.list = [{id: 'job-old', client_id: cid, status: 'done', created_at: '2026-10-01T10:00:00Z', updated_at: new Date(Date.now() + 3600000).toISOString(), entry_ids: ['k1', 'k2', 'k3', 'k4', 'k5'],
@@ -401,6 +439,26 @@ with sync_playwright() as p:
     ok(bk == ["ready", "ready", "ready", "ready"], "the four are ready to post again (%s)" % bk)
     E("""(cid) => { CloudJobs.list.push({id: 'job-new', client_id: cid, status: 'done', created_at: new Date(Date.now() + 1000).toISOString(), updated_at: new Date(Date.now() + 1000).toISOString(), entry_ids: ['k1'], results: [{id: 'k1', ok: true, verified: true, guid: 'new-k1'}]}); postReconcile(cid, true); }""", cid)
     ok(E("!!D().entries.k1.exportedAt") and E("D().entries.k1.tally.guid") == "new-k1", "a new cloud posting after the clear, finished while the page was closed: marked posted, not sent again")
+    # H2: bills queued here (postMarkNew) and marked posted from the cloud's result, then undone automatically / deleted in
+    # Tally by the owner: that posting is old, never marked on them again; a Retry of it is refused
+    E("""(cid) => { ['j1', 'j2'].forEach(id => { const e = D().entries[id]; billClearPosting(e); ['postClearedJobs', 'postClearedMark', 'postedVia'].forEach(k => delete e[k]); });
+      postMarkNew(cid, ['j1', 'j2'], 'job-q'); const t = new Date(Date.now() + 2000).toISOString();
+      CloudJobs.list = [{id: 'job-q', client_id: cid, status: 'done', created_at: t, updated_at: t, entry_ids: ['j1', 'j2'], results: ['j1', 'j2'].map(id => ({id, ok: true, verified: true, guid: 'q-' + id, vchType: 'Purchase', vchDate: '20260701'}))}];
+      postReconcile(cid, true); }""", cid)
+    ok(E("['j1', 'j2'].every(id => !!D().entries[id].exportedAt)"), "queued here: both marked posted from the cloud's result")
+    E("""async (cid) => { const e = D().entries.j1; e.auto = {run: 'r7', key: 'kj', label: 'J1', amt: 1000, cid: ''}; window.bridgeLive = () => true;
+      const ap = await loadAutoPost(); await ap.undo(cid, e, {noAsk: true}); approve(e, {bulk: true}); }""", cid); W(300)
+    E("() => { S.account = {me: {role: 'owner'}, firm: {name: 'Firm'}}; window.__rpc = []; }")
+    press("j2")
+    if pg.locator('#toast [data-toast-act^="I checked in Tally: not there"]').count(): pg.locator('#toast [data-toast-act^="I checked in Tally: not there"]').click(); W(400)
+    if box(): pg.fill("#confirmBox #deletedWhy", "deleted it"); pg.click('#confirmBox [data-cbx="yes"]'); W(600)
+    ok(["tally_post_owner_release", {"p_job": "job-q", "p_id": "j2", "p_why": "deleted it"}] in E("window.__rpc"), "the owner's word on a bill queued here: released for that posting (%s)" % E("window.__rpc"))
+    E("() => { approve(D().entries.j2, {bulk: true}); S.account = null; }")
+    E("(cid) => postReconcile(cid, true)", cid)
+    st = E("['j1', 'j2'].map(id => [D().entries[id].status, !!D().entries[id].exportedAt, postBucket(D().entries[id], {jobs: postJobStates(S.coId)})])")
+    ok(st == [["approved", False, "ready"], ["approved", False, "ready"]], "queued here, then AutoPost undo / Deleted in Tally: not marked posted again by that posting, ready to post (%s)" % st)
+    rf = E("(cid) => postRetryRefusal({id: 'job-q', client_id: cid, status: 'failed', entry_ids: ['j1']})", cid)
+    ok("Retry not possible" in (rf or "") and "changed since" in (rf or ""), "a Retry of that posting is refused: its bill was changed since (%r)" % rf)
     E("() => { CloudJobs.list = []; }")
     # S1: whether a line is FinCom's own posting, for 5,000 lines against a book of 5,000 entries
     ms = E("""() => { const b = B(), book = []; for (let i = 0; i < 5000; i++) book.push({date: '2026-01-01', debit: i + 1, credit: 0, vt: 'Receipt', vn: String(i), narr: '', guid: 'pg-' + i});

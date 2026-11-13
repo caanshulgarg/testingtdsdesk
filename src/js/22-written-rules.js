@@ -606,26 +606,6 @@ function bankOwnPost(r){
   const b = B(), fp = fpHash(r.fp || r.id), tag = b && b.postedTags ? b.postedTags[fp] : undefined, t = bankBookEntry(r);
   return (tag != null && !/^tally:/.test(String(tag))) || r.tallyHow === "posted by FinCom earlier" || !!(t && String(t.narr || "").toUpperCase().includes("TDSDESK:" + fp.toUpperCase()));
 }
-// "Not this Tally entry": the entry kept on the line (notTally), never matched again; the line waits for a person
-function bankNotTally(id){
-  const b = B(), r = bankRow(id);
-  if (!r || r.state !== "intally" || bankOwnPost(r)) return;
-  const t = bankBookEntry(r), keys = t ? bankTallyKeys(t) : r.tallyKey ? [r.tallyKey] : [];
-  if (!keys.length){ toast("FinCom does not know which Tally entry this line was matched to. Read the Tally bank book again first."); return; }
-  const words = t ? [fmtDate(t.date), [t.vt, t.vn].filter(Boolean).join(" "), money0(num(t.debit) || num(t.credit))].filter(Boolean).join(" \u00b7 ") : r.tallyRef || keys[0];
-  askConfirm({title: "Not this Tally entry?", ok: "Not that entry", body: '<p class="note">This bank line was matched to Tally entry ' + esc(words) + ". Mark it as NOT that entry? If this entry really is it, posting will put it in Tally twice.</p>"}).then(ok => {
-    if (!ok || r.state !== "intally") return;
-    r.notTally = (r.notTally || []).concat(keys); r.state = "attention"; r.userSet = false;
-    delete r.tallyIdx; delete r.tallyKey; r.tallyHow = ""; r.tallyRef = "";
-    const fp = fpHash(r.fp || r.id);
-    b.postedTags = b.postedTags || {};
-    if (/^tally:/.test(String(b.postedTags[fp] || ""))) delete b.postedTags[fp];
-    b.postedTags["nt:" + fp] = r.notTally.join("\n");
-    if (b.hist && (b.hist.rows[r.fp] || {}).s === "tally"){ delete b.hist.rows[r.fp]; b.histVer++; }
-    auditEvent("bank_not_tally", (r.dec.name || r.narr || r.id) + " " + money0(num(r.debit) || num(r.credit)) + " " + r.date + ": not Tally entry " + words, b.cid);
-    saveBank({rows: true, posted: true, hist: true}); toast("Marked as not that Tally entry: it is not matched to it again. Choose its ledger and post it, or ignore it."); render();
-  });
-}
 // In Tally's bank ledger, a debit is money in and a credit is money out.
 function matchTallyBook(acc, rows, force){
   const b = B();
@@ -697,11 +677,10 @@ function sameParty(a, b){
 function bankInTally(r){ return !!r && (r.state === "sent" || r.state === "intally"); }
 function bankKeptWords(n, what){ return n + " " + (what || "line") + (n === 1 ? " is" : "s are") + " already in Tally and " + (n === 1 ? "was left as it is." : "were left as they are.") +
   (what ? " If one was matched to the wrong Tally entry, press \u201cNot this Tally entry\u201d on it." : " To change one, press \u201cTake it back\u201d or \u201cNot this Tally entry\u201d on the line."); }
-function bankKeptOne(r){ return "This line is already in Tally, so it was left as it is. " + (r.state === "intally" && !bankOwnPost(r) ? "If it was matched to the wrong Tally entry, press \u201cNot this Tally entry\u201d on the line." : "To post it again, press \u201cTake it back\u201d on the line first."); }
 // the one way from Tally back to "ready": every posting field cleared alike
 function bankClearPosting(r, state){
   Object.assign(r, {state: state || (r.ledger ? "ready" : "attention"), sentAt: "", postVerified: false, postByReply: false, tally: null, tallyRef: "", tallyHow: "", checking: false, postError: ""}, postCleared(r.id));
-  delete r.goneFromTally; delete r.tallyIdx;
+  delete r.goneFromTally; delete r.tallyIdx; delete r.postJobNew;
   const b = B(); if (b && b.postedTags) delete b.postedTags[fpHash(r.fp || r.id)];
 }
 function rowSnapshot(r){ return {id: r.id, rep: r.rep ? Object.assign({}, r.rep) : r.rep, ledger: r.ledger, state: r.state, userSet: r.userSet, why: r.why, source: r.source, vtype: r.vtype, billId: r.billId, billRef: r.billRef, tdsAtPay: r.tdsAtPay}; }

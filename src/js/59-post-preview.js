@@ -466,7 +466,7 @@ const PostCheck = {
     }
     if (Date.parse(r.readAt || 0) <= this.postedAt(e)){ const t = "Not posted again: the read of Tally (" + tallyHm(r.readAt) + ") is older than the posting."; postNote(co.id, t, "bad"); toast(t); render(); return false; }
     // not in Tally at a read made just now: waiting again, and posted
-    if (!(await postClearReady())){ this.st[e.id].busy = false; return false; }
+    if (!(await postClearReady())){ this.st[e.id].busy = false; render(); return false; }
     billClearPosting(e);
     Store.saveEntry(co.id, e); refreshStats(co.id);
     await postAllToTally({kind: "bill", id: e.id});
@@ -540,6 +540,8 @@ function postRetryRefusal(j){
       return "Retry not possible: this bill was deleted in FinCom on " + when + " (" + (dl.reason || "no reason given") + "). Restore it first.";
     }
   }
+  // an entry changed since (taken back, undone, No entry, posted again): PostOwner.retryChanged, with Post to Tally (Retry's page)
+  const ch = typeof PostOwner === "object" && PostOwner.retryChanged(j, ids, ents); if (ch) return ch;
   // round 15 (B2): an entry Tally accepted whose reply needs review is never sent again by a Retry
   const rev = [].concat(j.results || []).filter(r => postNeedsReview(r) && r.accepted === true && ids.includes(String(r.id)));
   if (rev.length) return "Retry not possible: Tally accepted " + rev.length + (rev.length === 1 ? " entry that needs" : " entries that need") + " review first (Mark posted, or Not in Tally \u2014 release, under Errors).";
@@ -720,16 +722,22 @@ async function postTestCopies(cid, id, n){
 // owners of the firm alone (the cloud accepts only an active member with role owner; a superadmin who is not one is refused there)
 // a result of FinCom's cloud older than the bill's posting being cleared here (taken back, deleted in Tally, undone)
 // (by the postings FinCom's cloud had then, else created before; older records: postedVia kept and not posted since)
-function postOld(x, j){ return !!j && j.id !== x.postJobNew && (x.postClearedJobs ? x.postClearedJobs.includes(j.id) || !(String(j.created_at || "") > (x.postClearedMark || "")) : !!x.postedVia && !x.exportedAt); }
+// (a posting known at a clear is old even if this page queued it: postJobNew is dropped there, and checked after)
+function postOld(x, j){ if (!j) return false; const c = x.postClearedJobs; return !!c && c.includes(j.id) || j.id !== x.postJobNew && (c ? !(String(j.created_at || "") > (x.postClearedMark || "")) : !!x.postedVia && !x.exportedAt); }
 // what FinCom's cloud had when a posting is cleared: its postings of the entry, and the newest posting's time (server's)
 function postCleared(id){ const l = (typeof CloudJobs === "object" && CloudJobs.list) || []; return {postClearedJobs: l.filter(j => (CloudJobs.idsOf(j) || [].concat(j.results || [], j.items || []).map(r => String(r && r.id))).includes(String(id))).map(j => j.id), postClearedMark: l.reduce((m, j) => String(j.created_at || "") > m ? String(j.created_at) : m, "")}; }
 // before a posting is cleared: FinCom's cloud postings read now (else "Try again in a moment")
+// (a read already running is waited for, then a new one made; a failed or skipped read refuses)
 async function postClearReady(){
   if (typeof TCloud !== "object" || !TCloud.on()) return true;
+  for (let i = 0; CloudJobs.busy && i < 150; i++) await new Promise(r => setTimeout(r, 100));
+  const t0 = Date.now();
   try { await CloudJobs.load(true); } catch (e){}
-  if (!CloudJobs.list){ toast("Try again in a moment: FinCom\u2019s cloud postings could not be read."); return false; }
+  if (CloudJobs.busy || !CloudJobs.list || CloudJobs.err || CloudJobs.at < t0){ toast("Try again in a moment: FinCom\u2019s cloud postings could not be read."); return false; }
   return true;
 }
+// the rarely used settling of a posting (Deleted in Tally, Not this Tally entry) is src/js/59-post-owner.js: loaded first
+function postPart(f){ (typeof PostOwner === "object" ? Promise.resolve() : window.loadPart ? window.loadPart("post") : Promise.reject(new Error("not in this page"))).then(() => f(PostOwner), e => toast("Could not load this part of FinCom: " + ((e && e.message) || e))); }
 function postMarkNew(cid, ids, job){ const d = S.data[cid], b = S.bank && S.bank.cid === cid ? S.bank : null; ids.forEach(x => { const o = (d && d.entries && d.entries[x]) || (b && b.rows.find(r => String(r.id) === String(x))); if (o) o.postJobNew = job; }); }
 // the entries a check with Tally released: the bridge lets each go once more (without looking in Tally)
 function postReleased(list){ return list.filter(x => x.release && x.release.at).map(x => ({id: x.id, at: x.release.at, by: x.release.by || "", why: x.release.why || ""})); }
