@@ -957,7 +957,12 @@ func pullFetchStep(w *pullWork, port int) (bool, bool) {
 	// save in Tally or 10 minutes), not before every entry
 	listed := pullCoListed(w, port)
 	held := windowHoldFn()
-	got, err := fetchVouchersByMasterListed(tc, it.Company, port, it.Day, []string{mid}, liveBodySec(), listed)
+	got, notFound, err := fetchVouchersByMasterProof(tc, it.Company, port, it.Day, []string{mid}, liveBodySec(), listed)
+	if err == nil && !notFound && got[mid] == "" {
+		// 2.5.15 item 2: only Tally's exact "Could not find Voucher" says an entry is gone; a whole answer that does not hold
+		// the entry asked is an answer not read, asked again (never sent as no longer in Tally)
+		err = errors.New("Tally's answer did not hold the entry asked (MasterID " + mid + "); read again, never taken as gone")
+	}
 	holdMs := held(time.Now().Add(-time.Duration(took * float64(time.Second))))
 	if took == 0 {
 		holdMs = 0

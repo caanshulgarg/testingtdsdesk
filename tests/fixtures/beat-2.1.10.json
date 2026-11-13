@@ -82,6 +82,7 @@
   "postBatchBank": 50,
   "postBatchBills": 10,
   "postOnly": [],
+  "postedRecord": "",
   "readDays": false,
   "readStopped": null,
   "recorderBodyFetch": {},
@@ -138,6 +139,6 @@
     "offered": ""
   },
   "updating": false,
-  "version": "2.5.14",
+  "version": "2.5.15",
   "windowsUser": ""
 }

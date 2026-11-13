@@ -21,7 +21,7 @@ func r2515UpdBridge(t *testing.T) (*updServer, *standCloud) {
 	beatWith(c, M{"release": M{"version": "9.9.9", "allowed": true}})
 	oldP, oldF, oldW := updAltPauseFn, fetchFn, updRetryWaits
 	updAltPauseFn, updRetryWaits = func() {}, []time.Duration{10 * time.Millisecond, 10 * time.Millisecond}
-	t.Cleanup(func() { updAltPauseFn, fetchFn, updRetryWaits = oldP, oldF, oldW; updFailClear() })
+	t.Cleanup(func() { updAltPauseFn, fetchFn, updRetryWaits = oldP, oldF, oldW; updFailClear(); updNext.Store(0) })
 	updFailClear()
 	return u, c
 }

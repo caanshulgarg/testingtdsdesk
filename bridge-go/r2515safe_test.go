@@ -12,6 +12,15 @@ import (
 	"testing"
 )
 
+// the log in the test's own folder (never the package folder: TestNoLogInPackageFolder)
+func r2515LogHere(t *testing.T, dir string) {
+	oldC, oldH := ConfigPath, Home
+	t.Cleanup(func() { ConfigPath, Home = oldC, oldH; loadConfigRO() })
+	ConfigPath, Home = filepath.Join(dir, "tds-bridge.config.json"), dir
+	_ = os.WriteFile(ConfigPath, []byte(`{"LogFile":"`+filepath.ToSlash(filepath.Join(dir, "b.log"))+`"}`), 0o644)
+	loadConfig()
+}
+
 // every write flushed before its rename; nothing temporary left beside the file
 func TestR2515SaveFileFlushes(t *testing.T) {
 	dir := t.TempDir()
@@ -37,6 +46,7 @@ func TestR2515SaveFileFlushes(t *testing.T) {
 // a kept file: the one it replaces kept as .bak while whole; a damaged file is read from its .bak and never replaces it
 func TestR2515KeptFileBackup(t *testing.T) {
 	dir := t.TempDir()
+	r2515LogHere(t, dir)
 	f := filepath.Join(dir, "keep.json")
 	if err := saveJSONBak(f, M{"n": 1}); err != nil || exists(bakOf(f)) {
 		t.Fatalf("first write: %v, backup %v", err, exists(bakOf(f)))

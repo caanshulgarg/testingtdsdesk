@@ -2019,6 +2019,24 @@ func fetchVouchersByMasterIn(tc *TC, company string, port int, date string, mids
 // have closed it (no error, no wait, nobody at the computer, no save in Tally, under 10 minutes): the list is not asked
 // again before this entry. Every other caller asks it right before each entry, as 2.3.4 does
 func fetchVouchersByMasterListed(tc *TC, company string, port int, date string, mids []string, sec int, listed bool) (map[string]string, error) {
+	out, _, err := fetchVouchersByMasterProof(tc, company, port, date, mids, sec, listed)
+	return out, err
+}
+
+// the same, and whether Tally answered its exact "Could not find Voucher" for the MasterID asked (notFound): 2.5.15 item 2,
+// the older entries take an entry as gone only on that (a whole answer without the entry, as TallyPrime 7.1 gives for
+// some, is "not read": the recorder's own rule, wrongRetry, is unchanged)
+func fetchVouchersByMasterProof(tc *TC, company string, port int, date string, mids []string, sec int, listed bool) (map[string]string, bool, error) {
+	out, err := fetchVouchersByMasterAsk(tc, company, port, date, mids, sec, listed)
+	if err == errExactNotFound {
+		return map[string]string{}, true, nil
+	}
+	return out, false, err
+}
+
+var errExactNotFound = errors.New("Tally: Could not find Voucher")
+
+func fetchVouchersByMasterAsk(tc *TC, company string, port int, date string, mids []string, sec int, listed bool) (map[string]string, error) {
 	x := ""
 	if len(mids) == 1 {
 		x = voucherObjectRequest(company, mids[0]) // next-fastfetch: one voucher by its MasterID; the date is the line's, checked on the answer
@@ -2052,7 +2070,7 @@ func fetchVouchersByMasterListed(tc *TC, company string, port int, date string, 
 	// no envelope. Exactly that, for the MasterID asked and nothing else, is "no such voucher"; any other answer without an
 	// envelope stays one that could not be read
 	if strings.TrimSpace(raw) == fastNotFound(mids[0]) {
-		return map[string]string{}, nil // a delete is proven by it only with fastProveGone (re-review 2 L-d)
+		return nil, errExactNotFound // map[string]{} to the callers; a delete is proven by it only with fastProveGone (re-review 2 L-d)
 	}
 	if !strings.Contains(raw, "<ENVELOPE") {
 		return nil, errors.New("Tally's answer could not be read: " + cut(flat(raw), 120))
@@ -2082,11 +2100,6 @@ func fetchVouchersByMasterListed(tc *TC, company string, port int, date string, 
 		if id := tagNum(v, "MASTERID"); id != "" && v != "" {
 			out[id] = v
 		}
-	}
-	// 2.5.15 item 2: only Tally's exact "Could not find Voucher" (above) says an entry is gone; a whole answer that does not
-	// hold the entry asked (no voucher, or another one) is an answer that could not be read, asked again
-	if out[mids[0]] == "" {
-		return nil, errors.New("Tally's answer did not hold the entry asked (MasterID " + mids[0] + "); read again, never taken as gone")
 	}
 	return out, nil
 }
