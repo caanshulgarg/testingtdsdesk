@@ -200,6 +200,8 @@ def main():
            and n(ck + " [data-check-stopped]") == 0, "2. a check on the idle pace said (%s)" % txt(ck + " [data-check-paced]"))
         pg.click(ck + " [data-check-readnow]"); pg.wait_for_timeout(600)
         ok(len(calls("tally_check_resume")) == nres + 1 and calls("tally_check_resume")[-1] == {"p_book": "bk-zz"}, "2. Read now: the person's Resume (the check's own pace)")
+        state(sb(pull=dict(GOING, state="stopped"), check={"total": 20, "same": 15, "fixed": 3, "waiting": 2, "upload": 0, "run": {"state": "going", "paced": True}}), dict(CHECK, run={"state": "going", "paced": True}, period="stopped"), 1400)
+        ok(n(ck + " [data-check-paced]") == 1 and n(ck + " [data-check-stopped]") == 0, "2. resumed by the retry while the period is still stopped: the idle pace said with Read now, not 'Stopped'")
         pg.set_viewport_size({"width": 390, "height": 800}); pg.wait_for_timeout(600)
         ok(E("() => document.documentElement.scrollWidth <= window.innerWidth + 1"), "2. 390 wide: no sideways scroll")
         shot("from-tally-390")

@@ -2,8 +2,8 @@
 Supabase, fake_supabase.py) for next-fix-gap-after-post (migration 182). The owner, 13-Nov-2026: reads may go while people
 work, as long as nobody feels them. tally-ingest tells the cloud whether the computer is idle now (p_idle of
 tally_gap_front; the cloud hands out its light reads, one at a time, only then): no typing in Tally in this beat, as
-today's bridge says it (pickups refused with code typing, an older-entries day waiting with "someone is working in Tally",
-keepWait userInTally) and none seen for 5 s, or 60 s when the bridge's last request took more than 0.3 s; never while
+today's bridge says it (pickups refused with code typing, at most 2 minutes old; an older-entries day waiting with "someone
+is working in Tally" only beside such a refusal of that company, since the words stay; keepWait userInTally) and none seen for 5 s, or 60 s when the bridge's last request took more than 0.3 s; never while
 reading is paused; a beat without those fields is never idle (fail safe). Nothing new is asked of Tally. Made-up books only. Written before the
 code. Checks:
   1. typing: p_idle false; the time typing was seen kept on the computer's record (info.typingAt).
@@ -98,8 +98,8 @@ try:
     ok(days_of(r)[:2] == ["20261111", "20261110"] and all(x.get("kind") == "check" and x.get("types") == TYPES6 for x in (r.get("periodDays") or [])[:2]), "1. (guard) its days next, as check days (%s)" % days_of(r))
     ta = (next(d for d in FS.T["tally_devices"] if d["id"] == DA).get("info") or {}).get("typingAt")
     ok(bool(ta), "1. when typing was seen, kept on the computer's record (%s)" % ta)
-    time.sleep(5.2); c, r = call(dict(quiet, periodPull=dict(PP, companies={"made up co": {"waiting": "someone is working in Tally", "day": "20261111"}})))
-    ok(last_gf().get("p_idle") is False, "1. an older-entries day waiting for typing (its words): p_idle false (%s)" % last_gf())
+    time.sleep(5.2); c, r = call(dict(quiet, pickups=[REFUSED()], periodPull=dict(PP, companies={"made up co": {"waiting": "someone is working in Tally", "day": "20261111"}})))
+    ok(last_gf().get("p_idle") is False, "1. an older-entries day waiting for typing (its words, the company's refusal fresh): p_idle false (%s)" % last_gf())
     time.sleep(5.2); c, r = call(dict(quiet, keepWait={"reason": "userInTally", "words": "Waiting: someone is working in Tally on this computer.", "since": nowz()}))
     ok(last_gf().get("p_idle") is False, "1. a run waiting for typing (keepWait userInTally): p_idle false (%s)" % last_gf())
 
@@ -117,6 +117,14 @@ try:
     ok(last_gf().get("p_idle") is False, "2. a beat without the typing gate's fields (pickups, periodPull): never idle (fail safe) (%s)" % last_gf())
     time.sleep(5.2); c, r = call(dict(quiet, reqs=None))
     ok(last_gf().get("p_idle") is False, "2. without the last request's time: never idle (fail safe) (%s)" % last_gf())
+    # the waiting words stay on the bridge until that company's next day starts: alone they are not typing
+    WAITS = dict(PP, companies={"made up co": {"waiting": "someone is working in Tally", "day": "20261111"}})
+    old = dict(REFUSED(), at=(datetime.datetime.utcnow() - datetime.timedelta(minutes=3)).strftime("%Y-%m-%dT%H:%M:%SZ"))
+    d0["info"] = dict(d0.get("info") or {}, typingAt=(datetime.datetime.utcnow() - datetime.timedelta(minutes=3)).strftime("%Y-%m-%dT%H:%M:%S.000Z"))
+    time.sleep(5.2); c, r = call(dict(quiet, periodPull=WAITS, pickups=[old]))
+    ok(last_gf().get("p_idle") is True, "2. the waiting words left, the typing refusal 3 minutes old (stale): idle again (%s)" % last_gf())
+    time.sleep(5.2); c, r = call(dict(quiet, periodPull=WAITS, pickups=[REFUSED()]))
+    ok(last_gf().get("p_idle") is False, "2. the waiting words beside a fresh refusal of the same company: typing (%s)" % last_gf())
     np = len(gf_calls())
     time.sleep(5.2); c, r = call(dict(quiet, paused=True))
     ok(all(x.get("p_idle") is not True for x in gf_calls()[np:]), "2. (guard) reading paused: never idle (%s)" % gf_calls()[np:])

@@ -1925,16 +1925,26 @@ let gapIdleMissing = 0;                              // migration 182 (tally_gap
 // next-fix-gap-after-post (the owner, 13-Nov-2026: reads may go while people work, as long as nobody feels them): a light
 // read is handed out only when the beat shows the bridge's typing gate quiet and FinCom saw no typing for 5 s, or 60 s when
 // the bridge's last request took more than 0.3 s (reqs.last.ms); never while reading is paused or Tally is busy. Typing, as
-// today's bridge says it: a day refused for it (pickups [{state: "refused", code: "typing", at}], pickack.go), an
-// older-entries day waiting for it (periodPull.companies[*].waiting "someone is working in Tally ...", daypull.go), a
-// run waiting for it (keepWait.reason "userInTally"). Fail safe: a beat without pickups, periodPull or the last request's
-// time is never idle. Today's bridge keeps its own typing gate on top (DayPullIdleSec, 60 s by default)
+// today's bridge says it: a day refused for it (pickups [{company, state: "refused", code: "typing", at}], pickack.go; a
+// refusal older than 2 minutes is stale: the bridge keeps it up to 30), and a run waiting for it (keepWait.reason
+// "userInTally", cleared when the run goes on). An older-entries day's waiting words ("someone is working in Tally",
+// daypull.go) stay until that company's next day starts, so they count only beside a fresh refusal of the same company.
+// Fail safe: a beat without pickups, periodPull or the last request's time is never idle. Today's bridge keeps its own
+// typing gate on top (DayPullIdleSec, 60 s by default)
+const TYPING_STALE_MS = 120000;
 function lightIdle(b: any, prevInfo: any, now = Date.now()): { idle: boolean; typingAt: string | null } {
   const t = (v: unknown) => typeof v === "string" && !isNaN(Date.parse(v)) ? Date.parse(v) : NaN;
+  const key = (v: unknown) => typeof v === "string" ? v.trim().toLowerCase().split(/\s+/).join(" ") : "";     // (the bridge's companyKey)
   const pick = Array.isArray(b?.pickups) ? b.pickups : null;
   const cos = b?.periodPull && typeof b.periodPull === "object" && b.periodPull.companies && typeof b.periodPull.companies === "object" ? b.periodPull.companies : null;
-  const waits = cos ? Object.values(cos).some((c: any) => typeof c?.waiting === "string" && /someone is working in tally/i.test(c.waiting)) : false;
-  let at = Math.max(t(prevInfo?.typingAt) || 0, ...(pick || []).filter((x: any) => x?.state === "refused" && x?.code === "typing").map((x: any) => Math.min(now, t(x?.at) || now)));
+  // the fresh typing refusals, by company: when each was refused (never ahead of now)
+  const fresh = new Map<string, number>();
+  for (const x of (pick || []).slice(0, 50) as any[]) {
+    const at = Math.min(now, t(x?.at));
+    if (x?.state === "refused" && x?.code === "typing" && at > now - TYPING_STALE_MS) fresh.set(key(x?.company), Math.max(fresh.get(key(x?.company)) || 0, at));
+  }
+  let at = Math.max(t(prevInfo?.typingAt) || 0, ...fresh.values());
+  const waits = cos ? Object.entries(cos).some(([k, c]: [string, any]) => typeof c?.waiting === "string" && /someone is working in tally/i.test(c.waiting) && fresh.has(key(k))) : false;
   if (waits || b?.keepWait?.reason === "userInTally") at = now;
   const typingAt = at > 0 ? new Date(at).toISOString() : null;
   const ms = Number(b?.reqs?.last?.ms), known = !!pick && !!cos && b?.reqs?.last && Number.isFinite(ms) && ms >= 0;

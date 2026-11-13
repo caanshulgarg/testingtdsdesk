@@ -401,7 +401,7 @@ export function UploadCheck({ cid }) {
   // (reliability: its own read too on the one shared poll: not while the tab is hidden)
   useLive(waiting, bk, { sum: 15000, run: () => { if (bk) load(); } });
   if (!has) return null;
-  const s = st || Object.assign({ lines: [] }, b.check), run = s.run || {}, stopped = run.state === "stopped" || (s.period === "stopped");
+  const s = st || Object.assign({ lines: [] }, b.check), run = s.run || {}, stopped = run.state === "stopped" || (!run.paced && s.period === "stopped");
   const fixed = (s.lines || []).filter((x) => x.state === "fixed"), same = (s.lines || []).filter((x) => x.state === "same"), up = (s.lines || []).filter((x) => x.state === "upload");
   const resume = () => { setBusy(true);
     const p = b.pull, again = p && p.state === "stopped" ? rpc("tally_period_choose", { p_book: bk, p_fy_start: fyOf8(p.fy) + "-04-01", p_part: p.part || "year" }) : Promise.resolve();

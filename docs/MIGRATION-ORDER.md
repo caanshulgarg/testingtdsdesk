@@ -864,7 +864,7 @@ Tested: `tests/run_migration160.py`, `tests/run_gap_autoread_ingest.py`.
 
 ## 182: the gap after FinCom's own posting, read back and read on the right days (not run yet; branch next-fix-gap-after-post, 13-Nov-2026)
 
-**182, gap after post** (13-Nov-2026, branch `next-fix-gap-after-post`; **written, not run yet**; file md5 30d179f5a37b50d3af6157325bde21b8):
+**182, gap after post** (13-Nov-2026, branch `next-fix-gap-after-post`; **written, not run yet**; file md5 23ddaa33a134edf46e3fed6b0df88922):
 `server/tally-cloud/migration-182-gap-after-post.sql`. Staging, Client CL: a posting window's credit closed the gap as a
 match though none of FinCom's 42 posted entries was matched or read back; 110 later changes on older dates; the page asked
 for the Day Book of the gap's own (empty) days; 98's count never counted October again; 160's gap read held by an old

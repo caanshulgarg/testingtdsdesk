@@ -95,7 +95,8 @@ grant select, insert, update, delete on public.tally_light_days to service_role;
 grant select, insert, update, delete on public.tally_light_pace to service_role;
 
 -- ---------------------------------------------------------------- 2. the light pace
--- a light day may be handed out now: the computer idle (its last beat, 45 s), no posting of the company waiting or running,
+-- a light day may be handed out now: the computer idle (its last beat, 45 s), no posting of the company waiting or running
+-- (touched in the last 30 minutes),
 -- none in the last 25 s, under 120 this hour and 600 today (India's)
 create or replace function public.tally_light_may(p_book uuid) returns boolean
 language sql stable security definer set search_path = public, pg_temp as $function$
@@ -104,7 +105,7 @@ language sql stable security definer set search_path = public, pg_temp as $funct
                       and (x.hour_at is null or x.hour_at <= now() - interval '1 hour' or x.hour_n < 120)
                       and (x.day_on is distinct from (now() at time zone 'Asia/Kolkata')::date or x.day_n < 600)
                       and not exists (select 1 from tally_books b join tally_post_jobs j on j.firm_id = b.firm_id and j.company = b.company
-                                       where b.book_id = p_book and j.status in ('waiting', 'taken', 'running') and j.created_at > now() - interval '1 day')
+                                       where b.book_id = p_book and j.status in ('waiting', 'taken', 'running') and j.updated_at > now() - interval '30 minutes')
                      from tally_light_pace x where x.book_id = p_book), false)
 $function$;
 -- a check the gap's retry resumed (its choice time the retry's: the person's Resume gives it another) with days queued
@@ -402,20 +403,24 @@ begin
   select * into t from tally_gap_retries where book_id = p_book;
   if found and t.stopped_at is null and t.resumed_at is null and t.day is not null
      and exists (select 1 from tally_check_days k where k.book_id = p_book and k.day = t.day and k.via is not null and k.listed_at >= t.started_at) then
-    update tally_check_runs set state = 'going', chosen_at = t.chosen_at, stopped_at = null, stop_day = null, stop_why = null, stop_words = null
-     where book_id = p_book and state = 'stopped' and coalesce(stop_why, '') in ('over2s', 'window');
-    update tally_gap_retries set resumed_at = now() where book_id = p_book;
+    update tally_gap_retries set resumed_at = now() where book_id = p_book and stopped_at is null and resumed_at is null and chosen_at = t.chosen_at;
+    if found then
+      update tally_check_runs set state = 'going', chosen_at = t.chosen_at, stopped_at = null, stop_day = null, stop_why = null, stop_words = null
+       where book_id = p_book and state = 'stopped' and coalesce(stop_why, '') in ('over2s', 'window');
+    end if;
   end if;
-  -- postings first: none while a posting of the book's company waits or runs (and the computer is not idle for the light
-  -- reads); 182: whether the book's computer is idle now, kept at every beat for every book (98's recount and 135's check
+  -- postings first: none while a posting of the book's company waits or runs (touched in the last 30 minutes: one stuck
+  -- for hours never holds the reads all day; and the computer is not idle for the light reads); 182: whether the book's computer is idle now, kept at every beat for every book (98's recount and 135's check
   -- of a resumed check read it), gap or not
   select * into bk from tally_books where book_id = p_book;
   if not found then return out; end if;
   posting := exists (select 1 from tally_post_jobs j where j.firm_id = bk.firm_id and j.company = bk.company and j.status in ('waiting', 'taken', 'running')
-                       and j.created_at > now() - interval '1 day');
+                       and j.updated_at > now() - interval '30 minutes');
   insert into tally_light_pace (book_id, firm_id, idle_at) values (p_book, bk.firm_id, case when idle and not posting then now() end)
   on conflict (book_id) do update set idle_at = excluded.idle_at;
   if posting then return out; end if;
+  -- (the book's days written under tally_fill_request's lock of it: one order for both)
+  perform pg_advisory_xact_lock(hashtext('tally_check_request:' || p_book::text));
   select * into c from tally_sync_cursor where book_id = p_book;
   if not found or c.gap is null or c.gap_at is null then return out; end if;
   if c.gap_at > now() - interval '2 minutes' or coalesce(c.gap->>'since', '') !~ '^\d{4}-\d\d-\d\d' then return out; end if;
