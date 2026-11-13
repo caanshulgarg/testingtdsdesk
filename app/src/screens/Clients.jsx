@@ -2,7 +2,7 @@
 // Clean-up batch 2 (11-Oct-2026, "one main button, one place for each thing"): the page has one job, the list, and one
 // main button, Add client. Uploading bills for any client, the reading check and the Day Books for several clients are
 // under the page's More, each opening its panel above the list; the records used are under Settings → Plan and credit.
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import DropZone from "../parts/DropZone.jsx";
 import { MultiUpload } from "../parts/Notes.jsx";
 import { Jobs, ReadingCheck, UploadOptions } from "../parts/Reading.jsx";
@@ -12,49 +12,13 @@ import { goTallyRow } from "../parts/TallyChip.jsx";
 import { clientTallyState } from "../lib/tallyState.js";
 import Filters, { Search } from "../parts/Filters.jsx";
 import { FirstRunTally } from "../parts/TallyFirstRun.jsx";
+import { lazyModule } from "./lazy.js";
 
 // "Needs you" of a client: its duplicates and its bills to check, the same count as on Today
 const needsYou = (c) => { const st = c.stats || {}; return (st.dups || 0) + (st.check || 0); };
 
-// Add client: a client without Tally, typed (a client of the same or a similar name, or the same GSTIN, is said under the
-// name with Open it; adding one of the same name again is asked first). 24-Oct-2026 (next-tally-one-page; the owner: "I
-// have to go everywhere to see where to add.. I need a clear page only"): a client from Tally is added on the Tally page
-// only (Companies in Tally: Add as client); here one button opens that list. No Tally company is picked here.
-function AddClient() {
-  const others = sortedCompanies();
-  const [v, setV] = useState({ name: "", gstin: "", copyFrom: "", turnover10cr: false });
-  const set = (k) => (e) => setV({ ...v, [k]: e.target.type === "checkbox" ? e.target.checked : e.target.value });
-  const live = Object.values(S.companies || {}).filter((c) => !c.deleted);
-  const dups = typeof similarClients === "function" && (v.name.trim() || v.gstin.trim()) ? similarClients(v.name, v.gstin, live) : [];
-  const openIt = (c) => { S.addingCo = false; openCompany(c.id); };
-  const save = async () => {
-    const same = dups.find((d) => d.why === "same");
-    if (same && !(await askConfirm({ title: same.client.name + " already exists", ok: "Add another",
-      body: "<p>A client named <b>" + esc(same.client.name) + "</b> is already in FinCom. Open it from Clients instead, or add another client with this name.</p>" }))) return;
-    saveNewCompany({ ...v, dupOk: !!same });
-  };
-  return <>
-    <h2>Add client</h2>
-    <p className="note addc-tally" data-add-from-tally="" style={{ margin: "4px 0 0" }}>{"A client whose books are in Tally? "}
-      <button className="linkbtn" data-add-tally-go="" onClick={() => { S.addingCo = false; S.tallyGuide = {}; S.tallyFocus = ""; navHome("tally"); }}>Add it from the Tally page</button>
-      {" (Companies in Tally: Link to client…, + New client with this name). Or type a client below."}</p>
-    <div className="grid" style={{ marginTop: 10 }} onKeyDown={(e) => { if (e.key === "Enter" && e.target.tagName === "INPUT") save(); }}>
-      <label className="f wide"><span>Client name</span><input type="text" id="ncName" autoFocus autoComplete="off" placeholder="e.g. Gupta Traders Pvt Ltd" value={v.name} onChange={set("name")} /></label>
-      <label className="f"><span>GSTIN</span><input type="text" autoComplete="off" placeholder="09AAACG1111A1Z5" value={v.gstin} onChange={set("gstin")} /></label>
-      {dups.length > 0 && <div className="addc-dup wide" data-add-dup={dups[0].why} role="status">
-        <span>{dups[0].why === "gstin" ? dups[0].client.name + " already has this GSTIN." : dups[0].why === "same" ? dups[0].client.name + " already exists." : "A client with a similar name exists: " + dups[0].client.name + "."}</span>
-        <button className="linkbtn" data-add-dup-open={dups[0].client.id} onClick={() => openIt(dups[0].client)}>Open it</button></div>}
-      {others.length > 0 && <label className="f wide"><span>Copy ledger names from</span>
-        <select value={v.copyFrom} onChange={set("copyFrom")}><option value="">Standard names</option>{others.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
-      </label>}
-    </div>
-    <label className="chk" style={{ marginTop: 10 }}><input type="checkbox" checked={v.turnover10cr} onChange={set("turnover10cr")} /> Turnover last year was above ₹10 crore</label>
-    <div className="row" style={{ marginTop: 12 }}>
-      <button className="btn primary" onClick={save}>Add and open</button>
-      <button className="btn" onClick={() => doAct("cancelCo")}>Cancel</button>
-    </div>
-  </>;
-}
+// Add client (parts/AddClient.jsx, its own file: fetched with the other screens, or when the form is first opened)
+const AddClient = lazyModule(() => import("../parts/AddClient.jsx"))();
 
 function Free({ c }) {
   const f = freeRate(c);
@@ -118,7 +82,7 @@ export default function Clients() {
       {/* while the Day Books' files are matched, their "Bring them in" is the main button */}
       {offN > 0 && <label className="chk" data-show-inactive=""><input type="checkbox" checked={!!S.showInactive} onChange={FirmGate.showAll} /> Show inactive ({offN})</label>}
       {!S.addingCo && <button className={"btn small" + (S.multiUp ? "" : " primary")} data-add-client="" onClick={() => doAct("addCo")}>Add client</button>}</>} />
-    {S.addingCo && <div className="pane" style={{ marginTop: 0 }}><AddClient /></div>}
+    {S.addingCo && <div className="pane" style={{ marginTop: 0 }}><Suspense fallback={null}><AddClient /></Suspense></div>}
     {panel && <Panel id={panel} />}
     <Jobs which="auto" />
     {!all.length ? <div className="pane"><p className="empty lt-empty" data-list-empty="" style={{ padding: 0 }}>No clients yet. Use <b>Add client</b> above to add the first one, with its GSTIN and Tally company name.</p><FirstRunTally /></div> : <>
