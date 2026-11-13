@@ -1,10 +1,8 @@
 # Security review: FinCom Bridge 2.5.16 (security work; older days read in the day; stops that lift by themselves; the by-type split; Tally's port)
 
-Status: independent review pending. The coordinator's full security review of FinCom Bridge (13-Nov-2026) is the source
-of the security items; their fixes, and the day-reading and port items added on 13-Nov-2026, are to be reviewed
-independently before the release exe is built and release-check.sh is run.
+Status: independently reviewed 14-Nov: code, security and two re-reviews, no blockers.
 
-Range: c851cd1dc..053994f5d (origin/staging-next with 2.5.15 at c851cd1dc, which holds 2.5.15's signed commit 2bf75a4c7; the whole of 2.5.16 through the code and security reviews' fixes)
+Range: c851cd1dc..44452446b (origin/staging-next with 2.5.15 at c851cd1dc, which holds 2.5.15's signed commit 2bf75a4c7; the whole of 2.5.16 through the code and security reviews' fixes, up to 053994f5d; after it the review notes and the merge of origin/staging-next d9bc68021 in 44452446b, which changed nothing under bridge-go/)
 
 Areas for the reviewer (no finding details are written here; the repository is public):
 - The security items of 2.5.16 (e0c77945d to d2b7fd47a): local settings and files the bridge trusts, the Windows
