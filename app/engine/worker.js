@@ -5,7 +5,7 @@
 // Built by app/vite.config.js (fincom-legacy) into assets/engine-<hash>.js, fetched only when a run first needs it.
 // The page's words (data.t): init (legacy.js's address), begin / S / bk / bv / end (the books, in parts, a version each), run, cancel. Its answers:
 // ready / fail, prog (how far), mis (the figures), audit + rows + end (the findings, then their rows in parts), err.
-/* global S, MIS, Audit, GSTR, Books, BOOKS_REV, JOB_MEMO, IN_RENDER, reactScopeEnd */
+/* global S, MIS, Audit, GSTR, LK, Books, BOOKS_REV, JOB_MEMO, IN_RENDER, reactScopeEnd */
 import { loadLegacy, DENIED, storeTx } from "./boot.js";
 
 const SLICE_MS = 50, PROG_MS = 100, ROWS = 5000;
@@ -87,6 +87,8 @@ function run(m) {
   const b = S.books, prog = { k: 0, of: 0, keep: () => true };
   let it;
   if (m.kind === "gst") it = gstIn(m.from, m.how);
+  // Look up's ledger account (LK.ledgerBooks), as the page asked for it
+  else if (m.kind === "ledger") it = (function* () { yield; return LK.ledgerBooks.apply(LK, m.args || []); })();
   else if (m.kind === "audit") it = Audit.calcIn(m.from, m.to, prog);
   else {
     const regs = new Set((GSTR.gstins(b) || []).map((g) => String(g).slice(0, 2))).size || 1;
@@ -97,6 +99,7 @@ function run(m) {
   return { id: m.id, kind: m.kind, it, prog, memo: new Map(), n: 0, said: 0, b };
 }
 function done(j, v) {
+  if (j.kind === "ledger") { const rows = v.rows || []; say({ t: "lhead", id: j.id, r: Object.assign({}, v, { rows: null }) }); for (let i = 0; i < rows.length; i += ROWS) say({ t: "lrows", id: j.id, rows: rows.slice(i, i + ROWS) }); say({ t: "lend", id: j.id }); return; }
   if (j.kind === "gst") { say({ t: "gpart", id: j.id, k: "t", v: v.t }); say({ t: "gpart", id: j.id, k: "join", v: v.join }); say({ t: "gst", id: j.id, r: Object.assign({}, v, { t: null, join: null }) }); return; }
   if (j.kind === "mis") { EST.mis = j.n; say({ t: "mis", id: j.id, r: v }); return; }
   // the findings first (their rows after, in parts: no one word to copy that holds the page)
