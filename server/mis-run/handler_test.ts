@@ -43,8 +43,10 @@ const DEF = { id: "m1", name: "Monthly MIS", period: { kind: "ytd" }, units: { u
 const SCHED = (o: any = {}) => ({ id: "s-1", firm_id: FIRM, client_id: "c-1", report_id: "m1", report_name: "Monthly MIS", rule: { freq: "monthly", day: "1", time: "08:45" }, period: "lastMonth",
   recipients: { members: [OWNER], emails: ["director@client.example"] }, enabled: true, created_by: OWNER, ...o });
 
-function stand(o: { resend?: boolean, failReads?: number, due?: any[], member?: string } = {}) {
-  const st: any = { uploads: [] as any[], alerts: [] as any[], runs: [] as any[], resend: [] as any[], takes: 0, reads: 0 };
+function stand(o: { resend?: boolean, failReads?: number, due?: any[], member?: string, client?: any, report?: any, rate?: any[], rateDown?: boolean, verified?: string[] } = {}) {
+  const st: any = { uploads: [] as any[], alerts: [] as any[], runs: [] as any[], resend: [] as any[], takes: 0, reads: 0, rate: o.rate || [] as any[], asked: [] as string[] };
+  const NOW = Date.parse("2026-10-01T03:15:00Z");
+  const within = (b: any, w: number) => st.rate.filter((r: any) => r.bucket === b.p_bucket && r.key === b.p_key && r.at > NOW - w * 1000).length;
   const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { "Content-Type": "application/json" } });
   const f = async (input: any, init: any = {}) => {
     const u = new URL(String(input)), p = u.pathname + u.search, auth = String((init.headers || {}).Authorization || "");
@@ -54,11 +56,23 @@ function stand(o: { resend?: boolean, failReads?: number, due?: any[], member?: 
     if (p.startsWith("/rest/v1/rpc/gst_cron_ok")) return json(JSON.parse(init.body).k === "k-123");
     if (p.startsWith("/rest/v1/rpc/mis_take")) { st.takes++; return json(st.takes === 1 ? (o.due || [SCHED()]) : []); }
     if (p.startsWith("/rest/v1/rpc/mis_cloud_gst")) return json({ months: [] });
+    // the shared counts of migration 112 (auth_rate_hits), in memory
+    if (p.startsWith("/rest/v1/rpc/auth_rate_")) {
+      if (o.rateDown) return json({ message: "relation public.auth_rate_hits does not exist" }, 404);
+      const b = JSON.parse(init.body);
+      if (!/^[0-9a-f]{64}$/.test(b.p_key)) return json({ message: "bad key" }, 400);
+      if (p.includes("auth_rate_count")) return json(within(b, b.p_window_s));
+      if (p.includes("auth_rate_add")) { st.rate.push({ bucket: b.p_bucket, key: b.p_key, at: NOW }); return json(null); }
+      if (within(b, b.p_window_s) >= b.p_max) return json(false);
+      st.rate.push({ bucket: b.p_bucket, key: b.p_key, at: NOW }); return json(true);
+    }
+    // addresses their owners confirmed by a code when joining one of the firm's calls
+    if (p.startsWith("/rest/v1/call_participants")) { st.asked.push(decodeURIComponent(p)); return json((o.verified || []).filter((e) => decodeURIComponent(p).includes('"' + e + '"')).map((email) => ({ email }))); }
     if (p.startsWith("/rest/v1/platform_secrets")) return json(o.resend && /resend_api_key/.test(p) ? [{ value: "re_key" }] : []);
     if (p.startsWith("/rest/v1/members")) return json(/user_id=eq\./.test(p) ? [{ firm_id: FIRM, role: decodeURIComponent(p).includes(LOOK) ? "readonly" : "owner", active: true }] : [{ user_id: OWNER, email: "anshul@firm.example" }]);
     if (p.startsWith("/rest/v1/mis_schedules")) return json(decodeURIComponent(p).includes("firm_id=eq." + FIRM) && p.includes("id=eq.s-1") ? [SCHED()] : []);
-    if (p.startsWith("/rest/v1/client_book_items")) return json([{ data: { id: "m1", name: "Monthly MIS", def: DEF } }]);
-    if (p.startsWith("/rest/v1/clients")) return json([{ name: "Larkspur Made-up Events" }]);
+    if (p.startsWith("/rest/v1/client_book_items")) return json([{ data: { id: "m1", name: "Monthly MIS", def: DEF, ...(o.report || {}) } }]);
+    if (p.startsWith("/rest/v1/clients")) return json([{ name: "Larkspur Made-up Events", data: { deductor: { person: { email: "Director@Client.example" } } }, ...(o.client || {}) }]);
     if (p.startsWith("/rest/v1/tally_books")) { st.reads++; if (st.reads <= (o.failReads || 0)) return json({ message: "the cloud copy is busy" }, 503); return json([{ book_id: BOOK, client_id: "c-1", company: "LARKSPUR", from_date: "2026-04-01", open_as_on: "2026-04-01" }]); }
     if (p.startsWith("/rest/v1/tally_ledgers")) return json(/offset=0/.test(p) ? LEDGERS : []);
     if (p.startsWith("/rest/v1/tally_vouchers")) { const to = (p.match(/day=lte\.([\d-]+)/) || [])[1]; return json(/offset=0/.test(p) ? V.filter((v) => v.day <= to) : []); }
@@ -106,7 +120,7 @@ Deno.test("email: sent once through Resend with both files, to the member chosen
   const m = st.resend[0];
   eq(m.to, ["anshul@firm.example", "director@client.example"], "to the member and the director");
   eq(m.attachments.map((a: any) => a.filename.split(".").pop()), ["xlsx", "pdf"], "both files attached");
-  assert(/^FinCom MIS <mis@fincom\.live>$/.test(m.from) && /Monthly MIS for Larkspur Made-up Events is ready/.test(m.subject), "from FinCom MIS, the subject says what it is");
+  assert(/^FinCom MIS <mis@fincom\.live>$/.test(m.from) && m.subject === "Your MIS report from FinCom is ready (September 2026)" && /Monthly MIS/.test(m.text) && /Larkspur Made-up Events/.test(m.text), "from FinCom MIS, the subject says what it is: " + m.subject);
   eq([st.runs[0].email, st.runs[0].sent_to.length], ["sent", 2], "the run says sent, to two");
 });
 
@@ -138,4 +152,69 @@ Deno.test("the cloud copy made into the engine's input: the same figures as the 
   eq(res.blocks[1].total.cells.t, 1230000, "sales by customer add to the revenue");
   eq(res.blocks[2].total.cells.t, 1000000, "owed to you on 30-Sep: Orchid 8,20,000 - 2,50,000 + Quill 20,000 + 4,10,000 (its opening and half the sales) = 10,00,000");
   eq(res.blocks[3].kpi.value, 500000 - 240000 + 250000, "cash and bank on 30-Sep: 5,00,000 less salaries plus the receipt");
+});
+
+// ---------- 13-Nov-2026 (security review, M5): to whom, how many, and in whose words ----------
+import { MAIL_DAY_MAX, mailSubject, plainWords, RUN_NOW } from "./handler.ts";
+
+Deno.test("M5: email goes to the firm's members, the client's saved addresses and addresses confirmed by their owner; any other typed address is left out, and said", async () => {
+  const due = [SCHED({ recipients: { members: [OWNER], emails: ["director@client.example", "Guest@Joined.example", "stranger@elsewhere.example", "anshul@firm.example"] } })];
+  const { st, call } = stand({ resend: true, due, verified: ["guest@joined.example"] });
+  await call({ action: "due" }, { "x-cron-key": "k-123" });
+  eq(st.resend.length, 1, "one email");
+  eq(st.resend[0].to, ["anshul@firm.example", "director@client.example", "guest@joined.example"], "the member, the client's saved address, the confirmed address");
+  eq([st.runs[0].email, st.runs[0].sent_to], ["sent", ["anshul@firm.example", "director@client.example", "guest@joined.example"]], "the run says to whom");
+  assert(/emailed to 3 people/.test(st.alerts[0].words) && /1 address left out/.test(st.alerts[0].words) && !/stranger/.test(st.alerts[0].words), "the bell says one was left out: " + st.alerts[0].words);
+  assert(st.asked.every((q: string) => q.includes("firm_id=eq." + FIRM) && q.includes("verified=is.true")), "confirmed addresses are the firm's own, confirmed ones only");
+  // only addresses nobody knows: nothing is sent
+  const none = stand({ resend: true, due: [SCHED({ recipients: { members: [], emails: ["a@elsewhere.example", "b@elsewhere.example"] } })] });
+  await none.call({ action: "due" }, { "x-cron-key": "k-123" });
+  eq([none.st.resend.length, none.st.runs[0].email, none.st.runs[0].sent_to, none.st.runs[0].status], [0, "no recipients", [], "ok"], "no one to send to; the files and the run are as before");
+  assert(/2 addresses left out/.test(none.st.alerts[0].words), none.st.alerts[0].words);
+});
+
+Deno.test("M5: the subject is FinCom's own words; the report's and the client's names reach the email only as plain words", async () => {
+  const { st, call } = stand({ resend: true, report: { def: { ...DEF, name: "URGENT: pay at https://pay.elsewhere.example/now <b>today</b>" } }, client: { name: "Verify at www.elsewhere.example/login" } });
+  await call({ action: "due" }, { "x-cron-key": "k-123" });
+  const m = st.resend[0];
+  eq(m.subject, "Your MIS report from FinCom is ready (September 2026)", "the subject: fixed words and the period");
+  eq(mailSubject({ from: "20260401", to: "20260930" }), "Your MIS report from FinCom is ready (1 April 2026 to 30 September 2026)", "a longer period");
+  assert(!/https?:|www\.|elsewhere\.example|[<>]|\/\//.test(m.text), "no address or markup in the words: " + m.text);
+  assert(/URGENT pay at https pay elsewhere example now b today b/.test(m.text), "the name as plain words: " + m.text);
+  assert(m.html === undefined, "plain text only");
+  eq(plainWords("  A & B (Pvt) Ltd., 2026-27  "), "A & B (Pvt) Ltd, 2026-27", "ordinary names stay readable");
+  assert(m.attachments.every((a: any) => /^[A-Za-z0-9-]+\.(xlsx|pdf)$/.test(a.filename)), "the files' names are letters, digits and hyphens");
+});
+
+Deno.test("M5: a firm's emails in a day are counted for the firm, across the functions' running copies; past the day's count nothing is sent, the report is still made", async () => {
+  const key = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode("mail-firm:" + FIRM))), (b) => b.toString(16).padStart(2, "0")).join("");
+  const NOW = Date.parse("2026-10-01T03:15:00Z");
+  const rate = Array.from({ length: MAIL_DAY_MAX - 3 }, () => ({ bucket: "mail-firm", key, at: NOW - 3600_000 }));
+  const a = stand({ resend: true, rate });
+  await a.call({ action: "due" }, { "x-cron-key": "k-123" });
+  eq([a.st.resend.length, a.st.runs[0].email], [1, "sent"], "two more fit");
+  eq(rate.filter((r) => r.bucket === "mail-firm").length, MAIL_DAY_MAX - 1, "each person emailed is counted");
+  const b = stand({ resend: true, rate });   // another running copy, the same table
+  await b.call({ action: "due" }, { "x-cron-key": "k-123" });
+  eq([b.st.resend.length, b.st.runs[0].email, b.st.runs[0].status, b.st.runs[0].sent_to, b.st.uploads.length], [0, "failed", "ok", [], 2], "two more do not: nothing sent, the files kept, the run logged");
+  assert(/daily email limit/.test(b.st.alerts[0].words), "the bell says why: " + b.st.alerts[0].words);
+  eq(rate.length, MAIL_DAY_MAX - 1, "nothing counted for an email not sent");
+  // rows older than a day no longer count
+  rate.forEach((r) => { r.at = NOW - 25 * 3600_000; });
+  const c = stand({ resend: true, rate });
+  await c.call({ action: "due" }, { "x-cron-key": "k-123" });
+  eq(c.st.resend.length, 1, "the next day: sent again");
+  // the count cannot be reached: nothing is sent (the report is still made)
+  const d = stand({ resend: true, rateDown: true });
+  await d.call({ action: "due" }, { "x-cron-key": "k-123" });
+  eq([d.st.resend.length, d.st.runs[0].email, d.st.runs[0].status], [0, "failed", "ok"], "no count, no email");
+});
+
+Deno.test("M5: Run now: a schedule is run by a person at most " + RUN_NOW.max + " times in ten minutes", async () => {
+  const { st, call } = stand({ resend: true });
+  const go = () => call({ action: "run", schedule_id: "s-1" }, { Authorization: "Bearer tok-owner" });
+  for (let i = 0; i < RUN_NOW.max; i++) eq((await go()).status, 200, "run " + (i + 1));
+  const r = await go(), j = await r.json();
+  eq([r.status, j.ok, j.kind], [429, false, "rate"], "one more: refused");
+  eq([st.runs.length, st.resend.length], [RUN_NOW.max, RUN_NOW.max], "nothing run or sent by the refused call");
 });

@@ -40,6 +40,7 @@
 import { corsFor, allowedOrigins } from "../_shared/cors.ts";
 import { firmGate, viaRest } from "../_shared/firmgate.ts";   // the console's switches (migration 118)
 import { aiPolicy, refusal } from "../_shared/ai_policy.ts";
+import { EMAIL_STRICT, emailIn, lowEmail, mailFits, mailSent, plainWords, savedEmails } from "../_shared/mailrules.ts";
 import * as R from "../../app/src/calls/rules.js";
 import { costUsd, plan } from "../assistant/models.ts";
 import { buildPrompt, GROQ_URL, MODEL as STT_MODEL, MODEL_FULL as STT_MODEL_FULL } from "../fincom-transcribe/index.ts";
@@ -313,6 +314,36 @@ export function handler(deps: Deps) {
     return r;
   };
   const roomInvite = (r: any, m: { name: string }, firm: string, url: string) => R.inviteText({ title: r.title, host: m.name, firm, url, code: r.code, at: r.scheduled_at || null, minutes: r.minutes || null });
+  // 13-Nov-2026 (security review, M5; ../_shared/mailrules.ts): an invite FinCom itself emails.
+  //  - to whom: the firm's active members, the addresses saved in the meeting's client's details, and addresses their
+  //    owners confirmed with a code on one of the firm's calls; the others are handed back (not_emailed) with the
+  //    invite's words, for the person's own mail app;
+  //  - how many: the firm's emails of a day (with mis-run's), counted in the shared table; past it, or when the count
+  //    cannot be read, FinCom sends none (mail_limit);
+  //  - in whose words: FinCom's own subject; the meeting's, the host's and the firm's names as plain words.
+  const knownEmails = async (firm: string, client: string | null, list: string[]): Promise<Set<string>> => {
+    const known = new Set<string>();
+    for (const m of ((await svc("/rest/v1/members?select=email&firm_id=eq." + firm + "&active=is.true").catch(() => [])) as any[] || [])) if (m.email) known.add(lowEmail(m.email));
+    if (client) savedEmails(((await one("/rest/v1/clients?select=data&id=eq." + q(client) + "&firm_id=eq." + firm).catch(() => null)) || {}).data, known);
+    const ask = list.filter((e) => !known.has(e) && EMAIL_STRICT.test(e));
+    if (ask.length) for (const p of ((await svc("/rest/v1/call_participants?select=email&firm_id=eq." + firm + "&verified=is.true&email=" + emailIn(ask)).catch(() => [])) as any[] || [])) known.add(lowEmail(p.email));
+    return known;
+  };
+  const mailInvite = async (r: any, m: { firm: string, name: string, email: string }, list: string[], url: string) => {
+    const none = { sent: [] as string[], not: list, limit: false };
+    if (!list.length || !(await mailKey())) return none;
+    const known = await knownEmails(m.firm, r.client_id || null, list);
+    const to = list.filter((e) => known.has(e)), not = list.filter((e) => !known.has(e));
+    if (!to.length) return none;
+    if ((await mailFits((fn, args) => rpc(fn, args), m.firm, to.length)) !== "ok") return { ...none, limit: true };
+    const title = plainWords(r.title) || "Meeting", at = r.scheduled_at ? Date.parse(r.scheduled_at) : null;
+    const text = R.inviteText({ title, host: plainWords(m.name), firm: plainWords(await firmName(m.firm)), url, code: r.code, at: r.scheduled_at || null, minutes: r.minutes || null });
+    const ics = at ? R.icsFor({ uid: r.id, title, start: at, minutes: r.minutes || 30, url, organizer: { email: m.email, name: plainWords(m.name) }, description: "A FinCom meeting. Meeting code: " + r.code + ". Open the link at the time, write your name and ask to join." }) : "";
+    const ok = await sendMail(to, R.mailInviteSubject(at), text, ics ? [{ filename: "invite.ics", content: btoa(unescape(encodeURIComponent(ics))) }] : undefined);
+    if (!ok) return none;
+    await mailSent((fn, args) => rpc(fn, args), m.firm, to.length);
+    return { sent: to, not, limit: false };
+  };
   // the names that may be said in a call: the client's own and its biggest Tally ledgers (the firm's own only), kept a
   // few minutes per room
   const vocabCache = new Map<string, { at: number, names: any[] }>();
@@ -426,8 +457,8 @@ export function handler(deps: Deps) {
       const url = codeUrl(b.base, r.code);
       const ics = R.icsFor({ uid: r.id, title, start: at, minutes, url, organizer: { email: m.email, name: m.name }, description: "A FinCom meeting. Meeting code: " + r.code + ". Open the link at the time, write your name and ask to join." });
       const text = roomInvite(r, m, await firmName(m.firm), url), subject = R.inviteSubject(title, at);
-      const sent = emails.length ? await sendMail(emails, subject, text, [{ filename: "invite.ics", content: btoa(unescape(encodeURIComponent(ics))) }]) : false;
-      return { ok: true, room_id: r.id, code: r.code, url, ics, text, subject, title, at: new Date(at).toISOString(), minutes, emails, emailed: sent ? emails.length : 0, mail: !!(await mailKey()) };
+      const mailed = await mailInvite(r, m, emails, url);
+      return { ok: true, room_id: r.id, code: r.code, url, ics, text, subject, title, at: new Date(at).toISOString(), minutes, emails, emailed: mailed.sent.length, not_emailed: mailed.not, ...(mailed.limit ? { mail_limit: true } : {}), mail: !!(await mailKey()) };
     },
     // Add people: the room's code link (and, for an older link, a guest token link too), emailed when FinCom's email is
     // set up (with the .ics when the meeting has a time); otherwise the words for the person's own mail app
@@ -442,12 +473,12 @@ export function handler(deps: Deps) {
       const token = await newLink(r, m.user, list[0] || "");
       const text = roomInvite(r, m, await firmName(m.firm), url), subject = R.inviteSubject(r.title, r.scheduled_at || null);
       const ics = r.scheduled_at ? R.icsFor({ uid: r.id, title: r.title, start: Date.parse(r.scheduled_at), minutes: r.minutes || 30, url, organizer: { email: m.email, name: m.name }, description: "Meeting code: " + r.code }) : "";
-      const sent = list.length ? await sendMail(list, subject, text, ics ? [{ filename: "invite.ics", content: btoa(unescape(encodeURIComponent(ics))) }] : undefined) : false;
+      const mailed = await mailInvite(r, m, list, url), sent = mailed.sent.length > 0;
       if (list.length && r.kind === "meeting") {
         const inv = [...new Set([...(Array.isArray(r.invitees) ? r.invitees : []), ...list])].slice(0, 50);
         await patch("call_rooms", "id=eq." + r.id, { invitees: inv }).catch(() => null);
       }
-      return { ok: true, code: r.code, url, token, link: linkUrl(b.base, token), text, subject, ics, emailed: sent, mail: !!(await mailKey()) };
+      return { ok: true, code: r.code, url, token, link: linkUrl(b.base, token), text, subject, ics, emailed: sent, not_emailed: mailed.not, ...(mailed.limit ? { mail_limit: true } : {}), mail: !!(await mailKey()) };
     },
     async roster(m, b) {
       const r = await room(b.room_id, m.firm, m);

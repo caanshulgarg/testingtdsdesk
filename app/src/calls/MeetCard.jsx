@@ -31,12 +31,18 @@ export function MeetCard({ info, api, title, onJoin, emails, note, guest }) {
     setBusy(true); setMsg("");
     try {
       const j = api && info.room_id ? await api.call("invite", { room_id: info.room_id, emails: list, base: location.href }) : { emailed: false };
-      if (j.emailed) setMsg("Invite emailed to " + list.join(", ") + (info.at ? ", with the calendar file." : "."));
+      // FinCom emails the addresses it knows for the firm (M5); the others (j.not_emailed) go from the person's own mail app
+      const rest = Array.isArray(j.not_emailed) ? j.not_emailed : j.emailed ? [] : list, done = list.filter((x) => !rest.includes(x));
+      const sentWords = j.emailed && done.length ? "Invite emailed to " + done.join(", ") + (info.at ? ", with the calendar file." : ".") : "";
+      if (!rest.length) setMsg(sentWords);
       else {
-        const m = mailtoUrl(list, subject, words);
+        const m = mailtoUrl(rest, subject, words);
         setMailto(m);
         if (info.at) download("invite.ics", ics(), "text/calendar");
-        setMsg("Email sending isn't set up yet, so your mail app opens with the invite ready." + (info.at ? " The calendar file (invite.ics) is saved: attach it to the email." : ""));
+        const why = j.mail === false || !api ? "Email sending isn't set up yet, so your mail app opens with the invite ready."
+          : j.mail_limit ? "Your firm's emails for today are used up, so your mail app opens with the invite ready."
+          : "FinCom emails your firm's members, the client's saved addresses and people who have joined a call of yours with a code; for " + rest.join(", ") + " your mail app opens with the invite ready.";
+        setMsg((sentWords ? sentWords + " " : "") + why + (info.at ? " The calendar file (invite.ics) is saved: attach it to the email." : ""));
         openMail(m);
       }
     } catch (x) { setMsg(x.message); }

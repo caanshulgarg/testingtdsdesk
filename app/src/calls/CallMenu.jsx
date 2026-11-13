@@ -43,10 +43,15 @@ function Schedule({ o, close }) {
     setBusy(false);
   }
   if (res) {
-    const note = res.emailed ? "The invite was emailed to " + res.emailed + (res.emailed === 1 ? " person" : " people") + ", with the calendar file."
-      : res.list.length ? "Email sending isn't set up yet: press Send invite and your mail app opens with the invite ready." : "";
+    // FinCom itself emails the firm's members, the client's saved addresses and people who joined a call of the firm with
+    // a code (security review of 13-Nov-2026, M5); the others (res.not_emailed) are sent from the person's own mail app
+    const rest = Array.isArray(res.not_emailed) ? res.not_emailed : res.emailed ? [] : res.list;
+    const note = (res.emailed ? "The invite was emailed to " + res.emailed + (res.emailed === 1 ? " person" : " people") + ", with the calendar file." : "")
+      + (rest.length ? (res.emailed ? " " : "") + (res.mail === false ? "Email sending isn't set up yet: press Send invite and your mail app opens with the invite ready."
+        : res.mail_limit ? "Your firm's emails for today are used up: press Send invite and your mail app opens with the invite ready."
+        : "FinCom emails your firm's members, the client's saved addresses and people who have joined a call of yours with a code. For " + (rest.length === 1 ? "the other address" : "the other " + rest.length + " addresses") + ", press Send invite and your mail app opens with the invite ready.") : "");
     return <div data-schedule-done="">
-      <MeetCard title="Meeting scheduled" info={{ room_id: res.room_id, code: res.code, title: res.title, at: res.at, minutes: res.minutes }} api={api} emails={res.emailed ? [] : res.list} note={note} />
+      <MeetCard title="Meeting scheduled" info={{ room_id: res.room_id, code: res.code, title: res.title, at: res.at, minutes: res.minutes }} api={api} emails={rest} note={note} />
       <div className="call-row"><button type="button" className="btn primary" onClick={close} data-schedule-close="">Done</button></div>
     </div>;
   }

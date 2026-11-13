@@ -23,11 +23,11 @@ const uuid = () => "eeeeeeee-0000-4000-8000-" + String(++uuidN).padStart(12, "0"
 type Row = Record<string, any>;
 
 function stand(o: { cf?: boolean, mail?: boolean, ai?: boolean, aiOff?: boolean, aiAnswer?: string, transcribe?: (n: number) => Response, look429?: boolean,
-  groq?: boolean, stt?: (form: FormData, n: number) => Response, chat?: (body: any, n: number) => Response, noLobby?: boolean, noDiag?: boolean, fincom?: (a: any) => any } = {}) {
+  rate?: { bucket: string, key: string }[], rateDown?: boolean, groq?: boolean, stt?: (form: FormData, n: number) => Response, chat?: (body: any, n: number) => Response, noLobby?: boolean, noDiag?: boolean, fincom?: (a: any) => any } = {}) {
   const T: Record<string, Row[]> = {
     members: Object.values(USERS).map((u) => ({ user_id: u.id, firm_id: u.firm, role: u.role, active: true, name: u.name, email: u.email })),
     firms: [{ id: FIRM, name: "Garg & Co" }, { id: FIRM2, name: "B" }],
-    clients: [{ id: "c1", firm_id: FIRM, name: "Client One", deleted: false }, { id: "c2", firm_id: FIRM2, name: "Client Two", deleted: false }],
+    clients: [{ id: "c1", firm_id: FIRM, name: "Client One", deleted: false, data: { deductor: { email: "A@x.test" }, people: [{ name: "B", email: "b@x.test" }] } }, { id: "c2", firm_id: FIRM2, name: "Client Two", deleted: false }],
     platform_secrets: [{ name: "claude_api_key", value: o.ai === false ? "" : "sk-test" }, ...(o.groq === false ? [] : [{ name: "groq_api_key", value: "gsk-test" }]), ...(o.mail ? [{ name: "resend_api_key", value: "re-test" }] : []),
       ...(o.cf ? [{ name: "cf_realtime_app_id", value: "app1" }, { name: "cf_realtime_token", value: "cftok" }] : [])],
     assistant_settings: o.aiOff ? [{ firm_id: FIRM, enabled: false }] : [],
@@ -38,6 +38,7 @@ function stand(o: { cf?: boolean, mail?: boolean, ai?: boolean, aiOff?: boolean,
     tally_ledgers: [{ book_id: "bbbbbbbb-0000-4000-8000-000000000001", firm_id: FIRM, name: "Sharma Traders", primary_group: "Sundry Creditors", open: 500000 }],
   };
   const tries: Record<string, number> = {};
+  const rate: { bucket: string, key: string }[] = o.rate || [];
   const DEF: Record<string, () => Row> = {
     call_rooms: () => ({ id: uuid(), status: "open", chan_key: R.randomToken(32), chan_epoch: 1, cowork_on: false, cowork_epoch: 1, created_at: new Date().toISOString(), invitees: [], client_id: null, batch_id: null }),
     call_participants: () => ({ id: uuid(), joined_at: new Date().toISOString(), verified: false, otp_tries: 0, state: "waiting", cf_session: null }),
@@ -54,7 +55,7 @@ function stand(o: { cf?: boolean, mail?: boolean, ai?: boolean, aiOff?: boolean,
     if (op === "neq") return String(x) !== val;
     if (op === "not" && val === "is.null") return x != null;
     if (op === "is") return val === "null" ? x == null : val === "true" ? x === true : x === false || x == null;
-    if (op === "in") return val.replace(/^\(|\)$/g, "").split(",").includes(String(x));
+    if (op === "in") return val.replace(/^\(|\)$/g, "").split(",").map((v) => v.replace(/^"|"$/g, "")).includes(String(x));
     if (op === "gte") return String(x) >= val;
     if (op === "lt") return /^\d+(\.\d+)?$/.test(val) ? Number(x) < Number(val) : String(x) < val;
     throw new Error("filter " + v);
@@ -81,6 +82,12 @@ function stand(o: { cf?: boolean, mail?: boolean, ai?: boolean, aiOff?: boolean,
         if (fn === "ai_allowed") { if (tok !== "service-key") return J({ message: "permission denied" }, 403); log.asked.push(body); return J(o.fincom ? o.fincom(body) : { ok: true, reason: "on", model: null }); }
         if (fn === "asst_cost_add") return J({ inr: 1.5 });
         if (fn === "asst_log_add") return J(null);
+        // the shared counts of migration 112 (the firm's emails of a day)
+        if (fn === "auth_rate_count" || fn === "auth_rate_add") {
+          if (tok !== "service-key" || o.rateDown) return J({ message: "permission denied" }, 403);
+          if (fn === "auth_rate_add") { rate.push({ bucket: body.p_bucket, key: body.p_key }); return J(null); }
+          return J(rate.filter((x) => x.bucket === body.p_bucket && x.key === body.p_key).length);
+        }
         if (fn === "call_code_hit") { if (tok !== "service-key") return J({ message: "permission denied" }, 403); const add = body.p_add === 0 ? 0 : 1; tries[body.p_key] = (tries[body.p_key] || 0) + add; return J(tries[body.p_key] <= body.p_max - (add ? 0 : 1)); }
         if (fn === "call_client_setting_set") {
           const u = USERS[tok]; if (!u || u.role !== "owner") return J({ message: "Only the firm's owner can change a client's recording setting", code: "42501" }, 403);
@@ -437,7 +444,7 @@ Deno.test("schedule a meeting: the .ics, the invite by email when mail is set up
   eq([r.status, r.j.emailed], [200, 2], "emailed to both");
   assert(r.j.ics.includes("DTSTART:20261025T053000Z") && r.j.ics.includes("DTEND:20261025T061500Z") && r.j.ics.includes("SUMMARY:Year-end review"), "the calendar invite");
   assert(r.j.url === "https://staging.fincom.live/review/#/join/" + r.j.code && R.codeOk(r.j.code), "the code link on the page it was made from: " + r.j.url);
-  assert(s.log.mails[0].text.includes("Meeting code: " + r.j.code) && s.log.mails[0].subject.startsWith("Invitation: Year-end review · 25-Oct-2026 11:00 IST"), "the email: link, code and time in IST");
+  assert(s.log.mails[0].text.includes("Meeting code: " + r.j.code) && s.log.mails[0].subject === "Invitation to a FinCom meeting · 25-Oct-2026 11:00 IST", "the email: link, code and time in IST");
   eq(s.log.mails[0].attachments[0].filename, "invite.ics", "the .ics attached");
   eq((await s.call({ action: "schedule", title: "x", at: "2026-10-25T05:30:00Z", emails: ["nope"] }, "tok-staff")).status, 400, "a wrong address refused");
   const m = stand({ mail: false });
@@ -549,6 +556,8 @@ Deno.test("Meetings: Upcoming (mine: host or invited by email) and Recent with r
   assert(s.T.call_rooms.find((r) => r.id === sch.j.room_id)!.invitees.includes("new@x.test"), "kept with the meeting's invitees");
   const sm = stand({ mail: true });
   const a = await sm.call({ action: "start", kind: "meeting" }, "tok-staff");
+  // two people who each confirmed their address with a code on an earlier call of the firm
+  for (const email of ["x@y.test", "z@y.test"]) sm.T.call_participants.push({ id: uuid(), room_id: uuid(), firm_id: FIRM, email, verified: true, state: "left" });
   const inv2 = await sm.call({ action: "invite", room_id: a.j.room.id, emails: ["x@y.test", "z@y.test"] }, "tok-staff");
   eq([inv2.j.emailed, sm.log.mails[0].to], [true, ["x@y.test", "z@y.test"]], "with Resend: emailed");
   eq((await sm.call({ action: "invite", room_id: a.j.room.id, emails: ["bad"] }, "tok-staff")).status, 400, "a wrong address refused");
@@ -927,4 +936,62 @@ Deno.test("AI control centre: the summary and subtitles switched off by FinCom a
   m.T.call_transcripts.push({ room_id: b.j.room.id, firm_id: FIRM, lines: [{ who: "A", start_ms: 0, text: "hi" }] });
   const ok = await m.call({ action: "summarise", room_id: b.j.room.id }, "tok-staff");
   eq([ok.status, ok.j.summary.model], [200, "claude-opus-5-5"], "the console's model made the summary");
+});
+
+// ---------- 13-Nov-2026 (security review, M5): the invites FinCom emails for a firm ----------
+import { MAIL_DAY_MAX, sha256hex } from "../_shared/mailrules.ts";
+
+Deno.test("M5: an invite is emailed by FinCom to the firm's members, the client's saved addresses and addresses confirmed by their owner; the rest are handed back for the person's own mail app", async () => {
+  const s = stand({ mail: true });
+  s.T.call_participants.push({ id: uuid(), room_id: uuid(), firm_id: FIRM, email: "guest@joined.test", verified: true, state: "left" },
+    { id: uuid(), room_id: uuid(), firm_id: FIRM, email: "typed@only.test", verified: false, state: "left" }, { id: uuid(), room_id: uuid(), firm_id: FIRM2, email: "theirs@other.test", verified: true, state: "left" });
+  const list = ["S2@a.test", "a@x.test", "guest@joined.test", "typed@only.test", "theirs@other.test", "o@b.test", "stranger@else.test"];
+  const r = await s.call({ action: "schedule", title: "Year-end", at: "2026-10-25T05:30:00Z", minutes: 30, emails: list, client_id: "c1", base: "https://staging.fincom.live/review/" }, "tok-staff");
+  eq([r.status, r.j.emailed, r.j.not_emailed], [200, 3, ["typed@only.test", "theirs@other.test", "o@b.test", "stranger@else.test"]], "three known; an unconfirmed one, another firm's member and confirmed address, and a stranger are not");
+  eq(s.log.mails.map((m) => m.to), [["s2@a.test", "a@x.test", "guest@joined.test"]], "one email, to the known three");
+  assert(r.j.text.includes(r.j.url) && r.j.subject === "Invitation: Year-end · 25-Oct-2026 11:00 IST" && r.j.ics.includes("BEGIN:VEVENT"), "the words, subject and .ics for the person's own mail app, as before");
+  eq(s.T.call_rooms.find((x) => x.id === r.j.room_id)!.invitees.length, 7, "all seven stay the meeting's invitees");
+  // Add people: the same rule; a client's saved address counts only for that client's meeting
+  const plain = await s.call({ action: "start", kind: "meeting" }, "tok-staff");
+  const inv = await s.call({ action: "invite", room_id: plain.j.room.id, emails: ["a@x.test", "staff@a.test"] }, "tok-staff");
+  eq([inv.j.emailed, inv.j.not_emailed, s.log.mails[1].to], [true, ["a@x.test"], ["staff@a.test"]], "a meeting with no client: the member only");
+  const none = await s.call({ action: "invite", room_id: plain.j.room.id, emails: ["new@else.test"] }, "tok-staff");
+  eq([none.j.emailed, none.j.not_emailed, s.log.mails.length, !!none.j.text, !!none.j.subject], [false, ["new@else.test"], 2, true, true], "nobody known: nothing sent by FinCom; the invite's words go back for the mail app");
+});
+
+Deno.test("M5: the subject of an invite FinCom emails is FinCom's own; the meeting's, the host's and the firm's names go in as plain words", async () => {
+  const s = stand({ mail: true });
+  s.T.firms[0].name = "Pay now: https://pay.else.test/x";
+  const title = "URGENT verify at www.else.test/login <b>now</b>";
+  const r = await s.call({ action: "schedule", title, at: "2026-10-25T05:30:00Z", emails: ["s2@a.test"] }, "tok-staff");
+  const m = s.log.mails[0];
+  eq(m.subject, "Invitation to a FinCom meeting · 25-Oct-2026 11:00 IST", "the subject");
+  const ics = decodeURIComponent(escape(atob(m.attachments[0].content)));
+  for (const [what, t] of [["words", m.text.replace(r.j.url, "")], ["calendar file", ics.replace(/\r?\n /g, "")]] as [string, string][])
+    assert(!/else\.test|www\.|[<>]/.test(t) && !/https?:\/\/(?!staging\.fincom\.live)/.test(t), "no address or markup of the firm's typing in the " + what + ": " + t);
+  assert(m.text.includes("URGENT verify at www else test login b now b") && m.text.includes(r.j.url) && m.text.includes("Meeting code: " + r.j.code), "the names as plain words, FinCom's own link and the code: " + m.text);
+  const a = await s.call({ action: "start", kind: "meeting", title }, "tok-staff");
+  await s.call({ action: "invite", room_id: a.j.room.id, emails: ["s3@a.test"] }, "tok-staff");
+  eq(s.log.mails[1].subject, "Invitation to a FinCom meeting", "Add people on a meeting with no time");
+  assert(!/else\.test|[<>]/.test(s.log.mails[1].text.replace(/https:\/\/staging\.fincom\.live\S*/g, "")), "its words: " + s.log.mails[1].text);
+});
+
+Deno.test("M5: a firm's emails in a day are counted (with the MIS emails); past the day's count, or without the count, FinCom sends none and hands the invite back", async () => {
+  const key = await sha256hex("mail-firm:" + FIRM);
+  const rate = Array.from({ length: MAIL_DAY_MAX - 3 }, () => ({ bucket: "mail-firm", key }));
+  const s = stand({ mail: true, rate });
+  const a = await s.call({ action: "start", kind: "meeting" }, "tok-staff");
+  const one = await s.call({ action: "invite", room_id: a.j.room.id, emails: ["s2@a.test", "s3@a.test"] }, "tok-staff");
+  eq([one.j.emailed, rate.length], [true, MAIL_DAY_MAX - 1], "two fit, and are counted");
+  const two = await s.call({ action: "invite", room_id: a.j.room.id, emails: ["s2@a.test", "s3@a.test"] }, "tok-staff");
+  eq([two.status, two.j.emailed, two.j.not_emailed, two.j.mail_limit, s.log.mails.length, rate.length], [200, false, ["s2@a.test", "s3@a.test"], true, 1, MAIL_DAY_MAX - 1], "two more do not: none sent, none counted, said");
+  const other = await s.call({ action: "start", kind: "meeting" }, "tok-other");
+  s.T.members.push({ user_id: uuid(), firm_id: FIRM2, role: "staff", active: true, name: "P", email: "p@b.test" });
+  eq((await s.call({ action: "invite", room_id: other.j.room.id, emails: ["p@b.test"] }, "tok-other")).j.emailed, true, "another firm has its own count");
+  const down = stand({ mail: true, rateDown: true });
+  const b = await down.call({ action: "start", kind: "meeting" }, "tok-staff");
+  const r = await down.call({ action: "invite", room_id: b.j.room.id, emails: ["s2@a.test"] }, "tok-staff");
+  eq([r.j.emailed, r.j.not_emailed, down.log.mails.length], [false, ["s2@a.test"], 0], "the count cannot be read: nothing sent");
+  const sch = await down.call({ action: "schedule", title: "x", at: "2026-10-25T05:30:00Z", emails: ["s2@a.test"] }, "tok-staff");
+  eq([sch.status, sch.j.emailed, sch.j.not_emailed], [200, 0, ["s2@a.test"]], "a meeting is still scheduled");
 });

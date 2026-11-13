@@ -16,11 +16,32 @@
 // more; failing again it is logged as failed and the bell says why.
 import { corsFor } from "../_shared/cors.ts";
 import { firmGate, viaRest } from "../_shared/firmgate.ts";   // the console's switches (migration 118)
+import { EMAIL_STRICT, emailIn, lowEmail, MAIL_DAY_MAX, mailFits, mailSent, plainWords, savedEmails, sha256hex } from "../_shared/mailrules.ts";
+export { MAIL_DAY_MAX, plainWords };
 import { normalizeDef } from "../_shared/misdef.js";
 import { run as runEngine, periodOf } from "../../app/src/lib/misCustom.js";
 import { workbook } from "../../app/src/lib/misXlsx.js";
 import { cloudData, fetchBook } from "./data.ts";
 import { misPdf } from "./pdf.ts";
+
+// 13-Nov-2026 (security review, M5): the emails FinCom sends for a firm.
+//  - to whom: the firm's active members, the addresses saved in the client's own details, and addresses their owners
+//    confirmed with a code when joining one of the firm's calls; any other typed address is left out (the bell says so);
+//  - how many: MAIL_DAY_MAX people a day for a firm, counted in the shared table (migration 112, bucket mail-firm, with
+//    the call invites; ../_shared/mailrules.ts); past it, or when the count cannot be reached, the report is made and
+//    nothing is emailed;
+//  - in whose words: the subject is FinCom's own (mailSubject); the report's and the client's names go into the email
+//    as plain words only (plainWords: letters, digits and a few marks; no address can be written with them);
+//  - Run now: a schedule is run by a person at most RUN_NOW.max times in RUN_NOW.windowS seconds.
+export const RUN_NOW = { max: 3, windowS: 600 };
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+// the period in words from its two days (yyyymmdd): "September 2026" for a whole month, else "1 April 2026 to 30 September 2026"
+export function mailSubject(pr: { from: string; to: string }) {
+  const d = (x: string) => ({ y: +x.slice(0, 4), m: +x.slice(4, 6), d: +x.slice(6, 8) }), a = d(String(pr.from)), b = d(String(pr.to));
+  const say = (x: { y: number; m: number; d: number }) => x.d + " " + MONTHS[x.m - 1] + " " + x.y;
+  const whole = a.y === b.y && a.m === b.m && a.d === 1 && b.d === new Date(Date.UTC(b.y, b.m, 0)).getUTCDate();
+  return "Your MIS report from FinCom is ready (" + (whole ? MONTHS[a.m - 1] + " " + a.y : say(a) + " to " + say(b)) + ")";
+}
 
 export type Deps = { env: (k: string) => string | undefined, fetch: typeof fetch, now?: () => Date, excel: () => Promise<any> };
 const PERIOD_WORDS: Record<string, string> = { lastMonth: "last month", mtd: "the month so far", qtd: "the quarter so far", ytd: "the year so far" };
@@ -54,7 +75,7 @@ export function handler(deps: Deps) {
     const rec = items && items[0] && items[0].data;
     if (!rec || !rec.def) throw new Error("the report " + (s.report_name || s.report_id) + " is no longer saved for this client");
     const def = normalizeDef(Object.assign({}, rec.def, { period: { kind: s.period } })).def, today = istDay(now());
-    const client = ((await rest("/rest/v1/clients?select=name&firm_id=eq." + enc(s.firm_id) + "&id=eq." + enc(s.client_id)).catch(() => [])) || [])[0] || {};
+    const client = ((await rest("/rest/v1/clients?select=name,data&firm_id=eq." + enc(s.firm_id) + "&id=eq." + enc(s.client_id)).catch(() => [])) || [])[0] || {};
     const pr = periodOf(def, null, today);
     const rows = await fetchBook((p: string) => rest(p), s.firm_id, s.client_id, pr.to);
     if (!rows) throw new Error("FinCom's cloud has no books of this client for " + pr.from + " to " + pr.to);
@@ -72,23 +93,40 @@ export function handler(deps: Deps) {
     await upload(base + ".pdf", pdf, "application/pdf");
     const files = [{ kind: "xlsx", path: base + ".xlsx", name: slug(res.company) + "-" + slug(def.name) + ".xlsx", bytes: xlsx.length }, { kind: "pdf", path: base + ".pdf", name: slug(res.company) + "-" + slug(def.name) + ".pdf", bytes: pdf.length }];
     const title = def.name + " for " + (res.company || "the client") + " is ready (" + res.periodLabel + ")";
-    // to whom: the members chosen (their sign-in addresses) and the addresses typed
+    // to whom (M5): the members chosen (their sign-in addresses), and of the addresses typed only those the firm is known
+    // to write to: a member's, one saved in the client's details, or one its owner confirmed with a code on a call
     const ids = ((s.recipients || {}).members || []).filter((x: string) => /^[0-9a-f-]{36}$/.test(x));
-    const mem = ids.length ? await rest("/rest/v1/members?select=user_id,email&firm_id=eq." + enc(s.firm_id) + "&active=is.true&user_id=in.(" + ids.join(",") + ")").catch(() => []) : [];
-    const to = Array.from(new Set([...(mem || []).map((m: any) => String(m.email || "").trim()).filter(Boolean), ...((s.recipients || {}).emails || [])])).slice(0, 50);
-    let email = "no recipients", sent: string[] = [];
+    const mem = ((await rest("/rest/v1/members?select=user_id,email&firm_id=eq." + enc(s.firm_id) + "&active=is.true").catch(() => [])) || []) as any[];
+    const low = lowEmail;
+    const chosen = mem.filter((m) => ids.includes(m.user_id)).map((m) => low(m.email)).filter(Boolean);
+    const typed = Array.from(new Set((((s.recipients || {}).emails || []) as unknown[]).map(low).filter((e) => e.length <= 200 && EMAIL_STRICT.test(e)))).slice(0, 50);
+    const known = savedEmails(client.data); mem.forEach((m) => { if (m.email) known.add(low(m.email)); });
+    const ask = typed.filter((e) => !known.has(e));
+    if (ask.length) {
+      const conf = ((await rest("/rest/v1/call_participants?select=email&firm_id=eq." + enc(s.firm_id) + "&verified=is.true&email=" + emailIn(ask)).catch(() => [])) || []) as any[];
+      conf.forEach((c) => known.add(low(c.email)));
+    }
+    const to = Array.from(new Set([...chosen, ...typed.filter((e) => known.has(e))])).slice(0, 50);
+    const leftOut = typed.filter((e) => !known.has(e)).length;
+    let email = "no recipients", sent: string[] = [], why = "";
     if (to.length) {
       const key = await secret("resend_api_key");
       if (!key) email = "not set up";
       else {
-        const from = (await secret("resend_from")) || "FinCom MIS <mis@fincom.live>";
-        const r = await doFetch("https://api.resend.com/emails", { method: "POST", headers: { Authorization: "Bearer " + key, "Content-Type": "application/json" },
-          body: JSON.stringify({ from, to, subject: title, text: title + ".\n\nThe Excel and the PDF are attached. Every figure is worked out by FinCom from the books in FinCom's cloud.\n\n" + (def.name) + " · " + res.periodLabel,
-            attachments: [{ filename: files[0].name, content: b64(xlsx) }, { filename: files[1].name, content: b64(pdf) }] }) });
-        if (r.ok) { email = "sent"; sent = to; } else { email = "failed"; }
+        // how many (M5): the firm's emails of the last day, with these; counted only once they are sent
+        const fits = await mailFits((fn, args) => rpc(fn, args), String(s.firm_id), to.length);
+        if (fits !== "ok") { email = "failed"; why = fits === "unknown" ? " (not emailed: the email count could not be read)" : " (not emailed: the firm's daily email limit of " + MAIL_DAY_MAX + " is reached)"; }
+        else {
+          const from = (await secret("resend_from")) || "FinCom MIS <mis@fincom.live>";
+          const r = await doFetch("https://api.resend.com/emails", { method: "POST", headers: { Authorization: "Bearer " + key, "Content-Type": "application/json" },
+            body: JSON.stringify({ from, to, subject: mailSubject(pr), text: plainWords(def.name) + " for " + (plainWords(res.company) || "the client") + " is ready (" + plainWords(res.periodLabel) + ").\n\nThe Excel and the PDF are attached. Every figure is worked out by FinCom from the books in FinCom's cloud.\n\nSent by FinCom for the firm that keeps these books. If you did not expect it, tell that firm.",
+              attachments: [{ filename: files[0].name, content: b64(xlsx) }, { filename: files[1].name, content: b64(pdf) }] }) });
+          if (r.ok) { email = "sent"; sent = to; await mailSent((fn, args) => rpc(fn, args), String(s.firm_id), to.length); } else { email = "failed"; }
+        }
       }
     }
-    await insert("tally_alerts", { firm_id: s.firm_id, client_id: s.client_id, kind: "summary", day: istIso(now()), words: title + (email === "sent" ? ", and emailed to " + sent.length + (sent.length === 1 ? " person" : " people") : email === "not set up" ? " (email is not set up yet: open it in My MIS)" : ""),
+    const left = leftOut ? "; " + leftOut + " address" + (leftOut === 1 ? "" : "es") + " left out (FinCom emails the firm's members, the client's saved addresses and people who joined a call of the firm with a code)" : "";
+    await insert("tally_alerts", { firm_id: s.firm_id, client_id: s.client_id, kind: "summary", day: istIso(now()), words: title + (email === "sent" ? ", and emailed to " + sent.length + (sent.length === 1 ? " person" : " people") : email === "not set up" ? " (email is not set up yet: open it in My MIS)" : why) + left,
       data: { what: "mis", schedule: s.id, report: s.report_id, files, period: pr }, at: now().toISOString() });
     return (await insert("mis_runs", { firm_id: s.firm_id, client_id: s.client_id, schedule_id: s.id, report_id: s.report_id, report_name: def.name, period: pr, files, sent_to: sent, email, status: "ok", attempt, by_whom: by }))[0];
   }
@@ -254,6 +292,10 @@ export function handler(deps: Deps) {
     if (!["owner", "staff"].includes(member.role)) return reply(403, { ok: false, kind: "role", error: "Look-only access: ask the firm's owner or staff to run it." });
     const s = ((await rest("/rest/v1/mis_schedules?select=*&id=eq." + enc(String(body.schedule_id || "")) + "&firm_id=eq." + enc(member.firm_id)).catch(() => [])) || [])[0];
     if (!s) return reply(404, { ok: false, error: "No such schedule in your firm." });
+    // M5: Run now, a few times in ten minutes at most for one schedule (the count cannot be reached: the run goes on; the
+    // day's email count is the limit on what is sent)
+    const fits = await rpc("auth_rate_hit", { p_bucket: "mis-run-now", p_key: await sha256hex("mis-run-now:" + s.id), p_max: RUN_NOW.max, p_window_s: RUN_NOW.windowS }).catch(() => true);
+    if (fits === false) return reply(429, { ok: false, kind: "rate", error: "This report was run a few times just now. Try again in ten minutes." });
     const r = await runOne(s, "person");
     return reply(r.ok ? 200 : 500, r);
   };

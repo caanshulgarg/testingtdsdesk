@@ -324,6 +324,8 @@ export function inviteText({ title, host, firm, url, code, at, minutes }) {
     "Join: " + url + "\nMeeting code: " + code + "\n\nOpen the link (or go to the FinCom join page and type the code), write your name and ask to join; the host lets you in.";
 }
 export const inviteSubject = (title, at) => "Invitation: " + (title || "Meeting") + (at ? " · " + istWhen(at) : "");
+// the subject of an invite FinCom itself emails (security review of 13-Nov-2026, M5): FinCom's own words and the time, never the title
+export const mailInviteSubject = (at) => "Invitation to a FinCom meeting" + (at ? " · " + istWhen(at) : "");
 export function mailtoUrl(to, subject, body) {
   return "mailto:" + (Array.isArray(to) ? to : [to]).filter(Boolean).map(encodeURIComponent).join(",") + "?subject=" + encodeURIComponent(subject) + "&body=" + encodeURIComponent(body);
 }
