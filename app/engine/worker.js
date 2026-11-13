@@ -5,8 +5,8 @@
 // Built by app/vite.config.js (fincom-legacy) into assets/engine-<hash>.js, fetched only when a run first needs it.
 // The page's words (data.t): init (legacy.js's address), begin / S / bk / bv / end (the books, in parts, a version each), run, cancel. Its answers:
 // ready / fail, prog (how far), mis (the figures), audit + rows + end (the findings, then their rows in parts), err.
-/* global S, MIS, Audit, GSTR, BOOKS_REV, JOB_MEMO, IN_RENDER, reactScopeEnd */
-import { loadLegacy, DENIED } from "./boot.js";
+/* global S, MIS, Audit, GSTR, Books, BOOKS_REV, JOB_MEMO, IN_RENDER, reactScopeEnd */
+import { loadLegacy, DENIED, storeTx } from "./boot.js";
 
 const SLICE_MS = 50, PROG_MS = 100, ROWS = 5000;
 const say = (m) => self.postMessage(m);
@@ -53,6 +53,7 @@ function clearAll() {
   books = null; next = null; queue.length = 0;
   if (job) { try { job.it.return(); } catch (x) { /* closed */ } job = null; }
   setS({}); S.books = null; self.__engineLS.clear(); if (typeof M2B === "object") M2B.st = {};
+  stores.clear(); stV = null;
   fresh();
 }
 // a test's check (tests/run_speed_worker.py) that every write here is refused: each tried, and what it did
@@ -126,10 +127,40 @@ function step() {
   }
   if (job || queue.length) setTimeout(step, 0);
 }
+// Books.save's records, written here for the page (src/js/04 Books.saveNow, src/js/06 Engine.store): the books come in
+// parts (sbegin, sk / sa / sp: a key, a big part's place, its items; sv: the entries), then send: the same one
+// transaction as Books.save's, on the copy of this browser's store the page has open (its name, sbegin's db). The only
+// write the worker makes, through its own writer (boot.js storeTx); the engines' every write is refused (denyWrites)
+const stores = new Map();
+let stV = null;   // the entries last written here, as the page's Engine.stV
+function storeMsg(m) {
+  const st = stores.get(m.id);
+  if (m.t === "sbegin") { stores.set(m.id, { cid: m.cid, db: m.db, d: {}, v: [] }); return; }
+  if (!st) return;
+  if (m.t === "sk") st.d[m.k] = m.v;
+  else if (m.t === "sa") { if (m.at) st.d[m.k][m.at] = m.arr ? [] : {}; else st.d[m.k] = m.arr ? [] : {}; }
+  else if (m.t === "sp") { const to = m.at ? st.d[m.k][m.at] : st.d[m.k]; if (Array.isArray(to)) { for (let i = 0; i < m.v.length; i++) to.push(m.v[i]); } else Object.assign(to, m.v); }
+  else if (m.t === "sv") { for (let i = 0; i < m.v.length; i++) st.v.push(m.v[i]); }
+  else if (m.t === "send") {
+    stores.delete(m.id);
+    const v = m.vfrom === "kept" ? stV : m.vfrom === "engine" ? (books && books.vouchers) : st.v, d = st.d;
+    stV = null;
+    if (!Array.isArray(v)) { say({ t: "err", id: m.id, e: "the entries to write are not here" }); return; }
+    const [E, W, H, O] = Books.K(st.cid);
+    let s = "", wrote = false;
+    storeTx(st.db, (q, tx) => { const r = q.get(H); r.onsuccess = () => { try {
+      const h = r.result;
+      s = m.same && h && h.s === m.ks ? m.ks : Date.now() + "." + Math.random();
+      if (s !== m.ks) { q.put({ s, v }, E); q.put({ s }, H); wrote = true; }
+      q.put({ s, d }, W); q.delete(O);
+    } catch (e) { try { tx.abort(); } catch (x) { /* given up */ } } }; }).then(() => { stV = v; say({ t: "stored", id: m.id, s, wrote }); }, (e) => say({ t: "err", id: m.id, e: err(e) }));
+  }
+}
 self.onmessage = (e) => {
   const m = e.data || {};
   try {
     if (m.t === "init") init(m.legacy);
+    else if (/^s(begin|k|a|p|v|end)$/.test(m.t)) storeMsg(m);
     else if (m.t === "begin") begin(m);
     else if (m.t === "clear") clearAll();
     else if (m.t === "selftest") selftest().then((r) => say({ t: "selftest", r }));

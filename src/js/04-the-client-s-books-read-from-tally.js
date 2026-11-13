@@ -317,9 +317,31 @@ Object.assign(Books, {
   vk: {}, gone: {},
   K(cid){ return ["bke:", "bkw:", "bkh:", "books:"].map(p => p + cid); },
   touch(b){ if (b && b.vouchers) b.vouchers = b.vouchers.slice(); },
-  async save(cid, data){
-    if (this.gone[cid]) return;
+  // next-speed-worker (the owner's speed work: screens never freeze): the write of a new list of entries was one task of
+  // the browser's own copying (bke's put: 338 ms at 51,758 made-up entries, about 4x on an office PC), and of the rest
+  // with a large audit too. Books larger than Engine.SMALL are written by the engine's worker (Engine.store, src/js/06):
+  // the same records in the same one transaction, the books handed to it in parts; no worker, or it fails: here, as
+  // before. A client's saves are written in turn (q), so a later save never goes before an earlier one. The page closed
+  // while one is on its way (pend: the latest asked for a client, not yet written): written here at once (pagehide)
+  q: {}, pend: {},
+  save(cid, data){
+    if (this.gone[cid]) return Promise.resolve();
     this.remember(cid, data); this.ver[cid] = (this.ver[cid] || 0) + 1;
+    const n = this.ver[cid];
+    this.pend[cid] = {data, n};
+    const p = (this.q[cid] || Promise.resolve()).then(() => this.saveNow(cid, data)).finally(() => { if (this.pend[cid] && this.pend[cid].n === n) delete this.pend[cid]; });
+    this.q[cid] = p.catch(() => {});
+    return p;
+  },
+  async saveNow(cid, data){
+    if (this.gone[cid]) return;
+    if (typeof Engine === "object" && Engine.canStore(data)){
+      let r = null; try { r = await Engine.store(cid, data, this.vk[cid]); } catch (e){ r = null; }
+      if (r){ if (r.wrote) this.vk[cid] = {s: r.s, r: data.vouchers, a: data.vouchers.slice()}; return; }
+    }
+    return this.saveHere(cid, data);
+  },
+  async saveHere(cid, data){
     const [E, W, H, O] = this.K(cid);
     await IDBStore.tx((st, g) => { const q = st.get(H); q.onsuccess = () => g(() => {
       const k = this.vk[cid], h = q.result, v = data.vouchers, d = Object.assign({}, data);
@@ -330,6 +352,8 @@ Object.assign(Books, {
       st.put({s, d}, W); st.delete(O);
     }); });
   },
+  // the page closing: the saves on their way to the worker written here (its own transaction starts now)
+  closing(){ Object.keys(this.pend).forEach(cid => { const p = this.pend[cid]; delete this.pend[cid]; if (!this.gone[cid]) try { this.saveHere(cid, p.data).catch(() => {}); } catch (e){} }); },
   // mine: the books read are to be this page's copy (load), so their entries are the ones last read here (not while the
   // open books are this client's: those are)
   async read(cid, mine){
@@ -347,4 +371,6 @@ Object.assign(Books, {
   drop(cid){ this.gone[cid] = 1; this.forget(cid); delete this.vk[cid]; return IDBStore.write(this.K(cid).map(k => [k, null])).catch(() => {}); },
   forget(cid){ if (cid) this.mem.delete(cid); else this.mem.clear(); }
 });
+// (next-speed-worker: Books.closing; not in the engine's worker, which has no page)
+if (typeof window === "object" && typeof document === "object" && window.addEventListener) window.addEventListener("pagehide", () => { try { Books.closing(); } catch (e){} });
 

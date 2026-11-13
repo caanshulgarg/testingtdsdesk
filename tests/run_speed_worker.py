@@ -126,6 +126,24 @@ GST3B = r"""async () => {
   GSTR._carry = c0; GSTR._ck = k0; GSTR._ckAt = a0;
   return Object.assign(t, {view: [S.booksTab, S.gstView, S.gstPart], line, eng: !!(wk && wk.ym === "202603" && !wk.fail), same: shown === fresh, len: shown.length}); }"""
 
+# the books saved (saveBooks: Books.save) with a new list of entries (they are written: bke), then again with only the rest
+# changed (bkw): timed, by the worker (Engine.store); the records then in this browser's store the same as the same
+# saves written here (no worker)
+SAVE = r"""async () => {
+  const Z = window.__zz, b = S.books, K = Books.K(b.cid); await Z.quiet(800);
+  const hash = async () => { const r = await IDBStore.gets([K[0], K[1], K[2]]); return [Audit.hash(JSON.stringify(r[0].v)) + ":" + r[0].v.length, Audit.hash(JSON.stringify(r[1].d)), r[0].s === r[1].s && r[1].s === r[2].s]; };
+  const done = async () => { await Promise.all(Object.values(Store.chains)); await Books.q[b.cid]; };
+  let used = 0; const st = Engine.store; Engine.store = function () { const p = st.apply(this, arguments); p.then(r => { if (r) used++; }); return p; };
+  b.vouchers = b.vouchers.slice();
+  Z.start(); await saveBooks(); await done(); const t = Z.end(); const h1 = await hash(); await Z.quiet(500);
+  Z.start(); await saveBooks(); await done(); const t2 = Z.end(); const h1b = await hash();
+  Engine.store = st;
+  Engine.off("test: the save here"); b.vouchers = b.vouchers.slice(); await saveBooks(); await done(); const h2 = await hash(); Engine.st = ""; Engine.why = "";
+  // the page closed while a save is on its way to the worker (pagehide: Books.closing writes it here at once)
+  b.vouchers = b.vouchers.slice(); const p = saveBooks(); Books.closing(); await p; await done(); const h3 = await hash();
+  return Object.assign(t, {rest: {max: t2.max, top: t2.top}, eng: used === 2, same: h1[0] === h2[0] && h1[1] === h2[1] && h1b[1] === h2[1], stamps: h1[2] && h1b[2] && h2[2],
+    closing: h3[0] === h2[0] && h3[1] === h2[1] && h3[2], line: true, sl: []}); }"""
+
 # new books as they come (another list of the same entries, saved: the save of a new list writes every entry to this
 # browser's store, Books.save, a task of its own before the run is timed): what any page kept of the old is worked out again
 FRESH = """async () => { S.books.vouchers = S.books.vouchers.slice(); S.books.mis = null; S.books.audit = null; await saveBooks(); await Promise.all(Object.values(Store.chains));
@@ -364,7 +382,7 @@ try:
             row["open"] = pg.evaluate("() => window.__zz.end()")
             pg.evaluate("() => window.__zz.quiet(800)")
             row["ledger"] = pg.evaluate(LEDGER)
-            for k, js in (("gst3b", GST3B), ("mis", MIS_RUN), ("audit", AUDIT_RUN)):
+            for k, js in (("gst3b", GST3B), ("mis", MIS_RUN), ("audit", AUDIT_RUN), ("save", SAVE)):
                 runs = []
                 for i in range(REPEAT):
                     pg.evaluate(FRESH); runs.append(pg.evaluate(js))
@@ -377,6 +395,11 @@ try:
             for k, v in row.items():
                 for f in v.get("lf", [])[:4]: print("     long frame %s" % f, flush=True)
                 if v.get("sl"): print("     %s tasks over 40 ms [ms, steps, saved]: %s" % (k, v["sl"][:8]), flush=True)
+            v = row["save"]
+            ok(v["same"] and v["stamps"], "save: the records written are the ones the save here writes (the entries and the rest, one version)")
+            ok(v["closing"], "save: the page closed while a save goes to the worker: written here at once, whole")
+            ok(v["eng"], "save: written by the engine's worker")
+            ok(v["max"] <= TASK_MS and v["rest"]["max"] <= TASK_MS, "save: no task of the page's thread over %d ms: a new list of entries %d ms %s (the median of %d runs' longest: %s), the rest only %d ms %s" % (TASK_MS, v["max"], v["top"], len(v["runs"]), v["runs"], v["rest"]["max"], v["rest"]["top"]))
             v = row["gst3b"]
             if "eng" in v:
                 ok(v["same"], "gst3b: the 3B and the month's checks drawn are the ones worked out here afresh (%d characters)" % v["len"])
