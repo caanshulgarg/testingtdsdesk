@@ -1,7 +1,7 @@
 // deno test server/signup/handler_test.ts   (no network, no Supabase: the services are fakes)
 import {
   type AuthUser, CHECK_EMAIL, type Db, type Deps, JITTER_MS, makeHandler, MIN_MS, NEUTRAL, ownFirmId, RateLimiter,
-  SIGNUP_CREDIT, TOO_MANY,
+  PROVISION, SIGNUP_CREDIT, TOO_MANY,
 } from "./handler.ts";
 
 function assert(c: unknown, msg = "assertion failed"): asserts c { if (!c) throw new Error(msg); }
@@ -452,4 +452,80 @@ Deno.test("a provision cut off, then the setting changed: the finishing call wri
   const id = await ownFirmId("u-new");
   eq((await read(await handler(provision("tok-new")))).body, { ok: true, created: false, firm_id: id });
   eq([t.firms.get(id)!.balance, t.credits.map((c) => c.amount)], [500, [500]]);
+});
+
+// ---------- 13-Nov-2026 (security review, M2): the sign-up checks also stand where the firm is made ----------
+// Whichever way the login was made (the form, Supabase Auth itself, Google, Microsoft), the checks are made again on
+// the confirmed email before a firm exists, and the starting credit is given only when they pass.
+const person = (id: string, email: string, provider = "email"): AuthUser => ({ id, email, confirmed: true, name: "P " + id, firm: "Firm " + id, provider, signupFirm: null });
+function fakeWith(list: AuthUser[], over: Partial<Deps> = {}) {
+  const by = new Map(list.map((p) => ["tok-" + p.id, p]));
+  const f = fake({ ...over });
+  f.d.authUser = async (jwt) => by.get(jwt) ? { ...by.get(jwt)!, signupFirm: f.t.marks.get(by.get(jwt)!.id) ?? null } : null;
+  return { ...f, handler: makeHandler(f.d) };
+}
+
+Deno.test("M2: a confirmed login on a throwaway email domain gets no firm and no credit (the fixed list and the extra list)", async () => {
+  const list = [person("d1", "bot@mailinator.com"), person("d2", "x@sub.yopmail.com"), person("d3", "z@junkbox.test")];
+  const { handler, t } = fakeWith(list, { extraDisposable: ["junkbox.test"] });
+  for (const p of list) {
+    const r = await read(await handler(provision("tok-" + p.id)));
+    eq([r.status, r.body.ok, r.body.reason], [403, false, "not_allowed"], p.email);
+    assert(!JSON.stringify(r.body).includes("credit"), "no credit named");
+  }
+  eq(firmCount(t), 0); eq(t.credits.length, 0); eq(t.members.size, 1, "only the invited member of the fixture"); eq(t.marks.size, 0);
+});
+
+Deno.test("M2: firms made from one address are counted across running copies: past the day's count the firm is made without the starting credit", async () => {
+  const shared = sharedRate();
+  const list = Array.from({ length: PROVISION.ip.max + 2 }, (_, i) => person("n" + i, `owner${i}@firm${i}.test`));
+  const a = fakeWith(list, { rateHit: shared.hit }), b = fakeWith(list, { rateHit: shared.hit });
+  for (let i = 0; i < PROVISION.ip.max; i++) {
+    const r = await read(await (i % 2 ? a : b).handler(provision("tok-n" + i)));
+    eq([r.status, r.body.created, r.body.credit], [200, true, 10000], "firm " + i);
+  }
+  const over = await read(await a.handler(provision("tok-n" + PROVISION.ip.max)));
+  eq([over.status, over.body.ok, over.body.created, over.body.credit, over.body.credit_held], [200, true, true, 0, true]);
+  const id = await ownFirmId("n" + PROVISION.ip.max);
+  eq(a.t.firms.get(id)!.balance, 0, "no credit on the firm's balance");
+  eq(a.t.credits.filter((c) => c.firm_id === id).map((c) => c.amount), [0], "its line says nothing was given");
+  assert(/held/i.test(a.t.firms.get(id)!.note), "the firm's note says the credit is held: " + a.t.firms.get(id)!.note);
+  assert(a.t.members.has("n" + PROVISION.ip.max), "the person is still its owner (the firm works, on a zero balance)");
+  // asked again: the same firm, nothing more
+  eq((await read(await a.handler(provision("tok-n" + PROVISION.ip.max)))).body, { ok: true, created: false, firm_id: id });
+  // another address is not held
+  const other = await read(await b.handler(provision("tok-n" + (PROVISION.ip.max + 1), "198.51.100.9")));
+  eq([other.body.created, other.body.credit], [true, 10000]);
+  assert(shared.rows.every((r) => /^[0-9a-f]{64}$/.test(r.key)), "addresses and domains kept only as a SHA-256");
+});
+
+Deno.test("M2: firms made on one email domain of its own are counted (from any address); the large public mail services are not counted as one", async () => {
+  const shared = sharedRate();
+  const n = PROVISION.domain.max;
+  const list = [...Array.from({ length: n + 1 }, (_, i) => person("c" + i, `user${i}@catchall.test`)), ...Array.from({ length: n + 2 }, (_, i) => person("g" + i, `user${i}@gmail.com`, "google"))];
+  const { handler } = fakeWith(list, { rateHit: shared.hit });
+  for (let i = 0; i < n; i++) eq((await read(await handler(provision("tok-c" + i, "192.0.2." + i)))).body.credit, 10000, "domain firm " + i);
+  const held = await read(await handler(provision("tok-c" + n, "192.0.2.200")));
+  eq([held.body.created, held.body.credit, held.body.credit_held], [true, 0, true]);
+  for (let i = 0; i < n + 2; i++) eq((await read(await handler(provision("tok-g" + i, "192.0.3." + i)))).body.credit, 10000, "public mail " + i);
+});
+
+Deno.test("M2: a firm that already exists is not counted again (a retry, two tabs); the count is taken only when a firm is to be made", async () => {
+  const shared = sharedRate();
+  const { handler } = fakeWith([person("r1", "one@solo.test")], { rateHit: shared.hit });
+  for (let i = 0; i < 8; i++) eq((await handler(provision("tok-r1"))).status, 200);
+  eq(shared.rows.filter((r) => r.bucket === "provision-ip").length, 1);
+  // refused before any count: unconfirmed, an invited email under another login, a throwaway domain
+  const s2 = sharedRate();
+  const f2 = fake({ rateHit: s2.hit });
+  await f2.handler(provision("tok-unconf")); await f2.handler(provision("tok-invited-other-login"));
+  eq(s2.rows.length, 0);
+});
+
+Deno.test("M2: the shared count cannot be reached: the function's own count per address holds, and past it the credit is held", async () => {
+  const list = Array.from({ length: PROVISION.ip.max + 1 }, (_, i) => person("m" + i, `owner${i}@mem${i}.test`));
+  const { handler } = fakeWith(list, { rateHit: async () => { throw new Error("relation does not exist"); } });
+  for (let i = 0; i < PROVISION.ip.max; i++) eq((await read(await handler(provision("tok-m" + i)))).body.credit, 10000);
+  const r = await read(await handler(provision("tok-m" + PROVISION.ip.max)));
+  eq([r.body.created, r.body.credit, r.body.credit_held], [true, 0, true]);
 });

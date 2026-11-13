@@ -1,3 +1,7 @@
+// signup v14 (13-Nov-2026, security review M2): the form's checks (throwaway email domains, counts per address) are
+// made again where the firm is made, on the login's confirmed email, whichever way the login was made; the starting
+// credit goes on the firm only when they pass (a firm past the day's count is made with a zero balance and the note
+// "starting credit held", for the administrator to look at).
 // signup v13 (26-Oct-2026): v12 + the app's PKCE challenge passed to Supabase's sign-up (security review M1); the bot-check
 // token (Turnstile) passed to Auth's sign-up / recover; limits shared by every running copy (migration 112); throwaway
 // email domains get the neutral answer and nothing is sent.
@@ -103,7 +107,8 @@ export interface Deps {
   sleep(ms: number): Promise<void>;
   now(): number;
   random(): number;
-  limits: { ip: RateLimiter; email: RateLimiter; link: RateLimiter; provision: RateLimiter };
+  // newFirm (M2): firms made per address per day, this copy's own count, used when the shared count cannot be reached
+  limits: { ip: RateLimiter; email: RateLimiter; link: RateLimiter; provision: RateLimiter; newFirm?: RateLimiter };
   // 26-Oct-2026: CAPTCHA_REQUIRED=1 (Supabase Auth's bot protection on): a form without a bot-check token is refused here
   captchaRequired?: boolean;
   // the counts shared by every running copy (public.auth_rate_hits, migration 112): true = allowed (and counted). The key
@@ -159,7 +164,18 @@ export async function startCredit(db: Db): Promise<number> {
   return SIGNUP_CREDIT;
 }
 
-export async function provisionFirm(db: Db, u: AuthUser, now: number): Promise<{ status: number; body: Record<string, unknown> }> {
+// 13-Nov-2026 (M2): what the checks say of a login about to get a firm. "refuse": no firm; "hold": the firm, with no
+// starting credit; "ok": the firm and the credit. Asked once, only when a firm is about to be made
+export type Verdict = "ok" | "hold" | "refuse";
+export const NOT_ALLOWED = "This email address cannot be used to start a firm on FinCom. Sign up with your work email, or write to support.";
+// firms made in a day: from one address, and on one email domain of its own (the shared table, migration 112)
+export const PROVISION = { ip: { max: 5, windowS: 86400 }, domain: { max: 5, windowS: 86400 } };
+// mail services open to everyone: one domain, a great many unrelated people; never counted as one
+export const PUBLIC_MAIL = ["gmail.com", "googlemail.com", "outlook.com", "outlook.in", "hotmail.com", "live.com", "live.in", "msn.com", "yahoo.com", "yahoo.co.in",
+  "yahoo.in", "ymail.com", "rediffmail.com", "icloud.com", "me.com", "aol.com", "proton.me", "protonmail.com", "zoho.com", "zohomail.in", "zohomail.com"];
+export const emailDomain = (email: string) => email.slice(email.lastIndexOf("@") + 1).toLowerCase();
+
+export async function provisionFirm(db: Db, u: AuthUser, now: number, check?: (u: AuthUser) => Promise<Verdict>): Promise<{ status: number; body: Record<string, unknown> }> {
   if (!u.confirmed || !u.email) return { status: 403, body: { ok: false, reason: "not_confirmed", error: "Confirm your email first: open the link we sent you, then sign in." } };
   const mine = await db.memberOf(u.id);
   if (mine) return { status: 200, body: { ok: true, created: false, firm_id: mine } };
@@ -171,9 +187,13 @@ export async function provisionFirm(db: Db, u: AuthUser, now: number): Promise<{
   // a sign-up firm that was made once and later closed is not made again
   if (u.signupFirm && (u.signupFirm !== id || !existing)) return { status: 403, body: { ok: false, reason: "closed", error: "This account's firm was closed. Ask the administrator." } };
   let created = false;
-  const credit = existing ? null : await startCredit(db);
+  // the checks, before anything is made (M2): a refused login gets nothing; a held one gets its firm without the credit
+  const verdict: Verdict = existing || !check ? "ok" : await check(u);
+  if (verdict === "refuse") return { status: 403, body: { ok: false, reason: "not_allowed", error: NOT_ALLOWED } };
+  const held = verdict === "hold";
+  const credit = existing ? null : held ? 0 : await startCredit(db);
   if (!existing) {
-    created = await db.insertFirm({ id, name: firmNameFor(u), balance: credit!, note: "Signed up (" + (u.provider || "email") + ", email confirmed)" });
+    created = await db.insertFirm({ id, name: firmNameFor(u), balance: credit!, note: "Signed up (" + (u.provider || "email") + ", email confirmed)" + (held ? "; starting credit held" : "") });
     if (!created) existing = await db.firm(id);        // made by a call running at the same time
   }
   await db.markUser(u, id);
@@ -199,10 +219,23 @@ export async function provisionFirm(db: Db, u: AuthUser, now: number): Promise<{
       return { status: 200, body: { ok: true, created: false, firm_id: other } };
     }
   }
-  return { status: 200, body: created ? { ok: true, created, firm_id: id, credit } : { ok: true, created, firm_id: id } };
+  return { status: 200, body: created ? { ok: true, created, firm_id: id, credit, ...(held ? { credit_held: true } : {}) } : { ok: true, created, firm_id: id } };
 }
 
 export function makeHandler(d: Deps) {
+  const newFirm = d.limits.newFirm || new RateLimiter(PROVISION.ip.max, PROVISION.ip.windowS * 1000, d.now);
+  // M2: the checks on a login about to get a firm. A throwaway domain: refused. Past the day's count for the address,
+  // or for an email domain of its own: the credit is held. The shared count first; this copy's own when that fails
+  const provisionCheck = (ip: string) => async (u: AuthUser): Promise<Verdict> => {
+    if (disposable(u.email, d.extraDisposable || [])) return "refuse";
+    const dom = emailDomain(u.email);
+    try {
+      if (!d.rateHit) throw new Error("no shared count");
+      if (!(await d.rateHit("provision-ip", await sha256hex("provision-ip:" + ip), PROVISION.ip.max, PROVISION.ip.windowS))) return "hold";
+      if (!PUBLIC_MAIL.includes(dom) && !(await d.rateHit("provision-domain", await sha256hex("provision-domain:" + dom), PROVISION.domain.max, PROVISION.domain.windowS))) return "hold";
+      return "ok";
+    } catch { return newFirm.hit(ip) ? "ok" : "hold"; }
+  };
   return async (req: Request): Promise<Response> => {
     if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
     if (req.method !== "POST") return json(405, { ok: false, error: "POST only" });
@@ -231,7 +264,7 @@ export function makeHandler(d: Deps) {
       try { u = jwt ? await d.authUser(jwt) : null; } catch { u = null; }
       if (!u) return json(401, { ok: false, reason: "signed_out", error: "Sign in first." });
       try {
-        const r = await provisionFirm(d.db, u, d.now());
+        const r = await provisionFirm(d.db, u, d.now(), provisionCheck(clientIp(req)));
         return json(r.status, r.body);
       } catch {
         return json(500, { ok: false, reason: "retry", error: "Your firm could not be set up just now. Sign in again in a minute." });
