@@ -192,7 +192,10 @@ html.lt-resizing, html.lt-resizing * { cursor: col-resize !important; user-selec
 @media (min-width: 901px) {
   header.top .headrow > .tbar, header.top .headrow > .tbar[data-crumb="client-nav"] { flex: 0 0 auto; min-width: clamp(200px, 22%, 360px); max-width: 50%; }
   header.top .headrow > .tbar .tbar-title h2, #cobar .tbar-title .tbar-h h2 { flex: 0 0 auto; max-width: none; overflow: visible; text-overflow: clip; }
-  header.top .headrow > .tbar .tbar-title > .note, #cobar .tbar-title .crumbs { width: 0; min-width: 100%; }
+  /* ux-wins (13-Nov-2026; the owner's 14-Oct report back: "Test… › Purcha", "Firm › Test Firm of Accou…" beside half an
+     empty header): the line over the title is as wide as its own words, up to the block's half of the row; it was cut
+     to the title's width. In a client's line only the client's name is cut (.crumb-co, below) */
+  header.top .headrow > .tbar .tbar-title > .note, #cobar .tbar-title .crumbs { width: auto; min-width: 0; max-width: 100%; }
 }
 
 #cobar .tbar-title .crumbs > * { flex: 0 0 auto; }
