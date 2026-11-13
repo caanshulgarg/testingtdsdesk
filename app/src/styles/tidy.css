@@ -366,6 +366,6 @@ html.lt-resizing, html.lt-resizing * { cursor: col-resize !important; user-selec
      over and under it), a return's name on Compliance, a ledger's Change */
 :root[data-theme="dark"] .bell-n { color: #0B1220; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .bell-n { color: #0B1220; } }
-#cobar .tbar-title .crumbs { padding-block: 6px; margin-block: -6px; }
+#cobar .tbar-title .crumbs { padding-block: 6px; margin-block: -6px; min-height: 32px; }   /* (20 px of line as before: the header keeps its height) */
 #cobar .tbar-title .crumbs .linkbtn { padding-block: 6px; margin-block: -6px; }
 #app [data-due-open], #app [data-led-change] { display: inline-flex; align-items: center; min-height: 32px; }
