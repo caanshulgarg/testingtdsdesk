@@ -35,6 +35,31 @@ try:
 except ImportError:
     pass
 
+# 4b. a Tally-style register as a client keeps it (next-fix-sheet-import, 13-Nov-2026; every name and amount made up): a
+# blank first row, the header on row 2, real dates, " -   " where a tax is nil (Excel's accounting dash, as text), a Total
+# row, the client's own voucher type ("Sales UP"), and a column of its sales (or purchase) ledgers
+try:
+    import openpyxl, datetime
+    D = lambda d: datetime.datetime(2026, 10, d)
+    DASH = " -   "
+    def shape(name, party, ledger, rows):
+        wb = openpyxl.Workbook(); ws = wb.active; ws.title = "Sheet1"
+        ws.append([])
+        ws.append(["Date", party, "Voucher Type", "Vch No.", ledger, "HSN", "Taxable Amount", "IGST", "CGST", "SGST", "Invoice Amount"])
+        for r in rows: ws.append(r)
+        ws.append(["Total", None, None, None, None, None] + [sum(x[i] for x in rows if isinstance(x[i], (int, float))) for i in range(6, 11)])
+        wb.save(os.path.join(HERE, name))
+    shape("sales_owner_shape.xlsx", "Customer Name", "Sales Ledger", [
+        [D(6), "Asha Textiles Pvt Ltd", "Sales UP", "UP/26-27/0001", "Consulting Income (A)", 998311, 1000, 180, DASH, DASH, 1180],
+        [D(7), "Bharat Tools LLP", "Sales UP", "UP/26-27/0002", "Consulting Income (A)", 998311, 2000, DASH, 180, 180, 2360],
+        [D(8), "Bharat Tools LLP", "Sales UP", "UP/26-27/0003", "Consulting Income (B)", 998312, 500, DASH, DASH, DASH, 500],
+        [D(9), "Chitra Foods", "Sales UP", "UP/26-27/0004", "Training Income New", 1905, 3000, DASH, 270, 270, 3540]])
+    shape("purchase_owner_shape.xlsx", "Supplier Name", "Purchase Ledger", [
+        [D(6), "Dev Packaging", "Purchase UP", "DP/501", "Purchase of Goods (UP)", 4819, 4000, DASH, 360, 360, 4720],
+        [D(7), "Esha Traders", "Purchase UP", "ET/77", "Purchase of Goods (UP)", 4819, 1000, 180, DASH, DASH, 1180]])
+except ImportError:
+    pass
+
 # 5. an Amazon-style tax report (sales): two lines of one invoice, a refund
 AMZ = [["Seller Gstin", "Invoice Number", "Invoice Date", "Transaction Type", "Order Id", "Ship To State", "Tax Exclusive Gross", "Cgst Tax", "Sgst Tax", "Igst Tax", "Invoice Amount", "Hsn/sac", "Buyer Name"],
        ["09AANFG3202D1ZR", "AMZ-UP-1", "2026-07-03", "Shipment", "403-1", "UTTAR PRADESH", "1000", "90", "90", "0", "1180", "8471", "Asha Rao"],

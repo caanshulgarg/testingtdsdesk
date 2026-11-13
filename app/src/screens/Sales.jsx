@@ -397,7 +397,9 @@ export function SalesBar() {
     const confirmable = s.list.filter((v) => v.status === "review" && v.customerLedger && !(v.problems || []).length && !(v.ledgerIssues || []).length).length;
     // upload-pages: the counts of the states are the state bar's; the Post button counts what it posts
     left = null;
+    const why = !tc.ready && typeof salesWhy === "function" && salesWhy();
     right = <>
+      {why && <span className="note" data-post-why="">{why.text.split(":")[0]} <button className="linkbtn" onClick={why.act}>{why.btn}</button></span>}
       {confirmable > 0 && <button className="btn" onClick={() => salesAct("salesConfirmAll")}>Confirm all suggestions ({confirmable})</button>}
       {canPostTally(CO()) && postThroughWords(CO()) && <span className="note" data-post-through="">{postThroughWords(CO())}</span>}
       {canPostTally(CO()) ? <button className="btn primary" disabled={!tc.ready} onClick={() => salesAct("salesPost")}>Post to Tally ({tc.ready})</button>

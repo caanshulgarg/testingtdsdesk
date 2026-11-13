@@ -103,5 +103,23 @@ ok(e2("KIT/CN/4").note === "credit" && e2("KIT/CN/4").total === -1180 && e2("KIT
 ok(e2("MM/55").itc && e2("MM/55").itc.available === false && /place of supply/.test(e2("MM/55").itc.why), "ITC not available (rsn P) is said on the document");
 ok(e2("7654321").igst === 18000 && e2("7654321").taxable === 100000, "impg: the import of goods (bill of entry 7654321)");
 
+// ---- next-fix-sheet-import (13-Nov-2026): a client's own Tally-style register (made up): a blank first row, " -   " for
+// a nil tax, a Total row, a Sales Ledger column and the client's voucher type. A mapping that read the ledger column as
+// the party's ledger and Voucher Type as the document type (the AI's answer, and layouts saved so) is put right by rules
+if (typeof h.ctx.exactLedger !== "function") h.ctx.exactLedger = () => null;
+const gs = [[], ["Date", "Customer Name", "Voucher Type", "Vch No.", "Sales Ledger", "HSN", "Taxable Amount", "IGST", "CGST", "SGST", "Invoice Amount"],
+  ["2026-10-06", "A Co", "Sales UP", "U/1", "Consulting Income (A)", 998311, 1000, 180, " -   ", " -   ", 1180], ["Total", "", "", "", "", "", 1000, 180, 0, 0, 1180]];
+const hs = F.head(gs);
+const old = {date: "date", no: "vchno", party: "customername", ledger: "salesledger", doctype: "vouchertype", taxable: "taxableamount", igst: "igst", cgst: "cgst", sgst: "sgst", total: "invoiceamount"};
+const fx = F.fix(old, gs[hs], gs.slice(hs + 1));
+ok(hs === 1 && fx && fx.sledger === "salesledger" && fx.vchtype === "vouchertype" && !fx.ledger && !fx.doctype && old.ledger === "salesledger", "the header on row 2; the Sales Ledger column is the sales ledger, Voucher Type Tally's voucher type (" + JSON.stringify(fx) + ")");
+const ds = F.apply({map: fx || old, transforms: {date: "ymd", groupByNo: false}}, gs, hs, co, "sales");
+ok(ds.length === 1 && ds[0].sledger === "Consulting Income (A)" && ds[0].vch === "Sales UP" && ds[0].ledger === "" && ds[0].note === "" && ds[0].igst === 180 && ds[0].cgst === 0 && ds[0].total === 1180 && ds[0].check.ok && ds.skipped.length === 1,
+  "the document: its sales ledger and voucher type, no party's ledger; the dash cells nil; the Total row left out (" + JSON.stringify(ds.map((d) => [d.sledger, d.vch, d.ledger, d.cgst, d.total])) + ")");
+ok(F.fix({no: "no", ledger: "partyledger", doctype: "doctype"}, ["No", "Party Ledger", "Doc Type"], [["1", "X Traders", "Invoice"]]) === null && F.fix(fx || {}, gs[hs], gs.slice(hs + 1)) === null, "a party's ledger column and a document type are left as they are; a corrected mapping is not corrected again");
+const cnv = F.apply({map: {no: "no", vchtype: "vchtype", taxable: "amt", total: "amt"}, transforms: {}}, [["No", "Vch Type", "Amt"], ["C1", "Credit Note", 100]], 0, co, "sales");
+ok(cnv[0].note === "credit" && cnv[0].vch === "Credit Note" && cnv[0].total === -100, "a credit note is still known by the voucher type column");
+ok(F.fieldsFor("sales").some((f) => f[0] === "sledger" && f[1] === "Sales ledger") && F.fieldsFor("purchase").some((f) => f[0] === "sledger" && /Purchase/.test(f[1])) && F.fieldsFor("sales").some((f) => f[0] === "vchtype"), "the fields offered: the sales (or purchase) ledger and the voucher type, each its own");
+
 console.log(fails ? "\nFAILED: " + fails : "\nall passed");
 process.exit(fails ? 1 : 0);

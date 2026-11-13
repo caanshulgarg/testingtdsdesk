@@ -6,7 +6,7 @@ import { relabelText } from "../_shared/assistant-labels.js";
 import { costUsd, plan, taskOf } from "./models.ts";
 import { applyCitations, nameOnPage, NO_CASE, quoteOnPage, verify } from "./citations.ts";
 import { annexureCheck, checklistFor, kindOf } from "./notices.ts";
-import { PARTY_FIELDS, parseSheetMap, sheetPrompt } from "./sheetmap.ts";
+import { PARTY_FIELDS, parseSheetMap, SHEET_FIELDS, SHEET_SYSTEM, sheetPrompt } from "./sheetmap.ts";
 
 function assert(c: unknown, w: string): asserts c { if (!c) throw new Error(w); }
 const eq = (a: unknown, b: unknown, w: string) => assert(JSON.stringify(a) === JSON.stringify(b), w + ": got " + JSON.stringify(a) + ", expected " + JSON.stringify(b));
@@ -168,6 +168,15 @@ Deno.test("a register's format: the prompt carries the header and 10 rows only; 
   eq(Object.keys(r.map).sort(), ["cgst", "date", "gstin", "igst", "no", "party", "sgst", "taxable", "total"], "unknown fields, unknown headers and a second field on one column dropped");
   eq([r.transforms.date, r.transforms.groupByNo, r.why.date, r.why.hsn], ["dmy", true, "from 'Inv Dt'", undefined], "how to read, and why only for what is mapped");
   eq(parseSheetMap("no json at all", head).map, {}, "an answer that is not JSON maps nothing");
+});
+
+// next-fix-sheet-import (13-Nov-2026): a "Sales Ledger" column was answered as "ledger" and taken for the customer's
+Deno.test("a register's format: the sales (or purchase) ledger and the voucher type are fields of their own, and the prompt says which is which", () => {
+  const head = ["Date", "Customer Name", "Voucher Type", "Vch No.", "Sales Ledger", "Invoice Amount"];
+  assert(SHEET_FIELDS.includes("sledger") && SHEET_FIELDS.includes("vchtype") && SHEET_FIELDS.includes("ledger") && SHEET_FIELDS.includes("doctype"), "the fields offered");
+  assert(/sledger \(the sales, income, purchase or expense ledger/.test(SHEET_SYSTEM) && /never an income, expense or tax ledger/.test(SHEET_SYSTEM) && /vchtype \(/.test(SHEET_SYSTEM) && /map it to vchtype, not doctype/.test(SHEET_SYSTEM), "the prompt tells the party's ledger from the sales ledger, the voucher type from the document type");
+  const r = parseSheetMap('{"map": {"date": "Date", "party": "Customer Name", "vchtype": "Voucher Type", "no": "Vch No.", "sledger": "Sales Ledger", "total": "Invoice Amount"}}', head);
+  eq(Object.keys(r.map).sort(), ["date", "no", "party", "sledger", "total", "vchtype"], "an answer with them is kept");
 });
 
 Deno.test("a party's statement: its own fields (debit, credit, balance), never an invoice's", () => {

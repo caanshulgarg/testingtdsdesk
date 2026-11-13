@@ -50,6 +50,41 @@ function invoiceHtml(x, co, cfg){
       '<div class="cell w50" style="text-align:right"><div>For <b>' + e(co.name) + '</b></div><div class="sign"></div><div>' + e(cfg.signatory || "Authorised Signatory") + "</div></div></div>" +
     '<div class="cell" style="border-top:1px solid #333;text-align:center" class="muted">This is a computer-generated invoice.</div></div></body></html>';
 }
+// an invoice read again (was in src/js/25: used on this screen only)
+async function rereadSales(v, force){
+  const s = SL(); if (!s) return;
+  const file = S.files["sv:" + v.id];
+  if (!file){ toast("The file for this invoice is not on this computer any more. Upload it again."); return; }
+  if (force === "claude" && !claudeReady()){ toast("Claude is not available on this plan or in this view."); return; }
+  if (force === "google" && !googleReady()){ toast("Google OCR is not set up."); return; }
+  s.busy = force === "claude" ? "Reading again with Claude\u2026" : force === "google" ? "Reading again with Google OCR\u2026" : "Reading again\u2026"; render();
+  try {
+    const r = await readSalesFile(file, s.cid, m => { s.busy = m + "\u2026"; render(); }, null, force);
+    Object.assign(v.x, r.x || {});
+    v.method = r.method; v.problems = []; mapInvoice(v); saveSales();
+    toast("Read again: " + (r.method || "") + ". Check the invoice.");
+  } catch (e){ toast("Could not read it that way: " + errCopy(e && e.code)); }
+  s.busy = ""; render();
+}
+// Why nothing can be posted (next-fix-sheet-import, 13-Nov-2026: "Post to Tally" was disabled, or did nothing, with no
+// reason said): what the invoices under To review wait for, each invoice counted once by the first thing it needs, with
+// where that is set. {text, btn, act} for the bar (app/src/screens/Sales.jsx), or null when nothing waits
+function salesWhy(){
+  const s = SL(), n = {};
+  ((s && s.list) || []).filter(v => v.status === "review").forEach(v => {
+    const p = (v.problems || [])[0], L = v.ledgerIssues || [], has = re => L.some(x => re.test(x));
+    const k = p ? "fix" : has(/^sales ledger/) ? "sales" : has(/output ledger/) ? "tax" : has(/round-off/) ? "round" : has(/^customer ledger/) ? "cust" : L.length ? "tally" : "ok";
+    n[k] = (n[k] || 0) + 1;
+  });
+  const W = {sales: "the sales ledger", tax: "the output GST ledgers", round: "the round-off ledger", cust: "a customer ledger", tally: "a ledger that is in Tally", fix: "a correction", ok: "only your Confirm"};
+  const parts = Object.keys(W).filter(k => n[k]).map(k => n[k] + " invoice" + (n[k] === 1 ? " needs " : "s need ") + W[k]);
+  if (!parts.length) return null;
+  const set = n.sales || n.tax || n.round;
+  return {text: parts.join("; ") + (set ? ": set it here" : ": see To review"), btn: set ? "Set it here" : "Open To review",
+    act: () => { if (set) s.showSettings = true; else s.filter = "review"; render(); }};
+}
+if (typeof rereadSales !== "undefined") globalThis.rereadSales = rereadSales;
+if (typeof salesWhy !== "undefined") globalThis.salesWhy = salesWhy;
 if (typeof invoiceHtml !== "undefined") globalThis.invoiceHtml = invoiceHtml;
 // (each name only when declared: a test's harness loads a file's names one by one, tests/harness.js)
 /* @react-lazy: end */
