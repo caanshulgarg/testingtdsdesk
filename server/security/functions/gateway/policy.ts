@@ -72,3 +72,25 @@ export function unitsFor(model: string, usage: any): number {
   const u = Math.ceil(costUsd(model, usage) / UNIT_USD - 1e-9);
   return Math.min(MAX_UNITS, Math.max(m.reserve, u));
 }
+
+// 13-Nov-2026 (security review, L2): what Google Vision is sent. Each page is its own bytes (base64; never an address
+// for Google to fetch), read as text (DOCUMENT_TEXT_DETECTION, or TEXT_DETECTION when asked), with language hints.
+// Anything else in a request is dropped; a page without its bytes, or asked only for another kind of reading, is
+// refused (null). At most MAX_PAGES pages.
+export const MAX_PAGES = 16;
+export const MAX_PAGE_B64 = 14 * 1024 * 1024;
+const TEXT_KINDS = ["DOCUMENT_TEXT_DETECTION", "TEXT_DETECTION"];
+export function buildVision(requests: unknown): unknown[] | null {
+  if (!Array.isArray(requests) || !requests.length || requests.length > MAX_PAGES) return null;
+  const out: unknown[] = [];
+  for (const r of requests as any[]) {
+    const img = r && r.image;
+    if (!img || typeof img.content !== "string" || !img.content || img.content.length > MAX_PAGE_B64 || !/^[A-Za-z0-9+/_-]+={0,2}$/.test(img.content) || img.source !== undefined) return null;
+    const asked = Array.isArray(r.features) ? (r.features as any[]).map((f) => String((f && f.type) || "")) : [];
+    const kinds = asked.length ? TEXT_KINDS.filter((k) => asked.includes(k)) : [TEXT_KINDS[0]];
+    if (!kinds.length) return null;
+    const hints = Array.isArray(r.imageContext?.languageHints) ? (r.imageContext.languageHints as unknown[]).filter((h) => typeof h === "string" && /^[A-Za-z-]{2,12}$/.test(h)).slice(0, 5) : [];
+    out.push({ image: { content: img.content }, features: kinds.map((type) => ({ type })), ...(hints.length ? { imageContext: { languageHints: hints } } : {}) });
+  }
+  return out;
+}

@@ -4,7 +4,7 @@
 // input allowed; the caller's qty is ignored; the charge is the model's reserve, then the real usage times the model's
 // price; the two-step check stays.
 import { handler } from "./handler.ts";
-import { buildClaude, costUsd, MAX_IMAGES, MAX_OUT, MAX_TEXT, MODELS, UNIT_USD, unitsFor } from "./policy.ts";
+import { buildClaude, buildVision, costUsd, MAX_IMAGES, MAX_OUT, MAX_TEXT, MODELS, UNIT_USD, unitsFor } from "./policy.ts";
 
 function assert(c: unknown, w: string): asserts c { if (!c) throw new Error(w); }
 const eq = (a: unknown, b: unknown, w: string) => assert(JSON.stringify(a) === JSON.stringify(b), w + ": got " + JSON.stringify(a) + ", expected " + JSON.stringify(b));
@@ -233,4 +233,46 @@ Deno.test("AI control centre: a feature switched off by FinCom is refused in pla
   const c = stand({ ai: () => ({ ok: true, reason: "on", model: "claude-opus-5" }) });
   await call(c.h, claude(read("claude-sonnet-5"))); await call(c.h, claude(read("claude-sonnet-5")));
   eq([c.sent[0].body.model, c.sent[1].body.model, c.asked.length], ["claude-opus-5", "claude-opus-5", 1], "console model used, asked once");
+});
+
+// ---------- 13-Nov-2026 (security review, L2) ----------
+Deno.test("L2: a look-only member spends nothing of the firm's credit: bill reading and Vision are the owner's and staff's", async () => {
+  const PAGE = { image: { content: "QUJD" }, features: [{ type: "DOCUMENT_TEXT_DETECTION" }] };
+  for (const role of ["readonly", "viewer", "", undefined]) {
+    const s = stand({ member: { firm_id: FIRM, role, active: true } });
+    for (const body of [claude(read()), { what: "vision", ref: "ocr", payload: { requests: [PAGE] } }]) {
+      const r = await call(s.h, body), j = await r.json();
+      eq([r.status, j.ok, j.reason], [403, false, "role"], String(role) + " " + (body as any).what);
+    }
+    eq([s.charges.length, s.sent.length, s.asked.length], [0, 0, 0], "nothing charged, sent or asked of the switches for " + role);
+  }
+  for (const role of ["owner", "staff"]) {
+    const s = stand({ member: { firm_id: FIRM, role, active: true } });
+    eq((await call(s.h, claude(read()))).status, 200, role + " reads a bill");
+    eq(s.charges.length, 1, role + " charged once");
+  }
+});
+
+Deno.test("L2: Vision is sent only the page's own bytes, text reading and language hints; anything else in the request is refused or dropped", async () => {
+  const s = stand();
+  const page = { image: { content: "QUJD" }, features: [{ type: "DOCUMENT_TEXT_DETECTION", maxResults: 50, model: "x" }, { type: "FACE_DETECTION" }], imageContext: { languageHints: ["en", "hi"], webDetectionParams: { includeGeoResults: true } }, extra: 1 };
+  const r = await call(s.h, { what: "vision", ref: "ocr", payload: { requests: [page], parent: "projects/x" } });
+  eq(r.status, 200, "answered");
+  eq(s.sent[0].body, { requests: [{ image: { content: "QUJD" }, features: [{ type: "DOCUMENT_TEXT_DETECTION" }], imageContext: { languageHints: ["en", "hi"] } }] }, "what Google is sent");
+  const bad: [string, any][] = [
+    ["a page named by an address", { image: { source: { imageUri: "https://elsewhere.test/a.png" } }, features: [{ type: "DOCUMENT_TEXT_DETECTION" }] }],
+    ["a page in a bucket", { image: { source: { gcsImageUri: "gs://b/a.png" } }, features: [{ type: "DOCUMENT_TEXT_DETECTION" }] }],
+    ["bytes and an address together", { image: { content: "QUJD", source: { imageUri: "https://elsewhere.test/a.png" } }, features: [{ type: "DOCUMENT_TEXT_DETECTION" }] }],
+    ["no page", { features: [{ type: "DOCUMENT_TEXT_DETECTION" }] }],
+    ["not base64", { image: { content: "<svg onload=x>" }, features: [{ type: "DOCUMENT_TEXT_DETECTION" }] }],
+    ["only another kind of reading", { image: { content: "QUJD" }, features: [{ type: "WEB_DETECTION" }] }],
+  ];
+  for (const [what, rq] of bad) {
+    const t = stand();
+    const x = await call(t.h, { what: "vision", ref: "ocr", payload: { requests: [{ image: { content: "QUJD" }, features: [{ type: "TEXT_DETECTION" }] }, rq] } });
+    eq([x.status, t.charges.length, t.sent.length], [400, 0, 0], what + ": refused before any charge or call");
+  }
+  eq(buildVision([{ image: { content: "QUJD" }, features: [{ type: "TEXT_DETECTION" }] }]), [{ image: { content: "QUJD" }, features: [{ type: "TEXT_DETECTION" }] }], "plain text reading is kept");
+  eq(buildVision([{ image: { content: "QUJD" } }]), [{ image: { content: "QUJD" }, features: [{ type: "DOCUMENT_TEXT_DETECTION" }] }], "no feature named: document text");
+  eq(buildVision("x"), null, "not a list"); eq(buildVision(Array(17).fill({ image: { content: "QUJD" } })), null, "more than 16 pages");
 });

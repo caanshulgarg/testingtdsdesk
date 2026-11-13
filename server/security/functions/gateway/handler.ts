@@ -8,10 +8,12 @@
 // with the plain words "AI for <feature> is switched off by FinCom". A model set in the console replaces the caller's.
 // 27-Oct-2026 (security review F6): the server decides the model, max_tokens and the input allowed, and charges by the
 // real usage the API returns (policy.ts); Vision is charged one unit per page sent. The caller's qty is not used.
+// 13-Nov-2026 (security review, L2): only the firm's owner and staff spend its credit; Vision is sent each page's own
+// bytes and text reading only (policy.ts buildVision).
 // The Supabase client is passed in (index.ts), so handler_test.ts runs it with a stub.
 import { corsFor } from "./cors.ts";
 import { classify, declined, errorText, replyStatus } from "./classify.ts";
-import { buildClaude, MAX_BODY, MODELS, unitsFor } from "./policy.ts";
+import { buildClaude, buildVision, MAX_BODY, MODELS, unitsFor } from "./policy.ts";
 import { firmGate, viaClient } from "../_shared/firmgate.ts";   // the console's switches (migration 118)
 import { aiPolicy, refusal } from "../_shared/ai_policy.ts";
 
@@ -72,6 +74,9 @@ export function handler(deps: Deps) {
     const { data: member } = await admin.from("members").select("firm_id, role, active").eq("user_id", user.id).maybeSingle();
     if (!member || !member.active) return fail(403, "other", "This account is not part of a firm.");
     log.firm = member.firm_id;
+    // 13-Nov-2026 (security review, L2): the firm's credit is spent by its owner and staff only; a look-only member reads
+    // what is there and asks for nothing that is charged
+    if (!["owner", "staff"].includes(String(member.role))) return fail(403, "other", "Look-only access: ask the firm's owner or staff to read bills.", { reason: "role" });
     // console phase 1b: a paused firm is read-only, so nothing is read or charged for it (the service role skips can_write())
     const gate = await firmGate(viaClient(admin), member.firm_id);
     if (gate) return fail(gate.status, "other", gate.error, { reason: gate.reason });
@@ -109,8 +114,9 @@ export function handler(deps: Deps) {
       payload = built.payload;
       qty = MODELS[payload.model].reserve;
     } else {
-      const rq = (body.payload || {}).requests;
-      if (!Array.isArray(rq) || !rq.length || rq.length > 16) return fail(400, "other", "Bad request");
+      // L2: each page as its own bytes, read as text; nothing else of the request goes to Google (policy.ts)
+      const rq = buildVision((body.payload || {}).requests);
+      if (!rq) return fail(400, "other", "Bad request");
       payload = { requests: rq };
       qty = rq.length;
     }
