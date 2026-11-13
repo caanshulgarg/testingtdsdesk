@@ -433,6 +433,9 @@ run_fixed_assets_ui.py                420  TDSDESK_SITE=../app/dist-test
 # questions, To review and posting (Tally's queue; Zoho Books faked); GSTR-1 and GSTR-2B JSON by rules
 run_sheet_engine.js                   120
 run_sheet_import.py                   300  TDSDESK_SITE=../app/dist-test
+# next-fix-sheet-import (13-Nov-2026): a client's own Tally-style sales and purchase sheets (a ledger column, the client's
+# voucher type, ledgers in sub-groups), from the first upload to the posting; why Post is disabled, said
+run_sheet_owner_shape.py              300  TDSDESK_SITE=../app/dist-test
 # Reconciliations → Vendors / Customers: a party's statement in any format against its ledger in the books
 run_party_recon.js                    120
 run_party_recon_ui.py                 300  TDSDESK_SITE=../app/dist-test

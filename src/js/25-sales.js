@@ -93,7 +93,15 @@ window.addEventListener("pagehide", () => { if (salesSaveTimer && S.sales){ clea
 function inv(id){ const s = SL(); return s && s.list.find(v => v.id === id); }
 
 /* ---------- ledgers (exact Tally names only) ---------- */
-function ledgersIn(re){ const b = B(); return b ? (b.ledgers.list || []).filter(l => re.test(l.group || "")) : []; }
+// (by the whole group chain: a client keeps its sales ledgers under "Sales Local" under Sales Accounts, its GST under "GST Output")
+// (worked out once for a ledger list: it is asked for every line of every invoice)
+let ledInKept = {};
+function ledgersIn(re){
+  const b = B(); if (!b) return [];
+  const L = b.ledgers.list || [], G = S.books && S.books.groups, k = Ledgers.ver + "|" + re;
+  if (ledInKept.L !== L || ledInKept.G !== G) ledInKept = {L, G};
+  return ledInKept[k] || (ledInKept[k] = L.filter(l => re.test(l.group || "") || Ledgers.chain(b.cid, l.name).some(g => re.test(g))));
+}
 function rateTag(rate){ return String(rate).replace(/\.0+$/, ""); }
 // sales ledger for a GST rate, local or inter-state
 function salesLedgerFor(rate, inter){
@@ -248,7 +256,7 @@ function learnCustomer(v){
 /* ---------- Tally XML ---------- */
 function salesVoucherXml(v, co){
   const x = v.x, cfg = SL().cfg, cn = x.noteKind === "credit";
-  const vt = xesc(cn ? (cfg.creditNoteType || "Credit Note") : x.noteKind === "debit" ? (cfg.debitNoteType || "Debit Note") : (cfg.voucherType || "Sales")), d = toTallyDate(x.date);
+  const vt = xesc(x.vchType || (cn ? (cfg.creditNoteType || "Credit Note") : x.noteKind === "debit" ? (cfg.debitNoteType || "Debit Note") : (cfg.voucherType || "Sales"))), d = toTallyDate(x.date);
   const pos = x.pos || stateOfGstin(x.customerGstin) || stateOfGstin(co.gstin);
   const amt2 = n => r2(n).toFixed(2);
   let s = '<VOUCHER VCHTYPE="' + vt + '" ACTION="Create" OBJVIEW="Accounting Voucher View">\n<DATE>' + d + "</DATE>\n<EFFECTIVEDATE>" + d + "</EFFECTIVEDATE>\n" +
@@ -375,18 +383,4 @@ function newInvoice(x, source, extra){
   return Object.assign({id: uid("sv"), source, status: "review", x: Object.assign({number: "", date: "", customerName: "", customerGstin: "", address: "", pos: "", taxable: 0, cgst: 0, sgst: 0, igst: 0, cess: 0, total: 0, items: []}, x),
     customerLedger: "", userLedger: false, createdAt: new Date().toISOString()}, extra || {});
 }
-async function rereadSales(v, force){
-  const s = SL(); if (!s) return;
-  const file = S.files["sv:" + v.id];
-  if (!file){ toast("The file for this invoice is not on this computer any more. Upload it again."); return; }
-  if (force === "claude" && !claudeReady()){ toast("Claude is not available on this plan or in this view."); return; }
-  if (force === "google" && !googleReady()){ toast("Google OCR is not set up."); return; }
-  s.busy = force === "claude" ? "Reading again with Claude\u2026" : force === "google" ? "Reading again with Google OCR\u2026" : "Reading again\u2026"; render();
-  try {
-    const r = await readSalesFile(file, s.cid, m => { s.busy = m + "\u2026"; render(); }, null, force);
-    Object.assign(v.x, r.x || {});
-    v.method = r.method; v.problems = []; mapInvoice(v); saveSales();
-    toast("Read again: " + (r.method || "") + ". Check the invoice.");
-  } catch (e){ toast("Could not read it that way: " + errCopy(e && e.code)); }
-  s.busy = ""; render();
-}
+// rereadSales (an invoice read again): src/js/26-sales-invoice.js, with the Sales screen

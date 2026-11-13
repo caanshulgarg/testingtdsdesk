@@ -28,7 +28,7 @@ def ok(c, w):
 
 # each moved part: its name, and the screen that brings it (what is set before render())
 PARTS = {"GST9": "gst", "GST9C": "gst", "gst9PackHtml": "gst", "gst9Excel": "gst", "gst9Where": "gst", "gst9Typed": "gst", "gst9cSet": "gst",
-         "misPackHtml": "mis", "misExcel": "mis", "TDS24Q_FILE": "tds", "payFvuDownload": "tds", "invoiceHtml": "sales", "PostOwner": "post",
+         "misPackHtml": "mis", "misExcel": "mis", "TDS24Q_FILE": "tds", "payFvuDownload": "tds", "invoiceHtml": "sales", "rereadSales": "sales", "salesWhy": "sales", "PostOwner": "post",
          # next-room-2: Filed vs books' import, Returns filed's taking in of PDFs, AI help's buttons (with the GST screens)
          "gstxImport": "gst", "gstvTake": "gst", "aihAct": "gst"}
 # next-room-2: the parts of GSTX, GSTV, AIH (src/js/56, 38, 50) and TDSEdit (app/src/lib) only their own pages call, put on

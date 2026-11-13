@@ -378,7 +378,7 @@ async function salesCheckTally(list){
   const co = CO(SL().cid);
   if (!tallyVia(co) || !list.length) return 0;
   const dates = list.map(v => v.x.date).filter(Boolean).sort();
-  const j = await tallyCall(co, "/vouchers?company=" + encodeURIComponent(tallyCoName(co)) + "&from=" + isoToTally(addDays(dates[0], -3)) + "&to=" + isoToTally(addDays(dates[dates.length - 1], 3)) + "&types=" + encodeURIComponent([SL().cfg.voucherType || "Sales", "Sales"].join(",")) + Bridge.pinQ());
+  const j = await tallyCall(co, "/vouchers?company=" + encodeURIComponent(tallyCoName(co)) + "&from=" + isoToTally(addDays(dates[0], -3)) + "&to=" + isoToTally(addDays(dates[dates.length - 1], 3)) + "&types=" + encodeURIComponent([...new Set([SL().cfg.voucherType || "Sales", "Sales"].concat(list.map(v => v.x.vchType).filter(Boolean)))].join(",")) + Bridge.pinQ());
   const vs = [].concat(j.vouchers || []).filter(v => !/^yes$/i.test(v.cancelled || ""));
   const by = new Map();
   vs.forEach(x => [normInvNo(x.number), normInvNo(x.reference)].filter(Boolean).forEach(k => { if (!by.has(k)) by.set(k, []); if (!by.get(k).includes(x)) by.get(k).push(x); }));
@@ -408,7 +408,7 @@ async function postSalesToTally(){
   if (!(await ensureTallyCompany(co))) return;
   await syncLedgersFromTally(true);
   let list = s.list.filter(v => v.status === "ready");
-  if (!list.length) return;
+  if (!list.length) return withPart("invoice", "salesWhy", () => toast("No invoice is ready to post" + (salesWhy() ? ": " + salesWhy().text : "") + "."));   // never silent
   s.busy = "Checking Tally for invoices already booked\u2026"; render();
   try {
     await salesCheckTally(list);
@@ -420,7 +420,7 @@ async function postSalesToTally(){
     s.busy = "Posting " + list.length + " invoice" + (list.length > 1 ? "s" : "") + " to Tally\u2026"; render();
     const tn = tallyCoName(co);
     const j = await Bridge.post({company: tn, client: co.id,
-      masters: masters.map(l => ({id: "led:" + l.name, xml: customerMasterXml(l)})),
+      masters: masters.map(l => ({id: "led:" + l.name, xml: (/sundry/i.test(l.group || "sundry") ? customerMasterXml : ledgerMasterXml)(l)})),
       vouchers: list.map(v => ({id: v.id, xml: salesVoucherXml(v, co)}))}, pj => { s.busy = postingLine(pj, tn); refreshBusy(); });
     const by = new Map([].concat(j.results || []).map(r => [r.id, r]));
     const now = new Date().toISOString();
@@ -444,7 +444,7 @@ async function exportSalesXml(){
   if (!list.length){ toast(probs.length ? "Fix these first: " + probs.slice(0, 2).join("; ") : "No invoices are ready."); render(); return; }
   const masters = mastersFor(list);
   const sv = co.tallyName ? "<STATICVARIABLES><SVCURRENTCOMPANY>" + xesc(co.tallyName) + "</SVCURRENTCOMPANY></STATICVARIABLES>" : "";
-  const body = masters.map(l => '<TALLYMESSAGE xmlns:UDF="TallyUDF">\n' + customerMasterXml(l) + "</TALLYMESSAGE>\n").join("") + list.map(v => '<TALLYMESSAGE xmlns:UDF="TallyUDF">\n' + salesVoucherXml(v, co) + "</TALLYMESSAGE>\n").join("");
+  const body = masters.map(l => '<TALLYMESSAGE xmlns:UDF="TallyUDF">\n' + (/sundry/i.test(l.group || "sundry") ? customerMasterXml : ledgerMasterXml)(l) + "</TALLYMESSAGE>\n").join("") + list.map(v => '<TALLYMESSAGE xmlns:UDF="TallyUDF">\n' + salesVoucherXml(v, co) + "</TALLYMESSAGE>\n").join("");
   const xml = '<?xml version="1.0" encoding="UTF-8"?>\n<ENVELOPE>\n<HEADER><TALLYREQUEST>Import Data</TALLYREQUEST></HEADER>\n<BODY>\n<IMPORTDATA>\n<REQUESTDESC><REPORTNAME>' + (masters.length ? "All Masters" : "Vouchers") + "</REPORTNAME>" + sv + "</REQUESTDESC>\n<REQUESTDATA>\n" + body + "</REQUESTDATA>\n</IMPORTDATA>\n</BODY>\n</ENVELOPE>\n";
   const fname = "sales-" + slug(co.name) + "-" + new Date().toISOString().slice(0, 10) + ".xml";
   if (!(await saveFile(fname, new Blob([xml], {type: "application/xml"})))) return;
@@ -510,7 +510,7 @@ function salesBulk(kind, ledger){
 function salesRowAct(a, id, force){
   const s = SL(); if (!s) return true;
     const v = inv(id); if (!v) return true;
-    if (a === "reread"){ rereadSales(v, force); return true; }
+    if (a === "reread"){ withPart("invoice", "rereadSales", () => rereadSales(v, force)); return true; }
     if (a === "print"){ withPart("invoice", "invoiceHtml", () => printInvoiceHtml(invoiceHtml(v.x, CO(s.cid), s.cfg), v.x.number)); return true; }
     if (a === "file"){ const f = S.files["sv:" + v.id]; if (f){ const u = blobUrl(f); window.open(u, "_blank"); setTimeout(() => URL.revokeObjectURL(u), 60000); } return true; }
     if (a === "edit"){ s.openId = null; startDraft(v.id); return true; }

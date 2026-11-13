@@ -33,8 +33,13 @@ import "./vendorRecon.js";
 
 const SHEET_FIELDS = [["date", "Invoice date"], ["no", "Invoice no."], ["party", "Party name"], ["gstin", "Party GSTIN"], ["pos", "Place of supply"],
   ["taxable", "Taxable value"], ["rate", "GST rate %"], ["igst", "IGST"], ["cgst", "CGST"], ["sgst", "SGST / UTGST"], ["cess", "Cess"],
-  ["tax", "Total tax (one column)"], ["total", "Invoice total"], ["hsn", "HSN / SAC"], ["qty", "Quantity"], ["ledger", "Ledger (a hint)"],
-  ["doctype", "Document type"], ["against", "Against invoice no."]];
+  ["tax", "Total tax (one column)"], ["total", "Invoice total"], ["hsn", "HSN / SAC"], ["qty", "Quantity"], ["ledger", "Party's ledger in Tally"],
+  ["sledger", "Sales / purchase ledger"], ["doctype", "Document type (invoice / credit note)"], ["vchtype", "Voucher type in Tally"], ["against", "Against invoice no."]];
+// next-fix-sheet-import (13-Nov-2026, a client's sales sheet that would not post): "ledger" was "Ledger (a hint)" and was
+// taken as the PARTY's ledger, so a "Sales Ledger" column put the income ledger in the customer's place on every invoice,
+// and "Voucher Type" (the client's own "Sales UP") was only looked at for credit / debit. Now a field each: the party's
+// ledger (ledger), the sales or purchase ledger (sledger), Tally's voucher type (vchtype).
+const SIDE_LEDGER = {sales: "Sales ledger", purchase: "Purchase / expense ledger"};
 const SHEET_AMOUNTS = ["taxable", "igst", "cgst", "sgst", "cess", "tax", "total", "qty"];
 
 const SheetFmt = {
@@ -123,7 +128,28 @@ const SheetFmt = {
     return {head: head.map(h => String(h == null ? "" : h)), rows: rows.slice(0, 10).map(r => (r || []).map(cell))};
   },
   // a register's fields, or (vendor / customer) a party statement's (below)
-  fieldsFor(side){ return (side === "vendor" || side === "customer") && typeof PARTY_FIELDS !== "undefined" ? PARTY_FIELDS : SHEET_FIELDS; },
+  fieldsFor(side){ return (side === "vendor" || side === "customer") && typeof PARTY_FIELDS !== "undefined" ? PARTY_FIELDS
+    : SHEET_FIELDS.map(f => f[0] === "sledger" && SIDE_LEDGER[side] ? ["sledger", SIDE_LEDGER[side]] : f); },
+  // what a ledger of the sheet is in Tally, by its whole group chain (Ledgers.cls: a ledger under "Debtors UP" under
+  // Sundry Debtors is a party; one under "Sales Local" under Sales Accounts is income); "" when Tally has no such ledger, or its
+  // group is not known
+  cls(name){ const e = exactLedger(name); return e && typeof Ledgers === "object" ? Ledgers.cls(null, e) : ""; },
+  // FinCom's own rules over a mapping (the AI's answer, or a layout saved before 13-Nov-2026): a "ledger" column whose
+  // values are not parties in Tally (none under Sundry Debtors / Creditors, and they are Tally ledgers or the header says
+  // sales / purchase / income / expense) is the sales or purchase ledger; a "Voucher Type" column read as the document
+  // type is Tally's voucher type. Returns the corrected mapping, or null when there is nothing to correct
+  fix(map, head, rows){
+    const names = (head || []).map(h => this.norm(h)), m = Object.assign({}, map);
+    let changed = false;
+    const li = m.ledger ? names.indexOf(m.ledger) : -1;
+    if (li >= 0 && !m.sledger){
+      const cl = Array.from(new Set((rows || []).map(r => String((r || [])[li] == null ? "" : r[li]).trim()).filter(Boolean))).map(v => this.cls(v));
+      const says = /sale|purchase|income|expense|revenue/.test(m.ledger) && !/party|customer|supplier|vendor|buyer|debtor|creditor/.test(m.ledger);
+      if (!cl.includes("party") && (says || cl.some(Boolean))){ m.sledger = m.ledger; delete m.ledger; changed = true; }
+    }
+    if (m.doctype && !m.vchtype && /^(vch|voucher)type/.test(m.doctype)){ m.vchtype = m.doctype; delete m.doctype; changed = true; }
+    return changed ? m : null;
+  },
   // a new format's mapping: asked of the AI once (SheetAI, the firm's assistant on the cheap model), never a figure
   async propose(head, rows, side){
     const m = this.masked(head, rows);
@@ -136,7 +162,7 @@ const SheetFmt = {
       const i = typeof col === "number" ? col : names.indexOf(this.norm(col));
       if (i >= 0 && names[i]) map[field] = names[i];
     });
-    return {map, transforms: Object.assign({date: "dmy", groupByNo: true}, (r && r.transforms) || {}), skip: (r && r.skip) || [], why: (r && r.why) || {}, cost: (r && r.cost) || null};
+    return {map: this.fix(map, head, rows) || map, transforms: Object.assign({date: "dmy", groupByNo: true}, (r && r.transforms) || {}), skip: (r && r.skip) || [], why: (r && r.why) || {}, cost: (r && r.cost) || null};
   },
   // the documents a mapped sheet holds: one per invoice number (lines of one invoice added up), totals and blank rows
   // skipped; FinCom's rules work out the tax split, the place of supply, the totals and the check to the paisa
@@ -152,12 +178,13 @@ const SheetFmt = {
       if (!r || !r.some(c => String(c == null ? "" : c).trim())) return;
       const no = String(get(r, "no") || "").trim(), first = String(r.find(c => String(c == null ? "" : c).trim()) || "");
       if (!no || /^(grand\s*)?total|^sub\s*total|^net\s*total/i.test(first)){ skipped.push({row: hi + 2 + n, why: /total/i.test(first) ? "a total row" : "no invoice number"}); return; }
-      const typ = String(get(r, "doctype") || "").toLowerCase();
+      const typ = String(get(r, "doctype") || get(r, "vchtype") || "").toLowerCase();
       const credit = /credit|cn\b|return|refund/.test(typ), debit = !credit && /debit|dn\b/.test(typ);
       const key = no + "|" + (credit ? "C" : debit ? "D" : "I") + (t.groupByNo === false ? "|" + n : "");
       const a = f => this.amount(get(r, f));
       const d = docs.get(key) || {no, date: this.date(get(r, "date"), t.date), party: String(get(r, "party") || "").trim(), gstin: String(get(r, "gstin") || "").toUpperCase().replace(/[^A-Z0-9]/g, ""),
         pos: this.pos(get(r, "pos")), hsn: String(get(r, "hsn") || "").trim(), ledger: String(get(r, "ledger") || "").trim(), against: String(get(r, "against") || "").trim(),
+        sledger: String(get(r, "sledger") || "").trim(), vch: String(get(r, "vchtype") || "").trim(),
         note: credit ? "credit" : debit ? "debit" : "", taxable: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, total: 0, rates: [], lines: 0, rows: [], lineTotals: []};
       let taxable = a("taxable"), igst = a("igst"), cgst = a("cgst"), sgst = a("sgst"), cess = a("cess"), total = a("total");
       const rate = this.amount(get(r, "rate"));
@@ -308,12 +335,30 @@ const SheetFmt = {
 // a sheet's documents become entries: Purchase → bills (newEntry, finishNewEntry: the duplicate guard), Sales → invoices
 // (newInvoice, mapInvoice; an invoice number already here is not added again). Returns {added, held, again, ids}
 const SheetPost = {
+  // the party's ledger: the sheet's own (only when Tally keeps it under Sundry Debtors / Creditors, by the whole group
+  // chain: never an income or expense ledger in a party's place), the GSTIN's, the one answered before, the name's
   partyLedger(d, side){
     const list = ((typeof B === "function" && B() && B().ledgers && B().ledgers.list) || []);
+    if (d.ledger && SheetFmt.cls(d.ledger) === "party") return exactLedger(d.ledger);
     if (d.gstin){ const g = list.filter(l => String(l.gstin || "").toUpperCase() === d.gstin); if (g.length === 1) return g[0].name; }
     const remembered = typeof choiceValue === "function" ? choiceValue(CO(), "party:" + (d.gstin || normName(d.party || ""))) : "";
     if (remembered && exactLedger(remembered)) return exactLedger(remembered);
     return d.party ? exactLedger(d.party) || "" : "";
+  },
+  // the sales (or purchase) ledger the sheet names: Tally's own spelling, or the ledger answered for that name before
+  sledKey(d){ return d.sledger ? "sled:" + SheetFmt.norm(d.sledger) : ""; },
+  salesLedger(d){
+    if (!d.sledger) return "";
+    return exactLedger(d.sledger) || exactLedger(typeof choiceValue === "function" ? choiceValue(CO(), this.sledKey(d)) : "") || "";
+  },
+  // a ledger the person asked to create ("Create it" in the panel: their own click, never by itself): on the list of new
+  // ledgers, made in Tally with the first posting that uses it, as a new customer has always been
+  pend(name, group, d){
+    const b = typeof B === "function" && B();
+    if (!b || !b.newLed || b.cid !== S.coId) return name;
+    if (!exactLedger(name)) b.newLed.push({name, group, gstin: d && GSTIN_RE.test(d.gstin) ? d.gstin : "", state: d ? stateOfGstin(d.gstin) : ""});
+    if (typeof saveBank === "function") saveBank({newLed: true});
+    return name;
   },
   toBills(docs, cid, fileName){
     const res = {added: 0, held: 0, ids: []};
@@ -327,7 +372,14 @@ const SheetPost = {
       // a document that does not add up to the paisa is said on the bill, so it is looked at before it is approved
       if (d.check && !d.check.ok){ e.readNote = (e.readNote ? e.readNote + " " : "") + "From the sheet: " + d.check.text + "."; e.uncertain = ["total"]; }
       // the party: as answered in the panel (mapped, or a new ledger made when posting, as for a bill read), else matched
-      e.partyLedger = d.ledger || this.partyLedger(d, "purchase") || d.newLedger || "";
+      // (the person's own answer stands: it is not worked out again from the books)
+      const found = d.mapped || this.partyLedger(d, "purchase");
+      e.partyLedger = found || (d.newLedger ? this.pend(d.newLedger, "Sundry Creditors", d) : "");
+      if (d.mapped || (!found && d.newLedger)) e.partyUserSet = true;
+      // the sheet's own purchase ledger and voucher type, on the bill
+      const pl = d.sledMapped || this.salesLedger(d) || (d.newSled ? this.pend(d.newSled, "Purchase Accounts") : "");
+      if (pl){ e.expenseLedger = pl; e.expenseUserSet = true; }
+      if (d.vch) e.vchType = d.vch;
       finishNewEntry(e, cid, null);
       res.ids.push(e.id);
       if (e.status === "duplicate") res.held++; else res.added++;
@@ -338,19 +390,31 @@ const SheetPost = {
     const s = SL(), res = {added: 0, held: 0, again: 0, ids: []};
     docs.forEach(d => {
       const no = d.no + (d.note === "credit" && !/^cn/i.test(d.no) ? " (CN)" : "");
-      if (s.list.some(v => normInv(v.x.number) === normInv(no) && (!v.x.date || !d.date || v.x.date === d.date))){ res.again++; return; }
+      const was = s.list.find(v => normInv(v.x.number) === normInv(no) && (!v.x.date || !d.date || v.x.date === d.date));
+      // already here: never added again. One from a sheet still waiting (To review / Ready) takes this sheet's ledgers
+      // and voucher type, so the invoices an old, wrong layout left stuck are put right by uploading the sheet again
+      if (was){ res.again++; if (was.source === "sheet" && ["review", "ready"].includes(was.status)){ this.ledgersTo(was, d, true); mapInvoice(was); } return; }
       const v = newInvoice({number: no, date: d.date, customerName: d.party || (d.gstin ? "" : "Retail customer"), customerGstin: GSTIN_RE.test(d.gstin) ? d.gstin : "", pos: d.pos,
         hsn: d.hsn, taxable: Math.abs(d.taxable), cgst: Math.abs(d.cgst), sgst: Math.abs(d.sgst), igst: Math.abs(d.igst), cess: Math.abs(d.cess), total: Math.abs(d.total),
         rate: d.rate, noteKind: d.note || "", againstInvoice: d.against || ""}, "sheet", {fileName, sheet: {rows: d.rows, check: d.check, sec: d.sec || ""}});
-      const led = d.ledger || this.partyLedger(d, "sales");
-      if (led){ v.customerLedger = led; v.userLedger = true; }
-      // a customer to create: the bank page's list of new ledgers (made in Tally with the first posting, as today)
-      else if (d.newLedger && typeof B === "function" && B() && B().newLed && !B().newLed.some(l => l.name === d.newLedger))
-        B().newLed.push({name: d.newLedger, group: "Sundry Debtors", gstin: GSTIN_RE.test(d.gstin) ? d.gstin : "", state: stateOfGstin(d.gstin)});
+      this.ledgersTo(v, d);
       s.list.push(v); mapInvoice(v); res.added++; res.ids.push(v.id);
     });
     saveSales();
     return res;
+  },
+  // an invoice's ledgers from its row of the sheet: the customer (answered, found, or to create), the sheet's own sales
+  // ledger for each of its rates, and Tally's voucher type
+  ledgersTo(v, d, again){
+    const led = d.mapped || this.partyLedger(d, "sales");
+    if (led){ v.customerLedger = led; v.userLedger = true; }
+    // a customer to create: the bank page's list of new ledgers (made in Tally with the first posting, as today)
+    else if (d.newLedger){ v.customerLedger = this.pend(d.newLedger, "Sundry Debtors", d); v.userLedger = true; }
+    // (an invoice an old layout gave an income ledger for its customer: matched afresh)
+    else if (again && v.userLedger && !["party", ""].includes(SheetFmt.cls(v.customerLedger))){ v.customerLedger = ""; v.userLedger = false; }
+    const sl = d.sledMapped || this.salesLedger(d) || (d.newSled ? this.pend(d.newSled, "Sales Accounts") : "");
+    if (sl){ v.salesLedgers = {}; salesTotals(v.x).forEach(g => { v.salesLedgers[g.rate] = sl; }); }
+    if (d.vch) v.x.vchType = d.vch;
   }
 };
 
@@ -407,6 +471,17 @@ const SheetImport = {
       if (found){
         st.how = found.how; st.fmt = found.fmt; st.fmtName = found.fmt.name;
         if (this.recon(side)) return this.reconStep();
+        // a layout saved with the old, wrong columns (its ledger column read as the party's, though its values are not
+        // parties in Tally; Voucher Type as the document type): the mapping is shown again, corrected by FinCom's rules
+        // (no AI), for the person to check and save; the old one is put aside then, kept
+        // (a layout a person has checked since, v 2, is theirs: never asked again)
+        const fx = !found.fmt.builtin && !found.fmt.v && SheetFmt.fix(found.fmt.map, st.head, g.slice(st.hi + 1));
+        if (fx){
+          const col = n => st.head[st.head.map(h => SheetFmt.norm(h)).indexOf(n)] || n, was = found.fmt.map, who = side === "sales" ? "customer" : "supplier";
+          st.remap = {id: found.fmt.id, scope: found.fmt.scope, why: [was.ledger && !fx.ledger ? "“" + col(was.ledger) + "” was read as the " + who + "'s ledger, but its values are not " + who + "s in Tally: it is the " + SIDE_LEDGER[side].toLowerCase() + "." : "",
+            was.doctype && !fx.doctype ? "“" + col(was.doctype) + "” is Tally's voucher type: the entries are posted as that voucher type." : ""].filter(Boolean).join(" ")};
+          st.map = fx; st.transforms = Object.assign({}, found.fmt.transforms); st.why = {}; st.step = "map"; st.busy = ""; return render();
+        }
         st.docs = SheetFmt.apply(found.fmt, g, st.hi, CO(), side);
         return this.check();
       }
@@ -457,7 +532,8 @@ const SheetImport = {
     const st = this.st(), co = CO(st.cid); if (!st || !co) return;
     if (this.mapProblems().length) { toast("Choose the column for: " + this.mapProblems().join(", ") + "."); return; }
     const head = st.head, fmt = {id: uid("sf"), name: String(st.fmtName || "Register").slice(0, 60), side: st.side, fp: SheetFmt.fingerprint(head, st.read.sheet), cols: head.length,
-      headers: head.map(h => SheetFmt.norm(h)), map: st.map, transforms: st.transforms, by: whoAmI(), at: new Date().toISOString(), ai: !st.aiErr, scope: scope === "firm" ? "firm" : "client"};
+      headers: head.map(h => SheetFmt.norm(h)), map: st.map, transforms: st.transforms, by: whoAmI(), at: new Date().toISOString(), ai: !st.aiErr, scope: scope === "firm" ? "firm" : "client", v: 2};
+    if (st.remap){ const old = this.fmtById(st.remap.id); if (old) old.deleted = {at: fmt.at, by: fmt.by, why: "mapped again"}; if (old && old.scope === "firm" && fmt.scope !== "firm") Store.saveFirm(); fmt.ai = false; }
     if (fmt.scope === "firm"){ S.firm.sheetFormats = (S.firm.sheetFormats || []).concat([fmt]); Store.saveFirm(); }
     else { co.sheetFormats = (co.sheetFormats || []).concat([fmt]); Store.saveCompany(co); }
     st.fmt = fmt; st.how = "saved";
@@ -479,7 +555,14 @@ const SheetImport = {
       const key = d.gstin || normName(d.party || "");
       if (!key || seen.has(key) || d.summary) return;
       seen.add(key);
-      if (!SheetPost.partyLedger(d, st.side)) qs.push({id: "party:" + key, kind: "party", party: d.party || d.gstin, gstin: d.gstin, text: "Party “" + (d.party || d.gstin) + "”" + (d.gstin ? " (" + d.gstin + ")" : "") + " is not in Tally.", options: [["create", "Create it"], ["map", "Map to a ledger…"]]});
+      if (!SheetPost.partyLedger(d, st.side)) qs.push({id: "party:" + key, group: st.side === "sales" ? "Sundry Debtors" : "Sundry Creditors", kind: "party", party: d.party || d.gstin, gstin: d.gstin, text: "Party “" + (d.party || d.gstin) + "”" + (d.gstin ? " (" + d.gstin + ")" : "") + " is not in Tally.", options: [["create", "Create it"], ["map", "Map to a ledger…"]]});
+    });
+    // a sales (or purchase) ledger the sheet names that Tally does not have: created (the person's click) or mapped
+    (st.docs || []).forEach(d => {
+      const key = SheetPost.sledKey(d);
+      if (!key || seen.has(key) || SheetPost.salesLedger(d)) return;
+      seen.add(key);
+      qs.push({id: key, kind: "sledger", party: d.sledger, text: SIDE_LEDGER[st.side] + " “" + d.sledger + "” is not in Tally.", options: [["create", "Create it"], ["map", "Map to a ledger…"]]});
     });
     st.questions = qs; render();
   },
@@ -489,6 +572,7 @@ const SheetImport = {
     const q = (st.questions || []).find(x => x.id === id);
     // a party's answer is remembered for the client (a choice, as every confirmed ledger is)
     if (q && q.kind === "party" && v === "map" && ledger && exactLedger(ledger)) choiceConfirm(CO(st.cid), "party:" + id.slice(6), exactLedger(ledger));
+    if (q && q.kind === "sledger" && v === "map" && ledger && exactLedger(ledger)) choiceConfirm(CO(st.cid), id, exactLedger(ledger));
     render();
   },
   open(){ const st = this.st(); return (st && st.questions || []).filter(q => !(st.answers || {})[q.id] || (st.answers[q.id].v === "map" && !st.answers[q.id].ledger)); },
@@ -501,15 +585,24 @@ const SheetImport = {
     if (st.b2cs && a.b2cs && a.b2cs.v === "yes") docs = docs.concat(st.b2cs);
     docs.forEach(d => {
       const k = d.gstin || normName(d.party || ""), ans = a["party:" + k];
-      if (ans && ans.v === "create" && !d.ledger) d.newLedger = d.party || d.gstin;
-      if (ans && ans.v === "map" && ans.ledger) d.ledger = exactLedger(ans.ledger) || ans.ledger;
+      // "Create it" is the person's own click: the ledger is always made (it was skipped whenever the sheet had a ledger
+      // column); "Map to a ledger…" is the ledger they chose
+      // (worked out afresh each time: an answer changed from one to the other leaves nothing of the first)
+      delete d.newLedger; delete d.mapped; delete d.newSled; delete d.sledMapped;
+      if (ans && ans.v === "create") d.newLedger = d.party || d.gstin;
+      if (ans && ans.v === "map" && ans.ledger) d.mapped = exactLedger(ans.ledger) || ans.ledger;
+      const sa = a[SheetPost.sledKey(d)];
+      if (sa && sa.v === "create") d.newSled = d.sledger;
+      if (sa && sa.v === "map" && sa.ledger) d.sledMapped = exactLedger(sa.ledger) || sa.ledger;
     });
     return docs;
   },
-  add(){
+  async add(){
     const st = this.st(); if (!st) return;
     if (this.open().length){ toast("Answer the questions first."); return; }
     const docs = this.docsToAdd(), cid = st.cid;
+    // (a ledger to create goes on the client's list of new ledgers, kept with its bank data: brought in first)
+    if (docs.some(d => d.newLedger || d.newSled) && typeof loadBank === "function" && (!S.bank || S.bank.cid !== cid)) await loadBank(cid).catch(() => {});
     const r = st.side === "sales" ? SheetPost.toSales(docs, cid, st.name) : SheetPost.toBills(docs, cid, st.name);
     st.result = r; st.step = "done"; render();
     const rest = st.rest || [];

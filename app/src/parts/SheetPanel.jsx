@@ -23,8 +23,9 @@ function MapStep({ st }) {
   const fieldOf = (col) => Object.keys(st.map || {}).find((f) => st.map[f] === col) || "";
   const missing = SheetImport.mapProblems();
   return <section data-sheet-step="map">
-    <p className="note" data-sheet-ai="">{st.aiErr ? "FinCom's AI could not read this format (" + st.aiErr + "): choose each column's field yourself."
-      : "A format FinCom has not seen. FinCom's AI read its header and 10 rows once (names and numbers masked) and proposes these columns. Check them, change any, and save the format: the next sheet like it is read with no AI."}</p>
+    {st.remap && <p className="bk-alert" data-sheet-remap="">{"This layout was saved with a column read wrongly. " + st.remap.why + " FinCom has put it right below (no AI): check it and save."}</p>}
+    {!st.remap && <p className="note" data-sheet-ai="">{st.aiErr ? "FinCom's AI could not read this format (" + st.aiErr + "): choose each column's field yourself."
+      : "A format FinCom has not seen. FinCom's AI read its header and 10 rows once (names and numbers masked) and proposes these columns. Check them, change any, and save the format: the next sheet like it is read with no AI."}</p>}
     <label className="f"><span>Name of the format</span><input type="text" value={st.fmtName || ""} data-sheet-name="" onChange={(ev) => { st.fmtName = ev.target.value; render(); }} /></label>
     <div className="tblwrap"><table className="data sheet-map" data-sheet-map="">
       <thead><tr><th>Column</th><th>First row</th><th>Field in FinCom</th></tr></thead>
@@ -54,6 +55,7 @@ function Question({ st, q }) {
       {q.options.map(([v, l]) => <button key={v} type="button" className={"btn small" + (a && a.v === v ? " primary" : "")} data-sheet-a={v} aria-pressed={!!(a && a.v === v)} onClick={() => SheetImport.answer(q.id, v)}>{l}</button>)}
       {a && a.v === "map" && <LedgerBox className="lgbox" value={a.ledger || ""} fk={"sheetq:" + q.id} data-sheet-ledger={q.id} placeholder="A ledger from Tally" aria-label={"Ledger for " + q.party}
         onCommit={(v) => { if (!exactLedger(v)) { toast("“" + v + "” is not a Tally ledger."); return false; } SheetImport.answer(q.id, "map", v); return true; }} />}
+      {a && a.v === "create" && <span className="note" data-sheet-create="">{"“" + q.party + "” is created in Tally under " + (q.group || (st.side === "sales" ? "Sales Accounts" : "Purchase Accounts")) + ", with the first posting that uses it."}</span>}
     </div>
   </li>;
 }
@@ -149,7 +151,7 @@ export function SheetFormats() {
       cols={[
         { k: "name", role: "party", label: "Format", v: (f) => f.name, cell: (f) => <input type="text" defaultValue={f.name} aria-label={"Name of " + f.name} data-sheet-rename={f.id} onBlur={(ev) => { if (ev.target.value.trim() && ev.target.value !== f.name) SheetImport.rename(f.id, ev.target.value.trim()); }} /> },
         { k: "side", label: "For", v: (f) => f.side, cell: (f) => (f.side === "sales" ? "Sales" : "Purchase") + (f.scope === "firm" ? " · every client" : "") },
-        { k: "cols", label: "Columns read", v: (f) => Object.keys(f.map || {}).length, cell: (f) => Object.keys(f.map || {}).map((k) => (SHEET_FIELDS.find((x) => x[0] === k) || [k, k])[1]).join(", ") },
+        { k: "cols", label: "Columns read", v: (f) => Object.keys(f.map || {}).length, cell: (f) => Object.keys(f.map || {}).map((k) => (SheetFmt.fieldsFor(f.side).find((x) => x[0] === k) || [k, k])[1]).join(", ") },
         { k: "at", role: "date", label: "Saved", v: (f) => f.at, cell: (f) => fmtDateTime(f.at) + " · " + (f.by || "") },
         { k: "ac", role: "act", cell: (f) => <><button className="linkbtn" data-sheet-remap={f.id} onClick={() => SheetImport.remap(f.id)}>Map again</button>{" · "}<button className="linkbtn danger" data-sheet-delete={f.id} onClick={() => SheetImport.remove(f.id)}>Delete</button></> },
       ]} />

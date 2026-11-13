@@ -3,6 +3,7 @@
 /* ================================================================== */
 function txnTab(){ return S.txnTab || "bills"; }
 function vchTypeOf(e, co){
+  if (e.vchType) return e.vchType;   // the sheet's own voucher type (app/src/lib/registers.js)
   if (e.noteKind === "credit") return co.debitNoteType || "Debit Note";
   if (e.noteKind === "debit") return "Purchase";
   return co.voucherType || "Journal";
