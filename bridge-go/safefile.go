@@ -5,7 +5,8 @@
 //   - the owner's decision of 13-Nov-2026 ("I don't want slower save at all"): the flush to the disk (fsync of the file
 //     and its folder) and the copy kept as <name>.bak happen AFTER the save has returned, in the background (the flush
 //     below): one at a time per file, coalesced (a file saved again meanwhile is flushed once more, with its newest
-//     text), errors logged. The save never waits for them and holds no lock while they run;
+//     text), errors logged. The save never waits for them and holds no lock while they run; a file is flushed once its
+//     saves have been quiet for 50 ms (1 s at most), so a burst of saves costs one flush, after it;
 //   - the files that matter (posted-ids.json, a posting's progress.json and payload.json, the settings, the copy's
 //     keep.json / manifest.json / balances.json, the older-entries state, the postings taken from FinCom's queue) keep
 //     a .bak: the newest text, written to the disk and flushed, so a main file a power cut left cut short or empty has a
@@ -83,10 +84,7 @@ func writeInPlace(path, text string) error {
 		if err = renameFn(tmp, path); err == nil {
 			return nil
 		}
-		renameRetries.Add(1)
-		if durableWaitInFlight(path) { // refused while this file was being flushed: at once after it
-			continue
-		}
+		renameRetries.Add(1) // a save never waits for a flush (review of d3582645d): tried again after a pause, as 2.5.14
 		time.Sleep(time.Duration(i+1) * 50 * time.Millisecond)
 	}
 	_ = os.Remove(tmp)
@@ -221,8 +219,18 @@ type durableJob struct {
 	flush  bool   // the file itself flushed to the disk
 	bak    bool
 	whole  func([]byte) bool
-	urgent bool // waited for (a send to Tally): taken before the others
+	urgent bool      // waited for (a send to Tally): taken at once, before the others
+	first  time.Time // the first save not yet flushed
+	last   time.Time // the newest save
 }
+
+// review of d3582645d (the owner's rule: no slower saves, bursts included): a file is flushed once its saves have been
+// quiet for durQuiet, or durMaxWait after the first save not yet flushed, so a burst of saves costs one flush, after it;
+// a file waited for (a send to Tally) is flushed at once
+var (
+	durQuiet   = 50 * time.Millisecond
+	durMaxWait = time.Second
+)
 
 const durQueueMax = 512
 
@@ -235,15 +243,17 @@ var (
 	durRunning    bool                       // the worker runs
 	durSaid       sync.Map                   // path -> the last failure logged (said once until it works again)
 	durFullSaid   atomic.Bool
-	renameRetries atomic.Int64 // renames of a save tried again (the Windows check of the test sheet: 0)
+	durKick       = make(chan struct{}, 1) // wakes the worker's wait (a file waited for)
+	renameRetries atomic.Int64             // renames of a save tried again (the Windows check of the test sheet: 0)
 )
 
 // the flush of path (itself when flush, its .bak when bak) after a save, in the background
 func durableLater(path, text string, flush, bak bool, whole func([]byte) bool) {
 	durMu.Lock()
 	defer durMu.Unlock()
+	now := time.Now()
 	if j := durQueue[path]; j != nil {
-		j.text, j.flush, j.bak, j.whole = text, j.flush || flush, j.bak || bak, whole
+		j.text, j.flush, j.bak, j.whole, j.last = text, j.flush || flush, j.bak || bak, whole, now
 		return
 	}
 	if len(durQueue) >= durQueueMax && !flush {
@@ -254,7 +264,7 @@ func durableLater(path, text string, flush, bak bool, whole func([]byte) bool) {
 		}
 		return
 	}
-	durQueue[path] = &durableJob{text: text, flush: flush, bak: bak, whole: whole}
+	durQueue[path] = &durableJob{text: text, flush: flush, bak: bak, whole: whole, first: now, last: now}
 	durOrder = append(durOrder, path)
 	if !durRunning {
 		durRunning = true
@@ -265,12 +275,33 @@ func durableLater(path, text string, flush, bak bool, whole func([]byte) bool) {
 func durableWorker() {
 	durMu.Lock()
 	for len(durOrder) > 0 {
-		k := 0
+		// the file waited for first, else the one due soonest (quiet for durQuiet, or durMaxWait after its first save)
+		k, now := -1, time.Now()
+		var due time.Time
 		for i, p := range durOrder {
-			if durQueue[p].urgent {
+			j := durQueue[p]
+			if j.urgent {
 				k = i
 				break
 			}
+			d := j.last.Add(durQuiet)
+			if m := j.first.Add(durMaxWait); m.Before(d) {
+				d = m
+			}
+			if k < 0 || d.Before(due) {
+				k, due = i, d
+			}
+		}
+		if !durQueue[durOrder[k]].urgent && due.After(now) {
+			durMu.Unlock()
+			t := time.NewTimer(due.Sub(now))
+			select {
+			case <-t.C:
+			case <-durKick:
+			}
+			t.Stop()
+			durMu.Lock()
+			continue
 		}
 		path := durOrder[k]
 		durOrder = append(durOrder[:k:k], durOrder[k+1:]...)
@@ -288,6 +319,15 @@ func durableWorker() {
 	durFullSaid.Store(false)
 	durCond.Broadcast()
 	durMu.Unlock()
+}
+
+// a file waited for: flushed at once (the worker woken from its wait for the quiet)
+func durUrgent(j *durableJob) {
+	j.urgent = true
+	select {
+	case durKick <- struct{}{}:
+	default:
+	}
 }
 
 // the flush itself: the file (opened with the least access a flush needs, sharing read, write and delete, closed at
@@ -362,7 +402,7 @@ func writeBakSynced(path, text string, syncFn func(*os.File) error) error {
 func durableWait(path string) {
 	durMu.Lock()
 	if j := durQueue[path]; j != nil {
-		j.urgent = true
+		durUrgent(j)
 	}
 	for durQueue[path] != nil || durCur == path {
 		durCond.Wait()
@@ -370,23 +410,12 @@ func durableWait(path string) {
 	durMu.Unlock()
 }
 
-// a save whose rename was refused: when this very file is being flushed now, its end is waited for (true: try again at
-// once) instead of a sleep (review M2: a Windows handle open for the flush)
-func durableWaitInFlight(path string) bool {
-	durMu.Lock()
-	defer durMu.Unlock()
-	if durCur != path {
-		return false
-	}
-	for durCur == path {
-		durCond.Wait()
-	}
-	return true
-}
-
 // waits until nothing waits or runs (the tests, before their folders go)
 func durableWaitAll() {
 	durMu.Lock()
+	for _, j := range durQueue {
+		durUrgent(j)
+	}
 	for durRunning {
 		durCond.Wait()
 	}

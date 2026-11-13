@@ -35,6 +35,8 @@ func r2515HotPaths(t *testing.T) map[string]func(i int) (string, error) {
 	day := strings.Repeat(`<VOUCHER><DATE>20261005</DATE><NARRATION>made up</NARRATION></VOUCHER>`, 400)
 	posts := strings.Repeat("job-made-up-0001\n", 200)
 	jd := filepath.Join(jobsDir(), "job-r2515-fast")
+	dayPath := filepath.Join(syncFolder(zz), "days", "20261005.xml") // worked out once: the save alone is timed
+	days := []string{day + "0", day + "1"}
 	return map[string]func(i int) (string, error){
 		"posted-ids.json": func(i int) (string, error) {
 			acceptedMu.Lock()
@@ -51,8 +53,7 @@ func r2515HotPaths(t *testing.T) map[string]func(i int) (string, error) {
 			return cloudPostsFile(), saveFileMirror(cloudPostsFile(), posts+fmt.Sprint(i))
 		},
 		"day file": func(i int) (string, error) {
-			p := filepath.Join(syncFolder(zz), "days", "20261005.xml")
-			return p, saveFile(p, day+fmt.Sprint(i))
+			return dayPath, saveFile(dayPath, days[i%2])
 		},
 	}
 }
@@ -220,6 +221,45 @@ func TestR2515RenameRetriesBackToBack(t *testing.T) {
 	durableWaitAll()
 	if n := renameRetries.Load() - before; n != 0 {
 		t.Fatalf("%d renames of posted-ids.json tried again in 200 saves", n)
+	}
+}
+
+// a burst of saves (review of d3582645d: no slower saves, bursts included): 500 saves of posted-ids.json back to back
+// take no longer than 2.5.14's 500 writes of the same text (alternated, 5 rounds, the median round; 1.2 times for the
+// noise), and the burst is flushed once or twice, after it, not once a save
+func TestR2515BurstAs2514(t *testing.T) {
+	dir := t.TempDir()
+	r2515LogHere(t, dir)
+	var n atomic.Int64
+	r2515SetSync(t, func(h *os.File) error {
+		if filepath.Base(h.Name()) == "burst.json" {
+			n.Add(1)
+		}
+		return h.Sync()
+	})
+	text := strings.Repeat(`{"Fast": {"sent": true, "job": "job-made-up"}},`, 400)
+	p, ref := filepath.Join(dir, "burst.json"), filepath.Join(dir, "burst-ref.json")
+	var now, old []time.Duration
+	for round := 0; round < 5; round++ {
+		t0 := time.Now()
+		for i := 0; i < 500; i++ {
+			_ = saveFileMirror(p, text)
+		}
+		now = append(now, time.Since(t0))
+		t1 := time.Now()
+		for i := 0; i < 500; i++ {
+			_ = r2515Write2514(ref, text)
+		}
+		old = append(old, time.Since(t1))
+	}
+	durableWaitAll()
+	mn, mo := r2515Median(now), r2515Median(old)
+	t.Logf("500 saves back to back: median %s now, %s as 2.5.14; %d flushes of the file in 2,500 saves", mn, mo, n.Load())
+	if mn > mo*6/5 {
+		t.Errorf("a burst takes %s, 2.5.14's %s", mn, mo)
+	}
+	if n.Load() > 15 {
+		t.Errorf("%d flushes in 5 bursts of 500 saves: not coalesced", n.Load())
 	}
 }
 

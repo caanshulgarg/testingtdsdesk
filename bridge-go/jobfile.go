@@ -60,13 +60,9 @@ func jobFileWriteOnce(path, text string, mkdir bool) error {
 		return err
 	}
 	if err := renameFn(tmp, path); err != nil {
-		// review M2 of b41667d51: refused while this file was being flushed (a Windows handle open for it): once more at
-		// once after the flush, never a sleep for it
-		renameRetries.Add(1)
-		if !durableWaitInFlight(path) || renameFn(tmp, path) != nil {
-			_ = os.Remove(tmp)
-			return err
-		}
+		renameRetries.Add(1) // tried again by jobFileWrite after its pause, as 2.5.14; a save never waits for a flush
+		_ = os.Remove(tmp)
+		return err
 	}
 	durableLater(path, text, true, true, nil)
 	return nil
