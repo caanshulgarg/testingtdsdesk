@@ -25,7 +25,8 @@
 --      window) an hour or more ago, is no longer given up: one day at a time as a light read; for the stop a retry under
 --      its own choice time (tally_gap_retries), at most every 3 hours; the bridge's stop of it stops the retry only
 --      (tally_check_stop, 133's text plus that); a retry day Tally gave in time resumes the check by itself (the owner's
---      decision of 13-Nov-2026), under the retry's choice time. tally_gap_front(book, max) (160's arguments): the same, not idle.
+--      decision of 13-Nov-2026), under the retry's choice time, and stays on the idle pace (tally_check_next_open, 135's
+--      text plus that) until it finishes or the person presses Resume. tally_gap_front(book, max) (160's arguments): the same, not idle.
 --      tally_period_next_paced (98's text plus the recount): a book whose gap's own days match Tally (C) has its days
 --      counted before Tally's number now was first seen counted again, one light day at a time: once a book and number.
 --      tally_fill_request (135's text plus): each day goes to the client's book whose year has it (the latest book before);
@@ -41,8 +42,8 @@
 --      with checkUntil (an hour on) at every write of the gap; the page counts checking only until then.
 -- Add-only: three new tables (row security on, service_role only), seven new functions (one an overload of
 -- tally_gap_front), one new trigger; replaced with the same arguments, grants restated: 150's tally_recorder_gap_check,
--- 98's tally_period_next_paced, 133's tally_check_stop, 135's tally_fill_request, 160's tally_gap_front(uuid, integer) and
--- tally_sync_cursor_gap_checking. No column, row or other function changed. One transaction, lock_timeout 10 s; safe
+-- 98's tally_period_next_paced, 133's tally_check_stop, 135's tally_fill_request and
+-- tally_check_next_open, 160's tally_gap_front(uuid, integer) and tally_sync_cursor_gap_checking. No column, row or other function changed. One transaction, lock_timeout 10 s; safe
 -- twice. Tested by tests/run_migration182.py (pg_stand) and tests/run_gap_post_ingest.py (tally-ingest). Runs after 98,
 -- 133, 135, 150, 158 and 160.
 begin;
@@ -578,6 +579,38 @@ begin
   return out;
 end $function$;
 
+-- 135's tally_check_next_open, its text unchanged but the idle pace of a check the retry resumed (B, marked 182)
+create or replace function public.tally_check_next_open(p_book uuid, p_max integer) returns jsonb
+language plpgsql security definer set search_path = public, pg_temp as $function$
+declare r tally_check_runs%rowtype; p tally_period_pulls%rowtype; has_p boolean; ca timestamptz; out jsonb := '[]'::jsonb; d date; lim int := least(greatest(coalesce(p_max, 3), 0), 30);
+  today date := (now() at time zone 'Asia/Kolkata')::date; t tally_gap_retries%rowtype; paced boolean;
+begin
+  if auth.role() <> 'service_role' then raise exception 'not allowed' using errcode = '42501'; end if;
+  select * into r from tally_check_runs where book_id = p_book;
+  if not found or r.state <> 'going' or lim = 0 then return out; end if;
+  select * into p from tally_period_pulls where book_id = p_book;
+  has_p := found;
+  if has_p and p.state = 'paused' then return out; end if;
+  if has_p and p.state = 'stopped' and not (r.chosen_at > coalesce(p.stopped_at, p.chosen_at)) then return out; end if;
+  ca := case when has_p and p.state = 'going' then p.chosen_at else r.chosen_at end;
+  -- 182: a check the gap's retry resumed (its choice time the retry's; the person's Resume gives it a new one): the idle
+  -- pace, one day at a time (tally_light_may / _took), until it finishes or the person resumes it
+  select * into t from tally_gap_retries where book_id = p_book;
+  paced := found and t.resumed_at is not null and r.chosen_at = t.chosen_at;
+  if paced then
+    if not tally_light_may(p_book) then return out; end if;
+    lim := 1;
+  end if;
+  for d in select x.day from tally_check_days x where x.book_id = p_book and x.done_at is null and x.upload_at is null and x.day <= today
+            order by (x.asked_at is not null and x.asked_at > now() - interval '2 minutes'), x.day desc limit lim loop
+    out := out || jsonb_build_array(jsonb_build_object('day', to_char(d, 'YYYYMMDD'), 'fetch', true, 'chosenAt', ca, 'check', true));
+  end loop;
+  if paced and jsonb_array_length(out) > 0 then perform tally_light_took(p_book); end if;
+  update tally_check_days x set asked_at = now(), first_asked_at = coalesce(x.first_asked_at, now())
+   where x.book_id = p_book and x.day in (select to_date(e->>'day', 'YYYYMMDD') from jsonb_array_elements(out) e);
+  return out;
+end $function$;
+
 -- 135's tally_fill_request: each day to the client's book whose year has it; not again once read for Tally's number; a
 -- gap's older days as light days (B, C; marked 182)
 create or replace function public.tally_fill_request(p_client text, p_days date[]) returns jsonb
@@ -648,6 +681,8 @@ revoke all on function public.tally_check_stop(uuid, date, text, text, timestamp
 grant execute on function public.tally_check_stop(uuid, date, text, text, timestamptz) to service_role;
 revoke all on function public.tally_period_next_paced(uuid, integer, boolean) from public, anon, authenticated;
 grant execute on function public.tally_period_next_paced(uuid, integer, boolean) to service_role;
+revoke all on function public.tally_check_next_open(uuid, integer) from public, anon, authenticated;
+grant execute on function public.tally_check_next_open(uuid, integer) to service_role;
 revoke all on function public.tally_fill_request(text, date[]) from public, anon;
 grant execute on function public.tally_fill_request(text, date[]) to authenticated, service_role;
 

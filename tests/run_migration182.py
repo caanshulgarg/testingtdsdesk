@@ -15,8 +15,8 @@ Checks:
      600 a day; the read back closes the gap as a match.
   2. (D) posted days keep the gap "checking" for 24 hours only, and only with a computer reading older entries.
   3. (B) a 2 s stop (over2s, window) an hour old: one idle day read again under its own choice time, at most every 3
-     hours; its stop stops the retry only, a retry day given in time resumes the check; a gap open 7 hours: read when
-     idle, not given up.
+     hours; its stop stops the retry only, a retry day given in time resumes the check, on the idle pace until the
+     person's Resume; a gap open 7 hours: read when idle, not given up.
   4. (C) a day of the gap read whole (or type by type) after Tally's number was seen is not asked again; the gap says
      "Changes were made in Tally on older dates. Upload the Day Book from <the book's own year's first day> to today".
   5. (B) 98's count: once the gap's own days match, the days counted before Tally's number was seen are counted again,
@@ -72,7 +72,7 @@ if text:
     print("  md5 of %s: %s (%d bytes)" % (os.path.basename(M), hashlib.md5(text.encode()).hexdigest(), len(text.encode())))
 low = text.lower(); code = "\n".join(l.split("--")[0] for l in low.splitlines())
 NEW_FNS = ["tally_gap_own_read", "tally_gap_state", "tally_post_job_read_back", "tally_light_may", "tally_light_took", "tally_day_read_for"]
-REPLACED = ["tally_recorder_gap_check", "tally_period_next_paced", "tally_check_stop", "tally_gap_front", "tally_sync_cursor_gap_checking", "tally_fill_request"]
+REPLACED = ["tally_recorder_gap_check", "tally_period_next_paced", "tally_check_stop", "tally_gap_front", "tally_sync_cursor_gap_checking", "tally_fill_request", "tally_check_next_open"]
 if text:
     ok(re.search(r"^begin;\s*\nset local lock_timeout = '10s';", text, re.M) is not None and text.rstrip().endswith("commit;") and code.count("\nbegin;") == 1 and code.count("commit;") == 1, "0. one transaction, lock_timeout 10 s")
     alters = sorted(re.findall(r"\balter\s+table\b[^;]*;", code))
@@ -83,7 +83,7 @@ if text:
     FNS = sorted(set(re.findall(r"create or replace function public\.(\w+)\s*\(", text)))
     ok(FNS == sorted(NEW_FNS + REPLACED), "0. the functions (%s)" % FNS)
     for fn, sig in (("tally_recorder_gap_check", "(uuid, uuid, bigint, timestamptz)"), ("tally_period_next_paced", "(uuid, integer, boolean)"), ("tally_check_stop", "(uuid, date, text, text, timestamptz)"),
-                    ("tally_gap_front", "(uuid, integer, boolean), public.tally_gap_front(uuid, integer)"), ("tally_fill_request", "(text, date[])")):
+                    ("tally_gap_front", "(uuid, integer, boolean), public.tally_gap_front(uuid, integer)"), ("tally_fill_request", "(text, date[])"), ("tally_check_next_open", "(uuid, integer)")):
         ok(("grant execute on function public.%s%s to service_role;" % (fn, sig)) in text or ("grant execute on function public.%s%s to authenticated, service_role;" % (fn, sig)) in text, "0. %s: its grant restated" % fn)
 
 db = pg_stand.start(int(os.environ.get("PG182_PORT") or 31182))
@@ -180,7 +180,7 @@ try:
         for r in db.rows("select p.proname, p.oid::regprocedure::text sig from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = any (array[%s])" % ", ".join(q(x) for x in NEW_FNS + REPLACED)):
             sig.setdefault(r["proname"], []).append(r["sig"])
         ex = lambda rl, s: db.one("select has_function_privilege(%s, %s, 'execute')" % (q(rl), q(s))) in ("t", "true")
-        for fn in ("tally_gap_own_read", "tally_gap_state", "tally_gap_front", "tally_recorder_gap_check", "tally_period_next_paced", "tally_check_stop", "tally_light_may", "tally_light_took", "tally_day_read_for"):
+        for fn in ("tally_gap_own_read", "tally_gap_state", "tally_gap_front", "tally_recorder_gap_check", "tally_period_next_paced", "tally_check_stop", "tally_light_may", "tally_light_took", "tally_day_read_for", "tally_check_next_open"):
             ok(fn in sig and all(ex("service_role", s) and not ex("authenticated", s) and not ex("anon", s) for s in sig[fn]), "0. %s: service_role only (%s)" % (fn, sig.get(fn)))
         ok(len(sig.get("tally_gap_front", [])) == 2, "0. tally_gap_front: 160's arguments and the idle one")
         fr = sig.get("tally_fill_request", [])
@@ -282,6 +282,16 @@ try:
     HEADS(book, 0, []); FRONT(book, 3, False)
     ok(db.one("select state || ' ' || (chosen_at = %s::timestamptz)::text || ' ' || (stop_why is null)::text from tally_check_runs where book_id = %s" % (q(ca2 or "2000-01-01"), q(book))) == "going true true",
        "3. the retry's day given in time (read whole, not stopped): the check resumes by itself, under the retry's choice time")
+    db.sql("""insert into tally_check_days (book_id, firm_id, day, source, queued_at) select %s, %s, g::date, 'upload', now() from generate_series(%s::date, %s::date, interval '1 day') g
+              on conflict do nothing""" % (q(book), q(F), q(D(9)), q(D(5))))
+    CN = lambda: (lambda r: r if isinstance(r, list) else [{"_error": r}])(j("select tally_check_next_open(%s, 3)::text" % q(book)))
+    if text: db.sql("update tally_light_pace set idle_at = null where book_id = %s" % q(book))
+    ok(CN() == [], "3. (guard) the resumed check, someone typing: none")
+    if text: db.sql("update tally_light_pace set idle_at = now(), last_at = now() - interval '30 seconds' where book_id = %s" % q(book))
+    ok(days_of(CN()) == [D8(5)], "3. idle: one day (the idle pace)")
+    ok(CN() == [], "3. (guard) at once again: none (25 s)")
+    db.sql("update tally_check_runs set chosen_at = now() where book_id = %s" % q(book))      # the person's Resume (133's tally_check_resume)
+    ok(len(CN()) == 3, "3. (guard) the person resumes it: the check's own pace again")
     book, cg = gapbook(4)
     r, c = gap(book, 42873); age_gap(book, 7 * 60); unask(book)
     ok(FRONT(book, 3, False) == [] and days_of(FRONT(book, 3, True)) == [D8(0)], "3. a gap open 7 hours: read when idle (one light day), not given up")
