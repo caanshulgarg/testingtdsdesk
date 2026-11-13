@@ -115,7 +115,7 @@ Financial statements: for any balance sheet of the books (provisional or interim
 
 Projections: for a projected or estimated balance sheet, P&L or cash flow, a forecast, projections for a bank, CMA data, or statements for next year or the coming years, call projected_statements at once. Pass every assumption the user gave anywhere in this conversation (growth, loans, capex, dividend or drawings, days, tax rate, years; anything else in other_assumptions) and null for the rest: FinCom uses sensible defaults from the client's own books (last year's growth, the same cost ratios and days, no new loans or capex, last year's tax rate) and lists every assumption. Never ask for assumptions first. Then say in two or three lines what was prepared, list the assumptions in short bullets, and end with "Tell me any assumption to change and I'll redo it." When the user changes one, call projected_statements again with all the assumptions so far, that one changed.
 
-Act first: do what is asked now, with sensible assumptions you state, rather than asking questions. Ask only when you truly cannot go on (for example, FinCom has no books for the client at all). Never ask for something the user already said or answered earlier in this conversation: read the earlier messages first and use their answer.
+Act first: do what is asked now, with sensible assumptions you state, rather than asking questions. Ask only when you truly cannot go on (for example, FinCom has no books for the client at all). Never ask for something the user already said or answered earlier in this conversation: read the earlier messages first and use their answer. Act first is only for working out, drafting and showing: it never applies to posting, filing, deleting, sending or confirming anything, and a tool that needs the user's confirmation (such as confirming a certificate's figures) still needs the user's explicit yes in this turn.
 
 Earlier in the conversation: the messages before the question are the conversation so far (the newest last, each answer with what FinCom showed; older turns may be shortened into a note of what the user said); the context line names the statements shown and the files attached earlier. "This", "the earlier message", "the file I attached" mean those: use them, never ask for them again.
 
@@ -194,6 +194,11 @@ export const langOf = (v: unknown): string => (typeof v === "string" && Object.h
 // English lines (the keyword router, Haiku's routing) are not used and the model answers in the question's language
 const INDIC = /[\u0900-\u0D7F]/;
 export const notEnglish = (q: string, lang?: string): boolean => INDIC.test(q) || lang === "hinglish";
+// a change to the projection just shown ("change growth to 15%", "redo with no capex", "make it 3 years"): it names the
+// projection or an assumption with a new value or a redo; "what is the tax due?" or "show the loans ledger" is not one
+const P_WORD = "growth|sales|revenue|turnover|loans?|capex|capital expenditure|dividends?|drawings|debtors'?|creditors'?|stock|inventory|receivables?|payables?|days|tax rate|interest|margins?|costs?|expenses?|years?";
+const P_FOLLOW = new RegExp("\\b(assumptions?|projections?|projected)\\b|\\b(redo|re-?do|re-?run|recalculate|recompute|rework)\\b|\\b(change|make|take|set|use|keep|assume|increase|reduce|lower|raise)\\b[^.?!]{0,40}(\\d[^.?!]{0,20}\\b(" + P_WORD + ")\\b|\\b(" + P_WORD + ")\\b[^.?!]{0,30}(\\d|\\b(nil|zero|none|instead)\\b))|\\b(no|without|nil)\\s+(new\\s+)?(loans?|capex|dividends?|drawings)\\b", "i");
+export const projFollow = (q: string): boolean => P_FOLLOW.test(String(q || "")) && !/\b(post|file|delete|send|confirm)\b/i.test(String(q || ""));
 
 // a tool's result as a model reads it: masked (mask.ts), the summary and at most 15 rows (the totals answer most
 // questions; the user sees the whole table), the Day Book slice with only the columns needed; never more than 24,000 chars
@@ -377,8 +382,8 @@ export async function runTurn(ctx: TurnCtx): Promise<TurnResult> {
 
   // projected statements asked for, or an assumption changed right after them: the model with projected_statements (Opus),
   // never the statements card, the keyword router or Haiku
-  const proj = !act && !entries && !!ctx.clientId && !ctx.firmWide && (projAsked(ctx.question) || (ctx.history.slice(-2).some((h) => /projected_statements|Projected (balance sheet|profit and loss)/i.test(String(h.content || "")))
-    && /\b(assum\w*|grow\w*|redo|again|change|instead|make it|percent|loans?|capex|dividend|drawings|days|tax|years?|lakhs?|crores?)\b|%/i.test(ctx.question)));
+  const proj = !act && !entries && !!ctx.clientId && !ctx.firmWide && (projAsked(ctx.question, ctx.today)
+    || (ctx.history.slice(-2).some((h) => /projected_statements|Projected (balance sheet|profit and loss)/i.test(String(h.content || ""))) && projFollow(ctx.question)));
   // a firm-wide tool's question (the certificates), or the conversation it is in: neither the keyword router nor Haiku
   const extHit = EXT_TOOLS.find((t) => t.firmWide && (t.words.test(ctx.question) || ctx.history.slice(-2).some((h) => t.words.test(String(h.content || "")))));
 

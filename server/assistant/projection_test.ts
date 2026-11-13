@@ -14,7 +14,9 @@ import { boundHistory, HISTORY_TOTAL, runTurn, SYSTEM } from "./agent.ts";
 import { fsAsked, projAsked } from "./fsask.ts";
 import { route } from "./router.ts";
 import { claudeTools } from "./tools.ts";
-import { costOf, pbtOf, project, TOOLS } from "./tools/projection.ts";
+import { costOf, monthsIn, numOf, pbtOf, project, tablesOf, excelOf, TOOLS } from "./tools/projection.ts";
+import { fyOf } from "./tools/reports.ts";
+import { projFollow } from "./agent.ts";
 import { OPUS } from "./models.ts";
 import Anthropic from "npm:@anthropic-ai/sdk@0.133.0";
 
@@ -28,9 +30,12 @@ const fx = JSON.parse(new TextDecoder().decode(out.stdout));
 const c = fx.c, det = Object.assign({}, c.det, { entity: c.entity, age: c.age });
 const rows = c.tb.map((t: any) => ({ l: t.l, parent: t.g[0] || "", chain: t.g.slice(1), o: t.o, d: t.d, c: t.c, po: t.po, pd: t.pd, pc: t.pc }));
 const rpcCalls: string[] = [];
+// the books' first and last entry (asst_books) and the years rpt_tb holds; a test may change them
+const BOOKS = { from: "2024-04-01", to: "2026-03-31", held: ["2025-04-01"] as string[] };
 async function exec(fn: string, a: Record<string, unknown>): Promise<any> {
   rpcCalls.push(fn);
-  if (fn === "rpt_tb") return a.p_from === "2025-04-01" ? { ok: true, rows } : { ok: false, why: "not held" };
+  if (fn === "asst_books") return { rows: [{ company: "Kestrel", from: BOOKS.from, to: BOOKS.to, entries: 100 }] };
+  if (fn === "rpt_tb") return BOOKS.held.includes(String(a.p_from)) ? { ok: true, rows } : { ok: false, why: "not held" };
   if (fn === "rpt_saved") return { rx: { kind: "company", map: fx.st, det: { "2025": det } }, msme: {} };
   if (fn === "asst_find_ledgers") return { rows: [] };
   return null;
@@ -90,7 +95,7 @@ Deno.test("the engine: the client's figures carried forward on stated assumption
   const tool = TOOLS[0];
   const ctx: any = { clientId: "kestrel", clientName: "Kestrel Widgets Private Limited", today: "2026-11-13", firm: { name: "", lines: [] }, rpc: (fn: string, a: any) => exec(fn, { p_client: "kestrel", ...a }),
     uploadFile: async (b: Uint8Array, name: string, kind: string) => ({ id: name, name, kind, path: "p/" + name, expires: "", bytes: b.length }) };
-  const r = await tool.run({ client: null, base_year: null, assumptions: { ...NULLS } }, ctx);
+  const r = await tool.run({ base_year: null, assumptions: { ...NULLS } }, ctx);
   assert(!r.error, "made: " + r.error);
   const [pl, bs, cf, , as] = r.tables!;
   assert(pl.columns.map((x) => x.label).join("|") === "Particulars|2025-26 (actual)|2026-27 (estimated)|2027-28 (projected)", "actual, the running year estimated, next year projected: " + pl.columns.map((x) => x.label));
@@ -107,7 +112,7 @@ Deno.test("the engine: the client's figures carried forward on stated assumption
   assert(r.files!.length === 1 && /projected-2026-27-to-2027-28\.xlsx$/.test(r.files![0].name), "the Excel file: " + JSON.stringify(r.files));
   // the user's own assumptions replace the defaults
   const p = project({ rev: 1000000, mat: 600000, emp: 100000, exp: 100000, fin: 10000, dep: 20000, tax: 40000, ppe: 200000, share: 100000, reserves: 250000, ltb: 100000, tr: 200000, inv: 100000, cash: 50000, tp: 100000 } as any,
-    null, 2025, 2026, "company", { years: 1, revenue_growth_pct: [20], new_loans: [500000], capex: [400000] });
+    null, { fy: 2025, months: 12, kind: "company", warnings: [] }, 2026, { years: 1, revenue_growth_pct: ["20%"], new_loans: ["5 lakh"], capex: [400000] });
   const y = p.years[0].l;
   near(y.rev, 1200000, "growth 20% as said"); near(y.ltb, 600000, "the new loan as said"); near(y.mat, 720000, "materials keep 60% of revenue");
   near(pbtOf(y), y.rev - costOf(y) - y.emp - y.fin - y.dep - y.exp, "the profit adds up");
@@ -121,7 +126,7 @@ Deno.test("the turn: 'prepare a projected balance sheet' acts at once with the w
   for (let i = 0; i < 24; i++) history.push({ role: "user", content: "follow-up " + i }, { role: "assistant", content: "reply " + i });
   history.push({ role: "user", content: "start from 2025-26, the last audited year" }, { role: "assistant", content: "What growth should I take?" });
   const m = new FakeModel([
-    [{ type: "tool_use", name: "projected_statements", input: { client: null, base_year: "2025-26", assumptions: { ...NULLS, revenue_growth_pct: [12] } } }],
+    [{ type: "tool_use", name: "projected_statements", input: { base_year: "2025-26", assumptions: { ...NULLS, revenue_growth_pct: [12] } } }],
     [{ type: "text", text: "I prepared the projected statements for 2026-27 and 2027-28 from the 2025-26 books.\n- Revenue grows 12% a year.\n- No new loans.\nTell me any assumption to change and I'll redo it." }]]);
   const { r, events } = await turn("prepare a projected balance sheet", history, [], m);
   assert(!T(events, "fs").length, "not the statements card");
@@ -145,7 +150,7 @@ Deno.test("the turn: 'prepare a projected balance sheet' acts at once with the w
 });
 
 Deno.test("a change right after: 'make growth 15% and redo' goes back to the projection, not to a book tool", async () => {
-  const m = new FakeModel([[{ type: "tool_use", name: "projected_statements", input: { client: null, base_year: null, assumptions: { ...NULLS, revenue_growth_pct: [15] } } }], [{ type: "text", text: "Redone at 15%." }]]);
+  const m = new FakeModel([[{ type: "tool_use", name: "projected_statements", input: { base_year: null, assumptions: { ...NULLS, revenue_growth_pct: [15] } } }], [{ type: "text", text: "Redone at 15%." }]]);
   const { events } = await turn("make growth 15% and redo", [{ role: "user", content: "prepare a projected balance sheet" }, { role: "assistant", content: "Prepared. [Shown: table Projected balance sheet (as at 31 March) [projected_statements {}]]" }], [], m);
   assert(m.calls.length === 2 && m.calls[0].model === OPUS && !T(events, "fs").length, "the model with the projection tool");
   near(T(events, "result")[0].rows.find((x: any) => x.item === "Revenue from operations").y1, 6300000 * 1.15, "redone at 15%");
@@ -157,3 +162,99 @@ Deno.test({ name: "live: the real model calls projected_statements first, withou
   assert(r.tools[0] === "projected_statements" || r.tools.includes("projected_statements"), "called projected_statements: " + r.tools);
   assert(T(events, "result").length >= 2, "the statements shown");
 } });
+
+// ---------------------------------------------------------------- the review of 8fe086c34 (made-up figures only)
+const KEST: any = { clientId: "kestrel", clientName: "Kestrel Widgets Private Limited", today: "2026-11-13", firm: { name: "", lines: [] }, rpc: (fn: string, a: any) => exec(fn, { p_client: "kestrel", ...a }),
+  uploadFile: async (b: Uint8Array, name: string, kind: string) => ({ id: name, name, kind, path: "p/" + name, expires: "", bytes: b.length }) };
+const run = (input: Record<string, unknown>) => TOOLS[0].run({ base_year: null, assumptions: { ...NULLS }, ...input }, KEST);
+const allFinite = (tables: any[]) => tables.every((t) => t.rows.every((r: any) => Object.entries(r).every(([k, v]) => !/^y\d$/.test(k) || v == null || v === "-" || (typeof v === "number" ? isFinite(v) : !/NaN|Infinity/.test(String(v))))));
+const B0 = { rev: 0, mat: 300000, emp: 200000, exp: 100000, fin: 0, dep: 50000, tax: 0, ppe: 500000, share: 100000, reserves: 950000, tr: 200000, inv: 150000, cash: 300000, tp: 100000 } as any;
+
+Deno.test("1. nil or tiny sales: costs, debtors, stock and creditors are last year's amounts grown, never 0; and said", () => {
+  for (const rev of [0, 1000]) {
+    const p = project({ ...B0, rev }, null, { fy: 2025, months: 12, kind: "company", warnings: [] }, 2026, { revenue_growth_pct: [10] });
+    const y = p.years[0].l;
+    near(y.mat, 330000, "materials grown 10% (sales " + rev + ")"); near(y.emp, 220000, "employee costs grown"); near(y.tr, 220000, "debtors grown"); near(y.inv, 165000, "stock grown"); near(y.tp, 110000, "creditors grown");
+    assert(/were (nil|very small)/.test(p.assumptions.join(" ")), "said: " + p.assumptions.join(" ").slice(0, 300));
+    assert(allFinite(tablesOf(p)), "no NaN in the tables");
+  }
+});
+
+Deno.test("2. a partial year: the months found; annualised and said when no complete year; the running or a future year refused as a base", async () => {
+  eq3(monthsIn(2025, "2024-04-01", "2026-03-31"), 12, "a complete year"); eq3(monthsIn(2025, "2025-04-01", "2025-12-31"), 9, "nine months"); eq3(monthsIn(2026, "2024-04-01", "2026-09-30"), 6, "six months of the running year");
+  Object.assign(BOOKS, { from: "2025-04-01", to: "2025-12-31", held: ["2025-04-01"] });
+  try {
+    const r = await run({});
+    assert(!r.error, "made: " + r.error);
+    assert(/2025-26 \(actual, 9 months annualised\)/.test(r.tables![0].columns[1].label), "the base column says it: " + r.tables![0].columns[1].label);
+    near((r.tables![0].rows[0] as any).y0, 6300000 * 12 / 9, "the revenue annualised x 12/9");
+    assert(/9 months of books, its profit and loss annualised/.test(r.tables![4].rows.map((x: any) => x.item).join(" ")), "the annualising is said");
+    for (const by of ["2026-27", "2027-28", "31 March 2027"]) { const x = await run({ base_year: by }); assert(!!x.error && /not a completed year/.test(x.error!), "refused as a base: " + by + " -> " + x.error); }
+    // this year's books to date set the estimated year's growth (low)
+    Object.assign(BOOKS, { from: "2024-04-01", to: "2026-09-30", held: ["2025-04-01", "2026-04-01"] });
+    const y = await run({});
+    assert(/from this year's books to date \(6 months/.test(y.tables![4].rows.map((x: any) => x.item).join(" ")), "the running year's books used for its estimate");
+  } finally { Object.assign(BOOKS, { from: "2024-04-01", to: "2026-03-31", held: ["2025-04-01"] }); }
+});
+const eq3 = (a: unknown, b: unknown, w: string) => assert(JSON.stringify(a) === JSON.stringify(b), w + ": " + JSON.stringify(a));
+
+Deno.test("3. the base year read as a CA writes it", () => {
+  for (const [s, fy] of [["31 March 2026", "2025"], ["31-03-2026", "2025"], ["2026-03-31", "2025"], ["March 31, 2026", "2025"], ["2025-26", "2025"], ["FY 2025-26", "2025"], ["2025-2026", "2025"], ["FY25-26", "2025"], ["FY26", "2025"], ["2025", "2025"], ["30 September 2025", "2025"]])
+    eq3(fyOf(s, "2026-11-13"), fy, s);
+});
+
+Deno.test("4. a trial balance that does not balance: said first, kept as its own line, never in reserves or cash", () => {
+  const off = { ...B0, rev: 1000000, reserves: 950000 + 77777 };          // liabilities 77,777 more than assets
+  const p = project(off, null, { fy: 2025, months: 12, kind: "company", warnings: ["3 ledgers are not placed in the statements (A, B, C): place them on the Reports screen; the figures may be off."] }, 2026, {});
+  assert(/do not balance by ₹77,777/.test(p.warnings[0]) && /not placed/.test(p.warnings.join(" ")), "said: " + p.warnings);
+  const [, bs, , , as] = tablesOf(p), d = bs.rows.find((x: any) => /Difference in the books/.test(x.item)) as any;
+  assert(d && d.y0 === 77777 && d.y1 === 77777 && d.y2 === 77777, "its own line, unchanged: " + JSON.stringify(d));
+  const t = (s: string) => bs.rows.find((x: any) => x.item === s) as any;
+  near(t("Total assets").y1, t("Total equity and liabilities").y1, "the balance sheet still balances");
+  near(p.years[0].l.cash + 77777, sum0(p.years[0].l), "cash not inflated by the difference", 2);
+  assert(/^Check: The books do not balance/.test(String(as.rows[0].item)), "first in the assumptions table");
+  const x = new TextDecoder().decode(excelOf(p, "Made-up Co"));
+  assert(x.length > 0, "the Excel is made");
+});
+const sum0 = (l: any) => ["share", "capital", "current", "reserves", "ltb", "dtl", "oltl", "ltp", "stb", "tp", "ocl", "stp"].reduce((s, k) => s + (l[k] || 0), 0) - ["ppe", "intang", "cwip", "nci", "dta", "ltla", "onca", "ci", "inv", "tr", "stla", "oca"].reduce((s, k) => s + (l[k] || 0), 0);
+
+Deno.test("5. every input coerced and bounded; never NaN in the tables or the Excel", async () => {
+  eq3([numOf("25%"), numOf("1,00,000"), numOf("₹5 lakh"), numOf("2 crore"), numOf("abc"), numOf(NaN), numOf(Infinity)], [25, 100000, 500000, 20000000, null, null, null], "numbers as written");
+  const r = await run({ assumptions: { ...NULLS, years: "9", revenue_growth_pct: ["500%", "abc"], tax_rate_pct: 95, receivable_days: -4, inventory_days: "1000", material_cost_pct: "lots", capex: ["NaN"] } });
+  assert(!r.error, "made: " + r.error);
+  const said = r.tables![4].rows.map((x: any) => x.item).join(" ");
+  assert(r.tables![0].columns.length === 7, "years capped at 5: " + r.tables![0].columns.length);
+  for (const w of ["Years to project: 9 is outside 1 to 5; 5 is used", "Revenue growth %: 500 is outside -50 to 200; 200 is used", "“abc” is not a number", "Tax rate %: 95 is outside 0 to 60; 60 is used",
+    "Debtors' days: -4 is outside 0 to 730; 0 is used", "Stock days: 1000 is outside 0 to 730; 730 is used", "Cost of materials %: “lots” is not a number"]) assert(said.includes(w), "said: " + w);
+  assert(allFinite(r.tables!), "no NaN in the tables");
+  const strict = (sc: any): boolean => sc.type !== "object" || (sc.additionalProperties === false && JSON.stringify(Object.keys(sc.properties).sort()) === JSON.stringify([...sc.required].sort()) && Object.values(sc.properties).every(strict));
+  assert(strict(TOOLS[0].input_schema) && !("client" in (TOOLS[0].input_schema as any).properties), "a strict schema, no unused client field");
+});
+
+Deno.test("6-7. act-first never covers posting, filing or confirming; the follow-up rule is narrow", () => {
+  assert(/never applies to posting, filing, deleting, sending or confirming anything/.test(SYSTEM) && /explicit yes in this turn/.test(SYSTEM), "the scope of act-first");
+  for (const q of ["change growth to 15%", "redo with 20% growth", "make it 3 years", "take a new loan of 50 lakh", "no capex", "assume debtors at 60 days", "redo it without dividend", "change the assumptions"]) assert(projFollow(q), "a follow-up: " + q);
+  for (const q of ["what is the tax due this year?", "how many days to file GSTR-3B?", "show the loans ledger", "TDS on interest under 194A for 2025-26?", "show expenses over 50000 in March", "post these entries to tally", "confirm the certificate figures", "how much interest did we pay in 2 months"])
+    assert(!projFollow(q), "not a follow-up: " + q);
+});
+
+Deno.test("8. more projection wordings: a future year or date, Hinglish, Devanagari, typos", () => {
+  for (const q of ["balance sheet for FY 2027-28", "balance sheet as on 31 March 2028", "P&L for FY28", "future balance sheet", "aane wale saal ka balance sheet", "agle varsh ki balance sheet", "projeted balance sheet", "forcast P&L",
+    "अगले वर्ष की बैलेंस शीट", "अनुमानित लाभ हानि खाता", "प्रोजेक्टेड बैलेंस शीट"]) {
+    assert(projAsked(q, "2026-11-13"), "a projection: " + q);
+    assert(!fsAsked(q, null, "2026-11-13"), "not the card: " + q);
+  }
+  for (const q of ["balance sheet as on 31 March 2026", "provisional balance sheet till 30 September 2026", "balance sheet for FY 2025-26"]) assert(!projAsked(q, "2026-11-13") && fsAsked(q, null, "2026-11-13"), "the books' statements: " + q);
+});
+
+Deno.test("the DCF acts first: every missing assumption a stated default, bounded; the valuation made at once", async () => {
+  const { TOOLS: R } = await import("./tools/reports.ts");
+  const dcf = R.find((t) => t.name === "dcf_model")!;
+  const ctx = { ...KEST, today: "2026-10-13", book: async () => ({ rows: [] }), makeFile: async () => null, progress: () => {}, aiText: async () => "" };
+  const r = await dcf.run({ client: null, assumptions: { years: null, tg: "15%", wacc: "12" } }, ctx);
+  assert(!r.error, "made, nothing asked: " + r.error);
+  const as = r.tables!.find((t) => /Assumptions/.test(t.title))!, said = as.rows.map((x: any) => x.item).join(" ");
+  assert(/redo it/.test(as.title) && /Forecast of 5 years/.test(said) && /WACC 12% \(as you said\)/.test(said) && /Terminal growth %: 15 is outside -5 to 10; 10 is used/.test(said), "the defaults and bounds said: " + said);
+  assert(/Net debt/.test(said) && /Equity shares/.test(said) && /Tax rate: 25\.17%/.test(said), "net debt, shares and tax from the books or the entity");
+  assert(r.files!.length === 2 && /Tell me any assumption to change/.test(r.forModel!), "the Excel and the Word draft; the model invites changes");
+});

@@ -2133,7 +2133,7 @@ const FSX = (() => {
   };
   X.dcfExcel = function(d, ent){
     const A = d.A, n = d.n, names = {};
-    const as = {name: "Assumptions", rows: [["DRAFT - DCF valuation working. The assumptions are the user's; none is FinCom's."], [String((ent || {}).name || "").toUpperCase()], [], ["Assumption", "Value"]], widths: [60, 16]};
+    const as = {name: "Assumptions", rows: [["DRAFT - DCF valuation working. " + (d.notes ? "The assumptions are the user's or FinCom's stated defaults (listed below)." : "The assumptions are the user's; none is FinCom's.")], [String((ent || {}).name || "").toUpperCase()], [], ["Assumption", "Value"]], widths: [60, 16]};
     const inp = (nmx, label, v) => { as.rows.push([label, {v, s: 5}]); names[nmx] = "Assumptions!$B$" + as.rows.length; };
     inp("A_tax", "Tax rate (decimal)", d.t); inp("A_g", "Terminal growth (decimal)", d.g);
     if (A.wacc != null || d.fcfe) inp("A_rate_in", d.fcfe ? "Cost of equity (decimal)" : "WACC (decimal)", d.rate);
@@ -2142,6 +2142,7 @@ const FSX = (() => {
     inp("A_shares", "Number of equity shares", A.shares); if (!d.fcfe) inp("A_netdebt", "Net debt at the valuation date", A.netDebt); if (d.fcfe) inp("A_int", "Interest % of revenue (decimal)", A.interestPct / 100);
     if (A.wacc != null || d.fcfe) names.A_rate = names.A_rate_in;
     else { as.rows.push(["Cost of equity = rf + beta x ERP", {v: d.ke, f: "A_rf+A_beta*A_erp", s: 5}]); names.A_ke = "Assumptions!$B$" + as.rows.length; as.rows.push(["WACC", {v: d.rate, f: "1/(1+A_de)*A_ke+A_de/(1+A_de)*A_kd*(1-A_tax)", s: 5}]); names.A_rate = "Assumptions!$B$" + as.rows.length; }
+    if (d.notes && d.notes.length){ as.rows.push([], [{v: "How each assumption was made", s: 1}]); d.notes.forEach(t => as.rows.push([String(t)])); }
     const hs = {name: "Historical", rows: [["From the books (Schedule III statements)"], [X.UNITS], [], ["Year", "Revenue", "EBITDA", "Depreciation", "EBIT", "Finance costs", "PBT", "Tax", "PAT", "Net working capital"]], widths: [12, 16, 16, 16, 16, 16, 16, 16, 16, 18]};
     d.hist.forEach(h => hs.rows.push([X.fyLabel(h.fy)].concat(["rev", "ebitda", "dep", "ebit", "fin", "pbt", "tax", "pat", "nwc"].map(k => ({v: h[k] || 0, s: 2})))));
     const lastRow = hs.rows.length;
@@ -2180,11 +2181,12 @@ const FSX = (() => {
   };
   X.dcfWord = function(d, ent){
     const items = [{p: "DRAFT VALUATION REPORT", b: 1, center: 1, size: 26}, {p: "This draft must be issued by a registered valuer / merchant banker. FinCom prepares the working only.", b: 1, center: 1},
-      {p: "1. Purpose and basis", b: 1}, {p: "A discounted cash flow valuation (" + (d.fcfe ? "free cash flow to equity" : "free cash flow to the firm") + ") of the equity shares of " + ((ent || {}).name || "") + " as at " + d.A.valuationDate + ". The historical figures are from the financial statements prepared from the books; every assumption below was given by the user.", justify: 1},
+      {p: "1. Purpose and basis", b: 1}, {p: "A discounted cash flow valuation (" + (d.fcfe ? "free cash flow to equity" : "free cash flow to the firm") + ") of the equity shares of " + ((ent || {}).name || "") + " as at " + d.A.valuationDate + ". The historical figures are from the financial statements prepared from the books; " + (d.notes ? "each assumption below was given by the user or is FinCom's stated default (section 3)." : "every assumption below was given by the user."), justify: 1},
       {p: "2. Historical performance (from the books)", b: 1},
       {table: {cols: [{h: "Year"}, {h: "Revenue", n: 1}, {h: "EBITDA", n: 1}, {h: "PAT", n: 1}], rows: d.hist.map(h => ({t: X.fyLabel(h.fy), k: "r", c: [{v: P(h.rev)}, {v: P(h.ebitda)}, {v: P(h.pat)}]}))}},
-      {p: "3. Assumptions (given by the user)", b: 1},
+      {p: d.notes ? "3. Assumptions (the user's, or FinCom's stated defaults)" : "3. Assumptions (given by the user)", b: 1},
       {table: {cols: [{h: "Assumption"}, {h: "Value"}], rows: X.DCF_NEED.map(([k, l]) => ({t: l, k: "r", c: [Array.isArray(d.A[k]) ? d.A[k].join(", ") : String(d.A[k])]})).concat([{t: d.fcfe ? "Cost of equity" : "Discount rate (WACC)", k: "r", c: [pct2(d.rate)]}])}},
+      ...(d.notes || []).map(t => ({p: "- " + t})),
       {p: "4. Projected cash flows and value", b: 1},
       {table: {cols: [{h: "Particulars"}].concat(d.yrs.map((y, i) => ({h: "Year " + (i + 1), n: 1}))), rows: [["Revenue", "rev"], ["EBITDA", "ebitda"], [d.fcfe ? "FCFE" : "FCFF", "cf"], ["Present value", "pv"]].map(([l, k]) => ({t: l, k: "r", c: d.yrs.map(y => ({v: P(y[k])}))}))}},
       {table: {cols: [{h: "Particulars"}, {h: "Amount", n: 1}], rows: [["Sum of present values", d.sumPv], ["Present value of the terminal value", d.pvTv], [d.fcfe ? "Equity value" : "Enterprise value", d.ev], ["Equity value", d.equity]].map(([l, v]) => ({t: l, k: "r", c: [{v: P(v)}]})).concat([{t: "Value per share (₹)", k: "t", c: [dec2(d.perShare)]}])}},
