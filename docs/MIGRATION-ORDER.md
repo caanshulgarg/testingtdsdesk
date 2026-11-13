@@ -908,3 +908,14 @@ grant): the owner's unlock also ends the email's waits and counts here. Add-only
 twice. Needs migration 3 (numbers 183 to 188 belong to other branches; 189 needs none of them). Deploy: 189, then the signin function, then switch the hook on in the dashboard (Authentication ->
 Hooks -> Password Verification Attempt -> `public.auth_password_attempt_hook`). Without 189 the function counts as before.
 Tested: `tests/run_migration189.py` (RED_WITHOUT_189=1 fails), `server/security/functions/signin/handler_test.ts`.
+
+## 190: upload limits on two Storage buckets (not run yet; branch next-sec-server, 13-Nov-2026)
+
+**190, upload limits** (13-Nov-2026, branch `next-sec-server`, security review L8; **written, not run yet**; file md5 81608dd5328a5baba8f376bbad1e372c):
+`server/security/migration-190-upload-limits.sql`. Fills in two bucket settings where they were empty: `call-files` takes
+only the listed types (the app's `STORE_TYPES`, plain bytes, audio and video; fincom-call tells the page the type to put a
+chat file under, anything not listed as `application/octet-stream`), and `tally-days` gets a 64 MB size limit. No other
+bucket is touched (`assistant-files` keeps any type). Nothing else is changed; one transaction, lock_timeout 10 s, safe
+twice and without Storage. Deploy: the app and fincom-call first (an older page puts a file under the browser's own type,
+which Storage would then refuse when it is not listed), then 190. Tested: `tests/run_migration190.py` (RED_WITHOUT_190=1
+fails), `server/video-calls/handler_test.ts`.

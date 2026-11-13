@@ -19,13 +19,14 @@ export function makeApi(guest) {
     return j;
   }
   // a file put at the signed address the function gave
-  async function put(url, blob) {
-    const r = await fetch(url, { method: "PUT", headers: { "Content-Type": blob.type || "application/octet-stream", "x-upsert": "false" }, body: blob });
+  // type: the type the function said to keep it under (security review L8); an older function says none: the file's own
+  async function put(url, blob, type) {
+    const r = await fetch(url, { method: "PUT", headers: { "Content-Type": type || blob.type || "application/octet-stream", "x-upsert": "false" }, body: blob });
     if (!r.ok) throw new Error("The file did not go up (" + r.status + ")");
   }
   async function upload(what, blob, extra) {
     const u = await call("upload", Object.assign({ what, size: blob.size, type: blob.type, name: blob.name }, extra || {}));
-    await put(u.url, blob);
+    await put(u.url, blob, u.content_type);
     return u;
   }
   return { call, upload, put, guest };

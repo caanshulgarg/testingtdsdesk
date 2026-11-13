@@ -1022,3 +1022,22 @@ Deno.test("L5: a meeting's link is made only on FinCom's own https sites: a deve
   const ok = await s.call({ action: "create", title: "T", base: "https://app.fincom.live/#/meetings" }, "tok-owner");
   assert(ok.j.url.startsWith("https://app.fincom.live/#/join/"), ok.j.url);
 });
+
+// ---------- 13-Nov-2026 (security review, L8) ----------
+Deno.test("L8: a chat file of any type may be sent; it is kept under a listed type, or as plain bytes; its size is a real number within 20 MB", async () => {
+  const s = stand();
+  const a = await s.call({ action: "start", kind: "meeting" }, "tok-staff");
+  const up = (o: any) => s.call({ action: "upload", room_id: a.j.room.id, what: "chat", ...o }, "tok-staff");
+  for (const [type, kept] of [["application/pdf", "application/pdf"], ["image/PNG", "image/png"], ["text/csv; charset=utf-8", "text/csv"],
+    ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"],
+    ["text/html", "application/octet-stream"], ["image/svg+xml", "application/octet-stream"], ["application/xhtml+xml", "application/octet-stream"], ["text/javascript", "application/octet-stream"],
+    ["application/x-tally-backup", "application/octet-stream"], ["", "application/octet-stream"], [undefined, "application/octet-stream"], ["application/pdf\r\nX-Evil: 1", "application/octet-stream"]] as [any, string][]) {
+    const r = await up({ size: 1000, type, name: "file.bin" });
+    eq([r.status, r.j.bucket, r.j.content_type], [200, "call-files", kept], "type " + type);
+  }
+  for (const size of [0, -5, R.FILE_MAX + 1, "abc", Infinity, null]) eq((await up({ size, type: "application/pdf", name: "a.pdf" })).status, 413, "size " + size);
+  const mic = await s.call({ action: "upload", room_id: a.j.room.id, what: "mic", size: 5000, type: "audio/webm;codecs=opus", seq: 1 }, "tok-staff");
+  eq([mic.status, mic.j.content_type], [200, "audio/webm"], "a microphone piece: its own plain type");
+  eq(R.storeType("IMAGE/JPEG"), "image/jpeg", "the rule");
+  assert(!R.STORE_TYPES.some((t: string) => /html|svg|script|xhtml/.test(t)) && R.PLAIN_BYTES === "application/octet-stream", "no type a browser runs is on the list");
+});

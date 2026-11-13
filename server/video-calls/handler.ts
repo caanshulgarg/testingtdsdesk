@@ -887,9 +887,11 @@ export function handler(deps: Deps) {
       const r = await room(w.kind === "guest" ? w.room : b.room_id, w.kind === "member" ? w.firm : undefined, w.kind === "member" ? w : undefined);
       const p = await admittedIn(r, w);
       const what = String(b.what || ""), size = Number(b.size) || 0;
-      let bucket = "call-recordings", path = "";
+      // content_type (security review L8): the type the file is to be put under; the page sends it with the file
+      let bucket = "call-recordings", path = "", contentType = "";   // "" (a recording piece): the page's own type, as before
       if (what === "chat") {
-        if (!(size > 0 && size <= R.FILE_MAX)) fail(413, "A file may be at most 20 MB.", "size");
+        if (!(Number.isFinite(size) && size > 0 && size <= R.FILE_MAX)) fail(413, "A file may be at most 20 MB.", "size");
+        contentType = R.storeType(b.type);
         bucket = "call-files"; path = folder(r) + "chat/" + R.randomToken(9) + "-" + R.safeFileName(b.name);
       } else if (what === "rec") {
         if (w.kind !== "member" || !isHost(r, w)) fail(403, "Only the host records.", "host");
@@ -900,12 +902,13 @@ export function handler(deps: Deps) {
       } else if (what === "mic") {
         if (!(size > 0 && size <= 5 * 1024 * 1024)) fail(413, "A piece is too big.", "size");
         const ext = /mp4|m4a|aac/.test(String(b.type || "")) ? "m4a" : "webm";
+        contentType = ext === "m4a" ? "audio/mp4" : "audio/webm";
         path = folder(r) + "mic/" + p.id + "/" + String(Math.max(0, Math.min(99999, Number(b.seq) || 0))).padStart(5, "0") + "." + ext;
       } else fail(400, "Unknown upload.");
       const j: any = await svc("/storage/v1/object/upload/sign/" + bucket + "/" + path.split("/").map(q).join("/"), { method: "POST", body: "{}" });
       const url = String((j && (j.url || j.signedURL)) || "");
       if (!url) fail(502, "Storage did not give an address.");
-      return { ok: true, bucket, path, url: URL_ + "/storage/v1" + (url.startsWith("/") ? url : "/" + url) };
+      return { ok: true, bucket, path, ...(contentType ? { content_type: contentType } : {}), url: URL_ + "/storage/v1" + (url.startsWith("/") ? url : "/" + url) };
     },
     async download(w, b) {
       const r = await room(w.kind === "guest" ? w.room : b.room_id, w.kind === "member" ? w.firm : undefined, w.kind === "member" ? w : undefined);
