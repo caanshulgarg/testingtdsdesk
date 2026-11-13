@@ -193,6 +193,12 @@ func loadConfig() {
 	} else {
 		need = true
 	}
+	// 2.5.16 (servicestate.go): the service's fixed settings, whatever the file says
+	before0, _ := d.MarshalJSON()
+	applyServicePolicy(d)
+	if after0, _ := d.MarshalJSON(); string(after0) != string(before0) {
+		need = true
+	}
 	if str(d.Get("Key")) == "" {
 		d.Set("Key", newBridgeKey())
 		need = true
@@ -264,6 +270,7 @@ func syncConfig() {
 		return
 	}
 	guardPorts(o)
+	applyServicePolicy(o) // 2.5.16: never a fixed setting of the service from the file
 	cfgMu.Lock()
 	for _, k := range o.keys {
 		Cfg.Set(k, o.Get(k))

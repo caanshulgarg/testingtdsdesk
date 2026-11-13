@@ -43,6 +43,7 @@ func (service) Execute(args []string, req <-chan svc.ChangeRequest, st chan<- sv
 		}()
 		// round 20 (the re-review's Medium 1): at the first start of a new version (a bridge that updated itself never
 		// ran the install step) the recorder trial's folders are checked and made safe, once, before anything runs
+		serviceStateAtStart(writeLog) // 2.5.16: the settings and state in the service's own folder (servicestate.go)
 		if exe, err := os.Executable(); err == nil {
 			foldersAfterUpdate(filepath.Dir(exe), writeLog)
 			tallyIniAfterUpdate(filepath.Dir(exe), writeLog) // 2.4.5: FinCom's add-on in tally.ini (tallyini.go)
@@ -219,7 +220,10 @@ func startTrayIn(session uint32) error {
 }
 
 // --- install (run by the installer, as an administrator)
-type ownerInfo struct{ name, sid, profile, home string }
+type ownerInfo struct {
+	name, sid, profile, home string
+	cfgDir                   string // 2.5.16: where the settings go when not home (the service's folder, servicestate.go)
+}
 
 // the Windows user who runs the installer (the person signed in to this session, even when an administrator's password
 // was typed to install)
@@ -428,6 +432,21 @@ func installCmd(args []string) int {
 	_ = os.MkdirAll(o.home, 0o755)
 	clearPairOpen(regPairStore{registry.LOCAL_MACHINE}) // 2.4.6: an earlier install's first-start ask never outlives this install (pairopen.go)
 	stopService()
+	// 2.5.16 (servicestate.go): the service's settings and state in its own folder (the owner may read it, not change it);
+	// the earlier folder's files copied there once
+	home := o.home
+	if d, err := prepareServiceStateDir(o.sid, installLog); err != nil {
+		installLog("Install: the service's own folder could not be made safe (" + err.Error() + "); the settings stay in " + o.home + " for now (the service tries again at its start)")
+	} else {
+		cur := installedConfig()
+		if cur == "" || !exists(cur) {
+			cur = filepath.Join(o.home, "tds-bridge.config.json")
+		}
+		if err := copyServiceHome(filepath.Dir(cur), d, installLog); err != nil {
+			installLog("Install: the earlier settings could not all be copied into " + d + " (" + err.Error() + ")")
+		}
+		o.cfgDir, home = d, d
+	}
 	cfgPath, code := writeSettings(o, mode, fincom)
 	if code != 0 {
 		return code
@@ -435,7 +454,7 @@ func installCmd(args []string) int {
 	exe, _ := os.Executable()
 	k, _, err := registry.CreateKey(registry.LOCAL_MACHINE, regKey, registry.ALL_ACCESS|registry.WOW64_64KEY)
 	if err == nil {
-		_ = k.SetStringValue("Home", o.home)
+		_ = k.SetStringValue("Home", home)
 		_ = k.SetStringValue("Config", cfgPath)
 		_ = k.SetStringValue("Owner", o.name)
 		_ = k.SetStringValue("OwnerSid", o.sid)
@@ -447,7 +466,7 @@ func installCmd(args []string) int {
 	}
 	// 2.5.3 (gate g253 n2): the bridge's own settings and folder, so the setup's tally.ini results (tally-ini.json) are
 	// kept where the bridge reads them, not in the setup's working folder
-	setPaths(cfgPath, o.home)
+	setPaths(cfgPath, home)
 	loadConfigRO()
 	// round 19 (S2): the recorder trial's folders, links refused, their permissions set here (folders.go)
 	installFinComFolders(true, installLog)
@@ -467,9 +486,13 @@ func installCmd(args []string) int {
 // bridge 1.15.0, with its own file and port; or sole, in bridge 1.15.0's own settings, which then is taken off
 func writeSettings(o ownerInfo, mode, fincom string) (string, int) {
 	psCfg := filepath.Join(o.home, "tds-bridge.config.json")
+	dir := o.home
+	if o.cfgDir != "" {
+		dir = o.cfgDir // 2.5.16: the service's own folder (bridge 1.15.0's settings still read from its own)
+	}
 	var cfgPath string
 	if mode == "test" {
-		cfgPath = filepath.Join(o.home, "go-bridge.config.json")
+		cfgPath = filepath.Join(dir, "go-bridge.config.json")
 		c := newOrdered()
 		if exists(cfgPath) {
 			_ = c.UnmarshalText(readText(cfgPath))
@@ -487,26 +510,28 @@ func writeSettings(o ownerInfo, mode, fincom string) (string, int) {
 		c.Set("Mode", "test")
 		installPort(c, 9101) // 2.3.0: a port of 9100..9199 this user's bridge took before is kept
 		c.Set("PsHome", o.home)
-		c.Set("SyncDir", filepath.Join(o.home, "go-sync"))
-		c.Set("JobsDir", filepath.Join(o.home, "go-jobs"))
-		c.Set("LogFile", filepath.Join(o.home, "go-bridge.log"))
+		c.Set("SyncDir", filepath.Join(dir, "go-sync"))
+		c.Set("JobsDir", filepath.Join(dir, "go-jobs"))
+		c.Set("LogFile", filepath.Join(dir, "go-bridge.log"))
 		setOwner(c, o, fincom)
 		if err := writeOrdered(cfgPath, c); err != nil {
 			return "", installFailed(3, "The settings could not be written ("+err.Error()+").", "Close any program that has "+cfgPath+" open, then run the setup again.")
 		}
 	} else {
-		cfgPath = psCfg
+		cfgPath = filepath.Join(dir, "tds-bridge.config.json")
 		c := newOrdered()
 		if exists(cfgPath) {
 			_ = c.UnmarshalText(readText(cfgPath))
+		} else if exists(psCfg) {
+			_ = c.UnmarshalText(readText(psCfg))
 		}
 		// switched from test mode: the same bridge for FinCom (the id FinCom made the main one)
-		carryInstanceID(c, filepath.Join(o.home, "go-bridge.config.json"))
+		carryInstanceID(c, filepath.Join(dir, "go-bridge.config.json"))
 		c.Set("Mode", "")
 		installPort(c, 9100) // 2.3.0: a port of 9100..9199 this user's bridge took before is kept
 		// the main bridge on this computer, with no click: told to FinCom on its first contact (claimMainOnce)
 		c.Set("ClaimMain", true)
-		c.Set("LogFile", filepath.Join(o.home, "tds-bridge.log"))
+		c.Set("LogFile", filepath.Join(dir, "tds-bridge.log"))
 		setOwner(c, o, fincom)
 		if err := writeOrdered(cfgPath, c); err != nil {
 			return "", installFailed(3, "The settings could not be written ("+err.Error()+").", "Close any program that has "+cfgPath+" open, then run the setup again.")
@@ -780,7 +805,15 @@ func uninstallCmd(args []string) int {
 	_ = c.Run()
 	installLog("Uninstall: the FinCom Bridge service and its tray icons were stopped and the service removed")
 	removeOwnTask()
-	putBackOldBridge(mode, home)
+	// 2.5.16 (servicestate.go): the service's own folder, and the owner's folder it was copied from (bridge 1.15.0's)
+	if _, sid := platServiceOwner(); sid != "" && home != "" && pathInside(home, serviceStateDir(sid)) {
+		if old := platServiceOldHome(sid); old != "" {
+			putBackOldBridge(mode, old)
+			removeOwnFilesLogged(old, mode, contains(args, "--keep-pairing"))
+		}
+	} else {
+		putBackOldBridge(mode, home)
+	}
 	removeOwnFilesLogged(home, mode, contains(args, "--keep-pairing"))
 	_ = registry.DeleteKey(registry.LOCAL_MACHINE, regKey)
 	installLog("Uninstall: FinCom Bridge removed (its record in HKLM\\" + regKey + " too); bridge 1.15.0's files in " + home + " are kept")

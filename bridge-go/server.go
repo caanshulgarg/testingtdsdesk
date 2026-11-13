@@ -437,7 +437,7 @@ func route(w http.ResponseWriter, r *http.Request, path string, qs url.Values, b
 		coMu.Lock()
 		pm := planMode
 		coMu.Unlock()
-		return M{"ok": true, "version": BridgeVersion, "computer": computerName(), "user": ownerName(), "mySession": mySession(), "mode": pm, "onlyMySession": cfgB("OnlyMySession"), "time": nowS(),
+		return M{"ok": true, "version": BridgeVersion, "computer": computerName(), "user": ownerName(), "mySession": mySession(), "mode": pm, "onlyMySession": onlyMySession(), "time": nowS(),
 			"sessions": sessions, "allowImport": cfgB("AllowImport") && why == "", "readOnly": why, "impl": "go", "testMode": testMode(), "paused": paused(),
 			"tallyStuck": getTallyStuck(), "wake": wakeStatus(), "jobs": jobsNow, "posting": postingNow(), "tally": tallyStatus(sessions), "beat": beatStatus(),
 			"tallyWhy": why253, "tallyConnectSay": tallyConnectSay(why253, tallyIniBeat()), "sameSession": sameSessionOf(r),

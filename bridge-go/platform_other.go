@@ -125,3 +125,7 @@ func platRemotePath(p string) bool { return false }
 func platFvuRunAsOwner(q fvuReq) M {
 	return M{"ok": false, "needSignIn": true, "error": "The FVU runs only with the rights of the Windows user this bridge works for, never as Windows itself."}
 }
+
+// 2.5.16 (servicestate.go): no service here
+func platServiceOwner() (string, string)   { return "", "" }
+func platServiceOldHome(sid string) string { return "" }

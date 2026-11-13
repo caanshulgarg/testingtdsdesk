@@ -923,7 +923,7 @@ func tallyOpenNow() int {
 	}
 	_, plan := portPlan()
 	for _, pp := range plan {
-		if cfgB("OnlyMySession") && pp["mine"] == false {
+		if onlyMySession() && pp["mine"] == false {
 			continue
 		}
 		if tallyPortOpen(toInt(pp["port"])) {

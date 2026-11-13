@@ -323,7 +323,7 @@ func platTallyRunning() bool {
 		return true // Windows did not say: the port decides
 	}
 	for _, p := range ps {
-		if reTally.MatchString(p.Name) && (!cfgB("OnlyMySession") || sessionOwner(p) != "other") {
+		if reTally.MatchString(p.Name) && (!onlyMySession() || sessionOwner(p) != "other") {
 			return true
 		}
 	}

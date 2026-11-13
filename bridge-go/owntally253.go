@@ -37,7 +37,7 @@ func planEntry(pp M) M {
 	if pp["mine"] == nil {
 		e["owner"] = "unknown"
 	}
-	if cfgB("OnlyMySession") && pp["mine"] == false {
+	if onlyMySession() && pp["mine"] == false {
 		e["skipped"], e["reason"] = true, "another user"
 		who := str(pp["user"])
 		if who == "" {
