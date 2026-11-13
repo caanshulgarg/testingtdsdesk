@@ -9,6 +9,12 @@ failed on staging.)
 `server/security/functions/_shared` is a link to this folder, so `../_shared/cors.ts` resolves the same way from
 `server/<fn>/` and from `server/security/functions/<fn>/`.
 
+**13-Nov-2026 (security review L5):** the fixed list is FinCom's own https sites. A file opened from disk (`null`) and a
+developer's machine (`http://localhost:8000`, `http://127.0.0.1:8000`) are allowed only where a function's
+`ALLOWED_ORIGINS` secret lists them (staging, if they are still wanted there: `null,http://localhost:8000,http://127.0.0.1:8000`).
+Links and redirects FinCom makes (`linkOrigins()`: a meeting's link, the way back from Zoho) go to https sites only,
+whatever the secret adds.
+
 ## What each deploy must include
 
 **26-Oct-2026 (audit M1): functions are deployed as uploaded files from one commit, never as a

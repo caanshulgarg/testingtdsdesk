@@ -35,7 +35,7 @@
 //     {kind:"hook_new", connection}    -> {url}: the webhook address, shown once (owner)
 //     {kind:"post", client, entries, masters}    -> {ok, results: [{id, ok, message, zoho}]} (owner or staff)
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { corsFor, allowedOrigins } from "../_shared/cors.ts";
+import { corsFor, linkOrigins } from "../_shared/cors.ts";   // linkOrigins: https sites only for the way back (security review L5)
 import * as Z from "./map.js";
 import { firmGate, viaClient } from "../_shared/firmgate.ts";   // the console's switches (migration 118)
 import { publicError } from "../_shared/errors.ts";   // what a caller is told when something fails inside (security review L3)
@@ -489,7 +489,7 @@ function json(status: number, body: unknown, req: Request | null) {
 }
 function backTo(back: string, hash: string) {
   let u = "";
-  try { const x = new URL(back); if (allowedOrigins().includes(x.origin)) u = x.origin + x.pathname; } catch (_) { u = ""; }
+  try { const x = new URL(back); if (linkOrigins().includes(x.origin)) u = x.origin + x.pathname; } catch (_) { u = ""; }
   return (u || "https://staging.fincom.live/") + hash;
 }
 // 13-Nov-2026 (security review, M3): the sign-in to Zoho is completed only by the FinCom session that began it.
@@ -591,7 +591,7 @@ Deno.serve(async (req) => {
       const nh = String(body.nonce_hash || "");
       if (!/^[0-9a-f]{64}$/.test(nh)) return json(400, { ok: false, error: "Reload FinCom and connect Zoho Books again." }, req);
       let back = "";
-      try { const x = new URL(String(body.back || "")); if (allowedOrigins().includes(x.origin)) back = (x.origin + x.pathname).slice(0, 300); } catch (_) { back = ""; }
+      try { const x = new URL(String(body.back || "")); if (linkOrigins().includes(x.origin)) back = (x.origin + x.pathname).slice(0, 300); } catch (_) { back = ""; }
       const st = randomHex(24) + "." + b64u(back);
       await rpc("zoho_state_new", { p_user: me.user, p_state_hash: await sha256(st + ":" + nh), p_back: back });
       const q = new URLSearchParams({ scope: SCOPES.join(","), client_id: clientId(), response_type: "code", access_type: "offline", prompt: "consent", redirect_uri: REDIRECT, state: st });

@@ -1011,3 +1011,14 @@ Deno.test("L4: wrong meeting codes are counted by the address the platform saw: 
   const r = await down.call({ action: "guest_start", code: b.j.room.code, name: "Real Person", email: "r@x.test" });
   eq([r.status, r.j.kind], [429, "tries"], "the counter cannot be reached: not tried");
 });
+
+// ---------- 13-Nov-2026 (security review, L5) ----------
+Deno.test("L5: a meeting's link is made only on FinCom's own https sites: a developer's machine, a file from disk or another site gets staging's", async () => {
+  const s = stand();
+  for (const base of ["http://localhost:8000/index.html", "http://127.0.0.1:8000/", "null", "file:///C:/x/index.html", "https://elsewhere.example/x", ""]) {
+    const r = await s.call({ action: "create", title: "T", base }, "tok-owner");
+    assert(r.j.url.startsWith("https://staging.fincom.live/#/join/"), base + " -> " + r.j.url);
+  }
+  const ok = await s.call({ action: "create", title: "T", base: "https://app.fincom.live/#/meetings" }, "tok-owner");
+  assert(ok.j.url.startsWith("https://app.fincom.live/#/join/"), ok.j.url);
+});

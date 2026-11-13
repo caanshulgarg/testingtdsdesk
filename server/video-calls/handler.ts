@@ -37,7 +37,7 @@
 // ("call_captions") first ask the console's switches (ai_allowed through ../_shared/ai_policy.ts); off -> kind "ai_off"
 // with "AI for <feature> is switched off by FinCom", before any key is read or any provider called. A model set there
 // replaces the summary's.
-import { corsFor, allowedOrigins } from "../_shared/cors.ts";
+import { corsFor, linkOrigins } from "../_shared/cors.ts";
 import { firmGate, viaRest } from "../_shared/firmgate.ts";   // the console's switches (migration 118)
 import { aiPolicy, refusal } from "../_shared/ai_policy.ts";
 import { clientIp } from "../_shared/clientip.ts";
@@ -277,7 +277,7 @@ export function handler(deps: Deps) {
     const b = String(base || "");
     let origin = "";
     try { origin = new URL(b).origin; } catch { /* below */ }
-    return origin && allowedOrigins().includes(origin) ? b.split("#")[0] : "https://staging.fincom.live/";
+    return origin && linkOrigins().includes(origin) ? b.split("#")[0] : "https://staging.fincom.live/";
   };
   const linkUrl = (base: unknown, token: string) => siteBase(base) + "#join=" + token;
   const codeUrl = (base: unknown, code: string) => R.joinLink(siteBase(base), code);

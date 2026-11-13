@@ -30,12 +30,19 @@ const covers = (h, list) => { const have = String(h || "").toLowerCase().split("
     }
     const bad = m.corsFor(req("https://evil.example"));
     ok(bad["Access-Control-Allow-Origin"] !== "https://evil.example" && bad["Access-Control-Allow-Origin"] === "https://caanshulgarg.github.io", fn + ": an unknown site is not echoed (" + bad["Access-Control-Allow-Origin"] + ")");
-    ok(m.corsFor(req("null"))["Access-Control-Allow-Origin"] === "null", fn + ": the standalone file (Origin null) still works");
+    // security review L5 (13-Nov-2026): a file opened from disk and a developer's own machine are not on the fixed list
+    for (const o of ["null", "http://localhost:8000", "http://127.0.0.1:8000"]) ok(m.corsFor(req(o))["Access-Control-Allow-Origin"] === "https://caanshulgarg.github.io", fn + ": " + o + " is not allowed unless the function's secret lists it");
   }
   // ALLOWED_ORIGINS secret still adds sites
   globalThis.Deno = { env: { get: (k) => (k === "ALLOWED_ORIGINS" ? "https://extra.example, https://two.example" : undefined) } };
   ok(shared.corsFor(req("https://two.example"))["Access-Control-Allow-Origin"] === "https://two.example", "the ALLOWED_ORIGINS secret still adds sites");
+  // L5: staging's secret may still allow them for calls; links and redirects go to https sites only, whatever the secret says
+  globalThis.Deno = { env: { get: (k) => (k === "ALLOWED_ORIGINS" ? "null, http://localhost:8000, https://extra.example, http://plain.example, https://localhost:8443" : undefined) } };
+  ok(shared.corsFor(req("null"))["Access-Control-Allow-Origin"] === "null" && shared.corsFor(req("http://localhost:8000"))["Access-Control-Allow-Origin"] === "http://localhost:8000", "the secret (staging) still allows a file from disk and a developer's machine to call");
+  const links = shared.linkOrigins();
+  ok(SITES.every((x) => links.includes(x)) && links.includes("https://extra.example") && !links.some((x) => x === "null" || /^http:|localhost|127\./.test(x)), "links and redirects: https sites only (" + links.join(" ") + ")");
   delete globalThis.Deno;
+  ok(!shared.ALLOWED_ORIGINS.some((x) => x === "null" || !/^https:\/\//.test(x)), "the fixed list is https sites only");
 
   // functions that keep "*": headers from the shared file, and the OPTIONS answer uses them
   for (const [fn, dir, methods] of [["tally-ingest", "server/tally-cloud", "POST"], ["gst-api", "server/gst-api", "GET, POST"], ["gst-taxpro", "server/gst-taxpro", "GET, POST"], ["support-mail", "server/support-mail", "POST"]]) {

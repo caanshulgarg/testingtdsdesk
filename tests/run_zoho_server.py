@@ -108,7 +108,7 @@ try:
         "ZohoBooks.invoices.READ", "ZohoBooks.creditnotes.READ", "ZohoBooks.customerpayments.READ", "ZohoBooks.bills.READ", "ZohoBooks.bills.CREATE", "ZohoBooks.debitnotes.READ",
         "ZohoBooks.vendorpayments.READ", "ZohoBooks.expenses.READ", "ZohoBooks.expenses.CREATE", "ZohoBooks.banking.READ"}, "the scopes: ZohoBooks.* READ, and CREATE only for bills, expenses, journals (accountants) and contacts; never UPDATE, DELETE or ALL")
     NONCE = "5a" * 32; NH = hashlib.sha256(NONCE.encode()).hexdigest()
-    START = {"kind": "connect_start", "back": "http://127.0.0.1:8000/index.html", "nonce_hash": NH}
+    START = {"kind": "connect_start", "back": "https://app.fincom.live/index.html", "nonce_hash": NH}
     def approval(body=None, tok="tok-owner"):
         c, r, _ = call(body or START, tok=tok); au = urlparse(r.get("url", "")); return c, r, au, {k: v[0] for k, v in parse_qs(au.query).items()}
     def frag(loc): return {k: v[0] for k, v in parse_qs(loc.split("?", 1)[1] if "?" in loc else "").items()}
@@ -116,7 +116,7 @@ try:
     grants = lambda: int(db.one("select count(*) from zoho_grants"))
     c, r, _ = call(START, tok="tok-staff")
     ok(c == 403, "a staff member cannot connect Zoho (%s %s)" % (c, r.get("error")))
-    c, r, _ = call({"kind": "connect_start", "back": "http://127.0.0.1:8000/index.html"})
+    c, r, _ = call({"kind": "connect_start", "back": "https://app.fincom.live/index.html"})
     ok(c == 400 and "url" not in r and int(db.one("select count(*) from zoho_oauth_states")) == 0, "M3: a sign-in to Zoho is not begun without the page's own value for the tab (%s)" % c)
     c, r, au, aq = approval()
     ok(c == 200 and au.path == "/oauth/v2/auth" and aq.get("access_type") == "offline" and aq.get("response_type") == "code" and aq.get("redirect_uri") == URL and aq.get("client_id") == FZ.CLIENT_ID,
@@ -127,13 +127,20 @@ try:
     t0 = tokens()
     c, r, h = call(None, tok=None, path="?code=code-good&state=%s&location=in&accounts-server=x" % state, method="GET")
     loc = (h or {}).get("Location", ""); fq = frag(loc)
-    ok(c == 302 and loc.startswith("http://127.0.0.1:8000/index.html#/integrations/zoho?") and fq.get("zcode") == "code-good" and fq.get("zstate") == state and "grant=" not in loc,
+    ok(c == 302 and loc.startswith("https://app.fincom.live/index.html#/integrations/zoho?") and fq.get("zcode") == "code-good" and fq.get("zstate") == state and "grant=" not in loc,
        "M3: Zoho's redirect goes on to FinCom's Zoho page with the code and the state (%s)" % loc[:90])
     ok(tokens() == t0 and grants() == 0 and not db.rows("select 1 from vault.secrets where name like 'zoho:%'") and db.one("select used_at from zoho_oauth_states") in (None, ""),
        "M3: the redirect alone exchanges nothing at Zoho, stores no sign-in and uses up no state")
     ok((h or {}).get("Cache-Control") == "no-store" and (h or {}).get("Referrer-Policy") == "no-referrer", "M3: the redirect is not cached and sends no referrer")
     c, r, h = call(None, tok=None, path="?error=access_denied&state=%s" % state, method="GET")
     ok(c == 302 and (h or {}).get("Location", "").endswith("#/integrations/zoho?zoho=refused"), "Zoho's refusal comes back as refused")
+    # L5: a developer's own machine, even when the function's ALLOWED_ORIGINS secret lists it (as here), is never where a redirect goes
+    c, r, au2, aq2 = approval(dict(START, back="http://127.0.0.1:8000/index.html"))
+    c, r, h = call(None, tok=None, path="?code=code-good&state=%s" % aq2.get("state", ""), method="GET")
+    ok(c == 302 and (h or {}).get("Location", "").startswith("https://staging.fincom.live/#/integrations/zoho?"), "L5: a way back to http://127.0.0.1 is not taken; FinCom's own site instead (%s)" % (h or {}).get("Location", "")[:50])
+    local = "b" * 48 + "." + __import__("base64").urlsafe_b64encode(b"http://localhost:8000/x").decode().rstrip("=")
+    c, r, h = call(None, tok=None, path="?code=code-good&state=%s" % local, method="GET")
+    ok(c == 302 and (h or {}).get("Location", "").startswith("https://staging.fincom.live/#"), "L5: nor one written into the state")
     evil = "a" * 48 + "." + __import__("base64").urlsafe_b64encode(b"https://elsewhere.example/x").decode().rstrip("=")
     for stx in (evil, "nonsense", ""):
         c, r, h = call(None, tok=None, path="?code=code-good&state=%s" % stx, method="GET")
