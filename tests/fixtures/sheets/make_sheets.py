@@ -42,12 +42,14 @@ try:
     import openpyxl, datetime
     D = lambda d: datetime.datetime(2026, 10, d)
     DASH = " -   "
-    def shape(name, party, ledger, rows):
+    def shape(name, party, ledger, rows, typed=True):
         wb = openpyxl.Workbook(); ws = wb.active; ws.title = "Sheet1"
+        head = ["Date", party, "Voucher Type", "Vch No.", ledger, "HSN", "Taxable Amount", "IGST", "CGST", "SGST", "Invoice Amount"]
+        cut = (lambda r: r) if typed else (lambda r: r[:2] + r[3:])     # typed False: the sheet has no Voucher Type column
         ws.append([])
-        ws.append(["Date", party, "Voucher Type", "Vch No.", ledger, "HSN", "Taxable Amount", "IGST", "CGST", "SGST", "Invoice Amount"])
-        for r in rows: ws.append(r)
-        ws.append(["Total", None, None, None, None, None] + [sum(x[i] for x in rows if isinstance(x[i], (int, float))) for i in range(6, 11)])
+        ws.append(cut(head))
+        for r in rows: ws.append(cut(r))
+        ws.append(cut(["Total", None, None, None, None, None] + [sum(x[i] for x in rows if isinstance(x[i], (int, float))) for i in range(6, 11)]))
         wb.save(os.path.join(HERE, name))
     shape("sales_owner_shape.xlsx", "Customer Name", "Sales Ledger", [
         [D(6), "Asha Textiles Pvt Ltd", "Sales UP", "UP/26-27/0001", "Consulting Income (A)", 998311, 1000, 180, DASH, DASH, 1180],
@@ -57,6 +59,28 @@ try:
     shape("purchase_owner_shape.xlsx", "Supplier Name", "Purchase Ledger", [
         [D(6), "Dev Packaging", "Purchase UP", "DP/501", "Purchase of Goods (UP)", 4819, 4000, DASH, 360, 360, 4720],
         [D(7), "Esha Traders", "Purchase UP", "ET/77", "Purchase of Goods (UP)", 4819, 1000, 180, DASH, DASH, 1180]])
+    # credit and debit notes (the owner, 13-Nov-2026): the kind of row by what the type column says, whatever its case; and,
+    # in a sheet with no type column, by a negative invoice total
+    A, CI, PG = "Asha Textiles Pvt Ltd", "Consulting Income (A)", "Purchase of Goods (UP)"
+    shape("sales_notes.xlsx", "Customer Name", "Sales Ledger", [
+        [D(12), A, "Sales UP", "UP/26-27/0011", CI, 998311, 1000, 180, DASH, DASH, 1180],
+        [D(13), A, "Credit Note", "CN/26-27/01", CI, 998311, 500, 90, DASH, DASH, 590],
+        [D(14), A, "Sales Return", "SR/26-27/02", CI, 998311, 200, 36, DASH, DASH, 236],
+        [D(15), A, "crn", "CRN/26-27/03", CI, 998311, 100, 18, DASH, DASH, 118],
+        [D(16), A, "Debit Note", "DN/26-27/01", CI, 998311, 300, 54, DASH, DASH, 354],
+        [D(17), A, "DBN", "DBN/26-27/02", CI, 998311, 100, 18, DASH, DASH, 118]])
+    shape("sales_negative.xlsx", "Customer Name", "Sales Ledger", [
+        [D(20), A, "", "UP/26-27/0021", CI, 998311, 1000, 180, DASH, DASH, 1180],
+        [D(21), A, "", "UP/26-27/0022", CI, 998311, -400, -72, DASH, DASH, -472]], typed=False)
+    shape("purchase_notes.xlsx", "Supplier Name", "Purchase Ledger", [
+        [D(12), "Dev Packaging", "Purchase UP", "DP/601", PG, 4819, 1000, 180, DASH, DASH, 1180],
+        [D(13), "Dev Packaging", "Purchase Return", "DP/PR1", PG, 4819, 200, 36, DASH, DASH, 236],
+        [D(14), "Dev Packaging", "Debit Note", "DP/DN1", PG, 4819, 100, 18, DASH, DASH, 118],
+        [D(15), "Dev Packaging", "dbn", "DP/DBN1", PG, 4819, 50, 9, DASH, DASH, 59],
+        [D(16), "Dev Packaging", "Credit Note", "DP/CN1", PG, 4819, 300, 54, DASH, DASH, 354]])
+    shape("purchase_negative.xlsx", "Supplier Name", "Purchase Ledger", [
+        [D(20), "Dev Packaging", "", "DP/701", PG, 4819, 1000, 180, DASH, DASH, 1180],
+        [D(21), "Dev Packaging", "", "DP/702", PG, 4819, -400, -72, DASH, DASH, -472]], typed=False)
 except ImportError:
     pass
 

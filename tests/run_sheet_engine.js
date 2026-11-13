@@ -112,9 +112,9 @@ const gs = [[], ["Date", "Customer Name", "Voucher Type", "Vch No.", "Sales Ledg
 const hs = F.head(gs);
 const old = {date: "date", no: "vchno", party: "customername", ledger: "salesledger", doctype: "vouchertype", taxable: "taxableamount", igst: "igst", cgst: "cgst", sgst: "sgst", total: "invoiceamount"};
 const fx = F.fix(old, gs[hs], gs.slice(hs + 1));
-ok(hs === 1 && fx && fx.sledger === "salesledger" && fx.vchtype === "vouchertype" && !fx.ledger && !fx.doctype && old.ledger === "salesledger", "the header on row 2; the Sales Ledger column is the sales ledger, Voucher Type Tally's voucher type (" + JSON.stringify(fx) + ")");
+ok(hs === 1 && fx && fx.sledger === "salesledger" && fx.doctype === "vouchertype" && !fx.vchtype && !fx.ledger && old.ledger === "salesledger", "the header on row 2; the Sales Ledger column is the sales ledger, Voucher Type Tally's voucher type (" + JSON.stringify(fx) + ")");
 const ds = F.apply({map: fx || old, transforms: {date: "ymd", groupByNo: false}}, gs, hs, co, "sales");
-ok(ds.length === 1 && ds[0].sledger === "Consulting Income (A)" && ds[0].vch === "Sales UP" && ds[0].ledger === "" && ds[0].note === "" && ds[0].igst === 180 && ds[0].cgst === 0 && ds[0].total === 1180 && ds[0].check.ok && ds.skipped.length === 1,
+ok(ds.length === 1 && ds[0].sledger === "Consulting Income (A)" && ds[0].ledger === "" && ds[0].note === "" && ds[0].igst === 180 && ds[0].cgst === 0 && ds[0].total === 1180 && ds[0].check.ok && ds.skipped.length === 1,
   "the document: its sales ledger and voucher type, no party's ledger; the dash cells nil; the Total row left out (" + JSON.stringify(ds.map((d) => [d.sledger, d.vch, d.ledger, d.cgst, d.total])) + ")");
 ok(F.fix({no: "no", ledger: "partyledger", doctype: "doctype"}, ["No", "Party Ledger", "Doc Type"], [["1", "X Traders", "Invoice"]]) === null && F.fix(fx || {}, gs[hs], gs.slice(hs + 1)) === null, "a party's ledger column and a document type are left as they are; a corrected mapping is not corrected again");
 const cnv = F.apply({map: {no: "no", vchtype: "vchtype", taxable: "amt", total: "amt"}, transforms: {}}, [["No", "Vch Type", "Amt"], ["C1", "Credit Note", 100]], 0, co, "sales");

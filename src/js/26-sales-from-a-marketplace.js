@@ -378,15 +378,15 @@ async function salesCheckTally(list){
   const co = CO(SL().cid);
   if (!tallyVia(co) || !list.length) return 0;
   const dates = list.map(v => v.x.date).filter(Boolean).sort();
-  const j = await tallyCall(co, "/vouchers?company=" + encodeURIComponent(tallyCoName(co)) + "&from=" + isoToTally(addDays(dates[0], -3)) + "&to=" + isoToTally(addDays(dates[dates.length - 1], 3)) + "&types=" + encodeURIComponent([...new Set([SL().cfg.voucherType || "Sales", "Sales"].concat(list.map(v => v.x.vchType).filter(Boolean)))].join(",")) + Bridge.pinQ());
+  const j = await tallyCall(co, "/vouchers?company=" + encodeURIComponent(tallyCoName(co)) + "&from=" + isoToTally(addDays(dates[0], -3)) + "&to=" + isoToTally(addDays(dates[dates.length - 1], 3)) + "&types=" + encodeURIComponent([...new Set(list.map(v => salesVt(v.x)).concat("Sales"))].join(",")) + Bridge.pinQ());
   const vs = [].concat(j.vouchers || []).filter(v => !/^yes$/i.test(v.cancelled || ""));
   const by = new Map();
   vs.forEach(x => [normInvNo(x.number), normInvNo(x.reference)].filter(Boolean).forEach(k => { if (!by.has(k)) by.set(k, []); if (!by.get(k).includes(x)) by.get(k).push(x); }));
-  let n = 0;
+  let n = 0; const lc = s => String(s || "").toLowerCase();
   // a voucher a person said is not this invoice's (Not this Tally entry) is never matched to it again
   const keep = SL().cfg.notTally || {};
   list.forEach(v => { const no = normInvNo(v.x.number), not = (v.notTally || []).concat(keep[no] || []);
-    const hit = no && !not.includes("num:" + no) && (by.get(no) || []).find(x => !not.includes(salesTallyKey(x)));
+    const hit = no && !not.includes("num:" + no) && (by.get(no) || []).find(x => !not.includes(salesTallyKey(x)) && (lc(x.type) === lc(salesVt(v.x)) || !(v.x.noteKind || /note/i.test(x.type))));   // (a note is a note's, an invoice an invoice's)
     if (hit){ v.status = "intally"; v.postNote = "Already in Tally"; v.tallyMatch = {key: salesTallyKey(hit), date: String(hit.date || ""), number: String(hit.number || ""), amount: r2(Math.abs(num(hit.amount)))}; n++; } });
   return n;
 }

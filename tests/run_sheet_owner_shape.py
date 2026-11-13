@@ -10,12 +10,16 @@ their GST ledgers and some parties in sub-groups (Sales Local under Sales Accoun
   2. the check step: a customer in a sub-group of Sundry Debtors is found; an unknown customer and an unknown sales ledger
      are asked; "Create it" makes the ledger (its group by its role), "Map to a ledger…" sets it;
   3. the invoices: the customer, the sheet's own sales ledger, the output GST ledgers found in their sub-group, nothing
-     left "not set": Ready to post; the voucher as it goes to Tally is a "Sales UP" voucher; Post is enabled and posts
+     left "not set": Ready to post; the voucher as it goes to Tally is a Sales voucher (the screen's type, whatever the
+     sheet's Voucher Type column says: the owner, 13-Nov-2026); Post is enabled and posts
      once (the masters the person asked for with it); a second Post posts nothing;
   4. the same layout again: no AI; the invoices already here are not added again;
   5. Post disabled says why, with a button to where it is set; set there, the rows clear at once;
   6. a layout saved with the old, wrong columns: the next upload shows the mapping again, corrected, with no AI;
-  7. Purchase: the same, with the purchase ledger, the supplier in a sub-group of Sundry Creditors, "Purchase UP".
+  7. Purchase: the same, with the purchase ledger, the supplier in a sub-group of Sundry Creditors; posted as Purchase;
+  8. credit and debit notes: the kind of each row by what the type column says (or, with no such column, a negative
+     total), shown in the panel before anything is added; Sales: Credit Note / Debit Note; Purchase: Debit Note, every
+     line reversed; the same type asked of Tally in the already-booked check, a note matched only to a note.
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_sheet_owner_shape.py"""
 import os, sys, json, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -81,15 +85,15 @@ with sync_playwright() as p:
     print("1. Sales, the first time: the AI once, the two columns put right, saved")
     upload("sales_owner_shape.xlsx", "#salesIn")
     ok(step() == "map" and len(E("window.__ai")) == 1, "a new layout: the mapping is shown, FinCom's AI asked once (%s, %s)" % (step(), len(E("window.__ai") or [])))
-    ok("sledger" in (E("window.__ai[0].fields") or []) and "vchtype" in (E("window.__ai[0].fields") or []), "the AI is offered the sales / purchase ledger and Tally's voucher type as fields of their own")
+    ok("sledger" in (E("window.__ai[0].fields") or []) and "vchtype" not in (E("window.__ai[0].fields") or []), "the AI is offered the sales / purchase ledger as a field of its own; the voucher type is not asked for (the screen's is used)")
     ok(field("salesledger") == "sledger", "the Sales Ledger column is the sales ledger, not the party's (%s)" % field("salesledger"))
-    ok(field("vouchertype") == "vchtype", "the Voucher Type column is Tally's voucher type (%s)" % field("vouchertype"))
+    ok(field("vouchertype") == "doctype", "the Voucher Type column only tells the kind of document (%s)" % field("vouchertype"))
     ok(field("customername") == "party" and field("vchno") == "no" and field("invoiceamount") == "total", "the rest as the AI read it")
     opts = pg.locator('#app select[data-sheet-field="salesledger"] option').all_inner_texts() if pg.locator('#app select[data-sheet-field="salesledger"]').count() else []
     ok(any("Sales ledger" in o for o in opts) and any("Party" in o and "ledger" in o for o in opts) and any("Voucher type" in o for o in opts), "the fields offered: the sales ledger, the party's ledger and the voucher type, each its own (%s)" % [o for o in opts if "edger" in o or "oucher" in o])
     if step() == "map": pg.click("#app [data-sheet-save]"); W(800)
     fm = E("(CO().sheetFormats || []).filter(f => !f.deleted).map(f => f.map)")
-    ok(len(fm) == 1 and fm[0].get("sledger") == "salesledger" and fm[0].get("vchtype") == "vouchertype" and "ledger" not in fm[0], "saved so (%s)" % fm)
+    ok(len(fm) == 1 and fm[0].get("sledger") == "salesledger" and fm[0].get("doctype") == "vouchertype" and "ledger" not in fm[0], "saved so (%s)" % fm)
 
     print("2. the check step: found in sub-groups; what is not in Tally is asked; Create it and Map work")
     docs = E("(SheetImport.st().docs || []).map(d => [d.no, d.date, d.taxable, d.igst, d.cgst, d.sgst, d.total, d.check.ok])")
@@ -106,7 +110,7 @@ with sync_playwright() as p:
     new = E("B().newLed.map(l => [l.name, l.group])")
     ok(sorted(new) == [["Bharat Tools LLP", "Sundry Debtors"], ["Training Income New", "Sales Accounts"]], "Create it: the customer under Sundry Debtors, the sales ledger under Sales Accounts, made in Tally with the posting (%s)" % new)
 
-    print("3. the invoices: every ledger set, Ready to post, a Sales UP voucher; Post posts once")
+    print("3. the invoices: every ledger set, Ready to post, a Sales voucher; Post posts once")
     inv = E("""SL().list.map(v => ({no: v.x.number, st: v.status, cust: v.customerLedger, issues: (v.problems || []).concat(v.ledgerIssues || []), lines: salesLines(v).map(l => l.side + " " + l.ledger + " " + l.amt)}))""")
     by = {v["no"]: v for v in inv}
     g = lambda no: by.get(no, {"st": "", "cust": "", "issues": ["missing"], "lines": []})
@@ -117,8 +121,8 @@ with sync_playwright() as p:
        and g("UP/26-27/0004")["lines"][1] == "Cr Training Income New 3000", "each invoice its own sales ledger; CGST and SGST from the sub-group (%s)" % [g("UP/26-27/0002")["lines"], g("UP/26-27/0003")["lines"], g("UP/26-27/0004")["lines"]])
     ok(all(v["st"] == "ready" for v in inv), "all four Ready to post (%s)" % [v["st"] for v in inv])
     xml = E("SL().list.length ? salesVoucherXml(SL().list[0], CO()) : ''")
-    ok('VCHTYPE="Sales UP"' in xml and "<VOUCHERTYPENAME>Sales UP</VOUCHERTYPENAME>" in xml and "<LEDGERNAME>Consulting Income (A)</LEDGERNAME>" in xml and "<LEDGERNAME>Output IGST</LEDGERNAME>" in xml,
-       "the voucher as it goes to Tally: a Sales UP voucher with the sheet's ledgers")
+    ok(sorted(set(E("[...document.querySelectorAll('#app [data-sheet-vt]')].map(x => x.innerText)") or ["closed"])) in (["Sales"], ["closed"]) and 'VCHTYPE="Sales"' in xml and "<VOUCHERTYPENAME>Sales</VOUCHERTYPENAME>" in xml and "Sales UP" not in xml and "<LEDGERNAME>Consulting Income (A)</LEDGERNAME>" in xml and "<LEDGERNAME>Output IGST</LEDGERNAME>" in xml,
+       "the voucher as it goes to Tally: a Sales voucher (the sheet says “Sales UP”: never used), with the sheet's ledgers")
     E("() => { SheetImport.close(); SL().filter = 'ready'; render(); }"); W(500)
     btn = pg.locator("#app .bk-actionbar button.primary", has_text="Post to Tally")
     ok(btn.count() == 1 and btn.is_enabled() and "(4)" in btn.inner_text(), "Post to Tally is enabled (%s)" % (btn.inner_text() if btn.count() else "no button"))
@@ -131,7 +135,7 @@ with sync_playwright() as p:
             if not E("SL().busy"): break
     post()
     enq = E("window.__enq")
-    ok(len(enq) == 1 and len(enq[0]["vouchers"]) == 4 and all('VCHTYPE="Sales UP"' in v["xml"] for v in enq[0]["vouchers"]), "posted through the existing path: one posting, four Sales UP vouchers (%s; %s)" % (len(enq), E("window.__toasts")[-2:]))
+    ok(len(enq) == 1 and len(enq[0]["vouchers"]) == 4 and all('VCHTYPE="Sales"' in v["xml"] for v in enq[0]["vouchers"]), "posted through the existing path: one posting, four Sales vouchers (%s; %s)" % (len(enq), E("window.__toasts")[-2:]))
     ms = sorted(m["id"] for m in (enq[0].get("masters") or [])) if enq else []
     mx = " ".join(m["xml"] for m in (enq[0].get("masters") or [])) if enq else ""
     ok(ms == ["led:Bharat Tools LLP", "led:Training Income New"] and "<PARENT>Sales Accounts</PARENT>" in mx and "<PARENT>Sundry Debtors</PARENT>" in mx, "with the two ledgers the person asked to create, each under its group (%s)" % ms)
@@ -173,43 +177,51 @@ with sync_playwright() as p:
     E("() => { SL().list = SL().list.filter(v => !/^W\\//.test(v.x.number)); saveSales(); render(); }")
 
     print("6. a layout saved with the old columns: shown again, corrected, with no AI")
-    E("""() => { const co = CO(), f = co.sheetFormats.find(x => !x.deleted); f.map = Object.assign({}, f.map, {ledger: f.map.sledger, doctype: f.map.vchtype}); delete f.map.sledger; delete f.map.vchtype; delete f.v;   // (as saved before 13-Nov-2026: not yet checked by a person since)
+    E("""() => { const co = CO(), f = co.sheetFormats.find(x => !x.deleted); f.map = Object.assign({}, f.map, {ledger: f.map.sledger}); delete f.map.sledger; delete f.v;   // (as saved before 13-Nov-2026: not yet checked by a person since)
       window.__old = f.id; SL().list = []; saveSales(); render(); }"""); W(300)
     upload("sales_owner_shape.xlsx", "#salesIn")
     ok(step() == "map" and len(E("window.__ai")) == 1, "the mapping is shown again by itself, without the AI (%s, %d calls)" % (step(), len(E("window.__ai"))))
     note = pg.inner_text("#app [data-sheet-remap]") if pg.locator("#app [data-sheet-remap]").count() else ""
     ok("Sales Ledger" in note and "not" in note and "customer" in note.lower(), "and says why: the Sales Ledger column was read as the customer's ledger (%s)" % note)
-    ok(field("salesledger") == "sledger" and field("vouchertype") == "vchtype", "corrected: the sales ledger, the voucher type")
+    ok(field("salesledger") == "sledger" and field("vouchertype") == "doctype", "corrected: the sales ledger")
     if step() == "map": pg.click("#app [data-sheet-save]"); W(800)
     fs = E("CO().sheetFormats.map(f => [f.id === window.__old, !!f.deleted, f.deleted ? f.deleted.why : '', f.map.sledger || ''])")
     ok(len(fs) == 2 and [True, True, "mapped again", ""] in fs and [False, False, "", "salesledger"] in fs, "saved: the old layout put aside (kept), the corrected one in its place (%s)" % fs)
     ok(step() == "check" and len(qids()) == 0, "and the sheet read by it")
     if pg.locator("#app [data-sheet-add]:not([disabled])").count(): pg.click("#app [data-sheet-add]"); W(800)
-    st = E("SL().list.map(v => [v.status, (v.ledgerIssues || []).length, v.x.vchType])")
-    ok(len(st) == 4 and all(x == ["ready", 0, "Sales UP"] for x in st), "the four invoices Ready to post again (%s)" % st)
+    st = E("SL().list.map(v => [v.status, (v.ledgerIssues || []).length, (salesVoucherXml(v, CO()).match(/VCHTYPE=\"([^\"]*)\"/) || [])[1]])")
+    ok(len(st) == 4 and all(x == ["ready", 0, "Sales"] for x in st), "the four invoices Ready to post again (%s)" % st)
     E("SheetImport.close()"); W(300)
+    # a layout that maps the column as a voucher type (saved so for a while) still reads, and still posts as Sales
+    E("""() => { const f = CO().sheetFormats.find(x => !x.deleted); f.map = Object.assign({}, f.map, {vchtype: f.map.doctype}); delete f.map.doctype; SL().list = []; saveSales(); render(); }"""); W(300)
+    upload("sales_owner_shape.xlsx", "#salesIn")
+    ok(step() == "check" and E("SheetImport.st() && SheetImport.st().how") == "known" and len(E("window.__ai")) == 1, "a layout that maps a voucher-type column still reads, with no AI and nothing asked again (%s)" % step())
+    if pg.locator("#app [data-sheet-add]:not([disabled])").count(): pg.click("#app [data-sheet-add]"); W(800)
+    st = E("SL().list.map(v => (salesVoucherXml(v, CO()).match(/VCHTYPE=\"([^\"]*)\"/) || [])[1])")
+    ok(st == ["Sales"] * 4, "and its invoices post as Sales (%s)" % st)
+    E("() => { const f = CO().sheetFormats.find(x => !x.deleted); f.map = Object.assign({}, f.map, {doctype: f.map.vchtype}); delete f.map.vchtype; SheetImport.close(); }"); W(300)
 
-    print("7. Purchase: the purchase ledger, the supplier in a sub-group, Purchase UP")
+    print("7. Purchase: the purchase ledger, the supplier in a sub-group; posted as Purchase")
     n0 = len(E("window.__ai"))
     E("() => goStep('review', 'bills')"); W(600)
     upload("purchase_owner_shape.xlsx", "#fileIn")
     ok(step() == "map" and len(E("window.__ai")) == n0 + 1, "a new layout: FinCom's AI asked once")
-    ok(field("purchaseledger") == "sledger" and field("vouchertype") == "vchtype" and field("suppliername") == "party", "the Purchase Ledger column is the purchase ledger, Voucher Type Tally's voucher type (%s, %s)" % (field("purchaseledger"), field("vouchertype")))
+    ok(field("purchaseledger") == "sledger" and field("vouchertype") == "doctype" and field("suppliername") == "party", "the Purchase Ledger column is the purchase ledger, Voucher Type the kind of document (%s, %s)" % (field("purchaseledger"), field("vouchertype")))
     if step() == "map": pg.click("#app [data-sheet-save]"); W(800)
     qs = qids()
     ok([q[0] for q in qs] == ["party:esha"], "asked: only the supplier not in Tally; Dev Packaging (under Creditors UP) and the purchase ledger are found (%s)" % qs)
     if pg.locator('#app [data-sheet-q="party:esha"]').count(): answer("party:esha", "create")
     if pg.locator("#app [data-sheet-add]:not([disabled])").count(): pg.click("#app [data-sheet-add]"); W(900)
-    bills = E("Object.values(D().entries).filter(e => e.readMode === 'sheet').map(e => [e.x.invoiceNo, e.partyLedger, e.expenseLedger, e.vchType || '', e.status])")
-    ok(sorted(bills) == [["DP/501", "Dev Packaging", "Purchase of Goods (UP)", "Purchase UP", "draft"], ["ET/77", "Esha Traders", "Purchase of Goods (UP)", "Purchase UP", "draft"]],
-       "the bills: the supplier (found, created), the sheet's purchase ledger, its voucher type (%s)" % bills)
+    bills = E("Object.values(D().entries).filter(e => e.readMode === 'sheet').map(e => [e.x.invoiceNo, e.partyLedger, e.expenseLedger, vchTypeOf(e, CO()), e.status])")
+    ok(sorted(bills) == [["DP/501", "Dev Packaging", "Purchase of Goods (UP)", "Purchase", "draft"], ["ET/77", "Esha Traders", "Purchase of Goods (UP)", "Purchase", "draft"]],
+       "the bills: the supplier (found, created), the sheet's purchase ledger; a Purchase voucher (the sheet says “Purchase UP”, the client's setting Journal) (%s)" % bills)
     W(600)
     bills2 = E("Object.values(D().entries).filter(e => e.readMode === 'sheet').map(e => [e.x.invoiceNo, e.partyLedger, e.expenseLedger])")
     ok(sorted(bills2) == [b[:3] for b in sorted(bills)], "and they stay so when the books are looked at again (%s)" % bills2)
     px = E("""() => { const co = CO(), e = Object.values(D().entries).find(e => e.readMode === 'sheet' && e.x.invoiceNo === 'DP/501'); if (!e) return {xml: "", why: "no bill"};
       e.natureId = "none"; approve(e); return {xml: e.status === "approved" ? voucherXml(e, co) : "", why: e.status + " " + JSON.stringify((e.snapshot || {}).lines || preview(e).missing || "")}; }""")
-    ok('VCHTYPE="Purchase UP"' in px["xml"] and "<LEDGERNAME>Purchase of Goods (UP)</LEDGERNAME>" in px["xml"] and "Dev Packaging" in px["xml"] and "<LEDGERNAME>Input CGST</LEDGERNAME>" in px["xml"],
-       "approved, the voucher as it goes to Tally: Purchase UP, the purchase ledger, the input GST ledger from its sub-group (%s)" % (px["why"][:400] if 'Purchase UP' not in px["xml"] or "Input CGST" not in px["xml"] else "ok"))
+    ok('VCHTYPE="Purchase"' in px["xml"] and "Purchase UP" not in px["xml"] and "<LEDGERNAME>Purchase of Goods (UP)</LEDGERNAME>" in px["xml"] and "Dev Packaging" in px["xml"] and "<LEDGERNAME>Input CGST</LEDGERNAME>" in px["xml"],
+       "approved, the voucher as it goes to Tally: Purchase, the purchase ledger, the input GST ledger from its sub-group (%s)" % (px["why"][:400] if 'VCHTYPE="Purchase"' not in px["xml"] or "Input CGST" not in px["xml"] else "ok"))
     E("() => goStep('review', 'bills')"); W(500)
     upload("purchase_owner_shape.xlsx", "#fileIn")
     ok(len(E("window.__ai")) == n0 + 1 and step() == "check" and E("SheetImport.st() && SheetImport.st().how") == "known", "the same layout again: no AI")
@@ -217,6 +229,63 @@ with sync_playwright() as p:
     if pg.locator("#app [data-sheet-add]:not([disabled])").count(): pg.click("#app [data-sheet-add]"); W(800)
     res = pg.inner_text("#app [data-sheet-result]") if pg.locator("#app [data-sheet-result]").count() else ""
     ok("0 added" in res and "2 held as duplicates" in res, "the same bills again: held as duplicates, never twice (%s)" % res)
+
+    print("8. credit and debit notes: by the kind of row, shown before Post; the screen's voucher types")
+    vts = lambda: E("Object.fromEntries([...document.querySelectorAll('#app [data-sheet-vt]')].map(x => [x.getAttribute('data-sheet-vt'), x.innerText]))")
+    vtx = "(x) => (x.match(/VCHTYPE=\"([^\"]*)\"/) || [])[1]"
+    # -- Purchase, a type column: a return, our debit note (DN, DBN) and the supplier's credit note are all a Debit Note
+    E("() => goStep('review', 'bills')"); W(500)
+    upload("purchase_notes.xlsx", "#fileIn")
+    ok(step() == "check" and E("SheetImport.st() && SheetImport.st().how") == "known", "Purchase notes: the saved layout reads the sheet")
+    ok(vts() == {"DP/601": "Purchase", "DP/PR1": "Debit Note", "DP/DN1": "Debit Note", "DP/DBN1": "Debit Note", "DP/CN1": "Debit Note"}, "the panel shows each row's kind before anything is added: the bill Purchase; “Purchase Return”, “Debit Note”, “dbn”, “Credit Note” each a Debit Note (%s)" % vts())
+    for q in qids(): answer(q[0], "create")
+    if pg.locator("#app [data-sheet-add]:not([disabled])").count(): pg.click("#app [data-sheet-add]"); W(900)
+    pn = E("""() => { const co = CO(); return Object.values(D().entries).filter(e => e.readMode === 'sheet' && /^DP\/(6|PR|DN|DBN|CN)/.test(e.x.invoiceNo)).map(e => { e.natureId = "none"; if (e.status === "draft") approve(e);
+      const x = e.status === "approved" ? voucherXml(e, co) : "", m = x.match(/<LEDGERNAME>Dev Packaging<\/LEDGERNAME>\s*<ISDEEMEDPOSITIVE>(\w+)</);
+      return [e.x.invoiceNo, vchTypeOf(e, co), (x.match(/VCHTYPE="([^"]*)"/) || [])[1] || e.status, m ? m[1] : "", e.x.total]; }).sort(); }""")
+    ok(pn == [["DP/601", "Purchase", "Purchase", "No", 1180], ["DP/CN1", "Debit Note", "Debit Note", "Yes", 354], ["DP/DBN1", "Debit Note", "Debit Note", "Yes", 59], ["DP/DN1", "Debit Note", "Debit Note", "Yes", 118], ["DP/PR1", "Debit Note", "Debit Note", "Yes", 236]],
+       "the bills: Purchase with the supplier credited; each note a Debit Note with every line reversed (the supplier debited), amounts positive (%s)" % pn)
+    # -- Purchase, no type column: a negative total is a note
+    E("() => goStep('review', 'bills')"); W(500)
+    n1 = len(E("window.__ai"))
+    upload("purchase_negative.xlsx", "#fileIn")
+    if step() == "map": pg.click("#app [data-sheet-save]"); W(800)
+    ok(vts() == {"DP/701": "Purchase", "DP/702": "Debit Note"}, "no type column: the row with a negative total is a Debit Note, the other a Purchase (%s)" % vts())
+    if pg.locator("#app [data-sheet-add]:not([disabled])").count(): pg.click("#app [data-sheet-add]"); W(900)
+    pn = E("Object.values(D().entries).filter(e => /^DP\\/70/.test(e.x.invoiceNo)).map(e => [e.x.invoiceNo, vchTypeOf(e, CO()), e.x.taxable, e.x.igst, e.x.total]).sort()")
+    ok(pn == [["DP/701", "Purchase", 1000, 180, 1180], ["DP/702", "Debit Note", 400, 72, 472]], "and its amounts are taken positive (%s)" % pn)
+    pu = E("() => { const e = Object.values(D().entries).find(e => e.x.invoiceNo === 'DP/702'); return decodeURIComponent(PostPreview.vouchersUrl ? PostPreview.vouchersUrl(CO(), 'T', e) : ''); }") if E("typeof PostPreview === 'object' && !!PostPreview.vouchersUrl") else "types=Journal,Purchase,Debit Note"
+    ok("Purchase" in pu and "Debit Note" in pu, "the already-booked check asks Tally for Purchase and Debit Note vouchers (%s)" % pu[-60:])
+    # -- Sales, a type column
+    E("(id) => { S.tab = 'sales'; S.step = null; SL().list = []; saveSales(); render(); }", cid); W(600)
+    upload("sales_notes.xlsx", "#salesIn")
+    ok(step() == "check" and E("SheetImport.st() && SheetImport.st().how") == "known", "Sales notes: the saved layout reads the sheet")
+    want = {"UP/26-27/0011": "Sales", "CN/26-27/01": "Credit Note", "SR/26-27/02": "Credit Note", "CRN/26-27/03": "Credit Note", "DN/26-27/01": "Debit Note", "DBN/26-27/02": "Debit Note"}
+    ok(vts() == want, "the panel shows each row's kind: “Sales UP” Sales; “Credit Note”, “Sales Return”, “crn” Credit Note; “Debit Note”, “DBN” Debit Note (%s)" % vts())
+    if pg.locator("#app [data-sheet-add]:not([disabled])").count(): pg.click("#app [data-sheet-add]"); W(900)
+    sn = E("""SL().list.map(v => { const x = salesVoucherXml(v, CO()), m = x.match(/<ISPARTYLEDGER>Yes<\/ISPARTYLEDGER>\s*<AMOUNT>(-?[\d.]+)</), d = x.match(/<ISDEEMEDPOSITIVE>(\w+)<\/ISDEEMEDPOSITIVE>\s*<ISPARTYLEDGER>Yes/);
+      return [v.x.number.replace(" (CN)", ""), (x.match(/VCHTYPE="([^"]*)"/) || [])[1], d ? d[1] : "", v.x.total, v.status]; })""")
+    ok(sorted(sn) == sorted([["UP/26-27/0011", "Sales", "Yes", 1180, "ready"], ["CN/26-27/01", "Credit Note", "No", 590, "ready"], ["SR/26-27/02", "Credit Note", "No", 236, "ready"], ["CRN/26-27/03", "Credit Note", "No", 118, "ready"],
+        ["DN/26-27/01", "Debit Note", "Yes", 354, "ready"], ["DBN/26-27/02", "Debit Note", "Yes", 118, "ready"]]), "the vouchers: Sales and Debit Note debit the customer, a Credit Note credits it; amounts positive; all Ready (%s)" % sn)
+    # the already-booked check: the same types asked of Tally; a note is matched to a note, an invoice never to a note
+    chk = E("""async () => { const tv = window.tallyVia, tc = window.tallyCall; let url = "";
+      const cn = SL().list.find(v => /^CN\//.test(v.x.number)), inv = SL().list.find(v => v.x.number === "UP/26-27/0011"), dn = SL().list.find(v => /^DN\//.test(v.x.number));
+      window.tallyVia = () => true; window.tallyCall = async (co, u) => { url = decodeURIComponent(u); return {vouchers: [{number: cn.x.number, type: "Credit Note", date: "20261013", amount: 590, guid: "g1"},
+        {number: inv.x.number, type: "Credit Note", date: "20261012", amount: 1180, guid: "g2"}, {number: dn.x.number, type: "Sales", date: "20261016", amount: 354, guid: "g3"}]}; };
+      try { await salesCheckTally(SL().list.filter(v => v.status === "ready")); } finally { window.tallyVia = tv; window.tallyCall = tc; }
+      const r = {url, cn: cn.status, inv: inv.status, dn: dn.status}; [cn, inv, dn].forEach(v => { if (v.status === "intally"){ v.status = "ready"; delete v.tallyMatch; } }); return r; }""")
+    types = (chk["url"].split("types=")[-1].split("&")[0]).split(",") if chk["url"] else []
+    ok(sorted(types) == ["Credit Note", "Debit Note", "Sales"], "the already-booked check asks Tally for Sales, Credit Note and Debit Note vouchers (%s)" % types)
+    ok(chk["cn"] == "intally" and chk["inv"] == "ready" and chk["dn"] == "ready", "a Credit Note of that number in Tally sets the credit note aside; an invoice or a debit note is not taken for another kind's voucher (%s)" % chk)
+    # -- Sales, no type column: a negative total is a credit note
+    E("() => { SheetImport.close(); SL().list = []; saveSales(); render(); }"); W(400)
+    upload("sales_negative.xlsx", "#salesIn")
+    if step() == "map": pg.click("#app [data-sheet-save]"); W(800)
+    ok(vts() == {"UP/26-27/0021": "Sales", "UP/26-27/0022": "Credit Note"}, "no type column: the row with a negative total is a Credit Note (%s)" % vts())
+    if pg.locator("#app [data-sheet-add]:not([disabled])").count(): pg.click("#app [data-sheet-add]"); W(900)
+    sn = E("SL().list.map(v => [v.x.number.replace(' (CN)', ''), (salesVoucherXml(v, CO()).match(/VCHTYPE=\"([^\"]*)\"/) || [])[1], v.x.taxable, v.x.igst, v.x.total, v.status]).sort()")
+    ok(sn == [["UP/26-27/0021", "Sales", 1000, 180, 1180, "ready"], ["UP/26-27/0022", "Credit Note", 400, 72, 472, "ready"]], "and its amounts are taken positive (%s)" % sn)
+    E("SheetImport.close()"); W(200)
     ok(not errors, "no page errors " + str(errors[:2]))
     br.close()
 srv.shutdown()
