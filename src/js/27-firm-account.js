@@ -1854,7 +1854,7 @@ function doAct(act, t){
       if (r.draft){ toast("Form " + r.formNo + " is a draft – not yet validated against Protean’s file format, so it is not sent to the FVU yet."); break; }
       const co = CO();
       toast("Running the FVU on the Tally computer\u2026");
-      Bridge.call("/fvu", {text: r.text, name: r.name, fvuJar: (co.fvuJar || ""), csi: (co.csiFile || ""), outDir: (co.fvuOut || "")}, 200000).then(res => {
+      Bridge.call("/fvu", {text: r.text, name: r.name, csi: (co.csiFile || "")}, 200000).then(res => {
         res = Object.assign({}, res, {ok: res.accepted != null ? !!res.accepted : !!res.ok});
         S.fvuResult = Object.assign({at: new Date().toISOString(), q, fy, form: r.form}, res);
         toast(res.ok ? "The FVU accepted it. The .fvu file is on the Tally computer." : "The FVU found problems. They are listed below.");

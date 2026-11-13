@@ -119,3 +119,9 @@ func platWindowHold() func(from time.Time) int {
 
 // next-fast-measure: TallyPrime's version (tally.exe's file version) is read on Windows only
 func platTallyVersion() string { return "" }
+
+// 2.5.16 (fvu.go): no network drives here (a network path is told by its spelling); no service to hand a run from
+func platRemotePath(p string) bool { return false }
+func platFvuRunAsOwner(q fvuReq) M {
+	return M{"ok": false, "needSignIn": true, "error": "The FVU runs only with the rights of the Windows user this bridge works for, never as Windows itself."}
+}

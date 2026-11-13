@@ -27,6 +27,7 @@ import (
 //
 //	Tally measured for FinCom support (measure.go)
 //
+// FinComBridge.exe fvu-run                (2.5.16, started by the service only) the FVU with the owner's rights (fvu.go)
 // FinComBridge.exe version
 // The PowerShell bridge's own arguments work too (-ConfigPath F, -Sync), so its tests run this bridge unchanged.
 func main() {
@@ -79,7 +80,7 @@ func main() {
 		cmd = "worker"
 	}
 	switch cmd {
-	case "", "service", "tray", "install", "uninstall", "stop", "restart-service", "user", "worker", "connect", "keepalive":
+	case "", "service", "tray", "install", "uninstall", "stop", "restart-service", "user", "worker", "connect", "keepalive", "fvu-run":
 	default:
 		attachConsole() // the program is a windowed one (no console flashes for the tray): commands typed in a window print there
 	}
@@ -87,6 +88,8 @@ func main() {
 	case "version":
 		fmt.Println(BridgeVersion)
 		return
+	case "fvu-run":
+		os.Exit(fvuRunCmd()) // 2.5.16: the FVU in the owner's session, started by the service (fvu.go)
 	case "stop":
 		exitDrained(stopCmd(rest))
 	case "restart-service":

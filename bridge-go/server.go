@@ -991,6 +991,8 @@ func route(w http.ResponseWriter, r *http.Request, path string, qs url.Values, b
 	// --- the tray icon's own questions
 	case "/tray/status":
 		return trayStatus(), nil
+	case "/tray/fvu":
+		return trayFvuRoute(r.Method, parseObj(body)) // 2.5.16: the owner confirms the FVU on this computer (fvu.go)
 	case "/tray/pairopen":
 		// 2.4.6 (pairopen.go): the install's first-start opening of FinCom: the setup's Finish page, the owner's tray
 		return pairOpenRoute(r.Method, parseObj(body))

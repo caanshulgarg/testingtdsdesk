@@ -1,17 +1,13 @@
 // The nightly copy (bridge 1.10): each company's day book, balances and ledgers kept in a folder, ready in the morning;
-// and the FVU (Protean's File Validation Utility) run on this computer behind the bridge key.
+// the FVU is in fvu.go (2.5.16).
 package main
 
 import (
-	"bytes"
-	"context"
 	"errors"
 	"fmt"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"sort"
 	"strings"
 	"time"
 )
@@ -80,65 +76,6 @@ func setSchedule(on bool, t string) (M, error) {
 	}
 	_ = t
 	return getSchedule(), nil
-}
-
-func invokeFvu(o M) M {
-	homeDir := ownerProfile()
-	jar := str(o["fvuJar"])
-	if jar == "" {
-		jar = filepath.Join(homeDir, "TDS-Desk", "FVU", "FVU_STANDALONE.jar")
-	}
-	outDir := str(o["outDir"])
-	if outDir == "" {
-		outDir = filepath.Join(homeDir, "TDS-Desk", "FVU", "out")
-	}
-	if !strings.HasSuffix(strings.ToLower(jar), ".jar") || !exists(jar) {
-		return M{"ok": false, "error": "The FVU was not found at " + jar + ". Install Protean's FVU and set its path in FinCom."}
-	}
-	java, err := exec.LookPath("java")
-	if err != nil {
-		return M{"ok": false, "error": "Java is not installed on this computer. The FVU needs Java to run."}
-	}
-	text := str(o["text"])
-	if text == "" {
-		return M{"ok": false, "error": "The return file is empty."}
-	}
-	name := filepath.Base(str(o["name"]))
-	if !re(`^[\w .()-]+\.txt$`).MatchString(name) {
-		name = "return.txt"
-	}
-	runDir := filepath.Join(outDir, time.Now().Format("20060102-150405.000")+"-"+newUUID()[:6])
-	_ = os.MkdirAll(runDir, 0o755)
-	in := filepath.Join(runDir, name)
-	_ = os.WriteFile(in, []byte(text), 0o644)
-	errFile := strings.TrimSuffix(in, filepath.Ext(in)) + ".err"
-	args := []string{"-jar", jar, in, errFile, runDir}
-	if csi := str(o["csi"]); csi != "" && exists(csi) {
-		args = append(args, csi)
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, java, args...)
-	var so bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &so, &so
-	hideWindow(cmd)
-	if err := cmd.Run(); ctx.Err() != nil {
-		return M{"ok": false, "error": "The FVU did not finish in three minutes."}
-	} else {
-		_ = err
-	}
-	fvus, _ := filepath.Glob(filepath.Join(runDir, "*.fvu"))
-	sort.Strings(fvus)
-	fvu := ""
-	if len(fvus) > 0 {
-		fvu = fvus[len(fvus)-1]
-	}
-	st := "errors"
-	if fvu != "" {
-		st = "accepted"
-	}
-	writeLog("FVU run on " + name + ": " + st)
-	return M{"ok": true, "accepted": fvu != "", "fvu": fvu, "errors": readText(errFile), "output": so.String(), "folder": runDir, "input": in}
 }
 
 var _ = fmt.Sprint

@@ -553,6 +553,7 @@ func (t *tray) menu() {
 	if st != nil && truthy(st["testMode"]) {
 		add(8, "Compare with bridge 1.15.0", mfString)
 	}
+	add(28, "Confirm the FVU...", mfString) // 2.5.16: the FVU set on this computer, its fingerprint recorded (fvu.go)
 	add(14, "Send install log to FinCom", mfString)
 	add(25, "Clear notifications", mfString) // 2.3.5: every current one cleared, never shown again for the same problem
 	pAppendMenu.Call(m, mfSeparator, 0, 0)
@@ -576,6 +577,31 @@ func (t *tray) command(id int, st M) {
 		shellOpen(u, "")
 	case 10:
 		msgBox("FinCom Bridge", t.statusText(), mbIconInfo)
+	case 28:
+		title := "FinCom Bridge - Confirm the FVU"
+		r := trayCall("GET", "/tray/fvu", nil)
+		switch {
+		case r == nil:
+			msgBox(title, "The bridge is not answering.", mbIconWarning)
+		case r["ok"] != true:
+			msgBox(title, str(r["error"]), mbIconWarning)
+		case truthy(r["confirmed"]):
+			msgBox(title, "The FVU at\n"+str(r["path"])+"\nis the one confirmed on this computer.\n\nFingerprint (SHA-256):\n"+str(r["sha256"]), mbIconInfo)
+		default:
+			was := ""
+			if truthy(r["pinned"]) {
+				was = "\n\nThis is NOT the FVU confirmed before: it changed since. Confirm it only if you installed this FVU yourself."
+			}
+			if !yesNo(title, "Use the FVU at\n"+str(r["path"])+"\nfor Check with FVU on this computer?\n\nFingerprint (SHA-256):\n"+str(r["sha256"])+"\n\nConfirm only Protean's FVU that you installed yourself."+was) {
+				return
+			}
+			p := trayCall("POST", "/tray/fvu", M{"sha256": str(r["sha256"])})
+			if p == nil || p["ok"] != true {
+				msgBox(title, or(str(p["error"]), "The bridge is not answering."), mbIconWarning)
+				return
+			}
+			t.reply("FinCom Bridge", "The FVU is confirmed on this computer: Check with FVU uses it.", false)
+		}
 	case 7:
 		// 2.4.6: FinCom opens with the code filled in (#pair=), only FinCom's own sites (pairopen.go)
 		trayConnectNow(trayPairEnv(), trayFinComURL(st))
