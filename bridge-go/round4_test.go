@@ -325,7 +325,7 @@ func TestMeasureNotFromHTTP(t *testing.T) {
 func callLocalHeaders(t *testing.T, method, path string, headers map[string]string, body string) (int, M) {
 	t.Helper()
 	r := httptest.NewRequest(method, "http://127.0.0.1:9100"+path, strings.NewReader(body))
-	r.Header.Set("X-Bridge-Key", cfgS("Key"))
+	trayOrKey(r)
 	r.Header.Set("Content-Type", "application/json")
 	for k, v := range headers {
 		r.Header.Set(k, v)

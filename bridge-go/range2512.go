@@ -479,6 +479,7 @@ func pullRangeStep(w *pullWork, port int) (handled, sent, more bool) {
 			bad := or(h.Date, "no date")
 			writeLog(fmt.Sprintf("Older entries of %s: Tally answered the request for %s with an entry dated %s: the date was not applied. The answer is dropped and nothing is stored or sent", it.Company, form, liveDay(bad)))
 			w.noRange = true
+			pullRangeNoteFail(it) // the company's days are asked one at a time again until ranges prove sparse once more
 			pullStopDay(w, "dates", form+": an entry dated "+liveDay(bad))
 			return true, true, false
 		}

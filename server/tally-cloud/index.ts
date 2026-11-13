@@ -1348,8 +1348,18 @@ async function keyCheck(dev: any, firm: string, body: any) {
   if (error) return missingRel(error) ? reply(409, { ok: false, notReady: true, error: "FinCom's cloud is not ready for this yet (migration 54)." }) : busyReply();
   const bound = (data || []).some((r: any) => r.device_id === dev.id);
   const seen = dev?.info?.bridges && typeof dev.info.bridges === "object" ? dev.info.bridges[bid] : null;
-  const sameUser = !seen || !seen.user || !me.user || winUser(seen.user) === winUser(me.user);
+  // (the security review of 2.5.16, L5) the same Windows user, as this key's beats recorded it for that id: none recorded
+  // (or none said now) is not the same: the person connects FinCom again
+  const sameUser = !!seen && !!seen.user && !!me.user && winUser(seen.user) === winUser(me.user);
   return reply(200, { ok: true, known: bound && sameUser });
+}
+// (L5) at most 30 key_check calls an hour for one computer key
+const keyCheckAt = new Map<string, number[]>();
+function keyCheckAllowed(devId: string) {
+  const now = Date.now(), had = (keyCheckAt.get(devId) || []).filter((t) => now - t < 3600000);
+  if (had.length >= 30) { keyCheckAt.set(devId, had); return false; }
+  had.push(now); keyCheckAt.set(devId, had);
+  return true;
 }
 // a bridge makes itself the main one (its menu: Switch to main bridge): from now on the others on this key do not post
 async function makeMain(dev: any, id: string) {
@@ -4668,6 +4678,7 @@ Deno.serve(sentry.wrap(async (req) => {
   // FinCom Bridge 2.5.16: the service's first start asks, read only, whether the link it carries over is this
   // computer's own, before the bridge id is bound to the key (keyCheck)
   if (body?.kind === "key_check") {
+    if (!keyCheckAllowed(String(dev.id))) return reply(429, { ok: false, error: "This computer key has asked thirty times in the last hour; try again later." });
     try { return await keyCheck(dev, firm, body); } catch (e) { fail("key_check", e, "key_check", firm); console.error("tally-ingest key_check", (e as Error).message); return busyReply(); }
   }
   if (body?.kind === "own_key") {

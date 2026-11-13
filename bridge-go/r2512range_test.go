@@ -289,16 +289,23 @@ func TestR2512RangeDateNotApplied(t *testing.T) {
 	applyPeriodDays(r2512List(days...))
 	pullRun(t, 120)
 	n := len(r2512HeadsAsked(f))
-	if up := m.upload[days[3]]; up == nil || str(up["why"]) != "dates" || !strings.Contains(readText(logFile()), "the date was not applied") {
-		t.Fatalf("the mark: %v", m.upload)
+	// 2.5.16 (the code review's L1): the answer dropped, the day held 24 hours (a failed day, as a slow one), never marked
+	// to upload at once, and single days are not stopped on this Tally until a restart
+	if len(m.upload) != 0 || !pullRetryHeld(pullItem{Company: zz, CGUID: b220CoGUID, Day: days[3]}) || !strings.Contains(readText(logFile()), "the date was not applied") {
+		t.Fatalf("the hold: uploads %v, held %v", m.upload, pullRetryHeld(pullItem{Company: zz, CGUID: b220CoGUID, Day: days[3]}))
 	}
 	if _, had := r2512Told(m)[days[3]]; had {
 		t.Fatal("a day of the dropped answer told")
 	}
-	applyPeriodDays(r2512List(days[4:]...))
-	pullRun(t, 20)
-	if len(r2512HeadsAsked(f)) != n {
-		t.Fatal("another day asked of the same Tally")
+	pull.mu.Lock()
+	ns := len(pull.stopped)
+	pull.mu.Unlock()
+	if ns != 0 {
+		t.Fatal("single days stopped on this Tally")
+	}
+	// (the other listed days went on being read from the same Tally, one at a time, in the same run)
+	if _, had := r2512Told(m)[days[8]]; !had || n < 5 {
+		t.Fatalf("the other days not read after the hold: %d lists asked, told %v", n, r2512Told(m))
 	}
 }
 

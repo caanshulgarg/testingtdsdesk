@@ -35,6 +35,20 @@ func (o *Ordered) Set(k string, v any) {
 	}
 	o.vals[k] = v
 }
+
+// a name taken off (2.5.16)
+func (o *Ordered) Delete(k string) {
+	if _, ok := o.vals[k]; !ok {
+		return
+	}
+	delete(o.vals, k)
+	for i, x := range o.keys {
+		if x == k {
+			o.keys = append(o.keys[:i:i], o.keys[i+1:]...)
+			break
+		}
+	}
+}
 func (o *Ordered) MarshalJSON() ([]byte, error) {
 	var b bytes.Buffer
 	b.WriteString("{\n")

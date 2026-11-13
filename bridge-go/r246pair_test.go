@@ -110,7 +110,7 @@ func (p *pairStand) call(method, path string, body any) M {
 	}
 	r := httptest.NewRequest(method, "http://127.0.0.1:9100"+path, b)
 	r.RemoteAddr = "127.0.0.1:50123"
-	r.Header.Set("X-Bridge-Key", "k246")
+	trayOrKey(r) // (the tray's routes: the tray's own proof, 2.5.16 L4)
 	r.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	handle(w, r)

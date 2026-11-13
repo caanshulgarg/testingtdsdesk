@@ -101,3 +101,18 @@ func platFvuRunAsOwner(q fvuReq) M {
 	}
 	return M{"ok": false, "error": "The FVU run gave no answer."}
 }
+
+// 2.5.16 (the security review's L2): the look at the FVU as the owner: the service impersonates the owner's signed-in
+// session (not signed in: an error, nothing read); a bridge run by the owner reads as itself
+func platFvuAsOwner(fn func()) error {
+	if !asService {
+		fn()
+		return nil
+	}
+	rd, done, err := ownerReader()
+	if err != nil {
+		return err
+	}
+	defer done()
+	return rd.as(fn)
+}

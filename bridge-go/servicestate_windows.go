@@ -243,7 +243,22 @@ func serviceStateAtStart() (bool, string) {
 	old := platServiceOldHome(sid)
 	needCopy := !exists(filepath.Join(d, serviceCopiedMarker)) && old != "" && exists(old)
 	needSettings := !exists(cfgPath)
-	if needCopy || needSettings {
+	// (the security review's M1) the setup could not read the earlier settings with the owner's rights: read here
+	var cur *Ordered
+	earlierFrom := ""
+	if !needSettings {
+		cur = newOrdered()
+		if cur.UnmarshalText(readText(cfgPath)) == nil {
+			if f := str(cur.Get(earlierSettingsKey)); f != "" && old != "" && strings.EqualFold(filepath.Clean(filepath.Dir(f)), filepath.Clean(old)) {
+				earlierFrom = f
+			} else if f != "" {
+				cur.Delete(earlierSettingsKey) // (only the owner's own earlier folder is ever read)
+				b, _ := cur.MarshalJSON()
+				_ = saveFile(cfgPath, string(b))
+			}
+		}
+	}
+	if needCopy || needSettings || earlierFrom != "" {
 		rd, done, err := ownerReader()
 		if err != nil {
 			return false, "its earlier settings and files are read with the rights of the Windows user it works for, who is not signed in to this computer now; it starts once that user signs in"
@@ -258,6 +273,20 @@ func serviceStateAtStart() (bool, string) {
 			}
 			c := serviceSettingsFrom(rd, src, log)
 			b, _ := c.MarshalJSON()
+			if werr := saveFile(cfgPath, string(b)); werr != nil {
+				Home = home
+				return false, "its settings could not be written in " + d + " (" + werr.Error() + ")"
+			}
+		}
+		if earlierFrom != "" {
+			e := serviceSettingsFrom(rd, earlierFrom, log)
+			for _, k := range e.keys {
+				if !cur.Has(k) {
+					cur.Set(k, e.Get(k))
+				}
+			}
+			cur.Delete(earlierSettingsKey)
+			b, _ := cur.MarshalJSON()
 			if werr := saveFile(cfgPath, string(b)); werr != nil {
 				Home = home
 				return false, "its settings could not be written in " + d + " (" + werr.Error() + ")"

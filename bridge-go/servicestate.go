@@ -269,13 +269,18 @@ func copyServiceHome(rd treeReader, old, dir string, log func(string)) error {
 
 // the settings the service takes from a settings file it does not protect (the owner's folder of an earlier version):
 // these only. The link to FinCom (CloudUrl, CloudKey) is kept apart until FinCom confirms it (cloudpending.go); the
-// FVU, the update address and the PostOnly list are set again by the setup, the owner or FinCom
+// FVU, the update address, FinCom's address (FinComUrl: the setup sets it from its own build; the security review's
+// L1) and the PostOnly list are set again by the setup, the owner or FinCom
 var serviceSettingsAllowed = []string{"Port", "TallyPorts", "FallbackPorts", "PairWindowMin", "GentleMs", "StatusCacheSec", "TallyTimeoutSec",
 	"KeepInStep", "KeepSchedule", "KeepDailyAt", "KeepModes", "KeepCompanies", "KeepFrom", "KeepLightMin", "KeepWatchSec",
-	"KeepOfficeFrom", "KeepOfficeTo", "SyncCompanies", "InstanceId", "Mode", "ClaimMain", "FinComUrl",
+	"KeepOfficeFrom", "KeepOfficeTo", "SyncCompanies", "InstanceId", "Mode", "ClaimMain",
 	// the browsers' keys: a key only lets a page act for this same owner, whose file it was, so a browser that works
 	// keeps working until it pairs again (browserkeys.go)
 	"Key", "PairedBrowsers", "LegacyKeyRetired"}
+
+// the setup's note in the service's settings: the owner's earlier settings file, to be read at the service's first
+// start with the owner's rights (the owner was not signed in when the setup ran)
+const earlierSettingsKey = "EarlierSettingsFrom"
 
 // the allowed settings of a file the service does not protect (opened without following a link, 1 MB at most); the
 // names left out are logged (never their values)

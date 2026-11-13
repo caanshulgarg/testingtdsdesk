@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -122,10 +123,20 @@ func fvuJarLooked() (path, sha string, err error) {
 	if lerr != nil {
 		return raw, "", errors.New("The FVU is not used from " + raw + ": " + lerr.Error() + ".")
 	}
-	if !exists(p) {
+	// (the security review's L2) looked at and fingerprinted with the rights of the Windows user the bridge works for
+	// (the service: impersonated), never with the service's own
+	found, s := false, ""
+	var herr error
+	if aerr := fvuAsOwnerFn(func() {
+		if found = exists(p); found {
+			s, herr = fvuFingerprint(p)
+		}
+	}); aerr != nil {
+		return p, "", errors.New("The FVU is read with the rights of " + ownerName() + ", who is not signed in to this computer now. Sign in to Windows as " + ownerName() + ", then try again.")
+	}
+	if !found {
 		return p, "", errors.New("The FVU was not found at " + p + ". Install Protean's FVU there (or set FvuJar in the bridge's settings on this computer), then confirm it in the FinCom Bridge icon near the clock (Confirm the FVU...).")
 	}
-	s, herr := fvuFingerprint(p)
 	if herr != nil {
 		return p, "", errors.New("The FVU at " + p + " could not be read: " + herr.Error())
 	}
@@ -241,8 +252,30 @@ func fvuJava(set string) (string, error) {
 	return p, nil
 }
 
-// the jars the FVU loads besides itself: its manifest's Class-Path, each a relative path inside the FVU's folder
+// the run as the owner for the look at the FVU (the service: impersonated; elsewhere: as it is); a hook for the tests
+var fvuAsOwnerFn = platFvuAsOwner
+
+// the jars the FVU loads besides itself: its manifest's Class-Path, each a relative path inside the FVU's folder (the
+// security review's L3: percent-encoding decoded before the check, as Java reads the entries as URLs); a jar it loads
+// that names jars of its own is refused
 func fvuClassPath(jar string) ([]string, error) {
+	cp, err := fvuClassPathOf(jar)
+	if err != nil {
+		return nil, err
+	}
+	for _, rel := range cp {
+		more, err := fvuClassPathOf(filepath.Join(filepath.Dir(jar), rel))
+		if err != nil {
+			return nil, err
+		}
+		if len(more) > 0 {
+			return nil, errors.New("a jar the FVU loads (" + cutRunes(filepath.ToSlash(rel), 80) + ") names further jars; it is not run")
+		}
+	}
+	return cp, nil
+}
+
+func fvuClassPathOf(jar string) ([]string, error) {
 	z, err := zip.OpenReader(jar)
 	if err != nil {
 		return nil, nil // not read as a jar here: Java says so when it runs
@@ -263,7 +296,11 @@ func fvuClassPath(jar string) ([]string, error) {
 		text := strings.ReplaceAll(strings.ReplaceAll(string(b), "\r\n", "\n"), "\n ", "")
 		for _, l := range strings.Split(text, "\n") {
 			if k, v, ok := strings.Cut(l, ":"); ok && strings.EqualFold(strings.TrimSpace(k), "Class-Path") {
-				for _, e := range strings.Fields(v) {
+				for _, e0 := range strings.Fields(v) {
+					e, uerr := url.PathUnescape(e0)
+					if uerr != nil || strings.ContainsAny(e, "\x00%?#") {
+						return nil, errors.New("the FVU names a jar that cannot be read plainly (" + cutRunes(e0, 80) + ")")
+					}
 					if strings.Contains(e, ":") || strings.HasPrefix(e, "/") || strings.HasPrefix(e, "\\") || strings.Contains(e, "..") || winDeviceName(filepath.Base(e)) {
 						return nil, errors.New("the FVU names a jar outside its folder (" + cutRunes(e, 80) + ")")
 					}

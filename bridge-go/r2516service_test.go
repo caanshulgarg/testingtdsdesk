@@ -144,13 +144,13 @@ func TestR2516ServiceSettingsAllowList(t *testing.T) {
 	p := filepath.Join(dir, "tds-bridge.config.json")
 	_ = os.WriteFile(p, []byte(`{"Port": 9104, "InstanceId": "abcdef0123456789", "KeepDailyAt": "21:30", "Key": "keyvalue-not-taken",
 	 "CloudUrl": "https://example.invalid", "CloudKey": "fcd_valuenottaken", "UpdateUrl": "https://example.invalid/u", "FvuJar": "C:\\x\\y.jar",
-	 "FvuJarSha256": "00", "JavaExe": "C:\\x\\java.exe", "FvuOut": "C:\\x", "PairedBrowsers": [{"id": "a"}], "PostOnly": [], "TallyMaxSec": 99}`), 0o644)
+	 "FvuJarSha256": "00", "JavaExe": "C:\\x\\java.exe", "FvuOut": "C:\\x", "PairedBrowsers": [{"id": "a"}], "PostOnly": [], "TallyMaxSec": 99, "FinComUrl": "https://example.invalid/"}`), 0o644)
 	var lines []string
 	c := serviceSettingsFrom(osTree{}, p, func(s string) { lines = append(lines, s) })
 	if toInt(c.Get("Port")) != 9104 || str(c.Get("InstanceId")) != "abcdef0123456789" || str(c.Get("KeepDailyAt")) != "21:30" {
 		t.Fatalf("plain choices not kept: %v", c.keys)
 	}
-	for _, k := range []string{"CloudUrl", "CloudKey", "UpdateUrl", "FvuJar", "FvuJarSha256", "JavaExe", "FvuOut", "PostOnly", "TallyMaxSec"} {
+	for _, k := range []string{"CloudUrl", "CloudKey", "UpdateUrl", "FvuJar", "FvuJarSha256", "JavaExe", "FvuOut", "PostOnly", "TallyMaxSec", "FinComUrl"} {
 		if c.Has(k) {
 			t.Errorf("%s taken", k)
 		}

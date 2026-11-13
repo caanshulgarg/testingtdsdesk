@@ -345,6 +345,9 @@ func handle(w http.ResponseWriter, r *http.Request) {
 	// proof with its sealed body (pairopen.go trayRequest)
 	// 2.5.16: a paired browser's own key, or the earlier single key until the first pairing (browserkeys.go)
 	keyID, keyOK := webKey(r.Header.Get("X-Bridge-Key"))
+	if keyOK && strings.HasPrefix(path, "/tray/") {
+		keyOK = false // 2.5.16 (the security review's L4): the tray's routes take the tray's own one-use proof only, never a browser's key
+	}
 	if keyOK {
 		noteBrowserUsed(keyID)
 	}

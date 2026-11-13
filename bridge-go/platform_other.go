@@ -131,3 +131,6 @@ func platServiceOwner() (string, string)     { return "", "" }
 func platServiceOldHome(sid string) string   { return "" }
 func platRecordedStateDir(sid string) string { return "" }
 func platProgramPath(p string) bool          { return true }
+
+// 2.5.16 (the security review's L2): the look at the FVU as the owner: here, as it is
+func platFvuAsOwner(fn func()) error { fn(); return nil }

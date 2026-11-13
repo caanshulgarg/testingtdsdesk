@@ -3,6 +3,7 @@ package main
 
 import (
 	"errors"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"strings"
@@ -13,7 +14,7 @@ import (
 func callLocal(t *testing.T, method, path, origin, body string) (int, M) {
 	t.Helper()
 	r := httptest.NewRequest(method, "http://127.0.0.1:9100"+path, strings.NewReader(body))
-	r.Header.Set("X-Bridge-Key", cfgS("Key"))
+	trayOrKey(r)
 	r.Header.Set("Content-Type", "application/json")
 	if origin != "" {
 		r.Header.Set("Origin", origin)
@@ -21,6 +22,17 @@ func callLocal(t *testing.T, method, path, origin, body string) (int, M) {
 	w := httptest.NewRecorder()
 	handle(w, r)
 	return w.Code, parseObj(w.Body.String())
+}
+
+// 2.5.16 (the security review's L4): a /tray/ request carries the tray's own one-use proof (as trayRequest makes it);
+// any other the key
+func trayOrKey(r *http.Request) {
+	if strings.HasPrefix(r.URL.Path, "/tray/") {
+		ch := issueTrayChallenge()
+		r.Header.Set("X-Bridge-Auth", ch+"."+trayAuthMAC(cfgS("Key"), ch, r.Method, r.URL.RequestURI()))
+		return
+	}
+	r.Header.Set("X-Bridge-Key", cfgS("Key"))
 }
 
 // the tray's Resume reading clears a stop the bridge made itself, never one made from FinCom (that is lifted in FinCom)

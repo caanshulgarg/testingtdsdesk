@@ -493,9 +493,18 @@ func writeSettings(o ownerInfo, mode, fincom string) (string, int) {
 	}
 	var cfgPath string
 	// 2.5.16: the service's settings start from the plain choices of the earlier settings only (servicestate.go)
+	// (the security review's M1) the earlier file is the owner's: read with the owner's rights (impersonated, never
+	// the setup's own); the owner not signed in: read by the service at its first start, with the owner's rights
 	earlier := func(c *Ordered, from string) {
 		if o.cfgDir != "" {
-			*c = *serviceSettingsFrom(osTree{}, from, installLog)
+			rd, done, err := ownerReader()
+			if err != nil {
+				installLog("The earlier settings (" + logPath(from) + ") are read by the service at its first start, with the rights of the Windows user it works for")
+				c.Set(earlierSettingsKey, from)
+				return
+			}
+			defer done()
+			*c = *serviceSettingsFrom(rd, from, installLog)
 			return
 		}
 		_ = c.UnmarshalText(readText(from))

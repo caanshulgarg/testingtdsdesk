@@ -67,11 +67,27 @@ func checkPendingCloud() string {
 		if err != nil {
 			return "later"
 		}
-		setCfg("CloudUrl", u)
-		setCfg("CloudKey", pk)
-		setCfg("CloudKeyGo", "")
-		setCfg("PendingCloudUrl", "")
-		setCfg("PendingCloudKey", "")
+		// (the security review's L5) looked at again under the settings' lock, after FinCom answered: a link made
+		// meanwhile (the person connected FinCom), or another pending link, is never overwritten by this older one
+		cfgMu.Lock()
+		linked := str(Cfg.Get("CloudUrl")) != "" && (str(Cfg.Get("CloudKey")) != "" || str(Cfg.Get("CloudKeyGo")) != "")
+		same := str(Cfg.Get("PendingCloudUrl")) == u && str(Cfg.Get("PendingCloudKey")) == raw
+		if linked || !same {
+			if same {
+				Cfg.Set("PendingCloudUrl", "")
+				Cfg.Set("PendingCloudKey", "")
+			}
+			cfgMu.Unlock()
+			saveConfig()
+			writeLog("Cloud: the link to FinCom kept in the earlier settings is not taken: a newer link was made meanwhile")
+			return "dropped"
+		}
+		Cfg.Set("CloudUrl", u)
+		Cfg.Set("CloudKey", pk)
+		Cfg.Set("CloudKeyGo", "")
+		Cfg.Set("PendingCloudUrl", "")
+		Cfg.Set("PendingCloudKey", "")
+		cfgMu.Unlock()
 		saveConfig()
 		writeLog("Cloud: FinCom confirmed the link kept in the earlier settings is this computer's; it is used (nothing to do)")
 		return "taken"
