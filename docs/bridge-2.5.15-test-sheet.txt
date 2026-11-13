@@ -19,6 +19,12 @@ Use a test company with made-up entries only.
     Check B: queue a posting, then unplug the network as the first part starts. You should see: the posting still
     finishes in Tally; once the network is back, FinCom shows it done, and the bridge's log says "FinCom told of N
     part(s) sent while it could not be reached".
+    If FinCom refuses this computer outright (its key removed in FinCom, or the bridge in test mode), that is a stop,
+    not "no answer": nothing more is posted and the tray says "Posting stopped: FinCom refused this computer's key ...
+    Connect FinCom Bridge to FinCom again from the tray icon" (or that the bridge may not post). A posting FinCom holds
+    for checking (Part of it may be in Tally) is not sent further until an owner settles it.
+    Check C: remove this computer's key in FinCom while a posting of several parts waits for Tally, then open Tally.
+    You should see: nothing posted, and the tray line above.
  2. A day that could not be read is never sent as a day with no entries. If Tally's answer stops part-way (Tally
     closed in the middle, the connection dropped) or the day's file on this computer cannot be opened, the day is
     simply read or sent again later. FinCom never marks entries deleted because of it. An entry counts as deleted in
@@ -35,8 +41,11 @@ Use a test company with made-up entries only.
     file is whole again.
  4. Posting pauses if the record of posted entries cannot be read. If sync\posted-ids.json and its backup both cannot
     be read, FinCom Bridge posts nothing and says "FinCom Bridge can't read its record of posted entries; posting
-    paused" (on the posting in FinCom, in the tray, in the log). It never treats the record as empty, never writes
-    over it, and goes on by itself once the file is restored.
+    paused" (on the posting in FinCom, on FinCom's Tally page, in the tray, in the log), with what to do: close any
+    program that may hold the file (antivirus scan, backup or sync program) and restart FinCom Bridge from the tray;
+    if the message stays, put sync\posted-ids.json back from a backup of FinCom Bridge's folder or call FinCom support.
+    A file held by another program is never replaced by its older copy. It never treats the record as empty, never
+    writes over it, and goes on by itself once the file can be read.
     Check: stop the bridge, damage both posted-ids.json and posted-ids.json.bak (delete their last characters), start
     it, queue a posting. You should see: the message above, nothing new in Tally. Put back a good copy: the posting
     goes on by itself within a minute, and nothing already posted is posted again.
