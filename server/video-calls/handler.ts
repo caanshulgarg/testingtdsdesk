@@ -40,6 +40,7 @@
 import { corsFor, allowedOrigins } from "../_shared/cors.ts";
 import { firmGate, viaRest } from "../_shared/firmgate.ts";   // the console's switches (migration 118)
 import { aiPolicy, refusal } from "../_shared/ai_policy.ts";
+import { clientIp } from "../_shared/clientip.ts";
 import { EMAIL_STRICT, emailIn, lowEmail, mailFits, mailSent, plainWords, savedEmails } from "../_shared/mailrules.ts";
 import * as R from "../../app/src/calls/rules.js";
 import { costUsd, plan } from "../assistant/models.ts";
@@ -296,8 +297,9 @@ export function handler(deps: Deps) {
     }
     return r.code;
   };
-  // tries counted (migration 103): true while within the limit; when the counter cannot be reached the try is allowed
-  const hit = async (key: string, secs: number, max: number, add = 1) => { try { return (await rpc("call_code_hit", { p_key: key, p_secs: secs, p_max: max, p_add: add })) !== false; } catch { return true; } };
+  // tries counted (migration 103): true while within the limit. When the counter cannot be reached the try is refused
+  // (security review L4): a code is never guessed uncounted
+  const hit = async (key: string, secs: number, max: number, add = 1) => { try { return (await rpc("call_code_hit", { p_key: key, p_secs: secs, p_max: max, p_add: add })) === true; } catch { return false; } };
   const ipKey = async (ip: string) => "ip:" + (await R.sha256Hex("fincom-call:" + (ip || "?"))).slice(0, 32);
   // a room by its code; a wrong code counted against the address it came from
   const byCode = async (codeIn: unknown, ip: string) => {
@@ -1179,8 +1181,8 @@ export function handler(deps: Deps) {
     try { body = await req.json(); } catch { return reply(400, { ok: false, error: "Bad request" }); }
     const action = String((body && body.action) || "");
     try {
-      // the address a request came from (the first of x-forwarded-for, as the platform sets it): wrong codes are counted by it
-      const ctx: Ctx = { ip: (req.headers.get("x-forwarded-for") || "").split(",")[0].trim() || req.headers.get("cf-connecting-ip") || "" };
+      // the address a request came from, as the platform saw it (../_shared/clientip.ts; security review L4): wrong codes are counted by it
+      const ctx: Ctx = { ip: clientIp(req, "") };
       if (guest[action]) return reply(200, await guest[action](body, ctx));
       if (body.gt) {
         if (!shared[action]) return reply(403, { ok: false, kind: "guest", error: "A guest cannot do that." });

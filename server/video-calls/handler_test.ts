@@ -23,7 +23,7 @@ const uuid = () => "eeeeeeee-0000-4000-8000-" + String(++uuidN).padStart(12, "0"
 type Row = Record<string, any>;
 
 function stand(o: { cf?: boolean, mail?: boolean, ai?: boolean, aiOff?: boolean, aiAnswer?: string, transcribe?: (n: number) => Response, look429?: boolean,
-  rate?: { bucket: string, key: string }[], rateDown?: boolean, groq?: boolean, stt?: (form: FormData, n: number) => Response, chat?: (body: any, n: number) => Response, noLobby?: boolean, noDiag?: boolean, fincom?: (a: any) => any } = {}) {
+  rate?: { bucket: string, key: string }[], rateDown?: boolean, hitDown?: boolean, groq?: boolean, stt?: (form: FormData, n: number) => Response, chat?: (body: any, n: number) => Response, noLobby?: boolean, noDiag?: boolean, fincom?: (a: any) => any } = {}) {
   const T: Record<string, Row[]> = {
     members: Object.values(USERS).map((u) => ({ user_id: u.id, firm_id: u.firm, role: u.role, active: true, name: u.name, email: u.email })),
     firms: [{ id: FIRM, name: "Garg & Co" }, { id: FIRM2, name: "B" }],
@@ -88,7 +88,7 @@ function stand(o: { cf?: boolean, mail?: boolean, ai?: boolean, aiOff?: boolean,
           if (fn === "auth_rate_add") { rate.push({ bucket: body.p_bucket, key: body.p_key }); return J(null); }
           return J(rate.filter((x) => x.bucket === body.p_bucket && x.key === body.p_key).length);
         }
-        if (fn === "call_code_hit") { if (tok !== "service-key") return J({ message: "permission denied" }, 403); const add = body.p_add === 0 ? 0 : 1; tries[body.p_key] = (tries[body.p_key] || 0) + add; return J(tries[body.p_key] <= body.p_max - (add ? 0 : 1)); }
+        if (fn === "call_code_hit") { if (tok !== "service-key" || o.hitDown) return J({ message: "permission denied" }, 403); const add = body.p_add === 0 ? 0 : 1; tries[body.p_key] = (tries[body.p_key] || 0) + add; return J(tries[body.p_key] <= body.p_max - (add ? 0 : 1)); }
         if (fn === "call_client_setting_set") {
           const u = USERS[tok]; if (!u || u.role !== "owner") return J({ message: "Only the firm's owner can change a client's recording setting", code: "42501" }, 403);
           T.call_client_settings = T.call_client_settings.filter((x) => x.client_id !== body.p_client);
@@ -994,4 +994,20 @@ Deno.test("M5: a firm's emails in a day are counted (with the MIS emails); past 
   eq([r.j.emailed, r.j.not_emailed, down.log.mails.length], [false, ["s2@a.test"], 0], "the count cannot be read: nothing sent");
   const sch = await down.call({ action: "schedule", title: "x", at: "2026-10-25T05:30:00Z", emails: ["s2@a.test"] }, "tok-staff");
   eq([sch.status, sch.j.emailed, sch.j.not_emailed], [200, 0, ["s2@a.test"]], "a meeting is still scheduled");
+});
+
+// ---------- 13-Nov-2026 (security review, L4) ----------
+Deno.test("L4: wrong meeting codes are counted by the address the platform saw: what the caller writes first in X-Forwarded-For changes nothing; without the counter a code is not tried", async () => {
+  const s = stand();
+  const a = await s.call({ action: "start", kind: "meeting" }, "tok-staff");
+  const guess = (i: number) => s.call({ action: "guest_start", code: "abc-defg-hjk", name: "Guesser", email: "g@x.test" }, undefined, "9.9.9." + i + ", 198.51.100.77");
+  let last: any = null;
+  for (let i = 0; i <= R.CODE_TRIES.ipMax; i++) last = await guess(i);
+  eq([last.status, last.j.kind], [429, "tries"], "the same address behind a changing first entry is stopped");
+  eq(Object.keys(s.tries).filter((k) => k.startsWith("ip:")).length, 1, "one address counted, not one per made-up entry");
+  eq((await s.call({ action: "guest_start", code: a.j.room.code, name: "Real Person", email: "r@x.test" }, undefined, "192.0.2.50")).status, 200, "another address joins by the right code");
+  const down = stand({ hitDown: true });
+  const b = await down.call({ action: "start", kind: "meeting" }, "tok-staff");
+  const r = await down.call({ action: "guest_start", code: b.j.room.code, name: "Real Person", email: "r@x.test" });
+  eq([r.status, r.j.kind], [429, "tries"], "the counter cannot be reached: not tried");
 });

@@ -49,8 +49,9 @@ export const FREE_TRIES = 4;   // wrong passwords of one email from one address 
 export const waitWords = (s: number) => (s < 60 ? Math.max(1, Math.ceil(s)) + " seconds" : Math.ceil(s / 60) + " minute" + (Math.ceil(s / 60) === 1 ? "" : "s"));
 const waitMsg = (s: number) => "Too many wrong passwords. Try again in " + waitWords(s) + ", or ask the firm's owner to unlock you.";
 
-export const clientIp = (req: Request) =>
-  (req.headers.get("cf-connecting-ip") || (req.headers.get("x-forwarded-for") || "").split(",")[0] || "").trim() || "unknown";
+// the address as the platform saw it, never a caller's own header (security review L4): ../_shared/clientip.ts
+import { clientIp } from "../_shared/clientip.ts";
+export { clientIp };
 export async function sha256hex(s: string): Promise<string> {
   const h = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s)));
   return [...h].map((b) => b.toString(16).padStart(2, "0")).join("");

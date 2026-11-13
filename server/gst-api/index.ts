@@ -12,6 +12,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import aesjs from "npm:aes-js@3.1.2";
 import { makeGstCrypto } from "./gstcrypto.ts";
 import { corsFor } from "../_shared/cors.ts";   // the one list of headers for every function (server/_shared/cors.ts)
+import { clientIp } from "../_shared/clientip.ts";
 
 const C = makeGstCrypto(aesjs);
 const URL = Deno.env.get("SUPABASE_URL")!;
@@ -145,7 +146,7 @@ Deno.serve(async (req) => {
   let body: any = {};
   try { body = await req.json(); } catch { return reply(400, { ok: false, error: "Bad request" }); }
   // the person's public address, as GSTN asks for it
-  const ip = (req.headers.get("x-forwarded-for") || "").split(",")[0].trim() || req.headers.get("cf-connecting-ip") || "127.0.0.1";
+  const ip = clientIp(req, "127.0.0.1");   // as the platform saw it (../_shared/clientip.ts; security review L4)
   const action = String(body.action || "");
   // the plain relay (any gst/... path) is gone: nothing in the app called it (security review F5)
   if (action !== "otp" && action !== "auth" && action !== "2b") return reply(400, { ok: false, error: "Not a GST call this function makes." });

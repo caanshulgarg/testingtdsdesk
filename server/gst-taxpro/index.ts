@@ -50,6 +50,7 @@
 // back before proceeded. A File whose answer had no ARN is followed by RETTRACK before RETFILE is sent again.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsFor } from "../_shared/cors.ts";   // the one list of headers for every function (server/_shared/cors.ts)
+import { clientIp } from "../_shared/clientip.ts";
 import { after2b } from "./automatch.ts";
 import { firmGate, viaClient } from "../_shared/firmgate.ts";   // the console's switches (migration 118)
 import { r1Figures, r1PortalFigures, r3bFigures, compare, sameFigures, setoff, ledgersOf, writeAllowed, cleanR1, cleanR3b, safeText, Plain, reached, offsetDone, refusedClearly } from "./filing.ts";
@@ -1053,7 +1054,7 @@ Deno.serve(async (req) => {
     const username = String(body.username || "").trim();
     if (!["otp", "auth", "2b"].includes(action)) return reply(400, { ok: false, error: "Unknown action." });
     if (!username) return reply(400, { ok: false, error: "The taxpayer's GST portal username is needed." });
-    const ip = (req.headers.get("x-forwarded-for") || "").split(",")[0].trim() || "127.0.0.1";
+    const ip = clientIp(req, "127.0.0.1");   // as the platform saw it (../_shared/clientip.ts; security review L4)
     const h = hdr(gstin, username, ip);
     // an OTP or a sign-in only for one of the firm's clients, and not without limit (security review H1): each OTPREQUEST
     // is a paid call and sends the taxpayer an SMS and an email; AUTHTOKEN binds the taxpayer's portal session to this firm

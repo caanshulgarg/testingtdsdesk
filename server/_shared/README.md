@@ -30,12 +30,12 @@ fincom-assistant, fincom-transcribe, gst-2b-match, tds-challan-match, mis-run, z
 |---|---|---|---|
 | gateway | server/security/functions/gateway | index.ts, handler.ts, policy.ts, cors.ts, classify.ts, ../_shared/cors.ts, ../_shared/ai_policy.ts | the list |
 | admin | server/security/functions/admin | index.ts, cors.ts, ../_shared/cors.ts, ../_shared/firmgate.ts, ../_shared/errors.ts | the list |
-| signin | server/security/functions/signin | index.ts, handler.ts, cors.ts, ../_shared/cors.ts | the list |
+| signin | server/security/functions/signin | index.ts, handler.ts, cors.ts, ../_shared/cors.ts, ../_shared/clientip.ts | the list |
 | fincom-assistant | server/assistant | a one-line index.ts importing server/assistant/index.ts from GitHub at a pinned commit and calling main() (its own imports: ./agent.ts, ./tools.ts, ./tools/*, ./checks.ts, ./files.ts, ./mask.ts, ./models.ts, ./router.ts, ./citations.ts, ./notices.ts, ./entries.ts, ./mis.ts, ../_shared/misdef.js (My MIS's definition, shared with the app), ../_shared/cors.ts, ../_shared/sentry.ts, ../_shared/sentry-scrub.js); verify_jwt off (it checks the user's token itself) | the list |
 | fincom-transcribe | server/fincom-transcribe | a one-line index.ts importing server/fincom-transcribe/index.ts from GitHub at a pinned commit and calling main() (its own import: ../_shared/cors.ts); verify_jwt off (it checks the user's token itself, as fincom-assistant); key platform_secrets groq_api_key; usage rows in assistant_log (feature voice) | the list |
 | mis-run | server/mis-run | a one-line index.ts importing server/mis-run/index.ts from GitHub at a pinned commit and calling main() (its own imports: ./handler.ts, ./data.ts, ./pdf.ts, ../_shared/cors.ts, ../_shared/misdef.js, ../_shared/misledger.js, ../_shared/misageing.js, ../../app/src/lib/misCustom.js, ../../app/src/lib/misXlsx.js; ExcelJS and pdf-lib from npm); verify_jwt off (it checks the user's token, or the timer's x-cron-key with gst_cron_ok); email through Resend only when platform_secrets resend_api_key is set (sender platform_secrets resend_from, else FinCom MIS <mis@fincom.live>) | the list |
 | tally-ingest | server/tally-cloud | index.ts, parse.js, ../_shared/cors.ts, ../_shared/names.js, ../_shared/sentry.ts, ../_shared/sentry-scrub.js | `*` |
-| gst-api | server/gst-api | index.ts, gstcrypto.ts, ../_shared/cors.ts | `*` |
+| gst-api | server/gst-api | index.ts, gstcrypto.ts, ../_shared/cors.ts, ../_shared/clientip.ts | `*` |
 | gst-taxpro | server/gst-taxpro | index.ts, filing.ts, automatch.ts, ../_shared/cors.ts | `*` |
 | gst-2b-match | server/gst-2b-match | index.ts, handler.ts, match.ts, ../_shared/cors.ts, ../_shared/match2b.js, ../assistant/models.ts, ../assistant/router.ts (models.ts imports it); verify_jwt off (it checks the user's token, the service key or the cron key itself) | the list |
 | tds-challan-match | server/tds-challan-match | index.ts, handler.ts, match.ts, ../_shared/cors.ts, ../_shared/tdsmatch.js, ../assistant/models.ts, ../assistant/router.ts (models.ts imports it); verify_jwt off (it checks the user's token itself); no table of its own (the assistant's switch, cap, cost and log) | the list |
@@ -45,7 +45,7 @@ fincom-assistant, fincom-transcribe, gst-2b-match, tds-challan-match, mis-run, z
 
 The `*` functions take only the header list from here: each call carries a sign-in token or a device key (no cookies),
 and tally-ingest and gst-taxpro are also called by the Tally bridge and the database's timer.
-`signup` (by invitation only since 26-Oct-2026, audit H3) is in `server/signup/` (index.ts, handler.ts, and ../_shared/errors.ts since 13-Nov-2026; v10's source kept as v10-deployed.ts.txt); fyn-relay is a Node server called only by
+`signup` (by invitation only since 26-Oct-2026, audit H3) is in `server/signup/` (index.ts, handler.ts, and ../_shared/errors.ts and ../_shared/clientip.ts since 13-Nov-2026; v10's source kept as v10-deployed.ts.txt); fyn-relay is a Node server called only by
 gst-api, not by a browser.
 
 ## Check after deploy (staging)

@@ -6,7 +6,7 @@
 // token (Turnstile) passed to Auth's sign-up / recover; limits shared by every running copy (migration 112); throwaway
 // email domains get the neutral answer and nothing is sent.
 // signup v12 (26-Oct-2026): self-service sign-up again, with the email confirmed before anything is made. Plain module
-// with no imports, so the Deno tests (handler_test.ts) run it with fake services; index.ts wires the real ones.
+// (its one import: ../_shared/clientip.ts), so the Deno tests (handler_test.ts) run it with fake services; index.ts wires the real ones.
 //
 // Three ways in:
 //  (a) the public form (email, password, name, firm name). The answer is always the same "check your email" (status,
@@ -144,8 +144,9 @@ const CORS = {
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { ...CORS, "Content-Type": "application/json" } });
 
-export const clientIp = (req: Request) =>
-  (req.headers.get("cf-connecting-ip") || (req.headers.get("x-forwarded-for") || "").split(",")[0] || "").trim() || "unknown";
+// the address as the platform saw it, never a caller's own header (security review L4): ../_shared/clientip.ts
+import { clientIp } from "../_shared/clientip.ts";
+export { clientIp };
 
 // "<name>'s firm" for a Google/Microsoft sign-up (no firm-name box there); the owner can rename it in Settings
 export function firmNameFor(u: AuthUser): string {

@@ -205,3 +205,17 @@ Deno.test("M4: Auth's own refusal of a right password (the account's count, from
   eq(r.status, 403); assert(/Too many wrong passwords/.test(r.body.error));
   eq(att.fails.length, 0); eq(store.rows.length, 0);
 });
+
+// ---------- 13-Nov-2026 (security review, L4) ----------
+Deno.test("L4: failures are counted by the address the platform saw; a made-up first entry in X-Forwarded-For does not start a new count", async () => {
+  const store = sharedStore();
+  const { handler, log } = fake({ store });
+  const from = (i: number, email: string, pw: string) => handler(new Request("http://x/signin", { method: "POST", headers: { "Content-Type": "application/json", "x-forwarded-for": "7.7." + (i % 250) + "." + (i % 199) + ", 203.0.113.99, 10.0.0.1" }, body: JSON.stringify({ email, password: pw }) }));
+  for (let i = 0; i < MAX_IP_FAILS; i++) eq((await from(i, "v" + i + "@b.in", "guess")).status, 400);
+  eq(new Set(store.rows.map((r) => r.key)).size, 1, "one address counted");
+  const r = await read(await from(999, "new@b.in", GOOD));
+  eq([r.status, r.body.error], [429, IP_BLOCKED]); eq(log.auth.length, MAX_IP_FAILS);
+  // the edge's own header wins over anything in X-Forwarded-For
+  const cf = await handler(new Request("http://x/signin", { method: "POST", headers: { "Content-Type": "application/json", "cf-connecting-ip": "198.51.100.5", "x-forwarded-for": "203.0.113.99" }, body: JSON.stringify({ email: "new@b.in", password: GOOD }) }));
+  eq(cf.status, 200, "another address (the edge's header) is not blocked");
+});
