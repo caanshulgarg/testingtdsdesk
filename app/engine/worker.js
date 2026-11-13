@@ -65,7 +65,7 @@ self.onmessage = (e) => {
   try {
     if (m.t === "init") init(m.legacy);
     else if (m.t === "begin") begin(m);
-    else if (m.t === "S") { Object.keys(m.s || {}).forEach((k) => { S[k] = m.s[k]; }); const L = self.__engineLS; L.clear(); Object.keys(m.ls || {}).forEach((k) => L.set(k, m.ls[k])); if (books) S.books = books; }
+    else if (m.t === "S") { Object.keys(m.s || {}).forEach((k) => { S[k] = m.s[k]; }); const L = self.__engineLS; L.clear(); Object.keys(m.ls || {}).forEach((k) => L.set(k, m.ls[k])); if (m.g && m.g.M2B && typeof M2B === "object") M2B.st = m.g.M2B; if (books) S.books = books; }
     else if (m.t === "bk") { if (next && next.ver === m.ver) next.b[m.k] = m.v; }
     else if (m.t === "bv") { if (next && next.ver === m.ver) { const V = next.b.vouchers; for (let i = 0; i < m.v.length; i++) V.push(m.v[i]); } }
     else if (m.t === "end") {
