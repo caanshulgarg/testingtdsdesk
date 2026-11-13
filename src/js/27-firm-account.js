@@ -899,7 +899,9 @@ async function openCompany(cid, tab){
   setTimeout(() => { try { if (typeof postToFromLink === "function") postToFromLink(S.companies[cid]).then(v => { if (!v && typeof autoPostTo === "function") return autoPostTo(S.companies[cid]); }).catch(() => {}); } catch (e){} }, 0);
   // the client's ledger list, read on opening the client (from the cloud copy when linked, else the bridge); then the
   // Client setup ledgers of the wrong tax head or section, or not in Tally, are set to the ones that fit (and saved)
-  if (typeof Ledgers === "object") Ledgers.load(cid).then(() => { if (S.coId === cid && Ledgers.cid() === cid && autoMapCompanyLedgers(CO(cid)).length) render(); }, () => {});
+  // (next-speed-worker: in a task of its own after the opening's drawing, which it shared: 114 ms in one task on a
+  // client of 4,100 ledgers and 100,000 made-up entries; the same matching, a moment later)
+  if (typeof Ledgers === "object") Ledgers.load(cid).then(() => setTimeout(() => { if (S.coId === cid && Ledgers.cid() === cid && autoMapCompanyLedgers(CO(cid)).length) render(); }, 0), () => {});
 }
 function goHome(){ closeSwitcher(true); S.view = "home"; S.arm = null; render(); }
 

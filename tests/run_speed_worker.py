@@ -159,10 +159,16 @@ LEDGER = r"""async () => {
   const from = d[d.length - want], to = d[d.length - 1];
   S.tab = "books"; S.booksTab = "lookup"; S.lk = null; render(); await Z.quiet(800);
   const x = LK.st(); Object.assign(x, {kind: "ledger", led: "", from, to}); render(); await Z.quiet(600);
-  Z.start(); lkLed(l);
-  await Z.wait(() => { const r = S.lk && S.lk.res; return r && r.led === l && r.rows; }, 300000);
+  Z.start(); let line = false, ce = 0; const cs = typeof Engine === "object" ? Engine.calc : null; if (cs) Engine.calc = function () { ce++; return cs.apply(this, arguments); };
+  lkLed(l);
+  await Z.wait(() => { if (S.lk && S.lk.busy) line = true; const r = S.lk && S.lk.res; return r && r.led === l && r.rows && !S.lk.busy; }, 300000);
   await new Promise(r => setTimeout(r, 50)); await Z.wait(() => !document.querySelector("#app [data-working]"), 300000);
-  const t = Z.end(); return Object.assign(t, {led: l, lines: want, rows: S.lk.res.rows.length}); }"""
+  const t = Z.end(); if (cs) Engine.calc = cs;
+  // the table as drawn in the end (in parts of 300 rows a frame), and again after a drawing of the whole page
+  await new Promise(r => setTimeout(r, 600)); const shown = document.querySelectorAll("#app tr.lk-v").length; render(); await new Promise(r => setTimeout(r, 600)); const shown2 = document.querySelectorAll("#app tr.lk-v").length;
+  // the account shown against the same worked out here at once
+  const res = S.lk.res, title = res.title, fresh = LK.ledgerBooks(l, from, to); fresh.title = title;
+  return Object.assign(t, {led: l, lines: want, rows: res.rows.length, shown, shown2, line, eng: ce > 0, same: JSON.stringify(res) === JSON.stringify(fresh), len: JSON.stringify(res).length}); }"""
 
 # the job's rules with the worker (on the books open, made due again before each)
 # the job's rules with the worker (on the books open, made due again before each), a part each
@@ -375,14 +381,19 @@ try:
                     except Exception as x: e = {"error": str(x).split("\n")[0][:200], "state": pg.evaluate("() => window.__zz.state()")}
                     ok("error" not in e and WANT[name](e), "%s (%s)" % (SAY[name], e))
                 ctx.close(); break
-            pg.evaluate("() => window.__zz.start()")
-            pg.click("[data-side-client=back]")
-            pg.wait_for_function("(cid) => S.view === 'company' && S.books && S.books.cid === cid && !S.books.loading", arg=cid, timeout=120000)
-            pg.evaluate("() => window.__zz.wait(() => !document.querySelector('#app [data-working]'), 120000)")
-            row["open"] = pg.evaluate("() => window.__zz.end()")
-            pg.evaluate("() => window.__zz.quiet(800)")
-            row["ledger"] = pg.evaluate(LEDGER)
-            for k, js in (("gst3b", GST3B), ("mis", MIS_RUN), ("audit", AUDIT_RUN), ("save", SAVE)):
+            # the client opened from the sidebar REPEAT times (Today between), the books kept in memory; the median judged
+            opens = []
+            for i in range(REPEAT):
+                if i:
+                    pg.evaluate("() => goHome()"); pg.wait_for_timeout(1500); pg.evaluate("() => window.__zz.quiet(800)")
+                pg.evaluate("() => window.__zz.start()")
+                pg.click("[data-side-client=back]")
+                pg.wait_for_function("(cid) => S.view === 'company' && S.books && S.books.cid === cid && !S.books.loading", arg=cid, timeout=120000)
+                pg.evaluate("() => window.__zz.wait(() => !document.querySelector('#app [data-working]'), 120000)")
+                opens.append(pg.evaluate("() => window.__zz.end()"))
+                pg.evaluate("() => window.__zz.quiet(800)")
+            opens.sort(key=lambda v: v["max"]); row["open"] = dict(opens[len(opens) // 2], runs=[v["max"] for v in opens])
+            for k, js in (("ledger", LEDGER), ("gst3b", GST3B), ("mis", MIS_RUN), ("audit", AUDIT_RUN), ("save", SAVE)):
                 runs = []
                 for i in range(REPEAT):
                     pg.evaluate(FRESH); runs.append(pg.evaluate(js))
@@ -400,6 +411,14 @@ try:
             ok(v["closing"], "save: the page closed while a save goes to the worker: written here at once, whole")
             ok(v["eng"], "save: written by the engine's worker")
             ok(v["max"] <= TASK_MS and v["rest"]["max"] <= TASK_MS, "save: no task of the page's thread over %d ms: a new list of entries %d ms %s (the median of %d runs' longest: %s), the rest only %d ms %s" % (TASK_MS, v["max"], v["top"], len(v["runs"]), v["runs"], v["rest"]["max"], v["rest"]["top"]))
+            v = row["open"]
+            ok(v["max"] <= TASK_MS, "open: no task of the page's thread over %d ms: the longest %d ms %s (the median of %d openings' longest: %s)" % (TASK_MS, v["max"], v["top"], len(v["runs"]), v["runs"]))
+            v = row["ledger"]
+            if v.get("eng") is not None:
+                ok(v["same"], "ledger: the account shown is the one worked out here at once (%d characters)" % v["len"])
+                ok(v["shown"] > 300 and v["shown"] == v["shown2"], "ledger: the table drawn in full in the end, %d rows (%d after the page is drawn again)" % (v["shown"], v["shown2"]))
+                ok(v["eng"] and v["line"], "ledger: worked out in the engine's worker, the \"Working it out\" line shown meanwhile (%s)" % {x: v[x] for x in ("line", "eng")})
+                ok(v["max"] <= TASK_MS, "ledger: no task of the page's thread over %d ms: the longest %d ms %s (the median of %d runs' longest: %s)" % (TASK_MS, v["max"], v["top"], len(v.get("runs", [v["max"]])), v.get("runs", [v["max"]])))
             v = row["gst3b"]
             if "eng" in v:
                 ok(v["same"], "gst3b: the 3B and the month's checks drawn are the ones worked out here afresh (%d characters)" % v["len"])
