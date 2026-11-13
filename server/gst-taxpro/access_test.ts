@@ -52,7 +52,8 @@ globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) =>
     const id = (u.searchParams.get("user_id") || "").replace(/^eq\./, "");
     return out(200, S.members.filter((m) => m.user_id === id));
   }
-  if (table === "clients") return out(200, u.searchParams.get("firm_id") === "eq." + FIRM && u.searchParams.get("gstin") === "eq." + G ? [{ id: "c-1" }] : []);
+  // the firm's one client, known by its GSTIN G (PAN AAACT1234A): asked for by the PAN (pan=ilike.PAN or gstin=ilike.__PAN%)
+  if (table === "clients") return out(200, u.searchParams.get("firm_id") === "eq." + FIRM && /AAACT1234A/i.test((u.searchParams.get("gstin") || "") + (u.searchParams.get("pan") || "")) ? [{ id: "c-1", deleted: false, status: "active" }] : []);
   if (table === "gst_einv_accounts") return out(200, [{ firm_id: FIRM, gstin: G, username: "irp", token_until: null }]);
   if (table === "gst_einvoices") return out(200, [{ firm_id: FIRM, gstin: G, doc_key: "d1", irn: "IRN1", irn_status: "active", ack_dt: new Date().toISOString() }]);
   return out(200, []);

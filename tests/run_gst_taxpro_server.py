@@ -86,10 +86,15 @@ tps = http.server.ThreadingHTTPServer(("127.0.0.1", 9310), TPH); threading.Threa
 FIRM, USER, JWT = "f-1", "u-1", "user-jwt-1"
 F.USERS[JWT] = {"id": USER, "email": "a@b.c"}
 F.T["members"].append({"user_id": USER, "firm_id": FIRM, "active": True, "role": "owner"})
-# the firm's clients' GSTINs (an OTP or a sign-in only for these: security review H1); G_OTHER is another firm's client
+# the firm's clients (an OTP, a sign-in or an e-invoice action only for a GSTIN with one's PAN: security review H1 and its
+# review): c-0 known by its GSTIN (its other registrations, G_MORE, carry the same PAN), c-p by its PAN only (in lower
+# case), c-d deactivated, c-e deleted; G_OTHER is another firm's client
 G_MORE = ["07AAACT1234A2Z5", "07AAACT1234A3Z5", "07AAACT1234A4Z5", "07AAACT1234A5Z5"]; G_OTHER = "27AAACX9999X1Z5"
-for i, g in enumerate(["07AAACT1234A1Z5"] + G_MORE): F.T["clients"].append({"id": "c-%d" % i, "firm_id": FIRM, "gstin": g, "deleted": False})
-F.T["clients"].append({"id": "c-x", "firm_id": "f-2", "gstin": G_OTHER, "deleted": False})
+F.T["clients"] += [{"id": "c-0", "firm_id": FIRM, "gstin": "07AAACT1234A1Z5", "pan": None, "deleted": False, "status": "active"},
+                   {"id": "c-p", "firm_id": FIRM, "gstin": None, "pan": "aaacp5555p", "deleted": False, "status": None},
+                   {"id": "c-d", "firm_id": FIRM, "gstin": "07AAACD1111D1Z5", "pan": "AAACD1111D", "deleted": False, "status": "deactivated"},
+                   {"id": "c-e", "firm_id": FIRM, "gstin": "07AAACE2222E1Z5", "pan": "AAACE2222E", "deleted": True, "status": "active"},
+                   {"id": "c-x", "firm_id": "f-2", "gstin": G_OTHER, "pan": "AAACX9999X", "deleted": False, "status": "active"}]
 F.SECRETS["gsp:taxpro:aspid"] = "ASP-FROM-VAULT"; F.SECRETS["gsp:taxpro:password"] = "ASP-PASS-FROM-VAULT"
 F.start()
 env = dict(os.environ, SUPABASE_URL="http://127.0.0.1:%d" % F.PORT, SUPABASE_SERVICE_ROLE_KEY=F.SERVICE, SUPABASE_ANON_KEY="anon-key",
@@ -132,8 +137,8 @@ try:
     ok(rs[0].get("ok") and rs[1].get("ok") and not rs[2].get("ok") and "Try again in 15 minutes" in rs[2].get("error", "") and otps() == 2,
        "one GSTIN: 3 OTPs in 15 minutes, the 4th refused with when to try again: %s" % rs[2])
     rs = [call({"action": "otp", "gstin": g, "username": "user1"}) for g in G_MORE for _ in range(2)]
-    ok([x.get("ok") for x in rs] == [True] * 7 + [False] and "Try again in an hour" in rs[-1].get("error", "") and otps() == 9,
-       "the firm: 10 OTPs an hour (any GSTINs), the 11th refused with when to try again: %s" % rs[-1])
+    ok([x.get("ok") for x in rs] == [True] * 6 + [False] * 2 and "Try again in an hour" in rs[-1].get("error", "") and otps() == 8,
+       "the firm: 10 OTPs an hour (any GSTINs; the one a GSTIN's limit refused counts too), then refused with when to try again: %s" % rs[-1])
     rs = [call({"action": "auth", "gstin": G_MORE[0], "username": "user1", "otp": "111111"}) for _ in range(6)]
     ok(all("Invalid OTP" in x.get("error", "") for x in rs[:5]) and "Try again in 15 minutes" in rs[5].get("error", "") and sum(1 for c in TP["calls"][n0:] if c[1] == "AUTHTOKEN") == 5,
        "sign-in with an OTP: 5 tries in 15 minutes per GSTIN, the 6th refused: %s" % rs[5])
@@ -146,6 +151,47 @@ try:
     if leaks: print("   leaked:", leaks, [l.strip()[:300] for l in log if any(w in l for w in leaks)][:3])
     ok(not leaks, "after a network failure: no OTP, ASP id or password, or e-invoice password in the function's log or the reply")
     ok(any("/eivital/dec/v1.04/auth" in l for l in log) and any("authenticate" in l and "AUTHTOKEN" in l for l in log), "each failure is still logged, cleaned (the path and the action)")
+    # the review of c405f5104
+    n1 = len(TP["calls"]); sent = lambda: sum(1 for c in TP["calls"][n1:] if c[1] == "OTPREQUEST")
+    hits = lambda b: sum(1 for x in F.RATE if x[0] == b)
+    F.RATE.clear()
+    # M-a: the client's registration in another state (same PAN), and a client known by its PAN only: allowed
+    rs = [call({"action": "otp", "gstin": g, "username": "user1"}) for g in ("09AAACT1234A1Z5", "29AAACP5555P1Z5")]
+    ok(all(x.get("ok") for x in rs) and sent() == 2, "an OTP for the client's GSTIN in another state, and for a client known by its PAN only: sent: %s" % rs)
+    # L-c: a deactivated or deleted client: refused, nothing sent
+    rs = [call({"action": "otp", "gstin": g, "username": "user1"}) for g in ("07AAACD1111D1Z5", "07AAACE2222E1Z5")]
+    ok(all("not one of your firm's clients" in x.get("error", "") for x in rs) and sent() == 2, "a deactivated or a deleted client's GSTIN: refused, nothing sent: %s" % rs)
+    # L-b: the firm over its cap: refused before any GSTIN's count is used
+    F.RATE.clear()
+    for g, n in zip(G_MORE, (3, 3, 3, 1)):
+        for _ in range(n): call({"action": "otp", "gstin": g, "username": "user1"})
+    g0, d0 = hits("gst-otp-gstin"), hits("gst-otp-gstin-day")
+    r = call({"action": "otp", "gstin": "09AAACT1234A1Z5", "username": "user1"})
+    ok("Try again in an hour" in r.get("error", "") and hits("gst-otp-gstin") == g0 and hits("gst-otp-gstin-day") == d0 and sent() == 12,
+       "the firm has had 10 OTPs this hour: refused, and the GSTIN's own counts are not used: %s" % r)
+    # L-a: one GSTIN at most 10 OTPs in 24 hours, however they are spread over the hours
+    F.RATE.clear(); s0 = sent(); last = {}
+    for _ in range(30):
+        last = call({"action": "otp", "gstin": G_MORE[3], "username": "user1"})
+        if "24 hours" in last.get("error", ""): break
+        if not last.get("ok"): F.RATE[:] = [(b, k, t - 3700) if b in ("gst-otp-gstin", "gst-otp-firm") else (b, k, t) for b, k, t in F.RATE]   # the 15 minutes and the hour pass
+    ok(sent() - s0 == 10 and "Try again in 24 hours" in last.get("error", ""), "one GSTIN: 10 OTPs in 24 hours, then refused with when to try again (%d sent): %s" % (sent() - s0, last))
+    # M-b: the limit cannot be checked (the database fails): refused, nothing sent; a database without auth_rate_hit: counted here, logged
+    F.RATE.clear(); F.FAIL_RPC["auth_rate_hit"] = {"message": "terminating connection", "code": "57P01"}; s0 = len(TP["calls"])
+    rs = [call({"action": "otp", "gstin": G, "username": "user1"}), call({"action": "auth", "gstin": G_MORE[2], "username": "user1", "otp": "575757"}),
+          call({"action": "einv-login", "gstin": G_MORE[2], "username": "irpuser", "password": "irp-pass-2"})]
+    del F.FAIL_RPC["auth_rate_hit"]
+    ok(all("try again in a moment" in x.get("error", "") for x in rs) and len(TP["calls"]) == s0, "the limit cannot be checked: OTP, sign-in and e-invoice sign-in refused (try again in a moment), nothing sent: %s" % rs)
+    F.NO_FN.add("auth_rate_hit"); s0 = sent()
+    r = call({"action": "otp", "gstin": G_MORE[2], "username": "user1"})
+    F.NO_FN.discard("auth_rate_hit"); time.sleep(0.3)
+    ok(r.get("ok") and sent() == s0 + 1 and any("counted in this running copy only" in l for l in log), "a database without auth_rate_hit (PGRST202): counted in this copy, logged, sent: %s" % r)
+    # L-d: the e-invoice actions only for the firm's clients
+    rs = [call(dict(b, gstin=G_OTHER)) for b in ({"action": "einv-login", "username": "u", "password": "p-other"}, {"action": "irn", "docKey": "x", "inv": {"SellerDtls": {"Gstin": G_OTHER}}},
+          {"action": "irn-cancel", "docKey": "x"}, {"action": "ewb", "docKey": "x", "trans": {}})]
+    ok(all("not one of your firm's clients" in x.get("error", "") for x in rs) and not any(k.startswith("gsp:einv:%s:%s" % (FIRM, G_OTHER)) for k in F.SECRETS),
+       "einv-login, irn, irn-cancel and ewb for another firm's GSTIN: refused, nothing kept: %s" % [x.get("error") for x in rs])
+    F.RATE.clear()
     # Fetch now: 2B, GSTR-1 (the version that answers), 3B; a month not filed is "none"
     r = call({"action": "fetch", "gstin": G, "form": "2B", "period": per(1)})
     ok(r.get("ok") and ret("2B", per(1))["status"] == "ok" and ret("2B", per(1))["data"]["docdata"]["b2b"][0]["ctin"] == "09AAACB1234C1Z5", "2B fetched and kept on the server")
@@ -221,6 +267,10 @@ try:
     ok(r.get("ok") and e.get("irn_status") == "cancelled" and e.get("irn") == "IRN-SI/26/001", "IRN cancelled within 24 hours; the record stays, marked cancelled")
     lst = call({"action": "einvoices", "gstin": G})
     ok(lst.get("ok") and len(lst["einvoices"]) == 1 and lst["einvoices"][0]["irn_status"] == "cancelled" and "request" not in lst["einvoices"][0], "the firm's e-invoices listed")
+    # L-d: the e-invoice sign-in at most 5 times in 15 minutes per GSTIN
+    F.RATE.clear()
+    rs = [call({"action": "einv-login", "gstin": G, "username": "irpuser", "password": "wrong"}) for _ in range(6)]
+    ok(all("refused" in x.get("error", "") for x in rs[:5]) and "Try again in 15 minutes" in rs[5].get("error", ""), "e-invoice sign-in: 5 in 15 minutes, the 6th refused with when to try again: %s" % rs[5])
     # never the keys
     ok(not any("ASP-PASS-FROM-VAULT" in l or "TOK1" in l or "irp-pass" in l for l in log), "the function's log never has a key, token or password")
 finally:

@@ -22,8 +22,8 @@
 // (any role but owner or staff) may only read: status, returns, return, einv-status, einvoices, filing. Error replies are plain;
 // the raw detail is in the function's log only.
 //   {action:"status", gstins}                       sessions: until, access period, ended, error (never the token)
-//   {action:"otp" | "auth", gstin, username, otp?, days?}   only for a GSTIN of the firm's clients; OTPs 3 per 15 minutes per
-//                                                   GSTIN and 10 an hour per firm (with gst-api's), sign-ins 5 per 15 minutes
+//   {action:"otp" | "auth", gstin, username, otp?, days?}   only for a GSTIN with a client's PAN; OTPs 10 an hour per firm (with
+//                                                   gst-api's), 3 per 15 minutes and 10 a day per GSTIN; sign-ins 5 per 15 minutes
 //   {action:"2b", gstin, username, period}          2B now (kept on the server too)
 //   {action:"fetch", gstin, form: 2B|R1|3B, period} fetched and kept on the server (gst_returns)
 //   {action:"returns", gstins, forms?, from?, to?}  what is kept: form, period, status, when (no data)
@@ -87,38 +87,56 @@ function scrub(t: unknown, ...secret: string[]): string {
 
 // ---------- limits (security review H1, L7) ----------
 // Counted in the database (auth_rate_hit, server/security/migration-112-auth-rate-limits.sql: one count across the
-// function's running copies; the key hashed), as gst-api counts its OTPs; where that is not there, in this running copy
-// only (logged). "gst-otp-firm" is gst-api's own bucket and key, so the two functions share one count per firm
+// function's running copies; the key hashed), as gst-api counts its OTPs. "gst-otp-firm" is gst-api's own bucket and key,
+// so the two functions share one count per firm. A database without auth_rate_hit (PGRST202, 42883): counted in this
+// running copy only (logged). Any other failure to count: a closed limit refuses (nothing sent), the others count here
 const LIMITS = {
-  otpGstin: { bucket: "gst-otp-gstin", max: 3, window: 900 },    // OTPs sent to one taxpayer (SMS and email), whichever firm asks
-  otpFirm: { bucket: "gst-otp-firm", max: 10, window: 3600 },    // OTPs one firm asks for (each a paid TaxPro call)
-  auth: { bucket: "gst-auth", max: 5, window: 900 },             // OTPs tried for one firm's GSTIN
-  selftest: { bucket: "gst-selftest", max: 5, window: 3600 },    // the sandbox self-test, per firm
-  evc: { bucket: "gst-evc-otp", max: 5, window: 3600 },          // the signatory's EVC OTP, per return
+  otpFirm: { bucket: "gst-otp-firm", max: 10, window: 3600, closed: true },        // OTPs one firm asks for (each a paid TaxPro call)
+  otpGstin: { bucket: "gst-otp-gstin", max: 3, window: 900, closed: true },        // OTPs sent to one taxpayer (SMS and email), whichever firm asks
+  otpDay: { bucket: "gst-otp-gstin-day", max: 10, window: 86400, closed: true },   // the same, in a day
+  auth: { bucket: "gst-auth", max: 5, window: 900, closed: true },                 // OTPs tried for one firm's GSTIN
+  einvLogin: { bucket: "gst-einv-login", max: 5, window: 900, closed: true },      // e-invoice sign-ins for one firm's GSTIN
+  selftest: { bucket: "gst-selftest", max: 5, window: 3600, closed: false },       // the sandbox self-test, per firm
+  evc: { bucket: "gst-evc-otp", max: 5, window: 3600, closed: false },             // the signatory's EVC OTP, per return
 };
-type Limit = { bucket: string; max: number; window: number };
-const inWords = (s: number) => s >= 3600 ? "an hour" : Math.round(s / 60) + " minutes";
+type Limit = { bucket: string; max: number; window: number; closed: boolean };
+const inWords = (s: number) => s >= 86400 ? "24 hours" : s >= 3600 ? "an hour" : Math.round(s / 60) + " minutes";
+const LIMIT_DOWN = "FinCom could not check its limit just now, so nothing was sent. Please try again in a moment.";
 async function sha256hex(t: string) {
   const d = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(t)));
   return Array.from(d, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 const hitsHere = new Map<string, number[]>();
-async function allowed(l: Limit, key: string): Promise<boolean> {
+// true: allowed (and counted); false: over the limit; null: not checked (a closed limit when the database failed)
+async function allowed(l: Limit, key: string): Promise<boolean | null> {
   const k = await sha256hex(key);
   const { data, error } = await admin.rpc("auth_rate_hit", { p_bucket: l.bucket, p_key: k, p_max: l.max, p_window_s: l.window });
   if (!error) return data === true;
-  console.error(JSON.stringify({ fn: "gst-taxpro", where: "limit " + l.bucket, error: String(error.message || "").slice(0, 300), note: "counted in this running copy only" }));
+  const missing = error.code === "PGRST202" || error.code === "42883";
+  if (l.closed && !missing) {
+    console.error(JSON.stringify({ fn: "gst-taxpro", where: "limit " + l.bucket, code: error.code || null, error: String(error.message || "").slice(0, 300), note: "refused: the limit could not be checked" }));
+    return null;
+  }
+  console.error(JSON.stringify({ fn: "gst-taxpro", where: "limit " + l.bucket, code: error.code || null, error: String(error.message || "").slice(0, 300), note: "counted in this running copy only" }));
   const now = Date.now(), id = l.bucket + ":" + k, seen = (hitsHere.get(id) || []).filter((t) => now - t < l.window * 1000);
   if (seen.length >= l.max) { hitsHere.set(id, seen); return false; }
   seen.push(now); hitsHere.set(id, seen);
   return true;
 }
-// the GSTIN is one of the firm's clients' (not deleted), as gst-api checks it (firmClient, security review F5)
+// the GSTIN is one of the firm's clients' (not deleted, not deactivated): its PAN (characters 3-12) is a client's PAN, as
+// typed or as in the client's own GSTIN, since every registration added to a client must carry the client's PAN
+// (src/js/36-gst-settings.js clientPan); a GSTIN without a PAN in it (UIN, TDS/TCS) only by itself
 async function firmClient(firm: string, gstin: string): Promise<boolean> {
-  const { data, error } = await admin.from("clients").select("id").eq("firm_id", firm).eq("gstin", gstin).not("deleted", "is", true).limit(1);
-  if (error) dbFail("clients", error, "Your firm's clients could not be read. Nothing was sent; try again in a moment.");
-  return Array.isArray(data) && data.length > 0;
+  const pan = gstin.slice(2, 12), q = () => admin.from("clients").select("id, deleted, status").eq("firm_id", firm);
+  const asks = /^[A-Z]{5}\d{4}[A-Z]$/.test(pan) ? [q().ilike("pan", pan), q().ilike("gstin", "__" + pan + "%")] : [q().ilike("gstin", gstin)];
+  for (const a of asks) {
+    const { data, error } = await a.limit(100);
+    if (error) dbFail("clients", error, "Your firm's clients could not be read. Nothing was sent; try again in a moment.");
+    if ((data || []).some((c: any) => c.deleted !== true && c.status !== "deactivated")) return true;
+  }
+  return false;
 }
+const NOT_CLIENT = "That GSTIN is not one of your firm's clients. Add the client first.";
 function dbFail(where: string, error: { message?: string; code?: string }, say: string): never {
   console.error(JSON.stringify({ fn: "gst-taxpro", where, code: error.code || null, error: String(error.message || "").slice(0, 500) }));
   throw new Plain(say);
@@ -708,7 +726,7 @@ async function filingAction(w: Who, action: string, body: any, role: string) {
       if (action === "evc_otp") {
         const pan = String(body.pan || "").toUpperCase().trim();
         if (!PAN.test(pan)) return { ok: false, error: "The authorised signatory's PAN is needed." };
-        if (!(await allowed(LIMITS.evc, "gst-evc-otp:" + w.firm + ":" + gstin + ":" + form + ":" + period))) {
+        if ((await allowed(LIMITS.evc, "gst-evc-otp:" + w.firm + ":" + gstin + ":" + form + ":" + period)) === false) {
           await logFiling(w, r, "evc_otp", false, "refused: " + LIMITS.evc.max + " EVC OTPs within " + inWords(LIMITS.evc.window));
           return { ok: false, error: "The signatory's OTP has been asked for " + LIMITS.evc.max + " times in the last " + (LIMITS.evc.window >= 3600 ? "hour" : inWords(LIMITS.evc.window)) + " for this return. Try again in " + inWords(LIMITS.evc.window) + "." };
         }
@@ -888,7 +906,7 @@ Deno.serve(async (req) => {
     if (who instanceof Response) return who;
     // the firm's owner only, at most 5 times an hour (security review L7)
     if (who.role !== "owner") return reply(403, { ok: false, error: "Only the firm's owner can run the GST self-test." });
-    if (!(await allowed(LIMITS.selftest, "gst-selftest:" + who.firm))) return reply(429, { ok: false, error: "The GST self-test has run " + LIMITS.selftest.max + " times in the last hour. Try again in " + inWords(LIMITS.selftest.window) + "." });
+    if ((await allowed(LIMITS.selftest, "gst-selftest:" + who.firm)) === false) return reply(429, { ok: false, error: "The GST self-test has run " + LIMITS.selftest.max + " times in the last hour. Try again in " + inWords(LIMITS.selftest.window) + "." });
     // GSTN's published sandbox test taxpayer (sandbox OTP 575757); production is not touched, it costs credit
     const t = { gstin: "33AANCS2882A1ZG", username: "TN_NT2.2265" }, h = hdr(t.gstin, t.username);
     const steps: Record<string, string> = {};
@@ -969,6 +987,8 @@ Deno.serve(async (req) => {
     }
     const gstin = String(body.gstin || "").toUpperCase();
     if (!GSTIN.test(gstin)) return reply(400, { ok: false, error: "A GSTIN is needed." });
+    // the e-invoice actions keep a password or spend an IRP call: only for one of the firm's clients (review of c405f5104)
+    if (["einv-login", "irn", "irn-cancel", "ewb"].includes(action) && !(await firmClient(firm, gstin))) return reply(403, { ok: false, error: NOT_CLIENT });
     if (["filing", "save", "summary", "confirm", "proceed", "evc_otp", "file", "track"].includes(action))
       return reply(200, await deadline.run(Date.now() + ACTION_BUDGET, () => filingAction({ firm, me }, action, body, who.role)));
 
@@ -986,6 +1006,9 @@ Deno.serve(async (req) => {
     if (action === "einv-login") {
       const username = String(body.username || "").trim(), password = String(body.password || "");
       if (!username || !password) return reply(400, { ok: false, error: "The e-invoice API username and password are needed." });
+      const a = await allowed(LIMITS.einvLogin, "gst-einv-login:" + firm + ":" + gstin);
+      if (a === null) return reply(503, { ok: false, error: LIMIT_DOWN });
+      if (!a) return reply(429, { ok: false, error: "The e-invoice sign-in for " + gstin + " has been tried " + LIMITS.einvLogin.max + " times in the last " + inWords(LIMITS.einvLogin.window) + ". Try again in " + inWords(LIMITS.einvLogin.window) + "." });
       await sput(einvName(firm, gstin, "pass"), password);
       if (body.ewbPassword) await sput(ewbName(firm, gstin, "pass"), String(body.ewbPassword));
       const { error } = await admin.from("gst_einv_accounts").upsert({ firm_id: firm, gstin, username, token_until: null, last_error: null, updated_at: new Date().toISOString() });
@@ -1034,22 +1057,26 @@ Deno.serve(async (req) => {
     const h = hdr(gstin, username, ip);
     // an OTP or a sign-in only for one of the firm's clients, and not without limit (security review H1): each OTPREQUEST
     // is a paid call and sends the taxpayer an SMS and an email; AUTHTOKEN binds the taxpayer's portal session to this firm
-    if ((action === "otp" || action === "auth") && !(await firmClient(firm, gstin)))
-      return reply(403, { ok: false, error: "That GSTIN is not one of your firm's clients. Add the client first." });
+    if ((action === "otp" || action === "auth") && !(await firmClient(firm, gstin))) return reply(403, { ok: false, error: NOT_CLIENT });
 
     if (action === "otp") {
-      if (!(await allowed(LIMITS.otpGstin, "gst-otp-gstin:" + gstin)))
-        return reply(429, { ok: false, error: "The GST portal has been asked for " + LIMITS.otpGstin.max + " OTPs for " + gstin + " in the last " + inWords(LIMITS.otpGstin.window) + " (the taxpayer gets each by SMS and email), so no more is sent now. Try again in " + inWords(LIMITS.otpGstin.window) + "." });
-      if (!(await allowed(LIMITS.otpFirm, "gst-otp:" + firm)))
-        return reply(429, { ok: false, error: "Your firm has asked for " + LIMITS.otpFirm.max + " OTPs in the last hour. Try again in " + inWords(LIMITS.otpFirm.window) + "." });
+      // the firm's count first (a firm over its cap uses none of a GSTIN's), then the GSTIN's: 15 minutes, then the day
+      const tooMany = (l: Limit, a: boolean | null) => a === null ? reply(503, { ok: false, error: LIMIT_DOWN }) : !a ? reply(429, { ok: false, error: l === LIMITS.otpFirm
+        ? "Your firm has asked for " + l.max + " OTPs in the last hour. Try again in " + inWords(l.window) + "."
+        : "The GST portal has been asked for " + l.max + " OTPs for " + gstin + " in the last " + inWords(l.window) + " (the taxpayer gets each by SMS and email), so no more is sent now. Try again in " + inWords(l.window) + "." }) : null;
+      for (const [l, key] of [[LIMITS.otpFirm, "gst-otp:" + firm], [LIMITS.otpGstin, "gst-otp-gstin:" + gstin], [LIMITS.otpDay, "gst-otp-gstin-day:" + gstin]] as [Limit, string][]) {
+        const no = tooMany(l, await allowed(l, key));
+        if (no) return no;
+      }
       const x = await tp(AUTH, { action: "OTPREQUEST", gstin, username }, h);
       return reply(200, ok(x) ? { ok: true } : { ok: false, error: tpErr(x) });
     }
     if (action === "auth") {
       const otp = String(body.otp || "").trim();
       if (!/^\d{6}$/.test(otp)) return reply(400, { ok: false, error: "The OTP has 6 digits." });
-      if (!(await allowed(LIMITS.auth, "gst-auth:" + firm + ":" + gstin)))
-        return reply(429, { ok: false, error: LIMITS.auth.max + " OTPs were tried for " + gstin + " in the last " + inWords(LIMITS.auth.window) + ". Try again in " + inWords(LIMITS.auth.window) + ", with a new OTP." });
+      const a = await allowed(LIMITS.auth, "gst-auth:" + firm + ":" + gstin);
+      if (a === null) return reply(503, { ok: false, error: LIMIT_DOWN });
+      if (!a) return reply(429, { ok: false, error: LIMITS.auth.max + " OTPs were tried for " + gstin + " in the last " + inWords(LIMITS.auth.window) + ". Try again in " + inWords(LIMITS.auth.window) + ", with a new OTP." });
       const x = await tp(AUTH, { action: "AUTHTOKEN", gstin, username, OTP: otp }, h);
       const token = tokenOf(x);
       if (!ok(x) || !token) return reply(200, { ok: false, error: tpErr(x) });
