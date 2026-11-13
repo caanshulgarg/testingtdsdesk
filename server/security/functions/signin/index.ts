@@ -2,6 +2,8 @@
 // running copies (26-Oct-2026). The rules are in handler.ts (Deno tests: handler_test.ts); this wires the real services.
 // Deployed as uploaded files (index.ts, handler.ts, cors.ts, ../_shared/cors.ts), verify_jwt off.
 // Secrets: CAPTCHA_REQUIRED=1 once Supabase Auth's bot protection is on (a sign-in without a token is then refused here).
+// Needs migration 183 for the wait per email and address and the pass for Auth's password hook (Authentication -> Hooks ->
+// Password Verification Attempt -> public.auth_password_attempt_hook); without it the count goes on as before.
 // Needs migration 112 for the per-address count; without it the count is skipped and the per-email lockout holds as before.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsFor } from "./cors.ts";
@@ -28,4 +30,8 @@ Deno.serve(makeHandler({
   },
   rateCount: async (bucket, key, windowS) => Number(must(await admin.rpc("auth_rate_count", { p_bucket: bucket, p_key: key, p_window_s: windowS }))) || 0,
   rateAdd: async (bucket, key) => { must(await admin.rpc("auth_rate_add", { p_bucket: bucket, p_key: key })); },
+  // migration 183: the pair's wait and the pass for Auth's password hook
+  signinBegin: async (email, ipKey) => must(await admin.rpc("auth_signin_begin", { p_email: email, p_ip_key: ipKey })),
+  signinFail: async (email, ipKey) => must(await admin.rpc("auth_signin_fail", { p_email: email, p_ip_key: ipKey })),
+  signinOk: async (email, ipKey) => { must(await admin.rpc("auth_signin_ok", { p_email: email, p_ip_key: ipKey })); },
 }));

@@ -893,3 +893,18 @@ a company whose requests were measured at 0.3 s or less (60 s otherwise), and sa
 (the cloud now sees typing only while a read waits for it); and pickRefused (pickack.go) should refresh
 the refusal's time (a.at) when a day is refused for `typing` again, so the cloud sees the typing go on. Tested: `tests/run_migration182.py`,
 `tests/run_gap_post_ingest.py`, `tests/run_gap_older_page.py`.
+
+## 183: sign-in attempts counted where the password is checked; a wait per email and address (not run yet; branch next-sec-server, 13-Nov-2026)
+
+**183, sign-in attempts** (13-Nov-2026, branch `next-sec-server`, security review M4; **written, not run yet**; file md5 2813bb0dc3e47d2e4326c9293bd2d187):
+`server/security/migration-183-signin-attempts.sql`. Adds the tables `auth_signin_fails` and `auth_signin_pass` (emails
+and addresses kept only as SHA-256; service_role only) and `auth_signin_begin` / `auth_signin_fail` / `auth_signin_ok`
+(the sign-in function's: the wait belongs to one email from one address: none for four wrong passwords, then 30 s, 1, 2,
+5 and at most 15 minutes; a try during a wait is refused and not counted), `auth_password_attempt_hook` (Supabase Auth's
+"password verification attempt" hook: every wrong password counted for the account whichever way it reached Auth; after 10
+within 15 minutes a right password is taken only with the sign-in function's ten-second pass; ends by itself),
+`auth_signin_sweep` (hourly by pg_cron where installed). Replaces migration 3's `auth_lockout_clear` (same arguments and
+grant): the owner's unlock also ends the email's waits and counts here. Add-only, one transaction, lock_timeout 10 s, safe
+twice. Needs migration 3. Deploy: 183, then the signin function, then switch the hook on in the dashboard (Authentication ->
+Hooks -> Password Verification Attempt -> `public.auth_password_attempt_hook`). Without 183 the function counts as before.
+Tested: `tests/run_migration183.py` (RED_WITHOUT_183=1 fails), `server/security/functions/signin/handler_test.ts`.

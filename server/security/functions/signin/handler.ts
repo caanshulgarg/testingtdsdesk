@@ -13,6 +13,16 @@
 //    minutes from one address, whatever the emails, and that address is refused for the rest of the window; on top of
 //    the per-email lockout. The address is kept only as a SHA-256.
 
+//
+// 13-Nov-2026 (security review, M4; migration 183):
+//  - wrong passwords are counted where Supabase Auth checks them (its password hook), so a sign-in that does not come
+//    through here is counted too; before the password goes to Auth this function says so (auth_signin_begin, a pass of
+//    ten seconds), so a person signing in here is not kept out by wrong passwords sent elsewhere;
+//  - nobody's wrong passwords lock the email for everyone any more: the wait belongs to the email and the address
+//    together (none for four wrong passwords, then 30 s, 1, 2, 5 and at most 15 minutes), a try during a wait is refused
+//    without being counted, and the firm's owner can still unlock. The per-address count above stays.
+//  Without migration 183 the count goes on as before (auth_lockout).
+
 export const SWITCHED_OFF = "This account is switched off. Contact FinCom support.";
 export const MAX_IP_FAILS = 20, IP_WINDOW_S = 15 * 60;
 export const BOT_MISSING = "Complete the check that you are not a robot, then sign in again.";
@@ -30,7 +40,14 @@ export interface Deps {
   // the shared counts (migration 112); each may fail (not deployed yet): the sign-in then goes on as before
   rateCount(bucket: string, key: string, windowS: number): Promise<number>;
   rateAdd(bucket: string, key: string): Promise<void>;
+  // migration 183 (each may fail while it is not run: the count then goes on as before). ipKey: the address as a SHA-256
+  signinBegin(email: string, ipKey: string): Promise<{ allowed: boolean; fails: number; wait_s?: number; until?: string } | null>;
+  signinFail(email: string, ipKey: string): Promise<{ fails: number; wait_s: number; until: string | null } | null>;
+  signinOk(email: string, ipKey: string): Promise<void>;
 }
+export const FREE_TRIES = 4;   // wrong passwords of one email from one address that cost no wait (migration 183)
+export const waitWords = (s: number) => (s < 60 ? Math.max(1, Math.ceil(s)) + " seconds" : Math.ceil(s / 60) + " minute" + (Math.ceil(s / 60) === 1 ? "" : "s"));
+const waitMsg = (s: number) => "Too many wrong passwords. Try again in " + waitWords(s) + ", or ask the firm's owner to unlock you.";
 
 export const clientIp = (req: Request) =>
   (req.headers.get("cf-connecting-ip") || (req.headers.get("x-forwarded-for") || "").split(",")[0] || "").trim() || "unknown";
@@ -65,9 +82,19 @@ export function makeHandler(d: Deps) {
     const until = await d.lockoutUntil(email);
     if (until) return reply(423, { ok: false, locked_until: until, error: lockedMsg(until) });
 
+    // M4: this email from this address: may it be tried now? (and the pass for Auth's hook). null: migration 183 not run
+    const pairKey = await sha256hex("signin-pair-ip:" + clientIp(req));
+    let gate: Awaited<ReturnType<Deps["signinBegin"]>> = null;
+    try { gate = await d.signinBegin(email, pairKey); } catch { gate = null; }
+    if (gate && gate.allowed === false) {
+      const s = Math.max(1, Number(gate.wait_s) || 1);
+      return reply(423, { ok: false, reason: "wait", retry_after_s: s, locked_until: gate.until || new Date(Date.now() + s * 1000).toISOString(), error: waitMsg(s) });
+    }
+
     const r = await d.authToken(email, password, captcha);
     const j = r.body || {};
     if (r.status >= 200 && r.status < 300) {
+      if (gate) { try { await d.signinOk(email, pairKey); } catch { /* the pass ends by itself */ } }
       await d.lockoutClear(email);
       return reply(200, j);
     }
@@ -77,6 +104,14 @@ export function makeHandler(d: Deps) {
     // only a wrong email or password counts; anything else (a locked token, a switched-off login) is passed on as it is
     if (r.status === 400 && (j.error_code === "invalid_credentials" || /invalid/i.test(said))) {
       try { await d.rateAdd("signin-fail-ip", ipKey); } catch { /* migration 112 not run yet: the per-email lockout still holds */ }
+      if (gate) {
+        let f: Awaited<ReturnType<Deps["signinFail"]>> = null;
+        try { f = await d.signinFail(email, pairKey); } catch { f = null; }
+        const n = Number((f && f.fails) || 0), s = Number((f && f.wait_s) || 0);
+        if (s > 0) return reply(423, { ok: false, reason: "wait", retry_after_s: s, locked_until: (f && f.until) || new Date(Date.now() + s * 1000).toISOString(), error: waitMsg(s) });
+        const more = Math.max(1, FREE_TRIES + 1 - n);
+        return reply(400, { ok: false, error: "Wrong email or password." + (n >= 3 ? " After " + more + " more wrong password" + (more === 1 ? "" : "s") + " this network must wait before trying this email again." : "") });
+      }
       const f = await d.lockoutFail(email);
       const left = Math.max(0, 5 - Number((f && f.fails) || 0));
       if (f && f.locked_until) return reply(423, { ok: false, locked_until: f.locked_until, error: lockedMsg(f.locked_until) });
