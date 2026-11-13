@@ -4845,6 +4845,13 @@ Deno.serve(sentry.wrap(async (req) => {
           // second review M3: answered after this report's acceptances are stamped (below), never before
           if (!te && tj?.target_bridge && tj.target_bridge !== meU) refused = reply(403, { ok: false, error: "This posting is for another bridge on this computer; this one does not report it." });
         }
+        // FinCom Bridge 2.5.15 (review L3): post_ok's own rule: a posting another FinCom Bridge took (taken_by) is never
+        // reported by this one; answered cancelled (after this report's acceptances are stamped, below), so this bridge
+        // stops its copy. A cloud without the column: as before
+        if (!refused) {
+          const { data: tk, error: tke } = await db.from("tally_post_jobs").select("taken_by").eq("id", String(body.id || "")).eq("device_id", dev.id).maybeSingle();
+          if (!tke && tk?.taken_by && /^go-/.test(String(tk.taken_by)) && tk.taken_by !== meU) refused = reply(200, { ok: false, cancelled: true, notYours: true, error: "This posting was taken by another FinCom Bridge; only that bridge may post it." });
+        }
         const st = ["taken", "running", "done", "failed"].includes(body.status) ? body.status : "running";
         const s = (v: unknown, n: number) => typeof v === "string" ? v.slice(0, n) : "";
         const int = (v: unknown, max: number) => Math.max(0, Math.min(max, Math.floor(Number(v)) || 0));

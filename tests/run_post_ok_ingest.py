@@ -11,7 +11,9 @@ post_ok, the bridge's read-only question before it sends each part of a posting 
      bridge): post true;
   6. not the main bridge any more (another of the same Windows user chosen): notMain;
   7. a cloud without 174 (no stop_reason): read without it, as before;
-  8. posts_update with offlineSends: kept in the timing; without it the timing as before.
+  8. posts_update with offlineSends: kept in the timing; without it the timing as before;
+  9. (review L3) posts_update of a posting another FinCom Bridge took (taken_by): answered cancelled (notYours), its
+     acceptances stamped first, nothing of the row written.
 Needs Deno (DENO, default: the deno on the PATH or /opt/deno/deno)."""
 import os, sys, json, time, hashlib, subprocess, urllib.request, urllib.error, shutil, threading
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
@@ -106,6 +108,14 @@ try:
     c, r = call({"kind": "posts_update", "version": "2.5.15", "bridge": ME, "id": "p81", "status": "running", "done": 0, "message": "Posting", "seq": 2, "results": [], "items": [], "reqs": [], "secondsTotal": 0})
     tm = row("p81").get("timing") or {}
     ok(c == 200 and "offlineSends" not in tm, "without it: the timing as before (%s)" % tm)
+    print("== 9. posts_update of another bridge's posting")
+    F.T["tally_post_jobs"].append(job("p9", "running", taken_by=OTHER))
+    n0 = patches()
+    c, r = call({"kind": "posts_update", "version": "2.5.15", "bridge": ME, "id": "p9", "status": "running", "done": 1, "message": "Posting", "seq": 2,
+                 "results": [{"id": "K1", "ok": False, "accepted": True, "lastVchId": "91", "message": "Tally replied CREATED 1 LASTVCHID 91"}], "items": [{"id": "K1", "state": "unknown"}]})
+    st = [a for a in F.ARGS.get("tally_post_id_accept", []) if a.get("p_job") == "p9"]
+    ok(c == 200 and r.get("cancelled") is True and r.get("notYours") is True and st and row("p9")["status"] == "running" and row("p9")["taken_by"] == OTHER and patches() == n0,
+       "answered cancelled, stamped first, nothing written (%s %s, %d stamps)" % (c, r, len(st)))
 finally:
     fn.terminate()
     try: fn.wait(10)
