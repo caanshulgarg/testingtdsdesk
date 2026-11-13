@@ -22,7 +22,7 @@ func TestPortsNeverZero(t *testing.T) {
 	}
 	dir := t.TempDir()
 	oldC, oldH := ConfigPath, Home
-	defer func() { ConfigPath, Home = oldC, oldH; loadConfigRO() }()
+	defer func() { durableWaitAll(); ConfigPath, Home = oldC, oldH; loadConfigRO() }()
 	ConfigPath, Home = filepath.Join(dir, "tds-bridge.config.json"), dir
 	_ = os.WriteFile(ConfigPath, []byte(`{"Port":0,"TallyPorts":[0],"FallbackPorts":[0,9001]}`), 0o644)
 	loadConfig()
@@ -144,7 +144,7 @@ func TestJobWaitsForTally(t *testing.T) {
 	ln.Close()
 	dir := t.TempDir()
 	oldC, oldH := ConfigPath, Home
-	defer func() { ConfigPath, Home = oldC, oldH; loadConfigRO() }()
+	defer func() { durableWaitAll(); ConfigPath, Home = oldC, oldH; loadConfigRO() }()
 	ConfigPath, Home = filepath.Join(dir, "tds-bridge.config.json"), dir
 	_ = os.WriteFile(ConfigPath, []byte(`{"TallyPorts":"auto","FallbackPorts":[`+itoa(closed)+`],"AllowImport":true,"LogFile":"`+filepath.ToSlash(filepath.Join(dir, "b.log"))+`"}`), 0o644)
 	loadConfig()

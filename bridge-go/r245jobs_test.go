@@ -149,7 +149,8 @@ func TestJobFileSharedReadWaitsForMissing(t *testing.T) {
 	if m := readProgress(dir); m == nil || str(m["status"]) != "queued" {
 		t.Fatalf("the read did not wait: %v", m)
 	}
-	<-wrote // 2.5.15: the writer ends with progress.json.bak (safefile.go) after the file itself: the folder freed after it
+	<-wrote // 2.5.15: progress.json.bak is written after the file itself, in the background (safefile.go): the folder freed after it
+	durableWaitAll()
 	t0 := time.Now()
 	if m := readProgress(filepath.Join(t.TempDir(), "never")); m != nil || time.Since(t0) > 100*time.Millisecond {
 		t.Fatalf("no job: %v after %s", m, time.Since(t0))

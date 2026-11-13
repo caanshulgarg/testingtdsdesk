@@ -43,7 +43,7 @@ func TestTrayTip(t *testing.T) {
 func TestInstanceIdKept(t *testing.T) {
 	dir := t.TempDir()
 	oldC, oldH := ConfigPath, Home
-	defer func() { ConfigPath, Home = oldC, oldH; loadConfigRO() }()
+	defer func() { durableWaitAll(); ConfigPath, Home = oldC, oldH; loadConfigRO() }()
 	ConfigPath, Home = filepath.Join(dir, "go-bridge.config.json"), dir
 	_ = os.WriteFile(ConfigPath, []byte(`{"Mode":"test","Port":9101}`), 0o644)
 	loadConfig()

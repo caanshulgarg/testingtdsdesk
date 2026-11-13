@@ -1,11 +1,17 @@
 // 2.5.15 (the owner's approval of 13-Nov-2026, item 3): the files the bridge keeps its state in are written so a power
-// cut, a full disk or a program holding the file never leaves half a file, and one copy before it is kept:
-//   - every file saveFile writes: a temporary file beside it, written and flushed to the disk (fsync), then put in place by
-//     one rename (the folder flushed too where the system allows it); the old file is never removed first (round 20);
+// cut, a full disk or a program holding the file never leaves the bridge without a whole copy:
+//   - every file saveFile writes: a temporary file beside it, then put in place by one rename (the old file is never
+//     removed first: round 20), exactly as 2.5.14 did on the caller's path;
+//   - the owner's decision of 13-Nov-2026 ("I don't want slower save at all"): the flush to the disk (fsync of the file
+//     and its folder) and the copy kept as <name>.bak happen AFTER the save has returned, in the background (the flush
+//     below): one at a time per file, coalesced (a file saved again meanwhile is flushed once more, with its newest
+//     text), errors logged. The save never waits for them and holds no lock while they run;
 //   - the files that matter (posted-ids.json, a posting's progress.json and payload.json, the settings, the copy's
 //     keep.json / manifest.json / balances.json, the older-entries state, the postings taken from FinCom's queue) keep
-//     the file they replace as <name>.bak, but only while that file is itself whole (a damaged file never replaces a good
-//     backup);
+//     a .bak: the newest text, written to the disk and flushed, so a main file a power cut left cut short or empty has a
+//     whole copy (the text is checked whole before it is kept; a damaged text never replaces a good backup);
+//   - posted-ids.json alone is waited for: before the next send to Tally the previous flush of it has finished
+//     (postedDurableWait in sendImport), so a power cut never loses an acceptance;
 //   - read back, a main file that is missing or cannot be read whole falls back to its .bak, and the log says so once.
 //
 // Nothing here asks anything of Tally.
@@ -62,12 +68,18 @@ func fsyncDir(dir string) {
 	}
 }
 
-// the rename that puts the temporary file in place, tried again a few times (a program holding the file for a moment)
-func renameInPlace(tmp, path string) error {
+// the caller's side, as 2.5.14 wrote every file: the text in a temporary file beside it (no flush), then one rename,
+// tried again a few times (a program holding the file for a moment); the folder is made when missing
+func writeInPlace(path, text string) error {
+	_ = os.MkdirAll(filepath.Dir(path), 0o755)
+	tmp := fmt.Sprintf("%s.%d.%d.tmp", path, os.Getpid(), safeTmpN.Add(1))
+	if err := os.WriteFile(tmp, []byte(text), 0o644); err != nil {
+		_ = os.Remove(tmp)
+		return err
+	}
 	var err error
 	for i := 0; i < 4; i++ {
 		if err = renameFn(tmp, path); err == nil {
-			fsyncDir(filepath.Dir(path))
 			return nil
 		}
 		time.Sleep(time.Duration(i+1) * 50 * time.Millisecond)
@@ -76,45 +88,14 @@ func renameInPlace(tmp, path string) error {
 	return err
 }
 
-var bakMu sync.Map // path -> *sync.Mutex: one writer of a kept file and its backup at a time
-
-func bakLock(path string) *sync.Mutex {
-	l, _ := bakMu.LoadOrStore(path, &sync.Mutex{})
-	return l.(*sync.Mutex)
-}
-
-// the file now at path kept as path.bak, but only when it is whole (whole: the reader's own test); a damaged or missing
-// file leaves the backup as it is. A hard link when the disk allows it (nothing copied), else a copy written as above
-func keepBackup(path string, whole func([]byte) bool) {
-	b, err := os.ReadFile(path)
-	if err != nil || len(b) == 0 || (whole != nil && !whole(b)) {
-		return
-	}
-	bak := bakOf(path)
-	tmp := fmt.Sprintf("%s.%d.%d.tmp", bak, os.Getpid(), safeTmpN.Add(1))
-	if os.Link(path, tmp) != nil {
-		t, err := writeTempSynced(bak, b)
-		if err != nil {
-			return
-		}
-		tmp = t
-	}
-	if renameFn(tmp, bak) != nil {
-		_ = os.Remove(tmp)
-	}
-}
-
-// a kept file written safely: the file it replaces kept as .bak (when whole), the new one flushed and put in place
+// a kept file written safely: put in place as 2.5.14 did; the flush and the .bak (the same text, when whole) after it,
+// in the background
 func saveFileBak(path, text string, whole func([]byte) bool) error {
-	l := bakLock(path)
-	l.Lock()
-	defer l.Unlock()
-	tmp, err := writeTempSynced(path, []byte(text))
-	if err != nil {
+	if err := writeInPlace(path, text); err != nil {
 		return err
 	}
-	keepBackup(path, whole)
-	return renameInPlace(tmp, path)
+	durableLater(path, text, true, whole)
+	return nil
 }
 
 // a JSON file's test of being whole
@@ -214,26 +195,142 @@ func readTextBak(path string, whole func([]byte) bool) string {
 	return ""
 }
 
-// a posting's record written safely as two whole copies: the file, then its .bak with the very same text (so the backup
-// is never one posting behind: an entry sent is on both before anything else goes). Read back as any kept file
+// a posting's record written safely as two whole copies: the file, put in place as 2.5.14 did, then (in the background)
+// flushed and its .bak written with the very same text. Read back as any kept file
 func saveFileMirror(path, text string) error {
-	l := bakLock(path)
-	l.Lock()
-	defer l.Unlock()
-	tmp, err := writeTempSynced(path, []byte(text))
-	if err != nil {
+	if err := writeInPlace(path, text); err != nil {
 		return err
 	}
-	if err := renameInPlace(tmp, path); err != nil {
-		return err
-	}
-	// review M1: a backup not written is said (the file itself is whole and is read first)
-	tb, err := writeTempSynced(bakOf(path), []byte(text))
-	if err == nil {
-		err = renameInPlace(tb, bakOf(path))
-	}
-	if err != nil {
-		writeLog("Safe files: the copy " + bakOf(path) + " could not be written (" + err.Error() + "); " + filepath.Base(path) + " itself is whole")
-	}
+	durableLater(path, text, true, nil)
 	return nil
 }
+
+// --- the background flush (the owner's decision of 13-Nov-2026: no save slower than 2.5.14's) ---------------------------
+
+type durableJob struct {
+	text  string // the newest text saved (the .bak is written from it, never from the file: never read while another writes)
+	bak   bool
+	whole func([]byte) bool
+	again bool // saved again while this file's flush ran: once more, with the newest text
+}
+
+var (
+	durMu   sync.Mutex
+	durCond = sync.NewCond(&durMu)
+	durJobs = map[string]*durableJob{} // path -> its flush, while one runs
+	durSaid sync.Map                   // path -> the last failure logged (said once until it works again)
+)
+
+// the flush of path (and its .bak) after a save, in the background; one at a time per file, coalesced
+func durableLater(path, text string, bak bool, whole func([]byte) bool) {
+	durMu.Lock()
+	defer durMu.Unlock()
+	if j := durJobs[path]; j != nil {
+		j.text, j.bak, j.whole, j.again = text, j.bak || bak, whole, true
+		return
+	}
+	j := &durableJob{text: text, bak: bak, whole: whole}
+	durJobs[path] = j
+	go durableRun(path, j)
+}
+
+func durableRun(path string, j *durableJob) {
+	for {
+		durMu.Lock()
+		text, bak, whole := j.text, j.bak, j.whole
+		j.again = false
+		durMu.Unlock()
+		durableOnce(path, text, bak, whole)
+		durMu.Lock()
+		if j.again {
+			durMu.Unlock()
+			continue
+		}
+		delete(durJobs, path)
+		durCond.Broadcast()
+		durMu.Unlock()
+		return
+	}
+}
+
+// the flush itself: the file (opened sharing read, write and delete, so a save meanwhile is never refused), its .bak
+// written from the same text and flushed, then the folder. A folder removed meanwhile is never made again
+func durableOnce(path, text string, bak bool, whole func([]byte) bool) {
+	dir := filepath.Dir(path)
+	if fi, err := os.Stat(dir); err != nil || !fi.IsDir() {
+		return
+	}
+	var fails []string
+	if h, err := openForSync(path); err == nil {
+		if err := syncFileFn(h); err != nil {
+			fails = append(fails, "not flushed to the disk ("+err.Error()+")")
+		}
+		_ = h.Close()
+	} else if !os.IsNotExist(err) {
+		fails = append(fails, "not flushed to the disk ("+err.Error()+")")
+	}
+	if bak && (whole == nil || whole([]byte(text))) {
+		if err := writeBakSynced(path, text); err != nil {
+			// review M1: a backup not written is said (the file itself is whole and is read first)
+			fails = append(fails, "its copy "+bakOf(path)+" could not be written ("+err.Error()+")")
+		}
+	}
+	fsyncDir(dir)
+	if len(fails) == 0 {
+		durSaid.Delete(path)
+		return
+	}
+	w := strings.Join(fails, "; ")
+	if prev, _ := durSaid.Load(path); prev != w {
+		durSaid.Store(path, w)
+		writeLog("Safe files: " + path + ": " + w + "; " + filepath.Base(path) + " itself was written whole")
+	}
+}
+
+// the .bak: a temporary file beside it (never a folder made), written and flushed, then one rename
+func writeBakSynced(path, text string) error {
+	bak := bakOf(path)
+	tmp := fmt.Sprintf("%s.%d.%d.tmp", bak, os.Getpid(), safeTmpN.Add(1))
+	h, err := os.OpenFile(tmp, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
+	if err != nil {
+		return err
+	}
+	if _, err = h.WriteString(text); err == nil {
+		err = syncFileFn(h)
+	}
+	if cerr := h.Close(); err == nil {
+		err = cerr
+	}
+	if err == nil {
+		for i := 0; i < 4; i++ {
+			if err = renameFn(tmp, bak); err == nil {
+				return nil
+			}
+			time.Sleep(time.Duration(i+1) * 50 * time.Millisecond)
+		}
+	}
+	_ = os.Remove(tmp)
+	return err
+}
+
+// waits until path's flush (if one runs) has finished: the saves made before the call are on the disk
+func durableWait(path string) {
+	durMu.Lock()
+	for durJobs[path] != nil {
+		durCond.Wait()
+	}
+	durMu.Unlock()
+}
+
+// waits until no flush runs (the tests, before their folders go)
+func durableWaitAll() {
+	durMu.Lock()
+	for len(durJobs) > 0 {
+		durCond.Wait()
+	}
+	durMu.Unlock()
+}
+
+// before a send to Tally: the previous save of posted-ids.json flushed (a power cut never loses an acceptance); the save
+// itself never waits
+func postedDurableWait() { durableWait(acceptedFile()) }

@@ -15,6 +15,7 @@ func TestR2515ReviewRecordHeldNeverFromCopy(t *testing.T) {
 	old := acceptedRecheck
 	acceptedRecheck = 0
 	t.Cleanup(func() { acceptedRecheck = old })
+	durableWaitAll()
 	_ = os.WriteFile(bakOf(acceptedFile()), []byte(`{"Made9": {"sent": true, "job": "job-old"}}`), 0o644)
 	_ = os.Remove(acceptedFile())
 	_ = os.MkdirAll(acceptedFile(), 0o755)
@@ -41,6 +42,7 @@ func TestR2515ReviewProgressHeldNeverFromCopy(t *testing.T) {
 	standBridge(t, newStandTally(t), "")
 	jd := filepath.Join(jobsDir(), "job-r2515-held")
 	_ = writeProgress(jd, M{"id": "job-r2515-held", "status": "running"})
+	durableWait(filepath.Join(jd, "progress.json"))
 	_ = os.Remove(filepath.Join(jd, "progress.json"))
 	_ = os.MkdirAll(filepath.Join(jd, "progress.json"), 0o755)
 	if p := readProgress(jd); p != nil {
@@ -49,14 +51,18 @@ func TestR2515ReviewProgressHeldNeverFromCopy(t *testing.T) {
 	_ = os.RemoveAll(filepath.Join(jd, "progress.json"))
 	_ = os.Remove(bakOf(filepath.Join(jd, "progress.json")))
 	_ = os.MkdirAll(bakOf(filepath.Join(jd, "progress.json")), 0o755)
-	if err := writeProgress(jd, M{"id": "job-r2515-held", "status": "running"}); err != nil || logLines("progress.json.bak could not be written") < 1 {
+	err := writeProgress(jd, M{"id": "job-r2515-held", "status": "running"})
+	durableWait(filepath.Join(jd, "progress.json"))
+	if err != nil || logLines("progress.json.bak could not be written") < 1 {
 		t.Fatalf("a copy not written is not said: %v", err)
 	}
 	_ = noteSent("Made11", zz, "job-x", "", 1, "", "")
+	durableWait(acceptedFile())
 	_ = os.Remove(bakOf(acceptedFile()))
 	_ = os.MkdirAll(bakOf(acceptedFile()), 0o755)
 	acceptedReset()
 	_ = noteSent("Made10", zz, "job-x", "", 1, "", "")
+	durableWait(acceptedFile())
 	if logLines("posted-ids.json.bak could not be written") < 1 || acceptedInfo("Made10") == nil {
 		t.Fatal("posted-ids.json's copy not written is not said")
 	}

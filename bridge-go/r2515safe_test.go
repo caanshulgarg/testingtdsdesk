@@ -15,56 +15,83 @@ import (
 // the log in the test's own folder (never the package folder: TestNoLogInPackageFolder)
 func r2515LogHere(t *testing.T, dir string) {
 	oldC, oldH := ConfigPath, Home
-	t.Cleanup(func() { ConfigPath, Home = oldC, oldH; loadConfigRO() })
+	t.Cleanup(func() { durableWaitAll(); ConfigPath, Home = oldC, oldH; loadConfigRO() })
 	ConfigPath, Home = filepath.Join(dir, "tds-bridge.config.json"), dir
 	_ = os.WriteFile(ConfigPath, []byte(`{"LogFile":"`+filepath.ToSlash(filepath.Join(dir, "b.log"))+`"}`), 0o644)
 	loadConfig()
 }
 
-// every write flushed before its rename; nothing temporary left beside the file
+// every write flushed to the disk, after the save returned (the owner's decision of 13-Nov-2026: no save slower than
+// 2.5.14's): the save never waits for the flush; a flush that fails is logged, the file written whole stays; nothing
+// temporary left beside the file
 func TestR2515SaveFileFlushes(t *testing.T) {
 	dir := t.TempDir()
+	r2515LogHere(t, dir)
 	var n atomic.Int64
+	release := make(chan struct{})
 	old := syncFileFn
-	syncFileFn = func(h *os.File) error { n.Add(1); return h.Sync() }
+	syncFileFn = func(h *os.File) error {
+		if filepath.Base(h.Name()) != "note.txt" { // the settings the test's own home saves are flushed too
+			return h.Sync()
+		}
+		<-release
+		n.Add(1)
+		return h.Sync()
+	}
 	t.Cleanup(func() { syncFileFn = old })
 	f := filepath.Join(dir, "a", "note.txt")
-	if err := saveFile(f, "one"); err != nil || readText(f) != "one" || n.Load() != 1 {
-		t.Fatalf("saveFile: %v %q, %d flushes", err, readText(f), n.Load())
+	if err := saveFile(f, "one"); err != nil || readText(f) != "one" || n.Load() != 0 {
+		t.Fatalf("saveFile: %v %q, %d flushes before it returned", err, readText(f), n.Load())
 	}
-	// a flush that fails: the old file stays as it was, nothing temporary left
+	close(release)
+	durableWait(f)
+	if n.Load() != 1 {
+		t.Fatalf("%d flushes after the save", n.Load())
+	}
+	// a flush that fails: said in the log; the file the save wrote stays
 	syncFileFn = func(h *os.File) error { return errors.New("disk full (stand)") }
-	if err := saveFile(f, "two"); err == nil || readText(f) != "one" {
-		t.Fatalf("a failed flush replaced the file: %v %q", err, readText(f))
+	if err := saveFile(f, "two"); err != nil || readText(f) != "two" {
+		t.Fatalf("a save waited for its flush: %v %q", err, readText(f))
 	}
+	durableWait(f)
 	syncFileFn = old
+	if logLines("note.txt: not flushed to the disk (disk full (stand))") != 1 {
+		t.Fatal("the failed flush is not logged")
+	}
 	if m, _ := filepath.Glob(filepath.Join(dir, "a", "*.tmp")); len(m) != 0 {
 		t.Fatalf("temporary files left: %v", m)
 	}
 }
 
-// a kept file: the one it replaces kept as .bak while whole; a damaged file is read from its .bak and never replaces it
+// a kept file: its newest whole text kept as .bak (written after the save, in the background); a damaged file is read
+// from its .bak, and a damaged text never replaces the good backup
 func TestR2515KeptFileBackup(t *testing.T) {
 	dir := t.TempDir()
 	r2515LogHere(t, dir)
 	f := filepath.Join(dir, "keep.json")
-	if err := saveJSONBak(f, M{"n": 1}); err != nil || exists(bakOf(f)) {
-		t.Fatalf("first write: %v, backup %v", err, exists(bakOf(f)))
+	if err := saveJSONBak(f, M{"n": 1}); err != nil {
+		t.Fatalf("first write: %v", err)
+	}
+	durableWait(f)
+	if toInt(readObjFile(bakOf(f))["n"]) != 1 {
+		t.Fatalf("first write: backup %q", readText(bakOf(f)))
 	}
 	_ = saveJSONBak(f, M{"n": 2})
-	if toInt(readObjFile(bakOf(f))["n"]) != 1 || toInt(readObjFile(f)["n"]) != 2 {
+	durableWait(f)
+	if toInt(readObjFile(bakOf(f))["n"]) != 2 || toInt(readObjFile(f)["n"]) != 2 {
 		t.Fatalf("backup %q, file %q", readText(bakOf(f)), readText(f))
 	}
 	_ = os.WriteFile(f, []byte(`{"n": 3, "cut sh`), 0o644) // damaged (a power cut, another program)
-	if m := readObjFileBak(f); toInt(m["n"]) != 1 {
+	if m := readObjFileBak(f); toInt(m["n"]) != 2 {
 		t.Fatalf("the damaged file was not read from its backup: %v", m)
 	}
-	_ = saveJSONBak(f, M{"n": 4}) // the damaged file is not kept as the backup
-	if toInt(readObjFile(bakOf(f))["n"]) != 1 || toInt(readObjFile(f)["n"]) != 4 {
-		t.Fatalf("a damaged file replaced the good backup: %q", readText(bakOf(f)))
+	_ = saveFileBak(f, `{"n": 4, "cut sh`, wholeJSON) // a damaged text is never kept as the backup
+	durableWait(f)
+	if toInt(readObjFile(bakOf(f))["n"]) != 2 {
+		t.Fatalf("a damaged text replaced the good backup: %q", readText(bakOf(f)))
 	}
 	_ = os.Remove(f) // missing: the backup
-	if toInt(readObjFileBak(f)["n"]) != 1 {
+	if toInt(readObjFileBak(f)["n"]) != 2 {
 		t.Fatal("a missing file was not read from its backup")
 	}
 	if m, found, err := readObjFileBakErr(filepath.Join(dir, "none.json")); m != nil || found || err != nil {
@@ -84,6 +111,7 @@ func TestR2515PostingRecordsMirrored(t *testing.T) {
 	if err := noteSent("Made1", zz, "job-r2515-m", "", 1, "", ""); err != nil {
 		t.Fatal(err)
 	}
+	durableWait(acceptedFile())
 	if readText(acceptedFile()) != readText(bakOf(acceptedFile())) || !strings.Contains(readText(bakOf(acceptedFile())), "Made1") {
 		t.Fatalf("posted-ids.json.bak is not the same record: %q", readText(bakOf(acceptedFile())))
 	}
@@ -100,6 +128,7 @@ func TestR2515PostingRecordsMirrored(t *testing.T) {
 	if err := writeProgress(jd, M{"id": "job-r2515-prog", "status": "running", "results": []any{M{"id": "x1", "ok": true}}}); err != nil {
 		t.Fatal(err)
 	}
+	durableWait(filepath.Join(jd, "progress.json"))
 	if readText(filepath.Join(jd, "progress.json")) != readText(filepath.Join(jd, "progress.json.bak")) {
 		t.Fatal("progress.json.bak is not the same progress")
 	}
@@ -116,19 +145,20 @@ func TestR2515PostingRecordsMirrored(t *testing.T) {
 func TestR2515SettingsFromBackup(t *testing.T) {
 	dir := t.TempDir()
 	oldC, oldH := ConfigPath, Home
-	t.Cleanup(func() { ConfigPath, Home = oldC, oldH; loadConfigRO() })
+	t.Cleanup(func() { durableWaitAll(); ConfigPath, Home = oldC, oldH; loadConfigRO() })
 	ConfigPath, Home = filepath.Join(dir, "tds-bridge.config.json"), dir
 	_ = os.WriteFile(ConfigPath, []byte(`{"Port":9123,"AllowImport":true,"LogFile":"`+filepath.ToSlash(filepath.Join(dir, "b.log"))+`"}`), 0o644)
 	loadConfig()
 	key := cfgS("Key")
 	setCfg("Port", 9124)
-	saveConfig() // the settings before kept as .bak
+	saveConfig() // the settings kept as .bak too (after the save, in the background)
+	durableWait(ConfigPath)
 	if !exists(bakOf(ConfigPath)) || key == "" {
 		t.Fatal("no backup of the settings")
 	}
 	_ = os.WriteFile(ConfigPath, []byte(`{"Port":91`), 0o644)
 	loadConfig()
-	if cfgS("Key") != key || toInt(cfg("Port")) != 9123 {
+	if cfgS("Key") != key || toInt(cfg("Port")) != 9124 {
 		t.Fatalf("the settings were not read from the backup: key kept %v, port %v", cfgS("Key") == key, cfg("Port"))
 	}
 	o := newOrdered()

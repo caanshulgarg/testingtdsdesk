@@ -28,7 +28,7 @@ func noticeTestHome(t *testing.T) {
 	oldC, oldH := ConfigPath, Home
 	ConfigPath, Home = filepath.Join(dir, "tds-bridge.config.json"), dir
 	loadConfigRO()
-	t.Cleanup(func() { ConfigPath, Home = oldC, oldH; loadConfigRO() })
+	t.Cleanup(func() { durableWaitAll(); ConfigPath, Home = oldC, oldH; loadConfigRO() })
 }
 
 // a gate on a file in a temporary folder, its clock the test's

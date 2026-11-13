@@ -53,19 +53,9 @@ func jobFileWriteOnce(path, text string, mkdir bool) error {
 		_ = os.MkdirAll(filepath.Dir(path), 0o755)
 	}
 	tmp := fmt.Sprintf("%s.%d.%d.tmp", path, os.Getpid(), jobTmpN.Add(1))
-	// 2.5.15 (safefile.go): written and flushed to the disk before the replace; the same text then kept as .bak, so a
-	// power cut or a damaged file never leaves a posting without its record
-	h, err := os.OpenFile(tmp, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o644)
-	if err != nil {
-		return err
-	}
-	if _, err = h.WriteString(text); err == nil {
-		err = syncFileFn(h)
-	}
-	if cerr := h.Close(); err == nil {
-		err = cerr
-	}
-	if err != nil {
+	// 2.5.15 (safefile.go; the owner's decision of 13-Nov-2026): written and put in place as 2.5.14 did; the flush and the
+	// same text as progress.json.bak (a posting's record never one request behind in its copy) follow in the background
+	if err := os.WriteFile(tmp, []byte(text), 0o644); err != nil {
 		_ = os.Remove(tmp)
 		return err
 	}
@@ -73,17 +63,7 @@ func jobFileWriteOnce(path, text string, mkdir bool) error {
 		_ = os.Remove(tmp)
 		return err
 	}
-	fsyncDir(filepath.Dir(path))
-	// the same text as progress.json.bak: a posting's record is never one request behind in its copy
-	tb, err := writeTempSynced(bakOf(path), []byte(text))
-	if err == nil {
-		if err = renameFn(tb, bakOf(path)); err != nil {
-			_ = os.Remove(tb)
-		}
-	}
-	if err != nil { // review M1: said; progress.json itself is whole and is read first
-		writeLog("Safe files: the copy " + bakOf(path) + " could not be written (" + err.Error() + "); progress.json itself is whole")
-	}
+	durableLater(path, text, true, nil)
 	return nil
 }
 
