@@ -1,12 +1,12 @@
 // FinCom Bridge 2.1.3 reads Tally only after an event, and Tally cannot send its changes by itself, so a client's Tally
 // is said in one line with one button (tallyLine, booksAsOf and tallyUpdateNow in src/js/49-tally-cloud.js):
 //   TallyLine: "Connected · Tally open on NWS144 · last read 15:34" / "Tally not open on NWS144" / "NWS144 is offline" /
-//              "Tally is not answering on NWS144 since 12:28" / "Reading paused on NWS144" · Update now
+//              "Tally is not answering on NWS144 since 12:28" / "Reading paused on NWS144" · Update from Tally
 //   (FinCom 2.3.5: one vocabulary with the Tally page's cards: Connected / Offline / Tally not open / Reading stopped /
 //   Needs you)
-//   BooksAsOf: "Books as of 15:34 · Update now" (no longer on the pages: round 3 A, below)
+//   BooksAsOf: "Books as of 15:34 · Update from Tally" (no longer on the pages: round 3 A, below)
 //   round 3 A (the owner, 14-Oct-2026): how fresh the books are leaves the page body. PanelBooks, in the top bar's Tally
-//   panel: "Books up to 13-Oct-2026 · read 15:34" and Update now, the rest (and the timing) under Details for support.
+//   panel: "Books up to 13-Oct-2026 · read 15:34" and Update from Tally, the rest (and the timing) under Details for support.
 //   BooksStale: was one small amber line on a page when the books were stale; since next-tally-icon only the year note
 //   (staleWords goes to the header's Tally icon's popover).
 
@@ -15,7 +15,7 @@ export default function TallyLine({ co, update = true }) {
   const l = tallyLine(co);
   if (!l) return null;
   // round 4, item 25: FinCom has stopped reading on the client's computer: "Reading stopped by <name> at <time>: <reason>",
-  // and Resume for an owner (tally_read_resume for that computer, or for all when the stop is for all); no Update now
+  // and Resume for an owner (tally_read_resume for that computer, or for all when the stop is for all); no Update from Tally
   if (l.state === "stopped") {
     const owner = S.account && S.account.me && S.account.me.role === "owner";
     return <span className="tally-line" data-tally-line="stopped">
@@ -25,7 +25,7 @@ export default function TallyLine({ co, update = true }) {
   }
   return <span className="tally-line" data-tally-line={l.state}>
     <span className={"tag " + l.level} data-tally-line-text="">{l.text}</span>
-    {update && <>{" "}<button className="linkbtn" data-update-now="" onClick={() => tallyUpdateNow(co.id)}>Update now</button></>}
+    {update && <>{" "}<button className="linkbtn" data-update-now="" onClick={() => tallyUpdateNow(co.id)}>Update from Tally</button></>}
   </span>;
 }
 
@@ -37,7 +37,7 @@ export function BooksAsOf({ cid }) {
   const a = booksAsOf(cid);
   if (!a) return <YearNote cid={cid} />;
   return <span className="books-asof" data-books-asof="" title={a.say}>
-    <b>{a.text}</b>{" · "}<button className="linkbtn" data-update-now="" onClick={() => tallyUpdateNow(cid)}>Update now</button>
+    <b>{a.text}</b>{" · "}<button className="linkbtn" data-update-now="" onClick={() => tallyUpdateNow(cid)}>Update from Tally</button>
     {" "}<YearNote cid={cid} />
   </span>;
 }
@@ -67,14 +67,14 @@ export function BooksStale({ cid }) {
   if (!y) return null;
   return <p className="books-stale" data-books-year="" role="status"><span data-books-year-note="">{y}</span></p>;
 }
-// whether the panel shows the books' part (it then carries the one Update now)
+// whether the panel shows the books' part (it then carries the one Update from Tally)
 export function panelBooksShown(cid) {
   if (!cid) return false;
   const a = typeof booksAsOf === "function" ? booksAsOf(cid) : null;
   const f = typeof booksFresh === "function" ? booksFresh(S.books && S.books.cid === cid ? S.books : {}, cid) : null;
   return !!(a || (f && f.last));
 }
-// the Tally panel's books part: what the books hold, when they were read, Update now; Details for support
+// the Tally panel's books part: what the books hold, when they were read, Update from Tally; Details for support
 export function PanelBooks({ cid }) {
   if (!panelBooksShown(cid)) return null;
   const a = typeof booksAsOf === "function" ? booksAsOf(cid) : null;
@@ -85,7 +85,7 @@ export function PanelBooks({ cid }) {
   return <div className="tp-books" data-panel-books="">
     <p style={{ margin: "10px 0 4px" }}><b>{"Books up to " + (f && f.last ? dayOf(f.last) : "—")}</b>
       {a && <span className="note">{" · read " + tallyHm(a.at)}</span>}{" · "}
-      <button className="linkbtn" data-update-now="" onClick={up}>Update now</button></p>
+      <button className="linkbtn" data-update-now="" onClick={up}>Update from Tally</button></p>
     {w && <p className="books-stale" style={{ margin: "0 0 4px" }}>{w}</p>}
     <YearNote cid={cid} />
     <details className="tp-details" data-panel-details=""><summary className="note">Details</summary><div className="note">

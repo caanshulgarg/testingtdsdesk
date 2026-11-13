@@ -111,7 +111,7 @@ def main():
         E(T.SETUP, [[da2, db], [], [], "owner", T.CLIENTS, True, {}]); pg.wait_for_timeout(300)
         E("(dev) => { TCloud.me = () => 'made-up-member-a'; const L = [{user_id: 'made-up-member-a', device_id: dev, bridge_id: 'go-1'}]; TCloud.pane.links = L; " "const api = Cloud.api; Cloud.api = async (p, o) => /^tally_member_bridges/.test(p) ? JSON.parse(JSON.stringify(L)) : api(p, o); render(); }", da2["id"])
         pg.wait_for_timeout(1500)
-        b = "#app [data-tsm-guide] [data-tsm-recheck]"   # next-tally-connect-steps: Connect Tally's Check again
+        b = "#app [data-tsm-top-check]"   # ux-wins: the page's one Check again (the top card's; the steps' own link is gone)
         if pg.locator(b).count():
             n2 = looks(); E("(s) => { const e = document.querySelector(s); e.click(); e.click(); }", b)   # (two clicks at once)
             E("() => FCTallySimple.rescanLocal()")                                                       # (and a third ask while asking)

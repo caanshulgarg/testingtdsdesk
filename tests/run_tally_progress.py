@@ -4,7 +4,7 @@ cloud of run_tally_simple.py).
   2. The table: Client · Tally company | Masters | Entries | Action; "Tally: <COMPANY>" on every row; Masters "✓ Up to date ·
      438 ledgers · 52 groups · Updated <when>", "Not brought yet · 0 ledgers in FinCom · TDS and GST need these"; Entries
      "✓ Up to date · Last entry <when>", "Up to 12-Oct-2026 · N days to bring", "Not brought yet · Comes after masters"; ONE
-     main button a row (Update now, Check again + "Open it in Tally first", Bring masters); no filter chips, no "Coming in
+     main button a row (Update from Tally, Check again + "Open it in Tally first", Bring masters); no filter chips, no "Coming in
      from Tally now" panel.
   1. Masters reading in the row ("Reading now", its bar, "Reading masters from Tally: 7,560 of 12,195 ledgers… · 148
      groups"), Entries "Next, after
@@ -111,7 +111,7 @@ def main():
            "2. Masters, up to date: ✓ Up to date · 438 ledgers · 52 groups · Updated <when> (%s)" % mo)
         eo = txt(R(ORBIT) + " [data-tpg-entries]")
         ok(re.match(r"✓ Up to date Last entry (today|yesterday|\d+-\w{3}) \d\d:\d\d$", eo), "2. Entries, up to date: ✓ Up to date · Last entry <when> (%s)" % eo)
-        ok(mains(ORBIT) == ["update"] and txt(R(ORBIT) + ' [data-tpt-main]') == "Update now", "2. Orbit: Update now (%s)" % mains(ORBIT))
+        ok(mains(ORBIT) == ["update"] and txt(R(ORBIT) + ' [data-tpt-main]') == "Update from Tally", "2. Orbit: Update from Tally (%s)" % mains(ORBIT))
         ea = txt(R(ACME) + " [data-tpg-entries]")
         ok(re.match(r"Up to 12-Oct-2026 \d+ days to bring$", ea), "2. Entries behind: Up to 12-Oct-2026 · N days to bring (%s)" % ea)
         ok(n(R(ACME) + ".tpt-need") == 1 and txt(R(ACME) + " [data-tpt-state]") in ("Not open in Tally", "Not open in Tally on the server") and mains(ACME) == ["again"] and txt(R(ACME) + " [data-tpt-main]") == "Check again"
@@ -124,7 +124,7 @@ def main():
         ok(all(len(mains(nm)) == 1 for nm in (KES, ORBIT, ACME, NIMB)), "2. one main button a row (%s)" % [mains(nm) for nm in (KES, ORBIT, ACME, NIMB)])
         ok(all(txt(R(nm) + " [data-tpt-open]") == "More ▾" for nm in (KES, ORBIT, ACME, NIMB)) and n(TB + " tr[data-tpt-light]") == 0, "2. each row its More ▾, all closed")
         pg.click(R(NIMB) + ' [data-tpt-main="masters"]'); pg.wait_for_timeout(800)
-        ok(E("(c) => !!(window.FCRunState && window.FCRunState[c])", cid(NIMB)), "2. Bring masters: the masters' read asked (the Update now of From Tally)")
+        ok(E("(c) => !!(window.FCRunState && window.FCRunState[c])", cid(NIMB)), "2. Bring masters: the masters' read asked (the Update from Tally of From Tally)")
         nm_ = txt(R(NIMB) + " [data-tpg-masters]")
         ok(pg.get_attribute(R(NIMB) + " [data-tpg-masters]", "data-tpg-masters") in ("reading", "waiting") and "group" not in nm_, "2 (review 1). a first masters read: no '· N groups' before FinCom holds them (%s)" % nm_)
         ok(txt(R(NIMB) + " [data-tpt-state]") in ("Updating", "Waiting for Tally") and n(R(NIMB) + " .tpt-why") == 0 and mains(NIMB) == ["reading"],
@@ -208,9 +208,9 @@ def main():
         pg.click(L(ORBIT) + " [data-tpt-details]"); pg.wait_for_timeout(500)
         ok(all(n(L(ORBIT) + ' [data-tsm-details] [data-tsm-col="%s"]' % k) == 1 for k in ("c", "o", "l", "e", "do")), "3. Answers: Linked, Open now, Ledgers, Entries, What to do")
         ok(n(L(ORBIT) + " [data-tpt-unlink]") == 1, "3. Unlink there")
-        # (review 2) Bring masters under More: the masters alone read again (runPress without the entries' Update now)
+        # (review 2) Bring masters under More: the masters alone read again (runPress without the entries' Update from Tally)
         E("(c) => { window.__upd = []; window.__updWas = window.tallyUpdateNow; window.tallyUpdateNow = (x) => { window.__upd.push(x); }; if (window.FCRunState) delete window.FCRunState[c]; S.tcoSync = S.tcoSync || {}; delete S.tcoSync[c]; render(); }", cid(ORBIT)); pg.wait_for_timeout(300)
-        ok(txt(L(ORBIT) + " [data-tpt-masters-more]") == "Bring masters" and mains(ORBIT) == ["update"], "3 (review 2). More: Bring masters (the row's button Update now)")
+        ok(txt(L(ORBIT) + " [data-tpt-masters-more]") == "Bring masters" and mains(ORBIT) == ["update"], "3 (review 2). More: Bring masters (the row's button Update from Tally)")
         pg.click(L(ORBIT) + " [data-tpt-masters-more]"); pg.wait_for_timeout(800)
         ok(E("(c) => !!(window.FCRunState && window.FCRunState[c])", cid(ORBIT)) and E("() => window.__upd") == [], "3 (review 2). Bring masters: the masters' read asked, no entries asked (%s)" % E("() => window.__upd"))
         E("(c) => { window.tallyUpdateNow = window.__updWas; if (window.FCRunState) delete window.FCRunState[c]; delete S.tcoSync[c]; render(); }", cid(ORBIT)); pg.wait_for_timeout(300)
@@ -225,7 +225,7 @@ def main():
         bb = calls("tally_period_choose")
         ok(bb and bb[0][0] == "tally_period_choose_lean" and bb[0][1].get("p_book") == "bk-Orbit Space" and bb[0][1].get("p_part") == "year", "3. Bring books: this year's missing days asked (%s)" % bb)
         more(ORBIT)
-        ok(n(L(ORBIT) + " [data-tpt-update-more]") == 1, "3. More: Update now too, when the row's button is another")
+        ok(n(L(ORBIT) + " [data-tpt-update-more]") == 1, "3. More: Update from Tally too, when the row's button is another")
         pg.click(R(ORBIT) + " [data-tpt-open]"); pg.wait_for_timeout(300)
         E("(c) => { (TCloud.st[c].books || []).forEach(b => { b.to = new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 10); }); render(); }", cid(ORBIT))
         # (the owner's Fingate row, 08-Nov-2026; review of next-tally-simple3) days missing, an upload as the row's action. The
@@ -257,7 +257,7 @@ def main():
           if (window.tfxRefresh) window.tfxRefresh(); render(); }""", cid(ORBIT)); pg.wait_for_timeout(1500)
         ok(mains(ORBIT) == ["upload"] and txt(R(ORBIT) + " [data-tpt-main]") == "Upload Day Book" and "Upload that day" in txt(R(ORBIT) + " .tpt-st"),
            "3 (Fingate, review). a held day, the company open on a live bridge: Upload Day Book is the button (%s | %s)" % (mains(ORBIT), txt(R(ORBIT) + " .tpt-st")))
-        # (review) the held day's note stays in view while a read runs (Update now pressed: the run's words)
+        # (review) the held day's note stays in view while a read runs (Update from Tally pressed: the run's words)
         E("""(c) => { S.tcoSync = S.tcoSync || {}; S.tcoSync[c] = {at: Date.now(), via: 'bridge', company: 'ORBIT SPACE', prog: {read: 40, of: 438}}; }""", cid(ORBIT))
         E("(c) => { if (window.FCRunState) window.FCRunState[c] = {at: S.tcoSync[c].at}; render(); }", cid(ORBIT)); pg.wait_for_timeout(1200)
         hs = [txt(R(ORBIT) + " [data-tpt-state]"), txt(R(ORBIT) + " [data-tpt-held]")]
@@ -300,7 +300,7 @@ def main():
           window.__sum.find(x => x.pull).pull.state = 'going'; if (window.tfxRefresh) window.tfxRefresh(); render(); }""", cid(KES)); pg.wait_for_timeout(1800)
         ok(mains(KES) == ["pause"] and txt(R(KES) + " [data-tpt-main]") == "Pause" and txt(R(KES) + " [data-tpg-entries]").startswith("Bringing now"), "3. entries running (masters done): Pause is the row's button (%s | %s)" % (mains(KES), txt(R(KES) + " [data-tpg-entries]")))
         E("() => { window.__sum.find(x => x.pull).pull.state = 'stopped'; if (window.tfxRefresh) window.tfxRefresh(); render(); }"); pg.wait_for_timeout(1800)
-        ok(mains(KES) == ["books"] and txt(R(KES) + " [data-tpt-main]") == "Bring books" and txt(R(KES) + " [data-tpg-entries]").startswith("Stopped"), "3 (review 3). Bring books stopped: Bring books again, not Update now (%s | %s)" % (mains(KES), txt(R(KES) + " [data-tpg-entries]")))
+        ok(mains(KES) == ["books"] and txt(R(KES) + " [data-tpt-main]") == "Bring books" and txt(R(KES) + " [data-tpg-entries]").startswith("Stopped"), "3 (review 3). Bring books stopped: Bring books again, not Update from Tally (%s | %s)" % (mains(KES), txt(R(KES) + " [data-tpg-entries]")))
 
         print("== 3b (review B1)")
         # B1: the ledgers' count not read: "—", never "0 ledgers"

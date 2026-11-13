@@ -600,7 +600,7 @@ async function bankAutoSync(force){
   } finally { bankSyncing = false; }
   // lines marked as posted that were deleted in Tally since: looked for quietly, at most every 3 minutes per statement
   const st = curStmt();
-  // build 190: only when someone asks (Refresh from Tally); not every 3 minutes by itself (it read the day book each time)
+  // build 190: only when someone asks (Update from Tally); not every 3 minutes by itself (it read the day book each time)
   if (force && st && bridgeVer(Bridge.st.version) >= bridgeVer("1.12.3") && b.rows.some(r => ["sent", "intally"].includes(r.state))){
     const k = st.id, last = (b.goneAt || {})[k] || 0;
     if (Date.now() - last > 3 * 60000){ b.goneAt = Object.assign({}, b.goneAt, {[k]: Date.now()}); try { await checkMarkedInTally({quiet: true}); } catch (e){} }

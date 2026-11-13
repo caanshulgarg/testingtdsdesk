@@ -1,7 +1,7 @@
 // How fresh FinCom's copy of the books is, on Reports and Look up: kept in step with Tally by the bridge, the last copy,
 // or the cloud's copy; with the buttons to switch keeping in step on, bring in today's entries or check against Tally,
 // and the result of that check. Was LK.freshBar (src/js/44); the work is LK (keepOn, bringToday, keepCheck).
-// round 3 A (the owner, 14-Oct-2026): no status sentence here any more. "Books up to … · read …" and Update now are in
+// round 3 A (the owner, 14-Oct-2026): no status sentence here any more. "Books up to … · read …" and Update from Tally are in
 // the top bar's Tally panel; next-tally-icon: how Tally is, is the header's Tally icon only (below).
 import Msg from "./Msg.jsx";
 import { staleWords } from "./TallyLine.jsx";

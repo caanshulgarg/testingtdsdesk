@@ -198,7 +198,7 @@ def main():
         down_scene()
         sel = "#app [data-tsm-guide] [data-tsm-go=check], #app [data-tsm-guide] [data-tsm-recheck]"
         # (connected, the steps fold away: the words stay, on the top line)
-        press("W. step 1's Check again", "#app [data-tsm-guide] [data-tsm-go=check]" if n("#app [data-tsm-guide] [data-tsm-go=check]") else "#app [data-tsm-guide] [data-tsm-recheck]",
+        press("W. step 1's Check again", "#app [data-tsm-guide] [data-tsm-go=check]" if n("#app [data-tsm-guide] [data-tsm-go=check]") else "#app [data-tsm-top-check]",
               "#app [data-tsm-guide] [data-checked], #app [data-tsm-top] [data-checked]", WIN, before=comes_up)
         # Books › From Tally: its step line shows while this login's step 1-3 is not done: here step 3 (the bridge answers,
         # Tally's connection off), then Tally's connection on

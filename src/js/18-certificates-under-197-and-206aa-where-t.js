@@ -534,7 +534,7 @@ function setupKeepFor(co){
   }
   return ks;
 }
-// the time of the bridge's daily update from Tally (build 188: Tally is read once a day, or on Update now)
+// the time of the bridge's daily update from Tally (build 188: Tally is read once a day, or on Update from Tally)
 function keepAtSet(v){ if (/^\d{2}:\d{2}$/.test(v)) LK.keepSet({dailyAt: v}, "Tally will be updated every day at " + v + "."); }
 // the Tally ledgers and Audit tabs: React (app/src/screens/books/Ledgers.jsx, Audit.jsx)
 function gstParts(b){

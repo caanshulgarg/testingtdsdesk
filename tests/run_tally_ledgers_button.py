@@ -1,16 +1,16 @@
-"""python3 run_tally_ledgers_button.py - "Bring ledgers from Tally" (04-Nov-2026, next-tally-ledgers-button; the owner: "When
+"""python3 run_tally_ledgers_button.py - "Update from Tally" (04-Nov-2026, next-tally-ledgers-button; the owner: "When
 first time integrating tally company I can not see master is coming automatically, nor can I see any button to press to
 bring it"). Made-up firm, clients, companies and computers only (run_tally_page_clean.py's stand-in cloud).
   1. a connected client with no ledgers yet and no first sync going (the page opened again after linking), its company
-     open in this user's Tally: "Ledgers received?" Not yet with the button "Bring ledgers from Tally"; What to do says to
+     open in this user's Tally: "Ledgers received?" Not yet with the button "Update from Tally"; What to do says to
      press it (not "Nothing. It is coming in by itself."). The click: the existing ledgers wake (kind wake, what ledgers)
-     and the existing Update now (tally_want_update) for that client; nothing else is asked; the cell shows it coming in.
-  2. the automatic first sync through the cloud: the wake brought nothing in 45 seconds: Update now asked once by itself
+     and the existing Update from Tally (tally_want_update) for that client; nothing else is asked; the cell shows it coming in.
+  2. the automatic first sync through the cloud: the wake brought nothing in 45 seconds: Update from Tally asked once by itself
      (a bridge reads the ledger list only for a company it keeps in step already; a company just linked is not kept yet).
      The Tally page reads a first sync going every 10 seconds: no progress in 3 minutes is stuck (No, the reason) with the
      button again.
   3. the company open on no computer FinCom hears: the button is off, with "Open this company in Tally first".
-  4. the client's Tally ledgers screen with no ledgers yet: "Bring ledgers from Tally", the same two asks.
+  4. the client's Tally ledgers screen with no ledgers yet: "Update from Tally", the same two asks.
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_tally_ledgers_button.py"""
 import os, re, sys, json, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -27,7 +27,7 @@ def ok(c, w):
     if not c: fails.append(w)
 PC, WIN = "MADEUP-PC", "user-a"          # made-up
 NEWCO, OLDCO = "Nova Traders Pvt Ltd", "Orbit Mills"   # made-up
-BRING = "Bring ledgers from Tally"
+BRING = "Update from Tally"
 
 def main():
     srv = http.server.ThreadingHTTPServer(("localhost", PORT), functools.partial(T.Q, directory=SITE)); threading.Thread(target=srv.serve_forever, daemon=True).start()
@@ -68,28 +68,28 @@ def main():
         c = ids[NEWCO]
         ok(word(NEWCO, "c") == "Yes" and word(NEWCO, "o") == "Yes" and word(NEWCO, "l") == "Not yet", "1. connected, open, ledgers Not yet (%s)" % txt(row(NEWCO)))
         ok(n(btn(NEWCO)) == 1 and txt(btn(NEWCO)) == BRING and pg.is_enabled(btn(NEWCO)), "1. under Ledgers received?: the button '%s', on (%s)" % (BRING, txt(cell(NEWCO, "l"))))
-        ok(txt(cell(NEWCO, "do") + " [data-tsm-todo]") == "Press Bring ledgers from Tally.", "1. What to do: press it, not 'coming in by itself' (%s)" % txt(cell(NEWCO, "do")))
+        ok(txt(cell(NEWCO, "do") + " [data-tsm-todo]") == "Press Update from Tally.", "1. What to do: press it, not 'coming in by itself' (%s)" % txt(cell(NEWCO, "do")))
         ok(n(btn(OLDCO)) == 0, "1. a client whose ledgers are in: no button (%s)" % txt(cell(OLDCO, "l")))
         E("() => { window.__wakes = []; window.__calls = []; }")
         press(btn(NEWCO)); pg.wait_for_timeout(1500)
         wk = wakes()
         ok(wk == [{"kind": "wake", "what": "ledgers", "client": c}], "1. the click: the existing ledgers wake, once (%s)" % wk)
-        ok(calls("tally_want_update") == [{"p_client": c}], "1. and the existing Update now for that client, once (%s)" % calls("tally_want_update"))
+        ok(calls("tally_want_update") == [{"p_client": c}], "1. and the existing Update from Tally for that client, once (%s)" % calls("tally_want_update"))
         ok(not [x for x in E("window.__calls") if x[0] not in ("tally_want_update", "tally_status", "tally_period_status", "tally_fetch_summary", "tally_check_ask_status", "tally_held_status", "tally_openings_decide")],
            "1. nothing else is asked (%s)" % sorted(set(x[0] for x in E("window.__calls"))))
         ok(word(NEWCO, "l") == "Not yet" and txt(cell(NEWCO, "l") + " [data-tsm-note]") == "Coming in now" and n(btn(NEWCO)) == 0, "1. then: Coming in now, the button gone (%s)" % txt(cell(NEWCO, "l")))
 
-        print("== 2. the automatic first sync: Update now after 45 s with nothing; stuck after 3 minutes, the button again")
+        print("== 2. the automatic first sync: Update from Tally after 45 s with nothing; stuck after 3 minutes, the button again")
         E("() => { window.__calls = []; }")
         E("(c) => { const x = S.tcoSync[c]; x.upAsked = 0; x.at = Date.now() - 50000; x.moveAt = 0; }", c); pg.wait_for_timeout(11500)
-        ok(calls("tally_want_update") == [{"p_client": c}], "2. nothing in 45 seconds through the cloud: Update now asked once by itself (%s)" % calls("tally_want_update"))
+        ok(calls("tally_want_update") == [{"p_client": c}], "2. nothing in 45 seconds through the cloud: Update from Tally asked once by itself (%s)" % calls("tally_want_update"))
         E("() => { window.__calls = []; }"); pg.wait_for_timeout(10500)
         ok(calls("tally_want_update") == [], "2. once only (%s)" % calls("tally_want_update"))
         E("(c) => { S.tcoSync[c].at = Date.now() - 4 * 60000; }", c); pg.wait_for_timeout(11500)
         ok(word(NEWCO, "l") == "No" and n(btn(NEWCO)) == 1 and pg.is_enabled(btn(NEWCO)), "2. no progress in 3 minutes, read by this page itself: No, the reason, the button (%s)" % txt(cell(NEWCO, "l")))
-        ok(n(cell(NEWCO, "do") + " .btn") == 0 and "Bring ledgers from Tally" in txt(cell(NEWCO, "do") + " [data-tsm-todo]"), "2. one button only, What to do names it (%s)" % txt(cell(NEWCO, "do")))
+        ok(n(cell(NEWCO, "do") + " .btn") == 0 and "Update from Tally" in txt(cell(NEWCO, "do") + " [data-tsm-todo]"), "2. one button only, What to do names it (%s)" % txt(cell(NEWCO, "do")))
         E("() => { window.__wakes = []; window.__calls = []; }"); press(btn(NEWCO)); pg.wait_for_timeout(1500)
-        ok(len([w for w in wakes() if w.get("what") == "ledgers"]) == 1 and calls("tally_want_update") == [{"p_client": c}], "2. pressed again: the wake and Update now once more")
+        ok(len([w for w in wakes() if w.get("what") == "ledgers"]) == 1 and calls("tally_want_update") == [{"p_client": c}], "2. pressed again: the wake and Update from Tally once more")
 
         print("== 3. open on no computer: the button off, one plain line")
         d = T.dev(7, PC, WIN, tally="open", opened=(OLDCO,), version="2.5.3", rec=(OLDCO,))
@@ -113,7 +113,7 @@ def main():
         ok(n("#app [data-led-status-line=none]") == 1 and n("#app [data-led-bring]") == 1 and txt("#app [data-led-bring]") == BRING, "4. 'No ledgers from Tally yet' with '%s' (%s)" % (BRING, txt("#app [data-led-status]")))
         E("() => { window.__wakes = []; window.__calls = []; }"); press("#app [data-led-bring]"); pg.wait_for_timeout(2500)
         ok([w for w in wakes() if w.get("what") == "ledgers"] == [{"kind": "wake", "what": "ledgers", "client": c}] and calls("tally_want_update") == [{"p_client": c}],
-           "4. the click: the same wake and Update now (%s | %s)" % (wakes(), calls("tally_want_update")))
+           "4. the click: the same wake and Update from Tally (%s | %s)" % (wakes(), calls("tally_want_update")))
 
         ok(not errors, "no page errors (%s)" % errors[:3])
         finish(br, srv)

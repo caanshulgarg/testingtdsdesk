@@ -391,7 +391,7 @@ async function salesCheckTally(list){
   return n;
 }
 function salesTallyKey(x){ return String(x.guid || x.masterId || [x.date, x.type, x.number].join("|")); }
-// asked: someone pressed Refresh from Tally. By itself (opening the page) Tally is not read, except a first ledger list;
+// asked: someone pressed Update from Tally. By itself (opening the page) Tally is not read, except a first ledger list;
 // sales already in Tally are still found when posting (build 190)
 async function salesAutoSync(checkOnly, asked){
   const s = SL(), co = CO(s.cid);

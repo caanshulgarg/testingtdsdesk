@@ -205,7 +205,7 @@ def main():
         ok(pg.locator('#app input[aria-label="Company name in Tally"]').count() == 0 and "Posting allowed to company" not in txt("#app"), "4. Client setup → Tally: no name box, no 'Posting allowed to' card")
         to_row()
         rt = re.sub(r"\s+", " ", txt(R("GARG SHEKHAR")))
-        ok(re.search(r"last entry (today |yesterday )?\d\d:\d\d", rt) is not None and "Sync now" in rt and "NWS144" not in rt, "4. the row: the last entry, Sync now, no computer's name (%s)" % rt)
+        ok(re.search(r"last entry (today |yesterday )?\d\d:\d\d", rt) is not None and "Update from Tally" in rt and "NWS144" not in rt, "4. the row: the last entry, Sync now, no computer's name (%s)" % rt)
         shot(pg, "card-3-reading-desktop-light")
 
         # ---- 5. posting: the one linked company is confirmed from the link by itself (26-Oct-2026); Stop posting here and
@@ -267,7 +267,7 @@ def main():
         E("() => { const o = newCompany({name: 'ZZ Other', gstin: ''}); S.companies[o.id] = o; S.data[o.id] = {parties: {}, entries: {}, loaded: true}; o.stats = {}; window.__zz = o.id; }")
         scene(LINKED(D1)); E("() => { S.tallyFocus = ''; S.tallyGuide = {}; (S.tallyMore = Object.assign({}, S.tallyMore, {support: true}), navHome('tally')); }"); pg.wait_for_timeout(1800)
         rows = E("() => Object.fromEntries([...document.querySelectorAll('#app [data-tco-list=firm] [data-tco-row]')].map(r => [r.getAttribute('data-tco-row'), [r.getAttribute('data-tco-state'), r.getAttribute('data-tco-linked'), r.innerText.replace(/\\s+/g, ' ')]]))")
-        ok(rows.get("GARG SHEKHAR", [""])[0] == "connected" and rows["GARG SHEKHAR"][1] == cid and "Link Co" in rows["GARG SHEKHAR"][2] and "Sync now" in rows["GARG SHEKHAR"][2],
+        ok(rows.get("GARG SHEKHAR", [""])[0] == "connected" and rows["GARG SHEKHAR"][1] == cid and "Link Co" in rows["GARG SHEKHAR"][2] and "Update from Tally" in rows["GARG SHEKHAR"][2],
            "9. Companies in Tally: GARG SHEKHAR, Connected, its client Link Co, Sync now (%s)" % rows.get("GARG SHEKHAR"))
         ok("Choose client" in rows.get("ABC LTD", ["", "", ""])[2] and pg.locator(R("ABC LTD") + " select[data-tco-act=pick]").count() == 1 and "Add as client" not in rows.get("ABC LTD", ["", "", ""])[2], "9. ABC LTD (open on LAPTOP, no client): the client picker, no Add as client (Task D) (%s)" % rows.get("ABC LTD"))
         zz = E("window.__zz")

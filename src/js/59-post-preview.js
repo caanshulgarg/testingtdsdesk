@@ -347,7 +347,7 @@ function goSetupFor(msg){ Smart.setReturn(); S.postStop = null; S.step = null; S
 // FA/ELEC/013 (Fingate, 25,535.00, 01-Jul-2026) was offered to be posted again on the strength of a read of 15:34,
 // made while bridge 2.1.1 was timing out: a duplicate in real books. Now, before such a bill is shown, Tally is read
 // afresh for it: the bridge here asked directly when it has the company open; else the client's Tally computer asked to
-// read now (Update now) and its new read waited for. "Not found in Tally at the 17:43 read" only after such a read,
+// read now (Update from Tally) and its new read waited for. "Not found in Tally at the 17:43 read" only after such a read,
 // made after the posting; otherwise "Not checked yet" with why, and no Post again.
 const PostCheck = {
   st: {},                  // entry id -> {busy, at, ok, found, vch, readAt, why, said}

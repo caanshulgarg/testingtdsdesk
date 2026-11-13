@@ -66,18 +66,18 @@ with sync_playwright() as p:
     fg = os.path.join(OUT, "tb-groups.xml"); open(fg, "w").write("<ENVELOPE><DSPACCNAME><DSPDISPNAME>Current Assets</DSPDISPNAME></DSPACCNAME><DSPACCINFO><DSPCLDRAMT><DSPCLDRAMTA>-5.00</DSPCLDRAMTA></DSPCLDRAMT></DSPACCINFO></ENVELOPE>")
     pg.set_input_files("#tallyIn", fg); pg.wait_for_timeout(1000); pg.click("#app [data-tb-ask] button:has-text('Use as opening balances')"); pg.wait_for_timeout(1200)
     ok("Alt+F5" in pg.inner_text("#app") or pg.evaluate("Object.keys(S.books.tb.led).length") == 2, "a trial balance of groups only is refused, with how to export it with ledgers")
-    # the bridge's update from Tally: once a day at a time chosen, or Update now; nothing asked of Tally in between
+    # the bridge's update from Tally: once a day at a time chosen, or Update from Tally; nothing asked of Tally in between
     posts = pg.evaluate("""async () => { const got = window.__got = [];
       Object.assign(Bridge, {on: () => true, call: async (path, body) => { got.push([path, body || null]); return {ok: true, on: true, phase: "live", schedule: "daily", dailyAt: "20:00", lastRun: "20260929", running: false, now: !!(body && body.now), mode: "files"}; }});
       S.booksTab = "import"; S.setupKeep = {}; render(); await new Promise(r => setTimeout(r, 800)); render(); return got; }""")
     pg.evaluate("document.querySelector('#app [data-more=\"books\"]').open = true"); pg.wait_for_timeout(300)   # 2.4.0: under More
     t = pg.inner_text("#app")
     ok("once a day at" in t and "Nothing is asked of Tally during the day" in t and pg.input_value('input[aria-label="Daily update at"]') == "20:00", "step 4: updates from Tally once a day at 20:00, nothing asked during the day")
-    pg.click('#app [data-bridge-keep] button:text-is("Update now")'); pg.wait_for_timeout(800)
-    ok("Updating from Tally now" in pg.inner_text("body"), "Update now asks the bridge, and says the books follow")
+    pg.click('#app [data-bridge-keep] button:text-is("Update from Tally")'); pg.wait_for_timeout(800)
+    ok("Updating from Tally now" in pg.inner_text("body"), "Update from Tally asks the bridge, and says the books follow")
     pg.evaluate("document.querySelector('#app [data-more=\"books\"]').open = true"); pg.wait_for_timeout(300)
     pg.fill('input[aria-label="Daily update at"]', "19:30"); pg.wait_for_timeout(800)
-    ok(pg.evaluate("window.__got.some(([p, b]) => b && b.dailyAt === '19:30')") and pg.evaluate("window.__got.some(([p, b]) => b && b.now === true)"), "the daily time can be changed, and Update now was asked of the bridge")
+    ok(pg.evaluate("window.__got.some(([p, b]) => b && b.dailyAt === '19:30')") and pg.evaluate("window.__got.some(([p, b]) => b && b.now === true)"), "the daily time can be changed, and Update from Tally was asked of the bridge")
     ok(not errors, "no page errors" + ("" if not errors else ": " + errors[0]))
     pg.screenshot(path=OUT + "/parts.png", full_page=True)
     br.close()

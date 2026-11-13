@@ -10,7 +10,7 @@ Companies says Connected / Disconnected; Sync master re-syncs. FinCom, website o
      (tally_company_link once), the first sync's wake sent once (TCloudUp kind wake, what ledgers), the progress, then
      "1,240 ledgers imported ✓ at 16:20 IST · Entries Apr–Oct 2026 ✓". The page stays.
   3. A client of the same name already there: "Link to client…" has it chosen, no second client.
-  4. Linked: the client's name, Sync now (the existing Update now: tally_want_update), ⋯ Not this client (link another
+  4. Linked: the client's name, Sync now (the existing Update from Tally: tally_want_update), ⋯ Not this client (link another
      client / unlink), Upload older entries (Day Book) only while days are missing.
   5. Connect Tally: three steps (Install FinCom Bridge, Open your company in TallyPrime, Add as client) that tick from
      the beats and the links; no six-step strip, no Link / Ledgers / Day Book steps; all done: one green line.
@@ -188,10 +188,10 @@ def main():
            "3. Link to Garg Shekhar & Company: linked to it, no second client (%s)" % calls("tally_company_link"))
         ok(len(wakes()) == 1 and wakes()[0][1]["client"] == gs, "3. and its first sync starts (one wake)")
 
-        # ---- 4. linked: Sync now = Update now; ⋯
+        # ---- 4. linked: Sync now = Update from Tally; ⋯
         E("() => { window.__calls = []; S.coId = null; }")
         pg.click('#app [data-tco-row="%s"] [data-tco-sync-now]' % VMS); pg.wait_for_timeout(700)
-        ok(calls("tally_want_update") == [["tally_want_update", {"p_client": cid}]], "4. Sync now: the existing Update now (tally_want_update) (%s)" % calls())
+        ok(calls("tally_want_update") == [["tally_want_update", {"p_client": cid}]], "4. Sync now: the existing Update from Tally (tally_want_update) (%s)" % calls())
         pg.click('#app [data-tco-row="%s"] [data-tco-more] summary' % VMS); pg.wait_for_timeout(300)
         items = E("(co) => [...document.querySelectorAll('#app [data-tco-row=\"' + co + '\"] .bk-menu-list button')].map(b => b.innerText.split('\\n')[0])", VMS)
         # VMS was added as a client from its row (a person's link): that allowed posting into it too (the owner, 26-Oct-2026:

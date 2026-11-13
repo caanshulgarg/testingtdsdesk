@@ -2,10 +2,10 @@
 // take action there only... currently it pops then side panel opens and nothing happens there also"). Anchored to the
 // icon (parts/TallyIcon.jsx), never the side panel: the status word, one line, and right here the action that fits,
 // done in place, its result said in the popover. Nothing goes elsewhere unless "Open Tally page" is picked.
-//   Linked              Update now (the wake), with the last entry
+//   Linked              Update from Tally (the wake), with the last entry
 //   Waiting for Tally   "Open <company> in TallyPrime on <PC>", Check again (reads the status now)
 //   Needs you           its cause's one button: Allow posting (tally_link_posting) / Use ① · Use ② (the same company in
-//                       two places; owners) / Resume reading (owners) / the port's steps and Check again / Update now
+//                       two places; owners) / Resume reading (owners) / the port's steps and Check again / Update from Tally
 //   Not linked          Link to Tally company: the companies seen, the same GSTIN first (the link function, as the Tally
 //                       page's Link) / Download FinCom Bridge when no computer of the firm has it
 // Owners' actions are hidden from staff, with one line saying who can do them. Plain words (the owner: "I don't need
@@ -103,8 +103,8 @@ function Actions({ co, s, run, busy }) {
   const btn = (act, label, fn, primary) => <button type="button" className={"btn small" + (primary ? " primary" : "")} data-tally-pop-act={act} disabled={!!busy} onClick={() => run(fn, act === "check" && "Checking…")}>{label}</button>;
   const row = (...b) => <p className="tally-pop-acts">{b}</p>;
   const check = (primary) => btn("check", busy === "Checking…" ? "Checking…" : "Check again", async () => { await checkAll(); return checkedSay(tallyIconState(co).word); }, primary);
-  // next-buttons: what Update now really did (reading stopped: nothing asked; no Tally can answer: said at once)
-  const update = () => btn("update", "Update now", async () => {
+  // next-buttons: what Update from Tally really did (reading stopped: nothing asked; no Tally can answer: said at once)
+  const update = () => btn("update", "Update from Tally", async () => {
     const st = co && typeof tallyStopFor === "function" ? tallyStopFor(co.id) : null;
     if (st) return { bad: true, text: "Not asked: reading is stopped (" + (st.reason || "no reason given") + "). An owner resumes it on the Tally page." };
     await tallyUpdateNow(co ? co.id : null);

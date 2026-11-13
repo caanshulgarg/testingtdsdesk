@@ -1,8 +1,8 @@
 """python3 run_page_tops.py - the status lines leave the page body (the owner, 14-Oct-2026, round 3 A):
-  1. no page shows "Saved 08:07 IST · changes by others appear here at once", "Books as of … · Update now" or
+  1. no page shows "Saved 08:07 IST · changes by others appear here at once", "Books as of … · Update from Tally" or
      "Books: last entry … Opened in 0.3 s, every entry in 7.5 s" (TDS, MIS, Reports)
   2. saved: the top bar's save chip says "Saved 08:07", the rest in its tooltip
-  3. the Tally chip's panel: "Books up to … · read …" with Update now; the timing only under Details (for support)
+  3. the Tally chip's panel: "Books up to … · read …" with Update from Tally; the timing only under Details (for support)
   4. books over 2 days old, or reading stopped: no line on the page (next-tally-icon); the header's Tally icon's popover says it
 Runs on the React build: app/dist-test, or TDSDESK_SITE."""
 import os, sys, json, threading, functools, http.server
@@ -68,7 +68,7 @@ try:
         pb = pg.locator('[data-overlay="tallypanel"] [data-panel-books]')
         txt = pb.inner_text() if pb.count() else ""
         ok(pb.count() == 1 and "Books up to" in txt and "read" in txt, "the panel: Books up to … · read … (%r)" % txt)
-        ok(pg.locator('[data-overlay="tallypanel"] [data-panel-books] [data-update-now]').count() == 1, "with Update now")
+        ok(pg.locator('[data-overlay="tallypanel"] [data-panel-books] [data-update-now]').count() == 1, "with Update from Tally")
         det = pg.locator('[data-overlay="tallypanel"] details[data-panel-details]')
         ok(det.count() == 1 and not det.evaluate("d => d.open"), "the timing is under Details, closed")
         if det.count():

@@ -279,7 +279,7 @@ function TallyPanel({ open }) {
         <p className="note" style={{ margin: "10px 0 4px" }}><b>The firm’s Tally computers</b></p>
         <div data-tally-firm=""><TallyDetail s={tallySign(co)} /></div>
         <p><TallyPill co={co} /></p>{co && typeof tallyLine === "function" && tallyLine(co) && <p data-panel-tally-line=""><TallyLine co={co} update={!panelBooksShown(co.id)} /></p>}
-        {/* round 3 A: the client's books, Books up to … · read …, Update now; the rest under Details */}
+        {/* round 3 A: the client's books, Books up to … · read …, Update from Tally; the rest under Details */}
         {co && <PanelBooks cid={co.id} />}<PanelUpload co={co} /><p className="note">{tallyStatus(co).say}</p>
         <TallyStates co={co} />
         {Bridge.on() ? <>

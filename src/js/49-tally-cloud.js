@@ -1597,7 +1597,7 @@ Object.assign(TCloud, {
     render();
   },
   // review of 01-Oct-2026: "Send ledgers and groups now": the Tally computer reads every ledger and group and sends
-  // them (bridge 1.14.8), asked the way Update now is: through the bridge here, or through the cloud's heartbeat
+  // them (bridge 1.14.8), asked the way Update from Tally is: through the bridge here, or through the cloud's heartbeat
   async sendLedgers(cid){
     const here = typeof Bridge === "object" && Bridge.on() && Bridge.up();
     try {
@@ -1789,7 +1789,7 @@ const TLight = {
         else if (ds.tally === "closed") x = {level: "warn", short: "Tally closed", say: "Tally is not open on " + d.name + "."};
         else if (!co) x = {level: "warn", short: "not updated yet", say: c.company + " has no copy on " + d.name + " yet: it comes with the next update (" + (beat.dailyAt || "20:00") + ")."};
         else if (co.waiting) x = {level: "warn", short: co.waiting + " day" + (co.waiting === 1 ? "" : "s") + " to send", say: co.waiting + " day(s) of " + c.company + " wait on " + d.name + " to go to FinCom (the internet or FinCom's cloud was not reachable)."};
-        else if (!at || now - at > 36 * 3600000) x = {level: "warn", short: at ? "updated " + when(at) : "not updated yet", say: c.company + " was last updated from Tally " + (at ? "on " + when(at) : "never") + ". From Tally \u2192 Update now."};
+        else if (!at || now - at > 36 * 3600000) x = {level: "warn", short: at ? "updated " + when(at) : "not updated yet", say: c.company + " was last updated from Tally " + (at ? "on " + when(at) : "never") + ". From Tally \u2192 Update from Tally."};
         else x = {level: "ok", short: "updated " + when(at), say: c.company + " is up to date as of " + when(at) + " (" + d.name + ")."};
         if (beat.updating && x.level !== "bad") x.short = "updating now";
       }
@@ -1801,9 +1801,9 @@ const TLight = {
 };
 
 
-// FinCom Bridge 2.1.3 reads Tally only after an event (a client opened here, Update now, a posting, the nightly catch-up):
+// FinCom Bridge 2.1.3 reads Tally only after an event (a client opened here, Update from Tally, a posting, the nightly catch-up):
 // Tally cannot send changes by itself, so FinCom says in one line a client how its Tally stands, from the bridge's
-// heartbeat, with one button, Update now:
+// heartbeat, with one button, Update from Tally:
 //   "Connected · Tally open on NWS144 · last read 15:34" | "Tally not open on NWS144" | "NWS144 is offline" |
 //   "Tally is not answering on NWS144 since 12:28" | "Reading paused on NWS144" (FinCom 2.3.5: the cards' words)
 // {state: open | closed | offline | notanswering | paused, level, text, computer, read}; null when no Tally computer
@@ -1841,7 +1841,7 @@ function tallyLine(co, d0){
     comp = b.computer || "this computer"; tally = b.tallyState || (b.tallyUp ? "open" : "closed");
     since = (b.stuck && b.stuck.since) || ""; paused = !!b.paused; read = man.readAt || man.seen || "";
   } else return null;
-  // "Reading now…": the bridge says a read is going on (beat.updating), or Update now was asked here and no newer read
+  // "Reading now…": the bridge says a read is going on (beat.updating), or Update from Tally was asked here and no newer read
   // has come in yet (for three minutes at most)
   const ask = TallyAsk[co.id], updating = !!(beat && beat.updating);
   const reading = updating || !!(ask && now - ask.at < 180000 && !((Date.parse(read || 0) || 0) > ask.before));
@@ -1849,7 +1849,7 @@ function tallyLine(co, d0){
   // FinCom 2.3.5: the same words as the Tally page's cards (Connected / Offline / Tally not open / Reading stopped / paused)
   if (bridge === "offline" || bridge === "none") return o("offline", "bad", comp + " is offline");
   // round 4, item 25: a stop from FinCom on the client's computer (or on all computers) comes before everything but
-  // offline: "Reading stopped by <name> at <time>: <reason>"; the line's Resume (owners) and Update now look at .stop
+  // offline: "Reading stopped by <name> at <time>: <reason>"; the line's Resume (owners) and Update from Tally look at .stop
   const stop = dev ? tallyStopOn(dev) : null;
   if (stop) return Object.assign(o("stopped", "bad", "Reading stopped " + (stop.who ? "by " + stop.who : "from FinCom") + (stop.at ? " at " + tallyHm(stop.at) : "") + ": " + (stop.reason || "no reason given")), {stop});
   if (tally === "closed") return o("closed", "warn", "Tally not open on " + comp);
@@ -1878,7 +1878,7 @@ function tallyStopFor(cid){
   const l = co ? tallyLine(co) : null;
   return l && l.state === "stopped" ? l.stop : null;
 }
-// Update now asked here, per client: {at, before (the last read then)}, for "Reading now…" until a newer read comes in
+// Update from Tally asked here, per client: {at, before (the last read then)}, for "Reading now…" until a newer read comes in
 const TallyAsk = {};
 function tallyAskedRead(cid){
   const co = S.companies && S.companies[cid];
@@ -1952,7 +1952,7 @@ function booksAsOf(cid){
   }
   if (!at) return null;
   return {at, what, why: BOOKS_ASOF_WHY[what] || "", text: "Books as of " + tallyHm(at) + (BOOKS_ASOF_WHY[what] ? " (" + BOOKS_ASOF_WHY[what] + ")" : ""),
-    say: "Tally cannot send its changes by itself: entries made in Tally after " + tallyHm(at) + " come in at the next update (opening this client, Update now, or the nightly catch-up)."};
+    say: "Tally cannot send its changes by itself: entries made in Tally after " + tallyHm(at) + " come in at the next update (opening this client, Update from Tally, or the nightly catch-up)."};
 }
 // FinCom Bridge 2.1.4 asks Tally for no balance (its /balances, /tb and /ledgerbalance answer only from its own copy, and
 // on most companies with an error). The owner's decision of 02-Oct-2026: every balance FinCom shows (Look up, the books'
@@ -2079,7 +2079,7 @@ function bankNotReadBack(rows, cid){
   return (rows || []).filter(r => r.state === "sent" && !r.postedOptional &&
     (r.checking || (r.postedVia === "bridge" && r.postVerified !== true && r.postByReply !== true) || (r.sentAt && (!at || Date.parse(r.sentAt) > at))));
 }
-// Update now for a client: the bridge here when it has the company open, else the client's Tally computer through
+// Update from Tally for a client: the bridge here when it has the company open, else the client's Tally computer through
 // FinCom's cloud (the bridge reads at once, also while its background reading is paused)
 function tallyUpdateNow(cid){
   cid = cid || S.coId;

@@ -4,12 +4,12 @@ approved design: tallydesign Main / NotConnected / Phone). Made-up firm, logins,
 cloud of run_tally_simple.py). Login A (made-up-a) on the shared server SRV01; login B's Tally holds Kestrel (never A's).
    1. the top line: "Connected to Tally", "TallyPrime on port 9041 · 3 companies open · last entry …", Check again.
    2. ONE table "Clients · N" (next-tally-simple2): Client · Tally company | Masters | Entries | Action, one button and
-      More ▾. Each row type its one button: linked and open: Update now; linked, its company open nowhere: Check again
+      More ▾. Each row type its one button: linked and open: Update from Tally; linked, its company open nowhere: Check again
       ("Open it in Tally first"; the reason; a close name to link to), Connect again when no bridge is heard; a client whose
       company is open here: Connect; a company open here with a client of its name: Connect; open here, no client: Link; a
       client with nothing: Link. More ▾: Answers (the old answers) and Unlink. Rows that need you shaded.
-   3. Update now is never silent: "Asking Tally…" at once, "Reading ledgers: 1,200 of 3,400", the result; nothing in 30 s:
-      why in plain words. Books › From Tally's Update now the same.
+   3. Update from Tally is never silent: "Asking Tally…" at once, "Reading ledgers: 1,200 of 3,400", the result; nothing in 30 s:
+      why in plain words. Books › From Tally's Update from Tally the same.
    4. Advanced (for support): closed; open, everything that was on the page (the day check of every client, the computers,
       this computer, each computer, versions, every bridge, install, activity).
    5. not connected (step 3 of 6): the top says so, the six steps under it.
@@ -130,7 +130,7 @@ def main():
         ok("is not open in Tally" in w or w.startswith("Step "), "2. Connect again: the plain reason (%s)" % w[:140])
         shot("tally-redesign-desktop.png", 1280, 900)
 
-        print("== 3. Update now is never silent")
+        print("== 3. Update from Tally is never silent")
         cid = ids[ORBIT]
         E("() => { window.__ask = 0; window.__askO = Ledgers.askTally; Ledgers.askTally = function () { window.__ask++; return new Promise(() => {}); }; }")   # (the bridge does not answer yet)
         E("() => { S.tcoSync = {}; render(); }"); pg.wait_for_timeout(400)
@@ -139,7 +139,7 @@ def main():
             # (next-tally-simple2, review 5: the read's words in the Masters cell; the client cell just "● Updating")
             ok(txt(R(ORBIT) + " [data-tpg-ms]").startswith("Asking Tally…") and mains(ORBIT) == ["reading"] and txt(R(ORBIT) + " [data-tpt-state]") == "Updating" and n(R(ORBIT) + " .tpt-why") == 0,
                "3. at once: 'Asking Tally…' (Masters), '● Updating', the button Reading… (%s | %s)" % (txt(R(ORBIT) + " [data-tpg-masters]"), mains(ORBIT)))
-        else: ok(False, "3. Orbit Space's Update now (%s)" % mains(ORBIT))
+        else: ok(False, "3. Orbit Space's Update from Tally (%s)" % mains(ORBIT))
         E("() => { Ledgers.askTally = window.__askO; }")
         # the read on its way: its count
         E("""(c) => { const x = S.tcoSync[c] || (S.tcoSync[c] = {cid: c, at: Date.now(), samples: []}); FCRunState[c] = Object.assign(FCRunState[c] || {b: {n: 0, g: 0}}, {at: x.at, asking: false, say: ''});
@@ -166,12 +166,12 @@ def main():
         E("(c) => { S.tcoSync = {}; delete FCRunState[c]; window.__askO2 = Ledgers.askTally; Ledgers.askTally = () => new Promise(() => {}); location.hash = '#/c/' + encodeURIComponent(c) + '/from-tally'; if (typeof Route === 'object' && Route.apply) Route.apply(location.hash); }", cid); pg.wait_for_timeout(3500)
         if n("#app [data-masters-update]"):
             pg.click("#app [data-masters-update]"); pg.wait_for_timeout(300)
-            ok(txt("#app [data-masters-progress]").startswith("Asking Tally…"), "3. From Tally's Update now: 'Asking Tally…' at once (%s)" % txt("#app [data-masters]")[:160])
+            ok(txt("#app [data-masters-progress]").startswith("Asking Tally…"), "3. From Tally's Update from Tally: 'Asking Tally…' at once (%s)" % txt("#app [data-masters]")[:160])
             E("(c) => { const x = S.tcoSync[c]; if (x) { x.via = 'cloud'; FCRunState[c].asking = false; FCRunState[c].at = x.at; } }", cid)
             E(SETKW, {"reason": "user-active", "words": KW, "since": "2026-11-07T06:12:00Z", "queued": True}); pg.wait_for_timeout(1300)
             ok(txt("#app [data-masters-progress]") == KW + " (since 11:42)", "3. From Tally: keepWait's words too (%s)" % txt("#app [data-masters-progress]"))
             E(SETKW, None)
-        else: ok(False, "3. From Tally's Update now (%s)" % txt("#app [data-upload-page]")[:160])
+        else: ok(False, "3. From Tally's Update from Tally (%s)" % txt("#app [data-upload-page]")[:160])
         E("() => { Ledgers.askTally = window.__askO2; S.tcoSync = {}; }")
 
         print("== 4. Advanced (for support): closed, and everything in it")
@@ -202,7 +202,7 @@ def main():
         scene([adev([up], opened=(ORB, NOVA, ZETA), version="2.5.3"), bdev()], c1, CLx, P253)
         if n("#app [data-tsm-steps-link]"): pg.click("#app [data-tsm-steps-link]"); pg.wait_for_timeout(600)
         else: E("() => { S.tsm = Object.assign(S.tsm || {}, {open: true}); render(); }"); pg.wait_for_timeout(600)
-        ok(vis("#app [data-tsm-guide] [data-tsm-step='1'] [data-tsm-step-dl] [data-tsm-download]"), "7. the six steps: step 1 done, its Download still there (%s)" % txt("#app [data-tsm-step='1']")[:120])
+        ok(n("#app [data-tsm-guide] [data-tsm-step='1'] [data-tsm-download]") == 0, "7. the six steps: step 1 done, no Download under it (ux-wins: it is under Advanced) (%s)" % txt("#app [data-tsm-step='1']")[:120])
         if not n("#app [data-support-body]"): pg.click("#app [data-support-toggle]"); pg.wait_for_timeout(800)
         ok(n("#app [data-support-body] [data-install-again]") == 1 and "Install again or on another computer" in txt("#app [data-install-again]") and vis("#app [data-install-again] a, #app [data-install-again] button"),
            "7. Advanced: Install again or on another computer, its Download, without a second fold (%s)" % txt("#app [data-install-again]")[:160])
@@ -262,7 +262,7 @@ def main():
         ok(n("#app [data-tsm-guide]") == 0 and txt("#app [data-tsm-steps-link='laptop']") == "How to connect", "9. the six steps folded: 'How to connect'")
         sts = {nm: attr(R(nm) + " [data-tpt-state]", "data-tpt-state") for nm in (ORBIT, NOVA_C)}
         ok(all(v in ("ok", "reading") for v in sts.values()) and n(R(ORBIT) + ".tpt-need") + n(R(NOVA_C) + ".tpt-need") == 0, "9. both clients open in the office's Tally fine or reading, not 'needs you' (%s)" % sts)
-        ok(all(mains(nm) in (["update"], ["reading"]) for nm in (ORBIT, NOVA_C)), "9. each its Update now (%s)" % [mains(nm) for nm in (ORBIT, NOVA_C)])
+        ok(all(mains(nm) in (["update"], ["reading"]) for nm in (ORBIT, NOVA_C)), "9. each its Update from Tally (%s)" % [mains(nm) for nm in (ORBIT, NOVA_C)])
         ok("this Windows login" not in txt(TB) and "on the Tally computer" in txt(R(LARK) + " .tpt-why"), "9. no bridge here: a company open nowhere, 'on the Tally computer', never 'this Windows login' (%s)" % txt(R(LARK) + " .tpt-why"))
         shot("tally-redesign-nobridge.png", 1280, 900)
         pg.set_viewport_size({"width": 1440, "height": 900})
@@ -296,12 +296,12 @@ def main():
         E("(c) => { S.tallyMore = {support: true}; openTallyFor(c); render(); }", ids[ACME]); pg.wait_for_timeout(3000)
         ok(n(TB + " tr[data-focus]") == 1 and attr(TB + " tr[data-focus]", "data-tsm-row") == ACME and n("#app [data-support-body]") == 0, "11.1 from a client: its row marked, Advanced closed (%s)" % attr(TB + " tr[data-focus]", "data-tsm-row"))
         E("() => { S.tallyFocus = ''; S.tallyMore = {}; render(); }")
-        # 2. a row's one button: the missing days' fetch, the Day Book upload, else Update now
+        # 2. a row's one button: the missing days' fetch, the Day Book upload, else Update from Tally
         M = lambda r: E("(r) => FCTallyMain(r)", r)
         base_r = {"kind": "client", "c": {"w": "Yes"}, "o": {"w": "Yes"}, "l": {"w": "Yes"}, "company": ORB, "cid": "x"}
         ok(M(dict(base_r, e={"w": "No"}, need=True, act={"kind": "bring", "label": "Bring missing days"}, todo="Press the button: FinCom brings them from Tally.")) == {"main": "bring", "label": "Bring missing days"}, "11.2 missing days: Bring missing days")
         ok(M(dict(base_r, e={"w": "No"}, need=True, act={"kind": "upload", "label": "Upload Day Book"}, todo="Upload the Day Book for those days.")) == {"main": "upload", "label": "Upload Day Book"}, "11.2 held lines: Upload Day Book")
-        ok(M(dict(base_r, e={"w": "Yes"}, act=None, todo="Nothing.")) == {"main": "update", "label": "Update now"}, "11.2 up to date: Update now")
+        ok(M(dict(base_r, e={"w": "Yes"}, act=None, todo="Nothing.")) == {"main": "update", "label": "Update from Tally"}, "11.2 up to date: Update from Tally")
         # 3. a stuck read of a company open in Tally: the read's own reason, never "not open"
         E("(c) => { S.tcoSync = {}; S.tcoSync[c] = {cid: c, company: 'ORBIT SPACE', at: Date.now() - 200000, via: 'cloud', err: 'Could not ask Tally: made-up reason', end: 0, late: false, samples: []}; render(); }", ids[ORBIT]); pg.wait_for_timeout(2500)
         w = txt(R(ORBIT) + " .tpt-why")
@@ -323,7 +323,7 @@ def main():
             pg.click(R(KCO) + ' [data-tpt-main="update"]'); pg.wait_for_timeout(1300)
             E("(c) => { const x = S.tcoSync[c]; if (x) { x.via = 'cloud'; FCRunState[c].asking = false; FCRunState[c].at = x.at; } render(); }", idk[KCO]); pg.wait_for_timeout(1300)
             ok("someone is working" not in txt(R(KCO)) and n("#app [data-tsm-top-wait]") == 0, "11.6 B's wait words are not said on A's page (%s)" % txt(R(KCO))[:200])
-        else: ok(False, "11.6 Kestrel Co's Update now (%s)" % mains(KCO))
+        else: ok(False, "11.6 Kestrel Co's Update from Tally (%s)" % mains(KCO))
         E("() => { Ledgers.askTally = window.__askK; S.tcoSync = {}; }")
         # 10. connected: See the 6 steps stays near Check again
         ok(n("#app [data-tsm-top] [data-tsm-steps-link]") == 1, "11.10 See the 6 steps beside Check again when connected")

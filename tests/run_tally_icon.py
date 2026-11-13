@@ -9,7 +9,7 @@ to take action there only"; "I don't need NWS144... need only Tally... it should
      Waiting for Tally ("Open <company> in Tally"), red Needs you (one short sentence), grey Not linked / not connected.
      Plain words: never the computer's name, a port, a Windows user or the bridge.
   3. The popover (a click; never the side panel) shows the word, the line and the state's action, done in place, its
-     result said there: Update now / Check again / Allow posting (tally_link_posting, once) / Use ② (owners;
+     result said there: Update from Tally / Check again / Allow posting (tally_link_posting, once) / Use ② (owners;
      tally_link_place_choose, once; staff see who can) / Link to Tally company (an inline list, the link function once) /
      Download when no computer has FinCom. Esc and a click outside close it; the keyboard reaches it.
   4. Phone 390: the same single icon, no sideways scroll, the popover inside the screen.
@@ -102,18 +102,18 @@ def main():
         print("== 2/3. the four states, their colours, words and actions")
         pg = page(); E = lambda js, *a: pg.evaluate(js, *a)
         E("() => { window.__upd = []; window.__chk = 0; }")
-        # Linked: green, "Connected to Tally · last entry 2:41 pm", Update now
+        # Linked: green, "Connected to Tally · last entry 2:41 pm", Update from Tally
         scene(pg, [dev(OPEN, BEAT)])
         state_checks(pg, "linked", r"Tally: Linked — Connected to Tally · last entry \d{1,2}:\d\d [ap]m", "linked")
         po = pop_open(pg)
         ok(po["state"] == "linked" and po["word"] == "Linked" and po["line"].startswith("Connected to Tally · last entry ") and po["acts"] == ["update"] and not NOT_PLAIN.search(po["text"]),
-           "Linked: the popover says the word, the line, one action Update now, plain words (%s)" % po)
+           "Linked: the popover says the word, the line, one action Update from Tally, plain words (%s)" % po)
         ok("Open Tally page" in po["text"] and no_panel(pg), "Open Tally page is there; no side panel")
         shot(pg, "desktop-popover-linked", POP, 12)
         E("() => { window.__updWas = window.tallyUpdateNow; window.tallyUpdateNow = (c) => { window.__upd.push(c); }; }")
         m = act(pg, "update", 600)
         ok(E("window.__upd") == [CA] and m.startswith("Asked Tally for its new entries at ") and no_panel(pg) and E("() => S.view") == "company",
-           "Update now: asked once for this client, the result in the popover, nothing else opens (%s)" % m)
+           "Update from Tally: asked once for this client, the result in the popover, nothing else opens (%s)" % m)
         E("() => { window.tallyUpdateNow = window.__updWas; }")
         # Esc closes it, the focus back on the icon; a click outside closes it
         pg.keyboard.press("Escape"); pg.wait_for_timeout(300)

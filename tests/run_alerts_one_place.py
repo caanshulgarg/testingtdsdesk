@@ -143,7 +143,7 @@ with sync_playwright() as p:
     E(CLOSE)
     # review H1 (bridge 2.3.1): the bridge's own Tally lists its companies too slowly (stopped at 2 s): the lines of this
     # computer wait, said in plain words in the bell (the beat's recorderWaitWords), never lost; gone when it answers again
-    WW = "Tally took longer than 2 s to list its open companies (limit 2 s); this computer's changes are waiting until it answers in time (Update now asks it without the limit)"
+    WW = "Tally took longer than 2 s to list its open companies (limit 2 s); this computer's changes are waiting until it answers in time (Update from Tally asks it without the limit)"
     cid = scene({"devs": [dev(recording=True)], "alerts": [], "gap": None})
     E("""(w) => { window.__w.devs = window.__w.devs.map(d => { d.info.beat = Object.assign({}, d.info.beat || {}, {recorderWaitWords: w}); return d; }); TLight.st.devs = JSON.parse(JSON.stringify(window.__w.devs)); AlertHub.refresh(true); }""", WW)
     pg.wait_for_timeout(400)

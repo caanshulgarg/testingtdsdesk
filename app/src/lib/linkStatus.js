@@ -73,7 +73,7 @@ function linkWordNow(co, company) {
   if (!posting && rec) return o("needs", "Posting into Tally is stopped for " + co.name, { label: "Allow posting", act: () => (typeof linkPostingSet === "function" ? linkPostingSet(co, rec, true) : null) }, base);
   const l = k.line || null;
   if (l && l.state === "stopped") return o("needs", l.text, { label: "Open the Tally page", act: goRow(co, ACTIVITY) }, base);
-  if (l && l.state === "paused") return o("needs", l.text, { label: "Update now", act: () => (typeof tallyUpdateNow === "function" ? tallyUpdateNow(co.id) : null) }, base);
+  if (l && l.state === "paused") return o("needs", l.text, { label: "Update from Tally", act: () => (typeof tallyUpdateNow === "function" ? tallyUpdateNow(co.id) : null) }, base);
   if (l && l.state === "notanswering") return o("needs", l.text, { label: "Check again", act: check }, base);
   if (k.state === "needs") return o("needs", "Entries wait for you on the Tally page", { label: "Open the Tally page", act: goRow(co, ACTIVITY) }, base);
   const last = lastEntry(co, k);
