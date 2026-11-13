@@ -24,7 +24,7 @@ What the range holds:
 5. Tally's port (bf0ebdf00, portwatch2516.go): Windows' port list watched every 3 s with a beat at once on a move;
    tallyPortNotSaved in the beat; the page tries its own bridge's port first and shows Copy port / Check it works.
 
-The code review of d2b7fd47a..a87fd2260 (not ready: H1, M1, M2, L1-L7) and what was done (959101269):
+The code review of d2b7fd47a to a87fd2260 (not ready: H1, M1, M2, L1-L7) and what was done (959101269):
 - H1: a by-type list never closes a day: the bridge says partial; migration 197 marks the day split_open (a trigger on
   tally_period_days and tally_check_days): not done, its earlier count kept, until a whole list of the day clears it; the
   bridge holds the day 24 hours and asks its one-day list again. Tests: run_migration197.py "H1" (a Credit Note day),
