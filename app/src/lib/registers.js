@@ -385,6 +385,14 @@ const SheetPost = {
     const co = CO(), st = S.sheetImp; if (!co || !["Purchase", "Journal"].includes(v) || v === this.postAs()) return;
     co.voucherType = v; Store.saveCompany(co); if (st) st.postAsChanged = true; render();
   },
+  // "Edit type" on a held row of the panel: the person says what it is (an invoice / bill, a credit note, a debit note);
+  // its figures follow (a credit document negative here, the others positive) and it is held no more
+  setKind(d, k){
+    if (!d || !k) return;
+    d.note = k === "invoice" ? "" : k; d.hold = "";
+    if ((d.note === "credit") !== (d.total < 0)) ["taxable", "igst", "cgst", "sgst", "cess", "total"].forEach(f => { d[f] = r2(-d[f]); });
+    render();
+  },
   // the sales (or purchase) ledger the sheet names: Tally's own spelling, or the ledger answered for that name before
   sledKey(d){ return d.sledger ? "sled:" + SheetFmt.norm(d.sledger) : ""; },
   salesLedger(d){
@@ -401,8 +409,18 @@ const SheetPost = {
     return name;
   },
   toBills(docs, cid, fileName){
-    const res = {added: 0, held: 0, ids: []};
+    const res = {added: 0, held: 0, fixed: 0, ids: []};
+    const pk = (g, n) => GSTIN_RE.test(g || "") ? g : normName(n || "");
     docs.forEach(d => {
+      // a bill held for a person (a negative amount its Type column did not explain: never approved, never posted) and
+      // the sheet uploaded again with the Type put right: that bill is put right in place, by its number, date and
+      // party (its total's sign is what changed). Nobody deletes anything by hand
+      const heldE = !d.hold && Object.values(D(cid).entries || {}).find(o => o.hold && o.status === "draft" && normInv(o.x.invoiceNo) === normInv(d.no) && (!o.x.invoiceDate || !d.date || o.x.invoiceDate === d.date) && pk(o.x.vendorGstin, o.x.vendorName) === pk(d.gstin, d.party));
+      if (heldE){
+        Object.assign(heldE.x, {taxable: Math.abs(d.taxable), cgst: Math.abs(d.cgst), sgst: Math.abs(d.sgst), igst: Math.abs(d.igst), cess: Math.abs(d.cess), total: Math.abs(d.total)});
+        if (d.note) heldE.noteKind = d.note; else delete heldE.noteKind;
+        delete heldE.hold; heldE.readNote = ""; heldE.uncertain = []; Store.saveEntry(cid, heldE); res.fixed++; res.ids.push(heldE.id); return;
+      }
       const e = newEntry(fileName), ab = x => d.hold ? x : Math.abs(x);   // (a held document keeps the sheet's own figures)
       Object.assign(e.x, {vendorName: d.party, vendorGstin: d.gstin, vendorPan: d.gstin ? d.gstin.slice(2, 12) : "", invoiceNo: d.no, invoiceDate: d.date,
         taxable: ab(d.taxable), cgst: ab(d.cgst), sgst: ab(d.sgst), igst: ab(d.igst), cess: ab(d.cess), total: ab(d.total), hsn: d.hsn});
@@ -434,7 +452,7 @@ const SheetPost = {
     return res;
   },
   toSales(docs, cid, fileName){
-    const s = SL(), res = {added: 0, held: 0, again: 0, ids: []};
+    const s = SL(), res = {added: 0, held: 0, again: 0, fixed: 0, ids: []};
     docs.forEach(d => {
       const no = d.no + (d.note === "credit" && !/^cn/i.test(d.no) ? " (CN)" : "");
       const ab = x => d.hold ? x : Math.abs(x);   // (a held document keeps the sheet's own figures)
@@ -442,6 +460,13 @@ const SheetPost = {
       // H1 of cf58b7cc9: number and date alone let another party's invoice of that number be written over). Anything
       // else of that number is a new invoice (the number said "already exists" on it, as for any upload)
       const pk = (g, n) => GSTIN_RE.test(g || "") ? g : normName(n || ""), name = d.party || (d.gstin ? "" : "Retail customer");
+      // an invoice held for a person (never posted) and the sheet uploaded again with its Type put right: that invoice is
+      // put right in place, by its number, date and party (the total's sign and the kind are what changed)
+      const heldV = !d.hold && s.list.find(v => v.hold && v.status === "review" && normInv(v.x.number) === normInv(d.no) && (!v.x.date || !d.date || v.x.date === d.date) && pk(v.x.customerGstin, v.x.customerName) === pk(d.gstin, name));
+      if (heldV){
+        Object.assign(heldV.x, {number: no, taxable: Math.abs(d.taxable), cgst: Math.abs(d.cgst), sgst: Math.abs(d.sgst), igst: Math.abs(d.igst), cess: Math.abs(d.cess), total: Math.abs(d.total), rate: d.rate, noteKind: d.note || ""});
+        delete heldV.hold; this.ledgersTo(heldV, d, true); mapInvoice(heldV); res.fixed++; res.ids.push(heldV.id); return;
+      }
       const was = s.list.find(v => normInv(v.x.number) === normInv(no) && (!v.x.date || !d.date || v.x.date === d.date)
         && pk(v.x.customerGstin, v.x.customerName) === pk(d.gstin, name) && Math.abs(num(v.x.total) - (d.hold ? d.total : Math.abs(d.total))) < 0.005 && (v.x.noteKind || "") === (d.note || ""));
       // never added again. One from a sheet still waiting (To review / Ready) takes this sheet's ledgers where no person

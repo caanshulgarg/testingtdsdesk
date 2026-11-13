@@ -83,6 +83,17 @@ function salesWhy(){
   return {text: parts.join("; ") + (set ? ": set it here" : ": see To review"), btn: set ? "Set it here" : "Open To review",
     act: () => { if (set) s.showSettings = true; else s.filter = "review"; render(); }};
 }
+// "Edit type" on an invoice held for a person (a sheet's negative amount, or "Purchase Return" on Sales): they say what
+// it is; its amounts are taken positive, a credit note's number marked as a sheet's is, and it is held no more
+function salesSetKind(id, k){
+  const v = inv(id); if (!v || !k) return;
+  const x = v.x;
+  ["taxable", "cgst", "sgst", "igst", "cess", "total"].forEach(f => { x[f] = Math.abs(num(x[f])); });
+  x.noteKind = k === "invoice" ? "" : k;
+  if (k === "credit" && !/^cn|\(CN\)$/i.test(x.number)) x.number += " (CN)";
+  delete v.hold; mapInvoice(v); saveSales(); render();
+}
+if (typeof salesSetKind !== "undefined") globalThis.salesSetKind = salesSetKind;
 if (typeof rereadSales !== "undefined") globalThis.rereadSales = rereadSales;
 if (typeof salesWhy !== "undefined") globalThis.salesWhy = salesWhy;
 if (typeof invoiceHtml !== "undefined") globalThis.invoiceHtml = invoiceHtml;
