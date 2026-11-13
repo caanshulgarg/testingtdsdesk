@@ -94,3 +94,6 @@ func lockExclusive(path string, d time.Duration, started func()) error {
 	}
 	return nil
 }
+
+// 2.5.16 (userfile.go): not Windows: the owner is not told ("" is taken as not known)
+func platFileOwner(path string) string { return "" }

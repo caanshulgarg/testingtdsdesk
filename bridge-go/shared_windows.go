@@ -190,3 +190,23 @@ func lockExclusive(path string, d time.Duration, started func()) error {
 	}
 	return nil
 }
+
+// 2.5.16 (userfile.go): the Windows account that owns a file, DOMAIN\user ("" when it cannot be read)
+func platFileOwner(path string) string {
+	sd, err := windows.GetNamedSecurityInfo(path, windows.SE_FILE_OBJECT, windows.OWNER_SECURITY_INFORMATION)
+	if err != nil {
+		return ""
+	}
+	sid, _, err := sd.Owner()
+	if err != nil || sid == nil {
+		return ""
+	}
+	acc, dom, _, err := sid.LookupAccount("")
+	if err != nil || acc == "" {
+		return "sid:" + sid.String() // an account that cannot be named: matches no user name
+	}
+	if dom != "" {
+		return dom + `\` + acc
+	}
+	return acc
+}

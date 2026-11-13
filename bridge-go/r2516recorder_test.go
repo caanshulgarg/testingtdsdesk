@@ -120,3 +120,66 @@ func TestR2516ProgramFolderIniNeverWritten(t *testing.T) {
 		t.Fatal("iniInProgramFolder")
 	}
 }
+
+// failed.txt is made by the folder step for every user: they may add to it, not read it
+func TestR2516FailedTxtSharedWriteOnly(t *testing.T) {
+	base := t.TempDir()
+	var calls []string
+	oldI := icaclsFn
+	icaclsFn = func(args ...string) (string, error) {
+		calls = append(calls, strings.Join(args, " "))
+		return "processed", nil
+	}
+	t.Cleanup(func() { icaclsFn = oldI })
+	if _, err := prepareFinComFolders(base, true); err != nil {
+		t.Fatal(err)
+	}
+	f := filepath.Join(base, "FinCom", "recorder", "failed.txt")
+	if fi, err := os.Lstat(f); err != nil || !fi.Mode().IsRegular() {
+		t.Fatal("failed.txt not made")
+	}
+	want := f + " /inheritance:r /grant:r *S-1-5-18:F *S-1-5-32-544:F *S-1-5-32-545:(W) /L /Q"
+	all := strings.Join(calls, "\n")
+	if !strings.Contains(all, want) || strings.Index(all, want) < strings.Index(all, "/reset /L /Q") {
+		t.Fatalf("icacls calls:\n%s", all)
+	}
+}
+
+// a recorder file is a user's only when that user owns it; another user's file without a user name is not read by a
+// bridge for one user, and that is said
+func TestR2516RecorderFileOwner(t *testing.T) {
+	dir := t.TempDir()
+	r2515LogHere(t, dir)
+	owners := map[string]string{}
+	oldO, oldU, oldM := fileOwnerFn, liveWinUserFn, runMode
+	t.Cleanup(func() { fileOwnerFn, liveWinUserFn, runMode = oldO, oldU, oldM })
+	fileOwnerFn = func(p string) string { return owners[filepath.Base(p)] }
+	liveWinUserFn = func() string { return `PC-MADEUP\made-up-a` }
+	runMode = "user"
+	mine := "co-guid-1-20261113-made-up-a.txt"
+	owners[mine] = `PC-MADEUP\made-up-a`
+	if !liveFileTrusted(filepath.Join(dir, mine)) {
+		t.Fatal("the user's own file")
+	}
+	owners[mine] = `PC-MADEUP\made-up-b`
+	if liveFileTrusted(filepath.Join(dir, mine)) {
+		t.Fatal("a file named for this user but owned by another was read")
+	}
+	old := "co-guid-1-20261113.txt"
+	owners[old] = `PC-MADEUP\made-up-b`
+	if liveFileTrusted(filepath.Join(dir, old)) || !strings.Contains(readText(logFile()), "no Windows user in its name and is another user's") {
+		t.Fatal("another user's file without a user name")
+	}
+	owners["failed.txt"] = `BUILTIN\Administrators`
+	if liveFileTrusted(filepath.Join(dir, "failed.txt")) || !strings.Contains(readText(logFile()), "failed.txt (lines a Tally could not write)") {
+		t.Fatal("failed.txt for one user's bridge")
+	}
+	runMode = "service" // reads every file, each user's only when owned by that user
+	if !liveFileTrusted(filepath.Join(dir, old)) || !liveFileTrusted(filepath.Join(dir, "failed.txt")) || liveFileTrusted(filepath.Join(dir, mine)) {
+		t.Fatal("the service's look")
+	}
+	delete(owners, mine) // the owner not known (not Windows): by its name, as before
+	if !liveFileTrusted(filepath.Join(dir, mine)) {
+		t.Fatal("owner not known")
+	}
+}

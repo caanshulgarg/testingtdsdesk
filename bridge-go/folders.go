@@ -143,6 +143,18 @@ func prepareFinComFolders(base string, allUsers bool) ([]string, error) {
 				say("icacls " + strings.Join(args, " "))
 			}
 		}
+		// failed.txt (the add-on's line it could not write) is one file for every user: made here, every user may add to
+		// it, none may read it (the service reads it)
+		failed := filepath.Join(rec, "failed.txt")
+		if fi, err := os.Lstat(failed); os.IsNotExist(err) {
+			_ = writeFresh(failed, nil)
+		} else if err == nil && !fi.Mode().IsRegular() {
+			_ = os.Remove(failed)
+			_ = writeFresh(failed, nil)
+		}
+		if err := setACL(say, failed, [][]string{{"/inheritance:r", "/grant:r", sidSystem + ":F", sidAdmins + ":F", sidUsers + ":(W)"}}); err != nil {
+			say("failed.txt's permissions were not set: " + err.Error())
+		}
 		if err := setACL(say, add, [][]string{{"/reset"}, {"/inheritance:r", "/grant:r", sidSystem + ":(OI)(CI)F", sidAdmins + ":(OI)(CI)F", sidUsers + ":(OI)(CI)RX"}, {"/setowner", sidAdmins}}); err != nil {
 			return lines, err
 		}

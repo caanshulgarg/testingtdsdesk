@@ -22,6 +22,7 @@
 package main
 
 import (
+	"path/filepath"
 	"regexp"
 	"strings"
 )
@@ -105,4 +106,37 @@ func liveOtherUser(l recLine) {
 	}
 	live.logged[k] = true
 	writeLog("Recorder: " + name + ": lines of another Windows user (" + strings.TrimSpace(l.W) + ") are not read by this bridge")
+}
+
+// 2.5.16: a recorder file is taken as a Windows user's only when that user owns it (each file is its maker's: the
+// folder's permissions, folders.go); a file whose owner is not known here (not Windows) is taken by its name as before
+var fileOwnerFn = platFileOwner
+
+func liveOwnerIs(path, user string) bool {
+	o := fileOwnerFn(path)
+	return o == "" || liveUserSame(o, user)
+}
+
+// whether liveFiles reads this file: the name's user owns a user's file; a file without a user (an older add-on's, or
+// failed.txt) is read by a bridge for one user only when that user owns it, and is said once when it is not
+func liveFileTrusted(path string) bool {
+	n := filepath.Base(path)
+	_, u := liveFileDayUser(n)
+	if u != "" {
+		if liveOwnerIs(path, u) {
+			return true
+		}
+		liveSayOnce("recowner|"+n, "Recorder: "+logPath(n)+" is named for "+logPath(u)+" but another Windows user owns it: not read")
+		return false
+	}
+	me := liveOwnWinUser()
+	if me == "" || liveOwnerIs(path, liveWinUserFn()) {
+		return true
+	}
+	if strings.EqualFold(n, "failed.txt") {
+		liveSayOnce("recowner|failed", "Recorder: failed.txt (lines a Tally could not write) is shared by every user of this computer: the FinCom Bridge service reads it, a bridge installed just for one user does not; install FinCom Bridge for all users to have those lines")
+	} else {
+		liveSayOnce("recowner|"+n, "Recorder: "+logPath(n)+" has no Windows user in its name and is another user's: not read here (that user's Tally has an older FinCom add-on, or gave no user name)")
+	}
+	return false
 }

@@ -777,6 +777,9 @@ func liveFiles() []string {
 		if err != nil || !fi.Mode().IsRegular() {
 			continue
 		}
+		if !liveFileTrusted(f) { // 2.5.16: a user's file is read only when that user owns it (userfile.go)
+			continue
+		}
 		if strings.EqualFold(n, "failed.txt") {
 			if liveUnread(n, fi.Size()) {
 				out = append(out, df{to, f})
