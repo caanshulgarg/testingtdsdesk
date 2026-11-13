@@ -48,7 +48,7 @@ only.
     C:\ProgramData\FinCom\addon\FinComRecorder.tdl (or the administrator does it).
     Check: after the update, TallyPrime's tally.ini under Program Files is unchanged (compare its date and contents).
     On a server with two users: sign in as the second user and try to open the first user's file in the recorder
-    folder. You should see: access denied. Make Tally fail a line on purpose is not needed; just check that
+    folder. You should see: access denied. Also check that
     failed.txt exists and the second user cannot open it.
  4. Each browser has its own key. Connecting FinCom (Connect FinCom on this computer... and the code) gives that browser
     a key of its own; browsers connected before stay connected. The single key of earlier versions keeps working until
