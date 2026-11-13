@@ -98,6 +98,22 @@ try:
     shape("purchase_held_fixed.xlsx", "Supplier Name", "Purchase Ledger", [
         [D(27), "Dev Packaging", "Purchase Return", "DP/901", PG, 4819, -400, -72, DASH, DASH, -472],
         [D(28), "Dev Packaging", "Purchase Return", "DP/902", PG, 4819, -100, -18, DASH, DASH, -118]])
+    # the final review's cases: two rows of one number (an invoice, and a negative row its Type does not explain), the sheet
+    # uploaded twice and then corrected; a 1,00,000 professional-fees return (no TDS on a return)
+    shape("sales_repro.xlsx", "Customer Name", "Sales Ledger", [
+        [D(30), A, "Sales UP", "UP/X/1", CI, 998311, 1000, 180, DASH, DASH, 1180],
+        [D(30), A, "Sales UP", "UP/X/1", CI, 998311, -400, -72, DASH, DASH, -472]])
+    shape("sales_repro_fixed.xlsx", "Customer Name", "Sales Ledger", [
+        [D(30), A, "Sales UP", "UP/X/1", CI, 998311, 1000, 180, DASH, DASH, 1180],
+        [D(30), A, "Credit Note", "UP/X/1", CI, 998311, -400, -72, DASH, DASH, -472]])
+    shape("purchase_repro.xlsx", "Supplier Name", "Purchase Ledger", [
+        [D(30), "Dev Packaging", "Purchase UP", "QP/1", PG, 998311, 100000, 18000, DASH, DASH, 118000],
+        [D(30), "Dev Packaging", "Purchase Return", "QP/R1", PG, 998311, 100000, 18000, DASH, DASH, 118000],
+        [D(30), "Dev Packaging", "Purchase UP", "QP/2", PG, 4819, 1000, 180, DASH, DASH, 1180],
+        [D(30), "Dev Packaging", "Purchase UP", "QP/2", PG, 4819, -400, -72, DASH, DASH, -472]])
+    shape("purchase_repro_fixed.xlsx", "Supplier Name", "Purchase Ledger", [
+        [D(30), "Dev Packaging", "Purchase UP", "QP/2", PG, 4819, 1000, 180, DASH, DASH, 1180],
+        [D(30), "Dev Packaging", "Purchase Return", "QP/2", PG, 4819, -400, -72, DASH, DASH, -472]])
     shape("purchase_negative.xlsx", "Supplier Name", "Purchase Ledger", [
         [D(20), "Dev Packaging", "", "DP/701", PG, 4819, 1000, 180, DASH, DASH, 1180],
         [D(21), "Dev Packaging", "", "DP/702", PG, 4819, -400, -72, DASH, DASH, -472]], typed=False)

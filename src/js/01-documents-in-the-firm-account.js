@@ -1293,6 +1293,7 @@ function compute(e, cid){
   if (!x.vendorName) missing.push("supplier name");
   if (!x.invoiceDate) missing.push("invoice date");
   if (!(base > 0)) missing.push("taxable value");
+  if (e.hold) missing.push("its type: a bill or a return (Edit type)");   // a sheet's row held for a person
   if (!e.partyLedger) missing.push("party ledger");
   if (!e.expenseLedger) missing.push("expense ledger");
   if (tds > 0 && !tdsLedger) missing.push("TDS ledger");

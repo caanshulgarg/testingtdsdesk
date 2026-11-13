@@ -2,11 +2,14 @@
 /* Transactions: everything filed for this client, in one register    */
 /* ================================================================== */
 function txnTab(){ return S.txnTab || "bills"; }
+// the voucher type a client's purchase bills post as: its own (Client setup → Tally: Journal, Purchase, or its own name
+// for one), unless "Post as" on a purchase sheet chose the other of Journal / Purchase over that very setting (co.postAs)
+function billVt(co){ const own = co.voucherType || "Journal", p = co.postAs; return p && p.of === own ? p.v : own; }
 function vchTypeOf(e, co){
   if (e.noteKind === "credit") return co.debitNoteType || "Debit Note";
   if (e.noteKind === "debit") return "Purchase";
-  // (e.vchType: a sheet's bill of a client whose own setting names another type is a Purchase voucher, app/src/lib/registers.js)
-  return e.vchType || co.voucherType || "Journal";
+  // (e.vchType: stamped on a few sheet bills before the choice was kept on the client; they stay as they are)
+  return e.vchType || billVt(co);
 }
 // in Tally: posted and confirmed there (or found there already), and not since missing from Tally's own entries in
 // FinCom's cloud copy (review of 02-Oct-2026: FA/ELEC/013 posted on 29-Sep was deleted in Tally and still counted).

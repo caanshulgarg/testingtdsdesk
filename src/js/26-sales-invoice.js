@@ -86,7 +86,7 @@ function salesWhy(){
 // "Edit type" on an invoice held for a person (a sheet's negative amount, or "Purchase Return" on Sales): they say what
 // it is; its amounts are taken positive, a credit note's number marked as a sheet's is, and it is held no more
 function salesSetKind(id, k){
-  const v = inv(id); if (!v || !k) return;
+  const v = inv(id); if (!v || !k || !v.hold || v.status !== "review") return;   // only a held invoice still in To review
   const x = v.x;
   ["taxable", "cgst", "sgst", "igst", "cess", "total"].forEach(f => { x[f] = Math.abs(num(x[f])); });
   x.noteKind = k === "invoice" ? "" : k;
