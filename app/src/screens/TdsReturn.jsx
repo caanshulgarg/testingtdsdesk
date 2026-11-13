@@ -10,7 +10,7 @@
 // year 2026-27 a section is shown as the Act of 2025 numbers it with the old section beside it (TDS.secNew, src/js/09):
 // "393(1) Sl. 6(i) [old 194C]"; the section filter and the find box take either.
 // Filters are kept per tab in S.tdsFl, sorting in S.tdsSort; the row opened under a table in S.chOpen, S.tdsOpen,
-// S.q24Open. Changes go through tdsFilter, tdsSortBy, tdsToggle, tdsAlloc, challanAdd, … (src/js/27).
+// S.q24Open. Changes go through tdsFilter, tdsSortBy, tdsToggle, challanAdd, … (src/js/27).
 import SrcTag, { srcWords } from "../parts/SrcTag.jsx";
 import { useRef, useState } from "react";
 import ListTable from "../parts/ListTable.jsx";

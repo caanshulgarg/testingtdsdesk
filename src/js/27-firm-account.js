@@ -1286,13 +1286,9 @@ function tdsFilterClear(tab){ S.tdsFl = Object.assign({}, S.tdsFl, {[tab]: {}});
 function tdsSortBy(tab, k){ const cur = (S.tdsSort || {})[tab] || {}; S.tdsSort = Object.assign({}, S.tdsSort, {[tab]: {k, d: cur.k === k ? -(cur.d || 1) : 1}}); render(); }
 // one row opened under a table (a challan's deductions, a deductee's, an employee's months); a second click closes it
 function tdsToggle(which, key){ S[which] = S[which] === key ? "" : key; render(); }
-// tds-challans (10-Oct-2026): a challan is never used beyond its amount; the tagging goes through TDSCH.tag (src/js/65)
-function tdsAlloc(rowId, chId){
-  if (!chId){ const u = TDSCH.untag([rowId]); if (!u.ok) toast(u.why); render(); return; }
-  const r = TDSCH.tag([rowId], chId);
-  if (!r.ok) toast(r.why);
-  render();
-}
+// tds-challans (10-Oct-2026): a challan is never used beyond its amount; the tagging goes through TDSCH.tag (src/js/65).
+// (tdsAlloc, one row to a challan, called by nothing since the React screens: taken out with next-fix-mis-freeze for
+// legacy.js's budget)
 // many deductions at once (Entries: the ticked ones): to a challan (off their challans: tdsTakeOff, src/js/86; the old
 // tdsUntagMany here, called by nothing since the React screens, taken out with next-fix-tds-party for legacy.js's budget)
 function tdsTagMany(ids, chId){ const r = TDSCH.tag(ids, chId); if (!r.ok){ toast(r.why); return r; } toast(r.n + " deduction" + (r.n === 1 ? "" : "s") + " tagged to challan " + TDSCH.label(TDS.challans().find(c => c.id === chId)) + "."); S.tdsSel = {}; render(); return r; }

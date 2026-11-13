@@ -10,7 +10,7 @@ import NotRead from "../../parts/NotRead.jsx";
 import { Fragment } from "react";
 import CommitBox from "../../parts/CommitBox.jsx";
 import { CatchUp } from "../../parts/Notes.jsx";
-import { catchSoon, misSteps } from "../../lib/catchSoon.js";
+import { catchSoon } from "../../lib/catchSoon.js";
 import { behind } from "../../lib/behind.jsx";
 import Confirm from "../../parts/Confirm.jsx";
 import { ListRows } from "../../parts/ListTable.jsx";
@@ -68,7 +68,7 @@ function Head({ b, r, rg }) {
 }
 
 // next-mis-speed: a run in parts, so none holds the page; next-speed-render (51,758 made-up entries: the run itself
-// held the page 0.3-2 s): the run in steps behind the page (lib/catchSoon.js misSteps: each month's GST working, the
+// held the page 0.3-2 s): the run in steps behind the page (MIS.steps, src/js/07: each month's GST working, the
 // parties, the TDS rows, the days to pay, the cash flow and the cost centres, then MIS.runIn: 5,000 entries of the sales
 // and the ages a step), then the save. Only for the books it began on: when the client changes (or its books are
 // loading) it stops, and nothing is written to the other books. One at a time: a click meanwhile is ignored, and
@@ -80,7 +80,7 @@ function runSplit(from, to, how) {
   MIS._again = true; FinComNav.start();
   const n = ++runN;
   behind("mis-run", () => [b, n, b.loading], function* () {
-    try { yield* misSteps(from, to, how); } finally { MIS._again = false; FinComNav.done(); }
+    try { yield* MIS.steps(from, to, how); } finally { MIS._again = false; FinComNav.done(); }
     // the save names its books: done even when the client changes after the run
     saveBooks(null, b).catch(() => {});
     // (a run that ends inside its first step, small books, ends before any drawing of the job: the page drawn again with it)

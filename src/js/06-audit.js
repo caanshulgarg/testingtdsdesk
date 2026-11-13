@@ -685,7 +685,10 @@ Object.assign(Audit, {
   // takes no step (autoLoading); a busy line that says so holds it for at most WAIT_MAX_MS (autoBusy). A task of steps is about SLICE_MS, less if the idle time runs out (timeRemaining), and
   // HIDDEN_MS while the tab is hidden (its timers then come about once a second at best). tests/run_hang_audit_auto.py,
   // tests/run_audit_auto_ist.py
+  // The month's MIS on its own is worked out by the same steps (next-fix-mis-freeze: MIS takes AUTO and these auto* as
+  // its own, src/js/07), each with its books' last run (lastRun), its range (MIS.autoRange), steps (MIS.steps) and words (say)
   AUTO: {SLICE_MS: 10, HIDDEN_MS: 150, WAIT_MS: 250, WAIT_MAX_MS: 120000, DRAW_MS: 500, MAX_STARTS: 6},
+  say: "the day's audit on its own",
   // saves of the books that change nothing the audit reads (a finding marked, its note): auditFindingSet
   quiet: 0,
   quietSave(){ this.quiet++; return saveBooks(); },
@@ -699,24 +702,26 @@ Object.assign(Audit, {
   // what the run is worked out from: compared before each task of steps
   autoSig(b){
     const V = b.vouchers || [];
-    return {b, cid: b.cid, co: S.coId, V, n: V.length, vs: V.slice(), rev: this.rev(), last: (b.audit || {}).last || null, freq: this.cfg(b).freq};
+    return {b, cid: b.cid, co: S.coId, V, n: V.length, vs: V.slice(), rev: Audit.rev(), last: this.lastRun(b), freq: this.cfg(b).freq};
   },
   // the same run and setting (no run by hand since, the setting not changed)
-  autoRun(x, b){ return !!x && x.b === b && S.books === b && S.coId === x.co && x.last === ((b.audit || {}).last || null) && x.freq === this.cfg(b).freq; },
+  lastRun(b){ return (b.audit || {}).last || null; },
+  autoRun(x, b){ return !!x && x.b === b && S.books === b && S.coId === x.co && x.last === this.lastRun(b) && x.freq === this.cfg(b).freq; },
   autoSame(x, b){
     const V = b.vouchers || [];
-    return this.autoRun(x, b) && x.V === V && x.n === V.length && x.rev === this.rev() && x.vs.every((v, i) => v === V[i]);
+    return this.autoRun(x, b) && x.V === V && x.n === V.length && x.rev === Audit.rev() && x.vs.every((v, i) => v === V[i]);
   },
   // the books are being brought in from the cloud copy (changed across awaits): no step now. A load (TCloud.load,
   // openLoad: counted in try/finally) always holds it; a busy line (b.catchUp, Look up's) only for WAIT_MAX_MS, since
-  // a line can stay after its work
+  // a line can stay after its work. The month's MIS also waits for the day's audit on its own (its compliance part reads
+  // the audit's last run)
   autoLoading(){ const T = typeof TCloud === "object" ? TCloud : null; return !!(T && (T.opens > 0 || T.loads > 0)); },
-  autoBusy(b){ const f = typeof LK === "object" && LK.fr ? LK.fr() : null; return !!(b.catchUp || (f && f.busy)); },
+  autoBusy(b){ const f = typeof LK === "object" && LK.fr ? LK.fr() : null; return !!(b.catchUp || (f && f.busy) || (this !== Audit && Audit.auto)); },
   autoStart(b){
     const j = this.auto;
     if (j && j.b === b) return j;
     if (j) this.autoStop(j);
-    const job = this.auto = {b, cid: b.cid, co: S.coId, it: null, sig: null, memo: null, prog: {k: 0, of: Object.keys(this.checks).length}, starts: 0, slices: [], drawn: 0, t0: Date.now()};
+    const job = this.auto = {b, cid: b.cid, co: S.coId, it: null, sig: null, memo: null, prog: {k: 0, of: Object.keys(this.checks || 0).length}, starts: 0, slices: [], drawn: 0, t0: Date.now()};
     this.autoSoon(job);
     return job;
   },
@@ -735,13 +740,13 @@ Object.assign(Audit, {
     else setTimeout(go, 0);
   },
   autoBegin(j, b){
-    const r = this.defaultRange(b);
+    const r = this.autoRange ? this.autoRange(b) : this.defaultRange(b);
     j.sig = this.autoSig(b); j.memo = new Map(); j.starts++;
     // kept only if no load is running and the books are as they were when it started (they can change only on its last
     // start, or its very last); refused: once more (autoSlice)
     j.refused = false;
     j.prog.keep = () => { const ok = !this.autoLoading() && (!!j.extra || this.autoSame(j.sig, b)); if (!ok) j.refused = true; return ok; };
-    j.it = this.runIn(r.from, r.to, "on its own (" + this.cfg(b).freq + ")", j.prog);
+    j.it = (this.steps || this.runIn).call(this, r.from, r.to, "on its own (" + this.cfg(b).freq + ")", j.prog);
   },
   autoSlice(j, d){
     if (this.auto !== j) return;
@@ -782,7 +787,7 @@ Object.assign(Audit, {
     } catch (e){
       done = true; run = null;
       // as before, no run kept; said in the console and to Sentry (app/src/sentry.js), as the page's other parts say theirs
-      try { console.error("[FinCom] the day's audit on its own:", e); if (typeof window === "object" && typeof window.__fincomReport === "function") window.__fincomReport(e, "the day's audit on its own"); } catch (x){}
+      try { console.error("[FinCom] " + this.say + ":", e); if (typeof window === "object" && typeof window.__fincomReport === "function") window.__fincomReport(e, this.say); } catch (x){}
     }
     finally { IN_RENDER--; JOB_MEMO = was; j.slices.push(Math.round(now() - t0)); }
     if (!done){
@@ -799,9 +804,9 @@ Object.assign(Audit, {
     if (!run) return;
     j.run = run;
     saveBooks();
-    const hi = run.findings.filter(f => f.sev === "high").length;
-    // it ran by itself: the sidebar's quiet line, not a toast (stability batch 3)
-    toast("Audit ran on its own: " + run.findings.length + " findings" + (hi ? ", " + hi + " serious" : "") + ". See Audit.", {background: true});
+    // it ran by itself: the sidebar's quiet line, not a toast (stability batch 3); the month's MIS says nothing, as before
+    if (this === Audit){ const hi = run.findings.filter(f => f.sev === "high").length;
+      toast("Audit ran on its own: " + run.findings.length + " findings" + (hi ? ", " + hi + " serious" : "") + ". See Audit.", {background: true}); }
     if (typeof soonRender === "function") soonRender(); else render();
   },
   status(id){ const st = ((S.books.audit || {}).st || {})[id]; return st || {s: "open"}; },

@@ -477,7 +477,7 @@ const MIS = {
   run(from, to, how){ return typeof memoScope === "function" ? memoScope(() => this.runNow(from, to, how)) : this.runNow(from, to, how); },
   runNow(from, to, how){ return this.runSteps(this.runIn(from, to, how)); },
   // the run in steps (MIS works it out behind the page: app/src/screens/books/Mis.jsx): the same figures
-  *runIn(from, to, how){
+  *runIn(from, to, how, prog){
     from = Audit.ymd(from); to = Audit.ymd(to);
     const days = Audit.days(from, to) + 1, lyFrom = this.shift(from, -1), lyTo = this.shift(to, -1);
     // the period before: whole months when the period is whole months, else the same number of days
@@ -504,7 +504,7 @@ const MIS = {
     yield;
     const comp = this.compliance(from, to);
     yield;
-    return yield* this.madeIn(from, to, how, bal, balTo, {sales: s, purchases: pr, pl, prev, ly, prevRange: [pFrom, pTo], lyRange: [lyFrom, lyTo], mtd, ytd, cash, recv, pay, comp});
+    return yield* this.madeIn(from, to, how, bal, balTo, {sales: s, purchases: pr, pl, prev, ly, prevRange: [pFrom, pTo], lyRange: [lyFrom, lyTo], mtd, ytd, cash, recv, pay, comp, prog});
   },
   // next-cloud-mis: the rest of a run, the same whether its figures were worked out here (runIn) or in FinCom's cloud
   // (fromCloud): w holds sales to comp (and, from the cloud, owed, goods and the cash flow, flow); in steps (madeIn) for a
@@ -545,6 +545,8 @@ const MIS = {
       r.control = {ok: n === 0, n, amt, list: list.slice(0, 50)};
     } else r.control = null;
     r.basis = this.basis(b);
+    // a run on its own whose books changed on the way (prog.keep, Audit.autoBegin): nothing written
+    if (w.prog && !w.prog.keep()) return null;
     r.code = Audit.hash(JSON.stringify([s.total, pr.total, pl.pat.t, r.recv.sum, r.pay.sum, s.rows.slice(0, 50).map(x => [x.party, x.t]), r.p2.cash.net, r.p2.fc.weeks.map(w => w.net), r.p2.cc.rows.map(x => [x.name, x.profit])]));
     const m = b.mis = b.mis || {};
     m.last = r; m.history = [{at: r.at, from, to, how: r.how, sales: s.total, pat: pl.pat.t, code: r.code}].concat(m.history || []).slice(0, 24);
@@ -584,12 +586,18 @@ const MIS = {
     if (c.freq === "monthly"){ const d = new Date(Audit.iso(t) + "T00:00:00"); const pm = new Date(d.getFullYear(), d.getMonth(), 0); const to = pm.getFullYear() + String(pm.getMonth() + 1).padStart(2, "0") + String(pm.getDate()).padStart(2, "0"); const upto = to <= end ? to : end; return {from: upto.slice(0, 6) + "01", to: upto}; }   // the month just ended, or the last month in the books
     return {from: Audit.fyStart(end), to: end};
   },
+  // next-fix-mis-freeze: on the first open of a month the whole MIS was worked out here in one go (1.4-2.3 s in one task
+  // on 51,758 made-up entries, about 4x on a slow office PC). Now in idle steps as the day's audit on its own (Audit.autoStart,
+  // its auto* taken below: the same restarts, waits and keep rules), the same run (runIn). tests/run_hang_mis_auto.py
+  // Its steps (MIS.steps) come with the MIS screen's file (src/js/18-mis-pack.js), loaded first
   maybeRun(){
-    const b = S.books;
-    if (!b || !b.vouchers || !this.due(b)) return;
-    const r = this.autoRange(b); this.run(r.from, r.to, "on its own (" + this.cfg(b).freq + ")"); saveBooks();
-  }
+    const b = S.books, go = () => { if (S.books === b) this.autoStart(b); };
+    if (b && b.vouchers && this.due(b)) this.steps || typeof loadPart !== "function" ? go() : loadPart("mis").then(go, go);
+  },
+  lastRun(b){ return (b.mis || {}).last || null; },
+  say: "the month's MIS on its own"
 };
+Object.keys(Audit).forEach(k => { if (/^auto[A-Z]|^AUTO/.test(k)) MIS[k] = Audit[k]; });
 
 /* ---------- MIS, phase 2 ---------- */
 Object.assign(MIS, {
@@ -699,10 +707,11 @@ Object.assign(MIS, {
   // money in and out of cash and bank, month by month, by what it was for (the direct method)
   cashActual(f, t){ return this.keep("ca" + f + t, () => this.cashNow(f, t)); },
   cashNow(from, to){
-    const months = this.monthsOf(from, to), rows = {}, seen = new Set();
+    // (A: the ledger tests, each answer kept for this working by ledger name, Audit.runA: the same answers, next-fix-mis-freeze)
+    const months = this.monthsOf(from, to), rows = {}, seen = new Set(), A = Audit.runA();
     (S.books.vouchers || []).forEach(v => {
       if (v.date < from || v.date > to || v.opt || v.cancel) return;
-      const cb = v.ent.filter(e => Audit.isCash(e.l) || Audit.isBankL(e.l)), other = v.ent.filter(e => !(Audit.isCash(e.l) || Audit.isBankL(e.l)));
+      const cb = v.ent.filter(e => A.isCash(e.l) || A.isBankL(e.l)), other = v.ent.filter(e => !(A.isCash(e.l) || A.isBankL(e.l)));
       if (!cb.length || !other.length) return;                       // contra: between cash and bank
       // the cash moved is spread over the lines on the other side of it; a line on the same side (tax deducted by the customer) is not cash
       const net = cb.reduce((s, e) => s + e.a, 0), opp = other.filter(e => (e.a > 0) === (net < 0)), tot = opp.reduce((s, e) => s + Math.abs(e.a), 0), ym = this.ym(v.date);
@@ -737,10 +746,11 @@ Object.assign(MIS, {
   },
   median(a){ if (!a.length) return null; const s2 = a.slice().sort((x, y) => x - y), k = Math.floor(s2.length / 2); return s2.length % 2 ? s2[k] : Math.round((s2[k - 1] + s2[k]) / 2); },
   // how long each party takes to settle a bill, from the bills settled in the books
-  payDays(s, d){ return this.keep("pd" + s + d, () => this.payNow(s, d)); },
-  payNow(side, asOn){
+  // (payIn: in steps, 5,000 entries a step; MIS.steps works it out before the run, next-fix-mis-freeze)
+  payDays(s, d){ return this.keep("pd" + s + d, () => this.runSteps(this.payIn(s, d))); },
+  *payIn(side, asOn){
     const A = Audit, want = l => side === "r" ? A.isDebtor(l) : A.isCreditor(l), ref = {};
-    (S.books.vouchers || []).filter(v => v.date <= asOn && !v.opt && !v.cancel).sort((a, c) => a.date.localeCompare(c.date)).forEach(v => v.ent.forEach(e => {
+    yield* this.eachV((S.books.vouchers || []).filter(v => v.date <= asOn && !v.opt && !v.cancel).sort((a, c) => a.date.localeCompare(c.date)), v => v.ent.forEach(e => {
       if (!want(e.l) || !e.b) return;
       e.b.forEach(([name, type, amt]) => {
         if (!name || type === "On Account") return;
@@ -778,12 +788,13 @@ Object.assign(MIS, {
     }));
     // the same payment month after month: salaries, rent, EMIs and the like
     const last4 = [0, 1, 2, 3].map(k => { const d = new Date(Audit.iso(to) + "T00:00:00"); d.setDate(1); d.setMonth(d.getMonth() - k); return d.getFullYear() + String(d.getMonth() + 1).padStart(2, "0"); });
-    const pays = {};
+    // (A: as in cashNow)
+    const pays = {}, A = Audit.runA();
     (S.books.vouchers || []).forEach(v => {
       if (v.date > to || !last4.includes(this.ym(v.date)) || v.opt || v.cancel) return;
-      const cb = v.ent.filter(e => (Audit.isCash(e.l) || Audit.isBankL(e.l)) && e.a > 0);
+      const cb = v.ent.filter(e => (A.isCash(e.l) || A.isBankL(e.l)) && e.a > 0);
       if (!cb.length) return;
-      v.ent.filter(e => e.a < 0 && !Audit.isCash(e.l) && !Audit.isBankL(e.l) && !Audit.isCreditor(e.l) && !Audit.isDebtor(e.l) && !Books.ledgerOf(e.l).kind && !/IMPREST/i.test(e.l)).forEach(e => {
+      v.ent.filter(e => e.a < 0 && !A.isCash(e.l) && !A.isBankL(e.l) && !A.isCreditor(e.l) && !A.isDebtor(e.l) && !Books.ledgerOf(e.l).kind && !/IMPREST/i.test(e.l)).forEach(e => {
         const x = pays[e.l] = pays[e.l] || {}; const ym = this.ym(v.date); x[ym] = x[ym] || {amt: 0, days: []}; x[ym].amt = r2(x[ym].amt - e.a); x[ym].days.push(num(v.date.slice(6)));
       });
     });
@@ -896,19 +907,8 @@ Object.assign(MIS, {
     const allInc = rows.reduce((s2, x) => s2 + x.inc, 0) + un.inc, allExp = rows.reduce((s2, x) => s2 + x.exp, 0) + un.exp;
     return {rows, un, cover: {inc: allInc ? Math.round((allInc - un.inc) / allInc * 1000) / 10 : null, exp: allExp ? Math.round((allExp - un.exp) / allExp * 1000) / 10 : null}, cats: Array.from(new Set(rows.map(x => x.cat))).sort(), read: !!(S.books.meta || {}).cc};
   },
-  // budget against actual, head by head and month by month
+  // budget against actual, head by head and month by month (budgetVs: with the MIS screen, src/js/18-mis-pack.js)
   budgetFor(fy){ return ((S.books.budget || {})[fy]) || {}; },
-  budgetVs(r){
-    const fy = Audit.fyStart(r.to).slice(0, 4), bud = this.budgetFor(fy), rows = [];
-    this.HEADS.forEach(([k, l, sign]) => {
-      const H = r.pl.heads[k] || {t: 0, m: {}}, B = bud[k] || {};
-      const bt = r2(r.pl.months.reduce((s2, mm) => s2 + num(B[mm]), 0));
-      if (!bt && !H.t) return;
-      rows.push({k, l, sign, actual: H.t, budget: bt, diff: r2(H.t - bt), pct: bt ? Math.round((H.t - bt) / Math.abs(bt) * 1000) / 10 : null, m: r.pl.months.map(mm => ({ym: mm, a: H.m[mm] || 0, b: num(B[mm])}))});
-    });
-    const pbtB = r2(rows.reduce((s2, x) => s2 + x.budget * x.sign, 0));
-    return {fy, rows, has: Object.keys(bud).length > 0, pbt: {actual: r.pl.pbt.t, budget: pbtB, diff: r2(r.pl.pbt.t - pbtB)}};
-  },
   phase2(r, balTo, cashAtEnd, flow){
     return {cash: flow || this.cashActual(r.from, r.to), fc: this.forecast(r.to, r.recv, r.pay, cashAtEnd), ratios: this.ratios(r, balTo), regs: this.byReg(r.from, r.to), cc: this.costCentres(r.from, r.to)};
   }

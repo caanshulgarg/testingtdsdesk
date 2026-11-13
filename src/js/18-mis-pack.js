@@ -70,6 +70,39 @@ async function misExcel(r){
 // next-cloud-mis: a run from FinCom's cloud's figures (MIS.cloudOk / cloudWork in src/js/07-mis.js say when they may be
 // used); here, with the MIS screen, not in legacy.js
 const MisCloud = {
+  // budget against actual, head by head and month by month (moved from src/js/07-mis.js for legacy.js's budget,
+  // next-fix-mis-freeze: only the MIS screen asks for it)
+  budgetVs(r){
+    const fy = Audit.fyStart(r.to).slice(0, 4), bud = this.budgetFor(fy), rows = [];
+    this.HEADS.forEach(([k, l, sign]) => {
+      const H = r.pl.heads[k] || {t: 0, m: {}}, B = bud[k] || {};
+      const bt = r2(r.pl.months.reduce((s2, mm) => s2 + num(B[mm]), 0));
+      if (!bt && !H.t) return;
+      rows.push({k, l, sign, actual: H.t, budget: bt, diff: r2(H.t - bt), pct: bt ? Math.round((H.t - bt) / Math.abs(bt) * 1000) / 10 : null, m: r.pl.months.map(mm => ({ym: mm, a: H.m[mm] || 0, b: num(B[mm])}))});
+    });
+    const pbtB = r2(rows.reduce((s2, x) => s2 + x.budget * x.sign, 0));
+    return {fy, rows, has: Object.keys(bud).length > 0, pbt: {actual: r.pl.pbt.t, budget: pbtB, diff: r2(r.pl.pbt.t - pbtB)}};
+  },
+  // the run in steps behind the page (app/src/lib/catchSoon.js, Mis.jsx runSplit, the month's MIS on its own: Audit.autoBegin):
+  // first what the run reads many times (each month's GST working, from the books' first month so each month's credit
+  // carried in is there; the parties, the TDS rows, the days to pay, the cash flow and the cost centres: kept for the job
+  // as for one calculation, JOB_MEMO), then runIn. (moved from catchSoon.js, next-fix-mis-freeze; here, not in legacy.js)
+  *steps(from, to, how, prog){
+    const t = Audit.ymd(to), f = Audit.ymd(from), one = fn => { try { fn(); } catch (e){ /* the run says it */ } };
+    // (a month's working for each registration a step of its own, kept as gst3b keeps it)
+    const regs = Array.from(new Set((GSTR.gstins(S.books) || []).map(g => String(g).slice(0, 2))));
+    for (const m of GSTR.months().filter(x => x <= t.slice(0, 6))){
+      if (regs.length > 1) for (const rg of regs){ one(() => this.keep("3b" + m + rg, () => GSTR.threeBm(m, rg))); yield; }
+      one(() => this.gst3b(m)); yield;
+    }
+    one(() => Parties.position(t)); yield;
+    one(() => { TDS.rows(); TDS.salaryRows(); }); yield;
+    // the days to pay, each in steps of its own (payIn), kept as payDays keeps them
+    for (const s of ["r", "p"]){ try { const v = yield* this.payIn(s, t); perRender(this, "pd" + s + t, () => v); } catch (e){ /* the run says it */ } yield; }
+    one(() => this.cashActual(f, t)); yield;
+    one(() => this.costCentres(f, t)); yield;
+    return yield* this.runIn(from, to, how, prog);
+  },
   cloudFits(b, c){ const m = b && b.meta && b.meta.cloud; return !!(c && m && c.partial === false && c.misV === this.V && c.book === m.book && c.version === m.ver && this.cloudOk(b)); },
   async cloudAsk(b, from, to){
     let t; const late = new Promise((_, no) => { t = setTimeout(() => no(new Error("no answer")), 30000); });
