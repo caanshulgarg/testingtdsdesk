@@ -64,14 +64,15 @@ func allowedOrigin(o string) bool {
 	if o == "" {
 		return true
 	}
-	for _, a := range fincomSites { // pairopen.go: also the only sites the tray opens
+	for _, a := range trustedSites() { // pairopen.go: also the only sites the tray opens (2.5.16: by build, keyorigin.go)
 		if o == a {
 			return true
 		}
 	}
-	dev := truthy(cfg("DevOrigins"))
+	// 2.5.16: the settings add development pages only (with DevOrigins; never in the live build), never another site
+	dev := truthy(cfg("DevOrigins")) && buildSite != "production"
 	for _, a := range strs(cfg("AllowedOrigins")) {
-		if (devOrigin(a) || devOrigin(o)) && !dev {
+		if !dev || !devOrigin(a) {
 			continue
 		}
 		if o == a {
@@ -215,7 +216,7 @@ func handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !mine {
-		writeLog("Refused a request from a program of another Windows user (" + path + "): " + why)
+		logRefused("user|"+why, "Refused a request from a program of another Windows user ("+cutRunes(path, 80)+"): "+why)
 		nb := M{"ok": false, "error": notYours, "notYours": true}
 		if path == "/jobs/cancel" {
 			nb["code"], nb["words"] = "otherLogin", cancelWords["otherLogin"] // 2.5.10: Stop posting says why (jobs.go)
@@ -224,14 +225,14 @@ func handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if sentOrigin != "" && !originOK {
-		writeLog("Refused a request from the web page " + sentOrigin + " (not FinCom).")
+		logRefused("origin|"+logOrigin(sentOrigin), "Refused a request from the web page "+logOrigin(sentOrigin)+" (not FinCom).")
 		sendJSON(w, 403, M{"ok": false, "error": "This bridge answers FinCom only."}, origin)
 		return
 	}
 	if strings.HasPrefix(path, "/tray/") && (sentOrigin != "" || r.Header.Get("Sec-Fetch-Site") != "" || r.Header.Get("Sec-Fetch-Mode") != "") {
 		// the tray's own addresses are for the tray icon (a program on this computer, which sends no Origin), never for
 		// a web page, FinCom's own included: pausing, resuming, restarting, quitting are done in the tray
-		writeLog("Refused a tray request from a web page (" + path + ", " + sentOrigin + ").")
+		logRefused("tray|"+logOrigin(sentOrigin), "Refused a tray request from a web page ("+cutRunes(path, 80)+", "+logOrigin(sentOrigin)+").")
 		sendJSON(w, 403, M{"ok": false, "error": "This is for the FinCom Bridge tray icon only."}, origin)
 		return
 	}
@@ -327,7 +328,8 @@ func handle(w http.ResponseWriter, r *http.Request) {
 			pairMu.Unlock()
 			writeLog("FinCom connected with the code (" + sentOrigin + ").")
 			clearPairOpenDue("Connected with the code: the install's first-start opening of FinCom is not needed.") // 2.4.6
-			sendJSON(w, 200, M{"ok": true, "key": cfgS("Key"), "computer": computerName(), "user": ownerName(), "version": BridgeVersion, "bridgeId": "go-" + instanceID(), "port": toInt(cfg("Port"))}, origin)
+			key := rotateBridgeKey("FinCom connected with the code")                                                // 2.5.16: a new key at every pairing (keyorigin.go)
+			sendJSON(w, 200, M{"ok": true, "key": key, "computer": computerName(), "user": ownerName(), "version": BridgeVersion, "bridgeId": "go-" + instanceID(), "port": toInt(cfg("Port"))}, origin)
 			return
 		}
 		pairMu.Unlock()
@@ -347,7 +349,7 @@ func handle(w http.ResponseWriter, r *http.Request) {
 		w = tw
 	}
 	if !keyOK && !trayOK {
-		sendJSON(w, 401, M{"ok": false, "error": "Wrong bridge key. Copy the key shown in the bridge window into FinCom Settings."}, origin)
+		sendJSON(w, 401, M{"ok": false, "error": "Wrong bridge key: this browser is no longer connected (a new key is made at every connection). In the FinCom Bridge icon near the clock choose Connect FinCom on this computer..."}, origin)
 		return
 	}
 	bodyB, err := io.ReadAll(r.Body)
@@ -991,6 +993,8 @@ func route(w http.ResponseWriter, r *http.Request, path string, qs url.Values, b
 	// --- the tray icon's own questions
 	case "/tray/status":
 		return trayStatus(), nil
+	case "/tray/newkey":
+		return trayNewKeyRoute(r.Method) // 2.5.16: the owner disconnects FinCom's pages (keyorigin.go)
 	case "/tray/fvu":
 		return trayFvuRoute(r.Method, parseObj(body)) // 2.5.16: the owner confirms the FVU on this computer (fvu.go)
 	case "/tray/pairopen":

@@ -173,7 +173,7 @@ func TestR247SpakePairsWithTheTypedCode(t *testing.T) {
 		t.Fatal("the bridge's confirmation does not verify with the right code")
 	}
 	c, r = p.get("/pair?X=" + pg.X + "&confirm=" + confirmA)
-	if c != 200 || str(r["key"]) != "k246" {
+	if c != 200 || !r2516NewKey(r) /* 2.5.16: a new key at each pairing */ {
 		t.Fatalf("finish: %d %v", c, r)
 	}
 	// one use: the window is closed
@@ -301,7 +301,7 @@ func TestR247SecretFromTheAddress(t *testing.T) {
 		t.Fatal("a wrong secret paired")
 	}
 	c, r := p.get("/pair?code=" + secret)
-	if c != 200 || str(r["key"]) != "k246" {
+	if c != 200 || !r2516NewKey(r) /* 2.5.16: a new key at each pairing */ {
 		t.Fatalf("the secret: %d %v", c, r)
 	}
 	if c, _ := p.get("/pair?code=" + secret); c == 200 {

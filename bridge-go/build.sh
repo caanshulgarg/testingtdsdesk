@@ -18,7 +18,10 @@ if [ -e "../assets-test/bridge-go/FinComBridge-Setup-$VERSION.exe" ] && [ "$FORC
 fi
 mkdir -p dist
 python3 icons/make_icons.py >/dev/null
-GOOS=windows GOARCH=amd64 CGO_ENABLED=0 GOTOOLCHAIN=local go build -trimpath -ldflags "-s -w -H windowsgui" -o dist/FinComBridge.exe .
+# 2.5.16 (keyorigin.go): the sites the program trusts: the live build the live site only, any other the staging site too
+SITE=staging
+case "$FINCOM" in https://app.fincom.live/*|https://fincom.live/*) SITE=production ;; esac
+GOOS=windows GOARCH=amd64 CGO_ENABLED=0 GOTOOLCHAIN=local go build -trimpath -ldflags "-s -w -H windowsgui -X main.buildSite=$SITE" -o dist/FinComBridge.exe .
 sign() { if [ -n "$SIGN_CMD" ]; then $SIGN_CMD "$1" -out "$1.signed" && mv "$1.signed" "$1"; fi; }
 sign dist/FinComBridge.exe
 OUT="dist/FinComBridge-Setup-$VERSION.exe"

@@ -35,7 +35,8 @@ import (
 )
 
 // FinCom's own sites: the pages the bridge's web server trusts by itself (allowedOrigin) and the only ones it opens
-var fincomSites = []string{"https://app.fincom.live", "https://staging.fincom.live", "https://fincom.live", "https://caanshulgarg.github.io"}
+// (2.5.16: by build, trustedSites in keyorigin.go; no other site)
+var fincomSites = []string{"https://app.fincom.live", "https://staging.fincom.live", "https://fincom.live"}
 
 var reSixDigits = re(`^[0-9]{6}$`)
 
@@ -49,7 +50,7 @@ func fincomPlainURL(base string) (string, bool) {
 		return "", false
 	}
 	host := strings.ToLower(u.Host)
-	for _, s := range fincomSites {
+	for _, s := range trustedSites() {
 		if "https://"+host == s {
 			u.Scheme, u.Host, u.Fragment, u.RawFragment, u.RawQuery, u.ForceQuery = "https", host, "", "", "", false
 			return u.String(), true

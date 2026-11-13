@@ -553,7 +553,8 @@ func (t *tray) menu() {
 	if st != nil && truthy(st["testMode"]) {
 		add(8, "Compare with bridge 1.15.0", mfString)
 	}
-	add(28, "Confirm the FVU...", mfString) // 2.5.16: the FVU set on this computer, its fingerprint recorded (fvu.go)
+	add(29, "Disconnect FinCom from this computer...", mfString) // 2.5.16: a new bridge key (keyorigin.go)
+	add(28, "Confirm the FVU...", mfString)                      // 2.5.16: the FVU set on this computer, its fingerprint recorded (fvu.go)
 	add(14, "Send install log to FinCom", mfString)
 	add(25, "Clear notifications", mfString) // 2.3.5: every current one cleared, never shown again for the same problem
 	pAppendMenu.Call(m, mfSeparator, 0, 0)
@@ -577,6 +578,16 @@ func (t *tray) command(id int, st M) {
 		shellOpen(u, "")
 	case 10:
 		msgBox("FinCom Bridge", t.statusText(), mbIconInfo)
+	case 29:
+		title := "FinCom Bridge - Disconnect FinCom"
+		if !yesNo(title, "Disconnect every FinCom page from this computer?\n\nFinCom Bridge makes a new key: FinCom (on any browser) stops reaching this bridge until you choose Connect FinCom on this computer... and connect again. Nothing in Tally or in FinCom is changed.") {
+			return
+		}
+		if r := trayCall("POST", "/tray/newkey", M{}); r == nil || r["ok"] != true {
+			msgBox(title, "The bridge is not answering, so nothing was changed.", mbIconWarning)
+			return
+		}
+		t.reply("FinCom Bridge", "FinCom is disconnected from this computer. Choose Connect FinCom on this computer... to connect again.", false)
 	case 28:
 		title := "FinCom Bridge - Confirm the FVU"
 		r := trayCall("GET", "/tray/fvu", nil)

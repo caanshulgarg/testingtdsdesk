@@ -30,8 +30,7 @@ func TestPairOpenURLOnlyFinComSites(t *testing.T) {
 		"https://staging.fincom.live/review/":               "https://staging.fincom.live/review/#pair=" + pv,
 		"https://app.fincom.live/":                          "https://app.fincom.live/#pair=" + pv,
 		"https://app.fincom.live":                           "https://app.fincom.live#pair=" + pv,
-		"https://fincom.live/x/?next=https://evil.example/": "https://fincom.live/x/#pair=" + pv, // its query dropped
-		"https://caanshulgarg.github.io/testing/":           "https://caanshulgarg.github.io/testing/#pair=" + pv,
+		"https://fincom.live/x/?next=https://evil.example/": "https://fincom.live/x/#pair=" + pv,              // its query dropped
 		"https://staging.fincom.live/review/#/tally":        "https://staging.fincom.live/review/#pair=" + pv, // its own fragment replaced
 		"HTTPS://Staging.FinCom.live/review/":               "https://staging.fincom.live/review/#pair=" + pv,
 	}
@@ -42,6 +41,7 @@ func TestPairOpenURLOnlyFinComSites(t *testing.T) {
 	}
 	for _, base := range []string{
 		"", "http://staging.fincom.live/review/", "https://staging.fincom.live.evil.example/review/",
+		"https://caanshulgarg.github.io/testing/", // 2.5.16: not one of FinCom's sites (keyorigin.go)
 		"https://evil.example/https://staging.fincom.live/", "https://user@staging.fincom.live/review/",
 		"https://staging.fincom.live:8443/review/", "javascript:alert(1)", "file:///C:/x.html", "https://localhost/",
 		"https://127.0.0.1:9100/", "//staging.fincom.live/review/", "https://fincom.live.", "https://xfincom.live/",
@@ -173,7 +173,7 @@ func TestTrayConnectOpensFinComWithCode(t *testing.T) {
 	if strings.Contains(msg, "Settings > Tally Bridge") || strings.Contains(msg, "#pair") {
 		t.Errorf("the message: %s", msg)
 	}
-	if c, r := p.pair(rePairURL.FindStringSubmatch(p.opened[0])[2]); c != 200 || str(r["key"]) != "k246" { // 2.4.7: the address's secret
+	if c, r := p.pair(rePairURL.FindStringSubmatch(p.opened[0])[2]); c != 200 || !r2516NewKey(r) /* 2.5.16: a new key at each pairing */ { // 2.4.7: the address's secret
 		t.Fatalf("pairing with the code from the address: %d %v", c, r)
 	}
 	if c, _ := p.pair(rePairURL.FindStringSubmatch(p.opened[0])[2]); c == 200 {
