@@ -9,7 +9,6 @@ import Collect from "./Collect.jsx";
 import Invoices from "./Invoices.jsx";
 import BillDetail from "./Bill.jsx";
 import { ReviewTable, ActionBar, Drawer } from "./Review.jsx";
-import { DoneStep, PostLog } from "./Done.jsx";
 import Dash from "./Dash.jsx";
 import DocqPanel from "../parts/Docq.jsx";
 import Unsorted from "../parts/Unsorted.jsx";
@@ -21,6 +20,10 @@ const settings = lazyModule(() => import("./Settings.jsx")), bank = lazyModule((
 const post = lazyModule(() => import("./Post.jsx")), help = lazyModule(() => import("./Help.jsx")), txn = lazyModule(() => import("./Txn.jsx"));
 const parties = lazyModule(() => import("./Parties.jsx")), vendor = lazyModule(() => import("./VendorRecon.jsx")), compliance = lazyModule(() => import("./Compliance.jsx"));
 const integ = lazyModule(() => import("./Integrations.jsx"));
+// next-room-2: the page after a posting of documents other than bills (Main.jsx: the "done" tab) and its log, in a file of
+// their own like the other screens (the app's first file is at its size budget); Tally's page imports the log itself
+const done = lazyModule(() => import("./Done.jsx"));
+const DoneStep = done("DoneStep"), PostLog = done("PostLog");
 // next-calls-meet (23-Oct-2026): Meetings (calls/Meetings.jsx; the call screen itself still loads only when a call opens)
 const meet = lazyModule(() => import("../calls/Meetings.jsx"));
 const apiCard = lazyModule(() => import("./GstApiCard.jsx")), apiAll = lazyModule(() => import("./GstApiAll.jsx")), filed = lazyModule(() => import("./gst/FiledCompare.jsx")), gfile = lazyModule(() => import("./gst/FileApi.jsx"));

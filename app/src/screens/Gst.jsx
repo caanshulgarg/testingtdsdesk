@@ -20,6 +20,8 @@
 // S.gstSub (the tab of GSTR-1 or 3B), all kept in the address (Route.booksMore, src/js/52); a GSTIN or filing type seen
 // for the first time opens on its first part (S.gstSeen).
 // GSTLock's checks of a change (pair, twoB, guardBooks) come with the GST and books screens, not in legacy.js (build.py lazy_files)
+// next-room-2: GSTX's working for the GST screens (not in the program every page loads)
+import "../../../src/js/56-gst-recon-filed.js";
 import "../../../src/js/47-gst-lock-checks.js";
 import { PreFileButton } from "../parts/PreFile.jsx";
 import NotRead from "../parts/NotRead.jsx";

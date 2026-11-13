@@ -3,6 +3,10 @@
 // GSTV.expected(); PDFs are read and filed by gstvTake; opening, sorting and removing are gstvOpen … gstvZip (38).
 //
 // State: S.gstvFy (the year shown).
+// next-room-2: GSTX's working for the GST screens (not in the program every page loads)
+// next-room-2: taking in, filing and zipping the returns' PDFs (not in the program every page loads)
+import "../../../../src/js/38-gst-returns-filed-page.js";
+import "../../../../src/js/56-gst-recon-filed.js";
 import { useState } from "react";
 import CommitBox from "../../parts/CommitBox.jsx";
 import ListTable from "../../parts/ListTable.jsx";
