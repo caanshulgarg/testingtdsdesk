@@ -19,6 +19,9 @@ Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_tally_poll.py"
 import json, os, sys, threading, functools, http.server, collections
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
 from playwright.sync_api import sync_playwright
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from own_seed import OWN_DEV
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 SITE = os.environ.get("TDSDESK_SITE", os.path.join(HERE, "..", "app", "dist-test"))
 PORT = 8431
@@ -106,6 +109,7 @@ def main():
         pg.goto("http://localhost:%d/" % PORT); pg.wait_for_timeout(2500)
         pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(800)
         E = lambda js, *a: pg.evaluate(js, *a)
+        E(OWN_DEV, dev())   # next-tally-own-status (13-Nov-2026): the made-up Tally computer here is this person's own (own_seed.py)
         E(SETUP, [[dev("closed", ())], CLIENTS])
         # the page opens and settles (its first reads, the waiting-room watcher started)
         pg.clock.run_for(15000)

@@ -144,7 +144,9 @@ def main():
         ok("not set up" not in json.dumps(w) and w["gb"] != "—", "b-d. never a blank or “not set up” while a reason is known")
         E("() => localStorage.setItem(LocalOwner.P + 'ownbridge', JSON.stringify({id: 'go-1', port: 9103, user: 'PC1\\\\usera'}))")
         look([]); w = words(); print("      e.", w)
-        ok(w["own"] == "ok" and w["how"] == "remembered" and w["strip"].startswith("Open in your Tally now: “%s”" % OPEN) and "Shown: what that bridge last sent to FinCom’s cloud" in w["say"],
+        # (next-tally-own-status: a bridge found here before makes this a Tally computer: this login's six steps, step 5
+        # naming the company, where a browser with no bridge had the strip)
+        ok(w["own"] == "ok" and w["how"] == "remembered" and (w["strip"].startswith("Open in your Tally now: “%s”" % OPEN) or OPEN in w.get("step5", "")) and "Shown: what that bridge last sent to FinCom’s cloud" in w["say"],
            "e. nothing answers, found here before: the beat from FinCom's cloud, said so, the company still shown")
         pg.close()
 

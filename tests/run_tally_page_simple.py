@@ -15,6 +15,9 @@ Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_tally_page_sim
 import json, os, re, sys, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
 from playwright.sync_api import sync_playwright
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from own_seed import OWN_DEV
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 SITE = os.environ.get("TDSDESK_SITE", os.path.join(HERE, "..", "app", "dist-test"))
 SHOTS = sys.argv[sys.argv.index("--shots") + 1] if "--shots" in sys.argv else ""
@@ -160,6 +163,7 @@ def main():
         # 15-Oct-2026 (the calm page): each computer's card, its Details and the page's support parts are under the one
         # "Advanced (for support)" fold; fold=True opens it, as a person does
         def scene(devs, companies, role="owner", stops=STOPS, fold=True):
+            E(OWN_DEV, devs[0] if devs else None)   # next-tally-own-status (13-Nov-2026): the made-up Tally computer here is this person's own (own_seed.py)
             E(SETUP, [devs, stops, companies, role]); pg.wait_for_timeout(300)
             if fold: E("() => { S.tallyMore = {support: true, page: true}; render(); }")
             pg.wait_for_timeout(1500)
@@ -258,11 +262,11 @@ def main():
         ok("Posting settings" not in txt(card(D2)), "the other cards stay closed")
         pg.click(card(D1) + " [data-more-toggle]"); pg.wait_for_timeout(400)
         ok("Posting settings" not in txt(card(D1)), "card More: closes again")
-        ok(pg.locator("#app [data-read-stop-all]").count() == 1 and pg.locator("#app [data-bridges]").count() == 1 and pg.locator("#app [data-pane=\"tally-history\"]").count() == 1
-           and pg.locator("#app [data-bridge-card]").count() == 1 and pg.locator("#app [data-install-help]").count() == 1, "page More open: stop on all computers, every bridge, connection history, the install help")
+        ok(pg.locator("#app [data-read-stop-all]").count() == 1 and pg.locator("#app [data-bridges]").count() == 0 and pg.locator("#app [data-pane=\"tally-history\"]").count() == 1
+           and pg.locator("#app [data-bridge-card]").count() == 1 and pg.locator("#app [data-install-help]").count() == 1, "page More open: stop on all computers, connection history, the install help; no list of every bridge")
         shot("owner-more-open")
         pg.click("#app [data-page-more] > [data-more-toggle]"); pg.wait_for_timeout(400)
-        ok(pg.locator("#app [data-bridges]").count() == 0, "page More: closes again")
+        ok(pg.locator("#app [data-read-stop-all]").count() == 0, "page More: closes again")
         pg.click("#app [data-page-more] > [data-more-toggle]"); pg.wait_for_timeout(400)
         # the owner's buttons still call what they called
         pg.click(card(D4) + " [data-status-line] [data-read-resume]"); pg.wait_for_timeout(500)
@@ -277,9 +281,10 @@ def main():
 
         # ---- 5. staff: the same lines, no owner button anywhere, More open or not
         scene(DEVS, LINKED, role="member")
-        ok(line(D1) == l1 and "Reading stopped on the Tally computer" in line(D4) and pg.locator(card(D4) + " [data-status-line] button").count() == 0 and "owner" in line(D4), "staff: the same lines; the stop names who can resume it (%s)" % line(D4))
+        # (next-tally-own-status, 13-Nov-2026: a member of staff finds only their own bridge's card, DEVS[0] here; never another's)
+        ok(line(D1) == l1 and pg.locator(card(D4)).count() == 0 and pg.locator(card(D1) + " [data-status-line] button").count() == 0, "staff: their own bridge's line, the same; no card of another's computer")
         open_all()
-        ok(pg.locator("#app [data-page-more] [data-bridges]").count() == 1 and "Posting settings" in txt(card(D1)), "staff: More opens too")
+        ok(pg.locator("#app [data-page-more] [data-release]").count() == 1 and "Posting settings" in txt(card(D1)), "staff: More opens too")
         found = [h for h in OWNER_HOOKS if pg.locator("#app [%s]" % h).count()]
         ok(not found, "staff: no owner button (%s)" % found)
         shot("staff-more-open")

@@ -634,3 +634,5 @@ run_tally_look_heard.py               180  TDSDESK_SITE=../app/dist-test
 run_catch_soon.py                     180  TDSDESK_SITE=../app/dist-test
 run_daybook_slices.py                 180  TDSDESK_SITE=../app/dist-test
 run_items_own_seq.py                  180  TDSDESK_SITE=../app/dist-test
+# next-tally-own-status (13-Nov-2026): each person sees only their OWN Tally: the icon, the client's line, the bell, no list of every bridge
+run_tally_own_status.py               300  TDSDESK_SITE=../app/dist-test

@@ -1779,7 +1779,7 @@ const TLight = {
       // it is compared; a time is compared to the minute (as shown), so a beat whose times alone moved draws nothing
       const minute = (k, v) => (typeof v === "string" && /^\d{4}-\d\d-\d\dT\d\d:\d\d/.test(v) ? v.slice(0, 16) : v);
       const devs = tallyPage ? JSON.stringify((this.st.devs || []).map(d => [d.id, d.name, d.last_seen, d.info]), minute) : null;
-      return JSON.stringify([TStale.now(), t.parts || {}, t.state, t.label, l ? [l.state, l.read, l.reading, l.text] : null, h.code, h.label, (h.other || ""), S.view === "home" ? this.st.by : null, devs]);
+      return JSON.stringify([TStale.now(), t.parts || {}, t.state, t.label, l ? [l.state, l.read, l.reading, l.text] : null, h.code, h.label, typeof FCOwn == "object" ? FCOwn.icon() : 0, S.view === "home" ? this.st.by : null, devs]);
     } catch (e){ return String(Date.now()); }
   },
   // client id -> {level: ok | warn | bad, short, say}
@@ -1856,7 +1856,11 @@ function tallyLine(co, d0){
   // has come in yet (for three minutes at most)
   const ask = TallyAsk[co.id], updating = !!(beat && beat.updating);
   const reading = updating || !!(ask && now - ask.at < 180000 && !((Date.parse(read || 0) || 0) > ask.before));
-  const o = (state, level, text) => ({state, level, text, computer: comp, read, reading});
+  // next-tally-own-status (review of 1d3bce162, M1/M2/M4): the client's computer is not this person's own bridge's: the
+  // state and text are kept for what asks them (posting's reasons, Update now); what is SHOWN of it is say and tone:
+  // the data's line only, grey: never that computer's name, nor its Tally open, closed, paused or offline
+  const far = !!dev && (typeof FCOwn != "object" || ((FCOwn.bridge() || {}).dev || {}).id !== dev.id);
+  const o = (state, level, text) => ({state, level, text, computer: comp, read, reading, far, tone: far ? "no" : level, say: far ? (typeof FCOwn == "object" ? FCOwn.line(co, {company: link.company, line: {read}}) : "Read from Tally") : text});
   // FinCom 2.3.5: the same words as the Tally page's cards (Connected / Offline / Tally not open / Reading stopped / paused)
   if (bridge === "offline" || bridge === "none") return o("offline", "bad", comp + " is offline");
   // round 4, item 25: a stop from FinCom on the client's computer (or on all computers) comes before everything but
@@ -1867,6 +1871,7 @@ function tallyLine(co, d0){
   if (since) return o("notanswering", "bad", "Tally is not answering on " + comp + " since " + tallyHm(since));
   if (paused) return o("paused", "warn", "Reading paused on " + comp);
   if (notOpen) return Object.assign(o("notopen", "warn", link.company + " is not open in Tally on " + comp), {company: link.company});
+  // next-tally-own-status: "Connected · Tally open" only of this person's own bridge's computer; read in another's: the data's words
   return o("open", "ok", "Connected \u00b7 Tally open on " + comp + (read ? " \u00b7 last read " + tallyHm(read) : ""));
 }
 // the stop from FinCom standing on a computer, as the per-client line needs it: the one for all computers, else the
@@ -2163,8 +2168,10 @@ function linkByGstin(cos){
   });
 }
 
-// One Tally status for every screen (review item 5): the bridge on this computer and the heartbeat of the firm's
-// Tally computers (tally_devices), for a client or for the firm.
+// One Tally status for every screen (review item 5): the bridge on this computer, else this person's own bridge's
+// heartbeat (next-tally-own-status, 13-Nov-2026: FCOwn, app/src/lib/ownBridge.js; never the best of the firm's computers:
+// "Tally open" is only ever about the person's own Tally), for a client or for the firm. No bridge of their own: what
+// waits (the data), then "Last entry from Tally received …" / "No Tally on this computer" (state "far", grey).
 // state: none | offline | unlinked | waiting | ok;  level: ok | warn | bad (the pill's colour)
 // how fresh the books are, in one sentence used on every page (review of 01-Oct-2026: "Books up to …", "checked with
 // Tally to …" and "N days not read yet" were said differently in different places): the last entry, how far FinCom's copy
@@ -2207,21 +2214,22 @@ function tallyStatus(co){
   const local = typeof Bridge === "object" && Bridge.on() && Bridge.up();
   const lst = typeof Bridge === "object" ? Bridge.st : {};
   const devs = (typeof TLight === "object" && TLight.st.devs) || [];
-  const now = Date.now(), dss = devs.map(d => Object.assign({d}, devState(d, now)));
-  const seenOf = d => Date.parse((((d.info || {}).beat) || {}).at || d.last_seen || 0) || 0;
-  const heard = devs.reduce((a, d) => Math.max(a, seenOf(d)), 0);
   const when = t => fmtDateTime(t);
-  const rankB = {online: 3, reconnecting: 2, offline: 1, none: 0}, rankT = {open: 3, busy: 2, closed: 1};
-  // the three parts: the bridge (this computer's, else the best of the firm's computers), Tally, the company
-  let bridge = local ? (lst.shaky ? "reconnecting" : "online") : "none";
-  dss.forEach(x => { if (rankB[x.bridge] > rankB[bridge]) bridge = x.bridge; });
+  // the three parts: the bridge (this computer's, else this person's own), Tally, the company
+  const F = typeof FCOwn == "object" ? FCOwn : null, own = F ? F.state() : {}, mine = local || own.state == "ok" || own.state == "away";
+  const heard = Date.parse((own.own || {}).at || 0) || 0;
+  // (reliability: while FinCom's own read of the computers fails, their own bridge's last known state, never "offline")
+  const stale = TStale.now(["light"]);
+  // their own bridge's computer, when its heartbeat is that bridge's own (the only bridge of its key, or its main one):
+  // told as before (devState: a late beat is not offline, Tally busy); a bridge sharing a key: its own line of the beat
+  const od = !local && mine && own.own.dev, ds = od && own.own.beat === (od.info || {}).beat ? devState(od) : null;
+  let bridge = local || (ds ? ds.bridge == "online" || ds.bridge == "reconnecting" : own.state == "ok" || (mine && stale)) ? "online" : mine ? "offline" : "none";
   let tally = "closed", busySince = "";
   if (local) { tally = lst.tallyState || (lst.tallyUp ? "open" : "closed"); busySince = lst.busySince || ""; }
-  dss.filter(x => x.bridge !== "offline" && x.bridge !== "none").forEach(x => { if (rankT[x.tally] > rankT[tally]) { tally = x.tally; busySince = x.busySince; } });
-  // the steady sign (11-Oct-2026): a late beat, or a bridge here slow to answer once, is not "Reconnecting…": it stays
-  // connected; going offline, or Tally closing, shows once it has held for a minute (TallySteady); coming back at once
-  if (bridge === "reconnecting") bridge = "online";
-  if (devs.length || local){
+  else if (bridge == "online"){ const ob = own.own.beat || {}; busySince = ob.busySince || ""; tally = ds ? ds.tally : ob.tallyState == "busy" ? "busy" : (own.names ? own.names.size || own.noCo : ob.tallyState == "open") ? "open" : "closed"; }
+  // the steady sign (11-Oct-2026): going offline, or Tally closing, shows once it has held for a minute (TallySteady);
+  // coming back at once
+  if (mine){
     const sd = TallySteady.step("status", {bridge, tally, busySince}, bridge + "|" + tally, bridge === "online" && tally !== "closed");
     bridge = sd.bridge; tally = sd.tally; busySince = sd.busySince;
   }
@@ -2239,17 +2247,15 @@ function tallyStatus(co){
   const SHORT = {none: "Tally not set up", offline: "Tally offline" + (heard ? " \u00b7 " + hhmm(heard) : ""), reconnecting: "Tally reconnecting\u2026",
     unlinked: "Tally: not linked", busy: "Tally busy", ok: "Tally in sync"};
   // (reliability: while FinCom's own read fails, the last known state, without a tick, with the words and its time)
-  const stale = TStale.now(["light"]);
   const out = o => { Object.assign(o, {parts, short: o.state === "waiting" ? o.label.replace(/ waiting$/, "") + " for Tally" : SHORT[o.state] || o.label});
     return stale ? Object.assign(o, {stale, level: o.level === "ok" ? "warn" : o.level, label: o.label + " (" + stale.as + ")", say: stale.words + " (" + stale.as + "). " + o.say}) : o; };
   if (stale && !devs.length && !local) return out({state: "unknown", level: "warn", label: stale.words, say: "FinCom could not read the firm\u2019s Tally computers."});
   if (!local && !devs.length) return out({state: "none", level: "bad", label: "Not set up", say: "FinCom Bridge is not on this computer, and no computer of the firm sends from Tally. Install FinCom Bridge from the Tally page on the computer with TallyPrime."});
-  if (bridge === "offline" || bridge === "none") return out({state: "offline", level: "bad", label: "Offline since " + (heard ? when(heard) : "\u2014"), say: "No word from the firm's Tally computer" + (heard ? " since " + when(heard) : "") + " (three heartbeats missed): the computer or its bridge is off, or it has no internet."});
-  if (bridge === "reconnecting") return out({state: "reconnecting", level: "warn", label: "Reconnecting\u2026", say: "The bridge's last heartbeat is late. FinCom keeps listening; it shows Offline only after three missed heartbeats (about two minutes)."});
+  if (bridge === "offline") return out({state: "offline", level: "bad", label: "Offline since " + (heard ? when(heard) : "\u2014"), say: "No word from your FinCom Bridge" + (heard ? " since " + when(heard) : "") + " (three heartbeats missed): the computer or its bridge is off, or it has no internet."});
   const cos = co ? [co] : Object.values(S.companies || {}).filter(c => !c.deleted);
   // the one count of what is for Tally (postCountFor, src/js/59): the same number as the tab, the page and the dashboard
   const waiting = cos.reduce((a, c) => a + (typeof postCountFor === "function" ? postCountFor(c.id) : num((c.stats || {}).waiting)), 0);
-  if (co && company === "unlinked") return out({state: "unlinked", level: "warn", label: "Connected \u2013 company not linked", say: "Tally is connected, but no Tally company is linked to " + co.name + ". Link it in Client setup \u2192 Tally, or in Settings \u2192 Books in the cloud."});
+  if (co && company === "unlinked") return out({state: "unlinked", level: "warn", label: "Company not linked", say: "No Tally company is linked to " + co.name + ". Link it in Client setup \u2192 Tally, or in Settings \u2192 Books in the cloud."});
   if (waiting > 0) return out({state: "waiting", level: "warn", label: waiting + " entr" + (waiting === 1 ? "y" : "ies") + " waiting", say: waiting + " approved entr" + (waiting === 1 ? "y is" : "ies are") + " not yet in Tally" + (co ? "" : " (all clients)") + "."});
   // nothing ready to post, but bills or postings that need a decision (Post to Tally → Needs your attention): not "in sync"
   const attn = cos.reduce((a, c) => a + (typeof postAttentionFor === "function" ? postAttentionFor(c.id) : 0), 0);
@@ -2260,8 +2266,12 @@ function tallyStatus(co){
   if (held.length) return out({state: "held", level: "warn", label: AlertHub.heldSay(held.map(l => ({held_why: ""})), true),
     say: held.length === 1 ? "1 entry " + AlertHub.heldSay(held) + "." : held.length + " entries received from Tally are not yet entered in the books" + (co ? "" : " (all clients)") + ": " + [...new Set(held.map(l => l.held_why || "no reason given"))].slice(0, 3).join("; ") + ". See Tally \u2192 Sync activity."});
   if (tally === "busy") return out({state: "busy", level: "warn", label: "Connected \u2013 Tally busy", say: "The bridge is connected. Tally is open but answering slowly" + (busySince ? " since " + fmtDateTime(Date.parse(busySince)) : "") + " (a long report, or a message box in Tally); the bridge asks again by itself and nothing is lost."});
-  const light = co && typeof TLight === "object" ? TLight.st.by[co.id] : null;
-  return out({state: "ok", level: "ok", label: "Connected & in sync", say: "Tally is connected" + (local ? " on this computer" : " (" + devs.length + " computer" + (devs.length === 1 ? "" : "s") + " sending)") + " and nothing waits to be sent." + (light ? " " + light.say : "")});
+  // (the client's computer's own words, TLight.by, only when it is this person's own bridge's: M1)
+  const tl = co && mine ? tallyLine(co) : null, light = tl && !tl.far && typeof TLight === "object" ? TLight.st.by[co.id] : null, end = "othing waits to be sent." + (light ? " " + light.say : "");
+  if (!mine) return out({state: "far", level: "no", label: co ? (F ? F.line(co) : "Read from Tally") : F ? F.icon().word : "Not connected on this computer", say: "Nothing waits to be sent."});
+  // (their own bridge answers, their own Tally is closed: never "Connected")
+  if (tally === "closed") return out({state: "closed", level: "warn", label: "Tally not open", say: "Your Tally is not open. N" + end});
+  return out({state: "ok", level: "ok", label: "Connected & in sync", say: "Tally is connected" + (local ? " on this computer" : "") + " and n" + end});
 }
 // The top bar's one Tally sign (owner's spec H, 04-Oct-2026): exactly two states. Connected = FinCom Bridge on a computer
 // of this firm is online (its heartbeat recent: online, or one beat late) AND Tally is open there with THIS client's
@@ -2327,7 +2337,7 @@ function tallySignNow(co, old){
   const has = x => co ? x.open.some(same) : x.open.length > 0;
   // next-tally-other-login (05-Nov-2026): on a Tally computer (this browser's bridge, or one answering here: FCTallySimple)
   // the firm's sign never names another bridge's companies (a shared server: another Windows login's Tally); a client's own
-  // company open elsewhere still counts
+  // company open elsewhere still counts. next-tally-own-status: the firm's pages (no client) only ever the bridge here
   const FS = typeof FCTallySimple === "object" ? FCTallySimple : null, here = localOn || !!(FS && FS.onTallyPc()), ob = here && FS ? FS.ownBridge() || {} : {}, ownDev = (ob.dev || {}).id;
   // a client's company open in another Windows login's Tally of this very computer is not this login's: only another computer counts
   const myPc = here ? norm((localUp && lst.computer) || ob.pc || "") : "", myU = norm(tallyWinUser((localUp && lst.user) || ob.user));
@@ -2335,7 +2345,7 @@ function tallySignNow(co, old){
   // next-tally-link-any-bridge (the owner, 06-Nov-2026): a LINKED client's company counts open in the bridge of any login
   // that serves it (src/js/98-link-record.js tallyServe: its GUID and data folder checked); 98 not loaded: as before
   const sv = !old && link && typeof tallyServe == "function" ? tallyServe(want, {device: link.device_id}) : void 0;
-  const goods = pcs.filter(x => x.recent && isOpen(x) && has(x) && (x.local || (sv !== void 0 ? !!sv && sv.all.has(x.id) : !here || (co && away(x)))));
+  const goods = pcs.filter(x => x.recent && isOpen(x) && has(x) && (x.local || (sv !== void 0 ? !!sv && sv.all.has(x.id) : co && (!here || away(x)))));
   const good = goods.find(x => x.local) || goods.find(x => !link || !link.device_id || x.id === link.device_id) || goods[0];
   const out = (o) => Object.assign({computer: "", company: co ? want : "", at: "", reason: "", fix: "", short: o.computer || ""}, o);
   if (good){
@@ -2428,7 +2438,7 @@ const TallySteady = {
   }
 };
 // The top bar's sign: THIS computer only (the owner, 11-Oct-2026: like a status light in Microsoft 365 or Stripe, a
-// dot and a short word, quiet when all is well; other computers on the Tally page and in the hover's second line):
+// dot and a short word, quiet when all is well; nothing of other computers: next-tally-own-status):
 //   ok      "Tally ready"               the bridge here answers, Tally is open (with this client's company)
 //   warn    "Tally closed" / "Tally busy" / "Company not open" / "Company not linked" / "No internet"
 //   bad     "Bridge stopped" (set up here, not answering) / "Bridge not connected" (its key refused)
@@ -2440,12 +2450,11 @@ function tallyHereNow(co){
   const on = !!(B && B.on() && !(B.blocked && B.blocked()));
   const want = co ? (((typeof TLight === "object" && TLight.st.cos) || []).find(c => c.client_id === co.id) || {}).company || co.tallyName || co.name : "";
   const user = tallyWinUser(st.user), computer = st.computer || "";
-  const firm = tallySign(co), other = tallyOtherLine(firm, on);
   const check = {act: "tallyCheck", label: "Check again"};
   const out = (code, level, label, o) => Object.assign({code, level, label, short: label, computer, user, company: "", open: (st.open || []).map(x => x.name),
-    at: B && B.okAt ? B.okAt : 0, hint: "", next: [], other}, o || {});
+    at: B && B.okAt ? B.okAt : 0, hint: "", next: []}, o || {});
   if (!on) return out("none", "idle", "Tally not on this computer", {short: "Not on this PC", computer: "", user: "",
-    hint: "FinCom Bridge is not set up in this browser." + (firm.on ? "" : " Connect this computer to post to Tally from here."),
+    hint: "FinCom Bridge is not set up in this browser.",
     next: [{act: "tallyConnect", label: "Tally page"}]});
   if (!st.state || st.state === "off") return out("checking", "idle", "Checking Tally…", {short: "Checking…"});
   if (st.state === "key") return out("key", "bad", "Bridge not connected", {hint: "FinCom Bridge on this computer did not accept this browser's key. Connect again with the 6-digit code (right-click the FinCom icon near the clock → Connect FinCom on this computer…).",
@@ -2465,13 +2474,6 @@ function tallyHereNow(co){
   if (tallyNoNet(st)) return out("nonet", "warn", "No internet", {company, hint: "FinCom Bridge here cannot reach FinCom since " + tallyIst(st.beat.missedSince) + ". Posting from this computer still works; the other computers see it again when the internet is back.", next: [check]});
   return out("ready", "ok", "Tally ready", {company, next: [{act: "tallyGuide", label: "Tally page"}]});
 }
-// the hover's second line: the firm's other computers (never the sign's main words)
-function tallyOtherLine(firm, here){
-  if (!firm) return "";
-  if (firm.on && !firm.local) return (here ? "Also ready: " : "Posting goes through ") + (firm.pc || firm.computer) + ".";
-  if (!firm.on && !here) return "No computer of the firm has Tally ready" + (firm.pc ? " (last seen: " + firm.pc + (firm.at ? ", " + firm.at : "") + ")" : "") + ".";
-  return "";
-}
 function tallyHere(co){
   const raw = tallyHereNow(co);
   return TallySteady.step("here:" + (co ? co.id : ""), raw, raw.code, raw.level === "ok" || raw.code === "none" || raw.code === "checking");
@@ -2479,7 +2481,7 @@ function tallyHere(co){
 // the sign in words, for its hover title: "Tally ready — NWS144 (anshul) — company: … — last confirmed: …"
 function tallyHereWords(h){
   const pc = h.computer ? tallyPcShort(h.computer, h.user) : "";
-  return [h.label, pc, h.company ? "company: " + h.company : "", h.code !== "none" && h.confirmed ? "last confirmed: " + tallyIst(h.confirmed) : "", h.hint, h.other].filter(Boolean).join(" \u2014 ");
+  return [h.label, pc, h.company ? "company: " + h.company : "", h.code !== "none" && h.confirmed ? "last confirmed: " + tallyIst(h.confirmed) : "", h.hint].filter(Boolean).join(" \u2014 ");
 }
 // "Check again": ask the bridge here (and the cloud) now, and show the answer at once
 function tallyCheckNow(){

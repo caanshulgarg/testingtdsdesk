@@ -19,9 +19,9 @@
 // Book upload); nothing new is asked of the bridge or of Tally. No computer's name anywhere here.
 import { Component, useEffect, useState } from "react";
 import { linkTo, Pick, ChangePick, booksLoad, firstSync, syncPoll, openFromTally } from "./TallyCompanies.jsx";
-import { checkAll, connSig, tallyOpenOn, offSay, bridgesOf, rowsLast, placeOf, LEDN, ASKED_N, rowsFor, quickRows, openingsAll, openingsDecide, rupees, matches, headWords, ownState, localBridges, rescanLocal, lookOnce, aimLocal, LOCALB, YES, NO, NOTYET, BLOCKED } from "../lib/tallySimple.js";
-import { coKey, tallyDevs, pcRawOf } from "../lib/tallyState.js";
-import { bridgeStopped, bridgeBack, stoppedWhere } from "../lib/bridgeStop.js";   // bridge 2.5.10: a bridge stopped, or back by itself
+import { checkAll, connSig, bridgesOf, NO_TALLY, rowsLast, placeOf, LEDN, ASKED_N, rowsFor, quickRows, openingsAll, openingsDecide, rupees, matches, headWords, ownState, localBridges, rescanLocal, lookOnce, aimLocal, LOCALB, YES, NO, NOTYET, BLOCKED } from "../lib/tallySimple.js";
+import { coKey, tallyDevs, pcRawOf, farLine } from "../lib/tallyState.js";
+import { bridgeStopped as stopped0, bridgeBack as back0, stoppedWhere } from "../lib/bridgeStop.js";   // bridge 2.5.10: a bridge stopped, or back by itself
 import { ledgersHeld, LED_N, ledBook, cloudLedgerCount, baseKey, stallWhy, companyRows, unlink, runPress, runWords, runSettle, runBusy, keepWaitWords, readOf } from "./TallyCompanies.jsx";
 import { soonDraw } from "../lib/soonDraw.js";
 import { MastersCell, EntriesCell, BringMasters, BringBooks, PullButtons, History, DayBookDrop, rangeWords, mastersOf, entriesOf } from "./TallyProgress.jsx";
@@ -139,7 +139,6 @@ function Guide({ cs, collapsed, forced, asked, connectPanel, download, checkAgai
     <div className="tsm-note" data-tsm-laptop-here="">{LAPTOP_HERE}</div>
     {/* next-tally-page-redesign (the owner: "I can't see the bridge download button"): the Download right here, not only once the steps are opened */}
     {!forced && <div className="tsm-now-act" data-tsm-laptop-dl="">{download}</div>}
-    <div className="tsm-note" data-tsm-firm="">{cs.firm}</div>
     {forced && another}
     {/* (asked to set up here: this may be the Tally computer, its bridge not installed in this login yet) */}
     {(forced || asked) && connectPanel && <div className="tsm-guide-panel" data-tsm-panel="">{connectPanel}</div>}
@@ -414,6 +413,9 @@ export function lastWords(at) {
   const t = new Date(ms + 5.5 * 3600e3), hhmm = String(t.getUTCHours()).padStart(2, "0") + ":" + String(t.getUTCMinutes()).padStart(2, "0");
   return ISTD(ms) === ISTD(Date.now()) ? hhmm + " IST" : String(t.getUTCDate()).padStart(2, "0") + "-" + MONS[t.getUTCMonth()] + " " + hhmm;
 }
+// review of 1d3bce162 (M3): a bridge stopped, or back, is said to the owner and to the person whose own bridge it is; nobody else
+const seen1 = (x) => (x && x.dev && globalThis.FCOwn && FCOwn.sees(x.dev.id) ? x : null);
+const bridgeStopped = (dv) => seen1(stopped0(dv)), bridgeBack = (dv) => seen1(back0(dv));
 // a bridge of the firm heard in the last 3 minutes (the cloud's beats)
 function bridgesUp() { try { return bridgesOf().some((b) => b.at && Date.now() - Date.parse(b.at) < 3 * 60000); } catch (e) { return false; } }
 // the companies open now in any Tally FinCom hears (this login's, another login's, another computer's)
@@ -429,14 +431,19 @@ export function pageOf(row, seen) {
   const stuck = row.l.w === NO;
   // next-tally-simple2: a bridge of the firm heard now, the company open nowhere: "Not open in Tally", Check again (open it
   // first); no bridge heard: "Not connected", Connect again
+  // (M4: a person with no bridge of their own: the data's line, grey; "Not open in Tally" is of one's own Tally)
+  if (!open && row.o.setup) return { kind: "ok", dot: "idle", say: farLine(row.last), why: "", btn: "update" };
   if (!open) { const up = bridgesUp();
     return { kind: "away", dot: "warn", say: up ? "Not open in Tally" + (placeOf() === "laptop" ? " on the server" : "") : "Not connected", why: row.o.note && row.o.note !== "Checking…" ? row.o.note : "Company not open in Tally",
       btn: "again", label: up ? "Check again" : "Connect again", note: up ? "Open it in Tally first" : "", need: true }; }
   if (stuck) return { kind: "stuck", dot: "warn", say: "Not reading", why: row.l.note || "Nothing came from Tally", btn: "again", label: "Connect again", need: true };
   const reading = row.l.w === NOTYET || row.e.w === NOTYET;
   if (row.need || row.e.w === NO || (row.open && row.open.state === "differ")) return { kind: "need", dot: "warn", say: row.e.w === NO ? "Entries missing" : row.open && row.open.state === "differ" ? "Opening balances differ" : "Needs you", why: row.todo && /Update from Tally/.test(row.todo) ? "Ledgers not in FinCom yet: press Update from Tally." : row.todo && !/^Nothing/.test(row.todo) ? row.todo : row.e.note || "", btn: "update", need: true };
-  if (reading) return { kind: "reading", dot: "ok", say: "Connected", why: row.l.w === NOTYET ? row.l.note || "" : row.e.note || "", btn: "update" };
-  return { kind: "ok", dot: "ok", say: "Connected", why: "", btn: "update" };
+  // next-tally-own-status (the owner, 13-Nov-2026): "Connected" only when the company is open in this person's own Tally;
+  // read in another's Tally of the firm: the data's word, never "Connected" or "Tally open"
+  const mine = row.o.w === YES;
+  if (reading) return { kind: "reading", dot: mine ? "ok" : "read", say: mine ? "Connected" : farLine(row.last), why: row.l.w === NOTYET ? row.l.note || "" : row.e.note || "", btn: "update" };
+  return { kind: "ok", dot: mine ? "ok" : "read", say: mine ? "Connected" : farLine(row.last), why: "", btn: "update" };
 }
 // a row's one button: {main, label} (update | upload | bring | again | connect | link)
 export function mainOf(row, pg) {
@@ -885,9 +892,6 @@ function Top({ cs, own, rows, checkAgain, ready, shown, beat }) {
   const T = ownTallys(own), ok = T.tallys.filter((t) => t.ok), off = T.tallys.filter((t) => !t.ok), names = (own && own.names) || new Map();
   const login = cs.mode === "login", down = login && !!cs.now && cs.now.n <= 4;
   const last = rows.filter((r) => r.kind === "client" && r.c.w === YES && r.o.w === YES && r.last).map((r) => r.last).sort().pop() || "";
-  const office = cs.mode === "laptop" ? bridgesOf().filter((b) => b.at && Date.now() - Date.parse(b.at) < 3 * 60000) : [];
-  const officeK = office.filter(tallyOpenOn).length;
-  const officeOpen = new Set([].concat(...office.map((b) => b.open)).map(coKey)).size;
   const lastAny = rows.filter((r) => r.kind === "client" && r.c.w === YES && r.last).map((r) => r.last).sort().pop() || "";
   const o = own || {}, far = o.state === "ok" && o.far, kw = login ? keepWaitWords((((o.own || {}).beat) || {}).keepWait) : "";
   let dot, title, sub;
@@ -895,16 +899,12 @@ function Top({ cs, own, rows, checkAgain, ready, shown, beat }) {
   let stop = null, back = null;
   try { const dv = tallyDevs(); stop = bridgeStopped(dv); back = stop ? null : bridgeBack(dv); } catch (e) { stop = back = null; }
   if (!ready) { dot = "idle"; title = "Looking for your Tally…"; sub = ""; }
-  else if (stop && !(cs.mode === "laptop" && office.length)) { dot = "warn"; title = stop.title; sub = stop.todo; }
-  // a computer with no bridge of its own (a laptop, a Mac): the office's Tally through the firm's bridges heard now
-  // (counted by Tally open there: bridges heard with Tally closed are not "connected", amber)
-  else if (cs.mode === "laptop" && office.length && !officeK) { const w = office.map((x) => offSay(x.beat)).find(Boolean); dot = "warn";
-    // (bridge 2.5.11: a Tally open there that takes no connection is said so, with the bridge's words)
-    title = w ? "The office Tally is open but takes no connection" : "The office Tally is not open";
-    sub = w || "Open TallyPrime and the company on the computer or server where FinCom Bridge runs."; }
-  else if (cs.mode === "laptop" && office.length) { dot = "ok"; title = "Connected through the office Tally";
-    sub = [nOfW(rows.filter((r) => r.kind === "client" && r.c.w === YES).length, "client linked", "clients linked"), nOfW(officeOpen, "company open", "companies open"), lastAny ? "last entry " + lastWords(lastAny) : ""].filter(Boolean).join(" · "); }
-  else if (cs.mode === "laptop") { dot = "warn"; title = "No FinCom Bridge is connected"; sub = "Open FinCom on the computer or server where TallyPrime runs, and install FinCom Bridge there."; }
+  else if (stop) { dot = "warn"; title = stop.title; sub = stop.todo; }
+  // a computer with no bridge of its own (a laptop, a Mac): next-tally-own-status (the owner, 13-Nov-2026): grey, "No
+  // Tally on this computer", and the data's line (clients linked, the last entry): nothing of another's Tally, open or
+  // closed, and no count of the firm's bridges or of the companies open in them
+  else if (cs.mode === "laptop") { dot = "idle"; title = NO_TALLY;
+    sub = [nOfW(rows.filter((r) => r.kind === "client" && r.c.w === YES).length, "client linked", "clients linked"), lastAny ? "last entry " + lastWords(lastAny) : ""].filter(Boolean).join(" · "); }
   else if (cs.mode === "error" || !login) { dot = "idle"; title = "Tally"; sub = "The state could not be worked out just now."; }
   else if (down) { dot = "warn"; title = "Not connected yet: step " + cs.now.n + " of 6"; sub = "Do the step below, then press Check again. Nothing else is needed."; }
   else { dot = "ok"; title = "Connected to Tally";
@@ -929,7 +929,7 @@ function Top({ cs, own, rows, checkAgain, ready, shown, beat }) {
       <PostingWait beat={beat} hook="panel" /></div></div>
     <span className="tpt-top-acts">
       {/* next-tally-simple2: How to connect opens the six steps under this card */}
-      {cs.mode === "laptop" && office.length > 0 && <button type="button" className="linkbtn" data-tsm-steps-link="laptop" aria-expanded={shown ? "true" : "false"} onClick={steps}>{shown ? "Hide how to connect" : "How to connect"}</button>}
+      {cs.mode === "laptop" && <button type="button" className="linkbtn" data-tsm-steps-link="laptop" aria-expanded={shown ? "true" : "false"} onClick={steps}>{shown ? "Hide how to connect" : "How to connect"}</button>}
       {login && !down && <button type="button" className="linkbtn" data-tsm-steps-link="" aria-expanded={shown ? "true" : "false"} onClick={steps}>{shown ? "Hide how to connect" : "How to connect"}</button>}
       <button type="button" className="btn tpt-btn" data-tsm-top-check="" disabled={ck} onClick={again}>{ck ? "Checking…" : "Check again"}</button></span>
   </section>;
@@ -940,8 +940,9 @@ function ShortCard({ rows, cs }) {
   return <section className="tsm-card tpt-short" data-tsm-short=""><b>Clients</b>
     <div className="tsm-note">{"Your clients and their Tally companies show here once step " + (cs.now ? cs.now.n : 4) + " is done." + (linked ? " " + nOfW(linked, "client is", "clients are") + " already linked; they reconnect by themselves." : "")}</div></section>;
 }
-// for Advanced (for support): the day check of every client, and the computers in one line (were the page's header and foot)
-export function SupportTools({ checkAgain, pcs, download, sha }) {
+// for Advanced (for support): the day check of every client (next-tally-own-status: the line "Computers with Tally: N
+// connected" is gone, a person is told of their own Tally only)
+export function SupportTools({ checkAgain }) {
   // (the rows as the page last worked them out: rowsFor would replace the page's own options, its focused client)
   const rows = rowsLast(), on = checking();
   let st = null; try { st = bridgeStopped(tallyDevs()); } catch (e) { st = null; }
@@ -949,23 +950,11 @@ export function SupportTools({ checkAgain, pcs, download, sha }) {
     {st && <div className="tsm-note bad" data-tsm-support-stopped="">{stoppedWhere(st, pcRawOf(st.dev))}</div>}
     <div className="row" style={{ gap: 8, alignItems: "center", flexWrap: "wrap" }}><button type="button" className="btn small" data-tsm-check="" disabled={on} onClick={() => checkTallyNow(rows, checkAgain)}>{on ? "Checking Tally…" : "Check every client for changes in Tally"}</button></div>
     <Said k="checkall" hook="check-all" />
-    {pcs && <Computers pcs={pcs} download={download} sha={sha} />}
   </div>;
 }
 
-// ---------- the computers, one line, no names
-function Computers({ pcs, download, sha }) {
-  const { connected, away, older } = pcs;
-  return <section className="tsm-card tsm-pcs" aria-label="Computers" data-tsm-pcs={connected} data-tsm-older={older || undefined}>
-    <div className="tsm-pcs-words">{"Computers with Tally: "}<b>{connected ? connected + " connected" : "none connected"}</b>{"."}
-      {away > 0 && <span data-tsm-away={away}>{" " + (away === 1 ? "One is" : away + " are") + " not connected now."}</span>}
-      {older > 0 && <span data-tsm-older-say="">{" " + (older === 1 ? "One has" : older + " have") + " an older FinCom Bridge."}</span>}</div>
-    {older > 0 && <div className="tsm-pcs-acts">{download}{sha && <div className="note tsm-sha">Fingerprint (SHA-256): <code data-tsm-sha="">{sha}</code></div>}</div>}
-  </section>;
-}
-
 // the page above For support. installed: a bridge of the firm heard this week (the guided box counts it only when this user
-// has a bridge of their own: ownState); pcs: {connected, away, older};
+// has a bridge of their own: ownState);
 // download: the one Download FinCom Bridge (this site's latest.json); connectPanel: step 1's Download, Open it, Type its code
 // reliability (11-Nov-2026): a read of FinCom's cloud that failed (the computers, the summary, the checks, the masters'
 // progress: TStale, src/js/49) is said once above the table, with the time of what is shown; never told as Tally's state
@@ -973,7 +962,7 @@ function StaleNote() {
   const st = typeof TStale === "object" ? TStale.now() : null;
   return st ? <p className="note warn" data-tally-stale={st.at || 0} role="status" style={{ margin: "6px 0" }}>{st.words + " \u00b7 " + (st.at ? "showing what FinCom last knew, " + st.as : st.as)}</p> : null;
 }
-export default function SimpleTally({ installed, ready = true, pcs, download, sha, checkAgain, connectPanel, latest = "" }) {
+export default function SimpleTally({ installed, ready = true, download, sha, checkAgain, connectPanel, latest = "" }) {
   const ui = UI(), g = S.tallyGuide || {}, now = Date.now();
   const focus = g.cid && g.at && now - g.at < GUIDE_MS ? g.cid : (S.tallyFocus || "");
   // next-tally-own-login: everything above For support is this user's own FinCom Bridge and Tally (ownState), never another
@@ -1007,8 +996,9 @@ export default function SimpleTally({ installed, ready = true, pcs, download, sh
   // next-tally-page-redesign: the top line, Connect Tally's six steps (while steps 1-4 are not done, or asked for), the one
   // table (the short card instead while not connected and no client is in it); Advanced (for support) is the page's (Tally.jsx)
   const down = cs.mode === "login" && !!cs.now && cs.now.n <= 4;
-  // (a laptop with the office's bridges online: the steps only when asked for, "Connect Tally on this computer")
-  const officeUp = cs.mode === "laptop" && bridgesOf().some((b) => b.at && Date.now() - Date.parse(b.at) < 3 * 60000);
+  // (a laptop with a bridge of the firm heard now: the steps only when asked for, "How to connect"; nothing is said of
+  // that bridge or its Tally: next-tally-own-status)
+  const officeUp = cs.mode === "laptop" && bridgesUp();
   const showGuide = cs.mode === "laptop" ? !officeUp || forced || ui.open || asked : cs.mode !== "login" || down || forced || ui.open || asked;
   const beat = ((own.own || {}).beat) || null;
   // ux-wins: the big Download FinCom Bridge above the page shows only while it is needed (tallySimple.css): not while

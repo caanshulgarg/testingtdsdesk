@@ -123,7 +123,7 @@ function firmGroups() {
     ] },
     { title: "Tally", items: [
       { id: "bridge", label: "Connect Tally", about: "Connecting Tally, its companies and clients, and help: all on the one Tally page in the sidebar.",
-        status: "Tally: " + tallyStatus(null).label + (Bridge.on() && Bridge.up() && !Bridge.st.tallyUp ? " (bridge here running, Tally not open)" : "") },
+        status: "Tally: " + tallyStatus(null).label },
       ...(Cloud.on() ? [{ id: "tcloud", label: "Books in the cloud", about: "The computers that send Tally’s books to the firm account (which company is which client: the Tally page).",
         status: "Tally: " + tallyStatus(null).label }] : []),
       { id: "postlog", label: "Sent to Tally", about: "A record of every entry posted to Tally, by whom and when: it is kept on the Tally page.", status: (S.firm.postLog || []).length + " entries" },

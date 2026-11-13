@@ -57,7 +57,7 @@ function StatusLine({ co, noProblem }) {
 
 // Tally's own state in one plain sentence (parts/TallyIcon.jsx), "Not sent to Tally. Open X in Tally."
 function plainLine(co) {
-  const t = tallyIconState(co);
+  const t = tallyIconState(co, true);   // (why the posting did not go: the real state, next-tally-own-status M4)
   return "Not sent to Tally. " + (t.icon === "linked" ? "Tally did not answer. Try again." : String(t.line || "").replace(/\.?$/, "."));
 }
 

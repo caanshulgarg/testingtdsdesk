@@ -16,7 +16,7 @@ export default function TallyLine({ co, update = true }) {
   if (!l) return null;
   // round 4, item 25: FinCom has stopped reading on the client's computer: "Reading stopped by <name> at <time>: <reason>",
   // and Resume for an owner (tally_read_resume for that computer, or for all when the stop is for all); no Update from Tally
-  if (l.state === "stopped") {
+  if (l.state === "stopped" && !l.far) {
     const owner = S.account && S.account.me && S.account.me.role === "owner";
     return <span className="tally-line" data-tally-line="stopped">
       <span className="tag bad" data-tally-line-text="">{l.text}</span>
@@ -24,7 +24,7 @@ export default function TallyLine({ co, update = true }) {
     </span>;
   }
   return <span className="tally-line" data-tally-line={l.state}>
-    <span className={"tag " + l.level} data-tally-line-text="">{l.text}</span>
+    <span className={"tag " + (l.tone || l.level)} data-tally-line-text="">{l.say || l.text}</span>
     {update && <>{" "}<button className="linkbtn" data-update-now="" onClick={() => tallyUpdateNow(co.id)}>Update from Tally</button></>}
   </span>;
 }

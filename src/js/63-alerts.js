@@ -226,8 +226,10 @@ const AlertHub = {
           text: coName(g.cid) + ": " + (k === 1 ? "1 ledger" : k + " ledgers") + " used in Tally " + (k === 1 ? "is" : "are") + " not in FinCom yet.",
           fix: "Confirm them on Ledgers, or update them in Books › From Tally.", act: {label: "Ledgers", run: () => Rec.openClientTab(g.cid, "books:ledgers")}});
       });
-      // ---- one problem a computer: not answering, tried again by itself, silent today
-      const devs = ((typeof TLight === "object" && TLight.st.devs) || []).filter(d => d && !d.revoked);
+      // ---- one problem a computer: not answering, tried again by itself, silent today. next-tally-own-status (the owner,
+      // 13-Nov-2026): each person hears only of their OWN bridge's computer (FCOwn, app/src/lib/ownBridge.js), the owner too
+      const mineD = ((typeof FCOwn == "object" && FCOwn.bridge() || {}).dev || {}).id;
+      const devs = ((typeof TLight === "object" && TLight.st.devs) || []).filter(d => d && !d.revoked && d.id === mineD);
       const silent = Rec.silentOf();
       devs.forEach(d => {
         const beat = ((d.info || {}).beat) || {}, label = typeof tallyPcLabel === "function" ? tallyPcLabel(d) : d.name, ds = devState(d);

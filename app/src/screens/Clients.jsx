@@ -39,7 +39,7 @@ function TallyLight({ cid }) {
   // 24-Oct-2026 (next-tally-one-page): the one status (lib/tallyState.js: Connected / Disconnected / Not linked), the same
   // words as the client's title chip and its row on the Tally page; a click opens that row
   const p = clientTallyState(co);
-  return <button type="button" className={"tag tchip " + p.level} title={p.text + (p.company ? " (" + p.company + ")" : "") + ". " + (l ? l.text + ". " : "") + t.label + ". " + t.say + (x && (t.state === "ok" || t.state === "held") ? "" : x ? " " + x.say : "")}
+  return <button type="button" className={"tag tchip " + p.level} title={p.text + (p.company ? " (" + p.company + ")" : "") + ". " + (l ? (l.say || l.text) + ". " : "") + t.label + ". " + t.say + (x && (t.state === "ok" || t.state === "held" || t.state === "far" || (l && l.far)) ? "" : x ? " " + x.say : "")}
     data-tally={t.state} data-tally-link-chip={p.state} data-tally-chip={p.state} data-tally-pill={p.state} data-tally-chip-at="clients" data-tally-line-tip={l ? l.state : ""}
     onClick={(ev) => { ev.stopPropagation(); goTallyRow(cid); }}>{MARK[p.level] + p.word}</button>;
 }

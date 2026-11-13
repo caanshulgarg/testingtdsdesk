@@ -52,44 +52,17 @@ export function deadKey(whose, beat) {
 }
 
 // "PC1\usera" and "usera" are the same login (one side may say no computer); two computers' are not; null: not known
-const lc = (s) => String(s || "").trim().toLowerCase();
-export const sameUser = (a, b) => { const x = lc(a), y = lc(b); if (!x || !y) return null; if (x.includes("\\") && y.includes("\\")) return x === y; return x.split("\\").pop() === y.split("\\").pop(); };
-const OWNKEY = () => ((typeof LocalOwner === "object" && LocalOwner && LocalOwner.P) || "tdsdesk:") + "ownbridge";
-// next-tally-connectfix (04-Nov-2026): what this browser knows of THIS Windows login's own bridge, without asking it: the
-// bridge a 2.5.3 look found in this login's session before (lib/tallySimple.js rememberOwn: its id, port and Windows user;
-// each Windows login has its own browser profile), and the paired bridge's line in FinCom's cloud (its beat's Windows user
-// and bridgePort). {id, user, ports}; empty when nothing is known
-export function ownHint() {
-  const out = { id: "", user: "", ports: [] }, add = (p) => { p = Number(p) || 0; if (p >= 1 && p <= 65535 && !out.ports.includes(p)) out.ports.push(p); };
-  let m = null;
-  try { m = JSON.parse(localStorage.getItem(OWNKEY()) || "null"); } catch (e) { m = null; }
-  if (m && typeof m === "object") { out.id = String(m.id || ""); out.user = String(m.user || ""); add(m.port); }
-  try {
-    const c = (typeof Bridge === "object" && Bridge.cfg && Bridge.cfg()) || {};
-    const id = out.id || (c.key ? String(c.bridgeId || "") : "");
-    const r = id && typeof TCloud === "object" && TCloud.bridgesHeard ? TCloud.bridgesHeard().find((x) => x && x.id === id) : null;
-    if (r) { out.id = out.id || id; out.user = out.user || String(r.user || ""); add(r.port); }
-  } catch (e) { /* the cloud's list not read yet */ }
-  return out;
-}
+import { lc, sameUser, ownHint, HERE, baseNow, lastMine } from "./ownBridge.js";
+export { sameUser, ownHint, HERE, lastMine };
 // a /ping answer is this login's bridge: its session says so (2.5.3), or (older, or Windows did not say) it is this
 // Windows user's with an id, and its Windows user is not another than this login's own bridge's (when both are known)
 const isMine = (b, hint) => !!b && (b.sameSession === true || (b.yours !== false && !!b.bridgeId && b.sameSession !== false
   && !(hint.user && b.windowsUser && sameUser(b.windowsUser, hint.user) === false)));
 const isOther = (b, hint) => !!b && (b.yours === false || b.sameSession === false || (b.sameSession !== true && !!hint.user && !!b.windowsUser && sameUser(b.windowsUser, hint.user) === false));
 
-// next-tally-connectfix (finding 4: on a shared server each port that answers is another login's bridge reading the
-// computer's TCP table for its /ping): what this tab asked of 127.0.0.1. The look is one at a time (busy); the whole range
-// 9100-9199 is asked at most once in this tab by itself, and again only on a person's ask (Connect this computer, I have
-// opened it: full)
-// next-tally-other-login (05-Nov-2026): gen, a new start (resetHere): a look begun before it never goes on to the range
-export const HERE = { busy: null, busyFull: false, fullAt: 0, n: 0, gen: 0 };
+// (HERE, what this tab asked of 127.0.0.1, ownHint and lastMine are lib/ownBridge.js's since next-tally-own-status: the
+// app's first look on this computer and the one-click card's share them)
 export function resetHere() { Object.assign(HERE, { busy: null, busyFull: false, fullAt: 0, n: 0, gen: HERE.gen + 1, last: null, lookP: null }); }
-// the last look's answer, when it found this login's bridge at this browser's address, in this start, a moment ago: every
-// caller takes it (no port asked again)
-const baseNow = () => String((Bridge.cfg() || {}).url || "").replace(/\/+$/, "");
-export const lastMine = () => { const L = HERE.last; return L && L.gen === HERE.gen && L.base === baseNow() && Date.now() - L.at < 5000 && L.h.mine ? L.h : null; };
-
 // this computer's FinCom Bridge as /ping finds it (nothing secret sent): mine (with its id), another Windows user's, an
 // older bridge, or none; known: this login's own bridge is known to exist (installed here, not answering now). First the
 // remembered address and this login's own bridge's port (its beat's bridgePort); only when none of them is this login's

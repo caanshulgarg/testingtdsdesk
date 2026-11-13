@@ -64,6 +64,7 @@ def main():
           Bridge.call = async (path) => { if (path.startsWith('/status')) return JSON.parse(JSON.stringify(st)); if (path === '/diagnose') return { tallies: [], findings: [] }; return { ok: true }; };
           Bridge.ensureProven = async () => true; Bridge.diagnose = async () => ({ tallies: [], findings: [] });
           const g = await FCTallyConnect.getCompanies(), f = await FCTallyConnect.findTally();
+          FCTallySimple.LOCALB.page = 1;   // (next-tally-own-status: the Tally page's own first look is not asked again over this made-up answer)
           FCTallySimple.LOCALB.list = [{ port: 9100, url: 'http://127.0.0.1:9100', bridgePort: 9100, bridgeId: 'go-9100abcdef', sameSession: true, windowsUser: 'PC-SHARED\\\\userone', version: '2.5.3', bridge: 'FinCom Tally Bridge' }];
           const o = FCTallySimple.ownState();
           const rows = FCTallySimple.tableRows({}).filter((x) => x.kind === 'company').map((x) => x.company);

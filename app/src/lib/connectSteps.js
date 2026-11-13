@@ -15,7 +15,7 @@
 // A browser with no bridge (a laptop): "Do these steps on the computer or server where TallyPrime runs", with the firm's
 // state, and no per-login steps. Nothing new is asked of the bridge or Tally: what ownState() (lib/tallySimple.js), the
 // beats and the rows already hold. Never another login's company, and never the firm's state shown as this login's.
-import { ownState, ownBridge, localBridges, LOCALB, placeOf, bridgeSay, bridgesOf, ownConnOff, NEED_V, BRIDGE, BLOCKED, NO_CO, NO_CO_HELP, YES } from "./tallySimple.js";
+import { ownState, ownBridge, localBridges, LOCALB, placeOf, bridgeSay, ownConnOff, NEED_V, BRIDGE, BLOCKED, NO_CO, NO_CO_HELP, YES } from "./tallySimple.js";
 import { tallyDevs } from "./tallyState.js";
 import { freePort, portHowWords } from "./tallyPort.js";
 
@@ -112,7 +112,7 @@ export function connectSteps(opts) {
   // step 1 with where to do it, never "do these steps elsewhere" alone)
   const week = (at) => !!at && Date.now() - Date.parse(at) < 7 * 864e5;
   const first = place === "laptop" && !tallyDevs().some((d) => week(((d.info || {}).beat || {}).at || d.last_seen));
-  if (place === "laptop" && !first) return { mode: "laptop", login: "", steps: TITLES.map((title, i) => ({ n: i + 1, title, state: "later", say: "" })), now: null, firm: firmWords(o0.rows) };
+  if (place === "laptop" && !first) return { mode: "laptop", login: "", steps: TITLES.map((title, i) => ({ n: i + 1, title, state: "later", say: "" })), now: null, firm: null };
   let own; try { own = ownState(); } catch (e) { own = { state: "none" }; }
   const login = loginOf(own), steps = [];
   const put = (key, done, say, act, hook, doneSay) => steps.push({ n: steps.length + 1, key, title: TITLES[steps.length], done: !!done, say: say || "", doneSay: doneSay || "", act: act || null, hook: hook || "" });
@@ -214,13 +214,6 @@ export function connectSteps(opts) {
   return { mode: "login", login, steps, now, firm: null, notSaved };
 }
 const lcFirst = (s) => { const t = String(s || ""); return /^[A-Z][a-z]/.test(t) ? t[0].toLowerCase() + t.slice(1) : t; };
-// the firm's state, for a browser with no bridge (never per login): its bridges heard now, Tally open, clients linked
-export function firmWords(rows) {
-  const all = bridgesOf().filter((b) => fresh(b.at)), withT = all.filter((b) => b.open.length || [].concat((b.beat || {}).ports || []).some((p) => p && p.ok && !p.skipped));
-  const linked = [].concat(rows || []).filter((r) => r.kind === "client" && r.c && r.c.w === YES).length;
-  if (!all.length) return "For the firm now: no FinCom Bridge is connected.";
-  return "For the firm now: " + nOf(all.length, "FinCom Bridge is", "FinCom Bridges are") + " connected, " + withT.length + " with Tally open" + (rows ? ", " + nOf(linked, "client", "clients") + " linked" : "") + ".";
-}
 // the first step not done of the four a login needs before any client (the client's box and the top bar say it): null
 // when they are done, on a laptop, or while the bridge is still being looked for
 export function connectNow(latest) {
@@ -228,7 +221,9 @@ export function connectNow(latest) {
   const s = r.mode === "login" ? r.now : null;
   // (only where this browser is on a Tally computer: a laptop whose browser did not let FinCom look, or whose look was
   // cut, says the firm's state as before; the first time anywhere, step 1)
-  if (s && placeOf() !== "pc" && s.hook !== "first") return null;
+  // (the coordinator, 13-Nov-2026: a firm with no bridge at all: its step 1 is said on the Tally page and on the client's
+  // Tally tab only, never in a client's box on every page)
+  if (s && placeOf() !== "pc" && (s.hook !== "first" || !((S.view === "home" && S.homeTab === "tally") || (S.view === "company" && S.tab === "cotally")))) return null;
   return s && s.hook !== "checking" ? { n: s.n, title: s.title, say: s.say, hook: s.hook, login: r.login } : null;
 }
 // "Step 3 of 6 · Tally’s connection on…": the same words everywhere a box points to the checklist

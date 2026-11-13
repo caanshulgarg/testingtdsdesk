@@ -12,7 +12,7 @@ import "./linkStatus.css";
 export default function LinkStatus({ co, where = "pop", company = "" }) {
   const [how, setHow] = useState(false);
   if (!co || (where !== "pop" && where !== "row")) return null;
-  const s = linkWord(co, company);
+  const s = linkWord(co, company, 1);
   if (!s || (where === "row" && s.kind === "unlinked")) return null;
   // a port problem in short; the whole line in its tip and in the steps' box (on a Tally page row the pill says the word
   // and the line: the button only)
@@ -27,4 +27,4 @@ export default function LinkStatus({ co, where = "pop", company = "" }) {
 }
 // the one function for every chip (lib/tallyState.js clientTallyState), with its line and button for the header's Tally
 // icon's popover (TallyIcon draws p.after("pop"))
-if (typeof globalThis === "object") globalThis.LinkWord = (co, company) => { const w = linkWord(co, company); if (w) w.after = (where) => createElement(LinkStatus, { co, where }); return w; };
+if (typeof globalThis === "object") globalThis.LinkWord = (co, company, show) => { const w = linkWord(co, company, show); if (w) w.after = (where) => createElement(LinkStatus, { co, where }); return w; };

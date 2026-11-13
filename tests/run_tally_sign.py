@@ -55,8 +55,9 @@ with sync_playwright() as p:
     ok(s["on"] is True and st == "on" and txt == "Tally ready on OFFICE-PC", "connected: the bridge's heartbeat 5 s ago, Tally open with TESTING AAD, through which computer: “%s”" % txt)
     ok("OFFICE-PC" in title and "TESTING AAD" in title and IST.search(title), "hover: computer, company and the last contact in IST (%s)" % title[:140])
     pg.evaluate("() => { if (!S.tallyPanel) doAct('tallyPanel'); }"); pg.wait_for_timeout(300)
-    d = pg.inner_text("[data-tally-firm] [data-tally-detail]") if pg.locator("[data-tally-firm] [data-tally-detail]").count() else ""
-    ok("OFFICE-PC" in d and "TESTING AAD" in d and IST.search(d), "a click shows the same detail in plain words (%s)" % d.replace("\n", " / ")[:160])
+    # next-tally-own-status (the owner, 13-Nov-2026): the panel no longer lists the firm's Tally computers (each with its
+    # company and last contact): a person sees only their own Tally there
+    ok(pg.locator('[data-overlay="tallypanel"]').count() == 1 and pg.locator("[data-tally-firm]").count() == 0 and "Tally computers" not in pg.inner_text('[data-overlay="tallypanel"]'), "a click (connected): the panel, with no list of the firm's Tally computers")
     pg.keyboard.press("Escape"); pg.wait_for_timeout(300)
     ok(pg.evaluate("[S.tallyPanel, S.view]") == [False, "company"], "Esc closes the Tally panel and stays with the client")
     s = pg.evaluate(setup, [cid, beat(tallyState="busy"), None])
@@ -78,8 +79,9 @@ with sync_playwright() as p:
         ok(why.lower() in title.lower() and fix.lower() in title.lower(), "%s: reason and fix on hover (%s)" % (code, title[-160:]))
         ok("OFFICE-PC" in s.get("computer", "") and (code == "bridge" or IST.search(s.get("at", "") or "") or code == "internet"), "%s: which computer (%s), last contact %s" % (code, s.get("computer"), s.get("at")))
     pg.evaluate("() => { if (!S.tallyPanel) doAct('tallyPanel'); }"); pg.wait_for_timeout(300)
-    d = pg.inner_text("[data-tally-firm] [data-tally-detail]") if pg.locator("[data-tally-firm] [data-tally-detail]").count() else ""
-    ok("internet" in d.lower() and "OFFICE-PC" in d, "a click: the reason and the fix in the panel (%s)" % d.replace("\n", " / ")[:160])
+    # next-tally-own-status (the owner, 13-Nov-2026): the panel no longer lists the firm's Tally computers (each with its
+    # company and last contact): a person sees only their own Tally there
+    ok(pg.locator('[data-overlay="tallypanel"]').count() == 1 and pg.locator("[data-tally-firm]").count() == 0 and "Tally computers" not in pg.inner_text('[data-overlay="tallypanel"]'), "a click (no internet): the panel, with no list of the firm's Tally computers")
     pg.evaluate("() => { S.tallyPanel = false; render(); }")
     s = pg.evaluate(setup, [cid, None, None])
     ok(s["on"] is False and s["code"] == "bridge", "no Tally computer at all: disconnected, the bridge is not running (%s)" % s.get("reason"))
@@ -110,16 +112,18 @@ with sync_playwright() as p:
     st, txt, title = top()
     ok(txt == "Tally ready on 2 computers", "two computers: “Tally ready on 2 computers” (%s)" % txt)
     pg.evaluate("() => { if (!S.tallyPanel) doAct('tallyPanel'); }"); pg.wait_for_timeout(300)
-    dd = pg.inner_text("[data-tally-firm] [data-tally-detail]") if pg.locator("[data-tally-firm] [data-tally-detail]").count() else ""
-    ok("Office computer (NWS144)" in dd and "Accounts desk (NWS210)" in dd and "TESTING AAD" in dd and IST.search(dd), "a click: both computers, the company and the last contact (%s)" % dd.replace("\n", " / ")[:200])
+    # next-tally-own-status (the owner, 13-Nov-2026): the panel no longer lists the firm's Tally computers (each with its
+    # company and last contact): a person sees only their own Tally there
+    ok(pg.locator('[data-overlay="tallypanel"]').count() == 1 and pg.locator("[data-tally-firm]").count() == 0 and "Tally computers" not in pg.inner_text('[data-overlay="tallypanel"]'), "a click (two computers): the panel, with no list of the firm's Tally computers")
     pg.evaluate("() => { S.tallyPanel = false; render(); }")
     # none: last seen, the reason and the fix on a click
     s = pg.evaluate(two, [cid, [dict(d("d1", "Office computer", "NWS144", at=iso(900)), last_seen=iso(900))], None]); pg.wait_for_timeout(300)
     st, txt, title = top()
     ok(re.match(r"Tally not connected\. Last seen on Office computer \(NWS144\) at \d{2}-[A-Z][a-z]{2}-\d{4} \d{2}:\d{2} IST$", txt), "none: “Tally not connected. Last seen on Office computer (NWS144) at <time IST>” (%s)" % txt)
     pg.evaluate("() => { if (!S.tallyPanel) doAct('tallyPanel'); }"); pg.wait_for_timeout(300)
-    dd = pg.inner_text("[data-tally-firm] [data-tally-detail]") if pg.locator("[data-tally-firm] [data-tally-detail]").count() else ""
-    ok("not running" in dd and "start FinCom Bridge" in dd, "a click: the reason and the fix (%s)" % dd.replace("\n", " / ")[:200])
+    # next-tally-own-status (the owner, 13-Nov-2026): the panel no longer lists the firm's Tally computers (each with its
+    # company and last contact): a person sees only their own Tally there
+    ok(pg.locator('[data-overlay="tallypanel"]').count() == 1 and pg.locator("[data-tally-firm]").count() == 0 and "Tally computers" not in pg.inner_text('[data-overlay="tallypanel"]'), "a click (none heard): the panel, with no list of the firm's Tally computers")
     pg.evaluate("() => { S.tallyPanel = false; render(); }")
     # another company open
     s = pg.evaluate(two, [cid, [d("d1", "Office computer", "NWS144", open=["MASTERCAD SOLUTIONS"])], None]); pg.wait_for_timeout(300)

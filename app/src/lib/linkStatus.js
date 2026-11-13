@@ -1,7 +1,9 @@
 // One status word per client, everywhere (next-link-record, 26-Oct-2026; the owner's step 2 of "Stable Tally linking"):
 // the Tally page's rows, the client's title chip, the Clients list and Post to Tally say the SAME word, from this one
 // function (globalThis.LinkWord, put there by parts/LinkStatus.jsx; lib/tallyState.js clientTallyState hands over to it):
-//   Linked              reading and posting are fine: "reading · posting allowed · last entry 18:42"
+//   Linked              reading and posting are fine: "reading · posting allowed · last entry 18:42" when the company
+//                       is open in this person's own Tally; "Last entry from Tally received <date time>" when it is read in
+//                       another's Tally of the firm (next-tally-own-status)
 //   Waiting for Tally   linked, the company not open on any computer now: one plain line, "Open <company> in TallyPrime
 //                       on <PC>" (Tally closed, the company not open, the computer offline)
 //   Needs you           one line and one button: the same company in two places (Choose), FinCom Bridge cannot reach
@@ -14,7 +16,7 @@
 // {state (the pill's code, as lib/tallyState.js: connected | notopen | offline | unseen | unlinked), kind (linked |
 //  waiting | needs | unlinked), word, level, line, text (the word and the line), button: {label, act} | null, company,
 //  computer, seen, port}
-import { tallyDevs, openOn, pcOf, coKey, lastEntry, tallyCoState } from "./tallyState.js";
+import { tallyDevs, openOn, pcOf, coKey, lastEntry, tallyCoState, farLine } from "./tallyState.js";
 import { portIssueOf, portIssueWords, portWarnWords } from "./tallyPort.js";
 
 const hm = (t) => String((typeof tallyHm === "function" ? tallyHm(t) : "") || "").replace(/\s*IST$/, "");
@@ -31,8 +33,15 @@ const LEVEL = { linked: "ok", waiting: "warn", needs: "bad", unlinked: "warn" };
 
 // next-tally-connect-steps: a client waiting for Tally (or the port) while this login's own Connect Tally step is not done
 // says that step's words, with the way to the six steps (lib/connectSteps.js, through globalThis: no import cycle)
-export function linkWord(co, company) {
-  const w = linkWordNow(co, company);
+// show (next-tally-own-status, review M4): for the places that SHOW a client's state (the top bar's icon, the chips, the
+// client's Tally box, the Tally page's rows): a client whose company is on another's bridge, that Tally closed, offline,
+// paused, stopped, not answering or its port wrong (br), says the data's line, never amber or red; those are the
+// person's own bridge's only. Posting's words (src/js/97) ask without it: the real state
+const mineDev = (id) => { const b = globalThis.FCOwn && FCOwn.bridge(); return !!b && (!id || (!!b.dev && b.dev.id === id)); };
+export function linkWord(co, company, show) {
+  let w = linkWordNow(co, company);
+  if (show && w && w.br && !mineDev(w.device)) { const line = farLine(lastEntry(co, tallyLinkOf(co)));
+    w = Object.assign({}, w, { kind: "linked", word: WORDS.linked, level: LEVEL.linked, line, text: WORDS.linked + " — " + line, button: null, port: null, far: true }); }
   return typeof globalThis.FCWithStep === "function" ? globalThis.FCWithStep(w) : w;
 }
 function linkWordNow(co, company) {
@@ -54,28 +63,31 @@ function linkWordNow(co, company) {
   const sv = typeof globalThis.tallyServe === "function" ? globalThis.tallyServe(name, { rec, device: devId }) : undefined;
   const dev = (sv && sv.dev) || devs.find((d) => d.id === devId) || devs.find((d) => openOn(d).some((n) => sameCo(n, name))) || null;
   const pc = rec || dev ? pcOf(dev) : "its computer";   // (never a computer's name: next-fix-tally-links2)
-  const base = { state: st.state, company: name, computer: st.computer || pc, seen: st.seen, device: (dev && dev.id) || "" };
+  const base = { state: st.state, company: name, computer: st.computer || pc, seen: st.seen, device: (dev && dev.id) || "" }, brs = Object.assign({ br: 1 }, base);
   // open in none of several computer keys (a shared server: one a Windows login): the plain words, never one login's
   const open = sv === null && globalThis.tallyPlain(devId) ? "Open " + name + " in Tally" : "Open " + name + " in TallyPrime on " + pc;
   // the same company in two places (a copied data folder keeps the GUID): nothing from the other place is applied
   if (rec && typeof LinkRec === "object" && LinkRec.twoPlaces(rec)) return o("needs", name + " is open in two places with different data: choose which is the books", { label: "Choose", act: goRow(co, TWO) }, base);
   // (no computer of the firm has FinCom Bridge at all: that is what to do first)
-  if (!dev) return o("waiting", devs.length ? open : "Install FinCom Bridge on the computer with TallyPrime", null, base);
+  if (!dev) return o("waiting", devs.length ? open : "Install FinCom Bridge on the computer with TallyPrime", null, devs.length ? brs : base);
   const ds = typeof devState === "function" ? devState(dev) : { bridge: "online", tally: "open" };
-  if (ds.bridge === "offline" || ds.bridge === "none") return o("waiting", open, null, base);
+  if (ds.bridge === "offline" || ds.bridge === "none") return o("waiting", open, null, brs);
   // the bridge itself reports it cannot reach Tally on its port (never a port FinCom only guesses at)
   const pi = portIssueOf(dev, name, sameCo);
-  if (pi) return o("needs", portIssueWords(pi) + ". " + portWarnWords(pi.free), { label: "Show the steps", act: null }, Object.assign(base, { port: pi }));
-  if (ds.tally === "closed") return o("waiting", open, null, base);
+  if (pi) return o("needs", portIssueWords(pi) + ". " + portWarnWords(pi.free), { label: "Show the steps", act: null }, Object.assign(brs, { port: pi }));
+  if (ds.tally === "closed") return o("waiting", open, null, brs);
   const lists = [((dev.info || {}).beat || {}).open].concat(Object.values((dev.info || {}).bridges || {}).map((b) => b && b.open)).filter(Array.isArray);
-  if (lists.length && !lists.some((l) => l.some((n) => sameCo(n, name)))) return o("waiting", open, null, base);
+  if (lists.length && !lists.some((l) => l.some((n) => sameCo(n, name)))) return o("waiting", open, null, brs);
   const posting = rec ? !!rec.posting_allowed : typeof postToProblem === "function" && !postToProblem(co, "");
   if (!posting && rec) return o("needs", "Posting into Tally is stopped for " + co.name, { label: "Allow posting", act: () => (typeof linkPostingSet === "function" ? linkPostingSet(co, rec, true) : null) }, base);
   const l = k.line || null;
-  if (l && l.state === "stopped") return o("needs", l.text, { label: "Open the Tally page", act: goRow(co, ACTIVITY) }, base);
-  if (l && l.state === "paused") return o("needs", l.text, { label: "Update from Tally", act: () => (typeof tallyUpdateNow === "function" ? tallyUpdateNow(co.id) : null) }, base);
-  if (l && l.state === "notanswering") return o("needs", l.text, { label: "Check again", act: check }, base);
+  if (l && l.state === "stopped") return o("needs", l.text, { label: "Open the Tally page", act: goRow(co, ACTIVITY) }, brs);
+  if (l && l.state === "paused") return o("needs", l.text, { label: "Update from Tally", act: () => (typeof tallyUpdateNow === "function" ? tallyUpdateNow(co.id) : null) }, brs);
+  if (l && l.state === "notanswering") return o("needs", l.text, { label: "Check again", act: check }, brs);
   if (k.state === "needs") return o("needs", "Entries wait for you on the Tally page", { label: "Open the Tally page", act: goRow(co, ACTIVITY) }, base);
   const last = lastEntry(co, k);
-  return o("linked", ["reading", posting ? "posting allowed" : "posting not allowed", last ? "last entry " + hm(last) : ""].filter(Boolean).join(" · "), null, base);
+  // next-tally-own-status (the owner, 13-Nov-2026): open in this person's own Tally: reading and posting, as before; read
+  // in another's Tally of the firm: the data's line only (farLine: "Last entry from Tally received <date time>")
+  const mine = st.computer === "this computer" || !!(globalThis.FCOwn && FCOwn.has(name));
+  return o("linked", mine ? ["reading", posting ? "posting allowed" : "posting not allowed"].concat(last ? "last entry " + hm(last) : []).join(" · ") : farLine(last), null, Object.assign(base, { far: !mine }));
 }

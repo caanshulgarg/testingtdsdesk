@@ -36,6 +36,9 @@ Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_tally_page_cle
 import json, os, re, sys, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
 from playwright.sync_api import sync_playwright
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from own_seed import OWN_DEV
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 SITE = os.environ.get("TDSDESK_SITE", os.path.join(HERE, "..", "app", "dist-test"))
 SHOTS = sys.argv[sys.argv.index("--shots") + 1] if "--shots" in sys.argv else ""
@@ -143,7 +146,7 @@ SETUP = """([devs, companies, lines, role, clients, onlyMine, books]) => {
 OWNER_HOOKS = ["data-read-stop", "data-read-resume", "data-read-stop-all", "data-read-resume-all", "data-release-hold", "data-release-unhold", "data-release-rollback",
     "data-release-rollback-clear", "data-release-withdraw", "data-trial-tools-switch", "data-recorder-source-pick", "data-ps-edit", "data-changes-only-switch",
     "data-make-main", "data-release-identity", "data-member-link-pick", "data-baseline-clear", "data-reparse", "data-pc-resume"]
-FOLD = ["[data-bridge-card]", "[data-install-help]", "[data-connect-section]", '[data-pane="tally-history"]', "[data-release]", "[data-bridges]", "[data-read-stop-all]",
+FOLD = ["[data-bridge-card]", "[data-install-help]", "[data-connect-section]", '[data-pane="tally-history"]', "[data-release]", "[data-read-stop-all]",
         "[data-bridge-ps]", "[data-bridge-sha]"]   # round 66: the outdated "Clients' Tally" lines ([data-client-lines]) are gone
 
 def main():
@@ -169,6 +172,7 @@ def main():
             return E("(s) => { const a = document.querySelector('#app').cloneNode(true); a.querySelectorAll(s).forEach(e => e.remove()); return a.innerText; }", sel)
         outside = lambda sel, keep: E("([s, k]) => [...document.querySelectorAll('#app ' + s)].filter(e => !e.closest(k)).length", [sel, keep])
         def scene(devs, cos, lines=(), role="owner", only=True, books=None):
+            E(OWN_DEV, devs[0] if devs else None)   # next-tally-own-status (13-Nov-2026): the made-up Tally computer here is this person's own (own_seed.py)
             ids = E(SETUP, [devs, cos, list(lines), role, CLIENTS, only, books or {}]); pg.wait_for_timeout(1800); return ids
         def fold(open_it=True):
             if (n("#app [data-advanced] [data-bridge-more]") > 0) != open_it:
@@ -248,7 +252,8 @@ def main():
         fold(True)
         missing = [s for s in FOLD if s not in ('[data-install-help]',) and not n("#app [data-for-support] " + s)]
         ok(not missing, "fold open: install again, this browser's connect, history, versions, stop on all, every bridge, clients' lines (%s)" % missing)
-        ok(n("#app [data-advanced] [data-bridges] [data-bridge-row]") >= 2 and "Older bridge" in txt("#app [data-advanced] [data-bridges]"), "fold: every bridge heard from, the old one too")
+        # (next-tally-own-status (the owner, 13-Nov-2026): no list of every bridge heard from)
+        ok(n("#app [data-bridges]") == 0 and "Every bridge" not in txt("#app [data-advanced]"), "fold: no list of every bridge heard from")
         ok(n('#app [data-advanced] [data-tally-tab="activity"]') == 1 and n('#app [data-advanced] [data-tally-tab="sent"]') == 1, "fold: Sync activity and Everything sent")
         ok(n('#app [data-advanced] [data-computer="%s"]' % D1) == 1 and n("#app [data-advanced] [data-release-hold]") == 1 and n("#app [data-advanced] [data-release-rollback]") == 1,
            "fold: each computer's details, Hold version, Roll back")
@@ -439,7 +444,8 @@ def main():
             chip = E("(c) => { const r = [...document.querySelectorAll('#app table[data-list=\"clients\"] tr')].find(t => t.innerText.startsWith('GB TEXCOAT')); const ch = r && r.querySelector('[data-tally-chip]'); return ch ? [ch.getAttribute('data-tally-chip'), ch.getAttribute('data-tally-pill')] : ''; }", T)
             E("() => { S.tallyGuide = {}; navHome('tally'); }"); pg.wait_for_timeout(1200)
             rw = E("() => { const r = document.querySelector('#app [data-tco-row=\"GB TEXCOAT\"]'); return r ? [r.getAttribute('data-tco-state'), r.getAttribute('data-tco-linked'), r.querySelectorAll('[data-tco-act]').length] : null; }")
-            t2 = E("""() => { const a = document.querySelector('#app').cloneNode(true); a.querySelectorAll('[data-advanced], details, [data-connect-guide]').forEach(e => e.remove()); return a.innerText; }""")
+            t2 = E("""() => { const a = document.querySelector('#app').cloneNode(true); a.querySelectorAll('[data-advanced], details, [data-connect-guide], [data-tsm-top]').forEach(e => e.remove()); return a.innerText; }""")
+            # (next-tally-own-status: the computer is this person's own; their own top line names their Tally's port, nothing else does)
             ok(sign == "linked" and chip == ["connected", "connected"] and rw == ["connected", T, 0] and not re.search(r"\bport\b|9500|9002", t2, re.I),
                "%s: still linked and Connected: the top bar (%s), the Clients chip (%s), its row (%s); no re-link asked, no port words" % (label, sign, chip, rw))
         linked_everywhere("port 9002")
@@ -563,7 +569,7 @@ def main():
         fold(True)
         E("() => document.querySelectorAll('#app [data-more-toggle][aria-expanded=\"false\"]').forEach(b => b.click())"); pg.wait_for_timeout(600)
         found += [h for h in OWNER_HOOKS if n("#app [%s]" % h)]
-        ok(n("#app [data-advanced] [data-bridges]") == 1 and not found, "staff: the fold opens, no owner button anywhere (%s)" % found)
+        ok(n("#app [data-advanced] [data-release]") == 1 and not found, "staff: the fold opens, no owner button anywhere (%s)" % found)
 
         # ---- 4. phone 390: no sideways scroll
         pg.close(); pg = open_page(390, 844)

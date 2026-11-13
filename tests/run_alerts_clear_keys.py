@@ -72,7 +72,9 @@ with sync_playwright() as p:
     # (recorderWaitSince), the same in every browser of the person (release-240 re-review M2)
     DEV = """([since, on]) => { const now = new Date().toISOString(), beat = {at: now, every: 30, tally: true, tallyState: "open", open: ["ZZ CO"]};
       if (on){ beat.recorderWaitWords = "3 changes of ZZ CO waiting to go to FinCom (oldest since 10:05)"; beat.recorderWaitSince = since; }
-      TLight.st.devs = [{id: "d1", name: "Office", revoked: false, last_seen: now, info: {computer: "OFFICE", beat}}]; TLight.st.at = Date.now();
+      // (next-tally-own-status: the bell tells a person of their OWN bridge's computer only: this one is theirs, remembered)
+      localStorage.setItem(LocalOwner.P + "ownbridge", JSON.stringify({id: "go-1", port: 0, user: "office"}));
+      TLight.st.devs = [{id: "d1", name: "Office", revoked: false, last_seen: now, main_bridge: "go-1", info: {computer: "OFFICE", beat, bridges: {"go-1": {at: now, user: "office"}}}}]; TLight.st.at = Date.now();
       const x = AlertHub.all().find(i => i.key === "ownwait:d1"), shown = AlertHub.list().some(i => i.key === "ownwait:d1");
       return x ? {fp: x.fp, cleared: AlertClear.cleared(x) && !shown, shown, text: x.text} : null; }"""
     E(CLOUD)
@@ -111,7 +113,7 @@ with sync_playwright() as p:
     # ---------- M2-r: the bridge's start per reason (recorderWaitStarts), joined into the fingerprint
     DEV2 = """(starts) => { const now = new Date().toISOString(), beat = {at: now, every: 30, tally: true, tallyState: "open", open: ["ZZ CO"],
         recorderWaitWords: "3 changes of ZZ CO waiting to go to FinCom (oldest since 10:05)", recorderWaitSince: starts.map(x => x.since).sort()[0], recorderWaitStarts: starts};
-      TLight.st.devs = [{id: "d2", name: "Office", revoked: false, last_seen: now, info: {computer: "OFFICE", beat}}]; TLight.st.at = Date.now();
+      TLight.st.devs = [{id: "d2", name: "Office", revoked: false, last_seen: now, main_bridge: "go-1", info: {computer: "OFFICE", beat, bridges: {"go-1": {at: now, user: "office"}}}}]; TLight.st.at = Date.now();   // (this person's own, as above)
       const x = AlertHub.all().find(i => i.key === "ownwait:d2"), shown = AlertHub.list().some(i => i.key === "ownwait:d2");
       return x ? {fp: x.fp, shown} : null; }"""
     Q1 = {"reason": "queue", "company": "ZZ CO", "since": "2026-10-09T05:00:30Z"}

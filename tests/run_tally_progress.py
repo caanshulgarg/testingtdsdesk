@@ -130,11 +130,13 @@ def main():
         ok(txt(R(NIMB) + " [data-tpt-state]") in ("Updating", "Waiting for Tally") and n(R(NIMB) + " .tpt-why") == 0 and mains(NIMB) == ["reading"],
            "2 (review 5). the State cell just '● Updating', the read's words only in the Masters cell (%s | %s)" % (txt(R(NIMB) + " .tpt-st"), nm_))
         # (review 5) "on the server" only once the look on this computer has found no bridge, never while it still looks
+        # (next-tally-own-status: a bridge found here before makes this a Tally computer: nothing remembered here)
+        E("() => { const k = LocalOwner.P + 'ownbridge'; window.__own0 = localStorage.getItem(k); localStorage.removeItem(k); }")
         E("() => { window.__cfg0 = Bridge.cfg; const L = FCTallySimple.LOCALB; window.__lb0 = {list: L.list, busy: L.busy, cut: L.cut, blocked: L.blocked}; Bridge.cfg = () => ({}); Object.assign(L, {list: null, busy: true}); render(); }"); pg.wait_for_timeout(300)
         sa = [E("() => FCTallySimple.placeOf()"), txt(R(ACME) + " [data-tpt-state]")]
         E("() => { Object.assign(FCTallySimple.LOCALB, {list: [], busy: false, cut: false, blocked: false}); render(); }"); pg.wait_for_timeout(300)
         sb = [E("() => FCTallySimple.placeOf()"), txt(R(ACME) + " [data-tpt-state]")]
-        E("() => { Bridge.cfg = window.__cfg0; Object.assign(FCTallySimple.LOCALB, window.__lb0); render(); }"); pg.wait_for_timeout(300)
+        E("() => { Bridge.cfg = window.__cfg0; Object.assign(FCTallySimple.LOCALB, window.__lb0); if (window.__own0) localStorage.setItem(LocalOwner.P + 'ownbridge', window.__own0); render(); }"); pg.wait_for_timeout(300)
         ok(sa == ["unknown", "Not open in Tally"] and sb == ["laptop", "Not open in Tally on the server"], "2 (review 5). still looking: 'Not open in Tally'; no bridge here: '… on the server' (%s %s)" % (sa, sb))
 
         print("== 1. masters read, entries after masters: in the row itself")

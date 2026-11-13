@@ -926,7 +926,7 @@ function Pill({ r, st, co, earlier, split = null, noLine = false }) {
   if (earlier) return <span className="tco-pill" data-tco-pill="earlier" data-tco-pill-text={"Earlier year of " + earlier}>
     <span className="tag">Earlier year</span><span className="tco-why">{" · " + earlier + " is the newer year"}</span></span>;
   // next-link-record: a linked company says the client's one word (Linked / Waiting for Tally / Needs you) and its one line
-  const w = co ? linkWord(co, r.company) : null;
+  const w = co ? linkWord(co, r.company, 1) : null;
   if (w) return <span className="tco-pill" data-tco-pill={st.state} data-tco-pill-text={w.text} data-tco-word={w.kind}>
     <span className={"tag " + w.level}>{w.word}</span>{w.line && !noLine && <span className="tco-why">{w.line}</span>}</span>;
   return <span className="tco-pill" data-tco-pill={st.state} data-tco-pill-text={st.text}>
