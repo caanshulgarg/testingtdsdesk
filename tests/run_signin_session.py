@@ -5,9 +5,8 @@ whole session family dies, as GoTrue does outside its reuse window. Two real tab
 localStorage) are opened against it.
   1. two tabs whose token ran out refresh at the same moment: one refresh for both, nobody refused, both stay in
   2. a sign-out in one tab: the other tab says so (not a blank sign-in page); a sign-in in one tab brings the other in
-  3. a session that cannot continue (every refresh refused): the open bill and what was typed stay on the page, one
-     "Sign in again" in the top bar (stay signed in, 13-Nov-2026); it leads to the sign-in page and back to the bill, and
-     the sign-out reason reaches the activity log
+  3. a session that cannot continue (every refresh refused): the sign-in page says why, the open bill and what was typed
+     come back after signing in, and the sign-out reason reaches the activity log
   4. no automatic sign-out: 31 minutes without a click, still signed in; no such control in Settings
   5. "Sign out of all devices": the owner sees it and it calls logout?scope=global; a member does not see it
   6. "This is a shared computer": not ticked (default) = session in localStorage; ticked = sessionStorage (a new tab is
@@ -141,12 +140,11 @@ with sync_playwright() as p:
     A.fill('[data-fk="x:vendorName"]', "Alpha Traders typed"); A.wait_for_timeout(300)
     ST["refuse_all"] = True; ST["access"] = "gone-on-server"; ST["activity"] = []; ST["refused"] = 0
     r = A.evaluate("() => Cloud.api('records?select=id&limit=1').then(() => 'ok', e => 'err: ' + e.message)"); A.wait_for_timeout(800)
-    note = A.locator('[data-save="signedout"]')
-    ok(not signin_page(A) and not A.evaluate("Cloud.on()") and A.evaluate("location.hash") == bill, "a refused refresh ends the sign-in, the bill stays open (the request: %s)" % r)
-    ok(note.count() == 1 and note.inner_text().strip() == "Sign in again" and "Sign in to the firm account" not in A.inner_text("#app"), "one 'Sign in again' in the top bar, nothing on the page")
+    t = A.inner_text("#app")
+    ok(signin_page(A), "a refused refresh on every path ends the sign-in (the request: %s)" % r)
+    ok("Your sign-in ended:" in t and "Sign in again; your work is kept." in t, "the sign-in page says why, in words: " + (t.split("Your sign-in ended:")[1].split("\n")[0].strip() if "Your sign-in ended:" in t else "(nothing)"))
     ok(ST["refused"] == 1, "one refused refresh is enough: no retry storm (%d)" % ST["refused"])
-    note.click(); A.wait_for_timeout(600)
-    ok(signin_page(A) and A.evaluate("Route.pending") == bill, "the note opens the sign-in page, the open bill remembered (" + str(A.evaluate("Route.pending")) + ")")
+    ok(A.evaluate("Route.pending") == bill, "the open bill is remembered (" + str(A.evaluate("Route.pending")) + ")")
     ST["refuse_all"] = False
     sign_in(A); A.wait_for_timeout(1500)
     ok(not signin_page(A) and A.evaluate("location.hash") == bill, "after signing in the bill page is back (" + A.evaluate("location.hash") + ")")

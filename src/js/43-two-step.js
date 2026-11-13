@@ -29,7 +29,7 @@ Cloud.setSess = function(s){
   if (this.keep()){ lsSet(SESS_KEY, txt); try { sessionStorage.removeItem(SESS_KEY); } catch (e){} }
   else { try { sessionStorage.setItem(SESS_KEY, txt); lsDel(SESS_KEY); } catch (e){ lsSet(SESS_KEY, txt); } }
 };
-function keepChoice(){ const box = document.querySelector('[data-cloud="shared"]'); lsSet("tdsdesk:keep", box && box.checked ? "0" : "1"); Cloud.setCfg({again: 0}); }
+function keepChoice(){ const box = document.querySelector('[data-cloud="shared"]'); lsSet("tdsdesk:keep", box && box.checked ? "0" : "1"); }
 const cloudSignInBase = Cloud.signIn;
 Cloud.signIn = async function(email, password){
   keepChoice();
@@ -89,16 +89,15 @@ Cloud.refreshToken = function(used){
   })().finally(() => { this._refreshing = null; });
   return this._refreshing;
 };
-// a session that cannot continue (the firm account refused the refresh token): the page and the work stay open here, as
-// without an account, and the top bar says "Sign in again" once (TopBar.jsx SaveState; doAct "signAgain" opens the
-// sign-in page and comes back to the same page); no screen asks for it (the owner, 13-Nov-2026). The other tabs follow
+// a session that cannot continue (the firm account refused the refresh token: a deliberate sign-out elsewhere, "Sign out
+// of all devices" for a lost laptop): the page is locked again behind the sign-in page, which says why; the page is kept
+// for after signing in, nothing lost. Only this ends a sign-in: a network error, a timeout or a 5xx never does
 function sessionEnded(reason){
   if (!Cloud.sess()) return;
   if (/\bbanned\b/i.test(reason)){ signOutHere("Switched off by FinCom.", false, SWITCHED_OFF); return; }   // FinCom's console switched the login off
-  auditSignOut("Your sign-in ended: " + reason, Cloud.sess());
-  Cloud.setCfg({gate: false, again: 1}); sessionGone();
+  if (typeof Route === "object" && !signInNeeded()) Route.pending = Route.of();
+  signOutHere("Your sign-in ended: " + reason, false, "Your sign-in ended: " + reason + ". Sign in again; your work is kept.");
 }
-function sessionGone(){ Cloud.signOut(); clearInterval(cloudTimer); S.account = null; FirmGate.st = null; FirmGate.co = {}; Cloud.st.state = "signedout"; render(); }
 // kept fresh: on opening, back to the window (a laptop that slept: no timer ran), back online, and every 10 minutes; a
 // try that failed (no internet, a server error) again after 30 s, 1, 2, 4 … 10 minutes. Never signs anyone out itself
 Cloud.keepFresh = function(n){
@@ -107,7 +106,6 @@ Cloud.keepFresh = function(n){
 };
 ["focus", "online"].forEach(e => addEventListener(e, () => Cloud.keepFresh()));
 document.addEventListener("visibilitychange", () => { if (!document.hidden) Cloud.keepFresh(); });
-if (Cloud.cfg().again && !Cloud.on()) Cloud.st.state = "signedout";
 // the other tabs of this browser: signed out there means signed out here, said so; signed in there brings this tab in
 window.addEventListener("storage", ev => {
   if (!ev || ev.key !== SESS_KEY) return;
@@ -115,7 +113,6 @@ window.addEventListener("storage", ev => {
   if (ev.newValue){ let u = ""; try { u = (JSON.parse(ev.newValue) || {}).user_id || ""; } catch (e){} if (LocalOwner.other(u)){ LocalOwner.leave(); return; } }
   if (!ev.newValue){
     if (Cloud.st.state === "off" && !Cloud.st.firm && !Cloud.st.email) return;   // this tab was not signed in
-    if (Cloud.cfg().again) return sessionGone();                                // the sign-in ended there (sessionEnded)
     if (typeof Route === "object" && !signInNeeded()) Route.pending = Route.of();
     signOutHere("Signed out in another tab.", false, "Your sign-in ended: you signed out in another tab or window. Sign in again; your work is kept.", true);
   } else if (!ev.oldValue && Cloud.st.state === "off" && !Cloud.st.firm){
@@ -235,7 +232,7 @@ function signOutHere(msg, clearLocal, why, local){
   // tell the server too, so the refresh token cannot be used again
   if (!local && s && s.access_token){ const c = Cloud.cfg(); fetch(c.url.replace(/\/+$/, "") + "/auth/v1/logout", {method: "POST", headers: {apikey: c.key, Authorization: "Bearer " + s.access_token}}).catch(() => {}); }
   Cloud.signOut(); clearInterval(cloudTimer); S.account = null; S.backups = null; FirmGate.st = null; FirmGate.co = {}; S.settingsTab = null;
-  Cloud.setCfg({gate: true, again: 0});
+  Cloud.setCfg({gate: true});
   S.signedOutWhy = why || "";
   S.view = "home"; S.coId = null;
   // whose copy stays here, in plain words (owner, 21-Oct-2026): the next person to sign in here gets their own

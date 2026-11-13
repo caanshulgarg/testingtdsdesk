@@ -7,9 +7,9 @@ run_signin_session.py). Made-up logins only.
   2. no internet when FinCom opens: still signed in (nothing asks to sign in); once the internet is back the token is
      refreshed on its own. A server error (503) on the refresh never signs anyone out
   3. a laptop that slept for hours (no timer ran): coming back to the window refreshes the token at once
-  4. a sign-in the firm account no longer takes (the refresh token revoked): the same page stays open with the work, ONE
-     small "Sign in again" in the top bar, and no screen says "Sign in to the firm account"; the note leads to the
-     sign-in page and back to the same page
+  4. a sign-in the firm account no longer takes (the refresh token revoked: "Sign out of all devices", a lost laptop):
+     the page is locked behind the sign-in page as before, which says why, and comes back after signing in; no screen
+     says "Sign in to the firm account"
   5. "This is a shared computer" (off by default): ticked, the sign-in is not kept once the browser is closed; not
      ticked, it is
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_stay_signed_in.py"""
@@ -132,27 +132,23 @@ with sync_playwright() as p:
     A.evaluate("() => window.dispatchEvent(new Event('focus'))"); A.wait_for_timeout(1500)
     ok(ST["refreshes"] == 1 and A.evaluate("Cloud.on()"), "back to the window after a long sleep: the token is refreshed at once (%d)" % ST["refreshes"])
 
-    # 4. revoked: the firm account no longer takes this sign-in
+    # 4. revoked (a deliberate sign-out elsewhere, "Sign out of all devices"): the page is locked again, as before
     A.evaluate("() => navHome('tally')"); A.wait_for_timeout(1200)
     here = A.evaluate("location.hash")
     ST["revoked"] = True; ST["refused"] = 0; expire(A)
     A.evaluate("() => window.dispatchEvent(new Event('focus'))"); A.wait_for_timeout(2000)
-    ok(not signin_page(A) and A.evaluate("location.hash") == here and not A.evaluate("Cloud.on()"), "revoked: the same page stays open (%s)" % A.evaluate("location.hash"))
-    ok(notes(A).count() == 1 and notes(A).inner_text().strip() == "Sign in again", "one small 'Sign in again' in the top bar (%d)" % notes(A).count())
+    t = A.inner_text("#app")
+    ok(signin_page(A) and not A.evaluate("Cloud.on()") and "Your sign-in ended:" in t, "revoked: locked behind the sign-in page, which says why")
     ok(ST["refused"] == 1, "one refused refresh, no retry storm (%d)" % ST["refused"])
-    said = []
-    for go in ["navHome('tally')", "navHome('integrations')", "navHome('help')", "navHome('help'); SUP.st().tab = 'tickets'; render()", "navHome('today')"]:
-        A.evaluate("() => { " + go + "; }"); A.wait_for_timeout(700)
-        if asks_sign_in(A) or notes(A).count() != 1: said.append(go)
-    ok(not said, "no screen says 'Sign in to the firm account'; the one note stays (%s)" % said)
-    A.reload(); A.wait_for_timeout(3000)
-    ok(not signin_page(A) and notes(A).count() == 1, "after a reload: the work open, the one note still there")
-    A.evaluate("() => navHome('tally')"); A.wait_for_timeout(800)
-    notes(A).click(); A.wait_for_timeout(800)
-    ok(signin_page(A), "the note opens the sign-in page")
+    ok(A.evaluate("Route.pending") == here, "the open page is remembered (%s)" % A.evaluate("Route.pending"))
     sign_in(A); A.wait_for_timeout(1500)
-    ok(not signin_page(A) and A.evaluate("Cloud.on()") and A.evaluate("location.hash") == here and notes(A).count() == 0,
-       "signed in again: back on the same page (%s), the note gone" % A.evaluate("location.hash"))
+    ok(not signin_page(A) and A.evaluate("Cloud.on()") and A.evaluate("location.hash") == here, "signed in again: back on the same page (%s)" % A.evaluate("location.hash"))
+    said = []
+    A.evaluate("() => doAct('useOffline')")
+    for go in ["navHome('tally')", "navHome('integrations')", "navHome('help')", "navHome('today')"]:
+        A.evaluate("() => { " + go + "; }"); A.wait_for_timeout(700)
+        if asks_sign_in(A): said.append(go)
+    ok(not said, "no screen says 'Sign in to the firm account' (%s)" % said)
 
     # 5. a shared computer: not kept after the browser closes; one's own computer: kept
     kept = context(br, ctx.storage_state()); K = page(kept)

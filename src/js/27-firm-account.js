@@ -1503,8 +1503,6 @@ function doAct(act, t){
     }
     // the coordinator's screenshot review (14-Oct-2026): no floating box; the sidebar's foot says it (Side.jsx FootLine)
     case "useOffline": Cloud.setCfg({gate: false}); render(); break;
-    // the top bar's "Sign in again" (TopBar.jsx SaveState): the sign-in page, then back to this page (Route.pending)
-    case "signAgain": if (Cloud.on()) cloudSync(false); else { Route.pending = Route.of(); Cloud.setCfg({gate: true}); } render(); break;
     case "dropKeysList": Cloud.rpc("my_drop_keys").then(r => { S.dropKeys = [].concat(r || []); render(); }, e => toast(e.message)); break;
     case "dropKeyNew": {
       askConfirm({title: "Make a drop key", ok: "Make it", body: '<div class="bk-form one"><label><span>What is it for?</span><input type="text" id="dkLabel" value="Cowork agent"></label></div>',
