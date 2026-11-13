@@ -634,7 +634,7 @@ const TCloud = {
       else if (last && last.from && last.to){
         // (worked out here: in steps behind the page, MIS.runSoon, next-fix-mis-rework)
         const go = () => MIS.runSoon(b, {from: last.from, to: last.to, how});
-        if (MIS.cloudOk(b) && window.loadPart) window.loadPart("mis", true).then(() => MIS.cloudGo(last.from, last.to, how, go)).catch(() => {});
+        if (MIS.cloudOk(b) && window.loadPart) window.loadPart("mis", true).then(() => MIS.cloudGo(last.from, last.to, how, go)).catch(go);
         else go();
       } else MIS.maybeRun();
       Audit.maybeRun(); saveBooks(); render();

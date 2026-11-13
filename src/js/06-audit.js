@@ -714,9 +714,9 @@ Object.assign(Audit, {
   // the books are being brought in from the cloud copy (changed across awaits): no step now. A load (TCloud.load,
   // openLoad: counted in try/finally) always holds it; a busy line (b.catchUp, Look up's) only for WAIT_MAX_MS, since
   // a line can stay after its work. The month's MIS also waits for the day's audit on its own (its compliance part reads
-  // the audit's last run)
+  // the audit's last run) and for the MIS tab's own run (MIS._again: stopped by a newer run asked for, MIS.runSoon)
   autoLoading(){ const T = typeof TCloud === "object" ? TCloud : null; return !!(T && (T.opens > 0 || T.loads > 0)); },
-  autoBusy(b){ const f = typeof LK === "object" && LK.fr ? LK.fr() : null; return !!(b.catchUp || (f && f.busy) || (this !== Audit && Audit.auto)); },
+  autoBusy(b){ const f = typeof LK === "object" && LK.fr ? LK.fr() : null; return !!(b.catchUp || (f && f.busy) || (this !== Audit && (Audit.auto || this._again))); },
   // want (the MIS's runs asked for: MIS.runSoon): {from, to, how}, a run of that period and words, due or not; one asked
   // while another runs takes its place
   autoStart(b, want){
@@ -727,14 +727,17 @@ Object.assign(Audit, {
     this.autoSoon(job);
     return job;
   },
+  // (the page drawn again: a tab's line of the job goes, next-fix-mis-rework)
   autoStop(j){
     if (!j) return;
     if (j.it){ try { j.it.return(); } catch (e){} }
     j.it = null;
     if (this.auto === j) this.auto = null;
+    if (typeof soonRender === "function") soonRender();
   },
   // the run on its own being worked out for these books (the Audit tab's "checking" line)
-  // still wanted: a run asked for, until a run is written since it began (autoRun); else while due
+  // still wanted: a run asked for, until a run is written since it began (autoRun); else while due. A run asked for that
+  // goes (stopped, failed, another client opened) is said (MIS.wantSay)
   autoDue(j, b){ return j.want ? !j.sig || this.autoRun(j.sig, b) : this.due(b); },
   autoFor(b){ const j = this.auto; return j && j.b === b && S.books === b ? j : null; },
   autoSoon(j, ms){
@@ -756,7 +759,7 @@ Object.assign(Audit, {
     if (this.auto !== j) return;
     const b = j.b;
     // another client opened: stopped, nothing written
-    if (S.books !== b || S.coId !== j.co){ this.autoStop(j); return; }
+    if (S.books !== b || S.coId !== j.co){ this.autoStop(j); if (j.want && this.wantSay) this.wantSay(j, "drop"); return; }
     // the books are being brought in: looked at again in a moment. A load always holds it; a busy line for at most
     // WAIT_MAX_MS (a line that stayed does not hold the audit for the session). After, it goes on if the books are as
     // they were, else it starts again from them as for any change
@@ -771,7 +774,7 @@ Object.assign(Audit, {
       else {
         if (j.it){ try { j.it.return(); } catch (e){} j.it = null; }
         // a run by hand since, the setting turned off, or no entries: nothing more to do
-        if (!this.autoDue(j, b)){ this.autoStop(j); return; }
+        if (!this.autoDue(j, b)){ this.autoStop(j); if (j.want && this.wantSay) this.wantSay(j, "drop"); return; }
         if (j.starts + 1 >= this.AUTO.MAX_STARTS) j.final = true;
         this.autoBegin(j, b);
       }
@@ -789,7 +792,7 @@ Object.assign(Audit, {
         if (now() - t0 >= ms || (idle && idle.timeRemaining() <= 0)) break;
       }
     } catch (e){
-      done = true; run = null;
+      done = true; run = null; j.err = e;
       // as before, no run kept; said in the console and to Sentry (app/src/sentry.js), as the page's other parts say theirs
       try { console.error("[FinCom] " + this.say + ":", e); if (typeof window === "object" && typeof window.__fincomReport === "function") window.__fincomReport(e, this.say); } catch (x){}
     }
@@ -805,12 +808,14 @@ Object.assign(Audit, {
     // (only when keep refused it: a step that threw ends it, as before)
     if (!run && j.refused && !j.extra && this.autoRun(j.sig, b) && this.autoDue(j, b)){ j.extra = true; this.autoBegin(j, b); this.autoSoon(j); return; }
     if (this.auto === j) this.auto = null;
-    if (!run) return;
-    j.run = run;
-    saveBooks();
-    // it ran by itself: the sidebar's quiet line, not a toast (stability batch 3); the month's MIS says nothing, as before
-    if (this === Audit){ const hi = run.findings.filter(f => f.sev === "high").length;
-      toast("Audit ran on its own: " + run.findings.length + " findings" + (hi ? ", " + hi + " serious" : "") + ". See Audit.", {background: true}); }
+    if (run){
+      j.run = run;
+      saveBooks();
+      // it ran by itself: the sidebar's quiet line, not a toast (stability batch 3); the month's MIS says nothing, as before
+      if (this === Audit){ const hi = run.findings.filter(f => f.sev === "high").length;
+        toast("Audit ran on its own: " + run.findings.length + " findings" + (hi ? ", " + hi + " serious" : "") + ". See Audit.", {background: true}); }
+    } else if (j.want && this.wantSay) this.wantSay(j, j.err ? "fail" : "drop");
+    // drawn again however it ended (a failed run's line goes too)
     if (typeof soonRender === "function") soonRender(); else render();
   },
   status(id){ const st = ((S.books.audit || {}).st || {})[id]; return st || {s: "open"}; },

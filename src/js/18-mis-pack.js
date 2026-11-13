@@ -70,6 +70,14 @@ async function misExcel(r){
 // next-cloud-mis: a run from FinCom's cloud's figures (MIS.cloudOk / cloudWork in src/js/07-mis.js say when they may be
 // used); here, with the MIS screen, not in legacy.js
 const MisCloud = {
+  // a run asked for (MIS.runSoon, src/js/07) that did not end in a run: said, and (but for one that gave way) kept for the
+  // MIS tab's line (failed). Here, with the job's steps (MIS.steps), not in legacy.js
+  wantSay(j, k){
+    const w = j.want, p = fmtDate(tallyDate(Audit.ymd(w.from))) + " to " + fmtDate(tallyDate(Audit.ymd(w.to)));
+    const t = k === "fail" ? "Could not work out the MIS for " + p + ". The figures shown are from the earlier run. Press Run now to try again." : "The MIS for " + p + " was not worked out: another run or client came first.";
+    this.failed = k === "drop" ? null : {b: j.b, t};
+    toast(t);
+  },
   // budget against actual, head by head and month by month (moved from src/js/07-mis.js for legacy.js's budget,
   // next-fix-mis-freeze: only the MIS screen asks for it)
   budgetVs(r){
