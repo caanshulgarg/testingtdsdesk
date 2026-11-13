@@ -4,7 +4,7 @@ Status: independent review pending. The coordinator's full security review of Fi
 of the security items; their fixes, and the day-reading and port items added on 13-Nov-2026, are to be reviewed
 independently before the release exe is built and release-check.sh is run.
 
-Range: c851cd1dc..bf0ebdf00 (origin/staging-next with 2.5.15 at c851cd1dc, which holds 2.5.15's signed commit 2bf75a4c7; the whole of 2.5.16 through the port items)
+Range: c851cd1dc..1fd25c431 (origin/staging-next with 2.5.15 at c851cd1dc, which holds 2.5.15's signed commit 2bf75a4c7; the whole of 2.5.16 through the port items and their test fix)
 
 Areas for the reviewer (no finding details are written here; the repository is public):
 - The security items of 2.5.16 (e0c77945d to d2b7fd47a): local settings and files the bridge trusts, the Windows

@@ -4,7 +4,7 @@ Status: independent review pending. This file names the range to be reviewed; th
 coordinator's signature are added after the independent review. The release exe is built and release-check.sh is run
 only after that review.
 
-Range: c851cd1dc..bf0ebdf00 (origin/staging-next with 2.5.15 at c851cd1dc, which holds 2.5.15's signed commit 2bf75a4c7; the whole of 2.5.16 through the port items)
+Range: c851cd1dc..1fd25c431 (origin/staging-next with 2.5.15 at c851cd1dc, which holds 2.5.15's signed commit 2bf75a4c7; the whole of 2.5.16 through the port items and their test fix)
 
 What the range holds:
 1. The security work of 2.5.16 (e0c77945d to d2b7fd47a): the FVU path kept in local settings with its file checked;
