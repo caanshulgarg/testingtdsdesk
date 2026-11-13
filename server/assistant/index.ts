@@ -32,7 +32,7 @@ import { FREE_SOURCES } from "./citations.ts";
 import { classifyUpload } from "./upload.ts";
 import { DocSpec, makeFile, MIME, safeName } from "./files.ts";
 import { isSheetName, readSheetFile, renderSheetFile, SheetFile } from "./filetable.ts";
-import { ATTACH, fitAttachments, NATIVE, sniff } from "../_shared/attachrules.js";
+import { ATTACH, fitAttachments, NATIVE, sniff, textTokens, zipSizes, zipTooBig } from "../_shared/attachrules.js";
 import { PDFDocument } from "npm:pdf-lib@1.17.1";
 import { PARTY_FIELDS, PARTY_SYSTEM, parseSheetMap, sheetPrompt, SHEET_SYSTEM } from "./sheetmap.ts";
 import { guessLedgers, LEDGER_GUESS_V } from "./ledgers.ts";
@@ -270,13 +270,21 @@ export function handler(deps: Deps) {
       // a notice (…/notices/) or any other upload (…/uploads/) of the firm, read with the user's own token
       if (!path.startsWith(firm + "/") || !/\/(notices|uploads)\//.test(path) || path.includes("..")) return reply(403, { ok: false, kind: "file", error: "That file is not one of your firm's uploads." });
     }
-    type Got = { a: any, path: string, name: string, type: string, size: number, bytes: Uint8Array | null, native: string, pages: number, text: string, full: number, sheet: SheetFile | null, why: string };
+    // before anything is downloaded or opened (the review of 13-Nov-2026): asks with files are counted per user and per
+    // firm (auth_rate_hit, migration 112; else in this running copy), and a firm at its AI limit is told at once
+    if (sent.length && action === "ask") {
+      const lim = await attachRateOk((b, k, max, win) => rpc("auth_rate_hit", { p_bucket: b, p_key: k, p_max: max, p_window_s: win }, SERVICE), user.id, firm);
+      if (!lim.ok) return reply(429, { ok: false, kind: "rate_limit", error: lim.error });
+      const over = await capOver(async (q) => (await rest("/rest/v1/" + q, SERVICE).catch(() => null)) as any[] | null, firm, deps.now ? deps.now() : new Date());
+      if (over) return reply(429, { ok: false, kind: "cap", error: capWords(over.why, over.cap_inr, over.cap) + " The files are kept; send them again then." });
+    }
+    type Got = { a: any, path: string, name: string, type: string, size: number, bytes: Uint8Array | null, native: string, pages: number, text: string, full: number, sheet: SheetFile | null, why: string, noNative: string, sheetCut: boolean };
     const got: Got[] = [];
-    let downloaded = 0;
+    let downloaded = 0, nativeBytes = 0;
     for (const a of sent) {
       const path = String(a.path), name = String(a?.name || path.split("/").pop() || "file").slice(0, 120);
       const g: Got = { a, path, name, type: String(a?.type || "").slice(0, 120), size: Math.max(0, Number(a?.size) || 0), bytes: null, native: "", pages: 0,
-        text: typeof a?.text === "string" ? a.text.slice(0, ATTACH.textChars) : "", full: 0, sheet: null, why: "" };
+        text: typeof a?.text === "string" ? a.text.slice(0, ATTACH.textChars) : "", full: 0, sheet: null, why: "", noNative: "", sheetCut: false };
       // the text's whole length: the page keeps at most ATTACH.textChars of a file and says how long it was (full)
       g.full = Math.max(typeof a?.text === "string" ? a.text.length : 0, Math.min(Number(a?.full) || 0, 1e9));
       got.push(g);
@@ -287,7 +295,8 @@ export function handler(deps: Deps) {
       if (g.size > ATTACH.fileBytes) { g.why = "Not read: larger than " + ATTACH.fileBytes / 1048576 + " MB."; continue; }
       if (downloaded + g.size > ATTACH.totalBytes) { g.why = "Not read: the message's files are over " + ATTACH.totalBytes / 1048576 + " MB together."; continue; }
       const r = await doFetch(URL_ + "/storage/v1/object/authenticated/" + BUCKET + "/" + path.split("/").map(encodeURIComponent).join("/"), { headers: { apikey: ANON, Authorization: "Bearer " + jwt } });
-      if (!r.ok) { await r.body?.cancel(); return reply(403, { ok: false, kind: "file", error: "The file " + name + " could not be read (" + r.status + ")." }); }
+      // one file that cannot be fetched does not stop the others (it is said, and sent as its page text when there is one)
+      if (!r.ok) { await r.body?.cancel(); if (!g.text) g.why = "Not read: it could not be fetched from the firm's folder (" + r.status + ")."; continue; }
       if (Number(r.headers.get("content-length") || 0) > ATTACH.fileBytes) { await r.body?.cancel(); g.why = "Not read: larger than " + ATTACH.fileBytes / 1048576 + " MB."; continue; }
       const buf = new Uint8Array(await r.arrayBuffer());
       g.size = buf.length;
@@ -295,22 +304,34 @@ export function handler(deps: Deps) {
       downloaded += buf.length;
       if (downloaded > ATTACH.totalBytes) { g.why = "Not read: the message's files are over " + ATTACH.totalBytes / 1048576 + " MB together."; continue; }
       const kind = sniff(buf.subarray(0, 16), name, g.type);
-      if (kind === "application/pdf") { g.native = "pdf"; g.type = kind; g.pages = await pdfPages(buf); g.bytes = buf; }
-      else if (NATIVE.test(kind)) { g.native = "image"; g.type = kind; g.bytes = buf; }
+      // a PDF or a picture is kept only while it can go as it is (the bytes together, a picture's own size): else it is
+      // dropped here at once and goes as its text (memory: never 30 files' bytes held)
+      if (kind === "application/pdf" || NATIVE.test(kind)) {
+        g.native = kind === "application/pdf" ? "pdf" : "image"; g.type = kind;
+        g.noNative = g.native === "image" && buf.length > ATTACH.imageBytes ? "a picture over 5 MB cannot be shown to the AI"
+          : nativeBytes + buf.length > ATTACH.nativeBytes ? "the PDFs and pictures are over " + Math.round(ATTACH.nativeBytes / 1048576) + " MB together" : "";
+        if (!g.noNative) { if (g.native === "pdf") g.pages = await pdfPages(buf); g.bytes = buf; nativeBytes += buf.length; }
+        else g.pages = 1;
+      }
+      // an .xlsx is a zip: one that unpacks to far more than its size is not opened by ExcelJS here (the page's text instead)
+      else if (isSheetName(name, g.type) && kind === "xlsx" && zipTooBig(zipSizes(buf))) {
+        if ((g.sheet = await readSheetFile(sheets.length + 1, name, g.type, null, g.text))) { sheets.push(g.sheet); g.text = sheetText(g.sheet, ATTACH.textChars); }
+      }
       // a sheet: FinCom reads it itself (the bytes; else the page's text) and shows it with row numbers and column letters,
       // so make_file can copy its cells (filetable.ts); masked by the agent like the question
-      else if (isSheetName(name, g.type) && (g.sheet = await readSheetFile(sheets.length + 1, name, g.type, buf, g.text))) { sheets.push(g.sheet); g.text = sheetText(g.sheet, ATTACH.textChars); }
+      else if (isSheetName(name, g.type) && (g.sheet = await readSheetFile(sheets.length + 1, name, g.type, buf, g.text))) { sheets.push(g.sheet); g.text = sheetText(g.sheet, ATTACH.textChars); g.sheetCut = /are not shown to you;/.test(g.text); }
       // a text file the page did not read: its words, when it is text
       else if (!g.text) { g.text = textOf(buf, ATTACH.textChars); g.full = g.text.length < ATTACH.textChars ? g.text.length : Math.max(g.text.length, Math.round(buf.length * 0.9)); }
     }
-    const fit = fitAttachments(got.map((g) => ({ name: g.name, size: g.size, native: g.native, pages: g.pages, chars: g.text.length, why: g.why, read: !!(g.native || g.text) })));
+    const fit = fitAttachments(got.map((g) => ({ name: g.name, size: g.size, native: g.native, pages: g.pages, chars: g.text.length, tokens: textTokens(g.text), why: g.why, noNative: g.noNative, read: !!(g.native || g.text) })));
     const attachNotes: { name: string, why: string }[] = [];
-    got.forEach((g, i) => {
+    for (const [i, g] of got.entries()) {
       const p = fit.plan[i], n = i + 1, full = Math.max(g.full, g.text.length), shown = Math.min(p.chars, g.text.length), cut = p.mode === "text" && !g.sheet && shown < full, size = g.size >= 1048576 ? (g.size / 1048576).toFixed(1) + " MB" : g.size >= 1024 ? Math.round(g.size / 1024) + " KB" : g.size + " bytes";
       const pct = Math.max(1, Math.min(99, Math.round(shown * 100 / (full || 1))));
-      const why = cut && !p.cut ? (p.why ? p.why + " " : "") + "Shortened to fit: the AI reads about the first " + pct + "% of it." : p.why;
+      const why = cut && !p.cut ? (p.why ? p.why + " " : "") + "Shortened to fit: the AI reads about the first " + pct + "% of it."
+        : g.sheetCut && !p.cut ? (p.why ? p.why + " " : "") + "Shortened to fit: the AI reads the first rows of a long sheet." : p.why;
       if (why) attachNotes.push({ name: g.name, why: cut ? why.replace(/about the first \d+%/, "about the first " + pct + "%") : why });
-      if (p.mode === "native" && g.native === "pdf") attachments.push({ type: "document", source: { type: "base64", media_type: "application/pdf", data: b64(g.bytes as Uint8Array) }, title: g.name });
+      if (p.mode === "native" && g.native === "pdf") attachments.push({ type: "document", source: { type: "base64", media_type: "application/pdf", data: b64(p.cut ? await firstPages(g.bytes as Uint8Array, p.pages) : g.bytes as Uint8Array) }, title: g.name + (p.cut ? " (its first " + p.pages + " of " + g.pages + " pages)" : "") });
       else if (p.mode === "native") attachments.push({ type: "image", source: { type: "base64", media_type: g.type, data: b64(g.bytes as Uint8Array) } });
       else if (p.mode === "text") {
         const body0 = g.sheet ? sheetText(g.sheet, p.chars) : g.text.slice(0, shown);
@@ -318,7 +339,7 @@ export function handler(deps: Deps) {
           + (cut ? "\n[The rest of " + g.name + " is not shown to you. Say so if the answer may depend on it.]" : "") });
       } else attachments.push({ type: "text", text: "[The file " + n + ": " + g.name + " (" + (g.type || "type not known") + ", " + size + "): FinCom could not read this file" + (g.why ? " (" + g.why.replace(/^Not read: /, "").replace(/\.$/, "") + ")" : "") + "; only its name, type and size are given. Tell the user it could not be read.]" });
       g.bytes = null;
-    });
+    }
 
     // an upload FinCom's own rules could not tell: what it is, in one line (upload.ts); nothing else is done with it
     if (action === "classify") {
@@ -534,6 +555,40 @@ function b64(buf: Uint8Array): string {
   let s = "";
   for (let i = 0; i < buf.length; i += 0x8000) s += String.fromCharCode(...buf.subarray(i, i + 0x8000));
   return btoa(s);
+}
+// a PDF's first n pages, as a PDF of their own (a scanned file too long for the budget: its first pages go as they are)
+export async function firstPages(buf: Uint8Array, n: number): Promise<Uint8Array> {
+  const src = await PDFDocument.load(buf, { updateMetadata: false }), out = await PDFDocument.create();
+  for (const pg of await out.copyPages(src, Array.from({ length: Math.min(n, src.getPageCount()) }, (_x, i) => i))) out.addPage(pg);
+  return await out.save();
+}
+// asks with files, per user and per firm in an hour (the review of 13-Nov-2026): counted in the database (auth_rate_hit,
+// migration 112), the ids hashed; where that is not there, in this running copy (logged)
+export const ATTACH_RATE = { user: 60, firm: 300, windowS: 3600 };
+const rateHere = new Map<string, number[]>();
+export async function attachRateOk(hit: (bucket: string, key: string, max: number, windowS: number) => Promise<unknown>, uid: string, firm: string): Promise<{ ok: boolean, error?: string }> {
+  for (const [bucket, id, max] of [["asst-attach-user", uid, ATTACH_RATE.user], ["asst-attach-firm", firm, ATTACH_RATE.firm]] as [string, string, number][]) {
+    let allowed: boolean;
+    try { allowed = (await hit(bucket, await sha256(bucket + ":" + id), max, ATTACH_RATE.windowS)) === true; }
+    catch {
+      const now = Date.now(), k = bucket + ":" + id, seen = (rateHere.get(k) || []).filter((t) => now - t < ATTACH_RATE.windowS * 1000);
+      allowed = seen.length < max; if (allowed) seen.push(now); rateHere.set(k, seen);
+    }
+    if (!allowed) return { ok: false, error: bucket === "asst-attach-user" ? "You have sent " + max + " questions with files in the last hour. Wait a while, then send it again." : "Your firm has sent " + max + " questions with files in the last hour. Wait a while, then send it again." };
+  }
+  return { ok: true };
+}
+// the firm's AI limit, read without taking a call (asst_cap_take takes one when the model is asked): the month's rupees
+// or today's calls used up -> {why, cap_inr, cap}; null while there is room (or when it cannot be read: the turn checks)
+export async function capOver(get: (q: string) => Promise<any[] | null>, firm: string, now: Date): Promise<{ why: string, cap_inr: number, cap: number } | null> {
+  const day = now.toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" }), m0 = day.slice(0, 8) + "01";
+  const caps = await get("assistant_caps?select=daily_calls,monthly_inr&firm_id=eq." + firm), use = await get("assistant_usage?select=day,calls,cost_inr&firm_id=eq." + firm + "&day=gte." + m0);
+  if (!use) return null;
+  const c = (caps && caps[0]) || {}, calls = Number(c.daily_calls ?? 500), inr = Number(c.monthly_inr ?? 3000);
+  const spent = use.reduce((a, u) => a + Number(u.cost_inr || 0), 0), today = use.find((u) => String(u.day).slice(0, 10) === day);
+  if (spent >= inr) return { why: "inr", cap_inr: inr, cap: calls };
+  if (today && Number(today.calls || 0) >= calls) return { why: "calls", cap_inr: inr, cap: calls };
+  return null;
 }
 // a PDF's pages (0: it cannot be opened as it is: locked or damaged)
 async function pdfPages(buf: Uint8Array): Promise<number> {

@@ -66,10 +66,11 @@ def zbytes(entries, method=zipfile.ZIP_DEFLATED):
     for n, d in entries: z.writestr(n, d)
     z.close(); return b.getvalue()
 deep = zbytes([("deepest.txt", "Made-up deepest text")])
-nested = zbytes([("nested-note.txt", "Made-up nested note"), ("deep.zip", deep)])
+nested = zbytes([("nested-note.txt", "Made-up nested note"), ("deep.zip", deep), ("deep-hidden.dat", zbytes([("hidden.txt", "Made-up hidden text")]))])
 put("bundle.zip", zbytes([("inner/rows.csv", "Code,Name\nA1,Made-up inner row\n"), ("readme.txt", "Made-up readme in the zip"), ("photo-in-zip.png", png_bytes()),
                           ("nested.zip", nested), ("bomb.txt", b"\0" * (60 * 1024 * 1024)), ("tool.exe", b"MZ\x90\x00" + bytes(range(256)) * 4)]))
 put("blob.bin", bytes((i * 37) % 256 for i in range(4096)))
+put("fake.png", "<svg onload=alert(1)>made-up text named .png</svg>")
 while len(F) < 30: put("note-%02d.txt" % len(F), "Made-up note number %d" % len(F))
 put("one-more.txt", "Made-up 31st file")
 put("empty.txt", b"")
@@ -171,9 +172,9 @@ with sync_playwright() as p:
     # ---------- 2. what each is read as, on its chip; stored safely
     ok("name and size only" in ch["blob.bin"]["note"].lower(), "2: an unknown binary: 'name and size only' (%r)" % ch["blob.bin"]["note"])
     ok("shortened" in ch["big.txt"]["note"].lower(), "2: a long text: shortened to fit, said (%r)" % ch["big.txt"]["note"])
-    ok(not ch["note-12.txt"]["note"] and not ch["photo.png"]["note"], "2: a file read whole says nothing more")
+    ok(not ch[[n for n in THIRTY if n.startswith("note-")][0]]["note"] and not ch["photo.png"]["note"], "2: a file read whole says nothing more")
     st = {s["url"].rsplit("/", 1)[-1].split("-", 1)[-1]: s["type"] for s in pg.evaluate("window.__stored")}
-    ok(st.get("page.html") == "application/octet-stream" and st.get("tally.xml") == "application/octet-stream" and st.get("blob.bin") == "application/octet-stream", "2: a web page, an XML file and an unknown file are stored as application/octet-stream (%s)" % {k: st.get(k) for k in ("page.html", "tally.xml", "blob.bin")})
+    ok(st.get("page.html") == "application/octet-stream" and st.get("tally.xml") == "application/octet-stream" and st.get("blob.bin") == "application/octet-stream" and st.get("fake.png") == "application/octet-stream", "2: a web page, a text named .png, an XML file and an unknown file are stored as application/octet-stream (%s)" % {k: st.get(k) for k in ("page.html", "tally.xml", "blob.bin")})
     ok(st.get("photo.png") == "image/png" and st.get("Example-FS-draft.pdf") == "application/pdf", "2: a picture and a PDF keep their type (%s)" % {k: v for k, v in st.items() if k.endswith((".png", ".pdf"))})
 
     # ---------- 3. the cost, before sending
@@ -198,6 +199,7 @@ with sync_playwright() as p:
     ok(all(n in z for n in ("inner/rows.csv", "readme.txt", "photo-in-zip.png", "nested.zip", "bomb.txt", "tool.exe")), "4: the zip's list of files")
     ok("Made-up inner row" in z and "Made-up readme in the zip" in z, "4: the files read inside the zip")
     ok("Made-up nested note" in z and "deep.zip" in z and "Made-up deepest text" not in z, "4: a zip in the zip opened; one deeper listed only")
+    ok("deep-hidden.dat" in z and "Made-up hidden text" not in z, "4: a zip one deeper by its bytes (named .dat) is not opened either")
     ok("\0" not in z and "zip bomb" in z.lower(), "4: a file that unpacks to far more than its size is not opened, said so")
     ok(not tx("blob.bin") and att.get("blob.bin", {}).get("size") == 4096, "4: the unknown binary goes with its name and size, no text")
     ok(len(tx("big.txt")) <= 200000, "4: a file's text kept to 200,000 characters (%d)" % len(tx("big.txt")))
@@ -226,6 +228,9 @@ with sync_playwright() as p:
     ch = chips(pg)
     bad = [n for n, c in ch.items() if c["state"] == "failed"]
     ok(bad == ["part5.dat"] and "100 MB" in ch["part5.dat"]["text"], "5: over 100 MB together: the file past it refused (%s)" % {n: c["text"] for n, c in ch.items() if c["state"] == "failed"})
+    pg.evaluate("() => AUpload.drop(AUpload.pending().find((u) => u.name === 'part0.dat'))"); pg.wait_for_timeout(200)
+    pg.click('[data-asst-chip][data-name="part5.dat"] [data-asst-chip-retry]')
+    ok(wait(pg, "() => (AUpload.pending().find((u) => u.name === 'part5.dat') || {}).state === 'ready'", 30000), "5: the file past 100 MB goes once another is taken off (Retry)")
     clear_box(pg)
     # a phone: 30 chips fit, the box scrolls, no sideways scrolling
     pg.set_input_files("[data-asst-upload-input]", [F[n] for n in THIRTY])

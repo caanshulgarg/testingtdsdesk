@@ -884,6 +884,8 @@ Deno.test("30 files a message, any type: PDFs and pictures as they are, the rest
   att.push({ path: await put("bundle.zip", enc2.encode("PK\x05\x06" + "\0".repeat(18)), "application/zip"), name: "bundle.zip", type: "application/zip", kind: "other", text: "[The zip bundle.zip: 1 file]\n--- a.txt ---\nmade-up text inside", size: 22 });
   const over = new Uint8Array(20 * 1024 * 1024 + 10); over.set(enc2.encode("%PDF-1.4"));
   att.push({ path: await put("over.pdf", over, "application/pdf"), name: "over.pdf", type: "application/pdf", kind: "other", size: over.length });
+  // one not in the folder (the review: one unreadable file does not fail the whole question)
+  att.push({ path: FIRM + "/" + CLIENT + "/uploads/m30-gone.pdf", name: "gone.pdf", type: "application/pdf", kind: "other", size: 5000 });
   while (att.length < 30) { const n = att.length; att.push({ path: await put("n" + n + ".txt", enc2.encode("Made-up note " + n), "text/plain"), name: "note-" + n + ".txt", type: "text/plain", kind: "other", text: "Made-up note " + n, size: 15 }); }
   eq(att.length, 30, "30 files");
   // 31: refused before anything is read or a model is asked
@@ -905,11 +907,13 @@ Deno.test("30 files a message, any type: PDFs and pictures as they are, the rest
   assert(texts.some((t) => t.includes("bundle.zip") && t.includes("made-up text inside")), "the zip as the list and the files FinCom read in it");
   assert(texts.some((t) => t.includes("blob.bin") && /could not read/i.test(t) && /4[,.]?0|KB|bytes/.test(t)), "an unknown binary: its name, type and size only, and the AI told it could not be read");
   assert(texts.some((t) => t.includes("over.pdf") && /20 MB/.test(t)), "over 20 MB: the AI told it was not read");
-  assert(texts.filter((t) => /^\[The file \d+: note-\d+\.txt/.test(t)).length === 21, "the 21 notes, each its own text");
+  assert(texts.filter((t) => /^\[The file \d+: note-\d+\.txt/.test(t)).length === 20, "the 20 notes, each its own text");
+  assert(texts.some((t) => t.includes("gone.pdf") && /could not be fetched/.test(t)), "a file not in the folder: said, the others still read");
   const chars = texts.reduce((a, t) => a + t.length, 0);
   assert(chars / 3.5 + 2 * 2000 <= 100_000 + 30 * 200, "within the context budget (" + chars + " characters of text)");
   const notes = (ofType(r.events, "attach")[0]?.notes || []) as { name: string, why: string }[];
   const why = (n: string) => (notes.find((x) => x.name === n) || { why: "" }).why;
   assert(/20 MB/.test(why("over.pdf")) && /could not read/i.test(why("blob.bin")) && /Shortened/.test(why("big.txt")), "the user is told which files were not read or were shortened: " + JSON.stringify(notes));
   assert(!notes.some((x) => /note-|receipt|register/.test(x.name)), "files read whole are not listed");
+  assert(/could not be fetched/.test(why("gone.pdf")), "the user is told which file could not be fetched");
 });

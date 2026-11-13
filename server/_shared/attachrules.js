@@ -22,6 +22,15 @@ export const ATTACH = {
 export const PAGE_TOKENS = 2000, IMAGE_TOKENS = 1600, NAME_TOKENS = 60;
 export const tokensOf = (chars) => Math.ceil((Number(chars) || 0) / 3.5);
 export const charsOf = (tokens) => Math.floor((Number(tokens) || 0) * 3.5);
+// a text's tokens, counted on the safe side (the review of 13-Nov-2026): English words about 3.2 characters a token,
+// digits (a sheet's amounts, dates, GSTINs) 1.5, anything not ASCII (Hindi, Marathi, Tamil, ₹) 1.2 - a sheet of numbers
+// or a Hindi letter is far denser than English. The budget and the "about ₹X" both use it
+export function textTokens(text) {
+  const s = String(text || "");
+  let d = 0, n = 0;
+  for (let i = 0; i < s.length; i++) { const c = s.charCodeAt(i); if (c >= 48 && c <= 57) d++; else if (c > 127) n++; }
+  return Math.ceil((s.length - d - n) / 3.2 + d / 1.5 + n / 1.2);
+}
 
 // US dollars per million tokens (platform.claude.com pricing as of Oct 2026): input, output, cache read
 export const PRICES = {
@@ -62,39 +71,73 @@ export function storeType(name, type) {
 }
 
 // What the AI is given of each file of a message, within the limits above. items, in the message's order:
-//   {name, size, native: "pdf" | "image" | "", pages, chars (the text FinCom has of it), read (false: nothing could be read)}
-// Back, for each: {mode: "native" | "text" | "name", chars (the text given), cut (shortened), why (said to the user, or "")};
-// and the tokens of all of them. PDFs and pictures go as they are while they fit (pages, bytes, half the budget); a
-// PDF that does not goes as its text. The texts share the rest fairly: a short file whole, the long ones cut alike.
+//   {name, size, native: "pdf" | "image" | "", pages, chars (the text FinCom has of it), tokens (that text's, textTokens;
+//    else counted from chars), read (false: nothing could be read), why (not read, and why), noNative (why it cannot go as
+//    it is: it goes as its text)}
+// Back, for each: {mode: "native" | "text" | "name", chars (the text given), pages (a PDF's pages given), cut (shortened),
+// why (said to the user, or "")}; and the tokens of all of them. PDFs and pictures go as they are while they fit: they may
+// take the whole budget but what the texts need (at most a quarter of it), so a scanned notice of 40 pages goes as it is;
+// a PDF too long for what is left goes as its first pages (a scanned file has no text to fall back on). The texts share
+// the rest fairly: a short file whole, the long ones cut alike.
 export function fitAttachments(items, o = ATTACH) {
-  const out = items.map(() => ({ mode: "name", chars: 0, cut: false, why: "", tokens: NAME_TOKENS }));
+  const tk0 = (it) => Number(it.tokens) > 0 ? Number(it.tokens) : tokensOf(it.chars);
+  const out = items.map(() => ({ mode: "name", chars: 0, pages: 0, cut: false, why: "", tokens: NAME_TOKENS }));
+  const textNeed = items.reduce((a, it) => a + (!it.native && it.read !== false && !it.why && Number(it.chars) > 0 ? tk0(it) : 0), 0);
+  const names = items.filter((it) => it.read === false || it.why).length * NAME_TOKENS;
+  const cap = o.tokens - Math.min(textNeed, Math.floor(o.tokens / 4)) - names;
   let bytes = 0, pages = 0, tokens = 0;
   items.forEach((it, i) => {
     if (it.read === false || it.why) { out[i].why = it.why || "FinCom could not read this file: the AI gets its name and size only."; return; }
     if (!it.native) return;
-    const size = Number(it.size) || 0, pg = it.native === "pdf" ? Math.max(1, Number(it.pages) || 0) : 0, tk = it.native === "pdf" ? pg * PAGE_TOKENS : IMAGE_TOKENS;
-    const why = it.native === "image" && size > o.imageBytes ? "a picture over 5 MB cannot be shown to the AI"
+    const size = Number(it.size) || 0, all = it.native === "pdf" ? Math.max(1, Number(it.pages) || 0) : 0, tk = it.native === "pdf" ? all * PAGE_TOKENS : IMAGE_TOKENS;
+    let why = it.noNative || (it.native === "image" && size > o.imageBytes ? "a picture over 5 MB cannot be shown to the AI"
       : it.native === "pdf" && !(Number(it.pages) > 0) ? "the PDF could not be opened as it is (locked or damaged)"
-      : pages + pg > o.nativePages ? "the message's PDFs are over " + o.nativePages + " pages together"
-      : bytes + size > o.nativeBytes ? "the PDFs and pictures are over " + Math.round(o.nativeBytes / 1048576) + " MB together"
-      : tokens + tk > o.tokens / 2 ? "the files are too long to show the AI as they are" : "";
-    if (!why) { out[i] = { mode: "native", chars: 0, cut: false, why: "", tokens: tk }; bytes += size; pages += pg; tokens += tk; return; }
+      : bytes + size > o.nativeBytes ? "the PDFs and pictures are over " + Math.round(o.nativeBytes / 1048576) + " MB together" : "");
+    if (!why && pages + all <= o.nativePages && tokens + tk <= cap) { out[i] = { mode: "native", chars: 0, pages: all, cut: false, why: "", tokens: tk }; bytes += size; pages += all; tokens += tk; return; }
+    // a PDF with little text (scanned): its first pages, as many as are left room for; one with text goes as its text
+    const k = why || it.native !== "pdf" || Number(it.chars) >= 100 * all ? 0 : Math.min(o.nativePages - pages, Math.floor((cap - tokens) / PAGE_TOKENS), all - 1);
+    if (k >= 1) {
+      out[i] = { mode: "native", chars: 0, pages: k, cut: true, why: "Shortened to fit: the AI reads its first " + k + " of " + all + " pages.", tokens: k * PAGE_TOKENS };
+      bytes += Math.ceil(size * k / all); pages += k; tokens += k * PAGE_TOKENS; return;
+    }
+    why = why || (pages + all > o.nativePages ? "the message's PDFs are over " + o.nativePages + " pages together" : "the files are too long to show the AI as they are");
     out[i].why = (Number(it.chars) > 0 ? "Read as its text: " : "Not read: ") + why + ".";
   });
-  // the texts: the files with text that are not sent as they are, shortest first, each up to an equal share of what is left
+  // the texts: the files with text that are not sent as they are, the fewest tokens first, each up to an equal share of what is left
   const texts = items.map((it, i) => i).filter((i) => out[i].mode !== "native" && items[i].read !== false && !items[i].why && Number(items[i].chars) > 0);
-  let left = Math.max(0, o.tokens - tokens - (items.length - texts.length) * NAME_TOKENS);
-  texts.sort((x, y) => items[x].chars - items[y].chars);
+  let left = Math.max(0, o.tokens - tokens - (items.length - texts.length - out.filter((p) => p.mode === "native").length) * NAME_TOKENS);
+  texts.sort((x, y) => tk0(items[x]) - tk0(items[y]));
   texts.forEach((i, k) => {
-    const share = Math.floor(left / (texts.length - k)), want = tokensOf(items[i].chars), give = Math.min(want, share);
-    const chars = give === want ? Number(items[i].chars) : charsOf(give);
+    const share = Math.floor(left / (texts.length - k)), want = tk0(items[i]), give = Math.min(want, share), all = Number(items[i].chars);
+    const chars = give >= want ? all : Math.floor(all * give / want);
     left -= give;
-    const cut = chars < Number(items[i].chars);
-    out[i] = { mode: "text", chars, cut, tokens: give,
-      why: (out[i].why || "") + (cut ? (out[i].why ? " " : "") + "Shortened to fit: the AI reads about the first " + Math.max(1, Math.round(chars * 100 / Number(items[i].chars))) + "% of it." : "") };
+    const cut = chars < all;
+    out[i] = { mode: "text", chars, pages: 0, cut, tokens: give,
+      why: (out[i].why || "") + (cut ? (out[i].why ? " " : "") + "Shortened to fit: the AI reads about the first " + Math.max(1, Math.round(chars * 100 / all)) + "% of it." : "") };
   });
   return { plan: out, tokens: out.reduce((a, p) => a + p.tokens, 0) };
 }
+
+// a zip's central directory, read without unpacking anything: {entries, usize (all its files unpacked), csize, big (an
+// entry stated over 4 GB)}; null when it is not a zip. The server checks it before ExcelJS opens an .xlsx (an .xlsx is a
+// zip): one that unpacks to more than ZIP.totalBytes, or ZIP.ratio times its size, is not opened
+export function zipSizes(buf) {
+  const b = buf instanceof Uint8Array ? buf : new Uint8Array(buf || []);
+  const dv = new DataView(b.buffer, b.byteOffset, b.byteLength);
+  let eocd = -1;
+  for (let i = b.length - 22; i >= Math.max(0, b.length - 66000); i--) if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+  if (eocd < 0) return null;
+  const n = dv.getUint16(eocd + 10, true);
+  let p = dv.getUint32(eocd + 16, true), usize = 0, csize = 0, entries = 0, big = false;
+  for (let k = 0; k < n && p + 46 <= b.length && dv.getUint32(p, true) === 0x02014b50; k++) {
+    const c = dv.getUint32(p + 20, true), u = dv.getUint32(p + 24, true);
+    if (c === 0xffffffff || u === 0xffffffff) big = true;
+    csize += c; usize += u; entries++;
+    p += 46 + dv.getUint16(p + 28, true) + dv.getUint16(p + 30, true) + dv.getUint16(p + 32, true);
+  }
+  return { entries, usize, csize, big };
+}
+export const zipTooBig = (z) => !!z && (z.big || z.usize > ZIP.totalBytes || (z.usize > 1048576 && z.usize > Math.max(1, z.csize) * ZIP.ratio) || z.entries > 20000);
 
 // the zip's limits (the security review): what is opened inside a zip, and how far
 export const ZIP = {

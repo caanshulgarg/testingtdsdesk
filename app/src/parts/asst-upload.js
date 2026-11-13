@@ -11,7 +11,7 @@
 /* ================================================================== */
 // 30 files a message, any type (the owner, 13-Nov-2026): the limits, the stored type, what the AI is given of each file
 // and what it costs are server/_shared/attachrules.js, the same file fincom-assistant runs
-import { ATTACH, ZIP, attachInr, fitAttachments, sniff, storeType } from "../../../server/_shared/attachrules.js";
+import { ATTACH, ZIP, attachInr, fitAttachments, sniff, storeType, textTokens } from "../../../server/_shared/attachrules.js";
 const AUpload = window.AUpload = {
   KIND: {notice: "Notice", bill: "Bill or invoice", register: "Register", bank: "Bank statement", as26: "26AS / AIS / TRACES", certificate: "Certificate format", other: "Other document"},
   MAX: ATTACH.fileBytes,
@@ -98,27 +98,30 @@ const AUpload = window.AUpload = {
   gridText(grids){ return grids.map(g => g.slice(0, 20000).map(r => r.map(c => cellText(c)).join("\t")).join("\n")).join("\n\n"); },
   // a zip: its list of files, then the text of the files FinCom can read in it, within the zip limits (ZIP: how many,
   // how large unpacked, a zip bomb, how deep)
-  async zipText(buf, name, depth){
+  async zipText(buf, name, depth, seen){
+    // seen: what this zip and the zips in it have opened together (the limits hold across the levels, not for each)
+    seen = seen || {opened: 0, total: 0};
     const ents = this.zipList(buf).filter(e => !e.name.endsWith("/")), out = ["[The zip " + name + ": " + ents.length + " file" + (ents.length === 1 ? "" : "s") + (ents.length > ZIP.entries ? ", the first " + ZIP.entries + " listed" : "") + "]"];
     ents.slice(0, ZIP.entries).forEach(e => out.push("  " + e.name + " (" + kbOf(e.usize) + ")"));
-    let opened = 0, total = 0;
     for (const e of ents.slice(0, ZIP.entries)){
       const ext = (e.name.toLowerCase().match(/\.([a-z0-9]+)$/) || [])[1] || "";
       const skip = (why) => out.push("--- " + e.name + ": " + why + " ---");
       if (/^(png|jpe?g|webp|gif|heic|bmp|tiff?)$/.test(ext)){ skip("a picture: not read inside a zip"); continue; }
       if (/^(exe|dll|so|bin|dmg|iso|msi|apk|jar|class|mp[34]|mov|avi|wav)$/.test(ext)){ skip("not read (not a document)"); continue; }
-      if (opened >= ZIP.open){ skip("not opened: FinCom reads " + ZIP.open + " files of a zip"); continue; }
+      if (seen.opened >= ZIP.open){ skip("not opened: FinCom reads " + ZIP.open + " files of a zip"); continue; }
       if (e.flags & 1){ skip("locked with a password: not opened"); continue; }
       if (e.usize > 4096 && e.usize > Math.max(1, e.csize) * ZIP.ratio){ skip("not opened: it unpacks to far more than its size (a zip bomb?)"); continue; }
       if (e.usize === 0xffffffff || e.usize > ZIP.entryBytes){ skip("too large to open here"); continue; }
-      if (total + e.usize > ZIP.totalBytes){ skip("not opened: the zip's files are too large together"); continue; }
+      if (seen.total + e.usize > ZIP.totalBytes){ skip("not opened: the zip's files are too large together"); continue; }
       if (ext === "zip" && depth >= ZIP.depth){ skip("a zip inside a zip inside a zip: listed only"); continue; }
       try {
-        const b = await this.unzip(buf, e, Math.min(ZIP.entryBytes, ZIP.totalBytes - total));
-        opened++; total += b.length;
+        const b = await this.unzip(buf, e, Math.min(ZIP.entryBytes, ZIP.totalBytes - seen.total));
+        seen.opened++; seen.total += b.length;
         const f = new File([b], e.name.split("/").pop(), {type: ""}), k = sniff(b.subarray(0, 16), e.name, "");
+        // a zip by its bytes too (a zip named .dat): opened one level down at most
+        if (k === "application/zip" && ext !== "zip" && depth >= ZIP.depth){ skip("a zip inside a zip inside a zip: listed only"); continue; }
         let t = "";
-        if (ext === "zip" || k === "application/zip") t = await this.zipText(b, e.name, depth + 1);
+        if (ext === "zip" || k === "application/zip") t = await this.zipText(b, e.name, depth + 1, seen);
         else if (k === "application/pdf") t = (await AS26.pdfLines(f)).join("\n");
         else if (k === "xlsx" || /^(xlsx|xlsm|xls|csv)$/.test(ext)) t = this.gridText((await this.sheets(f)).map(x => x.rows));
         else if (k === "docx") t = await this.docxText(f);
@@ -134,7 +137,7 @@ const AUpload = window.AUpload = {
   },
   async read(file){
     const head = new Uint8Array(await file.slice(0, 16).arrayBuffer()), k = sniff(head, file.name, file.type);
-    const out = {lines: [], grids: [], text: "", full: 0, pages: 0, locked: false, pdf: k === "application/pdf", image: /^image\//.test(k)};
+    const out = {lines: [], grids: [], text: "", full: 0, pages: 0, locked: false, pdf: k === "application/pdf", image: /^image\//.test(k), sniffed: k};
     try {
       if (out.pdf){ out.lines = await AS26.pdfLines(file); out.pages = await this.pdfPages(file); }
       else if (out.image){ /* a picture: the AI sees it as it is */ }
@@ -280,7 +283,8 @@ const AUpload = window.AUpload = {
       try { if (isImage(file) && URL.createObjectURL) u.thumb = URL.createObjectURL(file); } catch (e){}
       // what can never be sent: said on its chip at once, with no Retry
       const no = !file.size ? "it is empty, 0 bytes" : file.size > this.MAX ? "larger than " + this.MAX / 1048576 + " MB" : total + file.size > ATTACH.totalBytes ? "the files of this message would be over " + ATTACH.totalBytes / 1048576 + " MB together" : "";
-      if (no) Object.assign(u, {state: "failed", error: no, fatal: true}); else total += file.size;
+      // over the message's total: Retry once others are taken off (it is checked again); empty or too large: never
+      if (no) Object.assign(u, {state: "failed", error: no, fatal: !/together/.test(no), overTotal: /together/.test(no)}); else total += file.size;
       a.uploads.push(u);
     }
     this.pump();
@@ -298,11 +302,11 @@ const AUpload = window.AUpload = {
     try {
       const r = await this.read(file);
       u.excerpt = String(r.text || ""); u.full = r.full; u.pdf = r.pdf; u.native = r.pdf ? "pdf" : r.image ? "image" : ""; u.pages = r.pages;
-      u.unread = !r.pdf && !r.image && !u.excerpt.trim();
+      u.unread = !r.pdf && !r.image && !u.excerpt.trim(); u.tokens = textTokens(u.excerpt); u.sniffed = r.sniffed;
       const k = this.rules(file, r, co);
       if (k) Object.assign(u, k, {by: "rules"});
       else if (u.unread) Object.assign(u, {kind: "other", by: "rules", summary: "FinCom could not read this file" + (r.err ? " (" + r.err + ")" : "") + "."});
-      u.path = await this.store(file, u.cid, k && k.kind === "notice" ? "notices" : "uploads", p => { u.progress = p; ASST.draw(); });
+      u.path = await this.store(file, u.cid, k && k.kind === "notice" ? "notices" : "uploads", p => { u.progress = p; ASST.draw(); }, /^(application\/pdf|image\/)/.test(r.sniffed || "") ? r.sniffed : "");
       if (u.dropped) return;
       u.state = "ready"; u.acts = u.kind ? this.actions(u) : [];
       ASST.draw();
@@ -314,7 +318,15 @@ const AUpload = window.AUpload = {
     finally { this.pump(); }
     ASST.draw();
   },
-  retry(u){ if (u && u.state === "failed" && !u.fatal){ u.state = "queued"; this.pump(); ASST.draw(); } },
+  retry(u){
+    if (!u || u.state !== "failed" || u.fatal) return;
+    if (u.overTotal){
+      const total = this.pending().filter(x => x !== u && x.state !== "failed").reduce((t, x) => t + (x.size || 0), 0);
+      if (total + u.size > ATTACH.totalBytes){ toast("Still over " + ATTACH.totalBytes / 1048576 + " MB together: take another file off first."); return; }
+      u.overTotal = false;
+    }
+    u.state = "queued"; this.pump(); ASST.draw();
+  },
   drop(u){ const a = this.st(); u.dropped = true; a.uploads = a.uploads.filter(x => x !== u); try { if (u.thumb && !u.sent) URL.revokeObjectURL(u.thumb); } catch (e){} this.pump(); ASST.draw(); },
   // the box's upload, all files together: {n, done, pct} while any is waiting or uploading, else null
   progress(){
@@ -327,7 +339,7 @@ const AUpload = window.AUpload = {
   // {notes: {id: line}, tokens, inr}
   fit(){
     const list = this.pending().filter(u => u.state === "ready");
-    const f = fitAttachments(list.map(u => ({name: u.name, size: u.size, native: u.native || "", pages: u.pages, chars: (u.excerpt || "").length, read: !u.unread})));
+    const f = fitAttachments(list.map(u => ({name: u.name, size: u.size, native: u.native || "", pages: u.pages, chars: (u.excerpt || "").length, tokens: u.tokens, read: !u.unread})));
     const notes = {};
     list.forEach((u, i) => {
       let w = f.plan[i].why;
@@ -376,7 +388,8 @@ const AUpload = window.AUpload = {
     return fx;
   },
   // into the firm's private bucket; the upload's progress (0..1) to onProgress (XMLHttpRequest: fetch tells no progress)
-  async store(file, cid, folder, onProgress){
+  // sniffed: the type the file's own bytes say (a PDF or a picture); else the browser's, kept only when it is a safe one
+  async store(file, cid, folder, onProgress, sniffed){
     await Cloud.fresh().catch(() => {});
     const c = Cloud.cfg(), s = Cloud.sess(), name = String(file.name || "file").replace(/[^A-Za-z0-9._-]+/g, "-").slice(-80);
     const path = Cloud.st.firm + "/" + (cid || "_firm") + "/" + folder + "/" + Date.now().toString(36) + "-" + name;
@@ -384,7 +397,7 @@ const AUpload = window.AUpload = {
     const status = await new Promise((ok, no) => {
       const x = new XMLHttpRequest();
       x.open("POST", url);
-      x.setRequestHeader("apikey", c.key); x.setRequestHeader("Authorization", "Bearer " + s.access_token); x.setRequestHeader("Content-Type", storeType(file.name, file.type));   // never served back as a page
+      x.setRequestHeader("apikey", c.key); x.setRequestHeader("Authorization", "Bearer " + s.access_token); x.setRequestHeader("Content-Type", storeType(file.name, sniffed || (/^(application\/pdf|image\/(png|jpeg|webp|gif))$/.test(file.type) ? "application/octet-stream" : file.type)));   // never served back as a page
       if (onProgress && x.upload) x.upload.onprogress = (e) => { if (e.lengthComputable && e.total) onProgress(Math.min(1, e.loaded / e.total)); };
       x.onload = () => ok(x.status); x.onerror = () => no(new Error("the connection failed")); x.ontimeout = () => no(new Error("the upload took too long"));
       x.timeout = 120000;
@@ -401,7 +414,7 @@ const AUpload = window.AUpload = {
       await Cloud.fresh().catch(() => {});
       const c = Cloud.cfg(), s = Cloud.sess(), bin = r.pdf || /^image\/(png|jpeg|webp|gif)$/.test(u.type);
       const res = await fetch(ASST.url(), {method: "POST", headers: {apikey: c.key, Authorization: "Bearer " + s.access_token, "Content-Type": "application/json"},
-        body: JSON.stringify({action: "classify", client_id: u.cid, name: u.name, excerpt: bin ? "" : u.excerpt, attachments: bin ? [{path: u.path, name: u.name, type: u.type || (r.pdf ? "application/pdf" : ""), kind: "upload"}] : []})});
+        body: JSON.stringify({action: "classify", client_id: u.cid, name: u.name, excerpt: bin ? (r.pdf ? String(u.excerpt || "").slice(0, 12000) : "") : u.excerpt, attachments: bin ? [{path: u.path, name: u.name, type: u.type || (r.pdf ? "application/pdf" : ""), kind: "upload"}] : []})});
       const j = await res.json().catch(() => ({}));
       if (!res.ok || !j.ok) return {kind: "other", by: "rules", summary: (j.error || "FinCom could not tell what this file is just now") + "", aiError: true};
       return {kind: AUpload.KIND[j.kind] ? j.kind : "other", by: "ai", summary: String(j.summary || "").slice(0, 300)};
