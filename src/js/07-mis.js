@@ -513,7 +513,10 @@ const MIS = {
   // (fromCloud): w holds sales to comp (and, from the cloud, owed, goods and the cash flow, flow); in steps (madeIn) for a
   // run behind the page, at once (made) for the cloud's
   made(from, to, how, bal, balTo, w){ return this.runSteps(this.madeIn(from, to, how, bal, balTo, w)); },
-  *madeIn(from, to, how, bal, balTo, w){
+  // (next-speed-worker: in two parts, the same run: madeCalc's figures, in the engine's worker for a run on its own,
+  // Audit.autoEngine; madeKeep, always on the page, writes them into the books' MIS)
+  *madeIn(from, to, how, bal, balTo, w){ return this.madeKeep(yield* this.madeCalc(from, to, how, bal, balTo, w), w.prog); },
+  *madeCalc(from, to, how, bal, balTo, w){
     const b = S.books, days = Audit.days(from, to) + 1, s = w.sales, pr = w.purchases, pl = w.pl;
     const r = {at: new Date().toISOString(), how: how || "run now", from, to, company: (b.meta || {}).company || CO().name,
       sales: s, purchases: pr, pl, prev: w.prev, ly: w.ly, prevRange: w.prevRange, lyRange: w.lyRange, mtd: w.mtd, ytd: w.ytd,
@@ -548,8 +551,12 @@ const MIS = {
       r.control = {ok: n === 0, n, amt, list: list.slice(0, 50)};
     } else r.control = null;
     r.basis = w.basis || this.basis(b);
+    return r;
+  },
+  madeKeep(r, prog){
+    const b = S.books, {from, to} = r, s = r.sales, pr = r.purchases, pl = r.pl;
     // a run on its own whose books changed on the way (prog.keep, Audit.autoBegin): nothing written
-    if (w.prog && !w.prog.keep()) return null;
+    if (prog && !prog.keep()) return null;
     r.code = Audit.hash(JSON.stringify([s.total, pr.total, pl.pat.t, r.recv.sum, r.pay.sum, s.rows.slice(0, 50).map(x => [x.party, x.t]), r.p2.cash.net, r.p2.fc.weeks.map(w => w.net), r.p2.cc.rows.map(x => [x.name, x.profit])]));
     const m = b.mis = b.mis || {};
     m.last = r; m.history = [{at: r.at, from, to, how: r.how, sales: s.total, pat: pl.pat.t, code: r.code}].concat(m.history || []).slice(0, 24);

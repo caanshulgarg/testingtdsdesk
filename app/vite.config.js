@@ -7,7 +7,7 @@ import fs from "node:fs";
 import { execSync } from "node:child_process";
 import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
-import { transform as esbuildTransform } from "esbuild";
+import { transform as esbuildTransform, build as esbuildBuild } from "esbuild";
 
 // Arc UI (src/arc, copied from github.com/kuratlielia/arc-library; see src/arc/README.md). Its files import each other
 // as "@/lib/…" and "@/registry/…", so "@" is src/arc. "motion/react" is FinCom's calm version of Motion
@@ -46,6 +46,34 @@ const csp = (mode, hashes = "") => "default-src 'self'; script-src 'self'" + has
 // (esbuild rewrites newer syntax); newer helpers come from public/guard.js. public/oldcheck.js tells older browsers
 const TARGET = ["es2020", "safari14", "chrome87", "firefox78", "edge88"];
 
+// next-speed-worker (owner-approved): the engine's worker (engine/worker.js: the page's own legacy.js, read in the worker,
+// with the React app's GST wraps and the MIS screen's file), one file of its own, assets/engine-<hash>.js, kept out of
+// legacy.js and the first file (tests/run_legacy_room.py) and fetched only when a run first needs it. legacy.js gets its
+// address in place of its mark (src/js/06-audit.js Engine.URL), and legacy.js?v= is worked out from both, so a new
+// engine is a new legacy.js address too
+const ENGINE_MARK = '"__FINCOM_ENGINE__"';
+let engineP = null;
+function engine() {
+  return engineP || (engineP = esbuildBuild({
+    entryPoints: [here("./engine/worker.js")], bundle: true, write: false, format: "iife", target: TARGET, minify: true, charset: "utf8", legalComments: "none",
+    // the page's alone, not in the worker: the GSTR-1 file's upload part (never fetched there), and the MIS screen's pack
+    // and Excel (put on globalThis by the MIS screen's own file; left out here, so only that file has them)
+    plugins: [{ name: "engine-page-only", setup(b) {
+      b.onResolve({ filter: /gzUpload\.js$/ }, () => ({ path: "./gzUpload.js", external: true }));
+      b.onLoad({ filter: /18-mis-pack\.js$/ }, (a) => {
+        const src = fs.readFileSync(a.path, "utf8"), out = src.replace(/^if \(typeof (misPackHtml|misExcel) !== "undefined"\) globalThis\.\1 = \1;$/gm, "");
+        if (src.length - out.length < 40) throw new Error("18-mis-pack.js: its globalThis.misPackHtml / misExcel lines not found for the engine's worker");
+        return { contents: out, loader: "js" };
+      });
+    } }],
+  }).then((r) => { const code = r.outputFiles[0].text; return { code, file: "assets/engine-" + crypto.createHash("sha256").update(code).digest("hex").slice(0, 10) + ".js" }; }));
+}
+const withEngine = (src, file) => {
+  if (src.split(ENGINE_MARK).length !== 2) throw new Error("legacy.js must hold the engine's mark " + ENGINE_MARK + " once (src/js/06-audit.js Engine.URL)");
+  return src.replace(ENGINE_MARK, JSON.stringify("./" + file));
+};
+async function legacyV(src) { const e = await engine(); return crypto.createHash("sha256").update(src + "\n" + e.file).digest("hex").slice(0, 12); }
+
 function legacy(mode) {
   const test = mode === "test", file = new URL("./legacy/" + (test ? "test" : "live") + ".js", import.meta.url);
   const read = () => {
@@ -55,14 +83,17 @@ function legacy(mode) {
   return {
     name: "fincom-legacy",
     configureServer(server) {
-      server.middlewares.use("/legacy.js", (_req, res) => { res.setHeader("Content-Type", "text/javascript"); res.end(read()); });
+      server.middlewares.use("/legacy.js", (_req, res) => { engine().then((e) => { res.setHeader("Content-Type", "text/javascript"); res.end(withEngine(read(), e.file)); }); });
+      server.middlewares.use("/assets/engine-", (_req, res) => { engine().then((e) => { res.setHeader("Content-Type", "text/javascript"); res.end(e.code); }); });
     },
     async generateBundle() {
       // stability batch 2: the program minified (2.5 MB -> about a third less to send and to read), with its source map
       // for error reports (src/sentry.js). Only whitespace, syntax and the names inside functions change: the program's
       // own top-level names (S, render, GSTAPI, …), which the React screens and the tests use, stay as they are
       // (esbuild keeps a classic script's top-level names), and so does every string (publish-preview.sh's database check)
-      const src = read();
+      const eng = await engine();
+      this.emitFile({ type: "asset", fileName: eng.file, source: eng.code });
+      const src = withEngine(read(), eng.file);
       const out = await esbuildTransform(src, { minify: true, sourcemap: "external", sourcefile: "legacy.src.js", charset: "utf8", legalComments: "inline", target: TARGET });
       this.emitFile({ type: "asset", fileName: "legacy.js", source: out.code + "//# sourceMappingURL=legacy.js.map\n" });
       this.emitFile({ type: "asset", fileName: "legacy.js.map", source: out.map });
@@ -73,11 +104,11 @@ function legacy(mode) {
       // without it the Tally page says the new bridge is being tested
       if (test && process.env.FINCOM_SHIP_BRIDGE === "1" && fs.existsSync(goDir)) for (const f of fs.readdirSync(goDir)) this.emitFile({ type: "asset", fileName: "assets/bridge-go/" + f, source: fs.readFileSync(new URL(f, goDir)) });
     },
-    transformIndexHtml(html) {
+    async transformIndexHtml(html) {
       // review of 01-Oct-2026: legacy.js has no hash in its name, so a browser kept an older copy after a new build (the
       // Pages cache, or a tab left open) and ran old code under the new screens. Its address now changes with its content
       if (fs.existsSync(file)) {
-        const v = crypto.createHash("sha256").update(read()).digest("hex").slice(0, 12);
+        const v = await legacyV(read());
         html = html.replace('src="./legacy.js"', 'src="./legacy.js?v=' + v + '"');
         // stability batch 2: fetched from the start (it was found only when the page's end was read: 2.1 s on an office PC)
         // speed round (27-Oct-2026): not "low" any more: the program is on the first page's critical path (the app's entry
@@ -168,8 +199,8 @@ function serviceWorker(mode) {
   return {
     name: "fincom-sw",
     // written once the files are on disk (Vite drops a CSS-only chunk after generateBundle): only files that are there
-    writeBundle(o, bundle) {
-      const v = fs.existsSync(legacyFile) ? crypto.createHash("sha256").update(fs.readFileSync(legacyFile, "utf8")).digest("hex").slice(0, 12) : "";
+    async writeBundle(o, bundle) {
+      const v = fs.existsSync(legacyFile) ? await legacyV(fs.readFileSync(legacyFile, "utf8")) : "";
       // calls (stage 1, 23-Oct-2026): the call screen's files are fetched only when a call is opened, never kept ahead
       const all = Object.keys(bundle).filter((f) => fs.existsSync(o.dir + "/" + f)).filter((f) => (/^assets\/.*\.(js|css)$/.test(f) || /^assets\/(inter|geist)-latin(-ext)?-wght-normal-[\w-]+\.woff2$/.test(f)) && !/^assets\/bridge-go\//.test(f)
         && !/^assets\/(CallScreen|CallMenu|guest|calls)-[\w-]+\.(js|css)$/.test(f));

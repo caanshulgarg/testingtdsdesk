@@ -12,6 +12,7 @@ import CommitBox from "../../parts/CommitBox.jsx";
 import { CatchUp } from "../../parts/Notes.jsx";
 import { catchSoon } from "../../lib/catchSoon.js";
 import { behind } from "../../lib/behind.jsx";
+import { useAutoLine } from "../../lib/autoLine.js";
 import Confirm from "../../parts/Confirm.jsx";
 import { ListRows } from "../../parts/ListTable.jsx";
 import DateBox from "../../parts/DateBox.jsx";
@@ -98,6 +99,10 @@ function runSplit(from, to, how) {
 // same book, version and working), else worked out here in parts (runSplit) and the cloud asked again for next time
 // (worked out here only when no run was asked for elsewhere since the click, k, while the page was drawn or the cloud's
 // answer awaited: MIS.asked)
+// next-speed-worker: how far the run on its own is, when the engine's worker says (src/js/06-audit.js Engine)
+const misPct = (j) => (j && j.prog && j.prog.of ? " " + Math.min(99, Math.floor((100 * j.prog.k) / j.prog.of)) + "% done" : "");
+// (drawn again by itself as the run goes: lib/autoLine.js)
+function MisAutoLine({ b }) { useAutoLine(); return <CatchUp text={"Working out the MIS…" + misPct(MIS.autoFor(b))} />; }
 const misGo = (from, to, how, k = MIS.asked) => FinComNav.track(MIS.cloudGo(from, to, how, () => { if (MIS.asked === k) runSplit(from, to, how); }));
 // Run now: the period chosen, else doAct says what is wrong with it
 const runNow = (rg) => { const k = MIS.asked; FinComNav.go(() => rg.from && rg.to && rg.from <= rg.to ? misGo(rg.from, rg.to, "run now", k) : doAct("misRun")); };
@@ -411,7 +416,7 @@ export default function Mis({ b }) {
   // a run asked for elsewhere (MIS.runSoon: an MSME type, Reports, the cloud copy's entries) being worked out behind the
   // page, or its file loading (MIS._soon); one that failed: what went wrong, and Run now (MIS.failed)
   const pend = !!MIS.autoFor(b) || !!(MIS._soon && MIS._soon.b === b), fl = MIS.failed && MIS.failed.b === b ? MIS.failed.t : "";
-  const busy = catchUp ? <div data-updating=""><CatchUp text={catchUp} /></div> : pend ? <div data-updating="" data-mis-auto=""><CatchUp text="Working out the MIS…" /></div>
+  const busy = catchUp ? <div data-updating=""><CatchUp text={catchUp} /></div> : pend ? <div data-updating="" data-mis-auto=""><MisAutoLine b={b} /></div>
     : fl ? <div className="bk-warn" data-mis-failed="" role="status">{fl} <button className="btn small" onClick={() => runNow(rg)}>Run now</button></div> : null, stale = !catchUp && MIS.stale(b);
   // a saved run from other books or older working: worked out again now, its figures not shown meanwhile (not while a
   // run asked for is worked out: its period is the one wanted, next-fix-mis-rework)

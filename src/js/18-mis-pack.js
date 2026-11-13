@@ -152,6 +152,8 @@ const MisCloud = {
   }
 };
 if (typeof MIS === "object") Object.assign(MIS, MisCloud);
+// (next-speed-worker: the engine as loaded, so a function of it replaced later keeps the run here, src/js/06 Engine.pure)
+if (typeof Engine === "object") Engine.keep(MisCloud);
 if (typeof misPackHtml !== "undefined") globalThis.misPackHtml = misPackHtml;
 if (typeof misExcel !== "undefined") globalThis.misExcel = misExcel;
 // (each name only when declared: a test's harness loads a file's names one by one, tests/harness.js)
