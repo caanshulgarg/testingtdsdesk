@@ -167,11 +167,11 @@ func fvuAsked(o M) M {
 	}
 	pin := strings.ToLower(strings.TrimSpace(cfgS("FvuJarSha256")))
 	if pin == "" {
-		return M{"ok": false, "needConfirm": true, "error": "Confirm the FVU on this computer first: in the FinCom Bridge icon near the clock choose Confirm the FVU... (it shows " + jar + " and its fingerprint)."}
+		return M{"ok": false, "needConfirm": true, "error": "One step first: right-click the FinCom Bridge icon near the clock, choose Confirm the FVU..., and say Yes for " + jar + ". Then try Check with FVU again."}
 	}
 	if pin != sha {
 		writeLog("FVU: " + jar + " is not the file confirmed on this computer (fingerprint " + sha[:12] + "..., confirmed " + cutRunes(pin, 12) + "...): not run")
-		return M{"ok": false, "changed": true, "error": "The FVU at " + jar + " is not the one confirmed on this computer. If you installed a new FVU, confirm it in the FinCom Bridge icon near the clock (Confirm the FVU...)."}
+		return M{"ok": false, "changed": true, "error": "The FVU file " + jar + " has changed since it was allowed (a new FVU version?). Right-click the FinCom Bridge icon near the clock, choose Confirm the FVU..., say Yes, then try again."}
 	}
 	out, err := localPath(fvuOutPath())
 	if err != nil {

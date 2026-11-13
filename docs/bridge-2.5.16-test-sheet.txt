@@ -6,23 +6,23 @@ Fingerprint: SHA-256 (filled in when the setup is built; compare with the .sha25
 2.5.16: safety changes from the bridge's security review. Nothing new is asked of Tally: no new request and no request
 changed (the requests are 2.5.15's), the same 2-second stop, one request at a time, postings first, never while someone
 is typing in Tally. FinCom's cloud needs the tally-ingest of the same branch. Use a test company with made-up entries
-only. Things for the owner to decide are marked DECIDE.
+only.
 
- 1. Check with FVU uses only the FVU set on this computer. FinCom no longer tells the bridge where the FVU is or where
-    to put its files. The bridge uses FVU_STANDALONE.jar in <your user folder>\TDS-Desk\FVU (output in ...\FVU\out),
-    or the place written in the bridge's settings (FvuJar, FvuOut). The first time, the owner confirms the FVU in the
-    tray icon: right-click the FinCom Bridge icon near the clock, choose "Confirm the FVU...", check the path, choose
-    Yes. The bridge remembers the file's fingerprint; if the file changes (a new FVU version), Check with FVU stops and
-    asks you to confirm it again. A network folder (\\server\share or a mapped network drive) is not used. Java runs
-    as you, never as Windows itself: with the bridge installed for all users, Check with FVU works only while you are
-    signed in to this computer.
-    Check A: in FinCom, Check with FVU before confirming. You should see: the result box says to confirm the FVU in
-    the tray icon; nothing is run.
-    Check B: confirm it in the tray icon, Check with FVU again. You should see: the FVU's result as before.
-    Check C: copy another FVU version over FVU_STANDALONE.jar, Check with FVU. You should see: "is not the one
-    confirmed on this computer"; confirm again and it runs.
-    DECIDE: a client whose FVU was in another folder (set in FinCom before) now needs that folder written in the
-    bridge's settings (FvuJar) on that computer, or the FVU copied to the standard folder.
+ 1. Check with FVU uses only the FVU on this computer. FinCom no longer tells the bridge where the FVU is.
+    The FVU must be in <your user folder>\TDS-Desk\FVU (the file FVU_STANDALONE.jar; its results go into
+    ...\FVU\out), or in the folder written in the bridge's settings as FvuJar.
+    The first time only: right-click the FinCom Bridge icon near the clock, choose "Confirm the FVU...", check that
+    the folder shown is where you installed the FVU, and choose Yes. If the FVU file changes later (a new FVU
+    version), Check with FVU stops and asks you to do this once more.
+    The FVU is never taken from a network folder. It always runs as you: with FinCom Bridge installed for all users,
+    Check with FVU works only while you are signed in to this computer.
+    Check A: in FinCom, choose Check with FVU before the step above. You should see: "One step first: right-click the
+    FinCom Bridge icon..."; the FVU did not run.
+    Check B: do the step, then Check with FVU again. You should see the FVU's result as before.
+    Check C: put another FVU version in the same place, then Check with FVU. You should see: "has changed since it was
+    allowed"; do the step again and it runs.
+    A client whose FVU is in another folder (set in FinCom before): write that folder in the bridge's settings
+    (FvuJar) on that computer, or move the FVU to the folder above.
  2. The bridge installed for all users (the Windows service) keeps its settings in
     C:\ProgramData\FinCom Bridge\state\<your account's id>. Windows and administrators may change them; you may only
     read them. At the first start of 2.5.16 the settings and the copy are copied there from
@@ -31,22 +31,26 @@ only. Things for the owner to decide are marked DECIDE.
     Check: after the update, open C:\ProgramData\FinCom Bridge\state. You should see: one folder; the bridge still
     connected to FinCom with the same port; the log in that folder says "the settings and state are now kept in".
     Try to change tds-bridge.config.json there as yourself (not as administrator): Windows refuses.
-    DECIDE: the setup (installer) itself needs no change for this, but the owner may want the setup's final page to
-    say where the settings now are.
  3. Each Windows user's recorder files are their own. In C:\ProgramData\FinCom\recorder each user's Tally may add its
-    files and read only its own; other users cannot open them. On a computer several people use (a server, more than
-    one person signed in), FinCom no longer adds its add-on line to TallyPrime's shared tally.ini: the Tally page says
-    so, and each user loads the add-on in their own Tally (F1 Help > TDLs & Add-ons,
-    C:\ProgramData\FinCom\addon\FinComRecorder.tdl), or the administrator does.
-    Check (a server with two users): sign in as the second user and try to open the first user's file in the recorder
-    folder. You should see: access denied. The tally.ini under Program Files is unchanged after the update.
- 4. Connecting FinCom makes a new bridge key each time. After "Connect FinCom on this computer..." and typing the code,
-    any other browser that was connected before must connect again. The tray icon has "Disconnect FinCom from this
-    computer...", which disconnects every browser at once. The live build trusts only app.fincom.live (and
-    fincom.live); the staging build trusts the staging site too. The github.io address is no longer trusted. A web page
-    that is refused is written in the log at most once in ten minutes, and refusals stop being logged after 256 KB a day.
-    Check: connect from browser A, then from browser B. You should see: browser A says it is no longer connected.
-    DECIDE: whether a computer should keep one key per browser (several browsers at once); 2.5.16 keeps one key.
+    files and read only its own; other users cannot open them.
+    FinCom never writes a tally.ini that other Windows accounts share: TallyPrime's own tally.ini (in its program
+    folder under Program Files) is never changed, on any computer. The Tally page says "shared" for it, and each user
+    loads FinCom's add-on in their own Tally: F1 Help > TDLs & Add-ons, the file
+    C:\ProgramData\FinCom\addon\FinComRecorder.tdl (or the administrator does it).
+    Check: after the update, TallyPrime's tally.ini under Program Files is unchanged (compare its date and contents).
+    On a server with two users: sign in as the second user and try to open the first user's file in the recorder
+    folder. You should see: access denied.
+ 4. Each browser has its own key. Connecting FinCom (Connect FinCom on this computer... and the code) gives that browser
+    a key of its own; browsers connected before stay connected. The single key of earlier versions keeps working until
+    the first browser connects with 2.5.16, then only browsers connected with 2.5.16 work.
+    To disconnect one browser: right-click the icon, "Disconnect a browser...", answer Yes for that browser (No moves
+    to the next). Signing out of FinCom disconnects that browser by itself.
+    The live build trusts only app.fincom.live (and fincom.live); the staging build trusts the staging site too. The
+    github.io address is no longer trusted. A web page that is refused is written in the log at most once in ten
+    minutes, and refusals stop being logged after 256 KB a day.
+    Check: connect from browser A, then from browser B. You should see: both work. Disconnect A in the tray: A says it
+    is not connected, B still works. Sign out of FinCom in B: B is not connected any more.
+    FinCom's web app of the same branch is needed with this bridge (it checks the bridge with each browser's key).
  5. Two small fixes from the 2.5.15 review: a posting whose progress file is busy for a moment is reported a moment
     later instead of being dropped from the list of postings in progress; a bridge in test mode that reports a posting
     has the entries Tally accepted recorded in FinCom before it is refused.

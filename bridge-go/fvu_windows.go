@@ -65,7 +65,7 @@ func ownerSessionToken() (windows.Token, error) {
 func platFvuRunAsOwner(q fvuReq) M {
 	tok, err := ownerSessionToken()
 	if err != nil {
-		return M{"ok": false, "needSignIn": true, "error": "The FVU runs only with the rights of " + ownerName() + ", never as Windows itself: sign in to this computer as " + ownerName() + " (FinCom Bridge's icon near the clock shows), then try again."}
+		return M{"ok": false, "needSignIn": true, "error": "Check with FVU runs only while " + ownerName() + " is signed in to this computer (it runs as that Windows user). Sign in to Windows as " + ownerName() + ", then try again."}
 	}
 	defer tok.Close()
 	env, _ := tok.Environ(false)

@@ -74,7 +74,7 @@ func TestR2516FvuUsesLocalSettings(t *testing.T) {
 func TestR2516FvuJarFingerprint(t *testing.T) {
 	_, jar, javaLog := r2516FvuHere(t)
 	r := invokeFvu(M{"text": "FH^NS^R", "name": "a.txt"})
-	if r["ok"] == true || r["needConfirm"] != true || !strings.Contains(str(r["errors"]), "Confirm the FVU") || exists(javaLog) {
+	if r["ok"] == true || r["needConfirm"] != true || !strings.Contains(str(r["errors"]), "Confirm the FVU...") || exists(javaLog) {
 		t.Fatalf("not confirmed yet: %v", r)
 	}
 	r2516Confirm(t)

@@ -617,13 +617,13 @@ func (t *tray) command(id int, st M) {
 		case r["ok"] != true:
 			msgBox(title, str(r["error"]), mbIconWarning)
 		case truthy(r["confirmed"]):
-			msgBox(title, "The FVU at\n"+str(r["path"])+"\nis the one confirmed on this computer.\n\nFingerprint (SHA-256):\n"+str(r["sha256"]), mbIconInfo)
+			msgBox(title, "Check with FVU already uses this FVU:\n\n"+str(r["path"])+"\n\nNothing to do.\n\n(Its fingerprint, for FinCom support: "+str(r["sha256"])+")", mbIconInfo)
 		default:
 			was := ""
 			if truthy(r["pinned"]) {
-				was = "\n\nThis is NOT the FVU confirmed before: it changed since. Confirm it only if you installed this FVU yourself."
+				was = "\n\nThis file has changed since you last said Yes. That is normal after you install a new FVU version. If you did not, choose No and tell FinCom support."
 			}
-			if !yesNo(title, "Use the FVU at\n"+str(r["path"])+"\nfor Check with FVU on this computer?\n\nFingerprint (SHA-256):\n"+str(r["sha256"])+"\n\nConfirm only Protean's FVU that you installed yourself."+was) {
+			if !yesNo(title, "Is this the FVU (Protean's file checking program) that you installed?\n\n"+str(r["path"])+"\n\nYes: FinCom's Check with FVU may use it on this computer. If the file changes later, FinCom Bridge asks you again."+was+"\n\n(Its fingerprint, for FinCom support: "+str(r["sha256"])+")") {
 				return
 			}
 			p := trayCall("POST", "/tray/fvu", M{"sha256": str(r["sha256"])})
@@ -631,7 +631,7 @@ func (t *tray) command(id int, st M) {
 				msgBox(title, or(str(p["error"]), "The bridge is not answering."), mbIconWarning)
 				return
 			}
-			t.reply("FinCom Bridge", "The FVU is confirmed on this computer: Check with FVU uses it.", false)
+			t.reply("FinCom Bridge", "Done: Check with FVU in FinCom now uses this FVU.", false)
 		}
 	case 7:
 		// 2.4.6: FinCom opens with the code filled in (#pair=), only FinCom's own sites (pairopen.go)
