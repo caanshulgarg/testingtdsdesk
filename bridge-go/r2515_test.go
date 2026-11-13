@@ -15,7 +15,7 @@ import (
 )
 
 func TestR2515Version(t *testing.T) {
-	if BridgeVersion != "2.5.15" || !newerVersion("2.5.15", "2.5.14") || newerVersion("2.5.14", "2.5.15") {
+	if BridgeVersion != "2.5.16" || !newerVersion("2.5.15", "2.5.14") || newerVersion("2.5.14", "2.5.15") { // 2.5.16 (r2516_test.go)
 		t.Fatalf("version %s", BridgeVersion)
 	}
 	if _, err := os.Stat("../docs/bridge-2.5.15-test-sheet.txt"); err != nil {
@@ -24,12 +24,12 @@ func TestR2515Version(t *testing.T) {
 	// the allow-list: wording only (the decision line, the dated line, the stock row's version word), no request changed
 	al := readText("../docs/tally-allowlist.md")
 	line := group(`(?m)^(First table: .*)$`, al, 1)
-	for _, w := range []string{"allowed for 2.5.15 by the owner's standing decision of 2026-10-06", "the requests are 2.5.14's", "as for 2.5.14 by the owner's standing decision of 2026-10-06"} {
+	for _, w := range []string{"as for 2.5.15 by the owner's standing decision of 2026-10-06", "the requests are 2.5.14's" /* 2.5.16 names the line (r2516_test.go) */, "as for 2.5.14 by the owner's standing decision of 2026-10-06"} {
 		if !strings.Contains(line, w) {
 			t.Errorf("the decision line does not say %q", w)
 		}
 	}
-	if !regexp.MustCompile(`re-measured on 2026-11-13 for 2\.5\.15: no request was measured again[^\n]*allowed for 2\.5\.15 by the owner's standing decision of 2026-10-06`).MatchString(al) {
+	if !regexp.MustCompile(`re-measured on 2026-11-13 for 2\.5\.15: no request was measured again[^\n]*2\.5\.15 allowed by the owner's standing decision of 2026-10-06`).MatchString(al) {
 		t.Error("no dated line for 2.5.15")
 	}
 	if strings.Contains(line, "allowed for 2.5.14 by") {
