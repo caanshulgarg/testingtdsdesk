@@ -61,8 +61,8 @@ const DueList = {
       if (x.optional && st.status === "overdue") return;
       // ux-wins (the owner, 13-Nov-2026: a client added today showed 84 "overdue" back to Apr-2025): the client's "Track
       // returns from" month (co.trackFrom, yyyymm: asked when the client is added, changed on Compliance): a return or a
-      // payment of an earlier period (x.pm, the period's last month) is listed only once filed
-      if (st.status !== "filed" && co.trackFrom && x.pm < co.trackFrom) return;
+      // payment of an earlier period (one that falls due by the end of that month) is listed only once filed
+      if (st.status !== "filed" && x.kind !== "task" && x.due.slice(0, 7).replace("-", "") <= co.trackFrom) return;
       out.push(Object.assign({cid: co.id, client: co.name}, x, st));
     };
     const fys = this.fysBetween(from, until);
@@ -77,7 +77,7 @@ const DueList = {
         const portal = GSTX.portal(reg, r.form, r.per), rec = GSTV.copies(reg, r.form, r.per)[0];
         const on = this.iso((portal && portal.dof) || (rec && rec.arnDate) || GSTV.filedOn(reg, r.form, r.per) || (r.form === "pmt06" && rec ? rec.at : ""));
         const pay = r.form === "pmt06";
-        keep({pm: month, kind: pay ? "gstpay" : "gst", tax: "GST", what: GSTV.label(r.form), per: GSTV.perLabel(r.form, r.per, reg), gstin: g, due: r.due, on,
+        keep({kind: pay ? "gstpay" : "gst", tax: "GST", what: GSTV.label(r.form), per: GSTV.perLabel(r.form, r.per, reg), gstin: g, due: r.due, on,
           optional: !!r.optional || r.form === "iff", source: portal ? "portal" : rec ? "pdf" : on ? "typed" : "",
           go: {tab: "gst", reg, ym: month, part: {r1: "r1", iff: "r1", r3b: "r3b", cmp08: "cmp08", pmt06: "qtr", gstr4: "gstr4", gstr9: "g9"}[r.form]}});
       }));
@@ -93,7 +93,7 @@ const DueList = {
         if (!rows.length && !sal.length && !(f && f.from === "return")) return;
         const due = this.iso(TDS.returnDue(fy, q, form)), on = f ? this.iso(f.on) : "";
         const lf = rows.length || sal.length ? TDS.lateFee(fy, q, on || this.iso(today).replace(/-/g, ""), form) : null;
-        keep({pm: (num(fy.slice(0, 4)) + (q === "Q4")) + ["06", "09", "12", "03"][q[1] - 1], kind: "tds", tax: "TDS", what: TDS.formShort(form, fy), form, per: q + " " + fy, fy, q, tan, due, on, source: f ? f.from : "",
+        keep({kind: "tds", tax: "TDS", what: TDS.formShort(form, fy), form, per: q + " " + fy, fy, q, tan, due, on, source: f ? f.from : "",
           tds: r2(rows.reduce((a, r) => a + r.tds, 0) + sal.reduce((a, e) => a + num(e.tds), 0)),
           fee: lf && lf.days > 0 ? lf.fee : 0, go: {tab: "tds", fy, q, form, sub: "file"}});
       }));
@@ -108,7 +108,7 @@ const DueList = {
       if (!(total > 0)) return;
       const paidOn = unpaid >= 1 ? "" : list.map(r => this.iso((ch[r.challan] || {}).date)).filter(Boolean).sort().pop() || "";
       const fy = TDS.fyOf(m + "01"), q = TDS.qOf(m + "01");
-      keep({pm: m, kind: "tdspay", tax: "TDS", what: "TDS and TCS deposit", per: GSTR.label(m), fy, q, due, on: paidOn, tds: total, unpaid: unpaid >= 1 ? unpaid : 0,
+      keep({kind: "tdspay", tax: "TDS", what: "TDS and TCS deposit", per: GSTR.label(m), fy, q, due, on: paidOn, tds: total, unpaid: unpaid >= 1 ? unpaid : 0,
         go: {tab: "tds", fy, q, form: "26Q", sub: "challans"}});
     });
     // ---- tasks added from a notice by FinCom Assistant (src/js/75-assistant.js; client_due_tasks), only when the user clicked "Add to due list"
