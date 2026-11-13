@@ -592,7 +592,8 @@ func pushCloudCompany(company, dir string, budget time.Duration) error {
 			// as readFailed:true, empty:false (the cloud marks nothing)
 			one["n"] = countVouchers(t)
 			if t == "" {
-				if exists(dayFullMark(dir, d)) {
+				// 2.5.15 (review M2): empty:true only for a day file that is there and empty; a missing one is not read
+				if rerr == nil && exists(dayFullMark(dir, d)) {
 					one["empty"] = true
 				} else {
 					one["empty"], one["readFailed"] = false, true
@@ -1588,7 +1589,7 @@ func syncCloudPosts() {
 			cp[id] = sig
 			if (st == "done" || st == "failed") && v["checking"] != true {
 				delete(cp, id)
-				saveCloudPosts()
+					saveCloudPosts()
 				writeLog("Posting from FinCom's queue " + id + ": " + str(v["message"]))
 			}
 		}

@@ -267,6 +267,13 @@ func saveKeepDays(dir, from, to, x string) int {
 // the same, and how many days changed: only a day whose text differs from the copy's is written again and goes to the
 // cloud (an Update now that reads the year again sends only what changed, deleted entries included)
 func saveKeepDaysChanged(dir, from, to, x string, full bool) (int, int) {
+	n, c, _ := saveKeepDaysChangedErr(dir, from, to, x, full)
+	return n, c
+}
+
+// the same; an error when a day file could not be written (that day neither marked read nor queued for the cloud)
+func saveKeepDaysChangedErr(dir, from, to, x string, full bool) (int, int, error) {
+	var werr error
 	by := map[string]*strings.Builder{}
 	for _, m := range reVchBlock.FindAllString(x, -1) {
 		d := tagDate(m, "DATE")
@@ -290,13 +297,17 @@ func saveKeepDaysChanged(dir, from, to, x string, full bool) (int, int) {
 			n += countVouchers(t)
 		}
 		df := filepath.Join(days, d+".xml")
-		if exists(df) && readText(df) == t {
+		// 2.5.15 (review M2): unchanged only when the copy's file could be read (a file that cannot be read is never "empty")
+		if old, rerr := os.ReadFile(df); rerr == nil && strings.TrimPrefix(string(old), "\ufeff") == t {
 			if full && !exists(dayFullMark(dir, d)) {
 				_ = saveFile(dayFullMark(dir, d), nowS()) // unchanged, and now known to be read in full
 			}
 			continue
 		}
-		writeDayFile(dir, d, t, full)
+		if err := writeDayFile(dir, d, t, full); err != nil {
+			werr = err
+			continue
+		}
 		ix := indexText(t)
 		_ = saveFile(filepath.Join(days, d+".idx"), ix)
 		whereMu.Lock()
@@ -309,7 +320,7 @@ func saveKeepDaysChanged(dir, from, to, x string, full bool) (int, int) {
 		written = append(written, d)
 	}
 	addCloudDays(dir, written)
-	return n, len(written)
+	return n, len(written), werr
 }
 
 // the vouchers a text shows: their opening tags (a voucher cut short counts; CMPINFO's counter <VOUCHER>n</VOUCHER> does not)
@@ -791,7 +802,7 @@ func useKeepPosted(dir string, st M) int {
 				keep.WriteString("<TALLYMESSAGE>" + v + "</TALLYMESSAGE>")
 			}
 			t2 := keep.String()
-			writeDayFile(dir, day, t2, false) // not a read: the day's full-read mark goes
+			_ = writeDayFile(dir, day, t2, false) // not a read: the day's full-read mark goes
 			_ = saveFile(strings.TrimSuffix(df, ".xml")+".idx", indexText(t2))
 			touched[day] = true
 		}
@@ -1038,7 +1049,11 @@ func (k *keepRun) step(company string, port int, booksFrom string) error {
 			return fmt.Errorf("Tally did not give %s (%s); try %d of 3", f, err.Error(), toInt(st["dayFail"]))
 		}
 		sec := time.Since(t1).Seconds()
-		n, changed := saveKeepDaysChanged(dir, f, t, x, true) // a full answer (checked above): the days are marked read in full
+		n, changed, werr := saveKeepDaysChangedErr(dir, f, t, x, true) // a full answer (checked above): the days are marked read in full
+		if werr != nil {
+			// 2.5.15 (review M2): a day file not written: the slice is read again at the next run (the days written are kept)
+			return fmt.Errorf("the copy of %s-%s could not be written (%s); read again", f, t, werr.Error())
+		}
 		var left []string
 		for _, s := range strs(st["skipped"]) {
 			if s < f || s > t {
@@ -1640,16 +1655,22 @@ func testKeepMonth(company, ym string, pref int) (M, error) {
 // a day's file of the copy (round 11 review, items 3 and 4): written by a full read of Tally (full: the day's mark is
 // set, so an empty day may go to the cloud as empty:true) or by anything else, a seed file or a posting's read-back
 // (the mark goes: an emptied day is then sent as readFailed, never as empty)
-func writeDayFile(dir, d, text string, full bool) {
-	_ = saveFile(filepath.Join(dir, "days", d+".xml"), text)
+// 2.5.15 (review M2): a day file not written leaves no mark of a full read (the day is read again, never sent as empty)
+func writeDayFile(dir, d, text string, full bool) error {
 	m := dayFullMark(dir, d)
+	if err := saveFile(filepath.Join(dir, "days", d+".xml"), text); err != nil {
+		_ = os.Remove(m)
+		writeLog("Keeping: the day file " + d + " could not be written (" + err.Error() + "); the day is read again, never sent as empty")
+		return err
+	}
 	if full {
 		if !exists(m) {
 			_ = saveFile(m, nowS())
 		}
-		return
+		return nil
 	}
 	_ = os.Remove(m)
+	return nil
 }
 
 // the hold for the next slice of a run: keepHold's words, except for an Update now reading on (pressOn) while someone
