@@ -38,6 +38,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsFor, allowedOrigins } from "../_shared/cors.ts";
 import * as Z from "./map.js";
 import { firmGate, viaClient } from "../_shared/firmgate.ts";   // the console's switches (migration 118)
+import { publicError } from "../_shared/errors.ts";   // what a caller is told when something fails inside (security review L3)
 
 const env = (k: string, d = "") => (Deno.env.get(k) ?? d);
 const URL_ = env("SUPABASE_URL");
@@ -631,7 +632,7 @@ Deno.serve(async (req) => {
   } catch (e) {
     const msg = clean((e as Error).message);
     const status = /not allowed|only the firm|look-only|not a member/i.test(msg) ? 403 : 500;
-    console.error("zoho-books", msg);
-    return json(status, { ok: false, error: msg }, req);
+    // FinCom's own words go back; the database's or the network's are logged under a number (security review L3)
+    return json(status, { ok: false, error: publicError("zoho-books", new Error(msg)) }, req);
   }
 });

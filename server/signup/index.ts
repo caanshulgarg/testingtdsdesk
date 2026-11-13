@@ -10,6 +10,7 @@
 // public answer needs no sign-in, and provision and the administrator's path check the token themselves.
 // Rollback: v11 (commit 209c0219b, invite only); before it v10 (its source is v10-deployed.ts.txt here).
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { publicError } from "../_shared/errors.ts";   // what a caller is told when something fails inside (security review L3)
 import { type AdminCaller, type AuthUser, type CreateFirm, type Db, makeHandler, RateLimiter, type SignUpForm } from "./handler.ts";
 
 const URL = Deno.env.get("SUPABASE_URL")!;
@@ -89,12 +90,12 @@ async function createFirm(by: AdminCaller, f: CreateFirm) {
   const { data: firm, error: fErr } = await admin.from("firms")
     .insert({ name: f.firm, plan_id: plan?.id || null, balance: f.credit, note: "Made by the administrator (signup)" })
     .select("id").single();
-  if (fErr) return { status: 400, body: { ok: false, error: fErr.message } };
+  if (fErr) return { status: 400, body: { ok: false, error: publicError("signup", fErr) } };
   let password: string | null = null;
   if (!target) {
     password = f.password || madeUpPassword();
     const { data, error } = await admin.auth.admin.createUser({ email: f.email, password, email_confirm: true, user_metadata: { name: f.name } });
-    if (error) { await admin.from("firms").delete().eq("id", firm.id); return { status: 400, body: { ok: false, error: error.message } }; }
+    if (error) { await admin.from("firms").delete().eq("id", firm.id); return { status: 400, body: { ok: false, error: publicError("signup", error) } }; }
     target = data.user;
   }
   await admin.from("members").upsert({ user_id: target.id, firm_id: firm.id, name: f.name, email: f.email, role: "owner", active: true });

@@ -57,3 +57,13 @@ Deno.test("L1: the two-step sign-in must be finished: a password-only session re
     eq([a.log.asked.length, a.log.sent.length], [0, 0], "no ticket read, no email");
   }
 });
+
+// ---------- 13-Nov-2026 (security review, L3) ----------
+Deno.test("L3: the database's and the email service's own words are not passed on to the caller", async () => {
+  const a = fake({ ticketError: 'permission denied for function support_get' });
+  const r = await read(await a.handler(post({ ticket: "t-1" })));
+  eq(r.status, 403); assert(!/permission|support_get/.test(JSON.stringify(r.body)) && /give support this number: [0-9a-f]{8}$/.test(r.body.error), r.body.error);
+  const b = fake({ resend: { ok: false, status: 422, message: "The fincom.test domain is not verified (https://resend.example/domains)" } });
+  const x = await read(await b.handler(post({ ticket: "t-1" })));
+  eq([x.status, x.body.ok, x.body.sent], [200, false, false]); assert(!/domain|https?:|resend/i.test(JSON.stringify(x.body)), JSON.stringify(x.body));
+});

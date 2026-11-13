@@ -23,6 +23,7 @@ import { firmGate, viaRest } from "../_shared/firmgate.ts";   // the console's s
 import { m2bFrom2bJson, m2bRow2b, m2bRowBk } from "../_shared/match2b.js";
 import { AiClient, matchRun, reapply, SONNET } from "./match.ts";
 import { aiPolicy } from "../_shared/ai_policy.ts";
+import { publicError } from "../_shared/errors.ts";   // what a caller is told when something fails inside (security review L3)
 
 export type Deps = { env: (k: string) => string | undefined, fetch: typeof fetch, anthropic: (key: string) => AiClient };
 
@@ -123,7 +124,7 @@ export function handler(deps: Deps) {
       const done = (await rest("/rest/v1/gst_2b_runs?id=eq." + id, SERVICE, { method: "PATCH", headers: { Prefer: "return=representation" }, body: JSON.stringify(patch) })) as any[];
       return { run: done[0], decisions };
     } catch (e) {
-      await rest("/rest/v1/gst_2b_runs?id=eq." + id, SERVICE, { method: "PATCH", body: JSON.stringify({ status: "failed", done_at: new Date().toISOString(), error: String((e as Error).message || e).slice(0, 500) }) }).catch(() => {});
+      await rest("/rest/v1/gst_2b_runs?id=eq." + id, SERVICE, { method: "PATCH", body: JSON.stringify({ status: "failed", done_at: new Date().toISOString(), error: publicError("gst-2b-match", e) }) }).catch(() => {});
       throw e;
     }
   }
@@ -212,7 +213,7 @@ export function handler(deps: Deps) {
       }
       return reply(400, { ok: false, error: "Unknown request" });
     } catch (e) {
-      return reply(500, { ok: false, kind: "other", error: String((e as Error).message || e).slice(0, 300) });
+      return reply(500, { ok: false, kind: "other", error: publicError("gst-2b-match", e) });
     }
   };
 }

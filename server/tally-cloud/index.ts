@@ -251,6 +251,7 @@ import { servingGate, beatOnly, lineFollows, followAskable } from "./readfollow.
 import { startDecision, earliestKnown, booksFromDay, memoAnswers, movedWords, istDay, uuidOfHex, dayOf } from "./bookstart.js";   // next-book-start: a book's start (bookStartFromState)
 import { corsFor } from "../_shared/cors.ts";   // the one list of headers for every function (server/_shared/cors.ts)
 import { cloudReporter } from "../_shared/sentry.ts";
+import { publicError } from "../_shared/errors.ts";   // what a caller is told when something fails inside (security review L3)
 // 23-Oct-2026 (next-fix-tally-link): the one rule for linking a company to a client by itself (server/_shared/tallyname.js)
 import { autoLinkFor } from "../_shared/tallyname.js";
 import { firmGate, viaClient } from "../_shared/firmgate.ts";   // the console's switches: a paused firm, a switched-off company   // error reports to Sentry, staging only, scrubbed (docs/sentry.md)
@@ -1258,11 +1259,11 @@ async function ownKey(dev: any, firm: string, body: any) {
   if (old && !old.revoked && old.firm_id !== firm && old.id !== dev.id) {
     const { data, error } = await db.rpc("tally_bridge_follow_move", { p_bridge: bid, p_from: old.id, p_to: dev.id, p_user: String(me.user || "").slice(0, 120) });
     if (!error) { console.log("tally-ingest: bridge follows login", bid, old.id, "->", dev.id, JSON.stringify(data)); return reply(data && (data as any).ok === false ? 409 : 200, data); }
-    if (error.code !== "PGRST202" && !missingFn(String(error.message || ""))) return reply(500, { ok: false, error: error.message });
+    if (error.code !== "PGRST202" && !missingFn(String(error.message || ""))) return reply(500, { ok: false, error: publicError("tally-ingest", error) });
   }
   if (!old || old.revoked || old.firm_id !== firm || old.id === dev.id) return reply(403, { ok: false, error: "Not moved: the old computer key is not a key of this firm that FinCom knows." });
   const { data, error } = await db.rpc("tally_bridge_own_key_move", { p_bridge: bid, p_from: old.id, p_to: dev.id, p_user: String(me.user || "").slice(0, 120) });
-  if (error) return (error.code === "PGRST202" || missingFn(String(error.message || ""))) ? reply(409, { ok: false, error: "FinCom's cloud is not ready for this yet (migration 54)." }) : reply(500, { ok: false, error: error.message });
+  if (error) return (error.code === "PGRST202" || missingFn(String(error.message || ""))) ? reply(409, { ok: false, error: "FinCom's cloud is not ready for this yet (migration 54)." }) : reply(500, { ok: false, error: publicError("tally-ingest", error) });
   console.log("tally-ingest: own_key", bid, old.id, "->", dev.id, JSON.stringify(data));
   return reply(data && (data as any).ok === false ? 409 : 200, data);
 }
@@ -1331,7 +1332,7 @@ async function shadowCall(dev: any, firm: string, body: any) {
       try {
         if (typeof d.b64 === "string") text = new TextDecoder("utf-8").decode(b64bytes(d.b64));
         else text = (await gunzip(b64bytes(d.gz), MAX_DAY)).text;
-      } catch (e) { bad.push({ day: d.day, error: String((e as Error)?.message || e).slice(0, 200) }); continue; }
+      } catch (e) { bad.push({ day: d.day, error: publicError("tally-ingest", e) }); continue; }
       done.push(d.day);
       const { data: blob } = await db.storage.from("tally-days").download(`${firm}/${book}/${d.day.slice(0, 6)}/${d.day}.xml.gz`);
       if (!blob) { fresh.push(d.day); continue; }
@@ -1436,19 +1437,19 @@ async function bridgeSafety(dev: any, firm: string, body: any) {
     const purpose = body.purpose === "post" || body.purpose === "read" ? body.purpose : null;
     let { data, error } = purpose ? await db.rpc("tally_lease_take", { ...args, p_purpose: purpose }) : await db.rpc("tally_lease_take", args);
     if (error && purpose && (error.code === "PGRST202" || missingFn(String(error.message || "")))) ({ data, error } = await db.rpc("tally_lease_take", args));
-    if (error) return notReady(error.message) ? reply(200, { ok: true, noLease: true }) : reply(500, { ok: false, error: error.message });
+    if (error) return notReady(error.message) ? reply(200, { ok: true, noLease: true }) : reply(500, { ok: false, error: publicError("tally-ingest", error) });
     return reply(200, data);
   }
   if (body.kind === "lease_release") {
     const { data, error } = await db.rpc("tally_lease_release", { p_firm: firm, p_book: book, p_holder: me.id });
-    if (error) return notReady(error.message) ? reply(200, { ok: true, noLease: true }) : reply(500, { ok: false, error: error.message });
+    if (error) return notReady(error.message) ? reply(200, { ok: true, noLease: true }) : reply(500, { ok: false, error: publicError("tally-ingest", error) });
     return reply(200, data);
   }
   // read_guard
   const n = (v: unknown) => v == null || v === "" || isNaN(Number(v)) ? null : Math.max(0, Math.floor(Number(v)));
   const { data, error } = await db.rpc("tally_sync_guard", { p_firm: firm, p_book: book, p_guid: String(body.guid || "").slice(0, 100) || null,
     p_alter: n(body.alter), p_count: n(body.count), p_device: dev.id, p_bridge: me.id });
-  if (error) return notReady(error.message) ? reply(200, { ok: true, state: "ok", noGuard: true }) : reply(500, { ok: false, error: error.message });
+  if (error) return notReady(error.message) ? reply(200, { ok: true, state: "ok", noGuard: true }) : reply(500, { ok: false, error: publicError("tally-ingest", error) });
   return reply(200, data);
 }
 // FinCom Bridge 2.1.4 (02-Oct-2026): the plain ledger list read by Update now (and after a posting with a new ledger,
@@ -3464,7 +3465,7 @@ async function ingestDaysRaw(firm: string, book: string, daysIn: unknown): Promi
         gz = b64bytes(d.gz);
         z = await gunzip(gz, Math.min(MAX_DAY, MAX_UNZIP - unzipped));
       }
-    } catch (e) { bad.push({ day: d.day, error: String((e as Error)?.message || e).slice(0, 200) }); continue; }
+    } catch (e) { bad.push({ day: d.day, error: publicError("tally-ingest", e) }); continue; }
     unzipped += z.size;
     // 2.4.4 (review 244 H1): never a salary payment's bank details in the bucket, whatever bridge sent the day
     const clean = dropBankDetails(z.text);
@@ -3530,7 +3531,7 @@ async function reparseMonthRaw(firm: string, book: string, monthIn: unknown) {
     if (e3 || !blob) { bad.push({ day, error: "could not read the kept file" }); continue; }
     const gz = new Uint8Array(await blob.arrayBuffer());
     let z: { text: string; size: number };
-    try { z = await gunzip(gz, MAX_DAY); } catch (e) { bad.push({ day, error: String((e as Error)?.message || e).slice(0, 200) }); continue; }
+    try { z = await gunzip(gz, MAX_DAY); } catch (e) { bad.push({ day, error: publicError("tally-ingest", e) }); continue; }
     const r = parseDay(z.text);
     if (r.dates.some((x: string) => x !== day)) { bad.push({ day, error: "entries of other dates" }); continue; }
     const { data: dayAns, error } = await db.rpc("tally_ingest_day", { p_book: book, p_day: iso(day),
@@ -4454,7 +4455,7 @@ async function userUpload(req: Request, auth: string) {
     return reply(400, { ok: false, error: "unknown kind" });
   } catch (e) {
     fail("upload", e, body?.kind, firm); console.error("tally-ingest upload", body?.kind, (e as Error).message);
-    return reply(500, { ok: false, error: (e as Error).message });
+    return reply(500, { ok: false, error: publicError("tally-ingest", e) });
   }
 }
 
@@ -4468,7 +4469,7 @@ Deno.serve(sentry.wrap(async (req) => {
     // the key could not be checked (the database did not answer): busy, the timer comes again in 30 s
     if (keyErr) { fail("work_key", keyErr); console.error("tally-ingest: the work key could not be checked:", String(keyErr.message || "").slice(0, 200)); return busyReply(); }
     if (okKey !== true) return reply(401, { ok: false, error: "not allowed" });
-    try { return reply(200, { ok: true, done: await work(100000) }); } catch (e) { fail("work", e); console.error("tally-ingest work", (e as Error).message); return reply(500, { ok: false, error: (e as Error).message }); }
+    try { return reply(200, { ok: true, done: await work(100000) }); } catch (e) { fail("work", e); console.error("tally-ingest work", (e as Error).message); return reply(500, { ok: false, error: publicError("tally-ingest", e) }); }
   }
   const key = (req.headers.get("x-fincom-device") || "").trim();
   const auth = req.headers.get("authorization") || "";
@@ -4495,7 +4496,7 @@ Deno.serve(sentry.wrap(async (req) => {
   // body holds the OLD key the bridge id is bound to: only a program holding both keys can ask (a member alone cannot move
   // a bridge, and no owner is needed for one's own). Answered before the id is bound to the new key
   if (body?.kind === "own_key") {
-    try { return await ownKey(dev, firm, body); } catch (e) { fail("own_key", e, "own_key", firm); console.error("tally-ingest own_key", (e as Error).message); return reply(500, { ok: false, error: (e as Error).message }); }
+    try { return await ownKey(dev, firm, body); } catch (e) { fail("own_key", e, "own_key", firm); console.error("tally-ingest own_key", (e as Error).message); return reply(500, { ok: false, error: publicError("tally-ingest", e) }); }
   }
   // migration 54 (review M3): a bridge id ("go-…", which the bridge reports itself) belongs to the first computer key that
   // reported it (tally_bridge_ids); another key naming it (an id copied from another Windows user's settings) is refused,
@@ -4522,7 +4523,7 @@ Deno.serve(sentry.wrap(async (req) => {
   }
   // go-bridge (FinCom Bridge 2.0.0 in test mode, beside bridge 1.15.0 on the same computer and key): compared, never kept
   if (body?.shadow === true) {
-    try { return await shadowCall(dev, firm, body); } catch (e) { fail("shadow", e, body?.kind, firm); console.error("tally-ingest shadow", body?.kind, (e as Error).message); return reply(500, { ok: false, error: (e as Error).message }); }
+    try { return await shadowCall(dev, firm, body); } catch (e) { fail("shadow", e, body?.kind, firm); console.error("tally-ingest shadow", body?.kind, (e as Error).message); return reply(500, { ok: false, error: publicError("tally-ingest", e) }); }
   }
   const seen = { last_seen: new Date().toISOString() } as Record<string, unknown>;
   if (body.version) seen.version = String(body.version).slice(0, 40);
@@ -4830,7 +4831,7 @@ Deno.serve(sentry.wrap(async (req) => {
         // key's main bridge) counts only for a posting with no record of its bridge
         const { data, error } = await db.rpc("tally_post_check_report", { p_check: Math.max(0, Math.floor(Number(body.check) || 0)), p_device: dev.id, p_bridge: meC, p_main: isMain(dev, meC),
           p_company: s(body.company, 200), p_result: result, p_vch: s(body.vch, 60), p_master: s(body.master, 30), p_words: s(body.words, 500) });
-        if (error) return (error.code === "PGRST202" || missingFn(String(error.message || ""))) ? reply(409, { ok: false, error: "FinCom's cloud is not ready for this yet (migration 55)." }) : reply(500, { ok: false, error: error.message });
+        if (error) return (error.code === "PGRST202" || missingFn(String(error.message || ""))) ? reply(409, { ok: false, error: "FinCom's cloud is not ready for this yet (migration 55)." }) : reply(500, { ok: false, error: publicError("tally-ingest", error) });
         return reply(200, data);
       }
       case "posts_update": {
@@ -5351,6 +5352,6 @@ Deno.serve(sentry.wrap(async (req) => {
     }
   } catch (e) {
     fail("tally_ingest", e, body?.kind, firm); console.error("tally-ingest", body?.kind, (e as Error).message);
-    return reply(500, { ok: false, error: (e as Error).message });
+    return reply(500, { ok: false, error: publicError("tally-ingest", e) });
   }
 }));

@@ -2,7 +2,8 @@
 // The rules are in handler.ts (Deno tests: handler_test.ts); this wires the real services.
 // Mail goes through Resend. Secrets: RESEND_API_KEY, SUPPORT_MAIL_TO, SUPPORT_MAIL_FROM (a sender on a domain
 // verified in Resend), APP_URL. Until RESEND_API_KEY and SUPPORT_MAIL_TO are set it answers {sent:false} and
-// the ticket itself is unaffected. Deployed as uploaded files: index.ts, handler.ts, ../_shared/cors.ts.
+// the ticket itself is unaffected. Deployed as uploaded files: index.ts, handler.ts, ../_shared/cors.ts, ../_shared/errors.ts
+// (publicError: what a caller is told when something fails inside).
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsFor } from "../_shared/cors.ts";   // the one list of headers for every function (server/_shared/cors.ts)
 import { makeHandler } from "./handler.ts";

@@ -16,6 +16,7 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsFor } from "./cors.ts";
 import { firmGate, viaClient } from "../_shared/firmgate.ts";   // the console's switches (migration 118)
+import { publicError } from "../_shared/errors.ts";   // what a caller is told when something fails inside (security review L3)
 
 const URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -84,7 +85,7 @@ Deno.serve(async (req) => {
     if (had) return reply(409, { ok: false, error: "This login already belongs to a firm." });
     const role = ROLES.includes(String(inv.role)) ? String(inv.role) : "staff";
     const { error: mErr } = await admin.from("members").insert({ user_id: user.id, firm_id: inv.firm_id, name: String(inv.name || "").slice(0, 120), email: String(user.email || "").toLowerCase(), role, active: true });
-    if (mErr) return reply(400, { ok: false, error: mErr.message });
+    if (mErr) return reply(400, { ok: false, error: publicError("admin", mErr) });
     await admin.auth.admin.updateUserById(user.id, { app_metadata: { fincom_invite: null } });
     await admin.from("activity").insert({ firm_id: inv.firm_id, user_id: user.id, client_id: "", what: "admin.accept_invite", detail: (String(user.email || "") + " as " + role).slice(0, 500) }).then(() => {}, () => {});
     return reply(200, { ok: true, firm_id: inv.firm_id, role });
@@ -171,7 +172,7 @@ Deno.serve(async (req) => {
         if (!theirs) {
           const inv = { firm_id: firmId, role, name, by: user.id, at: new Date().toISOString() };
           const { error } = await admin.auth.admin.updateUserById(target.id, { app_metadata: { fincom_invite: inv } });
-          if (error) return reply(400, { ok: false, error: error.message });
+          if (error) return reply(400, { ok: false, error: publicError("admin", error) });
           if (RESEND) await sendMail(email, "You are invited to a firm on FinCom",
             "<p>You have been invited to join a firm's FinCom account. Sign in to FinCom with your own login to accept it (the invitation lasts 14 days):</p><p><a href=\"" + esc(redirectTo) + "\">Open FinCom</a></p><p>If you did not expect this, ignore this email.</p>");
           await audit("admin." + action, email + " as " + role + " (invite to accept: the login existed)");
@@ -182,7 +183,7 @@ Deno.serve(async (req) => {
       }
       if (RESEND) {
         const { data, error } = await admin.auth.admin.generateLink({ type: "invite", email, options: { redirectTo, data: { name } } });
-        if (error) return reply(400, { ok: false, error: error.message });
+        if (error) return reply(400, { ok: false, error: publicError("admin", error) });
         target = data.user;
         const link = data.properties?.action_link || "";
         const ok = await sendMail(email, "You are invited to FinCom",
@@ -190,12 +191,12 @@ Deno.serve(async (req) => {
         if (!ok) return reply(502, { ok: false, error: "The invitation could not be emailed. Try again." });
       } else {
         const { data, error } = await admin.auth.admin.inviteUserByEmail(email, { redirectTo, data: { name } });
-        if (error) return reply(400, { ok: false, error: error.message + " (Supabase's own mailer: set up RESEND_API_KEY to send to anyone)" });
+        if (error) return reply(400, { ok: false, error: publicError("admin", error) });
         target = data.user;
       }
       if (!resend) {
         const { error: mErr } = await admin.from("members").upsert({ user_id: target!.id, firm_id: firmId, name, email, role, active: true });
-        if (mErr) return reply(400, { ok: false, error: mErr.message });
+        if (mErr) return reply(400, { ok: false, error: publicError("admin", mErr) });
       }
       await audit("admin." + action, email + " as " + role + " (invited by email" + (resend ? ", sent again" : "") + ")");
       return reply(200, { ok: true, email, role, invited: true,
@@ -208,14 +209,14 @@ Deno.serve(async (req) => {
       const redirectTo = safeRedirect(body.redirect);
       if (RESEND) {
         const { data, error } = await admin.auth.admin.generateLink({ type: "recovery", email, options: { redirectTo } });
-        if (error) return reply(400, { ok: false, error: error.message });
+        if (error) return reply(400, { ok: false, error: publicError("admin", error) });
         const ok = await sendMail(email, "Set a new FinCom password",
           "<p>A new password was asked for your FinCom login. Choose it here (the link works once, for an hour):</p><p><a href=\"" + (data.properties?.action_link || "") + "\">Set a new password</a></p><p>If you did not expect this, tell your firm's owner.</p>");
         if (!ok) return reply(502, { ok: false, error: "The reset link could not be emailed." });
       } else {
         const anon = createClient(URL, ANON);
         const { error } = await anon.auth.resetPasswordForEmail(email, { redirectTo });
-        if (error) return reply(400, { ok: false, error: error.message });
+        if (error) return reply(400, { ok: false, error: publicError("admin", error) });
       }
       await audit("admin.send_reset", email, r.theirs?.firm_id || firmId);
       return reply(200, { ok: true, email, note: "A link to set a new password has gone to " + email + "." });
@@ -234,7 +235,7 @@ Deno.serve(async (req) => {
       const no = resetRefused(r); if (no) return no;
       const password = madeUpPassword();   // never one the caller chose
       const { error } = await admin.auth.admin.updateUserById(r.target.id, { password });
-      if (error) return reply(400, { ok: false, error: error.message });
+      if (error) return reply(400, { ok: false, error: publicError("admin", error) });
       await audit("admin.reset_password", email, r.theirs?.firm_id || firmId);
       if (r.target.id !== user.id) await tell(email, "password");
       return reply(200, { ok: true, email, password });
@@ -270,7 +271,7 @@ Deno.serve(async (req) => {
         if (markErr) return reply(500, { ok: false, error: "The change could not be made just now. Try again." });
       }
       const { error } = await admin.from("members").update(patch).eq("user_id", r.target.id);
-      if (error) return reply(400, { ok: false, error: error.message });
+      if (error) return reply(400, { ok: false, error: publicError("admin", error) });
       await audit("admin.set_person", email + " " + JSON.stringify(patch), r.theirs?.firm_id || firmId);
       return reply(200, { ok: true });
     }
@@ -298,12 +299,12 @@ Deno.serve(async (req) => {
       const { data: firm, error: fErr } = await admin.from("firms")
         .insert({ name, plan_id: body.plan_id || null, balance: Number(body.credit || 0), note: String(body.note || "").slice(0, 500) })
         .select("id").single();
-      if (fErr) return reply(400, { ok: false, error: fErr.message });
+      if (fErr) return reply(400, { ok: false, error: publicError("admin", fErr) });
       let password: string | null = null;
       if (!target) {
         password = String(body.password || "") || madeUpPassword();
         const { data, error } = await admin.auth.admin.createUser({ email, password, email_confirm: true, user_metadata: { name: body.owner_name || "" } });
-        if (error) return reply(400, { ok: false, error: error.message });
+        if (error) return reply(400, { ok: false, error: publicError("admin", error) });
         target = data.user;
       }
       await admin.from("members").upsert({ user_id: target!.id, firm_id: firm.id, name: String(body.owner_name || ""), email, role: "owner", active: true });

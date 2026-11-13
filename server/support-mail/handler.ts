@@ -7,6 +7,7 @@
 // Until RESEND_API_KEY and SUPPORT_MAIL_TO are set it answers {sent: false} and the ticket itself is unaffected.
 // Security review of 13-Nov-2026, L1: the caller's two-step sign-in must be finished (mfa_ok), as every other member
 // function asks.
+import { publicError } from "../_shared/errors.ts";
 export type Mail = { from: string; to: string[]; subject: string; text: string; reply_to?: string };
 export interface Deps {
   cors: Record<string, string>;
@@ -31,7 +32,8 @@ export function makeHandler(d: Deps) {
     try { mfa = (await d.mfaOk(jwt)) === true; } catch { mfa = false; }
     if (!mfa) return reply(403, { ok: false, reason: "mfa", error: "Finish the two-step sign-in first." });
     const { t, error } = await d.ticket(jwt, String(body.ticket || ""));
-    if (error || !t) return reply(403, { ok: false, error: error || "Not your ticket." });
+    // L3: the database's own words are not passed on (publicError logs them under a number)
+    if (error || !t) return reply(403, { ok: false, error: error ? publicError("support-mail", new Error(error)) : "Not your ticket." });
     if (!d.key || !d.to) return reply(200, { ok: true, sent: false, reason: "Email is not set up yet (RESEND_API_KEY, SUPPORT_MAIL_TO)." });
 
     const thread: any[] = t.thread || [];
@@ -57,7 +59,7 @@ export function makeHandler(d: Deps) {
       "Open it in TDS Desk → Help: " + d.app,
     ].join("\n");
     const r = await d.send({ from: d.from, to, subject, text, ...(toSupport && t.created_email ? { reply_to: t.created_email } : {}) });
-    if (!r.ok) return reply(200, { ok: false, sent: false, error: r.message || ("Resend answered HTTP " + r.status) });
+    if (!r.ok) return reply(200, { ok: false, sent: false, error: publicError("support-mail", new Error("the email service answered HTTP " + r.status + ": " + (r.message || ""))) });
     return reply(200, { ok: true, sent: true, to: toSupport ? "support" : "raiser" });
   };
 }

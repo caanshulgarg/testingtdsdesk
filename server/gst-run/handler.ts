@@ -58,6 +58,7 @@
 //   Any failure: JSON {ok: false, error} with the CORS headers.
 import { corsFor } from "../_shared/cors.ts";
 import { firmGate, viaRest } from "../_shared/firmgate.ts";
+import { publicError } from "../_shared/errors.ts";   // what a caller is told when something fails inside (security review L3)
 // @ts-ignore plain JavaScript, shared with the Node test
 import { step, ENGINE, REV, contextOf, ctxOf, ctxDiff, shares, engineMonth, cloudSums, compare, itcMonths, engineItc, itcCompare } from "./engine.js";
 import { load, pickBook, fyOf, unpack } from "./data.ts";
@@ -219,7 +220,7 @@ export function handler(deps: Deps) {
         rows.heads = rows.lines = rows.bills = []; rows.made = null;
       } catch (e) {
         const until = await rpc("gst_share_backoff", { p_book: book.book_id, p_what: "ctx", p_why: String((e as Error)?.message || e).slice(0, 300) }).catch(() => null);
-        return { ok: false, book: book.book_id, ctx: true, error: String((e as Error)?.message || e).slice(0, 300), backoff: until };
+        return { ok: false, book: book.book_id, ctx: true, error: publicError("gst-run", e), backoff: until };
       }
       const d = kept && kept.ctx && kept.engine === ENGINE ? ctxDiff(kept.ctx, ctx) : { all: true, ledgers: [], guids: [] };
       const put = await rpc("gst_share_ctx_put", { p_book: book.book_id, p_run: run, p_stamp: stamp, p_engine: ENGINE, p_ctx: ctx, p_ledgers: d.ledgers, p_guids: d.guids, p_all: d.all });
@@ -405,7 +406,7 @@ export function handler(deps: Deps) {
         if (!inside) return reply(401, { ok: false, error: "Not allowed." });
         // the engine this function runs, kept for gst_share_books_due (migration 170: a book whose context another engine
         // made is due); written only when it moved. Without 170: nothing kept, the share actions go on as before
-        const said = await rpc("gst_share_engine_put", { p_engine: ENGINE, p_rev: REV }).then((m) => ({ ok: true, moved: m === true }), (e) => ({ ok: false, error: String((e as Error)?.message || e).slice(0, 300) }));
+        const said = await rpc("gst_share_engine_put", { p_engine: ENGINE, p_rev: REV }).then((m) => ({ ok: true, moved: m === true }), (e) => ({ ok: false, error: publicError("gst-run", e) }));
         if (action === "share_engine") return reply(200, { ...said, engine: ENGINE, rev: REV });
         const id = String(body.book_id || "");
         if (!/^[0-9a-f-]{36}$/i.test(id)) return reply(400, { ok: false, error: "Say the book (book_id)." });
@@ -442,7 +443,7 @@ export function handler(deps: Deps) {
       if (started) kick();
       return reply(200, { ok: true, book: book.book_id, version, reg, ym, result: null, pending: true, started });
     } catch (e) {
-      return reply(500, { ok: false, error: String((e as Error)?.message || e).slice(0, 300) });
+      return reply(500, { ok: false, error: publicError("gst-run", e) });
     }
   };
 }
