@@ -173,10 +173,10 @@ Deno.test("a register's format: the prompt carries the header and 10 rows only; 
 // next-fix-sheet-import (13-Nov-2026): a "Sales Ledger" column was answered as "ledger" and taken for the customer's
 Deno.test("a register's format: the sales (or purchase) ledger and the voucher type are fields of their own, and the prompt says which is which", () => {
   const head = ["Date", "Customer Name", "Voucher Type", "Vch No.", "Sales Ledger", "Invoice Amount"];
-  assert(SHEET_FIELDS.includes("sledger") && SHEET_FIELDS.includes("vchtype") && SHEET_FIELDS.includes("ledger") && SHEET_FIELDS.includes("doctype"), "the fields offered");
-  assert(/sledger \(the sales, income, purchase or expense ledger/.test(SHEET_SYSTEM) && /never an income, expense or tax ledger/.test(SHEET_SYSTEM) && /vchtype \(/.test(SHEET_SYSTEM) && /map it to vchtype, not doctype/.test(SHEET_SYSTEM), "the prompt tells the party's ledger from the sales ledger, the voucher type from the document type");
-  const r = parseSheetMap('{"map": {"date": "Date", "party": "Customer Name", "vchtype": "Voucher Type", "no": "Vch No.", "sledger": "Sales Ledger", "total": "Invoice Amount"}}', head);
-  eq(Object.keys(r.map).sort(), ["date", "no", "party", "sledger", "total", "vchtype"], "an answer with them is kept");
+  assert(SHEET_FIELDS.includes("sledger") && !SHEET_FIELDS.includes("vchtype") && SHEET_FIELDS.includes("ledger") && SHEET_FIELDS.includes("doctype"), "the fields offered");
+  assert(/sledger \(the sales, income, purchase or expense ledger/.test(SHEET_SYSTEM) && /never an income, expense or tax ledger/.test(SHEET_SYSTEM) && !/vchtype/.test(SHEET_SYSTEM), "the prompt tells the party's ledger from the sales ledger; the voucher type is not asked for (the screen's is used)");
+  const r = parseSheetMap('{"map": {"date": "Date", "party": "Customer Name", "vchtype": "Voucher Type", "doctype": "Voucher Type", "no": "Vch No.", "sledger": "Sales Ledger", "total": "Invoice Amount"}}', head);
+  eq(Object.keys(r.map).sort(), ["date", "doctype", "no", "party", "sledger", "total"], "an answer with the sales ledger is kept; a voucher-type field is not one of FinCom's");
 });
 
 Deno.test("a party's statement: its own fields (debit, credit, balance), never an invoice's", () => {

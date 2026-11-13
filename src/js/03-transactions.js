@@ -3,10 +3,10 @@
 /* ================================================================== */
 function txnTab(){ return S.txnTab || "bills"; }
 function vchTypeOf(e, co){
-  if (e.vchType) return e.vchType;   // the sheet's own voucher type (app/src/lib/registers.js)
   if (e.noteKind === "credit") return co.debitNoteType || "Debit Note";
   if (e.noteKind === "debit") return "Purchase";
-  return co.voucherType || "Journal";
+  // (a bill from a sheet uploaded on Purchase is a Purchase voucher: the screen's type, never the sheet's column)
+  return e.vchType || co.voucherType || "Journal";
 }
 // in Tally: posted and confirmed there (or found there already), and not since missing from Tally's own entries in
 // FinCom's cloud copy (review of 02-Oct-2026: FA/ELEC/013 posted on 29-Sep was deleted in Tally and still counted).
@@ -43,7 +43,7 @@ function txnRowsSales(){
     const x = v.x || {}, gst = num(x.cgst) + num(x.sgst) + num(x.igst) + num(x.cess);
     const cls = v.status === "posted" ? "ok" : v.status === "ready" ? "warn" : v.status === "ignored" ? "no" : "no";
     const label = v.status === "posted" ? "In Tally" : v.status === "ready" ? "Post to Tally" : v.status === "ignored" ? "Set aside" : "To review";
-    return {id: v.id, kind: "sale", date: x.date || "", up: (v.addedAt || "").slice(0, 10), vch: x.noteKind === "credit" ? "Credit Note" : x.noteKind === "debit" ? "Debit Note" : (s.cfg.voucherType || "Sales"),
+    return {id: v.id, kind: "sale", date: x.date || "", up: (v.addedAt || "").slice(0, 10), vch: salesVt(x),
       no: x.number || "", party: x.customerName || "", taxable: num(x.taxable), gst, total: num(x.total), cls, label, file: v.fileName || "", docPath: v.docPath || "", hasFile: !!(S.files["sv:" + v.id] || v.docPath || (S.fileIndex && S.fileIndex.has("sv:" + v.id))), v};
   }).sort((a, b) => String(b.date).localeCompare(String(a.date)));
 }

@@ -34,11 +34,14 @@ import "./vendorRecon.js";
 const SHEET_FIELDS = [["date", "Invoice date"], ["no", "Invoice no."], ["party", "Party name"], ["gstin", "Party GSTIN"], ["pos", "Place of supply"],
   ["taxable", "Taxable value"], ["rate", "GST rate %"], ["igst", "IGST"], ["cgst", "CGST"], ["sgst", "SGST / UTGST"], ["cess", "Cess"],
   ["tax", "Total tax (one column)"], ["total", "Invoice total"], ["hsn", "HSN / SAC"], ["qty", "Quantity"], ["ledger", "Party's ledger in Tally"],
-  ["sledger", "Sales / purchase ledger"], ["doctype", "Document type (invoice / credit note)"], ["vchtype", "Voucher type in Tally"], ["against", "Against invoice no."]];
+  ["sledger", "Sales / purchase ledger"], ["doctype", "Document type (invoice / credit note)"], ["vchtype", "Voucher type (information only)"], ["against", "Against invoice no."]];
 // next-fix-sheet-import (13-Nov-2026, a client's sales sheet that would not post): "ledger" was "Ledger (a hint)" and was
 // taken as the PARTY's ledger, so a "Sales Ledger" column put the income ledger in the customer's place on every invoice,
 // and "Voucher Type" (the client's own "Sales UP") was only looked at for credit / debit. Now a field each: the party's
-// ledger (ledger), the sales or purchase ledger (sledger), Tally's voucher type (vchtype).
+// ledger (ledger) and the sales or purchase ledger (sledger).
+// The voucher type (the owner's decision, 13-Nov-2026) is the screen's, never the sheet's column: an upload on Sales
+// posts as the Sales screen's type ("Sales", or the one in Sales settings), an upload on Purchase as "Purchase". A
+// voucher-type column may stay mapped (vchtype, or doctype as before): it tells a credit or debit note, nothing more.
 const SIDE_LEDGER = {sales: "Sales ledger", purchase: "Purchase / expense ledger"};
 const SHEET_AMOUNTS = ["taxable", "igst", "cgst", "sgst", "cess", "tax", "total", "qty"];
 
@@ -136,8 +139,7 @@ const SheetFmt = {
   cls(name){ const e = exactLedger(name); return e && typeof Ledgers === "object" ? Ledgers.cls(null, e) : ""; },
   // FinCom's own rules over a mapping (the AI's answer, or a layout saved before 13-Nov-2026): a "ledger" column whose
   // values are not parties in Tally (none under Sundry Debtors / Creditors, and they are Tally ledgers or the header says
-  // sales / purchase / income / expense) is the sales or purchase ledger; a "Voucher Type" column read as the document
-  // type is Tally's voucher type. Returns the corrected mapping, or null when there is nothing to correct
+  // sales / purchase / income / expense) is the sales or purchase ledger. Returns the corrected mapping, or null when there is nothing to correct
   fix(map, head, rows){
     const names = (head || []).map(h => this.norm(h)), m = Object.assign({}, map);
     let changed = false;
@@ -147,7 +149,6 @@ const SheetFmt = {
       const says = /sale|purchase|income|expense|revenue/.test(m.ledger) && !/party|customer|supplier|vendor|buyer|debtor|creditor/.test(m.ledger);
       if (!cl.includes("party") && (says || cl.some(Boolean))){ m.sledger = m.ledger; delete m.ledger; changed = true; }
     }
-    if (m.doctype && !m.vchtype && /^(vch|voucher)type/.test(m.doctype)){ m.vchtype = m.doctype; delete m.doctype; changed = true; }
     return changed ? m : null;
   },
   // a new format's mapping: asked of the AI once (SheetAI, the firm's assistant on the cheap model), never a figure
@@ -155,7 +156,7 @@ const SheetFmt = {
     const m = this.masked(head, rows);
     if (typeof SheetAI !== "object" || !SheetAI.map) throw new Error("FinCom's AI help is not available here: map the columns yourself.");
     const FL = this.fieldsFor(side);
-    const r = await SheetAI.map({head: m.head, rows: m.rows, side, fields: FL.map(f => f[0])});
+    const r = await SheetAI.map({head: m.head, rows: m.rows, side, fields: FL.map(f => f[0]).filter(f => f !== "vchtype")});
     const names = head.map(h => this.norm(h)), map = {};
     Object.entries((r && r.map) || {}).forEach(([field, col]) => {
       if (!FL.some(f => f[0] === field)) return;
@@ -179,7 +180,13 @@ const SheetFmt = {
       const no = String(get(r, "no") || "").trim(), first = String(r.find(c => String(c == null ? "" : c).trim()) || "");
       if (!no || /^(grand\s*)?total|^sub\s*total|^net\s*total/i.test(first)){ skipped.push({row: hi + 2 + n, why: /total/i.test(first) ? "a total row" : "no invoice number"}); return; }
       const typ = String(get(r, "doctype") || get(r, "vchtype") || "").toLowerCase();
-      const credit = /credit|cn\b|return|refund/.test(typ), debit = !credit && /debit|dn\b/.test(typ);
+      // the kind of row (the owner, 13-Nov-2026): a note when the document-type column says so (credit note, CN, CRN,
+      // return; debit note, DN, DBN), or, with no such column, when the invoice total is negative (its amounts are then
+      // taken positive). On Purchase every note is one kind: a purchase return, our debit note or the supplier's credit
+      // note is a Debit Note in Tally, every line reversed (noteKind "credit", src/js/01 voucherXml)
+      const says = /credit|cn\b|crn\b|return|refund/.test(typ), saysD = !says && /debit|dn\b|dbn\b/.test(typ);
+      const neg = idx.doctype < 0 && idx.vchtype < 0 && (this.amount(get(r, "total")) < 0 || (idx.total < 0 && this.amount(get(r, "taxable")) < 0));
+      const credit = says || neg || (saysD && side === "purchase"), debit = saysD && side !== "purchase";
       const key = no + "|" + (credit ? "C" : debit ? "D" : "I") + (t.groupByNo === false ? "|" + n : "");
       const a = f => this.amount(get(r, f));
       const d = docs.get(key) || {no, date: this.date(get(r, "date"), t.date), party: String(get(r, "party") || "").trim(), gstin: String(get(r, "gstin") || "").toUpperCase().replace(/[^A-Z0-9]/g, ""),
@@ -196,6 +203,7 @@ const SheetFmt = {
       }
       // no taxable column: the rate and the total tell it
       if (!taxable && total && rate) taxable = r2(total / (1 + rate / 100));
+      // (a credit document is kept negative here, whichever way the sheet writes it; the entry made takes it positive)
       const sign = credit && [taxable, total].every(x => x >= 0) ? -1 : 1;
       d.taxable = r2(d.taxable + sign * taxable); d.igst = r2(d.igst + sign * igst); d.cgst = r2(d.cgst + sign * cgst); d.sgst = r2(d.sgst + sign * sgst); d.cess = r2(d.cess + sign * cess);
       d.lineTotals = (d.lineTotals || []).concat([sign * total]);
@@ -345,6 +353,13 @@ const SheetPost = {
     if (remembered && exactLedger(remembered)) return exactLedger(remembered);
     return d.party ? exactLedger(d.party) || "" : "";
   },
+  // the voucher type a document is posted as: the screen's and the kind of row's, never the sheet's own type name.
+  // Sales: Sales (or the one in Sales settings), Credit Note, Debit Note; Purchase: Purchase, Debit Note
+  vchName(d, side){
+    const cfg = (side === "sales" && typeof SL === "function" && SL() && SL().cfg) || {}, co = CO() || {};
+    if (side === "sales") return d.note === "credit" ? cfg.creditNoteType || "Credit Note" : d.note === "debit" ? cfg.debitNoteType || "Debit Note" : cfg.voucherType || "Sales";
+    return d.note === "credit" ? co.debitNoteType || "Debit Note" : "Purchase";
+  },
   // the sales (or purchase) ledger the sheet names: Tally's own spelling, or the ledger answered for that name before
   sledKey(d){ return d.sledger ? "sled:" + SheetFmt.norm(d.sledger) : ""; },
   salesLedger(d){
@@ -376,10 +391,10 @@ const SheetPost = {
       const found = d.mapped || this.partyLedger(d, "purchase");
       e.partyLedger = found || (d.newLedger ? this.pend(d.newLedger, "Sundry Creditors", d) : "");
       if (d.mapped || (!found && d.newLedger)) e.partyUserSet = true;
-      // the sheet's own purchase ledger and voucher type, on the bill
+      // the sheet's own purchase ledger, on the bill
       const pl = d.sledMapped || this.salesLedger(d) || (d.newSled ? this.pend(d.newSled, "Purchase Accounts") : "");
       if (pl){ e.expenseLedger = pl; e.expenseUserSet = true; }
-      if (d.vch) e.vchType = d.vch;
+      if (!d.note) e.vchType = "Purchase";   // the Purchase screen's voucher type (vchTypeOf, src/js/03), whatever the sheet says
       finishNewEntry(e, cid, null);
       res.ids.push(e.id);
       if (e.status === "duplicate") res.held++; else res.added++;
@@ -414,7 +429,7 @@ const SheetPost = {
     else if (again && v.userLedger && !["party", ""].includes(SheetFmt.cls(v.customerLedger))){ v.customerLedger = ""; v.userLedger = false; }
     const sl = d.sledMapped || this.salesLedger(d) || (d.newSled ? this.pend(d.newSled, "Sales Accounts") : "");
     if (sl){ v.salesLedgers = {}; salesTotals(v.x).forEach(g => { v.salesLedgers[g.rate] = sl; }); }
-    if (d.vch) v.x.vchType = d.vch;
+    delete v.x.vchType;   // (the Sales screen's own type: never the sheet's column)
   }
 };
 
@@ -478,8 +493,7 @@ const SheetImport = {
         const fx = !found.fmt.builtin && !found.fmt.v && SheetFmt.fix(found.fmt.map, st.head, g.slice(st.hi + 1));
         if (fx){
           const col = n => st.head[st.head.map(h => SheetFmt.norm(h)).indexOf(n)] || n, was = found.fmt.map, who = side === "sales" ? "customer" : "supplier";
-          st.remap = {id: found.fmt.id, scope: found.fmt.scope, why: [was.ledger && !fx.ledger ? "“" + col(was.ledger) + "” was read as the " + who + "'s ledger, but its values are not " + who + "s in Tally: it is the " + SIDE_LEDGER[side].toLowerCase() + "." : "",
-            was.doctype && !fx.doctype ? "“" + col(was.doctype) + "” is Tally's voucher type: the entries are posted as that voucher type." : ""].filter(Boolean).join(" ")};
+          st.remap = {id: found.fmt.id, scope: found.fmt.scope, why: [was.ledger && !fx.ledger ? "“" + col(was.ledger) + "” was read as the " + who + "'s ledger, but its values are not " + who + "s in Tally: it is the " + SIDE_LEDGER[side].toLowerCase() + "." : ""].filter(Boolean).join(" ")};
           st.map = fx; st.transforms = Object.assign({}, found.fmt.transforms); st.why = {}; st.step = "map"; st.busy = ""; return render();
         }
         st.docs = SheetFmt.apply(found.fmt, g, st.hi, CO(), side);

@@ -370,7 +370,7 @@ const PostCheck = {
   vouchersUrl(co, tname, e){
     const vt = co.voucherType || "Journal";
     return "/vouchers?company=" + encodeURIComponent(tname) + "&from=" + isoToTally(addDays(e.x.invoiceDate, -5)) + "&to=" + isoToTally(addDays(e.x.invoiceDate, 5)) +
-      "&types=" + encodeURIComponent([...new Set([vt, e.vchType || vt, "Purchase", "Journal", co.debitNoteType || "Debit Note"])].join(",")) + (typeof Bridge === "object" && Bridge.pinQ ? Bridge.pinQ() : "");
+      "&types=" + encodeURIComponent([...new Set([vt, "Purchase", "Journal", co.debitNoteType || "Debit Note"])].join(",")) + (typeof Bridge === "object" && Bridge.pinQ ? Bridge.pinQ() : "");
   },
   // the client's Tally computer reads Tally now; the answer: {ok, readAt} or {ok: false, why}
   async remoteRead(co, force){

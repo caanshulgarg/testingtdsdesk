@@ -254,9 +254,11 @@ function learnCustomer(v){
   saveSales({hist: true});
 }
 /* ---------- Tally XML ---------- */
+// the voucher type of a sales document: the Sales screen's, by its kind (never a sheet's own type name)
+function salesVt(x){ const c = SL().cfg; return x.noteKind === "credit" ? c.creditNoteType || "Credit Note" : x.noteKind === "debit" ? c.debitNoteType || "Debit Note" : c.voucherType || "Sales"; }
 function salesVoucherXml(v, co){
-  const x = v.x, cfg = SL().cfg, cn = x.noteKind === "credit";
-  const vt = xesc(x.vchType || (cn ? (cfg.creditNoteType || "Credit Note") : x.noteKind === "debit" ? (cfg.debitNoteType || "Debit Note") : (cfg.voucherType || "Sales"))), d = toTallyDate(x.date);
+  const x = v.x, cn = x.noteKind === "credit";
+  const vt = xesc(salesVt(x)), d = toTallyDate(x.date);
   const pos = x.pos || stateOfGstin(x.customerGstin) || stateOfGstin(co.gstin);
   const amt2 = n => r2(n).toFixed(2);
   let s = '<VOUCHER VCHTYPE="' + vt + '" ACTION="Create" OBJVIEW="Accounting Voucher View">\n<DATE>' + d + "</DATE>\n<EFFECTIVEDATE>" + d + "</EFFECTIVEDATE>\n" +
