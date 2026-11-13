@@ -7,6 +7,9 @@ import HowPage from "../parts/HowPage.jsx";
 import { OnbCard } from "../parts/Notes.jsx";
 import PageSkeleton from "../parts/PageSkeleton.jsx";
 import { Inbox, ReceiptText, Send, Landmark } from "lucide-react";
+import { Suspense, lazy } from "react";
+// the TDS card: its books figure worked out behind the page (next-fix-client-open-freeze, parts/DashTds.jsx)
+const DashTds = lazy(() => import("../parts/DashTds.jsx"));
 
 const money = (x) => "₹" + INR.format(r2(x || 0));
 const sumTotal = (list) => money(list.reduce((a, e) => a + num(e.x.total), 0));
@@ -41,9 +44,6 @@ export default function Dash() {
   // (TDSYear.quarters: TDS.rows of the year), when this client's books are open
   const fy = fyOf(null);
   const tds = v.filter((e) => e.status === "approved" && e.snapshot && e.snapshot.fy === fy).reduce((a, e) => a + num(e.snapshot.tds), 0);
-  const bk = S.books && S.books.cid === co.id && (S.books.vouchers || []).length ? S.books : null;
-  let tdsBooks = null;
-  if (bk) { try { tdsBooks = TDS.rows().filter((r) => r.fy === fy).reduce((a, r) => a + num(r.tds), 0); } catch (e) { tdsBooks = null; } }
   const off = bank ? bank.rows.filter((r) => r.balOk === false).length : 0;
   return (<>
     <section className="dash">
@@ -64,11 +64,7 @@ export default function Dash() {
         {CloudDocs.on() && <p className="note" style={{ margin: "8px 0 0" }}>Documents are kept in the firm account, so anyone in the firm can open a bill from Transactions on any computer.
           {CloudDocs.queue.length > 0 && <> <b>{CloudDocs.queue.length} waiting to go up.</b></>}</p>}
         <div className="dash-cols">
-          <section className="dash-card" data-tone="violet"><h3>TDS {fy}</h3>
-            <div className="dash-row"><span>On bills approved here</span><b>{money(tds)}</b></div>
-            {tdsBooks != null && <div className="dash-row"><span>In the books (Tally), {TDS.formShort("26Q", fy)}</span><b>{money(tdsBooks)}</b></div>}
-            <p className="note">{tdsBooks != null ? "The books’ figure is the TDS page’s for the year. " : "The books’ TDS for the year is on the TDS page. "}Deductees over their limit show in red on the bills list.</p>
-            <button className="btn small" onClick={() => goClient("books:tds")}>Open TDS</button></section>
+          <Suspense fallback={null}><DashTds co={co} fy={fy} tds={tds} money={money} /></Suspense>
           <section className="dash-card" data-tone="sky"><h3>Bank</h3>
             {stmt ? <><p><b>{stmt.bank || ""}</b> · {fmtDate(stmt.from)} to {fmtDate(stmt.to)}</p>
               <div className="dash-row"><span>Opening</span><b>{money(stmt.opening)}</b></div><div className="dash-row"><span>Closing</span><b>{money(stmt.closing)}</b></div>

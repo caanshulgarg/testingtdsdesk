@@ -698,7 +698,8 @@ function autoMapCompanyLedgers(co){
     const f = find() || "";
     if (f !== (cur || "") && (f || (cur && hasLedgerList()))){ changes.push({from: cur || "", to: f, role}); put(f); }
   };
-  const usage = Ledgers.usage(cid) || {}, used = n => (usage[n] || {}).n || 0;
+  // (next-fix-client-open-freeze: the day book's use of each ledger, every entry, only when two ledgers are compared)
+  let usage; const used = n => ((usage = usage || Ledgers.usage(cid) || {})[n] || {}).n || 0;
   const best = arr => arr.sort((a, b) => used(b) - used(a) || a.length - b.length)[0] || "";
   const names = list.map(l => l.name);
   // next-hang-watch (04-Nov-2026; staging's 2,455-ledger client blocked the page about a second on a fast computer at each
