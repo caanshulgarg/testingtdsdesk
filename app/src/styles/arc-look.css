@@ -182,6 +182,8 @@ body:has(#toast.toast:not(.hidden)) .mainwrap { padding-bottom: calc(96px + var(
 #toast .toast-act:last-child:not(:first-child):hover { background: var(--brand-hover); border-color: var(--brand-hover); }
 #toast .toast-act:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 #toast .toast-details { color: var(--accent); }
+/* ux-wins: "Show me" (lib/toastNext.js): the box a message asks for, marked for a moment */
+[data-show-me] { outline: 3px solid var(--accent) !important; outline-offset: 2px; }
 #toast .toast-raw { color: var(--text-secondary); opacity: 1; font-family: var(--font-mono, ui-monospace, monospace); }
 @media (max-width: 600px) { #toast.toast { width: calc(100% - 32px); } #toast .toast-acts { margin-left: 18px; } }
 .toast.in { animation: arc-fade var(--duration-fast) var(--ease-enter); }
