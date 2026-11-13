@@ -440,14 +440,14 @@ function EntryList({ co, tab, canPost, empty, title }) {
   </section>;
 }
 
-// bills deleted in Tally (not there at a read) whose FinCom id FinCom's cloud still holds: the owner releases each
+// bills deleted in Tally (not there at a read) whose FinCom id FinCom's cloud still holds: a member who may post releases each
 function OwnerRelease({ co }) {
   const list = Object.values((D(co.id) || {}).entries || {}).filter((e) => e.ownerRelease);
   if (!list.length) return null;
   return <section className="post-sec" data-owner-release=""><h3>{"Deleted in Tally, held by FinCom's cloud (" + list.length + ")"}</h3><ul className="post-attn">
     {list.map((e) => <li key={e.id}>
-      <span className="why"><b>{[e.x.vendorName, e.x.invoiceNo].filter(Boolean).join(" ")}</b>{" — " + (e.ownerRelease.by || "") + ": not in Tally (" + (e.ownerRelease.why || "") + "). It is not posted again until the owner releases it."}</span>
-      <span className="acts">{postOwner() ? <><button className="btn small" data-owner-release-btn={e.id} onClick={() => PostOwner.ownerAsk(co.id, e)}>Owner: release this bill</button>{e.ownerRelease.ask && <button className="linkbtn" data-owner-release-dismiss={e.id} onClick={() => PostOwner.dismissAsk(co.id, e)}>Dismiss</button>}</> : <span className="note">Waiting for the firm’s owner.</span>}</span>
+      <span className="why"><b>{[e.x.vendorName, e.x.invoiceNo].filter(Boolean).join(" ")}</b>{" — " + (e.ownerRelease.by || "") + ": not in Tally (" + (e.ownerRelease.why || "") + "). It is not posted again until it is released."}</span>
+      <span className="acts">{PostOwner.mayRelease() ? <><button className="btn small" data-owner-release-btn={e.id} onClick={() => PostOwner.ownerAsk(co.id, e)}>Release this bill</button>{e.ownerRelease.ask && <button className="linkbtn" data-owner-release-dismiss={e.id} onClick={() => PostOwner.dismissAsk(co.id, e)}>Dismiss</button>}</> : <span className="note">Waiting for a member who may post.</span>}</span>
     </li>)}</ul></section>;
 }
 

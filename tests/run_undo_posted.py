@@ -16,9 +16,11 @@ twice. Made-up client, lines, invoices and bills. Checked, for each kind:
                  posting is still being checked or sent cannot be undone; Undo of a queued automatic entry reads the
                  posting's status when the cancel is refused (cancelled: undone; taken: left)
   Deleted in Tally - reads only say "still there" (the words name the reads that failed and those that found nothing); the
-                 owner's "I checked in Tally: not there" goes to tally_post_owner_release(p_job, p_id, p_why) (migration
-                 174; without it the server's words, kept under Post to Tally > Errors); a member's ask on a bill posted
-                 through the bridge only is settled by the owner without the cloud, or dismissed
+                 "I checked in Tally: not there – release" of any member who may post (owner or staff, the owner's decision of
+                 13-Nov-2026: a fresh reason, the risk said, audited naming who) goes to tally_post_owner_release(p_job,
+                 p_id, p_why) (174; 183: any member who may post; without it the server's words, kept under Post to
+                 Tally > Errors); a look-only member gets neither a release nor an ask; an ask made before (a bill
+                 posted through the bridge only) is settled by a member who may post without the cloud, or dismissed
   queued here    - a posting this page queued (postMarkNew), marked, then taken back / undone automatically / deleted in
                  Tally: that posting is old, never marked again; a Retry of it is refused
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_undo_posted.py"""
@@ -352,20 +354,31 @@ with sync_playwright() as p:
     ok("could not read the FinCom Bridge’s read of Tally" in said_failed and "nothing found in the party’s ledger in Tally" in said_failed and "nothing found in the FinCom Bridge’s read of Tally" in said_none and "could not read" not in said_none,
        "the words say which reads failed and which found nothing (%r | %r)" % (said_failed, said_none))
     ok(E("postBucket(D().entries.b5, {})") == "intally", "and it reads as in Tally, as before")
-    # a member: "Ask the owner to release" (a reason), to Post to Tally > Errors; nothing changes on the bill
+    # the owner's decision (13-Nov-2026): any member who may post releases it; a look-only member may not (no ask either:
+    # FinCom's cloud refuses a look-only member's saves, so an ask would never reach anyone)
     T("{mode: 'bridge', refused: false, vouchers: [], lv: []}")
-    E("() => { S.account = {me: {role: 'staff'}, firm: {name: 'Firm'}}; }")
+    E("() => { S.account = {me: {role: 'readonly'}, firm: {name: 'Firm'}}; }")
     press("c7")
-    ask = pg.locator('#toast [data-toast-act="Ask the owner to release"]')
-    ok(ask.count() == 1 and NOTSURE in last(), "a member: “Ask the owner to release”")
-    if ask.count(): ask.click(); W(400)
-    if box(): pg.fill("#confirmBox #deletedWhy", "not in the Day Book"); pg.click('#confirmBox [data-cbx="yes"]'); W(400)
-    ok(st_of("c7") == ["approved", True] and E("!!(D().entries.c7.ownerRelease && D().entries.c7.ownerRelease.ask)"), "asked: still posted, waiting for the owner")
-    for bid in ("c8", "c9"):
-        press(bid)
-        if pg.locator('#toast [data-toast-act="Ask the owner to release"]').count(): pg.locator('#toast [data-toast-act="Ask the owner to release"]').click(); W(400)
-        if box(): pg.fill("#confirmBox #deletedWhy", "not in the Day Book"); pg.click('#confirmBox [data-cbx="yes"]'); W(400)
-    ok(E("!!(D().entries.c8.ownerRelease && D().entries.c9.ownerRelease)") and any("bill_release_asked" in a for a in E("window.__audit || []") or []) or E("!!(D().entries.c8.ownerRelease && D().entries.c9.ownerRelease)"), "two more asks (bills posted through the bridge only)")
+    acts = E("() => [...document.querySelectorAll('#toast [data-toast-act]')].map(b => b.getAttribute('data-toast-act'))") or []
+    ok(NOTSURE in last() and "look-only" in last() and not [x for x in acts if "release" in x.lower()], "a look-only member: no release and no ask, the words say why (%r %s)" % (last()[-120:], acts))
+    ok(st_of("c7") == ["approved", True] and not E("D().entries.c7.ownerRelease"), "and nothing changes on the bill")
+    E("() => { S.account = {me: {role: 'readonly'}}; }"); E("(cid) => PostOwner.ownerAsk(cid, D().entries.c7)", cid); W(300)
+    ok("look-only" in last() and not box() and st_of("c7") == ["approved", True], "nor through the owner's path (%r)" % last())
+    # a member who may post (staff): "I checked in Tally: not there – release" at once, a fresh reason, the risk said
+    E("""(cid) => { S.account = {me: {role: 'staff'}, firm: {name: 'Firm'}}; window.__rpc = []; window.__audit = []; TCloud.rpc = async (fn, a) => { window.__rpc.push([fn, a]); if (window.__no174) throw new Error("Could not find the function public." + fn + "(p_id, p_job, p_why) in the schema cache"); return {ok: true, owner: true}; };
+      CloudJobs.list = [{id: 'job-c', client_id: cid, status: 'done', created_at: '2026-10-01T10:00:00Z', updated_at: '2026-10-01T10:00:00Z', entry_ids: ['c6', 'c7'], results: [{id: 'c6', ok: true, verified: true, guid: 'g6'}, {id: 'c7', ok: true, verified: true, guid: 'g7'}]}]; }""", cid)
+    press("c7")
+    btn = pg.locator('#toast [data-toast-act^="I checked in Tally: not there"]')
+    ok(btn.count() == 1 and pg.locator('#toast [data-toast-act="Ask the owner to release"]').count() == 0 and st_of("c7") == ["approved", True], "a member who may post: “I checked in Tally: not there – release”, no ask of the owner, nothing changed yet")
+    if btn.count(): btn.click(); W(400)
+    ok("it will be posted twice" in box() and pg.locator("#confirmBox #deletedWhy").count() == 1, "the member: a fresh reason and the risk said (%r)" % box()[:160])
+    if box(): pg.fill("#confirmBox #deletedWhy", "not in the Day Book"); pg.click('#confirmBox [data-cbx="yes"]'); W(600)
+    au = [a for a in E("window.__audit") or [] if a.startswith("bill_deleted_in_tally")]
+    ok(E("D().entries.c7.status") == "draft" and E("!!D().entries.c7.deletedInTally") and ["tally_post_owner_release", {"p_job": "job-c", "p_id": "c7", "p_why": "not in the Day Book"}] in E("window.__rpc") and not E("D().entries.c7.ownerRelease"),
+       "the member's word: back to To review, released in FinCom's cloud (tally_post_owner_release) (%s)" % E("window.__rpc"))
+    ok(len(au) == 1 and "released by " in au[0] and "it will be posted twice" in au[0], "audited, naming who released it (%s)" % au)
+    # asks made before this change (bills posted through the bridge only) wait under Post to Tally > Errors
+    E("() => { for (const id of ['c8', 'c9']){ const e = D().entries[id]; e.ownerRelease = {at: '2026-11-01T10:00:00Z', by: 'a member', why: 'not in the Day Book', ask: true}; Store.saveEntry(S.coId, e); } }")
     # the owner: a fresh reason, the risk said, then released (the bridge's release, the cloud's id)
     E("""(cid) => { S.account = {me: {role: 'owner'}, firm: {name: 'Firm'}}; window.__rpc = []; TCloud.rpc = async (fn, a) => { window.__rpc.push([fn, a]); if (window.__no174) throw new Error("Could not find the function public." + fn + "(p_id, p_job, p_why) in the schema cache"); return {ok: true, owner: true}; };
       window.__no174 = true; CloudJobs.list = [{id: 'job-c', client_id: cid, status: 'done', created_at: '2026-10-01T10:00:00Z', updated_at: '2026-10-01T10:00:00Z', entry_ids: ['c6', 'c7'], results: [{id: 'c6', ok: true, verified: true, guid: 'g6'}, {id: 'c7', ok: true, verified: true, guid: 'g7'}]}]; }""", cid)
@@ -402,21 +415,27 @@ with sync_playwright() as p:
     ok(E("postReleased([D().entries.h1]).length") == 1 and E("postReleased([D().entries.h1])[0].id") == "h1", "the bill goes to the bridge as released once (postReleased)")
     src = open(os.path.join(HERE, "..", "src", "js", "24-tally-bridge.js")).read()
     ok("released: postReleased(todo)" in src and "released: postReleased(rows)" in src, "bills are passed as released like bank lines")
-    E("() => { S.account = {me: {role: 'owner'}, firm: {name: 'Firm'}}; S.view = 'company'; goStep('post'); S.postTab = 'errors'; render(); }"); W(2500)
+    # Post to Tally > Errors: a look-only member sees them waiting, no button
+    E("() => { S.account = {me: {role: 'readonly'}, firm: {name: 'Firm'}}; S.view = 'company'; goStep('post'); S.postTab = 'errors'; render(); }"); W(2500)
     E("() => { const b = document.querySelector('[data-post-tab=\"errors\"], [data-tab=\"errors\"]'); if (b) b.click(); }"); W(800)
-    rb = pg.locator('[data-owner-release-btn="c7"]')
-    ok(rb.count() == 1 and "Owner: release this bill" in rb.inner_text(), "Post to Tally > Errors: “Owner: release this bill” for the owner (%d)" % rb.count())
+    sec = pg.inner_text("[data-owner-release]") if pg.locator("[data-owner-release]").count() else ""
+    ok(pg.locator("[data-owner-release-btn]").count() == 0 and pg.locator("[data-owner-release-dismiss]").count() == 0 and "Waiting for a member who may post" in sec, "Errors, a look-only member: no release, no dismiss (%r)" % sec[:200])
+    # a member who may post (staff): "Release this bill" for each, Dismiss for an ask
+    E("() => { S.account = {me: {role: 'staff'}, firm: {name: 'Firm'}}; render(); }"); W(800)
+    rb = pg.locator('[data-owner-release-btn="c6"]')
+    ok(rb.count() == 1 and "Release this bill" in rb.inner_text() and "Owner" not in rb.inner_text(), "Post to Tally > Errors: “Release this bill” for a member who may post (%d)" % rb.count())
     if rb.count(): rb.click(); W(600)
     if box(): pg.fill("#confirmBox #deletedWhy", "checked the Day Book"); pg.click('#confirmBox [data-cbx="yes"]'); W(600)
-    ok(["tally_post_owner_release", {"p_job": "job-c", "p_id": "c7", "p_why": "checked the Day Book"}] in E("window.__rpc") and not E("D().entries.c7.ownerRelease") and E("D().entries.c7.status") == "draft", "the owner's press (a fresh reason) releases it through tally_post_owner_release")
+    ok(E("window.__rpc").count(["tally_post_owner_release", {"p_job": "job-c", "p_id": "c6", "p_why": "deleted it"}]) == 2 and not E("D().entries.c6.ownerRelease") and E("D().entries.c6.status") == "draft", "the member's press releases the one the cloud refused before, through tally_post_owner_release (%s)" % E("window.__rpc"))
     n0 = len(E("window.__rpc"))
     rb = pg.locator('[data-owner-release-btn="c8"]')
     if rb.count(): rb.click(); W(600)
+    ok("it will be posted twice" in box(), "an ask on a bill still posted: a fresh reason, the risk said (%r)" % box()[:120])
     if box(): pg.fill("#confirmBox #deletedWhy", "checked the Day Book"); pg.click('#confirmBox [data-cbx="yes"]'); W(600)
     ok(not E("D().entries.c8.ownerRelease") and E("D().entries.c8.status") == "draft" and E("!!D().entries.c8.release") and len(E("window.__rpc")) == n0,
-       "a member's ask on a bill posted through the bridge only: the owner's release settles it, no call to FinCom's cloud (%s)" % E("window.__rpc")[n0:])
+       "an ask on a bill posted through the bridge only: the member's release settles it, no call to FinCom's cloud (%s)" % E("window.__rpc")[n0:])
     dm = pg.locator('[data-owner-release-dismiss="c9"]')
-    ok(dm.count() == 1, "the owner may dismiss a member's ask")
+    ok(dm.count() == 1, "a member who may post may dismiss an ask")
     if dm.count(): dm.click(); W(400)
     ok(not E("D().entries.c9.ownerRelease") and st_of("c9") == ["approved", True] and pg.locator('[data-owner-release-btn="c9"]').count() == 0, "dismissed: it stays posted, off Errors")
     E("() => { S.account = null; goStep('review', 'bills'); S.filter = 'approved'; S.reviewTable = false; render(); }"); W(500)
