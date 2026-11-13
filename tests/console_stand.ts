@@ -203,6 +203,7 @@ const deps: Deps = {
   },
 };
 const fn = makeHandler(deps, MODULES);
+const signins = { fn: 0, direct: 0 };   // password sign-ins: through the sign-in function, and straight at Auth
 const CORS = { "Access-Control-Allow-Origin": pageOrigin, "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info", "Access-Control-Allow-Methods": "GET, POST, OPTIONS" };
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { ...CORS, "Content-Type": "application/json" } });
 
@@ -217,11 +218,21 @@ Deno.serve({ port, hostname: "127.0.0.1", onListen: () => console.log("stand rea
   const bearer = (req.headers.get("Authorization") || "").replace(/^Bearer /, "");
   const who = tokens.get(bearer);
   const body = req.method === "POST" || req.method === "PUT" ? await req.json().catch(() => ({})) : {};
-  if (u.pathname === "/auth/v1/token" && u.searchParams.get("grant_type") === "password") {
+  // FinCom's sign-in function, as the console calls it (its answers: server/security/functions/signin/handler.ts).
+  // "down@zz.test" stands for a time the function cannot answer
+  if (u.pathname === "/functions/v1/signin" && req.method === "POST") {
+    signins.fn++;
+    if (String(body.email || "").toLowerCase() === "down@zz.test") return new Response("<html>Bad gateway</html>", { status: 502, headers: CORS });
     const l = logins.find((x) => x.email === String(body.email || "").toLowerCase() && !!x.password && x.password === body.password);
-    if (!l) return json(400, { code: 400, error_code: "invalid_credentials", msg: "Invalid login credentials" });
-    if (l.banned) return json(400, { code: 400, error_code: "user_banned", msg: "User is banned" });
+    if (!l) return json(400, { ok: false, error: "Wrong email or password." });
+    if (l.banned) return json(403, { ok: false, reason: "user_off", error: "This account is switched off. Contact FinCom support." });
     return json(200, session(l, "aal1"));
+  }
+  if (u.pathname === "/__signins") return json(200, signins);
+  // a password sent straight to Auth: the console never does (counted, and refused here)
+  if (u.pathname === "/auth/v1/token" && u.searchParams.get("grant_type") === "password") {
+    signins.direct++;
+    return json(403, { code: 403, error_code: "hook_rejected", msg: "the stand takes passwords through /functions/v1/signin only" });
   }
   if (u.pathname === "/auth/v1/token" && u.searchParams.get("grant_type") === "refresh_token") {
     const t = tokens.get(body.refresh_token); const l = t && logins.find((x) => x.id === t.id);

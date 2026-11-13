@@ -5,6 +5,8 @@
 // Needs migration 189 for the wait per email and address and the pass for Auth's password hook (Authentication -> Hooks ->
 // Password Verification Attempt -> public.auth_password_attempt_hook); without it the count goes on as before.
 // Needs migration 112 for the per-address count; without it the count is skipped and the per-email lockout holds as before.
+// Run 112 and 189 before deploying this, and switch the hook on only after the app and the console that sign in through
+// this function are published. Answers the app's sites and the console's two (cors.ts).
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsFor } from "./cors.ts";
 import { makeHandler } from "./handler.ts";

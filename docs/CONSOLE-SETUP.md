@@ -45,6 +45,9 @@ python3 -I scratchpad/fn_deploy.py <checkout> console-admin server/console/index
 - Secrets: none new. `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are Supabase's own. Optional
   `CONSOLE_ORIGINS` (comma-separated) adds a test address; the console's two addresses are built in.
 - Needs migration 112 (`auth_rate_hit`) and 118 on the database. Without 112 every call is refused as "too many".
+- The console's email-and-password step goes through the `signin` function (`server/security/functions/signin`, which
+  answers the console's two addresses): deploy it before publishing the console. A test address for the console goes
+  in signin's `ALLOWED_ORIGINS` secret too. When signin does not answer, the console says to try again.
 
 ## Step C. Supabase Auth settings (owner, once)
 

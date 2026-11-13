@@ -21,7 +21,7 @@ const covers = (h, list) => { const have = String(h || "").toLowerCase().split("
     const dir = path.join(ROOT, "server/security/functions", fn);
     const m = await import(path.join(dir, "cors.ts"));
     // where the function answers a request: admin in index.ts; gateway and signin in handler.ts since their rules moved
-    // there for the Deno tests (13-Nov-2026, security review I3: the two checks looked in index.ts and guarded nothing)
+    // there for the Deno tests
     const idx = fs.readFileSync(path.join(dir, "index.ts"), "utf8");
     const hasHandler = fs.existsSync(path.join(dir, "handler.ts")), src = hasHandler ? fs.readFileSync(path.join(dir, "handler.ts"), "utf8") : idx;
     const where = hasHandler ? "handler.ts" : "index.ts";
@@ -38,8 +38,18 @@ const covers = (h, list) => { const have = String(h || "").toLowerCase().split("
     }
     const bad = m.corsFor(req("https://evil.example"));
     ok(bad["Access-Control-Allow-Origin"] !== "https://evil.example" && bad["Access-Control-Allow-Origin"] === "https://caanshulgarg.github.io", fn + ": an unknown site is not echoed (" + bad["Access-Control-Allow-Origin"] + ")");
-    // security review L5 (13-Nov-2026): a file opened from disk and a developer's own machine are not on the fixed list
+    // a file opened from disk and a developer's own machine are not on the fixed list
     for (const o of ["null", "http://localhost:8000", "http://127.0.0.1:8000"]) ok(m.corsFor(req(o))["Access-Control-Allow-Origin"] === "https://caanshulgarg.github.io", fn + ": " + o + " is not allowed unless the function's secret lists it");
+  }
+  // the console's two sites: the sign-in function answers them (the console signs in there); gateway and admin do not
+  const consoleSites = JSON.parse(/export const DEFAULT_ORIGINS = (\[[^\]]*\]);/.exec(fs.readFileSync(path.join(ROOT, "server/console/core/router.ts"), "utf8"))[1]);
+  ok(consoleSites.length === 2 && JSON.stringify(consoleSites) === JSON.stringify(shared.CONSOLE_ORIGINS), "the console's sites here are the console function's own two");
+  for (const fn of ["gateway", "admin", "signin"]) {
+    const m = await import(path.join(ROOT, "server/security/functions", fn, "cors.ts"));
+    for (const o of consoleSites) {
+      const got = m.corsFor(req(o))["Access-Control-Allow-Origin"];
+      ok(fn === "signin" ? got === o : got === "https://caanshulgarg.github.io", fn + ": a preflight from " + o + (fn === "signin" ? " is allowed" : " is not allowed"));
+    }
   }
   // ALLOWED_ORIGINS secret still adds sites
   globalThis.Deno = { env: { get: (k) => (k === "ALLOWED_ORIGINS" ? "https://extra.example, https://two.example" : undefined) } };

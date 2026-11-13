@@ -2,7 +2,8 @@
 against tests/console_stand.ts: a fake Supabase Auth and the REAL console-admin router and modules with in-memory data.
 The built console (CONSOLE_DIST, else built here into $TMPDIR/console-dist) is served with console/_headers' own
 headers, the CSP included (only upgrade-insecure-requests left out: the test page is plain http on localhost).
-  1. sign-in: wrong password, a banned login ("This account is switched off. Contact FinCom support."), a login that
+  1. sign-in (through FinCom's sign-in function; when it does not answer: "try again"): wrong password, a banned
+     login ("This account is switched off. Contact FinCom support."), a login that
      is not a console admin; password then the authenticator code (a wrong code refused); enrolment (QR, key, code)
   2. every screen renders (Dashboard, Firms, a firm, Companies, a company, Users, a person, Change history, Admins,
      Settings); screenshots in SHOTS (default scratchpad/console-shots)
@@ -106,6 +107,9 @@ try:
         pg.fill("input[type=email]", "owner@fincom.live"); pg.fill("input[type=password]", "wrong"); pg.click("button:has-text('Continue')")
         pg.wait_for_selector("[role=alert]")
         ok("Wrong email or password." in text(pg), "a wrong password: plain words")
+        pg.fill("input[type=email]", "down@zz.test"); pg.fill("input[type=password]", "Any-pass-123"); pg.click("button:has-text('Continue')")
+        pg.wait_for_selector("text=Could not reach FinCom's sign-in")
+        ok("try again in a minute" in text(pg), "the sign-in function not answering: asked to try again")
         pg.fill("input[type=email]", "off@zz.test"); pg.fill("input[type=password]", "Off-pass-123"); pg.click("button:has-text('Continue')")
         pg.wait_for_selector("text=This account is switched off. Contact FinCom support.")
         ok(True, "a switched-off (banned) login: \"This account is switched off. Contact FinCom support.\"")
@@ -368,6 +372,8 @@ try:
         ok(pg.is_visible("nav [data-nav=users]"), "phone: the menu opens"); shot(pg, "20-phone-menu")
         ctx.close()
 
+        sg = stand_get("__signins")
+        ok(sg["fn"] >= 5 and sg["direct"] == 0, "every password went to the sign-in function, none straight to Auth (%s)" % sg)
         print("== 8. idle time-out")
         ctx, pg = new_page(br, viewport={"width": 1360, "height": 900})
         pg.clock.install()

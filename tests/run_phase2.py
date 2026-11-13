@@ -155,15 +155,21 @@ with sync_playwright() as p:
     # Until the database update ("Waiting for database" on the pull request): nothing may break
     pg.goto("about:blank"); pg.goto(BASE); pg.wait_for_timeout(2500)
     if pg.evaluate("() => typeof signInNeeded === 'function' && typeof S === 'object' && !!S && !!S.firm && signInNeeded()"): pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(800)
-    # sign-in: the sign-in function not deployed (the gateway's "not found", or the browser blocking the call) -> signs in as before
+    # sign-in: a project with no sign-in function (the gateway's 404) signs in at Auth; a call that fails, or an answer
+    # that is not the function's own, asks the person to try again and sends no password to Auth
     r = pg.evaluate("""async () => { const out = [], tok = {access_token: 'T', refresh_token: 'R', user: {id: 'u', email: 'a@b.in'}};
+      let direct = 0;
       const fake = mode => async (u, o) => { u = String(u);
-        if (/functions\/v1\/signin/.test(u)){ if (mode === 'cors') throw new TypeError('Failed to fetch'); return new Response(JSON.stringify({code: 'NOT_FOUND', message: 'Requested function was not found'}), {status: mode === '404' ? 404 : 401}); }
-        if (/auth\/v1\/token/.test(u)) return new Response(JSON.stringify(tok), {status: 200});
+        if (/functions\/v1\/signin/.test(u)){ if (mode === 'cors') throw new TypeError('Failed to fetch'); if (mode === 'page') return new Response('<html>Bad gateway</html>', {status: 502});
+          if (mode === 'okpage') return new Response('{}', {status: 200});
+          return new Response(JSON.stringify({code: 'NOT_FOUND', message: 'Requested function was not found'}), {status: mode === '404' ? 404 : 401}); }
+        if (/auth\/v1\/token/.test(u)){ direct++; return new Response(JSON.stringify(tok), {status: 200}); }
         return new Response('{}', {status: 200}); };
-      for (const m of ['404', 'cors', 'other']){ window.fetch = fake(m); try { const j = await Cloud.signInCall('a@b.in', 'pw'); out.push(m + ':' + j.access_token); } catch (e){ out.push(m + ':ERR ' + e.message); } }
+      for (const m of ['404', 'cors', 'other', 'page', 'okpage']){ window.fetch = fake(m); try { const j = await Cloud.signInCall('a@b.in', 'pw'); out.push(m + ':' + j.access_token); } catch (e){ out.push(m + ':ERR ' + e.message); } }
+      out.push('direct:' + direct);
       return out; }""")
-    ok(r == ["404:T", "cors:T", "other:T"], "waiting: with no sign-in function on the server, signing in works as before (" + ", ".join(r) + ")")
+    again = "ERR Could not reach FinCom's sign-in. Check the connection and try again in a minute."
+    ok(r == ["404:T", "cors:" + again, "other:" + again, "page:" + again, "okpage:" + again, "direct:1"], "sign-in: no sign-in function on the project (404) signs in at Auth; unreachable or not its own answer: try again, no password sent to Auth (" + ", ".join(r) + ")")
     # the admin service not yet updated: invite falls back to a made-up password, reset link and unlock say so
     r = pg.evaluate("""async () => { window.__c = []; window.__t = []; window.toast = m => window.__t.push(m);
       Cloud.on = () => true; S.account = {me: {role: 'owner'}, people: [{name: 'Bina', email: 'b@b.in', role: 'staff', active: true}]}; window.loadAccount = () => {};

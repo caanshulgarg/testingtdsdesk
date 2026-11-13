@@ -75,20 +75,22 @@ const Cloud = {
     if (!r.ok) throw new Error(switchedOff(j) || j.error_description || j.msg || j.message || ("Sign-in failed (" + r.status + ")"));
     return j;
   },
-  // through the sign-in function, which counts wrong passwords and locks the account after 5 (review item 21);
-  // straight at Supabase Auth where that function is not deployed (the lock is then kept by the token hook alone)
+  // through FinCom's sign-in function, which counts wrong passwords and hands Supabase Auth the password with its pass
+  // (migration 189). When the function cannot be reached, or answers something that is not its own, the person is
+  // asked to try again. Only a project that has no sign-in function at all (the gateway's 404) is signed in at Auth.
   // the bot check's token (app/src/lib/bot.jsx), when the build has one: passed on to Supabase Auth
+  SIGNIN_AGAIN: "Could not reach FinCom's sign-in. Check the connection and try again in a minute.",
   async signInCall(email, password){
-    const c = this.cfg(), captcha_token = window.fincomBot ? await window.fincomBot() : undefined, direct = () => this.authCall("token?grant_type=password", {email, password, gotrue_meta_security: captcha_token && {captcha_token}});
+    const c = this.cfg(), captcha_token = window.fincomBot ? await window.fincomBot() : undefined;
     let r;
     try { r = await fetch(c.url.replace(/\/+$/, "") + "/functions/v1/signin", {method: "POST", headers: {apikey: c.key, "Content-Type": "application/json"}, body: JSON.stringify({email, password, captcha_token})}); }
-    catch (e){ r = null; }
-    if (!r || r.status === 404) return direct();
+    catch (e){ throw new Error(this.SIGNIN_AGAIN); }
+    if (r.status === 404) return this.authCall("token?grant_type=password", {email, password, gotrue_meta_security: captcha_token && {captcha_token}});
     const j = await r.json().catch(() => null);
-    // an answer that is not the sign-in function's own (the gateway's "function not found", a proxy page): sign in as before
-    if (!j || (!r.ok && !("ok" in j)) || (r.ok && !j.access_token)) return direct();
-    if (!r.ok) throw new Error(switchedOff(j) || j.error || ("Sign-in failed (" + r.status + ")"));
-    return j;
+    if (r.ok && j && j.access_token) return j;
+    // the function's own refusal ({ok: false, error}): its words
+    if (!r.ok && j && j.ok === false) throw new Error(switchedOff(j) || j.error || ("Sign-in failed (" + r.status + ")"));
+    throw new Error(this.SIGNIN_AGAIN);
   },
   async signIn(email, password){
     const j = await this.signInCall(String(email).trim(), password);

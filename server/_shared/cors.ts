@@ -11,6 +11,9 @@ export const ALLOWED_ORIGINS = [
   "https://caanshulgarg.github.io",
   "https://staging.fincom.live", "https://app.fincom.live", "https://fincom.live",   // FinCom's own sites
 ];
+// the FinCom Console's two sites (the same two as server/console/core/router.ts DEFAULT_ORIGINS). Only the signin
+// function adds them (its cors.ts): the console signs its people in there
+export const CONSOLE_ORIGINS = ["https://console.fincom.live", "https://console-staging.fincom.live"];
 // every header the app (and the Tally bridge, x-fincom-device) sends
 export const ALLOW_HEADERS = "authorization, x-client-info, apikey, content-type, x-fincom-device";
 
@@ -31,12 +34,13 @@ export function linkOrigins(): string[] {
 
 // the CORS headers for a request. any: answer "*" (functions that authenticate every call by a token or a device key
 // and keep "*"); methods: what the function answers to
-export function corsFor(req: Request | null, opts?: { any?: boolean, methods?: string }): Record<string, string> {
+// also: more sites for this function alone
+export function corsFor(req: Request | null, opts?: { any?: boolean, methods?: string, also?: string[] }): Record<string, string> {
   const o = opts || {};
   const methods = o.methods || "POST, OPTIONS";
   if (o.any) return { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": ALLOW_HEADERS, "Access-Control-Allow-Methods": methods };
   const origin = (req && req.headers.get("Origin")) || "";
-  const allow = allowedOrigins().includes(origin) ? origin : ALLOWED_ORIGINS[0];
+  const allow = allowedOrigins().includes(origin) || (o.also || []).includes(origin) ? origin : ALLOWED_ORIGINS[0];
   return {
     "Access-Control-Allow-Origin": allow,
     "Vary": "Origin",

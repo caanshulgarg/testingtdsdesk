@@ -1,5 +1,5 @@
-// Sign-in for the console, straight against Supabase Auth's REST API (no SDK): email and password, then the
-// authenticator code (TOTP). The session lives in this tab only (sessionStorage), never localStorage: closing the tab
+// Sign-in for the console (no SDK): email and password through FinCom's sign-in function, then the authenticator code
+// (TOTP) and the rest against Supabase Auth's REST API. The session lives in this tab only (sessionStorage), never localStorage: closing the tab
 // ends it. Only the public publishable key is here; the service key never reaches the browser.
 // An email's link (an invite from Admins > Add an admin, or "Forgot password?") lands here with Supabase's tokens in the
 // address (#access_token=…&type=invite|recovery). takeLink() takes them out of the address at once (history.replaceState,
@@ -83,7 +83,23 @@ async function gotrue(path, { method = "POST", body, token } = {}) {
   return j;
 }
 
-export async function signIn(email, password) { save(await gotrue("/token?grant_type=password", { body: { email: email.trim(), password } })); }
+// Email and password go to FinCom's sign-in function (server/security/functions/signin), as the app's do: it counts
+// wrong passwords and hands Supabase Auth the password with its pass (migration 189). There is no other way in: when
+// the function cannot be reached, or answers something that is not its own, the person is asked to try again.
+const TRY_AGAIN = "Could not reach FinCom's sign-in. Check the connection and try again in a minute.";
+export async function signIn(email, password) {
+  let r;
+  try {
+    r = await fetch(SUPABASE_URL + "/functions/v1/signin", {
+      method: "POST", headers: { apikey: SUPABASE_KEY, "Content-Type": "application/json" }, body: JSON.stringify({ email: email.trim(), password }),
+    });
+  } catch { throw new Error(TRY_AGAIN); }
+  const j = await r.json().catch(() => null);
+  if (r.ok && j && j.access_token) { save(j); return; }
+  // the function's own refusal ({ok: false, error}): its words (a wrong password, a wait, a switched-off login)
+  if (!r.ok && j && j.ok === false && typeof j.error === "string" && j.error) { const e = new Error(j.error.slice(0, 300)); e.status = r.status; throw e; }
+  throw new Error(TRY_AGAIN);
+}
 // "Set your password" (an invite or a reset link): saved with the link's own sign-in, which becomes this tab's session
 export async function setPassword(password) {
   if (!link) throw new Error(EXPIRED);
