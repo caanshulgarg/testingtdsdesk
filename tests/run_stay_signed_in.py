@@ -5,7 +5,8 @@ run_signin_session.py). Made-up logins only.
   1. the access token ran out while the browser was closed (the refresh token still good): opening FinCom refreshes it
      on its own and stays signed in
   2. no internet when FinCom opens: still signed in (nothing asks to sign in); once the internet is back the token is
-     refreshed on its own. A server error (503) on the refresh never signs anyone out
+     refreshed on its own. A server error (503; a 500 whose words name the session) or a 200 without a token never
+     signs anyone out; a banned login (400 user_banned) is locked out and told so
   3. a laptop that slept for hours (no timer ran): coming back to the window refreshes the token at once
   4. a sign-in the firm account no longer takes (the refresh token revoked: "Sign out of all devices", a lost laptop):
      the page is locked behind the sign-in page as before, which says why, and comes back after signing in; no screen
@@ -28,7 +29,7 @@ page_srv = http.server.ThreadingHTTPServer(("localhost", PAGE_PORT), functools.p
 threading.Thread(target=page_srv.serve_forever, daemon=True).start()
 
 # ---------- the fake Supabase: a refresh token works once (rotation); "revoked" refuses every refresh ----------
-ST = {"n": 1, "access": "A1", "refresh": "R1", "revoked": False, "fail503": False, "refreshes": 0, "refused": 0, "lock": threading.Lock()}
+ST = {"n": 1, "access": "A1", "refresh": "R1", "revoked": False, "fail503": False, "answer": None, "refreshes": 0, "refused": 0, "lock": threading.Lock()}
 def new_session():
     ST["n"] += 1; ST["access"] = "A%d" % ST["n"]; ST["refresh"] = "R%d" % ST["n"]
 class Fake(http.server.BaseHTTPRequestHandler):
@@ -55,6 +56,7 @@ class Fake(http.server.BaseHTTPRequestHandler):
                 return self.out(200, {"access_token": ST["access"], "refresh_token": ST["refresh"], "expires_in": 3600, "user": {"id": "u1", "email": b.get("email", "")}})
             with ST["lock"]:
                 if ST["fail503"]: return self.out(503, {"message": "upstream unavailable"})
+                if ST["answer"]: return self.out(*ST["answer"])
                 if ST["revoked"] or b.get("refresh_token") != ST["refresh"]:
                     ST["refused"] += 1
                     return self.out(400, {"error": "invalid_grant", "error_description": "Invalid Refresh Token: Refresh Token Not Found"})
@@ -100,6 +102,7 @@ def asks_sign_in(pg): return "Sign in to the firm account" in pg.inner_text("#ap
 with sync_playwright() as p:
     br = p.chromium.launch()
     ctx = context(br); A = page(ctx)
+    ok(A.locator('[data-cloud="shared"]').count() == 1, "the first step (where Google and Microsoft are) has 'This is a shared computer' too")
     A.fill('[data-cloud="email"]', "owner@firm.in"); A.click('[data-act="cloudSignIn"]'); A.wait_for_timeout(300)
     ok(A.locator('[data-cloud="shared"]').count() == 1 and not A.is_checked('[data-cloud="shared"]'), "the sign-in form has 'This is a shared computer', not ticked")
     A.goto(URL); A.wait_for_timeout(2000)
@@ -125,6 +128,12 @@ with sync_playwright() as p:
     r = A.evaluate("() => Cloud.refreshToken().then(() => 'ok', (e) => 'err')"); A.wait_for_timeout(500)
     ok(r == "err" and A.evaluate("Cloud.on()") and not signin_page(A) and notes(A).count() == 0, "a server error on the refresh (503) never signs out")
     ST["fail503"] = False
+    for ans, what in [((500, {"code": 500, "error_code": "unexpected_failure", "msg": "Database error finding session"}), "a 500 'Database error finding session'"),
+                      ((200, {"token_type": "bearer"}), "a 200 without an access token")]:
+        ST["answer"] = ans; expire(A)
+        r = A.evaluate("() => Cloud.refreshToken().then(() => 'ok', (e) => 'err')"); A.wait_for_timeout(400)
+        ok(r == "err" and A.evaluate("Cloud.on()") and not signin_page(A), what + ": still signed in")
+    ST["answer"] = None
 
     # 3. a laptop that slept: no timer ran; the window comes back
     A.evaluate("() => { window.__t0 = Date.now(); }")
@@ -149,6 +158,21 @@ with sync_playwright() as p:
         A.evaluate("() => { " + go + "; }"); A.wait_for_timeout(700)
         if asks_sign_in(A): said.append(go)
     ok(not said, "no screen says 'Sign in to the firm account' (%s)" % said)
+
+    # 4b. a login FinCom switched off (banned): locked out, told so
+    ST["answer"] = (400, {"code": 400, "error_code": "user_banned", "msg": "User is banned"}); expire(A)
+    A.evaluate("() => window.dispatchEvent(new Event('focus'))"); A.wait_for_timeout(2000)
+    ok(signin_page(A) and "switched off" in A.inner_text("#app"), "banned: the sign-in page says the account is switched off")
+    ST["answer"] = None; sign_in(A)
+    # 4c. without the firm account: no nav item for its cloud-only pages
+    A.evaluate("() => signOutHere('Signed out.')"); A.wait_for_timeout(600); A.evaluate("() => doAct('useOffline')"); A.wait_for_timeout(600)
+    A.evaluate("() => goSettings(null)"); A.wait_for_timeout(800)
+    t = A.inner_text("#app")
+    ok(A.locator('[data-side="Integrations"]').count() == 0 and "Books in the cloud" not in t and "GST API, all clients" not in t,
+       "signed out: no Integrations, Books in the cloud or GST API all clients")
+    A.evaluate("() => { S.tallyTab = 'activity'; navHome('tally'); }"); A.wait_for_timeout(800)
+    ok(A.locator('[data-tally-tab="activity"]').count() == 0 and A.locator("#app [data-sync-activity]").count() == 0, "and no Sync activity")
+    A.evaluate("() => { S.tallyTab = ''; Cloud.setCfg({gate: true}); render(); }"); A.wait_for_timeout(600); sign_in(A)
 
     # 5. a shared computer: not kept after the browser closes; one's own computer: kept
     kept = context(br, ctx.storage_state()); K = page(kept)

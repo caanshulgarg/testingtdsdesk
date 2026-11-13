@@ -41,25 +41,30 @@ Cloud.signIn = async function(email, password){
 // The lock: tdsdesk:refreshing in localStorage names the tab refreshing now. A second tab waits (a storage event, or
 // 300 ms) and then finds the session the first tab wrote. Why: Supabase rotates refresh tokens, and a refresh token
 // offered a second time (two tabs refreshing in the same moment) is refused and ends the whole session, in every tab.
+// The tab holding it renews it every 5 s (own) while its refresh runs (up to a minute), so it never looks stale meanwhile.
 const sessLock = {
   id: Math.random().toString(36).slice(2),
   held(){ try { const l = JSON.parse(lsGet("tdsdesk:refreshing") || "null"); return l && Date.now() - num(l.at) < 15000 ? l : null; } catch (e){ return null; } },
   async take(){
     const t0 = Date.now();
-    while (Date.now() - t0 < 12000){
+    while (Date.now() - t0 < 7e4){
       const l = this.held();
-      if (!l){ lsSet("tdsdesk:refreshing", JSON.stringify({at: Date.now(), by: this.id})); await new Promise(r => setTimeout(r, 25)); const m = this.held(); if (m && m.by === this.id) return true; continue; }
-      if (l.by === this.id) return true;
+      if (!l){ this.mark(); await new Promise(r => setTimeout(r, 25)); const m = this.held(); if (m && m.by === this.id) return this.own(); continue; }
+      if (l.by === this.id) return this.own();
       await new Promise(r => { let t; const done = () => { window.removeEventListener("storage", h); clearTimeout(t); r(); };
         const h = ev => { if (ev.key === "tdsdesk:refreshing" || ev.key === SESS_KEY) done(); }; window.addEventListener("storage", h); t = setTimeout(done, 300); });
     }
-    return false;    // waited 12 s: the other tab must have stopped; go ahead
+    return false;    // waited 70 s: the other tab must have stopped; go ahead
   },
-  free(){ const l = this.held(); if (l && l.by === this.id) lsDel("tdsdesk:refreshing"); }
+  mark(){ lsSet("tdsdesk:refreshing", JSON.stringify({at: Date.now(), by: this.id})); },
+  own(){ clearInterval(this.b); this.b = setInterval(() => this.mark(), 5e3); return true; },
+  free(){ clearInterval(this.b); const l = this.held(); if (l && l.by === this.id) lsDel("tdsdesk:refreshing"); }
 };
-// the firm account's own refusal (Supabase Auth: "Invalid Refresh Token: …", "Session Expired", banned); a network error,
-// a timeout or a server error (5xx) is not one: the session stays and is tried again (keepFresh)
-const SESS_REFUSED = /refresh token|invalid_grant|session|banned/i;
+// the firm account's own refusal: a 4xx with Supabase Auth's code (refresh_token_not_found, refresh_token_already_used,
+// session_not_found, session_expired, user_banned; older servers: invalid_grant). A network error, a timeout, a 429 or a
+// 5xx (even one whose words name the session: "Database error finding session") is not one: the session stays and is
+// tried again (keepFresh). The code and status come with the error (Cloud.authCall, src/js/27)
+const SESS_REFUSED = /refresh_token|session|invalid_grant|banned/;
 Cloud.refreshToken = function(used){
   const s0 = this.sess();
   if (used && s0 && s0.access_token && s0.access_token !== used) return Promise.resolve();   // already newer (another request or tab did it)
@@ -74,12 +79,12 @@ Cloud.refreshToken = function(used){
       if (!now || !now.refresh_token) throw new Error("Signed out");
       if (now.access_token !== s.access_token || now.refresh_token !== s.refresh_token) return;   // another tab refreshed while we waited: use its session
       let j;
-      try { j = await this.authCall("token?grant_type=refresh_token", {refresh_token: s.refresh_token}, 6e4); }
+      try { j = await this.authCall("token?grant_type=refresh_token", {refresh_token: s.refresh_token}, 6e4); if (!j.access_token) throw new Error("No new token came"); }
       catch (e){
         const again = this.sess();
         if (again && again.refresh_token !== s.refresh_token) return;   // refused, but another tab holds a newer session: that one is used
-        if (!SESS_REFUSED.test(String(e.message))) throw e;             // the network, not the server: the session stays, the next call tries again
-        sessionEnded("the firm account no longer accepts this sign-in (" + e.message + ")");
+        if (!(e.status > 399 && e.status < 500 && SESS_REFUSED.test(e.code))) throw e;   // not the firm account's refusal: the session stays, tried again
+        sessionEnded("the firm account no longer accepts this sign-in (" + e.message + ")", e.code);
         throw new Error("Signed out");
       }
       const cur = this.sess();
@@ -92,9 +97,9 @@ Cloud.refreshToken = function(used){
 // a session that cannot continue (the firm account refused the refresh token: a deliberate sign-out elsewhere, "Sign out
 // of all devices" for a lost laptop): the page is locked again behind the sign-in page, which says why; the page is kept
 // for after signing in, nothing lost. Only this ends a sign-in: a network error, a timeout or a 5xx never does
-function sessionEnded(reason){
+function sessionEnded(reason, code){
   if (!Cloud.sess()) return;
-  if (/\bbanned\b/i.test(reason)){ signOutHere("Switched off by FinCom.", false, SWITCHED_OFF); return; }   // FinCom's console switched the login off
+  if (/banned/.test(code)){ signOutHere("Switched off by FinCom.", false, SWITCHED_OFF); return; }   // FinCom's console switched the login off
   if (typeof Route === "object" && !signInNeeded()) Route.pending = Route.of();
   signOutHere("Your sign-in ended: " + reason, false, "Your sign-in ended: " + reason + ". Sign in again; your work is kept.");
 }
@@ -102,7 +107,7 @@ function sessionEnded(reason){
 // try that failed (no internet, a server error) again after 30 s, 1, 2, 4 … 10 minutes. Never signs anyone out itself
 Cloud.keepFresh = function(n){
   clearTimeout(this._kf);
-  if (this.sess()) this.fresh().then(() => 0, () => (n || 0) + 1).then(k => { if (this.sess()) this._kf = setTimeout(() => this.keepFresh(k), k ? Math.min(6e5, 15e3 << k) : 6e5); });
+  if (this.sess()) this.fresh().then(() => 0, () => (n || 0) + 1).then(k => { if (this.sess()) this._kf = setTimeout(() => this.keepFresh(k), k ? Math.min(6e5, 15e3 * 2 ** Math.min(k, 6)) : 6e5); });
 };
 ["focus", "online"].forEach(e => addEventListener(e, () => Cloud.keepFresh()));
 document.addEventListener("visibilitychange", () => { if (!document.hidden) Cloud.keepFresh(); });

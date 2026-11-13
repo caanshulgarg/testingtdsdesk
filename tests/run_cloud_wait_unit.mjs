@@ -68,7 +68,7 @@ console.log("== 1c. the token's refresh (src/js/43, the only one): one at a time
   const fetchS = (url, o) => { sent.push(JSON.parse(o.body).refresh_token); return answer(); };
   const C = R((x) => Number(x) || 0, (k) => LS[k] || null, (k, v) => { LS[k] = v; }, (k) => { delete LS[k]; }, () => "", fetchS);
   new Function("Cloud", "lsGet", "lsSet", "lsDel", "num", "sessionEnded", "window", "const SESS_KEY = \"tdsdesk:cloudsess\";\n" + cut(s43, "const sessLock = {", "// a session that cannot continue"))(
-    C, (k) => LS[k] || null, (k, v) => { LS[k] = v; }, (k) => { delete LS[k]; }, (x) => Number(x) || 0, (why) => { ended.push(why); sess = null; }, { addEventListener() {}, removeEventListener() {} });
+    C, (k) => LS[k] || null, (k, v) => { LS[k] = v; }, (k) => { delete LS[k]; }, (x) => Number(x) || 0, (why, code) => { ended.push(why + "|" + code); sess = null; }, { addEventListener() {}, removeEventListener() {} });
   let sess = { access_token: "a1", refresh_token: "r1-aaaaaaaaaaaaaaaaaaaa", at: now0 };
   C.cfg = () => ({ url: "https://cloud.test", key: "k" }); C.sess = () => sess; C.setSess = (s) => { sess = s; };
   ok(/grant_type=refresh_token", \{refresh_token: s\.refresh_token\}, 6e4\)/.test(s43), "the refresh waits a minute (not the 20 s of a read)");
@@ -81,9 +81,24 @@ console.log("== 1c. the token's refresh (src/js/43, the only one): one at a time
   sent = []; answer = async () => new Response(JSON.stringify({ message: "upstream unavailable" }), { status: 503 });
   await C.refreshToken().catch(() => {});
   ok(sent.length === 1 && sess && !ended.length, "a server error (503): the session stays");
+  answer = async () => new Response(JSON.stringify({ code: 500, error_code: "unexpected_failure", msg: "Database error finding session" }), { status: 500 });
+  await C.refreshToken().catch(() => {});
+  ok(sess && !ended.length, "a 500 whose words name the session: the session stays (decided by the status and code, not the words)");
+  answer = async () => new Response(JSON.stringify({ access_token: "" }), { status: 200 });
+  await C.refreshToken().catch(() => {});
+  ok(sess && sess.refresh_token.startsWith("r2") && !ended.length, "a 200 without an access token: the session stays as it was");
+  answer = async () => new Response(JSON.stringify({ code: 429, error_code: "over_request_rate_limit", msg: "Request rate limit reached" }), { status: 429 });
+  await C.refreshToken().catch(() => {});
+  ok(sess && !ended.length, "too many requests (429): the session stays");
   answer = async () => new Response(JSON.stringify({ error: "invalid_grant", error_description: "Invalid Refresh Token: Refresh Token Not Found" }), { status: 400 });
   let e3 = null; await C.refreshToken().catch((e) => { e3 = e; });
   ok(e3 && ended.length === 1 && /Refresh Token Not Found/.test(ended[0]), "the firm account refused the refresh token: the sign-in ends, once (" + ended.length + ")");
+  sess = { access_token: "a9", refresh_token: "r9-eeeeeeeeeeeeeeeeeeee", at: now0 }; ended = [];
+  answer = async () => new Response(JSON.stringify({ code: 400, error_code: "user_banned", msg: "User is banned" }), { status: 400 });
+  await C.refreshToken().catch(() => {});
+  ok(ended.length === 1 && /\|user_banned$/.test(ended[0]), "a banned login: ended with its code, so it is told it is switched off (" + ended[0] + ")");
+  // the lock outlasts a refresh of a minute: renewed every 5 s while held
+  ok(/own\(\)\{ clearInterval\(this\.b\); this\.b = setInterval\(\(\) => this\.mark\(\), 5e3\)/.test(s43) && /Date\.now\(\) - t0 < 7e4/.test(s43), "the refresh lock is renewed every 5 s while held, and waited for up to 70 s");
 }
 
 console.log("== 2. TStale, tallyMark");

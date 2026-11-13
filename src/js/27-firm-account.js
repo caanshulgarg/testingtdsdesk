@@ -66,7 +66,7 @@ const Cloud = {
       alive();
       return [r, await r.json().catch(() => ({}))];
     }, wait);
-    if (!r.ok) throw new Error(switchedOff(j) || j.error_description || j.msg || j.message || ("Sign-in failed (" + r.status + ")"));
+    if (!r.ok){ const e = new Error(switchedOff(j) || j.error_description || j.msg || j.message || ("Sign-in failed (" + r.status + ")")); e.status = r.status; e.code = String(j.error_code || j.error || ""); throw e; }
     return j;
   },
   // through the sign-in function, which counts wrong passwords and locks the account after 5 (review item 21);

@@ -953,9 +953,9 @@ function PageMore({ rows, latest, m, cards, old = 0, connectStep }) {
       {/* round 89: deductions on challans the server does not have, after fetching the challans again (54-live-sync.js heal) */}
       {typeof BookItems === "object" && Object.entries(BookItems.st || {}).filter(([, x]) => x && x.chMiss > 0).map(([cid, x]) => <p key={cid} className="note bad" data-sync-chmiss={cid}>
         {((S.companies[cid] || {}).name || cid) + ": deductions point at " + x.chMiss + " challan" + (x.chMiss === 1 ? "" : "s") + " not on the server; they are listed under Not on any challan (TDS › Deductions) to choose again."}</p>)}
-      <H id="activity">Activity</H>
+      {TCloud.on() && <><H id="activity">Activity</H>
       <nav className="row tadv-links" aria-label="Tally, for support" style={{ gap: 8, flexWrap: "wrap", margin: "0 0 4px" }}>
-        {TALLY_TABS.filter(([id]) => id !== "computers").map(([id, label]) => <button key={id} className="btn small" data-tally-tab={id} onClick={() => goTab(id)}>{label}</button>)}</nav>
+        {TALLY_TABS.filter(([id]) => id !== "computers").map(([id, label]) => <button key={id} className="btn small" data-tally-tab={id} onClick={() => goTab(id)}>{label}</button>)}</nav></>}
       {(cards.length > 0 || old > 0) && <H id="computers">Each computer</H>}
       {cards.length > 0 && <BridgeLines cards={cards} latest={latest} m={m} />}
       {old > 0 && <p className="note" data-old-computers={old} style={{ margin: "4px 0" }}>{nOf(old, "older bridge", "older bridges") + " not heard from for over 7 days: hidden here (listed under Every bridge below)."}</p>}
@@ -1236,7 +1236,7 @@ export default function TallyHome({ connectStep = null, sourcesSlot = null }) {
   paneFresh();
   const rows = TCloud.on() ? TCloud.bridgesHeard() : [], latest = m && m.setup ? m.setup.version : "";
   const tab = TALLY_TABS.some(([id]) => id === S.tallyTab) ? S.tallyTab : "computers";
-  if (tab !== "computers") return <>
+  if (tab !== "computers" && TCloud.on()) return <>
     <nav className="sbar" aria-label="Tally">{TALLY_TABS.map(([id, label]) =>
       <button key={id} data-tally-tab={id} aria-selected={tab === id} onClick={() => goTab(id)}>{id === "computers" ? "← Tally" : label}</button>)}</nav>
     {tab === "activity" ? <SyncActivity /> : <PostLog />}</>;

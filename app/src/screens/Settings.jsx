@@ -122,13 +122,13 @@ function firmGroups() {
     { title: "Tally", items: [
       { id: "bridge", label: "Connect Tally", about: "Connecting Tally, its companies and clients, and help: all on the one Tally page in the sidebar.",
         status: "Tally: " + tallyStatus(null).label + (Bridge.on() && Bridge.up() && !Bridge.st.tallyUp ? " (bridge here running, Tally not open)" : "") },
-      { id: "tcloud", label: "Books in the cloud", about: "The computers that send Tally’s books to the firm account (which company is which client: the Tally page).",
-        status: "Tally: " + tallyStatus(null).label },
+      ...(Cloud.on() ? [{ id: "tcloud", label: "Books in the cloud", about: "The computers that send Tally’s books to the firm account (which company is which client: the Tally page).",
+        status: "Tally: " + tallyStatus(null).label }] : []),
       { id: "postlog", label: "Sent to Tally", about: "A record of every entry posted to Tally, by whom and when: it is kept on the Tally page.", status: (S.firm.postLog || []).length + " entries" },
     ] },
     { title: "GST", items: [
-      { id: "gstapi", label: "GST API, all clients", about: "Every client's GST portal connection: until when, the returns fetched, the e-invoice user.",
-        status: (() => { const xs = Object.values(GSTAPI.sess || {}).filter(Boolean); const soon = xs.filter((x) => x.accessUntil && Date.parse(x.accessUntil) - Date.now() < 3 * 86400000 && !x.endedAt).length; return xs.filter((x) => GSTAPI.live && x.connectedAt && !x.endedAt).length + " connected" + (soon ? ", " + soon + " ending soon" : ""); })() },
+      ...(Cloud.on() ? [{ id: "gstapi", label: "GST API, all clients", about: "Every client's GST portal connection: until when, the returns fetched, the e-invoice user.",
+        status: (() => { const xs = Object.values(GSTAPI.sess || {}).filter(Boolean); const soon = xs.filter((x) => x.accessUntil && Date.parse(x.accessUntil) - Date.now() < 3 * 86400000 && !x.endedAt).length; return xs.filter((x) => GSTAPI.live && x.connectedAt && !x.endedAt).length + " connected" + (soon ? ", " + soon + " ending soon" : ""); })() }] : []),
     ] },
     { title: "How the work is done", items: [
       { id: "rates", label: "TDS rates and limits", about: "The rates and yearly limits used to work out TDS on every client’s bills.", status: "tax year " + (S.firm.fy || "2026-27") },
@@ -141,7 +141,7 @@ function firmGroups() {
         status: Smart.KINDS.filter(([k]) => Smart.on(k)).length + " of " + Smart.KINDS.length + " on" },
     ] },
   ];
-  return groups;
+  return groups.filter((g) => g.items.length);
 }
 
 // the records kept on this computer (clean-up batch 2: it was a line on the Clients page), with the plan
