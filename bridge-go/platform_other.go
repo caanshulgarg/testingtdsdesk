@@ -130,3 +130,4 @@ func platFvuRunAsOwner(q fvuReq) M {
 func platServiceOwner() (string, string)     { return "", "" }
 func platServiceOldHome(sid string) string   { return "" }
 func platRecordedStateDir(sid string) string { return "" }
+func platProgramPath(p string) bool          { return true }

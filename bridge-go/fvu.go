@@ -15,6 +15,7 @@
 package main
 
 import (
+	"archive/zip"
 	"bytes"
 	"context"
 	"crypto/sha256"
@@ -124,7 +125,7 @@ func fvuJarLooked() (path, sha string, err error) {
 	if !exists(p) {
 		return p, "", errors.New("The FVU was not found at " + p + ". Install Protean's FVU there (or set FvuJar in the bridge's settings on this computer), then confirm it in the FinCom Bridge icon near the clock (Confirm the FVU...).")
 	}
-	s, herr := fvuFileSHA256(p)
+	s, herr := fvuFingerprint(p)
 	if herr != nil {
 		return p, "", errors.New("The FVU at " + p + " could not be read: " + herr.Error())
 	}
@@ -205,7 +206,9 @@ func fvuAsked(o M) M {
 	return res
 }
 
-// java: the settings' JavaExe when it is a local java program, else the one on this user's PATH; a local path only
+// java: the settings' JavaExe, else the one on this user's PATH. Either way a program on this computer, its links
+// resolved: java.exe (or javaw.exe) in a "bin" folder, and on Windows under Program Files (where only administrators
+// install programs)
 func fvuJava(set string) (string, error) {
 	j := set
 	if j == "" {
@@ -215,25 +218,128 @@ func fvuJava(set string) (string, error) {
 		}
 		j = lp
 	}
-	if b := strings.ToLower(filepath.Base(j)); b != "java" && b != "java.exe" && b != "javaw.exe" {
-		return "", errors.New("JavaExe in the bridge's settings must name java.exe")
-	}
 	p, err := localPath(j)
-	if err != nil || !filepath.IsAbs(p) || !exists(p) {
+	if err != nil || !filepath.IsAbs(p) {
 		return "", errors.New("Java is not used from " + j + " (a program on this computer only).")
 	}
+	b := strings.ToLower(filepath.Base(p))
+	if (b != "java" && b != "java.exe" && b != "javaw.exe") || !strings.EqualFold(filepath.Base(filepath.Dir(p)), "bin") {
+		return "", errors.New("Java is not used from " + j + ": it must be java.exe in a Java's bin folder.")
+	}
+	if fi, err := os.Stat(p); err != nil || !fi.Mode().IsRegular() {
+		return "", errors.New("Java was not found at " + j + ".")
+	}
+	if !platProgramPath(p) {
+		return "", errors.New("Java is not used from " + j + ": the FVU runs only with a Java installed under Program Files.")
+	}
 	return p, nil
+}
+
+// the jars the FVU loads besides itself: its manifest's Class-Path, each a relative path inside the FVU's folder
+func fvuClassPath(jar string) ([]string, error) {
+	z, err := zip.OpenReader(jar)
+	if err != nil {
+		return nil, nil // not read as a jar here: Java says so when it runs
+	}
+	defer z.Close()
+	var cp []string
+	for _, f := range z.File {
+		if !strings.EqualFold(f.Name, "META-INF/MANIFEST.MF") {
+			continue
+		}
+		rc, err := f.Open()
+		if err != nil {
+			return nil, err
+		}
+		b, _ := io.ReadAll(io.LimitReader(rc, 1<<20))
+		rc.Close()
+		// a manifest line goes on in the next line when that starts with a space
+		text := strings.ReplaceAll(strings.ReplaceAll(string(b), "\r\n", "\n"), "\n ", "")
+		for _, l := range strings.Split(text, "\n") {
+			if k, v, ok := strings.Cut(l, ":"); ok && strings.EqualFold(strings.TrimSpace(k), "Class-Path") {
+				for _, e := range strings.Fields(v) {
+					if strings.Contains(e, ":") || strings.HasPrefix(e, "/") || strings.HasPrefix(e, "\\") || strings.Contains(e, "..") || winDeviceName(filepath.Base(e)) {
+						return nil, errors.New("the FVU names a jar outside its folder (" + cutRunes(e, 80) + ")")
+					}
+					cp = append(cp, filepath.FromSlash(e))
+				}
+			}
+		}
+	}
+	if len(cp) > 50 {
+		return nil, errors.New("the FVU names more than 50 jars")
+	}
+	return cp, nil
+}
+
+// the FVU's fingerprint: the jar's SHA-256 when it loads no other jar, else the SHA-256 over each jar's name and SHA-256
+// (the jar first, then its Class-Path in order); a jar it names that is missing is an error
+func fvuFingerprint(jar string) (string, error) {
+	main, err := fvuFileSHA256(jar)
+	if err != nil {
+		return "", err
+	}
+	cp, err := fvuClassPath(jar)
+	if err != nil {
+		return "", err
+	}
+	if len(cp) == 0 {
+		return main, nil
+	}
+	h := sha256.New()
+	io.WriteString(h, filepath.Base(jar)+"\n"+main+"\n")
+	for _, rel := range cp {
+		s, err := fvuFileSHA256(filepath.Join(filepath.Dir(jar), rel))
+		if err != nil {
+			return "", errors.New("the jar " + rel + " the FVU needs was not found beside it")
+		}
+		io.WriteString(h, filepath.ToSlash(rel)+"\n"+s+"\n")
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+// the FVU and the jars it loads copied into a folder of this run's own (the user's temporary folder); the copy's jar
+func fvuCopy(jar, dir string) (string, error) {
+	cp, err := fvuClassPath(jar)
+	if err != nil {
+		return "", err
+	}
+	for _, rel := range append([]string{filepath.Base(jar)}, cp...) {
+		src := filepath.Join(filepath.Dir(jar), rel)
+		dst := filepath.Join(dir, rel)
+		if err := os.MkdirAll(filepath.Dir(dst), 0o700); err != nil {
+			return "", err
+		}
+		b, err := os.ReadFile(src)
+		if err != nil {
+			return "", err
+		}
+		if err := writeFresh(dst, b); err != nil {
+			return "", err
+		}
+	}
+	return filepath.Join(dir, filepath.Base(jar)), nil
 }
 
 // the run itself, as the Windows user the bridge works for: the FVU file checked again, a new folder for this run
 // under the output folder, the return file in it, Java for three minutes at most
 func fvuRun(q fvuReq) M {
-	if s, err := fvuFileSHA256(q.Jar); err != nil || s != q.Sha {
-		return M{"ok": false, "changed": true, "error": "The FVU at " + q.Jar + " changed while it was being started; not run."}
-	}
 	java, err := fvuJava(q.Java)
 	if err != nil {
 		return M{"ok": false, "error": err.Error()}
+	}
+	// the FVU (and the jars it loads) copied into this run's own folder; the copy is checked and the copy is run
+	priv, err := os.MkdirTemp("", "fincom-fvu-")
+	if err != nil {
+		return M{"ok": false, "error": "The FVU could not be prepared: " + err.Error()}
+	}
+	defer os.RemoveAll(priv)
+	jar, err := fvuCopy(q.Jar, priv)
+	if err != nil {
+		return M{"ok": false, "error": "The FVU could not be prepared: " + err.Error()}
+	}
+	if s, err := fvuFingerprint(jar); err != nil || s != q.Sha {
+		return M{"ok": false, "changed": true, "error": "The FVU file " + q.Jar + " has changed since it was allowed; not run."}
 	}
 	if err := os.MkdirAll(q.Out, 0o755); err != nil {
 		return M{"ok": false, "error": "The FVU's output folder " + q.Out + " could not be made: " + err.Error()}
@@ -250,7 +356,7 @@ func fvuRun(q fvuReq) M {
 		return M{"ok": false, "error": "The return file could not be written for the FVU: " + err.Error()}
 	}
 	errFile := strings.TrimSuffix(in, filepath.Ext(in)) + ".err"
-	args := []string{"-jar", q.Jar, in, errFile, runDir}
+	args := []string{"-jar", jar, in, errFile, runDir}
 	if q.Csi != "" {
 		args = append(args, q.Csi)
 	}

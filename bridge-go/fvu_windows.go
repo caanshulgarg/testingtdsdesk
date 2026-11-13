@@ -31,6 +31,16 @@ func platRemotePath(p string) bool {
 	return windows.GetDriveType(root) == windows.DRIVE_REMOTE
 }
 
+// a program under Program Files (where only administrators install)
+func platProgramPath(p string) bool {
+	for _, b := range []string{os.Getenv("ProgramFiles"), os.Getenv("ProgramFiles(x86)"), os.Getenv("ProgramW6432"), `C:\Program Files`, `C:\Program Files (x86)`} {
+		if b != "" && pathInside(p, b) {
+			return true
+		}
+	}
+	return false
+}
+
 // the owner's token from a session the owner is signed in to (active first), checked to be the owner's own SID
 func ownerSessionToken() (windows.Token, error) {
 	want := serviceOwnerSid()

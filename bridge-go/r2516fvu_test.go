@@ -5,6 +5,8 @@ package main
 // owner and checked before every run, network paths are not used, and under the service Java is never run by the
 // service itself. Nothing here asks anything of Tally. Made-up names only; a stand-in java (a shell script).
 import (
+	"archive/zip"
+	"bytes"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -23,9 +25,9 @@ func r2516FvuHere(t *testing.T) (dir, jar, javaLog string) {
 	_ = os.MkdirAll(filepath.Dir(jar), 0o755)
 	_ = os.WriteFile(jar, []byte("stand-in FVU 1"), 0o644)
 	javaLog = filepath.Join(dir, "java-args.txt")
-	java := filepath.Join(dir, "jre", "java")
+	java := filepath.Join(dir, "jre", "bin", "java")
 	_ = os.MkdirAll(filepath.Dir(java), 0o755)
-	_ = os.WriteFile(java, []byte("#!/bin/sh\necho \"$@\" >> '"+javaLog+"'\necho made > \"$5/return.fvu\"\n"), 0o755)
+	_ = os.WriteFile(java, []byte("#!/bin/sh\necho \"$@\" >> '"+javaLog+"'\nls \"$(dirname \"$2\")\" >> '"+javaLog+".ls'\necho made > \"$5/return.fvu\"\n"), 0o755)
 	setCfg("FvuJar", jar)
 	setCfg("FvuOut", filepath.Join(dir, "out"))
 	setCfg("JavaExe", java)
@@ -58,9 +60,13 @@ func TestR2516FvuUsesLocalSettings(t *testing.T) {
 	if r["ok"] != true || r["accepted"] != true {
 		t.Fatalf("the run: %v", r)
 	}
+	// the FVU is run from a copy in a folder of the run's own, never from where it lies (nor the request's)
 	args := readText(javaLog)
-	if !strings.Contains(args, "-jar "+jar+" ") || strings.Contains(args, other) {
+	if !strings.Contains(args, string(os.PathSeparator)+"fincom-fvu-") || !strings.Contains(args, "FVU_STANDALONE.jar ") || strings.Contains(args, jar+" ") || strings.Contains(args, other) {
 		t.Fatalf("java was given %q", args)
+	}
+	if m, _ := filepath.Glob(filepath.Join(os.TempDir(), "fincom-fvu-*")); len(m) != 0 {
+		t.Fatalf("the run's copy was left: %v", m)
 	}
 	if !strings.HasPrefix(str(r["folder"]), filepath.Join(dir, "out")+string(os.PathSeparator)) || !strings.HasSuffix(str(r["input"]), "26Q_Q1.txt") {
 		t.Fatalf("the run's folder %v", r["folder"])
@@ -168,5 +174,45 @@ func TestR2516FvuNotAsService(t *testing.T) {
 	handed.Sha = strings.Repeat("1", 64)
 	if r := fvuRun(handed); r["ok"] == true || exists(javaLog) {
 		t.Fatalf("fvu-run with another fingerprint: %v", r)
+	}
+}
+
+// the jars the FVU loads (its manifest's Class-Path) are in its fingerprint and copied with it; one outside its folder
+// is refused; java must be java in a bin folder
+func TestR2516FvuClassPathCopied(t *testing.T) {
+	dir, jar, javaLog := r2516FvuHere(t)
+	mk := func(cp string) {
+		var b bytes.Buffer
+		z := zip.NewWriter(&b)
+		w, _ := z.Create("META-INF/MANIFEST.MF")
+		_, _ = w.Write([]byte("Manifest-Version: 1.0\r\nClass-Path: " + cp + "\r\n"))
+		_ = z.Close()
+		_ = os.WriteFile(jar, b.Bytes(), 0o644)
+	}
+	_ = os.MkdirAll(filepath.Join(dir, "fvu", "lib"), 0o755)
+	_ = os.WriteFile(filepath.Join(dir, "fvu", "lib", "a.jar"), []byte("lib a 1"), 0o644)
+	mk("lib/a.jar")
+	r2516Confirm(t)
+	if r := invokeFvu(M{"text": "x", "name": "a.txt"}); r["accepted"] != true || !strings.Contains(readText(javaLog+".ls"), "lib") {
+		t.Fatalf("with its lib: %v; the run's folder held %q", r, readText(javaLog+".ls"))
+	}
+	_ = os.WriteFile(filepath.Join(dir, "fvu", "lib", "a.jar"), []byte("lib a 2"), 0o644)
+	if r := invokeFvu(M{"text": "x", "name": "a.txt"}); r["ok"] == true || r["changed"] != true {
+		t.Fatalf("a changed lib jar: %v", r)
+	}
+	for _, bad := range []string{"../x.jar", "/abs/x.jar", "file:/x.jar"} {
+		mk(bad)
+		if _, err := fvuFingerprint(jar); err == nil {
+			t.Errorf("Class-Path %s taken", bad)
+		}
+	}
+	mk("lib/a.jar")
+	r2516Confirm(t)
+	other := filepath.Join(dir, "elsewhere", "java")
+	_ = os.MkdirAll(filepath.Dir(other), 0o755)
+	_ = os.WriteFile(other, []byte("#!/bin/sh\n"), 0o755)
+	setCfg("JavaExe", other)
+	if r := invokeFvu(M{"text": "x", "name": "a.txt"}); r["ok"] == true {
+		t.Fatalf("a java outside a bin folder: %v", r)
 	}
 }
