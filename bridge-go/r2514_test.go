@@ -43,7 +43,7 @@ func TestR2514Version(t *testing.T) {
 			t.Errorf("the decision line does not say %q", w)
 		}
 	}
-	if !regexp.MustCompile(`re-measured on 2026-11-11 for 2\.5\.14: no request was measured again[^\n]*allowed for 2\.5\.14 by the owner's standing decision of 2026-10-06`).MatchString(al) {
+	if !regexp.MustCompile(`re-measured on 2026-11-11 for 2\.5\.14: no request was measured again[^\n]*2\.5\.14 allowed by the owner's standing decision of 2026-10-06`).MatchString(al) {
 		t.Error("no dated line for 2.5.14")
 	}
 	if strings.Contains(al, "allowed for 2.5.13 by") {

@@ -35,4 +35,7 @@ func TestR2515Version(t *testing.T) {
 	if strings.Contains(line, "allowed for 2.5.14 by") {
 		t.Error("2.5.14's line is still worded as the current one")
 	}
+	if strings.Contains(al, "allowed for 2.5.14 by") {
+		t.Error("2.5.14's dated line is still worded as the current one (the release check's step 4 names one version only)")
+	}
 }
