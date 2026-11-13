@@ -76,7 +76,9 @@ ok(not re.search(r"supabase\.co|\.supabase\.|project[_ ]ref|qbocskaiewaxqcvaunzc
 for g in ("grant execute on function public.tally_recorder_held_rerun(uuid, integer) to service_role;", "grant execute on function public.tally_recorder_probe_take(uuid, uuid, text, boolean, integer) to service_role;",
           "grant select, insert, update on public.tally_recorder_probes to service_role;", "revoke all on public.tally_recorder_probes from public, anon, authenticated;",
           "grant select, insert, update on public.tally_recorder_tries to service_role;", "grant select, insert, update on public.tally_recorder_ledger_lists to service_role;",
-          "grant execute on function public.tally_recorder_ledger_asks(uuid, uuid, text, boolean) to service_role;"):
+          "grant execute on function public.tally_recorder_ledger_asks(uuid, uuid, text, boolean) to service_role;",
+          "grant execute on function public.tally_recorder_fetching_sweep(integer) to service_role;",
+          "perform cron.schedule('tally-recorder-fetching-sweep', '37 21 * * *', 'select public.tally_recorder_fetching_sweep(2000)');"):
     ok(g in text, "0. explicit grant: " + g[:90])
 def block(t, name):
     i = [m.start() for m in re.finditer(r"create or replace function public\." + name + r"\(", t)][-1]
@@ -416,6 +418,31 @@ try:
     ok(tk == [], "14. the book held by another session: nothing handed (%s)" % (json.dumps(tk)[:120],))
     unpace(); tk = take()
     ok(isinstance(tk, list) and len(tk) > 0, "14. free again: handed")
+
+    print("== 15. the daily sweep, an error that keeps coming, the count")
+    B2 = "f79e4bc3-871d-4482-874d-000000002196"
+    sq("insert into tally_books (book_id, firm_id, client_id, company, from_date, open_as_on) values (%s, %s, 'c2', 'MADE UP CLOSED', '2025-04-01', '2025-03-31')" % (q(B2), q(F)))
+    def raw(book, lid, ev, days, master="", vdate="null", why="waiting: Tally busy"):
+        sq("""insert into tally_recorder_lines (firm_id, client_id, book_id, device_id, bridge, pc, company_guid, company, line_id, event, master_id, vch_type, vch_no, vch_date, state, held_why, received_at)
+              values (%s, 'c2', %s, %s, %s, 'PC-1', %s, 'MADE UP CLOSED', %s, %s, %s, 'Journal', '', %s, 'fetching', %s, now() - interval '%d days')"""
+           % (q(F), q(book), q(D1), q(BR), q(CG), q(lid), q(ev), q(master), vdate, q(why), days))
+    def ln(book, lid): return (db.rows("select state, coalesce(held_why, '') as why from tally_recorder_lines where book_id = %s and line_id = %s" % (q(book), q(lid))) or [{"state": None, "why": ""}])[0]
+    raw(B2, "sw-15", "created", 15); raw(B2, "sw-10", "created", 10)
+    sw = j("select tally_recorder_fetching_sweep(2000)::text")
+    ok(isinstance(sw, dict) and ln(B2, "sw-15")["state"] == "stale" and "could not bring this from Tally in 7 days" in ln(B2, "sw-15")["why"] and ln(B2, "sw-10")["state"] == "fetching",
+       "15. the daily sweep, a book no beat reports: a line 15 days old never tried closed 'stale'; one 10 days old not yet (%s %s %s)" % (json.dumps(sw)[:120], ln(B2, "sw-15"), ln(B2, "sw-10")))
+    sq("update tally_recorder_tries set first_at = now() - interval '8 days' where line_row = (select id from tally_recorder_lines where book_id = %s and line_id = 'sw-10')" % q(B2))
+    j("select tally_recorder_fetching_sweep(2000)::text")
+    ok(ln(B2, "sw-10")["state"] == "stale", "15. the sweep: a line whose first try is over 7 days old closed (%s)" % (ln(B2, "sw-10"),))
+    raw(B, "er-1", "bogus", 1)
+    e1 = rerun(1000)
+    ok(ln(B, "er-1")["state"] == "fetching" and isinstance(e1, dict) and any(x.get("line_id") == "er-1" for x in e1.get("errors", [])), "15. a run that raises: rolled back, still fetching, the error in the answer for Sentry (%s)" % json.dumps((e1 or {}).get("errors") if isinstance(e1, dict) else e1)[:200])
+    sq("update tally_recorder_tries set first_at = now() - interval '8 days' where line_row = (select id from tally_recorder_lines where book_id = %s and line_id = 'er-1')" % q(B))
+    rerun(1000)
+    ok(ln(B, "er-1")["state"] == "stale" and ln(B, "er-1")["why"].startswith("Could not be brought in (error)"), "15. raising for 7 days of tries: 'stale', Could not be brought in (error) (%s)" % (ln(B, "er-1"),))
+    c1 = hsn()
+    raw(B, "ex-1:resolved", "created", 1, master="777")
+    ok(hsn() == c1, "15. an exhausted ':resolved' row (nothing left to ask it by) is not counted as being brought (%s -> %s)" % (c1, hsn()))
 finally:
     db.stop()
 print("\nall passed" if not fails else "\nFAILED: %d" % len(fails)); raise SystemExit(1 if fails else 0)

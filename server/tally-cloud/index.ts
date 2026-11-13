@@ -937,6 +937,8 @@ async function heldRerun(book: string) {
     const d = data as any;
     if (d?.busy === true) { heldRerunAt.delete(book); return; }
     if (Number(d?.settled) > 0) console.log("tally-ingest beat: held lines run again", book, JSON.stringify({ rerun: d.rerun, settled: d.settled, states: d.states }));
+    // a line whose run raised: to Sentry, each (the database closes it 'stale' after 7 days of tries, never rolled back for ever)
+    for (const x of (Array.isArray(d?.errors) ? d.errors : []).slice(0, 20)) fail("held_rerun_line", new Error("recorder line " + String(x?.id ?? "") + " (" + String(x?.line_id ?? "").slice(0, 80) + "): " + String(x?.error ?? "").slice(0, 200)));
   } catch (e) { heldRerunAt.delete(book); fail("held_rerun", e); }
 }
 // migration 196 (next-fix-no-held): the candidate search. The add-on's line of a new entry that carries the entry before it's

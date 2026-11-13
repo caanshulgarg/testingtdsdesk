@@ -23,7 +23,9 @@
 --   g. every 'fetching' line ends: (1) its date's day check done after it came (FinComDayHeads of that day, the entries FinCom lacked
 --      taken by GUID): settled by the copy, else 'stale' "No such entry in Tally for <date> (checked <time>)"; (2) a ledger line
 --      once Tally's whole ledger list was stored after it: settled to the list ("Tally kept the ledger", the list's name, or 'stale');
---      (3) 7 days of tries (from its first re-run) still being fetched: 'stale' in plain words.
+--      (3) 7 days of tries (from its first re-run) still being fetched, or a run that keeps raising for 7 days ("Could not be
+--      brought in (error)"): 'stale' in plain words; a daily sweep (pg_cron) applies it to every book, open or not, and to lines
+--      that arrived over 14 days ago and were never tried.
 -- Also: tally_month_locked passes the lock for tally_recorder_line's own calls only; the candidate search (tally_recorder_probes,
 -- _probe_words, _probe_take: every GUID-less line with a MasterID, MasterID +1..+5 by GUID through tally-ingest's refetch while its
 -- typing gate is quiet, the book's lock taken and the line's state checked); the day check (136) takes every GUID-less entry line;
@@ -738,7 +740,7 @@ begin
     select count(*)::int as n, count(*) filter (where l.event in ('deleted', 'cancelled'))::int as dels, count(*) filter (where l.event not in ('deleted', 'cancelled'))::int as ents,
            min(l.vch_date) as d0, max(l.vch_date) as d1, coalesce(jsonb_agg(distinct to_char(l.vch_date, 'YYYYMMDD')), '[]'::jsonb) as days
       into h from tally_recorder_lines l
-     where l.book_id = b.book_id and l.state = 'held' and tally_held_line_ours(l.event, l.object_guid, l.vch_date, l.held_why); select count(*)::int into fn from tally_recorder_lines l where l.book_id = b.book_id and l.state = 'fetching' and (exists (select 1 from tally_check_days k where k.book_id = l.book_id and k.day = l.vch_date and k.done_at is null and k.upload_at is null) or exists (select 1 from tally_recorder_probes p where p.line_row = l.id and p.handed < p.round * 5) or (l.event like 'ledger\_%' and l.received_at > now() - interval '7 days') or (l.received_at > now() - interval '7 days' and (coalesce(l.master_id, '') ~ '^[1-9][0-9]{0,9}$' or (l.object_guid is not null and l.object_guid !~ '-0{8}$')) and exists (select 1 from tally_devices d where d.id = l.device_id and d.last_seen > now() - interval '10 minutes')));     -- 196
+     where l.book_id = b.book_id and l.state = 'held' and tally_held_line_ours(l.event, l.object_guid, l.vch_date, l.held_why); select count(*)::int into fn from tally_recorder_lines l where l.book_id = b.book_id and l.state = 'fetching' and (exists (select 1 from tally_check_days k where k.book_id = l.book_id and k.day = l.vch_date and k.done_at is null and k.upload_at is null) or exists (select 1 from tally_recorder_probes p where p.line_row = l.id and p.handed < p.round * 5) or (l.event like 'ledger\_%' and l.received_at > now() - interval '7 days') or (l.received_at > now() - interval '7 days' and l.line_id not like '%:resolved' and (coalesce(l.master_id, '') ~ '^[1-9][0-9]{0,9}$' or (l.object_guid is not null and l.object_guid !~ '-0{8}$')) and exists (select 1 from tally_devices d where d.id = l.device_id and d.last_seen > now() - interval '10 minutes')));     -- 196
     select count(*)::int as total, count(*) filter (where d.done_at is not null and d.upload_at is null)::int as done_n,
            count(*) filter (where d.done_at is null and d.upload_at is null)::int as waiting, count(*) filter (where d.upload_at is not null)::int as upload,
            least(30, extract(epoch from now() - min(coalesce(d.first_asked_at, d.asked_at))) / 60) as mins
@@ -1433,7 +1435,7 @@ revoke all on function public.tally_recorder_line(uuid, uuid, jsonb, bigint) fro
 -- {busy: true} otherwise, nothing done. Answer: {ok, book, rerun, settled, states: {state: n}}
 create or replace function public.tally_recorder_held_rerun(p_book uuid, p_max integer default 200)
 returns jsonb language plpgsql security definer set search_path = public, pg_temp as $function$
-declare r tally_recorder_lines%rowtype; one jsonb; n int := 0; moved int := 0; st jsonb := '{}'::jsonb; k text;
+declare r tally_recorder_lines%rowtype; one jsonb; n int := 0; moved int := 0; st jsonb := '{}'::jsonb; k text; errs jsonb := '[]'::jsonb; ew text;
   mx int := least(greatest(coalesce(p_max, 200), 1), 1000);
 begin
   if p_book is null then raise exception 'a book is needed'; end if;
@@ -1454,7 +1456,15 @@ begin
       if one->>'state' = 'failed' then raise exception 'held line % would end failed: %', r.id, one->>'why'; end if;
     exception when others then
       perform set_config('fincom.recorder_release', '', true);
-      one := jsonb_build_object('state', r.state, 'why', left(sqlerrm, 200));
+      ew := left(sqlerrm, 200);
+      errs := errs || jsonb_build_array(jsonb_build_object('id', r.id, 'line_id', r.line_id, 'error', ew));     -- tally-ingest reports each to Sentry
+      -- the ceiling here too: a line whose run keeps raising is closed after 7 days of tries, never rolled back for ever
+      if exists (select 1 from tally_recorder_tries t where t.line_row = r.id and t.first_at < now() - interval '7 days') then
+        update tally_recorder_lines set state = 'stale', held_why = left('Could not be brought in (error): ' || ew, 600) where id = r.id and state in ('held', 'fetching');
+        one := jsonb_build_object('state', 'stale', 'why', 'Could not be brought in (error)');
+      else
+        one := jsonb_build_object('state', r.state, 'why', ew);
+      end if;
     end;
     k := coalesce(one->>'state', r.state);
     -- 196: an error kept a line 'held': it is 'fetching' from now (the next re-run asks again), never left 'held'
@@ -1467,9 +1477,50 @@ begin
       update tally_sync_cursor set recorder_max_alter = greatest(coalesce(recorder_max_alter, 0), r.alter_id), recorder_last_at = now(), updated_at = now() where book_id = p_book;
     end if;
   end loop;
-  return jsonb_build_object('ok', true, 'book', p_book, 'rerun', n, 'settled', moved, 'states', st);
+  return jsonb_build_object('ok', true, 'book', p_book, 'rerun', n, 'settled', moved, 'states', st) || case when jsonb_array_length(errs) > 0 then jsonb_build_object('errors', errs) else '{}'::jsonb end;
 end $function$;
 revoke all on function public.tally_recorder_held_rerun(uuid, integer) from public, anon, authenticated;
 grant execute on function public.tally_recorder_held_rerun(uuid, integer) to service_role;
+
+-- ---------------------------------------------------------------- 196: the daily sweep (not tied to any beat)
+-- Every book's lines still 'held' or 'fetching' whose first try is over 7 days old, or that arrived over 14 days ago and were never
+-- tried (a book no bridge reports open: its beat never runs the re-run): each book's re-run first (what can be settled is), then
+-- every such line still being fetched closed 'stale' in plain words. At most p_max lines (1..10000, 2000 when null). Run once a
+-- day by pg_cron (job tally-recorder-fetching-sweep, below) where pg_cron is; callable by the service role. {ok, lines, books, closed}
+create or replace function public.tally_recorder_fetching_sweep(p_max integer default 2000)
+returns jsonb language plpgsql security definer set search_path = public, pg_temp as $function$
+declare ids bigint[]; bk uuid; nb int := 0; nc int := 0; mx int := least(greatest(coalesce(p_max, 2000), 1), 10000);
+begin
+  select array_agg(x.id) into ids from (
+    select l.id from tally_recorder_lines l left join tally_recorder_tries t on t.line_row = l.id
+     where l.state in ('held', 'fetching')
+       and ((t.line_row is not null and t.first_at < now() - interval '7 days') or (t.line_row is null and l.received_at < now() - interval '14 days'))
+     order by l.id limit mx) x;
+  if ids is null then return jsonb_build_object('ok', true, 'lines', 0, 'books', 0, 'closed', 0); end if;
+  for bk in select distinct l.book_id from tally_recorder_lines l where l.id = any (ids) loop
+    begin
+      perform tally_recorder_held_rerun(bk, 1000);
+      nb := nb + 1;
+    exception when others then
+      raise log 'tally_recorder_fetching_sweep: book %: % %', bk, sqlstate, sqlerrm;
+    end;
+  end loop;
+  update tally_recorder_lines l set state = 'stale',
+         held_why = left(format('FinCom could not bring this from Tally in 7 days (%s); closed, nothing in the books changed for it', coalesce(nullif(l.held_why, ''), 'no answer')), 600)
+   where l.id = any (ids) and l.state in ('held', 'fetching');
+  get diagnostics nc = row_count;
+  return jsonb_build_object('ok', true, 'lines', array_length(ids, 1), 'books', nb, 'closed', nc);
+end $function$;
+revoke all on function public.tally_recorder_fetching_sweep(integer) from public, anon, authenticated;
+grant execute on function public.tally_recorder_fetching_sweep(integer) to service_role;
+
+do $cron$
+begin
+  if to_regprocedure('cron.schedule(text,text,text)') is null then
+    raise notice 'migration 196: pg_cron is not here: the daily sweep is not scheduled (call tally_recorder_fetching_sweep yourself)';
+  else
+    perform cron.schedule('tally-recorder-fetching-sweep', '37 21 * * *', 'select public.tally_recorder_fetching_sweep(2000)');     -- 03:07 India time, daily
+  end if;
+end $cron$;
 
 commit;
