@@ -115,10 +115,16 @@ AUDIT_RUN = r"""async () => {
   return Object.assign(t, {same: now === want, len: now.length, line, findings: b.audit.last.findings.length, eng}); }"""
 
 GST3B = r"""async () => {
-  const Z = window.__zz; await Z.quiet(800);
-  Z.start(); S.tab = "books"; S.booksTab = "gst"; gstOpen("202603", "r3b", "07"); await new Promise(r => setTimeout(r, 300));
-  await Z.wait(() => !document.querySelector("#app [data-working]"), 300000); const t = Z.end();
-  return Object.assign(t, {view: [S.booksTab, S.gstView, S.gstPart]}); }"""
+  const Z = window.__zz; S.tab = "books"; S.booksTab = "lookup"; S.lk = null; render(); await Z.quiet(800); let line = false;
+  Z.start(); S.booksTab = "gst"; gstOpen("202603", "r3b", "07"); await new Promise(r => setTimeout(r, 300));
+  await Z.wait(() => { if (document.querySelector("#app [data-gst-working]")) line = true; return !document.querySelector("#app [data-working]") && document.querySelector("#app [data-return-card]"); }, 300000);
+  const t = Z.end(), wk = GSTR._work || null;
+  // the figures the page drew (with what the worker worked out) against the same worked out here afresh
+  const shown = memoScope(() => JSON.stringify([GSTR.threeBShown("202603", "07"), GSTR.threeB("202603", "07"), GSTR.errorsFor("202603", "07"), GSTR.checksKept("202603", "07")]));
+  const c0 = GSTR._carry, k0 = GSTR._ck, a0 = GSTR._ckAt; GSTR._carry = null; GSTR._ck = new WeakMap(); GSTR._ckAt = null;
+  const fresh = memoScope(() => { const t = GSTR.threeB("202603", "07"); return JSON.stringify([t, t, GSTR.errorsFor("202603", "07"), GSTR.checksKept("202603", "07")]); });
+  GSTR._carry = c0; GSTR._ck = k0; GSTR._ckAt = a0;
+  return Object.assign(t, {view: [S.booksTab, S.gstView, S.gstPart], line, eng: !!(wk && wk.ym === "202603" && !wk.fail), same: shown === fresh, len: shown.length}); }"""
 
 # new books as they come (another list of the same entries, saved: the save of a new list writes every entry to this
 # browser's store, Books.save, a task of its own before the run is timed): what any page kept of the old is worked out again
@@ -159,19 +165,19 @@ RULES = [
  ("edit", r"""async () => { const Z = window.__zz, b = Z.bk; Z.fresh();
   // an entry added and saved while the worker works the audit out
   const r = Z.due(Audit); Z.a0 = Z.copy(b.audit); const last0 = b.audit.last; S.booksTab = "audit"; render();
-  Audit.maybeRun(); const j = Audit.auto; await Z.wait(() => j.eng && Engine.jobs.size > 0, 60000); await new Promise(ok => setTimeout(ok, 300));
+  Audit.maybeRun(); const j = Audit.auto; await Z.wait(() => j.eng && Z.jobs("audit") > 0, 60000); await new Promise(ok => setTimeout(ok, 300));
   const p = b.vouchers.find(v => v.date >= r.from && v.date <= r.to && Books.isSale(v) && (v.ent || []).length >= 2);
   b.vouchers = b.vouchers.concat([Object.assign(Z.copy(p), {id: "zzsw-1", no: "ZSW1"})]); await saveBooks();
   await Z.wait(() => !Audit.auto && b.audit.last !== last0, 300000);
-  return {eng: !!j.eng, starts: j.starts, same: Z.text(b.audit) === Z.once(Audit, "audit", r), n: b.audit.last.vouchers, jobs: Engine.jobs.size}; }"""),
+  return {eng: !!j.eng, starts: j.starts, same: Z.text(b.audit) === Z.once(Audit, "audit", r), n: b.audit.last.vouchers, jobs: Z.jobs("audit")}; }"""),
  ("other", r"""async () => { const Z = window.__zz, b = Z.bk; Z.fresh();
   // another client opened while the worker works the MIS out
   Z.due(MIS); const m0 = Z.text(b.mis);
   const c = newCompany({name: "ZZ OTHER", gstin: "07AAGCL4827M1Z3"}); S.companies[c.id] = c;
   const o = Object.assign({}, b, {cid: c.id, vouchers: b.vouchers.slice(0, 3000), mis: null, audit: null}); const o0 = Z.text(o.mis);
-  MIS.maybeRun(); await Z.wait(() => MIS.auto && MIS.auto.eng && Engine.jobs.size > 0, 60000); const j = MIS.auto; await new Promise(ok => setTimeout(ok, 200));
+  MIS.maybeRun(); await Z.wait(() => MIS.auto && MIS.auto.eng && Z.jobs("mis") > 0, 60000); const j = MIS.auto; await new Promise(ok => setTimeout(ok, 200));
   S.books = o; S.coId = c.id; await new Promise(ok => setTimeout(ok, 1500));
-  const out = {eng: !!j.eng, stopped: MIS.auto !== j && !j.it, kept: Z.text(b.mis) === m0, otherSame: Z.text(o.mis) === o0, jobs: Engine.jobs.size};
+  const out = {eng: !!j.eng, stopped: MIS.auto !== j && !j.it, kept: Z.text(b.mis) === m0, otherSame: Z.text(o.mis) === o0, jobs: Z.jobs("mis")};
   S.books = b; S.coId = b.cid; render(); await Z.quiet(500); return out; }"""),
  ("none", r"""async () => { const Z = window.__zz, b = Z.bk;
   // no worker: worked out here, in steps
@@ -181,7 +187,7 @@ RULES = [
  ("gone", r"""async () => { const Z = window.__zz, b = Z.bk; Z.fresh();
   // the worker gone in the middle (as its error would end it): the run worked out here, the same
   const r = Z.due(MIS); Z.m0 = Z.copy(b.mis); const last0 = b.mis.last;
-  MIS.maybeRun(); await Z.wait(() => MIS.auto && MIS.auto.eng && Engine.jobs.size > 0, 60000); const j = MIS.auto; await new Promise(ok => setTimeout(ok, 300));
+  MIS.maybeRun(); await Z.wait(() => MIS.auto && MIS.auto.eng && Z.jobs("mis") > 0, 60000); const j = MIS.auto; await new Promise(ok => setTimeout(ok, 300));
   Engine.off("test: the worker went");
   await Z.wait(() => !MIS.auto && b.mis.last !== last0, 300000);
   Engine.st = ""; Engine.why = ""; return {eng: !!j.eng, same: Z.text(b.mis) === Z.once(MIS, "mis", r), how: b.mis.last.how}; }"""),
@@ -278,6 +284,24 @@ CLEAR = r"""async () => { const Z = window.__zz, b = Z.bk; Z.fresh(); S.books = 
   S.coId = b.cid; S.books = b; render();
   return {held: held ? held.n : -1, s: held ? held.s : [], after: after ? after.books : null, sent: sent === null, ended}; }"""
 S_OK = {"books", "firm", "companies", "coId", "sales", "gstReg", "gstYm", "auditFy", "inregScope", "data"}
+# GSTR-3B's figures: drawn as worked out afresh after an entry is added while the worker works; no worker: at once
+GSTR_RULES = [
+ ("gstEdit", r"""async () => { const Z = window.__zz, b = Z.bk; Z.fresh(); S.tab = "books"; S.booksTab = "lookup"; render(); await Z.quiet(500);
+  b.vouchers = b.vouchers.slice(); await saveBooks(); await Z.quiet(500);
+  S.booksTab = "gst"; gstOpen("202603", "r3b", "07"); const w0 = GSTR._work; await Z.wait(() => Z.jobs("gst") > 0, 60000);
+  const p = b.vouchers.find(v => v.date >= "20260301" && v.date <= "20260331" && Books.isSale(v) && (v.ent || []).length >= 2);
+  b.vouchers = b.vouchers.concat([Object.assign(Z.copy(p), {id: "zzsw-g1", no: "ZSWG1"})]); await saveBooks(); render();
+  await Z.wait(() => !document.querySelector("#app [data-working]") && document.querySelector("#app [data-return-card]"), 300000);
+  const shown = memoScope(() => JSON.stringify([GSTR.threeBShown("202603", "07"), GSTR.errorsFor("202603", "07")]));
+  const c0 = GSTR._carry, k0 = GSTR._ck, a0 = GSTR._ckAt; GSTR._carry = null; GSTR._ck = new WeakMap(); GSTR._ckAt = null;
+  const fresh = memoScope(() => JSON.stringify([GSTR.threeB("202603", "07"), GSTR.errorsFor("202603", "07")])); GSTR._carry = c0; GSTR._ck = k0; GSTR._ckAt = a0;
+  await new Promise(ok => setTimeout(ok, 600));
+  return {asked: !!w0, again: GSTR._work !== w0, same: shown === fresh, jobs: [...Engine.jobs.values()].filter(a => a.kind === "gst").length, left: [...Engine.jobs.values()].map(a => [a.id, a.kind, a.end, a.err]), fail: !!(GSTR._work || {}).fail, w0fail: !!w0.fail}; }"""),
+ ("gstNone", r"""async () => { const Z = window.__zz, b = Z.bk; S.tab = "books"; S.booksTab = "lookup"; render(); await Z.quiet(500);
+  b.vouchers = b.vouchers.slice(); await saveBooks(); await Z.quiet(500); Engine.off("test: no worker"); const w0 = GSTR._work;
+  S.booksTab = "gst"; gstOpen("202603", "r3b", "07"); const line = !!document.querySelector("#app [data-gst-working]"), card = !!document.querySelector("#app [data-return-card]");
+  Engine.st = ""; Engine.why = ""; return {line, card, asked: GSTR._work !== w0}; }"""),
+]
 WANT = {"dropped": lambda e: e["eng"] and e["st"] == "ok" and e["ms"] < 15000 and e["same"],
         "vanished": lambda e: e["eng"] and not e["err"] and e["cut"] and e["same"],
         "choice": lambda e: e["onEng"] and e["onSame"] and e["offEng"] and e["offSame"] and e["differ"],
@@ -285,6 +309,7 @@ WANT = {"dropped": lambda e: e["eng"] and e["st"] == "ok" and e["ms"] < 15000 an
         "crash": lambda e: e["eng"] and e["off"] and e["same"] and e["msgOff"],
         "denied": lambda e: e["n"] >= 9 and e["all"],
         "clear": lambda e: e["held"] > 50000 and set(e["s"]) <= S_OK and e["after"] is False and e["sent"] and e["ended"],
+        "gstEdit": lambda e: e["asked"] and e["same"] and e["jobs"] == 0, "gstNone": lambda e: not e["line"] and e["card"] and not e["asked"],
         "twob": lambda e: e["paired"] and e["misEng"] and e["misSame"] and e["auEng"] and e["auSame"],
         "edit": lambda e: e["eng"] and e["starts"] == 2 and e["same"] and e["jobs"] == 0,
         "other": lambda e: e["eng"] and e["stopped"] and e["kept"] and e["otherSame"] and e["jobs"] == 0,
@@ -297,6 +322,8 @@ SAY = {"dropped": "a clear while the worker works (another client opening): the 
        "crash": "the worker failing in the middle (its error; a word it cannot send): ended, the run worked out here, the same",
        "denied": "the worker writes nothing: every write it tries is refused (the books, the client, the stores, settings, the network)",
        "clear": "another client opened: the worker holds nothing of the last (its S only what the engines read before); a sign-out: it ends",
+       "gstEdit": "GSTR-3B: an entry added and saved while the worker works: the figures drawn are the ones worked out afresh",
+       "gstNone": "GSTR-3B with no worker: worked out at once, as before, no line",
        "twob": "2B data and a pair from the 2B matching run (outside the books): the MIS and the audit in the worker as at once",
        "edit": "an entry added and saved while the worker works: started again, the result as at once on the books now",
        "other": "another client opened: stopped, neither client's MIS changed, the worker's job dropped",
@@ -323,7 +350,7 @@ try:
             if ONLY_RULES:
                 pg.click("[data-side-client=back]"); pg.wait_for_function("(cid) => S.view === 'company' && S.books && S.books.cid === cid && !S.books.loading", arg=cid, timeout=120000)
                 pg.evaluate("() => loadPart('mis')"); pg.evaluate(RULES_HELP)
-                for name, js in RULES + REVIEW + [("choice", None), ("twob", None), ("clear", CLEAR)]:
+                for name, js in RULES + REVIEW + GSTR_RULES + [("choice", None), ("twob", None), ("clear", CLEAR)]:
                     try:
                         if name == "choice": pg.evaluate(LOAD, json.load(open(CACHE))); pg.wait_for_timeout(800); e = pg.evaluate(CHOICE); pg.evaluate("() => { const Z = window.__zz; S.books = Z.bk; S.coId = Z.bk.cid; render(); }")
                         else: e = pg.evaluate(js) if js else (pg.evaluate(itc_books.MAKE, [itc_books.CID, itc_books.CMP, itc_books.REG, itc_books.VS, itc_books.TWOB]), pg.evaluate(TWOB, [itc_books.CID, itc_books.REG]))[1]
@@ -336,21 +363,25 @@ try:
             pg.evaluate("() => window.__zz.wait(() => !document.querySelector('#app [data-working]'), 120000)")
             row["open"] = pg.evaluate("() => window.__zz.end()")
             pg.evaluate("() => window.__zz.quiet(800)")
-            row["gst3b"] = pg.evaluate(GST3B)
             row["ledger"] = pg.evaluate(LEDGER)
-            for k, js in (("mis", MIS_RUN), ("audit", AUDIT_RUN)):
+            for k, js in (("gst3b", GST3B), ("mis", MIS_RUN), ("audit", AUDIT_RUN)):
                 runs = []
                 for i in range(REPEAT):
                     pg.evaluate(FRESH); runs.append(pg.evaluate(js))
                 runs.sort(key=lambda v: v["max"])
                 row[k] = dict(runs[len(runs) // 2], same=all(v["same"] for v in runs), line=all(v["line"] for v in runs), eng=all(v.get("eng") for v in runs) if runs[0].get("eng") is not None else None,
-                              runs=[v["max"] for v in runs], lf=[f for v in runs for f in v["lf"]], sl=[x for v in runs for x in v["sl"]])
+                              runs=[v["max"] for v in runs], lf=[f for v in runs for f in v["lf"]], sl=[x for v in runs for x in v.get("sl", [])])
             for k, v in row.items():
                 print("   %-7s longest task %5d ms, %3d long tasks (%6d ms in all), answer after %6d ms %s%s" % (k, v["max"], v["n"], v["sum"], v["ms"], v["top"],
                       (" same as at once: %s, worker %s" % (v["same"], v.get("eng"))) if "same" in v else (" %s" % {x: v[x] for x in ("led", "lines", "rows", "view") if x in v})), flush=True)
             for k, v in row.items():
                 for f in v.get("lf", [])[:4]: print("     long frame %s" % f, flush=True)
                 if v.get("sl"): print("     %s tasks over 40 ms [ms, steps, saved]: %s" % (k, v["sl"][:8]), flush=True)
+            v = row["gst3b"]
+            if "eng" in v:
+                ok(v["same"], "gst3b: the 3B and the month's checks drawn are the ones worked out here afresh (%d characters)" % v["len"])
+                ok(v["line"] and v["eng"], "gst3b: worked out in the engine's worker, the \"Working out\" line shown meanwhile (%s)" % {x: v[x] for x in ("line", "eng")})
+                ok(v["max"] <= TASK_MS, "gst3b: no task of the page's thread over %d ms: the longest %d ms %s (the median of %d runs' longest: %s)" % (TASK_MS, v["max"], v["top"], len(v["runs"]), v["runs"]))
             for k in ("mis", "audit"):
                 v = row[k]
                 ok(v["same"], "%s: the result is the one the run at once gives (%d characters)" % (k, v["len"]))
@@ -361,7 +392,7 @@ try:
             if N == SIZES[0]:
                 print("\n   the job's rules with the worker (%d entries)" % N, flush=True)
                 pg.evaluate(RULES_HELP)
-                for name, js in RULES + REVIEW + [("choice", None), ("twob", None), ("clear", CLEAR)]:
+                for name, js in RULES + REVIEW + GSTR_RULES + [("choice", None), ("twob", None), ("clear", CLEAR)]:
                     try:
                         if name == "choice": pg.evaluate(LOAD, json.load(open(CACHE))); pg.wait_for_timeout(800); e = pg.evaluate(CHOICE); pg.evaluate("() => { const Z = window.__zz; S.books = Z.bk; S.coId = Z.bk.cid; render(); }")
                         else: e = pg.evaluate(js) if js else (pg.evaluate(itc_books.MAKE, [itc_books.CID, itc_books.CMP, itc_books.REG, itc_books.VS, itc_books.TWOB]), pg.evaluate(TWOB, [itc_books.CID, itc_books.REG]))[1]

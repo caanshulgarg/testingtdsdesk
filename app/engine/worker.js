@@ -5,7 +5,7 @@
 // Built by app/vite.config.js (fincom-legacy) into assets/engine-<hash>.js, fetched only when a run first needs it.
 // The page's words (data.t): init (legacy.js's address), begin / S / bk / bv / end (the books, in parts, a version each), run, cancel. Its answers:
 // ready / fail, prog (how far), mis (the figures), audit + rows + end (the findings, then their rows in parts), err.
-/* global S, MIS, Audit, BOOKS_REV, JOB_MEMO, IN_RENDER, reactScopeEnd */
+/* global S, MIS, Audit, GSTR, BOOKS_REV, JOB_MEMO, IN_RENDER, reactScopeEnd */
 import { loadLegacy, DENIED } from "./boot.js";
 
 const SLICE_MS = 50, PROG_MS = 100, ROWS = 5000;
@@ -72,18 +72,31 @@ function begin(m) {
   o.vouchers = m.keepV && books ? books.vouchers : [];
   next = { ver: m.ver, b: o, keepV: !!m.keepV };
 }
+// GSTR-3B's figures for a month (src/js/12 GSTR.workReady): the credit carried in, a month a step from the books'
+// first (creditIn, kept in GSTR._carry), then the month's checks (errorsFor: kept in keptState)
+function* gstIn(ym, reg) {
+  for (const m of GSTR.months().filter((x) => x <= ym)) { GSTR.creditIn(m, reg); yield; }
+  GSTR.errorsFor(ym, reg); yield;
+  const t = GSTR.threeB(ym, reg); yield;
+  const w = GSTR.keptState(), K = GSTR.workKeys(ym, reg), c = GSTR._carry;
+  if (!w || !c || !w.v[K.chk] || !w.v[K.join]) throw new Error("GST: the month's figures were not kept");
+  return { t, carry: { key: c.key, m: c.m }, irn: w.v[K.irn] ? w.v[K.irn].r : false, join: w.v[K.join].r, chk: w.v[K.chk].r };
+}
 function run(m) {
   const b = S.books, prog = { k: 0, of: 0, keep: () => true };
   let it;
-  if (m.kind === "audit") it = Audit.calcIn(m.from, m.to, prog);
+  if (m.kind === "gst") it = gstIn(m.from, m.how);
+  else if (m.kind === "audit") it = Audit.calcIn(m.from, m.to, prog);
   else {
     const regs = new Set((GSTR.gstins(b) || []).map((g) => String(g).slice(0, 2))).size || 1;
     prog.of = EST.mis || (GSTR.months().filter((x) => x <= Audit.ymd(m.to).slice(0, 6)).length * (regs + 1) + 12 + Math.ceil((b.vouchers || []).length / 5000) * 9);
     it = MIS.steps(m.from, m.to, m.how, prog);
   }
-  return { id: m.id, kind: m.kind, it, prog, memo: new Map(), n: 0, said: 0 };
+  // (the job keeps the books it was sent with: a later version that comes meanwhile is the next job's)
+  return { id: m.id, kind: m.kind, it, prog, memo: new Map(), n: 0, said: 0, b };
 }
 function done(j, v) {
+  if (j.kind === "gst") { say({ t: "gpart", id: j.id, k: "t", v: v.t }); say({ t: "gpart", id: j.id, k: "join", v: v.join }); say({ t: "gst", id: j.id, r: Object.assign({}, v, { t: null, join: null }) }); return; }
   if (j.kind === "mis") { EST.mis = j.n; say({ t: "mis", id: j.id, r: v }); return; }
   // the findings first (their rows after, in parts: no one word to copy that holds the page)
   const full = v.full, c = Object.assign({}, v, { b: null, full: null, ran: Array.from(v.ran), findings: v.findings.map((f) => Object.assign({}, f, { rows: [] })) });
@@ -95,9 +108,10 @@ function done(j, v) {
 function step() {
   if (!job) {
     const m = queue.shift() || null; if (!m) return;
-    try { fresh(); job = run(m); } catch (e) { job = null; say({ t: "err", id: m.id, e: err(e) }); if (queue.length) setTimeout(step, 0); return; }
+    try { fresh(); S.books = m.b; job = run(m); } catch (e) { job = null; say({ t: "err", id: m.id, e: err(e) }); if (queue.length) setTimeout(step, 0); return; }
   }
   const j = job, t0 = performance.now(), was = JOB_MEMO;
+  S.books = j.b;
   let fin = false, v = null;
   if (typeof reactScopeEnd === "function") reactScopeEnd();
   JOB_MEMO = j.memo; IN_RENDER++;
@@ -120,14 +134,14 @@ self.onmessage = (e) => {
     else if (m.t === "clear") clearAll();
     else if (m.t === "selftest") selftest().then((r) => say({ t: "selftest", r }));
     else if (m.t === "state") say({ t: "state", r: { books: !!books, n: books ? (books.vouchers || []).length : 0, s: Object.keys(S).sort(), ls: Array.from(self.__engineLS.keys()), m2b: typeof M2B === "object" ? Object.keys(M2B.st || {}).length : 0, queue: queue.length, job: !!job } });
-    else if (m.t === "S") { setS(m.s || {}); const L = self.__engineLS; L.clear(); Object.keys(m.ls || {}).forEach((k) => L.set(k, m.ls[k])); if (m.g && m.g.M2B && typeof M2B === "object") M2B.st = m.g.M2B; if (books) S.books = books; }
+    else if (m.t === "S") { setS(m.s || {}); const L = self.__engineLS; L.clear(); Object.keys(m.ls || {}).forEach((k) => L.set(k, m.ls[k])); if (m.g && m.g.M2B && typeof M2B === "object") M2B.st = m.g.M2B; if (books && !job) S.books = books; }
     else if (m.t === "bk") { if (next && next.ver === m.ver) next.b[m.k] = m.v; }
     else if (m.t === "bv") { if (next && next.ver === m.ver) { const V = next.b.vouchers; for (let i = 0; i < m.v.length; i++) V.push(m.v[i]); } }
     else if (m.t === "end") {
       // a new books object (and BOOKS_REV moved): nothing a page's cache kept of the last version is read again
-      if (next && next.ver === m.ver) { books = next.b; next = null; S.books = books; BOOKS_REV++; }
+      if (next && next.ver === m.ver) { books = next.b; next = null; if (!job) S.books = books; BOOKS_REV++; }
     }
-    else if (m.t === "run") { if (!books) { say({ t: "err", id: m.id, e: "no books" }); return; } S.books = books; queue.push(m); if (!job) setTimeout(step, 0); }
+    else if (m.t === "run") { if (!books) { say({ t: "err", id: m.id, e: "no books" }); return; } queue.push(Object.assign({}, m, { b: books })); if (!job) setTimeout(step, 0); }
     else if (m.t === "cancel") {
       if (job && job.id === m.id) { try { job.it.return(); } catch (x) { /* closed */ } job = null; }
       const i = queue.findIndex((q) => q.id === m.id); if (i >= 0) queue.splice(i, 1);

@@ -286,7 +286,10 @@ export default function Gst() {
   if (noBooks && S.gstView === "year") S.gstView = "return";
   const part = S.gstPart, noReturn = ftype === "qrmp" && !GSTSet.isQEnd(S.gstYm || ""), iffNow = noReturn && part === "r1", gNow = regs.find((g) => g.slice(0, 2) === S.gstReg) || "";
   // a GSTR-1 or 3B with errors to fix before filing (the year's grid's red "Errors N"): What to fix (N) is its first tab
-  const cardSt = S.gstView === "return" && !noBooks && SUBS[part] ? cardStatus(part, months, ftype) : null;
+  // next-speed-worker: GSTR-3B opened with its figures not kept (the credit carried in, the month's checks): worked out in
+  // the engine's worker meanwhile, the page says so and is drawn again with them (src/js/12 GSTR.workReady)
+  const waitGst = S.gstView === "return" && !noBooks && part === "r3b" && !GSTR.workReady(S.gstYm || "", S.gstReg || "");
+  const cardSt = !waitGst && S.gstView === "return" && !noBooks && SUBS[part] ? cardStatus(part, months, ftype) : null;
   const fixN = cardSt && cardSt.errors ? cardSt.n : 0, fixRet = part === "r3b" ? "r3b" : "r1";
   const subs = S.gstView === "return" && !noBooks ? (fixN ? [["fix", "What to fix (" + fixN + ")"]].concat(SUBS[part]) : SUBS[part]) : null;
   if (subs && !subs.some(([k]) => k === S.gstSub)) S.gstSub = "summary";
@@ -302,7 +305,7 @@ export default function Gst() {
   const subParts = secParts(sec);
   // t70 (the owner: "too much information above.. more professional"): a GSTR-1 or 3B open has one card: its first row the
   // year, month and GSTIN and the ledgers to confirm; the return's tabs and the parts one row under it
-  const cardOn = sec !== "ledgers" && S.gstView === "return" && !!subs;
+  const cardOn = !waitGst && sec !== "ledgers" && S.gstView === "return" && !!subs;
   const bar = <Bar months={months} regs={regs} gNow={gNow} ftype={ftype} noDownload={(noDownload && part !== "qtr") || (S.gstView === "return" && (part === "g9" || part === "g9c"))} inCard={cardOn} />;
   const partNav = (subParts.length > 1 || sec === "returns") ? <nav className="sbar subnav rp-tabs" aria-label="GST">
       {sec === "returns" && !noBooks && <button data-part="year" aria-selected={S.gstView === "year"} onClick={() => gstViewGo("year")}>Year</button>}
@@ -317,7 +320,8 @@ export default function Gst() {
     {sec === "ledgers" ? <TaxLedgers b={b} kind="gst" /> : <>
     {!cardOn && bar}
     {!cardOn && partNav}
-    {S.gstView === "year" ? <Grid months={months} reg={S.gstReg || ""} /> : <>
+    {waitGst ? <p className="note" data-working="" data-gst-working="" role="status" style={{ margin: "12px 2px" }}>{"Working out GSTR-3B for " + periodLabel(S.gstYm || "", S.gstReg || "") + "…"}</p>
+      : S.gstView === "year" ? <Grid months={months} reg={S.gstReg || ""} /> : <>
     {subs && <GstCard part={part} c={cardSt} gNow={gNow} ftype={ftype} noReturn={noReturn} sub={sub} prefile={!noBooks && S.gstYm ? <PreFileButton kind="gst" reg={S.gstReg || ""} ym={S.gstYm} /> : null}
       oneGstin={regs.length <= 1} retPick={<select className="ret-pick" aria-label="Return" data-gst-return-pick="" value={part} onChange={(ev) => (ev.target.value === "year" ? gstViewGo("year") : gstPartGo(ev.target.value))}>
         {sec === "returns" && !noBooks && <option value="year">The year's grid</option>}

@@ -145,7 +145,8 @@ export function Gstr3b({ b, sub }) {
   // the file tab, the checks and a figure opened to its bills work it out here
   const c = (sub === "summary" || sub === "details") && !S.r3bOpen ? cloud3b(S.gstYm || "", S.gstReg || "") : null;
   if (c && c.wait) return <p className="note" data-r3b-where="wait">Looking for this month’s 3B in FinCom’s cloud…</p>;
-  const t = c ? c.t : GSTR.threeB(S.gstYm || "", S.gstReg || ""), choice = ((b.itcBasis || {})[S.gstReg || ""]) || "2b";
+  // (next-speed-worker: the month's 3B the engine's worker worked out for this drawing, while it still fits: threeBShown)
+  const t = c ? c.t : GSTR.threeBShown(S.gstYm || "", S.gstReg || ""), choice = ((b.itcBasis || {})[S.gstReg || ""]) || "2b";
   const where = sub === "summary" || sub === "details" ? <p className="note" data-r3b-where={c ? "cloud" : "here"} style={{ margin: "0 2px 8px" }}>{c ? "Worked out in FinCom’s cloud " + cloud3bAt(c.at) : "Worked out here"}</p> : null;
   const ft = typeof GSTSet === "object" ? GSTSet.typeOf(S.gstYm || "", S.gstReg || "") : "monthly";
   const P = t.pay, months = GSTR.months(), first = months[0] === S.gstYm;
