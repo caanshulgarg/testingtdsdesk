@@ -633,7 +633,8 @@ const TCloud = {
       // next-cloud-mis: from the cloud's figures when they fit these books (MIS.cloudGo: else worked out here, as before)
       else if (last && last.from && last.to){
         // (worked out here: in steps behind the page, MIS.runSoon, next-fix-mis-rework)
-        const go = () => MIS.runSoon(b, {from: last.from, to: last.to, how});
+        // (not when another run was asked for while the cloud's answer was awaited: MIS.asked)
+        const k = MIS.asked, go = () => { if (MIS.asked === k) MIS.runSoon(b, {from: last.from, to: last.to, how}); };
         if (MIS.cloudOk(b) && window.loadPart) window.loadPart("mis", true).then(() => MIS.cloudGo(last.from, last.to, how, go)).catch(go);
         else go();
       } else MIS.maybeRun();

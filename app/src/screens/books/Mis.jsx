@@ -80,22 +80,27 @@ function runSplit(from, to, how) {
   if (MIS._again || !b || b.loading) return;
   if (MIS.auto) MIS.autoStop(MIS.auto);
   MIS._soon = null; MIS.failed = null;
-  MIS._again = true; FinComNav.start();
   const n = ++runN;
+  // MIS._again set and cleared by the job's own steps (a job stopped or put aside is closed: lib/behind.jsx), so it
+  // never stays set; its first step taken here (inMs 1: it only sets MIS._again), so a run asked for at once after the
+  // click (MIS.runSoon) sees it and takes its place
   behind("mis-run", () => [b, n, b.loading, MIS.tabRun], function* () {
-    try { yield* MIS.steps(from, to, how); } finally { MIS._again = false; FinComNav.done(); }
+    MIS._again = true; FinComNav.start();
+    try { yield; yield* MIS.steps(from, to, how); } finally { MIS._again = false; FinComNav.done(); }
     // the save names its books: done even when the client changes after the run
     saveBooks(null, b).catch(() => {});
     // (a run that ends inside its first step, small books, ends before any drawing of the job: the page drawn again with it)
     setTimeout(() => { if (S.books === b) render(); }, 0);
     return true;
-  });
+  }, 1);
 }
 // next-cloud-mis: the figures from FinCom's cloud when its answer fits these books exactly (MIS.cloudGo, src/js/07: the
 // same book, version and working), else worked out here in parts (runSplit) and the cloud asked again for next time
-const misGo = (from, to, how) => FinComNav.track(MIS.cloudGo(from, to, how, () => runSplit(from, to, how)));
+// (worked out here only when no run was asked for elsewhere since the click, k, while the page was drawn or the cloud's
+// answer awaited: MIS.asked)
+const misGo = (from, to, how, k = MIS.asked) => FinComNav.track(MIS.cloudGo(from, to, how, () => { if (MIS.asked === k) runSplit(from, to, how); }));
 // Run now: the period chosen, else doAct says what is wrong with it
-const runNow = (rg) => FinComNav.go(() => rg.from && rg.to && rg.from <= rg.to ? misGo(rg.from, rg.to, "run now") : doAct("misRun"));
+const runNow = (rg) => { const k = MIS.asked; FinComNav.go(() => rg.from && rg.to && rg.from <= rg.to ? misGo(rg.from, rg.to, "run now", k) : doAct("misRun")); };
 // where the figures were worked out, in plain words: the cloud's time (with its day when not today), or here
 const hhmm = (at) => { const t = fmtTime(at).replace(/ IST$/, ""), day = fmtDateTime(at).split(" ")[0]; return t + (day !== fmtDateTime(new Date().toISOString()).split(" ")[0] ? " on " + day : ""); };
 const Where = ({ r }) => <span data-mis-where={r.cloud ? "cloud" : "here"}>{r.cloud ? "Worked out in FinCom’s cloud at " + hhmm(r.cloud.at) : "Worked out here"}</span>;
