@@ -144,7 +144,7 @@ func TestR2515ReplaceProgram(t *testing.T) {
 		}
 		return old(a, b)
 	}
-	if err := replaceProgram(exe, []byte("MZ new")); err == nil || readText(exe) != "MZ running" {
-		t.Fatalf("not put back: %v, program %q", err, readText(exe))
+	if err := replaceProgram(exe, []byte("MZ new")); err == nil || readText(exe) != "MZ running" || readText(filepath.Join(dir, "FinComBridge.old.exe")) != "MZ running" {
+		t.Fatalf("not put back, or the old program not kept beside it (review L6): %v, program %q", err, readText(exe))
 	}
 }

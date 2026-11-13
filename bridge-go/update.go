@@ -182,6 +182,11 @@ func checkForUpdate(now bool) M {
 	if why := releaseRefuses(ver); why != "" {
 		setUpd("message", "Version "+ver+" is available but not approved for this computer yet ("+why+"); nothing was changed.")
 		writeLog("Update " + ver + ": FinCom has not approved it for this computer yet (" + why + "); nothing changed")
+		// review L6: a release withdrawn (none named, held, rolled back, another version named) is no longer an update that
+		// failed; one only not let through now (FinCom's update gate) still is
+		if !strings.Contains(why, "has not allowed it") && !strings.Contains(why, "has not answered") {
+			updFailClear()
+		}
 		return updateInfo()
 	}
 	if !strings.HasPrefix(u, "https://") && !(os.Getenv("FINCOM_TEST") == "1") {
@@ -537,12 +542,24 @@ func replaceProgram(exe string, b []byte) error {
 		return err
 	}
 	if err := updRename(nw, exe); err != nil {
+		// review L6: the running program put back, and FinComBridge.old.exe kept until the program is in place again: a
+		// rename back, else a copy of its bytes (the old one stays beside it either way), tried again for a few seconds
 		if e2 := updRename(old, exe); e2 != nil {
-			if ob, e3 := os.ReadFile(old); e3 == nil {
-				if t, e4 := writeTempSynced(exe, ob); e4 == nil {
-					_ = updRename(t, exe)
+			for i := 0; i < 5 && !exists(exe); i++ {
+				if ob, e3 := os.ReadFile(old); e3 == nil {
+					if t, e4 := writeTempSynced(exe, ob); e4 == nil {
+						if updRename(t, exe) != nil {
+							_ = os.Remove(t)
+						}
+					}
+				}
+				if !exists(exe) {
+					time.Sleep(time.Second)
 				}
 			}
+		}
+		if !exists(exe) {
+			writeLog("UPDATE: " + exe + " could not be put back; the program is kept as " + old + " (copy it to " + filepath.Base(exe) + " or run the setup again)")
 		}
 		_ = os.Remove(nw)
 		return err
