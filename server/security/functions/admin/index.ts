@@ -8,6 +8,11 @@
 //  - every action goes into the firm's audit trail
 // Security fix batch 1 (27-Oct-2026): "Add person" only invites (Supabase's invite email; no login made with a password
 // the owner chose); a login that already exists joins a firm only by accepting the invite itself (accept_invite)
+// 13-Nov-2026 (security review, M6): a firm's owner resets the password, or removes the two-step sign-in, only of
+// their own login or of a staff or look-only member; never of another owner of the firm (who asks for a reset link
+// themselves: send_reset goes to their own email), nor of a person another owner took the owner's role from, or
+// switched off, in the last 30 days. The new password is always made up here: one sent in the request is not used.
+// The person is told by email (when FinCom's email is set up) that it was done. The platform administrator's path stays.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsFor } from "./cors.ts";
 import { firmGate, viaClient } from "../_shared/firmgate.ts";   // the console's switches (migration 118)
@@ -122,6 +127,18 @@ Deno.serve(async (req) => {
     return { target, theirs };
   };
 
+  // M6: may the caller reset this person's password or two-step? null: yes; else the refusal
+  const WAS_OWNER_DAYS = 30;
+  const resetRefused = (r: { target: any, theirs: any }) => {
+    if (superadmin || r.target.id === user.id) return null;
+    const was = Date.parse(String((r.target.app_metadata || {}).fincom_was_owner || ""));
+    if (r.theirs?.role === "owner" || (Number.isFinite(was) && Date.now() - was < WAS_OWNER_DAYS * 86400000))
+      return reply(403, { ok: false, reason: "owner", error: "An owner's password and two-step sign-in are theirs alone to reset. Send them a reset link instead; for a lost phone, they write to FinCom support." });
+    return null;
+  };
+  const tell = (to: string, what: string) => sendMail(to, "Your FinCom " + what + " was reset",
+    "<p>Your FinCom " + what + " was reset by your firm's owner.</p><p>If you did not expect this, tell your firm's owner or write to FinCom support.</p>").catch(() => false);
+
   // console phase 1b: a paused firm (FinCom's console) adds nobody, and switches nobody on or changes a role; resetting,
   // unlocking and switching people off stay open (the service role skips can_write(), so it is asked here)
   if (firmId && (action === "add_person" || action === "invite_person" || (action === "set_person" && (body.role !== undefined || body.active === true)))) {
@@ -214,19 +231,22 @@ Deno.serve(async (req) => {
 
     if (action === "reset_password") {
       const r = await targetInScope(email); if (r.err) return r.err;
-      const password = String(body.password || "") || madeUpPassword();
-      if (password.length < 10) return reply(400, { ok: false, error: "The password must be 10 characters or more." });
+      const no = resetRefused(r); if (no) return no;
+      const password = madeUpPassword();   // never one the caller chose
       const { error } = await admin.auth.admin.updateUserById(r.target.id, { password });
       if (error) return reply(400, { ok: false, error: error.message });
       await audit("admin.reset_password", email, r.theirs?.firm_id || firmId);
+      if (r.target.id !== user.id) await tell(email, "password");
       return reply(200, { ok: true, email, password });
     }
 
     if (action === "reset_two_step") {   // a lost phone: removes the person's authenticator entries
       const r = await targetInScope(email); if (r.err) return r.err;
+      const no = resetRefused(r); if (no) return no;
       const { data: f } = await admin.auth.admin.mfa.listFactors({ userId: r.target.id });
       for (const x of f?.factors || []) await admin.auth.admin.mfa.deleteFactor({ userId: r.target.id, id: x.id });
       await audit("admin.reset_two_step", email, r.theirs?.firm_id || firmId);
+      if (r.target.id !== user.id) await tell(email, "two-step sign-in");
       return reply(200, { ok: true });
     }
 
@@ -243,6 +263,12 @@ Deno.serve(async (req) => {
       if (body.name !== undefined) patch.name = String(body.name).slice(0, 120);
       const losesOwner = r.theirs?.role === "owner" && ((patch.role && patch.role !== "owner") || patch.active === false);
       if (losesOwner && await ownersLeft(r.theirs.firm_id, r.target.id) === 0) return reply(400, { ok: false, error: "A firm must keep at least one owner." });
+      // M6: an owner who stops being one by another person's hand: the day is kept on the login (the server alone writes
+      // app_metadata), so their password and two-step are not an owner's to reset for WAS_OWNER_DAYS days
+      if (losesOwner && r.target.id !== user.id) {
+        const { error: markErr } = await admin.auth.admin.updateUserById(r.target.id, { app_metadata: { fincom_was_owner: new Date().toISOString() } });
+        if (markErr) return reply(500, { ok: false, error: "The change could not be made just now. Try again." });
+      }
       const { error } = await admin.from("members").update(patch).eq("user_id", r.target.id);
       if (error) return reply(400, { ok: false, error: error.message });
       await audit("admin.set_person", email + " " + JSON.stringify(patch), r.theirs?.firm_id || firmId);

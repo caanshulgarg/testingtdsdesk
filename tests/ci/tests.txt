@@ -632,3 +632,5 @@ run_daybook_slices.py                 180  TDSDESK_SITE=../app/dist-test
 run_items_own_seq.py                  180  TDSDESK_SITE=../app/dist-test
 # security review of 13-Nov-2026 (branch next-sec-server): the page's side of connecting Zoho Books (M3)
 run_zoho_connect_bound.js             120
+# an owner resets only their own login or a staff member's (M6)
+run_admin_coowner.py                  120
