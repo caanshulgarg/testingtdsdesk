@@ -19,6 +19,9 @@ export default function HeldBooks({ cid, led, to, where }) {
   // FinCom 2.3.5, one flow with Sync activity (Rec.needKind, src/js/61): yellow and "Needs you" only when a person must
   // act (upload that day's Day Book, add a ledger, a locked month...); lines FinCom is still fetching are said quietly
   const needs = typeof Rec === "object" && Rec.needKind ? (h.lines || []).some((l) => Rec.needKind(l)) : true;
+  // migration 196 (the owner, 13-Nov-2026: no entry is ever held): while FinCom brings entries from Tally by itself, one quiet line
+  const n = (h.lines || []).length, bringing = !needs && n > 0 ? "Bringing " + n + " " + (n === 1 ? "entry" : "entries") + " from Tally" : "";
+  if (bringing) return <div className="note" role="status" data-books-held={where || ""} data-books-bringing={String(n)} style={{ margin: "6px 0" }}>{bringing}</div>;
   return <div className={needs ? "bk-alert warn" : "note"} role="status" data-books-held={where || ""} data-books-held-needs={needs ? "" : undefined} style={{ margin: "6px 0" }}>
     {needs && <b>{"Needs you"}</b>}
     <div data-books-held-text="">{h.why

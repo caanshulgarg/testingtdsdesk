@@ -621,7 +621,7 @@ async function ledgersWantedFor(dev: any, firm: string, bridge: string) {
     if (!bridge) return null;
     const since = new Date(Date.now() - 7 * 86400000).toISOString();
     const { data, error } = await db.from("tally_recorder_lines").select("line_id, company, company_guid, book_id, received_at, bridge, device_id, held_why, payload")
-      .eq("firm_id", firm).eq("device_id", dev.id).eq("bridge", bridge).eq("state", "held").gt("received_at", since).order("received_at", { ascending: true }).limit(400);
+      .eq("firm_id", firm).eq("device_id", dev.id).eq("bridge", bridge).in("state", ["held", "fetching"]).gt("received_at", since).order("received_at", { ascending: true }).limit(400);
     if (error || !Array.isArray(data)) return null;
     const rows = (data as any[]).filter((r) => r && String(r.device_id ?? "") === String(dev.id) && String(r.bridge ?? "") === bridge && Date.parse(String(r.received_at)) > Date.now() - 7 * 86400000 && waitsFor(r).length)
       .sort((a, b) => Date.parse(String(a.received_at)) - Date.parse(String(b.received_at)));
@@ -718,7 +718,7 @@ async function autoLedgersFor(firm: string, body: any, have: Record<string, stri
 // bridge 2.3.1 (review H1): a ":resolved" row held for want of a complete body: the guard's words (guard-230), or no body
 const GUARD_WORDS = "the entry's details from Tally are incomplete";
 function heldIncomplete(x: any): boolean {
-  if (String(x?.state || "") !== "held") return false;
+  if (!["held", "fetching"].includes(String(x?.state || ""))) return false;     // migration 196: being fetched is held's successor
   const b = x?.body, noBody = !b || typeof b !== "object" || !Array.isArray(b.vouchers) || !b.vouchers.length;
   return noBody || String(x?.held_why || "").startsWith(GUARD_WORDS);
 }
@@ -756,7 +756,7 @@ async function heldOwnLines(dev: any, firm: string, bridge: string, max: number,
     if (!bridge) return [];
     const since = new Date(Date.now() - 7 * 86400000).toISOString();
     const { data, error } = await db.from("tally_recorder_lines").select("line_id, company, company_guid, event, master_id, vch_type, vch_no, vch_date, book_id, received_at, bridge, device_id, object_guid, body, held_why, payload")
-      .eq("firm_id", firm).eq("device_id", dev.id).eq("bridge", bridge).eq("state", "held").in("event", ["created", "altered", "imported"]).gt("received_at", since)
+      .eq("firm_id", firm).eq("device_id", dev.id).eq("bridge", bridge).in("state", ["held", "fetching"]).in("event", ["created", "altered", "imported"]).gt("received_at", since)
       .order("received_at", { ascending: true }).limit(400);
     if (error || !Array.isArray(data)) return [];
     let rows = (data as any[]).filter((r) => r && String(r.device_id ?? dev.id) === String(dev.id) && String(r.bridge ?? "") === bridge && Date.parse(String(r.received_at)) > Date.now() - 7 * 86400000 && want(r))
@@ -764,7 +764,7 @@ async function heldOwnLines(dev: any, firm: string, bridge: string, max: number,
     if (follow && follow.size) {
       const since30 = new Date(Date.now() - HELD_SLOW_DAYS * 86400000).toISOString();
       const { data: fd, error: fe } = await db.from("tally_recorder_lines").select("line_id, company, company_guid, event, master_id, vch_type, vch_no, vch_date, book_id, received_at, bridge, device_id, object_guid, body, held_why, payload")
-        .eq("firm_id", firm).in("book_id", [...follow.keys()].slice(0, 100)).eq("state", "held").in("event", ["created", "altered", "imported"]).gt("received_at", since30)
+        .eq("firm_id", firm).in("book_id", [...follow.keys()].slice(0, 100)).in("state", ["held", "fetching"]).in("event", ["created", "altered", "imported"]).gt("received_at", since30)
         .order("received_at", { ascending: true }).limit(400);
       if (fe) { fail("held_follow", fe); console.log("tally-ingest beat: " + what + ": the lines of the books read here not read:", String(fe.message || "").slice(0, 200)); }
       else {
@@ -785,7 +785,7 @@ async function heldOwnLines(dev: any, firm: string, bridge: string, max: number,
       const cols = "line_id, company, company_guid, event, master_id, vch_type, vch_no, vch_date, book_id, received_at, bridge, device_id, object_guid, body, held_why, payload";
       // 2.3.4 re-review 2 (L-a): created / altered / imported only (a line's ":resolved" row carries its line's event), so
       // held cancels, deletes and other rows never take the slots of the lines listed
-      const base = () => db.from("tally_recorder_lines").select(cols).eq("firm_id", firm).eq("device_id", dev.id).eq("bridge", bridge).eq("state", "held").in("event", ["created", "altered", "imported"]);
+      const base = () => db.from("tally_recorder_lines").select(cols).eq("firm_id", firm).eq("device_id", dev.id).eq("bridge", bridge).in("state", ["held", "fetching"]).in("event", ["created", "altered", "imported"]);
       const got: any[] = [];
       let bad = "";
       const ids = new Set<string>();
@@ -807,7 +807,7 @@ async function heldOwnLines(dev: any, firm: string, bridge: string, max: number,
       if (bad) { fail("held_slow", bad); console.log("tally-ingest beat: " + what + ": the slow-ended lines of the last " + HELD_SLOW_DAYS + " days not read:", bad.slice(0, 200)); }
       else {
         const seen = new Set(rows.map((r) => String(r.line_id || "")));
-        const old = got.filter((r) => r && String(r.device_id ?? dev.id) === String(dev.id) && String(r.bridge ?? "") === bridge && String(r.state ?? "held") === "held" && !String(r.line_id || "").endsWith(":resolved")
+        const old = got.filter((r) => r && String(r.device_id ?? dev.id) === String(dev.id) && String(r.bridge ?? "") === bridge && ["held", "fetching"].includes(String(r.state ?? "held")) && !String(r.line_id || "").endsWith(":resolved")
           && ["created", "altered", "imported"].includes(String(r.event || "")) && !seen.has(String(r.line_id || ""))
           && Date.parse(String(r.received_at)) > Date.now() - HELD_SLOW_DAYS * 86400000 && Date.parse(String(r.received_at)) <= Date.now() - 7 * 86400000 && want(r))
           .sort((a, b) => Date.parse(String(a.received_at)) - Date.parse(String(b.received_at)));
@@ -850,7 +850,7 @@ async function heldOwnLines(dev: any, firm: string, bridge: string, max: number,
         // held): listed again with ledgerAgain once the ledger is in (below), so that the bridge asks Tally for the entry once
         // more and sends "<line id>:resolved" again (the same id), applied then; it replaces both held rows (50-53's rules)
         const newest = xs.slice().sort((a, b) => Number(b?.id || 0) - Number(a?.id || 0) || Date.parse(String(b?.received_at)) - Date.parse(String(a?.received_at)))[0];
-        if (newest && String(newest.state || "") === "held" && waitsFor(newest).length) {
+        if (newest && ["held", "fetching"].includes(String(newest.state || "")) && waitsFor(newest).length) {
           if (xs.length > 2 || xs.filter((x) => waitsFor(x).length).length > 1) return false;
           r._waits = waitsFor(newest); r._ledgerAgain = true; r._holdAt = Date.parse(String(newest.received_at));
           return true;
@@ -914,9 +914,10 @@ async function heldOwnLines(dev: any, firm: string, bridge: string, max: number,
 }
 // migration 196 (next-fix-no-held): the book's held lines run again through tally_recorder_line's current rules
 // (tally_recorder_held_rerun: idempotent, a line whose state and words stay is not rewritten; a book another session holds is
-// left for the next time), once per book in each new isolate (so after every deploy) and then at most every 30 minutes.
+// left for the next time), once per book in each new isolate (so after every deploy) and then at most every 10 minutes: no line
+// stays 'held', and a 'fetching' one (being fetched) is tried again by itself.
 // Without the migration (said once; asked again 10 minutes later) or on any error: the beat never fails for it
-const HELD_RERUN_MS = 1800000;
+const HELD_RERUN_MS = 600000;
 const heldRerunAt = new Map<string, number>();
 let heldRerunMissing = 0;
 async function heldRerun(book: string) {
@@ -937,6 +938,26 @@ async function heldRerun(book: string) {
     if (d?.busy === true) { heldRerunAt.delete(book); return; }
     if (Number(d?.settled) > 0) console.log("tally-ingest beat: held lines run again", book, JSON.stringify({ rerun: d.rerun, settled: d.settled, states: d.states }));
   } catch (e) { heldRerunAt.delete(book); fail("held_rerun", e); }
+}
+// migration 196 (next-fix-no-held): the candidate search. The add-on's line of a new entry that carries the entry before it's
+// MasterID: Tally is asked for MasterID +1 to +5 by GUID (FinComVoucherObject, through the bridge's existing refetch: one request
+// each, the answer taken only when its type, number and date are the line's), one candidate a line every 2 minutes, only while
+// the beat's typing gate is quiet (lightIdle: 5 s after the last keystroke, Tally not busy). The database keeps the count (3
+// rounds of 5 at most; a new round only after the gap check sees a new AlterID). Handed before the refetch, the 20 together.
+// Without the migration (said once; asked again 10 minutes later) or on any error: none, the beat never fails for it
+let probeMissing = 0;
+async function probesFor(dev: any, firm: string, bridge: string, idle: boolean) {
+  if (!idle || !bridge || Date.now() - probeMissing < 600000) return [];
+  try {
+    const { data, error } = await db.rpc("tally_recorder_probe_take", { p_firm: firm, p_device: dev.id, p_bridge: bridge, p_idle: idle, p_max: 3 });
+    if (error) {
+      const m = String(error.message || "");
+      if (missingFn(m)) { if (!probeMissing) console.log("tally-ingest beat: no candidate search: migration 196 is not applied"); probeMissing = Date.now(); }
+      else fail("probe_take", error);
+      return [];
+    }
+    return Array.isArray(data) ? (data as any[]).filter((x) => x && typeof x.line_id === "string") : [];
+  } catch (e) { fail("probe_take", e); return []; }
 }
 async function recorderGaps(dev: any, firm: string, bridge: string, changes: BeatChange[]) {
   const out: Record<string, unknown> = {};
@@ -3222,7 +3243,7 @@ async function recorderLines(dev: any, firm: string, book: string, body: any) {
   // migration 111: a line carrying a FinCom id (the narration's TDSDesk:<id>) or a REMOTEGUID settles the register's lines of this book
   if (send.some((l: any) => l.fid || l.remoteGuid)) await registerCall("tally_post_register_settle_book", { p_book: book }, "recorder_lines");
   const out: Record<string, unknown> = { ok: true, results };
-  for (const k of ["applied", "held", "duplicate", "stale", "failed", "kept"]) out[k] = results.filter((r) => r?.state === k).length;
+  for (const k of ["applied", "fetching", "held", "duplicate", "stale", "failed", "kept"]) out[k] = results.filter((r) => r?.state === k).length;
   out.already = results.filter((r: any) => r?.already === true).length;     // migration 63: of the duplicates, repeats of lines FinCom had
   if (out.held || out.failed) console.log("tally-ingest recorder_lines", book, JSON.stringify({ n: results.length, held: out.held, failed: out.failed, why: results.filter((r) => r && r.state !== "applied" && r.state !== "duplicate").slice(0, 3).map((r) => r.why) }));
   return reply(200, out);
@@ -4770,6 +4791,9 @@ Deno.serve(sentry.wrap(async (req) => {
           })(),
           ledgersWantedFor(dev, firm, me.id),
           fetchOnFor(dev)]);
+        // migration 196: the candidate search's asks first, then the refetch, 20 together (the bridge takes 20)
+        const probes = await probesFor(dev, firm, me.id, quiet.idle);
+        const refetchAll = probes.length ? [...probes, ...(refetch || [])].slice(0, 20) : refetch;
         // 15-Oct-2026 (migration 89): the ledgers the live entries use that FinCom lacks, in the room left of the 20, or the
         // full ledger list ("ledgers", as the ledger chooser asks it); nothing while reading is paused or stopped
         const auto = await autoLedgersFor(firm, bRead, held, !!beat.paused || !!beat.readStopped || !!(info as any).readStop);
@@ -4810,7 +4834,7 @@ Deno.serve(sentry.wrap(async (req) => {
           auto.full.splice(0, auto.full.length, ...keepFull);
         }
         if (auto.full.length) { const at = new Date().toISOString(); for (const c of auto.full) ledgers[c] = at; console.log("tally-ingest beat: the full ledger list asked", dev.id, JSON.stringify(auto.full)); }
-        return reply(200, { ok: true, updateNow, posts: posts || 0, wake, opened, ledgers, ...(Object.keys(stock).length ? { stock } : {}), activityAt, settings, trialTools, ...(recorderSource ? { recorderSource } : {}), ...(Object.keys(recorder).length ? { recorder } : {}), ...(heldLines ? { heldLines } : {}), ...(refetch ? { refetch } : {}), ...(ledgersWanted ? { ledgersWanted } : {}), ...(periodDays ? { periodDays } : {}), ...(booksFrom ? { booksFrom } : {}), periodFetch, periodNight, ...(co ? { notMain: true, changesOnly: true, error: CHANGES_ONLY } : may ? {} : { notMain: true }), ...ctl.out });
+        return reply(200, { ok: true, updateNow, posts: posts || 0, wake, opened, ledgers, ...(Object.keys(stock).length ? { stock } : {}), activityAt, settings, trialTools, ...(recorderSource ? { recorderSource } : {}), ...(Object.keys(recorder).length ? { recorder } : {}), ...(heldLines ? { heldLines } : {}), ...(refetchAll ? { refetch: refetchAll } : {}), ...(ledgersWanted ? { ledgersWanted } : {}), ...(periodDays ? { periodDays } : {}), ...(booksFrom ? { booksFrom } : {}), periodFetch, periodNight, ...(co ? { notMain: true, changesOnly: true, error: CHANGES_ONLY } : may ? {} : { notMain: true }), ...ctl.out });
       }
       case "make_main": return await makeMain(dev, bridgeOf(dev, body, false).id);
       case "posts_take": {

@@ -205,7 +205,7 @@ const Rec = {
   sorted(){ return [].concat(this.act.rows || []).sort((x, y) => String(y.received_at || "").localeCompare(String(x.received_at || "")) || num(y.id) - num(x.id)); },
   filtered(f){
     const rows = this.sorted(), today = new Date().toDateString();
-    if (f === "waiting") return rows.filter(r => r.state === "held" || r.state === "received");
+    if (f === "waiting") return rows.filter(r => r.state === "held" || r.state === "received" || r.state === "fetching");
     if (f === "held") return rows.filter(r => r.state === "held");
     if (f === "mismatch") return rows.filter(r => r.check && r.check.ok === false);        // the ledger check (F37-40): none yet
     if (f === "today") return rows.filter(r => r.received_at && new Date(r.received_at).toDateString() === today);
@@ -230,6 +230,8 @@ const Rec = {
       case "applied": return "Entered in the books" + this.notesWords(r);
       case "held": return "Received, not yet entered in the books" + why;
       case "received": return "Received, not yet entered in the books";
+      // migration 196 (the owner, 13-Nov-2026: no entry is ever held): FinCom is bringing the entry from Tally by itself
+      case "fetching": return "Being brought from Tally" + why;
       case "replaced": return "Replaced by a later line";
       case "duplicate": return "Already in the books";
       case "stale": return "An older change, not applied";
@@ -244,7 +246,7 @@ const Rec = {
   // the cloud's own words (held_why)
   waiting(){
     const now = Date.now();
-    return this.sorted().filter(r => (r.state === "received" || r.state === "held") && r.received_at && now - Date.parse(r.received_at) > 120000).map(r => {
+    return this.sorted().filter(r => (r.state === "received" || r.state === "held" || r.state === "fetching") && r.received_at && now - Date.parse(r.received_at) > 120000).map(r => {
       const d = this.devOf(r.device_id), pc = r.pc || (d && ((d.info || {}).computer || d.name)) || "the Tally computer";
       let why = r.held_why || "";
       if (!why && d){ const ds = devState(d, now); why = ds.bridge === "offline" || ds.bridge === "none" ? pc + " is offline" : ds.tally === "closed" ? "Tally not open on " + pc : ""; }
@@ -273,7 +275,7 @@ const Rec = {
   needKind(r){
     if (!r) return "";
     const why = String(r.held_why || "").trim(), st = String(r.state || "");
-    if (st === "received" || st === "queued") return "";
+    if (st === "received" || st === "queued" || st === "fetching") return "";     // migration 196: being fetched, never a person's
     if (st === "failed") return /queue|timeout|server/i.test(why) ? "" : "other";
     if (st !== "held") return "";
     if (/reading from Tally is stopped|stopped from FinCom/i.test(why)) return "readstop";
