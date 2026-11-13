@@ -1494,12 +1494,14 @@ func syncCloudPosts() {
 		dir, err := jobDir(id)
 		if err != nil {
 			delete(cp, id)
+			offlineTold.Delete(id) // review L7
 			saveCloudPosts()
 			continue
 		}
 		v := jobView(dir)
 		if v == nil {
 			delete(cp, id)
+			offlineTold.Delete(id) // review L7
 			saveCloudPosts()
 			continue
 		}
@@ -1510,6 +1512,7 @@ func syncCloudPosts() {
 		}
 		if str(v["status"]) == "cancelled" {
 			delete(cp, id)
+			offlineTold.Delete(id) // review L7
 			saveCloudPosts()
 			continue
 		}
@@ -1564,6 +1567,7 @@ func syncCloudPosts() {
 			// cancelled in FinCom (or no longer there): it stops, also while it waits for Tally
 			_, _ = cancelJob(id, "cancelled in FinCom")
 			delete(cp, id)
+			offlineTold.Delete(id) // review L7
 			saveCloudPosts()
 			continue
 		}
@@ -1571,6 +1575,7 @@ func syncCloudPosts() {
 			// FinCom no longer takes this bridge's reports: another bridge is the main one now
 			noteNotMain(r.err, false)
 			delete(cp, id)
+			offlineTold.Delete(id) // review L7
 			saveCloudPosts()
 			continue
 		}
@@ -1578,6 +1583,7 @@ func syncCloudPosts() {
 			// 2.5.15 item 1: stopped, and FinCom does not take this bridge's report of it (another bridge's posting): ended here
 			_, _ = cancelJob(id, "stopped by FinCom")
 			delete(cp, id)
+			offlineTold.Delete(id) // review L7
 			saveCloudPosts()
 			continue
 		}
@@ -1589,7 +1595,8 @@ func syncCloudPosts() {
 			cp[id] = sig
 			if (st == "done" || st == "failed") && v["checking"] != true {
 				delete(cp, id)
-					saveCloudPosts()
+				offlineTold.Delete(id) // review L7
+				saveCloudPosts()
 				writeLog("Posting from FinCom's queue " + id + ": " + str(v["message"]))
 			}
 		}

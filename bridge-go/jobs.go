@@ -420,6 +420,9 @@ func postingNow() string {
 	if postedRecordErr() != nil {
 		return postedUnreadableWords
 	}
+	if w := postStopNow(); w != "" {
+		return w // review L5
+	}
 	for _, j := range activeJobs() {
 		o := obj(j)
 		if st := str(o["status"]); st == "waiting" || st == "running" || st == "queued" {
@@ -448,6 +451,7 @@ func jobWorker(dir string) {
 	asked := str(pl["company"])
 	jobID := str(p["id"])
 	fromCloud := truthy(pl["fromCloud"]) || cloudPostsHas(jobID) // 2.5.15 item 1: taken from FinCom's queue
+	defer postOKOffline.Delete(jobID)                            // review L7: nothing kept for a job that ended
 	hint := toInt(pl["port"])
 	if pp := toInt(p["port"]); pp > 0 {
 		hint = pp
@@ -1004,7 +1008,18 @@ func cloudPostOK(id string) (stop string, reached bool) {
 		return "", false
 	}
 	r := invokeCloud(M{"kind": "post_ok", "id": id}, 3)
-	if r.code == 0 || r.code == 503 {
+	// review L5 (the owner's decision): 401 / 403 is FinCom refusing this bridge (its key revoked, test mode, not the main
+	// bridge): a stop, said in the tray. Only no answer (a timeout, the network, FinCom busy or failing: 5xx) goes ahead
+	switch {
+	case r.code == 401:
+		return notePostStop("FinCom refused this computer's key (it may have been removed in FinCom), so nothing more is posted. Connect FinCom Bridge to FinCom again from the tray icon, then post again from FinCom."), true
+	case r.code == 403:
+		why := "FinCom does not let this FinCom Bridge post (it is in test mode, or another bridge is the main one on this computer)"
+		if r.json != nil && str(r.json["error"]) != "" {
+			why = str(r.json["error"])
+		}
+		return notePostStop(strings.TrimRight(why, ". ") + ", so nothing more is posted from here."), true
+	case r.code == 0 || r.code >= 500:
 		return "", false
 	}
 	if r.code == 200 && r.json != nil {
@@ -1014,6 +1029,29 @@ func cloudPostOK(id string) (stop string, reached bool) {
 	}
 	// an older cloud (no post_ok: 400), or any other answer: FinCom did not say stop
 	return "", true
+}
+
+// review L5: a posting FinCom refused this bridge for (401 / 403), said in the tray for 10 minutes
+var postStopSaid struct {
+	mu    sync.Mutex
+	words string
+	at    time.Time
+}
+
+func notePostStop(words string) string {
+	postStopSaid.mu.Lock()
+	postStopSaid.words, postStopSaid.at = words, time.Now()
+	postStopSaid.mu.Unlock()
+	return words
+}
+
+func postStopNow() string {
+	postStopSaid.mu.Lock()
+	defer postStopSaid.mu.Unlock()
+	if postStopSaid.words != "" && time.Since(postStopSaid.at) < 10*time.Minute {
+		return "Posting stopped: " + postStopSaid.words
+	}
+	return ""
 }
 
 // after FinCom could not be reached, it is asked again only after this pause (each part waiting 3 s for no answer
