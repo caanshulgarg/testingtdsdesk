@@ -606,9 +606,12 @@ const Rec = {
   // books again); only a change of the gap itself is news
   gapSame(r){ const g = this.gaps; return !!(g && g.sig && r && r.book_id && "gap" in r) && (g.sig[r.book_id] || "null") === JSON.stringify(r.gap == null ? null : r.gap); },
   gapFor(cid){ const g = this.gapsOf(); return ((g.byClient || {})[cid] || []); },
-  // Upload the Day Book for these days: Books -> From Tally with the Day Book's dates from gap.since to today
+  // next-fix-gap-after-post (migration 182): checking only until checkUntil (a gap written before 182: an hour after its
+  // last check), so a gap no beat rewrites never keeps a stale "Checking with Tally"
+  gapChecking(g){ return !!g && g.checking === true && Date.parse(g.checkUntil || g.at) + (g.checkUntil ? 0 : 36e5) > Date.now(); },
+  // Upload the Day Book for these days: Books -> From Tally with the Day Book's dates from gap.since (182: older.from) to today
   async uploadDays(cid, gap){
-    S.dbFrom = this.ymdLocal(gap && (gap.since || gap.last_match_at || gap.at) || Date.now()) || ""; S.dbTo = this.ymdLocal(Date.now());
+    S.dbFrom = this.ymdLocal(gap && ((gap.older || {}).from || gap.since || gap.last_match_at || gap.at) || Date.now()) || ""; S.dbTo = this.ymdLocal(Date.now());
     if (S.view !== "company" || S.coId !== cid) await openCompany(cid);
     goClient("books:import");
   },

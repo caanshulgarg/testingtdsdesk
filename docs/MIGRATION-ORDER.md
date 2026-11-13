@@ -861,3 +861,23 @@ arguments and grants). A read showing an entry FinCom lacks never closes the gap
 Add-only, one transaction, lock_timeout 10 s, safe twice. Needs 133, 135, 136, 150 and 158. Deploy: 160, then tally-ingest
 and the app (without 160 the function says nothing new). No bridge release (the check day's FinComDayHeads read, as 158).
 Tested: `tests/run_migration160.py`, `tests/run_gap_autoread_ingest.py`.
+
+## 182: the gap after FinCom's own posting, read back and read on the right days (not run yet; branch next-fix-gap-after-post, 13-Nov-2026)
+
+**182, gap after post** (13-Nov-2026, branch `next-fix-gap-after-post`; **written, not run yet**; file md5 f0bc9be5a63e223a280530b3b294e3c7):
+`server/tally-cloud/migration-182-gap-after-post.sql`. Staging, Client CL: a posting window's credit closed the gap as a
+match though none of FinCom's 42 posted entries was matched or read back; 110 later changes on older dates; the page asked
+for the Day Book of the gap's own (empty) days; 98's count never counted October again; 160's gap read held by an old
+over2s stop and given up after 6 hours; a stale "checking". Adds the table `tally_gap_retries` (service_role only), the
+trigger `tally_post_job_read_back` (a posting done queues its entries' days, by voucher date, for the check: source
+'post'), `tally_gap_own_read`, `tally_gap_state` (checking with `checkUntil`, and `older` {from, say, fix}: "Changes were
+made in Tally on older dates. Upload the Day Book from <first day of the book's year, or the oldest posted day> to today")
+and `tally_gap_front(uuid, integer, boolean)` (posted days first, then the gap's own days not yet read for Tally's number;
+over 6 hours or behind an over2s stop over an hour old: at night, under the retry's own choice time). Replaces, same
+arguments and grants: 150's `tally_recorder_gap_check` (a window credits only entries matched or read back), 98's
+`tally_period_next_paced` (a gap whose own days match recounts the days counted before it, once), 133's
+`tally_check_stop` (a retry's stop stops the retry only), 160's `tally_gap_front(uuid, integer)` and
+`tally_sync_cursor_gap_checking`. Add-only, one transaction, lock_timeout 10 s, safe twice. Needs 98, 133, 135, 150, 158
+and 160. Deploy: 182, then tally-ingest (p_night; without 182 it falls back to 160's call), then the app (checking only
+until checkUntil). No bridge release. Tested: `tests/run_migration182.py`, `tests/run_gap_post_ingest.py`,
+`tests/run_gap_older_page.py`.

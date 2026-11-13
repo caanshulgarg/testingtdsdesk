@@ -1921,6 +1921,7 @@ async function booksFromFor(firm: string, body: any): Promise<Record<string, str
 let daysClaimMissing = 0;
 let heldFrontMissing = 0, heldHeadsMissing = 0;     // migration 158 (tally_held_front / tally_held_delete_by_heads) not applied
 let gapFrontMissing = 0;                             // migration 160 (tally_gap_front) not applied
+let gapNightMissing = 0;                             // migration 182 (tally_gap_front with p_night) not applied
 async function periodDaysFor(firm: string, body: any, stopped: boolean, max = 3, night = max > 3, markCheck = false, claim?: { dev: any; bridge: string; shared: Set<string> }): Promise<Record<string, unknown>[] | null> {
   const out: Record<string, unknown>[] = [];
   max = Math.max(1, Math.min(30, Math.floor(Number(max) || 3)));
@@ -1987,8 +1988,15 @@ async function periodDaysFor(firm: string, body: any, stopped: boolean, max = 3,
       // before the period's days, read by the bridge itself as check days (the same whole-day read: no new Tally request);
       // a read that matches closes the gap ("checked against Tally"), one that shows a missing entry brings it in. A cloud
       // without 160: as before (asked again in 10 minutes)
+      // next-fix-gap-after-post (migration 182): the computer's quiet time said (p_night): a gap open over 6 hours, or one
+      // whose check an old over2s stop holds, is read then; a cloud without 182: 160's call (asked again in 10 minutes)
       if (Date.now() - gapFrontMissing >= 600000 && out.length < max) {
-        const { data: gf, error: ge } = await db.rpc("tally_gap_front", { p_book: book, p_max: max - out.length });
+        const night182 = Date.now() - gapNightMissing >= 600000;
+        let { data: gf, error: ge } = await db.rpc("tally_gap_front", night182 ? { p_book: book, p_max: max - out.length, p_night: night } : { p_book: book, p_max: max - out.length });
+        if (night182 && ge && missingFn(String(ge.message || ""))) {
+          gapNightMissing = Date.now();
+          ({ data: gf, error: ge } = await db.rpc("tally_gap_front", { p_book: book, p_max: max - out.length }));
+        }
         if (ge) { if (missingFn(String(ge.message || ""))) gapFrontMissing = Date.now(); else fail("gap_front", ge); }
         for (const d of Array.isArray(gf) ? gf as any[] : []) {
           if (out.length >= max) break;

@@ -182,7 +182,7 @@ const AlertHub = {
           out.push(Object.assign(base, {sev: "info", text: hd.length === b.ours.length && k2 === hd.length ? who + ": " + this.heldSay(hd, true) + "."
             : who + ": " + this.n(k2) + " made in Tally" + (since ? " since " + this.when(since) : "") + (k2 === 1 ? " is" : " are") + " not yet in FinCom.",
             fix: "FinCom is fetching the entry's details from Tally; nothing to do."}));
-        } else if (gapN && b.gap && b.gap.checking === true && !waiting){
+        } else if (gapN && Rec.gapChecking(b.gap) && !waiting){
           // next-gap-autoread (migration 160): FinCom asks FinCom Bridge to read Tally's Day Book of the gap's days itself;
           // a read that matches closes the gap, one that shows a missing entry brings it in. Information, no button
           out.push(Object.assign(base, {sev: "info", text: who + ": Checking with Tally… (no action needed)",
@@ -190,9 +190,10 @@ const AlertHub = {
         } else if (gapN || (b.rows.length && !b.gap && !waiting)){
           // a real gap: entries made in Tally that never reached FinCom; the Day Book of those days brings them in
           const gap = b.gap || {since: b.rows[0] && b.rows[0].at};
-          const words = gapN ? this.n(gapN) : "Entries";
-          out.push(Object.assign(base, {sev: "bad", text: who + ": " + words + " made in Tally" + (gap.since ? " since " + this.when(gap.since) : "") + (gapN === 1 ? " is" : " are") + " not yet in FinCom.",
-            fix: "Upload the Day Book for " + this.days(gap.since) + " to bring " + (gapN === 1 ? "it" : "them") + " in.",
+          // 182: the gap's own days match Tally: the changes are on older dates (the cloud's words, and the day to upload from)
+          const words = gapN ? this.n(gapN) : "Entries", o = gap.older;
+          out.push(Object.assign(base, {sev: "bad", text: who + ": " + (o ? o.say : words + " made in Tally" + (gap.since ? " since " + this.when(gap.since) : "") + (gapN === 1 ? " is" : " are") + " not yet in FinCom."),
+            fix: o ? o.fix : "Upload the Day Book for " + this.days(gap.since) + " to bring " + (gapN === 1 ? "it" : "them") + " in.",
             act: {label: "Upload Day Book", run: () => Rec.uploadDays(b.cid, gap)}}));
         } else if (b.other.length){
           const locked = b.other.filter(l => /^month locked/i.test(String(l.held_why || "")));
