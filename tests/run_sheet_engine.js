@@ -119,13 +119,27 @@ ok(ds.length === 1 && ds[0].sledger === "Consulting Income (A)" && ds[0].ledger 
 ok(F.fix({no: "no", ledger: "partyledger", doctype: "doctype"}, ["No", "Party Ledger", "Doc Type"], [["1", "X Traders", "Invoice"]]) === null && F.fix(fx || {}, gs[hs], gs.slice(hs + 1)) === null, "a party's ledger column and a document type are left as they are; a corrected mapping is not corrected again");
 const cnv = F.apply({map: {no: "no", vchtype: "vchtype", taxable: "amt", total: "amt"}, transforms: {}}, [["No", "Vch Type", "Amt"], ["C1", "Credit Note", 100]], 0, co, "sales");
 ok(cnv[0].note === "" && cnv[0].total === 100, "a column mapped as a voucher type tells nothing: its “Credit Note” is not taken for a credit note");
+// the kind of a row (the owner, 13-Nov-2026; re-review of d8281e4ea): by the document-type column's whole words
 const dt = (v, side, amt) => F.apply({map: {no: "no", doctype: "type", taxable: "amt", total: "amt"}, transforms: {}}, [["No", "Type", "Amt"], ["X1", v, amt || 100]], 0, co, side || "sales")[0];
-ok(["Credit Note", "CN", "crn", "Sales Return", "credit  note"].every((v) => dt(v).note === "credit" && dt(v).total === -100) && ["Debit Note", "DN", "dbn"].every((v) => dt(v).note === "debit" && dt(v).total === 100)
-  && ["Sales UP", "Tax Invoice", "Credit sale", "Indirect", "Scn"].every((v) => dt(v).note === ""), "the document-type column: credit note, CN, CRN, return; debit note, DN, DBN (any case); no other word makes a note");
-ok(["Purchase Return", "Debit Note", "DBN", "Credit Note"].every((v) => dt(v, "purchase").note === "credit" && dt(v, "purchase").total === -100) && dt("Purchase UP", "purchase").note === "", "on Purchase every note is the one kind (a Debit Note in Tally)");
-ok(dt("Tax Invoice", "sales", -100).note === "" && F.apply({map: {no: "no", taxable: "amt", total: "amt"}, transforms: {}}, [["No", "Amt"], ["N1", -100], ["N2", 100]], 0, co, "sales").map((d) => d.note + d.total).join() === "credit-100,100",
-  "a negative total is a note only in a sheet with no document-type column");
-ok(F.fieldsFor("sales").some((f) => f[0] === "sledger" && f[1] === "Sales ledger") && F.fieldsFor("purchase").some((f) => f[0] === "sledger" && /Purchase/.test(f[1])) && F.fieldsFor("sales").some((f) => f[0] === "vchtype"), "the fields offered: the sales (or purchase) ledger and the voucher type, each its own");
+const isC = (v, side) => dt(v, side).note === "credit" && dt(v, side).total === -100 && !dt(v, side).hold, isD = (v) => dt(v).note === "debit" && dt(v).total === 100, isI = (v, side) => dt(v, side).note === "" && dt(v, side).total === 100 && !dt(v, side).hold;
+ok(["Credit Note", "CN", "crn", "Sales Return", "credit  note", "Cr Note", "Cr. Note", "C.N.", "Refund", "Return", "RETURNS"].every((v) => isC(v)), "a credit note: credit note, cr note, C.N., CN, CRN, return, sales return, refund (any case)");
+ok(["Debit Note", "DN", "dbn", "Dr Note", "D.N.", "Dr. Note"].every((v) => isD(v)), "a debit note: debit note, dr note, D.N., DN, DBN");
+ok(["Sales UP", "Tax Invoice", "Credit", "Credit sale", "Non-returnable", "Non returnable goods", "Scn", "Refundable deposit", "Indirect", ""].every((v) => isI(v)),
+  "whole words only: “Non-returnable” is no return, “Credit” alone no credit note, a voucher type's name nothing (" + ["Credit", "Non-returnable", "Refundable deposit"].map((v) => v + ":" + dt(v).note).join(", ") + ")");
+ok(dt("Purchase Return").note === "" && /Purchase Return/.test(dt("Purchase Return").hold) && /credit note or a debit note/.test(dt("Purchase Return").hold) && dt("Purchase Return").total === 100, "“Purchase Return” on a sales sheet is held for a person, with the reason (" + dt("Purchase Return").hold + ")");
+ok(["Purchase Return", "Debit Note", "DBN", "Credit Note", "D.N.", "Return"].every((v) => isC(v, "purchase")) && isI("Purchase UP", "purchase") && isI("Non-returnable", "purchase"), "on Purchase every note is the one kind (a Debit Note in Tally)");
+// 1. the sign is the whole invoice's: a discount line does not split it, nor make a note of it
+const disc = (map, rows) => F.apply({map: Object.assign({no: "no", taxable: "amt", total: "amt"}, map), transforms: {groupByNo: true}}, [["No", "Type", "Amt"]].concat(rows), 0, co, "sales");
+let dd1 = disc({}, [["A1", "", 1000], ["A1", "", -100], ["A2", "", -300], ["A2", "", 50]]);
+ok(dd1.length === 2 && dd1[0].no === "A1" && dd1[0].note === "" && dd1[0].total === 900 && dd1[0].lines === 2, "an invoice with a discount line is one invoice of its net (900), not an invoice and a credit note (" + JSON.stringify(dd1.map((d) => [d.no, d.note, d.total, d.lines])) + ")");
+ok(dd1[1] && dd1[1].note === "credit" && dd1[1].total === -250 && dd1[1].taxable === -250 && !dd1[1].hold, "no document-type column: an invoice whose net is negative is a credit note of its net (250)");
+// 5. mixed signs in a note: the net, kept as a credit (the entry made takes it positive)
+dd1 = disc({doctype: "type"}, [["C1", "Credit Note", 500], ["C1", "Credit Note", -50], ["C2", "Credit Note", -500], ["C2", "Credit Note", 50]]);
+ok(dd1.length === 2 && dd1.every((d) => d.note === "credit" && d.total === -450 && d.taxable === -450 && d.check.ok), "a credit note with lines of both signs is its net, whichever way the sheet writes it (" + JSON.stringify(dd1.map((d) => [d.no, d.total])) + ")");
+// 2. a document-type column that does not call a negative invoice a return: held, never turned positive
+dd1 = disc({doctype: "type"}, [["H1", "", -472], ["H2", "Sales", -100], ["H3", "Sales", 100]]);
+ok(dd1[0].note === "" && dd1[0].total === -472 && /^Negative amount: is this a return\? Set it in the Type column$/.test(dd1[0].hold) && dd1[1].note === "" && dd1[1].total === -100 && !!dd1[1].hold && !dd1[2].hold,
+  "a Type column that is blank or says “Sales” on a negative invoice: held with a plain reason, its figures as the sheet has them (" + JSON.stringify(dd1.map((d) => [d.no, d.note, d.total, d.hold])) + ")");
 
 console.log(fails ? "\nFAILED: " + fails : "\nall passed");
 process.exit(fails ? 1 : 0);

@@ -5,7 +5,7 @@ function txnTab(){ return S.txnTab || "bills"; }
 function vchTypeOf(e, co){
   if (e.noteKind === "credit") return co.debitNoteType || "Debit Note";
   if (e.noteKind === "debit") return "Purchase";
-  // (a bill from a sheet uploaded on Purchase is a Purchase voucher: the screen's type, never the sheet's column)
+  // (e.vchType: a sheet's bill of a client whose own setting names another type is a Purchase voucher, app/src/lib/registers.js)
   return e.vchType || co.voucherType || "Journal";
 }
 // in Tally: posted and confirmed there (or found there already), and not since missing from Tally's own entries in
@@ -31,7 +31,7 @@ function txnRowsBills(){
     const [cls, label] = tallyStateOf(e);
     // a purchase bill is posted as the voucher type chosen in Client setup (Testing AAD: Journal); said so beside it
     // (review of 02-Oct-2026: "Journal" on purchase bills looked like a mistake)
-    return {id: e.id, kind: "bill", date: x.invoiceDate || "", up: (e.createdAt || "").slice(0, 10), vch: vchTypeOf(e, co), vchNote: e.noteKind ? "" : "the voucher type chosen for purchase bills in Client setup → Tally", no: x.invoiceNo || "",
+    return {id: e.id, kind: "bill", date: x.invoiceDate || "", up: (e.createdAt || "").slice(0, 10), vch: vchTypeOf(e, co), vchNote: e.noteKind === "credit" || e.vchType ? "" : "the voucher type chosen for this client’s purchase bills (Client setup → Tally, or “Post as” on a purchase sheet)", no: x.invoiceNo || "",
       party: x.vendorName || e.fileName || "", taxable: num(x.taxable), gst, total: num(x.total), cls, label,
       file: e.fileName || "", docPath: e.docPath || "", hasFile: !!(S.files[e.id] || e.docPath || (S.fileIndex && S.fileIndex.has(e.id))), e};
   }).sort((a, b) => String(b.date).localeCompare(String(a.date)) || String(b.up).localeCompare(String(a.up)));

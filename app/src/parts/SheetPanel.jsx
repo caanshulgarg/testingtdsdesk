@@ -73,7 +73,7 @@ function CheckStep({ st }) {
       cols={[
         { k: "date", role: "date", label: "Date", v: (d) => d.date, cell: (d) => (d.date ? fmtDate(d.date) : "—") },
         { k: "no", role: "number", label: "No.", v: (d) => d.no, cell: (d) => <>{d.no}{d.note && <> <span className="tag">{d.note === "credit" ? "credit note" : "debit note"}</span></>}{d.itc && d.itc.available === false && <> <span className="tag warn" title={d.itc.why}>no ITC</span></>}</> },
-        { k: "vt", label: "Posts as", v: (d) => SheetPost.vchName(d, st.side), cell: (d) => <span data-sheet-vt={d.no}>{SheetPost.vchName(d, st.side)}</span> },
+        { k: "vt", label: "Posts as", v: (d) => SheetPost.vchName(d, st.side), cell: (d) => d.hold ? <span className="tag warn" data-sheet-vt={d.no} data-sheet-hold="">{"To review: " + d.hold}</span> : <span data-sheet-vt={d.no}>{SheetPost.vchName(d, st.side)}</span> },
         { k: "party", role: "party", label: "Party", v: (d) => d.party || d.gstin, cell: (d) => <>{d.party || "—"}<div className="nr">{d.gstin || ""}</div></> },
         { k: "taxable", role: "amount", label: "Taxable", cls: "n", v: (d) => num(d.taxable), cell: (d) => money2(d.taxable) },
         { k: "tax", label: "Tax", cls: "n", v: tax, sum: tax, cell: (d) => money2(tax(d)) },

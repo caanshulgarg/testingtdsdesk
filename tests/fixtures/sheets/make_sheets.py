@@ -82,6 +82,13 @@ try:
         [D(24), "Dev Packaging", "Purchase UP", "DP/801", PG, 4819, 2000, DASH, 180, 180, 2360],
         [D(25), "Dev Packaging", "Purchase UP", "DP/802", PG, 4819, 1000, 180, DASH, DASH, 1180],
         [D(26), "Dev Packaging", "Purchase Return", "DP/PR8", PG, 4819, 100, 18, DASH, DASH, 118]])
+    # a negative amount the Type column does not explain, "Purchase Return" on a sales sheet, a word that only looks like one
+    shape("sales_held.xlsx", "Customer Name", "Sales Ledger", [
+        [D(27), A, "Sales UP", "UP/26-27/0031", CI, 998311, -400, -72, DASH, DASH, -472],
+        [D(28), A, "Purchase Return", "UP/26-27/0032", CI, 998311, 300, 54, DASH, DASH, 354],
+        [D(29), A, "Non-returnable", "UP/26-27/0033", CI, 998311, 100, 18, DASH, DASH, 118]])
+    shape("purchase_held.xlsx", "Supplier Name", "Purchase Ledger", [
+        [D(27), "Dev Packaging", "Purchase UP", "DP/901", PG, 4819, -400, -72, DASH, DASH, -472]])
     shape("purchase_negative.xlsx", "Supplier Name", "Purchase Ledger", [
         [D(20), "Dev Packaging", "", "DP/701", PG, 4819, 1000, 180, DASH, DASH, 1180],
         [D(21), "Dev Packaging", "", "DP/702", PG, 4819, -400, -72, DASH, DASH, -472]], typed=False)
