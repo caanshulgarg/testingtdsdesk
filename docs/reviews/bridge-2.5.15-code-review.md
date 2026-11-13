@@ -4,7 +4,7 @@ Reviewers: the session that built it (a self-review against the owner's rules), 
 coordinator: the first over the five items (two medium, seven low findings), the second over the fixes for them (nothing
 blocking; two low findings noted for 2.5.16). The coordinator signs.
 
-Range: 61f76372f..2d1a6fc61 (origin/staging-next as 2.5.15 was rebased on it, to the last commit outside docs/; after it
+Range: 61f76372f..57ae94a5a (origin/staging-next as 2.5.15 was rebased on it, to the allow-list wording fix 57ae94a5a: the 2.5.14 line reads "2.5.14 allowed by", r2514_test.go pattern and a TestR2515Version check to match; the coordinator read that diff: wording and tests only, no request or code path changed)
 only docs/tally-allowlist.md wording changed, in 135ffa4ad)
 
 (bridge-go/: safefile.go and jobfile.go (temp, fsync, rename, one .bak; a held file retried then posting paused, never

@@ -7,7 +7,7 @@ then the second independent code review, which checked the security-relevant fix
 copy; 401/403 stop; SHA-256 checked on every download path including the fallback; FinCom's own copy trusted only through
 the SHA; the old program kept). The coordinator signs.
 
-Range: 61f76372f..2d1a6fc61 (origin/staging-next as 2.5.15 was rebased on it, to the last commit outside docs/)
+Range: 61f76372f..57ae94a5a (origin/staging-next as 2.5.15 was rebased on it, to the allow-list wording fix 57ae94a5a: the 2.5.14 line reads "2.5.14 allowed by", r2514_test.go pattern and a TestR2515Version check to match; the coordinator read that diff: wording and tests only, no request or code path changed)
 
 What 2.5.15 changes, security-wise:
 - post_ok (server) is read-only, scoped to the calling bridge's computer and bridge id, and costs one or two selects;
