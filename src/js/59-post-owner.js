@@ -200,6 +200,7 @@ Object.assign(PostOwner, {
   // a member who may post: a fresh reason, the risk said, then the release (a bill already cleared: only the cloud's id)
   ownerAsk(cid, e){
     if (!PostOwner.mayRelease()){ toast(PostOwner.LOOK.trim()); return; }
+    if (postSending(cid).has(String(e.id))){ toast("Its posting to Tally is still being sent. Wait for it to finish."); return; }
     if (!billPostLive(e, cid)) return PostOwner.ownerRelease(cid, e);
     PostOwner.why("Not in Tally?", "Release", ": you looked in Tally yourself and it is not there. If it is in Tally, it will be posted twice.", e).then(a => { if (a) PostOwner.goneFromTally(cid, e, a.data); });
   },

@@ -422,6 +422,11 @@ with sync_playwright() as p:
     ok(pg.locator("[data-owner-release-btn]").count() == 0 and pg.locator("[data-owner-release-dismiss]").count() == 0 and "Waiting for a member who may post" in sec, "Errors, a look-only member: no release, no dismiss (%r)" % sec[:200])
     # a member who may post (staff): "Release this bill" for each, Dismiss for an ask
     E("() => { S.account = {me: {role: 'staff'}, firm: {name: 'Firm'}}; render(); }"); W(800)
+    # a posting of it still being sent: the release from Errors is refused on the page, nothing sent, it stays listed
+    E("() => { window.__toasts = []; window.postSending = (c) => new Set(['c6']); }"); n0 = len(E("window.__rpc"))
+    if pg.locator('[data-owner-release-btn="c6"]').count(): pg.locator('[data-owner-release-btn="c6"]').click(); W(500)
+    ok("still being sent" in last() and not box() and len(E("window.__rpc")) == n0 and E("!!D().entries.c6.ownerRelease"), "Errors: no release while its posting is being sent (%r)" % last())
+    E("() => { window.postSending = window.__s0; render(); }"); W(400)
     rb = pg.locator('[data-owner-release-btn="c6"]')
     ok(rb.count() == 1 and "Release this bill" in rb.inner_text() and "Owner" not in rb.inner_text(), "Post to Tally > Errors: “Release this bill” for a member who may post (%d)" % rb.count())
     if rb.count(): rb.click(); W(600)
