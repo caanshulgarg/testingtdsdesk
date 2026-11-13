@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"sync"
@@ -392,6 +393,51 @@ func durableWaitAll() {
 	durMu.Unlock()
 }
 
+// the same, for at most d (the bridge's stop and its restart after an update): true when all is on the disk
+func durableWaitFor(d time.Duration) bool {
+	done := make(chan struct{})
+	go func() { durableWaitAll(); close(done) }()
+	select {
+	case <-done:
+		return true
+	case <-time.After(d):
+		writeLog("Safe files: the stop did not wait longer for the files still being written to the disk")
+		return false
+	}
+}
+
 // before a send to Tally: posted-ids.json on the disk, with this request's own "sent, no answer yet" note and every
 // earlier one (a power cut never loses a note, so nothing is sent twice); the saves themselves never wait
 func postedDurableWait() { durableWait(acceptedFile()) }
+
+var reBakTmp = regexp.MustCompile(`\.bak\.(\d+)\.\d+\.tmp$`)
+
+// at the start: the temporary .bak files a run before left (stopped part-way) removed, in the copies' and the postings'
+// folders and beside the settings; another live process's never (its own number is in the name)
+func sweepBakTmp() {
+	me := fmt.Sprint(os.Getpid())
+	n := 0
+	one := func(p, name string) {
+		if m := reBakTmp.FindStringSubmatch(name); m != nil && m[1] != me && os.Remove(p) == nil {
+			n++
+		}
+	}
+	for _, root := range []string{syncDir(), jobsDir()} {
+		_ = filepath.WalkDir(root, func(p string, d os.DirEntry, err error) error {
+			if err == nil && !d.IsDir() {
+				one(p, d.Name())
+			}
+			return nil
+		})
+	}
+	if es, err := os.ReadDir(filepath.Dir(ConfigPath)); err == nil {
+		for _, e := range es {
+			if !e.IsDir() {
+				one(filepath.Join(filepath.Dir(ConfigPath), e.Name()), e.Name())
+			}
+		}
+	}
+	if n > 0 {
+		writeLog(fmt.Sprintf("Safe files: %d temporary copy file(s) left by an earlier run removed", n))
+	}
+}

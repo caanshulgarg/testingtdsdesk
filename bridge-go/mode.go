@@ -325,6 +325,7 @@ func runBridge(console bool) int {
 		crashStop()
 	}()
 	_ = os.MkdirAll(syncDir(), 0o755)
+	sweepBakTmp() // 2.5.15 (safefile.go): the temporary copies a run stopped part-way left
 	pausedB = cfgB("Paused")
 	if testMode() {
 		seedFromOldCopy()
@@ -409,6 +410,7 @@ func runBridge(console bool) int {
 	}
 	liveMidSave() // 2.3.1 (2.3.0 review L2/L3): the record of Tally's GUIDs learnt since its last write
 	time.Sleep(300 * time.Millisecond)
+	durableWaitFor(2 * time.Second) // 2.5.15 (safefile.go): the files still being flushed, 2 s at most (a stop, an update's restart)
 	return stopCode
 }
 

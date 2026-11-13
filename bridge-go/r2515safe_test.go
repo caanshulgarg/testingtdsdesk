@@ -5,6 +5,7 @@ package main
 // damaged or missing. Nothing here asks anything of Tally. Made-up names only.
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -67,6 +68,25 @@ func TestR2515SaveFileFlushes(t *testing.T) {
 	}
 	if m, _ := filepath.Glob(filepath.Join(dir, "a", "*.tmp")); len(m) != 0 {
 		t.Fatalf("temporary files left: %v", m)
+	}
+}
+
+// the temporary copies a run stopped part-way left are removed at the start; this run's own never
+func TestR2515SweepBakTmp(t *testing.T) {
+	dir := t.TempDir()
+	r2515LogHere(t, dir)
+	co := filepath.Join(syncDir(), "Made Co")
+	_ = os.MkdirAll(co, 0o755)
+	old := filepath.Join(co, "keep.json.bak.1.7.tmp")
+	mine := filepath.Join(co, fmt.Sprintf("keep.json.bak.%d.8.tmp", os.Getpid()))
+	cfgOld := ConfigPath + ".bak.2.3.tmp"
+	other := filepath.Join(co, "keep.json.1.9.tmp") // not a copy's: left as it is
+	for _, p := range []string{old, mine, cfgOld, other} {
+		_ = os.WriteFile(p, []byte("x"), 0o644)
+	}
+	sweepBakTmp()
+	if exists(old) || exists(cfgOld) || !exists(mine) || !exists(other) {
+		t.Fatalf("swept: old %v, settings' %v, this run's %v, other %v", !exists(old), !exists(cfgOld), !exists(mine), !exists(other))
 	}
 }
 
