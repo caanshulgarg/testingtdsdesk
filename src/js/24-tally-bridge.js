@@ -518,7 +518,8 @@ async function syncLedgersFromTally(silent){
   return true;
 }
 // after the list held for a client changed: what depended on the old one is looked at again
-function ledgersChanged(cid){
+// next-fix-books-freeze: what the matching asks of the ledgers again and again, worked out once for the whole (Ledgers.run)
+function ledgersChanged(cid){ return Ledgers.run(() => {
   const co = CO(cid), b = S.bank;
   if (b && b.cid === cid){
     b.rows.forEach(r => { if (["ready", "suggested"].includes(r.state) && r.ledger && !exactLedger(r.ledger)){ r.userSet = false; r.state = "attention"; } });
@@ -530,7 +531,7 @@ function ledgersChanged(cid){
   const mapped = Ledgers.cid() === cid ? autoMapCompanyLedgers(co) : [];
   if (typeof billAutoAll === "function" && Ledgers.cid() === cid) billAutoAll(cid);
   return mapped;
-}
+}); }
 function guessBankLedger(a){
   const b = B();
   const bankLeds = Ledgers.list(b.cid).filter(l => BANK_GROUPS.test(l.group || ""));

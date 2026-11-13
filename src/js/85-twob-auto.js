@@ -8,7 +8,7 @@
 /* is left. The screen part is app/src/screens/gst/TwoBAuto.jsx.      */
 /* ================================================================== */
 // Hook for the 2B screen (and its redesign, branch next-gst-portal): M2B.view(reg) gives the run for the registration and
-// the year of S.gstYm; M2B.statusMaps(reg) gives each document's status:
+// the year of S.gstYm; each row of its result gives its documents' status (r.st):
 //   "matched-rules" | "matched-ai" | "probable" | "mismatch" | "2b-only" | "books-only".
 // M2B's part the GSTR-3B engine runs is in server/_shared/gst3b.js (shared with the gst-run function); the rest is put on it here
 Object.assign(M2B, {
@@ -78,16 +78,6 @@ Object.assign(M2B, {
       if (!s.busy && s.hash !== x.hash) setTimeout(() => this.sync(reg, s.run ? "new entries" : "opened"), 0);
     } catch (e){}
     return Object.assign({fy}, s);
-  },
-  statusMaps(reg){
-    const s = this.st[this.key(reg, this.fyNow())], res = s && s.run && s.run.result;
-    if (!res) return null;
-    if (res._maps) return res._maps;
-    const g = {}, b = {};
-    (res.rows || []).forEach(r => { r.g.forEach(k => { g[k] = r.st; }); r.b.forEach(k => { b[k] = r.st; }); });
-    (res.left2b || []).forEach(k => { g[k] = "2b-only"; }); (res.leftBooks || []).forEach(k => { b[k] = "books-only"; });
-    Object.defineProperty(res, "_maps", {value: {g, b}, enumerable: false});
-    return res._maps;
   },
   // a person's accept or reject of a probable pair (one, or all of them): kept on the server, and an accepted pair of one
   // 2B document is linked for the rest of the 2B screen as a link by hand is

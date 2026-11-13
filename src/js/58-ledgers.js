@@ -19,6 +19,13 @@ const Ledgers = {
   err: {},            // cid -> what went wrong in the last read
   seen: {},           // cid -> when Ledgers.watch last looked
   ver: 0,
+  // next-fix-books-freeze (FINCOM-APP-STAGING-M): inside run(f), what memo(k, f) works out is kept until run ends; outside
+  // a run nothing is kept. For work that asks the same of the ledgers many times while they do not change (billAutoAll)
+  _m: null,
+  memo(k, f){ const m = this._m; if (!m) return f(); if (!m.has(k)) m.set(k, f()); return m.get(k); },
+  run(f){ const was = this._m; this._m = was || new Map(); try { return f(); } finally { this._m = was; } },
+  // the items of a list by a key of each, in the list's order
+  keyed(a, f){ const m = new Map(); a.forEach(x => { const k = f(x); (m.get(k) || m.set(k, []).get(k)).push(x); }); return m; },
   hist: {},           // cid -> {ledger -> vouchers} (the supplier's entries, from the cloud copy)
   histBusy: {},
   gstinMap: {},       // cid -> {GSTIN -> ledger} (from the cloud copy's entries)
@@ -384,12 +391,12 @@ const Ledgers = {
   // same objects, the same number of names), not at every chain(): a new object each time also made ledLook build its index
   // again (ledIdx is kept per object), so each of a 2,455-ledger client's ledgers went through every group at each look
   _par: null,
-  parentsOf(cid, a, b, c){
+  parentsOf(cid, a, b, c){ return this.memo("P" + cid, () => {
     const n = (o) => (o ? Object.keys(o).length : 0), p = this._par;
     if (p && p.cid === cid && p.a === a && p.b === b && p.c === c && p.na === n(a) && p.nb === n(b) && p.nc === n(c)) return p.m;
     const m = Object.assign({}, a || {}, b || {}, c || {});
     this._par = {cid, a, b, c, na: n(a), nb: n(b), nc: n(c), m};
-    return m;
+    return m; });
   },
   // the group chain of a ledger, from the list held, the cloud's groups, and the client's books
   chain(cid, name){
@@ -407,7 +414,9 @@ const Ledgers = {
   // Accounts), asset (Fixed Assets), income (Sales Accounts, Direct / Indirect Incomes), tax (Duties & Taxes),
   // bank, or other; "" when its group is not known
   cls(cid, name){
-    const ch = this.chain(cid || this.cid(), name);
+    cid = cid || this.cid();
+    return this.memo("c" + cid + "\u0001" + name, () => {
+    const ch = this.chain(cid, name);
     if (!ch.length) return "";
     const has = re => ch.some(g => re.test(String(g).trim()));
     if (has(/^sundry\s*(creditors|debtors)$/i)) return "party";
@@ -416,7 +425,7 @@ const Ledgers = {
     if (has(/^fixed\s*assets?$/i)) return "asset";
     if (has(/^duties\s*(&|and)\s*taxes$/i)) return "tax";
     if (has(/^(bank\s*accounts?|bank\s*od\s*a\/c|cash-in-hand|cash\s*in\s*hand)$/i)) return "bank";
-    return "other";
+    return "other"; });
   },
   groupOf(cid, name){ const ch = this.chain(cid || this.cid(), name); return ch.length ? ch[ch.length - 1] : ""; },
 
@@ -478,9 +487,11 @@ const Ledgers = {
     if (!g) return "";
     const bk = S.books && S.books.cid === cid ? S.books : null;
     if (bk){
-      const hit = Object.entries(bk.gstins || {}).filter(([, x]) => String(x).toUpperCase() === g).map(([n]) => n);
+      // next-fix-books-freeze: the ledgers and the entries by GSTIN, once for all the drafts of a run (memo)
+      const ix = this.memo("G" + cid, () => ({l: this.keyed(Object.entries(bk.gstins || {}), ([, x]) => String(x).toUpperCase()), v: this.keyed(bk.vouchers || [], v => String(v.gstin || "").toUpperCase())}));
+      const hit = (ix.l.get(g) || []).map(([n]) => n);
       if (hit.length === 1) return hit[0];
-      const vs = (bk.vouchers || []).filter(v => String(v.gstin || "").toUpperCase() === g);
+      const vs = ix.v.get(g) || [];
       const c = {};
       vs.forEach(v => { const p = (v.ent || []).map(e => e.l).find(l => this.cls(cid, l) === "party" && (normName(l) === normName(v.party) || nameSim(l, v.party || "") >= 0.6)) || (this.cls(cid, v.party) === "party" ? v.party : ""); if (p) c[p] = (c[p] || 0) + 1; });
       const top = Object.entries(c).sort((a, b) => b[1] - a[1]);

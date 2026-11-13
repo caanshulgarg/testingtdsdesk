@@ -346,7 +346,7 @@ const TCloud = {
   // and the load read everything, so MIS uses the cloud's figures only for exactly these books (MIS.cloudFits)
   calcVer(cid){ return this.rpc("tally_calc_cached", {p_client: cid, p_on: this.iso(Audit.today()), p_kind: "mis-now.2", p_args: ""}).catch(() => null); },
   // the loads of the open client's books in progress (they change the books across awaits: the day's audit on its own
-  // takes no step meanwhile, Audit.autoWait)
+  // takes no step meanwhile, Audit.autoLoading)
   loads: 0,
   async load(force, opening, p){
     if (p) return this.loadNow(force, opening, p);

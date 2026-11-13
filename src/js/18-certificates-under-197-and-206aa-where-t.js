@@ -227,7 +227,6 @@ async function saveBooks(opts, bb){
 }
 // filed GST returns whose documents changed in Tally since: on every Books tab until the amendments are reported
 // the books of a client (TDS & GST, MIS, Accounts, Audit, …): React (app/src/screens/Books.jsx)
-function viewBooks(){ return '<div data-react="Books"></div>'; }
 
 /* ---------- the day book through the bridge, month by month; the opening balances from FinCom's copy ---------- */
 const TallyRead = {
@@ -515,7 +514,6 @@ function misRangeQuick(k, b){
 // the MIS pack and Excel (misPackHtml, misExcel) are src/js/18-mis-pack.js; GSTR-9's PDF and Excel (gst9PackHtml, gst9Excel) src/js/08: each comes with its screen
 
 // the GST tab: React (app/src/screens/Gst.jsx); GSTR-1 and 3B are app/src/screens/gst/Returns.jsx, the input register gst/InputRegister.jsx, 2B gst/TwoB.jsx, amendments, advances and reversal gst/Workings.jsx, GSTR-9 and 9C gst/Annual.jsx, ITC follow-up gst/ItcFollow.jsx, returns filed gst/ReturnsFiled.jsx, QRMP, CMP-08 and GSTR-4 gst/Periodic.jsx; the other parts are still the old pages below
-function viewBooksGst(b){ return '<div data-react="Gst"></div>'; }
 // the parts of the GST tab for the GSTIN and month chosen, following its filing type
 // the From Tally tab: React (app/src/screens/books/FromTally.jsx). What it asks:
 // the bridge's own view of this client's company (it asks Tally nothing), asked at most once a minute
@@ -619,9 +617,6 @@ function r2Reg(b){
 /* ---------- Today: what needs doing, across every client ---------- */
 /* ---------- Inbox: every waiting document, and uploads that matched no client ---------- */
 // Today, Inbox and Clients are drawn by React (app/src/screens/Today.jsx, InboxAll.jsx, Clients.jsx)
-function viewToday(){ return '<div data-react="Today"></div>'; }
-function viewInboxAll(){ return '<div data-react="InboxAll"></div>'; }
-function viewClients(){ return '<div data-react="Clients"></div>'; }
 /* ---------- Tally: the connection, and everything sent ---------- */
 // Settings, TDS rates and limits and reading bills (app/src/screens/SettingsMore.jsx)
 function rateSet(id, k, v){ const r = S.firm.rules[id] = S.firm.rules[id] || {}; r[k] = num(v); Store.saveFirm(); render(); }
@@ -630,7 +625,6 @@ function readingToggle(which, on){
   else { S.freeFirst = on; lsSet("tdsdesk:freeFirst", on ? "1" : "0"); }
   render();
 }
-function viewTallyHome(){ return '<div data-react="TallyHome"></div>'; }
 
 // the top bar is drawn by React (app/src/TopBar.jsx); a change that touches only it redraws React alone
 // books-speed: the top bar's news is drawn with the figures of the last drawing when the books did not change (memoKeep)
@@ -644,12 +638,10 @@ function renderTop(){ if (!window.FinComReact) return; if (IN_RENDER || memoKept
 /* ---------- Home: client list ---------- */
 /* ---------- Home: unsorted uploads ---------- */
 // the unsorted uploads are React (app/src/parts/Unsorted.jsx)
-function viewInbox(){ return '<div data-react="Unsorted"></div>'; }
 
 /* ---------- Home: firm-wide rates ---------- */
 function viaPlatform(){ return Cloud.on() && !!S.account && !S.account.superadmin && !apiSettings().key; }
 // everything sent to Tally: React (app/src/screens/Done.jsx)
-function viewPostLog(){ return '<div data-react="PostLog"></div>'; }
 function postLogCsv(){
   const log = (S.firm.postLog || []).slice().reverse();
   const rows = [["When", "What", "Action", "Client", "Reference", "Party", "Amount", "Voucher type", "Tally id", "Company", "By"]].concat(
@@ -658,7 +650,6 @@ function postLogCsv(){
 }
 // the TDS rates and limits for all clients (the firm's name is in Settings → Firm details)
 // Settings for the firm: React (app/src/screens/Settings.jsx)
-function viewRules(){ return '<div data-react="FirmSettings"></div>'; }
 
 /* ---------- Client: invoices ---------- */
 /* ---------- all drafts in one table (for uploads of many bills) ---------- */
@@ -703,7 +694,6 @@ function revFiltered(){
     String(r.e.x.total), INR.format(num(r.e.x.total)), r.e.noteKind ? r.e.noteKind + " note" : "", r.e.postError || ""].join(" ").toLowerCase().includes(q));
 }
 // the review table and its bar at the bottom: React (app/src/screens/Review.jsx)
-function viewReviewTable(){ return '<div data-react="ReviewTable"></div>'; }
 function revSet(e, on){
   const c = compute(e);
   // "TDS on" for many bills books TDS where it is due; a bill below the limits stays without TDS

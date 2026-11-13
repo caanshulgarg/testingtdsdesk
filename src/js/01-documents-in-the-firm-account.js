@@ -766,24 +766,25 @@ function tallyPartyFor(x, cid, party){
   const g = fixGstin(x.vendorGstin).value, pan = effectivePan(x);
   // each ledger's GSTIN and PAN: Tally's (the cloud list, a bridge read) wins over the books copy's when both are there
   const bk = S.books && S.books.cid === cid ? S.books : null;
-  const names = Array.from(new Set(list.map(l => l.name).concat(bk ? Object.keys(bk.ledInfo || {}).concat(Object.keys(bk.gstins || {}), Object.keys(bk.pans || {})) : [])));
-  const ids = names.map(n => Object.assign({n}, Ledgers.ids(cid, n)));
+  // next-fix-books-freeze: every ledger's GSTIN and PAN, and its name cleaned, once for all the drafts of a run (Ledgers.memo)
+  const L = Ledgers, ix = L.memo("i" + cid, () => { const ids = Array.from(new Set(list.map(l => l.name).concat(bk ? Object.keys(bk.ledInfo || {}).concat(Object.keys(bk.gstins || {}), Object.keys(bk.pans || {})) : []))).map(n => Object.assign({n}, L.ids(cid, n)));
+    return {gstin: L.keyed(ids, i => i.gstin), pan: L.keyed(ids, i => i.pan)}; }), ids = (k, v) => (ix[k].get(v) || []).filter(i => ok(i.n));
   const note = id => id.tallyGstin && id.bookGstin && id.tallyGstin !== id.bookGstin ? "Tally now has GSTIN " + id.tallyGstin + " for this ledger (books copy had " + id.bookGstin + ")" : "";
   if (gstinValid(g)){
-    const hit = ids.filter(i => i.gstin === g && ok(i.n));
+    const hit = ids("gstin", g);
     const h = one(hit.map(i => ok(i.n)));
     if (h) return {name: h, how: "GSTIN " + g + " matches " + h + " in Tally", note: note(hit[0])};
-    const p = ok(Ledgers.gstinParty(cid, g));
+    const p = ok(L.gstinParty(cid, g));
     if (p) return {name: p, how: "GSTIN " + g + " is on " + p + "'s entries in Tally"};
   }
   if (pan){
-    const hit = ids.filter(i => i.pan === pan && ok(i.n));
+    const hit = ids("pan", pan);
     const h = one(hit.map(i => ok(i.n)));
     if (h) return {name: h, how: "PAN " + pan + " matches " + h + " in Tally", note: note(hit[0])};
   }
   if (x.vendorName){
     const want = supplierKey(x.vendorName);
-    const hit = want ? list.filter(l => supplierKey(l.name) === want).map(l => ok(l.name)).filter(Boolean) : [];
+    const hit = want ? (L.memo("k" + cid, () => L.keyed(list, l => supplierKey(l.name))).get(want) || []).map(l => ok(l.name)).filter(Boolean) : [];
     const pty = hit.filter(n => Ledgers.cls(cid, n) === "party");
     const h = one(pty.length ? pty : hit);
     if (h) return {name: h, how: "The name matches " + h + " in Tally"};
@@ -2101,17 +2102,19 @@ function expenseFor(e, cid, partyLed, party){
     if (sc.length){ const b = sc[0]; return {name: b.l, how: "Booked to " + b.l + " for this supplier in Tally (" + b.t.n + " of " + h.bills + " bill" + (h.bills === 1 ? "" : "s") + ")" + (b.w ? "; the bill says “" + b.w + "”" : "")}; }
   }
   if (party && party.expenseChosenByUser && ok(party.expenseLedger)) return {name: ok(party.expenseLedger), how: "Your choice for this supplier"};
-  const u = Ledgers.usage(cid) || {}, names = Ledgers.list(cid).map(l => l.name);
+  const u = Ledgers.usage(cid) || {};
+  // the ledgers a bill's words may name (and their words): worked out when first needed, once a run (Ledgers.memo)
+  let fit; const fits = () => fit = fit || Ledgers.memo("e" + cid, () => Ledgers.list(cid).map(l => l.name).filter(n => ok(n) && Ledgers.cls(cid, n)).map(n => [n, textWords(n)]));
   const best = arr => arr.sort((a, b) => ((u[b] || {}).n || 0) - ((u[a] || {}).n || 0) || a.length - b.length)[0];
   const codes = billCodes(e), text = words.join(" ");
   for (const [wre, sacs, lre] of EXP_HINTS){
     const w = (text.match(wre) || [])[0], c = codes.find(k => sacs.some(p => k.startsWith(p)));
     if (!w && !c) continue;
-    const cands = names.filter(n => lre.test(n) && ok(n) && Ledgers.cls(cid, n));
+    const cands = fits().map(f => f[0]).filter(n => lre.test(n));
     if (cands.length) return {name: best(cands), how: c ? "From HSN/SAC " + c + " on the bill" : "From the bill's words: “" + w + "”"};
   }
   for (const w of words.filter(w => w.length >= 5)){
-    const cands = names.filter(n => ok(n) && Ledgers.cls(cid, n) && textWords(n).some(t => t.startsWith(w) || (t.length >= 5 && w.startsWith(t))));
+    const cands = fits().filter(f => f[1].some(t => t.startsWith(w) || (t.length >= 5 && w.startsWith(t)))).map(f => f[0]);
     if (cands.length && cands.length <= 3) return {name: best(cands), how: "From the bill's words: “" + w + "”"};
   }
   const co = CO(cid), def = ok((co.expenseLedgers || {})[e.natureId]);
@@ -2126,7 +2129,7 @@ const AUTO_SEEN = new WeakMap();
 function billAutoLedgers(e, cid){
   cid = cid || S.coId;
   if (!e || e.status !== "draft" || !e.x || typeof Ledgers !== "object" || Ledgers.cid() !== cid || !hasLedgerList()) return false;
-  const bk = S.books && S.books.cid === cid ? (S.books.vouchers || []).length + ":" + Object.keys(S.books.ledInfo || {}).length + ":" + Object.keys(S.books.gstins || {}).length : 0;
+  const bk = Ledgers.memo("b" + cid, () => S.books && S.books.cid === cid ? (S.books.vouchers || []).length + ":" + Object.keys(S.books.ledInfo || {}).length + ":" + Object.keys(S.books.gstins || {}).length : 0);
   const stamp = () => [Ledgers.ver, bk, e.x.vendorGstin, e.x.vendorPan, e.x.vendorName, e.x.description, e.x.invoiceNo, e.natureId, e.partyLedger, e.expenseLedger, !!e.partyUserSet, !!e.expenseUserSet].join("|");
   if (AUTO_SEEN.get(e) === stamp()) return false;
   const party = findParty(e.x, cid), co = CO(cid);
@@ -2152,12 +2155,15 @@ function billAutoLedgers(e, cid){
   if (changed && D(cid).entries[e.id]) Store.saveEntry(cid, e);
   return changed;
 }
-// every draft of a client, when its ledger list or books have come in
+// every draft of a client, when its ledger list or books have come in. next-fix-books-freeze (FINCOM-APP-STAGING-M,
+// staging 13-Nov-2026: 9,990 ms in Ledgers.books' timer on Books): each draft worked out every ledger's GSTIN, PAN,
+// cleaned name and class again (drafts x ledgers: 240 drafts, 4,188 ledgers, 6-7 s here). What does not change during the
+// run is worked out once for all of them (Ledgers.run); nothing keeps it after the run (tests/run_hang_bill_drafts.py)
 function billAutoAll(cid){
   cid = cid || S.coId;
   if (!S.data[cid] || !D(cid).loaded) return 0;
   let n = 0;
-  Object.values(D(cid).entries || {}).forEach(e => { if (e.status === "draft" && billAutoLedgers(e, cid)) n++; });
+  Ledgers.run(() => Object.values(D(cid).entries || {}).forEach(e => { if (e.status === "draft" && billAutoLedgers(e, cid)) n++; }));
   if (n) refreshStats(cid);
   return n;
 }

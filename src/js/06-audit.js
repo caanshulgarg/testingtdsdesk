@@ -712,7 +712,6 @@ Object.assign(Audit, {
   // a line can stay after its work
   autoLoading(){ const T = typeof TCloud === "object" ? TCloud : null; return !!(T && (T.opens > 0 || T.loads > 0)); },
   autoBusy(b){ const f = typeof LK === "object" && LK.fr ? LK.fr() : null; return !!(b.catchUp || (f && f.busy)); },
-  autoWait(b){ return this.autoLoading() || this.autoBusy(b); },
   autoStart(b){
     const j = this.auto;
     if (j && j.b === b) return j;
