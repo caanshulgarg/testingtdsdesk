@@ -196,9 +196,9 @@ function BillBar({ e }) {
       <button className="btn" onClick={() => doAct("notDup")}>Keep both</button>{next}
     </>;
   } else if (e.status === "approved") {
-    const k = billBar(e); // (src/js/01: its words, Undo approval while not posted, Deleted in Tally while posted and not sending)
+    const k = billBar(e); // (src/js/01: its words and buttons: Undo approval while not posted, Deleted in Tally while posted and not sending)
     left = <><span className="tag ok">Approved</span> <span className="note">{k.note}</span></>;
-    right = <>{k.undo && <button className="btn" onClick={() => doAct("undo")}>Undo approval</button>}{!e.exportedAt && <button className="btn" onClick={() => doAct("goExport")}>Send to Tally</button>}{k.del && <button className="btn" onClick={() => doAct("billDeletedInTally")}>Deleted in Tally</button>}{next}</>;
+    right = <>{k.acts.map(([a, t]) => <button key={a} className="btn" onClick={() => doAct(a)}>{t}</button>)}{next}</>;
   } else {
     left = <span className="tag no">No entry</span>;
     right = <><button className="btn" onClick={() => doAct("restore")}>Move back to review</button>{next}</>;

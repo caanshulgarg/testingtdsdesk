@@ -3075,11 +3075,14 @@ function billMoveOn(e, said, list, undo){
     said + " Next: " + name + " (" + left.length + " left)", {kind: "approve", drawer: true, label: "Next →", noStay: true, actions: undo ? [undo] : []});
   render();
 }
-// a bill with a posting: sent, being checked, its id held by the cloud, or a cloud posting of it still running (after the
-// owner's "Deleted in Tally" (deletedInTally.verified) the cloud's record of that posting no longer holds it; billPosted ends it)
-function billPostLive(e, cid){ return !!(e && (e.exportedAt || e.postUnconfirmed || (typeof postSending === "function" && postSending(cid).has(String(e.id))) || (!(e.deletedInTally && e.deletedInTally.verified) && typeof billLivePosting === "function" && billLivePosting(e, cid)))); }
+// a bill with a posting: sent, being checked, its id held by the cloud, or a cloud posting of it still running
+function billPostLive(e, cid){ return !!(e && (e.exportedAt || e.postUnconfirmed || typeof postSending === "function" && postSending(cid).has(String(e.id)) || typeof billLivePosting === "function" && billLivePosting(e, cid) && !billOldHold(e, cid))); }
+// after the owner's "Deleted in Tally" (deletedInTally.verified; billPosted ends it): the cloud's hold is the cleared
+// posting's (postClearedJobs) while no newer posting names the bill; a newer one (any state) holds it again
+function billOldHold(e, cid){ const c = e.deletedInTally && e.deletedInTally.verified && e.postClearedJobs, v = c && postJobStates(cid).get(String(e.id)); return !!c && !(v && v.job && !c.includes(v.job.id)); }
 // the bar under an approved bill (app/src/screens/Review.jsx)
-function billBar(e){ const l = billPostLive(e, S.coId); return {note: e.exportedAt || e.goneFromTally ? tallyStateOf(e)[1] : "Waiting in Send to Tally", undo: !l, del: l && !postSending(S.coId).has(String(e.id))}; }
+function billBar(e){ const l = billPostLive(e, S.coId); return {note: e.exportedAt || e.goneFromTally ? tallyStateOf(e)[1] : "Waiting in Send to Tally",
+  acts: [!l && ["undo", "Undo approval"], !e.exportedAt && ["goExport", "Send to Tally"], l && !postSending(S.coId).has(String(e.id)) && ["billDeletedInTally", "Deleted in Tally"]].filter(Boolean)}; }
 // such a bill is not taken off its supplier's totals and put back to review here (it would be posted twice). o.force: a
 // bill deleted (a posted bill cannot be: billDelete), or Tally's own refusal of
 // this posting (src/js/24)

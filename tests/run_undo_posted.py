@@ -116,7 +116,7 @@ with sync_playwright() as p:
     E("() => { bankRowAct('accept', 'u1'); }"); W(100)
     ok(E(R, "u1")["state"] == "ready" and E("!!B().undo"), "a line confirmed: ready, Undo offered")
     E("(cid) => { const r = B().rows.find(x => x.id === 'u1'); bankPosted(cid, r, {ok: true, verified: true, guid: 'g-u1', vchType: 'Receipt', vchDate: '20260105'}, 'ZZ Undo Traders', new Date().toISOString(), {quiet: true}); }", cid)
-    E("() => { window.__toasts = []; undoBank(); render(); }"); W(100)
+    E("() => { window.__toasts = []; undoBank(); render(); }"); W(400)
     r = E(R, "u1")
     ok(r["state"] == "sent" and r["guid"] == "g-u1", "posted through the bridge, then Undo: still posted, with its Tally voucher (%s)" % r)
     ok("1 line is already in Tally and was left as it is." in last(), "the words: %r" % last())
@@ -217,7 +217,7 @@ with sync_playwright() as p:
 
     print("== sales invoices")
     E(SALES)
-    E("() => { salesRowAct('confirm', 'v1'); const v = SL().list.find(x => x.id === 'v1'); v.status = 'posted'; v.postedAt = new Date().toISOString(); v.postedVia = 'bridge'; window.__toasts = []; salesUndo(); }"); W(100)
+    E("() => { salesRowAct('confirm', 'v1'); const v = SL().list.find(x => x.id === 'v1'); v.status = 'posted'; v.postedAt = new Date().toISOString(); v.postedVia = 'bridge'; window.__toasts = []; salesUndo(); }"); W(400)
     ok(E(SV, "v1") == "posted", "confirmed, then posted, then Undo: still posted (%s)" % E(SV, "v1"))
     ok("1 invoice is already in Tally and was left as it is." in last(), "the words: %r" % last())
     E("() => { SL().sel = new Set(['m1', 'm2', 'm3', 'm4']); salesBulk('confirm'); }"); W(100)
@@ -457,8 +457,17 @@ with sync_playwright() as p:
     E("(cid) => postReconcile(cid, true)", cid)
     st = E("['j1', 'j2'].map(id => [D().entries[id].status, !!D().entries[id].exportedAt, postBucket(D().entries[id], {jobs: postJobStates(S.coId)})])")
     ok(st == [["approved", False, "ready"], ["approved", False, "ready"]], "queued here, then AutoPost undo / Deleted in Tally: not marked posted again by that posting, ready to post (%s)" % st)
+    # the cleared posting no longer holds j2 (released by the owner); a newer posting of it does, whatever its state
+    ok(E("(cid) => billPostLive(D().entries.j2, cid)", cid) is False, "after the owner's Deleted in Tally: the cleared posting does not hold the bill")
+    E("""(cid) => { const t = new Date(Date.now() + 5000).toISOString(); window.__pir = window.postIdReleased; window.postIdReleased = (id) => id === 'j2' ? false : undefined;
+      CloudJobs.list.push({id: 'job-q2', client_id: cid, status: 'done', created_at: t, updated_at: t, entry_ids: ['j2'], items: [{id: 'j2', state: 'needs_review'}], results: [{id: 'j2', ok: false, needsReview: true, accepted: true}]}); }""", cid)
+    lv = E("(cid) => [billPostLive(D().entries.j2, cid), unapply(D().entries.j2, cid), D().entries.j2.status]", cid)
+    ok(lv == [True, False, "approved"], "a newer cloud posting of it needing review: posted again (no Undo approval, no No entry, no delete) (%s)" % lv)
+    E("(cid) => { CloudJobs.list = CloudJobs.list.filter(j => j.id !== 'job-q2'); window.postIdReleased = window.__pir; }", cid)
     rf = E("(cid) => postRetryRefusal({id: 'job-q', client_id: cid, status: 'failed', entry_ids: ['j1']})", cid)
     ok("Retry not possible" in (rf or "") and "changed since" in (rf or ""), "a Retry of that posting is refused: its bill was changed since (%r)" % rf)
+    rf2 = E("() => postRetryRefusal({id: 'job-x', client_id: 'another-client', status: 'failed', entry_ids: ['zz1']})")
+    ok("open this client first" in (rf2 or ""), "a Retry for a client whose entries are not loaded here: refused (%r)" % rf2)
     E("() => { CloudJobs.list = []; }")
     # S1: whether a line is FinCom's own posting, for 5,000 lines against a book of 5,000 entries
     ms = E("""() => { const b = B(), book = []; for (let i = 0; i < 5000; i++) book.push({date: '2026-01-01', debit: i + 1, credit: 0, vt: 'Receipt', vn: String(i), narr: '', guid: 'pg-' + i});

@@ -9,7 +9,7 @@ const PostOwner = {
       toast(done);
     } catch (e){
       const m = String((e && e.message) || e);
-      toast(this.notReady(m) ? "FinCom\u2019s cloud is not ready for this yet (migration " + (fn === "tally_post_settle_ask" || fn === "tally_post_check_withdraw" || fn === "tally_post_check_confirm" ? "55" : "36b") + ")." : m.replace(/^ERROR:\s*/i, ""));
+      toast(this.notReady(m) ? "FinCom\u2019s cloud is not ready for this yet (migration " + (fn === "tally_post_settle_ask" || fn === "tally_post_check_withdraw" || fn === "tally_post_check_confirm" ? "55" : fn === "tally_post_owner_release" ? "174" : "36b") + ")." : m.replace(/^ERROR:\s*/i, ""));
     }
     if (typeof PostChecks === "object") PostChecks.load(cid, true);
     if (typeof PostMarks === "object") PostMarks.load(cid, true);
@@ -139,6 +139,9 @@ const PostOwner = {
 // the owner says so ("I checked in Tally: not there – release": a reason, the risk said, audited), a member asks the owner
 Object.assign(PostOwner, {
   delBusy: {},
+  // Undo that left some lines / invoices in Tally as they are
+  keptWords(n, what){ return n + " " + (what || "line") + (n === 1 ? " is" : "s are") + " already in Tally and " + (n === 1 ? "was left as it is." : "were left as they are.") +
+    (what ? " If one was matched to the wrong Tally entry, press \u201cNot this Tally entry\u201d on it." : " To change one, press \u201cTake it back\u201d or \u201cNot this Tally entry\u201d on the line."); },
   // a bank line's or an invoice's own button on one in Tally: left as it is, the next step named
   keptOne(r, inv){
     const next = inv ? (r.status === "intally" ? "If it was matched to the wrong Tally entry, press \u201cNot this Tally entry\u201d on it." : "")
@@ -147,6 +150,8 @@ Object.assign(PostOwner, {
   },
   // Retry of an old posting: refused when an entry of it was taken back, undone, put to No entry or posted again since
   retryChanged(j, ids, ents){
+    const d = S.data[j.client_id], other = S.bank && S.bank.cid !== j.client_id;
+    if (ids.some(id => !ents[id]) && (!(d && d.loaded) || other)) return "Retry not possible here: open this client first (FinCom checks its entries before sending them again).";
     for (const id of ids){
       const e = ents[id], r = !e && S.bank && S.bank.cid === j.client_id ? S.bank.rows.find(x => String(x.id) === id) : null, x = e || r;
       if (x && ((x.postClearedJobs || []).includes(j.id) || (e ? e.status !== "approved" || e.exportedAt || e.postUnconfirmed : r.state !== "ready")))

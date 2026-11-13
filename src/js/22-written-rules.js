@@ -675,8 +675,6 @@ function sameParty(a, b){
 }
 // a line in Tally is never taken back to an earlier state (Undo, bulk or a line's button): never posted twice
 function bankInTally(r){ return !!r && (r.state === "sent" || r.state === "intally"); }
-function bankKeptWords(n, what){ return n + " " + (what || "line") + (n === 1 ? " is" : "s are") + " already in Tally and " + (n === 1 ? "was left as it is." : "were left as they are.") +
-  (what ? " If one was matched to the wrong Tally entry, press \u201cNot this Tally entry\u201d on it." : " To change one, press \u201cTake it back\u201d or \u201cNot this Tally entry\u201d on the line."); }
 // the one way from Tally back to "ready": every posting field cleared alike
 function bankClearPosting(r, state){
   Object.assign(r, {state: state || (r.ledger ? "ready" : "attention"), sentAt: "", postVerified: false, postByReply: false, tally: null, tallyRef: "", tallyHow: "", checking: false, postError: ""}, postCleared(r.id));
@@ -742,7 +740,7 @@ function undoBank(){
   else if (u.ruleKeys && u.ruleKeys.length){ b.rules = b.rules.filter(x => !u.ruleKeys.includes(x.key)).concat(u.oldRules || []); }
   b.undo = null;
   saveBank({rows: true, rules: true});
-  toast("Undone." + (kept ? " " + bankKeptWords(kept) : ""));
+  if (kept) postPart(P => toast("Undone. " + P.keptWords(kept))); else toast("Undone.");
 }
 function forgetUndoRule(){
   const b = B(), u = b.undo; if (!u) return;

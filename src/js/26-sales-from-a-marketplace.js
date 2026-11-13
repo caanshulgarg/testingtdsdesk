@@ -472,7 +472,7 @@ function salesUndo(){
   const s = SL(), u = s.undo; if (!u) return;
   let kept = 0;
   u.before.forEach(old => { const i = s.list.findIndex(v => v.id === old.id); if (i >= 0 && salesInTally(s.list[i]) && s.list[i].status !== old.status){ kept++; return; } if (i >= 0) s.list[i] = old; else s.list.push(old); });
-  s.undo = null; saveSales(); toast("Undone." + (kept ? " " + bankKeptWords(kept, "invoice") : "")); render();
+  s.undo = null; saveSales(); if (kept) postPart(P => toast("Undone. " + P.keptWords(kept, "invoice"))); else toast("Undone."); render();
 }
 // set a customer ledger; other open invoices of the same customer follow
 function setCustomerLedger(v, ledger){

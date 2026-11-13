@@ -737,7 +737,7 @@ async function postClearReady(){
   return true;
 }
 // the rarely used settling of a posting (Deleted in Tally, Not this Tally entry) is src/js/59-post-owner.js: loaded first
-function postPart(f){ (typeof PostOwner === "object" ? Promise.resolve() : window.loadPart ? window.loadPart("post") : Promise.reject(new Error("not in this page"))).then(() => f(PostOwner), e => toast("Could not load this part of FinCom: " + ((e && e.message) || e))); }
+function postPart(f){ (typeof PostOwner === "object" ? Promise.resolve() : window.loadPart ? window.loadPart("post") : Promise.reject(new Error("not in this page"))).then(() => f(PostOwner)).catch(e => toast("This could not be done: " + ((e && e.message) || e))); }
 function postMarkNew(cid, ids, job){ const d = S.data[cid], b = S.bank && S.bank.cid === cid ? S.bank : null; ids.forEach(x => { const o = (d && d.entries && d.entries[x]) || (b && b.rows.find(r => String(r.id) === String(x))); if (o) o.postJobNew = job; }); }
 // the entries a check with Tally released: the bridge lets each go once more (without looking in Tally)
 function postReleased(list){ return list.filter(x => x.release && x.release.at).map(x => ({id: x.id, at: x.release.at, by: x.release.by || "", why: x.release.why || ""})); }
