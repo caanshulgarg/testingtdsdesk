@@ -818,7 +818,7 @@ Deno.test("the financial statements (owner, 29-Oct-2026): the statements card fo
   eq([log[0]?.route, Number(log[0]?.cost_inr), log[0]?.calls, log[0]?.tools], ["fs", 0, 0, ["fs_build"]], "logged: the statements, ₹0");
 });
 
-Deno.test("memory: a question that reaches the model carries the conversation (bounded, oldest dropped) and the files attached earlier, after the cached prompt", async () => {
+Deno.test("memory: a question that reaches the model carries the conversation (bounded, the older turns as a note of what the user said) and the files attached earlier, after the cached prompt", async () => {
   const c = new MockClaude([[text("The rent is higher because of the new office from July.")]]);
   const long = "x".repeat(5000);
   const history = Array.from({ length: 30 }, (_, i) => ({ role: i % 2 ? "assistant" : "user", content: (i % 2 ? "answer " : "question ") + i + " " + long }));
@@ -828,8 +828,9 @@ Deno.test("memory: a question that reaches the model carries the conversation (b
   const p: any = c.calls[0], msgs: any[] = p.messages, last = msgs[msgs.length - 1];
   assert(p.system[0].cache_control?.ttl === "1h" && Array.isArray(p.tools) && p.tools.length > 0, "the frozen prefix first: the tools and the system prompt, cached for an hour");
   const before = msgs.slice(0, -1), chars = before.reduce((a: number, m: any) => a + String(typeof m.content === "string" ? m.content : JSON.stringify(m.content)).length, 0);
-  assert(before.length >= 2 && before.length <= 12, "the conversation: the last turns, at most 12 messages (" + before.length + ")");
-  assert(before.every((m: any) => String(m.content).length <= 1600) && chars <= 10000, "each message cut, the whole bounded (" + chars + " characters)");
+  assert(before.length >= 2 && before.length <= 40, "the conversation: the last turns, at most 40 messages (" + before.length + ")");
+  assert(before.slice(1).every((m: any) => String(m.content).length <= 2000) && chars <= 24000 + 4200, "each message cut, the whole bounded (" + chars + " characters)");
+  assert(/^\[Earlier in this conversation \(shortened\), the user said, oldest first: .*question 0 /.test(String(before[0].content)), "the older turns' words kept in a note, the oldest question too (13-Nov-2026)");
   assert(String(before[before.length - 1].content).includes("statements card"), "the newest turns kept, with what was shown");
   assert(before[0].role === "user", "the conversation starts with a question");
   const lastText = (last.content as any[]).map((b) => b.text || "").join("\n");

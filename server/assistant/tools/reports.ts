@@ -46,7 +46,7 @@ const tbRows = (rows: any[], msme: Record<string, unknown>) => rows.map((r) => {
 }).filter((t) => t.o || t.d || t.c || t.po || t.pd || t.pc);
 
 // the statements' input for a year, from the books and what the app keeps for the client
-async function inputFor(ctx: Ctx, fy: string, layout?: string | null) {
+export async function inputFor(ctx: Ctx, fy: string, layout?: string | null) {
   const from = fy + "-04-01", to = (Number(fy) + 1) + "-03-31";
   const [tb, saved, far] = await Promise.all([ctx.rpc("rpt_tb", { p_client: ctx.clientId, p_from: from, p_to: to }), ctx.rpc("rpt_saved", { p_client: ctx.clientId }), farFor(ctx, fy)]);
   if (!tb || !tb.ok) return { error: "No books for " + FSX.fyLabel(fy) + ": " + ((tb && tb.why) || "the trial balance could not be read") + "." };

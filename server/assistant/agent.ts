@@ -21,7 +21,7 @@ import { dropSentences, FileTableSpec, fileFigures, SheetFile, tableFromFile } f
 import { Masker } from "./mask.ts";
 import { capWords, costUsd, detailAsked, HAIKU, plan, Plan, rupees, SONNET, Task, taskOf, Usage } from "./models.ts";
 import { compound, describe, route } from "./router.ts";
-import { dmy as fsDmy, fsLine, fsRequest, FsThread, pyFileOf } from "./fsask.ts";
+import { dmy as fsDmy, fsLine, fsRequest, FsThread, projAsked, pyFileOf } from "./fsask.ts";
 import { relabelText, summaryLabels } from "../_shared/assistant-labels.js";
 import { applyCitations, Checked, Citation, LABEL as CITE_LABEL, NO_CASE, verify } from "./citations.ts";
 import { EXT_TOOLS } from "./tools/index.ts";
@@ -94,7 +94,7 @@ export type TurnResult = { text: string, labels: string[], tools: string[], usag
 export const SYSTEM = `You are FinCom Assistant, inside FinCom, the practice software of an Indian chartered accountant's firm. You help the CA and the firm's staff with a client's books (kept in FinCom's cloud copy of the client's Tally data), with Indian tax and accounting, with notices, and with files they ask for.
 
 Figures of the books:
-- Every figure of the client's books comes from the book tools. Never work out a figure of the books yourself, never estimate one, never take one from memory. Prefer the book tool that answers the question; the table it returns is shown to the user under your answer, so do not copy the table: give the answer in a few lines and point to the table. A tool result shows you its summary and at most 15 rows; the user sees every row.
+- Every figure of the client's books comes from the book tools. Never work out a figure of the books yourself, never estimate one, never take one from memory (a projection is FinCom's too: see Projections). Prefer the book tool that answers the question; the table it returns is shown to the user under your answer, so do not copy the table: give the answer in a few lines and point to the table. A tool result shows you its summary and at most 15 rows; the user sees every row.
 - If no book tool fits, or a tool gives nothing usable, call daybook_slice for the smallest period that covers the question (narrowed by a ledger, party or words when the question names one) and answer from those entries only. Cite every entry you rely on as [V:<voucher no>|<YYYY-MM-DD>]. If the answer is not in the entries, say "not in these entries" rather than guess.
 - Any figure you state that is not copied from a book tool's table (a total you add up, a count, an amount for one party, month or ledger, any figure from daybook_slice) must be recorded with record_figures, with the book tool and parameters that compute the same figure, before your final answer. FinCom computes each again; where the books give another figure, FinCom's figure is the answer and you must use it.
 - A tool result's summaryLabels gives the words for its summary fields: name a figure by those words ("Disallowance u/s 40(a)(ia) – 30%"), never by the field's key ("disallowance30pct").
@@ -111,9 +111,13 @@ Notices:
 - Then check what the notice claims against the annexures and the book tools. If an official page (CBIC, CBDT, the portals) lists a document FinCom's list lacks, add it with add_documents and its link.
 - Then write the reply with draft (kind notice_reply): answer each issue point by point, cite every annexure as "Annexure N" exactly as FinCom numbered them, use only figures from the annexures and book tools, and cite case law only as [C:n]. FinCom adds the reference block and builds the reply pack (the reply in Word and PDF, the annexures, the citations and an index). Say which documents the user must still add.
 
-Financial statements: for any balance sheet (provisional or interim too), final accounts, Schedule III, notes to accounts, a P&L with the balance sheet, or last year's figures, call fs_build once with the period (from, to), the comparative and the notes; FinCom shows the statements card and works out every figure on its Financial statements page. Never state a figure of the statements and never build them from profit_and_loss, find_ledgers, cash_bank or other tools.
+Financial statements: for any balance sheet of the books (provisional or interim too; not a projection), final accounts, Schedule III, notes to accounts, a P&L with the balance sheet, or last year's figures, call fs_build once with the period (from, to), the comparative and the notes; FinCom shows the statements card and works out every figure on its Financial statements page. Never state a figure of the statements and never build them from profit_and_loss, find_ledgers, cash_bank or other tools.
 
-Earlier in the conversation: the messages before the question are the conversation so far (the newest last, each answer with what FinCom showed); the context line names the statements shown and the files attached earlier. "This", "the earlier message", "the file I attached" mean those: use them, never ask for them again.
+Projections: for a projected or estimated balance sheet, P&L or cash flow, a forecast, projections for a bank, CMA data, or statements for next year or the coming years, call projected_statements at once. Pass every assumption the user gave anywhere in this conversation (growth, loans, capex, dividend or drawings, days, tax rate, years; anything else in other_assumptions) and null for the rest: FinCom uses sensible defaults from the client's own books (last year's growth, the same cost ratios and days, no new loans or capex, last year's tax rate) and lists every assumption. Never ask for assumptions first. Then say in two or three lines what was prepared, list the assumptions in short bullets, and end with "Tell me any assumption to change and I'll redo it." When the user changes one, call projected_statements again with all the assumptions so far, that one changed.
+
+Act first: do what is asked now, with sensible assumptions you state, rather than asking questions. Ask only when you truly cannot go on (for example, FinCom has no books for the client at all). Never ask for something the user already said or answered earlier in this conversation: read the earlier messages first and use their answer.
+
+Earlier in the conversation: the messages before the question are the conversation so far (the newest last, each answer with what FinCom showed; older turns may be shortened into a note of what the user said); the context line names the statements shown and the files attached earlier. "This", "the earlier message", "the file I attached" mean those: use them, never ask for them again.
 
 Before filing: when the user asks to check a return before filing ("check my Q2 26Q", "is March's GST ready to file?"), call prefiling_check; FinCom runs its own checklist and shows it.
 
@@ -129,7 +133,7 @@ Entries: when the user asks you to make, pass or record entries for the client o
 
 ${MIS_SYSTEM}
 
-Writing: answer first, in at most 5 short lines or 5 bullets, in plain words for a CA: no headings, no preamble, no repeating the question, no closing offers or summaries. Tables and files are shown to the user separately: never restate them. Answer at length only when the user asks for it (in detail, explain fully, elaborate, step by step, the full answer); a draft, letter, reply or notice keeps its own length. Amounts with ₹ in the Indian style (₹1,23,450.00); dates as 05-Mar-2026. Name the period you used. Say when the books held do not cover the dates asked.
+Writing: answer first, in at most 5 short lines or 5 bullets (a projection's list of assumptions may add up to 10 more), in plain words for a CA: no headings, no preamble, no repeating the question, no closing offers or summaries. Tables and files are shown to the user separately: never restate them. Answer at length only when the user asks for it (in detail, explain fully, elaborate, step by step, the full answer); a draft, letter, reply or notice keeps its own length. Amounts with ₹ in the Indian style (₹1,23,450.00); dates as 05-Mar-2026. Name the period you used. Say when the books held do not cover the dates asked.
 
 Language: reply in the language and script of the user's question. Hindi in Devanagari: reply in Hindi in Devanagari. Hindi written in English letters (Hinglish, "TDS kitna katna hai"): reply in Hinglish in English letters. Marathi, Gujarati, Bengali, Tamil, Telugu, Kannada, Malayalam or Punjabi: reply in that language in its own script. Otherwise English. The voice language in the context line is only a hint; the question's own words decide. Keep figures in 0-9 digits, ₹ amounts, dates, section and form numbers (194C, GSTR-3B), voucher numbers, ledger and party names, tokens and the [V:…] and [C:…] marks exactly as they are; tax terms such as TDS, ITC and GST may stay in English. A draft, letter or notice reply is in English unless the user asks for another language.
 
@@ -155,19 +159,30 @@ export function threadBlock(ctx: TurnCtx, m?: Masker): string {
   const s = "[" + out.join(" ") + "]\n\n";
   return m ? m.text(s) : s;
 }
-// the conversation sent with a question, bounded so a long chat costs no more than a short one: the last 12 messages, each
-// cut at 1,500 characters, 9,000 in all (the oldest dropped first), starting with a question
-export const HISTORY_MESSAGES = 12, HISTORY_CHARS = 1500, HISTORY_TOTAL = 9000;
-export function boundHistory(h: { role: string, content: string }[]): { role: "user" | "assistant", content: string }[] {
-  const out: { role: "user" | "assistant", content: string }[] = [];
-  let total = 0;
-  for (const x of (h || []).filter((x) => x && (x.role === "user" || x.role === "assistant")).slice(-HISTORY_MESSAGES).reverse()) {
-    const c0 = String(x.content || ""), c = c0.length > HISTORY_CHARS ? c0.slice(0, HISTORY_CHARS - 1) + "…" : c0;
+// the conversation sent with a question (the owner, 13-Nov-2026: it "kept asking questions I had already answered"): the
+// last 40 messages, each cut at 2,000 characters, 24,000 in all, starting with a question; what the user said in the turns
+// older than those is kept as one note at the start (their words, 300 characters each, the newest 4,000 characters), so an
+// earlier answer is never lost. A long chat still costs a bounded amount (about 7,000 tokens at most).
+export const HISTORY_MESSAGES = 40, HISTORY_CHARS = 2000, HISTORY_TOTAL = 24000, HISTORY_OLDER = 4000;
+type Msg = { role: "user" | "assistant", content: string };
+const cutTo = (s: string, n: number) => (s.length > n ? s.slice(0, n - 1) + "…" : s);
+export function boundHistory(h: { role: string, content: string }[]): Msg[] {
+  const all = (h || []).filter((x) => x && (x.role === "user" || x.role === "assistant")) as Msg[];
+  const out: Msg[] = [];
+  let total = 0, i = all.length;
+  for (; i > 0 && out.length < HISTORY_MESSAGES; i--) {
+    const c = cutTo(String(all[i - 1].content || ""), HISTORY_CHARS);
     if (total + c.length > HISTORY_TOTAL) break;
     total += c.length;
-    out.unshift({ role: x.role as "user" | "assistant", content: c });
+    out.unshift({ role: all[i - 1].role, content: c });
   }
-  while (out.length && out[0].role !== "user") out.shift();
+  while (out.length && out[0].role !== "user") { out.shift(); i++; }
+  const older = all.slice(0, i).filter((x) => x.role === "user").map((x) => cutTo(String(x.content || "").replace(/\s+/g, " ").trim(), 300)).filter(Boolean);
+  if (older.length) {
+    const said = older.join(" | "), note = "[Earlier in this conversation (shortened), the user said, oldest first: " + (said.length > HISTORY_OLDER ? "…" + said.slice(-HISTORY_OLDER) : said) + "]";
+    if (out.length) out[0] = { role: "user", content: note + "\n\n" + out[0].content };
+    else out.push({ role: "user", content: note }, { role: "assistant", content: "(noted)" });
+  }
   return out;
 }
 
@@ -360,6 +375,10 @@ export async function runTurn(ctx: TurnCtx): Promise<TurnResult> {
     : capWords("inr", cap.cap_inr || 0, cap.cap) + " Answers from FinCom's own tools and the checks before filing keep working.",
     used: cap.used, cap: cap.cap, spent: cap.spent_inr, cap_inr: cap.cap_inr });
 
+  // projected statements asked for, or an assumption changed right after them: the model with projected_statements (Opus),
+  // never the statements card, the keyword router or Haiku
+  const proj = !act && !entries && !!ctx.clientId && !ctx.firmWide && (projAsked(ctx.question) || (ctx.history.slice(-2).some((h) => /projected_statements|Projected (balance sheet|profit and loss)/i.test(String(h.content || "")))
+    && /\b(assum\w*|grow\w*|redo|again|change|instead|make it|percent|loans?|capex|dividend|drawings|days|tax|years?|lakhs?|crores?)\b|%/i.test(ctx.question)));
   // a firm-wide tool's question (the certificates), or the conversation it is in: neither the keyword router nor Haiku
   const extHit = EXT_TOOLS.find((t) => t.firmWide && (t.words.test(ctx.question) || ctx.history.slice(-2).some((h) => t.words.test(String(h.content || "")))));
 
@@ -369,7 +388,7 @@ export async function runTurn(ctx: TurnCtx): Promise<TurnResult> {
   // works the figures out with the Financial statements page's own code in the browser. The period from the words, else
   // the statements shown last in this conversation; last year's balance sheet attached earlier handed to the card.
   // (a file attached to the question that is not a notice, e.g. last year's balance sheet: the card reads it, no model does)
-  const fsq = L.fs !== false && ctx.clientId && !ctx.firmWide && !act && !entries && !extHit && (ctx.attachments.length === 0 || (!!ctx.uploadKind && ctx.uploadKind !== "notice"))
+  const fsq = L.fs !== false && ctx.clientId && !ctx.firmWide && !act && !proj && !entries && !extHit && (ctx.attachments.length === 0 || (!!ctx.uploadKind && ctx.uploadKind !== "notice"))
     ? fsRequest(ctx.question, { anchor, today: ctx.today, thread: ctx.thread, history: ctx.history }) : null;
   if (fsq) {
     used.push("fs_build");
@@ -383,7 +402,7 @@ export async function runTurn(ctx: TurnCtx): Promise<TurnResult> {
   }
   // ---------------------------------------------------------------- 1. the keyword router (no model)
   const native = notEnglish(ctx.question, ctx.lang);
-  if (L.router && !native && !ctx.attachments.length && !act && !entries && !misWanted && ctx.clientId && !ctx.firmWide && !extHit) {
+  if (L.router && !native && !ctx.attachments.length && !act && !proj && !entries && !misWanted && ctx.clientId && !ctx.firmWide && !extHit) {
     const rt = route(ctx.question, anchor);
     if (rt && "prefile" in rt) {
       used.push("prefiling_check");
@@ -405,6 +424,7 @@ export async function runTurn(ctx: TurnCtx): Promise<TurnResult> {
   let task: Task = taskOf(ctx.question, ctx.attachments.length > 0, !!ctx.clientId, ctx.uploadKind);
   if (task !== "notice" && EXT_TOOLS.some((t) => t.task === "heavy" && t.words.test(ctx.question))) task = "heavy";
   if (extHit && (task === "general" || task === "book")) task = "file";        // Sonnet, no web: the tool does the work
+  if (proj && task !== "notice") task = "heavy";                                  // projections: Opus at high effort (as the DCF)
   // a short answer unless the user asks for a long one (the owner, 15-Oct-2026): book and general chat at low effort with a
   // lower max_tokens (which counts the thinking too); notices, heavy work and files keep their limits
   const brief = !detailAsked(ctx.question) && !ctx.attachments.length;
@@ -841,7 +861,7 @@ export async function runTurn(ctx: TurnCtx): Promise<TurnResult> {
   emit({ t: "done", text, labels, unchecked, verdicts: verdicts.map((v) => ({ id: v.id, name: v.name, ai: v.value, fincom: v.fincom, status: v.status, text: v.text, tool: v.tool })),
     citations: { ok: cites.ok, dropped: cites.dropped }, cases, casesRemoved: ap.removed, links: Array.from(links, ([url, title]) => ({ url, title })), notice: notice ? notice.id : null,
     usage: { ...usage, calls }, route: "model", models, stopped: stopped || null });
-  const cacheable = !stopped && !cutShort && !noBooks && !ctx.attachments.length && !files.length && !notice && !used.includes("prefiling_check") && !used.includes("record_figures") && !used.includes("draft_entries") && !used.includes("build_mis") && !entries && !misWanted && !act && !extHit && !used.some((n) => EXT_TOOLS.some((t) => t.firmWide && t.name === n));
+  const cacheable = !stopped && !cutShort && !noBooks && !proj && !ctx.attachments.length && !files.length && !notice && !used.includes("prefiling_check") && !used.includes("record_figures") && !used.includes("draft_entries") && !used.includes("build_mis") && !entries && !misWanted && !act && !extHit && !used.some((n) => EXT_TOOLS.some((t) => t.firmWide && t.name === n));
   return { text, labels, tools: used, usage, calls, stopped, route: "model", models, costUsd: usd, feature: P.feature, fellThrough, cacheable };
 }
 

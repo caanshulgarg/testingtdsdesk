@@ -47,10 +47,17 @@ const FILE = /\b(excel|xlsx|spreadsheet|pdf|download|copy|file|print)\b/i;
 const TALLY_DIFF = /\b(differ\w*|different|mismatch\w*|not\s+match\w*|doesn'?t\s+match|don'?t\s+match|not\s+tally\w*|wrong|not\s+same|not\s+agree\w*)\b[^.?!]{0,60}\btally\b|\btally\b[^.?!]{0,60}\b(differ\w*|different|mismatch\w*|shows?|says?|gives?)\b/i;
 const ATTACHED = /\battach\w*\b|\bupload\w*\b|\bearlier\s+message\b|\bsent\s+(you\s+)?(earlier|before)\b|\baudited\b|\bfinal\s+balance\s+sheet\b/i;
 
+// projected statements (the owner, 13-Nov-2026: "prepare a projected balance sheet", asked 4-5 times, never made): a
+// projection, forecast, CMA data, an estimated or budgeted statement, or a statement for next / coming years. These are not
+// the statements card's (the books' own figures): the model makes them with projected_statements (tools/projection.ts).
+const PROJ = /\b(projected|projections?|forecast(ed|s|ing)?|cma(\s+data)?|pro[\s-]?forma|estimated\s+(balance|p\s*&\s*l|profit|financials?|statements?|cash)|budget(ed)?\s+(balance|p\s*&\s*l|profit|financials?))\b/i;
+const NEXT = /\b(next|coming|future|following|agle)\s+(\d+\s+|two\s+|three\s+|five\s+|few\s+)?(financial\s+)?(years?|fy|saal)\b/i;
+export const projAsked = (q: string): boolean => { const s = String(q || ""); return PROJ.test(s) || (NEXT.test(s) && (BS.test(s) || FSW.test(s) || PL.test(s) || /\bcash\s*flow\b/i.test(s))); };
+
 // a request for the statements (not a question about the law: "what is Schedule III?" stays with the model)
 export function fsAsked(q: string, thread?: FsThread | null): boolean {
   const s = String(q || "");
-  if (!s.trim()) return false;
+  if (!s.trim() || projAsked(s)) return false;
   if (LAWQ.test(s) && !ASKING.test(s)) return false;
   if (BS.test(s) || FSW.test(s)) return true;
   // "BS" for the balance sheet: in capitals, or beside a P&L, "provisional" or Schedule ("P&L with BS for H1")
