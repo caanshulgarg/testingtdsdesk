@@ -11,6 +11,7 @@ import { AuditButton, AiLedgers } from "../../parts/Ai.jsx";
 import { CatchUp } from "../../parts/Notes.jsx";
 import { catchSoon } from "../../lib/catchSoon.js";
 import { behind } from "../../lib/behind.jsx";
+import { useAutoLine } from "../../lib/autoLine.js";
 import Confirm from "../../parts/Confirm.jsx";
 import ListTable, { ListRows } from "../../parts/ListTable.jsx";
 import DateBox from "../../parts/DateBox.jsx";
@@ -164,8 +165,12 @@ function FindingsTable({ list, gone }) {
 
 // next-audit-steps: the day's audit on its own, worked out behind the page (Audit.autoStart, src/js/06): the last run's
 // findings stay until the new ones are all in
-const AutoLine = ({ j }) => <div className="note" role="status" data-audit-auto="" style={{ margin: "10px 0 0" }}>
+// (drawn again by itself as the run goes: lib/autoLine.js)
+function AutoLine({ j }) {
+  useAutoLine();
+  return <div className="note" role="status" data-audit-auto="" style={{ margin: "10px 0 0" }}>
   {"Checking the books for today’s audit" + (j.prog && j.prog.of ? " (" + j.prog.k + " of " + j.prog.of + " checks)" : "") + "…" + ((j.b.audit || {}).last ? " The last run is shown until it is done." : "")}</div>;
+}
 
 function Findings({ b, busy }) {
   const au = b.audit || {}, run = au.last, auto = Audit.autoFor && Audit.autoFor(b);

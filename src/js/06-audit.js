@@ -526,7 +526,10 @@ Object.assign(Audit, {
   // (prog.keep, optional: asked before the last step; false: nothing is written and the run gives null.) The run's
   // basis and its count of entries are those of the books when it starts, so a run whose books changed on the way
   // no longer fits them (stale)
-  *runIn(from, to, how, prog){
+  // next-speed-worker: in two parts, the same run: calcIn works the findings out (in the engine's worker for a run on
+  // its own, Audit.autoEngine), writeIn writes them into the books' audit (always on the page, in its steps)
+  *runIn(from, to, how, prog){ return yield* this.writeIn(yield* this.calcIn(from, to, prog), how, prog); },
+  *calcIn(from, to, prog){
     const b = S.books;
     from = this.ymd(from); to = this.ymd(to);
     const V = this.vouchers(from, to);
@@ -587,6 +590,10 @@ Object.assign(Audit, {
     yield;
     const code = this.hash(JSON.stringify(findings.map(f => [f.id, f.count, f.amount, f.rows.map(r => r.key + "=" + r.amount)])));
     yield;
+    return {b, from, to, basis, n: V.length, findings, full, code, ran, errors, bal: {ok: !!ctx.bal.ok, src: ctx.bal.src, why: ctx.bal.why}};
+  },
+  *writeIn(c, how, prog){
+    const {b, from, to, basis, findings, full, code, ran, errors} = c, ctx = {bal: c.bal}, V = {length: c.n};
     // what the last step writes, worked out first (nothing of the books' audit changed yet): each row's item, and the
     // items found before and not now, in a period this run covers (put right)
     const au0 = b.audit || {}, items0 = au0.items || {}, seen = new Set(), recs = full.map(rows => rows.map(r => { seen.add(r.key); return [r.key, {date: r.date, no: r.no, party: r.party, amount: r.amount, note: r.note, type: r.type}]; }));
@@ -726,6 +733,8 @@ Object.assign(Audit, {
     if (j) this.autoStop(j);
     const job = this.auto = {b, want, k, cid: b.cid, co: S.coId, it: null, sig: null, memo: null, prog: {k: 0, of: Object.keys(this.checks || 0).length}, starts: 0, slices: [], drawn: 0, t0: Date.now()};
     this.autoSoon(job);
+    // (next-speed-worker: the tab's line of the job drawn now; it was drawn only with the page's next drawing)
+    if (typeof soonRender === "function") soonRender();
     return job;
   },
   // (the page drawn again: a tab's line of the job goes, next-fix-mis-rework)
@@ -754,7 +763,33 @@ Object.assign(Audit, {
     // start, or its very last); refused: once more (autoSlice)
     j.refused = false;
     j.prog.keep = () => { const ok = !this.autoLoading() && (!!j.extra || this.autoSame(j.sig, b)); if (!ok) j.refused = true; return ok; };
-    j.it = (this.steps || this.runIn).call(this, r.from, r.to, j.want ? j.want.how : "on its own (" + this.cfg(b).freq + ")", j.prog);
+    const how = j.want ? j.want.how : "on its own (" + this.cfg(b).freq + ")";
+    // next-speed-worker: worked out in the engine's worker where it can be (Engine.can), else here in steps as before
+    j.eng = Engine.can(this);
+    j.it = j.eng ? this.autoEngine(j, r.from, r.to, how) : this.autoLocal(r.from, r.to, how, j.prog);
+  },
+  autoLocal(from, to, how, prog){ return (this.steps || this.runIn).call(this, from, to, how, prog); },
+  // next-speed-worker (owner-approved: screens never freeze): the run in the engine's worker (Engine, below), off the
+  // page's thread: the books sent in parts (a step each), then the page waits (Engine.WAIT: autoSlice ends its task, the
+  // worker's next word wakes it) while the worker works the run out to where the steps here would ask prog.keep: the
+  // audit's findings (calcIn), the MIS's figures (madeCalc). What is written into the books (writeIn, madeKeep) is done
+  // here, in its steps, as before, so the run is the same. The job's own rules hold as they are: the books looked at
+  // before every task, stopped or started again (the worker's job then dropped: finally). The worker gone or failing to
+  // start: the run worked out here in steps (autoLocal); a step that throws in the worker: thrown here (j.err, said)
+  *autoEngine(j, from, to, how){
+    const E = Engine, kind = this === Audit ? "audit" : "mis", prog = j.prog, b = j.b;
+    let a = null;
+    try {
+      if (!(yield* E.ready()) || !(yield* E.sendIn(b))) return yield* this.autoLocal(from, to, how, prog);
+      a = E.ask(kind, from, to, how, prog);
+      while (!a.end && !a.err && E.st === "ok") yield E.WAIT;
+      if (a.err) throw new Error(a.err);
+      if (!a.end){ a = null; return yield* this.autoLocal(from, to, how, prog); }
+      const res = a.res; a.over = true;
+      if (kind === "mis") return this.madeKeep(res, prog);
+      res.b = b;
+      return yield* this.writeIn(res, how, prog);
+    } finally { if (a){ if (a.over) E.jobs.delete(a.id); else E.cancel(a); } }
   },
   autoSlice(j, d){
     if (this.auto !== j) return;
@@ -783,13 +818,15 @@ Object.assign(Audit, {
     const now = () => (typeof performance === "object" ? performance.now() : Date.now()), t0 = now(), was = typeof JOB_MEMO === "undefined" ? null : JOB_MEMO;
     const hidden = typeof document === "object" && !!document.hidden, idle = !hidden && d && !d.didTimeout && typeof d.timeRemaining === "function" ? d : null;
     const ms = hidden ? this.AUTO.HIDDEN_MS : this.AUTO.SLICE_MS;
-    let run = null, done = false;
+    let run = null, done = false, wait = false;
     if (typeof reactScopeEnd === "function") reactScopeEnd();
     JOB_MEMO = j.memo; IN_RENDER++;
     try {
       for (;;){
         const r = j.it.next();
         if (r.done){ run = r.value; done = true; break; }
+        // (the engine's worker is working: woken by its next word, Engine.sleep)
+        if (r.value === Engine.WAIT){ wait = true; break; }
         if (now() - t0 >= ms || (idle && idle.timeRemaining() <= 0)) break;
       }
     } catch (e){
@@ -800,8 +837,10 @@ Object.assign(Audit, {
     finally { IN_RENDER--; JOB_MEMO = was; j.slices.push(Math.round(now() - t0)); }
     if (!done){
       // the Audit tab's line of how far it is, now and then
-      if (Date.now() - j.drawn >= this.AUTO.DRAW_MS && typeof document === "object" && document.querySelector("[data-audit-auto]")){ j.drawn = Date.now(); if (typeof soonRender === "function") soonRender({now: true}); }
-      this.autoSoon(j);
+      // (next-speed-worker: the MIS tab's too, and the line alone is drawn again: "fincom:auto", app/src/lib/autoLine.js;
+      // the whole tab drawn again every half second took 50-100 ms a time at 100,000 made-up entries)
+      if (Date.now() - j.drawn >= this.AUTO.DRAW_MS && typeof document === "object" && document.querySelector("[data-audit-auto], [data-mis-auto]")){ j.drawn = Date.now(); Engine.say(); }
+      if (wait) Engine.sleep(() => this.autoSoon(j)); else this.autoSoon(j);
       return;
     }
     j.it = null;
@@ -890,3 +929,138 @@ Object.assign(Audit, {
 });
 // a check that has its steps (checkSteps) is worked out in them by Audit.runIn (a check put in its place has none)
 Object.keys(Audit.checkSteps).forEach(k => { Audit.checks[k].steps = Audit.checkSteps[k]; });
+
+// next-speed-worker (owner-approved, step 1 of the speed work: screens never freeze): the engine's worker, a Web Worker
+// that works the day's audit and the month's MIS out off the page's thread (Audit.autoEngine). It runs the very code
+// the page runs: this file (legacy.js, the same address and version, from the browser's cache) and the MIS screen's,
+// with the React app's GST wraps (app/engine/worker.js; its file, assets/engine-<hash>.js, is fetched only when a run
+// first needs it). URL: put in by app/vite.config.js; still the mark (the one-file site, a test's harness): no worker.
+//  - the books go in parts of PART entries (a post of all 100,000 made-up entries held the page 0.5 s; 5,000: 15-30 ms),
+//    each key of the books on its own (of the audit and the MIS only what the engines read: auditLite), and only what changed
+//    since the worker last had them (the same list of entries, every entry the same, no save since: none again);
+//  - its answer: the MIS's figures in one word, the audit's findings first and their rows in parts after;
+//  - only while the page's engine is the one loaded (pure: a function of MIS or Audit replaced since, a test's or a fix
+//    of the moment, is not in the worker's copy): else, and with no Worker, or a worker that does not start, fails or
+//    goes, the run is worked out here in steps as before (Audit.autoLocal). tests/run_speed_worker.py
+const Engine = {
+  URL: "__FINCOM_ENGINE__",
+  PART: 2500, ROWS: 5000, START_MS: 20000, NAP_MS: 250,
+  WAIT: {engine: "wait"},
+  st: "", why: "", w: null, nid: 0, ver: 0, sent: null, jobs: new Map(), wakers: new Set(), base: null,
+  // the page's engine as loaded (taken once legacy.js has run; the MIS screen's own when it loads: 18-mis-pack.js). The
+  // job's own functions (auto*, maybeRun, runSoon) run here only, so they are not compared
+  OBJ: () => [["MIS", MIS], ["Audit", Audit], ["checks", Audit.checks], ["checkSteps", Audit.checkSteps], ["Parties", Parties]],
+  PAGE: /^(auto[A-Z]|maybeRun$|runSoon$|wantSay$)/,
+  // (more: a screen's own functions put on MIS or Audit (name) when its file loads: 18-mis-pack.js's, 77-audit.js's)
+  keep(more, name){
+    const B = this.base = this.base || new Map();
+    const take = (n, o, all) => { if (!o) return; const m = B.get(n) || new Map(); Object.keys(o).forEach(k => { if (typeof o[k] === "function" && (all || !m.has(k))) m.set(k, o[k]); }); B.set(n, m); };
+    if (more) take(name || "MIS", more, true); else this.OBJ().forEach(([n, o]) => take(n, o));
+  },
+  pure(){
+    if (!this.base) return false;
+    return this.OBJ().every(([n, o]) => { const m = this.base.get(n); if (!m || !o) return false;
+      for (const [k, f] of m) if (o[k] !== f && !this.PAGE.test(k)) return false;
+      return Object.keys(o).every(k => typeof o[k] !== "function" || m.has(k) || this.PAGE.test(k)); });
+  },
+  src(){ const s = typeof document === "object" && document.querySelector('script[src*="legacy.js"]'); return s ? s.src : ""; },
+  can(A){ return this.st !== "off" && typeof Worker === "function" && !/^__/.test(this.URL) && !!this.src() && (A === Audit || A === MIS) && this.pure(); },
+  off(why){
+    this.st = "off"; this.why = String(why || "");
+    try { if (this.w) this.w.terminate(); } catch (e){}
+    this.w = null; this.sent = null; this.wake();
+  },
+  start(){
+    this.st = "start";
+    try {
+      const w = this.w = new Worker(this.URL);
+      w.onmessage = e => this.got(e.data || {});
+      w.onerror = e => { try { e.preventDefault(); } catch (x){} this.off("the worker failed: " + ((e && e.message) || "")); };
+      w.postMessage({t: "init", legacy: this.src()});
+      setTimeout(() => { if (this.st === "start") this.off("the worker did not start"); }, this.START_MS);
+    } catch (e){ this.off(e && e.message); }
+  },
+  // the worker started (yields WAIT meanwhile): true, or false when it cannot be
+  *ready(){ if (!this.st) this.start(); while (this.st === "start") yield this.WAIT; return this.st === "ok"; },
+  post(m){ this.w.postMessage(m); },
+  // what of S the engines read (the documents' reading left out), and this browser's settings (sign-in left out)
+  sNow(b){
+    const s = {}, skip = /^(books|data|files|previews|filePages|jobs|pendingHashes|docq|docqLocal|bank|sample|asst|sup)$/, ls = {};
+    Object.keys(S).forEach(k => { const v = S[k]; if (!skip.test(k) && typeof v !== "function") s[k] = v; });
+    if (S.data && b && S.data[b.cid]) s.data = {[b.cid]: S.data[b.cid]};
+    try { for (let i = 0; i < localStorage.length; i++){ const k = localStorage.key(i); if (!/sess|token|auth|api|secret|pass|key/i.test(k)) ls[k] = localStorage.getItem(k); } } catch (e){}
+    return {s, ls};
+  },
+  // the books to the worker, a part a step; false: the worker went meanwhile
+  *sendIn(b){
+    const V = b.vouchers || [], n = V.length, rev = typeof BOOKS_REV === "number" ? BOOKS_REV : 0, p = this.sent;
+    const keys = Object.keys(b).filter(k => k !== "vouchers"), kv = {};
+    keys.forEach(k => { kv[k] = b[k]; });
+    const keepV = !!p && p.b === b && p.V === V && p.n === n && p.vs.every((v, i) => v === V[i]);
+    yield;
+    const keep = p && p.b === b && p.rev === rev ? keys.filter(k => k in p.kv && p.kv[k] === b[k]) : [];
+    const S0 = this.sNow(b);
+    if (keepV && keep.length === keys.length && p.keys.length === keys.length){ this.post({t: "S", s: S0.s, ls: S0.ls}); return this.st === "ok"; }
+    const ver = ++this.ver;
+    this.sent = null;
+    this.post({t: "begin", ver, keepV, keep});
+    try { this.post({t: "S", s: S0.s, ls: S0.ls}); }
+    catch (e){ Object.keys(S0.s).forEach(k => { try { structuredClone(S0.s[k]); } catch (x){ delete S0.s[k]; } }); this.post({t: "S", s: S0.s, ls: S0.ls}); }
+    yield;
+    for (const k of keys){
+      if (keep.includes(k)) continue;
+      const v = k === "audit" ? this.auditLite(b.audit) : k === "mis" ? null : b[k];
+      try { this.post({t: "bk", ver, k, v}); } catch (e){ /* not to be copied (none known): the worker goes without it */ }
+      if (this.st !== "ok") return false;
+      yield;
+    }
+    if (!keepV) for (let i = 0; i < n; i += this.PART){ this.post({t: "bv", ver, v: V.slice(i, i + this.PART)}); if (this.st !== "ok") return false; yield; }
+    this.post({t: "end", ver, n});
+    this.sent = {b, V, n, vs: V.slice(), rev, kv, keys};
+    return this.st === "ok";
+  },
+  // what the engines read of the books' audit and MIS (the last run of the audit was 4.6 MB of JSON at 100,000 made-up
+  // entries, a copy of 50-150 ms): the audit's marks (Audit.status) and its last run as MIS.compliance and Audit.stale
+  // read it; none of the MIS (its runs are the page's: due, lastRun, stale)
+  auditLite(au){
+    if (!au) return au;
+    const L = au.last;
+    return {st: au.st, last: L ? {at: L.at, from: L.from, to: L.to, vouchers: L.vouchers, basis: L.basis, findings: (L.findings || []).map(f => ({id: f.id, sev: f.sev})), solved: (L.solved || []).map(x => ({id: x.id, n: x.n}))} : L};
+  },
+  ask(kind, from, to, how, prog){
+    const a = {id: ++this.nid, kind, prog, res: null, full: null, end: false, err: ""};
+    this.jobs.set(a.id, a);
+    this.post({t: "run", id: a.id, kind, from, to, how});
+    return a;
+  },
+  cancel(a){ this.jobs.delete(a.id); if (this.w && this.st === "ok") try { this.post({t: "cancel", id: a.id}); } catch (e){} },
+  // the page's job sleeps until the worker's next word, or NAP_MS (it looks at the books again then)
+  sleep(go){
+    let t = 0;
+    const w = () => { if (!this.wakers.delete(w)) return; clearTimeout(t); go(); };
+    this.wakers.add(w); t = setTimeout(w, this.NAP_MS);
+  },
+  wake(){ Array.from(this.wakers).forEach(w => w()); },
+  // a run on its own's line, drawn again by itself (app/src/lib/autoLine.js); a page without it: drawn with the page
+  say(){ try { window.dispatchEvent(new CustomEvent("fincom:auto")); } catch (e){ if (typeof soonRender === "function") soonRender({now: true}); } },
+  got(m){
+    if (m.t === "ready"){ if (this.st === "start") this.st = "ok"; }
+    else if (m.t === "fail") this.off(m.e);
+    else {
+      const a = this.jobs.get(m.id);
+      if (!a) return;
+      if (m.t === "prog"){ if (a.prog){ a.prog.k = m.k; a.prog.of = m.of; } }
+      else if (m.t === "err") a.err = m.e || "the engine's worker failed";
+      else if (m.t === "mis"){ a.res = m.r; a.end = true; }
+      else if (m.t === "audit"){ a.res = m.c; a.full = m.n.map(() => []); }
+      else if (m.t === "rows"){ const f = a.full[m.i]; for (let i = 0; i < m.rows.length; i++) f.push(m.rows[i]); }
+      else if (m.t === "end" && a.res){
+        // the findings' rows as calcIn leaves them: every row (full), each finding its first 1,000 of the same rows
+        a.res.full = a.full; a.res.findings.forEach((f, i) => { f.rows = a.full[i].slice(0, 1000); });
+        a.res.ran = new Set(a.res.ran); a.end = true;
+      }
+    }
+    this.wake();
+  }
+};
+setTimeout(() => Engine.keep(), 0);
