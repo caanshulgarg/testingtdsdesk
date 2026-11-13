@@ -142,8 +142,8 @@ func hostAllowed(r *http.Request) bool {
 
 // the bridge key as the request carries it (X-Bridge-Key), compared in constant time; false when either is empty
 func keyGiven(r *http.Request) bool {
-	k, g := cfgS("Key"), r.Header.Get("X-Bridge-Key")
-	return k != "" && g != "" && hmac.Equal([]byte(k), []byte(g))
+	_, ok := webKey(r.Header.Get("X-Bridge-Key")) // 2.5.16: a paired browser's key, or the earlier single key (browserkeys.go)
+	return ok
 }
 
 func handle(w http.ResponseWriter, r *http.Request) {
@@ -195,8 +195,13 @@ func handle(w http.ResponseWriter, r *http.Request) {
 			if n := qs.Get("n"); n != "" && (page || program) {
 				bound := "go-" + instanceID() + fmt.Sprint(toInt(cfg("Port")))
 				// the owner's condition: HMAC-SHA256(bridge key, nonce || bridge id || port)
-				if pr := proofFor(cfgS("Key"), n, bound); pr != "" {
+				// 2.5.16 (browserkeys.go): the single key's proof to the tray, and to pages only while that key is still taken
+				// from them; to pages, one proof per paired browser over its key's SHA-256
+				if pr := proofFor(cfgS("Key"), n, bound); pr != "" && (program || legacyKeyOpen()) {
 					p["proof"] = pr
+				}
+				if page {
+					p["proofs"] = browserProofs(n, bound)
 				}
 				if program && qs.Get("challenge") == "1" {
 					p["challenge"] = issueTrayChallenge() // 2.4.7: the tray proves the key per request, never sends it
@@ -328,7 +333,7 @@ func handle(w http.ResponseWriter, r *http.Request) {
 			pairMu.Unlock()
 			writeLog("FinCom connected with the code (" + sentOrigin + ").")
 			clearPairOpenDue("Connected with the code: the install's first-start opening of FinCom is not needed.") // 2.4.6
-			key := rotateBridgeKey("FinCom connected with the code")                                                // 2.5.16: a new key at every pairing (keyorigin.go)
+			key := addBrowserKey(browserName(r.UserAgent()))                                                        // 2.5.16: this browser's own key (browserkeys.go)
 			sendJSON(w, 200, M{"ok": true, "key": key, "computer": computerName(), "user": ownerName(), "version": BridgeVersion, "bridgeId": "go-" + instanceID(), "port": toInt(cfg("Port"))}, origin)
 			return
 		}
@@ -338,7 +343,21 @@ func handle(w http.ResponseWriter, r *http.Request) {
 	}
 	// 2.4.7: the key compared in constant time (as before, an install's settings always hold one), or the tray's one-use
 	// proof with its sealed body (pairopen.go trayRequest)
-	keyOK := cfgS("Key") != "" && hmac.Equal([]byte(cfgS("Key")), []byte(r.Header.Get("X-Bridge-Key")))
+	// 2.5.16: a paired browser's own key, or the earlier single key until the first pairing (browserkeys.go)
+	keyID, keyOK := webKey(r.Header.Get("X-Bridge-Key"))
+	if keyOK {
+		noteBrowserUsed(keyID)
+	}
+	if keyOK && path == "/forget" {
+		// 2.5.16: the paired page forgets itself (FinCom's sign-out): this browser's key removed, no other
+		if err := needPost(r, "Use POST."); err != nil {
+			sendJSON(w, 405, M{"ok": false, "error": "Use POST."}, origin)
+			return
+		}
+		removeBrowserKey(keyID, "the page signed out")
+		sendJSON(w, 200, M{"ok": true}, origin)
+		return
+	}
 	trayCh, trayOK := "", false
 	if !keyOK {
 		trayCh, trayOK = trayAuth(r)
@@ -349,7 +368,7 @@ func handle(w http.ResponseWriter, r *http.Request) {
 		w = tw
 	}
 	if !keyOK && !trayOK {
-		sendJSON(w, 401, M{"ok": false, "error": "Wrong bridge key: this browser is no longer connected (a new key is made at every connection). In the FinCom Bridge icon near the clock choose Connect FinCom on this computer..."}, origin)
+		sendJSON(w, 401, M{"ok": false, "error": "Wrong bridge key: this browser is not connected to this bridge (it was disconnected, or connected before on another key). In the FinCom Bridge icon near the clock choose Connect FinCom on this computer..."}, origin)
 		return
 	}
 	bodyB, err := io.ReadAll(r.Body)
@@ -993,6 +1012,8 @@ func route(w http.ResponseWriter, r *http.Request, path string, qs url.Values, b
 	// --- the tray icon's own questions
 	case "/tray/status":
 		return trayStatus(), nil
+	case "/tray/browsers":
+		return trayBrowsersRoute(r.Method, parseObj(body)) // 2.5.16: the paired browsers, one removed (browserkeys.go)
 	case "/tray/newkey":
 		return trayNewKeyRoute(r.Method) // 2.5.16: the owner disconnects FinCom's pages (keyorigin.go)
 	case "/tray/fvu":

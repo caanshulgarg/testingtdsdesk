@@ -553,8 +553,8 @@ func (t *tray) menu() {
 	if st != nil && truthy(st["testMode"]) {
 		add(8, "Compare with bridge 1.15.0", mfString)
 	}
-	add(29, "Disconnect FinCom from this computer...", mfString) // 2.5.16: a new bridge key (keyorigin.go)
-	add(28, "Confirm the FVU...", mfString)                      // 2.5.16: the FVU set on this computer, its fingerprint recorded (fvu.go)
+	add(29, "Disconnect a browser...", mfString) // 2.5.16: one paired browser's key removed (browserkeys.go)
+	add(28, "Confirm the FVU...", mfString)      // 2.5.16: the FVU set on this computer, its fingerprint recorded (fvu.go)
 	add(14, "Send install log to FinCom", mfString)
 	add(25, "Clear notifications", mfString) // 2.3.5: every current one cleared, never shown again for the same problem
 	pAppendMenu.Call(m, mfSeparator, 0, 0)
@@ -579,15 +579,35 @@ func (t *tray) command(id int, st M) {
 	case 10:
 		msgBox("FinCom Bridge", t.statusText(), mbIconInfo)
 	case 29:
-		title := "FinCom Bridge - Disconnect FinCom"
-		if !yesNo(title, "Disconnect every FinCom page from this computer?\n\nFinCom Bridge makes a new key: FinCom (on any browser) stops reaching this bridge until you choose Connect FinCom on this computer... and connect again. Nothing in Tally or in FinCom is changed.") {
-			return
-		}
-		if r := trayCall("POST", "/tray/newkey", M{}); r == nil || r["ok"] != true {
+		title := "FinCom Bridge - Disconnect a browser"
+		r := trayCall("GET", "/tray/browsers", nil)
+		if r == nil {
 			msgBox(title, "The bridge is not answering, so nothing was changed.", mbIconWarning)
 			return
 		}
-		t.reply("FinCom Bridge", "FinCom is disconnected from this computer. Choose Connect FinCom on this computer... to connect again.", false)
+		list := arr(r["browsers"])
+		if len(list) == 0 {
+			msgBox(title, "No browser is connected to FinCom Bridge on this computer.", mbIconInfo)
+			return
+		}
+		for _, x := range list {
+			b := obj(x)
+			when := ""
+			if at := str(b["at"]); at != "" {
+				when = "\nConnected: " + strings.Replace(at, "T", " ", 1)
+			}
+			if u := str(b["used"]); u != "" {
+				when += "\nLast used: " + strings.Replace(u, "T", " ", 1)
+			}
+			if !yesNo(title, "Disconnect "+str(b["name"])+"?"+when+"\n\nThat browser stops reaching this bridge until it connects again (Connect FinCom on this computer...). Other browsers stay connected. Nothing in Tally or in FinCom is changed.\n\nNo: the next browser, if any.") {
+				continue
+			}
+			if p := trayCall("POST", "/tray/browsers", M{"remove": str(b["id"])}); p == nil || p["ok"] != true {
+				msgBox(title, "It could not be disconnected; nothing was changed.", mbIconWarning)
+				return
+			}
+			t.reply("FinCom Bridge", str(b["name"])+" is disconnected from this computer.", false)
+		}
 	case 28:
 		title := "FinCom Bridge - Confirm the FVU"
 		r := trayCall("GET", "/tray/fvu", nil)

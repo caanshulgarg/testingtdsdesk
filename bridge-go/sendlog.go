@@ -20,7 +20,7 @@ import (
 
 // settings names whose values are keys: never sent, never shown
 func secretSetting(k string) bool {
-	return re(`(?i)(^key$|key$|keygo$|password|passwd|secret|token)`).MatchString(k)
+	return re(`(?i)(^key$|key$|keygo$|password|passwd|secret|token|^pairedbrowsers$)`).MatchString(k)
 }
 
 // a settings file as text, with every key's value taken out (the names stay, so support sees what is set)

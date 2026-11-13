@@ -22,6 +22,10 @@ func pairingOnly(text string) string {
 	}
 	o := newOrdered()
 	o.Set("Key", str(c.Get("Key")))
+	if c.Has("PairedBrowsers") { // 2.5.16: each browser's key (browserkeys.go)
+		o.Set("PairedBrowsers", c.Get("PairedBrowsers"))
+		o.Set("LegacyKeyRetired", c.Get("LegacyKeyRetired"))
+	}
 	o.Set("CloudUrl", str(c.Get("CloudUrl")))
 	k := str(c.Get("CloudKeyGo"))
 	if k == "" {

@@ -1,8 +1,6 @@
 // FinCom Bridge 2.5.16: the bridge key, FinCom's sites by build, and the log of refused requests.
 //
-//   - The bridge key changes at every pairing with FinCom (the code, or the secret of the address the bridge opened):
-//     the page that paired gets the new key and the key before it is no longer accepted. The tray icon's
-//     "Disconnect FinCom from this computer..." makes a new key without pairing, so no browser holds it.
+//   - The bridge keys: one per paired browser (browserkeys.go).
 //   - FinCom's own sites by build (build.sh sets buildSite from FINCOM): the live build trusts and opens the live site
 //     only; the staging build (and a build by hand) the staging site too. No other site, and the settings' AllowedOrigins
 //     never add one (they name development pages only, with DevOrigins, never in the live build).
@@ -32,29 +30,12 @@ func trustedSites() []string {
 	return out
 }
 
-var keyMu sync.Mutex
-
-// a new bridge key, kept in the settings at once; the one before is no longer accepted
-func rotateBridgeKey(why string) string {
-	keyMu.Lock()
-	defer keyMu.Unlock()
-	k := newBridgeKey()
-	for k == cfgS("Key") {
-		k = newBridgeKey()
-	}
-	setCfg("Key", k)
-	setCfg("KeyAt", nowS())
-	saveConfig()
-	writeLog("A new bridge key was made (" + why + "); the key before it is no longer accepted")
-	return k
-}
-
-// POST /tray/newkey: the owner disconnects every FinCom page from this computer (a new key; FinCom pairs again)
+// POST /tray/newkey (2.5.16, kept): every browser disconnected (browserkeys.go)
 func trayNewKeyRoute(method string) (M, error) {
 	if method != "POST" {
 		return nil, &httpErr{405, M{"ok": false, "error": "Use POST."}}
 	}
-	rotateBridgeKey("the owner's Disconnect FinCom in the tray icon")
+	removeAllBrowserKeys("the owner's Disconnect FinCom in the tray icon")
 	return M{"ok": true}, nil
 }
 

@@ -236,6 +236,7 @@ function signOutHere(msg, clearLocal, why, local){
   if (!local) auditSignOut(msg || "Signed out.", s);
   // tell the server too, so the refresh token cannot be used again
   if (!local && s && s.access_token){ const c = Cloud.cfg(); fetch(c.url.replace(/\/+$/, "") + "/auth/v1/logout", {method: "POST", headers: {apikey: c.key, Authorization: "Bearer " + s.access_token}}).catch(() => {}); }
+  if (!local) try { Bridge.forget(); } catch (e){}   // bridge 2.5.16: this browser's own key forgotten
   Cloud.signOut(); clearInterval(cloudTimer); S.account = null; S.backups = null; FirmGate.st = null; FirmGate.co = {}; S.settingsTab = null;
   Cloud.setCfg({gate: true});
   S.signedOutWhy = why || "";

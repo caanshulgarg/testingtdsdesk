@@ -24,6 +24,9 @@ const Bridge = {
   localUrl(u){ const m = String(u || "").match(/^http:\/\/(127\.0\.0\.1|localhost):(\d+)\/*$/); return !!m && this.PORTS.includes(+m[2]); },
   urlPort(u){ const m = String(u || "").match(/^https?:\/\/[^/:]+:(\d+)/); return m ? +m[1] : 0; },
   nonce(){ const a = new Uint8Array(24); crypto.getRandomValues(a); return Array.from(a, x => x.toString(16).padStart(2, "0")).join(""); },
+  async sha256(t){ return Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(t)))), x => x.toString(16).padStart(2, "0")).join(""); },
+  // 2.5.16: on sign-out this browser's key is forgotten by the bridge and here
+  forget(){ const c = this.cfg(); if (!c.key) return; this.call("/forget", {}, 3000).catch(() => {}).then(() => this.setCfg({key: ""})); },
   async hmac(secret, msg){
     const enc = new TextEncoder(), k = await crypto.subtle.importKey("raw", enc.encode(String(secret)), {name: "HMAC", hash: "SHA-256"}, false, ["sign"]);
     return Array.from(new Uint8Array(await crypto.subtle.sign("HMAC", k, enc.encode(msg))), x => x.toString(16).padStart(2, "0")).join("");
@@ -38,6 +41,8 @@ const Bridge = {
       if (!j || j.ok === false) return null;
       const o = Object.assign({port, url: base.replace(/\/+$/, "")}, j, {proven: false, pairProven: false});
       if (key && typeof j.proof === "string" && typeof j.bridgeId === "string" && Number(j.port) === port) o.proven = j.proof === await this.hmac(key, n + j.bridgeId + port);
+      // FinCom Bridge 2.5.16: one key per browser; the bridge proves itself over this key's SHA-256
+      if (key && !o.proven && Array.isArray(j.proofs) && j.proofs.length && typeof j.bridgeId === "string" && Number(j.port) === port) { const h = await this.sha256(key), want = await this.hmac(h, n + j.bridgeId + port); o.proven = j.proofs.includes(want); }
       // review M1 of 2.3.0: the pairing code's proof is bound to the bridge's id and this port too
       // FinCom Bridge 2.4.7: code may be "<6 digits>-<the window's 32-hex secret>" (FinCom opened by the bridge): the
       // bridge proves the secret (pairProofS); a 2.4.7 bridge gives no proof over the 6 digits (an offline test for

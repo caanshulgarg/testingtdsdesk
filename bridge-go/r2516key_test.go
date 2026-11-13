@@ -2,8 +2,7 @@
 
 package main
 
-// FinCom Bridge 2.5.16, item 4: the bridge key changes at every pairing (the earlier key is no longer accepted), and
-// the owner can make a new one from the tray icon; FinCom's own sites only, by build (the live build: the live site;
+// FinCom Bridge 2.5.16, item 4: one key per browser (each pairing adds its own, one removed alone); FinCom's own sites only, by build (the live build: the live site;
 // the staging build: the staging site too; no other site); a refused web page's request is logged at most once in ten
 // minutes and the refusal lines of a day are capped. Nothing here asks anything of Tally. Made-up names only.
 import (
@@ -13,61 +12,116 @@ import (
 	"time"
 )
 
-// a pairing's answer carries a new key, the one now kept (never the key before)
+// a pairing's answer carries this browser's own key (never the single key of earlier versions); only its hash is kept
 func r2516NewKey(r M) bool {
 	k := str(r["key"])
-	return k != "" && k != "k246" && k == cfgS("Key") && len(k) == 24
+	return len(k) == 32 && k != "k246" && k != cfgS("Key") && browserKeyID(k) != "" && !strings.Contains(readText(ConfigPath), k)
 }
 
-// the key before pairing is refused after it; the new one works; a second pairing replaces it again
-func TestR2516PairingMakesNewKey(t *testing.T) {
-	p := newPairStand(t, "")
-	if r := p.call("GET", "/status", nil); r["ok"] != true {
-		t.Fatalf("the key before pairing: %v", r)
+func r2516Call(path, key, method string) int {
+	q := httptest.NewRequest(method, "http://127.0.0.1:9100"+path, strings.NewReader("{}"))
+	q.RemoteAddr = "127.0.0.1:50125"
+	q.Header.Set("X-Bridge-Key", key)
+	q.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	handle(w, q)
+	return w.Code
+}
+
+// one key per browser: the single key works until the first pairing; each pairing adds its own key; one removed alone
+func TestR2516KeyPerBrowser(t *testing.T) {
+	newPairStand(t, "")
+	if r2516Call("/status", "k246", "GET") != 200 {
+		t.Fatal("the single key before any pairing")
 	}
-	_, secret, _ := freshPairCode(10)
-	c, r := p.pair(secret)
-	if c != 200 || !r2516NewKey(r) {
-		t.Fatalf("pairing: %d %v", c, r)
-	}
-	first := str(r["key"])
-	if r := p.call("GET", "/status", nil); r["ok"] == true {
-		t.Fatal("the key before pairing still works")
-	}
-	call := func(key string) int {
-		q := httptest.NewRequest("GET", "http://127.0.0.1:9100/status", nil)
-		q.RemoteAddr = "127.0.0.1:50125"
-		q.Header.Set("X-Bridge-Key", key)
+	pairAs := func(ua string) string {
+		_, secret, _ := freshPairCode(10)
+		q := httptest.NewRequest("GET", "http://127.0.0.1:9100/pair?code="+secret, nil)
+		q.RemoteAddr = "127.0.0.1:50124"
+		q.Header.Set("Origin", "https://staging.fincom.live")
+		q.Header.Set("User-Agent", ua)
 		w := httptest.NewRecorder()
 		handle(w, q)
-		return w.Code
+		r := parseObj(w.Body.String())
+		if w.Code != 200 || !r2516NewKey(r) {
+			t.Fatalf("pairing: %d %v", w.Code, r)
+		}
+		return str(r["key"])
 	}
-	if call(first) != 200 {
-		t.Fatal("the new key does not work")
+	chrome := pairAs("Mozilla/5.0 (Windows NT 10.0) AppleWebKit/537.36 Chrome/130.0 Safari/537.36")
+	if r2516Call("/status", "k246", "GET") == 200 {
+		t.Fatal("the single key still works after the first pairing")
 	}
-	_, secret, _ = freshPairCode(10)
-	if c, r := p.pair(secret); c != 200 || !r2516NewKey(r) || str(r["key"]) == first {
-		t.Fatalf("second pairing: %d %v", c, r)
+	edge := pairAs("Mozilla/5.0 (Windows NT 10.0) AppleWebKit/537.36 Chrome/130.0 Safari/537.36 Edg/130.0")
+	if r2516Call("/status", chrome, "GET") != 200 || r2516Call("/status", edge, "GET") != 200 {
+		t.Fatal("both browsers' keys work")
 	}
-	if call(first) == 200 {
-		t.Fatal("the first pairing's key still works after the second")
+	l, _ := trayBrowsersRoute("GET", nil)
+	names := ""
+	for _, x := range arr(l["browsers"]) {
+		b := obj(x)
+		names += str(b["name"]) + "|"
+		if b["hash"] != nil || b["key"] != nil || str(b["at"]) == "" {
+			t.Fatalf("the list: %v", b)
+		}
 	}
-	// kept in the settings file (a restart keeps the new key)
+	if names != "Chrome on this PC|Edge on this PC|" {
+		t.Fatalf("names %q", names)
+	}
+	// the page forgets itself (sign-out): its key only
+	if r2516Call("/forget", edge, "POST") != 200 || r2516Call("/status", edge, "GET") == 200 || r2516Call("/status", chrome, "GET") != 200 {
+		t.Fatal("forget")
+	}
+	// the tray removes one by its id
+	id := str(obj(arr(l["browsers"])[0])["id"])
+	if r, _ := trayBrowsersRoute("POST", M{"remove": id}); r["ok"] != true || r2516Call("/status", chrome, "GET") == 200 {
+		t.Fatalf("tray remove: %v", r)
+	}
+	// kept across a restart
+	k := pairAs("Firefox/130.0")
 	loadConfig()
-	if call(cfgS("Key")) != 200 || cfgS("Key") == first {
-		t.Fatal("the new key is not kept")
+	if r2516Call("/status", k, "GET") != 200 || r2516Call("/status", "k246", "GET") == 200 {
+		t.Fatal("not kept across a restart")
 	}
 }
 
-// the tray icon's "Disconnect FinCom": a new key, nothing paired with the old one
+// a page's proof of the bridge: over each paired key's SHA-256; the single key's proof no longer goes to pages
+func TestR2516PingProofsPerBrowser(t *testing.T) {
+	newPairStand(t, "")
+	_, secret, _ := freshPairCode(10)
+	q := httptest.NewRequest("GET", "http://127.0.0.1:9100/pair?code="+secret, nil)
+	q.RemoteAddr = "127.0.0.1:50124"
+	q.Header.Set("Origin", "https://staging.fincom.live")
+	w := httptest.NewRecorder()
+	handle(w, q)
+	key := str(parseObj(w.Body.String())["key"])
+	n := "nonce0123456789abcdefXYZ"
+	pq := httptest.NewRequest("GET", "http://127.0.0.1:9100/ping?n="+n, nil)
+	pq.RemoteAddr = "127.0.0.1:50127"
+	pq.Header.Set("Origin", "https://staging.fincom.live")
+	pw := httptest.NewRecorder()
+	handle(pw, pq)
+	p := parseObj(pw.Body.String())
+	bound := str(p["bridgeId"]) + itoa(toInt(p["port"]))
+	want := proofFor(keyHash(key), n, bound)
+	found := false
+	for _, x := range arr(p["proofs"]) {
+		found = found || str(x) == want
+	}
+	if !found || p["proof"] != nil {
+		t.Fatalf("ping: %v (want %s)", p, want)
+	}
+}
+
+// the tray icon's Disconnect FinCom (kept): every browser disconnected
 func TestR2516TrayNewKey(t *testing.T) {
 	newPairStand(t, "")
 	r, err := trayNewKeyRoute("POST")
-	if err != nil || r["ok"] != true || cfgS("Key") == "k246" || len(cfgS("Key")) != 24 || str(r["key"]) != "" {
-		t.Fatalf("new key: %v %v (the answer never carries the key)", r, err)
+	if err != nil || r["ok"] != true || r2516Call("/status", "k246", "GET") == 200 || len(pairedBrowsers()) != 0 {
+		t.Fatalf("new key: %v %v", r, err)
 	}
 	if _, err := trayNewKeyRoute("GET"); err == nil {
-		t.Fatal("GET made a new key")
+		t.Fatal("GET changed the keys")
 	}
 }
 
