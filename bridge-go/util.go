@@ -313,6 +313,9 @@ func safeName(s string) (string, error) {
 		return "", fmt.Errorf("The company name %q carries a control character and cannot be a folder name on this computer.", s)
 	case strings.ContainsAny(n, `/\`) || filepath.Base(n) != n:
 		return "", fmt.Errorf("The company name %q cannot be a folder name on this computer.", s)
+	case winDeviceName(n):
+		// 2.5.16: a Windows device name (CON, NUL, COM1...) is no folder Windows can keep
+		return "", fmt.Errorf("The company name %q cannot be a folder name on this computer (Windows keeps that name for itself).", s)
 	}
 	return n, nil
 }

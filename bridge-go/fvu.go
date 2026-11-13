@@ -132,6 +132,9 @@ func fvuJarLooked() (path, sha string, err error) {
 	return p, s, nil
 }
 
+// the largest return file checked (a quarter's 26Q is a few MB)
+const fvuMaxText = 20 << 20
+
 // the request handed to the run (here, or to fvu-run in the owner's session)
 type fvuReq struct {
 	Jar  string `json:"jar"`
@@ -158,8 +161,11 @@ func fvuAsked(o M) M {
 	if text == "" {
 		return M{"ok": false, "error": "The return file is empty."}
 	}
+	if len(text) > fvuMaxText {
+		return M{"ok": false, "error": "The return file is larger than 20 MB; it is not checked here."}
+	}
 	name := filepath.Base(str(o["name"]))
-	if !re(`^[\w .()-]+\.txt$`).MatchString(name) {
+	if !re(`^[\w .()-]{1,120}\.txt$`).MatchString(name) || winDeviceName(name) {
 		name = "return.txt"
 	}
 	jar, sha, err := fvuJarLooked()
@@ -171,7 +177,7 @@ func fvuAsked(o M) M {
 		return M{"ok": false, "needConfirm": true, "error": "One step first: right-click the FinCom Bridge icon near the clock, choose Confirm the FVU..., and say Yes for " + jar + ". Then try Check with FVU again."}
 	}
 	if pin != sha {
-		writeLog("FVU: " + jar + " is not the file confirmed on this computer (fingerprint " + sha[:12] + "..., confirmed " + cutRunes(pin, 12) + "...): not run")
+		writeLog("FVU: " + logPath(jar) + " is not the file confirmed on this computer (fingerprint " + sha[:12] + "..., confirmed " + cutRunes(pin, 12) + "...): not run")
 		return M{"ok": false, "changed": true, "error": "The FVU file " + jar + " has changed since it was allowed (a new FVU version?). Right-click the FinCom Bridge icon near the clock, choose Confirm the FVU..., say Yes, then try again."}
 	}
 	out, err := localPath(fvuOutPath())
@@ -202,7 +208,7 @@ func fvuAsked(o M) M {
 	} else if res["ok"] != true {
 		st = "not run: " + str(res["error"])
 	}
-	writeLog("FVU run on " + name + ": " + st)
+	writeLog("FVU run on " + name + ": " + cutRunes(logPath(st), 300))
 	return res
 }
 
@@ -427,6 +433,6 @@ func trayFvuRoute(method string, body M) (M, error) {
 	setCfg("FvuJarSha256", sha)
 	setCfg("FvuJarConfirmedAt", nowS())
 	saveConfig()
-	writeLog("FVU: " + jar + " confirmed by the owner on this computer (fingerprint " + sha + ")")
+	writeLog("FVU: " + logPath(jar) + " confirmed by the owner on this computer (fingerprint " + sha + ")")
 	return M{"ok": true, "path": jar, "sha256": sha, "confirmed": true}, nil
 }

@@ -354,6 +354,12 @@ func handle(w http.ResponseWriter, r *http.Request) {
 			sendJSON(w, 405, M{"ok": false, "error": "Use POST."}, origin)
 			return
 		}
+		if keyID == "legacy" {
+			// the single key of earlier versions is one key for every browser paired before 2.5.16: it goes for all of them
+			removeBrowserKey(keyID, "a page signed out: every browser paired before 2.5.16 is disconnected with it")
+			sendJSON(w, 200, M{"ok": true, "allOldKey": true, "words": "Every browser connected before FinCom Bridge 2.5.16 is disconnected (they shared one key); each connects again on its own."}, origin)
+			return
+		}
 		removeBrowserKey(keyID, "the page signed out")
 		sendJSON(w, 200, M{"ok": true}, origin)
 		return

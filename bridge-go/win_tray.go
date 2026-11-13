@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
@@ -1190,6 +1191,9 @@ func runTray(args []string) int {
 	trayConfigGiven = flagValue(args, "config") != ""
 	setPaths(flagValue(args, "config"), flagValue(args, "home"))
 	loadConfigRO()
+	if d := userInstallDir(); d != "" && !perUserInstall() {
+		logFileOverride = filepath.Join(d, "tray.log") // 2.5.16: never the service's own log (servicestate.go)
+	}
 	if o := cfgS("Owner"); o != "" && !sameUser(o, currentUser()) {
 		return 0 // the bridge works for another Windows user of this computer
 	}

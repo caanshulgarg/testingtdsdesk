@@ -296,7 +296,13 @@ func protectLogText(msg string) string {
 	return m
 }
 
+// 2.5.16: the tray icon of the service install writes its own log (the service's folder is not the user's to change)
+var logFileOverride string
+
 func logFile() string {
+	if logFileOverride != "" {
+		return logFileOverride
+	}
 	f := cfgS("LogFile")
 	if f == "" {
 		f = filepath.Join(Home, "tds-bridge.log")

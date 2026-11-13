@@ -18,6 +18,16 @@ func r2516NewKey(r M) bool {
 	return len(k) == 32 && k != "k246" && k != cfgS("Key") && browserKeyID(k) != "" && !strings.Contains(readText(ConfigPath), k)
 }
 
+func r2516Req(method, path, key string) *httptest.ResponseRecorder {
+	q := httptest.NewRequest(method, "http://127.0.0.1:9100"+path, strings.NewReader("{}"))
+	q.RemoteAddr = "127.0.0.1:50128"
+	q.Header.Set("X-Bridge-Key", key)
+	q.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	handle(w, q)
+	return w
+}
+
 func r2516Call(path, key, method string) int {
 	q := httptest.NewRequest(method, "http://127.0.0.1:9100"+path, strings.NewReader("{}"))
 	q.RemoteAddr = "127.0.0.1:50125"
