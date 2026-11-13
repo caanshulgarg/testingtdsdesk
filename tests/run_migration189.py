@@ -8,9 +8,10 @@ Checks:
   1. one address and one email: 4 wrong passwords, no wait; the 5th: 30 s, then 60 s, 2 min, 5 min, 15 min at most; a try
      during a wait is refused without being counted; after 15 minutes without a failure the count starts again.
   2. the wait is the address's own: the same email from another address is not held; a right password ends the pair's count.
-  3. the hook: a wrong password is counted for the account; after 10 wrong ones in 15 minutes a check without the
-     sign-in function's pass is refused with one message, the password right or wrong (a wrong one still counted); a
-     pass is the pair's own, lasts ten seconds and serves one check.
+  3. the hook: a wrong password is counted for the account; after 10 counted checks in 15 minutes a check without the
+     sign-in function's pass is refused with one message, the password right or wrong, and every refused check is
+     counted; a login with no email on record gets the same; a pass is the pair's own, lasts ten seconds and serves
+     one check; begin, fail and the hook take one advisory lock per email.
   4. the owner's unlock (auth_lockout_clear) ends every wait and count of that email.
   5. nothing kept in the clear (emails and addresses as SHA-256); anon and authenticated can run or read none of it.
 RED_WITHOUT_189=1: the same checks without the file (they fail; (guard) checks hold what stays as it was)."""
@@ -115,6 +116,8 @@ try:
     n0 = db.one("select count(*) from public.auth_signin_fails where ip_key = ''") if text else None
     w = hook(UB, False)
     ok(w == r and text and db.one("select count(*) from public.auth_signin_fails where ip_key = ''") == str(int(n0) + 1), "3. a wrong password then gets the same answer as a right one, and is still counted")
+    n1 = db.one("select count(*) from public.auth_signin_fails where ip_key = ''") if text else None
+    ok(hook(UB, True) == r and text and db.one("select count(*) from public.auth_signin_fails where ip_key = ''") == str(int(n1) + 1), "3. every refused check is counted, the password right or wrong")
     ok(hook(UA, True) == CONT, "3. another account is not held")
     b = begin(B, IP2)
     ok(b.get("allowed") is True and hook(UB, True) == CONT, "3. through the sign-in function (its pass): the right password is taken")
@@ -135,6 +138,12 @@ try:
     age(901)
     ok(hook(UB, True) == CONT, "3. 15 minutes on: the account's count has ended by itself")
     ok(hook("33333333-3333-4333-8333-000000000189", True) == CONT and hook("", False) == CONT, "3. (guard) a login it does not know: left to Auth")
+    UX = "44444444-4444-4444-8444-000000000189"
+    for i in range(10): hook(UX, False)
+    ok(hook(UX, True) == r and hook(UX, False) == r and hook(UB, True) == CONT, "3. a login with no email on record: counted under its id, and past the count it gets the same answer")
+    ok("44444444" not in json.dumps(db.rows("select * from public.auth_signin_fails")) if text else False, "3. and its id is kept only as a SHA-256")
+    lock = re.findall(r"pg_advisory_xact_lock\(hashtextextended\(([^,]+), 0\)\)", text)
+    ok(len(lock) == 3 and len(set(lock)) == 1, "3. begin, fail and the hook take one advisory lock, per email (%s)" % set(lock))
     # ---- 4. the owner's unlock
     print("== 4. the owner's unlock")
     for i in range(10): hook(UA, False)

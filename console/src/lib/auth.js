@@ -86,6 +86,7 @@ async function gotrue(path, { method = "POST", body, token } = {}) {
 // Email and password go to FinCom's sign-in function (server/security/functions/signin), as the app's do: it counts
 // wrong passwords and hands Supabase Auth the password with its pass (migration 189). There is no other way in: when
 // the function cannot be reached, or answers something that is not its own, the person is asked to try again.
+// No bot-check token is sent from here: signin's CAPTCHA_REQUIRED stays off while that is so (docs/CONSOLE-SETUP.md).
 const TRY_AGAIN = "Could not reach FinCom's sign-in. Check the connection and try again in a minute.";
 export async function signIn(email, password) {
   let r;

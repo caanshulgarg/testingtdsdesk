@@ -48,6 +48,9 @@ python3 -I scratchpad/fn_deploy.py <checkout> console-admin server/console/index
 - The console's email-and-password step goes through the `signin` function (`server/security/functions/signin`, which
   answers the console's two addresses): deploy it before publishing the console. A test address for the console goes
   in signin's `ALLOWED_ORIGINS` secret too. When signin does not answer, the console says to try again.
+- The console's sign-in page sends no bot-check token (Cloudflare Turnstile; the user app has it). Until the console
+  has the check, signin's `CAPTCHA_REQUIRED` secret must stay off (unset), and so must Supabase Auth's bot protection
+  (Authentication > Attack Protection): with either on, console sign-ins are refused.
 
 ## Step C. Supabase Auth settings (owner, once)
 

@@ -45,6 +45,9 @@ export interface Deps {
   signinFail(email: string, ipKey: string): Promise<{ fails: number; wait_s: number; until: string | null } | null>;
   signinOk(email: string, ipKey: string): Promise<void>;
 }
+// the words of public.auth_password_attempt_hook's refusal (migration 189), and how they are known in Auth's answer
+export const HOOK_WORDS = "Too many wrong passwords for this account. Sign in from FinCom's own sign-in page, or try again in 15 minutes.";
+const HOOK_REFUSED = /too many wrong passwords for this account/i;
 export const FREE_TRIES = 4;   // wrong passwords of one email from one address that cost no wait (migration 189)
 export const waitWords = (s: number) => (s < 60 ? Math.max(1, Math.ceil(s)) + " seconds" : Math.ceil(s / 60) + " minute" + (Math.ceil(s / 60) === 1 ? "" : "s"));
 const waitMsg = (s: number) => "Too many wrong passwords. Try again in " + waitWords(s) + ", or ask the firm's owner to unlock you.";
@@ -102,6 +105,9 @@ export function makeHandler(d: Deps) {
     const said = String(j.error_description || j.msg || j.error || "");
     // Auth's bot check refused it: said so, never counted as a wrong password
     if (j.error_code === "captcha_failed" || /captcha/i.test(said)) return reply(400, { ok: false, reason: "captcha", error: captcha ? BOT_FAILED : BOT_MISSING });
+    // the password hook's refusal (migration 189: the account's count, a check that carried no pass): passed on in its
+    // own words and never counted here, whatever status and error code Auth gives it
+    if (HOOK_REFUSED.test(said) || HOOK_REFUSED.test(String(j.message || ""))) return reply(403, { ok: false, reason: "account_wait", error: HOOK_WORDS });
     // only a wrong email or password counts; anything else (a locked token, a switched-off login) is passed on as it is
     if (r.status === 400 && (j.error_code === "invalid_credentials" || /invalid/i.test(said))) {
       try { await d.rateAdd("signin-fail-ip", ipKey); } catch { /* migration 112 not run yet: the per-email lockout still holds */ }

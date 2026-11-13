@@ -905,15 +905,17 @@ Without 112: signin skips the per-address count; support-mail still sends and lo
 makes the report and fincom-call schedules the meeting, and neither emails (the bell, and the invite's note, say the
 count could not be read).
 
-**189, sign-in attempts** (13-Nov-2026, branch `next-sec-server`; **written, not run yet**; file md5 eb2b37f2109287c8ffdbf3119ae27ce7):
+**189, sign-in attempts** (13-Nov-2026, branch `next-sec-server`; **written, not run yet**; file md5 7163c6b767a31d9c0d1f6612d0c4a7a1):
 `server/security/migration-189-signin-attempts.sql`. Adds the tables `auth_signin_fails` and `auth_signin_pass` (emails
 and addresses kept only as SHA-256; service_role only) and `auth_signin_begin` / `auth_signin_fail` / `auth_signin_ok`
 (the sign-in function's: the wait belongs to one email from one address: none for four wrong passwords, then 30 s, 1, 2,
-5 and at most 15 minutes; a try during a wait is refused and not counted; begin and fail take an advisory lock per
-pair), `auth_password_attempt_hook` (Supabase Auth's "password verification attempt" hook: every wrong password counted
-for the account; a pass of the sign-in function lasts ten seconds and serves one password check; a check without a pass
-on an account with 10 wrong passwords within 15 minutes is refused with one message, the password right or wrong; ends
-by itself), `auth_signin_sweep` (hourly by pg_cron where installed). Replaces migration 3's `auth_lockout_clear` (same
+5 and at most 15 minutes; a try during a wait is refused and not counted), `auth_password_attempt_hook` (Supabase
+Auth's "password verification attempt" hook: every wrong password counted for the account; a pass of the sign-in
+function lasts ten seconds and serves one password check; a check without a pass on an account with 10 counted checks
+within 15 minutes is refused with one message, the password right or wrong, and every refused check is counted; a
+login with no email on record is counted under its id; ends by itself). begin, fail and the hook take one advisory
+lock per email. Auth gives the hook the account and not the address, so the hook cannot match a pass to its address:
+a pass is written and ended per address, and a check uses up the account's oldest good one. `auth_signin_sweep` (hourly by pg_cron where installed). Replaces migration 3's `auth_lockout_clear` (same
 arguments and grant): the owner's unlock also ends the email's waits and counts here. Add-only, one transaction,
 lock_timeout 10 s, safe twice. Needs migration 3 (numbers 183 to 188 belong to other branches; 189 needs none of them).
 Deploy: 112 when it is not there, 189, then the signin function (it answers the console's two sites too), then the app
@@ -921,6 +923,9 @@ and the console (both sign in through the function: the console's page from `con
 and only then switch the hook on in the dashboard (Authentication -> Hooks -> Password Verification Attempt ->
 `public.auth_password_attempt_hook`): a page that still sent passwords straight to Auth would carry no pass. Without
 189 the function counts with migration 3's lockout.
+**The bot check and the console:** the console's sign-in page sends no bot-check token (the app's does, from
+`app/src/lib/bot.jsx`). Keep signin's `CAPTCHA_REQUIRED` secret off, and Supabase Auth's bot protection off, until the
+console has the check: with either on, nobody can sign in to the console.
 Tested: `tests/run_migration189.py` (RED_WITHOUT_189=1 fails), `server/security/functions/signin/handler_test.ts`,
 `tests/run_console_ui.py`, `tests/run_phase2.py`.
 

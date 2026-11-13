@@ -1,6 +1,6 @@
 // deno test server/security/functions/signin/handler_test.ts   (no network, no Supabase: the services are fakes)
 import { BOT_FAILED, BOT_MISSING, type Deps, IP_BLOCKED, makeHandler, MAX_IP_FAILS, SWITCHED_OFF } from "./handler.ts";
-import { waitWords } from "./handler.ts";
+import { HOOK_WORDS, waitWords } from "./handler.ts";
 
 function eq(a: unknown, b: unknown, msg = "") { const x = JSON.stringify(a), y = JSON.stringify(b); if (x !== y) throw new Error(`${msg} ${x} !== ${y}`); }
 function assert(c: unknown, msg = "assertion failed"): asserts c { if (!c) throw new Error(msg); }
@@ -204,6 +204,20 @@ Deno.test("M4: Auth's own refusal of a right password (the account's count, from
   const r = await read(await handler(post({ email: "a@b.in", password: GOOD })));
   eq(r.status, 403); assert(/Too many wrong passwords/.test(r.body.error));
   eq(att.fails.length, 0); eq(store.rows.length, 0);
+});
+
+Deno.test("the password hook's refusal is known by its words: given as 400 invalid_credentials, or with other text around it, it is still passed on and not counted", async () => {
+  const words = "Too many wrong passwords for this account. Sign in from FinCom's own sign-in page, or try again in 15 minutes.";
+  for (const body of [{ code: 400, error_code: "invalid_credentials", msg: words }, { code: 400, error_code: "hook_reject", error_description: "Invalid: " + words }, { code: 422, message: words }]) {
+    const { handler, att, store, log } = fake({ auth: () => ({ status: body.code, body }) });
+    const r = await read(await handler(post({ email: "a@b.in", password: GOOD })));
+    eq([r.status, r.body.ok, r.body.reason, r.body.error], [403, false, "account_wait", HOOK_WORDS], JSON.stringify(body));
+    eq([att.fails.length, store.rows.length, log.fails.length, att.calls.includes("fail")], [0, 0, 0, false], "not counted for the address, the pair or the email");
+  }
+  // Auth's own wrong-password answer is still counted
+  const w = fake();
+  const r = await read(await w.handler(post({ email: "a@b.in", password: "wrong" })));
+  eq([r.status, w.att.fails.length, w.store.rows.length], [400, 1, 1], "a wrong password: counted as before");
 });
 
 // ---------- 13-Nov-2026 (security review, L4) ----------
