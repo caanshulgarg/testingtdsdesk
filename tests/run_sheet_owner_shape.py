@@ -19,7 +19,10 @@ their GST ledgers and some parties in sub-groups (Sales Local under Sales Accoun
   7. Purchase: the same, with the purchase ledger, the supplier in a sub-group of Sundry Creditors; posted as Purchase;
   8. credit and debit notes: the kind of each row by what the type column says (or, with no such column, a negative
      total), shown in the panel before anything is added; Sales: Credit Note / Debit Note; Purchase: Debit Note, every
-     line reversed; the same type asked of Tally in the already-booked check, a note matched only to a note.
+     line reversed; the same type asked of Tally in the already-booked check, a note matched only to a note;
+  9. the sheet uploaded again over invoices still waiting (review of cf58b7cc9): another party's or another amount's
+     invoice of the same number is never written over (it is a new invoice); a ledger a person set is never replaced;
+     a Ready invoice whose ledger the upload changed goes back to To review.
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_sheet_owner_shape.py"""
 import os, sys, json, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -285,6 +288,40 @@ with sync_playwright() as p:
     if pg.locator("#app [data-sheet-add]:not([disabled])").count(): pg.click("#app [data-sheet-add]"); W(900)
     sn = E("SL().list.map(v => [v.x.number.replace(' (CN)', ''), (salesVoucherXml(v, CO()).match(/VCHTYPE=\"([^\"]*)\"/) || [])[1], v.x.taxable, v.x.igst, v.x.total, v.status]).sort()")
     ok(sn == [["UP/26-27/0021", "Sales", 1000, 180, 1180, "ready"], ["UP/26-27/0022", "Credit Note", 400, 72, 472, "ready"]], "and its amounts are taken positive (%s)" % sn)
+    E("SheetImport.close()"); W(200)
+
+    print("9. the sheet again over waiting invoices: never another invoice's, never a person's ledger; a changed Ready one to review")
+    E("() => { SL().list = []; saveSales(); render(); }"); W(300)
+    upload("sales_owner_shape.xlsx", "#salesIn")
+    for q in qids(): answer(q[0], "create")
+    if pg.locator("#app [data-sheet-add]:not([disabled])").count(): pg.click("#app [data-sheet-add]"); W(900)
+    ok(E("SL().list.map(v => v.status)") == ["ready"] * 4, "four invoices from the sheet, waiting (%s)" % E("SL().list.map(v => v.status)"))
+    E("""() => { const g = (n) => SL().list.find(v => v.x.number === "UP/26-27/000" + n);
+      // 1: another customer's invoice of the same number and date (H1: the party differs)
+      Object.assign(g(1).x, {customerName: "Chitra Foods"}); Object.assign(g(1), {customerLedger: "Chitra Foods (Lucknow)", userLedger: true, salesLedgers: {18: "Consulting Income (B)"}, id: "keep1"});
+      // 4: the same customer and number, another amount (H1: the total differs)
+      Object.assign(g(4).x, {taxable: 1000, cgst: 90, sgst: 90, total: 1180}); Object.assign(g(4), {salesLedgers: {18: "Consulting Income (B)"}, id: "keep4"});
+      // 2: the person chose another customer ledger and sales ledger (M2: theirs stand)
+      Object.assign(g(2), {customerLedger: "Chitra Foods (Lucknow)", userLedger: true, salesLedgers: {18: "Consulting Income (B)"}, status: "ready"});
+      // 3: a Ready invoice whose customer FinCom had only matched (not a person's): the upload sets it (M2: back to To review)
+      Object.assign(g(3), {customerLedger: "Asha Textiles Pvt Ltd", userLedger: false, custSure: true, status: "ready"});
+      saveSales(); render(); }"""); W(300)
+    upload("sales_owner_shape.xlsx", "#salesIn")
+    for q in qids(): answer(q[0], "create")
+    if pg.locator("#app [data-sheet-add]:not([disabled])").count(): pg.click("#app [data-sheet-add]"); W(900)
+    res = pg.inner_text("#app [data-sheet-result]") if pg.locator("#app [data-sheet-result]").count() else ""
+    L = E("SL().list.map(v => ({id: v.id, no: v.x.number, name: v.x.customerName, total: v.x.total, cust: v.customerLedger, sl: Object.values(v.salesLedgers || {}).join(), st: v.status, p: (v.problems || []).join()}))")
+    one = lambda f: ([v for v in L if f(v)] or [{"cust": "", "sl": "", "st": "", "name": "", "total": 0, "p": ""}])[0]
+    k1, k4 = one(lambda v: v["id"] == "keep1"), one(lambda v: v["id"] == "keep4")
+    ok(k1["cust"] == "Chitra Foods (Lucknow)" and k1["sl"] == "Consulting Income (B)" and k1["name"] == "Chitra Foods", "H1: another customer's invoice of the same number and date is not written over (%s)" % k1)
+    ok(k4["total"] == 1180 and k4["sl"] == "Consulting Income (B)", "H1: nor one of the same customer with another total (%s)" % k4)
+    ok("2 added" in res and "2 already here" in res and len(L) == 6, "the sheet's two are new invoices; the two that are the same are not added again (%s; %d here)" % (res, len(L)))
+    n1 = one(lambda v: v["no"] == "UP/26-27/0001" and v["id"] != "keep1"); n4 = one(lambda v: v["no"] == "UP/26-27/0004" and v["id"] != "keep4")
+    ok(n1["cust"] == "Asha Textiles Pvt Ltd" and n1["total"] == 1180 and n4["total"] == 3540 and "already exists" in n1["p"] and n1["st"] == "review", "the new ones carry the sheet's figures and say the number already exists: To review, never posted by themselves (%s)" % [n1, n4])
+    v2 = one(lambda v: v["no"] == "UP/26-27/0002")
+    ok(v2["cust"] == "Chitra Foods (Lucknow)" and v2["sl"] == "Consulting Income (B)" and v2["st"] == "ready", "M2: the customer ledger and sales ledger a person set are not replaced (%s)" % v2)
+    v3 = one(lambda v: v["no"] == "UP/26-27/0003")
+    ok(v3["cust"] == "Bharat Tools LLP" and v3["st"] == "review", "M2: a Ready invoice whose ledger the upload changed goes back to To review (%s)" % v3)
     E("SheetImport.close()"); W(200)
     ok(not errors, "no page errors " + str(errors[:2]))
     br.close()

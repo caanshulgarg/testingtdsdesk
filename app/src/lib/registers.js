@@ -41,7 +41,8 @@ const SHEET_FIELDS = [["date", "Invoice date"], ["no", "Invoice no."], ["party",
 // ledger (ledger) and the sales or purchase ledger (sledger).
 // The voucher type (the owner's decision, 13-Nov-2026) is the screen's, never the sheet's column: an upload on Sales
 // posts as the Sales screen's type ("Sales", or the one in Sales settings), an upload on Purchase as "Purchase". A
-// voucher-type column may stay mapped (vchtype, or doctype as before): it tells a credit or debit note, nothing more.
+// column mapped as the document type tells a credit or debit note by its words (credit note, CN, CRN, return; debit note,
+// DN, DBN), nothing more; one mapped as a voucher type (vchtype) is kept as information and tells nothing.
 const SIDE_LEDGER = {sales: "Sales ledger", purchase: "Purchase / expense ledger"};
 const SHEET_AMOUNTS = ["taxable", "igst", "cgst", "sgst", "cess", "tax", "total", "qty"];
 
@@ -179,13 +180,14 @@ const SheetFmt = {
       if (!r || !r.some(c => String(c == null ? "" : c).trim())) return;
       const no = String(get(r, "no") || "").trim(), first = String(r.find(c => String(c == null ? "" : c).trim()) || "");
       if (!no || /^(grand\s*)?total|^sub\s*total|^net\s*total/i.test(first)){ skipped.push({row: hi + 2 + n, why: /total/i.test(first) ? "a total row" : "no invoice number"}); return; }
-      const typ = String(get(r, "doctype") || get(r, "vchtype") || "").toLowerCase();
+      const typ = String(get(r, "doctype") || "").toLowerCase();
       // the kind of row (the owner, 13-Nov-2026): a note when the document-type column says so (credit note, CN, CRN,
       // return; debit note, DN, DBN), or, with no such column, when the invoice total is negative (its amounts are then
       // taken positive). On Purchase every note is one kind: a purchase return, our debit note or the supplier's credit
       // note is a Debit Note in Tally, every line reversed (noteKind "credit", src/js/01 voucherXml)
-      const says = /credit|cn\b|crn\b|return|refund/.test(typ), saysD = !says && /debit|dn\b|dbn\b/.test(typ);
-      const neg = idx.doctype < 0 && idx.vchtype < 0 && (this.amount(get(r, "total")) < 0 || (idx.total < 0 && this.amount(get(r, "taxable")) < 0));
+      // (only these words of the document-type column, never a voucher type's name: review M3/M4)
+      const saysD = /debit\s*note|\b(dn|dbn)\b|purchase\s*return/.test(typ), says = !saysD && /credit\s*note|\b(cn|crn)\b|return/.test(typ);
+      const neg = idx.doctype < 0 && (this.amount(get(r, "total")) < 0 || (idx.total < 0 && this.amount(get(r, "taxable")) < 0));
       const credit = says || neg || (saysD && side === "purchase"), debit = saysD && side !== "purchase";
       const key = no + "|" + (credit ? "C" : debit ? "D" : "I") + (t.groupByNo === false ? "|" + n : "");
       const a = f => this.amount(get(r, f));
@@ -392,8 +394,11 @@ const SheetPost = {
       e.partyLedger = found || (d.newLedger ? this.pend(d.newLedger, "Sundry Creditors", d) : "");
       if (d.mapped || (!found && d.newLedger)) e.partyUserSet = true;
       // the sheet's own purchase ledger, on the bill
-      const pl = d.sledMapped || this.salesLedger(d) || (d.newSled ? this.pend(d.newSled, "Purchase Accounts") : "");
-      if (pl){ e.expenseLedger = pl; e.expenseUserSet = true; }
+      // (set by a person only when they answered for it in the panel; the sheet's own only when Tally keeps it as an
+      // expense, purchase or fixed-asset ledger: review L8)
+      const own = d.sledMapped || (d.newSled ? this.pend(d.newSled, "Purchase Accounts") : ""), fromSheet = own ? "" : this.salesLedger(d);
+      if (own){ e.expenseLedger = own; e.expenseUserSet = true; }
+      else if (["expense", "asset"].includes(SheetFmt.cls(fromSheet))) e.expenseLedger = fromSheet;
       if (!d.note) e.vchType = "Purchase";   // the Purchase screen's voucher type (vchTypeOf, src/js/03), whatever the sheet says
       finishNewEntry(e, cid, null);
       res.ids.push(e.id);
@@ -405,10 +410,24 @@ const SheetPost = {
     const s = SL(), res = {added: 0, held: 0, again: 0, ids: []};
     docs.forEach(d => {
       const no = d.no + (d.note === "credit" && !/^cn/i.test(d.no) ? " (CN)" : "");
-      const was = s.list.find(v => normInv(v.x.number) === normInv(no) && (!v.x.date || !d.date || v.x.date === d.date));
-      // already here: never added again. One from a sheet still waiting (To review / Ready) takes this sheet's ledgers
-      // and voucher type, so the invoices an old, wrong layout left stuck are put right by uploading the sheet again
-      if (was){ res.again++; if (was.source === "sheet" && ["review", "ready"].includes(was.status)){ this.ledgersTo(was, d, true); mapInvoice(was); } return; }
+      // already here: the same number and date AND the same party (its GSTIN, else its name) AND the same total (review
+      // H1 of cf58b7cc9: number and date alone let another party's invoice of that number be written over). Anything
+      // else of that number is a new invoice (the number said "already exists" on it, as for any upload)
+      const pk = (g, n) => GSTIN_RE.test(g || "") ? g : normName(n || ""), name = d.party || (d.gstin ? "" : "Retail customer");
+      const was = s.list.find(v => normInv(v.x.number) === normInv(no) && (!v.x.date || !d.date || v.x.date === d.date)
+        && pk(v.x.customerGstin, v.x.customerName) === pk(d.gstin, name) && Math.abs(num(v.x.total) - Math.abs(d.total)) < 0.005);
+      // never added again. One from a sheet still waiting (To review / Ready) takes this sheet's ledgers where no person
+      // set one (M2), so the invoices an old, wrong layout left stuck are put right by uploading the sheet again; a
+      // Ready invoice whose ledger changed so goes back to To review, to be looked at before it is posted
+      if (was){
+        res.again++;
+        if (was.source === "sheet" && ["review", "ready"].includes(was.status)){
+          const sig = () => JSON.stringify([was.customerLedger, was.salesLedgers || {}]), before = sig(), ready = was.status === "ready";
+          this.ledgersTo(was, d, true); mapInvoice(was);
+          if (ready && sig() !== before) was.status = "review";
+        }
+        return;
+      }
       const v = newInvoice({number: no, date: d.date, customerName: d.party || (d.gstin ? "" : "Retail customer"), customerGstin: GSTIN_RE.test(d.gstin) ? d.gstin : "", pos: d.pos,
         hsn: d.hsn, taxable: Math.abs(d.taxable), cgst: Math.abs(d.cgst), sgst: Math.abs(d.sgst), igst: Math.abs(d.igst), cess: Math.abs(d.cess), total: Math.abs(d.total),
         rate: d.rate, noteKind: d.note || "", againstInvoice: d.against || ""}, "sheet", {fileName, sheet: {rows: d.rows, check: d.check, sec: d.sec || ""}});
@@ -421,16 +440,20 @@ const SheetPost = {
   // an invoice's ledgers from its row of the sheet: the customer (answered, found, or to create), the sheet's own sales
   // ledger for each of its rates, and Tally's voucher type
   ledgersTo(v, d, again){
-    const led = d.mapped || this.partyLedger(d, "sales");
+    // (on an invoice already here, a ledger a person set stands: only the old layout's mark, an income or expense ledger
+    // in the customer's place, is not a person's)
+    const keep = again && v.userLedger && SheetFmt.cls(v.customerLedger) === "party";
+    const led = keep ? "" : d.mapped || this.partyLedger(d, "sales");
     if (led){ v.customerLedger = led; v.userLedger = true; }
     // a customer to create: the bank page's list of new ledgers (made in Tally with the first posting, as today)
-    else if (d.newLedger){ v.customerLedger = this.pend(d.newLedger, "Sundry Debtors", d); v.userLedger = true; }
-    // (an invoice an old layout gave an income ledger for its customer: matched afresh)
+    else if (!keep && d.newLedger){ v.customerLedger = this.pend(d.newLedger, "Sundry Debtors", d); v.userLedger = true; }
     else if (again && v.userLedger && !["party", ""].includes(SheetFmt.cls(v.customerLedger))){ v.customerLedger = ""; v.userLedger = false; }
     const sl = d.sledMapped || this.salesLedger(d) || (d.newSled ? this.pend(d.newSled, "Sales Accounts") : "");
-    if (sl){ v.salesLedgers = {}; salesTotals(v.x).forEach(g => { v.salesLedgers[g.rate] = sl; }); }
+    // (a sales ledger already on the invoice, a Tally ledger, stands too)
+    if (sl){ const had = (again && v.salesLedgers) || {}; v.salesLedgers = {}; salesTotals(v.x).forEach(g => { v.salesLedgers[g.rate] = exactLedger(had[g.rate]) || sl; }); }
     delete v.x.vchType;   // (the Sales screen's own type: never the sheet's column)
   }
+
 };
 
 // the AI's half: the firm's assistant function (server/assistant, action "sheet_map"), on the cheap model, under the
@@ -547,7 +570,7 @@ const SheetImport = {
     if (this.mapProblems().length) { toast("Choose the column for: " + this.mapProblems().join(", ") + "."); return; }
     const head = st.head, fmt = {id: uid("sf"), name: String(st.fmtName || "Register").slice(0, 60), side: st.side, fp: SheetFmt.fingerprint(head, st.read.sheet), cols: head.length,
       headers: head.map(h => SheetFmt.norm(h)), map: st.map, transforms: st.transforms, by: whoAmI(), at: new Date().toISOString(), ai: !st.aiErr, scope: scope === "firm" ? "firm" : "client", v: 2};
-    if (st.remap){ const old = this.fmtById(st.remap.id); if (old) old.deleted = {at: fmt.at, by: fmt.by, why: "mapped again"}; if (old && old.scope === "firm" && fmt.scope !== "firm") Store.saveFirm(); fmt.ai = false; }
+    if (st.remap){ const old = this.fmtById(st.remap.id); if (old){ old.deleted = {at: fmt.at, by: fmt.by, why: "mapped again"}; if (old.scope === "firm") Store.saveFirm(); else Store.saveCompany(co); } fmt.ai = false; }
     if (fmt.scope === "firm"){ S.firm.sheetFormats = (S.firm.sheetFormats || []).concat([fmt]); Store.saveFirm(); }
     else { co.sheetFormats = (co.sheetFormats || []).concat([fmt]); Store.saveCompany(co); }
     st.fmt = fmt; st.how = "saved";
