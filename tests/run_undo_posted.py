@@ -273,7 +273,7 @@ with sync_playwright() as p:
     cid = E(BILLS); W(800)
     box = lambda: pg.inner_text("#confirmBox").replace("\n", " ") if pg.locator("#confirmBox .cbx").count() else ""
     ytd = "(id) => { const e = D().entries[id], a = e.applied || (e.deleted && e.deleted.kept && e.deleted.kept.applied); const p = a && D().parties[a.partyId]; return p ? JSON.stringify(p.ytd) : ''; }"
-    REFUSE = "This bill is posted to Tally. Delete it in Tally first, then press “Deleted in Tally” in the bar under this bill; after that you can delete it."
+    REFUSE = "Posted to Tally. Delete it in Tally first, then press “Deleted in Tally” under this bill."
     for b in ("b1", "b6"):
         E("() => { window.__toasts = []; }"); E("billDelete('%s')" % b); W(400)
         ok(not box() and last() == REFUSE and E("D().entries['%s'].status" % b) == "approved", "deleting a posted bill (%s) is refused, no box (%r)" % (b, last()))
@@ -284,7 +284,7 @@ with sync_playwright() as p:
     E("(cid) => { window.__un = unapply(D().entries.b2, cid); }", cid)
     ok(E("D().entries.b2.status") == "approved" and E("!!D().entries.b2.applied") and E("window.__un") is False, "unapply refuses a bill sent to Tally")
     E("() => { S.selected = 'b5'; doAct('reject'); }"); W(200)
-    ok(E("D().entries.b5.status") == "approved" and last() == "This bill is posted to Tally. Delete it in Tally first, then press “Deleted in Tally” in the bar under this bill; after that you can mark it No entry.", "No entry refuses a posted bill (%r)" % last())
+    ok(E("D().entries.b5.status") == "approved" and last() == "Posted to Tally. Delete it in Tally first, then press “Deleted in Tally” under this bill.", "No entry refuses a posted bill (%r)" % last())
     E("() => { S.selected = 'b3'; window.__removed = []; doAct('reject'); }"); W(600)
     ok(E("D().entries.b3.status") == "rejected" and E("window.__removed.length") == 0 and E("!!D().entries.b3.docPath"), "No entry: the cloud document is not removed while Undo is offered")
     pg.hover("#toast"); W(14000)

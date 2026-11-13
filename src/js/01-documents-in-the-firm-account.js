@@ -3096,7 +3096,7 @@ function billBar(e){ const l = billPostLive(e, S.coId); return {note: e.exported
 // bill deleted (a posted bill cannot be: billDelete), or Tally's own refusal of
 // this posting (src/js/24)
 function unapply(e, cid, o){
-  if (!(o && o.force) && billPostLive(e, cid)){ toast(e.exportedAt ? "This bill is posted to Tally. Delete it in Tally first, then press \u201cDeleted in Tally\u201d in the bar under this bill: it comes back to To review." : "Its posting to Tally is still being sent or checked. Wait for it to finish, then undo here."); return false; }
+  if (!(o && o.force) && billPostLive(e, cid)){ toast(e.exportedAt ? "Posted to Tally. Delete it in Tally first, then press \u201cDeleted in Tally\u201d under this bill." : "Its posting to Tally is still being sent or checked. Wait for it to finish, then undo here."); return false; }
   const a = e.applied, p = a && D(cid).parties[a.partyId];
   if (p && p.ytd && p.ytd[a.fy] && p.ytd[a.fy][a.natureId]){
     const cur = p.ytd[a.fy][a.natureId];

@@ -18,7 +18,7 @@ stand-in cloud, made-up logins). One part for each item; "python3 tests/run_ux_w
  10. dark mode's bell count can be read; each ledger's Change says which ledger; small links are 32 px to tap;
  11. the client-open follow-ups: usageSoon works at once in a hidden tab; the Overview's TDS card comes through
      lazyModule and works its figure out again when an edit TDS.keptIn looks at changes.
-Run on the React build (app/dist-test, or TDSDESK_SITE). UX_PORT (8421)."""
+Run on the React build (app/dist-test, or TDSDESK_SITE). UX_PORT (8437)."""
 import os, re, sys, json, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
@@ -27,7 +27,7 @@ from playwright.sync_api import sync_playwright
 import run_tally_page_clean as T
 import run_tally_simple as TS
 SITE = os.environ.get("TDSDESK_SITE", os.path.join(HERE, "..", "app", "dist-test"))
-PORT = int(os.environ.get("UX_PORT") or 8421)
+PORT = int(os.environ.get("UX_PORT") or 8437)
 ONLY = set(a for a in sys.argv[1:] if a.isdigit())
 fails, errors = [], []
 def ok(c, w):
@@ -151,7 +151,7 @@ def glob_js():
     import glob
     return "".join(open(f, encoding="utf8").read() for f in glob.glob(os.path.join(SITE, "assets", "*.js")) + [os.path.join(SITE, "legacy.js")])
 
-DUE = "async () => { DueList.cache = {}; const r = await DueList.all(); return r.items.map((x) => ({cid: x.cid, st: x.status, due: x.due, what: x.what, per: x.per, pm: x.pm || ''})); }"
+DUE = "async () => { DueList.cache = {}; const r = await DueList.all(); return r.items.map((x) => ({cid: x.cid, st: x.status, due: x.due, what: x.what, per: x.per, pm: x.due.slice(0, 7)})); }"
 def item3(br):
     print("3. a new client: 'Track returns from which month?', and nothing earlier is overdue")
     ctx, pg, cid = page(br); E = pg.evaluate
@@ -171,10 +171,10 @@ def item3(br):
         E("""([books, id]) => { const b = Object.assign({loading: false, challans: [], alloc: {}}, JSON.parse(JSON.stringify(books)), {cid: id}); const c = S.companies[id]; c.gstin = '07AAACZ9999Z1Z9'; c.tan = 'DELZ12345A';
           S.books = b; b.map = Books.mapLedgers(b.vouchers, {}); LedMaster.refresh(b); saveBooks(); render(); }""", [books, new["id"]]); pg.wait_for_timeout(800)
         items = [x for x in E(DUE) if x["cid"] == new["id"]]
-        early = [x for x in items if x["st"] != "filed" and x["pm"] and x["pm"] < "202611"]
+        early = [x for x in items if x["st"] != "filed" and x["pm"] <= "2026-11"]
         over = [x for x in items if x["st"] == "overdue"]
-        ok(not early and not over, "its list: nothing of a period before Nov-2026, nothing overdue (%d items; overdue %s)" % (len(items), over[:2]))
-        ok(any(x["pm"] >= "202611" for x in items), "   what is due from Nov-2026 on is listed (%s)" % [(x["what"], x["per"]) for x in items][:4])
+        ok(not early and not over, "its list: nothing that fell due by the end of Nov-2026, nothing overdue (%d items; overdue %s)" % (len(items), over[:2]))
+        ok(any(x["pm"] > "2026-11" for x in items), "   what is due from Nov-2026 on is listed (%s)" % [(x["what"], x["per"]) for x in items][:4])
         E("() => navHome('compliance')"); settle(pg, 1500)
         pg.select_option("[data-due-client]", new["id"]); pg.wait_for_timeout(500)
         n_over = pg.inner_text("[data-due-chip=overdue] .sbar-n")
@@ -187,7 +187,7 @@ def item3(br):
     pg.click("[data-track-open]"); pg.select_option("[data-track-client]", cid); pg.fill("[data-track-month]", "2026-10"); pg.click("[data-track-save]"); settle(pg, 1500)
     n1 = int(pg.inner_text("[data-due-chip=overdue] .sbar-n")); co = E("(id) => S.companies[id].trackFrom", cid); t = E(TOAST)
     left = [x for x in E(DUE) if x["cid"] == cid and x["st"] == "overdue"]
-    ok(co == "202610" and n1 < n0 and all(x["pm"] >= "202610" for x in left) and n1 == len(left), "saved (202610): overdue %d -> %d, all of Oct-2026 on (%s); it says so: %s" % (n0, n1, [(x["what"], x["per"]) for x in left][:3], t and t["words"]))
+    ok(co == "202610" and n1 < n0 and all(x["pm"] > "2026-10" for x in left) and n1 == len(left), "saved (202610): overdue %d -> %d, all of Oct-2026 on (%s); it says so: %s" % (n0, n1, [(x["what"], x["per"]) for x in left][:3], t and t["words"]))
     E("() => navHome('today')"); settle(pg, 1500)
     line = pg.inner_text("[data-due-line]")
     ok((str(n1) + " return") in line or (n1 == 0 and "Nothing overdue" in line), "Today's line says the same (%s)" % line.replace("\n", " "))

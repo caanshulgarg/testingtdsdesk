@@ -544,8 +544,8 @@ const Rec = {
     if (l.state === "offline") return {ok: false, kind: "offline", pc, text: "Tally can't be read now: " + pc + " is offline. Once FinCom Bridge runs there again, use Books › From Tally."};
     if (l.state === "stopped") return {ok: false, kind: "stopped", pc, text: "Tally can't be read now: reading is stopped from FinCom on " + pc + (l.stop && l.stop.reason ? " (" + l.stop.reason + ")" : "") + ". An owner resumes it on the Tally page; then the ledgers come in and this line goes by itself."};
     if (l.state === "closed") return {ok: false, kind: "closed", pc, text: "Tally can't be read now: it is not open on " + pc + ". Open " + name + " in Tally there, then use Books › From Tally."};
-    if (l.state === "paused") return {ok: true, kind: "paused", pc, text: "Background reading is paused on " + pc + ", so new ledgers do not come in by themselves. From Tally's Update from Tally reads them once. To keep them coming: right-click the FinCom icon near the clock → Resume background reading."};
-    if (l.state === "notanswering") return {ok: true, kind: "notanswering", pc, text: l.text + "; From Tally's Update from Tally goes once Tally answers."};
+    if (l.state === "paused") return {ok: true, kind: "paused", pc, text: "Background reading is paused on " + pc + ", so new ledgers do not come in by themselves. Update from Tally reads them once. To keep them coming: right-click the FinCom icon near the clock → Resume background reading."};
+    if (l.state === "notanswering") return {ok: true, kind: "notanswering", pc, text: l.text + "; Update from Tally goes once Tally answers."};
     return {ok: true, kind: "open", pc, text: "Update from Tally on Books › From Tally reads Tally's ledger list on " + pc + "."};
   },
 

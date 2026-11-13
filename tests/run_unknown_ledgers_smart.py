@@ -97,7 +97,7 @@ with sync_playwright() as p:
     ok("2.3.1" not in pg.inner_text("#app"), "3. no '2.3.1' on the page")
     # ---------- 4. the action and its reason while paused
     why = alltxt(box + " [data-unk-why]")
-    ok(why and "paused on NWS144" in why[0] and "Resume background reading" in why[0] and "From Tally's Update from Tally reads them once" in why[0], "4. paused: the plain reason, and that From Tally's Update from Tally still reads them once (%s)" % why)
+    ok(why and "paused on NWS144" in why[0] and "Resume background reading" in why[0] and "Update from Tally reads them once" in why[0], "4. paused: the plain reason, and that Update from Tally still reads them once (%s)" % why)
     # next-tally-basics (the owner): Books › From Tally is the one place that updates the ledgers: the box's way there
     ok(E("(s) => { const b = document.querySelector(s + ' [data-unk-go]'); return !!b && b.innerText.trim(); }", box) == "Update ledgers in Books \u203a From Tally" and E("(s) => !document.querySelector(s + ' [data-unk-read]')", box),
        "4. Update ledgers in Books › From Tally (no Read the ledgers now of its own)")
