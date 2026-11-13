@@ -11,6 +11,7 @@ import (
 	"crypto"
 	"crypto/rsa"
 	"crypto/sha256"
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
@@ -103,8 +104,12 @@ func setUpd(k string, v any) { updMu.Lock(); updLast[k] = v; updMu.Unlock() }
 // off on this computer (NoAutoUpdate) and the next look's time
 func updateBeat() M {
 	u := updateInfo()
-	return M{"checked": str(u["checked"]), "message": cutRunes(str(u["message"]), 200), "offered": str(u["latest"]),
+	o := M{"checked": str(u["checked"]), "message": cutRunes(str(u["message"]), 200), "offered": str(u["latest"]),
 		"applying": u["applying"] == true, "checking": updChecking.Load(), "noAutoUpdate": cfgB("NoAutoUpdate"), "next": updNextAt()}
+	if f := updFailNow(); f != nil {
+		o["failed"] = f // 2.5.15 item 5: the version that could not be put in place, the step and why, how many looks
+	}
+	return o
 }
 
 // when the schedule looks next ("" before the first wait is set)
@@ -170,6 +175,7 @@ func checkForUpdate(now bool) M {
 	setUpd("latest", ver)
 	if !newerVersion(ver, BridgeVersion) {
 		setUpd("message", "This is the newest FinCom Bridge ("+BridgeVersion+").")
+		updFailClear()
 		return updateInfo()
 	}
 	// only the version FinCom allowed this computer (nothing is downloaded otherwise)
@@ -182,31 +188,37 @@ func checkForUpdate(now bool) M {
 		setUpd("message", "The update's address is not secure, so it was not used.")
 		return updateInfo()
 	}
-	exeB, err := fetch(u, 200<<20)
-	if err != nil {
-		setUpd("message", "The update could not be downloaded: "+err.Error())
+	// 2.5.15 item 5: the download tried a second way when the first fails or does not match (downloadUpdate)
+	exeB, err := downloadUpdate(u, want)
+	if errors.Is(err, errUpdateSHA) {
+		setUpd("message", "The downloaded update does not match FinCom's list (SHA-256), so it was not used.")
+		writeLog("Update " + ver + ": the download does not match its SHA-256 (tried two ways); not used")
+		noteUpdFail(ver, "sha", "the download does not match FinCom's list (SHA-256), tried two ways")
 		return updateInfo()
 	}
-	h := sha256.Sum256(exeB)
-	if hex.EncodeToString(h[:]) != want {
-		setUpd("message", "The downloaded update does not match FinCom's list (SHA-256), so it was not used.")
-		writeLog("Update " + ver + ": the download does not match its SHA-256; not used")
+	if err != nil {
+		setUpd("message", "The update could not be downloaded: "+err.Error())
+		noteUpdFail(ver, "download", "the update could not be downloaded (tried two ways): "+err.Error())
 		return updateInfo()
 	}
 	if truthy(b["requireSignature"]) || cfgB("RequireSignedUpdates") {
 		if err := checkCodeSignature(exeB); err != nil {
 			setUpd("message", "The update is not signed by FinCom ("+err.Error()+"), so it was not used.")
 			writeLog("Update " + ver + ": no valid code signature; not used")
+			noteUpdFail(ver, "signature", "no valid code signature ("+err.Error()+")")
 			return updateInfo()
 		}
 	}
 	exe, _ := os.Executable()
 	writeLog("Update: putting FinCom Bridge " + ver + " in place of " + BridgeVersion)
 	if err := applyUpdateFn(exe, exeB); err != nil {
-		setUpd("message", "The update could not be put in place: "+err.Error())
-		writeLog("Update " + ver + " could not be put in place: " + err.Error())
+		// 2.5.15 item 5: the program running is kept as it is; looked for again shortly (updateLoop) and FinCom told
+		setUpd("message", "The update could not be put in place: "+err.Error()+"; this version keeps running and the update is tried again shortly.")
+		writeLog("Update " + ver + " could not be put in place: " + err.Error() + "; " + BridgeVersion + " keeps running, tried again shortly")
+		noteUpdFail(ver, "apply", "the update could not be put in place: "+err.Error())
 		return updateInfo()
 	}
+	updFailClear()
 	setUpd("applying", true)
 	setUpd("message", "Updating to "+ver+"; the bridge starts again in a few seconds.")
 	go restartAfterUpdate()
@@ -345,21 +357,213 @@ func checkForUpdateTray() M {
 }
 
 func updateLoop() {
-	wait := func(first bool) {
-		d := updateWait(first)
+	wait := func(first bool, spent time.Duration) {
+		d := updateWait(first) - spent // 2.5.15: the schedule kept to its own times (the gate expects them)
+		if d < time.Minute {
+			d = time.Minute
+		}
 		updNext.Store(time.Now().Add(d).UnixNano())
 		sleepOrStop(d)
 	}
-	wait(true)
+	wait(true, 0)
 	for !stopping() {
+		t0 := time.Now()
 		if !cfgB("NoAutoUpdate") {
-			func() {
-				defer func() { recover() }()
-				checkForUpdateOnce(false)
-			}()
+			updateLookWithRetries()
 		}
-		wait(false)
+		wait(false, time.Since(t0))
 	}
+}
+
+// one scheduled look. 2.5.15 item 5: a download or a putting in place that failed is tried again a little later, within
+// the look's own time (FinCom's update gate lets a bridge through for a few minutes); never during a posting (the start
+// again waits for quiet as before)
+func updateLookWithRetries() {
+	look := func() {
+		defer func() { recover() }()
+		checkForUpdateOnce(false)
+	}
+	look()
+	for _, d := range updRetryWaits {
+		if !updFailRetryable() || stopping() {
+			break
+		}
+		updNext.Store(time.Now().Add(d).UnixNano())
+		sleepOrStop(d)
+		look()
+	}
+}
+
+// --- 2.5.15 item 5 (the owner's approval of 13-Nov-2026): a computer never stays on an old bridge silently. The download
+// is tried a second way (a fresh connection over HTTP/1.1, then FinCom's own copy of the same file) when the first fails
+// or does not match FinCom's list; a download or a putting in place that fails is looked for again 2 and 4 minutes later
+// (within the update gate's few minutes), then at the usual times; the version, the step and why go to FinCom with every
+// beat (update.failed) until an update is put in place or this is the newest. Signing and the installer are unchanged:
+// the SHA-256 and the code signature are checked as before on whatever was downloaded
+var updRetryWaits = []time.Duration{2 * time.Minute, 2 * time.Minute}
+
+var errUpdateSHA = errors.New("the download does not match FinCom's list (SHA-256)")
+
+// the second way: a new connection of its own, HTTP/1.1, no connection kept, more time for the whole
+var fetchAltFn = func(u string, max int64) ([]byte, error) {
+	tr := &http.Transport{Proxy: http.ProxyFromEnvironment, DisableKeepAlives: true, ForceAttemptHTTP2: false,
+		TLSNextProto: map[string]func(string, *tls.Conn) http.RoundTripper{}, // HTTP/1.1 only
+		DialContext:  (&net.Dialer{Timeout: 20 * time.Second}).DialContext, TLSHandshakeTimeout: 20 * time.Second, ResponseHeaderTimeout: 60 * time.Second}
+	c := &http.Client{Timeout: 10 * time.Minute, Transport: tr}
+	r, err := c.Get(u)
+	if err != nil {
+		return nil, plainNetErr(err)
+	}
+	defer r.Body.Close()
+	if r.StatusCode != 200 {
+		return nil, fmt.Errorf("HTTP %d", r.StatusCode)
+	}
+	return io.ReadAll(io.LimitReader(r.Body, max))
+}
+
+var (
+	fetchFn       = fetch
+	updAltPauseFn = func() { sleepOrStop(5 * time.Second) }
+)
+
+// the program from u, matching want (SHA-256 hex): the usual way, then the second way, then the second way from
+// FinCom's own copy of the same file (when u is elsewhere); errUpdateSHA when what came never matched
+func downloadUpdate(u, want string) ([]byte, error) {
+	urls := []string{u}
+	if i := strings.LastIndex(u, "/"); i >= 0 {
+		if own := updateBase() + u[i+1:]; own != u && (strings.HasPrefix(own, "https://") || os.Getenv("FINCOM_TEST") == "1") {
+			urls = append(urls, own)
+		}
+	}
+	var last error
+	sawWrong := false
+	for n := 0; n < 1+len(urls); n++ {
+		get, at, how := fetchAltFn, urls[minI(maxI(n-1, 0), len(urls)-1)], "the second way"
+		if n == 0 {
+			get, how = fetchFn, "the usual way"
+		} else {
+			updAltPauseFn()
+			if stopping() {
+				break
+			}
+		}
+		b, err := get(at, 200<<20)
+		if err == nil {
+			h := sha256.Sum256(b)
+			if hex.EncodeToString(h[:]) == want {
+				if n > 0 {
+					writeLog("Update: downloaded " + how + " (" + at + ") after the first try did not work (" + or(errText(last), "no match") + ")")
+				}
+				return b, nil
+			}
+			sawWrong, err = true, errUpdateSHA
+		}
+		writeLog("Update: the download " + how + " (" + at + ") did not work: " + err.Error())
+		last = err
+	}
+	if sawWrong && errors.Is(last, errUpdateSHA) {
+		return nil, errUpdateSHA
+	}
+	return nil, last
+}
+
+var updFail struct {
+	mu   sync.Mutex
+	last M // {version, from, step, words, at, tries}; nil: none
+	now  bool
+}
+
+// a look ended without the update in place: kept (tries counted per version) for the beat; said in the log once a look
+func noteUpdFail(ver, step, words string) {
+	updFail.mu.Lock()
+	tries := 1
+	if updFail.last != nil && str(updFail.last["version"]) == ver {
+		tries = toInt(updFail.last["tries"]) + 1
+	}
+	updFail.last = M{"version": ver, "from": BridgeVersion, "step": step, "words": cutRunes(words, 300), "at": nowFn().Format(time.RFC3339), "tries": tries}
+	updFail.now = step == "download" || step == "apply" || step == "sha"
+	updFail.mu.Unlock()
+	writeLog(fmt.Sprintf("Update %s: not put in place (%s, look %d): %s; FinCom is told with the heartbeat", ver, step, tries, words))
+}
+
+func updFailClear() {
+	updFail.mu.Lock()
+	updFail.last, updFail.now = nil, false
+	updFail.mu.Unlock()
+}
+
+// the failure FinCom is told of (nil: none)
+func updFailNow() M {
+	updFail.mu.Lock()
+	defer updFail.mu.Unlock()
+	if updFail.last == nil {
+		return nil
+	}
+	o := M{}
+	for k, v := range updFail.last {
+		o[k] = v
+	}
+	return o
+}
+
+// the last look failed in a way a look a little later may mend (download, SHA-256, putting in place); consumed
+func updFailRetryable() bool {
+	updFail.mu.Lock()
+	defer updFail.mu.Unlock()
+	r := updFail.now
+	updFail.now = false
+	return r && !cfgB("NoAutoUpdate") && updateInfo()["applying"] != true
+}
+
+// the new program put in place of the running one (Windows: win_platform.go applyUpdate): written whole and flushed
+// beside it, the running one renamed aside (FinComBridge.old.exe), the new one renamed into its place. 2.5.15 item 5:
+// each rename tried again for a moment (a program holding the file), and if the new one cannot be put in place the
+// running one is put back, by a rename or else by a copy of its bytes, so the computer is never left without a program
+func replaceProgram(exe string, b []byte) error {
+	dir := filepath.Dir(exe)
+	nw := filepath.Join(dir, "FinComBridge.new.exe")
+	old := filepath.Join(dir, "FinComBridge.old.exe")
+	tmp, err := writeTempSynced(nw, b)
+	if err != nil {
+		return err
+	}
+	if err := updRename(tmp, nw); err != nil {
+		_ = os.Remove(tmp)
+		return err
+	}
+	_ = os.Remove(old)
+	if err := updRename(exe, old); err != nil {
+		_ = os.Remove(nw)
+		return err
+	}
+	if err := updRename(nw, exe); err != nil {
+		if e2 := updRename(old, exe); e2 != nil {
+			if ob, e3 := os.ReadFile(old); e3 == nil {
+				if t, e4 := writeTempSynced(exe, ob); e4 == nil {
+					_ = updRename(t, exe)
+				}
+			}
+		}
+		_ = os.Remove(nw)
+		return err
+	}
+	fsyncDir(dir)
+	// review H2 (2.2.0): the SHA-256 of the program replaced, recorded while it is the running one, for the rollback
+	_ = saveFile(filepath.Join(dir, "update-pending.json"), jsonText(M{"from": BridgeVersion, "at": nowS(), "starts": 0, "sha256": fileSHA256(old)}))
+	return nil
+}
+
+var updRenameFn = os.Rename
+
+func updRename(a, b string) error {
+	var err error
+	for i := 0; i < 5; i++ {
+		if err = updRenameFn(a, b); err == nil {
+			return nil
+		}
+		time.Sleep(time.Duration(i+1) * 100 * time.Millisecond)
+	}
+	return err
 }
 
 // --- 2.5.4: an update runs well only when the new program really works: its web server is up (serving) and its main

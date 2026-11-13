@@ -639,26 +639,10 @@ func checkCodeSignature(b []byte) error {
 	return nil
 }
 
-// the running program is renamed (Windows allows that), the new one put in its place; the service then starts again
-func applyUpdate(exe string, b []byte) error {
-	dir := filepath.Dir(exe)
-	nw := filepath.Join(dir, "FinComBridge.new.exe")
-	old := filepath.Join(dir, "FinComBridge.old.exe")
-	if err := os.WriteFile(nw, b, 0o755); err != nil {
-		return err
-	}
-	_ = os.Remove(old)
-	if err := os.Rename(exe, old); err != nil {
-		return err
-	}
-	if err := os.Rename(nw, exe); err != nil {
-		_ = os.Rename(old, exe)
-		return err
-	}
-	// review H2 (2.2.0): the SHA-256 of the program replaced, recorded while it is the running one, for the rollback
-	_ = saveFile(filepath.Join(dir, "update-pending.json"), jsonText(M{"from": BridgeVersion, "at": nowS(), "starts": 0, "sha256": fileSHA256(old)}))
-	return nil
-}
+// the running program is renamed (Windows allows that), the new one put in its place; the service then starts again.
+// 2.5.15 item 5: the steps in update.go replaceProgram (each rename tried again for a moment; the running one put back
+// whenever the new one cannot be put in place)
+func applyUpdate(exe string, b []byte) error { return replaceProgram(exe, b) }
 
 func openFile(f string) {
 	c := exec.Command("notepad.exe", f)

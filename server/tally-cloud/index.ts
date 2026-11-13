@@ -2438,9 +2438,15 @@ function updateOf(b: any) {
   const u = b?.update;
   if (!u || typeof u !== "object" || Array.isArray(u)) return {};
   const s = (v: unknown, n: number) => typeof v === "string" ? v.slice(0, n) : "";
-  const v = typeof u.offered === "string" && /^\d+\.\d+\.\d+$/.test(u.offered) ? u.offered : "";
+  const ver = (x: unknown) => typeof x === "string" && /^\d+\.\d+\.\d+$/.test(x) ? x : "";
+  const v = ver(u.offered);
+  // FinCom Bridge 2.5.15 (item 5): the update it could not put in place: the version, the version it runs, the step
+  // (download, sha, signature, apply), why (300 letters at most), when, how many looks; anything else dropped
+  const f = u.failed && typeof u.failed === "object" && !Array.isArray(u.failed) && ver(u.failed.version) ? u.failed : null;
+  const failed = f ? { version: ver(f.version), from: ver(f.from), step: ["download", "sha", "signature", "apply"].includes(f.step) ? f.step : "other", words: s(f.words, 300),
+    at: s(f.at, 40), tries: Math.max(0, Math.min(10000, Math.floor(Number(f.tries)) || 0)) } : null;
   return { update: { checked: s(u.checked, 40), message: s(u.message, 200), offered: v, applying: u.applying === true, checking: u.checking === true,
-    noAutoUpdate: u.noAutoUpdate === true, next: s(u.next, 40) } };
+    noAutoUpdate: u.noAutoUpdate === true, next: s(u.next, 40), ...(failed ? { failed } : {}) } };
 }
 // next-fix-read-any-bridge (07-Nov-2026, staging; bridge 2.5.5): an Update now that waited on a computer (someone working in
 // Tally, a posting, FinCom reading) said nothing for up to 30 minutes. The bridge now says why its run waits: a known reason,
