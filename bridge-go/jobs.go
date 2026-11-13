@@ -770,8 +770,11 @@ func jobWorker(dir string) {
 		// 3 s at most; never while Tally is asked anything). Told to stop: nothing more is sent, the job ends "stopped" and
 		// is reported as usual (FinCom stores it, then tells it to stop). No answer: what is on this computer is posted (the
 		// owner's decision: "Then go ahead"), counted, and said with the report when FinCom answers again
+		offline := false
 		if fromCloud {
-			if why := checkCloudBeforeSend(jobID, i+1, K, p); why != "" {
+			why, unheard := checkCloudBeforeSend(jobID, i+1, K)
+			offline = unheard
+			if why != "" {
 				p["stoppedBy"] = why
 				finish("stopped", "Stopped by FinCom before part "+fmt.Sprint(i+1)+" of "+fmt.Sprint(K)+" was sent: "+why)
 				return
@@ -839,6 +842,9 @@ func jobWorker(dir string) {
 				toInt(note["created"]), toInt(note["altered"]), toInt(note["exceptions"]), toInt(note["ignored"]), or(str(note["lastVchId"]), "none")))
 		}
 		round = 0
+		if offline && (o.err == nil || tallyNoAnswer(o.err)) {
+			p["offlineSends"] = toInt(p["offlineSends"]) + 1 // 2.5.15 item 1: a part that reached Tally without FinCom's answer
+		}
 		for _, x := range res {
 			delete(sending, str(x["id"]))
 			results = append(results, x)
@@ -1016,31 +1022,29 @@ var postOKOfflineGap = 15 * time.Second
 
 var postOKOffline sync.Map // job id -> time.Time of the last check with no answer
 
-// "" to send part i of n now; else why FinCom said stop. A part sent without FinCom's answer is counted in the job
-// (offlineSends: reported with posts_update, so FinCom knows once it answers again)
-func checkCloudBeforeSend(jobID string, i, n int, p M) string {
+// "" to send part i of n now; else why FinCom said stop. unheard: no answer from FinCom (the part, once it reaches
+// Tally, is counted in the job: offlineSends, reported with posts_update, so FinCom knows once it answers again)
+func checkCloudBeforeSend(jobID string, i, n int) (stop string, unheard bool) {
 	if v, ok := postOKOffline.Load(jobID); ok && time.Since(v.(time.Time)) < postOKOfflineGap {
-		p["offlineSends"] = toInt(p["offlineSends"]) + 1
-		return ""
+		return "", true
 	}
 	stop, reached := postOKFn(jobID)
 	if stop != "" {
 		postOKOffline.Delete(jobID)
 		writeLog(fmt.Sprintf("Posting job %s: FinCom said to stop before part %d of %d: %s; nothing more is sent to Tally", jobID, i, n, stop))
-		return stop
+		return stop, false
 	}
 	if !reached {
 		if _, was := postOKOffline.Load(jobID); !was {
 			writeLog(fmt.Sprintf("Posting job %s: FinCom's cloud could not be reached before part %d of %d; what is on this computer is posted (the owner's decision), and FinCom is told when it answers again", jobID, i, n))
 		}
 		postOKOffline.Store(jobID, time.Now())
-		p["offlineSends"] = toInt(p["offlineSends"]) + 1
-		return ""
+		return "", true
 	}
 	if _, was := postOKOffline.LoadAndDelete(jobID); was {
 		writeLog(fmt.Sprintf("Posting job %s: FinCom's cloud answers again (before part %d of %d)", jobID, i, n))
 	}
-	return ""
+	return "", false
 }
 
 // the posting is one taken from FinCom's queue (the list of them on this computer: an older payload has no mark)
