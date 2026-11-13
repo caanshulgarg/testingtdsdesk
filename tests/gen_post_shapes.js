@@ -8,7 +8,10 @@
 const fs = require("fs"), path = require("path"), vm = require("vm"), crypto = require("crypto");
 const SRC = path.join(__dirname, "..", "src", "js"), OUT = path.join(__dirname, "fixtures", "post-shapes");
 const ORDER = JSON.parse(fs.readFileSync(path.join(SRC, "ORDER.json"), "utf8"));
-const js = ORDER.map(f => fs.readFileSync(path.join(SRC, f), "utf8")).join("\n");
+// 18ad47515 (GST 3B in the cloud) moved num, r2, MONTHS3, toDateObj and fmtDate to server/_shared/gst3b.js, which
+// build.py puts at the head of the app (SHARED_JS): read first here as there, its export line left out
+const SHARED = fs.readFileSync(path.join(__dirname, "..", "server", "_shared", "gst3b.js"), "utf8").replace(/^export .*$/m, "");
+const js = [SHARED].concat(ORDER.map(f => fs.readFileSync(path.join(SRC, f), "utf8"))).join("\n");
 // the builders and what they call; every other name is a stub below
 const NAMES = ["xesc", "r2", "num", "amt", "toTallyDate", "fmtDate", "toDateObj", "MONTHS", "MONTHS3", "voucherXml", "vchNoFor", "remoteIdFor", "remoteIdTrial",
   "bankVoucherXml", "ledgerMasterXml", "salesVoucherXml", "customerMasterXml", "GST_STATES", "stateOfGstin", "fpHash", "setAutoNumbering", "ledNm", "OWN_BANK"];

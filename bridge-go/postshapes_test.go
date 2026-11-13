@@ -25,7 +25,10 @@ func postShapesSourceHash(t *testing.T, names []string) string {
 	for _, x := range arr(readJSONFile(filepath.Join(dir, "ORDER.json"))) {
 		order = append(order, str(x))
 	}
-	var parts []string
+	// as the app is built (build.py SHARED_JS) and gen_post_shapes.js reads it: server/_shared/gst3b.js first (num, r2,
+	// MONTHS3, toDateObj, fmtDate moved there in 18ad47515), its export line left out
+	shared := regexp.MustCompile(`(?m)^export .*$`).ReplaceAllString(readText(filepath.Join("..", "server", "_shared", "gst3b.js")), "")
+	parts := []string{shared}
 	for _, f := range order {
 		parts = append(parts, readText(filepath.Join(dir, f)))
 	}

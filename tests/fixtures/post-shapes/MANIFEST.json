@@ -24,7 +24,7 @@
     "ledNm",
     "OWN_BANK"
   ],
-  "sha256": "77ec97e7669690915b62c7be975f02f6b989c234e9ded7c053030693eccb61bc",
+  "sha256": "4d7f96ad11ed45384b237d3c9d7c7eb04d784ebd8e522190949eaa1a358ac54b",
   "files": [
     "purchase-bill.xml",
     "journal.xml",
