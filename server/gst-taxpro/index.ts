@@ -51,6 +51,7 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsFor } from "../_shared/cors.ts";   // the one list of headers for every function (server/_shared/cors.ts)
 import { clientIp } from "../_shared/clientip.ts";
+import { errorCodes } from "../_shared/lognames.ts";
 import { after2b } from "./automatch.ts";
 import { firmGate, viaClient } from "../_shared/firmgate.ts";   // the console's switches (migration 118)
 import { r1Figures, r1PortalFigures, r3bFigures, compare, sameFigures, setoff, ledgersOf, writeAllowed, cleanR1, cleanR3b, safeText, Plain, reached, offsetDone, refusedClearly } from "./filing.ts";
@@ -200,7 +201,7 @@ async function tp(path: string, query: Record<string, string>, headers: Record<s
   }
   let j: any = null; try { j = JSON.parse(text); } catch { /* not JSON */ }
   // for the function's own logs, failures only (never return data, tokens, the credentials or an OTP)
-  if (!j || j.error || String(j.status_cd) === "0") console.log(JSON.stringify({ taxpro: path, action: query.action, http: r.status, head: scrub(safeText(text.slice(0, 300), String((body as any)?.sid || "").split("|")[1] || ""), k.pw, query.OTP || "") }));
+  if (!j || j.error || String(j.status_cd) === "0") console.log(JSON.stringify({ taxpro: path, action: query.action, http: r.status, codes: errorCodes(text), length: text.length }));   // the answer's error codes only (security review L6)
   return { http: r.status, j, text };
 }
 const tpErr = (x: { http: number; j: any; text: string }) =>
@@ -453,7 +454,7 @@ async function ei(method: string, path: string, q: Record<string, string>, body?
   if (typeof data === "string") { try { data = JSON.parse(data); } catch { /* left as it is */ } }
   const okk = String(j?.Status ?? j?.status) === "1";
   const errs = (j?.ErrorDetails || j?.errorDetails || []).map((e: any) => (e.ErrorMessage || e.errorMessage || "") + (e.ErrorCode ? " (" + e.ErrorCode + ")" : "")).filter(Boolean);
-  if (!okk) console.log(JSON.stringify({ einv: path, http: r.status, head: scrub(text.slice(0, 300), ...hide) }));
+  if (!okk) console.log(JSON.stringify({ einv: path, http: r.status, codes: errorCodes(text), length: text.length }));
   return { ok: okk, data, error: errs.join("; ") || (okk ? "" : (j?.message || "The e-invoice service answered HTTP " + r.status + ".")), info: j?.InfoDtls || j?.infoDtls };
 }
 async function einvToken(firm: string, gstin: string, fresh = false) {

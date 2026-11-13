@@ -251,6 +251,7 @@ import { servingGate, beatOnly, lineFollows, followAskable } from "./readfollow.
 import { startDecision, earliestKnown, booksFromDay, memoAnswers, movedWords, istDay, uuidOfHex, dayOf } from "./bookstart.js";   // next-book-start: a book's start (bookStartFromState)
 import { corsFor } from "../_shared/cors.ts";   // the one list of headers for every function (server/_shared/cors.ts)
 import { cloudReporter } from "../_shared/sentry.ts";
+import { nm } from "../_shared/lognames.ts";   // a name in the log is a mark, never the name (security review L6)
 import { publicError } from "../_shared/errors.ts";   // what a caller is told when something fails inside (security review L3)
 // 23-Oct-2026 (next-fix-tally-link): the one rule for linking a company to a client by itself (server/_shared/tallyname.js)
 import { autoLinkFor } from "../_shared/tallyname.js";
@@ -476,10 +477,10 @@ function beatFail(fn: string, company: string, e: unknown) {
   if (missingFn(m)) {
     if (missingSaid.has(fn)) return;
     missingSaid.add(fn);
-    fail(fn, m); console.error(`tally-ingest beat: ${fn} is not in the database (migration 44 not run?), first for ${company}: ${m}. Said once until tally-ingest restarts`);
+    fail(fn, m); console.error(`tally-ingest beat: ${fn} is not in the database (migration 44 not run?), first for ${nm(company)}: ${m}. Said once until tally-ingest restarts`);
     return;
   }
-  fail(fn, m); console.error(`tally-ingest beat: ${fn} failed for ${company}: ${m}`);
+  fail(fn, m); console.error(`tally-ingest beat: ${fn} failed for ${nm(company)}: ${m}`);
 }
 // round 19: the starting points asked in this run (book and company GUID): tally_start_point keeps it once in the database
 // anyway, so it is called once per company per 5 minutes, not every beat (it takes the cursor's lock and writes). Review 46 H1
@@ -698,7 +699,7 @@ async function autoLedgersFor(firm: string, body: any, have: Record<string, stri
       if (error) {
         const m = String(error.message || "");
         if (missingFn(m)) { if (!ledgerFetchMissing) console.log("tally-ingest beat: the ledgers' automatic fetch is off: migration 89 is not applied"); ledgerFetchMissing = Date.now(); return out; }
-        fail("ledger_fetch", error); console.log("tally-ingest beat: the ledgers to fetch not worked out:", company, m.slice(0, 200));
+        fail("ledger_fetch", error); console.log("tally-ingest beat: the ledgers to fetch not worked out:", nm(company), m.slice(0, 200));
         continue;
       }
       if ((data as any)?.full === true) out.full.push(company);
@@ -933,7 +934,7 @@ async function recorderGaps(dev: any, firm: string, bridge: string, changes: Bea
           if (startDone.size > 5000) startDone.clear();
           startDone.set(key, { other: d?.otherCompany === true, t: Date.now() }); started = d?.set === true;
           if (typeof d?.bookGuid === "string" && d.bookGuid) { if (bookGuid.size > 5000) bookGuid.clear(); bookGuid.set(book, d.bookGuid); }
-          if (started) console.log("tally-ingest beat: starting point recorded", c.name, JSON.stringify({ guid: c.guid, startVoucher: (data as any)?.startVoucher, startMaster: (data as any)?.startMaster }));
+          if (started) console.log("tally-ingest beat: starting point recorded", nm(c.name), JSON.stringify({ guid: c.guid, startVoucher: (data as any)?.startVoucher, startMaster: (data as any)?.startMaster }));
         }
       } catch (e) { beatFail("tally_start_point", c.name, e); }
     }
@@ -942,7 +943,7 @@ async function recorderGaps(dev: any, firm: string, bridge: string, changes: Bea
       if (!otherSaid.has(key)) {
         if (otherSaid.size > 5000) otherSaid.clear();
         otherSaid.add(key);
-        console.log(`tally-ingest beat: ${c.name}: Tally company GUID ${c.guid} is another company than the book's (${bg || "not known"}): needs_baseline, the starting point kept, no gap check for it (said once)`);
+        console.log(`tally-ingest beat: ${nm(c.name)}: Tally company GUID ${c.guid} is another company than the book's (${bg || "not known"}): needs_baseline, the starting point kept, no gap check for it (said once)`);
       }
       out[c.name] = { gap: null, missing: 0, needsBaseline: true, otherCompany: true };
       continue;
@@ -1240,7 +1241,7 @@ async function supportPack(firm: string, dev: any, body: any) {
   const path = `${firm}/${dev.id}/${new Date().toISOString().replace(/[:.]/g, "-")}.zip`;
   const up = await db.storage.from("tally-support").upload(path, zip, { contentType: "application/zip" });
   if (up.error) throw new Error("storage: " + up.error.message);
-  console.log("tally-ingest support pack", path, String(body.note || "").slice(0, 200));
+  console.log("tally-ingest support pack", path);
   return reply(200, { ok: true, path });
 }
 // final review M3: {kind: "own_key", oldKey, bridge}: the bridge, given a new computer key by its member's FinCom page,
@@ -1640,7 +1641,7 @@ async function applyLedgerList(firm: string, book: string, body: any, dev?: any,
         // migration-36: the rename was rolled back (the trial balance would not tie, or the book's does not); said,
         // the batch goes on, and the next round asks again (the GUID is still under the old name)
         notes.push(("rename " + from + " -> " + to + " not made: " + String(error.message || "")).slice(0, 300));
-        if (!renameRefused(error)) fail("ledger_rename", error); console.log("tally-ingest ledger_list: rename rolled back", book, from, "->", to, String(error.message || "").slice(0, 200));
+        if (!renameRefused(error)) fail("ledger_rename", error); console.log("tally-ingest ledger_list: rename rolled back", book, nm(from), "->", nm(to), String(error.message || "").slice(0, 200));
         return;
       }
       if (!missing34(error)) throw new Error(error.message);
@@ -2053,7 +2054,7 @@ async function periodDaysFor(firm: string, body: any, stopped: boolean, max = 3,
       if (error) {
         const m = String(error.message || "");
         if (missingFn(m) || /tally_period/i.test(m) && /does not exist/i.test(m)) { if (!periodMissing) console.log("tally-ingest beat: older entries are off: migration 98 is not applied"); periodMissing = Date.now(); return null; }
-        fail("period_next", error); console.log("tally-ingest beat: the days of the period not worked out:", company, m.slice(0, 200));
+        fail("period_next", error); console.log("tally-ingest beat: the days of the period not worked out:", nm(company), m.slice(0, 200));
         unsure = true; continue;     // review 245 R5: that company left out; the others go on
       }
       for (const d of Array.isArray(data) ? data as any[] : []) {
@@ -2088,7 +2089,7 @@ async function periodDaysFor(firm: string, body: any, stopped: boolean, max = 3,
         const { data: cd, error: ce } = got;
         if (ce) {
           if (missingFn(String(ce.message || ""))) { if (!checkMissing) console.log("tally-ingest beat: the upload check is off: migration 133 is not applied"); checkMissing = Date.now(); }
-          else { fail("check_next", ce); console.log("tally-ingest beat: the days to check not worked out:", company, String(ce.message || "").slice(0, 200)); }
+          else { fail("check_next", ce); console.log("tally-ingest beat: the days to check not worked out:", nm(company), String(ce.message || "").slice(0, 200)); }
         } else {
           const rows = (Array.isArray(cd) ? cd as any[] : []).filter((d) => isDay(String(d?.day || "")));
           // bridge 2.5.10: a day queued by Bring missing days (tally_check_days.source 'fill') is handed out as kind fill,
@@ -2618,7 +2619,7 @@ async function applyLedgerChanges(firm: string, book: string, body: any) {
       const { data: rn, error: re } = await db.rpc("tally_ledger_rename_from_tally", { p_book: book, p_guid: r.guid, p_from: have.name, p_to: r.name });
       if (!re && (rn as any)?.renamed === true) {
         kept.push(("'" + have.name + "' renamed to '" + r.name + "' as in Tally (the owner's decision of 15-Oct-2026): its entries follow, the trial balance unchanged; the old name kept as an alias").slice(0, 300));
-        console.log("tally-ingest ledger_changes: renamed as in Tally", book, JSON.stringify({ from: have.name, to: r.name, guid: r.guid, lines: (rn as any)?.lines ?? null }));
+        console.log("tally-ingest ledger_changes: renamed as in Tally", book, JSON.stringify({ from: nm(have.name), to: nm(r.name), guid: r.guid, lines: (rn as any)?.lines ?? null }));
         have = { ...have, name: r.name };
         byName.set(r.name, have);
         renamed = true;
@@ -2628,7 +2629,7 @@ async function applyLedgerChanges(firm: string, book: string, body: any) {
         const why = re ? "it could not be made: " + String(re.message || "").slice(0, 120) : String((rn as any)?.words || (rn as any)?.note || "refused");
         kept.push(("'" + have.name + "' is named '" + r.name + "' in Tally now: not renamed (" + why + "); nothing was changed").slice(0, 300));
         if (re && !renameRefused(re)) fail("ledger_rename", re);
-        console.log("tally-ingest ledger_changes: rename from Tally not made, held", book, have.name, "->", r.name, why.slice(0, 200));
+        console.log("tally-ingest ledger_changes: rename from Tally not made, held", book, nm(have.name), "->", nm(r.name), why.slice(0, 200));
       }
     }
     if (have.name !== r.name) {
@@ -2686,7 +2687,7 @@ async function applyLedgerChanges(firm: string, book: string, body: any) {
     const { error } = await db.rpc("tally_year_openings", { p_book: book });
     if (error) kept.push(("year openings: " + error.message).slice(0, 300));
   }
-  console.log("tally-ingest ledger_changes", book, why, JSON.stringify({ ...out, after: body.after ?? null, upto: body.upto ?? null, kept: kept.slice(0, 5) }));
+  console.log("tally-ingest ledger_changes", book, why, JSON.stringify({ ...out, after: body.after ?? null, upto: body.upto ?? null, kept: kept.length }));
   return reply(200, out);
 }
 // Migration 45: the posting window of a job's last posts_update, {a0, a1, vouchersCreated, mastersCreated, guid}: whole numbers
@@ -2949,7 +2950,7 @@ async function endStaleAliases(book: string, rows: { guid: string; name: string 
       const { error } = await db.from("tally_ledger_aliases").update({ ended_at: new Date().toISOString() }).eq("book_id", book).in("tally_name", end.slice(i, i + 150));
       if (error) { fail("ledger_aliases", error); console.log("tally-ingest: stale ledger aliases not ended:", book, String(error.message || "").slice(0, 200)); return; }
     }
-    if (end.length) console.log("tally-ingest: ledger aliases ended (renamed again, or the name now another ledger's):", book, JSON.stringify(end.slice(0, 10)));
+    if (end.length) console.log("tally-ingest: ledger aliases ended (renamed again, or the name now another ledger's):", book, end.length);
   } catch (e) {
     fail("ledger_aliases", e); console.log("tally-ingest: stale ledger aliases not read:", book, String((e as Error)?.message || e).slice(0, 200));
   }
@@ -2994,7 +2995,7 @@ async function ledgerWait(book: string, send: Record<string, any>[]) {
     const used = mapLedgerNames(l, use);
     if (!used.length) continue;
     const ren = Object.fromEntries(used.map((n) => [n, use.get(n)]));
-    console.log("tally-ingest recorder_lines: ledger renamed in Tally (confirmed by a fetch for this hold), applied under FinCom's name", l.line_id, JSON.stringify(ren));
+    console.log("tally-ingest recorder_lines: ledger renamed in Tally (confirmed by a fetch for this hold), applied under FinCom's name", l.line_id);
     l.payload = { ...(l.payload || {}), renamedLedgers: ren };
   }
   const miss = new Set([...st.raw]);
@@ -4327,7 +4328,7 @@ async function registerOpenFromBeat(firm: string, dev: any, beat: any, prevInfo:
     const at = new Date().toISOString();
     const { error: ie } = await db.from("tally_companies").upsert(fresh.map((company) => ({ firm_id: firm, company, device_id: dev.id, last_seen: at })), { onConflict: "firm_id,company", ignoreDuplicates: true });
     if (ie) console.error("tally-ingest beat: companies not registered", dev.id, String(ie.message || "").slice(0, 200));
-    else console.log("tally-ingest beat: companies registered", dev.id, JSON.stringify(fresh));
+    else console.log("tally-ingest beat: companies registered", dev.id, Array.isArray(fresh) ? fresh.length : 1);
   } catch (e) { console.error("tally-ingest beat: registerOpenFromBeat", (e as Error).message); }
 }
 // {kind:"link_now", company, client, bridge} from the firm's owner or staff (the gate above): the company as this browser's
@@ -4351,7 +4352,7 @@ async function linkNow(firm: string, body: any, asUser: any, userId: string) {
     device = String(d.id);
     const { error: ie } = await db.from("tally_companies").upsert({ firm_id: firm, company, device_id: device, last_seen: new Date().toISOString() }, { onConflict: "firm_id,company", ignoreDuplicates: true });
     if (ie) throw new Error(ie.message);
-    console.log("tally-ingest link_now: registered", firm, device, company, userId);
+    console.log("tally-ingest link_now: registered", firm, device, nm(company), userId);
   }
   const { error: le } = await asUser.rpc("tally_company_link", { p_company: company, p_client: client });
   if (le) return reply(409, { ok: false, error: String(le.message || "Could not link it.") });
@@ -4405,7 +4406,7 @@ async function userUpload(req: Request, auth: string) {
     const path = `${firm}/web/${new Date().toISOString().replace(/[:.]/g, "-")}-install.log`;
     const up = await db.storage.from("tally-support").upload(path, new TextEncoder().encode(text), { contentType: "text/plain" });
     if (up.error) return reply(500, { ok: false, error: "The install log could not be kept: " + up.error.message });
-    console.log("tally-ingest install log from the web", path, user.id, String(body.name || "").slice(0, 100));
+    console.log("tally-ingest install log from the web", path, user.id);
     return reply(200, { ok: true, path });
   }
   if (body.kind === "wake") return await wakeFor(firm, body, user.id);
@@ -4783,7 +4784,7 @@ Deno.serve(sentry.wrap(async (req) => {
           }
           auto.full.splice(0, auto.full.length, ...keepFull);
         }
-        if (auto.full.length) { const at = new Date().toISOString(); for (const c of auto.full) ledgers[c] = at; console.log("tally-ingest beat: the full ledger list asked", dev.id, JSON.stringify(auto.full)); }
+        if (auto.full.length) { const at = new Date().toISOString(); for (const c of auto.full) ledgers[c] = at; console.log("tally-ingest beat: the full ledger list asked", dev.id, auto.full.length); }
         return reply(200, { ok: true, updateNow, posts: posts || 0, wake, opened, ledgers, ...(Object.keys(stock).length ? { stock } : {}), activityAt, settings, trialTools, ...(recorderSource ? { recorderSource } : {}), ...(Object.keys(recorder).length ? { recorder } : {}), ...(heldLines ? { heldLines } : {}), ...(refetch ? { refetch } : {}), ...(ledgersWanted ? { ledgersWanted } : {}), ...(periodDays ? { periodDays } : {}), ...(booksFrom ? { booksFrom } : {}), periodFetch, periodNight, ...(co ? { notMain: true, changesOnly: true, error: CHANGES_ONLY } : may ? {} : { notMain: true }), ...ctl.out });
       }
       case "make_main": return await makeMain(dev, bridgeOf(dev, body, false).id);

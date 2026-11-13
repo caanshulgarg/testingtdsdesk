@@ -13,6 +13,7 @@ import aesjs from "npm:aes-js@3.1.2";
 import { makeGstCrypto } from "./gstcrypto.ts";
 import { corsFor } from "../_shared/cors.ts";   // the one list of headers for every function (server/_shared/cors.ts)
 import { clientIp } from "../_shared/clientip.ts";
+import { errorCodes } from "../_shared/lognames.ts";
 
 const C = makeGstCrypto(aesjs);
 const URL = Deno.env.get("SUPABASE_URL")!;
@@ -70,7 +71,7 @@ async function fyn(method: string, path: string, headers: Record<string, string>
   let j: any = null; try { j = JSON.parse(text); } catch { /* not JSON */ }
   if (r.status === 401) tok = null;
   // what FYN answered, for the function's own logs: never tokens, keys or return data
-  if (r.status < 200 || r.status >= 300 || !j) console.log(JSON.stringify({ fyn: method + " " + path.replace(/\?.*$/, ""), http: r.status, type: r.headers.get("content-type"), server: r.headers.get("server"), via: RELAY ? "relay" : "direct", length: text.length, head: text.slice(0, 300) }));
+  if (r.status < 200 || r.status >= 300 || !j) console.log(JSON.stringify({ fyn: method + " " + path.replace(/\?.*$/, ""), http: r.status, type: r.headers.get("content-type"), server: r.headers.get("server"), via: RELAY ? "relay" : "direct", length: text.length, codes: errorCodes(text) }));   // the answer's error codes only (security review L6)
   return { http: r.status, j, text };
 }
 async function fynAt(url: string, headers: Record<string, string>): Promise<{ http: number; j: any; text: string }> {
