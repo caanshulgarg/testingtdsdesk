@@ -47,6 +47,7 @@ import { OC, doConnect, Line } from "./TallyOneClick.jsx";
 import { HERE } from "../lib/tallyConnect.js";
 import { noAnswer, readWhere, followOn } from "../lib/readFollow.js";
 import { connectSteps, LAPTOP, LAPTOP_HERE } from "../lib/connectSteps.js";
+import { portHowWords } from "../lib/tallyPort.js";
 
 const shown = (n) => String(n || "").replace(/\s+/g, " ").trim();
 // next-tally-words: a client named as its Tally company (case and spaces aside): the button says only "Link"
@@ -149,9 +150,14 @@ function Guide({ cs, collapsed, forced, asked, connectPanel, download, checkAgai
   if (cs.mode === "error") return <section className="tsm-card tsm-guide tsm-guide-small" aria-label="Connect Tally" data-tsm-guide="error">
     <div className="tsm-guide-top"><b>Connect Tally</b><span className="tsm-note">The steps could not be worked out just now.</span><span className="tsm-guide-links">{recheck}</span></div></section>;
   const now = cs.now, who = cs.login ? "This Windows login: " + cs.login : "This Windows login";
+  // bridge 2.5.16: "Tally port not saved": the port, the way to keep it in Tally, Copy port and Check it works
+  const ns = cs.notSaved, notSaved = ns ? <div className="tsm-note warn" data-tsm-notsaved={ns.port} role="status">
+    {"Tally port not saved: port " + ns.port + " works until Tally restarts. To keep it: " + portHowWords(ns.port)}
+    <span className="tsm-now-act"><button type="button" className="linkbtn" data-tsm-port-copy={ns.port} onClick={() => (navigator.clipboard ? navigator.clipboard.writeText(String(ns.port)) : Promise.reject()).then(() => toast("Port " + ns.port + " copied."), () => toast("Could not copy; type " + ns.port + ".", {sticky: false}))}>Copy port</button>
+      <button type="button" className="btn" data-tsm-go="verify" disabled={ck} onClick={again}>{ck ? "Checking…" : "Check it works"}</button></span></div> : null;
   if (collapsed) return <section className="tsm-card tsm-guide tsm-guide-small" aria-label="Connect Tally" data-tsm-guide="done" data-tsm-collapsed="" data-tsm-login={cs.login || undefined}>
     <div className="tsm-guide-top"><b>{"Connect Tally · " + who + " · all 6 steps done ✓"}</b>
-      <span className="tsm-guide-links">{recheck}<button type="button" className="linkbtn" data-tsm-show="" onClick={() => set({ open: true })}>Show the steps</button></span></div>{here}</section>;
+      <span className="tsm-guide-links">{recheck}<button type="button" className="linkbtn" data-tsm-show="" onClick={() => set({ open: true })}>Show the steps</button></span></div>{notSaved}{here}</section>;
   const a = now && now.act;
   let btn = null;
   if (a && a.kind === "download") btn = download;
@@ -185,6 +191,7 @@ function Guide({ cs, collapsed, forced, asked, connectPanel, download, checkAgai
     {/* Set up again / another computer (openConnectTally(1)): the one Download for that other login */}
     {forced && !(now && now.n === 1) && another}
     {now && now.n === 1 && connectPanel && now.hook !== "blocked" && <div className="tsm-guide-panel" data-tsm-panel="">{connectPanel}</div>}
+    {notSaved}
     {here}
   </section>;
 }

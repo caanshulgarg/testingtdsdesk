@@ -402,6 +402,7 @@ func runBridge(console bool) int {
 	go beatLoop()
 	go recorderWatchLoop() // round 18: the recorder trial's folder watch (file times only; Tally is not asked)
 	go dayPullLoop()       // 2.4.5: older entries for the period the person chose, one day at a time, idle only (daypull.go)
+	go portWatchLoop()     // 2.5.16: this login's Tally port watched in Windows' list every 3 s (portwatch2516.go)
 	go recorderLiveLoop()  // 2.2.0: the live recorder's uploader (the reader is the watch's turn)
 	for !stopping() {
 		loopAt.Store(time.Now().Unix())

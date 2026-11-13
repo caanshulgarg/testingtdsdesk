@@ -4791,6 +4791,8 @@ Deno.serve(sentry.wrap(async (req) => {
           ...(lastStopOf(b) ? { lastStop: lastStopOf(b) } : {}),
           // bridge 2.5.16: when a key or click was last seen in Tally (the page tells typing from a stuck bridge)
           ...(typeof b.lastKeyAt === "string" && !isNaN(Date.parse(b.lastKeyAt)) ? { lastKeyAt: new Date(Math.min(Date.now(), Date.parse(b.lastKeyAt))).toISOString() } : {}),
+          // bridge 2.5.16: this login's Tally listens on a port its tally.ini does not name ({port, iniPort, words})
+          ...(b.tallyPortNotSaved && typeof b.tallyPortNotSaved === "object" && Number(b.tallyPortNotSaved.port) > 0 ? { tallyPortNotSaved: { port: Math.min(65535, Math.floor(Number(b.tallyPortNotSaved.port))), iniPort: Math.max(0, Math.min(65535, Math.floor(Number(b.tallyPortNotSaved.iniPort) || 0))), words: s(b.tallyPortNotSaved.words, 400) } } : {}),
           windowsUser: s(b.windowsUser, 60), bridgePort: Math.max(0, Math.min(65535, Math.floor(Number(b.bridgePort) || 0))), tallyPort: Math.max(0, Math.min(65535, Math.floor(Number(b.tallyPort) || 0))), dataFolder: s(b.dataFolder, 260) };
         if (pickups.length) (beat as any).pickups = pickups;
         if (co) (me.entry as any).changesOnly = true;

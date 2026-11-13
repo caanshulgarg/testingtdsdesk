@@ -6,6 +6,7 @@ Checks:
   2. a day held (tally_period_retry_days) is never handed out (period, check or gap day), and the period's and the check's
      lists are asked for that many more days; a cloud without 197: as before (asked again after 10 minutes).
   3. a pick-up refused with code dayRetry keeps FinCom's own words.
+  4. the beat's tallyPortNotSaved (bridge 2.5.16) kept on the computer's beat, cleaned.
 Needs Deno (DENO). Made-up books only."""
 import os, sys, json, time, hashlib, subprocess, threading, urllib.request, urllib.error, shutil, datetime
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
@@ -113,6 +114,14 @@ try:
     dev = next(d for d in FS.T["tally_devices"] if d["id"] == DA)
     got = ((dev.get("info") or {}).get("beat") or {}).get("pickups") or []
     ok(any(x.get("code") == "dayRetry" and x.get("words") == "Tally was slow for this day; FinCom Bridge tries it again by itself after a day (no action needed)" for x in got), "3. kept with FinCom's words (%s)" % got)
+    print("== 4. bridge 2.5.16: Tally port not saved, kept on the beat")
+    time.sleep(5.2); c, r = call(dict(beat, tallyPortNotSaved={"port": 9050, "iniPort": 9000, "words": "Tally port not saved: x" * 40, "extra": "dropped"}))
+    dev = next(d for d in FS.T["tally_devices"] if d["id"] == DA)
+    ns = ((dev.get("info") or {}).get("beat") or {}).get("tallyPortNotSaved") or {}
+    ok(ns.get("port") == 9050 and ns.get("iniPort") == 9000 and len(ns.get("words", "")) == 400 and "extra" not in ns, "4. kept, cleaned (%s)" % {k: ns.get(k) for k in ("port", "iniPort")})
+    time.sleep(5.2); c, r = call(dict(beat, tallyPortNotSaved=None))
+    dev = next(d for d in FS.T["tally_devices"] if d["id"] == DA)
+    ok("tallyPortNotSaved" not in ((dev.get("info") or {}).get("beat") or {}), "4. none said: none kept")
 finally:
     fn.terminate()
     FS.stop() if hasattr(FS, "stop") else None

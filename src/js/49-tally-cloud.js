@@ -798,6 +798,14 @@ const TCloud = {
     const l = me && (this.pane.links || []).find(x => x.user_id === me && x.bridge_id);
     return l ? l.bridge_id : "";
   },
+  // bridge 2.5.16: the local port the member's own bridge said in its last beat (0 when not known): the page tries it
+  // before looking through 9100-9199 (the bridge still proves itself there)
+  myBridgePort(){
+    const id = this.myBridge(); if (!id) return 0;
+    const r = this.bridgesHeard().find(x => x.id === id && x.online);
+    const p = r ? Number(r.port) || 0 : 0;
+    return p >= 9100 && p <= 9199 ? p : 0;
+  },
   // the members linked to a bridge
   linkedTo(r){ return (this.pane.links || []).filter(x => x.bridge_id && x.bridge_id === r.id && x.device_id === r.device.id).map(x => x.user_id); },
   // the owner's rule of 05-Oct-2026 (migration 54's tally_bridge_is_own): a member's own bridge is the one they are linked

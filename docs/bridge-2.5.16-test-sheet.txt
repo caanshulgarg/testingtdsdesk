@@ -94,6 +94,16 @@ tally-ingest of the same branch. Use a test company with made-up entries only.
     seconds stops that day only (item 7). To switch it off on a computer: DayPullSplit false in the bridge's settings.
     Check A: on the big test company, a day of several thousand entries. You should see: the log says "the day's list
     took Tally over 2 s; asked again one voucher type at a time"; the day's entries arrive in FinCom.
+ 9. Tally's port. FinCom Bridge looks at Windows' list of ports about every 3 seconds and tells FinCom at once when your
+    Tally's port changes (Tally restarted on another port): FinCom's page sees it in seconds, not half a minute. When
+    your Tally listens on a port its tally.ini does not name (typed in F1 > Settings > Connectivity but not saved), the
+    page says "Tally port not saved", with the path to keep it, a Copy port button and a Check it works button. The
+    page tries the port FinCom last heard from your own bridge before looking through 9100-9199. The bridge never
+    writes a shared tally.ini and never starts Tally.
+    Check A: with Tally open, change its port in F1 > Settings > Connectivity without saving, then wait 10 seconds. You
+    should see: FinCom's Tally page says "Tally port not saved: port <n> ..."; Copy port copies it; Check it works checks
+    again.
+    Check B: close Tally and open it again. You should see: the page shows the new state within about 10 seconds.
 
 WINDOWS ONLY (the automatic tests cannot run these; check them on a real Windows PC):
   - item 1: Check with FVU runs a copy of the FVU from your own temporary folder (removed after); Java must be
@@ -109,6 +119,8 @@ WINDOWS ONLY (the automatic tests cannot run these; check them on a real Windows
   - item 7: a real slow day needs a big company on a real Tally (the tests stand in for Tally's time); Check A on the
     test PC with a day of many entries.
   - item 8: the time Tally takes for a big day, and by type, on real TallyPrime 3.0 to 7.1.
+  - item 9: Windows' real port and process lists, tally.ini read where TallyPrime keeps it, Chrome's permission for
+    the page to reach the bridge; Checks A and B.
 
 -------------------------------------------------------------------------------------------------------------------
 

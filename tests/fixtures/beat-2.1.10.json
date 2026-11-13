@@ -51,6 +51,7 @@
   "paused": true,
   "periodPull": {
     "companies": {},
+    "retryDays": [],
     "stopped": [],
     "stoppedCompanies": [],
     "uploadDays": []
@@ -127,6 +128,7 @@
   "tallyIni": [],
   "tallyOff": null,
   "tallyPort": 9000,
+  "tallyPortNotSaved": null,
   "tallyRetry": null,
   "tallyState": "open",
   "tallyWhy": "",

@@ -62,7 +62,11 @@ const Bridge = {
     if (!this.localUrl(c.url)) return null;
     // speed (11-Nov-2026): the last good port first; this login's bridge proven there (no pairing code): the other 99 not
     // asked. Else the range, at most RANGE_AT_ONCE at a time (100 pings at once on every look before)
-    const at = this.urlPort(c.url), one = !code && c.key && at ? await this.probe(at, 1500, c.key) : null;
+    const at = this.urlPort(c.url);
+    let one = !code && c.key && at ? await this.probe(at, 1500, c.key) : null;
+    // bridge 2.5.16: then the port FinCom's cloud heard from this member's own bridge (its beat), before the range
+    const cp = !code && c.key && !(one && one.proven && one.sameSession === true) && typeof TCloud === "object" && TCloud.myBridgePort ? TCloud.myBridgePort() : 0;
+    if (cp && cp !== at) one = await this.probe(cp, 1500, c.key);
     const found = one && one.proven && one.sameSession === true ? [one] : (await this.capped(this.PORTS, this.RANGE_AT_ONCE, p => this.probe(p, 1500, c.key, code))).filter(Boolean);
     // bridge 2.5.3: one answering sameSession false runs for another Windows session (never this browser's); true: this one's
     const ok = found.filter(b => (code ? (b.pairProven || b.spake) : b.proven) && b.sameSession !== false);

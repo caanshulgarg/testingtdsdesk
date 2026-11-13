@@ -138,9 +138,11 @@ export function connectSteps(opts) {
   const up = names.size > 0 || !!okP || (!ports.length && (!!src.tallyUp || src.tally === true || src.tallyState === "open" || src.tallyState === "busy"));
   const why = lc(src.tallyWhy), say = String(src.tallyConnectSay || "");
   const connOff = why === "connection off" || (!why && !up && !!ownConnOff(own));
+  // bridge 2.5.16: this login's Tally listens on a port its tally.ini does not name (lost when Tally restarts): {port, words}
+  const nsx = (b && b.beat && b.beat.tallyPortNotSaved) || src.tallyPortNotSaved, notSaved = up && nsx && typeof nsx === "object" && Number(nsx.port) > 0 ? { port: Number(nsx.port), words: String(nsx.words || "") } : null;
   const ok1 = steps[0].done;
   if (!ok1) { put("tally", false); put("connect", false); }
-  else if (up) { put("tally", true, "", null, "", "TallyPrime is running in this login"); put("connect", true, "", null, "", "Tally’s connection is on" + (okP && okP.port ? " (port " + okP.port + ")" + (holderOf(onThisPc(b), Number(okP.port), login) ? ": another login’s Tally uses it too" : ": this login’s own") : "")); }
+  else if (up) { put("tally", true, "", null, "", "TallyPrime is running in this login"); put("connect", true, "", null, "", "Tally’s connection is on" + (okP && okP.port ? " (port " + okP.port + ")" + (holderOf(onThisPc(b), Number(okP.port), login) ? ": another login’s Tally uses it too" : ": this login’s own") : "") + (notSaved ? ", but the port is not saved in Tally" : "")); }
   else if (connOff || why === "not answering") {
     put("tally", true, "", null, "", "TallyPrime is running in this login");
     if (why === "not answering") put("connect", false, WORDS.notanswering, { kind: "check" }, "notanswering");
@@ -209,7 +211,7 @@ export function connectSteps(opts) {
   let seen = false;
   steps.forEach((s) => { s.state = !seen && s.done ? "done" : !seen ? ((seen = true), "now") : "later"; });
   const now = steps.find((s) => s.state === "now") || null;
-  return { mode: "login", login, steps, now, firm: null };
+  return { mode: "login", login, steps, now, firm: null, notSaved };
 }
 const lcFirst = (s) => { const t = String(s || ""); return /^[A-Z][a-z]/.test(t) ? t[0].toLowerCase() + t.slice(1) : t; };
 // the firm's state, for a browser with no bridge (never per login): its bridges heard now, Tally open, clients linked
