@@ -39,7 +39,7 @@ const AlertHub = {
     try {
       const firm = typeof Rec === "object" && Rec.firm ? Rec.firm() : "";
       h.rows = [].concat(await Cloud.api("tally_recorder_lines?select=id,client_id,book_id,device_id,pc,company,event,object_guid,alter_id,state,held_why,received_at,vch_type,vch_no,vch_date,ledgers" +
-        "&firm_id=eq." + encodeURIComponent(firm) + "&state=in.(held,received,queued,failed)&order=received_at.desc&limit=200") || []);
+        "&firm_id=eq." + encodeURIComponent(firm) + "&state=in.(held,fetching,received,queued,failed)&order=received_at.desc&limit=200") || []);
       h.none = false;
     } catch (e){ h.rows = []; if (typeof Rec === "object" && Rec.missing && Rec.missing(e)) h.none = true; }
     // quiet refresh (14-Oct-2026): read again each minute; the page is drawn only when the lines changed
@@ -52,14 +52,14 @@ const AlertHub = {
     const by = new Map(act.map(r => [String(r.id), r]));
     const out = rows.map(r => by.get(String(r.id)) || r);
     const seen = new Set(out.map(r => String(r.id)));
-    act.forEach(r => { if (!seen.has(String(r.id)) && ["held", "received", "queued", "failed"].includes(r.state)) out.push(r); });
-    return out.filter(r => ["held", "received", "queued", "failed"].includes(r.state));
+    act.forEach(r => { if (!seen.has(String(r.id)) && ["held", "fetching", "received", "queued", "failed"].includes(r.state)) out.push(r); });
+    return out.filter(r => ["held", "fetching", "received", "queued", "failed"].includes(r.state));
   },
   // the owner's finding of 05-Oct-2026: a book with a line HELD is never "in sync". The held lines of these clients
   // (none given: every client's)
   heldFor(cids){
     const want = cids ? new Set([].concat(cids).map(String)) : null;
-    return this.waitingRows().filter(r => r.state === "held" && r.client_id && (!want || want.has(String(r.client_id))));
+    return this.waitingRows().filter(r => (r.state === "held" || r.state === "fetching") && r.client_id && (!want || want.has(String(r.client_id))));
   },
   // the held lines in the owner's words: "received, not yet entered in the books: <held_why>" for one line (or lines
   // with one reason), "N received, not yet entered in the books" for more
