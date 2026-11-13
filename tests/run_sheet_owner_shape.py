@@ -30,7 +30,12 @@ their GST ledgers and some parties in sub-groups (Sales Local under Sales Accoun
  11. held for a person (re-review of d8281e4ea): a negative amount in a sheet whose Type column does not call it a
      return, and "Purchase Return" on a sales sheet, wait in To review with the reason said, never turned positive;
      "Edit type" on the held row sets what it is, there; the sheet uploaded again with its Type put right puts the held
-     row right in place (by number, date and party: nothing deleted by hand, nothing added twice).
+     row right in place (by number, date and party: nothing deleted by hand, nothing added twice);
+ 12. the final review of ca68ea1ae: two rows of one number (an invoice, and a negative row its Type does not explain):
+     the sheet uploaded twice leaves the held row as it is (the other row never rewrites it), the corrected sheet puts
+     it right; "Edit type" does nothing to a row that is not held or is approved / posted, and a held bill is not
+     approved until its type is set; a return carries no TDS (a 1,00,000 professional-fees return: TDS 0); the client's
+     own name for its purchase voucher type is kept when Journal is chosen and chosen back.
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_sheet_owner_shape.py"""
 import os, sys, json, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -227,7 +232,7 @@ with sync_playwright() as p:
        "Post as: the client's own setting for its bills is Journal, so the switch starts at Journal and the rows say Journal (%s, %s, %s)" % (E("CO().voucherType"), pa(), vt7()))
     if pa(): pg.select_option("#app [data-sheet-postas]", "Purchase"); W(300)
     note = pg.inner_text("#app [data-sheet-postas-note]") if pg.locator("#app [data-sheet-postas-note]").count() else ""
-    ok(pa() == "Purchase" and vt7() == ["Purchase"] and E("CO().voucherType") == "Purchase" and "also changes it for bills of this client" in note, "Purchase chosen: the rows say Purchase, it is kept in the client's setting, and the panel says it changes the bills too (%s)" % note)
+    ok(pa() == "Purchase" and vt7() == ["Purchase"] and E("billVt(CO())") == "Purchase" and E("CO().voucherType") == "Journal" and "also changes it for bills of this client" in note, "Purchase chosen: the rows say Purchase, it is kept in the client's setting, and the panel says it changes the bills too (%s)" % note)
     if pg.locator('#app [data-sheet-q="party:esha"]').count(): answer("party:esha", "create")
     if pg.locator("#app [data-sheet-add]:not([disabled])").count(): pg.click("#app [data-sheet-add]"); W(900)
     bills = E("Object.values(D().entries).filter(e => e.readMode === 'sheet').map(e => [e.x.invoiceNo, e.partyLedger, e.expenseLedger, vchTypeOf(e, CO()), e.status])")
@@ -237,7 +242,7 @@ with sync_playwright() as p:
     bills2 = E("Object.values(D().entries).filter(e => e.readMode === 'sheet').map(e => [e.x.invoiceNo, e.partyLedger, e.expenseLedger])")
     ok(sorted(bills2) == [b[:3] for b in sorted(bills)], "and they stay so when the books are looked at again (%s)" % bills2)
     px = E("""() => { const co = CO(), e = Object.values(D().entries).find(e => e.readMode === 'sheet' && e.x.invoiceNo === 'DP/501'); if (!e) return {xml: "", why: "no bill"};
-      e.natureId = "none"; approve(e); return {xml: e.status === "approved" ? voucherXml(e, co) : "", why: e.status + " " + JSON.stringify((e.snapshot || {}).lines || preview(e).missing || "")}; }""")
+      e.natureId = "none"; approve(e); return {xml: e.status === "approved" ? voucherXml(e, co) : "", why: e.status + " " + JSON.stringify((e.snapshot || {}).lines || compute(e, S.coId).missing || "")}; }""")
     ok('VCHTYPE="Purchase"' in px["xml"] and "Purchase UP" not in px["xml"] and "<LEDGERNAME>Purchase of Goods (UP)</LEDGERNAME>" in px["xml"] and "Dev Packaging" in px["xml"] and "<LEDGERNAME>Input CGST</LEDGERNAME>" in px["xml"],
        "approved, the voucher as it goes to Tally: Purchase, the purchase ledger, the input GST ledger from its sub-group (%s)" % (px["why"][:400] if 'VCHTYPE="Purchase"' not in px["xml"] or "Input CGST" not in px["xml"] else "ok"))
     E("() => goStep('review', 'bills')"); W(500)
@@ -344,7 +349,7 @@ with sync_playwright() as p:
     upload("purchase_journal.xlsx", "#fileIn")
     ok(step() == "check" and pa() == "Purchase", "the choice made before is remembered for the client: Purchase (%s)" % pa())
     if pa(): pg.select_option("#app [data-sheet-postas]", "Journal"); W(300)
-    ok(pa() == "Journal" and E("CO().voucherType") == "Journal" and vts() == {"DP/801": "Journal", "DP/802": "Journal", "DP/PR8": "Debit Note"} and pg.locator("#app [data-sheet-postas-note]").count() == 1,
+    ok(pa() == "Journal" and E("billVt(CO())") == "Journal" and vts() == {"DP/801": "Journal", "DP/802": "Journal", "DP/PR8": "Debit Note"} and pg.locator("#app [data-sheet-postas-note]").count() == 1,
        "Journal chosen: the rows say Journal, the return still Debit Note; kept in the client's setting, and said (%s)" % vts())
     for q in qids(): answer(q[0], "create")
     if pg.locator("#app [data-sheet-add]:not([disabled])").count(): pg.click("#app [data-sheet-add]"); W(900)
@@ -431,8 +436,8 @@ with sync_playwright() as p:
     if pg.locator('#app select[data-edit-type="%s"]' % id902).count(): pg.select_option('#app select[data-edit-type="%s"]' % id902, "credit"); W(400)
     else: E("(id) => billSetKind(id, 'credit')", id902)
     E("() => { S.drawerOpen = false; S.selected = null; render(); }"); W(300)
-    b902 = E("(id) => { const e = D().entries[id]; return [e.noteKind || '', e.x.total, e.hold || '', vchTypeOf(e, CO())]; }", id902)
-    ok(b902 == ["credit", 118, "", "Debit Note"], "Edit type → Debit Note (a return): the bill is one, its amount positive, held no more (%s)" % b902)
+    b902 = E("(id) => { const e = D().entries[id]; return [e.noteKind || '', e.x.total, e.hold || '', vchTypeOf(e, CO()), e.tdsSkip || '']; }", id902)
+    ok(b902 == ["credit", 118, "", "Debit Note", "note"], "Edit type → Debit Note (a return): the bill is one, its amount positive, held no more (%s)" % b902)
     id901 = E("Object.values(D().entries).find(e => e.x.invoiceNo === 'DP/901').id")
     E("() => goStep('review', 'bills')"); W(400)
     upload("purchase_held_fixed.xlsx", "#fileIn")
@@ -441,6 +446,71 @@ with sync_playwright() as p:
     b = E("Object.values(D().entries).filter(e => /^DP\\/90/.test(e.x.invoiceNo) && e.status !== 'duplicate').map(e => [e.id, e.x.invoiceNo, e.noteKind || '', e.x.total, e.hold || '', e.status]).sort((a, b) => a[1].localeCompare(b[1]))")
     ok(len(b) == 2 and b[0] == [id901, "DP/901", "credit", 472, "", "draft"] and "1 held before, now put right" in res, "the corrected sheet puts the held bill right in place; the other is not added twice (%s; %s)" % (b, res))
     E("SheetImport.close()"); W(200)
+
+    print("12. the final review: one number on two rows; Edit type's guards; no TDS on a return; the client's own type name")
+    # -- Sales: UP/X/1 1,180 and UP/X/1 -472 (its Type says only "Sales UP")
+    E("(id) => { S.tab = 'sales'; S.step = null; SL().list = []; SL().filter = 'review'; saveSales(); render(); }", cid); W(600)
+    def up_sales(name):
+        upload(name, "#salesIn")
+        if pg.locator("#app [data-sheet-add]:not([disabled])").count(): pg.click("#app [data-sheet-add]"); W(900)
+        r = pg.inner_text("#app [data-sheet-result]") if pg.locator("#app [data-sheet-result]").count() else ""
+        E("SheetImport.close()"); W(200)
+        return r
+    rows = lambda: E("SL().list.map(v => [v.id, v.x.number, v.x.noteKind || '', v.x.total, !!v.hold]).sort((a, b) => b[3] - a[3])")
+    up_sales("sales_repro.xlsx")
+    r0 = rows()
+    ok(len(r0) == 2 and r0[0][1:] == ["UP/X/1", "", 1180, False] and r0[1][1:] == ["UP/X/1", "", -472, True], "the two rows of UP/X/1: the invoice of 1,180, and the negative row held (%s)" % [x[1:] for x in r0])
+    res = up_sales("sales_repro.xlsx")
+    ok(rows() == r0 and "0 added" in res and "2 already here" in res and "put right" not in res, "the same sheet again: the held row is as it was (the 1,180 row does not rewrite it), nothing added (%s; %s)" % ([x[1:] for x in rows()], res))
+    # Edit type does nothing to a row that is not held, or is not waiting
+    g = E("""() => { const inv1 = SL().list.find(v => !v.hold), held = SL().list.find(v => v.hold); salesSetKind(inv1.id, "credit"); const a = [inv1.x.noteKind || "", inv1.x.number];
+      held.status = "posted"; salesSetKind(held.id, "credit"); const b = [held.x.noteKind || "", held.x.total, !!held.hold]; held.status = "review"; return [a, b]; }"""); W(300)
+    ok(g == [["", "UP/X/1"], ["", -472, True]], "Edit type does nothing to an invoice that is not held, nor to one already posted (%s)" % g)
+    res = up_sales("sales_repro_fixed.xlsx")
+    r1 = rows()
+    ok(len(r1) == 2 and r1[0] == r0[0] and r1[1] == [r0[1][0], "UP/X/1 (CN)", "credit", 472, False] and "1 held before, now put right" in res and "1 already here" in res,
+       "the corrected sheet: the held row itself becomes the credit note of 472; the invoice of 1,180 is untouched (%s; %s)" % ([x[1:] for x in r1], res))
+    # -- Purchase: QP/2 1,180 and QP/2 -472; a 1,00,000 professional-fees bill and its return
+    E("() => { S.tab = null; goStep('review', 'bills'); }"); W(600)
+    def up_bills(name):
+        upload(name, "#fileIn")
+        for q in qids(): answer(q[0], "create")
+        if pg.locator("#app [data-sheet-add]:not([disabled])").count(): pg.click("#app [data-sheet-add]"); W(900)
+        r = pg.inner_text("#app [data-sheet-result]") if pg.locator("#app [data-sheet-result]").count() else ""
+        E("SheetImport.close()"); W(200)
+        return r
+    qp = lambda ids=None: E("(ids) => Object.values(D().entries).filter(e => /^QP\\//.test(e.x.invoiceNo) && (ids ? ids.includes(e.id) : (e.hold || e.status !== 'duplicate'))).map(e => [e.id, e.x.invoiceNo, e.noteKind || '', e.x.total, !!e.hold, e.tdsSkip || '']).sort((a, b) => a[1].localeCompare(b[1]) || b[3] - a[3])", ids)
+    up_bills("purchase_repro.xlsx")
+    q0 = qp(); qids0 = [x[0] for x in q0]
+    ok([x[1:] for x in q0] == [["QP/1", "", 118000, False, ""], ["QP/2", "", 1180, False, ""], ["QP/2", "", -472, True, ""], ["QP/R1", "credit", 118000, False, "note"]], "the bills: QP/2 of 1,180 and its negative row held; the return marked as carrying no TDS (%s)" % [x[1:] for x in q0])
+    tds = E("""() => { const co = CO(); return ["QP/1", "QP/R1"].map(no => { const e = Object.values(D().entries).find(e => e.x.invoiceNo === no && e.status === "draft"); e.natureId = "professional"; const p = compute(e, S.coId);
+      return [no, Math.round(num(p.tds)), vchTypeOf(e, co)]; }); }""")
+    ok(len(tds) == 2 and tds[0][1] > 0 and tds[1][1] == 0 and tds[1][2] == "Debit Note", "professional fees of 1,00,000: the bill has TDS (%s), its return (a Debit Note) TDS 0 (%s)" % (tds[0][1] if tds else "", tds))
+    held = [x for x in q0 if x[4]]
+    hid = held[0][0] if held else ""
+    na = E("""(id) => { const e = D().entries[id]; if (!e) return null; const keep = Object.assign({}, e.x); ["taxable", "igst", "total"].forEach(f => { e.x[f] = Math.abs(e.x[f]); }); e.natureId = "none";
+      const miss = (compute(e, S.coId).missing || []).join("; "); try { approve(e); } catch (x){} const st = e.status; Object.assign(e.x, keep); return [st, miss]; }""", hid)
+    ok(na and na[0] != "approved" and "its type" in na[1], "a held bill is not approved until its type is set, even with its amount typed positive (%s)" % na)
+    res = up_bills("purchase_repro.xlsx")
+    ok(qp(qids0) == q0 and "0 added" in res and "put right" not in res, "the same sheet again: the held bill is as it was (the 1,180 row does not rewrite it), nothing added (%s; %s)" % ([x[1:] for x in qp(qids0)], res))
+    res = up_bills("purchase_repro_fixed.xlsx")
+    q1 = qp(qids0)
+    was = [x for x in q1 if x[0] == hid]
+    ok(len(q1) == 4 and was and was[0][1:] == ["QP/2", "credit", 472, False, "note"] and [x for x in q1 if x[1] == "QP/2" and x[3] == 1180] == [x for x in q0 if x[1] == "QP/2" and x[3] == 1180] and "1 held before, now put right" in res,
+       "the corrected sheet: the held bill itself becomes the return of 472 (no TDS on it); the bill of 1,180 is untouched (%s; %s)" % ([x[1:] for x in q1], res))
+    g = E("""(id) => { const e = D().entries[id]; const st = e.status; e.hold = "x"; e.status = "approved"; billSetKind(id, "bill"); const a = [e.noteKind || "", e.tdsSkip || ""]; e.status = st; delete e.hold; return a; }""", hid)
+    ok(g == ["credit", "note"], "Edit type does nothing to an approved bill (%s)" % g)
+    # -- the client's own name for its purchase voucher type
+    E("() => { const co = CO(); co.voucherType = 'Purchase GST'; delete co.postAs; goStep('review', 'bills'); }"); W(400)
+    upload("purchase_journal.xlsx", "#fileIn")
+    a = [pa(), vts().get("DP/801"), vts().get("DP/PR8")]
+    if pa(): pg.select_option("#app [data-sheet-postas]", "Journal"); W(300)
+    b = [pa(), vts().get("DP/801"), E("CO().voucherType"), E("billVt(CO())")]
+    if pa(): pg.select_option("#app [data-sheet-postas]", "Purchase"); W(300)
+    c = [pa(), vts().get("DP/801"), E("CO().voucherType"), E("billVt(CO())"), E("CO().postAs || null")]
+    ok(a == ["Purchase", "Purchase GST", "Debit Note"] and b == ["Journal", "Journal", "Purchase GST", "Journal"] and c == ["Purchase", "Purchase GST", "Purchase GST", "Purchase GST", None],
+       "a client whose own type is “Purchase GST”: Purchase posts as it; Journal chosen leaves the name alone; Purchase chosen back posts as it again (%s %s %s)" % (a, b, c))
+    E("() => { SheetImport.close(); CO().voucherType = 'Journal'; delete CO().postAs; }"); W(200)
     ok(not errors, "no page errors " + str(errors[:2]))
     br.close()
 srv.shutdown()

@@ -87,7 +87,7 @@ function ReadBits({ e, ro }) {
       {!ro && S.files[e.id] && S.engine && <button className="btn small" onClick={() => doAct("reread")}>Read again carefully</button>}
       {e.readMode && <span className="note">Read by {e.readMode}</span>}
     </div>
-    {e.hold && <p style={{ margin: "6px 0 0" }}><select aria-label="Edit type" data-edit-type={e.id} value="" onChange={(ev) => billSetKind(e.id, ev.target.value)}><option value="">Edit type…</option><option value="bill">Bill</option><option value="credit">Debit Note (a return)</option></select></p>}
+    {e.hold && !ro && ["draft", "duplicate"].includes(e.status) && <p style={{ margin: "6px 0 0" }}><select aria-label="Edit type" data-edit-type={e.id} value="" onChange={(ev) => billSetKind(e.id, ev.target.value)}><option value="">Edit type…</option><option value="bill">Bill</option><option value="credit">Debit Note (a return)</option></select></p>}
     {e.readNote && <p className="note" style={{ margin: "6px 0 0" }}>{/^New supplier/.test(e.readNote) && supplierInTally(e.x) ? "In Tally as " + supplierInTally(e.x) + ", not yet in FinCom’s list: confirm the payment type before approving." : e.readNote}</p>}
     {e.readTrace && e.readTrace.length > 0 && <details className="trace" open={e.status === "draft"}>
       <summary>How this bill was read</summary>
@@ -279,7 +279,7 @@ function Slip({ e, c, ro, snap, miss }) {
   const tallyCtx = ledgerListFor(S.coId);
   return (
     <section><h3>Draft entry for Tally: {co.tallyName || co.name}</h3><div className="slip">
-      <div className="sh"><b>{co.voucherType} voucher</b><span>{fmtDate(x.invoiceDate) + (x.invoiceNo ? ", ref " + x.invoiceNo : "")}</span></div>
+      <div className="sh"><b>{vchTypeOf(e, co)} voucher</b><span>{fmtDate(x.invoiceDate) + (x.invoiceNo ? ", ref " + x.invoiceNo : "")}</span></div>
       <table className="vtbl" data-statement="">
         <thead><tr><th></th><th>Ledger</th><th className="n">Debit ₹</th><th className="n">Credit ₹</th></tr></thead>
         <tbody>{lines.map((l, i) => (

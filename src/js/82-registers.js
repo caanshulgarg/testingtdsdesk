@@ -35,9 +35,9 @@ function reconGo(side){ S.step = null; S.tab = "books"; S.booksTab = "recon"; S.
 // "Edit type" on a bill held for a person (a sheet's negative amount its Type column did not explain): a bill, or a
 // Debit Note (a return); its amounts are taken positive and it is held no more (app/src/screens/Bill.jsx)
 function billSetKind(id, k){
-  const e = D().entries[id]; if (!e || !k) return;
+  const e = D().entries[id]; if (!e || !k || !e.hold || !["draft", "duplicate"].includes(e.status)) return;   // only a held bill still waiting (never approved, never posted)
   ["taxable", "cgst", "sgst", "igst", "cess", "total"].forEach(f => { e.x[f] = Math.abs(num(e.x[f])); });
-  if (k === "credit") e.noteKind = "credit"; else delete e.noteKind;
+  if (k === "credit"){ e.noteKind = "credit"; e.tdsSkip = e.tdsSkip || "note"; } else { delete e.noteKind; if (e.tdsSkip === "note") delete e.tdsSkip; }   // (a return carries no TDS)
   delete e.hold; e.readNote = ""; e.uncertain = []; Store.saveEntry(S.coId, e); refreshStats(S.coId); render();
 }
 function vrOpen(){ S.vrec = null; if (typeof reconGo === "function") reconGo("vendor"); else render(); }

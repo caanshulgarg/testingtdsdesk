@@ -59,7 +59,7 @@ function salesCols(s, list, nSel) {
         {v.postError && <span className="src bad" title={v.postError}>Tally: {v.postError}</span>}
         <LedgerBox className={"lgbox" + (v.status === "ready" ? " done" : v.customerLedger ? " sugg" : "")} value={v.customerLedger || ""} fk={"svcust:" + v.id} data-svcust={v.id}
           placeholder="Select customer ledger" aria-label={"Customer ledger for " + (v.x.number || "invoice")} onCommit={(val) => salesSetCust(v.id, val)} />
-        {v.hold && <select aria-label="Edit type" data-edit-type={v.id} value="" onChange={(ev) => salesSetKind(v.id, ev.target.value)}><option value="">Edit type…</option><option value="invoice">Invoice</option><option value="credit">Credit Note</option><option value="debit">Debit Note</option></select>}
+        {v.hold && v.status === "review" && <select aria-label="Edit type" data-edit-type={v.id} value="" onChange={(ev) => salesSetKind(v.id, ev.target.value)}><option value="">Edit type…</option><option value="invoice">Invoice</option><option value="credit">Credit Note</option><option value="debit">Debit Note</option></select>}
         {p.issue ? <span className="src bad" title={(v.problems || []).concat(v.ledgerIssues || []).join("; ")}>{p.issue}</span>
           : <span className={"src" + (v.status === "ready" ? " ok" : "")}>{v.status === "ready" ? (v.userLedger ? "Set by you" : v.custSource || "Ready") : v.customerLedger ? "Suggested · " + (v.custSource || "match") : "No match found"}</span>}
       </> : <><span className="lgtext">{v.customerLedger || "—"}</span>
