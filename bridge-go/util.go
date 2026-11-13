@@ -225,22 +225,13 @@ var renameFn = os.Rename
 // a file written whole: the text in a temporary file beside it, then put in place by one rename. Round 20 (the
 // re-review's Low 2): the old file is never removed first; a rename refused (an antivirus or a backup holding the file)
 // is tried again a few times, and if it still fails the old file stays as it was and the temporary file goes
+// 2.5.15 (safefile.go): the temporary file is flushed to the disk (fsync) before the rename, and the folder after it
 func saveFile(path, text string) error {
-	_ = os.MkdirAll(filepath.Dir(path), 0o755)
-	tmp := fmt.Sprintf("%s.%d.tmp", path, os.Getpid())
-	if err := os.WriteFile(tmp, []byte(text), 0o644); err != nil {
-		_ = os.Remove(tmp)
+	tmp, err := writeTempSynced(path, []byte(text))
+	if err != nil {
 		return err
 	}
-	var err error
-	for i := 0; i < 4; i++ {
-		if err = renameFn(tmp, path); err == nil {
-			return nil
-		}
-		time.Sleep(time.Duration(i+1) * 50 * time.Millisecond)
-	}
-	_ = os.Remove(tmp)
-	return err
+	return renameInPlace(tmp, path)
 }
 func readText(f string) string {
 	b, err := os.ReadFile(f)

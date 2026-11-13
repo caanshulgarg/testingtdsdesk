@@ -130,13 +130,13 @@ func newPostJob(pl M) (M, error) {
 		st := str(v["status"])
 		if rel := arr(pl["released"]); len(rel) > 0 && !jobAlive(id) {
 			// round 7 (F2): the owner's releases that came with this hand-back, for the worker to see
-			if pay := readObjFile(filepath.Join(dir, "payload.json")); pay != nil {
+			if pay := readObjFileBak(filepath.Join(dir, "payload.json")); pay != nil {
 				pay["released"] = rel
-				_ = saveFile(filepath.Join(dir, "payload.json"), jsonText(pay))
+				_ = saveJSONBak(filepath.Join(dir, "payload.json"), pay)
 			}
 		}
 		byItem := map[string]string{}
-		if pay := readObjFile(filepath.Join(dir, "payload.json")); pay != nil {
+		if pay := readObjFileBak(filepath.Join(dir, "payload.json")); pay != nil {
 			for _, x := range arr(pay["items"]) {
 				if o := obj(x); o != nil {
 					byItem[str(o["id"])] = str(o["xml"])
@@ -166,7 +166,7 @@ func newPostJob(pl M) (M, error) {
 			if kept == nil {
 				kept = []any{}
 			}
-			if pay := readObjFile(filepath.Join(dir, "payload.json")); pay != nil {
+			if pay := readObjFileBak(filepath.Join(dir, "payload.json")); pay != nil {
 				var its []any
 				for _, x := range arr(pay["items"]) {
 					if o := obj(x); o != nil && (keep[str(o["id"])] || only[str(o["id"])]) {
@@ -177,7 +177,7 @@ func newPostJob(pl M) (M, error) {
 					its = []any{}
 				}
 				pay["items"] = its
-				_ = saveFile(filepath.Join(dir, "payload.json"), jsonText(pay))
+				_ = saveJSONBak(filepath.Join(dir, "payload.json"), pay)
 			}
 			_ = os.Remove(filepath.Join(dir, "cancel"))
 			v["results"], v["done"], v["resumed"], v["status"], v["message"], v["finishedAt"] = kept, len(kept), true, "queued", "Sending again only what FinCom released", ""
@@ -257,7 +257,7 @@ func newPostJob(pl M) (M, error) {
 	if pt := toInt(pl["port"]); pt > 0 {
 		payload["port"] = pt
 	}
-	_ = saveFile(filepath.Join(dir, "payload.json"), jsonText(payload))
+	_ = saveJSONBak(filepath.Join(dir, "payload.json"), payload)
 	p := M{"ok": true, "id": id, "status": "queued", "company": str(pl["company"]), "total": len(items), "done": 0, "results": []any{}, "message": "Starting", "pid": os.Getpid(), "resumed": false,
 		"startedAt": time.Now().Format(time.RFC3339Nano), "updatedAt": "", "finishedAt": "", "checking": false, "checkFailed": false, "reqs": []any{}, "secondsTotal": 0.0}
 	startJob(id, dir, p)
@@ -432,7 +432,7 @@ var postsDirty atomic.Bool
 // requests of PostBatchBills, bank lines of PostBatchBank); nothing is read back; the queue is never held.
 func jobWorker(dir string) {
 	p := readProgress(dir)
-	pl := readObjFile(filepath.Join(dir, "payload.json"))
+	pl := readObjFileBak(filepath.Join(dir, "payload.json"))
 	if p == nil || pl == nil {
 		return
 	}

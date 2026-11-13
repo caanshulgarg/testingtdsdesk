@@ -76,7 +76,7 @@ func loadHeld(company string) (*heldCopy, error) {
 		return nil, err
 	}
 	st := readKeepState(dir)
-	bal := readObjFile(filepath.Join(dir, "balances.json"))
+	bal := readObjFileBak(filepath.Join(dir, "balances.json"))
 	if st == nil || bal == nil || !isTallyDate(str(bal["openAsOn"])) || !isTallyDate(str(st["from"])) {
 		return nil, errors.New("FinCom works balances out from its copy of the books (Reports, Look up); the bridge no longer asks Tally for a balance, and it does not keep the whole day book of " + company + " here")
 	}

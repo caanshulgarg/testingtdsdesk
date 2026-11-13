@@ -13,8 +13,6 @@ package main
 import (
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"sync"
 	"time"
 )
@@ -50,7 +48,7 @@ func acceptedAll() M {
 	if acceptedNotes != nil && acceptedLoaded == f {
 		return acceptedNotes
 	}
-	all := readObjFile(f)
+	all := readObjFileBak(f) // 2.5.15: the file, else its copy (.bak) when the file is missing or not whole
 	if all == nil {
 		all = M{}
 	}
@@ -73,18 +71,8 @@ func acceptedAll() M {
 
 // under the lock: the notes written through, a temporary file renamed over the old one; the old file stays on a failure
 func acceptedWrite() error {
-	f := acceptedFile()
-	_ = os.MkdirAll(filepath.Dir(f), 0o755)
-	tmp := f + ".tmp"
-	if err := os.WriteFile(tmp, []byte(jsonText(acceptedNotes)), 0o644); err != nil {
-		_ = os.Remove(tmp)
-		return err
-	}
-	if err := os.Rename(tmp, f); err != nil {
-		_ = os.Remove(tmp)
-		return err
-	}
-	return nil
+	// 2.5.15 (safefile.go): flushed to the disk and put in place by one rename, then the same text as posted-ids.json.bak
+	return saveFileMirror(acceptedFile(), jsonText(acceptedNotes))
 }
 
 // a write failure is said loudly: until the file can be written again, what is known lives in this process only

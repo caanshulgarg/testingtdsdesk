@@ -1406,13 +1406,13 @@ func pullSaveNow() {
 	pullSaveMu.Lock()
 	defer pullSaveMu.Unlock()
 	if t, ok := pullSaveText.Load().(string); ok && t != "" {
-		_ = saveFile(pullFile(), t)
-		pullSaveText.CompareAndSwap(t, "") // a newer snapshot stored meanwhile stays, for its own write
+		_ = saveFileBak(pullFile(), t, wholeJSON) // 2.5.15 (safefile.go)
+		pullSaveText.CompareAndSwap(t, "")        // a newer snapshot stored meanwhile stays, for its own write
 	}
 }
 
 func pullLoad() {
-	j := readObjFile(pullFile())
+	j := readObjFileBak(pullFile())
 	if j == nil {
 		return
 	}

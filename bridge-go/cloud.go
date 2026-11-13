@@ -721,7 +721,7 @@ func pushCloudState(company, dir string) {
 	if t, ok := cloudStateAt[company]; ok && time.Since(t).Seconds() < float64(keepNum("CloudStateSec", 60)) {
 		return
 	}
-	m := readObjFile(filepath.Join(dir, "manifest.json"))
+	m := readObjFileBak(filepath.Join(dir, "manifest.json"))
 	if m == nil {
 		return
 	}
@@ -1379,7 +1379,7 @@ func cloudPostsFile() string { return sp("cloud-posts.txt") }
 func getCloudPosts() map[string]string {
 	if cloudPosts == nil {
 		cloudPosts = map[string]string{}
-		for _, l := range strings.Split(readText(cloudPostsFile()), "\n") {
+		for _, l := range strings.Split(readTextBak(cloudPostsFile(), nil), "\n") { // 2.5.15: its .bak when missing
 			if l = strings.TrimSpace(l); l != "" {
 				cloudPosts[l] = ""
 			}
@@ -1397,7 +1397,7 @@ func saveCloudPosts() {
 	if len(ks) > 0 {
 		t = strings.Join(ks, "\r\n") + "\r\n"
 	}
-	_ = saveFile(cloudPostsFile(), t)
+	_ = saveFileMirror(cloudPostsFile(), t) // 2.5.15 (safefile.go): the postings taken, never lost
 }
 
 func cloudPostTake() {

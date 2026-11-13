@@ -76,6 +76,11 @@ func (o *Ordered) UnmarshalText(s string) error {
 		}
 		o.Set(kt.(string), normNumbers(v))
 	}
+	// 2.5.15: a file cut short (no closing brace: a power cut, a full disk) is not whole: never read as fewer settings
+	// (the computer's key would be lost when the settings are written again); its .bak is read instead (loadConfig)
+	if t, err := d.Token(); err != nil || t != json.Delim('}') {
+		return fmt.Errorf("the settings stop part-way (not a whole file)")
+	}
 	return nil
 }
 
@@ -163,7 +168,16 @@ func loadConfig() {
 	need := false
 	if exists(ConfigPath) {
 		o := newOrdered()
-		if err := o.UnmarshalText(readText(ConfigPath)); err != nil {
+		err := o.UnmarshalText(readText(ConfigPath))
+		if err != nil {
+			// 2.5.15 (safefile.go): the copy kept before the last change (.bak), when whole: the computer's key, port and
+			// choices kept; only when neither can be read the standard settings
+			if b := newOrdered(); exists(bakOf(ConfigPath)) && b.UnmarshalText(readText(bakOf(ConfigPath))) == nil {
+				fmt.Println("  The settings file could not be read (" + err.Error() + "). Its backup (" + filepath.Base(bakOf(ConfigPath)) + ") is used.")
+				o, err, need = b, nil, true
+			}
+		}
+		if err != nil {
 			fmt.Println("  The settings file could not be read (" + err.Error() + "). Starting with the standard settings.")
 			need = true
 		} else {
@@ -228,7 +242,8 @@ func saveConfig() {
 		writeLog("Could not save the settings: " + err.Error())
 		return
 	}
-	if err := saveFile(ConfigPath, string(b)); err != nil {
+	// 2.5.15 (safefile.go): flushed and put in place by one rename; the settings before (when whole) kept as .bak
+	if err := saveFileBak(ConfigPath, string(b), func(x []byte) bool { return newOrdered().UnmarshalText(string(x)) == nil }); err != nil {
 		writeLog("Could not save the settings: " + err.Error())
 		return
 	}

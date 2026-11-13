@@ -53,13 +53,32 @@ func jobFileWriteOnce(path, text string, mkdir bool) error {
 		_ = os.MkdirAll(filepath.Dir(path), 0o755)
 	}
 	tmp := fmt.Sprintf("%s.%d.%d.tmp", path, os.Getpid(), jobTmpN.Add(1))
-	if err := os.WriteFile(tmp, []byte(text), 0o644); err != nil {
+	// 2.5.15 (safefile.go): written and flushed to the disk before the replace; the same text then kept as .bak, so a
+	// power cut or a damaged file never leaves a posting without its record
+	h, err := os.OpenFile(tmp, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o644)
+	if err != nil {
+		return err
+	}
+	if _, err = h.WriteString(text); err == nil {
+		err = syncFileFn(h)
+	}
+	if cerr := h.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
 		_ = os.Remove(tmp)
 		return err
 	}
 	if err := renameFn(tmp, path); err != nil {
 		_ = os.Remove(tmp)
 		return err
+	}
+	fsyncDir(filepath.Dir(path))
+	// the same text as progress.json.bak: a posting's record is never one request behind in its copy
+	if tb, err := writeTempSynced(bakOf(path), []byte(text)); err == nil {
+		if renameFn(tb, bakOf(path)) != nil {
+			_ = os.Remove(tb)
+		}
 	}
 	return nil
 }
@@ -176,10 +195,26 @@ func jobFileReadW(path string, waitMissing bool) M {
 			}
 		} else if os.IsNotExist(err) {
 			if fi, derr := os.Stat(filepath.Dir(path)); !waitMissing || derr != nil || !fi.IsDir() || i >= 8 {
-				return nil
+				return jobFileBak(path)
 			}
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
-	return nil
+	return jobFileBak(path)
+}
+
+// 2.5.15: the file missing (its folder still there) or not whole after the tries: the copy before it (.bak), when whole
+func jobFileBak(path string) M {
+	if fi, err := os.Stat(filepath.Dir(path)); err != nil || !fi.IsDir() {
+		return nil
+	}
+	b, err := os.ReadFile(bakOf(path))
+	if err != nil {
+		return nil
+	}
+	m := parseObj(strings.TrimPrefix(string(b), "\ufeff"))
+	if m != nil {
+		saidBak(path, "cannot be read whole")
+	}
+	return m
 }

@@ -172,9 +172,9 @@ func keepHoldWhy() (string, string) {
 }
 
 // --- the copy's state (keep.json): a JSON object, read and written as the PowerShell bridge did
-func readKeepState(dir string) M { return readObjFile(filepath.Join(dir, "keep.json")) }
+func readKeepState(dir string) M { return readObjFileBak(filepath.Join(dir, "keep.json")) } // 2.5.15: its .bak when not whole
 func saveKeepState(dir string, st M) {
-	_ = saveFile(filepath.Join(dir, "keep.json"), jsonText(st))
+	_ = saveJSONBak(filepath.Join(dir, "keep.json"), st) // 2.5.15 (safefile.go)
 }
 
 // the entries of a period, as numbers only: [guid, change number, date]; 'after' asks only for those changed since
@@ -431,7 +431,7 @@ func importKeepOpening(company, body string) (M, error) {
 		led = append(led, M{"name": str(l["name"]), "parent": str(l["parent"]), "open": str(l["open"]), "close": ""})
 	}
 	bal := M{"ok": true, "company": company, "from": st["from"], "to": today(), "openAsOn": want, "ledgers": led, "keep": true, "source": "trial balance file"}
-	_ = saveFile(filepath.Join(dir, "balances.json"), jsonText(bal))
+	_ = saveJSONBak(filepath.Join(dir, "balances.json"), bal)
 	setCloudLedgers(dir)
 	st["balAt"] = nowS()
 	saveKeepState(dir, st)
@@ -615,7 +615,7 @@ func writeKeepManifest(dir string, st M, td string) {
 	}
 	man := M{"ok": true, "keep": true, "company": st["company"], "at": nowS(), "from": from, "to": to, "phase": st["phase"], "doneTo": doneTo, "seen": nowS(), "months": months,
 		"balancesAt": st["balAt"], "readAt": st["readAt"], "bridge": BridgeVersion, "skipped": nonEmpty(strs(st["skipped"])), "trouble": st["trouble"]}
-	_ = saveFile(filepath.Join(dir, "manifest.json"), jsonText(man))
+	_ = saveJSONBak(filepath.Join(dir, "manifest.json"), man)
 }
 func nonEmpty(a []string) []any {
 	o := []any{}

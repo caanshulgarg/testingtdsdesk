@@ -34,7 +34,7 @@ func companySync(company string, port int) (M, error) {
 	if err != nil {
 		return nil, err
 	}
-	if m := readObjFile(filepath.Join(dir, "manifest.json")); m != nil {
+	if m := readObjFileBak(filepath.Join(dir, "manifest.json")); m != nil {
 		return m, nil
 	}
 	return nil, errors.New("The bridge has no copy of " + company + " yet; it is read at Update now or the nightly run.")
