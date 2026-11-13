@@ -6,16 +6,22 @@ function assert(c: unknown, msg = "assertion failed"): asserts c { if (!c) throw
 
 const TICKET = (o: any = {}) => ({ id: "t-1", code: "TD-0007", subject: "Bill not read", module: "TDS", priority: "high", status: "open", firm_name: "Made-up & Co", created_name: "Asha", created_email: "asha@firm.test",
   thread: [{ id: "m-1", body: "The bill of 3 March is not read.", author_name: "Asha", from_support: false, internal: false, at: "2026-11-13T05:00:00Z" }], ...o });
-function fake(o: { mfa?: boolean | "down"; ticket?: any; ticketError?: string; setUp?: boolean; resend?: { ok: boolean; status: number; message?: string } } = {}) {
+function fake(o: { mfa?: boolean | "down"; ticket?: any; ticketError?: string; setUp?: boolean; resend?: { ok: boolean; status: number; message?: string }; rate?: { bucket: string; key: string }[]; rateDown?: boolean } = {}) {
   const log = { sent: [] as any[], asked: [] as string[] };
+  const rate = o.rate || [];
+  const down = () => { if (o.rateDown) throw new Error("relation public.auth_rate_hits does not exist"); };
   const d: Deps = {
     cors: { "Access-Control-Allow-Origin": "*" },
     key: o.setUp === false ? "" : "re_test", to: "support@fincom.test, second@fincom.test", from: "FinCom Support <support@fincom.test>", app: "https://app.fincom.live/",
     mfaOk: async (jwt) => { if (o.mfa === "down") throw new Error("no function mfa_ok"); return jwt === "tok-member" && o.mfa !== false; },
     ticket: async (jwt, id) => { log.asked.push(jwt + " " + id); return o.ticketError ? { t: null, error: o.ticketError } : { t: "ticket" in o ? o.ticket : TICKET(), error: null }; },
     send: async (m) => { log.sent.push(m); return o.resend || { ok: true, status: 200 }; },
+    // the shared counts of migration 112, in memory
+    count: async (bucket, key) => { down(); return rate.filter((r) => r.bucket === bucket && r.key === key).length; },
+    add: async (bucket, key) => { down(); rate.push({ bucket, key }); },
+    hit: async (bucket, key, max) => { down(); if (rate.filter((r) => r.bucket === bucket && r.key === key).length >= max) return false; rate.push({ bucket, key }); return true; },
   };
-  return { handler: makeHandler(d), log };
+  return { handler: makeHandler(d), log, rate };
 }
 const post = (body: unknown, jwt = "tok-member") => new Request("http://x/support-mail", { method: "POST", headers: { "Content-Type": "application/json", ...(jwt ? { Authorization: "Bearer " + jwt } : {}) }, body: JSON.stringify(body) });
 const read = async (r: Response) => ({ status: r.status, body: await r.json() });
@@ -66,4 +72,42 @@ Deno.test("L3: the database's and the email service's own words are not passed o
   const b = fake({ resend: { ok: false, status: 422, message: "The fincom.test domain is not verified (https://resend.example/domains)" } });
   const x = await read(await b.handler(post({ ticket: "t-1" })));
   eq([x.status, x.body.ok, x.body.sent], [200, false, false]); assert(!/domain|https?:|resend/i.test(JSON.stringify(x.body)), JSON.stringify(x.body));
+});
+
+// ---------- 13-Nov-2026 (security review, L9) ----------
+import { TICKET_DAY_MAX } from "./handler.ts";
+Deno.test("L9: a message is emailed once: asking again for the same message sends nothing; the next message is emailed", async () => {
+  const rate: { bucket: string; key: string }[] = [];
+  const a = fake({ rate });
+  eq((await read(await a.handler(post({ ticket: "t-1", event: "new" })))).body.sent, true, "the first time");
+  for (let i = 0; i < 5; i++) {
+    const r = await read(await fake({ rate }).handler(post({ ticket: "t-1", event: "new" })));   // another running copy, the same table
+    eq([r.status, r.body.ok, r.body.sent, r.body.reason], [200, true, false, "already sent"], "again " + i);
+  }
+  eq(a.log.sent.length, 1, "one email");
+  assert(rate.every((r) => /^[0-9a-f]{64}$/.test(r.key)), "kept as hashes: no ticket id or address");
+  const t = TICKET(); t.thread.push({ id: "m-2", body: "Please upload it again.", author_name: "FinCom", from_support: true, internal: false, at: "2026-11-13T06:00:00Z" });
+  const b = fake({ rate, ticket: t });
+  eq((await read(await b.handler(post({ ticket: "t-1" })))).body, { ok: true, sent: true, to: "raiser" }, "the reply is a new message");
+  eq((await read(await b.handler(post({ ticket: "t-1" })))).body.sent, false, "and is emailed once");
+});
+
+Deno.test("L9: an email that did not go is not marked as sent; a ticket's emails in a day are limited; without the count nothing is sent", async () => {
+  const rate: { bucket: string; key: string }[] = [];
+  const bad = fake({ rate, resend: { ok: false, status: 500 } });
+  eq((await read(await bad.handler(post({ ticket: "t-1" })))).body.sent, false);
+  const good = fake({ rate });
+  eq((await read(await good.handler(post({ ticket: "t-1" })))).body.sent, true, "the next try sends it");
+  // many messages on one ticket in a day
+  const many: { bucket: string; key: string }[] = [];
+  let sent = 0;
+  for (let i = 0; i < TICKET_DAY_MAX + 3; i++) {
+    const t = TICKET(); for (let k = 0; k <= i; k++) t.thread.push({ id: "x-" + k, body: "more", from_support: false, internal: false, at: "2026-11-13T07:00:" + String(k).padStart(2, "0") + "Z" });
+    const f = fake({ rate: many, ticket: t });
+    if ((await read(await f.handler(post({ ticket: "t-1" })))).body.sent) sent++;
+  }
+  eq(sent, TICKET_DAY_MAX, "the day's count for one ticket");
+  const down = fake({ rateDown: true });
+  const r = await read(await down.handler(post({ ticket: "t-1" })));
+  eq([r.status, r.body.ok, r.body.sent], [200, true, false], "the ticket is unaffected"); eq(down.log.sent.length, 0, "nothing sent");
 });

@@ -10,6 +10,9 @@ import { makeHandler } from "./handler.ts";
 
 const URL = Deno.env.get("SUPABASE_URL")!;
 const ANON = Deno.env.get("SUPABASE_ANON_KEY")!;
+// the service role, for the shared counts only (migration 112): a message is emailed once (security review L9)
+const admin = createClient(URL, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false, autoRefreshToken: false } });
+const must = <T>(r: { data: T; error: any }) => { if (r.error) throw new Error(r.error.message || String(r.error)); return r.data; };
 // "*": every call carries the person's sign-in token, and the ticket is read as them
 const cors = corsFor(null, { any: true, methods: "POST, OPTIONS" });
 const asUser = (jwt: string) => createClient(URL, ANON, { global: { headers: { Authorization: `Bearer ${jwt}` } }, auth: { persistSession: false } });
@@ -26,4 +29,7 @@ Deno.serve(makeHandler({
     const j = await r.json().catch(() => ({}));
     return { ok: r.ok, status: r.status, message: j.message };
   },
+  count: async (bucket, key, windowS) => Number(must(await admin.rpc("auth_rate_count", { p_bucket: bucket, p_key: key, p_window_s: windowS }))) || 0,
+  add: async (bucket, key) => { must(await admin.rpc("auth_rate_add", { p_bucket: bucket, p_key: key })); },
+  hit: async (bucket, key, max, windowS) => must(await admin.rpc("auth_rate_hit", { p_bucket: bucket, p_key: key, p_max: max, p_window_s: windowS })) === true,
 }));
