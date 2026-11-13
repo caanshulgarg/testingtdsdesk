@@ -29,7 +29,7 @@ FAKES = """(() => {
   window.AudioContext = FakeAC; window.webkitAudioContext = FakeAC;
 })()"""
 SETUP = """() => {
-  Cloud.cfg = () => ({url: "https://stand.supabase.co", key: "anon-key", email: "me@firm.test"});
+  Cloud.cfg = () => ({url: "https://qbocskaiewaxqcvaunzc.supabase.co", key: "anon-key", email: "me@firm.test"});
   Cloud.sess = () => ({access_token: "tok-x", refresh_token: "", user_id: "u1", email: "me@firm.test", at: Date.now(), expires_in: 3600});
   Cloud.fresh = async () => {}; Cloud.refreshToken = async () => {};
   Cloud.st.firm = "f1"; Cloud.st.role = "owner"; Cloud.st.state = "ok";

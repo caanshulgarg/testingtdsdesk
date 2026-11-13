@@ -22,6 +22,6 @@ with sync_playwright() as p:
     ok(c["url"] == STAGING and c["key"].startswith("sb_publishable_Q--"), "the test site uses the staging database: " + c["url"])
     ok(pg.evaluate("localStorage.getItem('tdsdesk-test:cloudsess')") is None and c.get("email") == "a@b.in", "a sign-in from live is forgotten (sign in again on staging); the email is kept")
     pg.goto("http://localhost:8151/site/index.html"); pg.wait_for_timeout(1500)
-    ok(pg.evaluate("Cloud.cfg().url") == LIVE and not pg.evaluate("!!CLOUD_DEFAULT.lock"), "the live build keeps the live database")
+    ok(pg.evaluate("Cloud.cfg().url") == LIVE and pg.evaluate("!!CLOUD_DEFAULT.lock"), "the live build keeps the live database, and is tied to it (next-sec-client, 13-Nov-2026)")
     br.close()
 print("\n" + (str(len(fails)) + " FAILED" if fails else "all passed"))

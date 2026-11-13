@@ -266,8 +266,8 @@ class Fn:
             what = body.get("what"); path = "firm/client/%s/%s/%s-%s" % (r["id"], what, p["id"][:8], body.get("seq", body.get("name", "f")))
             if what == "chat" and body.get("size", 0) > 20 * 1024 * 1024: return err(413, "A file may be at most 20 MB.", "size")
             if what == "rec" and not host: return err(403, "Only the host records.", "host")
-            return 200, {"ok": True, "bucket": "call-files" if what == "chat" else "call-recordings", "path": path, "url": "https://stand.supabase.co/storage/v1/object/upload/sign/b/" + urllib.parse.quote(path) + "?token=t"}
-        if a == "download": return 200, {"ok": True, "url": "https://stand.supabase.co/storage/v1/object/sign/x?token=d"}
+            return 200, {"ok": True, "bucket": "call-files" if what == "chat" else "call-recordings", "path": path, "url": "https://qbocskaiewaxqcvaunzc.supabase.co/storage/v1/object/upload/sign/b/" + urllib.parse.quote(path) + "?token=t"}
+        if a == "download": return 200, {"ok": True, "url": "https://qbocskaiewaxqcvaunzc.supabase.co/storage/v1/object/sign/x?token=d"}
         if a == "rec_start":
             if not host: return err(403, "Only the host can record.", "host")
             if not self.allow: return err(403, "Recording is off for this client.", "recoff")
@@ -397,7 +397,7 @@ FAKE_SCREEN = """(() => {
 def setup_js(tok):
     u = USERS[tok]
     return """async () => {
-  Cloud.cfg = () => ({url: "https://stand.supabase.co", key: "sb_publishable_test", email: "%(email)s"});
+  Cloud.cfg = () => ({url: "https://qbocskaiewaxqcvaunzc.supabase.co", key: "sb_publishable_test", email: "%(email)s"});
   Cloud.sess = () => ({access_token: "%(tok)s", refresh_token: "", user_id: "%(id)s", email: "%(email)s", at: Date.now(), expires_in: 3600});
   Cloud.fresh = async () => {}; Cloud.refreshToken = async () => {};
   Cloud.st.firm = "f1"; Cloud.st.role = "%(role)s"; Cloud.st.state = "ok"; Cloud.st.email = "%(email)s";

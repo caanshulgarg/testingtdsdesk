@@ -37,9 +37,17 @@ const consoleUrl = (mode) => {
   if (process.env.FINCOM_CONSOLE_URL) return process.env.FINCOM_CONSOLE_URL.trim();
   try { return String(JSON.parse(fs.readFileSync(new URL("./console.json", import.meta.url), "utf8"))[mode === "test" ? "test" : "live"] || "").trim(); } catch (e) { return ""; }
 };
+// the one database the build is tied to (CLOUD_DEFAULT in the program built for this mode, src/js/27): the page may reach
+// that project's address only, never any other *.supabase.co (a project anyone can open there)
+const supabaseHost = (mode) => {
+  const f = new URL("./legacy/" + (mode === "test" ? "test" : "live") + ".js", import.meta.url);
+  const m = fs.existsSync(f) && /const CLOUD_DEFAULT = \{url: "https:\/\/([a-z0-9]{12,40}\.supabase\.co)"/.exec(fs.readFileSync(f, "utf8"));
+  if (!m) throw new Error("the build's database address (CLOUD_DEFAULT) was not found in legacy/*.js: run `python3 build.py --react` first");
+  return m[1];
+};
 const csp = (mode, hashes = "") => "default-src 'self'; script-src 'self'" + hashes + (turnstileKey(mode) ? " " + TURNSTILE : "") + " 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; " +
   "font-src 'self' data:; img-src 'self' data: blob:; media-src 'self' data: blob:; " +
-  "connect-src 'self' data: blob: https://*.supabase.co wss://*.supabase.co http://127.0.0.1:* http://localhost:*" + (sentryOn(mode) ? " " + SENTRY_INGEST : "") + "; " +
+  "connect-src 'self' data: blob: https://" + supabaseHost(mode) + " wss://" + supabaseHost(mode) + " http://127.0.0.1:* http://localhost:*" + (sentryOn(mode) ? " " + SENTRY_INGEST : "") + "; " +
   "worker-src 'self' blob:; frame-src 'self' blob:" + (turnstileKey(mode) ? " " + TURNSTILE : "") + "; object-src 'none'; base-uri 'self'; form-action 'self'";
 
 // 17-Oct-2026 (Mac Safari stuck on "Opening FinCom"): the code is written down to what Safari 14 and Chrome 87 read

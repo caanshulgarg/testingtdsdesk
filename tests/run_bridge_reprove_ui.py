@@ -68,7 +68,7 @@ with sync_playwright() as p:
     res = pg.evaluate("""async () => {
       const made = [];
       TCloud.on = () => true; Bridge.up = () => true; Bridge.on = () => true; TCloud.autoAt = 0; TCloud.autoBusy = false;
-      TCloud.ingestUrl = () => "https://x.supabase.co/functions/v1/tally-ingest";
+      TCloud.ingestUrl = () => "https://qbocskaiewaxqcvaunzc.supabase.co/functions/v1/tally-ingest";
       TCloud.rpc = async (fn, a) => { made.push(fn); return fn === "tally_device_create" ? {key: "fcd_" + "e".repeat(48)} : {}; };
       await TCloud.auto();
       return {made, err: TCloud.autoErr || ""};

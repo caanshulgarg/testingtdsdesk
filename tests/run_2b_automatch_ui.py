@@ -49,7 +49,7 @@ with sync_playwright() as p:
     pg.goto("http://localhost:8195/"); pg.wait_for_timeout(2500); pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(1000)
     if pg.locator("button:has-text('Later')").count(): pg.click("button:has-text('Later')"); pg.wait_for_timeout(300)
     pg.evaluate("""(bk) => {
-      Cloud.on = () => true; Cloud.cfg = () => ({url: 'https://example.supabase.co', key: 'anon'}); Cloud.sess = () => ({access_token: 't'}); Cloud.fresh = async () => {};
+      Cloud.on = () => true; Cloud.cfg = () => ({url: 'https://qbocskaiewaxqcvaunzc.supabase.co', key: 'anon'}); Cloud.sess = () => ({access_token: 't'}); Cloud.fresh = async () => {};
       window.saveBooks = async () => {}; window.ledgersReady = () => true;
       const c = newCompany({name: "ZZ TEST 2B auto", gstin: "07AAGCL4827M1Z3"});
       S.companies[c.id] = c; S.coId = c.id; S.view = "company"; S.tab = "books"; S.loadingCo = false;

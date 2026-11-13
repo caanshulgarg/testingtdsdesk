@@ -61,14 +61,14 @@ def handle(route):
         return route.fulfill(status=200, content_type="application/octet-stream", body=FILES.get(path, b""))
     if "/functions/v1/support-mail" in url: MAILS.append((tok, json.loads(req.post_data or "{}"))); return route.fulfill(status=200, content_type="application/json", body='{"ok":true,"sent":false,"reason":"Email is not set up yet"}')
     return route.fulfill(status=200, content_type="application/json", body="[]")
-SIGN = """(tok) => { Cloud.on = () => true; Cloud.cfg = () => ({url: 'https://example.supabase.co', key: 'anon'}); Cloud.sess = () => ({access_token: tok}); Cloud.refreshToken = async () => {};
+SIGN = """(tok) => { Cloud.on = () => true; Cloud.cfg = () => ({url: 'https://qbocskaiewaxqcvaunzc.supabase.co', key: 'anon'}); Cloud.sess = () => ({access_token: tok}); Cloud.refreshToken = async () => {};
   Cloud.st.firm = tok === 'tok-a' ? 'firm-a' : tok === 'tok-b' ? 'firm-b' : 'firm-x';
   S.account = tok === 'tok-admin' ? {superadmin: true, me: {role: 'owner'}} : {me: {role: 'owner'}, firm: {balance: 100}}; S.sup = null;
   S.firm.firmName = S.firm.firmName || 'ZZ Test Firm';   // an owner with no firm name is asked for it first (review item 32)
   render(); }"""
 with sync_playwright() as p:
     br = p.chromium.launch(); pg = br.new_page(viewport={"width": 1400, "height": 900}); pg.on("pageerror", lambda e: errors.append(str(e)))
-    pg.route("https://example.supabase.co/**", handle)
+    pg.route("https://qbocskaiewaxqcvaunzc.supabase.co/**", handle)
     pg.goto("http://localhost:8150/"); pg.wait_for_timeout(2500); pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(1500)
     # the guide, without the firm account
     ok(pg.locator('#side .side-link:has-text("Help")').count() == 1, "Help is in the side bar")

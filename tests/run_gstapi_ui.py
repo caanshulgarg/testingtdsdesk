@@ -38,7 +38,7 @@ with sync_playwright() as p:
     pg.wait_for_timeout(1500); pg.evaluate("S.books = window.__bk; S.gstPart = 'r2b'; render();"); pg.wait_for_timeout(2500)
     ok("Fetch 2B from the portal" in pg.inner_text("#app") and "Sign in to the firm account" in pg.inner_text("#app"), "without the firm account: the card says to sign in; files can still be brought in")
     # the firm account, as signed in
-    pg.evaluate("() => { Cloud.on = () => true; Cloud.cfg = () => ({url: 'https://example.supabase.co', key: 'anon'}); Cloud.sess = () => ({access_token: 'tok-firm'}); Cloud.refreshToken = async () => {}; S.account = {email: 'a@b.c'}; render(); }"); pg.wait_for_timeout(800)
+    pg.evaluate("() => { Cloud.on = () => true; Cloud.cfg = () => ({url: 'https://qbocskaiewaxqcvaunzc.supabase.co', key: 'anon'}); Cloud.sess = () => ({access_token: 'tok-firm'}); Cloud.refreshToken = async () => {}; S.account = {email: 'a@b.c'}; render(); }"); pg.wait_for_timeout(800)
     ok("GST portal username in" in pg.inner_text("#app"), "signed in, no username yet: points to GST settings")
     pg.evaluate("S.tab = 'gstset'; render()"); pg.wait_for_timeout(2000)
     pg.fill('section[data-greg="07"] input[aria-label="GST portal username"]', "vmsevents07"); pg.press('section[data-greg="07"] input[aria-label="GST portal username"]', "Tab"); pg.wait_for_timeout(800)

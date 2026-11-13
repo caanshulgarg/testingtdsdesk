@@ -133,7 +133,7 @@ with sync_playwright() as p:
     ok(pg.evaluate("window.__tc[0]") == ["tally_device_revoke", {"p_id": "d1"}], "and removes it")
     # the firm account: people's buttons, a backup, a drop key switched off, how long before signing out, syncing, documents;
     # the platform page's prices (read from their boxes), a firm's plan
-    pg.evaluate("""() => { window.__calls = []; Cloud.on = () => true; Cloud.aal = () => 'aal1'; window.__cc = {url: 'https://x.supabase.co', key: 'anon', auto: true}; Cloud.cfg = () => window.__cc; Cloud.setCfg = (o) => { window.__calls.push(['cfg', o]); Object.assign(window.__cc, o); }; window.startCloudSync = () => {};
+    pg.evaluate("""() => { window.__calls = []; Cloud.on = () => true; Cloud.aal = () => 'aal1'; window.__cc = {url: 'https://qbocskaiewaxqcvaunzc.supabase.co', key: 'anon', auto: true}; Cloud.cfg = () => window.__cc; Cloud.setCfg = (o) => { window.__calls.push(['cfg', o]); Object.assign(window.__cc, o); }; window.startCloudSync = () => {};
       Cloud.fn = async (n, a) => { window.__calls.push([n, a]); return {email: a.email, password: 'Pw-1'}; }; Cloud.rpc = async (n, a) => { window.__calls.push([n, a]); return n === 'backup_data' ? {x: 1} : []; };
       window.loadAccount = () => {}; window.saveFile = (n) => window.__calls.push(['save', n]);
       Cloud.st = Object.assign(Cloud.st, {email: 'a@b.in', role: 'owner', mfa: null, mfaInfo: {}, members: []});

@@ -50,7 +50,7 @@ SEED = """() => {
   const mk = (name, gstin) => { const c = newCompany({name, gstin}); S.companies[c.id] = c; S.data[c.id] = {parties: {}, entries: {}, loaded: true}; c.stats = {}; return c.id; };
   window.__A = mk("Alpha Traders Pvt Ltd", "09AANFG3202D1ZR"); window.__B = mk("Beta Exports LLP", "27AAACX9999X1ZA");
   window.__calls = []; window.__fs = {status: "active", reason: null}; window.__off = [];
-  Cloud.on = () => true; Cloud.aal = () => 'aal2'; window.__cc = {url: 'https://x.supabase.co', key: 'anon', auto: true}; Cloud.cfg = () => window.__cc; Cloud.setCfg = (o) => Object.assign(window.__cc, o);
+  Cloud.on = () => true; Cloud.aal = () => 'aal2'; window.__cc = {url: 'https://qbocskaiewaxqcvaunzc.supabase.co', key: 'anon', auto: true}; Cloud.cfg = () => window.__cc; Cloud.setCfg = (o) => Object.assign(window.__cc, o);
   window.startCloudSync = () => {}; window.loadAccount = async () => S.account;
   Cloud.rpc = async (n, a) => { window.__calls.push(['rpc', n, a]); if (n === 'my_firm_status') return window.__fs; if (n === 'tally_post_enqueue' || n === 'tally_post_enqueue_to') return {ok: true}; return []; };
   Cloud.api = async (p, o) => { window.__calls.push(['api', p, (o || {}).method || 'GET']); if (/^clients\\?select=id,status/.test(p)) return window.__off; return []; };

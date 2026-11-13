@@ -58,7 +58,7 @@ with sync_playwright() as p:
     pg.route("**/functions/v1/gst-taxpro", fake)
     pg.goto("http://localhost:8176/"); pg.wait_for_timeout(2500); pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(1000)
     if pg.locator("button:has-text('Later')").count(): pg.click("button:has-text('Later')"); pg.wait_for_timeout(300)   # the firm's details: later
-    pg.evaluate("""(g) => { Cloud.on = () => true; Cloud.cfg = () => ({url: 'https://example.supabase.co', key: 'anon'}); Cloud.sess = () => ({access_token: 't'}); Cloud.fresh = async () => {};
+    pg.evaluate("""(g) => { Cloud.on = () => true; Cloud.cfg = () => ({url: 'https://qbocskaiewaxqcvaunzc.supabase.co', key: 'anon'}); Cloud.sess = () => ({access_token: 't'}); Cloud.fresh = async () => {};
       S.account = {email: 'a@b.c', me: {role: 'owner'}}; S.gstReg = '09'; S.gstYm = '202608'; S.books = {twoBs: {}, filed: {}}; window.saveBooks = () => {}; window.ledgersReady = () => true;
       GSTR.gstins = () => [g]; GSTAPI.gstinOf = () => g; GSTAPI.user = () => 'u09'; GSTAmend.proof = () => null; GSTAmend.keep = () => {};
       GSTFILE.payload = (form, ym) => form === '3B' ? {gstin: g, ret_period: '082026'} : {gstin: g, fp: ym.slice(4) + ym.slice(0, 4), b2b: []};

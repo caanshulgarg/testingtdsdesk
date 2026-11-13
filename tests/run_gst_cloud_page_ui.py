@@ -54,7 +54,7 @@ def other(route):
     route.fulfill(status=200, content_type="application/json", body="[]")
 
 SETUP = """(bk) => {
-  Cloud.on = () => true; Cloud.cfg = () => ({url: 'https://stand-in.supabase.co', key: 'anon'}); Cloud.sess = () => ({access_token: 't'}); Cloud.fresh = async () => {};
+  Cloud.on = () => true; Cloud.cfg = () => ({url: 'https://qbocskaiewaxqcvaunzc.supabase.co', key: 'anon'}); Cloud.sess = () => ({access_token: 't'}); Cloud.fresh = async () => {};
   window.saveBooks = async () => {}; window.ledgersReady = () => true;
   const c = newCompany({name: "ZZ TEST cloud 3B", gstin: "07AAGCL4827M1Z3"});
   S.companies[c.id] = c; S.coId = c.id; S.view = "company"; S.tab = "books"; S.loadingCo = false;
@@ -81,8 +81,8 @@ SHOWN = """() => { const w = document.querySelector("#app [data-r3b-where]");
 
 with sync_playwright() as p:
     br = p.chromium.launch(); pg = br.new_page(viewport={"width": 1366, "height": 1000}); pg.on("pageerror", lambda e: errors.append(str(e)))
-    pg.route("https://stand-in.supabase.co/rest/v1/rpc/gst_calc_cached", cached)
-    pg.route("https://stand-in.supabase.co/functions/v1/gst-run", gstrun)
+    pg.route("https://qbocskaiewaxqcvaunzc.supabase.co/rest/v1/rpc/gst_calc_cached", cached)
+    pg.route("https://qbocskaiewaxqcvaunzc.supabase.co/functions/v1/gst-run", gstrun)
     pg.route("**/__test/boxes.js", lambda r: r.fulfill(status=200, content_type="text/javascript", body="export " + BOXES))
     pg.route("**/__test/gst3bprint.js", lambda r: r.fulfill(status=200, content_type="text/javascript", body=PRINT_JS))
     pg.route(re.compile(r"^https://stand-in\.supabase\.co/(?!rest/v1/rpc/gst_calc_cached|functions/v1/gst-run).*"), other)

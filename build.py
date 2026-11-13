@@ -81,7 +81,7 @@ def to_test(html):
     t = t.replace("<body>", '<body class="is-test">', 1)
     t = re.sub(r'(const APP_VERSION = ")', "\\1TEST \u00b7 ", t, 1)
     # the test site works on the staging database, never on live
-    live = 'const CLOUD_DEFAULT = {url: "https://nrtczucrlgalvtojwoes.supabase.co", key: "sb_publishable_HMkVf1jl9iOA8Xt4YaUezg_--4cIWVR", auto: true};'
+    live = 'const CLOUD_DEFAULT = {url: "https://nrtczucrlgalvtojwoes.supabase.co", key: "sb_publishable_HMkVf1jl9iOA8Xt4YaUezg_--4cIWVR", auto: true, lock: true};'
     if live not in t: sys.exit("CLOUD_DEFAULT (live) not found; the test build must not fall back to the live database")
     t = t.replace(live, 'const CLOUD_DEFAULT = {url: "https://qbocskaiewaxqcvaunzc.supabase.co", key: "sb_publishable_Q--gLdP6P-hU3gJDMHuKEA_fLTMJAxd", auto: true, lock: true};')
     if "nrtczucrlgalvtojwoes" in t: sys.exit("the test build still names the live database")
@@ -92,7 +92,7 @@ def to_test(html):
 CSP = ("default-src 'self'; script-src 'self' {hashes} 'wasm-unsafe-eval'; "
        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; "
        "img-src 'self' data: blob:; media-src 'self' data: blob:; "
-       "connect-src 'self' data: blob: https://*.supabase.co wss://*.supabase.co http://127.0.0.1:* http://localhost:*; "
+       "connect-src 'self' data: blob: https://{supabase} wss://{supabase} http://127.0.0.1:* http://localhost:*; "
        "worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'")
 def assemble_js_only(html):
     return "".join(m.group(1) for m in re.finditer(r"<script(?![^>]*\bsrc=)[^>]*>(.*?)</script>", html, re.S))
@@ -102,7 +102,10 @@ def csp_policy(html):
     for m in re.finditer(r"<script(?![^>]*\bsrc=)[^>]*>(.*?)</script>", html, re.S):
         h = "'sha256-" + base64.b64encode(hashlib.sha256(m.group(1).encode("utf-8")).digest()).decode() + "'"
         if h not in hashes: hashes.append(h)
-    return CSP.format(hashes=" ".join(hashes))
+    # the one database this page is tied to (its CLOUD_DEFAULT): that project's address only, never any other *.supabase.co
+    m = re.search(r'const CLOUD_DEFAULT = \{url: "https://([a-z0-9]{12,40}\.supabase\.co)"', html)
+    if not m: sys.exit("csp_policy: the page's database address (CLOUD_DEFAULT) was not found")
+    return CSP.format(hashes=" ".join(hashes), supabase=m.group(1))
 def add_csp(html):
     # With a CSP meta tag Chrome's preload scanner reads "<img ... src=" inside the inline script and fetches junk
     # addresses, so the program writes "<" + "img" instead; stop the build if one slips back in.

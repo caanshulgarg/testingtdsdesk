@@ -1,7 +1,7 @@
 /* ================================================================== */
 /* Firm account: the same data on every computer (Supabase)            */
 /* ================================================================== */
-const CLOUD_DEFAULT = {url: "https://nrtczucrlgalvtojwoes.supabase.co", key: "sb_publishable_HMkVf1jl9iOA8Xt4YaUezg_--4cIWVR", auto: true};
+const CLOUD_DEFAULT = {url: "https://nrtczucrlgalvtojwoes.supabase.co", key: "sb_publishable_HMkVf1jl9iOA8Xt4YaUezg_--4cIWVR", auto: true, lock: true};
 const CLOUD_CHUNK = 300;      // bank rows per record
 // a login FinCom switched off from its console (banned in Supabase Auth; the sign-in function says reason user_off)
 const SWITCHED_OFF = "This account is switched off. Contact FinCom support.";
@@ -9,9 +9,10 @@ function switchedOff(j){ return j && (j.reason === "user_off" || j.error_code ==
 const Cloud = {
   st: {state: "off", email: "", role: "", firm: "", lastSync: 0, pending: 0, error: "", busy: "", members: []},
   cfg(){ let c = {}; try { c = JSON.parse(lsGet("tdsdesk:cloud") || "{}"); } catch (e){}
-    // a build tied to one database (the test site: staging) forgets an address kept from another, and its sign-in
-    if (CLOUD_DEFAULT.lock && c.url && c.url !== CLOUD_DEFAULT.url){ c = {email: c.email || ""}; lsSet("tdsdesk:cloud", JSON.stringify(c)); lsDel("tdsdesk:cloudsess"); }
-    return Object.assign({}, CLOUD_DEFAULT, c); },
+    // every build is tied to its one database (live, or the test site's staging): an address kept from another is
+    // forgotten with its sign-in, and the address and key are always the build's own, never what this browser kept
+    if (c.url && c.url !== CLOUD_DEFAULT.url){ c = {email: c.email || ""}; lsSet("tdsdesk:cloud", JSON.stringify(c)); lsDel("tdsdesk:cloudsess"); }
+    return Object.assign({}, c, CLOUD_DEFAULT); },
   setCfg(p){ lsSet("tdsdesk:cloud", JSON.stringify(Object.assign(this.cfg(), p))); },
   sess(){ let s = null; try { s = JSON.parse(lsGet("tdsdesk:cloudsess") || "null"); } catch (e){} return s; },
   setSess(s){ if (s) lsSet("tdsdesk:cloudsess", JSON.stringify(s)); else lsDel("tdsdesk:cloudsess"); },
@@ -826,7 +827,7 @@ function takeAuthLink(){
 
 /* ---------- nothing is shown until someone signs in: the page is React (app/src/screens/SignIn.jsx) ---------- */
 function signInNeeded(){
-  if (window.claude) return false;                 // inside claude.ai, for trying things out
+  if (Bridge.blocked()) return false;              // inside claude.ai, for trying things out
   if (S.setPassword) return true;                  // arrived from an invite or reset link: the password comes first
   if (Cloud.on()) return !!Cloud.st.mfa;           // signed in (works offline once signed in), unless the code is still due
   return Cloud.cfg().gate !== false;
@@ -1149,7 +1150,7 @@ function billDelete(id){
 }
 function billDeleteAsk(e){
   askConfirm({title: "Delete this bill?", ok: "Delete", danger: true,
-    body: '<p class="note">' + esc(e.x.vendorName || e.fileName || "") + (e.x.invoiceNo ? " \u00b7 " + esc(e.x.invoiceNo) : "") + ". It moves to \u201cDeleted\u201d with its document, and can be restored from there.</p>" +
+    html: '<p class="note">' + esc(e.x.vendorName || e.fileName || "") + (e.x.invoiceNo ? " \u00b7 " + esc(e.x.invoiceNo) : "") + ". It moves to \u201cDeleted\u201d with its document, and can be restored from there.</p>" +
       '<label class="f" style="margin-top:8px"><span>Why is it deleted?</span><input type="text" id="delWhy" maxlength="200" placeholder="For example: uploaded twice, not this client\u2019s bill"></label>',
     read: () => ((document.getElementById("delWhy") || {}).value || "").trim(),
     validate: why => why.length < 3 ? "Write why the bill is deleted." : ""}).then(r => {
@@ -1302,7 +1303,7 @@ async function challanDelete(id){
   const c = TDS.challans().find(z => z.id === id), no = TDSReg.canDelete(c);
   if (no){ toast(no); return false; }
   const ok = await askConfirm({title: "Delete challan " + TDSCH.label(c) + "?", ok: "Delete", danger: true,
-    body: "It leaves the register; the register keeps it, with your reason, under Deleted.<br><label>Why <input type=\"text\" id=\"chDelWhy\" style=\"width:100%\"></label>",
+    html: "It leaves the register; the register keeps it, with your reason, under Deleted.<br><label>Why <input type=\"text\" id=\"chDelWhy\" style=\"width:100%\"></label>",
     read: () => (document.getElementById("chDelWhy") || {}).value || "", validate: (v) => String(v || "").trim().length < 3 ? "Say why the challan is deleted." : ""});
   if (!ok || !ok.ok) return false;
   const r = TDSReg.deleteHand(id, ok.data);
@@ -1400,7 +1401,7 @@ function acctPerson(what, email){
   else if (what === "makepw") Cloud.fn("admin", {action: "reset_password", email}).then(r => { S.newPerson = {email: r.email, password: r.password}; toast("New password made."); render(); }, e => toast(e.message));
   else if (what === "unlock") Cloud.fn("admin", {action: "unlock", email}).then(r => toast(r.note || "Unlocked."),
     e => toast(adminNotYet(e) ? "The lockout starts once the firm account\u2019s update is done: nobody is locked out until then." : e.message));
-  else if (what === "mfa") askConfirm({title: "Reset two-step sign-in for " + email + "?", ok: "Reset", body: '<p class="note">Their authenticator entry is removed. At the next sign-in they set it up again with their phone. Do this only when you are sure it is them asking.</p>'})
+  else if (what === "mfa") askConfirm({title: "Reset two-step sign-in for " + email + "?", ok: "Reset", html: '<p class="note">Their authenticator entry is removed. At the next sign-in they set it up again with their phone. Do this only when you are sure it is them asking.</p>'})
     .then(a => { if (a) Cloud.fn("admin", {action: "reset_two_step", email}).then(() => toast("Two-step sign-in reset for " + email + "."), e => toast(e.message)); });
   else Cloud.fn("admin", {action: "set_person", email, active: what === "on"}).then(() => { toast(what === "on" ? "Switched on." : "Switched off."); loadAccount(); }, e => toast(e.message));
 }
@@ -1412,7 +1413,7 @@ function acctBackup(id){
   }, e => toast(e.message));
 }
 function acctDropOff(id){
-  askConfirm({title: "Switch this key off?", ok: "Switch it off", body: '<p class="note">Anything using this key will no longer be able to send files in.</p>'}).then(a => {
+  askConfirm({title: "Switch this key off?", ok: "Switch it off", html: '<p class="note">Anything using this key will no longer be able to send files in.</p>'}).then(a => {
     if (!a) return;
     Cloud.rpc("revoke_drop_key", {p_id: id}).then(() => Cloud.rpc("my_drop_keys")).then(k => { S.dropKeys = [].concat(k || []); render(); }, e => toast(e.message));
   });
@@ -1544,7 +1545,7 @@ function doAct(act, t){
     case "useOffline": Cloud.setCfg({gate: false}); render(); break;
     case "dropKeysList": Cloud.rpc("my_drop_keys").then(r => { S.dropKeys = [].concat(r || []); render(); }, e => toast(e.message)); break;
     case "dropKeyNew": {
-      askConfirm({title: "Make a drop key", ok: "Make it", body: '<div class="bk-form one"><label><span>What is it for?</span><input type="text" id="dkLabel" value="Cowork agent"></label></div>',
+      askConfirm({title: "Make a drop key", ok: "Make it", html: '<div class="bk-form one"><label><span>What is it for?</span><input type="text" id="dkLabel" value="Cowork agent"></label></div>',
         read: () => ({label: (document.getElementById("dkLabel") || {}).value || "Agent"})}).then(a => {
         if (!a) return;
         Cloud.rpc("create_drop_key", {p_label: a.data.label}).then(r => {
@@ -1568,7 +1569,7 @@ function doAct(act, t){
     case "signOutNow": {
       flushBillSaves();                                         // a bill change typed a moment ago: saved and counted as not sent yet
       const pend = Cloud.on() ? cloudChanges().changes.length : 0;
-      askConfirm({title: "Sign out of FinCom?", ok: "Sign out", body: '<p class="note">You will need your email, password' + (Cloud.st.firm ? " and, if set up, the code from your phone" : "") + ' to come back in. Work already synced stays in your firm account.</p>',
+      askConfirm({title: "Sign out of FinCom?", ok: "Sign out", html: '<p class="note">You will need your email, password' + (Cloud.st.firm ? " and, if set up, the code from your phone" : "") + ' to come back in. Work already synced stays in your firm account.</p>',
         check: pend ? "" : "Also remove this firm\u2019s work from this computer (for a shared or office computer)"}).then(a => {
         if (!a) return;
         signOutHere("Signed out.", !!(a.check && !pend));
@@ -1661,7 +1662,7 @@ function doAct(act, t){
     case "bridgeSetupFile": saveBridgeSetup(); break;
     case "bridgeConnect": {
       askConfirm({title: "Connect to FinCom Bridge", ok: "Connect",
-        body: '<p class="note">Type the 6-digit code FinCom Bridge shows on this computer: right-click the FinCom icon near the clock \u2192 \u201cConnect FinCom on this computer\u2026\u201d. The code works once, for 15 minutes.</p><input type="text" id="bridgeCode" inputmode="numeric" maxlength="7" autocomplete="off" placeholder="6-digit code" style="width:160px;font-size:18px;letter-spacing:3px">',
+        html: '<p class="note">Type the 6-digit code FinCom Bridge shows on this computer: right-click the FinCom icon near the clock \u2192 \u201cConnect FinCom on this computer\u2026\u201d. The code works once, for 15 minutes.</p><input type="text" id="bridgeCode" inputmode="numeric" maxlength="7" autocomplete="off" placeholder="6-digit code" style="width:160px;font-size:18px;letter-spacing:3px">',
         read: () => String((document.getElementById("bridgeCode") || {}).value || "").replace(/\D/g, ""),
         validate: v => /^\d{6}$/.test(v) ? "" : "Type the 6 digits FinCom Bridge shows."}).then(a => {
       if (!a) return;
@@ -1822,7 +1823,7 @@ function doAct(act, t){
       break;
     }
     case "assetAdd": { const b = S.books; b.assets = (b.assets || []).concat([{id: uid("as"), name: "", date: "", igst: 0, cgst: 0, sgst: 0, cess: 0, use: "common", reg: S.gstReg || "", sold: ""}]); saveBooks(); render(); break; }
-    case "booksClear": confirmTyped({title: "Remove the books read from Tally?", ok: "Remove", body: '<p class="note">Challans and what you corrected stay. Nothing in Tally or in FinCom\u2019s cloud copy is touched, and a copy is kept: <b>More \u2192 Restore</b> puts the books back.</p>'}).then(async ok => {
+    case "booksClear": confirmTyped({title: "Remove the books read from Tally?", ok: "Remove", html: '<p class="note">Challans and what you corrected stay. Nothing in Tally or in FinCom\u2019s cloud copy is touched, and a copy is kept: <b>More \u2192 Restore</b> puts the books back.</p>'}).then(async ok => {
       if (!ok) return; const b = S.books, cid = S.coId;
       const kept = await Trash.put(cid, "books", "The books read from Tally (" + (b.vouchers || []).length + " entries)", {vouchers: b.vouchers, meta: b.meta, reco: b.reco}, ok.reason);
       b.trashLog = (b.trashLog || []).concat([{kind: "books", id: kept.id, server: kept.server, reason: ok.reason, at: new Date().toISOString(), by: whoAmI()}]);
@@ -1852,7 +1853,7 @@ function doAct(act, t){
     case "booksWipe": {
       const b = S.books; if (!b) break;
       confirmTyped({title: "Remove Tally data and all GST work?", ok: "Remove", wide: true,
-        body: '<p class="note"><b>Removed for ' + esc(CO().name) + ":</b> the day book and ledger masters read from Tally, Tally\u2019s balances, the audit, MIS and trial balance worked from them; every 2B, filed GSTR-1 and GSTR-1A copy; GST settings and contacts; 3B and GSTR-9 figures typed; filing dates and portal figures; ITC follow-up and IMS decisions; advances, reversal and amendment choices; and the returns-filed PDFs.</p>" +
+        html: '<p class="note"><b>Removed for ' + esc(CO().name) + ":</b> the day book and ledger masters read from Tally, Tally\u2019s balances, the audit, MIS and trial balance worked from them; every 2B, filed GSTR-1 and GSTR-1A copy; GST settings and contacts; 3B and GSTR-9 figures typed; filing dates and portal figures; ITC follow-up and IMS decisions; advances, reversal and amendment choices; and the returns-filed PDFs.</p>" +
           '<p class="note"><b>Kept:</b> TDS challans, certificates and the salary sheet; bills, bank and sales; the client\u2019s own settings; the returns-filed PDF files themselves. A copy of what is removed is kept: <b>More \u2192 Restore</b> puts it back.</p>'}).then(async ok => {
         if (!ok) return;
         const co = CO(), snap = {};
@@ -1870,7 +1871,7 @@ function doAct(act, t){
     case "yearExcel24": TDSYear.toExcel(S.tdsFy || "", "24Q").then(() => toast("Downloaded."), e => toast("Could not build it: " + (e && e.message))); break;
     case "yearExcelAll": TDSYear.toExcel(S.tdsFy || "", "").then(() => toast("Downloaded."), e => toast("Could not build it: " + (e && e.message))); break;
     case "salaryPick": { const i = document.getElementById("salaryIn"); if (i){ i.value = ""; i.click(); } break; }
-    case "salaryClear": askConfirm({title: "Remove the salary sheet?", ok: "Remove", danger: true, body: '<p class="note">The salary sheet of ' + ((S.books && S.books.salary) || []).length + ' employee' + (((S.books && S.books.salary) || []).length === 1 ? "" : "s") + ' is removed; this cannot be undone (upload it again to bring it back). The challans and everything else stay.</p>'}).then(ok => {
+    case "salaryClear": askConfirm({title: "Remove the salary sheet?", ok: "Remove", danger: true, html: '<p class="note">The salary sheet of ' + ((S.books && S.books.salary) || []).length + ' employee' + (((S.books && S.books.salary) || []).length === 1 ? "" : "s") + ' is removed; this cannot be undone (upload it again to bring it back). The challans and everything else stay.</p>'}).then(ok => {
       if (!ok) return; S.books.salary = []; saveBooks(); toast("Removed."); render(); }); break;
     case "tdsTxt": { if (!ledgersReady("tds")) break; LedMaster.snap(S.books, (S.tdsForm || "26Q") + " " + (S.tdsQ || "") + " " + (S.tdsFy || "")); saveBooks();
       const q = S.tdsQ || "", fy = S.tdsFy || "";
@@ -1905,7 +1906,7 @@ function doAct(act, t){
     case "gstJson": if (!ledgersReady("gst")) break;
       // a month already filed: its return is not made again from the books as they are now
       { const ym = S.gstYm || "", reg = S.gstReg || "", pr = reg && ym ? GSTAmend.proof(ym, reg) : null;
-        if (pr){ askConfirm({title: "GSTR-1 for " + GSTR.label(ym) + " is already filed", ok: "Close", body: '<p class="note">It was filed' + (pr.arn ? " with ARN " + esc(pr.arn) : "") + (pr.on ? " on " + esc(fmtDate(pr.on)) : "") +
+        if (pr){ askConfirm({title: "GSTR-1 for " + GSTR.label(ym) + " is already filed", ok: "Close", html: '<p class="note">It was filed' + (pr.arn ? " with ARN " + esc(pr.arn) : "") + (pr.on ? " on " + esc(fmtDate(pr.on)) : "") +
           ". A return made again from the books now would be wrong: the filed return stays as it is, and whatever was added, changed or deleted in Tally since goes as amendments in " + esc(GSTR.label(GSTAmend.nextOpen(ym, reg))) + "’s GSTR-1 (GST → Amendments).</p>"}); break; } }
       LedMaster.snap(S.books, "GSTR-1 " + GSTR.label(S.gstYm || "") + (S.gstReg ? " " + S.gstReg : "")); saveBooks(); GSTR.toJsonFile(S.gstYm || "", S.gstReg || "").then(j => toast("GSTR-1 JSON for " + j.fp + " downloaded. Check it on the portal's offline tool before filing."), e => toast("Could not build the file: " + (e && e.message))); break;
     case "gst3bJson": { if (!ledgersReady("gst")) break; LedMaster.snap(S.books, "GSTR-3B " + GSTR.label(S.gstYm || "") + (S.gstReg ? " " + S.gstReg : "")); saveBooks();
@@ -1936,7 +1937,7 @@ function doAct(act, t){
       CloudDocs.oldOnes(years).then(list => {
         if (!list.length){ toast("No documents are older than " + years + " year" + (years === 1 ? "" : "s") + " among the clients open on this computer."); return; }
         askConfirm({title: "Clear out " + list.length + " document" + (list.length === 1 ? "" : "s") + "?", ok: "Clear them out", danger: true,
-          body: '<p class="note">Documents older than ' + years + " year" + (years === 1 ? "" : "s") + " are removed from the firm account. The bills themselves, and everything posted to Tally, stay. Download them first if you need to keep them.</p>" +
+          html: '<p class="note">Documents older than ' + years + " year" + (years === 1 ? "" : "s") + " are removed from the firm account. The bills themselves, and everything posted to Tally, stay. Download them first if you need to keep them.</p>" +
             '<p class="note">Oldest: ' + esc(fmtDate(list[0].when)) + " \u00b7 " + esc(list[0].what) + "</p>"}).then(async ok => {
           if (!ok) return;
           let n = 0;
@@ -1964,7 +1965,7 @@ function doAct(act, t){
       if (!ids.length) break;
       // removed for good (not to Deleted): asked first, naming the bills (spec K9)
       const names = ids.slice(0, 6).map(id => { const x = D().entries[id].x || {}; return esc((x.vendorName || D().entries[id].fileName || "") + (x.invoiceNo ? " \u00b7 " + x.invoiceNo : "")); });
-      askConfirm({title: "Delete " + ids.length + " bill" + (ids.length === 1 ? "" : "s") + " for good?", ok: "Delete", danger: true, body: '<p class="note">' + names.join("<br>") + (ids.length > 6 ? "<br>and " + (ids.length - 6) + " more" : "") +
+      askConfirm({title: "Delete " + ids.length + " bill" + (ids.length === 1 ? "" : "s") + " for good?", ok: "Delete", danger: true, html: '<p class="note">' + names.join("<br>") + (ids.length > 6 ? "<br>and " + (ids.length - 6) + " more" : "") +
         '</p><p class="note">They and their documents are removed from FinCom; this cannot be undone. The files can be uploaded again.</p>'}).then(ok => {
         if (!ok) return;
         ids.forEach(id => { const e = D().entries[id]; if (!e || billPostLive(e, S.coId)) return; if (e.status === "approved") unapply(e, S.coId, {force: true}); removeEntry(e); });
@@ -1976,7 +1977,7 @@ function doAct(act, t){
       const list = Object.values(D().entries).filter(e => e.exportedAt && e.tally && e.tally.guid).sort(byDate);
       if (!list.length){ toast("Nothing here can be taken back automatically."); break; }
       askConfirm({title: "Take an entry back out of Tally", ok: "Choose this one", wide: true,
-        body: '<p class="note">The voucher is deleted from Tally and the bill comes back here as waiting.</p><div class="bk-form one"><label><span>Entry</span><select id="unpostPick">' +
+        html: '<p class="note">The voucher is deleted from Tally and the bill comes back here as waiting.</p><div class="bk-form one"><label><span>Entry</span><select id="unpostPick">' +
           list.map(e => '<option value="' + e.id + '">' + esc(e.x.invoiceNo || "(no number)") + " \u00b7 " + esc(e.x.vendorName || "") + " \u00b7 " + INR.format(num(e.x.total)) + " \u00b7 " + esc((e.tally || {}).vchType || "") + " " + esc(e.tallyVchNo || "") + "</option>").join("") + "</select></label></div>",
         read: () => ({id: (document.getElementById("unpostPick") || {}).value})}).then(a => {
         if (!a || !a.data.id) return;
@@ -2038,7 +2039,7 @@ function doAct(act, t){
     case "delCo": {
       closeMenus && closeMenus();
       const name = CO().name, cid = S.coId;
-      confirmTyped({title: "Remove " + name + "?", ok: "Remove client", body: '<p class="note">It leaves the client list on every computer of the firm. The firm account keeps its details, bills, bank and books, marked removed, and they can be brought back. Nothing in Tally is touched.</p>'}).then(ok => {
+      confirmTyped({title: "Remove " + name + "?", ok: "Remove client", html: '<p class="note">It leaves the client list on every computer of the firm. The firm account keeps its details, bills, bank and books, marked removed, and they can be brought back. Nothing in Tally is touched.</p>'}).then(ok => {
         if (!ok) return;
         S.coId = null; S.view = "home";
         // next-fix-clientremove: its Tally companies are released (the cloud does it too on the removal, migration 128,
@@ -2049,7 +2050,7 @@ function doAct(act, t){
       break;
     }
     case "clearSent":
-      confirmTyped({title: "Clear sent invoices older than 90 days?", ok: "Clear them", body: '<p class="note">Invoices sent to Tally more than 90 days ago move to \u201cDeleted\u201d, where each can be restored. Nothing in Tally changes, and deductee year totals are kept. Download the register first if you need it.</p>'})
+      confirmTyped({title: "Clear sent invoices older than 90 days?", ok: "Clear them", html: '<p class="note">Invoices sent to Tally more than 90 days ago move to \u201cDeleted\u201d, where each can be restored. Nothing in Tally changes, and deductee year totals are kept. Download the register first if you need it.</p>'})
         .then(ok => { if (ok) clearSent(ok.reason); }); break;
     case "xml": { const m = document.getElementById("markSent"); exportXml(m ? m.checked : true); break; }
     case "csv": exportCsv(); break;
@@ -2449,7 +2450,7 @@ window.addEventListener("beforeunload", () => { if (S.coId) lsSet("tdsdesk:last"
 async function coClearIds(what){
   const co = CO(), label = what.map(w => w === "gstin" ? "GSTIN " + (co.gstin || "") : "PAN " + (co.pan || "")).join(" and ");
   const ok = await askConfirm({title: "Clear the " + label + "?", ok: "Clear it", danger: true,
-    body: "<p>" + esc(co.name) + " will have no " + what.map(w => w.toUpperCase()).join(" or ") + " in FinCom until one is typed again. Returns and checks that need it will say so.</p>" +
+    html: "<p>" + esc(co.name) + " will have no " + what.map(w => w.toUpperCase()).join(" or ") + " in FinCom until one is typed again. Returns and checks that need it will say so.</p>" +
       '<label class="f" style="margin-top:12px"><span>Reason (kept with the change)</span><input type="text" id="cbxWhy" autocomplete="off" aria-label="Reason"></label>',
     read: () => ({reason: ((document.getElementById("cbxWhy") || {}).value || "").trim()}),
     validate: v => v.reason ? "" : "Give the reason."});

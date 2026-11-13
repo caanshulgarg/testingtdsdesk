@@ -20,7 +20,7 @@ BILL = {"vendorName": "ZZ Paper Mart", "vendorGstin": "", "invoiceNo": "PM/42", 
 SETUP = """(bill) => {
   // the firm account, faked: signed in, credit, the gateway answered from window.__gw (one answer per call, the last kept)
   S.account = {firm: {balance: 100, cloudDocs: false}}; S.firm = Object.assign(S.firm || {}, {cloudDocs: false});
-  Cloud.on = () => true; Cloud.fresh = async () => {}; Cloud.sess = () => ({access_token: 't'}); Cloud.cfg = () => ({url: 'https://stub.supabase.co', key: 'k'});
+  Cloud.on = () => true; Cloud.fresh = async () => {}; Cloud.sess = () => ({access_token: 't'}); Cloud.cfg = () => ({url: 'https://qbocskaiewaxqcvaunzc.supabase.co', key: 'k'});
   Cloud.rpc = async () => ({ok: true, balance: 100}); CloudDocs.add = () => {};
   S.freeFirst = false; S.engine = 'api'; S.imgMax = 6; S.sampleReady = true;
   window.__bill = bill; window.__gw = []; window.__calls = [];

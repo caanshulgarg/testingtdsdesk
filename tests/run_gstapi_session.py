@@ -19,7 +19,7 @@ with sync_playwright() as p:
     br = p.chromium.launch(); pg = br.new_page(); pg.on("pageerror", lambda e: errors.append(str(e)))
     pg.route("**/functions/v1/gst-taxpro", fake)
     pg.goto("http://localhost:8148/"); pg.wait_for_timeout(2500)
-    pg.evaluate("""(g) => { Cloud.on = () => true; Cloud.cfg = () => ({url: 'https://example.supabase.co', key: 'anon'}); Cloud.sess = () => ({access_token: 't'});
+    pg.evaluate("""(g) => { Cloud.on = () => true; Cloud.cfg = () => ({url: 'https://qbocskaiewaxqcvaunzc.supabase.co', key: 'anon'}); Cloud.sess = () => ({access_token: 't'});
       S.account = {email: 'a@b.c'}; S.gstReg = '09'; S.books = {twoBs: {}}; GSTAPI.gstinOf = () => g; GSTAPI.user = () => 'gargshekhar09';
       window.render = FinComReact.redraw; document.getElementById('app').innerHTML = '<div data-react="GstApiCard"></div>'; }""", G)
     card = lambda: pg.evaluate("FinComReact.redraw(), document.getElementById('app').innerHTML")

@@ -86,7 +86,7 @@ with sync_playwright() as p:
     # the firm account in Settings: signed out (the sign-in form), then signed in (plan and credit with its history,
     # sign-in and people, documents, drop keys, backups) and the platform page
     pg.evaluate("() => { S.sup = null; S.view = 'home'; S.homeTab = 'rules'; S.settingsTab = 'account'; Cloud.st.error = 'Wrong password.'; render(); }"); grab("acct-signedout")
-    pg.evaluate("""() => { Cloud.on = () => true; Cloud.aal = () => 'aal1'; Cloud.cfg = () => ({url: 'https://x.supabase.co', key: 'anon', auto: true}); Cloud.st = Object.assign(Cloud.st, {email: 'a@b.in', role: 'owner', pending: 2, error: '', busy: '', lastSync: 0, mfa: null, mfaInfo: {enrolled: false, admin: true},
+    pg.evaluate("""() => { Cloud.on = () => true; Cloud.aal = () => 'aal1'; Cloud.cfg = () => ({url: 'https://qbocskaiewaxqcvaunzc.supabase.co', key: 'anon', auto: true}); Cloud.st = Object.assign(Cloud.st, {email: 'a@b.in', role: 'owner', pending: 2, error: '', busy: '', lastSync: 0, mfa: null, mfaInfo: {enrolled: false, admin: true},
         members: [{name: 'Asha', email: 'a@b.in', role: 'owner', active: true}]});
       S.lastSignIn = null; S.account = {me: {role: 'owner'}, superadmin: true, firm: {id: 'f1', balance: 40, warn_at: 100, period_start: '2026-09-01', plan: {name: 'Starter', monthly_fee: 999, includes: {}}},
         modules: [{code: 'read', title: 'Reading bills', billing: 'unit', price: 2, unit: 'per page', enabled: true}, {code: 'post', title: 'Posting', billing: 'free', enabled: false}], usage: [{code: 'read', qty: 12, spent: 24}],
@@ -98,7 +98,7 @@ with sync_playwright() as p:
     # console phase 1b: the platform page is FinCom's console now (one link in Settings for its own people)
     pg.evaluate("() => { S.account.superadmin = true; S.settingsTab = 'firm'; render(); }"); grab("acct-admin-link")
     # Settings: TDS rates (one changed), reading bills (tests run and failed), and a client's closed periods
-    pg.evaluate("() => { Cloud.on = () => false; Cloud.cfg = () => ({url: 'https://x.supabase.co', key: 'anon', gate: false}); S.account = null; S.settingsTab = 'rates'; const r = rules()[0]; S.firm.rules = {[r.id]: {rateInd: 7.5}}; render(); }"); grab("set-rates")
+    pg.evaluate("() => { Cloud.on = () => false; Cloud.cfg = () => ({url: 'https://qbocskaiewaxqcvaunzc.supabase.co', key: 'anon', gate: false}); S.account = null; S.settingsTab = 'rates'; const r = rules()[0]; S.firm.rules = {[r.id]: {rateInd: 7.5}}; render(); }"); grab("set-rates")
     pg.evaluate("() => { S.settingsTab = 'reading'; S.ocrTest = {ok: false, msg: 'OCR failed on the sample'}; S.googleTest = {ok: false, msg: 'Google said no', code: 'google_billing'}; S.testResult = {busy: true}; S.selfTest = {results: {pdf: {ok: true, msg: 'read 3 fields'}, ocr: {ok: false, msg: 'too slow'}}}; render(); }"); grab("set-reading")
     pg.evaluate("() => { S.askClaudeNewSupplier = true; S.freeFirst = false; S.ocrTest = null; S.googleTest = null; S.testResult = null; render(); }"); grab("set-reading2")
     pg.evaluate("() => { const co = CO(); ClosedP.set(co, 'to', '2026-03-31'); ClosedP.set(co, 'gst', true); ClosedP.set(co, 'tdsFiled', {[ClosedP.quarters()[0]]: '2026-05-31'}); S.view = 'company'; S.tab = 'coclosed'; render(); }"); grab("set-closed")
