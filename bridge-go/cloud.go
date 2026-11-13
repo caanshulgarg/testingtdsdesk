@@ -1447,7 +1447,8 @@ func cloudPostTakeJobs() (checks []any) {
 		// round 7 (F2): the owner's releases ("Not in Tally — release") for the job's ids come with it
 		// review M1 / L2: a posting handed back after the bridge's "not found" names the entries to send again (resendOnly):
 		// only those go, never the whole posting
-		v, err := newPostJob(M{"jobId": id, "company": str(j["company"]), "masters": arr(pl["masters"]), "vouchers": arr(pl["vouchers"]), "released": arr(j["released"]), "resendOnly": arr(j["resendOnly"])})
+		v, err := newPostJob(M{"jobId": id, "company": str(j["company"]), "masters": arr(pl["masters"]), "vouchers": arr(pl["vouchers"]), "released": arr(j["released"]), "resendOnly": arr(j["resendOnly"]),
+			"fromCloud": true}) // 2.5.15 item 1: FinCom is asked before each part is sent
 		if err != nil {
 			invokeCloud(M{"kind": "posts_update", "id": id, "status": "failed", "done": 0, "message": "The Tally computer could not start this posting: " + err.Error(), "results": []any{}}, 30)
 			continue
@@ -1459,6 +1460,9 @@ func cloudPostTakeJobs() (checks []any) {
 	return
 }
 
+// 2.5.15 item 1: how many parts sent without FinCom's answer each posting's reports have told FinCom of
+var offlineTold sync.Map
+
 // the job's status as FinCom's queue knows it (taken, running, done, failed): a posting waiting for Tally is "taken",
 // with its "Waiting for Tally: ..." message
 func cloudPostStatus(st string) string {
@@ -1466,6 +1470,10 @@ func cloudPostStatus(st string) string {
 	case "done", "failed":
 		return st
 	case "waiting", "queued", "interrupted":
+		return "taken"
+	case "stopped":
+		// 2.5.15 item 1: FinCom said stop before a part was sent: reported as taken; FinCom judges by the results and
+		// items (failed when nothing reached Tally, else held for checking) and answers cancelled
 		return "taken"
 	}
 	return "running"
@@ -1537,10 +1545,18 @@ func syncCloudPosts() {
 			"seq": toInt(v["seq"]), "updatedAt": str(v["updatedAt"]),
 			// round 15: every request's timing ({n, seconds, created, altered, exceptions, ignored, lastVchId}) and the total
 			"reqs": arr(v["reqs"]), "secondsTotal": num(v["secondsTotal"])}
+		// 2.5.15 item 1: the parts sent while FinCom could not be reached (the owner's "Then go ahead"), said once it answers
+		if n := toInt(v["offlineSends"]); n > 0 {
+			up["offlineSends"] = n
+		}
 		// 2.2.0: the posting window with the job's last update (index.ts postWindow: {a0, a1, vouchersCreated,
 		// mastersCreated, guid})
 		if w := obj(v["window"]); w != nil && (st == "done" || st == "failed") {
 			up["window"] = w
+		}
+		n0 := toInt(up["offlineSends"])
+		if was, ok := offlineTold.Load(id); ok && was.(int) >= n0 {
+			n0 = 0 // told already
 		}
 		r := invokeCloud(up, 30)
 		if r.json != nil && (truthy(r.json["cancelled"]) || truthy(r.json["gone"])) {
@@ -1556,6 +1572,17 @@ func syncCloudPosts() {
 			delete(cp, id)
 			saveCloudPosts()
 			continue
+		}
+		if str(v["status"]) == "stopped" && r.code >= 400 && r.code < 500 && r.code != 409 && r.code != 429 {
+			// 2.5.15 item 1: stopped, and FinCom does not take this bridge's report of it (another bridge's posting): ended here
+			_, _ = cancelJob(id, "stopped by FinCom")
+			delete(cp, id)
+			saveCloudPosts()
+			continue
+		}
+		if r.code == 200 && n0 > 0 {
+			offlineTold.Store(id, n0)
+			writeLog(fmt.Sprintf("Posting from FinCom's queue %s: FinCom told of %d part(s) sent while it could not be reached", id, n0))
 		}
 		if r.code == 200 {
 			cp[id] = sig

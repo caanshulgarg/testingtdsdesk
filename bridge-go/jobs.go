@@ -154,7 +154,7 @@ func newPostJob(pl M) (M, error) {
 		// review M1 / L2: the cloud names the entries to send again (resendOnly, after the bridge's "not found"): only
 		// those go, in a done or a failed job alike; every other entry keeps its result and is never sent
 		only := resendOnlyOf(pl)
-		if len(only) > 0 && (st == "done" || st == "failed" || st == "cancelled") && !jobAlive(id) {
+		if len(only) > 0 && (st == "done" || st == "failed" || st == "cancelled" || st == "stopped") && !jobAlive(id) {
 			var kept []any
 			keep := map[string]bool{}
 			for _, r := range rs {
@@ -193,7 +193,8 @@ func newPostJob(pl M) (M, error) {
 				}
 			}
 		}
-		if (st == "failed" || st == "cancelled" || doneRelease) && !jobAlive(id) {
+		// 2.5.15 item 1: a posting FinCom stopped ("stopped") is taken again the same way once FinCom hands it back
+		if (st == "failed" || st == "cancelled" || st == "stopped" || doneRelease) && !jobAlive(id) {
 			var kept []any
 			for _, r := range rs {
 				if doneRelease {
@@ -216,6 +217,7 @@ func newPostJob(pl M) (M, error) {
 				kept = []any{}
 			}
 			_ = os.Remove(filepath.Join(dir, "cancel"))
+			delete(v, "stoppedBy")
 			v["results"], v["done"], v["resumed"], v["status"], v["message"], v["finishedAt"] = kept, len(kept), true, "queued", "Retrying", ""
 			startJob(id, dir, v)
 			writeLog(fmt.Sprintf("Posting job %s: retried (%d already sent to Tally kept, never sent again)", id, len(kept)))
@@ -254,6 +256,9 @@ func newPostJob(pl M) (M, error) {
 	}
 	// the port FinCom chose is kept only as a hint, and never as 0 (0 means "find it", which happens on every try anyway)
 	payload := M{"company": str(pl["company"]), "items": items, "released": arr(pl["released"])}
+	if truthy(pl["fromCloud"]) {
+		payload["fromCloud"] = true // 2.5.15 item 1: FinCom is asked before each part is sent
+	}
 	if pt := toInt(pl["port"]); pt > 0 {
 		payload["port"] = pt
 	}
@@ -442,6 +447,7 @@ func jobWorker(dir string) {
 	}
 	asked := str(pl["company"])
 	jobID := str(p["id"])
+	fromCloud := truthy(pl["fromCloud"]) || cloudPostsHas(jobID) // 2.5.15 item 1: taken from FinCom's queue
 	hint := toInt(pl["port"])
 	if pp := toInt(p["port"]); pp > 0 {
 		hint = pp
@@ -759,6 +765,18 @@ func jobWorker(dir string) {
 			cancelled()
 			return
 		}
+		// 2.5.15 item 1 (the owner's approval of 13-Nov-2026): a posting taken from FinCom's queue asks FinCom, before each
+		// part goes to Tally, whether it is still this bridge's and not stopped, cancelled or settled (post_ok, read only,
+		// 3 s at most; never while Tally is asked anything). Told to stop: nothing more is sent, the job ends "stopped" and
+		// is reported as usual (FinCom stores it, then tells it to stop). No answer: what is on this computer is posted (the
+		// owner's decision: "Then go ahead"), counted, and said with the report when FinCom answers again
+		if fromCloud {
+			if why := checkCloudBeforeSend(jobID, i+1, K, p); why != "" {
+				p["stoppedBy"] = why
+				finish("stopped", "Stopped by FinCom before part "+fmt.Sprint(i+1)+" of "+fmt.Sprint(K)+" was sent: "+why)
+				return
+			}
+		}
 		r := reqs[i]
 		for _, it := range r.items {
 			sending[str(it["id"])] = true
@@ -968,4 +986,69 @@ func jobWindow(p M, notes []any, company string, port int) {
 	p["window"] = M{"a0": a0, "a1": a1, "vouchersCreated": vc, "mastersCreated": mc, "guid": str(p["windowGuid"])}
 	liveAfterWindow(company, str(p["windowGuid"]), a0, a1, vc) // review M4: sources B and C skip FinCom's own entries
 	writeLog(fmt.Sprintf("Posting job %s: posting window ALTVCHID %d to %d, %d voucher(s) and %d master(s) created", str(p["id"]), a0, a1, vc, mc))
+}
+
+// --- 2.5.15 item 1: FinCom asked before each part of a posting taken from its queue goes to Tally
+var postOKFn = cloudPostOK
+
+// what FinCom says of the posting now: stop ("" to go on: also when FinCom gave no clear "stop") and whether FinCom
+// answered at all (reached false: no answer in 3 s, not reached, or busy)
+func cloudPostOK(id string) (stop string, reached bool) {
+	if !cloudOn() {
+		return "", false
+	}
+	r := invokeCloud(M{"kind": "post_ok", "id": id}, 3)
+	if r.code == 0 || r.code == 503 {
+		return "", false
+	}
+	if r.code == 200 && r.json != nil {
+		if v, ok := r.json["post"].(bool); ok && !v {
+			return or(str(r.json["error"]), "FinCom says this posting is not to be sent"), true
+		}
+	}
+	// an older cloud (no post_ok: 400), or any other answer: FinCom did not say stop
+	return "", true
+}
+
+// after FinCom could not be reached, it is asked again only after this pause (each part waiting 3 s for no answer
+// would hold a long posting back); the parts meanwhile go as the owner decided
+var postOKOfflineGap = 15 * time.Second
+
+var postOKOffline sync.Map // job id -> time.Time of the last check with no answer
+
+// "" to send part i of n now; else why FinCom said stop. A part sent without FinCom's answer is counted in the job
+// (offlineSends: reported with posts_update, so FinCom knows once it answers again)
+func checkCloudBeforeSend(jobID string, i, n int, p M) string {
+	if v, ok := postOKOffline.Load(jobID); ok && time.Since(v.(time.Time)) < postOKOfflineGap {
+		p["offlineSends"] = toInt(p["offlineSends"]) + 1
+		return ""
+	}
+	stop, reached := postOKFn(jobID)
+	if stop != "" {
+		postOKOffline.Delete(jobID)
+		writeLog(fmt.Sprintf("Posting job %s: FinCom said to stop before part %d of %d: %s; nothing more is sent to Tally", jobID, i, n, stop))
+		return stop
+	}
+	if !reached {
+		if _, was := postOKOffline.Load(jobID); !was {
+			writeLog(fmt.Sprintf("Posting job %s: FinCom's cloud could not be reached before part %d of %d; what is on this computer is posted (the owner's decision), and FinCom is told when it answers again", jobID, i, n))
+		}
+		postOKOffline.Store(jobID, time.Now())
+		p["offlineSends"] = toInt(p["offlineSends"]) + 1
+		return ""
+	}
+	if _, was := postOKOffline.LoadAndDelete(jobID); was {
+		writeLog(fmt.Sprintf("Posting job %s: FinCom's cloud answers again (before part %d of %d)", jobID, i, n))
+	}
+	return ""
+}
+
+// the posting is one taken from FinCom's queue (the list of them on this computer: an older payload has no mark)
+func cloudPostsHas(id string) bool {
+	for _, l := range strings.Split(readTextBak(cloudPostsFile(), nil), "\n") {
+		if strings.TrimSpace(l) == id {
+			return true
+		}
+	}
+	return false
 }

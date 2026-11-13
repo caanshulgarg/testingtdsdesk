@@ -77,6 +77,9 @@
 //   companies:[{name, gstin, guid}]                  -> the company's Tally GUID kept with its book (tally_sync_cursor)
 //   {kind:"posts_take"}                              -> {job: {id, company, payload} | null}: the next posting queued in
 //                                                       FinCom for this computer (build 199); the beat says how many wait
+//   {kind:"post_ok", id}                             -> {post: true} | {post: false, stop: notMain|gone|cancelled|stopped|
+//                                                       settled|notYours, error}: asked before each part of a posting is
+//                                                       sent (bridge 2.5.15; read only)
 //   {kind:"posts_update", id, status, done, message, results, checking} -> how a posting taken by this computer is going
 //    FinCom Bridge 2.1.8 (round 15, migration 43: posting by Tally's reply): a result may also carry byReply, vchId, batchEnd,
 //    batchN, needsReview, accepted, created, altered, exceptions, ignored, errors, lineError, lastVchId, company, sentAt,
@@ -1283,7 +1286,7 @@ async function makeMain(dev: any, id: string) {
 //   - companies, ledgers, groups, state: answered, nothing stored.
 async function shadowCall(dev: any, firm: string, body: any) {
   const kind = String(body.kind || "");
-  if (kind === "posts_take" || kind === "posts_update" || kind === "post_check") {
+  if (kind === "posts_take" || kind === "posts_update" || kind === "post_check" || kind === "post_ok") {
     if (kind === "posts_take") await rescuePosts(dev);   // review M-B: a posting for this bridge before it went to test mode is not left waiting
     return reply(403, { ok: false, error: "A bridge in test mode does not post." });
   }
@@ -4772,6 +4775,29 @@ Deno.serve(sentry.wrap(async (req) => {
         const checks = await checksFor(dev, meT, main);
         return reply(200, { ok: true, job: j ? { id: j.id, company: j.company, payload: j.payload, released, ...(resendOnly.length ? { resendOnly } : {}) } : null, ...(checks.length ? { checks } : {}) });
       }
+      case "post_ok": {
+        // FinCom Bridge 2.5.15 (item 1, the owner's approval of 13-Nov-2026): asked by the bridge before it sends each part of
+        // a posting it took from this queue to Tally. Read only: is the posting still this bridge's, and not stopped,
+        // cancelled or settled? {ok, post: true} or {ok, post: false, stop: code, error: words}. The bridge sends nothing
+        // when told post: false, and reports as usual (posts_update: stored, stamped, then told to stop); with no answer
+        // here in 3 s it posts what it holds (the owner's decision: "Then go ahead") and says so when it reports
+        const meOB = bridgeOf(dev, body, false), meO = meOB.id;
+        const no = (stop: string, error: string) => reply(200, { ok: true, post: false, stop, error });
+        if (!mayPost(dev, meO, (meOB.entry as any).user)) return no("notMain", "Another bridge of the same Windows user is the main bridge on this computer now (chosen in FinCom); this one does not post.");
+        if (await changesOnly(dev, meO)) return no("notMain", CHANGES_ONLY);
+        const id = String(body.id || "").slice(0, 64);
+        let q: any = await db.from("tally_post_jobs").select("status, checking, stop_reason, taken_by, target_bridge").eq("id", id).eq("device_id", dev.id).maybeSingle();
+        // a cloud without 174 (stop_reason) or 54 (target_bridge): read without them
+        if (q.error && /stop_reason|taken_by|target_bridge/.test(String(q.error.message || ""))) q = await db.from("tally_post_jobs").select("status, checking").eq("id", id).eq("device_id", dev.id).maybeSingle();
+        if (q.error) return reply(500, { ok: false, error: String(q.error.message || "").slice(0, 200) });
+        const j = q.data;
+        if (!j) return no("gone", "This posting is no longer in FinCom.");
+        if (j.status === "cancelled") return no("cancelled", "This posting was cancelled in FinCom.");
+        if (j.stop_reason) return no("stopped", String(j.stop_reason).slice(0, 400));
+        if (["done", "failed"].includes(j.status) && !j.checking) return no("settled", "This posting is settled in FinCom (" + j.status + ").");
+        if ((j.target_bridge && j.target_bridge !== meO) || (j.taken_by && /^go-/.test(String(j.taken_by)) && j.taken_by !== meO)) return no("notYours", "This posting was taken by another FinCom Bridge; only that bridge may post it.");
+        return reply(200, { ok: true, post: true });
+      }
       case "post_check": {
         // migration 55 (decision B): the bridge looked in Tally for an entry of an uncertain posting ("Not in Tally - post
         // again"): found (the voucher found), notseen (not in that company on that day) or unable (Tally not asked). The
@@ -4842,7 +4868,11 @@ Deno.serve(sentry.wrap(async (req) => {
             alreadySent: !!r?.alreadySent } : {}) }));
         // 2.1.8: the bridge's request timings of the posting, for tally_post_jobs.timing (migration 43; dropped on an older cloud)
         const reqs = Array.isArray(body.reqs) ? body.reqs.slice(0, 1000).map((x: any) => ({ n: int(x?.n, 500), seconds: secs(x?.seconds), created: int(x?.created, 1e6), altered: int(x?.altered, 1e6), exceptions: int(x?.exceptions, 1e6), ignored: int(x?.ignored, 1e6), lastVchId: s(x?.lastVchId, 30) })) : null;
-        const timing = reqs || body.secondsTotal !== undefined ? { reqs: reqs || [], secondsTotal: secs(body.secondsTotal) } : null;
+        // FinCom Bridge 2.5.15 (item 1): the parts it sent while this cloud could not be reached (its check before each part
+        // had no answer in 3 s: the owner's "Then go ahead"), kept with the timing and logged
+        const offlineSends = int(body.offlineSends, 1e6);
+        const timing = reqs || body.secondsTotal !== undefined || offlineSends ? { reqs: reqs || [], secondsTotal: secs(body.secondsTotal), ...(offlineSends ? { offlineSends } : {}) } : null;
+        if (offlineSends) console.log("tally-ingest posts_update: parts sent while FinCom's cloud could not be reached", String(body.id || "").slice(0, 64), offlineSends);
         // 02-Oct-2026: each entry's state as the bridge sees it (waiting / sending / sent / in_tally / failed, with why)
         // notfound (migration 37): checked and not in Tally; posted / needs_review (bridge 2.1.8, by Tally's reply; the review's finding 3)
         const STATES = ["waiting", "sending", "sent", "in_tally", "failed", "unknown", "notfound", "posted", "needs_review"];
