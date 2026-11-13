@@ -1,1 +1,0 @@
-import{j as r}from"./index-B5taicr2.js";import{C as m}from"./CommitBox-Bbxkkxb3.js";function f({fk:o,className:t="lgbox",...a}){return r.jsx(m,{className:t,"data-ac":"1","data-fk":o,autoComplete:"off",...a})}export{f as L};
