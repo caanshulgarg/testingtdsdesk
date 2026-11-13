@@ -4,9 +4,9 @@
 // Plain module: no imports, and Deno is only touched when it is there, so tests/run_cors_preflight.js loads it in Node.
 
 // Only TDS Desk's own pages may call the functions that check the origin.
-// 13-Nov-2026 (security review L5): the fixed list is FinCom's own https sites only. "null" (a file opened from disk)
-// and a developer's own machine (http://localhost:8000, http://127.0.0.1:8000) are no longer allowed everywhere: where
-// they are wanted (staging, a developer's project) they go in that function's ALLOWED_ORIGINS secret.
+// The fixed list is FinCom's own https sites. "null" (a file opened from disk) and a developer's own machine
+// (http://localhost:8000, http://127.0.0.1:8000) are allowed only where a function's ALLOWED_ORIGINS secret lists them
+// (staging, a developer's project).
 export const ALLOWED_ORIGINS = [
   "https://caanshulgarg.github.io",
   "https://staging.fincom.live", "https://app.fincom.live", "https://fincom.live",   // FinCom's own sites

@@ -65,6 +65,8 @@ function stand(o: { resend?: boolean, failReads?: number, due?: any[], member?: 
       if (!/^[0-9a-f]{64}$/.test(b.p_key)) return json({ message: "bad key" }, 400);
       if (p.includes("auth_rate_count")) return json(within(b, b.p_window_s));
       if (p.includes("auth_rate_add")) { st.rate.push({ bucket: b.p_bucket, key: b.p_key, at: NOW }); return json(null); }
+      // migration 191: n at a time, checked and counted together
+      if (p.includes("auth_rate_take")) { st.takeCalls = (st.takeCalls || 0) + 1; if (within(b, b.p_window_s) + b.p_n > b.p_max) return json(false); for (let i = 0; i < b.p_n; i++) st.rate.push({ bucket: b.p_bucket, key: b.p_key, at: NOW }); return json(true); }
       if (within(b, b.p_window_s) >= b.p_max) return json(false);
       st.rate.push({ bucket: b.p_bucket, key: b.p_key, at: NOW }); return json(true);
     }
@@ -196,6 +198,7 @@ Deno.test("M5: a firm's emails in a day are counted for the firm, across the fun
   await a.call({ action: "due" }, { "x-cron-key": "k-123" });
   eq([a.st.resend.length, a.st.runs[0].email], [1, "sent"], "two more fit");
   eq(rate.filter((r) => r.bucket === "mail-firm").length, MAIL_DAY_MAX - 1, "each person emailed is counted");
+  eq(a.st.takeCalls, 1, "checked and counted in one database call (auth_rate_take)");
   const b = stand({ resend: true, rate });   // another running copy, the same table
   await b.call({ action: "due" }, { "x-cron-key": "k-123" });
   eq([b.st.resend.length, b.st.runs[0].email, b.st.runs[0].status, b.st.runs[0].sent_to, b.st.uploads.length], [0, "failed", "ok", [], 2], "two more do not: nothing sent, the files kept, the run logged");
@@ -210,6 +213,7 @@ Deno.test("M5: a firm's emails in a day are counted for the firm, across the fun
   const d = stand({ resend: true, rateDown: true });
   await d.call({ action: "due" }, { "x-cron-key": "k-123" });
   eq([d.st.resend.length, d.st.runs[0].email, d.st.runs[0].status], [0, "failed", "ok"], "no count, no email");
+  assert(/the email count could not be read/.test(d.st.alerts[0].words) && !/limit/.test(d.st.alerts[0].words), "the bell says the count could not be read, not that the day's count is reached: " + d.st.alerts[0].words);
 });
 
 Deno.test("M5: Run now: a schedule is run by a person at most " + RUN_NOW.max + " times in ten minutes", async () => {

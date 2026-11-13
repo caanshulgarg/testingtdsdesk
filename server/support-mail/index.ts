@@ -10,7 +10,8 @@ import { makeHandler } from "./handler.ts";
 
 const URL = Deno.env.get("SUPABASE_URL")!;
 const ANON = Deno.env.get("SUPABASE_ANON_KEY")!;
-// the service role, for the shared counts only (migration 112): a message is emailed once (security review L9)
+// the service role, for the shared counts only (migration 112): a message is emailed once, a ticket a few a day.
+// Without migration 112 the email is still sent and the missing count is logged
 const admin = createClient(URL, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false, autoRefreshToken: false } });
 const must = <T>(r: { data: T; error: any }) => { if (r.error) throw new Error(r.error.message || String(r.error)); return r.data; };
 // "*": every call carries the person's sign-in token, and the ticket is read as them

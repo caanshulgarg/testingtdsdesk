@@ -492,7 +492,7 @@ function backTo(back: string, hash: string) {
   try { const x = new URL(back); if (linkOrigins().includes(x.origin)) u = x.origin + x.pathname; } catch (_) { u = ""; }
   return (u || "https://staging.fincom.live/") + hash;
 }
-// 13-Nov-2026 (security review, M3): the sign-in to Zoho is completed only by the FinCom session that began it.
+// The sign-in to Zoho is completed by the FinCom session that began it.
 //  - connect_start takes the hash of a value the page keeps for the tab (nonce_hash); the state it hands to Zoho is a
 //    random part plus the page to come back to, and is kept only as sha256(state + ":" + nonce_hash);
 //  - Zoho's redirect (a plain GET, no FinCom sign-in with it) exchanges nothing and stores nothing: it only sends the

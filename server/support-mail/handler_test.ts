@@ -7,7 +7,7 @@ function assert(c: unknown, msg = "assertion failed"): asserts c { if (!c) throw
 const TICKET = (o: any = {}) => ({ id: "t-1", code: "TD-0007", subject: "Bill not read", module: "TDS", priority: "high", status: "open", firm_name: "Made-up & Co", created_name: "Asha", created_email: "asha@firm.test",
   thread: [{ id: "m-1", body: "The bill of 3 March is not read.", author_name: "Asha", from_support: false, internal: false, at: "2026-11-13T05:00:00Z" }], ...o });
 function fake(o: { mfa?: boolean | "down"; ticket?: any; ticketError?: string; setUp?: boolean; resend?: { ok: boolean; status: number; message?: string }; rate?: { bucket: string; key: string }[]; rateDown?: boolean } = {}) {
-  const log = { sent: [] as any[], asked: [] as string[] };
+  const log = { sent: [] as any[], asked: [] as string[], said: [] as string[] };
   const rate = o.rate || [];
   const down = () => { if (o.rateDown) throw new Error("relation public.auth_rate_hits does not exist"); };
   const d: Deps = {
@@ -20,6 +20,7 @@ function fake(o: { mfa?: boolean | "down"; ticket?: any; ticketError?: string; s
     count: async (bucket, key) => { down(); return rate.filter((r) => r.bucket === bucket && r.key === key).length; },
     add: async (bucket, key) => { down(); rate.push({ bucket, key }); },
     hit: async (bucket, key, max) => { down(); if (rate.filter((r) => r.bucket === bucket && r.key === key).length >= max) return false; rate.push({ bucket, key }); return true; },
+    log: (w) => { log.said.push(w); },
   };
   return { handler: makeHandler(d), log, rate };
 }
@@ -92,7 +93,7 @@ Deno.test("L9: a message is emailed once: asking again for the same message send
   eq((await read(await b.handler(post({ ticket: "t-1" })))).body.sent, false, "and is emailed once");
 });
 
-Deno.test("L9: an email that did not go is not marked as sent; a ticket's emails in a day are limited; without the count nothing is sent", async () => {
+Deno.test("an email that did not go is not marked as sent; a ticket's emails in a day are limited; without the shared count the email is still sent, and that is logged", async () => {
   const rate: { bucket: string; key: string }[] = [];
   const bad = fake({ rate, resend: { ok: false, status: 500 } });
   eq((await read(await bad.handler(post({ ticket: "t-1" })))).body.sent, false);
@@ -109,5 +110,8 @@ Deno.test("L9: an email that did not go is not marked as sent; a ticket's emails
   eq(sent, TICKET_DAY_MAX, "the day's count for one ticket");
   const down = fake({ rateDown: true });
   const r = await read(await down.handler(post({ ticket: "t-1" })));
-  eq([r.status, r.body.ok, r.body.sent], [200, true, false], "the ticket is unaffected"); eq(down.log.sent.length, 0, "nothing sent");
+  eq([r.status, r.body.ok, r.body.sent, down.log.sent.length], [200, true, true, 1], "the shared count cannot be read: the email goes all the same");
+  eq(down.log.said.length, 2, "and it is logged: the count not read, the email not counted");
+  assert(down.log.said.every((w) => /migration 112/.test(w)) && !down.log.said.join(" ").includes("asha@"), "the log names the migration and no address: " + down.log.said.join(" | "));
+  eq(good.log.said.length, 0, "nothing logged when the count is there");
 });

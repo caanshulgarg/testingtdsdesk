@@ -8,11 +8,11 @@
 //  - every action goes into the firm's audit trail
 // Security fix batch 1 (27-Oct-2026): "Add person" only invites (Supabase's invite email; no login made with a password
 // the owner chose); a login that already exists joins a firm only by accepting the invite itself (accept_invite)
-// 13-Nov-2026 (security review, M6): a firm's owner resets the password, or removes the two-step sign-in, only of
-// their own login or of a staff or look-only member; never of another owner of the firm (who asks for a reset link
-// themselves: send_reset goes to their own email), nor of a person another owner took the owner's role from, or
-// switched off, in the last 30 days. The new password is always made up here: one sent in the request is not used.
-// The person is told by email (when FinCom's email is set up) that it was done. The platform administrator's path stays.
+// Whose password or two-step sign-in a firm's owner may reset: their own login's, or a staff or look-only member's.
+// Another owner of the firm asks for a reset link themselves (send_reset goes to their own email). A person another
+// owner took the owner's role from, or switched off, in the last 30 days is not reset by an owner either. The new
+// password is always made up here: one sent in the request is not used. The person is told by email (when FinCom's
+// email is set up) that it was done. The platform administrator's path is separate.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsFor } from "./cors.ts";
 import { firmGate, viaClient } from "../_shared/firmgate.ts";   // the console's switches (migration 118)

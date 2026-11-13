@@ -41,6 +41,7 @@ export function MeetCard({ info, api, title, onJoin, emails, note, guest }) {
         if (info.at) download("invite.ics", ics(), "text/calendar");
         const why = j.mail === false || !api ? "Email sending isn't set up yet, so your mail app opens with the invite ready."
           : j.mail_limit ? "Your firm's emails for today are used up, so your mail app opens with the invite ready."
+          : j.mail_uncounted ? "FinCom could not email the invite just now, so your mail app opens with the invite ready."
           : "FinCom emails your firm's members, the client's saved addresses and people who have joined a call of yours with a code; for " + rest.join(", ") + " your mail app opens with the invite ready.";
         setMsg((sentWords ? sentWords + " " : "") + why + (info.at ? " The calendar file (invite.ics) is saved: attach it to the email." : ""));
         openMail(m);

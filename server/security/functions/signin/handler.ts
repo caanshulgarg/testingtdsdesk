@@ -14,14 +14,14 @@
 //    the per-email lockout. The address is kept only as a SHA-256.
 
 //
-// 13-Nov-2026 (security review, M4; migration 189):
-//  - wrong passwords are counted where Supabase Auth checks them (its password hook), so a sign-in that does not come
-//    through here is counted too; before the password goes to Auth this function says so (auth_signin_begin, a pass of
-//    ten seconds), so a person signing in here is not kept out by wrong passwords sent elsewhere;
-//  - nobody's wrong passwords lock the email for everyone any more: the wait belongs to the email and the address
-//    together (none for four wrong passwords, then 30 s, 1, 2, 5 and at most 15 minutes), a try during a wait is refused
-//    without being counted, and the firm's owner can still unlock. The per-address count above stays.
-//  Without migration 189 the count goes on as before (auth_lockout).
+// With migration 189:
+//  - Supabase Auth's password hook counts every wrong password of an account. Before the password goes to Auth this
+//    function asks auth_signin_begin, which writes a pass for this email and address (ten seconds, one password
+//    check); the hook takes a check that carries a pass whatever the account's count is;
+//  - the wait belongs to the email and the address together: none for four wrong passwords, then 30 s, 1, 2, 5 and at
+//    most 15 minutes. A try during a wait is refused without being counted, and the firm's owner can unlock. The
+//    per-address count above stays.
+//  Without migration 189 the count is auth_lockout's (5 wrong passwords within 15 minutes).
 
 export const SWITCHED_OFF = "This account is switched off. Contact FinCom support.";
 export const MAX_IP_FAILS = 20, IP_WINDOW_S = 15 * 60;
@@ -49,7 +49,7 @@ export const FREE_TRIES = 4;   // wrong passwords of one email from one address 
 export const waitWords = (s: number) => (s < 60 ? Math.max(1, Math.ceil(s)) + " seconds" : Math.ceil(s / 60) + " minute" + (Math.ceil(s / 60) === 1 ? "" : "s"));
 const waitMsg = (s: number) => "Too many wrong passwords. Try again in " + waitWords(s) + ", or ask the firm's owner to unlock you.";
 
-// the address as the platform saw it, never a caller's own header (security review L4): ../_shared/clientip.ts
+// the address as the platform saw it, never a caller's own header: ../_shared/clientip.ts
 import { clientIp } from "../_shared/clientip.ts";
 export { clientIp };
 export async function sha256hex(s: string): Promise<string> {
@@ -83,7 +83,7 @@ export function makeHandler(d: Deps) {
     const until = await d.lockoutUntil(email);
     if (until) return reply(423, { ok: false, locked_until: until, error: lockedMsg(until) });
 
-    // M4: this email from this address: may it be tried now? (and the pass for Auth's hook). null: migration 189 not run
+    // this email from this address: may it be tried now? (and the pass for Auth's hook). null: migration 189 not run
     const pairKey = await sha256hex("signin-pair-ip:" + clientIp(req));
     let gate: Awaited<ReturnType<Deps["signinBegin"]>> = null;
     try { gate = await d.signinBegin(email, pairKey); } catch { gate = null; }

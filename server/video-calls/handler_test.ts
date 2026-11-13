@@ -83,6 +83,13 @@ function stand(o: { cf?: boolean, mail?: boolean, ai?: boolean, aiOff?: boolean,
         if (fn === "asst_cost_add") return J({ inr: 1.5 });
         if (fn === "asst_log_add") return J(null);
         // the shared counts of migration 112 (the firm's emails of a day)
+        // migration 191: n at a time, checked and counted together
+        if (fn === "auth_rate_take") {
+          if (tok !== "service-key" || o.rateDown) return J({ message: "permission denied" }, 403);
+          if (rate.filter((x) => x.bucket === body.p_bucket && x.key === body.p_key).length + body.p_n > body.p_max) return J(false);
+          for (let i = 0; i < body.p_n; i++) rate.push({ bucket: body.p_bucket, key: body.p_key });
+          return J(true);
+        }
         if (fn === "auth_rate_count" || fn === "auth_rate_add") {
           if (tok !== "service-key" || o.rateDown) return J({ message: "permission denied" }, 403);
           if (fn === "auth_rate_add") { rate.push({ bucket: body.p_bucket, key: body.p_key }); return J(null); }
@@ -991,7 +998,8 @@ Deno.test("M5: a firm's emails in a day are counted (with the MIS emails); past 
   const down = stand({ mail: true, rateDown: true });
   const b = await down.call({ action: "start", kind: "meeting" }, "tok-staff");
   const r = await down.call({ action: "invite", room_id: b.j.room.id, emails: ["s2@a.test"] }, "tok-staff");
-  eq([r.j.emailed, r.j.not_emailed, down.log.mails.length], [false, ["s2@a.test"], 0], "the count cannot be read: nothing sent");
+  eq([r.j.emailed, r.j.not_emailed, down.log.mails.length, r.j.mail_uncounted, r.j.mail_limit], [false, ["s2@a.test"], 0, true, undefined], "the count cannot be read: nothing sent, and said as that (not as the day's count reached)");
+  eq(two.j.mail_uncounted, undefined, "the day's count reached is said as that");
   const sch = await down.call({ action: "schedule", title: "x", at: "2026-10-25T05:30:00Z", emails: ["s2@a.test"] }, "tok-staff");
   eq([sch.status, sch.j.emailed, sch.j.not_emailed], [200, 0, ["s2@a.test"]], "a meeting is still scheduled");
 });

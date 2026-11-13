@@ -16,7 +16,7 @@
 // more; failing again it is logged as failed and the bell says why.
 import { corsFor } from "../_shared/cors.ts";
 import { firmGate, viaRest } from "../_shared/firmgate.ts";   // the console's switches (migration 118)
-import { EMAIL_STRICT, emailIn, lowEmail, MAIL_DAY_MAX, mailFits, mailSent, plainWords, savedEmails, sha256hex } from "../_shared/mailrules.ts";
+import { EMAIL_STRICT, emailIn, lowEmail, MAIL_DAY_MAX, mailTake, plainWords, savedEmails, sha256hex } from "../_shared/mailrules.ts";
 export { MAIL_DAY_MAX, plainWords };
 import { normalizeDef } from "../_shared/misdef.js";
 import { run as runEngine, periodOf } from "../../app/src/lib/misCustom.js";
@@ -24,12 +24,12 @@ import { workbook } from "../../app/src/lib/misXlsx.js";
 import { cloudData, fetchBook } from "./data.ts";
 import { misPdf } from "./pdf.ts";
 
-// 13-Nov-2026 (security review, M5): the emails FinCom sends for a firm.
+// The emails FinCom sends for a firm.
 //  - to whom: the firm's active members, the addresses saved in the client's own details, and addresses their owners
 //    confirmed with a code when joining one of the firm's calls; any other typed address is left out (the bell says so);
 //  - how many: MAIL_DAY_MAX people a day for a firm, counted in the shared table (migration 112, bucket mail-firm, with
-//    the call invites; ../_shared/mailrules.ts); past it, or when the count cannot be reached, the report is made and
-//    nothing is emailed;
+//    the call invites; taken in one call, migration 191; ../_shared/mailrules.ts). Past it the report is made and
+//    nothing is emailed; the same when the count cannot be read, and the bell says which of the two it was;
 //  - in whose words: the subject is FinCom's own (mailSubject); the report's and the client's names go into the email
 //    as plain words only (plainWords: letters, digits and a few marks; no address can be written with them);
 //  - Run now: a schedule is run by a person at most RUN_NOW.max times in RUN_NOW.windowS seconds.
@@ -93,7 +93,7 @@ export function handler(deps: Deps) {
     await upload(base + ".pdf", pdf, "application/pdf");
     const files = [{ kind: "xlsx", path: base + ".xlsx", name: slug(res.company) + "-" + slug(def.name) + ".xlsx", bytes: xlsx.length }, { kind: "pdf", path: base + ".pdf", name: slug(res.company) + "-" + slug(def.name) + ".pdf", bytes: pdf.length }];
     const title = def.name + " for " + (res.company || "the client") + " is ready (" + res.periodLabel + ")";
-    // to whom (M5): the members chosen (their sign-in addresses), and of the addresses typed only those the firm is known
+    // to whom: the members chosen (their sign-in addresses), and of the addresses typed only those the firm is known
     // to write to: a member's, one saved in the client's details, or one its owner confirmed with a code on a call
     const ids = ((s.recipients || {}).members || []).filter((x: string) => /^[0-9a-f-]{36}$/.test(x));
     const mem = ((await rest("/rest/v1/members?select=user_id,email&firm_id=eq." + enc(s.firm_id) + "&active=is.true").catch(() => [])) || []) as any[];
@@ -113,15 +113,15 @@ export function handler(deps: Deps) {
       const key = await secret("resend_api_key");
       if (!key) email = "not set up";
       else {
-        // how many (M5): the firm's emails of the last day, with these; counted only once they are sent
-        const fits = await mailFits((fn, args) => rpc(fn, args), String(s.firm_id), to.length);
+        // how many: the firm's places for today are taken, with these, before the email goes out
+        const fits = await mailTake((fn, args) => rpc(fn, args), String(s.firm_id), to.length);
         if (fits !== "ok") { email = "failed"; why = fits === "unknown" ? " (not emailed: the email count could not be read)" : " (not emailed: the firm's daily email limit of " + MAIL_DAY_MAX + " is reached)"; }
         else {
           const from = (await secret("resend_from")) || "FinCom MIS <mis@fincom.live>";
           const r = await doFetch("https://api.resend.com/emails", { method: "POST", headers: { Authorization: "Bearer " + key, "Content-Type": "application/json" },
             body: JSON.stringify({ from, to, subject: mailSubject(pr), text: plainWords(def.name) + " for " + (plainWords(res.company) || "the client") + " is ready (" + plainWords(res.periodLabel) + ").\n\nThe Excel and the PDF are attached. Every figure is worked out by FinCom from the books in FinCom's cloud.\n\nSent by FinCom for the firm that keeps these books. If you did not expect it, tell that firm.",
               attachments: [{ filename: files[0].name, content: b64(xlsx) }, { filename: files[1].name, content: b64(pdf) }] }) });
-          if (r.ok) { email = "sent"; sent = to; await mailSent((fn, args) => rpc(fn, args), String(s.firm_id), to.length); } else { email = "failed"; }
+          if (r.ok) { email = "sent"; sent = to; } else { email = "failed"; }
         }
       }
     }

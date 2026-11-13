@@ -1,10 +1,12 @@
-// The rules for an email FinCom sends on a firm's behalf (13-Nov-2026, security review M5): mis-run's scheduled report
-// and fincom-call's meeting invites. Plain module, no imports.
+// The rules for an email FinCom sends on a firm's behalf: mis-run's scheduled report and fincom-call's meeting
+// invites. Plain module, no imports.
 //  - to whom: the firm's active members, the addresses saved in the client's own details, and addresses their owners
 //    confirmed with a code when joining one of the firm's calls (call_participants.verified). The functions ask the
 //    database for the first and the last; savedEmails() reads the second out of a client's saved details;
-//  - how many: MAIL_DAY_MAX people a day for a firm, counted in the shared table of migration 112 (bucket mail-firm);
-//    when the count cannot be read nothing is sent;
+//  - how many: MAIL_DAY_MAX people a day for a firm, counted in the shared table of migration 112 (bucket mail-firm).
+//    The places are taken before the email goes out, in one database call that checks and counts together
+//    (auth_rate_take, migration 191). When that call fails nothing is sent, and the caller says the count could not
+//    be read (not that the day's count is reached);
 //  - in whose words: the subject is FinCom's own; names a firm typed go into an email as plain words only (plainWords).
 export const MAIL_DAY_MAX = 200;
 export const MAIL_BUCKET = "mail-firm";
@@ -26,14 +28,15 @@ export async function sha256hex(t: string) { const h = new Uint8Array(await cryp
 export const emailIn = (list: string[]) => "in.(" + encodeURIComponent(list.map((e) => '"' + e + '"').join(",")) + ")";
 
 type Rpc = (fn: string, args: Record<string, unknown>) => Promise<unknown>;
-// may the firm send n more today? "ok", "limit" (the day's count is reached) or "unknown" (the count cannot be read)
-export async function mailFits(rpc: Rpc, firm: string, n: number): Promise<"ok" | "limit" | "unknown"> {
+// take n of the firm's places for today: "ok" (taken: send), "limit" (they do not fit: nothing taken) or "unknown"
+// (the database call failed, or answered something else: nothing is known to be taken; the failure is logged)
+export async function mailTake(rpc: Rpc, firm: string, n: number): Promise<"ok" | "limit" | "unknown"> {
   const key = await sha256hex(MAIL_BUCKET + ":" + firm);
-  const had = await rpc("auth_rate_count", { p_bucket: MAIL_BUCKET, p_key: key, p_window_s: 86400 }).then((x) => (typeof x === "number" ? x : NaN), () => NaN);
-  return isNaN(had) ? "unknown" : had + n <= MAIL_DAY_MAX ? "ok" : "limit";
-}
-// n emails were sent for the firm
-export async function mailSent(rpc: Rpc, firm: string, n: number): Promise<void> {
-  const key = await sha256hex(MAIL_BUCKET + ":" + firm);
-  await Promise.all(Array.from({ length: n }, () => rpc("auth_rate_add", { p_bucket: MAIL_BUCKET, p_key: key }).catch(() => null)));
+  try {
+    const took = await rpc("auth_rate_take", { p_bucket: MAIL_BUCKET, p_key: key, p_n: n, p_max: MAIL_DAY_MAX, p_window_s: 86400 });
+    if (took === true) return "ok";
+    if (took === false) return "limit";
+    console.error("mailrules: auth_rate_take answered neither true nor false");
+  } catch (e) { console.error("mailrules: the firm's email count could not be taken: " + String((e as Error)?.message || e).slice(0, 200)); }
+  return "unknown";
 }
