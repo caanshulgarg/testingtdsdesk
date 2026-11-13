@@ -90,7 +90,7 @@ const GSTB = {
   // the person's two-step code (the authenticator app's), checked by the server: the sign-in kept here becomes a fresh one
   async twoStep(){
     const f = (await Cloud.factors()).find(x => x.status === "verified");
-    if (!f) throw new Error("Turn on two-step sign-in first (Settings), then log in to the portal from here.");
+    if (!f) throw new Error("No two-step sign-in was found for you; sign in again, then log in to the portal from here.");
     const ans = await askConfirm({title: "Your two-step code", ok: "Continue",
       html: 'A saved GST portal login is used only right after your two-step code. Type the 6-digit code from your authenticator app.<br><input type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="8" id="gstbCode" aria-label="Two-step code" style="margin-top:8px;width:100%">',
       read: () => ((document.getElementById("gstbCode") || {}).value || "").replace(/\s+/g, ""), validate: v => /^\d{6}$/.test(v) ? "" : "Type the 6-digit code."});

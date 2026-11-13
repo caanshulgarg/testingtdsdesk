@@ -7,8 +7,8 @@ auth.jwt() and auth.mfa_factors stood in, migration 93, then 192 twice. Checks:
   1. grants: the read as 93 gave it (signed-in users, never anon); the new function executable by no signed-in user.
   2. no fresh two-step, no password: a sign-in with no code (aal1), a code given 11 minutes ago, a token whose only stamp
      is the password's, a stamp from the future, an amr that is not a list; the answer says need 'two_step' (the page asks
-     for the code) and carries no password; a person who never turned two-step on is told to turn it on. Nothing is logged
-     as a read.
+     for the code) and carries no password; none of it logged as a read. A member who never turned two-step sign-in on
+     is not asked for a code (the owner's decision of 13-Nov-2026): they read as before, logged, under the same limit.
   3. a code given in the last 10 minutes: the owner, and a staff member the owner allowed, get the password; each read logged.
   4. 93's rules are kept: a staff member not allowed, a viewer and another firm get nothing, with a fresh code too; the
      refusal logged.
@@ -108,20 +108,23 @@ try:
     for what, claims in stale.items():
         r = read(OWNER, claims=claims)
         ok(r.get("ok") is False and r.get("need") == "two_step" and "password" not in r and PW not in json.dumps(r), "2. %s: no password, the answer asks for the two-step code (%s)" % (what, {k: v for k, v in r.items() if k != "password"}))
-    r = read(NOMFA, claims=jwt(aal="aal1", totp=None))
-    ok(r.get("ok") is False and "need" not in r and "Turn on two-step" in r.get("error", "") and "password" not in r, "2. a staff member who never turned two-step on is told to turn it on (%s)" % r.get("error"))
     ok(not [e for e in events() if e[1] == "read"], "2. none of these is logged as a read (%s)" % [e[1:] for e in events()])
+    r = read(NOMFA, claims=jwt(aal="aal1", totp=None))
+    ok(r.get("ok") is True and r.get("password") == PW and events("action = 'read'") == [(NOMFA, "read", "")], "2. an allowed staff member who never turned two-step on is not asked for a code: the password, the read logged")
+    got = [read(NOMFA, claims=jwt(aal="aal1", totp=None)).get("ok") for _ in range(5)]
+    ok(got == [True] * 4 + [False], "2. ... under the same limit: 5 in a minute, the 6th refused (%s)" % got)
+    forget()
     # 3. a fresh code
     r = read(OWNER)
     ok(r.get("ok") is True and r.get("password") == PW and r.get("username") == "fx_user", "3. the owner, a code given a minute ago: the password (for the one fill)")
     r = read(STAFF, claims=jwt(totp=590))
     ok(r.get("ok") is True and r.get("password") == PW, "3. the allowed staff member, a code given 9 min 50 s ago: the password")
-    ok([e[:2] for e in events("action = 'read'")] == [(OWNER, "read"), (STAFF, "read")], "3. each read logged: who, what")
+    ok([e[:2] for e in events("action = 'read' and at > now() - interval '1 hour'")] == [(OWNER, "read"), (STAFF, "read")], "3. each read logged: who, what")
     # 4. 93's rules kept
     r2, r3, r4 = read(STAFF2), read(VIEW), read(OTHER)
     ok(r2.get("ok") is False and "not allowed" in r2.get("error", "") and r3.get("ok") is False and r4.get("ok") is False and "No GST portal login" in r4.get("error", "") and not any("password" in x for x in (r2, r3, r4)),
        "4. a staff member not allowed, a viewer and another firm's owner get nothing, with a fresh code too")
-    ok([e for e in events("action = 'refused'")] == [(STAFF2, "refused", "read: not allowed"), (VIEW, "refused", "read: not allowed")], "4. the refusals logged as 93 logs them")
+    ok([e for e in events("action = 'refused' and at > now() - interval '1 hour'")] == [(STAFF2, "refused", "read: not allowed"), (VIEW, "refused", "read: not allowed")], "4. the refusals logged as 93 logs them")
     # 5. the limit
     forget()
     got = [read(OWNER).get("ok") for _ in range(5)]

@@ -8,11 +8,13 @@
 -- a staff member the owner allowed, for the one fill of the portal's login form. 93 logs every read but does not slow
 -- them: one signed-in page could read every client's password in a few seconds. Two conditions are added, both checked
 -- on the server, in the function itself:
---   1. A FRESH TWO-STEP. The caller's sign-in must carry a two-step code (an authenticator app's) given in the last 10
+--   1. A FRESH TWO-STEP, for a person who has two-step sign-in on (a verified entry in auth.mfa_factors; the firm's
+--      owner always has). Their sign-in must carry a two-step code (an authenticator app's) given in the last 10
 --      minutes: the token is aal2 and its amr holds a second-step entry stamped inside that time (Supabase stamps it when
 --      the code is checked, and keeps the stamp through token refreshes). Else nothing is read and the answer says
---      need 'two_step' (the page asks for the code); for a person who has not turned two-step sign-in on, the answer says
---      to turn it on. Not logged as a refusal: it is the ordinary first answer of every "Log in to GST portal".
+--      need 'two_step' (the page asks for the code). Not logged as a refusal: it is the ordinary first answer of
+--      "Log in to GST portal". A member who has NOT turned two-step sign-in on is not asked for a code (the owner's
+--      decision of 13-Nov-2026): they read as before, under the limit below.
 --   2. A LIMIT. At most 5 passwords a minute and 40 an hour for one person (counted from gst_portal_login_events, the
 --      reads 93 already logs; one person's calls are taken one at a time, so calls sent together cannot slip past the
 --      count). Over it nothing is read; the refusal is logged ('refused', note 'read: too many', at most 3 such lines a
@@ -63,13 +65,13 @@ begin
     insert into public.gst_portal_login_events (firm_id, client_id, gstin, user_id, action, note) values (f, p_client, g, auth.uid(), 'refused', 'read: not allowed');
     return jsonb_build_object('ok', false, 'error', 'You are not allowed to use this client''s GST portal login. The firm''s owner can allow you in GST settings.');
   end if;
-  -- 192, 1: a two-step code given in the last 10 minutes (a stamp from the future is not one)
-  v_at := public.gst_portal_two_step_at();
-  if v_at is null or v_at < now() - interval '10 minutes' or v_at > now() + interval '2 minutes' then
-    if not exists (select 1 from auth.mfa_factors m where m.user_id = auth.uid() and m.status::text = 'verified') then
-      return jsonb_build_object('ok', false, 'error', 'Turn on two-step sign-in first (Settings): a saved GST portal login is used only right after your two-step code.');
+  -- 192, 1: a person with two-step sign-in on: a code given in the last 10 minutes (a stamp from the future is not one);
+  -- a member who has not turned it on is not asked (the owner's decision of 13-Nov-2026)
+  if exists (select 1 from auth.mfa_factors m where m.user_id = auth.uid() and m.status::text = 'verified') then
+    v_at := public.gst_portal_two_step_at();
+    if v_at is null or v_at < now() - interval '10 minutes' or v_at > now() + interval '2 minutes' then
+      return jsonb_build_object('ok', false, 'need', 'two_step', 'error', 'Type your two-step code to use the saved GST portal login.');
     end if;
-    return jsonb_build_object('ok', false, 'need', 'two_step', 'error', 'Type your two-step code to use the saved GST portal login.');
   end if;
   -- 192, 2: at most 5 a minute and 40 an hour for one person; that person's calls one at a time
   perform pg_advisory_xact_lock(hashtextextended('gst_portal_login_read:' || auth.uid()::text, 0));

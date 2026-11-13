@@ -896,19 +896,18 @@ the refusal's time (a.at) when a day is refused for `typing` again, so the cloud
 
 ## 192: a saved GST portal login only right after a two-step code, and a few a minute (not run yet; branch next-sec-client, 13-Nov-2026)
 
-**192, GST portal read guard** (13-Nov-2026, branch `next-sec-client`; **written, not run yet**; file md5 fe283269c3a0e57b5a86ab7c83e9ff58):
+**192, GST portal read guard** (13-Nov-2026, branch `next-sec-client`; **written, not run yet**; file md5 e85c7e49e34f5118ffd2bc762ed2174e):
 `server/gst-browser/migration-192-gst-portal-read-guard.sql`. 93's `gst_portal_login_read` hands a client's GST portal
 password to the page of the owner or an allowed staff member and logs it, but nothing slowed it: one signed-in page could
-read every client's password in seconds. Two conditions are added in the function itself: the caller's sign-in must carry
-a two-step code given in the last 10 minutes (the token is aal2 and its amr has a second-step entry stamped inside that
-time; else the answer says need `two_step` and the page asks for the code, or, for a person who never turned two-step
-sign-in on, to turn it on), and at most 5 reads a minute and 40 an hour for one person (counted from
+read every client's password in seconds. Two conditions are added in the function itself: for a person who has two-step
+sign-in on, the sign-in must carry a two-step code given in the last 10 minutes (the token is aal2 and its amr has a
+second-step entry stamped inside that time; else the answer says need `two_step` and the page asks for the code; a member
+who has not turned two-step sign-in on is not asked, the owner's decision of 13-Nov-2026), and at most 5 reads a minute and 40 an hour for one person (counted from
 `gst_portal_login_events`; one person's calls are taken one at a time; a refusal is logged as 'refused' / 'read: too many',
 at most 3 lines a minute). 93's own rules and answers are kept as they are. Adds the function `gst_portal_two_step_at()`
 (for the read only; executable by no signed-in user) and the index `gst_portal_login_events_by_user`; replaces
 `gst_portal_login_read(text, text)` with the same arguments, security and grants. Add-only, one transaction, lock_timeout
 10 s, safe twice. Needs 93 (it stops and says so without it); 93 must not be run again after it. Deploy: either order
 with the app (an older page shows the answer's words and reads nothing; the new page, `src/js/84-gst-browser.js`, asks for
-the code and reads once more). A staff member the owner allowed who has not turned two-step sign-in on can no longer use a
-saved login until they turn it on (the owner's decision to confirm). Tested: `tests/run_migration192.py`
+the code and reads once more). Tested: `tests/run_migration192.py`
 (`RED_WITHOUT_192=1` shows the checks failing on 93 alone), `tests/run_sec_client.py` (the page's part).
