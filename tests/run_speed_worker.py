@@ -24,6 +24,8 @@ import os, sys, json, shutil, tempfile, threading, functools, subprocess, http.s
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
 HERE = os.path.dirname(os.path.abspath(__file__))
 from playwright.sync_api import sync_playwright
+sys.path.insert(0, HERE)
+import itc_books
 SITE = os.environ.get("TDSDESK_SITE", os.path.join(HERE, "..", "app", "dist-test"))
 PORT = int(os.environ.get("SPEED_WORKER_PORT") or 8347)
 TASK_MS = int(os.environ.get("TASK_MS") or 100)
@@ -187,11 +189,34 @@ RULES = [
   Audit.maybeRun(); const j = Audit.auto; await Z.wait(() => !Audit.auto && b.audit.last !== last0, 300000);
   return {eng: !!j.eng, same: Z.text(b.audit) === Z.once(Audit, "audit", r)}; }"""),
 ]
-WANT = {"edit": lambda e: e["eng"] and e["starts"] == 2 and e["same"] and e["jobs"] == 0,
+# the 2B client of tests/itc_books.py (made up), with a made-up pair from the 2B matching run (M2B.st: kept by the page,
+# outside the books; GST2B.run reads its AI pairs): the MIS and the audit in the worker as at once on the page
+TWOB = r"""async ([cid, reg]) => { const Z = window.__zz, big = Z.bk; Z.fresh();
+  const b = await Books.read(cid); S.coId = cid; S.books = b; b.misCfg = {freq: "monthly"}; b.auditCfg = {freq: "daily"};
+  // (the matching run of the year shown: S.gstYm's, M2B.fyNow)
+  const ym0 = S.gstYm, reg0 = S.gstReg; S.gstYm = "202605"; S.gstReg = reg;
+  const k = M2B.key(reg, M2B.fyNow()), g = Object.values(b.twoBs).flatMap(x => x.rows).find(r => r.no === "O/5");
+  const before = JSON.stringify(GST2B.run(reg));
+  M2B.st[k] = {run: {id: "zzrun1", at: "2026-11-01T00:00:00Z", result: {rows: [{st: "matched-ai", g: [g.key], b: ["e1"], why: ["zz made-up pair"], id: "zzr1"}]}}};
+  const paired = JSON.stringify(GST2B.run(reg)).includes("zz made-up pair") && JSON.stringify(GST2B.run(reg)) !== before;
+  const r = {from: "20260401", to: "20260531"};
+  // the MIS asked for (a run of its own: MIS.runSoon), in the worker
+  Z.m0 = Z.copy(b.mis); let last0 = (b.mis || {}).last; MIS.runSoon(b, {from: r.from, to: r.to, how: "zz 2B"});
+  await Z.wait(() => MIS.auto && MIS.auto.it, 60000); const jm = MIS.auto; await Z.wait(() => !MIS.auto && !MIS._soon && (b.mis || {}).last !== last0, 300000);
+  const misNow = Z.text(b.mis), keepM = b.mis; b.mis = Z.copy(Z.m0); memoScope(() => MIS.runNow(r.from, r.to, "zz 2B")); const misOnce = Z.text(b.mis); b.mis = keepM;
+  // the day's audit on its own, in the worker
+  Z.a0 = Z.copy(b.audit); last0 = (b.audit || {}).last; Audit.maybeRun(); const ja = Audit.auto;
+  await Z.wait(() => !Audit.auto && (b.audit || {}).last !== last0, 300000);
+  const ra = Audit.defaultRange(b), auNow = Z.text(b.audit), keepA = b.audit; b.audit = Z.copy(Z.a0); memoScope(() => Audit.runNow(ra.from, ra.to, "on its own (daily)")); const auOnce = Z.text(b.audit); b.audit = keepA;
+  delete M2B.st[k]; S.gstYm = ym0; S.gstReg = reg0; S.books = big; S.coId = big.cid; render(); await Z.quiet(500);
+  return {paired, misEng: !!(jm && jm.eng), misSame: misNow === misOnce, auEng: !!(ja && ja.eng), auSame: auNow === auOnce, findings: (b.audit.last || {}).findings.length}; }"""
+WANT = {"twob": lambda e: e["paired"] and e["misEng"] and e["misSame"] and e["auEng"] and e["auSame"],
+        "edit": lambda e: e["eng"] and e["starts"] == 2 and e["same"] and e["jobs"] == 0,
         "other": lambda e: e["eng"] and e["stopped"] and e["kept"] and e["otherSame"] and e["jobs"] == 0,
         "none": lambda e: not e["eng"] and e["same"], "gone": lambda e: e["eng"] and e["same"],
         "patched": lambda e: not e["eng"] and e["pure"], "again": lambda e: e["eng"] and e["same"]}
-SAY = {"edit": "an entry added and saved while the worker works: started again, the result as at once on the books now",
+SAY = {"twob": "2B data and a pair from the 2B matching run (outside the books): the MIS and the audit in the worker as at once",
+       "edit": "an entry added and saved while the worker works: started again, the result as at once on the books now",
        "other": "another client opened: stopped, neither client's MIS changed, the worker's job dropped",
        "none": "no worker: worked out here in steps, the same", "gone": "the worker gone in the middle: worked out here, the same",
        "patched": "a function of the engine replaced on the page: worked out here, in steps", "again": "then in a new worker again, the same"}
@@ -216,8 +241,8 @@ try:
             if ONLY_RULES:
                 pg.click("[data-side-client=back]"); pg.wait_for_function("(cid) => S.view === 'company' && S.books && S.books.cid === cid && !S.books.loading", arg=cid, timeout=120000)
                 pg.evaluate("() => loadPart('mis')"); pg.evaluate(RULES_HELP)
-                for name, js in RULES:
-                    try: e = pg.evaluate(js)
+                for name, js in RULES + [("twob", None)]:
+                    try: e = pg.evaluate(js) if js else (pg.evaluate(itc_books.MAKE, [itc_books.CID, itc_books.CMP, itc_books.REG, itc_books.VS, itc_books.TWOB]), pg.evaluate(TWOB, [itc_books.CID, itc_books.REG]))[1]
                     except Exception as x: e = {"error": str(x).split("\n")[0][:200], "state": pg.evaluate("() => window.__zz.state()")}
                     ok("error" not in e and WANT[name](e), "%s (%s)" % (SAY[name], e))
                 ctx.close(); break
@@ -252,8 +277,8 @@ try:
             if N == SIZES[0]:
                 print("\n   the job's rules with the worker (%d entries)" % N, flush=True)
                 pg.evaluate(RULES_HELP)
-                for name, js in RULES:
-                    try: e = pg.evaluate(js)
+                for name, js in RULES + [("twob", None)]:
+                    try: e = pg.evaluate(js) if js else (pg.evaluate(itc_books.MAKE, [itc_books.CID, itc_books.CMP, itc_books.REG, itc_books.VS, itc_books.TWOB]), pg.evaluate(TWOB, [itc_books.CID, itc_books.REG]))[1]
                     except Exception as x: e = {"error": str(x).split("\n")[0][:200], "state": pg.evaluate("() => window.__zz.state()")}
                     ok("error" not in e and WANT[name](e), "%s (%s)" % (SAY[name], e))
                 eng = pg.evaluate("() => typeof Engine === 'object' ? Engine.URL : ''")

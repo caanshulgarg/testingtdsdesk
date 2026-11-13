@@ -966,7 +966,7 @@ const Engine = {
   src(){ const s = typeof document === "object" && document.querySelector('script[src*="legacy.js"]'); return s ? s.src : ""; },
   can(A){ return this.st !== "off" && typeof Worker === "function" && !/^__/.test(this.URL) && !!this.src() && (A === Audit || A === MIS) && this.pure(); },
   off(why){
-    this.st = "off"; this.why = String(why || "");
+    this.st = "off"; this.why = String(why || ""); this.gSent = undefined;
     try { if (this.w) this.w.terminate(); } catch (e){}
     this.w = null; this.sent = null; this.wake();
   },
@@ -989,7 +989,14 @@ const Engine = {
     Object.keys(S).forEach(k => { const v = S[k]; if (!skip.test(k) && typeof v !== "function") s[k] = v; });
     if (S.data && b && S.data[b.cid]) s.data = {[b.cid]: S.data[b.cid]};
     try { for (let i = 0; i < localStorage.length; i++){ const k = localStorage.key(i); if (!/sess|token|auth|api|secret|pass|key/i.test(k)) ls[k] = localStorage.getItem(k); } } catch (e){}
-    return {s, ls};
+    // what the engines read outside S: the 2B matching runs of the year (M2B.st, from FinCom's cloud: GST2B.run's AI
+    // pairs, and so the 3B's credit), sent again only when the page has another
+    const g = {};
+    if (typeof M2B === "object" && M2B.st){
+      const sig = JSON.stringify(Object.keys(M2B.st).sort().map(k => { const x = M2B.st[k] || {}, r = x.run || {}; return [k, r.id || "", r.at || "", x.hash || "", ((r.result || {}).rows || []).length, JSON.stringify(r.decisions || null).length]; }));
+      if (sig !== this.gSent){ g.M2B = M2B.st; this.gSent = sig; }
+    }
+    return {s, ls, g};
   },
   // the books to the worker, a part a step; false: the worker went meanwhile
   *sendIn(b){
@@ -1000,13 +1007,13 @@ const Engine = {
     yield;
     const keep = p && p.b === b && p.rev === rev ? keys.filter(k => k in p.kv && p.kv[k] === b[k]) : [];
     const S0 = this.sNow(b);
-    if (keepV && keep.length === keys.length && p.keys.length === keys.length){ this.post({t: "S", s: S0.s, ls: S0.ls}); return this.st === "ok"; }
+    if (keepV && keep.length === keys.length && p.keys.length === keys.length){ this.post({t: "S", s: S0.s, ls: S0.ls, g: S0.g}); return this.st === "ok"; }
     const ver = ++this.ver;
     this.sent = null;
     this.post({t: "begin", ver, keepV, keep});
-    try { this.post({t: "S", s: S0.s, ls: S0.ls}); }
+    try { this.post({t: "S", s: S0.s, ls: S0.ls, g: S0.g}); }
     // (a field that cannot be copied left out; with no structuredClone, Safari 14, each tried in a word of its own)
-    catch (e){ Object.keys(S0.s).forEach(k => { try { if (typeof structuredClone === "function") structuredClone(S0.s[k]); else this.post({t: "S", s: {[k]: S0.s[k]}, ls: {}}); } catch (x){ delete S0.s[k]; } }); this.post({t: "S", s: S0.s, ls: S0.ls}); }
+    catch (e){ Object.keys(S0.s).forEach(k => { try { if (typeof structuredClone === "function") structuredClone(S0.s[k]); else this.post({t: "S", s: {[k]: S0.s[k]}, ls: {}}); } catch (x){ delete S0.s[k]; } }); this.post({t: "S", s: S0.s, ls: S0.ls, g: S0.g}); }
     yield;
     for (const k of keys){
       if (keep.includes(k)) continue;
