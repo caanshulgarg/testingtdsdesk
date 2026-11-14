@@ -214,7 +214,12 @@ ok(/xhr: false/.test(appSrc) && /fetch: false/.test(appSrc) && /dom: false/.test
   ok(ro("ResizeObserver loop completed with undelivered notifications.") === null, "the ResizeObserver loop (Safari's words): the event dropped");
   ok(ro("ResizeObserver loop limit exceeded") === null, "the older words of the same (ResizeObserver loop limit exceeded): dropped");
   ok(ro("Uncaught ResizeObserver loop completed with undelivered notifications.", "message") === null, "in the event's message too: dropped");
-  ok(S.scrubEvent({ event_id: "0123456789abcdef0123456789abcdef", tags: { msg_code: "resizeObserverLoop" } }) === null, "a msg_code resizeObserverLoop tag set by hand: dropped");
+  // dropped by the primary error's words only (the last exception value): a notice chained behind a real error keeps it
+  const two = (first, last) => S.scrubEvent({ event_id: "0123456789abcdef0123456789abcdef", level: "error", exception: { values: [{ type: "Error", value: first }, { type: "TypeError", value: last }] } });
+  const RO = "ResizeObserver loop completed with undelivered notifications.";
+  ok(two(RO, "Cannot read properties of undefined") !== null, "a ResizeObserver notice chained behind a real error (not the primary value): the error is sent");
+  ok(two("Cannot read properties of undefined", RO) === null, "the ResizeObserver notice as the primary value: dropped");
+  ok(S.scrubEvent({ event_id: "0123456789abcdef0123456789abcdef", tags: { msg_code: "resizeObserverLoop" } }) !== null, "a msg_code tag set by hand, with no such words: not dropped");
   ok(!(ro("ResizeObserver loop completed with ALPHA TRADERS 09AANFG3202D1ZR").tags || {}).msg_code, "the same words with anything else in them: no code");
   ok(!(ro("Ledger ALPHA TRADERS clashes with BETA").tags || {}).msg_code, "any other message: no code");
   ok(!(S.scrubEvent({ event_id: "0123456789abcdef0123456789abcdef", tags: { msg_code: "ALPHA TRADERS" } }).tags || {}).msg_code &&
