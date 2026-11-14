@@ -6,10 +6,12 @@ import { TOOLS as REPORTS } from "./reports.ts";
 import { TOOLS as DEPRECIATION } from "./depreciation.ts";
 import { TOOLS as CERTIFICATES } from "./certificates.ts";
 import { TOOLS as PROJECTION } from "./projection.ts";
+import { TOOLS as CMA } from "./cma.ts";
 export const EXT_TOOLS: ExtTool[] = [
   ...AUDIT,
   ...REPORTS,
   ...DEPRECIATION,
   ...CERTIFICATES,
   ...PROJECTION,
+  ...CMA,
 ];

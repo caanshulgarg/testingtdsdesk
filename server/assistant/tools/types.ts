@@ -7,7 +7,7 @@ export type Col = { k: string, label: string, t?: "text" | "amount" | "int" | "d
 // a table FinCom computed (never a figure from the AI): shown under the answer, right-aligned amounts, a date opens the entry
 export type ToolTable = { tool: string, title: string, columns: Col[], rows: Record<string, unknown>[], summary?: Record<string, number | string | boolean | null>,
   basis?: string, period?: { from?: string | null, to?: string | null, as_on?: string | null },
-  label?: "confirm" | "certificate" | "projection" };   // neutral, not green: figures not all computed from the books (the certificates); a row with books_check: true is the books' own figure; projection: projected statements (projection.ts) from the books and stated assumptions
+  label?: "confirm" | "certificate" | "projection" | "cma" };   // cma: CMA data (cma.ts): past years from files and books, the rest estimated and projected   // neutral, not green: figures not all computed from the books (the certificates); a row with books_check: true is the books' own figure; projection: projected statements (projection.ts) from the books and stated assumptions
 export type FileOut = { id: string, name: string, kind: string, path: string, expires: string, bytes?: number };
 
 export type ExtCtx = {
@@ -28,7 +28,11 @@ export type ExtCtx = {
   rpcFor?: (client: string, fn: string, args: Record<string, unknown>) => Promise<any>,
   uploads?: { path: string, name: string, type: string }[],
   readFile?: (path: string) => Promise<Uint8Array | null>,
-  aiRead?: (prompt: string, doc?: { bytes: Uint8Array, type: string } | null) => Promise<string>,
+  // o.schema: the answer as JSON in that strict schema (structured output); o.feature: what the cost is counted under
+  aiRead?: (prompt: string, doc?: { bytes: Uint8Array, type: string } | null, o?: { schema?: Record<string, unknown>, feature?: string, maxTokens?: number }) => Promise<string>,
+  // the files attached earlier in this conversation as the panel lists them, with what FinCom found each to be (kind:
+  // balance_sheet, cma, notice, ...); paths of the firm's own folder only (index.ts)
+  files?: { path: string, name: string, type: string, kind?: string, summary?: string }[],
   // deno-lint-ignore no-explicit-any
   store?: any,
   noFont?: boolean,
@@ -41,6 +45,7 @@ export type ExtResult = {
   aiText?: string,           // AI-written narrative to show, marked "AI-drafted, review before use"
   error?: string,            // the tool could not run: said to the model, which tells the user
   cards?: Record<string, unknown>[], // events for a card the panel works out itself (fs_build: the statements card, t "fs"; the figures are the page's, in the browser)
+  line?: string,             // FinCom's own words above the tables when the tool answers without a model (cma_data: agent.ts)
 };
 export type ExtTool = {
   name: string,              // snake_case, unique across all modules (prefix: audit_*, report_*)
