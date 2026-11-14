@@ -2,7 +2,9 @@
 
 Status: independently reviewed 14-Nov: code, security and two re-reviews, no blockers.
 
-Range: c851cd1dc..44452446b (origin/staging-next with 2.5.15 at c851cd1dc, which holds 2.5.15's signed commit 2bf75a4c7; the whole of 2.5.16 through the code and security reviews' fixes, up to 053994f5d; after it the review notes and the merge of origin/staging-next d9bc68021 in 44452446b, which changed nothing under bridge-go/)
+Range: c851cd1dc..cdbdcecde (origin/staging-next with 2.5.15 at c851cd1dc, which holds 2.5.15's signed commit 2bf75a4c7; the whole of 2.5.16 through the code and security reviews' fixes, up to 053994f5d; after it the review notes and the merge of origin/staging-next d9bc68021 in 44452446b, which changed nothing under bridge-go/)
+
+cdbdcecde: post-shapes fixtures regenerated for the sheet-import builder change (test data only).
 
 Areas for the reviewer (no finding details are written here; the repository is public):
 - The security items of 2.5.16 (e0c77945d to d2b7fd47a): local settings and files the bridge trusts, the Windows
