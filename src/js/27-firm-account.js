@@ -860,8 +860,9 @@ function openSwitcher(){ if (!Object.keys(S.companies).length){ goHome(); S.addi
 // takes it away, its own drawing shows the page without it (nothing is painted in between). tests/run_hang_leave_client.py
 function closeSwitcher(drawn){ const was = !!S.switcher; S.switcher = null; if (was && !drawn) renderSwitcher(); }
 
-// tab: the client's page to open on (saveNewCompany: its Tally card), drawn at once on it
-async function openCompany(cid, tab){
+// tab: the client's page to open on (saveNewCompany: its Tally card), drawn at once on it; quiet: not drawn here, the
+// caller draws it at once (Route.apply, on the page its address names: the page was drawn twice, once on the tab before)
+async function openCompany(cid, tab, quiet){
   loadDocq().catch(() => {});
   if (!S.companies[cid]) return;
   closeSwitcher(true);
@@ -883,8 +884,13 @@ async function openCompany(cid, tab){
     S.loadingCo = false;
   }
   pruneStaleHashes(cid);
-  refreshStats(cid);
-  render(); window.scrollTo(0, 0);
+  // next-fix-back-to-client (FINCOM-APP-STAGING-K): the bills' counts (refreshStats: every draft's checks worked out,
+  // about 0.6 ms a draft here) after the opening's drawing, which they shared, a few drafts a task (refreshStatsSoon);
+  // drawn again only when the drafts' count the sidebar shows changed (the others are on Clients and Today, drawn there)
+  const was = (CO(cid) && CO(cid).stats || {}).drafts;
+  refreshStatsSoon(cid).then(n => { if (n && S.view === "company" && S.coId === cid && (CO(cid).stats || {}).drafts !== was) render(); });
+  if (!quiet) render();
+  window.scrollTo(0, 0);
   // FinCom Bridge 2.1.3: the client's Tally computer brings in what changed in Tally since its last read (one light update)
   try { if (typeof TWake === "object") TWake.open(cid); } catch (e){}
   // round 17 (04-Oct-2026): a posting FinCom's cloud finished by Tally's reply while this client was not open is marked

@@ -145,7 +145,8 @@ const Route = {
     try {
       if (p[0] === "c" && p[1]){
         if (!S.companies[p[1]]){ toast("That client is not in this firm’s list."); return false; }
-        await openCompany(p[1]);
+        // (next-fix-back-to-client: opened without its own drawing; the page is drawn once, below, on the tab asked for)
+        await openCompany(p[1], null, true);
         const what = p[2] || "dash", arg = p[3] || "";
         S.step = null; S.drawerOpen = false; S.colPop = null;
         if (what === "upload"){ S.tab = S.tab === "dash" ? "invoices" : S.tab; S.step = "collect"; }
