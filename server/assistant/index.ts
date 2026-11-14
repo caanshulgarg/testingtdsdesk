@@ -1,7 +1,7 @@
 // fincom-assistant: FinCom Assistant's function (the owner's approval of AI in the app, 13-Oct-2026; never called by the
 // bridge or the Tally add-on). One POST per question; the answer streams back as server-sent events (agent.ts).
 //   {action: "ask", question, asked (what was typed, when the page added its working to the question), client_id | null, history: [{role, content}], thread: {fs: {from, to, cmp, notes} | null, files:
-//    [{path, name, type, kind, summary}]}, attachments: [{path, name, type}], firm: {name, lines},
+//    [{path, name, type, kind, summary}]} (a file of it is read again when the question refers back to it: earlier.ts), attachments: [{path, name, type}], firm: {name, lines},
 //    lang: the voice language chosen ("en-IN", "hi-IN", "hinglish", "mr-IN", …: agent.ts LANGS), a hint for the reply's language}
 //   {action: "report", client_id, question, note, tools, entries}      the "Wrong answer?" button
 //   {action: "sheet_map", client_id, head, rows, side}                  a register's new format: its columns (sheetmap.ts)
@@ -40,6 +40,7 @@ import { capWords, costUsd as priceUsd, HAIKU, SONNET } from "./models.ts";
 import { aiMap } from "./fsmap.ts";
 import { misAsked } from "./mis.ts";
 import { fsAsked, FsThread } from "./fsask.ts";
+import { EARLIER, earlierNote, pickEarlier, UploadRow, usingLine, withinBudget } from "./earlier.ts";
 import { aiPolicy, refusal } from "../_shared/ai_policy.ts";
 
 export type Env = (k: string) => string | undefined;
@@ -251,7 +252,7 @@ export function handler(deps: Deps) {
     }
     // the conversation so far, as the panel keeps it (owner, 29-Oct-2026: "no previous memory"): the statements shown last
     // (their period, comparative and notes) and the files attached earlier with what FinCom found each to be. Only the
-    // firm's own files; words only (nothing here is read or sent as a file)
+    // firm's own files; words here (a file is read again only for a question that needs it, below: earlier.ts)
     const th = body && typeof body.thread === "object" && body.thread ? body.thread : {};
     const ymd = (v: unknown) => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null;
     const thread: FsThread = {
@@ -274,6 +275,22 @@ export function handler(deps: Deps) {
       // a notice (…/notices/) or any other upload (…/uploads/) of the firm, read with the user's own token
       if (!path.startsWith(firm + "/") || !/\/(notices|uploads)\//.test(path) || path.includes("..")) return reply(403, { ok: false, kind: "file", error: "That file is not one of your firm's uploads." });
     }
+    // the files attached earlier in this conversation that this question refers back to, or whose data its work needs
+    // (earlier.ts; the owner, 14-Nov-2026: "pls prepare cma data on this basis" with nothing attached): read again by their
+    // path, as a new upload is, below. Only the firm's own folder for the client open, and only a file whose upload record
+    // (read as the user: row-level security) says this same user uploaded it; never a notice (its own flow) and never for
+    // the statements card (it reads last year's file itself). Within the message's files and bytes and EARLIER's limits.
+    const earlierUsed: string[] = [], earlierLeft: string[] = [];
+    if (action === "ask" && !fsAsked(question, thread, (deps.now ? deps.now() : new Date()).toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" }))) {
+      const picked = pickEarlier(question, thread.files || [], { firm, clientId, exclude: sent.map((a: any) => String(a?.path || "")) });
+      if (picked.length) {
+        const rows = await Promise.all(picked.map(async (f) => ((await rest("/rest/v1/assistant_uploads?select=path,client_id,created_by,size,kind&path=eq." + encodeURIComponent(f.path) + "&limit=1", jwt).catch(() => [])) as UploadRow[] | null)?.[0] || null));
+        const newBytes = sent.reduce((t: number, a: any) => t + Math.max(0, Number(a?.size) || 0), 0);
+        const b = withinBudget(picked, rows, { user: user.id, clientId, files: ATTACH.files - sent.length, bytes: Math.min(EARLIER.bytes, ATTACH.totalBytes - newBytes) });
+        earlierLeft.push(...b.left);
+        for (const f of b.take) sent.push({ path: f.path, name: f.name, type: f.type, kind: f.kind, size: f.size, earlier: true });
+      }
+    }
     // before anything is downloaded or opened (the review of 13-Nov-2026): asks with files are counted per user and per
     // firm (auth_rate_hit, migration 112; else in this running copy), and a firm at its AI limit is told at once
     if (sent.length && action === "ask") {
@@ -292,7 +309,7 @@ export function handler(deps: Deps) {
       // the text's whole length: the page keeps at most ATTACH.textChars of a file and says how long it was (full)
       g.full = Math.max(typeof a?.text === "string" ? a.text.length : 0, Math.min(Number(a?.full) || 0, 1e9));
       got.push(g);
-      noticePath = noticePath || path;
+      if (!a?.earlier) noticePath = noticePath || path;
       // the bytes are read for a PDF or a picture (sent as they are), a sheet (its cells) or a file the page could not read
       const wantBytes = /pdf|^image\//i.test(g.type) || /\.(pdf|png|jpe?g|webp|gif)$/i.test(name) || isSheetName(name, g.type) || !g.text;
       if (!wantBytes) continue;
@@ -343,7 +360,11 @@ export function handler(deps: Deps) {
           + (cut ? "\n[The rest of " + g.name + " is not shown to you. Say so if the answer may depend on it.]" : "") });
       } else attachments.push({ type: "text", text: "[The file " + n + ": " + g.name + " (" + (g.type || "type not known") + ", " + size + "): FinCom could not read this file" + (g.why ? " (" + g.why.replace(/^Not read: /, "").replace(/\.$/, "") + ")" : "") + "; only its name, type and size are given. Tell the user it could not be read.]" });
       g.bytes = null;
+      if (g.a?.earlier && p.mode !== "name") earlierUsed.push(g.name);
     }
+    // the model is told which earlier files it has, and starts its answer with them; the user sees the same line
+    if (earlierUsed.length) attachments.unshift({ type: "text", text: earlierNote(earlierUsed) });
+    if (earlierLeft.length) attachNotes.push(...earlierLeft.map((n) => ({ name: n, why: "Attached earlier in this conversation; not read again for this question (over the files or MB a message may take)." })));
 
     // an upload FinCom's own rules could not tell: what it is, in one line (upload.ts); nothing else is done with it
     if (action === "classify") {
@@ -452,7 +473,8 @@ export function handler(deps: Deps) {
         const ctx: TurnCtx = {
           client: deps.anthropic ? deps.anthropic(key) : (new Anthropic({ apiKey: key, maxRetries: 1, timeout: 170_000 }) as unknown as TurnCtx["client"]),
           question, lang: langOf(body.lang), history: history.map((h: any) => ({ role: h.role, content: String(h.content || "") })), thread,
-          attachments, sheets, uploadKind: (Array.isArray(body.attachments) && body.attachments[0] && typeof body.attachments[0].kind === "string") ? String(body.attachments[0].kind).slice(0, 20) : undefined,
+          attachments, sheets, uploadKind: (Array.isArray(body.attachments) && body.attachments[0] && typeof body.attachments[0].kind === "string") ? String(body.attachments[0].kind).slice(0, 20)
+            : earlierUsed.length ? String(sent.find((a: any) => a.earlier)?.kind || "other").replace(/^notice$/, "other").slice(0, 20) : undefined,
           noticePath: (Array.isArray(body.attachments) && body.attachments[0] && body.attachments[0].kind && body.attachments[0].kind !== "notice") ? "" : noticePath, clientId, clientName, firmWide: !clientId, today, books, anchor, chatEffort: String(env("ASSISTANT_CHAT_EFFORT") || "medium"), levers: deps.levers,
           exec: (fn, args) => rpc(fn, args, jwt),
           capTake: async () => { const r = await rpc("asst_cap_take", { p_firm: firm, p_n: 1 }, SERVICE); return { ok: !!r?.ok, used: Number(r?.used || 0), cap: Number(r?.cap || 0), spent_inr: Number(r?.spent_inr || 0), cap_inr: Number(r?.cap_inr || 0), warn: !!r?.warn, why: String(r?.why || "") }; },
@@ -514,6 +536,7 @@ export function handler(deps: Deps) {
         try {
           emit({ t: "start", client: clientId, clientName });
           if (attachNotes.length) emit({ t: "attach", notes: attachNotes });
+          if (earlierUsed.length) emit({ t: "earlier", files: earlierUsed, line: usingLine(earlierUsed) });
           const r = await runTurn(ctx);
           tools.push(...r.tools); usage = r.usage; calls = r.calls; route = r.route; models = r.models; costUsd = r.costUsd; feature = r.feature; fellThrough = r.fellThrough;
           // kept for the next time the same question is asked on the same books (only answers that cost something)

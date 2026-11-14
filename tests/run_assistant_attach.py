@@ -53,6 +53,11 @@ files["march.csv"] = os.path.join(TMP, "march.csv")
 open(files["march.csv"], "w").write("Statement of Account\nHDFC Bank\nAccount No: 50100999988887\nIFSC: HDFC0001234\n\nDate,Narration,Chq./Ref.No.,Value Dt,Withdrawal Amt.,Deposit Amt.,Closing Balance\n02/03/2026,NEFT CR MARIGOLD,N1,02/03/2026,,1000.00,2000.00\n03/03/2026,UPI DR ROSEWOOD,N2,03/03/2026,500.00,,1500.00\n")
 files["fs-draft.pdf"] = os.path.join(TMP, "Example Lantern FS 2024-25 draft.pdf"); fs_pdf(files["fs-draft.pdf"], "draft")
 files["fs-final.pdf"] = os.path.join(TMP, "Example Lantern FS 2024-25 final.pdf"); fs_pdf(files["fs-final.pdf"], "final")
+# an earlier CMA and last year's balance sheet, as sheets (the owner's chat of 14-Nov-2026; figures made up)
+files["cma.csv"] = os.path.join(TMP, "earlier CMA (FY24-25).csv")
+open(files["cma.csv"], "w").write("Form II - Operating Statement,2024-25\nGross sales,4321000\nForm III - Analysis of Balance Sheet,\nForm V - MPBF,\n")
+files["bs.csv"] = os.path.join(TMP, "BS FY25-26.csv")
+open(files["bs.csv"], "w").write("Balance Sheet as at 31-Mar-2026,\nEquity and Liabilities,\nShare capital,500000\nAssets,\nTrade receivables,765432\n")
 
 SETUP = """() => {
   Cloud.cfg = () => ({url: "http://fn.test", key: "anon-key", email: "me@firm.test"});
@@ -263,6 +268,29 @@ with sync_playwright() as p:
     ok(card.count() == 1 and "compared line by line" in card.inner_text() and "1,50,000.00" in card.inner_text() and card.locator("tbody tr").count() == len(r[0]["rows"] if r else []), "9: the differences shown as a table under the answer (%d rows)" % card.locator("tbody tr").count())
     ok("lines compared" in card.inner_text(), "9: how many lines were compared, and how many agree")
     shot(pg, "07-compare-fs", ".asst-turn.latest")
+
+    # ---------- 11. a CMA and a balance sheet keep their kinds (never "other"); a later "on this basis" carries them, and the
+    # answer says which earlier files were used (the owner, 14-Nov-2026)
+    nb = pg.evaluate("() => window.__bodies.length")
+    pg.set_input_files("[data-asst-upload-input]", [files["cma.csv"], files["bs.csv"]])
+    wait(pg, "() => document.querySelectorAll('[data-asst-chips] [data-asst-chip=\"ready\"]').length === 2", 15000)
+    kinds = pg.evaluate("() => Object.fromEntries(AUpload.pending().map((u) => [u.name, [u.kind, u.by]]))")
+    ok(kinds.get("earlier CMA (FY24-25).csv") == ["cma", "rules"] and kinds.get("BS FY25-26.csv") == ["balance_sheet", "rules"], "11: FinCom's rules name a CMA and a balance sheet (%s)" % kinds)
+    pg.fill("#asstQ", "Keep these for the CMA"); pg.keyboard.press("Enter")
+    wait(pg, "() => window.__bodies.length === %d" % (nb + 1))
+    pg.evaluate(ANSWER, "Noted (made up)."); pg.wait_for_timeout(400)
+    rec = pg.evaluate("() => window.__rec.filter((r) => r[0] === 'assistant_uploads' && r[1] === 'POST').length")
+    ok(rec >= 2, "11: each upload is recorded (%d)" % rec)
+    pg.fill("#asstQ", "pls prepare cma data on this basis"); pg.keyboard.press("Enter")
+    wait(pg, "() => window.__bodies.length === %d" % (nb + 2))
+    b = pg.evaluate("() => window.__bodies[window.__bodies.length - 1]")
+    tf = {f["name"]: f.get("kind") for f in (b.get("thread") or {}).get("files") or []}
+    ok(not b.get("attachments") and tf.get("earlier CMA (FY24-25).csv") == "cma" and tf.get("BS FY25-26.csv") == "balance_sheet", "11: the follow-up sends no file; the thread lists both with their kinds, for the server to read again (%s)" % tf)
+    pg.evaluate("() => window.__push({t: 'earlier', files: ['earlier CMA (FY24-25).csv', 'BS FY25-26.csv'], line: 'Using: earlier CMA (FY24-25).csv, BS FY25-26.csv'})")
+    pg.evaluate(ANSWER, "Using: earlier CMA (FY24-25).csv, BS FY25-26.csv\nThe CMA data (made up)."); pg.wait_for_timeout(500)
+    use = pg.locator(".asst-turn.latest [data-asst-earlier]")
+    ok(use.count() == 1 and "Using: earlier CMA (FY24-25).csv, BS FY25-26.csv" in use.inner_text(), "11: the message says which earlier files were used (%s)" % (use.inner_text() if use.count() else None))
+    shot(pg, "10-earlier-files", ".asst-turn.latest")
 
     # ---------- 10. a phone: the chips fit in the box
     pg.set_input_files("[data-asst-upload-input]", [files["receipt.png"], files["fs-final.pdf"], files["notes.txt"]])

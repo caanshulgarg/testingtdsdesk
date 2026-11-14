@@ -398,6 +398,13 @@ analyze;""")
     ok(A.ask(db, "select action from assistant_uploads", A.ME) == "purchase", "the step the user picked is kept")
     A.migrate(db, A.MIG84)
     ok(A.ask(db, "select count(*) from assistant_uploads", A.ME) == "1", "84 runs twice and keeps what is there")
+    # 198: a balance sheet and a CMA workbook keep their kinds (never "other"); an unknown kind is still refused; it runs twice
+    for k in ("balance_sheet", "cma"):
+        A.ask(db, "insert into assistant_uploads (client_id, path, name, size, kind, kind_by, summary) values ('larkspur', '%s', '%s.xlsx', 900, '%s', 'rules', 'made up');" % (up.replace("k1", "k" + k), k, k), A.STAFF)
+    ok(A.ask(db, "select string_agg(kind, ',' order by kind) from assistant_uploads where kind in ('balance_sheet', 'cma')", A.ME) == "balance_sheet,cma", "198: balance_sheet and cma are kinds of their own")
+    A.migrate(db, A.MIG198)
+    try: A.ask(db, "insert into assistant_uploads (path, name, kind) values ('%s', 'x.pdf', 'weird');" % up, A.STAFF); ok(False, "198: an unknown kind is still refused")
+    except RuntimeError as e: ok("check" in str(e), "198: an unknown kind is still refused (and 198 runs twice)")
 finally:
     db.stop()
 print("\n" + ("FAILED: %d" % len(fails) if fails else "all passed"))

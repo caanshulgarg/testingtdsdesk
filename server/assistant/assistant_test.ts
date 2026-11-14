@@ -918,3 +918,42 @@ Deno.test("30 files a message, any type: PDFs and pictures as they are, the rest
   assert(!notes.some((x) => /note-|receipt|register/.test(x.name)), "files read whole are not listed");
   assert(/could not be fetched/.test(why("gone.pdf")), "the user is told which file could not be fetched");
 });
+
+// ---- the files attached earlier in the chat, read again (the owner, 14-Nov-2026: "pls prepare cma data on this basis" with
+// nothing attached sent only the files' names; server/assistant/earlier.ts). All made up.
+Deno.test("a follow-up 'on this basis': the earlier CMA and balance sheet are read again from the firm's folder, said as 'Using: …'; another member's file and another firm's path are not", async () => {
+  const XL = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+  const sheet = async (title: string, rows: (string | number)[][]) => {
+    const wb = new ExcelJS.Workbook(), ws = wb.addWorksheet(title);
+    rows.forEach((r) => ws.addRow(r));
+    return new Uint8Array(await wb.xlsx.writeBuffer() as ArrayBuffer);
+  };
+  const keep = async (name: string, bytes: Uint8Array, uid: string, kind: string) => {
+    const path = FIRM + "/" + CLIENT + "/uploads/th-" + name.replace(/[^A-Za-z0-9.-]+/g, "-");
+    await (await fetch(STAND + "/storage/v1/object/assistant-files/" + path, { method: "POST", headers: { Authorization: "Bearer tok-" + uid, "Content-Type": XL }, body: bytes as unknown as BodyInit })).text();
+    const r = await fetch(STAND + "/rest/v1/assistant_uploads", { method: "POST", headers: { Authorization: "Bearer tok-" + uid, "Content-Type": "application/json" },
+      body: JSON.stringify({ client_id: CLIENT, path, name, size: bytes.length, mime: XL, kind, kind_by: "rules", summary: "made up" }) });
+    assert(r.ok, "the upload's record: " + r.status + " " + await r.text());
+    return { path, name, type: XL, kind, summary: kind === "cma" ? "CMA data (2024-25)." : "A balance sheet / financial statements as at 31-Mar-2026." };
+  };
+  const cma = await keep("earlier CMA (FY24-25).xlsx", await sheet("Form II", [["Made-up Operating Statement", "2024-25"], ["Gross sales", 4321000], ["Net profit", 98765]]), ME, "cma");
+  const bs = await keep("BS FY25-26.xlsx", await sheet("Balance Sheet", [["Made-up Balance Sheet as at 31-Mar-2026"], ["Share capital", 500000], ["Trade receivables", 765432]]), ME, "balance_sheet");
+  const theirs = await keep("staff BS.xlsx", await sheet("BS", [["Made-up staff sheet", 1]]), STAFF, "balance_sheet");
+  const otherFirm = { path: "22222222-2222-4222-8222-222222222222/" + CLIENT + "/uploads/th-x.xlsx", name: "other firm.xlsx", type: XL, kind: "cma", summary: "CMA data." };
+  const c = new MockClaude([[text("Using: earlier CMA (FY24-25).xlsx, BS FY25-26.xlsx\nThe CMA data is prepared on the earlier format.")]]);
+  const r = await ask(c, { question: "pls prepare cma data on this basis", client_id: CLIENT, history: [{ role: "user", content: "here are the files" }, { role: "assistant", content: "Noted." }],
+    thread: { fs: null, files: [cma, bs, otherFirm, theirs] }, uploads: [cma, bs, theirs].map((f) => ({ path: f.path, name: f.name, type: f.type })) });
+  assert(r.status === 200 && r.done && c.calls.length >= 1, "answered: " + r.raw.slice(0, 400));
+  const ev = ofType(r.events, "earlier")[0];
+  eq([...(ev?.files || [])].sort(), [bs.name, cma.name].sort(), "the turn says which earlier files were used");
+  assert(String(ev?.line || "").startsWith("Using: ") && ev.line.includes(cma.name) && ev.line.includes(bs.name), "the line: " + ev?.line);
+  const last = (c.calls[0] as any).messages.slice(-1)[0], said = (last.content as any[]).map((b) => b.text || "").join("\n");
+  assert(said.includes("Made-up Operating Statement") && said.includes("4321000") && said.includes("765432"), "the model sees both files' cells, not only their names: " + said.slice(0, 900));
+  assert(said.includes("Begin your answer with this one line") && said.includes("\"Using: "), "the model is told to say which files it used");
+  assert(!said.includes("Made-up staff sheet"), "another member's upload is never read again");
+  assert(!/no more script/.test(r.done.text) && r.done.text.startsWith("Using: "), "the answer names the files: " + r.done.text.slice(0, 200));
+  // a question that needs no file: nothing read again
+  const c2 = new MockClaude([[text("2% for a company.")]]);
+  const r2 = await ask(c2, { question: "What is the TDS rate on contract payments to a company?", client_id: CLIENT, history: [{ role: "user", content: "x" }, { role: "assistant", content: "y" }], thread: { fs: null, files: [cma, bs] } });
+  eq(ofType(r2.events, "earlier").length, 0, "no earlier file for a question about the law");
+});
