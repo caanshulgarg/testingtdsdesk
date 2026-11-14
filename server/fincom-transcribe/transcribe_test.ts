@@ -6,7 +6,7 @@
 // turbo for a long one or at the full model's limit, the Hinglish sample-sentence prompt in English letters, Devanagari
 // written in English letters, the names corrected with their changes, the AI step under the cap and checked, and the
 // usage row with counts only.
-import { buildPrompt, FIRM_CAP_TEXT, FIRM_DAY_SECS, handler, istDayStart } from "./index.ts";
+import { buildPrompt, FIRM_CAP_TEXT, FIRM_DAY_SECS, FIRM_WORDS, handler, istDayStart, PROMPT_TOKENS, screenPhrases, tokensOf } from "./index.ts";
 import { HAIKU } from "../assistant/models.ts";
 
 function assert(c: unknown, w: string): asserts c { if (!c) throw new Error(w); }
@@ -108,8 +108,8 @@ function stand(o: { key?: string | null, groq?: (form: Record<string, string>) =
 }
 
 const AUDIO = new Uint8Array(48_000).map((_, i) => (i * 31 + 7) & 255);     // a made-up clip; its bytes are looked for later
-function send(h: (r: Request) => Promise<Response>, o: { tok?: string | null, bytes?: Uint8Array, type?: string, lang?: string, client?: string, secs?: number, len?: string, latin?: boolean, verbose?: boolean } = {}) {
-  const qs = new URLSearchParams({ lang: o.lang ?? "hi", secs: String(o.secs ?? 12), ...(o.client === undefined ? { client: "larkspur" } : o.client ? { client: o.client } : {}), ...(o.latin ? { latin: "1" } : {}), ...(o.verbose ? { verbose: "1" } : {}) });
+function send(h: (r: Request) => Promise<Response>, o: { tok?: string | null, bytes?: Uint8Array, type?: string, lang?: string, client?: string, secs?: number, len?: string, latin?: boolean, verbose?: boolean, screen?: string } = {}) {
+  const qs = new URLSearchParams({ lang: o.lang ?? "hi", ...(o.secs === -1 ? {} : { secs: String(o.secs ?? 12) }), ...(o.client === undefined ? { client: "larkspur" } : o.client ? { client: o.client } : {}), ...(o.latin ? { latin: "1" } : {}), ...(o.verbose ? { verbose: "1" } : {}), ...(o.screen ? { screen: o.screen } : {}) });
   const headers: Record<string, string> = { "Content-Type": o.type ?? "audio/webm;codecs=opus", Origin: "https://staging.fincom.live" };
   if (o.tok !== null) headers.Authorization = "Bearer " + (o.tok ?? "tok-me");
   if (o.len) headers["Content-Length"] = o.len;
@@ -170,8 +170,9 @@ Deno.test("the words prompt: the firm's words and the client's own top ledger an
   const en = stand({ key: "gsk_test" });
   await send(en.h, { lang: "auto", client: "", type: "audio/mp4", secs: 40 });
   const g2 = en.calls.find((x) => x.url.startsWith("https://api.groq.com/"))!;
-  eq([g2.form!.language, g2.file!.name, g2.form!.model], [undefined, "clip.m4a", "whisper-large-v3-turbo"], "auto: no language sent; Safari's mp4 as m4a; a 40 s clip on turbo");
-  assert(g2.form!.prompt.includes("GSTR-3B") && !en.calls.some((x) => x.url.includes("tally_ledgers")), "no client: the firm's words only");
+  eq([g2.form!.language, g2.file!.name, g2.form!.model], [undefined, "clip.m4a", "whisper-large-v3"], "auto: no language sent; Safari's mp4 as m4a; a 40 s clip on the full model");
+  assert(g2.form!.prompt.includes("GSTR-3B") && !en.calls.some((x) => x.url.includes("tally_ledgers")), "no client: no ledgers read");
+  assert(g2.form!.prompt.includes("Larkspur Traders") && g2.form!.prompt.includes("Leads Insurance Private Limited"), "no client: the firm's client names still: " + g2.form!.prompt);
   eq(buildPrompt(["Ä".repeat(900)]).length <= 700, true, "a very long name is cut to the budget");
 });
 
@@ -217,14 +218,19 @@ Deno.test("minutes used today: the firm's own; all firms' for the platform admin
   eq((await s.h(new Request("http://x/", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }))).status, 401, "usage needs a signed-in member too");
 });
 
-Deno.test("the model: large-v3 under 30 s, turbo for 30 s or more, and turbo when large-v3 answers 429", async () => {
+Deno.test("the model: large-v3 up to 60 s (next-fix-voice: was under 30 s), turbo with no length, and turbo when large-v3 answers 429", async () => {
   const models = async (o: Parameters<typeof send>[1], groq?: (f: Record<string, string>) => Response) => {
     const s = stand({ key: "gsk_test", groq });
     const r = await send(s.h, o);
     return { status: r.status, j: await r.json(), sent: s.calls.filter((x) => x.url.startsWith("https://api.groq.com/")).map((x) => x.form!.model), log: s.logRows };
   };
   eq((await models({ secs: 29.5 })).sent, ["whisper-large-v3"], "29.5 s: the full model");
-  eq((await models({ secs: 30 })).sent, ["whisper-large-v3-turbo"], "30 s: turbo");
+  eq((await models({ secs: 30 })).sent, ["whisper-large-v3"], "30 s: the full model now");
+  eq((await models({ secs: 45 })).sent, ["whisper-large-v3"], "45 s: the full model");
+  eq((await models({ secs: 55 })).sent, ["whisper-large-v3"], "a whole 55 s piece of the app: the full model");
+  eq((await models({ secs: 60 })).sent, ["whisper-large-v3"], "60 s, the longest clip taken: the full model");
+  eq((await models({ secs: -1 })).sent, ["whisper-large-v3-turbo"], "no length said: turbo");
+  eq((await models({ secs: 61 })).status, 413, "over 60 s: refused, as before");
   const lim = (f: Record<string, string>) => f.model === "whisper-large-v3" ? new Response(JSON.stringify({ error: { message: "Rate limit" } }), { status: 429 }) : new Response(JSON.stringify({ text: "Tally kholo" }));
   const fb = await models({ secs: 8 }, lim);
   eq([fb.status, fb.j.text, fb.j.model, fb.sent], [200, "Tally kholo", "whisper-large-v3-turbo", ["whisper-large-v3", "whisper-large-v3-turbo"]], "large-v3 at its limit: the same clip on turbo");
@@ -240,7 +246,7 @@ Deno.test("Hinglish: a sample sentence in English letters from the client's name
   const g = s.calls.find((x) => x.url.startsWith("https://api.groq.com/"))!;
   const pr = g.form!.prompt;
   assert(pr.startsWith("Larkspur Traders ke liye HDFC Bank A/c se AIR ESS EXIM PRIVATE LIMITED ko 1 lakh"), "the sample sentence with the client, its bank and a party: " + pr);
-  for (const w of ["TDS 194J", "GSTR-1", "GSTR-3B", "Tally", "voucher", "Ledger", "crore", "rupees", "Richa Khandelwal"]) assert(pr.includes(w), w + " in the prompt: " + pr);
+  for (const w of ["TDS 194J", "GSTR-1", "GSTR-3B", "Tally", "voucher", "ledger", "crore", "rupees", "CMA", "Richa Khandelwal"]) assert(pr.includes(w), w + " in the prompt: " + pr);
   assert(!/[ऀ-ॿ]/.test(pr), "Latin script only");
   assert(pr.length <= 700, "within the budget (" + pr.length + ")");
   eq(g.form!.language, undefined, "the language left to Whisper");
@@ -386,4 +392,57 @@ Deno.test("AI control centre: voice typing switched off by FinCom is refused in 
   // on: as before
   const on = stand({ key: "gsk_test" });
   eq((await send(on.h)).status, 200, "on: the clip is read");
+});
+
+Deno.test("the words hints (next-fix-voice): CMA and banking words, the open screen, the firm's clients; within Whisper's 224 tokens", async () => {
+  for (const w of ["CMA", "MPBF", "DSCR", "TOL/TNW", "drawing power", "working capital", "projected balance sheet", "cash credit", "term loan", "GSTR-1", "GSTR-3B", "2B", "TDS",
+    "26AS", "Form 16A", "ITC", "e-way bill", "Tally", "ledger", "voucher", "Day Book", "debit note", "credit note", "journal", "depreciation", "provision"]) assert(FIRM_WORDS.includes(w), "the firm's word " + w);
+  // no client, nothing else: every firm word fits a list prompt? no: the first ones, and the CMA words among them
+  const bare = buildPrompt([], "list");
+  for (const w of ["Tally", "GSTR-3B", "TDS", "CMA", "MPBF", "DSCR", "TOL/TNW", "drawing power", "working capital", "projected balance sheet", "cash credit", "term loan", "26AS", "Form 16A", "e-way bill", "Day Book", "depreciation", "provision"])
+    assert(bare.includes(w), w + " in the bare prompt: " + bare);
+  assert(tokensOf(bare) <= PROMPT_TOKENS, "the bare prompt within the budget");
+  // Hinglish with a client open, a screen and the firm's clients: the sentence, then the words, the screen, the names, the clients
+  const s = stand({ key: "gsk_test" });
+  await send(s.h, { lang: "auto", latin: true, screen: "Larkspur Traders · Bank reconciliation · CMA report ABCPK1234L 27AAACR5055K1Z5" });
+  const pr = s.calls.find((x) => x.url.startsWith("https://api.groq.com/"))!.form!.prompt;
+  assert(pr.startsWith("Larkspur Traders ke liye HDFC Bank A/c se"), "the sample sentence first: " + pr);
+  for (const w of ["CMA", "MPBF", "DSCR", "drawing power", "working capital", "Bank reconciliation", "Leads Insurance Private Limited", "AIR ESS EXIM", "Richa Khandelwal"]) assert(pr.includes(w), w + " in the prompt: " + pr);
+  assert(!pr.includes("ABCPK1234L") && !pr.includes("27AAACR5055K1Z5"), "no PAN or GSTIN from the screen: " + pr);
+  assert(tokensOf(pr) <= PROMPT_TOKENS && pr.length <= 900, "within the budget (" + tokensOf(pr) + " tokens counted, " + pr.length + " characters)");
+  assert(pr.indexOf("CMA") < pr.indexOf("Bank reconciliation") && pr.indexOf("Bank reconciliation") < pr.indexOf("Richa Khandelwal") && pr.indexOf("Richa Khandelwal") < pr.indexOf("Leads Insurance"), "the order: words, screen, names, clients");
+  // the cap with far too much: 400 ledgers, 300 clients, a long screen; every group gets its share, and the total stays under
+  const many = Array.from({ length: 400 }, (_, i) => ({ name: "Shri Venkateswara Agro Industries Number " + i, group: "Sundry Debtors" }));
+  const clients = Array.from({ length: 300 }, (_, i) => "Khandelwal and Associates Client " + i);
+  for (const st of ["list", "hinglish", "en", "hi"] as const) {
+    const p = buildPrompt(many, st, { screen: ["Projected balance sheet", "Working capital"], clients });
+    assert(tokensOf(p) <= PROMPT_TOKENS, st + ": within " + PROMPT_TOKENS + " tokens counted (" + tokensOf(p) + ")");
+    assert(p.includes("Number 0") && p.includes("Client 0") && p.includes("CMA") && (st === "hi" || p.includes("Projected balance sheet")), st + ": the names, the clients, the words and the screen each get a share (Hindi's sentence leaves less room) " + p);
+    assert(!p.includes("Number 399") && !p.includes("Client 299"), st + ": the rest left out");
+  }
+  // the count is cautious (Whisper's own tokenizer counted 153-179 for prompts counted 213-215 here)
+  eq([tokensOf("GST"), tokensOf("MPBF"), tokensOf("ledger"), tokensOf("रिचा")], [3, 3, 2, 8], "capitals, a word, Devanagari");
+  eq(screenPhrases("Larkspur Traders › GST · Returns | PAN ABCPK1234L ·  · 1234567"), ["Larkspur Traders", "GST", "Returns", "PAN"], "the screen's phrases: words only, no identifier, no long number");
+  eq(screenPhrases(null), [], "no screen");
+});
+
+Deno.test("Hinglish heard as Hindi (lang=hi&latin=1, the app's choice once the live words look Hindi): Whisper told Hindi, the words in English letters", async () => {
+  const s = stand({ key: "gsk_test", groq: () => new Response(JSON.stringify({ text: "रिचा खंडेलवाल को एक लाख का पेमेंट" })) });
+  const j = await (await send(s.h, { lang: "hi", latin: true })).json();
+  const g = s.calls.filter((x) => x.url.startsWith("https://api.groq.com/"));
+  eq([g.length, g[0].form!.language], [1, "hi"], "one call, as Hindi");
+  assert(g[0].form!.prompt.startsWith("Larkspur Traders ke liye") && !/[ऀ-ॿ]/.test(g[0].form!.prompt), "the Hinglish prompt, in English letters: " + g[0].form!.prompt);
+  eq(j.text, "Richa Khandelwal ko ek lakh ka pement", "Devanagari written in English letters, the name corrected");
+  eq(s.logRows[0].route, "hi", "logged as hi");
+  // without latin, Hindi stays in Devanagari, as before
+  const d = stand({ key: "gsk_test", groq: () => new Response(JSON.stringify({ text: "एक लाख" })) });
+  eq((await (await send(d.h, { lang: "hi" })).json()).text, "एक लाख", "Hindi chosen: Devanagari kept");
+});
+
+Deno.test("a prompt Groq refuses (400): the clip heard once more with the sample sentence alone", async () => {
+  const prompts: string[] = [];
+  const s = stand({ key: "gsk_test", groq: (f) => { prompts.push(f.prompt); return prompts.length === 1 ? new Response(JSON.stringify({ error: { message: "prompt too long" } }), { status: 400 }) : new Response(JSON.stringify({ text: "Tally kholo" })); } });
+  const r = await send(s.h, { lang: "auto", latin: true });
+  eq([r.status, (await r.json()).text, prompts.length], [200, "Tally kholo", 2], "answered on the second call");
+  eq(prompts[1], buildPrompt([], "hinglish"), "the second with the sample sentence alone");
 });
