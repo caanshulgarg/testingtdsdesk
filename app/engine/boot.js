@@ -26,6 +26,24 @@ class Quiet { observe() {} unobserve() {} disconnect() {} takeRecords() { return
 ["HTMLElement", "Element", "Node", "Image", "HTMLCanvasElement"].forEach((k) => { if (typeof self[k] === "undefined") put(k, class {}); });
 ["alert", "confirm", "prompt", "scrollTo", "requestAnimationFrame", "cancelAnimationFrame", "getComputedStyle"].forEach((k) => put(k, noop));
 put("innerWidth", 1400); put("innerHeight", 900);
+// next-speed-worker, review of part 1: the worker can never write. Every way legacy.js writes (the books, the client,
+// bank, files, rules, drafts, sales; this browser's store and settings; a file to save) throws here: a run that tried
+// would fail in the worker and be worked out on the page instead. (fetch, XHR and WebSocket refuse: no network either)
+export const DENIED = ["saveBooks", "saveBank", "saveBridgeSetup", "saveDraft", "saveFile", "saveNewCompany", "saveRules", "saveSales", "flushAuditLater", "flushBillSaves", "flushBillSavesAndSend", "lsSet", "lsDel"];
+const STORES = () => [["Store", typeof Store === "object" ? Store : null], ["IDBStore", typeof IDBStore === "object" ? IDBStore : null], ["BankDB", typeof BankDB === "object" ? BankDB : null], ["FileStore", typeof FileStore === "object" ? FileStore : null]];
+const no = (what) => function () { throw new Error("the engine's worker writes nothing (" + what + ")"); };
+function denyWrites() {
+  DENIED.forEach((n) => { if (typeof self[n] === "function") self[n] = no(n); });
+  // (the stores' every function: the engines read nothing of them either)
+  STORES().forEach(([n, o]) => { if (o) Object.keys(o).forEach((k) => { if (typeof o[k] === "function") o[k] = no(n + "." + k); }); });
+  if (typeof Books === "object") ["save", "drop", "load", "read"].forEach((k) => { if (typeof Books[k] === "function") Books[k] = no("Books." + k); });
+  ["setItem", "removeItem", "clear"].forEach((k) => { store[k] = no("localStorage." + k); });
+  put("sessionStorage", { getItem: () => null, setItem: no("sessionStorage.setItem"), removeItem: no("sessionStorage.removeItem"), clear: no("sessionStorage.clear"), key: () => null, length: 0 });
+  put("indexedDB", { open: no("indexedDB.open"), deleteDatabase: no("indexedDB.deleteDatabase"), databases: no("indexedDB.databases") });
+  put("caches", { open: no("caches.open"), delete: no("caches.delete"), match: no("caches.match"), keys: no("caches.keys"), has: no("caches.has") });
+  try { if (self.navigator) Object.defineProperty(self.navigator, "sendBeacon", { value: no("sendBeacon"), configurable: true }); } catch (e) { /* none */ }
+}
+
 // the page's legacy.js (its address and version as the page has it), read with its timers left unset; then the engine
 // reaches nothing outside: no line (its runs are written on the page). "" read, else what went wrong
 export function loadLegacy(legacy) {
@@ -33,9 +51,12 @@ export function loadLegacy(legacy) {
   const st = self.setTimeout, si = self.setInterval;
   let failed = "";
   self.setTimeout = () => 0; self.setInterval = () => 0;
+  // (the app's own start, src/js/27 start(), sees this and does nothing here)
+  self.__fincomEngineWorker = true;
   try { importScripts(legacy); } catch (e) { failed = "legacy.js: " + ((e && e.message) || e); }
   finally { self.setTimeout = st; self.setInterval = si; }
   const refuse = () => Promise.reject(new Error("the engine's worker reaches no network"));
   put("fetch", refuse); put("XMLHttpRequest", class { open() { throw new Error("the engine's worker reaches no network"); } }); put("WebSocket", class { constructor() { throw new Error("the engine's worker reaches no network"); } });
+  if (!failed) denyWrites();
   return failed;
 }

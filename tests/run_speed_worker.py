@@ -26,6 +26,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 from playwright.sync_api import sync_playwright
 sys.path.insert(0, HERE)
 import itc_books
+from books_data import CACHE
+from tdsgst_snapshot import LOAD
 SITE = os.environ.get("TDSDESK_SITE", os.path.join(HERE, "..", "app", "dist-test"))
 PORT = int(os.environ.get("SPEED_WORKER_PORT") or 8347)
 TASK_MS = int(os.environ.get("TASK_MS") or 100)
@@ -141,12 +143,17 @@ LEDGER = r"""async () => {
 # the job's rules with the worker (on the books open, made due again before each)
 # the job's rules with the worker (on the books open, made due again before each), a part each
 RULES_HELP = r"""() => { const Z = window.__zz, b = S.books;
-  Z.due = (A) => { const r = A === MIS ? MIS.autoRange(b) : Audit.defaultRange(b); if (A === MIS) b.misCfg = {freq: "monthly"}; else b.auditCfg = {freq: "daily"};
+  Z.due = (A) => { if (A === MIS) b.misCfg = {freq: "monthly"}; else b.auditCfg = {freq: "daily"}; const r = A === MIS ? MIS.autoRange(b) : Audit.defaultRange(b);
     const L = A.lastRun(b) || (A.run(r.from, r.to, "by hand"), A.lastRun(b)), y = new Date(Date.now() - (A === MIS ? 40 : 1) * 86400000).toISOString(); L.at = y; (A === MIS ? b.mis : b.audit).history[0].at = y; return r; };
   Z.once = (A, k0, r) => { const keep = b[k0]; b[k0] = Z.copy(A === MIS ? Z.m0 : Z.a0); memoScope(() => A.runNow(r.from, r.to, "on its own (" + A.cfg(b).freq + ")")); const t = Z.text(b[k0]); b[k0] = keep; return t; };
   Z.state = () => ({audit: !!Audit.auto, mis: !!MIS.auto, soon: !!MIS._soon, st: typeof Engine === "object" && Engine.st, jobs: typeof Engine === "object" && Engine.jobs.size, again: !!MIS._again, b: S.books === b});
   // (the engine as at the start: a part that turned it off and failed leaves it so)
   Z.fresh = () => { if (typeof Engine === "object" && Engine.st === "off"){ Engine.st = ""; Engine.why = ""; } };
+  // a run on its own started (go) and waited for (done): its job, as it began (a small book's run can end between two looks)
+  Z.job = async (A, go, done) => { let j = null; const ab = A.autoBegin; A.autoBegin = function (x) { j = x; return ab.apply(this, arguments); };
+    try { go(); await Z.wait(() => j && done(), 300000); } finally { A.autoBegin = ab; } return j; };
+  // (the worker's jobs of a kind: others come and go meanwhile)
+  Z.jobs = (k) => [...Engine.jobs.values()].filter(a => a.kind === k).length;
   Z.bk = b; return true; }"""
 RULES = [
  ("edit", r"""async () => { const Z = window.__zz, b = Z.bk; Z.fresh();
@@ -201,8 +208,7 @@ TWOB = r"""async ([cid, reg]) => { const Z = window.__zz, big = Z.bk; Z.fresh();
   const paired = JSON.stringify(GST2B.run(reg)).includes("zz made-up pair") && JSON.stringify(GST2B.run(reg)) !== before;
   const r = {from: "20260401", to: "20260531"};
   // the MIS asked for (a run of its own: MIS.runSoon), in the worker
-  Z.m0 = Z.copy(b.mis); let last0 = (b.mis || {}).last; MIS.runSoon(b, {from: r.from, to: r.to, how: "zz 2B"});
-  await Z.wait(() => MIS.auto && MIS.auto.it, 60000); const jm = MIS.auto; await Z.wait(() => !MIS.auto && !MIS._soon && (b.mis || {}).last !== last0, 300000);
+  Z.m0 = Z.copy(b.mis); let last0 = (b.mis || {}).last; const jm = await Z.job(MIS, () => MIS.runSoon(b, {from: r.from, to: r.to, how: "zz 2B"}), () => !MIS.auto && !MIS._soon && (b.mis || {}).last !== last0);
   const misNow = Z.text(b.mis), keepM = b.mis; b.mis = Z.copy(Z.m0); memoScope(() => MIS.runNow(r.from, r.to, "zz 2B")); const misOnce = Z.text(b.mis); b.mis = keepM;
   // the day's audit on its own, in the worker
   Z.a0 = Z.copy(b.audit); last0 = (b.audit || {}).last; Audit.maybeRun(); const ja = Audit.auto;
@@ -210,12 +216,68 @@ TWOB = r"""async ([cid, reg]) => { const Z = window.__zz, big = Z.bk; Z.fresh();
   const ra = Audit.defaultRange(b), auNow = Z.text(b.audit), keepA = b.audit; b.audit = Z.copy(Z.a0); memoScope(() => Audit.runNow(ra.from, ra.to, "on its own (daily)")); const auOnce = Z.text(b.audit); b.audit = keepA;
   delete M2B.st[k]; S.gstYm = ym0; S.gstReg = reg0; S.books = big; S.coId = big.cid; render(); await Z.quiet(500);
   return {paired, misEng: !!(jm && jm.eng), misSame: misNow === misOnce, auEng: !!(ja && ja.eng), auSame: auNow === auOnce, findings: (b.audit.last || {}).findings.length}; }"""
-WANT = {"twob": lambda e: e["paired"] and e["misEng"] and e["misSame"] and e["auEng"] and e["auSame"],
+# review of part 1. choice: the fixture client (its advances shown in GST, tdsgst_snapshot.LOAD), its MIS in the worker;
+# then the switch turned off as the page does it (AdvOptIn.jsx: the books unchanged, GSTR._carry emptied on the page),
+# the MIS again in the worker: each the one at once on the page, and the two differ (the choice counts)
+CHOICE = r"""async () => { const Z = window.__zz, b = S.books, co = CO(); Z.fresh(); b.misCfg = {freq: "monthly"};
+  const r = {from: String(b.meta.from || "20250401"), to: String(b.meta.to)};
+  const one = async (tag) => { const m0 = Z.copy(b.mis), last0 = (b.mis || {}).last;
+    const j = await Z.job(MIS, () => MIS.runSoon(b, {from: r.from, to: r.to, how: tag}), () => !MIS.auto && !MIS._soon && (b.mis || {}).last !== last0);
+    const now = Z.text(b.mis), keep = b.mis; b.mis = Z.copy(m0); GSTR._carry = null; memoScope(() => MIS.runNow(r.from, r.to, tag)); const once = Z.text(b.mis), fig = JSON.stringify(b.mis.last.comp); b.mis = keep;
+    return {eng: !!j.eng, same: now === once, fig}; };
+  const a = await one("zz advances on");
+  choiceConfirm(co, "advGst", "off"); GSTR._carry = null;
+  const c = await one("zz advances off");
+  return {onEng: a.eng, onSame: a.same, offEng: c.eng, offSame: c.same, differ: a.fig !== c.fig}; }"""
+REVIEW = [
+ ("timeout", r"""async () => { const Z = window.__zz, b = Z.bk; Z.fresh(); S.books = b; S.coId = b.cid; render();
+  const r = Z.due(Audit); Z.a0 = Z.copy(b.audit); const last0 = b.audit.last;
+  const post = Engine.post, J = [Engine.JOB_MS, Engine.JOB_PER, Engine.took]; Engine.JOB_MS = 1500; Engine.JOB_PER = 0; Engine.took = {};
+  // (the worker never answers: its run is not sent)
+  Engine.post = function (m) { if (m && m.t === "run") return; return post.apply(this, arguments); };
+  try { Audit.maybeRun(); const j = Audit.auto; await Z.wait(() => !Audit.auto && b.audit.last !== last0, 300000);
+    return {eng: !!j.eng, off: Engine.st === "off", why: Engine.why, same: Z.text(b.audit) === Z.once(Audit, "audit", r)}; }
+  finally { Engine.post = post; Engine.JOB_MS = J[0]; Engine.JOB_PER = J[1]; Engine.took = J[2]; Engine.st = ""; Engine.why = ""; } }"""),
+ ("crash", r"""async () => { const Z = window.__zz, b = Z.bk; Z.fresh();
+  const r = Z.due(MIS); Z.m0 = Z.copy(b.mis); const last0 = b.mis.last;
+  MIS.maybeRun(); await Z.wait(() => MIS.auto && MIS.auto.eng && Z.jobs("mis") > 0, 60000); const j = MIS.auto;
+  Engine.w.onerror({message: "zz made-up crash", preventDefault(){}});
+  const off = Engine.st === "off", why = Engine.why;
+  await Z.wait(() => !MIS.auto && b.mis.last !== last0, 300000);
+  const out = {eng: !!j.eng, off, why, same: Z.text(b.mis) === Z.once(MIS, "mis", r)};
+  Engine.st = ""; Engine.why = "";
+  const g = Engine.ready(); let x; while (!(x = g.next()).done) await new Promise(ok => setTimeout(ok, 50));
+  Engine.w.onmessageerror({}); out.msgOff = Engine.st === "off"; Engine.st = ""; Engine.why = ""; return out; }"""),
+ ("denied", r"""async () => { const Z = window.__zz; Z.fresh();
+  const g = Engine.ready(); let x; while (!(x = g.next()).done) await new Promise(ok => setTimeout(ok, 50));
+  const r = await new Promise(ok => { const f = e => { if ((e.data || {}).t === "selftest"){ Engine.w.removeEventListener("message", f); ok(e.data.r); } }; Engine.w.addEventListener("message", f); Engine.post({t: "selftest"}); });
+  return {r, n: Object.keys(r).length, all: Object.values(r).every(v => /^refused/.test(v))}; }"""),
+]
+CLEAR = r"""async () => { const Z = window.__zz, b = Z.bk; Z.fresh(); S.books = b; S.coId = b.cid; render();
+  const r = Z.due(Audit), last0 = b.audit.last; Audit.maybeRun(); await Z.wait(() => !Audit.auto && b.audit.last !== last0, 300000);
+  const held = await Engine.peek();
+  const c = newCompany({name: "ZZ OTHER 2", gstin: "07AAGCL4827M1Z3"}); S.companies[c.id] = c; await openCompany(c.id); await new Promise(ok => setTimeout(ok, 800));
+  const after = await Engine.peek(), sent = Engine.sent;
+  const was = !!Engine.w; Cloud.signOut(); const ended = was && !Engine.w && Engine.st === "";
+  S.coId = b.cid; S.books = b; render();
+  return {held: held ? held.n : -1, s: held ? held.s : [], after: after ? after.books : null, sent: sent === null, ended}; }"""
+S_OK = {"books", "firm", "companies", "coId", "sales", "gstReg", "gstYm", "auditFy", "inregScope", "data"}
+WANT = {"choice": lambda e: e["onEng"] and e["onSame"] and e["offEng"] and e["offSame"] and e["differ"],
+        "timeout": lambda e: e["eng"] and e["off"] and "too long" in e["why"] and e["same"],
+        "crash": lambda e: e["eng"] and e["off"] and e["same"] and e["msgOff"],
+        "denied": lambda e: e["n"] >= 9 and e["all"],
+        "clear": lambda e: e["held"] > 50000 and set(e["s"]) <= S_OK and e["after"] is False and e["sent"] and e["ended"],
+        "twob": lambda e: e["paired"] and e["misEng"] and e["misSame"] and e["auEng"] and e["auSame"],
         "edit": lambda e: e["eng"] and e["starts"] == 2 and e["same"] and e["jobs"] == 0,
         "other": lambda e: e["eng"] and e["stopped"] and e["kept"] and e["otherSame"] and e["jobs"] == 0,
         "none": lambda e: not e["eng"] and e["same"], "gone": lambda e: e["eng"] and e["same"],
         "patched": lambda e: not e["eng"] and e["pure"], "again": lambda e: e["eng"] and e["same"]}
-SAY = {"twob": "2B data and a pair from the 2B matching run (outside the books): the MIS and the audit in the worker as at once",
+SAY = {"choice": "a client's choice changed (advances in GST), the books not: the worker's MIS each time the one at once (the choice counts)",
+       "timeout": "a job the worker never answers: the worker ended at its time, the run worked out here, the same",
+       "crash": "the worker failing in the middle (its error; a word it cannot send): ended, the run worked out here, the same",
+       "denied": "the worker writes nothing: every write it tries is refused (the books, the client, the stores, settings, the network)",
+       "clear": "another client opened: the worker holds nothing of the last (its S only what the engines read before); a sign-out: it ends",
+       "twob": "2B data and a pair from the 2B matching run (outside the books): the MIS and the audit in the worker as at once",
        "edit": "an entry added and saved while the worker works: started again, the result as at once on the books now",
        "other": "another client opened: stopped, neither client's MIS changed, the worker's job dropped",
        "none": "no worker: worked out here in steps, the same", "gone": "the worker gone in the middle: worked out here, the same",
@@ -241,8 +303,10 @@ try:
             if ONLY_RULES:
                 pg.click("[data-side-client=back]"); pg.wait_for_function("(cid) => S.view === 'company' && S.books && S.books.cid === cid && !S.books.loading", arg=cid, timeout=120000)
                 pg.evaluate("() => loadPart('mis')"); pg.evaluate(RULES_HELP)
-                for name, js in RULES + [("twob", None)]:
-                    try: e = pg.evaluate(js) if js else (pg.evaluate(itc_books.MAKE, [itc_books.CID, itc_books.CMP, itc_books.REG, itc_books.VS, itc_books.TWOB]), pg.evaluate(TWOB, [itc_books.CID, itc_books.REG]))[1]
+                for name, js in RULES + REVIEW + [("choice", None), ("twob", None), ("clear", CLEAR)]:
+                    try:
+                        if name == "choice": pg.evaluate(LOAD, json.load(open(CACHE))); pg.wait_for_timeout(800); e = pg.evaluate(CHOICE); pg.evaluate("() => { const Z = window.__zz; S.books = Z.bk; S.coId = Z.bk.cid; render(); }")
+                        else: e = pg.evaluate(js) if js else (pg.evaluate(itc_books.MAKE, [itc_books.CID, itc_books.CMP, itc_books.REG, itc_books.VS, itc_books.TWOB]), pg.evaluate(TWOB, [itc_books.CID, itc_books.REG]))[1]
                     except Exception as x: e = {"error": str(x).split("\n")[0][:200], "state": pg.evaluate("() => window.__zz.state()")}
                     ok("error" not in e and WANT[name](e), "%s (%s)" % (SAY[name], e))
                 ctx.close(); break
@@ -277,8 +341,10 @@ try:
             if N == SIZES[0]:
                 print("\n   the job's rules with the worker (%d entries)" % N, flush=True)
                 pg.evaluate(RULES_HELP)
-                for name, js in RULES + [("twob", None)]:
-                    try: e = pg.evaluate(js) if js else (pg.evaluate(itc_books.MAKE, [itc_books.CID, itc_books.CMP, itc_books.REG, itc_books.VS, itc_books.TWOB]), pg.evaluate(TWOB, [itc_books.CID, itc_books.REG]))[1]
+                for name, js in RULES + REVIEW + [("choice", None), ("twob", None), ("clear", CLEAR)]:
+                    try:
+                        if name == "choice": pg.evaluate(LOAD, json.load(open(CACHE))); pg.wait_for_timeout(800); e = pg.evaluate(CHOICE); pg.evaluate("() => { const Z = window.__zz; S.books = Z.bk; S.coId = Z.bk.cid; render(); }")
+                        else: e = pg.evaluate(js) if js else (pg.evaluate(itc_books.MAKE, [itc_books.CID, itc_books.CMP, itc_books.REG, itc_books.VS, itc_books.TWOB]), pg.evaluate(TWOB, [itc_books.CID, itc_books.REG]))[1]
                     except Exception as x: e = {"error": str(x).split("\n")[0][:200], "state": pg.evaluate("() => window.__zz.state()")}
                     ok("error" not in e and WANT[name](e), "%s (%s)" % (SAY[name], e))
                 eng = pg.evaluate("() => typeof Engine === 'object' ? Engine.URL : ''")
