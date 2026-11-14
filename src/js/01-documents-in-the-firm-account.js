@@ -3177,15 +3177,20 @@ function linkDuplicates(cid){
   });
   return n;
 }
-function refreshStats(cid){
+// a draft that needs a look (its checks: something missing, or a flag above "info")
+function draftNeedsCheck(e, cid){ if (S.reading[e.id]) return false; const c = compute(e, cid); return !!(c.missing.length || c.flags.some(f => f.lvl !== "info")); }
+const statsRev = {};
+// check: the count of drafts that need a look, when worked out already (refreshStatsSoon)
+function refreshStats(cid, check){
   const co = CO(cid), d = S.data[cid];
   if (!co || !d || !d.loaded) return;
+  statsRev[cid] = (statsRev[cid] || 0) + 1;
   linkDuplicates(cid);
   const v = Object.values(d.entries), fy = fyOf(null);
   const drafts = v.filter(e => e.status === "draft");
   const st = {
     drafts: drafts.length,
-    check: drafts.filter(e => !S.reading[e.id] && (() => { const c = compute(e, cid); return c.missing.length || c.flags.some(f => f.lvl !== "info"); })()).length,
+    check: check != null ? check : drafts.filter(e => draftNeedsCheck(e, cid)).length,
     // waiting: approved and not confirmed in Tally; inTally: confirmed there (review of 02-Oct-2026: the badge "In Tally"
     // counted every bill approved this year)
     waiting: v.filter(e => e.status === "approved" && !billInTally(e)).length,
@@ -3211,6 +3216,27 @@ function refreshStats(cid){
     co.stats = Object.assign(st, {fy, updatedAt: send ? new Date().toISOString() : old.updatedAt || new Date().toISOString()});
     if (send) Store.saveCompany(co);
   }
+}
+// next-fix-back-to-client (FINCOM-APP-STAGING-K): the same counts, the drafts' checks worked out STATS_STEP drafts a
+// task (about 0.6 ms a draft at full speed: 400 drafts were 250 ms in one task on opening the client). Any other
+// refreshStats meanwhile has counted everything itself: this one then stops. Resolves true when it counted
+const STATS_STEP = 60;
+function refreshStatsSoon(cid){
+  const d = S.data[cid];
+  if (!CO(cid) || !d || !d.loaded) return Promise.resolve(false);
+  const rev = statsRev[cid] || 0, drafts = Object.values(d.entries).filter(e => e.status === "draft");
+  let n = 0, i = 0;
+  return new Promise(done => {
+    const step = () => { try {
+      if ((statsRev[cid] || 0) !== rev || S.data[cid] !== d) return done(false);
+      for (const end = Math.min(drafts.length, i + STATS_STEP); i < end; i++) if (drafts[i].status === "draft" && draftNeedsCheck(drafts[i], cid)) n++;
+      if (i < drafts.length) return setTimeout(step, 0);
+      // a draft added or approved meanwhile: counted at once, as before
+      const now = Object.values(d.entries).filter(e => e.status === "draft");
+      refreshStats(cid, now.length === drafts.length && now.every((e, k) => e === drafts[k]) ? n : undefined); done(true);
+    } catch (e){ done(false); } };
+    setTimeout(step, 0);
+  });
 }
 
 /* ------------------------------------------------------------------ */

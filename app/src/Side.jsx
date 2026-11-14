@@ -120,16 +120,25 @@ function tree() {
 
 // the open client as a card: in a client, a click changes the client (F3); on a firm page it goes back to the client's
 // page last shown (backToClient, src/js/52), the one way back (the Tally page's own "← Back to" link is gone)
+// next-fix-back-to-client (FINCOM-APP-STAGING-K, staging 14-Nov-2026: 2,060 ms in React's click handler, last_ui
+// side-client, route client/dash): the click opened the client and drew its whole page in its own task (openCompany:
+// the bills' counts worked out again, refreshStats, and the page drawn twice). Now the click only says it is taken (the
+// card "Opening…", the thin bar) and returns; the client is opened and drawn on the next frame (FinComNav.go, as the
+// sidebar's own links). tests/run_hang_back_to_client.py
 function ClientCard({ open, home, after }) {
-  const back = () => { S.firmMenu = false; S.tallyPanel = false; if (typeof backToClient === "function") backToClient(); else openCompany(open.id).then(() => { render(); window.scrollTo(0, 0); }); };
-  const go = () => { if (after) after(); if (home) back(); else openSwitcher(); };
+  const [opening, setOpening] = useState(false);
+  const back = () => {
+    S.firmMenu = false; S.tallyPanel = false; setOpening(true);
+    FinComNav.go(() => { try { if (typeof backToClient === "function") backToClient(); else openCompany(open.id).then(() => { render(); window.scrollTo(0, 0); }); } finally { setOpening(false); } });
+  };
+  const go = () => { if (after) after(); if (home) { if (!opening) back(); } else openSwitcher(); };
   const label = home ? "Back to " + open.name : "Client: " + open.name + ". Change client (F3)";
   return <div className="side-client">
     <span className="side-label">Client</span>
     {/* t70: the name on one line with ▾ (change the client; its full name in the title), the GSTIN under it */}
-    <button className="side-co" onClick={go} title={(home ? "Back to " : "") + open.name + (home ? "" : " · change client (F3)")} aria-label={label} data-side-client={home ? "back" : "change"}>
+    <button className="side-co" onClick={go} title={(home ? "Back to " : "") + open.name + (home ? "" : " · change client (F3)")} aria-label={label} aria-busy={opening || undefined} data-side-client={home ? "back" : "change"} data-opening={opening ? "" : undefined}>
       <span className="side-av" aria-hidden="true">{initials(open.name)}</span>
-      <span className="side-co-words"><span className="side-co-name"><b>{open.name}</b><span className="side-co-caret" aria-hidden="true">{home ? "↩" : "▾"}</span></span><small>{open.gstin || "No GSTIN"}</small></span>
+      <span className="side-co-words"><span className="side-co-name"><b>{open.name}</b><span className="side-co-caret" aria-hidden="true">{home ? "↩" : "▾"}</span></span><small>{opening ? "Opening…" : open.gstin || "No GSTIN"}</small></span>
     </button>
   </div>;
 }
