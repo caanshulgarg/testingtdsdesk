@@ -73,6 +73,56 @@ export function toLatin(text: string): string {
   return String(text || "").split(/(\s+)/).map((w) => (DEVA.test(w) ? wordToLatin(w) : w)).join("");
 }
 
+// ------------------------------------------------------------------ English words Whisper wrote in Devanagari
+// next-fix-voice review (14-Nov-2026): Hinglish heard as Hindi came back with the accountant's English words in Devanagari,
+// and toLatin made them "bailens shit", "tidies", "jiesti", "kredit not". Before toLatin, each such word (one to three
+// Devanagari words, with or without a nukta, ँ or ं) is put back in English; the rest is left for toLatin.
+const LOANS: [string, string][] = [
+  ["बैलेंस शीट", "balance sheet"], ["बैलेन्स शीट", "balance sheet"], ["प्रोजेक्टेड बैलेंस शीट", "projected balance sheet"], ["ट्रायल बैलेंस", "trial balance"],
+  ["बैलेंस", "balance"], ["बैलेन्स", "balance"], ["शीट", "sheet"],
+  ["टीडीएस", "TDS"], ["टी डी एस", "TDS"], ["टीसीएस", "TCS"], ["जीएसटी", "GST"], ["जी एस टी", "GST"], ["जीएसटीआर", "GSTR"], ["जीएसटीआर वन", "GSTR-1"],
+  ["जीएसटीआर थ्री बी", "GSTR-3B"], ["जीएसटीआर टू बी", "GSTR-2B"], ["टू बी", "2B"], ["आईटीसी", "ITC"], ["आईटीआर", "ITR"], ["पैन", "PAN"],
+  ["सीएमए", "CMA"], ["सी एम ए", "CMA"], ["एमपीबीएफ", "MPBF"], ["डीएससीआर", "DSCR"], ["टीओएल", "TOL"], ["टीएनडब्ल्यू", "TNW"],
+  ["ड्रॉइंग पावर", "drawing power"], ["ड्राइंग पावर", "drawing power"], ["वर्किंग कैपिटल", "working capital"], ["कैश क्रेडिट", "cash credit"],
+  ["टर्म लोन", "term loan"], ["लोन", "loan"], ["ओवरड्राफ्ट", "overdraft"], ["नेट वर्थ", "net worth"], ["करंट रेशियो", "current ratio"], ["स्टॉक स्टेटमेंट", "stock statement"],
+  ["क्रेडिट नोट", "credit note"], ["डेबिट नोट", "debit note"], ["क्रेडिट", "credit"], ["डेबिट", "debit"], ["नोट", "note"],
+  ["पेमेंट", "payment"], ["पेमेन्ट", "payment"], ["रिसीट", "receipt"], ["लेजर", "ledger"], ["लेज़र", "ledger"], ["वाउचर", "voucher"], ["वॉउचर", "voucher"],
+  ["इनवॉइस", "invoice"], ["इन्वॉइस", "invoice"], ["इनवॉयस", "invoice"], ["इन्वॉयस", "invoice"], ["इनवाइस", "invoice"], ["बिल", "bill"],
+  ["टैली", "Tally"], ["एंट्री", "entry"], ["एन्ट्री", "entry"], ["जर्नल", "journal"], ["डे बुक", "Day Book"], ["डेबुक", "Day Book"],
+  ["डेप्रिसिएशन", "depreciation"], ["डेप्रिसिएशन", "depreciation"], ["प्रोविजन", "provision"], ["प्रोविज़न", "provision"],
+  ["ई वे बिल", "e-way bill"], ["ई-वे बिल", "e-way bill"], ["फॉर्म", "form"], ["फ़ॉर्म", "form"], ["रिटर्न", "return"], ["फाइल", "file"], ["फ़ाइल", "file"],
+  ["बैंक", "bank"], ["बैंक रिकंसिलिएशन", "bank reconciliation"], ["रिकंसिलिएशन", "reconciliation"], ["कैश", "cash"], ["अकाउंट", "account"], ["अमाउंट", "amount"],
+  ["टैक्स", "tax"], ["सेल्स", "sales"], ["परचेज", "purchase"], ["पर्चेज", "purchase"], ["पार्टी", "party"], ["रिपोर्ट", "report"], ["स्टॉक", "stock"],
+  ["सनड्री डेटर्स", "sundry debtors"], ["सनड्री क्रेडिटर्स", "sundry creditors"], ["डेटर्स", "debtors"], ["क्रेडिटर्स", "creditors"], ["प्रोविजनल", "provisional"],
+  ["रिकॉन्सिलिएशन", "reconciliation"], ["स्टेटमेंट", "statement"], ["इंटरेस्ट", "interest"], ["कैपिटल", "capital"], ["प्रॉफिट", "profit"], ["लॉस", "loss"],
+];
+const loanKey = (s: string) => s.normalize("NFC").replace(/\u093C/g, "").replace(/\u0901/g, "\u0902").replace(/[\u200C\u200D]/g, "").replace(/[\s-]+/g, " ").trim();
+const LOAN_MAP = new Map(LOANS.map(([d, e]) => [loanKey(d), e]));
+const LOAN_MAX = Math.max(...LOANS.map(([d]) => d.split(/[\s-]+/).length));
+export function loanWords(text: string): string {
+  const parts = String(text || "").split(/(\s+)/);
+  const word = (i: number) => parts[i] || "";
+  const bare = (w: string) => { const m = w.match(/^([^\u0900-\u0963\u0966-\u097F]*)([\u0900-\u0963\u0966-\u097F-]+)([^\u0900-\u0963\u0966-\u097F]*)$/); return m ? { pre: m[1], core: m[2], post: m[3] } : null; };
+  const out: string[] = [];
+  for (let i = 0; i < parts.length; i++) {
+    if (!DEVA.test(word(i))) { out.push(word(i)); continue; }
+    let hit = false;
+    for (let n = LOAN_MAX; n >= 1 && !hit; n--) {
+      const idx = Array.from({ length: n }, (_, k) => i + 2 * k);
+      if (idx[idx.length - 1] >= parts.length) continue;
+      const bs = idx.map((j) => bare(word(j)));
+      if (bs.some((b) => !b) || bs.slice(0, -1).some((b) => b!.post) || bs.slice(1).some((b) => b!.pre)) continue;
+      const en = LOAN_MAP.get(loanKey(bs.map((b) => b!.core).join(" ")));
+      if (!en) continue;
+      out.push(bs[0]!.pre + en + bs[n - 1]!.post); i = idx[n - 1]; hit = true;
+    }
+    if (!hit) out.push(word(i));
+  }
+  return out.join("");
+}
+// Hinglish written in English letters: the English words first, then the rest letter by letter
+export const hinglishLatin = (text: string): string => toLatin(loanWords(text));
+
 // ------------------------------------------------------------------ matching
 // the plain letters of a word or name: lower case, letters and digits only
 export const plain = (s: string): string => String(s || "").toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "");

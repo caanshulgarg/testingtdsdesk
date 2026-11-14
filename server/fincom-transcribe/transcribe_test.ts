@@ -109,10 +109,18 @@ function stand(o: { key?: string | null, groq?: (form: Record<string, string>) =
 
 const AUDIO = new Uint8Array(48_000).map((_, i) => (i * 31 + 7) & 255);     // a made-up clip; its bytes are looked for later
 function send(h: (r: Request) => Promise<Response>, o: { tok?: string | null, bytes?: Uint8Array, type?: string, lang?: string, client?: string, secs?: number, len?: string, latin?: boolean, verbose?: boolean, screen?: string } = {}) {
-  const qs = new URLSearchParams({ lang: o.lang ?? "hi", ...(o.secs === -1 ? {} : { secs: String(o.secs ?? 12) }), ...(o.client === undefined ? { client: "larkspur" } : o.client ? { client: o.client } : {}), ...(o.latin ? { latin: "1" } : {}), ...(o.verbose ? { verbose: "1" } : {}), ...(o.screen ? { screen: o.screen } : {}) });
+  const qs = new URLSearchParams({ lang: o.lang ?? "hi", ...(o.secs === -1 ? {} : { secs: String(o.secs ?? 12) }), ...(o.client === undefined ? { client: "larkspur" } : o.client ? { client: o.client } : {}), ...(o.latin ? { latin: "1" } : {}), ...(o.verbose ? { verbose: "1" } : {}) });
   const headers: Record<string, string> = { "Content-Type": o.type ?? "audio/webm;codecs=opus", Origin: "https://staging.fincom.live" };
   if (o.tok !== null) headers.Authorization = "Bearer " + (o.tok ?? "tok-me");
   if (o.len) headers["Content-Length"] = o.len;
+  // the screen's words: as the app sends them, multipart with the clip (in the body, never the URL)
+  if (o.screen !== undefined) {
+    const form = new FormData();
+    form.append("audio", new Blob([(o.bytes ?? AUDIO).slice().buffer as ArrayBuffer], { type: o.type ?? "audio/webm;codecs=opus" }), "clip");
+    form.append("screen", o.screen);
+    delete headers["Content-Type"];
+    return h(new Request("http://x/?" + qs, { method: "POST", headers, body: form }));
+  }
   return h(new Request("http://x/?" + qs, { method: "POST", headers, body: (o.bytes ?? AUDIO).slice().buffer as ArrayBuffer }));   // a copy as an ArrayBuffer: a BodyInit on every Deno
 }
 const has = (hay: Uint8Array | string | null, needle: Uint8Array) => {
@@ -250,9 +258,9 @@ Deno.test("Hinglish: a sample sentence in English letters from the client's name
   assert(!/[ऀ-ॿ]/.test(pr), "Latin script only");
   assert(pr.length <= 700, "within the budget (" + pr.length + ")");
   eq(g.form!.language, undefined, "the language left to Whisper");
-  eq(j.text, "Richa Khandelwal ko ek lakh ka pement, Tally men entri", "Devanagari written in English letters, then the names corrected");
-  eq(j.changes, [{ from: "richa khandelval", to: "Richa Khandelwal" }, { from: "taili", to: "Tally" }], "the changes");
-  eq(s.logRows[0].tools, ["ok", "latin", "names:2"], "logged: written in English letters, 2 names corrected (no words)");
+  eq(j.text, "Richa Khandelwal ko ek lakh ka payment, Tally men entry", "Devanagari: the English words put back (payment, Tally, entry), the rest in English letters, then the names corrected");
+  eq(j.changes, [{ from: "richa khandelval", to: "Richa Khandelwal" }], "the changes");
+  eq(s.logRows[0].tools, ["ok", "latin", "names:1"], "logged: written in English letters, 1 name corrected (no words)");
   assert(!JSON.stringify(s.logRows).includes("Richa"), "no words in the log");
   // English and Hindi: their own sample sentences
   const en = stand({ key: "gsk_test" }); await send(en.h, { lang: "en" });
@@ -404,11 +412,12 @@ Deno.test("the words hints (next-fix-voice): CMA and banking words, the open scr
   assert(tokensOf(bare) <= PROMPT_TOKENS, "the bare prompt within the budget");
   // Hinglish with a client open, a screen and the firm's clients: the sentence, then the words, the screen, the names, the clients
   const s = stand({ key: "gsk_test" });
-  await send(s.h, { lang: "auto", latin: true, screen: "Larkspur Traders · Bank reconciliation · CMA report ABCPK1234L 27AAACR5055K1Z5" });
+  await send(s.h, { lang: "auto", latin: true, screen: "Larkspur Traders · Bank reconciliation · CMA report ABCPK1234L 27AAACR5055K1Z5 abcpk1234l ram@firm.in ₹1,25,000 Rs 500 2.5Cr 3 L XXXX1234 ****5678" });
   const pr = s.calls.find((x) => x.url.startsWith("https://api.groq.com/"))!.form!.prompt;
   assert(pr.startsWith("Larkspur Traders ke liye HDFC Bank A/c se"), "the sample sentence first: " + pr);
   for (const w of ["CMA", "MPBF", "DSCR", "drawing power", "working capital", "Bank reconciliation", "Leads Insurance Private Limited", "AIR ESS EXIM", "Richa Khandelwal"]) assert(pr.includes(w), w + " in the prompt: " + pr);
-  assert(!pr.includes("ABCPK1234L") && !pr.includes("27AAACR5055K1Z5"), "no PAN or GSTIN from the screen: " + pr);
+  for (const bad of ["ABCPK1234L", "abcpk1234l", "27AAACR5055K1Z5", "ram@", "firm.in", "1,25,000", "500", "2.5", "XXXX", "1234", "5678"]) assert(!pr.includes(bad), "nothing private from the screen (" + bad + "): " + pr);
+  assert(!s.calls.some((x) => x.url.includes("Bank%20reconciliation") || x.url.includes("screen=")), "the screen never in a URL");
   assert(tokensOf(pr) <= PROMPT_TOKENS && pr.length <= 900, "within the budget (" + tokensOf(pr) + " tokens counted, " + pr.length + " characters)");
   assert(pr.indexOf("CMA") < pr.indexOf("Bank reconciliation") && pr.indexOf("Bank reconciliation") < pr.indexOf("Richa Khandelwal") && pr.indexOf("Richa Khandelwal") < pr.indexOf("Leads Insurance"), "the order: words, screen, names, clients");
   // the cap with far too much: 400 ledgers, 300 clients, a long screen; every group gets its share, and the total stays under
@@ -424,19 +433,30 @@ Deno.test("the words hints (next-fix-voice): CMA and banking words, the open scr
   eq([tokensOf("GST"), tokensOf("MPBF"), tokensOf("ledger"), tokensOf("रिचा")], [3, 3, 2, 8], "capitals, a word, Devanagari");
   eq(screenPhrases("Larkspur Traders › GST · Returns | PAN ABCPK1234L ·  · 1234567"), ["Larkspur Traders", "GST", "Returns", "PAN"], "the screen's phrases: words only, no identifier, no long number");
   eq(screenPhrases(null), [], "no screen");
+  eq(screenPhrases("Bank · Rs. 4,50,000 · ₹ 12 lakh · 1.5 Cr · INR 900 · a/c XXXX1234 · xx-4321 · **** 9876 · pan abcpk1234l · mail ram.k@firm.co.in · Sharma Traders"),
+    ["Bank", "a/c", "pan", "mail", "Sharma Traders"], "emails, amounts (₹, Rs, INR, commas, L, Cr), masked accounts and a lowercase PAN dropped");
+  // the clip as the plain body still works (calls' subtitles), and multipart without a screen
+  const plain = stand({ key: "gsk_test" });
+  eq((await send(plain.h, { lang: "en" })).status, 200, "the plain body");
+  const mp = stand({ key: "gsk_test" });
+  const rm = await send(mp.h, { lang: "en", screen: "", type: "audio/mp4" });
+  const gm = mp.calls.find((x) => x.url.startsWith("https://api.groq.com/"))!;
+  eq([rm.status, gm.file!.name, gm.file!.size], [200, "clip.m4a", AUDIO.length], "multipart: the clip by its own type");
+  const bad = stand({ key: "gsk_test" });
+  eq((await send(bad.h, { screen: "x", type: "application/pdf" })).status, 415, "multipart: not audio is refused");
 });
 
-Deno.test("Hinglish heard as Hindi (lang=hi&latin=1, the app's choice once the live words look Hindi): Whisper told Hindi, the words in English letters", async () => {
-  const s = stand({ key: "gsk_test", groq: () => new Response(JSON.stringify({ text: "रिचा खंडेलवाल को एक लाख का पेमेंट" })) });
-  const j = await (await send(s.h, { lang: "hi", latin: true })).json();
+Deno.test("Hinglish answered in Devanagari: the accountant's English words put back before the rest is written in English letters (review F1)", async () => {
+  const s = stand({ key: "gsk_test", groq: () => new Response(JSON.stringify({ text: "पिछले महीने की बैलेंस शीट, टीडीएस और जीएसटी, सीएमए रिपोर्ट, क्रेडिट नोट और लेजर दिखाओ" })) });
+  const j = await (await send(s.h, { lang: "auto", latin: true, client: "" })).json();
   const g = s.calls.filter((x) => x.url.startsWith("https://api.groq.com/"));
-  eq([g.length, g[0].form!.language], [1, "hi"], "one call, as Hindi");
-  assert(g[0].form!.prompt.startsWith("Larkspur Traders ke liye") && !/[ऀ-ॿ]/.test(g[0].form!.prompt), "the Hinglish prompt, in English letters: " + g[0].form!.prompt);
-  eq(j.text, "Richa Khandelwal ko ek lakh ka pement", "Devanagari written in English letters, the name corrected");
-  eq(s.logRows[0].route, "hi", "logged as hi");
-  // without latin, Hindi stays in Devanagari, as before
+  eq([g.length, g[0].form!.language], [1, undefined], "one call, the language left to Whisper (never forced to Hindi)");
+  assert(g[0].form!.prompt.startsWith("Client ke liye") && !/[ऀ-ॿ]/.test(g[0].form!.prompt), "the Hinglish prompt in English letters: " + g[0].form!.prompt);
+  eq(j.text, "pichhle mahine ki balance sheet, TDS aur GST, CMA report, credit note aur ledger dikhao", "the English words as English: " + j.text);
+  for (const bad of ["bailens", "shit", "tidies", "jiesti", "siemae", "kredit", "lejar"]) assert(!j.text.includes(bad), "never " + bad);
+  // the app sends Hindi only when Hindi is chosen; latin with hi is not taken (Devanagari kept)
   const d = stand({ key: "gsk_test", groq: () => new Response(JSON.stringify({ text: "एक लाख" })) });
-  eq((await (await send(d.h, { lang: "hi" })).json()).text, "एक लाख", "Hindi chosen: Devanagari kept");
+  eq((await (await send(d.h, { lang: "hi", latin: true })).json()).text, "एक लाख", "Hindi chosen: Devanagari kept");
 });
 
 Deno.test("a prompt Groq refuses (400): the clip heard once more with the sample sentence alone", async () => {
@@ -445,4 +465,10 @@ Deno.test("a prompt Groq refuses (400): the clip heard once more with the sample
   const r = await send(s.h, { lang: "auto", latin: true });
   eq([r.status, (await r.json()).text, prompts.length], [200, "Tally kholo", 2], "answered on the second call");
   eq(prompts[1], buildPrompt([], "hinglish"), "the second with the sample sentence alone");
+  // 400 then large-v3 at its limit: turbo gets the trimmed prompt too
+  const seen: [string, string][] = [];
+  const t = stand({ key: "gsk_test", groq: (f) => { seen.push([f.model, f.prompt]); return seen.length === 1 ? new Response("{}", { status: 400 }) : seen.length === 2 ? new Response("{}", { status: 429 }) : new Response(JSON.stringify({ text: "ok" })); } });
+  eq((await send(t.h, { lang: "auto", latin: true })).status, 200, "answered by turbo");
+  eq(seen.map((x) => x[0]), ["whisper-large-v3", "whisper-large-v3", "whisper-large-v3-turbo"], "full, full again, then turbo");
+  eq(seen[2][1], buildPrompt([], "hinglish"), "turbo with the trimmed prompt");
 });
