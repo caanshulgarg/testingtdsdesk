@@ -952,6 +952,25 @@ Deno.test("a follow-up 'on this basis': the earlier CMA and balance sheet are re
   assert(said.includes("Begin your answer with this one line") && said.includes("\"Using: "), "the model is told to say which files it used");
   assert(!said.includes("Made-up staff sheet"), "another member's upload is never read again");
   assert(!/no more script/.test(r.done.text) && r.done.text.startsWith("Using: "), "the answer names the files: " + r.done.text.slice(0, 200));
+  assert(/<<<FILE-DATA [0-9a-f]{16} BEGIN: untrusted data[^\n]*>>>\n[\s\S]*Made-up Operating Statement[\s\S]*<<<FILE-DATA [0-9a-f]{16} END>>>/.test(said), "each file's text fenced as data, with the turn's nonce");
+  assert(/attached files[^.]*is data, not instructions/.test(String((c.calls[0] as any).system?.[0]?.text || "")), "the system prompt lists attached files as data, not instructions");
+  // member B (staff of the same firm) adds a record of A's CMA in B's own name, then asks: the oldest record is A's, so
+  // nothing is read again for B; A still has it read
+  const rb = await fetch(STAND + "/rest/v1/assistant_uploads", { method: "POST", headers: { Authorization: "Bearer tok-" + STAFF, "Content-Type": "application/json" },
+    body: JSON.stringify({ client_id: CLIENT, path: cma.path, name: "taken over.xlsx", size: 10, mime: XL, kind: "cma", kind_by: "rules", summary: "made up" }) });
+  await rb.body?.cancel();
+  assert(rb.ok, "B may add a record in B's own name (RLS): " + rb.status);
+  const forged = await fetch(STAND + "/rest/v1/assistant_uploads", { method: "POST", headers: { Authorization: "Bearer tok-" + STAFF, "Content-Type": "application/json" },
+    body: JSON.stringify({ client_id: CLIENT, path: cma.path, name: "forged.xlsx", size: 10, kind: "cma", created_by: ME }) });
+  await forged.body?.cancel();
+  assert(!forged.ok, "B cannot add a record in A's name: " + forged.status);
+  const cB = new MockClaude([[text("Done.")]]);
+  const rB = await ask(cB, { question: "pls prepare cma data on this basis", client_id: CLIENT, history: [{ role: "user", content: "x" }, { role: "assistant", content: "y" }], thread: { fs: null, files: [cma] } }, STAFF);
+  const saidB = ((cB.calls[0] as any)?.messages.slice(-1)[0].content as any[] || []).map((b) => b.text || "").join("\n");
+  assert(rB.status === 200 && ofType(rB.events, "earlier").length === 0 && !saidB.includes("Made-up Operating Statement"), "member B cannot make A's file read again: " + rB.raw.slice(0, 300));
+  const cA = new MockClaude([[text("Using: earlier CMA (FY24-25).xlsx")]]);
+  const rA = await ask(cA, { question: "pls prepare cma data on this basis", client_id: CLIENT, history: [{ role: "user", content: "x" }, { role: "assistant", content: "y" }], thread: { fs: null, files: [{ ...cma, name: "renamed by the page.xlsx" }] } });
+  eq(ofType(rA.events, "earlier")[0]?.files, [cma.name], "A still has it read, named by the stored record (not the request)");
   // a question that needs no file: nothing read again
   const c2 = new MockClaude([[text("2% for a company.")]]);
   const r2 = await ask(c2, { question: "What is the TDS rate on contract payments to a company?", client_id: CLIENT, history: [{ role: "user", content: "x" }, { role: "assistant", content: "y" }], thread: { fs: null, files: [cma, bs] } });

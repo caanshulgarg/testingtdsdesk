@@ -405,6 +405,15 @@ analyze;""")
     A.migrate(db, A.MIG198)
     try: A.ask(db, "insert into assistant_uploads (path, name, kind) values ('%s', 'x.pdf', 'weird');" % up, A.STAFF); ok(False, "198: an unknown kind is still refused")
     except RuntimeError as e: ok("check" in str(e), "198: an unknown kind is still refused (and 198 runs twice)")
+    # 198: a record is added by its own uploader only, and never changes hands, path or client
+    try: A.ask(db, "insert into assistant_uploads (client_id, path, name, kind, created_by) values ('larkspur', '%s', 'x.pdf', 'other', '%s');" % (up.replace("k1", "k9"), A.ME), A.STAFF); ok(False, "198: staff cannot add a record in another member's name")
+    except RuntimeError as e: ok("row-level security" in str(e), "198: staff cannot add a record in another member's name")
+    for col, val in (("created_by", "'%s'" % A.ME), ("path", "'%s'" % up.replace("k1", "k8")), ("client_id", "'zz-other-client'")):
+        try: A.ask(db, "update assistant_uploads set %s = %s where kind = 'cma';" % (col, val), A.STAFF); ok(False, "198: an update cannot change " + col)
+        except RuntimeError as e: ok("keeps who uploaded it" in str(e), "198: an update cannot change " + col)
+    A.ask(db, "update assistant_uploads set action = 'ask' where kind = 'cma';", A.STAFF)
+    ok(A.ask(db, "select action from assistant_uploads where kind = 'cma'", A.ME) == "ask", "198: the step the user picked still changes")
+    ok(A.ask(db, "select convalidated from pg_constraint where conname = 'assistant_uploads_kind_check'", A.ME) == "t", "198: the kind's check is validated")
 finally:
     db.stop()
 print("\n" + ("FAILED: %d" % len(fails) if fails else "all passed"))
