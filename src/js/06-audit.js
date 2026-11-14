@@ -789,7 +789,7 @@ Object.assign(Audit, {
       if (kind === "mis") return this.madeKeep(res, prog);
       res.b = b;
       return yield* this.writeIn(res, how, prog);
-    } finally { if (a){ if (a.over) E.jobs.delete(a.id); else E.cancel(a); } }
+    } finally { if (a){ if (a.over){ clearTimeout(a.timer); E.jobs.delete(a.id); } else E.cancel(a); } }
   },
   autoSlice(j, d){
     if (this.auto !== j) return;
@@ -945,6 +945,9 @@ Object.keys(Audit.checkSteps).forEach(k => { Audit.checks[k].steps = Audit.check
 const Engine = {
   URL: "__FINCOM_ENGINE__",
   PART: 2500, ROWS: 5000, START_MS: 20000, NAP_MS: 250,
+  // a job the worker does not answer in time (JOB_MS, and 0.5 ms an entry; after one has been answered, 3 times the
+  // longest of its kind, never less than JOB_MS) ends the worker: the run is worked out here in steps (review of part 1)
+  JOB_MS: 20000, JOB_PER: 0.5, took: {},
   WAIT: {engine: "wait"},
   st: "", why: "", w: null, nid: 0, ver: 0, sent: null, jobs: new Map(), wakers: new Set(), base: null,
   // the page's engine as loaded (taken once legacy.js has run; the MIS screen's own when it loads: 18-mis-pack.js). The
@@ -968,14 +971,26 @@ const Engine = {
   off(why){
     this.st = "off"; this.why = String(why || ""); this.gSent = undefined;
     try { if (this.w) this.w.terminate(); } catch (e){}
-    this.w = null; this.sent = null; this.wake();
+    this.w = null; this.sent = null; this.jobs.forEach(a => clearTimeout(a.timer)); this.jobs.clear(); this.wake();
   },
+  // another client opened, a sign-out or another person's copy of this browser (review of part 1): the worker keeps
+  // nothing of the last (clear: its books, S, this browser's settings, the 2B runs), and the page's note of what it holds
+  // goes; kill (a sign-out, a switch of person): the worker itself ends, and a new one starts when a run needs it
+  clear(why, kill){
+    this.sent = null; this.gSent = undefined; this.owner = null;
+    if (!this.w) return;
+    if (kill){ try { this.w.terminate(); } catch (e){} this.w = null; if (this.st !== "off") this.st = ""; this.jobs.forEach(a => clearTimeout(a.timer)); this.jobs.clear(); this.wake(); return; }
+    try { this.post({t: "clear", why: String(why || "")}); } catch (e){}
+  },
+  // whose books and copy the worker holds: another one, and it is cleared first
+  ownerNow(b){ const o = typeof LocalOwner === "object" && LocalOwner.bound || {}; return [o.slot || "", o.uid || "", S.coId || "", (b && b.cid) || ""].join("|"); },
   start(){
     this.st = "start";
     try {
       const w = this.w = new Worker(this.URL);
       w.onmessage = e => this.got(e.data || {});
       w.onerror = e => { try { e.preventDefault(); } catch (x){} this.off("the worker failed: " + ((e && e.message) || "")); };
+      w.onmessageerror = () => this.off("a word of the worker could not be read");
       w.postMessage({t: "init", legacy: this.src()});
       setTimeout(() => { if (this.st === "start") this.off("the worker did not start"); }, this.START_MS);
     } catch (e){ this.off(e && e.message); }
@@ -983,23 +998,33 @@ const Engine = {
   // the worker started (yields WAIT meanwhile): true, or false when it cannot be
   *ready(){ if (!this.st) this.start(); while (this.st === "start") yield this.WAIT; return this.st === "ok"; },
   post(m){ this.w.postMessage(m); },
-  // what of S the engines read (the documents' reading left out), and this browser's settings (sign-in left out)
+  // what of S the engines read (review of part 1: only those; the client's own of the clients), and this browser's
+  // settings (sign-in left out). The worker's S is these, as they are (its S is replaced, not added to)
+  S_KEYS: ["firm", "coId", "sales", "gstReg", "gstYm", "auditFy", "inregScope"],
   sNow(b){
-    const s = {}, skip = /^(books|data|files|previews|filePages|jobs|pendingHashes|docq|docqLocal|bank|sample|asst|sup)$/, ls = {};
-    Object.keys(S).forEach(k => { const v = S[k]; if (!skip.test(k) && typeof v !== "function") s[k] = v; });
+    const s = {}, ls = {}, cs = S.companies || {};
+    this.S_KEYS.forEach(k => { if (S[k] !== undefined) s[k] = S[k]; });
+    s.companies = {};
+    [S.coId, b && b.cid].forEach(c => { if (c && cs[c]) s.companies[c] = cs[c]; });
+    // (the client's documents and parties: the audit's checks read them)
     if (S.data && b && S.data[b.cid]) s.data = {[b.cid]: S.data[b.cid]};
     try { for (let i = 0; i < localStorage.length; i++){ const k = localStorage.key(i); if (!/sess|token|auth|api|secret|pass|key/i.test(k)) ls[k] = localStorage.getItem(k); } } catch (e){}
     // what the engines read outside S: the 2B matching runs of the year (M2B.st, from FinCom's cloud: GST2B.run's AI
     // pairs, and so the 3B's credit), sent again only when the page has another
     const g = {};
     if (typeof M2B === "object" && M2B.st){
-      const sig = JSON.stringify(Object.keys(M2B.st).sort().map(k => { const x = M2B.st[k] || {}, r = x.run || {}; return [k, r.id || "", r.at || "", x.hash || "", ((r.result || {}).rows || []).length, JSON.stringify(r.decisions || null).length]; }));
+      // (by a hash of all of it, review of part 1: not by its runs' sizes)
+      let sig = ""; try { sig = Audit.hash(JSON.stringify(M2B.st)); } catch (e){ sig = String(Math.random()); }
       if (sig !== this.gSent){ g.M2B = M2B.st; this.gSent = sig; }
     }
     return {s, ls, g};
   },
   // the books to the worker, a part a step; false: the worker went meanwhile
   *sendIn(b){
+    // (the books of another client or person than the worker holds: it is cleared first, review of part 1)
+    const own = this.ownerNow(b);
+    if (this.owner && this.owner !== own) this.clear("another client or person");
+    this.owner = own;
     const V = b.vouchers || [], n = V.length, rev = typeof BOOKS_REV === "number" ? BOOKS_REV : 0, p = this.sent;
     const keys = Object.keys(b).filter(k => k !== "vouchers"), kv = {};
     keys.forEach(k => { kv[k] = b[k]; });
@@ -1007,18 +1032,17 @@ const Engine = {
     yield;
     const keep = p && p.b === b && p.rev === rev ? keys.filter(k => k in p.kv && p.kv[k] === b[k]) : [];
     const S0 = this.sNow(b);
-    if (keepV && keep.length === keys.length && p.keys.length === keys.length){ this.post({t: "S", s: S0.s, ls: S0.ls, g: S0.g}); return this.st === "ok"; }
+    if (keepV && keep.length === keys.length && p.keys.length === keys.length){ try { this.post({t: "S", s: S0.s, ls: S0.ls, g: S0.g}); } catch (e){ return false; } return this.st === "ok"; }
     const ver = ++this.ver;
     this.sent = null;
     this.post({t: "begin", ver, keepV, keep});
-    try { this.post({t: "S", s: S0.s, ls: S0.ls, g: S0.g}); }
-    // (a field that cannot be copied left out; with no structuredClone, Safari 14, each tried in a word of its own)
-    catch (e){ Object.keys(S0.s).forEach(k => { try { if (typeof structuredClone === "function") structuredClone(S0.s[k]); else this.post({t: "S", s: {[k]: S0.s[k]}, ls: {}}); } catch (x){ delete S0.s[k]; } }); this.post({t: "S", s: S0.s, ls: S0.ls, g: S0.g}); }
+    // (anything that cannot be copied: the run is worked out here, review of part 1: never without a part of it)
+    try { this.post({t: "S", s: S0.s, ls: S0.ls, g: S0.g}); } catch (e){ return false; }
     yield;
     for (const k of keys){
       if (keep.includes(k)) continue;
       const v = k === "audit" ? this.auditLite(b.audit) : k === "mis" ? null : b[k];
-      try { this.post({t: "bk", ver, k, v}); } catch (e){ /* not to be copied (none known): the worker goes without it */ }
+      try { this.post({t: "bk", ver, k, v}); } catch (e){ return false; }
       if (this.st !== "ok") return false;
       yield;
     }
@@ -1036,12 +1060,18 @@ const Engine = {
     return {st: au.st, last: L ? {at: L.at, from: L.from, to: L.to, vouchers: L.vouchers, basis: L.basis, findings: (L.findings || []).map(f => ({id: f.id, sev: f.sev})), solved: (L.solved || []).map(x => ({id: x.id, n: x.n}))} : L};
   },
   ask(kind, from, to, how, prog){
-    const a = {id: ++this.nid, kind, prog, res: null, full: null, end: false, err: ""};
+    const a = {id: ++this.nid, kind, prog, res: null, full: null, end: false, err: "", t0: Date.now()};
     this.jobs.set(a.id, a);
+    const n = ((S.books || {}).vouchers || []).length, ms = Math.max(this.JOB_MS + n * this.JOB_PER, 3 * (this.took[kind] || 0), this.JOB_MS);
+    a.timer = setTimeout(() => { if (this.jobs.get(a.id) === a && !a.end) this.off("a job of the worker took too long (" + kind + ", " + Math.round(ms / 1000) + " s)"); }, ms);
     this.post({t: "run", id: a.id, kind, from, to, how});
     return a;
   },
-  cancel(a){ this.jobs.delete(a.id); if (this.w && this.st === "ok") try { this.post({t: "cancel", id: a.id}); } catch (e){} },
+  // what the worker holds now (a test's look: tests/run_speed_worker.py): {books, n, s: S's fields, ls: settings' keys}
+  peek(){ return new Promise(ok => { if (!this.w || this.st !== "ok"){ ok(null); return; } const f = e => { if ((e.data || {}).t === "state"){ this.w && this.w.removeEventListener("message", f); ok(e.data.r); } }; this.w.addEventListener("message", f); this.post({t: "state"}); }); },
+  // (answered: how long it took, for the next one's time)
+  done(a){ clearTimeout(a.timer); this.took[a.kind] = Math.max(this.took[a.kind] || 0, Date.now() - a.t0); },
+  cancel(a){ clearTimeout(a.timer); this.jobs.delete(a.id); if (this.w && this.st === "ok") try { this.post({t: "cancel", id: a.id}); } catch (e){} },
   // the page's job sleeps until the worker's next word, or NAP_MS (it looks at the books again then)
   sleep(go){
     let t = 0;
@@ -1058,14 +1088,14 @@ const Engine = {
       const a = this.jobs.get(m.id);
       if (!a) return;
       if (m.t === "prog"){ if (a.prog){ a.prog.k = m.k; a.prog.of = m.of; } }
-      else if (m.t === "err") a.err = m.e || "the engine's worker failed";
-      else if (m.t === "mis"){ a.res = m.r; a.end = true; }
+      else if (m.t === "err"){ clearTimeout(a.timer); a.err = m.e || "the engine's worker failed"; }
+      else if (m.t === "mis"){ a.res = m.r; a.end = true; this.done(a); }
       else if (m.t === "audit"){ a.res = m.c; a.full = m.n.map(() => []); }
       else if (m.t === "rows"){ const f = a.full[m.i]; for (let i = 0; i < m.rows.length; i++) f.push(m.rows[i]); }
       else if (m.t === "end" && a.res){
         // the findings' rows as calcIn leaves them: every row (full), each finding its first 1,000 of the same rows
         a.res.full = a.full; a.res.findings.forEach((f, i) => { f.rows = a.full[i].slice(0, 1000); });
-        a.res.ran = new Set(a.res.ran); a.end = true;
+        a.res.ran = new Set(a.res.ran); a.end = true; this.done(a);
       }
     }
     this.wake();

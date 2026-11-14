@@ -234,9 +234,11 @@ const LocalOwner = {
     // another tab put this copy aside: this page is opened again (it would otherwise show and send the other copy)
     addEventListener("storage", ev => { if (ev.key === this.KEY && this.cur().slot !== this.bound.slot) this.leave(); });
   },
-  leave(){ if (this.stale) return; this.stale = true; this.ss("displaced", "1"); try { Live.stop(); } catch (e){} setTimeout(() => location.reload(), 50); },
+  leave(){ if (this.stale) return; this.stale = true; try { if (typeof Engine === "object") Engine.clear("another person's copy", true); } catch (e){} this.ss("displaced", "1"); try { Live.stop(); } catch (e){} setTimeout(() => location.reload(), 50); },
   // puts the copy here aside and opens the one of (uid, firm): synchronous, so two tabs cannot do it at once
   move(s, uid, firm, email, unknown){
+    // (next-speed-worker, review of part 1: the engine's worker ends with the copy it read from)
+    try { if (typeof Engine === "object") Engine.clear("another person's copy", true); } catch (e){}
     const P = this.P, old = s.cur, pre = slot => P + "@" + slot + ":", mv = (a, b) => { try { localStorage.setItem(b, localStorage.getItem(a)); localStorage.removeItem(a); } catch (e){} };
     let raw = {}; try { raw = JSON.parse(localStorage.getItem(P + "cloud")) || {}; } catch (e){}
     const lastPull = raw.lastPull || ""; delete raw.lastPull;

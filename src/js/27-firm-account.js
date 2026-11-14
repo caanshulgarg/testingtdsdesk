@@ -109,7 +109,7 @@ const Cloud = {
   // never the firm's data; cleared all the same, so nothing of this sign-in stays behind). Only this address's own
   // (fincom-files:/review/ or /next/, the worker's RUNTIME): the trial build never clears the live one's; the other tab
   // is signed out too (the shared sign-in) and clears its own
-  signOut(){ try { Live.stop(); } catch (e){} try { if (typeof TStale === "object") TStale.reset(); } catch (e){} try { if (window.caches) caches.delete("fincom-files:" + new URL("./", location.href).pathname).catch(() => {}); } catch (e){} this.setSess(null); this.st = {state: "off", email: "", role: "", firm: "", lastSync: 0, pending: 0, error: "", busy: "", members: []}; },
+  signOut(){ try { Live.stop(); } catch (e){} try { if (typeof Engine === "object") Engine.clear("sign-out", true); } catch (e){} try { if (typeof TStale === "object") TStale.reset(); } catch (e){} try { if (window.caches) caches.delete("fincom-files:" + new URL("./", location.href).pathname).catch(() => {}); } catch (e){} this.setSess(null); this.st = {state: "off", email: "", role: "", firm: "", lastSync: 0, pending: 0, error: "", busy: "", members: []}; },
   // speed round 2 (27-Oct-2026, client_timings: about 20 reads sent at the same moment as the page opened, each 150-280 ms
   // alone but up to 1.3 s together, and 5 s for alert_dismissals_list, tally_post_jobs and tally_post_row_flags): the
   // reads of things the first page does not show (alerts and their dismissals, posting flags and payloads, ledgers Tally
@@ -866,6 +866,8 @@ async function openCompany(cid, tab){
   if (!S.companies[cid]) return;
   closeSwitcher(true);
   const changed = S.coId !== cid;
+  // (next-speed-worker, review of part 1: the engine's worker keeps nothing of the client before)
+  if (changed && typeof Engine === "object") Engine.clear("another client");
   S.coId = cid; S.view = "company"; S.arm = null;
   if (changed && typeof TStale === "object") TStale.reset("prog:");   // (the rows' marks: reliability round)
   if (changed){ S.tab = "dash"; S.filter = "draft"; S.selected = null; S.partySel = null; S.step = null;
@@ -2325,6 +2327,8 @@ function applyEntryHash(){
 }
 window.addEventListener("hashchange", () => { applyEntryHash(); render(); });
 (async function start(){
+  // (next-speed-worker, review of part 1: not in the engine's worker, which reads legacy.js for its engines only)
+  if (typeof self === "object" && self.__fincomEngineWorker) return;
   await takeAuthLink();
   applyEntryHash();
   S.splitPdf = lsGet("tdsdesk:splitPdf") === "1";
