@@ -163,6 +163,8 @@ const Route = {
         else if (what === "post" || what === "done"){ S.tab = what === "post" ? "export" : "done"; S.postFocus = arg || "bills"; if (!S.bank || S.bank.cid !== S.coId) loadBank(S.coId).then(() => render()); }
         else if (what === "purchase"){ S.tab = "invoices"; S.selected = null; S.drawerOpen = false; S.reviewTable = arg === "review"; if (arg && arg !== "review") S.filter = arg; }
         else if (what === "bill"){
+          // a held duplicate opened from its address: linked to its original now (the client's other bills a moment later)
+          if (arg && typeof linkDuplicates === "function") linkDuplicates(S.coId, arg);
           const e = D().entries[arg];
           S.tab = "invoices";
           // over the review table when that is where it was opened (Back closes it), else one at a time
@@ -198,10 +200,11 @@ const Route = {
 // browser's history, so Back returns to the Tally page), else its dashboard
 function backToClient(){
   const cid = S.coId;
-  if (!cid || !S.companies[cid]) { navHome("clients"); return; }
+  if (!cid || !S.companies[cid]) { navHome("clients"); return Promise.resolve(false); }
   const pre = "#/c/" + encodeURIComponent(cid) + "/", h = S.lastClientHash && S.lastClientHash.indexOf(pre) === 0 ? S.lastClientHash : pre + "dash";
   if (typeof history !== "undefined" && Route.ready){ try { history.pushState(null, "", location.pathname + location.search + h); } catch (e){} }
-  Route.apply(h);
+  // (settled once the client is open and drawn: the sidebar's card says "Opening…" until then)
+  return Route.apply(h);
 }
 // from a client: the Tally page, focused on that client's computer and company (S.tallyFocus)
 // next-bell-tally (11-Nov-2026, the owner: "When I open the Tally page from the bell ... it redirects to the Advanced

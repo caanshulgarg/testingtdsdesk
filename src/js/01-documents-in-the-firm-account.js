@@ -3163,13 +3163,15 @@ function removeEntry(e){
 
 /* Summary kept on each client so the client list needs no extra loading */
 // a duplicate held without its original (it was not on this computer when the copy came in, review of 02-Oct-2026:
-// emuqaocqrvj2xr said "since cleared from the desk" while emum250ulhfbl8 was there): linked once the bills are loaded
-function linkDuplicates(cid){
+// emuqaocqrvj2xr said "since cleared from the desk" while emum250ulhfbl8 was there): linked once the bills are loaded.
+// only: that one bill's id (next-fix-back-to-client: a bill opened from its address is linked at once, Route.apply; the
+// rest with the counts, refreshStatsSoon)
+function linkDuplicates(cid, only){
   const d = S.data[cid];
   if (!d || !d.loaded) return 0;
   const v = Object.values(d.entries);
   let n = 0;
-  v.filter(e => e.dupOf && !(e.dupOf.entryId && d.entries[e.dupOf.entryId])).forEach(e => {
+  (only ? (d.entries[only] ? [d.entries[only]] : []) : v).filter(e => e.dupOf && !(e.dupOf.entryId && d.entries[e.dupOf.entryId])).forEach(e => {
     const o = v.find(o => o.id !== e.id && !["duplicate", "deleted"].includes(o.status) && !o.notDuplicate && sameBill(e.x, o.x));
     if (!o) return;
     e.dupOf = {entryId: o.id, msg: dupMsg(o)};
