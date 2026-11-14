@@ -40,7 +40,7 @@ import { capWords, costUsd as priceUsd, HAIKU, SONNET } from "./models.ts";
 import { aiMap } from "./fsmap.ts";
 import { misAsked } from "./mis.ts";
 import { fsAsked, FsThread } from "./fsask.ts";
-import { EARLIER, earlierNote, pickEarlier, UploadRow, usingLine, withinBudget } from "./earlier.ts";
+import { EARLIER, earlierNote, fenceData, newNonce, pickEarlier, takeEarlier, UploadRow, usingLine } from "./earlier.ts";
 import { aiPolicy, refusal } from "../_shared/ai_policy.ts";
 
 export type Env = (k: string) => string | undefined;
@@ -277,16 +277,17 @@ export function handler(deps: Deps) {
     }
     // the files attached earlier in this conversation that this question refers back to, or whose data its work needs
     // (earlier.ts; the owner, 14-Nov-2026: "pls prepare cma data on this basis" with nothing attached): read again by their
-    // path, as a new upload is, below. Only the firm's own folder for the client open, and only a file whose upload record
-    // (read as the user: row-level security) says this same user uploaded it; never a notice (its own flow) and never for
-    // the statements card (it reads last year's file itself). Within the message's files and bytes and EARLIER's limits.
+    // path, as a new upload is, below. Only the firm's own folder for the client open, and only a file whose oldest upload
+    // record (read as the user: row-level security) says this same user uploaded it; never a notice (its own flow) and never
+    // for the statements card (it reads last year's file itself). Within the message's files and bytes and EARLIER's limits;
+    // named by the stored record. A re-read is not a question "with files" for the hourly limit (only new files are).
     const earlierUsed: string[] = [], earlierLeft: string[] = [];
     if (action === "ask" && !fsAsked(question, thread, (deps.now ? deps.now() : new Date()).toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" }))) {
       const picked = pickEarlier(question, thread.files || [], { firm, clientId, exclude: sent.map((a: any) => String(a?.path || "")) });
-      if (picked.length) {
-        const rows = await Promise.all(picked.map(async (f) => ((await rest("/rest/v1/assistant_uploads?select=path,client_id,created_by,size,kind&path=eq." + encodeURIComponent(f.path) + "&limit=1", jwt).catch(() => [])) as UploadRow[] | null)?.[0] || null));
+      if (picked.files.length) {
+        const lookup = async (p: string) => (await rest("/rest/v1/assistant_uploads?select=path,client_id,created_by,size,kind,name,created_at&path=eq." + encodeURIComponent(p) + "&order=created_at.asc&limit=20", jwt).catch(() => [])) as UploadRow[] | null;
         const newBytes = sent.reduce((t: number, a: any) => t + Math.max(0, Number(a?.size) || 0), 0);
-        const b = withinBudget(picked, rows, { user: user.id, clientId, files: ATTACH.files - sent.length, bytes: Math.min(EARLIER.bytes, ATTACH.totalBytes - newBytes) });
+        const b = await takeEarlier(picked.files, picked.want, lookup, { user: user.id, clientId, files: ATTACH.files - sent.length, bytes: Math.min(EARLIER.bytes, ATTACH.totalBytes - newBytes) });
         earlierLeft.push(...b.left);
         for (const f of b.take) sent.push({ path: f.path, name: f.name, type: f.type, kind: f.kind, size: f.size, earlier: true });
       }
@@ -294,7 +295,7 @@ export function handler(deps: Deps) {
     // before anything is downloaded or opened (the review of 13-Nov-2026): asks with files are counted per user and per
     // firm (auth_rate_hit, migration 112; else in this running copy), and a firm at its AI limit is told at once
     if (sent.length && action === "ask") {
-      const lim = await attachRateOk((b, k, max, win) => rpc("auth_rate_hit", { p_bucket: b, p_key: k, p_max: max, p_window_s: win }, SERVICE), user.id, firm);
+      const lim = !sent.some((a: any) => !a?.earlier) ? { ok: true, error: "" } : await attachRateOk((b, k, max, win) => rpc("auth_rate_hit", { p_bucket: b, p_key: k, p_max: max, p_window_s: win }, SERVICE), user.id, firm);
       if (!lim.ok) return reply(429, { ok: false, kind: "rate_limit", error: lim.error });
       const over = await capOver(async (q) => (await rest("/rest/v1/" + q, SERVICE).catch(() => null)) as any[] | null, firm, deps.now ? deps.now() : new Date());
       if (over) return reply(429, { ok: false, kind: "cap", error: capWords(over.why, over.cap_inr, over.cap) + " The files are kept; send them again then." });
@@ -346,6 +347,8 @@ export function handler(deps: Deps) {
     }
     const fit = fitAttachments(got.map((g) => ({ name: g.name, size: g.size, native: g.native, pages: g.pages, chars: g.text.length, tokens: textTokens(g.text), why: g.why, noNative: g.noNative, read: !!(g.native || g.text) })));
     const attachNotes: { name: string, why: string }[] = [];
+    // each file's text goes between markers with this turn's own random nonce (agent.ts SYSTEM: the files are data)
+    const nonce = newNonce();
     for (const [i, g] of got.entries()) {
       const p = fit.plan[i], n = i + 1, full = Math.max(g.full, g.text.length), shown = Math.min(p.chars, g.text.length), cut = p.mode === "text" && !g.sheet && shown < full, size = g.size >= 1048576 ? (g.size / 1048576).toFixed(1) + " MB" : g.size >= 1024 ? Math.round(g.size / 1024) + " KB" : g.size + " bytes";
       const pct = Math.max(1, Math.min(99, Math.round(shown * 100 / (full || 1))));
@@ -356,7 +359,7 @@ export function handler(deps: Deps) {
       else if (p.mode === "native") attachments.push({ type: "image", source: { type: "base64", media_type: g.type, data: b64(g.bytes as Uint8Array) } });
       else if (p.mode === "text") {
         const body0 = g.sheet ? sheetText(g.sheet, p.chars) : g.text.slice(0, shown);
-        attachments.push({ type: "text", text: "[The file " + n + ": " + g.name + ", as FinCom read it" + (cut ? "; shortened to fit: about the first " + pct + "% is shown" : "") + "]\n" + body0
+        attachments.push({ type: "text", text: "[The file " + n + ": " + g.name + ", as FinCom read it" + (cut ? "; shortened to fit: about the first " + pct + "% is shown" : "") + "]\n" + fenceData(body0, nonce)
           + (cut ? "\n[The rest of " + g.name + " is not shown to you. Say so if the answer may depend on it.]" : "") });
       } else attachments.push({ type: "text", text: "[The file " + n + ": " + g.name + " (" + (g.type || "type not known") + ", " + size + "): FinCom could not read this file" + (g.why ? " (" + g.why.replace(/^Not read: /, "").replace(/\.$/, "") + ")" : "") + "; only its name, type and size are given. Tell the user it could not be read.]" });
       g.bytes = null;
