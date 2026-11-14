@@ -56,12 +56,14 @@ const recent = () => { try { return Date.now() - (Number(sessionStorage.getItem(
 const mark = (t) => { try { sessionStorage.setItem(KEY, String(t || Date.now())); } catch { /* storage blocked: the page's own clock */ } };
 const seen = () => typeof document !== "object" || document.visibilityState !== "hidden";
 const file = (u) => String(u || "").split("?")[0].split("#")[0];
-// next-fix-sentry-noise (14-Nov-2026): a late heartbeat with no long frame in it, in Safari (no Long Animation Frames; it
-// holds back a window's timers when the window is not in front) or in a window hidden or not in front during the gap,
-// is the browser holding back the timers, not a page that blocked: not reported. A gap with long frames is reported as before
-export const isSafari = (ua) => /safari/i.test(String(ua || "")) && !/chrome|chromium|crios|fxios|edg|android|opr\//i.test(String(ua || ""));
-export const timersHeld = ({ frames, safari, seen: s, focused }) => !frames && (!!safari || !s || !focused);
-const focusedNow = () => typeof document !== "object" || typeof document.hasFocus !== "function" || document.hasFocus();
+// next-fix-sentry-noise (14-Nov-2026): a late heartbeat with no long frame in it, in a window hidden or not in front during
+// the gap (any browser), is the browser holding back the timers, not a page that blocked: not reported. A gap with long
+// frames is reported as before; so is a gap in a window seen and in front, in every browser (Safari has no Long Animation
+// Frames, so its real freezes come as a heartbeat with no frame: never dropped for being Safari). Focus in a frame of the
+// page (an iframe) is the window in front
+export const timersHeld = ({ frames, seen: s, focused }) => !frames && (!s || !focused);
+const inFrame = () => typeof document === "object" && !!document.activeElement && document.activeElement.tagName === "IFRAME";
+const focusedNow = () => typeof document !== "object" || typeof document.hasFocus !== "function" || document.hasFocus() || inFrame();
 // the scripts of the long frames, as stack frames (Sentry maps them back with the build's source maps)
 const framesOf = (scripts) => [].concat(scripts || []).filter((s) => s && s.sourceURL).sort((a, b) => b.duration - a.duration).slice(0, 5).reverse()
   .map((s) => ({ filename: file(s.sourceURL), function: s.sourceFunctionName || String(s.invoker || "").slice(0, 60) || "?", lineno: 1, colno: Math.max(0, Number(s.sourceCharPosition) || 0), in_app: true }));
@@ -90,9 +92,15 @@ export function watchHangs({ captureEvent, addBreadcrumb, scrubEvent, routeName,
   let hidAt = seen() ? -1 : performance.now(), shownAt = -1, tellNow = null;
   const seenSince = (t0) => seen() && hidAt < t0 && shownAt < t0;
   // when the window was last left and last come back to (performance.now()): a gap with either in it was not in front throughout
-  let blurAt = focusedNow() ? -1 : performance.now(), focusAt = -1;
-  window.addEventListener("blur", () => { blurAt = performance.now(); });
-  window.addEventListener("focus", () => { focusAt = performance.now(); });
+  // (focus moving into one of the page's iframes blurs the window and coming back focuses it: neither counts. Some
+  // browsers make the iframe the active element only after the blur: a blur is taken back when it is, a moment later)
+  let blurAt = focusedNow() ? -1 : performance.now(), focusAt = -1, away = !focusedNow();
+  window.addEventListener("blur", () => {
+    if (inFrame()) return;
+    const was = blurAt, wasAway = away; blurAt = performance.now(); away = true;
+    setTimeout(() => { if (inFrame()) { blurAt = was; away = wasAway; } }, 0);
+  });
+  window.addEventListener("focus", () => { if (away) { away = false; focusAt = performance.now(); } });
   const focusedSince = (t0) => focusedNow() && blurAt < t0 && focusAt < t0;
   // the long frames (over 150 ms) of the last minute, with their scripts: what ran during a late heartbeat
   const lf = [];
@@ -130,7 +138,7 @@ export function watchHangs({ captureEvent, addBreadcrumb, scrubEvent, routeName,
       if (Date.now() - lastFrame <= 3000 || Date.now() - sleptAt < gap + 2500) return;
       const scripts = [], es = []; let n = 0;
       lf.forEach((f) => { if (f.end > from && f.t < now) { n++; scripts.push(...f.scripts); es.push(f.e); } });
-      if (timersHeld({ frames: n, safari: isSafari(navigator.userAgent), seen: seenSince(from), focused: focusedSince(from) })) return;
+      if (timersHeld({ frames: n, seen: seenSince(from), focused: focusedSince(from) })) return;
       send("heartbeat", gap, scripts, Object.assign({ frames: String(n) }, n ? frameTags(es) : {}));
     }, 300);
   }, 1000);

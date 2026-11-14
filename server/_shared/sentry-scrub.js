@@ -313,7 +313,10 @@ export function scrubEvent(e) {
   const code = [msg].concat((e.exception && Array.isArray(e.exception.values) ? e.exception.values : []).map((v) => v && v.value)).map(messageCode).find(Boolean);
   if (code) tags.msg_code = code;
   for (const [k, ok] of Object.entries(TAGS)) { const v = e.tags && e.tags[k]; if (typeof v === "string") { const s = ok(v); if (s !== undefined) tags[k] = s; } }
-  if (DROP_CODES.has(tags.msg_code)) return null;
+  // dropped by the primary error's own words only (the last exception value, or the message when there is none): a
+  // ResizeObserver notice chained behind another error does not drop that error
+  const ex = e.exception && Array.isArray(e.exception.values) ? e.exception.values : [];
+  if (DROP_CODES.has(messageCode(ex.length ? ex[ex.length - 1] && ex[ex.length - 1].value : msg))) return null;
   if (Object.keys(tags).length) o.tags = tags;
   if (e.user && typeof e.user.id === "string" && /^[0-9a-f]{32}$/.test(e.user.id)) o.user = { id: e.user.id };
   if (e.request && typeof e.request === "object") {
