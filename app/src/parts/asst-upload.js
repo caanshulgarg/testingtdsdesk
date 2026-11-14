@@ -13,7 +13,7 @@
 // and what it costs are server/_shared/attachrules.js, the same file fincom-assistant runs
 import { ATTACH, ZIP, attachInr, fitAttachments, sniff, storeType, textTokens } from "../../../server/_shared/attachrules.js";
 const AUpload = window.AUpload = {
-  KIND: {notice: "Notice", bill: "Bill or invoice", register: "Register", bank: "Bank statement", as26: "26AS / AIS / TRACES", certificate: "Certificate format", other: "Other document"},
+  KIND: {notice: "Notice", bill: "Bill or invoice", register: "Register", bank: "Bank statement", as26: "26AS / AIS / TRACES", certificate: "Certificate format", balance_sheet: "Balance sheet / financial statements", cma: "CMA data", other: "Other document"},
   MAX: ATTACH.fileBytes,
   ACCEPT: "",                         // any type
 
@@ -213,6 +213,10 @@ const AUpload = window.AUpload = {
       const title = (r.lines.find(l => /certif/i.test(l)) || name).trim().slice(0, 90);
       return {kind: "certificate", summary: "A certificate format: " + title + (blanks ? " (" + blanks + " blank" + (blanks === 1 ? "" : "s") + " to fill)" : "") + "."};
     }
+    // CMA data for a bank, and a balance sheet or financial statements (14-Nov-2026): kinds of their own, never "other", so a
+    // later question ("prepare cma data on this basis") and the tools find them (server/assistant/earlier.ts); a PDF or a sheet
+    const fs = this.statementKind(name, head);
+    if (fs) return fs;
     // a bill: a tax invoice, a bill of supply or a note (not a proforma, an order, a quotation, a challan or a receipt)
     if (r.lines.length && this.BILL.test(r.lines.slice(0, 40).join("\n")) && !docKindOf(r.lines)){
       const no = (head.match(/\b(?:invoice|bill|note)\s*(?:no|number|#)\.?\s*[:\-]?\s*([A-Z0-9][A-Z0-9\/\-.]{1,30})/i) || [])[1];
@@ -223,6 +227,22 @@ const AUpload = window.AUpload = {
       const what = /credit\s*note/i.test(head) ? "A credit note" : /debit\s*note/i.test(head) ? "A debit note" : /bill\s*of\s*supply/i.test(head) ? "A bill of supply" : "A tax invoice";
       return {kind: "bill", side, summary: what + (no ? " no. " + no.replace(/[.\-]+$/, "") : "") + (date ? " dated " + date : "") + (side === "purchase" ? ", made out to this client (a purchase)" : side === "sales" ? ", issued by this client (a sale)" : "") + "."};
     }
+    return null;
+  },
+  // {kind: "cma" | "balance_sheet", summary} or null: by the file's name, or by its words (a CMA's forms; a balance sheet's
+  // heads, both sides); the years it is for, as written
+  statementKind(name, head){
+    const both = String(name || "") + "\n" + String(head || "");
+    const yrs = [], add = y => { y = y.replace(/\s+/g, ""); if (y && !yrs.includes(y) && yrs.length < 4) yrs.push(y); };
+    for (const m of both.matchAll(/\b(?:FY|F\.Y\.)\s*'?(\d{2,4}\s*[-–\/]\s*\d{2,4})|\b(20\d{2}\s*[-–]\s*\d{2,4})\b/gi)) add(m[1] || m[2]);
+    const at = (head.match(/\bas\s+(?:at|on)\s+(\d{1,2}(?:st|nd|rd|th)?[\s.\-\/]+[A-Za-z]{3,9}[\s.,\-\/]+\d{4}|\d{1,2}[-\/.]\d{1,2}[-\/.]\d{2,4})/i) || [])[1];
+    const forYrs = yrs.length ? " (" + yrs.join(", ") + ")" : "";
+    const forms = [/operating\s+statement/i, /analysis\s+of\s+balance\s+sheet/i, /comparative\s+statement\s+of\s+current\s+assets/i, /\bMPBF\b|permissible\s+bank\s+finance/i,
+      /funds?\s+flow/i, /assessment\s+of\s+working\s+capital/i].filter(re => re.test(head)).length;
+    if (/\bCMA\b|credit\s+monitoring\s+arrangement/i.test(both) || forms >= 2) return {kind: "cma", summary: "CMA data" + forYrs + (forms ? ": " + forms + " of its forms (operating statement, balance sheet analysis, MPBF …)" : "") + "."};
+    const byName = /balance[\s_-]*sheet|\bBS\b|financial[\s_-]+statements?|final[\s_-]+accounts|audited[\s_-]+accounts/i.test(String(name || "").replace(/\.[a-z0-9]+$/i, ""));
+    const byWords = /balance\s*sheet/i.test(head) && /equity\s+and\s+liabilities|\bliabilities\b/i.test(head) && /\bassets\b/i.test(head);
+    if (byName || byWords) return {kind: "balance_sheet", summary: "A balance sheet / financial statements" + (at ? " as at " + at.trim() : "") + forYrs + "."};
     return null;
   },
   // GSTR-1 ({gstin, fp, b2b: [{ctin, inv: [...]}], ...}) or GSTR-2B ({data: {gstin, rtnprd, docdata: {b2b: [{ctin, inv}]}}}):
@@ -422,7 +442,11 @@ const AUpload = window.AUpload = {
   },
   async record(u, patch){
     if (patch){ await Cloud.api("assistant_uploads?path=eq." + encodeURIComponent(u.path), {method: "PATCH", body: patch}); return; }
-    await Cloud.api("assistant_uploads", {method: "POST", body: {client_id: u.cid, path: u.path, name: String(u.name).slice(0, 200), size: u.size, mime: u.type || null, kind: u.kind, kind_by: u.by === "ai" ? "ai" : "rules", summary: u.summary || null}});
+    const row = {client_id: u.cid, path: u.path, name: String(u.name).slice(0, 200), size: u.size, mime: u.type || null, kind: u.kind, kind_by: u.by === "ai" ? "ai" : "rules", summary: u.summary || null};
+    // the record is what lets a later question read the file again (server/assistant/earlier.ts): a database without
+    // migration 198 refuses the kinds balance_sheet and cma, so it is kept as "other" there (the panel keeps the kind)
+    try { await Cloud.api("assistant_uploads", {method: "POST", body: row}); }
+    catch (e){ if (row.kind !== "balance_sheet" && row.kind !== "cma") throw e; await Cloud.api("assistant_uploads", {method: "POST", body: {...row, kind: "other"}}); }
   },
   // a step the user clicked. Each one hands the file to the page that already does that job, for review there
   async act(u, id, o){
@@ -479,7 +503,12 @@ ASST.upload = files => AUpload.add(files);
 // the answer's stream says which files were not read or were shortened (server/assistant/index.ts: {t: "attach", notes})
 if (!ASST.take.attachNotes){
   const take = ASST.take;
-  ASST.take = function (t, e){ if (e && e.t === "attach"){ t.attachNotes = Array.isArray(e.notes) ? e.notes.slice(0, 30) : []; return; } return take.call(this, t, e); };
+  ASST.take = function (t, e){
+    if (e && e.t === "attach"){ t.attachNotes = Array.isArray(e.notes) ? e.notes.slice(0, 30) : []; return; }
+    // the files attached earlier in this conversation that were read again for this question ({t: "earlier", files, line})
+    if (e && e.t === "earlier"){ t.earlier = Array.isArray(e.files) ? e.files.slice(0, 10).map(String) : []; return; }
+    return take.call(this, t, e);
+  };
   ASST.take.attachNotes = true;
 }
 ASST.prep = function (q){ return AUpload.prep(q); };

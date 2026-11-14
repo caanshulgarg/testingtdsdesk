@@ -202,8 +202,8 @@ export function fsRequest(q: string, o: { anchor: string, today?: string, thread
 // last year's balance sheet among the files of this conversation (the newest that reads as one): its name or what FinCom
 // found it to be says balance sheet, financial statements, final accounts or audited; a PDF or a sheet
 export function pyFileOf(files: { path?: string, name?: string, type?: string, kind?: string, summary?: string }[] | null | undefined) {
-  const list = (files || []).filter((f) => f && f.path && /\.(pdf|xlsx|xls|csv)$/i.test(String(f.name || f.path)) && f.kind !== "notice"
-    && /balance\s*sheet|\bbs\b|financial\s+statements?|final\s+accounts|audited|schedule\s*(iii|3)/i.test(String(f.name || "") + " " + String(f.summary || "")));
+  const list = (files || []).filter((f) => f && f.path && /\.(pdf|xlsx|xls|csv)$/i.test(String(f.name || f.path)) && f.kind !== "notice" && f.kind !== "cma"
+    && (f.kind === "balance_sheet" || /balance\s*sheet|\bbs\b|financial\s+statements?|final\s+accounts|audited|schedule\s*(iii|3)/i.test(String(f.name || "") + " " + String(f.summary || ""))));
   const f = list[list.length - 1];
   return f ? { path: String(f.path), name: String(f.name || String(f.path).split("/").pop()), type: String(f.type || "") } : null;
 }

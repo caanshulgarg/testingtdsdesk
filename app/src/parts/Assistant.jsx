@@ -231,6 +231,7 @@ function Turn({ t, latest }) {
       <span className="asst-who"><span className="asst-av" aria-hidden="true"><User size={12} strokeWidth={2.4} /></span><span>You</span>{t.at && <time dateTime={t.at} className="asst-time">{when(t.at)}</time>}</span>
       <p className="asst-q" data-asst-q="">{t.q}</p>
       <SentChips t={t} />
+      {(t.earlier || []).length > 0 && <p className="note asst-earlier" data-asst-earlier="">Using: {t.earlier.join(", ")} <span className="muted">(attached earlier in this chat)</span></p>}
       {(t.attachNotes || []).length > 0 && <ul className="note asst-attach-notes" data-asst-attach-notes="">{t.attachNotes.map((x, i) => <li key={i}><b>{x.name}</b>: {x.why}</li>)}</ul>}
     </header>
     <div className="asst-a" data-asst-answer="">
