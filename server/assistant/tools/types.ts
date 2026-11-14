@@ -33,10 +33,10 @@ export type ExtCtx = {
   // the files attached earlier in this conversation as the panel lists them, with what FinCom found each to be (kind:
   // balance_sheet, cma, notice, ...); paths of the firm's own folder only (index.ts)
   files?: { path: string, name: string, type: string, kind?: string, summary?: string }[],
-  ownFiles?: (paths: string[]) => Promise<string[]>,
+  ownFiles?: (paths: string[]) => Promise<string[]>,   // the paths of these whose first upload record is this user's, for the client open (index.ts)
   // a small store for what a tool worked out from a file (cma_data's readings, keyed by the file's hash): the firm's own
   // folder for the client open, so a follow-up does not read a PDF with the AI again
-  memo?: { get: (key: string) => Promise<any>, set: (key: string, value: unknown) => Promise<void> },  // the paths of these that this same user uploaded for the client open (assistant_uploads, read as the user)
+  memo?: { get: (key: string) => Promise<any>, set: (key: string, value: unknown) => Promise<void> },
   // deno-lint-ignore no-explicit-any
   store?: any,
   noFont?: boolean,

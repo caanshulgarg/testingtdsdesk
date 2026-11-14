@@ -94,3 +94,11 @@ Deno.test("extraction (review Low): an unlabelled column is provisional; 'Actual
   const y = readGrids("x.xlsx", "p", [G("Balance Sheet", [["Particulars", "As at 31 March 2025", "2023-24 Actual"], ["EQUITY AND LIABILITIES"], ["Share capital", 100, 100], ["ASSETS"], ["Cash and bank balances", 100, 100]])]).years;
   assert(y.every((x) => x.kind === "provisional"), "provisional: " + y.map((x) => x.kind));
 });
+
+Deno.test("extraction (re-review 3): both parts given as nil is a known split, not 'could not be told apart'", () => {
+  const one = (parts: Record<string, number | null>) => readAi("b.pdf", "p", JSON.stringify({ document: "balance_sheet", unit: "rupees", years: [{ column: "31-03-2025", kind: "audited", lines: { stb: 600, share: 100 },
+    parts: { inv_raw_materials: null, inv_stock_in_process: null, inv_finished_goods: null, ...parts }, total_liabilities: null, total_assets: null, profit_before_tax: null, profit_after_tax: null }] })).years[0];
+  const zero = one({ stb_current_maturities: 0, stb_related_parties: 0 });
+  assert(zero.stbUnknown == null && zero.l.stb === 600, "nil parts: all bank, known");
+  assert(one({ stb_current_maturities: null, stb_related_parties: null }).stbUnknown === 600, "no parts: not told apart");
+});

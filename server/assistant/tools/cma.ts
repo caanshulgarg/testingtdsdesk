@@ -189,7 +189,9 @@ async function fromBooks(ctx: ExtCtx, open: number): Promise<BookYears> {
 export function yearEnd(l0: Lines, m: number, asOn: string | null, fy: number, kind: string): CYear {
   const l: Lines = { ...l0 };
   const pat0 = pbtLines(l0) - (l0.tax || 0), dep0 = l0.dep || 0;
-  for (const k of PLK) l[k] = (l0[k] || 0) * 12 / m;
+  // every line annualised but the change in stock: the closing stock is taken at the same holding period as to date (the
+  // stock on the last entry), so the year's change in stock is the change to date
+  for (const k of PLK) l[k] = k === "chg" ? (l0.chg || 0) : (l0[k] || 0) * 12 / m;
   const dPat = pbtLines(l) - (l.tax || 0) - pat0, dDep = Math.min((l.dep || 0) - dep0, Math.max(0, (l.ppe || 0)));
   const toCap = kind !== "company" && !(l.share || 0) ? ((l.current || 0) ? "current" : "capital") : "reserves";
   l[toCap] = (l[toCap] || 0) + dPat;
@@ -292,7 +294,7 @@ export async function runCma(input: Record<string, unknown>, ctx: ExtCtx): Promi
   const assumptions = [
     ...B.warnings.map((w) => "Check the books: " + w),
     "Format: the standard CMA (Forms I to VI and the key ratios), not one bank's own. Past years from the sources listed in Sources; where an audited balance sheet and the earlier CMA give the same year, the audited figures are used and every difference is listed.",
-    ...(cur ? ["The year now running (" + fyL(cur.fy) + ") is an estimate from the books to " + (B.todate?.asOn || "the last entry") + ": the profit and loss annualised (x 12/" + cur.months + "); the balance sheet carried to 31 March from the books' balances, the rest of the year's profit added to the net worth (no drawings or dividend) and the rest of the year's depreciation taken off the fixed assets, both through cash and bank."] : []),
+    ...(cur ? ["The year now running (" + fyL(cur.fy) + ") is an estimate from the books to " + (B.todate?.asOn || "the last entry") + ": the profit and loss annualised (x 12/" + cur.months + ") but for the change in stock: the closing stock at 31 March is taken at the same holding period as to date (the stock on the last entry), so the change in stock is the books' to date; the balance sheet carried to 31 March from the books' balances, the rest of the year's profit added to the net worth (no drawings or dividend) and the rest of the year's depreciation taken off the fixed assets, both through cash and bank."] : []),
     ...(negTnw.length ? ["Net worth negative (tangible net worth below nil) in " + negTnw.join(", ") + ": TOL/TNW and debt/equity are not meaningful there and are left blank."] : []),
     "MPBF by Method " + I.method + (I.method === "II" ? " (the second method: 25% of the current assets from long-term funds), FinCom's default" : " (the first method: 25% of the working capital gap from long-term funds), as you said") + "; the other method is shown for comparison. Export receivables are taken as nil.",
     "Drawing power: paid stock (inventory less trade creditors) less a " + Math.round(I.stockMargin * 100) + "% margin, and receivables less a " + Math.round(I.recMargin * 100) + "% margin" + (input.stock_margin_pct == null && input.receivable_margin_pct == null ? " (FinCom's defaults)." : "."),
@@ -303,7 +305,8 @@ export async function runCma(input: Record<string, unknown>, ctx: ExtCtx): Promi
     ...p.assumptions, ...p.warnings.map((w) => "Check: " + w), ...notes, ...I.said,
   ];
   // the books' own statements failing a check or with ledgers not placed: the CMA built on them is a draft too
-  const why = draftWhy(fails.length, tiesBad.length, B.warnings.length);
+  const fromBooksUsed = !!cur || past.some((y) => /^books/.test(y.src));
+  const why = draftWhy(fails.length, tiesBad.length, fromBooksUsed ? B.warnings.length : 0);
   const status = !why.length ? "All " + c.checks.length + " checks pass." : "DRAFT, NOT FINAL: " + why.join("; ") + " (see Checks and Assumptions).";
   const lastPast = past[past.length - 1] || cur!;
   const form1: [string, string][] = [

@@ -160,3 +160,13 @@ Deno.test("DSCR (review High): with no schedule, the instalments are the current
   assert(/current maturities of the year before/.test(as), "said in the assumptions");
   assert(!/existing term loans/.test(r.line), "not asked for when the current maturities stand in: " + r.line);
 });
+
+Deno.test("the running year (re-review 4): the closing stock at the same holding period as to date; the stock change not doubled", async () => {
+  const { yearEnd } = await import("./cma.ts");
+  const l = { ...YB.l, rev: 6900000, mat: 4025000, emp: 825000, fin: 190000, dep: 160000, exp: 1000000, oth: 50000, tax: 200000, chg: -100000 };
+  const y = yearEnd(l, 6, "2025-09-30", 2025, "company");
+  near(y.l.chg, -100000, "the change in stock is the books' to date"); near(y.l.inv, YB.l.inv, "the closing stock is the stock on the last entry");
+  near(y.l.mat, 8050000, "the rest annualised");
+  const c = cmaCompute([YA, y], { method: "II", stockMargin: 0.25, recMargin: 0.25, limit: null });
+  assert(c.checks.find((x) => /balance sheet balances/.test(x.label) && x.year === "2025-26")!.ok, "balances");
+});

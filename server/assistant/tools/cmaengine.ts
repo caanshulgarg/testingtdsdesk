@@ -133,10 +133,12 @@ const H = (key: string, label: string): Def => ({ key, label, fmt: "head" });
 const L = (...ks: string[]) => (y: CYear) => sumOf(y.l, ks);
 
 // the term loans' share of the year's interest: finance costs x the term loans' share of the borrowings (the average of the
-// year's opening and closing, when the year before is known)
+// year's opening and closing, when the year before is known). Term loans include their instalments due within a year;
+// the borrowings include the short-term ones from directors and related parties.
 function intTL(ys: CYear[], i: number): number {
   const y = ys[i], p = i > 0 ? ys[i - 1] : null;
-  const tl = g(y.l, "ltb") + (p ? g(p.l, "ltb") : g(y.l, "ltb")), all = tl + g(y.l, "stb") + (p ? g(p.l, "stb") : g(y.l, "stb"));
+  const T = (l: Lines) => g(l, "ltb") + g(l, "cm"), B = (l: Lines) => T(l) + g(l, "stb") + g(l, "stbo");
+  const tl = T(y.l) + (p ? T(p.l) : T(y.l)), all = B(y.l) + (p ? B(p.l) : B(y.l));
   return all > 0 ? g(y.l, "fin") * tl / all : 0;
 }
 

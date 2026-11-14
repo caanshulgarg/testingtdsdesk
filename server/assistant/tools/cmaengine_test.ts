@@ -90,3 +90,9 @@ Deno.test("engine (review Low): the checks are real ones: the printed totals and
   const r = cmaCompute([YB, p], II);
   assert(r.checks.some((x) => !x.ok && /retained profit/.test(x.label)), "the retained-profit check catches an invented drawing or capital");
 });
+
+Deno.test("engine (re-review 1): interest on term loans counts their instalments due and the directors' loans", () => {
+  const y: CYear = { fy: 2025, kind: "projected", src: "t", repay: 100, l: { share: 1000, ltb: 300, cm: 100, stb: 400, stbo: 200, tp: 0, ppe: 1000, inv: 1000, fin: 100 } };
+  const c = cmaCompute([y], II);
+  near(rowOf(c, "R", "inttl").vals[0], 100 * 400 / 1000, "100 x (300 + 100) / (300 + 100 + 400 + 200)", 1e-9);
+});

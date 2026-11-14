@@ -359,7 +359,9 @@ export function readAi(name: string, path: string, text: string): RFile {
       const cm = Math.min(P("stb_current_maturities"), l.stb), ot = Math.min(P("stb_related_parties"), l.stb - cm);
       if (cm) { l.stb -= cm; l.cm = cm; }
       if (ot) { l.stb -= ot; l.stbo = ot; }
-      if (!cm && !ot) stbUnknown = l.stb;
+      // both parts given (0 included): the split is known; none given: it could not be told apart
+      const given = (k: string) => !!y.parts && ok(y.parts[k]);
+      if (!given("stb_current_maturities") && !given("stb_related_parties")) stbUnknown = l.stb;
     }
     if (l.inv) { if (P("inv_raw_materials")) l.inv_rm = P("inv_raw_materials"); if (P("inv_stock_in_process")) l.inv_wip = P("inv_stock_in_process"); if (P("inv_finished_goods")) l.inv_fg = P("inv_finished_goods"); }
     const kind = ["audited", "provisional", "estimated", "projected"].includes(y.kind) ? y.kind : "audited";
