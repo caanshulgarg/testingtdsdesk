@@ -14,9 +14,10 @@ answered by the test (page.route):
   7. names corrected (22-Oct-2026): the microphone asked for echo cancelling, noise suppression, gain, one channel; opus
      at 64 kbps (Safari's AAC at 96 kbps; next-fix-voice, 14-Nov-2026: were 40); Hinglish sent with latin=1; the corrected
      names under the box, underlined, the heard words on a tap, one tap to undo; the pause after speech 4 s by default
-  8. next-fix-voice: the default is Hinglish · auto (lang auto, latin=1); once the live words look Hindi the clip goes as
-     Hindi (lang hi, latin=1) and the question's hint is Hinglish; English picked still wins; the open screen's title goes
-  9. hold to talk (off by default, kept): held, it listens through a pause; let go, it stops and sends the clip
+  8. next-fix-voice: the default is Hinglish · auto (lang auto, latin=1), Hindi words or not (never forced to Hindi);
+     English picked still wins and is kept; the open screen's title goes in the body (multipart), never the URL
+  9. hold to talk (off by default, kept): held, it listens through a pause; let go, it stops and sends the clip; it stops
+     by itself at its cap (2 minutes; 0.8 s here) and when the window loses focus
 Run on app/dist-test, under the lock: flock /tmp/fincom-app.lock python3 tests/run_voice_whisper.py"""
 import os, sys, json, threading, functools, http.server, urllib.parse
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -43,10 +44,18 @@ def fn(route, request):
     if request.method == "OPTIONS": return route.fulfill(status=204, headers=CORS)
     u = urllib.parse.urlparse(request.url); qs = dict(urllib.parse.parse_qsl(u.query))
     body = request.post_data_buffer or b""
+    ctype, screen = request.headers.get("content-type") or "", None
+    if ctype.startswith("multipart/form-data"):      # the app: the clip as "audio", the screen's words as "screen"
+        b = ctype.split("boundary=")[1].strip().strip('"').encode()
+        for part in body.split(b"--" + b)[1:-1]:
+            head, _, data = part.partition(b"\r\n\r\n"); data = data[:-2] if data.endswith(b"\r\n") else data
+            h = head.decode("latin-1")
+            if 'name="audio"' in h: body = data; ctype = next((l.split(":", 1)[1].strip() for l in h.split("\r\n") if l.lower().startswith("content-type:")), "")
+            elif 'name="screen"' in h: screen = data.decode("utf-8")
     if (request.headers.get("content-type") or "").startswith("application/json"):
         return route.fulfill(status=200, content_type="application/json", body=json.dumps({"ok": True, "firm_secs": 120, "all_secs": 1500, "key": True}),
                              headers=CORS)
-    SEEN.append({"qs": qs, "type": request.headers.get("content-type"), "body": body.decode("latin-1"), "auth": request.headers.get("authorization")})
+    SEEN.append({"qs": qs, "type": ctype.split(";")[0], "body": body.decode("latin-1"), "auth": request.headers.get("authorization"), "screen": screen})
     if MODE[0] == "limit": return route.fulfill(status=429, content_type="application/json", body=json.dumps({"ok": False, "kind": "limit"}), headers=CORS)
     if MODE[0] == "nokey": return route.fulfill(status=503, content_type="application/json", body=json.dumps({"ok": False, "kind": "nokey"}), headers=CORS)
     if MODE[0] == "names": return route.fulfill(status=200, content_type="application/json", headers=CORS, body=json.dumps({"ok": True, "ms": 300, "model": "whisper-large-v3",
@@ -83,7 +92,7 @@ with sync_playwright() as p:
     ok(len(sent) == 1 and sent[0]["body"] == "clip0" and sent[0]["type"] == "audio/webm", "the clip went to fincom-transcribe as audio/webm (%s)" % sent)
     ok(sent and sent[0]["qs"].get("lang") == "auto" and sent[0]["qs"].get("latin") == "1" and sent[0]["qs"].get("client") == cid and sent[0]["auth"] == "Bearer tok-x",
        "nothing chosen: Hinglish · auto (lang auto, latin=1), the open client and the sign-in token (%s)" % (sent[0]["qs"] if sent else None))
-    ok(sent and sent[0]["qs"].get("screen", "").startswith("From Tally"), "the open screen's title goes as a hint (%s)" % (sent[0]["qs"].get("screen") if sent else None))
+    ok(sent and (sent[0]["screen"] or "").startswith("From Tally") and "screen" not in sent[0]["qs"], "the open screen's title goes as a hint, in the body, not the URL (%s)" % (sent[0]["screen"] if sent else None))
     ok(pg.evaluate("document.querySelector('[data-asst-lang]').value") == "auto" and pg.evaluate("localStorage.getItem('tdsdesk:asst-voice-lang:u1')") is None, "the picker shows Hinglish · auto, nothing kept until chosen")
     ok(box(pg) == "Whisper heard clip0", "Whisper's words replaced the browser's (%r)" % box(pg))
     ok("kept" not in line(pg), "no fallback line when Whisper answered (%r)" % line(pg))
@@ -154,13 +163,10 @@ with sync_playwright() as p:
     ok(pg.evaluate("__mr[__mr.length - 1].opts.audioBitsPerSecond") == 96000, "Safari: AAC at 96 kbps (%s)" % pg.evaluate("__mr[__mr.length - 1].opts.audioBitsPerSecond"))
     ctx.close()
 
-    print("8. Hinglish · auto: as Hindi once the live words look Hindi; English picked still wins")
+    print("8. Hinglish · auto: never switched to Hindi by itself; English picked still wins")
     ctx, pg, cid = page(br)
-    _, sent = speak(pg, "richa ka ledger dikhao")
-    ok(sent and sent[0]["qs"].get("lang") == "hi" and sent[0]["qs"].get("latin") == "1", "Hindi words heard: lang hi, latin=1 (%s)" % (sent[0]["qs"] if sent else None))
-    ok(pg.locator("[data-asst-voice][data-asst-voice-hindi]").count() == 1 and pg.evaluate("ASST.st().lang") == "hinglish", "the question's hint is Hinglish (%s)" % pg.evaluate("ASST.st().lang"))
-    _, sent = speak(pg, "show the ledger of richa")
-    ok(sent and sent[0]["qs"].get("lang") == "auto" and pg.evaluate("ASST.st().lang") == "en-IN", "English words: auto again, the hint English (%s, %s)" % (sent[0]["qs"] if sent else None, pg.evaluate("ASST.st().lang")))
+    _, sent = speak(pg, "mujhe richa ka ledger dikhao, balance sheet kab tak")
+    ok(sent and sent[0]["qs"].get("lang") == "auto" and sent[0]["qs"].get("latin") == "1", "Hindi words heard: still lang auto, latin=1 (%s)" % (sent[0]["qs"] if sent else None))
     pg.select_option("[data-asst-lang]", "en-IN"); _, sent = speak(pg, "richa ka ledger dikhao")
     ok(sent and sent[0]["qs"].get("lang") == "en" and pg.evaluate("ASST.st().lang") == "en-IN", "English picked: lang en, Hindi words or not (%s)" % (sent[0]["qs"] if sent else None))
     ok(pg.evaluate("localStorage.getItem('tdsdesk:asst-voice-lang:u1')") == "en-IN", "the choice kept")
@@ -182,6 +188,21 @@ with sync_playwright() as p:
     ok(not mic_on(pg) and len(SEEN) == n + 1 and box(pg) == "Whisper heard clip%s" % SEEN[-1]["body"][4:], "let go: stopped, the clip sent, Whisper's words in the box (%r)" % box(pg))
     pg.hover("[data-asst-mic]"); pg.mouse.down(); pg.wait_for_timeout(80); pg.mouse.up(); pg.wait_for_timeout(300)
     ok(not mic_on(pg) and "Hold the mic" in line(pg), "a quick tap: stopped, with the tip (%r)" % line(pg))
+    pg.evaluate("window.FINCOM_VOICE_HOLD_MS = 800"); n = len(SEEN)
+    pg.hover("[data-asst-mic]"); pg.mouse.down(); pg.wait_for_timeout(250); pg.evaluate("__say([['ek lambi baat', true]])"); pg.wait_for_timeout(1000)
+    ok(not mic_on(pg), "held past the cap (0.8 s here, 2 minutes in use): stopped by itself")
+    pg.mouse.up(); pg.wait_for_timeout(500)
+    ok(len(SEEN) == n + 1, "and its clip sent once (%d)" % (len(SEEN) - n))
+    pg.evaluate("window.FINCOM_VOICE_HOLD_MS = 0")
+    pg.hover("[data-asst-mic]"); pg.mouse.down(); pg.wait_for_timeout(250); pg.evaluate("__say([['aur ek', true]])")
+    pg.evaluate("window.dispatchEvent(new Event('blur'))"); pg.wait_for_timeout(200)
+    ok(not mic_on(pg), "the window lost focus while held: stopped")
+    pg.mouse.up(); pg.wait_for_timeout(400)
+    pg.evaluate("Object.defineProperty(document, 'visibilityState', {configurable: true, get: () => 'hidden'})")
+    pg.hover("[data-asst-mic]"); pg.mouse.down(); pg.wait_for_timeout(250)
+    pg.evaluate("document.dispatchEvent(new Event('visibilitychange'))"); pg.wait_for_timeout(200)
+    ok(not mic_on(pg), "the page hidden while held: stopped")
+    pg.mouse.up(); pg.wait_for_timeout(300); pg.evaluate("delete document.visibilityState")
     pg.focus("[data-asst-mic]"); pg.keyboard.down("Space"); pg.wait_for_timeout(200)
     ok(mic_on(pg), "the keyboard: Space held listens")
     pg.keyboard.up("Space"); pg.wait_for_timeout(300)
@@ -207,7 +228,7 @@ with sync_playwright() as p:
     ok(bits == 64000, "opus at 64 kbps (%s)" % bits)
     pg.evaluate("__say([['richa khandelwaal ko 1 lakh ka payment teddy mein entry', true]])"); pg.click("[data-asst-mic]"); pg.wait_for_timeout(700)
     sent = SEEN[n:]
-    ok(sent and sent[0]["qs"].get("lang") == "hi" and sent[0]["qs"].get("latin") == "1", "Hinglish, Hindi words heard: lang hi, latin=1 (%s)" % (sent[0]["qs"] if sent else None))
+    ok(sent and sent[0]["qs"].get("lang") == "auto" and sent[0]["qs"].get("latin") == "1", "Hinglish: lang auto, latin=1, Hindi words or not (%s)" % (sent[0]["qs"] if sent else None))
     ok(box(pg) == "Pehle: Richa Khandelwal ko 1 lakh ka payment, Tally mein entry", "the corrected words in the box (%r)" % box(pg))
     words = pg.locator("[data-asst-fix-word]")
     ok(words.count() == 2 and words.nth(0).inner_text() == "Richa Khandelwal" and words.nth(1).inner_text() == "Tally", "the two corrected names shown under the box (%d)" % words.count())

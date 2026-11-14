@@ -179,9 +179,12 @@ export async function transcribe(clips, { lang = "auto", client = null, latin = 
     const qs = new URLSearchParams({ lang, secs: String(Math.round(clip.secs * 10) / 10) });
     if (client) qs.set("client", client);
     if (latin) qs.set("latin", "1");
-    if (screen) qs.set("screen", String(screen).slice(0, 120));
+    // the clip and the screen's words in the body (multipart; never the screen in the URL)
+    const body = new FormData();
+    body.append("audio", clip.blob.type ? clip.blob : new Blob([clip.blob], { type: String(clip.type || "audio/webm") }), "clip");
+    if (screen) body.append("screen", String(screen).slice(0, 120));
     let r;
-    try { r = await fetch(url + "?" + qs, { method: "POST", headers: { apikey: c.key, Authorization: "Bearer " + s.access_token, "Content-Type": String(clip.type || "audio/webm").split(";")[0] }, body: clip.blob }); }
+    try { r = await fetch(url + "?" + qs, { method: "POST", headers: { apikey: c.key, Authorization: "Bearer " + s.access_token }, body }); }
     catch (e) { return { ok: false, kind: typeof navigator === "object" && navigator.onLine === false ? "offline" : "error" }; }
     const j = await r.json().catch(() => ({}));
     // switched off by FinCom (the console's AI control centre), or this month's AI allowance used up: FinCom's own words

@@ -20,13 +20,14 @@
 // matches what Whisper heard against the client's own names and gives back the changes; each corrected name is shown
 // under the box, underlined, with what was heard on hover or a tap, and one tap on its undo puts the heard words back.
 // next-fix-voice (14-Nov-2026: the owner speaks Hinglish; listening "very bad"): the default language is Hinglish · auto
-// (voiceLang.js: Whisper finds the language, the words in English letters; as Hindi once the live words look Hindi); a
-// language picked still wins and is kept. The open screen's title and section go to Whisper as a hint. Hold to talk, a
-// choice kept in this browser (localStorage "tdsdesk:asst-voice-hold"): the mic listens while held and stops when let go
-// (no stop on a pause); off by default, the tap and the pause as before.
+// (voiceLang.js: Whisper finds the language, the words in English letters); a language picked still wins and is kept.
+// The open screen's title and section go to Whisper as a hint. Hold to talk, a choice kept in this browser (localStorage
+// "tdsdesk:asst-voice-hold"): the mic listens while held and stops when let go (no stop on a pause), and at the latest
+// after 2 minutes, or when the window loses focus or is hidden (a key let go elsewhere never records for ever); off by
+// default, the tap and the pause as before.
 import { useEffect, useRef, useState } from "react";
 import { Hand, Mic, Square, Undo2, Volume2, VolumeX } from "lucide-react";
-import { VOICE_LANGS, byCode, langOf, looksHindi, whisperFor, askLang } from "./voiceLang.js";
+import { VOICE_LANGS, byCode, langOf, whisperFor, askLang } from "./voiceLang.js";
 import NoDeviceNote from "./NoDeviceNote.jsx";
 import { NO_SOUND_TEXT } from "./noDevice.js";
 
@@ -45,6 +46,9 @@ const seen = (k) => { try { return localStorage.getItem(k) === "1"; } catch (e) 
 const see = (k) => { try { localStorage.setItem(k, "1"); } catch (e) { /* storage blocked */ } };
 const NOTE_KEY = "tdsdesk:asst-voice-note", NONE_KEY = "tdsdesk:asst-voice-none", HOLD_KEY = "tdsdesk:asst-voice-hold";
 const HOLD_TIP = "Hold the mic while you speak; let go to stop.";
+// hold to talk stops by itself after this long (a test may shorten it)
+export const HOLD_MAX_MS = 120000;
+const holdMax = () => Number(globalThis.FINCOM_VOICE_HOLD_MS) || HOLD_MAX_MS;
 const NOTE = "Voice is turned into text by your browser (Google/Apple); for clearer words the recording also goes to Groq through FinCom, and is not kept.";
 const BUSY = "Making the words clearer…";
 const OPENING = "Starting the microphone…";
@@ -88,15 +92,15 @@ const ERR = {
 // the mic and the language, in the question box's bar; `a` is ASST's state (a.q the box, a.lang the hint)
 export function VoiceInput({ a, onText, client = null }) {
   const [on, setOn] = useState(false), [msg, setMsg] = useState(""), [lang, setLang] = useState(voiceLang);
-  // the last listening's words looked Hindi (Hinglish · auto: the hint goes as Hinglish); hold to talk chosen
-  const [hindi, setHindi] = useState(false), [hold, setHold] = useState(() => seen(HOLD_KEY));
+  // hold to talk chosen
+  const [hold, setHold] = useState(() => seen(HOLD_KEY));
   // no microphone reached this browser (Remote Desktop, a cloud PC): "nodevice"; one that sent no sound: "silent"
   const [noDev, setNoDev] = useState("");
   const [none, setNone] = useState(() => !voiceSupported() && !seen(NONE_KEY));
   // the names corrected in the words last put in the box: [{from, to, open}], and where those words start
   const [fixes, setFixes] = useState({ list: [], at: 0 });
   const mine = useRef(null);
-  a.lang = askLang(lang, hindi);
+  a.lang = askLang(lang);
   useEffect(() => () => { if (live && live === mine.current) stopVoice(); }, []);
   useEffect(() => { if (voiceSupported()) loadRecorder(); }, []);
   if (!voiceSupported()) {
@@ -110,17 +114,15 @@ export function VoiceInput({ a, onText, client = null }) {
     const base = String(a.q || "").replace(/\s+$/, ""), sep = base ? " " : "";
     setFixes({ list: [], at: 0 });
     // one listening: the words of the sessions ended (done), the current session's finals (cur) and its interim words
-    const sess = { on: true, done: [], cur: [], interim: "", heard: false, at: Date.now(), quick: 0, rec: null, timer: null, mic: null, lang, hold: held, hindi: false };
+    const sess = { on: true, done: [], cur: [], interim: "", heard: false, at: Date.now(), quick: 0, rec: null, timer: null, mic: null, lang, hold: held };
     const words = () => norm([...sess.done, ...sess.cur, sess.interim].join(" "));
     sess.words = words;
-    const show = () => {
-      const w = words(); onText(w ? base + sep + w : base);
-      if (!sess.hindi && looksHindi(w)) { sess.hindi = true; if (mine.current === sess) setHindi(true); }
-    };
+    const show = () => { const w = words(); onText(w ? base + sep + w : base); };
     const keep = () => { const w = norm([...sess.cur, sess.interim].join(" ")); if (w) sess.done.push(w); sess.cur = []; sess.interim = ""; };
     sess.finish = (how) => {
       if (!sess.on) return;
-      sess.on = false; clearTimeout(sess.timer);
+      sess.on = false; clearTimeout(sess.timer); clearTimeout(sess.cap);
+      if (sess.away) { window.removeEventListener("blur", sess.away); document.removeEventListener("visibilitychange", sess.away); }
       const r = sess.rec; sess.rec = null;
       keep(); show();
       if (r) { try { if (how === "abort") r.abort(); else r.stop(); } catch (e) { /* already stopped */ } }
@@ -161,7 +163,14 @@ export function VoiceInput({ a, onText, client = null }) {
       sess.rec = r; r.startedAt = Date.now();
       try { r.start(); } catch (e) { sess.rec = null; setMsg("Voice typing could not start here."); sess.finish("abort"); }
     };
-    stopVoice(); live = sess; mine.current = sess; setNoDev(""); setHindi(false);
+    stopVoice(); live = sess; mine.current = sess; setNoDev("");
+    // hold to talk: never longer than 2 minutes, and stopped when the window loses focus or is hidden (the key or the
+    // finger let go where this page does not hear it)
+    if (held) {
+      sess.cap = setTimeout(() => sess.finish("stop"), holdMax());
+      sess.away = (e) => { if (e.type === "blur" || document.visibilityState === "hidden") sess.finish("stop"); };
+      window.addEventListener("blur", sess.away); document.addEventListener("visibilitychange", sess.away);
+    }
     if (VR && VR.canRecord()) {
       sess.mic = VR.startRecording({ silenceMs: silenceMs(), onSilence: () => { if (!sess.hold) sess.finish("stop"); }, onError: (w) => { if (mine.current === sess) setMsg(w); },
         onNoDevice: () => { if (mine.current === sess) { setNoDev("nodevice"); setMsg((m) => (m === OPENING ? "" : m)); } },
@@ -180,7 +189,7 @@ export function VoiceInput({ a, onText, client = null }) {
       // the microphone sent no sound (a silent Remote Desktop microphone): nothing sent to be heard, the browser's words stay
       if (clips.quiet) { setNoDev("silent"); return null; }
       setMsg(BUSY);
-      const w = whisperFor(sess.lang, sess.hindi);
+      const w = whisperFor(sess.lang);
       return VR.transcribe(clips, { lang: w.lang, latin: w.latin, client, screen: VR.screenWords ? VR.screenWords() : "" }).then((r) => {
         const done = (m) => setMsg((x) => (x === BUSY ? m : x));
         if (mine.current !== sess || String(a.q || "") !== shown) { done(""); return; }   // a new listening, Ask, or the box changed
@@ -201,7 +210,7 @@ export function VoiceInput({ a, onText, client = null }) {
   };
   const peek = (i) => setFixes({ list: fixes.list.map((f, j) => (j === i ? Object.assign({}, f, { open: !f.open }) : f)), at: fixes.at });
   const shownFixes = on ? [] : fixes.list.map((f, i) => [f, i]).filter(([f]) => String(a.q || "").includes(f.to));
-  const pick = (c) => { setLang(c); keepLang(c); setHindi(false); a.lang = askLang(c, false); if (live) { const s = live; live = null; s.finish("stop"); setOn(false); } };
+  const pick = (c) => { setLang(c); keepLang(c); a.lang = askLang(c); if (live) { const s = live; live = null; s.finish("stop"); setOn(false); } };
   // hold to talk: pressed starts, let go stops (a tap too short to say anything: the tip)
   const press = (e) => {
     if (e.type === "pointerdown" && e.button !== 0) return;
@@ -221,9 +230,9 @@ export function VoiceInput({ a, onText, client = null }) {
   const micHandlers = hold
     ? { onPointerDown: press, onPointerUp: letGo, onPointerCancel: letGo, onKeyDown: keyHold, onKeyUp: keyHold, onContextMenu: (e) => e.preventDefault(), onClick: (e) => e.preventDefault() }
     : { onClick: () => start(false) };
-  const micTitle = on ? (hold ? "Let go to stop" : "Stop listening") : (hold ? "Hold to speak" : "Speak your question") + " (" + byCode(lang).label + (lang === "auto" && hindi ? ", Hindi heard" : "") + ")";
+  const micTitle = on ? (hold ? "Let go to stop" : "Stop listening") : (hold ? "Hold to speak" : "Speak your question") + " (" + byCode(lang).label + ")";
   return <>
-    <span className="asst-voice" data-asst-voice="" data-asst-voice-hindi={hindi ? "" : undefined}>
+    <span className="asst-voice" data-asst-voice="">
       <button type="button" className={"asst-act asst-mic" + (on ? " on" : "") + (hold ? " hold" : "")} data-asst-mic="" data-asst-mic-hold={hold ? "" : undefined} aria-pressed={on} {...micHandlers}
         title={micTitle} aria-label={on ? (hold ? "Let go to stop" : "Stop listening") : hold ? "Hold to speak your question" : "Speak your question"}>
         {on ? <><span className="asst-mic-pulse" aria-hidden="true" /><Square size={12} aria-hidden="true" fill="currentColor" /></> : <Mic size={16} aria-hidden="true" />}

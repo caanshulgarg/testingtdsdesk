@@ -1,7 +1,7 @@
 // deno test server/fincom-transcribe/names_test.ts (run by tests/run_transcribe_server.py). Whisper's words made right:
 // Devanagari to English letters for Hinglish, the client's names and the firm's words corrected only on a confident,
 // unique match, an amount never changed, and the AI step's answer refused when a number changed.
-import { checkAiFix, correctNames, devanagariShare, diffWords, soundKey, toLatin, variantsOf } from "./names.ts";
+import { checkAiFix, correctNames, devanagariShare, diffWords, hinglishLatin, loanWords, soundKey, toLatin, variantsOf } from "./names.ts";
 
 function assert(c: unknown, w: string): asserts c { if (!c) throw new Error(w); }
 const eq = (a: unknown, b: unknown, w: string) => assert(JSON.stringify(a) === JSON.stringify(b), w + ": got " + JSON.stringify(a) + ", expected " + JSON.stringify(b));
@@ -78,4 +78,13 @@ Deno.test("the AI step's answer: taken only with every number unchanged and only
   eq(checkAiFix(before, "Mohan Lal ko 1,25,000 ka receipt Tally mein", allowed).why, "word", "a word that is not a name's: refused (the meaning)");
   eq(checkAiFix(before, "", allowed).ok, false, "empty: refused");
   eq(diffWords(before, "Mohan Lal ko 1,25,000 ka payment Tally mein"), [{ from: "mohan laal", to: "Mohan Lal" }, { from: "teddy", to: "Tally" }], "the changes, from and to");
+});
+
+Deno.test("the accountant's English words in Devanagari put back before toLatin (review F1)", () => {
+  eq(hinglishLatin("मुझे बैलेंस शीट दिखाओ"), "mujhe balance sheet dikhao", "balance sheet, not bailens shit");
+  eq(hinglishLatin("टीडीएस और जीएसटी, सीएमए रिपोर्ट।"), "TDS aur GST, CMA report.", "TDS, GST, CMA; the danda a full stop");
+  eq(hinglishLatin("क्रेडिट नोट, डेबिट नोट और लेज़र, वाउचर, इनवॉइस"), "credit note, debit note aur ledger, voucher, invoice", "notes, ledger with a nukta, voucher, invoice");
+  eq(hinglishLatin("रिचा को पेमेंट, टैली में एंट्री"), "richa ko payment, Tally men entry", "payment, Tally, entry");
+  eq(hinglishLatin("ड्रॉइंग पावर और वर्किंग कैपिटल, टर्म लोन"), "drawing power aur working capital, term loan", "CMA words");
+  eq(loanWords("Richa ko कल"), "Richa ko कल", "other words left for toLatin");
 });

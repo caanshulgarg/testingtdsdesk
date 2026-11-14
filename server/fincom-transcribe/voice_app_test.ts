@@ -1,8 +1,8 @@
 // deno test server/fincom-transcribe/voice_app_test.ts (run by tests/run_transcribe_server.py). The app's side of voice
 // typing, as plain functions (next-fix-voice, 14-Nov-2026: the owner speaks Hinglish; every clip had gone as English):
-// the default language (Hinglish · auto) and a choice kept; the switch to Hindi once the live words look Hindi; what goes
-// to Whisper for each language; the bitrate asked of the recorder (AAC 96 kbps, opus 64 kbps); the screen's words.
-import { askLang, byCode, DEFAULT_LANG, langOf, looksHindi, VOICE_LANGS, whisperFor } from "../../app/src/parts/voiceLang.js";
+// the default language (Hinglish · auto) and a choice kept; what goes to Whisper for each language (never Hindi unless
+// picked: the review's F1/F2); the bitrate asked of the recorder (AAC 96 kbps, opus 64 kbps); the screen's words.
+import { askLang, byCode, DEFAULT_LANG, langOf, VOICE_LANGS, whisperFor } from "../../app/src/parts/voiceLang.js";
 import { BITRATE, BITRATE_AAC, bitrateFor, recorderOptions, screenWords } from "../../app/src/parts/VoiceRecorder.js";
 
 function assert(c: unknown, w: string): asserts c { if (!c) throw new Error(w); }
@@ -15,19 +15,12 @@ Deno.test("the default language is Hinglish · auto; a choice kept wins", () => 
   for (const c of ["en-IN", "hi-IN", "hinglish", "mr-IN", "gu-IN", "bn-IN", "ta-IN", "te-IN", "kn-IN", "ml-IN", "pa-IN"]) assert(VOICE_LANGS.some((l) => l.code === c), "still offered: " + c);
 });
 
-Deno.test("the live words look Hindi: Hinglish's small words or Devanagari; English does not", () => {
-  for (const t of ["mujhe last month ki GST payable kitna hai", "Richa ka ledger dikhao", "TDS kab bharna hai", "किराये पर टीडीएस", "ledger dikhao"]) assert(looksHindi(t), "Hindi: " + t);
-  for (const t of ["", "show me the ledger of Richa", "what is the GST payable for last month", "main ledger to the bank", "TDS on rent", "par value of shares"]) assert(!looksHindi(t), "not Hindi: " + t);
-});
-
 Deno.test("what goes to Whisper, and the question's hint, for each language", () => {
   eq(whisperFor("auto"), { lang: "auto", latin: true }, "auto: Whisper finds the language, English letters");
-  eq(whisperFor("auto", true), { lang: "hi", latin: true }, "auto, the words looked Hindi: as Hindi, English letters");
   eq(whisperFor("hinglish"), { lang: "auto", latin: true }, "Hinglish chosen: as before");
-  eq(whisperFor("hinglish", true), { lang: "hi", latin: true }, "Hinglish chosen, Hindi heard: as Hindi, English letters");
-  eq([whisperFor("en-IN", true), whisperFor("hi-IN")], [{ lang: "en", latin: false }, { lang: "hi", latin: false }], "English and Hindi chosen win, Hindi words or not");
+  eq([whisperFor("en-IN"), whisperFor("hi-IN")], [{ lang: "en", latin: false }, { lang: "hi", latin: false }], "English and Hindi only when chosen");
   eq(whisperFor("ta-IN"), { lang: "auto", latin: false }, "another language: auto, its own script");
-  eq([askLang("auto"), askLang("auto", true), askLang("en-IN", true), askLang("hi-IN")], ["en-IN", "hinglish", "en-IN", "hi-IN"], "the hint: auto as English until Hindi is heard; a choice as it is");
+  eq([askLang("auto"), askLang("en-IN"), askLang("hinglish"), askLang("hi-IN")], ["en-IN", "en-IN", "hinglish", "hi-IN"], "the hint: auto as English; a choice as it is");
 });
 
 Deno.test("the bitrate asked of the recorder: Safari's AAC 96 kbps, opus 64 kbps", () => {

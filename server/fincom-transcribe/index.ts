@@ -4,8 +4,10 @@
 // Whisper's words replace the browser's. On any failure the app keeps the browser's words.
 //   POST the audio itself (Content-Type audio/webm, audio/ogg, audio/mp4 or audio/wav; at most 5 MB and 60 s), with
 //     ?lang=hi|en|auto (auto: Hinglish and the other languages), &latin=1 (Hinglish: the words in English letters),
-//     &secs=<the clip's length>, &client=<the open client>, &screen=<the open screen's title and section>, &verbose=1 (calls, 23-Oct-2026: Whisper's verbose answer, and
+//     &secs=<the clip's length>, &client=<the open client>, &verbose=1 (calls, 23-Oct-2026: Whisper's verbose answer, and
 //     the language it found as `language`, ta, hi, en…; the words in their own script: with verbose=1 latin is not applied)
+//     Or (next-fix-voice) multipart/form-data: "audio" the clip (its own type), "screen" the open screen's title and
+//     section (in the body, never the URL), the rest as above.
 //     -> {ok: true, text, changes: [{from, to}], model, ms[, language]} | {ok: false, kind: "nokey" | "limit" | "error" | "size" | ...}
 //   POST {"action": "usage"} -> {ok, firm_secs, all_secs (the platform administrator only), key: is a key set}
 // Who: as fincom-assistant: the signed-in user's token, their two-step sign-in, an active member of a firm whose owner
@@ -18,11 +20,11 @@
 // Words prompt (Whisper reads at most 224 tokens of it, and copies its style; next-fix-voice: counted cautiously,
 // tokensOf, within PROMPT_TOKENS): a short sample sentence in the chosen style (Hinglish in English letters, English, or
 // Hindi) made of the client's own biggest ledger and party names, then, by priority: more of the client's biggest names,
-// the open screen's title and section (&screen=), the firm's words (accounting, GST, TDS, banking and CMA: FIRM_WORDS),
+// the open screen's title and section ("screen", in the body), the firm's words (accounting, GST, TDS, banking and CMA: FIRM_WORDS),
 // the firm's client names (always, a client open or not), then the rest while they fit; the ledgers read from
-// tally_ledgers for that client's books in the caller's firm only. Hinglish may be sent as Hindi (lang=hi&latin=1, the
-// app's choice once the live words look Hindi). For Hinglish an answer mostly in Devanagari is written in English letters
-// (names.ts, toLatin).
+// tally_ledgers for that client's books in the caller's firm only. Hinglish goes as auto with the Hinglish prompt in
+// English letters, so Whisper stays in English letters; an answer mostly in Devanagari has its English words put back
+// first (names.ts, loanWords: बैलेंस शीट -> balance sheet), then the rest written in English letters (toLatin).
 // Names corrected (names.ts): each run of 1-4 words is matched against the client's ledger and party names and the
 // firm's client names; replaced only on a confident, unique match; the changes go back as {from, to} for the app to show
 // (underlined, with one tap to undo). When some name was near but not sure, one cheap AI call (the routing model of
@@ -46,7 +48,7 @@
 import { corsFor } from "../_shared/cors.ts";
 import { firmGate, viaRest } from "../_shared/firmgate.ts";   // the console's switches (migration 118)
 import { aiPolicy, refusal } from "../_shared/ai_policy.ts";
-import { arabicShare, checkAiFix, correctNames, devanagariShare, diffWords, FIRM_ALIASES, Name, toLatin } from "./names.ts";
+import { arabicShare, checkAiFix, correctNames, devanagariShare, diffWords, FIRM_ALIASES, hinglishLatin, Name } from "./names.ts";
 import { costUsd, HAIKU } from "../assistant/models.ts";
 import { ID_PATTERNS } from "../assistant/mask.ts";
 import { whisperLang } from "../../app/src/calls/rules.js";
@@ -88,13 +90,24 @@ export function tokensOf(s: string): number {
   }
   return n;
 }
-// the open screen's title and section (?screen=, from the app): its words only, never an identifier or a long number;
-// at most 6 phrases of 40 characters
+// the open screen's title and section ("screen" in the body, from the app): its words only; never an identifier (PAN,
+// GSTIN, ... in either case), an email, an amount (₹, Rs, INR, digits with commas, 2.5L, 3Cr) or an account number,
+// masked (XXXX1234, ****1234) or long; at most 6 phrases of 40 characters
+const isId = (w: string) => [w, w.toUpperCase()].some((x) => ID_PATTERNS.some(([, re]) => { re.lastIndex = 0; const hit = re.test(x); re.lastIndex = 0; return hit; }));
+const AMOUNT = /₹|^(rs|inr)\b|^\d[\d,]*,\d|^\d[\d,.]*\s*(l|lac|lacs|lakhs?|cr|crs?|crores?|k|m)$/i;
+const MASKED = /[x*•#]{2,}[-\s]?\d|\d[-\s]?[x*•#]{2,}|^[x*•#]{3,}$/i;
+const UNIT = /^(l|lac|lacs|lakhs?|cr|crs?|crores?|\/-)$/i;
 export function screenPhrases(raw: string | null): string[] {
   const out: string[] = [];
   for (const part of String(raw || "").slice(0, 160).split(/\s*(?:·|›|»|\||>|\n)\s*/)) {
-    const words = part.split(/\s+/).filter((w) => w && !ID_PATTERNS.some(([, re]) => { re.lastIndex = 0; const hit = re.test(w); re.lastIndex = 0; return hit; }) && !/[0-9]{5,}/.test(w))
-      .map((w) => w.replace(/[^\p{L}\p{N}&/.-]+/gu, "")).filter((w) => /\p{L}/u.test(w));
+    let after = false;   // a word right after an amount ("2.5 Cr", "Rs 500")
+    const words = part.split(/\s+/).filter((w) => {
+      const t = w.replace(/^[(\[]+|[)\],.:;]+$/g, "");
+      const money = AMOUNT.test(t) || (after && (/^\d/.test(t) || UNIT.test(t)));
+      const drop = !t || money || isId(t) || /@/.test(t) || MASKED.test(t) || /[0-9]{5,}/.test(t) || (/\d/.test(t) && /[.,]/.test(t));
+      after = money || /^\d[\d,.]*$/.test(t) || /^(rs\.?|inr|₹)$/i.test(t);
+      return !drop;
+    }).map((w) => w.replace(/[^\p{L}\p{N}&/.-]+/gu, "")).filter((w) => /\p{L}/u.test(w));
     const p = words.join(" ").slice(0, 40).trim();
     if (p && !out.some((x) => x.toLowerCase() === p.toLowerCase())) out.push(p);
     if (out.length >= 6) break;
@@ -248,25 +261,37 @@ export function handler(deps: Deps & { now?: () => number }) {
     const allowed = await policy.aiAllowed(firm, "voice");
     if (!allowed.ok) { await drop(); const no = refusal(allowed); return reply(no.status, no.body); }
 
-    // the clip
-    const ext = TYPES[type];
-    if (!ext) { await drop(); return reply(415, { ok: false, kind: "type", error: "Send the recording as webm, ogg, mp4 or wav." }); }
+    // the clip: the body itself, or (the app) multipart with the clip as "audio" and the screen's words as "screen"
+    const multi = type === "multipart/form-data";
+    if (!multi && !TYPES[type]) { await drop(); return reply(415, { ok: false, kind: "type", error: "Send the recording as webm, ogg, mp4 or wav." }); }
     const u = new URL(req.url);
     const lang = String(u.searchParams.get("lang") || "auto").toLowerCase();
     const verbose = u.searchParams.get("verbose") === "1";
-    // Hinglish: the words in English letters (auto-detected, or heard as Hindi once the app saw Hindi words)
-    const latin = u.searchParams.get("latin") === "1" && (lang === "auto" || lang === "hi") && !verbose;
+    const latin = u.searchParams.get("latin") === "1" && lang === "auto" && !verbose;       // Hinglish: the words in English letters
     if (!LANGS.has(lang)) { await drop(); return reply(400, { ok: false, kind: "lang", error: "The language must be hi, en or auto." }); }
     const secs = Math.max(0, Number(u.searchParams.get("secs")) || 0);
     if (secs > MAX_SECS) { await drop(); return reply(413, { ok: false, kind: "length", error: "A clip may be at most 60 seconds." }); }
-    if (Number(req.headers.get("Content-Length") || 0) > MAX_BYTES) { await drop(); return reply(413, { ok: false, kind: "size", error: "A clip may be at most 5 MB." }); }
-    const audio = new Uint8Array(await req.arrayBuffer());
+    if (Number(req.headers.get("Content-Length") || 0) > MAX_BYTES + (multi ? 16_384 : 0)) { await drop(); return reply(413, { ok: false, kind: "size", error: "A clip may be at most 5 MB." }); }
+    let audio: Uint8Array, atype = type, screenRaw = "";
+    if (multi) {
+      let form: FormData;
+      try { form = await req.formData(); } catch { return reply(400, { ok: false, kind: "empty", error: "No audio was sent." }); }
+      const f = form.get("audio");
+      if (!f || typeof f === "string") return reply(400, { ok: false, kind: "empty", error: "No audio was sent." });
+      atype = String(f.type || "").split(";")[0].trim().toLowerCase();
+      if (!TYPES[atype]) return reply(415, { ok: false, kind: "type", error: "Send the recording as webm, ogg, mp4 or wav." });
+      if (f.size > MAX_BYTES) return reply(413, { ok: false, kind: "size", error: "A clip may be at most 5 MB." });
+      audio = new Uint8Array(await f.arrayBuffer());
+      const sc = form.get("screen");
+      screenRaw = typeof sc === "string" ? sc.slice(0, 400) : "";
+    } else audio = new Uint8Array(await req.arrayBuffer());
+    const ext = TYPES[atype];
     if (audio.length > MAX_BYTES) return reply(413, { ok: false, kind: "size", error: "A clip may be at most 5 MB." });
     if (!audio.length) return reply(400, { ok: false, kind: "empty", error: "No audio was sent." });
     // the client: one of the firm's (read as the user: row-level security)
     const clientId = u.searchParams.get("client") ? String(u.searchParams.get("client")).slice(0, 120) : null;
     const names: Name[] = [], firmClients: string[] = [];
-    const screen = screenPhrases(u.searchParams.get("screen"));
+    const screen = screenPhrases(screenRaw);
     if (clientId) {
       const c = (await rest("/rest/v1/clients?select=id,name,deleted&id=eq." + encodeURIComponent(clientId), jwt).catch(() => [])) as any[];
       if (!c || !c.length || c[0].deleted) return reply(403, { ok: false, kind: "client", error: "This client is not one of your firm's." });
@@ -302,13 +327,13 @@ export function handler(deps: Deps & { now?: () => number }) {
     const key = await groqKey();
     if (!key) { await log(["nokey"], [MODEL], 0); return reply(503, { ok: false, kind: "nokey", error: "Clearer listening is not set up yet." }); }
     const style: Style = latin ? "hinglish" : lang === "en" ? "en" : lang === "hi" ? "hi" : "list";
-    const prompt = buildPrompt(names, style, { screen, clients: firmClients });
+    let prompt = buildPrompt(names, style, { screen, clients: firmClients });
     // the full model for a short clip; turbo for a long one, or when the full model is at its limit
     let model = secs > 0 && secs <= FULL_SECS ? MODEL_FULL : MODEL;
-    let r = await groq(key, model, audio, ext, type, lang, prompt, verbose);
+    let r = await groq(key, model, audio, ext, atype, lang, prompt, verbose);
     // a prompt Groq refuses (400: too long by its own count): the clip once more with the sample sentence alone
-    if (r && r.status === 400) { await r.body?.cancel(); r = await groq(key, model, audio, ext, type, lang, buildPrompt([], style), verbose); }
-    if (r && r.status === 429 && model === MODEL_FULL) { await r.body?.cancel(); model = MODEL; r = await groq(key, model, audio, ext, type, lang, prompt, verbose); }
+    if (r && r.status === 400) { await r.body?.cancel(); prompt = buildPrompt([], style); r = await groq(key, model, audio, ext, atype, lang, prompt, verbose); }
+    if (r && r.status === 429 && model === MODEL_FULL) { await r.body?.cancel(); model = MODEL; r = await groq(key, model, audio, ext, atype, lang, prompt, verbose); }
     if (!r) { await log(["error"], [model], 1); return reply(502, { ok: false, kind: "error", error: "Clearer listening could not be reached." }); }
     if (r.status === 429) { await r.body?.cancel(); await log(["limit"], [model], 1); return reply(429, { ok: false, kind: "limit", error: "Today's limit for clearer listening is reached." }); }
     const j: any = await r.json().catch(() => null);
@@ -319,14 +344,14 @@ export function handler(deps: Deps & { now?: () => number }) {
     // Hinglish taken for Urdu (Whisper's own guess; the two sound alike): heard once more as Hindi; the first words stay
     // when that call fails
     if (latin && arabicShare(text) > 0.5) {
-      const r2 = await groq(key, model, audio, ext, type, "hi", prompt);
+      const r2 = await groq(key, model, audio, ext, atype, "hi", prompt);
       const j2: any = r2 && r2.ok ? await r2.json().catch(() => null) : (await r2?.body?.cancel(), null);
       if (j2) heard += Math.max(0, Number(j2.duration) || 0);
       if (j2 && typeof j2.text === "string" && j2.text.trim()) { text = j2.text.replace(/\s+/g, " ").trim(); tools.push("urdu:hi"); }
       else tools.push("urdu:kept");
     }
     // Hinglish: an answer mostly in Devanagari, in English letters
-    if (latin && devanagariShare(text) > 0.5) { text = toLatin(text); tools.push("latin"); }
+    if (latin && devanagariShare(text) > 0.5) { text = hinglishLatin(text); tools.push("latin"); }
     // the names said, made right (deterministic)
     const all: Name[] = [...names, ...firmClients];
     const fixed = correctNames(text, all);
