@@ -14,7 +14,9 @@ const SHARED = fs.readFileSync(path.join(__dirname, "..", "server", "_shared", "
 const js = [SHARED].concat(ORDER.map(f => fs.readFileSync(path.join(SRC, f), "utf8"))).join("\n");
 // the builders and what they call; every other name is a stub below
 const NAMES = ["xesc", "r2", "num", "amt", "toTallyDate", "fmtDate", "toDateObj", "MONTHS", "MONTHS3", "voucherXml", "vchNoFor", "remoteIdFor", "remoteIdTrial",
-  "bankVoucherXml", "ledgerMasterXml", "salesVoucherXml", "customerMasterXml", "GST_STATES", "stateOfGstin", "fpHash", "setAutoNumbering", "ledNm", "OWN_BANK"];
+  "bankVoucherXml", "ledgerMasterXml", "salesVoucherXml", "customerMasterXml", "GST_STATES", "stateOfGstin", "fpHash", "setAutoNumbering", "ledNm", "OWN_BANK",
+  // the sheet-import change: voucherXml takes the voucher type from vchTypeOf (src/js/03), which asks billVt; salesVoucherXml from salesVt (src/js/25)
+  "vchTypeOf", "billVt", "salesVt"];
 const re = /\n(?:async function|function|const|let|var|class) ([A-Za-z_$][\w$]*)/g;
 const decl = []; let m;
 while ((m = re.exec(js))) decl.push({name: m[1], at: m.index});

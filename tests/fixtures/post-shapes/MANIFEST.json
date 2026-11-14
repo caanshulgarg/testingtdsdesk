@@ -22,9 +22,12 @@
     "fpHash",
     "setAutoNumbering",
     "ledNm",
-    "OWN_BANK"
+    "OWN_BANK",
+    "vchTypeOf",
+    "billVt",
+    "salesVt"
   ],
-  "sha256": "4d7f96ad11ed45384b237d3c9d7c7eb04d784ebd8e522190949eaa1a358ac54b",
+  "sha256": "9eca159c683d6e4bab9e0e40d040340ffc2b9612e7f65929cfa15bc07d6b8f71",
   "files": [
     "purchase-bill.xml",
     "journal.xml",
