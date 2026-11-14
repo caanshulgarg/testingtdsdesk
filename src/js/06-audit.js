@@ -1006,8 +1006,9 @@ const Engine = {
     this.S_KEYS.forEach(k => { if (S[k] !== undefined) s[k] = S[k]; });
     s.companies = {};
     [S.coId, b && b.cid].forEach(c => { if (c && cs[c]) s.companies[c] = cs[c]; });
-    // (the client's documents and parties: the audit's checks read them)
-    if (S.data && b && S.data[b.cid]) s.data = {[b.cid]: S.data[b.cid]};
+    // (the client's documents and parties: the audit's checks read them, S.data[cid], so S.data is always there, as on
+    // the page; the client's own only)
+    s.data = {}; if (S.data && b && S.data[b.cid]) s.data[b.cid] = S.data[b.cid];
     try { for (let i = 0; i < localStorage.length; i++){ const k = localStorage.key(i); if (!/sess|token|auth|api|secret|pass|key/i.test(k)) ls[k] = localStorage.getItem(k); } } catch (e){}
     // what the engines read outside S: the 2B matching runs of the year (M2B.st, from FinCom's cloud: GST2B.run's AI
     // pairs, and so the 3B's credit), sent again only when the page has another
