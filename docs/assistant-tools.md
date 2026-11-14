@@ -98,3 +98,18 @@ effort, counted against the cap; a scanned copy is sent as it is, as a notice is
 the AI" and checked on their line where the copy has text. Wording: `tools/certificate-templates.ts` (one file, every
 paragraph "to confirm by the owner"); the arithmetic and reading: `tools/certlib.ts`. Tests: `tests/run_certificates.py`,
 `tests/run_migration83.py`, `tests/run_certificates_ui.py`.
+
+## CMA data (`tools/cma.ts`, branch `next-ask-cma`, 14-Nov-2026)
+
+`cma_data`: the standard CMA format (no one bank's own). CMA, credit monitoring, MPBF, Tandon, "projections for the bank"
+("bank ke liye projections") go to it at once with no chat model (`server/assistant/cmaask.ts`, step 0 of `runTurn`), never
+to the statements card; what the user said in the chat (loan type and amounts, tenure, moratorium, Method I, years, margins)
+is read by FinCom's rules. Past years: the balance sheets and the earlier CMA of the chat (`tools/cmaread.ts`; Excel by
+FinCom through `filetable.ts`, a PDF by the AI into a strict schema, the only AI step), each row placed on a Schedule III line
+and tied to the file's own totals; the audited figures win over the books and the earlier CMA, every difference listed;
+with no file, the books' last complete years. The year running: the books to date (FSX's sums), the P&L annualised,
+"estimate". Then 1-2 years by `project()`. The forms, ratios and checks: `tools/cmaengine.ts` (every figure one formula,
+worked out by FinCom and written as-is into the Excel by `tools/cmaxl.ts`, whose Assumptions cells switch Method II/I and
+the margins). A failing check or an untied file total makes the whole a DRAFT, said first. Only the loan's type and
+amount and the repayment schedules are asked; Form I shows them as placeholders. Tests: `tools/cmaengine_test.ts`,
+`tools/cmaread_test.ts`, `tools/cma_test.ts` (run_reports_server.py), `cmaask_test.ts` (run_assistant_agent.py).
