@@ -1,7 +1,7 @@
 FINCOM BRIDGE 2.5.16 - TEST SHEET (2.5.15's sheet below, with 2.5.16's changes first)
 
 File:        FinComBridge-Setup-2.5.16.exe
-Fingerprint: SHA-256 (filled in when the setup is built; compare with the .sha256 file next to the setup)
+Fingerprint: SHA-256 a44b11ce8cd3a831cf86f2849b32bb86796773c4205c99ef373779fe9524bde5 (FinComBridge-Setup-2.5.16.exe, built 14-Nov-2026 02:50 UTC at bridge sources 053994f5d after the independent reviews, POSTONLY=any; compare with the .sha256 file next to the setup); program FinComBridge-2.5.16.exe SHA-256 e9cc69fd792b453f45d3adb88996756b40516518fbfc6d18f512c05f95ef0b4f
 
 2.5.16: safety changes from the bridge's security review, and older days read in the day while people work (items 6
 on). Nothing new is asked of Tally: no new request and no request changed (the requests are 2.5.15's), the same
