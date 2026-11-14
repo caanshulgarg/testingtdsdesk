@@ -139,7 +139,8 @@ let stV = null;   // the entries last written here, as the page's Engine.stV
 function storeMsg(m) {
   const st = stores.get(m.id);
   if (m.t === "sbegin") { stores.set(m.id, { cid: m.cid, db: m.db, d: {}, v: [] }); return; }
-  if (!st) return;
+  // (its parts dropped by a clear meanwhile, another client: the page writes the save itself)
+  if (!st) { if (m.t === "send") say({ t: "err", id: m.id, e: "the save's parts were dropped" }); return; }
   if (m.t === "sk") st.d[m.k] = m.v;
   else if (m.t === "sa") { if (m.at) st.d[m.k][m.at] = m.arr ? [] : {}; else st.d[m.k] = m.arr ? [] : {}; }
   else if (m.t === "sp") { const to = m.at ? st.d[m.k][m.at] : st.d[m.k]; if (Array.isArray(to)) { for (let i = 0; i < m.v.length; i++) to.push(m.v[i]); } else Object.assign(to, m.v); }
