@@ -31,21 +31,28 @@ put("innerWidth", 1400); put("innerHeight", 900);
 // would fail in the worker and be worked out on the page instead. (fetch, XHR and WebSocket refuse: no network either)
 export const DENIED = ["saveBooks", "saveBank", "saveBridgeSetup", "saveDraft", "saveFile", "saveNewCompany", "saveRules", "saveSales", "flushAuditLater", "flushBillSaves", "flushBillSavesAndSend", "lsSet", "lsDel"];
 // Books.save's records for the page (worker.js storeMsg, Engine.store): the one write the worker makes, with this
-// browser's indexedDB as the worker found it (taken before denyWrites). One transaction, given up as a whole on an error
+// browser's indexedDB as the worker found it (taken before denyWrites). One transaction, given up as a whole on an error.
+// Review of the full stack: the worker never makes or upgrades the database. It is opened without a version: one that
+// is not there (another tab's "clear this browser's copy") is not made again (its upgrade given up), nor one without the
+// store; another tab removing it meanwhile (its versionchange) gives the save up. live(): still to be written (f looks
+// at it just before its writes)
 const IDB = self.indexedDB;
 export function storeTx(name, f) {
   return new Promise((ok, no) => {
     if (!IDB || !name) { no(new Error("no store to write to")); return; }
-    const r = IDB.open(name, 1);
-    r.onupgradeneeded = () => { if (!r.result.objectStoreNames.contains("docs")) r.result.createObjectStore("docs"); };
-    r.onerror = () => no(r.error || new Error("the store did not open"));
+    let r;
+    try { r = IDB.open(name); } catch (e) { no(e); return; }
+    r.onupgradeneeded = () => { try { r.transaction.abort(); } catch (e) { /* given up */ } };
+    r.onerror = (e) => { if (e && e.preventDefault) e.preventDefault(); no(r.error || new Error("the store did not open")); };
     r.onblocked = () => {};
     r.onsuccess = () => {
-      const db = r.result; let t;
+      const db = r.result; let t, gone = false;
+      if (!db.objectStoreNames.contains("docs")) { db.close(); no(new Error("the store is not there")); return; }
       try { t = db.transaction("docs", "readwrite"); } catch (e) { db.close(); no(e); return; }
-      t.oncomplete = () => { db.close(); ok(); };
+      db.onversionchange = () => { gone = true; try { t.abort(); } catch (e) { /* done */ } db.close(); };
+      t.oncomplete = () => { db.close(); gone ? no(new Error("the store was removed")) : ok(); };
       t.onabort = t.onerror = () => { db.close(); no(t.error || new Error("the save was given up")); };
-      try { f(t.objectStore("docs"), t); } catch (e) { try { t.abort(); } catch (x) { /* given up */ } }
+      try { f(t.objectStore("docs"), t, () => !gone); } catch (e) { try { t.abort(); } catch (x) { /* given up */ } }
     };
   });
 }
