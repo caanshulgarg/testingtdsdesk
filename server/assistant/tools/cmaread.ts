@@ -15,7 +15,9 @@ import { ASSET, CYear, fyL as fyLabel, KIND_WORD, LIAB, Lines, pbtLines, PLK, su
 const lineName = (id: string) => (((globalThis as any).FSX?.LINES || []).find((z: any) => z.id === id) || { face: id }).face;
 
 export type FileKind = "cma" | "balance_sheet";
+// stbUnknown: short-term borrowings that neither the lines nor the notes told apart (counted as bank borrowings, and said)
 export type RYear = { fy: number, kind: YKind | "estimated", label: string, l: Lines, tot: { L?: number, A?: number, PBT?: number, PAT?: number }, bs: boolean, pl: boolean, unit: number, tol: number,
+  stbUnknown?: number, stbFrom?: string,
   div?: number | null };
 export type Tie = { year: string, head: string, file: number, mapped: number, gap: number, ok: boolean };
 export type RFile = { name: string, path: string, kind: FileKind, by: "file" | "ai", years: RYear[], ties: Tie[], unplaced: string[], notes: string[] };
@@ -39,7 +41,8 @@ export function yearOf(cell: unknown): number | null {
   if (m) return 2000 + Number(m[1]) - 1;
   return null;
 }
-const kindIn = (s: string): RYear["kind"] | null => /\baudited\b|\bactuals?\b/i.test(s) ? "audited" : /provisional|unaudited/i.test(s) ? "provisional" : /estimat/i.test(s) ? "estimated" : /project/i.test(s) ? "projected" : null;
+// a column's kind as written: "Actual" is not audited unless it says audited; no word at all is decided by the file (readGrids)
+const kindIn = (s: string): RYear["kind"] | null => /unaudited|provisional/i.test(s) ? "provisional" : /\baudited\b/i.test(s) ? "audited" : /\bactuals?\b/i.test(s) ? "provisional" : /estimat/i.test(s) ? "estimated" : /project/i.test(s) ? "projected" : null;
 // the units a sheet states ("Rs. in lakhs", "(₹ in crore)", "Amount in '000")
 export function unitOf(text: string): number {
   const s = String(text || "").toLowerCase();
@@ -67,7 +70,9 @@ const RULES: [RegExp, string, Side[], number?][] = [
   [/deferred\s+tax\s+liabilit/, "dtl", ["L"]],
   [/deferred\s+tax\s+asset/, "dta", ["A"]],
   [/reserves?|surplus|retained\s+earnings|balance\s+(in|of)\s+(the\s+)?(statement\s+of\s+)?profit|profit\s+and\s+loss\s+account|securities\s+premium/, "reserves", ["L"]],
-  [/instal+ments?\s+of\s+term\s+loans?|current\s+maturities|term\s+loans?\s+(due|repayable)\s+within/, "ocl", ["L"]],
+  [/instal+ments?\s+(of|on)\s+term\s+loans?|current\s+maturities|term\s+loans?\s+(due|repayable)\s+within/, "cm", ["L"]],
+  [/short[- ]term\s+borrowings\s+from\s+(others|directors|partners|related)|(short[- ]term\s+)?loans?\s+(repayable\s+on\s+demand\s+)?from\s+(directors|partners|promoters|related\s+part|relatives|shareholders|members)/, "__stbo", ["L"]],
+  [/borrowings\s+from\s+banks|bank\s+borrowings|cash\s+credit|overdraft|\bod\b|\bcc\b|working\s+capital\s+(loans?|limits?|borrowings?|demand)|bills\s+(purchased|discounted)|packing\s+credit|loans?\s+repayable\s+on\s+demand\s+from\s+banks/, "__stbbank", ["L"]],
   [/short[- ]term\s+borrowings|bank\s+borrowings|borrowings\s+from\s+banks|cash\s+credit|overdraft|working\s+capital\s+(loans?|limits?|borrowings?|demand)|bills\s+(purchased|discounted)|packing\s+credit/, "stb", ["L"]],
   [/long[- ]term\s+borrowings|term\s+loans?|debentures|secured\s+loans?|unsecured\s+loans?|deferred\s+payment\s+credits?|term\s+deposits|loans?\s+from\s+(directors|partners|promoters|relatives|related)|borrowings/, "ltb", ["L"]],
   [/other\s+long[- ]term\s+liabilities|other\s+term\s+liabilities/, "oltl", ["L"]],
@@ -112,18 +117,21 @@ const RULES: [RegExp, string, Side[], number?][] = [
 const SHEET_P = /operating\s+statement|profit\s*(and|&)\s*loss|p\s*&\s*l|\bpl\b|income\s+statement|form\s*(ii|2)\b/i;
 const SHEET_SKIP = /\bnotes?\b|form\s*(i|1|iv|4|v|5|vi|6)\b|ratios?|mpbf|fund\s*s?\s*flow|assumptions|particulars|checks?|cash\s*flow/i;
 // a block heading inside a sheet: the form it starts (a CMA's forms stacked on one sheet), or the side of the balance sheet
-function heading(s: string): { side?: Side | null, sub?: "CA" | "NCA" | null, skip?: boolean } | null {
+type Sub = "CA" | "NCA" | "CL" | "NCL" | null;
+function heading(s: string): { side?: Side | null, sub?: Sub, skip?: boolean } | null {
   if (/form\s*(i|1|iv|4|v|5|vi|6)\b(?![\w-])|comparative\s+statement\s+of\s+current|computation\s+of\s+(mpbf|maximum)|maximum\s+permissible|fund\s*s?\s+flow|key\s+ratios|^ratios|particulars\s+of\s+(the\s+)?(existing|proposed)|assessment\s+of/i.test(s)) return { skip: true, side: null };
   if (/form\s*(ii|2)\b|operating\s+statement|statement\s+of\s+profit|profit\s+and\s+loss|^income$|^revenue$|^expenses$|^expenditure$/i.test(s)) return { side: "P", skip: false };
   if (/form\s*(iii|3)\b|analysis\s+of\s+balance\s+sheet/i.test(s)) return { side: null, skip: false };
   if (/non[- ]current\s+assets|fixed\s+assets|other\s+non[- ]current/i.test(s)) return { side: "A", sub: "NCA", skip: false };
   if (/current\s+assets/i.test(s)) return { side: "A", sub: "CA", skip: false };
-  if (/liabilit|net\s+worth|shareholders|partners'?\s+funds|owners?'?\s+funds|sources\s+of\s+funds|^equity/i.test(s)) return { side: "L", skip: false };
+  if (/non[- ]current\s+liabilities|term\s+liabilities|long[- ]term\s+liabilities/i.test(s)) return { side: "L", sub: "NCL", skip: false };
+  if (/current\s+liabilities/i.test(s)) return { side: "L", sub: "CL", skip: false };
+  if (/liabilit|net\s+worth|shareholders|partners'?\s+funds|owners?'?\s+funds|sources\s+of\s+funds|^equity/i.test(s)) return { side: "L", sub: null, skip: false };
   if (/^assets$|^assets\b|application\s+of\s+funds/i.test(s)) return { side: "A", sub: null, skip: false };
   return null;
 }
 const clean = (s: string) => String(s || "").toLowerCase().replace(/^\s*(\(?[a-z0-9]{1,4}[.)]|[ivx]+[.)])\s*/i, "").replace(/^\s*(\(?[a-z0-9]{1,4}[.)]|[ivx]+[.)])\s*/i, "").replace(/\s+/g, " ").trim();
-export function lineFor(label0: string, side: Side | null, sub: "CA" | "NCA" | null): { id: string, sign: number } | "skip" | null {
+export function lineFor(label0: string, side: Side | null, sub: Sub): { id: string, sign: number } | "skip" | null {
   const s = clean(label0);
   if (!s) return null;
   if (SKIP.test(s)) return "skip";
@@ -132,23 +140,69 @@ export function lineFor(label0: string, side: Side | null, sub: "CA" | "NCA" | n
     if (side && !sides.includes(side)) continue;
     if (!side && sides.length === 1 && sides[0] === "P" && id !== "rev" && id !== "__gs") continue;   // a P&L word outside the P&L: not placed
     if (id === "__inv") return { id: sub === "NCA" || /non[- ]current|long[- ]term/.test(s) ? "nci" : "ci", sign: 1 };
-    return { id, sign: sign || 1 };
+    return { id, sign: sign || 0 };   // 0: as printed
   }
   return null;
 }
 
+// the part of the stock a row names (raw materials, stock-in-process, finished goods and stock-in-trade)
+const invPart = (label: string): "inv_rm" | "inv_wip" | "inv_fg" | null => {
+  const s = clean(label);
+  return /raw\s+materials?|packing\s+materials?/.test(s) ? "inv_rm" : /work[- ]in[- ]progress|stock[- ]in[- ]process|semi[- ]finished|\bwip\b/.test(s) ? "inv_wip" : /finished\s+goods|stock[- ]in[- ]trade|traded\s+goods/.test(s) ? "inv_fg" : null;
+};
+// the notes (any sheet, a Notes sheet too): the short-term borrowings note's parts (current maturities of long-term debt,
+// loans from directors and related parties, loans from banks) and the inventories note's (raw materials, stock-in-process,
+// finished goods), by year; a block runs from its heading to its total or the next note
+type Split = { cm: number, stbo: number, bank: number, inv_rm: number, inv_wip: number, inv_fg: number };
+export function noteSplits(grids: Grid[]): Map<number, Split> {
+  const out = new Map<number, Split>();
+  const at = (fy: number) => { let x = out.get(fy); if (!x) { x = { cm: 0, stbo: 0, bank: 0, inv_rm: 0, inv_wip: 0, inv_fg: 0 }; out.set(fy, x); } return x; };
+  for (const g of grids) {
+    if (!/\bnotes?\b|schedules?/i.test(g.name) && !g.rows.some((r) => r.some((x) => typeof x === "string" && /^\s*note\s*\d+/i.test(x)))) continue;
+    const unit = unitOf(g.name + " " + g.rows.slice(0, 15).flat().filter((x) => typeof x === "string").join(" "));
+    let cols: { c: number, fy: number }[] = [], block: "stb" | "inv" | null = null;
+    for (const row of g.rows) {
+      const ys = row.map((x, c) => ({ c, fy: typeof x === "string" && c >= 1 && x.length <= 40 ? yearOf(x) : null })).filter((x) => x.fy != null) as { c: number, fy: number }[];
+      if (ys.length && !row.some((x) => typeof x === "number")) { cols = ys; continue; }
+      const first = cols.length ? Math.min(...cols.map((x) => x.c)) : row.length;
+      const label = clean(row.slice(0, Math.max(1, first)).filter((x) => typeof x === "string").join(" "));
+      if (!label) continue;
+      if (/short[- ]term\s+borrowings/.test(label) && !/^total/.test(label)) { block = "stb"; continue; }
+      if (/^(inventor|stocks?\b)/.test(label) || /^note\s*\d+\W*\s*inventor/.test(label)) { block = "inv"; continue; }
+      if (/^total\b/.test(label) || /^note\s*\d+/.test(label)) { block = null; continue; }
+      if (!block || !cols.length) continue;
+      for (const col of cols) {
+        const v = row[col.c];
+        if (typeof v !== "number" || !isFinite(v)) continue;
+        const x = v * unit, sp = at(col.fy);
+        if (block === "stb") {
+          if (/current\s+maturit|instal+ments?\s+(of|on|due)/.test(label)) sp.cm += x;
+          else if (/director|partner|promoter|related|relative|shareholder|member|proprietor/.test(label)) sp.stbo += x;
+          else if (/bank|cash\s+credit|overdraft|\bod\b|\bcc\b|packing\s+credit|bills/.test(label)) sp.bank += x;
+        } else {
+          const part = invPart(label);
+          if (part) sp[part] += x;
+        }
+      }
+    }
+  }
+  return out;
+}
+
 // ---------------------------------------------------------------- a file's sheets
-type Acc = RYear & { gb: number, ad: number, gs: number, ed: number, got: Set<string> };
+type Acc = RYear & { gb: number, ad: number, gs: number, ed: number, got: Set<string>, stbGen: number };
 export function readGrids(name: string, path: string, grids: Grid[], hint: FileKind | "" = ""): RFile {
   const notes: string[] = [], unplaced: string[] = [];
   const allText = grids.map((g) => g.name + " " + g.rows.slice(0, 40).flat().filter((x) => typeof x === "string").join(" ")).join(" ");
   const isCma = hint === "cma" || (hint !== "balance_sheet" && /\bcma\b|credit\s+monitoring|operating\s+statement|analysis\s+of\s+balance\s+sheet|\bmpbf\b|form\s*(ii|iii)\b/i.test(allText));
   const kind: FileKind = isCma ? "cma" : "balance_sheet";
   const per: Map<number, Acc> = new Map();
+  // a column with no kind written: audited only when the file says so (and not "unaudited"); else provisional
+  const fileKind: RYear["kind"] = /\baudited\b/i.test(allText) && !/unaudited|provisional/i.test(allText) ? "audited" : "provisional";
   const useSheets = grids.filter((g) => !SHEET_SKIP.test(g.name) || /form\s*(ii|iii|2|3)\b/i.test(g.name));
   for (const g of (useSheets.length ? useSheets : grids)) {
     const unit = unitOf(g.name + " " + g.rows.slice(0, 15).flat().filter((x) => typeof x === "string").join(" "));
-    let side: Side | null = SHEET_P.test(g.name) ? "P" : null, sub: "CA" | "NCA" | null = null, skip = false;
+    let side: Side | null = SHEET_P.test(g.name) ? "P" : null, sub: Sub = null, skip = false;
     let cols: { c: number, fy: number, kind: RYear["kind"], label: string }[] = [];
     for (let r = 0; r < g.rows.length; r++) {
       const row = g.rows[r];
@@ -157,7 +211,7 @@ export function readGrids(name: string, path: string, grids: Grid[], hint: FileK
       if (ys.length >= 1 && row.filter((x) => typeof x === "number").length === 0) {
         cols = ys.map((x) => {
           const near = [r - 2, r - 1, r, r + 1, r + 2].map((k) => String(g.rows[k]?.[x.c] ?? "")).join(" ");
-          return { c: x.c, fy: x.fy as number, kind: kindIn(near) || (kind === "cma" ? "audited" : "audited"), label: x.t.trim() };
+          return { c: x.c, fy: x.fy as number, kind: kindIn(near) || fileKind, label: x.t.trim() };
         });
         // a row of kinds just under it is not a line
         continue;
@@ -194,7 +248,7 @@ export function readGrids(name: string, path: string, grids: Grid[], hint: FileK
         if (col.kind === "projected" || col.kind === "estimated") { /* the earlier CMA's own estimates are not used */ }
         let a = per.get(col.fy * 10 + (col.kind === "projected" || col.kind === "estimated" ? 1 : 0));
         if (!a) {
-          a = { fy: col.fy, kind: col.kind, label: col.label, l: {}, tot: {}, bs: false, pl: false, unit, tol: unit === 1 ? 2 : unit * 0.06, gb: 0, ad: 0, gs: 0, ed: 0, got: new Set(), div: null };
+          a = { fy: col.fy, kind: col.kind, label: col.label, l: {}, tot: {}, bs: false, pl: false, unit, tol: unit === 1 ? 2 : unit * 0.06, gb: 0, ad: 0, gs: 0, ed: 0, got: new Set(), div: null, stbGen: 0 };
           per.set(col.fy * 10 + (col.kind === "projected" || col.kind === "estimated" ? 1 : 0), a);
         }
         const x = v * unit;
@@ -206,18 +260,35 @@ export function readGrids(name: string, path: string, grids: Grid[], hint: FileK
         if (id === "__gs") { a.gs += x; a.pl = true; continue; }
         if (id === "__ed") { a.ed += Math.abs(x); continue; }
         if (id === "__div") { a.div = (a.div || 0) + Math.abs(x); continue; }
-        a.l[id] = (a.l[id] || 0) + (id === "chg" ? sign * Math.abs(x) : x);
-        a.got.add(id);
-        if (LIAB.includes(id) || ASSET.includes(id)) a.bs = true; else a.pl = true;
+        // short-term borrowings: from banks (named so), from directors and related parties, or not told apart (stbGen)
+        const to = id === "__stbo" ? (sub === "NCL" ? "ltb" : "stbo") : id === "__stbbank" ? "stb" : id;
+        if (id === "stb") a.stbGen += x;
+        // the change in inventories as printed ((20): the stock rose, less cost); opening stock added, closing taken off
+        a.l[to] = (a.l[to] || 0) + (to === "chg" && sign ? sign * Math.abs(x) : x);
+        if (to === "inv") { const part = invPart(label); if (part) a.l[part] = (a.l[part] || 0) + x; }
+        a.got.add(to);
+        if (LIAB.includes(to) || ASSET.includes(to)) a.bs = true; else a.pl = true;
       }
     }
   }
   const years: RYear[] = [], ties: Tie[] = [];
+  const split = noteSplits(grids);
   for (const a of [...per.values()].sort((p, q) => p.fy - q.fy)) {
     if (!a.got.has("ppe") && a.gb) a.l.ppe = a.gb - a.ad;
+    // the notes' split of short-term borrowings (current maturities, related parties) and of the stock
+    const sp = split.get(a.fy);
+    if (sp && a.stbGen > 0) {
+      const cm = Math.min(sp.cm, a.stbGen), ot = Math.min(sp.stbo, a.stbGen - cm);
+      if (cm) { a.l.stb -= cm; a.l.cm = (a.l.cm || 0) + cm; }
+      if (ot) { a.l.stb -= ot; a.l.stbo = (a.l.stbo || 0) + ot; }
+      a.stbGen = Math.max(0, a.stbGen - cm - ot - sp.bank);
+      a.stbFrom = "the notes";
+    }
+    if (sp && a.l.inv && a.l.inv_rm == null && a.l.inv_wip == null && a.l.inv_fg == null) for (const k of ["inv_rm", "inv_wip", "inv_fg"] as const) if (sp[k]) a.l[k] = sp[k];
+    if (a.stbGen > a.tol) a.stbUnknown = a.stbGen;
     if (!a.got.has("rev") && a.gs) a.l.rev = a.gs - a.ed;
     if (!a.bs && !a.pl) continue;
-    const { gb: _gb, ad: _ad, gs: _gs, ed: _ed, got: _got, ...y } = a;
+    const { gb: _gb, ad: _ad, gs: _gs, ed: _ed, got: _got, stbGen: _sg, ...y } = a;
     years.push(y);
     const yl = fyL(a.fy) + (a.kind === "projected" || a.kind === "estimated" ? " (" + a.kind + ")" : "");
     const tie = (head: string, file: number | undefined, mapped: number) => { if (file != null) ties.push({ year: yl, head, file, mapped, gap: mapped - file, ok: Math.abs(mapped - file) <= a.tol }); };
@@ -234,18 +305,22 @@ export function readGrids(name: string, path: string, grids: Grid[], hint: FileK
 }
 
 // ---------------------------------------------------------------- a PDF read by the AI (strict schema)
-export const LINE_IDS = [...LIAB, ...ASSET, "rev", "oth", "mat", "pur", "chg", "emp", "fin", "dep", "exp", "exc", "xo", "tax"];
+export const LINE_IDS = [...LIAB.filter((k) => k !== "stbo" && k !== "cm"), ...ASSET, "rev", "oth", "mat", "pur", "chg", "emp", "fin", "dep", "exp", "exc", "xo", "tax"];
+// parts of a line, usually from the notes: of stb, the current maturities of long-term debt and the loans from directors /
+// related parties in it; of inv, its raw materials, stock-in-process and finished goods
+export const PART_IDS = ["stb_current_maturities", "stb_related_parties", "inv_raw_materials", "inv_stock_in_process", "inv_finished_goods"];
 const nul = (t: string) => ({ type: ["number", "null"], description: t });
 export const READ_SCHEMA = {
   type: "object", additionalProperties: false, required: ["document", "unit", "years"],
   properties: {
     document: { type: "string", enum: ["balance_sheet", "cma", "other"], description: "audited or provisional financial statements, an earlier CMA for a bank, or neither" },
     unit: { type: "string", enum: ["rupees", "thousands", "lakhs", "crores", "millions"], description: "the units the amounts are printed in" },
-    years: { type: "array", items: { type: "object", additionalProperties: false, required: ["column", "kind", "lines", "total_liabilities", "total_assets", "profit_before_tax", "profit_after_tax"],
+    years: { type: "array", items: { type: "object", additionalProperties: false, required: ["column", "kind", "lines", "parts", "total_liabilities", "total_assets", "profit_before_tax", "profit_after_tax"],
       properties: {
         column: { type: "string", description: "the column's heading as printed, with its year or date (e.g. 'As at 31 March 2025', '2024-25 Audited')" },
         kind: { type: "string", enum: ["audited", "provisional", "estimated", "projected"] },
         lines: { type: "object", additionalProperties: false, required: LINE_IDS, properties: Object.fromEntries(LINE_IDS.map((k) => [k, nul(k)])) },
+        parts: { type: "object", additionalProperties: false, required: PART_IDS, properties: Object.fromEntries(PART_IDS.map((k) => [k, nul(k + ", included in its line (null when the document does not show it)")])) },
         total_liabilities: nul("total equity and liabilities as printed"), total_assets: nul("total assets as printed"),
         profit_before_tax: nul("as printed"), profit_after_tax: nul("as printed"),
       } } },
@@ -255,6 +330,7 @@ export const READ_PROMPT = "Read the financial statements (or the CMA's operatin
   "Line ids (Schedule III): share = share capital; capital = partners'/proprietor's capital; current = partners' current accounts; reserves = reserves and surplus; ltb = long-term borrowings (term loans, unsecured loans); dtl = deferred tax liability; oltl = other long-term liabilities; ltp = long-term provisions; " +
   "stb = short-term borrowings (bank borrowings for working capital); tp = trade payables; ocl = other current liabilities (incl. instalments of term loans due within a year); stp = short-term provisions (incl. provision for tax); ppe = property, plant and equipment, net block; intang = intangible assets; cwip = capital work-in-progress; nci = non-current investments; dta = deferred tax asset; ltla = long-term loans and advances; onca = other non-current assets; " +
   "ci = current investments; inv = inventories (all kinds together); tr = trade receivables; cash = cash and bank balances; stla = short-term loans and advances; oca = other current assets; rev = revenue from operations (net sales); oth = other income; mat = cost of materials consumed; pur = purchases of stock-in-trade; chg = change in inventories (positive when stock fell); emp = employee costs; fin = finance costs; dep = depreciation; exp = other expenses; exc = exceptional items; xo = extraordinary items; tax = tax expense. " +
+  "Parts (usually in the notes; null when not shown): stb_current_maturities and stb_related_parties are the amounts INSIDE stb that are current maturities of long-term debt and loans from directors, partners or related parties; inv_raw_materials, inv_stock_in_process and inv_finished_goods are the parts of inv. " +
   "Put each printed figure in exactly one line; never add, estimate or work out a figure that is not printed, except to add the parts of one line printed separately (for example raw materials, stock-in-process and finished goods together as inv). Give the printed totals as printed. Expenses as positive numbers.";
 const UNITS: Record<string, number> = { rupees: 1, thousands: 1e3, lakhs: 1e5, crores: 1e7, millions: 1e6 };
 // the AI's answer, read strictly: every figure a finite number within bounds, the units applied, a column's year from its
@@ -276,11 +352,21 @@ export function readAi(name: string, path: string, text: string): RFile {
     let bad = 0;
     for (const k of LINE_IDS) { const v = y.lines ? y.lines[k] : null; if (v == null) continue; if (!ok(v)) { bad++; continue; } l[k] = v * unit; }
     if (bad) notes.push(name + ", " + fyL(fy) + ": " + bad + " figure(s) the AI gave were not numbers; left out.");
+    // the parts: moved out of short-term borrowings (never more than it), the stock's split kept as memo
+    const P = (k: string) => (y.parts && ok(y.parts[k]) ? Math.abs(y.parts[k]) * unit : 0);
+    let stbUnknown: number | undefined;
+    if (l.stb) {
+      const cm = Math.min(P("stb_current_maturities"), l.stb), ot = Math.min(P("stb_related_parties"), l.stb - cm);
+      if (cm) { l.stb -= cm; l.cm = cm; }
+      if (ot) { l.stb -= ot; l.stbo = ot; }
+      if (!cm && !ot) stbUnknown = l.stb;
+    }
+    if (l.inv) { if (P("inv_raw_materials")) l.inv_rm = P("inv_raw_materials"); if (P("inv_stock_in_process")) l.inv_wip = P("inv_stock_in_process"); if (P("inv_finished_goods")) l.inv_fg = P("inv_finished_goods"); }
     const kind = ["audited", "provisional", "estimated", "projected"].includes(y.kind) ? y.kind : "audited";
     const bs = LIAB.concat(ASSET).some((k) => k in l), pl = ["rev", "oth", "mat", "pur", "emp", "fin", "dep", "exp", "tax"].some((k) => k in l);
     const tot = { L: ok(y.total_liabilities) ? y.total_liabilities * unit : undefined, A: ok(y.total_assets) ? y.total_assets * unit : undefined,
       PBT: ok(y.profit_before_tax) ? y.profit_before_tax * unit : undefined, PAT: ok(y.profit_after_tax) ? y.profit_after_tax * unit : undefined };
-    out.years.push({ fy, kind, label: String(y.column).slice(0, 60), l, tot, bs, pl, unit, tol: unit === 1 ? 2 : unit * 0.06 });
+    out.years.push({ fy, kind, label: String(y.column).slice(0, 60), l, tot, bs, pl, unit, tol: unit === 1 ? 2 : unit * 0.06, stbUnknown });
     const yl = fyL(fy) + (kind === "projected" || kind === "estimated" ? " (" + kind + ")" : "");
     const tie = (head: string, file: number | undefined, mapped: number) => { if (file != null) out.ties.push({ year: yl, head, file, mapped, gap: mapped - file, ok: Math.abs(mapped - file) <= (unit === 1 ? 2 : unit * 0.06) }); };
     if (bs) { tie("Total equity and liabilities", tot.L, sumOf(l, LIAB)); tie("Total assets", tot.A, sumOf(l, ASSET)); out.ties.push({ year: yl, head: "Assets = liabilities (as read)", file: sumOf(l, LIAB), mapped: sumOf(l, ASSET), gap: sumOf(l, ASSET) - sumOf(l, LIAB), ok: Math.abs(sumOf(l, ASSET) - sumOf(l, LIAB)) <= (unit === 1 ? 2 : unit * 0.06) }); }
@@ -290,8 +376,9 @@ export function readAi(name: string, path: string, text: string): RFile {
 }
 
 // ---------------------------------------------------------------- the past years: which source each year takes, and the differences
-type Cand2 = { pri: number, src: string, kind: CYear["kind"], l: Lines, tol: number, bs: boolean, pl: boolean, div?: number | null };
-const BS_KEYS = [...LIAB, ...ASSET];
+type Cand2 = { pri: number, src: string, kind: CYear["kind"], l: Lines, tol: number, bs: boolean, pl: boolean, div?: number | null, tot?: RYear["tot"], stbUnknown?: number };
+const BS_KEYS = [...LIAB, ...ASSET], MEMO = ["inv_rm", "inv_wip", "inv_fg"];
+const rupees = (v: number) => "₹" + new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 }).format(Math.round(v));
 export function pastYears(files: RFile[], books: CYear[], open: number, notes: string[]): { years: CYear[], diffs: (string | number)[][], sources: string[][] } {
   const by = new Map<number, Cand2[]>();
   const add = (fy: number, c: Cand2) => { if (!by.has(fy)) by.set(fy, []); by.get(fy)!.push(c); };
@@ -299,22 +386,25 @@ export function pastYears(files: RFile[], books: CYear[], open: number, notes: s
   for (const f of files) {
     for (const y of f.years) {
       if (y.kind === "projected" || y.kind === "estimated" || y.fy >= open) { ignored++; continue; }
-      const word = f.kind === "cma" ? "earlier CMA" : y.kind === "provisional" ? "provisional balance sheet" : "audited balance sheet";
-      add(y.fy, { pri: f.kind === "cma" ? 2 : 0, src: word + " (" + f.name + (f.by === "ai" ? ", read by the AI" : "") + ")", kind: y.kind === "provisional" ? "provisional" : "audited", l: y.l, tol: y.tol, bs: y.bs, pl: y.pl, div: y.div ?? null });
+      const word = f.kind === "cma" ? "earlier CMA" : y.kind === "audited" ? "audited balance sheet" : "balance sheet (not stated as audited)";
+      add(y.fy, { pri: f.kind === "cma" ? 2 : 0, src: word + " (" + f.name + (f.by === "ai" ? ", read by the AI" : "") + ")", kind: y.kind === "audited" ? "audited" : "provisional", l: y.l, tol: y.tol, bs: y.bs, pl: y.pl, div: y.div ?? null,
+        tot: y.tot, stbUnknown: y.stbUnknown });
     }
   }
   if (ignored) notes.push("The earlier CMA's estimated and projected columns (" + ignored + ") are not used: FinCom works out its own from the latest figures.");
-  for (const b of books) add(b.fy, { pri: 1, src: "books", kind: "actual", l: b.l, tol: 1, bs: true, pl: true });
+  for (const b of books) add(b.fy, { pri: 1, src: "books", kind: "actual", l: b.l, tol: 1, bs: true, pl: true, stbUnknown: (b as CYear & { stbUnknown?: number }).stbUnknown });
   const years: CYear[] = [], diffs: (string | number)[][] = [], sources: string[][] = [["Year", "Kind", "Figures from"]];
   for (const fy of [...by.keys()].sort((a, b) => a - b)) {
     const cs = by.get(fy)!.sort((a, b) => a.pri - b.pri);
     const bsC = cs.find((c) => c.bs), plC = cs.find((c) => c.pl);
     if (!bsC) { notes.push(fyLabel(fy) + ": only the profit and loss could be read (no balance sheet); the year is left out."); continue; }
     const l: Lines = {};
-    for (const k of BS_KEYS) if (bsC.l[k] != null) l[k] = bsC.l[k];
+    for (const k of [...BS_KEYS, ...MEMO]) if (bsC.l[k] != null) l[k] = bsC.l[k];
     if (plC) for (const k of PLK) if (plC.l[k] != null) l[k] = plC.l[k];
     const kind: CYear["kind"] = bsC.pri === 1 ? "actual" : bsC.kind;
-    years.push({ fy, kind, src: bsC.src + (plC && plC !== bsC ? "; profit and loss from " + plC.src : ""), l, tol: Math.max(bsC.tol, plC ? plC.tol : 1), div: plC && plC.div != null ? plC.div : null });
+    years.push({ fy, kind, src: bsC.src + (plC && plC !== bsC ? "; profit and loss from " + plC.src : ""), l, tol: Math.max(bsC.tol, plC ? plC.tol : 1), div: plC && plC.div != null ? plC.div : null,
+      printed: { L: bsC.tot?.L, A: bsC.tot?.A, PBT: plC?.tot?.PBT, PAT: plC?.tot?.PAT } });
+    if (bsC.stbUnknown && bsC.stbUnknown > 1) notes.push(fyLabel(fy) + ": short-term borrowings of " + rupees(bsC.stbUnknown) + " (" + bsC.src + ") could not be told apart (bank, current maturities of term loans, directors or related parties): counted as bank borrowings for working capital. Give the split to change it.");
     sources.push([fyLabel(fy), KIND_WORD[kind], bsC.src + (plC && plC !== bsC ? "; profit and loss from " + plC.src : "") + (!plC ? "; no profit and loss for the year" : "")]);
     for (const c of cs) {
       if (c === bsC && (c === plC || !plC)) continue;

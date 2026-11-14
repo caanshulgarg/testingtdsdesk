@@ -22,6 +22,7 @@ export type CYear = {
   div?: number | null,                          // dividend or drawings of the year (null: not known)
   repay?: number | null,                        // term loans repaid in the year (null: not known)
   tol?: number,                                 // rounding the figures carry (a file in lakhs to 2 decimals: Rs 1,000 a line)
+  printed?: { L?: number, A?: number, PBT?: number, PAT?: number },   // the source's own printed totals (a file's), checked against the forms
 };
 export type Opts = { method: "I" | "II", stockMargin: number, recMargin: number, limit: number | null };
 export type Fmt = "amt" | "pct" | "x" | "mo" | "head";
@@ -30,7 +31,10 @@ export type Sheet = { id: string, name: string, title: string, rows: Row[], late
 export type Check = { n: number, label: string, year: string, col: number, ok: boolean, a: number | null, b: number | null, gap: number, sheet: string, fa: string, fb: string, tol: number };
 export type Cma = { years: CYear[], labels: string[], sheets: Sheet[], checks: Check[], ok: boolean, opts: Opts, dscrAvg: number | null };
 
-export const LIAB = ["share", "capital", "current", "reserves", "ltb", "dtl", "oltl", "ltp", "stb", "tp", "ocl", "stp"];
+// stb here is the bank borrowings for working capital (and any short-term borrowing that could not be told apart); stbo the
+// short-term borrowings from directors, partners and related parties; cm the current maturities of long-term debt (since
+// the 2021 Schedule III change inside short-term borrowings; here split out). inv_rm, inv_wip, inv_fg: memo parts of inv.
+export const LIAB = ["share", "capital", "current", "reserves", "ltb", "dtl", "oltl", "ltp", "stb", "stbo", "cm", "tp", "ocl", "stp"];
 export const ASSET = ["ppe", "intang", "cwip", "nci", "dta", "ltla", "onca", "ci", "inv", "tr", "cash", "stla", "oca"];
 export const PLK = ["rev", "oth", "mat", "pur", "chg", "emp", "fin", "dep", "exp", "exc", "xo", "tax"];
 const g = (l: Lines, k: string) => (typeof l[k] === "number" && isFinite(l[k]) ? l[k] : 0);
@@ -142,6 +146,10 @@ export const FORMS: { id: string, name: string, title: string, later?: boolean, 
     C("growth", "2. % rise (+) / fall (-) in net sales over the year before", 'IF([sales@-1]=0,"",([sales]/[sales@-1]-1)*100)', "pct"),
     H("h3", "3. Cost of sales"),
     I("mat", "   (i) Raw materials and goods consumed (incl. purchases of stock-in-trade)", L("mat", "pur")),
+    I("purch", "   memo: materials and goods bought (consumed, plus the rise in raw-material stock where the stock is split)", (y, i, ys) => {
+      const p = i > 0 ? ys[i - 1] : null, rm = y.l.inv_rm, rm0 = p ? p.l.inv_rm : undefined;
+      return g(y.l, "mat") + g(y.l, "pur") + (typeof rm === "number" && typeof rm0 === "number" ? rm - rm0 : 0);
+    }),
     I("chg", "   (ii) Change in inventories (opening less closing)", L("chg")),
     I("emp", "   (iii) Employee costs (direct labour and staff)", L("emp")),
     I("dep", "   (iv) Depreciation", L("dep")),
@@ -161,11 +169,13 @@ export const FORMS: { id: string, name: string, title: string, later?: boolean, 
   ] },
   { id: "III", name: "Form III", title: "FORM III - ANALYSIS OF BALANCE SHEET", defs: [
     H("hcl", "CURRENT LIABILITIES"),
-    I("bank", "1. Short-term borrowings (bank borrowings for working capital, as in the balance sheet)", L("stb")),
+    I("bank", "1. Bank borrowings for working capital (cash credit, overdraft, bills; and short-term borrowings not told apart)", L("stb")),
+    I("stbo", "1A. Short-term borrowings from others (directors, partners, related parties)", L("stbo")),
     I("tp", "2. Sundry creditors (trade)", L("tp")),
-    I("ocl", "3. Other current liabilities (advances, statutory dues, term-loan instalments due within a year, others)", L("ocl")),
+    I("ocl", "3. Other current liabilities (advances from customers, statutory dues, others)", L("ocl")),
+    I("cmr", "3A. Instalments of term loans due within a year (current maturities of long-term debt)", L("cm")),
     I("stp", "4. Short-term provisions (incl. taxation)", L("stp")),
-    C("tcl", "5. Total current liabilities", "[bank]+[tp]+[ocl]+[stp]"),
+    C("tcl", "5. Total current liabilities", "[bank]+[stbo]+[tp]+[ocl]+[cmr]+[stp]"),
     H("htl", "TERM LIABILITIES"),
     I("ltb", "6. Term loans, debentures and other long-term borrowings", L("ltb")),
     I("dtl", "7. Deferred tax liability", L("dtl")),
@@ -205,6 +215,12 @@ export const FORMS: { id: string, name: string, title: string, later?: boolean, 
     H("hca", "A. CURRENT ASSETS"),
     C("inv", "1. Inventory", "[III:inv]"),
     C("inv_m", "   (months' cost of sales)", 'IF([II:cos]<=0,"",[inv]/[II:cos]*12)', "mo"),
+    I("rm", "   (a) Raw materials (where the source splits the stock)", (y) => (typeof y.l.inv_rm === "number" ? y.l.inv_rm : null)),
+    C("rm_m", "       (months' materials consumed)", 'IF(OR([rm]="",[II:mat]<=0),"",[rm]/[II:mat]*12)', "mo"),
+    I("wip", "   (b) Stock-in-process", (y) => (typeof y.l.inv_wip === "number" ? y.l.inv_wip : null)),
+    C("wip_m", "       (months' cost of sales, as the cost of production)", 'IF(OR([wip]="",[II:cos]<=0),"",[wip]/[II:cos]*12)', "mo"),
+    I("fg", "   (c) Finished goods and stock-in-trade", (y) => (typeof y.l.inv_fg === "number" ? y.l.inv_fg : null)),
+    C("fg_m", "       (months' cost of sales)", 'IF(OR([fg]="",[II:cos]<=0),"",[fg]/[II:cos]*12)', "mo"),
     C("tr", "2. Receivables (trade)", "[III:tr]"),
     C("tr_m", "   (months' net sales)", 'IF([II:sales]<=0,"",[tr]/[II:sales]*12)', "mo"),
     C("cash", "3. Cash and bank balances", "[III:cash]"),
@@ -213,14 +229,16 @@ export const FORMS: { id: string, name: string, title: string, later?: boolean, 
     C("tca", "6. Total current assets", "[inv]+[tr]+[cash]+[ci]+[adv]"),
     H("hcl", "B. CURRENT LIABILITIES (other than bank borrowings)"),
     C("tp", "7. Sundry creditors (trade)", "[III:tp]"),
-    C("tp_m", "   (months' materials and goods bought)", 'IF([II:mat]<=0,"",[tp]/[II:mat]*12)', "mo"),
-    C("ocl", "8. Other current liabilities", "[III:ocl]"),
-    C("stp", "9. Short-term provisions (incl. taxation)", "[III:stp]"),
-    C("tocl", "10. Total current liabilities (other than bank borrowings)", "[tp]+[ocl]+[stp]"),
+    C("tp_m", "   (months' materials and goods bought, Form II memo)", 'IF([II:purch]<=0,"",[tp]/[II:purch]*12)', "mo"),
+    C("stbo", "8. Short-term borrowings from others (directors, related parties)", "[III:stbo]"),
+    C("ocl", "9. Other current liabilities", "[III:ocl]"),
+    C("cmr", "10. Instalments of term loans due within a year", "[III:cmr]"),
+    C("stp", "11. Short-term provisions (incl. taxation)", "[III:stp]"),
+    C("tocl", "12. Total current liabilities (other than bank borrowings)", "[tp]+[stbo]+[ocl]+[cmr]+[stp]"),
   ] },
   { id: "V", name: "Form V", title: "FORM V - COMPUTATION OF MAXIMUM PERMISSIBLE BANK FINANCE (MPBF)", defs: [
     C("tca", "1. Total current assets (Form IV, 6)", "[IV:tca]"),
-    C("ocl", "2. Other current liabilities, other than bank borrowings (Form IV, 10)", "[IV:tocl]"),
+    C("ocl", "2. Other current liabilities, other than bank borrowings (Form IV, 12)", "[IV:tocl]"),
     C("wcg", "3. Working capital gap (1 - 2)", "[tca]-[ocl]"),
     C("mnwc", "4. Minimum stipulated net working capital (Method II: 25% of 1; Method I: 25% of 3)", 'IF({M}="I",[wcg]*0.25,[tca]*0.25)'),
     C("anwc", "5. Actual / projected net working capital (Form III, 30)", "[III:nwc]"),
@@ -271,7 +289,7 @@ export const FORMS: { id: string, name: string, title: string, later?: boolean, 
   { id: "R", name: "Ratios", title: "KEY RATIOS", defs: [
     C("cr", "Current ratio (current assets / current liabilities)", "[III:cr]", "x"),
     C("toltnw", "TOL / TNW (total outside liabilities / tangible net worth)", "[III:toltnw]", "x"),
-    C("de", "Debt / equity (term liabilities / tangible net worth)", "[III:ttltnw]", "x"),
+    C("de", "Debt / equity: term loans incl. instalments due within a year / tangible net worth (DTL and provisions excluded)", 'IF([III:tnw]<=0,"",([III:ltb]+[III:cmr])/[III:tnw])', "x"),
     I("repay", "Term loans repaid in the year (the repayment schedule; blank: not known)", (y) => (y.repay == null ? null : y.repay)),
     I("inttl", "Interest on term loans (finance costs x term loans' share of the borrowings)", (_y, i, ys) => intTL(ys, i)),
     C("dscr", "DSCR: (profit after tax + depreciation + interest on term loans) / (interest on term loans + repayment)", 'IF([repay]="","",IF([inttl]+[repay]=0,"",([II:pat]+[II:dep]+[inttl])/([inttl]+[repay])))', "x"),
@@ -282,20 +300,19 @@ export const FORMS: { id: string, name: string, title: string, later?: boolean, 
 ];
 
 // the checks: [label, sheet, a, b (a formula, or a function of the year's lines: the statement's own figure), from the 2nd year only]
-type CheckDef = { label: string, sheet: string, a: string, b: string | ((y: CYear) => number), later?: boolean };
+type CheckDef = { label: string, sheet: string, a: string, b: string | ((y: CYear) => number | null), later?: boolean, when?: (y: CYear) => boolean };
 const CHECKS: CheckDef[] = [
   { label: "The balance sheet balances (total assets = total liabilities)", sheet: "III", a: "[ta]", b: "[tl]" },
-  { label: "Form II profit before tax = the profit and loss account's", sheet: "II", a: "[pbt]", b: (y) => pbtLines(y.l) },
-  { label: "Form II profit after tax = the profit and loss account's", sheet: "II", a: "[pat]", b: (y) => pbtLines(y.l) - g(y.l, "tax") },
-  { label: "Form III total liabilities = the balance sheet's", sheet: "III", a: "[tl]", b: (y) => sumOf(y.l, LIAB) },
-  { label: "Form III total assets = the balance sheet's", sheet: "III", a: "[ta]", b: (y) => sumOf(y.l, ASSET) },
-  { label: "Form IV current assets = Form III's", sheet: "IV", a: "[tca]", b: "[III:tca]" },
-  { label: "Form IV current liabilities (other than bank) = Form III's less bank borrowings", sheet: "IV", a: "[tocl]", b: "[III:tcl]-[III:bank]" },
-  { label: "Form V net working capital = Form III's", sheet: "V", a: "[anwc]", b: "[III:nwc]" },
-  { label: "Form V working capital gap = current assets less other current liabilities", sheet: "V", a: "[wcg]", b: "[III:tca]-([III:tcl]-[III:bank])" },
+  // the source's own printed totals (a file's): the lines placed add up to them
+  { label: "Form III total liabilities = the total printed in the source", sheet: "III", a: "[tl]", b: (y) => y.printed?.L ?? null },
+  { label: "Form III total assets = the total printed in the source", sheet: "III", a: "[ta]", b: (y) => y.printed?.A ?? null },
+  { label: "Form II profit before tax = the profit printed in the source", sheet: "II", a: "[pbt]", b: (y) => y.printed?.PBT ?? null },
+  { label: "Form II profit after tax = the profit printed in the source", sheet: "II", a: "[pat]", b: (y) => y.printed?.PAT ?? null },
+  // a year whose dividend or drawings are known: the net worth moves by the retained profit (no capital introduced)
+  { label: "Net worth moves by the retained profit (profit after tax less dividend or drawings)", sheet: "III", a: "[nw]-[nw@-1]", b: "[II:ret]", later: true, when: (y) => y.div != null && (y.kind === "projected" || y.kind === "estimate") },
   { label: "Fund flow: long-term surplus = the change in net working capital", sheet: "VI", a: "[ltsur]", b: "[dnwc]", later: true },
   { label: "Fund flow: net surplus / deficit = the decrease / increase in bank borrowings", sheet: "VI", a: "[net]", b: "0-[dbank]", later: true },
-  { label: "Fund flow: the change in cash = the balance sheets'", sheet: "VI", a: "[dcash]", b: (y) => g(y.l, "cash"), later: true },
+  { label: "Fund flow: the change in current assets = the details' (cash, stock, receivables, others)", sheet: "VI", a: "[dca]", b: "[dcash]+[dinv]+[dtr]+[doth]", later: true },
 ];
 
 export function cmaCompute(years: CYear[], o: Opts): Cma {
@@ -338,11 +355,12 @@ export function cmaCompute(years: CYear[], o: Opts): Cma {
   for (const c of CHECKS) {
     for (let i = 0; i < n; i++) {
       if (c.later && i === 0) continue;
+      if (c.when && !c.when(ys[i])) continue;
+      if (typeof c.b !== "string" && c.b(ys[i]) == null) continue;   // nothing printed to check against
       const tol = Math.max(1, ys[i].tol || 1, i > 0 ? ys[i - 1].tol || 1 : 1);
       const a = figure(c.a, envAt(c.sheet, i));
       const bf = typeof c.b === "string" ? c.b : null;
-      let b = bf ? figure(bf, envAt(c.sheet, i)) : (c.b as (y: CYear) => number)(ys[i]);
-      if (!bf && c.label.startsWith("Fund flow: the change in cash")) b = g(ys[i].l, "cash") - g(ys[i - 1].l, "cash");
+      const b = bf ? figure(bf, envAt(c.sheet, i)) : (c.b as (y: CYear) => number)(ys[i]);
       const gap = (a ?? 0) - (b ?? 0);
       checks.push({ n: ++k, label: c.label, year: fyL(ys[i].fy), col: i, ok: Math.abs(gap) <= tol, a, b, gap, sheet: c.sheet, fa: c.a, fb: bf ?? "", tol });
     }

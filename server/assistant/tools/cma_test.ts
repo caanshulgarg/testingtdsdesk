@@ -96,3 +96,67 @@ Deno.test("the tool: nothing to work from is said plainly", async () => {
   const r: any = await runCma({}, { clientId: "k", clientName: "K", today: "2026-11-14", rpc: async () => ({ none: true }), progress: () => {}, uploads: [], files: [] } as any);
   assert(/No figures for K/.test(r.error), r.error);
 });
+
+Deno.test("books (review High): short-term borrowings told apart by their ledgers; the rest listed", async () => {
+  const { booksSplit } = await import("./cma.ts");
+  const L = [{ l: "HDFC Bank OD A/c", g: ["Bank OD A/c", "Loans (Liability)"], line: "stb", cy: -40000000 }, { l: "Loan from Director Mr A", g: ["Unsecured Loans"], line: "stb", cy: -5000000 },
+    { l: "Term loan - current maturities", g: ["Secured Loans"], line: "stb", cy: -12000000 }, { l: "Suspense loan", g: ["Loans (Liability)"], line: "stb", cy: -1000000 }, { l: "Trade payable", g: ["Sundry Creditors"], line: "tp", cy: -9 }];
+  const s = booksSplit(L, "cy");
+  near(s.cm, 120000, "current maturities"); near(s.stbo, 50000, "directors"); assert(s.unknown.length === 1 && s.unknown[0].name === "Suspense loan" && Math.abs(s.unknown[0].amt - 10000) < 1, "the rest listed");
+});
+
+Deno.test("the running year (review Medium): the annualised P&L with a balance sheet carried to 31 March, no drawings invented", async () => {
+  const { yearEnd } = await import("./cma.ts");
+  // six months of books: profit after tax to date 4,00,000, depreciation 1,00,000
+  const l = { ...YB.l, rev: 6900000, mat: 4025000, emp: 825000, fin: 190000, dep: 160000, exp: 1000000, oth: 50000, tax: 200000 };
+  const pat0 = 6900000 + 50000 - 4025000 - 825000 - 190000 - 160000 - 1000000 - 200000;
+  const y = yearEnd(l, 6, "2025-09-30", 2025, "company");
+  near(y.l.rev, 13800000, "annualised"); near(y.l.reserves, YB.l.reserves + pat0, "the rest of the year's profit to reserves");
+  near(y.l.ppe, YB.l.ppe - 160000, "the rest of the year's depreciation off the fixed assets");
+  const c = cmaCompute([YA, y], II);
+  assert(c.checks.find((x) => /balance sheet balances/.test(x.label) && x.year === "2025-26")!.ok, "it balances");
+  assert(y.asOn == null && /carried to 31-03-2026/.test(y.src), "labelled: " + y.src);
+});
+
+Deno.test("DRAFT (review Medium): failing checks, untied totals or the books' own warnings", async () => {
+  const { draftWhy } = await import("./cma.ts");
+  assert(draftWhy(0, 0, 0).length === 0, "final"); assert(/books' statements/.test(draftWhy(0, 0, 2).join()), "the books' warnings make it a draft");
+});
+
+Deno.test("cache (review Medium): a PDF is read by the AI once; a follow-up uses the reading kept", async () => {
+  const lines = Object.fromEntries(Object.keys(YB.l).filter((k) => !["stbo", "cm"].includes(k)).map((k) => [k, YB.l[k]]));
+  const answer = JSON.stringify({ document: "balance_sheet", unit: "rupees", years: [{ column: "As at 31 March 2025", kind: "audited", lines, parts: { stb_current_maturities: null, stb_related_parties: null, inv_raw_materials: null, inv_stock_in_process: null, inv_finished_goods: null },
+    total_liabilities: 8150000, total_assets: 8150000, profit_before_tax: 1500000, profit_after_tax: 1100000 }] });
+  let ai = 0;
+  const kept = new Map<string, unknown>();
+  const ctx: any = { clientId: "k", clientName: "K", today: "2026-11-14", firm: { name: "", lines: [] }, rpc: async () => ({ none: true }), progress: () => {},
+    uploads: [{ path: "f/k/uploads/a-audited-bs.pdf", name: "Audited BS FY25.pdf", type: "application/pdf" }], files: [],
+    readFile: async () => new TextEncoder().encode("%PDF-1.4 made up"), aiRead: async () => { ai++; return answer; },
+    memo: { get: async (k: string) => kept.get(k) ?? null, set: async (k: string, v: unknown) => { kept.set(k, JSON.parse(JSON.stringify(v))); } },
+    uploadFile: async (_b: Uint8Array, name: string) => ({ id: "1", name, kind: "xlsx", path: "x", expires: "" }) };
+  const r1: any = await runCma({}, ctx), r2: any = await runCma({ method: "I" }, ctx);
+  assert(!r1.error && !r2.error, "made: " + (r1.error || r2.error));
+  assert(ai === 1, "the AI read the PDF once: " + ai);
+  assert(/read by the AI/.test(r2.line), "still said to be read by the AI");
+});
+
+Deno.test("DSCR (review High): with no schedule, the instalments are the current maturities of the year before (said)", async () => {
+  const files: Record<string, Uint8Array> = { "f/k/uploads/b.xlsx": await bsXlsx() };
+  const ctx: any = { clientId: "k", clientName: "K", today: "2026-11-14", firm: { name: "", lines: [] }, rpc: async () => ({ none: true }), progress: () => {},
+    uploads: [{ path: "f/k/uploads/b.xlsx", name: "Audited BS.xlsx", type: "" }], files: [], readFile: async (p: string) => files[p],
+    uploadFile: async (_b: Uint8Array, name: string) => ({ id: "1", name, kind: "xlsx", path: "x", expires: "" }) };
+  // the fixture's balance sheet with a current-maturities line inside short-term borrowings, from its notes
+  const ExcelJS = (await import("npm:exceljs@4.4.0")).default;
+  const wb = new ExcelJS.Workbook(); await wb.xlsx.load(files["f/k/uploads/b.xlsx"] as any);
+  const nt = wb.getWorksheet("Notes")!;
+  nt.addRow(["", "As at 31 March 2025", "As at 31 March 2024"]); nt.addRow(["Note 5 Short-term borrowings"]); nt.addRow(["Cash credit from bank", 1100000, 1000000]); nt.addRow(["Current maturities of long-term debt", 300000, 200000]); nt.addRow(["Total", 1400000, 1200000]);
+  files["f/k/uploads/b.xlsx"] = new Uint8Array(await wb.xlsx.writeBuffer());
+  const r: any = await runCma({ loan_type: "working_capital", working_capital_limit: 1500000 }, ctx);
+  assert(!r.error, String(r.error));
+  const R = r.tables.find((t: any) => t.title === "Key ratios"), dscr = R.rows.find((x: any) => /^DSCR/.test(x.item));
+  const ys = R.columns.slice(1).map((c: any) => c.k);
+  assert(dscr[ys[ys.length - 1]] != null && dscr[ys[1]] != null, "DSCR for the projected and the later past years: " + JSON.stringify(dscr));
+  const as = r.tables.find((t: any) => /^Assumptions/.test(t.title)).rows.map((x: any) => x.item).join(" ");
+  assert(/current maturities of the year before/.test(as), "said in the assumptions");
+  assert(!/existing term loans/.test(r.line), "not asked for when the current maturities stand in: " + r.line);
+});

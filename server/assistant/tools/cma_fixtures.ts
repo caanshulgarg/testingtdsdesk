@@ -46,7 +46,7 @@ export async function cmaXlsx(): Promise<Uint8Array> {
 export async function bsXlsx(): Promise<Uint8Array> {
   const wb = new ExcelJS.Workbook(), a = YA.l, b = YB.l;
   const bs = wb.addWorksheet("Balance Sheet");
-  [["Kestrel Widgets Private Limited"], ["Balance Sheet as at 31st March 2025"], ["Particulars", "Note", "As at 31 March 2025", "As at 31 March 2024"],
+  [["Kestrel Widgets Private Limited"], ["Audited Balance Sheet as at 31st March 2025"], ["Particulars", "Note", "As at 31 March 2025", "As at 31 March 2024"],
     ["I. EQUITY AND LIABILITIES"], ["(1) Shareholders' funds"], ["(a) Share capital", 2, b.share, a.share], ["(b) Reserves and surplus", 3, b.reserves, a.reserves],
     ["(2) Non-current liabilities"], ["(a) Long-term borrowings", 4, b.ltb, a.ltb], ["(3) Current liabilities"], ["(a) Short-term borrowings", 5, b.stb, a.stb],
     ["(b) Trade payables", 6, b.tp, a.tp], ["(c) Other current liabilities", 7, b.ocl, a.ocl], ["(d) Short-term provisions", 8, b.stp, a.stp], ["TOTAL", null, 8150000, 7000000],

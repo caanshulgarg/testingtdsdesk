@@ -69,3 +69,24 @@ Deno.test("evaluator: Excel's syntax", () => {
   assert(evalF('IF({M}="I",1,2)', env) === 2, "IF on text"); assert(evalF('IF({LIM}="",5,6)', env) === 5, "a blank is \"\"");
   assert(evalF("MAX(0,MIN(3,-4))", env) === 0, "MAX/MIN"); assert(evalF("-(2+3)*4/2", env) === -10, "arithmetic");
 });
+
+Deno.test("engine (review High): short-term borrowings from others and current maturities are not bank borrowings", () => {
+  const y: CYear = { fy: 2025, kind: "projected", src: "t", l: { share: 200, ltb: 300, stb: 400, stbo: 50, cm: 150, tp: 300, ppe: 400, inv: 500, tr: 500 } };
+  const c = cmaCompute([y], II), v = (s: string, k: string) => rowOf(c, s, k).vals[0];
+  assert(c.ok, "balances");
+  near(v("III", "bank"), 400, "bank borrowings only"); near(v("III", "tcl"), 900, "all current liabilities");
+  near(v("IV", "tocl"), 500, "other current liabilities take others and instalments"); near(v("V", "wcg"), 500, "gap"); near(v("V", "bank"), 400, "Form V's bank");
+  near(v("R", "de"), (300 + 150) / 200, "debt/equity: term loans with their instalments over TNW", 1e-9);
+});
+
+Deno.test("engine (review Low): the checks are real ones: the printed totals and the retained profit", () => {
+  const a: CYear = { ...YA, printed: { L: 7000000, A: 7000000, PBT: 1100000, PAT: 800000 } };
+  const ok = cmaCompute([a, YB], II);
+  assert(ok.checks.some((x) => /printed/.test(x.label)) && ok.ok, "printed totals checked and tie");
+  const bad = cmaCompute([{ ...a, printed: { ...a.printed, PBT: 1200000 } }, YB], II);
+  assert(bad.checks.some((x) => !x.ok && /profit before tax = the profit printed/.test(x.label)), "a printed profit that differs fails");
+  // a projected year whose net worth moves by more than its retained profit: fails
+  const p: CYear = { ...YB, fy: 2025, kind: "projected", div: 0, l: { ...YB.l, reserves: YB.l.reserves + 1100000 + 5000, cash: YB.l.cash + 1100000 + 5000 } };
+  const r = cmaCompute([YB, p], II);
+  assert(r.checks.some((x) => !x.ok && /retained profit/.test(x.label)), "the retained-profit check catches an invented drawing or capital");
+});

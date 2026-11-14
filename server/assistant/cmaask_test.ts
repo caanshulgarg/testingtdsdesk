@@ -19,9 +19,13 @@ Deno.test("router: CMA words, with or without files, are cma_data's", () => {
   // the statements card keeps the books' own statements; a CMA with "balance sheet" in it is not the card's when routed
   assert(fsAsked("provisional balance sheet till 30 September") && !cmaAsked("provisional balance sheet till 30 September"), "the books' statements stay the card's");
   for (const q of ["what is the TDS rate on rent?", "projected balance sheet for next year", "cash payments over 10000"]) assert(!cmaAsked(q), "not CMA: " + q);
+  // a party, a ledger or the CMA course is never a CMA (review Medium)
+  for (const q of ["ledger of Nayak Traders", "Tandon Steels outstanding", "CMA inter exam fees ledger", "balance of Tandon & Sons", "Nayak", "cma"]) assert(!cmaAsked(q), "not CMA: " + q);
   const shown = [{ role: "user", content: "prepare cma" }, { role: "assistant", content: "CMA data in the standard bank format for K: …" }];
   for (const q of ["use method I", "term loan 50 lakh for 5 years", "cc limit 40 lakh", "redo with 6 months moratorium"]) assert(cmaFollow(q) && cmaWanted(q, shown), "a change to the CMA: " + q);
   assert(!cmaWanted("what is the GST on this?", shown), "another question after a CMA is not one");
+  for (const q of ["show the loan ledger again", "what is the limit?", "again", "loan from Mehta & Sons"]) assert(!cmaWanted(q, shown), "not a CMA change without its own words: " + q);
+  for (const q of ["stock margin 30%", "show DSCR", "MPBF by method II", "make it 3 years projections"]) assert(cmaWanted(q, shown), "a CMA change: " + q);
   assert(!cmaWanted("use method I", []), "a change with no CMA shown is not one");
 });
 

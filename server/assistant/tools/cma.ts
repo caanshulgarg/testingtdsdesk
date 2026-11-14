@@ -15,7 +15,7 @@ import { fyOf, inputFor } from "./reports.ts";
 import { Assume, linesOf, monthsIn, project } from "./projection.ts";
 import { numOf } from "./num.ts";
 import { gridsFromCsv, gridsFromXlsx } from "../filetable.ts";
-import { Cma, cmaCompute, CYear, fyL, KIND_WORD, Opts, PLK, rowOf, sumOf } from "./cmaengine.ts";
+import { Cma, cmaCompute, CYear, fyL, KIND_WORD, Lines, Opts, pbtLines, PLK, rowOf, sumOf } from "./cmaengine.ts";
 import { FileKind, pastYears, READ_PROMPT, READ_SCHEMA, readAi, readGrids, RFile } from "./cmaread.ts";
 import { cmaExcel, rowCells, XlMeta } from "./cmaxl.ts";
 // deno-lint-ignore no-explicit-any
@@ -77,6 +77,11 @@ async function readFiles(ctx: ExtCtx, notes: string[]): Promise<RFile[]> {
     if (pdf && (!looksStatement(f) || pdfs >= 2 || !ctx.aiRead)) { if (looksStatement(f) && pdfs >= 2) notes.push(f.name + ": not read (two PDFs a CMA at most)."); continue; }
     const bytes = ctx.readFile ? await ctx.readFile(f.path).catch(() => null) : null;
     if (!bytes) { notes.push(f.name + ": could not be read from the firm's folder."); continue; }
+    // read once: the reading kept by the file's own bytes (its hash) and path, so a follow-up never pays the AI again
+    const key = "cma-read-" + READ_VERSION + "-" + await sha256(bytes) + "-" + (await sha256(new TextEncoder().encode(f.path + "|" + hint))).slice(0, 16);
+    const kept = ctx.memo ? await ctx.memo.get(key).catch(() => null) : null;
+    if (kept && Array.isArray(kept.years)) { out.push({ ...(kept as RFile), name: f.name, path: f.path }); if (pdf) pdfs++; continue; }
+    const keep = async (r: RFile) => { if (ctx.memo && r.years.length) await ctx.memo.set(key, r).catch(() => {}); };
     if (pdf) {
       pdfs++;
       ctx.progress("Reading " + f.name + " (AI)");
@@ -85,20 +90,54 @@ async function readFiles(ctx: ExtCtx, notes: string[]): Promise<RFile[]> {
       const r = readAi(f.name, f.path, txt);
       if (hint) r.kind = hint;
       out.push(r);
+      await keep(r);
       continue;
     }
     let grids;
     try { grids = /\.csv$/i.test(f.name) ? gridsFromCsv(new TextDecoder().decode(bytes)) : await gridsFromXlsx(bytes); } catch { notes.push(f.name + ": the workbook could not be opened."); continue; }
     const r = readGrids(f.name, f.path, grids, hint);
-    if (r.years.length || looksStatement(f)) out.push(r);
+    if (r.years.length || looksStatement(f)) { out.push(r); await keep(r); }
   }
   return out;
 }
 
+// the readings kept (ctx.memo) are keyed by this: change it when what a reading holds changes
+export const READ_VERSION = "v2";
+const sha256 = async (b: Uint8Array) => Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", b as unknown as ArrayBuffer)), (x) => x.toString(16).padStart(2, "0")).join("");
+
+// the books' short-term borrowings told apart by their ledgers (FSX's model.L: name, groups, line): current maturities of
+// long-term debt, loans from directors, partners or related parties (or under Unsecured Loans), bank OD / CC; the rest is
+// counted as bank borrowing and listed
+export function booksSplit(L: any[], col: "cy" | "py"): { cm: number, stbo: number, unknown: { name: string, amt: number }[] } {
+  const out = { cm: 0, stbo: 0, unknown: [] as { name: string, amt: number }[] };
+  for (const x of L || []) {
+    if (!x || x.line !== "stb") continue;
+    const amt = -(Number(x[col]) || 0) / 100;        // paise, a credit negative: the borrowing as a positive figure
+    if (!amt) continue;
+    const words = String(x.l || "") + " | " + (x.g || []).join(" | ");
+    if (/current\s+maturit|cmltd|instal+ments?\s+(due|of|on)|term\s+loans?\s+.*\bdue\b/i.test(words)) out.cm += amt;
+    else if (/director|partner|promoter|related|relative|shareholder|proprietor|unsecured\s+loans?/i.test(words)) out.stbo += amt;
+    else if (/\bbank\s+od\b|\bod\b|\bcc\b|cash\s+credit|overdraft|bank\s+o\/?d|working\s+capital|packing\s+credit|bills?\s+discount/i.test(words)) { /* bank: stays */ }
+    else out.unknown.push({ name: String(x.l || ""), amt });
+  }
+  return out;
+}
+const applySplit = (l: Lines, sp: { cm: number, stbo: number }) => {
+  const stb = l.stb || 0, cm = Math.max(0, Math.min(sp.cm, stb)), ot = Math.max(0, Math.min(sp.stbo, stb - cm));
+  l.stb = stb - cm - ot; if (cm) l.cm = (l.cm || 0) + cm; if (ot) l.stbo = (l.stbo || 0) + ot;
+};
+
 // ---------------------------------------------------------------- the books: the last complete years and the year now running
-type BookYears = { past: CYear[], cur: CYear | null, kind: string, warnings: string[] };
+type BookYears = { past: CYear[], cur: CYear | null, kind: string, warnings: string[], notes: string[], todate?: { l: Lines, asOn: string | null, months: number } | null };
 async function fromBooks(ctx: ExtCtx, open: number): Promise<BookYears> {
-  const out: BookYears = { past: [], cur: null, kind: "", warnings: [] };
+  const out: BookYears = { past: [], cur: null, kind: "", warnings: [], notes: [], todate: null };
+  const split = (fy: number, l: Lines, L: any[], col: "cy" | "py") => {
+    const sp = booksSplit(L, col);
+    applySplit(l, sp);
+    const unk = sp.unknown.reduce((t, u) => t + u.amt, 0);
+    if (unk > 1) out.notes.push(fyL(fy) + " (books): short-term borrowings of " + rs(unk) + " in " + sp.unknown.slice(0, 4).map((u) => u.name + " " + rs(u.amt)).join(", ") + (sp.unknown.length > 4 ? ", …" : "") + " could not be told apart by their ledgers: counted as bank borrowings for working capital.");
+    return l;
+  };
   let from: string | null = null, to: string | null = null, known = false;
   try {
     const b = await ctx.rpc("asst_books", {});
@@ -119,9 +158,9 @@ async function fromBooks(ctx: ExtCtx, open: number): Promise<BookYears> {
       if (!("error" in g)) {
         const run = FSX.run(g.inp), nm = run.model.nm;
         out.kind = String(g.inp.entity.kind || "");
-        out.past.push({ fy: open - 1, kind: "actual", src: "books", l: linesOf(nm, "CY") });
+        out.past.push({ fy: open - 1, kind: "actual", src: "books", l: split(open - 1, linesOf(nm, "CY"), run.model.L, "cy") });
         const py = linesOf(nm, "PY");
-        if (months(open - 2) === 12 && Object.values(py).some((v) => v)) out.past.unshift({ fy: open - 2, kind: "actual", src: "books", l: py });
+        if (months(open - 2) === 12 && Object.values(py).some((v) => v)) out.past.unshift({ fy: open - 2, kind: "actual", src: "books", l: split(open - 2, py, run.model.L, "py") });
         say(open - 1, run);
       }
     } catch (_e) { out.warnings.push(fyL(open - 1) + ": the books' statements could not be worked out."); }
@@ -131,16 +170,40 @@ async function fromBooks(ctx: ExtCtx, open: number): Promise<BookYears> {
     try {
       const g = await inputFor(ctx, String(open));
       if (!("error" in g)) {
-        const run = FSX.run(g.inp), l = linesOf(run.model.nm, "CY");
+        const run = FSX.run(g.inp), l = split(open, linesOf(run.model.nm, "CY"), run.model.L, "cy");
         out.kind = out.kind || String(g.inp.entity.kind || "");
         const asOn = to && to < (open + 1) + "-03-31" ? to : null;
-        for (const k of PLK) l[k] = (l[k] || 0) * 12 / m;
-        out.cur = { fy: open, kind: "estimate", src: "books to " + (asOn || "31-03-" + (open + 1)) + " (" + m + " month" + (m > 1 ? "s" : "") + ", the profit and loss annualised x 12/" + m + ")", l, asOn, months: m };
+        out.todate = { l: { ...l }, asOn, months: m };
+        out.cur = yearEnd(l, m, asOn, open, out.kind);
         say(open, run);
       }
     } catch (_e) { out.warnings.push(fyL(open) + ": the books to date could not be worked out."); }
   }
   return out;
+}
+
+// the year now running, to 31 March (the reviewer's choice of 14-Nov-2026): the profit and loss annualised from the books
+// to date (x 12/months), and the balance sheet carried to the year end from the books' own balances on the last entry:
+// the rest of the year's profit added to the net worth (no drawings or dividend), the rest of the year's depreciation taken
+// off the fixed assets, and the two through cash and bank (a shortfall shown as bank borrowing). Nothing else is invented.
+export function yearEnd(l0: Lines, m: number, asOn: string | null, fy: number, kind: string): CYear {
+  const l: Lines = { ...l0 };
+  const pat0 = pbtLines(l0) - (l0.tax || 0), dep0 = l0.dep || 0;
+  for (const k of PLK) l[k] = (l0[k] || 0) * 12 / m;
+  const dPat = pbtLines(l) - (l.tax || 0) - pat0, dDep = Math.min((l.dep || 0) - dep0, Math.max(0, (l.ppe || 0)));
+  const toCap = kind !== "company" && !(l.share || 0) ? ((l.current || 0) ? "current" : "capital") : "reserves";
+  l[toCap] = (l[toCap] || 0) + dPat;
+  l.ppe = (l.ppe || 0) - dDep;
+  let cash = (l.cash || 0) + dPat + dDep;
+  if (cash < 0) { l.stb = (l.stb || 0) - cash; cash = 0; }
+  l.cash = cash;
+  return { fy, kind: "estimate", src: "books to " + (asOn || "31-03-" + (fy + 1)) + " (" + m + " month" + (m > 1 ? "s" : "") + "): profit and loss annualised x 12/" + m + "; balance sheet carried to 31-03-" + (fy + 1), l, asOn: null, months: m };
+}
+
+// why the CMA is a DRAFT (none: final): failing checks, file totals that do not tie, the books' statements needing attention
+export function draftWhy(fails: number, ties: number, books: number): string[] {
+  return [...(fails ? [fails + " check" + (fails > 1 ? "s fail" : " fails")] : []), ...(ties ? [ties + " file total" + (ties > 1 ? "s do" : " does") + " not tie"] : []),
+    ...(books ? ["the books' statements need attention (" + books + ": unplaced ledgers or failing checks)"] : [])];
 }
 
 // ---------------------------------------------------------------- the tool
@@ -173,6 +236,7 @@ export async function runCma(input: Record<string, unknown>, ctx: ExtCtx): Promi
   for (const f of files) notes.push(...f.notes);
   ctx.progress("Reading the books");
   const B = await fromBooks(ctx, open);
+  notes.push(...B.notes);
   const P = pastYears(files, B.past, B.cur ? B.cur.fy : open, notes);
   const past = P.years.slice(-3);
   const cur = B.cur;
@@ -184,17 +248,32 @@ export async function runCma(input: Record<string, unknown>, ctx: ExtCtx): Promi
   const n = Math.min(5, I.years + (cur ? 0 : Math.max(0, open - base.fy)));   // the years to the running one, then the years asked
   const tlNew = I.loanType !== "working_capital" && I.tlAmount ? I.tlAmount : 0;
   const sched = tlNew && I.tlYears ? tlSchedule(tlNew, I.tlYears, I.moratorium || 0, n) : null;
-  const exist = sumOf(base.l, ["ltb"]) > 0;
-  const repay = Array.from({ length: n }, (_, i) => (sched ? sched[i] : 0) + (I.existingRepay ? I.existingRepay[Math.min(i, I.existingRepay.length - 1)] : 0));
+  const exist = sumOf(base.l, ["ltb", "cm"]) > 0;
+  // the existing term loans' instalments: as the user gave them, else the current maturities shown a year earlier (the
+  // instalments due in the year), stated
+  const cmProxy = !I.existingRepay && (base.l.cm || 0) > 0 ? base.l.cm : null;
+  const existRepay = I.existingRepay ?? (cmProxy ? [cmProxy] : null);
+  const repay = Array.from({ length: n }, (_, i) => (sched ? sched[i] : 0) + (existRepay ? existRepay[Math.min(i, existRepay.length - 1)] : 0));
   const A: Assume = { years: n, revenue_growth_pct: I.A.revenue_growth_pct ?? null, capex: I.A.capex ?? (tlNew ? [tlNew, 0] : null), new_loans: tlNew ? [tlNew, 0] : null,
     loan_repayment: repay.some((x) => x > 0) ? repay : null, dividend_or_drawings: I.A.dividend_or_drawings ?? null, receivable_days: I.A.receivable_days ?? null, inventory_days: I.A.inventory_days ?? null,
     payable_days: I.A.payable_days ?? null, tax_rate_pct: I.A.tax_rate_pct ?? null, other_assumptions: I.A.other_assumptions ?? null, material_cost_pct: null, employee_cost_pct: null, other_expenses_pct: null };
-  const p = project(base.l, prevY ? prevY.l : null, { fy: base.fy, months: 12, kind, warnings: [], ytd: null }, base.fy, A);
+  // project() knows Schedule III's lines only: the borrowings from others and the current maturities ride in other current
+  // liabilities through it and are put back as they were at the base year's end
+  const fold = { stbo: base.l.stbo || 0, cm: base.l.cm || 0 };
+  const baseP: Lines = { ...base.l, ocl: (base.l.ocl || 0) + fold.stbo + fold.cm, stbo: 0, cm: 0 };
+  const p = project(baseP, prevY ? prevY.l : null, { fy: base.fy, months: 12, kind, warnings: [], ytd: null }, base.fy, A);
+  for (const y of p.years) { y.l.ocl = (y.l.ocl || 0) - fold.stbo - fold.cm; y.l.stbo = fold.stbo; y.l.cm = fold.cm; }
   const divs = Array.isArray(I.A.dividend_or_drawings) ? (I.A.dividend_or_drawings as unknown[]).map((x) => numOf(x) || 0) : null;
   const proj: CYear[] = p.years.map((y, i) => ({ fy: y.fy, kind: y.fy <= open ? "estimate" : "projected", src: "projected by FinCom from " + fyL(base.fy) + " on the assumptions listed", l: y.l,
-    div: divs ? divs[Math.min(i, divs.length - 1)] : 0, repay: (exist && !I.existingRepay) || (tlNew && !sched) ? null : repay[i] }));
+    div: divs ? divs[Math.min(i, divs.length - 1)] : 0, repay: (exist && !existRepay) || (tlNew && !sched) ? null : repay[i] }));
+  // the past years and the estimate: the instalments due in the year are the current maturities shown a year earlier
+  const known = [...past, ...(cur ? [cur] : [])];
+  known.forEach((y, i) => { if (y.repay == null && i > 0 && (known[i - 1].l.cm || 0) > 0) y.repay = known[i - 1].l.cm; });
+  const years: CYear[] = [...known, ...proj];
+  const inForms = new Set(years.map((y) => fyL(y.fy)));
+  P.sources = [P.sources[0], ...P.sources.slice(1).filter((r) => inForms.has(r[0]))];
+  P.diffs = P.diffs.filter((d) => inForms.has(String(d[0])));
   for (const y of proj) P.sources.push([fyL(y.fy), KIND_WORD[y.kind], y.src]);
-  const years: CYear[] = [...past, ...(cur ? [cur] : []), ...proj];
   const opts: Opts = { method: I.method, stockMargin: I.stockMargin, recMargin: I.recMargin, limit: I.loanType === "term_loan" ? null : I.wcLimit };
   const c = cmaCompute(years, opts);
 
@@ -206,21 +285,26 @@ export async function runCma(input: Record<string, unknown>, ctx: ExtCtx): Promi
     if (I.loanType !== "working_capital" && I.tlAmount == null) need.push("the term loan amount sought");
   }
   if (tlNew && !sched) need.push("the term loan's repayment schedule (tenure and moratorium)");
-  if (exist && !I.existingRepay) need.push("the repayment schedule of the existing term loans (" + rs(sumOf(base.l, ["ltb"])) + ")");
+  if (exist && !existRepay) need.push("the repayment schedule of the existing term loans (" + rs(sumOf(base.l, ["ltb"])) + ")");
+  const negTnw = c.years.filter((_y, i) => (rowOf(c, "III", "tnw").vals[i] ?? 0) < 0).map((y) => fyL(y.fy));
   // the assumptions, all of them
   const fails = c.checks.filter((x) => !x.ok), tiesBad = files.flatMap((f) => f.ties.filter((t) => !t.ok && !/\((estimated|projected)\)/.test(t.year)).map((t) => ({ f: f.name, ...t })));   // a file's own estimates are not used
   const assumptions = [
     ...B.warnings.map((w) => "Check the books: " + w),
     "Format: the standard CMA (Forms I to VI and the key ratios), not one bank's own. Past years from the sources listed in Sources; where an audited balance sheet and the earlier CMA give the same year, the audited figures are used and every difference is listed.",
-    ...(cur ? ["The year now running (" + fyL(cur.fy) + ") is an estimate from the books to date: their own sums, the profit and loss annualised (x 12/" + cur.months + ") and the balance sheet as on " + (cur.asOn || "the last entry") + "; nothing else is added."] : []),
+    ...(cur ? ["The year now running (" + fyL(cur.fy) + ") is an estimate from the books to " + (B.todate?.asOn || "the last entry") + ": the profit and loss annualised (x 12/" + cur.months + "); the balance sheet carried to 31 March from the books' balances, the rest of the year's profit added to the net worth (no drawings or dividend) and the rest of the year's depreciation taken off the fixed assets, both through cash and bank."] : []),
+    ...(negTnw.length ? ["Net worth negative (tangible net worth below nil) in " + negTnw.join(", ") + ": TOL/TNW and debt/equity are not meaningful there and are left blank."] : []),
     "MPBF by Method " + I.method + (I.method === "II" ? " (the second method: 25% of the current assets from long-term funds), FinCom's default" : " (the first method: 25% of the working capital gap from long-term funds), as you said") + "; the other method is shown for comparison. Export receivables are taken as nil.",
     "Drawing power: paid stock (inventory less trade creditors) less a " + Math.round(I.stockMargin * 100) + "% margin, and receivables less a " + Math.round(I.recMargin * 100) + "% margin" + (input.stock_margin_pct == null && input.receivable_margin_pct == null ? " (FinCom's defaults)." : "."),
-    "Form II: Schedule III does not split other expenses, so all are under selling, general and administrative expenses; employee costs and depreciation are under cost of sales. Short-term borrowings as in the balance sheet are bank borrowings for working capital; term-loan instalments due within a year stay where the balance sheet shows them.",
-    "Interest on term loans (for the DSCR) is the finance costs in proportion to the term loans' share of the borrowings; the DSCR is shown for the years whose repayment is known.",
+    "Form II: Schedule III does not split other expenses, so all are under selling, general and administrative expenses; employee costs and depreciation are under cost of sales. Short-term borrowings are split into bank borrowings, borrowings from directors and related parties, and current maturities of term loans (shown with the other current liabilities), from the lines, the notes or the books' ledgers; any amount that could not be told apart is counted as bank borrowing and listed below.",
+    "Interest on term loans (for the DSCR) is the finance costs in proportion to the term loans' share of the borrowings; the DSCR is shown for the years whose repayment is known" + (cmProxy ? "; with no repayment schedule given, each year's instalments are taken as the current maturities of the year before (" + rs(cmProxy) + " a year in the projections)." : "."),
+    "Debt / equity: term loans with their instalments due within a year over the tangible net worth; deferred tax and long-term provisions are left out.",
     ...(tlNew ? ["Term loan of " + rs(tlNew) + " taken at the start of " + fyL(proj[0]?.fy || open) + (I.A.capex == null ? " and spent on fixed assets in that year (tell me the project cost to change it)" : "") + (sched ? "; repaid in monthly instalments over " + I.tlYears + " years" + (I.moratorium ? " after a " + I.moratorium + "-month moratorium" : "") + "." : "; its repayment schedule is not known yet.")] : []),
     ...p.assumptions, ...p.warnings.map((w) => "Check: " + w), ...notes, ...I.said,
   ];
-  const status = c.ok && !tiesBad.length ? "All " + c.checks.length + " checks pass." : "DRAFT, NOT FINAL: " + (fails.length ? fails.length + " check" + (fails.length > 1 ? "s" : "") + " fail" + (fails.length > 1 ? "" : "s") : "") + (fails.length && tiesBad.length ? "; " : "") + (tiesBad.length ? tiesBad.length + " file total" + (tiesBad.length > 1 ? "s do" : " does") + " not tie" : "") + " (see Checks).";
+  // the books' own statements failing a check or with ledgers not placed: the CMA built on them is a draft too
+  const why = draftWhy(fails.length, tiesBad.length, B.warnings.length);
+  const status = !why.length ? "All " + c.checks.length + " checks pass." : "DRAFT, NOT FINAL: " + why.join("; ") + " (see Checks and Assumptions).";
   const lastPast = past[past.length - 1] || cur!;
   const form1: [string, string][] = [
     ["Name of the borrower", ctx.clientName || ""], ["Constitution", ({ company: "Company", llp: "Limited liability partnership", firm: "Partnership firm", proprietor: "Proprietorship" } as Record<string, string>)[kind] || kind],
@@ -241,7 +325,8 @@ export async function runCma(input: Record<string, unknown>, ctx: ExtCtx): Promi
   const tables = tablesOf(c, meta, fails);
   const last = c.years.length - 1, mp = rowOf(c, "V", "mpbf").vals[last], alt = rowOf(c, "V", I.method === "II" ? "mpbf1" : "mpbf2").vals[last], gap = rowOf(c, "V", "dpgap").vals[last];
   const byAi = files.filter((x) => x.by === "ai" && x.years.length).map((x) => x.name);
-  const line = cmaLine({ client: ctx.clientName, c, method: I.method, mp, alt, gap, status, fails: fails.length + tiesBad.length, diffs: P.diffs.length, need, file: !!f, limit: opts.limit })
+  const line = cmaLine({ client: ctx.clientName, c, method: I.method, mp, alt, gap, status, fails: why.length, diffs: P.diffs.length, need, file: !!f, limit: opts.limit })
+    + (negTnw.length ? " Net worth negative in " + negTnw.join(", ") + "." : "")
     + (byAi.length ? " The figures of " + byAi.join(", ") + " were read by the AI from the PDF: check them against the copy." : "");
   return { tables, files: f ? [f] : [], line,
     forModel: JSON.stringify({ shown: "CMA data (Forms I-VI, ratios, checks, assumptions) shown as tables" + (f ? " with the bank-format Excel" : ""), years: c.labels, status, mpbf_last_year: Math.round(mp || 0), method: I.method,

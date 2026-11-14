@@ -520,6 +520,22 @@ export function handler(deps: Deps) {
           },
           uploads,
           // the paths of these that this same user uploaded for the client open (earlier.ts's rule; the CMA tool reads only those)
+          // what a tool worked out from a file, kept by the file's hash in <firm>/<client>/cache/ (never sent anywhere)
+          memo: {
+            get: async (key) => {
+              if (!/^[A-Za-z0-9-]{8,160}$/.test(key) || !clientId) return null;
+              const r = await doFetch(URL_ + "/storage/v1/object/" + BUCKET + "/" + firm + "/" + clientId.replace(/[^A-Za-z0-9_-]/g, "_") + "/cache/" + key + ".json", { headers: { apikey: SERVICE, Authorization: "Bearer " + SERVICE } });
+              if (!r.ok) { await r.body?.cancel(); return null; }
+              try { return JSON.parse(await r.text()); } catch { return null; }
+            },
+            set: async (key, value) => {
+              if (!/^[A-Za-z0-9-]{8,160}$/.test(key) || !clientId) return;
+              const body = JSON.stringify(value);
+              if (body.length > 2_000_000) return;
+              const r = await doFetch(URL_ + "/storage/v1/object/" + BUCKET + "/" + firm + "/" + clientId.replace(/[^A-Za-z0-9_-]/g, "_") + "/cache/" + key + ".json", { method: "POST", headers: { apikey: SERVICE, Authorization: "Bearer " + SERVICE, "Content-Type": "application/json", "x-upsert": "true" }, body });
+              await r.text();
+            },
+          },
           ownFiles: async (paths) => {
             const ps = paths.slice(0, 20);
             const rows = await Promise.all(ps.map(async (p) => oldestRow((await rest("/rest/v1/assistant_uploads?select=path,client_id,created_by,created_at&path=eq." + encodeURIComponent(p) + "&order=created_at.asc&limit=20", jwt).catch(() => [])) as UploadRow[] | null, p)));
