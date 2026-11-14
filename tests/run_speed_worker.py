@@ -191,9 +191,11 @@ RULES = [
   try { Audit.maybeRun(); j = Audit.auto; await Z.wait(() => !Audit.auto && b.audit.last !== last0, 300000); } finally { Audit.checks.odd = ck; }
   return {eng: !!j.eng, pure: Engine.pure()}; }"""),
  ("again", r"""async () => { const Z = window.__zz, b = Z.bk; Z.fresh();
-  // and the worker again after
+  // and the worker again after (a new one, ready first; the run's job as it began: review of the full stack, not flaky)
+  const g = Engine.ready(); let x; while (!(x = g.next()).done) await new Promise(ok => setTimeout(ok, 50));
+  await Z.wait(() => !Audit.auto && !MIS.auto, 300000);
   const r = Z.due(Audit); Z.a0 = Z.copy(b.audit); const last0 = b.audit.last;
-  Audit.maybeRun(); const j = Audit.auto; await Z.wait(() => !Audit.auto && b.audit.last !== last0, 300000);
+  const j = await Z.job(Audit, () => Audit.maybeRun(), () => !Audit.auto && b.audit.last !== last0);
   return {eng: !!j.eng, same: Z.text(b.audit) === Z.once(Audit, "audit", r)}; }"""),
 ]
 # the 2B client of tests/itc_books.py (made up), with a made-up pair from the 2B matching run (M2B.st: kept by the page,
@@ -230,6 +232,20 @@ CHOICE = r"""async () => { const Z = window.__zz, b = S.books, co = CO(); Z.fres
   const c = await one("zz advances off");
   return {onEng: a.eng, onSame: a.same, offEng: c.eng, offSame: c.same, differ: a.fig !== c.fig}; }"""
 REVIEW = [
+ ("dropped", r"""async () => { const Z = window.__zz, b = Z.bk; Z.fresh();
+  // (review of the full stack) a clear while the worker works (as another client's opening does): the job dropped at once,
+  // the worker not ended, the run worked out here, the same
+  const r = Z.due(MIS); Z.m0 = Z.copy(b.mis); const last0 = b.mis.last;
+  MIS.maybeRun(); await Z.wait(() => MIS.auto && MIS.auto.eng && Z.jobs("mis") > 0, 60000); const j = MIS.auto, t0 = Date.now();
+  Engine.clear("test: another client");
+  await Z.wait(() => !MIS.auto && b.mis.last !== last0, 300000);
+  return {eng: !!j.eng, st: Engine.st, ms: Date.now() - t0, same: Z.text(b.mis) === Z.once(MIS, "mis", r)}; }"""),
+ ("vanished", r"""async () => { const Z = window.__zz, b = Z.bk; Z.fresh(); b.vouchers = b.vouchers.slice(); await saveBooks(); await Z.quiet(500);
+  // (review of the full stack) the worker gone in the middle of sending the books: worked out here, never a failed run
+  const r = Z.due(Audit); Z.a0 = Z.copy(b.audit); const last0 = b.audit.last, post = Engine.post; let n = 0;
+  Engine.post = function (m) { if (m && m.t === "bv" && ++n === 3 && this.w){ this.w.terminate(); this.w = null; } return post.apply(this, arguments); };
+  let j; try { j = await Z.job(Audit, () => Audit.maybeRun(), () => !Audit.auto && b.audit.last !== last0); } finally { Engine.post = post; }
+  return {eng: !!j.eng, err: !!j.err, cut: n >= 3, same: Z.text(b.audit) === Z.once(Audit, "audit", r), st: Engine.st}; }"""),
  ("timeout", r"""async () => { const Z = window.__zz, b = Z.bk; Z.fresh(); S.books = b; S.coId = b.cid; render();
   const r = Z.due(Audit); Z.a0 = Z.copy(b.audit); const last0 = b.audit.last;
   const post = Engine.post, J = [Engine.JOB_MS, Engine.JOB_PER, Engine.took]; Engine.JOB_MS = 1500; Engine.JOB_PER = 0; Engine.took = {};
@@ -262,7 +278,9 @@ CLEAR = r"""async () => { const Z = window.__zz, b = Z.bk; Z.fresh(); S.books = 
   S.coId = b.cid; S.books = b; render();
   return {held: held ? held.n : -1, s: held ? held.s : [], after: after ? after.books : null, sent: sent === null, ended}; }"""
 S_OK = {"books", "firm", "companies", "coId", "sales", "gstReg", "gstYm", "auditFy", "inregScope", "data"}
-WANT = {"choice": lambda e: e["onEng"] and e["onSame"] and e["offEng"] and e["offSame"] and e["differ"],
+WANT = {"dropped": lambda e: e["eng"] and e["st"] == "ok" and e["ms"] < 15000 and e["same"],
+        "vanished": lambda e: e["eng"] and not e["err"] and e["cut"] and e["same"],
+        "choice": lambda e: e["onEng"] and e["onSame"] and e["offEng"] and e["offSame"] and e["differ"],
         "timeout": lambda e: e["eng"] and e["off"] and "too long" in e["why"] and e["same"],
         "crash": lambda e: e["eng"] and e["off"] and e["same"] and e["msgOff"],
         "denied": lambda e: e["n"] >= 9 and e["all"],
@@ -272,7 +290,9 @@ WANT = {"choice": lambda e: e["onEng"] and e["onSame"] and e["offEng"] and e["of
         "other": lambda e: e["eng"] and e["stopped"] and e["kept"] and e["otherSame"] and e["jobs"] == 0,
         "none": lambda e: not e["eng"] and e["same"], "gone": lambda e: e["eng"] and e["same"],
         "patched": lambda e: not e["eng"] and e["pure"], "again": lambda e: e["eng"] and e["same"]}
-SAY = {"choice": "a client's choice changed (advances in GST), the books not: the worker's MIS each time the one at once (the choice counts)",
+SAY = {"dropped": "a clear while the worker works (another client opening): the job dropped at once, the worker not ended, the run worked out here, the same",
+       "vanished": "the worker gone in the middle of sending the books: the run worked out here, not failed, the same",
+       "choice": "a client's choice changed (advances in GST), the books not: the worker's MIS each time the one at once (the choice counts)",
        "timeout": "a job the worker never answers: the worker ended at its time, the run worked out here, the same",
        "crash": "the worker failing in the middle (its error; a word it cannot send): ended, the run worked out here, the same",
        "denied": "the worker writes nothing: every write it tries is refused (the books, the client, the stores, settings, the network)",

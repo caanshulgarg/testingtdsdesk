@@ -48,6 +48,8 @@ function fresh() {
 function setS(s) { Object.keys(S).forEach((k) => { if (k !== "books" && !(k in s)) delete S[k]; }); Object.keys(s).forEach((k) => { S[k] = s[k]; }); }
 // the page's clear (another client, a sign-out): nothing of the last is kept
 function clearAll() {
+  // (each job it held answered "dropped" at once: the page does not wait for its time, review of the full stack)
+  queue.forEach((q) => say({ t: "dropped", id: q.id })); if (job) say({ t: "dropped", id: job.id });
   books = null; next = null; queue.length = 0;
   if (job) { try { job.it.return(); } catch (x) { /* closed */ } job = null; }
   setS({}); S.books = null; self.__engineLS.clear(); if (typeof M2B === "object") M2B.st = {};

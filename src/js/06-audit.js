@@ -781,10 +781,11 @@ Object.assign(Audit, {
     let a = null;
     try {
       if (!(yield* E.ready()) || !(yield* E.sendIn(b))) return yield* this.autoLocal(from, to, how, prog);
-      a = E.ask(kind, from, to, how, prog);
-      while (!a.end && !a.err && E.st === "ok") yield E.WAIT;
-      if (a.err) throw new Error(a.err);
-      if (!a.end){ a = null; return yield* this.autoLocal(from, to, how, prog); }
+      // (review of the full stack: the worker gone while asked, its error, or its job dropped: worked out here in steps,
+      // never a failed run; a step that throws here is said as before)
+      try { a = E.ask(kind, from, to, how, prog); } catch (e){ a = null; return yield* this.autoLocal(from, to, how, prog); }
+      while (!a.end && !a.err && !a.dropped && E.st === "ok") yield E.WAIT;
+      if (!a.end){ const x = a; a = null; E.cancel(x); return yield* this.autoLocal(from, to, how, prog); }
       const res = a.res; a.over = true;
       if (kind === "mis") return this.madeKeep(res, prog);
       res.b = b;
@@ -978,6 +979,8 @@ const Engine = {
   // goes; kill (a sign-out, a switch of person): the worker itself ends, and a new one starts when a run needs it
   clear(why, kill){
     this.sent = null; this.gSent = undefined; this.owner = null;
+    // (the jobs asked for before: dropped at once, their runs worked out here if still wanted; never the worker's end)
+    this.jobs.forEach(a => { clearTimeout(a.timer); a.dropped = true; }); this.jobs.clear(); this.wake();
     if (!this.w) return;
     if (kill){ try { this.w.terminate(); } catch (e){} this.w = null; if (this.st !== "off") this.st = ""; this.jobs.forEach(a => clearTimeout(a.timer)); this.jobs.clear(); this.wake(); return; }
     try { this.post({t: "clear", why: String(why || "")}); } catch (e){}
@@ -997,7 +1000,8 @@ const Engine = {
   },
   // the worker started (yields WAIT meanwhile): true, or false when it cannot be
   *ready(){ if (!this.st) this.start(); while (this.st === "start") yield this.WAIT; return this.st === "ok"; },
-  post(m){ this.w.postMessage(m); },
+  // (no worker, or not ready: refused, review of the full stack; the callers then work it out here)
+  post(m){ if (!this.w || this.st !== "ok") throw new Error("the engine's worker is not there"); this.w.postMessage(m); },
   // what of S the engines read (review of part 1: only those; the client's own of the clients), and this browser's
   // settings (sign-in left out). The worker's S is these, as they are (its S is replaced, not added to)
   S_KEYS: ["firm", "coId", "sales", "gstReg", "gstYm", "auditFy", "inregScope"],
@@ -1020,8 +1024,9 @@ const Engine = {
     }
     return {s, ls, g};
   },
-  // the books to the worker, a part a step; false: the worker went meanwhile
-  *sendIn(b){
+  // the books to the worker, a part a step; false (work it out here): the worker went, or anything could not be sent
+  *sendIn(b){ try { return yield* this.sendParts(b); } catch (e){ this.sent = null; if (!this.w && this.st === "ok") this.st = ""; return false; } },
+  *sendParts(b){
     // (the books of another client or person than the worker holds: it is cleared first, review of part 1)
     const own = this.ownerNow(b);
     if (this.owner && this.owner !== own) this.clear("another client or person");
@@ -1065,7 +1070,7 @@ const Engine = {
     this.jobs.set(a.id, a);
     const n = ((S.books || {}).vouchers || []).length, ms = Math.max(this.JOB_MS + n * this.JOB_PER, 3 * (this.took[kind] || 0), this.JOB_MS);
     a.timer = setTimeout(() => { if (this.jobs.get(a.id) === a && !a.end) this.off("a job of the worker took too long (" + kind + ", " + Math.round(ms / 1000) + " s)"); }, ms);
-    this.post({t: "run", id: a.id, kind, from, to, how});
+    try { this.post({t: "run", id: a.id, kind, from, to, how}); } catch (e){ clearTimeout(a.timer); this.jobs.delete(a.id); throw e; }
     return a;
   },
   // what the worker holds now (a test's look: tests/run_speed_worker.py): {books, n, s: S's fields, ls: settings' keys}
@@ -1090,6 +1095,7 @@ const Engine = {
       if (!a) return;
       if (m.t === "prog"){ if (a.prog){ a.prog.k = m.k; a.prog.of = m.of; } }
       else if (m.t === "err"){ clearTimeout(a.timer); a.err = m.e || "the engine's worker failed"; }
+      else if (m.t === "dropped"){ clearTimeout(a.timer); a.dropped = true; }
       else if (m.t === "mis"){ a.res = m.r; a.end = true; this.done(a); }
       else if (m.t === "audit"){ a.res = m.c; a.full = m.n.map(() => []); }
       else if (m.t === "rows"){ const f = a.full[m.i]; for (let i = 0; i < m.rows.length; i++) f.push(m.rows[i]); }
