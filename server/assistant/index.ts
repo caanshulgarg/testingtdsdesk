@@ -40,7 +40,7 @@ import { capWords, costUsd as priceUsd, HAIKU, SONNET } from "./models.ts";
 import { aiMap } from "./fsmap.ts";
 import { misAsked } from "./mis.ts";
 import { fsAsked, FsThread } from "./fsask.ts";
-import { EARLIER, earlierNote, fenceData, newNonce, pickEarlier, takeEarlier, UploadRow, usingLine } from "./earlier.ts";
+import { EARLIER, earlierNote, fenceData, newNonce, oldestRow, ownedBy, pickEarlier, takeEarlier, UploadRow, usingLine } from "./earlier.ts";
 import { aiPolicy, refusal } from "../_shared/ai_policy.ts";
 
 export type Env = (k: string) => string | undefined;
@@ -290,6 +290,8 @@ export function handler(deps: Deps) {
         const b = await takeEarlier(picked.files, picked.want, lookup, { user: user.id, clientId, files: ATTACH.files - sent.length, bytes: Math.min(EARLIER.bytes, ATTACH.totalBytes - newBytes) });
         earlierLeft.push(...b.left);
         for (const f of b.take) sent.push({ path: f.path, name: f.name, type: f.type, kind: f.kind, size: f.size, earlier: true });
+        // and for the tools that read the chat's files themselves (cma_data), when the panel's list no longer has them
+        for (const f of b.take) if (!uploads.some((u) => u.path === f.path)) uploads.push({ path: f.path, name: f.name, type: f.type });
       }
     }
     // before anything is downloaded or opened (the review of 13-Nov-2026): asks with files are counted per user and per
@@ -517,6 +519,12 @@ export function handler(deps: Deps) {
             } catch { return null; }
           },
           uploads,
+          // the paths of these that this same user uploaded for the client open (earlier.ts's rule; the CMA tool reads only those)
+          ownFiles: async (paths) => {
+            const ps = paths.slice(0, 20);
+            const rows = await Promise.all(ps.map(async (p) => oldestRow((await rest("/rest/v1/assistant_uploads?select=path,client_id,created_by,created_at&path=eq." + encodeURIComponent(p) + "&order=created_at.asc&limit=20", jwt).catch(() => [])) as UploadRow[] | null, p)));
+            return ps.filter((p, i) => ownedBy(rows[i], { path: p, user: user.id, clientId }));
+          },
           // a file of the firm's private bucket, read as the user (row-level security on storage decides)
           readFile: async (path) => {
             if (!path.startsWith(firm + "/") || path.includes("..")) return null;

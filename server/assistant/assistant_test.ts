@@ -941,7 +941,8 @@ Deno.test("a follow-up 'on this basis': the earlier CMA and balance sheet are re
   const theirs = await keep("staff BS.xlsx", await sheet("BS", [["Made-up staff sheet", 1]]), STAFF, "balance_sheet");
   const otherFirm = { path: "22222222-2222-4222-8222-222222222222/" + CLIENT + "/uploads/th-x.xlsx", name: "other firm.xlsx", type: XL, kind: "cma", summary: "CMA data." };
   const c = new MockClaude([[text("Using: earlier CMA (FY24-25).xlsx, BS FY25-26.xlsx\nThe CMA data is prepared on the earlier format.")]]);
-  const r = await ask(c, { question: "pls prepare cma data on this basis", client_id: CLIENT, history: [{ role: "user", content: "here are the files" }, { role: "assistant", content: "Noted." }],
+  // (a CMA itself is FinCom's cma_data with no model: below; projections on this basis reach the model with the files)
+  const r = await ask(c, { question: "pls prepare projections on this basis", client_id: CLIENT, history: [{ role: "user", content: "here are the files" }, { role: "assistant", content: "Noted." }],
     thread: { fs: null, files: [cma, bs, otherFirm, theirs] }, uploads: [cma, bs, theirs].map((f) => ({ path: f.path, name: f.name, type: f.type })) });
   assert(r.status === 200 && r.done && c.calls.length >= 1, "answered: " + r.raw.slice(0, 400));
   const ev = ofType(r.events, "earlier")[0];
@@ -971,6 +972,12 @@ Deno.test("a follow-up 'on this basis': the earlier CMA and balance sheet are re
   const cA = new MockClaude([[text("Using: earlier CMA (FY24-25).xlsx")]]);
   const rA = await ask(cA, { question: "pls prepare cma data on this basis", client_id: CLIENT, history: [{ role: "user", content: "x" }, { role: "assistant", content: "y" }], thread: { fs: null, files: [{ ...cma, name: "renamed by the page.xlsx" }] } });
   eq(ofType(rA.events, "earlier")[0]?.files, [cma.name], "A still has it read, named by the stored record (not the request)");
+  // "cma data on this basis": FinCom's cma_data at once, no model; the files read by the tool itself
+  const c3 = new MockClaude([[text("(the model must not be called)")]]);
+  const r3 = await ask(c3, { question: "pls prepare cma data on this basis", client_id: CLIENT, history: [{ role: "user", content: "here are the files" }, { role: "assistant", content: "Noted." }],
+    thread: { fs: null, files: [cma, bs, otherFirm, theirs] }, uploads: [cma, bs, theirs].map((f) => ({ path: f.path, name: f.name, type: f.type })) });
+  assert(r3.status === 200 && r3.done && c3.calls.length === 0 && r3.done.route === "cma", "cma_data with no model: " + r3.raw.slice(0, 600));
+  assert(ofType(r3.events, "tool").some((e: any) => e.name === "cma_data"), "cma_data ran");
   // a question that needs no file: nothing read again
   const c2 = new MockClaude([[text("2% for a company.")]]);
   const r2 = await ask(c2, { question: "What is the TDS rate on contract payments to a company?", client_id: CLIENT, history: [{ role: "user", content: "x" }, { role: "assistant", content: "y" }], thread: { fs: null, files: [cma, bs] } });

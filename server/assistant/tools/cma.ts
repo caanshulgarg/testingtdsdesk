@@ -51,10 +51,11 @@ export function tlSchedule(amount: number, years: number, moratorium: number, n:
 // ---------------------------------------------------------------- the files of this chat to read
 type Cand = { path: string, name: string, type: string, kind: string, summary: string };
 const STMT_WORDS = /balance\s*sheet|\bbs\b|financial\s+statements?|final\s+accounts|audited|schedule\s*(iii|3)|\bcma\b|credit\s+monitoring|operating\s+statement|p\s*&\s*l|profit\s*(and|&)\s*loss/i;
+// the uploads of this chat (the panel's list) in the client's own folder; the thread's files give their kinds and summaries
 export function candidates(ctx: Pick<ExtCtx, "uploads" | "files" | "clientId">): Cand[] {
   const folder = [String(ctx.clientId || ""), String(ctx.clientId || "").replace(/[^A-Za-z0-9_-]/g, "_")];
-  const all = new Map<string, Cand>();
-  for (const f of [...(ctx.files || []), ...(ctx.uploads || [])] as any[]) {
+  const all = new Map<string, Cand>(), up = new Set((ctx.uploads || []).map((u) => u.path));
+  for (const f of [...(ctx.files || []).filter((x) => up.has(x.path)), ...(ctx.uploads || [])] as any[]) {
     const p = String(f && f.path || ""), seg = p.split("/");
     if (seg.length !== 4 || seg[2] !== "uploads" || !folder.includes(seg[1]) || p.includes("..")) continue;
     const prev = all.get(p);
@@ -66,7 +67,10 @@ const looksStatement = (f: Cand) => f.kind === "cma" || f.kind === "balance_shee
 async function readFiles(ctx: ExtCtx, notes: string[]): Promise<RFile[]> {
   const out: RFile[] = [];
   let pdfs = 0;
-  for (const f of candidates(ctx)) {
+  // only this same user's own uploads (earlier.ts's rule: another member's file is never pulled into a turn)
+  const cs = candidates(ctx), own = ctx.ownFiles ? new Set(await ctx.ownFiles(cs.map((f) => f.path)).catch(() => [] as string[])) : null;
+  for (const f of cs) {
+    if (own && !own.has(f.path)) { if (looksStatement(f)) notes.push(f.name + ": not read (uploaded by another member of the firm)."); continue; }
     const hint: FileKind | "" = f.kind === "cma" ? "cma" : f.kind === "balance_sheet" ? "balance_sheet" : /\bcma\b|credit\s+monitoring/i.test(f.name) ? "cma" : "";
     if (/\.xls$/i.test(f.name)) { if (looksStatement(f)) notes.push(f.name + ": an old .xls workbook FinCom cannot open; save it as .xlsx and upload it again."); continue; }
     const pdf = /\.(pdf|png|jpe?g)$/i.test(f.name);

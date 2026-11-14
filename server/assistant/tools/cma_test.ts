@@ -59,18 +59,21 @@ Deno.test("term loan schedule: monthly after the moratorium", () => {
 });
 
 Deno.test("the tool: files only (no books, no AI), forms, checks, Excel and what is still needed", async () => {
-  const files: Record<string, Uint8Array> = { "firm1/kestrel/uploads/a-old-cma.xlsx": await cmaXlsx(), "firm1/kestrel/uploads/b-audited.xlsx": await bsXlsx(), "firm1/other/uploads/c-bs.xlsx": await bsXlsx() };
+  const files: Record<string, Uint8Array> = { "firm1/kestrel/uploads/a-old-cma.xlsx": await cmaXlsx(), "firm1/kestrel/uploads/b-audited.xlsx": await bsXlsx(), "firm1/other/uploads/c-bs.xlsx": await bsXlsx(), "firm1/kestrel/uploads/d-staff-bs.xlsx": await bsXlsx() };
   const up: { name: string, bytes: Uint8Array }[] = [], read: string[] = [];
   let ai = 0;
   const ctx: any = { clientId: "kestrel", clientName: "Kestrel Widgets Private Limited", today: "2026-11-14", firm: { name: "Test firm", lines: [] },
     rpc: async (fn: string) => (fn === "asst_books" ? { none: true } : null), progress: () => {}, aiRead: async () => { ai++; return ""; },
-    uploads: [{ path: "firm1/kestrel/uploads/a-old-cma.xlsx", name: "old-cma.xlsx", type: "" }, { path: "firm1/other/uploads/c-bs.xlsx", name: "bs.xlsx", type: "" }],
+    uploads: [{ path: "firm1/kestrel/uploads/a-old-cma.xlsx", name: "old-cma.xlsx", type: "" }, { path: "firm1/other/uploads/c-bs.xlsx", name: "bs.xlsx", type: "" }, { path: "firm1/kestrel/uploads/b-audited.xlsx", name: "b.xlsx", type: "" },
+      { path: "firm1/kestrel/uploads/d-staff-bs.xlsx", name: "staff BS.xlsx", type: "" }],
+    ownFiles: async (ps: string[]) => ps.filter((p) => !p.includes("staff")),
     files: [{ path: "firm1/kestrel/uploads/b-audited.xlsx", name: "Audited BS FY25.xlsx", type: "", kind: "balance_sheet", summary: "" }],
     readFile: async (p: string) => { read.push(p); return files[p] || null; },
     uploadFile: async (b: Uint8Array, name: string, kind: string) => { up.push({ name, bytes: b }); return { id: "1", name, kind, path: "x/" + name, expires: "" }; } };
   const r: any = await runCma({ loan_type: "working_capital", working_capital_limit: 1800000 }, ctx);
   assert(!r.error, "no error: " + r.error);
   assert(!read.some((p) => p.includes("/other/")), "another client's file is never read");
+  assert(!read.some((p) => p.includes("staff")), "another member's upload is never read");
   assert(ai === 0, "no AI for Excel files");
   assert(up.length === 1 && /CMA-2023-24-to-2028-29\.xlsx$/.test(up[0].name), "the Excel: " + up.map((u) => u.name));
   const titles = r.tables.map((t: any) => t.title);

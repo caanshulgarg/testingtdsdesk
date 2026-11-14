@@ -74,6 +74,7 @@ export type TurnCtx = {
   // record and kept files, and the store of migration 83
   uploads?: { path: string, name: string, type: string }[],
   readFile?: (path: string) => Promise<Uint8Array | null>,
+  ownFiles?: (paths: string[]) => Promise<string[]>,  // which of these uploads this same user made for the client open (index.ts)
   clientInfo?: (id: string) => Promise<Record<string, unknown> | null>,
   clientFiles?: (id: string) => Promise<{ path: string, name: string, type: string }[]>,
   certStore?: unknown,
@@ -397,7 +398,7 @@ export async function runTurn(ctx: TurnCtx): Promise<TurnResult> {
       extAi = true;
       return mk.unmask((msg.content || []).filter((b: any) => b.type === "text").map((b: any) => b.text).join("\n"));
     },
-    firmWide: ctx.firmWide, uploads: ctx.uploads || [], files: (ctx.thread && ctx.thread.files ? ctx.thread.files : []).map((f) => ({ path: String(f.path || ""), name: String(f.name || ""), type: String(f.type || ""), kind: f.kind, summary: f.summary })), readFile: ctx.readFile, clientInfo: ctx.clientInfo, clientFiles: ctx.clientFiles, store: ctx.certStore, noFont: ctx.noFont,
+    firmWide: ctx.firmWide, uploads: ctx.uploads || [], files: (ctx.thread && ctx.thread.files ? ctx.thread.files : []).map((f) => ({ path: String(f.path || ""), name: String(f.name || ""), type: String(f.type || ""), kind: f.kind, summary: f.summary })), readFile: ctx.readFile, ownFiles: ctx.ownFiles, clientInfo: ctx.clientInfo, clientFiles: ctx.clientFiles, store: ctx.certStore, noFont: ctx.noFont,
     clients: async (text) => (((await ctx.exec("asst_clients", { p_text: text })) || {}).rows || []).map((c: any) => ({ client: String(c.client), name: String(c.name), gstin: String(c.gstin || "") })),
     rpcFor: (client, fn, args) => ctx.exec(fn, { ...args, p_client: client }),
     // the AI reads a document FinCom could not (extraction only): Sonnet, the text masked, a scanned copy as it is (as a
