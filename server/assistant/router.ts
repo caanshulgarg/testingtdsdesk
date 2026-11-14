@@ -9,6 +9,7 @@
 import { fieldKind, fieldLabel } from "../_shared/assistant-labels.js";
 import { entriesAsked } from "./entries.ts";
 import { fsAsked, projAsked } from "./fsask.ts";
+import { cmaAsked } from "./cmaask.ts";
 
 export type Route = { tool: string, input: Record<string, unknown>, why: string } | { prefile: { form: string, fy: string | null, quarter: string | null, month: string | null, reg: string | null }, why: string };
 
@@ -86,7 +87,8 @@ export function route(question: string, anchor: string): Route | null {
   // the financial statements (a balance sheet, provisional or interim, Schedule III, the notes, a P&L with the balance
   // sheet, last year's figures) are never a book tool's by their words: FinCom's statements card (fsask.ts). The owner's
   // voice question of 29-Oct-2026 ("… Provencial Balance Sheet with P&L and notes …") got the P&L of April alone here.
-  if (fsAsked(q) || projAsked(q)) return null;
+  // CMA data (cmaask.ts): FinCom's cma_data, never a book tool
+  if (fsAsked(q) || projAsked(q) || cmaAsked(q)) return null;
   // "check my Q2 26Q", "check March GST before filing": FinCom's own checklist (no AI anywhere)
   let m = s.match(/\b(26q|27q|24q)\b/);
   if (/\bcheck\b|\bbefore filing\b|\bready to file\b/.test(s) && (m || /\bgst(r-?3b|r-?1)?\b/.test(s))) {

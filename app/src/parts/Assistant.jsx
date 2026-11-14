@@ -45,6 +45,8 @@ const LABELS = {
   compare: ["neutral", "the two statements you attached – compared line by line by FinCom, figures as printed"],
   // projected statements (server/assistant/tools/projection.ts): the books' last year carried forward on stated assumptions
   projection: ["warn", "projected – from the books and the assumptions listed, not actual figures"],
+  // CMA data (server/assistant/tools/cma.ts): past years from the files and books listed, the rest estimated and projected
+  cma: ["warn", "CMA data – past years from the files and books listed, the rest estimated or projected on the assumptions listed"],
 };
 const money = (v) => (v == null || v === "" ? "" : INR.format(r2(num(v))));
 const isNum = (t) => t === "amount" || t === "int" || t === "pct";
