@@ -125,13 +125,21 @@ function tree() {
 // the bills' counts worked out again, refreshStats, and the page drawn twice). Now the click only says it is taken (the
 // card "Opening…", the thin bar) and returns; the client is opened and drawn on the next frame (FinComNav.go, as the
 // sidebar's own links). tests/run_hang_back_to_client.py
+// "Opening…" stays until the client is open and drawn (Route.apply settled, its bills loaded first when they were not);
+// a second click meanwhile is let go (it added a second step to the browser's history)
 function ClientCard({ open, home, after }) {
-  const [opening, setOpening] = useState(false);
+  const [opening, setOpening] = useState(false), busy = useRef(false);
   const back = () => {
-    S.firmMenu = false; S.tallyPanel = false; setOpening(true);
-    FinComNav.go(() => { try { if (typeof backToClient === "function") backToClient(); else openCompany(open.id).then(() => { render(); window.scrollTo(0, 0); }); } finally { setOpening(false); } });
+    if (busy.current) return;
+    busy.current = true; S.firmMenu = false; S.tallyPanel = false; setOpening(true);
+    const end = () => { busy.current = false; setOpening(false); };
+    FinComNav.go(() => {
+      let p;
+      try { p = typeof backToClient === "function" ? backToClient() : openCompany(open.id).then(() => { render(); window.scrollTo(0, 0); }); }
+      finally { Promise.resolve(p).then(end, end); }
+    });
   };
-  const go = () => { if (after) after(); if (home) { if (!opening) back(); } else openSwitcher(); };
+  const go = () => { if (after) after(); if (home) back(); else openSwitcher(); };
   const label = home ? "Back to " + open.name : "Client: " + open.name + ". Change client (F3)";
   return <div className="side-client">
     <span className="side-label">Client</span>

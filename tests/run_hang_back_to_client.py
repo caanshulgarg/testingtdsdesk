@@ -2,8 +2,9 @@
 (FINCOM-APP-STAGING-K: about 2 s in React's click handler; Side.jsx ClientCard -> backToClient -> Route.apply ->
 openCompany, src/js/52 and 27). On a firm page (Clients, Today, Tally) the card goes back to the client's page last
 shown: the click opened the client and drew its whole page (the Overview with its cards) in the click's own task.
-Now the click only marks the way (the address, the card "Opening…") and returns; the client is opened and its page
-drawn in a later task (Route.soon), as "Add and open" leaves the books to a later task (run_hang_add_client.py).
+Now the click only says it is taken (the card "Opening…", the thin bar) and returns; the client is opened and its page
+drawn on the next frame (FinComNav.go, as the sidebar's own links), as "Add and open" leaves the books to a later task
+(run_hang_add_client.py).
 Made-up books only (the fixture's large client copied 14 times, 51,758 entries, as run_hang_gst_year.py makes them),
 DRAFTS (default 400) made-up draft bills on it, as run_hang_bill_drafts.py makes them, and 300 more made-up clients. Checks:
   1. from the large client's Overview, then the Clients page: "Back to <client>": the click's own task within BACK_MS
@@ -11,7 +12,8 @@ DRAFTS (default 400) made-up draft bills on it, as run_hang_bill_drafts.py makes
      and drawn in later tasks, each within BACK_MS (the drafts' checks a few a task: refreshStatsSoon), open on its
      Overview (client/dash, its address), drawn as a fresh drawing draws it;
   2. from its GST › Year, then the Tally page: back to GST › Year the same way;
-  3. Back in the browser then returns to the firm page.
+  3. Back in the browser then returns to the firm page;
+  4. two clicks while it is opening: one step in the browser's history, the card saying "Opening…" until it is drawn.
 Runs on the React build: app/dist-test (cd app && npm run legacy && npm run build:test), or TDSDESK_SITE.
 BIG_DIR=a folder with Master.xml and DayBook.xml from mis_big_books.py (made in a temporary folder when not given)."""
 import os, sys, json, shutil, tempfile, threading, functools, subprocess, http.server
@@ -105,6 +107,18 @@ try:
         pg.go_back(); pg.wait_for_timeout(2500)
         now = pg.evaluate(WHERE)
         ok(now["open"].startswith("home/tally"), "3. Back in the browser returns to the Tally page (%s, %s)" % (now["open"], now["hash"]))
+        # 4. two clicks while it is opening: one step in the history; "Opening…" until the client is drawn
+        pg.evaluate("() => FinComNav.go(() => navHome('clients'))"); pg.wait_for_timeout(1500)
+        h0 = pg.evaluate("history.length")
+        pg.evaluate("() => { window.__op = []; const b = () => document.querySelector('#side [data-side-client]'); b().click(); b().click();"
+                    " const t = setInterval(() => { const x = b(); window.__op.push(S.view + '|' + (x ? x.innerText : '')); if (S.view === 'company') clearInterval(t); }, 0); }")
+        pg.wait_for_timeout(3000)
+        op = pg.evaluate("window.__op"); h1 = pg.evaluate("history.length"); now = pg.evaluate(WHERE)
+        seen = [x for x in op if x.startswith("home|")]
+        ok(h1 == h0 + 1 and now["open"] == "company/books:gst" and seen and all("Opening" in x for x in seen),
+           "4. two clicks while opening: %d step in the history (one), open on %s (the page last shown), the card said Opening… until the client was drawn (%d looks: %s)" % (h1 - h0, now["open"], len(seen), [x.replace("\n", " ")[:50] for x in op[:3]]))
+        pg.go_back(); pg.wait_for_timeout(2000)
+        ok(pg.evaluate(WHERE)["open"] == "home/clients", "   Back returns to Clients")
         br.close()
 finally:
     srv.shutdown(); shutil.rmtree(root, ignore_errors=True)
