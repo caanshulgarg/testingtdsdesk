@@ -37,12 +37,28 @@ export function yearOf(cell: unknown): number | null {
   if (m && Number(m[2]) >= 1 && Number(m[2]) <= 12) return fyAt(y4(m[3]), Number(m[2]));
   m = new RegExp("\\b(?:\\d{1,2}\\s*(?:st|nd|rd|th)?[\\s.\\-/]*(?:of\\s+)?)?(" + MON.join("|") + ")[a-z]*\\.?[\\s,.\\-/']*(20\\d{2}|\\d{2})\\b").exec(s);
   if (m) return fyAt(y4(m[2]), MON.indexOf(m[1]) + 1);
+  // "FY27-28", "FY 27–28": the year from 1 April 2027; "FY25" alone: the year to 31 March 2025
+  m = /\bfy\s*'?(\d{2})\s*[-–—\/]\s*(\d{2})\b/.exec(s);
+  if (m && Number(m[2]) === (Number(m[1]) + 1) % 100) return 2000 + Number(m[1]);
   m = /\bfy\s*'?(\d{2})\b/.exec(s);
   if (m) return 2000 + Number(m[1]) - 1;
   return null;
 }
 // a column's kind as written: "Actual" is not audited unless it says audited; no word at all is decided by the file (readGrids)
-const kindIn = (s: string): RYear["kind"] | null => /unaudited|provisional/i.test(s) ? "provisional" : /\baudited\b/i.test(s) ? "audited" : /\bactuals?\b/i.test(s) ? "provisional" : /estimat/i.test(s) ? "estimated" : /project/i.test(s) ? "projected" : null;
+// (a bank CMA's short words too: "Aud.", "Prov.", "Est.", "Proj.")
+const kindIn = (s: string): RYear["kind"] | null => /unaudited|provisional|\bprov\b/i.test(s) ? "provisional" : /\baudited\b|\baud\b/i.test(s) ? "audited" : /\bactuals?\b/i.test(s) ? "provisional" : /estimat|\best\b|\bestd\b/i.test(s) ? "estimated" : /project|\bproj\b/i.test(s) ? "projected" : null;
+// a row of bare years as a bank CMA heads its columns ("Financial Year | 2019 | 2020 | … | 2030", numbers or text): each the
+// year to 31 March of it (2025: the year 2024-25); two or more in a run, one apart, and no other figure in the row
+export function bareYears(row: unknown[]): { c: number, fy: number }[] | null {
+  const ys: { c: number, y: number }[] = [];
+  for (let c = 1; c < row.length; c++) {
+    const v = row[c], n = typeof v === "number" ? v : typeof v === "string" && /^\s*(19|20)\d{2}\s*$/.test(v) ? Number(v) : null;
+    if (n != null && Number.isInteger(n) && n >= 1990 && n <= 2100) ys.push({ c, y: n });
+    else if (typeof v === "number") return null;
+  }
+  if (ys.length < 2 || !ys.every((x, i) => i === 0 || Math.abs(x.y - ys[i - 1].y) === 1)) return null;
+  return ys.map((x) => ({ c: x.c, fy: x.y - 1 }));
+}
 // the units a sheet states ("Rs. in lakhs", "(₹ in crore)", "Amount in '000")
 export function unitOf(text: string): number {
   const s = String(text || "").toLowerCase();
@@ -58,28 +74,30 @@ type Side = "L" | "A" | "P";
 // a row that is a total, a sub-total, a ratio or a profit line: not a line of its own (some are kept as the file's totals)
 const TOTAL_L = /^(total\s+(equity\s+and\s+liabilities|liabilities(\s+and\s+(equity|capital))?|sources\s+of\s+funds)|grand\s+total\s*(of\s+)?liabilities)/;
 const TOTAL_A = /^(total\s+(assets|application\s+of\s+funds)|grand\s+total\s*(of\s+)?assets)/;
-const PBT = /^(net\s+)?profit\s*(\/\s*\(?loss\)?)?\s+before\s+tax|^pbt\b/;
-const PAT = /^(net\s+)?profit\s*(\/\s*\(?loss\)?)?\s+(after\s+tax|for\s+the\s+(year|period))|^pat\b|^net\s+profit\b(?!\s+as)/;
-const SKIP = /\btotal\b|\bsub[- ]?total\b|\bratio\b|%|\brise\b|\bgrowth\b|\bmargin\b|\bnet\s+worth\b|\bnet\s+working\s+capital\b|\bworking\s+capital\s+gap\b|\bmpbf\b|\bpermissible\b|\b(gross|operating|net)\s+profit\b|\bprofit\s*(\/\s*\(?loss\)?\s*)?(before|after|for)\b|\bebitda\b|\bpbt\b|\bpat\b|\bcost\s+of\s+(production|sales)\b|\bretained\s+profit\b|\bearnings\s+per\s+share\b|\beps\b|\bholding\b|\bmonths?\b|\bdays\b|\bsurplus\s*\(\+\)|\bdeficit\b|\bnumber\s+of\s+shares\b|\bface\s+value\b/;
+// ("Profit / (Loss)", "Profit (Loss)", "Profit/loss")
+const PBT = /^(net\s+)?profit\s*(\/?\s*\(?loss\)?)?\s+before\s+tax|^pbt\b/;
+const PAT = /^(net\s+)?profit\s*(\/?\s*\(?loss\)?)?\s+(after\s+tax|for\s+the\s+(year|period))|^pat\b|^net\s+profit\b(?!\s+as)/;
+const SKIP = /\btotal\b|\bsub[- ]?total\b|\bratio\b|%|\brise\b|\bgrowth\b|\bmargin\b|\bnet\s+worth\b|\bnet\s+working\s+capital\b|\bworking\s+capital\s+gap\b|\bmpbf\b|\bpermissible\b|\b(gross|operating|net)\s+profit\b|\bprofit\s*(\/\s*\(?loss\)?\s*)?(before|after|for)\b|\bebitda\b|\bpbt\b|\bpat\b|\bcost\s+of\s+(production|sales)\b|\bretained\s+profit\b|\bearnings\s+per\s+share\b|\beps\b|\bebit\b|^net\s+of\b|\bholding\b|^\(?\s*(in\s+)?(months?|days)\b|\bin\s+(months|days)\b|\b(months|days)'|\b(months?|days)\s+(of|cost|sales|consumption|turnover)\b|\bsurplus\s*\(\+\)|\bdeficit\b|\bnumber\s+of\s+shares\b|\bface\s+value\b/;
 // [words, line id, sides it may be on, sign]
 const RULES: [RegExp, string, Side[], number?][] = [
   // balance sheet: liabilities
   [/share\s+capital|equity\s+share|ordinary\s+share|preference\s+share|share\s+application/, "share", ["L"]],
   [/partners'?\s*capital|proprietor'?s?\s*capital|capital\s+account|owner'?s?\s+capital|^capital$/, "capital", ["L"]],
   [/partners'?\s*current|^current\s+account/, "current", ["L"]],
-  [/deferred\s+tax\s+liabilit/, "dtl", ["L"]],
-  [/deferred\s+tax\s+asset/, "dta", ["A"]],
-  [/reserves?|surplus|retained\s+earnings|balance\s+(in|of)\s+(the\s+)?(statement\s+of\s+)?profit|profit\s+and\s+loss\s+account|securities\s+premium/, "reserves", ["L"]],
+  [/def+er+ed\s+tax\s+liabilit|^dtl\b/, "dtl", ["L"]],
+  [/def+er+ed\s+tax\s+asset|def+er+ed\s+tax\s*\(net\)/, "dta", ["A"]],
+  [/def+er+ed\s+revenue\s+expenditure/, "intang", ["A"]],
+  [/reserves?|surplus|retained\s+earnings|share\s+premium|balance\s+(in|of)\s+(the\s+)?(statement\s+of\s+)?profit|profit\s+and\s+loss\s+account|securities\s+premium/, "reserves", ["L"]],
   [/instal+ments?\s+(of|on)\s+term\s+loans?|current\s+maturities|term\s+loans?\s+(due|repayable)\s+within/, "cm", ["L"]],
   [/short[- ]term\s+borrowings\s+from\s+(others|directors|partners|related)|(short[- ]term\s+)?loans?\s+(repayable\s+on\s+demand\s+)?from\s+(directors|partners|promoters|related\s+part|relatives|shareholders|members)/, "__stbo", ["L"]],
   [/borrowings\s+from\s+banks|bank\s+borrowings|cash\s+credit|overdraft|\bod\b|\bcc\b|working\s+capital\s+(loans?|limits?|borrowings?|demand)|bills\s+(purchased|discounted)|packing\s+credit|loans?\s+repayable\s+on\s+demand\s+from\s+banks/, "__stbbank", ["L"]],
   [/short[- ]term\s+borrowings|bank\s+borrowings|borrowings\s+from\s+banks|cash\s+credit|overdraft|working\s+capital\s+(loans?|limits?|borrowings?|demand)|bills\s+(purchased|discounted)|packing\s+credit/, "stb", ["L"]],
-  [/long[- ]term\s+borrowings|term\s+loans?|debentures|secured\s+loans?|unsecured\s+loans?|deferred\s+payment\s+credits?|term\s+deposits|loans?\s+from\s+(directors|partners|promoters|relatives|related)|borrowings/, "ltb", ["L"]],
+  [/long[- ]term\s+borrowings|term\s+loans?|loans?\s*-\s*(secured|unsecured)|debentures|secured\s+loans?|unsecured\s+loans?|deferred\s+payment\s+credits?|term\s+deposits|loans?\s+from\s+(directors|partners|promoters|relatives|related)|borrowings/, "ltb", ["L"]],
   [/other\s+long[- ]term\s+liabilities|other\s+term\s+liabilities/, "oltl", ["L"]],
   [/long[- ]term\s+provisions/, "ltp", ["L"]],
-  [/trade\s+payables|sundry\s+creditors|creditors\s+for\s+(goods|purchases|raw)|trade\s+creditors|^creditors$/, "tp", ["L"]],
-  [/provision\s+for\s+(tax|taxation|income[- ]?tax)|short[- ]term\s+provisions|^provisions$/, "stp", ["L"]],
-  [/other\s+current\s+liabilities|advances?\s+(payments?\s+)?(received\s+)?from\s+customers|statutory\s+(liabilities|dues)|dividend\s+payable|other\s+liabilities|expenses\s+payable|creditors\s+for\s+expenses|deposits\s+from|duties\s+and\s+taxes|other\s+payables/, "ocl", ["L"]],
+  [/trade\s+payables|outstanding\s+dues\s+of\s+(micro|creditors|msme)|sundry\s+creditors|creditors\s+for\s+(goods|purchases|raw)|trade\s+creditors|^creditors$/, "tp", ["L"]],
+  [/provision\s+for\s+(tax|taxation|income[- ]?tax)|short[- ]term\s+provisions?|^provisions$/, "stp", ["L"]],
+  [/other\s+current\s+liabilities|advances?\s+(payments?\s+)?(received\s+)?from\s+customers|statutory\s+(liabilities|dues|remittances)|remittances\s+payable|dividend\s+payable|other\s+liabilities|expenses\s+payable|creditors\s+for\s+expenses|deposits\s+from|duties\s+and\s+taxes|other\s+payables/, "ocl", ["L"]],
   // balance sheet: assets
   [/net\s+block|property,?\s+plant|(^|[^n])tangible\s+(fixed\s+)?assets|^fixed\s+assets$|fixed\s+assets\s*\(net\)/, "ppe", ["A"]],
   [/gross\s+block/, "__gb", ["A"]],
@@ -88,23 +106,26 @@ const RULES: [RegExp, string, Side[], number?][] = [
   [/intangible|goodwill|preliminary\s+expenses|miscellaneous\s+expenditure/, "intang", ["A"]],
   [/non[- ]current\s+investments|investments?\s+in\s+(subsidiar|associat|group|joint)/, "nci", ["A"]],
   [/long[- ]term\s+loans\s+and\s+advances|advances\s+to\s+suppliers\s+of\s+capital|deferred\s+receivables|security\s+deposits|capital\s+advances/, "ltla", ["A"]],
-  [/other\s+non[- ]current\s+assets|other\s+non[- ]current/, "onca", ["A"]],
+  [/other\s+non[- ]current\s+assets|other\s+non[- ]current|investments?\s*\/\s*book\s*debts|debts?\s+outstanding\s+for\s+a\s+period\s+exceeding/, "onca", ["A"]],
   [/current\s+investments|^investments|government\s+securities/, "__inv", ["A"]],
+  [/^advances?\s+(paid\s+)?to\s+suppliers/, "stla", ["A"]],
   [/inventor|stock[- ]in[- ]trade|^stocks?\b|closing\s+stock|raw\s+materials?|stock[- ]in[- ]process|work[- ]in[- ]progress|finished\s+goods|consumable\s+spares|stores\s+and\s+spares|spares/, "inv", ["A"]],
   [/trade\s+receivables|sundry\s+debtors|receivables|debtors|bills\s+receivable/, "tr", ["A"]],
   [/cash\s+and\s+(bank|cash\s+equivalents)|cash\s+(in|on)\s+hand|bank\s+balances?|balances?\s+with\s+banks|^cash\b|fixed\s+deposits?\s+with\s+banks/, "cash", ["A"]],
-  [/short[- ]term\s+loans\s+and\s+advances|advances\s+to\s+suppliers|advance\s+payment\s+of\s+tax|advance\s+tax|loans\s+and\s+advances|advances/, "stla", ["A"]],
-  [/other\s+current\s+assets|prepaid|other\s+receivables|gst\s+(input|receivable)|balances?\s+with\s+(revenue|government|statutory)|tds\s+receivable/, "oca", ["A"]],
+  [/short[- ]term\s+loans\s+and\s+advances|advances?\s+to\s+suppliers|advance\s+payment\s+of\s+tax|advance\s+tax|loans\s+and\s+advances|advances/, "stla", ["A"]],
+  [/other\s+current\s+assets|prepaid|recoverable|other\s+receivables|gst\s+(input|receivable)|balances?\s+with\s+(revenue|government|statutory)|tds\s+receivable/, "oca", ["A"]],
   // the profit and loss / operating statement
   [/net\s+sales|revenue\s+from\s+operations|net\s+revenue|income\s+from\s+operations/, "rev", ["P"]],
   [/gross\s+sales|domestic\s+sales|export\s+sales|^sales|turnover|gross\s+receipts|sales\s+of\s+(products|services|goods)/, "__gs", ["P"]],
   [/excise\s+duty|less:?\s*(gst|duties)/, "__ed", ["P"]],
-  [/other\s+(non[- ]operating\s+)?income|non[- ]operating\s+income|interest\s+income|dividend\s+income/, "oth", ["P"]],
+  [/other\s+(non[- ]operating\s+)?income|non[- ]operating\s+income|interest\s+income|interest\s+(received|earned)|dividend\s+income/, "oth", ["P"]],
   [/other\s+non[- ]operating\s+expenses|non[- ]operating\s+expenses|exceptional/, "exc", ["P"]],
-  [/extraordinary|prior\s+period/, "xo", ["P"]],
+  [/extraordinary|prior\s+period|prior\s+years?/, "xo", ["P"]],
   [/changes?\s+in\s+inventor|\(increase\)\s*\/?\s*decrease\s+in\s+(stock|inventor)|increase\s*\/\s*decrease\s+in\s+(stock|inventor)/, "chg", ["P"]],
-  [/(add:?\s*)?opening\s+stock/, "chg", ["P"], 1],
-  [/(deduct|less):?\s*closing\s+stock|^closing\s+stock/, "chg", ["P"], -1],
+  // a CMA's "add: opening stock / raw material / finished goods" and "less: closing …" (used only when the change itself is
+  // not printed: readGrids)
+  [/(add:?\s*)?opening\s+(stock|raw|finished|work|wip|inventor|goods)/, "__chgo", ["P"], 1],
+  [/(deduct|less):?\s*closing\s+(stock|raw|finished|work|wip|inventor|goods)|^closing\s+(stock|raw|finished|inventor)/, "__chgo", ["P"], -1],
   [/cost\s+of\s+materials?\s+consumed|raw\s+materials?|materials?\s+consumed|consumption\s+of/, "mat", ["P"]],
   [/purchases?/, "pur", ["P"]],
   [/employee\s+benefits?|salar(y|ies)|wages|direct\s+labour|staff\s+(cost|welfare)|employee\s+cost/, "emp", ["P"]],
@@ -112,34 +133,44 @@ const RULES: [RegExp, string, Side[], number?][] = [
   [/depreciation|amorti[sz]ation/, "dep", ["P"]],
   [/provision\s+for\s+tax|tax\s+expense|current\s+tax|deferred\s+tax|income[- ]?tax|^taxes?$|taxation/, "tax", ["P"]],
   [/dividend|drawings/, "__div", ["P"]],
-  [/other\s+expenses|power\s+and\s+fuel|other\s+manufacturing|manufacturing\s+expenses|selling|general\s+and\s+admin|administrative|other\s+spares|repairs|rent|freight|expenses/, "exp", ["P"]],
+  [/other\s+expenses|power\s+and\s+fuel|other\s+manufacturing|manufacturing\s+expenses|selling|general\s+and\s+admin|administrative|other\s+spares|repairs|rent|freight|expenses|\bexpense\b|marketing|advertis/, "exp", ["P"]],
 ];
-const SHEET_P = /operating\s+statement|profit\s*(and|&)\s*loss|p\s*&\s*l|\bpl\b|income\s+statement|form\s*(ii|2)\b/i;
-const SHEET_SKIP = /\bnotes?\b|form\s*(i|1|iv|4|v|5|vi|6)\b|ratios?|mpbf|fund\s*s?\s*flow|assumptions|particulars|checks?|cash\s*flow/i;
+const SHEET_P = /operating\s+statement|profit\s*(and|&)\s*loss|p\s*&\s*l|\bpl\b|\bpnl\b|income\s+statement|form\s*(ii|2)\b/i;
+// a bank CMA's sheets by side ("Asset", "Liability", "Asset statement")
+const SHEET_A = /^\s*assets?\b|asset\s+statement/i, SHEET_L = /^\s*liabilit|liability\s+statement/i;
+// not a statement: the notes, the other forms, a CMA's own checks, indicators, holding levels, DSCR and revenue workings, a
+// break-up of a line (its parts are read as notes: noteSplits)
+const SHEET_SKIP = /\bnotes?\b|form\s*(i|1|iv|4|v|5|vi|6)\b|ratios?|mpbf|fund\s*s?\s*flow|assumptions|particulars|checks?|cash\s*flow|^\s*valid|\bkfi\b|key\s+financial|\bwcc\b|holding\s+levels?|\bdscr\b|offline|break[- ]?up|projections?\s+summary/i;
 // a block heading inside a sheet: the form it starts (a CMA's forms stacked on one sheet), or the side of the balance sheet
-type Sub = "CA" | "NCA" | "CL" | "NCL" | null;
+type Sub = "CA" | "NCA" | "CL" | "NCL" | "NW" | null;
 function heading(s: string): { side?: Side | null, sub?: Sub, skip?: boolean } | null {
   if (/form\s*(i|1|iv|4|v|5|vi|6)\b(?![\w-])|comparative\s+statement\s+of\s+current|computation\s+of\s+(mpbf|maximum)|maximum\s+permissible|fund\s*s?\s+flow|key\s+ratios|^ratios|particulars\s+of\s+(the\s+)?(existing|proposed)|assessment\s+of/i.test(s)) return { skip: true, side: null };
   if (/form\s*(ii|2)\b|operating\s+statement|statement\s+of\s+profit|profit\s+and\s+loss|^income$|^revenue$|^expenses$|^expenditure$/i.test(s)) return { side: "P", skip: false };
   if (/form\s*(iii|3)\b|analysis\s+of\s+balance\s+sheet/i.test(s)) return { side: null, skip: false };
-  if (/non[- ]current\s+assets|fixed\s+assets|other\s+non[- ]current/i.test(s)) return { side: "A", sub: "NCA", skip: false };
+  if (/non[- ]current\s+assets|not\s+current\s+assets|fixed\s+assets|other\s+non[- ]current/i.test(s)) return { side: "A", sub: "NCA", skip: false };
   if (/current\s+assets/i.test(s)) return { side: "A", sub: "CA", skip: false };
   if (/non[- ]current\s+liabilities|term\s+liabilities|long[- ]term\s+liabilities/i.test(s)) return { side: "L", sub: "NCL", skip: false };
   if (/current\s+liabilities/i.test(s)) return { side: "L", sub: "CL", skip: false };
-  if (/liabilit|net\s+worth|shareholders|partners'?\s+funds|owners?'?\s+funds|sources\s+of\s+funds|^equity/i.test(s)) return { side: "L", sub: null, skip: false };
+  if (/net\s+worth|shareholders'?\s+funds|partners'?\s+funds|owners?'?\s+funds/i.test(s)) return { side: "L", sub: "NW", skip: false };
+  if (/liabilit|shareholders|sources\s+of\s+funds|^equity/i.test(s)) return { side: "L", sub: null, skip: false };
   if (/^assets$|^assets\b|application\s+of\s+funds/i.test(s)) return { side: "A", sub: null, skip: false };
   return null;
 }
 const clean = (s: string) => String(s || "").toLowerCase().replace(/^\s*(\(?[a-z0-9]{1,4}[.)]|[ivx]+[.)])\s*/i, "").replace(/^\s*(\(?[a-z0-9]{1,4}[.)]|[ivx]+[.)])\s*/i, "").replace(/\s+/g, " ").trim();
 export function lineFor(label0: string, side: Side | null, sub: Sub): { id: string, sign: number } | "skip" | null {
-  const s = clean(label0);
+  // "total outstanding dues of micro and small enterprises / of creditors other than …": trade payables, not a total
+  const s = clean(label0).replace(/^total\s+(outstanding\s+dues)/, "$1");
   if (!s) return null;
+  // a CMA's net worth: "Surplus (+) or deficit (-) in Profit & Loss Account" is the reserves, not the fund flow's surplus
+  if (side !== "P" && /surplus.*\b(in|of)\s+(the\s+)?(statement\s+of\s+)?profit\s*(&|and)\s*loss/.test(s)) return { id: "reserves", sign: 0 };
   if (SKIP.test(s)) return "skip";
   for (const [re, id, sides, sign] of RULES) {
     if (!re.test(s)) continue;
     if (side && !sides.includes(side)) continue;
     if (!side && sides.length === 1 && sides[0] === "P" && id !== "rev" && id !== "__gs") continue;   // a P&L word outside the P&L: not placed
     if (id === "__inv") return { id: sub === "NCA" || /non[- ]current|long[- ]term/.test(s) ? "nci" : "ci", sign: 1 };
+    // receivables shown under the non-current assets (a CMA's debtors over six months)
+    if (id === "tr" && sub === "NCA") return { id: "onca", sign: 0 };
     return { id, sign: sign || 0 };   // 0: as printed
   }
   return null;
@@ -158,7 +189,7 @@ export function noteSplits(grids: Grid[]): Map<number, Split> {
   const out = new Map<number, Split>();
   const at = (fy: number) => { let x = out.get(fy); if (!x) { x = { cm: 0, stbo: 0, bank: 0, inv_rm: 0, inv_wip: 0, inv_fg: 0 }; out.set(fy, x); } return x; };
   for (const g of grids) {
-    if (!/\bnotes?\b|schedules?/i.test(g.name) && !g.rows.some((r) => r.some((x) => typeof x === "string" && /^\s*note\s*\d+/i.test(x)))) continue;
+    if (!/\bnotes?\b|schedules?|break[- ]?up/i.test(g.name) && !g.rows.some((r) => r.some((x) => typeof x === "string" && /^\s*note\s*\d+/i.test(x)))) continue;
     const unit = unitOf(g.name + " " + g.rows.slice(0, 15).flat().filter((x) => typeof x === "string").join(" "));
     let cols: { c: number, fy: number }[] = [], block: "stb" | "inv" | null = null;
     for (const row of g.rows) {
@@ -190,7 +221,7 @@ export function noteSplits(grids: Grid[]): Map<number, Split> {
 }
 
 // ---------------------------------------------------------------- a file's sheets
-type Acc = RYear & { gb: number, ad: number, gs: number, ed: number, got: Set<string>, stbGen: number };
+type Acc = RYear & { gb: number, ad: number, gs: number, ed: number, got: Set<string>, stbGen: number, chgo: number };
 export function readGrids(name: string, path: string, grids: Grid[], hint: FileKind | "" = ""): RFile {
   const notes: string[] = [], unplaced: string[] = [];
   const allText = grids.map((g) => g.name + " " + g.rows.slice(0, 40).flat().filter((x) => typeof x === "string").join(" ")).join(" ");
@@ -202,68 +233,106 @@ export function readGrids(name: string, path: string, grids: Grid[], hint: FileK
   const useSheets = grids.filter((g) => !SHEET_SKIP.test(g.name) || /form\s*(ii|iii|2|3)\b/i.test(g.name));
   for (const g of (useSheets.length ? useSheets : grids)) {
     const unit = unitOf(g.name + " " + g.rows.slice(0, 15).flat().filter((x) => typeof x === "string").join(" "));
-    let side: Side | null = SHEET_P.test(g.name) ? "P" : null, sub: Sub = null, skip = false;
+    let side: Side | null = SHEET_P.test(g.name) ? "P" : SHEET_A.test(g.name) ? "A" : SHEET_L.test(g.name) ? "L" : null, sub: Sub = null, skip = false;
     let cols: { c: number, fy: number, kind: RYear["kind"], label: string }[] = [];
+    // the text rows just above (a heading over several rows: "Short-term borrowings from banks (including bills …)"), for a
+    // row that names only its part ("(i) From banks"); and the line a row's parts follow (a row ending ":" or "(specify)", or
+    // one followed by "(a) …", "(b) …" rows that add up to it): its parts are not counted again
+    let above = "", lastNum = false;
+    let parent: { id: string, colon: boolean, rem: Map<number, number>, tol: number } | null = null;
+    const setSide = (h: ReturnType<typeof heading>) => { if (!h) return; if (h.skip !== undefined) skip = h.skip; if (h.side !== undefined) side = h.side; if (h.sub !== undefined) sub = h.sub ?? null; };
     for (let r = 0; r < g.rows.length; r++) {
       const row = g.rows[r];
-      // a heading row of years (again at each form stacked on the sheet)
-      const ys = row.map((x, c) => ({ c, fy: typeof x === "string" && c >= 1 && x.length <= 40 ? yearOf(x) : null, t: String(x ?? "") })).filter((x) => x.fy != null);
-      if (ys.length >= 1 && row.filter((x) => typeof x === "number").length === 0) {
+      // a heading row of years (again at each form stacked on the sheet): "2024-25", "31-03-2025", or a CMA's bare years
+      const bare = bareYears(row);
+      const ys = bare ? bare.map((x) => ({ c: x.c, fy: x.fy as number | null, t: String(row[x.c] ?? "") }))
+        : row.map((x, c) => ({ c, fy: typeof x === "string" && c >= 1 && x.length <= 40 ? yearOf(x) : null, t: String(x ?? "") })).filter((x) => x.fy != null);
+      if (ys.length >= 1 && (bare || row.filter((x) => typeof x === "number").length === 0)) {
         cols = ys.map((x) => {
           const near = [r - 2, r - 1, r, r + 1, r + 2].map((k) => String(g.rows[k]?.[x.c] ?? "")).join(" ");
-          return { c: x.c, fy: x.fy as number, kind: kindIn(near) || fileKind, label: x.t.trim() };
+          return { c: x.c, fy: x.fy as number, kind: kindIn(near) || fileKind, label: bare ? fyL(x.fy as number) : x.t.trim() };
         });
-        // a row of kinds just under it is not a line
+        parent = null; above = "";
         continue;
       }
       // a heading before the years' row (the form's title above it) still sets the form and the side
       if (!cols.length) {
         const t = row.filter((x) => typeof x === "string").join(" ").trim();
-        if (t && !row.some((x) => typeof x === "number")) { const h = heading(t); if (h) { if (h.skip !== undefined) skip = h.skip; if (h.side !== undefined) side = h.side; if (h.sub !== undefined) sub = h.sub ?? null; } }
+        if (t && !row.some((x) => typeof x === "number")) setSide(heading(t));
         continue;
       }
       const first = Math.min(...cols.map((x) => x.c));
-      const label = row.slice(0, first).filter((x) => typeof x === "string" && !/^\s*(note|sch(edule)?\.?)\s*(no\.?)?\s*\d*\s*$/i.test(x)).join(" ").trim();
+      const raw = row.slice(0, first).filter((x) => typeof x === "string" && !/^\s*(note|sch(edule)?\.?)\s*(no\.?)?\s*\d*\s*$/i.test(x)).join(" ").trim();
+      const label = raw;
       const nums = cols.map((x) => row[x.c]).filter((v) => typeof v === "number");
       if (!label) continue;
       if (!nums.length) {
         if (kindIn(label) && label.length < 30) continue;
-        const h = heading(label);
-        if (h) { if (h.skip !== undefined) skip = h.skip; if (h.side !== undefined) side = h.side; if (h.sub !== undefined) sub = h.sub ?? null; }
+        above = lastNum ? label : (above + " " + label).trim().slice(0, 240);
+        lastNum = false;
+        setSide(heading(label));
         continue;
       }
+      lastNum = true;
       if (skip) continue;
       const s = clean(label);
-      const totals = TOTAL_L.test(s) ? "L" : TOTAL_A.test(s) ? "A" : side === "P" || !side ? (PBT.test(s) ? "PBT" : PAT.test(s) ? "PAT" : null) : null;
-      const hit = totals ? "skip" : lineFor(label, side, sub);
+      // a bare "Total" closes the side it is on (a balance sheet whose "Total liabilities" is a heading above it)
+      const bareTotal = /^(grand\s+)?total$/.test(s) && (side === "L" || side === "A") ? side : null;
+      const ratio = /%|\/\s*(sales|revenue|turnover)|\bratio\b/.test(s);
+      const totals = ratio ? null : bareTotal || (TOTAL_L.test(s) ? "L" : TOTAL_A.test(s) ? "A" : side === "P" || !side ? (PBT.test(s) ? "PBT" : PAT.test(s) ? "PAT" : null) : null);
+      let hit = totals ? "skip" as const : lineFor(label, side, sub);
+      // the parts of the line just above: not counted again
+      const child = /^\s*(\(\s*[a-z]{1,2}\s*\)|\(\s*[ivx]{1,4}\s*\.?\s*\)|[a-z]\)|[ivx]{1,4}\))/i.test(label);
+      const vals = new Map<number, number>();
+      for (const col of cols) { const v = row[col.c]; if (typeof v === "number" && isFinite(v)) vals.set(col.c, v); }
+      const sameLine = hit === null || hit === "skip" || (typeof hit === "object" && hit.id === parent?.id);
+      if (parent && sameLine && !totals && (parent.colon || child) && [...vals].every(([c, v]) => Math.abs(v) <= Math.max(0, Math.abs(parent!.rem.get(c) ?? 0)) + parent!.tol)) {
+        for (const [c, v] of vals) parent.rem.set(c, (parent.rem.get(c) ?? 0) - v);
+        continue;
+      }
+      parent = null;
+      // a row naming only its part ("(i) From banks"): read with the heading above it
+      if (hit === null && above && (child || /^\)?\s*(from|secured|unsecured)\b/.test(s))) {
+        const part = label.replace(/^\s*\(?[a-z0-9.]{1,4}\)\s*/i, "");
+        // "(ii) From others" under "Short-term borrowings from banks": the borrowings from others, not the bank's
+        const h2 = /borrowings|loans?/i.test(above) && /^\s*from\s+(others|directors|partners|promoters|related|relatives|shareholders)/i.test(part) ? { id: "__stbo", sign: 0 } : lineFor(above + " " + part, side, sub);
+        if (h2 && h2 !== "skip") hit = h2;
+      }
+      // a bank CMA's net worth: what is not share capital is the reserves (excess provision, share premium, "others")
+      if (hit === null && sub === "NW" && side === "L") hit = { id: "reserves", sign: 0 };
+      if (hit === "skip" && !totals) continue;
       if (hit === null) {
         const h = heading(label);
-        if (h) { if (h.skip !== undefined) skip = h.skip; if (h.side !== undefined) side = h.side; if (h.sub !== undefined) sub = h.sub ?? null; continue; }
+        if (h) { setSide(h); continue; }
         if (unplaced.length < 12 && !unplaced.includes(label)) unplaced.push(label.slice(0, 80));
         continue;
+      }
+      if (typeof hit === "object" && hit !== null) {
+        if (/[:\/]\s*$|\(\s*(please\s+)?specify\s*\)\s*$/i.test(label)) parent = { id: hit.id, colon: true, rem: new Map(vals), tol: unit === 1 ? 2 : unit * 0.006 };
+        else if (!child) parent = { id: hit.id, colon: false, rem: new Map(vals), tol: unit === 1 ? 2 : unit * 0.006 };
       }
       for (const col of cols) {
         const v = row[col.c];
         if (typeof v !== "number" || !isFinite(v)) continue;
-        if (col.kind === "projected" || col.kind === "estimated") { /* the earlier CMA's own estimates are not used */ }
         let a = per.get(col.fy * 10 + (col.kind === "projected" || col.kind === "estimated" ? 1 : 0));
         if (!a) {
-          a = { fy: col.fy, kind: col.kind, label: col.label, l: {}, tot: {}, bs: false, pl: false, unit, tol: unit === 1 ? 2 : unit * 0.06, gb: 0, ad: 0, gs: 0, ed: 0, got: new Set(), div: null, stbGen: 0 };
+          a = { fy: col.fy, kind: col.kind, label: col.label, l: {}, tot: {}, bs: false, pl: false, unit, tol: unit === 1 ? 2 : unit * 0.06, gb: 0, ad: 0, gs: 0, ed: 0, got: new Set(), div: null, stbGen: 0, chgo: 0 };
           per.set(col.fy * 10 + (col.kind === "projected" || col.kind === "estimated" ? 1 : 0), a);
         }
         const x = v * unit;
         if (totals) { (a.tot as any)[totals] = x; continue; }
-        if (hit === "skip") continue;
-        const { id, sign } = hit;
+        const { id, sign } = hit as { id: string, sign: number };
         if (id === "__gb") { a.gb += x; continue; }
         if (id === "__ad") { a.ad += Math.abs(x); continue; }
         if (id === "__gs") { a.gs += x; a.pl = true; continue; }
         if (id === "__ed") { a.ed += Math.abs(x); continue; }
         if (id === "__div") { a.div = (a.div || 0) + Math.abs(x); continue; }
+        // opening stock added, closing taken off: used only when the change itself is not printed
+        if (id === "__chgo") { a.chgo += sign * Math.abs(x); a.pl = true; continue; }
         // short-term borrowings: from banks (named so), from directors and related parties, or not told apart (stbGen)
         const to = id === "__stbo" ? (sub === "NCL" ? "ltb" : "stbo") : id === "__stbbank" ? "stb" : id;
         if (id === "stb") a.stbGen += x;
-        // the change in inventories as printed ((20): the stock rose, less cost); opening stock added, closing taken off
+        // the change in inventories as printed ((20): the stock rose, less cost)
         a.l[to] = (a.l[to] || 0) + (to === "chg" && sign ? sign * Math.abs(x) : x);
         if (to === "inv") { const part = invPart(label); if (part) a.l[part] = (a.l[part] || 0) + x; }
         a.got.add(to);
@@ -287,8 +356,9 @@ export function readGrids(name: string, path: string, grids: Grid[], hint: FileK
     if (sp && a.l.inv && a.l.inv_rm == null && a.l.inv_wip == null && a.l.inv_fg == null) for (const k of ["inv_rm", "inv_wip", "inv_fg"] as const) if (sp[k]) a.l[k] = sp[k];
     if (a.stbGen > a.tol) a.stbUnknown = a.stbGen;
     if (!a.got.has("rev") && a.gs) a.l.rev = a.gs - a.ed;
+    if (!a.got.has("chg") && a.chgo) a.l.chg = a.chgo;
     if (!a.bs && !a.pl) continue;
-    const { gb: _gb, ad: _ad, gs: _gs, ed: _ed, got: _got, stbGen: _sg, ...y } = a;
+    const { gb: _gb, ad: _ad, gs: _gs, ed: _ed, got: _got, stbGen: _sg, chgo: _co, ...y } = a;
     years.push(y);
     const yl = fyL(a.fy) + (a.kind === "projected" || a.kind === "estimated" ? " (" + a.kind + ")" : "");
     const tie = (head: string, file: number | undefined, mapped: number) => { if (file != null) ties.push({ year: yl, head, file, mapped, gap: mapped - file, ok: Math.abs(mapped - file) <= a.tol }); };

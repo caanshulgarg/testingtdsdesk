@@ -26,9 +26,14 @@ export const cmaShown = (h: { role: string, content: string }[]): boolean => (h 
 // amount or terms); "again", "loan" or "limit" alone are not a change to the CMA
 // an amount only with its rupee sign, its lakh / crore, or the word amount: a bare digit is not one
 const AMOUNT = "(?:(?:₹|rs\\.?|inr)\\s*\\d[\\d,]*(?:\\.\\d+)?(?:\\s*(?:lakhs?|lacs?|lakh|l|crores?|cr))?|\\d[\\d,]*(?:\\.\\d+)?\\s*(?:lakhs?|lacs?|lakh|l|crores?|cr)\\b|amount\\s*(?:of\\s*)?\\d[\\d,]*)";
-const FOLLOW = new RegExp("\\bmethod\\s*-?\\s*(i{1,2}|1|2|one|two)\\b|\\b(first|second)\\s+method\\b|\\b(stock|receivables?|debtors?|book\\s+debts?)\\s+margin\\b|\\bmargin\\s+(on|of)\\s+(stock|receivables?|debtors?)\\b|\\bmpbf\\b|\\bdrawing\\s+power\\b|\\bdscr\\b|\\bform\\s*(i{1,3}|iv|v|vi|[1-6])\\b|\\b(\\d|one|two|three)\\s+(projected\\s+)?years?\\s+(of\\s+)?projections?\\b|\\bproject(ed|ion)?s?\\s+(for\\s+)?(\\d|one|two|three)\\s+years?\\b|" +
+const FOLLOW = new RegExp("\\bmethod\\s*-?\\s*(i{1,2}|1|2|one|two)\\b|\\b(first|second)\\s+method\\b|\\b(stock|receivables?|debtors?|book\\s+debts?)\\s+margin\\b|\\bmargin\\s+(on|of)\\s+(stock|receivables?|debtors?)\\b|\\bmpbf\\b|\\bdrawing\\s+power\\b|\\bdscr\\b|\\bform\\s*(i{1,3}|iv|v|vi|[1-6])\\b|\\b(\\d|one|two|three|four|five)\\s+(projected\\s+)?years?\\s+(of\\s+)?projections?\\b|\\bproject(ed|ion)?s?\\s+(for\\s+)?(\\d|one|two|three|four|five)\\s+years?\\b|" +
   "\\b(term\\s+loan|cc|cash\\s+credit|od|overdraft|working\\s+capital|wc)(\\s+(limit|loan|facility))?\\b[^.?!\\n]{0,25}?" + AMOUNT + "|" + AMOUNT + "\\s*(of\\s+|ka\\s+|ki\\s+)?(term\\s+loan|cc|cash\\s+credit|od|overdraft|working\\s+capital)\\b|\\b(tenure|moratorium|repayment\\s+schedule|instal+ments?|emi)\\b|\\bredo\\s+(the\\s+)?cma\\b", "i");
-export const cmaFollow = (q: string): boolean => FOLLOW.test(String(q || "")) && !/\b(post|file|delete|send|confirm)\b/i.test(String(q || ""));
+// the projections of the CMA just shown, given or changed (the owner, 14-Nov-2026: a follow-up asking to keep the sales and
+// margins of the road map, its tables pasted, which went to the chat model): words of the projections with a figure, a %, or a
+// pasted table; or the road map / projections named
+const PROJ_W = /\b(sales?|revenue|turnover|growth|gross\s+(profit|margin)|ebitda|margins?|depreciation|interest\s+cost|pbt|pat|profit\s+before\s+tax|verticals?|projections?|projected)\b/i;
+const projFollowCma = (q: string) => PROJ_W.test(q) && (/\d\s*%|(?:₹|rs\.?)\s*\d|\d\s*(cr|crores?|lakhs?|lacs?)\b|\t|\bfy\s*'?\d{2}/i.test(q) || /\b(road\s*map|as\s+per\s+(the\s+)?(attached|file|document|word)|like\s+this|on\s+this\s+basis|these\s+(figures|projections|numbers))\b/i.test(q));
+export const cmaFollow = (q: string): boolean => (FOLLOW.test(String(q || "")) || projFollowCma(String(q || ""))) && !/\b(post|file|delete|send|confirm)\b/i.test(String(q || ""));
 export const cmaWanted = (q: string, history: { role: string, content: string }[]): boolean => cmaAsked(q) || (cmaShown(history) && cmaFollow(q));
 
 // ---------------------------------------------------------------- what the user said, read by FinCom's rules
@@ -52,6 +57,8 @@ export function cmaInput(question: string, history: { role: string, content: str
   said.forEach((t, i) => { if (cmaAsked(t)) from = from || i + 1; });
   const ts = said.slice(Math.max(0, from - 1));
   const o: CmaInput = { loan_type: null, working_capital_limit: null, term_loan_amount: null, term_loan_years: null, moratorium_months: null, existing_repayment: null, method: null, years: null,
+    // the user's own words since the CMA was asked, pasted tables and all: the projections are read from them (tools/cmaplan.ts)
+    projection_text: ts.join("\n\n").slice(0, 40000) || null,
     stock_margin_pct: null, receivable_margin_pct: null, assumptions: { revenue_growth_pct: null, capex: null, dividend_or_drawings: null, receivable_days: null, inventory_days: null, payable_days: null, tax_rate_pct: null, other_assumptions: null } };
   const A = o.assumptions as Record<string, unknown>;
   let wcSaid = false, tlSaid = false;
@@ -75,8 +82,8 @@ export function cmaInput(question: string, history: { role: string, content: str
     m = new RegExp("\\b(?:existing|current|old|present)\\s+(?:term\\s+)?loans?\\b[^.?!\\d]{0,40}?" + AMT + "\\s*(?:a|per|each|every)\\s*(?:year|annum)", "i").exec(s);
     if (m) o.existing_repayment = [amt(m[1], m[2])];
     // the years to project: "for 2 years", "next 3 years", "2 years projections"
-    m = /\b(?:for|next|coming|project(?:ed|ion)?s?\s+(?:for\s+)?)\s*(\d|one|two|three)\s+(?:projected\s+)?(?:years?|yrs?|saal)\b|\b(\d|one|two|three)\s+(?:years?|yrs?)\s+(?:of\s+)?project/.exec(s);
-    if (m && (m.index || 0) + m[0].length !== tenureAt && /\b(project\w*|cma|forecast\w*|estimates?|financials?)\b/.test(s)) { const w = m[1] || m[2]; o.years = ({ one: 1, two: 2, three: 3 } as Record<string, number>)[w] ?? Number(w); }
+    m = /\b(?:for|next|coming|project(?:ed|ion)?s?\s+(?:for\s+)?)\s*(\d|one|two|three|four|five)\s+(?:projected\s+)?(?:years?|yrs?|saal)\b|\b(\d|one|two|three|four|five)[\s-]+(?:years?|yrs?)\s+(?:of\s+)?(?:project|forecast|road)/.exec(s);
+    if (m && (m.index || 0) + m[0].length !== tenureAt && /\b(project\w*|cma|forecast\w*|estimates?|financials?|road\s*map)\b/.test(s)) { const w = m[1] || m[2]; o.years = ({ one: 1, two: 2, three: 3, four: 4, five: 5 } as Record<string, number>)[w] ?? Number(w); }
     m = /\b(?:sales|revenue|turnover|growth|grow\w*)\b[^.?!\d]{0,25}(-?\d+(?:\.\d+)?)\s*%/.exec(s);
     if (m) A.revenue_growth_pct = [Number(m[1])];
     m = /\bstock\s+margin\b[^.?!\d]{0,15}(\d+(?:\.\d+)?)\s*%|(\d+(?:\.\d+)?)\s*%\s*(?:margin\s+on\s+stock|stock\s+margin)/.exec(s);

@@ -6,7 +6,7 @@ import { cmaAsked, cmaFollow, cmaInput, cmaWanted } from "./cmaask.ts";
 import { fsAsked } from "./fsask.ts";
 import { route } from "./router.ts";
 import { runTurn } from "./agent.ts";
-import { bsXlsx, cmaXlsx } from "./tools/cma_fixtures.ts";
+import { bankCmaXlsx, baseXlsx, bsXlsx, cmaXlsx, PLAN_PASTED, roadmapDocx } from "./tools/cma_fixtures.ts";
 
 function assert(c: unknown, w: string): asserts c { if (!c) throw new Error(w); }
 
@@ -61,4 +61,22 @@ Deno.test("a turn: CMA with earlier files goes to cma_data, no model, no stateme
   assert(events.some((e) => e.t === "file" && /CMA/.test(e.name)), "the Excel");
   assert(/CMA data in the standard bank format/.test(r.text) && r.labels.includes("cma"), "FinCom's line, labelled cma: " + r.text);
   assert(!r.cacheable, "never cached");
+});
+
+Deno.test("a turn (14-Nov-2026): the projections pasted right after a CMA go to cma_data with the road map, no chat model", async () => {
+  const files: Record<string, Uint8Array> = { "firm1/kestrel/uploads/a-cma.xlsx": await bankCmaXlsx(), "firm1/kestrel/uploads/b-base.xlsx": await baseXlsx(), "firm1/kestrel/uploads/c-road-map.docx": await roadmapDocx() };
+  const events: any[] = [];
+  let called = 0;
+  const claude = { beta: { messages: { stream: () => { called++; throw new Error("no chat model for a CMA"); } } } };
+  const r = await runTurn({ client: claude as never, question: PLAN_PASTED, history: [{ role: "user", content: "please prepare cma data for kestrel" }, { role: "assistant", content: "DRAFT, NOT FINAL: 2 checks fail. CMA data in the standard bank format for Kestrel: …" }],
+    thread: { fs: null, files: [] }, attachments: [], clientId: "kestrel", clientName: "Kestrel Widgets Private Limited", firmWide: false, today: "2026-11-14", books: "",
+    exec: async (fn: string) => (fn === "asst_books" ? { none: true } : null), capTake: async () => ({ ok: true, used: 1, cap: 100 }), makeFile: async () => null, recordMismatch: async () => null,
+    firm: { name: "Test firm", lines: [] }, emit: (e) => events.push(e), strict: false, readFile: async (p: string) => files[p] || null,
+    uploads: Object.keys(files).map((path) => ({ path, name: path.split("/").pop()!, type: "" })),
+    uploadFile: async (_b, name, kind) => ({ id: "1", name, kind, path: "p/" + name, expires: "" }) });
+  assert(called === 0, "no chat model");
+  assert(r.route === "cma" && r.tools.includes("cma_data"), "routed to cma_data: " + r.route + " " + r.tools);
+  const res = events.filter((e) => e.t === "result" && e.tool === "cma_data");
+  assert(/^Projections summary - A/.test(res[0].title) && res.some((e) => /^Projections summary - C/.test(e.title)), "the summary, with the road map's verticals: " + res.slice(0, 3).map((e) => e.title));
+  assert(/All \d+ checks pass/.test(r.text) && /2031-32 projected/.test(r.text), "FinCom's line: " + r.text.slice(0, 300));
 });

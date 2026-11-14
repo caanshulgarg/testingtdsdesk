@@ -5,9 +5,12 @@
 // formula, beside FinCom's result), the differences between the audited figures and the earlier CMA, and the sources.
 import ExcelJS from "npm:exceljs@4.4.0";
 import { colLetter } from "../filetable.ts";
-import { Cma, fyL, KIND_WORD, Row, Sheet } from "./cmaengine.ts";
+import { Cma, fyL, KIND_WORD, Row, rowOf, Sheet } from "./cmaengine.ts";
 
-export type XlMeta = { client: string, firm: string, today: string, status: string, assumptions: string[], form1: [string, string][], sources: string[][], diffs: (string | number)[][], ties: (string | number)[][] };
+// the projections summary (cma.ts): the forms' columns it shows (A and C; B from the first year the user gave the
+// profitability for) and each business vertical's share of the revenue in each of A's years (%)
+export type Summary = { cols: number[], bCols: number[], verts: { name: string, share: number[] }[], notes?: string[] };
+export type XlMeta = { client: string, firm: string, today: string, status: string, assumptions: string[], form1: [string, string][], sources: string[][], diffs: (string | number)[][], ties: (string | number)[][], summary?: Summary };
 
 const AMT = '#,##,##0;[Red]-#,##,##0', DEC = "0.00", MO = "0.0";
 // the Assumptions sheet's input cells (the forms' {M} {SM} {RM} {LIM})
@@ -48,6 +51,9 @@ export async function cmaExcel(c: Cma, meta: XlMeta): Promise<Uint8Array> {
     if (/^\[/.test(v)) r.getCell(2).font = { bold: true, color: { argb: "FFB45309" } };
     if (!v) r.getCell(1).font = { bold: true };
   });
+
+  // ---------------------------------------------------------------- the projections summary (A, B, C), live on Form II
+  if (meta.summary && meta.summary.cols.length) summarySheet(wb, c, meta, meta.summary, rowAt, sheetOf, head);
 
   // ---------------------------------------------------------------- Forms II-VI and the ratios
   for (const s of c.sheets) {
@@ -143,4 +149,86 @@ export function rowCells(r: Row, n: number): Record<string, unknown> {
     o["y" + k] = r.fmt === "head" || v == null ? null : r.fmt === "amt" ? Math.round(v) : r.fmt === "pct" ? (Math.round(v * 10) / 10).toFixed(1) + "%" : r.fmt === "mo" ? (Math.round(v * 10) / 10).toFixed(1) + " months" : (Math.round(v * 100) / 100).toFixed(2);
   }
   return o;
+}
+
+// the owner's layout in ₹ crore: each figure a formula on Form II's cells (its cached result FinCom's), so the summary is the
+// forms' own; the verticals' shares are the yellow cells (change one and its amounts follow)
+function summarySheet(wb: ExcelJS.Workbook, c: Cma, meta: XlMeta, S: Summary, rowAt: (s: Sheet, key: string) => number, sheetOf: (id: string) => Sheet, head: (ws: ExcelJS.Worksheet, title: string) => void) {
+  const ws = wb.addWorksheet("Projections summary", { views: [{ state: "frozen", xSplit: 1, ySplit: 0 }] });
+  head(ws, "PROJECTIONS SUMMARY");
+  ws.getCell("A3").value = "₹ crore, worked from Form II (so every figure agrees with the forms). Prepared by FinCom on " + meta.today + " for " + (meta.firm || "the firm") + "; not audited. " + meta.status;
+  ws.getColumn(1).width = 46;
+  for (let k = 0; k < Math.max(S.cols.length, S.bCols.length) + 1; k++) ws.getColumn(2 + k).width = 15;
+  const F2 = sheetOf("II"), II = (key: string, i: number) => "'Form II'!" + colLetter(1 + i) + rowAt(F2, key);
+  const val = (key: string, i: number) => rowOf(c, "II", key).vals[i] ?? 0;
+  const CR = 1e7, D2 = "0.00", P1 = "0.0%";
+  const fx = (formula: string, result: number | string) => ({ formula, result: typeof result === "number" ? Math.round(result * 1e8) / 1e8 : result }) as ExcelJS.CellFormulaValue;
+  const yl = (i: number) => "FY " + fyL(c.years[i].fy) + (c.years[i].kind === "estimate" ? " (estimate)" : "");
+  let r = 5;
+  // A. revenue by year and its growth
+  ws.getRow(r).getCell(1).value = "A. REVENUE GROWTH PROJECTION"; ws.getRow(r).font = { bold: true }; r++;
+  ["Financial year", "Revenue (₹ Cr)", "Annual growth"].forEach((t, k) => { ws.getRow(r).getCell(1 + k).value = t; }); ws.getRow(r).font = { bold: true }; r++;
+  for (const i of S.cols) {
+    const row = ws.getRow(r++), rev = val("sales", i), prev = i > 0 ? val("sales", i - 1) : 0;
+    row.getCell(1).value = yl(i);
+    row.getCell(2).value = fx(II("sales", i) + "/" + CR, rev / CR); row.getCell(2).numFmt = D2;
+    if (i > 0) { row.getCell(3).value = fx("IF(" + II("sales", i - 1) + "=0,\"\"," + II("sales", i) + "/" + II("sales", i - 1) + "-1)", prev ? rev / prev - 1 : ""); row.getCell(3).numFmt = P1; }
+  }
+  r++;
+  // B. the profitability, years as columns
+  ws.getRow(r).getCell(1).value = "B. PROFITABILITY PROJECTIONS"; ws.getRow(r).font = { bold: true }; r++;
+  ws.getRow(r).getCell(1).value = "Particulars"; S.bCols.forEach((i, k) => { ws.getRow(r).getCell(2 + k).value = "FY" + fyL(c.years[i].fy).slice(2); }); ws.getRow(r).font = { bold: true }; r++;
+  const at: Record<string, number> = {};
+  const oth = S.bCols.some((i) => Math.abs(val("oth", i) - val("nox", i)) >= 1);
+  const lines: [string, string, (i: number, k: number) => [string, number | string], string][] = [
+    ["rev", "Revenue", (i) => [II("sales", i) + "/" + CR, val("sales", i) / CR], D2],
+    ["gp", "Gross profit (revenue less materials and goods, net of the stock change)", (i) => ["(" + II("sales", i) + "-" + II("mat", i) + "-" + II("chg", i) + ")/" + CR, (val("sales", i) - val("mat", i) - val("chg", i)) / CR], D2],
+    ["gm", "Gross margin", (i, k) => { const L = colLetter(1 + k); const rv = val("sales", i); return ["IF(" + L + at.rev + "=0,\"\"," + L + at.gp + "/" + L + at.rev + ")", rv ? (rv - val("mat", i) - val("chg", i)) / rv : ""]; }, P1],
+    ["eb", "EBITDA", (i) => ["(" + II("opbi", i) + "+" + II("dep", i) + ")/" + CR, (val("opbi", i) + val("dep", i)) / CR], D2],
+    ["em", "EBITDA margin", (i, k) => { const L = colLetter(1 + k); const rv = val("sales", i); return ["IF(" + L + at.rev + "=0,\"\"," + L + at.eb + "/" + L + at.rev + ")", rv ? (val("opbi", i) + val("dep", i)) / rv : ""]; }, P1],
+    ["dep", "Depreciation", (i) => [II("dep", i) + "/" + CR, val("dep", i) / CR], D2],
+    ["int", "Interest", (i) => [II("int", i) + "/" + CR, val("int", i) / CR], D2],
+    ...(oth ? [["oth", "Other income less exceptional items", (i: number) => ["(" + II("oth", i) + "-" + II("nox", i) + ")/" + CR, (val("oth", i) - val("nox", i)) / CR], D2] as [string, string, (i: number, k: number) => [string, number | string], string]] : []),
+    ["pbt", "Profit before tax", (i) => [II("pbt", i) + "/" + CR, val("pbt", i) / CR], D2],
+    ["tax", "Tax", (i) => [II("tax", i) + "/" + CR, val("tax", i) / CR], D2],
+    ["pat", "Profit after tax", (i) => [II("pat", i) + "/" + CR, val("pat", i) / CR], D2],
+    ["chk", "Check: EBITDA - depreciation - interest" + (oth ? " + other income" : "") + " - profit before tax (nil)", (_i, k) => { const L = colLetter(1 + k); return ["ROUND(" + L + at.eb + "-" + L + at.dep + "-" + L + at.int + (oth ? "+" + L + at.oth : "") + "-" + L + at.pbt + ",4)", 0]; }, D2],
+  ];
+  for (const [key, label, f, fmt] of lines) {
+    at[key] = r;
+    const row = ws.getRow(r++);
+    row.getCell(1).value = label;
+    if (key === "pat" || key === "pbt" || key === "eb") row.getCell(1).font = { bold: true };
+    if (key === "chk") row.getCell(1).font = { italic: true, color: { argb: "FF5A6B63" } };
+    S.bCols.forEach((i, k) => { const [form, res] = f(i, k); const cell = row.getCell(2 + k); cell.value = fx(form, res); cell.numFmt = fmt; });
+  }
+  r++;
+  // C. the revenue by business vertical: each share a yellow cell, its amount the share of Form II's revenue
+  if (S.verts.length) {
+    ws.getRow(r).getCell(1).value = "C. REVENUE CONTRIBUTION BY BUSINESS VERTICAL"; ws.getRow(r).font = { bold: true }; r++;
+    const hdr = (t: string) => { ws.getRow(r).getCell(1).value = t; S.cols.forEach((i, k) => { ws.getRow(r).getCell(2 + k).value = "FY" + fyL(c.years[i].fy).slice(2); }); ws.getRow(r).font = { bold: true }; r++; };
+    hdr("Share of revenue");
+    const shareRow: number[] = [];
+    for (const v of S.verts) {
+      shareRow.push(r);
+      const row = ws.getRow(r++);
+      row.getCell(1).value = v.name;
+      S.cols.forEach((_i, k) => { const cell = row.getCell(2 + k); cell.value = Math.round(v.share[k] * 1e6) / 1e8; cell.numFmt = P1; cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFF3B0" } }; });
+    }
+    const tot = ws.getRow(r++);
+    tot.getCell(1).value = "Total"; tot.font = { bold: true };
+    S.cols.forEach((_i, k) => { const L = colLetter(1 + k); tot.getCell(2 + k).value = fx(shareRow.map((x) => L + x).join("+"), S.verts.reduce((t, v) => t + Math.round(v.share[k] * 1e6) / 1e8, 0)); tot.getCell(2 + k).numFmt = P1; });
+    r++;
+    hdr("Revenue (₹ Cr)");
+    const amtRow: number[] = [];
+    S.verts.forEach((v, n) => {
+      amtRow.push(r);
+      const row = ws.getRow(r++);
+      row.getCell(1).value = v.name;
+      S.cols.forEach((i, k) => { const L = colLetter(1 + k); row.getCell(2 + k).value = fx(L + shareRow[n] + "*" + II("sales", i) + "/" + CR, Math.round(v.share[k] * 1e6) / 1e8 * val("sales", i) / CR); row.getCell(2 + k).numFmt = D2; });
+    });
+    const ta = ws.getRow(r++);
+    ta.getCell(1).value = "Total (the revenue)"; ta.font = { bold: true };
+    S.cols.forEach((i, k) => { const L = colLetter(1 + k); ta.getCell(2 + k).value = fx(amtRow.map((x) => L + x).join("+"), S.verts.reduce((t, v) => t + Math.round(v.share[k] * 1e6) / 1e8 * val("sales", i) / CR, 0)); ta.getCell(2 + k).numFmt = D2; });
+  }
 }
