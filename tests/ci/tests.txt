@@ -630,6 +630,8 @@ run_idb_reopen.py                     180  TDSDESK_SITE=../app/dist-test
 run_open_client_hang.py               180  TDSDESK_SITE=../app/dist-test
 run_hang_render.py                    240  TDSDESK_SITE=../app/dist-test
 run_hang_invoker.mjs                  60
+# next-fix-sentry-noise (14-Nov-2026): a late heartbeat with no long frame, in Safari or a window hidden or not in front, is not reported
+run_hang_heartbeat.mjs                60
 run_tally_look_heard.py               180  TDSDESK_SITE=../app/dist-test
 run_catch_soon.py                     180  TDSDESK_SITE=../app/dist-test
 run_daybook_slices.py                 180  TDSDESK_SITE=../app/dist-test

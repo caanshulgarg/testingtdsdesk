@@ -210,6 +210,9 @@ const KNOWN_MESSAGES = [
   [/^(?:uncaught )?(?:error: )?resizeobserver loop limit exceeded\.?$/i, "resizeObserverLoop"],
 ];
 const MSG_CODES = new Set(KNOWN_MESSAGES.map((k) => k[1]));
+// next-fix-sentry-noise (14-Nov-2026): the browser's own notice that a ResizeObserver's work went to the next frame (Safari's
+// words above) is no error of the page and says nothing: such an event is dropped, never sent (scrubEvent returns null)
+const DROP_CODES = new Set(["resizeObserverLoop"]);
 export function messageCode(m) {
   if (typeof m !== "string" || m.length > 200) return "";
   const t = m.trim();
@@ -310,6 +313,7 @@ export function scrubEvent(e) {
   const code = [msg].concat((e.exception && Array.isArray(e.exception.values) ? e.exception.values : []).map((v) => v && v.value)).map(messageCode).find(Boolean);
   if (code) tags.msg_code = code;
   for (const [k, ok] of Object.entries(TAGS)) { const v = e.tags && e.tags[k]; if (typeof v === "string") { const s = ok(v); if (s !== undefined) tags[k] = s; } }
+  if (DROP_CODES.has(tags.msg_code)) return null;
   if (Object.keys(tags).length) o.tags = tags;
   if (e.user && typeof e.user.id === "string" && /^[0-9a-f]{32}$/.test(e.user.id)) o.user = { id: e.user.id };
   if (e.request && typeof e.request === "object") {

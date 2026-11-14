@@ -209,10 +209,12 @@ ok(/xhr: false/.test(appSrc) && /fetch: false/.test(appSrc) && /dom: false/.test
 {
   const ro = (m, where = "value") => S.scrubEvent({ event_id: "0123456789abcdef0123456789abcdef", level: "error",
     ...(where === "value" ? { exception: { values: [{ type: "Error", value: m, mechanism: { type: "auto.browser.global_handlers.onerror", handled: false } }] } } : { message: m }) });
-  const a = ro("ResizeObserver loop completed with undelivered notifications.");
-  ok(a.tags && a.tags.msg_code === "resizeObserverLoop" && a.exception.values[0].value === "… with …", "the ResizeObserver loop: msg_code resizeObserverLoop, the message scrubbed as before (" + JSON.stringify(a.tags) + ")");
-  ok((ro("ResizeObserver loop limit exceeded").tags || {}).msg_code === "resizeObserverLoop", "the older words of the same (ResizeObserver loop limit exceeded)");
-  ok((ro("Uncaught ResizeObserver loop completed with undelivered notifications.", "message").tags || {}).msg_code === "resizeObserverLoop", "in the event's message too");
+  // next-fix-sentry-noise (14-Nov-2026): such an event is dropped (null: never sent); its code name is still known
+  ok(S.messageCode("ResizeObserver loop completed with undelivered notifications.") === "resizeObserverLoop", "the ResizeObserver loop: its code name resizeObserverLoop");
+  ok(ro("ResizeObserver loop completed with undelivered notifications.") === null, "the ResizeObserver loop (Safari's words): the event dropped");
+  ok(ro("ResizeObserver loop limit exceeded") === null, "the older words of the same (ResizeObserver loop limit exceeded): dropped");
+  ok(ro("Uncaught ResizeObserver loop completed with undelivered notifications.", "message") === null, "in the event's message too: dropped");
+  ok(S.scrubEvent({ event_id: "0123456789abcdef0123456789abcdef", tags: { msg_code: "resizeObserverLoop" } }) === null, "a msg_code resizeObserverLoop tag set by hand: dropped");
   ok(!(ro("ResizeObserver loop completed with ALPHA TRADERS 09AANFG3202D1ZR").tags || {}).msg_code, "the same words with anything else in them: no code");
   ok(!(ro("Ledger ALPHA TRADERS clashes with BETA").tags || {}).msg_code, "any other message: no code");
   ok(!(S.scrubEvent({ event_id: "0123456789abcdef0123456789abcdef", tags: { msg_code: "ALPHA TRADERS" } }).tags || {}).msg_code &&

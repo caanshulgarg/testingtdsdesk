@@ -104,7 +104,17 @@ with sync_playwright() as p:
       requestAnimationFrame(function zzFrameThrow(){ throw new Error('frame two'); });
       const i = setInterval(function zzIntervalThrow(){ clearInterval(i); throw new Error('interval three'); }, 10); }""")
     pg.wait_for_timeout(3000)
+    # next-fix-sentry-noise (14-Nov-2026): the browser's own ResizeObserver notice (Safari's words; it comes to window.onerror
+    # with no error object) is dropped by the page's beforeSend (the one scrubber), never sent; an error after it still is
+    n_ro = len(got)
+    E("""() => { window.dispatchEvent(new ErrorEvent('error', {message: 'ResizeObserver loop completed with undelivered notifications.'}));
+      window.dispatchEvent(new ErrorEvent('error', {message: 'ResizeObserver loop limit exceeded'}));
+      setTimeout(function zzAfterRo(){ throw new Error('after the notice'); }, 50); }""")
+    pg.wait_for_timeout(2000)
+    ro_after = got[n_ro:]
     ctx.close()
+    ok(len(ro_after) == 1 and "zzAfterRo" in ro_after[0]["body"] and "resizeObserverLoop" not in ro_after[0]["body"] and "… with …" not in ro_after[0]["body"],
+       "the browser's ResizeObserver notice: not sent by the page (beforeSend drops it); the error after it is (%d sent)" % len(ro_after))
 
     print("  %d envelopes caught" % len(got))
     ok(len(got) >= 8, "the forced errors were reported (%d envelopes)" % len(got))
