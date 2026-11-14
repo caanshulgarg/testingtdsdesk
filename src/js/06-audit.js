@@ -984,7 +984,9 @@ const Engine = {
   clear(why, kill){
     this.sent = null; this.gSent = undefined; this.owner = null;
     // (the jobs asked for before: dropped at once, their runs worked out here if still wanted; never the worker's end)
-    this.jobs.forEach(a => { clearTimeout(a.timer); a.dropped = true; }); this.jobs.clear(); this.wake();
+    // (a save on its way to the worker is not: the worker answers it, written or dropped, so a page writing it here
+    // never writes alongside the worker; review of the full stack)
+    this.jobs.forEach((a, id) => { if (a.kind === "store" && !kill && this.w) return; clearTimeout(a.timer); a.dropped = true; this.jobs.delete(id); }); this.wake();
     if (!this.w) return;
     if (kill){ try { this.w.terminate(); } catch (e){} this.w = null; if (this.st !== "off") this.st = ""; this.jobs.forEach(a => clearTimeout(a.timer)); this.jobs.clear(); this.wake(); return; }
     try { this.post({t: "clear", why: String(why || "")}); } catch (e){}
@@ -1094,14 +1096,19 @@ const Engine = {
       let a = null;
       try {
         if (!(yield* E.ready()) || !(yield* E.sendIn(S.books))) return null;
-        a = E.ask(kind, "", "", "", null, args);
-        while (!a.end && !a.err && E.st === "ok") yield E.WAIT;
+        try { a = E.ask(kind, "", "", "", null, args); } catch (e){ return null; }
+        while (!a.end && !a.err && !a.dropped && E.st === "ok") yield E.WAIT;
         return a.end ? a.res : null;
       } finally { if (a){ if (a.end) E.jobs.delete(a.id); else E.cancel(a); } }
     })());
   },
   // ---------- the books written to this browser's store by the worker (Books.save, src/js/04)
-  canStore(data){ return this.st !== "off" && typeof Worker === "function" && !/^__/.test(this.URL) && !!this.src() && !!data && Array.isArray(data.vouchers) && data.vouchers.length > this.SMALL && typeof LocalOwner === "object" && !LocalOwner.stale && typeof IDBStore === "object"; },
+  // (review of the full stack: never once the copy is not this page's to write, idbOk: removed by another tab, cleared here,
+  // put aside; looked at again just before the worker is told to write, as Books.gone is)
+  canStore(data){ return this.st !== "off" && typeof Worker === "function" && !/^__/.test(this.URL) && !!this.src() && !!data && Array.isArray(data.vouchers) && data.vouchers.length > this.SMALL && this.storeOk(); },
+  storeOk(cid){ return typeof LocalOwner === "object" && typeof IDBStore === "object" && typeof idbOk === "function" && idbOk(IDBStore) && !IDBStore.vc && !LocalOwner.clearing && !LocalOwner.stale && !(cid && typeof Books === "object" && Books.gone[cid]); },
+  // a client removed (Books.drop): a save of its books in the worker is given up, before or in its transaction
+  gone(cid){ if (this.w && this.st === "ok") try { this.post({t: "sgone", cid}); } catch (e){} },
   // a generator of the engine's (WAIT: until the worker's next word) run as a small job of its own: its answer
   drive(it){
     return new Promise((ok, no) => {
@@ -1142,34 +1149,51 @@ const Engine = {
   // or null when the worker could not (then written here). The entries go only when the worker does not hold this very
   // list: the one it last wrote (stV), or the one the engine has (sent)
   store(cid, data, k){ return this.drive(this.storeIn(cid, data, k)); },
+  // ({skip: true}: not to be written at all, the client removed or the copy not this page's; review of the full stack)
   *storeIn(cid, data, k){
     if (!(yield* this.ready())) return null;
     while (this.sending) yield this.WAIT;
     this.sending = true;
-    let a = null;
+    let a = null, sent = false;
     try {
-      const V = data.vouchers, n = V.length, sameAs = p => !!p && p.V === V && p.n === n && p.vs.every((x, i) => x === V[i]);
-      const same = !!k && k.r === V && n === k.a.length && V.every((x, i) => x === k.a[i]);
+      if (!this.storeOk(cid)) return {skip: true};
+      // (the entries as they are now: what is sent, and what the next save is compared with, the worker's stV and
+      // Books.vk; an entry changed in place while the save goes is not taken for written)
+      const V = data.vouchers, n = V.length, vs = V.slice(), sameAs = p => !!p && p.V === V && p.n === n && p.vs.every((x, i) => x === vs[i]);
+      const same = !!k && k.r === V && n === k.a.length && vs.every((x, i) => x === k.a[i]);
       a = {id: ++this.nid, kind: "store", res: null, end: false, err: "", t0: Date.now()}; this.jobs.set(a.id, a);
       // (its time, as any job's: the worker ends when it does not answer, review of part 1; the save is written here)
       const ms = Math.max(this.JOB_MS + n * this.JOB_PER, 3 * (this.took.store || 0), this.JOB_MS);
       a.timer = setTimeout(() => { if (this.jobs.get(a.id) === a && !a.end) this.off("a save of the worker took too long (" + Math.round(ms / 1000) + " s)"); }, ms);
+      const on = () => !a.err && !a.dropped && this.st === "ok" && !!this.w;
       // (the copy of this browser's store the page has open: its name as IDBStore opens it)
       this.post({t: "sbegin", id: a.id, cid, db: LocalOwner.db("tdsdesk-work")});
       yield;
-      for (const key of Object.keys(data)){ if (key === "vouchers") continue; yield* this.postPart(a.id, key, data[key]); if (this.st !== "ok") return null; }
+      for (const key of Object.keys(data)){ if (key === "vouchers") continue; if (!on()) return null; yield* this.postPart(a.id, key, data[key]); }
       let vfrom = "kept";
       if (!(this.stV && this.stV.cid === cid && sameAs(this.stV))){
         if (sameAs(this.sent)) vfrom = "engine";
-        else { vfrom = "parts"; for (let i = 0; i < n; i += this.PART){ this.post({t: "sv", id: a.id, v: V.slice(i, i + this.PART)}); if (this.st !== "ok") return null; yield; } }
+        else { vfrom = "parts"; for (let i = 0; i < n; i += this.PART){ if (!on()) return null; this.post({t: "sv", id: a.id, v: vs.slice(i, i + this.PART)}); yield; } }
       }
+      if (!on()) return null;
+      if (!this.storeOk(cid)) return {skip: true};
+      const snap = {cid, V, n, vs};
       this.stV = null;
-      this.post({t: "send", id: a.id, ks: k ? k.s : null, same, vfrom});
-      while (!a.end && !a.err && this.st === "ok") yield this.WAIT;
-      if (a.err || !a.end) return null;
-      this.stV = {cid, V, n, vs: V.slice()};
-      return a.res;
-    } finally { this.sending = false; if (a){ clearTimeout(a.timer); this.jobs.delete(a.id); } this.wake(); }
+      this.post({t: "send", id: a.id, ks: k ? k.s : null, same, vfrom}); sent = true;
+      while (!a.end && !a.err && !a.dropped && this.st === "ok") yield this.WAIT;
+      if (!a.end) return null;
+      if (a.res && a.res.skip) return a.res;
+      this.stV = snap;
+      return Object.assign({a: vs}, a.res);
+    } finally {
+      this.sending = false;
+      if (a){
+        clearTimeout(a.timer); this.jobs.delete(a.id);
+        // (a save given up before it was sent: its parts freed in the worker)
+        if (!sent && this.w && this.st === "ok") try { this.post({t: "sdrop", id: a.id}); } catch (e){}
+      }
+      this.wake();
+    }
   },
   // GSTR-3B's figures for a month (GSTR.workReady, src/js/12): the carry and the month's checks; done(answer, or null
   // when the worker could not), not called when a newer ask took its place (GSTR._work). Stepped in idle time as a run
@@ -1180,8 +1204,8 @@ const Engine = {
     const it = (function* (){
       try {
         if (!(yield* E.ready()) || !(yield* E.sendIn(at.b))) return null;
-        a = E.ask("gst", ym, ym, reg, null);
-        while (!a.end && !a.err && E.st === "ok") yield E.WAIT;
+        try { a = E.ask("gst", ym, ym, reg, null); } catch (e){ return null; }
+        while (!a.end && !a.err && !a.dropped && E.st === "ok") yield E.WAIT;
         return a.end ? a.res : null;
       } finally { if (a){ if (a.end) E.jobs.delete(a.id); else E.cancel(a); } }
     })();
@@ -1225,6 +1249,7 @@ const Engine = {
       else if (m.t === "gpart"){ a.all[m.k] = m.v; }
       else if (m.t === "gst"){ a.res = Object.assign(m.r, a.all); a.end = true; this.done(a); }
       else if (m.t === "stored"){ a.res = {s: m.s, wrote: m.wrote}; a.end = true; this.done(a); }
+      else if (m.t === "skip"){ clearTimeout(a.timer); a.res = {skip: true, why: m.why}; a.end = true; }
       else if (m.t === "lhead"){ a.res = m.r; a.full = []; }
       else if (m.t === "lrows"){ for (let i = 0; i < m.rows.length; i++) a.full.push(m.rows[i]); }
       else if (m.t === "lend" && a.res){ a.res.rows = a.full; a.end = true; this.done(a); }

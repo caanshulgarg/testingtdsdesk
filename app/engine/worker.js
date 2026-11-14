@@ -53,7 +53,7 @@ function clearAll() {
   books = null; next = null; queue.length = 0;
   if (job) { try { job.it.return(); } catch (x) { /* closed */ } job = null; }
   setS({}); S.books = null; self.__engineLS.clear(); if (typeof M2B === "object") M2B.st = {};
-  stores.clear(); stV = null;
+  stores.forEach((x, id) => say({ t: "dropped", id })); stores.clear(); stV = null;
   fresh();
 }
 // a test's check (tests/run_speed_worker.py) that every write here is refused: each tried, and what it did
@@ -136,35 +136,52 @@ function step() {
 // write the worker makes, through its own writer (boot.js storeTx); the engines' every write is refused (denyWrites)
 const stores = new Map();
 let stV = null;   // the entries last written here, as the page's Engine.stV
+// review of the full stack: clients the page removed (Books.drop's gone, sgone) and saves the page called off (sstop: a
+// clear of this browser's copy, sdrop: a save given up). Looked at just before the writes, in the save's transaction
+const gone = new Set(), stopped = new Set();
+let halt = false;
 function storeMsg(m) {
+  if (m.t === "sgone") { gone.add(m.cid); return; }
+  if (m.t === "sstop") { halt = true; stores.clear(); stV = null; return; }
+  if (m.t === "sdrop") { stores.delete(m.id); stopped.add(m.id); return; }
   const st = stores.get(m.id);
-  if (m.t === "sbegin") { stores.set(m.id, { cid: m.cid, db: m.db, d: {}, v: [] }); return; }
+  if (m.t === "sbegin") { if (!halt) stores.set(m.id, { cid: m.cid, db: m.db, d: {}, v: [] }); return; }
   // (its parts dropped by a clear meanwhile, another client: the page writes the save itself)
-  if (!st) { if (m.t === "send") say({ t: "err", id: m.id, e: "the save's parts were dropped" }); return; }
-  if (m.t === "sk") st.d[m.k] = m.v;
-  else if (m.t === "sa") { if (m.at) st.d[m.k][m.at] = m.arr ? [] : {}; else st.d[m.k] = m.arr ? [] : {}; }
-  else if (m.t === "sp") { const to = m.at ? st.d[m.k][m.at] : st.d[m.k]; if (Array.isArray(to)) { for (let i = 0; i < m.v.length; i++) to.push(m.v[i]); } else Object.assign(to, m.v); }
-  else if (m.t === "sv") { for (let i = 0; i < m.v.length; i++) st.v.push(m.v[i]); }
-  else if (m.t === "send") {
+  if (!st) { if (m.t === "send") say({ t: halt ? "skip" : "dropped", id: m.id }); return; }
+  try {
+    if (m.t === "sk") st.d[m.k] = m.v;
+    else if (m.t === "sa") { if (m.at) st.d[m.k][m.at] = m.arr ? [] : {}; else st.d[m.k] = m.arr ? [] : {}; }
+    else if (m.t === "sp") { const to = m.at ? st.d[m.k][m.at] : st.d[m.k]; if (Array.isArray(to)) { for (let i = 0; i < m.v.length; i++) to.push(m.v[i]); } else Object.assign(to, m.v); }
+    else if (m.t === "sv") { for (let i = 0; i < m.v.length; i++) st.v.push(m.v[i]); }
+  } catch (e) { stores.delete(m.id); say({ t: "err", id: m.id, e: err(e) }); return; }
+  if (m.t === "send") {
     stores.delete(m.id);
-    const v = m.vfrom === "kept" ? stV : m.vfrom === "engine" ? (books && books.vouchers) : st.v, d = st.d;
+    const v = m.vfrom === "kept" ? stV : m.vfrom === "engine" ? (books && books.vouchers) : st.v, d = st.d, cid = st.cid;
     stV = null;
     if (!Array.isArray(v)) { say({ t: "err", id: m.id, e: "the entries to write are not here" }); return; }
-    const [E, W, H, O] = Books.K(st.cid);
-    let s = "", wrote = false;
-    storeTx(st.db, (q, tx) => { const r = q.get(H); r.onsuccess = () => { try {
+    const [E, W, H, O] = Books.K(cid);
+    let s = "", wrote = false, why = "";
+    const off = () => (halt ? "stop" : gone.has(cid) ? "gone" : stopped.has(m.id) ? "drop" : "");
+    if ((why = off())) { stopped.delete(m.id); say({ t: "skip", id: m.id, why }); return; }
+    storeTx(st.db, (q, tx, live) => { const r = q.get(H); r.onsuccess = () => { try {
+      // (the page's word may have come while the store opened: nothing is written then)
+      if ((why = off()) || !live()) { why = why || "stop"; tx.abort(); return; }
       const h = r.result;
       s = m.same && h && h.s === m.ks ? m.ks : Date.now() + "." + Math.random();
       if (s !== m.ks) { q.put({ s, v }, E); q.put({ s }, H); wrote = true; }
       q.put({ s, d }, W); q.delete(O);
-    } catch (e) { try { tx.abort(); } catch (x) { /* given up */ } } }; }).then(() => { stV = v; say({ t: "stored", id: m.id, s, wrote }); }, (e) => say({ t: "err", id: m.id, e: err(e) }));
+      if ((why = off()) || !live()) { why = why || "stop"; tx.abort(); return; }
+      if (tx.commit) tx.commit();
+    } catch (e) { try { tx.abort(); } catch (x) { /* given up */ } } }; })
+      .then(() => { stopped.delete(m.id); stV = v; say({ t: "stored", id: m.id, s, wrote }); },
+        (e) => { stopped.delete(m.id); say(why ? { t: "skip", id: m.id, why } : { t: "err", id: m.id, e: err(e) }); });
   }
 }
 self.onmessage = (e) => {
   const m = e.data || {};
   try {
     if (m.t === "init") init(m.legacy);
-    else if (/^s(begin|k|a|p|v|end)$/.test(m.t)) storeMsg(m);
+    else if (/^s(begin|k|a|p|v|end|gone|stop|drop)$/.test(m.t)) storeMsg(m);
     else if (m.t === "begin") begin(m);
     else if (m.t === "clear") clearAll();
     else if (m.t === "selftest") selftest().then((r) => say({ t: "selftest", r }));

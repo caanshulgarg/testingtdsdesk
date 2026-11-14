@@ -337,13 +337,17 @@ Object.assign(Books, {
     if (this.gone[cid]) return;
     if (typeof Engine === "object" && Engine.canStore(data)){
       let r = null; try { r = await Engine.store(cid, data, this.vk[cid]); } catch (e){ r = null; }
-      if (r){ if (r.wrote) this.vk[cid] = {s: r.s, r: data.vouchers, a: data.vouchers.slice()}; return; }
+      // (the entries as they were sent: Engine.storeIn's a; skip: not to be written, the client gone or the copy not this
+      // page's)
+      if (r){ if (r.wrote && !this.gone[cid]) this.vk[cid] = {s: r.s, r: data.vouchers, a: r.a}; return; }
     }
+    if (this.gone[cid]) return;
     return this.saveHere(cid, data);
   },
   async saveHere(cid, data){
     const [E, W, H, O] = this.K(cid);
     await IDBStore.tx((st, g) => { const q = st.get(H); q.onsuccess = () => g(() => {
+      if (this.gone[cid]) return;
       const k = this.vk[cid], h = q.result, v = data.vouchers, d = Object.assign({}, data);
       const s = k && h && h.s === k.s && k.r === v && (!v || v.length === k.a.length && v.every((x, i) => x === k.a[i])) ? k.s : Date.now() + "." + Math.random();
       delete d.vouchers;
@@ -368,7 +372,15 @@ Object.assign(Books, {
     try { const d = await this.read(cid, 1); if (d && d.cid === cid) this.remember(cid, d); return d; } catch (e){ return null; }
   },
   // a client removed: its books leave this browser
-  drop(cid){ this.gone[cid] = 1; this.forget(cid); delete this.vk[cid]; return IDBStore.write(this.K(cid).map(k => [k, null])).catch(() => {}); },
+  // (review of the full stack: in the client's turn, q, after the save on its way, which the worker is told to give up
+  // (Engine.gone): nothing it was writing comes back after the removal)
+  drop(cid){
+    this.gone[cid] = 1; this.forget(cid); delete this.vk[cid]; delete this.pend[cid];
+    if (typeof Engine === "object") Engine.gone(cid);
+    const p = (this.q[cid] || Promise.resolve()).then(() => IDBStore.write(this.K(cid).map(k => [k, null]))).catch(() => {});
+    this.q[cid] = p;
+    return p;
+  },
   forget(cid){ if (cid) this.mem.delete(cid); else this.mem.clear(); }
 });
 // (next-speed-worker: Books.closing; not in the engine's worker, which has no page)
