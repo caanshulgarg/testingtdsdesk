@@ -12,8 +12,11 @@ answered by the test (page.route):
   6. the platform's keys (the Groq key beside the Claude key) and the voice minutes of all firms: FinCom's console now
      (console phase 1b, 27-Oct-2026); no key field anywhere in the app, for the platform's administrator either
   7. names corrected (22-Oct-2026): the microphone asked for echo cancelling, noise suppression, gain, one channel; opus
-     at about 40 kbps; Hinglish sent with latin=1; the corrected names under the box, underlined, the heard words on a
-     tap, one tap to undo; the pause after speech 4 s by default
+     at 64 kbps (Safari's AAC at 96 kbps; next-fix-voice, 14-Nov-2026: were 40); Hinglish sent with latin=1; the corrected
+     names under the box, underlined, the heard words on a tap, one tap to undo; the pause after speech 4 s by default
+  8. next-fix-voice: the default is Hinglish · auto (lang auto, latin=1); once the live words look Hindi the clip goes as
+     Hindi (lang hi, latin=1) and the question's hint is Hinglish; English picked still wins; the open screen's title goes
+  9. hold to talk (off by default, kept): held, it listens through a pause; let go, it stops and sends the clip
 Run on app/dist-test, under the lock: flock /tmp/fincom-app.lock python3 tests/run_voice_whisper.py"""
 import os, sys, json, threading, functools, http.server, urllib.parse
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -78,10 +81,15 @@ with sync_playwright() as p:
     shown, sent = speak(pg, "tally main gst ki entry")
     ok(shown == "tally main gst ki entry", "the browser's words show live while speaking (%r)" % shown)
     ok(len(sent) == 1 and sent[0]["body"] == "clip0" and sent[0]["type"] == "audio/webm", "the clip went to fincom-transcribe as audio/webm (%s)" % sent)
-    ok(sent and sent[0]["qs"].get("lang") == "en" and sent[0]["qs"].get("client") == cid and sent[0]["auth"] == "Bearer tok-x", "with lang en, the open client and the sign-in token (%s)" % (sent[0]["qs"] if sent else None))
+    ok(sent and sent[0]["qs"].get("lang") == "auto" and sent[0]["qs"].get("latin") == "1" and sent[0]["qs"].get("client") == cid and sent[0]["auth"] == "Bearer tok-x",
+       "nothing chosen: Hinglish · auto (lang auto, latin=1), the open client and the sign-in token (%s)" % (sent[0]["qs"] if sent else None))
+    ok(sent and sent[0]["qs"].get("screen", "").startswith("From Tally"), "the open screen's title goes as a hint (%s)" % (sent[0]["qs"].get("screen") if sent else None))
+    ok(pg.evaluate("document.querySelector('[data-asst-lang]').value") == "auto" and pg.evaluate("localStorage.getItem('tdsdesk:asst-voice-lang:u1')") is None, "the picker shows Hinglish · auto, nothing kept until chosen")
     ok(box(pg) == "Whisper heard clip0", "Whisper's words replaced the browser's (%r)" % box(pg))
     ok("kept" not in line(pg), "no fallback line when Whisper answered (%r)" % line(pg))
     ok(pg.evaluate("__tracksStopped") >= 1 and not mic_on(pg), "the microphone let go, the mic off")
+    pg.select_option("[data-asst-lang]", "en-IN"); _, sent = speak(pg, "tally main gst ki entry")
+    ok(sent and sent[0]["qs"].get("lang") == "en" and "latin" not in sent[0]["qs"], "English chosen: lang en (%s)" % (sent[0]["qs"] if sent else None))
     pg.select_option("[data-asst-lang]", "hi-IN"); _, sent = speak(pg, "टैली")
     ok(sent and sent[0]["qs"].get("lang") == "hi", "Hindi chosen: lang hi (%s)" % (sent[0]["qs"] if sent else None))
     pg.select_option("[data-asst-lang]", "hinglish"); _, sent = speak(pg, "tally kholo")
@@ -143,6 +151,47 @@ with sync_playwright() as p:
     ctx, pg, cid = page(br, ua="Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15")
     _, sent = speak(pg, "safari words")
     ok(sent and sent[0]["type"] == "audio/mp4" and box(pg) == "Whisper heard clip0", "Safari: recorded and sent as audio/mp4 (%s, %r)" % (sent[0]["type"] if sent else None, box(pg)))
+    ok(pg.evaluate("__mr[__mr.length - 1].opts.audioBitsPerSecond") == 96000, "Safari: AAC at 96 kbps (%s)" % pg.evaluate("__mr[__mr.length - 1].opts.audioBitsPerSecond"))
+    ctx.close()
+
+    print("8. Hinglish · auto: as Hindi once the live words look Hindi; English picked still wins")
+    ctx, pg, cid = page(br)
+    _, sent = speak(pg, "richa ka ledger dikhao")
+    ok(sent and sent[0]["qs"].get("lang") == "hi" and sent[0]["qs"].get("latin") == "1", "Hindi words heard: lang hi, latin=1 (%s)" % (sent[0]["qs"] if sent else None))
+    ok(pg.locator("[data-asst-voice][data-asst-voice-hindi]").count() == 1 and pg.evaluate("ASST.st().lang") == "hinglish", "the question's hint is Hinglish (%s)" % pg.evaluate("ASST.st().lang"))
+    _, sent = speak(pg, "show the ledger of richa")
+    ok(sent and sent[0]["qs"].get("lang") == "auto" and pg.evaluate("ASST.st().lang") == "en-IN", "English words: auto again, the hint English (%s, %s)" % (sent[0]["qs"] if sent else None, pg.evaluate("ASST.st().lang")))
+    pg.select_option("[data-asst-lang]", "en-IN"); _, sent = speak(pg, "richa ka ledger dikhao")
+    ok(sent and sent[0]["qs"].get("lang") == "en" and pg.evaluate("ASST.st().lang") == "en-IN", "English picked: lang en, Hindi words or not (%s)" % (sent[0]["qs"] if sent else None))
+    ok(pg.evaluate("localStorage.getItem('tdsdesk:asst-voice-lang:u1')") == "en-IN", "the choice kept")
+    pg.reload(); pg.wait_for_timeout(2500); pg.evaluate(SETUP); pg.wait_for_timeout(500); pg.evaluate("ASST.open()"); pg.wait_for_timeout(900)
+    ok(pg.evaluate("document.querySelector('[data-asst-lang]').value") == "en-IN", "after a reload English is still chosen")
+    pg.select_option("[data-asst-lang]", "auto")
+
+    print("9. hold to talk")
+    ok(pg.locator("[data-asst-mic][data-asst-mic-hold]").count() == 0 and pg.get_attribute("[data-asst-hold]", "aria-pressed") == "false", "off by default")
+    pg.click("[data-asst-hold]"); pg.wait_for_timeout(150)
+    ok(pg.get_attribute("[data-asst-hold]", "aria-pressed") == "true" and pg.evaluate("localStorage.getItem('tdsdesk:asst-voice-hold')") == "1", "turned on, kept")
+    pg.evaluate("localStorage.setItem('tdsdesk:asst-voice-silence', '1')")
+    pg.fill("#asstQ", ""); n = len(SEEN)
+    pg.hover("[data-asst-mic]"); pg.mouse.down(); pg.wait_for_timeout(250)
+    ok(mic_on(pg), "held: listening")
+    pg.evaluate("__say([['tds kitna kata', true]])"); pg.evaluate("window.__level = 0.1"); pg.wait_for_timeout(300); pg.evaluate("window.__level = 0.006"); pg.wait_for_timeout(1800)
+    ok(mic_on(pg) and len(SEEN) == n, "held through a pause longer than the pause setting: still listening, nothing sent")
+    pg.mouse.up(); pg.wait_for_timeout(600)
+    ok(not mic_on(pg) and len(SEEN) == n + 1 and box(pg) == "Whisper heard clip%s" % SEEN[-1]["body"][4:], "let go: stopped, the clip sent, Whisper's words in the box (%r)" % box(pg))
+    pg.hover("[data-asst-mic]"); pg.mouse.down(); pg.wait_for_timeout(80); pg.mouse.up(); pg.wait_for_timeout(300)
+    ok(not mic_on(pg) and "Hold the mic" in line(pg), "a quick tap: stopped, with the tip (%r)" % line(pg))
+    pg.focus("[data-asst-mic]"); pg.keyboard.down("Space"); pg.wait_for_timeout(200)
+    ok(mic_on(pg), "the keyboard: Space held listens")
+    pg.keyboard.up("Space"); pg.wait_for_timeout(300)
+    ok(not mic_on(pg), "Space let go: stopped")
+    pg.click("[data-asst-hold]"); pg.wait_for_timeout(150)
+    ok(pg.evaluate("localStorage.getItem('tdsdesk:asst-voice-hold')") is None, "turned off again")
+    pg.click("[data-asst-mic]"); pg.wait_for_timeout(200)
+    ok(mic_on(pg), "off: a tap starts it, as before"); pg.click("[data-asst-mic]"); pg.wait_for_timeout(400)
+    pg.evaluate("localStorage.removeItem('tdsdesk:asst-voice-silence')")
+    ok(not errors, "no page error (%s)" % errors[:2])
     ctx.close()
 
     print("7. clearer sound, and the names corrected: underlined, the heard words on a tap, one tap to undo")
@@ -155,10 +204,10 @@ with sync_playwright() as p:
     ok(au.get("echoCancellation") is True and au.get("noiseSuppression") is True and au.get("autoGainControl") is True and au.get("channelCount") == 1 and au.get("sampleRate") in (48000, 16000),
        "the microphone: echo cancelling, noise suppression, gain, one channel, 48 or 16 kHz (%s)" % au)
     bits = pg.evaluate("__mr[__mr.length - 1].opts.audioBitsPerSecond")
-    ok(bits and 32000 <= bits <= 48000, "opus at 32-48 kbps (%s)" % bits)
+    ok(bits == 64000, "opus at 64 kbps (%s)" % bits)
     pg.evaluate("__say([['richa khandelwaal ko 1 lakh ka payment teddy mein entry', true]])"); pg.click("[data-asst-mic]"); pg.wait_for_timeout(700)
     sent = SEEN[n:]
-    ok(sent and sent[0]["qs"].get("lang") == "auto" and sent[0]["qs"].get("latin") == "1", "Hinglish: lang auto, latin=1 (%s)" % (sent[0]["qs"] if sent else None))
+    ok(sent and sent[0]["qs"].get("lang") == "hi" and sent[0]["qs"].get("latin") == "1", "Hinglish, Hindi words heard: lang hi, latin=1 (%s)" % (sent[0]["qs"] if sent else None))
     ok(box(pg) == "Pehle: Richa Khandelwal ko 1 lakh ka payment, Tally mein entry", "the corrected words in the box (%r)" % box(pg))
     words = pg.locator("[data-asst-fix-word]")
     ok(words.count() == 2 and words.nth(0).inner_text() == "Richa Khandelwal" and words.nth(1).inner_text() == "Tally", "the two corrected names shown under the box (%d)" % words.count())

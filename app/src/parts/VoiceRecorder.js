@@ -6,8 +6,11 @@
 // (server/fincom-transcribe), whose Whisper words replace the browser's. A clip longer than about 55 s is cut into pieces
 // (a new recorder every 55 s on the same microphone: each piece a whole file) and the pieces' words joined.
 // Clearer sound (the owner, 22-Oct-2026: voice "still not good"): the microphone is asked for echo cancelling, noise
-// suppression and automatic gain, one channel at 48 kHz; opus at about 40 kbps; each new piece starts 300 ms before the
+// suppression and automatic gain, one channel at 48 kHz; each new piece starts 300 ms before the
 // last one ends (a word at the seam is never cut), and the person is told to speak only once the recorder runs (onReady).
+// The bitrate (next-fix-voice, 14-Nov-2026): Safari's AAC was 40 kbps, thin for speech; now AAC at 96 kbps and opus at
+// 64 kbps, where the browser's MediaRecorder takes audioBitsPerSecond (one that refuses it records at its own rate). A
+// 55 s piece is then at most about 660 KB (the function takes 5 MB).
 // The function corrects the client's names; the changes ({from, to}) come back with the words, for the app to show.
 // Nothing is kept: the clip lives in this page's memory until it is sent, and the function keeps neither audio nor words.
 import { noDeviceError } from "./noDevice.js";
@@ -18,7 +21,14 @@ const TICK = 100;              // how often the level is read, ms
 const SPEECH = 0.02;           // the level (RMS, 0-1) that counts as speech, above the room's own noise
 export const SILENCE_MS = 4000; // the pause after speech that ends the listening (a person may set 1-15 s)
 export const PRE_ROLL_MS = 300; // a new piece starts this long before the last one ends
-export const BITRATE = 40000;   // opus, bits a second
+export const BITRATE = 64000;      // opus (Chrome, Edge, Firefox), bits a second
+export const BITRATE_AAC = 96000;  // Safari's mp4/aac: AAC needs more bits than opus for the same clearness
+// the bitrate asked for a recording type
+export const bitrateFor = (type) => (/mp4|aac|m4a/i.test(String(type || "")) ? BITRATE_AAC : BITRATE);
+// the recorder's options: the type, and the bitrate when the browser's MediaRecorder takes one
+export function recorderOptions(type) {
+  return Object.assign(type ? { mimeType: type } : {}, { audioBitsPerSecond: bitrateFor(type) });
+}
 // below this level (RMS) for the whole listening, the microphone sent no sound (a silent Remote Desktop microphone): the
 // clip is not sent to be heard (23-Oct-2026)
 export const QUIET = 0.003;
@@ -62,7 +72,7 @@ export function startRecording(o = {}) {
   // one recorder = one piece (a whole file)
   const piece = () => {
     let r;
-    try { r = new window.MediaRecorder(st.stream, Object.assign(type ? { mimeType: type } : {}, { audioBitsPerSecond: BITRATE })); }
+    try { r = new window.MediaRecorder(st.stream, recorderOptions(type)); }
     catch (e) { try { r = type ? new window.MediaRecorder(st.stream, { mimeType: type }) : new window.MediaRecorder(st.stream); } catch (e2) { if (o.onError) o.onError(micWords(e2)); return; } }
     const chunks = [], t0 = Date.now(), seq = st.seq++;
     st.rec = r; st.pending++;
@@ -140,14 +150,24 @@ export function startRecording(o = {}) {
   };
 }
 
-// the language for Whisper: hi and en when they are certain; Hinglish and the other languages "auto" (Hinglish with
-// latin: its words in English letters)
-export const whisperLang = (code) => (code === "hi-IN" ? "hi" : code === "en-IN" ? "en" : "auto");
-export const whisperLatin = (code) => code === "hinglish";
+// the open screen's title and section (the top bar's title and the tabs chosen), a hint for Whisper's words: at most 120
+// characters; the function keeps only words (never an identifier)
+export function screenWords(doc = typeof document === "object" ? document : null) {
+  if (!doc || !doc.querySelectorAll) return "";
+  const out = [];
+  try {
+    for (const el of doc.querySelectorAll(".tbar-title h2, #app [role=tab][aria-selected=true], #app h2, #app h3")) {
+      const t = String(el.textContent || "").replace(/\s+/g, " ").trim();
+      if (t && t.length <= 60 && !out.includes(t)) out.push(t);
+      if (out.length >= 5) break;
+    }
+  } catch (e) { /* no hint */ }
+  return out.join(" · ").slice(0, 120);
+}
 
 // the pieces to fincom-transcribe, in order, the words joined.
 // -> {ok: true, text, changes: [{from, to}] (the names corrected)} | {ok: false, kind: nokey|limit|offline|error|auth|ai_off (+ message)}
-export async function transcribe(clips, { lang = "auto", client = null, latin = false } = {}) {
+export async function transcribe(clips, { lang = "auto", client = null, latin = false, screen = "" } = {}) {
   if (!clips || !clips.length) return { ok: false, kind: "empty" };
   if (typeof navigator === "object" && navigator.onLine === false) return { ok: false, kind: "offline" };
   if (!(typeof Cloud === "object" && Cloud.on && Cloud.on())) return { ok: false, kind: "auth" };
@@ -159,6 +179,7 @@ export async function transcribe(clips, { lang = "auto", client = null, latin = 
     const qs = new URLSearchParams({ lang, secs: String(Math.round(clip.secs * 10) / 10) });
     if (client) qs.set("client", client);
     if (latin) qs.set("latin", "1");
+    if (screen) qs.set("screen", String(screen).slice(0, 120));
     let r;
     try { r = await fetch(url + "?" + qs, { method: "POST", headers: { apikey: c.key, Authorization: "Bearer " + s.access_token, "Content-Type": String(clip.type || "audio/webm").split(";")[0] }, body: clip.blob }); }
     catch (e) { return { ok: false, kind: typeof navigator === "object" && navigator.onLine === false ? "offline" : "error" }; }

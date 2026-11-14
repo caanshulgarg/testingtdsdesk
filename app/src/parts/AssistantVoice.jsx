@@ -19,40 +19,32 @@
 // Names corrected (the owner, 22-Oct-2026: voice "still not good", wrong client, ledger and party names): the function
 // matches what Whisper heard against the client's own names and gives back the changes; each corrected name is shown
 // under the box, underlined, with what was heard on hover or a tap, and one tap on its undo puts the heard words back.
+// next-fix-voice (14-Nov-2026: the owner speaks Hinglish; listening "very bad"): the default language is Hinglish · auto
+// (voiceLang.js: Whisper finds the language, the words in English letters; as Hindi once the live words look Hindi); a
+// language picked still wins and is kept. The open screen's title and section go to Whisper as a hint. Hold to talk, a
+// choice kept in this browser (localStorage "tdsdesk:asst-voice-hold"): the mic listens while held and stops when let go
+// (no stop on a pause); off by default, the tap and the pause as before.
 import { useEffect, useRef, useState } from "react";
-import { Mic, Square, Undo2, Volume2, VolumeX } from "lucide-react";
+import { Hand, Mic, Square, Undo2, Volume2, VolumeX } from "lucide-react";
+import { VOICE_LANGS, byCode, langOf, looksHindi, whisperFor, askLang } from "./voiceLang.js";
 import NoDeviceNote from "./NoDeviceNote.jsx";
 import { NO_SOUND_TEXT } from "./noDevice.js";
 
-// code: what the browser listens for and what goes to fincom-assistant as the hint (server/assistant/agent.ts, LANGS)
-export const VOICE_LANGS = [
-  { code: "en-IN", label: "English", rec: "en-IN" },
-  { code: "hi-IN", label: "हिन्दी", rec: "hi-IN" },
-  { code: "hinglish", label: "Hinglish", rec: "en-IN" },   // Hindi spoken, written in English letters: the en-IN recogniser
-  { code: "mr-IN", label: "मराठी", rec: "mr-IN" },
-  { code: "gu-IN", label: "ગુજરાતી", rec: "gu-IN" },
-  { code: "bn-IN", label: "বাংলা", rec: "bn-IN" },
-  { code: "ta-IN", label: "தமிழ்", rec: "ta-IN" },
-  { code: "te-IN", label: "తెలుగు", rec: "te-IN" },
-  { code: "kn-IN", label: "ಕನ್ನಡ", rec: "kn-IN" },
-  { code: "ml-IN", label: "മലയാളം", rec: "ml-IN" },
-  { code: "pa-IN", label: "ਪੰਜਾਬੀ", rec: "pa-IN" },
-];
-const byCode = (c) => VOICE_LANGS.find((l) => l.code === c) || VOICE_LANGS[0];
+export { VOICE_LANGS };
 const Rec = () => (typeof window === "undefined" ? null : window.SpeechRecognition || window.webkitSpeechRecognition || null);
 export const voiceSupported = () => !!Rec();
 
-// kept per person (the signed-in user) in this browser; private windows and blocked storage just start at English
+// kept per person (the signed-in user) in this browser; private windows and blocked storage start at Hinglish · auto
 const who = () => { try { return (typeof Cloud === "object" && Cloud.sess && (Cloud.sess() || {}).user_id) || "me"; } catch (e) { return "me"; } };
 const KEY = () => "tdsdesk:asst-voice-lang:" + who();
 export function voiceLang() {
-  try { const v = localStorage.getItem(KEY()); if (v && VOICE_LANGS.some((l) => l.code === v)) return v; } catch (e) { /* storage blocked */ }
-  return "en-IN";
+  try { return langOf(localStorage.getItem(KEY())); } catch (e) { return langOf(null); }
 }
 function keepLang(c) { try { localStorage.setItem(KEY(), c); } catch (e) { /* storage blocked */ } }
 const seen = (k) => { try { return localStorage.getItem(k) === "1"; } catch (e) { return false; } };
 const see = (k) => { try { localStorage.setItem(k, "1"); } catch (e) { /* storage blocked */ } };
-const NOTE_KEY = "tdsdesk:asst-voice-note", NONE_KEY = "tdsdesk:asst-voice-none";
+const NOTE_KEY = "tdsdesk:asst-voice-note", NONE_KEY = "tdsdesk:asst-voice-none", HOLD_KEY = "tdsdesk:asst-voice-hold";
+const HOLD_TIP = "Hold the mic while you speak; let go to stop.";
 const NOTE = "Voice is turned into text by your browser (Google/Apple); for clearer words the recording also goes to Groq through FinCom, and is not kept.";
 const BUSY = "Making the words clearer…";
 const OPENING = "Starting the microphone…";
@@ -96,28 +88,35 @@ const ERR = {
 // the mic and the language, in the question box's bar; `a` is ASST's state (a.q the box, a.lang the hint)
 export function VoiceInput({ a, onText, client = null }) {
   const [on, setOn] = useState(false), [msg, setMsg] = useState(""), [lang, setLang] = useState(voiceLang);
+  // the last listening's words looked Hindi (Hinglish · auto: the hint goes as Hinglish); hold to talk chosen
+  const [hindi, setHindi] = useState(false), [hold, setHold] = useState(() => seen(HOLD_KEY));
   // no microphone reached this browser (Remote Desktop, a cloud PC): "nodevice"; one that sent no sound: "silent"
   const [noDev, setNoDev] = useState("");
   const [none, setNone] = useState(() => !voiceSupported() && !seen(NONE_KEY));
   // the names corrected in the words last put in the box: [{from, to, open}], and where those words start
   const [fixes, setFixes] = useState({ list: [], at: 0 });
   const mine = useRef(null);
-  a.lang = lang;
+  a.lang = askLang(lang, hindi);
   useEffect(() => () => { if (live && live === mine.current) stopVoice(); }, []);
   useEffect(() => { if (voiceSupported()) loadRecorder(); }, []);
   if (!voiceSupported()) {
     return none ? <span className="asst-voice-msg" role="note" data-asst-voice-none="">Voice typing is not available in this browser (use Chrome, Edge or Safari).
       <button type="button" className="linkbtn" aria-label="Hide this note" onClick={() => { see(NONE_KEY); setNone(false); }}>×</button></span> : null;
   }
-  const start = () => {
+  // held: hold to talk (no stop on a pause; letting go stops it)
+  const start = (held = false) => {
     if (on || live) { const s = live; live = null; if (s) s.finish("stop"); setOn(false); return; }
     const R = Rec();
     const base = String(a.q || "").replace(/\s+$/, ""), sep = base ? " " : "";
     setFixes({ list: [], at: 0 });
     // one listening: the words of the sessions ended (done), the current session's finals (cur) and its interim words
-    const sess = { on: true, done: [], cur: [], interim: "", heard: false, at: Date.now(), quick: 0, rec: null, timer: null, mic: null, lang };
+    const sess = { on: true, done: [], cur: [], interim: "", heard: false, at: Date.now(), quick: 0, rec: null, timer: null, mic: null, lang, hold: held, hindi: false };
     const words = () => norm([...sess.done, ...sess.cur, sess.interim].join(" "));
-    const show = () => { const w = words(); onText(w ? base + sep + w : base); };
+    sess.words = words;
+    const show = () => {
+      const w = words(); onText(w ? base + sep + w : base);
+      if (!sess.hindi && looksHindi(w)) { sess.hindi = true; if (mine.current === sess) setHindi(true); }
+    };
     const keep = () => { const w = norm([...sess.cur, sess.interim].join(" ")); if (w) sess.done.push(w); sess.cur = []; sess.interim = ""; };
     sess.finish = (how) => {
       if (!sess.on) return;
@@ -130,7 +129,7 @@ export function VoiceInput({ a, onText, client = null }) {
       if (sess.mic) { if (how === "abort") sess.mic.abort(); else clearer(sess, words() ? base + sep + words() : base, base); }
     };
     // a pause after speech ends it (the timer starts again at every word heard)
-    const arm = () => { clearTimeout(sess.timer); sess.timer = setTimeout(() => sess.finish("stop"), silenceMs()); };
+    const arm = () => { clearTimeout(sess.timer); if (!sess.hold) sess.timer = setTimeout(() => sess.finish("stop"), silenceMs()); };
     const begin = () => {
       let r;
       try { r = new R(); } catch (e) { setMsg("Voice typing could not start here."); sess.finish("abort"); return; }
@@ -156,15 +155,15 @@ export function VoiceInput({ a, onText, client = null }) {
         // ended by the browser, not by the person: listen again (sessions ending at once, again and again, stop it)
         sess.quick = Date.now() - r.startedAt < 1000 ? sess.quick + 1 : 0;
         if (sess.quick >= 5) { setMsg("Voice typing keeps stopping in this browser. Tap the mic to try again."); sess.finish("stop"); return; }
-        if (!sess.heard && Date.now() - sess.at > NOTHING_MS) { setMsg(ERR["no-speech"]); sess.finish("stop"); return; }
+        if (!sess.hold && !sess.heard && Date.now() - sess.at > NOTHING_MS) { setMsg(ERR["no-speech"]); sess.finish("stop"); return; }
         begin();
       };
       sess.rec = r; r.startedAt = Date.now();
       try { r.start(); } catch (e) { sess.rec = null; setMsg("Voice typing could not start here."); sess.finish("abort"); }
     };
-    stopVoice(); live = sess; mine.current = sess; setNoDev("");
+    stopVoice(); live = sess; mine.current = sess; setNoDev(""); setHindi(false);
     if (VR && VR.canRecord()) {
-      sess.mic = VR.startRecording({ silenceMs: silenceMs(), onSilence: () => sess.finish("stop"), onError: (w) => { if (mine.current === sess) setMsg(w); },
+      sess.mic = VR.startRecording({ silenceMs: silenceMs(), onSilence: () => { if (!sess.hold) sess.finish("stop"); }, onError: (w) => { if (mine.current === sess) setMsg(w); },
         onNoDevice: () => { if (mine.current === sess) { setNoDev("nodevice"); setMsg((m) => (m === OPENING ? "" : m)); } },
         onReady: () => { if (mine.current === sess) setMsg((m) => (m === OPENING ? "" : m)); } });
     }
@@ -181,7 +180,8 @@ export function VoiceInput({ a, onText, client = null }) {
       // the microphone sent no sound (a silent Remote Desktop microphone): nothing sent to be heard, the browser's words stay
       if (clips.quiet) { setNoDev("silent"); return null; }
       setMsg(BUSY);
-      return VR.transcribe(clips, { lang: VR.whisperLang(sess.lang), client, latin: VR.whisperLatin ? VR.whisperLatin(sess.lang) : false }).then((r) => {
+      const w = whisperFor(sess.lang, sess.hindi);
+      return VR.transcribe(clips, { lang: w.lang, latin: w.latin, client, screen: VR.screenWords ? VR.screenWords() : "" }).then((r) => {
         const done = (m) => setMsg((x) => (x === BUSY ? m : x));
         if (mine.current !== sess || String(a.q || "") !== shown) { done(""); return; }   // a new listening, Ask, or the box changed
         if (r.ok) {
@@ -201,21 +201,43 @@ export function VoiceInput({ a, onText, client = null }) {
   };
   const peek = (i) => setFixes({ list: fixes.list.map((f, j) => (j === i ? Object.assign({}, f, { open: !f.open }) : f)), at: fixes.at });
   const shownFixes = on ? [] : fixes.list.map((f, i) => [f, i]).filter(([f]) => String(a.q || "").includes(f.to));
-  const pick = (c) => { setLang(c); keepLang(c); a.lang = c; if (live) { const s = live; live = null; s.finish("stop"); setOn(false); } };
+  const pick = (c) => { setLang(c); keepLang(c); setHindi(false); a.lang = askLang(c, false); if (live) { const s = live; live = null; s.finish("stop"); setOn(false); } };
+  // hold to talk: pressed starts, let go stops (a tap too short to say anything: the tip)
+  const press = (e) => {
+    if (e.type === "pointerdown" && e.button !== 0) return;
+    e.preventDefault();
+    try { if (e.pointerId != null) e.currentTarget.setPointerCapture(e.pointerId); } catch (x) { /* none */ }
+    if (!live) start(true);
+  };
+  const letGo = () => {
+    const s = live;
+    if (!s || s !== mine.current || !s.hold) return;
+    // a tap too short to say anything: nothing sent, the tip
+    if (Date.now() - s.at < 400 && !s.words()) { s.finish("abort"); setMsg(HOLD_TIP); }
+    else s.finish("stop");
+  };
+  const keyHold = (e) => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); if (e.type === "keyup") letGo(); else if (!e.repeat) press(e); } };
+  const holdOn = (v) => { setHold(v); try { if (v) localStorage.setItem(HOLD_KEY, "1"); else localStorage.removeItem(HOLD_KEY); } catch (e) { /* storage blocked */ } setMsg(v ? HOLD_TIP : ""); };
+  const micHandlers = hold
+    ? { onPointerDown: press, onPointerUp: letGo, onPointerCancel: letGo, onKeyDown: keyHold, onKeyUp: keyHold, onContextMenu: (e) => e.preventDefault(), onClick: (e) => e.preventDefault() }
+    : { onClick: () => start(false) };
+  const micTitle = on ? (hold ? "Let go to stop" : "Stop listening") : (hold ? "Hold to speak" : "Speak your question") + " (" + byCode(lang).label + (lang === "auto" && hindi ? ", Hindi heard" : "") + ")";
   return <>
-    <span className="asst-voice" data-asst-voice="">
-      <button type="button" className={"asst-act asst-mic" + (on ? " on" : "")} data-asst-mic="" aria-pressed={on} onClick={start}
-        title={on ? "Stop listening" : "Speak your question (" + byCode(lang).label + ")"} aria-label={on ? "Stop listening" : "Speak your question"}>
+    <span className="asst-voice" data-asst-voice="" data-asst-voice-hindi={hindi ? "" : undefined}>
+      <button type="button" className={"asst-act asst-mic" + (on ? " on" : "") + (hold ? " hold" : "")} data-asst-mic="" data-asst-mic-hold={hold ? "" : undefined} aria-pressed={on} {...micHandlers}
+        title={micTitle} aria-label={on ? (hold ? "Let go to stop" : "Stop listening") : hold ? "Hold to speak your question" : "Speak your question"}>
         {on ? <><span className="asst-mic-pulse" aria-hidden="true" /><Square size={12} aria-hidden="true" fill="currentColor" /></> : <Mic size={16} aria-hidden="true" />}
       </button>
       <label className="sr-only" htmlFor="asstVoiceLang">Language for voice</label>
       <select id="asstVoiceLang" className="asst-lang" data-asst-lang="" value={lang} onChange={(e) => pick(e.target.value)} title="Language you speak (the reply comes in the question's language)">
         {VOICE_LANGS.map((l) => <option key={l.code} value={l.code}>{l.label}</option>)}
       </select>
+      <button type="button" className={"asst-act asst-hold" + (hold ? " on" : "")} data-asst-hold="" aria-pressed={hold} onClick={() => holdOn(!hold)}
+        title={hold ? "Hold to talk is on: hold the mic while you speak. Tap to go back to tap and pause" : "Hold to talk: hold the mic while you speak, let go to stop"} aria-label="Hold to talk"><Hand size={13} aria-hidden="true" /></button>
       {noDev === "nodevice" && <NoDeviceNote className="asst-nodev" />}
     </span>
     {noDev === "silent" && <span className="asst-voice-msg" role="status" data-asst-voice-silent="">{NO_SOUND_TEXT}<NoDeviceNote /></span>}
-    {(on || msg) && <span className="asst-voice-msg" role="status" data-asst-voice-msg="">{msg || "Listening… speak; it keeps listening until you pause or tap the mic again."}</span>}
+    {(on || msg) && <span className="asst-voice-msg" role="status" data-asst-voice-msg="">{msg || (hold ? "Listening… let go of the mic to stop." : "Listening… speak; it keeps listening until you pause or tap the mic again.")}</span>}
     {shownFixes.length > 0 && <span className="asst-voice-msg asst-voice-fixes" data-asst-voice-fixes="">
       <span>Names matched to the books:</span>
       {shownFixes.map(([f, i]) => <span key={i + f.to} className="asst-fix" data-asst-fix="">

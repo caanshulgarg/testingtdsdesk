@@ -4,19 +4,25 @@
 // Whisper's words replace the browser's. On any failure the app keeps the browser's words.
 //   POST the audio itself (Content-Type audio/webm, audio/ogg, audio/mp4 or audio/wav; at most 5 MB and 60 s), with
 //     ?lang=hi|en|auto (auto: Hinglish and the other languages), &latin=1 (Hinglish: the words in English letters),
-//     &secs=<the clip's length>, &client=<the open client>, &verbose=1 (calls, 23-Oct-2026: Whisper's verbose answer, and
+//     &secs=<the clip's length>, &client=<the open client>, &screen=<the open screen's title and section>, &verbose=1 (calls, 23-Oct-2026: Whisper's verbose answer, and
 //     the language it found as `language`, ta, hi, en…; the words in their own script: with verbose=1 latin is not applied)
 //     -> {ok: true, text, changes: [{from, to}], model, ms[, language]} | {ok: false, kind: "nokey" | "limit" | "error" | "size" | ...}
 //   POST {"action": "usage"} -> {ok, firm_secs, all_secs (the platform administrator only), key: is a key set}
 // Who: as fincom-assistant: the signed-in user's token, their two-step sign-in, an active member of a firm whose owner
 // has not switched AI help off; a client must be one of that firm's (read with the user's own token: row-level security).
 // The model (the owner, 22-Oct-2026: voice "still not good", wrong words and wrong names): Whisper large-v3, the full
-// model, for a clip under 30 s; turbo for a longer one, and when Groq says 429 for large-v3 (both are on Groq's free
-// tier, each with its own limits: about 20 a minute, 2,000 a day, 2 hours of audio an hour).
-// Words prompt (Whisper reads up to about 224 tokens of it, and copies its style): a short sample sentence in the chosen
-// style (Hinglish in English letters, English, or Hindi) made of the client's own biggest ledger and party names and the
-// firm's words (Tally, GST, TDS 194J, ...), then more names; read from tally_ledgers for that client's books in the
-// caller's firm only. For Hinglish an answer mostly in Devanagari is written in English letters (names.ts, toLatin).
+// model, for a clip up to 60 s (next-fix-voice, 14-Nov-2026: was under 30 s; the app's pieces are at most 55 s, so every
+// clip now goes to large-v3); turbo for a longer one, and when Groq says 429 for large-v3 (both are on Groq's free tier,
+// each with its own limits: about 20 a minute, 2,000 a day, 2 hours of audio an hour and 8 hours a day; voice typing now
+// uses large-v3's allowance, turbo's only when large-v3 is at its limit, and call subtitles keep turbo's).
+// Words prompt (Whisper reads at most 224 tokens of it, and copies its style; next-fix-voice: counted cautiously,
+// tokensOf, within PROMPT_TOKENS): a short sample sentence in the chosen style (Hinglish in English letters, English, or
+// Hindi) made of the client's own biggest ledger and party names, then, by priority: more of the client's biggest names,
+// the open screen's title and section (&screen=), the firm's words (accounting, GST, TDS, banking and CMA: FIRM_WORDS),
+// the firm's client names (always, a client open or not), then the rest while they fit; the ledgers read from
+// tally_ledgers for that client's books in the caller's firm only. Hinglish may be sent as Hindi (lang=hi&latin=1, the
+// app's choice once the live words look Hindi). For Hinglish an answer mostly in Devanagari is written in English letters
+// (names.ts, toLatin).
 // Names corrected (names.ts): each run of 1-4 words is matched against the client's ledger and party names and the
 // firm's client names; replaced only on a confident, unique match; the changes go back as {from, to} for the app to show
 // (underlined, with one tap to undo). When some name was near but not sure, one cheap AI call (the routing model of
@@ -51,7 +57,7 @@ export type Deps = { env: Env, fetch: typeof fetch };
 export const GROQ_URL = "https://api.groq.com/openai/v1/audio/transcriptions";
 export const MODEL = "whisper-large-v3-turbo";       // a long clip, and when large-v3 is at its limit
 export const MODEL_FULL = "whisper-large-v3";        // a clip under FULL_SECS: the full model, the clearest
-export const FULL_SECS = 30;
+export const FULL_SECS = 60;     // up to this long (and the function takes no longer clip): the full model
 export const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const MAX_BYTES = 5 * 1024 * 1024, MAX_SECS = 60;
 const LANGS = new Set(["hi", "en", "auto"]);
@@ -60,8 +66,41 @@ const TYPES: Record<string, string> = {
   "audio/webm": "webm", "video/webm": "webm", "audio/ogg": "ogg", "audio/mp4": "m4a", "video/mp4": "m4a", "audio/x-m4a": "m4a", "audio/m4a": "m4a",
   "audio/aac": "m4a", "audio/wav": "wav", "audio/x-wav": "wav", "audio/wave": "wav",
 };
-export const FIRM_WORDS = ["Tally", "GST", "GSTR-1", "GSTR-3B", "TDS", "TCS", "ledger", "voucher", "invoice", "debit", "credit", "lakh", "crore", "rupees", "₹"];
-const PROMPT_CHARS = 640;   // about 200 tokens
+// the firm's words, the most said first (a full prompt keeps the first; those already in the sample sentence cost nothing):
+// Tally and its entries, GST and TDS, then banking and CMA (credit monitoring arrangement) words, then the rest
+export const FIRM_WORDS = ["Tally", "GST", "GSTR-1", "GSTR-3B", "TDS", "voucher", "ledger", "lakh", "crore", "rupees",
+  "CMA", "MPBF", "DSCR", "TOL/TNW", "drawing power", "working capital", "cash credit", "term loan", "projected balance sheet",
+  "GSTR-2B", "2B", "ITC", "26AS", "Form 16A", "e-way bill", "Day Book", "journal", "debit note", "credit note", "depreciation",
+  "provision", "TCS", "invoice", "balance sheet", "trial balance", "stock statement", "bank reconciliation", "sundry debtors",
+  "sundry creditors", "overdraft", "current ratio", "net worth", "ITR", "194C", "194J", "26Q"];
+// Whisper reads at most 224 tokens of the prompt (a longer one loses its start); a margin for a count that is a guess
+export const PROMPT_TOKENS = 215;
+// a cautious count of Whisper's tokens (byte pairs; checked against Whisper's own multilingual tokenizer, 14-Nov-2026: a
+// prompt of names and the firm's words counted 213-215 here was 153-179 there): a run of capitals 3 for every 4 (GST 2, MPBF 3),
+// another run of English letters one for every 3 (names split more than words), digits one for every 2, a mark one, a
+// letter of another script (Devanagari: 3 bytes) 2
+export function tokensOf(s: string): number {
+  let n = 0;
+  for (const m of String(s || "").matchAll(/[A-Za-z]+|[0-9]+|\s+|[^]/gu)) {
+    const t = m[0];
+    if (/^\s/.test(t)) continue;
+    n += /^[A-Z]{2,}$/.test(t) ? Math.ceil(t.length * 3 / 4) : /^[A-Za-z]/.test(t) ? Math.ceil(t.length / 3) : /^[0-9]/.test(t) ? Math.ceil(t.length / 2) : t.charCodeAt(0) < 128 ? 1 : 2;
+  }
+  return n;
+}
+// the open screen's title and section (?screen=, from the app): its words only, never an identifier or a long number;
+// at most 6 phrases of 40 characters
+export function screenPhrases(raw: string | null): string[] {
+  const out: string[] = [];
+  for (const part of String(raw || "").slice(0, 160).split(/\s*(?:·|›|»|\||>|\n)\s*/)) {
+    const words = part.split(/\s+/).filter((w) => w && !ID_PATTERNS.some(([, re]) => { re.lastIndex = 0; const hit = re.test(w); re.lastIndex = 0; return hit; }) && !/[0-9]{5,}/.test(w))
+      .map((w) => w.replace(/[^\p{L}\p{N}&/.-]+/gu, "")).filter((w) => /\p{L}/u.test(w));
+    const p = words.join(" ").slice(0, 40).trim();
+    if (p && !out.some((x) => x.toLowerCase() === p.toLowerCase())) out.push(p);
+    if (out.length >= 6) break;
+  }
+  return out;
+}
 export const FIRM_DAY_SECS = 120 * 60;   // 120 minutes of audio a firm a day
 export const FIRM_CAP_TEXT = "Today's voice-typing limit for your firm is used up; typing still works.";
 // the start of today in India (UTC+05:30), as an ISO time
@@ -73,44 +112,61 @@ export function istDayStart(now = Date.now()): string {
 export type Style = "hinglish" | "en" | "hi" | "list";
 const BANK = /\bbank\b/i, PARTY = /sundry|debtor|creditor|customer|supplier|vendor/i;
 const DEVA = /[\u0900-\u097F]/;
-// the words prompt: a short sample sentence in the chosen style, made of the client's own names and the firm's words,
-// then more names (biggest first) while they fit. Hinglish and English: names in English letters only.
-export function buildPrompt(names: Name[], style: Style = "list"): string {
-  const seen = new Set<string>(), list: { name: string, group: string }[] = [];
+// what else goes in the prompt: the open screen's title and section, the firm's client names
+export type More = { screen?: string[], clients?: string[] };
+// the words prompt: a short sample sentence in the chosen style (none for "list"), made of the client's own names and the
+// firm's words, then the rest by priority while they fit in PROMPT_TOKENS: first each group to its share of what the
+// sentence leaves (the client's biggest names a quarter, the screen's words a tenth, the firm's words two fifths, the
+// firm's clients a quarter), then whatever is left of the client's names, the firm's clients, the firm's words and the
+// screen. Written in a fixed order: the sentence, the firm's words, the screen, the names, the clients.
+// Hinglish and English: names in English letters only.
+export function buildPrompt(names: Name[], style: Style = "list", more: More = {}): string {
+  const seen = new Set<string>();
+  const clean = (raw: unknown) => String(raw || "").replace(/\s+/g, " ").trim().slice(0, 60);
+  const fits = (n: string) => n && /[a-z\u0900-\u097F]{2}/i.test(n) && (style === "list" || style === "hi" || !DEVA.test(n));
+  const list: { name: string, group: string }[] = [];
   for (const raw of names) {
-    const n = String(typeof raw === "string" ? raw : (raw && raw.name) || "").replace(/\s+/g, " ").trim().slice(0, 60);
-    const k = n.toLowerCase();
-    if (!n || seen.has(k) || !/[a-z\u0900-\u097F]{2}/i.test(n)) continue;
-    if (style !== "list" && style !== "hi" && DEVA.test(n)) continue;
+    const n = clean(typeof raw === "string" ? raw : raw && raw.name), k = n.toLowerCase();
+    if (!fits(n) || seen.has(k)) continue;
     seen.add(k); list.push({ name: n, group: typeof raw === "string" ? "" : String(raw.group || "") });
   }
-  if (style === "list") {
-    let p = FIRM_WORDS.join(", ") + ".";
-    for (const { name: n } of list) {
-      if (p.length + n.length + 2 > PROMPT_CHARS) { if (p.length > PROMPT_CHARS - 12) break; continue; }
-      p += " " + n + ",";
-    }
-    return p.replace(/,$/, ".");
-  }
   // the sample sentence: the client (the first name), a bank, a party
+  let head = "";
   const used = new Set<string>();
-  const take = (f: (x: { name: string, group: string }) => boolean) => { const x = list.find((y) => !used.has(y.name) && f(y)); if (x) used.add(x.name); return x ? x.name : ""; };
-  const client = take(() => true), bank = take((x) => BANK.test(x.name)), party = take((x) => PARTY.test(x.group)) || take((x) => !BANK.test(x.name));
-  const S = {
-    hinglish: [(client || "Client") + " ke liye " + (bank || "bank") + " se " + (party || "party") + " ko 1 lakh 25 hazaar rupees ka payment, TDS 194J kata, GSTR-1 aur GSTR-3B file karna hai, Tally mein voucher entry karo.",
-      " Ledger, invoice, debit, credit, GST, TCS, 2 crore:"],
-    en: ["For " + (client || "the client") + ", a payment of 1 lakh 25 thousand rupees from " + (bank || "the bank") + " to " + (party || "the party") + ", TDS 194J deducted; file GSTR-1 and GSTR-3B, and pass the voucher entry in Tally.",
-      " Ledger, invoice, debit, credit, GST, TCS, 2 crore:"],
-    hi: [(client || "क्लाइंट") + " के लिए " + (bank || "बैंक") + " से " + (party || "पार्टी") + " को 1 लाख 25 हज़ार rupees का payment, TDS 194J कटा, GSTR-1 और GSTR-3B file करना है, Tally में voucher entry करो।",
-      " Ledger, invoice, debit, credit, GST, TCS, 2 crore, lakh:"],
-  }[style];
-  let p = S[0] + S[1];
-  for (const { name: n } of list) {
-    if (used.has(n)) continue;
-    if (p.length + n.length + 2 > PROMPT_CHARS) { if (p.length > PROMPT_CHARS - 12) break; continue; }
-    p += " " + n + ",";
+  if (style !== "list") {
+    const take = (f: (x: { name: string, group: string }) => boolean) => { const x = list.find((y) => !used.has(y.name) && f(y)); if (x) used.add(x.name); return x ? x.name : ""; };
+    const client = take(() => true), bank = take((x) => BANK.test(x.name)), party = take((x) => PARTY.test(x.group)) || take((x) => !BANK.test(x.name));
+    head = {
+      hinglish: (client || "Client") + " ke liye " + (bank || "bank") + " se " + (party || "party") + " ko 1 lakh 25 hazaar rupees ka payment, TDS 194J kata, GSTR-1 aur GSTR-3B file karna hai, Tally mein voucher entry karo.",
+      en: "For " + (client || "the client") + ", a payment of 1 lakh 25 thousand rupees from " + (bank || "the bank") + " to " + (party || "the party") + ", TDS 194J deducted; file GSTR-1 and GSTR-3B, and pass the voucher entry in Tally.",
+      hi: (client || "क्लाइंट") + " के लिए " + (bank || "बैंक") + " से " + (party || "पार्टी") + " को 1 लाख 25 हज़ार rupees का payment, TDS 194J कटा, GSTR-1 और GSTR-3B file करना है, Tally में voucher entry करो।",
+    }[style];
   }
-  return p.replace(/[,:]$/, ".");
+  const inHead = head.toLowerCase();
+  const fresh = (w: string) => { const k = w.toLowerCase(); if (!w || seen.has(k + "\u0000") || (head && new RegExp("(^|[^a-z0-9])" + k.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&") + "($|[^a-z0-9])").test(inHead))) return false; seen.add(k + "\u0000"); return true; };
+  let total = tokensOf(head);
+  const left = Math.max(0, PROMPT_TOKENS - total);
+  // the groups, by priority, each with its first share of the budget
+  const groups: { items: string[], cap: number, got: string[], used: number }[] = [
+    { items: list.filter((x) => !used.has(x.name)).map((x) => x.name), cap: left * 0.25, got: [], used: 0 },           // 0: the client's names
+    { items: (more.screen || []).map(clean).filter((x) => x && (style !== "en" && style !== "hinglish" || !DEVA.test(x))), cap: left * 0.1, got: [], used: 0 },   // 1: the screen
+    { items: FIRM_WORDS.slice(), cap: left * 0.4, got: [], used: 0 },                                               // 2: the firm's words
+    { items: (more.clients || []).map(clean).filter((x) => fits(x) && !seen.has(x.toLowerCase())), cap: left * 0.25, got: [], used: 0 },   // 3: the firm's clients
+  ];
+  const room = (g: typeof groups[0], capped: boolean) => {
+    const rest: string[] = [];
+    for (const w of g.items) {
+      const t = tokensOf(w) + 1;      // and its comma
+      if (total + t > PROMPT_TOKENS || (capped && g.used + t > g.cap)) { rest.push(w); continue; }
+      if (!fresh(w)) continue;
+      g.got.push(w); g.used += t; total += t;
+    }
+    g.items = rest;
+  };
+  for (const g of groups) room(g, true);
+  for (const i of [0, 3, 2, 1]) room(groups[i], false);
+  const body = [...groups[2].got, ...groups[1].got, ...groups[0].got, ...groups[3].got].join(", ");
+  return ((head ? head + (body ? " " : "") : "") + body + (body ? "." : "")).trim();
 }
 
 // the optional AI step: only names and the firm's words; the answer is the corrected words alone
@@ -198,7 +254,8 @@ export function handler(deps: Deps & { now?: () => number }) {
     const u = new URL(req.url);
     const lang = String(u.searchParams.get("lang") || "auto").toLowerCase();
     const verbose = u.searchParams.get("verbose") === "1";
-    const latin = u.searchParams.get("latin") === "1" && lang === "auto" && !verbose;       // Hinglish: the words in English letters
+    // Hinglish: the words in English letters (auto-detected, or heard as Hindi once the app saw Hindi words)
+    const latin = u.searchParams.get("latin") === "1" && (lang === "auto" || lang === "hi") && !verbose;
     if (!LANGS.has(lang)) { await drop(); return reply(400, { ok: false, kind: "lang", error: "The language must be hi, en or auto." }); }
     const secs = Math.max(0, Number(u.searchParams.get("secs")) || 0);
     if (secs > MAX_SECS) { await drop(); return reply(413, { ok: false, kind: "length", error: "A clip may be at most 60 seconds." }); }
@@ -209,13 +266,16 @@ export function handler(deps: Deps & { now?: () => number }) {
     // the client: one of the firm's (read as the user: row-level security)
     const clientId = u.searchParams.get("client") ? String(u.searchParams.get("client")).slice(0, 120) : null;
     const names: Name[] = [], firmClients: string[] = [];
+    const screen = screenPhrases(u.searchParams.get("screen"));
     if (clientId) {
       const c = (await rest("/rest/v1/clients?select=id,name,deleted&id=eq." + encodeURIComponent(clientId), jwt).catch(() => [])) as any[];
       if (!c || !c.length || c[0].deleted) return reply(403, { ok: false, kind: "client", error: "This client is not one of your firm's." });
       names.push(String(c[0].name || ""));
-      // the firm's other clients (read as the user: row-level security), for the names said
-      try { for (const x of ((await rest("/rest/v1/clients?select=name&deleted=not.is.true&limit=2000", jwt)) as any[] || [])) firmClients.push(String(x.name || "")); } catch { /* the client's own names */ }
-      // its ledgers and parties, the biggest first (the caller's firm only; never a deleted or merged one)
+    }
+    // the firm's clients (read as the user: row-level security), for the names said: always, a client open or not
+    try { for (const x of ((await rest("/rest/v1/clients?select=name&deleted=not.is.true&limit=2000", jwt)) as any[] || [])) firmClients.push(String(x.name || "")); } catch { /* the client's own names */ }
+    // its ledgers and parties, the biggest first (the caller's firm only; never a deleted or merged one)
+    if (clientId) {
       try {
         const books = ((await rest("/rest/v1/tally_books?select=book_id&firm_id=eq." + firm + "&client_id=eq." + encodeURIComponent(clientId), SERVICE)) as any[] || []).map((b) => String(b.book_id)).filter((b) => /^[0-9a-f-]{36}$/i.test(b));
         if (books.length) {
@@ -241,11 +301,13 @@ export function handler(deps: Deps & { now?: () => number }) {
 
     const key = await groqKey();
     if (!key) { await log(["nokey"], [MODEL], 0); return reply(503, { ok: false, kind: "nokey", error: "Clearer listening is not set up yet." }); }
-    const style: Style = lang === "en" ? "en" : lang === "hi" ? "hi" : latin ? "hinglish" : "list";
-    const prompt = buildPrompt(names, style);
+    const style: Style = latin ? "hinglish" : lang === "en" ? "en" : lang === "hi" ? "hi" : "list";
+    const prompt = buildPrompt(names, style, { screen, clients: firmClients });
     // the full model for a short clip; turbo for a long one, or when the full model is at its limit
-    let model = secs > 0 && secs < FULL_SECS ? MODEL_FULL : MODEL;
+    let model = secs > 0 && secs <= FULL_SECS ? MODEL_FULL : MODEL;
     let r = await groq(key, model, audio, ext, type, lang, prompt, verbose);
+    // a prompt Groq refuses (400: too long by its own count): the clip once more with the sample sentence alone
+    if (r && r.status === 400) { await r.body?.cancel(); r = await groq(key, model, audio, ext, type, lang, buildPrompt([], style), verbose); }
     if (r && r.status === 429 && model === MODEL_FULL) { await r.body?.cancel(); model = MODEL; r = await groq(key, model, audio, ext, type, lang, prompt, verbose); }
     if (!r) { await log(["error"], [model], 1); return reply(502, { ok: false, kind: "error", error: "Clearer listening could not be reached." }); }
     if (r.status === 429) { await r.body?.cancel(); await log(["limit"], [model], 1); return reply(429, { ok: false, kind: "limit", error: "Today's limit for clearer listening is reached." }); }

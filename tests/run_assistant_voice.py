@@ -115,7 +115,8 @@ with sync_playwright() as p:
     ok(pg.locator("[data-asst-panel] [data-asst-mic]").count() == 1, "the mic is in the question box's bar")
     opts = pg.evaluate("Array.from(document.querySelectorAll('[data-asst-lang] option')).map(o => [o.value, o.textContent])")
     codes = [o[0] for o in opts]
-    ok(codes[:3] == ["en-IN", "hi-IN", "hinglish"] and all(c in codes for c in ["mr-IN", "gu-IN", "bn-IN", "ta-IN", "te-IN", "kn-IN", "ml-IN", "pa-IN"]), "the languages: English, Hindi, Hinglish and 8 regional (%s)" % opts)
+    ok(codes[:4] == ["auto", "en-IN", "hi-IN", "hinglish"] and all(c in codes for c in ["mr-IN", "gu-IN", "bn-IN", "ta-IN", "te-IN", "kn-IN", "ml-IN", "pa-IN"]), "the languages: Hinglish · auto (the default, next-fix-voice), English, Hindi, Hinglish and 8 regional (%s)" % opts)
+    ok(pg.evaluate("document.querySelector('[data-asst-lang]').value") == "auto", "nothing chosen: Hinglish · auto")
     ok(dict(opts).get("hi-IN") == "हिन्दी" and dict(opts).get("ta-IN") == "தமிழ்", "each language named in its own script")
     pg.fill("#asstQ", "")
     pg.click("[data-asst-mic]"); pg.wait_for_timeout(200)

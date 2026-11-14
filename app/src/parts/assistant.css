@@ -284,6 +284,10 @@ html { scroll-padding-bottom: max(calc(150px + var(--bottom-banner-h, 0px)), var
 .asst-voice { display: inline-flex; align-items: center; gap: 2px; flex: 0 0 auto; }
 .asst-panel .asst-mic { position: relative; width: 32px; height: 32px; padding: 0; justify-content: center; }
 .asst-panel .asst-mic.on { color: var(--danger); background: color-mix(in oklab, var(--danger) 10%, transparent); }
+/* hold to talk (off by default): the mic is held, so no text selection or long-press menu; the small hand turns it on */
+.asst-mic.hold { touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.asst-voice .asst-hold { width: 24px; height: 28px; padding: 0; justify-content: center; color: var(--text-secondary); }
+.asst-voice .asst-hold.on { color: var(--accent); background: var(--accent-subtle); }
 .asst-mic-pulse { position: absolute; inset: 2px; border-radius: 50%; border: 2px solid color-mix(in oklab, var(--danger) 55%, transparent); animation: asst-ring 1.4s ease-out infinite; }
 @keyframes asst-ring { 0% { transform: scale(.75); opacity: 1; } 100% { transform: scale(1.25); opacity: 0; } }
 .asst-panel select.asst-lang { field-sizing: content; width: auto; height: 28px; max-width: 110px; min-width: 0; padding: 0 22px 0 6px; background-position: calc(100% - 13px) 55%, calc(100% - 8px) 55%; border: 1px solid transparent; border-radius: var(--radius-control); background-color: transparent;
