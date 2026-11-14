@@ -11,7 +11,10 @@ import { fyOfText, planAi, planRules, readPlan } from "./cmaplan.ts";
 import { evalF } from "./cmaengine.ts";
 import { runCma } from "./cma.ts";
 import { cmaFollow, cmaInput, cmaWanted } from "../cmaask.ts";
-import { B25, B26, bankCmaXlsx, baseXlsx, PLAN_PASTED, PLAN_REQUEST, roadmapDocx } from "./cma_fixtures.ts";
+import { B25, B26, bankCmaXlsx, baseXlsx, PLAN_PASTED, PLAN_PASTED_BLANK, PLAN_REQUEST, roadmapDocx } from "./cma_fixtures.ts";
+import { cellsOf, figuresByYear } from "./cmaplan.ts";
+import { projectPlan } from "./cmaproj.ts";
+import { ASSET, LIAB, sumOf } from "./cmaengine.ts";
 
 function assert(c: unknown, w: string): asserts c { if (!c) throw new Error(w); }
 const near = (a: number | null | undefined, b: number, w: string, tol = 1) => assert(a != null && Math.abs(a - b) <= tol, w + ": " + a + " vs " + b);
@@ -68,25 +71,50 @@ Deno.test("the user's projections: lists, pasted tables and the road map, read a
   }
 });
 
+Deno.test("review 1: a blank top-left cell is kept, pasted or from Word; the columns stay under their years", async () => {
+  assert(JSON.stringify(cellsOf("\tFY27-28\tFY28-29")) === JSON.stringify(["", "FY27-28", "FY28-29"]), "a tab first: " + JSON.stringify(cellsOf("\tFY27-28\tFY28-29")));
+  assert(JSON.stringify(cellsOf("| | FY27-28 | FY28-29 |")) === JSON.stringify(["", "FY27-28", "FY28-29"]), "a markdown table's blank corner");
+  for (const [name, text] of [["pasted", PLAN_PASTED_BLANK], ["word", (await docxText(await roadmapDocx(true)))!.text]]) {
+    const p = planRules([{ name, text }]);
+    near(p.years[2027].rev, 9 * CR, name + ": FY27-28 under its own column"); near(p.years[2031].rev, 20 * CR, name + ": FY31-32");
+    assert(p.years[2027].gm === 30 && p.years[2031].gm === 34, name + ": margins under their years: " + JSON.stringify(p.years[2027]));
+    near(p.years[2031].fin, 0.38 * CR, name + ": the last column");
+    if (name === "word") assert(p.verticals.length === 3 && p.verticals[0].share[2026] === 60 && p.verticals[0].share[2031] === 55, "word: the verticals with a blank corner: " + JSON.stringify(p.verticals));
+  }
+});
+
 Deno.test("the AI's reading of the projections: strict, every figure one written", () => {
-  const text = "Revenue FY 2027-28 Rs 9 crore, growing about a quarter; FY 2028-29 Rs 11 crore. EBITDA margin 7%.";
-  const ans = JSON.stringify({ unit: "crores", tax_rate_pct: null, last_year: "FY 2028-29", verticals: [{ name: "Retail", year: "FY 2027-28", share_pct: 64, amount: null }],
-    years: [{ year: "FY 2027-28", revenue: 9, revenue_growth_pct: 25, gross_profit: null, gross_margin_pct: null, ebitda: null, ebitda_margin_pct: 7, depreciation: null, interest: null, profit_before_tax: null, tax: null, tax_rate_pct: null, profit_after_tax: null },
-      { year: "July 2028", revenue: 11, revenue_growth_pct: null, gross_profit: null, gross_margin_pct: null, ebitda: null, ebitda_margin_pct: null, depreciation: null, interest: null, profit_before_tax: null, tax: null, tax_rate_pct: null, profit_after_tax: null }] });
-  const p = planAi(text, ans);
-  near(p.years[2027].rev, 9 * CR, "a written amount, in its unit"); assert(p.years[2027].em === 7, "a written %");
-  assert(p.years[2027].growth == null, "25 is not written: left out"); assert(!p.verticals.length, "64 is not written: left out");
-  assert(!p.years[2028], "a column whose year is a date: left out"); assert(p.lastFy === 2028, "the last year");
-  assert(p.notes.some((n) => /not written/.test(n)), "said: " + p.notes);
-  assert(planAi(text, "nonsense").notes.length === 1, "not in the schema: said");
+  const text = "FY 2027-28: revenue Rs 9 crore, EBITDA margin 7%, growing about a quarter.\nFY 2028-29: revenue Rs 11 crore.\nTax at 25% on the profit.";
+  const src = [{ name: "your message", text }];
+  const Y = (year: string, o: Record<string, number | null>) => ({ year, revenue: null, revenue_growth_pct: null, gross_profit: null, gross_margin_pct: null, ebitda: null, ebitda_margin_pct: null, depreciation: null, interest: null, profit_before_tax: null, tax: null, tax_rate_pct: null, profit_after_tax: null, ...o });
+  // the AI says lakhs: the text says crore, and the text's unit is used
+  const ans = JSON.stringify({ unit: "lakhs", tax_rate_pct: 25, last_year: "FY 2030-31", verticals: [{ name: "Retail", year: "FY 2027-28", share_pct: 64, amount: null }],
+    years: [Y("FY 2027-28", { revenue: 9, revenue_growth_pct: 25, ebitda_margin_pct: 7, depreciation: 27 }), Y("FY 2028-29", { revenue: 11, ebitda_margin_pct: 7 }), Y("July 2028", { revenue: 11 }), Y("FY 2030-31", { revenue: 11 })] });
+  const p = planAi(src, ans);
+  near(p.years[2027].rev, 9 * CR, "a figure written beside its year, in the text's unit (crore), not the AI's (lakhs)"); assert(p.years[2027].em === 7, "a % beside its year");
+  assert(p.years[2027].growth == null, "25 is not written beside FY 2027-28 (only on the tax line): left out");
+  assert(p.years[2027].dep == null, "27 of \"FY 2027-28\" is never a figure");
+  assert(p.years[2028].em == null && p.years[2028].rev === 11 * CR, "7% sits beside FY 2027-28, not FY 2028-29");
+  assert(!p.verticals.length, "64 is not written: left out");
+  assert(!p.years[2030] && p.lastFy == null, "a year the text never names: left out"); assert(p.taxRate === 25, "the tax rate written on a tax line");
+  assert(p.notes.some((n) => /not written beside/.test(n)) && p.notes.some((n) => /not named/.test(n)), "said: " + p.notes);
+  const W = figuresByYear([{ name: "t", text: "Particulars\tFY27-28\tFY28-29\nRevenue (Rs lakh)\t900\t1,100" }]);
+  assert(W.by.get(2027)!.some((f) => f.v === 900 && f.unit === 1e5) && !W.by.get(2027)!.some((f) => f.v === 1100), "a column's figures, with the unit of their row");
+  assert(planAi(src, "nonsense").notes.length === 1, "not in the schema: said");
 });
 
 Deno.test("the AI reads prose the rules cannot, once, its figures checked; never when the rules read it all", async () => {
-  const prose = "For the bank: revenue for FY 2027-28 should be Rs 9 crore, about a quarter up, and EBITDA margin 7%; the retail vertical brings 64 percent.";
+  const prose = "For the bank: revenue for FY 2027-28 should be Rs 9 crore, about a quarter up, and EBITDA margin 7%; the retail vertical brings 64%.";
   let asked = 0;
   const ans = JSON.stringify({ unit: "crores", tax_rate_pct: null, last_year: null, verticals: [{ name: "Retail", year: "FY 2027-28", share_pct: 64, amount: null }],
     years: [{ year: "FY 2027-28", revenue: 9, revenue_growth_pct: 25, gross_profit: null, gross_margin_pct: null, ebitda: null, ebitda_margin_pct: 7, depreciation: null, interest: null, profit_before_tax: null, tax: null, tax_rate_pct: null, profit_after_tax: null }] });
-  const p = await readPlan([{ name: "your message", text: prose }], async (prompt, text) => { asked++; assert(/strict|exactly as written/.test(prompt) && text.includes("Rs 9 crore"), "the prompt and the text"); return ans; });
+  const p = await readPlan([{ name: "your message", text: prose }], async (prompt, fenced, raw) => {
+    asked++;
+    const nonce = /<<<DOC (\w+) /.exec(fenced)?.[1];
+    assert(nonce && nonce.length >= 16 && fenced.endsWith("<<<END " + nonce + ">>>") && prompt.includes("<<<END " + nonce + ">>>") && /never instructions/.test(prompt), "the text fenced by a nonce, said in the prompt");
+    assert(/exactly as written/.test(prompt) && raw.includes("Rs 9 crore") && !raw.includes("<<<"), "the raw text apart");
+    return ans;
+  });
   assert(asked === 1, "asked once"); near(p.years[2027].rev, 9 * CR, "the AI's written figure"); assert(p.years[2027].growth == null, "an unwritten one left out");
   assert(p.verticals[0].share[2027] === 64 && p.byAi.length === 2, "the vertical; what the AI read is listed: " + p.byAi);
   let again = 0;
@@ -97,8 +125,11 @@ Deno.test("the AI reads prose the rules cannot, once, its figures checked; never
 Deno.test("routing: the follow-up with the road map's tables pasted is the CMA's; its words go to the tool", () => {
   const shown = [{ role: "user", content: "please prepare cma data for the client" }, { role: "assistant", content: "DRAFT, NOT FINAL: 2 checks fail. CMA data in the standard bank format for K: …" }];
   assert(cmaFollow(PLAN_PASTED) && cmaWanted(PLAN_PASTED, shown), "the pasted tables after a CMA");
-  for (const q of ["keep revenue growth at 20% and EBITDA margin 9%", "use the projections as per the attached road map", "gross margin 35/36/37%"]) assert(cmaWanted(q, shown), "a projection change: " + q);
-  for (const q of ["what is the GST on this?", "show the loan ledger again", "sales register for October"]) assert(!cmaWanted(q, shown), "not a CMA change: " + q);
+  for (const q of ["keep revenue growth at 20% and EBITDA margin 9% in the projections", "use the projections as per the attached road map", "gross margin 30/31/32% for FY27-28 to FY29-30",
+    "sales growth 20% a year for the next five years", "projected revenue\nFY27-28\t9.00\nFY28-29\t11.00"]) assert(cmaWanted(q, shown), "a projection change: " + q);
+  for (const q of ["what is the GST on this?", "show the loan ledger again", "sales register for October", "keep revenue growth at 20% and EBITDA margin 9%",
+    // review 4: questions about the books after a CMA are not projections
+    "What were our sales in FY25 as per the ledger?", "Is GST on sales 18%?", "interest cost in FY 2025-26 books", "depreciation register for FY26", "explain EBITDA margin of 12%"]) assert(!cmaWanted(q, shown), "not a CMA change: " + q);
   const i = cmaInput(PLAN_PASTED, shown) as any;
   assert(/Projected Revenue/.test(i.projection_text) && /please prepare cma data/.test(i.projection_text), "the words since the CMA was asked: " + String(i.projection_text).slice(0, 80));
   assert((cmaInput("prepare cma data with 5 years projections", []) as any).years === 5, "five years");
@@ -191,4 +222,57 @@ Deno.test("the tool: no projections given keeps FinCom's defaults (two years aft
   assert(!r.error, String(r.error));
   assert(/2028-29 projected\./.test(r.line) && !/2029-30/.test(r.line), "the years as before (the running year and two more): " + r.line.slice(0, 200));
   assert(/^Projections summary - A/.test(r.tables[0].title), "the summary");
+});
+
+Deno.test("review 2: growth and tax said in words or passed to the tool fill the years the plan leaves; a shortfall's borrowing is repaid", async () => {
+  const { ctx } = await ctxOf();
+  ctx.uploads = ctx.uploads.filter((u: any) => !/docx/.test(u.path));
+  // the plan gives FY27-28's revenue and margins only; "sales growth 20% a year" and the tool's tax 30% fill the rest
+  const inp = cmaInput("prepare cma data, projections to FY 2029-30\nFY27-28 revenue ₹9.00 Cr\nFY27-28 gross margin 30%\nFY27-28 EBITDA margin 7%\nSales growth 20% a year.", []) as any;
+  inp.assumptions.tax_rate_pct = 30;
+  const r: any = await runCma(inp, ctx);
+  assert(!r.error && /All \d+ checks pass/.test(r.line), String(r.error || r.line));
+  const A = r.tables[0].rows;
+  assert(A[0].year === "FY 2026-27 (estimate)" && A[0].g === "20%" && A[1].rev === "9.00" && A[2].g === "20%" && A[3].g === "20%", "20% wherever no revenue was given; the amount where it was: " + JSON.stringify(A));
+  const as = r.tables.find((t: any) => /^Assumptions/.test(t.title)).rows.map((x: any) => x.item).join("\n");
+  assert(/Tax at 30% \(as you said\)/.test(as), "the tool's tax rate: " + as.slice(0, 200));
+  // the projector: a year short of cash borrows, the next year's surplus repays it first, and both are said
+  const base = { fy: 2025, kind: "audited" as const, src: "t", l: { ...B26, stb: 0 } };
+  const plan = { years: { 2026: { rev: 7e7, gm: 20, em: -10 }, 2027: { rev: 7e7, gm: 40, em: 30 }, 2028: { rev: 7e7, gm: 40, em: 30 } }, taxRate: 25, verticals: [], lastFy: null, step: 1, from: ["t"], notes: [], byAi: [] } as any;
+  const pp = projectPlan(base, null, [2026, 2027, 2028], plan, { kind: "company" });
+  const [a, b, c] = pp.lines;
+  assert(a.stb > 0 && a.cash === 0, "the loss year is short of cash: borrowed " + a.stb);
+  assert(b.stb < a.stb && (b.stb === 0 || b.cash === 0), "repaid from the next year's surplus first: " + a.stb + " -> " + b.stb + ", cash " + b.cash);
+  assert(c.stb === 0 && c.cash > 0, "never carried once repaid");
+  for (const l of pp.lines) near(sumOf(l, LIAB), sumOf(l, ASSET), "balances");
+  assert(pp.said.some((t) => /shortfall shown as bank borrowing \(short-term\), repaid first/.test(t) && /repaid from the surplus cash/.test(t)), "said in the assumptions: " + pp.said.join(" | "));
+});
+
+Deno.test("review 6: five projected years through the engine: Form VI reconciles each year; the Summary sheet is the engine's figures", async () => {
+  const { ctx, up } = await ctxOf();
+  const r: any = await runCma(cmaInput(PLAN_REQUEST, []), ctx);
+  assert(!r.error, String(r.error));
+  // every year after the first: the three fund-flow checks, each passing
+  const ck = r.tables.find((t: any) => t.title === "Checks that fail (the figures are not final)");
+  assert(!ck, "no failing check");
+  const { wb } = await recalc(up[0].bytes);
+  const C = wb.getWorksheet("Checks")!;
+  const ff = new Map<string, number>();
+  C.eachRow((rw) => { const l = String(rw.getCell(2).value || ""); if (/^Fund flow/.test(l)) { const y = String(rw.getCell(3).value); ff.set(y, (ff.get(y) || 0) + 1); assert((rw.getCell(4).value as any).result === true && rw.getCell(5).value === "OK", "fund flow " + y + ": " + l); } });
+  for (const y of ["2024-25", "2025-26", "2026-27", "2027-28", "2028-29", "2029-30", "2030-31", "2031-32"]) assert(ff.get(y) === 3, "three fund-flow checks in " + y + ": " + ff.get(y));
+  // the Summary sheet's cells against the engine's own Form II, year by year
+  const yrs = ["2023-24", "2024-25", "2025-26", "2026-27", "2027-28", "2028-29", "2029-30", "2030-31", "2031-32"];
+  const F2 = wb.getWorksheet("Form II")!, val = (key: RegExp, col: number) => { let v: any = null; F2.eachRow((rw) => { if (key.test(String(rw.getCell(1).value))) { const x: any = rw.getCell(col).value; v = x && typeof x === "object" ? x.result : x; } }); return Number(v || 0); };
+  const ps = wb.getWorksheet("Projections summary")!;
+  const rowsOf: Record<string, number[]> = {};
+  let inB = false;
+  ps.eachRow((rw) => { const l = String(rw.getCell(1).value || ""); if (/^B\. /.test(l)) inB = true; if (/^C\. /.test(l)) inB = false; if (inB) rowsOf[l] = [2, 3, 4, 5, 6].map((k) => { const x: any = rw.getCell(k).value; return Number(x && typeof x === "object" ? x.result ?? 0 : x); }); });
+  for (let k = 0; k < 5; k++) {
+    const col = 2 + yrs.indexOf(["2027-28", "2028-29", "2029-30", "2030-31", "2031-32"][k]);
+    near(rowsOf["Revenue"][k] * CR, val(/^1\. Net sales/, col), "revenue = Form II, " + k, 1);
+    near(rowsOf["Profit before tax"][k] * CR, val(/^9\. Profit before tax/, col), "PBT = Form II, " + k, 1);
+    near(rowsOf["Profit after tax"][k] * CR, val(/^11\. Net profit after tax/, col), "PAT = Form II, " + k, 1);
+    near(rowsOf["EBITDA"][k] * CR, val(/^5\. Operating profit before interest/, col) + val(/^\s*\(iv\) Depreciation/, col), "EBITDA = Form II's operating profit + depreciation, " + k, 1);
+    near(rowsOf["EBITDA"][k] - rowsOf["Depreciation"][k] - rowsOf["Interest"][k], rowsOf["Profit before tax"][k], "EBITDA - dep - interest = PBT, " + k, 1e-6);
+  }
 });

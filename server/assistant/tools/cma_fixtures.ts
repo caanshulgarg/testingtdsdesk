@@ -142,7 +142,8 @@ export const ROADMAP_A: [string, string, string][] = [["FY 2026–27 (Base)", "�
 export const ROADMAP_B: string[][] = [["Particulars", "FY27–28", "FY28–29", "FY29–30", "FY30–31", "FY31–32"], ["Revenue", "9.00", "11.00", "13.50", "16.50", "20.00"], ["Gross Profit", "2.70", "3.41", "4.32", "5.45", "6.80"],
   ["Gross Margin", "30%", "31%", "32%", "33%", "34%"], ["EBITDA", "0.63", "0.83", "1.08", "1.49", "2.00"], ["EBITDA Margin", "7%", "7.5%", "8%", "9%", "10%"], ["Depreciation", "0.20", "0.22", "0.25", "0.28", "0.30"],
   ["Interest Cost (Assumed)", "0.30", "0.32", "0.34", "0.36", "0.38"], ["Profit Before Tax", "0.13", "0.29", "0.49", "0.85", "1.32"], ["Estimated Tax", "0.03", "0.07", "0.12", "0.21", "0.33"], ["Estimated PAT", "0.10", "0.21", "0.37", "0.63", "0.99"]];
-export async function roadmapDocx(): Promise<Uint8Array> {
+// (blank: the tables' top-left cells left empty, as Word tables and pasted tables often have them)
+export async function roadmapDocx(blank = false): Promise<Uint8Array> {
   const { Document, Packer, Paragraph, Table, TableCell, TableRow, TextRun } = await import("npm:docx@9.7.2");
   const P = (t: string) => new Paragraph({ children: [new TextRun(t)] });
   const T = (rows: string[][]) => new Table({ rows: rows.map((r) => new TableRow({ children: r.map((c) => new TableCell({ children: [P(c)] })) })) });
@@ -151,9 +152,9 @@ export async function roadmapDocx(): Promise<Uint8Array> {
     T([["Founded", "July 2018"], ["Current annual revenue", "₹7.2 Crore"], ["Plant", "Pune"]]),
     P("Phase 1: Consolidation (FY 2027–28)"), P("Target revenue: ₹9.00 crore"), P("Phase 5: National scale (FY 2031–32)"), P("The projected revenue of ₹20 crore by FY 2031–32 reflects the company's growth ambition."),
     P("A. Revenue Growth Projection"), T([["Financial Year", "Projected Revenue", "Annual Growth"], ...ROADMAP_A]),
-    P("B. Indicative Profitability Projections"), T(ROADMAP_B),
+    P("B. Indicative Profitability Projections"), T(blank ? [["", ...ROADMAP_B[0].slice(1)], ...ROADMAP_B.slice(1)] : ROADMAP_B),
     P("C. Revenue Contribution by Business Vertical"), P("Indicative targeted revenue mix:"),
-    T([["Business Vertical", "FY 2026–27", "FY 2031–32"], ["Showroom & Web Sales", "60%", "55%"], ["Contract Projects", "30%", "30%"], ["Dealer Network", "10%", "15%"], ["Total", "100%", "100%"]]),
+    T([[blank ? "" : "Business Vertical", "FY 2026–27", "FY 2031–32"], ["Showroom & Web Sales", "60%", "55%"], ["Contract Projects", "30%", "30%"], ["Dealer Network", "10%", "15%"], ["Total", "100%", "100%"]]),
     P("We request the bank to renew our working capital limits."),
   ] }] });
   return new Uint8Array(await Packer.toBuffer(doc));
@@ -177,3 +178,5 @@ C. Revenue contribution by business vertical, from the road map.`;
 // and as the owner pasted it: the road map's tables copied into the chat (tabs between the cells)
 export const PLAN_PASTED = "use these sales and margins for the projections A. Revenue Growth Projection\nFinancial Year\tProjected Revenue\tAnnual Growth\n" + ROADMAP_A.map((r) => r.join("\t")).join("\n") +
   "\nB. Indicative Profitability Projections\n" + ROADMAP_B.map((r) => r.join("\t")).join("\n") + "\n\nC. Revenue Contribution by Business Vertical\nThe company intends to diversify its revenue base.";
+// the profitability table pasted with its top-left cell empty (a tab first)
+export const PLAN_PASTED_BLANK = "use these figures for the projections (₹ crore)\n" + ["\t" + ROADMAP_B[0].slice(1).join("\t"), ...ROADMAP_B.slice(1).map((r) => r.join("\t"))].join("\n");

@@ -13,7 +13,7 @@
 //   - the balance sheet: receivables, stock and creditors at the base year's days; the net block plus the capital
 //     expenditure less the depreciation (with depreciation given and no capex, the capex is the depreciation, said);
 //     the profit to reserves (or capital); term loans less their repayment; everything else as at the base; cash and bank
-//     the balancing figure, a shortfall shown as bank borrowing. The balance sheet balances by construction, and the forms'
+//     the balancing figure, a shortfall borrowed from the bank and repaid first from later surplus cash. The balance sheet balances by construction, and the forms'
 //     own checks (cmaengine.ts) test it and the fund flow again.
 // Plain module.
 import { CYear, Lines, LIAB, ASSET, sumOf } from "./cmaengine.ts";
@@ -64,7 +64,8 @@ export function projectPlan(base: CYear, prev: CYear | null, fys: number[], plan
   const depGiven = Object.values(plan.years).some((y) => y.dep != null);
 
   const out: Lines[] = [];
-  let lastG = g0;
+  let lastG = g0, extra = 0;
+  const gapSaid: string[] = [];
   const revSaid: string[] = [], from: Record<string, string[]> = {};
   const note = (k: string, t: string) => { (from[k] ||= []).push(t); };
   for (let i = 0; i < fys.length; i++) {
@@ -126,8 +127,11 @@ export function projectPlan(base: CYear, prev: CYear | null, fys: number[], plan
     l.ltb = g(p, "ltb") + at(o.newLoans, i) - repaid;
     l.tr = rev * trD / 365; l.inv = l.mat * invD / 365; l.tp = (l.mat + l.exp) * tpD / 365;
     l[toCap] = g(p, toCap) + pat - at(o.div, i);
+    // cash is the balancing figure: a shortfall is borrowed from the bank, and that borrowing is repaid first from a later
+    // year's surplus cash (never carried for ever); the bank borrowings of the base year stay as they were
     let cash = sumOf(l, LIAB) - sumOf(l, ASSET.filter((k) => k !== "cash"));
-    if (cash < 0) { l.stb = g(l, "stb") - cash; cash = 0; }
+    if (cash < 0) { l.stb = g(l, "stb") - cash; extra += -cash; gapSaid.push(fyL(fy) + " short by " + cr(-cash) + ", borrowed"); cash = 0; }
+    else if (extra > 0 && cash > 0) { const r = Math.min(extra, cash); l.stb = g(l, "stb") - r; extra -= r; cash -= r; gapSaid.push(fyL(fy) + " " + cr(r) + " of it repaid from the surplus cash"); }
     l.cash = cash;
     out.push(l);
   }
@@ -136,11 +140,14 @@ export function projectPlan(base: CYear, prev: CYear | null, fys: number[], plan
   said.push("Gross margin (revenue less the cost of materials and goods) " + (from.gm ? "as you gave it, and for the years not given: " + from.gm.join("; ") : "as you gave it") + ".");
   said.push("EBITDA margin " + (from.em ? "as you gave it, and for the years not given: " + from.em.join("; ") : "as you gave it") + "; employee and other costs are the gross profit less the EBITDA, split " + Math.round(empShare * 100) + ":" + (100 - Math.round(empShare * 100)) + " as in " + fyL(base.fy) + ".");
   if (anyEbitda) said.push("Other income nil in the projected years, so that EBITDA less depreciation and interest is the profit before tax, as in your figures.");
-  said.push("Depreciation " + (from.dep ? "as you gave it; " + from.dep.join("; ") : "as you gave it") + ". Interest " + (from.fin ? "as you gave it; " + from.fin.join("; ") : "as you gave it") + " (not tied to the borrowings).");
+  const given = (k: keyof YP) => Object.values(plan.years).some((y) => y[k] != null);
+  const w = (k: keyof YP, t: string[] | undefined) => (given(k) ? "as you gave it" + (t ? "; " + t.join("; ") : "") : (t || []).join("; "));
+  said.push("Depreciation " + w("dep", from.dep) + ". Interest " + w("fin", from.fin) + (given("fin") ? " (not tied to the borrowings)" : "") + ".");
   said.push("Tax at " + (plan.taxRate != null ? pc(plan.taxRate) + " (as you said)" : Object.values(plan.years).some((y) => y.taxRate != null) ? "the rates you gave" : pc(taxDefault) + (implied != null && implied === taxDefault ? " (the rate your tax figures imply)" : eff > 0.05 && eff < 0.5 ? " (" + fyL(base.fy) + "'s effective rate)" : " (FinCom's default)")) + " of the profit before tax; nil on a loss.");
   said.push(o.capex ? "Capital expenditure as you said." : depGiven ? "Capital expenditure not given: taken equal to each year's depreciation, so the net block stays as at " + fyL(base.fy) + " (tell me the capex to change it)." : "No new fixed assets (capital expenditure nil).");
   said.push("Receivables at " + Math.round(trD) + " days of revenue, stock at " + Math.round(invD) + " days of the cost of materials and creditors at " + Math.round(tpD) + " days of materials and other costs" + (o.trDays != null || o.invDays != null || o.tpDays != null ? " (as you said where given; else " + fyL(base.fy) + "'s)." : ", as in " + fyL(base.fy) + "."));
-  said.push("The profit after tax goes to " + (toCap === "reserves" ? "reserves and surplus" : "the " + toCap + " account") + (o.div ? " less the dividend or drawings you gave" : " (no dividend or drawings)") + "; other assets and liabilities stay as at " + fyL(base.fy) + "; cash and bank is the balancing figure, a shortfall shown as bank borrowing.");
+  said.push("The profit after tax goes to " + (toCap === "reserves" ? "reserves and surplus" : "the " + toCap + " account") + (o.div ? " less the dividend or drawings you gave" : " (no dividend or drawings)") + "; other assets and liabilities stay as at " + fyL(base.fy) + "; cash and bank is the balancing figure.");
+  if (gapSaid.length) said.push("Cash shortfall shown as bank borrowing (short-term), repaid first from later surplus cash: " + gapSaid.join("; ") + (extra > 0 ? "; " + cr(extra) + " still borrowed at the end of " + fyL(fys[fys.length - 1]) : "") + ". Its interest is not in the interest above.");
   return { lines: out, said, diffs };
 }
 

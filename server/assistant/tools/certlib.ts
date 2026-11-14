@@ -7,6 +7,7 @@
 //   fieldsIn / fillText / fillDocx    an uploaded format's placeholders and blanks, and filling them
 //   unzip / zip   docx and xlsx are zips (DecompressionStream, no package)
 //   render / docx the certificate from a template (certificate-templates.ts) as blocks, and those blocks as Word
+import { docxText as readDocx } from "../docxtext.ts";
 export type Kind = "company" | "firm" | "llp" | "proprietor";
 export type NwIn = { share_capital?: number | null, reserves?: number | null, revaluation_reserve?: number | null, accumulated_losses?: number | null,
   misc_expenditure?: number | null, partners_capital?: number | null, partners_current?: number | null };
@@ -254,10 +255,11 @@ export function zip(files: [string, Uint8Array | string][]): Uint8Array {
 const xe = (s: string) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]!)).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "");
 const xd = (s: string) => s.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, "&");
 const paraText = (p: string) => Array.from(p.matchAll(/<w:t(?:\s[^>]*)?>([^<]*)<\/w:t>|<w:tab\/>/g)).map((m) => m[1] != null ? xd(m[1]) : "\t").join("");
-// the text of a docx, a paragraph a line (tables: a row a line, cells with two spaces)
+// the text of a docx, a paragraph a line (a table's cells too, each its own line)
+// (docxtext.ts, the one Word reader: every paragraph, a table cell's too, as written; nothing readable: "")
 export async function docxText(bytes: Uint8Array): Promise<string> {
-  const z = await unzip(bytes), doc = new TextDecoder().decode(z.get("word/document.xml") || new Uint8Array());
-  return Array.from(doc.matchAll(/<w:p[ >][\s\S]*?<\/w:p>/g)).map((m) => paraText(m[0])).join("\n");
+  const d = await readDocx(bytes);
+  return d ? d.paras.join("\n") : "";
 }
 // a paragraph's runs made one (the first run's look kept) with the new text
 function setPara(p: string, text: string): string {

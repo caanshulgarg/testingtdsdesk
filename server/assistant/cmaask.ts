@@ -29,10 +29,18 @@ const AMOUNT = "(?:(?:₹|rs\\.?|inr)\\s*\\d[\\d,]*(?:\\.\\d+)?(?:\\s*(?:lakhs?|
 const FOLLOW = new RegExp("\\bmethod\\s*-?\\s*(i{1,2}|1|2|one|two)\\b|\\b(first|second)\\s+method\\b|\\b(stock|receivables?|debtors?|book\\s+debts?)\\s+margin\\b|\\bmargin\\s+(on|of)\\s+(stock|receivables?|debtors?)\\b|\\bmpbf\\b|\\bdrawing\\s+power\\b|\\bdscr\\b|\\bform\\s*(i{1,3}|iv|v|vi|[1-6])\\b|\\b(\\d|one|two|three|four|five)\\s+(projected\\s+)?years?\\s+(of\\s+)?projections?\\b|\\bproject(ed|ion)?s?\\s+(for\\s+)?(\\d|one|two|three|four|five)\\s+years?\\b|" +
   "\\b(term\\s+loan|cc|cash\\s+credit|od|overdraft|working\\s+capital|wc)(\\s+(limit|loan|facility))?\\b[^.?!\\n]{0,25}?" + AMOUNT + "|" + AMOUNT + "\\s*(of\\s+|ka\\s+|ki\\s+)?(term\\s+loan|cc|cash\\s+credit|od|overdraft|working\\s+capital)\\b|\\b(tenure|moratorium|repayment\\s+schedule|instal+ments?|emi)\\b|\\bredo\\s+(the\\s+)?cma\\b", "i");
 // the projections of the CMA just shown, given or changed (the owner, 14-Nov-2026: a follow-up asking to keep the sales and
-// margins of the road map, its tables pasted, which went to the chat model): words of the projections with a figure, a %, or a
-// pasted table; or the road map / projections named
-const PROJ_W = /\b(sales?|revenue|turnover|growth|gross\s+(profit|margin)|ebitda|margins?|depreciation|interest\s+cost|pbt|pat|profit\s+before\s+tax|verticals?|projections?|projected)\b/i;
-const projFollowCma = (q: string) => PROJ_W.test(q) && (/\d\s*%|(?:₹|rs\.?)\s*\d|\d\s*(cr|crores?|lakhs?|lacs?)\b|\t|\bfy\s*'?\d{2}/i.test(q) || /\b(road\s*map|as\s+per\s+(the\s+)?(attached|file|document|word)|like\s+this|on\s+this\s+basis|these\s+(figures|projections|numbers))\b/i.test(q));
+// margins of the road map, its tables pasted, which went to the chat model). Only with projection intent: the projections
+// named ("projection", "projected", "forecast", the road map) or two future years or more ("FY27-28 to FY31-32", "next
+// five years"), and with them the assumptions' words, a table of figures, or the road map / attached file pointed to.
+// Never a question about the books ("sales in FY25 as per the ledger", "depreciation register for FY26", "is GST on sales
+// 18%?", "explain EBITDA margin of 12%").
+const ASSUME_W = /\b(sales?|revenue|turnover|growth|gross\s+(profit|margin)|ebitda|margins?|depreciation|interest(\s+cost)?|tax(\s+rate)?|pbt|pat|profit\s+(before|after)\s+tax|verticals?|capex)\b/i;
+const INTENT_W = /\bproject(ion|ions|ed)\b|\bforecast(s|ed)?\b|\broad\s*map\b/i;
+const FY_TOK = /\bfy\s*'?(\d{2,4})(?:\s*[-–]\s*\d{2,4})?|\b(20\d{2})\s*[-–]\s*\d{2}\b/gi;
+const futureYears = (q: string) => /\b(next|coming|following)\s+(\d|two|three|four|five)\s+years\b/i.test(q) || new Set([...q.matchAll(FY_TOK)].map((m) => m[0].replace(/\s+/g, "").toLowerCase())).size >= 2;
+const figureTable = (q: string) => /\t[^\n]*\d/.test(q) || q.split(/\n/).filter((l) => /\d/.test(l) && /\d[^\n]*(\t|\s{2,}|\|)[^\n]*\d/.test(l)).length >= 3 || /\d+(?:\.\d+)?\s*\/\s*\d+(?:\.\d+)?\s*\/\s*\d/.test(q);
+const projFollowCma = (q: string) => (INTENT_W.test(q) || futureYears(q)) && (ASSUME_W.test(q) || figureTable(q) || /\b(road\s*map|attached|as\s+per\s+(the\s+)?(file|document|word))\b/i.test(q))
+  && !/\b(as\s+per\s+(the\s+)?(ledger|books)|ledger|register|in\s+the\s+books)\b/i.test(q);
 export const cmaFollow = (q: string): boolean => (FOLLOW.test(String(q || "")) || projFollowCma(String(q || ""))) && !/\b(post|file|delete|send|confirm)\b/i.test(String(q || ""));
 export const cmaWanted = (q: string, history: { role: string, content: string }[]): boolean => cmaAsked(q) || (cmaShown(history) && cmaFollow(q));
 

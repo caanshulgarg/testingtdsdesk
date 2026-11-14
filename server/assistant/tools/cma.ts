@@ -24,7 +24,7 @@ import { gridsFromCsv, gridsFromXlsx } from "../filetable.ts";
 import { Cma, cmaCompute, CYear, fyL, KIND_WORD, Lines, Opts, pbtLines, PLK, rowOf, sumOf } from "./cmaengine.ts";
 import { FileKind, pastYears, READ_PROMPT, READ_SCHEMA, readAi, readGrids, RFile } from "./cmaread.ts";
 import { cmaExcel, rowCells, Summary, XlMeta } from "./cmaxl.ts";
-import { emptyPlan, Plan, PLAN_SCHEMA, planned, readPlan, Src } from "./cmaplan.ts";
+import { emptyPlan, Plan, PLAN_PROMPT, PLAN_SCHEMA, planned, readPlan, Src } from "./cmaplan.ts";
 import { projectPlan, verticalShares } from "./cmaproj.ts";
 import { docxText } from "../docxtext.ts";
 import { blocksText } from "../docxtext.ts";
@@ -270,12 +270,12 @@ export async function runCma(input: Record<string, unknown>, ctx: ExtCtx): Promi
   let plan: Plan = emptyPlan();
   if (srcs.length) {
     ctx.progress("Reading your projections");
-    plan = await readPlan(srcs, ctx.aiRead ? async (prompt, text) => {
-      // read once: the AI's reading kept by the text's own hash, so a follow-up never pays for it again
-      const key = "cma-plan-" + READ_VERSION + "-" + (await sha256(new TextEncoder().encode(prompt + "\n" + text))).slice(0, 40);
+    plan = await readPlan(srcs, ctx.aiRead ? async (prompt, fenced, raw) => {
+      // read once: the AI's reading kept by the text's own hash (not the fence's nonce), so a follow-up never pays again
+      const key = "cma-plan-" + READ_VERSION + "-" + (await sha256(new TextEncoder().encode(PLAN_PROMPT + "\n" + raw))).slice(0, 40);
       const kept = ctx.memo ? await ctx.memo.get(key).catch(() => null) : null;
       if (kept && typeof kept.answer === "string") return kept.answer;
-      const answer = await ctx.aiRead!(prompt + "\n\n" + text, null, { schema: PLAN_SCHEMA, feature: "cma", maxTokens: 4000 }).catch(() => "");
+      const answer = await ctx.aiRead!(prompt + "\n\n" + fenced, null, { schema: PLAN_SCHEMA, feature: "cma", maxTokens: 4000 }).catch(() => "");
       if (answer && ctx.memo) await ctx.memo.set(key, { answer }).catch(() => {});
       return answer;
     } : null);
@@ -325,6 +325,12 @@ export async function runCma(input: Record<string, unknown>, ctx: ExtCtx): Promi
   if (hasPlan) {
     const fys = Array.from({ length: n }, (_, i) => base.fy + 1 + i);
     const nums = (v: unknown) => Array.isArray(v) ? (v as unknown[]).map((x) => numOf(x) || 0) : v == null ? null : [numOf(v) || 0];
+    // the user's figures always win: a growth or a tax rate said in words or passed to the tool ("sales growth 20% a year",
+    // "tax 25%") fills every year the plan gives no revenue or growth (no rate) for
+    const gArr = Array.isArray(I.A.revenue_growth_pct) || I.A.revenue_growth_pct != null ? nums(I.A.revenue_growth_pct)!.filter((x) => isFinite(x)) : null;
+    if (gArr && gArr.length) fys.forEach((fy, i) => { const y = plan.years[fy] ||= {}; if (y.rev == null && y.growth == null) y.growth = Math.max(-50, Math.min(200, gArr[Math.min(i, gArr.length - 1)])); });
+    const tArg = numOf(I.A.tax_rate_pct);
+    if (tArg != null && tArg >= 0 && tArg < 60 && plan.taxRate == null && !fys.some((fy) => plan.years[fy]?.taxRate != null)) plan.taxRate = tArg;
     const pp = projectPlan(base, prevY, fys, plan, { kind, newLoans: tlNew ? [tlNew, 0] : null, repay: repay.some((x) => x > 0) ? repay : null, capex: nums(I.A.capex) ?? (tlNew ? [tlNew, 0] : null), div: divs,
       trDays: numOf(I.A.receivable_days), invDays: numOf(I.A.inventory_days), tpDays: numOf(I.A.payable_days) });
     projL = pp.lines; projSaid = pp.said; planDiffs = pp.diffs;
