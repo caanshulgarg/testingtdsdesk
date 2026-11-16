@@ -2149,12 +2149,13 @@ function coCommit(path, v){
     if (GSTIN_RE.test(g) && !co.pan) co.pan = g.slice(2, 12);
     else if (GSTIN_RE.test(g) && co.pan && String(co.pan).toUpperCase() !== g.slice(2, 12)) toast("This GSTIN’s PAN is " + g.slice(2, 12) + ", but the client’s PAN is " + co.pan + ". Correct one of them.");
   } else if (path === "otherGstins"){
-    // the client's registrations in other states (Sales picks its output GST ledgers by them, src/js/25-sales.js)
-    const t = String(co.otherGstins || "").toUpperCase(), gs = t.match(/\b\d{2}[A-Z0-9]{13}\b/g) || [], pan = String(co.pan || String(co.gstin || "").slice(2, 12)).toUpperCase();
-    co.otherGstins = gs.join(", ");
-    if (t.replace(/[^A-Z0-9]/g, "").length > gs.join("").length) toast("Only full 15-character GSTINs are kept here.");
-    else if (gs.some(g => !gstinValid(g))) toast("A GSTIN there fails its check digit. Check each character.");
-    else if (pan.length === 10 && gs.some(g => g.slice(2, 12) !== pan)) toast("Each GSTIN here should be of the client\u2019s PAN " + pan + ".");
+    // the client's registrations in other states (Sales picks its output GST ledgers by them, src/js/25-sales.js): only
+    // real GSTINs (the check digit) of the client's own PAN are kept; the rest are dropped, and said
+    const t = String(co.otherGstins || "").toUpperCase(), gs = Array.from(new Set(t.match(/\b\d{2}[A-Z0-9]{13}\b/g) || [])), pan = String(co.pan || String(co.gstin || "").slice(2, 12)).toUpperCase();
+    const keep = gs.filter(g => gstinValid(g) && pan.length === 10 && g.slice(2, 12) === pan), bad = gs.filter(g => !keep.includes(g));
+    co.otherGstins = keep.join(", ");
+    if (bad.length) toast("Not kept: " + bad.join(", ") + (pan.length === 10 ? " (a GSTIN here must pass its check digit and be of the client\u2019s PAN " + pan + ")" : " (give the client\u2019s GSTIN or PAN first)") + ".");
+    else if (t.replace(/[^A-Z0-9]/g, "").length > gs.join("").length) toast("Only full 15-character GSTINs are kept here.");
   } else if (path === "pan"){
     const p0 = String(co.pan || "").toUpperCase().trim(), g0 = String(co.gstin || "").toUpperCase();
     if (p0 && GSTIN_RE.test(g0) && g0.slice(2, 12) !== p0) toast("The client’s GSTIN " + g0 + " carries PAN " + g0.slice(2, 12) + ", not " + p0 + ". Correct one of them.");

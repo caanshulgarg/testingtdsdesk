@@ -153,20 +153,36 @@ function ledNumState(bare){
   if (m && ok(m[1])){ const w = m[2].trim(), c = m[1]; if (GST_ABBR[c].split(" ").includes(w.split(/\s+/)[0].toUpperCase()) || stateCodeFrom(w) === c) return c; }
   return "";
 }
-// the rates a ledger's name carries: any number with "%", or a GST rate (or half) on its own, not a state code in context
-function ledgerRates(name){
+// the rates a ledger's name carries, and whether a number in it leaves its rate in doubt (re-review of aec7142b3):
+// a rate is a number with "%" (or "@ 18"), or a GST rate (or half) standing bare at the end of the name with no
+// state / branch / code word before it; never a number with a leading zero ("Branch 05"); a state code in context
+// ("Code 29") is not a rate. Any other number ("Output IGST 18 Sales", "Branch 05") puts the ledger in doubt: never
+// picked by itself for a client with several registrations
+function ledgerRateInfo(name){
   let bare = ledNameBare(name);
   const sc = ledNumState(bare); if (sc) bare = bare.replace(new RegExp("(^|[^\\d.])" + sc + "(?![\\d.])"), "$1 ");
-  const out = [];
-  bare.replace(/(^|[^\d.])(\d+(?:\.\d+)?)(\s*%)?(?![\d.])/g, (all, p, n, pc) => { if (pc || GST_RATE_NUMS.includes(+n)) out.push(+n); return all; });
-  return out;
+  const rates = [];
+  let doubt = false;
+  const lead0 = n => /^0\d/.test(n);
+  bare = bare.replace(/(^|[^\d.])(\d+(?:\.\d+)?)\s*%/g, (all, p, n) => { if (lead0(n)) doubt = true; else rates.push(+n); return p + " "; })
+    .replace(/@\s*(\d+(?:\.\d+)?)(?![\d.])/g, (all, n) => { if (lead0(n) || !GST_RATE_NUMS.includes(+n)) doubt = true; else rates.push(+n); return " "; });
+  const end = bare.match(/(^|[^\d.])(\d+(?:\.\d+)?)\s*\)?[\s.\-–_]*$/);
+  if (end){
+    const before = bare.slice(0, end.index + end[1].length).replace(/[\s(\-–_:#]+$/, ""), w = (before.match(/([A-Za-z.]+)$/) || [])[1] || "";
+    if (!lead0(end[2]) && GST_RATE_NUMS.includes(+end[2]) && !/^(state|code|branch|br|unit|plant|div|division|depot|loc|location|no\.?|series|gstin|reg)$/i.test(w)) rates.push(+end[2]);
+    else doubt = true;
+    bare = bare.slice(0, end.index + end[1].length);
+  }
+  if (/\d/.test(bare)) doubt = true;
+  return {rates, doubt};
 }
+function ledgerRates(name){ return ledgerRateInfo(name).rates; }
 let ledStateKept = {};
-// the state a ledger is kept for: its Tally master's GSTIN, else its name (a state's name, an abbreviation, a code in a
-// state's context, not with rateWise: a rate-wise list); "" untagged
-function ledgerStateTag(l, rateWise){
+// the state a ledger is kept for, each ledger on its own: its Tally master's GSTIN, else its name (a state's name, an
+// abbreviation, a code in a state's context); "" untagged
+function ledgerStateTag(l){
   if (!l) return "";
-  const key = l.name + "|" + (l.gstin || "") + "|" + (l.state || "") + "|" + (rateWise ? 1 : 0);
+  const key = l.name + "|" + (l.gstin || "") + "|" + (l.state || "");
   if (key in ledStateKept) return ledStateKept[key];
   const g = stateOfGstin(String(l.gstin || "").toUpperCase());
   let st = g && GST_STATES[g] ? g : "";
@@ -174,7 +190,7 @@ function ledgerStateTag(l, rateWise){
   if (!st && l.state) st = stateCodeFrom(l.state);
   if (!st){ const m = name.toUpperCase().match(/\b(\d{2})[A-Z]{5}\d{4}[A-Z][0-9A-Z]Z[0-9A-Z]\b/); if (m && GST_STATES[m[1]]) st = m[1]; }
   if (!st) st = (Object.entries(GST_STATES).find(([c, s]) => +c < 90 && [s].concat(GST_STATE_ALIAS[c] || []).some(n => low.includes(" " + n.toLowerCase().replace(/[^a-z0-9]+/g, " ") + " "))) || [""])[0];
-  if (!st && !rateWise) st = ledNumState(ledNameBare(name));
+  if (!st) st = ledNumState(ledNameBare(name));
   if (!st){
     const words = name.split(/[^A-Za-z]+/).filter(Boolean);
     st = (Object.entries(GST_ABBR).find(([c, a]) => a.split(" ").some(ab => words.some(w => w.toUpperCase() === ab && (!GST_ABBR_WORDS.test(ab) || w === ab)))) || [""])[0];
@@ -186,16 +202,18 @@ function gstStateWords(c){ return c ? c + (GST_STATES[c] ? " " + GST_STATES[c] :
 // the client's own GSTINs, as its client setup keeps them (its GSTIN, and "Other GSTINs", its registrations in other
 // states): never what happens to be loaded, so a choice kept for the client means the same each time (review of 2f8b825a7)
 function salesOwnGstins(){
-  const s = SL(), co = CO(s && s.cid) || {};
+  const s = SL(), co = CO(s && s.cid) || {}, pan = salesPan(co);
   const all = [co.gstin].concat(String(co.otherGstins || "").toUpperCase().match(/\b\d{2}[A-Z0-9]{13}\b/g) || [], co.gstins || []);
-  return Array.from(new Set(all.map(g => String(g || "").toUpperCase().trim()).filter(g => /^\d{2}[A-Z0-9]{13}$/.test(g))));
+  // (only real GSTINs of the client's own PAN: a mistyped one, or another's, is no registration of the client)
+  return Array.from(new Set(all.map(g => String(g || "").toUpperCase().trim()).filter(g => salesGstinOfPan(g, pan))));
 }
+function salesPan(co){ return String((co && (co.pan || String(co.gstin || "").slice(2, 12))) || "").toUpperCase().trim(); }
+function salesGstinOfPan(g, pan){ return /^\d{2}[A-Z0-9]{13}$/.test(g) && (typeof gstinValid !== "function" || gstinValid(g)) && pan.length === 10 && g.slice(2, 12) === pan && !!GST_STATES[g.slice(0, 2)]; }
 function salesOwnStates(){ return Array.from(new Set(salesOwnGstins().map(stateOfGstin).filter(c => GST_STATES[c]))); }
-// one of the client's own GSTINs: in its setup, or of its PAN (a registration in another state)
+// one of the client's own GSTINs: a real GSTIN (its check digit) of the client's PAN, in any state
 function salesIsOwn(g, co){
   g = String(g || "").toUpperCase().trim(); co = co || CO(SL() && SL().cid) || {};
-  const pan = String(co.pan || String(co.gstin || "").slice(2, 12)).toUpperCase();
-  return /^\d{2}[A-Z0-9]{13}$/.test(g) && (salesOwnGstins().includes(g) || (pan.length === 10 && g.slice(2, 12) === pan));
+  return salesGstinOfPan(g, salesPan(co));
 }
 // an invoice's branch or series, as a key ("b:bengaluru", "s:MH/##-##/")
 function salesSeriesKeys(x){
@@ -256,41 +274,63 @@ function salesPickTax(ck, ledger, id, ik){
   if (typeof render === "function") render();
   return n;
 }
-// {ledger, why, cands, ck, ik, reg}: cands (several) when a person must choose; ck the client's choice key (none when
-// the state is not known with several registrations: then ik, the invoice's own)
+// {ledger, why, cands, ck, ik, reg}: cands when a person must choose; ck the client's choice key (none when the state
+// is not known with several registrations: then ik, the invoice's own). Re-review of aec7142b3: a client with one
+// registration is picked as before 2f8b825a7 (by "%" rates, the one plain ledger, the one ledger), never a ledger of
+// another rate; all the state rules are for a client with several registrations, and there nothing is posted by itself
+// unless FinCom is sure: the state not known is always asked
 function taxLedgerPick(kind, rate, v){
   const cfg = SL().cfg, L = cfg.ledgers || {}, K0 = kind.toUpperCase();
   const half = kind === "igst" || kind === "cess" ? rate : rate / 2;
-  for (const k of [kind + "_" + rateTag(half), kind]){ const e = exactLedger(L[k]); if (e) return {ledger: e, why: "set in Sales settings"}; }
+  const multi = salesOwnStates().length > 1;
+  const setL = [kind + "_" + rateTag(half), kind].map(k => exactLedger(L[k])).find(Boolean);
+  if (setL && !multi) return {ledger: setL, why: "set in Sales settings"};
   const K = {cgst: /c\.?\s*gst|central\s*(gst|tax)/i, sgst: /s\.?\s*gst|state\s*(gst|tax)|utgst/i, igst: /i\.?\s*gst|integrated/i, cess: /cess/i, }[kind];
   const taxes = ledgersIn(/duties|taxes/i).filter(l => K.test(l.name) && !/input|itc|credit|receivable|rcm|reverse/i.test(l.name) && !(kind === "sgst" && /cgst|igst/i.test(l.name)));
   const out = taxes.filter(l => /output|payable|liab/i.test(l.name));
   const pool = out.length ? out : taxes;
-  // rate-wise ledgers: picked by the invoice's rate, as before; their numbers are never states
-  const rates = new Map(pool.map(l => [l.name, ledgerRates(l.name)])), rateWise = pool.some(l => rates.get(l.name).length);
-  const rateHit = pool.filter(l => rates.get(l.name).includes(+half));
-  const plain = pool.filter(l => !rates.get(l.name).length);
-  const cand = rateHit.length ? rateHit : plain.length ? plain : pool;
-  if (!cand.length) return {ledger: "", why: ""};
-  const ik = kind + (rateHit.length ? "_" + rateTag(half) : "");
-  const mine = exactLedger(((v && v.taxPick) || {})[ik]);
-  if (mine && cand.some(l => l.name === mine)) return {ledger: mine, why: "chosen by you on this invoice"};
-  const reg = v ? salesRegOf(v) : {code: ""}, multi = salesOwnStates().length > 1;
-  const ck = multi && !reg.code ? "" : ik + (multi ? "@" + reg.code : "");
-  const chosen = ck && exactLedger((cfg.taxPick || {})[ck]);
-  if (chosen && cand.some(l => l.name === chosen)) return {ledger: chosen, why: "chosen by you" + (multi ? " for " + gstStateWords(reg.code) : "") + " (Sales: " + K0 + " ledger)"};
-  if (cand.length === 1) return {ledger: cand[0].name, why: rateHit.length ? "the output " + K0 + " ledger for " + rateTag(half) + "%" : "the only output " + K0 + " ledger"};
-  const tagged = cand.map(l => ({l, st: ledgerStateTag(l, rateWise)}));
-  const ask = (list) => ({ledger: "", why: "", cands: list.map(l => l.name), ck, ik, reg: reg.code || "", unknown: multi && !reg.code});
-  if (reg.code){
-    const hit = tagged.filter(t => t.st === reg.code);
-    if (hit.length === 1) return {ledger: hit[0].l.name, why: "picked by state " + gstStateWords(reg.code) + " (" + reg.why + ")"};
-    if (hit.length > 1) return ask(hit.map(t => t.l));
+  const info = new Map(pool.map(l => [l.name, ledgerRateInfo(l.name)]));
+  const ik = kind + "_" + rateTag(half);
+  // (a ledger of another rate is never a candidate: its rate read with "%", or bare at the end of its name)
+  const rightRate = l => { const r = info.get(l.name).rates; return !r.length || r.includes(+half); };
+  if (!multi){
+    const rateHit = pool.filter(l => new RegExp("(^|[^0-9.])" + rateTag(half).replace(".", "\\.") + "\\s*%").test(l.name));
+    if (rateHit.length === 1) return {ledger: rateHit[0].name, why: "the output " + K0 + " ledger for " + rateTag(half) + "%"};
+    const plain = pool.filter(l => !/\d\s*%/.test(l.name));
+    if (plain.length === 1) return {ledger: plain[0].name, why: "the only output " + K0 + " ledger without a rate"};
+    if (pool.length === 1 && !/\d\s*%/.test(pool[0].name)) return {ledger: pool[0].name, why: "the only output " + K0 + " ledger"};
+    const cands = (rateHit.length ? rateHit : pool).filter(rightRate);
+    const chosen = exactLedger((cfg.taxPick || {})[ik]);
+    if (chosen && cands.some(l => l.name === chosen)) return {ledger: chosen, why: "chosen by you (Sales: " + K0 + " ledger at " + rateTag(half) + "%)"};
+    return cands.length ? {ledger: "", why: "", cands: cands.map(l => l.name), ck: ik, ik, reg: ""} : {ledger: "", why: ""};
   }
+  const rateHit = pool.filter(l => info.get(l.name).rates.includes(+half));
+  const cand = rateHit.length ? rateHit : pool.filter(l => !info.get(l.name).rates.length);
+  if (!cand.length) return {ledger: "", why: ""};
+  const reg = v ? salesRegOf(v) : {code: ""};
+  if (!reg.code){
+    // several registrations, which one not known: asked on the invoice, every time (nothing kept for the client)
+    const mine = exactLedger(((v && v.taxPick) || {})[ik]);
+    if (mine && cand.some(l => l.name === mine)) return {ledger: mine, why: "chosen by you on this invoice"};
+    return {ledger: "", why: "", cands: cand.map(l => l.name), ck: "", ik, reg: "", unknown: true};
+  }
+  const ck = ik + "@" + reg.code, sw = gstStateWords(reg.code);
+  const tagged = cand.map(l => ({l, st: ledgerStateTag(l), doubt: info.get(l.name).doubt}));
+  const mineOrOk = tagged.filter(t => !t.st || t.st === reg.code);
+  const ask = (list) => list.length ? {ledger: "", why: "", cands: list.map(t => t.l.name), ck, ik, reg: reg.code} : {ledger: "", why: ""};
+  // the person's choice for this state, then the state's own ledger, then Sales settings, then the one untagged ledger
+  const chosen = exactLedger((cfg.taxPick || {})[ck]);
+  if (chosen && mineOrOk.some(t => t.l.name === chosen)) return {ledger: chosen, why: "chosen by you for " + sw + " (Sales: " + K0 + " ledger at " + rateTag(half) + "%)"};
+  const hit = tagged.filter(t => t.st === reg.code);
+  if (hit.length === 1 && !hit[0].doubt) return {ledger: hit[0].l.name, why: "picked by state " + sw + " (" + reg.why + ")"};
+  if (hit.length) return ask(hit);
+  if (setL){ const st = ledgerStateTag(exactLedgerObj(setL)); if (!st || st === reg.code) return {ledger: setL, why: "set in Sales settings (none tagged " + sw + ")"}; }
   const untagged = tagged.filter(t => !t.st);
-  if (untagged.length === 1) return {ledger: untagged[0].l.name, why: "the only output " + K0 + " ledger not tagged by a state" + (reg.code ? " (none tagged " + gstStateWords(reg.code) + ")" : "")};
-  return ask(cand);
+  if (untagged.length === 1 && !untagged[0].doubt) return {ledger: untagged[0].l.name, why: "the only output " + K0 + " ledger not tagged by a state (none tagged " + sw + ")"};
+  return ask(mineOrOk);
 }
+// a Tally ledger's own record (its GSTIN, for its state)
+function exactLedgerObj(name){ const b = B(); return ((b && b.ledgers.list) || []).find(l => l.name === name) || {name}; }
 function roundOffLedger(){
   const e = exactLedger((SL().cfg.ledgers || {}).roundOff); if (e) return e;
   const hit = (B().ledgers.list || []).find(l => /round(ed|ing)?\s*[- ]?off/i.test(l.name));
