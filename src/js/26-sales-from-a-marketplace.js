@@ -378,19 +378,50 @@ async function salesCheckTally(list){
   const co = CO(SL().cid);
   if (!tallyVia(co) || !list.length) return 0;
   const dates = list.map(v => v.x.date).filter(Boolean).sort();
-  // the types asked of Tally: each invoice's own, and the client's own sales and note types (Sales settings) beside Tally's
+  // next-fix-sales-upload (item 2): every voucher of the period is asked of Tally (no type named: the bridge and the cloud
+  // copy then answer every type), and the Sales-class ones are kept: the client's own sales and note types (Sales
+  // settings), Tally's own, and every type of the client's made under Sales ("Sales UP", "GST Sales": a type whose
+  // vouchers credit a ledger under Sales Accounts, or named so); a client's own type is never left out of the check
   const cfg = SL().cfg, lc = s => String(s || "").toLowerCase(), notes = [cfg.creditNoteType || "Credit Note", cfg.debitNoteType || "Debit Note", "Credit Note", "Debit Note"];
-  const j = await tallyCall(co, "/vouchers?company=" + encodeURIComponent(tallyCoName(co)) + "&from=" + isoToTally(addDays(dates[0], -3)) + "&to=" + isoToTally(addDays(dates[dates.length - 1], 3)) + "&types=" + encodeURIComponent([...new Set(list.map(v => salesVt(v.x)).concat(notes, cfg.voucherType || [], "Sales"))].join(",")) + Bridge.pinQ());
-  const vs = [].concat(j.vouchers || []).filter(v => !/^yes$/i.test(v.cancelled || ""));
+  const j = await tallyCall(co, "/vouchers?company=" + encodeURIComponent(tallyCoName(co)) + "&from=" + isoToTally(addDays(dates[0], -3)) + "&to=" + isoToTally(addDays(dates[dates.length - 1], 3)) + Bridge.pinQ());
+  const all = [].concat(j.vouchers || []).filter(v => !/^yes$/i.test(v.cancelled || ""));
+  const cls = salesTypeClasses(all, list.map(v => salesVt(v.x)).concat(cfg.voucherType || [], "Sales"), notes);
+  const vs = all.filter(x => !x.type || cls.has(lc(x.type)));
   const by = new Map();
   vs.forEach(x => [normInvNo(x.number), normInvNo(x.reference)].filter(Boolean).forEach(k => { if (!by.has(k)) by.set(k, []); if (!by.get(k).includes(x)) by.get(k).push(x); }));
   let n = 0;
   // a voucher a person said is not this invoice's (Not this Tally entry) is never matched to it again
   const keep = SL().cfg.notTally || {};
   list.forEach(v => { const no = normInvNo(v.x.number), not = (v.notTally || []).concat(keep[no] || []);
-    const hit = no && !not.includes("num:" + no) && (by.get(no) || []).find(x => !not.includes(salesTallyKey(x)) && (lc(x.type) === lc(salesVt(v.x)) || !(v.x.noteKind || notes.some(t => lc(t) === lc(x.type)))));   // (a note is a note's, an invoice an invoice's)
-    if (hit){ v.status = "intally"; v.postNote = "Already in Tally"; v.tallyMatch = {key: salesTallyKey(hit), date: String(hit.date || ""), number: String(hit.number || ""), amount: r2(Math.abs(num(hit.amount)))}; n++; } });
+    const hit = no && !not.includes("num:" + no) && (by.get(no) || []).find(x => !not.includes(salesTallyKey(x)) && (lc(x.type) === lc(salesVt(v.x)) || (v.x.noteKind ? cls.get(lc(x.type)) === v.x.noteKind : !cls.get(lc(x.type)))));   // (a note is a note's, an invoice an invoice's)
+    // (item 3: what the Tally voucher is, kept to show beside the invoice: its date, type, number, party and amount)
+    if (hit){ v.status = "intally"; v.postNote = "Already in Tally"; v.tallyMatch = {key: salesTallyKey(hit), date: String(hit.date || ""), number: String(hit.number || ""), type: String(hit.type || ""), party: String(hit.party || ""), amount: salesTallyAmount(hit)}; n++; } });
   return n;
+}
+// the voucher types of Tally's answer that are of the Sales class: Map(type in lower case → "" an invoice's type,
+// "credit" / "debit" a note's). The types named (the client's own and Tally's), every type named as a sales type, and
+// every type whose vouchers credit a ledger under Sales Accounts (a type the client made under Sales, whatever its name)
+function salesTypeClasses(vs, own, notes){
+  const lc = s => String(s || "").toLowerCase().trim(), out = new Map(), cfg = SL().cfg;
+  const noteOf = t => lc(t) === lc(cfg.creditNoteType || "Credit Note") || /credit\s*note|\bcrn?\b|sales\s*returns?/i.test(t) ? "credit" : lc(t) === lc(cfg.debitNoteType || "Debit Note") || /debit\s*note|\bdbn\b|\bdn\b/i.test(t) ? "debit" : "";
+  [].concat(own || [], notes || []).filter(Boolean).forEach(t => out.set(lc(t), noteOf(t)));
+  const salesLed = l => { try { const ch = typeof Ledgers === "object" ? Ledgers.chain(SL().cid, l) : []; return ch.some(g => /^sales\s*accounts?$/i.test(String(g).trim())); } catch (e){ return false; } };
+  (vs || []).forEach(x => {
+    const t = String(x.type || "").trim(); if (!t || out.has(lc(t))) return;
+    if (/order|quotation|delivery|receipt\s*note|memo/i.test(t)) return;
+    const named = /\bsales?\b/i.test(t) || !!noteOf(t);
+    if (named || [].concat(x.entries || []).some(e => e && e.ledger && salesLed(e.ledger))) out.set(lc(t), noteOf(t));
+  });
+  return out;
+}
+function salesAmtNum(a){ return num(String(a == null ? "" : a).replace(/[^0-9.\-]/g, "")); }
+// a Tally voucher's amount: its own when the answer carries one, else its party's line (the bridge's and the cloud's
+// /vouchers carry the lines, not a total), else its largest line
+function salesTallyAmount(x){
+  if (num(x.amount)) return r2(Math.abs(num(x.amount)));
+  const es = [].concat(x.entries || []).filter(e => e && e.ledger), party = es.filter(e => String(e.ledger) === String(x.party || ""));
+  const a = (party.length ? party : es).reduce((m, e) => Math.max(m, Math.abs(salesAmtNum(e.amount))), 0);
+  return r2(a);
 }
 function salesTallyKey(x){ return String(x.guid || x.masterId || [x.date, x.type, x.number].join("|")); }
 // asked: someone pressed Update from Tally. By itself (opening the page) Tally is not read, except a first ledger list;
@@ -402,6 +433,7 @@ async function salesQueuedSync(){
     let j = null; try { j = await CloudPost.row(v.postJob); } catch (e){ continue; }
     const r = j && [].concat(j.results || []).find(x => x && x.id === v.id);
     if (r && r.ok){ n++; v.status = "posted"; v.postedAt = new Date().toISOString(); v.postError = ""; v.postedInto = j.company || ""; delete v.postJob; }
+    else if (r && salesRefusal(r)){ n++; delete v.postJob; salesMarkRefused(v, r, salesRefusal(r)); }
     else if (j && ["failed", "cancelled"].includes(j.status)){ n++; v.postError = plainMsg((r && r.message) || j.message); delete v.postJob; }
   }
   if (n){ saveSales(); render(); }
@@ -439,17 +471,46 @@ async function postSalesToTally(){
     const by = new Map([].concat(j.results || []).map(r => [r.id, r]));
     const now = new Date().toISOString();
     masters.forEach(l => { const r = by.get("led:" + l.name); if (r && r.ok){ l.sent = true; l.sentAt = now; } });
-    let ok = 0, bad = 0, queued = 0;
+    let ok = 0, bad = 0, queued = 0, refusedN = 0;
     let optionalN = 0;
-    list.forEach(v => { const r = by.get(v.id); if (r && r.ok && r.verified !== true){ bad++; const x = r; v.postError = "Failed: not found in Tally when read back, so it is not marked as posted. Look in Tally (Day Book, and Display More Reports \u2192 Exception Reports \u2192 Optional Vouchers). If it is not there, post it again." + (x.verifyNote ? " [" + x.verifyNote + "]" : ""); return; } if (r && r.ok){ ok++; v.status = "posted"; v.postedAt = now; v.postError = ""; v.postedInto = r.company || ""; v.postedOptional = !!r.optional; if (r.optional) optionalN++; learnCustomer(v); } else if (r && r.held){ queued++; v.postError = plainMsg(r.message); v.postJob = r.job; }   /* held by a posting still going on in FinCom's cloud: queued, not failed */
+    list.forEach(v => { const r = by.get(v.id), no = salesRefusal(r);
+      // (item 4) "created 0 of N" with exceptions and no line error: a definite refusal of the request, said plainly;
+      // the invoice is Refused by Tally (not Ready, never sent again as it is) until it is posted one by one or changed
+      if (no){ refusedN++; salesMarkRefused(v, r, no); return; }
+      if (r && r.ok && r.verified !== true){ bad++; const x = r; v.postError = "Failed: not found in Tally when read back, so it is not marked as posted. Look in Tally (Day Book, and Display More Reports \u2192 Exception Reports \u2192 Optional Vouchers). If it is not there, post it again." + (x.verifyNote ? " [" + x.verifyNote + "]" : ""); return; } if (r && r.ok){ ok++; v.status = "posted"; v.postedAt = now; v.postError = ""; v.postedInto = r.company || ""; v.postedOptional = !!r.optional; if (r.optional) optionalN++; learnCustomer(v); } else if (r && r.held){ queued++; v.postError = plainMsg(r.message); v.postJob = r.job; }   /* held by a posting still going on in FinCom's cloud: queued, not failed */
       else { bad++; v.postError = plainMsg(r && r.message) || "Tally did not confirm this invoice."; } });
     saveBank({newLed: true});
     s.busy = ""; saveSales();
-    toast(ok + " posted to Tally" + (optionalN ? " (" + optionalN + " as Optional vouchers: Display More Reports \u2192 Exception Reports \u2192 Optional Vouchers)" : "") + (queued ? "; " + queued + " queued, posts by itself" : "") + (bad ? "; " + bad + " not posted (see the red notes)" : "") + ".");
-    if (!bad && !queued) s.filter = "done";
+    toast(ok + " posted to Tally" + (optionalN ? " (" + optionalN + " as Optional vouchers: Display More Reports \u2192 Exception Reports \u2192 Optional Vouchers)" : "") + (queued ? "; " + queued + " queued, posts by itself" : "") + (bad ? "; " + bad + " not posted (see the red notes)" : "") +
+      (refusedN ? "; " + refusedN + " refused by Tally with no reason given: under To review, “Post one by one to find the cause”" : "") + ".");
+    if (!bad && !queued && !refusedN) s.filter = "done";
+    else if (refusedN && !bad && !queued) s.filter = "review";
     syncLedgersFromTally(true);
   } catch (e){ s.busy = ""; toast("Posting failed: " + e.message); }
   render();
+}
+// next-fix-sales-upload (item 4): Tally's answer "created 0 of N" with exceptions and no line error (the bridge's words,
+// bridge-go/post.go replyLine; its own fallback "Tally reported an exception" is lost when the request held several):
+// a definite refusal of the whole request. Returns {n, exceptions} or null
+function salesRefusal(r){
+  if (!r || r.ok !== false || r.held || r.outcomeUnknown || r.notAllowed || r.pendingCheck) return null;
+  const said = String(r.message || ""), m = said.match(/created\s+0\s+of\s+(\d+)/i);
+  const has = k => r[k] != null && r[k] !== "";
+  const created = has("created") ? num(r.created) : m ? 0 : NaN;
+  if (created !== 0 || num(r.altered) > 0 || r.accepted === true) return null;
+  if ([].concat(r.lineError || []).filter(x => String(x || "").trim()).length) return null;
+  const exc = has("exceptions") ? num(r.exceptions) : num((said.match(/exceptions\s+(\d+)/i) || [])[1]);
+  if (!(exc > 0)) return null;
+  return {n: num(r.batchN) || (m ? num(m[1]) : 1), exceptions: exc};
+}
+function salesRefusalHint(no, single){
+  return single ? "Tally would not take this voucher and gave no reason (an exception, no line error). Open it in Tally\u2019s import (or check its customer and sales ledgers, the voucher type, the GST details and the date), put it right here, then post it again."
+    : "Tally created none of the " + no.n + " vouchers sent together and gave no reason (" + no.exceptions + " exception" + (no.exceptions === 1 ? "" : "s") + ", no line error). One voucher Tally will not take can stop all of them: post them one by one to find which.";
+}
+function salesMarkRefused(v, r, no, single, hint){
+  v.refused = {at: new Date().toISOString(), n: no.n, exceptions: no.exceptions, single: !!single, said: plainMsg(r && r.message) || "", hint: hint || salesRefusalHint(no, single)};
+  v.postError = "Refused by Tally: " + v.refused.hint + (v.refused.said ? " [" + v.refused.said + "]" : "");
+  delete v.postJob; v.status = "review"; mapInvoice(v);
 }
 async function exportSalesXml(){
   const s = SL(), co = CO(s.cid);
@@ -496,7 +557,7 @@ function setCustomerLedger(v, ledger){
   const key = salesHistKey(v);
   const targets = s.list.filter(o => o.id === v.id || (key && ["review", "ready"].includes(o.status) && salesHistKey(o) === key && !o.userLedger));
   const before = targets.map(salesSnapshot);
-  targets.forEach(o => { o.customerLedger = l; o.userLedger = true; o.custSource = "Set by you"; mapInvoice(o); s.sticky.add(o.id); if (o.status === "review" && !(o.problems || []).length && !(o.ledgerIssues || []).length) o.status = "ready"; });
+  targets.forEach(o => { if (o.id === v.id && o.customerLedger !== l) delete o.refused; o.customerLedger = l; o.userLedger = true; o.custSource = "Set by you"; mapInvoice(o); s.sticky.add(o.id); if (o.status === "review" && !(o.problems || []).length && !(o.ledgerIssues || []).length) o.status = "ready"; });
   learnCustomer(v);
   salesSetUndo(esc(v.x.customerName || v.x.number) + " \u2192 <b>" + esc(l) + "</b>" + (targets.length > 1 ? " \u00b7 also " + (targets.length - 1) + " more invoice" + (targets.length > 2 ? "s" : "") + " of this customer" : ""), before);
   saveSales();
@@ -576,11 +637,18 @@ function salesSetCust(id, val){
 function salesSetField(k, val){
   const v = inv(SL().openId); if (!v) return;
   const before = [salesSnapshot(v)];
-  v.x[k] = ["taxable", "cgst", "sgst", "igst", "cess", "total"].includes(k) ? r2(num(val)) : k === "customerGstin" ? String(val).trim().toUpperCase() : String(val).trim();
-  if (k === "customerGstin" && gstinValid(v.x.customerGstin) && !v.x.pos) v.x.pos = stateOfGstin(v.x.customerGstin);
+  const was = v.x[k];
+  v.x[k] = ["taxable", "cgst", "sgst", "igst", "cess", "total"].includes(k) ? r2(num(val)) : k === "customerGstin" ? String(val).trim().toUpperCase().replace(/\s+/g, "") : String(val).trim();
+  // (item 6) a GSTIN typed, changed or cleared: the place of supply it gave follows it, and every problem is worked out
+  // again below, so no label of the GSTIN before stays; a GSTIN or place of supply a person typed is theirs (a sheet's
+  // invoice no longer takes the party's from its Tally ledger)
+  if (k === "customerGstin" && gstinValid(v.x.customerGstin) && (!v.x.pos || v.x.pos === stateOfGstin(was))) v.x.pos = stateOfGstin(v.x.customerGstin);
+  if ((k === "customerGstin" || k === "pos") && v.sheetHad){ v.sheetHad = Object.assign({}, v.sheetHad, k === "pos" ? {pos: true} : {gstin: true}); delete v.filled; }
+  // (item 4) an invoice Tally refused, changed: it is not the voucher refused any more
+  if (v.refused && was !== v.x[k]) delete v.refused;
   mapInvoice(v); salesSetUndo("Invoice " + esc(v.x.number) + " changed", before); saveSales(); render();
 }
-function salesSetSalesLedger(rate, val){ const v = inv(SL().openId); if (v){ v.salesLedgers = v.salesLedgers || {}; v.salesLedgers[num(rate)] = val; mapInvoice(v); saveSales(); render(); } }
+function salesSetSalesLedger(rate, val){ const v = inv(SL().openId); if (v){ v.salesLedgers = v.salesLedgers || {}; v.salesLedgers[num(rate)] = val; delete v.refused; mapInvoice(v); saveSales(); render(); } }
 // the invoice being created
 function draftSet(k, val){
   const s = SL(), x = s.draft.x;

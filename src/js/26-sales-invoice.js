@@ -97,11 +97,52 @@ function salesSetKind(id, k){
   const v = inv(id); if (!v || !k || !v.hold || v.status !== "review") return;   // only a held invoice still in To review
   const x = v.x;
   ["taxable", "cgst", "sgst", "igst", "cess", "total"].forEach(f => { x[f] = Math.abs(num(x[f])); });
+  (x.items || []).forEach(it => ["taxable", "igst", "cgst", "sgst", "tax"].forEach(f => { if (it[f] != null && it[f] !== "") it[f] = Math.abs(num(it[f])); }));
   x.noteKind = k === "invoice" ? "" : k;
   if (k === "credit" && !/^cn|\(CN\)$/i.test(x.number)) x.number += " (CN)";
   delete v.hold; mapInvoice(v); saveSales(); render();
 }
+// "Post one by one to find the cause": each invoice Tally refused in a batch is sent again on its own, through the same
+// posting path (Bridge.post: the same voucher XML, one voucher a request). Allowed because "created 0" is a definite
+// refusal: Tally made nothing of the request (the bridge forgets such a request, the cloud's id is not live). Each one's
+// own answer is kept on it and listed (s.oneByOne)
+async function salesPostOneByOne(ids){
+  const s = SL(), co = CO(s.cid);
+  const list = s.list.filter(v => v.refused && !v.refused.single && v.status === "review" && (!ids || ids.includes(v.id)));
+  if (!list.length){ toast("No invoice refused in a batch is waiting."); return; }
+  if (!(await ensureTallyCompany(co))) return;
+  const tn = tallyCoName(co), out = [];
+  s.oneByOne = {at: new Date().toISOString(), rows: out};
+  try {
+    for (let i = 0; i < list.length; i++){
+      const v = list[i];
+      s.busy = "Posting one by one: " + (i + 1) + " of " + list.length + " (" + v.x.number + ")\u2026"; render();
+      const masters = mastersFor([v]), now = new Date().toISOString();
+      let r = null;
+      try {
+        const j = await Bridge.post({company: tn, client: co.id, masters: masters.map(l => ({id: "led:" + l.name, xml: (/sundry/i.test(l.group || "sundry") ? customerMasterXml : ledgerMasterXml)(l)})), vouchers: [{id: v.id, xml: salesVoucherXml(v, co)}]});
+        const by = new Map([].concat(j.results || []).map(x => [x.id, x]));
+        masters.forEach(l => { const m = by.get("led:" + l.name); if (m && m.ok){ l.sent = true; l.sentAt = now; } });
+        r = by.get(v.id) || null;
+      } catch (e){ r = {ok: false, message: (e && e.message) || String(e)}; }
+      const no = salesRefusal(r);
+      let word;
+      // (each answer read as the batch's are, postSalesToTally)
+      if (r && r.ok && r.verified === true){ v.status = "posted"; v.postedAt = now; v.postError = ""; v.postedInto = r.company || ""; v.postedOptional = !!r.optional; delete v.refused; learnCustomer(v); word = "Posted"; }
+      else if (r && r.ok){ delete v.refused; v.status = "ready"; v.postError = "Failed: not found in Tally when read back, so it is not marked as posted. Look in Tally (Day Book, and Display More Reports \u2192 Exception Reports \u2192 Optional Vouchers). If it is not there, post it again."; word = "Not confirmed: " + v.postError; }
+      else if (r && r.held){ delete v.refused; v.status = "ready"; v.postError = plainMsg(r.message); v.postJob = r.job; word = "Queued: " + v.postError; }
+      else if (no){ salesMarkRefused(v, r, {n: 1, exceptions: no.exceptions}, true); word = "Refused by Tally on its own, with no reason given: this voucher is one that stops the batch"; }
+      else { const said = plainMsg(r && r.message) || "Tally did not confirm this invoice."; salesMarkRefused(v, r, {n: 1, exceptions: num(r && r.exceptions)}, true, "Tally said: " + said); word = "Refused by Tally on its own: " + said; }
+      out.push({id: v.id, number: v.x.number, ok: v.status === "posted", word});
+      saveSales();
+    }
+  } finally { s.busy = ""; saveBank({newLed: true}); saveSales(); }
+  const okN = out.filter(x => x.ok).length;
+  toast("One by one: " + okN + " of " + out.length + " posted" + (okN < out.length ? "; the rest say why under To review" : "") + ".");
+  render();
+}
 if (typeof salesSetKind !== "undefined") globalThis.salesSetKind = salesSetKind;
+if (typeof salesPostOneByOne !== "undefined") globalThis.salesPostOneByOne = salesPostOneByOne;
 if (typeof rereadSales !== "undefined") globalThis.rereadSales = rereadSales;
 if (typeof salesWhy !== "undefined") globalThis.salesWhy = salesWhy;
 if (typeof invoiceHtml !== "undefined") globalThis.invoiceHtml = invoiceHtml;

@@ -275,9 +275,26 @@ Object.assign(PostOwner, {
   salesNotTally(id){
     const s = SL(), v = inv(id); if (!v || v.status !== "intally") return;
     const m = v.tallyMatch || {}, key = m.key || "num:" + normInvNo(v.x.number), d = String(m.date || "");
-    const words = [d ? fmtDate(/^\d{8}$/.test(d) ? d.slice(0, 4) + "-" + d.slice(4, 6) + "-" + d.slice(6) : d) : "", m.number || v.x.number, m.amount ? money0(m.amount) : ""].filter(Boolean).join(" \u00b7 ");
-    askConfirm({title: "Not this Tally entry?", ok: "Not that entry", body: '<p class="note">This invoice was matched to Tally entry ' + esc(words) + ". Mark it as NOT that entry? If this entry really is it, posting will put it in Tally twice." +
+    const tdate = d ? fmtDate(/^\d{8}$/.test(d) ? d.slice(0, 4) + "-" + d.slice(4, 6) + "-" + d.slice(6) : d) : "";
+    const words = [tdate, [m.type, m.number || v.x.number].filter(Boolean).join(" "), m.amount ? money0(m.amount) : ""].filter(Boolean).join(" \u00b7 ");
+    // next-fix-sales-upload (item 3): FinCom's invoice and the Tally voucher side by side (date, number and type, amount,
+    // party), so the person sees what they are saying is not the same; whether the override is allowed is unchanged (the
+    // owner's decision), and it is asked twice
+    const cell = t => "<td>" + (t ? esc(t) : '<span class="nr">not known</span>') + "</td>";
+    const row = (l, a, b, same) => "<tr" + (same ? ' class="same"' : "") + "><th>" + l + "</th>" + cell(a) + cell(b) + "</tr>";
+    const lc = t => String(t || "").trim().toLowerCase();
+    const table = '<table class="data" data-nottally-compare="" style="width:100%;margin:8px 0"><thead><tr><th></th><th>In FinCom</th><th>In Tally</th></tr></thead><tbody>' +
+      row("Date", v.x.date ? fmtDate(v.x.date) : "", tdate) +
+      row("Number and type", [v.x.number, salesVt(v.x)].filter(Boolean).join(" \u00b7 "), [m.number, m.type].filter(Boolean).join(" \u00b7 ")) +
+      row("Amount", num(v.x.total) ? money0(num(v.x.total)) : "", m.amount ? money0(m.amount) : "") +
+      row("Party", v.customerLedger || v.x.customerName || "", m.party || "") + "</tbody></table>";
+    askConfirm({title: "Not this Tally entry?", ok: "Not that entry", wide: true, body: '<p class="note"><b>Same number and type already in Tally. Posting it again will create a duplicate.</b></p>' + table +
+      '<p class="note">This invoice was matched to Tally entry ' + esc(words) + ". Mark it as NOT that entry? If this entry really is it, posting will put it in Tally twice." +
       (m.key ? "" : " FinCom did not keep which voucher it was, so every Tally voucher numbered " + esc(v.x.number || "") + " is left out for this invoice.") + "</p>"}).then(ok => {
+      if (!ok || v.status !== "intally") return null;
+      // the second confirmation: the person says it once more, knowing it can be posted twice
+      return askConfirm({title: "Mark it as not that entry?", ok: "Yes, it is a different entry", danger: true, body: '<p class="note" data-nottally-again="">Invoice ' + esc(v.x.number || "") + " will go back to To review and can be posted to Tally. If the Tally entry " + esc(words) + " is this invoice, Tally will have it twice.</p>"});
+    }).then(ok => {
       if (!ok || v.status !== "intally") return;
       // back to review: a person confirms it before it is posted
       v.notTally = (v.notTally || []).concat(key); const no = normInvNo(v.x.number); s.cfg.notTally = Object.assign({}, s.cfg.notTally, {[no]: v.notTally}); saveSales({cfg: true}); delete v.tallyMatch; v.postNote = ""; mapInvoice(v); v.status = "review";

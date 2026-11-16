@@ -47,7 +47,7 @@ function TaxChoice({ a, n, id }) {
   </span>;
 }
 // the sales list's columns (spec K6: date, number, party, amount, status, then the rest, in ListTable.jsx's order)
-const ST_WORDS = { ready: ["ok", "Ready to post"], review: ["warn", "To review"], posted: ["ok", "Posted"], intally: ["no", "In Tally"], ignored: ["no", "Ignored"] };
+const ST_WORDS = { ready: ["ok", "Ready to post"], review: ["warn", "To review"], refused: ["bad", "Refused by Tally"], posted: ["ok", "Posted"], intally: ["no", "In Tally"], ignored: ["no", "Ignored"] };
 const salesPrep = (v) => ({ editable: ["review", "ready"].includes(v.status), issue: (v.problems || [])[0] || (v.ledgerIssues || []).find((p) => !/customer ledger/.test(p)) || "" });
 function salesCols(s, list, nSel) {
   const act = (a, v) => () => salesRowAct(a, v.id);
@@ -60,7 +60,7 @@ function salesCols(s, list, nSel) {
     { k: "cust", role: "party", label: "Customer", cls: "pt", filter: <ColFunnel hideIdle t="sales" k="cust" label="Customer" />, v: (v) => v.x.customerName || "",
       cell: ({ x }) => <><div className="pn">{x.customerName || "—"}</div><div className="nr">{x.customerGstin || "Unregistered"}{x.pos ? " · " + (GST_STATES[x.pos] || x.pos) : ""}</div></> },
     { k: "val", role: "amount", label: "Total", cls: "n", filter: <ColFunnel hideIdle t="sales" k="val" label="Total" />, v: (v) => num(v.x.total), cell: (v) => <b>{money(num(v.x.total))}</b> },
-    { k: "st", role: "status", label: "Status", v: (v) => (ST_WORDS[v.status] || ["", v.status])[1], cell: (v) => { const w = ST_WORDS[v.status] || ["no", v.status]; return <span className={"tag " + w[0]}>{w[1]}</span>; } },
+    { k: "st", role: "status", label: "Status", v: (v) => (ST_WORDS[v.refused && v.status === "review" ? "refused" : v.status] || ["", v.status])[1], cell: (v) => { const w = ST_WORDS[v.refused && v.status === "review" ? "refused" : v.status] || ["no", v.status]; return <span className={"tag " + w[0]} data-sales-st={v.id}>{w[1]}</span>; } },
     { k: "tx", label: "Taxable", cls: "n", v: (v) => num(v.x.taxable), sum: true, cell: (v) => money(num(v.x.taxable)) },
     { k: "gst", label: "GST", cls: "n", v: (v) => gstOf(v.x), sum: true, cell: (v) => <>{money(gstOf(v.x))}
       {(v.taxPicks || []).map((t, i) => <div key={i} className="nr" data-tax-led={t.kind} title={t.why ? t.ledger + ": " + t.why : t.ledger}>{t.ledger}</div>)}</> },
@@ -319,6 +319,18 @@ function Create() {
   );
 }
 
+function SalesRefused({ s }) {
+  const waiting = s.list.filter((v) => v.refused && !v.refused.single && v.status === "review"), done = s.oneByOne;
+  if (!waiting.length && !(done && done.rows && done.rows.length)) return null;
+  return <div className="bk-alert" data-sales-refused="">
+    {waiting.length > 0 && <div><b>Refused by Tally:</b> {waiting.length} invoice{waiting.length === 1 ? "" : "s"}. {waiting[0].refused.hint}{" "}
+      <button className="btn small" data-sales-onebyone="" disabled={!!s.busy || !canPostTally(CO())} onClick={() => salesPostOneByOne()}>Post one by one to find the cause</button></div>}
+    {done && done.rows && done.rows.length > 0 && <div data-sales-onebyone-result="" style={{ marginTop: waiting.length ? 8 : 0 }}><b>Posted one by one:</b>
+      <ul style={{ margin: "4px 0 0 18px" }}>{done.rows.map((r) => <li key={r.id} data-onebyone-row={r.id} className={r.ok ? "" : "bad"}><button className="linkbtn" onClick={() => salesOpen(r.id)}>{r.number || "(no number)"}</button>: {r.word}</li>)}</ul>
+      <button className="linkbtn" onClick={() => { s.oneByOne = null; render(); }}>Close</button></div>}
+  </div>;
+}
+
 export default function Sales() {
   const co = CO(), s = SL();
   if (!s || s.cid !== co.id) { loadSales(co.id); return <Loading what="sales invoices" page="table" />; }
@@ -330,6 +342,9 @@ export default function Sales() {
   // upload-pages (14-Oct-2026): the states are the page's one row of states (parts/StateBar.jsx), as on Purchase and Bank
   const head = <>
     {s.busy && <BusyCard title="Working on sales…" detail={s.busy} />}
+    {/* next-fix-sales-upload (item 4): invoices Tally refused in a batch with no reason given, and each one's own answer
+        once posted one by one (src/js/26 salesPostOneByOne) */}
+    <SalesRefused s={s} />
     {/* one row (round 3, 05-Oct-2026), the how-to on hover and behind How */}
     {!hasLedgerList() && (bridgeLive(co) ? <NoticeLine sev="info" text="Loading ledgers from Tally…" />
       : (B() && B().ledgersLoading) || (typeof TCloud === "object" && TCloud.on() && TCloud.has(co.id)) ? <NoticeLine sev="info" text="Loading ledgers from FinCom’s cloud copy of the books…" />

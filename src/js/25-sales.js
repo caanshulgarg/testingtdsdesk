@@ -71,6 +71,9 @@ async function loadSales(cid){
   // invoices filed from elsewhere are matched now
   const pend = S.sales.list.filter(v => v.needsMap);
   if (pend.length){ pend.forEach(v => { v.needsMap = false; mapInvoice(v); }); saveSales(); }
+  // (item 6: the problems kept with an invoice waiting are worked out again on opening, so a label left from an earlier
+  // state, "customer GSTIN is not valid" on a GSTIN since cleared, never stays)
+  S.sales.list.forEach(v => { if (["review", "ready"].includes(v.status) && !v.needsMap){ const was = JSON.stringify(v.problems || []); v.problems = invoiceProblems(v); if (was !== JSON.stringify(v.problems)) mapInvoice(v); } });
   render();
   if (bridgeLive(CO(cid))) salesAutoSync();
 }
@@ -370,7 +373,10 @@ function salesTotals(x){
   const items = (x.items || []).filter(it => num(it.taxable) || num(it.qty));
   const groups = new Map();
   if (items.length){
-    items.forEach(it => { const r = num(it.gstRate); const g = groups.get(r) || {rate: r, taxable: 0}; g.taxable = r2(g.taxable + num(it.taxable)); groups.set(r, g); });
+    items.forEach(it => { const r = num(it.gstRate); const g = groups.get(r) || {rate: r, taxable: 0}; g.taxable = r2(g.taxable + num(it.taxable));
+      // (an item line that carries its own tax, a sheet's rows at that rate: its figures as given, never worked out again)
+      if (it.tax != null && it.tax !== ""){ g.own = true; ["igst", "cgst", "sgst"].forEach(k => { g[k] = r2(num(g[k]) + num(it[k])); }); }
+      groups.set(r, g); });
   } else {
     const gst = num(x.cgst) + num(x.sgst) + num(x.igst);
     const rate = num(x.taxable) ? Math.round(gst / num(x.taxable) * 10000) / 100 : 0;
@@ -392,6 +398,7 @@ function salesLines(v){
   const taxParts = [];
   if (groups.length > 1 && (x.items || []).length){
     groups.forEach(g => {
+      if (g.own){ ["cgst", "sgst", "igst"].forEach(k => { if (num(g[k])) taxParts.push({kind: k, rate: g.rate, amt: r2(num(g[k]))}); }); return; }
       const t = r2(g.taxable * g.rate / 100);
       if (inter) taxParts.push({kind: "igst", rate: g.rate, amt: t});
       else { taxParts.push({kind: "cgst", rate: g.rate, amt: r2(t / 2)}); taxParts.push({kind: "sgst", rate: g.rate, amt: r2(t - r2(t / 2))}); }
@@ -424,9 +431,16 @@ function invoiceProblems(v){
   const gst = num(x.cgst) + num(x.sgst) + num(x.igst);
   if (Math.abs(num(x.taxable) + gst + num(x.cess) - num(x.total)) > 1.0) p.push("taxable value + GST does not equal the total");
   if (num(x.igst) && (num(x.cgst) || num(x.sgst))) p.push("both IGST and CGST/SGST");
-  const inter = isInterState(x, co);
-  if (gst > 0 && inter && !num(x.igst)) p.push("place of supply is another state, so IGST is expected");
-  if (gst > 0 && !inter && num(x.igst) && x.pos) p.push("place of supply is the same state, so CGST + SGST are expected");
+  const inter = isInterState(x, co), home = salesRegOf(v).code || stateOfGstin(co.gstin), pos = x.pos || stateOfGstin(x.customerGstin);
+  // next-fix-sales-upload (item 1): the place of supply named, and where it came from (the party's Tally ledger when the
+  // sheet gave none); an IGST invoice whose party's state is not known is held, never posted as a sale to a consumer
+  const from = v.filled && v.filled.pos && v.filled.pos === x.pos ? " (the party\u2019s state in its Tally ledger)" : "";
+  const stName = c => GST_STATES[c] || c;
+  if (gst > 0 && inter && !num(x.igst)) p.push("CGST + SGST are charged, but the place of supply is " + stName(pos) + from + ", another state than " + stName(home) + ", so IGST is expected");
+  if (gst > 0 && !inter && num(x.igst) && pos) p.push("IGST is charged, but the place of supply is " + stName(pos) + from + ", the state " + co.name + " issues it from, so CGST + SGST are expected");
+  // (asked once the customer ledger is set: with none, the ledger is what it waits for, and Tally's master gives the state)
+  if (num(x.igst) > 0 && !pos && v.customerLedger) p.push("IGST is charged, but the party\u2019s state is not known (no GSTIN or state on the sheet or in its Tally ledger): set the customer\u2019s GSTIN or the place of supply");
+  if (v.refused) p.push("Refused by Tally" + (v.refused.single ? " (sent on its own)" : "") + ": " + (v.refused.hint || v.refused.said || "Tally created nothing"));
   if (Math.abs(num(x.cgst) - num(x.sgst)) > 0.05) p.push("CGST and SGST differ");
   if (salesTotals(x).some(g => g.mixed)) p.push("GST is not at one standard rate (several rates?): use Enter items");
   if (x.sellerGstin && co.gstin && !salesIsOwn(x.sellerGstin, co)) p.push("the seller GSTIN on the invoice is not " + co.name + "\u2019s");
@@ -448,6 +462,7 @@ function mapInvoice(v){
     v.customerLedger = c.ledger; v.custSource = c.label; v.custSure = c.sure; v.userLedger = false;
   }
   salesLearnReg(v);
+  salesPartyFill(v);
   v.problems = invoiceProblems(v);
   const lines = hasLedgerList() ? salesLines(v) : null;
   v.ledgerIssues = lines ? ledgerProblems(v, lines) : ["Tally ledger list not loaded"];
@@ -457,6 +472,31 @@ function mapInvoice(v){
   // (an invoice a person said is not the Tally entry it was matched to waits for a person to set its ledger)
   const sure = v.problems.length === 0 && v.ledgerIssues.length === 0 && (v.custSure || v.userLedger || v.source === "created") && !(v.notTally && !v.userLedger);
   if (v.status !== "ready" || v.problems.length || v.ledgerIssues.length) v.status = sure && SL().cfg.auto !== false ? "ready" : "review";
+}
+// next-fix-sales-upload (item 1): a party's GSTIN and state as its Tally ledger master has them (the ledger list read
+// from Tally, else the client's books): {gstin, state (the 2-digit code), stateName}, or null when Tally has no such ledger
+function partyMaster(ledger){
+  const name = exactLedger(ledger); if (!name) return null;
+  const b = B(), l = ((b && b.ledgers && b.ledgers.list) || []).find(x => x.name === name) || {};
+  const bk = S.books && (!S.books.cid || S.books.cid === SL().cid) ? S.books : null;
+  const g = String(l.gstin || (bk && ((bk.gstins || {})[name] || ((bk.ledInfo || {})[name] || {}).gstin)) || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const gstin = GSTIN_RE.test(g) ? g : "", stateName = String(l.state || l.stateName || (bk && (bk.states || {})[name]) || "").trim();
+  return {gstin, state: stateOfGstin(gstin) || stateCodeFrom(stateName), stateName};
+}
+// an invoice from a sheet that gave no GSTIN (or no place of supply): the party's, from its Tally ledger master, so a
+// B2B sale is never reported as one to a consumer; the place of supply is the party's state. What a person typed stands;
+// what was filled so follows the customer ledger when it changes (v.filled: what was filled, and from which ledger)
+function salesPartyFill(v){
+  const x = v.x; if (["posted", "intally", "ignored"].includes(v.status)) return;
+  // (an invoice read from a file other than a sheet: what it gave is what it had when first worked out; one made here: none)
+  if (!v.sheetHad && v.source !== "created") v.sheetHad = {gstin: GSTIN_RE.test(x.customerGstin || ""), pos: !!x.pos};
+  const h = v.sheetHad; if (!h) return;
+  const f = v.filled || {}, m = v.customerLedger ? partyMaster(v.customerLedger) : null;
+  const ours = k => !x[k] || (f[k] && x[k] === f[k]);
+  const out = {ledger: v.customerLedger || ""};
+  if (!h.gstin && ours("customerGstin")){ x.customerGstin = (m && m.gstin) || ""; if (x.customerGstin) out.customerGstin = x.customerGstin; }
+  if (!h.pos && (!x.pos || (f.pos && x.pos === f.pos))){ x.pos = stateOfGstin(x.customerGstin) || (m && m.state) || ""; if (x.pos) out.pos = x.pos; }
+  if (out.customerGstin || out.pos) v.filled = out; else delete v.filled;
 }
 function learnCustomer(v){
   const k = salesHistKey(v); if (!k || !v.customerLedger) return;
@@ -472,7 +512,8 @@ function salesCmpGstin(v, co){ const r = salesRegOf(v); return r.gstin && salesI
 function salesVoucherXml(v, co){
   const x = v.x, cn = x.noteKind === "credit";
   const vt = xesc(salesVt(x)), d = toTallyDate(x.date);
-  const pos = x.pos || stateOfGstin(x.customerGstin) || stateOfGstin(co.gstin);
+  // (the client's own state only for an invoice of CGST + SGST: an IGST invoice with no place of supply is held, item 1)
+  const pos = x.pos || stateOfGstin(x.customerGstin) || (num(x.igst) ? "" : salesRegOf(v).code || stateOfGstin(co.gstin));
   const amt2 = n => r2(n).toFixed(2);
   let s = '<VOUCHER VCHTYPE="' + vt + '" ACTION="Create" OBJVIEW="Accounting Voucher View">\n<DATE>' + d + "</DATE>\n<EFFECTIVEDATE>" + d + "</EFFECTIVEDATE>\n" +
     "<VOUCHERTYPENAME>" + vt + "</VOUCHERTYPENAME>\n<VOUCHERNUMBER>" + xesc(x.number) + "</VOUCHERNUMBER>\n<REFERENCE>" + xesc(x.number) + "</REFERENCE>\n<REFERENCEDATE>" + d + "</REFERENCEDATE>\n" +

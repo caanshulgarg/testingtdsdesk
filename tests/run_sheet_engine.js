@@ -9,7 +9,7 @@ const {load, HTML} = require("./harness");
 let fails = 0;
 const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };
 const FX = path.join(__dirname, "fixtures", "sheets");
-const NAMES = ["num", "r2", "fpHash", "GST_STATES", "stateOfGstin", "GSTIN_RE", "normName", "normInv", "money", "INR", "Market", "GST2B", "GSTAmend", "VR", "isSheetFile"];
+const NAMES = ["num", "r2", "fpHash", "GST_STATES", "SALES_RATES", "stateOfGstin", "GSTIN_RE", "normName", "normInv", "money", "INR", "Market", "GST2B", "GSTAmend", "VR", "isSheetFile"];
 const h = load(HTML, NAMES);
 // the engine is a file of its own, loaded by the app when first used: run here on the program's helpers
 // (its import of the vendor reconciliation, src/js/42 since 25-Oct-2026, is left out: VR comes from the page above)
@@ -140,6 +140,23 @@ ok(dd1.length === 2 && dd1.every((d) => d.note === "credit" && d.total === -450 
 dd1 = disc({doctype: "type"}, [["H1", "", -472], ["H2", "Sales", -100], ["H3", "Sales", 100]]);
 ok(dd1[0].note === "" && dd1[0].total === -472 && /^Negative amount: is this a return\? Set it in the Type column$/.test(dd1[0].hold) && dd1[1].note === "" && dd1[1].total === -100 && !!dd1[1].hold && !dd1[2].hold,
   "a Type column that is blank or says “Sales” on a negative invoice: held with a plain reason, its figures as the sheet has them (" + JSON.stringify(dd1.map((d) => [d.no, d.note, d.total, d.hold])) + ")");
+
+// ---- next-fix-sales-upload (item 5, made-up rows): one invoice whose rows carry two GST rates is one invoice of two
+// rate-wise item lines (taxable, rate and tax a line, as the sheet has them), never one line at a rate that is neither
+const mr = (rows, map, side) => F.apply({map: Object.assign({no: "no", date: "date", party: "party", taxable: "taxable", igst: "igst", cgst: "cgst", sgst: "sgst", total: "total"}, map || {}), transforms: {date: "dmy", groupByNo: true}},
+  [["No", "Date", "Party", "Rate", "Taxable", "IGST", "CGST", "SGST", "Total"]].concat(rows), 0, co, side || "sales");
+let m5 = mr([["MR/1", "01-10-2026", "ZZ Made Up Traders", 5, 1000, 0, 25, 25, 1050], ["MR/1", "01-10-2026", "ZZ Made Up Traders", 18, 2000, 0, 180, 180, 2360]], {rate: "rate"});
+ok(m5.length === 1 && m5[0].taxable === 3000 && m5[0].total === 3410 && m5[0].check.ok && (m5[0].items || []).length === 2, "rows at 5% and 18%: one invoice of 3,000 + 410 = 3,410 (" + JSON.stringify(m5.map((d) => [d.taxable, d.total, (d.items || []).length])) + ")");
+ok(JSON.stringify((m5[0].items || []).map((it) => [it.rate, it.taxable, it.cgst, it.sgst, it.tax])) === JSON.stringify([[5, 1000, 25, 25, 50], [18, 2000, 180, 180, 360]]), "its item lines: 5% on 1,000 (tax 50) and 18% on 2,000 (tax 360) (" + JSON.stringify(m5[0].items) + ")");
+m5 = mr([["MR/2", "02-10-2026", "ZZ Made Up Traders", "", 1000, 120, 0, 0, 1120], ["MR/2", "02-10-2026", "ZZ Made Up Traders", "", 500, 25, 0, 0, 525], ["MR/2", "02-10-2026", "ZZ Made Up Traders", "", 300, 36, 0, 0, 336]]);
+ok(m5.length === 1 && JSON.stringify((m5[0].items || []).map((it) => [it.rate, it.taxable, it.igst])) === JSON.stringify([[5, 500, 25], [12, 1300, 156]]), "no rate column: each row's rate from its tax (12%, 5%, 12%), the rows of one rate added up (" + JSON.stringify(m5[0].items) + ")");
+m5 = mr([["MR/3", "03-10-2026", "ZZ Made Up Traders", 18, 1000, 180, 0, 0, 1180], ["MR/3", "03-10-2026", "ZZ Made Up Traders", 18, 500, 90, 0, 0, 590]], {rate: "rate"});
+ok(m5.length === 1 && !m5[0].items && m5[0].taxable === 1500, "rows all at one rate: no item lines (the invoice of one rate, as before)");
+m5 = mr([["CN/9", "04-10-2026", "ZZ Made Up Traders", 5, -200, -10, 0, 0, -210], ["CN/9", "04-10-2026", "ZZ Made Up Traders", 18, -100, -18, 0, 0, -118]], {rate: "rate"});
+ok(m5[0].note === "credit" && m5[0].total === -328 && JSON.stringify(m5[0].items.map((it) => [it.rate, it.taxable, it.tax])) === JSON.stringify([[5, -200, -10], [18, -100, -18]]), "a credit note of two rates: its item lines negative with it (" + JSON.stringify(m5[0].items) + ")");
+m5 = F.apply({map: {no: "no", doctype: "type", rate: "rate", taxable: "taxable", igst: "igst", total: "total"}, transforms: {groupByNo: true}}, [["No", "Type", "Rate", "Taxable", "IGST", "Total"], ["CN/10", "Credit Note", 5, 200, 10, 210], ["CN/10", "Credit Note", 18, 100, 18, 118]], 0, co, "sales");
+ok(m5[0].note === "credit" && m5[0].total === -328 && JSON.stringify(m5[0].items.map((it) => [it.rate, it.taxable, it.tax])) === JSON.stringify([[5, -200, -10], [18, -100, -18]]), "a credit note the Type column names, written positive: taken negative, its item lines with it");
+ok(F.rateOf(1000, 180) === 18 && F.rateOf(1000, 179.96) === 18 && F.rateOf(1000, 150) === 15 && F.rateOf(0, 5) === 0, "a row's rate from its figures: the standard rate within 0.05%, else its own");
 
 console.log(fails ? "\nFAILED: " + fails : "\nall passed");
 process.exit(fails ? 1 : 0);

@@ -36,8 +36,15 @@ their GST ledgers and some parties in sub-groups (Sales Local under Sales Accoun
      it right; "Edit type" does nothing to a row that is not held or is approved / posted, and a held bill is not
      approved until its type is set; a return carries no TDS (a 1,00,000 professional-fees return: TDS 0); the client's
      own name for its purchase voucher type is kept when Journal is chosen and chosen back.
+ 14-16. next-fix-sales-upload (made-up parties and sheets): a sheet with no GSTIN column takes each party's GSTIN and state
+     from its Tally ledger (place of supply its state; IGST to a party of the client's own state, CGST + SGST to one of
+     another, and IGST with no state known are held with the reason); rows of two rates are one invoice of rate-wise item
+     lines, posted in the sales voucher's form of several rates; a GSTIN cleared leaves no "not valid" label; the AI's
+     mapping of a new layout is kept until saved or cancelled; the already-booked check asks Tally for every voucher and
+     keeps the Sales-class types (the client's "Sales UP"); "Not this Tally entry" shows both sides and asks twice; Tally's
+     "created 0 of N" with no line error is "Refused by Tally", posted one by one through the same path, each answer shown.
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_sheet_owner_shape.py"""
-import os, sys, json, threading, functools, http.server
+import os, sys, json, threading, functools, http.server, tempfile
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
 from playwright.sync_api import sync_playwright
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
@@ -65,14 +72,15 @@ FAKE_AI = """async () => { await registersLoad(); window.__ai = []; SheetAI.map 
 LEDGERS = """() => { const L = [["Asha Textiles Pvt Ltd", "Debtors UP"], ["Chitra Foods (Lucknow)", "Sundry Debtors"], ["Consulting Income (A)", "Sales Local"], ["Consulting Income (B)", "Sales Local"],
     ["Output CGST", "GST Output"], ["Output SGST", "GST Output"], ["Output IGST", "GST Output"], ["Input CGST", "GST Input"], ["Input SGST", "GST Input"], ["Input IGST", "GST Input"],
     ["Purchase of Goods (UP)", "Purchase UP"], ["Dev Packaging", "Creditors UP"], ["Rent Received", "Indirect Incomes"], ["Cash", "Cash-in-Hand"], ["ICICI Bank", "Bank Accounts"]];
-  S.bank.ledgers = {list: L.map(([name, group]) => ({name, group})), parents: {"Debtors UP": "Sundry Debtors", "Sales Local": "Sales Accounts", "GST Output": "Duties & Taxes", "GST Input": "Duties & Taxes",
+  // (next-fix-sales-upload: Asha's state is in its ledger, Delhi: its IGST invoices with no GSTIN have a place of supply)
+  S.bank.ledgers = {list: L.map(([name, group]) => Object.assign({name, group}, name === "Asha Textiles Pvt Ltd" ? {state: "Delhi"} : {})), parents: {"Debtors UP": "Sundry Debtors", "Sales Local": "Sales Accounts", "GST Output": "Duties & Taxes", "GST Input": "Duties & Taxes",
     "Purchase UP": "Purchase Accounts", "Creditors UP": "Sundry Creditors"}, importedAt: new Date().toISOString(), live: true};
   S.bank.newLed = []; Ledgers.st[S.coId] = null; delete Ledgers.busy[S.coId]; }"""
 # the cloud's queue, as run_sheet_import.py fakes it
 QUEUE = """() => { const G = "GARG SHEKHAR & COMPANY"; const rpc0 = TCloud.rpc; window.__enq = [];
   TCloud.rpc = async (fn, a) => { if (fn === "tally_post_enqueue" && a && a.p_payload && (a.p_payload.vouchers || []).length){ const ids = a.p_payload.vouchers.map(v => v.id); window.__enq.push(JSON.parse(JSON.stringify(a.p_payload)));
       window.__jobs.unshift({id: a.p_id, client_id: a.p_client, company: G, status: "done", done: ids.length, n: ids.length, message: ids.length + " of " + ids.length + " sent to Tally", created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
-        entry_ids: ids, results: ids.map(id => ({id, ok: true, verified: true, vchNumber: "V/" + id})), items: ids.map(id => ({id, state: "in_tally"}))}); CloudJobs.changed(); return {ok: true}; }
+        entry_ids: ids, results: window.__postAnswer ? window.__postAnswer(a.p_payload.vouchers) : ids.map(id => ({id, ok: true, verified: true, vchNumber: "V/" + id})), items: ids.map(id => ({id, state: window.__postAnswer ? "refused" : "in_tally"}))}); CloudJobs.changed(); return {ok: true}; }
     if (fn === "tally_vouchers_in") return [];
     return rpc0(fn, a); };
   Cloud.api = async (p) => { const m = /tally_post_jobs\\?.*id=eq\\.([^&]+)/.exec(p); return m ? JSON.parse(JSON.stringify(window.__jobs.filter(j => j.id === m[1]))) : []; };
@@ -85,7 +93,13 @@ with sync_playwright() as p:
     W = pg.wait_for_timeout
     cid = E(BK.PURCHASE); W(1500)
     E(FAKE_AI); E(QUEUE)
+    # (step 13 leaves Client setup's Tally draft unsaved: its "Save your changes?" is answered first)
+    E("() => { if (typeof Drafts === 'object' && Drafts.clear) try { Drafts.clear(); } catch (e){} }")
     E("(id) => { S.tab = 'sales'; S.step = null; return loadSales(id).then(() => render()); }", cid); W(1200)
+    def no_save():
+        b = pg.locator("#confirmBox button", has_text="Don’t save")
+        if b.count() and b.first.is_visible(): b.first.click(); W(400)
+    no_save()
     E(LEDGERS); E("() => { ensureFileInputs(); SL().list = []; render(); }"); W(300)
     panel = lambda: pg.inner_text("#app [data-sheet-panel]") if pg.locator("#app [data-sheet-panel]").count() else ""
     step = lambda: E("(document.querySelector('#app [data-sheet-step]') || {getAttribute: () => ''}).getAttribute('data-sheet-step')")
@@ -297,8 +311,8 @@ with sync_playwright() as p:
         {number: inv.x.number, type: "Credit Note", date: "20261012", amount: 1180, guid: "g2"}, {number: dn.x.number, type: "Sales", date: "20261016", amount: 354, guid: "g3"}]}; };
       try { await salesCheckTally(SL().list.filter(v => v.status === "ready")); } finally { window.tallyVia = tv; window.tallyCall = tc; }
       const r = {url, cn: cn.status, inv: inv.status, dn: dn.status}; [cn, inv, dn].forEach(v => { if (v.status === "intally"){ v.status = "ready"; delete v.tallyMatch; } }); return r; }""")
-    types = (chk["url"].split("types=")[-1].split("&")[0]).split(",") if chk["url"] else []
-    ok(sorted(types) == ["Credit Note", "Debit Note", "Sales"], "the already-booked check asks Tally for Sales, Credit Note and Debit Note vouchers (%s)" % types)
+    # (next-fix-sales-upload, item 2: every voucher of the period is asked for, and the Sales-class types kept here)
+    ok(chk["url"].startswith("/vouchers?") and "types=" not in chk["url"], "the already-booked check asks Tally for every voucher of the period, so no Sales, Credit Note or Debit Note type is left out (%s)" % chk["url"][-60:])
     ok(chk["cn"] == "intally" and chk["inv"] == "ready" and chk["dn"] == "ready", "a Credit Note of that number in Tally sets the credit note aside; an invoice or a debit note is not taken for another kind's voucher (%s)" % chk)
     # -- Sales, no type column: a negative total is a credit note
     E("() => { SheetImport.close(); SL().list = []; saveSales(); render(); }"); W(400)
@@ -532,6 +546,149 @@ with sync_playwright() as p:
       const c = d ? vchTypeOf(d, co) : "no draft"; e.status = "draft"; const back = vchTypeOf(e, co); coCommit("voucherType", "Journal"); return [a, b, c, back]; }""")
     ok(st and st[0] == ["approved", "Journal", "Journal"] and st[1] == ["Journal", "Journal"] and st[2] == "Purchase" and st[3] == "Purchase",
        "a bill approved as Journal still posts as Journal after the client's type is changed to Purchase; a bill waiting, and that bill sent back to To review, take Purchase (%s)" % st)
+    print("14. next-fix-sales-upload: a sheet with no GSTIN column; rows of two rates; the AI's mapping kept until saved")
+    # made-up parties: their GSTIN and state only in their Tally ledgers (the client is in Uttar Pradesh, 09)
+    TMP = tempfile.mkdtemp(prefix="salesfix-")
+    # (step 13 leaves Client setup's Tally draft unsaved: its "Save your changes?" is answered first)
+    E("() => { if (typeof Drafts === 'object' && Drafts.clear) try { Drafts.clear(); } catch (e){} }")
+    E("(id) => { S.tab = 'sales'; S.step = null; return loadSales(id).then(() => render()); }", cid); W(1200)
+    def no_save():
+        b = pg.locator("#confirmBox button", has_text="Don’t save")
+        if b.count() and b.first.is_visible(): b.first.click(); W(400)
+    no_save()
+    G = E("() => { const g = b => b + gstinCheckChar(b); return {delhi: g('07AAACZ1111A1Z'), home: g('09AAACZ2222B1Z')}; }")
+    E("""(G) => { const L = S.bank.ledgers.list; [["ZZ Delhi Buyers", "Sundry Debtors", G.delhi, ""], ["ZZ Home Buyers", "Sundry Debtors", G.home, ""], ["ZZ Far Buyers", "Sundry Debtors", "", "Delhi"], ["ZZ Nowhere Buyers", "Sundry Debtors", "", ""]]
+        .forEach(([name, group, gstin, state]) => L.push({name, group, gstin, state})); Ledgers.st[S.coId] = null; delete Ledgers.busy[S.coId]; Ledgers.ver = (Ledgers.ver || 0) + 1;
+      salesCfgLedger('sales_5_i', 'Consulting Income (B)'); salesCfgLedger('sales_18_i', 'Consulting Income (A)'); salesCfgLedger('sales_18_l', 'Consulting Income (A)');
+      SheetImport.close(); SL().list = []; SL().filter = 'review'; saveSales(); render(); }""", G); W(400)
+    csvp = os.path.join(TMP, "zz_no_gstin_sales.csv")
+    open(csvp, "w").write("Date,Vch No.,Customer Name,Taxable Amount,IGST,CGST,SGST,Invoice Amount\n" +
+        "2026-10-20,ZZ/1,ZZ Delhi Buyers,1000,180,0,0,1180\n2026-10-20,ZZ/2,ZZ Home Buyers,1000,180,0,0,1180\n2026-10-21,ZZ/3,ZZ Far Buyers,1000,0,90,90,1180\n" +
+        "2026-10-21,ZZ/4,ZZ Nowhere Buyers,500,90,0,0,590\n2026-10-22,MX/1,ZZ Delhi Buyers,1000,50,0,0,1050\n2026-10-22,MX/1,ZZ Delhi Buyers,2000,360,0,0,2360\n")
+    def upload_tmp(path):
+        E("() => { pickMode = 'company'; }")
+        pg.set_input_files("#salesIn", path); W(1800)
+    n0 = len(E("window.__ai"))
+    upload_tmp(csvp)
+    ok(step() == "map" and len(E("window.__ai")) == n0 + 1, "a new layout: FinCom's AI asked once (%s, %d)" % (step(), len(E("window.__ai")) - n0))
+    # item 7: the same layout again before it is saved: the mapping waiting is shown again, the AI not asked again
+    E("() => SheetImport.close()"); W(300)
+    upload_tmp(csvp)
+    ok(step() == "map" and len(E("window.__ai")) == n0 + 1 and pg.locator("#app [data-sheet-pending]").count() == 1, "uploaded again before saving: the mapping proposed is shown again, no second AI call (%d)" % (len(E("window.__ai")) - n0))
+    E("() => SheetImport.close()"); W(300)
+    upload_tmp(csvp)
+    ok(len(E("window.__ai")) == n0 + 1, "and a third time: still the one AI call (%d)" % (len(E("window.__ai")) - n0))
+    if pg.locator("#app [data-sheet-map-cancel]").count(): pg.locator("#app [data-sheet-map-cancel]").first.dispatch_event("click"); W(400)
+    upload_tmp(csvp)
+    ok(step() == "map" and len(E("window.__ai")) == n0 + 2, "Cancel lets the mapping go: the next upload asks the AI again (%d)" % (len(E("window.__ai")) - n0))
+    no_save()
+    # (the faked AI answers "rows are not grouped"; this sheet's rows of one number are one invoice)
+    E("() => SheetImport.setTransform('groupByNo', true)"); W(200)
+    if step() == "map": pg.click("#app [data-sheet-save]"); W(800)
+    ok(E("Object.keys(SheetImport._pend).length") == 0, "saved: nothing is kept waiting any more")
+    upload_tmp(csvp)
+    ok(step() == "check" and len(E("window.__ai")) == n0 + 2, "after saving, the layout is known: no AI (%s)" % step())
+    docs = E("(SheetImport.st().docs || []).map(d => [d.no, d.gstin, d.taxable, d.total, (d.items || []).map(it => [it.rate, it.taxable, it.tax])])")
+    mx = [d for d in docs if d[0] == "MX/1"]
+    ok(len(docs) == 5 and mx and mx[0][2] == 3000 and mx[0][3] == 3410 and mx[0][4] == [[5, 1000, 50], [18, 2000, 360]], "item 5: MX/1’s rows at 5%% and 18%% are one invoice with an item line a rate (%s)" % mx)
+    if pg.locator("#app [data-sheet-add]:not([disabled])").count(): pg.click("#app [data-sheet-add]"); W(900)
+    E("SheetImport.close()"); W(300)
+    V = lambda no: E("""(no) => { const v = SL().list.find(v => v.x.number === no); if (!v) return null; const x = salesVoucherXml(v, CO());
+      return {id: v.id, st: v.status, gstin: v.x.customerGstin, pos: v.x.pos, p: (v.problems || []).join(" | "), li: (v.ledgerIssues || []).join(" | "), lines: salesLines(v).map(l => l.side + " " + l.ledger + " " + l.amt),
+        reg: (x.match(/<GSTREGISTRATIONTYPE>([^<]*)</) || [])[1] || "", pg: (x.match(/<PARTYGSTIN>([^<]*)</) || [])[1] || "", place: (x.match(/<PLACEOFSUPPLY>([^<]*)</) || [])[1] || "", xml: x}; }""", no)
+    a = V("ZZ/1") or {}
+    ok(a.get("gstin") == G["delhi"] and a.get("pos") == "07" and a.get("reg") == "Regular" and a.get("pg") == G["delhi"] and a.get("place") == "Delhi" and not a.get("p"),
+       "item 1: no GSTIN on the sheet: the party's GSTIN from its Tally ledger, place of supply its state (Delhi), posted as Regular, not to a consumer (%s)" % {k: a.get(k) for k in ["gstin", "pos", "reg", "place", "p"]})
+    b = V("ZZ/2") or {}
+    ok(b.get("st") == "review" and "IGST is charged, but the place of supply is Uttar Pradesh (the party’s state in its Tally ledger), the state" in b.get("p", "") and "CGST + SGST are expected" in b.get("p", ""),
+       "IGST charged to a party of the client's own state: held, the reason said (%s)" % b.get("p"))
+    c = V("ZZ/3") or {}
+    ok(c.get("st") == "review" and c.get("pos") == "07" and c.get("gstin") == "" and "CGST + SGST are charged, but the place of supply is Delhi (the party’s state in its Tally ledger)" in c.get("p", "") and "so IGST is expected" in c.get("p", ""),
+       "CGST + SGST charged to a party of another state (its state only in its ledger): held, said (%s)" % c.get("p"))
+    d4 = V("ZZ/4") or {}
+    ok(d4.get("st") == "review" and "IGST is charged, but the party’s state is not known" in d4.get("p", "") and "<PLACEOFSUPPLY>Uttar Pradesh" not in d4.get("xml", ""),
+       "IGST with no GSTIN or state anywhere: held, never given the client's own state as its place of supply (%s)" % d4.get("p"))
+    m = V("MX/1") or {}
+    ok(m.get("lines") == ["Dr ZZ Delhi Buyers 3410", "Cr Consulting Income (B) 1000", "Cr Consulting Income (A) 2000", "Cr Output IGST 410"] and not m.get("p") and not m.get("li"),
+       "item 5: MX/1 posts in the sales voucher's form of several rates: a sales ledger a rate, the tax as the sheet has it (%s; %s %s)" % (m.get("lines"), m.get("p"), m.get("li")))
+    ok(m.get("xml", "").count("<ALLLEDGERENTRIES.LIST>") == 4 and "<LEDGERNAME>Consulting Income (B)</LEDGERNAME>" in m.get("xml", "") and "<AMOUNT>-3410.00</AMOUNT>" in m.get("xml", ""), "… the same voucher XML as any invoice of several rates (no new form)")
+    # item 6: a GSTIN typed wrong, then cleared: the label goes at once; a label left from before goes on opening
+    E("(id) => { SL().openId = id; salesSetField('customerGstin', '07AAACZ1111A1ZZ'); }", a.get("id"))
+    p1 = E("(id) => SL().list.find(v => v.id === id).problems.join(' | ')", a.get("id"))
+    E("(id) => { SL().openId = id; salesSetField('customerGstin', ''); }", a.get("id"))
+    p2 = E("(id) => SL().list.find(v => v.id === id).problems.join(' | ')", a.get("id"))
+    ok("customer GSTIN is not valid" in p1 and "not valid" not in p2, "item 6: a wrong GSTIN is said; cleared, the label goes at once (%r → %r)" % (p1, p2))
+    E("(id) => { SL().openId = id; salesSetField('customerGstin', '%s'); }" % G["delhi"], a.get("id"))
+    E("(id) => { const v = SL().list.find(v => v.id === id); v.problems = ['customer GSTIN is not valid']; v.x.customerGstin = ''; saveSales(); }", a.get("id")); W(700)
+    E("(id) => loadSales(id).then(() => render())", cid); W(1200)
+    p3 = E("(id) => { const v = SL().list.find(v => v.id === id); return [(v.problems || []).join(' | '), v.x.customerGstin]; }", a.get("id"))
+    ok("not valid" not in p3[0], "a “not valid” label kept from before on a blank GSTIN is gone when the page opens (%s)" % p3)
+    E("(id) => { SL().openId = id; salesSetField('customerGstin', '%s'); SL().openId = null; }" % G["delhi"], a.get("id"))
+
+    print("15. the already-booked check: every Sales-class type; Not this Tally entry side by side, asked twice")
+    box = lambda: pg.inner_text("#confirmBox").replace("\n", " ") if pg.locator("#confirmBox .cbx").count() else ""
+    chk = E("""async (G) => { const tv = window.tallyVia, tc = window.tallyCall; let url = "";
+      const a = SL().list.find(v => v.x.number === "ZZ/1"), m = SL().list.find(v => v.x.number === "MX/1");
+      window.tallyVia = () => true; window.tallyCall = async (co, u) => { url = decodeURIComponent(u); return {vouchers: [
+        {number: "ZZ/1", type: "Sales UP", date: "20261020", party: "ZZ Delhi Buyers", guid: "zz1", entries: [{ledger: "ZZ Delhi Buyers", amount: "-1180.00"}, {ledger: "Consulting Income (A)", amount: "1000.00"}, {ledger: "Output IGST", amount: "180.00"}]},
+        {number: "MX/1", type: "Tax Invoice", date: "20261022", party: "ZZ Delhi Buyers", guid: "mx1", entries: [{ledger: "ZZ Delhi Buyers", amount: "-3410.00"}, {ledger: "Consulting Income (A)", amount: "2000.00"}]},
+        {number: "ZZ/3", type: "Stock Journal", date: "20261021", party: "", guid: "sj", entries: [{ledger: "Rent Received", amount: "10.00"}]}]}; };
+      try { await salesCheckTally(SL().list.filter(v => ["review", "ready"].includes(v.status))); } finally { window.tallyVia = tv; window.tallyCall = tc; }
+      const c = SL().list.find(v => v.x.number === "ZZ/3");
+      return {url, a: a.status, am: a.tallyMatch || null, m: m.status, c: c.status}; }""", G)
+    ok("types=" not in chk["url"], "every voucher of the period is asked of Tally, no type left out (%s)" % chk["url"][-80:])
+    ok(chk["a"] == "intally" and (chk["am"] or {}).get("type") == "Sales UP" and (chk["am"] or {}).get("amount") == 1180 and (chk["am"] or {}).get("party") == "ZZ Delhi Buyers",
+       "the client's own “Sales UP” voucher of that number is found, with its real amount 1,180 and its party (%s)" % chk["am"])
+    ok(chk["m"] == "intally" and chk["c"] != "intally", "a type of the client's under Sales by any name (its voucher credits a ledger under Sales Accounts) is found; a Stock Journal of a number is not (%s, %s)" % (chk["m"], chk["c"]))
+    E("(id) => salesRowAct('nottally', id)", a.get("id")); W(400)
+    bx = box()
+    ok("Same number and type already in Tally. Posting it again will create a duplicate." in bx and pg.locator("#confirmBox [data-nottally-compare]").count() == 1, "the box: the plain words (%r)" % bx[:160])
+    cmp_ = pg.inner_text("#confirmBox [data-nottally-compare]") if pg.locator("#confirmBox [data-nottally-compare]").count() else ""
+    ok("In FinCom" in cmp_ and "In Tally" in cmp_ and cmp_.count("1,180") == 2 and "Sales UP" in cmp_ and cmp_.count("ZZ Delhi Buyers") == 2 and cmp_.count(E("fmtDate('2026-10-20')")) == 2,
+       "FinCom's and Tally's date, number and type, amount and party side by side (%r)" % cmp_)
+    if pg.locator('#confirmBox [data-cbx="yes"]').count(): pg.click('#confirmBox [data-cbx="yes"]'); W(400)
+    ok(pg.locator("#confirmBox [data-nottally-again]").count() == 1 and E("(id) => SL().list.find(v => v.id === id).status", a.get("id")) == "intally", "a second confirmation is asked; nothing changes until it is answered")
+    if pg.locator('#confirmBox [data-cbx="no"]').count(): pg.click('#confirmBox [data-cbx="no"]'); W(300)
+    ok(E("(id) => SL().list.find(v => v.id === id).status", a.get("id")) == "intally", "Cancel at the second: still In Tally")
+    E("(id) => salesRowAct('nottally', id)", a.get("id")); W(400)
+    for i in range(2):
+        if pg.locator('#confirmBox [data-cbx="yes"]').count(): pg.click('#confirmBox [data-cbx="yes"]'); W(400)
+    ok(E("(id) => SL().list.find(v => v.id === id).status", a.get("id")) == "review", "both answered: not that entry, back to To review (the override as before)")
+
+    print("16. Tally refuses a batch with no reason: Refused by Tally; posted one by one, each one's own answer")
+    E("""() => { SL().list.forEach(v => { if (["ZZ/1", "MX/1"].includes(v.x.number)){ delete v.tallyMatch; v.notTally = []; v.status = "review"; v.userLedger = true; mapInvoice(v); v.status = "ready"; } });
+      SL().list = SL().list.filter(v => ["ZZ/1", "MX/1"].includes(v.x.number)); SL().cfg.notTally = {}; window.__enq.length = 0;
+      window.__postAnswer = (vs) => vs.map(v => ({id: v.id, ok: false, needsReview: true, accepted: false, created: 0, altered: 0, errors: 0, exceptions: vs.length, ignored: 0, batchN: vs.length, lineError: [], message: "Tally's reply: created 0 of " + vs.length + ", exceptions " + vs.length}));
+      SL().filter = 'ready'; saveSales(); render(); }"""); W(500)
+    ok(E("SL().list.map(v => v.status)") == ["ready", "ready"], "two invoices Ready (%s)" % E("SL().list.map(v => [v.x.number, v.status, v.problems, v.ledgerIssues])"))
+    post()
+    rf = E("SL().list.map(v => [v.x.number, v.status, !!v.refused, (v.problems || [])[0] || ''])")
+    ok(len(E("window.__enq")) == 1 and all(x[1] == "review" and x[2] and x[3].startswith("Refused by Tally: Tally created none of the 2 vouchers sent together and gave no reason") for x in rf),
+       "“created 0 of 2”, exceptions, no line error: both Refused by Tally with a plain hint, not Ready (%s)" % rf)
+    E("() => { SL().filter = 'review'; render(); }"); W(400)
+    tags = E("[...document.querySelectorAll('#app [data-sales-st]')].map(x => x.innerText)")
+    ok(tags == ["Refused by Tally"] * 2 and pg.locator("#app [data-sales-onebyone]").count() == 1, "the rows say Refused by Tally; “Post one by one to find the cause” is offered (%s)" % tags)
+    E("() => { SL().filter = 'ready'; render(); }"); W(300)
+    post(); E("() => postSalesToTally()"); W(900)
+    ok(len(E("window.__enq")) == 1, "never sent again as it is by Post to Tally (%d postings)" % len(E("window.__enq")))
+    batch_xml = sorted(v["xml"] for v in E("window.__enq")[0]["vouchers"])
+    E("""() => { window.__postAnswer = (vs) => vs.map(v => { const mx = SL().list.find(x => x.id === v.id).x.number === "MX/1";
+      return mx ? {id: v.id, ok: false, needsReview: true, accepted: false, created: 0, exceptions: 1, batchN: 1, lineError: [], message: "Tally's reply: created 0 of 1, exceptions 1"} : {id: v.id, ok: true, verified: true, vchNumber: "V/1"}; });
+      SL().filter = 'review'; render(); }"""); W(300)
+    if pg.locator("#app [data-sales-onebyone]").count(): pg.click("#app [data-sales-onebyone]")
+    for i in range(40):
+        W(300)
+        if pg.locator('#confirmBox [data-cbx="yes"]').count() and pg.locator('#confirmBox [data-cbx="yes"]').is_visible(): pg.click('#confirmBox [data-cbx="yes"]')
+        if not E("SL().busy") and len(E("window.__enq")) >= 3: break
+    W(500)
+    enq = E("window.__enq")
+    ok(len(enq) == 3 and [len(x["vouchers"]) for x in enq[1:]] == [1, 1] and sorted(x["vouchers"][0]["xml"] for x in enq[1:]) == batch_xml, "one by one: each refused voucher in a posting of its own, the same XML as in the batch (%s)" % [len(x["vouchers"]) for x in enq])
+    st = E("Object.fromEntries(SL().list.map(v => [v.x.number, [v.status, v.refused ? v.refused.single : null, (v.problems || [])[0] || '']]))")
+    ok(st.get("ZZ/1", [""])[0] == "posted" and st.get("MX/1", ["", None])[0] == "review" and st["MX/1"][1] is True and "sent on its own" in st["MX/1"][2], "ZZ/1 posted on its own; MX/1 refused on its own: the one that stops the batch (%s)" % st)
+    res = pg.inner_text("#app [data-sales-onebyone-result]") if pg.locator("#app [data-sales-onebyone-result]").count() else ""
+    ok("ZZ/1" in res and "Posted" in res and "MX/1" in res and "Refused by Tally on its own" in res, "each one's own result is shown (%r)" % res)
+    E("() => { window.__postAnswer = null; }")
+
     ok(not errors, "no page errors " + str(errors[:2]))
     br.close()
 srv.shutdown()

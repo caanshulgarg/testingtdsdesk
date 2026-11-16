@@ -24,7 +24,8 @@ function MapStep({ st }) {
   const missing = SheetImport.mapProblems();
   return <section data-sheet-step="map">
     {st.remap && <p className="bk-alert" data-sheet-remap="">{"This layout was saved with a column read wrongly. " + st.remap.why + " FinCom has put it right below (no AI): check it and save."}</p>}
-    {!st.remap && <p className="note" data-sheet-ai="">{st.aiErr ? "FinCom's AI could not read this format (" + st.aiErr + "): choose each column's field yourself."
+    {!st.remap && st.pendingAgain && <p className="note" data-sheet-ai="" data-sheet-pending="">{"This layout was uploaded before and its columns are not saved yet: the mapping proposed then is shown, with any changes you made (FinCom's AI is not asked again). Check it and save, or Cancel to let it go."}</p>}
+    {!st.remap && !st.pendingAgain && <p className="note" data-sheet-ai="">{st.aiErr ? "FinCom's AI could not read this format (" + st.aiErr + "): choose each column's field yourself."
       : "A format FinCom has not seen. FinCom's AI read its header and 10 rows once (names and numbers masked) and proposes these columns. Check them, change any, and save the format: the next sheet like it is read with no AI."}</p>}
     <label className="f"><span>Name of the format</span><input type="text" value={st.fmtName || ""} data-sheet-name="" onChange={(ev) => { st.fmtName = ev.target.value; render(); }} /></label>
     <div className="tblwrap"><table className="data sheet-map" data-sheet-map="">
@@ -43,6 +44,7 @@ function MapStep({ st }) {
     <div className="row" style={{ gap: 8 }}>
       <Button className="btn primary" data-sheet-save="" disabled={missing.length > 0} onClick={() => SheetImport.saveFormat("client")}>Save the format and read the sheet</Button>
       <Button className="btn" data-sheet-save-firm="" disabled={missing.length > 0} onClick={() => SheetImport.saveFormat("firm")}>Save for every client</Button>
+      <Button className="btn" data-sheet-map-cancel="" onClick={() => SheetImport.cancelMap()}>Cancel</Button>
     </div>
   </section>;
 }

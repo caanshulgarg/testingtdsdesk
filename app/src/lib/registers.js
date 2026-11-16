@@ -207,12 +207,27 @@ const SheetFmt = {
       d.taxable = r2(d.taxable + taxable); d.igst = r2(d.igst + igst); d.cgst = r2(d.cgst + cgst); d.sgst = r2(d.sgst + sgst); d.cess = r2(d.cess + cess);
       d.lineTotals = (d.lineTotals || []).concat([total]);
       if (rate && !d.rates.includes(rate)) d.rates.push(rate);
+      // next-fix-sales-upload (item 5): each row's own GST rate (its rate column, else its tax over its taxable value at
+      // the nearest standard rate), its figures kept rate-wise: an invoice whose rows carry two rates becomes one item line
+      // a rate (taxable, rate, tax), never one line at a rate that is none of them
+      const rr = rate || this.rateOf(taxable, igst + cgst + sgst);
+      if (taxable || igst || cgst || sgst){
+        const pt = (d.parts = d.parts || {})[rr] || (d.parts[rr] = {rate: rr, taxable: 0, igst: 0, cgst: 0, sgst: 0, cess: 0});
+        pt.taxable = r2(pt.taxable + taxable); pt.igst = r2(pt.igst + igst); pt.cgst = r2(pt.cgst + cgst); pt.sgst = r2(pt.sgst + sgst); pt.cess = r2(pt.cess + cess);
+      }
       d.lines++; d.rows.push(hi + 2 + n);
       docs.set(key, d);
     });
     const out = Array.from(docs.values()).map(d => this.signed(this.finish(d), idx.doctype >= 0));
     out.skipped = skipped;
     return out;
+  },
+  // a row's GST rate from its figures: the standard rate it is at (to within 0.05%), else its own to two places
+  rateOf(taxable, tax){
+    if (!taxable || !tax) return 0;
+    const pc = tax / taxable * 100, list = typeof SALES_RATES !== "undefined" ? SALES_RATES : [0, 0.25, 3, 5, 12, 18, 28, 40];
+    const std = list.find(x => Math.abs(Math.abs(pc) - x) <= 0.05);
+    return std !== undefined ? std : Math.round(Math.abs(pc) * 100) / 100;
   },
   // the kind a document-type cell says: "C" a credit note (credit note, cr note, C.N., CN, CRN, return, sales return,
   // refund), "D" a debit note (debit note, dr note, D.N., DN, DBN), "I" anything else; whole words, any case. On
@@ -231,8 +246,13 @@ const SheetFmt = {
   // held for a person with the reason said, never turned positive by itself
   signed(d, typed){
     if (!d.note && d.total < 0){ if (typed) d.hold = d.hold || "Negative amount: is this a return? Set it in the Type column"; else d.note = "credit"; }
-    if (d.note === "credit" && d.total > 0) ["taxable", "igst", "cgst", "sgst", "cess", "total"].forEach(k => { d[k] = r2(-d[k]); });
+    if (d.note === "credit" && d.total > 0) this.flip(d);
     return d;
+  },
+  // a document's figures the other way round (its rate-wise item lines with them)
+  flip(d){
+    ["taxable", "igst", "cgst", "sgst", "cess", "total"].forEach(k => { d[k] = r2(-d[k]); });
+    (d.items || []).forEach(it => ["taxable", "igst", "cgst", "sgst", "cess", "tax"].forEach(k => { it[k] = r2(-it[k]); }));
   },
   pos(v){
     const s = String(v == null ? "" : v).trim();
@@ -252,6 +272,11 @@ const SheetFmt = {
       delete d.lineTotals;
     }
     if (!d.total) d.total = r2(d.taxable + tax);
+    // rows at more than one rate: one item line a rate, each with its own taxable value and tax (posted as the sales
+    // voucher of several rates: a sales ledger and its tax a rate, src/js/25 salesLines)
+    const parts = Object.values(d.parts || {}).filter(p => p.taxable || p.igst || p.cgst || p.sgst);
+    delete d.parts;
+    if (parts.length > 1) d.items = parts.sort((a, b) => a.rate - b.rate).map(p => Object.assign(p, {tax: r2(p.igst + p.cgst + p.sgst)}));
     d.rate = d.taxable ? Math.round((d.igst + d.cgst + d.sgst) / d.taxable * 10000) / 100 : (d.rates[0] || 0);
     const diff = r2(d.total - d.taxable - tax);
     d.check = Math.abs(diff) < 0.005 ? {ok: true} : Math.abs(diff) <= 1 ? {ok: true, roundOff: diff} : {ok: false, diff, text: "Taxable " + d.taxable.toFixed(2) + " + tax " + tax.toFixed(2) + " is " + r2(d.taxable + tax).toFixed(2) + ", not the total " + d.total.toFixed(2)};
@@ -398,7 +423,7 @@ const SheetPost = {
   setKind(d, k){
     if (!d || !k) return;
     d.note = k === "invoice" ? "" : k; d.hold = "";
-    if ((d.note === "credit") !== (d.total < 0)) ["taxable", "igst", "cgst", "sgst", "cess", "total"].forEach(f => { d[f] = r2(-d[f]); });
+    if ((d.note === "credit") !== (d.total < 0)) SheetFmt.flip(d);
     render();
   },
   // the sales (or purchase) ledger the sheet names: Tally's own spelling, or the ledger answered for that name before
@@ -501,17 +526,26 @@ const SheetPost = {
       const heldV = !d.hold && s.list.find(v => v.hold && v.status === "review" && normInv(v.x.number) === normInv(d.no) && (!v.x.date || !d.date || v.x.date === d.date) && pk(v.x.customerGstin, v.x.customerName) === pk(d.gstin, name)
         && Math.abs(Math.abs(num(v.x.total)) - Math.abs(d.total)) < 0.005);
       if (heldV){
-        Object.assign(heldV.x, {number: no, taxable: Math.abs(d.taxable), cgst: Math.abs(d.cgst), sgst: Math.abs(d.sgst), igst: Math.abs(d.igst), cess: Math.abs(d.cess), total: Math.abs(d.total), rate: d.rate, noteKind: d.note || ""});
+        Object.assign(heldV.x, {number: no, taxable: Math.abs(d.taxable), cgst: Math.abs(d.cgst), sgst: Math.abs(d.sgst), igst: Math.abs(d.igst), cess: Math.abs(d.cess), total: Math.abs(d.total), rate: d.rate, noteKind: d.note || "", items: this.items(d, Math.abs)});
         delete heldV.hold; this.ledgersTo(heldV, d, true); mapInvoice(heldV); res.fixed++; res.ids.push(heldV.id); return;
       }
       const v = newInvoice({number: no, date: d.date, customerName: d.party || (d.gstin ? "" : "Retail customer"), customerGstin: GSTIN_RE.test(d.gstin) ? d.gstin : "", pos: d.pos,
         hsn: d.hsn, taxable: ab(d.taxable), cgst: ab(d.cgst), sgst: ab(d.sgst), igst: ab(d.igst), cess: ab(d.cess), total: ab(d.total),
-        rate: d.rate, noteKind: d.note || "", againstInvoice: d.against || "", sellerGstin: d.own || "", branch: d.branch || ""}, "sheet", {fileName, sheet: {rows: d.rows, check: d.check, sec: d.sec || ""}});
+        rate: d.rate, noteKind: d.note || "", againstInvoice: d.against || "", sellerGstin: d.own || "", branch: d.branch || "", items: this.items(d, ab)}, "sheet", {fileName, sheet: {rows: d.rows, check: d.check, sec: d.sec || ""},
+        // (item 1: what the sheet itself gave; a GSTIN or place of supply it did not give comes from the party's Tally
+        // ledger, src/js/25 salesPartyFill)
+        sheetHad: {gstin: GSTIN_RE.test(d.gstin), pos: !!d.pos}});
       this.ledgersTo(v, d);
       s.list.push(v); mapInvoice(v); res.added++; res.ids.push(v.id);
     });
     saveSales();
     return res;
+  },
+  // an invoice's rate-wise item lines (rows of the sheet at more than one rate): taxable, rate and tax a line, as the
+  // sheet has them; none for an invoice of one rate
+  items(d, ab){
+    return (d.items || []).map(p => ({desc: "Rows at " + String(p.rate).replace(/\.0+$/, "") + "%", hsn: d.hsn || "", qty: 0, unit: "", rate: 0, disc: 0,
+      taxable: ab(p.taxable), gstRate: p.rate, igst: ab(p.igst), cgst: ab(p.cgst), sgst: ab(p.sgst), tax: ab(p.tax)}));
   },
   // an invoice's ledgers from its row of the sheet: the customer (answered, found, or to create), the sheet's own sales
   // ledger for each of its rates, and Tally's voucher type
@@ -600,18 +634,47 @@ const SheetImport = {
         return this.check();
       }
       // a format FinCom has not seen: the AI proposes a mapping, once; the person confirms or changes it
+      // (next-fix-sales-upload, item 7: the mapping waiting to be saved is kept for this file's layout, the person's
+      // changes with it, until it is saved or cancelled: the same layout uploaded again is not sent to the AI again)
+      st.pendKey = this.pendKey(S.coId, side, SheetFmt.fingerprint(st.head, st.read.sheet));
+      const kept = this.pending(st.pendKey);
+      if (kept){
+        Object.assign(st, {map: Object.assign({}, kept.map), transforms: Object.assign({}, kept.transforms), why: kept.why || {}, aiCost: null, fmtName: kept.fmtName || this.suggestName(f.name), pendingAgain: true});
+        st.step = "map"; st.busy = ""; return render();
+      }
       st.busy = "A new format: FinCom's AI is reading its columns…"; render();
       let p = null;
       try { p = await SheetFmt.propose(st.head, g.slice(st.hi + 1, st.hi + 11), side); }
       catch (e){ st.aiErr = (e && e.message) || String(e); p = {map: {}, transforms: {date: "dmy", groupByNo: true}, why: {}}; }
       st.map = p.map; st.transforms = p.transforms; st.why = p.why || {}; st.aiCost = p.cost || null;
-      st.fmtName = this.suggestName(f.name); st.step = "map"; st.busy = ""; render();
+      st.fmtName = this.suggestName(f.name); st.step = "map"; st.busy = "";
+      if (!st.aiErr) this.keepPending(st);
+      render();
     } catch (e){ st.busy = ""; st.err = (e && e.message) || String(e); st.step = "error"; render(); }
   },
+  // the mappings waiting to be saved, by client, side and the file's layout (its fingerprint): kept in memory and for
+  // this browser tab (sessionStorage, when it can be used), dropped when the format is saved or the mapping cancelled
+  _pend: {},
+  pendKey(cid, side, fp){ return "fincom:sheetmap:" + [cid || "", side || "", fp || ""].join("|"); },
+  pending(key){
+    if (!key) return null;
+    if (this._pend[key]) return this._pend[key];
+    try { const v = JSON.parse(sessionStorage.getItem(key) || "null"); if (v && v.map) return (this._pend[key] = v); } catch (e){}
+    return null;
+  },
+  keepPending(st){
+    if (!st || !st.pendKey || st.remap) return;
+    const v = {map: st.map || {}, transforms: st.transforms || {}, why: st.why || {}, fmtName: st.fmtName || "", at: new Date().toISOString()};
+    this._pend[st.pendKey] = v;
+    try { sessionStorage.setItem(st.pendKey, JSON.stringify(v)); } catch (e){}
+  },
+  dropPending(key){ if (!key) return; delete this._pend[key]; try { sessionStorage.removeItem(key); } catch (e){} },
+  // Cancel on the mapping: the mapping waiting is let go (the next upload of this layout asks the AI again)
+  cancelMap(){ const st = this.st(); if (st) this.dropPending(st.pendKey); this.close(); },
   suggestName(n){ return String(n || "Register").replace(/\.[a-z]+$/i, "").replace(/[_\-]+/g, " ").replace(/\s*\d{4,}.*$/, "").trim() || "Register"; },
   setMap(field, col){ const st = this.st(); if (!st) return; st.map = Object.assign({}, st.map); Object.keys(st.map).forEach(k => { if (k !== field && st.map[k] === col && col) delete st.map[k]; });
-    if (col) st.map[field] = col; else delete st.map[field]; render(); },
-  setTransform(k, v){ const st = this.st(); if (!st) return; st.transforms = Object.assign({}, st.transforms, {[k]: v}); render(); },
+    if (col) st.map[field] = col; else delete st.map[field]; if (this.pending(st.pendKey)) this.keepPending(st); render(); },
+  setTransform(k, v){ const st = this.st(); if (!st) return; st.transforms = Object.assign({}, st.transforms, {[k]: v}); if (this.pending(st.pendKey)) this.keepPending(st); render(); },
   // a format needs at least an invoice number and an amount (the total, or the taxable value)
   mapProblems(){ const st = this.st() || {}, m = st.map || {}; const p = [];
     if (this.recon(st.side)){ if (!m.date) p.push("Date"); if (!(m.debit && m.credit) && !m.amount) p.push("Debit and Credit (or one Amount)"); return p; }
@@ -650,7 +713,7 @@ const SheetImport = {
     if (st.remap){ const old = this.fmtById(st.remap.id); if (old){ old.deleted = {at: fmt.at, by: fmt.by, why: "mapped again"}; if (old.scope === "firm") Store.saveFirm(); else Store.saveCompany(co); } fmt.ai = false; }
     if (fmt.scope === "firm"){ S.firm.sheetFormats = (S.firm.sheetFormats || []).concat([fmt]); Store.saveFirm(); }
     else { co.sheetFormats = (co.sheetFormats || []).concat([fmt]); Store.saveCompany(co); }
-    st.fmt = fmt; st.how = "saved";
+    st.fmt = fmt; st.how = "saved"; this.dropPending(st.pendKey);
     if (this.recon(st.side)) return this.reconStep();
     st.docs = SheetFmt.apply(fmt, st.read.grid, st.hi, co, st.side);
     this.check();

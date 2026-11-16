@@ -251,6 +251,9 @@ with sync_playwright() as p:
     E("() => salesRowAct('nottally', 'n2')"); W(400)
     ok("This invoice was matched to Tally entry" in box() and "Mark it as NOT that entry?" in box() and "posting will put it in Tally twice" in box(), "sales: Not this Tally entry asks first (%r)" % box()[:200])
     pg.click('#confirmBox [data-cbx="yes"]'); W(400)
+    # (next-fix-sales-upload: a second confirmation)
+    ok("Tally will have it twice" in box(), "sales: and asks once more (%r)" % box()[:200])
+    pg.click('#confirmBox [data-cbx="yes"]'); W(400)
     ok(E(SV, "n2") == "review" and E("SL().list.find(v => v.id === 'n2').notTally") == ["sv-1"], "sales: back to review (a person confirms it), the entry remembered (%s)" % E(SV, "n2"))
     E("""() => { const v = SL().list.find(x => x.id === 'n2'); const m1 = window.mapInvoice; window.mapInvoice = window.__mi0; const h = [hasLedgerList, ledgerProblems, invoiceProblems, customerLedgerFor];
       window.hasLedgerList = () => true; window.ledgerProblems = () => []; window.invoiceProblems = () => []; window.customerLedgerFor = () => ({ledger: 'Alpha Retail', sure: true, label: 'match'});
