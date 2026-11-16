@@ -452,6 +452,8 @@ function invoiceProblems(v){
   const dupOf = salesDupOf(v);
   if (dupOf) p.push(salesDupWords(dupOf));
   if (v.needsCheck) p.push("Not confirmed: check Tally before posting again");
+  // (the books use several sales voucher types: an invoice waits for the person's answer, none is applied before it)
+  if (SL().vtAsk && !x.noteKind) p.push("Choose the voucher type");
   if (v.refused) p.push("Refused by Tally" + (v.refused.single ? " (sent on its own)" : "") + ": " + (v.refused.hint || v.refused.said || "Tally created nothing"));
   if (Math.abs(num(x.cgst) - num(x.sgst)) > 0.05) p.push("CGST and SGST differ");
   if (salesTotals(x).some(g => g.mixed)) p.push("GST is not at one standard rate (several rates?): use Enter items");
@@ -489,15 +491,26 @@ function salesBooksVts(){
 }
 function salesLearnVt(){
   const s = SL(); if (!s || !s.cfg) return;
-  const c = s.cfg; if (c.vtBy === "you" || c.vtBy === "asked") { s.vtAsk = null; return; }
-  const t = salesBooksVts(); if (!t.length){ s.vtAsk = null; return; }
-  const was = c.voucherType;
-  c.voucherType = t[0].type; c.vtFrom = "books";
-  s.vtAsk = t.length > 1 ? t : null;
-  if (was !== c.voucherType) saveSales({cfg: true});
+  const c = s.cfg, was = !!s.vtAsk;
+  // (review of d487be4c1) learnt only while the type is still the untouched default "Sales": a type ever set to anything
+  // else (old settings with no vtBy too), typed by hand, answered or learnt before, is never replaced
+  const untouched = !c.vtBy && !c.vtFrom && (!c.voucherType || String(c.voucherType).trim() === "Sales");
+  s.vtAsk = null;
+  if (untouched){
+    const t = salesBooksVts();
+    // several in real use: none applied until the person answers (the invoices wait, "Choose the voucher type")
+    if (t.length > 1) s.vtAsk = t;
+    else if (t.length === 1 && t[0].type !== "Sales"){
+      c.voucherType = t[0].type; c.vtFrom = "books"; c.vtNotice = {to: t[0].type, at: new Date().toISOString()};
+      saveSales({cfg: true});
+    }
+  }
+  if (was !== !!s.vtAsk) (s.list || []).forEach(v => mapInvoice(v));
 }
 // the person's answer when the books use several sales types: kept for the client
-function salesVtAnswer(t){ const s = SL(); if (!s || !t) return; s.cfg.voucherType = t; s.cfg.vtBy = "asked"; s.cfg.vtFrom = "books"; s.vtAsk = null; saveSales({cfg: true}); s.list.forEach(v => mapInvoice(v)); render(); }
+function salesVtAnswer(t){ const s = SL(); if (!s || !t) return; s.cfg.voucherType = t; s.cfg.vtBy = "asked"; s.cfg.vtFrom = "books"; delete s.cfg.vtNotice; s.vtAsk = null; saveSales({cfg: true}); s.list.forEach(v => mapInvoice(v)); render(); }
+// the notice of a type learnt from the books, shown until the person closes it or presses Change
+function salesVtNoticeDone(open){ const s = SL(); if (!s) return; if (s.cfg.vtNotice) s.cfg.vtNotice.seen = new Date().toISOString(); if (open) s.showSettings = true; saveSales({cfg: true}); render(); }
 function normInvNo(s){ return String(s || "").toUpperCase().replace(/[^A-Z0-9]/g, "").replace(/^0+/, ""); }
 function ledgerProblems(v, lines){
   const p = [];

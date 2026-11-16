@@ -708,9 +708,16 @@ with sync_playwright() as p:
     nb = E("(id) => { const v = SL().list.find(v => v.id === id); return [!!v.dupOverride, (v.dupOverride || {}).by || '', !!(v.dupOverride || {}).at, (v.problems || []).some(p => /Already in Tally/.test(p))]; }", bid)
     ok(nb[0] and nb[1] and nb[2] and not nb[3], "both confirmed: allowed, with who and when kept (%s)" % nb)
     # the cloud copy's read stops at 20,000 entries: an answer that long is not trusted, nothing is posted
-    cap = E("""async () => { const tv = window.tallyVia, tc = window.tallyCall; window.tallyVia = () => true; window.tallyCall = async () => ({vouchers: Array.from({length: 20000}, (x, i) => ({number: "X" + i, type: "Sales", date: "20261020"}))});
-      let e = null; try { await salesCheckTally(SL().list.filter(v => ["review", "ready"].includes(v.status))); } catch (x){ e = x; } finally { window.tallyVia = tv; window.tallyCall = tc; } return e ? e.message : "no error"; }""")
-    ok(cap == "Too many entries to check; check in smaller date ranges", "an answer of 20,000 entries (the cloud copy's cap): “%s”" % cap)
+    # the cloud copy's read stops at 20,000 entries: an answer that long is read again in smaller pieces (review of
+    # d487be4c1), by itself; only one day still at the cap is refused, said plainly
+    cap = E("""async () => { const tc = window.tallyCall, asked = []; window.tallyCall = async (co, u) => { const q = new URLSearchParams(decodeURIComponent(u).split("?")[1]), f = q.get("from"), t = q.get("to"); asked.push(f + "-" + t);
+        return {vouchers: f === t ? [{number: "D" + f, type: "Sales", date: f, guid: "g" + f}] : Array.from({length: 20000}, (x, i) => ({number: "X" + i, type: "Sales", date: f, guid: "x" + f + i}))}; };
+      let r = null, e = null; try { r = await salesVouchersIn(CO(), "2026-10-19", "2026-10-23"); } catch (x){ e = x; } finally { window.tallyCall = tc; }
+      return {n: r ? r.length : -1, nums: r ? r.map(x => x.number).sort() : [], asked: asked.length, e: e ? e.message : ""}; }""")
+    ok(cap["n"] == 5 and cap["nums"] == ["D20261019", "D20261020", "D20261021", "D20261022", "D20261023"] and not cap["e"], "five days at the cap together: read again in smaller pieces by itself, every day's vouchers in (%s)" % cap)
+    cap = E("""async () => { const tc = window.tallyCall; window.tallyCall = async () => ({vouchers: Array.from({length: 20000}, (x, i) => ({number: "X" + i, type: "Sales", date: "20261020", guid: "x" + i}))});
+      let e = null; try { await salesVouchersIn(CO(), "2026-10-19", "2026-10-23"); } catch (x){ e = x; } finally { window.tallyCall = tc; } return e ? e.message : "no error"; }""")
+    ok(cap.startswith("Too many entries in Tally on " + E("fmtDate('2026-10-19')")) and "in one day" in cap and "nothing was posted" in cap, "one day still at the cap: refused, said plainly (%s)" % cap)
     E("(id) => salesRowAct('nottally', id)", a.get("id")); W(400)
     bx = box()
     ok("Same number and type already in Tally. Posting it again will create a duplicate." in bx and pg.locator("#confirmBox [data-nottally-compare]").count() == 1, "the box: the plain words (%r)" % bx[:160])
@@ -736,8 +743,8 @@ with sync_playwright() as p:
     ok(E("SL().list.map(v => v.status)") == ["ready", "ready"], "two invoices Ready (%s)" % E("SL().list.map(v => [v.x.number, v.status, v.problems, v.ledgerIssues])"))
     E("() => { window.__vin = []; window.__vinAnswer = () => Array.from({length: 20000}, (x, i) => ({number: 'X' + i, type: 'Sales', date: '20261020', entries: []})); window.__toasts = []; }")
     post()
-    ok(len(E("window.__enq")) == 0 and any("Too many entries to check; check in smaller date ranges" in t for t in E("window.__toasts")) and E("SL().list.map(v => v.status)") == ["ready", "ready"],
-       "the cloud copy answers its cap (20,000): nothing is posted, and it is said (%s)" % E("window.__toasts")[-1:])
+    ok(len(E("window.__enq")) == 0 and any("Too many entries in Tally on" in t and "in one day" in t for t in E("window.__toasts")) and E("SL().list.map(v => v.status)") == ["ready", "ready"],
+       "the cloud copy at its cap even for one day: nothing is posted, and it is said (%s)" % E("window.__toasts")[-1:])
     vin = E("window.__vin")
     ok(vin and vin[0].get("p_from") == "2026-10-19" and vin[0].get("p_to") == "2026-10-23", "the cloud copy is asked for the invoices' own dates only, a day either side (%s)" % (vin[:1],))
     E("() => { window.__vinAnswer = null; }")
@@ -830,17 +837,60 @@ with sync_playwright() as p:
       const c = SL().cfg; delete c.vtBy; delete c.vtFrom; c.voucherType = "Sales"; salesLearnVt(); render();
       const v = SL().list.find(v => v.status !== "posted");
       return [c.voucherType, c.vtFrom, (salesVoucherXml(v, CO()).match(/VCHTYPE="([^"]*)"/) || [])[1], !!SL().vtAsk]; }"""); W(400)
+    vn = pg.inner_text("#app [data-sales-vt-notice]") if pg.locator("#app [data-sales-vt-notice]").count() else ""
+    ok(vt == ["Sales UP", "books", "Sales UP", False] and "Voucher type changed to Sales UP (from your Tally). Change" in vn, "the default “Sales” untouched: the books' sales type is used, the change said once (%s; %r)" % (vt, vn))
+    if pg.locator("#app [data-vt-notice-close]").count(): pg.click("#app [data-vt-notice-close]"); W(300)
     vtl = pg.inner_text("#app [data-sales-vt]") if pg.locator("#app [data-sales-vt]").count() else ""
-    ok(vt == ["Sales UP", "books", "Sales UP", False] and "Voucher type: Sales UP (from your Tally)" in vtl, "the books' most used sales type is the default, said “Voucher type: Sales UP (from your Tally)”, the vouchers post as it (%s; %r)" % (vt, vtl))
+    ok(pg.locator("#app [data-sales-vt-notice]").count() == 0 and "Voucher type: Sales UP (from your Tally)" in vtl, "closed, it is not said again; the type is shown (%r)" % vtl)
+    vt = E("() => { const c = SL().cfg; c.voucherType = 'Sales GST'; delete c.vtBy; delete c.vtFrom; delete c.vtNotice; salesLearnVt(); return [c.voucherType, c.vtFrom || '', !!SL().vtAsk]; }")
+    ok(vt == ["Sales GST", "", False], "a type set before to anything but “Sales” (old settings, no mark of who): never replaced by the books' (%s)" % vt)
     vt = E("() => { salesCfg('voucherType', 'Sales Local'); salesLearnVt(); return [SL().cfg.voucherType, SL().cfg.vtBy]; }")
     ok(vt == ["Sales Local", "you"], "a type the person types is kept, the books' not put back over it (%s)" % vt)
     E("""() => { const cid = SL().cid, mk = (t, n) => Array.from({length: n}, (x, i) => ({id: t + i, type: t, no: String(i), date: "2026-10-01", ent: []}));
       S.books = Object.assign({}, S.books, {vouchers: mk("Sales UP", 12).concat(mk("Sales Delhi", 7))}); const c = SL().cfg; delete c.vtBy; delete c.vtFrom; c.voucherType = "Sales"; salesLearnVt(); render(); }"""); W(400)
-    ok(pg.locator("#app [data-sales-vt-ask] [data-vt-pick]").count() == 2, "two sales types in real use: asked once, which (%d)" % pg.locator("#app [data-sales-vt-ask] [data-vt-pick]").count())
-    if pg.locator('#app [data-vt-pick="Sales Delhi"]').count(): pg.click('#app [data-vt-pick="Sales Delhi"]'); W(400)
+    ok(pg.locator("#app [data-sales-vt-ask] [data-vt-pick]").count() == 2 and "Choose the voucher type" in pg.inner_text("#app [data-sales-vt-ask]"), "two sales types in real use: asked, which (%d)" % pg.locator("#app [data-sales-vt-ask] [data-vt-pick]").count())
+    hv = E("() => { const v = SL().list.find(v => v.status === 'review' || v.status === 'ready'); return [SL().cfg.voucherType, v.status, (v.problems || []).includes('Choose the voucher type'), v.id]; }")
+    ok(hv[0] == "Sales" and hv[1] == "review" and hv[2], "neither applied until answered: the invoices wait with “Choose the voucher type” (%s)" % hv)
+    ok(pg.locator('#app [data-sales-vt-row="%s"] [data-vt-pick-row]' % hv[3]).count() == 2, "with a one-click choice on the invoice")
+    if pg.locator('#app [data-sales-vt-row="%s"] [data-vt-pick-row="Sales Delhi"]' % hv[3]).count(): pg.click('#app [data-sales-vt-row="%s"] [data-vt-pick-row="Sales Delhi"]' % hv[3]); W(400)
     vt = E("() => { salesLearnVt(); render(); return [SL().cfg.voucherType, SL().cfg.vtBy, !!SL().vtAsk]; }"); W(300)
     ok(vt == ["Sales Delhi", "asked", False] and pg.locator("#app [data-sales-vt-ask]").count() == 0, "the answer is kept for the client and not asked again (%s)" % vt)
-    E("() => { S.books = window.__books0; const c = SL().cfg; delete c.vtBy; delete c.vtFrom; c.voucherType = 'Sales'; saveSales({cfg: true}); render(); }")
+    ok(not E("(id) => (SL().list.find(v => v.id === id).problems || []).includes('Choose the voucher type')", hv[3]), "answered: the invoices no longer wait for it")
+    E("() => { S.books = window.__books0; const c = SL().cfg; delete c.vtBy; delete c.vtFrom; delete c.vtNotice; c.voucherType = 'Sales'; SL().vtAsk = null; saveSales({cfg: true}); SL().list.forEach(v => mapInvoice(v)); render(); }")
+    # review of d487be4c1: "Post duplicate anyway" is good for one attempt: Tally makes the voucher but no answer comes;
+    # Try again checks again and asks again, never posting it a second time by itself
+    E("""(G) => { SL().list = []; window.__enq.length = 0; const v = newInvoice({number: "DUP/9", date: "2026-10-28", customerName: "ZZ Delhi Buyers", customerGstin: G.delhi, pos: "07", taxable: 1000, igst: 180, total: 1180}, "upload");
+      v.customerLedger = "ZZ Delhi Buyers"; v.userLedger = true; SL().list.push(v); mapInvoice(v);
+      window.__vinAnswer = () => [{number: "DUP/9", type: "Sales", date: "20261028", party: "ZZ Delhi Buyers", guid: "old9", entries: [{ledger: "ZZ Delhi Buyers", amount: "-700.00"}]}];
+      SL().filter = 'ready'; saveSales(); render(); }""", G); W(400)
+    post()
+    d9 = E("() => SL().list.find(v => v.x.number === 'DUP/9').id")
+    ok(len(E("window.__enq")) == 0 and E("(id) => SL().list.find(v => v.id === id).status", d9) == "review", "DUP/9: Tally has the number (another amount): skipped, held")
+    E("() => { SL().filter = 'review'; render(); }"); W(300)
+    pg.click('#app [data-sales-dup="%s"] [data-dup-override]' % d9); W(400)
+    for i in range(2):
+        if pg.locator('#confirmBox [data-cbx="yes"]').count(): pg.click('#confirmBox [data-cbx="yes"]'); W(400)
+    # Tally creates it, but no answer comes back
+    E("""() => { window.__postAnswer = (vs) => vs.map(v => ({id: v.id, ok: false, outcomeUnknown: true, message: "Sent to Tally, but no answer came"}));
+      window.__vinAnswer = () => [{number: "DUP/9", type: "Sales", date: "20261028", party: "ZZ Delhi Buyers", guid: "old9", entries: [{ledger: "ZZ Delhi Buyers", amount: "-700.00"}]},
+        {number: "DUP/9", type: "Sales", date: "20261028", party: "ZZ Delhi Buyers", guid: "new9", entries: [{ledger: "ZZ Delhi Buyers", amount: "-1180.00"}]}];
+      SL().filter = 'ready'; render(); }"""); W(300)
+    post()
+    o9 = E("(id) => { const v = SL().list.find(v => v.id === id); return [v.status, !!v.dupOverride, (v.dupOverrideLog || []).length, !!v.needsCheck]; }", d9)
+    ok(len(E("window.__enq")) == 1 and o9 == ["review", False, 1, True], "posted once on the person's say-so; no answer: the override is spent, the invoice waits for the check again (%s)" % o9)
+    E("() => { window.__postAnswer = null; SL().filter = 'review'; render(); }"); W(300)
+    if pg.locator('#app [data-sales-retry="%s"]' % d9).count(): pg.locator('#app [data-sales-retry="%s"]' % d9).first.click()
+    for i in range(30):
+        W(300)
+        if not E("SL().busy"): break
+    W(400)
+    a9 = E("(id) => { const v = SL().list.find(v => v.id === id); return [v.status, (v.problems || []).filter(p => /Already in Tally/.test(p)).length, !!v.dupOverride]; }", d9)
+    ok(len(E("window.__enq")) == 1 and a9 == ["review", 1, False] and pg.locator('#app [data-sales-dup="%s"] [data-dup-override]' % d9).count() == 1,
+       "Try again: the check runs again and FinCom asks again (“Post duplicate anyway”); nothing is sent a second time (%s, %d postings)" % (a9, len(E("window.__enq"))))
+    E("() => { SL().filter = 'ready'; render(); }"); W(300)
+    post(); E("() => postSalesToTally()"); W(900)
+    ok(len(E("window.__enq")) == 1, "nor by Post to Tally (%d)" % len(E("window.__enq")))
+    E("() => { window.__vinAnswer = null; SL().list = []; saveSales(); render(); }")
 
     print("18. the owner, 16-Nov-2026: every ledger on an invoice can be changed, on it and in bulk; kept as set by you")
     E("""(G) => { const L = S.bank.ledgers.list; [["ZZ Sales Alt", "Sales Local"], ["ZZ Output IGST Alt", "GST Output"], ["ZZ Output CGST Alt", "GST Output"], ["ZZ Cash Buyer", "Sundry Debtors"]].forEach(([name, group]) => L.push({name, group}));
@@ -899,6 +949,21 @@ with sync_playwright() as p:
     m3 = bulk("igst", "5", "ZZ Output IGST Alt")
     ok(m3 == "Changed on 0 invoices; 3 skipped (posted / no such line)", "IGST at 5%%: no such line on any: nothing changed, said (%s)" % m3)
     E("() => { SL().sel = new Set(); SL().list = []; saveSales(); render(); }")
+    # the party set on one invoice is also set on the others of this customer still waiting (as before): said, Undo;
+    # never on a posted one
+    E("""() => { const mk = (no, st) => { const v = newInvoice({number: no, date: "2026-10-29", customerName: "ZZ Share Co", pos: "09", taxable: 100, cgst: 9, sgst: 9, total: 118}, "upload"); SL().list.push(v); mapInvoice(v); if (st) v.status = st; return v; };
+      mk("S/1"); mk("S/2"); mk("S/3", "posted"); SL().filter = 'review'; SL().undo = null; saveSales(); render(); }"""); W(300)
+    s1 = E("() => SL().list.find(v => v.x.number === 'S/1').id")
+    E("(id) => salesLinePick(id, 'party', null, 'ZZ Cash Buyer')", s1); W(400)
+    sh = E("() => SL().list.map(v => [v.x.number, v.customerLedger || '', v.status])")
+    ut = E("SL().undo ? SL().undo.text : ''")
+    ok([x[1] for x in sh] == ["ZZ Cash Buyer", "ZZ Cash Buyer", ""] and "Also set on 1 other invoice of this customer." in ut and any("Also set on 1 other invoice of this customer." in t for t in E("window.__toasts")),
+       "S/2 of the same customer follows, said “Also set on 1 other invoice of this customer.” with Undo; the posted S/3 untouched (%s; %r)" % (sh, ut))
+    snack = pg.inner_text("#app .bk-snack") if pg.locator("#app .bk-snack").count() else ""
+    ok("Also set on 1 other invoice of this customer." in snack and pg.locator("#app .bk-snack button", has_text="Undo").count() == 1, "the bar says it, with Undo (%r)" % snack)
+    E("() => salesUndo()"); W(300)
+    ok([x[1] for x in E("() => SL().list.map(v => [v.x.number, v.customerLedger || ''])")] == ["", "", ""], "Undo: both as they were")
+    E("() => { SL().list = []; SL().undo = null; saveSales(); render(); }")
 
     ok(not errors, "no page errors " + str(errors[:2]))
     br.close()

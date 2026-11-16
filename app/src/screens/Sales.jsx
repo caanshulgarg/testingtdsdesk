@@ -352,6 +352,7 @@ function SalesAsk({ v, wide }) {
   if (!["review", "ready"].includes(v.status)) return null;
   const dup = salesDupOf(v);
   return <>
+    {s.vtAsk && s.vtAsk.length > 1 && !v.x.noteKind && <span data-sales-vt-row={v.id}>{s.vtAsk.map((t) => <button key={t.type} className={cls} data-vt-pick-row={t.type} onClick={() => salesVtAnswer(t.type)}>{t.type}</button>)}</span>}
     {(v.refused || v.needsCheck) && <button className={cls} data-sales-retry={v.id} disabled={!!s.busy || !canPostTally(CO())} title="Checks Tally for it first, then sends it on its own" onClick={() => salesPostOneByOne([v.id])}>Try again</button>}
     {dup && <span data-sales-dup={v.id}>{wide && <b>{salesDupWords(dup)} </b>}
       {dup.src === "tally" && <><button className={cls} data-near-same="" onClick={() => salesNearAnswer(v.id)}>It is this invoice</button>{" · "}</>}
@@ -361,8 +362,10 @@ function SalesAsk({ v, wide }) {
 // the client's own sales voucher type from its books (src/js/25 salesLearnVt), and the one question when there are several
 function SalesVt({ s }) {
   const c = s.cfg || {};
-  if (s.vtAsk && s.vtAsk.length > 1 && !c.vtBy) return <div className="bk-alert" data-sales-vt-ask="">
-    <b>Your Tally uses more than one sales voucher type.</b> Which do uploaded sales post as? {s.vtAsk.map((t) => <button key={t.type} className="btn small" data-vt-pick={t.type} onClick={() => salesVtAnswer(t.type)}>{t.type} ({t.count})</button>)}</div>;
+  if (s.vtAsk && s.vtAsk.length > 1) return <div className="bk-alert" data-sales-vt-ask="">
+    <b>Choose the voucher type:</b> your Tally uses more than one for sales, so the invoices wait until you choose. {s.vtAsk.map((t) => <button key={t.type} className="btn small" data-vt-pick={t.type} onClick={() => salesVtAnswer(t.type)}>{t.type} ({t.count})</button>)}</div>;
+  if (c.vtNotice && !c.vtNotice.seen) return <div className="bk-alert" data-sales-vt-notice="">Voucher type changed to {c.vtNotice.to} (from your Tally). <button className="linkbtn" data-vt-change="" onClick={() => salesVtNoticeDone(true)}>Change</button>{" "}
+    <button className="icon" aria-label="Close" data-vt-notice-close="" onClick={() => salesVtNoticeDone(false)}>✕</button></div>;
   return c.vtFrom === "books" ? <p className="note" data-sales-vt="">Voucher type: {c.voucherType} (from your Tally)</p> : null;
 }
 function SalesRefused({ s }) {

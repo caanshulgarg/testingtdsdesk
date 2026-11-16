@@ -386,9 +386,7 @@ async function salesCheckTally(list){
   // a day either side), every type (Tally and the cloud copy match a type by its exact name, and the client's own sales
   // type, "Sales UP", is not known before), the Sales-class ones kept here (salesTypeClasses)
   const cfg = SL().cfg, lc = s => String(s || "").toLowerCase().trim(), notes = [cfg.creditNoteType || "Credit Note", cfg.debitNoteType || "Debit Note", "Credit Note", "Debit Note"];
-  const j = await tallyCall(co, "/vouchers?company=" + encodeURIComponent(tallyCoName(co)) + "&from=" + isoToTally(addDays(dates[0], -1)) + "&to=" + isoToTally(addDays(dates[dates.length - 1], 1)) + Bridge.pinQ());
-  const got = [].concat(j.vouchers || []);
-  if (got.length >= SALES_CHECK_CAP) throw {code: "check_cap", message: "Too many entries to check; check in smaller date ranges"};
+  const got = await salesVouchersIn(co, addDays(dates[0], -1), addDays(dates[dates.length - 1], 1));
   const all = got.filter(v => !/^yes$/i.test(v.cancelled || ""));
   const own = list.filter(v => !v.x.noteKind).map(v => salesVt(v.x)).concat(cfg.voucherType || [], "Sales");
   const isInv = salesTypeClasses(own), noteTypes = new Set(notes.concat(list.filter(v => v.x.noteKind).map(v => salesVt(v.x))).map(lc));
@@ -407,16 +405,36 @@ async function salesCheckTally(list){
     // (this invoice's duplicate check has run again: an answer not confirmed before no longer holds it, item 3)
     if (v.needsCheck){ delete v.needsCheck; mapInvoice(v); }
     // a person pressed "Post duplicate anyway" and confirmed it for this number: nothing of that number holds it
+    // (good for the one post attempt it was given for: salesOverrideSpent ends it after that attempt)
     if (v.dupOverride && v.dupOverride.no === no){ if (had) mapInvoice(v); return; }
     // the number AND the amount (to ₹1): In Tally. The number alone is never enough to call it this invoice; but it is
     // never posted again without a person's "Post duplicate anyway" (the owner, 16-Nov-2026), also after "Not this
     // Tally entry": held, with Tally's voucher said
-    const hit = same.find(x => Math.abs(salesTallyAmount(x) - r2(Math.abs(num(v.x.total)))) <= 1);
+    // (an invoice posted before as a duplicate on a person's say-so: a voucher of its number and amount may be the one
+    // that attempt made, or the one it duplicated; never taken for it by itself: the person is asked again)
+    const hit = v.dupOverrideLog ? null : same.find(x => Math.abs(salesTallyAmount(x) - r2(Math.abs(num(v.x.total)))) <= 1);
     if (hit){ v.status = "intally"; v.postNote = "Already in Tally"; v.tallyMatch = info(hit); n++; }
     else if (any.length){ v.dupBlock = info(same[0] || any[0]); if (["ready", "review"].includes(v.status)) mapInvoice(v); }
     else if (had) mapInvoice(v);
   });
   return n;
+}
+// the vouchers of a period (yyyy-mm-dd, both ends), read again in smaller pieces when an answer reaches the cloud copy's
+// cap (review of d487be4c1): the period halved until each piece is under it; only a single day at the cap is refused
+async function salesVouchersIn(co, from, to){
+  const ask = async (a, b) => [].concat((await tallyCall(co, "/vouchers?company=" + encodeURIComponent(tallyCoName(co)) + "&from=" + isoToTally(a) + "&to=" + isoToTally(b) + Bridge.pinQ())).vouchers || []);
+  const days = (a, b) => Math.round((Date.parse(b + "T00:00:00Z") - Date.parse(a + "T00:00:00Z")) / 86400000);
+  const out = [], seen = new Set();
+  const take = list => list.forEach(x => { const k = salesTallyKey(x); if (!seen.has(k)){ seen.add(k); out.push(x); } });
+  const run = async (a, b) => {
+    const got = await ask(a, b);
+    if (got.length < SALES_CHECK_CAP){ take(got); return; }
+    if (a === b) throw {code: "check_cap", message: "Too many entries in Tally on " + fmtDate(a) + " to check (" + SALES_CHECK_CAP.toLocaleString("en-IN") + " or more in one day), so nothing was posted. Check that day's invoices in Tally first."};
+    const mid = addDays(a, Math.floor(days(a, b) / 2));
+    await run(a, mid); await run(addDays(mid, 1), b);
+  };
+  await run(from, to);
+  return out;
 }
 // whether a voucher type of Tally's answer is of the Sales class, for an invoice: the client's own sales type (Sales
 // settings, the invoices' own), Tally's "Sales", or a type with "sales" in its name; never a Journal, Receipt, Payment,
@@ -475,6 +493,7 @@ async function postSalesToTally(){
   let list = s.list.filter(v => v.status === "ready");
   if (!list.length) return withPart("invoice", "salesWhy", () => toast("No invoice is ready to post" + (salesWhy() ? ": " + salesWhy().text : "") + "."));   // never silent
   s.busy = "Checking Tally for invoices already booked\u2026"; render();
+  let sent = [];
   try {
     const asked = list.slice();
     await salesCheckTally(list);
@@ -487,6 +506,7 @@ async function postSalesToTally(){
     const masters = mastersFor(list);
     s.busy = "Posting " + list.length + " invoice" + (list.length > 1 ? "s" : "") + " to Tally\u2026"; render();
     const tn = tallyCoName(co);
+    sent = list;
     const j = await Bridge.post({company: tn, client: co.id,
       masters: masters.map(l => ({id: "led:" + l.name, xml: (/sundry/i.test(l.group || "sundry") ? customerMasterXml : ledgerMasterXml)(l)})),
       vouchers: list.map(v => ({id: v.id, xml: salesVoucherXml(v, co)}))}, pj => { s.busy = postingLine(pj, tn); refreshBusy(); });
@@ -495,12 +515,14 @@ async function postSalesToTally(){
     masters.forEach(l => { const r = by.get("led:" + l.name); if (r && r.ok){ l.sent = true; l.sentAt = now; } });
     let ok = 0, bad = 0, queued = 0, refusedN = 0;
     let optionalN = 0;
+    sent = [];
     list.forEach(v => { const r = by.get(v.id), no = salesRefusal(r);
       // (item 4) "created 0 of N" with exceptions and no line error: a definite refusal of the request, said plainly;
       // the invoice is Refused by Tally (not Ready, never sent again as it is) until it is posted one by one or changed
       if (no){ refusedN++; salesMarkRefused(v, r, no); return; }
       if (r && r.ok && r.verified !== true){ bad++; const x = r; v.postError = "Failed: not found in Tally when read back, so it is not marked as posted. Look in Tally (Day Book, and Display More Reports \u2192 Exception Reports \u2192 Optional Vouchers). If it is not there, post it again." + (x.verifyNote ? " [" + x.verifyNote + "]" : ""); return; } if (r && r.ok){ ok++; v.status = "posted"; v.postedAt = now; v.postError = ""; v.postedInto = r.company || ""; v.postedOptional = !!r.optional; if (r.optional) optionalN++; learnCustomer(v); } else if (r && r.held){ queued++; v.postError = plainMsg(r.message); v.postJob = r.job; }   /* held by a posting still going on in FinCom's cloud: queued, not failed */
       else { bad++; v.postError = plainMsg(r && r.message) || "Tally did not confirm this invoice."; } });
+    salesOverrideSpent(list);
     saveBank({newLed: true});
     s.busy = ""; saveSales();
     toast(ok + " posted to Tally" + (optionalN ? " (" + optionalN + " as Optional vouchers: Display More Reports \u2192 Exception Reports \u2192 Optional Vouchers)" : "") + (queued ? "; " + queued + " queued, posts by itself" : "") + (bad ? "; " + bad + " not posted (see the red notes)" : "") +
@@ -508,8 +530,19 @@ async function postSalesToTally(){
     if (!bad && !queued && !refusedN) s.filter = "done";
     else if (refusedN && !bad && !queued) s.filter = "review";
     syncLedgersFromTally(true);
-  } catch (e){ s.busy = ""; toast("Posting failed: " + e.message); }
+  } catch (e){ s.busy = ""; salesOverrideSpent(sent); saveSales(); toast("Posting failed: " + e.message); }
   render();
+}
+// a "Post duplicate anyway" is good for one post attempt: after it (posted, no answer, not confirmed, refused, failed),
+// it is ended (kept in the invoice's log), and an invoice not posted waits for the duplicate check to run again
+// ("Not confirmed"), which asks again if the number is in Tally (review of d487be4c1)
+function salesOverrideSpent(list){
+  [].concat(list || []).forEach(v => {
+    if (!v || !v.dupOverride) return;
+    v.dupOverrideLog = (v.dupOverrideLog || []).concat([Object.assign({}, v.dupOverride, {spentAt: new Date().toISOString(), result: v.status})]);
+    delete v.dupOverride;
+    if (v.status !== "posted" && !v.postJob){ v.needsCheck = true; v.status = "review"; mapInvoice(v); }
+  });
 }
 // next-fix-sales-upload (item 4): Tally's answer "created 0 of N" with exceptions and no line error (the bridge's words,
 // bridge-go/post.go replyLine; its own fallback "Tally reported an exception" is lost when the request held several):
@@ -581,7 +614,11 @@ function setCustomerLedger(v, ledger){
   const before = targets.map(salesSnapshot);
   targets.forEach(o => { if (o.id === v.id && o.customerLedger !== l) delete o.refused; if (o.custSource !== "Set by you") o.custWas = {ledger: o.customerLedger || "", source: o.custSource || "", user: !!o.userLedger, sure: !!o.custSure}; o.customerLedger = l; o.userLedger = true; o.custSource = "Set by you"; salesPartyFill(o); mapInvoice(o); s.sticky.add(o.id); if (o.status === "review" && !(o.problems || []).length && !(o.ledgerIssues || []).length) o.status = "ready"; });
   learnCustomer(v);
-  salesSetUndo(esc(v.x.customerName || v.x.number) + " \u2192 <b>" + esc(l) + "</b>" + (targets.length > 1 ? " \u00b7 also " + (targets.length - 1) + " more invoice" + (targets.length > 2 ? "s" : "") + " of this customer" : ""), before);
+  // (the other invoices of this customer waiting with no ledger a person set follow, as before; never one posted or in
+  // Tally: only To review and Ready ones are looked at. Said, with Undo: review of d487be4c1)
+  const others = targets.length - 1, also = others ? "Also set on " + others + " other invoice" + (others === 1 ? "" : "s") + " of this customer." : "";
+  salesSetUndo(esc(v.x.customerName || v.x.number) + " \u2192 <b>" + esc(l) + "</b>" + (also ? " \u00b7 <span data-also-set=\"" + others + "\">" + esc(also) + "</span>" : ""), before);
+  if (also) toast(also + " Undo is in the bar below.");
   saveSales();
   return true;
 }
