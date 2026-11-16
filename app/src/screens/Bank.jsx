@@ -13,7 +13,7 @@ import More from "../parts/More.jsx";
 import Msg from "../parts/Msg.jsx";
 import { useRef, useEffect, useLayoutEffect, useState } from "react";
 import SmartBar from "../parts/bank/SmartBar.jsx";
-import { smartRows, selectAll, setVtype, vtypeOf, VTYPES, bulkVtype, bulkNarr, kbKey, kbChange, splitSave, splitClear, ledgersFromBooks } from "../parts/bank/smart.js";
+import { smartRows, smartOn, selectAll, setVtype, vtypeOf, VTYPES, bulkVtype, bulkNarr, kbKey, kbChange, splitSave, splitClear, ledgersFromBooks } from "../parts/bank/smart.js";
 import HeadFilter from "../parts/bank/HeadFilter.jsx";
 import { markGone, goneOpen, goneLine, goneCount, goneToast } from "../parts/bank/goneSent.js";
 import "../parts/bank/bankSmart.css";
@@ -433,6 +433,9 @@ function BankPage() {
   // the lines the table lists: the tab, search, column filters and dates (bankVisibleRows, src/js/22), then the quick
   // chips and "suggestions only" (parts/bank/smart.js); the filter bar counts and adds them up (it replaces the ChipBar)
   const view = apView("bank") === "auto" ? b.rows.filter(isAuto) : apRows("bank", bankVisibleRows()), shown = smartRows(b, view);
+  // the ready lines shown now, when a filter is on (re-review of fdeb79bd8); [] otherwise
+  const fOn = smartOn(b) || ["date", "narr", "wd", "dep", "led"].some((k) => colActive("bank", k)) || listFOn("bank"), bsh = fOn ? listShownSet("bank") : null;
+  const pv = fOn ? shown.filter((r) => r.state === "ready" && (!bsh || bsh.has(r.id))) : [];
   if (b.dense === undefined) b.dense = denseOn();
   // posting (moved from the bar at the foot to the header, spacious layout): waits until the account's ledger is confirmed
   const noLed = !bankLedgerReady(CO(), acc), whyLed = noLed ? bankLedgerWhy(CO(), acc) : "";
@@ -469,7 +472,10 @@ function BankPage() {
         </dl>
         <div className="bk-actions">
           <button className="btn small" data-bank-save="" title="Keep the statement's changes now (they are also kept by themselves)" onClick={saveNow}>Save</button>
-          {canPostTally(CO()) ? <button className="btn small primary" data-bank-post="" disabled={!tc.post || noLed} title={noLed ? whyLed : undefined} onClick={() => bankAct("bankPost")}>Post to Tally ({tc.post})</button>
+          {/* re-review of fdeb79bd8: a filter on (smartOn, the column funnels): Post keeps to the ready lines shown now; none
+              shown: the plain button, as with no filter */}
+          {canPostTally(CO()) ? <button className="btn small primary" data-bank-post="" data-post-shown={pv.length ? pv.length : undefined} disabled={!tc.post || noLed} title={noLed ? whyLed : undefined}
+            onClick={() => (pv.length ? postBankToTally(pv.map((r) => r.id)) : bankAct("bankPost"))}>{pv.length ? "Post " + pv.length + " shown to Tally" : "Post to Tally (" + tc.post + ")"}</button>
             : <button className="btn small primary" data-bank-post="" disabled={!tc.post || noLed} title={noLed ? whyLed : undefined} onClick={() => bankAct("bankXml")}>Create Tally file ({tc.post})</button>}
           <button className="btn small" data-bank-rules="" aria-pressed={tab === "rules"} onClick={() => bankTabGo("rules")}>Rules</button><button className="btn small" onClick={() => bankAct("bankSettings")}>Settings</button><MoreMenu tc={tc} /></div>
       </div>

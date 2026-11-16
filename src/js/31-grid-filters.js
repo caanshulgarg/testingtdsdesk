@@ -7,11 +7,19 @@ function gfN(n){ if (typeof GridF !== "object") return n; if (GridF.full()) retu
 // next-ui-table-filters (the owner, 16-Nov-2026): also the plain tables of the Tally page (table.data, its clients' grid);
 // the one list table (ListTable.jsx, table.lt) has funnels of its own, on all its rows
 const GF_SEL = "#app table.bk-table, #app table.data:not(.lt), #app table.tpt-grid";
-// Sales (review of 955ce3d85): Select all, Post to Tally and Create Tally file keep to the invoices the column filters show,
-// the old ones (salesColPass) and the new (ListTable "sales": listPass); every one when no column filter is on
+// Sales (reviews of 955ce3d85 and fdeb79bd8): with a column filter on (the old, salesColPass, or the new, ListTable
+// "sales"), Select all, Post to Tally, Create Tally file and Confirm all suggestions keep to the invoices shown right now
+// (this tab, the search, the filters). None of them shown: every one, as with no filter (the plain button)
 function salesShown(v){ return typeof listShows !== "function" || listShows("sales", v.id); }
 function salesPostOn(){ return (typeof salesColOn === "function" && salesColOn()) || (typeof listFOn === "function" && listFOn("sales")); }
-function salesPostScope(list){ return salesPostOn() ? list.filter(v => salesColPass(v) && (typeof listPass !== "function" || listPass("sales", v))) : list; }
+function salesInView(){ const sh = typeof listShownSet === "function" ? listShownSet("sales") : null; return new Set(salesVisible().filter(v => !sh || sh.has(v.id)).map(v => v.id)); }
+// the list kept to the invoices shown; .shown when it was (the button then says "N shown")
+function salesPostScope(list){
+  if (!salesPostOn()) return list;
+  const ids = salesInView(), out = list.filter(v => ids.has(v.id));
+  if (!out.length) return list;
+  out.shown = true; return out;
+}
 const GridF = {
   pop: null,
   // which screen this is, so a filter stays with its own table

@@ -232,7 +232,7 @@ export default function ListTable({ name, cols, rows, rowKey, rowProps, prep, un
   // the old funnels (Purchase, Bank, Sales: src/js/23 colPop) are on their own columns; the bar's Clear filters clears both
   const oldT = (cs.find((c) => c.filter && c.filter.props && c.filter.props.t) || { filter: { props: {} } }).filter.props.t;
   const oldOn = !!oldT && typeof colActive === "function" && cs.some((c) => c.filter && c.filter.props && colActive(oldT, c.filter.props.k));
-  const clearAll = () => { if (oldOn && typeof colChipAll === "function") { if (S.listF) delete S.listF[name]; S.listFPop = null; colChipAll(oldT); } else clearListF(name); };
+  const clearAll = () => { if (oldOn && typeof colChipAll === "function") { if (S.listF) delete S.listF[name]; S.listFPop = null; colChipAll(oldT, true); } else clearListF(name); };
   const pop = lf && S.listFPop && S.listFPop.name === name ? cs.find((c) => c.k === S.listFPop.k && filterable(c)) : null;
   const popEl = pop ? <Suspense fallback={null}><ColFilterPop key={pop.k} name={name} c={pop} rows={all0} prep={prep} close={() => { S.listFPop = null; render(); }} /></Suspense> : null;
   const tot = oldOn && of != null ? of : all0.length;

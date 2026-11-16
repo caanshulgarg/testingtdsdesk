@@ -475,17 +475,19 @@ export function SalesBar() {
       {rows.every((v) => v.status !== "posted") && <button className="btn danger" onClick={() => salesAct("salesBulkDelete")}>Delete</button>}
     </>;
   } else {
-    const confirmable = s.list.filter((v) => v.status === "review" && v.customerLedger && !(v.problems || []).length && !(v.ledgerIssues || []).length).length;
+    // re-review of fdeb79bd8: with a column filter on, the bulk buttons keep to the invoices shown now (salesPostScope,
+    // src/js/31); none shown: the plain button, as with no filter
+    const conf = salesPostScope(s.list.filter((v) => v.status === "review" && v.customerLedger && !(v.problems || []).length && !(v.ledgerIssues || []).length)), confirmable = conf.length;
     // upload-pages: the counts of the states are the state bar's; the Post button counts what it posts
     left = null;
     // (the output GST ledgers to choose are offered whatever else is ready: next-fix-igst-pick)
     const why0 = typeof salesWhy === "function" && salesWhy(), why = !tc.ready && why0;
-    const fOn = salesPostOn(), nPost = fOn ? salesPostScope(s.list.filter((v) => v.status === "ready")).length : tc.ready;
+    const post = salesPostScope(s.list.filter((v) => v.status === "ready")), fOn = !!post.shown, nPost = fOn ? post.length : tc.ready;
     right = <>
       {why && <span className="note" data-post-why="">{why.text.split(":")[0]} <button className="linkbtn" onClick={why.act}>{why.btn}</button></span>}
       {why0 && (why0.choices || []).map((c) => <TaxChoice key={c.ck} a={c} n={c.n} />)}
       {why0 && why0.unknown > 0 && <span className="note" data-tax-unknown={why0.unknown}>{why0.unknown} invoice{why0.unknown === 1 ? "" : "s"}: which GSTIN of the client {why0.unknown === 1 ? "it is" : "they are"} from is not known. Choose the GST ledger on each, or upload the sheet with its “Our GSTIN” column.</span>}
-      {confirmable > 0 && <button className="btn" onClick={() => salesAct("salesConfirmAll")}>Confirm all suggestions ({confirmable})</button>}
+      {confirmable > 0 && <button className="btn" data-confirm-shown={conf.shown ? confirmable : undefined} onClick={() => salesAct("salesConfirmAll")}>{conf.shown ? "Confirm " + confirmable + " shown suggestion" + (confirmable === 1 ? "" : "s") : "Confirm all suggestions (" + confirmable + ")"}</button>}
       {canPostTally(CO()) && postThroughWords(CO()) && <span className="note" data-post-through="">{postThroughWords(CO())}</span>}
       {/* review of 955ce3d85: a column filter on: only the Ready invoices it shows are posted, counted on the button */}
       {canPostTally(CO()) ? <button className="btn primary" disabled={!nPost} data-post-shown={fOn ? nPost : undefined} onClick={() => salesAct("salesPost")}>{fOn ? "Post " + nPost + " shown to Tally" : "Post to Tally (" + nPost + ")"}</button>

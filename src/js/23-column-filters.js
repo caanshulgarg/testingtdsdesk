@@ -143,12 +143,13 @@ function colPopApply(clearOnly, keepOpen){
 // the chips over a list (app/src/parts/ChipBar.jsx): a chip opens its column's filter box, ✕ removes it, Clear all
 function colChipOpen(t, k){ S.colPop = S.colPop && S.colPop.k === k && S.colPop.t === t ? null : {t, k, justOpened: true}; render(); }
 function colChipX(t, k){ S.colPop = {t, k}; colPopApply(true); }
-function colChipAll(t){
+// keepTicks (the table's Clear filters, re-review of fdeb79bd8): the rows ticked stay ticked
+function colChipAll(t, keepTicks){
   if (S.listF) delete S.listF[t];   // next-ui-table-filters: the new funnels of the same list (ListTable "rev", "sales", "bank") too
-  if (t === "bank"){ const b = B(); b.from = ""; b.to = ""; b.f = {}; b.sel.clear(); }
-  else if (t === "sales"){ const sl = SL(); if (sl){ sl.f = {}; sl.sel.clear(); } }
+  if (t === "bank"){ const b = B(); b.from = ""; b.to = ""; b.f = {}; if (!keepTicks) b.sel.clear(); }
+  else if (t === "sales"){ const sl = SL(); if (sl){ sl.f = {}; if (!keepTicks) sl.sel.clear(); } }
   else if (t === "txn"){ S.txnF = S.txnF || {}; S.txnF[txnTab()] = {}; S.txnQ = ""; S.txnStatus = ""; }
-  else { S.revF = {}; S.revSel = new Set(); }
+  else { S.revF = {}; if (!keepTicks) S.revSel = new Set(); }
   S.colPop = null; render();
 }
 function colChips(t){

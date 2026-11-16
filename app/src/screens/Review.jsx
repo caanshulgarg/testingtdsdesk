@@ -122,7 +122,12 @@ function Why({ none, tally }) {
 
 function ReviewBar() {
   const rows = draftRows(), sel = S.revSel || new Set(), live = bridgeLive();
-  const picked = rows.filter((r) => sel.has(r.e.id)), ready = rows.filter((r) => !needsLook(r));
+  const picked = rows.filter((r) => sel.has(r.e.id)), ready0 = rows.filter((r) => !needsLook(r));
+  // re-review of fdeb79bd8: a column filter on (the old, S.revF, or the new, ListTable "rev"): Approve keeps to the ready
+  // bills shown now; none shown: the plain button, as with no filter
+  const fOn = Object.values(S.revF || {}).some((v) => (Array.isArray(v) ? v.length : v)) || listFOn("rev");
+  const sh = fOn ? listShownSet("rev") : null, inView = fOn ? new Set(revFiltered().filter((r) => !sh || sh.has(r.e.id)).map((r) => r.e.id)) : null;
+  const readyShown = inView ? ready0.filter((r) => inView.has(r.e.id)) : [], scoped = readyShown.length > 0, ready = scoped ? readyShown : ready0;
   // round 14c (C1): when no bill is ready, the bulk Approve says why in plain words, counted from the drafts' missing lists
   const noneReady = (list) => list.length && !list.some((r) => !(r.c.missing || []).length) ? noneReadyWords(list) : "";
   if (picked.length) return (
@@ -145,7 +150,7 @@ function ReviewBar() {
       <div className="ab-left"><Why none={!ready.length && noneReady(rows)} tally={!live} /></div>
       <div className="ab-right">
         <button className="btn" disabled={!live} title={!live ? NO_TALLY : undefined} onClick={() => doAct("revCheckTallyAll")}>Check the year in Tally for all</button>
-        <button className="btn primary" disabled={!ready.length} title={!ready.length ? (noneReady(rows) || "No bill is ready to approve yet") : undefined} onClick={() => doAct("revApproveAll")}>Approve all that are ready ({ready.length})</button>
+        <button className="btn primary" disabled={!ready.length} title={!ready.length ? (noneReady(rows) || "No bill is ready to approve yet") : undefined} data-approve-shown={scoped ? ready.length : undefined} onClick={() => { if (!scoped) return doAct("revApproveAll"); S.revSel = new Set(ready.map((r) => r.e.id)); doAct("revApprove"); }}>{scoped ? "Approve " + ready.length + " shown that " + (ready.length === 1 ? "is" : "are") + " ready" : "Approve all that are ready (" + ready.length + ")"}</button>
       </div>
     </div>
   );

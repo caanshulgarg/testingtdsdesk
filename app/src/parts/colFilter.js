@@ -111,11 +111,16 @@ const REG = {};
 export function register(name, cs, rows, prep, rowKey) { REG[name] = { cs, rows, prep, rowKey }; }
 const keyOf = (g, r, i) => (g.rowKey ? g.rowKey(r, i) : i);
 // the keys of the rows the column filters show, or null when no column filter is on (every row shows)
+// worked out once per drawing and filter (re-review of fdeb79bd8: Select all on 50,000 rows asked it per row), so a page's
+// action looks each row up in one Set
 export function listShownKeys(name) {
-  const g = REG[name];
+  const g = REG[name], f = S.listF && S.listF[name];
   if (!g || !anyOn(name)) return null;
+  if (g.memo && g.memo.f === f) return g.memo.set;
   const idx = new Map(g.rows.map((r, i) => [r, i]));
-  return new Set(filterRows(name, g.cs, g.rows, g.prep).map((r) => keyOf(g, r, idx.get(r))));
+  const set = new Set(filterRows(name, g.cs, g.rows, g.prep).map((r) => keyOf(g, r, idx.get(r))));
+  g.memo = { f, set };
+  return set;
 }
 export function listShows(name, key) { const s = listShownKeys(name); return !s || s.has(key); }
 // one row (on this tab or not) against the list's column filters
@@ -128,7 +133,7 @@ export function pruneSel(name, sel) {
   g.rows.forEach((r, i) => { const k = keyOf(g, r, i); if (sel.has(k) && !shown.has(k)) { sel.delete(k); out = true; } });
   return out;
 }
-if (typeof window !== "undefined") Object.assign(window, { listShows, listPass, listFOn: anyOn, listFParse: { amt, day } });
+if (typeof window !== "undefined") Object.assign(window, { listShows, listShownSet: listShownKeys, listPass, listFOn: anyOn, listFParse: { amt, day } });
 
 export function setListF(name, k, patch) {
   S.listF = S.listF || {};

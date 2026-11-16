@@ -767,7 +767,7 @@ function salesClick(t){
       printInvoiceHtml(html, rows.length + "-invoices"); }); return true; }
     case "salesBulkLedger": { const inp = document.querySelector("[data-svbulk]"); const l = exactLedger(inp && inp.value); if (!l){ toast("Choose a Tally ledger for the selected invoices."); return true; } acClose(); salesBulk("ledger", l); return true; }
     case "salesConfirmAll": {
-      const rows = s.list.filter(v => v.status === "review" && v.customerLedger && !(v.problems || []).length && !(v.ledgerIssues || []).length);
+      const rows = salesPostScope(s.list.filter(v => v.status === "review" && v.customerLedger && !(v.problems || []).length && !(v.ledgerIssues || []).length));
       const before = rows.map(salesSnapshot);
       rows.forEach(v => { v.status = "ready"; s.sticky.add(v.id); learnCustomer(v); });
       salesSetUndo(rows.length + " invoices confirmed", before); saveSales(); render(); return true;
