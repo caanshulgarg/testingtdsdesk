@@ -82,11 +82,14 @@ function salesWhy(){
   // next-fix-igst-pick: the output GST ledgers a person must choose (several fit, none by its state), each choice once
   // with its candidates, and how many waiting invoices it sets
   const ch = new Map();
-  ((s && s.list) || []).filter(v => v.status === "review").forEach(v => (v.taxAsk || []).forEach(a => {
-    const c = ch.get(a.ck) || {ck: a.ck, kind: a.kind, reg: a.reg, cands: a.cands, n: 0}; c.n++; ch.set(a.ck, c); }));
+  // (an invoice whose registration is not known, with several: chosen on its own row, never for the client: review of
+  // 2f8b825a7; the bar says how many, and that the sheet's "Our GSTIN" column tells it)
+  let unknown = 0;
+  ((s && s.list) || []).filter(v => v.status === "review").forEach(v => { if ((v.taxAsk || []).some(a => !a.ck)) unknown++; (v.taxAsk || []).filter(a => a.ck).forEach(a => {
+    const c = ch.get(a.ck) || {ck: a.ck, kind: a.kind, reg: a.reg, cands: a.cands, n: 0}; c.n++; ch.set(a.ck, c); }); });
   const set = n.sales || n.tax || n.round;
   return {text: parts.join("; ") + (set ? ": set it here" : ": see To review"), btn: set ? "Set it here" : "Open To review",
-    act: () => { if (set) s.showSettings = true; else s.filter = "review"; render(); }, choices: Array.from(ch.values())};
+    act: () => { if (set) s.showSettings = true; else s.filter = "review"; render(); }, choices: Array.from(ch.values()), unknown};
 }
 // "Edit type" on an invoice held for a person (a sheet's negative amount, or "Purchase Return" on Sales): they say what
 // it is; its amounts are taken positive, a credit note's number marked as a sheet's is, and it is held no more

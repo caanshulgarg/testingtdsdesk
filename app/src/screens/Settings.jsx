@@ -222,7 +222,8 @@ function EntityType({ co }) {
 function Company() {
   const co = CO(), owner = S.account && S.account.me ? S.account.me.role === "owner" : true;
   return <Card title="The client" note="As on the client’s GST registration. The PAN is filled in from the GSTIN when left empty.">
-    <div className="grid"><CoText label="Client name" path="name" /><CoText label="GSTIN" path="gstin" /><CoText label="PAN" path="pan" /><EntityType co={co} /></div>
+    <div className="grid"><CoText label="Client name" path="name" /><CoText label="GSTIN" path="gstin" /><CoText label="PAN" path="pan" /><EntityType co={co} />
+      <CoText label="Other GSTINs (registrations in other states)" path="otherGstins" placeholder="e.g. 29…, 33…" /></div>
     {/* review of 02-Oct-2026: a GSTIN or PAN cannot be emptied by a sync (the server keeps it); an owner clears a wrong one
         here, with a reason that is kept */}
     {owner && (co.gstin || co.pan) && <div className="row" data-clear-ids="" style={{ gap: 8, marginTop: 8 }}>

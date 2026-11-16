@@ -40,10 +40,10 @@ const gstOf = (x) => r2(num(x.cgst) + num(x.sgst) + num(x.igst) + num(x.cess));
 // next-fix-igst-pick: the output GST ledger a person chooses, one click (several fit, none by its state); every
 // waiting invoice of the client takes it (salesPickTax, src/js/25-sales.js)
 const taxWord = (a) => "Output " + String(a.kind || "").toUpperCase() + (a.reg ? " for " + a.reg + " " + (GST_STATES[a.reg] || "") : "");
-function TaxChoice({ a, n }) {
+function TaxChoice({ a, n, id }) {
   return <span className="row" data-tax-choice={a.ck} style={{ gap: 4, flexWrap: "wrap", alignItems: "center" }}>
     <span className="note">{taxWord(a)}{n ? " (" + n + " invoice" + (n === 1 ? "" : "s") + ")" : ""}:</span>
-    {a.cands.map((c) => <button key={c} className="btn small" data-tax-pick={c} title={"Use " + c + " on every waiting invoice of this client"} onClick={() => salesPickTax(a.ck, c)}>{c}</button>)}
+    {a.cands.map((c) => <button key={c} className="btn small" data-tax-pick={c} title={a.ck ? "Use " + c + " on every waiting invoice of this client" + (a.reg ? " issued from " + a.reg : "") : "Use " + c + " on this invoice (which registration it is from is not known)"} onClick={() => salesPickTax(a.ck, c, id, a.ik)}>{c}</button>)}
   </span>;
 }
 // the sales list's columns (spec K6: date, number, party, amount, status, then the rest, in ListTable.jsx's order)
@@ -70,7 +70,7 @@ function salesCols(s, list, nSel) {
         <LedgerBox className={"lgbox" + (v.status === "ready" ? " done" : v.customerLedger ? " sugg" : "")} value={v.customerLedger || ""} fk={"svcust:" + v.id} data-svcust={v.id}
           placeholder="Select customer ledger" aria-label={"Customer ledger for " + (v.x.number || "invoice")} onCommit={(val) => salesSetCust(v.id, val)} />
         {v.hold && v.status === "review" && <select aria-label="Edit type" data-edit-type={v.id} value="" onChange={(ev) => salesSetKind(v.id, ev.target.value)}><option value="">Edit type…</option><option value="invoice">Invoice</option><option value="credit">Credit Note</option><option value="debit">Debit Note</option></select>}
-        {p.editable && (v.taxAsk || []).slice(0, 1).map((a) => <TaxChoice key={a.ck} a={a} />)}
+        {p.editable && (v.taxAsk || []).slice(0, 1).map((a) => <TaxChoice key={a.ck || a.ik} a={a} id={v.id} />)}
         {p.issue ? <span className="src bad" title={(v.problems || []).concat(v.ledgerIssues || []).join("; ")}>{p.issue}</span>
           : <span className={"src" + (v.status === "ready" ? " ok" : "")}>{v.status === "ready" ? (v.userLedger ? "Set by you" : v.custSource || "Ready") : v.customerLedger ? "Suggested · " + (v.custSource || "match") : "No match found"}</span>}
       </> : <><span className="lgtext">{v.customerLedger || "—"}</span>
@@ -178,7 +178,7 @@ function Detail({ v }) {
         <div className="bk-tablewrap" style={{ marginTop: 10 }}><table className="bk-table" data-statement="">
           <thead><tr><th>Ledger</th><th className="n">Debit ₹</th><th className="n">Credit ₹</th></tr></thead>
           <tbody>
-            {lines.map((l, i) => <tr key={i}><td title={l.why || undefined} data-line-why={l.why || undefined}>{l.ledger || <span className="src bad">not set</span>}{!ro && !l.ledger && l.cands && <> <TaxChoice a={l} /></>}{l.ledger && l.why && <span className="src muted"> · {l.why}</span>}{l.ledger && !exactLedger(l.ledger) && <> <span className="src bad">not in Tally</span></>}</td>
+            {lines.map((l, i) => <tr key={i}><td title={l.why || undefined} data-line-why={l.why || undefined}>{l.ledger || <span className="src bad">not set</span>}{!ro && !l.ledger && l.cands && <> <TaxChoice a={l} id={v.id} /></>}{l.ledger && l.why && <span className="src muted"> · {l.why}</span>}{l.ledger && !exactLedger(l.ledger) && <> <span className="src bad">not in Tally</span></>}</td>
               <td className="n">{l.side === "Dr" ? INR.format(l.amt) : ""}</td><td className="n">{l.side === "Cr" ? INR.format(l.amt) : ""}</td></tr>)}
             <tr><td><b>Total</b></td><td className="n"><b>{INR.format(tot("Dr"))}</b></td><td className="n"><b>{INR.format(tot("Cr"))}</b></td></tr>
           </tbody>
@@ -414,6 +414,7 @@ export function SalesBar() {
     right = <>
       {why && <span className="note" data-post-why="">{why.text.split(":")[0]} <button className="linkbtn" onClick={why.act}>{why.btn}</button></span>}
       {why0 && (why0.choices || []).map((c) => <TaxChoice key={c.ck} a={c} n={c.n} />)}
+      {why0 && why0.unknown > 0 && <span className="note" data-tax-unknown={why0.unknown}>{why0.unknown} invoice{why0.unknown === 1 ? "" : "s"}: which GSTIN of the client {why0.unknown === 1 ? "it is" : "they are"} from is not known. Choose the GST ledger on each, or upload the sheet with its “Our GSTIN” column.</span>}
       {confirmable > 0 && <button className="btn" onClick={() => salesAct("salesConfirmAll")}>Confirm all suggestions ({confirmable})</button>}
       {canPostTally(CO()) && postThroughWords(CO()) && <span className="note" data-post-through="">{postThroughWords(CO())}</span>}
       {canPostTally(CO()) ? <button className="btn primary" disabled={!tc.ready} onClick={() => salesAct("salesPost")}>Post to Tally ({tc.ready})</button>
