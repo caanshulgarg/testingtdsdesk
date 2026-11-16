@@ -295,6 +295,9 @@ function draftProblems(){
 }
 function saveDraft(){
   const s = SL(), d = s.draft, co = CO(s.cid);
+  // (next-fix-sales-sync) the series' number taken meanwhile on another computer (its invoice synced in): the next free one
+  if (!d.editId && d.seriesN && normInvNo(d.x.number) === normInvNo(seriesNumber(s.cfg, d.x.date, d.seriesN)) && s.list.some(v => normInvNo(v.x.number) === normInvNo(d.x.number))){
+    const nn = nextInvoiceNumber(d.x.date); toast("Invoice number " + d.x.number + " was used on another computer meanwhile, so this one is " + nn.number + "."); d.x.number = nn.number; d.seriesN = nn.n; }
   recalcDraft();
   const probs = draftProblems();
   if (probs.length){ toast(probs[0]); d.showErrors = true; render(); return null; }
@@ -662,7 +665,7 @@ function salesRowAct(a, id, force){
       if (!v.customerLedger || miss.length){ toast(miss[0] || "Choose the customer ledger first."); s.openId = v.id; render(); return true; }
       v.status = "ready"; learnCustomer(v); salesSetUndo("Invoice " + esc(v.x.number) + " confirmed", before);
     }
-    if (a === "unready"){ v.status = "review"; salesSetUndo("Invoice " + esc(v.x.number) + " moved back to review", before); }
+    if (a === "unready"){ v.status = "review"; v.heldBack = true; salesSetUndo("Invoice " + esc(v.x.number) + " moved back to review", before); }
     if (a === "ignore"){ v.status = "ignored"; if (s.openId === v.id) s.openId = null; salesSetUndo("Invoice " + esc(v.x.number) + " ignored", before); }
     if (a === "restore"){ v.status = "review"; mapInvoice(v); salesSetUndo("Invoice " + esc(v.x.number) + " restored", before); }
     if (a === "delete"){

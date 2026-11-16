@@ -227,7 +227,8 @@ function cloudSnapshot(){
   if (s && s.cid && !s.loading){
     // (next-fix-sales-sync) with when each setting was changed here, so a copy with it empty never wipes it (src/js/25)
     add("sales_cfg", s.cid, s.cid, Object.assign({cfg: s.cfg, hist: s.hist}, s.cfgAt && Object.keys(s.cfgAt).length ? {cfgAt: s.cfgAt} : {}));
-    s.list.forEach(v => add("sales", s.cid + ":" + v.id, s.cid, v));
+    // (an invoice only looked at again here is sent as it was: salesSynced, src/js/25)
+    s.list.forEach(v => add("sales", s.cid + ":" + v.id, s.cid, typeof salesSynced === "function" ? salesSynced(v) : v));
   }
   return out;
 }
@@ -601,7 +602,7 @@ async function cloudFlushListsBefore(rows){
   try {
     const s = S.sales, b = S.bank;
     if (s && typeof salesSaveTimer !== "undefined" && salesSaveTimer && rows.some(r => /^sales/.test(r.kind) && r.client_id === s.cid)){
-      clearTimeout(salesSaveTimer); salesSaveTimer = null; await BankDB.set("sales:" + s.cid, s.list);
+      clearTimeout(salesSaveTimer); salesSaveTimer = null; await BankDB.set("sales:" + s.cid, s.list.map(salesSynced));
     }
     if (b && b.cur && typeof bankSaveTimer !== "undefined" && bankSaveTimer && rows.some(r => /^bank_/.test(r.kind) && r.client_id === b.cid)){
       clearTimeout(bankSaveTimer); bankSaveTimer = null; await BankDB.set("stmt:" + b.cid + ":" + b.cur, b.rows);

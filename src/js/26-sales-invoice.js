@@ -247,4 +247,29 @@ if (typeof rereadSales !== "undefined") globalThis.rereadSales = rereadSales;
 if (typeof salesWhy !== "undefined") globalThis.salesWhy = salesWhy;
 if (typeof invoiceHtml !== "undefined") globalThis.invoiceHtml = invoiceHtml;
 // (each name only when declared: a test's harness loads a file's names one by one, tests/harness.js)
+// next-fix-sales-sync: the invoices waiting, looked at again on this computer (src/js/25, salesSynced). True when it ran
+const salesFilled = new Set();
+function salesRemapWaiting(){
+  const s = SL(), b = B(), L = b && b.cid === (s && s.cid) && b.ledgers.list;
+  if (!s || s.loading || s.busy || !(L && L.length) || (s.remapKey && s.remapKey === L)) return false;
+  let filled = 0;
+  salesNoIdx = Ledgers.keyed(s.list, v => normInvNo(v.x.number));
+  try {
+    Ledgers.run(() => s.list.forEach(v => {
+      if (!["review", "ready"].includes(v.status) || v.postJob || v.needsMap) return;
+      const k = v.__vw, before = k && JSON.stringify(v) === k.after ? k.before : JSON.stringify(v), blank = !v.customerLedger;
+      mapInvoice(v, true);
+      const after = JSON.stringify(v), key = s.cid + "|" + v.id + "|" + v.customerLedger;
+      if (blank && v.customerLedger && !salesFilled.has(key)){ salesFilled.add(key); filled++; delete v.__vw; }
+      else if (after !== before) Object.defineProperty(v, "__vw", {value: {before, after}, configurable: true, writable: true, enumerable: false});
+      else delete v.__vw;
+    }));
+  } finally { salesNoIdx = null; }
+  s.remapKey = L;
+  if (filled) saveSales();
+  return true;
+}
+if (typeof salesRemapWaiting !== "undefined") globalThis.salesRemapWaiting = salesRemapWaiting;
+// (this file comes with the Sales screen: what is open is looked at now)
+setTimeout(() => { try { if (salesRemapWaiting()) render(); } catch (e){} }, 0);
 /* @react-lazy: end */
