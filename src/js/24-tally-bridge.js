@@ -539,6 +539,8 @@ function ledgersChanged(cid){ return Ledgers.run(() => {
   }
   const mapped = Ledgers.cid() === cid ? autoMapCompanyLedgers(co) : [];
   if (typeof billAutoAll === "function" && Ledgers.cid() === cid) billAutoAll(cid);
+  // (next-fix-sales-sync) the sales invoices waiting, mapped again with the list now here (src/js/25)
+  if (typeof salesRemapWaiting === "function" && S.sales && S.sales.cid === cid && salesRemapWaiting()) setTimeout(() => render(), 0);
   return mapped;
 }); }
 function guessBankLedger(a){

@@ -76,7 +76,9 @@ function salesWhy(){
     const k = p ? "fix" : has(/^sales ledger/) ? "sales" : has(/output ledger/) ? "tax" : has(/round-off/) ? "round" : has(/^customer ledger/) ? "cust" : L.length ? "tally" : "ok";
     n[k] = (n[k] || 0) + 1;
   });
-  const W = {sales: "the sales ledger", tax: "the output GST ledgers", round: "the round-off ledger", cust: "a customer ledger", tally: "a ledger that is in Tally", fix: "a correction", ok: "only your Confirm"};
+  // (next-fix-sales-sync) the first correction named, whole: the bar showed the words before a colon only
+  const fix1 = (((s && s.list) || []).find(v => v.status === "review" && (v.problems || []).length) || {problems: [""]}).problems[0];
+  const W = {sales: "the sales ledger", tax: "the output GST ledgers", round: "the round-off ledger", cust: "a customer ledger", tally: "a ledger that is in Tally", fix: "a correction" + (fix1 ? " (" + fix1 + ")" : ""), ok: "only your Confirm"};
   const parts = Object.keys(W).filter(k => n[k]).map(k => n[k] + " invoice" + (n[k] === 1 ? " needs " : "s need ") + W[k]);
   if (!parts.length) return null;
   // next-fix-igst-pick: the output GST ledgers a person must choose (several fit, none by its state), each choice once

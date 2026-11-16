@@ -484,7 +484,7 @@ export function SalesBar() {
     const why0 = typeof salesWhy === "function" && salesWhy(), why = !tc.ready && why0;
     const post = salesPostScope(s.list.filter((v) => v.status === "ready")), fOn = !!post.shown, nPost = fOn ? post.length : tc.ready;
     right = <>
-      {why && <span className="note" data-post-why="">{why.text.split(":")[0]} <button className="linkbtn" onClick={why.act}>{why.btn}</button></span>}
+      {why && <span className="note" data-post-why="">{why.text} <button className="linkbtn" onClick={why.act}>{why.btn}</button></span>}
       {why0 && (why0.choices || []).map((c) => <TaxChoice key={c.ck} a={c} n={c.n} />)}
       {why0 && why0.unknown > 0 && <span className="note" data-tax-unknown={why0.unknown}>{why0.unknown} invoice{why0.unknown === 1 ? "" : "s"}: which GSTIN of the client {why0.unknown === 1 ? "it is" : "they are"} from is not known. Choose the GST ledger on each, or upload the sheet with its “Our GSTIN” column.</span>}
       {(conf.shown ? conf.all : confirmable) > 0 && <button className="btn" data-confirm-shown={conf.shown ? confirmable : undefined} disabled={!confirmable} onClick={() => salesAct("salesConfirmAll")}>{!conf.shown ? "Confirm all suggestions (" + confirmable + ")" : confirmable ? "Confirm " + confirmable + " shown suggestion" + (confirmable === 1 ? "" : "s") : "No suggestion shown: clear filters to confirm all " + conf.all}</button>}

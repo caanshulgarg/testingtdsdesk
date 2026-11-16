@@ -225,7 +225,8 @@ function cloudSnapshot(){
   }
   const s = S.sales;
   if (s && s.cid && !s.loading){
-    add("sales_cfg", s.cid, s.cid, {cfg: s.cfg, hist: s.hist});
+    // (next-fix-sales-sync) with when each setting was changed here, so a copy with it empty never wipes it (src/js/25)
+    add("sales_cfg", s.cid, s.cid, Object.assign({cfg: s.cfg, hist: s.hist}, s.cfgAt && Object.keys(s.cfgAt).length ? {cfgAt: s.cfgAt} : {}));
     s.list.forEach(v => add("sales", s.cid + ":" + v.id, s.cid, v));
   }
   return out;
@@ -522,7 +523,10 @@ async function cloudApplyNow(rows){
       if (unsent){
         const base = baseGet(k);
         // no base kept (a change made before this page was opened): what is here is kept whole
-        const data = base !== undefined && plainObj(here) && plainObj(r.data) ? merge3(JSON.parse(base), here, r.data) : here;
+        let data = base !== undefined && plainObj(here) && plainObj(r.data) ? merge3(JSON.parse(base), here, r.data) : here;
+        // (next-fix-sales-sync) Sales settings: their copy as it came, merged setting by setting with the times
+        // (cloudApplySales), not by which push was later
+        if (r.kind === "sales_cfg" && plainObj(data) && plainObj(r.data)) data = Object.assign({}, data, {cfg: r.data.cfg, cfgAt: r.data.cfgAt});
         baseSet(k, JSON.stringify(r.data));
         sendAfter = true;
         if (stableStr(data) === mine.get(k)) continue;              // nothing of theirs to take: the row is left, the mark kept
@@ -640,7 +644,10 @@ async function cloudApplySales(r){
   const cid = bits[0], id = bits.slice(1).join(":");
   if (r.kind === "sales_cfg"){
     if (r.deleted) return;
-    await BankDB.set("salescfg:" + cid, (r.data || {}).cfg || {});
+    // next-fix-sales-sync: merged with the settings kept here, setting by setting (salesCfgMerge, src/js/25), never
+    // laid over them whole
+    const d = r.data || {};
+    await BankDB.set("salescfg:" + cid, typeof salesCfgMerge === "function" ? salesCfgMerge(await BankDB.get("salescfg:" + cid), d.cfg, d.cfgAt) : d.cfg || {});
     await BankDB.set("saleshist:" + cid, (r.data || {}).hist || {});
     return;
   }

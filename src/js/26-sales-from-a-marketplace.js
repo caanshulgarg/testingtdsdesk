@@ -486,7 +486,11 @@ async function salesAutoSync(checkOnly, asked){
     saveSales(); render();
   } catch (e){ /* shown when posting */ }
 }
-async function postSalesToTally(){
+// next-fix-sales-sync (16-Nov-2026: "Post to Tally" did nothing on one computer): never silent. Whatever stops a post,
+// before its own try below (finding the Tally company, reading the ledgers) or in it, ends in a message
+async function postSalesToTally(){ try { return await postSalesRun(); } catch (e){ salesPostFailed(e); } }
+function salesPostFailed(e){ const s = SL(); if (s) s.busy = ""; toast("Posting failed: " + plainMsg((e && (e.message || e.code)) || String(e || "unknown error"))); render(); }
+async function postSalesRun(){
   const s = SL(), co = CO(s.cid);
   if (!(await ensureTallyCompany(co))) return;
   await syncLedgersFromTally(true);
@@ -753,7 +757,7 @@ function salesClick(t){
     case "salesClose": s.openId = null; render(); return true;
     case "salesCsv": closeMenus(); exportSalesCsv(); return true;
     case "salesFile": closeMenus(); exportSalesXml(); return true;
-    case "salesPost": postSalesToTally(); return true;
+    case "salesPost": postSalesToTally().catch(salesPostFailed); return true;
     case "salesSync": closeMenus(); salesAutoSync(false, true).then(() => toast("Refreshed from Tally.")); return true;
     case "salesUndo": salesUndo(); return true;
     case "salesUndoOk": s.undo = null; salesLightRefresh(); return true;
@@ -942,7 +946,7 @@ function canonicalizeBills(list){
 async function ensureTallyCompany(co){
   // build 199: Tally on another computer, the client's books in the cloud: posted through the queue there
   if (!bridgeLive(co) && typeof TCloud === "object" && TCloud.on()){ await TCloud.status(co.id); if (tallyVia(co) === "cloud") return tallyCoName(co); }
-  if (!Bridge.on()){ toast("Connect FinCom Bridge first."); return null; }
+  if (!Bridge.on()){ toast("Connect FinCom Bridge first." + (typeof TCloud === "object" && TCloud.on() ? " The Tally company of " + co.name + " is not open on any computer." : "")); return null; }
   if (!Bridge.up() || !Bridge.st.tallyUp) await Bridge.refresh();
   if (!Bridge.up() || !Bridge.st.tallyUp){ toast("Tally is not connected."); return null; }
   let o = Bridge.openFor(co);
@@ -953,12 +957,13 @@ async function ensureTallyCompany(co){
     body: '<p class="note" style="margin:0 0 10px">FinCom could not match <b>' + esc(co.name) + "</b> to a company open in your Tally by name or GSTIN. Choose it once; it is remembered.</p>" +
       '<div class="bk-form one"><label><span>Company open in Tally</span><select id="tcoPick">' + open.map(x => '<option value="' + esc(x.name) + '">' + esc(x.name) + " (port " + x.port + ")</option>").join("") + "</select></label></div>",
     read: () => ({name: (document.getElementById("tcoPick") || {}).value || ""})});
-  if (!ans || !ans.data.name) return null;
+  if (!ans || !ans.data.name){ toast("No Tally company chosen for " + co.name + ", so nothing was sent to Tally."); return null; }
   co.tallyName = ans.data.name; Store.saveCompany(co);
   Bridge.lastOpenKey = null;
   await Bridge.refresh();
   o = Bridge.openFor(co);
   render();
+  if (!o) toast("Tally company " + co.tallyName + " is not open in Tally now. Open it in TallyPrime and try again.");
   return o ? o.name : null;
 }
 // Live Tally ledgers for the screen being shown (at most every 20 seconds, refreshed when older than 10 minutes)

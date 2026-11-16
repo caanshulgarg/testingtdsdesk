@@ -68,12 +68,15 @@ async function loadSales(cid){
   const [list, cfg, hist] = await Promise.all([BankDB.get("sales:" + cid), BankDB.get("salescfg:" + cid), BankDB.get("saleshist:" + cid)]);
   if (!S.sales || S.sales.cid !== cid) return;
   SALES_REV++; Object.assign(S.sales, {list: list || [], cfg: Object.assign({}, SALES_CFG_DEFAULT, cfg || {}), hist: hist || {}, loading: false});
+  salesCfgTook(S.sales);
+  // next-fix-sales-sync: with the ledger list here, every invoice waiting is mapped again on this computer
+  const remapped = salesRemapWaiting();
   // invoices filed from elsewhere are matched now
   const pend = S.sales.list.filter(v => v.needsMap);
   if (pend.length){ pend.forEach(v => { v.needsMap = false; mapInvoice(v); }); saveSales(); }
   // (item 6: the problems kept with an invoice waiting are worked out again on opening, so a label left from an earlier
   // state, "customer GSTIN is not valid" on a GSTIN since cleared, never stays)
-  S.sales.list.forEach(v => { if (["review", "ready"].includes(v.status) && !v.needsMap){ const was = JSON.stringify(v.problems || []); v.problems = invoiceProblems(v); if (was !== JSON.stringify(v.problems)) mapInvoice(v); } });
+  if (!remapped) S.sales.list.forEach(v => { if (["review", "ready"].includes(v.status) && !v.needsMap){ const was = JSON.stringify(v.problems || []); v.problems = invoiceProblems(v); if (was !== JSON.stringify(v.problems)) mapInvoice(v); } });
   salesLearnVt();
   render();
   if (bridgeLive(CO(cid))) salesAutoSync();
@@ -90,8 +93,93 @@ function saveSales(what){
   clearTimeout(salesSaveTimer);
   if (S.bank && S.bank.cid === cid) S.bank.salesRef = list;
   salesSaveTimer = setTimeout(() => { salesSaveTimer = null; BankDB.set("sales:" + cid, list); }, 500);
-  if (what && what.cfg && !(typeof Drafts === "object" && Drafts.hold("salescfg:" + cid))) BankDB.set("salescfg:" + cid, s.cfg);
+  if (what && what.cfg && !(typeof Drafts === "object" && Drafts.hold("salescfg:" + cid))){ salesCfgStamp(s); salesCfgWrite(s); }
   if (what && what.hist) BankDB.set("saleshist:" + cid, s.hist);
+}
+/* ---------- next-fix-sales-sync (16-Nov-2026): Sales settings merged key by key ---------- */
+// The settings went to the cloud as one whole object, and the last computer to save won: one with empty ledger settings
+// wiped the ledgers set on another. Now each setting, and each entry of the maps (the ledgers, the GST ledgers chosen,
+// the branches' registrations, the items, "not this Tally entry"), carries when it was last changed here (cfgAt, kept in
+// this browser as cfg._at and sent beside cfg): the newer one wins; with neither newer, an empty or missing value never
+// wipes one that is set. Merged when a copy comes from the cloud (cloudApplySales, src/js/27) and when saving here
+const SALES_CFG_MAPS = ["ledgers", "items", "taxPick", "regBy", "notTally"];
+const salesCfgObj = x => !!x && typeof x === "object" && !Array.isArray(x);
+function salesCfgUnits(cfg){
+  const o = {};
+  Object.keys(cfg || {}).forEach(k => { if (k === "_at") return; const v = cfg[k];
+    if (SALES_CFG_MAPS.includes(k) && salesCfgObj(v)) Object.keys(v).forEach(e => { o[k + "/" + e] = JSON.stringify(v[e]); }); else o[k] = JSON.stringify(v); });
+  return o;
+}
+// the settings as read from this browser: their times apart (s.cfgAt), and what they were (s.cfgSaved), to see what changes
+function salesCfgTook(s){ const at = s.cfg._at; delete s.cfg._at; s.cfgAt = salesCfgObj(at) ? at : {}; s.cfgSaved = salesCfgUnits(s.cfg); }
+function salesCfgStamp(s){
+  const now = new Date().toISOString(), u = salesCfgUnits(s.cfg), was = s.cfgSaved || {};
+  s.cfgAt = s.cfgAt || {};
+  new Set(Object.keys(u).concat(Object.keys(was))).forEach(k => { if (u[k] !== was[k]) s.cfgAt[k] = now; });
+  s.cfgSaved = u;
+}
+// a (what is kept here, with a._at) and b (the other copy, with bAt): one settings object, with _at
+function salesCfgMerge(a, b, bAt){
+  a = salesCfgObj(a) ? a : {}; b = salesCfgObj(b) ? b : {};
+  const aAt = salesCfgObj(a._at) ? a._at : {}; bAt = salesCfgObj(bAt) ? bAt : salesCfgObj(b._at) ? b._at : {};
+  const empty = x => x == null || x === "" || (typeof x === "object" && !Object.keys(x).length);
+  const out = {}, at = Object.assign({}, aAt);
+  // which wins for one setting or entry: the newer; else b, unless b is empty and a is not
+  const take = (k, x, y) => { const ta = aAt[k] || "", tb = bAt[k] || "", w = tb > ta || (tb === ta && !(empty(y) && !empty(x))); if (w && tb) at[k] = tb; return w ? y : x; };
+  new Set(Object.keys(a).concat(Object.keys(b))).forEach(k => {
+    if (k === "_at") return;
+    if (SALES_CFG_MAPS.includes(k) && (salesCfgObj(a[k]) || salesCfgObj(b[k])) && (a[k] == null || salesCfgObj(a[k])) && (b[k] == null || salesCfgObj(b[k]))){
+      const x = a[k] || {}, y = b[k] || {}, m = {};
+      new Set(Object.keys(x).concat(Object.keys(y))).forEach(e => { const v = take(k + "/" + e, x[e], y[e]); if (v !== undefined) m[e] = v; });
+      out[k] = m;
+    } else { const v = take(k, a[k], b[k]); if (v !== undefined) out[k] = v; }
+  });
+  out._at = at;
+  return out;
+}
+// saved in this browser merged with what is kept there (a copy from another computer may have come in since): what
+// that copy has and is not changed here comes into the settings on screen
+let salesCfgQ = Promise.resolve();
+function salesCfgWrite(s){
+  const cid = s.cid;
+  salesCfgQ = salesCfgQ.then(async () => {
+    const m = salesCfgMerge(await BankDB.get("salescfg:" + cid), s.cfg, s.cfgAt);
+    let took = false;
+    new Set(Object.keys(m).concat(Object.keys(s.cfg))).forEach(k => { if (k === "_at") return;
+      if (!(k in m)){ delete s.cfg[k]; took = true; } else if (JSON.stringify(m[k]) !== JSON.stringify(s.cfg[k])){ s.cfg[k] = m[k]; took = true; } });
+    s.cfgAt = Object.assign({}, m._at); s.cfgSaved = salesCfgUnits(s.cfg);
+    await BankDB.set("salescfg:" + cid, Object.assign({}, s.cfg, {_at: s.cfgAt}));
+    if (took && SL() === s && typeof render === "function") render();
+  }).catch(() => {});
+  return salesCfgQ;
+}
+/* ---------- next-fix-sales-sync: the invoices waiting, mapped again on this computer ---------- */
+// (16-Nov-2026: one computer said Ready, the other To review, for the same invoices) an invoice's status is saved on it
+// by the computer that last mapped it, and comes to the others as it is. Once the ledger list is here (the bridge's or
+// the cloud copy's), every invoice still waiting (To review, Ready) is mapped again here: what a person set (a customer
+// ledger, a GST ledger chosen, "set by you", the voucher type) stays, as mapInvoice keeps it; posted ones, and ones sent
+// and waiting in the cloud's queue, are never touched; saved only when something changed. Again when another ledger
+// list comes in (ledgersChanged, src/js/24). Each invoice's duplicate checks look only at the invoices of its own number
+// (salesOfNo), and the debtors are listed once: 5,000 invoices are never worked through 5,000 times. True when it ran
+let salesNoIdx = null;
+function salesOfNo(no){ return salesNoIdx ? salesNoIdx.get(normInvNo(no)) || [] : SL().list; }
+function salesRemapWaiting(){
+  const s = SL();
+  if (!s || s.loading || s.busy || !hasLedgerList()) return false;
+  if (s.remapKey && s.remapKey[0] === Ledgers.list(s.cid) && s.remapKey[1] === Ledgers.ver) return false;
+  const look = v => JSON.stringify([v.status, v.needsMap, v.customerLedger, v.custSource, v.custSure, v.problems, v.ledgerIssues, v.taxPicks, v.taxAsk]);
+  let changed = 0;
+  salesNoIdx = Ledgers.keyed(s.list, v => normInvNo(v.x.number));
+  try {
+    Ledgers.run(() => s.list.forEach(v => {
+      if (!["review", "ready"].includes(v.status) || v.postJob) return;
+      const was = look(v); v.needsMap = false; mapInvoice(v);
+      if (look(v) !== was) changed++;
+    }));
+  } finally { salesNoIdx = null; }
+  s.remapKey = [Ledgers.list(s.cid), Ledgers.ver];
+  if (changed) saveSales();
+  return true;
 }
 window.addEventListener("pagehide", () => { if (salesSaveTimer && S.sales){ clearTimeout(salesSaveTimer); BankDB.set("sales:" + S.sales.cid, S.sales.list); } });
 function inv(id){ const s = SL(); return s && s.list.find(v => v.id === id); }
@@ -300,12 +388,19 @@ function taxLedgerPick(kind, rate, v){
   // (a ledger of another rate is never a candidate: its rate read with "%", or bare at the end of its name)
   const rightRate = l => { const r = info.get(l.name).rates; return !r.length || r.includes(+half); };
   if (!multi){
-    const rateHit = pool.filter(l => new RegExp("(^|[^0-9.])" + rateTag(half).replace(".", "\\.") + "\\s*%").test(l.name));
+    // next-fix-sales-sync (16-Nov-2026: a state-09 client's CGST taken as "OUTPUT CGST @9% (DL)", by its rate alone): a
+    // ledger clearly tagged for another state than the client's own GSTIN's (ledgerStateTag) is never picked by itself,
+    // only offered when nothing else fits; with no ledger so tagged, all as before
+    const home = salesOwnStates()[0] || "", away = l => { const st = home ? ledgerStateTag(l) : ""; return !!st && st !== home; };
+    const far = pool.filter(away), ours = far.length ? pool.filter(l => !away(l)) : pool;
+    const hitOf = list => list.filter(l => new RegExp("(^|[^0-9.])" + rateTag(half).replace(".", "\\.") + "\\s*%").test(l.name));
+    const rateHit = hitOf(ours);
     if (rateHit.length === 1) return {ledger: rateHit[0].name, why: "the output " + K0 + " ledger for " + rateTag(half) + "%"};
-    const plain = pool.filter(l => !/\d\s*%/.test(l.name));
+    const plain = ours.filter(l => !/\d\s*%/.test(l.name));
     if (plain.length === 1) return {ledger: plain[0].name, why: "the only output " + K0 + " ledger without a rate"};
-    if (pool.length === 1 && !/\d\s*%/.test(pool[0].name)) return {ledger: pool[0].name, why: "the only output " + K0 + " ledger"};
-    const cands = (rateHit.length ? rateHit : pool).filter(rightRate);
+    if (ours.length === 1 && !/\d\s*%/.test(ours[0].name)) return {ledger: ours[0].name, why: "the only output " + K0 + " ledger"};
+    let cands = (rateHit.length ? rateHit : ours).filter(rightRate);
+    if (!cands.length && far.length){ const fh = hitOf(far); cands = (fh.length ? fh : far).filter(rightRate); }
     const chosen = exactLedger((cfg.taxPick || {})[ik]);
     if (chosen && cands.some(l => l.name === chosen)) return {ledger: chosen, why: "chosen by you (Sales: " + K0 + " ledger at " + rateTag(half) + "%)"};
     return cands.length ? {ledger: "", why: "", cands: cands.map(l => l.name), ck: ik, ik, reg: ""} : {ledger: "", why: ""};
@@ -350,7 +445,7 @@ function salesHistKey(v){ return v.x.customerGstin ? "g:" + v.x.customerGstin : 
 // customer ledger: GSTIN on the Tally ledger, then past invoices, then a close name
 function customerLedgerFor(v){
   const b = B(), x = v.x;
-  const debtors = (b.ledgers.list || []).filter(l => !BANK_GROUPS.test(l.group || ""));
+  const debtors = Ledgers.memo("salesDebtors", () => (b.ledgers.list || []).filter(l => !BANK_GROUPS.test(l.group || "")));
   if (x.customerGstin){
     const byG = debtors.filter(l => String(l.gstin || "").toUpperCase() === x.customerGstin);
     if (byG.length === 1) return {ledger: byG[0].name, sure: true, label: "GSTIN match"};
@@ -458,7 +553,7 @@ function invoiceProblems(v){
   if (Math.abs(num(x.cgst) - num(x.sgst)) > 0.05) p.push("CGST and SGST differ");
   if (salesTotals(x).some(g => g.mixed)) p.push("GST is not at one standard rate (several rates?): use Enter items");
   if (x.sellerGstin && co.gstin && !salesIsOwn(x.sellerGstin, co)) p.push("the seller GSTIN on the invoice is not " + co.name + "\u2019s");
-  const dup = SL().list.find(o => o.id !== v.id && o.status !== "ignored" && normInvNo(o.x.number) === normInvNo(x.number) && o.x.date && x.date && fyLabel(o.x.date) === fyLabel(x.date));
+  const dup = salesOfNo(x.number).find(o => o.id !== v.id && o.status !== "ignored" && normInvNo(o.x.number) === normInvNo(x.number) && o.x.date && x.date && fyLabel(o.x.date) === fyLabel(x.date));
   if (x.number && dup && !(dupOf && dupOf.src === "fincom")) p.push("invoice " + x.number + " already exists");
   return p;
 }
@@ -470,7 +565,7 @@ function salesDupOf(v){
   const no = normInvNo(v.x.number); if (!no || (v.dupOverride && v.dupOverride.no === no)) return null;
   if (v.dupBlock) return Object.assign({src: "tally"}, v.dupBlock);
   const vt = String(salesVt(v.x)).toLowerCase();
-  const o = (SL().list || []).find(o => o.id !== v.id && ["posted", "intally"].includes(o.status) && normInvNo(o.x.number) === no && String(salesVt(o.x)).toLowerCase() === vt && o.x.date && v.x.date && fyLabel(o.x.date) === fyLabel(v.x.date));
+  const o = (salesOfNo(v.x.number) || []).find(o => o.id !== v.id && ["posted", "intally"].includes(o.status) && normInvNo(o.x.number) === no && String(salesVt(o.x)).toLowerCase() === vt && o.x.date && v.x.date && fyLabel(o.x.date) === fyLabel(v.x.date));
   return o ? {src: "fincom", type: salesVt(o.x), number: o.x.number, date: o.x.date, amount: r2(Math.abs(num(o.x.total))), id: o.id} : null;
 }
 function salesDupWords(d){
