@@ -974,11 +974,12 @@ function bankExportProblems(rows){
   const n = rows.filter(bankRepOpen).length;
   return (n ? [(n === 1 ? "1 entry is" : n + " entries are") + " marked Possible repeat — check: Keep it or It’s a repeat first"] : []).concat(probs);
 }
-async function exportBankXml(){
+// ids: only these lines (the ready ones a column filter shows, app/src/screens/Bank.jsx); none given: every ready line
+async function exportBankXml(ids){
   const b = B(), st = curStmt(), co = CO(b.cid);
   if (!st) return;
-  const acc = (co.bankAccounts || []).find(a => a.id === st.acctId);
-  const rows = b.rows.filter(r => r.state === "ready");
+  const acc = (co.bankAccounts || []).find(a => a.id === st.acctId), only = Array.isArray(ids) ? new Set(ids) : null;
+  const rows = b.rows.filter(r => r.state === "ready" && (!only || only.has(r.id)));
   if (!rows.length){ toast("No rows are ready. Accept suggestions or set ledgers first."); return; }
   if (!acc || !bankLedgerReady(co, acc)){ toast(bankLedgerWhy(co, acc) || "Choose the Tally ledger for this bank account first."); return; }
   acc.ledger = bankLedgerReady(co, acc);

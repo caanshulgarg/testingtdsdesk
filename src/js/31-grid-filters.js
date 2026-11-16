@@ -9,7 +9,7 @@ function gfN(n){ if (typeof GridF !== "object") return n; if (GridF.full()) retu
 const GF_SEL = "#app table.bk-table, #app table.data:not(.lt), #app table.tpt-grid";
 // Sales (reviews of 955ce3d85 and fdeb79bd8): with a column filter on (the old, salesColPass, or the new, ListTable
 // "sales"), Select all, Post to Tally, Create Tally file and Confirm all suggestions keep to the invoices shown right now
-// (this tab, the search, the filters). None of them shown: every one, as with no filter (the plain button)
+// (this tab, the search, the filters). None of them shown: none (the button is off and says to clear the filters)
 function salesShown(v){ return typeof listShows !== "function" || listShows("sales", v.id); }
 function salesPostOn(){ return (typeof salesColOn === "function" && salesColOn()) || (typeof listFOn === "function" && listFOn("sales")); }
 function salesInView(){ const sh = typeof listShownSet === "function" ? listShownSet("sales") : null; return new Set(salesVisible().filter(v => !sh || sh.has(v.id)).map(v => v.id)); }
@@ -17,8 +17,7 @@ function salesInView(){ const sh = typeof listShownSet === "function" ? listShow
 function salesPostScope(list){
   if (!salesPostOn()) return list;
   const ids = salesInView(), out = list.filter(v => ids.has(v.id));
-  if (!out.length) return list;
-  out.shown = true; return out;
+  out.shown = true; out.all = list.length; return out;
 }
 const GridF = {
   pop: null,

@@ -263,15 +263,21 @@ with sync_playwright() as p:
     ok(kept == picked2 and len(rows(pg, N)) == 12, "7. Clear filters keeps the ticks still on rows (%s)" % kept)
     pg.evaluate("() => { SL().sel.clear(); SL().list.forEach((v, i) => { if (i % 4 === 0) v.status = 'ready'; if (i % 4 >= 2) { v.customerLedger = i % 4 === 2 ? 'Alpha Retail LLP' : ''; v.problems = []; v.ledgerIssues = []; } }); SL().sticky.clear(); render(); }"); pg.wait_for_timeout(500)
     btn = lambda: re.sub(r"\s+", " ", pg.inner_text('#app .actionbar button.primary')).strip()
-    cbtn = lambda: re.sub(r"\s+", " ", pg.inner_text('#app .actionbar button:has-text("Confirm")')).strip() if pg.locator('#app .actionbar button:has-text("Confirm")').count() else ""
+    cbtn = lambda: re.sub(r"\s+", " ", pg.inner_text('#app .actionbar button:has-text("suggestion")')).strip() if pg.locator('#app .actionbar button:has-text("suggestion")').count() else ""
     ok(btn() in ("Post to Tally (6)", "Create Tally file (6)") and cbtn() == "Confirm all suggestions (6)", "7. no filter: the plain buttons, all 6 Ready, 6 suggestions (%s; %s)" % (btn(), cbtn()))
     funnel(pg, N, "tx"); pg.fill('#app [data-ltf-pop=tx] input[data-ltf-in="max"]', "10000"); pg.wait_for_timeout(500); pg.click("#app [data-ltf-pop=tx] [data-ltf-done]"); pg.wait_for_timeout(400)
-    ok(btn() in ("Post to Tally (6)", "Create Tally file (6)"), "7. a filter on, To review: no Ready invoice shown, so the plain button (%s)" % btn())
+    ok(btn() in ("No Ready invoice shown: clear filters to post all 6", "No Ready invoice shown: clear filters to export all 6") and pg.is_disabled('#app .actionbar button.primary'),
+       "7. a filter on, To review: no Ready invoice shown, so the button is off and says so (%s)" % btn())
+    ok(pg.evaluate("() => salesPostScope(SL().list.filter(v => v.status === 'ready')).length") == 0, "7. and Post / Create Tally file would take none of the hidden ones")
     conf = [101 + i for i in range(24) if i % 4 == 2 and 1000 * (i + 1) <= 10000]
     ok(cbtn() == "Confirm %d shown suggestions" % len(conf), "7. Confirm keeps to the %d suggestions shown (%s)" % (len(conf), cbtn()))
-    pg.click('#app .actionbar button:has-text("Confirm")'); pg.wait_for_timeout(500)
+    pg.click('#app .actionbar button:has-text("suggestion")'); pg.wait_for_timeout(500)
     done = pg.evaluate("() => SL().list.filter((v, i) => i % 4 === 2 && v.status === 'ready').map(v => v.x.number).sort()")
     ok(done == sorted("S/%d" % n for n in conf), "7. only those confirmed (%s)" % done)
+    pg.evaluate("() => { const keep = S.listF.sales; S.listF.sales = {tx: {min: '999999'}}; render(); window.__keepF = keep; }"); pg.wait_for_timeout(500)
+    left = pg.evaluate("() => SL().list.filter(v => v.status === 'review' && v.customerLedger && !(v.problems || []).length && !(v.ledgerIssues || []).length).length")
+    ok(cbtn() == "No suggestion shown: clear filters to confirm all %d" % left and pg.is_disabled('#app .actionbar button:has-text("suggestion")'), "7. a filter that shows no suggestion: Confirm off (%s)" % cbtn())
+    pg.evaluate("() => { S.listF.sales = window.__keepF; render(); }"); pg.wait_for_timeout(400)
     pg.evaluate("() => { SL().list.forEach((v, i) => { if (i % 4 === 2) v.status = 'review'; }); SL().sticky.clear(); SL().filter = 'ready'; render(); }"); pg.wait_for_timeout(500)
     ready = [101 + i for i in range(24) if i % 4 == 0 and 1000 * (i + 1) <= 10000]
     ok(btn() in ("Post %d shown to Tally" % len(ready), "Create Tally file of %d shown" % len(ready)), "7. Ready to post, Taxable up to 10,000: the button says the %d shown (%s)" % (len(ready), btn()))
@@ -335,6 +341,8 @@ with sync_playwright() as p:
     pg.click('#app .actionbar button.primary'); pg.wait_for_timeout(800)
     appr = pg.evaluate("() => Object.values(S.data[S.coId].entries).filter(e => e.status === 'approved').map(e => e.id).sort()")
     ok(appr == shown, "11. only the shown bills approved (%s)" % appr)
+    pg.evaluate("() => { S.revF = {sup: 'Nobody here'}; render(); }"); pg.wait_for_timeout(600)
+    ok(ab().startswith("No ready bill shown: clear filters to approve all") and pg.is_disabled('#app .actionbar button.primary'), "11. Purchase, a filter that shows none: the button off (%s)" % ab())
     pg.evaluate("() => { S.revF = {}; render(); }"); pg.wait_for_timeout(400)
     pg.evaluate(BANK); pg.wait_for_timeout(1500)
     bb = lambda: re.sub(r"\s+", " ", pg.inner_text('#app [data-bank-post]')).strip() if pg.locator('#app [data-bank-post]').count() else ""
@@ -345,6 +353,18 @@ with sync_playwright() as p:
     pg.click('#app [data-bank-post]'); pg.wait_for_timeout(500)
     got = pg.evaluate("() => window.__posted")
     ok(isinstance(got, list) and sorted(got) == want, "11. Bank posts only the %d shown (%s)" % (len(want), got))
+    pg.evaluate("() => { B().q = 'NO SUCH PARTY'; render(); }"); pg.wait_for_timeout(600)
+    ok(bb() == "No Ready line shown: clear filters to post all 12" and pg.is_disabled('#app [data-bank-post]'), "11. Bank, a filter that shows none: the button off (%s)" % bb())
+    # Create Tally file (no bridge): the same rule
+    pg.evaluate("() => { window.canPostTally = () => false; window.__xml = null; window.exportBankXml = async (ids) => { window.__xml = ids || 'all'; }; render(); }"); pg.wait_for_timeout(500)
+    ok(bb() == "No Ready line shown: clear filters to export all 12" and pg.is_disabled('#app [data-bank-post]'), "11. Bank Create Tally file, none shown: off (%s)" % bb())
+    pg.evaluate("() => { B().q = 'NORTHWIND'; render(); }"); pg.wait_for_timeout(600)
+    ok(bb() == "Create Tally file of %d shown" % len(want), "11. Bank Create Tally file with a filter: %s" % bb())
+    pg.click('#app [data-bank-post]'); pg.wait_for_timeout(400)
+    got = pg.evaluate("() => window.__xml")
+    ok(isinstance(got, list) and sorted(got) == want, "11. Bank's Tally file takes only the %d shown (%s)" % (len(want), got))
+    pg.evaluate("() => { B().q = ''; render(); }"); pg.wait_for_timeout(500)
+    ok(bb() == "Create Tally file (12)", "11. Bank, no filter: the plain button again (%s)" % bb())
     pg.close()
 
     # ---------------------------------------------------------------- 4. the Tally page's other tables

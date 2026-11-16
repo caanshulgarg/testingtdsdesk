@@ -127,7 +127,8 @@ function ReviewBar() {
   // bills shown now; none shown: the plain button, as with no filter
   const fOn = Object.values(S.revF || {}).some((v) => (Array.isArray(v) ? v.length : v)) || listFOn("rev");
   const sh = fOn ? listShownSet("rev") : null, inView = fOn ? new Set(revFiltered().filter((r) => !sh || sh.has(r.e.id)).map((r) => r.e.id)) : null;
-  const readyShown = inView ? ready0.filter((r) => inView.has(r.e.id)) : [], scoped = readyShown.length > 0, ready = scoped ? readyShown : ready0;
+  // final review: a filter on and no ready bill shown: the button is off and says to clear the filters (never every bill)
+  const scoped = !!inView, ready = scoped ? ready0.filter((r) => inView.has(r.e.id)) : ready0;
   // round 14c (C1): when no bill is ready, the bulk Approve says why in plain words, counted from the drafts' missing lists
   const noneReady = (list) => list.length && !list.some((r) => !(r.c.missing || []).length) ? noneReadyWords(list) : "";
   if (picked.length) return (
@@ -150,7 +151,7 @@ function ReviewBar() {
       <div className="ab-left"><Why none={!ready.length && noneReady(rows)} tally={!live} /></div>
       <div className="ab-right">
         <button className="btn" disabled={!live} title={!live ? NO_TALLY : undefined} onClick={() => doAct("revCheckTallyAll")}>Check the year in Tally for all</button>
-        <button className="btn primary" disabled={!ready.length} title={!ready.length ? (noneReady(rows) || "No bill is ready to approve yet") : undefined} data-approve-shown={scoped ? ready.length : undefined} onClick={() => { if (!scoped) return doAct("revApproveAll"); S.revSel = new Set(ready.map((r) => r.e.id)); doAct("revApprove"); }}>{scoped ? "Approve " + ready.length + " shown that " + (ready.length === 1 ? "is" : "are") + " ready" : "Approve all that are ready (" + ready.length + ")"}</button>
+        <button className="btn primary" disabled={!ready.length} title={!ready.length ? (noneReady(rows) || "No bill is ready to approve yet") : undefined} data-approve-shown={scoped ? ready.length : undefined} onClick={() => { if (!scoped) return doAct("revApproveAll"); S.revSel = new Set(ready.map((r) => r.e.id)); doAct("revApprove"); }}>{!scoped ? "Approve all that are ready (" + ready.length + ")" : ready.length ? "Approve " + ready.length + " shown that " + (ready.length === 1 ? "is" : "are") + " ready" : ready0.length ? "No ready bill shown: clear filters to approve all " + ready0.length : "Approve all that are ready (0)"}</button>
       </div>
     </div>
   );

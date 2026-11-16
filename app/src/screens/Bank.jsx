@@ -472,11 +472,12 @@ function BankPage() {
         </dl>
         <div className="bk-actions">
           <button className="btn small" data-bank-save="" title="Keep the statement's changes now (they are also kept by themselves)" onClick={saveNow}>Save</button>
-          {/* re-review of fdeb79bd8: a filter on (smartOn, the column funnels): Post keeps to the ready lines shown now; none
-              shown: the plain button, as with no filter */}
-          {canPostTally(CO()) ? <button className="btn small primary" data-bank-post="" data-post-shown={pv.length ? pv.length : undefined} disabled={!tc.post || noLed} title={noLed ? whyLed : undefined}
-            onClick={() => (pv.length ? postBankToTally(pv.map((r) => r.id)) : bankAct("bankPost"))}>{pv.length ? "Post " + pv.length + " shown to Tally" : "Post to Tally (" + tc.post + ")"}</button>
-            : <button className="btn small primary" data-bank-post="" disabled={!tc.post || noLed} title={noLed ? whyLed : undefined} onClick={() => bankAct("bankXml")}>Create Tally file ({tc.post})</button>}
+          {/* final review of the column filters: a filter on (smartOn, the column funnels), Post and Create Tally file take
+              only the ready lines shown now; none shown: the button is off and says so; no filter: as before */}
+          {canPostTally(CO()) ? <button className="btn small primary" data-bank-post="" data-post-shown={fOn ? pv.length : undefined} disabled={!tc.post || noLed || (fOn && !pv.length)} title={noLed ? whyLed : undefined}
+            onClick={() => (fOn ? postBankToTally(pv.map((r) => r.id)) : bankAct("bankPost"))}>{!fOn ? "Post to Tally (" + tc.post + ")" : pv.length ? "Post " + pv.length + " shown to Tally" : "No Ready line shown: clear filters to post all " + tc.post}</button>
+            : <button className="btn small primary" data-bank-post="" data-post-shown={fOn ? pv.length : undefined} disabled={!tc.post || noLed || (fOn && !pv.length)} title={noLed ? whyLed : undefined}
+              onClick={() => (fOn ? exportBankXml(pv.map((r) => r.id)) : bankAct("bankXml"))}>{!fOn ? "Create Tally file (" + tc.post + ")" : pv.length ? "Create Tally file of " + pv.length + " shown" : "No Ready line shown: clear filters to export all " + tc.post}</button>}
           <button className="btn small" data-bank-rules="" aria-pressed={tab === "rules"} onClick={() => bankTabGo("rules")}>Rules</button><button className="btn small" onClick={() => bankAct("bankSettings")}>Settings</button><MoreMenu tc={tc} /></div>
       </div>
       {/* what needs saying about the statement, between its header and the row of tabs and filters (spacious.css orders the

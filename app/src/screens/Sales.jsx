@@ -487,11 +487,11 @@ export function SalesBar() {
       {why && <span className="note" data-post-why="">{why.text.split(":")[0]} <button className="linkbtn" onClick={why.act}>{why.btn}</button></span>}
       {why0 && (why0.choices || []).map((c) => <TaxChoice key={c.ck} a={c} n={c.n} />)}
       {why0 && why0.unknown > 0 && <span className="note" data-tax-unknown={why0.unknown}>{why0.unknown} invoice{why0.unknown === 1 ? "" : "s"}: which GSTIN of the client {why0.unknown === 1 ? "it is" : "they are"} from is not known. Choose the GST ledger on each, or upload the sheet with its “Our GSTIN” column.</span>}
-      {confirmable > 0 && <button className="btn" data-confirm-shown={conf.shown ? confirmable : undefined} onClick={() => salesAct("salesConfirmAll")}>{conf.shown ? "Confirm " + confirmable + " shown suggestion" + (confirmable === 1 ? "" : "s") : "Confirm all suggestions (" + confirmable + ")"}</button>}
+      {(conf.shown ? conf.all : confirmable) > 0 && <button className="btn" data-confirm-shown={conf.shown ? confirmable : undefined} disabled={!confirmable} onClick={() => salesAct("salesConfirmAll")}>{!conf.shown ? "Confirm all suggestions (" + confirmable + ")" : confirmable ? "Confirm " + confirmable + " shown suggestion" + (confirmable === 1 ? "" : "s") : "No suggestion shown: clear filters to confirm all " + conf.all}</button>}
       {canPostTally(CO()) && postThroughWords(CO()) && <span className="note" data-post-through="">{postThroughWords(CO())}</span>}
       {/* review of 955ce3d85: a column filter on: only the Ready invoices it shows are posted, counted on the button */}
-      {canPostTally(CO()) ? <button className="btn primary" disabled={!nPost} data-post-shown={fOn ? nPost : undefined} onClick={() => salesAct("salesPost")}>{fOn ? "Post " + nPost + " shown to Tally" : "Post to Tally (" + nPost + ")"}</button>
-        : <button className="btn primary" disabled={!nPost} data-post-shown={fOn ? nPost : undefined} onClick={() => salesAct("salesFile")}>{fOn ? "Create Tally file of " + nPost + " shown" : "Create Tally file (" + nPost + ")"}</button>}
+      {canPostTally(CO()) ? <button className="btn primary" disabled={!nPost} data-post-shown={fOn ? nPost : undefined} onClick={() => salesAct("salesPost")}>{!fOn ? "Post to Tally (" + nPost + ")" : nPost ? "Post " + nPost + " shown to Tally" : "No Ready invoice shown: clear filters to post all " + post.all}</button>
+        : <button className="btn primary" disabled={!nPost} data-post-shown={fOn ? nPost : undefined} onClick={() => salesAct("salesFile")}>{!fOn ? "Create Tally file (" + nPost + ")" : nPost ? "Create Tally file of " + nPost + " shown" : "No Ready invoice shown: clear filters to export all " + post.all}</button>}
     </>;
   }
   return (
