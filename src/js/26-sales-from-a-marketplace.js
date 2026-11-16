@@ -579,7 +579,7 @@ function setCustomerLedger(v, ledger){
   const key = salesHistKey(v);
   const targets = s.list.filter(o => o.id === v.id || (key && ["review", "ready"].includes(o.status) && salesHistKey(o) === key && !o.userLedger));
   const before = targets.map(salesSnapshot);
-  targets.forEach(o => { if (o.id === v.id && o.customerLedger !== l) delete o.refused; o.customerLedger = l; o.userLedger = true; o.custSource = "Set by you"; salesPartyFill(o); mapInvoice(o); s.sticky.add(o.id); if (o.status === "review" && !(o.problems || []).length && !(o.ledgerIssues || []).length) o.status = "ready"; });
+  targets.forEach(o => { if (o.id === v.id && o.customerLedger !== l) delete o.refused; if (o.custSource !== "Set by you") o.custWas = {ledger: o.customerLedger || "", source: o.custSource || "", user: !!o.userLedger, sure: !!o.custSure}; o.customerLedger = l; o.userLedger = true; o.custSource = "Set by you"; salesPartyFill(o); mapInvoice(o); s.sticky.add(o.id); if (o.status === "review" && !(o.problems || []).length && !(o.ledgerIssues || []).length) o.status = "ready"; });
   learnCustomer(v);
   salesSetUndo(esc(v.x.customerName || v.x.number) + " \u2192 <b>" + esc(l) + "</b>" + (targets.length > 1 ? " \u00b7 also " + (targets.length - 1) + " more invoice" + (targets.length > 2 ? "s" : "") + " of this customer" : ""), before);
   saveSales();

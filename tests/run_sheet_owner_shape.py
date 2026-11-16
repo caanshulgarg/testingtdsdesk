@@ -38,6 +38,9 @@ their GST ledgers and some parties in sub-groups (Sales Local under Sales Accoun
      own name for its purchase voucher type is kept when Journal is chosen and chosen back.
  17. the owner (16-Nov-2026): a number already in Tally or posted from FinCom is never posted without "Post duplicate
      anyway", confirmed twice (bulk Post skips and lists it); the client's own sales voucher type from its books.
+ 18. the owner (16-Nov-2026): every ledger of an invoice changed on it (a box of the client's Tally ledgers, kept as
+     "set by you", undone with "undo, let FinCom pick"; posted ones read-only) and in bulk ("Change ledger": the line, its
+     rate, the ledger; skipped ones said; Undo), the checks run again.
  14-16. next-fix-sales-upload (made-up parties and sheets): a sheet with no GSTIN column takes each party's GSTIN and state
      from its Tally ledger (place of supply its state; IGST to a party of the client's own state, CGST + SGST to one of
      another, and IGST with no state known are held with the reason); rows of two rates are one invoice of rate-wise item
@@ -838,6 +841,64 @@ with sync_playwright() as p:
     vt = E("() => { salesLearnVt(); render(); return [SL().cfg.voucherType, SL().cfg.vtBy, !!SL().vtAsk]; }"); W(300)
     ok(vt == ["Sales Delhi", "asked", False] and pg.locator("#app [data-sales-vt-ask]").count() == 0, "the answer is kept for the client and not asked again (%s)" % vt)
     E("() => { S.books = window.__books0; const c = SL().cfg; delete c.vtBy; delete c.vtFrom; c.voucherType = 'Sales'; saveSales({cfg: true}); render(); }")
+
+    print("18. the owner, 16-Nov-2026: every ledger on an invoice can be changed, on it and in bulk; kept as set by you")
+    E("""(G) => { const L = S.bank.ledgers.list; [["ZZ Sales Alt", "Sales Local"], ["ZZ Output IGST Alt", "GST Output"], ["ZZ Output CGST Alt", "GST Output"], ["ZZ Cash Buyer", "Sundry Debtors"]].forEach(([name, group]) => L.push({name, group}));
+      Ledgers.st[S.coId] = null; delete Ledgers.busy[S.coId]; Ledgers.ver = (Ledgers.ver || 0) + 1; SL().list = []; SL().undo = null; SL().sel = new Set();
+      const mk = (no, party, gstin, pos, tax, extra) => { const v = newInvoice(Object.assign({number: no, date: "2026-10-27", customerName: party, customerGstin: gstin, pos, taxable: 1000, total: 1180}, tax), "upload");
+        v.customerLedger = party; v.userLedger = true; Object.assign(v, extra || {}); SL().list.push(v); mapInvoice(v); return v; };
+      mk("L/1", "ZZ Delhi Buyers", G.delhi, "07", {igst: 180});
+      mk("L/2", "ZZ Home Buyers", G.home, "09", {cgst: 90, sgst: 90}, {salesLedgers: {18: "No Such Sales Ledger"}});
+      const p = mk("L/3", "ZZ Delhi Buyers", G.delhi, "07", {igst: 180}); p.status = "posted";
+      SL().filter = 'review'; saveSales(); render(); }""", G); W(500)
+    LS = lambda no: E("""(no) => { const v = SL().list.find(v => v.x.number === no); return {st: v.status, lines: salesLines(v).filter(l => l.role !== 'roundoff').map(l => [l.role === 'tax' ? l.kind : l.role, l.ledger, l.by || '']), iss: (v.ledgerIssues || []).join(' | ')}; }""", no)
+    ok(LS("L/2")["st"] == "review" and "is not a Tally ledger" in LS("L/2")["iss"], "L/2 waits: its sales ledger is not in Tally (%s)" % LS("L/2"))
+    l1 = E("() => SL().list.find(v => v.x.number === 'L/1').id")
+    E("(id) => salesOpen(id)", l1); W(700)
+    boxes = E("[...document.querySelectorAll('[data-svline-box]')].map(b => b.getAttribute('data-svline-box'))")
+    ok(sorted(boxes) == ["igst", "party", "sales:18"], "on the invoice, every ledger line has a box: party, sales, IGST (%s)" % boxes)
+    def pick(sel, name):
+        b = pg.locator(sel).first; b.click(); b.fill(name); b.press("Tab"); W(500)
+    pick('[data-svline-box="igst"]', "ZZ Output IGST Alt")
+    pick('[data-svline-box="sales:18"]', "ZZ Sales Alt")
+    pick('[data-svline-box="party"]', "ZZ Cash Buyer")
+    a = LS("L/1")
+    ok(a["lines"] == [["party", "ZZ Cash Buyer", "you"], ["sales", "ZZ Sales Alt", "you"], ["igst", "ZZ Output IGST Alt", "you"]], "each line picked by hand, from the client's Tally ledgers (%s)" % a["lines"])
+    ok(pg.locator("[data-set-by-you]").count() == 3 and pg.locator("[data-svline-undo]").count() == 3, "each shown “set by you”, with “undo, let FinCom pick”")
+    pick('[data-svline-box="igst"]', "Not A Ledger At All")
+    ok(LS("L/1")["lines"][2][1] == "ZZ Output IGST Alt", "a name that is not a Tally ledger is refused, the line as it was")
+    E("() => { salesCfgLedger('sales_18_i', 'Consulting Income (B)'); SL().list.forEach(v => mapInvoice(v)); }"); W(300)
+    ok(LS("L/1")["lines"] == a["lines"], "FinCom working the invoices out again (a Sales settings change) leaves the person's ledgers as they are (%s)" % LS("L/1")["lines"])
+    pg.locator('[data-svline="igst"] [data-svline-undo]').first.click(); W(400)
+    # (two output IGST ledgers now, Output IGST and the made-up Alt: FinCom's own pick is to ask, as for any invoice)
+    ok(LS("L/1")["lines"][2][2] == "" and LS("L/1")["lines"][2][1] != "ZZ Output IGST Alt", "undo, let FinCom pick: the IGST line is FinCom's again, not the person's (%s)" % LS("L/1")["lines"][2])
+    pg.locator('[data-svline="sales"] [data-svline-undo]').first.click(); W(400)
+    ok(LS("L/1")["lines"][1] == ["sales", "Consulting Income (B)", ""], "… and the sales ledger (%s)" % LS("L/1")["lines"][1])
+    E("() => salesAct('salesClose')"); W(300)
+    l3 = E("() => SL().list.find(v => v.x.number === 'L/3').id")
+    E("(id) => salesOpen(id)", l3); W(600)
+    b3 = LS("L/3")["lines"]
+    ok(pg.locator("[data-svline-box]").count() == 0 and E("(id) => salesLinePick(id, 'igst', 18, 'ZZ Output IGST Alt')", l3) is False and LS("L/3")["lines"] == b3, "a posted invoice is read-only: no boxes, nothing changed")
+    E("() => salesAct('salesClose')"); W(300)
+    # in bulk: the line, its rate, the ledger; on every ticked invoice that is not posted; Undo
+    E("() => { SL().sel = new Set(SL().list.map(v => v.id)); SL().filter = 'review'; SL().sticky = new Set(SL().list.map(v => v.id)); render(); }"); W(500)
+    def bulk(role, rate, name):
+        pg.select_option("#app [data-svbulkline-role]", role); W(200)
+        if rate is not None and pg.locator("#app [data-svbulkline-rate]").count(): pg.select_option("#app [data-svbulkline-rate]", rate); W(200)
+        b = pg.locator("#app [data-svbulkline-led]").first; b.click(); b.fill(name); b.press("Tab"); W(400)
+        pg.click("#app [data-svbulkline-apply]"); W(500)
+        return E("SL().bulkLineMsg")
+    m1 = bulk("cgst", "18", "ZZ Output CGST Alt")
+    ok(m1 == "Changed on 1 invoice; 2 skipped (posted / no such line)" and LS("L/2")["lines"][2] == ["cgst", "ZZ Output CGST Alt", "you"] and LS("L/2")["lines"][3][0] == "sgst" and LS("L/2")["lines"][3][1] != "ZZ Output CGST Alt",
+       "CGST at 18%%: changed on L/2 only; L/1 has no CGST line, L/3 is posted (%s; %s)" % (m1, LS("L/2")["lines"]))
+    m2 = bulk("sales", "all", "ZZ Sales Alt")
+    ok(m2 == "Changed on 2 invoices; 1 skipped (posted / no such line)" and LS("L/2")["st"] in ("ready", "review") and not LS("L/2")["iss"], "sales, all rates: L/1 and L/2 (%s); L/2's checks run again: its ledger problem gone (%s)" % (m2, LS("L/2")))
+    ok(LS("L/2")["st"] == "ready", "… and it moves to Ready (%s)" % LS("L/2")["st"])
+    E("() => salesUndo()"); W(400)
+    ok(LS("L/2")["lines"][1] == ["sales", "No Such Sales Ledger", ""] and LS("L/2")["st"] == "review" and LS("L/1")["lines"][1][1] == "Consulting Income (B)", "Undo: both put back, L/2 back to To review (%s, %s)" % (LS("L/2"), LS("L/1")["lines"][1]))
+    m3 = bulk("igst", "5", "ZZ Output IGST Alt")
+    ok(m3 == "Changed on 0 invoices; 3 skipped (posted / no such line)", "IGST at 5%%: no such line on any: nothing changed, said (%s)" % m3)
+    E("() => { SL().sel = new Set(); SL().list = []; saveSales(); render(); }")
 
     ok(not errors, "no page errors " + str(errors[:2]))
     br.close()

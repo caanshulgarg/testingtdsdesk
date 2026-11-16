@@ -150,6 +150,76 @@ async function salesPostOneByOne(ids){
   toast("One by one: " + okN + " of " + out.length + " posted" + (okN < out.length ? "; the rest say why under To review" : "") + ".");
   render();
 }
+// The owner (16-Nov-2026): every ledger FinCom set on an invoice can be changed by a person, on the invoice (a searchable
+// box of the client's exact Tally ledger names) and on several at once; what a person picks is kept ("set by you"),
+// never worked out again, until they press "undo, let FinCom pick". Posted invoices are not changed.
+//   role: "party" | "sales" | "igst" | "cgst" | "sgst" | "cess"; rate: the GST rate of the line ("all" in bulk)
+// Returns whether the invoice had such a line (false: nothing changed)
+function salesLineSet(v, role, rate, ledger){
+  const l = exactLedger(ledger); if (!l || !v || !["review", "ready"].includes(v.status)) return false;
+  const lines = salesLines(v), all = rate === "all" || rate == null || rate === "";
+  if (role === "party"){
+    if (v.custSource !== "Set by you") v.custWas = {ledger: v.customerLedger || "", source: v.custSource || "", user: !!v.userLedger, sure: !!v.custSure};
+    v.customerLedger = l; v.userLedger = true; v.custSource = "Set by you";
+  } else if (role === "sales"){
+    const rates = lines.filter(x => x.role === "sales" && (all || num(x.rate) === num(rate))).map(x => num(x.rate));
+    if (!rates.length) return false;
+    v.salesLedgers = Object.assign({}, v.salesLedgers); v.salesBy = Object.assign({}, v.salesBy);
+    rates.forEach(r => { if (!v.salesBy[r]) v.salesBy[r] = {was: (v.salesLedgers || {})[r] || ""}; v.salesLedgers[r] = l; });
+  } else {
+    const keys = [].concat(...lines.filter(x => x.role === "tax" && x.kind === role).map(x => x.keys || [])).filter(k => role === "cess" || all || k === salesTaxKey(role, rate));
+    if (!keys.length) return false;
+    v.taxLedgers = Object.assign({}, v.taxLedgers); keys.forEach(k => { v.taxLedgers[k] = l; });
+  }
+  delete v.refused;   // (changed: not the voucher Tally refused)
+  mapInvoice(v);
+  return true;
+}
+// "undo, let FinCom pick": the person's choice on that line is let go, the ledger worked out as for any invoice
+function salesLineUnset(id, role, keys){
+  const s = SL(), v = inv(id); if (!v || !["review", "ready"].includes(v.status)) return;
+  const before = [salesSnapshot(v)];
+  if (role === "party"){
+    const w = v.custWas; delete v.custWas;
+    if (w && exactLedger(w.ledger)){ v.customerLedger = w.ledger; v.custSource = w.source; v.userLedger = w.user; v.custSure = w.sure; }
+    else { v.customerLedger = ""; v.userLedger = false; v.custSource = ""; }
+  } else if (role === "sales"){
+    [].concat(keys).forEach(r => { const b = (v.salesBy || {})[r]; if (!b) return; if (b.was) v.salesLedgers[r] = b.was; else delete v.salesLedgers[r]; delete v.salesBy[r]; });
+  } else [].concat(keys || []).forEach(k => { if (v.taxLedgers) delete v.taxLedgers[k]; });
+  mapInvoice(v); salesSetUndo("Invoice " + esc(v.x.number || "") + ": FinCom picks the ledger again", before); saveSales(); render();
+}
+// one line of the invoice that is open (or any invoice by id), from its box
+function salesLinePick(id, role, rate, ledger){
+  const s = SL(), v = inv(id);
+  if (!exactLedger(ledger)){ toast("\u201c" + ledger + "\u201d is not a Tally ledger. Choose one from the list."); return false; }
+  if (!v || !["review", "ready"].includes(v.status)){ toast("A posted invoice is not changed."); return false; }
+  if (role === "party"){ setCustomerLedger(v, ledger); render(); return true; }
+  const before = [salesSnapshot(v)];
+  if (!salesLineSet(v, role, rate, ledger)) return false;
+  salesSetUndo("Invoice " + esc(v.x.number || "") + ": " + esc(role) + " \u2192 <b>" + esc(exactLedger(ledger)) + "</b>", before); saveSales(); render();
+  return true;
+}
+// "Change ledger" on the invoices ticked: one line (sales, party, IGST, CGST, SGST or cess; a rate, or all) on each that
+// is not posted; undone with Undo
+function salesBulkLine(role, rate, ledger){
+  const s = SL(), l = exactLedger(ledger);
+  if (!l){ toast("\u201c" + ledger + "\u201d is not a Tally ledger. Choose one from the list."); return null; }
+  const rows = s.list.filter(v => s.sel.has(v.id)), before = [];
+  let changed = 0, skipped = 0;
+  rows.forEach(v => {
+    if (!["review", "ready"].includes(v.status)){ skipped++; return; }
+    const snap = salesSnapshot(v);
+    if (salesLineSet(v, role, rate, l)){ changed++; before.push(snap); s.sticky.add(v.id); } else skipped++;
+  });
+  if (before.length) salesSetUndo("Changed the " + esc(role) + " ledger on " + changed + " invoice" + (changed === 1 ? "" : "s") + " \u2192 <b>" + esc(l) + "</b>", before);
+  saveSales();
+  const msg = "Changed on " + changed + " invoice" + (changed === 1 ? "" : "s") + "; " + skipped + " skipped (posted / no such line)";
+  s.bulkLineMsg = msg; toast(msg + "."); render();
+  return {changed, skipped};
+}
+if (typeof salesLinePick !== "undefined") globalThis.salesLinePick = salesLinePick;
+if (typeof salesLineUnset !== "undefined") globalThis.salesLineUnset = salesLineUnset;
+if (typeof salesBulkLine !== "undefined") globalThis.salesBulkLine = salesBulkLine;
 // "Post duplicate anyway" (the owner, 16-Nov-2026: any person, no role needed): an invoice whose number Tally, or FinCom's
 // own posted record, already has under a Sales-class type is posted again only when a person presses it and confirms a
 // second time; who and when are kept on the invoice and in the audit trail. It is then Ready, and goes with Post to Tally

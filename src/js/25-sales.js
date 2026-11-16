@@ -394,8 +394,9 @@ function salesLines(v){
   const groups = salesTotals(x);
   const lines = [];
   const total = r2(num(x.total));
-  lines.push({side: "Dr", ledger: v.customerLedger || "", amt: total, role: "party"});
-  groups.forEach(g => lines.push({side: "Cr", ledger: v.salesLedgers && v.salesLedgers[g.rate] || salesLedgerFor(g.rate, inter), amt: g.taxable, role: "sales", rate: g.rate}));
+  // (by: "you" on a line whose ledger a person picked on the invoice or in bulk: kept, never worked out again)
+  lines.push(Object.assign({side: "Dr", ledger: v.customerLedger || "", amt: total, role: "party"}, v.userLedger && v.custSource === "Set by you" ? {by: "you"} : {}));
+  groups.forEach(g => lines.push(Object.assign({side: "Cr", ledger: v.salesLedgers && v.salesLedgers[g.rate] || salesLedgerFor(g.rate, inter), amt: g.taxable, role: "sales", rate: g.rate}, v.salesBy && v.salesBy[g.rate] ? {by: "you"} : {})));
   const taxParts = [];
   if (groups.length > 1 && (x.items || []).length){
     groups.forEach(g => {
@@ -414,14 +415,19 @@ function salesLines(v){
   const byLedger = new Map();
   // (each line says why its ledger, or, when a person must choose, the candidates and the choice's key)
   const pickTo = (e, pk) => { if (pk.why) e.why = pk.why; if (pk.cands){ e.cands = pk.cands; e.ck = pk.ck; e.ik = pk.ik; e.reg = pk.reg; e.unknown = pk.unknown; } return e; };
-  taxParts.forEach(t => { if (!t.amt) return; const pk = taxLedgerPick(t.kind, t.rate, v), l = pk.ledger || ""; const k = l || t.kind + "?"; const e = byLedger.get(k) || pickTo({side: "Cr", ledger: l, amt: 0, role: "tax", kind: t.kind}, pk); e.amt = r2(e.amt + t.amt); byLedger.set(k, e); });
+  // (an output ledger a person picked for this invoice, by kind and GST rate, v.taxLedgers["igst_18"]: before any pick)
+  const mine = k => exactLedger((v.taxLedgers || {})[k]);
+  const pickOf = (kind, rate) => { const m = mine(salesTaxKey(kind, rate)); return m ? {ledger: m, why: "set by you", by: "you"} : taxLedgerPick(kind, rate, v); };
+  taxParts.forEach(t => { if (!t.amt) return; const pk = pickOf(t.kind, t.rate), l = pk.ledger || ""; const k = l || t.kind + "?"; const e = byLedger.get(k) || pickTo({side: "Cr", ledger: l, amt: 0, role: "tax", kind: t.kind, keys: []}, pk); e.amt = r2(e.amt + t.amt); if (pk.by) e.by = "you"; if (!e.keys.includes(salesTaxKey(t.kind, t.rate))) e.keys.push(salesTaxKey(t.kind, t.rate)); byLedger.set(k, e); });
   byLedger.forEach(e => lines.push(e));
-  if (num(x.cess)){ const pk = taxLedgerPick("cess", 0, v); lines.push(pickTo({side: "Cr", ledger: pk.ledger, amt: r2(num(x.cess)), role: "tax", kind: "cess"}, pk)); }
+  if (num(x.cess)){ const pk = pickOf("cess", 0); lines.push(Object.assign(pickTo({side: "Cr", ledger: pk.ledger, amt: r2(num(x.cess)), role: "tax", kind: "cess", keys: [salesTaxKey("cess", 0)]}, pk), pk.by ? {by: "you"} : {})); }
   const cr = r2(lines.filter(l => l.side === "Cr").reduce((a, l) => a + l.amt, 0));
   const ro = r2(total - cr);
   if (Math.abs(ro) >= 0.01) lines.push({side: ro > 0 ? "Cr" : "Dr", ledger: roundOffLedger(), amt: Math.abs(ro), role: "roundoff"});
   return lines;
 }
+// the key of an output tax line a person sets on an invoice: its kind and the invoice's GST rate ("igst_18", "cess_0")
+function salesTaxKey(kind, rate){ return kind + "_" + (kind === "cess" ? "0" : rateTag(num(rate))); }
 function invoiceProblems(v){
   const co = CO(SL().cid), x = v.x, p = [];
   if (v.hold) p.push(v.hold);   // a sheet's row held for a person (a negative amount its Type column does not explain)

@@ -174,13 +174,17 @@ function Detail({ v }) {
       <section><h3>Sales voucher for Tally</h3>
         <div className="bk-form">
           <label><span>Customer ledger</span><LedgerBox value={v.customerLedger || ""} fk={"svcustd:" + v.id} data-svcust={v.id} disabled={ro} onCommit={(val) => salesSetCust(v.id, val)} /></label>
-          {salesTotals(x).map((g) => <label key={g.rate}><span>Sales ledger {rateTag(g.rate)}%</span>
-            <LedgerSelect selected={lines.find((l) => l.role === "sales" && l.rate === g.rate).ledger} prefer={/sales accounts?/i} disabled={ro} onPick={(val) => salesSetSalesLedger(g.rate, val)} /></label>)}
         </div>
         <div className="bk-tablewrap" style={{ marginTop: 10 }}><table className="bk-table" data-statement="">
           <thead><tr><th>Ledger</th><th className="n">Debit ₹</th><th className="n">Credit ₹</th></tr></thead>
           <tbody>
-            {lines.map((l, i) => <tr key={i}><td title={l.why || undefined} data-line-why={l.why || undefined}>{l.ledger || <span className="src bad">not set</span>}{!ro && !l.ledger && l.cands && <> <TaxChoice a={l} id={v.id} /></>}{l.ledger && l.why && <span className="src muted"> · {l.why}</span>}{l.ledger && !exactLedger(l.ledger) && <> <span className="src bad">not in Tally</span></>}</td>
+            {/* the owner, 16-Nov-2026: every line's ledger can be changed here (the client's exact Tally ledger names), kept as "set by you" */}
+            {lines.map((l, i) => <tr key={i} data-svline={lineRole(l)}><td title={l.why || undefined} data-line-why={l.why || undefined}>
+              {ro || l.role === "roundoff" ? (l.ledger || <span className="src bad">not set</span>)
+                : <LedgerBox value={l.ledger || ""} fk={"svline:" + v.id + ":" + i + ":" + (l.ledger || "")} data-svline-box={lineRole(l) + (l.role === "sales" ? ":" + l.rate : "")} placeholder={lineLabel(l) + " ledger"} aria-label={lineLabel(l) + " ledger"}
+                    onCommit={(val) => salesLinePick(v.id, lineRole(l), l.role === "sales" ? l.rate : lineRate(l), val)} />}
+              {!ro && !l.ledger && l.cands && <> <TaxChoice a={l} id={v.id} /></>}{l.ledger && l.why && l.by !== "you" && <span className="src muted"> · {l.why}</span>}{l.ledger && !exactLedger(l.ledger) && <> <span className="src bad">not in Tally</span></>}
+              {!ro && l.by === "you" && <> <span className="src ok" data-set-by-you="">set by you</span> <button className="linkbtn" data-svline-undo="" onClick={() => salesLineUnset(v.id, lineRole(l), l.role === "sales" ? l.rate : l.keys)}>undo, let FinCom pick</button></>}</td>
               <td className="n">{l.side === "Dr" ? INR.format(l.amt) : ""}</td><td className="n">{l.side === "Cr" ? INR.format(l.amt) : ""}</td></tr>)}
             <tr><td><b>Total</b></td><td className="n"><b>{INR.format(tot("Dr"))}</b></td><td className="n"><b>{INR.format(tot("Cr"))}</b></td></tr>
           </tbody>
@@ -321,6 +325,24 @@ function Create() {
   );
 }
 
+// a line of the sales voucher: what a person changes it as (party, sales, igst, cgst, sgst, cess), its words, its GST rate
+const lineRole = (l) => l.role === "tax" ? l.kind : l.role;
+const lineLabel = (l) => l.role === "party" ? "Customer" : l.role === "sales" ? "Sales " + rateTag(l.rate) + "%" : l.role === "tax" ? String(l.kind || "").toUpperCase() + " output" : "Round-off";
+const lineRate = (l) => { const k = (l.keys || [])[0]; return k && (l.keys || []).length === 1 ? num(k.split("_")[1]) : "all"; };
+// "Change ledger" on the invoices ticked: the line, its rate (all or one), the ledger
+function BulkLine({ s }) {
+  const b = s.bulkLine || (s.bulkLine = { role: "sales", rate: "all" }), set = (k, val) => { s.bulkLine = { ...b, [k]: val }; render(); };
+  return <span className="row" data-svbulkline="" style={{ gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+    <select aria-label="Line to change" data-svbulkline-role="" value={b.role} onChange={(ev) => set("role", ev.target.value)}>
+      {[["sales", "Sales"], ["party", "Party"], ["igst", "IGST"], ["cgst", "CGST"], ["sgst", "SGST"], ["cess", "Cess"]].map(([k, t]) => <option key={k} value={k}>{t}</option>)}</select>
+    {!["party", "cess"].includes(b.role) && <select aria-label="Rate" data-svbulkline-rate="" value={b.rate} onChange={(ev) => set("rate", ev.target.value)}>
+      <option value="all">All rates</option>{SALES_RATES.map((r) => <option key={r} value={r}>{rateTag(r)}%</option>)}</select>}
+    <LedgerBox value={b.ledger || ""} fk={"svbulkline:" + b.role + ":" + b.rate} data-svbulkline-led="" placeholder="New ledger" aria-label="New ledger for the line"
+      onCommit={(val) => { if (!val) return true; if (!exactLedger(val)) { toast("“" + val + "” is not a Tally ledger."); return false; } s.bulkLine = { ...b, ledger: exactLedger(val) }; render(); return true; }} />
+    {s.bulkLineMsg && <span className="note" data-svbulkline-msg="">{s.bulkLineMsg}</span>}
+    <button className="btn" data-svbulkline-apply="" disabled={!b.ledger} onClick={() => salesBulkLine(b.role, b.rate === "all" ? "all" : num(b.rate), b.ledger)}>Change ledger</button>
+  </span>;
+}
 // a GSTIN FinCom filled from the party's Tally ledger (a sheet that gave none), said where it is shown
 const gstinFromLedger = (v) => !!(v && v.filled && v.filled.customerGstin && v.filled.customerGstin === v.x.customerGstin);
 // on an invoice: "Try again" (refused by Tally, or not confirmed: the duplicate check runs first), and the answer to a Tally
@@ -443,6 +465,7 @@ export function SalesBar() {
       {/* a ledger picked from the list, or Enter, applies it (src/js/23, 26) */}
       <input type="text" className="lgbox" data-svbulk="" data-fk="svbulk" data-ac="1" autoComplete="off" placeholder={"Customer ledger for the " + nsel + " selected"} aria-label="Customer ledger for the selected" />
       <button className="btn" onClick={() => salesAct("salesBulkLedger")}>Apply</button>
+      <BulkLine s={s} />
       {rows.some((v) => v.status === "review") && <button className="btn primary" onClick={() => salesAct("salesBulkConfirm")}>Confirm</button>}
       {rows.some((v) => ["review", "ready"].includes(v.status)) && <button className="btn" onClick={() => salesAct("salesBulkIgnore")}>Ignore</button>}
       <button className="btn" onClick={() => salesAct("salesBulkPrint")}>Print</button>
