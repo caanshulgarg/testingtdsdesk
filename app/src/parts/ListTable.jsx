@@ -28,10 +28,13 @@
 // sorted-column tint and row hover redrawn on table.lt in styles/arc-look.css, because its own phone layout would undo
 // FinCom's phone cards, src/js/53-phone.js), on the same table as before, so every list keeps its rows, cells and
 // attributes; an empty list is Arc's empty state (EmptyNote).
-import { Children, Fragment, cloneElement, isValidElement, useLayoutEffect, useRef } from "react";
+import { Children, Fragment, Suspense, cloneElement, isValidElement, lazy, useLayoutEffect, useRef } from "react";
+import { filterable, filterRows, listF, fActive, anyOn, openListF, clearListF } from "./colFilter.js";
 import Loading from "./Loading.jsx";
 import EmptyNote from "./EmptyNote.jsx";
 import arc from "@/registry/components/sortable-data-table/sortable-data-table.module.css";
+// next-ui-table-filters: the box a funnel opens, loaded when first pressed (the first file has little room left)
+const ColFilterPop = lazy(() => import("./ColFilterPop.jsx"));
 
 const RANK = { pick: 0, row: 0, date: 1, number: 2, party: 3, amount: 4, status: 5, act: 7 };
 const rank = (c) => (c.role in RANK ? RANK[c.role] : 6);
@@ -150,7 +153,20 @@ const sortVal = (v) => (blank(v) ? undefined : typeof v === "number" ? String(v)
 // Arc's marks on a cell: right-aligned figures, the column sorted by
 const isNum = (c) => /\bn\b/.test(c.cls || "") || c.role === "amount";
 const arcCell = (c, on) => ({ "data-numeric": isNum(c) ? "" : undefined, "data-sorted": on ? "" : undefined });
-function Head({ name, c, s, via, rz, w, fz }) {
+// next-ui-table-filters: the funnel on a heading (the old tables' look, .colf); filled while its filter is on
+const FUNNEL_SVG = <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 5h18l-7 8.5V20l-4-2v-4.5z" /></svg>;
+function Funnel({ name, c }) {
+  const on = fActive(listF(name)[c.k]), open = !!(S.listFPop && S.listFPop.name === name && S.listFPop.k === c.k);
+  return <button type="button" className={"colf ltf" + (on ? " on" : "") + (open ? " open" : "")} data-ltf={c.k} aria-label={"Filter " + c.label} aria-expanded={open ? "true" : "false"} title={"Filter " + c.label}
+    onClick={(ev) => { ev.stopPropagation(); openListF(name, c.k); }}>{FUNNEL_SVG}</button>;
+}
+// on a phone a list is drawn as cards (no headings, src/js/53-phone.js): the same funnels as a row of chips above it
+function PhoneFunnels({ name, cs }) {
+  const f = listF(name);
+  return <div className="lt-fphone" data-lt-fphone={name}>{cs.filter(filterable).map((c) => <button key={c.k} type="button" className={"cp-chip ltf-chip" + (fActive(f[c.k]) ? " on" : "")} data-ltf={c.k}
+    aria-label={"Filter " + c.label} onClick={(ev) => { ev.stopPropagation(); openListF(name, c.k); }}>{c.label} ▾</button>)}</div>;
+}
+function Head({ name, c, s, via, rz, w, fz, lf }) {
   const on = s && s.k === c.k, arrow = on ? (s.dir === "desc" ? "▼" : "▲") : "";
   const label = <span className="gfl">{c.label}</span>;
   const inner = c.head !== undefined ? c.head
@@ -161,7 +177,7 @@ function Head({ name, c, s, via, rz, w, fz }) {
     data-sortable={sortable(c) && c.head === undefined ? "" : undefined} data-k={rz ? c.k : undefined} data-rz={grip ? "" : undefined} {...(fz || {})}
     style={rz && w && w[c.k] ? { width: w[c.k] + "px" } : undefined}
     aria-sort={on ? (s.dir === "desc" ? "descending" : "ascending") : sortable(c) ? "none" : undefined}>
-    {c.filter ? <span className="colh">{inner}{c.filter}</span> : inner}
+    {c.filter ? <span className="colh">{inner}{c.filter}</span> : lf && filterable(c) ? <span className="colh">{inner}<Funnel name={name} c={c} /></span> : inner}
     {grip && <Grip name={name} c={c} />}
   </th>;
 }
@@ -195,7 +211,7 @@ export function ListWrap({ children, className }) {
 }
 
 export default function ListTable({ name, cols, rows, rowKey, rowProps, prep, unit = ["entry", "entries"], of, empty, loading, limit, more,
-  className = "bk-table", wrap, style, foot = true, id, after, before, tail, sortVia, footNote, keepHead, resize, freeze }) {
+  className = "bk-table", wrap, style, foot = true, id, after, before, tail, sortVia, footNote, keepHead, resize, freeze, filters = true }) {
   // sortVia: {state: {k, dir}, by(k)}: a list whose order is kept elsewhere (the rows come in sorted); the headers and
   // arrows are the same
   const cs = orderCols(cols), s = sortOf(name);
@@ -204,8 +220,20 @@ export default function ListTable({ name, cols, rows, rowKey, rowProps, prep, un
   const w = resize ? colWidths(name) : null, tw = w ? tableWidth(cs, w) : undefined;
   const tcls = className + " lt" + (resize ? " lt-rsz" : "") + (freeze ? " lt-frozen" : "") + (tw ? " lt-sized" : "");
   const tstyle = tw ? { ...(style || {}), width: tw } : style;
-  const heads = <thead><tr>{cs.map((c, i) => <Head key={c.k} name={name} c={c} s={sortVia ? sortVia.state : s} via={sortVia && sortVia.by} rz={resize} w={w} fz={frz(i, freeze)} />)}</tr></thead>;
+  // next-ui-table-filters: the funnels (a list of 3 rows or more, or one filtered), and the rows they let through, from
+  // ALL the rows, before the order and the cut (limit)
+  const fOn = filters && anyOn(name), lf = filters && (rows.length >= 3 || fOn), all0 = rows;
+  if (fOn) rows = filterRows(name, cs, rows, prep);
+  const pop = lf && S.listFPop && S.listFPop.name === name ? cs.find((c) => c.k === S.listFPop.k && filterable(c)) : null;
+  const popEl = pop ? <Suspense fallback={null}><ColFilterPop key={pop.k} name={name} c={pop} rows={all0} prep={prep} close={() => { S.listFPop = null; render(); }} /></Suspense> : null;
+  const fbar = fOn ? <div className="lt-fbar" data-lt-fbar={name} role="status">Showing <b>{rows.length}</b> of {all0.length} {all0.length === 1 ? unit[0] : unit[1]}
+    <button type="button" className="linkbtn" data-lt-fclear="" onClick={() => clearListF(name)}>Clear filters</button></div> : null;
+  if (fOn && of == null) of = all0.length;
+  const heads = <thead><tr>{cs.map((c, i) => <Head key={c.k} name={name} c={c} s={sortVia ? sortVia.state : s} via={sortVia && sortVia.by} rz={resize} w={w} fz={frz(i, freeze)} lf={lf} />)}</tr></thead>;
   if (loading) return <Loading what={typeof loading === "string" ? loading : unit[1]} rows={4} cols={cs.length} />;
+  if (!rows.length && fOn) return <><PhoneFunnels name={name} cs={cs} />{fbar}<Wrap><table className={tcls} data-list={name} style={tstyle} id={id} ref={tref}>
+    {heads}
+    <tbody><tr className="lt-none"><td colSpan={cs.length}><EmptyNote className="bk-none lt-empty" data-list-empty="" what={<>Nothing matches these filters. <button type="button" className="linkbtn" onClick={() => clearListF(name)}>Clear filters</button></>} /></td></tr></tbody></table></Wrap>{popEl}</>;
   // keepHead (t70): a list whose filters are in its headers keeps its headers when nothing matches, so they can be changed
   if (!rows.length && keepHead) return <Wrap><table className={tcls} data-list={name} style={tstyle} id={id} ref={tref}>
     {heads}
@@ -214,6 +242,8 @@ export default function ListTable({ name, cols, rows, rowKey, rowProps, prep, un
   const sorted = sortVia ? sortVia.state : s;
   const all = sortVia ? rows : sortRows(name, cs, rows), shown = limit ? all.slice(0, limit) : all;
   return <>
+    {lf && <PhoneFunnels name={name} cs={cs} />}
+    {fbar}
     <Wrap>
       <table className={tcls} data-list={name} style={tstyle} id={id} ref={tref}>
         {cs.some((c) => c.w) && !tw && <colgroup>{cs.map((c) => <col key={c.k} style={c.w ? { width: c.w + "%" } : undefined} />)}</colgroup>}
@@ -222,7 +252,7 @@ export default function ListTable({ name, cols, rows, rowKey, rowProps, prep, un
           const p = prep ? prep(r) : undefined, rp = rowProps ? rowProps(r, p) : {}, k = rowKey ? rowKey(r, i) : i;
           const tr = <tr key={k} {...rp}>{cs.map((c, ci) => {
             const { className: ec, ...extra } = (c.td && c.td(r, p)) || {};
-            return <td key={c.k} {...arcCell(c, sorted && sorted.k === c.k)} {...frz(ci, freeze)} {...extra} className={[c.cls, ec].filter(Boolean).join(" ") || undefined} data-sort={sortable(c) ? sortVal(c.v(r)) : undefined}>{c.cell(r, p, i)}</td>;
+            return <td key={c.k} {...arcCell(c, sorted && sorted.k === c.k)} {...frz(ci, freeze)} data-nw={c.role === "date" ? "" : undefined} {...extra} className={[c.cls, ec].filter(Boolean).join(" ") || undefined} data-sort={sortable(c) ? sortVal(c.v(r)) : undefined}>{c.cell(r, p, i)}</td>;
           })}</tr>;
           // a row opened under its row (a challan's deductions): one cell across the table
           const open = after && after(r, p);
@@ -235,6 +265,7 @@ export default function ListTable({ name, cols, rows, rowKey, rowProps, prep, un
       </table>
     </Wrap>
     {limit && all.length > shown.length ? more : null}
+    {popEl}
   </>;
 }
 

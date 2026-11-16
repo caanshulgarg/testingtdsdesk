@@ -8,6 +8,7 @@
 // The placeholder's other data-* attributes are passed to the screen as props: <div data-react="DocqPanel" data-cid="x">.
 import { flushSync } from "react-dom";
 import { whyPass } from "./parts/WhyNotes.jsx";
+import { clampNotes } from "./parts/density.js";
 
 const legacyRender = window.render;
 let version = 0, hosts = new Map(), placed = [];
@@ -100,6 +101,8 @@ window.render = function render() {
     if (typeof placeColPop === "function") placeColPop();
     // the funnels on the tables that are still old pieces
     if (typeof GridF === "object") GridF.after();
+    // next-ui-table-filters: the density chosen, and long help lines folded to one line (parts/density.js)
+    clampNotes();
     // the guide beside a tab ("How this tab works") follows the page, which React may have just changed
     if (typeof Help === "object") Help.after();
     if (acFk && !AC.fk) { const el = document.querySelector('[data-fk="' + CSS.escape(acFk) + '"]'); if (el && document.activeElement === el) acOpen(el); }

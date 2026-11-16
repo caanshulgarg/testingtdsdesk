@@ -19,6 +19,7 @@
 // Tally: the bridge reads one day at a time, only while Tally is idle, each request stopped at 2 s, postings first.
 import { useEffect, useRef, useState } from "react";
 import "./tallyCompanies.css";
+import ListTable from "./ListTable.jsx";
 import { soonDraw } from "../lib/soonDraw.js";
 import { QUIET } from "../lib/quietReads.js";
 import { pullPaced } from "../lib/pullSpeed.js";
@@ -32,6 +33,20 @@ const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct
 export const day8 = (d) => { const s = String(d || "").replace(/-/g, ""); return s.length === 8 ? Number(s.slice(6, 8)) + "-" + MON[Number(s.slice(4, 6)) - 1] : ""; };
 export const dayLong = (d) => { const s = String(d || "").replace(/-/g, ""); return s.length === 8 ? s.slice(6, 8) + "-" + MON[Number(s.slice(4, 6)) - 1] + "-" + s.slice(0, 4) : ""; };
 // a time of day as every page says it: India's time, "10:42 IST", whatever this computer's clock
+// next-ui-table-filters: the entries Tally sent (today's list here, Check changes' list in TallyCheck.jsx) in the one list
+// table, so each column sorts and filters: the date by from / to, the voucher by its type (ticked), the amount by from / to
+const isoDay = (d) => { const s = String(d || "").replace(/-/g, ""); return s.length === 8 ? s.slice(0, 4) + "-" + s.slice(4, 6) + "-" + s.slice(6, 8) : ""; };
+const amt = (a) => (a == null ? "—" : Number(a).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+export function entryCols(whatLabel, what, at) {
+  return [
+    { k: "date", role: "date", label: "Date", v: (r) => isoDay(r.day), cell: (r) => dayLong(r.day) },
+    { k: "vch", role: "number", label: "Voucher", v: (r) => [r.vtype, r.vno].filter(Boolean).join(" "), fv: (r) => r.vtype || "", cell: (r) => [r.vtype, r.vno].filter(Boolean).join(" ") || "—" },
+    { k: "party", role: "party", label: "Party", v: (r) => r.party || "", cell: (r) => r.party || "—" },
+    { k: "amt", role: "amount", cls: "n", label: "Amount", v: (r) => (r.amount == null ? undefined : Number(r.amount)), fmt: amt, cell: (r) => amt(r.amount) },
+    { k: "what", role: "status", label: whatLabel, v: what, cell: what },
+    at && { k: "at", label: "At", v: (r) => r.at || "", fkind: "text", cell: (r) => hm(r.at) },
+  ];
+}
 export const hm = (at) => { const t = Date.parse(at || ""); return t ? new Date(t + 5.5 * 3600e3).toISOString().slice(11, 16) + " IST" : ""; };
 export function fyNow() { const t = new Date(Date.now() + 5.5 * 3600e3); return t.getUTCFullYear() - (t.getUTCMonth() < 3 ? 1 : 0); }
 const fyOfDate = (d) => { const s = String(d || "").replace(/-/g, ""); if (s.length < 6) return 0; const y = Number(s.slice(0, 4)), m = Number(s.slice(4, 6)); return m < 4 ? y - 1 : y; };
@@ -364,10 +379,8 @@ export function TodayLine({ cid, book = "", where = "row" }) {
     <button className="linkbtn" data-today-open={bk} aria-expanded={open ? "true" : "false"} onClick={() => setOpen(!open)}>{(where === "status" && b.company ? b.company + ": " : "") + words}</button>
     {open && <div className="tfx-today-list" data-today-list="">
       {!rows ? <p className="note">Reading the list…</p> : list.err ? <p className="note bad">FinCom’s cloud did not answer; try again in a minute.</p> :
-        <div style={{ overflowX: "auto" }}><table className="data" data-today-table=""><thead><tr><th>Date</th><th>Voucher</th><th>Party</th><th className="n">Amount</th><th>What happened</th><th>At</th></tr></thead>
-          <tbody>{rows.map((r, i) => <tr key={i} data-today-row={r.via + ":" + r.what}><td>{dayLong(r.day)}</td><td>{[r.vtype, r.vno].filter(Boolean).join(" ") || "—"}</td><td>{r.party || "—"}</td>
-            <td className="n">{r.amount == null ? "—" : Number(r.amount).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-            <td>{(WHAT[r.via] || WHAT.tally)[r.what] || r.what}</td><td>{hm(r.at)}</td></tr>)}</tbody></table>
+        <div data-today-table=""><ListTable name={"tallyToday:" + bk} className="data" rows={rows} unit={["entry", "entries"]} rowProps={(r) => ({ "data-today-row": r.via + ":" + r.what })}
+            cols={entryCols("What happened", (r) => (WHAT[r.via] || WHAT.tally)[r.what] || r.what, true)} />
           {list.total > rows.length && <p className="note">{"Showing the latest " + nf(rows.length) + " of " + nf(list.total) + "."}</p>}</div>}
     </div>}
   </div>;

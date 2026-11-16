@@ -11,7 +11,8 @@
 // goes first. Its own file, loaded only with the Tally page and Books › From Tally (the app's first file and legacy.js stay
 // within budget).
 import { useEffect, useState } from "react";
-import { nf, day8, dayLong, hm, fyNow, plural, rpc, missing, may, TurnOn, bookSum, summary, etaWords, partWords, askStatus, askOff, bookFetch, paceWords, useLive } from "./TallyFetch.jsx";
+import { nf, day8, dayLong, hm, fyNow, plural, rpc, missing, may, TurnOn, bookSum, summary, etaWords, partWords, askStatus, askOff, bookFetch, paceWords, useLive, entryCols } from "./TallyFetch.jsx";
+import ListTable from "./ListTable.jsx";
 // bridge 2.5.10: once pressed, what the bridge itself said of the check ("Started at …" / "Not started: <its words>"); with
 // nothing said (an older bridge) the waiting words below, as before
 import { ackSnap, ackNew, ackWords } from "../lib/pickAck.js";
@@ -73,9 +74,8 @@ function List({ cid }) {
   const rows = r.rows || [];
   if (!rows.length) return null;
   const WHAT = { added: "added", changed: "changed", deleted: "deleted (kept in history)" };
-  return <div style={{ overflowX: "auto" }}><table className="data" data-cc-table=""><thead><tr><th>Date</th><th>Voucher</th><th>Party</th><th className="n">Amount</th><th>What FinCom did</th></tr></thead>
-    <tbody>{rows.map((x, i) => <tr key={i} data-cc-row={x.what}><td>{dayLong(x.day)}</td><td>{[x.vtype, x.vno].filter(Boolean).join(" ") || "—"}</td><td>{x.party || "—"}</td>
-      <td className="n">{x.amount == null ? "—" : Number(x.amount).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td><td>{WHAT[x.what] || x.what}</td></tr>)}</tbody></table></div>;
+  return <div data-cc-table=""><ListTable name={"tallyCheckChanges:" + cid} className="data" rows={rows} unit={["entry", "entries"]} rowProps={(x) => ({ "data-cc-row": x.what })}
+    cols={entryCols("What FinCom did", (x) => WHAT[x.what] || x.what)} /></div>;
 }
 
 export default function CheckChanges({ cid, where = "books" }) {

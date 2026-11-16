@@ -12,7 +12,8 @@
    8. A steady frame: the top bar's fixed places, the status tabs in the page, the page's shape while data comes (steady.css).
    9. Clean-up batch 3, "Polish": one tab style, one width, the tables, one banner, the bars (arc-clean.css).
   10. ui-tidy: one filter bar, one table, details beside the row, the answer first (tidy.css).
-  11. The pages before sign-in in one frame (signin.css, 27-Oct-2026). */
+  11. The pages before sign-in in one frame (signin.css, 27-Oct-2026).
+  12. Compact rows and the column filters' own bits (dense.css, next-ui-table-filters). */
 @import "./fonts.css";
 @import "../../legacy/app.css" layer(fincom);
 @import "../arc/foundation.css";
@@ -27,3 +28,4 @@
 @import "./tds-layout.css";
 @import "./upload.css";
 @import "./signin.css";
+@import "./dense.css";

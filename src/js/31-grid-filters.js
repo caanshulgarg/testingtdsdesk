@@ -4,6 +4,9 @@
 /* ================================================================== */
 // Tables that already have their own filters (bills, bank, sales) are left as they are.
 function gfN(n){ if (typeof GridF !== "object") return n; if (GridF.full()) return Infinity; GridF.cut = true; return n; }
+// next-ui-table-filters (the owner, 16-Nov-2026): also the plain tables of the Tally page (table.data, its clients' grid);
+// the one list table (ListTable.jsx, table.lt) has funnels of its own, on all its rows
+const GF_SEL = "#app table.bk-table, #app table.data:not(.lt), #app table.tpt-grid";
 const GridF = {
   pop: null,
   // which screen this is, so a filter stays with its own table
@@ -50,7 +53,7 @@ const GridF = {
   // after every render: funnels on the headings, filters applied, long tables boxed
   after(){
     this.cutSeen = this.cut; this.cut = false;
-    const tables = Array.from(document.querySelectorAll("#app table.bk-table"));
+    const tables = Array.from(document.querySelectorAll(GF_SEL));
     tables.forEach((t, ti) => {
       // a table with filters of its own (bills, bank) is left as it is; a funnel added here is not one of those
       if (t.querySelector(".colf:not(.gff)") || t.classList.contains("gf-off")) return;
@@ -60,7 +63,7 @@ const GridF = {
       const rows = this.rows(t);
       t.dataset.gfkey = this.key(t, ti);
       if (rows.length >= 4) hs.forEach((th, i) => {
-        if (th.querySelector(".gff") || !this.label(th) || th.querySelector("input")) return;
+        if (th.querySelector(".gff") || !this.label(th) || th.querySelector("input") || th.dataset.role === "act" || /-act\b/.test(th.className)) return;
         const btn = '<button class="colf gff" data-gfi="' + i + '" aria-label="Filter" title="Filter this column">' + FUNNEL + "</button>";
         if (own) th.insertAdjacentHTML(th.classList.contains("n") ? "afterbegin" : "beforeend", btn);
         else th.innerHTML = '<span class="colh"><span class="gfl">' + th.innerHTML + "</span>" + btn + "</span>";
@@ -69,7 +72,7 @@ const GridF = {
       const wrap = t.closest(".bk-tablewrap");
       if (wrap && rows.length > 18) wrap.classList.add("gf-scroll");
     });
-    if (this.pop){ const t = document.querySelector('#app table.bk-table[data-gfkey="' + CSS.escape(this.pop.key) + '"]'); if (!t) this.close(); else this.place(t); }
+    if (this.pop){ const t = document.querySelector('#app table[data-gfkey="' + CSS.escape(this.pop.key) + '"]'); if (!t) this.close(); else this.place(t); }
   },
   apply(t){
     const f = this.st(t), rows = this.rows(t), hs = this.heads(t), on = Object.keys(f).filter(i => this.active(f[i]));
@@ -122,7 +125,7 @@ const GridF = {
     el.style.top = (below + h <= window.innerHeight - 8 ? below : Math.max(8, Math.min(r.top - h - 6, window.innerHeight - h - 8))) + "px";
   },
   close(){ this.pop = null; const el = document.getElementById("gfpop"); if (el) el.remove(); },
-  table(){ return this.pop ? document.querySelector('#app table.bk-table[data-gfkey="' + CSS.escape(this.pop.key) + '"]') : null; },
+  table(){ return this.pop ? document.querySelector('#app table[data-gfkey="' + CSS.escape(this.pop.key) + '"]') : null; },
   set(k, v){
     const t = this.table(); if (!t) return;
     const st = this.st(t), f = st[this.pop.i] = st[this.pop.i] || {};
@@ -135,7 +138,7 @@ document.addEventListener("click", e => {
   const b = e.target.closest && e.target.closest(".gff");
   if (b){ e.preventDefault(); e.stopPropagation(); GridF.open(b); return; }
   const c = e.target.closest && e.target.closest("[data-gfclear]");
-  if (c){ const t = document.querySelector('#app table.bk-table[data-gfkey="' + CSS.escape(c.dataset.gfclear) + '"]'); if (t){ S.gridF[t.dataset.gfkey] = {}; GridF.apply(t); } GridF.close(); return; }
+  if (c){ const t = document.querySelector('#app table[data-gfkey="' + CSS.escape(c.dataset.gfclear) + '"]'); if (t){ S.gridF[t.dataset.gfkey] = {}; GridF.apply(t); } GridF.close(); return; }
   const qk = e.target.closest && e.target.closest("#gfpop [data-gfq]");
   if (qk){ const t = GridF.table(), r = GridF.quick(qk.dataset.gfq); if (t && r){ const st = GridF.st(t), f = st[GridF.pop.i] = st[GridF.pop.i] || {}; f.from = r[0]; f.to = r[1]; GridF.apply(t); GridF.draw(t); } return; }
   const x = e.target.closest && e.target.closest("#gfpop [data-gfx]");

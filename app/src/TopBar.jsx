@@ -26,6 +26,7 @@ import { useDismiss } from "./parts/dismiss.js";
 import { clientTallyState } from "./lib/tallyState.js";
 // next-tally-icon (27-Oct-2026): the header's ONE Tally sign, an icon with a status dot (its words on hover and in its popover)
 import TallyIcon from "./parts/TallyIcon.jsx";
+import { density, setDensity } from "./parts/density.js";
 
 const HOME_TITLES = { clients: "Clients", today: "Today", compliance: "Compliance", inbox: "Inbox", tally: "Tally", integrations: "Integrations", rules: "Settings", help: "Help", meetings: "Meetings" };
 // one name for one thing (spec K1; clean-up batch 1): each page is called what the sidebar calls it. From Tally keeps
@@ -290,6 +291,8 @@ function FirmMenu() {
       {item("Settings", () => doAct("openSettings"))}
       {item("People", () => goSettings("account"))}
       {item("Plan and credit", () => goSettings("plan"))}
+      {/* next-ui-table-filters: the rows' density, remembered per person in this browser (parts/density.js) */}
+      <Menu.Item asChild onSelect={() => setDensity(density() === "compact" ? "comfortable" : "compact")}><button type="button" className={"fm-item " + menu.item} data-density={density()}>{density() === "compact" ? "Rows: Compact · switch to Comfortable" : "Rows: Comfortable · switch to Compact"}</button></Menu.Item>
       {Cloud.on() && item("Sign out", () => doAct("signOutNow"))}
   </Menu.Content></Menu.Portal>;
 }

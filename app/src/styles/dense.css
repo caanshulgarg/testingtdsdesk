@@ -1,0 +1,90 @@
+/* next-ui-table-filters (the owner, 16-Nov-2026: "page is eating lot of spaces"): the compact layout, FinCom's default.
+   Rows about 32 px, tighter cells, smaller headings and margins, a table inside a card not boxed a second time, a long
+   help line folded to one line with "more" (parts/density.js). "Comfortable" (html.comfy, the firm menu) keeps the
+   spacing as before. On a touch screen the boxes and buttons keep their finger size. Also: the column filters' own bits
+   (the funnel in a sortable heading, "Showing X of Y", the box as a sheet on a phone). */
+
+/* ---- the column filters (ListTable.jsx, ColFilterPop.jsx) ---- */
+#app table.lt.lt thead th[data-sortable] > .colh { display: flex; width: 100%; gap: 0; align-items: center; }
+#app table.lt.lt thead th[data-sortable] > .colh > .lt-sort { flex: 1 1 auto; min-width: 0; }
+#app table.lt.lt thead th[data-sortable] > .colh > .ltf { margin-right: 4px; flex: none; }
+/* the funnel at the right of every heading, as in Excel (an amount's label stays right-aligned in its sort button) */
+#app table.lt.lt thead th[data-sortable] > .colh, #app table.lt.lt thead th.n[data-sortable] > .colh { flex-direction: row; }
+#app .ltf { opacity: .55; }
+#app .tpt-grid > thead th { white-space: nowrap; }
+#app .ltf:hover, #app .ltf:focus-visible, #app .ltf.on, #app .ltf.open, #app th:hover .ltf { opacity: 1; }
+.lt-fbar { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin: 0 0 6px; font-size: 13px; color: var(--muted); }
+.lt-fbar b { color: var(--ink); }
+.ltf-pop { width: 260px; }
+.ltf-pop .cp-full { margin: 8px 0 0; }
+.ltf-pop .cp-range + .cp-full, .ltf-pop .cp-quick + .cp-range { margin-top: 0; }
+.ltf-pop .cp-sub { margin: 8px 0 4px; }
+/* a phone: the list as cards has no headings, so its funnels are a row of chips above it */
+.lt-fphone { display: none; }
+@media (max-width: 600px) {
+  #app .lt-fphone:has(~ .lt-wrap > table.cards), #app .lt-fphone:has(~ .bk-tablewrap > table.cards) { display: flex; gap: 6px; overflow-x: auto; margin: 0 0 6px; padding-bottom: 2px; scrollbar-width: none; }
+  #app .lt-fphone .ltf-chip { flex: none; min-height: 36px; white-space: nowrap; }
+  #app .lt-fphone .ltf-chip.on { border-color: var(--ledger); background: var(--ledger-soft); color: var(--ledger); }
+  .ltf-pop { left: 8px !important; right: 8px; top: auto !important; bottom: 8px; width: auto; max-width: none; max-height: 75vh; display: flex; flex-direction: column; }
+  .ltf-pop .cp-body { max-height: none; flex: 1 1 auto; }
+  .ltf-pop .cp-item { min-height: 40px; }
+  .ltf-pop input[type="text"], .ltf-pop input[type="search"], .ltf-pop input[type="date"] { height: 40px !important; font-size: 16px !important; }
+}
+/* the heading stays in view while the rows scroll, on every list table */
+#app .lt-wrap > table.lt:not(.cards) > thead th { position: sticky; top: 0; z-index: 1; }
+
+/* ---- a long help line: one line, "more" opens it ---- */
+#app p.note.tf-clamp:not(.tf-open) { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 46px; position: relative; cursor: pointer; }
+#app p.note.tf-clamp:not(.tf-open)::after { content: "more"; position: absolute; right: 0; top: 0; padding-left: 6px; background: inherit; color: var(--ledger, var(--accent)); font-weight: 500; }
+#app p.note.tf-clamp.tf-open { cursor: pointer; }
+
+/* ---- compact (the default) ---- */
+html:not(.comfy) #app table.lt.lt { font-size: 13px; }
+html:not(.comfy) #app table.lt.lt td[data-nw] { white-space: nowrap; }
+html:not(.comfy) #app table.lt.lt td { padding: 4px 8px; line-height: 1.35; }
+html:not(.comfy) #app table.lt.lt th { padding: 5px 8px; font-size: 12px; }
+html:not(.comfy) #app table.lt.lt th[data-sortable] { padding: 0; }
+html:not(.comfy) #app table.lt.lt .lt-sort { min-height: 30px; padding: 4px 8px; }
+html:not(.comfy) #app table.lt.lt tfoot td { padding: 5px 8px; }
+html:not(.comfy) #app .bk-table td { padding: 4px 8px; }
+html:not(.comfy) #app .bk-table th { padding: 6px 8px; font-size: 11px; }
+html:not(.comfy) #app table.data td { padding: 4px 8px; }
+html:not(.comfy) #app table.data th { padding: 6px 8px; font-size: 12px; }
+html:not(.comfy) #app .bk-table .nr, html:not(.comfy) #app table.lt .nr { font-size: 11.5px; line-height: 1.25; }
+html:not(.comfy) #app .bk-table .src { font-size: 11.5px; line-height: 1.25; }
+html:not(.comfy) #app .lgbox { height: 28px; padding: 0 8px; }
+html:not(.comfy) #app .bk-table .btn.small, html:not(.comfy) #app table.lt .btn.small { min-height: 26px; padding-top: 2px; padding-bottom: 2px; }
+html:not(.comfy) #app .colf { width: 20px; height: 20px; }
+/* the Tally page's clients */
+html:not(.comfy) #app .tpt-grid > thead th { padding: 7px 8px; font-size: 11.5px; }
+html:not(.comfy) #app .tpt-td { padding: 8px 8px; }
+html:not(.comfy) #app .tpt-grid > thead th:first-child, html:not(.comfy) #app .tpt-grid > tbody > tr > td:first-child { padding-left: 14px; }
+html:not(.comfy) #app .tpt-act, html:not(.comfy) #app .tpt-grid > thead th.tpt-th-act { padding-right: 14px; }
+html:not(.comfy) #app .tpt-act-in { gap: 2px; }
+html:not(.comfy) #app .tpt-act-in > .btn { min-height: 32px; border-radius: 8px; }
+html:not(.comfy) #app .tsm-client-name { font-size: 14px; }
+html:not(.comfy) #app .tpt-co-line { font-size: 12.5px; margin-top: 1px; }
+html:not(.comfy) #app .tpt-state { margin-top: 2px; font-size: 12.5px; gap: 0; }
+/* cards, headings and the page's margins */
+html:not(.comfy) #app .pane { padding: 12px 14px; margin-top: 10px; }
+html:not(.comfy) #app .pane h2 { margin: 0 0 6px; font-size: 15px; }
+html:not(.comfy) #app .pane h3 { margin: 0 0 6px; font-size: 14px; }
+html:not(.comfy) #app .bk-head { padding: 8px 12px; gap: 8px 14px; }
+html:not(.comfy) #app .bk-figs dd { font-size: 15px; }
+html:not(.comfy) #app .bk-bar { margin: 6px 0; }
+html:not(.comfy) #app .chipbar { margin: 0 0 6px; }
+@media (min-width: 601px) { html:not(.comfy) .mainwrap main.wrap { padding-left: 20px; padding-right: 20px; } }
+/* a table inside a card is not boxed again: it runs to the card's edges */
+html:not(.comfy) #app .pane .lt-wrap, html:not(.comfy) #app .pane .bk-tablewrap { border: 0; box-shadow: none; border-radius: 0; margin-left: -14px; margin-right: -14px; }
+html:not(.comfy) #app .pane .lt-wrap > table.lt.lt > * > tr > :first-child { padding-left: 14px; }
+html:not(.comfy) #app .pane .lt-wrap > table.lt.lt > * > tr > :last-child { padding-right: 14px; }
+html:not(.comfy) #app .pane .lt-wrap > table.lt.lt > thead > tr > th[data-sortable]:first-child { padding-left: 6px; }
+
+/* a finger's room on a touch screen, whatever the density */
+@media (pointer: coarse) {
+  html:not(.comfy) #app .lgbox { height: 36px; }
+  html:not(.comfy) #app .colf, #app .ltf { width: 32px; height: 32px; opacity: 1; }
+  html:not(.comfy) #app .bk-table .btn.small, html:not(.comfy) #app table.lt .btn.small { min-height: 36px; }
+  html:not(.comfy) #app .tpt-act-in > .btn { min-height: 44px; }
+  html:not(.comfy) #app table.lt.lt .lt-sort { min-height: 36px; }
+}

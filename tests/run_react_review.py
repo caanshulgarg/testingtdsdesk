@@ -65,8 +65,9 @@ with sync_playwright() as p:
     other = pg.evaluate("rules().find(r => r.basis !== 'never' && r.id !== draftRows().find(x => x.e.x.vendorName === 'Beta Traders').e.natureId).id")
     row.locator('select[aria-label="Payment type"]').select_option(other); pg.wait_for_timeout(400)
     ok(pg.evaluate("draftRows().find(r => r.e.x.vendorName === 'Beta Traders').e.natureId") == other, "the payment type chosen in the row is kept")
-    # 14-Oct-2026 (the owner: one filter bar only, as on the challan register): no filter arrow on the headings
-    ok(pg.locator('#app table.revtbl thead .colf, #app table.revtbl thead .gff').count() == 0, "no filter arrows on the headings (the filter bar is the one filter)")
+    # 16-Nov-2026 (next-ui-table-filters, the owner: "there has to be filters in the column sections"): a filter arrow on the
+    # headings again (14-Oct-2026 had none, the filter bar being the one filter), with the filter bar kept
+    ok(pg.locator('#app table.revtbl thead .colf').count() >= 5, "filter arrows on the headings (%d), and the filter bar" % pg.locator('#app table.revtbl thead .colf').count())
     # the filter chips over the list: a chip opens its column's filter box, ✕ removes it, Clear all
     pg.evaluate("S.revF = {sup: 'Alpha', no: 'A/'}; render()"); pg.wait_for_timeout(400)
     ok(pg.locator("#app .chipbar .fchip").count() == 2 and "Supplier has “Alpha”" in pg.inner_text("#app .chipbar"), "the filters set show as chips")
