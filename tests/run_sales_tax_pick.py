@@ -20,7 +20,10 @@ SGST by abbreviation and name; the client registered in 27 and 29.
   6a-c. ("05", a rate in the middle) a number in doubt is only offered; each ledger tagged on its own ("18% (Code 29)"
      is 29, never posted from 07); a setting or choice without a state never beats a state match; a client with one
      registration is picked as before 2f8b825a7, never a ledger of another rate;
-  7. "Other GSTINs" keeps only real GSTINs of the client's PAN.
+  7. "Other GSTINs" keeps only real GSTINs of the client's PAN;
+  8. (round 3) a GSTIN of the client's PAN not set up is "not the client's"; the client's GSTIN as set up always is, its
+     check digit aside; with several registrations, Sales settings' ledger is used where none is tagged for the state,
+     and offered where the state is not known.
 Books alone never make a client multi-state: its client setup's GSTINs ("Other GSTINs") do.
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_sales_tax_pick.py"""
 import os, threading, functools, http.server
@@ -56,6 +59,7 @@ with sync_playwright() as p:
       return {mh: mk('27AAACZ1234Q1Z'), ka: mk('29AAACZ1234Q1Z'), dl: mk('07AAACK5678P1Z'), dl2: mk('07AAACL5678P1Z'), ka2: mk('29AAACM5678P1Z'),
         as: mk('18AAACZ1234Q1Z'), mn: mk('14AAACZ1234Q1Z'), ar: mk('12AAACZ1234Q1Z'), kao: mk('29AAACY1234Q1Z'),
         as27: mk('27AAACZ1234Q1Z'), mn27: mk('27AAACZ1234Q1Z'), ar27: mk('27AAACZ1234Q1Z'), dl27: mk('07AAACZ1234Q1Z'), dl29: mk('29AAACZ1234Q1Z'),
+        mhbad: (() => { const g = mk('27AAACZ1234Q1Z'); return g.slice(0, 14) + (g[14] === 'A' ? 'B' : 'A'); })(),
         kabad: (() => { const g = mk('29AAACZ1234Q1Z'); return g.slice(0, 14) + (g[14] === 'A' ? 'B' : 'A'); })()}; }""")
     cid = E("""(g) => { const c = newCompany({name: "ZZ Test Traders", gstin: g.mh}); S.companies[c.id] = c; S.data[c.id] = {parties: {}, entries: {}, loaded: true}; c.stats = {};
       return openCompany(c.id).then(() => loadBank(c.id)).then(() => { S.tab = "sales"; S.step = null; return loadSales(c.id); }).then(() => c.id); }""", G)
@@ -229,8 +233,31 @@ with sync_playwright() as p:
     kept = E("""(g) => { CO().otherGstins = [g.ka, g.ka2, g.kabad].join(", "); coCommit("otherGstins"); return CO().otherGstins; }""", G)
     ok(kept == G["ka"], "another PAN's and a bad check digit dropped on saving (%s)" % kept)
     E("""(g) => { CO().otherGstins = [g.ka2, g.kabad].join(", "); }""", G)
-    ok(E("salesOwnStates()") == ["27"] and not E("(g) => salesIsOwn(g.kabad)", G) and not E("(g) => salesIsOwn(g.ka2)", G) and E("(g) => salesIsOwn(g.ka)", G),
-       "typed in by other means: still not the client's (%s)" % E("salesOwnStates()"))
+    ok(E("salesOwnStates()") == ["27"] and not E("(g) => salesIsOwn(g.kabad)", G) and not E("(g) => salesIsOwn(g.ka2)", G) and not E("(g) => salesIsOwn(g.ka)", G),
+       "typed in by other means: still not the client's; a 29 GSTIN of its PAN not listed is not its own either (%s)" % E("salesOwnStates()"))
+
+    print("8. round 3: the same PAN alone is not enough; the client's own GSTIN always is; Sales settings with several")
+    client(G["mh"], "", ["Output IGST"])
+    E(ADD, ["U/1", G["ka"], G["dl"], "Kappa Retail", 1000, True])
+    u = E(GET, "U/1"); xml = E("salesVoucherXml(SL().list[0], CO())")
+    ok(u["st"] == "review" and any("seller GSTIN" in i for i in u["issues"]) and "<CMPGSTIN>" + G["mh"] + "</CMPGSTIN>" in xml,
+       "27 only, an invoice from the PAN's 29 GSTIN (a GSTR-1 of it): \"not the client's\", not ready, CMPGSTIN 27 (%s)" % u["issues"])
+    client(G["mhbad"], "", ["Output IGST"])
+    E(ADD, ["U/2", G["mhbad"], G["dl"], "Kappa Retail", 1000, True])
+    u2 = E(GET, "U/2")
+    ok(not any("seller GSTIN" in i for i in u2["issues"]) and E("(g) => salesIsOwn(g.mhbad)", G) and E("salesOwnStates()") == ["27"],
+       "the client's GSTIN as set up, its check digit wrong: the invoice from it is the client's own (%s)" % u2["issues"])
+    client(G["mh"], G["ka"], [], {"igst": "Tax Output Inter-state"})
+    E(SETL, [["Kappa Retail", "Sundry Debtors", G["dl"]], ["Sales Account", "Sales Accounts"], ["Tax Output Inter-state", "Duties & Taxes"]])
+    E(ADD, ["V/1", G["ka"], G["dl"], "Kappa Retail", 1000, True])
+    E(ADD, ["8802", "", G["dl"], "Kappa Retail", 1000, True])
+    ok(T("V/1") == ["Tax Output Inter-state"] and T("8802") == [""] and C("8802") == ["Tax Output Inter-state"],
+       "27+29, Sales settings' IGST the only one: used for a 29 invoice as before; offered for one of unknown state (%s, %s)" % (T("V/1"), C("8802")))
+    client(G["mh"], G["ka"], ["Output IGST KA"], {"igst": "Tax Output Inter-state"})
+    E(SETL, [["Kappa Retail", "Sundry Debtors", G["dl"]], ["Sales Account", "Sales Accounts"], ["Tax Output Inter-state", "Duties & Taxes"], ["Output IGST KA", "Duties & Taxes"]])
+    E(ADD, ["V/3", G["mh"], G["dl"], "Kappa Retail", 1000, True])
+    E(ADD, ["V/4", G["ka"], G["dl"], "Kappa Retail", 1000, True])
+    ok(T("V/3") == ["Tax Output Inter-state"] and T("V/4") == ["Output IGST KA"], "none tagged 27: the settings ledger; 29: its own ledger first (%s, %s)" % (T("V/3"), T("V/4")))
     ok(not errors, "no page errors" + ("" if not errors else ": " + errors[0]))
     br.close()
 srv.shutdown()

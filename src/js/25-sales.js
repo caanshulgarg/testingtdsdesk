@@ -202,18 +202,20 @@ function gstStateWords(c){ return c ? c + (GST_STATES[c] ? " " + GST_STATES[c] :
 // the client's own GSTINs, as its client setup keeps them (its GSTIN, and "Other GSTINs", its registrations in other
 // states): never what happens to be loaded, so a choice kept for the client means the same each time (review of 2f8b825a7)
 function salesOwnGstins(){
-  const s = SL(), co = CO(s && s.cid) || {}, pan = salesPan(co);
-  const all = [co.gstin].concat(String(co.otherGstins || "").toUpperCase().match(/\b\d{2}[A-Z0-9]{13}\b/g) || [], co.gstins || []);
-  // (only real GSTINs of the client's own PAN: a mistyped one, or another's, is no registration of the client)
-  return Array.from(new Set(all.map(g => String(g || "").toUpperCase().trim()).filter(g => salesGstinOfPan(g, pan))));
+  const s = SL(), co = CO(s && s.cid) || {}, pan = salesPan(co), own = String(co.gstin || "").toUpperCase().trim();
+  const others = (String(co.otherGstins || "").toUpperCase().match(/\b\d{2}[A-Z0-9]{13}\b/g) || []).concat(co.gstins || []).map(g => String(g || "").toUpperCase().trim());
+  // (the client's own GSTIN as set up is always its own, whatever its check digit: round 3 of the review; the other
+  // GSTINs only when real GSTINs of the client's own PAN: a mistyped one, or another's, is no registration of the client)
+  return Array.from(new Set((/^\d{2}[A-Z0-9]{13}$/.test(own) && GST_STATES[own.slice(0, 2)] ? [own] : []).concat(others.filter(g => g !== own && salesGstinOfPan(g, pan)))));
 }
 function salesPan(co){ return String((co && (co.pan || String(co.gstin || "").slice(2, 12))) || "").toUpperCase().trim(); }
 function salesGstinOfPan(g, pan){ return /^\d{2}[A-Z0-9]{13}$/.test(g) && (typeof gstinValid !== "function" || gstinValid(g)) && pan.length === 10 && g.slice(2, 12) === pan && !!GST_STATES[g.slice(0, 2)]; }
 function salesOwnStates(){ return Array.from(new Set(salesOwnGstins().map(stateOfGstin).filter(c => GST_STATES[c]))); }
-// one of the client's own GSTINs: a real GSTIN (its check digit) of the client's PAN, in any state
-function salesIsOwn(g, co){
-  g = String(g || "").toUpperCase().trim(); co = co || CO(SL() && SL().cid) || {};
-  return salesGstinOfPan(g, salesPan(co));
+// one of the client's own GSTINs: exactly its GSTIN, or one of its Other GSTINs (re-review round 3: the same PAN alone
+// is never enough; an invoice from a registration not set up says "the seller GSTIN … is not the client's")
+function salesIsOwn(g){
+  g = String(g || "").toUpperCase().trim();
+  return !!g && salesOwnGstins().includes(g);
 }
 // an invoice's branch or series, as a key ("b:bengaluru", "s:MH/##-##/")
 function salesSeriesKeys(x){
@@ -306,14 +308,18 @@ function taxLedgerPick(kind, rate, v){
   }
   const rateHit = pool.filter(l => info.get(l.name).rates.includes(+half));
   const cand = rateHit.length ? rateHit : pool.filter(l => !info.get(l.name).rates.length);
-  if (!cand.length) return {ledger: "", why: ""};
   const reg = v ? salesRegOf(v) : {code: ""};
   if (!reg.code){
-    // several registrations, which one not known: asked on the invoice, every time (nothing kept for the client)
+    // several registrations, which one not known: asked on the invoice, every time (nothing kept for the client); the
+    // Sales settings ledger among the choices (re-review round 3)
+    const names = cand.map(l => l.name).concat(setL && !cand.some(l => l.name === setL) ? [setL] : []);
+    if (!names.length) return {ledger: "", why: ""};
     const mine = exactLedger(((v && v.taxPick) || {})[ik]);
-    if (mine && cand.some(l => l.name === mine)) return {ledger: mine, why: "chosen by you on this invoice"};
-    return {ledger: "", why: "", cands: cand.map(l => l.name), ck: "", ik, reg: "", unknown: true};
+    if (mine && names.includes(mine)) return {ledger: mine, why: "chosen by you on this invoice"};
+    return {ledger: "", why: "", cands: names, ck: "", ik, reg: "", unknown: true};
   }
+  // (no output ledger of this kind but the one set in Sales settings: it, as before, unless tagged for another state)
+  if (!cand.length){ const st = setL ? ledgerStateTag(exactLedgerObj(setL)) : ""; return setL && (!st || st === reg.code) ? {ledger: setL, why: "set in Sales settings"} : {ledger: "", why: ""}; }
   const ck = ik + "@" + reg.code, sw = gstStateWords(reg.code);
   const tagged = cand.map(l => ({l, st: ledgerStateTag(l), doubt: info.get(l.name).doubt}));
   const mineOrOk = tagged.filter(t => !t.st || t.st === reg.code);
