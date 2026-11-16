@@ -1348,7 +1348,7 @@ function gstViewGo(v){ S.gstView = v; render(); }
 function gstSubGo(sub){ S.gstSub = sub; render(); }
 // the review table (app/src/screens/Review.jsx)
 function revPick(id, on){ S.revSel = S.revSel || new Set(); if (on) S.revSel.add(id); else S.revSel.delete(id); render(); }
-function revPickAll(on){ S.revSel = new Set(on ? revFiltered().map(r => r.e.id) : []); render(); }   // only the rows the filter shows
+function revPickAll(on){ S.revSel = new Set(on ? revFiltered().filter(r => typeof listShows !== "function" || listShows("rev", r.e.id)).map(r => r.e.id) : []); render(); }   // only the rows the filters show (the column filters too)
 function revOpen(id){ S.selected = id; S.drawerOpen = true; render(); }
 // one row of the review table: the table stays (smart moves 5: with Undo)
 function revApproveOne(id){ const e = D().entries[id]; if (e){ approve(e, {bulk: true}); refreshStats(S.coId); if (e.status === "approved") toast("Approved.", {actions: [{label: "Undo", run: () => { if (e.status === "approved" && !e.exportedAt){ undoApproval(e); S.reviewTable = true; S.selected = null; render(); } }}]}); render(); } }

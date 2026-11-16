@@ -119,7 +119,8 @@ export function clearAll() {
 // tick every line the filters show (not only the hundred drawn); a line in Tally cannot be ticked
 export function selectAll(rows, on) {
   const b = B();
-  rows.filter((r) => r.state !== "sent").forEach((r) => { if (on) b.sel.add(r.id); else b.sel.delete(r.id); });
+  // only the lines the column filters show (review of 955ce3d85: colFilter.js listShows)
+  rows.filter((r) => r.state !== "sent" && (typeof listShows !== "function" || listShows("bank", r.id))).forEach((r) => { if (on) b.sel.add(r.id); else b.sel.delete(r.id); });
   bankLightRefresh();
 }
 

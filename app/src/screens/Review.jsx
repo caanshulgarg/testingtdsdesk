@@ -102,7 +102,7 @@ export function ReviewTable() {
         </div>
         <ChipBar t="rev" shown={rows.length} total={all.length + " bills"} />
         {/* the one list table (spec K6): column order, sorting, sticky header, the count and totals at the foot */}
-        <ListTable name="rev" className="bk-table gf-off revtbl" cols={revCols(rows, sel, nSel).filter((c) => revColShown(c.k))} rows={rows} rowKey={(r) => r.e.id} prep={revPrep} unit={["bill", "bills"]} of={all.length}
+        <ListTable name="rev" className="bk-table gf-off revtbl" cols={revCols(rows, sel, nSel).filter((c) => revColShown(c.k))} rows={rows} rowKey={(r) => r.e.id} prep={revPrep} unit={["bill", "bills"]} of={all.length} selected={sel}
           rowProps={(r, p) => ({ className: [sel.has(r.e.id) && "picked", p.miss && "needs", S.drawerOpen && S.selected === r.e.id && "open"].filter(Boolean).join(" ") || undefined })}
           empty={<>No bill matches the filter. <button className="linkbtn" onClick={() => { S.revQuery = ""; colChipAll("rev"); }}>Clear the filters</button> to see all {all.length}.</>} />
       </>}

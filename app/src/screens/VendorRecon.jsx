@@ -7,6 +7,7 @@ import { useRef } from "react";
 import "../lib/vendorRecon.js";
 import { BusyCard } from "../parts/Reading.jsx";
 import DateBox from "../parts/DateBox.jsx";
+import ListTable, { textOf, cellValue } from "../parts/ListTable.jsx";
 
 const m = (v) => v === null || v === undefined ? "—" : (v < 0 ? "−" : "") + money(Math.abs(v));
 const side = (v) => v === null ? "" : v > 0.004 ? " payable" : v < -0.004 ? " advance" : "";
@@ -30,13 +31,14 @@ function Form({ V0 }) {
   </>;
 }
 
-// a list of entries under its heading, with a count; nothing when empty
+// a list of entries under its heading, with a count; nothing when empty. next-ui-table-filters (review of 955ce3d85): the
+// one list table, so each column sorts and filters over ALL the entries; the first 500 of what the filters let through drawn
 function Section({ title, rows, cols }) {
   if (!rows.length) return null;
-  return <div className="recon-sec"><h4>{title} <span className="cnt">{rows.length}</span></h4><div className="tblwrap"><table className="data" data-statement="">
-    <thead><tr>{cols.map(([h, , n]) => <th key={h} className={n ? "n" : undefined}>{h}</th>)}</tr></thead>
-    <tbody>{rows.slice(0, 500).map((r, i) => <tr key={i}>{cols.map(([h, f, n]) => <td key={h} className={n ? "n" : undefined}>{f(r)}</td>)}</tr>)}</tbody>
-  </table></div></div>;
+  const lc = cols.map(([h, f, n], i) => ({ k: "c" + i, label: h, cls: n ? "n" : undefined, cell: (r) => f(r), fv: (r) => textOf(f(r)).trim(), v: (r) => cellValue(textOf(f(r))) }));
+  return <div className="recon-sec"><h4>{title} <span className="cnt">{rows.length}</span></h4>
+    <ListTable name={"vrecon:" + title} className="data" cols={lc} rows={rows} limit={500} unit={["entry", "entries"]}
+      more={<p className="note" data-vr-more="">{"The first 500 are drawn: filter a column to find the rest."}</p>} /></div>;
 }
 
 // Tally's balance, what explains the gap line by line, the vendor's balance

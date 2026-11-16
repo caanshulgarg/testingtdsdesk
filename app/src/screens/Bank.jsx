@@ -229,7 +229,7 @@ function Table({ tab, all }) {
   // a long statement: more lines load as the end comes into view (the scroll listener in src/js/23 finds this button)
   const more = <div className="bk-more"><button className="btn small" data-act="bankMore" onClick={() => bankAct("bankMore")}>Show {Math.min(100, total - Math.min(total, b.limit))} more ({total - Math.min(total, b.limit)} left)</button></div>;
   return <div className="bs-grid" ref={grid} tabIndex={0} data-bank-grid="" aria-label="Bank statement lines: arrow keys move, Enter sets the ledger" onKeyDown={(ev) => kbKey(ev, grid.current)}>
-    <ListTable name="bank" className="bk-table gf-off" keepHead resize freeze={2} cols={bankCols(b, all, nSel)} rows={all} rowKey={(r) => r.id} unit={["entry", "entries"]} of={b.rows.length} limit={b.limit} more={more} footNote={<FootNote b={b} all={all} />}
+    <ListTable name="bank" className="bk-table gf-off" keepHead resize freeze={2} cols={bankCols(b, all, nSel)} rows={all} rowKey={(r) => r.id} selected={b.sel} unit={["entry", "entries"]} of={b.rows.length} limit={b.limit} more={more} footNote={<FootNote b={b} all={all} />}
       after={(r) => (b.splitOpen === r.id && ["attention", "suggested", "ready"].includes(r.state) ? <SplitEditor r={r} /> : null)}
       rowProps={(r) => ({ className: "st-" + r.state + (b.sel.has(r.id) ? " picked" : "") + (b.kbRow === r.id ? " kb-on" : "") + (b.drawer === r.id ? " dr-on" : ""), "data-rid": r.id,
         onClick: (ev) => { if (ev.target.closest("td.pt, td.dt")) rowOpen(ev, r.id); } })}

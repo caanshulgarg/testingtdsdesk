@@ -381,7 +381,9 @@ export function TodayLine({ cid, book = "", where = "row" }) {
       {!rows ? <p className="note">Reading the list…</p> : list.err ? <p className="note bad">FinCom’s cloud did not answer; try again in a minute.</p> :
         <div data-today-table=""><ListTable name={"tallyToday:" + bk} className="data" rows={rows} unit={["entry", "entries"]} rowProps={(r) => ({ "data-today-row": r.via + ":" + r.what })}
             cols={entryCols("What happened", (r) => (WHAT[r.via] || WHAT.tally)[r.what] || r.what, true)} />
-          {list.total > rows.length && <p className="note">{"Showing the latest " + nf(rows.length) + " of " + nf(list.total) + "."}</p>}</div>}
+          {/* review of 955ce3d85: the column filters look only at the entries loaded; FinCom's cloud sends the latest ones only
+              (tally_today_from_tally has no "all"), so there is no Load all here */}
+          {list.total > rows.length && <p className="note" data-today-loaded={rows.length}>{"Showing the latest " + nf(rows.length) + " of " + nf(list.total) + ". The column filters look only at these " + nf(rows.length) + " loaded entries."}</p>}</div>}
     </div>}
   </div>;
 }

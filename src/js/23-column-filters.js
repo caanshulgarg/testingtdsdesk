@@ -144,6 +144,7 @@ function colPopApply(clearOnly, keepOpen){
 function colChipOpen(t, k){ S.colPop = S.colPop && S.colPop.k === k && S.colPop.t === t ? null : {t, k, justOpened: true}; render(); }
 function colChipX(t, k){ S.colPop = {t, k}; colPopApply(true); }
 function colChipAll(t){
+  if (S.listF) delete S.listF[t];   // next-ui-table-filters: the new funnels of the same list (ListTable "rev", "sales", "bank") too
   if (t === "bank"){ const b = B(); b.from = ""; b.to = ""; b.f = {}; b.sel.clear(); }
   else if (t === "sales"){ const sl = SL(); if (sl){ sl.f = {}; sl.sel.clear(); } }
   else if (t === "txn"){ S.txnF = S.txnF || {}; S.txnF[txnTab()] = {}; S.txnQ = ""; S.txnStatus = ""; }
@@ -797,7 +798,8 @@ function bankClick(t){
     case "ruleFindClose": S.ruleSuggest = null; render(); return true;
     case "ruleMakeSug": {
       const list = S.ruleSuggest || [];
-      const picked = list.filter((x, i) => { const el = document.querySelector('[data-sug="' + i + '"]'); return el && el.checked; });
+      // a suggestion a column filter hides (GridF: its row not shown) is never made, ticked or not (review of 955ce3d85)
+      const picked = list.filter((x, i) => { const el = document.querySelector('[data-sug="' + i + '"]'); const tr = el && el.closest("tr"); return el && el.checked && !(tr && tr.style.display === "none"); });
       if (!picked.length){ toast("Tick at least one."); return true; }
       picked.forEach(sg => {
         clientRules().unshift(newRule({name: sg.ledger + " \u2013 " + sg.text,

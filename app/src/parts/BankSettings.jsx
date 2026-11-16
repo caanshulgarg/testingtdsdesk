@@ -65,7 +65,8 @@ function Suggestions() {
   const list = S.ruleSuggest;
   if (!list) return <div className="row" style={{ marginTop: 10 }}><Btn act="ruleFind">Look for rules in what we have done before</Btn></div>;
   if (!list.length) return <p className="note" style={{ marginTop: 10 }}>Nothing worth a rule yet — the same wording has to be booked to the same ledger at least three times. <Btn act="ruleFindClose" className="linkbtn">Hide</Btn></p>;
-  const all = (ev) => document.querySelectorAll("[data-sug]").forEach((x) => { x.checked = ev.target.checked; });
+  // Tick all: the rows a column filter shows only (ruleMakeSug in src/js/23 also leaves out the hidden ones)
+  const all = (ev) => document.querySelectorAll("[data-sug]").forEach((x) => { const tr = x.closest("tr"); if (!(tr && tr.style.display === "none")) x.checked = ev.target.checked; });
   return <div className="bdiag" style={{ marginTop: 12 }}><b>{list.length + " rule" + (list.length === 1 ? "" : "s") + " we can make from what you have already done"}</b>
     <div className="tblwrap" style={{ marginTop: 6 }}><table className="data" data-statement=""><thead><tr><th className="ck"><input type="checkbox" aria-label="Tick all" defaultChecked onClick={all} /></th><th>When the line says</th><th>Money</th><th>Use this ledger</th><th className="n">Done before</th></tr></thead><tbody>
       {list.map((s, i) => <tr key={i}><td className="ck"><input type="checkbox" data-sug={i} aria-label={"Make: " + s.text} defaultChecked={!s.off} /></td><td><b>{s.text}</b><div className="nr">{String(s.sample).slice(0, 60)}</div></td>

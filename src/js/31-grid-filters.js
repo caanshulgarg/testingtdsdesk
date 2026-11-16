@@ -7,6 +7,11 @@ function gfN(n){ if (typeof GridF !== "object") return n; if (GridF.full()) retu
 // next-ui-table-filters (the owner, 16-Nov-2026): also the plain tables of the Tally page (table.data, its clients' grid);
 // the one list table (ListTable.jsx, table.lt) has funnels of its own, on all its rows
 const GF_SEL = "#app table.bk-table, #app table.data:not(.lt), #app table.tpt-grid";
+// Sales (review of 955ce3d85): Select all, Post to Tally and Create Tally file keep to the invoices the column filters show,
+// the old ones (salesColPass) and the new (ListTable "sales": listPass); every one when no column filter is on
+function salesShown(v){ return typeof listShows !== "function" || listShows("sales", v.id); }
+function salesPostOn(){ return (typeof salesColOn === "function" && salesColOn()) || (typeof listFOn === "function" && listFOn("sales")); }
+function salesPostScope(list){ return salesPostOn() ? list.filter(v => salesColPass(v) && (typeof listPass !== "function" || listPass("sales", v))) : list; }
 const GridF = {
   pop: null,
   // which screen this is, so a filter stays with its own table

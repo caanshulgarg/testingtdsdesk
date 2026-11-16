@@ -28,8 +28,8 @@
 // sorted-column tint and row hover redrawn on table.lt in styles/arc-look.css, because its own phone layout would undo
 // FinCom's phone cards, src/js/53-phone.js), on the same table as before, so every list keeps its rows, cells and
 // attributes; an empty list is Arc's empty state (EmptyNote).
-import { Children, Fragment, Suspense, cloneElement, isValidElement, lazy, useLayoutEffect, useRef } from "react";
-import { filterable, filterRows, listF, fActive, anyOn, openListF, clearListF } from "./colFilter.js";
+import { Children, Fragment, Suspense, cloneElement, isValidElement, lazy, useEffect, useLayoutEffect, useRef } from "react";
+import { filterable, filterRows, listF, fActive, anyOn, openListF, clearListF, register, pruneSel } from "./colFilter.js";
 import Loading from "./Loading.jsx";
 import EmptyNote from "./EmptyNote.jsx";
 import arc from "@/registry/components/sortable-data-table/sortable-data-table.module.css";
@@ -211,7 +211,7 @@ export function ListWrap({ children, className }) {
 }
 
 export default function ListTable({ name, cols, rows, rowKey, rowProps, prep, unit = ["entry", "entries"], of, empty, loading, limit, more,
-  className = "bk-table", wrap, style, foot = true, id, after, before, tail, sortVia, footNote, keepHead, resize, freeze, filters = true }) {
+  className = "bk-table", wrap, style, foot = true, id, after, before, tail, sortVia, footNote, keepHead, resize, freeze, filters = true, selected }) {
   // sortVia: {state: {k, dir}, by(k)}: a list whose order is kept elsewhere (the rows come in sorted); the headers and
   // arrows are the same
   const cs = orderCols(cols), s = sortOf(name);
@@ -223,17 +223,27 @@ export default function ListTable({ name, cols, rows, rowKey, rowProps, prep, un
   // next-ui-table-filters: the funnels (a list of 3 rows or more, or one filtered), and the rows they let through, from
   // ALL the rows, before the order and the cut (limit)
   const fOn = filters && anyOn(name), lf = filters && (rows.length >= 3 || fOn), all0 = rows;
+  // the list as drawn, for the page's own actions (Select all, Post, bulk actions: colFilter.js listShows, listPass)
+  if (filters) register(name, cs, all0, prep, rowKey);
+  // selected (a page's ticked rows, a Set of rowKey): a tick on a row the column filters now hide is taken off, so a
+  // bulk action reaches only the rows shown (review of 955ce3d85)
+  useEffect(() => { if (filters && selected && pruneSel(name, selected)) render(); });
   if (fOn) rows = filterRows(name, cs, rows, prep);
+  // the old funnels (Purchase, Bank, Sales: src/js/23 colPop) are on their own columns; the bar's Clear filters clears both
+  const oldT = (cs.find((c) => c.filter && c.filter.props && c.filter.props.t) || { filter: { props: {} } }).filter.props.t;
+  const oldOn = !!oldT && typeof colActive === "function" && cs.some((c) => c.filter && c.filter.props && colActive(oldT, c.filter.props.k));
+  const clearAll = () => { if (oldOn && typeof colChipAll === "function") { if (S.listF) delete S.listF[name]; S.listFPop = null; colChipAll(oldT); } else clearListF(name); };
   const pop = lf && S.listFPop && S.listFPop.name === name ? cs.find((c) => c.k === S.listFPop.k && filterable(c)) : null;
   const popEl = pop ? <Suspense fallback={null}><ColFilterPop key={pop.k} name={name} c={pop} rows={all0} prep={prep} close={() => { S.listFPop = null; render(); }} /></Suspense> : null;
-  const fbar = fOn ? <div className="lt-fbar" data-lt-fbar={name} role="status">Showing <b>{rows.length}</b> of {all0.length} {all0.length === 1 ? unit[0] : unit[1]}
-    <button type="button" className="linkbtn" data-lt-fclear="" onClick={() => clearListF(name)}>Clear filters</button></div> : null;
+  const tot = oldOn && of != null ? of : all0.length;
+  const fbar = fOn || oldOn ? <div className="lt-fbar" data-lt-fbar={name} role="status">Showing <b>{rows.length}</b> of {tot} {tot === 1 ? unit[0] : unit[1]}
+    <button type="button" className="linkbtn" data-lt-fclear="" onClick={clearAll}>Clear filters</button></div> : null;
   if (fOn && of == null) of = all0.length;
   const heads = <thead><tr>{cs.map((c, i) => <Head key={c.k} name={name} c={c} s={sortVia ? sortVia.state : s} via={sortVia && sortVia.by} rz={resize} w={w} fz={frz(i, freeze)} lf={lf} />)}</tr></thead>;
   if (loading) return <Loading what={typeof loading === "string" ? loading : unit[1]} rows={4} cols={cs.length} />;
   if (!rows.length && fOn) return <><PhoneFunnels name={name} cs={cs} />{fbar}<Wrap><table className={tcls} data-list={name} style={tstyle} id={id} ref={tref}>
     {heads}
-    <tbody><tr className="lt-none"><td colSpan={cs.length}><EmptyNote className="bk-none lt-empty" data-list-empty="" what={<>Nothing matches these filters. <button type="button" className="linkbtn" onClick={() => clearListF(name)}>Clear filters</button></>} /></td></tr></tbody></table></Wrap>{popEl}</>;
+    <tbody><tr className="lt-none"><td colSpan={cs.length}><EmptyNote className="bk-none lt-empty" data-list-empty="" what={<>Nothing matches these filters. <button type="button" className="linkbtn" onClick={clearAll}>Clear filters</button></>} /></td></tr></tbody></table></Wrap>{popEl}</>;
   // keepHead (t70): a list whose filters are in its headers keeps its headers when nothing matches, so they can be changed
   if (!rows.length && keepHead) return <Wrap><table className={tcls} data-list={name} style={tstyle} id={id} ref={tref}>
     {heads}

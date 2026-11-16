@@ -490,7 +490,7 @@ async function postSalesToTally(){
   const s = SL(), co = CO(s.cid);
   if (!(await ensureTallyCompany(co))) return;
   await syncLedgersFromTally(true);
-  let list = s.list.filter(v => v.status === "ready");
+  let list = salesPostScope(s.list.filter(v => v.status === "ready"));
   if (!list.length) return withPart("invoice", "salesWhy", () => toast("No invoice is ready to post" + (salesWhy() ? ": " + salesWhy().text : "") + "."));   // never silent
   s.busy = "Checking Tally for invoices already booked\u2026"; render();
   let sent = [];
@@ -569,7 +569,7 @@ function salesMarkRefused(v, r, no, single, hint){
 }
 async function exportSalesXml(){
   const s = SL(), co = CO(s.cid);
-  let list = s.list.filter(v => v.status === "ready");
+  let list = salesPostScope(s.list.filter(v => v.status === "ready"));
   const probs = salesReadyProblems(list);
   list = list.filter(v => v.status === "ready");
   if (!list.length){ toast(probs.length ? "Fix these first: " + probs.slice(0, 2).join("; ") : "No invoices are ready."); render(); return; }
@@ -681,7 +681,7 @@ function salesToggle(id, on, shift){
   else if (on) s.sel.add(id); else s.sel.delete(id);
   salesLastClicked = id; salesLightRefresh();
 }
-function salesSelAll(on){ const s = SL(); salesVisible().filter(v => !salesInTally(v)).forEach(v => on ? s.sel.add(v.id) : s.sel.delete(v.id)); salesLightRefresh(); }
+function salesSelAll(on){ const s = SL(); salesVisible().filter(v => !salesInTally(v) && salesShown(v)).forEach(v => on ? s.sel.add(v.id) : s.sel.delete(v.id)); salesLightRefresh(); }
 // an invoice's customer ledger; false when it is not a Tally ledger (the box goes back)
 function salesSetCust(id, val){
   const s = SL(), v = inv(id); if (!v) return true;

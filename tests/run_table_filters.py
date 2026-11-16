@@ -10,6 +10,12 @@ colFilter.js, ColFilterPop.jsx) and the compact layout (styles/dense.css, parts/
   5. compact rows (about 32 px a one-line row), a long help line folded to one line with "more"; Comfortable from the
      firm menu, remembered per person; storage that throws does not break the page
   6. a phone (390): no sideways scroll, the box a sheet at the bottom of the screen, funnels a finger wide
+  review of 955ce3d85:
+  7. Sales: Select all ticks only the rows shown; a ticked row a filter hides is unticked; Post / Create Tally file keep to
+     the Ready invoices shown ("Post 3 shown to Tally"); Clear filters clears the old funnels and the new
+  8. Bank rules: a suggestion a column filter hides is not made, ticked or not
+  9. amounts as people write them (1,25,000, ₹, Dr / Cr) and dates (yyyymmdd, dd-Mon-yyyy, dd/mm/yyyy, timestamps by
+     their IST day); a value not read is never hidden by a range; words applied 200 ms after the last key
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_table_filters.py (port: TABLE_FILTERS_PORT)"""
 import os, re, sys, json, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -97,7 +103,9 @@ with sync_playwright() as p:
     # words
     funnel(pg, N, "entry")
     ok(pg.locator("#app [data-ltf-pop=entry]").count() == 1, "1. the funnel opens the box")
-    pg.fill('#app [data-ltf-pop=entry] input[data-ltf-in="q"]', "receipt"); pg.wait_for_timeout(500)
+    pg.fill('#app [data-ltf-pop=entry] input[data-ltf-in="q"]', "receipt")
+    n0 = len(rows(pg, N)); pg.wait_for_timeout(500)
+    ok(n0 == 240, "9. words: the list waits for the typing to stop (%d rows at once)" % n0)
     r = rows(pg, N); ei = col(pg, N, "Entry")
     ok(len(r) == 60 and all("Receipt" in x[ei] for x in r), "1. words: “receipt” finds the 60 receipts (%d)" % len(r))
     ok(fbar(pg, N).startswith("Showing 60 of 240 lines") and "Clear filters" in fbar(pg, N), "1. Showing 60 of 240 lines · Clear filters (%s)" % fbar(pg, N))
@@ -126,6 +134,8 @@ with sync_playwright() as p:
     pg.fill('#app [data-ltf-pop=saved] input[data-ltf-in="from"]', "2026-10-05"); pg.fill('#app [data-ltf-pop=saved] input[data-ltf-in="to"]', "2026-10-07"); pg.wait_for_timeout(500)
     want = sum(1 for l in LINES if "2026-10-05" <= l["saved_at"][:10] <= "2026-10-07")
     ok(len(rows(pg, N)) == want and fbar(pg, N).startswith("Showing %d of 240" % want), "1. Saved in Tally 05-Oct to 07-Oct: %d lines (%s)" % (want, fbar(pg, N)))
+    pg.evaluate("() => { Rec.act.rows[0].saved_at = 'not a date'; render(); }"); pg.wait_for_timeout(400)
+    ok(len(rows(pg, N)) == want + 1, "9. a date not read is never hidden by a range (%d)" % len(rows(pg, N)))
     pg.click("#app [data-ltf-pop=saved] [data-ltf-clear]"); pg.wait_for_timeout(400)
     ok(len(rows(pg, N)) == 240, "1. the box's Clear empties this column's filter")
     pg.click("#app [data-ltf-pop=saved] [data-ltf-done]"); pg.wait_for_timeout(300)
@@ -199,6 +209,61 @@ with sync_playwright() as p:
     ok(len(r) == 6 and all(x[si] == "Posted" for x in r), "3. only Posted: 6 (%d)" % len(r))
     pg.click('#app [data-lt-fbar="sales"] [data-lt-fclear]'); pg.wait_for_timeout(500)
     ok(len(rows(pg, N)) == 12, "3. Clear filters: all 12 done")
+    pg.close()
+
+    # ---------------------------------------------------------------- 7. Sales: ticks, Post, Clear
+    print("== 7. Sales: Select all, ticks, Post, Clear filters")
+    pg = br.new_page(viewport={"width": 1440, "height": 900}); boot(pg); sales(pg)
+    N = "sales"
+    funnel(pg, N, "tx"); pg.fill('#app [data-ltf-pop=tx] input[data-ltf-in="min"]', "5,000"); pg.fill('#app [data-ltf-pop=tx] input[data-ltf-in="max"]', "₹10,000"); pg.wait_for_timeout(500)
+    want = [101 + i for i in range(24) if i % 4 >= 2 and 5000 <= 1000 * (i + 1) <= 10000]
+    ok(len(rows(pg, N)) == len(want), "9. amounts typed as 5,000 and ₹10,000: %d invoices (%d)" % (len(want), len(rows(pg, N))))
+    pg.click("#app [data-ltf-pop=tx] [data-ltf-done]"); pg.wait_for_timeout(300)
+    pg.click(LIST(N) + ' thead input[aria-label="Select all"]'); pg.wait_for_timeout(400)
+    picked = pg.evaluate("() => [...SL().sel].map(id => inv(id).x.number).sort()")
+    ok(picked == sorted("S/%d" % n for n in want), "7. Select all ticks only the %d shown (%s)" % (len(want), picked))
+    # a ticked row the filter then hides is unticked
+    funnel(pg, N, "tx"); pg.fill('#app [data-ltf-pop=tx] input[data-ltf-in="max"]', "7,000"); pg.wait_for_timeout(600)
+    picked2 = pg.evaluate("() => [...SL().sel].map(id => inv(id).x.number).sort()")
+    shown = sorted(x for x in pg.evaluate("(n) => [...document.querySelectorAll('#app table[data-list=\"' + n + '\"] > tbody > tr')].map(r => r.querySelector('.pn button') ? r.querySelector('.pn button').innerText : '')", N) if x)
+    ok(picked2 == shown and len(picked2) < len(picked), "7. narrowed: the ticks on the rows now hidden are taken off (%s, shown %s)" % (picked2, shown))
+    pg.click("#app [data-ltf-pop=tx] [data-ltf-done]"); pg.wait_for_timeout(300)
+    pg.click('#app [data-lt-fbar="sales"] [data-lt-fclear]'); pg.wait_for_timeout(400)
+    pg.evaluate("() => { SL().sel.clear(); SL().list.forEach((v, i) => { if (i % 4 === 0) v.status = 'ready'; }); render(); }"); pg.wait_for_timeout(500)
+    btn = lambda: re.sub(r"\s+", " ", pg.inner_text('#app .actionbar button.primary')).strip()
+    ok(btn() in ("Post to Tally (6)", "Create Tally file (6)"), "7. no filter: all 6 Ready (%s)" % btn())
+    funnel(pg, N, "tx"); pg.fill('#app [data-ltf-pop=tx] input[data-ltf-in="max"]', "10000"); pg.wait_for_timeout(500); pg.click("#app [data-ltf-pop=tx] [data-ltf-done]"); pg.wait_for_timeout(400)
+    ready = [101 + i for i in range(24) if i % 4 == 0 and 1000 * (i + 1) <= 10000]
+    ok(btn() in ("Post %d shown to Tally" % len(ready), "Create Tally file of %d shown" % len(ready)), "7. Taxable up to 10,000: the button says the %d shown (%s)" % (len(ready), btn()))
+    scope = pg.evaluate("() => salesPostScope(SL().list.filter(v => v.status === 'ready')).map(v => v.x.number).sort()")
+    ok(scope == sorted("S/%d" % n for n in ready), "7. and Post / Create Tally file take only those (%s)" % scope)
+    # the old funnel's filter and the new one: one Clear filters for both
+    pg.evaluate("() => { SL().f = Object.assign({}, SL().f, {min: '1000'}); render(); }"); pg.wait_for_timeout(400)
+    ok(fbar(pg, N) != "", "7. the old filter and the new: the Showing line (%s)" % fbar(pg, N))
+    pg.click('#app [data-lt-fbar="sales"] [data-lt-fclear]'); pg.wait_for_timeout(500)
+    ok(pg.evaluate("() => !Object.keys(SL().f || {}).some(k => SL().f[k] && (!Array.isArray(SL().f[k]) || SL().f[k].length)) && !(S.listF && S.listF.sales)"), "7. Clear filters clears both kinds")
+    ok(pg.evaluate("() => { const c = (salesColOn() ? 1 : 0); return c; }") == 0 and btn() in ("Post to Tally (6)", "Create Tally file (6)"), "7. cleared: all 6 Ready again (%s)" % btn())
+    # 9. the reading of amounts and dates
+    P = pg.evaluate("""() => { const {amt, day} = window.listFParse; return {a: ["1,25,000.50", "₹ 1,250", "1,250.00 Dr", "500 Cr", "(250)", "abc", ""].map(amt).map(x => isNaN(x) ? null : x),
+      d: ["20261005", "05-Oct-2026", "5 Sept 2026", "05/10/2026", "2026-10-05", "2026-10-04T20:00:00Z", "2026-10-05T10:00:00+05:30", "not a date", "31/02/2026x"].map(day)}; }""")
+    ok(P["a"] == [125000.5, 1250, 1250, -500, -250, None, None], "9. amounts read: %s" % P["a"])
+    ok(P["d"][:7] == ["2026-10-05", "2026-10-05", "2026-09-05", "2026-10-05", "2026-10-05", "2026-10-05", "2026-10-05"] and P["d"][7] == "", "9. dates read, a timestamp by its IST day: %s" % P["d"])
+    # ---------------------------------------------------------------- 8. bank rules
+    print("== 8. Bank rules: hidden suggestions are not made")
+    pg.evaluate("""() => { S.tab = 'bankrules'; B().wrules = [];
+      S.ruleSuggest = ['swiggy', 'zomato', 'uber', 'ola', 'amazon', 'flipkart'].map((t, i) => ({text: t, sample: 'UPI/' + t.toUpperCase() + '/made-up', dir: 'out', ledger: i < 2 ? 'Staff Welfare' : 'Travel', n: 3 + i, agree: 100})); render(); }""")
+    pg.wait_for_timeout(1500)
+    st = pg.evaluate("() => { const t = document.querySelector('[data-sug]') && document.querySelector('[data-sug]').closest('table'); return t ? [t.querySelectorAll('thead .gff').length, t.tBodies[0].rows.length] : null; }")
+    ok(st and st[0] >= 3 and st[1] == 6, "8. the suggestions: 6, with funnels on their headings (%s)" % st)
+    if st and st[0]:
+        li = pg.evaluate("() => { const t = document.querySelector('[data-sug]').closest('table'); return [...t.tHead.rows[0].cells].findIndex(th => /ledger/i.test(th.innerText)); }")
+        pg.click('table:has([data-sug]) thead .gff[data-gfi="%d"]' % li); pg.wait_for_timeout(400)
+        pg.check('#gfpop input[data-gfv="Travel"]'); pg.wait_for_timeout(400); pg.click('#gfpop [data-gfx="close"] >> nth=-1'); pg.wait_for_timeout(300)
+        vis = pg.evaluate("() => [...document.querySelectorAll('[data-sug]')].filter(x => x.closest('tr').style.display !== 'none').length")
+        ok(vis == 4, "8. Use this ledger: Travel: 4 of 6 shown (%d)" % vis)
+        pg.click('button:has-text("Make the ticked rules")'); pg.wait_for_timeout(600)
+        made = pg.evaluate("() => clientRules().map(r => r.then.ledger)")
+        ok(len(made) == 4 and set(made) == {"Travel"}, "8. Make the ticked rules: the 4 shown only, the 2 hidden (ticked) not made (%s)" % made)
     pg.close()
 
     # ---------------------------------------------------------------- 4. the Tally page's other tables
