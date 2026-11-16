@@ -269,6 +269,8 @@ with sync_playwright() as p:
     ok(btn() in ("No Ready invoice shown: clear filters to post all 6", "No Ready invoice shown: clear filters to export all 6") and pg.is_disabled('#app .actionbar button.primary'),
        "7. a filter on, To review: no Ready invoice shown, so the button is off and says so (%s)" % btn())
     ok(pg.evaluate("() => salesPostScope(SL().list.filter(v => v.status === 'ready')).length") == 0, "7. and Post / Create Tally file would take none of the hidden ones")
+    pg.evaluate("() => { exportSalesXml(); }"); pg.wait_for_timeout(600)
+    ok("No Ready invoice shown: clear filters to include all 6" in pg.inner_text("body"), "7. More › Create Tally file instead, none shown: says to clear the filters")
     conf = [101 + i for i in range(24) if i % 4 == 2 and 1000 * (i + 1) <= 10000]
     ok(cbtn() == "Confirm %d shown suggestions" % len(conf), "7. Confirm keeps to the %d suggestions shown (%s)" % (len(conf), cbtn()))
     pg.click('#app .actionbar button:has-text("suggestion")'); pg.wait_for_timeout(500)
@@ -353,7 +355,13 @@ with sync_playwright() as p:
     pg.click('#app [data-bank-post]'); pg.wait_for_timeout(500)
     got = pg.evaluate("() => window.__posted")
     ok(isinstance(got, list) and sorted(got) == want, "11. Bank posts only the %d shown (%s)" % (len(want), got))
-    pg.evaluate("() => { B().q = 'NO SUCH PARTY'; render(); }"); pg.wait_for_timeout(600)
+    # More › Create a Tally file instead: the same lines
+    pg.evaluate("() => { window.__xml = null; window.__xml0 = exportBankXml; window.exportBankXml = async (ids) => { window.__xml = ids || 'all'; }; bankAct('bankFile'); }"); pg.wait_for_timeout(400)
+    got = pg.evaluate("() => window.__xml")
+    ok(isinstance(got, list) and sorted(got) == want, "11. Bank More › Create a Tally file instead: only the %d shown (%s)" % (len(want), got))
+    pg.evaluate("() => { window.exportBankXml = window.__xml0; B().q = 'NO SUCH PARTY'; render(); }"); pg.wait_for_timeout(600)
+    pg.evaluate("() => { bankAct('bankFile'); }"); pg.wait_for_timeout(600)
+    ok("No Ready line shown: clear filters to include all 12" in pg.inner_text("body"), "11. Bank More › Create a Tally file instead, none shown: says to clear the filters")
     ok(bb() == "No Ready line shown: clear filters to post all 12" and pg.is_disabled('#app [data-bank-post]'), "11. Bank, a filter that shows none: the button off (%s)" % bb())
     # Create Tally file (no bridge): the same rule
     pg.evaluate("() => { window.canPostTally = () => false; window.__xml = null; window.exportBankXml = async (ids) => { window.__xml = ids || 'all'; }; render(); }"); pg.wait_for_timeout(500)

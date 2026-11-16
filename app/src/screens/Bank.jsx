@@ -436,6 +436,8 @@ function BankPage() {
   // the ready lines shown now, when a filter is on (re-review of fdeb79bd8); [] otherwise
   const fOn = smartOn(b) || ["date", "narr", "wd", "dep", "led"].some((k) => colActive("bank", k)) || listFOn("bank"), bsh = fOn ? listShownSet("bank") : null;
   const pv = fOn ? shown.filter((r) => r.state === "ready" && (!bsh || bsh.has(r.id))) : [];
+  // the same lines for More › Create a Tally file instead (bankFile, src/js/23); null: no filter, every ready line
+  window.bankShownReady = fOn ? pv.map((r) => r.id) : null;
   if (b.dense === undefined) b.dense = denseOn();
   // posting (moved from the bar at the foot to the header, spacious layout): waits until the account's ledger is confirmed
   const noLed = !bankLedgerReady(CO(), acc), whyLed = noLed ? bankLedgerWhy(CO(), acc) : "";

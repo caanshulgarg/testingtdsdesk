@@ -572,7 +572,7 @@ async function exportSalesXml(){
   let list = salesPostScope(s.list.filter(v => v.status === "ready"));
   const probs = salesReadyProblems(list);
   list = list.filter(v => v.status === "ready");
-  if (!list.length){ toast(probs.length ? "Fix these first: " + probs.slice(0, 2).join("; ") : "No invoices are ready."); render(); return; }
+  if (!list.length){ toast(probs.length ? "Fix these first: " + probs.slice(0, 2).join("; ") : salesNoneShown() || "No invoices are ready."); render(); return; }
   const masters = mastersFor(list);
   const sv = co.tallyName ? "<STATICVARIABLES><SVCURRENTCOMPANY>" + xesc(co.tallyName) + "</SVCURRENTCOMPANY></STATICVARIABLES>" : "";
   const body = masters.map(l => '<TALLYMESSAGE xmlns:UDF="TallyUDF">\n' + (/sundry/i.test(l.group || "sundry") ? customerMasterXml : ledgerMasterXml)(l) + "</TALLYMESSAGE>\n").join("") + list.map(v => '<TALLYMESSAGE xmlns:UDF="TallyUDF">\n' + salesVoucherXml(v, co) + "</TALLYMESSAGE>\n").join("");

@@ -760,8 +760,9 @@ function bankClick(t){
       if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(() => toast("Copied. Paste it into the chat."), fallback); else fallback();
       return true;
     }
-    case "bankXml": exportBankXml(); return true;
-    case "bankFile": closeMenus(); exportBankXml(); return true;
+    // with a filter on, only the ready lines shown (window.bankShownReady, set by app/src/screens/Bank.jsx as it draws)
+    case "bankXml": exportBankXml(window.bankShownReady || undefined); return true;
+    case "bankFile": closeMenus(); exportBankXml(window.bankShownReady || undefined); return true;
     case "bankDismissMoved": b.moved = null; render(); return true;
     case "bankOpenMoved": { const m = b.moved; b.moved = null; if (m){ openCompany(m.cid).then(() => { S.tab = "bank"; render(); }); } return true; }
     case "ruleNew": {

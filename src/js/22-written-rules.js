@@ -980,6 +980,7 @@ async function exportBankXml(ids){
   if (!st) return;
   const acc = (co.bankAccounts || []).find(a => a.id === st.acctId), only = Array.isArray(ids) ? new Set(ids) : null;
   const rows = b.rows.filter(r => r.state === "ready" && (!only || only.has(r.id)));
+  if (!rows.length && only){ const all = b.rows.filter(r => r.state === "ready").length; if (all){ toast("No Ready line shown: clear filters to include all " + all + "."); return; } }
   if (!rows.length){ toast("No rows are ready. Accept suggestions or set ledgers first."); return; }
   if (!acc || !bankLedgerReady(co, acc)){ toast(bankLedgerWhy(co, acc) || "Choose the Tally ledger for this bank account first."); return; }
   acc.ledger = bankLedgerReady(co, acc);

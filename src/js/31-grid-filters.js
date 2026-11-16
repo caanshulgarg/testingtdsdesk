@@ -14,6 +14,8 @@ function salesShown(v){ return typeof listShows !== "function" || listShows("sal
 function salesPostOn(){ return (typeof salesColOn === "function" && salesColOn()) || (typeof listFOn === "function" && listFOn("sales")); }
 function salesInView(){ const sh = typeof listShownSet === "function" ? listShownSet("sales") : null; return new Set(salesVisible().filter(v => !sh || sh.has(v.id)).map(v => v.id)); }
 // the list kept to the invoices shown; .shown when it was (the button then says "N shown")
+// a filter on and no Ready invoice shown: what to say ("" otherwise)
+function salesNoneShown(){ const all = SL().list.filter(v => v.status === "ready"); return salesPostOn() && all.length && !salesPostScope(all).length ? "No Ready invoice shown: clear filters to include all " + all.length : ""; }
 function salesPostScope(list){
   if (!salesPostOn()) return list;
   const ids = salesInView(), out = list.filter(v => ids.has(v.id));
