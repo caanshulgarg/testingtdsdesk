@@ -44,7 +44,7 @@ their GST ledgers and some parties in sub-groups (Sales Local under Sales Accoun
      keeps the Sales-class types (the client's "Sales UP"); "Not this Tally entry" shows both sides and asks twice; Tally's
      "created 0 of N" with no line error is "Refused by Tally", posted one by one through the same path, each answer shown.
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_sheet_owner_shape.py"""
-import os, sys, json, threading, functools, http.server, tempfile
+import os, sys, json, threading, functools, http.server, tempfile, subprocess, re
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
 from playwright.sync_api import sync_playwright
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
@@ -81,11 +81,27 @@ QUEUE = """() => { const G = "GARG SHEKHAR & COMPANY"; const rpc0 = TCloud.rpc; 
   TCloud.rpc = async (fn, a) => { if (fn === "tally_post_enqueue" && a && a.p_payload && (a.p_payload.vouchers || []).length){ const ids = a.p_payload.vouchers.map(v => v.id); window.__enq.push(JSON.parse(JSON.stringify(a.p_payload)));
       window.__jobs.unshift({id: a.p_id, client_id: a.p_client, company: G, status: "done", done: ids.length, n: ids.length, message: ids.length + " of " + ids.length + " sent to Tally", created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
         entry_ids: ids, results: window.__postAnswer ? window.__postAnswer(a.p_payload.vouchers) : ids.map(id => ({id, ok: true, verified: true, vchNumber: "V/" + id})), items: ids.map(id => ({id, state: window.__postAnswer ? "refused" : "in_tally"}))}); CloudJobs.changed(); return {ok: true}; }
-    if (fn === "tally_vouchers_in") return [];
+    if (fn === "tally_vouchers_in"){ window.__vin = (window.__vin || []).concat([JSON.parse(JSON.stringify(a))]); return window.__vinAnswer ? window.__vinAnswer(a) : []; }
     return rpc0(fn, a); };
   Cloud.api = async (p) => { const m = /tally_post_jobs\\?.*id=eq\\.([^&]+)/.exec(p); return m ? JSON.parse(JSON.stringify(window.__jobs.filter(j => j.id === m[1]))) : []; };
   window.syncLedgersFromTally = async () => {}; window.__toasts = []; const t0 = window.toast; window.toast = (m) => { window.__toasts.push(String(m)); return t0 && t0(m); }; }"""
 
+# review of 44e4c1e97 (item 6): the posting XML of a client of one registration is byte for byte as at 5d3611f5c; that
+# commit's salesVoucherXml, salesLines, salesTotals and isInterState are loaded beside today's, under names of their own
+def old_xml_fns():
+    src = subprocess.run(["git", "show", "5d3611f5c:src/js/25-sales.js"], cwd=HERE, capture_output=True, text=True).stdout
+    names = ["salesVoucherXml", "salesLines", "salesTotals", "isInterState"]
+    out = []
+    for n in names:
+        m = re.search(r"\nfunction " + n + r"\(.*?(?=\n(?:function |const |let |/\*|// ))", src, re.S)
+        if m: out.append(m.group(0))
+    code = "\n".join(out)
+    for n in names: code = re.sub(r"\b" + n + r"\(", n + "_5d36(", code)
+    return code if len(out) == 4 else ""
+OLD_XML = old_xml_fns()
+SAME_XML = """(code) => { if (!code) return "the old functions were not found"; (0, eval)(code); const co = CO();
+  const bad = SL().list.filter(v => !(v.x.items || []).some(it => it.tax != null)).filter(v => salesVoucherXml(v, co) !== salesVoucherXml_5d36(v, co)).map(v => v.x.number);
+  return bad.length ? "differs: " + bad.join(", ") : "same:" + SL().list.length; }"""
 with sync_playwright() as p:
     br = p.chromium.launch(); pg = br.new_page(viewport={"width": 1440, "height": 950}); pg.on("pageerror", lambda e: errors.append(str(e)))
     pg.goto("http://localhost:%d/" % PORT); pg.wait_for_timeout(2500); pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(800)
@@ -153,6 +169,8 @@ with sync_playwright() as p:
     xml = E("SL().list.length ? salesVoucherXml(SL().list[0], CO()) : ''")
     ok(sorted(set(E("[...document.querySelectorAll('#app [data-sheet-vt]')].map(x => x.innerText)") or ["closed"])) in (["Sales"], ["closed"]) and 'VCHTYPE="Sales"' in xml and "<VOUCHERTYPENAME>Sales</VOUCHERTYPENAME>" in xml and "Sales UP" not in xml and "<LEDGERNAME>Consulting Income (A)</LEDGERNAME>" in xml and "<LEDGERNAME>Output IGST</LEDGERNAME>" in xml,
        "the voucher as it goes to Tally: a Sales voucher (the sheet says “Sales UP”: never used), with the sheet's ledgers")
+    sx = E(SAME_XML, OLD_XML)
+    ok(sx.startswith("same:") and sx != "same:0", "a client of one registration: each voucher's XML is byte for byte as at 5d3611f5c (%s)" % sx)
     E("() => { SheetImport.close(); SL().filter = 'ready'; render(); }"); W(500)
     btn = pg.locator("#app .bk-actionbar button.primary", has_text="Post to Tally")
     ok(btn.count() == 1 and btn.is_enabled() and "(4)" in btn.inner_text(), "Post to Tally is enabled (%s)" % (btn.inner_text() if btn.count() else "no button"))
@@ -185,7 +203,7 @@ with sync_playwright() as p:
     E("SheetImport.close()"); W(300)
 
     print("5. Post disabled says why, with a button to where it is set")
-    E("""() => { const mk = (n) => { const v = newInvoice({number: "W/" + n, date: "2026-10-1" + n, customerName: "Asha Textiles Pvt Ltd", taxable: 1000, igst: 180, total: 1180}, "upload"); SL().list.push(v); mapInvoice(v); };
+    E("""() => { const mk = (n) => { const v = newInvoice({number: "W/" + n, date: "2026-10-1" + n, customerName: "Asha Textiles Pvt Ltd", pos: "07", taxable: 1000, igst: 180, total: 1180}, "upload"); SL().list.push(v); mapInvoice(v); };
       mk(1); mk(2); SL().filter = "review"; saveSales(); render(); }"""); W(500)
     iss = E("SL().list.filter(v => /^W\\//.test(v.x.number)).map(v => [v.status, v.ledgerIssues])")
     ok(all(x[0] == "review" and x[1] == ["sales ledger for 18% not set"] for x in iss), "two invoices with no sales ledger (two under Sales Accounts, none chosen): To review (%s)" % iss)
@@ -606,12 +624,35 @@ with sync_playwright() as p:
     ok(c.get("st") == "review" and c.get("pos") == "07" and c.get("gstin") == "" and "CGST + SGST are charged, but the place of supply is Delhi (the party’s state in its Tally ledger)" in c.get("p", "") and "so IGST is expected" in c.get("p", ""),
        "CGST + SGST charged to a party of another state (its state only in its ledger): held, said (%s)" % c.get("p"))
     d4 = V("ZZ/4") or {}
-    ok(d4.get("st") == "review" and "IGST is charged, but the party’s state is not known" in d4.get("p", "") and "<PLACEOFSUPPLY>Uttar Pradesh" not in d4.get("xml", ""),
-       "IGST with no GSTIN or state anywhere: held, never given the client's own state as its place of supply (%s)" % d4.get("p"))
+    ok(d4.get("st") == "review" and "IGST is charged, but the party’s state is not known" in d4.get("p", ""),
+       "IGST with no GSTIN or state anywhere: held with the reason, so it never posts (its XML is left as before) (%s)" % d4.get("p"))
     m = V("MX/1") or {}
     ok(m.get("lines") == ["Dr ZZ Delhi Buyers 3410", "Cr Consulting Income (B) 1000", "Cr Consulting Income (A) 2000", "Cr Output IGST 410"] and not m.get("p") and not m.get("li"),
        "item 5: MX/1 posts in the sales voucher's form of several rates: a sales ledger a rate, the tax as the sheet has it (%s; %s %s)" % (m.get("lines"), m.get("p"), m.get("li")))
     ok(m.get("xml", "").count("<ALLLEDGERENTRIES.LIST>") == 4 and "<LEDGERNAME>Consulting Income (B)</LEDGERNAME>" in m.get("xml", "") and "<AMOUNT>-3410.00</AMOUNT>" in m.get("xml", ""), "… the same voucher XML as any invoice of several rates (no new form)")
+    E("() => { SL().filter = 'review'; render(); }"); W(300)
+    E("() => { SL().filter = 'ready'; render(); }"); W(300)
+    tagged = E("[...document.querySelectorAll('#app [data-gstin-from]')].map(x => x.getAttribute('data-gstin-from'))")
+    ok(a.get("id") in tagged and len(tagged) >= 1, "the GSTIN filled from the ledger is said on the invoice: “GSTIN from Tally ledger” (%s)" % tagged)
+    E("(id) => salesOpen(id)", a.get("id")); W(700)
+    ok("Customer GSTIN (GSTIN from Tally ledger)" in (pg.inner_text("body") or ""), "… and in the open invoice")
+    E("() => salesAct('salesClose')"); W(300)
+    sx = E(SAME_XML, OLD_XML)
+    ok(sx.startswith("same:"), "the invoices of one rate here: XML byte for byte as at 5d3611f5c, the place of supply kept (%s)" % sx)
+    nf = E("""() => { const base = {date: "2026-10-23", party: "ZZ Delhi Buyers", gstin: "", pos: "", hsn: "", ledger: "", against: "", note: "", taxable: 100, igst: 18, cgst: 0, sgst: 0, cess: 0, total: 118, rates: [18], lines: 1, rows: [], check: {ok: true}};
+      const docs = [Object.assign({}, base, {no: "B2CL/1", sec: "B2CL"}), Object.assign({}, base, {no: "B2CS/1", sec: "B2CS", summary: true}), Object.assign({}, base, {no: "UR/1", regType: "Unregistered"}), Object.assign({}, base, {no: "OK/1"})];
+      SheetPost.toSales(docs, S.coId, "zz.json");
+      return Object.fromEntries(["B2CL/1", "B2CS/1", "UR/1", "OK/1"].map(n => { const v = SL().list.find(v => v.x.number === n); return [n, v ? [v.x.customerGstin, !!v.sheetHad] : null]; })); }""")
+    ok(nf.get("B2CL/1") == ["", False] and nf.get("B2CS/1") == ["", False] and nf.get("UR/1") == ["", False] and nf.get("OK/1") == [G["delhi"], True],
+       "GSTR-1's B2CL and B2CS rows, and a row the file calls unregistered: no GSTIN from the ledger; a plain row takes it (%s)" % nf)
+    E("() => { SL().list = SL().list.filter(v => !['B2CL/1', 'B2CS/1', 'UR/1', 'OK/1'].includes(v.x.number)); saveSales(); }")
+    # an invoice uploaded before this rule (no v.sheetHad): left as it was, also when the page is opened again
+    E("""() => { const v = newInvoice({number: "OLD/1", date: "2026-10-24", customerName: "ZZ Delhi Buyers", taxable: 1000, cgst: 90, sgst: 90, total: 1180}, "sheet"); v.customerLedger = "ZZ Delhi Buyers"; v.userLedger = true;
+      SL().list.push(v); mapInvoice(v); saveSales(); }"""); W(700)
+    E("(id) => loadSales(id).then(() => render())", cid); W(1200)
+    ov = E("() => { const v = SL().list.find(v => v.x.number === 'OLD/1'); return v ? [v.x.customerGstin, v.x.pos, !!v.filled] : null; }")
+    ok(ov == ["", "", False], "an invoice uploaded before: reloaded, its GSTIN and place of supply are not changed (%s)" % ov)
+    E("() => { SL().list = SL().list.filter(v => v.x.number !== 'OLD/1'); saveSales(); }")
     # item 6: a GSTIN typed wrong, then cleared: the label goes at once; a label left from before goes on opening
     E("(id) => { SL().openId = id; salesSetField('customerGstin', '07AAACZ1111A1ZZ'); }", a.get("id"))
     p1 = E("(id) => SL().list.find(v => v.id === id).problems.join(' | ')", a.get("id"))
@@ -631,15 +672,28 @@ with sync_playwright() as p:
       const a = SL().list.find(v => v.x.number === "ZZ/1"), m = SL().list.find(v => v.x.number === "MX/1");
       window.tallyVia = () => true; window.tallyCall = async (co, u) => { url = decodeURIComponent(u); return {vouchers: [
         {number: "ZZ/1", type: "Sales UP", date: "20261020", party: "ZZ Delhi Buyers", guid: "zz1", entries: [{ledger: "ZZ Delhi Buyers", amount: "-1180.00"}, {ledger: "Consulting Income (A)", amount: "1000.00"}, {ledger: "Output IGST", amount: "180.00"}]},
-        {number: "MX/1", type: "Tax Invoice", date: "20261022", party: "ZZ Delhi Buyers", guid: "mx1", entries: [{ledger: "ZZ Delhi Buyers", amount: "-3410.00"}, {ledger: "Consulting Income (A)", amount: "2000.00"}]},
-        {number: "ZZ/3", type: "Stock Journal", date: "20261021", party: "", guid: "sj", entries: [{ledger: "Rent Received", amount: "10.00"}]}]}; };
+        {number: "MX/1", type: "GST Sales", date: "20261022", party: "ZZ Delhi Buyers", guid: "mx1", entries: [{ledger: "ZZ Delhi Buyers", amount: "-3410.00"}, {ledger: "Consulting Income (A)", amount: "2000.00"}]},
+        {number: "ZZ/3", type: "Journal", date: "20261021", party: "ZZ Far Buyers", guid: "jv", entries: [{ledger: "ZZ Far Buyers", amount: "-1180.00"}, {ledger: "Consulting Income (A)", amount: "1180.00"}]},
+        {number: "ZZ/4", type: "Tax Invoice", date: "20261021", party: "ZZ Nowhere Buyers", guid: "ti", entries: [{ledger: "ZZ Nowhere Buyers", amount: "-590.00"}, {ledger: "Consulting Income (A)", amount: "500.00"}]},
+        {number: "ZZ/2", type: "Sales", date: "20261020", party: "ZZ Home Buyers", guid: "zz2", entries: [{ledger: "ZZ Home Buyers", amount: "-999.00"}, {ledger: "Consulting Income (A)", amount: "999.00"}]}]}; };
       try { await salesCheckTally(SL().list.filter(v => ["review", "ready"].includes(v.status))); } finally { window.tallyVia = tv; window.tallyCall = tc; }
-      const c = SL().list.find(v => v.x.number === "ZZ/3");
-      return {url, a: a.status, am: a.tallyMatch || null, m: m.status, c: c.status}; }""", G)
-    ok("types=" not in chk["url"], "every voucher of the period is asked of Tally, no type left out (%s)" % chk["url"][-80:])
+      const g = n => SL().list.find(v => v.x.number === n);
+      return {url, a: a.status, am: a.tallyMatch || null, m: m.status, c: g("ZZ/3").status, d: g("ZZ/4").status, b: g("ZZ/2").status, bn: g("ZZ/2").tallyNear || null, bp: (g("ZZ/2").problems || []).join(" | ")}; }""", G)
+    ok("types=" not in chk["url"] and "from=20261019" in chk["url"] and "to=20261023" in chk["url"], "the invoices' own dates only (20 to 22 Oct, a day either side), every type (%s)" % chk["url"][-80:])
     ok(chk["a"] == "intally" and (chk["am"] or {}).get("type") == "Sales UP" and (chk["am"] or {}).get("amount") == 1180 and (chk["am"] or {}).get("party") == "ZZ Delhi Buyers",
-       "the client's own “Sales UP” voucher of that number is found, with its real amount 1,180 and its party (%s)" % chk["am"])
-    ok(chk["m"] == "intally" and chk["c"] != "intally", "a type of the client's under Sales by any name (its voucher credits a ledger under Sales Accounts) is found; a Stock Journal of a number is not (%s, %s)" % (chk["m"], chk["c"]))
+       "the client's own “Sales UP” voucher of that number and amount is found, with its real amount 1,180 and its party (%s)" % chk["am"])
+    ok(chk["m"] == "intally" and chk["c"] != "intally" and chk["d"] != "intally", "a type named sales (“GST Sales”) is found; a Journal of that number crediting Sales Accounts is not, nor a “Tax Invoice” type (%s, %s, %s)" % (chk["m"], chk["c"], chk["d"]))
+    ok(chk["b"] == "review" and (chk["bn"] or {}).get("amount") == 999 and "Same number in Tally, different amount" in chk["bp"], "the same number of another amount (999 against 1,180): not In Tally, said, the person decides (%s; %s)" % (chk["b"], chk["bp"]))
+    bid = E("() => SL().list.find(v => v.x.number === 'ZZ/2').id")
+    E("(id) => { SL().filter = 'review'; SL().openId = null; render(); }", bid); W(400)
+    ok(pg.locator('#app [data-sales-near="%s"] [data-near-other]' % bid).count() == 1, "its row asks: It is this invoice · It is another")
+    if pg.locator('#app [data-sales-near="%s"] [data-near-other]' % bid).count(): pg.click('#app [data-sales-near="%s"] [data-near-other]' % bid); W(400)
+    nb = E("(id) => { const v = SL().list.find(v => v.id === id); return [v.status, !!v.tallyNear, (v.notTally || []).join(), (v.problems || []).some(p => /Same number/.test(p))]; }", bid)
+    ok(nb[1] is False and nb[2] == "zz2" and nb[3] is False and nb[0] == "review", "“It is another”: that voucher is never matched to it again; the invoice is worked out again (%s)" % nb)
+    # the cloud copy's read stops at 20,000 entries: an answer that long is not trusted, nothing is posted
+    cap = E("""async () => { const tv = window.tallyVia, tc = window.tallyCall; window.tallyVia = () => true; window.tallyCall = async () => ({vouchers: Array.from({length: 20000}, (x, i) => ({number: "X" + i, type: "Sales", date: "20261020"}))});
+      let e = null; try { await salesCheckTally(SL().list.filter(v => ["review", "ready"].includes(v.status))); } catch (x){ e = x; } finally { window.tallyVia = tv; window.tallyCall = tc; } return e ? e.message : "no error"; }""")
+    ok(cap == "Too many entries to check; check in smaller date ranges", "an answer of 20,000 entries (the cloud copy's cap): “%s”" % cap)
     E("(id) => salesRowAct('nottally', id)", a.get("id")); W(400)
     bx = box()
     ok("Same number and type already in Tally. Posting it again will create a duplicate." in bx and pg.locator("#confirmBox [data-nottally-compare]").count() == 1, "the box: the plain words (%r)" % bx[:160])
@@ -661,6 +715,13 @@ with sync_playwright() as p:
       window.__postAnswer = (vs) => vs.map(v => ({id: v.id, ok: false, needsReview: true, accepted: false, created: 0, altered: 0, errors: 0, exceptions: vs.length, ignored: 0, batchN: vs.length, lineError: [], message: "Tally's reply: created 0 of " + vs.length + ", exceptions " + vs.length}));
       SL().filter = 'ready'; saveSales(); render(); }"""); W(500)
     ok(E("SL().list.map(v => v.status)") == ["ready", "ready"], "two invoices Ready (%s)" % E("SL().list.map(v => [v.x.number, v.status, v.problems, v.ledgerIssues])"))
+    E("() => { window.__vin = []; window.__vinAnswer = () => Array.from({length: 20000}, (x, i) => ({number: 'X' + i, type: 'Sales', date: '20261020', entries: []})); window.__toasts = []; }")
+    post()
+    ok(len(E("window.__enq")) == 0 and any("Too many entries to check; check in smaller date ranges" in t for t in E("window.__toasts")) and E("SL().list.map(v => v.status)") == ["ready", "ready"],
+       "the cloud copy answers its cap (20,000): nothing is posted, and it is said (%s)" % E("window.__toasts")[-1:])
+    vin = E("window.__vin")
+    ok(vin and vin[0].get("p_from") == "2026-10-19" and vin[0].get("p_to") == "2026-10-23", "the cloud copy is asked for the invoices' own dates only, a day either side (%s)" % (vin[:1],))
+    E("() => { window.__vinAnswer = null; }")
     post()
     rf = E("SL().list.map(v => [v.x.number, v.status, !!v.refused, (v.problems || [])[0] || ''])")
     ok(len(E("window.__enq")) == 1 and all(x[1] == "review" and x[2] and x[3].startswith("Refused by Tally: Tally created none of the 2 vouchers sent together and gave no reason") for x in rf),
@@ -687,6 +748,31 @@ with sync_playwright() as p:
     ok(st.get("ZZ/1", [""])[0] == "posted" and st.get("MX/1", ["", None])[0] == "review" and st["MX/1"][1] is True and "sent on its own" in st["MX/1"][2], "ZZ/1 posted on its own; MX/1 refused on its own: the one that stops the batch (%s)" % st)
     res = pg.inner_text("#app [data-sales-onebyone-result]") if pg.locator("#app [data-sales-onebyone-result]").count() else ""
     ok("ZZ/1" in res and "Posted" in res and "MX/1" in res and "Refused by Tally on its own" in res, "each one's own result is shown (%r)" % res)
+    # Try again on the invoice itself (the cause put right in Tally): the duplicate check first, then sent on its own; an
+    # answer that does not come is "Not confirmed", held until the check has run again
+    mid = E("() => SL().list.find(v => v.x.number === 'MX/1').id")
+    E("() => { SL().filter = 'review'; SL().openId = null; window.__vin = []; window.__postAnswer = (vs) => vs.map(v => ({id: v.id, ok: false, outcomeUnknown: true, message: 'Sent to Tally, but no answer came'})); render(); }"); W(400)
+    ok(pg.locator('#app [data-sales-retry="%s"]' % mid).count() == 1, "a refused invoice has “Try again” on it")
+    def retry(id_):
+        n = len(E("window.__enq"))
+        if pg.locator('#app [data-sales-retry="%s"]' % id_).count(): pg.locator('#app [data-sales-retry="%s"]' % id_).first.click()
+        for i in range(40):
+            W(300)
+            if pg.locator('#confirmBox [data-cbx="yes"]').count() and pg.locator('#confirmBox [data-cbx="yes"]').is_visible(): pg.click('#confirmBox [data-cbx="yes"]')
+            if not E("SL().busy") and len(E("window.__enq")) > n: break
+        W(500)
+    retry(mid)
+    t1 = E("(id) => { const v = SL().list.find(v => v.id === id); return [v.status, !!v.refused, !!v.needsCheck, (v.problems || [])[0] || '', window.__vin.length]; }", mid)
+    ok(t1[0] == "review" and not t1[1] and t1[2] and t1[3] == "Not confirmed: check Tally before posting again" and t1[4] >= 1, "Try again: checked first; no answer came, so “Not confirmed: check Tally before posting again”, never “Refused by Tally” (%s)" % t1)
+    res = pg.inner_text("#app [data-sales-onebyone-result]") if pg.locator("#app [data-sales-onebyone-result]").count() else ""
+    ok("Not confirmed: check Tally before posting again" in res and "Refused" not in res, "and the result says so (%r)" % res)
+    E("() => { SL().list.find(v => v.x.number === 'MX/1').status = 'review'; SL().filter = 'ready'; render(); }"); W(300)
+    n_enq = len(E("window.__enq")); E("() => postSalesToTally()"); W(1200)
+    ok(len(E("window.__enq")) == n_enq, "Post to Tally does not send it again until the check has run (%d)" % (len(E("window.__enq")) - n_enq))
+    E("() => { window.__postAnswer = null; SL().filter = 'review'; render(); }"); W(300)
+    retry(mid)
+    t2 = E("(id) => { const v = SL().list.find(v => v.id === id); return [v.status, !!v.needsCheck]; }", mid)
+    ok(t2 == ["posted", False], "Try again once more: the check runs again, then it posts (%s)" % t2)
     E("() => { window.__postAnswer = null; }")
 
     ok(not errors, "no page errors " + str(errors[:2]))

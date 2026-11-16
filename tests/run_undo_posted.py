@@ -259,13 +259,13 @@ with sync_playwright() as p:
       window.hasLedgerList = () => true; window.ledgerProblems = () => []; window.invoiceProblems = () => []; window.customerLedgerFor = () => ({ledger: 'Alpha Retail', sure: true, label: 'match'});
       try { mapInvoice(v); } finally { [window.hasLedgerList, window.ledgerProblems, window.invoiceProblems, window.customerLedgerFor] = h; window.mapInvoice = m1; } }""")
     ok(E(SV, "n2") == "review", "sales: working out the invoice again keeps it in review until a person sets its ledger (%s)" % E(SV, "n2"))
-    E("""async () => { window.tallyVia = () => true; window.tallyCall = async () => ({vouchers: [{guid: 'sv-1', number: 'S/n2', date: '20260701'}]});
+    E("""async () => { window.tallyVia = () => true; window.tallyCall = async () => ({vouchers: [{guid: 'sv-1', number: 'S/n2', date: '20260701', amount: SL().list.find(v => v.id === 'n2').x.total}]});
       await salesCheckTally(SL().list.filter(v => v.id === 'n2')); }""")
     ok(E(SV, "n2") == "review", "sales: the excluded voucher is not matched again")
     E("""async () => { const s = SL(), o = s.list.find(x => x.id === 'n2'); const v = JSON.parse(JSON.stringify(o)); v.id = 'n2b'; delete v.notTally; s.list.push(v);
       await salesCheckTally([v]); }""")
     ok(E(SV, "n2b") == "review", "sales: the invoice uploaded again keeps its excluded voucher")
-    E("""async () => { window.tallyCall = async () => ({vouchers: [{guid: 'sv-1', number: 'S/n2', date: '20260701'}, {guid: 'sv-2', number: 'S/n2', date: '20260702'}]});
+    E("""async () => { window.tallyCall = async () => ({vouchers: [{guid: 'sv-1', number: 'S/n2', date: '20260701', amount: SL().list.find(v => v.id === 'n2').x.total}, {guid: 'sv-2', number: 'S/n2', date: '20260702', amount: SL().list.find(v => v.id === 'n2').x.total}]});
       await salesCheckTally(SL().list.filter(v => v.id === 'n2')); }""")
     ok(E(SV, "n2") == "intally" and E("SL().list.find(v => v.id === 'n2').tallyMatch.key") == "sv-2", "sales: another voucher of that number is matched")
     E("() => { const v = SL().list.find(x => x.id === 'm3'); delete v.tallyMatch; salesRowAct('nottally', 'm3'); }"); W(400)

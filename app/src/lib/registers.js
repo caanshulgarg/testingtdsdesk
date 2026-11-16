@@ -35,7 +35,9 @@ const SHEET_FIELDS = [["date", "Invoice date"], ["no", "Invoice no."], ["party",
   ["taxable", "Taxable value"], ["rate", "GST rate %"], ["igst", "IGST"], ["cgst", "CGST"], ["sgst", "SGST / UTGST"], ["cess", "Cess"],
   ["tax", "Total tax (one column)"], ["total", "Invoice total"], ["hsn", "HSN / SAC"], ["qty", "Quantity"], ["ledger", "Party's ledger in Tally"],
   ["sledger", "Sales / purchase ledger"], ["doctype", "Document type (invoice / credit note)"], ["vchtype", "Voucher type (information only)"], ["against", "Against invoice no."],
-  ["owngstin", "Our GSTIN (the client's registration)"], ["branch", "Branch / series"]];
+  ["owngstin", "Our GSTIN (the client's registration)"], ["branch", "Branch / series"], ["regtype", "Party's registration (regular / unregistered)"]];
+// (regtype, next-fix-sales-upload: a row it calls unregistered or a consumer never takes a GSTIN from the party's Tally
+// ledger; mapped by a person, the AI is not asked for it)
 // (owngstin, branch: next-fix-igst-pick, 16-Nov-2026: the client's own registration an invoice is issued from picks its
 // output GST ledgers by state, src/js/25-sales.js taxLedgerPick)
 // next-fix-sheet-import (13-Nov-2026, a client's sales sheet that would not post): "ledger" was "Ledger (a hint)" and was
@@ -160,7 +162,7 @@ const SheetFmt = {
     const m = this.masked(head, rows);
     if (typeof SheetAI !== "object" || !SheetAI.map) throw new Error("FinCom's AI help is not available here: map the columns yourself.");
     const FL = this.fieldsFor(side);
-    const r = await SheetAI.map({head: m.head, rows: m.rows, side, fields: FL.map(f => f[0]).filter(f => f !== "vchtype")});
+    const r = await SheetAI.map({head: m.head, rows: m.rows, side, fields: FL.map(f => f[0]).filter(f => f !== "vchtype" && f !== "regtype")});
     const names = head.map(h => this.norm(h)), map = {};
     Object.entries((r && r.map) || {}).forEach(([field, col]) => {
       if (!FL.some(f => f[0] === field)) return;
@@ -191,7 +193,7 @@ const SheetFmt = {
       const a = f => this.amount(get(r, f));
       const d = docs.get(key) || {no, date: this.date(get(r, "date"), t.date), party: String(get(r, "party") || "").trim(), gstin: String(get(r, "gstin") || "").toUpperCase().replace(/[^A-Z0-9]/g, ""),
         pos: this.pos(get(r, "pos")), hsn: String(get(r, "hsn") || "").trim(), ledger: String(get(r, "ledger") || "").trim(), against: String(get(r, "against") || "").trim(),
-        sledger: String(get(r, "sledger") || "").trim(), vch: String(get(r, "vchtype") || "").trim(),
+        sledger: String(get(r, "sledger") || "").trim(), vch: String(get(r, "vchtype") || "").trim(), regType: String(get(r, "regtype") || "").trim(),
         own: /^\d{2}[A-Z0-9]{13}$/.test(String(get(r, "owngstin") || "").toUpperCase().replace(/[^A-Z0-9]/g, "")) ? String(get(r, "owngstin")).toUpperCase().replace(/[^A-Z0-9]/g, "") : "", branch: String(get(r, "branch") || "").trim(),
         note: kind === "C" ? "credit" : kind === "D" ? "debit" : "", hold: kind === "?" ? "“" + String(get(r, "doctype")).trim() + "” on a sales sheet: is this a credit note or a debit note? Set it in the Type column" : "", taxable: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, total: 0, rates: [], lines: 0, rows: [], lineTotals: []};
       let taxable = a("taxable"), igst = a("igst"), cgst = a("cgst"), sgst = a("sgst"), cess = a("cess"), total = a("total");
@@ -534,12 +536,24 @@ const SheetPost = {
         rate: d.rate, noteKind: d.note || "", againstInvoice: d.against || "", sellerGstin: d.own || "", branch: d.branch || "", items: this.items(d, ab)}, "sheet", {fileName, sheet: {rows: d.rows, check: d.check, sec: d.sec || ""},
         // (item 1: what the sheet itself gave; a GSTIN or place of supply it did not give comes from the party's Tally
         // ledger, src/js/25 salesPartyFill)
-        sheetHad: {gstin: GSTIN_RE.test(d.gstin), pos: !!d.pos}});
+        // (never a GSTR-1's B2CS / B2CL / unregistered note, a summary or a row the file marks unregistered: review of 44e4c1e97)
+        sheetHad: this.mayFill(d) ? {gstin: GSTIN_RE.test(d.gstin), pos: !!d.pos} : undefined});
+      if (!v.sheetHad) delete v.sheetHad;
       this.ledgersTo(v, d);
-      s.list.push(v); mapInvoice(v); res.added++; res.ids.push(v.id);
+      // (the customer ledger first, found as for any invoice; then the party's GSTIN and state from it)
+      s.list.push(v); mapInvoice(v);
+      if (typeof salesPartyFill === "function" && v.sheetHad){ salesPartyFill(v); mapInvoice(v); } res.added++; res.ids.push(v.id);
     });
     saveSales();
     return res;
+  },
+  // whether a document's party GSTIN may be taken from its Tally ledger: never for a sale to a consumer by the file's
+  // own word (GSTR-1's B2CS, B2CL, CDNUR, EXP; a summary row; a row whose registration column says unregistered or
+  // consumer; the retail customer a sheet with no party names)
+  mayFill(d){
+    if (!d || d.summary || /^(b2cs|b2cl|cdnur|exp)$/i.test(String(d.sec || "")) || d.unreg) return false;
+    if (/unregistered|consumer|\bb2c\b|\burp\b/i.test(String(d.regType || ""))) return false;
+    return !!d.party;
   },
   // an invoice's rate-wise item lines (rows of the sheet at more than one rate): taxable, rate and tax a line, as the
   // sheet has them; none for an invoice of one rate

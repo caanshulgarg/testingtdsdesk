@@ -440,6 +440,9 @@ function invoiceProblems(v){
   if (gst > 0 && !inter && num(x.igst) && pos) p.push("IGST is charged, but the place of supply is " + stName(pos) + from + ", the state " + co.name + " issues it from, so CGST + SGST are expected");
   // (asked once the customer ledger is set: with none, the ledger is what it waits for, and Tally's master gives the state)
   if (num(x.igst) > 0 && !pos && v.customerLedger) p.push("IGST is charged, but the party\u2019s state is not known (no GSTIN or state on the sheet or in its Tally ledger): set the customer\u2019s GSTIN or the place of supply");
+  // (review of 44e4c1e97) a Tally voucher of this number, of another amount: the person says whether it is this invoice
+  if (v.tallyNear) p.push("Same number in Tally, different amount (Tally " + money(num(v.tallyNear.amount)) + ", here " + money(num(x.total)) + "): say whether it is this invoice");
+  if (v.needsCheck) p.push("Not confirmed: check Tally before posting again");
   if (v.refused) p.push("Refused by Tally" + (v.refused.single ? " (sent on its own)" : "") + ": " + (v.refused.hint || v.refused.said || "Tally created nothing"));
   if (Math.abs(num(x.cgst) - num(x.sgst)) > 0.05) p.push("CGST and SGST differ");
   if (salesTotals(x).some(g => g.mixed)) p.push("GST is not at one standard rate (several rates?): use Enter items");
@@ -462,7 +465,6 @@ function mapInvoice(v){
     v.customerLedger = c.ledger; v.custSource = c.label; v.custSure = c.sure; v.userLedger = false;
   }
   salesLearnReg(v);
-  salesPartyFill(v);
   v.problems = invoiceProblems(v);
   const lines = hasLedgerList() ? salesLines(v) : null;
   v.ledgerIssues = lines ? ledgerProblems(v, lines) : ["Tally ledger list not loaded"];
@@ -485,12 +487,11 @@ function partyMaster(ledger){
 }
 // an invoice from a sheet that gave no GSTIN (or no place of supply): the party's, from its Tally ledger master, so a
 // B2B sale is never reported as one to a consumer; the place of supply is the party's state. What a person typed stands;
-// what was filled so follows the customer ledger when it changes (v.filled: what was filled, and from which ledger)
+// what was filled so follows the customer ledger a person sets (v.filled: what was filled, and from which ledger)
 function salesPartyFill(v){
-  const x = v.x; if (["posted", "intally", "ignored"].includes(v.status)) return;
-  // (an invoice read from a file other than a sheet: what it gave is what it had when first worked out; one made here: none)
-  if (!v.sheetHad && v.source !== "created") v.sheetHad = {gstin: GSTIN_RE.test(x.customerGstin || ""), pos: !!x.pos};
-  const h = v.sheetHad; if (!h) return;
+  // (only an invoice uploaded from a sheet since this rule, when it is added and when a person sets its customer ledger:
+  // never one uploaded before, nor a B2CS / B2CL or unregistered row, which carry no v.sheetHad; never on a reload)
+  const x = v.x, h = v.sheetHad; if (!h || ["posted", "intally", "ignored"].includes(v.status)) return;
   const f = v.filled || {}, m = v.customerLedger ? partyMaster(v.customerLedger) : null;
   const ours = k => !x[k] || (f[k] && x[k] === f[k]);
   const out = {ledger: v.customerLedger || ""};
@@ -513,7 +514,9 @@ function salesVoucherXml(v, co){
   const x = v.x, cn = x.noteKind === "credit";
   const vt = xesc(salesVt(x)), d = toTallyDate(x.date);
   // (the client's own state only for an invoice of CGST + SGST: an IGST invoice with no place of supply is held, item 1)
-  const pos = x.pos || stateOfGstin(x.customerGstin) || (num(x.igst) ? "" : salesRegOf(v).code || stateOfGstin(co.gstin));
+  // (review of 44e4c1e97: as 5d3611f5c for a client of one registration; one of several takes the state of the
+  // registration the invoice is issued from. An IGST invoice with no place of supply is held, invoiceProblems)
+  const pos = x.pos || stateOfGstin(x.customerGstin) || (salesOwnStates().length > 1 && salesRegOf(v).code) || stateOfGstin(co.gstin);
   const amt2 = n => r2(n).toFixed(2);
   let s = '<VOUCHER VCHTYPE="' + vt + '" ACTION="Create" OBJVIEW="Accounting Voucher View">\n<DATE>' + d + "</DATE>\n<EFFECTIVEDATE>" + d + "</EFFECTIVEDATE>\n" +
     "<VOUCHERTYPENAME>" + vt + "</VOUCHERTYPENAME>\n<VOUCHERNUMBER>" + xesc(x.number) + "</VOUCHERNUMBER>\n<REFERENCE>" + xesc(x.number) + "</REFERENCE>\n<REFERENCEDATE>" + d + "</REFERENCEDATE>\n" +

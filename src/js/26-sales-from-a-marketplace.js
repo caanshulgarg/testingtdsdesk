@@ -373,46 +373,63 @@ function mastersFor(list){
   list.forEach(v => salesLines(v).forEach(l => used.add(String(l.ledger).toLowerCase())));
   return B().newLed.filter(l => !l.sent && used.has(l.name.toLowerCase()));
 }
-// sales vouchers already in Tally (same number) are set aside
+// sales vouchers already in Tally (same number and amount) are set aside
+// (the most entries the cloud copy answers in one read, server/tally-cloud tally_vouchers_in: an answer of that many may
+// have stopped short, so nothing is posted on it)
+const SALES_CHECK_CAP = 20000;
 async function salesCheckTally(list){
   const co = CO(SL().cid);
   if (!tallyVia(co) || !list.length) return 0;
   const dates = list.map(v => v.x.date).filter(Boolean).sort();
-  // next-fix-sales-upload (item 2): every voucher of the period is asked of Tally (no type named: the bridge and the cloud
-  // copy then answer every type), and the Sales-class ones are kept: the client's own sales and note types (Sales
-  // settings), Tally's own, and every type of the client's made under Sales ("Sales UP", "GST Sales": a type whose
-  // vouchers credit a ledger under Sales Accounts, or named so); a client's own type is never left out of the check
-  const cfg = SL().cfg, lc = s => String(s || "").toLowerCase(), notes = [cfg.creditNoteType || "Credit Note", cfg.debitNoteType || "Debit Note", "Credit Note", "Debit Note"];
-  const j = await tallyCall(co, "/vouchers?company=" + encodeURIComponent(tallyCoName(co)) + "&from=" + isoToTally(addDays(dates[0], -3)) + "&to=" + isoToTally(addDays(dates[dates.length - 1], 3)) + Bridge.pinQ());
-  const all = [].concat(j.vouchers || []).filter(v => !/^yes$/i.test(v.cancelled || ""));
-  const cls = salesTypeClasses(all, list.map(v => salesVt(v.x)).concat(cfg.voucherType || [], "Sales"), notes);
-  const vs = all.filter(x => !x.type || cls.has(lc(x.type)));
+  if (!dates.length) return 0;
+  // next-fix-sales-upload (item 2; review of 44e4c1e97): the vouchers of the invoices' own dates only (the first to the last,
+  // a day either side), every type (Tally and the cloud copy match a type by its exact name, and the client's own sales
+  // type, "Sales UP", is not known before), the Sales-class ones kept here (salesTypeClasses)
+  const cfg = SL().cfg, lc = s => String(s || "").toLowerCase().trim(), notes = [cfg.creditNoteType || "Credit Note", cfg.debitNoteType || "Debit Note", "Credit Note", "Debit Note"];
+  const j = await tallyCall(co, "/vouchers?company=" + encodeURIComponent(tallyCoName(co)) + "&from=" + isoToTally(addDays(dates[0], -1)) + "&to=" + isoToTally(addDays(dates[dates.length - 1], 1)) + Bridge.pinQ());
+  const got = [].concat(j.vouchers || []);
+  if (got.length >= SALES_CHECK_CAP) throw {code: "check_cap", message: "Too many entries to check; check in smaller date ranges"};
+  const all = got.filter(v => !/^yes$/i.test(v.cancelled || ""));
+  const own = list.filter(v => !v.x.noteKind).map(v => salesVt(v.x)).concat(cfg.voucherType || [], "Sales");
+  const isInv = salesTypeClasses(own), noteTypes = new Set(notes.concat(list.filter(v => v.x.noteKind).map(v => salesVt(v.x))).map(lc));
+  const vs = all.filter(x => !x.type || isInv(x.type) || noteTypes.has(lc(x.type)));
   const by = new Map();
   vs.forEach(x => [normInvNo(x.number), normInvNo(x.reference)].filter(Boolean).forEach(k => { if (!by.has(k)) by.set(k, []); if (!by.get(k).includes(x)) by.get(k).push(x); }));
   let n = 0;
   // a voucher a person said is not this invoice's (Not this Tally entry) is never matched to it again
   const keep = SL().cfg.notTally || {};
+  const info = x => ({key: salesTallyKey(x), date: String(x.date || ""), number: String(x.number || ""), type: String(x.type || ""), party: String(x.party || ""), amount: salesTallyAmount(x)});
   list.forEach(v => { const no = normInvNo(v.x.number), not = (v.notTally || []).concat(keep[no] || []);
-    const hit = no && !not.includes("num:" + no) && (by.get(no) || []).find(x => !not.includes(salesTallyKey(x)) && (lc(x.type) === lc(salesVt(v.x)) || (v.x.noteKind ? cls.get(lc(x.type)) === v.x.noteKind : !cls.get(lc(x.type)))));   // (a note is a note's, an invoice an invoice's)
-    // (item 3: what the Tally voucher is, kept to show beside the invoice: its date, type, number, party and amount)
-    if (hit){ v.status = "intally"; v.postNote = "Already in Tally"; v.tallyMatch = {key: salesTallyKey(hit), date: String(hit.date || ""), number: String(hit.number || ""), type: String(hit.type || ""), party: String(hit.party || ""), amount: salesTallyAmount(hit)}; n++; } });
+    // (a note is matched to a voucher of its own type only, an invoice to a Sales-class voucher, or one of no type said)
+    const kind = x => v.x.noteKind ? lc(x.type) === lc(salesVt(v.x)) : (!x.type || isInv(x.type));
+    const same = no && !not.includes("num:" + no) ? (by.get(no) || []).filter(x => !not.includes(salesTallyKey(x)) && kind(x)) : [];
+    delete v.tallyNear;
+    // (this invoice's duplicate check has run again: an answer not confirmed before no longer holds it, item 3)
+    if (v.needsCheck){ delete v.needsCheck; mapInvoice(v); }
+    // the number AND the amount (to ₹1): In Tally. The number alone is never enough: said, and the person decides
+    const hit = same.find(x => Math.abs(salesTallyAmount(x) - r2(Math.abs(num(v.x.total)))) <= 1);
+    if (hit){ v.status = "intally"; v.postNote = "Already in Tally"; v.tallyMatch = info(hit); n++; }
+    else if (same.length){ v.tallyNear = info(same[0]); if (["ready", "review"].includes(v.status)) mapInvoice(v); }
+  });
   return n;
 }
-// the voucher types of Tally's answer that are of the Sales class: Map(type in lower case → "" an invoice's type,
-// "credit" / "debit" a note's). The types named (the client's own and Tally's), every type named as a sales type, and
-// every type whose vouchers credit a ledger under Sales Accounts (a type the client made under Sales, whatever its name)
-function salesTypeClasses(vs, own, notes){
-  const lc = s => String(s || "").toLowerCase().trim(), out = new Map(), cfg = SL().cfg;
-  const noteOf = t => lc(t) === lc(cfg.creditNoteType || "Credit Note") || /credit\s*note|\bcrn?\b|sales\s*returns?/i.test(t) ? "credit" : lc(t) === lc(cfg.debitNoteType || "Debit Note") || /debit\s*note|\bdbn\b|\bdn\b/i.test(t) ? "debit" : "";
-  [].concat(own || [], notes || []).filter(Boolean).forEach(t => out.set(lc(t), noteOf(t)));
-  const salesLed = l => { try { const ch = typeof Ledgers === "object" ? Ledgers.chain(SL().cid, l) : []; return ch.some(g => /^sales\s*accounts?$/i.test(String(g).trim())); } catch (e){ return false; } };
-  (vs || []).forEach(x => {
-    const t = String(x.type || "").trim(); if (!t || out.has(lc(t))) return;
-    if (/order|quotation|delivery|receipt\s*note|memo/i.test(t)) return;
-    const named = /\bsales?\b/i.test(t) || !!noteOf(t);
-    if (named || [].concat(x.entries || []).some(e => e && e.ledger && salesLed(e.ledger))) out.set(lc(t), noteOf(t));
-  });
-  return out;
+// whether a voucher type of Tally's answer is of the Sales class, for an invoice: the client's own sales type (Sales
+// settings, the invoices' own), Tally's "Sales", or a type with "sales" in its name; never a Journal, Receipt, Payment,
+// Contra, a note, a return or an order, whatever its entries
+function salesTypeClasses(own){
+  const lc = s => String(s || "").toLowerCase().trim(), names = new Set([].concat(own || [], "Sales").filter(Boolean).map(lc));
+  const never = /^(journal|receipt|payment|contra|credit\s*note|debit\s*note)$|return|order|quotation|delivery|memo/i;
+  return t => { const n = lc(t); if (!n || never.test(n)) return false; return names.has(n) || /\bsales\b/i.test(n); };
+}
+// "Same number in Tally, different amount": the person's answer. same: it is that voucher (In Tally, never posted);
+// else it is another (that voucher is never matched to this invoice again) and the invoice is worked out again
+function salesNearAnswer(id, same){
+  const s = SL(), v = inv(id), m = v && v.tallyNear; if (!m || !["review", "ready"].includes(v.status)) return;
+  delete v.tallyNear;
+  if (same){ v.status = "intally"; v.postNote = "Already in Tally"; v.tallyMatch = m; auditEvent("sales_tally_same", "Invoice " + (v.x.number || v.id) + ": the Tally voucher of another amount is this invoice", s.cid); }
+  else { v.notTally = (v.notTally || []).concat(m.key); const no = normInvNo(v.x.number); s.cfg.notTally = Object.assign({}, s.cfg.notTally, {[no]: v.notTally}); saveSales({cfg: true}); mapInvoice(v);
+    auditEvent("sales_not_tally", "Invoice " + (v.x.number || v.id) + ": not Tally entry " + [m.date, m.type, m.number, m.amount].join(" "), s.cid); }
+  saveSales(); render();
 }
 function salesAmtNum(a){ return num(String(a == null ? "" : a).replace(/[^0-9.\-]/g, "")); }
 // a Tally voucher's amount: its own when the answer carries one, else its party's line (the bridge's and the cloud's
@@ -557,7 +574,7 @@ function setCustomerLedger(v, ledger){
   const key = salesHistKey(v);
   const targets = s.list.filter(o => o.id === v.id || (key && ["review", "ready"].includes(o.status) && salesHistKey(o) === key && !o.userLedger));
   const before = targets.map(salesSnapshot);
-  targets.forEach(o => { if (o.id === v.id && o.customerLedger !== l) delete o.refused; o.customerLedger = l; o.userLedger = true; o.custSource = "Set by you"; mapInvoice(o); s.sticky.add(o.id); if (o.status === "review" && !(o.problems || []).length && !(o.ledgerIssues || []).length) o.status = "ready"; });
+  targets.forEach(o => { if (o.id === v.id && o.customerLedger !== l) delete o.refused; o.customerLedger = l; o.userLedger = true; o.custSource = "Set by you"; salesPartyFill(o); mapInvoice(o); s.sticky.add(o.id); if (o.status === "review" && !(o.problems || []).length && !(o.ledgerIssues || []).length) o.status = "ready"; });
   learnCustomer(v);
   salesSetUndo(esc(v.x.customerName || v.x.number) + " \u2192 <b>" + esc(l) + "</b>" + (targets.length > 1 ? " \u00b7 also " + (targets.length - 1) + " more invoice" + (targets.length > 2 ? "s" : "") + " of this customer" : ""), before);
   saveSales();
@@ -570,7 +587,7 @@ function salesBulk(kind, ledger){
   let n = 0;
   rows.forEach(v => {
     s.sticky.add(v.id);
-    if (kind === "ledger"){ v.customerLedger = ledger; v.userLedger = true; v.custSource = "Set by you"; mapInvoice(v); if (v.status === "review" && !(v.problems || []).length && !(v.ledgerIssues || []).length) v.status = "ready"; n++; }
+    if (kind === "ledger"){ v.customerLedger = ledger; v.userLedger = true; v.custSource = "Set by you"; salesPartyFill(v); mapInvoice(v); if (v.status === "review" && !(v.problems || []).length && !(v.ledgerIssues || []).length) v.status = "ready"; n++; }
     if (kind === "confirm" && v.status !== "ignored"){ mapInvoice(v); if (v.customerLedger && !(v.problems || []).length && !(v.ledgerIssues || []).length){ v.status = "ready"; learnCustomer(v); n++; } }
     if (kind === "ignore" && v.status !== "ignored"){ v.status = "ignored"; n++; }
   });
@@ -627,7 +644,7 @@ function salesSelAll(on){ const s = SL(); salesVisible().filter(v => !salesInTal
 function salesSetCust(id, val){
   const s = SL(), v = inv(id); if (!v) return true;
   val = String(val || "").trim();
-  if (!val){ v.customerLedger = ""; v.userLedger = false; mapInvoice(v); saveSales(); render(); return true; }
+  if (!val){ v.customerLedger = ""; v.userLedger = false; salesPartyFill(v); mapInvoice(v); saveSales(); render(); return true; }
   if (!exactLedger(val)){ toast("“" + val + "” is not a Tally ledger. Choose one from the list, or create it."); return false; }
   if (s.sel.has(v.id) && s.sel.size > 1){ salesBulk("ledger", exactLedger(val)); return true; }
   if (setCustomerLedger(v, val)) render();

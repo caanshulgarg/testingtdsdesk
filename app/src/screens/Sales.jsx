@@ -58,7 +58,7 @@ function salesCols(s, list, nSel) {
     { k: "no", role: "number", label: "Invoice", cls: "pt", filter: <ColFunnel hideIdle t="sales" k="no" label="Invoice" />, v: (v) => v.x.number || "",
       cell: (v) => <><div className="pn"><button className="linkbtn strong" onClick={() => salesOpen(v.id)}>{v.x.number || "(no number)"}</button></div><div className="nr">{v.source === "created" ? "Created here" : v.fileName || "Uploaded"}</div></> },
     { k: "cust", role: "party", label: "Customer", cls: "pt", filter: <ColFunnel hideIdle t="sales" k="cust" label="Customer" />, v: (v) => v.x.customerName || "",
-      cell: ({ x }) => <><div className="pn">{x.customerName || "—"}</div><div className="nr">{x.customerGstin || "Unregistered"}{x.pos ? " · " + (GST_STATES[x.pos] || x.pos) : ""}</div></> },
+      cell: (v) => { const x = v.x; return <><div className="pn">{x.customerName || "—"}</div><div className="nr">{x.customerGstin || "Unregistered"}{x.pos ? " · " + (GST_STATES[x.pos] || x.pos) : ""}{gstinFromLedger(v) && <> <span className="src" data-gstin-from={v.id}>GSTIN from Tally ledger</span></>}</div></>; } },
     { k: "val", role: "amount", label: "Total", cls: "n", filter: <ColFunnel hideIdle t="sales" k="val" label="Total" />, v: (v) => num(v.x.total), cell: (v) => <b>{money(num(v.x.total))}</b> },
     { k: "st", role: "status", label: "Status", v: (v) => (ST_WORDS[v.refused && v.status === "review" ? "refused" : v.status] || ["", v.status])[1], cell: (v) => { const w = ST_WORDS[v.refused && v.status === "review" ? "refused" : v.status] || ["no", v.status]; return <span className={"tag " + w[0]} data-sales-st={v.id}>{w[1]}</span>; } },
     { k: "tx", label: "Taxable", cls: "n", v: (v) => num(v.x.taxable), sum: true, cell: (v) => money(num(v.x.taxable)) },
@@ -71,6 +71,7 @@ function salesCols(s, list, nSel) {
           placeholder="Select customer ledger" aria-label={"Customer ledger for " + (v.x.number || "invoice")} onCommit={(val) => salesSetCust(v.id, val)} />
         {v.hold && v.status === "review" && <select aria-label="Edit type" data-edit-type={v.id} value="" onChange={(ev) => salesSetKind(v.id, ev.target.value)}><option value="">Edit type…</option><option value="invoice">Invoice</option><option value="credit">Credit Note</option><option value="debit">Debit Note</option></select>}
         {p.editable && (v.taxAsk || []).slice(0, 1).map((a) => <TaxChoice key={a.ck || a.ik} a={a} id={v.id} />)}
+        <SalesAsk v={v} />
         {p.issue ? <span className="src bad" title={(v.problems || []).concat(v.ledgerIssues || []).join("; ")}>{p.issue}</span>
           : <span className={"src" + (v.status === "ready" ? " ok" : "")}>{v.status === "ready" ? (v.userLedger ? "Set by you" : v.custSource || "Ready") : v.customerLedger ? "Suggested · " + (v.custSource || "match") : "No match found"}</span>}
       </> : <><span className="lgtext">{v.customerLedger || "—"}</span>
@@ -157,9 +158,10 @@ function Detail({ v }) {
     <Panel wide title={<>Invoice {x.number || ""} <span className={"tag " + cls}>{word}</span></>} close={() => salesAct("salesClose")}>
       {probs.length > 0 && <div className="bk-alert bad">{probs.map((p, i) => <div key={i}>{p}</div>)}</div>}
       {v.postError && <div className="bk-alert bad">Tally: {v.postError}</div>}
+      <SalesAsk v={v} wide />
       <section><h3>Invoice details</h3>
         <div className="bk-form">
-          <Field x={x} ro={ro} label="Invoice number" k="number" /><Field x={x} ro={ro} label="Date" k="date" type="date" /><Field x={x} ro={ro} label="Customer name" k="customerName" /><Field x={x} ro={ro} label="Customer GSTIN" k="customerGstin" />
+          <Field x={x} ro={ro} label="Invoice number" k="number" /><Field x={x} ro={ro} label="Date" k="date" type="date" /><Field x={x} ro={ro} label="Customer name" k="customerName" /><Field x={x} ro={ro} label={gstinFromLedger(v) ? "Customer GSTIN (GSTIN from Tally ledger)" : "Customer GSTIN"} k="customerGstin" />
           <label><span>Place of supply</span><select value={x.pos || ""} disabled={ro} onChange={(ev) => salesSetField("pos", ev.target.value)}><States /></select></label>
           <Field x={x} ro={ro} label="Taxable value" k="taxable" type="number" /><Field x={x} ro={ro} label="CGST" k="cgst" type="number" /><Field x={x} ro={ro} label="SGST" k="sgst" type="number" /><Field x={x} ro={ro} label="IGST" k="igst" type="number" />
           <Field x={x} ro={ro} label="Cess" k="cess" type="number" /><Field x={x} ro={ro} label="Invoice total" k="total" type="number" />
@@ -319,6 +321,20 @@ function Create() {
   );
 }
 
+// a GSTIN FinCom filled from the party's Tally ledger (a sheet that gave none), said where it is shown
+const gstinFromLedger = (v) => !!(v && v.filled && v.filled.customerGstin && v.filled.customerGstin === v.x.customerGstin);
+// on an invoice: "Try again" (refused by Tally, or not confirmed: the duplicate check runs first), and the answer to a Tally
+// voucher of the same number and another amount
+function SalesAsk({ v, wide }) {
+  const s = SL(), cls = wide ? "btn small" : "linkbtn";
+  if (!["review", "ready"].includes(v.status)) return null;
+  return <>
+    {(v.refused || v.needsCheck) && <button className={cls} data-sales-retry={v.id} disabled={!!s.busy || !canPostTally(CO())} title="Checks Tally for it first, then sends it on its own" onClick={() => salesPostOneByOne([v.id])}>Try again</button>}
+    {v.tallyNear && <span data-sales-near={v.id}>{wide && <>Tally has {v.tallyNear.type || "a voucher"} {v.tallyNear.number} of {money(num(v.tallyNear.amount))}{v.tallyNear.party ? " (" + v.tallyNear.party + ")" : ""}. </>}
+      <button className={cls} data-near-same="" onClick={() => salesNearAnswer(v.id, true)}>It is this invoice</button>{" · "}
+      <button className={cls} data-near-other="" onClick={() => salesNearAnswer(v.id, false)}>It is another</button></span>}
+  </>;
+}
 function SalesRefused({ s }) {
   const waiting = s.list.filter((v) => v.refused && !v.refused.single && v.status === "review"), done = s.oneByOne;
   if (!waiting.length && !(done && done.rows && done.rows.length)) return null;
