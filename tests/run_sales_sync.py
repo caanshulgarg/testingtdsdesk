@@ -150,6 +150,8 @@ with sync_playwright() as p:
 
     print("2. Post never silent")
     B.evaluate(TOASTS)
+    r = B.evaluate("() => { const k = S.sales; S.sales = null; const a = [salesAct('salesPost'), salesAct('salesSettings')]; S.sales = k; const t = window.__toasts.slice(); window.__toasts = []; return [a, t]; }")
+    ok(r == [[True, False], ["Sales list still loading. Try again in a moment."]], "a Post click before the Sales list is loaded: says so; other actions stay quiet (%s)" % r)
     B.evaluate("() => { window.__etc = window.ensureTallyCompany; window.ensureTallyCompany = async () => { throw new Error('the bridge did not answer'); }; }")
     B.evaluate("() => salesAct('salesPost')"); B.wait_for_timeout(600)
     t = B.evaluate("() => window.__toasts")

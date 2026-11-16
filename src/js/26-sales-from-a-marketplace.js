@@ -745,7 +745,7 @@ function salesCfg(k, val){ const s = SL(); if (k === "voucherType"){ s.cfg.vtBy 
 function salesCfgCheck(k, on){ const s = SL(); s.cfg[k] = on; saveSales({cfg: true}); s.list.forEach(v => mapInvoice(v)); render(); }
 function salesCfgLedger(k, val){ const s = SL(); s.cfg.ledgers = s.cfg.ledgers || {}; s.cfg.ledgers[k] = val; saveSales({cfg: true}); s.list.forEach(v => mapInvoice(v)); saveSales(); render(); }
 function salesClick(t){
-  const s = SL(); if (!s) return false;
+  const s = SL(); if (!s){ if (!/Post/.test(t.dataset.act)) return false; toast("Sales list still loading. Try again in a moment."); return true; }
   if (t.dataset.svact){ salesRowAct(t.dataset.svact, t.dataset.id, t.dataset.force || null); return true; }
   switch (t.dataset.act){
     case "salesPick": document.getElementById("salesIn").click(); return true;

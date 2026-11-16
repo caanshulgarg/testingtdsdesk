@@ -490,8 +490,8 @@ export function SalesBar() {
       {(conf.shown ? conf.all : confirmable) > 0 && <button className="btn" data-confirm-shown={conf.shown ? confirmable : undefined} disabled={!confirmable} onClick={() => salesAct("salesConfirmAll")}>{!conf.shown ? "Confirm all suggestions (" + confirmable + ")" : confirmable ? "Confirm " + confirmable + " shown suggestion" + (confirmable === 1 ? "" : "s") : "No suggestion shown: clear filters to confirm all " + conf.all}</button>}
       {canPostTally(CO()) && postThroughWords(CO()) && <span className="note" data-post-through="">{postThroughWords(CO())}</span>}
       {/* review of 955ce3d85: a column filter on: only the Ready invoices it shows are posted, counted on the button */}
-      {canPostTally(CO()) ? <button className="btn primary" disabled={!nPost} data-post-shown={fOn ? nPost : undefined} onClick={() => salesAct("salesPost")}>{!fOn ? "Post to Tally (" + nPost + ")" : nPost ? "Post " + nPost + " shown to Tally" : "No Ready invoice shown: clear filters to post all " + post.all}</button>
-        : <button className="btn primary" disabled={!nPost} data-post-shown={fOn ? nPost : undefined} onClick={() => salesAct("salesFile")}>{!fOn ? "Create Tally file (" + nPost + ")" : nPost ? "Create Tally file of " + nPost + " shown" : "No Ready invoice shown: clear filters to export all " + post.all}</button>}
+      {canPostTally(CO()) ? <button className="btn primary" disabled={!nPost} data-post-shown={fOn ? nPost : undefined} onClick={() => salesAct("salesPost")}>{!fOn ? (nPost || why ? "Post to Tally (" + nPost + ")" : "No Ready invoice to post") : nPost ? "Post " + nPost + " shown to Tally" : "No Ready invoice shown: clear filters to post all " + post.all}</button>
+        : <button className="btn primary" disabled={!nPost} data-post-shown={fOn ? nPost : undefined} onClick={() => salesAct("salesFile")}>{!fOn ? (nPost || why ? "Create Tally file (" + nPost + ")" : "No Ready invoice to export") : nPost ? "Create Tally file of " + nPost + " shown" : "No Ready invoice shown: clear filters to export all " + post.all}</button>}
     </>;
   }
   return (
