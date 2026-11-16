@@ -183,6 +183,7 @@ run_react_home.py                     120
 run_react_post.py                     120
 run_react_review.py                   120
 run_react_sales.py                    120
+run_sales_tax_pick.py                 120
 run_react_settings.py                 120
 run_react_txn_dash.py                 120
 run_read_failures.py                  120

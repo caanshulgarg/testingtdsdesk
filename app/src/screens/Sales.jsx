@@ -37,6 +37,15 @@ const EMPTY = { review: "Nothing to review: every invoice has its customer ledge
 const States = () => <><option value="">— Choose —</option>{gstStateList().map(([c, n]) => <option key={c} value={c}>{c} · {n}</option>)}</>;
 const gstOf = (x) => r2(num(x.cgst) + num(x.sgst) + num(x.igst) + num(x.cess));
 
+// next-fix-igst-pick: the output GST ledger a person chooses, one click (several fit, none by its state); every
+// waiting invoice of the client takes it (salesPickTax, src/js/25-sales.js)
+const taxWord = (a) => "Output " + String(a.kind || "").toUpperCase() + (a.reg ? " for " + a.reg + " " + (GST_STATES[a.reg] || "") : "");
+function TaxChoice({ a, n }) {
+  return <span className="row" data-tax-choice={a.ck} style={{ gap: 4, flexWrap: "wrap", alignItems: "center" }}>
+    <span className="note">{taxWord(a)}{n ? " (" + n + " invoice" + (n === 1 ? "" : "s") + ")" : ""}:</span>
+    {a.cands.map((c) => <button key={c} className="btn small" data-tax-pick={c} title={"Use " + c + " on every waiting invoice of this client"} onClick={() => salesPickTax(a.ck, c)}>{c}</button>)}
+  </span>;
+}
 // the sales list's columns (spec K6: date, number, party, amount, status, then the rest, in ListTable.jsx's order)
 const ST_WORDS = { ready: ["ok", "Ready to post"], review: ["warn", "To review"], posted: ["ok", "Posted"], intally: ["no", "In Tally"], ignored: ["no", "Ignored"] };
 const salesPrep = (v) => ({ editable: ["review", "ready"].includes(v.status), issue: (v.problems || [])[0] || (v.ledgerIssues || []).find((p) => !/customer ledger/.test(p)) || "" });
@@ -53,13 +62,15 @@ function salesCols(s, list, nSel) {
     { k: "val", role: "amount", label: "Total", cls: "n", filter: <ColFunnel hideIdle t="sales" k="val" label="Total" />, v: (v) => num(v.x.total), cell: (v) => <b>{money(num(v.x.total))}</b> },
     { k: "st", role: "status", label: "Status", v: (v) => (ST_WORDS[v.status] || ["", v.status])[1], cell: (v) => { const w = ST_WORDS[v.status] || ["no", v.status]; return <span className={"tag " + w[0]}>{w[1]}</span>; } },
     { k: "tx", label: "Taxable", cls: "n", v: (v) => num(v.x.taxable), sum: true, cell: (v) => money(num(v.x.taxable)) },
-    { k: "gst", label: "GST", cls: "n", v: (v) => gstOf(v.x), sum: true, cell: (v) => money(gstOf(v.x)) },
+    { k: "gst", label: "GST", cls: "n", v: (v) => gstOf(v.x), sum: true, cell: (v) => <>{money(gstOf(v.x))}
+      {(v.taxPicks || []).map((t, i) => <div key={i} className="nr" data-tax-led={t.kind} title={t.why ? t.ledger + ": " + t.why : t.ledger}>{t.ledger}</div>)}</> },
     { k: "led", label: "Customer ledger", cls: "lg", filter: <ColFunnel hideIdle t="sales" k="led" label="Customer ledger" />, v: (v) => v.customerLedger || "",
       cell: (v, p) => p.editable ? <>
         {v.postError && <span className="src bad" title={v.postError}>Tally: {v.postError}</span>}
         <LedgerBox className={"lgbox" + (v.status === "ready" ? " done" : v.customerLedger ? " sugg" : "")} value={v.customerLedger || ""} fk={"svcust:" + v.id} data-svcust={v.id}
           placeholder="Select customer ledger" aria-label={"Customer ledger for " + (v.x.number || "invoice")} onCommit={(val) => salesSetCust(v.id, val)} />
         {v.hold && v.status === "review" && <select aria-label="Edit type" data-edit-type={v.id} value="" onChange={(ev) => salesSetKind(v.id, ev.target.value)}><option value="">Edit type…</option><option value="invoice">Invoice</option><option value="credit">Credit Note</option><option value="debit">Debit Note</option></select>}
+        {p.editable && (v.taxAsk || []).slice(0, 1).map((a) => <TaxChoice key={a.ck} a={a} />)}
         {p.issue ? <span className="src bad" title={(v.problems || []).concat(v.ledgerIssues || []).join("; ")}>{p.issue}</span>
           : <span className={"src" + (v.status === "ready" ? " ok" : "")}>{v.status === "ready" ? (v.userLedger ? "Set by you" : v.custSource || "Ready") : v.customerLedger ? "Suggested · " + (v.custSource || "match") : "No match found"}</span>}
       </> : <><span className="lgtext">{v.customerLedger || "—"}</span>
@@ -167,7 +178,7 @@ function Detail({ v }) {
         <div className="bk-tablewrap" style={{ marginTop: 10 }}><table className="bk-table" data-statement="">
           <thead><tr><th>Ledger</th><th className="n">Debit ₹</th><th className="n">Credit ₹</th></tr></thead>
           <tbody>
-            {lines.map((l, i) => <tr key={i}><td>{l.ledger || <span className="src bad">not set</span>}{l.ledger && !exactLedger(l.ledger) && <> <span className="src bad">not in Tally</span></>}</td>
+            {lines.map((l, i) => <tr key={i}><td title={l.why || undefined} data-line-why={l.why || undefined}>{l.ledger || <span className="src bad">not set</span>}{!ro && !l.ledger && l.cands && <> <TaxChoice a={l} /></>}{l.ledger && l.why && <span className="src muted"> · {l.why}</span>}{l.ledger && !exactLedger(l.ledger) && <> <span className="src bad">not in Tally</span></>}</td>
               <td className="n">{l.side === "Dr" ? INR.format(l.amt) : ""}</td><td className="n">{l.side === "Cr" ? INR.format(l.amt) : ""}</td></tr>)}
             <tr><td><b>Total</b></td><td className="n"><b>{INR.format(tot("Dr"))}</b></td><td className="n"><b>{INR.format(tot("Cr"))}</b></td></tr>
           </tbody>
@@ -398,9 +409,11 @@ export function SalesBar() {
     const confirmable = s.list.filter((v) => v.status === "review" && v.customerLedger && !(v.problems || []).length && !(v.ledgerIssues || []).length).length;
     // upload-pages: the counts of the states are the state bar's; the Post button counts what it posts
     left = null;
-    const why = !tc.ready && typeof salesWhy === "function" && salesWhy();
+    // (the output GST ledgers to choose are offered whatever else is ready: next-fix-igst-pick)
+    const why0 = typeof salesWhy === "function" && salesWhy(), why = !tc.ready && why0;
     right = <>
       {why && <span className="note" data-post-why="">{why.text.split(":")[0]} <button className="linkbtn" onClick={why.act}>{why.btn}</button></span>}
+      {why0 && (why0.choices || []).map((c) => <TaxChoice key={c.ck} a={c} n={c.n} />)}
       {confirmable > 0 && <button className="btn" onClick={() => salesAct("salesConfirmAll")}>Confirm all suggestions ({confirmable})</button>}
       {canPostTally(CO()) && postThroughWords(CO()) && <span className="note" data-post-through="">{postThroughWords(CO())}</span>}
       {canPostTally(CO()) ? <button className="btn primary" disabled={!tc.ready} onClick={() => salesAct("salesPost")}>Post to Tally ({tc.ready})</button>

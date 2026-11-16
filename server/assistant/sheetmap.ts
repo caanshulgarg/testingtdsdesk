@@ -6,7 +6,7 @@
 // prompt is cached (1 hour), so a firm mapping several formats in a session pays for it once.
 // Plain module: no Deno, no imports.
 
-export const SHEET_FIELDS = ["date", "no", "party", "gstin", "pos", "taxable", "rate", "igst", "cgst", "sgst", "cess", "tax", "total", "hsn", "qty", "ledger", "sledger", "doctype", "against"];
+export const SHEET_FIELDS = ["date", "no", "party", "gstin", "pos", "taxable", "rate", "igst", "cgst", "sgst", "cess", "tax", "total", "hsn", "qty", "ledger", "sledger", "doctype", "against", "owngstin", "branch"];
 // a party's statement of account (a vendor's or customer's ledger of the client, for reconciliation: app/src/lib/registers.js)
 export const PARTY_FIELDS = ["date", "no", "narration", "debit", "credit", "amount", "drcr", "balance", "tds", "gst"];
 export const PARTY_SYSTEM = [
@@ -26,7 +26,9 @@ export const SHEET_SYSTEM = [
   "total (invoice or document value), hsn (HSN/SAC), qty, against (the original invoice of a note),",
   "sledger (the sales, income, purchase or expense ledger of the row: a column headed Sales Ledger, Purchase Ledger, Particulars or Account whose values are account heads, not the party),",
   "ledger (the party's own ledger name as kept in the accounting software, only when it is a column other than the party name; never an income, expense or tax ledger),",
-  "doctype (what the document is: invoice / credit note / debit note / return; a Voucher Type column is this).",
+  "doctype (what the document is: invoice / credit note / debit note / return; a Voucher Type column is this),",
+  "owngstin (on a sales register only: the seller's own GSTIN the invoice is issued from, a column such as Our GSTIN, Company GSTIN or Seller GSTIN; never the customer's),",
+  "branch (the branch, location or invoice series the row was issued from).",
   "Map a field only when a column clearly holds it; leave it out otherwise. Never map two fields to one column. Use the column's header text exactly as given.",
   "Also say how to read: date order (dmy, mdy or ymd) from the sample values; whether rows sharing an invoice number are one invoice (groupByNo);",
   "Answer only JSON: {\"map\": {field: header}, \"transforms\": {\"date\": \"dmy\", \"groupByNo\": true}, \"skip\": [\"what rows to skip, e.g. total rows\"], \"why\": {field: \"a few words: from 'Inv Dt'\"}}.",

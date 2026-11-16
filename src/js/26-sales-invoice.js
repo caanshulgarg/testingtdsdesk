@@ -79,9 +79,14 @@ function salesWhy(){
   const W = {sales: "the sales ledger", tax: "the output GST ledgers", round: "the round-off ledger", cust: "a customer ledger", tally: "a ledger that is in Tally", fix: "a correction", ok: "only your Confirm"};
   const parts = Object.keys(W).filter(k => n[k]).map(k => n[k] + " invoice" + (n[k] === 1 ? " needs " : "s need ") + W[k]);
   if (!parts.length) return null;
+  // next-fix-igst-pick: the output GST ledgers a person must choose (several fit, none by its state), each choice once
+  // with its candidates, and how many waiting invoices it sets
+  const ch = new Map();
+  ((s && s.list) || []).filter(v => v.status === "review").forEach(v => (v.taxAsk || []).forEach(a => {
+    const c = ch.get(a.ck) || {ck: a.ck, kind: a.kind, reg: a.reg, cands: a.cands, n: 0}; c.n++; ch.set(a.ck, c); }));
   const set = n.sales || n.tax || n.round;
   return {text: parts.join("; ") + (set ? ": set it here" : ": see To review"), btn: set ? "Set it here" : "Open To review",
-    act: () => { if (set) s.showSettings = true; else s.filter = "review"; render(); }};
+    act: () => { if (set) s.showSettings = true; else s.filter = "review"; render(); }, choices: Array.from(ch.values())};
 }
 // "Edit type" on an invoice held for a person (a sheet's negative amount, or "Purchase Return" on Sales): they say what
 // it is; its amounts are taken positive, a credit note's number marked as a sheet's is, and it is held no more

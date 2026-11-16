@@ -34,7 +34,10 @@ import "./vendorRecon.js";
 const SHEET_FIELDS = [["date", "Invoice date"], ["no", "Invoice no."], ["party", "Party name"], ["gstin", "Party GSTIN"], ["pos", "Place of supply"],
   ["taxable", "Taxable value"], ["rate", "GST rate %"], ["igst", "IGST"], ["cgst", "CGST"], ["sgst", "SGST / UTGST"], ["cess", "Cess"],
   ["tax", "Total tax (one column)"], ["total", "Invoice total"], ["hsn", "HSN / SAC"], ["qty", "Quantity"], ["ledger", "Party's ledger in Tally"],
-  ["sledger", "Sales / purchase ledger"], ["doctype", "Document type (invoice / credit note)"], ["vchtype", "Voucher type (information only)"], ["against", "Against invoice no."]];
+  ["sledger", "Sales / purchase ledger"], ["doctype", "Document type (invoice / credit note)"], ["vchtype", "Voucher type (information only)"], ["against", "Against invoice no."],
+  ["owngstin", "Our GSTIN (the client's registration)"], ["branch", "Branch / series"]];
+// (owngstin, branch: next-fix-igst-pick, 16-Nov-2026: the client's own registration an invoice is issued from picks its
+// output GST ledgers by state, src/js/25-sales.js taxLedgerPick)
 // next-fix-sheet-import (13-Nov-2026, a client's sales sheet that would not post): "ledger" was "Ledger (a hint)" and was
 // taken as the PARTY's ledger, so a "Sales Ledger" column put the income ledger in the customer's place on every invoice,
 // and "Voucher Type" (the client's own "Sales UP") was only looked at for credit / debit. Now a field each: the party's
@@ -133,7 +136,7 @@ const SheetFmt = {
   },
   // a register's fields, or (vendor / customer) a party statement's (below)
   fieldsFor(side){ return (side === "vendor" || side === "customer") && typeof PARTY_FIELDS !== "undefined" ? PARTY_FIELDS
-    : SHEET_FIELDS.map(f => f[0] === "sledger" && SIDE_LEDGER[side] ? ["sledger", SIDE_LEDGER[side]] : f); },
+    : SHEET_FIELDS.filter(f => side !== "purchase" || f[0] !== "owngstin").map(f => f[0] === "sledger" && SIDE_LEDGER[side] ? ["sledger", SIDE_LEDGER[side]] : f); },
   // what a ledger of the sheet is in Tally, by its whole group chain (Ledgers.cls: a ledger under "Debtors UP" under
   // Sundry Debtors is a party; one under "Sales Local" under Sales Accounts is income); "" when Tally has no such ledger, or its
   // group is not known
@@ -174,7 +177,7 @@ const SheetFmt = {
     const col = f => map[f] ? head.indexOf(map[f]) : -1, idx = {};
     SHEET_FIELDS.forEach(([f]) => { idx[f] = col(f); });
     const get = (r, f) => idx[f] >= 0 ? r[idx[f]] : "";
-    const home = stateOfGstin(co && co.gstin);
+    const home0 = stateOfGstin(co && co.gstin);
     const docs = new Map(), skipped = [];
     grid.slice(hi + 1).forEach((r, n) => {
       if (!r || !r.some(c => String(c == null ? "" : c).trim())) return;
@@ -189,12 +192,13 @@ const SheetFmt = {
       const d = docs.get(key) || {no, date: this.date(get(r, "date"), t.date), party: String(get(r, "party") || "").trim(), gstin: String(get(r, "gstin") || "").toUpperCase().replace(/[^A-Z0-9]/g, ""),
         pos: this.pos(get(r, "pos")), hsn: String(get(r, "hsn") || "").trim(), ledger: String(get(r, "ledger") || "").trim(), against: String(get(r, "against") || "").trim(),
         sledger: String(get(r, "sledger") || "").trim(), vch: String(get(r, "vchtype") || "").trim(),
+        own: /^\d{2}[A-Z0-9]{13}$/.test(String(get(r, "owngstin") || "").toUpperCase().replace(/[^A-Z0-9]/g, "")) ? String(get(r, "owngstin")).toUpperCase().replace(/[^A-Z0-9]/g, "") : "", branch: String(get(r, "branch") || "").trim(),
         note: kind === "C" ? "credit" : kind === "D" ? "debit" : "", hold: kind === "?" ? "“" + String(get(r, "doctype")).trim() + "” on a sales sheet: is this a credit note or a debit note? Set it in the Type column" : "", taxable: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, total: 0, rates: [], lines: 0, rows: [], lineTotals: []};
       let taxable = a("taxable"), igst = a("igst"), cgst = a("cgst"), sgst = a("sgst"), cess = a("cess"), total = a("total");
       const rate = this.amount(get(r, "rate"));
       // one tax column: split by the place of supply (the same state as the client: CGST + SGST, else IGST)
       if (idx.tax >= 0 && !igst && !cgst && !sgst){
-        const tax = a("tax"), pos = d.pos || stateOfGstin(d.gstin);
+        const tax = a("tax"), pos = d.pos || stateOfGstin(d.gstin), home = (side === "sales" && stateOfGstin(d.own)) || home0;
         const inter = side === "sales" ? (pos && home && pos !== home) : (stateOfGstin(d.gstin) && home && stateOfGstin(d.gstin) !== home);
         if (inter) igst = tax; else { cgst = r2(tax / 2); sgst = r2(tax - cgst); }
       }
@@ -338,19 +342,19 @@ const SheetFmt = {
   // GSTR-1 JSON (GSTAmend.norm, the GST tab's reader, only read; cdnur read here): each document; B2CS as summary rows
   // per rate and place of supply (posted as one entry each only when the panel's question is answered yes)
   from1(j){
-    const n = GSTAmend.norm(j), out = [];
+    const n = GSTAmend.norm(j), out = [], own = /^\d{2}[A-Z0-9]{13}$/.test(String(j.gstin || "").toUpperCase()) ? String(j.gstin).toUpperCase() : "";
     n.docs.forEach(x => {
       const credit = x.kind === "CDNR" && x.ntty === "C", debit = x.kind === "CDNR" && x.ntty === "D", sg = credit ? -1 : 1;
       out.push(this.finish({no: x.num, date: x.date ? x.date.slice(0, 4) + "-" + x.date.slice(4, 6) + "-" + x.date.slice(6, 8) : "", party: "", gstin: x.ctin || "", pos: x.pos, hsn: "", ledger: "", against: "",
-        note: credit ? "credit" : debit ? "debit" : "", taxable: sg * x.txval, igst: sg * x.iamt, cgst: sg * x.camt, sgst: sg * x.samt, cess: sg * x.csamt, total: sg * x.val, rates: x.rates, lines: 1, rows: [], sec: x.kind}));
+        note: credit ? "credit" : debit ? "debit" : "", taxable: sg * x.txval, igst: sg * x.iamt, cgst: sg * x.camt, sgst: sg * x.samt, cess: sg * x.csamt, total: sg * x.val, rates: x.rates, lines: 1, rows: [], sec: x.kind, own}));
     });
     (j.cdnur || []).forEach(x => { const t = (x.itms || []).reduce((a, it) => { const dd = it.itm_det || it; ["txval", "iamt", "camt", "samt", "csamt"].forEach(k => { a[k] = r2((a[k] || 0) + num(dd[k])); }); return a; }, {});
       const sg = x.ntty === "D" ? 1 : -1;
       out.push(this.finish({no: String(x.nt_num || ""), date: GSTAmend.ymd ? (d => d.slice(0, 4) + "-" + d.slice(4, 6) + "-" + d.slice(6, 8))(GSTAmend.ymd(x.nt_dt)) : "", party: "", gstin: "", pos: String(x.pos || "").padStart(2, "0"), hsn: "", ledger: "", against: "",
-        note: sg < 0 ? "credit" : "debit", taxable: sg * (t.txval || 0), igst: sg * (t.iamt || 0), cgst: sg * (t.camt || 0), sgst: sg * (t.samt || 0), cess: sg * (t.csamt || 0), total: sg * num(x.val), rates: [], lines: 1, rows: [], sec: "CDNUR"})); });
+        note: sg < 0 ? "credit" : "debit", taxable: sg * (t.txval || 0), igst: sg * (t.iamt || 0), cgst: sg * (t.camt || 0), sgst: sg * (t.samt || 0), cess: sg * (t.csamt || 0), total: sg * num(x.val), rates: [], lines: 1, rows: [], sec: "CDNUR", own})); });
     const fp = String(j.fp || ""), last = fp.length === 6 ? new Date(Date.UTC(num(fp.slice(2)), num(fp.slice(0, 2)), 0)).toISOString().slice(0, 10) : "";
     const b2cs = Array.from(n.b2cs.values()).map(x => this.finish({no: "B2CS/" + fp + "/" + x.pos + "/" + x.rt, date: last, party: "Retail sales (B2CS)", gstin: "", pos: x.pos, hsn: "", ledger: "", against: "",
-      note: "", taxable: x.txval, igst: x.iamt, cgst: x.camt, sgst: x.samt, cess: x.csamt, total: 0, rates: [x.rt], lines: 1, rows: [], sec: "B2CS", summary: true}));
+      note: "", taxable: x.txval, igst: x.iamt, cgst: x.camt, sgst: x.samt, cess: x.csamt, total: 0, rates: [x.rt], lines: 1, rows: [], sec: "B2CS", summary: true, own}));
     return {docs: out, b2cs};
   }
 };
@@ -483,6 +487,8 @@ const SheetPost = {
       if (was){
         res.again++;
         if (was.source === "sheet" && ["review", "ready"].includes(was.status)){
+          if (d.own && !was.x.sellerGstin) was.x.sellerGstin = d.own;
+          if (d.branch && !was.x.branch) was.x.branch = d.branch;
           const sig = () => JSON.stringify([was.customerLedger, was.salesLedgers || {}]), before = sig(), ready = was.status === "ready";
           this.ledgersTo(was, d, true); mapInvoice(was);
           if (ready && sig() !== before) was.status = "review";
@@ -500,7 +506,7 @@ const SheetPost = {
       }
       const v = newInvoice({number: no, date: d.date, customerName: d.party || (d.gstin ? "" : "Retail customer"), customerGstin: GSTIN_RE.test(d.gstin) ? d.gstin : "", pos: d.pos,
         hsn: d.hsn, taxable: ab(d.taxable), cgst: ab(d.cgst), sgst: ab(d.sgst), igst: ab(d.igst), cess: ab(d.cess), total: ab(d.total),
-        rate: d.rate, noteKind: d.note || "", againstInvoice: d.against || ""}, "sheet", {fileName, sheet: {rows: d.rows, check: d.check, sec: d.sec || ""}});
+        rate: d.rate, noteKind: d.note || "", againstInvoice: d.against || "", sellerGstin: d.own || "", branch: d.branch || ""}, "sheet", {fileName, sheet: {rows: d.rows, check: d.check, sec: d.sec || ""}});
       this.ledgersTo(v, d);
       s.list.push(v); mapInvoice(v); res.added++; res.ids.push(v.id);
     });
