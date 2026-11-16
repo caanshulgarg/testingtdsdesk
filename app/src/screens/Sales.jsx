@@ -328,17 +328,28 @@ const gstinFromLedger = (v) => !!(v && v.filled && v.filled.customerGstin && v.f
 function SalesAsk({ v, wide }) {
   const s = SL(), cls = wide ? "btn small" : "linkbtn";
   if (!["review", "ready"].includes(v.status)) return null;
+  const dup = salesDupOf(v);
   return <>
     {(v.refused || v.needsCheck) && <button className={cls} data-sales-retry={v.id} disabled={!!s.busy || !canPostTally(CO())} title="Checks Tally for it first, then sends it on its own" onClick={() => salesPostOneByOne([v.id])}>Try again</button>}
-    {v.tallyNear && <span data-sales-near={v.id}>{wide && <>Tally has {v.tallyNear.type || "a voucher"} {v.tallyNear.number} of {money(num(v.tallyNear.amount))}{v.tallyNear.party ? " (" + v.tallyNear.party + ")" : ""}. </>}
-      <button className={cls} data-near-same="" onClick={() => salesNearAnswer(v.id, true)}>It is this invoice</button>{" · "}
-      <button className={cls} data-near-other="" onClick={() => salesNearAnswer(v.id, false)}>It is another</button></span>}
+    {dup && <span data-sales-dup={v.id}>{wide && <b>{salesDupWords(dup)} </b>}
+      {dup.src === "tally" && <><button className={cls} data-near-same="" onClick={() => salesNearAnswer(v.id)}>It is this invoice</button>{" · "}</>}
+      <button className={wide ? "btn small danger" : "linkbtn danger"} data-dup-override="" onClick={() => salesDupOverride(v.id)}>Post duplicate anyway</button></span>}
   </>;
+}
+// the client's own sales voucher type from its books (src/js/25 salesLearnVt), and the one question when there are several
+function SalesVt({ s }) {
+  const c = s.cfg || {};
+  if (s.vtAsk && s.vtAsk.length > 1 && !c.vtBy) return <div className="bk-alert" data-sales-vt-ask="">
+    <b>Your Tally uses more than one sales voucher type.</b> Which do uploaded sales post as? {s.vtAsk.map((t) => <button key={t.type} className="btn small" data-vt-pick={t.type} onClick={() => salesVtAnswer(t.type)}>{t.type} ({t.count})</button>)}</div>;
+  return c.vtFrom === "books" ? <p className="note" data-sales-vt="">Voucher type: {c.voucherType} (from your Tally)</p> : null;
 }
 function SalesRefused({ s }) {
   const waiting = s.list.filter((v) => v.refused && !v.refused.single && v.status === "review"), done = s.oneByOne;
-  if (!waiting.length && !(done && done.rows && done.rows.length)) return null;
+  const skipped = (s.dupSkipped || []).map((id) => s.list.find((v) => v.id === id)).filter((v) => v && salesDupOf(v));
+  if (!waiting.length && !(done && done.rows && done.rows.length) && !skipped.length) return null;
   return <div className="bk-alert" data-sales-refused="">
+    {skipped.length > 0 && <div data-sales-dupskipped=""><b>Not posted: already in Tally</b>
+      <ul style={{ margin: "4px 0 0 18px" }}>{skipped.map((v) => <li key={v.id}>{v.x.number}: {salesDupWords(salesDupOf(v))} <button className="linkbtn danger" data-dup-override={v.id} onClick={() => salesDupOverride(v.id)}>Post duplicate anyway</button></li>)}</ul></div>}
     {waiting.length > 0 && <div><b>Refused by Tally:</b> {waiting.length} invoice{waiting.length === 1 ? "" : "s"}. {waiting[0].refused.hint}{" "}
       <button className="btn small" data-sales-onebyone="" disabled={!!s.busy || !canPostTally(CO())} onClick={() => salesPostOneByOne()}>Post one by one to find the cause</button></div>}
     {done && done.rows && done.rows.length > 0 && <div data-sales-onebyone-result="" style={{ marginTop: waiting.length ? 8 : 0 }}><b>Posted one by one:</b>
@@ -360,6 +371,7 @@ export default function Sales() {
     {s.busy && <BusyCard title="Working on sales…" detail={s.busy} />}
     {/* next-fix-sales-upload (item 4): invoices Tally refused in a batch with no reason given, and each one's own answer
         once posted one by one (src/js/26 salesPostOneByOne) */}
+    <SalesVt s={s} />
     <SalesRefused s={s} />
     {/* one row (round 3, 05-Oct-2026), the how-to on hover and behind How */}
     {!hasLedgerList() && (bridgeLive(co) ? <NoticeLine sev="info" text="Loading ledgers from Tally…" />

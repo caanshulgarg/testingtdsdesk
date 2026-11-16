@@ -74,6 +74,7 @@ async function loadSales(cid){
   // (item 6: the problems kept with an invoice waiting are worked out again on opening, so a label left from an earlier
   // state, "customer GSTIN is not valid" on a GSTIN since cleared, never stays)
   S.sales.list.forEach(v => { if (["review", "ready"].includes(v.status) && !v.needsMap){ const was = JSON.stringify(v.problems || []); v.problems = invoiceProblems(v); if (was !== JSON.stringify(v.problems)) mapInvoice(v); } });
+  salesLearnVt();
   render();
   if (bridgeLive(CO(cid))) salesAutoSync();
 }
@@ -440,17 +441,57 @@ function invoiceProblems(v){
   if (gst > 0 && !inter && num(x.igst) && pos) p.push("IGST is charged, but the place of supply is " + stName(pos) + from + ", the state " + co.name + " issues it from, so CGST + SGST are expected");
   // (asked once the customer ledger is set: with none, the ledger is what it waits for, and Tally's master gives the state)
   if (num(x.igst) > 0 && !pos && v.customerLedger) p.push("IGST is charged, but the party\u2019s state is not known (no GSTIN or state on the sheet or in its Tally ledger): set the customer\u2019s GSTIN or the place of supply");
-  // (review of 44e4c1e97) a Tally voucher of this number, of another amount: the person says whether it is this invoice
-  if (v.tallyNear) p.push("Same number in Tally, different amount (Tally " + money(num(v.tallyNear.amount)) + ", here " + money(num(x.total)) + "): say whether it is this invoice");
+  // (the owner, 16-Nov-2026) the same number and type already in Tally, or posted from FinCom: never posted again
+  // without a person's "Post duplicate anyway", confirmed twice
+  const dupOf = salesDupOf(v);
+  if (dupOf) p.push(salesDupWords(dupOf));
   if (v.needsCheck) p.push("Not confirmed: check Tally before posting again");
   if (v.refused) p.push("Refused by Tally" + (v.refused.single ? " (sent on its own)" : "") + ": " + (v.refused.hint || v.refused.said || "Tally created nothing"));
   if (Math.abs(num(x.cgst) - num(x.sgst)) > 0.05) p.push("CGST and SGST differ");
   if (salesTotals(x).some(g => g.mixed)) p.push("GST is not at one standard rate (several rates?): use Enter items");
   if (x.sellerGstin && co.gstin && !salesIsOwn(x.sellerGstin, co)) p.push("the seller GSTIN on the invoice is not " + co.name + "\u2019s");
   const dup = SL().list.find(o => o.id !== v.id && o.status !== "ignored" && normInvNo(o.x.number) === normInvNo(x.number) && o.x.date && x.date && fyLabel(o.x.date) === fyLabel(x.date));
-  if (x.number && dup) p.push("invoice " + x.number + " already exists");
+  if (x.number && dup && !(dupOf && dupOf.src === "fincom")) p.push("invoice " + x.number + " already exists");
   return p;
 }
+// the voucher of this number and type already in Tally (the duplicate check's v.dupBlock) or posted from FinCom (another
+// invoice of the number, its type and year, posted or found in Tally): {src, type, number, date, amount}, or null when
+// there is none or a person pressed "Post duplicate anyway" for this number
+function salesDupOf(v){
+  if (!v || !["review", "ready"].includes(v.status)) return null;
+  const no = normInvNo(v.x.number); if (!no || (v.dupOverride && v.dupOverride.no === no)) return null;
+  if (v.dupBlock) return Object.assign({src: "tally"}, v.dupBlock);
+  const vt = String(salesVt(v.x)).toLowerCase();
+  const o = (SL().list || []).find(o => o.id !== v.id && ["posted", "intally"].includes(o.status) && normInvNo(o.x.number) === no && String(salesVt(o.x)).toLowerCase() === vt && o.x.date && v.x.date && fyLabel(o.x.date) === fyLabel(v.x.date));
+  return o ? {src: "fincom", type: salesVt(o.x), number: o.x.number, date: o.x.date, amount: r2(Math.abs(num(o.x.total))), id: o.id} : null;
+}
+function salesDupWords(d){
+  const dt = String(d.date || ""), iso = /^\d{8}$/.test(dt) ? dt.slice(0, 4) + "-" + dt.slice(4, 6) + "-" + dt.slice(6) : dt;
+  return "Already in Tally as " + [d.type || "Sales", d.number].filter(Boolean).join(" ") + (iso ? " dated " + fmtDate(iso) : "") + ", " + money0(num(d.amount)) + ". Post again anyway?";
+}
+// next-fix-sales-upload (the owner, 16-Nov-2026): the client's own sales voucher type, from the vouchers FinCom already
+// reads (the client's books): the Sales-class type most used, the default for uploads, shown as "(from your Tally)"; a
+// type a person typed in Sales settings stands (cfg.vtBy "you"), and when the books use more than one in real use the
+// person is asked once (cfg.vtBy "asked")
+function salesBooksVts(){
+  const s = SL(), bk = S.books && s && S.books.cid === s.cid ? S.books : null; if (!bk) return [];
+  const n = new Map(), never = /note|return|order|quotation|delivery|memo|journal|receipt|payment|contra/i;
+  (bk.vouchers || []).forEach(v => { const t = String(v.type || "").trim(); if (!t || v.opt || v.cancel || never.test(t) || !/\bsales\b/i.test(t)) return; n.set(t, (n.get(t) || 0) + 1); });
+  const all = Array.from(n.entries()).sort((a, b) => b[1] - a[1]), tot = all.reduce((a, x) => a + x[1], 0);
+  // (in real use: at least 3 vouchers and a twentieth of the client's sales)
+  return all.filter(([, c]) => c >= 3 && c >= tot * 0.05).map(([type, count]) => ({type, count}));
+}
+function salesLearnVt(){
+  const s = SL(); if (!s || !s.cfg) return;
+  const c = s.cfg; if (c.vtBy === "you" || c.vtBy === "asked") { s.vtAsk = null; return; }
+  const t = salesBooksVts(); if (!t.length){ s.vtAsk = null; return; }
+  const was = c.voucherType;
+  c.voucherType = t[0].type; c.vtFrom = "books";
+  s.vtAsk = t.length > 1 ? t : null;
+  if (was !== c.voucherType) saveSales({cfg: true});
+}
+// the person's answer when the books use several sales types: kept for the client
+function salesVtAnswer(t){ const s = SL(); if (!s || !t) return; s.cfg.voucherType = t; s.cfg.vtBy = "asked"; s.cfg.vtFrom = "books"; s.vtAsk = null; saveSales({cfg: true}); s.list.forEach(v => mapInvoice(v)); render(); }
 function normInvNo(s){ return String(s || "").toUpperCase().replace(/[^A-Z0-9]/g, "").replace(/^0+/, ""); }
 function ledgerProblems(v, lines){
   const p = [];

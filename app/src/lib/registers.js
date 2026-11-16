@@ -794,6 +794,8 @@ const SheetImport = {
     const docs = this.docsToAdd(), cid = st.cid;
     // (a ledger to create goes on the client's list of new ledgers, kept with its bank data: brought in first)
     if (docs.some(d => d.newLedger || d.newSled) && typeof loadBank === "function" && (!S.bank || S.bank.cid !== cid)) await loadBank(cid).catch(() => {});
+    // (Sales: the client's own sales voucher type from its books, as the default for these new invoices, src/js/25)
+    if (st.side === "sales" && typeof salesLearnVt === "function") salesLearnVt();
     const r = st.side === "sales" ? SheetPost.toSales(docs, cid, st.name) : SheetPost.toBills(docs, cid, st.name);
     st.result = r; st.step = "done"; render();
     const rest = st.rest || [];

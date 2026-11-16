@@ -402,14 +402,19 @@ async function salesCheckTally(list){
   list.forEach(v => { const no = normInvNo(v.x.number), not = (v.notTally || []).concat(keep[no] || []);
     // (a note is matched to a voucher of its own type only, an invoice to a Sales-class voucher, or one of no type said)
     const kind = x => v.x.noteKind ? lc(x.type) === lc(salesVt(v.x)) : (!x.type || isInv(x.type));
-    const same = no && !not.includes("num:" + no) ? (by.get(no) || []).filter(x => !not.includes(salesTallyKey(x)) && kind(x)) : [];
-    delete v.tallyNear;
+    const any = no ? (by.get(no) || []).filter(kind) : [], same = !not.includes("num:" + no) ? any.filter(x => !not.includes(salesTallyKey(x))) : [];
+    const had = !!v.dupBlock; delete v.dupBlock;
     // (this invoice's duplicate check has run again: an answer not confirmed before no longer holds it, item 3)
     if (v.needsCheck){ delete v.needsCheck; mapInvoice(v); }
-    // the number AND the amount (to ₹1): In Tally. The number alone is never enough: said, and the person decides
+    // a person pressed "Post duplicate anyway" and confirmed it for this number: nothing of that number holds it
+    if (v.dupOverride && v.dupOverride.no === no){ if (had) mapInvoice(v); return; }
+    // the number AND the amount (to ₹1): In Tally. The number alone is never enough to call it this invoice; but it is
+    // never posted again without a person's "Post duplicate anyway" (the owner, 16-Nov-2026), also after "Not this
+    // Tally entry": held, with Tally's voucher said
     const hit = same.find(x => Math.abs(salesTallyAmount(x) - r2(Math.abs(num(v.x.total)))) <= 1);
     if (hit){ v.status = "intally"; v.postNote = "Already in Tally"; v.tallyMatch = info(hit); n++; }
-    else if (same.length){ v.tallyNear = info(same[0]); if (["ready", "review"].includes(v.status)) mapInvoice(v); }
+    else if (any.length){ v.dupBlock = info(same[0] || any[0]); if (["ready", "review"].includes(v.status)) mapInvoice(v); }
+    else if (had) mapInvoice(v);
   });
   return n;
 }
@@ -421,14 +426,11 @@ function salesTypeClasses(own){
   const never = /^(journal|receipt|payment|contra|credit\s*note|debit\s*note)$|return|order|quotation|delivery|memo/i;
   return t => { const n = lc(t); if (!n || never.test(n)) return false; return names.has(n) || /\bsales\b/i.test(n); };
 }
-// "Same number in Tally, different amount": the person's answer. same: it is that voucher (In Tally, never posted);
-// else it is another (that voucher is never matched to this invoice again) and the invoice is worked out again
-function salesNearAnswer(id, same){
-  const s = SL(), v = inv(id), m = v && v.tallyNear; if (!m || !["review", "ready"].includes(v.status)) return;
-  delete v.tallyNear;
-  if (same){ v.status = "intally"; v.postNote = "Already in Tally"; v.tallyMatch = m; auditEvent("sales_tally_same", "Invoice " + (v.x.number || v.id) + ": the Tally voucher of another amount is this invoice", s.cid); }
-  else { v.notTally = (v.notTally || []).concat(m.key); const no = normInvNo(v.x.number); s.cfg.notTally = Object.assign({}, s.cfg.notTally, {[no]: v.notTally}); saveSales({cfg: true}); mapInvoice(v);
-    auditEvent("sales_not_tally", "Invoice " + (v.x.number || v.id) + ": not Tally entry " + [m.date, m.type, m.number, m.amount].join(" "), s.cid); }
+// "It is this invoice": the Tally voucher of this number (another amount) is this invoice: In Tally, never posted
+function salesNearAnswer(id){
+  const s = SL(), v = inv(id), m = v && v.dupBlock; if (!m || m.src === "fincom" || !["review", "ready"].includes(v.status)) return;
+  delete v.dupBlock; v.status = "intally"; v.postNote = "Already in Tally"; v.tallyMatch = m;
+  auditEvent("sales_tally_same", "Invoice " + (v.x.number || v.id) + ": the Tally voucher " + [m.type, m.number, m.date, m.amount].join(" ") + " is this invoice", s.cid);
   saveSales(); render();
 }
 function salesAmtNum(a){ return num(String(a == null ? "" : a).replace(/[^0-9.\-]/g, "")); }
@@ -474,9 +476,12 @@ async function postSalesToTally(){
   if (!list.length) return withPart("invoice", "salesWhy", () => toast("No invoice is ready to post" + (salesWhy() ? ": " + salesWhy().text : "") + "."));   // never silent
   s.busy = "Checking Tally for invoices already booked\u2026"; render();
   try {
+    const asked = list.slice();
     await salesCheckTally(list);
     list = list.filter(v => v.status === "ready");
     const probs = salesReadyProblems(list);
+    // (a number already in Tally or posted from FinCom: skipped, listed with "Post duplicate anyway")
+    s.dupSkipped = asked.filter(v => v.status !== "ready" && salesDupOf(v)).map(v => v.id);
     list = list.filter(v => v.status === "ready");
     if (!list.length){ s.busy = ""; saveSales(); toast(probs.length ? "Fix these first: " + probs.slice(0, 2).join("; ") : "These invoices are already in Tally."); render(); return; }
     const masters = mastersFor(list);
@@ -692,7 +697,7 @@ function draftCust(val){
   applyDraftCustomer(l); return true;
 }
 // Sales settings
-function salesCfg(k, val){ const s = SL(); s.cfg[k] = ["next", "pad"].includes(k) ? Math.max(1, Math.round(num(val))) : val; saveSales({cfg: true}); render(); }
+function salesCfg(k, val){ const s = SL(); if (k === "voucherType"){ s.cfg.vtBy = "you"; delete s.cfg.vtFrom; s.vtAsk = null; } s.cfg[k] = ["next", "pad"].includes(k) ? Math.max(1, Math.round(num(val))) : val; saveSales({cfg: true}); render(); }
 function salesCfgCheck(k, on){ const s = SL(); s.cfg[k] = on; saveSales({cfg: true}); s.list.forEach(v => mapInvoice(v)); render(); }
 function salesCfgLedger(k, val){ const s = SL(); s.cfg.ledgers = s.cfg.ledgers || {}; s.cfg.ledgers[k] = val; saveSales({cfg: true}); s.list.forEach(v => mapInvoice(v)); saveSales(); render(); }
 function salesClick(t){
