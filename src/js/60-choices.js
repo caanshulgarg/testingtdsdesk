@@ -328,7 +328,11 @@ const Drafts = {
     s.stores.forEach((st, i) => {
       const before = s.pre[i], now = st.snap();
       if (!before || !now) return;
-      choicePathDiff(before, now, [], [], 0).forEach(p => { const k = i + ":" + JSON.stringify(p), c = s.paths.get(k), val = choicePathGet(now, p); if (c) c.val = val; else s.paths.set(k, {i, path: p, base: choicePathGet(before, p), val}); });
+      const ps = choicePathDiff(before, now, [], [], 0);
+      // val: what the draft wrote, also after later edits inside it
+      s.paths.forEach(c => c.i === i && ps.forEach(p => { const n = Math.min(p.length, c.path.length); if (p.slice(0, n).every((k, j) => k === c.path[j]))
+        p.length > n && c.val && typeof c.val === "object" ? choicePathSet(c.val, p.slice(n), choicePathGet(now, p)) : c.val = choicePathGet(now, c.path); }));
+      ps.forEach(p => { const k = i + ":" + JSON.stringify(p); if (!s.paths.has(k)) s.paths.set(k, {i, path: p, base: choicePathGet(before, p), val: choicePathGet(now, p)}); });
     });
     s.armed = 0; s.pre = null;
   },
@@ -350,8 +354,13 @@ const Drafts = {
     if (typeof s === "string") s = this.secs[s];
     if (!s) return [];
     if (s.armed) this.attribute(s);
-    // (a value stored since by other code is no longer the draft's: never undone)
-    return Array.from(s.paths.values()).filter(c => { const root = s.stores[c.i] && s.stores[c.i].root(), v = root && choicePathGet(root, c.path); return root && !choiceSame(v, c.base) && choiceSame(v, c.val); });
+    return Array.from(s.paths.values()).filter(c => { const root = s.stores[c.i] && s.stores[c.i].root(); return root && (c.ops = this.own(c, root)).length; });
+  },
+  // [path, value before] of what is still as the draft wrote it (a value stored since by other code is never undone)
+  own(c, root){
+    const isO = v => !!v && typeof v === "object" && !Array.isArray(v), v = choicePathGet(root, c.path);
+    if (!isO(c.val) || !isO(v)) return choiceSame(v, c.val) && !choiceSame(v, c.base) ? [[c.path, c.base]] : [];
+    return choicePathDiff({}, c.val, [], [], 0).filter(p => choiceSame(choicePathGet(v, p), choicePathGet(c.val, p))).map(p => [c.path.concat(p), undefined]);
   },
   dirty(id){
     const s = typeof id === "string" ? this.secs[id] : id;
@@ -379,13 +388,13 @@ const Drafts = {
       if (s.custom) return;
       s.stores.forEach((st, i) => {
         if (st.hold !== want) return;
-        this.changes(s).filter(c => c.i === i).forEach(c => {
-          let path = c.path;
-          if (kind === "party"){ if (path[0] !== id) return; path = path.slice(1); }
+        this.changes(s).filter(c => c.i === i).forEach(c => c.ops.forEach(([p, base]) => {
+          let path = p;
+          if (kind === "party"){ if (path[0] !== id || c.path.length < 2) return; path = path.slice(1); }
           if (!path.length) return;
           if (out === data) out = clone(data);
-          choicePathSet(out, path, c.base);
-        });
+          choicePathSet(out, path, base);
+        }));
       });
     });
     return out;
@@ -438,7 +447,8 @@ const Drafts = {
     const s = this.secs[id]; if (!s) return;
     if (s.custom){ try { s.custom.discard(); } catch (e){} delete this.secs[id]; render(); return; }
     const ch = this.changes(s);
-    ch.slice().reverse().forEach(c => { const root = s.stores[c.i].root(); if (root) choicePathSet(root, c.path, c.base); });
+    ch.slice().reverse().forEach(c => { const root = s.stores[c.i].root(); if (!root) return; c.ops.forEach(([p, base]) => choicePathSet(root, p, base));
+      const o = choicePathGet(root, c.path); if (c.ops[0][0] !== c.path && choiceSame(o, undefined)) choicePathSet(root, c.path, c.base); });
     delete this.secs[id];
     this.bypassN++;
     try { s.stores.forEach((st, i) => { if ((s.held && s.held.has(st.hold)) || ch.some(c => c.i === i)) st.persist(ch.filter(c => c.i === i).map(c => c.path)); if (st.after && ch.some(c => c.i === i)) st.after(); }); }
