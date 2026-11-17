@@ -91,6 +91,7 @@ run_gst_portal_user.js                120
 run_gstq.js                           120
 run_gstregs_ui.py                     120  TDSDESK_SITE=../app/dist-test
 run_gstset_layout_ui.py               120  TDSDESK_SITE=../app/dist-test
+run_settings_layout_ui.py             180  TDSDESK_SITE=../app/dist-test
 run_gstset.js                         120
 run_held_books.py                     120  TDSDESK_SITE=../app/dist-test
 run_held_not_in_sync.py               120  TDSDESK_SITE=../app/dist-test

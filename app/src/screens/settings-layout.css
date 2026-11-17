@@ -1,0 +1,44 @@
+/* Settings and Client setup (Settings.jsx, the owner's redesign of 17-Nov-2026): a compact list on the left, one line a
+   section (its label, and where it stands at the right; a section that needs something in the warning colour), the
+   section on the right; "Needs you" / "To finish" above both; a client's name, GSTINs and "N of M set up" at the top.
+   On a phone (≤ 760 px) the list is a screen of its own and a section opens full width, with "← Settings" back to it.
+   The app's own colours and corners (src/css/app.css, the arc tokens); loaded with the Settings screen only. */
+.setpage .setwrap { grid-template-columns: 264px minmax(0, 1fr); }
+.setpage .setnav { gap: 10px; }
+.setpage .setnav button { flex-direction: row; align-items: center; justify-content: space-between; gap: 8px; min-height: 36px; }
+.setpage .setnav button > span { min-width: 0; }
+.setpage .setnav button small { flex: 0 1 auto; min-width: 0; max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right; }
+.setpage .setnav button.warn small { color: var(--warn); font-weight: 600; }
+.setpage .set-back { display: none; margin: 0 0 8px; }
+/* a fieldset is as wide as its widest line unless told otherwise (Tally's "Supplier invoice no. is in" ran off a phone) */
+.setpage .setbody fieldset { min-width: 0; max-width: 100%; }
+.setpage .set-back .linkbtn { min-height: 40px; font-weight: 500; }
+
+.set-needs { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 20px; margin: 0 0 14px; padding: 10px 14px; border: 1px solid color-mix(in oklab, var(--warn) 30%, transparent); border-radius: 10px; background: var(--warn-soft); }
+.set-needs > b { color: var(--warn); font-size: 14px; }
+.set-needs > .linkbtn { font-size: 14px; text-align: left; min-height: 32px; }
+
+.set-client { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 20px; margin: 0 0 14px; padding: 14px 18px; border: 1px solid var(--rule); border-radius: 10px; background: var(--sheet); }
+.set-client-id { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.set-client-name { font-family: var(--font-display, inherit); font-size: 20px; font-weight: 600; letter-spacing: -.01em; overflow-wrap: anywhere; }
+.set-client-id .note { overflow-wrap: anywhere; }
+.set-client-prog { display: flex; flex-direction: column; gap: 6px; min-width: 180px; margin-left: auto; font-size: 13px; color: var(--muted); }
+.set-client-prog b { color: var(--ink); }
+.set-bar { height: 6px; border-radius: 999px; background: var(--rule-soft, var(--rule)); overflow: hidden; }
+.set-bar > i { display: block; height: 100%; border-radius: inherit; background: var(--accent, var(--ledger)); }
+
+@media (max-width: 760px) {
+  /* the list as a screen of its own (not the row of chips of the old phone layout) */
+  .setpage .setwrap { grid-template-columns: minmax(0, 1fr); }
+  .setpage .setnav { position: static; flex-direction: column; flex-wrap: nowrap; overflow: visible; gap: 10px; padding: 0; }
+  .setpage .setgroup { flex-direction: column; flex-wrap: nowrap; gap: 2px; }
+  .setpage .setgroup-t { display: block; }
+  .setpage .setnav button { width: 100%; white-space: normal; min-height: 44px; }
+  .setpage .setnav button small { display: block; }
+  .setpage.list-first .setbody { display: none; }
+  .setpage:not(.list-first) .setnav, .setpage:not(.list-first) .set-needs { display: none; }
+  .setpage:not(.list-first) .set-back { display: block; }
+  .set-needs { flex-direction: column; align-items: flex-start; }
+  .set-client { padding: 12px 14px; }
+  .set-client-prog { margin-left: 0; min-width: 0; width: 100%; }
+}

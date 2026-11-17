@@ -3,6 +3,10 @@
 //   ClientSetup  — for the open client (Client setup). The section is S.tab, one of SETUP_TABS (src/js/02).
 // Was the tiles page (settingsTiles, viewRules in src/js/18) and viewCompanySettings (src/js/27), which put the
 // company, Tally, TDS and GST settings on one long page.
+// The owner's redesign of 17-Nov-2026 (settings-layout.css): one line a section in the list, its status at the right (a
+// section needing something in the warning colour); "Needs you" / "To finish" above, only what needs doing, each a link
+// to its section; a client's header (name, GSTIN, PAN, Tally, "N of M set up"); on a phone the list first, then the
+// section full width with "← Settings" / "← Client setup" back to the list.
 //
 // Each section is one draft (review 18: parts/Confirm.jsx, src/js/60): what is typed or picked is checked as before
 // (coSetText, coCommit, coCommitRuleLedger, …) but saved, and sent to the cloud, only when Save at its foot is pressed;
@@ -13,7 +17,7 @@ import { SheetFormats } from "../parts/SheetPanel.jsx";
 // GSTLock's checks of a change (the ISD switch, GST API all clients): with this screen, as with the GST screens (build.py lazy_files)
 import "../../../src/js/47-gst-lock-checks.js";
 import HowPage from "../parts/HowPage.jsx";
-import { useState, Suspense, lazy } from "react";
+import { useState, useEffect, Suspense, lazy } from "react";
 // Academy batches (calls, stage 1): in the calls' own small-windows file, loaded when the section is opened
 const Batches = lazy(() => import("../calls/CallMenu.jsx").then((m) => ({ default: m.Batches })));
 // "Have a coupon?" under Plan and credit (migration 120's coupon_redeem): its own small file
@@ -36,11 +40,14 @@ import GstSettings from "./gst/GstSettings.jsx";
 import Parties from "./Parties.jsx";
 import GstApiAll from "./GstApiAll.jsx";
 import LogoPick from "../parts/LogoPick.jsx";
-import { clientTallyState } from "../lib/tallyState.js";
+import { clientTallyState, tallyDevs, pcLive, seenWords } from "../lib/tallyState.js";
 // TDSF25 (src/js/83-tds-forms-2025.js: the deductor's details) comes with this screen's file, not in legacy.js (build.py lazy_files)
 import "../../../src/js/83-tds-forms-2025.js";
+// the two-pane look of both pages (the owner's redesign of 17-Nov-2026): with this screen's file, not in the main styles
+import "./settings-layout.css";
 
-// the list on the left: groups of sections; each section has a label and, below it, where it stands now
+// the list on the left: groups of sections; each section one line, its label and, at the right, where it stands now
+// (a section that needs something done: warn, in the warning colour; its whole status in the tip)
 function SetNav({ label, groups, current, pick, foot }) {
   return (
     <nav className="setnav" aria-label={label}>
@@ -48,7 +55,8 @@ function SetNav({ label, groups, current, pick, foot }) {
         <div className="setgroup" key={g.title}>
           <div className="setgroup-t">{g.title}</div>
           {g.items.map((it) => (
-            <button key={it.id} className={it.danger ? "danger" : undefined} aria-current={current === it.id ? "page" : undefined} onClick={() => pick(it.id)}>
+            <button key={it.id} className={[it.danger && "danger", it.warn && "warn"].filter(Boolean).join(" ") || undefined} data-set-item={it.id} data-done={it.done === undefined ? undefined : String(it.done)}
+              title={it.tip || it.status || undefined} aria-current={current === it.id ? "page" : undefined} onClick={() => pick(it.id)}>
               <span>{it.label}</span>{it.status && <small>{it.status}</small>}
             </button>
           ))}
@@ -57,6 +65,15 @@ function SetNav({ label, groups, current, pick, foot }) {
       {foot}
     </nav>
   );
+}
+
+// "Needs you" (the firm) / "To finish" (a client): only what needs doing, each a link to its section; nothing when all is done
+function NeedsStrip({ title, items, pick }) {
+  if (!items.length) return null;
+  return <div className="set-needs" role="region" aria-label={title} data-set-needs="">
+    <b>{title + " (" + items.length + ")"}</b>
+    {items.map((x, i) => <button key={x.id + i} type="button" className="linkbtn" data-needs-go={x.id} onClick={() => pick(x.id, x)}>{x.text}</button>)}
+  </div>;
 }
 
 // what each section changes (its draft: src/js/60, draftStore); a section with none has only buttons that act at once
@@ -76,12 +93,18 @@ export function BackTo() {
   return <p className="back-to"><button className="linkbtn" data-back-to="" onClick={() => Smart.goBack()}>{"← Back to " + back.label}</button></p>;
 }
 
-function Layout({ label, groups, current, pick, children, scope, cid, foot }) {
+// top: the strip (and a client's header) above both panes. list: on a phone (≤ 760 px, settings-layout.css) the list is
+// shown alone, the section hidden; otherwise the section alone, full width, with "← <label>" (back) to the list. On a
+// computer both panes always show (Back hidden).
+function Layout({ label, groups, current, pick, children, scope, cid, foot, top, list, back }) {
   const it = groups.flatMap((g) => g.items).find((x) => x.id === current);
   return (
+    <div className={"setpage" + (list ? " list-first" : "")} data-set-page={scope}>
+    {top}
     <div className="setwrap">
       <SetNav label={label} groups={groups} current={current} pick={pick} foot={foot} />
       <div className="setbody">
+        <p className="set-back"><button type="button" className="linkbtn" data-set-back="" onClick={back}>{"← " + label}</button></p>
         <BackTo />
         <header className="sethead"><h2>{it.label}</h2><p>{it.about}</p></header>
         {scope === "setup" && <HowPage page="setup" />}
@@ -89,6 +112,7 @@ function Layout({ label, groups, current, pick, children, scope, cid, foot }) {
         {!(SEC_STORES[current] || []).length && /^Nothing to save here/.test(SEC_EMPTY[current] || "") ? <div className="cfm-sec" data-confirm={scope + ":" + current} data-saves-at-once="">{children}</div>
           : <Confirm id={scope + ":" + current} label={it.label} stores={SEC_STORES[current] || []} cid={cid} empty={SEC_EMPTY[current]} {...(SEC_BAR[current] || {})}>{children}</Confirm>}
       </div>
+    </div>
     </div>
   );
 }
@@ -113,40 +137,69 @@ function FirmDetails() {
   </Card>;
 }
 
-function firmGroups() {
-  const a = S.account;
+// what needs the firm, from what the page already holds (nothing is asked for it): the firm's computers with Tally heard
+// this week but not now (TLight / the Tally page's last read; never while that read itself is failing), and the GST API
+// links of the clients' GSTINs already looked up (Settings → GST API): not linked, or ending within 3 days
+const WEEK = 7 * 864e5;
+function firmSignals() {
+  const beatAt = (d) => Date.parse((((d && d.info) || {}).beat || {}).at || (d && d.last_seen) || "") || 0;
+  const stale = typeof TStale === "object" && TStale.now(["light"]);
+  const off = stale ? [] : tallyDevs().filter((d) => { const t = beatAt(d); return t && Date.now() - t < WEEK && !pcLive(d); });
+  const G = typeof GSTAPI === "object" ? GSTAPI : null;
+  const gstins = Array.from(new Set(Object.values(S.companies || {}).filter((c) => c && !c.deleted).map((c) => String(c.gstin || "").toUpperCase()).filter((g) => /^\d{2}[A-Z0-9]{13}$/.test(g))));
+  const looked = G ? gstins.filter((g) => G.seen && G.seen[g]) : [];
+  const notLinked = G ? looked.filter((g) => !G.live(g)).length : 0;
+  const soon = G ? looked.filter((g) => { const l = G.live(g), x = G.accessLeft ? G.accessLeft(g) : null; return l && x && x.soon && !x.over; }).length : 0;
+  return { off, offSince: off.length === 1 ? seenWords(new Date(beatAt(off[0])).toISOString()) : "", notLinked, soon };
+}
+const plural = (n, one, many) => n + " " + (n === 1 ? one : many || one + "s");
+
+function firmGroups(sig = firmSignals()) {
+  const a = S.account, tally = tallyStatus(null).label;
+  const gstApi = (() => { const xs = Object.values(GSTAPI.sess || {}).filter(Boolean); const soon = xs.filter((x) => x.accessUntil && Date.parse(x.accessUntil) - Date.now() < 3 * 86400000 && !x.endedAt).length; return xs.filter((x) => GSTAPI.live && x.connectedAt && !x.endedAt).length + " connected" + (soon ? ", " + soon + " ending soon" : ""); })();
   const groups = [
     { title: "Your firm", items: [
-      { id: "firm", label: "Firm details", about: "The firm’s name, as it appears on the page and on what you give clients.", status: S.firm.firmName || "no name yet" },
+      { id: "firm", label: "Firm details", about: "The firm’s name, as it appears on the page and on what you give clients.", status: S.firm.firmName || "no name yet", warn: !S.firm.firmName },
       { id: "account", label: "Sign-in and people", about: "Who is signed in, the people in the firm and what each may do, and keeping work in step across computers.",
         status: Cloud.on() ? (a && a.me ? a.me.email : "signed in") : "not signed in" },
       ...(Cloud.on() ? [{ id: "batches", label: "Academy batches", about: "Classes by video call: a batch's members and Start class.", status: "" }] : []),
       { id: "plan", label: "Plan and credit", about: "What the firm pays, the credit left, and this month’s use.",
-        status: a && a.firm ? (a.firm.plan ? a.firm.plan.name : "no plan") + " · " + money(num(a.firm.balance)) + " left" : "" },
+        status: a && a.firm ? money(num(a.firm.balance)) + " left" : "", tip: a && a.firm ? (a.firm.plan ? a.firm.plan.name : "no plan") + " · " + money(num(a.firm.balance)) + " left" : "" },
     ] },
     { title: "Tally", items: [
       { id: "bridge", label: "Connect Tally", about: "Connecting Tally, its companies and clients, and help: all on the one Tally page in the sidebar.",
-        status: "Tally: " + tallyStatus(null).label },
+        status: sig.off.length ? sig.off.length + " offline" : tally, warn: !!sig.off.length, tip: "Tally: " + tally + (sig.off.length ? " · " + plural(sig.off.length, "computer") + " with Tally offline" : "") },
       ...(Cloud.on() ? [{ id: "tcloud", label: "Books in the cloud", about: "The computers that send Tally’s books to the firm account (which company is which client: the Tally page).",
-        status: "Tally: " + tallyStatus(null).label }] : []),
+        status: tally, tip: "Tally: " + tally }] : []),
       { id: "postlog", label: "Sent to Tally", about: "A record of every entry posted to Tally, by whom and when: it is kept on the Tally page.", status: (S.firm.postLog || []).length + " entries" },
     ] },
     { title: "GST", items: [
       ...(Cloud.on() ? [{ id: "gstapi", label: "GST API, all clients", about: "Every client's GST portal connection: until when, the returns fetched, the e-invoice user.",
-        status: (() => { const xs = Object.values(GSTAPI.sess || {}).filter(Boolean); const soon = xs.filter((x) => x.accessUntil && Date.parse(x.accessUntil) - Date.now() < 3 * 86400000 && !x.endedAt).length; return xs.filter((x) => GSTAPI.live && x.connectedAt && !x.endedAt).length + " connected" + (soon ? ", " + soon + " ending soon" : ""); })() }] : []),
+        status: sig.notLinked ? sig.notLinked + " not linked" : sig.soon ? sig.soon + " ending soon" : gstApi, warn: !!(sig.notLinked || sig.soon), tip: gstApi + (sig.notLinked ? ", " + sig.notLinked + " not linked" : "") }] : []),
     ] },
     { title: "How the work is done", items: [
-      { id: "rates", label: "TDS rates and limits", about: "The rates and yearly limits used to work out TDS on every client’s bills.", status: "tax year " + (S.firm.fy || "2026-27") },
+      { id: "rates", label: "TDS rates and limits", about: "The rates and yearly limits used to work out TDS on every client’s bills.", status: "FY " + (S.firm.fy || "2026-27"), tip: "tax year " + (S.firm.fy || "2026-27") },
       { id: "reading", label: "Reading bills", about: "How bills and statements are read — free reading first, then Google OCR or Claude — and a test of each.",
-        status: S.engine === "api" ? "free steps, then Claude" : hasGoogle() ? "free steps, then Google OCR" : "free reading only" },
+        status: S.engine === "api" ? "free, then Claude" : hasGoogle() ? "free, then Google OCR" : "free reading only",
+        tip: S.engine === "api" ? "free steps, then Claude" : hasGoogle() ? "free steps, then Google OCR" : "free reading only" },
       { id: "ai", label: "AI help", about: "Claude’s suggestions in TDS, GST, audit and notices: on or off.", status: AIH.sub() },
       { id: "autopost", label: "Post automatically", about: "Bank lines and purchase bills that copy what a person approved before go to Tally by themselves; the rest waits for you. Off unless switched on, client by client.",
-        status: (() => { const all = Object.values(S.companies || {}), n = all.filter((c) => c.choices && c.choices.autopost && c.choices.autopost.value && c.choices.autopost.value.on).length; return n ? "on for " + n + " of " + all.length + " clients" : "off"; })() },
+        ...(() => { const all = Object.values(S.companies || {}), n = all.filter((c) => c.choices && c.choices.autopost && c.choices.autopost.value && c.choices.autopost.value.on).length; return n ? { status: "on for " + n + " of " + all.length, tip: "on for " + n + " of " + all.length + " clients" } : { status: "off" }; })() },
       { id: "moves", label: "Move on by itself", about: "When a piece of work ends, the page opens what comes next. It never approves, posts or sends anything to Tally, never moves while you are typing or have unsaved changes, and says so with Stay here; Back undoes it.",
         status: Smart.KINDS.filter(([k]) => Smart.on(k)).length + " of " + Smart.KINDS.length + " on" },
     ] },
   ];
   return groups.filter((g) => g.items.length);
+}
+
+// Needs you: each thing to do, as a link to its section (only sections the list has)
+function firmNeeds(sig, ids) {
+  const out = [];
+  if (!S.firm.firmName) out.push({ id: "firm", text: "The firm’s name is not set" });
+  if (sig.off.length) out.push({ id: "bridge", text: sig.off.length === 1 ? "A computer with Tally is offline" + (sig.offSince ? " since " + sig.offSince : "") : sig.off.length + " computers with Tally are offline" });
+  if (sig.notLinked) out.push({ id: "gstapi", text: "GST API not linked for " + plural(sig.notLinked, "client") });
+  if (sig.soon) out.push({ id: "gstapi", text: "GST API link ends soon for " + plural(sig.soon, "client") });
+  return out.filter((x) => ids.includes(x.id));
 }
 
 // the records kept on this computer (clean-up batch 2: it was a line on the Clients page), with the plan
@@ -175,9 +228,12 @@ function AdminConsoleLink() {
 }
 
 export function FirmSettings() {
-  const groups = firmGroups(), ids = groups.flatMap((g) => g.items.map((i) => i.id));
-  const cur = ids.includes(S.settingsTab) ? S.settingsTab : "firm";
+  const sig = firmSignals(), groups = firmGroups(sig), ids = groups.flatMap((g) => g.items.map((i) => i.id));
+  // no section asked for (Settings in the sidebar, #/settings): Firm details on a computer, the list on a phone
+  const list = !ids.includes(S.settingsTab);
+  const cur = list ? "firm" : S.settingsTab;
   const pick = (id) => { S.settingsTab = id; render(); window.scrollTo(0, 0); };
+  const back = () => { S.settingsTab = null; render(); window.scrollTo(0, 0); };
   const body = {
     firm: () => <FirmDetails />,
     account: () => <><FirmAccount />{Cloud.on() && <PeopleEtc />}</>,
@@ -195,7 +251,8 @@ export function FirmSettings() {
     moves: () => <MoveSwitches />,
   }[cur];
   // the one place for the build stamp (owner's spec K1): a small About line at the foot of Settings
-  return <><Layout label="Settings" groups={groups} current={cur} pick={pick} scope="firm" cid="" foot={<AdminConsoleLink />}>{body()}</Layout>
+  return <><Layout label="Settings" groups={groups} current={cur} pick={pick} scope="firm" cid="" foot={<AdminConsoleLink />}
+      list={list} back={back} top={<NeedsStrip title="Needs you" items={firmNeeds(sig, ids)} pick={pick} />}>{body()}</Layout>
     <p className="note about-line" data-about="">{"About FinCom: this version was built on " + String(__REACT_BUILD__).replace(/^React · /, "").replace(/(\d{2}:\d{2})(?! IST)/, "$1 IST")}</p></>;
 }
 
@@ -438,23 +495,45 @@ function tallyCounts(co) {
   return { bank: names.filter((l) => inG(l, ["Bank Accounts", "Bank OD A/c", "Bank OCC A/c"])).length, sup: names.filter((l) => inG(l, ["Sundry Creditors"])).length };
 }
 
-function clientGroups() {
-  const co = CO(), tc = tallyCounts(co), here = (co.bankAccounts || []).length, known = Object.keys(D().parties || {}).length, supNew = pendingSuppliers().length;
-  const accs = tc ? tc.bank : here, sup = tc ? tc.sup : known;
+// where the client stands, from what is already on the page (nothing is asked for it): its name, GSTIN and PAN; its Tally
+// company (or Zoho Books); the TDS deductor's required details (TDSF25.deductorRequired, as Validate & file checks them);
+// the suppliers kept without a PAN; each GSTIN's GSTR-2B (portal) username, once the client's books are open here; its
+// bank accounts. done: true / false for a section whose state is known, undefined when it is not (left out of "N of M")
+function clientSignals(co) {
+  const tc = tallyCounts(co), here = (co.bankAccounts || []).length, parties = Object.values(D().parties || {}), supNew = pendingSuppliers().length;
+  const zoho = typeof booksSourceOf === "function" && (booksSourceOf(co) || {}).kind === "zoho", ts = clientTallyState(co);
+  let dedMissing;
+  try { dedMissing = co.mustDeduct === false ? 0 : typeof TDSF25 === "object" && TDSF25.deductorRequired && typeof TDS26Q === "object" ? TDSF25.deductorRequired(TDS26Q.firmDetails()).length : undefined; } catch (e) { dedMissing = undefined; }
+  const b = S.books && S.books.cid === co.id && !S.books.loading ? S.books : null;
+  let regs = null;
+  try { regs = b && typeof GSTR === "object" && typeof GSTSet === "object" ? GSTR.gstins(b) || [] : null; } catch (e) { regs = null; }
+  const noUser = regs ? regs.filter((g) => !GSTSet.peek(g.slice(0, 2)).portalUser) : [];
+  return { tc, here, accs: tc ? tc.bank : here, sup: tc ? tc.sup : parties.length, known: parties.length, supNew, zoho, ts,
+    noPan: parties.filter((p) => p && !p.noTds && !String(p.pan || "").trim()).length, dedMissing, regs, noUser };
+}
+
+function clientGroups(co = CO(), sig = clientSignals(co)) {
+  const { tc, here, accs, sup, known, supNew, ts } = sig;
   const label = Object.fromEntries(SETUP_TABS);
-  const it = (id, about, status, danger) => ({ id, label: label[id], about, status, danger });
+  const it = (id, about, status, more) => Object.assign({ id, label: label[id], about, status }, more);
+  const gstState = (g) => (typeof GSTRegs === "object" ? g.slice(0, 2) + " · " + GSTRegs.state(g) : g);
   return [
     { title: "The client", items: [
-      it("settings", "Who the client is: name, GSTIN and PAN.", co.gstin || "no GSTIN yet"),
-      it("cotally", "How entries are numbered and the round-off ledger; the client's company in Tally is on the Tally page.", "Tally: " + clientTallyState(co).word + (clientTallyState(co).company ? " · " + clientTallyState(co).company : "")),
+      it("settings", "Who the client is: name, GSTIN and PAN.", co.gstin || "no GSTIN yet", { warn: !co.gstin || !co.pan, done: !!(co.gstin && co.pan), tip: co.gstin ? (co.pan ? undefined : "no PAN yet") : undefined }),
+      it("cotally", "How entries are numbered and the round-off ledger; the client's company in Tally is on the Tally page.", sig.zoho ? "Zoho Books" : ts.word,
+        { tip: sig.zoho ? undefined : "Tally: " + ts.word + (ts.company ? " · " + ts.company : ""), warn: !sig.zoho && ts.state === "unlinked", done: sig.zoho || ts.state !== "unlinked" }),
     ] },
     { title: "Tax", items: [
-      it("cotds", "Whether the client deducts TDS, and the expense ledger of each payment type (TDS ledgers: on the TDS page).", co.mustDeduct === false ? "does not deduct" : "deducts TDS"),
-      it("deductees", "Each supplier’s PAN and usual payment type, and amounts credited before FinCom, so yearly limits are right.", sup + " supplier" + (sup === 1 ? "" : "s") + (tc ? " in Tally (Sundry Creditors)" + (known ? ", " + known + " with details here" : "") : "") + (supNew ? " + " + supNew + " new, not yet approved" : "")),
-      it("gstset", "GST registrations and how each is filed, and which purchases have blocked credit (GST ledgers: on the GST page).", ""),
+      it("cotds", "Whether the client deducts TDS, and the expense ledger of each payment type (TDS ledgers: on the TDS page).", co.mustDeduct === false ? "does not deduct" : sig.dedMissing ? sig.dedMissing + " to fill" : "deducts TDS",
+        { warn: !!sig.dedMissing, done: sig.dedMissing === undefined ? undefined : !sig.dedMissing, tip: sig.dedMissing ? "deducts TDS · deductor details: " + sig.dedMissing + " required to fill" : undefined }),
+      it("deductees", "Each supplier’s PAN and usual payment type, and amounts credited before FinCom, so yearly limits are right.", sig.noPan ? sig.noPan + " no PAN" : plural(sup, "supplier"),
+        { warn: !!sig.noPan, done: !sig.noPan, tip: sup + " supplier" + (sup === 1 ? "" : "s") + (tc ? " in Tally (Sundry Creditors)" + (known ? ", " + known + " with details here" : "") : "") + (supNew ? " + " + supNew + " new, not yet approved" : "") + (sig.noPan ? " · " + sig.noPan + " without a PAN" : "") }),
+      it("gstset", "GST registrations and how each is filed, and which purchases have blocked credit (GST ledgers: on the GST page).", !sig.regs ? "" : sig.noUser.length ? sig.noUser.length + " to finish" : plural(sig.regs.length, "GSTIN"),
+        { warn: !!sig.noUser.length, done: !sig.regs ? undefined : sig.regs.length > 0 && !sig.noUser.length, tip: sig.noUser.length ? "GSTR-2B username missing for " + sig.noUser.map(gstState).join(", ") : undefined }),
     ] },
     { title: "Bank", items: [
-      it("bankset", "The client’s bank accounts and the Tally ledger of each.", accs + " account" + (accs === 1 ? "" : "s") + (tc ? " in Tally (Bank Accounts)" + (here ? ", " + here + " with statements here" : "") : "")),
+      it("bankset", "The client’s bank accounts and the Tally ledger of each.", plural(accs, "account"),
+        { warn: !accs, done: accs > 0, tip: accs + " account" + (accs === 1 ? "" : "s") + (tc ? " in Tally (Bank Accounts)" + (here ? ", " + here + " with statements here" : "") : "") }),
       it("bankrules", "Rules that give bank lines their ledger by themselves, for this client or the whole firm.", ""),
     ] },
     { title: "Books", items: [
@@ -465,8 +544,43 @@ function clientGroups() {
   ];
 }
 
+// To finish: each thing still to do for the client, as a link to its section (a GSTIN's: that GSTIN chosen)
+function clientNeeds(co, sig) {
+  const out = [];
+  if (!co.gstin || !co.pan) out.push({ id: "settings", text: !co.gstin && !co.pan ? "No GSTIN or PAN yet" : !co.gstin ? "No GSTIN yet" : "No PAN yet" });
+  if (!sig.zoho && sig.ts.state === "unlinked") out.push({ id: "cotally", text: "Not linked to its company in Tally" });
+  if (sig.dedMissing) out.push({ id: "cotds", text: "TDS deductor details: " + sig.dedMissing + " to fill" });
+  if (sig.noPan) out.push({ id: "deductees", text: plural(sig.noPan, "supplier") + " without PAN" });
+  const gs = sig.noUser.map((g) => ({ id: "gstset", reg: g.slice(0, 2), text: "GSTR-2B username missing for " + g.slice(0, 2) + (typeof GSTRegs === "object" ? " · " + GSTRegs.state(g) : "") }));
+  out.push(...(gs.length > 2 ? [{ id: "gstset", reg: gs[0].reg, text: "GSTR-2B username missing for " + gs.length + " GSTINs" }] : gs));
+  if (!sig.accs) out.push({ id: "bankset", text: "No bank account yet" });
+  return out;
+}
+
+// the client at the top: name, GSTIN, PAN, its Tally (or Zoho Books), and how many of the sections with a known state are done
+function ClientHead({ co, sig, items, more }) {
+  const known = items.filter((x) => x.done !== undefined), done = known.filter((x) => x.done).length;
+  const books = sig.zoho ? "Zoho Books" : "Tally: " + sig.ts.word + (sig.ts.company ? " · " + sig.ts.company : "");
+  return <div className="set-client" data-set-client="">
+    <div className="set-client-id"><b className="set-client-name">{co.name}</b>
+      <span className="note">{"GSTIN " + (co.gstin || "not set") + " · PAN " + (co.pan || "not set") + " · " + books}</span></div>
+    {known.length > 0 && <div className="set-client-prog" data-set-progress={done + "/" + known.length}>
+      <span><b>{done + " of " + known.length}</b> set up</span>
+      <div className="set-bar" role="progressbar" aria-label="Sections set up" aria-valuemin={0} aria-valuemax={known.length} aria-valuenow={done}><i style={{ width: Math.round((100 * done) / known.length) + "%" }} /></div></div>}
+    {more}
+  </div>;
+}
+
+// on a phone, the list is shown first on opening Client setup (its first section, Company: from the sidebar's Client
+// setup); a link to another section opens that section. "← Client setup" shows the list again (kept here: the section it
+// was pressed on; picking any section, or a link to another, opens that section). The page is drawn afresh for each
+// section (Main.jsx keys it by S.tab): LEFT says the last one drawn was left for a page outside Client setup
+let LIST_AT = null, LEFT = true;
+
 export function ClientSetup() {
-  const co = CO(), tab = S.tab;
+  const co = CO(), tab = S.tab, [, redraw] = useState(0);
+  useState(() => { if (LEFT) LIST_AT = tab === "settings" ? "settings" : null; LEFT = false; });
+  useEffect(() => () => { if (!(S.view === "company" && isSetupTab(S.tab))) LEFT = true; }, []);
   const body = {
     settings: () => <Company />,
     cotally: () => <TallySetup />,
@@ -479,13 +593,13 @@ export function ClientSetup() {
     cosheets: () => <SheetFormats />,
     coremove: () => <Remove />,
   }[tab] || (() => <Company />);
+  const sig = clientSignals(co), groups = clientGroups(co, sig), cur = isSetupTab(tab) && tab !== "coremove" ? tab : "settings";
+  const pick = (id) => { LIST_AT = null; goTab(id); window.scrollTo(0, 0); };
   // removing the client is out of the way, in More, behind the client's name (review of 02-Oct-2026)
-  return <>
-    <div className="row" style={{ justifyContent: "flex-end", marginBottom: 8 }}>
-      <details className="bk-menu" data-more="client"><summary className="btn small">More</summary><div className="bk-menu-list">
-        <button className="danger" onClick={() => doAct("delCo")}>Remove this client<small>Asks for the client’s name. The firm account keeps its data, marked removed.</small></button>
-      </div></details>
-    </div>
-    <Layout label="Client setup" groups={clientGroups()} current={isSetupTab(tab) && tab !== "coremove" ? tab : "settings"} pick={(id) => { goTab(id); window.scrollTo(0, 0); }} scope="setup" cid={co.id}>{body()}</Layout>
-  </>;
+  const more = <details className="bk-menu" data-more="client"><summary className="btn small">More</summary><div className="bk-menu-list">
+    <button className="danger" onClick={() => doAct("delCo")}>Remove this client<small>Asks for the client’s name. The firm account keeps its data, marked removed.</small></button>
+  </div></details>;
+  return <Layout label="Client setup" groups={groups} current={cur} pick={pick} scope="setup" cid={co.id} list={LIST_AT === cur} back={() => { LIST_AT = cur; redraw((n) => n + 1); window.scrollTo(0, 0); }}
+    top={<><ClientHead co={co} sig={sig} items={groups.flatMap((g) => g.items)} more={more} />
+      <NeedsStrip title="To finish" items={clientNeeds(co, sig)} pick={(id, x) => { if (x && x.reg) { S.gsetReg = x.reg; S.gsetTab = "regs"; } pick(id); }} /></>}>{body()}</Layout>;
 }
