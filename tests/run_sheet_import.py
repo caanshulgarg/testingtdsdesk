@@ -133,6 +133,9 @@ with sync_playwright() as p:
     goto_review()
     upload("purchase_register_drift.csv")
     ok(len(E("window.__ai")) == 1 and E("SheetImport.st().how") == "drift" and "read by their names, no AI" in panel(), "a column added: no AI call, read by the columns' names")
+    # (next-fix-sheetgst) the columns the saved format was not made with are named on the panel, never dropped silently
+    grown = pg.inner_text("#app [data-sheet-grown]") if pg.query_selector("#app [data-sheet-grown]") else ""
+    ok("“Branch”" in grown and "“Notes”" in grown and "Not read" in grown, "… and the new columns it does not read are named (%s)" % grown)
     E("SheetImport.close()"); W(300)
     upload("purchase_register_changed.csv")
     ok(len(E("window.__ai")) == 2 and step() == "map", "the columns renamed (a real change): FinCom's AI is asked again")

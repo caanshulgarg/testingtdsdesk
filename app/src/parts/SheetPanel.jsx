@@ -67,6 +67,8 @@ function CheckStep({ st }) {
   const tax = (d) => r2(num(d.igst) + num(d.cgst) + num(d.sgst) + num(d.cess));
   return <section data-sheet-step="check">
     <p className="note" data-sheet-how={st.how}>{(st.fmtName ? "Format: " + st.fmtName + ". " : "") + (HOW[st.how] || "")}</p>
+    {st.grown && <p className="note" data-sheet-grown="">{[st.grown.added.length ? "New in this sheet, now read: " + st.grown.added.map((a) => "“" + a.col + "” as " + a.label).join(", ") + "." : "",
+      st.grown.other.length ? "Not read (not in the saved format): " + st.grown.other.map((c) => "“" + c + "”").join(", ") + ". To read " + (st.grown.other.length === 1 ? "it" : "them") + ", use Map again in Client setup → Register formats." : ""].filter(Boolean).join(" ")}</p>}
     {(docs.skipped || []).length > 0 && <p className="note" data-sheet-skipped="">{docs.skipped.length + " row" + (docs.skipped.length === 1 ? "" : "s") + " left out: " + Array.from(new Set(docs.skipped.map((x) => x.why))).join(", ") + "."}</p>}
     {bad.length > 0 && <div className="bk-alert bad" data-sheet-bad="">{bad.length + " document" + (bad.length === 1 ? " does" : "s do") + " not add up to the paisa; they go to To review marked so:"}
       <ul>{bad.map((d) => <li key={d.no}>{d.no + ": " + d.check.text}</li>)}</ul></div>}

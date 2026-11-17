@@ -121,6 +121,22 @@ const SheetFmt = {
     const near = list.find(f => { const used = Object.values(f.map || {}).filter(Boolean); return used.length >= 3 && used.every(n => names.has(n)) && Math.abs((f.cols || 0) - head.length) <= 3; });
     return near ? {fmt: near, how: "drift"} : null;
   },
+  // next-fix-sheetgst (17-Nov-2026): a saved layout made before the sheet had a GSTIN column, read by it as "drift", dropped
+  // the column without a word. The columns a field is known by, sure enough to read with no question (the party's GSTIN only)
+  SURE: {gstin: ["gstin", "gstinuin", "gstno", "gstnumber", "gstinno", "customergstin", "customergstinuin", "partygstin", "partygstinuin", "buyergstin", "suppliergstin", "vendorgstin"]},
+  // a saved format met with columns it was not saved with (fmt.headers): those a field is surely known by, read by it
+  // (added: {field: column}; a field or a column the format already uses is never taken), the others named (other).
+  // null when nothing is new. The saved format itself is not changed
+  grow(fmt, head){
+    if (!fmt || fmt.builtin || !Array.isArray(fmt.headers)) return null;
+    const map = fmt.map || {}, used = new Set(Object.values(map).filter(Boolean)), had = new Set(fmt.headers), added = {}, other = [];
+    head.map(x => this.norm(x)).forEach(n => {
+      if (!n || used.has(n) || had.has(n) || other.includes(n) || Object.values(added).includes(n)) return;
+      const f = Object.keys(this.SURE).find(k => this.SURE[k].includes(n));
+      if (f && !map[f] && !added[f]) added[f] = n; else other.push(n);
+    });
+    return Object.keys(added).length || other.length ? {map: Object.assign({}, map, added), added, other} : null;
+  },
   // what the AI is shown: the header, and up to 10 rows with every identifier, name and long number masked
   masked(head, rows){
     const map = new Map(), tok = (kind, v) => { const k = kind + "|" + v; if (!map.has(k)) map.set(k, kind + "_" + (Array.from(map.keys()).filter(x => x.startsWith(kind + "|")).length + 1)); return map.get(k); };
@@ -505,19 +521,27 @@ const SheetPost = {
       // already here: the same number and date AND the same party (its GSTIN, else its name) AND the same total (review
       // H1 of cf58b7cc9: number and date alone let another party's invoice of that number be written over). Anything
       // else of that number is a new invoice (the number said "already exists" on it, as for any upload)
-      const pk = (g, n) => GSTIN_RE.test(g || "") ? g : normName(n || ""), name = d.party || (d.gstin ? "" : "Retail customer");
+      // (next-fix-sheetgst: the party by its GSTIN only when both carry a good one, by its check character; else by its
+      // name, so a sheet put right with a GSTIN column is not added again over the invoices its old layout left)
+      const name = d.party || (d.gstin ? "" : "Retail customer"), same = (g, n) => this.sameParty(g, n, d.gstin, name);
       const was = s.list.find(v => normInv(v.x.number) === normInv(no) && (!v.x.date || !d.date || v.x.date === d.date)
-        && pk(v.x.customerGstin, v.x.customerName) === pk(d.gstin, name) && Math.abs(num(v.x.total) - (d.hold ? d.total : Math.abs(d.total))) < 0.005 && (v.x.noteKind || "") === (d.note || "") && !v.hold === !d.hold);
+        && same(v.x.customerGstin, v.x.customerName) && Math.abs(num(v.x.total) - (d.hold ? d.total : Math.abs(d.total))) < 0.005 && (v.x.noteKind || "") === (d.note || "") && !v.hold === !d.hold);
       // never added again. One from a sheet still waiting (To review / Ready) takes this sheet's ledgers where no person
       // set one (M2), so the invoices an old, wrong layout left stuck are put right by uploading the sheet again; a
       // Ready invoice whose ledger changed so goes back to To review, to be looked at before it is posted
+      // (next-fix-sheetgst: any invoice still waiting takes the sheet's GSTIN and place of supply where it has none, or only
+      // what FinCom filled from the Tally ledger; never one posted)
       if (was){
         res.again++;
-        if (was.source === "sheet" && ["review", "ready"].includes(was.status)){
-          if (d.own && !was.x.sellerGstin) was.x.sellerGstin = d.own;
-          if (d.branch && !was.x.branch) was.x.branch = d.branch;
-          const sig = () => JSON.stringify([was.customerLedger, was.salesLedgers || {}]), before = sig(), ready = was.status === "ready";
-          this.ledgersTo(was, d, true); mapInvoice(was);
+        if (["review", "ready"].includes(was.status)){
+          const sig = () => JSON.stringify([was.customerLedger, was.salesLedgers || {}, was.x.customerGstin || "", was.x.pos || ""]), before = sig(), ready = was.status === "ready";
+          const gst = this.fillParty(was, d);
+          if (was.source === "sheet"){
+            if (d.own && !was.x.sellerGstin) was.x.sellerGstin = d.own;
+            if (d.branch && !was.x.branch) was.x.branch = d.branch;
+            this.ledgersTo(was, d, true);
+          }
+          if (gst || was.source === "sheet") mapInvoice(was);
           if (ready && sig() !== before) was.status = "review";
         }
         return;
@@ -525,7 +549,7 @@ const SheetPost = {
       // an invoice held for a person (never posted) and the sheet uploaded again with its Type put right: that invoice is
       // put right in place. Only after the already-here check (above), and only the held invoice of the same number,
       // date, party AND amount (its sign and its kind are what changed): another row of that number never rewrites it
-      const heldV = !d.hold && s.list.find(v => v.hold && v.status === "review" && normInv(v.x.number) === normInv(d.no) && (!v.x.date || !d.date || v.x.date === d.date) && pk(v.x.customerGstin, v.x.customerName) === pk(d.gstin, name)
+      const heldV = !d.hold && s.list.find(v => v.hold && v.status === "review" && normInv(v.x.number) === normInv(d.no) && (!v.x.date || !d.date || v.x.date === d.date) && same(v.x.customerGstin, v.x.customerName)
         && Math.abs(Math.abs(num(v.x.total)) - Math.abs(d.total)) < 0.005);
       if (heldV){
         Object.assign(heldV.x, {number: no, taxable: Math.abs(d.taxable), cgst: Math.abs(d.cgst), sgst: Math.abs(d.sgst), igst: Math.abs(d.igst), cess: Math.abs(d.cess), total: Math.abs(d.total), rate: d.rate, noteKind: d.note || "", items: this.items(d, Math.abs)});
@@ -546,6 +570,25 @@ const SheetPost = {
     });
     saveSales();
     return res;
+  },
+  // next-fix-sheetgst: the same party on two invoices: by the GSTIN when both carry a good one (its check character,
+  // gstinValid) or the very same one; else by the name (an invoice with no GSTIN, or one that fails its check)
+  goodGstin(g){ g = String(g || "").toUpperCase(); return GSTIN_RE.test(g) && (typeof gstinValid !== "function" || gstinValid(g)); },
+  sameParty(g1, n1, g2, n2){
+    const a = String(g1 || "").toUpperCase(), b = String(g2 || "").toUpperCase();
+    if (a && a === b && GSTIN_RE.test(a)) return true;
+    return this.goodGstin(a) && this.goodGstin(b) ? false : normName(n1 || "") === normName(n2 || "");
+  },
+  // an invoice already here, still waiting: the sheet's GSTIN and place of supply where it has none, or only what FinCom
+  // filled from the party's Tally ledger (v.filled, salesPartyFill in src/js/25); what a person typed stands. True when changed
+  fillParty(v, d){
+    const x = v.x, f = v.filled || {}, ours = k => !x[k] || (f[k] && x[k] === f[k]);
+    const g = GSTIN_RE.test(d.gstin || "") ? d.gstin : "", pos = d.pos || stateOfGstin(g);
+    let did = false;
+    if (g && x.customerGstin !== g && ours("customerGstin")){ x.customerGstin = g; delete f.customerGstin; if (v.sheetHad) v.sheetHad.gstin = true; did = true; }
+    if (pos && x.pos !== pos && ours("pos")){ x.pos = pos; delete f.pos; if (v.sheetHad) v.sheetHad.pos = true; did = true; }
+    if (did && v.filled && !f.customerGstin && !f.pos) delete v.filled;
+    return did;
   },
   // whether a document's party GSTIN may be taken from its Tally ledger: never for a sale to a consumer by the file's
   // own word (GSTR-1's B2CS, B2CL, CDNUR, EXP; a summary row; a row whose registration column says unregistered or
@@ -644,7 +687,17 @@ const SheetImport = {
           st.remap = {id: found.fmt.id, scope: found.fmt.scope, why: [was.ledger && !fx.ledger ? "“" + col(was.ledger) + "” was read as the " + who + "'s ledger, but its values are not " + who + "s in Tally: it is the " + SIDE_LEDGER[side].toLowerCase() + "." : ""].filter(Boolean).join(" ")};
           st.map = fx; st.transforms = Object.assign({}, found.fmt.transforms); st.why = {}; st.step = "map"; st.busy = ""; return render();
         }
-        st.docs = SheetFmt.apply(found.fmt, g, st.hi, CO(), side);
+        // (next-fix-sheetgst) columns the saved format was not made with: a GSTIN column is read as the party's GSTIN, and
+        // the panel says so and names any other new column it does not read (never silent). Only for this upload: the
+        // saved format stays as the person saved it
+        const gr = found.how === "drift" && SheetFmt.grow(found.fmt, st.head);
+        let fmt = found.fmt;
+        if (gr){
+          const label = n => st.head[st.head.map(h => SheetFmt.norm(h)).indexOf(n)] || n, FL = SheetFmt.fieldsFor(side);
+          fmt = Object.assign({}, found.fmt, {map: gr.map});
+          st.grown = {added: Object.entries(gr.added).map(([field, n]) => ({field, col: label(n), label: (FL.find(x => x[0] === field) || [field, field])[1]})), other: gr.other.map(label)};
+        }
+        st.docs = SheetFmt.apply(fmt, g, st.hi, CO(), side);
         return this.check();
       }
       // a format FinCom has not seen: the AI proposes a mapping, once; the person confirms or changes it
