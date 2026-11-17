@@ -164,13 +164,23 @@ const GSTB = {
     if (!force && this.logins[c] && Date.now() - (this.loginsAt[c] || 0) < 60000) return this.logins[c];
     this.loginsAt[c] = Date.now();
     try { this.logins[c] = await Cloud.rpc("gst_portal_login_list", {p_client: c}) || []; } catch (e){ this.logins[c] = this.logins[c] || []; }
+    if (S.coId === c) this.logins[c].forEach((x) => this.keepUser(x.gstin, x.username));
     render();
     return this.logins[c];
+  },
+  // the 2B fetch reads only GST settings' "GST portal username" (GSTAPI.user): when that is empty, the user id of the
+  // helper's login is stored there too, at once (not a draft of the settings page, src/js/60 Drafts.direct)
+  keepUser(gstin, user){
+    const reg = String(gstin || "").slice(0, 2), u = String(user || "").trim(), b = S.books;
+    if (!reg || !u || !b || b.cid !== S.coId || GSTSet.peek(reg).portalUser) return false;
+    Drafts.direct(() => { GSTSet.store(reg).portalUser = u; GSTR._carry = null; saveBooks(); }, {bypass: true});
+    return true;
   },
   loginOf(gstin){ return ((this.logins[S.coId || ""] || []).find((x) => x.gstin === gstin)) || null; },
   async saveLogin(gstin, username, password, staff){
     const r = await Cloud.rpc("gst_portal_login_save", {p_client: S.coId, p_gstin: gstin, p_username: username, p_password: password || "", p_staff: staff});
     if (!r || !r.ok) throw new Error((r && r.error) || "Not saved.");
+    this.keepUser(gstin, username);
     await this.loadLogins(true);
     return r;
   },

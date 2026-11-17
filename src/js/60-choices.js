@@ -328,7 +328,7 @@ const Drafts = {
     s.stores.forEach((st, i) => {
       const before = s.pre[i], now = st.snap();
       if (!before || !now) return;
-      choicePathDiff(before, now, [], [], 0).forEach(p => { const k = i + ":" + JSON.stringify(p); if (!s.paths.has(k)) s.paths.set(k, {i, path: p, base: choicePathGet(before, p)}); });
+      choicePathDiff(before, now, [], [], 0).forEach(p => { const k = i + ":" + JSON.stringify(p), c = s.paths.get(k), val = choicePathGet(now, p); if (c) c.val = val; else s.paths.set(k, {i, path: p, base: choicePathGet(before, p), val}); });
     });
     s.armed = 0; s.pre = null;
   },
@@ -350,7 +350,8 @@ const Drafts = {
     if (typeof s === "string") s = this.secs[s];
     if (!s) return [];
     if (s.armed) this.attribute(s);
-    return Array.from(s.paths.values()).filter(c => { const root = s.stores[c.i] && s.stores[c.i].root(); return root && !choiceSame(choicePathGet(root, c.path), c.base); });
+    // (a value stored since by other code is no longer the draft's: never undone)
+    return Array.from(s.paths.values()).filter(c => { const root = s.stores[c.i] && s.stores[c.i].root(), v = root && choicePathGet(root, c.path); return root && !choiceSame(v, c.base) && choiceSame(v, c.val); });
   },
   dirty(id){
     const s = typeof id === "string" ? this.secs[id] : id;

@@ -72,9 +72,9 @@ function OneGstin({ b, g, regs }) {
         <label className="note">If QRMP, PMT-06 by <select aria-label="PMT-06 method" style={{ width: "auto" }} key={k("pmt", st.pmt)} defaultValue={st.pmt || "fixed"} onChange={shared("pmt")}><option value="fixed">fixed sum (35% method)</option><option value="self">self-assessment</option></select></label>
         <label className="note">If composition, rate <select aria-label="Composition rate" style={{ width: "auto" }} key={k("comp", st.comp)} defaultValue={st.comp || "trader"} onChange={shared("comp")}>{Object.entries(GSTQ.RATES).map(([k, x]) => <option key={k} value={k}>{x.l}</option>)}</select></label>
       </div>
-      <H4>GST portal username</H4>
+      <H4>GST portal username (for the GSTR-2B fetch)</H4>
       <CommitBox aria-label="GST portal username" data-fk={"gset-puser-" + reg} value={st.portalUser || ""} placeholder="as used to sign in on gst.gov.in" style={{ width: 260 }} autoComplete="off" onCommit={(v) => gsetSet("puser", v, reg)} />
-      {" "}<span className="note">for the GST API (OTP sign-in); the API never needs the password.</span>
+      {" "}<span className="note">Used to fetch GSTR-2B through the GST API (OTP sign-in). No password needed.</span>
       <GstPortalLogin gstin={g} portalUser={st.portalUser || ""} />
       <H4>Credit in 3B table 4</H4>
       <select aria-label="Credit in 3B table 4" style={{ width: "auto" }} key={k("basis", basis)} defaultValue={basis} onChange={shared("basis")}><option value="2b">As far as 2B shows it (section 16(2)(aa)) — the law</option><option value="books">As booked in Tally — for comparison only</option></select>

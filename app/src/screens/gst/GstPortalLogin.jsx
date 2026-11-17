@@ -25,7 +25,8 @@ export default function GstPortalLogin({ gstin, portalUser }) {
   const editing = edit || !a;
   return (
     <div data-portal-login={gstin}>
-      <H4>GST portal login (for the browser helper)</H4>
+      <H4>GST portal login (browser helper only)</H4>
+      <p className="note" data-login-not2b="">For the browser helper only. Not used for the GSTR-2B fetch: that uses the GST portal username above.</p>
       {a && !edit && <p className="note" data-login-saved="">User id <b>{a.username}</b> · password {a.has_password ? <b>saved</b> : "not saved"}
         {owner && <> · <button className="linkbtn" data-login-change="" onClick={() => { setEdit(true); setU(null); }}>change</button> · <button className="linkbtn" data-login-delete="" disabled={busy} onClick={del}>delete</button></>}</p>}
       {!owner && !a && <p className="note">Only the firm’s owner can save the GST portal login.</p>}

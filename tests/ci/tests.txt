@@ -87,6 +87,7 @@ run_gateway_errors.js                 120
 run_group_case.js                     120
 run_gst9.js                           120
 run_gst_api_ui.py                     120
+run_gst_portal_user.js                120
 run_gstq.js                           120
 run_gstregs_ui.py                     120  TDSDESK_SITE=../app/dist-test
 run_gstset.js                         120
