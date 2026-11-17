@@ -29,7 +29,9 @@ const oldHead = ["Date", "Customer Name", "Voucher Type", "Vch No.", "Sales Ledg
 const saved = {id: "sfold1", name: "Made-up sales", side: "sales", scope: "client", v: 2, cols: oldHead.length, fp: F.fingerprint(oldHead, "Sheet1"), headers: oldHead.map(x => F.norm(x)),
   map: {date: "date", party: "customername", doctype: "vouchertype", no: "vchno", sledger: "salesledger", hsn: "hsn", taxable: "taxableamount", igst: "igst", cgst: "cgst", sgst: "sgst", total: "invoiceamount"},
   transforms: {date: "dmy", groupByNo: false}, at: "2026-11-14T06:00:00.000Z"};
-const co = {name: "ZZ Made Up Client", gstin: "09AANFG3202D1ZR", sheetFormats: [saved]};
+// the client's own registrations (made up): its GSTIN and one in another state of the same PAN
+const OWN = G("09", 5), OWN2 = (b => b + C.gstinCheckChar(b + "0"))("27" + OWN.slice(2, 14));
+const co = {name: "ZZ Made Up Client", gstin: OWN, otherGstins: OWN2, sheetFormats: [saved]};
 C.CO = () => co; C.S.firm = {sheetFormats: []}; C.S.coId = "c1";
 const headWith = (col) => ["Date", "Customer Name", col, "Voucher Type", "Vch No.", "Sales Ledger", "HSN", "Taxable Amount", "IGST", "CGST", "SGST", "Invoice Amount", "", "", ""];
 
@@ -38,16 +40,22 @@ const head = headWith("GSTIN");
 const f = F.find(head, "Sheet1", "c1", "sales");
 ok(f && f.how === "drift" && f.fmt.id === "sfold1", "the sheet with a GSTIN column added: the saved format still reads it (drift)");
 ok(typeof F.grow === "function", "SheetFmt.grow: what a saved format makes of the columns it was not made with");
-const grow = (hd, fmt) => (typeof F.grow === "function" ? F.grow(fmt || saved, hd) : null);
+const grow = (hd, fmt, rs) => (typeof F.grow === "function" ? F.grow(fmt || saved, hd, rs || [], [OWN, OWN2]) : null);
 const g1 = grow(head);
 ok(g1 && g1.added && g1.added.gstin === "gstin" && g1.map.gstin === "gstin" && g1.map.no === "vchno" && !g1.other.length, "a new “GSTIN” column is read as the party's GSTIN; the saved columns kept (" + JSON.stringify(g1 && g1.added) + ")");
 ok(!saved.map.gstin, "… the saved format itself is not changed");
-["Customer GSTIN", "Party GSTIN", "GST No", "GSTIN/UIN", "GST No.", "Customer GSTIN/UIN"].forEach(n => {
+["Customer GSTIN", "Party GSTIN", "GST No", "GSTIN/UIN", "GST No.", "GST Number", "Buyer GSTIN", "Recipient GSTIN"].forEach(n => {
   const g = grow(headWith(n));
   ok(g && g.added && g.added.gstin === F.norm(n), "“" + n + "” is the party's GSTIN too");
 });
 const gN = grow(headWith("Notes"));
 ok(gN && !Object.keys(gN.added).length && gN.other.join() === "notes", "a new column it does not know (“Notes”): not read, and named so (" + JSON.stringify(gN && gN.other) + ")");
+// (review of 2b565f7e7, 1: the names a side's party GSTIN goes by, never the other side's)
+["Supplier GSTIN", "Vendor GSTIN", "Seller GSTIN"].forEach(n => {
+  const g = grow(headWith(n));
+  ok(g && !g.added.gstin && g.other.includes(F.norm(n)), "on a sales sheet “" + n + "” is not the customer's GSTIN: named as not read");
+});
+ok(F.own && F.own("c1").includes(OWN) && F.own("c1").includes(OWN2), "the client's own GSTINs: its GSTIN and its other GSTINs (" + (F.own ? F.own("c1").join(" ") : "") + ")");
 const gB = grow(headWith("Our GSTIN"));
 ok(gB && !gB.added.gstin, "“Our GSTIN” (the client's own) is never taken as the party's");
 ok(grow(oldHead) === null, "the very layout it was saved with: nothing new");
@@ -84,12 +92,12 @@ const start = async (hd, rs) => { await I.start([{name: "made-up-sales.csv", typ
   let mapped = [], nid = 0;
   const old = (d, extra) => Object.assign({id: "old-" + d.no, source: "sheet", status: "review", x: {number: d.no, date: d.date, customerName: d.party, customerGstin: "", pos: "", total: Math.abs(d.total), noteKind: ""},
     customerLedger: d.party, userLedger: true, custSource: "From the sheet"}, extra || {});
-  const run = (list) => {
+  const run = (list, ds) => {
     mapped = []; nid = 0;
     C.S.sales = {cid: "c1", list, cfg: {}}; C.SL = () => C.S.sales;
     Object.assign(C, {newInvoice: (x, source, extra) => Object.assign({id: "new" + (++nid), source, status: "review", x: Object.assign({customerGstin: "", pos: ""}, x), customerLedger: "", userLedger: false}, extra || {}),
       mapInvoice: v => mapped.push(v.id), saveSales(){}, salesPartyFill(){}, salesTotals: () => [{rate: 18}]});
-    return P.toSales(docs, "c1", "made-up-sales.csv");
+    return P.toSales(ds || docs, "c1", "made-up-sales.csv");
   };
   const byNo = (list) => list.reduce((a, v) => { a[v.x.number] = (a[v.x.number] || 0) + 1; return a; }, {});
   // the invoices uploaded before with the old layout: no GSTIN, no place of supply
@@ -97,7 +105,7 @@ const start = async (hd, rs) => { await I.start([{name: "made-up-sales.csv", typ
   list[1].status = "ready";
   list[2].x.customerGstin = BAD;   // one holding a GSTIN that fails its check
   list[3].status = "posted";
-  list[4].x.customerGstin = "27ZZQPZ9999Z1Z5"; list[4].filled = {ledger: list[4].customerLedger, customerGstin: "27ZZQPZ9999Z1Z5", pos: "27"}; list[4].x.pos = "27";   // filled by FinCom from Tally
+  const TF = G("27", 6); list[4].x.customerGstin = TF; list[4].filled = {ledger: list[4].customerLedger, customerGstin: TF, pos: "27"}; list[4].x.pos = "27";   // a good GSTIN FinCom filled from Tally
   let r = run(list);
   ok(r.added === 0 && r.again === 5 && list.length === 5 && Object.values(byNo(list)).every(n => n === 1), "no invoice added again: matched by name where the one here has no GSTIN, or one that fails its check (" + JSON.stringify(r) + ")");
   ok(list[0].x.customerGstin === P1 && list[0].x.pos === "27", "a waiting invoice with no GSTIN takes the sheet's, and its place of supply (" + list[0].x.customerGstin + " · " + list[0].x.pos + ")");
@@ -121,6 +129,56 @@ const start = async (hd, rs) => { await I.start([{name: "made-up-sales.csv", typ
   list = docs.map(d => old(d, {x: {number: d.no, date: d.date, customerName: "Someone Else Made Up", customerGstin: "", pos: "", total: Math.abs(d.total), noteKind: ""}}));
   r = run(list);
   ok(r.added === 5 && r.again === 0, "no GSTIN here and another name: another party's invoice (" + JSON.stringify(r) + ")");
+
+  // ---- review of 2b565f7e7
+  // 1. the client's own GSTIN is never the party's: a column of it is not read, and no invoice takes it
+  const rowsOwn = rows.map((r, i) => r.slice(0, 2).concat([i === 4 ? P5 : i % 2 ? OWN2 : OWN], r.slice(3)));
+  const gO = grow(head, saved, rowsOwn);
+  ok(gO && !gO.added.gstin && gO.other.includes("gstin"), "a sales sheet's new “GSTIN” column holding the client's own GSTINs: not read as the party's (" + JSON.stringify(gO) + ")");
+  st = await start(head, rowsOwn);
+  ok(st && st.step === "check" && st.grown && !st.grown.added.length && st.grown.other.includes("GSTIN") && st.docs.every(d => !d.gstin), "… uploaded: the panel names it as not read, and no invoice carries it (" + JSON.stringify(st && st.grown) + ")");
+  const pOld = ["Bill Date", "Bill No", "Supplier", "Taxable", "IGST", "Total"], pFmt = {id: "sfp1", side: "purchase", v: 2, cols: 6, headers: pOld.map(x => F.norm(x)),
+    map: {date: "billdate", no: "billno", party: "supplier", taxable: "taxable", igst: "igst", total: "total"}};
+  const pRows = (g) => [0, 1, 2].map(i => ["01/11/2026", "B/" + i, "Made Up Supplier " + i, g(i), 1000, 180, 1180]);
+  const pHead = (n) => ["Bill Date", "Bill No", "Supplier", n, "Taxable", "IGST", "Total"];
+  let gp = grow(pHead("Buyer GSTIN"), pFmt, pRows(() => OWN));
+  ok(gp && !gp.added.gstin && gp.other.includes("buyergstin"), "a purchase register's new “Buyer GSTIN” (the client's own): not read as the supplier's (" + JSON.stringify(gp) + ")");
+  gp = grow(pHead("GSTIN"), pFmt, pRows(() => OWN));
+  ok(gp && !gp.added.gstin && gp.other.includes("gstin"), "… nor a “GSTIN” column whose values are the client's own");
+  gp = grow(pHead("Supplier GSTIN"), pFmt, pRows(i => [P1, P2, P3][i]));
+  ok(gp && gp.added.gstin === "suppliergstin", "a purchase register's new “Supplier GSTIN” of the suppliers' GSTINs is read");
+  gp = grow(pHead("Customer GSTIN"), pFmt, pRows(i => [P1, P2, P3][i]));
+  ok(gp && !gp.added.gstin, "… and “Customer GSTIN” is no supplier's on a purchase register");
+  const dOwn = docs.map((d, i) => Object.assign({}, d, i === 0 ? {gstin: OWN, pos: "09"} : i === 1 ? {gstin: BAD, pos: BAD.slice(0, 2)} : {}));
+  list = docs.map(d => old(d));
+  r = run(list, dOwn);
+  ok(r.again === 5 && list[0].x.customerGstin === "" && list[1].x.customerGstin === "", "an invoice here never takes the client's own GSTIN, nor one that fails its check (" + JSON.stringify([list[0].x.customerGstin, list[1].x.customerGstin]) + ")");
+  list = [];
+  r = run(list, dOwn.slice(0, 1));
+  ok(r.added === 1 && list[0].x.customerGstin === "", "a new invoice never takes the client's own GSTIN as the customer's (" + list[0].x.customerGstin + ")");
+  // 2. an invoice queued for posting is never touched
+  list = docs.map(d => old(d));
+  list[0].status = "ready"; list[0].postJob = "job-made-up-1";
+  r = run(list);
+  ok(list[0].x.customerGstin === "" && list[0].status === "ready" && !mapped.includes(list[0].id) && list[1].x.customerGstin === P2, "an invoice queued for posting is not changed, the others are");
+  // 4. a GSTIN FinCom filled from Tally is matched by name, and the sheet's good one replaces it (above: list[4]); 5. only
+  // an uploaded invoice, and never a GSTIN a person cleared
+  list = docs.map(d => old(d));
+  list[0].source = "created";
+  list[1].sheetHad = {gstin: true, pos: true};
+  r = run(list);
+  ok(r.again === 5 && list[0].x.customerGstin === "" && list[1].x.customerGstin === "" && list[2].x.customerGstin === P3, "an invoice made in FinCom, or one whose sheet GSTIN a person cleared, is not filled (" + JSON.stringify([list[0].x.customerGstin, list[1].x.customerGstin]) + ")");
+  // 6. two blank names are no match
+  ok(P.sameParty("", "", "", "") === false && P.sameParty("", "Made Up A", BAD, "made up a") === true, "two blank names are not the same party; the same name is");
+  // 7. a held invoice put right takes the GSTIN too
+  list = [old(docs[0], {hold: "Negative amount: is this a return?"})];
+  r = run(list, docs.slice(0, 1));
+  ok(r.fixed === 1 && list[0].x.customerGstin === P1 && list[0].x.pos === "27", "a held invoice put right takes the sheet's GSTIN and place of supply (" + JSON.stringify(r) + ")");
+  // 1. toBills: the client's own GSTIN never becomes the supplier's
+  const bills = [];
+  Object.assign(C, {D: () => ({entries: {}}), newEntry: () => ({id: "e" + bills.length, x: {}}), finishNewEntry: e => { e.status = "draft"; bills.push(e); }, Store: {saveEntry(){}}});
+  P.toBills([Object.assign({}, docs[2], {gstin: OWN}), docs[3]], "c1", "made-up-purchase.csv");
+  ok(bills.length === 2 && bills[0].x.vendorGstin === "" && bills[0].x.vendorPan === "" && bills[1].x.vendorGstin === P4, "a bill never takes the client's own GSTIN as the supplier's (" + bills.map(b => b.x.vendorGstin || "-").join(" ") + ")");
 
   console.log(fails ? "\n" + fails + " FAILED" : "\nALL OK");
   process.exit(fails ? 1 : 0);
