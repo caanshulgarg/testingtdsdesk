@@ -180,6 +180,41 @@ const start = async (hd, rs) => { await I.start([{name: "made-up-sales.csv", typ
   P.toBills([Object.assign({}, docs[2], {gstin: OWN}), docs[3]], "c1", "made-up-purchase.csv");
   ok(bills.length === 2 && bills[0].x.vendorGstin === "" && bills[0].x.vendorPan === "" && bills[1].x.vendorGstin === P4, "a bill never takes the client's own GSTIN as the supplier's (" + bills.map(b => b.x.vendorGstin || "-").join(" ") + ")");
 
+  // ---- second review of a61ffbb12
+  // a supply between the client's own registrations keeps the other registration's GSTIN and place of supply: only the
+  // issuing one (the sheet's "Our GSTIN", else the client's GSTIN) is never the customer's
+  const ofDoc = (i, more) => Object.assign({}, docs[i], more);
+  list = [];
+  r = run(list, [ofDoc(0, {own: OWN, gstin: OWN2, pos: "27"}), ofDoc(1, {own: OWN2, gstin: OWN, pos: "09"}), ofDoc(2, {gstin: OWN2, pos: "27"}), ofDoc(3, {gstin: OWN, pos: "09", posFromGstin: true})]);
+  ok(r.added === 4 && list[0].x.customerGstin === OWN2 && list[0].x.pos === "27" && list[1].x.customerGstin === OWN && list[1].x.pos === "09" && list[2].x.customerGstin === OWN2,
+    "from one registration to the client's other: the other's GSTIN and place of supply kept (" + list.map(v => (v.x.customerGstin || "-") + "/" + (v.x.pos || "-")).join(" ") + ")");
+  ok(list[3].x.customerGstin === "" && list[3].x.pos === "", "the issuing registration itself (the client's GSTIN) as the customer: blanked, with the place of supply it gave");
+  list = docs.map(d => old(d));
+  r = run(list, [ofDoc(0, {gstin: OWN2, pos: "27"})].concat(docs.slice(1)));
+  ok(list[0].x.customerGstin === OWN2, "an invoice here takes the client's other registration's GSTIN from the sheet (" + list[0].x.customerGstin + ")");
+  // a place of supply the sheet gave stands; only one worked out from the blanked GSTIN goes
+  const fG = F.finish({no: "X1", gstin: OWN, pos: "", taxable: 100, igst: 0, cgst: 9, sgst: 9, cess: 0, total: 118, rates: []});
+  const fP = F.finish({no: "X2", gstin: OWN, pos: "29", taxable: 100, igst: 18, cgst: 0, sgst: 0, cess: 0, total: 118, rates: []});
+  ok(fG.pos === "09" && fP.pos === "29", "the place of supply: worked out from the GSTIN, or the sheet's own");
+  const nG = P.notOwn(fG, OWN), nP = P.notOwn(fP, OWN);
+  ok(nG.gstin === "" && nG.pos === "" && nP.gstin === "" && nP.pos === "29", "the own GSTIN blanked: its worked-out place of supply with it, the sheet's own kept (" + JSON.stringify([nG.pos, nP.pos]) + ")");
+  ok(P.notOwn(fG, OWN2) === fG, "a GSTIN not the issuing registration's is left as it is");
+  // the panel: its documents and questions never show the issuing registration as the party
+  const fmtG = Object.assign({}, saved, {id: "sfg1", headers: head.map(x => F.norm(x)), cols: head.length, map: Object.assign({gstin: "gstin"}, saved.map)});
+  co.sheetFormats = [fmtG];
+  st = await start(head, rowsOwn);
+  const qText = JSON.stringify((st && st.questions) || []);
+  ok(st && st.step === "check" && st.docs.filter(d => d.gstin === OWN).length === 0 && st.docs.filter(d => d.gstin === OWN2).length === 2 && !qText.includes(OWN),
+    "the panel: the issuing registration is never a document's party nor in its questions; the other registration is (" + (st && st.docs || []).map(d => d.gstin || "-").join(" ") + ")");
+  ok(st && Array.isArray(st.docs.skipped), "… the list still says which rows it left out");
+  co.sheetFormats = [saved];
+  // toBills: a held bill saved before with the client's own GSTIN as the supplier's still matches its row, put right in place
+  const heldBill = {id: "hb1", hold: "Negative amount: is this a return?", status: "draft", x: {invoiceNo: docs[2].no, invoiceDate: docs[2].date, vendorName: docs[2].party, vendorGstin: OWN, vendorPan: OWN.slice(2, 12), total: -Math.abs(docs[2].total)}};
+  bills.length = 0;
+  Object.assign(C, {D: () => ({entries: {hb1: heldBill}})});
+  const rb = P.toBills([Object.assign({}, docs[2], {gstin: OWN})], "c1", "made-up-purchase.csv");
+  ok(rb.fixed === 1 && rb.added === 0 && bills.length === 0 && !heldBill.hold && heldBill.x.vendorGstin === "", "a held bill saved with the client's own GSTIN as the supplier's is put right, not added again (" + JSON.stringify(rb) + ")");
+
   console.log(fails ? "\n" + fails + " FAILED" : "\nALL OK");
   process.exit(fails ? 1 : 0);
 })().catch(e => { console.error(e); process.exit(1); });

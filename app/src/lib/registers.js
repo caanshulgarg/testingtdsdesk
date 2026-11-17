@@ -312,7 +312,8 @@ const SheetFmt = {
     d.rate = d.taxable ? Math.round((d.igst + d.cgst + d.sgst) / d.taxable * 10000) / 100 : (d.rates[0] || 0);
     const diff = r2(d.total - d.taxable - tax);
     d.check = Math.abs(diff) < 0.005 ? {ok: true} : Math.abs(diff) <= 1 ? {ok: true, roundOff: diff} : {ok: false, diff, text: "Taxable " + d.taxable.toFixed(2) + " + tax " + tax.toFixed(2) + " is " + r2(d.taxable + tax).toFixed(2) + ", not the total " + d.total.toFixed(2)};
-    if (!d.pos) d.pos = stateOfGstin(d.gstin);
+    // (posFromGstin: worked out here, not the sheet's own; SheetPost.notOwn takes it away with an own GSTIN)
+    if (!d.pos){ d.pos = stateOfGstin(d.gstin); if (d.pos) d.posFromGstin = true; }
     return d;
   },
   fromMarket(x){ return this.finish({no: x.no, date: x.date, party: x.party, gstin: x.gstin, pos: this.pos(x.pos), hsn: x.hsn, ledger: "", against: x.against || "", note: x.note || "",
@@ -475,14 +476,17 @@ const SheetPost = {
   },
   toBills(docs, cid, fileName){
     const res = {added: 0, held: 0, fixed: 0, ids: []};
-    const pk = (g, n) => GSTIN_RE.test(g || "") ? g : normName(n || ""), ownG = SheetFmt.own(cid);
+    const pk = (g, n) => GSTIN_RE.test(g || "") ? g : normName(n || "");
     docs.forEach(d => {
-      d = this.notOwn(d, ownG);   // (the client's own GSTIN is never the supplier's: review of 2b565f7e7)
+      // (the client's own receiving registration is never the supplier's: reviews of 2b565f7e7 and a61ffbb12; a bill saved
+      // before with it as the supplier's is matched as one with no GSTIN)
+      const mine = this.issuer(d, "purchase", cid), pko = (g, n) => pk(String(g || "").toUpperCase() === mine ? "" : g, n);
+      d = this.notOwn(d, mine);
       // a bill held for a person (a negative amount its Type column did not explain: never approved, never posted) and
       // the sheet uploaded again with the Type put right: that bill is put right in place. Only the held bill of the
       // same number, date, party AND amount (its sign is what changed), and only when this row is not a bill already
       // here (the already-here check first: review of ca68ea1ae, where another row of that number rewrote the held one)
-      const same = o => normInv(o.x.invoiceNo) === normInv(d.no) && (!o.x.invoiceDate || !d.date || o.x.invoiceDate === d.date) && pk(o.x.vendorGstin, o.x.vendorName) === pk(d.gstin, d.party)
+      const same = o => normInv(o.x.invoiceNo) === normInv(d.no) && (!o.x.invoiceDate || !d.date || o.x.invoiceDate === d.date) && pko(o.x.vendorGstin, o.x.vendorName) === pk(d.gstin, d.party)
         && Math.abs(Math.abs(num(o.x.total)) - Math.abs(d.total)) < 0.005;
       const all = Object.values(D(cid).entries || {});
       const here = all.some(o => !o.hold && same(o) && (o.noteKind || "") === (d.note || ""));
@@ -492,6 +496,7 @@ const SheetPost = {
       if (heldE){
         Object.assign(heldE.x, {taxable: Math.abs(d.taxable), cgst: Math.abs(d.cgst), sgst: Math.abs(d.sgst), igst: Math.abs(d.igst), cess: Math.abs(d.cess), total: Math.abs(d.total)});
         this.billKind(heldE, d.note);
+        if (mine && String(heldE.x.vendorGstin || "").toUpperCase() === mine){ heldE.x.vendorGstin = ""; heldE.x.vendorPan = ""; }
         delete heldE.hold; heldE.readNote = ""; heldE.uncertain = []; Store.saveEntry(cid, heldE); res.fixed++; res.ids.push(heldE.id); return;
       }
       const e = newEntry(fileName), ab = x => d.hold ? x : Math.abs(x);   // (a held document keeps the sheet's own figures)
@@ -529,9 +534,12 @@ const SheetPost = {
     if (note === "credit") e.tdsSkip = e.tdsSkip || "note"; else if (e.tdsSkip === "note") delete e.tdsSkip;
   },
   toSales(docs, cid, fileName){
-    const s = SL(), res = {added: 0, held: 0, again: 0, fixed: 0, ids: []}, own = SheetFmt.own(cid);
+    const s = SL(), res = {added: 0, held: 0, again: 0, fixed: 0, ids: []};
     docs.forEach(d => {
-      d = this.notOwn(d, own);   // (the client's own GSTIN is never the customer's: review of 2b565f7e7)
+      // (the registration the invoice is issued from is never the customer's; the client's other registration, a supply
+      // between its own branches, is: reviews of 2b565f7e7 and a61ffbb12)
+      const own = [this.issuer(d, "sales", cid)].filter(Boolean);
+      d = this.notOwn(d, own[0]);
       const no = d.no + (d.note === "credit" && !/^cn/i.test(d.no) ? " (CN)" : "");
       const ab = x => d.hold ? x : Math.abs(x);   // (a held document keeps the sheet's own figures)
       // already here: the same number and date AND the same party (its GSTIN, else its name) AND the same total (review
@@ -599,12 +607,18 @@ const SheetPost = {
     const na = normName(n1 || ""), nb = normName(n2 || "");
     return !!na && na === nb;   // (two blank names are no match)
   },
-  // a document whose party GSTIN is one of the client's own (own: SheetFmt.own): its copy with no party GSTIN, nor the
-  // place of supply that GSTIN gave
-  notOwn(d, own){
+  // the client's own registration on a document: on Sales the one it is issued from (the sheet's "Our GSTIN", else the
+  // client's GSTIN), on Purchase the one receiving it (the client's GSTIN)
+  issuer(d, side, cid){ return String((side === "sales" && d && d.own) || (CO(cid) || {}).gstin || "").toUpperCase().trim(); },
+  // a document whose party GSTIN is that registration (mine): its copy with no party GSTIN, nor the place of supply worked
+  // out from it (d.posFromGstin); a place of supply the sheet gave stands. Any other GSTIN, the client's other
+  // registrations among them (a supply between its own branches), is left as it is
+  notOwn(d, mine){
     const g = String((d && d.gstin) || "").toUpperCase();
-    if (!g || !(own || []).includes(g)) return d;
-    return Object.assign({}, d, {gstin: "", pos: d.pos === stateOfGstin(g) ? "" : d.pos});
+    if (!g || !mine || g !== String(mine).toUpperCase()) return d;
+    const c = Object.assign({}, d, {gstin: ""});
+    if (d.posFromGstin){ c.pos = ""; delete c.posFromGstin; }
+    return c;
   },
   // an invoice already here, still waiting: the sheet's GSTIN and place of supply where it has none, or only what FinCom
   // filled from the party's Tally ledger (v.filled, salesPartyFill in src/js/25); what a person typed stands. True when changed
@@ -820,6 +834,9 @@ const SheetImport = {
     const st = this.st(); if (!st) return;
     st.step = "check"; st.busy = "";
     st.answers = st.answers || {};
+    // (the client's own registration is never shown nor asked about as a party: review of a61ffbb12)
+    // (in place: the list keeps what else it carries, its rows left out: docs.skipped)
+    if (!this.recon(st.side)) (st.docs || []).forEach((d, i) => { st.docs[i] = SheetPost.notOwn(d, SheetPost.issuer(d, st.side === "sales" ? "sales" : "purchase", st.cid)); });
     const qs = [], seen = new Set();
     if (st.b2cs && st.b2cs.length) qs.push({id: "b2cs", kind: "b2cs", text: "GSTR-1 has " + st.b2cs.length + " B2CS summary row" + (st.b2cs.length === 1 ? "" : "s") + " (sales to consumers, by rate and place of supply). Post B2CS as one summary entry per rate / place of supply?", options: [["yes", "Yes, one entry each"], ["no", "No, leave them out"]]});
     const blocked = (st.docs || []).filter(d => d.itc && d.itc.available === false);
