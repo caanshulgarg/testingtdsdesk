@@ -66,6 +66,9 @@ const SEC_STORES = { settings: ["client"], cotally: ["client"], cotds: ["client"
 const SEC_EMPTY = { cosheets: "Each change acts at once; a format deleted is kept, with who and why.", bankrules: "Each rule is saved from its own box (New rule, Change); a rule deleted is asked first.", account: "Nothing to save here: each button acts at once.",
   plan: "Nothing to save here.", autopost: "Nothing to save here: the panel has its own Save, and only the owner switches it on.", moves: "Each switch acts at once. It is kept in this browser, for you only.", bridge: "Nothing to save here: each button acts at once.", tcloud: "Nothing to save here: each button acts at once.", postlog: "Nothing to save here.", gstapi: "Nothing to save here." };
 
+// the Save bar's own words, for a section that asks for them (GST settings, the owner's redesign of 17-Nov-2026)
+const SEC_BAR = { gstset: { count: true, discardText: "Undo my changes" } };
+
 // "← Back to Post to Tally": a setup page reached from another page leads back to it (smart moves round 1, Smart.setReturn)
 export function BackTo() {
   const back = typeof Smart === "object" ? Smart.returnHere() : null;
@@ -84,7 +87,7 @@ function Layout({ label, groups, current, pick, children, scope, cid, foot }) {
         {scope === "setup" && <HowPage page="setup" />}
         {/* clean-up batch 2: a section where each button acts at once has no Save bar ("Nothing to save here" beside a Save) */}
         {!(SEC_STORES[current] || []).length && /^Nothing to save here/.test(SEC_EMPTY[current] || "") ? <div className="cfm-sec" data-confirm={scope + ":" + current} data-saves-at-once="">{children}</div>
-          : <Confirm id={scope + ":" + current} label={it.label} stores={SEC_STORES[current] || []} cid={cid} empty={SEC_EMPTY[current]}>{children}</Confirm>}
+          : <Confirm id={scope + ":" + current} label={it.label} stores={SEC_STORES[current] || []} cid={cid} empty={SEC_EMPTY[current]} {...(SEC_BAR[current] || {})}>{children}</Confirm>}
       </div>
     </div>
   );
@@ -404,9 +407,7 @@ function TdsSetup() {
 function GstSetup() {
   const co = CO();
   return <>
-    <GstSettings />
-    <LedgerPointer />
-    <Card title="Blocked credit, section 17(5)" note="Flag: suggest on matching bills, and you accept or reject. Always blocked: applied by itself (it can still be unticked on a bill). Credit allowed: never flagged — for example a car dealer buying motor vehicles.">
+    <GstSettings clientWide={<Card title="Blocked credit, section 17(5)" note="Flag: suggest on matching bills, and you accept or reject. Always blocked: applied by itself (it can still be unticked on a bill). Credit allowed: never flagged — for example a car dealer buying motor vehicles.">
       <div className="tblwrap"><table className="data" data-statement="">
         <thead><tr><th>Kind of purchase</th><th>Section</th><th>For this client</th></tr></thead>
         <tbody>{BLOCK_CATS.map((b) => <tr key={b.id}><td>{b.label}</td><td>{b.sec}</td>
@@ -414,7 +415,8 @@ function GstSetup() {
             <option value="flag">Flag for review</option>{!b.flagOnly && <option value="block">Always blocked</option>}<option value="allow">Credit allowed</option></select>
             {b.flagOnly && <div className="nr">Flag only: never blocked by itself{b.id === "construction" ? " (repairs and plant and machinery are allowed)" : " (vehicles over 13 seats, dealers and transporters are allowed)"}.</div>}</td></tr>)}</tbody>
       </table></div>
-    </Card>
+    </Card>} />
+    <LedgerPointer />
   </>;
 }
 

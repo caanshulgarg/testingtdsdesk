@@ -20,6 +20,7 @@ with sync_playwright() as p:
     pg.evaluate("S.tab = 'gstset'; render()"); pg.wait_for_timeout(2500)
     pg.select_option('section[data-greg="07"] select[aria-label="Filing type"]', "qrmp"); pg.select_option('section[data-greg="07"] select[aria-label="Filing type from"]', "202510"); pg.click('section[data-greg="07"] button:text-is("Set")'); pg.wait_for_timeout(800); pg.click('[data-cbx="yes"]'); pg.wait_for_timeout(1200)
     ok(pg.evaluate("GSTSet.typeOf('202511','07')") == "qrmp" and "Quarterly (QRMP) from Q3 2025-26" in pg.inner_text("#app"), "QRMP from Q3 2025-26 set in GST settings")
+    pg.click('#app [data-gset-tab="client"]'); pg.wait_for_timeout(500)   # the client's settings: the Client-wide tab
     ok("Save only" in pg.inner_text("#app") and pg.evaluate("GSTQ.apiMode()") == "save", "returns through the API: save only by default")
     pg.evaluate("S.tab = 'books'; render()"); pg.wait_for_timeout(3500); t = pg.inner_text("#app")
     # 02-Oct-2026: the quarter on one page; November's column (its IFF) is the one open, with PMT-06

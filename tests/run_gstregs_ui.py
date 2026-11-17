@@ -25,10 +25,13 @@ with sync_playwright() as p:
       window.__t = []; window.toast = m => { window.__t.push(m); }; S.tab = "gstset"; render(); }""".replace("@NAME@", NAME).replace("@OWN@", OWN).replace("@PAN@", PAN))
     pg.wait_for_timeout(1500); pg.evaluate("S.books = window.__bk; render();"); pg.wait_for_timeout(1500)
     t = pg.inner_text("#app")
-    ok("GST registrations" in t and OWN in t and "Uttar Pradesh" in t and "Client setup" in t, "no day book: GST settings open, the client's own GSTIN listed from Client setup")
+    ok("Registrations" in t and OWN in t and "Uttar Pradesh" in t and "Client setup" in t and pg.locator('[data-gset-chip="09"]').count() == 1, "no day book: GST settings open, the client's own GSTIN listed from Client setup (a chip)")
     ok("Settings of " + OWN in t and pg.locator('section[data-greg="09"] select[aria-label="E-invoicing"]').count() == 1, "its settings are shown")
     last = lambda: (pg.evaluate("window.__t") or [""])[-1]
+    # the redesign of 17-Nov-2026: "Rarely changed" folded, each row's box shown by its Change
+    rare = lambda: pg.evaluate("() => { document.querySelectorAll('[data-gset-rare]').forEach(d => d.open = true); document.querySelectorAll('[data-rare-change][aria-expanded=false]').forEach(b => b.click()); }")
     def add(g):
+        if not pg.locator('input[aria-label="New GSTIN"]').count(): pg.click('[data-gset-add]')
         pg.fill('input[aria-label="New GSTIN"]', g); pg.click('button:text-is("Add GSTIN")'); pg.wait_for_timeout(700)
     add(OTHER); ok("PAN " + OTHER[2:12] in last() and PAN in last() and OTHER not in pg.evaluate("GSTR.gstins(S.books)"), "another business's GSTIN is refused: " + last())
     bad = "07" + PAN + "1Z" + ("B" if pg.evaluate("gstinCheckChar('07%s1Z0')" % PAN) == "A" else "A")
@@ -39,8 +42,8 @@ with sync_playwright() as p:
     add(g07); ok(g07 in pg.evaluate("GSTR.gstins(S.books)") and "added" in last() and "Delhi" in last(), "the client's Delhi GSTIN is added: " + last())
     add(g27.lower()); ok(g27 in pg.evaluate("GSTR.gstins(S.books)"), "typed in small letters, taken as capitals")
     t = pg.inner_text("#app")
-    ok("Settings of " + g27 in t and pg.locator('select[aria-label="Settings shown for"]').count() == 1 and pg.locator("section.dash-card h3:has-text('Settings of')").count() == 1, "one GSTIN's settings at a time, the one just added, with a chooser")
-    pg.select_option('select[aria-label="Settings shown for"]', "09"); pg.wait_for_timeout(700)
+    ok("Settings of " + g27 in t and pg.locator("[data-gset-chip]").count() == 3 and pg.locator('[data-gset-chip="27"][aria-pressed="true"]').count() == 1 and pg.locator("section[data-greg]").count() == 1, "one GSTIN's settings at a time, the one just added, with a chip for each")
+    pg.click('[data-gset-chip="09"]'); pg.wait_for_timeout(700)
     ok("Settings of " + OWN in pg.inner_text("#app"), "the chooser shows another GSTIN's settings")
     # a change: asked, only this GSTIN by default
     pg.select_option('section[data-greg="09"] select[aria-label="E-invoicing"]', "no"); pg.wait_for_timeout(600)
@@ -49,10 +52,10 @@ with sync_playwright() as p:
     pg.click('[data-cbx="yes"]'); pg.wait_for_timeout(700)
     ok(pg.evaluate("[GSTSet.einvMode('09'), GSTSet.einvMode('07'), GSTSet.einvMode('27')]") == ["no", "auto", "auto"], "kept for this GSTIN only")
     # all of them
-    pg.check('section[data-greg="09"] input[aria-label="Rule 37"]'); pg.wait_for_timeout(600); pg.check('input[name="gapto"][value="all"]'); pg.click('[data-cbx="yes"]'); pg.wait_for_timeout(700)
+    rare(); pg.check('section[data-greg="09"] input[aria-label="Rule 37"]'); pg.wait_for_timeout(600); pg.check('input[name="gapto"][value="all"]'); pg.click('[data-cbx="yes"]'); pg.wait_for_timeout(700)
     ok(pg.evaluate("['09','07','27'].map(r => !!(S.books.rule37On || {})[r])") == [True, True, True] and "3 GSTINs" in last(), "rule 37 on for all three")
     # those ticked
-    pg.select_option('section[data-greg="09"] select[aria-label="Credit in 3B table 4"]', "books"); pg.wait_for_timeout(600)
+    rare(); pg.select_option('section[data-greg="09"] select[aria-label="Credit in 3B table 4"]', "books"); pg.wait_for_timeout(600)
     pg.check('[data-gapto="27"]'); ok(pg.is_checked('input[name="gapto"][value="some"]'), "ticking a GSTIN chooses \"those ticked\"")
     pg.click('[data-cbx="yes"]'); pg.wait_for_timeout(700)
     ok(pg.evaluate("['09','07','27'].map(r => (S.books.itcBasis || {})[r] || '2b')") == ["books", "2b", "books"], "credit basis for this GSTIN and Maharashtra, not Delhi")
@@ -63,8 +66,9 @@ with sync_playwright() as p:
     pg.select_option('section[data-greg="09"] select[aria-label="Filing type"]', "qrmp"); pg.click('section[data-greg="09"] button:text-is("Set")'); pg.wait_for_timeout(600)
     pg.check('[data-gapto="07"]'); pg.click('[data-cbx="yes"]'); pg.wait_for_timeout(700)
     ok(pg.evaluate("['09','07','27'].map(r => GSTSet.history(r).length)") == [1, 1, 0], "filing type set for this GSTIN and Delhi")
-    pg.evaluate("window.scrollTo(0, 0)"); pg.click('tr[data-key^="09"] td:nth-child(4) button'); pg.wait_for_timeout(800)
-    ok(pg.evaluate("document.activeElement.getAttribute('aria-label')") == "GST portal username" and pg.evaluate("(document.activeElement.closest('[data-greg]') || {dataset: {}}).dataset.greg") == "09", "\"type it\" beside the GSTIN goes to its username box")
+    pg.evaluate("window.scrollTo(0, 0)")
+    card = 'section[data-greg="09"] [data-gset-card="2b"]'
+    ok("no portal username" in (pg.get_attribute('[data-gset-chip="09"]', "title") or "") and pg.locator(card + ' input[aria-label="GST portal username"]').count() == 1 and "Username needed" in pg.inner_text(card), "no username yet: the chip says so, and the GSTR-2B fetch card has its box, marked Username needed")
     pg.evaluate("S.account = {email: 'a@b.c', firm: {plan: {name: 'Starter', includes: []}, balance: 0}}; render()"); pg.wait_for_timeout(500)
     # review of 01-Oct-2026: the firm button shows the credit; the plan, by its name, is in its title and the firm menu
     ok("[object Object]" not in pg.inner_text("body") and "plan Starter" in (pg.get_attribute("button.firmbtn", "title") or ""), "the firm's plan shows by its name")
@@ -76,6 +80,7 @@ with sync_playwright() as p:
     # the username stays per GSTIN, without a question
     pg.fill('section[data-greg="09"] input[aria-label="GST portal username"]', "gargup"); pg.press('section[data-greg="09"] input[aria-label="GST portal username"]', "Tab"); pg.wait_for_timeout(600)
     ok(pg.locator("#confirmBox .cbx").count() == 0 and pg.evaluate("[GSTSet.peek('09').portalUser, GSTSet.peek('07').portalUser || '']") == ["gargup", ""], "portal username: this GSTIN's own, no question")
+    ok("Ready" in pg.inner_text(card) and "Not saved yet: " in pg.inner_text('#app [data-confirm-foot="setup:gstset"]') and pg.inner_text('#app [data-confirm-foot="setup:gstset"] [data-cfm="discard"]') == "Undo my changes", "the 2B fetch is Ready; the Save bar counts the changes, with Undo my changes")
     pg.screenshot(path=OUT + "/gstregs-settings.png", full_page=True)
     # review 18 (02-Oct-2026): the section's changes are saved with Save at its foot (the books' save waits until then)
     pg.evaluate("() => { window.__got = null; window.__bsave = Books.save; Books.save = async (cid, x) => { window.__got = x; }; }")
@@ -97,9 +102,10 @@ with sync_playwright() as p:
     ok(pg.evaluate("S.tab") == "gstset" and "Settings of " + OWN in pg.inner_text("#app"), "the link goes to that GSTIN's settings")
     # remove one added here
     # spec K9 (round 2): nothing is lost (adding it again brings it back), so no question first
-    pg.click('tr[data-key="%s"] button:text-is("remove")' % g27); pg.wait_for_timeout(700)
+    pg.click('[data-gset-chip="27"]'); pg.wait_for_timeout(500); pg.click('[data-gset-shown] button:text-is("remove")'); pg.wait_for_timeout(700)
     ok(pg.locator("#confirmBox .cbx").count() == 0, "removing an added GSTIN asks nothing (it comes back when added again)")
-    ok(g27 not in pg.evaluate("GSTR.gstins(S.books)") and pg.locator('tr[data-key="%s"] button:text-is("remove")' % OWN).count() == 0, "an added GSTIN can be removed; the one from Client setup cannot")
+    pg.click('[data-gset-chip="09"]'); pg.wait_for_timeout(500)
+    ok(g27 not in pg.evaluate("GSTR.gstins(S.books)") and "Settings of " + OWN in pg.inner_text("#app") and pg.locator('[data-gset-shown] button:text-is("remove")').count() == 0, "an added GSTIN can be removed; the one from Client setup cannot")
     if FIXTURE:
         # the made-up day book: its two registrations come from the entries (CMPGSTIN), with nothing added by hand
         # (EXPECTED.md: 07AAGCL4827M1Z3, Delhi, and 09AAGCL4827M1ZZ, Uttar Pradesh)
@@ -108,8 +114,9 @@ with sync_playwright() as p:
           S.tab = "gstset"; render(); }""".replace("@NAME@", NAME + " (books)").replace("@PAN@", PAN), json.load(open(CACHE)))
         pg.wait_for_timeout(1200); pg.evaluate("S.books = window.__bk; render();"); pg.wait_for_timeout(1500)
         t = pg.inner_text("#app")
-        ok(sorted(pg.evaluate("GSTR.gstins(S.books)")) == [GSTIN, GSTIN09] and GSTIN in t and GSTIN09 in t and "Delhi" in t and "Uttar Pradesh" in t, "fixture: the day book's two registrations listed, %s and %s" % (GSTIN, GSTIN09))
-        ok(pg.locator('tr[data-key="%s"] button:text-is("remove")' % GSTIN).count() == 0, "fixture: a registration read from the books cannot be removed")
+        ok(sorted(pg.evaluate("GSTR.gstins(S.books)")) == [GSTIN, GSTIN09] and pg.locator('[data-gset-chip][data-key="%s"]' % GSTIN).count() == 1 and pg.locator('[data-gset-chip][data-key="%s"]' % GSTIN09).count() == 1 and "Delhi" in t and "Uttar Pradesh" in t, "fixture: the day book's two registrations listed, %s and %s" % (GSTIN, GSTIN09))
+        pg.click('[data-gset-chip="%s"]' % GSTIN[:2]); pg.wait_for_timeout(500)
+        ok(pg.locator('[data-gset-shown] button:text-is("remove")').count() == 0, "fixture: a registration read from the books cannot be removed")
     # a client with no GSTIN at all
     pg.evaluate("""() => { const c = newCompany({name: "No GST Co", pan: "@PAN@"}); S.companies[c.id] = c; S.coId = c.id; S.books = {loading: false, cid: c.id, vouchers: [], map: {}, meta: null, alloc: {}, challans: []}; window.__bk = S.books; S.tab = 'books'; S.booksTab = 'gst'; render(); }""".replace("@PAN@", PAN))
     pg.wait_for_timeout(800); pg.evaluate("S.books = window.__bk; render();"); pg.wait_for_timeout(800)

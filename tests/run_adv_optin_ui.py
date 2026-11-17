@@ -96,7 +96,7 @@ with sync_playwright() as p:
     ok(s["optin"] == "on" and s["at"] == 1, "the Advances page shows 11A after the reload")
 
     print("5. Client setup → GST")
-    E("() => { S.tab = 'gstset'; render(); }"); pg.wait_for_timeout(1500)
+    E("() => { S.tab = 'gstset'; S.gsetTab = 'client'; render(); }"); pg.wait_for_timeout(1500)   # the Client-wide tab
     box = '#app input[aria-label="Show advances in GST returns (Tables 11A/11B)"]'
     ok(pg.locator(box).count() == 1 and pg.locator(box).is_checked(), "the same setting in Client setup → GST, ticked")
     pg.click(box); pg.wait_for_timeout(500)

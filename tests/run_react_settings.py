@@ -69,7 +69,7 @@ with sync_playwright() as p:
     ok(pg.evaluate("CO().expenseLedgers['%s']" % rid) == "Contract Charges", "an expense ledger by payment type")
     save()
     ok(pg.evaluate("CO().expenseLedgers['%s']" % rid) == "Contract Charges", "the expense ledger kept after Save")
-    nav("GST"); pg.wait_for_timeout(1200)
+    nav("GST"); pg.wait_for_timeout(1200); pg.click('#app [data-gset-tab="client"]'); pg.wait_for_timeout(500)   # blocked credit: on the Client-wide tab
     ok("Blocked credit, section 17(5)" in pg.inner_text("#app .setbody") and "Reverse charge ledgers" not in pg.inner_text("#app .setbody") and "Confirm TDS/GST ledgers on the TDS and GST pages" in pg.inner_text("#app .setbody"), "GST: registrations and blocked credit; the GST ledgers on the GST page (one line)")
     cat = pg.evaluate("BLOCK_CATS[0]")
     pg.select_option('#app select[aria-label="Blocked credit: %s"]' % cat["label"], "allow"); pg.wait_for_timeout(300)

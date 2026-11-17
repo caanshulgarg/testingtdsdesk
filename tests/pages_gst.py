@@ -86,8 +86,9 @@ with sync_playwright() as p:
     pg.evaluate("() => { const x = CustIMS.items(S.gstReg || '')[0]; if (x){ S.gstYm = x.addYm || x.rejYm; } S.gstPart = 'r3b'; render(); }"); grab("custims-3b")
     # GST settings in Client setup: as it stands after all the above, then the contacts searched
     pg.evaluate("() => { S.tab = 'gstset'; render(); }"); grab("gstset")
-    pg.evaluate("() => { S.gcontQ = 'a'; render(); }"); grab("gstset-contacts")
-    pg.evaluate("() => { S.gcontQ = ''; S.tab = 'books'; render(); }")
+    pg.evaluate("() => { S.gcontQ = 'a'; S.gsetTab = 'contacts'; render(); }"); grab("gstset-contacts")
+    pg.evaluate("() => { S.gcontQ = ''; S.gsetTab = 'client'; render(); }"); grab("gstset-client")
+    pg.evaluate("() => { S.tab = 'books'; render(); }")
     br.close()
 srv.shutdown()
 json.dump({"pages": res, "errors": errors}, open(out, "w"), indent=0)

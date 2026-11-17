@@ -230,7 +230,7 @@ with sync_playwright() as p:
     EC("document.querySelectorAll('#app details').forEach(d => d.open = true)"); pc.wait_for_timeout(200)
     ok(pc.locator('#app [data-confirm-foot="books:audit-settings"]').count() == 1, "Audit settings: the shared footer")
     # GST settings (in Client setup → GST): a change is a draft; leaving asks; Don't save puts it back
-    EC("() => { S.tab = 'gstset'; render(); }"); pc.wait_for_timeout(1200)
+    EC("() => { S.tab = 'gstset'; S.gsetTab = 'client'; render(); }"); pc.wait_for_timeout(1200)   # the Client-wide tab
     before = EC("(S.books.gstEst ? 'on' : 'off')")
     pc.click('#app input[aria-label="Show FinCom’s estimate"]'); pc.wait_for_timeout(300)
     ok("Not saved yet" in pc.inner_text('#app [data-confirm-foot="setup:gstset"]'), "GST settings: a tick is “Not saved yet”")

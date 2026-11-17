@@ -29,7 +29,7 @@ with sync_playwright() as p:
     ok("Filing, interest and late fee" in t and "Checks the portal runs" in t and "DRC-01B" in t, "3B has the filing section and the portal's checks")
     ok("Rule 37" in t and R37 not in t, "rule 37 is off by default: no bills listed")
     pg.evaluate("S.tab = 'gstset'; render()"); pg.wait_for_timeout(2500)
-    pg.check('section[data-greg="07"] input[aria-label="Rule 37"]'); pg.wait_for_timeout(800); pg.click('[data-cbx="yes"]'); pg.wait_for_timeout(1200)
+    pg.evaluate("() => { document.querySelectorAll('[data-gset-rare]').forEach(d => d.open = true); document.querySelectorAll('[data-rare-change][aria-expanded=false]').forEach(b => b.click()); }"); pg.wait_for_timeout(300); pg.check('section[data-greg="07"] input[aria-label="Rule 37"]'); pg.wait_for_timeout(800); pg.click('[data-cbx="yes"]'); pg.wait_for_timeout(1200)
     pg.evaluate("S.tab = 'books'; render()"); pg.wait_for_timeout(4000); t = pg.inner_text("#app")
     ok(R37 in t and "4(B)(2) reversed" in t and pg.evaluate("S.books.rule37On['07']") is True, "switched on for the GSTIN: the month's unpaid bills listed, reversed in 4(B)(2)")
     if FIXTURE:   # EXPECTED.md: NSL/112, billed twice (2,32,000, tax 36,000), 1,16,000 paid; half unpaid 180 days after 08-May-2025
@@ -41,7 +41,7 @@ with sync_playwright() as p:
     ok(pg.evaluate("S.books.gstFiled['07']['%s'].r3b" % YM) == "2025-12-05" and "estimate" not in t.lower() and "from the portal" in t, "by default only the portal's late fee and interest are shown, no estimate")
     pg.fill('input[aria-label="portalInt"]', "12345"); pg.press('input[aria-label="portalInt"]', "Tab"); pg.wait_for_timeout(2500)
     ok(pg.evaluate("S.books.gstFiled['07']['%s'].portalInt" % YM) == 12345, "the portal's interest typed in is kept")
-    pg.evaluate("S.tab = 'gstset'; render()"); pg.wait_for_timeout(2000)
+    pg.evaluate("S.tab = 'gstset'; S.gsetTab = 'client'; render()"); pg.wait_for_timeout(2000)   # the Client-wide tab
     ok(pg.locator('input[aria-label="Show FinCom’s estimate"]').is_checked() is False, "the estimate setting is off by default")
     pg.check('input[aria-label="Show FinCom’s estimate"]'); pg.wait_for_timeout(1200)
     pg.click('#app [data-confirm-foot="setup:gstset"] [data-cfm="save"]'); pg.wait_for_timeout(500)   # review 18 (02-Oct-2026): saved with Save

@@ -163,6 +163,7 @@ with sync_playwright() as p:
     pg.evaluate("S.tab = 'gstset'; render()"); pg.wait_for_timeout(2500)
     box = '[data-portal-login="%s"]' % GSTIN
     ok(pg.query_selector(box) is not None, "GST settings has the GST portal login for the GSTIN")
+    pg.evaluate("() => document.querySelectorAll('[data-portal-fold]').forEach(d => d.open = true)")   # folded: Browser helper login (optional)
     pg.fill(box + ' input[aria-label="GST portal user id"]', "fx_user"); pg.fill(box + ' input[aria-label="GST portal password"]', PW)
     pg.click(box + " [data-login-save]"); stand.wait(pg, lambda: pg.query_selector(box + " [data-login-saved]"), 10000)
     t = pg.inner_text(box)
@@ -198,11 +199,11 @@ with sync_playwright() as p:
     ok(not pg.query_selector("[data-helper-login]") and "has not allowed you" in t, "a staff member not allowed sees no “Log in to GST portal” and is told why")
     pg.evaluate("GSTB.login('%s')" % REG); pg.wait_for_timeout(2500)
     ok("not allowed" in pg.inner_text("[data-helper-msg]") and db.one("select count(*) from gst_portal_login_events where action = 'refused' and user_id = %s" % q(STAFF)) == "1", "asked anyway, the server refuses and logs the refusal")
-    pg.evaluate("S.tab = 'gstset'; render()"); pg.wait_for_timeout(2000)
+    pg.evaluate("S.tab = 'gstset'; render()"); pg.wait_for_timeout(2000); pg.evaluate("() => document.querySelectorAll('[data-portal-fold]').forEach(d => d.open = true)")
     ok("change" not in pg.inner_text(box) and not pg.query_selector(box + " [data-login-save]"), "staff cannot change or delete the login")
 
     # the owner deletes it: the Vault secret goes
-    sign_in("tok-owner", "owner"); pg.evaluate("S.tab = 'gstset'; render()"); pg.wait_for_timeout(2500)
+    sign_in("tok-owner", "owner"); pg.evaluate("S.tab = 'gstset'; render()"); pg.wait_for_timeout(2500); pg.evaluate("() => document.querySelectorAll('[data-portal-fold]').forEach(d => d.open = true)")
     pg.once("dialog", lambda d: d.accept())
     pg.click(box + " [data-login-delete]"); stand.wait(pg, lambda: not pg.query_selector(box + " [data-login-saved]"), 10000)
     ok(db.one("select count(*) from vault.secrets") == "0" and db.one("select count(*) from gst_portal_logins where deleted and secret_id is null") == "1", "deleted by the owner: the password removed from Vault, the login marked deleted")

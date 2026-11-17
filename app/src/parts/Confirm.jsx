@@ -25,23 +25,24 @@ function useCapture(id) {
   return el;
 }
 
-export function SavedLine({ id, cid, dirty, empty }) {
-  const rec = Drafts.savedRec(id, cid);
-  if (dirty) return <span className="cfm-state unsaved" data-cfm-state="unsaved">Not saved yet</span>;
+export function SavedLine({ id, cid, dirty, empty, count }) {
+  const rec = Drafts.savedRec(id, cid), n = dirty && count ? Drafts.changes(id).length : 0;
+  if (dirty) return <span className="cfm-state unsaved" data-cfm-state="unsaved">{"Not saved yet" + (n ? ": " + n + (n === 1 ? " change" : " changes") : "")}</span>;
   // data-why: the reason a disabled Save is disabled, already in sight (app/src/parts/WhyNotes.jsx adds nothing more)
   if (rec) return <span className="cfm-state saved" data-cfm-state="saved" data-why="">{"Saved · " + fmtDateTime(rec.at) + " · " + (rec.by || "this computer")}</span>;
   return <span className="cfm-state" data-cfm-state="none" data-why="">{empty || "No changes"}</span>;
 }
 
-export function ConfirmFooter({ id, cid, label, saveText = "Save", empty }) {
+// count: the bar says how many changes are not saved; discardText: Don't save's own words (GST settings)
+export function ConfirmFooter({ id, cid, label, saveText = "Save", empty, count, discardText = "Don’t save" }) {
   const dirty = Drafts.dirty(id), s = Drafts.secs[id], ready = !!(s && s.custom && s.custom.canSave && s.custom.canSave());
   // clean-up batch 3: the Save bar shows only when something changed (or a section with its own saving is ready); until
   // then one quiet line says when it was last saved
   if (!dirty && !ready) return <div className="cfm-foot cfm-clean" data-confirm-foot={id} aria-label={"Save " + (label || "")}>{(Drafts.savedRec(id, cid) || empty) && <SavedLine id={id} cid={cid} dirty={dirty} empty={empty} />}</div>;
   return <div className="cfm-foot cfm-dirty" data-confirm-foot={id} aria-label={"Save " + (label || "")}>
-    <SavedLine id={id} cid={cid} dirty={dirty} empty={empty} />
+    <SavedLine id={id} cid={cid} dirty={dirty} empty={empty} count={count} />
     <span className="cfm-btns">
-      {dirty && <Button type="button" className="btn small" data-cfm="discard" onClick={() => Drafts.discard(id)}>Don’t save</Button>}
+      {dirty && <Button type="button" className="btn small" data-cfm="discard" onClick={() => Drafts.discard(id)}>{discardText}</Button>}
       <Button type="button" className={"btn small" + (dirty || ready ? " primary" : "")} data-cfm="save" disabled={!dirty && !ready} title={!dirty && !ready ? "Nothing to save: change something first" : undefined} onClick={() => { if (Drafts.save(id)) toast((label || "Settings") + ": saved."); }}>{saveText}</Button>
     </span>
   </div>;
@@ -58,13 +59,13 @@ export function KeptLine({ id }) {
 }
 
 // a section of settings with its draft and its footer
-export default function Confirm({ id, label, stores = [], cid, custom, onSave, saveText, empty, children, className = "" }) {
+export default function Confirm({ id, label, stores = [], cid, custom, onSave, saveText, empty, count, discardText, children, className = "" }) {
   const c = cid === undefined ? S.coId : cid;
   Drafts.reg(id, { label, stores, cid: c, custom, onSave });
   const el = useCapture(id);
   return <div ref={el} className={"cfm-sec " + className} data-confirm={id}>
     {children}
-    <ConfirmFooter id={id} cid={c} label={label} saveText={saveText} empty={empty} />
+    <ConfirmFooter id={id} cid={c} label={label} saveText={saveText} empty={empty} count={count} discardText={discardText} />
   </div>;
 }
 

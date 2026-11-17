@@ -49,7 +49,8 @@ with sync_playwright() as p:
     before = pg.evaluate("GSTR.threeB('%s','09').pay.cash.igst + GSTR.threeB('%s','09').pay.cash.cgst" % (YM09, YM09))
     pg.evaluate("S.tab = 'gstset'; S.gsetReg = '09'; render()"); pg.wait_for_timeout(2500)
     ok("GST settings" in pg.inner_text("#app") and "Filing type" in pg.inner_text("#app"), "Client setup \u2192 GST: the settings for each GSTIN")
-    pg.fill('section[data-greg="09"] input[aria-label="Opening CGST"]', "500000"); pg.press('section[data-greg="09"] input[aria-label="Opening CGST"]', "Tab"); pg.wait_for_timeout(2500)
+    # "Rarely changed" (folded) → Change shows the opening balance's boxes
+    pg.evaluate("() => { document.querySelectorAll('[data-gset-rare]').forEach(d => d.open = true); document.querySelectorAll('[data-rare-change][aria-expanded=false]').forEach(b => b.click()); }"); pg.wait_for_timeout(300); pg.fill('section[data-greg="09"] input[aria-label="Opening CGST"]', "500000"); pg.press('section[data-greg="09"] input[aria-label="Opening CGST"]', "Tab"); pg.wait_for_timeout(2500)
     after = pg.evaluate("GSTR.threeB('%s','09').pay.cash.igst + GSTR.threeB('%s','09').pay.cash.cgst" % (YM09, YM09))
     ok(pg.evaluate("S.books.gstOpen['09'].cgst") == 500000 and after < before, "an opening balance typed in settings reduces cash payable: %s to %s" % (before, after))
     if FIXTURE: ok([before, after] == [2700, 0], "fixture: Jun-2025, 09: CGST in cash 2,700 before, nil once the opening credit of 5,00,000 is carried to June (%s)" % [before, after])

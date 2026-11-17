@@ -3,10 +3,14 @@
 // (API mode, estimates, turnover, rule 42, contacts for letters). Were viewGstSettings and viewGstRegs (src/js/36).
 // Changes go through gsetFilingAdd, gsetShared, gsetSet, gsetIsd, gregAdd, gregRemove, gcontSet (36).
 //
+// Three tabs (S.gsetTab): Registrations (a chip per GSTIN; for the one chosen, cards for its returns, the 2B fetch and
+// e-invoicing, and "Rarely changed" folded, each with Change), Client-wide, Contacts.
 // State: S.gsetReg (the GSTIN whose settings are shown), S.gsetFrom / S.gsetType (a filing type being chosen),
 // S.gcontQ (the contacts search).
 import GstPortalLogin from "./GstPortalLogin.jsx";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import Tag from "../../parts/Tag.jsx";
+import "./gstset.css";
 import CommitBox from "../../parts/CommitBox.jsx";
 import Loading from "../../parts/Loading.jsx";
 import { ListRows } from "../../parts/ListTable.jsx";
@@ -19,34 +23,44 @@ const H4 = ({ children, top = 12 }) => <h4 style={{ margin: top + "px 0 4px" }}>
 const Row = ({ children, gap = 8 }) => <div style={{ display: "flex", gap, flexWrap: "wrap", alignItems: "center" }}>{children}</div>;
 const latestYm = () => { const ms = GSTR.months(); return ms[ms.length - 1] || GSTF.today().slice(0, 7).replace("-", ""); };
 
+// the GSTINs, one chip each (the one shown outlined), and "+ Add GSTIN" (the box for a new one)
 function Registrations({ b, regs }) {
-  const box = useRef(null), co = CO() || {};
+  const box = useRef(null), co = CO() || {}, [adding, setAdding] = useState(false);
   const add = () => { if (gregAdd(box.current.value)) box.current.value = ""; };
+  const g = regs.find((x) => x.slice(0, 2) === S.gsetReg) || "", src = g ? GSTRegs.source(g, b) : [], only = src.length === 1 && src[0] === "added here";
   return (
-    <section className="dash-card" style={{ marginBottom: 12 }}><h3>GST registrations</h3>
-      <p className="note" style={{ margin: "0 0 8px" }}>The GSTINs of {co.name || "this client"} (PAN {clientPan() || "not set"}). The GST tab works for these even before any Tally day book is brought in: 2B from the portal or its JSON, and the returns filed.</p>
-      {regs.length ? <div className="bk-tablewrap"><table className="bk-table compact" data-statement="">
-        <thead><tr><th>GSTIN</th><th>State</th><th>Filing type now</th><th>Portal username</th><th>Taken from</th><th></th></tr></thead>
-        <tbody>{regs.map((g) => { const reg = g.slice(0, 2), src = GSTRegs.source(g, b), only = src.length === 1 && src[0] === "added here", user = GSTSet.peek(reg).portalUser;
-          return <tr key={g} data-key={g}><td><b>{g}</b></td><td>{GSTRegs.state(g)}</td><td>{GSTSet.typeLabel(GSTSet.typeOf(latestYm(), reg))}</td>
-            <td>{user ? <>{user} <button className="linkbtn" onClick={() => gsetUserFocus(reg)}>change</button></> : <button className="linkbtn" onClick={() => gsetUserFocus(reg)}>type it</button>}</td>
-            <td>{src.join(", ")}</td>
-            <td>{S.gsetReg === reg ? <span className="note">settings below</span> : <button className="linkbtn" onClick={() => setAndShow("gsetReg", reg)}>settings</button>}
-              {only && <> · <button className="linkbtn" onClick={() => gregRemove(g)}>remove</button></>}</td></tr>; })}</tbody>
-      </table></div> : <p className="note" style={{ color: "var(--warn)" }}>No GSTIN yet. Add the client’s GSTIN below to use the GST tab.</p>}
-      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 8 }}>
+    <div className="gset-regs">
+      <div className="gset-chips" role="group" aria-label="GSTINs">
+        {regs.map((x) => { const reg = x.slice(0, 2), user = GSTSet.peek(reg).portalUser;
+          return <button key={x} type="button" className="gset-chip" data-key={x} data-gset-chip={reg} aria-pressed={S.gsetReg === reg}
+            title={x + " · " + GSTSet.typeLabel(GSTSet.typeOf(latestYm(), reg)) + (user ? " · portal user " + user : " · no portal username")} onClick={() => setAndShow("gsetReg", reg)}>{reg + " · " + GSTRegs.state(x)}</button>; })}
+        <button type="button" className="gset-chip add" aria-expanded={adding || !regs.length} data-gset-add="" onClick={() => setAdding(!adding)}>+ Add GSTIN</button>
+        {g && <span className="note gset-shown" data-gset-shown="">Settings of <b>{g}</b>{" · from " + src.join(", ")}{only && <> · <button type="button" className="linkbtn" onClick={() => gregRemove(g)}>remove</button></>}</span>}
+      </div>
+      {!regs.length && <p className="note" style={{ color: "var(--warn)" }}>No GSTIN yet. Add the client’s GSTIN to use the GST tab.</p>}
+      {(adding || !regs.length) && <div className="gset-add">
         <input ref={box} type="text" aria-label="New GSTIN" data-fk="gregnew" maxLength={15} placeholder="15-character GSTIN" style={{ width: 240, textTransform: "uppercase" }} autoComplete="off"
           onKeyDown={(ev) => { if (ev.key === "Enter") add(); }} />
-        <button className="btn small primary" onClick={add}>Add GSTIN</button><span className="note">Its PAN must be the client’s PAN.</span>
-      </div>
-      {regs.length > 1 && <div style={{ marginTop: 10 }}><label className="note">Settings shown for <select aria-label="Settings shown for" style={{ width: "auto" }} value={S.gsetReg} onChange={(ev) => setAndShow("gsetReg", ev.target.value)}>
-        {regs.map((g) => <option key={g} value={g.slice(0, 2)}>{g + " · " + GSTRegs.state(g)}</option>)}</select></label></div>}
-    </section>
+        <button className="btn small primary" onClick={add}>Add GSTIN</button>
+        <span className="note">The GSTINs of {co.name || "this client"} (PAN {clientPan() || "not set"}): its PAN must be the client’s PAN. The GST tab works for these even before any Tally day book is brought in: 2B from the portal or its JSON, and the returns filed.</span>
+      </div>}
+      {regs.length > 1 && <p className="note" style={{ margin: "6px 0 0" }}>Each GSTIN keeps its own settings. When one is changed here, FinCom asks whether it is for this GSTIN only or for the others too.</p>}
+    </div>
   );
 }
 
-// the settings of one GSTIN
-function OneGstin({ b, g, regs }) {
+// a setting set once and seldom changed: one line with what it is now, and Change to show its box
+function RareRow({ id, name, value, children }) {
+  const [open, setOpen] = useState(false);
+  return <div className="gset-rrow" data-rare={id}>
+    <div className="gset-rline"><span className="gset-rname">{name}</span>
+      <span className="gset-rval"><span>{value}</span><button type="button" className="linkbtn" data-rare-change={id} aria-expanded={open} onClick={() => setOpen(!open)}>{open ? "Hide" : "Change"}</button></span></div>
+    {open && <div className="gset-rbody">{children}</div>}
+  </div>;
+}
+
+// the settings of one GSTIN: three cards (returns, the 2B fetch, e-invoicing) and, folded, what is rarely changed
+function OneGstin({ b, g }) {
   const reg = g.slice(0, 2), st = GSTSet.peek(reg), hist = GSTSet.history(reg), open = (b.gstOpen || {})[reg] || {}, basis = ((b.itcBasis || {})[reg]) || "2b";
   const months = GSTR.months(), first = months[0] || "", cur = GSTSet.typeOf(months[months.length - 1] || first, reg);
   const quarters = Array.from(new Set(months.map((m) => GSTSet.qStart(m))));
@@ -55,40 +69,58 @@ function OneGstin({ b, g, regs }) {
   // (key) when the saved value changes or the question is cancelled
   const shared = (key) => (ev) => gsetShared(reg, key, ev.target.type === "checkbox" ? ev.target.checked : ev.target.value);
   const k = (name, v) => name + ":" + v + ":" + (S.gsetNonce || 0);
+  const r37 = !!((b.rule37On || {})[reg]), einv = GSTSet.einvMode(reg), cash = ((b.gstCashLedger || {})[reg]) || (reg + " GST ELECTRONIC CASH LEDGER");
+  const comp = GSTQ.RATES[st.comp || "trader"] || {}, isComp = cur === "comp" || hist.some((x) => x.type === "comp");
+  const opens = [["igst", "IGST"], ["cgst", "CGST"], ["sgst", "SGST"], ["cess", "Cess"]], opened = opens.filter(([x]) => +open[x]).map(([x, l]) => l + " " + money(open[x]));
   return (
-    <section className="dash-card" data-greg={reg} style={{ marginBottom: 12 }}><h3>{"Settings of " + g + " · " + GSTRegs.state(g)}</h3>
-      {regs.length > 1 && <p className="note" style={{ margin: "0 0 6px" }}>Each GSTIN keeps its own settings. When one is changed here, FinCom asks whether it is for this GSTIN only or for the others too.</p>}
-      <H4 top={8}>Filing type</H4>
-      <Row>
-        <select aria-label="Filing type" style={{ width: "auto" }} defaultValue={(S.gsetType || {})[reg] || cur} key={"t" + cur} onChange={(ev) => gsetPick(reg, "type", ev.target.value)}>{GSTSet.TYPES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
-        <span className="note">from</span>
-        <select aria-label="Filing type from" style={{ width: "auto" }} defaultValue={(S.gsetFrom || {})[reg] || quarters[0]} onChange={(ev) => gsetPick(reg, "from", ev.target.value)}>{quarters.map((q) => <option key={q} value={q}>{GSTSet.qLabel(q)}</option>)}</select>
-        <button className="btn small" onClick={() => gsetFilingAdd(reg, cur)}>Set</button>
-      </Row>
-      {hist.length ? <p className="note">{hist.map((x, i) => <span key={x.from}>{i > 0 && "; "}{GSTSet.typeLabel(x.type) + " from " + GSTSet.qLabel(x.from) + " "}<button className="linkbtn" onClick={() => gsetFilingDel(reg, x.from)}>remove</button></span>)}. Before the first of these: monthly.</p>
-        : <p className="note">Monthly for every month in the books.</p>}
-      <p className="note">Changing between QRMP and monthly on the portal: <b>through the GST API: not built yet</b>{" (the portal’s own preference call); until then change it on the portal and set it here. For " + GSTSet.qLabel(next) + " the portal accepts the change from " + GSTAmend.dmy(win.from.replace(/-/g, "")) + " to " + GSTAmend.dmy(win.to.replace(/-/g, "")) + ". QRMP needs turnover of ₹5 crore or less in the year before. Composition is chosen on the portal (CMP-02, CMP-04) and cannot be changed through the API."}</p>
-      <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginTop: 8 }}>
-        <label className="note">If QRMP, PMT-06 by <select aria-label="PMT-06 method" style={{ width: "auto" }} key={k("pmt", st.pmt)} defaultValue={st.pmt || "fixed"} onChange={shared("pmt")}><option value="fixed">fixed sum (35% method)</option><option value="self">self-assessment</option></select></label>
-        <label className="note">If composition, rate <select aria-label="Composition rate" style={{ width: "auto" }} key={k("comp", st.comp)} defaultValue={st.comp || "trader"} onChange={shared("comp")}>{Object.entries(GSTQ.RATES).map(([k, x]) => <option key={k} value={k}>{x.l}</option>)}</select></label>
+    <section data-greg={reg} className="gset-one">
+      <div className="gset-grid">
+        <section className="dash-card gset-card" data-gset-card="returns"><h3>Returns</h3>
+          <div className="gset-pair">
+            <label className="gset-f"><span>Filing type</span><select aria-label="Filing type" defaultValue={(S.gsetType || {})[reg] || cur} key={"t" + cur} onChange={(ev) => gsetPick(reg, "type", ev.target.value)}>{GSTSet.TYPES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label>
+            <label className="gset-f"><span>From</span><select aria-label="Filing type from" defaultValue={(S.gsetFrom || {})[reg] || quarters[0]} onChange={(ev) => gsetPick(reg, "from", ev.target.value)}>{quarters.map((q) => <option key={q} value={q}>{GSTSet.qLabel(q)}</option>)}</select></label>
+          </div>
+          <div><button className="btn small" onClick={() => gsetFilingAdd(reg, cur)}>Set</button></div>
+          {hist.length ? <p className="note">{hist.map((x, i) => <span key={x.from}>{i > 0 && "; "}{GSTSet.typeLabel(x.type) + " from " + GSTSet.qLabel(x.from) + " "}<button className="linkbtn" onClick={() => gsetFilingDel(reg, x.from)}>remove</button></span>)}. Before the first of these: monthly.</p>
+            : <p className="note">Monthly for every month in the books.</p>}
+          <label className="gset-f"><span>PMT-06 method (if QRMP)</span><select aria-label="PMT-06 method" key={k("pmt", st.pmt)} defaultValue={st.pmt || "fixed"} onChange={shared("pmt")}><option value="fixed">fixed sum (35% method)</option><option value="self">self-assessment</option></select></label>
+          <details className="gset-fold"><summary>Changing the filing type on the portal</summary>
+            <p className="note">Changing between QRMP and monthly on the portal: <b>through the GST API: not built yet</b>{" (the portal’s own preference call); until then change it on the portal and set it here. For " + GSTSet.qLabel(next) + " the portal accepts the change from " + GSTAmend.dmy(win.from.replace(/-/g, "")) + " to " + GSTAmend.dmy(win.to.replace(/-/g, "")) + ". QRMP needs turnover of ₹5 crore or less in the year before. Composition is chosen on the portal (CMP-02, CMP-04) and cannot be changed through the API."}</p></details>
+        </section>
+        <section className="dash-card gset-card" data-gset-card="2b">
+          <div className="gset-cardh"><h3>GSTR-2B fetch</h3>{st.portalUser ? <Tag kind="ok" data-gset-2b="ready">Ready</Tag> : <Tag kind="warn" data-gset-2b="need">Username needed</Tag>}</div>
+          <label className="gset-f"><span>GST portal username</span>
+            <CommitBox aria-label="GST portal username" data-fk={"gset-puser-" + reg} value={st.portalUser || ""} placeholder="as used to sign in on gst.gov.in" autoComplete="off" onCommit={(v) => gsetSet("puser", v, reg)} /></label>
+          <p className="note">Used to fetch GSTR-2B through the GST API (OTP sign-in). No password needed.</p>
+          <GstPortalLogin gstin={g} portalUser={st.portalUser || ""} />
+        </section>
+        <section className="dash-card gset-card" data-gset-card="einv">
+          <div className="gset-cardh"><h3>E-invoicing</h3>{einv === "auto" && <Tag kind="info">Found from Tally</Tag>}</div>
+          <label className="gset-f"><span>Applies</span><select aria-label="E-invoicing" key={k("einv", einv)} defaultValue={einv} onChange={shared("einv")}>{[["auto", "Found from Tally: checked when the books carry IRNs"], ["outside", "Applies, e-invoices made outside Tally"], ["no", "Does not apply"]].map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label>
+          <EinvLogin gstin={(GSTR.gstins(b) || []).find((x) => x.slice(0, 2) === reg) || ""} />
+        </section>
       </div>
-      <H4>GST portal username (for the GSTR-2B fetch)</H4>
-      <CommitBox aria-label="GST portal username" data-fk={"gset-puser-" + reg} value={st.portalUser || ""} placeholder="as used to sign in on gst.gov.in" style={{ width: 260 }} autoComplete="off" onCommit={(v) => gsetSet("puser", v, reg)} />
-      {" "}<span className="note">Used to fetch GSTR-2B through the GST API (OTP sign-in). No password needed.</span>
-      <GstPortalLogin gstin={g} portalUser={st.portalUser || ""} />
-      <H4>Credit in 3B table 4</H4>
-      <select aria-label="Credit in 3B table 4" style={{ width: "auto" }} key={k("basis", basis)} defaultValue={basis} onChange={shared("basis")}><option value="2b">As far as 2B shows it (section 16(2)(aa)) — the law</option><option value="books">As booked in Tally — for comparison only</option></select>
-      <H4>Electronic credit ledger at the start{first ? " (" + GSTR.label(first) + ")" : ""}</H4>
-      <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>{[["igst", "IGST"], ["cgst", "CGST"], ["sgst", "SGST"], ["cess", "Cess"]].map(([k, l]) => <label key={k} className="note">{l}{" "}
-        <CommitBox type="number" step="0.01" aria-label={"Opening " + l} data-fk={"gset-open-" + reg + k} value={open[k] === undefined || open[k] === "" ? "" : String(open[k])} style={{ width: 130 }} onCommit={(v) => gsetSet("open", v, reg, k)} /></label>)}</div>
-      <p className="note">The balance on the portal’s credit ledger before the first month here; later months carry it forward.</p>
-      <H4>Rule 37</H4><label className="note"><input type="checkbox" aria-label="Rule 37" key={k("r37", !!((b.rule37On || {})[reg]))} defaultChecked={!!((b.rule37On || {})[reg])} onChange={shared("r37")} /> Reverse credit on bills unpaid 180 days after their date, and reclaim it when paid (off unless switched on)</label>
-      <H4>E-invoicing</H4>
-      <select aria-label="E-invoicing" style={{ width: "auto" }} key={k("einv", GSTSet.einvMode(reg))} defaultValue={GSTSet.einvMode(reg)} onChange={shared("einv")}>{[["auto", "Found from Tally: checked when the books carry IRNs"], ["outside", "Applies, e-invoices made outside Tally"], ["no", "Does not apply"]].map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
-      <EinvLogin gstin={(GSTR.gstins(b) || []).find((g) => g.slice(0, 2) === reg) || ""} />
-      <H4>Tally ledger for GST paid in cash</H4>
-      <CommitBox aria-label="Tally ledger for GST paid in cash" data-fk={"gset-cash-" + reg} value={((b.gstCashLedger || {})[reg]) || (reg + " GST ELECTRONIC CASH LEDGER")} style={{ width: 320 }} onCommit={(v) => gsetSet("cash", v, reg)} />
-      {" "}<span className="note">used in the set-off journal</span>
+      <details className="dash-card gset-rare" data-gset-rare="">
+        <summary><span className="gset-rare-t">Rarely changed</span><span className="note">Set once a year · 5 items</span></summary>
+        <RareRow id="basis" name="Credit in 3B table 4" value={basis === "books" ? "As booked in Tally (comparison only)" : "As far as 2B shows it"}>
+          <select aria-label="Credit in 3B table 4" key={k("basis", basis)} defaultValue={basis} onChange={shared("basis")}><option value="2b">As far as 2B shows it (section 16(2)(aa)) — the law</option><option value="books">As booked in Tally — for comparison only</option></select>
+        </RareRow>
+        <RareRow id="r37" name="Rule 37 (180-day payment)" value={r37 ? "On" : "Off"}>
+          <label className="note"><input type="checkbox" aria-label="Rule 37" key={k("r37", r37)} defaultChecked={r37} onChange={shared("r37")} /> Reverse credit on bills unpaid 180 days after their date, and reclaim it when paid (off unless switched on)</label>
+        </RareRow>
+        <RareRow id="comp" name="Composition rate" value={(comp.l || "") + (isComp ? "" : " · used only if composition")}>
+          <select aria-label="Composition rate" key={k("comp", st.comp)} defaultValue={st.comp || "trader"} onChange={shared("comp")}>{Object.entries(GSTQ.RATES).map(([c, x]) => <option key={c} value={c}>{x.l}</option>)}</select>
+        </RareRow>
+        <RareRow id="cash" name="Tally ledger for GST paid in cash" value={cash}>
+          <CommitBox aria-label="Tally ledger for GST paid in cash" data-fk={"gset-cash-" + reg} value={cash} style={{ width: 320 }} onCommit={(v) => gsetSet("cash", v, reg)} />
+          {" "}<span className="note">used in the set-off journal</span>
+        </RareRow>
+        <RareRow id="open" name={"Electronic credit ledger at the start" + (first ? " (" + GSTR.label(first) + ")" : "")} value={opened.length ? opened.join(" · ") : "None"}>
+          <div className="gset-opens">{opens.map(([c, l]) => <label key={c} className="note">{l}{" "}
+            <CommitBox type="number" step="0.01" aria-label={"Opening " + l} data-fk={"gset-open-" + reg + c} value={open[c] === undefined || open[c] === "" ? "" : String(open[c])} style={{ width: 130 }} onCommit={(v) => gsetSet("open", v, reg, c)} /></label>)}</div>
+          <p className="note">The balance on the portal’s credit ledger before the first month here; later months carry it forward.</p>
+        </RareRow>
+      </details>
     </section>
   );
 }
@@ -96,25 +128,28 @@ function OneGstin({ b, g, regs }) {
 // tax-accuracy: the client's e-invoice (IRP) API user, for IRN and e-way bills from Sales; the password goes straight to
 // the firm's server, which keeps it in Vault: it is never kept in this browser
 function EinvLogin({ gstin }) {
-  const [u, setU] = useState(""), [p, setP] = useState(""), [msg, setMsg] = useState(""), [busy, setBusy] = useState(false);
+  const [u, setU] = useState(""), [p, setP] = useState(""), [msg, setMsg] = useState(""), [busy, setBusy] = useState(false), [open, setOpen] = useState(false);
   const a = gstin && GSTAPI.on() ? EINV.need(gstin) : undefined;
-  if (!gstin || !GSTAPI.on()) return null;
-  const save = async () => { setBusy(true); try { await EINV.login(gstin, u.trim(), p); setP(""); setMsg("Signed in to the e-invoice portal (" + (EINV.host || "") + ")."); } catch (e) { setMsg((e && e.message) || String(e)); } setBusy(false); render(); };
-  return <div data-einv-login={gstin}>
-    <H4>E-invoice and e-way bill API user</H4>
-    {a ? <p className="note">{gstin}: user <b>{a.username}</b>{a.last_error ? <> · <span className="bad">sign-in failed: {a.last_error}</span></> : a.token_until ? " · signed in" : ""}. Give it again to change it.</p>
-      : <div className="note" data-einv-steps="">The taxpayer makes this user once, on the e-invoice portal:
+  if (!gstin) return null;
+  if (!GSTAPI.on()) return <p className="note" data-einv-off="">E-invoice portal: sign-in once the GST API is connected.</p>;
+  const save = async () => { setBusy(true); try { await EINV.login(gstin, u.trim(), p); setP(""); setOpen(false); setMsg("Signed in to the e-invoice portal (" + (EINV.host || "") + ")."); } catch (e) { setMsg((e && e.message) || String(e)); } setBusy(false); render(); };
+  // the API user's boxes only after Sign in (none saved yet) or Change
+  return <div data-einv-login={gstin} className="gset-einv">
+    <p className="note">{"E-invoice portal" + (a ? "" : ": not signed in")}{a && <>: user <b>{a.username}</b>{a.last_error ? <> · <span className="bad">sign-in failed: {a.last_error}</span></> : a.token_until ? " · signed in" : ""}</>}
+      {" · "}<button type="button" className="linkbtn" data-einv-open="" aria-expanded={open} onClick={() => setOpen(!open)}>{open ? "Cancel" : a ? "Change" : "Sign in"}</button></p>
+    {open && <>
+      {!a && <div className="note" data-einv-steps="">The taxpayer makes this user once, on the e-invoice portal:
         <ol style={{ margin: "4px 0 4px 18px", padding: 0 }}>
           <li>On einvoice1.gst.gov.in, sign in and go to API Registration → User Credentials → Create API User → Through GSP (an OTP comes to the registered mobile).</li>
           <li>In the list of GSPs, choose <b>TaxPro</b>, the GSP FinCom uses (the portal names each GSP as it is registered; pick the one for TaxPro).</li>
           <li>Set a username and a password for the API user.</li>
           <li>Enter them here. FinCom keeps the password on the firm's server, in Vault.</li>
         </ol></div>}
-    <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-      <input type="text" placeholder="API username" aria-label="E-invoice API username" value={u} autoComplete="off" style={{ width: 200 }} onChange={(ev) => setU(ev.target.value)} />
-      <input type="password" placeholder="API password" aria-label="E-invoice API password" value={p} autoComplete="new-password" style={{ width: 200 }} onChange={(ev) => setP(ev.target.value)} />
-      <button className="btn small" disabled={busy || !u.trim() || !p} onClick={save}>{busy ? "Signing in…" : "Save and sign in"}</button>
-    </div>
+      <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+        <input type="text" placeholder="API username" aria-label="E-invoice API username" value={u} autoComplete="off" style={{ width: 200 }} onChange={(ev) => setU(ev.target.value)} />
+        <input type="password" placeholder="API password" aria-label="E-invoice API password" value={p} autoComplete="new-password" style={{ width: 200 }} onChange={(ev) => setP(ev.target.value)} />
+        <button className="btn small" disabled={busy || !u.trim() || !p} onClick={save}>{busy ? "Signing in…" : "Save and sign in"}</button>
+      </div></>}
     {msg && <p className="note">{msg}</p>}
   </div>;
 }
@@ -139,7 +174,7 @@ function ForClient({ b }) {
       <H4>Advances received before the invoice</H4><AdvOptIn co={CO()} />
       <p className="note">Off: GSTR-1 tables 11A and 11B, and the tax on advances in 3B 3.1(a), stay empty for this client. Turn on to work them out from the receipts in Tally (GST page → Advances).</p>
       <IsdLedgers b={b} />
-      <H4>Blocked credit, section 17(5)</H4><p className="note">Reported in 3B table 4(B)(1), with rules 38, 42 and 43. Which kinds of purchase are blocked for this client is set further down this page.</p>
+      <H4>Blocked credit, section 17(5)</H4><p className="note">Reported in 3B table 4(B)(1), with rules 38, 42 and 43. Which kinds of purchase are blocked for this client is set below.</p>
     </section>
   );
 }
@@ -175,18 +210,26 @@ function Contacts({ b }) {
   );
 }
 
-export default function GstSettings() {
+// the page: three tabs (S.gsetTab: the GSTINs' own settings, the client's, the contacts). clientWide: more of the
+// client's settings drawn by Client setup (blocked credit), on the Client-wide tab
+const TABS = [["regs", "Registrations"], ["client", "Client-wide"], ["contacts", "Contacts"]];
+export default function GstSettings({ clientWide = null }) {
   const co = CO();
+  // a tab is kept while the page is open; it opens again on Registrations (unless a link sets S.gsetTab first)
+  useEffect(() => () => { S.gsetTab = ""; }, []);
   if (!S.books || S.books.cid !== co.id || S.books.loading) { if (!S.books || S.books.cid !== co.id) openBooks(co.id); return <Loading what="the books" page="books" />; }
   const b = S.books, regs = GSTR.gstins(b) || [];
   if (!regs.some((g) => g.slice(0, 2) === S.gsetReg)) { const own = String(co.gstin || "").toUpperCase().slice(0, 2); S.gsetReg = ((regs.find((g) => g.slice(0, 2) === own) || regs[0] || "")).slice(0, 2); }
+  const tab = TABS.some(([t]) => t === S.gsetTab) ? S.gsetTab : "regs", nParties = GSTSet.parties().length;
   return (
-    <div className="stack"><div className="pane" style={{ marginTop: 0 }}><h2>GST settings</h2>
+    <div className="stack gset"><div className="pane" style={{ marginTop: 0 }}>
+      <div className="gset-top"><h2>GST settings</h2>
+        <nav className="gset-tabs" aria-label="GST settings sections">{TABS.map(([t, l]) => <button key={t} type="button" data-gset-tab={t} aria-selected={tab === t} onClick={() => setAndShow("gsetTab", t)}>{t === "contacts" ? l + " (" + nParties + ")" : l}</button>)}</nav></div>
       <p className="note" style={{ margin: "0 0 12px" }}>Settings that stay the same month after month, for each GSTIN and for the client. What changes each month — filing dates, portal figures, IMS and follow-up decisions — stays on the GST tab.</p>
-      <Registrations b={b} regs={regs} />
-      {regs.filter((g) => g.slice(0, 2) === S.gsetReg).map((g) => <OneGstin key={g} b={b} g={g} regs={regs} />)}
-      <ForClient b={b} />
-      <Contacts b={b} />
+      {tab === "regs" && <><Registrations b={b} regs={regs} />
+        {regs.filter((g) => g.slice(0, 2) === S.gsetReg).map((g) => <OneGstin key={g} b={b} g={g} />)}</>}
+      {tab === "client" && <><ForClient b={b} />{clientWide}</>}
+      {tab === "contacts" && <Contacts b={b} />}
     </div></div>
   );
 }

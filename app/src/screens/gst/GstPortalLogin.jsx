@@ -7,8 +7,6 @@ import { useEffect, useState } from "react";
 // GSTB (src/js/84-gst-browser.js) comes with this screen's file, not in legacy.js (build.py lazy_files)
 import "../../../../src/js/84-gst-browser.js";
 
-const H4 = ({ children }) => <h4 style={{ margin: "14px 0 4px" }}>{children}</h4>;
-
 export default function GstPortalLogin({ gstin, portalUser }) {
   const [u, setU] = useState(null), [p, setP] = useState(""), [edit, setEdit] = useState(false), [msg, setMsg] = useState(""), [busy, setBusy] = useState(false), [staff, setStaff] = useState(null);
   const signed = typeof Cloud === "object" && Cloud.on();
@@ -23,10 +21,12 @@ export default function GstPortalLogin({ gstin, portalUser }) {
   const save = () => run(() => GSTB.saveLogin(gstin, user.trim(), p, owner ? allowed : null), a ? "Saved." : "Saved. The password is kept on the firm's server, in Vault.");
   const del = () => { if (window.confirm("Delete the GST portal login of " + gstin + "? The password is removed from the firm's server.")) run(() => GSTB.deleteLogin(gstin), "Deleted."); };
   const editing = edit || !a;
+  // folded under the 2B fetch's username (GST settings' GSTR-2B fetch card): it is optional
   return (
+    <details className="gset-fold" data-portal-fold="">
+    <summary>Browser helper login (optional){a && <span className="note">{" · saved for " + a.username}</span>}</summary>
     <div data-portal-login={gstin}>
-      <H4>GST portal login (browser helper only)</H4>
-      <p className="note" data-login-not2b="">For the browser helper only. Not used for the GSTR-2B fetch: that uses the GST portal username above.</p>
+      <p className="note" data-login-not2b="">GST portal login for the browser helper only. Not used for the GSTR-2B fetch: that uses the GST portal username above.</p>
       {a && !edit && <p className="note" data-login-saved="">User id <b>{a.username}</b> · password {a.has_password ? <b>saved</b> : "not saved"}
         {owner && <> · <button className="linkbtn" data-login-change="" onClick={() => { setEdit(true); setU(null); }}>change</button> · <button className="linkbtn" data-login-delete="" disabled={busy} onClick={del}>delete</button></>}</p>}
       {!owner && !a && <p className="note">Only the firm’s owner can save the GST portal login.</p>}
@@ -41,6 +41,6 @@ export default function GstPortalLogin({ gstin, portalUser }) {
           onChange={(e) => { const next = e.target.checked ? allowed.concat([m.user_id]) : allowed.filter((x) => x !== m.user_id); setStaff(next); if (a && !edit) run(() => GSTB.saveLogin(gstin, a.username, "", next), "Saved."); }} /> {m.name || m.email}</label>)}</div>}
       {msg && <p className="note" data-login-msg="">{msg}</p>}
       <p className="note">Used only when someone allowed presses “Log in to GST portal”: the helper types the user id and password on the portal’s login page and stops; the captcha and the OTP are typed by you. Every use is logged (who, when, GSTIN). The password is never shown again, kept in this browser or sent anywhere else.</p>
-    </div>
+    </div></details>
   );
 }
