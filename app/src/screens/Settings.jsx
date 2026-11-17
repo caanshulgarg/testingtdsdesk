@@ -96,9 +96,18 @@ export function BackTo() {
 // the phone's list and sections in the browser's history: a section opened from the list is a step of its own, marked
 // fcSetFrom (so "←" goes back to the list's step, as the browser's Back does); the step the list is shown on is marked
 // fcSetList (Client setup: the list and Company share an address). FOCUS: where the focus goes after the next drawing
-// ("head", or "list:<section>"), on a phone only
-let FOCUS = "";
+// ("head", or "list:<section>"), on a phone only, and only for a drawing within a second (never later, for another page).
+// The history steps are added on a phone only: on a computer the list and the section show together, and a step with the
+// same address would make Back seem to do nothing.
+let FOCUS = { to: "", at: 0 };
+const focusNext = (to) => { FOCUS = { to, at: Date.now() }; };
 const phone = () => typeof matchMedia === "function" && matchMedia("(max-width: 760px)").matches;
+// the sidebar's Client setup (Side.jsx: S.setupList, the time it was pressed) asks for the list first: only for a drawing
+// soon after, and never after an address was opened (Back / Forward, a link: Route.apply), so a mark left while the client
+// was loading cannot turn a later link to Company into the list
+const SETUP_LIST_MS = 10000;
+const setupListAsked = () => { const t = S.setupList; if (t && Date.now() - t > SETUP_LIST_MS) delete S.setupList; return !!S.setupList; };
+if (typeof window === "object") { const drop = () => { if (typeof S === "object" && S) delete S.setupList; }; window.addEventListener("hashchange", drop); window.addEventListener("popstate", drop); }
 const hst = () => { try { return (typeof history === "object" && history.state) || {}; } catch (e) { return {}; } };
 const markStep = (o) => { try { history.replaceState(Object.assign({}, hst(), o), "", location.href); } catch (e) { /* the address is unchanged */ } };
 
@@ -109,7 +118,7 @@ function Layout({ label, groups, current, pick, children, scope, cid, foot, top,
   const it = groups.flatMap((g) => g.items).find((x) => x.id === current);
   // the control pressed is hidden on a phone (the list or the section goes): the focus follows to what is shown
   useEffect(() => {
-    const f = FOCUS; FOCUS = "";
+    const f = Date.now() - FOCUS.at < 1000 ? FOCUS.to : ""; FOCUS = { to: "", at: 0 };
     if (!f || !phone()) return;
     const el = f === "head" ? document.querySelector("#app .sethead h2") : document.querySelector('#app .setnav button[data-set-item="' + f.slice(5) + '"]');
     if (el && el.getClientRects().length) el.focus();
@@ -164,11 +173,15 @@ const WEEK = 7 * 864e5;
 function firmSignals() {
   const beatOf = (d) => (((d && d.info) || {}).beat || {}), beatAt = (d) => Date.parse(beatOf(d).at || (d && d.last_seen) || "") || 0;
   const TL = typeof TLight === "object" ? TLight.st || {} : {};
-  const fresh = !!TL.at && Date.now() - TL.at < 60000 && !(typeof TStale === "object" && TStale.now(["light"]));
-  let own = null; try { own = window.FCOwn && window.FCOwn.bridge ? window.FCOwn.bridge() : null; } catch (e) { own = null; }
+  // read within 3 minutes (a beat every 30 s), each beat's age told as of that read (devState at TL.at), not as of now
+  const fresh = !!TL.at && Date.now() - TL.at < 180000 && !(typeof TStale === "object" && TStale.now(["light"]));
+  let own = null, answers = false;
+  try { own = window.FCOwn && window.FCOwn.bridge ? window.FCOwn.bridge() : null; answers = !!(window.FCOwn && window.FCOwn.state && (window.FCOwn.state() || {}).state === "ok"); } catch (e) { own = null; }
+  const liveAtRead = (d) => { try { const b = typeof devState === "function" ? devState(d, TL.at).bridge : ""; return b === "online" || b === "reconnecting"; } catch (e) { return pcLive(d); } };
   const dev = own && own.dev && tallyDevs().find((d) => d.id === own.dev.id);
   const hadTally = (d) => { const b = beatOf(d); return !!b.tally || b.tallyState === "open" || b.tallyState === "busy" || openOn(d).length > 0; };
-  const off = fresh && dev && beatAt(dev) && Date.now() - beatAt(dev) < WEEK && hadTally(dev) && !pcLive(dev) ? [dev] : [];
+  // (their bridge answering this browser now: the top bar says Connected, so nothing here says otherwise)
+  const off = fresh && !answers && dev && beatAt(dev) && TL.at - beatAt(dev) < WEEK && hadTally(dev) && !liveAtRead(dev) ? [dev] : [];
   const G = typeof GSTAPI === "object" ? GSTAPI : null;
   const gstins = Array.from(new Set(Object.values(S.companies || {}).filter((c) => c && !c.deleted).map((c) => String(c.gstin || "").toUpperCase()).filter((g) => /^\d{2}[A-Z0-9]{13}$/.test(g))));
   const lapsed = G ? gstins.filter((g) => { const x = (G.sess || {})[g]; return !!x && !!(x.connectedAt || x.endedAt || x.error) && !G.live(g); }).length : 0;
@@ -255,8 +268,8 @@ export function FirmSettings() {
   // no section asked for (Settings in the sidebar, #/settings): Firm details on a computer, the list on a phone
   const list = !ids.includes(S.settingsTab);
   const cur = list ? "firm" : S.settingsTab;
-  const pick = (id) => { FOCUS = "head"; S.settingsTab = id; render(); if (list && S.settingsTab === id) markStep({ fcSetFrom: 1 }); window.scrollTo(0, 0); };
-  const back = () => { FOCUS = "list:" + cur; if (hst().fcSetFrom) history.back(); else { S.settingsTab = null; render(); } window.scrollTo(0, 0); };
+  const pick = (id) => { focusNext("head"); S.settingsTab = id; render(); if (list && S.settingsTab === id && phone()) markStep({ fcSetFrom: 1 }); window.scrollTo(0, 0); };
+  const back = () => { focusNext("list:" + cur); if (hst().fcSetFrom) history.back(); else { S.settingsTab = null; render(); } window.scrollTo(0, 0); };
   const body = {
     firm: () => <FirmDetails />,
     account: () => <><FirmAccount />{Cloud.on() && <PeopleEtc />}</>,
@@ -606,7 +619,7 @@ export function ClientSetup() {
   const co = CO(), tab = S.tab;
   // the sidebar's Client setup: the step it opened (written after this drawing, Route.sync) is the list's
   // (a moment later: the address is written once the drawing is done)
-  useEffect(() => { if (S.setupList) setTimeout(() => { if (S.setupList) { delete S.setupList; markStep({ fcSetList: 1, fcSetFrom: 0 }); } }, 0); });
+  useEffect(() => { if (setupListAsked()) setTimeout(() => { if (setupListAsked()) { delete S.setupList; markStep({ fcSetList: 1, fcSetFrom: 0 }); } }, 0); });
   const body = {
     settings: () => <Company />,
     cotally: () => <TallySetup />,
@@ -620,15 +633,15 @@ export function ClientSetup() {
     coremove: () => <Remove />,
   }[tab] || (() => <Company />);
   const sig = clientSignals(co), groups = clientGroups(co, sig), cur = isSetupTab(tab) && tab !== "coremove" ? tab : "settings";
-  const list = !!S.setupList || (cur === "settings" && !!hst().fcSetList);
+  const list = cur === "settings" && (setupListAsked() || !!hst().fcSetList);
   const pick = (id) => {
-    FOCUS = "head";
-    // from the list: the section is a new step (Company's has the list's address, so it is added here)
-    if (list && id === S.tab) { delete S.setupList; try { history.pushState({ fcSetFrom: 1 }, "", location.href); } catch (e) { /* no history */ } render(); }
-    else { delete S.setupList; goTab(id); if (list && S.tab === id) markStep({ fcSetFrom: 1, fcSetList: 0 }); }
+    focusNext("head");
+    // from the list, on a phone: the section is a new step (Company's has the list's address, so it is added here)
+    if (list && id === S.tab) { delete S.setupList; if (phone()) try { history.pushState({ fcSetFrom: 1 }, "", location.href); } catch (e) { /* no history */ } render(); }
+    else { delete S.setupList; goTab(id); if (list && S.tab === id && phone()) markStep({ fcSetFrom: 1, fcSetList: 0 }); }
     window.scrollTo(0, 0);
   };
-  const back = () => { FOCUS = "list:" + cur; if (hst().fcSetFrom) history.back(); else { S.setupList = 1; if (S.tab === "settings") render(); else goTab("settings"); } window.scrollTo(0, 0); };
+  const back = () => { focusNext("list:" + cur); if (hst().fcSetFrom) history.back(); else { S.setupList = Date.now(); if (S.tab === "settings") render(); else goTab("settings"); } window.scrollTo(0, 0); };
   // removing the client is out of the way, in More, behind the client's name (review of 02-Oct-2026)
   const more = <details className="bk-menu" data-more="client"><summary className="btn small">More</summary><div className="bk-menu-list">
     <button className="danger" onClick={() => doAct("delCo")}>Remove this client<small>Asks for the client’s name. The firm account keeps its data, marked removed.</small></button>

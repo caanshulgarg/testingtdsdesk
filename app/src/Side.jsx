@@ -112,8 +112,8 @@ function tree() {
       { icon: "letters", label: "Letters", on: bt === "letters", go: () => goClient("books:letters"), title: "Balance confirmations and dues reminders" },
     ]],
     ["sep", [
-      // S.setupList: opened from here, a phone shows Client setup's list first (screens/Settings.jsx); a link to Company does not
-      { icon: "setup", label: "Client setup", on: setup, go: () => { if (!setup) { S.setupList = 1; toggleSetup(); } }, title: "This client's company, suppliers, Tally and ledgers" },
+      // S.setupList (when): opened from here, a phone shows Client setup's list first (screens/Settings.jsx); a link to Company does not
+      { icon: "setup", label: "Client setup", on: setup, go: () => { if (!setup) { S.setupList = Date.now(); toggleSetup(); } }, title: "This client's company, suppliers, Tally and ledgers" },
       help,
     ]],
   ];
