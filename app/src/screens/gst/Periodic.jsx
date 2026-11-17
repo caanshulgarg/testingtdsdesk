@@ -178,7 +178,7 @@ export function Cmp08() {
     <p className="note">One statement a quarter, due {d(c.due)}. Fill these figures on the portal (Returns → CMP-08).</p>
     <Step n={1} title="Turnover and tax">
       <Row label={"Sales in the quarter" + (c.cat.base === "taxable" ? " (taxable supplies)" : "")} value={m(c.turnover)} />
-      <div className="dash-row"><span>Rate: {c.cat.l} (<button className="linkbtn" onClick={() => goGstSettings()}>change in GST settings</button>)</span><b>{m(c.tax)}</b></div>
+      <div className="dash-row"><span>Rate: {c.cat.l} (<button className="linkbtn" onClick={() => { S.gsetGo = { tab: "regs", rare: "comp" }; goGstSettings(); }}>change in GST settings</button>)</span><b>{m(c.tax)}</b></div>
       <p className="note">{"CGST " + m(c.cgst) + " · SGST " + m(c.sgst) + (c.cat.base === "taxable" && c.exempt ? " · exempt sales " + m(c.exempt) + " carry no tax" : "")}</p>
     </Step>
     <Step n={2} title="Tax on purchases under reverse charge"><Row label="Reverse charge in the quarter" value={m(all4(c.rcm))} /></Step>

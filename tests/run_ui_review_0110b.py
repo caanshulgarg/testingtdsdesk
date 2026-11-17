@@ -138,8 +138,10 @@ with sync_playwright() as p:
              ("purchase done", "S.tab = 'done'"), ("bank", "S.tab = 'bank'"), ("sales", "S.tab = 'sales'")]
     pages += [("books " + t, "S.tab = 'books'; S.booksTab = '%s'" % t) for t in ["import", "ledgers", "tds", "gst", "reports", "mis", "fs", "audit", "lookup", "letters"]]
     pages += [("setup " + t, "S.tab = '%s'" % t) for t in ["settings", "cotally", "cotds", "deductees", "gstset", "bankset", "bankrules", "coclosed"]]
+    # GST settings' other tabs (the redesign of 17-Nov-2026)
+    pages += [("setup gstset " + t, "S.tab = 'gstset'; S.gsetTab = '%s'" % t) for t in ["client", "contacts"]]
     probe = """() => { const W = innerWidth, out = {scroll: document.documentElement.scrollWidth - W, hidden: []};
-      const sel = '#cobar nav.sbar button, #app nav.sbar button, #app .bk-tabs button, #cobar .tbar-actions .btn.primary, #app .setnav button';
+      const sel = '#cobar nav.sbar button, #app nav.sbar button, #app .bk-tabs button, #cobar .tbar-actions .btn.primary, #app .setnav button, #app .gset-tabs [role=tab]';
       document.querySelectorAll(sel).forEach(b => { const r = b.getBoundingClientRect(); if (r.width === 0) return;
         let el = b.parentElement, clip = false; while (el) { const cs = getComputedStyle(el); if (/auto|scroll|hidden/.test(cs.overflowX)) { const pr = el.getBoundingClientRect(); if (r.left < pr.left - 1 || r.right > pr.right + 1) clip = true; } el = el.parentElement; }
         if (r.left < -1 || r.right > W + 1 || clip) out.hidden.push(b.textContent.trim().slice(0, 30)); });

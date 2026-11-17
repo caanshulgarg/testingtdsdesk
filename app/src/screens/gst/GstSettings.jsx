@@ -51,7 +51,7 @@ function Registrations({ b, regs }) {
 
 // a setting set once and seldom changed: one line with what it is now, and Change to show its box
 function RareRow({ id, name, value, children }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(() => S.gsetRare === id);
   return <div className="gset-rrow" data-rare={id}>
     <div className="gset-rline"><span className="gset-rname">{name}</span>
       <span className="gset-rval"><span>{value}</span><button type="button" className="linkbtn" data-rare-change={id} aria-expanded={open} onClick={() => setOpen(!open)}>{open ? "Hide" : "Change"}</button></span></div>
@@ -72,6 +72,9 @@ function OneGstin({ b, g }) {
   const r37 = !!((b.rule37On || {})[reg]), einv = GSTSet.einvMode(reg), cash = ((b.gstCashLedger || {})[reg]) || (reg + " GST ELECTRONIC CASH LEDGER");
   const comp = GSTQ.RATES[st.comp || "trader"] || {}, isComp = cur === "comp" || hist.some((x) => x.type === "comp");
   const opens = [["igst", "IGST"], ["cgst", "CGST"], ["sgst", "SGST"], ["cess", "Cess"]], opened = opens.filter(([x]) => +open[x]).map(([x, l]) => l + " " + money(open[x]));
+  // a link to one of "Rarely changed": the fold open, its row's box shown and scrolled to (once)
+  const [rare] = useState(() => S.gsetRare || "");
+  useEffect(() => { if (!rare) return; S.gsetRare = ""; const el = document.querySelector('[data-greg="' + reg + '"] [data-rare="' + rare + '"]'); if (el) el.scrollIntoView({ block: "center" }); }, []);
   return (
     <section data-greg={reg} className="gset-one">
       <div className="gset-grid">
@@ -100,7 +103,7 @@ function OneGstin({ b, g }) {
           <EinvLogin gstin={(GSTR.gstins(b) || []).find((x) => x.slice(0, 2) === reg) || ""} />
         </section>
       </div>
-      <details className="dash-card gset-rare" data-gset-rare="">
+      <details className="dash-card gset-rare" data-gset-rare="" open={!!rare}>
         <summary><span className="gset-rare-t">Rarely changed</span><span className="note">Set once a year · 5 items</span></summary>
         <RareRow id="basis" name="Credit in 3B table 4" value={basis === "books" ? "As booked in Tally (comparison only)" : "As far as 2B shows it"}>
           <select aria-label="Credit in 3B table 4" key={k("basis", basis)} defaultValue={basis} onChange={shared("basis")}><option value="2b">As far as 2B shows it (section 16(2)(aa)) — the law</option><option value="books">As booked in Tally — for comparison only</option></select>
@@ -211,25 +214,39 @@ function Contacts({ b }) {
 }
 
 // the page: three tabs (S.gsetTab: the GSTINs' own settings, the client's, the contacts). clientWide: more of the
-// client's settings drawn by Client setup (blocked credit), on the Client-wide tab
+// client's settings drawn by Client setup (blocked credit, which needs no books), on the Client-wide tab.
+// A link from another page sets S.gsetGo = {tab, rare} before goGstSettings(): that tab, and with rare the row of
+// "Rarely changed" (basis, r37, comp, cash, open) with the fold open and its box shown.
 const TABS = [["regs", "Registrations"], ["client", "Client-wide"], ["contacts", "Contacts"]];
+const SEC = "setup:gstset";
 export default function GstSettings({ clientWide = null }) {
   const co = CO();
-  // a tab is kept while the page is open; it opens again on Registrations (unless a link sets S.gsetTab first)
-  useEffect(() => () => { S.gsetTab = ""; }, []);
-  if (!S.books || S.books.cid !== co.id || S.books.loading) { if (!S.books || S.books.cid !== co.id) openBooks(co.id); return <Loading what="the books" page="books" />; }
-  const b = S.books, regs = GSTR.gstins(b) || [];
-  if (!regs.some((g) => g.slice(0, 2) === S.gsetReg)) { const own = String(co.gstin || "").toUpperCase().slice(0, 2); S.gsetReg = ((regs.find((g) => g.slice(0, 2) === own) || regs[0] || "")).slice(0, 2); }
-  const tab = TABS.some(([t]) => t === S.gsetTab) ? S.gsetTab : "regs", nParties = GSTSet.parties().length;
+  // on opening: a link's tab, or Registrations (S.gsetTab is emptied on leaving); but the tab left with unsaved
+  // changes stays (Stay on "Save your changes?" draws the page again), until those changes are saved or undone
+  useState(() => {
+    const go = S.gsetGo; delete S.gsetGo;
+    if (go) { S.gsetTab = go.tab || ""; S.gsetRare = go.rare || ""; }
+    else if (S.gsetKept && !Drafts.dirty(SEC)) S.gsetTab = "";
+    S.gsetKept = false;
+  });
+  useEffect(() => () => { S.gsetRare = ""; if (Drafts.dirty(SEC)) S.gsetKept = true; else S.gsetTab = ""; }, []);
+  const tab = TABS.some(([t]) => t === S.gsetTab) ? S.gsetTab : "regs";
+  const ready = !!S.books && S.books.cid === co.id && !S.books.loading;
+  if (!ready && (!S.books || S.books.cid !== co.id)) openBooks(co.id);
+  const b = ready ? S.books : null, regs = ready ? GSTR.gstins(b) || [] : [];
+  if (ready && !regs.some((g) => g.slice(0, 2) === S.gsetReg)) { const own = String(co.gstin || "").toUpperCase().slice(0, 2); S.gsetReg = ((regs.find((g) => g.slice(0, 2) === own) || regs[0] || "")).slice(0, 2); }
+  const loading = <Loading what="the books" page="books" />;
   return (
     <div className="stack gset"><div className="pane" style={{ marginTop: 0 }}>
       <div className="gset-top"><h2>GST settings</h2>
-        <nav className="gset-tabs" aria-label="GST settings sections">{TABS.map(([t, l]) => <button key={t} type="button" data-gset-tab={t} aria-selected={tab === t} onClick={() => setAndShow("gsetTab", t)}>{t === "contacts" ? l + " (" + nParties + ")" : l}</button>)}</nav></div>
+        <div className="gset-tabs" role="tablist" aria-label="GST settings sections">{TABS.map(([t, l]) => <button key={t} type="button" role="tab" data-gset-tab={t} aria-selected={tab === t} onClick={() => setAndShow("gsetTab", t)}>{t === "contacts" && ready ? l + " (" + GSTSet.parties().length + ")" : l}</button>)}</div></div>
       <p className="note" style={{ margin: "0 0 12px" }}>Settings that stay the same month after month, for each GSTIN and for the client. What changes each month — filing dates, portal figures, IMS and follow-up decisions — stays on the GST tab.</p>
-      {tab === "regs" && <><Registrations b={b} regs={regs} />
-        {regs.filter((g) => g.slice(0, 2) === S.gsetReg).map((g) => <OneGstin key={g} b={b} g={g} />)}</>}
-      {tab === "client" && <><ForClient b={b} />{clientWide}</>}
-      {tab === "contacts" && <Contacts b={b} />}
+      <div role="tabpanel" aria-label={TABS.find(([t]) => t === tab)[1]}>
+        {tab === "regs" && (!ready ? loading : <><Registrations b={b} regs={regs} />
+          {regs.filter((g) => g.slice(0, 2) === S.gsetReg).map((g) => <OneGstin key={g} b={b} g={g} />)}</>)}
+        {tab === "client" && <>{ready ? <ForClient b={b} /> : loading}{clientWide}</>}
+        {tab === "contacts" && (ready ? <Contacts b={b} /> : loading)}
+      </div>
     </div></div>
   );
 }

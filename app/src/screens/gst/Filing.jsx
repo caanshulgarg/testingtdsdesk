@@ -8,7 +8,8 @@ import { FiledOrDate } from "./FileApi.jsx";
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
 const dmy = (s) => GSTAmend.dmy(String(s || "").replace(/-/g, ""));
-const SetLink = ({ children = "change in GST settings" }) => <button className="linkbtn" onClick={() => goGstSettings()}>{children}</button>;
+// to GST settings: tab and rare (GstSettings: S.gsetGo) land on the setting
+const SetLink = ({ children = "change in GST settings", tab, rare }) => <button className="linkbtn" onClick={() => { if (tab || rare) S.gsetGo = { tab: tab || "regs", rare }; goGstSettings(); }}>{children}</button>;
 const Card = ({ title, children }) => <section className="dash-card" style={{ marginTop: 12 }}><h3>{title}</h3>{children}</section>;
 const H4 = ({ children }) => <h4 style={{ margin: "12px 0 4px" }}>{children}</h4>;
 
@@ -32,7 +33,7 @@ function Rule37({ b, reg, r }) {
   const on = !!((b.rule37On || {})[reg]);
   const rows = (list, inTb) => list.map((x, i) => <tr key={inTb + i}><td>{x.party}</td><td>{x.ref}</td><td>{fmtDate(tallyDate(x.date))}</td><td>{x.why}</td><td className="n">{money(x.tax)}</td><td>{inTb}</td></tr>);
   return <>
-    <H4>Rule 37: suppliers unpaid after 180 days</H4><p className="note">{on ? "On for this GSTIN" : "Off for this GSTIN"} · <SetLink /></p>
+    <H4>Rule 37: suppliers unpaid after 180 days</H4><p className="note">{on ? "On for this GSTIN" : "Off for this GSTIN"} · <SetLink rare="r37" /></p>
     {on && <>{r && (r.rev.n || r.re.n) ? <ListRows name="rule37" className="bk-table compact" unit={["bill", "bills"]} head={[{ label: "Supplier", role: "party" }, { label: "Bill", role: "number" }, { label: "Date", role: "date", cls: "dt" }, { label: "Why" }, { label: "Tax", role: "amount", cls: "n" }, { label: "In 3B", role: "status" }]}>
       {rows(r.rev.list, "4(B)(2) reversed")}{rows(r.re.list, "4(A)(5) and 4(D)(1) reclaimed")}</ListRows>
       : <p className="note">No bill reaches 180 days unpaid this month, and none reversed earlier was paid.</p>}
@@ -48,7 +49,7 @@ function AfterFiling({ ym, reg, rec }) {
     <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center" }}>
       {rec.snap ? <><span className="tag">3B kept as filed on {dmy(rec.r3b) || fmtDate(String(rec.snapAt || "").slice(0, 10))}</span><button className="linkbtn" onClick={() => gstfUnsnap()}>remove the kept copy</button></>
         : <button className="btn small" onClick={() => gstfSnap()}>Mark this 3B as filed and keep a copy</button>}
-      <button className="btn small" onClick={() => gstfJournal()}>Set-off journal for Tally</button><span className="note">cash ledger in Tally: <b>{J.cashL}</b> · <SetLink /></span>
+      <button className="btn small" onClick={() => gstfJournal()}>Set-off journal for Tally</button><span className="note">cash ledger in Tally: <b>{J.cashL}</b> · <SetLink rare="cash" /></span>
     </div>
     <p className="note">The kept copy is used for GSTR-9 and for the credit carried into the next month, so later changes in Tally do not move a month already filed.
       {J.missing.length > 0 && <>{" "}<b>{"Ledger not found in Tally: " + J.missing.join(", ") + (J.balanced ? "" : "; the journal will not balance until it is there") + "."}</b></>}</p>
@@ -76,7 +77,7 @@ export function Filing({ b, t }) {
       </table></div>
       <div className="dash-row"><span>Interest under section 50, from the portal (table 5.1)</span><b><Portal k="portalInt" v={rec.portalInt} />{est && <Agrees est={it.total} portal={rec.portalInt} />}</b></div>
       <p className="note">Late fee and interest are the portal’s own figures. They will be fetched from the portal once the GST API is connected; until then type what the portal shows. GSTR-1’s late fee is charged by the portal in the next 3B.</p>
-      {est && <p className="note"><b>FinCom’s estimate</b> (<SetLink>switched on in GST settings</SetLink>){"): late fee under section 47, ₹50 a day (₹20 for nil), capped at " + money(f3.cap || f1.cap || 0).replace(/\.00$/, "") + " by the turnover of the year before"
+      {est && <p className="note"><b>FinCom’s estimate</b> (<SetLink tab="client">switched on in GST settings</SetLink>){"): late fee under section 47, ₹50 a day (₹20 for nil), capped at " + money(f3.cap || f1.cap || 0).replace(/\.00$/, "") + " by the turnover of the year before"
         + (a.from === "part" || a.from === "none" ? " (not all of that year is in the books; type it in GST settings)" : "") + "."
         + (it.days && it.total ? " Interest under section 50(1), 18% a year on " + money(t.quarter ? t.payable : t.pay.cash.igst + t.pay.cash.cgst + t.pay.cash.sgst + t.pay.cash.cess) + (t.quarter ? " still to pay after PMT-06" : " paid in cash") + " for " + it.days + " days" + (it.estimated ? " if filed today" : "") + ": " + money(it.total) + "." : "")}</p>}
       <H4>Checks the portal runs</H4>

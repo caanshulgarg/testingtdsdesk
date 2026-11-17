@@ -82,7 +82,7 @@ function Letters({ reg, rows, onClose }) {
         <td>{s.email || <span className="nr">no email</span>}<div className="nr">{s.phone || "no phone"}</div></td><td>{s.lastSent ? GSTAmend.dmy(s.lastSent) + (s.sent.length > 1 ? " (" + s.sent.length + " times)" : "") : <span className="nr">not yet</span>}</td>
         <td style={{ whiteSpace: "nowrap" }}><button className="linkbtn" data-letter-copy={s.key} onClick={() => write("copy", s)}>copy</button> · <button className="linkbtn" onClick={() => write("mail", s)}>email</button> · <button className="linkbtn" onClick={() => write("wa", s)}>WhatsApp</button> · <button className="linkbtn" onClick={() => setOpen(open === s.key ? "" : s.key)}>{open === s.key ? "hide" : "see"} letter</button></td></tr>
         {open === s.key && <tr><td colSpan={6}><pre className="itc-letter" data-letter-text="">{s.text}</pre></td></tr>}</Fragment>)}</tbody></table></div>}
-    <p className="note">Email and phone come from Tally, or from GST settings (<button className="linkbtn" onClick={() => { onClose(); S.gsetTab = "contacts"; goGstSettings(); }}>contacts</button>). Writing is logged, so next month shows when each was last written to.</p>
+    <p className="note">Email and phone come from Tally, or from GST settings (<button className="linkbtn" onClick={() => { onClose(); S.gsetGo = { tab: "contacts" }; goGstSettings(); }}>contacts</button>). Writing is logged, so next month shows when each was last written to.</p>
   </Pop>;
 }
 

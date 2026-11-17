@@ -20,7 +20,7 @@ export default function BrowserHelper({ form, ym, reg }) {
   // helper by default): the helper's steps are not shown
   const route = typeof gstFileRoute === "function" ? gstFileRoute(S.books) : "helper";
   if (route === "api") return <section className="dash-card" style={{ marginTop: 12 }} data-browser-helper={form} data-helper-off="api"><h3>Browser helper</h3>
-    <p className="note">This client files through the GST API (the setting “File through” in <button className="linkbtn" onClick={() => goGstSettings()}>GST settings</button>), so the browser helper’s steps are not shown.</p></section>;
+    <p className="note">This client files through the GST API (the setting “File through” in <button className="linkbtn" onClick={() => { S.gsetGo = { tab: "client" }; goGstSettings(); }}>GST settings</button>), so the browser helper’s steps are not shown.</p></section>;
   const gstin = GSTB.gstinOf(reg), st = GSTB.state(reg, ym, form), rec = GSTF.peek(ym, reg);
   const arn = form === "3B" ? rec.r3bArn : form === "IFF" ? rec.iffArn : rec.r1Arn;
   const login = GSTB.loginOf(gstin), signed = typeof Cloud === "object" && Cloud.on();

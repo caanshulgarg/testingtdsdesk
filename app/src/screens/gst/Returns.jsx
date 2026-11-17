@@ -16,7 +16,8 @@ import { cloud3b, cloud3bAt } from "./cloud3b.js";
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
 const day = (d) => fmtDate(tallyDate(d));
-const SetLink = ({ children = "change in GST settings" }) => <button className="linkbtn" onClick={() => goGstSettings()}>{children}</button>;
+// to GST settings: tab and rare (GstSettings: S.gsetGo) land on the setting
+const SetLink = ({ children = "change in GST settings", tab, rare }) => <button className="linkbtn" onClick={() => { if (tab || rare) S.gsetGo = { tab: tab || "regs", rare }; goGstSettings(); }}>{children}</button>;
 // t70: the taxable value and the tax each on a line of its own (they were one line, cut off in a narrow box)
 const Box = ({ label, s, warn }) => <div className={"dtile" + (warn ? " warn" : "")}><span>{label}</span><b>{s.n}</b><small>Taxable {money(s.taxable)}</small><small>Tax {money(s.igst + s.cgst + s.sgst)}</small></div>;
 // t70 (the owner: "in GST the tax amount is not coming properly"): the tax of a customer, and under it its heads
@@ -159,7 +160,7 @@ export function Gstr3b({ b, sub }) {
   return <>
     {where}
     <div className="gf-ctl" style={{ marginBottom: 10 }}>
-      <span className="note">Credit in table 4: <b>{choice === "2b" ? "as far as 2B shows it" : "as booked in Tally"}</b> · filing {typeof GSTSet === "object" ? GSTSet.typeLabel(ft).toLowerCase() : "monthly"} · <SetLink /></span>
+      <span className="note">Credit in table 4: <b>{choice === "2b" ? "as far as 2B shows it" : "as booked in Tally"}</b> · filing {typeof GSTSet === "object" ? GSTSet.typeLabel(ft).toLowerCase() : "monthly"} · <SetLink rare="basis" /></span>
       <span className="note">{t.basis === "2b" ? "This month’s 2B is here; bills not in it are held back." : t.basis === "no 2B" ? "No 2B for this month here, so the books are used; bring it in under 2B reconciliation." : "As booked."}</span>
     </div>
     {/* round 72: Summary is the return as the portal lays it out; Details how FinCom works it out (the steps, the typing) */}
@@ -224,7 +225,7 @@ export function Gstr3b({ b, sub }) {
         <Gap n={8} h={6} />
         <tr><td>Credit brought forward{first ? <div className="nr">the balance in the electronic credit ledger at the start of {GSTR.label(S.gstYm)}, from the portal</div>
           : <div className="nr">left over from {GSTR.label(months[months.indexOf(S.gstYm) - 1] || "")}</div>}</td><td></td>
-          {HD.map(([k]) => <td key={k} className="n">{money(t.opening[k])}</td>)}<td>{first && <SetLink>typed in GST settings</SetLink>}</td><td></td></tr>
+          {HD.map(([k]) => <td key={k} className="n">{money(t.opening[k])}</td>)}<td>{first && <SetLink rare="open">typed in GST settings</SetLink>}</td><td></td></tr>
         <tr><td><b>Credit carried to next month</b></td><td></td>{HD.map(([k]) => <td key={k} className="n"><b>{money(P.carry[k])}</b></td>)}<td></td><td></td></tr>
       </tbody>
     </table></div>
