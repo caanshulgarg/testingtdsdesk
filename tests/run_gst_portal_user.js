@@ -35,7 +35,7 @@ const fresh = (gstSet) => {
   D.reg(SEC, {label: "GST", stores: ["client", "books:gstSet,gstOpen,gstApi"], cid: "c1"});
 };
 const edit = (f) => { D.touch(SEC); f(); D.attribute(D.secs[SEC]); };   // a person's edit inside the section
-const user = () => x.GSTSet.peek(REG).portalUser;
+const user = () => x.GSTSet.peek(REG).portalUser, clone = (o) => JSON.parse(JSON.stringify(o));
 
 (async () => {
   // ---- 1. the helper's login fills an empty "GST portal username"
@@ -141,6 +141,68 @@ const user = () => x.GSTSet.peek(REG).portalUser;
   edit(() => { ctx.S.companies.c1.gst.extra = Object.assign({}, ctx.S.companies.c1.gst.extra, {b: "y"}); });
   const sent = D.view("client", "c1", ctx.S.companies.c1);
   ok(!((sent.gst || {}).extra || {}).a && !((sent.gst || {}).extra || {}).b && ctx.S.companies.c1.gst.extra.b === "y", "2. the cloud is sent neither part of a new group of settings while it is unsaved");
+
+  // review of 9a92f1000 (cases A-G): Don't save gives what it gave before these fixes
+  const J = (v) => JSON.stringify(v);
+  // A. Settings → Suppliers → Add supplier (a record with empty fields), renamed, Don't save: the record goes
+  fresh(); ctx.S.data = {c1: {parties: {p1: {id: "p1", name: "Old", pan: "AAAPA1111A"}}}};
+  D.reg("set:deductees", {label: "D", stores: ["parties"], cid: "c1"});
+  const P = () => ctx.S.data.c1.parties, pe = (f) => { D.touch("set:deductees"); f(); D.attribute(D.secs["set:deductees"]); };
+  pe(() => { P()["p-new"] = {id: "p-new", name: "New supplier", pan: "", gstin: "", ytd: {}}; });
+  pe(() => { P()["p-new"].name = "Acme"; });
+  ok(D.dirty("set:deductees") && J(D.view("party", "p-new", clone(P()["p-new"]), "c1")) === J(P()["p-new"]), "A. a new supplier is a draft; its cloud copy is the record as it is (as before)");
+  D.discard("set:deductees");
+  ok(J(P()) === J({p1: {id: "p1", name: "Old", pan: "AAAPA1111A"}}), "A. Don't save: the new supplier goes, empty fields and all (" + J(P()) + ")");
+  // the same with something stored on it since by other code: only what the draft wrote goes
+  fresh(); ctx.S.data = {c1: {parties: {}}}; D.reg("set:deductees", {label: "D", stores: ["parties"], cid: "c1"});
+  pe(() => { P()["p-new"] = {id: "p-new", name: "New supplier", pan: "", ytd: {}}; });
+  D.direct(() => { P()["p-new"].ledgerChoice = {value: "L", state: "confirmed"}; });
+  D.discard("set:deductees");
+  ok(J(P()) === J({"p-new": {ledgerChoice: {value: "L", state: "confirmed"}}}), "A. ... and with a value stored on it since by other code, only that stays (" + J(P()) + ")");
+  // B. a new state: username typed, PMT-06 picked, username emptied, Don't save
+  fresh();
+  edit(() => { x.GSTSet.store(REG).portalUser = "abc"; });
+  edit(() => { x.GSTSet.store(REG).pmt = "self"; });
+  edit(() => { x.GSTSet.store(REG).portalUser = ""; });
+  D.discard(SEC);
+  ok(J(ctx.S.books.gstSet) === "{}", "B. a new state's username typed, PMT-06 picked, username emptied: Don't save leaves nothing (" + J(ctx.S.books.gstSet) + ")");
+  // C. the same setting of a new state edited twice
+  fresh();
+  edit(() => { ctx.S.books.gstOpen = {[REG]: {igst: 100}}; });
+  edit(() => { ctx.S.books.gstOpen = {[REG]: {igst: 200}}; });
+  D.discard(SEC);
+  ok(J(ctx.S.books.gstOpen) === "{}", "C. a new state's opening IGST edited twice: Don't save leaves nothing (" + J(ctx.S.books.gstOpen) + ")");
+  // D. a state's settings: one edited, then the whole state's settings removed
+  fresh({[REG]: {portalUser: "saved", pmt: "fixed"}});
+  edit(() => { x.GSTSet.store(REG).pmt = "self"; });
+  edit(() => { delete ctx.S.books.gstSet[REG]; });
+  D.discard(SEC);
+  ok(J(ctx.S.books.gstSet) === J({[REG]: {portalUser: "saved", pmt: "fixed"}}), "D. one setting edited, then the state's settings removed: Don't save brings back what was saved (" + J(ctx.S.books.gstSet) + ")");
+  // E. the client's settings: a new group (TDS ledgers), two parts, the cloud copy while unsaved, Don't save
+  fresh(); D.reg("set:cotds", {label: "T", stores: ["client"], cid: "c1"});
+  const co = ctx.S.companies.c1, ce = (f) => { D.touch("set:cotds"); f(); D.attribute(D.secs["set:cotds"]); };
+  ce(() => { co.tdsLedgers = {"194C": "TDS C"}; });
+  ce(() => { co.tdsLedgers["194J"] = "TDS J"; });
+  const v = D.view("client", "c1", clone(co));
+  ok(!Object.keys(v.tdsLedgers || {}).length && v.name === co.name && co.tdsLedgers["194J"] === "TDS J", "E. the cloud is sent no unsaved TDS ledger (" + J(v.tdsLedgers) + ")");
+  D.discard("set:cotds");
+  ok(J(co) === J({id: "c1", name: "ZZ Test Traders"}), "E. Don't save: both go (" + J(co) + ")");
+  // F. a setting six levels down (compared whole): the saved parts come back, one stored since by other code stays
+  fresh(); ctx.S.books.gstSet = {[REG]: {a: {b: {c: {d: {k1: 1, k2: 2}}}}}};
+  edit(() => { ctx.S.books.gstSet[REG].a.b.c.d.k2 = 3; });
+  D.direct(() => { ctx.S.books.gstSet[REG].a.b.c.d.k9 = 9; });
+  D.discard(SEC);
+  ok(J(ctx.S.books.gstSet[REG].a.b.c.d) === J({k1: 1, k2: 2, k9: 9}), "F. six levels down: k1 and k2 as saved, k9 (stored since by other code) kept (" + J(ctx.S.books.gstSet[REG].a.b.c.d) + ")");
+  fresh(); ctx.S.books.gstSet = {[REG]: {a: {b: {c: {d: {k1: 1, k2: 2}}}}}};
+  edit(() => { ctx.S.books.gstSet[REG].a.b.c.d.k2 = 3; });
+  D.discard(SEC);
+  ok(J(ctx.S.books.gstSet[REG].a.b.c.d) === J({k1: 1, k2: 2}), "F. ... and without k9: as saved");
+  // G. a list (the filing types) changed twice
+  fresh({[REG]: {filing: [{type: "monthly", from: "202404"}]}});
+  edit(() => { const t = x.GSTSet.store(REG); t.filing = t.filing.concat([{type: "qrmp", from: "202407"}]); });
+  edit(() => { const t = x.GSTSet.store(REG); t.filing = t.filing.concat([{type: "monthly", from: "202410"}]); });
+  D.discard(SEC);
+  ok(J(ctx.S.books.gstSet) === J({[REG]: {filing: [{type: "monthly", from: "202404"}]}}), "G. the filing types changed twice: Don't save brings back the saved list");
 
   // no password in the books
   ok(!JSON.stringify(ctx.S.books).includes("fx-made-up"), "the helper's password is never in the books");
