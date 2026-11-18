@@ -18,7 +18,7 @@ import HeadFilter from "../parts/bank/HeadFilter.jsx";
 import { markGone, goneOpen, goneLine, goneCount, goneToast } from "../parts/bank/goneSent.js";
 import "../parts/bank/bankSmart.css";
 import Rail from "../parts/bank/Rail.jsx";
-import { Drawer, Density, ActiveChips, useSpacious, rowOpen, rowTally, denseOn, bankParty, BST, fill, fillSoon } from "../parts/bank/Spacious.jsx";
+import { Drawer, Density, ActiveChips, useSpacious, rowOpen, dismissing, drawerGone, rowTally, denseOn, bankParty, BST, fill, fillSoon } from "../parts/bank/Spacious.jsx";
 import { BankSettings, RulesPanel } from "../parts/BankSettings.jsx";
 import { PostReport, ReviewCheck, FixBanner, BankBalance, Recon, Gone, DupFind, BankFocus } from "../parts/BankChecks.jsx";
 import { ColFunnel } from "../parts/ColHead.jsx";
@@ -107,7 +107,7 @@ function bankCols(b, rows, nSel) {
       cell: (r) => <input type="checkbox" aria-label="Select" checked={b.sel.has(r.id)} disabled={r.state === "sent"} onChange={() => {}} onClick={(ev) => bankToggleRow(r.id, ev.target.checked, ev.shiftKey)} /> },
     { k: "date", role: "date", label: "Date", cls: "dt", filter: <ColFunnel t="bank" k="date" label="Date" />, v: (r) => r.date || "", td: (r) => ({ title: fmtDate(r.date) }),
       // spacious layout: the date opens the line's details (the drawer), by keyboard too
-      cell: (r) => <button type="button" className="bs-dt" data-row-open={r.id} aria-label={"Details of the line of " + fmtDate(r.date)} onClick={() => { const b = B(); b.drawer = b.drawer === r.id ? null : r.id; render(); }}>{shortDate(r.date)}</button> },
+      cell: (r) => <button type="button" className="bs-dt" data-row-open={r.id} aria-label={"Details of the line of " + fmtDate(r.date)} onClick={(ev) => { if (dismissing(ev)) return; const b = B(); b.drawer = b.drawer === r.id ? null : r.id; render(); }}>{shortDate(r.date)}</button> },
     // the whole narration, two lines at most (all of it on hover), the party read from it first and the mode and reference
     // in small letters (24-Oct-2026: one line of 60 letters and a second of the narration cut short, 69 px a row)
     // 25-Oct-2026 (the owner: "size has become too short"; party, mode, reference and narration ran together): the party in
@@ -443,9 +443,14 @@ function BankPage() {
   const noLed = !bankLedgerReady(CO(), acc), whyLed = noLed ? bankLedgerWhy(CO(), acc) : "";
   // the statement's lines are shown (not the rules, not one line per party): a line's details can sit beside them
   const lines = tab !== "rules" && !(tab === "review" && b.grouped && apView("bank") !== "auto");
+  // the lines on screen (the column filters too): the open line's details only while it is one of them;
+  // a tab, filter, search or statement changed, or posting moved it off this tab: the panel shuts (18-Nov-2026 review)
+  const lsh = lines && b.drawer ? listShownSet("bank") : null, onScreen = lsh ? shown.filter((r) => lsh.has(r.id)) : shown;
+  if (b.drawer && (tab === "rules" || (b.drIn && b.drIn !== b.cur) || !onScreen.some((x) => x.id === b.drawer))) drawerGone(b);
+  b.drIn = b.drawer ? b.cur : null;
   return <>
     <SpaceOn />
-    <div className={"bk bk-smart bk-space" + (b.dense ? " bk-dense" : "") + (lines && b.drawer && b.rows.some((x) => x.id === b.drawer) ? " bk-dr-open" : "")} data-density={b.dense ? "compact" : "comfortable"}>
+    <div className={"bk bk-smart bk-space" + (b.dense ? " bk-dense" : "") + (lines && b.drawer ? " bk-dr-open" : "")} data-density={b.dense ? "compact" : "comfortable"}>
       {/* upload-pages (14-Oct-2026): the states are the page's one row of states (parts/StateBar.jsx); the rules are not a
           state, so they open from their own button. 24-Oct-2026: the search and Group by party are in the filter bar */}
       {tab === "rules" && <div className="bk-bar"><button className="btn small" data-bank-rules-back="" onClick={() => bankTabGo("review")}>← Back to the statement</button></div>}
@@ -502,7 +507,7 @@ function BankPage() {
       {tab !== "rules" && <AutoFilter kind="bank" all={b.rows} />}
       {tab === "rules" ? <RulesPanel /> : lines ? <Table tab={tab} all={shown} /> : <Groups />}
       {/* a line's details: beside the table on a wide screen (spacious.css, .bk-dr-open), so drawn right after it */}
-      {tab !== "rules" && <Drawer rows={shown} />}
+      {tab !== "rules" && <Drawer rows={onScreen} />}
       {tab !== "rules" && apView("bank") === "auto" && <RunLine />}
     </div>
     {b.showSettings && <BankSettings />}

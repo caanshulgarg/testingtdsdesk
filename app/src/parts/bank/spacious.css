@@ -115,9 +115,10 @@
 .bsp-acts { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 8px; border-top: 1px solid var(--border-subtle, var(--border)); }
 
 /* 18-Nov-2026 (the owner: "need a proper side panel with the same space"): a computer's screen, the panel the table's
-   height, starting where the table's box starts (--bk-top and --bk-fill, Spacious.jsx fill), over the table's right side */
+   height, starting where the table's box starts (--bk-top and --bk-dr-h, Spacious.jsx fill, measured again on scroll and
+   kept under the header and inside the window), over the table's right side */
 @media (min-width: 601px) {
-  html.bk-spacious .bsp-drawer { top: var(--bk-top, calc(var(--head-h, 56px) + 6px)); bottom: auto; height: var(--bk-fill, calc(100vh - var(--head-h, 56px) - 98px)); }
+  html.bk-spacious .bsp-drawer { top: var(--bk-top, calc(var(--head-h, 56px) + 6px)); bottom: auto; height: var(--bk-dr-h, var(--bk-fill, calc(100vh - var(--head-h, 56px) - 98px))); }
 }
 /* 1100 px and more: beside the table, not over it. The table (.bs-grid) and the panel share the row (#app is a wrapping
    flex row, spacious.css 2.): the table narrows, keeps its frozen header and Date column, pinned totals and sideways

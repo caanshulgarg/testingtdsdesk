@@ -9,7 +9,12 @@
      with the panel open the Status column (its whole pill) is in view without scrolling sideways, and the totals row's
      figures and words never run into each other, open or closed (the coordinator's review of the first screenshots);
   3. between 601 and 1099 px it stays over the table but has the table's full height;
-  4. a phone (375 / 390 px): no sideways scroll, the details a sheet from the bottom.
+  4. a phone (375 / 390 px): no sideways scroll, the details a sheet from the bottom;
+  5. (the review of 18-Nov-2026) the panel shuts, and the table has its columns again, when its line is no longer on
+     screen: another tab, a filter, the search, posting it off the tab; focus then on the list, ↑ / ↓ moving; a click that
+     only shuts a column's filter does not open the line under it; Esc in the search box is the box's, the panel stays;
+     at 900 px, the page scrolled, the panel over the table follows it, inside the window and under the filters; with one
+     line per party, the panel inside the window and under the filters.
 With BANK_PANEL_SHOTS=<dir>, screenshots of the panel open at 1280, 1600 and 390 px (deviceScaleFactor 2).
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_bank_panel_ui.py"""
 import os, threading, functools, http.server
@@ -153,8 +158,86 @@ def docked(br, w, h, full):
         ok(E(DR) is None, "a second Esc closes the details")
     ctx.close()
 
+COLS = "() => !!document.querySelector('#app .bk-space.bk-dr-open') || getComputedStyle(document.querySelector('#app table.bk-table thead th.bal')).display === 'none'"
+FOCUS = "() => { const a = document.activeElement; return a ? (a.dataset.bankGrid !== undefined ? 'grid' : a.closest('[data-bank-drawer]') ? 'panel' : a.tagName + '.' + a.className) : null; }"
+
+def behave(br):
+    print("1280 px: the panel shuts when its line leaves the screen")
+    ctx, pg = start(br, 1280, 800); E, W = pg.evaluate, pg.wait_for_timeout
+    w0 = E(WIDTH)
+    def shut(why):
+        ok(E(DR) is None and not E(COLS) and abs(E(WIDTH) - w0) < 2, why + ": the panel shuts and the table has its columns and width again (%s, %d)" % (E(DR), E(WIDTH)))
+    # another tab (focus was in the panel): focus on the list, ↑ / ↓ move
+    pg.click('#app tr[data-rid="r4"] td.bal'); W(400)
+    ok(E(DR) == "r4" and E(COLS), "open on the line r4")
+    E("() => bankTabGo('ready')"); W(500)
+    shut("another tab")
+    ok(E(FOCUS) == "grid", "focus is on the list (%s)" % E(FOCUS))
+    k0 = E("B().kbRow"); pg.keyboard.press("ArrowDown"); W(200); k1 = E("B().kbRow")
+    ok(k1 and k1 != k0 and E("!!document.querySelector('#app tr.kb-on[data-rid=\"' + B().kbRow + '\"]')"), "↓ moves on the list (%s to %s)" % (k0, k1))
+    E("() => bankTabGo('all')"); W(500)
+    # a filter: Out / In
+    pg.click('#app tr[data-rid="r3"] td.bal'); W(400)
+    ok(E(DR) == "r3", "open on r3 (a withdrawal)")
+    pg.click('#app [data-dir="in"]'); W(500)
+    shut("In (deposits) only")
+    pg.click('#app [data-dir=""]'); W(400)
+    # the search: Esc in the box is the box's, then a search the line is not in
+    pg.click('#app tr[data-rid="r2"] td.bal'); W(400)
+    pg.click('#app input.bs-search'); pg.keyboard.type("GAMMA"); W(700)
+    ok(E(DR) == "r2", "a search the line is in: the panel stays")
+    pg.keyboard.press("Escape"); W(300)
+    ok(E(DR) == "r2" and E("document.activeElement && document.activeElement.classList.contains('bs-search')"), "Esc in the search box: the panel stays, focus in the box")
+    pg.fill('#app input.bs-search', "ALPHA"); W(700)
+    shut("a search the line is not in")
+    ok(E("document.activeElement && document.activeElement.classList.contains('bs-search')"), "and the search box keeps the focus")
+    pg.fill('#app input.bs-search', ""); W(700)
+    # posting it off the tab: a ready line on the Ready tab, posted (Tally's reply, as the bridge gives it)
+    E("() => bankTabGo('ready')"); W(500)
+    pg.click('#app tr[data-rid="r8"] td.bal'); W(400)
+    ok(E(DR) == "r8", "open on a ready line, Ready tab")
+    E("() => { const b = B(), r = b.rows.find(x => x.id === 'r8'); bankPosted(b.cid, r, {guid: 'g-demo-1', verified: true}, 'DEMO TRADERS', new Date().toISOString(), {quiet: true}); render(); }"); W(500)
+    shut("posted to Tally, off the Ready tab")
+    ok(E(FOCUS) == "grid", "focus is on the list (%s)" % E(FOCUS))
+    E("() => bankTabGo('all')"); W(500)
+    # a click that only shuts a column's filter does not open the line under it
+    pg.click('#app th [data-hf="bal"]'); W(300)
+    ok(E(VISQ, ".colpop"), "the Balance column's filter is open")
+    pg.click('#app tr[data-rid="r6"] td.bal'); W(400)
+    ok(not E(VISQ, ".colpop") and E(DR) is None, "a click on a line shuts the filter and does not open the line (%s)" % E(DR))
+    pg.click('#app tr[data-rid="r6"] td.bal'); W(400)
+    ok(E(DR) == "r6", "the next click opens it")
+    # one line per party: the panel stays inside the window, under the filters
+    E("() => { B().filter = 'review'; B().drawer = 'r4'; bankSetGrouped(true); }"); W(600)
+    g = E(PANEL)
+    ok(E(DR) == "r4" and g and g["t"] >= g["fb"] - 1 and g["b"] <= g["h"] + 1 and g["b"] - g["t"] >= 200, "one line per party: the panel under the filters, inside the window (%s)" % g)
+    E("() => { bankSetGrouped(false); }"); W(300)
+    ctx.close()
+
+VISQ = "(s) => { const e = document.querySelector(s); return !!e && e.getClientRects().length > 0; }"
+PANEL = """() => { const d = document.querySelector('[data-bank-drawer]'), f = document.querySelector('#app [data-bank-filters]'), hd = document.querySelector('header.top');
+  if (!d) return null; const a = d.getBoundingClientRect(), hp = hd ? getComputedStyle(hd).position : '';
+  return {t: Math.round(a.top), b: Math.round(a.bottom), fb: f ? Math.round(f.getBoundingClientRect().bottom) : 0, hb: hd && /fixed|sticky/.test(hp) ? Math.round(hd.getBoundingClientRect().bottom) : 0, h: innerHeight}; }"""
+
+def overlay(br):
+    print("900 px: the panel over the table follows the page's scroll")
+    ctx, pg = start(br, 900, 420); E, W = pg.evaluate, pg.wait_for_timeout
+    pg.click('#app tr[data-rid="r4"] td.bal'); W(500)
+    g0 = E(GEO); ok(E(DR) == "r4" and g0 and abs(g0["dt"] - g0["tt"]) <= 2, "open, at the table's top (%s / %s)" % (g0 and round(g0["dt"]), g0 and round(g0["tt"])))
+    for y in (0, 60, 400):
+        E("(y) => window.scrollTo(0, y)", y); W(400)
+        g, q = E(GEO), E(PANEL)
+        ok(E("scrollY") > 0 if y else E("scrollY") == 0, "the page scrolled to %d" % E("scrollY"))
+        want = max(g["tt"], q["hb"] + 6)
+        ok(abs(g["dt"] - want) <= 2, "scrolled %d: the panel starts at the table's top, or under the header (%d, want %d)" % (y, g["dt"], want))
+        ok(g["db"] <= g["h"] + 1 and g["dt"] >= 0 and g["db"] <= g["tb"] + 2 and g["db"] - g["dt"] >= 200, "and is inside the window, not past the table's foot (%d-%d of %d, table %d-%d)" % (g["dt"], g["db"], g["h"], g["tt"], g["tb"]))
+        ok(g["dt"] >= q["fb"] - 1, "and never over the filters (panel %d, filters end %d)" % (g["dt"], q["fb"]))
+    ctx.close()
+
 with sync_playwright() as p:
     br = p.chromium.launch()
+    behave(br)
+    overlay(br)
     docked(br, 1280, 800, True)
     docked(br, 1600, 900, True)
 

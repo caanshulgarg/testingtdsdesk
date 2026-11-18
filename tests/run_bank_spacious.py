@@ -146,8 +146,8 @@ with sync_playwright() as p:
     E(BACK); W(700)
     pg.focus('.bkr [data-rail="sales"]'); W(200); ok(E(VIS, '[data-rail-flyout="sales"]'), "focus Sales: its flyout"); pg.mouse.click(700, 500); W(250)
     ok(not E(VIS, '[data-rail-flyout="sales"]'), "a click elsewhere closes a flyout")
-    # (that click lands on a line of the table, which opens its details since 18-Nov-2026: shut again for what follows)
-    E("() => { B().drawer = null; render(); }"); W(200)
+    # that click lands on a line of the table: it only shuts the flyout, the line's details stay shut (18-Nov-2026 review)
+    ok(E("!document.querySelector('[data-bank-drawer]')"), "and does not open the line under it")
     E("() => { window.__acts = []; const a = window.bankAct, d = window.doAct; window.bankAct = (x, ...r) => { window.__acts.push(x); if (x !== 'bookPick' && x !== 'bankCheckTally') return a(x, ...r); }; window.doAct = (x, ...r) => { window.__acts.push(x); if (x !== 'uploadHere') return d(x, ...r); }; }")
     for (sec, word, want) in SUBS:
         E(BACK); W(700); E("window.__acts = []")
