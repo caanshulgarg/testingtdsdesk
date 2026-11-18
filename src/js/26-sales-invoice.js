@@ -279,8 +279,11 @@ if (typeof salesRemapWaiting !== "undefined") globalThis.salesRemapWaiting = sal
 function salesByNo(f){
   const s = SL(), was = salesNoIdx;
   if (was || !s || !s.list) return f();
-  const make = () => Ledgers.keyed(s.list, v => normInvNo(v.x.number));
-  salesNoIdx = typeof perRender === "function" ? perRender(s, "salesByNo", make) : make();
+  // keyed on every save of the invoices (SALES_REV) and the list itself, so a draw reused after a save never checks old invoices
+  const list = s.list, make = () => ({list, i: Ledgers.keyed(list, v => normInvNo(v.x.number))});
+  let got = typeof perRender === "function" ? perRender(s, "salesByNo:" + (typeof SALES_REV === "number" ? SALES_REV : 0), make) : make();
+  if (got.list !== list) got = make();
+  salesNoIdx = got.i;
   try { return f(); } finally { salesNoIdx = was; }
 }
 function salesDupNow(v){ return salesByNo(() => salesDupOf(v)); }
