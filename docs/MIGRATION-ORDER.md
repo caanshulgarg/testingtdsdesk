@@ -937,18 +937,52 @@ transaction, lock_timeout 10 s, safe twice. Needs 174 and 184. Deploy: 184, 185,
 while it waits). No bridge or tally-ingest change. Tested: `tests/run_migration185.py` (RED_WITHOUT_185=1 fails; two
 takes at the same moment: exactly one), `tests/run_cloud_post_ui.py`.
 
-## 199: a big posting's report is stored in time (not run yet; branch next-fix-posttimeout, 18-Nov-2026)
+## 199, 200: a big posting is stored in time, and a held posting settles by itself (not run yet; branch next-fix-posttimeout, 18-Nov-2026)
 
 **199, post match fast** (18-Nov-2026, branch `next-fix-posttimeout`; **written, not run yet**; file md5
-6dd788966a4aa6ba9d827e4e97f51ddf): `server/tally-cloud/migration-199-post-match-fast.sql`. On staging, 17-Nov-2026
+325a6c81dca89c54580b2119f092af65): `server/tally-cloud/migration-199-post-match-fast.sql`. On staging, 17-Nov-2026
 12:19-13:52 UTC, the bridge's report of a 661-entry posting was cancelled by the 8 s statement timeout about 470 times: the
 report changed the posting's status, and the sync trigger (`tally_post_ids_sync`, 40) and `tally_post_job_accepted` (43)
 compared every id of the posting with every id of its results and items through `tally_post_id_match` (four
 regexp_replace per pair). Now each id is spelt in letters and digits once and the ids are matched by equality (hashed):
-the same rule and the same answers. Replaces only those two functions, from their latest text (staging's, md5 of prosrc
-checked by the test), the same arguments; `tally_post_id_match` stays for its other callers. Add-only, one transaction,
-lock_timeout 10 s, safe twice; service_role only, granted explicitly. After 40 and 43; independent of 184 / 185 / 196 /
-197 / 198 and of the reserved 189-191. No bridge, edge function or app change. Tested: `tests/run_migration199.py`
-(RED_WITHOUT_199=1 fails: the report of a 1500-entry posting is cancelled at 8 s; with 199 it is written in under 1 s; 300
-made-up postings give the old answers and leave the same ids live). It is on the posting path: the owner's OK before it
-runs on staging.
+the same rule and the same answers. The owner's aim (a posting of 20,000 entries never stuck) makes every step of the
+posting path linear: replaced from their latest text (staging's, md5 of prosrc checked by the test), the same arguments
+and answers: 43's `tally_post_job_accepted`, `tally_post_job_settle` and `tally_post_id_accept_reply`, 40's
+`tally_post_ids_sync`, 36b's `tally_post_id_accept`, 174's `tally_post_register_judged`, 111's
+`tally_post_register_apply_row` (one pass, no per-entry put) and `tally_post_register_queued` (the duplicate guard the
+same; its voucher fields read without a regular expression where the tag is plain, its lookups by key). In
+`tally_post_job_accepted` and the sync, 44's helpers (`tally_post_result_accepted` / `_taken`, `tally_post_accept_text`,
+`tally_post_bool`, never inlined since 44 gave them a search_path) are written out word for word. New (service_role):
+`tally_post_id_accept_many(job, list)` (a report's acceptances in one call, the posting's ids read once) and
+`tally_post_id_stamp_fids` (its stamp by primary key). Three indexes of `tally_post_ids` (job, entry id; job, either id
+in letters and digits). `tally_post_id_match` stays for its other callers. Add-only, one transaction, lock_timeout 10 s, safe twice; service_role only, granted explicitly. After 40, 43,
+111 and 174; independent of 184 / 185 / 196 / 197 / 198 and of the reserved 189-191. tally-ingest (same branch): a
+report keeps up to 25,000 entries (was 5,000: later entries of a bigger posting were dropped), stamps them with
+`tally_post_id_accept_many` in parts of 2,000 (one by one on a cloud without 199), reads the posting's ids in pages of
+1,000, matches entries by maps instead of a search per entry, and when a status change still hits the statement timeout
+stores the entries without it and answers 503 (the bridge reports again). No bridge or app change. Tested:
+`tests/run_migration199.py` (RED_WITHOUT_199=1 fails: the report of a 1500-entry posting is cancelled at 8 s; 300 made-up
+postings give the old answers, the same register rows and history, the same stamps one by one or in one call, the same
+ids live; 20,000 entries from the queue to the register: every statement under 6 s, the slowest the queueing at about
+5 s), `tests/run_post_settle_server.py`.
+
+**200, post settle itself** (18-Nov-2026, branch `next-fix-posttimeout`; **written, not run yet**; file md5
+323336d6ee04d82aa7af5ee3e054337b): `server/tally-cloud/migration-200-post-settle-itself.sql`. The owner (18-Nov-2026): a posting never stays
+"Held"; every posting settles by itself; never a double post; a person only for contradictory evidence, named. Staging's
+c66d0e82 (661 entries, all in Tally once) is held because its last reports were lost, though FinCom's read-back of Tally
+matched all 661 (`tally_post_ids.matched_at`). New (service_role): `tally_post_settle_itself(job)` settles a posting held
+for checking (done, checking) entry by entry, set-based: read back in Tally (matched_at) -> stamped in Tally; not seen by
+its own bridge (55's check) AND FinCom has read every change in Tally since the posting (the book's match at or above the
+window's a1, 45/150/182) -> released (released_by 'owner', as a member's confirm) and handed back to the same bridge alone
+(resend_only) by `tally_post_settle_resend(job)` in its own statement, the posting held until then; contradictory (read back but later not seen; proven absent though Tally replied it created that one entry)
+-> named for a person in the posting's words and `tally_post_self_settle.conflicts`, nothing marked or released; anything
+else -> a check asked by itself (55's path, `tally_post_checks.auto`), asked again after a give-up: never left "nobody has
+confirmed it". `tally_post_settle_itself_all(max)`: every held posting, pg_cron every minute (`tally-post-settle-itself`,
+only where pg_cron is). One table (`tally_post_self_settle`, row security on, members read), one column
+(`tally_post_checks.auto`), one partial index (`tally_post_jobs_held`), 55's `tally_member_name` replaced with one case
+(the made-up asker `...0200` named "FinCom (by itself)"), `tally_post_self_stamp`, `tally_post_settle_resend`. Add-only, one transaction, lock_timeout
+10 s, safe twice; service_role only, granted explicitly. **After 199.** tally-ingest calls `tally_post_settle_itself` after
+a report that leaves a posting held and after each check report (resent: the bridge takes it again at once); a cloud
+without 200: nothing changes. No bridge change, no new Tally request. Tested: `tests/run_migration200.py`
+(RED_WITHOUT_200=1 fails; c66d0e82 replayed with made-up ids settles on the cron's next run, nothing sent again; 20,000
+entries: settle about 2 s, the hand-back's change of status about 5 s). Both are on the posting path: the owner's OK before they run on staging, 199 first.

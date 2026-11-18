@@ -43,6 +43,7 @@ MAX_URL = [0]             # > 0: a request whose path and query are longer answe
 NO_COL = {"tally_openings_held": {"id"}}   # table -> {column}: a database without these columns (a migration not run): a GET selecting one answers
                           # 42703, a POST carrying one PGRST204, as PostgREST does (bridge 2.3.1: 57's tally_ledgers.tds_deductee_type)
 HONOR_LIMIT = [False]     # True: order=col.asc|desc and limit=n are applied to a GET (off by default: as before)
+SETTLE_ITSELF = [None]    # migration 200: what tally_post_settle_itself answers (None: nothing held)
 LEASE7_MISSING = [False]  # migration 55 not run: the 7-argument tally_lease_take (p_purpose) is not there (PGRST202 for that call only)
 PK = {"gst_sessions": ["firm_id", "gstin"], "gst_filings": ["firm_id", "gstin", "form", "period"], "gst_returns": ["firm_id", "gstin", "form", "period"], "gst_einv_accounts": ["firm_id", "gstin"], "gst_einvoices": ["firm_id", "gstin", "doc_key"]}
 ids = itertools.count(1)
@@ -66,6 +67,18 @@ def match(row, q):
     return True
 def rpc(fn, a):
     ARGS.setdefault(fn, []).append(a)
+    if fn == "tally_post_id_accept_many":   # migration 199: each entry stamped as by the one-by-one calls (recorded under their own names, a test's hook too)
+        me, out = globals()["rpc"], {"ok": True, "n": 0, "stamped": 0, "zero": []}
+        for x in a.get("p_list") or []:
+            r = (me("tally_post_id_accept_reply", {"p_job": a["p_job"], "p_id": x.get("id"), "p_vch": x.get("vchId"), "p_batch_end": x.get("batchEnd"), "p_batch_n": x.get("batchN")}) if x.get("reply")
+                 else me("tally_post_id_accept", {"p_job": a["p_job"], "p_id": x.get("id"), "p_vch": x.get("vch")}))
+            r = (r.get("accept") or r) if isinstance(r, dict) else {}
+            out["n"] += 1; out["stamped"] += int(r.get("stamped") or 0)
+            if r.get("ok") and not r.get("stamped"): out["zero"].append(x.get("id"))
+        return out
+    if fn == "tally_post_settle_itself":   # migration 200 (its SQL: run_migration200.py): nothing held here unless a test sets SETTLE_ITSELF
+        return dict(SETTLE_ITSELF[0] or {"ok": True, "job": a.get("p_job"), "held": False}, job=a.get("p_job"))
+    if fn == "tally_post_settle_resend": return {"ok": True, "job": a.get("p_job"), "resent": False}
     if fn == "mfa_ok": return True
     if fn == "auth_rate_hit":   # migration-112: allowed (and counted) while the key has under max tries in the window
         t, w = now(), a["p_window_s"]
