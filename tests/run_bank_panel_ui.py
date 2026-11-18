@@ -6,6 +6,8 @@
      its pinned totals and its sideways scroll keep working in the narrower box; nothing scrolls the page sideways;
   2. a click anywhere on a line's text or empty space opens its details (not on its tick box, ledger box, buttons or links);
      a second click on the open line, ✕ and Esc close it; ↑ / ↓ step through the lines; focus goes into the panel and back;
+     with the panel open the Status column (its whole pill) is in view without scrolling sideways, and the totals row's
+     figures and words never run into each other, open or closed (the coordinator's review of the first screenshots);
   3. between 601 and 1099 px it stays over the table but has the table's full height;
   4. a phone (375 / 390 px): no sideways scroll, the details a sheet from the bottom.
 With BANK_PANEL_SHOTS=<dir>, screenshots of the panel open at 1280, 1600 and 390 px (deviceScaleFactor 2).
@@ -47,6 +49,20 @@ GEO = """() => { const d = document.querySelector('[data-bank-drawer]'), t = doc
   return {dl: a.left, dr: a.right, dt: a.top, db: a.bottom, tl: b.left, tr: b.right, tt: b.top, tb: b.bottom, pos: getComputedStyle(d).position,
     sw: document.documentElement.scrollWidth, w: innerWidth, h: innerHeight}; }"""
 WIDTH = "() => document.querySelector('#app .bk-tablewrap').getBoundingClientRect().width"
+# the Status cells of the lines in view: their right edge (and their pill's) inside what the table's box shows, unscrolled
+STATUS = """() => { const b = document.querySelector('#app .bk-tablewrap'), r = b.getBoundingClientRect(), right = r.left + b.clientWidth, out = [];
+  for (const td of document.querySelectorAll('#app tbody tr[data-rid] td.bs-st')) { const c = td.getBoundingClientRect(); if (c.bottom < r.top || c.top > r.bottom) continue;
+    const t = td.querySelector('.tag'), g = t ? t.getBoundingClientRect() : c;
+    if (c.width < 20 || c.right > right + 0.5 || g.right > Math.min(c.right, right) + 0.5 || (t && t.scrollWidth > t.clientWidth + 1)) out.push([td.parentElement.dataset.rid, Math.round(c.right), Math.round(g.right), Math.round(right)]); }
+  return {bad: out, n: document.querySelectorAll('#app tbody tr[data-rid] td.bs-st').length, sl: b.scrollLeft}; }"""
+# the totals row: the words and figures of each cell, as drawn, never overlap another cell's nor leave their own cell
+FOOT = """() => { const cells = [...document.querySelectorAll('#app table.bk-table tfoot td')].filter(td => td.offsetParent && td.textContent.trim()), boxes = [], bad = [];
+  for (const td of cells) { const rg = document.createRange(); rg.selectNodeContents(td); const c = td.getBoundingClientRect();
+    const rs = [...rg.getClientRects()].filter(x => x.width > 0.5 && x.height > 0.5);
+    for (const x of rs) { if (x.left < c.left - 0.5 || x.right > c.right + 0.5) bad.push('outside its cell: ' + td.textContent.trim().slice(0, 30)); boxes.push([td, x]); } }
+  for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++) { const [ta, a] = boxes[i], [tb, b] = boxes[j];
+    if (ta !== tb && a.left < b.right - 0.5 && b.left < a.right - 0.5 && a.top < b.bottom - 0.5 && b.top < a.bottom - 0.5) bad.push('overlap: ' + ta.textContent.trim().slice(0, 24) + ' / ' + tb.textContent.trim().slice(0, 24)); }
+  return {bad: [...new Set(bad)].slice(0, 4), n: cells.length}; }"""
 
 def start(br, w, h):
     ctx = br.new_context(viewport={"width": w, "height": h}, device_scale_factor=2)
@@ -63,6 +79,7 @@ def docked(br, w, h, full):
     ctx, pg = start(br, w, h); E, W = pg.evaluate, pg.wait_for_timeout
     w0 = E(WIDTH)
     ok(E("document.documentElement.scrollWidth") <= w, "closed: no sideways scroll (%d)" % E("document.documentElement.scrollWidth"))
+    f = E(FOOT); ok(f["n"] >= 3 and not f["bad"], "closed: the totals row's words and figures do not run into each other (%s)" % f)
     # a click on the balance (not the date, not the particulars): the line's details open
     pg.click('#app tr[data-rid="r4"] td.bal'); W(500)
     ok(E(DR) == "r4", "a click on a line's balance opens its details")
@@ -73,6 +90,8 @@ def docked(br, w, h, full):
     ok(g and g["pos"] != "fixed", "it is part of the page, not floating over it (%s)" % (g and g["pos"]))
     ok(E(WIDTH) < w0 - 300, "the table narrowed to share the space (%d, was %d)" % (E(WIDTH), w0))
     ok(g and g["sw"] <= w, "open: no sideways scroll of the page (%s)" % (g and g["sw"]))
+    sv = E(STATUS); ok(sv["n"] > 5 and not sv["bad"] and sv["sl"] == 0, "open: every Status pill in view is whole, without scrolling sideways (%s)" % sv)
+    f = E(FOOT); ok(f["n"] >= 3 and not f["bad"], "open: the totals row's words and figures do not run into each other (%s)" % f)
     ok(E("!!document.querySelector('#app tr[data-rid=\"r4\"].dr-on')"), "the open line is marked in the table")
     ok(E("document.activeElement && !!document.activeElement.closest('[data-bank-drawer]')"), "focus is in the panel")
     ok(E("(() => { const d = document.querySelector('[data-bank-drawer]'); return !!d && d.getAttribute('role') === 'dialog' && /^Line details/.test(d.getAttribute('aria-label') || ''); })()"), "role and label kept")
@@ -83,7 +102,7 @@ def docked(br, w, h, full):
       return {box: r.top, th: th.top, foot: tf.bottom, boxb: r.bottom, dl: d.left - r.left, sl: b.scrollLeft, side: b.scrollWidth > b.clientWidth}; }""")
     ok(abs(st["th"] - st["box"]) <= 2, "the header row stays at the top of the narrower box (%d / %d)" % (st["th"], st["box"]))
     ok(st["foot"] <= st["boxb"] + 1 and st["boxb"] - st["foot"] < 20, "the totals stay at its foot (%d / %d)" % (st["foot"], st["boxb"]))
-    ok(st["side"] and st["sl"] > 0 and st["dl"] < 60, "it scrolls sideways with the Date column frozen (scrolled %d, date at %d)" % (st["sl"], st["dl"]))
+    ok(not st["side"] or (st["sl"] > 0 and st["dl"] < 60), "what does not fit scrolls sideways, the Date column frozen (scrolls: %s, scrolled %d, date at %d)" % (st["side"], st["sl"], st["dl"]))
     E("() => { const b = document.querySelector('#app .bk-tablewrap'); b.scrollTop = 0; b.scrollLeft = 0; }"); W(200)
     if full:
         shot(pg, "bank-panel-%d.png" % w)
@@ -93,7 +112,7 @@ def docked(br, w, h, full):
         pg.click("[data-drawer-prev]"); W(300)
         ok(E(DR) == "r4", "↑ the line before")
         # a second click on the open line closes it
-        pg.click('#app tr[data-rid="r4"] td.bal'); W(400)
+        pg.click('#app tr[data-rid="r4"] td.bs-st'); W(400)
         ok(E(DR) is None, "a second click on the open line closes it")
         ok(abs(E(WIDTH) - w0) < 2, "and the table has its whole width again")
         # the particulars' text, a status tag: open; Esc closes, focus back on the line's date

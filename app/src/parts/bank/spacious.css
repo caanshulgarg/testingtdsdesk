@@ -128,13 +128,18 @@
   html.bk-spacious #app > .react-host > .bk-space.bk-dr-open > .bsp-drawer { position: relative; top: auto; right: auto; bottom: auto; z-index: 4;
     flex: 0 0 400px; width: 400px; max-width: none; height: var(--bk-fill, 70vh); align-self: flex-start;
     border-right: 1px solid var(--border); border-radius: 12px; box-shadow: none; }
-  /* the narrower box scrolls sideways rather than squeezing the particulars (the one column without a set width, bankSmart.css
-     1060 px: about 110 px of it left; here about 230) */
-  html.bk-spacious #app .bk-space.bk-dr-open table.bk-table.lt.lt:not(.cards) { min-width: 1180px; }
+  /* the narrower table (the coordinator's review of the first screenshots, 18-Nov-2026): the Balance, Type and actions
+     columns rest while the panel is open (the panel shows the open line's balance, voucher type and actions), so the
+     Status pill is in view without scrolling sideways; the table is at least 880 px (the particulars about 230 px at
+     1280 px), the Ledger column partly behind the sideways scroll at 1280, all of it in view at 1600 */
+  html.bk-spacious #app .bk-space.bk-dr-open table.bk-table.lt.lt:not(.cards) { min-width: 880px; }
+  html.bk-spacious #app .bk-space.bk-dr-open table.bk-table:not(.cards) :is(th, td):is(.bal, .vt, .ac) { display: none; }
 }
 
-/* the totals row at the foot of the table (Bank.jsx FootNote) */
-#app .bk-space .bsp-foot { white-space: nowrap; font-variant-numeric: tabular-nums; }
+/* the totals row at the foot of the table (Bank.jsx FootNote): its words wrap inside their cell (the count and the
+   opening and closing ran over the withdrawals' total at 1280 px, 18-Nov-2026); each figure stays on one line */
+#app .bk-space .bsp-foot { white-space: normal; font-variant-numeric: tabular-nums; }
+#app .bk-space .bsp-foot b { white-space: nowrap; }
 #app .bk-space .bsp-foot .linkbtn { font-size: inherit; }
 #app .actionbar.bs-bankbar { flex-wrap: wrap !important; row-gap: 4px; }
 #app .actionbar.bs-bankbar > .ab-left { flex: 0 1 auto; min-width: 0; }
@@ -145,9 +150,6 @@
   .bsp-dens { display: none !important; }
   html.bk-spacious #app .bk-space .bsp-client { display: block; font-size: 12.5px; color: var(--text-muted, var(--muted)); }
   html.bk-spacious #app .bk-space .bs-head .bk-actions { display: flex; flex-wrap: wrap; gap: 6px; }
-  /* the totals line under the cards (18-Nov-2026): "60 entries · Opening … · Closing … · Select all" kept on one line
-     pushed the page about 100 px sideways on a 390 px phone; it wraps here */
-  #app .bk-space .bsp-foot { white-space: normal; }
   .bsp-drawer { left: 0; right: 0; top: 18vh; bottom: 0; width: auto; max-width: none; border-radius: 16px 16px 0 0; border-right: 1px solid var(--border); z-index: 75; }
 }
 @media (min-width: 601px) and (max-width: 1599px) { html.bk-spacious #app .bk-space .bs-head .bk-figs .bsp-oc { display: none; } }

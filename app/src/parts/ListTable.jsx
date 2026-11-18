@@ -201,7 +201,7 @@ function Foot({ cols, rows, unit, of, note }) {
       cells.push(<td key={c.k} colSpan={j - i} className="lt-count">{count}</td>);
       placed = true; i = j - 1; continue;
     }
-    cells.push(<td key={c.k}></td>);
+    cells.push(<td key={c.k} className={c.cls}></td>);   // its column's class: a page can hide a column, foot and all
   }
   return <tfoot data-list-foot=""><tr>{cells}</tr></tfoot>;
 }

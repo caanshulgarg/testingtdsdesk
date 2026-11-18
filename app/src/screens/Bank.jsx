@@ -129,7 +129,7 @@ function bankCols(b, rows, nSel) {
     { k: "dep", role: "amount", label: "Deposit", cls: "n", filter: <ColFunnel t="bank" k="dep" label="Deposit" />, v: (r) => num(r.credit) || null, sum: (r) => num(r.credit), cell: (r) => <>{bkAmt(r.credit)}{r.credit ? flag(r) : null}</> },
     { k: "bal", role: "amount", label: "Balance", cls: "n bal", sum: false, filter: <HeadFilter k="bal" label="Balance" />, v: (r) => (r.balance === null || r.balance === undefined || r.balance === "" ? null : num(r.balance)),
       cell: (r) => (r.balance === null || r.balance === undefined || r.balance === "" ? "" : INR.format(r2(num(r.balance)))) },
-    { k: "st", role: "status", label: "Status", filter: <HeadFilter k="st" label="Status" />, v: (r) => (BST[r.state] || ["", r.state])[1], cell: (r) => { const w = BST[r.state] || ["no", r.state]; return <span className={"tag " + w[0]}>{w[1]}</span>; } },
+    { k: "st", role: "status", label: "Status", cls: "bs-st", filter: <HeadFilter k="st" label="Status" />, v: (r) => (BST[r.state] || ["", r.state])[1], cell: (r) => { const w = BST[r.state] || ["no", r.state]; return <span className={"tag " + w[0]}>{w[1]}</span>; } },
     { k: "led", label: "Ledger", cls: "lg", filter: <ColFunnel t="bank" k="led" label="Ledger" />, v: (r) => r.ledger || "", cell: (r) => <RowLedger r={r} /> },
     // the voucher type the line goes to Tally as (set by the ledger: Contra for a bank or cash ledger); changeable while open
     { k: "vt", label: "Type", cls: "vt", filter: <HeadFilter k="vt" label="Type" />, v: (r) => vtypeOf(r), cell: (r) => ["attention", "suggested", "ready"].includes(r.state)
