@@ -232,7 +232,7 @@ function Table({ tab, all }) {
     <ListTable name="bank" className="bk-table gf-off" keepHead resize freeze={2} cols={bankCols(b, all, nSel)} rows={all} rowKey={(r) => r.id} selected={b.sel} unit={["entry", "entries"]} of={b.rows.length} limit={b.limit} more={more} footNote={<FootNote b={b} all={all} />}
       after={(r) => (b.splitOpen === r.id && ["attention", "suggested", "ready"].includes(r.state) ? <SplitEditor r={r} /> : null)}
       rowProps={(r) => ({ className: "st-" + r.state + (b.sel.has(r.id) ? " picked" : "") + (b.kbRow === r.id ? " kb-on" : "") + (b.drawer === r.id ? " dr-on" : ""), "data-rid": r.id,
-        onClick: (ev) => { if (ev.target.closest("td.pt, td.dt")) rowOpen(ev, r.id); } })}
+        onClick: (ev) => rowOpen(ev, r.id) })}
       empty={bankRangeOn() || (b.chips || []).length || b.sugOnly ? <>Nothing matches these filters. <button className="linkbtn" onClick={() => { b.chips = []; b.sugOnly = false; colChipAll("bank"); }}>Clear all filters</button> to see every entry.</> : EMPTY[tab] || "Nothing here. Use Upload statement at the top right to add one."} />
   </div>;
 }
@@ -441,9 +441,11 @@ function BankPage() {
   if (b.dense === undefined) b.dense = denseOn();
   // posting (moved from the bar at the foot to the header, spacious layout): waits until the account's ledger is confirmed
   const noLed = !bankLedgerReady(CO(), acc), whyLed = noLed ? bankLedgerWhy(CO(), acc) : "";
+  // the statement's lines are shown (not the rules, not one line per party): a line's details can sit beside them
+  const lines = tab !== "rules" && !(tab === "review" && b.grouped && apView("bank") !== "auto");
   return <>
     <SpaceOn />
-    <div className={"bk bk-smart bk-space" + (b.dense ? " bk-dense" : "")} data-density={b.dense ? "compact" : "comfortable"}>
+    <div className={"bk bk-smart bk-space" + (b.dense ? " bk-dense" : "") + (lines && b.drawer && b.rows.some((x) => x.id === b.drawer) ? " bk-dr-open" : "")} data-density={b.dense ? "compact" : "comfortable"}>
       {/* upload-pages (14-Oct-2026): the states are the page's one row of states (parts/StateBar.jsx); the rules are not a
           state, so they open from their own button. 24-Oct-2026: the search and Group by party are in the filter bar */}
       {tab === "rules" && <div className="bk-bar"><button className="btn small" data-bank-rules-back="" onClick={() => bankTabGo("review")}>← Back to the statement</button></div>}
@@ -498,9 +500,10 @@ function BankPage() {
       {tab !== "rules" && <SmartBar rows={shown} base={view} grouped={b.grouped} />}
       {b.q.trim() && tab !== "rules" && <Found key={b.q} shown={shown} />}
       {tab !== "rules" && <AutoFilter kind="bank" all={b.rows} />}
-      {tab === "rules" ? <RulesPanel /> : tab === "review" && b.grouped && apView("bank") !== "auto" ? <Groups /> : <Table tab={tab} all={shown} />}
-      {tab !== "rules" && apView("bank") === "auto" && <RunLine />}
+      {tab === "rules" ? <RulesPanel /> : lines ? <Table tab={tab} all={shown} /> : <Groups />}
+      {/* a line's details: beside the table on a wide screen (spacious.css, .bk-dr-open), so drawn right after it */}
       {tab !== "rules" && <Drawer rows={shown} />}
+      {tab !== "rules" && apView("bank") === "auto" && <RunLine />}
     </div>
     {b.showSettings && <BankSettings />}
   </>;

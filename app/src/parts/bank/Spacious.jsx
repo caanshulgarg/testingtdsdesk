@@ -73,7 +73,7 @@ export function useSpacious() {
   useLayoutEffect(() => {
     const h = document.documentElement;
     h.classList.add("bk-spacious");
-    return () => { h.classList.remove("bk-spacious"); h.style.removeProperty("--bk-fill"); };
+    return () => { h.classList.remove("bk-spacious"); h.style.removeProperty("--bk-fill"); h.style.removeProperty("--bk-top"); };
   }, []);
   useLayoutEffect(fill);
   // what stands above the table (the header, the notices, the tabs and filters, which can wrap) changing height: measured again
@@ -113,11 +113,17 @@ export function fill() {
   const top = box.getBoundingClientRect().top + se.scrollTop, under = (bar ? bar.getBoundingClientRect().height : 0) + ban + 6;
   // the "Show more" button under the table, when there is one
   const more = box.parentElement && box.parentElement.querySelector(":scope > .bk-more"), mh = more ? more.getBoundingClientRect().height + 6 : 0;
-  const v = Math.max(280, Math.round(window.innerHeight - top - under - mh)) + "px";
-  if (document.documentElement.style.getPropertyValue("--bk-fill") !== v) document.documentElement.style.setProperty("--bk-fill", v);
+  const v = Math.max(280, Math.round(window.innerHeight - top - under - mh)) + "px", hs = document.documentElement.style;
+  if (hs.getPropertyValue("--bk-fill") !== v) hs.setProperty("--bk-fill", v);
+  // where the table's box starts in the window: the line's details (between 601 and 1099 px, over the table) start there too
+  const t = Math.round(box.getBoundingClientRect().top) + "px";
+  if (hs.getPropertyValue("--bk-top") !== t) hs.setProperty("--bk-top", t);
 }
 
-// ---- a line's details: the drawer on the right ----
+// ---- a line's details: the panel on the right ----
+// 18-Nov-2026 (the owner: "need a proper side panel with the same space"): on a wide screen (1100 px and more) the panel
+// sits beside the table, at the table's height, and the table narrows to share the space (spacious.css, .bk-dr-open);
+// between 601 and 1099 px it lies over the table, the table's full height; on a phone, a sheet from the bottom
 const STEP = { you: "set by you", rule: "by a rule", hist: "learnt from earlier statements" };
 function history(b, r) {
   const st = curStmt(), out = [];
@@ -133,10 +139,16 @@ function history(b, r) {
 
 export function Drawer({ rows }) {
   const b = B(), box = useRef(null), id = b.drawer, r = id ? b.rows.find((x) => x.id === id) : null;
-  const close = () => { b.drawer = null; render(); };
+  // closed from inside it (✕, Esc): focus goes back to the line's date, so the keyboard carries on from the line
+  const close = () => {
+    const back = !!(box.current && box.current.contains(document.activeElement)), was = b.drawer;
+    b.drawer = null; render();
+    if (back && was) requestAnimationFrame(() => { const el = document.querySelector('#app [data-row-open="' + CSS.escape(was) + '"]'); if (el) el.focus({ preventScroll: true }); });
+  };
   useEffect(() => {
     if (!id) return undefined;
-    const esc = (ev) => { if (ev.key === "Escape" && !(ev.target && ev.target.closest && ev.target.closest(".acbox, [data-ac-open]"))) { ev.preventDefault(); ev.stopImmediatePropagation(); close(); } };
+    // the rail's full menu open over the page (Rail.jsx): Esc closes that first
+    const esc = (ev) => { if (ev.key === "Escape" && !(ev.target && ev.target.closest && ev.target.closest(".acbox, [data-ac-open]")) && !document.querySelector('.bkr [data-rail-menu][aria-expanded="true"]')) { ev.preventDefault(); ev.stopImmediatePropagation(); close(); } };
     window.addEventListener("keydown", esc, true);
     return () => window.removeEventListener("keydown", esc, true);
   }, [id]);
@@ -190,9 +202,11 @@ export function Drawer({ rows }) {
   </aside>;
 }
 
-// a click on a line's date or particulars opens its details (not on a box, a button or a link in it)
+// a click anywhere on a line opens its details, a second click on the open line closes them (18-Nov-2026: was the date
+// and the particulars only); not on what does something of its own: its tick box, ledger box, lists, buttons and links
+export const DOES = "input, button, select, a, label, textarea, summary, [role=button], [role=checkbox], [contenteditable], [data-legacy], .lgbox, .bs-led, .acbox, td.ck";
 export function rowOpen(ev, id) {
-  if (ev.target.closest("input, button, select, a, label, textarea, [data-legacy], .lgbox")) return;
+  if (!ev.target.closest || ev.target.closest(DOES)) return;
   if (window.getSelection && String(window.getSelection())) return;
   const b = B(); b.drawer = b.drawer === id ? null : id; render();
 }
