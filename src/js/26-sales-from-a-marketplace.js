@@ -714,7 +714,6 @@ function salesSetField(k, val){
   if (v.refused && was !== v.x[k]) delete v.refused;
   mapInvoice(v); salesSetUndo("Invoice " + esc(v.x.number) + " changed", before); saveSales(); render();
 }
-function salesSetSalesLedger(rate, val){ const v = inv(SL().openId); if (v){ v.salesLedgers = v.salesLedgers || {}; v.salesLedgers[num(rate)] = val; delete v.refused; mapInvoice(v); saveSales(); render(); } }
 // the invoice being created
 function draftSet(k, val){
   const s = SL(), x = s.draft.x;

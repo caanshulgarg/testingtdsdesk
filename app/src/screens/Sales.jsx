@@ -350,7 +350,8 @@ const gstinFromLedger = (v) => !!(v && v.filled && v.filled.customerGstin && v.f
 function SalesAsk({ v, wide }) {
   const s = SL(), cls = wide ? "btn small" : "linkbtn";
   if (!["review", "ready"].includes(v.status)) return null;
-  const dup = salesDupOf(v);
+  // (the invoices by number listed once for the drawing: salesDupNow, src/js/26-sales-invoice.js)
+  const dup = salesDupNow(v);
   return <>
     {s.vtAsk && s.vtAsk.length > 1 && !v.x.noteKind && <span data-sales-vt-row={v.id}>{s.vtAsk.map((t) => <button key={t.type} className={cls} data-vt-pick-row={t.type} onClick={() => salesVtAnswer(t.type)}>{t.type}</button>)}</span>}
     {(v.refused || v.needsCheck) && <button className={cls} data-sales-retry={v.id} disabled={!!s.busy || !canPostTally(CO())} title="Checks Tally for it first, then sends it on its own" onClick={() => salesPostOneByOne([v.id])}>Try again</button>}
@@ -370,11 +371,11 @@ function SalesVt({ s }) {
 }
 function SalesRefused({ s }) {
   const waiting = s.list.filter((v) => v.refused && !v.refused.single && v.status === "review"), done = s.oneByOne;
-  const skipped = (s.dupSkipped || []).map((id) => s.list.find((v) => v.id === id)).filter((v) => v && salesDupOf(v));
+  const skipped = (s.dupSkipped || []).map((id) => s.list.find((v) => v.id === id)).filter((v) => v && salesDupNow(v));
   if (!waiting.length && !(done && done.rows && done.rows.length) && !skipped.length) return null;
   return <div className="bk-alert" data-sales-refused="">
     {skipped.length > 0 && <div data-sales-dupskipped=""><b>Not posted: already in Tally</b>
-      <ul style={{ margin: "4px 0 0 18px" }}>{skipped.map((v) => <li key={v.id}>{v.x.number}: {salesDupWords(salesDupOf(v))} <button className="linkbtn danger" data-dup-override={v.id} onClick={() => salesDupOverride(v.id)}>Post duplicate anyway</button></li>)}</ul></div>}
+      <ul style={{ margin: "4px 0 0 18px" }}>{skipped.map((v) => <li key={v.id}>{v.x.number}: {salesDupWords(salesDupNow(v))} <button className="linkbtn danger" data-dup-override={v.id} onClick={() => salesDupOverride(v.id)}>Post duplicate anyway</button></li>)}</ul></div>}
     {waiting.length > 0 && <div><b>Refused by Tally:</b> {waiting.length} invoice{waiting.length === 1 ? "" : "s"}. {waiting[0].refused.hint}{" "}
       <button className="btn small" data-sales-onebyone="" disabled={!!s.busy || !canPostTally(CO())} onClick={() => salesPostOneByOne()}>Post one by one to find the cause</button></div>}
     {done && done.rows && done.rows.length > 0 && <div data-sales-onebyone-result="" style={{ marginTop: waiting.length ? 8 : 0 }}><b>Posted one by one:</b>
