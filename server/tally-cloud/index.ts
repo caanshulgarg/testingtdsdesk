@@ -4686,7 +4686,7 @@ Deno.serve(sentry.wrap(async (req) => {
   // connection was lost (readRetry: never for a statement timeout or any other answer of the database); its error as one
   // short line (the status and the page's title, never the page)
   const keyHash = await sha256(key);
-  const { data: dev, error: devErr, tries: devTries } = await readRetry(() => db.from("tally_devices").select("*").eq("key_hash", keyHash).maybeSingle());
+  const { data: dev, error: devErr, tries: devTries } = await readRetry(() => db.from("tally_devices").select("*").eq("key_hash", keyHash).abortSignal(AbortSignal.timeout(700)).maybeSingle());
   // the lookup FAILED (a database error is not "no such key"): busy, asked again; the 401 below only when the database
   // answered and holds no such key, or holds it revoked
   if (devErr) { fail("device_lookup", devErr); console.error("tally-ingest: the computer key could not be looked up:", String(devErr.code || ""), String(devErr.message || "").slice(0, 200), "(tries " + devTries + ")"); return busyReply(); }

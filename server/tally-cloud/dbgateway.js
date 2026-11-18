@@ -17,7 +17,7 @@ const GATEWAY = new Set([502, 503, 504, 520, 521, 522, 523, 524, 525, 526, 527, 
 const LOST_CODES = new Set(["PGRST000", "PGRST001", "PGRST002", "57P01", "57P02", "57P03", "08000", "08001", "08003", "08004", "08006"]);
 const LOST_WORDS = /fetch failed|error sending request|connection (?:reset|refused|closed|terminated|timed out)|ECONNRESET|ECONNREFUSED|ETIMEDOUT|EPIPE|network ?error|socket hang up|tls handshake/i;
 
-const looksHtml = (s) => typeof s === "string" && /^\s*(?:<!doctype html|<html|<head|<body|<\?xml)|<\/html>\s*$|<title>/i.test(s.slice(0, 400)) ;
+const looksHtml = (s) => typeof s === "string" && /^\s*(?:<!doctype html|<html|<head|<body)|<\/html>\s*$|<title>/i.test(s.slice(0, 400)) ;
 const msgOf = (e) => (e && typeof e === "object" && typeof e.message === "string" ? e.message : typeof e === "string" ? e : "");
 
 // the error as one short line when it is a gateway's HTML page ({code: "GW522", message: "the database gateway answered
@@ -62,14 +62,14 @@ export function dbReport(err, status) {
 }
 
 // a READ, tried once more after a short wait when its error is worth it (isTransientDb) and the first try came back
-// within maxMs (a 522 often comes after the gateway's own long wait; a second one would hold the caller twice as long).
+// within maxMs (the bridge waits about 2 s per request: a 700 ms cap on each try, at most 400 ms between; a 522 often comes after the gateway's own long wait; a second one would hold the caller twice as long).
 // read() answers as supabase-js does ({data, error, status}) or throws (fetch itself failed). The answer: the last one,
 // its error shortened (dbErrorShort), and tries. Never for a write: a write the gateway timed out may have been done
 export async function readRetry(read, o = {}) {
   const sleep = o.sleep || ((ms) => new Promise((r) => setTimeout(r, ms)));
   const now = o.now || (() => Date.now());
-  const maxMs = o.maxMs ?? 5000;
-  const wait = o.waitMs ?? 400 + Math.floor(Math.random() * 400);
+  const maxMs = o.maxMs ?? 800;
+  const wait = o.waitMs ?? 200 + Math.floor(Math.random() * 200);
   const once = async () => { try { return await read(); } catch (e) { return { data: null, error: { message: String((e && e.message) || e) }, status: 0 }; } };
   const t0 = now();
   let r = await once(), tries = 1;

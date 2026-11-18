@@ -69,7 +69,7 @@ Deno.test("readRetry: one more try after a short wait, only for a lost connectio
   const flaky = async () => (++n === 1 ? { data: null, error: { message: P522a }, status: 522 } : { data: { id: "d1" }, error: null, status: 200 });
   const r1 = await readRetry(flaky, { sleep });
   assert(n === 2 && r1.data?.id === "d1" && !r1.error && r1.tries === 2, "a 522 then the row: the row (" + n + " " + JSON.stringify(r1) + ")");
-  assert(waits.length === 1 && waits[0] >= 300 && waits[0] <= 1200, "one short wait before the second try: " + waits);
+  assert(waits.length === 1 && waits[0] >= 200 && waits[0] <= 400, "one short wait before the second try: " + waits);
   n = 0; waits.length = 0;
   const down = async () => { n++; return { data: null, error: { message: P521 }, status: 521 }; };
   const r2 = await readRetry(down, { sleep });
