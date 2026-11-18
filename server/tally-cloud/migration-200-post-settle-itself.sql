@@ -155,9 +155,10 @@ begin
 
   -- each entry of the posting not settled yet (no result ok, no item in Tally, not released), with its evidence
   with v as (
-    select distinct on (tally_fincom_id(t.x)) tally_fincom_id(t.x) fid, coalesce(nullif(t.x->>'id', ''), tally_fincom_id(t.x)) eid, t.o
-      from jsonb_array_elements(case when jsonb_typeof(j.payload->'vouchers') = 'array' then j.payload->'vouchers' else '[]'::jsonb end) with ordinality t(x, o)
-     where jsonb_typeof(t.x) = 'object' and tally_fincom_id(t.x) is not null order by tally_fincom_id(t.x), t.o),
+    -- the posting's own ids (one a FinCom id, with its voucher's entry id: tally_post_ids_sync made them from the payload),
+    -- in their order: the payload is not read again
+    select i.fincom_id fid, coalesce(nullif(i.entry_id, ''), i.fincom_id) eid, row_number() over (order by i.fincom_id) o
+      from tally_post_ids i where i.job_id = p_job),
   x as materialized (
     select v.fid, v.eid, v.o, p.matched_at, coalesce(nullif(p.matched_vch, ''), nullif(p.matched_mid, '')) as mvch, nullif(p.matched_mid, '') as mid,
            nullif(p.reply_vch, '') as reply_vch, p.batch_n, lcm -> v.eid as lc, (pmm ->> v.eid)::timestamptz as marked_at
@@ -255,7 +256,18 @@ begin
   select count(*) into n_asked from ins;
 
   -- the posting's state: still held while an entry waits or conflicts; else as tally_post_job_settle says
-  o := tally_post_job_settle(j.status, j.checking, j.payload, res, its);
+  -- entries proven not in Tally, to be handed back (by tally_post_settle_resend)
+  if n_wait + n_conf = 0 then
+    select count(distinct k.entry_id) into n_resend from tally_post_checks k
+     where k.job_id = p_job and k.state = 'confirmed' and k.confirmed_by = me and not coalesce(k.resent, false);
+  end if;
+  -- tally_post_job_settle (a pass over the whole posting) only when its answer is the posting's state: nothing waits, nothing
+  -- is handed back; else the posting stays held and its counts come from its ids (indexed)
+  if n_wait + n_conf > 0 or (n_resend > 0 and j.stop_reason is null) then
+    select jsonb_build_object('total', count(*), 'posted', count(*) filter (where i.released_at is null) - n_wait - n_conf) into o from tally_post_ids i where i.job_id = p_job;
+  else
+    o := tally_post_job_settle(j.status, j.checking, j.payload, res, its);
+  end if;
   conf_words := (select string_agg((c0->>'entry') || ': ' || (c0->>'why'), '; ') from jsonb_array_elements(conf) c0);
   if n_wait + n_conf > 0 then
     st := 'done'; chk := true;
@@ -274,8 +286,6 @@ begin
   -- the register's triggers: with this pass in one statement, some 8 s at 20,000); never a posting whose posting into Tally
   -- was stopped (stop_reason: said)
   if n_wait + n_conf = 0 then
-    select count(distinct k.entry_id) into n_resend from tally_post_checks k
-     where k.job_id = p_job and k.state = 'confirmed' and k.confirmed_by = me and not coalesce(k.resent, false);
     if n_resend > 0 and j.stop_reason is not null then
       said := 'not sent again: posting into Tally is stopped for this posting (' || left(j.stop_reason, 200) || ')';
       msg := left(msg || '; ' || said, 500);

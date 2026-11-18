@@ -96,7 +96,8 @@ create or replace function public.tally_post_job_settle(p_status text, p_checkin
 returns jsonb language plpgsql immutable set search_path = public, pg_temp as $function$
 declare total int; posted int; pending int; unknown int; review int; st text := p_status; chk boolean := coalesce(p_checking, false);
 begin
-  with v as (select o vid, tally_fincom_id(x) fk, x->>'id' ek from jsonb_array_elements(coalesce(p_payload->'vouchers', '[]'::jsonb)) with ordinality t(x, o) where tally_fincom_id(x) is not null),
+  with v as (select t.o vid, z.fk, t.x->>'id' ek from jsonb_array_elements(coalesce(p_payload->'vouchers', '[]'::jsonb)) with ordinality t(x, o)
+               cross join lateral (select tally_fincom_id(t.x) fk) z where z.fk is not null),     -- (each voucher's FinCom id once)
   vk as (select vid, 'x' k, fk key from v union all select vid, 'x', ek from v where ek is not null
          union all select vid, 'a', regexp_replace(fk, '[^A-Za-z0-9]', '', 'g') from v union all select vid, 'a', regexp_replace(coalesce(ek, ''), '[^A-Za-z0-9]', '', 'g') from v),
   r as (select x->>'id' id, tally_post_bool(x->>'ok') ok, tally_post_bool(x->>'needsReview') nr from jsonb_array_elements(coalesce(p_results, '[]'::jsonb)) x where coalesce(x->>'id', '') <> ''),
@@ -185,27 +186,34 @@ grant execute on function public.tally_post_id_accept_reply(uuid, text, text, te
 
 -- new (service_role, internal): tally_post_id_accept's stamp for the ids of a posting found already (by
 -- tally_post_id_accept_many's maps), by the posting's primary key: the same columns, the same rule, the same fallback
+-- (one id at a time by the primary key: a plan for "fincom_id = any(...)" cached once the statistics knew a posting of 50,000
+-- ids read the whole posting's index for each entry; all the ids of the entry in one block, as one update had them)
 create or replace function public.tally_post_id_stamp_fids(p_job uuid, p_fids text[], p_vch text, p_retaken timestamptz)
 returns integer language plpgsql security definer set search_path = public, pg_temp as $function$
-declare n int; vch text := nullif(left(btrim(coalesce(p_vch, '')), 60), ''); retaken timestamptz := p_retaken;
+declare n int := 0; k int; f text; vch text := nullif(left(btrim(coalesce(p_vch, '')), 60), ''); retaken timestamptz := p_retaken;
 begin
   if auth.role() <> 'service_role' then raise exception 'service role only' using errcode = '42501'; end if;
   begin
-    update tally_post_ids set accepted_at = coalesce(accepted_at, now()), accepted_vch = coalesce(vch, accepted_vch),
-           live = case when released_by = 'owner' and (accepted_at is null or released_at >= accepted_at) and (retaken is null or retaken <= released_at) then live else true end,
-           released_at = case when released_by = 'owner' and (accepted_at is null or released_at >= accepted_at) and (retaken is null or retaken <= released_at) then released_at end,
-           released_by = case when released_by = 'owner' and (accepted_at is null or released_at >= accepted_at) and (retaken is null or retaken <= released_at) then released_by end,
-           released_why = case when released_by = 'owner' and (accepted_at is null or released_at >= accepted_at) and (retaken is null or retaken <= released_at) then released_why end
-     where job_id = p_job and fincom_id = any(p_fids);
-    get diagnostics n = row_count;
+    foreach f in array coalesce(p_fids, '{}') loop
+      update tally_post_ids set accepted_at = coalesce(accepted_at, now()), accepted_vch = coalesce(vch, accepted_vch),
+             live = case when released_by = 'owner' and (accepted_at is null or released_at >= accepted_at) and (retaken is null or retaken <= released_at) then live else true end,
+             released_at = case when released_by = 'owner' and (accepted_at is null or released_at >= accepted_at) and (retaken is null or retaken <= released_at) then released_at end,
+             released_by = case when released_by = 'owner' and (accepted_at is null or released_at >= accepted_at) and (retaken is null or retaken <= released_at) then released_by end,
+             released_why = case when released_by = 'owner' and (accepted_at is null or released_at >= accepted_at) and (retaken is null or retaken <= released_at) then released_why end
+       where job_id = p_job and fincom_id = f;
+      get diagnostics k = row_count; n := n + k;
+    end loop;
   exception when unique_violation then
     -- another posting holds the id live: stamped all the same, so that it is never freed here either
-    update tally_post_ids set accepted_at = coalesce(accepted_at, now()), accepted_vch = coalesce(vch, accepted_vch),
-           released_at = case when released_by = 'owner' and (accepted_at is null or released_at >= accepted_at) and (retaken is null or retaken <= released_at) then released_at end,
-           released_by = case when released_by = 'owner' and (accepted_at is null or released_at >= accepted_at) and (retaken is null or retaken <= released_at) then released_by end,
-           released_why = case when released_by = 'owner' and (accepted_at is null or released_at >= accepted_at) and (retaken is null or retaken <= released_at) then released_why end
-     where job_id = p_job and fincom_id = any(p_fids);
-    get diagnostics n = row_count;
+    n := 0;
+    foreach f in array coalesce(p_fids, '{}') loop
+      update tally_post_ids set accepted_at = coalesce(accepted_at, now()), accepted_vch = coalesce(vch, accepted_vch),
+             released_at = case when released_by = 'owner' and (accepted_at is null or released_at >= accepted_at) and (retaken is null or retaken <= released_at) then released_at end,
+             released_by = case when released_by = 'owner' and (accepted_at is null or released_at >= accepted_at) and (retaken is null or retaken <= released_at) then released_by end,
+             released_why = case when released_by = 'owner' and (accepted_at is null or released_at >= accepted_at) and (retaken is null or retaken <= released_at) then released_why end
+       where job_id = p_job and fincom_id = f;
+      get diagnostics k = row_count; n := n + k;
+    end loop;
   end;
   return n;
 end $function$;
@@ -221,18 +229,24 @@ grant execute on function public.tally_post_id_stamp_fids(uuid, text[], text, ti
 create or replace function public.tally_post_id_accept_many(p_job uuid, p_list jsonb)
 returns jsonb language plpgsql security definer set search_path = public, pg_temp as $function$
 declare x jsonb; n int := 0; s int := 0; zero jsonb := '[]'::jsonb; me jsonb; ma jsonb; retaken timestamptz; id_ text; k text; fids text[]; c int;
-        one boolean; v text; bn integer;
+        one boolean; v text; bn integer; ea text[]; ka text[]; fid_ text;
 begin
   if auth.role() <> 'service_role' then raise exception 'service role only' using errcode = '42501'; end if;
   if jsonb_typeof(p_list) is distinct from 'array' then return jsonb_build_object('ok', false, 'error', 'a list of entries'); end if;
   select taken_at into retaken from tally_post_jobs where id = p_job;
+  -- only the posting's ids this report can name (by its four indexes), read once into the two maps
+  select coalesce(array_agg(distinct e->>'id') filter (where e->>'id' is not null), '{}'),
+         coalesce(array_agg(distinct regexp_replace(e->>'id', '[^A-Za-z0-9]', '', 'g')) filter (where regexp_replace(coalesce(e->>'id', ''), '[^A-Za-z0-9]', '', 'g') <> ''), '{}')
+    into ea, ka from jsonb_array_elements(p_list) e where jsonb_typeof(e) = 'object';
   select coalesce(jsonb_object_agg(z.key, z.f), '{}'::jsonb) into me from (
-    select t.key, jsonb_agg(distinct t.fincom_id) f from (select i.fincom_id, i.fincom_id key from tally_post_ids i where i.job_id = p_job
-                                                           union all select i.fincom_id, i.entry_id from tally_post_ids i where i.job_id = p_job and i.entry_id is not null) t
+    select t.key, jsonb_agg(distinct t.fincom_id) f from (select i.fincom_id, i.fincom_id key from tally_post_ids i where i.job_id = p_job and i.fincom_id = any(ea)
+                                                           union all select i.fincom_id, i.entry_id from tally_post_ids i where i.job_id = p_job and i.entry_id = any(ea)) t
      group by t.key) z;
   select coalesce(jsonb_object_agg(z.key, z.f), '{}'::jsonb) into ma from (
-    select t.key, jsonb_agg(distinct t.fincom_id) f from (select i.fincom_id, regexp_replace(i.fincom_id, '[^A-Za-z0-9]', '', 'g') key from tally_post_ids i where i.job_id = p_job
-                                                           union all select i.fincom_id, regexp_replace(coalesce(i.entry_id, ''), '[^A-Za-z0-9]', '', 'g') from tally_post_ids i where i.job_id = p_job) t
+    select t.key, jsonb_agg(distinct t.fincom_id) f from (select i.fincom_id, regexp_replace(i.fincom_id, '[^A-Za-z0-9]', '', 'g') key from tally_post_ids i
+                                                            where i.job_id = p_job and regexp_replace(i.fincom_id, '[^A-Za-z0-9]', '', 'g') = any(ka)
+                                                           union all select i.fincom_id, regexp_replace(coalesce(i.entry_id, ''), '[^A-Za-z0-9]', '', 'g') from tally_post_ids i
+                                                            where i.job_id = p_job and regexp_replace(coalesce(i.entry_id, ''), '[^A-Za-z0-9]', '', 'g') = any(ka)) t
      where t.key <> '' group by t.key) z;
   for x in select e from jsonb_array_elements(p_list) e where jsonb_typeof(e) = 'object' loop
     n := n + 1; id_ := x->>'id'; k := regexp_replace(coalesce(id_, ''), '[^A-Za-z0-9]', '', 'g');
@@ -242,9 +256,11 @@ begin
       -- tally_post_id_accept_reply: the stamp (the exact voucher id when the request held it alone), then the reply's columns
       bn := case when x->>'batchN' ~ '^\d{1,6}$' then (x->>'batchN')::int end; one := bn = 1; v := nullif(left(btrim(coalesce(x->>'vchId', '')), 60), '');
       c := tally_post_id_stamp_fids(p_job, fids, case when one then v end, retaken);
-      update tally_post_ids set reply_vch = case when one then coalesce(v, reply_vch) else reply_vch end,
-             batch_end = nullif(left(btrim(coalesce(x->>'batchEnd', '')), 60), ''), batch_n = bn
-       where job_id = p_job and fincom_id = any(fids);
+      foreach fid_ in array fids loop
+        update tally_post_ids set reply_vch = case when one then coalesce(v, reply_vch) else reply_vch end,
+               batch_end = nullif(left(btrim(coalesce(x->>'batchEnd', '')), 60), ''), batch_n = bn
+         where job_id = p_job and fincom_id = fid_;
+      end loop;
     else
       c := tally_post_id_stamp_fids(p_job, fids, x->>'vch', retaken);
     end if;

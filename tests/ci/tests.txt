@@ -125,6 +125,8 @@ run_migration_grants.py               120
 run_migration199.py                   1500
 # 18-Nov-2026 (next-fix-posttimeout): 200, a posting held for checking settles by itself by the evidence (c66d0e82 replayed; 20,000 entries)
 run_migration200.py                   120
+# 18-Nov-2026 (next-fix-posttimeout): 201, the posting register's pass of a big posting in steps; 20,000 and 50,000 entries timed
+run_migration201.py                   480
 run_mis.js                            120
 run_mis_custom.js                     120  # My MIS engine = MIS / FinSt (ROUND 105)
 run_mis_xlsx.py                       300  TDSDESK_SITE=../app/dist-test @libreoffice  # needs LibreOffice: tagged, so run_ci.sh deals it to one share with run_fin_xlsx.py and ci.yml installs libreoffice-calc there only

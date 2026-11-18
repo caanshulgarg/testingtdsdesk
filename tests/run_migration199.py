@@ -75,7 +75,7 @@ def fbody(t_, name):   # post_queue_stand's, with 111's $fn$ too
 src = lambda n: open(os.path.join(PS.SQLDIR, n)).read()
 m111 = src("migration-111-post-register.sql")
 m36b, m40, m43, m174 = src("migration-36b-post-acceptance.sql"), src("migration-40-states-carried.sql"), src("migration-43-posting-reply.sql"), src("migration-174-post-jobs-safe.sql")
-for name, s0, n_add, n_gone in (("tally_post_job_accepted", m43, 15, 5), ("tally_post_ids_sync", m40, 8, 4), ("tally_post_job_settle", m43, 12, 9),
+for name, s0, n_add, n_gone in (("tally_post_job_accepted", m43, 15, 5), ("tally_post_ids_sync", m40, 8, 4), ("tally_post_job_settle", m43, 13, 9),
                                 ("tally_post_id_accept", m36b, 5, 3), ("tally_post_id_accept_reply", m43, 3, 2), ("tally_post_register_judged", m174, 35, 14),
                                 ("tally_post_register_apply_row", m111, APPLY_ADD, APPLY_GONE), ("tally_post_register_queued", m111, QUEUED_ADD, QUEUED_GONE)):
     if ("create or replace function public." + name + "(") in text:

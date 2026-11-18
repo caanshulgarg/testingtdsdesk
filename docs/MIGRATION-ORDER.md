@@ -937,10 +937,10 @@ transaction, lock_timeout 10 s, safe twice. Needs 174 and 184. Deploy: 184, 185,
 while it waits). No bridge or tally-ingest change. Tested: `tests/run_migration185.py` (RED_WITHOUT_185=1 fails; two
 takes at the same moment: exactly one), `tests/run_cloud_post_ui.py`.
 
-## 199, 200: a big posting is stored in time, and a held posting settles by itself (not run yet; branch next-fix-posttimeout, 18-Nov-2026)
+## 199, 200, 201: a big posting is stored in time, a held posting settles by itself, the register follows in steps (not run yet; branch next-fix-posttimeout, 18-Nov-2026)
 
 **199, post match fast** (18-Nov-2026, branch `next-fix-posttimeout`; **written, not run yet**; file md5
-325a6c81dca89c54580b2119f092af65): `server/tally-cloud/migration-199-post-match-fast.sql`. On staging, 17-Nov-2026
+04f5cd99f5cb71aff42671600610b303): `server/tally-cloud/migration-199-post-match-fast.sql`. On staging, 17-Nov-2026
 12:19-13:52 UTC, the bridge's report of a 661-entry posting was cancelled by the 8 s statement timeout about 470 times: the
 report changed the posting's status, and the sync trigger (`tally_post_ids_sync`, 40) and `tally_post_job_accepted` (43)
 compared every id of the posting with every id of its results and items through `tally_post_id_match` (four
@@ -953,8 +953,8 @@ and answers: 43's `tally_post_job_accepted`, `tally_post_job_settle` and `tally_
 same; its voucher fields read without a regular expression where the tag is plain, its lookups by key). In
 `tally_post_job_accepted` and the sync, 44's helpers (`tally_post_result_accepted` / `_taken`, `tally_post_accept_text`,
 `tally_post_bool`, never inlined since 44 gave them a search_path) are written out word for word. New (service_role):
-`tally_post_id_accept_many(job, list)` (a report's acceptances in one call, the posting's ids read once) and
-`tally_post_id_stamp_fids` (its stamp by primary key). Three indexes of `tally_post_ids` (job, entry id; job, either id
+`tally_post_id_accept_many(job, list)` (a report's acceptances in one call: only the ids the report names read, by
+the four indexes) and `tally_post_id_stamp_fids` (its stamp, one id at a time by the primary key). Three indexes of `tally_post_ids` (job, entry id; job, either id
 in letters and digits). `tally_post_id_match` stays for its other callers. Add-only, one transaction, lock_timeout 10 s, safe twice; service_role only, granted explicitly. After 40, 43,
 111 and 174; independent of 184 / 185 / 196 / 197 / 198 and of the reserved 189-191. tally-ingest (same branch): a
 report keeps up to 25,000 entries (was 5,000: later entries of a bigger posting were dropped), stamps them with
@@ -967,7 +967,7 @@ ids live; 20,000 entries from the queue to the register: every statement under 6
 5 s), `tests/run_post_settle_server.py`.
 
 **200, post settle itself** (18-Nov-2026, branch `next-fix-posttimeout`; **written, not run yet**; file md5
-323336d6ee04d82aa7af5ee3e054337b): `server/tally-cloud/migration-200-post-settle-itself.sql`. The owner (18-Nov-2026): a posting never stays
+1d6ace7a4bcc54a0f873cd97d060c5c9): `server/tally-cloud/migration-200-post-settle-itself.sql`. The owner (18-Nov-2026): a posting never stays
 "Held"; every posting settles by itself; never a double post; a person only for contradictory evidence, named. Staging's
 c66d0e82 (661 entries, all in Tally once) is held because its last reports were lost, though FinCom's read-back of Tally
 matched all 661 (`tally_post_ids.matched_at`). New (service_role): `tally_post_settle_itself(job)` settles a posting held
@@ -986,3 +986,28 @@ a report that leaves a posting held and after each check report (resent: the bri
 without 200: nothing changes. No bridge change, no new Tally request. Tested: `tests/run_migration200.py`
 (RED_WITHOUT_200=1 fails; c66d0e82 replayed with made-up ids settles on the cron's next run, nothing sent again; 20,000
 entries: settle about 2 s, the hand-back's change of status about 5 s). Both are on the posting path: the owner's OK before they run on staging, 199 first.
+
+**201, post register async** (18-Nov-2026, branch `next-fix-posttimeout`; **written, not run yet**; file md5
+c5cba1199eacb3d0fd5d3dcd5c290240): `server/tally-cloud/migration-201-post-register-async.sql`. The owner: every request and trigger on the
+posting path under about 1.5 s at 20,000 entries, linear to 50,000. With 199/200 each change of a big posting's status
+still ran the posting register's whole pass inside the trigger (about 4 s at 20,000). Now the register pass of a posting
+of more than 2,000 entries leaves the triggers: 111's status trigger (`tally_post_register_job_changed`) and the queue
+trigger (`tally_post_register_queued`, its duplicate guard kept in the trigger) only mark the posting in the new
+`tally_post_register_pending` (row security on; the firm reads its progress words), and `tally_post_register_step(job,
+n)` does the pass in steps of 2,000: the queue phase (the records of the posting's ids, by key), one preparing step
+(each voucher and the posting's results, items and marks as maps: `tally_post_register_maps`), then 199's judge and
+apply on each chunk (`tally_post_register_judged_part`, `tally_post_register_apply_part`, `tally_post_register_queue_part`:
+the same text on a chunk). Resumable (a cursor), idempotent, one worker a posting (an advisory lock); a change while a
+pass runs marks it dirty (it finishes, then runs again). A posting of 2,000 entries or fewer is done in the trigger as
+before. `tally_post_register_apply(job)` (tally-ingest after each report) does one step of a big posting. 199's sync:
+the ids Tally took worked out only when the posting fails or is cancelled (they decide nothing else), as maps, and
+only ids whose live changes written; each voucher's FinCom id worked out once. 182's read-back reads the date as 199's
+judge does. 185's enqueue finds other live postings' entries by a hashed lookup (staging runs 185's text: md5 checked
+read-only 18-Nov-2026). One cron entry, `tally_post_work()`: one indexed look when idle; else 200's settling and
+register steps within 25 s; the jobs `tally-post-settle-itself` and `tally-post-requeue` carry `set statement_timeout`
+(40 s / 30 s; pg_cron 1.6.4 over libpq on staging). Add-only, one transaction, lock_timeout 10 s, safe twice;
+service_role only, granted explicitly. **After 184, 185, 199, 200.** No bridge or edge-function change (tally-ingest's
+register call becomes a step by itself). Tested: `tests/run_migration201.py` (150 made-up postings: the records, history
+and ids after the steps exactly as the synchronous triggers leave them, 59 with a change mid-pass; two workers at once:
+one does the step; 20,000 entries: every statement at most 1.4 s; 50,000: at most 2.8 s; RED_WITHOUT_201=1 fails).
+
