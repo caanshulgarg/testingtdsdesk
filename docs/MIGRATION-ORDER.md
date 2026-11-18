@@ -936,3 +936,19 @@ posting say why, `targetWhy`). Add-only, one
 transaction, lock_timeout 10 s, safe twice. Needs 174 and 184. Deploy: 184, 185, then the app (src/js/51 shows the words
 while it waits). No bridge or tally-ingest change. Tested: `tests/run_migration185.py` (RED_WITHOUT_185=1 fails; two
 takes at the same moment: exactly one), `tests/run_cloud_post_ui.py`.
+
+## 199: a big posting's report is stored in time (not run yet; branch next-fix-posttimeout, 18-Nov-2026)
+
+**199, post match fast** (18-Nov-2026, branch `next-fix-posttimeout`; **written, not run yet**; file md5
+6dd788966a4aa6ba9d827e4e97f51ddf): `server/tally-cloud/migration-199-post-match-fast.sql`. On staging, 17-Nov-2026
+12:19-13:52 UTC, the bridge's report of a 661-entry posting was cancelled by the 8 s statement timeout about 470 times: the
+report changed the posting's status, and the sync trigger (`tally_post_ids_sync`, 40) and `tally_post_job_accepted` (43)
+compared every id of the posting with every id of its results and items through `tally_post_id_match` (four
+regexp_replace per pair). Now each id is spelt in letters and digits once and the ids are matched by equality (hashed):
+the same rule and the same answers. Replaces only those two functions, from their latest text (staging's, md5 of prosrc
+checked by the test), the same arguments; `tally_post_id_match` stays for its other callers. Add-only, one transaction,
+lock_timeout 10 s, safe twice; service_role only, granted explicitly. After 40 and 43; independent of 184 / 185 / 196 /
+197 / 198 and of the reserved 189-191. No bridge, edge function or app change. Tested: `tests/run_migration199.py`
+(RED_WITHOUT_199=1 fails: the report of a 1500-entry posting is cancelled at 8 s; with 199 it is written in under 1 s; 300
+made-up postings give the old answers and leave the same ids live). It is on the posting path: the owner's OK before it
+runs on staging.
