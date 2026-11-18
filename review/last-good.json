@@ -1,10 +1,10 @@
 {
- "build": "mwl49pp7-d5af5d",
+ "build": "mwlt51j2-3c7eb1",
  "path": "../review-prev/",
- "stamp": "React \u00b7 18-Nov-2026 01:30 \u00b7 3b9b06ae0",
- "commit": "01488a73509d95386b5c4e44978b4ac171ead55a",
- "replacedBy": "mwlt51j2-3c7eb1",
+ "stamp": "React \u00b7 18-Nov-2026 13:06 \u00b7 f0080c44e",
+ "commit": "c8e2b9a6761f2b37f337a6d1085e00ef4fa34ab3",
+ "replacedBy": "mwluqijz-9fbabd",
  "how": "promote",
- "at": "2026-11-18T07:37:25Z",
+ "at": "2026-11-18T08:21:35Z",
  "note": "the build review/ held before; app/rollback-review.sh puts review/ back as it is at commit"
 }
