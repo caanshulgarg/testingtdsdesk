@@ -35,6 +35,8 @@ GST_WANT_FAIL = [False]    # gst_calc_want_book fails (tally-ingest must not)
 NO_FN = set()             # functions this database does not have yet (an older cloud): PostgREST's 404 PGRST202
 FAIL_SELECT = {}          # table -> {message, code}: a GET answers this PostgREST error (bridge 2.3.1 Lows: errors are logged)
 FAIL_RPC = {}             # function -> {message, code}: the call answers this PostgREST error (the database cannot be read)
+GATEWAY_FAIL = {}         # table -> {status, body, n}: the next n GETs of it (n < 0: every one) answer the gateway's HTML error page
+                          # (Cloudflare's 52x in front of Supabase while Postgres restarts; FINCOM-CLOUD-STAGING-8/B/C)
 DELAY = [0.0]             # seconds every request waits before it is answered (a slow database)
 SPANS = []                # while DELAY is on: (method, path?query, started, ended) of each request, to see which ran at the same time
 MAX_URL = [0]             # > 0: a request whose path and query are longer answers 414 (a gateway's URL limit; the refetch chunks)
@@ -207,6 +209,10 @@ class H(http.server.BaseHTTPRequestHandler):
             except Exception as e: return self.send(400, {"message": str(e), "code": "P0001"})
         if path.startswith("/rest/v1/"):
             t = path.rsplit("/", 1)[1]; rows = T.setdefault(t, []); single = "vnd.pgrst.object" in (self.headers.get("Accept") or "")
+            g = GATEWAY_FAIL.get(t)
+            if method in ("GET", "HEAD") and g and g.get("n", 0) != 0:
+                g["n"] = g["n"] - 1 if g["n"] > 0 else g["n"]
+                return self.send(g["status"], raw=g["body"].encode(), headers={"Content-Type": "text/html; charset=UTF-8"})
             if method in ("GET", "HEAD") and t in FAIL_SELECT:
                 return self.send(400, dict(FAIL_SELECT[t], details=None, hint=None))
             if method in ("GET", "HEAD") and NO_COL.get(t):
