@@ -104,13 +104,32 @@ func activeJobs() []any {
 	return out
 }
 
-var jobLocks sync.Map // job id -> *sync.Mutex
+// one hand-out of a posting at a time; the lock is let go (and forgotten) once no hand-out holds or waits for it
+type jobLockT struct {
+	mu sync.Mutex
+	n  int // hand-outs holding or waiting for it (under jobLocksMu)
+}
+
+var (
+	jobLocks   sync.Map // job id -> *jobLockT
+	jobLocksMu sync.Mutex
+)
 
 func jobLock(id string) func() {
-	m, _ := jobLocks.LoadOrStore(id, &sync.Mutex{})
-	mu := m.(*sync.Mutex)
-	mu.Lock()
-	return mu.Unlock
+	jobLocksMu.Lock()
+	v, _ := jobLocks.LoadOrStore(id, &jobLockT{})
+	l := v.(*jobLockT)
+	l.n++
+	jobLocksMu.Unlock()
+	l.mu.Lock()
+	return func() {
+		l.mu.Unlock()
+		jobLocksMu.Lock()
+		if l.n--; l.n == 0 {
+			jobLocks.CompareAndDelete(id, l)
+		}
+		jobLocksMu.Unlock()
+	}
 }
 
 // test seam: called between reading a handed-again posting's payload and writing the GUID into it

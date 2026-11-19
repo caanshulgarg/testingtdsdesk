@@ -4872,7 +4872,11 @@ Deno.serve(sentry.wrap(async (req) => {
             ...(altOf(c?.altvchid) !== null ? { altvchid: altOf(c?.altvchid), altmstid: altOf(c?.altmstid) } : {}),
             ...(typeof c?.recorderSeen === "boolean" ? { recorderSeen: c.recorderSeen, recorderLastAt: s(c?.recorderLastAt, 40) } : {}),
             // bridge 2.5.13: the books' first day is known nowhere (the ledgers come without their openings): the bridge's words
-            ...(s(c?.booksFromWhy, 200) ? { booksFromWhy: s(c.booksFromWhy, 200) } : {}) })),
+            ...(s(c?.booksFromWhy, 200) ? { booksFromWhy: s(c.booksFromWhy, 200) } : {}),
+            // next-fix-linkedguid: open only in a Tally a posting would not use (another Windows user's, or one whose owner
+            // Windows cannot tell): its port and why, never a GUID (migration 203's tally_post_linked_why_for says it)
+            ...(c?.openElsewhere && ["owner unknown", "other user"].includes(c.openElsewhere.why) && Number.isInteger(c.openElsewhere.port) && c.openElsewhere.port > 0 && c.openElsewhere.port < 65536
+              ? { openElsewhere: { port: c.openElsewhere.port, why: c.openElsewhere.why } } : {}) })),
           // go-bridge: Tally open / busy (open, slow to answer) / closed, and how often the beat comes (2.0: 30 s; 1.15.0: 60 s)
           tallyState: ["open", "busy", "closed"].includes(b.tallyState) ? b.tallyState : (b.tally ? "open" : "closed"), busySince: s(b.busySince, 30),
           every: Math.max(10, Math.min(600, Math.floor(Number(b.every) || 60))), version: s(body.version, 40),

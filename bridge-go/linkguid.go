@@ -177,8 +177,8 @@ func linkedIn(sessions []M, guid, asked string) (linkLook, error) {
 func elsewhereWords(sessions []M, guid string, blind bool) string {
 	var untold, other []string
 	for _, s := range sessions {
-		if tallyToPost(s, blind) {
-			continue
+		if tallyToPost(s, blind) || s["ok"] != true || s["skipped"] == true {
+			continue // (only a Tally that answered its list now)
 		}
 		for _, c := range sessCompanies(s) {
 			if normGUID(str(c["guid"])) == guid {

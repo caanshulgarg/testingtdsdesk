@@ -1141,12 +1141,19 @@ func beatCompanies(sessions []M, open []any) []any {
 	guidOf := map[string]string{}
 	liveOf := map[string][]string{} // linkguid.go: every GUID an open company of that name has in Tally's list now
 	ownOpen := map[string]bool{}    // linkguid.go: open in a Tally a posting would use (with a GUID or none)
+	elsewhere := map[string]M{}     // linkguid.go: open (answered now) only in a Tally a posting would not use: where, why
 	listedNoBF := map[string]bool{} // 2.5.13: listed by this user's Tally without a BOOKSFROM
 	blind := ownersUntold(sessions)
 	for _, s := range sessions {
 		for _, c := range sessCompanies(s) {
 			if s["ok"] == true && s["skipped"] != true && tallyToPost(s, blind) {
 				ownOpen[companyKey(str(c["name"]))] = true
+			} else if s["ok"] == true && s["skipped"] != true && elsewhere[companyKey(str(c["name"]))] == nil {
+				why := "owner unknown" // the same words as the bridge's wait (elsewhereWords)
+				if s["mine"] == false {
+					why = "other user"
+				}
+				elsewhere[companyKey(str(c["name"]))] = M{"port": toInt(s["port"]), "why": why}
 			}
 			if g := str(c["guid"]); g != "" && tallyToPost(s, blind) {
 				guidOf[companyKey(str(c["name"]))] = g // (only from a Tally a posting would use)
@@ -1205,6 +1212,10 @@ func beatCompanies(sessions []M, open []any) []any {
 		if len(gs) == 0 {
 			e := row(name, ownOpen[companyKey(name)])
 			e["guid"] = ""
+			// open only elsewhere: where and why (never its GUID), so FinCom's reason matches the bridge's own words
+			if oe := elsewhere[companyKey(name)]; oe != nil && !ownOpen[companyKey(name)] {
+				e["openElsewhere"] = oe
+			}
 			cos = append(cos, e)
 		}
 		for _, g := range gs {

@@ -247,6 +247,14 @@ try:
     F.T["tally_post_jobs"].append(dict(job("p11", "running"), firm_id="f-other"))
     c, r = call({"kind": "posts_update", "shadow": True, "version": "2.5.16", "bridge": ME, "id": "p11", "status": "running", "results": [{"id": "K1", "ok": True}]})
     ok(c == 403 and not [a for a in F.ARGS.get("tally_post_id_accept", []) if a.get("p_job") == "p11"], "another firm's posting: refused, nothing stamped")
+    print("== 13. the beat: a company open only in a Tally a posting would not use keeps where and why (203's reason)")
+    c, r = call({"kind": "beat", "version": "2.5.16", "bridge": ME, "tally": True, "open": ["ZZ HERON CO", "ZZ OTHER"], "companies": [
+        {"name": "ZZ HERON CO", "open": False, "guid": "", "openElsewhere": {"port": 9001, "why": "owner unknown", "guid": "g-no", "x": "y"}},
+        {"name": "ZZ OTHER", "open": False, "openElsewhere": {"port": "bad", "why": "made up"}}]})
+    bt = (next((d for d in F.T["tally_devices"]), {}).get("info") or {}).get("beat") or {}
+    cs = {x.get("name"): x for x in bt.get("companies", [])}
+    ok(c == 200 and cs.get("ZZ HERON CO", {}).get("openElsewhere") == {"port": 9001, "why": "owner unknown"} and "openElsewhere" not in cs.get("ZZ OTHER", {"openElsewhere": 1}),
+       "kept as {port, why} only (no GUID); words not known: left out (%s)" % [cs.get(k) for k in cs])
     print("== 11. key_check (2.5.16): read only, before the id is bound")
     call({"kind": "beat", "version": "2.5.15", "bridge": ME, "tally": True, "open": [], "companies": []})   # (an earlier bridge's beat recorded its Windows user)
     c, r = call({"kind": "key_check", "version": "2.5.16", "bridge": ME})
