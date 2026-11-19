@@ -301,6 +301,16 @@ for n_, why, want in ((111, "owner unknown", "Tally on port 9001 has it open, bu
     info["beat"]["companies"] = [{"name": CO, "guid": "", "open": False, "openElsewhere": {"port": 9001, "why": why}}]
     st.setbeat(DA, info); job(n_); c = count(); t = take()
     ok(c == "0" and t is None and want in msg(n_) and "is not open in Tally" not in msg(n_), "11. %s: not handed out, the posting says where: %r" % (why, msg(n_)))
+# the final review (nit a): the words only from the beat of the bridge the posting is for (the computer's latest beat sent by
+# another bridge, or a beat that does not say which bridge sent it: the plain words, never another bridge's Tally)
+for n_, by in ((113, BB), (114, None)):
+    close_all(); info = st.beat("made-up-a", BA, [CO])
+    info["bridges"][BA]["cos"] = []
+    info["beat"]["companies"] = [{"name": CO, "guid": "", "open": False, "openElsewhere": {"port": 9001, "why": "owner unknown"}}]
+    if by: info["beat"]["bridge"] = by
+    else: info["beat"].pop("bridge", None)
+    st.setbeat(DA, info); job(n_); c = count(); t = take()
+    ok(c == "0" and t is None and "port 9001" not in msg(n_) and msg(n_), "11. the beat %s: no words from it: %r" % ("of another bridge" if by else "naming no bridge", msg(n_)))
 close_all()
 
 print("\nALL PASSED: %d" % len(fails) if not fails else "\nFAILED: %d\n  %s" % (len(fails), "\n  ".join(fails)))

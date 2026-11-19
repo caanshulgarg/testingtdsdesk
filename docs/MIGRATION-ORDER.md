@@ -1163,7 +1163,7 @@ safe twice; service_role only, granted explicitly. **After 201.** No bridge chan
 
 **203, post linked guid** (19-Nov-2026, branch `next-fix-linkedguid`, the owner's hard rule: FinCom Bridge posts only into
 the Tally company the client is linked to, identified by the company's GUID; **written, not run yet**; file md5
-4cef9ee5e1cd6d6260e14747254460f6): `server/tally-cloud/migration-203-post-linked-guid.sql`. **After the applied 202**
+e45c70ed4a68f4b10cefe16d5fecee0d): `server/tally-cloud/migration-203-post-linked-guid.sql`. **After the applied 202**
 (`migration-202-post-recheck.sql`); it refuses to run without it (no `tally_post_linked_ok` / `tally_post_recheck_job`).
 This branch's own first draft of a 202 (`migration-202-post-linked-guid.sql`, never run) is withdrawn: what the applied 202
 covers (the hand-out and the beat's count gated on the linked GUID open, the words on the posting) is dropped; the rest is
@@ -1173,8 +1173,10 @@ BEFORE INSERT trigger `tally_post_jobs_guid`; one queued before 203 is stamped a
 changed from one it had, to another or none, or the client was relinked; kept by a BEFORE INSERT OR UPDATE trigger
 `tally_links_guid_changed`; a first GUID on a link that had none does not move it; a link not touched since before 203
 keeps its last `updated_at` there on its first touch). New (service_role): `tally_post_link_guid`,
-`tally_post_beat_cos`, `tally_link_guid_pick_mark`, `tally_post_elsewhere_why` (the beat's `openElsewhere`: the company
-open only in another Windows user's Tally or one whose owner Windows cannot tell, said as the bridge says it; the gate
+`tally_post_beat_cos`, `tally_link_guid_pick_mark`, `tally_post_elsewhere_why(device, bridge, company)` (the beat's
+`openElsewhere`: the company open only in another Windows user's Tally or one whose owner Windows cannot tell, said as the
+bridge says it, and only from the beat of the bridge the posting is for: the computer's latest beat names its bridge,
+`beat.bridge`, this branch's tally-ingest; a beat of another bridge, or one naming none, gives the plain words; the gate
 stays shut); for owners (authenticated): `tally_link_guid_pick(book, guid)`.
 Replaced with the same arguments: 202's `tally_post_linked_ok` (the single linked GUID open, and no other open company of
 that name in the bridge's list), 202's `tally_post_linked_why_for` (two more plain reasons; "an owner picks"), 202's
@@ -1193,7 +1195,8 @@ line: the marks), 110's `tally_link_guid` (a GUID from the beats only when every
 one). No table, nothing dropped, no row changed (two triggers, if not there). One transaction, lock_timeout 3 s, safe twice; the jobs column's check is added
 NOT VALID there and validated in a second short transaction of its own. **Deploy: 203, then
 tally-ingest of this branch** (posts_take sends `guid`; the beat's `cos` keeps two open companies of one name apart;
-posts_update keeps the port and the company; the beat's companies keep `openElsewhere` {port, why}), **then the bridge**: a posting from FinCom's queue that names no GUID waits
+posts_update keeps the port and the company; the beat's companies keep `openElsewhere` {port, why}; the beat names the
+bridge that sent it, `bridge`), **then the bridge**: a posting from FinCom's queue that names no GUID waits
 ("Waiting for FinCom to name the linked company") and nothing is sent; nothing is guessed by name. tally-ingest's post_ok
 also stops a posting whose stamp is no longer the link's GUID. The web app sends the link's GUID with a posting straight to
 the bridge (`guid` on /jobs and /import, `companyGuid` on /unpost) and only to a bridge whose /status says `linkGuid`

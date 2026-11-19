@@ -17,7 +17,7 @@
 --      the company by its name, so neither is posted to). The beat's count and the hand-out follow (both ask it).
 --   4. 202's tally_post_linked_why_for, changed: three more plain reasons (two linked books disagree; two open companies of
 --      that name; open only in a Tally a posting would not use, the beat's openElsewhere: tally_post_elsewhere_why, the
---      bridge's own words), and "an owner picks" while 6. is waiting.
+--      bridge's own words, only from that bridge's own beat), and "an owner picks" while 6. is waiting.
 --   5. 202's tally_post_take_for, changed: a posting with no stamp is stamped as it is handed out; the third look (a
 --      posting queued for no computer, 185's tally_post_unrouted_ok) asks the gate too.
 --      174's tally_post_job_blocked, two cases added: the client linked to another Tally company (another GUID) after the
@@ -135,20 +135,23 @@ grant execute on function public.tally_post_linked_ok(uuid, text, text, uuid, te
 -- ---------------------------------------------------------------- 4. the words (202's tally_post_linked_why_for)
 -- the company open only in a Tally a posting would not use, as the bridge's beat says it (companies[].openElsewhere:
 -- {port, why}: another Windows user's, or one whose owner Windows cannot tell; never a GUID): the bridge's own words for
--- it (bridge linkguid.go elsewhereWords); null when the beat says none
-create or replace function public.tally_post_elsewhere_why(p_device uuid, p_company text)
+-- it (bridge linkguid.go elsewhereWords); null when the beat says none. Only from the beat of the bridge the posting is for:
+-- the computer's latest beat (info.beat) names the bridge that sent it (beat.bridge, this branch's tally-ingest); one sent
+-- by another bridge of the computer, or naming none, says nothing here (another login's Tally is never named for it)
+create or replace function public.tally_post_elsewhere_why(p_device uuid, p_bridge text, p_company text)
 returns text language sql stable security definer set search_path = public, pg_temp as $function$
   select case x -> 'openElsewhere' ->> 'why'
            when 'owner unknown' then 'Not posted yet: ' || p_company || ': Tally on port ' || (x -> 'openElsewhere' ->> 'port') || ' has it open, but Windows cannot tell whose Tally that is (it may be running as administrator), so nothing is sent to it; run Tally normally as your own Windows user'
            when 'other user' then 'Not posted yet: ' || p_company || ' is open only in another Windows user''s Tally (port ' || (x -> 'openElsewhere' ->> 'port') || '); open it in your own Tally' end
     from tally_devices d, jsonb_array_elements(case when jsonb_typeof(d.info -> 'beat' -> 'companies') = 'array' then d.info -> 'beat' -> 'companies' else '[]'::jsonb end) x
-   where d.id = p_device and jsonb_typeof(x) = 'object' and jsonb_typeof(x -> 'openElsewhere') = 'object'
+   where d.id = p_device and p_bridge is not null and d.info -> 'beat' ->> 'bridge' = p_bridge
+     and jsonb_typeof(x) = 'object' and jsonb_typeof(x -> 'openElsewhere') = 'object'
      and x -> 'openElsewhere' ->> 'why' in ('owner unknown', 'other user') and (x -> 'openElsewhere' ->> 'port') ~ '^[0-9]{1,5}$'
      and lower(regexp_replace(tally_nm(x ->> 'name'), '^[\s\x01-\x1f]+|[\s\x01-\x1f]+$', '', 'g')) = lower(regexp_replace(tally_nm(p_company), '^[\s\x01-\x1f]+|[\s\x01-\x1f]+$', '', 'g'))
    limit 1
 $function$;
-revoke all on function public.tally_post_elsewhere_why(uuid, text) from public, anon, authenticated;
-grant execute on function public.tally_post_elsewhere_why(uuid, text) to service_role;
+revoke all on function public.tally_post_elsewhere_why(uuid, text, text) from public, anon, authenticated;
+grant execute on function public.tally_post_elsewhere_why(uuid, text, text) to service_role;
 
 -- 202's text; changed: two linked books disagree; two open companies of that name; an owner picks (6.)
 create or replace function public.tally_post_linked_why_for(p_firm uuid, p_client text, p_company text, p_device uuid, p_bridge text)
@@ -174,8 +177,8 @@ returns text language sql stable security definer set search_path = public, pg_t
                   where a.guid = tally_post_link_guid(p_firm, p_client, p_company))
       then 'Not posted yet: two open companies in Tally are named ' || p_company || '; close the one that is not the client''s (FinCom posts only into the linked company, by its company ID)'
     -- 203: open only in a Tally a posting would not use (the beat's openElsewhere): where, and what to do; the gate stays shut
-    when tally_post_elsewhere_why(p_device, p_company) is not null
-      then tally_post_elsewhere_why(p_device, p_company)
+    when tally_post_elsewhere_why(p_device, p_bridge, p_company) is not null
+      then tally_post_elsewhere_why(p_device, p_bridge, p_company)
     when (select case when jsonb_typeof(me.info -> 'bridges' -> p_bridge -> 'cos') = 'array'
            then exists (select 1 from jsonb_array_elements(me.info -> 'bridges' -> p_bridge -> 'cos') c where jsonb_typeof(c) = 'array' and nullif(btrim(coalesce(c ->> 1, '')), '') is not null)
            else jsonb_typeof(me.info -> 'beat' -> 'companies') = 'array'

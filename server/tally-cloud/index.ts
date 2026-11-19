@@ -4849,7 +4849,9 @@ Deno.serve(sentry.wrap(async (req) => {
           pickupsOf(b, prevInfo, me.id, (c: string) => bookForBeat(firm, c)),
           // migration 54: switched to changes only by an owner (said on the bridge's line and to the bridge)
           changesOnly(dev, me.id)]);
-        const beat = { at: beatAt, tally: !!b.tally, updating: !!b.updating, dailyAt: s(b.dailyAt, 5), lastRun: s(b.lastRun, 8),
+        // migration 203 (the final review): the beat names the bridge that sent it, so a posting's words are read only from
+        // its own bridge's beat (tally_post_elsewhere_why)
+        const beat = { at: beatAt, bridge: me.id, tally: !!b.tally, updating: !!b.updating, dailyAt: s(b.dailyAt, 5), lastRun: s(b.lastRun, 8),
           // next-tally-connectfix: a company's name trimmed of spaces and CR/LF (staging: one came with "\r\n\r\n" at its end)
           open: (Array.isArray(b.open) ? b.open : []).slice(0, 50).map((x: unknown) => coTrim(x)),
           // bridge 1.14.9: each Tally port as the bridge sees it (open, another user's, how many companies, the error)

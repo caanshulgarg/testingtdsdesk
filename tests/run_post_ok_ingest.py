@@ -255,6 +255,7 @@ try:
     cs = {x.get("name"): x for x in bt.get("companies", [])}
     ok(c == 200 and cs.get("ZZ HERON CO", {}).get("openElsewhere") == {"port": 9001, "why": "owner unknown"} and "openElsewhere" not in cs.get("ZZ OTHER", {"openElsewhere": 1}),
        "kept as {port, why} only (no GUID); words not known: left out (%s)" % [cs.get(k) for k in cs])
+    ok(bt.get("bridge") == ME.get("id"), "the beat names the bridge that sent it (203's words only from that bridge's beat): %s" % bt.get("bridge"))
     print("== 11. key_check (2.5.16): read only, before the id is bound")
     call({"kind": "beat", "version": "2.5.15", "bridge": ME, "tally": True, "open": [], "companies": []})   # (an earlier bridge's beat recorded its Windows user)
     c, r = call({"kind": "key_check", "version": "2.5.16", "bridge": ME})

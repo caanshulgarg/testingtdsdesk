@@ -80,7 +80,7 @@ class Stand:
         except (TypeError, ValueError): return {"_out": out}
     def beat(self, user, bridge, open_, ago=0, guid=GUID, folder=FOLDER, computer="SRV9"):
         at = iso(datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=ago))
-        return {"computer": computer, "beat": {"at": at, "windowsUser": computer + "\\" + user, "open": list(open_), "companies": [{"name": n, "guid": guid, "open": True} for n in open_]},
+        return {"computer": computer, "beat": {"at": at, "bridge": bridge, "windowsUser": computer + "\\" + user, "open": list(open_), "companies": [{"name": n, "guid": guid, "open": True} for n in open_]},
                 "bridges": {bridge: {"at": at, "computer": computer, "user": computer + "\\" + user, "mode": "main", "open": list(open_), "tallyPort": 9000, "dataFolder": folder}}}
     def setbeat(self, dev, info): self.db.sql("update tally_devices set info = %s, last_seen = now() where id = %s" % (q(json.dumps(info)), q(dev)))
     def pair(self, sql_a, sql_b, hold=1.5, gap=0.5, pre_a="", pre_b=""):
