@@ -610,6 +610,9 @@ func openCompaniesAsk(tc *TC, fresh bool) ([]M, bool) {
 	// fix 3: what the bridge's OWN Tallys list now (never a Tally Windows shows as another user's), for the recorder's rule
 	// that a line is taken only for a company open in the own Tally (recorder_owntally.go); ownAll: each answered or is closed
 	ownOpen, ownAll := map[string]string{}, true
+	// the final review of next-fix-linkedguid: "own" by the postings' rule (linkguid.go ownRule over this plan): a Tally
+	// whose owner Windows cannot tell only while Windows tells the owner of none in the plan
+	ownT := ownRule(plan)
 	partial := false
 	// 2.5.8 round-2 review (low 1): a company's GSTIN / PAN is asked under the background rules (postings first), not
 	// held back by typing: a give-way there would hold it back for 5 minutes (coInfoFailAt)
@@ -646,7 +649,7 @@ func openCompaniesAsk(tc *TC, fresh bool) ([]M, bool) {
 		// (round-2 review, medium: then this is not a complete look at the own Tallys for the recorder: partial)
 		if tc.only != nil && !tc.only[toInt(pp["port"])] {
 			if h := heldEntry(toInt(pp["port"])); h != nil {
-				if pp["mine"] != false {
+				if ownT(pp) {
 					partial = true
 				}
 				sessions = append(sessions, h)
@@ -658,7 +661,7 @@ func openCompaniesAsk(tc *TC, fresh bool) ([]M, bool) {
 				if tc.holdOK && prevCompanies(toInt(pp["port"])) == nil {
 					// 2.5.8 review 3: a Check again on a Tally still in its wait after no answer: not asked this press
 					allFresh = false
-					if pp["mine"] != false {
+					if ownT(pp) {
 						ownAll = false
 					}
 					e["error"], e["tallyState"] = "Tally did not give its company list in 2 s; asked again after a short wait", "open"
@@ -668,7 +671,7 @@ func openCompaniesAsk(tc *TC, fresh bool) ([]M, bool) {
 				}
 				if prev := prevCompanies(toInt(pp["port"])); prev != nil {
 					allFresh = false
-					if pp["mine"] != false {
+					if ownT(pp) {
 						ownAll = false
 					}
 					e["ok"], e["companies"], e["tallyState"], e["kept"] = true, prev, "open", true
@@ -693,7 +696,7 @@ func openCompaniesAsk(tc *TC, fresh bool) ([]M, bool) {
 		}
 		if err != nil {
 			allFresh = false
-			if pp["mine"] != false {
+			if ownT(pp) {
 				ownAll = false
 			}
 		}
@@ -731,7 +734,7 @@ func openCompaniesAsk(tc *TC, fresh bool) ([]M, bool) {
 				}
 				inf := getCoInfo(itc, name, toInt(pp["port"]))
 				noteCompanyGUID(name, nt(c, "GUID")) // the first GUID seen is held; another one is noted, never taken
-				if pp["mine"] != false {
+				if ownT(pp) {
 					noteBooksFrom(name, nt(c, "BOOKSFROM")) // 2.5.0: the ledger reads' period, from this user's own Tally only (booksfrom.go)
 					ownOpen[liveOwnKey(nt(c, "GUID"), name)], ownOpen[liveOwnKey("", name)] = name, name
 				}

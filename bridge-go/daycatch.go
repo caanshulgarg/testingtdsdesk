@@ -23,8 +23,10 @@ var (
 	// the companies open in this user's own Tally (the company list as last given; Tally is not asked; tests replace it)
 	dcOwnOpen = func() []string {
 		var o []string
-		for _, s := range openCompaniesCached() {
-			if s["skipped"] == true || s["ok"] != true || s["mine"] == false {
+		ss := openCompaniesCached()
+		own := ownRule(ss) // (one rule with the postings: linkguid.go)
+		for _, s := range ss {
+			if s["ok"] != true || !own(s) {
 				continue
 			}
 			for _, c := range sessCompanies(s) {

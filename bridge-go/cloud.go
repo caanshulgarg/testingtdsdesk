@@ -1141,19 +1141,12 @@ func beatCompanies(sessions []M, open []any) []any {
 	guidOf := map[string]string{}
 	liveOf := map[string][]string{} // linkguid.go: every GUID an open company of that name has in Tally's list now
 	ownOpen := map[string]bool{}    // linkguid.go: open in a Tally a posting would use (with a GUID or none)
-	elsewhere := map[string]M{}     // linkguid.go: open (answered now) only in a Tally a posting would not use: where, why
 	listedNoBF := map[string]bool{} // 2.5.13: listed by this user's Tally without a BOOKSFROM
 	blind := ownersUntold(sessions)
 	for _, s := range sessions {
 		for _, c := range sessCompanies(s) {
 			if s["ok"] == true && s["skipped"] != true && tallyToPost(s, blind) {
 				ownOpen[companyKey(str(c["name"]))] = true
-			} else if s["ok"] == true && s["skipped"] != true && elsewhere[companyKey(str(c["name"]))] == nil {
-				why := "owner unknown" // the same words as the bridge's wait (elsewhereWords)
-				if s["mine"] == false {
-					why = "other user"
-				}
-				elsewhere[companyKey(str(c["name"]))] = M{"port": toInt(s["port"]), "why": why}
 			}
 			if g := str(c["guid"]); g != "" && tallyToPost(s, blind) {
 				guidOf[companyKey(str(c["name"]))] = g // (only from a Tally a posting would use)
@@ -1162,7 +1155,7 @@ func beatCompanies(sessions []M, open []any) []any {
 					liveOf[companyKey(str(c["name"]))] = append(liveOf[companyKey(str(c["name"]))], g)
 				}
 			}
-			if s["mine"] != false && !isTallyDate(normDate(str(c["booksFrom"]))) {
+			if s["skipped"] != true && tallyToPost(s, blind) && !isTallyDate(normDate(str(c["booksFrom"]))) {
 				listedNoBF[companyKey(str(c["name"]))] = true
 			}
 		}
@@ -1213,8 +1206,11 @@ func beatCompanies(sessions []M, open []any) []any {
 			e := row(name, ownOpen[companyKey(name)])
 			e["guid"] = ""
 			// open only elsewhere: where and why (never its GUID), so FinCom's reason matches the bridge's own words
-			if oe := elsewhere[companyKey(name)]; oe != nil && !ownOpen[companyKey(name)] {
-				e["openElsewhere"] = oe
+			// (the same port and why as the posting's words, elsewhereWords: the owner-unknown Tally first)
+			if !ownOpen[companyKey(name)] {
+				if why, ports := elsewhereOf(sessions, blind, func(c M) bool { return companyKey(str(c["name"])) == companyKey(name) }); why != "" {
+					e["openElsewhere"] = M{"port": toInt(ports[0]), "why": why}
+				}
 			}
 			cos = append(cos, e)
 		}

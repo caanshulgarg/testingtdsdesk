@@ -69,7 +69,7 @@ func mastersRetryWhyNot(company string, port int) string {
 		return fmt.Sprintf("%d reads in a row failed with the same reason (%s); asked again only by Update from Tally or Bring masters", n, str(f["why"]))
 	}
 	mrMu.Lock()
-	last, tries := mrAt[key], mrTries[key+"|"+today()]
+	last, tries := mrAt[key], mrTries[key+"|"+dcToday()]
 	mrMu.Unlock()
 	switch {
 	case tries >= mastersRetryDayMax():
@@ -106,7 +106,7 @@ func mastersRetryAfterLightCheck(company string, port int) bool {
 	f := obj(keepStateOf(company)["mastersFail"])
 	mrMu.Lock()
 	mrAt[key], mrTold[key] = nowFn(), ""
-	mrTries[key+"|"+today()]++ // review N2: every retry started counts, whatever came of it (held, left alone, failed)
+	mrTries[key+"|"+dcToday()]++ // review N2: every retry started counts, whatever came of it (held, left alone, failed)
 	mrMu.Unlock()
 	writeLog(fmt.Sprintf("Masters of %s: FinCom holds none and the last read failed (%s); the company is open in this user's own Tally, so they are read once more", company, str(f["why"])))
 	return mrStart(runReq{kind: "now", only: []string{company}, why: "masters not in FinCom after a failed read", short: true})

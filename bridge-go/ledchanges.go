@@ -135,15 +135,27 @@ func ledOwnPort(company, guid string, preferred int) (int, string) {
 	open := liveOwnOpenNow(guid, company)
 	live.mu.Unlock()
 	if !open {
+		// (the final review of next-fix-linkedguid: open only in a Tally the postings' rule leaves out: the posting's words)
+		if w := readElsewhere(openCompaniesCached(), company, guid); w != "" {
+			return 0, w
+		}
 		return 0, "the company is not open in this bridge's own Tally"
 	}
 	port, err := findCompanyPortBg(company, preferred)
 	if err != nil {
 		return 0, err.Error()
 	}
-	for _, s := range openCompaniesCached() {
-		if toInt(s["port"]) == port && s["mine"] == false {
+	ss := openCompaniesCached()
+	own := ownRule(ss)
+	for _, s := range ss {
+		if toInt(s["port"]) != port {
+			continue
+		}
+		if s["mine"] == false {
 			return 0, fmt.Sprintf("the Tally on port %d is another Windows user's", port)
+		}
+		if !own(s) {
+			return 0, elsewhereText("owner unknown", []string{fmt.Sprint(port)})
 		}
 	}
 	return port, ""

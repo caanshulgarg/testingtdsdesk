@@ -539,3 +539,37 @@ func TestMastersStopNoteEndsReading(t *testing.T) {
 		t.Fatalf("the stop note: %v", ps)
 	}
 }
+
+// the final review (nit d): the retries' day is the daily catch-up's clock (dcToday, nowFn), never the wall clock
+func TestMastersRetryDayClock(t *testing.T) {
+	_, f := mrSetup(t)
+	mrStart = func(r runReq) bool { return true }
+	mrOwnTally = func(string, int) string { return "" }
+	f.mu.Lock()
+	f.behave = mrLineError(grpListID)
+	f.mu.Unlock()
+	_ = newRun("now", "rd").step(zz, f.port, "")
+	keepReleaseLeases()
+	nowWas := nowFn
+	day := time.Now().AddDate(0, 0, 40)
+	nowFn = func() time.Time { return day }
+	t.Cleanup(func() { nowFn = nowWas })
+	mrMu.Lock()
+	mrTries[companyKey(zz)+"|"+tallyDate(day)] = mastersRetryDayMax()
+	mrMu.Unlock()
+	if why := mastersRetryWhyNot(zz, f.port); !strings.Contains(why, "times today") {
+		t.Fatalf("the day's retries not counted by the day clock: %q", why)
+	}
+	mrMu.Lock()
+	mrTries = map[string]int{}
+	mrMu.Unlock()
+	if !mastersRetryAfterLightCheck(zz, f.port) {
+		t.Fatal("not asked")
+	}
+	mrMu.Lock()
+	n := mrTries[companyKey(zz)+"|"+tallyDate(day)]
+	mrMu.Unlock()
+	if n != 1 {
+		t.Fatalf("the retry not counted on the day clock's day: %v", mrTries)
+	}
+}

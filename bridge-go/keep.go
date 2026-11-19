@@ -1337,12 +1337,7 @@ func keepWorker(r runReq) {
 	sent0 := tallySent.Load()
 	reqs := func() string { return fmt.Sprintf(" (%d request(s) to Tally)", tallySent.Load()-sent0) }
 	upToDate := map[string]bool{}
-	type oc struct {
-		name string
-		port int
-		from string
-	}
-	var open []oc
+	var open []keepOC
 	asked, held, why := false, "", ""
 	heldAt := time.Time{}
 	var heldPushAt time.Time
@@ -1428,7 +1423,7 @@ func keepWorker(r runReq) {
 			// a light update asks Tally nothing (not even which companies are open): only the copy is brought up to date
 			for _, c := range r.only {
 				if keepStateOf(c) != nil {
-					open = append(open, oc{c, 0, ""})
+					open = append(open, keepOC{c, 0, ""})
 				}
 			}
 			asked = true
@@ -1450,18 +1445,7 @@ func keepWorker(r runReq) {
 			// which companies are open: asked once a run
 			want := strs(cfg("KeepCompanies"))
 			k.holdNow() // third review T5: reading on, the company list too waits while the person types
-			for _, s := range openCompaniesWith(k.checkTC(), true) {
-				if s["skipped"] == true || s["ok"] != true {
-					continue
-				}
-				for _, c := range sessCompanies(s) {
-					n := str(c["name"])
-					if (len(want) > 0 && !contains(want, n)) || (len(r.only) > 0 && !contains(r.only, n)) {
-						continue
-					}
-					open = append(open, oc{n, toInt(s["port"]), str(c["from"])})
-				}
-			}
+			open = keepOpenOf(openCompaniesWith(k.checkTC(), true), want, r.only)
 			if len(open) == 0 && (!anyBackoff().IsZero() || tallyWanted()) {
 				// the list itself was held back, or stopped for FinCom's request: asked again when Tally is free
 				sleepOrStop(2 * time.Second)
@@ -1804,4 +1788,30 @@ func kwNowNext() bool {
 	kwMu.Lock()
 	defer kwMu.Unlock()
 	return kwPending != nil && kwPending.kind == "now"
+}
+
+// a company open in Tally for a kept-books run: its name, port and books' start
+type keepOC struct {
+	name string
+	port int
+	from string
+}
+
+// the companies a kept-books run reads: open in this user's own Tally (ownRule) that answered, among those wanted (KeepCompanies) and asked for
+func keepOpenOf(sessions []M, want, only []string) []keepOC {
+	var open []keepOC
+	own := ownRule(sessions) // (the final review of next-fix-linkedguid: one rule with the postings, linkguid.go)
+	for _, s := range sessions {
+		if s["ok"] != true || !own(s) {
+			continue
+		}
+		for _, c := range sessCompanies(s) {
+			n := str(c["name"])
+			if (len(want) > 0 && !contains(want, n)) || (len(only) > 0 && !contains(only, n)) {
+				continue
+			}
+			open = append(open, keepOC{n, toInt(s["port"]), str(c["from"])})
+		}
+	}
+	return open
 }

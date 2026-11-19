@@ -175,13 +175,24 @@ func linkedIn(sessions []M, guid, asked string) (linkLook, error) {
 // no other Tally lists it). Owner not told (while Windows tells another's): perhaps run as administrator; another Windows
 // user's: open it in this user's own Tally
 func elsewhereWords(sessions []M, guid string, blind bool) string {
+	why, ports := elsewhereOf(sessions, blind, func(c M) bool { return normGUID(str(c["guid"])) == guid })
+	if why == "" {
+		return ""
+	}
+	return ": " + elsewhereText(why, ports)
+}
+
+// the Tallies a posting (and a read) may not use that answered their list now and list a company match takes: the
+// owner-unknown ones first ("owner unknown"), else another Windows user's ("other user"); "" when none. The beat's
+// openElsewhere and the waits' words both come from here, so they name the same port and why
+func elsewhereOf(sessions []M, blind bool, match func(c M) bool) (string, []string) {
 	var untold, other []string
 	for _, s := range sessions {
 		if tallyToPost(s, blind) || s["ok"] != true || s["skipped"] == true {
 			continue // (only a Tally that answered its list now)
 		}
 		for _, c := range sessCompanies(s) {
-			if normGUID(str(c["guid"])) == guid {
+			if match(c) {
 				if s["mine"] == false {
 					other = append(other, fmt.Sprint(toInt(s["port"])))
 				} else {
@@ -193,11 +204,43 @@ func elsewhereWords(sessions []M, guid string, blind bool) string {
 	}
 	switch {
 	case len(untold) > 0:
-		return ": Tally on port " + strings.Join(untold, ", ") + " has it open, but Windows cannot tell whose Tally that is (it may be running as administrator), so nothing is sent to it; run Tally normally as your own Windows user"
+		return "owner unknown", untold
 	case len(other) > 0:
-		return ": it is open only in another Windows user's Tally (port " + strings.Join(other, ", ") + "); open it in your own Tally"
+		return "other user", other
 	}
-	return ""
+	return "", nil
+}
+
+func elsewhereText(why string, ports []string) string {
+	if why == "owner unknown" {
+		return "Tally on port " + strings.Join(ports, ", ") + " has it open, but Windows cannot tell whose Tally that is (it may be running as administrator), so nothing is sent to it; run Tally normally as your own Windows user"
+	}
+	return "it is open only in another Windows user's Tally (port " + strings.Join(ports, ", ") + "); open it in your own Tally"
+}
+
+// the final review of next-fix-linkedguid: ONE rule for reads and postings. The sessions of the list this bridge uses as
+// this user's own Tally (not skipped; tallyToPost over the same list's ownersUntold): the recorder's own-Tally record
+// (ports.go), the ledger and masters reads' port (ledOwnPort), the daily catch-up (daycatch.go), the kept-books run
+// (keep.go keepOpenOf) and the beat. A plain PC where Windows tells no owner: every Tally that answers, as before
+func ownRule(sessions []M) func(M) bool {
+	blind := ownersUntold(sessions)
+	return func(s M) bool { return s["skipped"] != true && tallyToPost(s, blind) }
+}
+
+// a read of company (its GUID when known, else its name) not asked because only a Tally the rule leaves out lists it:
+// the posting's words for it (elsewhereText); "" when none does
+func readElsewhere(sessions []M, company, guid string) string {
+	g := normGUID(guid)
+	why, ports := elsewhereOf(sessions, ownersUntold(sessions), func(c M) bool {
+		if cg := normGUID(str(c["guid"])); g != "" && cg != "" {
+			return cg == g
+		}
+		return companyKey(str(c["name"])) == companyKey(company)
+	})
+	if why == "" {
+		return ""
+	}
+	return elsewhereText(why, ports)
 }
 
 // the look itself (one company-list request per own Tally, as the posting always asked before each part); the GUID
