@@ -19,9 +19,10 @@
 --      that name), and "an owner picks" while 6. is waiting.
 --   5. 202's tally_post_take_for, changed: a posting with no stamp is stamped as it is handed out; the third look (a
 --      posting queued for no computer, 185's tally_post_unrouted_ok) asks the gate too.
---      174's tally_post_job_blocked, one case added: the client linked to another Tally company (another GUID) after the
---      posting was made: held for a person with that reason (174's hold: failed when never taken, else the stop flag),
---      never handed to the new company.
+--      174's tally_post_job_blocked, two cases added: the client linked to another Tally company (another GUID) after the
+--      posting was made; or a posting with no stamp (queued before 203) whose link changed after it was made (the link's
+--      linked_at or updated_at later than the posting: a relink, a rename, a GUID picked): held for a person with that
+--      reason (174's hold: failed when never taken, else the stop flag), never stamped with, or handed to, the new company.
 --      202's tally_post_count_for: the postings queued for no computer counted only when the gate is open (asked once per
 --      client and company), as the hand-out's third look; timed against 185's text (tests/run_migration203.py, 9.).
 --   6. "pick which company": tally_links.guid_pick (new, jsonb). A link with no GUID whose name a bridge's beat shows open
@@ -33,13 +34,15 @@
 --      gives the same one (two companies of that name open: none; then 6.).
 -- Not here (the applied 202 covers it, or it was dropped): a second wait function and posts_take's "wait" words (202's
 -- count writes the words on the posting), the 3-minute heard check (202's gate reads the bridge's latest list).
--- ADD-ONLY: two columns (if not exists), one trigger (if not there); new functions; six replaced with the same arguments
--- and their grants restated. No table, nothing dropped, no row changed. One transaction, lock_timeout 10 s, safe twice.
+-- ADD-ONLY: two columns (if not exists; the new column's check added NOT VALID, if not there), one trigger (if not
+-- there); new functions; six replaced with the same arguments and their grants restated. No table, nothing dropped, no row
+-- changed. One transaction, lock_timeout 3 s, safe twice; then the check validated in a second short transaction of its
+-- own (a scan of tally_post_jobs that blocks no writer; nothing to do once valid, or when the first did not run).
 -- Deploy: 203, then tally-ingest of this branch (posts_take sends guid; the beat keeps two open companies of one name
 -- apart), then the bridge (it posts only a posting that names the GUID).
 -- bridge. Tested on a throwaway stand: tests/run_migration203.py.
 begin;
-set local lock_timeout = '10s';
+set local lock_timeout = '3s';
 
 do $$ begin
   if to_regprocedure('public.tally_post_linked_ok(uuid,text,text,uuid,text)') is null or to_regprocedure('public.tally_post_linked_why_for(uuid,text,text,uuid,text)') is null
@@ -49,8 +52,14 @@ do $$ begin
 end $$;
 
 -- ---------------------------------------------------------------- 1. the columns
-alter table public.tally_post_jobs add column if not exists company_guid text check (company_guid is null or company_guid ~ '^[0-9a-z-]{1,100}$');
+alter table public.tally_post_jobs add column if not exists company_guid text;
 alter table public.tally_links add column if not exists guid_pick jsonb;
+-- the column's check: added NOT VALID (no scan under the table's lock), validated at the end in a transaction of its own
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'tally_post_jobs_company_guid_check' and conrelid = 'public.tally_post_jobs'::regclass) then
+    alter table public.tally_post_jobs add constraint tally_post_jobs_company_guid_check check (company_guid is null or company_guid ~ '^[0-9a-z-]{1,100}$') not valid;
+  end if;
+end $$;
 
 -- ---------------------------------------------------------------- 2. the linked GUID of a client's company
 -- stamped on each posting as it is handed out (5.)
@@ -238,6 +247,8 @@ returns text language sql stable security definer set search_path = public, pg_t
     when exists (select 1 from tally_split_links x where x.firm_id = j.firm_id and x.book_id = tc.book_id and x.client_id = j.client_id and x.state = 'linked')
       then 'Not posted: ' || j.company || ' is now the earlier-years company of ' || nm || ' in Tally; postings go to its current company only. Nothing of it was sent to Tally.'
     when j.company_guid is not null and tally_post_link_guid(j.firm_id, j.client_id, j.company) is not null and tally_post_link_guid(j.firm_id, j.client_id, j.company) <> j.company_guid
+      then 'The client was linked to another Tally company after this posting was made: check the entries and post again. Nothing of it was sent to Tally.'
+    when j.company_guid is null and exists (select 1 from tally_links x join tally_companies t on t.firm_id = x.firm_id and t.book_id = x.book_id where x.firm_id = j.firm_id and x.client_id = j.client_id and x.state = 'linked' and lower(tally_nm(t.company)) = lower(tally_nm(j.company)) and greatest(x.linked_at, x.updated_at) > j.created_at)
       then 'The client was linked to another Tally company after this posting was made: check the entries and post again. Nothing of it was sent to Tally.'
     when not l.posting_allowed
       then 'Not posted: posting into Tally was stopped for ' || nm || ' after this was queued. Nothing of it was sent to Tally. Allow it on the Tally page (the company''s ⋯ Post entries here), then post again.'
@@ -444,4 +455,15 @@ $function$;
 revoke all on function public.tally_link_guid(uuid, text, uuid) from public, anon, authenticated;
 grant execute on function public.tally_link_guid(uuid, text, uuid) to service_role;
 
+commit;
+
+-- ---------------------------------------------------------------- the column's check validated (its own transaction)
+-- a scan that takes no lock a writer waits on; nothing to do when already valid, or when the transaction above did not run
+begin;
+set local lock_timeout = '3s';
+do $$ begin
+  if exists (select 1 from pg_constraint where conname = 'tally_post_jobs_company_guid_check' and conrelid = 'public.tally_post_jobs'::regclass and not convalidated) then
+    alter table public.tally_post_jobs validate constraint tally_post_jobs_company_guid_check;
+  end if;
+end $$;
 commit;

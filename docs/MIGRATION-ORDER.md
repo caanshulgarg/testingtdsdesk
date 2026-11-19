@@ -1163,7 +1163,7 @@ safe twice; service_role only, granted explicitly. **After 201.** No bridge chan
 
 **203, post linked guid** (19-Nov-2026, branch `next-fix-linkedguid`, the owner's hard rule: FinCom Bridge posts only into
 the Tally company the client is linked to, identified by the company's GUID; **written, not run yet**; file md5
-c3877ebb8ca43a65cc242b27ee264b24): `server/tally-cloud/migration-203-post-linked-guid.sql`. **After the applied 202**
+85c0a3bace3f35495f1dc7e9ea159f7a): `server/tally-cloud/migration-203-post-linked-guid.sql`. **After the applied 202**
 (`migration-202-post-recheck.sql`); it refuses to run without it (no `tally_post_linked_ok` / `tally_post_recheck_job`).
 This branch's own first draft of a 202 (`migration-202-post-linked-guid.sql`, never run) is withdrawn: what the applied 202
 covers (the hand-out and the beat's count gated on the linked GUID open, the words on the posting) is dropped; the rest is
@@ -1174,14 +1174,19 @@ BEFORE INSERT trigger `tally_post_jobs_guid`; one queued before 203 is stamped a
 Replaced with the same arguments: 202's `tally_post_linked_ok` (the single linked GUID open, and no other open company of
 that name in the bridge's list), 202's `tally_post_linked_why_for` (two more plain reasons; "an owner picks"), 202's
 `tally_post_take_for` (stamps a posting with none; the third look asks the gate too), 202's `tally_post_count_for` (the
-postings queued for no computer counted only when the gate is open, once per client and company; timed against 185's text
-at 1,000 + 1,000 waiting postings: never slower), 174's `tally_post_job_blocked` (one case: the client linked to another
-Tally company after the posting was made: held for a person, "The client was linked to another Tally company after this
-posting was made: check the entries and post again"; never handed to the new company), 155's `tally_link_guid_fill` (one
+postings queued for no computer counted only when the gate is open, once per client and company; timed against 202's text
+at 1,000 + 1,000 waiting postings: never slower), 174's `tally_post_job_blocked` (two cases: the client linked to another
+Tally company after the posting was made, or a posting with no stamp whose link changed after it was made, the link's
+`linked_at` or `updated_at` later than the posting: held for a person, "The client was linked to another Tally company
+after this posting was made: check the entries and post again"; never stamped with or handed to the new company), 155's `tally_link_guid_fill` (one
 line: the marks), 110's `tally_link_guid` (a GUID from the beats only when every beat naming the company gives the same
-one). No table, nothing dropped, no row changed. One transaction, lock_timeout 10 s, safe twice. **Deploy: 203, then
+one). No table, nothing dropped, no row changed. One transaction, lock_timeout 3 s, safe twice; the new column's check is added
+NOT VALID there and validated in a second short transaction of its own. **Deploy: 203, then
 tally-ingest of this branch** (posts_take sends `guid`; the beat's `cos` keeps two open companies of one name apart;
 posts_update keeps the port and the company), **then the bridge**: a posting from FinCom's queue that names no GUID waits
-("Waiting for FinCom to name the linked company") and nothing is sent; nothing is guessed by name. Tested:
+("Waiting for FinCom to name the linked company") and nothing is sent; nothing is guessed by name. tally-ingest's post_ok
+also stops a posting whose stamp is no longer the link's GUID. The web app sends the link's GUID with a posting straight to
+the bridge (`guid` on /jobs and /import, `companyGuid` on /unpost); a link with no GUID sends nothing and says why; the
+bridge refuses a browser posting that names no GUID ("Update FinCom: ..."). Tested:
 `tests/run_migration203.py` (RED_WITHOUT_203=1 fails), `tests/run_migration202.py`; bridge: `go test ./...`
 (linkguid_test.go, linkguid_closed_test.go).
