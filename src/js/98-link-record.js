@@ -28,6 +28,12 @@ const LinkRec = {
   // the firm's records, read again after 15 s (TLight asks every 30 s); a cloud without the table: missing, as before
   load(force){
     if (!this.on()) return Promise.resolve(null);
+    // (forced while a read is in flight: that read may have begun before what the caller just changed; it is waited for,
+    // then one fresh read for every forced caller waiting, never the one in flight)
+    if (this.st.p && force) {
+      if (!this.st.pf){ const pf = this.st.pf = this.st.p.then(() => {}, () => {}).then(() => { if (this.st.pf === pf) this.st.pf = null; return this.load(true); }); }
+      return this.st.pf;
+    }
     if (this.st.p) return this.st.p;
     if (!force && this.st.rows && Date.now() - this.st.at < 15000) return Promise.resolve(this.st.rows);
     // (the data locations: the same company in two places, tally_link_places; none on a cloud without them)

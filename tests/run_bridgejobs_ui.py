@@ -68,6 +68,18 @@ with sync_playwright() as p:
     pg.goto("http://localhost:8153/"); pg.wait_for_timeout(1500); pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(500)
     pg.evaluate("() => { Bridge.setCfg({key: 'K'.repeat(32)}); }"); pg.evaluate("Bridge.refresh()")
     ok(pg.evaluate("Bridge.up() && Bridge.st.version") == "1.12.0", "bridge 1.12 seen")
+    # the final review (item 2): a forced read of the link records while a read is in flight waits for it, then reads afresh
+    # (never the in-flight read, which may have begun before what the caller just changed)
+    lf = pg.evaluate("""async () => { const L = LinkRec, was = [L.on, TCloud.restPages, L.st.rows, L.st.at, L.st.missing], calls = []; let rel = null;
+      L.on = () => true; L.st.missing = false; L.st.p = null;
+      TCloud.restPages = (u) => { if (!/^tally_links\\?/.test(u)) return Promise.resolve([]); const n = calls.length; calls.push(n);
+        return n === 0 ? new Promise((r) => { rel = () => r([{book_id: 'old'}]); }) : Promise.resolve([{book_id: 'new'}]); };
+      try { const a = L.load(); await new Promise((r) => setTimeout(r, 0)); const b = L.load(true), c = L.load(true), same = a === b, n0 = calls.length;
+        if (rel) rel(); const ra = await a, rb = await b, rc = await c;
+        return {same, n0, n: calls.length, a: ra.map((x) => x.book_id), b: rb.map((x) => x.book_id), c: rc.map((x) => x.book_id)}; }
+      finally { [L.on, TCloud.restPages] = was; L.st.p = null; L.st.rows = was[2]; L.st.at = was[3]; L.st.missing = was[4]; } }""")
+    ok(lf["same"] is False and lf["n0"] == 1 and lf["n"] == 2 and lf["a"] == ["old"] and lf["b"] == ["new"] and lf["c"] == ["new"],
+       "a forced link read while one is in flight: waits for it, then one fresh read (%s)" % lf)
     # the client's link to ZZ, with its GUID (LinkRec's record, as FinCom's cloud gives it)
     LINK = "(g) => { let co = CO(); if (!co){ co = newCompany({name: 'ZZ'}); S.companies[co.id] = co; S.data[co.id] = {parties: {}, entries: {}, loaded: true}; co.stats = {}; S.coId = co.id; choiceConfirm(co, 'postTo', 'ZZ'); } LinkRec.on = () => true; LinkRec.st.missing = false; LinkRec.st.err = ''; LinkRec.load = async () => LinkRec.st.rows; LinkRec.st.rows = [{book_id: 'b-zz', client_id: co.id, company_guid: g, company_name: 'ZZ', state: 'linked', posting_allowed: true}]; return co.id; }"
     ok(bool(pg.evaluate(LINK, LG)), "a client linked to ZZ")
@@ -104,6 +116,14 @@ with sync_playwright() as p:
     n = pg.evaluate("""async () => { if (typeof ClosedP !== "object") return -1; const was = ClosedP.gate; let asked = 0; ClosedP.gate = async (p) => { asked++; return []; };
       try { await Bridge.post({company: "ZZ", masters: [], vouchers: [{id: "c1", xml: "<x/>"}]}); } finally { ClosedP.gate = was; } return asked; }""")
     ok(n == 0 and not M["bodies"], "a link with no GUID: the closed-period question is not asked, nothing sent (%s)" % n)
+    # the final review (nit e): every entry with no proper date: refused here with its own reason first (nothing sent,
+    # nothing asked), whatever the link says; a posting with one good entry keeps the link check first
+    pg.evaluate(LINK, ""); M["bodies"].clear()
+    bd = pg.evaluate("""async () => { const r = await Bridge.post({company: "ZZ", masters: [], vouchers: [{id: "bd1", xml: "<VOUCHER><DATE>20261345</DATE></VOUCHER>"}, {id: "bd2", xml: "<VOUCHER></VOUCHER>"}]});
+      const r2 = await Bridge.post({company: "ZZ", masters: [], vouchers: [{id: "bd3", xml: "<VOUCHER><DATE>20261345</DATE></VOUCHER>"}, {id: "bd4", xml: "<VOUCHER><DATE>20260701</DATE></VOUCHER>"}]});
+      return [r.results.map((x) => [x.id, x.ok, x.message || ""]), r2.results.map((x) => [x.id, x.ok, x.message || ""])]; }""")
+    ok(not M["bodies"] and [x[0] for x in bd[0]] == ["bd1", "bd2"] and "not a valid date" in bd[0][0][2] and "has no date" in bd[0][1][2]
+       and all("no company ID" in x[2] for x in bd[1]), "every entry with no proper date: its own reason, before the link's; one good entry: the link's reason (%s)" % bd)
     # each reason is the call's own (linkGuid returns it with the result), never one shared between calls
     r2 = pg.evaluate("""async () => { const a = linkGuid(CO(), 'ZZ'), b = linkGuid(CO(), 'NOT ZZ'); return [await a, await b]; }""")
     ok(isinstance(r2, list) and all(isinstance(x, dict) for x in r2) and r2[0].get("guid") == "" and "no company ID" in r2[0].get("why", "") and "is not linked to NOT ZZ" in r2[1].get("why", ""), "the reasons per call: %s" % r2)
@@ -135,6 +155,18 @@ with sync_playwright() as p:
       try { await unpostFromTally('bill', {id: 'u1', tally: {guid: 'v-guid', vchType: 'Journal', vchDate: '20260701', company: 'ZZ'}}, CO().id); } finally { [toast, askConfirm, ensureTallyCompany] = was; } }""")
     ub = [b for pth, b in M["bodies"] if pth == "/unpost"]
     ok(len(ub) == 1 and ub[0].get("companyGuid") == LG and ub[0].get("guid") == "v-guid", "a deletion names the linked company's GUID as companyGuid: %s" % ub)
+    # the final review (nit c): removing Tally duplicates asks the link of ONE client, taken before the confirm, both times
+    # (another client opened while the confirm is up changes nothing)
+    pg.evaluate(LINK, LG); M["bodies"].clear()
+    rd = pg.evaluate("""async () => { const was = [toast, askConfirm, linkGuid, S.bank, S.dupFind, saveBank, wideCheckKey, render], seen = []; const cid = CO().id;
+      saveBank = () => {}; wideCheckKey = () => 'made-up-key'; render = () => {};
+      S.bank = Object.assign({}, S.bank || {}, {cid, rows: (S.bank && S.bank.rows) || []});
+      S.dupFind = {company: 'ZZ', extra: [{guid: 'd-guid', type: 'Journal', date: '20260701', number: '1'}], wrongDate: [], badOnly: [], amountOf: () => 0};
+      toast = () => {}; linkGuid = async (co, n) => { seen.push(co ? co.id : null); return was[2](co, n); };
+      askConfirm = async () => { S.bank = Object.assign({}, S.bank, {cid: 'made-up-other-client'}); return true; };
+      try { await removeTallyDuplicates('extra'); } finally { [toast, askConfirm, linkGuid] = was; S.bank = was[3]; S.dupFind = was[4]; [saveBank, wideCheckKey, render] = was.slice(5); }
+      return {seen, cid}; }""")
+    ok(rd["seen"] == [rd["cid"], rd["cid"]] and any(pth == "/unpost" for pth, b in M["bodies"]), "removing duplicates: the same client's link asked before and after the confirm (%s)" % rd)
     M["jobs"].clear()
 
     M["seen"].clear(); M["dropPost"] = 1

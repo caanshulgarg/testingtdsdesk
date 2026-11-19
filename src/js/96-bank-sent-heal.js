@@ -334,14 +334,14 @@ async function removeTallyDuplicates(which){
   const d = S.dupFind;
   const list = d ? (which === "wrong" ? d.wrongDate : d.extra) : [];
   if (!list.length) return;
-  let lg = await linkGuid(CO(B().cid), d.company);   // the linked company's GUID; none: nothing is sent, said first
+  const b = B(), cid = b.cid;   // (one client, taken before the confirm: both link checks are its own)
+  let lg = await linkGuid(CO(cid), d.company);   // the linked company's GUID; none: nothing is sent, said first
   if (!lg.guid){ toast(lg.why); return; }
   const what = which === "wrong" ? list.length + " wrong-date entr" + (list.length === 1 ? "y" : "ies") : list.length + " extra cop" + (list.length === 1 ? "y" : "ies");
   const a = await askConfirm({title: "Remove " + what + " from " + d.company + "?", ok: "Remove them",
     body: '<p class="note">' + (which === "wrong" ? "Only the copies under the wrong date are removed. The lines then show as not posted, and Post puts them in with the right date." : "Only the later copy of each double entry is removed; the first stays.") + " This cannot be undone from FinCom, so take a Tally backup first if you have not.</p>"});
   if (!a || which === "wrong" && !(await postClearReady())) return;
-  const b = B();
-  { const again = await linkGuid(CO(b.cid), d.company); if (again.guid !== lg.guid){ toast(again.why || LINK_UNREAD); return; } lg = lg.guid; }   // (asked again right before)
+  { const again = await linkGuid(CO(cid), d.company); if (again.guid !== lg.guid){ toast(again.why || LINK_UNREAD); return; } lg = lg.guid; }   // (asked again right before)
   let ok = 0, bad = 0;
   const gone = new Set();
   for (let i = 0; i < list.length; i++){

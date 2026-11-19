@@ -220,6 +220,13 @@ const Bridge = {
     // 19-Nov-2026 (the owner's rule): straight to the bridge only with the linked company's GUID and a bridge that
     // checks it, else nothing is sent (asked before the closed-period question and any new ledger's confirm; asked again
     // right before the write)
+    // (the final review: every entry without a proper date, or dated before the books begin: answered here first, nothing
+    // sent and nothing asked; a posting with any other entry keeps the order below)
+    const dateWhy = it => { const open = (this.st.open || []).find(o => o.name === payload.company), booksFrom = open && /^\d{8}$/.test(String(open.from || "")) ? String(open.from) : "";
+      const why = voucherDateProblem(it.xml), d = (String(it.xml || "").match(/^\s*<VOUCHER\b[\s\S]*?<DATE>(\d{8})<\/DATE>/) || [])[1];
+      return why || (d && booksFrom && d < booksFrom ? "Dated " + fmtDate(tallyDate(d)) + ", before " + payload.company + "'s books begin (" + fmtDate(tallyDate(booksFrom)) + "), so it was not sent. Open the company that holds this period in Tally." : ""); };
+    { const all = [].concat(payload.masters || [], payload.vouchers || []);
+      if (all.length && all.every(dateWhy)) return {ok: true, company: payload.company, results: all.map(it => ({id: it.id, ok: false, message: dateWhy(it)}))}; }
     const lg = viaZoho || viaCloud ? {} : await linkGuid(coP, payload.company);
     if (!viaZoho && !viaCloud && !lg.guid) return hold(lg.why);
     // nothing without a proper date, or dated before the company's books begin, ever goes to Tally: it is answered here
@@ -233,12 +240,8 @@ const Bridge = {
         payload = Object.assign({}, payload, {vouchers: payload.vouchers.filter(v => !ids.has(v.id))});
       }
     }
-    const open = (this.st.open || []).find(o => o.name === payload.company);
-    const booksFrom = open && /^\d{8}$/.test(String(open.from || "")) ? String(open.from) : "";
     const keep = list => [].concat(list || []).filter(it => {
-      let why = voucherDateProblem(it.xml);
-      const d = (String(it.xml || "").match(/^\s*<VOUCHER\b[\s\S]*?<DATE>(\d{8})<\/DATE>/) || [])[1];
-      if (!why && d && booksFrom && d < booksFrom) why = "Dated " + fmtDate(tallyDate(d)) + ", before " + payload.company + "'s books begin (" + fmtDate(tallyDate(booksFrom)) + "), so it was not sent. Open the company that holds this period in Tally.";
+      const why = dateWhy(it);
       if (why) refused.push({id: it.id, ok: false, message: why});
       return !why;
     });
