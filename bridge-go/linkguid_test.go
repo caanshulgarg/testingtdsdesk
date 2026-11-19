@@ -274,7 +274,9 @@ func TestLinkedGUIDChangedMidJob(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p := lgWaitFor(t, str(j["id"]), "the part unconfirmed", func(p M) bool { return lgCount(p, func(r M) bool { return r["unconfirmed"] == true }) == 10 })
+	p := lgWaitFor(t, str(j["id"]), "the part unconfirmed", func(p M) bool {
+		return lgCount(p, func(r M) bool { return r["unconfirmed"] == true }) == 10 && str(p["status"]) == "waiting" // (the results are written a moment before the wait)
+	})
 	if str(p["status"]) != "waiting" || str(p["message"]) != "Open ZZ TEST in Tally to post" {
 		t.Fatalf("%v %q", p["status"], p["message"])
 	}
