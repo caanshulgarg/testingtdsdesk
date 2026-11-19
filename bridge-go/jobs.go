@@ -104,6 +104,18 @@ func activeJobs() []any {
 	return out
 }
 
+var jobLocks sync.Map // job id -> *sync.Mutex
+
+func jobLock(id string) func() {
+	m, _ := jobLocks.LoadOrStore(id, &sync.Mutex{})
+	mu := m.(*sync.Mutex)
+	mu.Lock()
+	return mu.Unlock
+}
+
+// test seam: called between reading a handed-again posting's payload and writing the GUID into it
+var jobPayHook = func() {}
+
 // POST /jobs: {jobId, company, port, masters, vouchers: [{id, xml, bank?}], released}
 func newPostJob(pl M) (M, error) {
 	if err := postingAllowed(); err != nil {
@@ -117,6 +129,9 @@ func newPostJob(pl M) (M, error) {
 	if err != nil {
 		return nil, err
 	}
+	// one hand-out of a posting at a time: its payload read and written again by one only (two hand-outs at the same
+	// moment naming two GUIDs: the first one's is taken, the other refused)
+	defer jobLock(id)()
 	if exists(filepath.Join(dir, "progress.json")) {
 		// linkguid.go: a posting this computer has (a browser's, or an earlier hand-out) handed out again names the linked
 		// GUID: the payload takes it when it has none (also while the posting waits for it: its worker reads it each
@@ -125,6 +140,7 @@ func newPostJob(pl M) (M, error) {
 		if g := normGUID(str(pl["guid"])); g != "" {
 			pr := readProgress(dir)
 			if pay := readObjFileBak(filepath.Join(dir, "payload.json")); pay != nil {
+				jobPayHook()
 				had := normGUID(str(pay["guid"]))
 				for _, w := range []string{had, normGUID(str(pr["companyGuid"])), normGUID(str(pr["windowGuid"]))} {
 					if w != "" && w != g {
@@ -663,6 +679,15 @@ func jobWorker(dir string) {
 				}
 			}
 			if why == nil && guid == "" {
+				if !fromCloud {
+					// linkguid.go: a browser's posting naming no GUID ends here: each entry not sent (Retry is safe),
+					// nothing asked of Tally, nothing left active (the browser's page is from before the rule)
+					for _, it := range itemsToSend(all, results) {
+						results = append(results, M{"id": it["id"], "kind": it["kind"], "ok": false, "notSent": true, "state": "failed", "message": noBrowserGUID})
+					}
+					finish("failed", noBrowserGUID)
+					return false
+				}
 				why = noGUIDWait(fromCloud) // linkguid.go: never posted, nothing asked of Tally
 			}
 			if why == nil {

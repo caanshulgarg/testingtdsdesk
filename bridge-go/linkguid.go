@@ -46,8 +46,8 @@ const linkedElsewhere = "The client was linked to another Tally company after th
 const noFinComGUID = "Waiting for FinCom to name the linked company"
 
 // a browser's posting (/jobs, /import, /unpost) that names no GUID (a FinCom page from before the rule): never sent; a
-// job waits for it (handed again with the GUID, it goes on by itself)
-const noBrowserGUID = "Update FinCom: this posting does not name the linked Tally company; nothing was sent. Reload FinCom and post again"
+// job ends failed at once, each entry not sent (Retry, or the page reloaded and posted again, is safe)
+const noBrowserGUID = "Update FinCom: this request does not name the linked Tally company, so nothing was sent to Tally. Reload FinCom, then post or remove it again"
 
 // the wait for a posting that names no GUID
 func noGUIDWait(fromCloud bool) *linkWait {
@@ -148,7 +148,7 @@ func linkedIn(sessions []M, guid, asked string) (linkLook, error) {
 	case stale:
 		return linkLook{}, &linkWait{"stale", openToPost(asked) + ": Tally did not give its company list just now; asked again by itself", hung}
 	case len(hits) == 0:
-		return linkLook{}, &linkWait{kind: "notopen", text: openToPost(asked)}
+		return linkLook{}, &linkWait{kind: "notopen", text: openToPost(asked) + elsewhereWords(sessions, guid, blind)}
 	case len(hits) > 1:
 		var p []string
 		for _, h := range hits {
@@ -169,6 +169,35 @@ func linkedIn(sessions []M, guid, asked string) (linkLook, error) {
 		return linkLook{}, &linkWait{kind: "samename", text: openToPost(asked) + ": two open companies in Tally are named " + h.name + "; close the one that is not the client's"}
 	}
 	return h, nil
+}
+
+// the linked GUID not open in a Tally a posting may use, but listed by one it may not: where, and what to do ("" when
+// no other Tally lists it). Owner not told (while Windows tells another's): perhaps run as administrator; another Windows
+// user's: open it in this user's own Tally
+func elsewhereWords(sessions []M, guid string, blind bool) string {
+	var untold, other []string
+	for _, s := range sessions {
+		if tallyToPost(s, blind) {
+			continue
+		}
+		for _, c := range sessCompanies(s) {
+			if normGUID(str(c["guid"])) == guid {
+				if s["mine"] == false {
+					other = append(other, fmt.Sprint(toInt(s["port"])))
+				} else {
+					untold = append(untold, fmt.Sprint(toInt(s["port"])))
+				}
+				break
+			}
+		}
+	}
+	switch {
+	case len(untold) > 0:
+		return ": Tally on port " + strings.Join(untold, ", ") + " has it open, but Windows cannot tell whose Tally that is (it may be running as administrator), so nothing is sent to it; run Tally normally as your own Windows user"
+	case len(other) > 0:
+		return ": it is open only in another Windows user's Tally (port " + strings.Join(other, ", ") + "); open it in your own Tally"
+	}
+	return ""
 }
 
 // the look itself (one company-list request per own Tally, as the posting always asked before each part); the GUID

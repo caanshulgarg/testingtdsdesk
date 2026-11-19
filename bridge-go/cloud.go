@@ -1140,12 +1140,16 @@ func beatCompanies(sessions []M, open []any) []any {
 	}
 	guidOf := map[string]string{}
 	liveOf := map[string][]string{} // linkguid.go: every GUID an open company of that name has in Tally's list now
+	ownOpen := map[string]bool{}    // linkguid.go: open in a Tally a posting would use (with a GUID or none)
 	listedNoBF := map[string]bool{} // 2.5.13: listed by this user's Tally without a BOOKSFROM
 	blind := ownersUntold(sessions)
 	for _, s := range sessions {
 		for _, c := range sessCompanies(s) {
-			if g := str(c["guid"]); g != "" {
-				guidOf[companyKey(str(c["name"]))] = g
+			if s["ok"] == true && s["skipped"] != true && tallyToPost(s, blind) {
+				ownOpen[companyKey(str(c["name"]))] = true
+			}
+			if g := str(c["guid"]); g != "" && tallyToPost(s, blind) {
+				guidOf[companyKey(str(c["name"]))] = g // (only from a Tally a posting would use)
 				// only from a Tally a posting would use (this user's own; linkguid.go tallyToPost)
 				if s["ok"] == true && s["skipped"] != true && tallyToPost(s, blind) && !contains(liveOf[companyKey(str(c["name"]))], g) {
 					liveOf[companyKey(str(c["name"]))] = append(liveOf[companyKey(str(c["name"]))], g)
@@ -1194,9 +1198,14 @@ func beatCompanies(sessions []M, open []any) []any {
 		done[companyKey(name)] = true
 		// linkguid.go: an open company says the GUID Tally gives it now; two open companies of one name are two rows
 		// (each its GUID), so FinCom never takes one for the other
+		// none: open only in a Tally a posting would not use (another Windows user's, or one whose owner Windows cannot
+		// tell), or this user's Tally gives it no GUID: said with no GUID (never the one held here or another Tally's),
+		// and not open unless this user's Tally has it
 		gs := liveOf[companyKey(name)]
 		if len(gs) == 0 {
-			cos = append(cos, row(name, true))
+			e := row(name, ownOpen[companyKey(name)])
+			e["guid"] = ""
+			cos = append(cos, e)
 		}
 		for _, g := range gs {
 			e := row(name, true)
@@ -1540,7 +1549,20 @@ func cloudPostTakeJobs() (checks []any) {
 		v, err := newPostJob(M{"jobId": id, "company": str(j["company"]), "guid": str(j["guid"]), "masters": arr(pl["masters"]), "vouchers": arr(pl["vouchers"]), "released": arr(j["released"]), "resendOnly": arr(j["resendOnly"]),
 			"fromCloud": true}) // 2.5.15 item 1: FinCom is asked before each part is sent
 		if err != nil {
-			invokeCloud(M{"kind": "posts_update", "id": id, "status": "failed", "done": 0, "message": "The Tally computer could not start this posting: " + err.Error(), "results": []any{}}, 30)
+			// linkguid.go: refused for another GUID than the one it was started for or posted into: what this computer
+			// already sent of it goes with the refusal (never told "nothing reached Tally" for entries that did)
+			res, done := []any{}, 0
+			if err.Error() == linkedElsewhere {
+				if dir, e := jobDir(id); e == nil {
+					if v := jobView(dir); v != nil {
+						res, done = arr(v["results"]), toInt(v["done"])
+						if res == nil {
+							res = []any{}
+						}
+					}
+				}
+			}
+			invokeCloud(M{"kind": "posts_update", "id": id, "status": "failed", "done": done, "message": "The Tally computer could not start this posting: " + err.Error(), "results": res}, 30)
 			continue
 		}
 		cp[id] = ""

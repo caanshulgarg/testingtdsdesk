@@ -3,7 +3,7 @@ package main
 // The owner's hard rule (19-Nov-2026), the review of next-fix-linkedguid: a posting goes only into the Tally company the
 // client is linked to, by the company's GUID, never by its name. Made-up companies and a fake Tally only:
 //   - a browser's posting (/jobs, /import, /unpost) that names no GUID is never sent, even with a GUID held here for the
-//     name: it waits ("Update FinCom: ...") or is refused; the same posting handed again with the GUID goes on by itself
+//     name: it ends failed ("Update FinCom: ...", each entry not sent) or is refused; Retry with the GUID posts it
 //   - a posting handed back for another GUID than the one its progress names (its payload naming none) is refused
 //   - a Tally whose owner Windows cannot tell, while Windows tells the owner of another Tally: never posted to
 //   - Tally's reply with exceptions (or ignored) and nothing created: needs review, kept on this computer's record
@@ -31,8 +31,8 @@ func lgWaitLong(t *testing.T, id, what string, ok func(p M) bool) M {
 	return nil
 }
 
-// a browser's job naming no GUID: never sent (the GUID held here for the name is not used); handed again with the GUID
-// while it waits: it goes on by itself
+// a browser's job naming no GUID: never sent (the GUID held here for the name is not used): failed, each entry not
+// sent; Retry with the GUID posts it; another GUID after that is refused
 func TestLinkedBrowserJobNoGUID(t *testing.T) {
 	_, l := lgSetup(t)
 	noteCompanyGUID(zz, lgGUID)
@@ -41,21 +41,20 @@ func TestLinkedBrowserJobNoGUID(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p := lgWaitFor(t, str(j["id"]), "the wait", func(p M) bool { return str(p["status"]) == "waiting" })
+	p := lgWaitFor(t, str(j["id"]), "the end", func(p M) bool { return str(p["status"]) == "failed" })
 	time.Sleep(300 * time.Millisecond)
-	if l.n() != 0 || !strings.HasPrefix(str(p["message"]), "Update FinCom: this posting does not name the linked Tally company") {
+	if l.n() != 0 || !strings.HasPrefix(str(p["message"]), "Update FinCom: this request does not name the linked Tally company") {
 		t.Fatalf("a browser's posting with no GUID: %d imports, %q", l.n(), p["message"])
 	}
-	if !jobAlive("job-lg-browser-noguid") {
-		t.Fatal("the posting is not waiting")
+	if jobAlive("job-lg-browser-noguid") {
+		t.Fatal("the posting is still active")
 	}
-	// another GUID than none is never written over; the GUID handed while it waits is taken
 	if _, err := newPostJob(M{"jobId": "job-lg-browser-noguid", "company": zz, "guid": lgGUID, "vouchers": vs}); err != nil {
 		t.Fatal(err)
 	}
 	p = waitJob(t, "job-lg-browser-noguid")
 	if str(p["status"]) != "done" || l.n() != 1 || str(p["companyGuid"]) != lgGUID {
-		t.Fatalf("handed again with the GUID: %v %q, %d imports", p["status"], p["message"], l.n())
+		t.Fatalf("Retry with the GUID: %v %q, %d imports", p["status"], p["message"], l.n())
 	}
 	if _, err := newPostJob(M{"jobId": "job-lg-browser-noguid", "company": zz, "guid": "co-guid-new", "vouchers": vs}); err == nil ||
 		!strings.HasPrefix(err.Error(), "The client was linked to another Tally company after this posting was made") {
@@ -69,7 +68,7 @@ func TestLinkedBrowserImportUnpostNoGUID(t *testing.T) {
 	f, l := lgSetup(t)
 	noteCompanyGUID(zz, lgGUID)
 	asked := f.n("TDSDeskCompanies")
-	if _, err := invokeImport(M{"company": zz, "vouchers": lgVouchers("x", 2)}); err == nil || !strings.HasPrefix(err.Error(), "Update FinCom: this posting does not name the linked Tally company") || l.n() != 0 {
+	if _, err := invokeImport(M{"company": zz, "vouchers": lgVouchers("x", 2)}); err == nil || !strings.HasPrefix(err.Error(), "Update FinCom: this request does not name the linked Tally company") || l.n() != 0 {
 		t.Fatalf("/import with no GUID: %v, %d imports", err, l.n())
 	}
 	code, res := callLocal(t, "POST", "/import", "", `{"company":"`+zz+`","vouchers":[{"id":"x9","xml":"<VOUCHER/>"}]}`)
