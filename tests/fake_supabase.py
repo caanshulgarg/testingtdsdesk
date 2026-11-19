@@ -50,6 +50,7 @@ SETTLE_ITSELF = [None]    # migration 200: what tally_post_settle_itself answers
 PATCH_GUARD = {}          # table -> fn(old_row, patch) -> words or None: a trigger refusing the update (P0001), as 36b's resend guard
 JOB_ACCEPTED = [None]     # fn(args) -> tally_post_job_accepted's answer (None: nothing accepted)
 RPC_DELAY = {}            # function -> seconds it waits before it answers (a database that hangs on that call)
+LINK_GUID = {}            # migration 203: tally_post_link_guid's answer per (firm, client, company) (none: null)
 RESEND_OK = {}            # migration 200: tally_post_resend_ok's words for a posting (none: it may send; its SQL: run_post_never_twice.py)
 LEASE7_MISSING = [False]  # migration 55 not run: the 7-argument tally_lease_take (p_purpose) is not there (PGRST202 for that call only)
 PK = {"gst_sessions": ["firm_id", "gstin"], "gst_filings": ["firm_id", "gstin", "form", "period"], "gst_returns": ["firm_id", "gstin", "form", "period"], "gst_einv_accounts": ["firm_id", "gstin"], "gst_einvoices": ["firm_id", "gstin", "doc_key"]}
@@ -87,6 +88,7 @@ def rpc(fn, a):
         return dict(SETTLE_ITSELF[0] or {"ok": True, "job": a.get("p_job"), "held": False}, job=a.get("p_job"))
     if fn == "tally_post_settle_resend": return {"ok": True, "job": a.get("p_job"), "resent": False}
     if fn == "tally_post_resend_ok": return RESEND_OK.get(a.get("p_job"))
+    if fn == "tally_post_link_guid": return LINK_GUID.get((a.get("p_firm"), a.get("p_client"), a.get("p_company")))
     if fn == "tally_post_job_accepted": return JOB_ACCEPTED[0](a) if JOB_ACCEPTED[0] else None
     if fn == "mfa_ok": return True
     if fn == "auth_rate_hit":   # migration-112: allowed (and counted) while the key has under max tries in the window

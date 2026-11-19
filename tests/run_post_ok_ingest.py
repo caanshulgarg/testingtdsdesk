@@ -20,6 +20,9 @@ post_ok, the bridge's read-only question before it sends each part of a posting 
  10. (2.5.16) posts_update from a bridge in test mode: refused, its acceptances (a posting of this firm only) stamped first.
  11. (2.5.16) key_check: known for a bridge id this computer key holds, not for another, and asking binds nothing;
      never without a Windows user recorded and said; at most 30 an hour for one key.
+ 12. (migration 203, the owner's rule) a posting stamped with the linked GUID (company_guid) while the client's link now
+     has another (tally_post_link_guid): post false, stop "stopped", 203's words; the same GUID: post true; the link's GUID
+     not had (an error): refused, never allowed; a cloud without 203 (no company_guid): read without it, as before.
 Needs Deno (DENO, default: the deno on the PATH or /opt/deno/deno)."""
 import os, sys, json, time, hashlib, subprocess, urllib.request, urllib.error, shutil, threading
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
@@ -180,6 +183,26 @@ try:
                "%s: %s (%s %s; X1 %s; %s)" % (jid, want, c, r, x_.get("state"), j_["message"][:90]))
         F.JOB_ACCEPTED[0] = None
     else: ok(False, "the put-back against the real resend guard (no PostgreSQL stand)")
+    print("== 12. the client linked to another Tally company since the posting was stamped (203)")
+    LINKED = "The client was linked to another Tally company after this posting was made: check the entries and post again"
+    F.T["tally_post_jobs"].append(job("p121", "running", client_id="c1", company_guid="g-old-0001"))
+    F.T["tally_post_jobs"].append(job("p122", "running", client_id="c1", company_guid="g-same-001"))
+    F.LINK_GUID[(FIRM, "c1", "ZZ HERON CO")] = "g-same-001"
+    c, r = ask("p121")
+    ok(c == 200 and r.get("post") is False and r.get("stop") == "stopped" and str(r.get("error") or "").startswith(LINKED), "another GUID: stopped, 203's words (%s %s)" % (c, r))
+    c, r = ask("p122")
+    ok(c == 200 and r.get("post") is True, "the same GUID: post true (%s %s)" % (c, r))
+    F.LINK_GUID.pop((FIRM, "c1", "ZZ HERON CO"))
+    c, r = ask("p122")
+    ok(c == 200 and r.get("post") is False and r.get("stop") == "stopped", "the link has no GUID now: stopped (%s %s)" % (c, r))
+    F.LINK_GUID[(FIRM, "c1", "ZZ HERON CO")] = "g-same-001"
+    F.FAIL_RPC["tally_post_link_guid"] = {"code": "57014", "message": "canceling statement due to statement timeout"}
+    c, r = ask("p122"); F.FAIL_RPC.pop("tally_post_link_guid", None)
+    ok(c == 200 and r.get("post") is False and r.get("stop") == "checking", "the link's GUID not had: refused (%s %s)" % (c, r))
+    F.LINK_GUID.pop((FIRM, "c1", "ZZ HERON CO"))
+    j123 = job("p123", "running"); F.T["tally_post_jobs"].append(j123); F.NO_COL["tally_post_jobs"] = {"company_guid"}
+    c, r = ask("p123"); F.NO_COL.pop("tally_post_jobs", None)
+    ok(c == 200 and r.get("post") is True, "a cloud without 203: read without company_guid, post true (%s %s)" % (c, r))
     print("== 6. not the main bridge any more")
     dev = F.T["tally_devices"][0]
     dev["main_bridge"] = OTHER; dev["info"]["bridges"][OTHER] = {"at": "2026-11-13T10:00:00Z", "user": ME["user"]}

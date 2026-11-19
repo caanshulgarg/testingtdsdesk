@@ -299,6 +299,8 @@ const BUSY_WORDS = "FinCom is busy, trying again";
 // not had by then (the computer's key, its bridge, the posting, the re-send check) is answered post: false with these words,
 // never allowed (the fifth review, B1). A refusal before any part was sent: posts_update puts the posting back at once
 const POST_OK_MS = 1800;
+// migration 203's words (tally_post_job_blocked): a posting whose client was linked to another Tally company since it was made
+const POST_LINKED_ELSEWHERE = "The client was linked to another Tally company after this posting was made: check the entries and post again. Nothing more of it was sent to Tally.";
 const POST_OK_UNSURE = "FinCom could not confirm in time that this posting may be sent now, so nothing more is sent now. If none of it was sent on this try, FinCom puts it back for this FinCom Bridge, which tries again shortly; otherwise FinCom judges what reached Tally from this bridge's report.";
 const postOkUnsure = () => new Response(JSON.stringify({ ok: true, post: false, stop: "checking", error: POST_OK_UNSURE }), { status: 200, headers: { ...cors, "Content-Type": "application/json" } });
 const busyReply = () => new Response(JSON.stringify({ ok: false, busy: true, retry: true, error: BUSY_WORDS }), { status: 503, headers: { ...cors, "Content-Type": "application/json", "Retry-After": "30" } });
@@ -5139,8 +5141,9 @@ Deno.serve(sentry.wrap(async (req) => {
         if (co.error && !missingRel(co.error)) { console.error("tally-ingest: post_ok changes only not read", dev.id, String(co.error.message || "").slice(0, 200)); return postOkUnsure(); }
         if (!co.error && co.data?.changes_only === true) return no("notMain", CHANGES_ONLY);
         const id = String(body.id || "").slice(0, 64);
-        let q: any = await inTime(db.from("tally_post_jobs").select("status, checking, stop_reason, taken_by, target_bridge, resend_only").eq("id", id).eq("device_id", dev.id).maybeSingle());
-        // a cloud without 174 (stop_reason) or 54 (target_bridge, resend_only): read without them
+        let q: any = await inTime(db.from("tally_post_jobs").select("status, checking, stop_reason, taken_by, target_bridge, resend_only, firm_id, client_id, company, company_guid").eq("id", id).eq("device_id", dev.id).maybeSingle());
+        // a cloud without 203 (company_guid): read without it; without 174 (stop_reason) or 54 (target_bridge, resend_only): without them
+        if (q.error && /company_guid/.test(String(q.error.message || ""))) q = await inTime(db.from("tally_post_jobs").select("status, checking, stop_reason, taken_by, target_bridge, resend_only").eq("id", id).eq("device_id", dev.id).maybeSingle());
         if (q.error && /stop_reason|taken_by|target_bridge|resend_only/.test(String(q.error.message || ""))) q = await inTime(db.from("tally_post_jobs").select("status, checking").eq("id", id).eq("device_id", dev.id).maybeSingle());
         if (q.error) { console.error("tally-ingest: post_ok posting not read", id, String(q.error.message || "").slice(0, 200)); return postOkUnsure(); }
         const j = q.data;
@@ -5163,6 +5166,14 @@ Deno.serve(sentry.wrap(async (req) => {
             return postOkUnsure();
           }
           if (typeof why === "string" && why) return no("checking", why.slice(0, 400));
+        }
+        // migration 203 (the owner's rule: only into the linked company, by its GUID): the posting stamped with the linked GUID
+        // while the client's link now names another (or none): nothing more is sent (203's tally_post_job_blocked words);
+        // the link's GUID not had in time: refused, never allowed
+        if (j.company_guid) {
+          const g: any = await inTime(db.rpc("tally_post_link_guid", { p_firm: j.firm_id, p_client: j.client_id, p_company: j.company }));
+          if (g.error) { console.error("tally-ingest: post_ok tally_post_link_guid", id, String(g.error?.message || g.error).slice(0, 200)); return postOkUnsure(); }
+          if (String(g.data || "").trim().toLowerCase() !== String(j.company_guid).trim().toLowerCase()) return no("stopped", POST_LINKED_ELSEWHERE);
         }
         return reply(200, { ok: true, post: true });
       }
