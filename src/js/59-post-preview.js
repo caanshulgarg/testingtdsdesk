@@ -246,7 +246,14 @@ const PostRecord = {
 // needing a decision 5 times (2,400 bills posted: 280-790 ms here in the click, about 2 s on an office computer). Now once
 // a drawing (perRender) for what they are worked out from: the client's bills (ENTRY_REV), the postings as read, the bank
 // lines open; and each a pass over the entries (CloudJobs.idx). tests/run_hang_post_counts.py
-function postRev(cid){ const b = S.bank && S.bank.cid === cid ? S.bank : null; return [cid, ENTRY_REV, typeof CloudJobs === "object" ? CloudJobs.at + ":" + (CloudJobs.list || []).length : "", b ? (b.loading ? "l" : "") + (b.rows || []).length : ""].join("|"); }
+// Review: also what a drawing with the last drawing's figures (memoKeep: renderTop) must not miss: the bank lines saved
+// (BANK_REV, src/js/20) or swapped, and each read of the posting register, the marks, the checks, the ids and the sales
+// (each read is a new object: revOf numbers an object the first time it is seen)
+const REV_OF = new WeakMap(); let REV_N = 0;
+function revOf(o){ return o && typeof o === "object" ? REV_OF.get(o) || (REV_OF.set(o, ++REV_N), REV_N) : 0; }
+function postRev(cid){ const b = S.bank && S.bank.cid === cid ? S.bank : null, by = o => typeof o === "object" ? revOf(o.by[cid]) + ":" + o.readable : "";
+  return [cid, ENTRY_REV, typeof CloudJobs === "object" ? CloudJobs.at + ":" + revOf(CloudJobs.list) + ":" + (CloudJobs.list || []).length : "", b ? (b.loading ? "l" : "") + revOf(b) + ":" + revOf(b.rows) + ":" + (b.rows || []).length + ":" + BANK_REV : "",
+    by(typeof PostReg === "object" && PostReg), by(PostMarks), by(PostChecks), by(PostIds), S.sales ? revOf(S.sales) + ":" + revOf(S.sales.list) + ":" + (S.sales.list || []).length : ""].join("|"); }
 // id -> {st: sending | unknown | refused | posted | "", job, reason}: the newest posting of the cloud naming the entry
 function postJobStates(cid){ return perRender(postJobStates, postRev(cid), () => postJobStatesNow(cid)); }
 function postJobStatesNow(cid){
