@@ -648,3 +648,5 @@ run_daybook_slices.py                 180  TDSDESK_SITE=../app/dist-test
 run_items_own_seq.py                  180  TDSDESK_SITE=../app/dist-test
 # next-tally-own-status (13-Nov-2026): each person sees only their OWN Tally: the icon, the client's line, the bell, no list of every bridge
 run_tally_own_status.py               300  TDSDESK_SITE=../app/dist-test
+# next-fix-devlookup (18-Nov-2026, FINCOM-CLOUD-STAGING-8/B/C/9): the gateway's HTML error page as one short line, one more try for the key lookup
+run_devlookup_gateway.py              120

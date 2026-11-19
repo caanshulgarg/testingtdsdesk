@@ -254,6 +254,8 @@ import { servingGate, beatOnly, lineFollows, followAskable } from "./readfollow.
 import { startDecision, earliestKnown, booksFromDay, memoAnswers, movedWords, istDay, uuidOfHex, dayOf } from "./bookstart.js";   // next-book-start: a book's start (bookStartFromState)
 import { corsFor } from "../_shared/cors.ts";   // the one list of headers for every function (server/_shared/cors.ts)
 import { cloudReporter } from "../_shared/sentry.ts";
+// next-fix-devlookup (FINCOM-CLOUD-STAGING-8/B/C/9): the gateway's HTML error page as one short line, one more try for a read
+import { dbReport, readRetry } from "./dbgateway.js";
 // 23-Oct-2026 (next-fix-tally-link): the one rule for linking a company to a client by itself (server/_shared/tallyname.js)
 import { autoLinkFor } from "../_shared/tallyname.js";
 import { firmGate, viaClient } from "../_shared/firmgate.ts";   // the console's switches: a paused firm, a switched-off company   // error reports to Sentry, staging only, scrubbed (docs/sentry.md)
@@ -266,7 +268,19 @@ const db = createClient(URL, SERVICE, { auth: { persistSession: false } });
 // scrubbed words, its stack, the request's kind and the firm as a hash. Never the request, Tally's XML or any id
 const sentry = cloudReporter({ release: "tally-ingest-2.4.0" });
 sentry.listen();
-const fail = (where: string, e: unknown, kind?: unknown, firm?: unknown) => sentry.report(where, e, { kind, firm });
+// next-fix-devlookup: a gateway's HTML page (the database restarting) is reported as fixed short words with its status and
+// code as tags (one issue, not a page per Ray ID), and at most once in 10 minutes from each place of this instance: an
+// outage of the database is one report, not one for each of the bridges' calls in it
+const gatewayReported = new Map<string, number>();
+const fail = (where: string, e: unknown, kind?: unknown, firm?: unknown) => {
+  const g = dbReport(e);
+  if (!g) return sentry.report(where, e, { kind, firm });
+  const t = Date.now();
+  if ((gatewayReported.get(where) || 0) > t - 600000) return;
+  gatewayReported.set(where, t);
+  if (gatewayReported.size > 200) gatewayReported.clear();
+  return sentry.report(where, g.err, { kind, firm, tags: g.tags });
+};
 const MAX_BODY = 25 * 1024 * 1024;          // one request
 const MAX_DAY = 60 * 1024 * 1024;           // one day's day book, unzipped
 const MAX_UNZIP = 200 * 1024 * 1024;        // all the days of one request, unzipped
@@ -4717,10 +4731,14 @@ Deno.serve(sentry.wrap(async (req) => {
   const len = Number(req.headers.get("content-length") || 0);
   if (len > MAX_BODY) return reply(413, { ok: false, error: "Too much in one go; send fewer days at a time." });
   // every column: wake_token is there from migration-13 on, and the heartbeat works without it
-  const { data: dev, error: devErr } = await db.from("tally_devices").select("*").eq("key_hash", await sha256(key)).maybeSingle();
+  // next-fix-devlookup: a read, so asked once more after a short wait when the gateway answered its error page or the
+  // connection was lost (readRetry: never for a statement timeout or any other answer of the database); its error as one
+  // short line (the status and the page's title, never the page)
+  const keyHash = await sha256(key);
+  const { data: dev, error: devErr, tries: devTries } = await readRetry(() => db.from("tally_devices").select("*").eq("key_hash", keyHash).abortSignal(AbortSignal.timeout(700)).maybeSingle());
   // the lookup FAILED (a database error is not "no such key"): busy, asked again; the 401 below only when the database
   // answered and holds no such key, or holds it revoked
-  if (devErr) { fail("device_lookup", devErr); console.error("tally-ingest: the computer key could not be looked up:", String(devErr.code || ""), String(devErr.message || "").slice(0, 200)); return busyReply(); }
+  if (devErr) { fail("device_lookup", devErr); console.error("tally-ingest: the computer key could not be looked up:", String(devErr.code || ""), String(devErr.message || "").slice(0, 200), "(tries " + devTries + ")"); return busyReply(); }
   if (!dev || dev.revoked) return reply(401, { ok: false, error: "This computer's key is not valid any more. Connect it again from FinCom." });
   let body: any;
   try { body = JSON.parse(await readBody(req)); } catch (e) { return (e as Error).message === "too large" ? reply(413, { ok: false, error: "Too much in one go; send fewer days at a time." }) : reply(400, { ok: false, error: "Bad request" }); }
