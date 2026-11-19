@@ -109,8 +109,9 @@ func emptyPorts(sessions, held []M, fileAt time.Time) map[int]time.Time {
 	for _, h := range held {
 		heldBy[toInt(h["port"])] = h
 	}
+	own := ownRule(sessions) // (one rule with the postings: linkguid.go)
 	for _, s := range sessions {
-		if s["skipped"] == true || s["ok"] != true || s["mine"] == false || len(sessCompanies(s)) > 0 {
+		if s["ok"] != true || !own(s) || len(sessCompanies(s)) > 0 {
 			continue
 		}
 		port := toInt(s["port"])
@@ -155,8 +156,9 @@ func beatSoon() {
 // review 1: one of the ports asked names a company now
 func namesAnyOf(sessions []M, ports map[int]bool) []string {
 	var names []string
+	own := ownRule(sessions) // (one rule with the postings: linkguid.go)
 	for _, s := range sessions {
-		if ports[toInt(s["port"])] && s["skipped"] != true && s["ok"] == true && s["mine"] != false {
+		if ports[toInt(s["port"])] && s["ok"] == true && own(s) {
 			for _, c := range sessCompanies(s) {
 				names = append(names, str(c["name"]))
 			}

@@ -117,8 +117,10 @@ var fmLinkCheck = func(co, guid string) string {
 var fmOpenNames = func() []string {
 	var out []string
 	seen := map[string]bool{}
-	for _, s := range openCompaniesCached() {
-		if s["skipped"] == true || s["ok"] != true || s["mine"] == false {
+	ss := openCompaniesCached()
+	own := ownRule(ss) // (one rule with the postings: linkguid.go)
+	for _, s := range ss {
+		if s["ok"] != true || !own(s) {
 			continue
 		}
 		for _, c := range sessCompanies(s) {

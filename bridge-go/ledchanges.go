@@ -141,12 +141,20 @@ func ledOwnPort(company, guid string, preferred int) (int, string) {
 		}
 		return 0, "the company is not open in this bridge's own Tally"
 	}
+	// (the second review: a preferred port of a Tally the rule leaves out is not preferred: the own Tally's hit goes first)
+	ss := openCompaniesCached()
+	own := ownRule(ss)
+	for _, s := range ss {
+		if preferred > 0 && toInt(s["port"]) == preferred && !own(s) {
+			preferred = 0
+		}
+	}
 	port, err := findCompanyPortBg(company, preferred)
 	if err != nil {
 		return 0, err.Error()
 	}
-	ss := openCompaniesCached()
-	own := ownRule(ss)
+	ss = openCompaniesCached()
+	own = ownRule(ss)
 	for _, s := range ss {
 		if toInt(s["port"]) != port {
 			continue

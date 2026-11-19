@@ -3,7 +3,7 @@
 // Windows cannot tell counts as this user's only while Windows tells the owner of no Tally; such a company's words are
 // the posting's ("Tally on port N has it open, but Windows cannot tell whose…"). A plain PC where no owner is known: as
 // before. Made-up companies only. Exits 1 on a failure.
-import { ownRule, hereNames, untoldOf, untoldWords } from "../app/src/lib/ownBridge.js";
+import { ownRule, hereNames, untoldOf, untoldWords, upBeat } from "../app/src/lib/ownBridge.js";
 
 let fails = 0;
 const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };
@@ -36,6 +36,14 @@ ok(r2({ mine: null }) && r2({}) && !r2({ mine: false }), "rule: none told, unkno
 // the beat: openElsewhere owner unknown (the bridge's own rule there)
 const bu = untoldOf({ beat: { companies: [{ name: "B CO", open: false, openElsewhere: { port: 9001, why: "owner unknown" } }, { name: "D CO", open: false, openElsewhere: { port: 9002, why: "other user" } }] } });
 ok(bu.get("b co") && bu.get("b co").join(",") === "9001" && !bu.has("d co"), "beat: the owner-unknown Tally said where (" + [...bu] + ")");
+
+// the beat's ports (owner "unknown" when Windows cannot tell): this user's Tally answers only by the same rule
+const port = (p, ok, owner, extra) => Object.assign({ port: p, ok, skipped: false, owner: owner || "", reason: ok ? "open" : "not answering" }, extra || {});
+ok(!upBeat({ ports: [port(9000, false), port(9001, true, "unknown")] }), "beat: own Tally down, only an owner-unknown one answers while another owner is known: not up");
+ok(!upBeat({ ports: [port(9000, false, "", { skipped: true, reason: "another user" }), port(9001, true, "unknown")] }), "beat: another user's told, the owner-unknown one answers: not up");
+ok(upBeat({ ports: [port(9000, true), port(9001, true, "unknown")] }), "beat: own Tally answers: up");
+ok(upBeat({ ports: [port(9001, true, "unknown")] }), "beat: plain PC, the owner-unknown one answers: up (as before)");
+ok(upBeat({ ports: [], tally: true }) && !upBeat({ ports: [] }), "beat: no ports said: the beat's tally flag (as before)");
 
 console.log(fails ? "\n" + fails + " failure(s)" : "\nall passed");
 process.exit(fails ? 1 : 0);

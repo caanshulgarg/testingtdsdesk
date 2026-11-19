@@ -572,8 +572,9 @@ func lightCompanyListFound(sessions []M) ([]M, map[string]bool) {
 func lightCheckOpen(sessions []M) {
 	if why := lightCheckBlocked(); why != "" {
 		names := 0
+		own := ownRule(sessions) // (the second review: this user's own Tally only, the postings' rule, linkguid.go)
 		for _, s := range sessions {
-			if s["skipped"] == true || s["ok"] != true {
+			if s["ok"] != true || !own(s) {
 				continue
 			}
 			for _, c := range sessCompanies(s) {
@@ -589,8 +590,12 @@ func lightCheckOpen(sessions []M) {
 		return
 	}
 	sessions, found := lightCompanyListFound(sessions)
+	// the second review of next-fix-linkedguid: only this user's own Tally by the postings' rule (ownRule): a Tally whose
+	// owner Windows cannot tell while it tells another's, or another Windows user's, is never asked, and its port never
+	// feeds the start point, the recorder, bank, ledger or masters follow-ups
+	own := ownRule(sessions)
 	for _, s := range sessions {
-		if s["skipped"] == true || s["ok"] != true {
+		if s["ok"] != true || !own(s) {
 			continue
 		}
 		port := toInt(s["port"])
