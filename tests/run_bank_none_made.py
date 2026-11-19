@@ -17,7 +17,9 @@ Made-up fixtures (never a client's lines). Checked:
  (4) lines stored before (postReview from a 0-made reply, the old words): opening the statement shows the new words and
      takes them out of review; a stored partly made batch and a stored no-answer line stay in review, and Post sends only
      the 0-made ones;
- (5) a batch Tally made only partly (8 of 39) still says "does not say which" and offers Check with Tally.
+ (5) a batch Tally made only partly (8 of 39) still says "does not say which" and offers Check with Tally;
+ (6) the report: lines sharing words are one item ("39 lines (… to …) — Tally made none of them. …"), lines with words of
+     their own one each; a row says "Tally made none — not posted", the whole words as its title.
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_bank_none_made.py"""
 import os, threading, functools, http.server, re, json
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -138,6 +140,14 @@ with sync_playwright() as p:
        "(1) the report offers no check with Tally (%s)" % t.replace("\n", " ")[:200])
     body = pg.inner_text("#app")
     ok("Tally could not open " + G in body and "does not say which" not in body, "(1) the screen shows the new words, never 'does not say which'")
+    # one banner item for the 39 lines with the same words; each row says it short, the whole words on hover
+    li = pg.locator("#app [data-failed-list] li").all_inner_texts()
+    ok(li == ["39 lines (02-Sep-2026 to 28-Sep-2026) \u2014 Tally made none of them. Tally could not open " + G + ": open it in Tally (and close any screen or login prompt in it), then post again."],
+       "(1) the report groups the 39 lines with the same words into one item (%s)" % li[:2])
+    ok(pg.locator("#app [data-bank-report]").get_by_text("Show the lines not posted").count() == 1, "(1) the report still offers 'Show the lines not posted'")
+    st = pg.locator("#app span.src.bad", has_text="Tally made none")
+    ok(st.count() >= 1 and st.first.inner_text().strip() == "Tally made none \u2014 not posted" and st.first.get_attribute("title") == want,
+       "(1) each row: 'Tally made none \u2014 not posted', the whole words as its title (%s)" % (st.first.inner_text() if st.count() else "none"))
 
     # (2) the company opened in Tally: Post again makes all 39, each once
     E("() => { window.__T.whole = ''; B().postReport = null; }")
@@ -188,6 +198,14 @@ with sync_playwright() as p:
     ok(all(r["st"] == "ready" and r["rev"] and "Tally made 8 of the 39 lines sent together" in r["err"] and "does not say which" in r["err"] for r in R), "(5) 8 of 39: every line in review, 'does not say which' (%s)" % R[0]["err"][:120])
     t = report_text()
     ok(rp["review"] == 39 and pg.locator("#app [data-check-review]").count() == 1 and "wait for a check with Tally" in t, "(5) the report offers Check with Tally (%s)" % t.replace("\n", " ")[:160])
+    # (6) the report: lines with words of their own stay one item each; lines sharing words are one item
+    E("""() => { const b = B(), r = b.rows; b.postReport = {at: Date.now(), posted: 0, dismiss: 'bankReportOk', failed: [
+      {id: r[0].id, what: 'line A', msg: 'Ledger \u201cRent\u201d is not in Tally'}, {id: r[1].id, what: 'line B', msg: 'Tally made none of the 2 lines. Tally said: Voucher totals do not match! Nothing was posted; fix this in Tally and post again.'},
+      {id: r[2].id, what: 'line C', msg: 'Tally made none of the 2 lines. Tally said: Voucher totals do not match! Nothing was posted; fix this in Tally and post again.'}, {id: r[3].id, what: 'line D', msg: 'Ledger \u201cTravel\u201d is not in Tally'}]}; render(); }""")
+    pg.wait_for_timeout(300)
+    li = pg.locator("#app [data-failed-list] li").all_inner_texts()
+    ok(li == ["line A \u2014 Ledger \u201cRent\u201d is not in Tally", "2 lines (02-Sep-2026 to 03-Sep-2026) \u2014 Tally made none of them. Tally said: Voucher totals do not match! Nothing was posted; fix this in Tally and post again.",
+              "line D \u2014 Ledger \u201cTravel\u201d is not in Tally"], "(6) different words stay separate, shared words are one item (%s)" % li)
     br.close()
 ok(not errors, "no page errors" + ("" if not errors else ": " + " | ".join(errors[:3])))
 print("\n" + (str(len(fails)) + " FAILED" if fails else "all passed"))

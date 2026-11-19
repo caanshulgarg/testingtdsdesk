@@ -14,6 +14,17 @@ const plural2 = (n, one, many) => n + (n === 1 ? one : many);
 
 // show only some lines of the statement, with what they are
 // the cloud's refusal starts "Choose the Tally company …", which the banner's heading already says: said once
+// 19-Nov-2026 (owner): lines of the last posting with the same words are one item, "39 lines (02-Sep-2026 to
+// 15-Oct-2026) — Tally made none of them. …"; lines with words of their own stay one item each, as before
+export function failedItems(failed){
+  const groups = new Map(), rows = new Map(((typeof B === "function" && B()) || { rows: [] }).rows.map((r) => [r.id, r]));
+  failed.forEach((f) => { const k = f.msg || ""; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(f); });
+  return [...groups.values()].flatMap((g) => {
+    if (g.length < 2) return g.map((f) => f.what + " — " + f.msg);
+    const ds = g.map((f) => (rows.get(f.id) || {}).date).filter(Boolean).sort(), span = ds.length ? " (" + fmtDate(ds[0]) + (ds[ds.length - 1] !== ds[0] ? " to " + fmtDate(ds[ds.length - 1]) : "") + ")" : "";
+    return [g.length + " lines" + span + " — " + String(g[0].msg || "").replace(/^Tally made none of the \d+ lines\./, "Tally made none of them.")];
+  });
+}
 export function notAllowedRest(msg){ return String(msg || "").replace(/^\s*choose the tally company.*?may post to[^.]*\.\s*/i, ""); }
 export function FocusBtn({ title, ids, label, note }) {
   if (!ids || !ids.length) return null;
@@ -203,12 +214,12 @@ export function PostReport({ rep }) {
   // 30-Oct-2026: lines of a batch Tally made only partly, and a posting FinCom's cloud did not record: said. 19-Nov-2026:
   // or no answer came; a batch Tally made none of is never here (src/js/96 bankNoneMade: those lines say why, ready)
   if (rep.review) bits.push(rep.review + " wait for a check with Tally (Tally made only some of the lines sent together, or did not answer, and does not say which)");
-  const failed = rep.failed || [];
+  const failed = rep.failed || [], items = failedItems(failed);
   return <div className={"bk-alert" + (failed.length ? " bad" : "")} data-bank-report=""><b>{"Tally, " + fmtTime(rep.at) + ":"}</b>{" " + bits.join(" · ")}
     {rep.unrecorded && <div className="note" data-post-unrecorded="">{rep.unrecorded}</div>}
     {rep.review > 0 && <div style={{ marginTop: 6 }}><Btn act="bankCheckReview" className="btn small primary" data-check-review="">Check with Tally</Btn></div>}
-    {failed.length > 0 && <><ul style={{ margin: "6px 0 0" }}>{failed.slice(0, 20).map((f, i) => <li key={i}>{f.what + " — " + f.msg}</li>)}</ul>
-      {failed.length > 20 && <div className="note">{"and " + (failed.length - 20) + " more"}</div>}
+    {failed.length > 0 && <><ul style={{ margin: "6px 0 0" }} data-failed-list="">{items.slice(0, 20).map((t, i) => <li key={i}>{t}</li>)}</ul>
+      {items.length > 20 && <div className="note">{"and " + (items.length - 20) + " more"}</div>}
       {S.tab === "bank" && <FocusBtn title="not posted in the last posting" ids={failed.map((f) => f.id).filter(Boolean)} label="Show the lines not posted" />}</>}
     {" "}<Btn act={rep.dismiss} className="linkbtn">Dismiss</Btn></div>;
 }

@@ -62,7 +62,7 @@ function RowLedger({ r }) {
   const said = r.state === "suggested" ? "Suggested · " + (r.srcLabel || "Match") : r.state === "ready" ? (r.source === "you" || r.userSet ? "Set by you" : r.srcLabel || "Confirmed")
     : hasLedgerList() ? "No match found" : "Import the ledger list";
   return <>
-    {r.state === "ready" && r.postError && <span className="src bad" title={r.postError}>Tally: {r.postError}
+    {r.state === "ready" && r.postError && <span className="src bad" title={r.postError}>{/^Tally made none of /.test(r.postError) ? "Tally made none \u2014 not posted" : "Tally: " + r.postError}
       {held && <> <button className="linkbtn" onClick={() => bankRowAct("notintally", r.id)}>I checked — it is not in Tally</button></>}</span>}
     <div className="bs-led">
       <LedgerBox className={"lgbox" + (r.state === "suggested" ? " sugg" : r.state === "ready" ? " done" : "")} value={r.ledger || ""}
