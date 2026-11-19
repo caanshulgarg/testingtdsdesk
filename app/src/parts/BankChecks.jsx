@@ -200,8 +200,9 @@ export function PostReport({ rep }) {
   if (rep.skipped) bits.push(rep.skipped + " already in Tally (not posted again)");
   if (rep.failed && rep.failed.length) bits.push(rep.failed.length + " not posted");
   if (rep.movedBack) bits.push(rep.movedBack + " moved back to review (ledger not in Tally)");
-  // 30-Oct-2026 (Fingate): lines of a batch Tally made only partly, and a posting FinCom's cloud did not record: said
-  if (rep.review) bits.push(rep.review + " wait for a check with Tally (Tally made only part of a batch and does not say which)");
+  // 30-Oct-2026: lines of a batch Tally made only partly, and a posting FinCom's cloud did not record: said. 19-Nov-2026:
+  // or no answer came; a batch Tally made none of is never here (src/js/96 bankNoneMade: those lines say why, ready)
+  if (rep.review) bits.push(rep.review + " wait for a check with Tally (Tally made only some of the lines sent together, or did not answer, and does not say which)");
   const failed = rep.failed || [];
   return <div className={"bk-alert" + (failed.length ? " bad" : "")} data-bank-report=""><b>{"Tally, " + fmtTime(rep.at) + ":"}</b>{" " + bits.join(" · ")}
     {rep.unrecorded && <div className="note" data-post-unrecorded="">{rep.unrecorded}</div>}

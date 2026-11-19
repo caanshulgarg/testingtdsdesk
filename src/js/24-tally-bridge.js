@@ -1136,7 +1136,8 @@ async function postBankToTally(ids){
     if (isOwnBank(r, r.ledger)){ dropOwnBank(r); failed.push({id: r.id, what: fmtDate(r.date) + " " + (r.dec.name || "") + " " + INR.format(r.debit || r.credit), msg: OWN_BANK}); return false; }
     // 30-Oct-2026: a line of a batch Tally made only partly waits for Check with Tally (src/js/96); it is listed with
     // Tally's words, and goes again only once released (not found in Tally, or "post again" with the bridge looking first)
-    if (r.postReview && !r.release){ failed.push({id: r.id, what: fmtDate(r.date) + " " + (r.dec.name || "") + " " + INR.format(r.debit || r.credit), msg: r.postError || "Needs a check with Tally", review: true}); return false; }
+    // 19-Nov-2026: a line stored in review from a request Tally made none of (src/js/96 bankNoneHeal) goes again
+    if (r.postReview && !r.release && !(typeof bankNoneHeal === "function" && bankNoneHeal([r]))){ failed.push({id: r.id, what: fmtDate(r.date) + " " + (r.dec.name || "") + " " + INR.format(r.debit || r.credit), msg: r.postError || "Needs a check with Tally", review: true}); return false; }
     const need = [r.ledger].concat(r.tdsAtPay ? [r.tdsLedger || bankLedgers(co).tds] : []);
     const miss = need.find(n => !exactLedger(n));
     if (miss !== undefined){
@@ -1213,6 +1214,10 @@ async function postBankToTally(ids){
         // a batch Tally made only partly (or no answer): Tally's words and counts kept on the line, for Check with Tally
         delete r.release; bankReviewMark(r, x, x.jobId || jobId);
         failed.push({id: r.id, what: fmtDate(r.date) + " " + (r.dec.name || "") + " " + INR.format(r.debit || r.credit), msg: r.postError, review: true});
+      } else if (x && typeof bankNoneMade === "function" && bankNoneMade(x)){
+        // Tally made none of the request (src/js/96): said plainly; not in review, ready to post again
+        bankNoneMark(r, Object.assign({company: tname}, x));
+        failed.push({id: r.id, what: fmtDate(r.date) + " " + (r.dec.name || "") + " " + INR.format(r.debit || r.credit), msg: r.postError});
       } else {
         if (x && !x.alreadySent) delete r.release;
         r.postError = plainMsg(x && x.message) || "Tally did not confirm this entry.";
