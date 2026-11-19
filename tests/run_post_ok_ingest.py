@@ -10,7 +10,8 @@ post_ok, the bridge's read-only question before it sends each part of a posting 
      again), unless handed back to send some entries again (resend_only): post true; waiting (put back for this same
      bridge): post true; (migration 200, never twice) one whose re-send list was not handed back yet, or has an entry
      posted again in another posting since (tally_post_resend_ok's words): post false, stop "checking", those words; that
-     answer not had (an error, no such function, no answer within 4 s): post false, never allowed;
+     answer not had (an error, no such function, or not within 2 s of the request, the bridge waiting 3 s): post false,
+     never allowed; that refusal before any part was sent: the posting put back for the same bridge at once;
   6. not the main bridge any more (another of the same Windows user chosen): notMain;
   7. a cloud without 174 (no stop_reason): read without it, as before;
   8. posts_update with offlineSends: kept in the timing; without it the timing as before;
@@ -95,17 +96,31 @@ try:
     for jid in ("p54", "p55"):
         c, r = ask(jid)
         ok(c == 200 and r.get("post") is False and r.get("stop") == "checking" and r.get("error") == F.RESEND_OK[jid], "%s: the re-send list may not go now: post false (%s)" % (jid, r))
-    # (the fourth review) the database's answer on a re-send list not had (an error, no such function, or no answer in time):
-    # refused, never allowed
-    for jid, how in (("p56", "error"), ("p57", "missing"), ("p58", "slow")):
+    # (the fourth review; the fifth, B1) the whole answer within 2 s of the request (the bridge waits 3 s, then posts what it
+    # holds): the re-send check, the posting's read or the computer's lookup not had in time, or an error: refused, never allowed
+    UNSURE = "could not confirm in time"
+    for jid, how in (("p56", "error"), ("p57", "missing"), ("p58", "slow check"), ("p581", "slow posting read"), ("p582", "slow computer lookup")):
         F.T["tally_post_jobs"].append(job(jid, "waiting", attempts=1, resend_only=["K1"]))
         if how == "error": F.FAIL_RPC["tally_post_resend_ok"] = {"code": "57014", "message": "canceling statement due to statement timeout"}
         if how == "missing": F.NO_FN.add("tally_post_resend_ok")
-        if how == "slow": F.RPC_DELAY["tally_post_resend_ok"] = 12
+        if how == "slow check": F.RPC_DELAY["tally_post_resend_ok"] = 12
+        if how == "slow posting read": F.TABLE_DELAY["tally_post_jobs"] = [12]
+        if how == "slow computer lookup": F.TABLE_DELAY["tally_devices"] = [1.5]
         t0 = time.time(); c, r = ask(jid); t = time.time() - t0
-        F.FAIL_RPC.pop("tally_post_resend_ok", None); F.NO_FN.discard("tally_post_resend_ok"); F.RPC_DELAY.pop("tally_post_resend_ok", None)
-        ok(c == 200 and r.get("post") is False and r.get("stop") == "checking" and "could not" in str(r.get("error") or "") and t < 8,
-           "%s: tally_post_resend_ok %s: refused, never allowed (%.1f s, %s)" % (jid, how, t, r))
+        F.FAIL_RPC.pop("tally_post_resend_ok", None); F.NO_FN.discard("tally_post_resend_ok"); F.RPC_DELAY.pop("tally_post_resend_ok", None); F.TABLE_DELAY.pop("tally_post_jobs", None); F.TABLE_DELAY.pop("tally_devices", None)
+        ok(c == 200 and r.get("post") is False and r.get("stop") == "checking" and UNSURE in str(r.get("error") or "") and t < 2.0,
+           "%s: %s: refused within the bridge's 3 s, never allowed (%.2f s, %s)" % (jid, how, t, r))
+    time.sleep(12)   # (the slow calls above end on the stand-in's side)
+    # its refusal ends the bridge's job "stopped" (reported as taken, its words with it): nothing of it was sent, so the posting
+    # is put back for the same bridge at once (it sends it once FinCom answers); a part sent already: left as it was (judged as before)
+    for jid, part, want in (("p59", "1 of 1", "waiting"), ("p591", "2 of 2", "taken")):
+        F.T["tally_post_jobs"].append(job(jid, "taken", attempts=1, resend_only=["K1"], items=[{"id": "K1", "kind": "voucher", "state": "waiting"}]))
+        c, r = call({"kind": "posts_update", "version": "2.5.15", "bridge": ME, "id": jid, "status": "taken", "done": 0, "seq": 2, "updatedAt": "2026-11-13T10:00:00Z",
+                     "message": "Stopped by FinCom before part %s was sent: FinCom %s that the entries released for sending again may go now, so nothing more is sent now." % (part, UNSURE),
+                     "results": [], "items": [{"id": "K1", "kind": "voucher", "state": "waiting"}], "reqs": [], "secondsTotal": 0})
+        j_ = row(jid)
+        ok(c == 200 and j_["status"] == want and j_["taken_by"] == ME["id"] and j_.get("resend_only") == ["K1"] and (want != "waiting" or "put back" in j_["message"].lower()),
+           "%s stopped before part %s: %s (%s %s; %s)" % (jid, part, want, c, r, j_["message"][:120]))
     print("== 6. not the main bridge any more")
     dev = F.T["tally_devices"][0]
     dev["main_bridge"] = OTHER; dev["info"]["bridges"][OTHER] = {"at": "2026-11-13T10:00:00Z", "user": ME["user"]}

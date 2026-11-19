@@ -30,8 +30,9 @@
 --   3. The hand-out (185's tally_post_take_for): a posting is handed to a bridge only when that bridge reports the linked
 --      company's GUID open (its own list of open companies, else its key's beat): tally_post_linked_open. The beat's count
 --      (185's tally_post_count_for) asks the same gate, and a posting of the bridge it refuses says why on the posting
---      (tally_post_linked_why: the link has no company ID yet, or another company ID is open): never the name alone, and
---      never waiting silently. An entry whose date or amount cannot be read from the posting is never sent again by
+--      (tally_post_linked_why_for: the link has no company ID yet, or another company ID is open): never the name alone, and
+--      never waiting silently. The gate (tally_post_linked_ok) is asked once per client and company (the count as fast as
+--      185's); the words only over an empty message or the gate's own, for a bridge that may post, never moving updated_at. An entry whose date or amount cannot be read from the posting is never sent again by
 --      itself (a person looks).
 -- Add-only: one table (row security on, the firm reads), two partial indexes, functions new or replaced from their latest
 -- text (185's tally_post_take_for and tally_post_count_for; 201's tally_post_work_due, tally_post_work, tally_post_work_run gain the recheck).
@@ -472,15 +473,16 @@ revoke all on procedure public.tally_post_work_run(integer) from public, anon, a
 grant execute on procedure public.tally_post_work_run(integer) to service_role;
 
 -- ---------------------------------------------------------------- 3. only into the linked company (its GUID open there)
--- may this bridge be handed this posting? The posting's client is linked to its company (tally_links, linked, its GUID
--- known) and the bridge reports that very GUID open: its own list of open companies (info.bridges[id].cos, 146) when it
--- sends one, else its key's beat (companies, open). Else nothing is handed to it (it waits for a bridge that has it open)
-create or replace function public.tally_post_linked_open(p_job uuid, p_device uuid, p_bridge text)
+-- may this bridge be handed a posting of this client and company? The client is linked to its company (tally_links,
+-- linked, its GUID known) and the bridge reports that very GUID open: its own list of open companies (info.bridges[id].cos,
+-- 146) when it sends one, else its key's beat (companies, open). Else nothing is handed to it (it waits for a bridge that has
+-- it open). Asked by client and company (the fifth review: the beat's count asks it once per company, never per posting)
+create or replace function public.tally_post_linked_ok(p_firm uuid, p_client text, p_company text, p_device uuid, p_bridge text)
 returns boolean language sql stable security definer set search_path = public, pg_temp as $function$
   select coalesce((
     select exists (select 1 from tally_links l join tally_companies tc on tc.firm_id = l.firm_id and tc.book_id = l.book_id
-                    where l.firm_id = j.firm_id and l.client_id = j.client_id and l.state = 'linked'
-                      and lower(tally_nm(tc.company)) = lower(tally_nm(j.company))
+                    where l.firm_id = p_firm and l.client_id = p_client and l.state = 'linked'
+                      and lower(tally_nm(tc.company)) = lower(tally_nm(p_company))
                       and nullif(btrim(coalesce(l.company_guid, '')), '') is not null
                       and case when jsonb_typeof(me.info -> 'bridges' -> p_bridge -> 'cos') = 'array'
                             then exists (select 1 from jsonb_array_elements(me.info -> 'bridges' -> p_bridge -> 'cos') c where jsonb_typeof(c) = 'array'
@@ -488,66 +490,100 @@ returns boolean language sql stable security definer set search_path = public, p
                             else jsonb_typeof(me.info -> 'beat' -> 'companies') = 'array'
                              and exists (select 1 from jsonb_array_elements(me.info -> 'beat' -> 'companies') c where jsonb_typeof(c) = 'object'
                                           and lower(btrim(coalesce(c ->> 'guid', ''))) = lower(btrim(l.company_guid)) and coalesce(c ->> 'open', 'true') <> 'false') end)
-      from tally_post_jobs j
-      join tally_devices me on me.id = p_device and not coalesce(me.revoked, false)
-     where j.id = p_job), false)
+      from tally_devices me where me.id = p_device and not coalesce(me.revoked, false)), false)
+$function$;
+revoke all on function public.tally_post_linked_ok(uuid, text, text, uuid, text) from public, anon, authenticated;
+grant execute on function public.tally_post_linked_ok(uuid, text, text, uuid, text) to service_role;
+
+-- the same, for one posting (the hand-out below)
+create or replace function public.tally_post_linked_open(p_job uuid, p_device uuid, p_bridge text)
+returns boolean language sql stable security definer set search_path = public, pg_temp as $function$
+  select coalesce((select tally_post_linked_ok(j.firm_id, j.client_id, j.company, p_device, p_bridge) from tally_post_jobs j where j.id = p_job), false)
 $function$;
 revoke all on function public.tally_post_linked_open(uuid, uuid, text) from public, anon, authenticated;
 grant execute on function public.tally_post_linked_open(uuid, uuid, text) to service_role;
 
--- (the fourth review) why tally_post_linked_open refuses, in plain words (null: it does not). The same tests, in order:
--- no link with a company ID, then the company this bridge reports open. Never the name alone
-create or replace function public.tally_post_linked_why(p_job uuid, p_device uuid, p_bridge text)
+-- (the fourth review) why the gate refused, in plain words; asked only once the gate has refused (never the gate again):
+-- no link, no company ID, another company ID open, or the linked company not open. Never the name alone
+create or replace function public.tally_post_linked_why_for(p_firm uuid, p_client text, p_company text, p_device uuid, p_bridge text)
 returns text language sql stable security definer set search_path = public, pg_temp as $function$
   select case
-    when tally_post_linked_open(p_job, p_device, p_bridge) then null
     when not exists (select 1 from tally_links l join tally_companies tc on tc.firm_id = l.firm_id and tc.book_id = l.book_id
-                      where l.firm_id = j.firm_id and l.client_id = j.client_id and l.state = 'linked' and lower(tally_nm(tc.company)) = lower(tally_nm(j.company)))
-      then 'Not posted yet: the client is not linked to the Tally company ' || j.company || ' in FinCom. FinCom posts only into the linked company, by its company ID'
+                      where l.firm_id = p_firm and l.client_id = p_client and l.state = 'linked' and lower(tally_nm(tc.company)) = lower(tally_nm(p_company)))
+      then 'Not posted yet: the client is not linked to the Tally company ' || p_company || ' in FinCom. FinCom posts only into the linked company, by its company ID'
     when not exists (select 1 from tally_links l join tally_companies tc on tc.firm_id = l.firm_id and tc.book_id = l.book_id
-                      where l.firm_id = j.firm_id and l.client_id = j.client_id and l.state = 'linked' and lower(tally_nm(tc.company)) = lower(tally_nm(j.company))
+                      where l.firm_id = p_firm and l.client_id = p_client and l.state = 'linked' and lower(tally_nm(tc.company)) = lower(tally_nm(p_company))
                         and nullif(btrim(coalesce(l.company_guid, '')), '') is not null)
-      then 'Not posted yet: the linked company has no company ID yet (FinCom posts only into the linked company, by its company ID). Open ' || j.company || ' in Tally on the computer so the FinCom Bridge reads its ID'
-    when case when jsonb_typeof(me.info -> 'bridges' -> p_bridge -> 'cos') = 'array'
+      then 'Not posted yet: the linked company has no company ID yet (FinCom posts only into the linked company, by its company ID). Open ' || p_company || ' in Tally on the computer so the FinCom Bridge reads its ID'
+    when (select case when jsonb_typeof(me.info -> 'bridges' -> p_bridge -> 'cos') = 'array'
            then exists (select 1 from jsonb_array_elements(me.info -> 'bridges' -> p_bridge -> 'cos') c where jsonb_typeof(c) = 'array' and nullif(btrim(coalesce(c ->> 1, '')), '') is not null)
            else jsonb_typeof(me.info -> 'beat' -> 'companies') = 'array'
-            and exists (select 1 from jsonb_array_elements(me.info -> 'beat' -> 'companies') c where jsonb_typeof(c) = 'object' and nullif(btrim(coalesce(c ->> 'guid', '')), '') is not null
-                         and coalesce(c ->> 'open', 'true') <> 'false') end
-      then 'Not posted yet: the Tally company open on the computer is not the linked one (different company ID). Open ' || j.company || ' (the company its client is linked to) in Tally'
-    else 'Waiting: the linked Tally company ' || j.company || ' is not open in Tally on the computer' end
-    from tally_post_jobs j join tally_devices me on me.id = p_device
-   where j.id = p_job
+            and exists (select 1 from jsonb_array_elements(me.info -> 'beat' -> 'companies') c where jsonb_typeof(c) = 'object' and nullif(btrim(coalesce(c ->> 'guid', ''))  , '') is not null
+                         and coalesce(c ->> 'open', 'true') <> 'false') end from tally_devices me where me.id = p_device)
+      then 'Not posted yet: the Tally company open on the computer is not the linked one (different company ID). Open ' || p_company || ' (the company its client is linked to) in Tally'
+    else 'Not posted yet: the linked Tally company ' || p_company || ' is not open in Tally on the computer' end
+$function$;
+revoke all on function public.tally_post_linked_why_for(uuid, text, text, uuid, text) from public, anon, authenticated;
+grant execute on function public.tally_post_linked_why_for(uuid, text, text, uuid, text) to service_role;
+
+-- why tally_post_linked_open refuses this posting (null: it does not)
+create or replace function public.tally_post_linked_why(p_job uuid, p_device uuid, p_bridge text)
+returns text language sql stable security definer set search_path = public, pg_temp as $function$
+  select case when tally_post_linked_ok(j.firm_id, j.client_id, j.company, p_device, p_bridge) then null
+              else tally_post_linked_why_for(j.firm_id, j.client_id, j.company, p_device, p_bridge) end
+    from tally_post_jobs j where j.id = p_job
 $function$;
 revoke all on function public.tally_post_linked_why(uuid, uuid, text) from public, anon, authenticated;
 grant execute on function public.tally_post_linked_why(uuid, uuid, text) to service_role;
 
--- 185's tally_post_count_for (the beat's posts count); changed (the fourth review): the bridge's own postings and those it
--- may pick up are counted only when it reports the linked company's GUID open (tally_post_linked_open, as the hand-out
--- below); the third part (185's tally_post_unrouted_ok) asked it already. A posting of its own it refuses says why on the
--- posting (tally_post_linked_why), written only when the words change, never waiting on a lock; a failure there never
--- stops the count
+-- 185's tally_post_count_for (the beat's posts count); changed (the fourth and fifth reviews): the bridge's own postings
+-- and those it may pick up are counted only when it reports the linked company's GUID open (tally_post_linked_ok, the
+-- hand-out's gate), asked once per client and company, never per posting; the third part (185's tally_post_unrouted_ok)
+-- asked it already. The words: only for a bridge that may post, only for its own postings the gate refused (the words
+-- worked out once per refused company), only over an empty message or the gate's own words ("Not posted yet: ...", never
+-- 'Started on', the 6-hour words, 'Rechecked by itself', 'Retry:' or any other writer's), only when they change, at most 20
+-- a beat, never waiting on a lock, never moving updated_at; a failure there never stops the count
 create or replace function public.tally_post_count_for(p_device uuid, p_bridge text, p_main boolean)
 returns integer language plpgsql volatile security definer set search_path = public, pg_temp as $function$
-declare n integer; go boolean := coalesce(p_bridge, '') ~ '^go-[0-9a-f]{6,32}$'; r record;
+declare n integer; w jsonb; go boolean := coalesce(p_bridge, '') ~ '^go-[0-9a-f]{6,32}$'; r record;
 begin
-  select count(*)::int into n from tally_post_jobs j
-   where j.device_id = p_device and j.status = 'waiting' and tally_post_mine_ok(j.id, p_device, p_bridge, p_main) and tally_post_linked_open(j.id, p_device, p_bridge);
+  with mine as materialized (
+    select j.id, j.firm_id, j.client_id, j.company, j.message, j.stop_reason, j.created_at from tally_post_jobs j
+     where j.device_id = p_device and j.status = 'waiting' and tally_post_mine_ok(j.id, p_device, p_bridge, p_main)),
+  gk as materialized (
+    select g.firm_id, g.client_id, g.company, tally_post_linked_ok(g.firm_id, g.client_id, g.company, p_device, p_bridge) as ok
+      from (select distinct m.firm_id, m.client_id, m.company from mine m) g),
+  gw as materialized (select gk.*, case when not gk.ok then left(tally_post_linked_why_for(gk.firm_id, gk.client_id, gk.company, p_device, p_bridge), 300) end as why from gk)
+  select (select count(*)::int from mine m join gw on gw.firm_id = m.firm_id and gw.client_id = m.client_id and gw.company = m.company where gw.ok),
+         (select coalesce(jsonb_agg(jsonb_build_object('id', x.id, 'why', x.why)), '[]'::jsonb) from (
+            select m.id, gw.why from mine m join gw on gw.firm_id = m.firm_id and gw.client_id = m.client_id and gw.company = m.company
+             where not gw.ok and m.stop_reason is null and m.message is distinct from gw.why
+               and (coalesce(m.message, '') = '' or m.message like 'Not posted yet: %')
+             order by m.created_at limit 20) x)
+    into n, w;
   if go then
-    n := n + (select count(*)::int from tally_post_jobs j join tally_devices me on me.id = p_device
-               where j.firm_id = me.firm_id and j.status = 'waiting' and j.taken_by is null and tally_post_pickable_ok(j.id, p_device, p_bridge) and tally_post_linked_open(j.id, p_device, p_bridge))
-            + (select count(*)::int from tally_post_jobs j join tally_devices me on me.id = p_device
+    n := n + (with pk as materialized (
+                select j.firm_id, j.client_id, j.company from tally_post_jobs j join tally_devices me on me.id = p_device
+                 where j.firm_id = me.firm_id and j.status = 'waiting' and j.taken_by is null and tally_post_pickable_ok(j.id, p_device, p_bridge)),
+              pg as materialized (select g.*, tally_post_linked_ok(g.firm_id, g.client_id, g.company, p_device, p_bridge) as ok from (select distinct * from pk) g)
+              select count(*)::int from pk join pg on pg.firm_id = pk.firm_id and pg.client_id = pk.client_id and pg.company = pk.company where pg.ok)
+           + (select count(*)::int from tally_post_jobs j join tally_devices me on me.id = p_device
                where j.firm_id = me.firm_id and j.status = 'waiting' and j.device_id is null and tally_post_unrouted_ok(j.id, p_device, p_bridge));
   end if;
-  begin
-    for r in select j.id, left(w.why, 300) as why from tally_post_jobs j cross join lateral (select tally_post_linked_why(j.id, p_device, p_bridge) as why) w
-              where j.device_id = p_device and j.status = 'waiting' and j.stop_reason is null and tally_post_mine_ok(j.id, p_device, p_bridge, p_main)
-                and w.why is not null and j.message is distinct from left(w.why, 300)
-              order by j.created_at limit 20 loop
-      perform 1 from tally_post_jobs j where j.id = r.id for update skip locked;
-      if found then update tally_post_jobs set message = r.why, updated_at = now() where id = r.id and status = 'waiting'; end if;
-    end loop;
-  exception when others then null;   -- (the words are a courtesy; the count stands)
-  end;
+  if jsonb_array_length(w) > 0 then
+    begin
+      if tally_bridge_may_post(p_device, p_bridge) then
+        for r in select (x->>'id')::uuid as id, x->>'why' as why from jsonb_array_elements(w) x loop
+          perform 1 from tally_post_jobs j where j.id = r.id for update skip locked;
+          if found then
+            update tally_post_jobs set message = r.why
+             where id = r.id and status = 'waiting' and stop_reason is null and (coalesce(message, '') = '' or message like 'Not posted yet: %') and message is distinct from r.why;
+          end if;
+        end loop;
+      end if;
+    exception when others then null;   -- (the words are a courtesy; the count stands)
+    end;
+  end if;
   return n;
 end $function$;
 revoke all on function public.tally_post_count_for(uuid, text, boolean) from public, anon, authenticated;

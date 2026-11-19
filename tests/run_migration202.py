@@ -18,9 +18,13 @@ entry; an entry only ever posted into the company its client is linked to (by it
      Retry), one posted elsewhere meanwhile is not handed back, a recheck run again sends nothing
   J. the hand-out: a posting goes only to a bridge that reports the linked company's GUID open; the beat's count
      (tally_post_count_for) asks the same gate, and a posting it refuses says why in plain words (another company ID open,
-     or the link has no company ID yet): never waits silently, never the name alone
+     or the link has no company ID yet): never waits silently, never the name alone; never over another writer's words
+     ('Started on', the 6-hour words, 'Rechecked by itself', 'Retry:'), never moving updated_at, never on a bridge that may
+     not post, never a write on a beat that changes nothing
   K. the cron: idle is one look; due: the recheck in the run
   L. an entry whose date or amount cannot be read from the posting: never sent again, left to a person in words
+  M. the beat's count timed: 1,000 waiting postings, the gate open and refused, against 185's own text (never slower,
+     within noise); the gate asked once per company, not per posting
 RED_WITHOUT_202=1: the same checks without the file (fails)."""
 import os, re, sys, json, time, hashlib
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
@@ -44,7 +48,7 @@ ok(bool(text) and "delete from" not in code and not re.search(r"\b(drop|truncate
    "add-only: one table, two indexes; nothing dropped, deleted or truncated; no trigger")
 ok(bool(text) and not re.search(r"supabase\.co|https?://|qbocskai|nrtczu|project[_ ]ref", text.lower()), "names no real database")
 FNS = ["tally_post_recheck_enroll()", "tally_post_recheck_any()", "tally_post_recheck_job(uuid)", "tally_post_recheck_run(uuid[])", "tally_post_work_due()", "tally_post_work()",
-       "tally_post_linked_open(uuid, uuid, text)", "tally_post_linked_why(uuid, uuid, text)", "tally_post_take_for(uuid, text, boolean)", "tally_post_count_for(uuid, text, boolean)"]
+       "tally_post_linked_open(uuid, uuid, text)", "tally_post_linked_why(uuid, uuid, text)", "tally_post_linked_ok(uuid, text, text, uuid, text)", "tally_post_linked_why_for(uuid, text, text, uuid, text)", "tally_post_take_for(uuid, text, boolean)", "tally_post_count_for(uuid, text, boolean)"]
 ok(all(("revoke all on function public.%s from public, anon, authenticated;" % s) in text and ("grant execute on function public.%s to service_role;" % s) in text for s in FNS)
    and sorted(set(re.findall(r"create or replace function public\.(\w+)\(", code))) == sorted(f.split("(")[0] for f in FNS)
    and "grant execute on procedure public.tally_post_work_run(integer) to service_role;" in text, "only these functions (and 201's procedure), each granted explicitly")
@@ -250,6 +254,28 @@ try:
     ok(take() == "", "and is handed nothing")
     db.sql("update tally_links set company_guid = %s where firm_id = %s and client_id = 'c1'" % (q(g0), q(F)))
     ok(count() == "1", "the linked company's GUID open: counted")
+    # (the fifth review, B3) the gate's words never over another writer's, never moving updated_at; none on a bridge that may not post
+    st.setbeat(DA, st.beat("made-up-a", BA, [CO], guid="ffffffff-0000-0000-0000-000000000202"))
+    upd = lambda: db.one("select updated_at::text from tally_post_jobs where id = %s" % q(J(30)))
+    ver = lambda: db.one("select row_version::text from tally_post_jobs where id = %s" % q(J(30)))
+    for w in ("Started on SRV9 by made-up-a; held for that bridge", "Still waiting after 6 hours (since 19-Nov-2026 09:00 IST) for the FinCom Bridge", "Rechecked by itself on 19-Nov-2026: kept", "Retry: waiting for the Tally computer"):
+        db.sql("update tally_post_jobs set message = %s, updated_at = now() - interval '3 hours' where id = %s" % (q(w), q(J(30))))
+        u0 = upd(); count()
+        ok(msg() == w and upd() == u0 if not RED else False, "another writer's words kept, updated_at not moved (%s...)" % w[:24])
+    db.sql("update tally_post_jobs set message = '', updated_at = now() - interval '3 hours' where id = %s" % q(J(30)))
+    u0 = upd(); count()
+    ok("different company ID" in msg() and upd() == u0, "an empty message: the gate's words written, updated_at not moved")
+    v0 = ver(); [count() for _ in range(3)]
+    ok(ver() == v0, "beats that change nothing write nothing (row_version %s -> %s)" % (v0, ver()))
+    db.sql("update tally_post_jobs set message = '' where id = %s" % q(J(30)))
+    info = st.beat("made-up-a", BA, [CO], guid="ffffffff-0000-0000-0000-000000000202"); info["bridges"]["go-cccc000202"] = dict(info["bridges"][BA])
+    st.setbeat(DA, info); db.sql("update tally_devices set main_bridge = 'go-cccc000202' where id = %s" % q(DA))
+    if db.one("select tally_bridge_may_post(%s::uuid, %s)::text" % (q(DA), q(BA))) == "false":
+        v0 = ver(); db.one("set role service_role; select tally_post_count_for(%s::uuid, %s, false)::text" % (q(DA), q(BA)))
+        ok(msg() == "" and ver() == v0, "a bridge that may not post: the gate's words not written (%s)" % msg())
+    else: ok(False, "the stand's bridge may still post with another main bridge")
+    db.sql("update tally_devices set main_bridge = null where id = %s" % q(DA))
+    st.setbeat(DA, st.beat("made-up-a", BA, [CO]))
     ok(J(30) in take(), "the linked company's GUID open: handed it")
     close(30)
 
@@ -266,6 +292,38 @@ try:
         ok(not RED and o.get("released", 0) == 0 and row(n)["status"] == "done" and holders(x) == [J(n)] and rc(n, x).get("state") == "person" and "date or amount" in w,
            "its %s not read: not sent, a person must look (%s %s)" % (what, rc(n, x).get("state"), w))
         close(n)
+
+    print("== M. the beat's count timed (1,000 waiting postings, against 185's text)")
+    m185 = open(M185).read(); a_ = m185.index("create or replace function public.tally_post_count_for("); b_ = m185.index("$function$;", m185.index("$function$", a_) + 10) + len("$function$;")
+    db.sql(m185[a_:b_].replace("public.tally_post_count_for(", "public.tally_post_count_for_185(", 1))
+    db.sql("update tally_post_jobs set status = 'failed', checking = false where status in ('waiting', 'taken', 'running')")
+    db.sql("insert into tally_post_jobs (id, firm_id, client_id, company, status, n, payload, device_id, created_by, created_at) select extensions.gen_random_uuid(), %s, 'c1', %s, 'waiting', 1, '{}'::jsonb, %s, %s, now() - (g || ' seconds')::interval from generate_series(1, 1000) g"
+           % (q(F), q(CO), q(DA), q(STAFF)))
+    def tmed(fn, k=7):
+        ts = []
+        for _ in range(k):
+            t0 = time.time(); out = db.one("set role service_role; select %s(%s::uuid, %s, true)::text" % (fn, q(DA), q(BA))); ts.append(time.time() - t0)
+        return out, sorted(ts)[k // 2]
+    st.setbeat(DA, st.beat("made-up-a", BA, [CO]))
+    tmed("tally_post_count_for"); tmed("tally_post_count_for_185")   # (warm)
+    n_new, t_new = tmed("tally_post_count_for"); n_old, t_old = tmed("tally_post_count_for_185")
+    print("    open: 185 %.0f ms (%s), 202 %.0f ms (%s)" % (t_old * 1000, n_old, t_new * 1000, n_new))
+    ok(n_new == n_old == "1000" and t_new <= t_old * 1.2 + 0.02, "the gate open: counted alike, never slower than 185 (%.0f ms against %.0f ms)" % (t_new * 1000, t_old * 1000))
+    st.setbeat(DA, st.beat("made-up-a", BA, [CO], guid="ffffffff-0000-0000-0000-000000000202"))
+    t0 = time.time(); n1 = db.one("set role service_role; select tally_post_count_for(%s::uuid, %s, true)::text" % (q(DA), q(BA))); t_first = time.time() - t0
+    written = db.one("select count(*)::text from tally_post_jobs where status = 'waiting' and message like 'Not posted yet:%'")
+    for _ in range(60):
+        if db.one("select count(*)::text from tally_post_jobs where status = 'waiting' and message like 'Not posted yet:%'") == "1000": break
+        db.one("set role service_role; select tally_post_count_for(%s::uuid, %s, true)::text" % (q(DA), q(BA)))
+    ok(db.one("select count(*)::text from tally_post_jobs where status = 'waiting' and message like 'Not posted yet:%'") == "1000", "every refused posting says why within 50 beats")
+    v0 = db.one("select sum(row_version)::text from tally_post_jobs")
+    n_ref, t_ref = tmed("tally_post_count_for"); _, t_old2 = tmed("tally_post_count_for_185")
+    v1 = db.one("select sum(row_version)::text from tally_post_jobs")
+    print("    refused: first beat %.0f ms (%s words written), then 202 %.0f ms, 185 %.0f ms" % (t_first * 1000, written, t_ref * 1000, t_old2 * 1000))
+    ok(n1 == "0" and n_ref == "0" and written == "20" and t_first < 0.5, "the gate refused: nothing counted; the words on at most 20 a beat (%s, %.0f ms)" % (written, t_first * 1000))
+    ok(t_ref <= t_old2 * 1.2 + 0.02 and v0 == v1, "then each beat as fast as 185's, nothing written (%.0f ms against %.0f ms; row_version %s -> %s)" % (t_ref * 1000, t_old2 * 1000, v0, v1))
+    db.sql("update tally_post_jobs set status = 'failed' where status = 'waiting'")
+    st.setbeat(DA, st.beat("made-up-a", BA, [CO]))
 
     print("== K. the cron")
     if not RED: db.sql("update tally_post_rechecks set state = 'person' where state = 'open'")
