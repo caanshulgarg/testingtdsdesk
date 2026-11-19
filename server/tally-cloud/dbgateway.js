@@ -61,21 +61,45 @@ export function dbReport(err, status) {
   return { err: { message: UNREACHABLE }, tags, short: s.message };
 }
 
-// a READ, tried once more after a short wait when its error is worth it (isTransientDb) and the first try came back
-// within maxMs (the bridge waits about 2 s per request: a 700 ms cap on each try, at most 400 ms between; a 522 often comes after the gateway's own long wait; a second one would hold the caller twice as long).
-// read() answers as supabase-js does ({data, error, status}) or throws (fetch itself failed). The answer: the last one,
-// its error shortened (dbErrorShort), and tries. Never for a write: a write the gateway timed out may have been done
+// a try cut off by its own time limit (an AbortSignal: supabase-js answers "TimeoutError: Signal timed out." or
+// "AbortError: ..."): not a lost connection by itself (isTransientDb says no), but worth one more try while time is left
+const ABORTED = /\b(?:TimeoutError|AbortError)\b|signal (?:has been )?(?:timed out|aborted)|operation was aborted|the request was aborted/i;
+export const isAborted = (err) => !!err && ABORTED.test(msgOf(err) || String((err && err.name) || ""));
+
+// a READ, tried once more after a short wait when its error is worth it (isTransientDb, or the try cut off by its time
+// limit) and time is left. The bridge waits about 2 s per request, so the whole lookup, its one more try included, has
+// budgetMs (1800): the first try up to tryMs (1450: a slow but healthy database answering in 1-1.3 s is answered), then
+// a wait of 200-400 ms (less when time is short) and one more try with what is left, only when at least minTryMs (250)
+// is. A dead gateway answers its page at once (two quick tries); one that hangs is cut off at the budget.
+// read(signal) answers as supabase-js does ({data, error, status}) or throws (fetch itself failed); a read that never
+// settles is answered by its time limit all the same. The answer: the last one, its error shortened (dbErrorShort), and
+// tries. Never for a write: a write the gateway timed out may have been done
 export async function readRetry(read, o = {}) {
   const sleep = o.sleep || ((ms) => new Promise((r) => setTimeout(r, ms)));
   const now = o.now || (() => Date.now());
-  const maxMs = o.maxMs ?? 800;
-  const wait = o.waitMs ?? 200 + Math.floor(Math.random() * 200);
-  const once = async () => { try { return await read(); } catch (e) { return { data: null, error: { message: String((e && e.message) || e) }, status: 0 }; } };
-  const t0 = now();
-  let r = await once(), tries = 1;
-  if (r && r.error && isTransientDb(r.error, r.status) && now() - t0 <= maxMs) {
-    await sleep(wait);
-    r = await once(); tries = 2;
+  const budget = o.budgetMs ?? 1800;
+  const tryMs = o.tryMs ?? 1450;
+  const minTry = o.minTryMs ?? 250;
+  let wait = o.waitMs ?? 200 + Math.floor(Math.random() * 200);
+  const t0 = now(), started = Date.now();
+  // the real time left (the clock a test gives decides the retry; the timers always run on the real one)
+  const left = () => Math.min(budget - (now() - t0), budget - (Date.now() - started));
+  const once = async (ms) => {
+    const ac = new AbortController();
+    let timer;
+    const cut = new Promise((res) => { timer = setTimeout(() => { const why = new DOMException("Signal timed out.", "TimeoutError"); ac.abort(why); res({ data: null, error: { message: "TimeoutError: Signal timed out.", code: "" }, status: 0 }); }, Math.max(1, ms)); });
+    try {
+      return await Promise.race([(async () => { try { return await read(ac.signal); } catch (e) { return { data: null, error: { message: (e && e.name && e.name !== "Error" && e.name !== "TypeError" ? e.name + ": " : "") + String((e && e.message) || e) }, status: 0 }; } })(), cut]);
+    } finally { clearTimeout(timer); }
+  };
+  let r = await once(Math.min(tryMs, left())), tries = 1;
+  if (r && r.error && (isTransientDb(r.error, r.status) || isAborted(r.error))) {
+    const l = left();
+    wait = Math.min(wait, Math.max(0, l - minTry));
+    if (l - wait >= minTry) {
+      await sleep(wait);
+      r = await once(left()); tries = 2;
+    }
   }
   const error = r && r.error ? dbErrorShort(r.error, r.status) : null;
   return { ...r, error, tries };

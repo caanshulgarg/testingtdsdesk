@@ -4733,9 +4733,11 @@ Deno.serve(sentry.wrap(async (req) => {
   // every column: wake_token is there from migration-13 on, and the heartbeat works without it
   // next-fix-devlookup: a read, so asked once more after a short wait when the gateway answered its error page or the
   // connection was lost (readRetry: never for a statement timeout or any other answer of the database); its error as one
-  // short line (the status and the page's title, never the page)
+  // short line (the status and the page's title, never the page). The whole lookup within 1.8 s, its one more try
+  // included (the bridge waits 2 s): the first try up to 1.45 s (a slow but healthy database is answered), one more
+  // only while time is left (a try cut off by its limit included)
   const keyHash = await sha256(key);
-  const { data: dev, error: devErr, tries: devTries } = await readRetry(() => db.from("tally_devices").select("*").eq("key_hash", keyHash).abortSignal(AbortSignal.timeout(700)).maybeSingle());
+  const { data: dev, error: devErr, tries: devTries } = await readRetry((signal: AbortSignal) => db.from("tally_devices").select("*").eq("key_hash", keyHash).abortSignal(signal).maybeSingle(), { budgetMs: 1800, tryMs: 1450 });
   // the lookup FAILED (a database error is not "no such key"): busy, asked again; the 401 below only when the database
   // answered and holds no such key, or holds it revoked
   if (devErr) { fail("device_lookup", devErr); console.error("tally-ingest: the computer key could not be looked up:", String(devErr.code || ""), String(devErr.message || "").slice(0, 200), "(tries " + devTries + ")"); return busyReply(); }

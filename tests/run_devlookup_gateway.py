@@ -93,6 +93,24 @@ try:
     FS.CALLS.clear()
     c, r, h = call(dict(HELLO))
     ok(c == 200 and lookups() == 1, "5. the database well: answered, the key looked up once (%s, %d)" % (c, lookups()))
+    print("== 6. a slow but healthy database; one that hangs")
+    for secs in (1.0, 1.3):
+        FS.CALLS.clear(); FS.TABLE_DELAY["tally_devices"] = [secs]
+        t0 = time.time(); c, r, h = call(dict(HELLO)); took = time.time() - t0
+        ok(c == 200 and r.get("ok") is not False and lookups() == 1, "6. the key lookup answers in %.1f s: answered as usual, asked once (%s %s, %d, %.2f s)" % (secs, c, str(r)[:80], lookups(), took))
+    # the first try slow past its share, the second at once: one more try within the time allowed
+    FS.CALLS.clear(); FS.TABLE_DELAY["tally_devices"] = [3.0, 0.0]
+    t0 = time.time(); c, r, h = call(dict(HELLO)); took = time.time() - t0
+    time.sleep(3.2)   # (the stand-in counts a call when it answers it: the first, given up on, after its 3 s)
+    ok(c == 200 and lookups() == 2 and took < 2.0, "6. the first try hangs, the second answers: answered as usual within 2 s (%s, %d, %.2f s)" % (c, lookups(), took))
+    # hangs the whole time: busy, fast, the whole lookup (its one more try included) within 1.8 s, every request within 2 s
+    FS.CALLS.clear(); del log[:]; FS.TABLE_DELAY["tally_devices"] = [5.0]
+    t0 = time.time(); c, r, h = call(dict(HELLO)); took = time.time() - t0
+    ok(busy(c, r, h) and took < 2.0, "6. the database hangs: 503 busy within 2 s (%s, %.2f s)" % (c, took))
+    time.sleep(0.3)
+    lines = [l for l in log if "could not be looked up" in l]
+    ok(len(lines) == 1 and "tries 2" in lines[0], "6. the database hangs: tried twice within the time allowed (%r)" % (lines[0].strip()[:200] if lines else None))
+    FS.TABLE_DELAY.pop("tally_devices"); time.sleep(5.5)
 finally:
     fn.terminate()
 if fails:

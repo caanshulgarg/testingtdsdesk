@@ -86,13 +86,49 @@ Deno.test("readRetry: one more try after a short wait, only for a lost connectio
   n = 0; waits.length = 0;
   let clock = 0;
   const slow = async () => { n++; clock += 8000; return { data: null, error: { message: P522a }, status: 522 }; };
-  const r5 = await readRetry(slow, { sleep, now: () => clock, maxMs: 5000 });
+  const r5 = await readRetry(slow, { sleep, now: () => clock, budgetMs: 5000 });
   assert(n === 1 && waits.length === 0 && r5.error?.code === "GW522", "a slow 522: one try only, the short error (" + n + ")");
   // a thrown error (fetch itself failed) is an answer with that error, tried again once
   n = 0; waits.length = 0;
   const throws = async () => { n++; if (n === 1) throw new TypeError("fetch failed"); return { data: { id: "d2" }, error: null, status: 200 }; };
   const r6 = await readRetry(throws, { sleep });
   assert(n === 2 && r6.data?.id === "d2", "a thrown fetch failure: tried again (" + n + ")");
+});
+
+Deno.test("readRetry: a slow but healthy read is answered; one that hangs is cut off and tried again only while time is left", async () => {
+  const wait = (ms: number, signal?: AbortSignal) => new Promise<void>((res, rej) => {
+    const t = setTimeout(res, ms);
+    signal?.addEventListener("abort", () => { clearTimeout(t); rej(signal.reason ?? new DOMException("Signal timed out.", "TimeoutError")); });
+  });
+  // as supabase-js answers an aborted fetch: no throw, the abort as the error's message
+  const as = async (ms: number, signal: AbortSignal, row: any) => {
+    try { await wait(ms, signal); return { data: row, error: null, status: 200 }; }
+    catch (e) { return { data: null, error: { message: `${(e as Error).name}: ${(e as Error).message}`, details: "", hint: "", code: "" }, status: 0 }; }
+  };
+  // 1.2 s, healthy: answered on the first try (it was cut off at 700 ms and the lookup said busy)
+  let n = 0, t0 = Date.now();
+  const r1 = await readRetry((signal: AbortSignal) => { n++; return as(1200, signal, { id: "d1" }); });
+  assert(n === 1 && r1.data?.id === "d1" && !r1.error, "1.2 s: the row on the first try (" + n + " " + JSON.stringify(r1.error) + ")");
+  // hangs the first time, quick the second: cut off, tried again within the time allowed
+  n = 0; t0 = Date.now();
+  const r2 = await readRetry((signal: AbortSignal) => { n++; return as(n === 1 ? 5000 : 10, signal, { id: "d2" }); });
+  const t2 = Date.now() - t0;
+  assert(n === 2 && r2.data?.id === "d2" && t2 < 1850, "hang then quick: the row on the second try within 1.8 s (" + n + ", " + t2 + " ms, " + JSON.stringify(r2.error) + ")");
+  // hangs every time: two tries, the whole lookup within 1.8 s, the abort's error handed back
+  n = 0; t0 = Date.now();
+  const r3 = await readRetry((signal: AbortSignal) => { n++; return as(5000, signal, { id: "d3" }); });
+  const t3 = Date.now() - t0;
+  assert(n === 2 && !!r3.error && t3 < 1850 && t3 > 1400, "hangs: two tries, cut off within 1.8 s (" + n + ", " + t3 + " ms)");
+  // the read ignores the signal (never settles): still answered within the time allowed
+  n = 0; t0 = Date.now();
+  const r4 = await readRetry(() => { n++; return new Promise(() => {}); });
+  const t4 = Date.now() - t0;
+  assert(!!r4.error && t4 < 1850, "a read that never settles: an error within 1.8 s (" + n + ", " + t4 + " ms)");
+  // an abort with no time left for another try (the budget used up): not tried again
+  n = 0;
+  const r5 = await readRetry((signal: AbortSignal) => { n++; return as(5000, signal, null); }, { budgetMs: 600, tryMs: 500 });
+  assert(n === 1 && !!r5.error, "an abort with no time left: one try (" + n + ")");
+  assert(isTransientDb({ message: "TimeoutError: Signal timed out.", code: "" }, 0) === false, "an abort alone is not a lost connection (readRetry decides by the time left)");
 });
 
 Deno.test("Sentry: gateway pages a few seconds apart (other Ray IDs, other 52x) are one fixed short report, its status a tag", async () => {

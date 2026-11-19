@@ -38,6 +38,7 @@ FAIL_RPC = {}             # function -> {message, code}: the call answers this P
 GATEWAY_FAIL = {}         # table -> {status, body, n}: the next n GETs of it (n < 0: every one) answer the gateway's HTML error page
                           # (Cloudflare's 52x in front of Supabase while Postgres restarts; FINCOM-CLOUD-STAGING-8/B/C)
 DELAY = [0.0]             # seconds every request waits before it is answered (a slow database)
+TABLE_DELAY = {}          # table -> [seconds, ...]: each GET of it waits the next of these (the last kept) before it is answered (a slow but healthy database, or one that hangs)
 SPANS = []                # while DELAY is on: (method, path?query, started, ended) of each request, to see which ran at the same time
 MAX_URL = [0]             # > 0: a request whose path and query are longer answers 414 (a gateway's URL limit; the refetch chunks)
 # migration 130 (bridge 2.5.0): by default a database before it (tally_openings_held not there); run_openings_ingest.py
@@ -314,6 +315,13 @@ class H(http.server.BaseHTTPRequestHandler):
                 return self.send(200, raw=FILES[key], headers={"Content-Type": "application/gzip"})
         self.send(404, {"message": "no such path " + path})
     def timed(self, method):
+        td = TABLE_DELAY.get(self.path.split("?", 1)[0].rsplit("/", 1)[-1]) if method == "GET" and self.path.startswith("/rest/v1/") else None
+        if td:
+            time.sleep(td.pop(0) if len(td) > 1 else td[0])
+            try: return self.handle_any(method) if not DELAY[0] else self.timed_rest(method)
+            except (BrokenPipeError, ConnectionResetError): return   # the caller gave up waiting (its own time limit)
+        return self.timed_rest(method)
+    def timed_rest(self, method):
         if not DELAY[0]: return self.handle_any(method)
         t0 = time.time(); time.sleep(DELAY[0])
         try: return self.handle_any(method)
