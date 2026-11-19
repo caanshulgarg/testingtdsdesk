@@ -23,7 +23,12 @@ cloud (the last one failed, half of its bills refused) and 300 more made-up clie
      (default 250; 400-850 ms before, under 150 after) and the drafts' count the one refreshStats gives at once;
   2. the same counts and rows as the build before the fix (DIGEST): Post to Tally's tab counts, the Errors and Posted rows
      with their status, the bills by bucket, the postings needing a decision and what each has left to send, worked out
-     inside a drawing and outside one.
+     inside a drawing and outside one;
+  3. the figures kept for a drawing are never shown stale by a drawing with the last drawing's figures (memoKeep: the
+     top bar's own news, renderTop): after the Overview is drawn, a bank line of the statement open refused (its state
+     and Tally's words changed in place, the same number of lines, saveBank) and then a posting register read again with
+     a bill refused in it: each time FinComReact.redraw({keep: true}) while memoKept(), and the top bar's "N Tally errors"
+     is the count worked out afresh (one more each time).
 Runs on the React build: app/dist-test (cd app && npm run legacy && npm run build:test), or TDSDESK_SITE.
 BIG_DIR=a folder with Master.xml and DayBook.xml from mis_big_books.py (made in a temporary folder when not given)."""
 import os, sys, json, shutil, tempfile, threading, functools, subprocess, http.server
@@ -95,6 +100,13 @@ INSTR = """() => { window.__ck = null; window.__lt = []; window.__ps = 0;
   new PerformanceObserver((l) => l.getEntries().forEach((e) => window.__lt.push([Math.round(e.startTime), Math.round(e.duration)]))).observe({type: 'longtask'}); }"""
 WHERE = "() => ({open: S.view === 'home' ? 'home/' + S.homeTab : S.view + '/' + S.tab, co: S.coId, hash: location.hash})"
 HASH = "(s) => { let h = 2166136261; for (const c of s){ h ^= c.codePointAt(0); h = Math.imul(h, 16777619) >>> 0; } return h.toString(16).toUpperCase(); }"
+# a made-up bank statement open for the client: 6 made-up lines ready to post, none refused
+BANK = """() => { const cid = S.coId, rows = [];
+  for (let i = 0; i < 6; i++) rows.push({id: 'zzb' + i, date: '2026-08-1' + i, narr: 'MADE UP NARRATION ' + i, debit: 1000 + i, credit: 0, state: 'ready', dec: {name: 'Made Up Payee ' + i}});
+  S.bank = {cid, rows, stmts: [{id: 'zzst', bank: 'Made Up Bank', from: '2026-08-01', to: '2026-08-31', opening: 0, closing: 0}], cur: 'zzst', filter: 'review', loading: false}; render(); return rows.length; }"""
+# the top bar's "N Tally errors" as drawn, and the count worked out afresh (outside a drawing)
+ERRS = """() => { const b = document.querySelector('[data-review-link]'); return [b ? parseInt(b.innerText, 10) : 0, num(postTabCounts(S.coId).errors)]; }"""
+KEEP = """() => { const kept = memoKept(); FinComReact.redraw({keep: true}); return kept; }"""
 # what Post to Tally counts and lists, as text
 FIGS = """(inside) => { const cid = S.coId, go = () => { const t = postTabCounts(cid), rows = (tab) => postTabRows(cid, tab).shown.map(x => x.key + ':' + x.st.code).sort(), b = postBills(cid);
     const need = CloudJobs.needing(cid);
@@ -152,6 +164,18 @@ try:
         c = json.loads(a)
         ok(c[0]["topost"] == 0 and c[0]["errors"] > 0 and len(c[2]) > 0 and len(c[3]) >= (JOBS - 1) * PER and len(c[7]) == 1 and c[7][0][1] == PER // 2 - 1,
            "   tab counts %s, %d Errors rows, %d Posted rows, the failed posting needing a decision with %s left to send" % (c[0], len(c[2]), len(c[3]), c[7][0][1] if c[7] else None))
+        print("\n3. A drawing with the last drawing's figures (memoKeep) after a change")
+        pg.evaluate("(c) => Route.apply('#/c/' + c + '/dash')", cid); pg.wait_for_timeout(2500)
+        nb = pg.evaluate(BANK); pg.wait_for_timeout(800)
+        e0 = pg.evaluate(ERRS)
+        ok(nb == 6 and e0[0] == e0[1] > 0, "the Overview with a made-up statement of %d lines open: %s Tally errors (afresh %s)" % (nb, e0[0], e0[1]))
+        pg.evaluate("() => { const r = S.bank.rows[2]; r.postError = 'Made-up refusal of the line'; saveBank({rows: true}); }")
+        kept = pg.evaluate(KEEP); pg.wait_for_timeout(300); e1 = pg.evaluate(ERRS)
+        ok(kept and e1[0] == e1[1] == e0[1] + 1, "   a bank line refused in place (still 6 lines), the memoKeep drawing (kept %s): %s Tally errors (afresh %s)" % (kept, e1[0], e1[1]))
+        pg.evaluate("""(cid) => { const r = {fincom_id: 'zzp0', entry_id: 'zzp0', kind: 'bill', state: 'refused', job_id: 'zzjob0', tally_words: 'Made-up refusal in the register', changed_at: '2026-10-02T10:00:00Z'};
+          PostReg.readable = true; PostReg.by[cid] = {at: Date.now(), key: PostReg.key(cid), m: new Map([['zzp0', r]]), rows: [r], sg: 'zz'}; }""", cid)
+        kept = pg.evaluate(KEEP); pg.wait_for_timeout(300); e2 = pg.evaluate(ERRS)
+        ok(kept and e2[0] == e2[1] == e1[1] + 1, "   the posting register read again with a bill refused, the memoKeep drawing (kept %s): %s Tally errors (afresh %s)" % (kept, e2[0], e2[1]))
         br.close()
 finally:
     srv.shutdown(); shutil.rmtree(root, ignore_errors=True)
