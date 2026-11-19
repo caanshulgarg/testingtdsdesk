@@ -246,6 +246,8 @@ try:
         st.setbeat(DA, st.beat("made-up-a", BA, [CO]))
         ok(db.one("select status || '/' || checking::text from tally_post_jobs where id = %s" % q(JB)) == "done/true", "held by the requeue")
         db.sql("update tally_post_ids set matched_at = now(), matched_vch = 'V' where job_id = %s and fincom_id <= %s" % (q(JB), q("g%d-%05d" % (N, N - N // 50 - 1))))
+        # (the last N/50: nothing of Tally's says it took them, their reports lost before any stamp: 200 releases only such)
+        db.sql("update tally_post_ids set accepted_at = null, reply_vch = null, batch_end = null, batch_n = null where job_id = %s and matched_at is null" % q(JB))
         db.sql("insert into tally_post_windows (firm_id, book_id, job_id, device_id, a0, a1, created_vch, at) values (%s, %s, %s, %s, 1, 100, 0, now() - interval '5 minutes') on conflict (job_id) do nothing" % (q(F), q(PS.BK), q(JB), q(DA)))
         db.sql("insert into tally_sync_cursor (book_id, firm_id, start_at, match_start, match_alter, match_at) values (%s, %s, '2026-11-01', '2026-11-01', 200, now()) on conflict (book_id) do update set match_alter = 200, match_at = now(), start_at = '2026-11-01', match_start = '2026-11-01'" % (q(PS.BK), q(F)))
         db.sql("insert into tally_post_checks (firm_id, job_id, entry_id, company, asked_by, why, state, checked_at, checked_bridge, checked_device, auto) select %s, %s, i.entry_id, %s, '00000000-0000-0000-0000-000000000200', 'made-up', 'notseen', now(), %s, %s, true from tally_post_ids i where i.job_id = %s and i.matched_at is null"
