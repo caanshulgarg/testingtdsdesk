@@ -1139,11 +1139,15 @@ func beatCompanies(sessions []M, open []any) []any {
 		}
 	}
 	guidOf := map[string]string{}
+	liveOf := map[string][]string{} // linkguid.go: every GUID an open company of that name has in Tally's list now
 	listedNoBF := map[string]bool{} // 2.5.13: listed by this user's Tally without a BOOKSFROM
 	for _, s := range sessions {
 		for _, c := range sessCompanies(s) {
 			if g := str(c["guid"]); g != "" {
 				guidOf[companyKey(str(c["name"]))] = g
+				if s["ok"] == true && s["skipped"] != true && !contains(liveOf[companyKey(str(c["name"]))], g) {
+					liveOf[companyKey(str(c["name"]))] = append(liveOf[companyKey(str(c["name"]))], g)
+				}
 			}
 			if s["mine"] != false && !isTallyDate(normDate(str(c["booksFrom"]))) {
 				listedNoBF[companyKey(str(c["name"]))] = true
@@ -1186,7 +1190,17 @@ func beatCompanies(sessions []M, open []any) []any {
 			continue
 		}
 		done[companyKey(name)] = true
-		cos = append(cos, row(name, true))
+		// linkguid.go: an open company says the GUID Tally gives it now; two open companies of one name are two rows
+		// (each its GUID), so FinCom never takes one for the other
+		gs := liveOf[companyKey(name)]
+		if len(gs) == 0 {
+			cos = append(cos, row(name, true))
+		}
+		for _, g := range gs {
+			e := row(name, true)
+			e["guid"] = g
+			cos = append(cos, e)
+		}
 	}
 	for _, name := range keptNames {
 		if !done[companyKey(name)] {
@@ -1519,7 +1533,8 @@ func cloudPostTakeJobs() (checks []any) {
 		// round 7 (F2): the owner's releases ("Not in Tally — release") for the job's ids come with it
 		// review M1 / L2: a posting handed back after the bridge's "not found" names the entries to send again (resendOnly):
 		// only those go, never the whole posting
-		v, err := newPostJob(M{"jobId": id, "company": str(j["company"]), "masters": arr(pl["masters"]), "vouchers": arr(pl["vouchers"]), "released": arr(j["released"]), "resendOnly": arr(j["resendOnly"]),
+		// linkguid.go: the linked company's Tally GUID (migration 202); none: the posting waits, nothing is sent
+		v, err := newPostJob(M{"jobId": id, "company": str(j["company"]), "guid": str(j["guid"]), "masters": arr(pl["masters"]), "vouchers": arr(pl["vouchers"]), "released": arr(j["released"]), "resendOnly": arr(j["resendOnly"]),
 			"fromCloud": true}) // 2.5.15 item 1: FinCom is asked before each part is sent
 		if err != nil {
 			invokeCloud(M{"kind": "posts_update", "id": id, "status": "failed", "done": 0, "message": "The Tally computer could not start this posting: " + err.Error(), "results": []any{}}, 30)

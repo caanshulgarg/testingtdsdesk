@@ -465,20 +465,26 @@ func invokeImport(p M) (M, error) {
 	if company == "" {
 		return nil, errors.New("No company given.")
 	}
-	port, err := findCompanyPort(company, toInt(p["port"]))
+	// linkguid.go: only into the company with the linked GUID, found in Tally's list asked now, under its name there
+	look, guid, err := findLinkedNow(p)
 	if err != nil {
 		return nil, err
 	}
+	asked := company
+	port, company := look.port, look.name
 	// the company's GUID (a job checked it already): another company of the same name is never posted to; Tally not
 	// answering the check: nothing is posted (each entry says so)
 	var stopAll M
 	if !truthy(p["guidChecked"]) {
 		g, err := companyCheck(fin, company, port)
 		switch {
+		case err == nil && g != "" && normGUID(g) != guid:
+			writeLog("  NOT POSTED: " + company + " in Tally is not the linked company (Tally GUID " + g + ")")
+			stopAll = M{"ok": false, "notSent": true, "message": openToPost(asked)}
 		case err != nil:
 			writeLog("  company check of " + company + ": NOT POSTED, could not check Tally: " + tallyTrouble(err.Error()))
 			stopAll = M{"ok": false, "checkFailed": true, "message": "Could not check Tally, not posted. Try again.", "detail": tallyTrouble(err.Error())}
-		case guardCompanyGUID(company, g) != nil:
+		case normGUID(g) != guid && guardCompanyGUID(company, g) != nil:
 			gerr := guardCompanyGUID(company, g)
 			writeLog("  NOT POSTED: " + gerr.Error())
 			stopAll = M{"ok": false, "guidMismatch": true, "message": "Not posted: " + gerr.Error()}
@@ -541,7 +547,35 @@ func invokeImport(p M) (M, error) {
 		}
 	}
 	reqs := planImports(masters, vouchers)
+	// linkguid.go: the part sent last, held until the next look at Tally's list confirms it went into the linked company
+	var held []M
+	confirm := func() bool {
+		if held == nil {
+			return true
+		}
+		sess := postListFn()
+		ok, wrong, why := confirmLinked(sess, guid, look)
+		if !ok {
+			held = unconfirmResults(held, why, wrong)
+			writeLog("  the part just sent could not be confirmed in " + company + " (" + why + "); unconfirmed, never sent again")
+		}
+		for _, x := range held {
+			add(x)
+		}
+		held = nil
+		return ok
+	}
+	stopped := ""
 	for i, r := range reqs {
+		if stopped == "" && i > 0 && !confirm() {
+			stopped = openToPost(asked)
+		}
+		if stopped != "" {
+			for _, it := range r.items {
+				add(M{"id": it["id"], "kind": r.kind, "ok": false, "notSent": true, "company": company, "port": port, "message": stopped})
+			}
+			continue
+		}
 		o := sendImport(port, company, job, r)
 		var res []M
 		switch {
@@ -560,10 +594,15 @@ func invokeImport(p M) (M, error) {
 			writeLog(fmt.Sprintf("  request %d of %d: %d %s in %.1f s (created %d, altered %d, exceptions %d, ignored %d, last Tally id %s)", i+1, len(reqs), len(r.items), r.kind, o.seconds,
 				toInt(o.note["created"]), toInt(o.note["altered"]), toInt(o.note["exceptions"]), toInt(o.note["ignored"]), or(str(o.note["lastVchId"]), "none")))
 		}
-		for _, x := range res {
-			add(x)
+		if o.err == nil || tallyNoAnswer(o.err) {
+			held = res
+		} else {
+			for _, x := range res {
+				add(x)
+			}
 		}
 	}
+	confirm()
 	okN := 0
 	for _, r := range results {
 		if r["ok"] == true {
@@ -593,6 +632,12 @@ func deletionShape(x string) bool {
 
 // delete one voucher from Tally, trying each way Tally identifies a voucher, and saying what Tally answered
 func removeTallyVoucher(port int, company, guid, masterID, vtype, vdate, vnum string) (M, error) {
+	return removeTallyVoucherWith(port, company, guid, masterID, vtype, vdate, vnum, nil)
+}
+
+// linkguid.go: before (when given) is asked before each try: the port and the company's name in Tally now, or why
+// nothing may be sent (then nothing is)
+func removeTallyVoucherWith(port int, company, guid, masterID, vtype, vdate, vnum string, before func() (int, string, error)) (M, error) {
 	var d time.Time
 	if isTallyDate(vdate) {
 		d = fromTallyDate(vdate)
@@ -616,6 +661,13 @@ func removeTallyVoucher(port int, company, guid, masterID, vtype, vdate, vnum st
 	}
 	var said []string
 	for _, t := range tries {
+		if before != nil {
+			pt, name, err := before()
+			if err != nil {
+				return M{"ok": false, "notSent": true, "message": err.Error()}, nil
+			}
+			port, company = pt, name
+		}
 		raw, err := invokeTally(fin, port, importEnvelope("Vouchers", company, `<TALLYMESSAGE xmlns:UDF="TallyUDF">`+t.x+"</TALLYMESSAGE>"), 0)
 		if err != nil {
 			return nil, err

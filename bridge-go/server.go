@@ -527,15 +527,38 @@ func route(w http.ResponseWriter, r *http.Request, path string, qs url.Values, b
 			writeLog("Unpost from '" + company + "': " + why)
 			return nil, errors.New(why)
 		}
-		port, err := findCompanyPort(company, qint(qs, "port"))
+		// linkguid.go: only in the company with the linked GUID (companyGuid, else the one held for the name), looked at
+		// afresh before each try and once after a deletion
+		want := M{"company": company, "guid": o["companyGuid"]}
+		look, coGUID, err := findLinkedNow(want)
 		if err != nil {
 			return nil, err
 		}
+		port := look.port
 		vtype, vdate, vnum := str(o["vchType"]), str(o["vchDate"]), str(o["vchNumber"])
-		rv, err := removeTallyVoucher(port, company, str(o["guid"]), str(o["masterId"]), vtype, vdate, vnum)
+		first := true
+		rv, err := removeTallyVoucherWith(port, look.name, str(o["guid"]), str(o["masterId"]), vtype, vdate, vnum, func() (int, string, error) {
+			if first { // just looked at
+				first = false
+				return look.port, look.name, nil
+			}
+			h, _, err := findLinkedNow(M{"company": company, "guid": coGUID})
+			look = h
+			return h.port, h.name, err
+		})
 		if err != nil {
 			return M{"ok": false, "error": "Tally did not answer: " + err.Error()}, nil
 		}
+		if rv["ok"] == true {
+			if ok, wrong, why := confirmLinked(postListFn(), coGUID, look); !ok {
+				rv["ok"], rv["unconfirmed"] = false, true
+				rv["message"] = "Tally answered that it deleted the entry, but the company could not be confirmed right after (" + why + "); check it in Tally"
+				if wrong != "" {
+					rv["wrongCompany"] = wrong
+				}
+			}
+		}
+		port = look.port
 		st := "FAILED " + str(rv["message"])
 		if rv["ok"] == true {
 			st = "removed (" + str(rv["how"]) + ")"

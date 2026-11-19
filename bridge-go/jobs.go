@@ -259,6 +259,9 @@ func newPostJob(pl M) (M, error) {
 	if truthy(pl["fromCloud"]) {
 		payload["fromCloud"] = true // 2.5.15 item 1: FinCom is asked before each part is sent
 	}
+	if g := normGUID(str(pl["guid"])); g != "" {
+		payload["guid"] = g // the linked company's Tally GUID (linkguid.go): posted only into the company with it
+	}
 	if pt := toInt(pl["port"]); pt > 0 {
 		payload["port"] = pt
 	}
@@ -452,10 +455,6 @@ func jobWorker(dir string) {
 	jobID := str(p["id"])
 	fromCloud := truthy(pl["fromCloud"]) || cloudPostsHas(jobID) // 2.5.15 item 1: taken from FinCom's queue
 	defer postOKOffline.Delete(jobID)                            // review L7: nothing kept for a job that ended
-	hint := toInt(pl["port"])
-	if pp := toInt(p["port"]); pp > 0 {
-		hint = pp
-	}
 	p["pid"] = os.Getpid()
 	p["checking"] = false
 	var results []M
@@ -557,7 +556,23 @@ func jobWorker(dir string) {
 			}
 		}
 	}
+	// linkguid.go: the part sent last, held until the next look at Tally's list confirms it was the linked company
+	var held []M
+	var heldAt linkLook
+	// the part held made unconfirmed (sent, on the record, never sent again)
+	settleHeld := func(why string) {
+		if held == nil {
+			return
+		}
+		for _, x := range unconfirmResults(held, why, "") {
+			delete(sending, str(x["id"]))
+			results = append(results, x)
+		}
+		held = nil
+		p["inflight"] = []any{}
+	}
 	finish := func(st, msg string) {
+		settleHeld("the posting ended before the company was looked at again")
 		p["status"], p["message"], p["finishedAt"] = st, msg, time.Now().Format(time.RFC3339Nano)
 		save()
 		writeLog("Posting job " + jobID + " " + st + ": " + msg)
@@ -584,21 +599,59 @@ func jobWorker(dir string) {
 	round := 0
 	var port int
 	var company string
+	// linkguid.go: the linked company's GUID; the part sent last, held until the next look at Tally's list confirms it
+	guid := linkedGuidOf(pl)
+	heldDirty := false
+	commitHeld := func(sess []M) {
+		if held == nil {
+			return
+		}
+		var lw *linkWait
+		if _, err := linkedIn(sess, guid, heldAt.name); errors.As(err, &lw) && lw.kind == "stale" {
+			return // no fresh answer from Tally: not decided yet (asked again; the posting ending first: unconfirmed)
+		}
+		if ok, wrong, why := confirmLinked(sess, guid, heldAt); !ok {
+			held = unconfirmResults(held, why, wrong)
+			writeLog("Posting job " + jobID + ": the part just sent could not be confirmed in " + heldAt.name + " (" + why + "); its entries are unconfirmed, never sent again")
+			if wrong != "" {
+				p["wrongCompany"] = cut(wrong, 200)
+			}
+		}
+		for _, x := range held {
+			delete(sending, str(x["id"]))
+			results = append(results, x)
+		}
+		held = nil
+		p["inflight"] = []any{}
+		heldDirty = true // written with the next save (the next part's, or the wait's below)
+	}
 	waitTally := func(why error) bool {
 		for {
 			if cancelled() || stopping() {
 				return false
 			}
 			if why == nil {
-				pt, name, err := findCompanyNow(asked, hint)
+				sess := postListFn()
+				guid = guidAfterList(guid, pl)
+				commitHeld(sess)
+				h, err := linkedIn(sess, guid, asked)
 				if err == nil {
-					port, company, hint = pt, name, pt
-					p["port"], p["tallyCompany"] = pt, name
+					port, company = h.port, h.name
+					p["port"], p["tallyCompany"] = h.port, h.name
 					return true
 				}
 				why = err
 			}
-			setStatus("waiting", waitingLine(asked, why))
+			if heldDirty {
+				heldDirty = false
+				save()
+			}
+			var lw *linkWait
+			if errors.As(why, &lw) {
+				setStatus("waiting", lw.text)
+			} else {
+				setStatus("waiting", waitingLine(asked, why))
+			}
 			if !pause(waitPause(round)) {
 				cancelled()
 				return false
@@ -662,9 +715,13 @@ func jobWorker(dir string) {
 	coGUID := ""
 	for {
 		g, err := companyCheck(fin, company, port)
+		if err == nil && g != "" && normGUID(g) != guid {
+			// linkguid.go: the company Tally names so is not the linked one (it changed since the list): waited for
+			err = &linkWait{"notopen", openToPost(asked)}
+		}
 		if err == nil {
 			coGUID = g
-			if gerr := guardCompanyGUID(company, g); gerr != nil {
+			if gerr := guardCompanyGUID(company, g); gerr != nil && normGUID(g) != guid {
 				for _, it := range itemsToSend(all, results) {
 					results = append(results, M{"id": it["id"], "kind": it["kind"], "ok": false, "guidMismatch": true, "message": "Not posted: " + gerr.Error()})
 				}
@@ -742,15 +799,17 @@ func jobWorker(dir string) {
 	}
 	p["resumed"] = true
 	save()
-	// A3: the requests, planned once: each master on its own, the bills by PostBatchBills, the bank lines by PostBatchBank
-	reqs := planImports(masters, vouchers)
-	K := len(reqs)
+	// A3: each master on its own, then the bills, then the bank lines; linkguid speed round: each part sized by how long
+	// Tally took for the one before (postpace.go), from PostBatchBills / PostBatchBank
+	pq := newPostQueue(masters, vouchers)
+	K := pq.parts()
 	notes := arr(p["reqs"]) // a resumed job keeps the notes of the requests it sent before
 	secondsTotal := num(p["secondsTotal"])
 	nVouchers := 0
 	total := toInt(p["total"])
 	round = 0
-	for i := 0; i < K; {
+	for i := 0; pq.left(); {
+		K = i + pq.parts()
 		if cancelled() || stopping() {
 			return
 		}
@@ -784,12 +843,12 @@ func jobWorker(dir string) {
 				return
 			}
 		}
-		r := reqs[i]
+		r := pq.next()
 		for _, it := range r.items {
 			sending[str(it["id"])] = true
 		}
-		setStatus("running", sendingLine(len(results)+1, total))
-		save()
+		// linkguid speed round: the status goes to the disk (and FinCom) with the in-flight ids just below: one write, not three
+		p["status"], p["message"] = "running", sendingLine(len(results)+1, total)
 		// the request's ids on disk before it goes (finding 1): a restart mid-request finds them as inflight
 		var inflight []any
 		for _, it := range r.items {
@@ -811,7 +870,10 @@ func jobWorker(dir string) {
 			o = sendImport(port, company, jobID, r)
 			gate.Unlock()
 		}
-		p["inflight"] = []any{}
+		reached := o.err == nil || tallyNoAnswer(o.err)
+		if !reached {
+			p["inflight"] = []any{}
+		} // linkguid.go: a part that reached Tally keeps its ids in flight until the next look confirms the company
 		what := fmt.Sprintf("%d vouchers", len(r.items))
 		if r.kind == "master" {
 			what = "1 master"
@@ -854,9 +916,14 @@ func jobWorker(dir string) {
 		if offline && (o.err == nil || tallyNoAnswer(o.err)) {
 			p["offlineSends"] = toInt(p["offlineSends"]) + 1 // 2.5.15 item 1: a part that reached Tally without FinCom's answer
 		}
-		for _, x := range res {
-			delete(sending, str(x["id"]))
-			results = append(results, x)
+		pq.done(r, o.seconds, o.err)
+		if reached && !errors.As(o.err, &pinErr) {
+			held, heldAt = res, linkLook{port, company}
+		} else {
+			for _, x := range res {
+				delete(sending, str(x["id"]))
+				results = append(results, x)
+			}
 		}
 		if r.kind == "voucher" {
 			nVouchers += len(r.items)
@@ -867,6 +934,22 @@ func jobWorker(dir string) {
 		p["message"] = sendingLine(minI(len(results)+1, total), total)
 		save() // the cloud hears every request as it is answered (posts_update with seq)
 		i++
+	}
+	// linkguid.go: the last part confirmed by one more look at Tally's list (a busy Tally asked again a few times; no
+	// fresh answer: the part is unconfirmed, never sent again)
+	for r := 0; held != nil; r++ {
+		if stopping() {
+			return // in flight on the disk: unknown after the restart, never sent again
+		}
+		if r >= 4 || (r > 0 && !pause(time.Second)) {
+			settleHeld("Tally did not give its company list right after the last part")
+			save()
+			break
+		}
+		commitHeld(postListFn())
+	}
+	if heldDirty {
+		save()
 	}
 	writeLog(fmt.Sprintf("Posting job %s: %d requests, %d vouchers, %.1f s total", jobID, K, nVouchers, secondsTotal))
 	// 2.2.0: the posting window, after the last request (never during the job): a1 by one FinComCompany read now, the
