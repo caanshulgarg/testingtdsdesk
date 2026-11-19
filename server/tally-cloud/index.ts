@@ -5113,7 +5113,7 @@ Deno.serve(sentry.wrap(async (req) => {
         // M1: only those of the postings it took (or is named in); a posting with no record, only for the key's main bridge
         const checks = await checksFor(dev, meT, main);
         // migration 203 (the owner's rule: only into the linked company, by its GUID): the posting carries the linked GUID
-        // its hand-out judged open (a cloud without 203: none; the bridge then posts only by its own record, linkguid.go)
+        // stamped as it was queued (a cloud without 203: none; the bridge then waits and sends nothing, linkguid.go)
         const cg = typeof (j as any)?.company_guid === "string" ? String((j as any).company_guid).trim().toLowerCase() : "";
         return reply(200, { ok: true, job: j ? { id: j.id, company: j.company, payload: j.payload, released, ...(/^[0-9a-z-]{1,100}$/.test(cg) ? { guid: cg } : {}), ...(resendOnly.length ? { resendOnly } : {}) } : null, ...(checks.length ? { checks } : {}) });
       }

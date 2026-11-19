@@ -17,7 +17,7 @@ in one session and 201a, as on staging; made-up firms, logins and companies only
      filled, marked "pick which company" (guid_pick) with both GUIDs and the posting says an owner picks; an owner picks
      (staff refused; a GUID not marked refused); a link made while two of the name are open takes no GUID (tally_link_guid)
 RED_WITHOUT_203=1: the same checks without the file (fails)."""
-import os, re, sys, json, hashlib
+import os, re, sys, json, hashlib, time
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 import post_queue_stand as PS
 from post_queue_stand import q, F, OWNER, STAFF, DA, DB, BA, BB, BK, CO, GUID
@@ -36,25 +36,27 @@ print("  md5 of %s: %s (%d bytes)" % (os.path.basename(M203), hashlib.md5(text.e
 code = "\n".join(l.split("--")[0] for l in text.lower().splitlines())
 print("== 0. the file")
 ok(re.search(r"^begin;\s*\nset local lock_timeout = '10s';", text, re.M) is not None and text.rstrip().endswith("commit;") and code.count("\nbegin;") == 1, "one transaction, lock_timeout 10 s")
-ok(bool(text) and "delete from" not in code and not re.search(r"\b(drop|truncate)\s", code) and "create table" not in code and "create trigger" not in code
+ok(bool(text) and "delete from" not in code and not re.search(r"\b(drop|truncate)\s", code) and "create table" not in code
+   and code.count("create trigger") == 1 and "if not exists (select 1 from pg_trigger where tgname = 'tally_post_jobs_guid'" in code
    and re.findall(r"alter table ([\w.]+) add column if not exists (\w+)", code) == [("public.tally_post_jobs", "company_guid"), ("public.tally_links", "guid_pick")]
-   and len(re.findall(r"alter table", code)) == 2, "add-only: two columns (if not exists); no table, no trigger; nothing dropped, deleted or truncated")
+   and len(re.findall(r"alter table", code)) == 2, "add-only: two columns (if not exists), one trigger (if not there: the stamp as queued); no table; nothing dropped, deleted or truncated")
 ok(bool(text) and not re.search(r"supabase\.co|https?://|qbocskai|nrtczu|project[_ ]ref", text.lower()), "names no real database")
 ok("raise exception 'migration 203 runs after 202" in text, "never runs without the applied 202")
 ok("FinComVoucher" not in text and "<ENVELOPE>" not in text.upper(), "no new request to Tally")
 made = sorted(set(re.findall(r"create or replace function public\.(\w+)\(", code)))
-ok(bool(made) and "tally_post_count_for" not in made and "tally_post_take_wait" not in made and "tally_post_guid_wait" not in made, "202's count left as it is (it asks the gate 203 replaces); no second wait: %s" % made)
+ok(bool(made) and "tally_post_take_wait" not in made and "tally_post_guid_wait" not in made, "no second wait: %s" % made)
 for fn in made:
     sig = re.search(r"create or replace function public\.%s\(([^)]*)\)" % fn, code).group(1)
     types = ", ".join(a.split()[-1] for a in sig.split(",") if a.strip())
     full = "public.%s(%s)" % (fn, types)
     ok(("revoke all on function %s from public, anon" % full) in code and ("grant execute on function %s to " % full) in code, "%s: grants explicit" % full)
 ok(bool(made) and all(("security definer set search_path = public, pg_temp" in seg) for seg in code.split("create or replace function")[1:]), "every function security definer with a fixed search_path")
-for fn, base, want in (("tally_post_take_for", "migration-202-post-recheck.sql", (4, 3)), ("tally_link_guid_fill", "migration-155-link-guid-fill.sql", (1, 0))):
-    if not text: ok(False, fn + ": no file"); continue
+for fn, base, want in (("tally_post_take_for", "migration-202-post-recheck.sql", (4, 3)), ("tally_link_guid_fill", "migration-155-link-guid-fill.sql", (1, 0)),
+                       ("tally_post_count_for", "migration-202-post-recheck.sql", (4, 2)), ("tally_post_job_blocked", "migration-174-post-jobs-safe.sql", (2, 0))):
+    if ("create or replace function public." + fn + "(") not in text: ok(False, fn + ": not in the file"); continue
     a, b = PS.fbody(text, fn), PS.fbody(open(os.path.join(PS.SQLDIR, base)).read(), fn)
     added, gone = [l for l in a if l not in b], [l for l in b if l not in a]
-    ok((len(added), len(gone)) == want and all("company_guid" in l or "tally_post_linked_open" in l or "tally_link_guid_pick_mark" in l for l in added),
+    ok((len(added), len(gone)) == want and all(any(w in l for w in ("company_guid", "tally_post_linked_open", "tally_link_guid_pick_mark", "tally_post_linked_ok", "tally_post_unrouted_ok", "uk.", "ug.", "linked to another tally company", "+ (with uk")) for l in [x.lower() for x in added]),
        "%s: the latest text (%s) with %d added / %d changed lines (want %s): %s" % (fn, base.split("-")[1], len(added), len(gone), want, [l[:90] for l in added]))
 
 st = PS.Stand(int(os.environ.get("PG203_PORT") or 31207), extra=(M184, M185)); db = st.db
@@ -154,6 +156,47 @@ pk = one("select coalesce(guid_pick::text, '') from tally_links where book_id = 
 ok(n == "1" and g == GUID and pk == "", "exactly one of the name: filled by itself (%s, %r), no mark" % (n, g))
 lg = one("select coalesce(tally_link_guid(%s::uuid, %s, %s::uuid), '')" % (q(F), q(CO), q(BK)))
 ok(lg == GUID, "tally_link_guid with one company of the name: %r" % lg)
+
+print("== 6. stamped as queued; the link changed afterwards: held for a person, never handed to the new company")
+close_all(); beat_cos([[CO, GUID]]); job(6)
+ok(one("select coalesce(company_guid, '') from tally_post_jobs where id = %s" % q(J(6))) == GUID, "company_guid stamped as it is queued: %r" % one("select coalesce(company_guid, '') from tally_post_jobs where id = %s" % q(J(6))))
+db.sql("update tally_links set company_guid = %s where book_id = %s" % (q(OTHER), q(BK)))
+beat_cos([[CO, OTHER]]); t = take()
+WHY = "The client was linked to another Tally company after this posting was made: check the entries and post again"
+ok(t is None and status(6) == "failed" and msg(6).startswith(WHY), "never handed to the new company; held for a person: %s %r (%s)" % (status(6), msg(6), t))
+job(7); db.sql("update tally_post_jobs set company_guid = %s, taken_by = %s, first_taken_at = now() - interval '5 minutes', attempts = 1 where id = %s" % (q(GUID), q(BA), q(J(7))))
+t = take(); sr = one("select coalesce(stop_reason, '') from tally_post_jobs where id = %s" % q(J(7)))
+ok(t is None and sr.startswith(WHY), "one taken before (perhaps partly sent): stopped with the reason, never handed out: %r (%s)" % (sr, t))
+db.sql("update tally_links set company_guid = %s where book_id = %s" % (q(GUID), q(BK)))
+
+print("== 7. a posting queued before 203 (no stamp): stamped at hand-out")
+close_all(); beat_cos([[CO, GUID]]); job(8); db.sql("update tally_post_jobs set company_guid = null where id = %s" % q(J(8)))
+t = take(); ok(t is not None and t["id"] == J(8) and t["g"] == GUID, "handed out, stamped with the linked GUID: %s" % t)
+
+print("== 8. the beat's count agrees with the hand-out for postings queued for no computer")
+close_all(); beat_cos([[CO, GUID], [CO, OTHER]]); job(9, dev=None)
+c = count(); ok(c == "0" and take() is None, "two open companies of the name: not counted (%s), not handed out" % c)
+beat_cos([[CO, GUID]]); c = count(); ok(c == "1", "one open: counted (%s)" % c)
+close_all()
+
+print("== 9. the beat's count timed (1,000 own and 1,000 for no computer, waiting), against 185's text")
+m185 = open(M185).read(); a_ = m185.index("create or replace function public.tally_post_count_for("); b_ = m185.index("$function$;", m185.index("$function$", a_) + 10) + len("$function$;")
+db.sql(m185[a_:b_].replace("public.tally_post_count_for(", "public.tally_post_count_for_185(", 1))
+for dv in (q(DA), "null"):
+    db.sql("insert into tally_post_jobs (id, firm_id, client_id, company, status, n, payload, device_id, created_by, created_at) select extensions.gen_random_uuid(), %s, 'c1', %s, 'waiting', 1, '{}'::jsonb, %s, %s, now() - (g || ' seconds')::interval from generate_series(1, 1000) g"
+           % (q(F), q(CO), dv, q(STAFF)))
+beat_cos([[CO, GUID]])
+def tpair(k=15):
+    a_, b_ = [], []
+    for _ in range(k):
+        for fn, ts in (("tally_post_count_for", a_), ("tally_post_count_for_185", b_)):
+            t0 = time.time(); o_ = db.one("set role service_role; select %s(%s::uuid, %s, true)::text" % (fn, q(DA), q(BA))); ts.append((time.time() - t0, o_))
+    return a_[0][1], sorted(t for t, _ in a_)[k // 2], b_[0][1], sorted(t for t, _ in b_)[k // 2]
+tpair(3)   # (warm)
+n_new, t_new, n_old, t_old = tpair()
+print("    185 %.0f ms (%s), 203 %.0f ms (%s)" % (t_old * 1000, n_old, t_new * 1000, n_new))
+ok(n_new == n_old and n_new not in ("", "0") and t_new <= t_old * 1.25 + 0.03, "the gate open: counted alike, never slower than 185 (%.0f ms against %.0f ms)" % (t_new * 1000, t_old * 1000))
+close_all()
 
 print("\nALL PASSED: %d" % len(fails) if not fails else "\nFAILED: %d\n  %s" % (len(fails), "\n  ".join(fails)))
 sys.exit(1 if fails else 0)

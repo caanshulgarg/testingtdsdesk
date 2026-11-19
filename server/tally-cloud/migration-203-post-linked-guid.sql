@@ -6,10 +6,10 @@
 -- (tally_post_linked_why_for). What this branch still needs on top of it (this branch's own first draft of a 202, never
 -- run, is withdrawn; what the applied 202 covers is dropped from it):
 --
---   1. tally_post_jobs.company_guid (new, lower case): the linked GUID a posting is handed out for, stamped by the hand-out
---      (the very GUID the gate judged open; tally_post_link_guid); posts_take sends it to the bridge, which posts only into
---      the open company with that GUID (bridge linkguid.go). A bridge given no GUID (a cloud before 203) never guesses
---      beyond its own record (linkguid.go).
+--   1. tally_post_jobs.company_guid (new, lower case): the linked GUID a posting is for, stamped as it is queued (a BEFORE
+--      INSERT trigger, tally_post_jobs_guid: no enqueue function is replaced), from tally_links.company_guid then; a
+--      posting queued before 203 (no stamp) is stamped by its hand-out. posts_take sends it to the bridge, which posts only
+--      into the open company with that GUID and, given none, waits and sends nothing (bridge linkguid.go).
 --   2. tally_post_link_guid(firm, client, company): the GUID of the client's linked company of that name; null when the link
 --      has none, or two linked books of that name disagree. Service role only.
 --   3. 202's tally_post_linked_ok (same arguments), changed: the single linked GUID (2.), open in the bridge's list, and NO
@@ -17,8 +17,13 @@
 --      the company by its name, so neither is posted to). The beat's count and the hand-out follow (both ask it).
 --   4. 202's tally_post_linked_why_for, changed: two more plain reasons (two linked books disagree; two open companies of
 --      that name), and "an owner picks" while 6. is waiting.
---   5. 202's tally_post_take_for, changed: each hand-out stamps company_guid; the third look (a posting queued for no
---      computer, 185's tally_post_unrouted_ok) asks the gate too.
+--   5. 202's tally_post_take_for, changed: a posting with no stamp is stamped as it is handed out; the third look (a
+--      posting queued for no computer, 185's tally_post_unrouted_ok) asks the gate too.
+--      174's tally_post_job_blocked, one case added: the client linked to another Tally company (another GUID) after the
+--      posting was made: held for a person with that reason (174's hold: failed when never taken, else the stop flag),
+--      never handed to the new company.
+--      202's tally_post_count_for: the postings queued for no computer counted only when the gate is open (asked once per
+--      client and company), as the hand-out's third look; timed against 185's text (tests/run_migration203.py, 9.).
 --   6. "pick which company": tally_links.guid_pick (new, jsonb). A link with no GUID whose name a bridge's beat shows open
 --      twice with two GUIDs is never given one by itself: marked {at, guids, device, bridge} for an owner to pick
 --      (tally_link_guid_pick, owners only: one of the GUIDs marked, never one another linked book holds).
@@ -26,12 +31,12 @@
 --      the open companies of the bridge's latest beat: tally_post_beat_cos).
 --   7. tally_link_guid (110's text): a link made from the beats takes a GUID only when every beat that names the company
 --      gives the same one (two companies of that name open: none; then 6.).
--- Not here (the applied 202 covers it, or it was dropped): the queue-time stamp trigger, a second wait function and
--- posts_take's "wait" words (202's count writes the words on the posting), the 3-minute heard check (202's gate reads
--- the bridge's latest list).
--- ADD-ONLY: two columns (if not exists); new functions; four replaced with the same arguments and their grants restated.
--- No table, no trigger, nothing dropped, no row changed. One transaction, lock_timeout 10 s, safe twice. Deploy: 203, then
--- tally-ingest of this branch (posts_take sends guid; the beat keeps two open companies of one name apart), then the
+-- Not here (the applied 202 covers it, or it was dropped): a second wait function and posts_take's "wait" words (202's
+-- count writes the words on the posting), the 3-minute heard check (202's gate reads the bridge's latest list).
+-- ADD-ONLY: two columns (if not exists), one trigger (if not there); new functions; six replaced with the same arguments
+-- and their grants restated. No table, nothing dropped, no row changed. One transaction, lock_timeout 10 s, safe twice.
+-- Deploy: 203, then tally-ingest of this branch (posts_take sends guid; the beat keeps two open companies of one name
+-- apart), then the bridge (it posts only a posting that names the GUID).
 -- bridge. Tested on a throwaway stand: tests/run_migration203.py.
 begin;
 set local lock_timeout = '10s';
@@ -58,6 +63,23 @@ returns text language sql stable security definer set search_path = public, pg_t
 $function$;
 revoke all on function public.tally_post_link_guid(uuid, text, text) from public, anon, authenticated;
 grant execute on function public.tally_post_link_guid(uuid, text, text) to service_role;
+
+-- stamped as it is queued (whatever function queued it: no enqueue function is replaced), from the link's GUID then
+create or replace function public.tally_post_jobs_guid()
+returns trigger language plpgsql security definer set search_path = public, pg_temp as $function$
+begin
+  if new.company_guid is null then
+    new.company_guid := tally_post_link_guid(new.firm_id, new.client_id, new.company);
+  end if;
+  return new;
+end $function$;
+revoke all on function public.tally_post_jobs_guid() from public, anon, authenticated;
+grant execute on function public.tally_post_jobs_guid() to service_role;
+do $$ begin
+  if not exists (select 1 from pg_trigger where tgname = 'tally_post_jobs_guid' and tgrelid = 'public.tally_post_jobs'::regclass) then
+    create trigger tally_post_jobs_guid before insert on public.tally_post_jobs for each row execute function public.tally_post_jobs_guid();
+  end if;
+end $$;
 
 -- ---------------------------------------------------------------- 3. the gate (202's tally_post_linked_ok)
 -- the open companies the bridge's latest beat names, each (name, guid): its own list (info.bridges[id].cos, 146; two open
@@ -148,7 +170,7 @@ begin
     exit when jid is null;
     if tally_post_job_blocked(jid) is null then
       return query
-      update tally_post_jobs set status = 'taken', company_guid = tally_post_link_guid(firm_id, client_id, company), taken_at = now(), first_taken_at = coalesce(first_taken_at, now()), updated_at = now(), seq = null, message = 'Taken by the Tally computer',
+      update tally_post_jobs set status = 'taken', company_guid = coalesce(company_guid, tally_post_link_guid(firm_id, client_id, company)), taken_at = now(), first_taken_at = coalesce(first_taken_at, now()), updated_at = now(), seq = null, message = 'Taken by the Tally computer',
              taken_by = case when p_bridge ~ '^go-[0-9a-f]{6,32}$' then p_bridge else taken_by end   -- final review M1: the bridge that took it
        where id = jid
       returning *;
@@ -166,7 +188,7 @@ begin
     exit when jid is null;
     if tally_post_job_blocked(jid) is null then
       return query
-      update tally_post_jobs set status = 'taken', company_guid = tally_post_link_guid(firm_id, client_id, company), taken_at = now(), first_taken_at = coalesce(first_taken_at, now()), updated_at = now(), seq = null, device_id = p_device, target_bridge = p_bridge, taken_by = p_bridge,
+      update tally_post_jobs set status = 'taken', company_guid = coalesce(company_guid, tally_post_link_guid(firm_id, client_id, company)), taken_at = now(), first_taken_at = coalesce(first_taken_at, now()), updated_at = now(), seq = null, device_id = p_device, target_bridge = p_bridge, taken_by = p_bridge,
              message = left('Taken by the FinCom Bridge that has ' || company || ' open now (the one it was queued for did not have it open)', 300)
        where id = jid and status = 'waiting' and taken_by is null and taken_at is null
       returning *;
@@ -188,7 +210,7 @@ begin
     if jid is null then return; end if;
     if tally_post_job_blocked(jid) is null then
       return query
-      update tally_post_jobs set status = 'taken', company_guid = tally_post_link_guid(firm_id, client_id, company), taken_at = now(), first_taken_at = coalesce(first_taken_at, now()), updated_at = now(), seq = null, device_id = p_device, target_bridge = p_bridge, taken_by = p_bridge,
+      update tally_post_jobs set status = 'taken', company_guid = coalesce(company_guid, tally_post_link_guid(firm_id, client_id, company)), taken_at = now(), first_taken_at = coalesce(first_taken_at, now()), updated_at = now(), seq = null, device_id = p_device, target_bridge = p_bridge, taken_by = p_bridge,
              message = left('Taken by the FinCom Bridge that has ' || company || ' open now (it was queued for whichever computer opens it)', 300)
        where id = jid and status = 'waiting' and device_id is null and taken_by is null and taken_at is null and first_taken_at is null
       returning *;
@@ -199,6 +221,90 @@ begin
 end $function$;
 revoke all on function public.tally_post_take_for(uuid, text, boolean) from public, anon, authenticated;
 grant execute on function public.tally_post_take_for(uuid, text, boolean) to service_role;
+
+-- ---------------------------------------------------------------- 5b. the link changed after the posting was made
+-- 174's tally_post_job_blocked; added: a posting stamped as queued whose client is now linked to another Tally company
+-- (another GUID) is held for a person (174's tally_post_hold_job: failed when never taken, else the stop flag), never
+-- handed to the new company. One queued before 203 (no stamp) is stamped at its hand-out
+create or replace function public.tally_post_job_blocked(p_job uuid)
+returns text language sql stable security definer set search_path = public, pg_temp as $function$
+  select case
+    when tc.book_id is null and p.now_to is not null
+      then 'Not posted: the Tally company ' || j.company || ' was renamed (or removed) after this was queued; ' || nm || ' now posts to ' || p.now_to || '. Nothing of it was sent to Tally. Post it again to send it there.'
+    when tc.book_id is null
+      then 'Not posted: ' || j.company || ' is no longer a Tally company of ' || nm || ' in FinCom (renamed or removed after this was queued). Nothing of it was sent to Tally.'
+    when l.book_id is null or l.state <> 'linked' or l.client_id is distinct from j.client_id
+      then 'Not posted: ' || nm || ' was unlinked from ' || j.company || ' in Tally after this was queued. Nothing of it was sent to Tally. Link it again on the Tally page, then post again.'
+    when exists (select 1 from tally_split_links x where x.firm_id = j.firm_id and x.book_id = tc.book_id and x.client_id = j.client_id and x.state = 'linked')
+      then 'Not posted: ' || j.company || ' is now the earlier-years company of ' || nm || ' in Tally; postings go to its current company only. Nothing of it was sent to Tally.'
+    when j.company_guid is not null and tally_post_link_guid(j.firm_id, j.client_id, j.company) is not null and tally_post_link_guid(j.firm_id, j.client_id, j.company) <> j.company_guid
+      then 'The client was linked to another Tally company after this posting was made: check the entries and post again. Nothing of it was sent to Tally.'
+    when not l.posting_allowed
+      then 'Not posted: posting into Tally was stopped for ' || nm || ' after this was queued. Nothing of it was sent to Tally. Allow it on the Tally page (the company''s ⋯ Post entries here), then post again.'
+  end
+  from tally_post_jobs j
+  cross join lateral (select coalesce((select cl.name from clients cl where cl.firm_id = j.firm_id and cl.id = j.client_id), 'this client') nm) c
+  left join lateral (select t.book_id from tally_companies t where t.firm_id = j.firm_id and lower(tally_nm(t.company)) = lower(tally_nm(j.company))
+                      order by (t.company = j.company) desc, t.last_seen desc nulls last limit 1) tc on true
+  left join tally_links l on l.firm_id = j.firm_id and l.book_id = tc.book_id
+  cross join lateral (select tally_link_post_to(j.firm_id, j.client_id, null) now_to) p
+  where j.id = p_job
+$function$;
+revoke all on function public.tally_post_job_blocked(uuid) from public, anon, authenticated;
+grant execute on function public.tally_post_job_blocked(uuid) to service_role;
+
+-- ---------------------------------------------------------------- 5c. the beat's count (202's tally_post_count_for)
+-- 202's text; changed: the postings queued for no computer are counted only when the gate (3.) is open, asked once per
+-- client and company as for the bridge's own (the hand-out's third look asks it, 5.)
+create or replace function public.tally_post_count_for(p_device uuid, p_bridge text, p_main boolean)
+returns integer language plpgsql volatile security definer set search_path = public, pg_temp as $function$
+declare n integer; w jsonb; go boolean := coalesce(p_bridge, '') ~ '^go-[0-9a-f]{6,32}$'; r record;
+begin
+  with mine as materialized (
+    select j.id, j.firm_id, j.client_id, j.company, j.message, j.stop_reason, j.created_at from tally_post_jobs j
+     where j.device_id = p_device and j.status = 'waiting' and tally_post_mine_ok(j.id, p_device, p_bridge, p_main)
+       and not (j.message like 'Put back for the same FinCom Bridge%' and j.updated_at > now() - interval '30 seconds')),   -- (the put-back's pause, as the hand-out)
+  gk as materialized (
+    select g.firm_id, g.client_id, g.company, tally_post_linked_ok(g.firm_id, g.client_id, g.company, p_device, p_bridge) as ok
+      from (select distinct m.firm_id, m.client_id, m.company from mine m) g),
+  gw as materialized (select gk.*, case when not gk.ok then left(tally_post_linked_why_for(gk.firm_id, gk.client_id, gk.company, p_device, p_bridge), 300) end as why from gk)
+  select (select count(*)::int from mine m join gw on gw.firm_id = m.firm_id and gw.client_id is not distinct from m.client_id and gw.company is not distinct from m.company where gw.ok),
+         -- the words: refused, the gate's words (empty over its own once open: never another writer's)
+         (select coalesce(jsonb_agg(jsonb_build_object('id', x.id, 'why', x.why)), '[]'::jsonb) from (
+            select m.id, coalesce(gw.why, '') as why from mine m join gw on gw.firm_id = m.firm_id and gw.client_id is not distinct from m.client_id and gw.company is not distinct from m.company
+             where m.stop_reason is null and ((not gw.ok and gw.why is not null and m.message is distinct from gw.why and (coalesce(m.message, '') = '' or m.message like 'Not posted yet: %'))
+                                              or (gw.ok and m.message like 'Not posted yet: %'))
+             order by m.created_at limit 20) x)
+    into n, w;
+  if go then
+    n := n + (with pk as materialized (
+                select j.firm_id, j.client_id, j.company from tally_post_jobs j join tally_devices me on me.id = p_device
+                 where j.firm_id = me.firm_id and j.status = 'waiting' and j.taken_by is null and tally_post_pickable_ok(j.id, p_device, p_bridge)),
+              pg as materialized (select g.*, tally_post_linked_ok(g.firm_id, g.client_id, g.company, p_device, p_bridge) as ok from (select distinct * from pk) g)
+              select count(*)::int from pk join pg on pg.firm_id = pk.firm_id and pg.client_id is not distinct from pk.client_id and pg.company is not distinct from pk.company where pg.ok)
+           + (with uk as materialized (select j.firm_id, j.client_id, j.company from tally_post_jobs j join tally_devices me on me.id = p_device
+                                          where j.firm_id = me.firm_id and j.status = 'waiting' and j.device_id is null and tally_post_unrouted_ok(j.id, p_device, p_bridge)),
+                   ug as materialized (select g.*, tally_post_linked_ok(g.firm_id, g.client_id, g.company, p_device, p_bridge) as ok from (select distinct * from uk) g)
+              select count(*)::int from uk join ug on ug.firm_id = uk.firm_id and ug.client_id is not distinct from uk.client_id and ug.company is not distinct from uk.company where ug.ok);
+  end if;
+  if jsonb_array_length(w) > 0 then
+    begin
+      if tally_bridge_may_post(p_device, p_bridge) then   -- (cleared too only by a bridge that may post: its gate is the one judged)
+        for r in select (x->>'id')::uuid as id, x->>'why' as why from jsonb_array_elements(w) x loop
+          perform 1 from tally_post_jobs j where j.id = r.id for update skip locked;
+          if found then
+            update tally_post_jobs set message = r.why
+             where id = r.id and status = 'waiting' and stop_reason is null and (coalesce(message, '') = '' or message like 'Not posted yet: %') and message is distinct from r.why;
+          end if;
+        end loop;
+      end if;
+    exception when others then null;   -- (the words are a courtesy; the count stands)
+    end;
+  end if;
+  return n;
+end $function$;
+revoke all on function public.tally_post_count_for(uuid, text, boolean) from public, anon, authenticated;
+grant execute on function public.tally_post_count_for(uuid, text, boolean) to service_role;
 
 -- ---------------------------------------------------------------- 6. "pick which company"
 -- a linked company with no GUID that this bridge's beat shows open under its name with two (or more) GUIDs: marked for an
