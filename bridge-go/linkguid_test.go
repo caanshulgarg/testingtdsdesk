@@ -312,14 +312,12 @@ func TestLinkedStaleCache(t *testing.T) {
 	cancelJob(str(j["id"]), "test")
 }
 
-// a posting from FinCom's queue that names no GUID (a FinCom before migration 203), with no GUID held on this computer
-// and none in Tally's list for the name: never posted, it waits in plain words (linkguid_closed_test.go: one held)
+// a posting from FinCom's queue that names no GUID: never posted, even with the company of that name open and its GUID
+// held on this computer (the coordinator's decision of 19-Nov-2026: the bridge needs FinCom's company_guid; no fallback
+// by name); it waits in plain words
 func TestLinkedNoGUID(t *testing.T) {
 	_, l := lgSetup(t)
-	l.set(coPair{zz, ""})
-	if err := saveFile(guidFile(), "{}"); err != nil {
-		t.Fatal(err)
-	}
+	noteCompanyGUID(zz, lgGUID)
 	was := postOKFn
 	postOKFn = func(string) (string, bool) { return "", true }
 	t.Cleanup(func() { postOKFn = was })
@@ -329,7 +327,7 @@ func TestLinkedNoGUID(t *testing.T) {
 	}
 	p := lgWaitFor(t, str(j["id"]), "the wait", func(p M) bool { return str(p["status"]) == "waiting" })
 	time.Sleep(300 * time.Millisecond)
-	if l.n() != 0 || !strings.Contains(str(p["message"]), "the link has no Tally GUID") || !strings.HasPrefix(str(p["message"]), "Open ZZ TEST in Tally to post") {
+	if l.n() != 0 || str(p["message"]) != "Waiting for FinCom to name the linked company" {
 		t.Fatalf("%d imports, %q", l.n(), p["message"])
 	}
 	cancelJob(str(j["id"]), "test")

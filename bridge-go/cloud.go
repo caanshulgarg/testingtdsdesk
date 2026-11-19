@@ -1533,8 +1533,8 @@ func cloudPostTakeJobs() (checks []any) {
 		// round 7 (F2): the owner's releases ("Not in Tally — release") for the job's ids come with it
 		// review M1 / L2: a posting handed back after the bridge's "not found" names the entries to send again (resendOnly):
 		// only those go, never the whole posting
-		// linkguid.go: the linked company's Tally GUID (migration 203); none (a FinCom before 203): the GUID this computer
-		// holds for the name, matched in Tally's list; none held: the posting waits, nothing is sent
+		// linkguid.go: the linked company's Tally GUID (migration 203); none: the posting waits ("Waiting for FinCom to
+		// name the linked company"), nothing is sent
 		v, err := newPostJob(M{"jobId": id, "company": str(j["company"]), "guid": str(j["guid"]), "masters": arr(pl["masters"]), "vouchers": arr(pl["vouchers"]), "released": arr(j["released"]), "resendOnly": arr(j["resendOnly"]),
 			"fromCloud": true}) // 2.5.15 item 1: FinCom is asked before each part is sent
 		if err != nil {

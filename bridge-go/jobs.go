@@ -600,6 +600,9 @@ func jobWorker(dir string) {
 	var port int
 	var company string
 	// linkguid.go: the linked company's GUID; the part sent last, held until the next look at Tally's list confirms it
+	if fromCloud {
+		pl["fromCloud"] = true // linkguid.go: a posting of FinCom's queue is posted only by the GUID FinCom names
+	}
 	guid := linkedGuidOf(pl)
 	heldDirty := false
 	commitHeld := func(sess []M) {
@@ -629,6 +632,9 @@ func jobWorker(dir string) {
 		for {
 			if cancelled() || stopping() {
 				return false
+			}
+			if why == nil && guid == "" && fromCloud {
+				why = &linkWait{"noguid", noFinComGUID} // linkguid.go: never posted, nothing asked of Tally
 			}
 			if why == nil {
 				sess := postListFn()

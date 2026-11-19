@@ -30,14 +30,14 @@ func linkedGuidOf(pl M) string {
 	if g := normGUID(str(pl["guid"])); g != "" {
 		return g
 	}
-	// FinCom's queue names it (migration 203); a FinCom before 203 names none (its hand-out gate, the applied 202, gives
-	// it only while this bridge reports the link's GUID open): the GUID this computer holds for the name, matched in
-	// Tally's list as any (linkedIn: one company of that name, that GUID); none held: it waits
+	if truthy(pl["fromCloud"]) {
+		return "" // FinCom's queue names it (migration 203); one that names none is never posted (noFinComGUID), never guessed by name
+	}
 	return normGUID(heldGUID(str(pl["company"])))
 }
 
-// where the GUID a posting is for came from: "fincom" (named by FinCom's queue or the browser), "computer" (held here
-// for the name), "" (none)
+// where the GUID a posting is for came from: "fincom" (named by FinCom's queue or the browser), "computer" (a browser's
+// posting: held here for the name), "" (none)
 func guidFromOf(pl M, guid string) string {
 	switch {
 	case normGUID(str(pl["guid"])) != "":
@@ -49,6 +49,10 @@ func guidFromOf(pl M, guid string) string {
 }
 
 func openToPost(company string) string { return "Open " + company + " in Tally to post" }
+
+// a posting from FinCom's queue that names no GUID (the coordinator's decision of 19-Nov-2026: the deploy order is 203,
+// tally-ingest, the bridge, so FinCom always names it): it waits, nothing is sent, nothing is guessed by name
+const noFinComGUID = "Waiting for FinCom to name the linked company"
 
 // (the staging incident of 19-Nov-2026) whose Tally a posting may go to: this Windows user's own only. A Tally whose owner
 // Windows cannot tell (mine unknown) only while no Tally of this user runs at all (on a shared server it may be another
@@ -155,10 +159,10 @@ func linkedIn(sessions []M, guid, asked string) (linkLook, error) {
 	return h, nil
 }
 
-// a posting handed here without a GUID, with none held for the name yet: the list just asked holds the first GUID Tally
-// gives for it (noteCompanyGUID, as before this rule); still only one company of that name may be open (linkedIn)
+// a posting a browser handed here without a GUID, with none held for the name yet: the list just asked holds the first
+// GUID Tally gives for it (noteCompanyGUID, as before this rule); FinCom's queue is never guessed for
 func guidAfterList(guid string, pl M) string {
-	if guid != "" {
+	if guid != "" || truthy(pl["fromCloud"]) {
 		return guid
 	}
 	return normGUID(heldGUID(str(pl["company"])))

@@ -8,8 +8,8 @@ package main
 //       runs at all, and then only with the GUID matching
 //   (c) the port and the company name used go to FinCom with the results
 //   (d) Tally created nothing of a request: failed plainly in Tally's words, never "needs review"
-//   and a posting from a FinCom cloud that names no GUID (before migration 203): the GUID this computer holds for the
-//   company, matched in Tally's list; none held, or another one open: it waits, nothing is sent
+//   and a posting from FinCom's queue that names no GUID: it waits ("Waiting for FinCom to name the linked company"),
+//   nothing is sent (no fallback to the GUID held here by name)
 
 import (
 	"net/http"
@@ -135,8 +135,8 @@ func TestLinkedOwnTallyOnly(t *testing.T) {
 	}
 }
 
-// (c) and the cloud: the port and the company name used go with the results; a posting naming no GUID (a cloud
-// before 203) goes only into the company of the GUID this computer holds, matched in Tally's list
+// (c) the port and the company name used go with the results; and a posting from FinCom's queue that names no GUID
+// is never posted, even with this computer's GUID for the name open (no fallback by name): it waits
 func TestLinkedCloudPortCompanyNoGUID(t *testing.T) {
 	f := newStandTally(t)
 	l := &listTally{}
@@ -150,12 +150,12 @@ func TestLinkedCloudPortCompanyNoGUID(t *testing.T) {
 	t.Cleanup(func() { postOKFn = was })
 	noteCompanyGUID(zz, lgGUID)
 	c.mu.Lock()
-	c.takeJobs = []M{{"id": "job-lg-cloud-noguid", "company": zz, "guid": "", "payload": M{"vouchers": lgVouchers("u", 2)}}}
+	c.takeJobs = []M{{"id": "job-lg-cloud-guid", "company": zz, "guid": lgGUID, "payload": M{"vouchers": lgVouchers("u", 2)}}}
 	c.mu.Unlock()
 	cloudPostTake()
-	p := waitJob(t, "job-lg-cloud-noguid")
-	if str(p["status"]) != "done" || l.n() != 1 || str(p["guidFrom"]) != "computer" {
-		t.Fatalf("a posting naming no GUID, this computer's GUID open: %v %q (%d imports, from %q)", p["status"], p["message"], l.n(), p["guidFrom"])
+	p := waitJob(t, "job-lg-cloud-guid")
+	if str(p["status"]) != "done" || l.n() != 1 || str(p["guidFrom"]) != "fincom" {
+		t.Fatalf("a posting naming its GUID: %v %q (%d imports, from %q)", p["status"], p["message"], l.n(), p["guidFrom"])
 	}
 	l.checkSafe(t, lgGUID)
 	postsDirty.Store(true)
@@ -163,12 +163,12 @@ func TestLinkedCloudPortCompanyNoGUID(t *testing.T) {
 	c.mu.Lock()
 	var up M
 	for _, o := range c.posts {
-		if str(o["id"]) == "job-lg-cloud-noguid" {
+		if str(o["id"]) == "job-lg-cloud-guid" {
 			up = o
 		}
 	}
 	c.mu.Unlock()
-	if up == nil || toInt(up["port"]) == 0 || str(up["tallyCompany"]) != zz || str(up["companyGuid"]) != lgGUID || str(up["guidFrom"]) != "computer" {
+	if up == nil || toInt(up["port"]) == 0 || str(up["tallyCompany"]) != zz || str(up["companyGuid"]) != lgGUID || str(up["guidFrom"]) != "fincom" {
 		t.Fatalf("the update does not say where it went: %v", up)
 	}
 	for _, x := range arr(up["results"]) {
@@ -176,18 +176,17 @@ func TestLinkedCloudPortCompanyNoGUID(t *testing.T) {
 			t.Fatalf("a result without its port and company: %v", r)
 		}
 	}
-	// another company of that name open now (this computer holds another GUID): never posted, it waits
-	l.set(coPair{zz, "co-guid-other"})
+	// FinCom names no GUID (the company of that name open, its GUID held here): never posted, it waits
 	c.mu.Lock()
-	c.takeJobs = []M{{"id": "job-lg-cloud-noguid-2", "company": zz, "guid": "", "payload": M{"vouchers": lgVouchers("v", 2)}}}
+	c.takeJobs = []M{{"id": "job-lg-cloud-noguid", "company": zz, "guid": "", "payload": M{"vouchers": lgVouchers("v", 2)}}}
 	c.mu.Unlock()
 	cloudPostTake()
-	p = lgWaitFor(t, "job-lg-cloud-noguid-2", "the wait", func(p M) bool { return str(p["status"]) == "waiting" })
+	p = lgWaitFor(t, "job-lg-cloud-noguid", "the wait", func(p M) bool { return str(p["status"]) == "waiting" })
 	time.Sleep(300 * time.Millisecond)
-	if l.n() != 1 || !strings.HasPrefix(str(p["message"]), "Open ZZ TEST in Tally to post") {
-		t.Fatalf("posted into another company of the name: %d imports, %q", l.n(), p["message"])
+	if l.n() != 1 || str(p["message"]) != "Waiting for FinCom to name the linked company" {
+		t.Fatalf("posted with no GUID from FinCom: %d imports, %q", l.n(), p["message"])
 	}
-	cancelJob("job-lg-cloud-noguid-2", "test")
+	cancelJob("job-lg-cloud-noguid", "test")
 }
 
 // (d) Tally created nothing of a request: failed in Tally's words, never "needs review"; something created: needs review
