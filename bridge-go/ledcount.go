@@ -141,7 +141,8 @@ func ledProgressNote(company, round string, read, of int, done bool) {
 }
 
 // next-fix-mastersread: a read that brought no masters (errNoMasters, Tally's own error) ends its round at 0 of 0, with
-// the reason (why: FinCom's masters line says "Not read: <why>"; the company's trouble carries it too)
+// the reason in why (FinCom's cloud keeps no why today: the masters line takes the reason from the company's trouble,
+// tally_books.state.trouble.why, which the bridge sends with the copy's state)
 func ledProgressFailed(company, round, why string) {
 	ledProgressSay(company, round, 0, 0, true, cutRunes(why, 300))
 }

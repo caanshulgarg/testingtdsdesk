@@ -195,15 +195,26 @@ func TestMastersRetryOnLightCheck(t *testing.T) {
 	if !mastersRetryAfterLightCheck(zz, f.port) || len(asked) != 2 {
 		t.Fatal("not asked 11 minutes on")
 	}
-	// three more failures with the same reason (4 in a row): no more
-	for i := 2; i <= 4; i++ {
-		_ = newRun("now", "r"+string(rune('0'+i))).step(zz, f.port, "")
+	// review N1: two more failures with the same reason, one naming another list and company (3 in a row): no more
+	_ = newRun("now", "r2").step(zz, f.port, "")
+	f.mu.Lock()
+	f.behave = func(w http.ResponseWriter, r *http.Request, id, body string) bool {
+		if id == grpListID {
+			_, _ = w.Write([]byte("<ENVELOPE><BODY><DATA><LINEERROR>Could not set &apos;SVCurrentCompany&apos; to &apos;ZZ TEST (2)&apos;</LINEERROR></DATA></BODY></ENVELOPE>"))
+			return true
+		}
+		return false
 	}
+	f.mu.Unlock()
+	_ = newRun("now", "r3").step(zz, f.port, "")
 	keepReleaseLeases()
+	if n := toInt(obj(keepStateOf(zz)["mastersFail"])["n"]); n != 3 {
+		t.Fatalf("the same reason, another company's name in it: n=%d", n)
+	}
 	mrMu.Lock()
 	mrAt[companyKey(zz)] = time.Now().Add(-11 * time.Minute)
 	mrMu.Unlock()
-	if why := mastersRetryWhyNot(zz, f.port); !strings.Contains(why, "4 reads in a row") {
+	if why := mastersRetryWhyNot(zz, f.port); !strings.Contains(why, "3 reads in a row") {
 		t.Fatalf("why not: %q", why)
 	}
 	// masters held (read in full): nothing
@@ -239,7 +250,18 @@ func TestMastersWakeNeverReadLinked(t *testing.T) {
 	if keepStateOf(zz) != nil {
 		t.Fatal("the company is kept here already")
 	}
+	// review S4: a run nobody pressed (short), not a pressed Update now
+	var asked []runReq
+	ledWakeSeen = func(r runReq) { asked = append(asked, r) }
 	r := wakeLedgers(zz, "the ledger chooser opened in FinCom", false)
+	ledWakeSeen = nil
+	if r["started"] != true || r["now"] != true || len(asked) != 1 || asked[0].kind != "now" || !asked[0].short || asked[0].day {
+		t.Fatalf("a linked company never read: %v %+v", r, asked)
+	}
+	evMu.Lock()
+	ledSeen = map[string]time.Time{}
+	evMu.Unlock()
+	r = wakeLedgers(zz, "the ledger chooser opened in FinCom", false)
 	if r["started"] != true || r["now"] != true {
 		t.Fatalf("a linked company never read: %v", r)
 	}
@@ -265,7 +287,7 @@ func TestDailyCatchUp(t *testing.T) {
 	dcOwnOpen = func() []string { return []string{zz, "ZZ NOT LINKED"} }
 	t.Cleanup(func() { dcStart, dcOwnOpen = func(r runReq) bool { return startKeepRun(r) }, open })
 	dcMu.Lock()
-	dcTried, dcAt = map[string]time.Time{}, time.Time{}
+	dcAt = time.Time{}
 	dcMu.Unlock()
 	day := time.Date(2026, 11, 18, 11, 0, 0, 0, time.Local) // a Wednesday, office hours
 	nowWas := nowFn
@@ -313,14 +335,27 @@ func TestDailyCatchUp(t *testing.T) {
 	if !dayCatchCheck() || len(asked) != 2 {
 		t.Fatal("not tried again 30 minutes on")
 	}
+	// review N4: the tries kept in day-check.json (a restart does not run it again at once), 4 a day at most
+	if m := dayCheckOf(zz); toInt(m["tries"]) != 2 || str(m["triedAt"]) == "" {
+		t.Fatalf("the day's tries: %v", m)
+	}
+	for i := 0; i < 2; i++ {
+		day = day.Add(31 * time.Minute)
+		if !dayCatchCheck() {
+			t.Fatalf("try %d not started", i+3)
+		}
+	}
+	day = day.Add(31 * time.Minute)
+	if dayCatchCheck() || len(asked) != 4 {
+		t.Fatalf("a fifth try in a day: %d", len(asked))
+	}
 	dayCheckNote(zz, true, "")
 	dayCheckNote(zz, false, "later failure")
 	if !dayCheckDone(zz) {
 		t.Fatal("a day done was undone by a later failure")
 	}
-	day = day.Add(31 * time.Minute)
-	if dayCatchCheck() || len(asked) != 2 {
-		t.Fatal("started again on a day done")
+	if m := dayCheckOf(zz); toInt(m["tries"]) != 4 {
+		t.Fatalf("the tries lost when the day was done: %v", m)
 	}
 	// the night's window: the nightly catch-up's own (never this)
 	day = time.Date(2026, 11, 18, 21, 0, 0, 0, time.Local)
@@ -356,4 +391,151 @@ func tailText(s string, n int) string {
 		return s[len(s)-n:]
 	}
 	return s
+}
+
+// review S1: a list read in full before (held in FinCom's cloud) and then lost here: a failed read sends no 0 of 0 over it
+func TestMastersFailedOverHeldSaysNoEnd(t *testing.T) {
+	c := newStandCloud(t)
+	prog := mrProg(c)
+	f := ledgerTally(t, 5, c.cfg())
+	noteCompanyGUID(zz, f.guid)
+	if err := newRun("now", "r1").step(zz, f.port, ""); err != nil {
+		t.Fatal(err)
+	}
+	keepReleaseLeases()
+	_ = os.Remove(ledListFile(syncFolder(zz)))
+	_ = mrProgs(c, prog)
+	c.mu.Lock()
+	*prog = nil
+	c.mu.Unlock()
+	f.mu.Lock()
+	f.behave = mrLineError(grpListID)
+	f.mu.Unlock()
+	if err := newRun("now", "r2").step(zz, f.port, ""); !errors.Is(err, errTallySaid) {
+		t.Fatal(err)
+	}
+	for _, p := range mrProgs(c, prog) {
+		if p["done"] == true {
+			t.Fatalf("a 0 of 0 over masters FinCom holds: %v", p)
+		}
+	}
+}
+
+// review S2: nothing held, the group list failed: the next try is a new round (its start shows as reading)
+func TestMastersFailedNextTryNewRound(t *testing.T) {
+	c := newStandCloud(t)
+	prog := mrProg(c)
+	f := ledgerTally(t, 5, c.cfg())
+	noteCompanyGUID(zz, f.guid)
+	f.mu.Lock()
+	f.behave = mrLineError(grpListID)
+	f.mu.Unlock()
+	_ = newRun("now", "r1").step(zz, f.port, "")
+	keepReleaseLeases()
+	if keepStateOf(zz)["led"] != nil {
+		t.Fatalf("the failed round kept: %v", keepStateOf(zz)["led"])
+	}
+	ps := mrProgs(c, prog)
+	failed := str(ps[len(ps)-1]["round"])
+	ledProg.mu.Lock()
+	ledProg.last, ledProg.sent = map[string]M{}, map[string]time.Time{}
+	ledProg.mu.Unlock()
+	f.mu.Lock()
+	f.behave = nil
+	f.mu.Unlock()
+	if err := newRun("now", "r2").step(zz, f.port, ""); err != nil {
+		t.Fatal(err)
+	}
+	ps = mrProgs(c, prog)
+	var next []M
+	for _, p := range ps {
+		if str(p["round"]) != failed {
+			next = append(next, p)
+		}
+	}
+	if len(next) < 2 || next[0]["done"] == true || toInt(next[0]["read"]) != 0 {
+		t.Fatalf("the next try's start under a new round: %v (failed round %s)", next, failed)
+	}
+}
+
+// review S5: merged into a queued run, a run nobody pressed stays one unless a pressed one comes in; the daily catch-up
+// stays one unless the night's own run comes in
+func TestMastersRunMerge(t *testing.T) {
+	kwMu.Lock()
+	wasR, wasRun, wasP := kwRunning, kwRun, kwPending
+	kwRunning, kwRun, kwPending = true, &keepRun{kind: "light"}, nil
+	kwMu.Unlock()
+	t.Cleanup(func() {
+		kwMu.Lock()
+		kwRunning, kwRun, kwPending = wasR, wasRun, wasP
+		kwNowAt = time.Time{}
+		kwMu.Unlock()
+	})
+	cfgWas := cfg("KeepInStep")
+	_ = cfgWas
+	q := func(rs ...runReq) runReq {
+		kwMu.Lock()
+		kwPending = nil
+		kwMu.Unlock()
+		for _, r := range rs {
+			startKeepRun(r)
+		}
+		kwMu.Lock()
+		defer kwMu.Unlock()
+		return *kwPending
+	}
+	if !keepOn() {
+		t.Skip("keeping off in this configuration")
+	}
+	if r := q(runReq{kind: "now", short: true, only: []string{"A"}}, runReq{kind: "ledgers", only: []string{"B"}}); r.kind != "now" || !r.short {
+		t.Fatalf("a wake merged into a retry: %+v", r)
+	}
+	if r := q(runReq{kind: "now", short: true}, runReq{kind: "now"}); r.short {
+		t.Fatalf("a pressed Update now merged in: %+v", r)
+	}
+	if r := q(runReq{kind: "nightly", short: true, day: true}, runReq{kind: "now", short: true}); r.kind != "now" || r.day || !r.short {
+		t.Fatalf("a retry merged into the daily catch-up: %+v", r)
+	}
+	if r := q(runReq{kind: "nightly", short: true, day: true}, runReq{kind: "ledgers"}); !r.day || !r.short {
+		t.Fatalf("a wake merged into the daily catch-up: %+v", r)
+	}
+	if r := q(runReq{kind: "nightly", short: true, day: true}, runReq{kind: "nightly", night: "20261118"}); r.day {
+		t.Fatalf("the night's run merged in: %+v", r)
+	}
+}
+
+// review N3: a step that read nothing (another company's GUID under the name) is not a read: no "read at", no day done
+func TestMastersNotReadNotMarked(t *testing.T) {
+	_, f := mrSetup(t)
+	k := newRun("now", "r1")
+	k.full = map[string]bool{}
+	if err := k.step(zz, f.port, ""); err != nil || !k.full[zz] {
+		t.Fatalf("a read in full: %v %v", err, k.full)
+	}
+	keepReleaseLeases()
+	all := readObjFile(guidFile()) // the GUID held for the name: another company's
+	all[companyKey(zz)] = M{"guid": "another-guid"}
+	_ = saveFile(guidFile(), jsonText(all))
+	k2 := newRun("now", "r2")
+	k2.full = map[string]bool{}
+	_ = k2.step(zz, f.port, "")
+	if k2.full[zz] {
+		t.Fatal("a step the GUID guard refused counted as a read in full")
+	}
+}
+
+// review N5: a read that stopped after parts were read (not a failure, not a back-off): "reading" ended with what was read
+func TestMastersStopNoteEndsReading(t *testing.T) {
+	c := newStandCloud(t)
+	prog := mrProg(c)
+	_ = ledgerTally(t, 5, c.cfg())
+	k := newRun("now", "r1")
+	st := M{"led": M{"round": "rr", "n": 40}}
+	k.ledStopNote(zz, st, errors.New("Tally did not answer"))
+	k.ledStopNote(zz, st, errBackoff)
+	k.ledStopNote(zz, M{"led": M{"round": "r0", "n": 0}}, errors.New("x"))
+	ps := mrProgs(c, prog)
+	if len(ps) != 1 || ps[0]["done"] != true || toInt(ps[0]["read"]) != 40 || toInt(ps[0]["of"]) != 40 || str(ps[0]["round"]) != "rr" {
+		t.Fatalf("the stop note: %v", ps)
+	}
 }

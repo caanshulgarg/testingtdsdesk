@@ -5,8 +5,9 @@
 // read of it: an Update from Tally of that company alone, as a run nobody pressed (runReq.short: each request under the
 // 2 s stop, the company list and check too; not while someone works in Tally, giving up after 2 minutes held; not while
 // reading is paused). Only the requests every read makes (no new request to Tally). At most once in 10 minutes per
-// company, never while another read or a posting goes (a posting goes first), and no more after MastersRetryMax (3)
-// reads in a row failed with the same reason (said once in the log; the reason stays on FinCom's masters line)
+// company, never while another read or a posting goes (a posting goes first), and no more once MastersRetryMax (3)
+// reads in a row failed with the same reason (its list and quoted values left out), nor after MastersRetryDayMax (6)
+// retries in a day (said once in the log; the reason stays on FinCom's masters line)
 package main
 
 import (
@@ -19,6 +20,7 @@ var (
 	mrMu    sync.Mutex
 	mrAt    = map[string]time.Time{} // company key -> when its last retry was started
 	mrTold  = map[string]string{}    // company key -> the last reason a retry was not asked (said once)
+	mrTries = map[string]int{}       // review N2: company key + "|" + the day -> retries started that day
 	mrStart = func(r runReq) bool { return startKeepRun(r) }
 	// the port of this bridge's own Tally with the company open ("" : yes; else why not; tests replace it)
 	mrOwnTally = func(company string, port int) string {
@@ -27,7 +29,8 @@ var (
 	}
 )
 
-func mastersRetryMax() int { return keepNum("MastersRetryMax", 3) }
+func mastersRetryMax() int    { return keepNum("MastersRetryMax", 3) }
+func mastersRetryDayMax() int { return keepNum("MastersRetryDayMax", 6) }
 func mastersRetryEvery() time.Duration {
 	return time.Duration(keepNum("MastersRetryMin", 10)) * time.Minute
 }
@@ -57,17 +60,20 @@ func mastersRetryWhyNot(company string, port int) string {
 	case st == nil || obj(st["mastersFail"]) == nil:
 		return "no failed masters read"
 	}
-	if dir, err := companyDir(company); err == nil && len(loadLedList(dir)) > 0 {
+	// (review N7: the read time first; the list file only when no full read is known)
+	if dir, err := companyDir(company); err == nil && mastersHeld(dir, st) {
 		return "its masters are held"
 	}
 	f := obj(st["mastersFail"])
-	if n := toInt(f["n"]); n > mastersRetryMax() {
+	if n := toInt(f["n"]); n >= mastersRetryMax() {
 		return fmt.Sprintf("%d reads in a row failed with the same reason (%s); asked again only by Update from Tally or Bring masters", n, str(f["why"]))
 	}
 	mrMu.Lock()
-	last := mrAt[key]
+	last, tries := mrAt[key], mrTries[key+"|"+today()]
 	mrMu.Unlock()
 	switch {
+	case tries >= mastersRetryDayMax():
+		return fmt.Sprintf("asked again %d times today; asked again only by Update from Tally or Bring masters", tries)
 	case !last.IsZero() && nowFn().Sub(last) < mastersRetryEvery():
 		return "asked again " + last.Format("15:04")
 	case keepRunning():
@@ -100,6 +106,7 @@ func mastersRetryAfterLightCheck(company string, port int) bool {
 	f := obj(keepStateOf(company)["mastersFail"])
 	mrMu.Lock()
 	mrAt[key], mrTold[key] = nowFn(), ""
+	mrTries[key+"|"+today()]++ // review N2: every retry started counts, whatever came of it (held, left alone, failed)
 	mrMu.Unlock()
 	writeLog(fmt.Sprintf("Masters of %s: FinCom holds none and the last read failed (%s); the company is open in this user's own Tally, so they are read once more", company, str(f["why"])))
 	return mrStart(runReq{kind: "now", only: []string{company}, why: "masters not in FinCom after a failed read", short: true})

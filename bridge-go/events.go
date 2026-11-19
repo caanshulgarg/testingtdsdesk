@@ -233,12 +233,24 @@ func wakeLedgers(company, source string, afterPost bool) M {
 		if keepStateOf(company) == nil {
 			// next-fix-mastersread: a linked company never read on this computer: its first read now (the ledgers-only
 			// run has nothing to compare with and stopped at once, so FinCom's page waited 45 s to press Update from Tally)
-			out["started"], out["now"] = startKeepRun(runReq{kind: "now", only: []string{company}, why: source + "; its first read"}), true
+			// (review S4: a run nobody pressed: every request under the 2 s stop, not while someone works in Tally)
+			out["started"], out["now"] = ledWakeStart(runReq{kind: "now", only: []string{company}, why: source + "; its first read", short: true}), true
 			break
 		}
 		out["started"] = startKeepRun(runReq{kind: "ledgers", only: []string{company}, why: source})
 	}
 	return out
+}
+
+// the start of a wake's run (tests set it: the run asked for, nothing started)
+var ledWakeSeen func(r runReq)
+
+func ledWakeStart(r runReq) bool {
+	if ledWakeSeen != nil {
+		ledWakeSeen(r)
+		return true
+	}
+	return startKeepRun(r)
 }
 
 // "ledgers" from the heartbeat's answer (company -> when), the fallback for the wake-up channel

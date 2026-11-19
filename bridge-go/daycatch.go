@@ -3,7 +3,8 @@
 // user's own Tally (nobody has used FinCom for DayCatchQuietMin (2) minutes, nobody works in Tally, no read or posting
 // going, Tally not left alone after a failure), when the company has not been read in full today, a nightly-kind run of
 // those companies starts (runReq.day, .short): the requests every read makes (no new request to Tally), each under the
-// 2 s stop, giving up after 2 minutes held; a company tried and not done is tried again DayCatchRetryMin (30) minutes on.
+// 2 s stop, giving up after 2 minutes held; a company tried and not done is tried again DayCatchRetryMin (30) minutes on, DayCatchMax (4) times a day at most
+// (the tries kept in day-check.json, so a restart does not run it again at once).
 // The night's slot stays as it was (its own key, keep-lastnight.txt). Each company's day is kept in day-check.json
 // ({company, day, at, ok, why}): done by any full read of the day (Update from Tally, the nightly or daily catch-up); the
 // beat's lastRun and companies[].lastRead, and the round's tally_ledger_rounds row, say it as before
@@ -18,7 +19,6 @@ import (
 var (
 	dcMu    sync.Mutex
 	dcAt    time.Time
-	dcTried = map[string]time.Time{} // company key -> the last daily catch-up started for it
 	dcStart = func(r runReq) bool { return startKeepRun(r) }
 	// the companies open in this user's own Tally (the company list as last given; Tally is not asked; tests replace it)
 	dcOwnOpen = func() []string {
@@ -59,16 +59,40 @@ func dayCheckNote(company string, ok bool, why string) {
 		all = M{}
 	}
 	k := companyKey(company)
-	if was := obj(all[k]); !ok && was != nil && truthy(was["ok"]) && str(was["day"]) == today() {
+	was := obj(all[k])
+	if !ok && was != nil && truthy(was["ok"]) && str(was["day"]) == dcToday() {
 		return
 	}
-	all[k] = M{"company": company, "day": today(), "at": nowS(), "ok": ok, "why": cutRunes(why, 300)}
+	e := M{"company": company, "day": dcToday(), "at": nowS(), "ok": ok, "why": cutRunes(why, 300)}
+	if was != nil && str(was["day"]) == dcToday() {
+		e["tries"], e["triedAt"] = was["tries"], was["triedAt"] // review N4: the day's tries kept
+	}
+	all[k] = e
+	_ = saveFile(dayCheckFile(), jsonText(all))
+}
+
+// review N4: a daily catch-up started for the company now: counted in day-check.json (a restart does not run it again at
+// once); at most DayCatchMax (4) a day
+func dayCheckTried(company string, now time.Time) {
+	dcMu.Lock()
+	defer dcMu.Unlock()
+	all := readObjFile(dayCheckFile())
+	if all == nil {
+		all = M{}
+	}
+	k, td := companyKey(company), tallyDate(now)
+	e := obj(all[k])
+	if e == nil || str(e["day"]) != td {
+		e = M{"company": company, "day": td, "ok": false}
+	}
+	e["tries"], e["triedAt"] = toInt(e["tries"])+1, now.Format(time.RFC3339)
+	all[k] = e
 	_ = saveFile(dayCheckFile(), jsonText(all))
 }
 
 func dayCheckDone(company string) bool {
 	m := dayCheckOf(company)
-	return m != nil && truthy(m["ok"]) && str(m["day"]) == today()
+	return m != nil && truthy(m["ok"]) && str(m["day"]) == dcToday()
 }
 
 // "" when the daily catch-up may start now (the bridge, Tally and FinCom quiet); else why not
@@ -115,11 +139,13 @@ func dayCatchDue(now time.Time) []string {
 			continue
 		}
 		seen[k] = true
-		dcMu.Lock()
-		t := dcTried[k]
-		dcMu.Unlock()
-		if !t.IsZero() && now.Sub(t) < every && !t.After(now) {
-			continue
+		if e := dayCheckOf(n); e != nil && str(e["day"]) == tallyDate(now) {
+			if toInt(e["tries"]) >= keepNum("DayCatchMax", 4) {
+				continue
+			}
+			if t, err := time.Parse(time.RFC3339, str(e["triedAt"])); err == nil && now.Sub(t) < every && !t.After(now) {
+				continue
+			}
 		}
 		o = append(o, n)
 	}
@@ -144,10 +170,11 @@ func dayCatchCheck() bool {
 	if len(due) == 0 {
 		return false
 	}
-	dcMu.Lock()
 	for _, n := range due {
-		dcTried[companyKey(n)] = now
+		dayCheckTried(n, now)
 	}
-	dcMu.Unlock()
 	return dcStart(runReq{kind: "nightly", only: due, why: "not read in full today", short: true, day: true})
 }
+
+// the day by the bridge's clock (nowFn), as the catch-up's own checks count it
+func dcToday() string { return tallyDate(nowFn()) }

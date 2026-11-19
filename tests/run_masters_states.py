@@ -87,7 +87,7 @@ def main():
           const rpc = TCloud.rpc;
           TCloud.rpc = async (fn, a) => { if (fn === 'tally_fetch_summary') return {ok: true, books: JSON.parse(JSON.stringify(window.__sum))};
             if (fn === 'tally_catchup_status') return null;
-            if (fn === 'tally_period_status') { const v = window.__prog[a.p_book]; return {ok: true, pull: null, ledger: v ? Object.assign({}, v, v.now ? {at: new Date().toISOString()} : {}) : null}; }
+            if (fn === 'tally_period_status') { window.__asked = (window.__asked || []).concat([a.p_book]); const v = window.__prog[a.p_book]; return {ok: true, pull: null, ledger: v ? Object.assign({}, v, v.now ? {at: new Date().toISOString()} : {}) : null}; }
             return rpc(fn, a); }; }""")
         E("() => { navHome('clients'); }"); pg.wait_for_timeout(500)
         cid = lambda nm: ids[nm]
@@ -150,7 +150,17 @@ def main():
            "5. Lotus (not open): State Waiting · open <company> in your own Tally, Check again · Open it in Tally first (%s | %s | %s)" % (S_(LOTUS), W_(LOTUS), mains(LOTUS)))
         ok(S_(FAL) == "Needs you" and n(R(FAL) + ".tpt-need") == 1 and mains(FAL) == ["masters"], "5. Falcon (not read): the only Needs you, Bring masters (%s | %s)" % (S_(FAL), mains(FAL)))
         chips = E("() => Object.fromEntries([...document.querySelectorAll('#app [data-tpf-chip]')].map(c => [c.getAttribute('data-tpf-chip'), c.textContent.replace(/\\D+/g, ' ').trim()]))")
-        ok(chips.get("need") == "2" and chips.get("reading") == "3", "5. chips: Needs attention 2 (Falcon, Acme not open), Reading now 3 (Kestrel, Nimbus, Lotus) (%s)" % chips)
+        ok(chips.get("need") == "2" and chips.get("reading") == "1", "5 (review S6). chips: Needs attention 2 (Falcon, Acme not open), Reading now 1 (Kestrel; never a row waiting) (%s)" % chips)
+        todos = E("() => Object.fromEntries(FCTallySimple.tableRows().filter(r => r.kind === 'client').map(r => [r.client, r.todo]))")
+        ok(todos.get(KES) == "Nothing. FinCom is reading the masters from Tally now." and todos.get(LOTUS) == "Open “" + LOC + "” in your own Tally."
+           and todos.get(NIMB) == "Nothing. Tally is busy, it reads when typing stops." and "press Bring masters" in (todos.get(FAL) or ""),
+           "5 (review S7). what to do follows the Masters state; only the failed read says press Bring masters (%s)" % todos)
+
+        print("== 6 (review S1). a done 0 of 0 over masters FinCom holds: still Up to date")
+        E("() => { window.__prog['bk-Orbit Space'] = {round: 'o9', read: 0, of: 0, done: true, now: true}; }")
+        pg.wait_for_timeout(22000)   # (the page asks the cloud's progress of an open company every 20 s)
+        mo2 = M(ORBIT)
+        ok("bk-Orbit Space" in (E("() => window.__asked") or []) and st(ORBIT) == "done" and mo2.startswith("✓ Up to date") and "Not read" not in mo2, "6. Orbit: ✓ Up to date, never Not read (%s)" % mo2)
 
         shot("tally-page.png", 1440, 1100)
         shot("falcon-row.png", 1440, 900, R(FAL))

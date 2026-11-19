@@ -452,7 +452,8 @@ export function pageOf(row, seen, m) {
 function mastersPage(m, row) {
   // (a row with its own thing to do (a Day Book to upload, days to bring, entries missing) keeps it)
   if (row.act || (row.e && row.e.w === NO)) return null;
-  if (m.st === "reading") return { kind: "reading", dot: "read", say: "Reading from Tally", why: "", btn: "none" };
+  // (review N5: a wake's read over masters FinCom holds keeps the row's Update from Tally)
+  if (m.st === "reading") return { kind: "reading", dot: "read", say: "Reading from Tally", why: "", btn: m.held ? "update" : "none" };
   // (waiting for the company to be opened: Check again, "Open it in Tally first"; for Tally to be free or a quiet moment,
   // or open in another Tally of the firm: the row's button stays, the read waits its turn. A person with no bridge of
   // their own keeps the data's line)
@@ -721,7 +722,8 @@ function pcOfRow(r, devs, by) {
 function tagsOf(r, i, seen, devs, now, by) {
   const L = isLinked(r), m = L ? mastersOf(r.cid, r.company) : null, p = pageOf(r, seen, m), io = inTally(r, p, seen), s = [];
   const e = L ? entriesOf(r.cid, m, r.last) : null, es = e ? e.st : "";
-  const reading = L && m.st !== "why" && (p.kind === "reading" || p.kind === "waiting" || runBusy(r.cid) || m.st === "reading" || m.st === "waiting" || es === "going" || es === "after");
+  // (review S6: masters waiting for the company to be opened or a quiet moment (idle) are not "Reading now")
+  const reading = L && m.st !== "why" && !(m.st === "waiting" && m.idle) && (p.kind === "reading" || (p.kind === "waiting" && !m.idle) || runBusy(r.cid) || m.st === "reading" || m.st === "waiting" || es === "going" || es === "after");
   if (p.need) s.push("need");
   if (reading) s.push("reading");
   if (L && p.kind === "ok" && !reading && m.st === "done" && (es === "uptodate" || es === "done")) s.push("ok");
@@ -735,7 +737,7 @@ function tagsOf(r, i, seen, devs, now, by) {
   const l = !lm ? ["never"] : now - lm < 7 * 86400e3 ? (ISTD(lm) === ISTD(now) ? ["today", "week"] : ["week"]) : ["older"];
   let days = e && es === "behind" ? parseInt(e.sub, 10) || 0 : 0;
   if (!days && r.act && r.act.kind === "bring") { try { days = daysOf(r.act.need).length; } catch (x) { days = 0; } }
-  return { r, i, s, m: m ? (m.st === "waiting" ? "reading" : m.st) : "", e: en, l, io, pc: pcOfRow(r, devs, by), days, lm, nm: String(r.client || shown(r.company)).toLowerCase() };
+  return { r, i, s, m: m ? (m.st === "waiting" ? (m.idle ? "none" : "reading") : m.st) : "", e: en, l, io, pc: pcOfRow(r, devs, by), days, lm, nm: String(r.client || shown(r.company)).toLowerCase() };
 }
 // a row kept by the filters; skip: the one group its own counts leave out
 function keeps(t, f, skip) {

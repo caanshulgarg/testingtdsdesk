@@ -384,7 +384,7 @@ def main():
                 ok(seen(row_new + " [data-tsm-row-pick]", r"\S", 3000) != "", "6. Link: the client picker opens")
                 ok(bool(pg.get_attribute(row_new + " [data-tco-relink]", "title")) or not pg.is_disabled(row_new + " [data-tco-relink]"), "6. the picker's Link off until a client is chosen, and says so")
             else:
-                w = seen(TB + ' [data-said="link"], ' + R(NEWC) + " .tpt-state", r"Linked|Not linked|Updating|Waiting|Connected", 6000)
+                w = seen(TB + ' [data-said="link"], ' + R(NEWC) + " .tpt-state", r"Linked|Not linked|Updating|Waiting|Connected|Reading from Tally", 6000)
                 ok(w != "", "6. Connect: linked, or why not (%s)" % w)
         else: ok(False, "6. Heron Paper: a Connect / Link button (%s)" % txt(TB)[:200])
         no_rejections("6. Connect / Link")

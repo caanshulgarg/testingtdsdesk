@@ -544,6 +544,8 @@ export async function syncPoll(cid) {
       const rd = Number(lp.read) || 0, last = x.samples[x.samples.length - 1];
       if (!last || rd !== last.read) { x.samples.push({ t: Date.now(), read: rd }); x.moveAt = Date.now(); }
       x.prog = lp;
+      // (the read's result says it; next-fix-mastersread, review S1: the Masters line says it only while FinCom holds
+      // no masters, mastersOf)
       if (lpEmpty(lp)) { x.err = EMPTY_WORDS; x.empty = true; return; }
     }
     const laNew = !!la && (x.snap ? la !== x.la0 : Date.parse(la) >= since);

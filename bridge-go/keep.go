@@ -673,8 +673,9 @@ type keepRun struct {
 	// an Update now a person pressed that waited KeepNowWaitSec (2 minutes) for a 15 s pause in Tally: it reads on, in
 	// short slices (each request under the 2 s stop), giving way between them while the person types (holdNow)
 	pressOn bool
-	short   bool // next-fix-mastersread: runReq.short
-	day     bool // next-fix-mastersread: runReq.day
+	full    map[string]bool // review N3: the companies whose masters this run read in full
+	short   bool            // next-fix-mastersread: runReq.short
+	day     bool            // next-fix-mastersread: runReq.day
 }
 
 // next-fix-mastersread: the TC of the company list and the company check: under the 2 s stop for a run reading on
@@ -951,7 +952,14 @@ func (k *keepRun) step(company string, port int, booksFrom string) error {
 	// 2.1.4 (02-Oct-2026): the plain ledger and group lists (ledgers.go), in chunks, before the day book
 	done, err := k.ledgerList(company, port, dir, st, inBudget, save)
 	if err != nil {
+		k.ledStopNote(company, st, err)
 		return err
+	}
+	if done {
+		if k.full == nil {
+			k.full = map[string]bool{}
+		}
+		k.full[company] = true // review N3: read in full in this run (never a lease another bridge held, a GUID refused)
 	}
 	if !done {
 		save()
@@ -1189,7 +1197,14 @@ func startKeepRun(r runReq) bool {
 			if runRank(r.kind) > runRank(m.kind) {
 				m.kind, m.why = r.kind, r.why
 			}
-			m.short, m.day = m.short && r.short, m.day && r.day // next-fix-mastersread: a pressed run merged in stays one
+			// next-fix-mastersread (review S5): a run nobody pressed stays one unless a pressed one (now, not short) is merged
+			// in; the daily catch-up stays one unless the night's own run (nightly, not day) is merged in
+			if r.kind == "now" && !r.short {
+				m.short = false
+			}
+			if r.kind == "nightly" && !r.day {
+				m.day = false
+			}
 			if m.kind != "nightly" {
 				m.day = false
 			}
@@ -1273,7 +1288,7 @@ func keepWorker(r runReq) {
 	_ = saveFile(pidf, fmt.Sprint(os.Getpid()))
 	_ = saveFile(sp("keep.ver"), BridgeVersion)
 	k := &keepRun{tc: &TC{copier: true, readSec: keepNum("KeepReadSec", 120)}, kind: r.kind, only: r.only, light: r.kind == "light", force: r.kind == "now", once: true, told: map[string]bool{},
-		id: fmt.Sprint(time.Now().UnixNano()), alter: map[string]int64{}, short: r.short, day: r.day}
+		id: fmt.Sprint(time.Now().UnixNano()), alter: map[string]int64{}, short: r.short, day: r.day, full: map[string]bool{}}
 	kwMu.Lock()
 	kwRun = k
 	kwMu.Unlock()
@@ -1477,7 +1492,8 @@ func keepWorker(r runReq) {
 			switch {
 			case err == nil:
 				clearBgBackoff(o.port)
-				if !k.booksHeld[o.name] && !k.openUnknown[o.name] {
+				// review N3: only a read in full (k.full: not a lease another bridge held, not a GUID the guard refused) is a read
+				if !k.booksHeld[o.name] && !k.openUnknown[o.name] && k.full[o.name] {
 					markRead(o.name) // 2.5.0: a ledger read held for want of books-from is not a read (2.5.13: nor one without openings)
 					if k.caughtUp && (r.kind == "now" || r.kind == "nightly") {
 						dayCheckNote(o.name, true, "") // next-fix-mastersread: the day's check of this company done (daycatch.go)

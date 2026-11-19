@@ -20,6 +20,7 @@ import { noAnswer } from "../lib/readFollow.js";   // next-link-follow: a result
 import { press, busyOf, lockOf, Said, useSaid, errWords } from "./TallyBtn.jsx";   // next-buttons: every click says what came of it
 import { ackSnap } from "../lib/pickAck.js";   // bridge 2.5.10: what the bridge said of it
 import { localOpen } from "../lib/ownBridge.js";   // next-fix-mastersread: open in this user's own Tally
+import { troubleOf } from "../lib/tallySimple.js";   // next-fix-mastersread: the book's trouble, said one way
 
 const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const ist = (ms) => new Date(ms + 5.5 * 3600e3);
@@ -108,7 +109,8 @@ export function rowWatch(w) {
 export function liveOf(v, bk) {
   if (!v || typeof v !== "object") return null;
   const t = Date.parse(v.at) || 0, age = Date.now() - t, of = Number(v.of) || 0, read = Math.min(Number(v.read) || 0, of || Infinity);
-  if (!v.done) return age < FRESH_MS ? { st: "reading", read, of, at: v.at } : null;
+  // (next-fix-mastersread, review N5: a read's start with nothing read since: reading for a minute at most)
+  if (!v.done) return age < (Number(v.read) > 0 ? FRESH_MS : 60000) ? { st: "reading", read, of, at: v.at } : null;
   // (an empty read is said until a later list came: the book's ledger time after it)
   if (lpEmpty(v)) return age < 86400e3 && !(Date.parse((bk && bk.ledgersAt) || "") > t) ? { st: "empty", read: 0, of: 0, at: v.at } : null;
   return age < 12 * 3600e3 ? { st: "done", read: Number(v.read) || 0, of, at: v.at } : null;
@@ -120,7 +122,7 @@ const readingWords = (read, of) => (of > 0 ? nf(read) + " of " + nf(of) + " ledg
 // HH:MM, or not checked today and why) | Waiting: open <company> in your own Tally / Tally is busy, it reads when typing
 // stops | Not read: <Tally's own words>. Read from what FinCom already holds (the book's state, the computers' beats)
 // the bridge's trouble with the book (tally_books.state.trouble.why): why its last read did not go
-export const troubleOf = (bk) => { const t = bk && bk.state && bk.state.trouble; return t && t.why ? String(t.why).replace(/\s+/g, " ").trim().replace(/^Tally answered with an error for the [a-z ]+:\s*/i, "Tally said: ") : ""; };
+export { troubleOf };
 // when the company was last read in full: the newest of the computers' beats' companies[].lastRead ("" when none)
 export function lastReadOf(company) {
   let best = "";
@@ -162,8 +164,9 @@ export function mastersOf(cid, company) {
     if (rw && rw.phase === "waiting") return Object.assign(base, { st: "waiting", read: 0, of: 0, pct: 0, words: rw.text });
     return Object.assign(base, { st: "reading", read: 0, of: 0, pct: 0, words: rw && rw.text ? rw.text : "Reading…" });
   }
-  if (rw && rw.phase === "why") return Object.assign(base, { st: "why", empty: !!(x && x.empty), words: "Not read: " + rw.text.replace(/^Not updated:\s*/, "") });
-  if (x && (x.err || x.late) && (!held || x.empty)) return Object.assign(base, { st: "why", empty: !!x.empty, words: "Not read: " + (x.err || x.why || "no answer from Tally in 3 minutes") });
+  // (review S1: a failed read is said only while FinCom holds no masters; over held masters the line stays Up to date)
+  if (rw && rw.phase === "why" && !held) return Object.assign(base, { st: "why", empty: !!(x && x.empty), words: "Not read: " + rw.text.replace(/^Not updated:\s*/, "") });
+  if (x && (x.err || x.late) && !held) return Object.assign(base, { st: "why", empty: !!x.empty, words: "Not read: " + (x.err || x.why || "no answer from Tally in 3 minutes") });
   // next-masters-progress: a read nobody pressed here (FinCom's cloud's count), or one that ended with nothing; a read
   // pressed here keeps its own state (x) and words
   const lp = x ? null : cloudProg(cid, company);
@@ -171,7 +174,7 @@ export function mastersOf(cid, company) {
   // next-fix-mastersread: no masters held and the bridge's last read of them failed: its reason (Tally's own words)
   const tr = held ? "" : troubleOf(bk);
   if (tr) return Object.assign(base, { st: "why", empty: false, words: "Not read: " + tr });
-  if (lp && lp.st === "empty") return Object.assign(base, { st: "why", empty: true, words: "Not read: " + EMPTY_WORDS });
+  if (lp && lp.st === "empty" && !held) return Object.assign(base, { st: "why", empty: true, words: "Not read: " + EMPTY_WORDS });
   if (held && lp && lp.st === "done" && lp.read > 0) base.readLine = "Masters read: " + nf(lp.read) + (lp.read === 1 ? " ledger, " : " ledgers, ") + hhmm(lp.at);
   // (the cloud's count not read yet, or not read: "—", never a made-up 0)
   if (held) {
@@ -431,3 +434,7 @@ export function History({ row }) {
       : <ul className="tpg-hlist">{hist.map((r, k) => <li key={k} className={"tpg-h " + r.k} data-tpg-h={r.k}><span data-tpg-h-what="">{[whenWords(r.at), r.what, r.how].filter(Boolean).join(" · ")}</span><span data-tpg-h-res="">{r.res}</span></li>)}</ul>}
   </div>;
 }
+
+// review S7: the Tally page's rows (lib/tallySimple.js, in the main bundle) read the Masters state through this, never
+// importing this part
+if (typeof globalThis === "object") globalThis.FCMastersOf = mastersOf;

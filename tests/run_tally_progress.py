@@ -148,8 +148,8 @@ def main():
            "1. Masters reading: Reading from Tally now, its bar (62), 7,560 of 12,195 ledgers · 148 groups (%s)" % mk)
         ok(ek == "Next, after masters 1,304 of 2,651 · about 12 min" and n(R(KES) + " [data-tpg-entries] [role=progressbar]") == 1, "1. Entries: Next, after masters, its bar, 1,304 of 2,651 · about 12 min (%s)" % ek)
         ok("left" not in mk and "slow" not in txt(R(KES)), "1. no masters time left, no 'ledgers slow in Tally' (no data for them)")
-        ok(mains(KES) == [] and n(R(KES) + " [data-tpt-open]") == 1,
-           "1 (review 4; next-fix-mastersread). masters read, entries only waiting: no button, More kept (%s)" % mains(KES))
+        ok(mains(KES) == ["reading"] and txt(R(KES) + " [data-tpt-main]") == "Reading…" and pg.is_disabled(R(KES) + " [data-tpt-main]"),
+           "1 (review 4). masters read again over masters FinCom holds: the row's button the disabled Reading… (next-fix-mastersread review N5: kept) (%s)" % mains(KES))
         dl = "#app [data-tpg-dl-head]"
         ok(n(dl + " .tpg-title") == 0 and n("#app h2.tpg-title") == 0 and n(dl + " [data-tpg-download]") == 1 and txt(dl + " [data-tpg-download]") == "Download FinCom Bridge 2.5.5"
            and re.match(r"assets/bridge-go/FinComBridge-Setup-2\.5\.5\.exe\?v=cdcdcdcdcdcd$", pg.get_attribute(dl + " [data-tpg-download]", "href") or ""),

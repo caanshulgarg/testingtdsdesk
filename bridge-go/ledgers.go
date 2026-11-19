@@ -58,6 +58,7 @@ import (
 	"html"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -539,8 +540,12 @@ func (k *keepRun) ledgerList(company string, port int, dir string, st M, inBudge
 		ls["bound"] = b
 	}
 	// next-fix-mastersread (item 9): FinCom's masters line says "Reading from Tally now" from the read's start, not
-	// only after its first part (at most one call in 2 s; ledger_progress goes to FinCom, never to Tally)
-	ledProgressNote(company, str(ls["round"]), toInt(ls["n"]), toInt(ls["of"]), false)
+	// only after its first part (at most one call in 2 s; ledger_progress goes to FinCom, never to Tally). The read
+	// that counts the ledgers first (the ledgers-only read) says it once the count has given its "of N"
+	bar := k.kind == "ledgers"
+	if !bar {
+		ledProgressNote(company, str(ls["round"]), toInt(ls["n"]), toInt(ls["of"]), false)
+	}
 	if !truthy(ls["groups"]) {
 		k.holdNow() // third review T5: reading on, the group list too waits while the person types
 		g, err := readGroupList(k.tc, company, port)
@@ -577,9 +582,9 @@ func (k *keepRun) ledgerList(company string, port int, dir string, st M, inBudge
 	// the nightly run read the list as before
 	// 2.5.14: the progress itself (ledger_progress to FinCom, never to Tally) is said for every read; only the count, a
 	// request to Tally, stays the ledgers-only read's (Update now and the nightly run: "read" without "of N")
-	bar := k.kind == "ledgers"
 	if bar {
 		ledCountFor(company, port, ls, save, func() bool { return inBudget() && k.holdNow() == "" }, nextPoison(st, 0) > 0)
+		ledProgressNote(company, str(ls["round"]), toInt(ls["n"]), toInt(ls["of"]), false) // next-fix-mastersread: the start, with its "of N"
 	}
 	for !truthy(ls["done"]) {
 		if !inBudget() || k.holdNow() != "" {
@@ -893,18 +898,55 @@ func (k *keepRun) ledgerList(company string, port int, dir string, st M, inBudge
 // company (mastersFail: the reason and how many reads in a row failed with it, for the retry on the light check,
 // mastersretry.go); when no masters are held here, the round ends at 0 of 0 with the reason, so FinCom's masters line
 // says it at once (it said "Not brought yet" with nothing to do). The error goes on (the company's trouble)
+// (review S1: a list read in full here before, sent to FinCom's cloud, is held there: no 0 of 0 over it. Review S2: with
+// nothing held, the round is dropped, so the next try is a new round whose start FinCom shows as reading, not the failed
+// round kept done)
 func (k *keepRun) mastersFailed(company, dir string, st, ls M, err error, save func()) error {
 	why := err.Error()
 	n := 1
-	if f := obj(st["mastersFail"]); f != nil && str(f["why"]) == why {
+	if f := obj(st["mastersFail"]); f != nil && mastersWhyKey(str(f["why"])) == mastersWhyKey(why) {
 		n = toInt(f["n"]) + 1
 	}
 	st["mastersFail"] = M{"why": why, "n": n, "at": nowS()}
+	held := mastersHeld(dir, st)
+	if !held {
+		delete(st, "led")
+		_ = os.Remove(ledReadFile(dir))
+	}
 	save()
-	if len(loadLedList(dir)) == 0 {
+	if !held {
 		ledProgressFailed(company, str(ls["round"]), why)
 	}
 	return err
+}
+
+// the company's masters are held: read in full here before (and so sent to FinCom's cloud), or a list held here
+func mastersHeld(dir string, st M) bool {
+	return str(st["ledAt"]) != "" || len(loadLedList(dir)) > 0
+}
+
+// review N1: a failure's reason as compared from one read to the next: the list it was (groups or ledgers) and quoted
+// values (a company's name) left out
+var (
+	reMastersWhyList  = regexp.MustCompile(`(?i)\s+for the (group|ledger) list`)
+	reMastersWhyQuote = regexp.MustCompile(`'[^']*'|"[^"]*"`)
+)
+
+func mastersWhyKey(why string) string {
+	return strings.ToLower(strings.TrimSpace(reMastersWhyQuote.ReplaceAllString(reMastersWhyList.ReplaceAllString(why, ""), "''")))
+}
+
+// review N5: a read that stopped for another reason (not a failure of the masters, not a back-off it goes on from) after
+// its start was said: FinCom's "reading" is ended with what was read so far (never a done 0 of 0, which says "no
+// masters"; with nothing read the start note ages out on the page)
+func (k *keepRun) ledStopNote(company string, st M, err error) {
+	if err == nil || errors.Is(err, errTallySaid) || errors.Is(err, errNoMasters) || errors.Is(err, errBackoff) || gaveWay(err) {
+		return
+	}
+	ls := obj(st["led"])
+	if n := toInt(ls["n"]); n > 0 && str(ls["round"]) != "" {
+		ledProgressNote(company, str(ls["round"]), n, n, true)
+	}
 }
 
 // a renamed ledger's opening in the balances held here (balances.json) carries the new name
