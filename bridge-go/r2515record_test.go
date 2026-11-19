@@ -23,12 +23,12 @@ func TestR2515PostingPausedWhileRecordUnreadable(t *testing.T) {
 		t.Fatal("a damaged record (and copy) is read as fine")
 	}
 	// the browser's /import: refused as a whole, with the words; nothing reaches Tally
-	if _, err := invokeImport(M{"company": zz, "vouchers": []any{M{"id": "rp0", "xml": finVoucher("rp0", fgParty, "RP-0", td, "1.00")}}}); err == nil ||
+	if _, err := invokeImport(M{"company": zz, "guid": "co-guid-1", "vouchers": []any{M{"id": "rp0", "xml": finVoucher("rp0", fgParty, "RP-0", td, "1.00")}}}); err == nil ||
 		!strings.Contains(err.Error(), "FinCom Bridge can't read its record of posted entries; posting paused") {
 		t.Fatalf("/import with the record unreadable: %v", err)
 	}
 	// a job: waits with the words (FinCom hears them in the posting's message), never fails, sends nothing
-	if _, err := newPostJob(M{"jobId": "job-r2515-rec", "company": zz, "vouchers": r15Bills("rp", td, 2)}); err != nil {
+	if _, err := newPostJob(M{"jobId": "job-r2515-rec", "company": zz, "guid": "co-guid-1", "vouchers": r15Bills("rp", td, 2)}); err != nil {
 		t.Fatal(err)
 	}
 	jd, _ := jobDir("job-r2515-rec")

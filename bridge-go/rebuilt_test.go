@@ -1177,8 +1177,14 @@ func TestCompanyGUIDDifferentRefused(t *testing.T) {
 	if _, err := acceptCompanyGUID(zz); err != nil || heldGUID(zz) != "co-guid-2" {
 		t.Fatalf("confirm: %v %q", err, heldGUID(zz))
 	}
-	if r := postOne(t, "g3", finVoucher("g3", fgParty, "B-3", td, "30.00")); r["ok"] != true {
-		t.Fatalf("after confirming: %v", r)
+	// linkguid.go (19-Nov-2026): confirming here does not move postings; one goes there only once FinCom names that GUID
+	// (the client linked to it)
+	if r := postOne(t, "g3", finVoucher("g3", fgParty, "B-3", td, "30.00")); r["ok"] == true || r["notSent"] != true {
+		t.Fatalf("after confirming, FinCom still naming the old GUID: %v", r)
+	}
+	res, err := invokeImport(M{"company": zz, "guid": "co-guid-2", "vouchers": []any{M{"id": "g4", "xml": finVoucher("g4", fgParty, "B-4", td, "30.00")}}})
+	if rs := arr(res["results"]); err != nil || len(rs) != 1 || obj(rs[0])["ok"] != true {
+		t.Fatalf("FinCom naming the new GUID: %v %v", res, err)
 	}
 	f.noBalance(t)
 }
@@ -1239,7 +1245,7 @@ func TestTimedOutPostingOutcomeUnknown(t *testing.T) {
 				return create, d
 			}
 			standBridge(t, f, `,"TallyMaxSec":1,"PostTimeoutSec":1,"PostTimeoutBaseSec":1,"TallyProbeEverySec":2,"PostWaitMs":200`) // the import's own timeout (review finding 7)
-			j, err := newPostJob(M{"jobId": "job-unknown-" + fmt.Sprint(made), "company": zz, "vouchers": []any{M{"id": "u1", "xml": finVoucher("u1", fgParty, "U-1", td, "70.00")}}})
+			j, err := newPostJob(M{"jobId": "job-unknown-" + fmt.Sprint(made), "company": zz, "guid": "co-guid-1", "vouchers": []any{M{"id": "u1", "xml": finVoucher("u1", fgParty, "U-1", td, "70.00")}}})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -1300,7 +1306,7 @@ func TestLeaseHonoured(t *testing.T) {
 	if logLines("another FinCom Bridge (PC-2 go-other, until 15:00) is reading or posting this company now; this one gives way") != 1 {
 		t.Fatal("the log does not say it gave way")
 	}
-	j, err := newPostJob(M{"jobId": "job-lease-1", "company": zz, "vouchers": []any{M{"id": "l1", "xml": finVoucher("l1", fgParty, "L-1", td, "9.00")}}})
+	j, err := newPostJob(M{"jobId": "job-lease-1", "company": zz, "guid": "co-guid-1", "vouchers": []any{M{"id": "l1", "xml": finVoucher("l1", fgParty, "L-1", td, "9.00")}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1452,7 +1458,7 @@ func TestNoLedgerCollectionAsked(t *testing.T) {
 	liveFrom(td)
 	runNow(t, "now") // the copy here holds today's entries
 	// a posting naming its ledger, checked first (a resumed or queued posting): what reached Tally is looked for
-	j, err := newPostJob(M{"jobId": "job-ledcoll-1", "company": zz, "ledger": fgParty, "checkFirst": true,
+	j, err := newPostJob(M{"jobId": "job-ledcoll-1", "company": zz, "guid": "co-guid-1", "ledger": fgParty, "checkFirst": true,
 		"vouchers": []any{M{"id": "lc1", "xml": finVoucher("lc1", fgParty, "LC-1", td, "8.00")}}})
 	if err != nil {
 		t.Fatal(err)

@@ -693,7 +693,7 @@ func TestLightCheckNothingDuringPosting(t *testing.T) {
 	f.importAt = func(id, body string) (bool, time.Duration) { return true, 1500 * time.Millisecond }
 	standBridge(t, f, "")
 	sessions := openCompaniesWith(fin, true)
-	j, err := newPostJob(M{"jobId": "job-light-1", "company": zz, "vouchers": []any{M{"id": "lp1", "xml": finVoucher("lp1", fgParty, "LP-1", td, "4.00")}}})
+	j, err := newPostJob(M{"jobId": "job-light-1", "company": zz, "guid": "co-guid-1", "vouchers": []any{M{"id": "lp1", "xml": finVoucher("lp1", fgParty, "LP-1", td, "4.00")}}})
 	if err != nil {
 		t.Fatal(err)
 	}

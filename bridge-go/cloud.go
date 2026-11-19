@@ -1141,11 +1141,13 @@ func beatCompanies(sessions []M, open []any) []any {
 	guidOf := map[string]string{}
 	liveOf := map[string][]string{} // linkguid.go: every GUID an open company of that name has in Tally's list now
 	listedNoBF := map[string]bool{} // 2.5.13: listed by this user's Tally without a BOOKSFROM
+	blind := ownersUntold(sessions)
 	for _, s := range sessions {
 		for _, c := range sessCompanies(s) {
 			if g := str(c["guid"]); g != "" {
 				guidOf[companyKey(str(c["name"]))] = g
-				if s["ok"] == true && s["skipped"] != true && !contains(liveOf[companyKey(str(c["name"]))], g) {
+				// only from a Tally a posting would use (this user's own; linkguid.go tallyToPost)
+				if s["ok"] == true && s["skipped"] != true && tallyToPost(s, blind) && !contains(liveOf[companyKey(str(c["name"]))], g) {
 					liveOf[companyKey(str(c["name"]))] = append(liveOf[companyKey(str(c["name"]))], g)
 				}
 			}

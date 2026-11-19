@@ -148,7 +148,8 @@ func TestJobWaitsForTally(t *testing.T) {
 	ConfigPath, Home = filepath.Join(dir, "tds-bridge.config.json"), dir
 	_ = os.WriteFile(ConfigPath, []byte(`{"TallyPorts":"auto","FallbackPorts":[`+itoa(closed)+`],"AllowImport":true,"LogFile":"`+filepath.ToSlash(filepath.Join(dir, "b.log"))+`"}`), 0o644)
 	loadConfig()
-	p, err := newPostJob(M{"jobId": "job-aebb6c15", "company": "GARG SHEKHAR & COMPANY", "port": 0, "checkFirst": true,
+	t.Cleanup(lgEndJobs) // a posting left waiting would hold every later test's reads (postings first)
+	p, err := newPostJob(M{"jobId": "job-aebb6c15", "company": "GARG SHEKHAR & COMPANY", "guid": "co-guid-1", "port": 0, "checkFirst": true,
 		"vouchers": []any{M{"id": "v1", "xml": "<VOUCHER><DATE>20260401</DATE><NARRATION>TDSDesk:v1</NARRATION></VOUCHER>"}}})
 	if err != nil {
 		t.Fatal(err)
@@ -157,13 +158,13 @@ func TestJobWaitsForTally(t *testing.T) {
 	var v M
 	for i := 0; i < 100; i++ {
 		v = readProgress(jd)
-		// linkguid.go (19-Nov-2026): no Tally answering, no GUID known for the company: "Open ... in Tally to post"
+		// linkguid.go (19-Nov-2026): no Tally answering: "Open ... in Tally to post"
 		if str(v["status"]) == "waiting" && strings.HasPrefix(str(v["message"]), "Open GARG SHEKHAR & COMPANY in Tally to post") {
 			break
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-	if str(v["status"]) != "waiting" || !strings.Contains(str(v["message"]), "it posts by itself") {
+	if str(v["status"]) != "waiting" || !strings.HasPrefix(str(v["message"]), "Open GARG SHEKHAR & COMPANY in Tally to post") {
 		t.Fatalf("not waiting: %v %v", v["status"], v["message"])
 	}
 	items := arr(v["items"])

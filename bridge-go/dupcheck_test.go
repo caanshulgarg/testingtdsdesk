@@ -39,7 +39,7 @@ const (
 
 func postOne(t *testing.T, id, x string) M {
 	t.Helper()
-	res, err := invokeImport(M{"company": zz, "vouchers": []any{M{"id": id, "xml": x}}})
+	res, err := invokeImport(M{"company": zz, "guid": "co-guid-1", "vouchers": []any{M{"id": id, "xml": x}}})
 	var lw *linkWait
 	if errors.As(err, &lw) {
 		// linkguid.go (19-Nov-2026): the linked company not seen in Tally's list now (Tally busy, closed, another GUID):
@@ -82,7 +82,7 @@ func TestDupSecondTabRefused(t *testing.T) {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			if res, err := invokeImport(M{"company": zz, "vouchers": []any{M{"id": "e1", "xml": x}}}); err == nil && len(arr(res["results"])) == 1 {
+			if res, err := invokeImport(M{"company": zz, "guid": "co-guid-1", "vouchers": []any{M{"id": "e1", "xml": x}}}); err == nil && len(arr(res["results"])) == 1 {
 				out[i] = obj(arr(res["results"])[0])
 			}
 		}(i)
@@ -109,7 +109,7 @@ func TestDupSecondTabRefused(t *testing.T) {
 		t.Fatalf("the second tab: %v", refused)
 	}
 	// the stale tab again, later, through a background job (Post again)
-	jr, err := newPostJob(M{"jobId": "dup-tab-job-0001", "company": zz, "vouchers": []any{M{"id": "e1", "xml": x}}})
+	jr, err := newPostJob(M{"jobId": "dup-tab-job-0001", "company": zz, "guid": "co-guid-1", "vouchers": []any{M{"id": "e1", "xml": x}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -155,7 +155,7 @@ func TestDupRecordNotTally(t *testing.T) {
 		t.Fatal("posted twice")
 	}
 	// a ledger (a master) is not checked this way
-	res, err := invokeImport(M{"company": zz, "masters": []any{M{"id": "m1", "xml": `<LEDGER NAME="Fingate" ACTION="Create"><NAME>Fingate</NAME><PARENT>Sundry Creditors</PARENT></LEDGER>`}}})
+	res, err := invokeImport(M{"company": zz, "guid": "co-guid-1", "masters": []any{M{"id": "m1", "xml": `<LEDGER NAME="Fingate" ACTION="Create"><NAME>Fingate</NAME><PARENT>Sundry Creditors</PARENT></LEDGER>`}}})
 	if err != nil || obj(arr(res["results"])[0])["ok"] != true {
 		t.Fatalf("a master: %v %v", res, err)
 	}

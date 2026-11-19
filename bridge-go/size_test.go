@@ -245,8 +245,10 @@ func TestSizeBigCompany(t *testing.T) {
 		t.Fatalf("the ledger count at 50,000 ledgers: %v", cls)
 	}
 	// a posting: the import alone (round 15: nothing is read back)
-	if r := postOne(t, "big1", finVoucher("big1", fgParty, "BIG-1", td, "1.00")); r["ok"] != true {
-		t.Fatalf("posting: %v", r)
+	// (linkguid.go) the posting names the big company's own GUID, as FinCom does for the linked company
+	res, err := invokeImport(M{"company": zz, "guid": "big-guid", "vouchers": []any{M{"id": "big1", "xml": finVoucher("big1", fgParty, "BIG-1", td, "1.00")}}})
+	if rs := arr(res["results"]); err != nil || len(rs) != 1 || obj(rs[0])["ok"] != true {
+		t.Fatalf("posting: %v %v", res, err)
 	}
 
 	big.mu.Lock()

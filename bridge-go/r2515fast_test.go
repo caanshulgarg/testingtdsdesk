@@ -135,7 +135,7 @@ func TestR2515PostedFlushedBeforeNextSend(t *testing.T) {
 	}
 	done := make(chan error, 1)
 	go func() {
-		_, err := invokeImport(M{"company": zz, "vouchers": []any{M{"id": "fs1", "xml": finVoucher("fs1", fgParty, "FS-1", today(), "1.00")}}})
+		_, err := invokeImport(M{"company": zz, "guid": "co-guid-1", "vouchers": []any{M{"id": "fs1", "xml": finVoucher("fs1", fgParty, "FS-1", today(), "1.00")}}})
 		done <- err
 	}()
 	time.Sleep(150 * time.Millisecond)
@@ -180,7 +180,7 @@ func TestR2515PostedNotFlushedNothingSent(t *testing.T) {
 		return h.Sync()
 	})
 	post := func(id string) (M, error) {
-		return invokeImport(M{"company": zz, "vouchers": []any{M{"id": id, "xml": finVoucher(id, fgParty, strings.ToUpper(id), today(), "1.00")}}})
+		return invokeImport(M{"company": zz, "guid": "co-guid-1", "vouchers": []any{M{"id": id, "xml": finVoucher(id, fgParty, strings.ToUpper(id), today(), "1.00")}}})
 	}
 	fails.Store(1) // once: tried again, sent
 	if res, err := post("nf1"); err != nil || f.n("Import") != 1 || len(arr(res["results"])) != 1 {
@@ -231,7 +231,7 @@ func TestR2515PostingPathTime(t *testing.T) {
 	for i := 0; i < 40; i++ {
 		id := fmt.Sprintf("pp%d", i)
 		t0 := time.Now()
-		if _, err := invokeImport(M{"company": zz, "vouchers": []any{M{"id": id, "xml": finVoucher(id, fgParty, fmt.Sprintf("PP-%d", i), today(), "1.00")}}}); err != nil {
+		if _, err := invokeImport(M{"company": zz, "guid": "co-guid-1", "vouchers": []any{M{"id": id, "xml": finVoucher(id, fgParty, fmt.Sprintf("PP-%d", i), today(), "1.00")}}}); err != nil {
 			t.Fatal(err)
 		}
 		d = append(d, time.Duration(at.Load()-t0.UnixNano()))

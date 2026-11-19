@@ -202,7 +202,7 @@ func TestPostingNewLedgerReadsListOnce(t *testing.T) {
 	runNow(t, "now")
 	g0 := f.n(grpListID)
 	master := `<LEDGER NAME="Kashi IT Solutions" ACTION="Create"><NAME>Kashi IT Solutions</NAME><PARENT>Sundry Creditors</PARENT></LEDGER>`
-	j, err := newPostJob(M{"jobId": "job-newled-1", "company": zz, "masters": []any{M{"id": "m1", "xml": master}},
+	j, err := newPostJob(M{"jobId": "job-newled-1", "company": zz, "guid": "co-guid-1", "masters": []any{M{"id": "m1", "xml": master}},
 		"vouchers": []any{M{"id": "v1", "xml": finVoucher("v1", "Kashi IT Solutions", "K-1", today(), "10.00")}}})
 	if err != nil {
 		t.Fatal(err)

@@ -26,7 +26,7 @@ func TestPartialBatchNotedOnDisk(t *testing.T) {
 		M{"id": "fb2", "xml": finVoucher("fb2", fgParty, "FB-2", td, "2.00")},
 		M{"id": "fb3", "xml": finVoucher("fb3", fgParty, "FB-3", td, "3.00")},
 	}
-	if _, err := newPostJob(M{"jobId": "job-held-1", "company": zz, "vouchers": vch}); err != nil {
+	if _, err := newPostJob(M{"jobId": "job-held-1", "company": zz, "guid": "co-guid-1", "vouchers": vch}); err != nil {
 		t.Fatal(err)
 	}
 	p := r6Done(t, "job-held-1")
@@ -45,7 +45,7 @@ func TestPartialBatchNotedOnDisk(t *testing.T) {
 		}
 	}
 	// the cloud freed the ids; a new job carries fb2 (and fb3): refused, nothing sent
-	if _, err := newPostJob(M{"jobId": "job-held-2", "company": zz, "vouchers": []any{vch[1], vch[2]}}); err != nil {
+	if _, err := newPostJob(M{"jobId": "job-held-2", "company": zz, "guid": "co-guid-1", "vouchers": []any{vch[1], vch[2]}}); err != nil {
 		t.Fatal(err)
 	}
 	p = r6Done(t, "job-held-2")

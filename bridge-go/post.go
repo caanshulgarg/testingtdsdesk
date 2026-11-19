@@ -333,6 +333,7 @@ func sendImport(port int, company, job string, r importReq) importOutcome {
 	created, altered, errs, exc, ign, lv := toInt(rr["created"]), toInt(rr["altered"]), toInt(rr["errors"]), toInt(rr["exceptions"]), toInt(rr["ignored"]), str(rr["lastVchId"])
 	lineErr := strs(rr["lineErrors"])
 	trusted := created+altered == s && errs == 0 && exc == 0 && len(lineErr) == 0
+	refused := !trusted && created == 0 && altered == 0 && exc == 0 && ign == 0 && (errs > 0 || len(lineErr) > 0)
 	note := M{"n": s, "kind": r.kind, "seconds": secs, "created": created, "altered": altered, "exceptions": exc, "ignored": ign, "errors": errs, "lastVchId": lv}
 	var out []M
 	for _, it := range r.items {
@@ -357,14 +358,15 @@ func sendImport(port int, company, job string, r importReq) importOutcome {
 					b["message"] = "Altered in Tally: it existed already"
 				}
 			}
-		} else if created+altered > 0 {
-			// Tally made something of the request, not all of it as asked: needs review (Tally's counts and words)
+		} else if !refused {
+			// Tally made something of the request (or excepted or ignored some of it), not all of it as asked: needs review
+			// (Tally's counts and words), and on this computer's record (never sent again by itself)
 			b["ok"], b["needsReview"], b["accepted"] = false, true, true
 			b["lineError"] = toAny(lineErrorKept(lineErr))
 			b["message"] = replyLine(s, rr, lineErr)
 		} else {
-			// (19-Nov-2026) Tally created nothing of it: plainly failed in Tally's own words (never "needs review"); not on
-			// this computer's record, so it may go again (Retry)
+			// (19-Nov-2026) Tally created, altered and excepted nothing of it, and said errors: plainly failed in Tally's
+			// own words (never "needs review"); not on this computer's record, so it may go again (Retry)
 			b["ok"], b["accepted"], b["refusedByTally"] = false, false, true
 			b["lineError"] = toAny(lineErrorKept(lineErr))
 			b["message"] = replyLine(s, rr, lineErr)
@@ -372,7 +374,7 @@ func sendImport(port int, company, job string, r importReq) importOutcome {
 		out = append(out, b)
 	}
 	if r.kind == "voucher" {
-		if trusted || created+altered > 0 {
+		if !refused {
 			vchID := ""
 			if s == 1 && lv != "" {
 				vchID = lv
@@ -462,6 +464,12 @@ func sentBeforeRefusal(id any, xml string) M {
 // gives way to them
 var importsInFlight atomic.Int64
 
+// a caller inside this bridge that checked the company's GUID already passes this as guidChecked (no such caller now);
+// a "guidChecked" from an HTTP caller (any JSON value) is never it: the check is always made
+type guidCheckedMark struct{}
+
+var guidCheckedHere any = guidCheckedMark{}
+
 func invokeImport(p M) (M, error) {
 	importsInFlight.Add(1)
 	defer importsInFlight.Add(-1)
@@ -482,7 +490,7 @@ func invokeImport(p M) (M, error) {
 	// the company's GUID (a job checked it already): another company of the same name is never posted to; Tally not
 	// answering the check: nothing is posted (each entry says so)
 	var stopAll M
-	if !truthy(p["guidChecked"]) {
+	if p["guidChecked"] != guidCheckedHere {
 		g, said, err := companyCheckSaid(fin, company, port)
 		switch {
 		case err == nil && normGUID(g) == "":
@@ -495,10 +503,6 @@ func invokeImport(p M) (M, error) {
 		case err != nil:
 			writeLog("  company check of " + company + ": NOT POSTED, could not check Tally: " + tallyTrouble(err.Error()))
 			stopAll = M{"ok": false, "checkFailed": true, "message": "Could not check Tally, not posted. Try again.", "detail": tallyTrouble(err.Error())}
-		case normGUID(g) != guid && guardCompanyGUID(company, g) != nil:
-			gerr := guardCompanyGUID(company, g)
-			writeLog("  NOT POSTED: " + gerr.Error())
-			stopAll = M{"ok": false, "guidMismatch": true, "message": "Not posted: " + gerr.Error()}
 		}
 	}
 	results := []M{}

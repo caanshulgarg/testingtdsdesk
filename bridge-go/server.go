@@ -527,8 +527,8 @@ func route(w http.ResponseWriter, r *http.Request, path string, qs url.Values, b
 			writeLog("Unpost from '" + company + "': " + why)
 			return nil, errors.New(why)
 		}
-		// linkguid.go: only in the company with the linked GUID (companyGuid, else the one held for the name), looked at
-		// afresh before each try and once after a deletion
+		// linkguid.go: only in the company with the linked GUID (companyGuid; none named: refused, nothing asked of
+		// Tally, never the one held for the name), looked at afresh before each try and once after a deletion
 		want := M{"company": company, "guid": o["companyGuid"]}
 		look, coGUID, err := findLinkedNow(want)
 		if err != nil {

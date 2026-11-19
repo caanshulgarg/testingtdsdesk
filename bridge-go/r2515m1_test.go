@@ -23,7 +23,7 @@ func TestR2515ReviewRecordHeldNeverFromCopy(t *testing.T) {
 	if err := postedRecordErr(); err == nil {
 		t.Fatal("a record held by another program was read from its copy")
 	}
-	if _, err := invokeImport(M{"company": zz, "vouchers": []any{M{"id": "hd0", "xml": finVoucher("hd0", fgParty, "HD-0", today(), "1.00")}}}); err == nil || f.n("Import") != 0 {
+	if _, err := invokeImport(M{"company": zz, "guid": "co-guid-1", "vouchers": []any{M{"id": "hd0", "xml": finVoucher("hd0", fgParty, "HD-0", today(), "1.00")}}}); err == nil || f.n("Import") != 0 {
 		t.Fatalf("posted while the record is held: %v", err)
 	}
 	_ = os.RemoveAll(acceptedFile())

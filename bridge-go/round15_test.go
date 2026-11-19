@@ -58,7 +58,7 @@ func r15Bank(prefix, date string, n int) []any {
 
 func r15Job(t *testing.T, id string, vouchers []any) M {
 	t.Helper()
-	if _, err := newPostJob(M{"jobId": id, "company": zz, "vouchers": vouchers}); err != nil {
+	if _, err := newPostJob(M{"jobId": id, "company": zz, "guid": "co-guid-1", "vouchers": vouchers}); err != nil {
 		t.Fatal(err)
 	}
 	return waitJob(t, id)
@@ -247,7 +247,7 @@ func TestPostNoReadBackRequests(t *testing.T) {
 	f.add(td, fgParty, "OLD-1", "Electricity | TDSDesk:rb1", "-1.00") // the same tag in Tally already: not asked about
 	standBridge(t, f, "")
 	master := `<LEDGER NAME="Round Fifteen" ACTION="Create"><NAME>Round Fifteen</NAME><PARENT>Sundry Creditors</PARENT></LEDGER>`
-	if _, err := newPostJob(M{"jobId": "job-r15-norb", "company": zz, "masters": []any{M{"id": "m1", "xml": master}}, "vouchers": r15Bills("rb", td, 5), "checkFirst": true}); err != nil {
+	if _, err := newPostJob(M{"jobId": "job-r15-norb", "company": zz, "guid": "co-guid-1", "masters": []any{M{"id": "m1", "xml": master}}, "vouchers": r15Bills("rb", td, 5), "checkFirst": true}); err != nil {
 		t.Fatal(err)
 	}
 	p := waitJob(t, "job-r15-norb")
@@ -396,10 +396,10 @@ func TestPostQueueNeverHeld(t *testing.T) {
 	f.importSkip = func(x string) bool { return strings.Contains(x, "TDSDesk:qa") } // Tally refuses job A's entries
 	standBridge(t, f, "")
 	t0 := time.Now()
-	if _, err := newPostJob(M{"jobId": "job-r15-qa", "company": zz, "vouchers": r15Bills("qa", td, 3)}); err != nil {
+	if _, err := newPostJob(M{"jobId": "job-r15-qa", "company": zz, "guid": "co-guid-1", "vouchers": r15Bills("qa", td, 3)}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := newPostJob(M{"jobId": "job-r15-qb", "company": zz, "vouchers": r15Bills("qb", td, 2)}); err != nil {
+	if _, err := newPostJob(M{"jobId": "job-r15-qb", "company": zz, "guid": "co-guid-1", "vouchers": r15Bills("qb", td, 2)}); err != nil {
 		t.Fatal(err)
 	}
 	pb := waitJob(t, "job-r15-qb")
@@ -682,7 +682,7 @@ func TestRestartMidRequestNeverResends(t *testing.T) {
 	f := newStandTally(t)
 	f.importAt = func(id, body string) (bool, time.Duration) { return true, 2 * time.Second }
 	dir := standBridge(t, f, "")
-	if _, err := newPostJob(M{"jobId": "job-r15-crash", "company": zz, "vouchers": r15Bills("cr", td, 2)}); err != nil {
+	if _, err := newPostJob(M{"jobId": "job-r15-crash", "company": zz, "guid": "co-guid-1", "vouchers": r15Bills("cr", td, 2)}); err != nil {
 		t.Fatal(err)
 	}
 	jd, _ := jobDir("job-r15-crash")
@@ -894,7 +894,7 @@ func TestNoSendWhenRecordNotWritable(t *testing.T) {
 	if r["ok"] == true || r["notSent"] != true || !strings.Contains(str(r["message"]), "record not written; nothing sent") || f.n("Import") != 0 {
 		t.Fatalf("/import with the record unwritable: %v (%d imports)", r, f.n("Import"))
 	}
-	if _, err := newPostJob(M{"jobId": "job-r15-norecord", "company": zz, "vouchers": r15Bills("nw", td, 2)}); err != nil {
+	if _, err := newPostJob(M{"jobId": "job-r15-norecord", "company": zz, "guid": "co-guid-1", "vouchers": r15Bills("nw", td, 2)}); err != nil {
 		t.Fatal(err)
 	}
 	jd, _ := jobDir("job-r15-norecord")
@@ -951,7 +951,7 @@ func TestImportNotReachedForgetsNotes(t *testing.T) {
 	}
 	// within the minute: the import is held (nothing reached Tally); the note made before the send is forgotten
 	imports := f.n("Import")
-	res, err := invokeImport(M{"company": zz, "guidChecked": true, "vouchers": []any{M{"id": "nr1", "xml": finVoucher("nr1", fgParty, "NR-1", td, "1.00")}}})
+	res, err := invokeImport(M{"company": zz, "guid": "co-guid-1", "guidChecked": guidCheckedHere, "vouchers": []any{M{"id": "nr1", "xml": finVoucher("nr1", fgParty, "NR-1", td, "1.00")}}})
 	if err != nil {
 		t.Fatal(err)
 	}

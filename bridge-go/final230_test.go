@@ -176,7 +176,7 @@ func TestResendOnlyReleasedEntries(t *testing.T) {
 	f.importSkip = func(x string) bool { return true }
 	f.mu.Unlock()
 	vb := []any{M{"id": "r25", "xml": finVoucher("r25", fgParty, "R-25", td, "25.00")}, M{"id": "r26", "xml": finVoucher("r26", fgParty, "R-26", td, "26.00")}}
-	if _, err := newPostJob(M{"jobId": "job-r3-000001", "company": zz, "vouchers": vb}); err != nil {
+	if _, err := newPostJob(M{"jobId": "job-r3-000001", "company": zz, "guid": "co-guid-1", "vouchers": vb}); err != nil {
 		t.Fatal(err)
 	}
 	if p := waitJob(t, "job-r3-000001"); str(p["status"]) != "failed" {
@@ -191,7 +191,7 @@ func TestResendOnlyReleasedEntries(t *testing.T) {
 	}
 	// (c) done here: only the released one goes again
 	vc := []any{M{"id": "r27", "xml": finVoucher("r27", fgParty, "R-27", td, "27.00")}, M{"id": "r28", "xml": finVoucher("r28", fgParty, "R-28", td, "28.00")}}
-	if _, err := newPostJob(M{"jobId": "job-r4-000001", "company": zz, "vouchers": vc}); err != nil {
+	if _, err := newPostJob(M{"jobId": "job-r4-000001", "company": zz, "guid": "co-guid-1", "vouchers": vc}); err != nil {
 		t.Fatal(err)
 	}
 	if p := waitJob(t, "job-r4-000001"); str(p["status"]) != "done" {

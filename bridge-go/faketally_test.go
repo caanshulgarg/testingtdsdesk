@@ -133,7 +133,7 @@ func TestFakeTallyBehaviours(t *testing.T) {
 		f.coName = "SOME OTHER CO"
 		standBridge(t, f, "")
 		oldDaysOn() // round 19: ReadDays on: invokeTally refuses every dated request with it off; this test is about the dated logic
-		res, err := invokeImport(M{"company": zz, "vouchers": []any{M{"id": "w1", "xml": finVoucher("w1", fgParty, "W-1", td, "1.00")}}})
+		res, err := invokeImport(M{"company": zz, "guid": "co-guid-linked", "vouchers": []any{M{"id": "w1", "xml": finVoucher("w1", fgParty, "W-1", td, "1.00")}}})
 		// linkguid.go (19-Nov-2026): not posted; the posting waits for the linked company, never failed
 		if err == nil || !strings.Contains(err.Error(), "Open "+zz+" in Tally to post") || f.n("Import") != 0 {
 			t.Fatalf("posted with another company open: %v %v", res, err)
@@ -146,7 +146,7 @@ func TestFakeTallyBehaviours(t *testing.T) {
 		noteCompanyGUID(zz, "co-guid-held")
 		// linkguid.go (19-Nov-2026): the company of the name with another GUID is not the linked one: nothing is sent,
 		// the posting waits for the linked company ("Open ... in Tally to post")
-		res, err := invokeImport(M{"company": zz, "vouchers": []any{M{"id": "w2", "xml": finVoucher("w2", fgParty, "W-2", td, "1.00")}}})
+		res, err := invokeImport(M{"company": zz, "guid": "co-guid-held", "vouchers": []any{M{"id": "w2", "xml": finVoucher("w2", fgParty, "W-2", td, "1.00")}}})
 		if err == nil || !strings.Contains(err.Error(), "Open "+zz+" in Tally to post") || f.n("Import") != 0 {
 			t.Fatalf("posted to a company with another GUID: %v %v", res, err)
 		}
@@ -203,7 +203,7 @@ func Test02Oct900sRead(t *testing.T) {
 			t.Fatal("answered while Tally is busy")
 		}
 		// linkguid.go (19-Nov-2026): Tally not giving its company list now, the posting is not sent (it waits)
-		res, err := invokeImport(M{"company": zz, "vouchers": []any{M{"id": fmt.Sprint("b", sec), "xml": finVoucher(fmt.Sprint("b", sec), fgParty, fmt.Sprint("B-", sec), td, "2.00")}}})
+		res, err := invokeImport(M{"company": zz, "guid": "co-guid-1", "vouchers": []any{M{"id": fmt.Sprint("b", sec), "xml": finVoucher(fmt.Sprint("b", sec), fgParty, fmt.Sprint("B-", sec), td, "2.00")}}})
 		if rs := arr(res["results"]); err == nil && (len(rs) != 1 || obj(rs[0])["ok"] == true) {
 			t.Fatal("posted while Tally is busy")
 		}

@@ -83,7 +83,7 @@ func TestCreatedReplyIsPostedWithoutReadBack(t *testing.T) {
 	f.ansi = true
 	f.storeNarr = f1NoTag // this Tally keeps the narration without the tag: a read-back would never have found it
 	standBridge(t, f, "")
-	j, err := newPostJob(M{"jobId": "job-f1-posted", "company": zz, "vouchers": []any{M{"id": "emu1", "xml": f1Voucher("emu1", "")}}})
+	j, err := newPostJob(M{"jobId": "job-f1-posted", "company": zz, "guid": "co-guid-1", "vouchers": []any{M{"id": "emu1", "xml": f1Voucher("emu1", "")}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -170,7 +170,7 @@ func TestSentNeverQueuedTwice(t *testing.T) {
 	f.ansi = true
 	f.storeNarr = f1NoTag
 	standBridge(t, f, "")
-	j, err := newPostJob(M{"jobId": "job-f1-resume", "company": zz, "vouchers": []any{M{"id": "emu4", "xml": f1Voucher("emu4", "")}}})
+	j, err := newPostJob(M{"jobId": "job-f1-resume", "company": zz, "guid": "co-guid-1", "vouchers": []any{M{"id": "emu4", "xml": f1Voucher("emu4", "")}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -213,7 +213,7 @@ func TestLastVchIdNeverInferred(t *testing.T) {
 	if r["ok"] != true || str(r["vchId"]) != master || toInt(r["batchN"]) != 1 {
 		t.Fatalf("one entry: %v", r)
 	}
-	j, err := newPostJob(M{"jobId": "job-f1-two", "company": zz, "vouchers": []any{M{"id": "emu6", "xml": f1Voucher("emu6", "(a)")}, M{"id": "emu7", "xml": f1Voucher("emu7", "(b)")}}})
+	j, err := newPostJob(M{"jobId": "job-f1-two", "company": zz, "guid": "co-guid-1", "vouchers": []any{M{"id": "emu6", "xml": f1Voucher("emu6", "(a)")}, M{"id": "emu7", "xml": f1Voucher("emu7", "(b)")}}})
 	if err != nil {
 		t.Fatal(err)
 	}

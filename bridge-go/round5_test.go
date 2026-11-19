@@ -94,7 +94,7 @@ func TestAlteredReplyIsPosted(t *testing.T) {
 		t.Fatalf("queued again: %v", left)
 	}
 	// the job: done, nothing checking, the item posted with Tally's voucher id
-	j, err := newPostJob(M{"jobId": "job-c7-altered", "company": zz, "vouchers": []any{M{"id": "alt2", "xml": f1Voucher("alt2", "")}}})
+	j, err := newPostJob(M{"jobId": "job-c7-altered", "company": zz, "guid": "co-guid-1", "vouchers": []any{M{"id": "alt2", "xml": f1Voucher("alt2", "")}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -121,7 +121,7 @@ func TestCancelAfterDoneKeepsDone(t *testing.T) {
 	f.ansi = true
 	standBridge(t, f, "")
 	td := today()
-	j, err := newPostJob(M{"jobId": "job-c8-cancel", "company": zz, "vouchers": []any{
+	j, err := newPostJob(M{"jobId": "job-c8-cancel", "company": zz, "guid": "co-guid-1", "vouchers": []any{
 		M{"id": "ok1", "xml": finVoucher("ok1", fgParty, "OK-1", td, "10.00")},
 		M{"id": "un1", "xml": f1Voucher("un1", "")},
 	}})

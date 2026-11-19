@@ -2,8 +2,8 @@ package main
 
 // The owner's hard rule (19-Nov-2026): FinCom Bridge posts an entry only into the Tally company the client is linked
 // to, known by the company's GUID; never into another company. The posting carries the linked GUID (FinCom's queue:
-// tally_post_jobs.company_guid, migration 203; a browser's /jobs or /import: its guid, else the GUID this computer holds
-// for the name). Before every request to Tally that posts or deletes, the company list is asked afresh (the same
+// tally_post_jobs.company_guid, migration 203; a browser's /jobs, /import or /unpost: the link's company_guid; one that
+// names none is never sent, never matched by the name). Before every request to Tally that posts or deletes, the company list is asked afresh (the same
 // request the posting asked before each part anyway: no new request, never a list held from before, never a late
 // answer) and the request goes only when exactly one open company of this user's Tally has the linked GUID and no
 // other open company has its name; it goes under that company's name as Tally gives it now. The next look (before the
@@ -24,57 +24,60 @@ var postListFn = func() []M { return openCompaniesWith(postListTC, true) }
 
 func normGUID(g string) string { return strings.ToLower(strings.TrimSpace(g)) }
 
-// the GUID a posting is for: the one FinCom's queue (or the browser) named, else, for a posting a browser handed
-// here without one, the GUID this computer holds for the name; "" when none is known (nothing is posted)
-func linkedGuidOf(pl M) string {
-	if g := normGUID(str(pl["guid"])); g != "" {
-		return g
-	}
-	if truthy(pl["fromCloud"]) {
-		return "" // FinCom's queue names it (migration 203); one that names none is never posted (noFinComGUID), never guessed by name
-	}
-	return normGUID(heldGUID(str(pl["company"])))
-}
+// the GUID a posting is for: the one FinCom's queue or the browser named (the link's company_guid); "" when it names
+// none: nothing is posted, never a GUID guessed by the name (held on this computer) or the first one Tally lists
+func linkedGuidOf(pl M) string { return normGUID(str(pl["guid"])) }
 
-// where the GUID a posting is for came from: "fincom" (named by FinCom's queue or the browser), "computer" (a browser's
-// posting: held here for the name), "" (none)
+// where the GUID a posting is for came from: "fincom" (named by FinCom's queue or the browser), "" (none)
 func guidFromOf(pl M, guid string) string {
-	switch {
-	case normGUID(str(pl["guid"])) != "":
+	if guid != "" && normGUID(str(pl["guid"])) == guid {
 		return "fincom"
-	case guid != "":
-		return "computer"
 	}
 	return ""
 }
 
 func openToPost(company string) string { return "Open " + company + " in Tally to post" }
 
+// a posting handed out again for another GUID than the one it was started for or posted into
+const linkedElsewhere = "The client was linked to another Tally company after this posting was made: check the entries and post again"
+
 // a posting from FinCom's queue that names no GUID (the coordinator's decision of 19-Nov-2026: the deploy order is 203,
 // tally-ingest, the bridge, so FinCom always names it): it waits, nothing is sent, nothing is guessed by name
 const noFinComGUID = "Waiting for FinCom to name the linked company"
 
-// (the staging incident of 19-Nov-2026) whose Tally a posting may go to: this Windows user's own only. A Tally whose owner
-// Windows cannot tell (mine unknown) only while no Tally of this user runs at all (on a shared server it may be another
-// user's, with the same company open), and then only with the GUID matching (linkedIn matches by GUID alone). Another
-// user's (mine false): never
-func ownTallyRuns(sessions []M) bool {
-	for _, s := range sessions {
-		if s["mine"] == true && s["skipped"] != true {
-			return true
-		}
+// a browser's posting (/jobs, /import, /unpost) that names no GUID (a FinCom page from before the rule): never sent; a
+// job waits for it (handed again with the GUID, it goes on by itself)
+const noBrowserGUID = "Update FinCom: this posting does not name the linked Tally company; nothing was sent. Reload FinCom and post again"
+
+// the wait for a posting that names no GUID
+func noGUIDWait(fromCloud bool) *linkWait {
+	if fromCloud {
+		return &linkWait{kind: "noguid", text: noFinComGUID}
 	}
-	return false
+	return &linkWait{kind: "noguid", text: noBrowserGUID}
 }
 
-func tallyToPost(s M, own bool) bool {
+// (the staging incident of 19-Nov-2026) whose Tally a posting may go to: this Windows user's own only. A Tally whose owner
+// Windows cannot tell (mine unknown) only while Windows tells the owner of no Tally in the list at all (neither this
+// user's nor another's: on a shared server it may be another user's, with the same company open), and then only with the
+// GUID matching (linkedIn matches by GUID alone). Another user's (mine false): never. blind: ownersUntold(sessions)
+func ownersUntold(sessions []M) bool {
+	for _, s := range sessions {
+		if _, told := s["mine"].(bool); told {
+			return false
+		}
+	}
+	return true
+}
+
+func tallyToPost(s M, blind bool) bool {
 	switch s["mine"] {
 	case true:
 		return true
 	case false:
 		return false
 	}
-	return !own
+	return blind
 }
 
 // the company check before a posting gave no company, or the company with no GUID: never sent (fail closed), the
@@ -84,13 +87,19 @@ func checkWait(asked, said string) *linkWait {
 	if said = strings.TrimSpace(said); said != "" {
 		t += " (Tally said: " + cut(said, 160) + ")"
 	}
-	return &linkWait{"nocheck", t}
+	return &linkWait{kind: "nocheck", text: t}
 }
 
 // a reason not to post now (a wait, never a failure)
 type linkWait struct {
-	kind string // noguid, notopen, stale, many, samename
-	text string
+	kind  string // noguid, notopen, stale, many, samename
+	text  string
+	ports []string // stale: the ports of the Tallies that did not give their list
+}
+
+// a few stale rounds running: the wait names the Tally that does not answer (still nothing is sent)
+func staleWords(asked string, lw *linkWait) string {
+	return openToPost(asked) + ": Tally on port " + strings.Join(lw.ports, ", ") + " has not given its company list for a while (it may be stuck on a message or a long task); nothing is sent until it answers"
 }
 
 func (e *linkWait) Error() string { return e.text }
@@ -105,24 +114,27 @@ type linkLook struct {
 func linkedIn(sessions []M, guid, asked string) (linkLook, error) {
 	guid = normGUID(guid)
 	if guid == "" {
-		return linkLook{}, &linkWait{"noguid", openToPost(asked) + ": FinCom does not know yet which Tally company this is (the link has no Tally GUID); it posts by itself once FinCom has seen the company open"}
+		return linkLook{}, &linkWait{kind: "noguid", text: openToPost(asked) + ": FinCom does not know yet which Tally company this is (the link has no Tally GUID); it posts by itself once FinCom has seen the company open"}
 	}
 	var hits []linkLook
 	stale := false
 	var fresh []M
-	own := ownTallyRuns(sessions)
+	var hung []string
+	blind := ownersUntold(sessions)
 	for _, s := range sessions {
-		if s["skipped"] == true || !tallyToPost(s, own) {
+		if s["skipped"] == true || !tallyToPost(s, blind) {
 			continue
 		}
 		if s["ok"] != true {
 			if re(`(?i)timed out|timeout|busy|` + earlierWords).MatchString(str(s["error"])) {
 				stale = true
+				hung = append(hung, fmt.Sprint(toInt(s["port"])))
 			}
 			continue
 		}
 		if s["busy"] == true || s["late"] == true || s["kept"] == true {
 			stale = true // not Tally's answer now: nothing is known of what it has open
+			hung = append(hung, fmt.Sprint(toInt(s["port"])))
 			continue
 		}
 		fresh = append(fresh, s)
@@ -134,15 +146,15 @@ func linkedIn(sessions []M, guid, asked string) (linkLook, error) {
 	}
 	switch {
 	case stale:
-		return linkLook{}, &linkWait{"stale", openToPost(asked) + ": Tally did not give its company list just now; asked again by itself"}
+		return linkLook{}, &linkWait{"stale", openToPost(asked) + ": Tally did not give its company list just now; asked again by itself", hung}
 	case len(hits) == 0:
-		return linkLook{}, &linkWait{"notopen", openToPost(asked)}
+		return linkLook{}, &linkWait{kind: "notopen", text: openToPost(asked)}
 	case len(hits) > 1:
 		var p []string
 		for _, h := range hits {
 			p = append(p, fmt.Sprint(h.port))
 		}
-		return linkLook{}, &linkWait{"many", openToPost(asked) + ": the company is open more than once in Tally (ports " + strings.Join(p, ", ") + "); close it in all but one"}
+		return linkLook{}, &linkWait{kind: "many", text: openToPost(asked) + ": the company is open more than once in Tally (ports " + strings.Join(p, ", ") + "); close it in all but one"}
 	}
 	h := hits[0]
 	same := 0
@@ -154,26 +166,19 @@ func linkedIn(sessions []M, guid, asked string) (linkLook, error) {
 		}
 	}
 	if same > 1 {
-		return linkLook{}, &linkWait{"samename", openToPost(asked) + ": two open companies in Tally are named " + h.name + "; close the one that is not the client's"}
+		return linkLook{}, &linkWait{kind: "samename", text: openToPost(asked) + ": two open companies in Tally are named " + h.name + "; close the one that is not the client's"}
 	}
 	return h, nil
 }
 
-// a posting a browser handed here without a GUID, with none held for the name yet: the list just asked holds the first
-// GUID Tally gives for it (noteCompanyGUID, as before this rule); FinCom's queue is never guessed for
-func guidAfterList(guid string, pl M) string {
-	if guid != "" || truthy(pl["fromCloud"]) {
-		return guid
-	}
-	return normGUID(heldGUID(str(pl["company"])))
-}
-
 // the look itself (one company-list request per own Tally, as the posting always asked before each part); the GUID
-// it was for
+// it was for. A posting that names no GUID: nothing asked of Tally, never sent (noBrowserGUID)
 func findLinkedNow(pl M) (linkLook, string, error) {
-	sess := postListFn()
-	guid := guidAfterList(linkedGuidOf(pl), pl)
-	h, err := linkedIn(sess, guid, str(pl["company"]))
+	guid := linkedGuidOf(pl)
+	if guid == "" {
+		return linkLook{}, "", noGUIDWait(truthy(pl["fromCloud"]))
+	}
+	h, err := linkedIn(postListFn(), guid, str(pl["company"]))
 	return h, guid, err
 }
 
@@ -185,8 +190,9 @@ func confirmLinked(sessions []M, guid string, sent linkLook) (ok bool, wrong str
 		return true, "", ""
 	}
 	// whatever is now open under the name the part went to, with another GUID
+	blind := ownersUntold(sessions)
 	for _, s := range sessions {
-		if s["skipped"] == true || !tallyToPost(s, ownTallyRuns(sessions)) || s["ok"] != true || toInt(s["port"]) != sent.port {
+		if s["skipped"] == true || !tallyToPost(s, blind) || s["ok"] != true || toInt(s["port"]) != sent.port {
 			continue
 		}
 		for _, c := range sessCompanies(s) {

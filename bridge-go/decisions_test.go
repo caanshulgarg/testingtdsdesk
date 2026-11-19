@@ -284,7 +284,7 @@ func TestSettleCheckNotFoundSentOnce(t *testing.T) {
 	standBridge(t, f, `,"TallyMaxSec":1,"PostTimeoutSec":1,"PostTimeoutBaseSec":1,"TallyProbeEverySec":1,"PostWaitMs":200`+c.cfg())
 	x := finVoucher("k2", fgParty, "B-78", td, "20.00")
 	pay := M{"vouchers": []any{M{"id": "k2", "xml": x}}}
-	j, err := newPostJob(M{"jobId": "job-k2-000001", "company": zz, "vouchers": pay["vouchers"]})
+	j, err := newPostJob(M{"jobId": "job-k2-000001", "company": zz, "guid": "co-guid-1", "vouchers": pay["vouchers"]})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -332,7 +332,7 @@ func TestSettleCheckPostedDeletedByHand(t *testing.T) {
 	standBridge(t, f, `,"PostWaitMs":200`+c.cfg())
 	x := finVoucher("k5", fgParty, "B-80", td, "50.00")
 	pay := M{"vouchers": []any{M{"id": "k5", "xml": x}}}
-	if _, err := newPostJob(M{"jobId": "job-k5-000001", "company": zz, "vouchers": pay["vouchers"]}); err != nil {
+	if _, err := newPostJob(M{"jobId": "job-k5-000001", "company": zz, "guid": "co-guid-1", "vouchers": pay["vouchers"]}); err != nil {
 		t.Fatal(err)
 	}
 	if p := waitJob(t, "job-k5-000001"); str(p["status"]) != "done" || f.tagged("TDSDesk:k5") != 1 {
@@ -420,7 +420,7 @@ func TestPostingTakesLeaseFromReader(t *testing.T) {
 	c.lease = &leaseModel{}
 	c.lease.take("go-other00002", "read")
 	standBridge(t, f, `,"PostWaitMs":200,"LeaseWantMs":100`+c.cfg())
-	j, err := newPostJob(M{"jobId": "job-lease-d1", "company": zz, "vouchers": []any{M{"id": "d1", "xml": finVoucher("d1", fgParty, "D-1", td, "9.00")}}})
+	j, err := newPostJob(M{"jobId": "job-lease-d1", "company": zz, "guid": "co-guid-1", "vouchers": []any{M{"id": "d1", "xml": finVoucher("d1", fgParty, "D-1", td, "9.00")}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -543,7 +543,7 @@ func TestPostingNeverYieldsTwoPostingsSerialize(t *testing.T) {
 	for _, id := range []string{"s1", "s2", "s3"} {
 		vs = append(vs, M{"id": id, "xml": finVoucher(id, fgParty, "S-"+id, td, "4.00")})
 	}
-	j, err := newPostJob(M{"jobId": "job-serial-1", "company": zz, "vouchers": vs})
+	j, err := newPostJob(M{"jobId": "job-serial-1", "company": zz, "guid": "co-guid-1", "vouchers": vs})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -572,7 +572,7 @@ func TestPostingNeverYieldsTwoPostingsSerialize(t *testing.T) {
 	if a := c.lease.take("go-other00002", "post"); a["held"] != false {
 		t.Fatalf("the other bridge's turn: %v", a)
 	}
-	j2, err := newPostJob(M{"jobId": "job-serial-2", "company": zz, "vouchers": []any{M{"id": "s4", "xml": finVoucher("s4", fgParty, "S-s4", td, "4.00")}}})
+	j2, err := newPostJob(M{"jobId": "job-serial-2", "company": zz, "guid": "co-guid-1", "vouchers": []any{M{"id": "s4", "xml": finVoucher("s4", fgParty, "S-s4", td, "4.00")}}})
 	if err != nil {
 		t.Fatal(err)
 	}

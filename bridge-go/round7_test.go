@@ -21,7 +21,7 @@ func TestReleasedEntrySentOnceMore(t *testing.T) {
 	id := "emuqtw0683g090"
 	x := f1Voucher(id, "")
 	vch := []any{M{"id": id, "xml": x}}
-	if _, err := newPostJob(M{"jobId": "job-rel-1", "company": zz, "vouchers": vch}); err != nil {
+	if _, err := newPostJob(M{"jobId": "job-rel-1", "company": zz, "guid": "co-guid-1", "vouchers": vch}); err != nil {
 		t.Fatal(err)
 	}
 	r6Done(t, "job-rel-1")
@@ -33,7 +33,7 @@ func TestReleasedEntrySentOnceMore(t *testing.T) {
 		t.Fatalf("sentAt %q is not RFC3339", a["sentAt"])
 	}
 	// without a release: refused on the record
-	if _, err := newPostJob(M{"jobId": "job-rel-2", "company": zz, "vouchers": vch}); err != nil {
+	if _, err := newPostJob(M{"jobId": "job-rel-2", "company": zz, "guid": "co-guid-1", "vouchers": vch}); err != nil {
 		t.Fatal(err)
 	}
 	if p := r6Done(t, "job-rel-2"); f.n("Import") != 1 || r6States(p)[id] != "failed" {
@@ -60,7 +60,7 @@ func TestReleasedEntrySentOnceMore(t *testing.T) {
 		t.Fatalf("the record was not replaced by the new send: %v", a2)
 	}
 	// the same release again (honoured already): not sent a third time
-	if _, err := newPostJob(M{"jobId": "job-rel-4", "company": zz, "vouchers": vch, "released": []any{M{"id": id, "at": newer, "by": "Anshul", "why": "not in Tally"}}}); err != nil {
+	if _, err := newPostJob(M{"jobId": "job-rel-4", "company": zz, "guid": "co-guid-1", "vouchers": vch, "released": []any{M{"id": id, "at": newer, "by": "Anshul", "why": "not in Tally"}}}); err != nil {
 		t.Fatal(err)
 	}
 	r6Done(t, "job-rel-4")
@@ -162,7 +162,7 @@ func TestPartialBatchNeedsReview(t *testing.T) {
 		M{"id": "fb2", "xml": finVoucher("fb2", fgParty, "FB-2", td, "2.00")},
 		M{"id": "fb3", "xml": finVoucher("fb3", fgParty, "FB-3", td, "3.00")},
 	}
-	if _, err := newPostJob(M{"jobId": "job-fast-partial", "company": zz, "vouchers": vch}); err != nil {
+	if _, err := newPostJob(M{"jobId": "job-fast-partial", "company": zz, "guid": "co-guid-1", "vouchers": vch}); err != nil {
 		t.Fatal(err)
 	}
 	p := r6Done(t, "job-fast-partial")
@@ -182,7 +182,7 @@ func TestPartialBatchNeedsReview(t *testing.T) {
 		}
 	}
 	// a later job with the same ids: refused on the record, still one import
-	if _, err := newPostJob(M{"jobId": "job-fast-partial-2", "company": zz, "vouchers": vch}); err != nil {
+	if _, err := newPostJob(M{"jobId": "job-fast-partial-2", "company": zz, "guid": "co-guid-1", "vouchers": vch}); err != nil {
 		t.Fatal(err)
 	}
 	p = r6Done(t, "job-fast-partial-2")
@@ -235,7 +235,7 @@ func TestAcceptedKeyOneForBankLine(t *testing.T) {
 	standBridge(t, f, "")
 	bank := strings.Replace(f1Voucher("sid-3", ""), "| TDSDesk:sid-3", "", 1) // no tag of its own: the bridge stamps TDSDesk:sid3
 	hash := strings.Replace(f1Voucher("x", ""), "| TDSDesk:x", "", 1)         // an id with no letters or digits: a hash tag
-	if _, err := newPostJob(M{"jobId": "job-sid-1", "company": zz, "vouchers": []any{M{"id": "sid-3", "xml": bank}, M{"id": "-#-", "xml": hash}}}); err != nil {
+	if _, err := newPostJob(M{"jobId": "job-sid-1", "company": zz, "guid": "co-guid-1", "vouchers": []any{M{"id": "sid-3", "xml": bank}, M{"id": "-#-", "xml": hash}}}); err != nil {
 		t.Fatal(err)
 	}
 	p := r6Done(t, "job-sid-1")
@@ -257,7 +257,7 @@ func TestAcceptedKeyOneForBankLine(t *testing.T) {
 	}
 	// the same two again in another job: refused on the one key, the reason naming job-sid-1; nothing sent
 	imports := f.n("Import")
-	if _, err := newPostJob(M{"jobId": "job-sid-x2", "company": zz, "vouchers": []any{M{"id": "sid-3", "xml": bank}, M{"id": "-#-", "xml": hash}}}); err != nil {
+	if _, err := newPostJob(M{"jobId": "job-sid-x2", "company": zz, "guid": "co-guid-1", "vouchers": []any{M{"id": "sid-3", "xml": bank}, M{"id": "-#-", "xml": hash}}}); err != nil {
 		t.Fatal(err)
 	}
 	p = r6Done(t, "job-sid-x2")
@@ -346,7 +346,7 @@ func TestPostedIdsWriteFailureHolds(t *testing.T) {
 	t.Cleanup(func() { _ = os.RemoveAll(acceptedFile()) })
 	id := "emuqtw0683g090"
 	vch := []any{M{"id": id, "xml": f1Voucher(id, "")}}
-	if _, err := newPostJob(M{"jobId": "job-wf-1", "company": zz, "vouchers": vch}); err != nil {
+	if _, err := newPostJob(M{"jobId": "job-wf-1", "company": zz, "guid": "co-guid-1", "vouchers": vch}); err != nil {
 		t.Fatal(err)
 	}
 	jd, _ := jobDir("job-wf-1")

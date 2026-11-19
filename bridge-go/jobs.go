@@ -118,20 +118,25 @@ func newPostJob(pl M) (M, error) {
 		return nil, err
 	}
 	if exists(filepath.Join(dir, "progress.json")) {
-		// linkguid.go: a posting this computer has (a browser's, or an earlier hand-out) handed out by FinCom again names
-		// the linked GUID: the payload takes it when it has none; another GUID than the one it was started for is never
-		// followed (the client linked to another company since: a person looks)
-		if g := normGUID(str(pl["guid"])); g != "" && !jobAlive(id) {
+		// linkguid.go: a posting this computer has (a browser's, or an earlier hand-out) handed out again names the linked
+		// GUID: the payload takes it when it has none (also while the posting waits for it: its worker reads it each
+		// round); another GUID than the one it was started for, or the one it was posted into (its progress), is never
+		// followed and never written over (the client linked to another company since: a person looks)
+		if g := normGUID(str(pl["guid"])); g != "" {
+			pr := readProgress(dir)
 			if pay := readObjFileBak(filepath.Join(dir, "payload.json")); pay != nil {
-				switch had := normGUID(str(pay["guid"])); {
-				case had == "":
+				had := normGUID(str(pay["guid"]))
+				for _, w := range []string{had, normGUID(str(pr["companyGuid"])), normGUID(str(pr["windowGuid"]))} {
+					if w != "" && w != g {
+						return nil, errors.New(linkedElsewhere)
+					}
+				}
+				if had == "" {
 					pay["guid"] = g
 					if truthy(pl["fromCloud"]) {
 						pay["fromCloud"] = true
 					}
 					_ = saveJSONBak(filepath.Join(dir, "payload.json"), pay)
-				case had != g:
-					return nil, errors.New("The client was linked to another Tally company after this posting was made: check the entries and post again")
 				}
 			}
 		}
@@ -645,20 +650,27 @@ func jobWorker(dir string) {
 		p["inflight"] = []any{}
 		heldDirty = true // written with the next save (the next part's, or the wait's below)
 	}
+	stale := 0 // linkguid.go: company-list rounds in a row with a Tally not answering it
 	waitTally := func(why error) bool {
 		for {
 			if cancelled() || stopping() {
 				return false
 			}
-			if why == nil && guid == "" && fromCloud {
-				why = &linkWait{"noguid", noFinComGUID} // linkguid.go: never posted, nothing asked of Tally
+			if guid == "" {
+				// linkguid.go: the GUID handed with the posting again while it waits (newPostJob writes it in the payload)
+				if g := normGUID(str(readObjFileBak(filepath.Join(dir, "payload.json"))["guid"])); g != "" {
+					guid, pl["guid"] = g, g
+				}
+			}
+			if why == nil && guid == "" {
+				why = noGUIDWait(fromCloud) // linkguid.go: never posted, nothing asked of Tally
 			}
 			if why == nil {
 				sess := postListFn()
-				guid = guidAfterList(guid, pl)
 				commitHeld(sess)
 				h, err := linkedIn(sess, guid, asked)
 				if err == nil {
+					stale = 0
 					port, company = h.port, h.name
 					p["port"], p["tallyCompany"], p["companyGuid"], p["guidFrom"] = h.port, h.name, guid, guidFromOf(pl, guid)
 					return true
@@ -671,7 +683,16 @@ func jobWorker(dir string) {
 			}
 			var lw *linkWait
 			if errors.As(why, &lw) {
-				setStatus("waiting", lw.text)
+				if lw.kind == "stale" {
+					stale++
+				} else {
+					stale = 0
+				}
+				if lw.kind == "stale" && stale >= 3 && len(lw.ports) > 0 {
+					setStatus("waiting", staleWords(asked, lw))
+				} else {
+					setStatus("waiting", lw.text)
+				}
 			} else {
 				setStatus("waiting", waitingLine(asked, why))
 			}
@@ -745,17 +766,12 @@ func jobWorker(dir string) {
 			err = checkWait(asked, said)
 		case err == nil && normGUID(g) != guid:
 			// linkguid.go: the company Tally names so is not the linked one (it changed since the list): waited for
-			err = &linkWait{"notopen", openToPost(asked)}
+			err = &linkWait{kind: "notopen", text: openToPost(asked)}
 		}
 		if err == nil {
+			// the GUID Tally gave is the linked one (just compared): held here for the name when none is (as before)
 			coGUID = g
-			if gerr := guardCompanyGUID(company, g); gerr != nil && normGUID(g) != guid {
-				for _, it := range itemsToSend(all, results) {
-					results = append(results, M{"id": it["id"], "kind": it["kind"], "ok": false, "guidMismatch": true, "message": "Not posted: " + gerr.Error()})
-				}
-				finish("failed", "Not posted: "+gerr.Error())
-				return
-			}
+			noteCompanyGUID(company, g)
 			break
 		}
 		if !waitTally(err) {

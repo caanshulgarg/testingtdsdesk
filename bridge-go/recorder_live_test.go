@@ -903,7 +903,7 @@ func TestLiveUploaderDuringPosting(t *testing.T) {
 		}
 	}()
 	vs := r15Bills("lv", td, 2000)
-	if _, err := newPostJob(M{"jobId": "job-live-2000", "company": zz, "vouchers": vs}); err != nil {
+	if _, err := newPostJob(M{"jobId": "job-live-2000", "company": zz, "guid": "co-guid-1", "vouchers": vs}); err != nil {
 		t.Fatal(err)
 	}
 	go func() { // the add-on, writing while the posting runs

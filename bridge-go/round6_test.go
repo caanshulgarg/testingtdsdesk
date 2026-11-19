@@ -57,7 +57,7 @@ func TestRequeuedJobNeverResent(t *testing.T) {
 	f := r6Tally(t, func() bool { return true })
 	standBridge(t, f, "")
 	vch := []any{M{"id": "emuqtw0683g090", "xml": f1Voucher("emuqtw0683g090", "")}}
-	if _, err := newPostJob(M{"jobId": "3b03cc5e", "company": zz, "vouchers": vch}); err != nil {
+	if _, err := newPostJob(M{"jobId": "3b03cc5e", "company": zz, "guid": "co-guid-1", "vouchers": vch}); err != nil {
 		t.Fatal(err)
 	}
 	p := r6Done(t, "3b03cc5e")
@@ -66,7 +66,7 @@ func TestRequeuedJobNeverResent(t *testing.T) {
 	}
 	// the requeue: the same job id, the same items, as cloudPostTake hands it over
 	for i := 0; i < 2; i++ {
-		if _, err := newPostJob(M{"jobId": "3b03cc5e", "company": zz, "vouchers": vch}); err != nil {
+		if _, err := newPostJob(M{"jobId": "3b03cc5e", "company": zz, "guid": "co-guid-1", "vouchers": vch}); err != nil {
 			t.Fatal(err)
 		}
 		p = r6Done(t, "3b03cc5e")
@@ -94,14 +94,14 @@ func TestNewJobWithSentIdRefused(t *testing.T) {
 	f := r6Tally(t, func() bool { return true })
 	standBridge(t, f, "")
 	x := f1Voucher("emuqtw0683g090", "")
-	if _, err := newPostJob(M{"jobId": "job-first", "company": zz, "vouchers": []any{M{"id": "emuqtw0683g090", "xml": x}}}); err != nil {
+	if _, err := newPostJob(M{"jobId": "job-first", "company": zz, "guid": "co-guid-1", "vouchers": []any{M{"id": "emuqtw0683g090", "xml": x}}}); err != nil {
 		t.Fatal(err)
 	}
 	r6Done(t, "job-first")
 	f.mu.Lock()
 	master := f.lastMaster
 	f.mu.Unlock()
-	if _, err := newPostJob(M{"jobId": "job-second", "company": zz, "vouchers": []any{M{"id": "emuqtw0683g090", "xml": x}}}); err != nil {
+	if _, err := newPostJob(M{"jobId": "job-second", "company": zz, "guid": "co-guid-1", "vouchers": []any{M{"id": "emuqtw0683g090", "xml": x}}}); err != nil {
 		t.Fatal(err)
 	}
 	p := r6Done(t, "job-second")
@@ -130,7 +130,7 @@ func TestRetryAfterNeedsReviewSendsNothing(t *testing.T) {
 	f.importSkip = func(x string) bool { return strings.Contains(x, "TDSDesk:bad1") } // Tally refuses this one (ERRORS 1)
 	standBridge(t, f, "")
 	vch := []any{M{"id": "emuqtw0683g090", "xml": f1Voucher("emuqtw0683g090", "")}, M{"id": "bad1", "xml": finVoucher("bad1", fgParty, "B-1", td, "5.00")}}
-	if _, err := newPostJob(M{"jobId": "job-retry", "company": zz, "vouchers": vch}); err != nil {
+	if _, err := newPostJob(M{"jobId": "job-retry", "company": zz, "guid": "co-guid-1", "vouchers": vch}); err != nil {
 		t.Fatal(err)
 	}
 	p := r6Done(t, "job-retry")
@@ -151,7 +151,7 @@ func TestRetryAfterNeedsReviewSendsNothing(t *testing.T) {
 	f.mu.Lock()
 	f.importSkip = nil
 	f.mu.Unlock()
-	if _, err := newPostJob(M{"jobId": "job-retry", "company": zz, "vouchers": vch}); err != nil {
+	if _, err := newPostJob(M{"jobId": "job-retry", "company": zz, "guid": "co-guid-1", "vouchers": vch}); err != nil {
 		t.Fatal(err)
 	}
 	p = r6Done(t, "job-retry")
@@ -222,7 +222,7 @@ func TestNothingAfterTheImport(t *testing.T) {
 func TestSentRecordOnDisk(t *testing.T) {
 	f := r6Tally(t, func() bool { return true })
 	standBridge(t, f, "")
-	if _, err := newPostJob(M{"jobId": "job-disk", "company": zz, "vouchers": []any{M{"id": "emu-8", "xml": f1Voucher("emu8", "")}}}); err != nil {
+	if _, err := newPostJob(M{"jobId": "job-disk", "company": zz, "guid": "co-guid-1", "vouchers": []any{M{"id": "emu-8", "xml": f1Voucher("emu8", "")}}}); err != nil {
 		t.Fatal(err)
 	}
 	r6Done(t, "job-disk")
@@ -236,7 +236,7 @@ func TestSentRecordOnDisk(t *testing.T) {
 	}
 	// a batch: the request's size and Tally's last id, no vchId
 	td := today()
-	if _, err := newPostJob(M{"jobId": "job-disk-2", "company": zz, "vouchers": []any{M{"id": "ok-9", "xml": finVoucher("ok9", fgParty, "OK-9", td, "9.00")}, M{"id": "ok-10", "xml": finVoucher("ok10", fgParty, "OK-10", td, "10.00")}}}); err != nil {
+	if _, err := newPostJob(M{"jobId": "job-disk-2", "company": zz, "guid": "co-guid-1", "vouchers": []any{M{"id": "ok-9", "xml": finVoucher("ok9", fgParty, "OK-9", td, "9.00")}, M{"id": "ok-10", "xml": finVoucher("ok10", fgParty, "OK-10", td, "10.00")}}}); err != nil {
 		t.Fatal(err)
 	}
 	r6Done(t, "job-disk-2")

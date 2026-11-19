@@ -199,7 +199,7 @@ func TestLinkedInRules(t *testing.T) {
 		{"a late answer", []M{s(9000, M{"late": true}, coPair{"A Co", "g1"})}, "g1", "stale", ""},
 		{"a list kept from before", []M{s(9000, M{"kept": true}, coPair{"A Co", "g1"})}, "g1", "stale", ""},
 		{"busy: the last list", []M{s(9000, M{"busy": true}, coPair{"A Co", "g1"})}, "g1", "stale", ""},
-		{"another user's Tally left out", []M{s(9000, nil, coPair{"A Co", "g1"}), s(9001, M{"mine": false}, coPair{"A Co", "g9"})}, "g1", "", "A Co"},
+		{"another user's Tally left out", []M{s(9000, M{"mine": true}, coPair{"A Co", "g1"}), s(9001, M{"mine": false}, coPair{"A Co", "g9"})}, "g1", "", "A Co"},
 	}
 	for _, c := range cases {
 		h, err := linkedIn(c.sess, c.guid, "A Co")
