@@ -130,6 +130,8 @@ run_migration199.py                   1500
 run_migration200.py                   120
 # 18-Nov-2026 (next-fix-posttimeout): 201, the posting register's pass of a big posting in steps; 20,000 and 50,000 entries timed
 run_migration201.py                   480
+# migration 201a (19-Nov-2026, found applying 199-202 on staging): tally_post_register_pending's 11 columns only; MAINTAIN off the new tables
+run_migration201a.py                  240
 # 19-Nov-2026 (next-fix-posttimeout, the third review): never twice, every way an entry is sent again (199-201 in one session)
 run_post_never_twice.py               240
 # 19-Nov-2026 (next-fix-posttimeout): 202, an entry that needs review rechecked by itself (narration, the Day Book's content)
