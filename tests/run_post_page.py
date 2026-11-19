@@ -154,7 +154,7 @@ with sync_playwright() as p:
     E("""() => { window.__rpc = []; TCloud.st[S.coId] = {at: Date.now(), books: []}; const e = Object.values(D().entries)[1];
       window.__guids = []; const pc = Bridge.postChecked; Bridge.postChecked = async (p, a, b) => { window.__guids.push(p.guid || ""); return pc(p, a, b); };
       LinkRec.guidFor = async (co, n) => co && co.id === S.coId && n === "GARG SHEKHAR & COMPANY" ? "made-up-guid-0002" : "";
-      linkGuid = LinkRec.guidFor;   // (and a bridge that checks it: linkGuid in its /status)
+      linkGuid = async (co, n) => ({guid: await LinkRec.guidFor(co, n), why: "not the made-up link"});   // (and a bridge that checks it: linkGuid in its /status)
       window.__r2 = null; Bridge.post({company: "GARG SHEKHAR & COMPANY", client: S.coId, masters: [], vouchers: [{id: e.id, xml: voucherXml(e, CO())}]}).then(r => window.__r2 = r, err => window.__r2 = {err: err.message}); }""")
     pg.wait_for_timeout(1500)
     rec = [x[1] for x in E("window.__rpc") if x[0] == "tally_post_record"]

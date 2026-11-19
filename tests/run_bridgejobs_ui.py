@@ -69,7 +69,7 @@ with sync_playwright() as p:
     pg.evaluate("() => { Bridge.setCfg({key: 'K'.repeat(32)}); }"); pg.evaluate("Bridge.refresh()")
     ok(pg.evaluate("Bridge.up() && Bridge.st.version") == "1.12.0", "bridge 1.12 seen")
     # the client's link to ZZ, with its GUID (LinkRec's record, as FinCom's cloud gives it)
-    LINK = "(g) => { let co = CO(); if (!co){ co = newCompany({name: 'ZZ'}); S.companies[co.id] = co; S.data[co.id] = {parties: {}, entries: {}, loaded: true}; co.stats = {}; S.coId = co.id; choiceConfirm(co, 'postTo', 'ZZ'); } LinkRec.load = async () => LinkRec.st.rows; LinkRec.st.rows = [{book_id: 'b-zz', client_id: co.id, company_guid: g, company_name: 'ZZ', state: 'linked'}]; return co.id; }"
+    LINK = "(g) => { let co = CO(); if (!co){ co = newCompany({name: 'ZZ'}); S.companies[co.id] = co; S.data[co.id] = {parties: {}, entries: {}, loaded: true}; co.stats = {}; S.coId = co.id; choiceConfirm(co, 'postTo', 'ZZ'); } LinkRec.on = () => true; LinkRec.st.missing = false; LinkRec.st.err = ''; LinkRec.load = async () => LinkRec.st.rows; LinkRec.st.rows = [{book_id: 'b-zz', client_id: co.id, company_guid: g, company_name: 'ZZ', state: 'linked', posting_allowed: true}]; return co.id; }"
     ok(bool(pg.evaluate(LINK, LG)), "a client linked to ZZ")
 
     # the link's GUID travels with the posting; a link with no GUID: nothing is sent, a plain reason
@@ -88,14 +88,25 @@ with sync_playwright() as p:
     # the reasons told apart: the link not read (the read failed; no records), two links with different companies
     pg.evaluate(LINK, LG)
     for setup, want, what in (("() => { LinkRec.load = async () => { LinkRec.st.err = 'made-up failure'; return LinkRec.st.rows; }; }", "could not read this client's Tally link", "the link records could not be read"),
-                              ("() => { LinkRec.load = async () => { LinkRec.st.err = ''; return LinkRec.st.rows; }; LinkRec.st.rows = []; }", "could not read this client's Tally link", "no link records read"),
-                              ("() => { LinkRec.load = async () => LinkRec.st.rows; LinkRec.st.err = ''; LinkRec.st.rows = [{book_id: 'b-zz', client_id: CO().id, company_guid: 'made-up-guid-0001', company_name: 'ZZ', state: 'linked'}, {book_id: 'b-zz2', client_id: CO().id, company_guid: 'made-up-guid-0009', company_name: 'ZZ', state: 'linked'}]; }", "two Tally links named ZZ with different companies", "two links with different GUIDs")):
+                              ("() => { LinkRec.load = async () => { LinkRec.st.err = ''; return LinkRec.st.rows; }; LinkRec.st.rows = []; }", "is not linked to ZZ in FinCom", "no link records"),
+                              ("() => { LinkRec.on = () => false; LinkRec.st.missing = false; }", "sign in to FinCom's cloud", "not signed in to FinCom's cloud"),
+                              ("() => { LinkRec.on = () => false; LinkRec.st.missing = true; }", "is not linked to ZZ in FinCom", "a cloud without the link records"),
+                              ("() => { LinkRec.on = () => true; LinkRec.st.missing = false; LinkRec.load = async () => LinkRec.st.rows; LinkRec.st.err = ''; LinkRec.st.rows = [{book_id: 'b-zz', client_id: CO().id, company_guid: 'made-up-guid-0001', company_name: 'ZZ', state: 'linked', posting_allowed: true}, {book_id: 'b-zz2', client_id: CO().id, company_guid: '', company_name: 'ZZ', state: 'linked', posting_allowed: true}]; }", "two Tally links for this client; keep one", "one link with a GUID, one without"),
+                              ("() => { LinkRec.load = async () => LinkRec.st.rows; LinkRec.st.err = ''; LinkRec.st.rows = [{book_id: 'b-zz', client_id: CO().id, company_guid: 'made-up-guid-0001', company_name: 'ZZ', state: 'linked', posting_allowed: true}, {book_id: 'b-zz2', client_id: CO().id, company_guid: 'made-up-guid-0009', company_name: 'ZZ', state: 'linked', posting_allowed: true}]; }", "two Tally links named ZZ with different companies", "two links with different GUIDs")):
         pg.evaluate(setup); M["bodies"].clear(); M["jobs"].clear()
         o = pg.evaluate(POST, {"m": [], "v": ["r1"]})
         rs = o["r"]["results"]; t = pg.evaluate(UNPOST)
         ok(not M["bodies"] and rs and all(not x["ok"] and want in (x.get("message") or "") for x in rs) and want in t["said"] and t["asked"] == 0,
            "%s: nothing sent, the posting and the deletion say so: %s / %s" % (what, [x.get("message", "")[:70] for x in rs], t["said"][:70]))
     pg.evaluate(LINK, LG); pg.evaluate("() => { LinkRec.st.err = ''; }")
+    # a closed period with no GUID on the link: not asked about (nor recorded), nothing sent
+    pg.evaluate(LINK, ""); M["bodies"].clear()
+    n = pg.evaluate("""async () => { if (typeof ClosedP !== "object") return -1; const was = ClosedP.gate; let asked = 0; ClosedP.gate = async (p) => { asked++; return []; };
+      try { await Bridge.post({company: "ZZ", masters: [], vouchers: [{id: "c1", xml: "<x/>"}]}); } finally { ClosedP.gate = was; } return asked; }""")
+    ok(n == 0 and not M["bodies"], "a link with no GUID: the closed-period question is not asked, nothing sent (%s)" % n)
+    # each reason is the call's own (linkGuid returns it with the result), never one shared between calls
+    r2 = pg.evaluate("""async () => { const a = linkGuid(CO(), 'ZZ'), b = linkGuid(CO(), 'NOT ZZ'); return [await a, await b]; }""")
+    ok(isinstance(r2, list) and all(isinstance(x, dict) for x in r2) and r2[0].get("guid") == "" and "no company ID" in r2[0].get("why", "") and "is not linked to NOT ZZ" in r2[1].get("why", ""), "the reasons per call: %s" % r2)
     # a new ledger with no GUID on the link: no confirm asked, nothing sent
     pg.evaluate(LINK, ""); M["bodies"].clear()
     n = pg.evaluate("""async () => { const was = PostGate.masters; let asked = 0; PostGate.masters = async (p) => { asked++; return {masters: p.masters, results: []}; };
@@ -107,13 +118,19 @@ with sync_playwright() as p:
       finally { [AutoPost.may, postClearReady, bridgeLive, AutoPost.where] = was; } }""")
     ok(not M["bodies"] and not u["ok"] and "no company ID" in (u.get("why") or ""), "Post automatically's undo with no GUID: says why (%s)" % u)
     # a bridge that does not say it checks the GUID: nothing sent to it, "update FinCom Bridge"
-    pg.evaluate(LINK, LG); M["linkGuid"] = False; pg.evaluate("Bridge.refresh()"); M["bodies"].clear(); M["jobs"].clear()
+    # (its /status asked again right before the write: the page's last look still says linkGuid)
+    pg.evaluate(LINK, LG); M["linkGuid"] = False; M["bodies"].clear(); M["jobs"].clear()
     o = pg.evaluate(POST, {"m": [], "v": ["o1"]}); t = pg.evaluate(UNPOST)
     rs = o["r"]["results"]
     ok(not M["bodies"] and rs and all(not x["ok"] and "update FinCom Bridge on this computer" in (x.get("message") or "") for x in rs) and "update FinCom Bridge" in t["said"] and t["asked"] == 0,
        "a bridge without linkGuid: nothing sent, the posting and the deletion say update the bridge: %s / %s" % ([x.get("message", "")[:60] for x in rs], t["said"][:60]))
     M["linkGuid"] = True; pg.evaluate("Bridge.refresh()")
-    pg.evaluate(LINK, LG); M["bodies"].clear()
+    # the link record read afresh (past the 15 s copy) right before the write
+    pg.evaluate(LINK, LG); M["bodies"].clear(); M["jobs"].clear()
+    f = pg.evaluate("""async () => { const fs = []; LinkRec.load = async (force) => { fs.push(!!force); return LinkRec.st.rows; };
+      await Bridge.post({company: "ZZ", masters: [], vouchers: [{id: "fr1", xml: "<x/>"}]}); return fs; }""")
+    ok(True in f and any(pth == "/jobs" for pth, b in M["bodies"]), "the link record read afresh before the posting (%s)" % f)
+    pg.evaluate(LINK, LG); M["bodies"].clear(); M["jobs"].clear()
     pg.evaluate("""async () => { const was = [toast, askConfirm, ensureTallyCompany]; toast = m => {}; askConfirm = async () => true; ensureTallyCompany = async () => 'ZZ';
       try { await unpostFromTally('bill', {id: 'u1', tally: {guid: 'v-guid', vchType: 'Journal', vchDate: '20260701', company: 'ZZ'}}, CO().id); } finally { [toast, askConfirm, ensureTallyCompany] = was; } }""")
     ub = [b for pth, b in M["bodies"] if pth == "/unpost"]

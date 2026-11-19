@@ -111,26 +111,36 @@ const LinkRec = {
   },
   forClient(cid){ return this.live().filter(r => String(r.client_id) === String(cid)); },
   // the owner's rule (19-Nov-2026): a posting or deletion through the bridge names the Tally company the client is linked
-  // to by its GUID (the bridge sends only into the open company with it): every link record of the client with that name
-  // gives the same one GUID; else "" and why says why, nothing is sent (24's linkGuid; Bridge.post, unpostFromTally):
-  // the records not read (not signed in, the read failed, none there), the client not linked to that name, two links
-  // with different companies, or the link with no GUID yet
-  why: "",
-  async guidFor(co, name){
-    const no = w => { this.why = w; return ""; };
+  // to by its GUID (the bridge sends only into the open company with it). {guid, why}: the GUID when every link record of
+  // the client with that name gives the same one; else guid "" and why says why, nothing is sent: not signed in to
+  // FinCom's cloud, the records could not be read now (try again), the client not linked to that name (or a cloud
+  // without the records), two links (with different companies, or one with a GUID and one without), no GUID yet.
+  // fresh: read again now, past the 15 s copy
+  async guidTo(co, name, fresh){
+    const no = why => ({guid: "", why}), nm = (co && co.name) || "this client";
+    const notLinked = () => no("Nothing was sent to Tally: " + nm + " is not linked to " + name + " in FinCom. Link it on the Tally page, then try again.");
     if (!co) return no(LINK_UNREAD);
-    try { await this.load(); } catch (e){ return no(LINK_UNREAD); }
-    if (this.st.err || !Array.isArray(this.st.rows) || !this.st.rows.length) return no(LINK_UNREAD);
-    const rs = this.forClient(co.id).filter(x => this.isName(x, name)), gs = [...new Set(rs.map(r => String(r.company_guid || "").trim().toLowerCase()))];
-    if (!rs.length) return no("Nothing was sent to Tally: " + (co.name || "this client") + " is not linked to " + name + " in FinCom. Link it on the Tally page, then try again.");
-    if (gs.filter(Boolean).length > 1) return no("Nothing was sent to Tally: " + (co.name || "this client") + " has two Tally links named " + name + " with different companies. Unlink the one that is not the client's on the Tally page, then try again.");
-    if (gs.length !== 1 || !/^[0-9a-z-]{1,100}$/.test(gs[0])) return no("Nothing was sent to Tally: this client's Tally link has no company ID yet. Open the company in Tally with FinCom Bridge running, then try again.");
-    return gs[0];
+    if (!this.on()) return this.st.missing ? notLinked() : no("Nothing was sent to Tally: sign in to FinCom's cloud (the client's Tally link is kept there), then try again.");
+    try { await this.load(!!fresh); } catch (e){ return no(LINK_UNREAD); }
+    if (this.st.err || !Array.isArray(this.st.rows)) return no(LINK_UNREAD);
+    const rs = this.forClient(co.id).filter(x => this.isName(x, name)), gs = [...new Set(rs.map(r => String(r.company_guid || "").trim().toLowerCase()))], real = gs.filter(Boolean);
+    if (!rs.length) return notLinked();
+    if (real.length > 1) return no("Nothing was sent to Tally: " + nm + " has two Tally links named " + name + " with different companies. Unlink the one that is not the client's on the Tally page, then try again.");
+    if (real.length && gs.length > 1) return no("Nothing was sent to Tally: there are two Tally links for this client; keep one (on the Tally page, unlink the " + name + " link that has no company ID), then try again.");
+    if (!real.length || !/^[0-9a-z-]{1,100}$/.test(real[0])) return no("Nothing was sent to Tally: this client's Tally link has no company ID yet. Open the company in Tally with FinCom Bridge running, then try again.");
+    return {guid: real[0], why: ""};
   },
-  // a bridge that does not say it checks the linked GUID (before the rule): it would post by the name alone
-  bridgeWhy(){
-    return Bridge.st.state === "ok" ? "Nothing was sent to Tally: update FinCom Bridge on this computer to post or remove entries (this one does not check the linked company's ID)."
-      : "Nothing was sent to Tally: FinCom Bridge on this computer is not answering. Start it, then try again.";
+  async guidFor(co, name){ return (await this.guidTo(co, name)).guid; },
+  // asked right before a posting or deletion goes straight to the bridge (24's linkGuid): the link record read afresh, and
+  // the bridge's /status asked again: only a bridge that says linkGuid (it checks the GUID; an older one would post by the
+  // name alone) is sent anything
+  async sendTo(co, name){
+    const r = await this.guidTo(co, name, true);
+    if (!r.guid) return r;
+    let j = null;
+    try { j = await Bridge.call("/status", null, 15000); } catch (e){}
+    if (!j) return {guid: "", why: "Nothing was sent to Tally: FinCom Bridge on this computer is not answering. Start it, then try again."};
+    return j.linkGuid === true ? r : {guid: "", why: "Nothing was sent to Tally: update FinCom Bridge on this computer to post or remove entries (this one does not check the linked company's ID)."};
   },
   // two names of one company: the same words, or one linked company's names (its record's and its name in Tally now)
   same(a, b){ if (this.key(a) === this.key(b)) return true; const r = this.ofName(a) || this.ofName(b); return !!r && this.isName(r, a) && this.isName(r, b); },

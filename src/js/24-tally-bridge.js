@@ -166,7 +166,7 @@ const Bridge = {
         tallyState: (j.tally && j.tally.state) || (usable.length ? (j.tallyStuck ? "busy" : "open") : "closed"), busySince: (j.tally && j.tally.since) || (j.tallyStuck && j.tallyStuck.since) || "",
         beat: j.beat || null, computer: j.computer || "", paused: !!j.paused,
         // bridge 2.5.3: why none of this user's Tallys answers, Tally's connection switched on, this browser's session
-        tallyWhy: j.tallyWhy || "", tallyConnectSay: j.tallyConnectSay || "", sameSession: j.sameSession, linkGuid: j.linkGuid === true};
+        tallyWhy: j.tallyWhy || "", tallyConnectSay: j.tallyConnectSay || "", sameSession: j.sameSession};
       if (!this.st.tallyUp || this.st.pinMissing){ if (!this.diag || Date.now() - this.diag.at > 30000) await this.diagnose(); }
       else this.diag = null;
       this.misses = 0; this.okAt = Date.now();
@@ -203,6 +203,25 @@ const Bridge = {
     const hold = (why, r) => ({ok: true, company: payload.company, results: [].concat(payload.masters || [], payload.vouchers || []).map(x => ({id: x.id, ok: false, held: true, message: why})).concat(r || [])});
     { const why = typeof FirmGate === "object" ? FirmGate.why(payload.client || (S.view === "company" ? S.coId : "")) : "";
       if (why) return hold(why); }
+    const coP = (payload.client && S.companies[payload.client]) || (typeof CO === "function" ? CO() : null);
+    // zoho-books (13-Oct-2026): a client whose books come from Zoho Books posts there (src/js/74), not to a Tally company
+    if (typeof ZohoB === "object" && coP && ZohoB.on() && !ZohoB.st.data) { try { await ZohoB.load(); } catch (e){} }
+    const viaZoho = typeof ZohoB === "object" && ZohoB.isZoho(coP);
+    // 02-Oct-2026: only into the Tally company chosen for this client (Client setup → Tally); the cloud refuses the same
+    if (!viaZoho && coP && typeof postToFromLink === "function") await postToFromLink(coP);
+    const notAllowed = viaZoho ? "" : postToProblem(coP, payload.company);
+    if (notAllowed) return {ok: true, company: payload.company, notAllowed: true, results: [].concat(payload.masters || [], payload.vouchers || []).map(x => ({id: x.id, ok: false, notAllowed: true, message: notAllowed}))};
+    // B11: every posting goes through the queue in FinCom's cloud when the client is linked there, also with the bridge
+    // on this computer (the main bridge takes it from the queue; the live connection wakes it), so every posting is in one
+    // list. Straight to the bridge only when the cloud is not there for this client; then recorded in the cloud afterwards
+    const cloudOn = !viaZoho && !!coP && typeof TCloud === "object" && TCloud.on();
+    if (cloudOn && !(TCloud.st[coP.id] && TCloud.st[coP.id].books)){ try { await TCloud.status(coP.id); } catch (e){} }
+    const viaCloud = cloudOn && TCloud.has(coP.id);
+    // 19-Nov-2026 (the owner's rule): straight to the bridge only with the linked company's GUID and a bridge that
+    // checks it, else nothing is sent (asked before the closed-period question and any new ledger's confirm; asked again
+    // right before the write)
+    const lg = viaZoho || viaCloud ? {} : await linkGuid(coP, payload.company);
+    if (!viaZoho && !viaCloud && !lg.guid) return hold(lg.why);
     // nothing without a proper date, or dated before the company's books begin, ever goes to Tally: it is answered here
     const refused = [];
     // entries dated in a closed period: the user is asked, and those held back are answered here
@@ -225,25 +244,6 @@ const Bridge = {
     });
     payload = Object.assign({}, payload, {masters: keep(payload.masters), vouchers: keep(payload.vouchers)});
     if (!payload.masters.length && !payload.vouchers.length) return {ok: true, company: payload.company, results: refused};
-    // build 199: Tally on another computer: through the queue in the cloud
-    const coP = (payload.client && S.companies[payload.client]) || (typeof CO === "function" ? CO() : null);
-    // zoho-books (13-Oct-2026): a client whose books come from Zoho Books posts there (src/js/74), not to a Tally company
-    if (typeof ZohoB === "object" && coP && ZohoB.on() && !ZohoB.st.data) { try { await ZohoB.load(); } catch (e){} }
-    const viaZoho = typeof ZohoB === "object" && ZohoB.isZoho(coP);
-    // 02-Oct-2026: only into the Tally company chosen for this client (Client setup → Tally); the cloud refuses the same
-    if (!viaZoho && coP && typeof postToFromLink === "function") await postToFromLink(coP);
-    const notAllowed = viaZoho ? "" : postToProblem(coP, payload.company);
-    if (notAllowed) return {ok: true, company: payload.company, notAllowed: true, results: [].concat(payload.masters || [], payload.vouchers || []).map(x => ({id: x.id, ok: false, notAllowed: true, message: notAllowed})).concat(refused)};
-    // B11: every posting goes through the queue in FinCom's cloud when the client is linked there, also with the bridge
-    // on this computer (the main bridge takes it from the queue; the live connection wakes it), so every posting is in one
-    // list. Straight to the bridge only when the cloud is not there for this client; then recorded in the cloud afterwards
-    const cloudOn = !viaZoho && !!coP && typeof TCloud === "object" && TCloud.on();
-    if (cloudOn && !(TCloud.st[coP.id] && TCloud.st[coP.id].books)){ try { await TCloud.status(coP.id); } catch (e){} }
-    const viaCloud = cloudOn && TCloud.has(coP.id);
-    // 19-Nov-2026 (the owner's rule): straight to the bridge only with the linked company's GUID and a bridge that
-    // checks it, else nothing is sent (asked before any new ledger is confirmed)
-    const lg = viaZoho || viaCloud ? "" : await linkGuid(coP, payload.company);
-    if (!viaZoho && !viaCloud && !lg) return hold(linkGuid.why, refused);
     // review of 02-Oct-2026 (B9): a ledger Tally already has is never sent as a master; a new one is asked about first,
     // and nothing is sent until it is confirmed
     if (typeof PostGate === "object" && (payload.masters || []).length){
@@ -260,7 +260,8 @@ const Bridge = {
       outC.results = [].concat(outC.results || []).concat(refused);
       return words(outC);
     }
-    payload = Object.assign({}, payload, {guid: lg});
+    { const again = await linkGuid(coP, payload.company); if (again.guid !== lg.guid) return hold(again.why || LINK_UNREAD, refused); }
+    payload = Object.assign({}, payload, {guid: lg.guid});
     let out = null;
     const after = onChecked || cloudOn ? chk => { words(chk); if (out && cloudOn && typeof PostRecord === "object") PostRecord.save(coP, payload, {recId: out.recId, company: out.company, results: [].concat(chk.results || []).concat(refused)}); if (onChecked) onChecked(chk); } : onChecked;
     out = await this.postChecked(payload, onProgress, after);
@@ -985,16 +986,10 @@ function bankFocus(title, ids, note){ const b = B(); b.focus = {title, ids: [].c
 
 /* ---------- taking an entry back out of Tally ---------- */
 const LINK_UNREAD = "Nothing was sent to Tally: FinCom could not read this client's Tally link just now. Try again in a moment.";
-// the linked company's GUID a posting or deletion straight to the bridge names (98's LinkRec.guidFor), only for a bridge
-// that checks it (bridge /status linkGuid); "": nothing is sent, linkGuid.why says why
-async function linkGuid(co, name){
-  const L = typeof LinkRec === "object" ? LinkRec : null;
-  if (L) L.why = "";
-  const g = L ? await L.guidFor(co, name) : "";
-  linkGuid.why = !g ? (L && L.why) || LINK_UNREAD : Bridge.st.linkGuid ? "" : L.bridgeWhy();
-  return linkGuid.why ? "" : g;
-}
-async function unpostFromTally(what, obj, cid){
+// the linked company's GUID a posting or deletion straight to the bridge names, asked right before it: {guid} or {why}
+// (98's LinkRec.sendTo: the link record read afresh, the bridge's /status says linkGuid)
+async function linkGuid(co, name){ return typeof LinkRec === "object" ? LinkRec.sendTo(co, name) : {guid: "", why: LINK_UNREAD}; }
+async function unpostFromTally(what, obj, cid, out){
   const co = CO(cid || S.coId);
   const t = obj.tally || {};
   if (!t.guid){
@@ -1003,14 +998,15 @@ async function unpostFromTally(what, obj, cid){
   }
   const tname = await ensureTallyCompany(co);
   if (!tname) return false;
-  const lg = await linkGuid(co, t.company || tname);
-  if (!lg){ toast(linkGuid.why); return false; }
+  let lg = await linkGuid(co, t.company || tname);
+  if (!lg.guid){ toast(lg.why); if (out) out.why = lg.why; return false; }
   const ans = await askConfirm({title: "Remove this entry from Tally?", ok: "Remove it",
     body: '<p class="note">Voucher ' + esc(t.vchType || "") + " " + esc(obj.tallyVchNo || t.masterId || "") + " dated " + esc(t.vchDate ? fmtDate(tallyToIso(t.vchDate)) : "") +
       " will be deleted from <b>" + esc(t.company || tname) + "</b>. It then comes back here as waiting to be posted.</p>"});
   if (!ans) return false;
+  { const again = await linkGuid(co, t.company || tname); if (again.guid !== lg.guid){ lg = again.why || LINK_UNREAD; toast(lg); if (out) out.why = lg; return false; } }
   try {
-    const j = await Bridge.call("/unpost", {company: t.company || tname, companyGuid: lg, guid: t.guid, vchType: t.vchType, vchDate: t.vchDate}, 120000);
+    const j = await Bridge.call("/unpost", {company: t.company || tname, companyGuid: lg.guid, guid: t.guid, vchType: t.vchType, vchDate: t.vchDate}, 120000);
     if (!j || j.ok === false){ toast("Tally would not remove it: " + plainMsg((j && (j.message || j.error)) || "")); return false; }
     logPosting({what, id: obj.id, action: "removed", co: co.id, tally: t, by: (Cloud.st && Cloud.st.email) || ""});
     toast("Removed from Tally.");

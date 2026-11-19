@@ -650,10 +650,9 @@ const AutoPost = {
         if (bank) saveBank({rows: true}); else Store.saveEntry(cid, x);
         return {ok: false, marked: true, why: "It is in Tally. It can be taken back only on the Tally computer (" + ((typeof tallyPcLabel === "function" && x.tally && x.tally.pc) || "where FinCom Bridge runs") + "), or deleted in Tally by hand. Marked for undo there."};
       }
-      linkGuid.why = "";
-      const done = opts.noAsk ? await this.unpostQuiet(bank ? "bank" : "bill", x, cid) : await unpostFromTally(bank ? "bank" : "bill", x, cid);
-      // nothing sent for want of the linked company's GUID (or a bridge that checks it): that reason, not Tally's
-      if (!done) return {ok: false, why: linkGuid.why || "Tally did not remove it."};
+      const said = {};   // (this call's own reason: nothing sent for want of the linked GUID, or a bridge that checks it)
+      const done = opts.noAsk ? await this.unpostQuiet(bank ? "bank" : "bill", x, cid, said) : await unpostFromTally(bank ? "bank" : "bill", x, cid, said);
+      if (!done) return {ok: false, why: said.why || "Tally did not remove it."};
     }
     const job = w === "queued" ? (x.auto && x.auto.job) || x.postJobNew || this.jobOf(cid, [x.id], a.run) : null;
     if (job && typeof TCloud === "object"){
@@ -709,13 +708,13 @@ const AutoPost = {
     if (job && !opts.whole){ if (this.inRun === a.run){ this.requeueRun = this.requeueRun || {}; this.requeueRun[a.run] = true; } else await this.requeue(cid, a.run, x.id); }
     return {ok: true, words: "Undone: " + (a.label || "the entry") + " " + money0(a.amt || 0).replace(/\.00$/, "") + (w === "tally" ? " deleted from Tally" : w === "queued" ? " taken off the queue" : "") + " · back in “Waiting for me” · rule paused"};
   },
-  async unpostQuiet(what, obj, cid){
+  async unpostQuiet(what, obj, cid, out){
     const co = CO(cid), t = obj.tally || {};
     try {
       const tname = typeof tallyCoName === "function" ? tallyCoName(co) : co.tallyName;
-      const lg = await linkGuid(co, t.company || tname);   // the linked company's GUID; none: nothing is sent (linkGuid.why)
-      if (!lg) return false;
-      const j = await Bridge.call("/unpost", {company: t.company || tname, companyGuid: lg, guid: t.guid, vchType: t.vchType, vchDate: t.vchDate}, 120000);
+      const lg = await linkGuid(co, t.company || tname);   // the linked company's GUID; none: nothing is sent (its why)
+      if (!lg.guid){ if (out) out.why = lg.why; return false; }
+      const j = await Bridge.call("/unpost", {company: t.company || tname, companyGuid: lg.guid, guid: t.guid, vchType: t.vchType, vchDate: t.vchDate}, 120000);
       if (!j || j.ok === false) return false;
       logPosting({what, id: obj.id, action: "removed", co: cid, tally: t, by: whoAmI()});
       return true;
