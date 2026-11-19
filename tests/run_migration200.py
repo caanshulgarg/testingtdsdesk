@@ -13,7 +13,10 @@ a double post; a person only for contradictory evidence, named. On a throwaway P
      those entries alone are released and handed back to the same bridge (resend_only, released); the re-post settles it
   C. contradictory evidence: named for a person (which entries and why), nothing marked or released; the rest settles
   D. a check asked by itself answered "found": marked posted by "FinCom (by itself)"; E. a check given up is asked again
-  F. 20,000 entries held (BIG=0 skips): settled in one pass (read back, released, checked), each statement timed under 6 s
+  F. 20,000 entries held (BIG=0 skips): settled in one pass (read back, released, checked), each statement timed: under
+     7.5 s with 199 and 200 alone (never the release: the hand-back's change of status runs the register's whole pass in
+     its trigger, some 6 s), under 1.5 s with WITH_201=1 (201 applied after 200, as the release is: 199, 200, 201 together)
+  H, I (never twice, the cron's hand-backs); the third review's never-twice paths: run_post_never_twice.py
 RED_WITHOUT_200=1: the same checks without the file (the postings stay held: fails)."""
 import os, re, sys, json, time, hashlib, csv
 csv.field_size_limit(1 << 30)   # a big posting's results read back whole
@@ -24,6 +27,7 @@ M199 = os.path.join(PS.SQLDIR, "migration-199-post-match-fast.sql")
 M200 = os.path.join(PS.SQLDIR, "migration-200-post-settle-itself.sql")
 RED = os.environ.get("RED_WITHOUT_200") == "1"
 BIG = os.environ.get("BIG", "1") != "0" and not RED
+WITH_201 = os.environ.get("WITH_201") == "1" and not RED
 ME = "00000000-0000-0000-0000-000000000200"
 fails = []
 def ok(c, w):
@@ -39,9 +43,19 @@ ok(bool(text) and "delete from" not in code and not re.search(r"\b(drop|truncate
    "add-only: one table, one column, three indexes, if not there; no trigger; nothing dropped, deleted or truncated")
 ok(bool(text) and not re.search(r"supabase\.co|https?://|qbocskai|nrtczu|project[_ ]ref", text.lower()), "names no real database")
 FNS = ["public.tally_member_name(uuid, uuid)", "public.tally_post_self_stamp(text, text, text, text, text, text, text, text)", "public.tally_post_settle_itself(uuid)",
-       "public.tally_post_settle_resend(uuid)", "public.tally_post_settle_resend_due(integer)", "public.tally_post_settle_itself_all(integer)"]
-ok(sorted(set(re.findall(r"create or replace function (public\.\w+)\(", code))) == sorted(f.split("(")[0] for f in FNS), "only these functions: %s" % ", ".join(FNS))
+       "public.tally_post_settle_resend(uuid)", "public.tally_post_settle_resend_due(integer)", "public.tally_post_settle_itself_all(integer)",
+       "public.tally_post_resend_owed(uuid, uuid)", "public.tally_post_resend_elsewhere(uuid, jsonb)", "public.tally_post_resend_list(uuid)", "public.tally_post_resend_ok(uuid)"]
+ok(sorted(set(re.findall(r"create or replace function (public\.\w+)\(", code))) == sorted([f.split("(")[0] for f in FNS] + ["public.tally_post_check_confirm"]), "only these functions: %s, and 174's tally_post_check_confirm" % ", ".join(FNS))
 ok(all(("revoke all on function %s from public, anon, authenticated;" % s) in text and ("grant execute on function %s to service_role;" % s) in text for s in FNS), "service_role only, granted explicitly")
+ok("revoke all on function public.tally_post_check_confirm(uuid, text, text) from public, anon;" in text and "grant execute on function public.tally_post_check_confirm(uuid, text, text) to authenticated;" in text,
+   "174's tally_post_check_confirm: granted as before (a member's own call), explicitly")
+m174 = open(os.path.join(PS.SQLDIR, "migration-174-post-jobs-safe.sql")).read()
+a_ = PS.fbody(text, "tally_post_check_confirm") if text else []; b_ = PS.fbody(m174, "tally_post_check_confirm")
+ok(text and [l for l in b_ if l not in a_] == ["update tally_post_jobs set status = 'waiting', message = 'Not in Tally (looked by ' || tally_member_name(f, auth.uid()) || '): sent again', taken_at = null, updated_at = now(),",
+                                       "attempts = coalesce(attempts, 0) + 1 where id = p_job;", "v_resent := true;",
+                                       "update tally_post_checks set state = 'confirmed', confirmed_by = auth.uid(), confirmed_at = now(), confirmed_why = v_why, resent = v_resent where id = c.id;"],
+   "tally_post_check_confirm: 174's text, only its hand-back (and the check's confirm before it) changed: %s" % [l for l in b_ if l not in a_][:6])
+ok("raise exception 'migration 200 runs after 199" in text and "to_regprocedure('public.tally_post_id_accept_many(uuid,jsonb)') is null" in text, "never runs without 199 (199, 200, 201: one release)")
 ok("perform cron.schedule('tally-post-settle-itself', '* * * * *', 'select public.tally_post_settle_itself_all()')" in text and "to_regprocedure('cron.schedule(text,text,text)') is not null and to_regprocedure('public.tally_post_work_run(integer)') is null" in text,
    "the cron job every minute, only where pg_cron is and 201 has not given it its own command (scheduled by name: safe twice)")
 m55 = open(os.path.join(PS.SQLDIR, "migration-55-settle-and-lease.sql")).read()
@@ -49,7 +63,7 @@ a = PS.fbody(text, "tally_member_name") if text else []; b = PS.fbody(m55, "tall
 ok([l for l in b if l not in a] == ["select coalesce((select nullif(btrim(m.name), '') from members m where m.firm_id = p_firm and m.user_id = p_user limit 1), 'a member of the firm')"] and len([l for l in a if l not in b]) == 2,
    "tally_member_name: 55's text with one case added")
 
-st = PS.Stand(int(os.environ.get("PG200_PORT") or 31200), extra=(M199,)); db = st.db
+st = PS.Stand(int(os.environ.get("PG200_PORT") or 31200), extra=(M199,) + ((os.path.join(PS.SQLDIR, "migration-184-post-dupes.sql"), os.path.join(PS.SQLDIR, "migration-185-post-unrouted.sql")) if WITH_201 else ())); db = st.db
 J = lambda n: "%08d-0000-0000-0000-000000000200" % n
 def timed(stmt, uid=None):
     t0 = time.time()
@@ -93,6 +107,13 @@ try:
         if RED: ok(False, "run %d (RED_WITHOUT_200: not run)" % k); continue
         r = st.psql_text(text); ok(r.returncode == 0, "run %d %s" % (k, (r.stderr or "").strip()[-500:] if r.returncode else ""))
     st.grants()
+    if WITH_201:   # (the release: 201 after 200, with what 201 needs: 184 and 185 above, 182's read-back)
+        m182 = open(os.path.join(PS.SQLDIR, "migration-182-gap-after-post.sql")).read()
+        t0_ = m182.index("create table if not exists public.tally_light_days ("); t1_ = m182.index(");", t0_) + 2
+        f0_ = m182.index("create or replace function public.tally_post_job_read_back()"); f1_ = m182.index("end $$;", f0_) + len("end $$;")
+        db.sql(m182[t0_:t1_] + "\n" + m182[f0_:f1_])
+        r = st.psql_text(open(os.path.join(PS.SQLDIR, "migration-201-post-register-async.sql")).read())
+        ok(r.returncode == 0, "WITH_201: 201 applied after 200 %s" % (r.stderr or "")[-300:]); st.grants()
     if not RED:
         priv = lambda role, s: db.one("select has_function_privilege(%s, %s, 'execute')::text" % (q(role), q(s)))
         ok(all(priv("authenticated", s) == "false" and priv("anon", s) == "false" and priv("service_role", s) == "true" for s in FNS), "not for anon or authenticated; service_role may")
@@ -247,6 +268,11 @@ try:
     print("== H. never twice: an entry released by itself, then posted in another posting before the hand-back, is not handed back")
     def again(n, x, k, status="waiting"):   # the user posts entry x (the k-th of its posting) again in another posting n
         V = [{"id": x, "xml": "<VOUCHER VCHTYPE=\"Payment\"><DATE>20261117</DATE><VOUCHERNUMBER>%d</VOUCHERNUMBER><NARRATION>TDSDesk:%s</NARRATION><AMOUNT>-%d.00</AMOUNT></VOUCHER>" % (k + 1, x, 100 + k)}]
+        if WITH_201:   # (201 refuses it at the queue: put there as staging's code let it, before this release)
+            db.sql("set session_replication_role = replica; insert into tally_post_jobs (id, firm_id, client_id, company, status, n, payload, device_id, created_by) values (%s, %s, 'c1', %s, %s, 1, %s, %s, %s);"
+                   "insert into tally_post_ids (firm_id, client_id, fincom_id, job_id, entry_id, live) values (%s, 'c1', %s, %s, %s, true); set session_replication_role = origin;"
+                   % (q(J(n)), q(F), q(CO), q(status), q(json.dumps({"vouchers": V})), q(DA), q(OWNER), q(F), q(x), q(J(n)), q(x)))
+            return
         db.sql("insert into tally_post_jobs (id, firm_id, client_id, company, status, n, payload, device_id, created_by) values (%s, %s, 'c1', %s, %s, 1, %s, %s, %s)"
                % (q(J(n)), q(F), q(CO), q(status), q(json.dumps({"vouchers": V})), q(DA), q(OWNER)))
     def notseen(n, xs):
@@ -296,7 +322,7 @@ try:
 
     if BIG:
         print("== F. 20,000 entries held: settled in one pass")
-        N, LIMIT, timings = 20000, 6.0, {}   # three quarters of the 8 s statement timeout
+        N, LIMIT, timings = 20000, (1.5 if WITH_201 else 7.5), {}   # (199 + 200 alone are never the release: under the 8 s statement timeout)
         ids = job(5, N, "b")
         res = [ok_res(ids[k], k) for k in range(15000)]
         report(5, res, [{"id": x, "state": "posted" if k < 15000 else "waiting"} for k, x in enumerate(ids)])
@@ -308,6 +334,12 @@ try:
         o = json.loads(out or "{}")
         ok(not e and o.get("found") == 4500 and o.get("asked") == 100 and o.get("waiting") == 500 and o.get("register") is True, "4,500 posted by itself, 500 checked (100 asked this run) %s" % e)
         out, e, t = timed("set role service_role; set statement_timeout = '8s'; select tally_post_register_apply(%s::uuid)::text" % q(J(5))); timings["the register follows (its own statement, 199)"] = t
+        def drain():   # (201: the register's pass of a big posting in steps of 2,000, each timed)
+            for _ in range(100):
+                o_, e_, t_ = timed("set role service_role; set statement_timeout = '8s'; select tally_post_register_step(%s::uuid, 2000)::text" % q(J(5)))
+                timings["a register step (201: 2,000 a step)"] = max(timings.get("a register step (201: 2,000 a step)", 0), t_)
+                if e_ or '"idle": true' in (o_ or ""): break
+        if WITH_201: drain()
         ok(not e and cnt("select count(*) from tally_post_register where job_id = %s and state = 'in_tally'" % q(J(5))) == 19500, "the register: 19,500 in Tally at once %s" % e)
         db.sql("update tally_post_checks set state = 'notseen', checked_at = now(), checked_bridge = %s, checked_device = %s where job_id = %s and state = 'waiting'" % (q(BA), q(DA), q(J(5))))
         db.sql("insert into tally_post_checks (firm_id, job_id, entry_id, company, asked_by, why, state, checked_at, checked_bridge, checked_device, auto) select %s, %s, x, %s, %s, 'made-up', 'notseen', now(), %s, %s, true from unnest(%s::text[]) x"
@@ -319,12 +351,13 @@ try:
         out, e, t = timed("set role service_role; set statement_timeout = '8s'; select tally_post_settle_resend(%s::uuid)::text" % q(J(5))); timings["handed back (tally_post_settle_resend: the change of status)"] = t
         r = row(5)
         ok(not e and r["status"] == "waiting" and len(r["resend_only"]) == 500, "500 handed back alone %s" % e)
+        if WITH_201: drain()
         ok(cnt("select count(*) from tally_post_ids where job_id = %s and live" % q(J(5))) == 19500 and cnt("select count(*) from tally_post_register where job_id = %s and state = 'in_tally'" % q(J(5))) == 19500,
            "19,500 kept live and in the register in Tally; 500 free")
         out, e, t = timed("set statement_timeout = '8s'; " + SETTLE_ALL); timings["the cron's run (every held posting)"] = t
         ok(not e, "the cron's run %s %s" % (out, e))
         for k, v in sorted(timings.items(), key=lambda kv: -kv[1]): print("  %6.2f s  %s" % (v, k))
-        ok(all(v < LIMIT for v in timings.values()), "every step under %.0f s (the statement timeout is 8 s)" % LIMIT)
+        ok(all(v < LIMIT for v in timings.values()), "every step under %.1f s (%s; the statement timeout is 8 s)" % (LIMIT, "with 201: the release" if WITH_201 else "199 and 200 alone"))
 finally:
     st.stop()
 print("\n%s: %d" % ("FAILED" if fails else "ALL PASSED", len(fails)))

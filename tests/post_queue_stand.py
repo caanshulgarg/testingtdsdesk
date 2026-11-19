@@ -33,6 +33,9 @@ iso = lambda d: d.strftime("%Y-%m-%dT%H:%M:%SZ")
 class Stand:
     def __init__(self, port, extra=()):
         self.db = db = pg_stand.start(port)
+        # (a throwaway server: its WAL kept small, so that a run of 50,000 entries does not fill a small disk)
+        db.sql("alter system set max_wal_size = '256MB'; alter system set min_wal_size = '64MB'")
+        db.sql("select pg_reload_conf()")
         db.sql(part(os.path.join(HERE, "run_migration33.py"), "SCHEMA")); db.sql(part(os.path.join(HERE, "run_migration35.py"), "SCHEMA")); db.sql(part(os.path.join(HERE, "run_migration37.py"), "SCHEMA_X"))
         db.sql(part(os.path.join(HERE, "run_migration47.py"), "SCHEMA47"))
         db.sql("""do $$ begin if not exists (select 1 from pg_roles where rolname = 'service_role') then create role service_role bypassrls; end if;

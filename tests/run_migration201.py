@@ -13,6 +13,8 @@ pg_stand, port 31201 unless PG201_PORT; never a real database) with 199 and 200 
   4. 20,000 and 50,000 entries (BIG=0 skips): queued, taken, 20 reports, done, held by the cron, settled by itself, handed
      back; every statement timed (limit 1.5 s at 20,000; under the 8 s statement timeout at 50,000); the register follows in
      steps; the cron is one indexed look when idle
+  10. a register pass that fails 5 steps in a row is given up: its entries need review, the posting says so, the queue
+     no longer refuses them as "still being recorded" (as needing review instead); a pass that works again clears it
 RED_WITHOUT_201=1: the same checks without the file (fails)."""
 import os, re, sys, json, random, time, hashlib, csv, subprocess, threading
 csv.field_size_limit(1 << 30)
@@ -35,7 +37,7 @@ DELS = ["delete from tally_post_register_wants x where x.job_id = p_job;", "dele
         "delete from tally_post_work_errors e where e.last_at < now() - interval '7 days'"]
 ok(bool(text) and code.count("delete from") == 3 and all(d in code for d in DELS) and "x.id <= w.top" not in code
    and not re.search(r"\b(drop|truncate)\s", code) and code.count("create table") == 3 and "create trigger" not in code
-   and code.count("create index if not exists") == 2 and "alter table public.tally_post_register_pending enable row level security" in code
+   and code.count("create index if not exists") == 3 and "alter table public.tally_post_register_pending enable row level security" in code
    and "alter table public.tally_post_register_wants enable row level security" in code and "alter table public.tally_post_work_errors enable row level security" in code and code.count("alter table") == 3,
    "add-only: three tables and their indexes; no trigger; nothing dropped or truncated; deleted only the wants a step has folded (or of a posting gone) and the error log's old rows")
 ok(bool(text) and not re.search(r"supabase\.co|https?://|qbocskai|nrtczu|project[_ ]ref", text.lower()), "names no real database")
@@ -44,7 +46,7 @@ FNS = ["tally_post_register_maps(public.tally_post_jobs)", "tally_post_register_
        "tally_post_register_mark(uuid, uuid, uuid, boolean, boolean, uuid)", "tally_post_register_step(uuid, integer, uuid[])", "tally_post_register_job_changed()", "tally_post_register_apply(uuid)",
        "tally_post_register_queued()", "tally_post_ids_sync()", "tally_post_job_read_back()", "tally_post_enqueue_core(uuid, text, jsonb, uuid, text)", "tally_post_work()",
        "tally_post_register_fold(uuid)", "tally_post_work_due()", "tally_post_work_settle(uuid[])", "tally_post_work_then(uuid, text)",
-       "tally_post_work_error(text, uuid, text, text)", "tally_post_resend_reserved(uuid)"]
+       "tally_post_work_error(text, uuid, text, text)", "tally_post_resend_reserved(uuid)", "tally_post_register_give_up(uuid, text)"]
 ok(all(("revoke all on function public.%s from public, anon, authenticated;" % s) in text and ("grant execute on function public.%s to service_role;" % s) in text for s in FNS)
 , "every function granted explicitly (service_role)")
 ok(sorted(set(re.findall(r"create or replace function public\.(\w+)\(", code))) == sorted(set(f.split("(")[0] for f in FNS)), "only these functions (tally_fincom_id unchanged)")
@@ -380,6 +382,52 @@ try:
         ok(r1.returncode == 0 and r2.returncode == 0 and db.one("select command from cron.job where jobname = 'tally-post-settle-itself'") == "call public.tally_post_work_run()",
            "after 201, then 200 again: %s" % db.one("select command from cron.job where jobname = 'tally-post-settle-itself'"))
     else: ok(False, "9 (RED_WITHOUT_201: not run)")
+
+    print("== 10. a register pass that fails again and again is given up: its entries need review, never 'still being recorded' for ever")
+    db.sql("alter database postgres set fincom.register_sync_max = '2'")
+    STEP10 = lambda jid: json.loads(db.one("set role service_role; select tally_post_register_step(%s::uuid, 2000)::text" % q(jid)) or "{}")
+    def gu_job(n, pre):   # a big posting its bridge had, then cancelled: its records still to be written by the steps
+        ids = ["%s-%d" % (pre, k) for k in range(3)]
+        ok(post(n, ids) == "", "posting %s queued" % pre)
+        db.sql("set role service_role; update tally_post_jobs set status = 'taken', taken_at = now(), taken_by = %s where id = %s" % (q(BA), q(J(n))))
+        db.sql("set role service_role; update tally_post_jobs set status = 'cancelled', updated_at = now() where id = %s" % q(J(n)))
+        return ids
+    db.sql("""create or replace function t201_gu() returns trigger language plpgsql as $t$ begin
+                if new.fincom_id like 'gu-%%' and new.state <> 'needs_review' then raise exception 'made-up poison (gu)'; end if;
+                if new.fincom_id like 'gh-%%' then raise exception 'made-up poison (gh)'; end if; return new; end $t$;
+              create trigger t201_gu before insert or update on tally_post_register for each row execute function t201_gu();""")
+    ids_g = gu_job(9601, "gu")
+    outs = [STEP10(J(9601)) for _ in range(4)]
+    ok(all(o.get("ok") is False and "made-up poison" in (o.get("error") or "") for o in outs) and outs[-1].get("fails") == 4, "four steps fail: counted (%s)" % outs[-1])
+    e = post(9602, ids_g[:1])
+    ok("still being recorded" in e, "meanwhile its entries are refused as still being recorded (%s)" % e[-120:])
+    o = STEP10(J(9601))
+    ok(o.get("gave_up") is True and o.get("review") == 3, "the fifth: the pass given up, its 3 entries set to need review (%s)" % o)
+    ok(db.one("select string_agg(distinct state, ',') from tally_post_register where job_id = %s" % q(J(9601))) == "needs_review"
+       and db.one("select count(*)::text from tally_post_register_history where job_id = %s and to_state = 'needs_review'" % q(J(9601))) == "3", "the register: needs review, with their history")
+    pr = json.loads(db.one("select (to_jsonb(p) - 'vlist' - 'maps')::text from tally_post_register_pending p where job_id = %s" % q(J(9601))))
+    ok(pr["done_at"] and pr["failed_at"] and not pr["held"] and db.one("select count(*)::text from tally_post_register_wants where job_id = %s" % q(J(9601))) == "0", "the pass closed (failed_at), nothing left asked")
+    msg = db.one("select message from tally_post_jobs where id = %s" % q(J(9601))) or ""
+    ok(msg.startswith("FinCom's posting register could not record 3 entries of this posting: they need review"), "the posting says so in plain words (%s)" % msg[:160])
+    e = post(9603, ids_g[:1])
+    ok("Not queued" in e and "still being recorded" not in e and "waiting for review" in e, "the queue: refused as waiting for review, no longer 'still being recorded' (%s)" % e[-140:])
+    ok(STEP10(J(9601)).get("idle") is True, "the cron leaves it: no step retried for ever")
+    # the review could not be written either: its entries held by the pass's row
+    ids_h = gu_job(9604, "gh")
+    for _ in range(5): o = STEP10(J(9604))
+    pr = json.loads(db.one("select (to_jsonb(p) - 'vlist' - 'maps')::text from tally_post_register_pending p where job_id = %s" % q(J(9604))))
+    ok(o.get("gave_up") is True and pr["held"] is True and pr["done_at"], "given up, the review not writable: held by the pass's row (%s)" % o)
+    e = post(9605, ids_h[:1])
+    ok("Not queued" in e and "waiting for review" in e and "could not record" in e, "the queue refuses them as needing review (%s)" % e[-160:])
+    db.sql("drop trigger t201_gu on tally_post_register")
+    db.one("set role service_role; select tally_post_register_apply(%s::uuid)::text" % q(J(9604)))
+    for _ in range(10):
+        if STEP10(J(9604)).get("idle"): break
+    pr = json.loads(db.one("select (to_jsonb(p) - 'vlist' - 'maps')::text from tally_post_register_pending p where job_id = %s" % q(J(9604))))
+    ok(pr["held"] is False and pr["failed_at"] is None and pr["fails"] == 0 and db.one("select string_agg(distinct state, ',') from tally_post_register where job_id = %s" % q(J(9604))) == "needs_review",
+       "a later pass that works: written as the register judges it (needs review: its bridge had it), the hold cleared")
+    db.sql("alter database postgres reset fincom.register_sync_max")
+    db.sql("update tally_post_jobs set status = 'failed' where status in ('waiting', 'taken', 'running')")
 
     def together(JB, V, tm):
         """5. the cron's worker at work (a held posting of 20,000 settled, a new one of 20,000 recorded and judged in steps)

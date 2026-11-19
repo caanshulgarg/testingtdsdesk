@@ -47,6 +47,7 @@ NO_COL = {"tally_openings_held": {"id"}}   # table -> {column}: a database witho
                           # 42703, a POST carrying one PGRST204, as PostgREST does (bridge 2.3.1: 57's tally_ledgers.tds_deductee_type)
 HONOR_LIMIT = [False]     # True: order=col.asc|desc and limit=n are applied to a GET (off by default: as before)
 SETTLE_ITSELF = [None]    # migration 200: what tally_post_settle_itself answers (None: nothing held)
+RESEND_OK = {}            # migration 200: tally_post_resend_ok's words for a posting (none: it may send; its SQL: run_post_never_twice.py)
 LEASE7_MISSING = [False]  # migration 55 not run: the 7-argument tally_lease_take (p_purpose) is not there (PGRST202 for that call only)
 PK = {"gst_sessions": ["firm_id", "gstin"], "gst_filings": ["firm_id", "gstin", "form", "period"], "gst_returns": ["firm_id", "gstin", "form", "period"], "gst_einv_accounts": ["firm_id", "gstin"], "gst_einvoices": ["firm_id", "gstin", "doc_key"]}
 ids = itertools.count(1)
@@ -82,6 +83,7 @@ def rpc(fn, a):
     if fn == "tally_post_settle_itself":   # migration 200 (its SQL: run_migration200.py): nothing held here unless a test sets SETTLE_ITSELF
         return dict(SETTLE_ITSELF[0] or {"ok": True, "job": a.get("p_job"), "held": False}, job=a.get("p_job"))
     if fn == "tally_post_settle_resend": return {"ok": True, "job": a.get("p_job"), "resent": False}
+    if fn == "tally_post_resend_ok": return RESEND_OK.get(a.get("p_job"))
     if fn == "mfa_ok": return True
     if fn == "auth_rate_hit":   # migration-112: allowed (and counted) while the key has under max tries in the window
         t, w = now(), a["p_window_s"]

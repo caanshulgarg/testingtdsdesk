@@ -54,6 +54,16 @@
 -- hands back one another posting has since (its FinCom id there, or its register record moved there): its check closed,
 -- that posting named. 201's queue keeps such an entry to its posting until then. tally_post_settle_resend_due hands each
 -- back on its own (one that fails is kept with its record and tried last; the others go on).
+-- The third review of 19-Nov-2026 (NO-SHIP, fixed before any run): an entry a member released by "I looked in Tally: not
+-- there" while its posting was held (55/174) waited for the hand-back unreserved, so it could be posted in another posting
+-- and then handed back too. One rule for every path now: tally_post_resend_owed (what a posting owes, whoever released it),
+-- tally_post_resend_elsewhere (the entries another posting has since), tally_post_resend_list (the whole list a hand-back
+-- sends, those elsewhere closed; never a list kept from an earlier hand-back), tally_post_resend_ok (tally-ingest's
+-- post_ok: a held posting's list not handed back yet, or one with an entry posted elsewhere, is not sent). 174's
+-- tally_post_check_confirm hands back through the same list; the cron hands back a settled posting that still owes
+-- entries (a Mark posted settled it); a posting whose posting into Tally was stopped is never handed back, even once 174
+-- clears its stop (its entries' checks closed: free for a person). 199, 200, 201 (and 202) are one release, applied
+-- together in one session: 200 refuses to run without 199.
 -- Add-only: one new table (tally_post_self_settle: row security on, the firm reads, service_role writes), one column added
 -- to tally_post_checks (auto, default false), two partial indexes (held postings; checks released by itself not handed
 -- back yet) and one of tally_post_ids (firm, FinCom id, created: the hand-back's lookup), five new functions,
@@ -63,6 +73,14 @@
 -- are 55's (the owner-approved one-voucher reads). Tested by tests/run_migration200.py.
 begin;
 set local lock_timeout = '10s';
+
+-- 199, 200 and 201 are one release, applied together in one session in that order (docs/MIGRATION-ORDER.md: alone, 199 or
+-- 199 + 200 leave a posting of 20,000 entries at 4-6 s a status change). 200 never runs without 199
+do $$ begin
+  if to_regprocedure('public.tally_post_id_accept_many(uuid,jsonb)') is null then
+    raise exception 'migration 200 runs after 199 (199, 200 and 201 are applied together, in that order, in one session)';
+  end if;
+end $$;
 
 -- ---------------------------------------------------------------- 1. the record of each held posting's settling
 create table if not exists public.tally_post_self_settle (
@@ -107,6 +125,107 @@ language sql stable security definer set search_path to 'public', 'pg_temp' as $
 $function$;
 revoke all on function public.tally_member_name(uuid, uuid) from public, anon, authenticated;
 grant execute on function public.tally_member_name(uuid, uuid) to service_role;
+
+-- ---------------------------------------------------------------- never twice: one rule for every way an entry is sent again
+-- (the third review of 19-Nov-2026) An entry released for re-sending waits for its posting's hand-back: a moment, or days
+-- (its posting held while an entry beside it is checked, or waits for a person). It was released by itself (200) or by a
+-- member's "I looked in Tally: not there" (55/174's tally_post_check_confirm: named in the posting's resend_only while
+-- the posting stays held). Meanwhile its id is not live, so another posting could take it to Tally, and the hand-back then
+-- sent it a second time. Every path now asks these three:
+-- tally_post_resend_owed(firm, job): the entries a posting still owes to send again, one row an entry: its id there released
+-- and not live; its latest confirmed check not handed back (resent not true) and confirmed after the posting was last taken;
+-- confirmed by itself, or by a member who named it in resend_only (one answered by another bridge is released only and
+-- named nowhere: free to post anew); never of a cancelled posting (free). p_job null: every posting of the firm (the
+-- queue's reserve, 201). By 200's partial index of such checks
+create or replace function public.tally_post_resend_owed(p_firm uuid, p_job uuid)
+returns table (job_id uuid, entry_id text, fincom_id text, check_id bigint, checked_bridge text, checked_device uuid)
+language sql stable security definer set search_path = public, pg_temp as $function$
+  select distinct on (k.job_id, k.entry_id) k.job_id, k.entry_id, i.fincom_id, k.id, k.checked_bridge, k.checked_device
+    from tally_post_checks k
+    join tally_post_jobs j on j.id = k.job_id
+    -- (its id by key: by the entry id, else the FinCom id of an entry with none; an OR here read the posting's ids for each)
+    cross join lateral (select i1.fincom_id, i1.released_at, i1.live from tally_post_ids i1 where i1.job_id = k.job_id and i1.entry_id = k.entry_id
+                        union all
+                        select i2.fincom_id, i2.released_at, i2.live from tally_post_ids i2 where i2.job_id = k.job_id and i2.fincom_id = k.entry_id and coalesce(i2.entry_id, '') = ''
+                        limit 1) i
+   where k.state = 'confirmed' and k.resent is not true and k.firm_id = p_firm and j.firm_id = p_firm and (p_job is null or k.job_id = p_job)
+     and j.status <> 'cancelled'
+     and (k.confirmed_by = '00000000-0000-0000-0000-000000000200'::uuid or (jsonb_typeof(j.resend_only) = 'array' and j.resend_only ? k.entry_id))
+     and (j.taken_at is null or k.confirmed_at is null or j.taken_at < k.confirmed_at)
+     and i.released_at is not null and not i.live
+   order by k.job_id, k.entry_id, k.id desc
+$function$;
+revoke all on function public.tally_post_resend_owed(uuid, uuid) from public, anon, authenticated;
+grant execute on function public.tally_post_resend_owed(uuid, uuid) to service_role;
+
+-- tally_post_resend_elsewhere(job, entries): of those entries, the ones another posting has taken since (never handed back
+-- then: Tally has them, or will, from there): the FinCom id in another posting's ids (live, or put there after this posting
+-- released it), or its register record held by a posting queued after that release. By key. {entry: that posting}
+create or replace function public.tally_post_resend_elsewhere(p_job uuid, p_entries jsonb)
+returns jsonb language sql stable security definer set search_path = public, pg_temp as $function$
+  select coalesce(jsonb_object_agg(g.eid, g.other), '{}'::jsonb) from (
+    select distinct on (z.eid) z.eid, z.other from (
+      select e.eid, coalesce(o2.job_id, rg.job_id)::text as other
+        from jsonb_array_elements_text(case when jsonb_typeof(p_entries) = 'array' then p_entries else '[]'::jsonb end) e(eid)
+        cross join lateral (select i1.firm_id, i1.fincom_id, i1.released_at from tally_post_ids i1 where i1.job_id = p_job and i1.entry_id = e.eid
+                            union all
+                            select i2.firm_id, i2.fincom_id, i2.released_at from tally_post_ids i2 where i2.job_id = p_job and i2.fincom_id = e.eid and coalesce(i2.entry_id, '') = ''
+                            limit 1) i
+        left join lateral (select o.job_id from tally_post_ids o where o.firm_id = i.firm_id and o.fincom_id = i.fincom_id and o.job_id <> p_job
+                              and (o.live or o.created_at >= coalesce(i.released_at, '-infinity'::timestamptz)) order by o.created_at desc limit 1) o2 on true
+        left join lateral (select r.job_id from tally_post_register r join tally_post_jobs oj on oj.id = r.job_id
+                            where r.firm_id = i.firm_id and r.fincom_id = i.fincom_id and r.job_id <> p_job
+                              and oj.created_at >= coalesce(i.released_at, '-infinity'::timestamptz) limit 1) rg on true
+       where o2.job_id is not null or rg.job_id is not null) z order by z.eid, z.other) g
+$function$;
+revoke all on function public.tally_post_resend_elsewhere(uuid, jsonb) from public, anon, authenticated;
+grant execute on function public.tally_post_resend_elsewhere(uuid, jsonb) to service_role;
+
+-- tally_post_resend_list(job): what a hand-back sends (the caller holds the posting's row): every entry the posting owes,
+-- whoever confirmed it, less those another posting has since; theirs closed here (superseded, naming that posting). The
+-- whole list, never only the newest (the review: 200's hand-back merged a member's earlier entry unchecked; a posting's
+-- resend_only kept from an earlier hand-back is never sent again). {resend: [...], gone: {entry: posting}, gw: words,
+-- bridge, device: the latest such check's}. Used by tally_post_settle_resend and tally_post_check_confirm
+create or replace function public.tally_post_resend_list(p_job uuid)
+returns jsonb language plpgsql security definer set search_path = public, pg_temp as $fn$
+declare f uuid; owed jsonb; gone jsonb; gw text; lastc record; resend jsonb;
+begin
+  -- (service_role only by its grant; also called inside tally_post_check_confirm, a member's own call)
+  select j.firm_id into f from tally_post_jobs j where j.id = p_job;
+  select coalesce(jsonb_agg(o.entry_id order by o.entry_id), '[]'::jsonb) into owed from tally_post_resend_owed(f, p_job) o;
+  gone := tally_post_resend_elsewhere(p_job, owed);
+  if gone <> '{}'::jsonb then
+    gw := (select string_agg(g.key || ' (in posting ' || left(g.value, 8) || ')', ', ' order by g.key) from jsonb_each_text(gone) g);
+    update tally_post_checks k set state = 'superseded', superseded_at = now(),
+           words = left('Not sent again by this posting: posted again in posting ' || left(gone ->> k.entry_id, 8) || ' since it was released ('
+                        || to_char(now() at time zone 'Asia/Kolkata', 'DD-Mon-YYYY HH24:MI') || ' IST)', 500)
+     where k.job_id = p_job and k.state = 'confirmed' and k.resent is not true and gone ? k.entry_id;
+  end if;
+  select coalesce(jsonb_agg(z order by z), '[]'::jsonb) into resend from jsonb_array_elements_text(owed) z where not gone ? z;
+  select o.checked_bridge, o.checked_device into lastc from tally_post_resend_owed(f, p_job) o order by o.check_id desc limit 1;
+  return jsonb_build_object('resend', resend, 'gone', gone, 'gw', gw, 'bridge', lastc.checked_bridge, 'device', lastc.checked_device);
+end $fn$;
+revoke all on function public.tally_post_resend_list(uuid) from public, anon, authenticated;
+grant execute on function public.tally_post_resend_list(uuid) to service_role;
+
+-- tally_post_resend_ok(job): may the bridge send the entries of this posting's resend_only now (tally-ingest's post_ok)?
+-- null: yes; else why not: a posting held for checking whose entries were released by a member but not handed back yet
+-- (174's held posting with a re-send list: the bridge that still holds it in memory would post them before the hand-back),
+-- or an entry of the list another posting has taken since
+create or replace function public.tally_post_resend_ok(p_job uuid)
+returns text language sql stable security definer set search_path = public, pg_temp as $function$
+  select case
+    when jsonb_typeof(j.resend_only) is distinct from 'array' or jsonb_array_length(j.resend_only) = 0 then null
+    when j.status = 'done' and coalesce(j.checking, false) and exists (select 1 from tally_post_resend_owed(j.firm_id, j.id) o where j.resend_only ? o.entry_id)
+      then 'This posting is held for checking in FinCom; the entries released for sending again go when it is handed back, not before.'
+    when tally_post_resend_elsewhere(j.id, j.resend_only) <> '{}'::jsonb
+      then 'Not sent: ' || (select string_agg(g.key || ' was posted again in posting ' || left(g.value, 8), ', ' order by g.key) from jsonb_each_text(tally_post_resend_elsewhere(j.id, j.resend_only)) g)
+           || ' since it was released; it is not sent twice.'
+  end
+  from tally_post_jobs j where j.id = p_job
+$function$;
+revoke all on function public.tally_post_resend_ok(uuid) from public, anon, authenticated;
+grant execute on function public.tally_post_resend_ok(uuid) to service_role;
 
 -- ---------------------------------------------------------------- 2. one held posting settled by the evidence
 -- the stamp written on an entry's result ('r') or item ('i'), by "FinCom (by itself)". In Tally: verified and in_tally, as the
@@ -218,16 +337,18 @@ begin
   -- each entry of the posting not settled yet (no result ok, no item in Tally, not released), with its evidence
   with v as (
     -- the posting's own ids (one a FinCom id, with its voucher's entry id: tally_post_ids_sync made them from the payload),
-    -- in their order: the payload is not read again
-    select i.fincom_id fid, coalesce(nullif(i.entry_id, ''), i.fincom_id) eid, row_number() over (order by i.fincom_id) o
+    -- in their order: the payload is not read again. Read once, with every field below (the third review: a second join of
+    -- the same ids by key was planned row by row when the posting's ids had no statistics yet: 20,000 x 20,000)
+    select i.fincom_id fid, coalesce(nullif(i.entry_id, ''), i.fincom_id) eid, row_number() over (order by i.fincom_id) o,
+           i.matched_at, i.matched_vch, i.matched_mid, i.reply_vch, i.batch_n, i.batch_end, i.accepted_at, i.released_at
       from tally_post_ids i where i.job_id = p_job),
   x as materialized (
-    select v.fid, v.eid, v.o, p.matched_at, coalesce(nullif(p.matched_vch, ''), nullif(p.matched_mid, '')) as mvch, nullif(p.matched_mid, '') as mid,
-           nullif(p.reply_vch, '') as reply_vch, p.batch_n, nullif(p.batch_end, '') as batch_end, p.accepted_at, lcm -> v.eid as lc, (pmm ->> v.eid)::timestamptz as marked_at,
+    select v.fid, v.eid, v.o, v.matched_at, coalesce(nullif(v.matched_vch, ''), nullif(v.matched_mid, '')) as mvch, nullif(v.matched_mid, '') as mid,
+           nullif(v.reply_vch, '') as reply_vch, v.batch_n, nullif(v.batch_end, '') as batch_end, v.accepted_at, lcm -> v.eid as lc, (pmm ->> v.eid)::timestamptz as marked_at,
            coalesce(evm -> v.fid, evm -> v.eid, evm -> regexp_replace(v.fid, '[^A-Za-z0-9]', '', 'g'), evm -> regexp_replace(coalesce(v.eid, ''), '[^A-Za-z0-9]', '', 'g')) as ev
-      from v left join tally_post_ids p on p.job_id = p_job and p.fincom_id = v.fid
+      from v
      where not (pkm ? v.fid or pkm ? v.eid or pkm ? regexp_replace(v.fid, '[^A-Za-z0-9]', '', 'g') or pkm ? regexp_replace(coalesce(v.eid, ''), '[^A-Za-z0-9]', '', 'g'))
-       and p.released_at is null),
+       and v.released_at is null),
   y as materialized (
     select x.fid, x.eid, x.o, x.matched_at, x.mvch, x.mid, x.reply_vch, x.batch_n, x.batch_end, x.accepted_at, x.ev, x.marked_at, (x.lc->>'id')::bigint as cid, x.lc->>'state' as cst,
            (x.lc->>'asked')::timestamptz as c_asked, (x.lc->>'at')::timestamptz as c_at, x.lc->>'cb' as cb, (x.lc->>'cd')::uuid as cd, (x.lc->>'last')::timestamptz as c_last
@@ -356,8 +477,16 @@ begin
     -- A conflict never holds the posting: it is flagged on the entry (needs review, for a person) and the posting settles
     -- with it. Entries proven not in Tally, to be handed back (by tally_post_settle_resend)
     if n_wait = 0 then
-      select count(distinct k.entry_id) into n_resend from tally_post_checks k
-       where k.job_id = p_job and k.state = 'confirmed' and k.confirmed_by = me and not coalesce(k.resent, false);
+      -- (third review) every entry the posting owes, whoever released it (a member's confirm while it was held, too)
+      select count(*) into n_resend from tally_post_resend_owed(j.firm_id, p_job);
+      -- (third review LOW) posting into Tally stopped for this posting: never handed back, now or later (the stop flag is
+      -- cleared once the posting settles, 174): those entries' checks are closed here; proven not in Tally and released,
+      -- they are free for a person to post again once posting is allowed
+      if n_resend > 0 and j.stop_reason is not null then
+        update tally_post_checks k set state = 'superseded', superseded_at = now(),
+               words = left('Not sent again by itself: posting into Tally was stopped for this posting (' || left(j.stop_reason, 200) || '). Not in Tally and released: post it again once posting is allowed (' || day_ || ')', 500)
+         where k.job_id = p_job and k.state = 'confirmed' and k.resent is not true and k.entry_id in (select o.entry_id from tally_post_resend_owed(j.firm_id, p_job) o);
+      end if;
       -- an entry flagged for a person that Tally accepted keeps the whole posting from going back to the bridge (36b's guard:
       -- never 'waiting' while Tally accepted an entry nobody settled): those proven not in Tally wait, released, and are handed
       -- back by the cron once a person has settled it (tally_post_settle_resend_due); the posting settles meanwhile
@@ -392,7 +521,8 @@ begin
     -- was stopped (stop_reason: said)
     if n_wait = 0 then
       if n_resend > 0 and j.stop_reason is not null then
-        said := 'not sent again: posting into Tally is stopped for this posting (' || left(j.stop_reason, 200) || ')';
+        said := 'not sent again: posting into Tally is stopped for this posting (' || left(j.stop_reason, 200) || '); ' || n_resend || ' entr' || case when n_resend = 1 then 'y' else 'ies' end
+                || ' not in Tally, released: post them again once posting is allowed';
         msg := left(msg || '; ' || said, 500);
       elsif n_resend > 0 and blocked then
         msg := left(msg || '; ' || n_resend || ' entr' || case when n_resend = 1 then 'y' else 'ies' end || ' proven not in Tally: sent again by itself once the entries that need review are settled', 500);
@@ -425,93 +555,90 @@ end $fn$;
 revoke all on function public.tally_post_settle_itself(uuid) from public, anon, authenticated;
 grant execute on function public.tally_post_settle_itself(uuid) to service_role;
 
--- the entries released by itself (proven not in Tally), handed back alone (resend_only) to the bridge that looked (as
--- tally_post_check_confirm does after a member's confirm); the posting waits again for it. Only a posting still held, nothing
--- waiting or contradictory (tally_post_settle_itself said resend), its posting into Tally not stopped; the 36b resend guard
--- still refuses one Tally accepted and nobody settled. Safe to call again: nothing is handed back twice.
--- Never twice (the review of 19-Nov-2026): the hand-back can wait days (an entry beside it a person must settle), and
--- between the settling and the hand-back a person may post the entry again in another posting, which puts it in Tally;
--- the bridge would then honour this posting's release and send it a second time. 201's queue keeps such an entry to this
--- posting until it is handed back; here, as the last word, an entry is never handed back once another posting has it:
--- its FinCom id in another posting's ids (live, or put there since the release) or its record in the posting register
--- moved to another posting. Its check is closed (superseded, naming that posting); the others go back alone
+-- the entries a posting owes (tally_post_resend_owed: proven not in Tally and released by itself, or released by a member's
+-- confirm while it was held), handed back alone (resend_only) to the bridge that looked (as tally_post_check_confirm does);
+-- the posting waits again for it. Only a posting settled or held, nothing waiting (tally_post_settle_itself said resend, or
+-- the cron's tally_post_settle_resend_due), its posting into Tally not stopped; the 36b resend guard still refuses one
+-- Tally accepted and nobody settled. Safe to call again: nothing is handed back twice.
+-- Never twice (the reviews of 19-Nov-2026): the hand-back can wait days, and meanwhile the entry may be posted again in
+-- another posting, which puts it in Tally; the bridge would then honour this posting's release and send it a second time.
+-- 201's queue keeps every such entry to this posting until it is handed back; here, as the last word, the WHOLE list
+-- (tally_post_resend_list: every entry owed, whoever confirmed it; never a list kept from an earlier hand-back) is read
+-- for entries another posting has since: never handed back, their checks closed (superseded, naming that posting)
 create or replace function public.tally_post_settle_resend(p_job uuid)
 returns jsonb language plpgsql security definer set search_path = public, pg_temp as $fn$
-declare j tally_post_jobs%rowtype; me constant uuid := '00000000-0000-0000-0000-000000000200'; resend jsonb; lastc record; v_n int; gone jsonb; v_g int; o jsonb; gw text; day_ text;
+declare j tally_post_jobs%rowtype; l jsonb; resend jsonb; v_n int; gone jsonb; v_g int; o jsonb; gw text; blk text; n_owed int; day_ text;
 begin
   if coalesce(auth.role(), 'service_role') <> 'service_role' then raise exception 'service role only' using errcode = '42501'; end if;
   -- (no key update: a report's insert that refers to the posting is never kept waiting by it)
   select * into j from tally_post_jobs where id = p_job for no key update skip locked;
   if not found then return jsonb_build_object('ok', true, 'job', p_job, 'busy', true, 'resent', false); end if;
-  -- (a posting settled with entries for a person: done, not checking; held: done, checking)
-  if j.status <> 'done' or j.stop_reason is not null then
+  -- (a posting settled, with entries for a person or not: done or failed, not checking; held: done, checking)
+  if j.status not in ('done', 'failed') or j.stop_reason is not null then
     return jsonb_build_object('ok', true, 'job', p_job, 'resent', false, 'status', j.status);
   end if;
   -- (an entry flagged for a person does not stop the others: it is never among those handed back)
-  if exists (select 1 from tally_post_self_settle s where s.job_id = p_job and s.waiting > 0) then
+  if exists (select 1 from tally_post_self_settle s where s.job_id = p_job and s.waiting > 0) and j.checking then
     return jsonb_build_object('ok', true, 'job', p_job, 'resent', false, 'error', 'entries of it are still being checked');
   end if;
-  select coalesce(jsonb_agg(distinct k.entry_id), '[]'::jsonb) into resend from tally_post_checks k
-   where k.job_id = p_job and k.state = 'confirmed' and k.confirmed_by = me and not coalesce(k.resent, false);
-  v_n := jsonb_array_length(resend);
-  if v_n = 0 then return jsonb_build_object('ok', true, 'job', p_job, 'resent', false); end if;
-  -- never twice: the entries another posting has taken since (by key: this posting's ids, the firm's ids by FinCom id, the
-  -- register's record)
-  select coalesce(jsonb_object_agg(g.eid, g.other), '{}'::jsonb) into gone from (
-    select distinct on (z.eid) z.eid, z.other from (
-      select coalesce(nullif(i.entry_id, ''), i.fincom_id) as eid, coalesce(o2.job_id, rg.job_id) as other
-        from jsonb_array_elements_text(resend) e(eid)
-        join tally_post_ids i on i.job_id = p_job and (i.entry_id = e.eid or (coalesce(i.entry_id, '') = '' and i.fincom_id = e.eid))
-        left join lateral (select o.job_id from tally_post_ids o where o.firm_id = i.firm_id and o.fincom_id = i.fincom_id and o.job_id <> p_job
-                              and (o.live or o.created_at >= coalesce(i.released_at, '-infinity'::timestamptz)) order by o.created_at desc limit 1) o2 on true
-        left join lateral (select r.job_id from tally_post_register r where r.firm_id = i.firm_id and r.fincom_id = i.fincom_id and r.job_id is not null and r.job_id <> p_job limit 1) rg on true
-       where o2.job_id is not null or rg.job_id is not null) z order by z.eid, z.other) g;
-  v_g := (select count(*) from jsonb_object_keys(gone));
-  if v_g > 0 then
-    day_ := to_char(now() at time zone 'Asia/Kolkata', 'DD-Mon-YYYY HH24:MI') || ' IST';
-    gw := (select string_agg(g.key || ' (in posting ' || left(g.value, 8) || ')', ', ' order by g.key) from jsonb_each_text(gone) g);
+  select count(*) into n_owed from tally_post_resend_owed(j.firm_id, p_job);
+  if n_owed = 0 then return jsonb_build_object('ok', true, 'job', p_job, 'resent', false); end if;
+  day_ := to_char(now() at time zone 'Asia/Kolkata', 'DD-Mon-YYYY HH24:MI') || ' IST';
+  -- (third review LOW) posting into this posting's company no longer allowed (174's rule, read again: unlinked, stopped,
+  -- renamed): never handed back; the entries, not in Tally and released, are free for a person to post again
+  blk := tally_post_job_blocked(p_job);
+  if blk is not null then
     update tally_post_checks k set state = 'superseded', superseded_at = now(),
-           words = left('Not sent again by this posting: posted again in posting ' || left(gone ->> k.entry_id, 8) || ' since it was proven not in Tally (' || day_ || ')', 500)
-     where k.job_id = p_job and k.state = 'confirmed' and k.confirmed_by = me and not coalesce(k.resent, false) and gone ? k.entry_id;
-    select coalesce(jsonb_agg(z), '[]'::jsonb) into resend from jsonb_array_elements_text(resend) z where not gone ? z;
-    v_n := jsonb_array_length(resend);
-    if v_n = 0 then
-      -- nothing left to hand back: the posting settles (it was held only for the hand-back)
-      o := tally_post_job_settle(j.status, j.checking, j.payload, j.results, j.items);
-      update tally_post_jobs set status = coalesce(o->>'status', status), checking = coalesce((o->>'checking')::boolean, false), updated_at = now(),
-             message = left(regexp_replace(coalesce(message, ''), '; [0-9]+ entr(y|ies) proven not in Tally: (being sent again by itself \(only those\)|sent again by itself once the entries that need review are settled)', '')
-                            || '; not sent again: ' || gw || ' posted again elsewhere since', 500)
-       where id = p_job;
-      update tally_post_self_settle set settled_at = now(), words = left('not sent again: ' || gw || ' posted again elsewhere since', 500) where job_id = p_job;
-      return jsonb_build_object('ok', true, 'job', p_job, 'resent', false, 'elsewhere', gone);
-    end if;
+           words = left('Not sent again by itself: posting into Tally is no longer allowed for this posting (' || left(blk, 300) || '). Not in Tally and released: post it again once it is allowed (' || day_ || ')', 500)
+     where k.job_id = p_job and k.state = 'confirmed' and k.resent is not true and k.entry_id in (select o2.entry_id from tally_post_resend_owed(j.firm_id, p_job) o2);
+    o := tally_post_job_settle(j.status, j.checking, j.payload, j.results, j.items);
+    update tally_post_jobs set status = coalesce(o->>'status', status), checking = coalesce((o->>'checking')::boolean, false), updated_at = now(),
+           message = left(regexp_replace(coalesce(message, ''), '; [0-9]+ entr(y|ies) proven not in Tally: (being sent again by itself \(only those\)|sent again by itself once the entries that need review are settled)', '')
+                          || '; not sent again: posting into Tally is no longer allowed for it (' || n_owed || ' not in Tally, released: post them again once it is allowed)', 500)
+     where id = p_job;
+    update tally_post_self_settle set settled_at = now(), words = left('not sent again: posting into Tally is no longer allowed for it', 500) where job_id = p_job;
+    return jsonb_build_object('ok', true, 'job', p_job, 'resent', false, 'blocked', blk);
+  end if;
+  -- the whole list owed, less those another posting has since (theirs closed)
+  l := tally_post_resend_list(p_job);
+  resend := l->'resend'; gone := l->'gone'; gw := l->>'gw';
+  v_n := jsonb_array_length(resend); v_g := (select count(*) from jsonb_object_keys(gone));
+  if v_n = 0 then
+    -- nothing left to hand back: the posting settles (it was held only for the hand-back)
+    o := tally_post_job_settle(j.status, j.checking, j.payload, j.results, j.items);
+    update tally_post_jobs set status = coalesce(o->>'status', status), checking = coalesce((o->>'checking')::boolean, false), updated_at = now(),
+           message = left(regexp_replace(coalesce(message, ''), '; [0-9]+ entr(y|ies) proven not in Tally: (being sent again by itself \(only those\)|sent again by itself once the entries that need review are settled)', '')
+                          || '; not sent again: ' || coalesce(gw, '') || ' posted again elsewhere since', 500)
+     where id = p_job;
+    update tally_post_self_settle set settled_at = now(), words = left('not sent again: ' || coalesce(gw, '') || ' posted again elsewhere since', 500) where job_id = p_job;
+    return jsonb_build_object('ok', true, 'job', p_job, 'resent', false, 'elsewhere', gone);
   end if;
   -- 36b's guard, asked first: an entry Tally accepted that nobody settled (one flagged for a person) keeps the posting from
   -- the bridge; those proven not in Tally wait, released, until a person has settled it (the cron asks again)
   if tally_post_job_accepted(p_job, j.results, j.items) is not null then
-    return jsonb_build_object('ok', true, 'job', p_job, 'resent', false, 'review', true, 'error', 'entries of it need review by a person first');
+    return jsonb_build_object('ok', true, 'job', p_job, 'resent', false, 'review', true, 'error', 'entries of it need review by a person first') || case when v_g > 0 then jsonb_build_object('elsewhere', gone) else '{}'::jsonb end;
   end if;
-  select k.checked_bridge, k.checked_device into lastc from tally_post_checks k
-   where k.job_id = p_job and k.state = 'confirmed' and k.confirmed_by = me and not coalesce(k.resent, false) order by k.id desc limit 1;
-  update tally_post_jobs set resend_only = (select coalesce(jsonb_agg(distinct z), '[]'::jsonb) from jsonb_array_elements_text(coalesce(resend_only, '[]'::jsonb) || resend) z),
-         target_bridge = case when lastc.checked_bridge ~ '^go-[0-9a-f]{6,32}$' then lastc.checked_bridge else target_bridge end,
-         device_id = coalesce(lastc.checked_device, device_id),
+  -- the list replaces any earlier one (an entry of an earlier hand-back is never sent again from it)
+  update tally_post_jobs set resend_only = resend,
+         target_bridge = case when (l->>'bridge') ~ '^go-[0-9a-f]{6,32}$' then l->>'bridge' else target_bridge end,
+         device_id = coalesce((l->>'device')::uuid, device_id),
          status = 'waiting', checking = false, taken_at = null, attempts = coalesce(attempts, 0) + 1, updated_at = now(),
-         message = left(regexp_replace(coalesce(message, ''), '; [0-9]+ entr(y|ies) proven not in Tally: being sent again by itself \(only those\)$', '')
+         message = left(regexp_replace(coalesce(message, ''), '; [0-9]+ entr(y|ies) proven not in Tally: (being sent again by itself \(only those\)|sent again by itself once the entries that need review are settled)$', '')
                         || case when v_g > 0 then '; not sent again: ' || gw || ' posted again elsewhere since' else '' end
-                        || '; sent again by itself: ' || v_n || ' entr' || case when v_n = 1 then 'y' else 'ies' end || ' proven not in Tally (only those)', 500)
+                        || '; sent again by itself: ' || v_n || ' entr' || case when v_n = 1 then 'y' else 'ies' end || ' not in Tally (only those)', 500)
    where id = p_job;
-  update tally_post_checks k set resent = true where k.job_id = p_job and k.state = 'confirmed' and k.confirmed_by = me and not coalesce(k.resent, false);
-  update tally_post_self_settle set settled_at = now(), words = left('sent again by itself: ' || v_n || ' proven not in Tally', 500) where job_id = p_job;
-  return jsonb_build_object('ok', true, 'job', p_job, 'resent', true, 'n', v_n, 'entries', resend, 'bridge', lastc.checked_bridge) || case when v_g > 0 then jsonb_build_object('elsewhere', gone) else '{}'::jsonb end;
+  update tally_post_checks k set resent = true where k.job_id = p_job and k.state = 'confirmed' and k.resent is not true and resend ? k.entry_id;
+  update tally_post_self_settle set settled_at = now(), words = left('sent again by itself: ' || v_n || ' not in Tally', 500) where job_id = p_job;
+  return jsonb_build_object('ok', true, 'job', p_job, 'resent', true, 'n', v_n, 'entries', resend, 'bridge', l->>'bridge') || case when v_g > 0 then jsonb_build_object('elsewhere', gone) else '{}'::jsonb end;
 end $fn$;
 revoke all on function public.tally_post_settle_resend(uuid) from public, anon, authenticated;
 grant execute on function public.tally_post_settle_resend(uuid) to service_role;
 
--- the postings settled with entries proven not in Tally still to be handed back (36b's guard held them while an entry
--- Tally accepted waited for a person): handed back once that is settled (tally_post_settle_resend asks the guard first);
--- found by the partial index of such checks, at most p_max a run. Each on its own (the review of 19-Nov-2026): one that
--- fails is kept with its record (words, tried_at: tried last next time) and the others go on
+-- the postings settled (done or failed, not held) that still owe entries (tally_post_resend_owed: 36b's guard held them
+-- while an entry Tally accepted waited for a person; or a member released one while the posting was held, and the posting
+-- was settled by a Mark posted, which hands nothing back): handed back by themselves (tally_post_settle_resend asks the
+-- guard first); found by the partial index of such checks, at most p_max a run. Each on its own (the review of
+-- 19-Nov-2026): one that fails is kept with its record (words, tried_at: tried last next time) and the others go on
 create or replace function public.tally_post_settle_resend_due(p_max integer default 5)
 returns jsonb language plpgsql security definer set search_path = public, pg_temp as $fn$
 declare r record; o jsonb; k int := 0; n int := 0; errs int := 0;
@@ -519,14 +646,20 @@ begin
   if coalesce(auth.role(), 'service_role') <> 'service_role' then raise exception 'service role only' using errcode = '42501'; end if;
   for r in select d.job_id, d.firm_id from (
              select distinct k0.job_id, j.firm_id from tally_post_checks k0 join tally_post_jobs j on j.id = k0.job_id
-              where k0.state = 'confirmed' and k0.resent is not true and k0.confirmed_by = '00000000-0000-0000-0000-000000000200'::uuid
-                and j.status = 'done' and not coalesce(j.checking, false) and j.stop_reason is null) d
+              where k0.state = 'confirmed' and k0.resent is not true
+                and j.status in ('done', 'failed') and not coalesce(j.checking, false) and j.stop_reason is null
+                and exists (select 1 from tally_post_resend_owed(j.firm_id, j.id))) d
              left join tally_post_self_settle s on s.job_id = d.job_id
             order by s.tried_at nulls first, d.job_id
             limit greatest(1, least(coalesce(p_max, 5), 50)) loop
     begin
       o := tally_post_settle_resend(r.job_id);
       n := n + case when coalesce((o->>'resent')::boolean, false) then 1 else 0 end;
+      -- (one held back by 36b's guard is tried last next time)
+      if not coalesce((o->>'resent')::boolean, false) then
+        insert into tally_post_self_settle as s (job_id, firm_id, tries, tried_at, words) values (r.job_id, r.firm_id, 1, now(), left(coalesce(o->>'error', 'not handed back this time'), 500))
+        on conflict (job_id) do update set tries = s.tries + 1, tried_at = now();
+      end if;
     exception when others then
       errs := errs + 1;
       raise log 'tally_post_settle_resend_due: job %: % %', r.job_id, sqlstate, sqlerrm;
@@ -542,6 +675,72 @@ begin
 end $fn$;
 revoke all on function public.tally_post_settle_resend_due(integer) from public, anon, authenticated;
 grant execute on function public.tally_post_settle_resend_due(integer) to service_role;
+
+-- 55/174's tally_post_check_confirm ("I looked in Tally: not there - post again", a member); changed (the third review of
+-- 19-Nov-2026, never twice): a posting settled is handed back with every entry it owes (tally_post_resend_list: this one
+-- and any a member released while it was held, never one another posting has since, never a list kept from an earlier
+-- hand-back); nothing left to send: not handed back. Every line else as 174's
+create or replace function public.tally_post_check_confirm(p_job uuid, p_id text, p_why text)
+returns jsonb language plpgsql security definer set search_path to 'public', 'pg_temp' as $function$
+declare f uuid := my_firm(); v_why text := left(btrim(coalesce(p_why, '')), 500); j tally_post_jobs%rowtype; c tally_post_checks%rowtype; eid text; r jsonb; v_resent boolean := false; said text; v_other boolean;
+        l jsonb; resend jsonb; gw text;
+begin
+  if f is null or not can_write() then raise exception 'only a member of the firm who may post can confirm this' using errcode = '42501'; end if;
+  if v_why = '' then raise exception 'give a reason: where you looked in Tally (kept with your name and the time)'; end if;
+  select * into j from tally_post_jobs where id = p_job and firm_id = f for update;
+  if not found then raise exception 'this posting is not in your firm (or not found)'; end if;
+  select v->>'id' into eid from jsonb_array_elements(coalesce(j.payload->'vouchers', '[]'::jsonb)) v where tally_post_id_match(tally_fincom_id(v), v->>'id', p_id) limit 1;
+  if eid is null then raise exception 'the entry % is not in this posting', p_id; end if;
+  select * into c from tally_post_checks k where k.job_id = p_job and k.entry_id = eid order by k.id desc limit 1 for update;
+  if c.id is null or c.state <> 'notseen' then
+    return jsonb_build_object('ok', false, 'state', coalesce(c.state, ''), 'error', 'Not sent again: the FinCom Bridge has not reported this entry as not seen in Tally (or that check was closed). Press "Not in Tally - post again" first: the bridge looks in Tally.');
+  end if;
+  if not tally_post_check_bridge_ok(p_job, c.checked_device, c.checked_bridge, true) then
+    return jsonb_build_object('ok', false, 'error', 'Not sent again: the check was not answered by the bridge that posts this posting.');
+  end if;
+  if exists (select 1 from tally_post_marks m where m.job_id = p_job and m.entry_id = eid and m.action = 'posted' and m.at > c.asked_at) then
+    return jsonb_build_object('ok', false, 'error', 'Not sent again: the entry was marked posted after the check was asked.');
+  end if;
+  r := tally_post_release_core(f, auth.uid(), p_job, eid,
+         left(v_why || ' (the FinCom Bridge did not see it in ' || j.company || ' on ' || to_char(c.checked_at at time zone 'Asia/Kolkata', 'DD-Mon-YYYY HH24:MI') || ' IST; confirmed by ' || tally_member_name(f, auth.uid()) || ')', 500));
+  select * into j from tally_post_jobs where id = p_job;
+  -- (174, sixth review M-A) answered by another bridge (the one that took it is gone): released only, never sent again
+  -- (the posting stays with the bridge that took it, which nobody else may take)
+  v_other := coalesce(j.taken_by, j.target_bridge) is not null and c.checked_bridge is distinct from coalesce(j.taken_by, j.target_bridge);
+  if not v_other then
+  update tally_post_jobs set resend_only = case when coalesce(resend_only, '[]'::jsonb) @> jsonb_build_array(eid) then resend_only else coalesce(resend_only, '[]'::jsonb) || jsonb_build_array(eid) end,
+         target_bridge = case when c.checked_bridge ~ '^go-[0-9a-f]{6,32}$' then c.checked_bridge else target_bridge end, device_id = coalesce(c.checked_device, device_id)
+   where id = p_job;
+  end if;
+  -- (third review) the check confirmed first: the hand-back below reads what the posting owes from the checks
+  update tally_post_checks set state = 'confirmed', confirmed_by = auth.uid(), confirmed_at = now(), confirmed_why = v_why, resent = false where id = c.id;
+  if v_other then
+    said := 'released; you can post it again';
+  elsif j.status in ('failed', 'done') and not coalesce(j.checking, false) then
+    begin
+      -- (third review, never twice) every entry it owes, less those another posting has since
+      l := tally_post_resend_list(p_job); resend := l->'resend'; gw := l->>'gw';
+      if jsonb_array_length(resend) = 0 then
+        said := 'released; not sent again: ' || coalesce(gw, 'nothing is left to send') || ' posted again elsewhere since';
+      else
+        update tally_post_jobs set status = 'waiting', resend_only = resend,
+               message = left('Not in Tally (looked by ' || tally_member_name(f, auth.uid()) || '): sent again' || case when gw is not null then '; not sent again: ' || gw || ' posted again elsewhere since' else '' end, 500),
+               taken_at = null, updated_at = now(), attempts = coalesce(attempts, 0) + 1 where id = p_job;
+        update tally_post_checks k set resent = true where k.job_id = p_job and k.state = 'confirmed' and k.resent is not true and resend ? k.entry_id;
+        v_resent := resend ? eid;
+        if gw is not null then said := 'sent again; not sent again: ' || gw || ' posted again elsewhere since'; end if;
+      end if;
+    exception when others then
+      said := sqlerrm;
+    end;
+  else
+    -- (174, fifth review L1) a cancelled posting is not sent again: the entry is free to post anew
+    said := case when j.status = 'cancelled' then 'released; you can post it again' else 'released; it is sent again when the posting''s other entries are settled' end;
+  end if;
+  return jsonb_build_object('ok', true, 'state', 'confirmed', 'resent', v_resent, 'job', p_job, 'entry', eid, 'check', c.id, 'words', said);
+end $function$;
+revoke all on function public.tally_post_check_confirm(uuid, text, text) from public, anon;
+grant execute on function public.tally_post_check_confirm(uuid, text, text) to authenticated;
 
 -- ---------------------------------------------------------------- 3. every held posting, by the cron
 create or replace function public.tally_post_settle_itself_all(p_max integer default 25)
