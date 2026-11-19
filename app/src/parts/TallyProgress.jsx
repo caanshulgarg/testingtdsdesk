@@ -19,7 +19,7 @@ import { bookSum, pctOf, partWords, etaWords, nf, rpc, summary, fyNow, whyWords,
 import { noAnswer } from "../lib/readFollow.js";   // next-link-follow: a result line when no Tally can answer
 import { press, busyOf, lockOf, Said, useSaid, errWords } from "./TallyBtn.jsx";   // next-buttons: every click says what came of it
 import { ackSnap } from "../lib/pickAck.js";   // bridge 2.5.10: what the bridge said of it
-import { localOpen } from "../lib/ownBridge.js";   // next-fix-mastersread: open in this user's own Tally
+import { localOpen, mineState, untoldWords } from "../lib/ownBridge.js";   // next-fix-mastersread: open in this user's own Tally
 import { troubleOf } from "../lib/tallySimple.js";   // next-fix-mastersread: the book's trouble, said one way
 
 const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -138,7 +138,9 @@ const waitWords = (kw) => (!kw ? "" : /typ|working in Tally|click/i.test(kw) ? B
 // what keeps the masters from being read now ("" : nothing known)
 function waitOf(company) {
   if (!company) return "";
-  if (!openHere(company)) return "open " + company + " in your own Tally";
+  // (the final review of next-fix-linkedguid: open only in a Tally whose owner Windows cannot tell, while it tells another's:
+  // the posting's own words, as the bridge's)
+  if (!openHere(company)) { let u = null; try { const o = mineState(); u = o && o.untold ? o.untold.get(coKey(company)) : null; } catch (e) { u = null; } return u ? untoldWords(u) : "open " + company + " in your own Tally"; }
   return waitWords(keepWaitOf(company));
 }
 // ---------- Step 1 · Masters: {st: reading | waiting | done | none | why, n, g, read, of, pct, words, sub, at}

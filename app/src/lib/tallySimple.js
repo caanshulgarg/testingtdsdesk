@@ -469,7 +469,7 @@ function clientRow(co, all, opts) {
   if (!held && !running && opts.own && opts.own.state === "ok" && typeof globalThis.FCMastersOf === "function") { try { ms = globalThis.FCMastersOf(cid, company); } catch (e) { ms = null; } }
   const msWait = ms && ms.st === "waiting" && ms.idle ? String(ms.wait || "") : "";
   const msTodo = !ms ? "" : ms.st === "reading" ? "Nothing. FinCom is reading the masters from Tally now."
-    : /^open /.test(msWait) ? "Open “" + shown(company) + "” in your own Tally." : msWait ? "Nothing. " + msWait.charAt(0).toUpperCase() + msWait.slice(1) + "." : "";
+    : /^open /.test(msWait) ? "Open “" + shown(company) + "” in your own Tally." : /^Tally on port /.test(msWait) ? msWait + "." : msWait ? "Nothing. " + msWait.charAt(0).toUpperCase() + msWait.slice(1) + "." : "";
   if (!row.act && !again) {
     // next-fix-mastersread (staging: "Nothing. It is coming in by itself." over masters that never came): no masters in
     // FinCom and no read of them going: the reason when one failed, and what the person does

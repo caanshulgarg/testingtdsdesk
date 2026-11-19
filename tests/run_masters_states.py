@@ -27,8 +27,11 @@ def ok(c, w):
     if not c: fails.append(w)
 LATEST = {"setup": {"version": "2.5.16", "url": "https://x/assets/bridge-go/FinComBridge-Setup-2.5.16.exe", "sha256": "cd" * 32}}
 PC = "SRV01"; UA = PC + "\\made-up-a"
-ORBIT, ACME, KES, FAL, NIMB, LOTUS = "Orbit Space", "Acme Traders", "Kestrel Textiles", "Falcon Foods", "Nimbus Events", "Lotus Labs"
-ORB, ACO, KESC, FALC, NIC, LOC = "ORBIT SPACE", "ACME TRADERS 2025-26", "KESTREL TEXTILES", "FALCON FOODS", "NIMBUS EVENTS", "LOTUS LABS"
+ORBIT, ACME, KES, FAL, NIMB, LOTUS, HERON = "Orbit Space", "Acme Traders", "Kestrel Textiles", "Falcon Foods", "Nimbus Events", "Lotus Labs", "Heron Works"
+ORB, ACO, KESC, FALC, NIC, LOC, HEC = "ORBIT SPACE", "ACME TRADERS 2025-26", "KESTREL TEXTILES", "FALCON FOODS", "NIMBUS EVENTS", "LOTUS LABS", "HERON WORKS"
+# the final review of next-fix-linkedguid: a company open only in a Tally whose owner Windows cannot tell (the beat's
+# openElsewhere, as the bridge says it): the masters wait in the posting's own words
+UNTOLD = "Tally on port 9040 has it open, but Windows cannot tell whose Tally that is (it may be running as administrator), so nothing is sent to it; run Tally normally as your own Windows user"
 # Tally's own words, as the bridge keeps them in the company's trouble (made up for a made-up company)
 WHY = "Tally answered with an error for the group list: Could not set 'SVCurrentCompany' to 'FALCON FOODS'"
 SAID = "Tally said: Could not set 'SVCurrentCompany' to 'FALCON FOODS'"   # (as the page says it: Tally's own words first)
@@ -64,15 +67,16 @@ def main():
                     {"name": KESC, "open": True, "phase": "live", "waiting": 0, "lastRead": ""},
                     {"name": FALC, "open": True, "phase": "live", "waiting": 0, "lastRead": ""},
                     {"name": NIC, "open": True, "phase": "live", "waiting": 0, "lastRead": ""},
-                    {"name": ACO, "open": False, "phase": "live", "waiting": 0, "lastRead": "ago:2900"}]
+                    {"name": ACO, "open": False, "phase": "live", "waiting": 0, "lastRead": "ago:2900"},
+                    {"name": HEC, "open": False, "phase": "", "waiting": 0, "lastRead": "", "guid": "", "openElsewhere": {"port": 9040, "why": "owner unknown"}}]
         dA = T.dev(7, PC, "made-up-a", tally="open", opened=opened, version="2.5.16", rec=opened, beat=beat, ports=[up], cos=cos_beat)
         def link(co, cl, seen="ago:0.5"): return {"company": co, "client_id": "NAME:" + cl, "device_id": dA["id"], "gstin": "", "last_seen": seen}
-        cos = [link(ORB, ORBIT), link(ACO, ACME, "ago:3000"), link(KESC, KES), link(FALC, FAL), link(NIC, NIMB), link(LOC, LOTUS, "ago:3000")]
+        cos = [link(ORB, ORBIT), link(ACO, ACME, "ago:3000"), link(KESC, KES), link(FALC, FAL), link(NIC, NIMB), link(LOC, LOTUS, "ago:3000"), link(HEC, HERON, "ago:3000")]
         A_PINGS = {"9101": TS.ping(9101, True, UA, version="2.5.16", bridgeId="go-7")}
         acme = T.book(ACME); acme[0]["ledgersAt"] = "ago:2900"
         fal = T.book(FAL, ledgers=False, days=False); fal[0]["state"] = {"trouble": {"at": "ago:3", "why": WHY}}
-        books = {ORBIT: T.book(ORBIT), ACME: acme, KES: T.book(KES, ledgers=False, days=False), FAL: fal, NIMB: T.book(NIMB, ledgers=False, days=False), LOTUS: T.book(LOTUS, ledgers=False, days=False)}
-        clients = [ORBIT, ACME, KES, FAL, NIMB, LOTUS]
+        books = {ORBIT: T.book(ORBIT), ACME: acme, KES: T.book(KES, ledgers=False, days=False), FAL: fal, NIMB: T.book(NIMB, ledgers=False, days=False), LOTUS: T.book(LOTUS, ledgers=False, days=False), HERON: T.book(HERON, ledgers=False, days=False)}
+        clients = [ORBIT, ACME, KES, FAL, NIMB, LOTUS, HERON]
         ids = E(T.SETUP, [[dA], cos, [], "owner", clients, True, books])
         E("() => { window.__linksApi = false; }")
         E(TS.EXTRA, [[], [], [], {}, []]); E(TS.PINGS, A_PINGS); E(TS.FORGET); E(TS.MINE, ["", "", ""])
@@ -124,6 +128,8 @@ def main():
         ok(st(NIMB) == "waiting" and mn == "Waiting: Tally is busy, it reads when typing stops", "3. Nimbus: Waiting: Tally is busy, it reads when typing stops (%s)" % mn)
         ok(st(LOTUS) == "waiting" and mn != ml and ml == "Waiting: open " + LOC + " in your own Tally", "3. Lotus, open nowhere: Waiting: open <company> in your own Tally (%s)" % ml)
         ok(n(R(LOTUS) + " [data-tpg-masters] [role=progressbar]") == 0, "3. no bar while it waits for the company to be opened")
+        mh = M(HERON)
+        ok(st(HERON) == "waiting" and mh == "Waiting: " + UNTOLD, "3. Heron, open only in a Tally whose owner Windows cannot tell: the posting's words (%s)" % mh)
 
         print("== 4. Not read: Tally's own words; the entries wait; what to do")
         mf, ef = M(FAL), txt(R(FAL) + " [data-tpg-entries]")
@@ -153,7 +159,7 @@ def main():
         ok(chips.get("need") == "2" and chips.get("reading") == "1", "5 (review S6). chips: Needs attention 2 (Falcon, Acme not open), Reading now 1 (Kestrel; never a row waiting) (%s)" % chips)
         todos = E("() => Object.fromEntries(FCTallySimple.tableRows().filter(r => r.kind === 'client').map(r => [r.client, r.todo]))")
         ok(todos.get(KES) == "Nothing. FinCom is reading the masters from Tally now." and todos.get(LOTUS) == "Open “" + LOC + "” in your own Tally."
-           and todos.get(NIMB) == "Nothing. Tally is busy, it reads when typing stops." and "press Bring masters" in (todos.get(FAL) or ""),
+           and todos.get(NIMB) == "Nothing. Tally is busy, it reads when typing stops." and "press Bring masters" in (todos.get(FAL) or "") and todos.get(HERON) == UNTOLD + ".",
            "5 (review S7). what to do follows the Masters state; only the failed read says press Bring masters (%s)" % todos)
 
         print("== 6 (review S1). a done 0 of 0 over masters FinCom holds: still Up to date")

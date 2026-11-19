@@ -284,8 +284,28 @@ export const NO_CO = "Tally is open, but no company is open in it. Open your com
 // bridge 2.5.8 (asks again within 30 s while Tally names no company): step 4's help when it stays
 export const NO_CO_HELP = "If the company is already open and this stays more than a minute: in TallyPrime press Alt+F3, then F3 to make sure it is loaded (enter its password or TallyVault if asked), then press Check again.";
 const noCo = (o, up) => (up && !o.names.size && !o.why ? Object.assign(o, { noCo: true, why: NO_CO }) : o);
+// the final review of next-fix-linkedguid: ONE rule with the bridge's reads and postings (bridge-go linkguid.go
+// tallyToPost over ownersUntold): a Tally Windows says is this user's; one whose owner Windows cannot tell only while it
+// tells the owner of no Tally in the list (a plain PC: as before); another user's never
+export const ownRule = (list) => { const told = [].concat(list || []).some((x) => x && typeof x.mine === "boolean"); return (x) => !!x && (x.mine === true || (typeof x.mine !== "boolean" && !told)); };
+const ruleOf = (st) => ownRule((st.sessions || []).length ? st.sessions : st.open);
+// the companies open in this login's own Tally, by the bridge's /status (each with its Tally's mine)
+export const hereNames = (st) => { const r = ruleOf(st); return new Map([].concat(st.open || []).filter((x) => x && x.name && r(x)).map((x) => [coKey(x.name), String(x.name)])); };
+// the companies open only in a Tally whose owner Windows cannot tell, left out by the rule: coKey -> its ports (the
+// /status sessions that answered now; else the beat's openElsewhere, the bridge's own words)
+export function untoldOf(st) {
+  const out = new Map(), add = (n, p) => { const k = coKey(n), l = out.get(k) || []; if (!l.includes(String(p))) l.push(String(p)); out.set(k, l); };
+  const ss = [].concat(st.sessions || []), r = ruleOf(st);
+  if (ss.length) ss.forEach((x) => { if (x && x.ok && !x.skipped && typeof x.mine !== "boolean" && !r(x)) [].concat(x.companies || []).forEach((c) => c && c.name && add(c.name, x.port)); });
+  else [].concat((st.beat || {}).companies || []).forEach((c) => { const e = c && c.openElsewhere; if (e && e.why === "owner unknown" && Number(e.port) > 0) add(c.name, Number(e.port)); });
+  const mine = hereNames(st); mine.forEach((_, k) => out.delete(k));
+  return out;
+}
+// the beat's companies open only in a Tally the bridge's rule leaves out (openElsewhere): never this user's own
+const elsewhereB = (b) => new Set([].concat((b || {}).companies || []).filter((c) => c && c.name && c.open === false && c.openElsewhere).map((c) => coKey(c.name)));
+export const untoldWords = (ports) => "Tally on port " + [].concat(ports || []).join(", ") + " has it open, but Windows cannot tell whose Tally that is (it may be running as administrator), so nothing is sent to it; run Tally normally as your own Windows user";
 // this login's own Tally answers: its bridge's own sessions (another user's never), else (an older answer) Tally up
-const upHere = (st) => { const s = [].concat(st.sessions || []).filter((x) => x && !x.skipped && x.mine !== false); return (st.sessions || []).length ? s.some((x) => x.ok) : !!st.tallyUp; };
+const upHere = (st) => { const r = ruleOf(st), s = [].concat(st.sessions || []).filter((x) => x && !x.skipped && r(x)); return (st.sessions || []).length ? s.some((x) => x.ok) : !!st.tallyUp; };
 export const upBeat = (b) => { const p = [].concat(b.ports || []); return p.length ? p.some((x) => x && x.ok && !x.skipped) : b.tally === true || b.tallyState === "open"; };
 // where this browser is: "pc" a Tally computer (a bridge answers here, one is paired here, or this login's own bridge was
 // found here before: rememberedOwn, next-tally-own-status), "laptop" (the look found
@@ -304,8 +324,8 @@ export function ownState() {
   const st = hereIfOwn(own), unsure = own.how === "unsure";
   // (another Windows user's Tally on this computer, when the bridge says so, is not this user's)
   const by = (ns) => new Map(ns.filter(Boolean).map((n) => [coKey(n), String(n)]));
-  if (st) return noCo(Object.assign({ state: "ok", from: "here", own, unsure, names: by([].concat(st.open || []).filter((x) => x && x.mine !== false).map((x) => x.name)) }, whyOf(st.tallyWhy != null ? st : own.beat)), upHere(st));
-  if (fresh(own.at)) return noCo(Object.assign({ state: "ok", from: "beat", own, unsure, names: by(own.open), far: own.how === "remembered" && !!say && (say.kind === "blocked" ? "blocked" : "far") }, whyOf(own.beat)),
+  if (st) return noCo(Object.assign({ state: "ok", from: "here", own, unsure, names: hereNames(st), untold: untoldOf(st) }, whyOf(st.tallyWhy != null ? st : own.beat)), upHere(st));
+  if (fresh(own.at)) return noCo(Object.assign({ state: "ok", from: "beat", own, unsure, names: by(own.open.filter((n) => !elsewhereB(own.beat).has(coKey(n)))), untold: untoldOf({ beat: own.beat || {} }), far: own.how === "remembered" && !!say && (say.kind === "blocked" ? "blocked" : "far") }, whyOf(own.beat)),
     upBeat(own.beat || {}));
   // this browser holds the own bridge's key, its first answer not read yet
   const c = cfgOf(), b = typeof Bridge === "object" ? Bridge.st || {} : {};
