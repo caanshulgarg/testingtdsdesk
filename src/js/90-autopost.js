@@ -711,7 +711,9 @@ const AutoPost = {
     const co = CO(cid), t = obj.tally || {};
     try {
       const tname = typeof tallyCoName === "function" ? tallyCoName(co) : co.tallyName;
-      const j = await Bridge.call("/unpost", {company: t.company || tname, guid: t.guid, vchType: t.vchType, vchDate: t.vchDate}, 120000);
+      const lg = typeof LinkRec !== "object" ? "" : await LinkRec.guidFor(co, t.company || tname);   // the linked company's GUID; none: nothing is sent
+      if (!lg) return false;
+      const j = await Bridge.call("/unpost", {company: t.company || tname, companyGuid: lg, guid: t.guid, vchType: t.vchType, vchDate: t.vchDate}, 120000);
       if (!j || j.ok === false) return false;
       logPosting({what, id: obj.id, action: "removed", co: cid, tally: t, by: whoAmI()});
       return true;

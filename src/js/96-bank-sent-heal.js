@@ -253,13 +253,16 @@ async function reconDelete(which){
     body: '<p class="note">' + list.slice(0, 12).map(t => esc(fmtDate(t.date) + " " + [t.type, t.number].filter(Boolean).join(" ") + " " + t.party + " " + INR.format(Math.abs(t.eff)))).join("<br>") + (list.length > 12 ? "<br>and " + (list.length - 12) + " more" : "") +
       "<br><br>" + (which === "replace" ? "Each Tally entry is deleted and the statement line is posted again with the statement’s amount." : "Total " + INR.format(total) + ".") + " This cannot be undone from FinCom: take a Tally backup first if you have not.</p>"});
   if (!a || which === "replace" && !(await postClearReady())) return;
+  // the linked company's GUID (the bridge deletes only in the open company with it); none: nothing is sent
+  const lg = typeof LinkRec !== "object" ? "" : await LinkRec.guidFor(CO(b.cid), R.company);
+  if (!lg){ toast(LINK_NOGUID); return; }
   let ok = 0, bad = 0;
   const why = [], gone = new Set();
   for (let k = 0; k < list.length; k++){
     const t = list[k];
     b.busy = (which === "replace" ? "Replacing " : "Deleting ") + (k + 1) + " of " + list.length + " in Tally…"; render();
     try {
-      const j = await Bridge.call("/unpost", {company: R.company, guid: t.guid, masterId: t.masterId, vchType: t.type, vchDate: t.vdate, vchNumber: t.number}, 60000);
+      const j = await Bridge.call("/unpost", {company: R.company, companyGuid: lg, guid: t.guid, masterId: t.masterId, vchType: t.type, vchDate: t.vdate, vchNumber: t.number}, 60000);
       if (j && j.ok !== false){ ok++; gone.add(t.i); logPosting({what: "bank", id: t.guid, action: "removed", co: b.cid, ref: "reconciliation " + [t.type, t.number].join(" "), party: t.party, amount: Math.abs(t.eff), tally: {guid: t.guid, vchType: t.type, vchDate: t.vdate, company: R.company}, by: (Cloud.st && Cloud.st.email) || ""}); }
       else { bad++; why.push(fmtDate(t.date) + " " + [t.type, t.number].filter(Boolean).join(" ") + ": " + ((j && (j.message || j.error)) || "Tally did not delete it")); }
     } catch (e){ bad++; why.push(fmtDate(t.date) + " " + [t.type, t.number].filter(Boolean).join(" ") + ": " + (e.message || e)); }
@@ -302,13 +305,15 @@ async function removeTallyDuplicates(which){
     body: '<p class="note">' + (which === "wrong" ? "Only the copies under the wrong date are removed. The lines then show as not posted, and Post puts them in with the right date." : "Only the later copy of each double entry is removed; the first stays.") + " This cannot be undone from FinCom, so take a Tally backup first if you have not.</p>"});
   if (!a || which === "wrong" && !(await postClearReady())) return;
   const b = B();
+  const lg = typeof LinkRec !== "object" ? "" : await LinkRec.guidFor(CO(b.cid), d.company);   // the linked company's GUID; none: nothing is sent
+  if (!lg){ toast(LINK_NOGUID); return; }
   let ok = 0, bad = 0;
   const gone = new Set();
   for (let i = 0; i < list.length; i++){
     const v = list[i];
     b.busy = "Removing " + (i + 1) + " of " + list.length + "…"; render();
     try {
-      const j = await Bridge.call("/unpost", {company: d.company, guid: v.guid || "", vchType: v.type, vchDate: v.date, vchNumber: v.number || ""}, 60000);
+      const j = await Bridge.call("/unpost", {company: d.company, companyGuid: lg, guid: v.guid || "", vchType: v.type, vchDate: v.date, vchNumber: v.number || ""}, 60000);
       if (j && j.ok !== false){
         ok++; if (v.rowId) gone.add(v.rowId);
         logPosting({what: "bank", id: v.guid, action: "removed", co: b.cid, ref: (which === "wrong" ? "wrong date " : "double entry ") + (v.number || ""), party: v.party, amount: d.amountOf(v), tally: {guid: v.guid, vchType: v.type, vchDate: v.date, company: d.company}, by: (Cloud.st && Cloud.st.email) || ""});

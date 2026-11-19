@@ -110,6 +110,15 @@ const LinkRec = {
     await this.again(); toast("FinCom reads " + this.nameOf(r) + " from the data you chose."); return true;
   },
   forClient(cid){ return this.live().filter(r => String(r.client_id) === String(cid)); },
+  // the owner's rule (19-Nov-2026): a posting or deletion through the bridge names the Tally company the client is linked
+  // to by its GUID (the bridge sends only into the open company with it); "" when the client's link to that company has
+  // none (or no link is read): nothing is sent (Bridge.post, unpostFromTally say why: LINK_NOGUID)
+  async guidFor(co, name){
+    if (!co) return "";
+    try { await this.load(); } catch (e){}
+    const r = this.forClient(co.id).find(x => this.isName(x, name)), g = String((r && r.company_guid) || "").trim().toLowerCase();
+    return /^[0-9a-z-]{1,100}$/.test(g) ? g : "";
+  },
   // two names of one company: the same words, or one linked company's names (its record's and its name in Tally now)
   same(a, b){ if (this.key(a) === this.key(b)) return true; const r = this.ofName(a) || this.ofName(b); return !!r && this.isName(r, a) && this.isName(r, b); },
   // the companies' rows with the record's client, by the book (the row's own record; a row read before the book was

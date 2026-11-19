@@ -150,7 +150,10 @@ with sync_playwright() as p:
     r = E("window.__r1")
     ok(r and r.get("viaCloud") and E("window.__direct") == 0 and any(x[0] == "tally_post_enqueue" for x in E("window.__rpc")), "B11. bridge here and the client linked to the cloud: through the queue, not straight to the bridge")
     # straight to the bridge only without the cloud for this client; then recorded
+    # (19-Nov-2026, the owner's rule) straight to the bridge with the client's link's GUID (a made-up one)
     E("""() => { window.__rpc = []; TCloud.st[S.coId] = {at: Date.now(), books: []}; const e = Object.values(D().entries)[1];
+      window.__guids = []; const pc = Bridge.postChecked; Bridge.postChecked = async (p, a, b) => { window.__guids.push(p.guid || ""); return pc(p, a, b); };
+      LinkRec.guidFor = async (co, n) => co && co.id === S.coId && n === "GARG SHEKHAR & COMPANY" ? "made-up-guid-0002" : "";
       window.__r2 = null; Bridge.post({company: "GARG SHEKHAR & COMPANY", client: S.coId, masters: [], vouchers: [{id: e.id, xml: voucherXml(e, CO())}]}).then(r => window.__r2 = r, err => window.__r2 = {err: err.message}); }""")
     pg.wait_for_timeout(1500)
     rec = [x[1] for x in E("window.__rpc") if x[0] == "tally_post_record"]
@@ -158,6 +161,7 @@ with sync_playwright() as p:
     ok(E("window.__direct") == 1 and len(rec) == 1 and rec[0]["p_status"] == "done" and rec[0]["p_entry_ids"] == [eid] and rec[0]["p_id"] == "1b9f0156-0000-4000-8000-000000000001" and "FinCom Bridge 2.1.1" in rec[0]["p_message"],
        "B11. no cloud for the client: straight to the bridge, then recorded in the cloud (tally_post_record, done, %s)" % (rec[0]["p_message"] if rec else "-"))
     ok(not any(x[0] == "tally_post_enqueue" for x in E("window.__rpc")), "B11. and not queued")
+    ok(E("window.__guids") == ["made-up-guid-0002"], "B11. the posting straight to the bridge names the link's GUID (%s)" % E("window.__guids"))
     E("""() => { window.__noRecord = true; window.__r3 = null; const e = Object.values(D().entries)[1];
       Bridge.post({company: "GARG SHEKHAR & COMPANY", client: S.coId, masters: [], vouchers: [{id: e.id, xml: voucherXml(e, CO())}]}).then(r => window.__r3 = r, err => window.__r3 = {err: String(err && err.message)}); }""")
     pg.wait_for_timeout(1200)

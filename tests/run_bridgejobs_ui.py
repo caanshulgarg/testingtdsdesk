@@ -1,7 +1,9 @@
 """python3 run_bridgejobs_ui.py - FinCom hands postings to bridge 1.12 as a job and follows it: a lost hand-over is sent
 again with the same job number, a bridge that stops answering is waited for, a stopped job is resumed, an old bridge still
 gets the one long /import, one missed status check does not show the bridge as offline, and a posting left over from
-before a reload is reported."""
+before a reload is reported. The owner's rule (19-Nov-2026): a posting goes only into the Tally company the client is linked
+to, by its GUID: the link's company_guid travels as guid on /jobs and /import and as companyGuid on /unpost; a link with no
+GUID sends nothing and says why. A made-up company and GUID only."""
 import os, sys, json, threading, functools, http.server, urllib.parse
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from bridge_proof import ping_body, is_ping
@@ -14,12 +16,15 @@ fails, errors = [], []
 def ok(c, w):
     print(("  ok   " if c else "  FAIL ") + w)
     if not c: fails.append(w)
-M = {"version": "1.12.0", "seen": [], "jobs": {}, "dropPost": 0, "dropPoll": 0, "interruptOnce": False, "statusFail": 0, "polls": 0}
+M = {"version": "1.12.0", "seen": [], "jobs": {}, "dropPost": 0, "dropPoll": 0, "interruptOnce": False, "statusFail": 0, "polls": 0, "bodies": []}
+LG = "made-up-guid-0001"
 def J(route, body, status=200): return route.fulfill(status=status, content_type="application/json", body=json.dumps(body))
 def bridge(route):
     rq = route.request; u = rq.url; path = urllib.parse.urlparse(u).path; qs = urllib.parse.parse_qs(urllib.parse.urlparse(u).query)
     if is_ping(u): return J(route, ping_body(u, "K" * 32))   # FinCom Bridge 2.3.0 proves itself before anything is sent
     M["seen"].append(rq.method + " " + path + ("?" + urllib.parse.urlparse(u).query if qs else ""))
+    if rq.method == "POST" and path in ("/jobs", "/import", "/unpost"): M["bodies"].append((path, json.loads(rq.post_data or "{}")))
+    if path == "/unpost": return J(route, {"ok": True, "message": "removed", "how": "test"})
     if path == "/status":
         if M["statusFail"] > 0: M["statusFail"] -= 1; return route.abort()
         jobs = [dict(id=k, status=v["status"], done=v["done"], total=v["total"], company="ZZ", message="") for k, v in M["jobs"].items() if v["status"] in ("running",)]
@@ -60,6 +65,28 @@ with sync_playwright() as p:
     pg.goto("http://localhost:8153/"); pg.wait_for_timeout(1500); pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(500)
     pg.evaluate("() => { Bridge.setCfg({key: 'K'.repeat(32)}); }"); pg.evaluate("Bridge.refresh()")
     ok(pg.evaluate("Bridge.up() && Bridge.st.version") == "1.12.0", "bridge 1.12 seen")
+    # the client's link to ZZ, with its GUID (LinkRec's record, as FinCom's cloud gives it)
+    LINK = "(g) => { let co = CO(); if (!co){ co = newCompany({name: 'ZZ'}); S.companies[co.id] = co; S.data[co.id] = {parties: {}, entries: {}, loaded: true}; co.stats = {}; S.coId = co.id; choiceConfirm(co, 'postTo', 'ZZ'); } LinkRec.load = async () => LinkRec.st.rows; LinkRec.st.rows = [{book_id: 'b-zz', client_id: co.id, company_guid: g, company_name: 'ZZ', state: 'linked'}]; return co.id; }"
+    ok(bool(pg.evaluate(LINK, LG)), "a client linked to ZZ")
+
+    # the link's GUID travels with the posting; a link with no GUID: nothing is sent, a plain reason
+    M["seen"].clear(); M["bodies"].clear()
+    o = pg.evaluate(POST, {"m": [], "v": ["g1"]})
+    gs = [b.get("guid") for pth, b in M["bodies"] if pth == "/jobs"]
+    ok(gs and all(g == LG for g in gs) and all(x["ok"] for x in o["r"]["results"]), "the posting names the linked company's GUID on /jobs: %s" % gs)
+    pg.evaluate(LINK, ""); M["seen"].clear(); M["bodies"].clear(); M["jobs"].clear()
+    o = pg.evaluate(POST, {"m": ["led:A"], "v": ["g2"]})
+    rs = o["r"]["results"]
+    ok(not M["bodies"] and len(rs) == 2 and all(not x["ok"] and "no company ID" in (x.get("message") or "") for x in rs), "a link with no GUID: nothing sent, each entry says why: %s" % [x.get("message", "")[:60] for x in rs])
+    t = pg.evaluate("""async () => { const was = [toast, askConfirm, ensureTallyCompany]; let said = ''; toast = m => { said = m; }; askConfirm = async () => true; ensureTallyCompany = async () => 'ZZ';
+      try { await unpostFromTally('bill', {id: 'u1', tally: {guid: 'v-guid', vchType: 'Journal', vchDate: '20260701', company: 'ZZ'}}, CO().id); } finally { [toast, askConfirm, ensureTallyCompany] = was; } return said; }""") or ""
+    ok(not M["bodies"] and "no company ID" in t, "a deletion with no GUID on the link: nothing sent: %s" % t[:80])
+    pg.evaluate(LINK, LG); M["bodies"].clear()
+    pg.evaluate("""async () => { const was = [toast, askConfirm, ensureTallyCompany]; toast = m => {}; askConfirm = async () => true; ensureTallyCompany = async () => 'ZZ';
+      try { await unpostFromTally('bill', {id: 'u1', tally: {guid: 'v-guid', vchType: 'Journal', vchDate: '20260701', company: 'ZZ'}}, CO().id); } finally { [toast, askConfirm, ensureTallyCompany] = was; } }""")
+    ub = [b for pth, b in M["bodies"] if pth == "/unpost"]
+    ok(len(ub) == 1 and ub[0].get("companyGuid") == LG and ub[0].get("guid") == "v-guid", "a deletion names the linked company's GUID as companyGuid: %s" % ub)
+    M["jobs"].clear()
 
     M["seen"].clear(); M["dropPost"] = 1
     o = pg.evaluate(POST, {"m": ["led:A"], "v": ["v1", "v2", "v3", "v4", "v5"]})
@@ -86,6 +113,7 @@ with sync_playwright() as p:
     M["version"] = "1.11.0"; pg.evaluate("Bridge.refresh()"); M["seen"].clear()
     o = pg.evaluate(POST, {"m": [], "v": ["a", "b"]})
     ok(any(s.startswith("POST /import") for s in M["seen"]) and not any("/jobs" in s for s in M["seen"]) and all(x["ok"] for x in o["r"]["results"]), "an older bridge: the one /import request as before")
+    ok(all(b.get("guid") == LG for pth, b in M["bodies"] if pth == "/import") and any(pth == "/import" for pth, b in M["bodies"]), "the /import names the linked company's GUID too")
     M["version"] = "1.12.0"; pg.evaluate("Bridge.refresh()")
 
     M["statusFail"] = 1; pg.evaluate("Bridge.refresh()")

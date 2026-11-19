@@ -200,8 +200,9 @@ const Bridge = {
   // Returns {results: [{id, ok, message, ...}]} for every item sent, whatever happened.
   async post(payload, onProgress, onChecked){
     // console phase 1b: a paused firm or a company FinCom switched off posts nothing (src/js/99; the database refuses it too)
+    const hold = (why, r) => ({ok: true, company: payload.company, results: [].concat(payload.masters || [], payload.vouchers || []).map(x => ({id: x.id, ok: false, held: true, message: why})).concat(r || [])});
     { const why = typeof FirmGate === "object" ? FirmGate.why(payload.client || (S.view === "company" ? S.coId : "")) : "";
-      if (why) return {ok: true, company: payload.company, results: [].concat(payload.masters || [], payload.vouchers || []).map(x => ({id: x.id, ok: false, held: true, message: why}))}; }
+      if (why) return hold(why); }
     // nothing without a proper date, or dated before the company's books begin, ever goes to Tally: it is answered here
     const refused = [];
     // entries dated in a closed period: the user is asked, and those held back are answered here
@@ -254,6 +255,10 @@ const Bridge = {
       outC.results = [].concat(outC.results || []).concat(refused);
       return words(outC);
     }
+    // 19-Nov-2026 (the owner's rule): straight to the bridge only with the linked company's GUID, else nothing is sent
+    const lg = typeof LinkRec === "object" ? await LinkRec.guidFor(coP, payload.company) : "";
+    if (!lg) return hold(LINK_NOGUID, refused);
+    payload = Object.assign({}, payload, {guid: lg});
     let out = null;
     const after = onChecked || cloudOn ? chk => { words(chk); if (out && cloudOn && typeof PostRecord === "object") PostRecord.save(coP, payload, {recId: out.recId, company: out.company, results: [].concat(chk.results || []).concat(refused)}); if (onChecked) onChecked(chk); } : onChecked;
     out = await this.postChecked(payload, onProgress, after);
@@ -977,6 +982,7 @@ async function checkBankBalance(opts){
 function bankFocus(title, ids, note){ const b = B(); b.focus = {title, ids: [].concat(ids || []), note: note || ""}; b.sel.clear(); b.limit = 500; }
 
 /* ---------- taking an entry back out of Tally ---------- */
+const LINK_NOGUID = "Nothing was sent to Tally: this client's Tally link has no company ID yet. Open the company in Tally with FinCom Bridge running, then try again.";
 async function unpostFromTally(what, obj, cid){
   const co = CO(cid || S.coId);
   const t = obj.tally || {};
@@ -990,8 +996,10 @@ async function unpostFromTally(what, obj, cid){
     body: '<p class="note">Voucher ' + esc(t.vchType || "") + " " + esc(obj.tallyVchNo || t.masterId || "") + " dated " + esc(t.vchDate ? fmtDate(tallyToIso(t.vchDate)) : "") +
       " will be deleted from <b>" + esc(t.company || tname) + "</b>. It then comes back here as waiting to be posted.</p>"});
   if (!ans) return false;
+  const lg = typeof LinkRec === "object" ? await LinkRec.guidFor(co, t.company || tname) : "";
+  if (!lg){ toast(LINK_NOGUID); return false; }
   try {
-    const j = await Bridge.call("/unpost", {company: t.company || tname, guid: t.guid, vchType: t.vchType, vchDate: t.vchDate}, 120000);
+    const j = await Bridge.call("/unpost", {company: t.company || tname, companyGuid: lg, guid: t.guid, vchType: t.vchType, vchDate: t.vchDate}, 120000);
     if (!j || j.ok === false){ toast("Tally would not remove it: " + plainMsg((j && (j.message || j.error)) || "")); return false; }
     logPosting({what, id: obj.id, action: "removed", co: co.id, tally: t, by: (Cloud.st && Cloud.st.email) || ""});
     toast("Removed from Tally.");

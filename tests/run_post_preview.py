@@ -39,6 +39,8 @@ SETUP = """async () => {
     {name: "Round Off", group: "Indirect Expenses"}]});
   S.bank.newLed = [{name: "Input Cgst", group: "Duties & Taxes"}, {name: "Professional Charges", group: "Indirect Expenses"}];
   window.__sent = []; window.__reply = null;
+  // (19-Nov-2026, the owner's rule) a posting straight to the bridge names the client's link's GUID (a made-up one here)
+  if (typeof LinkRec === "object") LinkRec.guidFor = async (co) => co ? "made-up-guid-0004" : "";
   Bridge.postChecked = async (p) => { window.__sent.push(JSON.parse(JSON.stringify(p))); return window.__reply ? window.__reply(p) : {ok: true, company: p.company, results: [].concat(p.masters, p.vouchers).map(x => ({id: x.id, ok: true, verified: true}))}; };
   render();
   return {cid: c.id, a: a.id, g: g.id};
