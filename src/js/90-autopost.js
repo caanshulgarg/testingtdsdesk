@@ -650,8 +650,10 @@ const AutoPost = {
         if (bank) saveBank({rows: true}); else Store.saveEntry(cid, x);
         return {ok: false, marked: true, why: "It is in Tally. It can be taken back only on the Tally computer (" + ((typeof tallyPcLabel === "function" && x.tally && x.tally.pc) || "where FinCom Bridge runs") + "), or deleted in Tally by hand. Marked for undo there."};
       }
+      linkGuid.why = "";
       const done = opts.noAsk ? await this.unpostQuiet(bank ? "bank" : "bill", x, cid) : await unpostFromTally(bank ? "bank" : "bill", x, cid);
-      if (!done) return {ok: false, why: "Tally did not remove it."};
+      // nothing sent for want of the linked company's GUID (or a bridge that checks it): that reason, not Tally's
+      if (!done) return {ok: false, why: linkGuid.why || "Tally did not remove it."};
     }
     const job = w === "queued" ? (x.auto && x.auto.job) || x.postJobNew || this.jobOf(cid, [x.id], a.run) : null;
     if (job && typeof TCloud === "object"){
@@ -711,7 +713,7 @@ const AutoPost = {
     const co = CO(cid), t = obj.tally || {};
     try {
       const tname = typeof tallyCoName === "function" ? tallyCoName(co) : co.tallyName;
-      const lg = typeof LinkRec !== "object" ? "" : await LinkRec.guidFor(co, t.company || tname);   // the linked company's GUID; none: nothing is sent
+      const lg = await linkGuid(co, t.company || tname);   // the linked company's GUID; none: nothing is sent (linkGuid.why)
       if (!lg) return false;
       const j = await Bridge.call("/unpost", {company: t.company || tname, companyGuid: lg, guid: t.guid, vchType: t.vchType, vchDate: t.vchDate}, 120000);
       if (!j || j.ok === false) return false;

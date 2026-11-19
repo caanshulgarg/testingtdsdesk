@@ -111,13 +111,26 @@ const LinkRec = {
   },
   forClient(cid){ return this.live().filter(r => String(r.client_id) === String(cid)); },
   // the owner's rule (19-Nov-2026): a posting or deletion through the bridge names the Tally company the client is linked
-  // to by its GUID (the bridge sends only into the open company with it); "" when the client's link to that company has
-  // none (or no link is read): nothing is sent (Bridge.post, unpostFromTally say why: LINK_NOGUID)
+  // to by its GUID (the bridge sends only into the open company with it): every link record of the client with that name
+  // gives the same one GUID; else "" and why says why, nothing is sent (24's linkGuid; Bridge.post, unpostFromTally):
+  // the records not read (not signed in, the read failed, none there), the client not linked to that name, two links
+  // with different companies, or the link with no GUID yet
+  why: "",
   async guidFor(co, name){
-    if (!co) return "";
-    try { await this.load(); } catch (e){}
-    const r = this.forClient(co.id).find(x => this.isName(x, name)), g = String((r && r.company_guid) || "").trim().toLowerCase();
-    return /^[0-9a-z-]{1,100}$/.test(g) ? g : "";
+    const no = w => { this.why = w; return ""; };
+    if (!co) return no(LINK_UNREAD);
+    try { await this.load(); } catch (e){ return no(LINK_UNREAD); }
+    if (this.st.err || !Array.isArray(this.st.rows) || !this.st.rows.length) return no(LINK_UNREAD);
+    const rs = this.forClient(co.id).filter(x => this.isName(x, name)), gs = [...new Set(rs.map(r => String(r.company_guid || "").trim().toLowerCase()))];
+    if (!rs.length) return no("Nothing was sent to Tally: " + (co.name || "this client") + " is not linked to " + name + " in FinCom. Link it on the Tally page, then try again.");
+    if (gs.filter(Boolean).length > 1) return no("Nothing was sent to Tally: " + (co.name || "this client") + " has two Tally links named " + name + " with different companies. Unlink the one that is not the client's on the Tally page, then try again.");
+    if (gs.length !== 1 || !/^[0-9a-z-]{1,100}$/.test(gs[0])) return no("Nothing was sent to Tally: this client's Tally link has no company ID yet. Open the company in Tally with FinCom Bridge running, then try again.");
+    return gs[0];
+  },
+  // a bridge that does not say it checks the linked GUID (before the rule): it would post by the name alone
+  bridgeWhy(){
+    return Bridge.st.state === "ok" ? "Nothing was sent to Tally: update FinCom Bridge on this computer to post or remove entries (this one does not check the linked company's ID)."
+      : "Nothing was sent to Tally: FinCom Bridge on this computer is not answering. Start it, then try again.";
   },
   // two names of one company: the same words, or one linked company's names (its record's and its name in Tally now)
   same(a, b){ if (this.key(a) === this.key(b)) return true; const r = this.ofName(a) || this.ofName(b); return !!r && this.isName(r, a) && this.isName(r, b); },

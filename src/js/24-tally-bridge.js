@@ -166,7 +166,7 @@ const Bridge = {
         tallyState: (j.tally && j.tally.state) || (usable.length ? (j.tallyStuck ? "busy" : "open") : "closed"), busySince: (j.tally && j.tally.since) || (j.tallyStuck && j.tallyStuck.since) || "",
         beat: j.beat || null, computer: j.computer || "", paused: !!j.paused,
         // bridge 2.5.3: why none of this user's Tallys answers, Tally's connection switched on, this browser's session
-        tallyWhy: j.tallyWhy || "", tallyConnectSay: j.tallyConnectSay || "", sameSession: j.sameSession};
+        tallyWhy: j.tallyWhy || "", tallyConnectSay: j.tallyConnectSay || "", sameSession: j.sameSession, linkGuid: j.linkGuid === true};
       if (!this.st.tallyUp || this.st.pinMissing){ if (!this.diag || Date.now() - this.diag.at > 30000) await this.diagnose(); }
       else this.diag = null;
       this.misses = 0; this.okAt = Date.now();
@@ -234,6 +234,16 @@ const Bridge = {
     if (!viaZoho && coP && typeof postToFromLink === "function") await postToFromLink(coP);
     const notAllowed = viaZoho ? "" : postToProblem(coP, payload.company);
     if (notAllowed) return {ok: true, company: payload.company, notAllowed: true, results: [].concat(payload.masters || [], payload.vouchers || []).map(x => ({id: x.id, ok: false, notAllowed: true, message: notAllowed})).concat(refused)};
+    // B11: every posting goes through the queue in FinCom's cloud when the client is linked there, also with the bridge
+    // on this computer (the main bridge takes it from the queue; the live connection wakes it), so every posting is in one
+    // list. Straight to the bridge only when the cloud is not there for this client; then recorded in the cloud afterwards
+    const cloudOn = !viaZoho && !!coP && typeof TCloud === "object" && TCloud.on();
+    if (cloudOn && !(TCloud.st[coP.id] && TCloud.st[coP.id].books)){ try { await TCloud.status(coP.id); } catch (e){} }
+    const viaCloud = cloudOn && TCloud.has(coP.id);
+    // 19-Nov-2026 (the owner's rule): straight to the bridge only with the linked company's GUID and a bridge that
+    // checks it, else nothing is sent (asked before any new ledger is confirmed)
+    const lg = viaZoho || viaCloud ? "" : await linkGuid(coP, payload.company);
+    if (!viaZoho && !viaCloud && !lg) return hold(linkGuid.why, refused);
     // review of 02-Oct-2026 (B9): a ledger Tally already has is never sent as a master; a new one is asked about first,
     // and nothing is sent until it is confirmed
     if (typeof PostGate === "object" && (payload.masters || []).length){
@@ -245,19 +255,11 @@ const Bridge = {
     }
     const words = o => { [].concat(o.results || []).forEach(x => { if (x && x.ok && postAltered(x)) x.altered = Math.max(1, num(x.altered)); if (x) x.word = postWord(x); }); return o; };
     if (viaZoho){ const outZ = await ZohoB.post(coP, payload, onProgress); outZ.results = [].concat(outZ.results || []).concat(refused); return words(outZ); }
-    // B11: every posting goes through the queue in FinCom's cloud when the client is linked there, also with the bridge
-    // on this computer (the main bridge takes it from the queue; the live connection wakes it), so every posting is in one
-    // list. Straight to the bridge only when the cloud is not there for this client; then recorded in the cloud afterwards
-    const cloudOn = !!coP && typeof TCloud === "object" && TCloud.on();
-    if (cloudOn && !(TCloud.st[coP.id] && TCloud.st[coP.id].books)){ try { await TCloud.status(coP.id); } catch (e){} }
-    if (cloudOn && TCloud.has(coP.id)){
+    if (viaCloud){
       const outC = await CloudPost.run(coP.id, payload, onProgress, onChecked ? chk => { words(chk); onChecked(chk); } : onChecked);
       outC.results = [].concat(outC.results || []).concat(refused);
       return words(outC);
     }
-    // 19-Nov-2026 (the owner's rule): straight to the bridge only with the linked company's GUID, else nothing is sent
-    const lg = typeof LinkRec === "object" ? await LinkRec.guidFor(coP, payload.company) : "";
-    if (!lg) return hold(LINK_NOGUID, refused);
     payload = Object.assign({}, payload, {guid: lg});
     let out = null;
     const after = onChecked || cloudOn ? chk => { words(chk); if (out && cloudOn && typeof PostRecord === "object") PostRecord.save(coP, payload, {recId: out.recId, company: out.company, results: [].concat(chk.results || []).concat(refused)}); if (onChecked) onChecked(chk); } : onChecked;
@@ -982,7 +984,16 @@ async function checkBankBalance(opts){
 function bankFocus(title, ids, note){ const b = B(); b.focus = {title, ids: [].concat(ids || []), note: note || ""}; b.sel.clear(); b.limit = 500; }
 
 /* ---------- taking an entry back out of Tally ---------- */
-const LINK_NOGUID = "Nothing was sent to Tally: this client's Tally link has no company ID yet. Open the company in Tally with FinCom Bridge running, then try again.";
+const LINK_UNREAD = "Nothing was sent to Tally: FinCom could not read this client's Tally link just now. Try again in a moment.";
+// the linked company's GUID a posting or deletion straight to the bridge names (98's LinkRec.guidFor), only for a bridge
+// that checks it (bridge /status linkGuid); "": nothing is sent, linkGuid.why says why
+async function linkGuid(co, name){
+  const L = typeof LinkRec === "object" ? LinkRec : null;
+  if (L) L.why = "";
+  const g = L ? await L.guidFor(co, name) : "";
+  linkGuid.why = !g ? (L && L.why) || LINK_UNREAD : Bridge.st.linkGuid ? "" : L.bridgeWhy();
+  return linkGuid.why ? "" : g;
+}
 async function unpostFromTally(what, obj, cid){
   const co = CO(cid || S.coId);
   const t = obj.tally || {};
@@ -992,12 +1003,12 @@ async function unpostFromTally(what, obj, cid){
   }
   const tname = await ensureTallyCompany(co);
   if (!tname) return false;
+  const lg = await linkGuid(co, t.company || tname);
+  if (!lg){ toast(linkGuid.why); return false; }
   const ans = await askConfirm({title: "Remove this entry from Tally?", ok: "Remove it",
     body: '<p class="note">Voucher ' + esc(t.vchType || "") + " " + esc(obj.tallyVchNo || t.masterId || "") + " dated " + esc(t.vchDate ? fmtDate(tallyToIso(t.vchDate)) : "") +
       " will be deleted from <b>" + esc(t.company || tname) + "</b>. It then comes back here as waiting to be posted.</p>"});
   if (!ans) return false;
-  const lg = typeof LinkRec === "object" ? await LinkRec.guidFor(co, t.company || tname) : "";
-  if (!lg){ toast(LINK_NOGUID); return false; }
   try {
     const j = await Bridge.call("/unpost", {company: t.company || tname, companyGuid: lg, guid: t.guid, vchType: t.vchType, vchDate: t.vchDate}, 120000);
     if (!j || j.ok === false){ toast("Tally would not remove it: " + plainMsg((j && (j.message || j.error)) || "")); return false; }

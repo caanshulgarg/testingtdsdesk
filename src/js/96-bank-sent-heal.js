@@ -249,13 +249,13 @@ async function reconDelete(which){
   const list = which === "replace" ? R.differ.map(d => R.T[d.ti]) : Array.from(R.pick).map(i => R.T[i]);
   if (!list.length) return;
   const total = list.reduce((a, t) => a + Math.abs(t.eff), 0);
+  // the linked company's GUID (the bridge deletes only in the open company with it); none: nothing is sent, said first
+  const lg = await linkGuid(CO(b.cid), R.company);
+  if (!lg){ toast(linkGuid.why); return; }
   const a = await askConfirm({title: which === "replace" ? "Replace " + list.length + " entr" + (list.length === 1 ? "y" : "ies") + " in " + R.company + "?" : "Delete " + list.length + " entr" + (list.length === 1 ? "y" : "ies") + " from " + R.company + "?", ok: which === "replace" ? "Replace them" : "Delete them",
     body: '<p class="note">' + list.slice(0, 12).map(t => esc(fmtDate(t.date) + " " + [t.type, t.number].filter(Boolean).join(" ") + " " + t.party + " " + INR.format(Math.abs(t.eff)))).join("<br>") + (list.length > 12 ? "<br>and " + (list.length - 12) + " more" : "") +
       "<br><br>" + (which === "replace" ? "Each Tally entry is deleted and the statement line is posted again with the statement’s amount." : "Total " + INR.format(total) + ".") + " This cannot be undone from FinCom: take a Tally backup first if you have not.</p>"});
   if (!a || which === "replace" && !(await postClearReady())) return;
-  // the linked company's GUID (the bridge deletes only in the open company with it); none: nothing is sent
-  const lg = typeof LinkRec !== "object" ? "" : await LinkRec.guidFor(CO(b.cid), R.company);
-  if (!lg){ toast(LINK_NOGUID); return; }
   let ok = 0, bad = 0;
   const why = [], gone = new Set();
   for (let k = 0; k < list.length; k++){
@@ -300,13 +300,13 @@ async function removeTallyDuplicates(which){
   const d = S.dupFind;
   const list = d ? (which === "wrong" ? d.wrongDate : d.extra) : [];
   if (!list.length) return;
+  const lg = await linkGuid(CO(B().cid), d.company);   // the linked company's GUID; none: nothing is sent, said first
+  if (!lg){ toast(linkGuid.why); return; }
   const what = which === "wrong" ? list.length + " wrong-date entr" + (list.length === 1 ? "y" : "ies") : list.length + " extra cop" + (list.length === 1 ? "y" : "ies");
   const a = await askConfirm({title: "Remove " + what + " from " + d.company + "?", ok: "Remove them",
     body: '<p class="note">' + (which === "wrong" ? "Only the copies under the wrong date are removed. The lines then show as not posted, and Post puts them in with the right date." : "Only the later copy of each double entry is removed; the first stays.") + " This cannot be undone from FinCom, so take a Tally backup first if you have not.</p>"});
   if (!a || which === "wrong" && !(await postClearReady())) return;
   const b = B();
-  const lg = typeof LinkRec !== "object" ? "" : await LinkRec.guidFor(CO(b.cid), d.company);   // the linked company's GUID; none: nothing is sent
-  if (!lg){ toast(LINK_NOGUID); return; }
   let ok = 0, bad = 0;
   const gone = new Set();
   for (let i = 0; i < list.length; i++){

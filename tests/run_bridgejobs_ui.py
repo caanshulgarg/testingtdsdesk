@@ -3,7 +3,10 @@ again with the same job number, a bridge that stops answering is waited for, a s
 gets the one long /import, one missed status check does not show the bridge as offline, and a posting left over from
 before a reload is reported. The owner's rule (19-Nov-2026): a posting goes only into the Tally company the client is linked
 to, by its GUID: the link's company_guid travels as guid on /jobs and /import and as companyGuid on /unpost; a link with no
-GUID sends nothing and says why. A made-up company and GUID only."""
+GUID sends nothing and says why. Only to a bridge that says it checks the GUID (/status linkGuid): an older one gets
+nothing ("update FinCom Bridge"). The reasons are told apart: the link not read, two links with different companies, no
+GUID yet; each asked before any confirm (a deletion, a new ledger), and Post automatically's undo says it. A made-up
+company and GUID only."""
 import os, sys, json, threading, functools, http.server, urllib.parse
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from bridge_proof import ping_body, is_ping
@@ -16,7 +19,7 @@ fails, errors = [], []
 def ok(c, w):
     print(("  ok   " if c else "  FAIL ") + w)
     if not c: fails.append(w)
-M = {"version": "1.12.0", "seen": [], "jobs": {}, "dropPost": 0, "dropPoll": 0, "interruptOnce": False, "statusFail": 0, "polls": 0, "bodies": []}
+M = {"version": "1.12.0", "seen": [], "jobs": {}, "dropPost": 0, "dropPoll": 0, "interruptOnce": False, "statusFail": 0, "polls": 0, "bodies": [], "linkGuid": True}
 LG = "made-up-guid-0001"
 def J(route, body, status=200): return route.fulfill(status=status, content_type="application/json", body=json.dumps(body))
 def bridge(route):
@@ -28,7 +31,7 @@ def bridge(route):
     if path == "/status":
         if M["statusFail"] > 0: M["statusFail"] -= 1; return route.abort()
         jobs = [dict(id=k, status=v["status"], done=v["done"], total=v["total"], company="ZZ", message="") for k, v in M["jobs"].items() if v["status"] in ("running",)]
-        return J(route, {"ok": True, "version": M["version"], "tallyUp": True, "sessions": [{"port": 9000, "ok": True, "mine": True, "companies": [{"name": "ZZ"}]}], "jobs": jobs})
+        return J(route, {"ok": True, "version": M["version"], "tallyUp": True, "sessions": [{"port": 9000, "ok": True, "mine": True, "companies": [{"name": "ZZ"}]}], "jobs": jobs, **({"linkGuid": True} if M["linkGuid"] else {})})
     if path == "/import":
         b = json.loads(rq.post_data); ids = [x["id"] for x in b.get("masters", []) + b.get("vouchers", [])]
         return J(route, {"ok": True, "company": b["company"], "results": [{"id": i, "ok": True, "verified": True} for i in ids]})
@@ -78,9 +81,38 @@ with sync_playwright() as p:
     o = pg.evaluate(POST, {"m": ["led:A"], "v": ["g2"]})
     rs = o["r"]["results"]
     ok(not M["bodies"] and len(rs) == 2 and all(not x["ok"] and "no company ID" in (x.get("message") or "") for x in rs), "a link with no GUID: nothing sent, each entry says why: %s" % [x.get("message", "")[:60] for x in rs])
-    t = pg.evaluate("""async () => { const was = [toast, askConfirm, ensureTallyCompany]; let said = ''; toast = m => { said = m; }; askConfirm = async () => true; ensureTallyCompany = async () => 'ZZ';
-      try { await unpostFromTally('bill', {id: 'u1', tally: {guid: 'v-guid', vchType: 'Journal', vchDate: '20260701', company: 'ZZ'}}, CO().id); } finally { [toast, askConfirm, ensureTallyCompany] = was; } return said; }""") or ""
-    ok(not M["bodies"] and "no company ID" in t, "a deletion with no GUID on the link: nothing sent: %s" % t[:80])
+    UNPOST = """async () => { const was = [toast, askConfirm, ensureTallyCompany]; let said = '', asked = 0; toast = m => { said = m; }; askConfirm = async () => { asked++; return true; }; ensureTallyCompany = async () => 'ZZ';
+      try { await unpostFromTally('bill', {id: 'u1', tally: {guid: 'v-guid', vchType: 'Journal', vchDate: '20260701', company: 'ZZ'}}, CO().id); } finally { [toast, askConfirm, ensureTallyCompany] = was; } return {said, asked}; }"""
+    t = pg.evaluate(UNPOST)
+    ok(not M["bodies"] and "no company ID" in t["said"] and t["asked"] == 0, "a deletion with no GUID on the link: nothing sent, said before any confirm: %s" % t)
+    # the reasons told apart: the link not read (the read failed; no records), two links with different companies
+    pg.evaluate(LINK, LG)
+    for setup, want, what in (("() => { LinkRec.load = async () => { LinkRec.st.err = 'made-up failure'; return LinkRec.st.rows; }; }", "could not read this client's Tally link", "the link records could not be read"),
+                              ("() => { LinkRec.load = async () => { LinkRec.st.err = ''; return LinkRec.st.rows; }; LinkRec.st.rows = []; }", "could not read this client's Tally link", "no link records read"),
+                              ("() => { LinkRec.load = async () => LinkRec.st.rows; LinkRec.st.err = ''; LinkRec.st.rows = [{book_id: 'b-zz', client_id: CO().id, company_guid: 'made-up-guid-0001', company_name: 'ZZ', state: 'linked'}, {book_id: 'b-zz2', client_id: CO().id, company_guid: 'made-up-guid-0009', company_name: 'ZZ', state: 'linked'}]; }", "two Tally links named ZZ with different companies", "two links with different GUIDs")):
+        pg.evaluate(setup); M["bodies"].clear(); M["jobs"].clear()
+        o = pg.evaluate(POST, {"m": [], "v": ["r1"]})
+        rs = o["r"]["results"]; t = pg.evaluate(UNPOST)
+        ok(not M["bodies"] and rs and all(not x["ok"] and want in (x.get("message") or "") for x in rs) and want in t["said"] and t["asked"] == 0,
+           "%s: nothing sent, the posting and the deletion say so: %s / %s" % (what, [x.get("message", "")[:70] for x in rs], t["said"][:70]))
+    pg.evaluate(LINK, LG); pg.evaluate("() => { LinkRec.st.err = ''; }")
+    # a new ledger with no GUID on the link: no confirm asked, nothing sent
+    pg.evaluate(LINK, ""); M["bodies"].clear()
+    n = pg.evaluate("""async () => { const was = PostGate.masters; let asked = 0; PostGate.masters = async (p) => { asked++; return {masters: p.masters, results: []}; };
+      try { await Bridge.post({company: "ZZ", masters: [{id: "led:N", xml: "<x/>"}], vouchers: [{id: "n1", xml: "<x/>"}]}); } finally { PostGate.masters = was; } return asked; }""")
+    ok(n == 0 and not M["bodies"], "a link with no GUID: the new-ledger confirm is not asked, nothing sent (%s)" % n)
+    # Post automatically's undo says the reason, not "Tally did not remove it"
+    u = pg.evaluate("""async () => { const was = [AutoPost.may, postClearReady, bridgeLive, AutoPost.where]; AutoPost.may = () => true; postClearReady = async () => true; bridgeLive = () => true; AutoPost.where = () => 'tally';
+      try { return await AutoPost.undo(CO().id, {id: 'au1', auto: {key: 'k', run: 'r'}, tally: {guid: 'v-guid', vchType: 'Journal', vchDate: '20260701', company: 'ZZ'}}, {noAsk: true}); }
+      finally { [AutoPost.may, postClearReady, bridgeLive, AutoPost.where] = was; } }""")
+    ok(not M["bodies"] and not u["ok"] and "no company ID" in (u.get("why") or ""), "Post automatically's undo with no GUID: says why (%s)" % u)
+    # a bridge that does not say it checks the GUID: nothing sent to it, "update FinCom Bridge"
+    pg.evaluate(LINK, LG); M["linkGuid"] = False; pg.evaluate("Bridge.refresh()"); M["bodies"].clear(); M["jobs"].clear()
+    o = pg.evaluate(POST, {"m": [], "v": ["o1"]}); t = pg.evaluate(UNPOST)
+    rs = o["r"]["results"]
+    ok(not M["bodies"] and rs and all(not x["ok"] and "update FinCom Bridge on this computer" in (x.get("message") or "") for x in rs) and "update FinCom Bridge" in t["said"] and t["asked"] == 0,
+       "a bridge without linkGuid: nothing sent, the posting and the deletion say update the bridge: %s / %s" % ([x.get("message", "")[:60] for x in rs], t["said"][:60]))
+    M["linkGuid"] = True; pg.evaluate("Bridge.refresh()")
     pg.evaluate(LINK, LG); M["bodies"].clear()
     pg.evaluate("""async () => { const was = [toast, askConfirm, ensureTallyCompany]; toast = m => {}; askConfirm = async () => true; ensureTallyCompany = async () => 'ZZ';
       try { await unpostFromTally('bill', {id: 'u1', tally: {guid: 'v-guid', vchType: 'Journal', vchDate: '20260701', company: 'ZZ'}}, CO().id); } finally { [toast, askConfirm, ensureTallyCompany] = was; } }""")
@@ -110,9 +142,14 @@ with sync_playwright() as p:
     rs = {x["id"]: x for x in o["r"]["results"]}
     ok(rs["a"]["ok"] and not rs["bad"]["ok"] and "Ledger" in rs["bad"]["message"] and not rs["skip"]["ok"] and len(rs) == 4, "every item gets an answer: a refused one with Tally's reason, one the job never reported as not posted")
 
-    M["version"] = "1.11.0"; pg.evaluate("Bridge.refresh()"); M["seen"].clear()
+    # an older bridge (1.11: one long /import, and no linkGuid): nothing sent to it; one with /import that says linkGuid:
+    # the one /import request, naming the GUID
+    M["version"] = "1.11.0"; M["linkGuid"] = False; pg.evaluate("Bridge.refresh()"); M["seen"].clear(); M["bodies"].clear()
     o = pg.evaluate(POST, {"m": [], "v": ["a", "b"]})
-    ok(any(s.startswith("POST /import") for s in M["seen"]) and not any("/jobs" in s for s in M["seen"]) and all(x["ok"] for x in o["r"]["results"]), "an older bridge: the one /import request as before")
+    ok(not M["bodies"] and all(not x["ok"] and "update FinCom Bridge" in (x.get("message") or "") for x in o["r"]["results"]), "an older bridge: nothing sent, update FinCom Bridge")
+    M["linkGuid"] = True; pg.evaluate("Bridge.refresh()"); M["seen"].clear()
+    o = pg.evaluate(POST, {"m": [], "v": ["a", "b"]})
+    ok(any(s.startswith("POST /import") for s in M["seen"]) and not any("/jobs" in s for s in M["seen"]) and all(x["ok"] for x in o["r"]["results"]), "a bridge without jobs: the one /import request as before")
     ok(all(b.get("guid") == LG for pth, b in M["bodies"] if pth == "/import") and any(pth == "/import" for pth, b in M["bodies"]), "the /import names the linked company's GUID too")
     M["version"] = "1.12.0"; pg.evaluate("Bridge.refresh()")
 
