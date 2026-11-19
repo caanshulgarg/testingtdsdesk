@@ -967,7 +967,7 @@ ids live; 20,000 entries from the queue to the register: every statement under 6
 5 s), `tests/run_post_settle_server.py`.
 
 **200, post settle itself** (18-Nov-2026, branch `next-fix-posttimeout`; **written, not run yet**; file md5
-1d6ace7a4bcc54a0f873cd97d060c5c9): `server/tally-cloud/migration-200-post-settle-itself.sql`. The owner (18-Nov-2026): a posting never stays
+6fe48934ca59585a735f949008ee3afb): `server/tally-cloud/migration-200-post-settle-itself.sql`. The owner (18-Nov-2026): a posting never stays
 "Held"; every posting settles by itself; never a double post; a person only for contradictory evidence, named. Staging's
 c66d0e82 (661 entries, all in Tally once) is held because its last reports were lost, though FinCom's read-back of Tally
 matched all 661 (`tally_post_ids.matched_at`). New (service_role): `tally_post_settle_itself(job)` settles a posting held
@@ -985,10 +985,18 @@ only where pg_cron is). One table (`tally_post_self_settle`, row security on, me
 a report that leaves a posting held and after each check report (resent: the bridge takes it again at once); a cloud
 without 200: nothing changes. No bridge change, no new Tally request. Tested: `tests/run_migration200.py`
 (RED_WITHOUT_200=1 fails; c66d0e82 replayed with made-up ids settles on the cron's next run, nothing sent again; 20,000
-entries: settle about 2 s, the hand-back's change of status about 5 s). Both are on the posting path: the owner's OK before they run on staging, 199 first.
+entries: settle about 2 s, the hand-back's change of status about 5 s). Review of 18-Nov-2026 (same branch, before any run): an
+entry is never released by itself when anything of Tally's says it took it (stamped accepted, a reply of its own or of its
+request that created or altered vouchers, created in another company: both proofs of absence go by the narration in the
+posting's company); such an entry is flagged on itself for a person (needs review, conflict, why; the register holds it as
+needs_review) and no longer holds the posting, which settles; entries proven not in Tally beside an accepted one wait,
+released, and `tally_post_settle_resend_due` (the cron, a partial index `tally_post_checks_resend_due`) hands them back once
+a person has settled it (36b's guard asked first). `tally_post_settle_itself` works the evidence out unlocked, then locks the
+posting only if unchanged (xmin, skip locked), takes the checks it writes NOWAIT, and re-checks every stamp as it releases.
+Tested: run_migration200.py G (each case). Both are on the posting path: the owner's OK before they run on staging, 199 first.
 
 **201, post register async** (18-Nov-2026, branch `next-fix-posttimeout`; **written, not run yet**; file md5
-c5cba1199eacb3d0fd5d3dcd5c290240): `server/tally-cloud/migration-201-post-register-async.sql`. The owner: every request and trigger on the
+205c7e97969fbb12a463c14100fa0d95): `server/tally-cloud/migration-201-post-register-async.sql`. The owner: every request and trigger on the
 posting path under about 1.5 s at 20,000 entries, linear to 50,000. With 199/200 each change of a big posting's status
 still ran the posting register's whole pass inside the trigger (about 4 s at 20,000). Now the register pass of a posting
 of more than 2,000 entries leaves the triggers: 111's status trigger (`tally_post_register_job_changed`) and the queue
@@ -1010,4 +1018,15 @@ service_role only, granted explicitly. **After 184, 185, 199, 200.** No bridge o
 register call becomes a step by itself). Tested: `tests/run_migration201.py` (150 made-up postings: the records, history
 and ids after the steps exactly as the synchronous triggers leave them, 59 with a change mid-pass; two workers at once:
 one does the step; 20,000 entries: every statement at most 1.4 s; 50,000: at most 2.8 s; RED_WITHOUT_201=1 fails).
+Review of 18-Nov-2026 (same branch, before any run): the cron's run was one transaction of 25-40 s holding the rows a bridge's
+report writes, so reports hit the 8 s timeout. Now the cron's command is `call public.tally_post_work_run()` alone (a plain
+procedure, COMMIT after each held posting settled, its hand-back, each register step; a SET in the same command would make it
+one transaction block and refuse the COMMITs; the role's statement_timeout, if any, covers the whole CALL); `tally_post_work()`
+does the same within about a second in one transaction. A mark is only appended (`tally_post_register_wants`, no reference
+to the posting), folded into the pass's row by the step under its lock (`tally_post_register_fold`); a step takes records
+NOWAIT (lock_timeout 300 ms) and leaves them for the next step. Every chunk of a pass is judged by the posting's status,
+resend_only, taken_at, message as prepared (`jsnap`). While a big posting's records are still to be written, the queue
+trigger refuses its entries, by key, for another posting when that one's bridge had it (taken_at; failed or cancelled with
+nothing stamped). Tested: run_migration201.py 2b, 3b, 5 (the worker mid-pass at 20,000 while a status report, a register
+step and check reports run on the same postings: each under 1.5 s; the worker's longest transaction about 1.5 s).
 

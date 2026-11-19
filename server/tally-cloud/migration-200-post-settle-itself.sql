@@ -290,7 +290,9 @@ begin
 
   -- (tally_post_job_settle, a pass over the whole posting, worked out before the lock: its answer is the posting's state
   -- when nothing waits)
-  if n_wait = 0 then o_set := tally_post_job_settle(j.status, j.checking, j.payload, res, its); end if;
+  -- (needed when nothing is handed back: none proven not in Tally, or held back by a conflict or a stop; else worked out
+  -- under the lock in the rare case it is needed after all)
+  if n_wait = 0 and (n_out = 0 or n_conf > 0 or j.stop_reason is not null) then o_set := tally_post_job_settle(j.status, j.checking, j.payload, res, its); end if;
   n_out_f := (select count(*) from jsonb_each_text(byfid) b where b.value = 'out');
 
   -- the writes: the posting locked now, unless a report holds it this moment or it changed since it was read (then the
@@ -360,7 +362,7 @@ begin
     if n_wait > 0 or (n_resend > 0 and j.stop_reason is null and not blocked) then
       select jsonb_build_object('total', count(*), 'posted', count(*) filter (where i.released_at is null) - n_wait - n_conf) into o from tally_post_ids i where i.job_id = p_job;
     else
-      o := o_set;
+      o := coalesce(o_set, tally_post_job_settle(j.status, j.checking, j.payload, res, its));
     end if;
     conf_words := (select string_agg((c0->>'entry') || ': ' || (c0->>'why'), '; ') from jsonb_array_elements(conf) c0);
     if n_wait > 0 then
