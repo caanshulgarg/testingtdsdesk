@@ -135,7 +135,15 @@ func bridgeFor(t *testing.T, s *standIn, extra string) string {
 	finComFromHeld, finComFromDir, finComFromSaid = map[string]string{}, "", map[string]string{}                // 2.5.1: FinCom's first days, per test
 	booksFromMu.Unlock()
 	oldC, oldH := ConfigPath, Home
-	t.Cleanup(func() { waitIdle(t); durableWaitAll(); ConfigPath, Home = oldC, oldH; nowFn = time.Now; loadConfigRO() })
+	// next-fix-mastersread: the ledger progress sent before the next test (every read says its start)
+	t.Cleanup(func() {
+		waitIdle(t)
+		durableWaitAll()
+		ledProgFlush()
+		ConfigPath, Home = oldC, oldH
+		nowFn = time.Now
+		loadConfigRO()
+	})
 	ConfigPath, Home = filepath.Join(dir, "tds-bridge.config.json"), dir
 	j := func(p string) string { return filepath.ToSlash(filepath.Join(dir, p)) }
 	cfgText := fmt.Sprintf(`{"TallyPorts":[%d],"TallyHost":"127.0.0.1","AllowImport":true,"LogFile":"%s","SyncDir":"%s","JobsDir":"%s","KeepInStep":true,"GentleMs":0,

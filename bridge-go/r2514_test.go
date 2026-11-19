@@ -363,8 +363,13 @@ func TestR2514ProgressForEveryRead(t *testing.T) {
 	if len(ps) < 2 {
 		t.Fatalf("Update now's progress: %v", ps)
 	}
-	if p := ps[0]; toInt(p["read"]) <= 0 || toInt(p["of"]) != 0 || p["done"] == true || str(p["company"]) != zz {
-		t.Fatalf("the first: %v", p)
+	// next-fix-mastersread (item 9): the read's start first (0, not done), then the first part's count
+	if p := ps[0]; toInt(p["read"]) != 0 || toInt(p["of"]) != 0 || p["done"] == true || str(p["company"]) != zz {
+		t.Fatalf("the start: %v", p)
+	}
+	// (the parts' own counts at most one in 2 s after it: here the end may be the next)
+	if p := ps[1]; toInt(p["read"]) <= 0 || str(p["company"]) != zz {
+		t.Fatalf("the first after the start: %v", p)
 	}
 	if p := ps[len(ps)-1]; toInt(p["read"]) != 500 || toInt(p["of"]) != 500 || p["done"] != true || str(p["company_guid"]) != f.guid {
 		t.Fatalf("the end: %v", p)
