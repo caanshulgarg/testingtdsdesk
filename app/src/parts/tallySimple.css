@@ -171,6 +171,11 @@
 #app .tpg-sub2 { font-size: 12.5px; color: var(--text-secondary); }
 #app .tpg-bar { height: 8px; border-radius: 999px; background: var(--surface-muted); overflow: hidden; margin: 4px 0 2px; }
 #app .tpg-bar i { display: block; height: 100%; border-radius: 999px; background: var(--accent); }
+/* next-fix-mastersread: a read with no total known moves; Tally's words under "Not read:", two lines at most */
+#app .tpg-bar.indet i { width: 30%; animation: tpg-indet 1.4s ease-in-out infinite; }
+@keyframes tpg-indet { 0% { transform: translateX(-100%); } 100% { transform: translateX(340%); } }
+@media (prefers-reduced-motion: reduce) { #app .tpg-bar.indet i { animation: none; width: 100%; opacity: .45; } }
+#app .tpg-sub.two { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
 #app .tpg-bar i.wait { background: color-mix(in srgb, var(--text-secondary) 60%, var(--surface)); }
 /* More ▾: one light row under the client's row */
 #app .tpt-light-tr > td { padding: 0 22px 16px; border-top: 0; }

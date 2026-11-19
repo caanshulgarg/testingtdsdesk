@@ -421,7 +421,11 @@ function bridgesUp() { try { return bridgesOf().some((b) => b.at && Date.now() -
 // the companies open now in any Tally FinCom hears (this login's, another login's, another computer's)
 function openAnywhere() { try { return new Set(companyRows().filter((r) => r.open).map((r) => coKey(r.company))); } catch (e) { return new Set(); } }
 // what a row is: {kind, dot (ok | read | warn | idle | ring), say, why, btn (update | again | connect | link | act), need}
-export function pageOf(row, seen) {
+// next-fix-mastersread: m, the row's Masters state (TallyProgress mastersOf), when known: masters not in FinCom and
+// being read or waiting are said as the Masters cell says them (never "Needs you"); only a read that failed needs you
+export function pageOf(row, seen, m) {
+  const pm = row.kind === "client" && row.c && row.c.w === YES && m ? mastersPage(m, row) : null;
+  if (pm) return pm;
   if (row.kind === "company") return { kind: "company", dot: "idle", say: "Open in Tally · not linked", why: row.best ? "Client “" + row.best.name + "” matches" + (row.ask ? ": choose to link" : "") : "No client of its name yet", btn: row.best && !row.ask ? "connect" : "link" };
   if (row.c.w !== YES) {
     if (row.c.connect) return { kind: "open", dot: "idle", say: "Open in Tally · not linked", why: "", btn: "connect" };
@@ -445,8 +449,25 @@ export function pageOf(row, seen) {
   if (reading) return { kind: "reading", dot: mine ? "ok" : "read", say: mine ? "Connected" : farLine(row.last), why: row.l.w === NOTYET ? row.l.note || "" : row.e.note || "", btn: "update" };
   return { kind: "ok", dot: mine ? "ok" : "read", say: mine ? "Connected" : farLine(row.last), why: "", btn: "update" };
 }
-// a row's one button: {main, label} (update | upload | bring | again | connect | link)
+function mastersPage(m, row) {
+  // (a row with its own thing to do (a Day Book to upload, days to bring, entries missing) keeps it)
+  if (row.act || (row.e && row.e.w === NO)) return null;
+  // (review N5: a wake's read over masters FinCom holds keeps the row's Update from Tally)
+  if (m.st === "reading") return { kind: "reading", dot: "read", say: "Reading from Tally", why: "", btn: m.held ? "update" : "none" };
+  // (waiting for the company to be opened: Check again, "Open it in Tally first"; for Tally to be free or a quiet moment,
+  // or open in another Tally of the firm: the row's button stays, the read waits its turn. A person with no bridge of
+  // their own keeps the data's line)
+  const why = String(m.words || "").replace(/^Waiting:\s*/, "");
+  if (m.st === "waiting" && row.o && row.o.setup) return null;
+  if (m.st === "waiting" && !m.held && m.idle && /^open /.test(m.wait || "") && !openAnywhere().has(coKey(row.company))) return { kind: "waiting", dot: "warn", say: "Waiting", why, btn: "again", label: "Check again", note: "Open it in Tally first" };
+  if (m.st === "waiting" && !m.held) return { kind: "waiting", dot: "warn", say: "Waiting", why, btn: "update" };
+  // (a read pressed here that got stuck keeps its own words and Connect again)
+  if (m.st === "why" && !m.held && !(row.l && row.l.w === NO)) return { kind: "need", dot: "warn", say: "Needs you", why: row.todo || m.words, btn: "update", need: true };
+  return null;
+}
+// a row's one button: {main, label} (update | upload | bring | again | connect | link; none: no button, More only)
 export function mainOf(row, pg) {
+  if (pg.btn === "none") return { main: "", label: "" };
   if (pg.btn === "update" && row.act && (row.act.kind === "upload" || row.act.kind === "bring")) return { main: row.act.kind, label: row.act.label };
   if (pg.btn === "update") return { main: "update", label: "Update from Tally" };
   if (pg.btn === "again") return { main: "again", label: pg.label || "Connect again" };
@@ -547,14 +568,14 @@ function Row({ row, download, oneDl, seen, cs, x, checkAgain }) {
   const det = ui.details === "all" || !!(ui.details || {})[key], more = ui.more === key || det;
   // a first sync going: read every 10 seconds (its count, done, or stuck after 3 minutes with the button)
   useEffect(() => { if (!row.l || !row.l.syncing) return; const t = setInterval(() => syncPoll(row.cid), 10000); return () => clearInterval(t); }, [row.cid, row.l && row.l.syncing]);
-  const pg = pageOf(row, seen), linked = row.kind === "client" && row.c.w === YES;
+  const linked = row.kind === "client" && row.c.w === YES, m = linked ? mastersOf(row.cid, row.company) : null, pg = pageOf(row, seen, m);
   // this client's Update from Tally: its words each second while it is on its way (Asking Tally… → the count → the result)
   const rw = linked ? runWords(row.cid, row.company) : null, live = !!(rw && rw.phase !== "done" && rw.phase !== "why");
   useEffect(() => { if (!live) return; const t = setInterval(() => tick((k) => k + 1), 1000); return () => clearInterval(t); }, [live]);
   useEffect(() => { if (linked) runSettle(row.cid, row.company, () => tick((k) => k + 1)); });
   const sx = linked ? readOf(row.cid, row.company) : null, runningRead = !!(sx && !sx.end && !sx.err && !sx.late) || runBusy(row.cid);
   const label = row.client || shown(row.company), name = row.kind === "client" ? row.client : row.company;
-  const m = linked ? mastersOf(row.cid, row.company) : null, e = linked ? entriesOf(row.cid, m, row.last) : null, p = e && e.p && !e.p.done && e.b && e.b.book ? e.p : null;
+  const e = linked ? entriesOf(row.cid, m, row.last) : null, p = e && e.p && !e.p.done && e.b && e.b.book ? e.p : null;
   // the row's ONE main button, chosen by its state; a short note under it when needed
   const mm = mainOf(row, pg).main;
   // (the owner's Fingate row, 08-Nov-2026: "Not brought yet" with Upload Day Book as its button) the upload stays the
@@ -565,11 +586,16 @@ function Row({ row, download, oneDl, seen, cs, x, checkAgain }) {
   let btn = null, main = "", note = "";
   if (!canWrite()) { btn = null; if (row.kind === "client" || row.kind === "company") note = VIEW_ONLY; }
   else if (off && owner() && bookSum(row.cid)) { btn = <TurnOn b={bookSum(row.cid)} main />; main = "turnon"; }
+  // next-fix-mastersread: masters being read or waiting: no button (More keeps the rest)
+  else if (pg.btn === "none") { btn = null; main = ""; }
   // (a row whose own action is the Day Book upload or the missing days' fetch: that action, in its words)
   else if (mm === "upload" || mm === "bring") { btn = <Act row={row} main />; main = mm; if (off) note = OFF_NOTE; }
   else if (pg.btn === "again") { btn = <Again row={row} x={x} cs={cs} checkAgain={checkAgain} label={pg.label} />; main = "again"; note = pg.note || ""; }
   // masters read first, entries only waiting after them: Reading… (Pause and Stop under More)
-  else if (pg.btn === "update" && p && e.st === "after") { btn = <button type="button" className="btn tpt-btn" data-tpt-main="reading" disabled title={READING_WHY}>Reading…</button>; main = "reading"; }
+  else if (pg.btn === "update" && p && e.st === "after" && !e.mastersFirst) { btn = <button type="button" className="btn tpt-btn" data-tpt-main="reading" disabled title={READING_WHY}>Reading…</button>; main = "reading"; }
+  // next-fix-mastersread: Bring books asked, but no masters in FinCom and none being read: Bring masters first (the
+  // entries wait for them; Pause stays under More)
+  else if (pg.btn === "update" && linked && !runningRead && p && e.mastersFirst && ledBook(row.cid) && !ledgersHeld(row.cid)) { btn = <BringMasters row={row} />; main = "masters"; if (!(row.o && row.o.w === YES) && !(readWhere(row.company) || {}).reader) note = "Needs the company open in Tally"; }
   // Bring books going or paused: Pause / Resume (Stop under More)
   else if (pg.btn === "update" && p && (p.state === "going" || p.state === "paused")) { btn = <PullButtons e={e} only={[p.state === "going" ? "pause" : "resume"]} main />; main = p.state === "going" ? "pause" : "resume"; }
   // masters not in FinCom yet: Bring masters (the masters' read; entries follow by themselves). Only for a book FinCom
@@ -582,7 +608,7 @@ function Row({ row, download, oneDl, seen, cs, x, checkAgain }) {
   else if (pg.kind === "open") { btn = <ConnectBtn r={row.r} co={row.co} label="Connect" hook={{ "data-tsm-connect": row.cid, "data-tpt-main": "connect" }} />; main = "connect"; }
   else if (pg.kind === "company" && row.best && !row.ask) { btn = <ConnectBtn r={row.r} co={row.best} label="Connect" hook={{ "data-tsm-act": "connect", "data-tsm-act-client": row.best.id, "data-tpt-main": "connect" }} />; main = "connect"; }
   else { btn = <ActLink row={row} />; main = "link"; }
-  const aw = pg.btn === "again" ? Again.why(row, cs) : null;
+  const aw = pg.btn === "again" && pg.kind !== "waiting" ? Again.why(row, cs) : null; // (waiting: the Masters cell's short reason)
   const near = pg.kind === "away" && x ? (x.unlinked || []).find((u) => coKey(u.company) !== coKey(row.company) && (baseKey(u.company) === baseKey(row.company) || !!(globalThis.LinkRec && LinkRec.same && LinkRec.same(u.company, row.company)))) : null;
   // (a client being read: its Masters and Entries cells say how far, the read's own words too; not a second time here.
   // The read's result, or why it was not done, stays here)
@@ -694,9 +720,10 @@ function pcOfRow(r, devs, by) {
 }
 // a row's place in each filter: {s: chips, m, e: [entries], l: [last entry], io, pc, days, lm, nm, i}
 function tagsOf(r, i, seen, devs, now, by) {
-  const p = pageOf(r, seen), L = isLinked(r), io = inTally(r, p, seen), s = [];
-  const m = L ? mastersOf(r.cid, r.company) : null, e = L ? entriesOf(r.cid, m, r.last) : null, es = e ? e.st : "";
-  const reading = L && (p.kind === "reading" || runBusy(r.cid) || m.st === "reading" || m.st === "waiting" || es === "going" || es === "after");
+  const L = isLinked(r), m = L ? mastersOf(r.cid, r.company) : null, p = pageOf(r, seen, m), io = inTally(r, p, seen), s = [];
+  const e = L ? entriesOf(r.cid, m, r.last) : null, es = e ? e.st : "";
+  // (review S6: masters waiting for the company to be opened or a quiet moment (idle) are not "Reading now")
+  const reading = L && m.st !== "why" && !(m.st === "waiting" && m.idle) && (p.kind === "reading" || (p.kind === "waiting" && !m.idle) || runBusy(r.cid) || m.st === "reading" || m.st === "waiting" || es === "going" || es === "after");
   if (p.need) s.push("need");
   if (reading) s.push("reading");
   if (L && p.kind === "ok" && !reading && m.st === "done" && (es === "uptodate" || es === "done")) s.push("ok");
@@ -710,7 +737,7 @@ function tagsOf(r, i, seen, devs, now, by) {
   const l = !lm ? ["never"] : now - lm < 7 * 86400e3 ? (ISTD(lm) === ISTD(now) ? ["today", "week"] : ["week"]) : ["older"];
   let days = e && es === "behind" ? parseInt(e.sub, 10) || 0 : 0;
   if (!days && r.act && r.act.kind === "bring") { try { days = daysOf(r.act.need).length; } catch (x) { days = 0; } }
-  return { r, i, s, m: m ? (m.st === "waiting" ? "reading" : m.st) : "", e: en, l, io, pc: pcOfRow(r, devs, by), days, lm, nm: String(r.client || shown(r.company)).toLowerCase() };
+  return { r, i, s, m: m ? (m.st === "waiting" ? (m.idle ? "none" : "reading") : m.st) : "", e: en, l, io, pc: pcOfRow(r, devs, by), days, lm, nm: String(r.client || shown(r.company)).toLowerCase() };
 }
 // a row kept by the filters; skip: the one group its own counts leave out
 function keeps(t, f, skip) {

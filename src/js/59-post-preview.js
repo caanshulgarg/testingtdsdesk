@@ -240,19 +240,34 @@ const PostRecord = {
 //              under Posted, not counted.
 // The three tabs of the page (plan piped-moseying-frost, item 1b): To post = ready (+ sending shown as on its way),
 // Posted = the cloud's history, Errors = attention + unknown + refused + the failed postings.
+// next-fix-dashstall (FINCOM-APP-STAGING-K, staging 19-Nov-2026: 2,053 ms in the click opening a client from Clients):
+// every client page draws the top bar's "N Tally errors" and the Overview its "Ready to post", and in one drawing the
+// postings' states were worked out 10 times, the Post to Tally rows (postEntryRows, src/js/62) 5 times and the postings
+// needing a decision 5 times (2,400 bills posted: 280-790 ms here in the click, about 2 s on an office computer). Now once
+// a drawing (perRender) for what they are worked out from: the client's bills (ENTRY_REV), the postings as read, the bank
+// lines open; and each a pass over the entries (CloudJobs.idx). tests/run_hang_post_counts.py
+// Review: also what a drawing with the last drawing's figures (memoKeep: renderTop) must not miss: the bank lines saved
+// (BANK_REV, src/js/20) or swapped, and each read of the posting register, the marks, the checks, the ids and the sales
+// (each read is a new object: revOf numbers an object the first time it is seen)
+const REV_OF = new WeakMap(); let REV_N = 0;
+function revOf(o){ return o && typeof o === "object" ? REV_OF.get(o) || (REV_OF.set(o, ++REV_N), REV_N) : 0; }
+function postRev(cid){ const b = S.bank && S.bank.cid === cid ? S.bank : null, by = o => typeof o === "object" ? revOf(o.by[cid]) + ":" + o.readable : "";
+  return [cid, ENTRY_REV, typeof CloudJobs === "object" ? CloudJobs.at + ":" + revOf(CloudJobs.list) + ":" + (CloudJobs.list || []).length : "", b ? (b.loading ? "l" : "") + revOf(b) + ":" + revOf(b.rows) + ":" + (b.rows || []).length + ":" + BANK_REV : "",
+    by(typeof PostReg === "object" && PostReg), by(PostMarks), by(PostChecks), by(PostIds), S.sales ? revOf(S.sales) + ":" + revOf(S.sales.list) + ":" + (S.sales.list || []).length : ""].join("|"); }
 // id -> {st: sending | unknown | refused | posted | "", job, reason}: the newest posting of the cloud naming the entry
-function postJobStates(cid){
+function postJobStates(cid){ return perRender(postJobStates, postRev(cid), () => postJobStatesNow(cid)); }
+function postJobStatesNow(cid){
   const out = new Map();
   if (typeof CloudJobs !== "object") return out;
   const jobs = CloudJobs.forClient(cid).slice().sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")));
   jobs.forEach(j => {
     const items = [].concat(j.items || []).filter(Boolean), results = [].concat(j.results || []).filter(Boolean);
     const ids = CloudJobs.idsOf(j) || [...new Set(items.map(x => String(x.id)).concat(results.map(x => String(x.id))))];
-    const live = CloudJobs.live(j), byPerson = !!(j.dismissed_at && !j.dismiss_auto);
+    const live = CloudJobs.live(j), byPerson = !!(j.dismissed_at && !j.dismiss_auto), ix = CloudJobs.idx(j);
     ids.forEach(id => {
       id = String(id);
       if (out.has(id)) return;
-      const it = items.find(x => String(x.id) === id), r = results.find(x => String(x.id) === id);
+      const it = ix.it.get(id), r = ix.res.get(id);
       let st = "", reason = "";
       if ((r && (r.ok || postAlready(r))) || (it && (it.state === "in_tally" || it.state === "posted"))) st = "posted";
       // round 15 (B2): Tally accepted the request but its reply needs a look (bridge 2.1.8: ok false, needsReview true;
@@ -604,7 +619,7 @@ function postMarkOf(e){ const t = e && e.tally; return t && (t.vch != null || t.
 // person who pressed Post (created_by); else the ids the cloud kept in tally_post_ids
 function postMarkFromJob(j, id){
   if (!j) return null;
-  const r = [].concat(j.results || []).find(x => x && String(x.id) === String(id));
+  const r = CloudJobs.idx(j).res.get(String(id));
   const by = j.created_by ? memberName(j.created_by) : "";
   const m = postTallyMark(r, {company: j.company, at: j.updated_at || j.created_at, by});
   if (m) return m;
@@ -631,7 +646,7 @@ function postReconcile(cid, quiet){
   postJobStates(cid).forEach((v, id) => {
     const j = v.job;
     if (v.st !== "posted" || !j || (!v.reg && !["done", "failed"].includes(j.status))) return;
-    const x = v.reg ? postRegResult(v.reg) : [].concat(j.results || []).find(r => r && String(r.id) === id);
+    const x = v.reg ? postRegResult(v.reg) : CloudJobs.idx(j).res.get(id);   // (the posting's results by id: CloudJobs.idx)
     if (!postTaken(x) || released(id)) return;
     const at = x.sentAt || j.updated_at || j.created_at || new Date().toISOString(), by = j.created_by ? memberName(j.created_by) : "";
     const e = d && d.loaded && d.entries ? d.entries[id] : null;

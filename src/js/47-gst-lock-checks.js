@@ -62,7 +62,7 @@ const GSTLockMore = {
   // with a reason (the words say a filed 3B is adjusted in the current month). For entries Tally types (not a click):
   // t4 before the books are put in, t4Moved after, and the words shown as a warning
   // fn() in one calculation's memo (as the audit runs, src/js/06): the month index and the book's documents worked out once
-  scope(fn){ if (typeof JOB_MEMO === "undefined") return fn(); const was = JOB_MEMO; JOB_MEMO = new WeakMap(); IN_RENDER++; try { return fn(); } finally { IN_RENDER--; JOB_MEMO = was; } },
+  scope(fn){ return typeof memoJob === "function" ? memoJob(fn) : fn(); },
   // table 4 of the filed 3B months (only: those of them in it), as the books work it out now
   t4(reg, only){
     return this.scope(() => {

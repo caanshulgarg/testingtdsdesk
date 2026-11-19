@@ -365,6 +365,8 @@ export function ownConnOff(own) {
 // the companies open in THIS user's own Tally that no client has (each its own row, the strip and step 3)
 export const openUnlinked = (all, own) => { const o = own || ownState(); return o.state === "ok" ? all.filter((r) => !r.client && o.names.has(coKey(r.company))) : []; };
 
+// next-fix-mastersread: the bridge's trouble with a book (tally_books.state.trouble.why), "" when none
+export const troubleOf = (bk) => { const t = bk && bk.state && bk.state.trouble; return t && t.why ? String(t.why).replace(/\s+/g, " ").trim().replace(/^Tally answered with an error for the [a-z ]+:\s*/i, "Tally said: ") : ""; };
 // one client's row
 function clientRow(co, all, opts) {
   const cid = co.id, k = typeof tallyLinkOf === "function" ? tallyLinkOf(co) : null, company = (k && k.company) || "";
@@ -414,6 +416,8 @@ function clientRow(co, all, opts) {
     row.l = { w: NOTYET, note: of > 0 ? nf(rd) + " of " + nOf(of, "ledger", "ledgers") : stop || "Coming in now", syncing: !stop, ...(stop ? { why: stop } : {}) }; }
   else if (stuck && !held) row.l = Object.assign({ w: NO, note: x.err || x.why || "Nothing came from Tally in 3 minutes" }, bring);
   else if (held) row.l = { w: YES, note: n > 0 ? nOf(n, "ledger", "ledgers") : "Received", change: ch.words, link: true };
+  // next-fix-mastersread: no masters, and the bridge's last read of them failed: its reason (Tally's own words)
+  else if (troubleOf(ledBook(cid))) row.l = Object.assign({ w: NOTYET, note: "Not read: " + troubleOf(ledBook(cid)), failed: true }, bring);
   else row.l = Object.assign({ w: NOTYET, note: "" }, bring);
   row.lKnown = ch.known;
   row.open = held ? openingsOf(cid) : null;
@@ -461,14 +465,27 @@ function clientRow(co, all, opts) {
     row.e = { w: NOTYET, note: running || (open && held) ? "Entries starting" : "" };
   }
   // what to do (at most one button), else plain words (the entries being asked again: their own words above)
+  let ms = null;
+  if (!held && !running && opts.own && opts.own.state === "ok" && typeof globalThis.FCMastersOf === "function") { try { ms = globalThis.FCMastersOf(cid, company); } catch (e) { ms = null; } }
+  const msWait = ms && ms.st === "waiting" && ms.idle ? String(ms.wait || "") : "";
+  const msTodo = !ms ? "" : ms.st === "reading" ? "Nothing. FinCom is reading the masters from Tally now."
+    : /^open /.test(msWait) ? "Open “" + shown(company) + "” in your own Tally." : msWait ? "Nothing. " + msWait.charAt(0).toUpperCase() + msWait.slice(1) + "." : "";
   if (!row.act && !again) {
+    // next-fix-mastersread (staging: "Nothing. It is coming in by itself." over masters that never came): no masters in
+    // FinCom and no read of them going: the reason when one failed, and what the person does
+    const bringMasters = "Open “" + shown(company) + "” in your own Tally and press Bring masters.";
     if (wait && row.l.w !== YES) { row.todo = wait + "."; row.upload = true; }
+    else if (row.l.failed) { row.todo = row.l.note.replace(/[.\s]+$/, "") + ". " + bringMasters; row.need = true; row.upload = true; }
+    // (review S7: masters being read, or waiting for a reason known: what the person does, never "press Bring masters";
+    // a viewer with no bridge of their own keeps the lines below)
+    else if (msTodo) { row.todo = msTodo; row.upload = true; }
     else if (stuck && !held) { row.todo = "Keep the company open in Tally, then press Update from Tally."; row.upload = true; }
     else if (row.l.bring && anyOpen && !p && !(fill && Number(fill.waiting) > 0)) { row.todo = "Press Update from Tally."; row.upload = true; }
     else if (row.e.w === NOTYET || row.l.w === NOTYET) {
       // (next-tally-page-redesign; the owner on a Mac with no bridge: "0 clients are fine. 8 need you"): a company open in
       // ANY of the firm's Tallys FinCom hears now comes in by itself; only one open nowhere needs opening
-      if (anyOpen || p || running || (fill && Number(fill.waiting) > 0)) row.todo = "Nothing. It is coming in by itself.";
+      if (!held && !running && row.l.w !== YES) row.todo = bringMasters;
+      else if (anyOpen || p || running || (fill && Number(fill.waiting) > 0)) row.todo = "Nothing. It is coming in by itself.";
       else row.todo = row.where && row.where.kind === "offline" ? row.where.text : "Open the company in Tally.";
       row.upload = true;
     } else if (row.where && row.where.kind === "offline") row.todo = row.where.text;

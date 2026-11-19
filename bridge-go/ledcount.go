@@ -137,6 +137,17 @@ var ledProg = struct {
 // after a chunk (done: the round's end, read the final count): kept for the beat and sent to FinCom (at most every 2 s,
 // the round's end always)
 func ledProgressNote(company, round string, read, of int, done bool) {
+	ledProgressSay(company, round, read, of, done, "")
+}
+
+// next-fix-mastersread: a read that brought no masters (errNoMasters, Tally's own error) ends its round at 0 of 0, with
+// the reason in why (FinCom's cloud keeps no why today: the masters line takes the reason from the company's trouble,
+// tally_books.state.trouble.why, which the bridge sends with the copy's state)
+func ledProgressFailed(company, round, why string) {
+	ledProgressSay(company, round, 0, 0, true, cutRunes(why, 300))
+}
+
+func ledProgressSay(company, round string, read, of int, done bool, why string) {
 	if of > 0 && of < read {
 		of = read // a ledger created during the read: never shown "of" below "read"
 	}
@@ -146,6 +157,9 @@ func ledProgressNote(company, round string, read, of int, done bool) {
 	guid := heldGUID(company)
 	k := companyKey(company)
 	e := M{"company": company, "company_guid": guid, "round": round, "read": read, "of": of, "at": nowFn().Format(time.RFC3339), "done": done}
+	if why != "" {
+		e["why"] = why
+	}
 	ledProg.mu.Lock()
 	if p := ledProg.last[k]; p != nil && str(p["round"]) == round && toInt(p["read"]) > read && !done {
 		e["read"] = toInt(p["read"]) // never back

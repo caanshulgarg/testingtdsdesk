@@ -55,8 +55,10 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"html"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -181,8 +183,8 @@ func readLedgerChunkSlot(tc *TC, company, bf string, port int, after, upto int64
 	if err != nil {
 		return nil, 0, err
 	}
-	if !strings.Contains(raw, "<ENVELOPE") {
-		return nil, 0, errors.New("Tally's answer to the ledger list could not be read: " + cut(flat(raw), 120))
+	if err := ledAnswerErr(raw, "the ledger list"); err != nil {
+		return nil, 0, err
 	}
 	out, top := ledRowsOf(raw)
 	return out, top, nil
@@ -226,14 +228,40 @@ func ledRowsOf(raw string) ([]ledRow, int64) {
 // complete read, the reason is told in plain words (the keep run's own trouble line), and the read is tried again later
 var errNoMasters = errors.New("Tally gave no masters for this company")
 
+// next-fix-mastersread (staging: "Tally gave no masters for this company", Tally's own words thrown away): an answer to
+// the group or ledger list that is not one, said with Tally's own words (tallyCollectionWhy): Tally's error (LINEERROR,
+// errTallySaid: the company's trouble and FinCom's masters line carry it), an answer cut short, or none at all. An answer
+// with no <COLLECTION> root is left to the caller (no group named: errNoMasters)
+var errTallySaid = errors.New("Tally answered with an error")
+
+type tallySaidErr struct{ what, words string }
+
+func (e *tallySaidErr) Error() string {
+	return "Tally answered with an error for " + e.what + ": " + or(e.words, "(no words given)")
+}
+func (e *tallySaidErr) Unwrap() error { return errTallySaid }
+
+func ledAnswerErr(raw, what string) error {
+	why := tallyCollectionWhy(raw)
+	switch {
+	case why == "" || why == tallyNoListWords:
+		return nil
+	case strings.HasPrefix(why, tallyErrWords):
+		return &tallySaidErr{what, strings.TrimSpace(html.UnescapeString(strings.TrimPrefix(why, tallyErrWords)))}
+	case !strings.Contains(raw, "<ENVELOPE"):
+		return errors.New("Tally's answer to " + what + " could not be read: " + cut(flat(raw), 120))
+	}
+	return errors.New(why + " (" + what + ")")
+}
+
 // Tally's groups, name and parent (a primary group's parent is empty): one request
 func readGroupList(tc *TC, company string, port int) ([][2]string, error) {
 	raw, err := invokeTally(ledgerTC(tc), port, groupListRequest(company), ledChunkSec())
 	if err != nil {
 		return nil, err
 	}
-	if !strings.Contains(raw, "<ENVELOPE") {
-		return nil, errors.New("Tally's answer to the group list could not be read: " + cut(flat(raw), 120))
+	if err := ledAnswerErr(raw, "the group list"); err != nil {
+		return nil, err
 	}
 	var out [][2]string
 	for _, g := range xmlDoc(raw).All("GROUP") {
@@ -511,6 +539,13 @@ func (k *keepRun) ledgerList(company string, port int, dir string, st M, inBudge
 	if b := companyAlterM(company); b > toI64(ls["bound"]) {
 		ls["bound"] = b
 	}
+	// next-fix-mastersread (item 9): FinCom's masters line says "Reading from Tally now" from the read's start, not
+	// only after its first part (at most one call in 2 s; ledger_progress goes to FinCom, never to Tally). The read
+	// that counts the ledgers first (the ledgers-only read) says it once the count has given its "of N"
+	bar := k.kind == "ledgers"
+	if !bar {
+		ledProgressNote(company, str(ls["round"]), toInt(ls["n"]), toInt(ls["of"]), false)
+	}
 	if !truthy(ls["groups"]) {
 		k.holdNow() // third review T5: reading on, the group list too waits while the person types
 		g, err := readGroupList(k.tc, company, port)
@@ -520,12 +555,14 @@ func (k *keepRun) ledgerList(company string, port int, dir string, st M, inBudge
 			writeLog("Keeping " + company + ": Tally took longer than 2 s for the group list; the bridge stopped waiting and reads the ledgers anyway (FinCom keeps the groups it has; they are asked again at the next full read)")
 			ls["groups"], ls["groupsStopped"], ls["reqs"] = true, true, toInt(ls["reqs"])+1
 			save()
+		} else if errors.Is(err, errTallySaid) {
+			return false, k.mastersFailed(company, dir, st, ls, err, save) // next-fix-mastersread: Tally's own words
 		} else if err != nil {
 			return false, err
 		} else if len(g) == 0 {
 			// 2.5.14: an answer with no group at all is not a list (errNoMasters): the list held is kept, the round
 			// does not go on, and it is asked again at the next try
-			return false, errNoMasters
+			return false, k.mastersFailed(company, dir, st, ls, errNoMasters, save)
 		} else {
 			gl := []any{}
 			for _, x := range g {
@@ -545,9 +582,9 @@ func (k *keepRun) ledgerList(company string, port int, dir string, st M, inBudge
 	// the nightly run read the list as before
 	// 2.5.14: the progress itself (ledger_progress to FinCom, never to Tally) is said for every read; only the count, a
 	// request to Tally, stays the ledgers-only read's (Update now and the nightly run: "read" without "of N")
-	bar := k.kind == "ledgers"
 	if bar {
 		ledCountFor(company, port, ls, save, func() bool { return inBudget() && k.holdNow() == "" }, nextPoison(st, 0) > 0)
+		ledProgressNote(company, str(ls["round"]), toInt(ls["n"]), toInt(ls["of"]), false) // next-fix-mastersread: the start, with its "of N"
 	}
 	for !truthy(ls["done"]) {
 		if !inBudget() || k.holdNow() != "" {
@@ -620,6 +657,10 @@ func (k *keepRun) ledgerList(company string, port int, dir string, st M, inBudge
 		if err != nil {
 			// 2.5.5: stopped at 2 s (the hard stop): halved as a chunk that did not answer, down to the smallest chunk
 			stopped := errors.Is(err, errRecorderStop)
+			if errors.Is(err, errTallySaid) {
+				save()
+				return false, k.mastersFailed(company, dir, st, ls, err, save) // next-fix-mastersread: Tally's own words
+			}
 			if gaveWay(err) || (!tallyNoAnswer(err) && !stopped) {
 				// not sent (refused, held, reading stopped), stopped for FinCom, or an answer that could not be read:
 				// not Tally hanging on this chunk. The same chunk again later, nothing halved or marked
@@ -766,10 +807,11 @@ func (k *keepRun) ledgerList(company string, port int, dir string, st M, inBudge
 		// 2.5.14: every chunk answered and none named a ledger, though ledgers are held from an earlier read (or this
 		// round's groups were not read either): not a list (errNoMasters). The list held and FinCom's are left as they
 		// are (no ledger is said gone), and the round starts again at the next try
+		round := str(ls["round"])
 		delete(st, "led")
 		_ = os.Remove(ledReadFile(dir))
 		save()
-		return false, errNoMasters
+		return false, k.mastersFailed(company, dir, st, M{"round": round}, errNoMasters, save)
 	}
 	// seen: every distinct GUID of the round (the skipped ledgers' among them); rowsRead is their count
 	seen := make([]string, 0, len(read))
@@ -845,10 +887,66 @@ func (k *keepRun) ledgerList(company string, port int, dir string, st M, inBudge
 	}
 	ledProgressNote(company, round, len(read), len(read), true) // 2.4.5: the round's end, the final count (2.5.14: every read)
 	delete(st, "led")
+	delete(st, "mastersFail") // next-fix-mastersread: read in full; the retry after a failed read has nothing to do
 	st["ledRun"], st["ledAt"] = k.id, nowS()
 	save()
 	noteLedgersRead(company)
 	return true, nil
+}
+
+// next-fix-mastersread: a read that brought no masters (errNoMasters, or Tally's own error, errTallySaid). Kept on the
+// company (mastersFail: the reason and how many reads in a row failed with it, for the retry on the light check,
+// mastersretry.go); when no masters are held here, the round ends at 0 of 0 with the reason, so FinCom's masters line
+// says it at once (it said "Not brought yet" with nothing to do). The error goes on (the company's trouble)
+// (review S1: a list read in full here before, sent to FinCom's cloud, is held there: no 0 of 0 over it. Review S2: with
+// nothing held, the round is dropped, so the next try is a new round whose start FinCom shows as reading, not the failed
+// round kept done)
+func (k *keepRun) mastersFailed(company, dir string, st, ls M, err error, save func()) error {
+	why := err.Error()
+	n := 1
+	if f := obj(st["mastersFail"]); f != nil && mastersWhyKey(str(f["why"])) == mastersWhyKey(why) {
+		n = toInt(f["n"]) + 1
+	}
+	st["mastersFail"] = M{"why": why, "n": n, "at": nowS()}
+	held := mastersHeld(dir, st)
+	if !held {
+		delete(st, "led")
+		_ = os.Remove(ledReadFile(dir))
+	}
+	save()
+	if !held {
+		ledProgressFailed(company, str(ls["round"]), why)
+	}
+	return err
+}
+
+// the company's masters are held: read in full here before (and so sent to FinCom's cloud), or a list held here
+func mastersHeld(dir string, st M) bool {
+	return str(st["ledAt"]) != "" || len(loadLedList(dir)) > 0
+}
+
+// review N1: a failure's reason as compared from one read to the next: the list it was (groups or ledgers) and quoted
+// values (a company's name) left out
+var (
+	reMastersWhyList  = regexp.MustCompile(`(?i)\s+for the (group|ledger) list`)
+	reMastersWhyQuote = regexp.MustCompile(`'[^']*'|"[^"]*"`)
+)
+
+func mastersWhyKey(why string) string {
+	return strings.ToLower(strings.TrimSpace(reMastersWhyQuote.ReplaceAllString(reMastersWhyList.ReplaceAllString(why, ""), "''")))
+}
+
+// review N5: a read that stopped for another reason (not a failure of the masters, not a back-off it goes on from) after
+// its start was said: FinCom's "reading" is ended with what was read so far (never a done 0 of 0, which says "no
+// masters"; with nothing read the start note ages out on the page)
+func (k *keepRun) ledStopNote(company string, st M, err error) {
+	if err == nil || errors.Is(err, errTallySaid) || errors.Is(err, errNoMasters) || errors.Is(err, errBackoff) || gaveWay(err) {
+		return
+	}
+	ls := obj(st["led"])
+	if n := toInt(ls["n"]); n > 0 && str(ls["round"]) != "" {
+		ledProgressNote(company, str(ls["round"]), n, n, true)
+	}
 }
 
 // a renamed ledger's opening in the balances held here (balances.json) carries the new name
@@ -1037,7 +1135,7 @@ func slowSkipped(st M, mid int64) bool {
 // (second review N2: a ledger that hangs Tally too, but a week after it was last asked; a skip of 2.5.4 or before, with
 // no day noted, at the first night's run)
 func (k *keepRun) slowRetryDue(st M, mid int64) bool {
-	if k.kind != "nightly" || postingGoing() {
+	if k.kind != "nightly" || k.day || postingGoing() { // next-fix-mastersread: never in the daily catch-up (by day)
 		return false
 	}
 	last := str(obj(st["ledSlowTry"])[fmt.Sprint(mid)])

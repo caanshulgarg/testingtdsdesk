@@ -158,8 +158,12 @@ async function bankOpenHeld(cid, sid, name){
   toast("This statement is already in FinCom" + (name ? ", under " + name : "") + " — opened it.");
 }
 let bankSaveTimer = null;
+// BANK_REV: moved by every save of the bank lines (a line's state changed in place, the number of lines the same), so the
+// Post to Tally figures kept for a drawing are worked out again (postRev, src/js/59)
+let BANK_REV = 0;
 function saveBank(what){
   const b = B(); if (!b) return;
+  BANK_REV++;
   if (typeof cloudSoon === "function") setTimeout(cloudSoon, 950);     // after the rows are kept here
   const cid = b.cid;
   if (!what || what.rows){

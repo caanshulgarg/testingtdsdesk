@@ -72,6 +72,7 @@ async function bankSentHeal(cid, rows, tname, ids){
     if (sp && sp.taken) x = sp.taken;
     // 30-Oct-2026 (Fingate, job 488f8f64: Tally created 8 of 50 and 16 of 37): a line of a batch Tally made only partly
     // keeps Tally's own words and the batch's counts, never the guard's "already sent from this computer"
+    if (x && bankNoneMade(x)){ bankNoneMark(r, Object.assign({company: j.company || tname}, x)); out.refused.push(r); continue; }
     if (x && !postTaken(x) && bankInReview(x)){ bankReviewMark(r, x, job); out.review.push(r); continue; }
     if (!x || !postTaken(x)) continue;
     const guess = sp ? sp.guess : bankBatchGuesses(j.results).get(String(r.id));
@@ -93,7 +94,38 @@ async function bankSentHeal(cid, rows, tname, ids){
 // from this computer on …", and the line sat "ready" for ever: 87 lines of one statement (24 of them in Tally, 63 not)
 // with no word of Tally's left. Now each such line keeps r.postReview {job, created, n, batchEnd, at, words}, its
 // postError says what Tally said, and Check with Tally (bankCheckReview) settles it from a read of the bank ledger.
-function bankInReview(x){ return !!(x && (x.needsReview === true || x.outcomeUnknown === true || (x.ok === false && x.accepted === true))); }
+function bankInReview(x){ return !!(x && !bankNoneMade(x) && (x.needsReview === true || x.outcomeUnknown === true || (x.ok === false && x.accepted === true))); }
+// 19-Nov-2026 (owner): a request Tally refused whole ("created 0 of 39": "Could not set 'SVCurrentCompany' to ...") is
+// not in review: Tally said plainly it made none, and the bridge keeps no record of it (bridge-go/post.go
+// acceptedForgetMany), so the line may go again. Only with Tally's counts there, both 0, an answer, nothing accepted
+function bankNoneMade(x){
+  return !!(x && x.ok === false && x.needsReview === true && x.outcomeUnknown !== true && x.accepted !== true && x.alreadySent !== true &&
+    x.created !== undefined && x.created !== null && x.created !== "" && num(x.created) === 0 && num(x.altered) === 0);
+}
+// the words for it, from Tally's: {n, words, company}
+function bankNoneWords(n, words, company){
+  const said = [...new Set([].concat(words || []).map(w => plainMsg(w).replace(/^Tally's reply: created \d+ of \d+[^:]*:\s*/, "").trim()).filter(Boolean))].join("; ");
+  const co = (said.match(/Could not set\s*['\u2018\u2019"]?SVCurrentCompany['\u2018\u2019"]?\s*to\s*['\u2018\u2019"]([^'\u2018\u2019"]*)['\u2018\u2019"]/i) || [])[1];
+  return (n > 1 ? "Tally made none of the " + n + " lines. " : "Tally did not make this line. ") + (co !== undefined
+    ? "Tally could not open " + (co || company || "the company") + ": open it in Tally (and close any screen or login prompt in it), then post again."
+    : "Tally said: " + (said.replace(/\.+$/, "") || "no reason given") + (/[.!?]$/.test(said.replace(/\.+$/, "")) ? "" : ".") + " Nothing was posted; fix this in Tally and post again.");
+}
+function bankNoneMark(r, x){
+  delete r.postReview; delete r.postJob; delete r.release;
+  r.postError = bankNoneWords(num(x.batchN), [].concat(x.lineError || []).length ? x.lineError : [x.message], x.company);
+}
+// a line stored in review from such a reply before 19-Nov-2026 (r.postReview {created: 0, ...}, "Tally made 0 of the N
+// lines sent together ..."; a no-answer line said "no answer came", never this): the same words, out of review
+function bankNoneHeal(rows){
+  let n = 0;
+  [].concat(rows || []).forEach(r => {
+    const v = r && r.state === "ready" && r.postReview;
+    if (!v || v.unknown || v.accepted || num(v.created) !== 0 || !/^Tally made 0 of the \d+ lines sent together/.test(r.postError || "")) return;
+    delete r.postReview; delete r.postJob;
+    r.postError = bankNoneWords(num(v.n), v.words, (CO(B() && B().cid) || {}).tallyName); n++;
+  });
+  return n;
+}
 function bankReviewWords(x){
   const n = num(x.batchN), made = num(x.created) + num(x.altered);
   const tw = [].concat(x.lineError || []).map(e => plainMsg(e)).filter(Boolean);
@@ -103,7 +135,7 @@ function bankReviewWords(x){
     " and does not say which. Tally said: " + said + ". Press Check with Tally to find which of them are in Tally.";
 }
 function bankReviewMark(r, x, job){
-  r.postReview = {job: String(job || x.jobId || x.sentJob || r.postJob || ""), created: num(x.created) + num(x.altered), n: num(x.batchN), batchEnd: String(x.batchEnd || ""),
+  r.postReview = {job: String(job || x.jobId || x.sentJob || r.postJob || ""), created: num(x.created) + num(x.altered), n: num(x.batchN), batchEnd: String(x.batchEnd || ""), unknown: x.outcomeUnknown === true, accepted: x.accepted === true,
     at: x.sentAt || "", words: [].concat(x.lineError || []).map(e => plainMsg(e)).filter(Boolean).concat(x.lineError && x.lineError.length ? [] : [plainMsg(x.message || "")]).filter(Boolean).slice(0, 5)};
   if (r.postReview.job) r.postJob = r.postReview.job;
   r.postError = bankReviewWords(x);
@@ -220,6 +252,7 @@ function bankAlreadyLine(h){
 async function bankHealOpen(){
   const b = B(), st = b && curStmt();
   if (!b || !st || b.busy) return 0;
+  if (bankNoneHeal(b.rows)){ saveBank({rows: true}); render(); }
   const k = b.cid + ":" + st.id;
   bankHealOpen.done = bankHealOpen.done || {};
   if (bankHealOpen.done[k]) return 0;
@@ -342,5 +375,5 @@ async function bankRepostGone(){
   gone.forEach(r => bankClearPosting(r, "ready"));
   saveBank({rows: true}); toast(gone.length + " line" + (gone.length === 1 ? " is" : "s are") + " ready to post again."); render();
 }
-if (typeof globalThis === "object") Object.assign(globalThis, {reconPost, reconDelete, goneBack, removeTallyDuplicates, bankRepostGone, bankPartialSplit, bankBatchGuesses, bankJobAnswers, bankJobOf, bankSentHeal, bankAlreadyLine, bankHealOpen, bankInReview, bankReviewWords, bankReviewMark, bankCheckReview});
+if (typeof globalThis === "object") Object.assign(globalThis, {reconPost, reconDelete, goneBack, removeTallyDuplicates, bankRepostGone, bankPartialSplit, bankBatchGuesses, bankJobAnswers, bankJobOf, bankSentHeal, bankAlreadyLine, bankHealOpen, bankInReview, bankNoneMade, bankNoneWords, bankNoneMark, bankNoneHeal, bankReviewWords, bankReviewMark, bankCheckReview});
 /* @react-lazy: end */

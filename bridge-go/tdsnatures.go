@@ -132,7 +132,7 @@ func (k *keepRun) natureList(company string, port int, st, ls M, inBudget func()
 		save()
 		return true, nil
 	}
-	if truthy(st["natWaitNight"]) && k.kind != "nightly" {
+	if truthy(st["natWaitNight"]) && (k.kind != "nightly" || k.day) { // next-fix-mastersread: the daily catch-up is by day
 		// second review N5: stopped at 2 s before: they wait for the next nightly run (FinCom keeps the natures it has)
 		ls["natDone"], ls["natSkip"] = true, true
 		save()

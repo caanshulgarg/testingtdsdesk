@@ -217,7 +217,8 @@ func wakeLedgers(company, source string, afterPost bool) M {
 		out["why"] = "keeping the books in step is off on this computer"
 	case paused():
 		out["why"] = "background reading is paused in the tray (Update now still reads the ledger list)"
-	case keepStateOf(company) == nil:
+	case keepStateOf(company) == nil && !linkedHeld(company):
+		// next-fix-mastersread: a linked company never read here goes on (below: a read of it now)
 		out["why"] = "this company is not kept in step on this computer"
 	case !anyBackoff().IsZero():
 		out["why"] = "Tally is left alone for now after it did not answer"
@@ -229,9 +230,27 @@ func wakeLedgers(company, source string, afterPost bool) M {
 		evMu.Lock()
 		ledSeen[company] = nowFn()
 		evMu.Unlock()
+		if keepStateOf(company) == nil {
+			// next-fix-mastersread: a linked company never read on this computer: its first read now (the ledgers-only
+			// run has nothing to compare with and stopped at once, so FinCom's page waited 45 s to press Update from Tally)
+			// (review S4: a run nobody pressed: every request under the 2 s stop, not while someone works in Tally)
+			out["started"], out["now"] = ledWakeStart(runReq{kind: "now", only: []string{company}, why: source + "; its first read", short: true}), true
+			break
+		}
 		out["started"] = startKeepRun(runReq{kind: "ledgers", only: []string{company}, why: source})
 	}
 	return out
+}
+
+// the start of a wake's run (tests set it: the run asked for, nothing started)
+var ledWakeSeen func(r runReq)
+
+func ledWakeStart(r runReq) bool {
+	if ledWakeSeen != nil {
+		ledWakeSeen(r)
+		return true
+	}
+	return startKeepRun(r)
 }
 
 // "ledgers" from the heartbeat's answer (company -> when), the fallback for the wake-up channel
@@ -346,6 +365,7 @@ func bridgeTurn(safe func(string, func())) {
 		}
 	}
 	safe("Nightly catch-up", nightlyCheck)
+	safe("Daily catch-up", func() { dayCatchCheck() }) // next-fix-mastersread: once a day by day too (daycatch.go)
 	safe("After a posting", postedDue)
 	// the outbox goes on without the copier too (days kept while offline go as soon as FinCom can be reached)
 	// (third review T1: a run held before reading pushes from its own wait loop, at most once a minute (keepWorker), never

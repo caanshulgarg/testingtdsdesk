@@ -940,6 +940,12 @@ var (
 	reTallyColl    = regexp.MustCompile(`(?i)<COLLECTION[\s>/]`)
 )
 
+// next-fix-mastersread: the words of tallyCollectionWhy the masters' reads tell apart (ledgers.go, ledAnswerErr)
+const (
+	tallyErrWords    = "Tally answered with an error: "
+	tallyNoListWords = "Tally's answer holds no list"
+)
+
 func tallyCollectionWhy(raw string) string {
 	switch {
 	case !strings.Contains(raw, "<ENVELOPE"):
@@ -947,9 +953,9 @@ func tallyCollectionWhy(raw string) string {
 	case !wholeEnvelope(raw): // 2.5.15 item 2
 		return cutAnswerWords
 	case reTallyLineErr.MatchString(raw):
-		return "Tally answered with an error: " + cut(flat(group(`(?is)<LINEERROR(?:\s[^>]*)?>(.*?)</LINEERROR>`, raw, 1)), 160)
+		return tallyErrWords + cut(flat(group(`(?is)<LINEERROR(?:\s[^>]*)?>(.*?)</LINEERROR>`, raw, 1)), 160)
 	case !reTallyColl.MatchString(raw):
-		return "Tally's answer holds no list"
+		return tallyNoListWords
 	}
 	return ""
 }

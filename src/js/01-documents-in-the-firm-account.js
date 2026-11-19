@@ -3189,17 +3189,18 @@ function refreshStats(cid, check){
   statsRev[cid] = (statsRev[cid] || 0) + 1;
   linkDuplicates(cid);
   const v = Object.values(d.entries), fy = fyOf(null);
-  const drafts = v.filter(e => e.status === "draft");
+  const drafts = v.filter(e => e.status === "draft"), pb = typeof postBills === "function" ? postBills(cid) : null;
   const st = {
     drafts: drafts.length,
-    check: check != null ? check : drafts.filter(e => draftNeedsCheck(e, cid)).length,
+    // (the drafts' checks in one memo, memoJob: the bills' keys for their duplicate checks worked out once)
+    check: check != null ? check : memoJob(() => drafts.filter(e => draftNeedsCheck(e, cid)).length),
     // waiting: approved and not confirmed in Tally; inTally: confirmed there (review of 02-Oct-2026: the badge "In Tally"
     // counted every bill approved this year)
     waiting: v.filter(e => e.status === "approved" && !billInTally(e)).length,
     // the one count for Tally (review of 02-Oct-2026): ready to post, and needing attention (postBucket, src/js/59);
     // kept for a client whose bills are not loaded on this computer
-    ready: typeof postBills === "function" ? (postBills(cid) || {ready: []}).ready.length : 0,
-    attention: typeof postBills === "function" ? (postBills(cid) || {attention: []}).attention.length : 0,
+    ready: pb ? pb.ready.length : 0,
+    attention: pb ? pb.attention.length : 0,
     inTally: v.filter(e => billInTally(e) && (e.snapshot ? e.snapshot.fy : fyOf(e.x.invoiceDate)) === fy).length,
     tdsFy: v.filter(e => e.status === "approved" && e.snapshot && e.snapshot.fy === fy).reduce((a, e) => a + num(e.snapshot.tds), 0),
     invoicesFy: v.filter(e => e.status === "approved" && e.snapshot && e.snapshot.fy === fy).length,
@@ -3231,7 +3232,7 @@ function refreshStatsSoon(cid){
   return new Promise(done => {
     const step = () => { try {
       if ((statsRev[cid] || 0) !== rev || S.data[cid] !== d) return done(false);
-      for (const end = Math.min(drafts.length, i + STATS_STEP); i < end; i++) if (drafts[i].status === "draft" && draftNeedsCheck(drafts[i], cid)) n++;
+      memoJob(() => { for (const end = Math.min(drafts.length, i + STATS_STEP); i < end; i++) if (drafts[i].status === "draft" && draftNeedsCheck(drafts[i], cid)) n++; });
       if (i < drafts.length) return setTimeout(step, 0);
       // a draft added or approved meanwhile: counted at once, as before
       const now = Object.values(d.entries).filter(e => e.status === "draft");
@@ -3469,6 +3470,12 @@ function perRender(o, key, fn){
   if (Object.prototype.hasOwnProperty.call(m.v, key)) return m.v[key];
   return (m.v[key] = fn());
 }
+// fn() with a memo of its own (JOB_MEMO) for the figures a drawing keeps (perRender: dupKeys, ...): worked out once for
+// the whole of fn and kept no longer, never mixed with a drawing's (RENDER_GEN is left alone, so memoKeep is as before).
+// next-fix-dashstall (FINCOM-APP-STAGING-K): the drafts' counts after a client is opened (refreshStatsSoon, refreshStats)
+// run outside a drawing, so every draft's duplicate check (findDuplicate) worked every bill's number, supplier and year
+// out again (dupKeys): 60 drafts a task took 400-850 ms here with 2,800 bills; tests/run_hang_post_counts.py
+function memoJob(fn){ const was = JOB_MEMO; JOB_MEMO = new WeakMap(); IN_RENDER++; try { return fn(); } finally { IN_RENDER--; JOB_MEMO = was; } }
 // a long calculation (the MIS, the audit) shares figures the same way while it runs: GST 3B for a month was worked out
 // 48 times in one MIS run, and the TDS rows 18 times
 function memoScope(fn){ reactScopeEnd(); if (!IN_RENDER){ RENDER_GEN++; drawStamp(); } IN_RENDER++; try { return fn(); } finally { IN_RENDER--; } }

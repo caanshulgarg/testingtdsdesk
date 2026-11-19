@@ -107,8 +107,8 @@ def main():
         ok(n("#app [data-tsm-filter]") == 0 and n("#app .tsm-filters") == 0, "2. no filter chips")
         ok(n("#app [data-tpg-now]") == 0 and "Coming in from Tally now" not in txt("#app [data-tally-simple]") and n("#app [data-tpg-details]") == 0, "2. no 'Coming in from Tally now' panel, no detail cards")
         mo = txt(R(ORBIT) + " [data-tpg-masters]")
-        ok(pg.get_attribute(R(ORBIT) + " [data-tpg-masters]", "data-tpg-masters") == "done" and re.match(r"✓ Up to date 438 ledgers · 52 groups Updated (today|yesterday|\d+-\w{3}) \d\d:\d\d$", mo),
-           "2. Masters, up to date: ✓ Up to date · 438 ledgers · 52 groups · Updated <when> (%s)" % mo)
+        ok(pg.get_attribute(R(ORBIT) + " [data-tpg-masters]", "data-tpg-masters") == "done" and re.match(r"✓ Up to date 438 ledgers · 52 groups Checked today \d\d:\d\d$", mo),
+           "2. Masters, up to date: ✓ Up to date · 438 ledgers · 52 groups · Checked today HH:MM (next-fix-mastersread) (%s)" % mo)
         eo = txt(R(ORBIT) + " [data-tpg-entries]")
         ok(re.match(r"✓ Up to date Last entry (today|yesterday|\d+-\w{3}) \d\d:\d\d$", eo), "2. Entries, up to date: ✓ Up to date · Last entry <when> (%s)" % eo)
         ok(mains(ORBIT) == ["update"] and txt(R(ORBIT) + ' [data-tpt-main]') == "Update from Tally", "2. Orbit: Update from Tally (%s)" % mains(ORBIT))
@@ -117,8 +117,8 @@ def main():
         ok(n(R(ACME) + ".tpt-need") == 1 and txt(R(ACME) + " [data-tpt-state]") in ("Not open in Tally", "Not open in Tally on the server") and mains(ACME) == ["again"] and txt(R(ACME) + " [data-tpt-main]") == "Check again"
            and txt(R(ACME) + " [data-tpt-note]") == "Open it in Tally first", "2. Acme (open nowhere, the firm's bridge online): shaded, Not open in Tally, Check again, Open it in Tally first (%s)" % txt(R(ACME) + " .tpt-act"))
         mn = txt(R(NIMB) + " [data-tpg-masters]")
-        ok(pg.get_attribute(R(NIMB) + " [data-tpg-masters]", "data-tpg-masters") == "none" and mn == "Not brought yet 0 ledgers in FinCom TDS and GST need these" and "bad" in (pg.get_attribute(R(NIMB) + " [data-tpg-mw]", "class") or ""),
-           "2. Masters, never read: red Not brought yet · 0 ledgers in FinCom · TDS and GST need these (%s)" % mn)
+        ok(pg.get_attribute(R(NIMB) + " [data-tpg-masters]", "data-tpg-masters") == "waiting" and mn == "Waiting: FinCom reads them at the next quiet moment in Tally" and "warn" in (pg.get_attribute(R(NIMB) + " [data-tpg-mw]", "class") or ""),
+           "2. Masters, never read (next-fix-mastersread: one of four states): Waiting: FinCom reads them at the next quiet moment in Tally (%s)" % mn)
         ok(txt(R(NIMB) + " [data-tpg-entries]") == "Not brought yet Comes after masters", "2. Entries before masters: Not brought yet · Comes after masters (%s)" % txt(R(NIMB) + " [data-tpg-entries]"))
         ok(mains(NIMB) == ["masters"] and txt(R(NIMB) + ' [data-tpt-main="masters"]') == "Bring masters", "2. Nimbus: Bring masters (the old Bring ledgers & groups) (%s)" % txt(R(NIMB) + " .tpt-act"))
         ok(all(len(mains(nm)) == 1 for nm in (KES, ORBIT, ACME, NIMB)), "2. one main button a row (%s)" % [mains(nm) for nm in (KES, ORBIT, ACME, NIMB)])
@@ -127,7 +127,7 @@ def main():
         ok(E("(c) => !!(window.FCRunState && window.FCRunState[c])", cid(NIMB)), "2. Bring masters: the masters' read asked (the Update from Tally of From Tally)")
         nm_ = txt(R(NIMB) + " [data-tpg-masters]")
         ok(pg.get_attribute(R(NIMB) + " [data-tpg-masters]", "data-tpg-masters") in ("reading", "waiting") and "group" not in nm_, "2 (review 1). a first masters read: no '· N groups' before FinCom holds them (%s)" % nm_)
-        ok(txt(R(NIMB) + " [data-tpt-state]") in ("Updating", "Waiting for Tally") and n(R(NIMB) + " .tpt-why") == 0 and mains(NIMB) == ["reading"],
+        ok(txt(R(NIMB) + " [data-tpt-state]") in ("Updating", "Waiting for Tally") and n(R(NIMB) + " .tpt-why") == 0 and mains(NIMB) == [],
            "2 (review 5). the State cell just '● Updating', the read's words only in the Masters cell (%s | %s)" % (txt(R(NIMB) + " .tpt-st"), nm_))
         # (review 5) "on the server" only once the look on this computer has found no bridge, never while it still looks
         # (next-tally-own-status: a bridge found here before makes this a Tally computer: nothing remembered here)
@@ -144,12 +144,12 @@ def main():
           window.__sum = window.__sum.filter(x => x.book !== b).concat([{book: b, client: c, company: 'KESTREL TEXTILES', from: '2026-04-01', devices: [{id: 'd', fetchOn: true}], pull: {fy: '20260401', part: 'year', state: 'going', x: 1304, y: 2651, etaMin: 12, rate: 113, chosenAt: new Date(Date.now() - 1800000).toISOString(), pace: true}}]);
           if (window.tfxRefresh) window.tfxRefresh(); render(); }""", [cid(KES), "bk-Kestrel Textiles"]); pg.wait_for_timeout(2500)
         mk, ek = txt(R(KES) + " [data-tpg-masters]"), txt(R(KES) + " [data-tpg-entries]")
-        ok(pg.get_attribute(R(KES) + " [data-tpg-masters]", "data-tpg-masters") == "reading" and mk == "Reading now Reading masters from Tally: 7,560 of 12,195 ledgers… · 148 groups" and pg.get_attribute(R(KES) + " [data-tpg-masters] [role=progressbar]", "aria-valuenow") == "62",
-           "1. Masters reading: Reading now, its bar (62), Reading masters from Tally: 7,560 of 12,195 ledgers… · 148 groups (%s)" % mk)
+        ok(pg.get_attribute(R(KES) + " [data-tpg-masters]", "data-tpg-masters") == "reading" and mk == "Reading from Tally now 7,560 of 12,195 ledgers · 148 groups" and pg.get_attribute(R(KES) + " [data-tpg-masters] [role=progressbar]", "aria-valuenow") == "62",
+           "1. Masters reading: Reading from Tally now, its bar (62), 7,560 of 12,195 ledgers · 148 groups (%s)" % mk)
         ok(ek == "Next, after masters 1,304 of 2,651 · about 12 min" and n(R(KES) + " [data-tpg-entries] [role=progressbar]") == 1, "1. Entries: Next, after masters, its bar, 1,304 of 2,651 · about 12 min (%s)" % ek)
         ok("left" not in mk and "slow" not in txt(R(KES)), "1. no masters time left, no 'ledgers slow in Tally' (no data for them)")
         ok(mains(KES) == ["reading"] and txt(R(KES) + " [data-tpt-main]") == "Reading…" and pg.is_disabled(R(KES) + " [data-tpt-main]"),
-           "1 (review 4). masters read, entries only waiting: the row's button the disabled Reading… (%s)" % mains(KES))
+           "1 (review 4). masters read again over masters FinCom holds: the row's button the disabled Reading… (next-fix-mastersread review N5: kept) (%s)" % mains(KES))
         dl = "#app [data-tpg-dl-head]"
         ok(n(dl + " .tpg-title") == 0 and n("#app h2.tpg-title") == 0 and n(dl + " [data-tpg-download]") == 1 and txt(dl + " [data-tpg-download]") == "Download FinCom Bridge 2.5.5"
            and re.match(r"assets/bridge-go/FinComBridge-Setup-2\.5\.5\.exe\?v=cdcdcdcdcdcd$", pg.get_attribute(dl + " [data-tpg-download]", "href") or ""),
@@ -185,7 +185,7 @@ def main():
         E("""([c, w]) => { S.tcoSync[c] = {at: Date.now(), via: 'bridge', company: 'KESTREL TEXTILES'}; const d = window.__devs[0]; d.info.beat.keepWait = {reason: 'userInTally', words: w, since: new Date().toISOString()};
           TLight.st.devs = JSON.parse(JSON.stringify(window.__devs)); TCloud.pane.devices = TLight.st.devs; render(); }""", [cid(KES), WAIT]); pg.wait_for_timeout(2500)
         mw = txt(R(KES) + " [data-tpg-masters]")
-        ok(mw.startswith("Waiting") and WAIT in mw and pg.get_attribute(R(KES) + " [data-tpg-masters]", "data-tpg-masters") == "waiting", "1. masters waiting: the bridge's own words (%s)" % mw)
+        ok(mw == "Waiting: Tally is busy, it reads when typing stops" and pg.get_attribute(R(KES) + " [data-tpg-masters]", "data-tpg-masters") == "waiting", "1. masters waiting: Waiting: Tally is busy, it reads when typing stops (next-fix-mastersread) (%s)" % mw)
 
         print("== 3. More ▾: one light row under the row")
         E("""() => { const t = (m) => new Date(Date.now() - m * 60000).toISOString();

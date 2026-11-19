@@ -673,7 +673,20 @@ type keepRun struct {
 	// an Update now a person pressed that waited KeepNowWaitSec (2 minutes) for a 15 s pause in Tally: it reads on, in
 	// short slices (each request under the 2 s stop), giving way between them while the person types (holdNow)
 	pressOn bool
+	full    map[string]bool // review N3: the companies whose masters this run read in full
+	short   bool            // next-fix-mastersread: runReq.short
+	day     bool            // next-fix-mastersread: runReq.day
 }
+
+// next-fix-mastersread: the TC of the company list and the company check: under the 2 s stop for a run reading on
+// (pressOn) or nobody pressed in the day (short)
+func (k *keepRun) checkTC() *TC {
+	if k.pressOn || k.short {
+		return ledgerTC(k.tc)
+	}
+	return k.tc
+}
+
 type keepBack struct {
 	n     int
 	until time.Time
@@ -916,10 +929,9 @@ func (k *keepRun) step(company string, port int, booksFrom string) error {
 	// the same name). Round 4 (03-Oct-2026): the check is made once per ROUND (k.id), not once per keeper, so the rewind
 	// guard sent at the round's end carries the company's highest AlterID as of this round, never a stale one
 	if ck := "check:" + company + ":" + k.id; !k.told[ck] {
-		ctc := k.tc
+		ctc := k.checkTC() // the Update now reading on while someone types (next-fix-mastersread: or a run nobody pressed): under the 2 s stop
 		if k.pressOn {
-			ctc = ledgerTC(k.tc) // the Update now reading on while someone types: this request too under the 2 s stop
-			k.holdNow()          // third review T5: and it waits while the person types
+			k.holdNow() // third review T5: and it waits while the person types
 		}
 		g, err := companyCheck(ctc, company, port)
 		if err != nil {
@@ -940,7 +952,14 @@ func (k *keepRun) step(company string, port int, booksFrom string) error {
 	// 2.1.4 (02-Oct-2026): the plain ledger and group lists (ledgers.go), in chunks, before the day book
 	done, err := k.ledgerList(company, port, dir, st, inBudget, save)
 	if err != nil {
+		k.ledStopNote(company, st, err)
 		return err
+	}
+	if done {
+		if k.full == nil {
+			k.full = map[string]bool{}
+		}
+		k.full[company] = true // review N3: read in full in this run (never a lease another bridge held, a GUID refused)
 	}
 	if !done {
 		save()
@@ -982,10 +1001,7 @@ func (k *keepRun) step(company string, port int, booksFrom string) error {
 			t = td
 		}
 		t1 := time.Now()
-		dtc := k.tc
-		if k.pressOn {
-			dtc = ledgerTC(k.tc) // third review T5: an Update now reading on: each day-book request under the 2 s stop
-		}
+		dtc := k.checkTC() // third review T5: an Update now reading on (or a run nobody pressed): each day-book request under the 2 s stop
 		x, err := getDayBookXML(dtc, company, f, t, port)
 		// round 10 (03-Oct-2026): a day counts as read only when its answer came in full. An answer that is not a whole
 		// Tally envelope (the connection dropped, the decoder stopped), or one taken while the self-watch stopped reading,
@@ -1138,6 +1154,11 @@ type runReq struct {
 	kind  string   // light | now | nightly | ledgers
 	only  []string // these companies only; none: every company open in Tally
 	why   string   // for the log
+	// next-fix-mastersread: a run nobody pressed in the day (the retry after a failed masters read, kind now; the daily
+	// catch-up, kind nightly with day): every request under the 2 s stop (company list and check too), never reading on
+	// while someone works in Tally (it gives up after 2 minutes held, as a light run), not while reading is paused
+	short bool
+	day   bool // the daily catch-up (daycatch.go): never the night's key, never the nightly-only retries
 }
 
 func runRank(kind string) int {
@@ -1175,6 +1196,17 @@ func startKeepRun(r runReq) bool {
 			m := *kwPending
 			if runRank(r.kind) > runRank(m.kind) {
 				m.kind, m.why = r.kind, r.why
+			}
+			// next-fix-mastersread (review S5): a run nobody pressed stays one unless a pressed one (now, not short) is merged
+			// in; the daily catch-up stays one unless the night's own run (nightly, not day) is merged in
+			if r.kind == "now" && !r.short {
+				m.short = false
+			}
+			if r.kind == "nightly" && !r.day {
+				m.day = false
+			}
+			if m.kind != "nightly" {
+				m.day = false
 			}
 			if len(m.only) == 0 || len(r.only) == 0 {
 				m.only = nil
@@ -1256,7 +1288,7 @@ func keepWorker(r runReq) {
 	_ = saveFile(pidf, fmt.Sprint(os.Getpid()))
 	_ = saveFile(sp("keep.ver"), BridgeVersion)
 	k := &keepRun{tc: &TC{copier: true, readSec: keepNum("KeepReadSec", 120)}, kind: r.kind, only: r.only, light: r.kind == "light", force: r.kind == "now", once: true, told: map[string]bool{},
-		id: fmt.Sprint(time.Now().UnixNano()), alter: map[string]int64{}}
+		id: fmt.Sprint(time.Now().UnixNano()), alter: map[string]int64{}, short: r.short, day: r.day, full: map[string]bool{}}
 	kwMu.Lock()
 	kwRun = k
 	kwMu.Unlock()
@@ -1278,14 +1310,27 @@ func keepWorker(r runReq) {
 		}
 	}()
 	what := map[string]string{"light": "Light update", "now": "Update from Tally", "nightly": "Nightly catch-up", "ledgers": "Ledger list"}[r.kind]
+	if r.day {
+		what = "Daily catch-up"
+	} else if r.short && r.kind == "now" {
+		what = "Masters read again"
+	}
 	switch r.kind {
 	case "ledgers":
 		writeLog("Ledger list of " + strings.Join(r.only, ", ") + " (" + r.why + "): the plain ledger and group lists read from Tally, nothing else")
 	case "light":
 		writeLog("Light update of " + strings.Join(r.only, ", ") + " (" + r.why + "): the entries just posted into the copy; Tally is not read (Update now reads it)")
 	case "now":
-		writeLog("Update from Tally: asked for now")
+		if r.short {
+			writeLog(what + " of " + strings.Join(r.only, ", ") + " (" + r.why + "): each request 2 s at most, not while someone works in Tally")
+		} else {
+			writeLog("Update from Tally: asked for now")
+		}
 	default:
+		if r.day {
+			writeLog(what + " of " + strings.Join(r.only, ", ") + " (" + r.why + "): once a day while the company is open in this user's own Tally; each request 2 s at most, not while someone works in Tally")
+			break
+		}
 		writeLog("Nightly catch-up (" + keepDailyAt() + "): Tally is open and nobody has used FinCom for 15 minutes")
 	}
 	runEnd := time.Now().Add(time.Duration(keepNum("KeepRunMin", 30)) * time.Minute)
@@ -1310,7 +1355,7 @@ func keepWorker(r runReq) {
 		}
 	}
 	var pressedAt time.Time // fourth review: a queued Update now's wait counts from the press, not from this start
-	if r.kind == "now" {
+	if r.kind == "now" && !r.short {
 		var press bool
 		press, pressedAt = kwNowPressOn()
 		if press {
@@ -1323,7 +1368,7 @@ func keepWorker(r runReq) {
 		if !keepOn() || stopping() {
 			break
 		}
-		if paused() && r.kind != "now" {
+		if paused() && (r.kind != "now" || r.short) {
 			why = "background reading is paused (tray icon)"
 			break
 		}
@@ -1345,7 +1390,7 @@ func keepWorker(r runReq) {
 			}
 			held = hold
 			setKeepWait(code, hold) // next-fix-read-any-bridge: said in the beat; the push goes on meanwhile (heldPush)
-			if k.light && time.Since(heldAt) > 2*time.Minute {
+			if (k.light || r.short) && time.Since(heldAt) > 2*time.Minute {
 				why = hold
 				break
 			}
@@ -1359,7 +1404,7 @@ func keepWorker(r runReq) {
 			// the agreed rule: an Update now a person pressed waits about 2 minutes at most for a 15 s pause in Tally;
 			// then it reads on in short slices, giving way while the person types. The nightly and light runs keep
 			// waiting as before; a posting is never held (it does not ask keepHold)
-			if r.kind == "now" && code == "userInTally" && time.Since(heldAt) >= time.Duration(keepNum("KeepNowWaitSec", 120))*time.Second {
+			if r.kind == "now" && !r.short && code == "userInTally" && time.Since(heldAt) >= time.Duration(keepNum("KeepNowWaitSec", 120))*time.Second {
 				k.pressOn = true
 				writeLog(what + ": someone has been working in Tally for " + time.Since(heldAt).Round(time.Second).String() + " without a 15 s pause; reading goes on in short parts (each request 2 s at most), giving way while they type")
 				continue
@@ -1395,7 +1440,7 @@ func keepWorker(r runReq) {
 		if !asked {
 			// Tally left alone after a failure: nothing is sent until the back-off ends
 			if u := anyBackoff(); !u.IsZero() {
-				if k.light || u.After(runEnd) {
+				if k.light || r.short || u.After(runEnd) {
 					why = "Tally is left alone until " + u.Format("15:04")
 					break
 				}
@@ -1405,7 +1450,7 @@ func keepWorker(r runReq) {
 			// which companies are open: asked once a run
 			want := strs(cfg("KeepCompanies"))
 			k.holdNow() // third review T5: reading on, the company list too waits while the person types
-			for _, s := range openCompaniesWith(k.tc, true) {
+			for _, s := range openCompaniesWith(k.checkTC(), true) {
 				if s["skipped"] == true || s["ok"] != true {
 					continue
 				}
@@ -1447,8 +1492,12 @@ func keepWorker(r runReq) {
 			switch {
 			case err == nil:
 				clearBgBackoff(o.port)
-				if !k.booksHeld[o.name] && !k.openUnknown[o.name] {
+				// review N3: only a read in full (k.full: not a lease another bridge held, not a GUID the guard refused) is a read
+				if !k.booksHeld[o.name] && !k.openUnknown[o.name] && k.full[o.name] {
 					markRead(o.name) // 2.5.0: a ledger read held for want of books-from is not a read (2.5.13: nor one without openings)
+					if k.caughtUp && (r.kind == "now" || r.kind == "nightly") {
+						dayCheckNote(o.name, true, "") // next-fix-mastersread: the day's check of this company done (daycatch.go)
+					}
 				}
 				if k.caughtUp {
 					upToDate[o.name] = true
@@ -1464,6 +1513,9 @@ func keepWorker(r runReq) {
 				// one line; nothing is sent to Tally until then
 				writeLog(fmt.Sprintf("Keeping %s: %s. Leaving Tally alone until %s", o.name, err.Error(), until.Format("15:04")))
 				setKeepTrouble(o.name, err.Error())
+				if r.kind == "now" || r.kind == "nightly" {
+					dayCheckNote(o.name, false, err.Error()) // next-fix-mastersread: why the day's check is not done
+				}
 			}
 		}
 		all := true
@@ -1490,7 +1542,7 @@ func keepWorker(r runReq) {
 		invokeCloudPush()
 		if waiting && !wait.IsZero() {
 			// every company left waits for Tally to be left alone no longer: nothing is sent meanwhile
-			if k.light || wait.After(runEnd) {
+			if k.light || r.short || wait.After(runEnd) {
 				why = "Tally is left alone until " + wait.Format("15:04")
 				break
 			}
@@ -1528,8 +1580,10 @@ func keepWorker(r runReq) {
 		}
 		writeLog("Ledger list: not finished (" + why + ")" + reqs() + "; the next event tries again")
 	case !k.allDone:
-		_ = saveFile(sp("keep-tried.txt"), nowS())
-		if r.kind == "now" {
+		if !r.short { // next-fix-mastersread: a run nobody pressed in the day never holds back the night's
+			_ = saveFile(sp("keep-tried.txt"), nowS())
+		}
+		if r.kind == "now" && !r.short {
 			_ = os.Remove(sp("keep-now.txt"))
 		}
 		if why == "" {
@@ -1542,7 +1596,9 @@ func keepWorker(r runReq) {
 			_ = saveFile(sp("keep-lastnight.txt"), r.night)
 		}
 		_ = saveFile(lightFile(), nowS())
-		_ = os.Remove(sp("keep-now.txt"))
+		if !r.short {
+			_ = os.Remove(sp("keep-now.txt"))
+		}
 		writeLog(what + ": done" + reqs() + "; the bridge is idle again (next: the nightly catch-up at " + keepDailyAt() + ", or Update now)")
 	}
 }

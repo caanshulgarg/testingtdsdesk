@@ -19,6 +19,8 @@ import { bookSum, pctOf, partWords, etaWords, nf, rpc, summary, fyNow, whyWords,
 import { noAnswer } from "../lib/readFollow.js";   // next-link-follow: a result line when no Tally can answer
 import { press, busyOf, lockOf, Said, useSaid, errWords } from "./TallyBtn.jsx";   // next-buttons: every click says what came of it
 import { ackSnap } from "../lib/pickAck.js";   // bridge 2.5.10: what the bridge said of it
+import { localOpen } from "../lib/ownBridge.js";   // next-fix-mastersread: open in this user's own Tally
+import { troubleOf } from "../lib/tallySimple.js";   // next-fix-mastersread: the book's trouble, said one way
 
 const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const ist = (ms) => new Date(ms + 5.5 * 3600e3);
@@ -72,7 +74,8 @@ export function cloudProg(cid, company) {
   const k = LP[cid] && LP[cid].book === bk.book ? LP[cid] : (LP[cid] = { book: bk.book, at: 0, v: null, busy: false });
   const v = k.v, t = v ? Date.parse(v.at) || 0 : 0, going = !!v && !v.done && Date.now() - t < FRESH_MS;
   // (a company open nowhere is not being read: nothing asked; what was read stays)
-  if (!k.busy && seen() && (going || openNow(company)) && Date.now() - k.at > (going ? 5000 : 20000)) {
+  // (next-fix-mastersread, the owner: "it is in the dark": every 3 s while a read runs; every 20 s otherwise, as before)
+  if (!k.busy && seen() && (going || openNow(company)) && Date.now() - k.at > (going ? 3000 : 20000)) {
     const was = JSON.stringify(k.v), key = "prog:" + bk.book, say = (e) => { if (typeof TStale === "object") { if (e) TStale.fail(key, e, () => { k.at = 0; cloudProg(cid, company); }); else TStale.ok(key); } };
     // (a read that failed is said, TStale: what was read before stays, with its time; the next look asks again)
     k.busy = cloudAsk("prog:" + bk.book, () => TCloud.rpc("tally_period_status", { p_book: bk.book }).then((p) => { k.v = (p && p.ledger) || null; say(); }, (e) => { if (!missing(e)) say(e); })
@@ -92,7 +95,7 @@ function rowBeat() {
   ROWS.forEach((w) => {
     try {
       const r = w.row(), m = mastersOf(r.cid, r.company);
-      if ((m.st === "reading" || m.st === "waiting") && rowN % 5 === 0) cloudAsk("led:" + r.cid, () => cloudLedgerCount(r.cid, false, 9000));
+      if ((m.st === "reading" || (m.st === "waiting" && !m.idle)) && rowN % 5 === 0) cloudAsk("led:" + r.cid, () => cloudLedgerCount(r.cid, false, 9000));
       const sig = JSON.stringify([m.st, m.read, m.of, m.n, m.g, m.words, m.sub, m.readLine]);
       if (sig !== w.sig) { w.sig = sig; w.tick(); }
     } catch (e) { /* the next beat */ }
@@ -106,13 +109,38 @@ export function rowWatch(w) {
 export function liveOf(v, bk) {
   if (!v || typeof v !== "object") return null;
   const t = Date.parse(v.at) || 0, age = Date.now() - t, of = Number(v.of) || 0, read = Math.min(Number(v.read) || 0, of || Infinity);
-  if (!v.done) return age < FRESH_MS ? { st: "reading", read, of, at: v.at } : null;
+  // (next-fix-mastersread, review N5: a read's start with nothing read since: reading for a minute at most)
+  if (!v.done) return age < (Number(v.read) > 0 ? FRESH_MS : 60000) ? { st: "reading", read, of, at: v.at } : null;
   // (an empty read is said until a later list came: the book's ledger time after it)
   if (lpEmpty(v)) return age < 86400e3 && !(Date.parse((bk && bk.ledgersAt) || "") > t) ? { st: "empty", read: 0, of: 0, at: v.at } : null;
   return age < 12 * 3600e3 ? { st: "done", read: Number(v.read) || 0, of, at: v.at } : null;
 }
-// "Reading masters from Tally: 1,200 of 4,191 ledgers…" / "… 1,200 ledgers so far…"
-const readingWords = (read, of) => "Reading masters from Tally: " + (of > 0 ? nf(read) + " of " + nf(of) + " ledgers…" : nf(read) + " ledgers so far…");
+// "1,200 of 4,191 ledgers" (the total only where the read itself counted it) / "1,200 ledgers so far"
+const readingWords = (read, of) => (of > 0 ? nf(read) + " of " + nf(of) + " ledgers" : nf(read) + (read === 1 ? " ledger" : " ledgers") + " so far");
+// ---------- next-fix-mastersread (the owner: "how would I know whether masters are being read — it is in the dark"). The
+// Masters line is always one of four plain states: Reading from Tally now · N ledgers so far | Up to date (checked today
+// HH:MM, or not checked today and why) | Waiting: open <company> in your own Tally / Tally is busy, it reads when typing
+// stops | Not read: <Tally's own words>. Read from what FinCom already holds (the book's state, the computers' beats)
+// the bridge's trouble with the book (tally_books.state.trouble.why): why its last read did not go
+export { troubleOf };
+// when the company was last read in full: the newest of the computers' beats' companies[].lastRead ("" when none)
+export function lastReadOf(company) {
+  let best = "";
+  try { tallyDevs().forEach((d) => [].concat(((d && d.info) || {}).beat && d.info.beat.companies || []).forEach((c) => {
+    if (c && c.lastRead && coKey(c.name) === coKey(company) && Date.parse(c.lastRead) && (!best || Date.parse(c.lastRead) > Date.parse(best))) best = String(c.lastRead); })); } catch (e) { best = ""; }
+  return best;
+}
+const isToday = (at) => { const t = Date.parse(at || ""); return !!t && ist(t).toISOString().slice(0, 10) === ist(Date.now()).toISOString().slice(0, 10); };
+// open in this user's own Tally, or (a person with no bridge of their own) in any Tally FinCom hears now
+const openHere = (company) => { let h = ""; try { h = localOpen(company); } catch (e) { h = ""; } return h === "yes" || ((h === "none" || h === "away") && openNow(company)); };
+export const BUSY_WORDS = "Tally is busy, it reads when typing stops";
+const waitWords = (kw) => (!kw ? "" : /typ|working in Tally|click/i.test(kw) ? BUSY_WORDS : kw.replace(/^waiting:?\s*/i, ""));
+// what keeps the masters from being read now ("" : nothing known)
+function waitOf(company) {
+  if (!company) return "";
+  if (!openHere(company)) return "open " + company + " in your own Tally";
+  return waitWords(keepWaitOf(company));
+}
 // ---------- Step 1 · Masters: {st: reading | waiting | done | none | why, n, g, read, of, pct, words, sub, at}
 export function mastersOf(cid, company) {
   const x = readOf(cid, company), n = ledgersOf(cid), g = (GRP[cid] || {}).n, held = ledgersHeld(cid), bk = ledBook(cid) || {};
@@ -122,7 +150,10 @@ export function mastersOf(cid, company) {
   const kw = company ? keepWaitOf(company) : "";
   const base = { n: nKnown ? n : null, g: g == null ? null : g, at, held };
   if (running) {
-    if (kw && !(read > 0)) return Object.assign(base, { st: "waiting", words: /^waiting/i.test(kw) ? kw : "Waiting: " + kw, read, of, pct: 0 });
+    // (next-fix-mastersread: the bridge's own count in FinCom's cloud, when the press has none yet: reading, not waiting)
+    const lq = read > 0 ? null : cloudProg(cid, company);
+    if (lq && lq.st === "reading" && lq.read > 0) return Object.assign(base, { st: "reading", live: true, read: lq.read, of: lq.of, pct: lq.of > 0 ? Math.min(99, Math.round((lq.read * 100) / lq.of)) : 0, words: readingWords(lq.read, lq.of) });
+    if (kw && !(read > 0)) return Object.assign(base, { st: "waiting", words: "Waiting: " + waitWords(kw), read, of, pct: 0 });
     if (of > 0) return Object.assign(base, { st: "reading", read, of, pct: Math.min(99, Math.round((read * 100) / of)), words: "Reading · " + nf(read) + " of " + nf(of) });
     if (read > 0) return Object.assign(base, { st: "reading", read, of: 0, pct: 0, words: "Reading… " + nf(read) + " so far" });
     // next-masters-progress: a bridge that sends no progress (it reads on its own, or an older one): FinCom's own count of
@@ -133,27 +164,41 @@ export function mastersOf(cid, company) {
     if (rw && rw.phase === "waiting") return Object.assign(base, { st: "waiting", read: 0, of: 0, pct: 0, words: rw.text });
     return Object.assign(base, { st: "reading", read: 0, of: 0, pct: 0, words: rw && rw.text ? rw.text : "Reading…" });
   }
-  if (rw && rw.phase === "why") return Object.assign(base, { st: "why", empty: !!(x && x.empty), words: "Not done: " + rw.text.replace(/^Not updated:\s*/, "") });
-  if (x && (x.err || x.late) && (!held || x.empty)) return Object.assign(base, { st: "why", empty: !!x.empty, words: "Not done: " + (x.err || x.why || "no answer from Tally in 3 minutes") });
+  // (review S1: a failed read is said only while FinCom holds no masters; over held masters the line stays Up to date)
+  if (rw && rw.phase === "why" && !held) return Object.assign(base, { st: "why", empty: !!(x && x.empty), words: "Not read: " + rw.text.replace(/^Not updated:\s*/, "") });
+  if (x && (x.err || x.late) && !held) return Object.assign(base, { st: "why", empty: !!x.empty, words: "Not read: " + (x.err || x.why || "no answer from Tally in 3 minutes") });
   // next-masters-progress: a read nobody pressed here (FinCom's cloud's count), or one that ended with nothing; a read
   // pressed here keeps its own state (x) and words
   const lp = x ? null : cloudProg(cid, company);
   if (lp && lp.st === "reading") return Object.assign(base, { st: "reading", live: true, read: lp.read, of: lp.of, pct: lp.of > 0 ? Math.min(99, Math.round((lp.read * 100) / lp.of)) : 0, words: readingWords(lp.read, lp.of) });
-  if (lp && lp.st === "empty") return Object.assign(base, { st: "why", empty: true, words: "Not done: " + EMPTY_WORDS });
+  // next-fix-mastersread: no masters held and the bridge's last read of them failed: its reason (Tally's own words)
+  const tr = held ? "" : troubleOf(bk);
+  if (tr) return Object.assign(base, { st: "why", empty: false, words: "Not read: " + tr });
+  if (lp && lp.st === "empty" && !held) return Object.assign(base, { st: "why", empty: true, words: "Not read: " + EMPTY_WORDS });
   if (held && lp && lp.st === "done" && lp.read > 0) base.readLine = "Masters read: " + nf(lp.read) + (lp.read === 1 ? " ledger, " : " ledgers, ") + hhmm(lp.at);
   // (the cloud's count not read yet, or not read: "—", never a made-up 0)
-  if (held) return Object.assign(base, { st: "done", words: "✓ " + (nKnown ? nf(n) + (n === 1 ? " ledger" : " ledgers") : "— ledgers") + " · " + (g != null ? nf(g) + (g === 1 ? " group" : " groups") : "— groups"),
-    sub: (at ? "updated " + hhmm(at) + " · " : "") + "changes every 10 min", done: rw && rw.phase === "done" ? rw.text : "" });
-  return Object.assign(base, { st: "none", words: "Not brought yet" });
+  if (held) {
+    // next-fix-mastersread (item 8): checked today (the last full read: the beats' lastRead, FinCom's ledger time, the
+    // read's end), or not checked today and why
+    const last = [lastReadOf(company), at, lp && lp.st === "done" ? lp.at : ""].filter((v) => Date.parse(v || "")).sort((a, b) => Date.parse(b) - Date.parse(a))[0] || "";
+    const why = isToday(last) ? "" : waitOf(company) || troubleOf(bk) || "FinCom checks at the next quiet moment in Tally";
+    return Object.assign(base, { st: "done", words: "✓ " + (nKnown ? nf(n) + (n === 1 ? " ledger" : " ledgers") : "— ledgers") + " · " + (g != null ? nf(g) + (g === 1 ? " group" : " groups") : "— groups"),
+      sub: (at ? "updated " + hhmm(at) + " · " : "") + "changes every 10 min", done: rw && rw.phase === "done" ? rw.text : "", checkedAt: last,
+      checked: why ? "Not checked today: " + why : "Checked today " + hhmm(last) });
+  }
+  // next-fix-mastersread (item 9): never read, nothing failed: what it waits for (was "Not brought yet" with nothing to do)
+  const wo = waitOf(company);
+  return Object.assign(base, { st: "waiting", idle: true, wait: wo, words: "Waiting: " + (wo || "FinCom reads them at the next quiet moment in Tally") });
 }
 // ---------- Step 2 · Entries: {st: going | after | paused | stopped | done | uptodate | behind | none, words, sub, pct, p}
 export function entriesOf(cid, ms, last) {
   const b = bookSum(cid), p = b && b.pull, bk = cloudBook(cid) || {}, to = d8Of(bk.to), t8 = today8();
   if (p && !p.done && (p.state === "going" || p.state === "paused" || p.state === "stopped")) {
     const y = Number(p.y || 0), x = Math.min(Number(p.x || 0), y), xy = y ? nf(x) + " of " + nf(y) : "";
-    const st = p.state === "going" ? (ms && (ms.st === "reading" || ms.st === "waiting") ? "after" : "going") : p.state;
+    // (next-fix-mastersread: masters not in FinCom, read or not, failed or waiting: the entries wait for them)
+    const st = p.state === "going" ? (ms && (ms.st === "reading" || ms.st === "waiting" || !ms.held) ? "after" : "going") : p.state;
     const word = st === "after" ? "After masters" : st === "going" ? "Bringing" : st === "paused" ? "Paused" : "Stopped";
-    return { st, p, b, pct: pctOf(p), words: word + (xy ? " · " + xy : p.counting ? " · counting the year in Tally" : ""),
+    return { st, p, b, pct: pctOf(p), mastersFirst: st === "after" && !!ms && ms.st !== "reading", words: word + (xy ? " · " + xy : p.counting ? " · counting the year in Tally" : ""),
       sub: [partWords(p), p.state === "going" && Number(p.etaMin) > 0 ? etaWords(p.etaMin) + " left" : "", p.state === "going" && Number(p.rate) > 0 ? nf(p.rate) + " entries a minute" : ""].filter(Boolean).join(" · ") };
   }
   if (p && p.done) return { st: "done", p, b, pct: 100, words: "✓ " + partWords(p) + " in FinCom", sub: last ? "last " + hhmm(last) : "" };
@@ -171,7 +216,9 @@ function known(head, cls, keys) {
   const st = typeof TStale === "object" ? TStale.now(keys) : null;
   return st && cls === " ok" ? [head.replace(/^✓ /, ""), " muted", st.as] : [head, cls, ""];
 }
+// (pct null: no total known: a moving bar, aria-valuenow left out, as for a progress of unknown length)
 function Bar({ pct, kind, label }) {
+  if (pct == null) return <div className="tpg-bar indet" role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={100} data-tpg-pct=""><i className={kind} /></div>;
   return <div className="tpg-bar" role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct || 0} data-tpg-pct={pct || 0}>
     <i className={kind} style={{ width: Math.max(2, pct || 0) + "%" }} /></div>;
 }
@@ -183,7 +230,7 @@ export function MastersCell({ row }) {
   // the counts of ledgers and groups in FinCom's cloud (each kept a minute; the ledgers' the table's own count)
   useEffect(() => { let on = true; if (ledgersHeld(row.cid)) Promise.all([cloudLedgerCount(row.cid).catch(() => null), groupCount(row.cid).catch(() => null)]).then(() => { if (on) tick((k) => k + 1); });
     return () => { on = false; }; }, [row.cid, (ledBook(row.cid) || {}).ledgersAt]);
-  const m = mastersOf(row.cid, row.company), live = m.st === "reading" || m.st === "waiting";
+  const m = mastersOf(row.cid, row.company), live = m.st === "reading" || (m.st === "waiting" && !m.idle);
   // (reliability: no timer of its own: the table's one timer, rowWatch, while the masters are read or the company is
   // open in Tally; it draws this row only when what it shows changed)
   const need = live || openNow(row.company), ref = useRef(row); ref.current = row;
@@ -193,18 +240,20 @@ export function MastersCell({ row }) {
   useEffect(() => () => { if (mBook && typeof TStale === "object") TStale.forget("prog:" + mBook); }, [mBook]);
   let head, sub = "", sub2 = "", cls = "";
   // ux-wins (the review: "✓ Up to date" over "0 ledgers · 0 groups"): a read that brought no ledger is not "up to date"
-  if (m.st === "done" && m.n !== 0) { head = "✓ Up to date"; cls = " ok"; sub = countWords(m.n, m.g); sub2 = m.readLine || (m.at ? "Updated " + whenIn(m.at) : ""); }
+  // next-fix-mastersread (item 9): one of four plain states. Up to date: checked today HH:MM, or not checked today and why
+  if (m.st === "done" && m.n !== 0) { head = "✓ Up to date"; cls = " ok"; sub = countWords(m.n, m.g); sub2 = m.checked || m.readLine || (m.at ? "Updated " + whenIn(m.at) : ""); }
   // (the groups only once FinCom holds this client's masters: a first read has no count yet, never "0 groups")
-  else if (m.st === "reading") { head = "Reading now"; cls = " read"; sub = (m.of > 0 || m.read > 0 ? readingWords(m.read, m.of) : m.words) + (m.held && m.g != null ? " · " + nf(m.g) + (m.g === 1 ? " group" : " groups") : ""); }
-  else if (m.st === "waiting") { head = "Waiting"; cls = " warn"; sub = m.words; }
-  else if (m.st === "why") { head = m.empty ? "No masters from Tally" : "Not done"; cls = " bad"; sub = m.words.replace(/^Not done:\s*/, ""); }
+  else if (m.st === "reading") { head = "Reading from Tally now"; cls = " read"; sub = (m.of > 0 || m.read > 0 || /^Reading/.test(m.words) ? readingWords(m.read, m.of) : m.words) + (m.held && m.g != null ? " · " + nf(m.g) + (m.g === 1 ? " group" : " groups") : ""); }
+  else if (m.st === "waiting") { head = "Waiting:"; cls = " warn"; sub = m.words.replace(/^Waiting:\s*/, ""); }
+  // (Not read: Tally's own words under it, two lines at most; the whole of it on hover)
+  else if (m.st === "why") { head = "Not read:"; cls = " bad"; sub = m.words.replace(/^Not (done|read):\s*/, ""); }
   // (0 only when FinCom's book for it is known and says no ledger ever came; else "—")
   else { const bk = ledBook(row.cid); head = "Not brought yet"; cls = " bad"; sub = (m.n != null ? nf(m.n) : bk && !bk.ledgersAt ? "0" : "—") + " ledgers in FinCom"; sub2 = "TDS and GST need these"; }
   let as; [head, cls, as] = known(head, cls, ["light", "prog:" + mBook]); if (as) sub2 = as;
   return <div className="tpg-cell" data-tpg-masters={m.st} data-tpg-stale={as ? "" : undefined}>
     <span className={"tpg-words" + cls} data-tpg-mw="">{head}</span>
-    {live && <Bar pct={m.pct} kind="read" label={"Ledgers of " + row.client} />}
-    {sub && <span className="tpg-sub" data-tpg-ms="">{sub}</span>}
+    {live && <Bar pct={m.st === "reading" && !(m.of > 0) ? null : m.pct} kind="read" label={"Ledgers of " + row.client} />}
+    {sub && <span className={"tpg-sub" + (m.st === "why" ? " two" : "")} data-tpg-ms="" title={m.st === "why" ? sub : undefined}>{sub}</span>}
     {sub2 && <span className="tpg-sub2">{sub2}</span>}
   </div>;
 }
@@ -232,7 +281,7 @@ export function EntriesCell({ row }) {
   let head, sub = "", cls = "";
   if (e.st === "behind") { head = e.words; cls = " warn"; sub = e.sub; }
   else if (e.st === "after" || e.st === "going") { head = e.st === "after" ? "Next, after masters" : "Bringing now"; cls = e.st === "going" ? " read" : " muted";
-    sub = [xy, p.state === "going" && Number(p.etaMin) > 0 ? etaWords(p.etaMin) : ""].filter(Boolean).join(" · "); }
+    sub = e.mastersFirst ? "Starts once the masters are in" : [xy, p.state === "going" && Number(p.etaMin) > 0 ? etaWords(p.etaMin) : ""].filter(Boolean).join(" · "); }
   else if (e.st === "paused" || e.st === "stopped") { head = e.st === "paused" ? "Paused" : "Stopped"; cls = " warn"; sub = [partWords(p), xy].filter(Boolean).join(" · "); }
   else if (e.st === "uptodate") { head = "✓ Up to date"; cls = " ok"; sub = row.last ? "Last entry " + whenIn(row.last) : ""; }
   else if (e.st === "done") { head = e.words; cls = " ok"; sub = row.last ? "Last entry " + whenIn(row.last) : ""; }
@@ -243,7 +292,7 @@ export function EntriesCell({ row }) {
   let as; [head, cls, as] = known(head, cls, ["light", "sum"]); if (as) sub = [sub, as].filter(Boolean).join(" · ");
   return <div className="tpg-cell" data-tpg-entries={e.st} data-tpg-stale={as ? "" : undefined}>
     <span className={"tpg-words" + cls} data-tpg-ew="">{head}</span>
-    {p && !p.done && (e.st === "going" || e.st === "after" || e.st === "paused") && <Bar pct={e.pct} kind={e.st === "going" ? "read" : "wait"} label={"Entries of " + row.client} />}
+    {p && !p.done && (e.st === "going" || (e.st === "after" && !e.mastersFirst) || e.st === "paused") && <Bar pct={e.pct} kind={e.st === "going" ? "read" : "wait"} label={"Entries of " + row.client} />}
     {sub && <span className="tpg-sub" data-tpg-es="">{sub}</span>}
     {cu && <span className="tpg-sub" data-tpg-catchup="" role="status">{cu}</span>}
     {wait && <span className="tpg-sub2 warn" data-tpg-ewait="" role="status">{wait}</span>}
@@ -385,3 +434,7 @@ export function History({ row }) {
       : <ul className="tpg-hlist">{hist.map((r, k) => <li key={k} className={"tpg-h " + r.k} data-tpg-h={r.k}><span data-tpg-h-what="">{[whenWords(r.at), r.what, r.how].filter(Boolean).join(" · ")}</span><span data-tpg-h-res="">{r.res}</span></li>)}</ul>}
   </div>;
 }
+
+// review S7: the Tally page's rows (lib/tallySimple.js, in the main bundle) read the Masters state through this, never
+// importing this part
+if (typeof globalThis === "object") globalThis.FCMastersOf = mastersOf;
