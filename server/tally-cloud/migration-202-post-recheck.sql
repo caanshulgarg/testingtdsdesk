@@ -409,6 +409,12 @@ begin
   return jsonb_build_object('ok', true);
 exception when others then
   perform tally_post_work_error('then', p_job, sqlstate, sqlerrm);
+  -- (the seventh review) a recheck's apply that failed: looked at again in 10 minutes, said so (as tally_post_recheck_run
+  -- does for a judging that fails), never judged again on every run
+  if p_then = 'recheck' then
+    update tally_post_rechecks set next_at = now() + interval '10 minutes', words = left('Could not be rechecked this time: ' || sqlerrm, 500)
+     where job_id = p_job and state = 'open' and next_at <= now();
+  end if;
   return jsonb_build_object('ok', false, 'job', p_job, 'error', left(sqlerrm, 300));
 end $fn$;
 revoke all on function public.tally_post_work_then(uuid, text) from public, anon, authenticated;

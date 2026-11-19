@@ -378,6 +378,19 @@ try:
     due(41); svc("tally_post_recheck_step(%s::uuid, 'judge')" % q(J(41))); o4 = svc("tally_post_work_then(%s::uuid, 'recheck')" % q(J(41)))
     if o4.get("register"): svc("tally_post_work_then(%s::uuid, 'register')" % q(J(41)))
     ok(o4.get("posted") == 1 and reg(xk2) == "in_tally", "judged, then applied by the follow-up: marked posted (%s)" % o4)
+    # (the seventh review) an apply that fails: its recheck pushed 10 minutes with the words, as a judging that fails (not
+    # judged again on every run of the cron)
+    xk3 = posting(42, [vx("rk-3", amt="4242.00")])[0]
+    db.sql("update tally_post_ids set matched_at = now(), matched_vch = 'V-42' where fincom_id = %s" % q(xk3))
+    db.sql("""create or replace function public.t202_fail() returns trigger language plpgsql as $t$ begin
+              if new.id = '%s'::uuid and new.message like 'Rechecked by itself%%' then raise exception 'made-up write error'; end if; return new; end $t$;
+              create trigger t202_fail before update on tally_post_jobs for each row execute function public.t202_fail();""" % J(42))
+    svc("tally_post_recheck_enroll()"); due(42)
+    r = st.psql_text("call public.tally_post_work_run();")
+    x3 = rc(42, xk3); wait_s = db.one("select round(extract(epoch from next_at - now()))::text from tally_post_rechecks where job_id = %s" % q(J(42))) if not RED else "0"
+    ok(r.returncode == 0 and x3.get("state") == "open" and int(wait_s or 0) >= 590 and (x3.get("words") or "").startswith("Could not be rechecked this time: ") and "made-up write error" in (x3.get("words") or ""),
+       "an apply that fails: looked at again in 10 minutes, said so (%s s; %s)" % (wait_s, x3.get("words")))
+    db.sql("drop trigger t202_fail on tally_post_jobs"); close(42)
 finally:
     st.stop()
 print("\n%s: %d" % ("FAILED" if fails else "ALL PASSED", len(fails)))
