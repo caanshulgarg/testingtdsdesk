@@ -157,12 +157,13 @@ func TestJobWaitsForTally(t *testing.T) {
 	var v M
 	for i := 0; i < 100; i++ {
 		v = readProgress(jd)
-		if str(v["status"]) == "waiting" && strings.HasPrefix(str(v["message"]), "Waiting for Tally:") {
+		// linkguid.go (19-Nov-2026): no Tally answering, no GUID known for the company: "Open ... in Tally to post"
+		if str(v["status"]) == "waiting" && strings.HasPrefix(str(v["message"]), "Open GARG SHEKHAR & COMPANY in Tally to post") {
 			break
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-	if str(v["status"]) != "waiting" || !strings.Contains(str(v["message"]), "it will be posted automatically") {
+	if str(v["status"]) != "waiting" || !strings.Contains(str(v["message"]), "it posts by itself") {
 		t.Fatalf("not waiting: %v %v", v["status"], v["message"])
 	}
 	items := arr(v["items"])

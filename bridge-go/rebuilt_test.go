@@ -763,7 +763,16 @@ func newStandCloud(t *testing.T) *standCloud {
 			out["state"] = "ok"
 		case "posts_take":
 			if len(c.takeJobs) > 0 {
-				out["job"] = c.takeJobs[0]
+				j := c.takeJobs[0]
+				if _, named := j["guid"]; !named && j != nil {
+					// migration 202: FinCom's queue hands each posting out with the linked company's GUID; a test job
+					// naming none is for the stand Tally's company (newStandTally's GUID)
+					j = M{"guid": "co-guid-1"}
+					for k, v := range c.takeJobs[0] {
+						j[k] = v
+					}
+				}
+				out["job"] = j
 				c.takeJobs = c.takeJobs[1:]
 			}
 			if len(c.checks) > 0 {
@@ -1151,7 +1160,8 @@ func TestCompanyGUIDDifferentRefused(t *testing.T) {
 	f.mu.Unlock()
 	imports := f.n("Import")
 	r := postOne(t, "g2", finVoucher("g2", fgParty, "B-2", td, "20.00"))
-	if r["ok"] == true || r["guidMismatch"] != true || !strings.Contains(str(r["message"]), "co-guid-2") {
+	// linkguid.go (19-Nov-2026): the company of the name with another GUID is not the linked one: not sent, it waits
+	if r["ok"] == true || r["notSent"] != true || !strings.Contains(str(r["message"]), "Open "+zz+" in Tally to post") {
 		t.Fatalf("posted to another company: %v", r)
 	}
 	if f.n("Import") != imports {

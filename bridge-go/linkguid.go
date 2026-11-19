@@ -17,7 +17,7 @@ import (
 )
 
 // the company list for a posting: always Tally's own answer now (no late answer, no list held from before)
-var postListTC = &TC{noLate: true}
+var postListTC = &TC{noLate: true, forPost: true}
 
 // test seam: the company list asked for a posting
 var postListFn = func() []M { return openCompaniesWith(postListTC, true) }
@@ -66,7 +66,7 @@ func linkedIn(sessions []M, guid, asked string) (linkLook, error) {
 			continue
 		}
 		if s["ok"] != true {
-			if re(`(?i)timed out|timeout|busy`).MatchString(str(s["error"])) {
+			if re(`(?i)timed out|timeout|busy|` + earlierWords).MatchString(str(s["error"])) {
 				stale = true
 			}
 			continue

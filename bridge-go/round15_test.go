@@ -936,6 +936,12 @@ func TestImportNotReachedForgetsNotes(t *testing.T) {
 	if _, err := findCompanyPort(zz, 0); err != nil {
 		t.Fatal(err)
 	}
+	// linkguid.go: the posting's own company list is the one Tally gave while free (this test is about the send held
+	// after it, not the list)
+	free := postListFn()
+	was := postListFn
+	postListFn = func() []M { return free }
+	t.Cleanup(func() { postListFn = was })
 	start := time.Now()
 	nowFn = func() time.Time { return start }
 	if _, err := getLedgerNames(fin, zz, f.port); err == nil {
@@ -954,6 +960,7 @@ func TestImportNotReachedForgetsNotes(t *testing.T) {
 	if acceptedInfo("nr1") != nil {
 		t.Fatalf("the note stayed though nothing reached Tally: %v", acceptedInfo("nr1"))
 	}
+	postListFn = was
 	// the probe may go and Tally is free: the retry posts, not refused as already sent
 	nowFn = func() time.Time { return start.Add(2 * time.Minute) }
 	r = postOne(t, "nr1", finVoucher("nr1", fgParty, "NR-1", td, "1.00"))

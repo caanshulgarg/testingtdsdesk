@@ -197,7 +197,9 @@ func TestNothingAfterTheImport(t *testing.T) {
 	var after []string
 	seen := false
 	for _, id := range f.reqs {
-		if seen {
+		// linkguid.go (19-Nov-2026): the one company list right after the import confirms the linked company (no
+		// voucher read-back)
+		if seen && id != "TDSDeskCompanies" {
 			after = append(after, id)
 		}
 		if id == "Import" {

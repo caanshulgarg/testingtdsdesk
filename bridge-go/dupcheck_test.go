@@ -7,6 +7,7 @@ package main
 // (sameVoucher) stays tested because the request stays in the program for Check Tally and the read test.
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -39,6 +40,12 @@ const (
 func postOne(t *testing.T, id, x string) M {
 	t.Helper()
 	res, err := invokeImport(M{"company": zz, "vouchers": []any{M{"id": id, "xml": x}}})
+	var lw *linkWait
+	if errors.As(err, &lw) {
+		// linkguid.go (19-Nov-2026): the linked company not seen in Tally's list now (Tally busy, closed, another GUID):
+		// nothing is sent; as the entry's own answer
+		return M{"id": id, "ok": false, "notSent": true, "message": err.Error()}
+	}
 	if err != nil {
 		t.Fatalf("the posting was refused as a whole: %v", err)
 	}
@@ -241,7 +248,7 @@ func TestDupCloudQueueChecked(t *testing.T) {
 		case "posts_take":
 			if !taken {
 				taken = true
-				_, _ = w.Write([]byte(jsonText(M{"job": M{"id": "cloud-job-00000001", "company": zz, "payload": M{"vouchers": []any{
+				_, _ = w.Write([]byte(jsonText(M{"job": M{"id": "cloud-job-00000001", "company": zz, "guid": f.guid, "payload": M{"vouchers": []any{
 					M{"id": "c1", "xml": finVoucher("c1", fgParty, fgBill, fgDate, fgAmt)},
 					M{"id": "c2", "xml": finVoucher("c2", fgParty, "FA/ELEC/020", fgDate, "1200.00")},
 					M{"id": "c3", "xml": finVoucher("c3", fgParty, "FA/ELEC/021", fgDate, "1300.00")},

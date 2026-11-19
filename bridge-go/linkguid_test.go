@@ -109,7 +109,31 @@ func lgSetup(t *testing.T) (*standTally, *listTally) {
 	l.set(coPair{zz, lgGUID})
 	f.behave = l.behave(f)
 	standBridge(t, f, `,"PostWaitMs":100,"PostBatchBills":10,"PostPaceOff":true`)
+	// a posting left waiting by a test is cancelled and has ended before the next test (it would hold Tally for it)
+	t.Cleanup(lgEndJobs)
 	return f, l
+}
+
+func lgEndJobs() {
+	jobsMu.Lock()
+	var ids []string
+	for id := range jobsRunning {
+		ids = append(ids, id)
+	}
+	jobsMu.Unlock()
+	for _, id := range ids {
+		_, _ = cancelJob(id, "test over")
+	}
+	for i := 0; i < 500; i++ {
+		alive := false
+		for _, id := range ids {
+			alive = alive || jobAlive(id)
+		}
+		if !alive {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 }
 
 func lgVouchers(prefix string, n int) []any {

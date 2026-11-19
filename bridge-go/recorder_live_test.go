@@ -862,7 +862,7 @@ func TestRecorderLinesFixture(t *testing.T) {
 // --- 4c. a posting goes first: 2,000 lines written while a 2,000-entry posting runs. No upload starts while an import
 // is at Tally, at most one group per gap between imports; every line is sent once and in order
 func TestLiveUploaderDuringPosting(t *testing.T) {
-	rec, f, c := liveBridge(t, `,"PostBatchBills":100,"CloudPostSyncSec":0`)
+	rec, f, c := liveBridge(t, `,"PostBatchBills":100,"CloudPostSyncSec":0,"PostPaceOff":true`) // PostPaceOff: parts of 100 as planned (postpace.go)
 	td := today()
 	f.importAt = func(id, body string) (bool, time.Duration) { return true, 30 * time.Millisecond }
 	var mu sync.Mutex

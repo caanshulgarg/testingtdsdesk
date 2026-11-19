@@ -320,6 +320,9 @@ type TC struct {
 	// 2.5.4 review B2: Tally itself is asked, never a late answer kept (late254.go): a posting whose company the kept list
 	// does not name asks once more
 	noLate bool
+	// linkguid.go: the company list a posting asks right before it sends: it waits for Tally's lock as the posting
+	// itself does (an earlier request still at Tally: it waits on, never given up after TallyAbandonWaitSec)
+	forPost bool
 	// 2.5.8 (nocompany258.go): the company list asked of these ports only (the others' held lists stand, nothing sent
 	// to them): the short re-ask of a Tally that answered with no company. nil: every port, as before
 	only map[int]bool
@@ -1132,7 +1135,7 @@ func invokeTallyNow(tc *TC, port int, x string, timeoutSec int) (string, error) 
 			return "", err
 		}
 	}
-	unlock0, err := enterTallyLock(tc, port, cancel, isPostingRequest(x))
+	unlock0, err := enterTallyLock(tc, port, cancel, isPostingRequest(x) || tc.forPost)
 	if err != nil {
 		return "", err
 	}
