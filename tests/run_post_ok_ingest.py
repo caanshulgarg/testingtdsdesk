@@ -194,7 +194,8 @@ try:
     ok(c == 200 and r.get("post") is True, "the same GUID: post true (%s %s)" % (c, r))
     F.LINK_GUID.pop((FIRM, "c1", "ZZ HERON CO"))
     c, r = ask("p122")
-    ok(c == 200 and r.get("post") is False and r.get("stop") == "stopped", "the link has no GUID now: stopped (%s %s)" % (c, r))
+    ok(c == 200 and r.get("post") is False and r.get("stop") == "stopped" and str(r.get("error") or "").startswith("The client's Tally link changed or was removed after this posting was made"),
+       "the link has no GUID now: stopped, in words that fit it (%s %s)" % (c, r))
     F.LINK_GUID[(FIRM, "c1", "ZZ HERON CO")] = "g-same-001"
     F.FAIL_RPC["tally_post_link_guid"] = {"code": "57014", "message": "canceling statement due to statement timeout"}
     c, r = ask("p122"); F.FAIL_RPC.pop("tally_post_link_guid", None)

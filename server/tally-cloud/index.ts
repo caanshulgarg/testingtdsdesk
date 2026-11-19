@@ -301,6 +301,8 @@ const BUSY_WORDS = "FinCom is busy, trying again";
 const POST_OK_MS = 1800;
 // migration 203's words (tally_post_job_blocked): a posting whose client was linked to another Tally company since it was made
 const POST_LINKED_ELSEWHERE = "The client was linked to another Tally company after this posting was made: check the entries and post again. Nothing more of it was sent to Tally.";
+// the link's GUID gone since the posting was stamped (unlinked, or linked again without one): words that fit it
+const POST_LINK_GONE = "The client's Tally link changed or was removed after this posting was made: check the entries and post again. Nothing more of it was sent to Tally.";
 const POST_OK_UNSURE = "FinCom could not confirm in time that this posting may be sent now, so nothing more is sent now. If none of it was sent on this try, FinCom puts it back for this FinCom Bridge, which tries again shortly; otherwise FinCom judges what reached Tally from this bridge's report.";
 const postOkUnsure = () => new Response(JSON.stringify({ ok: true, post: false, stop: "checking", error: POST_OK_UNSURE }), { status: 200, headers: { ...cors, "Content-Type": "application/json" } });
 const busyReply = () => new Response(JSON.stringify({ ok: false, busy: true, retry: true, error: BUSY_WORDS }), { status: 503, headers: { ...cors, "Content-Type": "application/json", "Retry-After": "30" } });
@@ -5173,7 +5175,8 @@ Deno.serve(sentry.wrap(async (req) => {
         if (j.company_guid) {
           const g: any = await inTime(db.rpc("tally_post_link_guid", { p_firm: j.firm_id, p_client: j.client_id, p_company: j.company }));
           if (g.error) { console.error("tally-ingest: post_ok tally_post_link_guid", id, String(g.error?.message || g.error).slice(0, 200)); return postOkUnsure(); }
-          if (String(g.data || "").trim().toLowerCase() !== String(j.company_guid).trim().toLowerCase()) return no("stopped", POST_LINKED_ELSEWHERE);
+          const now = String(g.data || "").trim().toLowerCase();
+          if (now !== String(j.company_guid).trim().toLowerCase()) return no("stopped", now ? POST_LINKED_ELSEWHERE : POST_LINK_GONE);
         }
         return reply(200, { ok: true, post: true });
       }
