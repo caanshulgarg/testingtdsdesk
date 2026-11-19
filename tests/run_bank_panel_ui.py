@@ -1,0 +1,269 @@
+"""python3 run_bank_panel_ui.py - the Bank statement page's line details as a proper side panel (18-Nov-2026; the owner:
+"i am not able to open proper side panel.. need a proper side panel with the same space"). Offline, a made-up statement of
+60 lines (no real client):
+  1. on a wide screen (1280 and 1600 px) the details panel sits BESIDE the table, not over it: the table narrows, its right
+     edge is left of the panel, and the panel has the table's top and bottom; the table's frozen header row and Date column,
+     its pinned totals and its sideways scroll keep working in the narrower box; nothing scrolls the page sideways;
+  2. a click anywhere on a line's text or empty space opens its details (not on its tick box, ledger box, buttons or links);
+     a second click on the open line, ✕ and Esc close it; ↑ / ↓ step through the lines; focus goes into the panel and back;
+     with the panel open the Status column (its whole pill) is in view without scrolling sideways, and the totals row's
+     figures and words never run into each other, open or closed (the coordinator's review of the first screenshots);
+  3. between 601 and 1099 px it stays over the table but has the table's full height;
+  4. a phone (375 / 390 px): no sideways scroll, the details a sheet from the bottom;
+  5. (the review of 18-Nov-2026) the panel shuts, and the table has its columns again, when its line is no longer on
+     screen: another tab, a filter, the search, posting it off the tab; focus then on the list, ↑ / ↓ moving; a click that
+     only shuts a column's filter does not open the line under it; Esc in the search box is the box's, the panel stays;
+     at 900 px, the page scrolled, the panel over the table follows it, inside the window and under the filters; with one
+     line per party, the panel inside the window and under the filters.
+With BANK_PANEL_SHOTS=<dir>, screenshots of the panel open at 1280, 1600 and 390 px (deviceScaleFactor 2).
+Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_bank_panel_ui.py"""
+import os, threading, functools, http.server
+os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
+from playwright.sync_api import sync_playwright
+PORT = int(os.environ.get("BANK_PANEL_PORT", "8621"))
+SITE = os.environ.get("TDSDESK_SITE", os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "app", "dist-test"))
+SHOTS = os.environ.get("BANK_PANEL_SHOTS", "")
+H = functools.partial(http.server.SimpleHTTPRequestHandler, directory=SITE)
+H.func.log_message = lambda *a: None
+srv = http.server.ThreadingHTTPServer(("localhost", PORT), H); threading.Thread(target=srv.serve_forever, daemon=True).start()
+fails, errors = [], []
+def ok(c, w):
+    print(("  ok   " if c else "  FAIL ") + w)
+    if not c: fails.append(w)
+
+SETUP = """() => {
+  const c = newCompany({name: "DEMO TRADERS PVT LTD", gstin: "27AAACD0000A1Z5"}); c.bankAccounts = [{id: "a1", bank: "DEMO BANK", acct: "0001", ledger: "Demo Bank A/c"}];
+  c.choices = {"bank:a1": {value: "Demo Bank A/c", state: "confirmed", by: "you", at: new Date().toISOString()}};
+  S.companies[c.id] = c; S.coId = c.id; S.view = "company"; S.tab = "bank";
+  const parties = ["ALPHA SUPPLIES", "BETA SERVICES PVT LTD", "GAMMA LOGISTICS", "DELTA OFFICE RENT", "EPSILON SOFTWARE", "ZETA ELECTRICITY"];
+  const st = ["attention", "suggested", "ready", "sent", "attention", "suggested"];
+  let bal = 1000000;
+  const rows = Array.from({length: 60}, (_, i) => { const out = i % 3 !== 1, amt = 1000 + (i * 137) % 9000; bal += out ? -amt : amt; const s = st[i % 6];
+    return {id: "r" + i, fp: "fp" + i, date: "2026-05-" + String(1 + (i % 28)).padStart(2, "0"), debit: out ? amt : 0, credit: out ? 0 : amt, balance: r2(bal),
+      narr: (i % 4 === 0 ? "UPI/" : "NEFT DR-") + parties[i % 6] + " INVOICE " + (500 + i) + " FOR GOODS SUPPLIED AS PER ORDER, REF " + (900000 + i),
+      dec: {name: parties[i % 6], mode: i % 4 === 0 ? "UPI" : "NEFT", utr: "REF" + (900000 + i)}, ledger: s === "attention" ? "" : parties[i % 6], state: s,
+      sentAt: s === "sent" ? "2026-05-30T10:00:00Z" : undefined, balOk: true, why: ["Party name found in the narration."], srcLabel: "Learnt"}; });
+  S.bank = {cid: c.id, loading: false, stmts: [{id: "s1", acctId: "a1", bank: "DEMO BANK", acct: "0001", from: "2026-05-01", to: "2026-05-28", opening: 1000000, closing: bal, totDr: 0, totCr: 0}], cur: "s1", rows, rules: [], wrules: [],
+    ledgers: {list: parties.map(p => ({name: p, group: "Sundry Creditors"})).concat([{name: "Demo Bank A/c", group: "Bank Accounts"}]), importedAt: new Date().toISOString(), live: true}, newLed: [], keys: {}, books: {},
+    filter: "all", grouped: false, showSettings: false, q: "", limit: 300, pendingRule: null, busy: "", createFor: null, sel: new Set(), sticky: new Set(), undo: null, hist: {rows: {}}, histVer: 0, postedTags: {}, salesRef: []};
+  render(); }"""
+OPEN = "() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"
+DR = "() => { const d = document.querySelector('[data-bank-drawer]'); return d ? d.dataset.bankDrawer : null; }"
+GEO = """() => { const d = document.querySelector('[data-bank-drawer]'), t = document.querySelector('#app .bk-tablewrap');
+  if (!d || !t) return null; const a = d.getBoundingClientRect(), b = t.getBoundingClientRect();
+  return {dl: a.left, dr: a.right, dt: a.top, db: a.bottom, tl: b.left, tr: b.right, tt: b.top, tb: b.bottom, pos: getComputedStyle(d).position,
+    sw: document.documentElement.scrollWidth, w: innerWidth, h: innerHeight}; }"""
+WIDTH = "() => document.querySelector('#app .bk-tablewrap').getBoundingClientRect().width"
+# the Status cells of the lines in view: their right edge (and their pill's) inside what the table's box shows, unscrolled
+STATUS = """() => { const b = document.querySelector('#app .bk-tablewrap'), r = b.getBoundingClientRect(), right = r.left + b.clientWidth, out = [];
+  for (const td of document.querySelectorAll('#app tbody tr[data-rid] td.bs-st')) { const c = td.getBoundingClientRect(); if (c.bottom < r.top || c.top > r.bottom) continue;
+    const t = td.querySelector('.tag'), g = t ? t.getBoundingClientRect() : c;
+    if (c.width < 20 || c.right > right + 0.5 || g.right > Math.min(c.right, right) + 0.5 || (t && t.scrollWidth > t.clientWidth + 1)) out.push([td.parentElement.dataset.rid, Math.round(c.right), Math.round(g.right), Math.round(right)]); }
+  return {bad: out, n: document.querySelectorAll('#app tbody tr[data-rid] td.bs-st').length, sl: b.scrollLeft}; }"""
+# the totals row: the words and figures of each cell, as drawn, never overlap another cell's nor leave their own cell
+FOOT = """() => { const cells = [...document.querySelectorAll('#app table.bk-table tfoot td')].filter(td => td.offsetParent && td.textContent.trim()), boxes = [], bad = [];
+  for (const td of cells) { const rg = document.createRange(); rg.selectNodeContents(td); const c = td.getBoundingClientRect();
+    const rs = [...rg.getClientRects()].filter(x => x.width > 0.5 && x.height > 0.5);
+    for (const x of rs) { if (x.left < c.left - 0.5 || x.right > c.right + 0.5) bad.push('outside its cell: ' + td.textContent.trim().slice(0, 30)); boxes.push([td, x]); } }
+  for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++) { const [ta, a] = boxes[i], [tb, b] = boxes[j];
+    if (ta !== tb && a.left < b.right - 0.5 && b.left < a.right - 0.5 && a.top < b.bottom - 0.5 && b.top < a.bottom - 0.5) bad.push('overlap: ' + ta.textContent.trim().slice(0, 24) + ' / ' + tb.textContent.trim().slice(0, 24)); }
+  return {bad: [...new Set(bad)].slice(0, 4), n: cells.length}; }"""
+
+def start(br, w, h):
+    ctx = br.new_context(viewport={"width": w, "height": h}, device_scale_factor=2)
+    pg = ctx.new_page(); pg.on("pageerror", lambda e: errors.append(str(e)[:200]))
+    pg.goto("http://localhost:%d/" % PORT); pg.wait_for_timeout(2500); pg.evaluate(OPEN); pg.wait_for_timeout(800)
+    pg.evaluate(SETUP); pg.wait_for_timeout(1200)
+    return ctx, pg
+def shot(pg, name):
+    if SHOTS:
+        os.makedirs(SHOTS, exist_ok=True); pg.screenshot(path=os.path.join(SHOTS, name))
+
+def docked(br, w, h, full):
+    print("%d px wide: the panel beside the table" % w)
+    ctx, pg = start(br, w, h); E, W = pg.evaluate, pg.wait_for_timeout
+    w0 = E(WIDTH)
+    ok(E("document.documentElement.scrollWidth") <= w, "closed: no sideways scroll (%d)" % E("document.documentElement.scrollWidth"))
+    f = E(FOOT); ok(f["n"] >= 3 and not f["bad"], "closed: the totals row's words and figures do not run into each other (%s)" % f)
+    # a click on the balance (not the date, not the particulars): the line's details open
+    pg.click('#app tr[data-rid="r4"] td.bal'); W(500)
+    ok(E(DR) == "r4", "a click on a line's balance opens its details")
+    g = E(GEO)
+    ok(g and g["tr"] <= g["dl"] + 0.5, "the table ends where the panel starts (table right %s, panel left %s)" % (g and round(g["tr"]), g and round(g["dl"])))
+    ok(g and abs(g["dt"] - g["tt"]) <= 2 and abs(g["db"] - g["tb"]) <= 2, "the panel has the table's top and bottom (panel %s-%s, table %s-%s)" % (g and round(g["dt"]), g and round(g["db"]), g and round(g["tt"]), g and round(g["tb"])))
+    ok(g and 370 <= g["dr"] - g["dl"] <= 430 and g["dr"] <= w + 0.5, "the panel is %s px wide, inside the window" % (g and round(g["dr"] - g["dl"])))
+    ok(g and g["pos"] != "fixed", "it is part of the page, not floating over it (%s)" % (g and g["pos"]))
+    ok(E(WIDTH) < w0 - 300, "the table narrowed to share the space (%d, was %d)" % (E(WIDTH), w0))
+    ok(g and g["sw"] <= w, "open: no sideways scroll of the page (%s)" % (g and g["sw"]))
+    sv = E(STATUS); ok(sv["n"] > 5 and not sv["bad"] and sv["sl"] == 0, "open: every Status pill in view is whole, without scrolling sideways (%s)" % sv)
+    f = E(FOOT); ok(f["n"] >= 3 and not f["bad"], "open: the totals row's words and figures do not run into each other (%s)" % f)
+    ok(E("!!document.querySelector('#app tr[data-rid=\"r4\"].dr-on')"), "the open line is marked in the table")
+    ok(E("document.activeElement && !!document.activeElement.closest('[data-bank-drawer]')"), "focus is in the panel")
+    ok(E("(() => { const d = document.querySelector('[data-bank-drawer]'); return !!d && d.getAttribute('role') === 'dialog' && /^Line details/.test(d.getAttribute('aria-label') || ''); })()"), "role and label kept")
+    # the narrower table still works: frozen header row and Date column, totals at the foot, scrolls sideways
+    E("() => { const b = document.querySelector('#app .bk-tablewrap'); b.scrollTop = 600; b.scrollLeft = 300; }"); W(300)
+    st = E("""() => { const b = document.querySelector('#app .bk-tablewrap'), r = b.getBoundingClientRect(), th = document.querySelector('#app table.bk-table thead th[data-role=date]').getBoundingClientRect(),
+      tf = document.querySelector('#app table.bk-table tfoot td').getBoundingClientRect(), d = document.querySelector('#app tbody td.dt').getBoundingClientRect();
+      return {box: r.top, th: th.top, foot: tf.bottom, boxb: r.bottom, dl: d.left - r.left, sl: b.scrollLeft, side: b.scrollWidth > b.clientWidth}; }""")
+    ok(abs(st["th"] - st["box"]) <= 2, "the header row stays at the top of the narrower box (%d / %d)" % (st["th"], st["box"]))
+    ok(st["foot"] <= st["boxb"] + 1 and st["boxb"] - st["foot"] < 20, "the totals stay at its foot (%d / %d)" % (st["foot"], st["boxb"]))
+    ok(not st["side"] or (st["sl"] > 0 and st["dl"] < 60), "what does not fit scrolls sideways, the Date column frozen (scrolls: %s, scrolled %d, date at %d)" % (st["side"], st["sl"], st["dl"]))
+    E("() => { const b = document.querySelector('#app .bk-tablewrap'); b.scrollTop = 0; b.scrollLeft = 0; }"); W(200)
+    if full:
+        shot(pg, "bank-panel-%d.png" % w)
+        # ↑ / ↓
+        pg.click("[data-drawer-next]"); W(300)
+        ok(E(DR) == "r5" and E("!!document.querySelector('#app tr[data-rid=\"r5\"].dr-on')"), "↓ the next line (%s)" % E(DR))
+        pg.click("[data-drawer-prev]"); W(300)
+        ok(E(DR) == "r4", "↑ the line before")
+        # a second click on the open line closes it
+        pg.click('#app tr[data-rid="r4"] td.bs-st'); W(400)
+        ok(E(DR) is None, "a second click on the open line closes it")
+        ok(abs(E(WIDTH) - w0) < 2, "and the table has its whole width again")
+        # the particulars' text, a status tag: open; Esc closes, focus back on the line's date
+        pg.click('#app tr[data-rid="r2"] td.pt .pn'); W(400)
+        ok(E(DR) == "r2", "a click on the particulars opens")
+        pg.keyboard.press("Escape"); W(300)
+        ok(E(DR) is None, "Esc closes it")
+        ok(E("document.activeElement && document.activeElement.getAttribute('data-row-open')") == "r2", "focus goes back to the line (%s)" % E("document.activeElement && document.activeElement.outerHTML.slice(0, 60)"))
+        pg.click('#app tr[data-rid="r1"] td [class*="tag"]'); W(400)
+        ok(E(DR) == "r1", "a click on the status opens")
+        pg.click("[data-drawer-close]"); W(300)
+        ok(E(DR) is None, "✕ closes it")
+        # what is a control in the line does its own thing, and does not open the details
+        pg.click('#app tr[data-rid="r0"] td.ck input[type=checkbox]'); W(300)
+        ok(E(DR) is None and E("B().sel.has('r0')"), "the tick box ticks the line, the details stay shut")
+        pg.click('#app tr[data-rid="r0"] td.ck input[type=checkbox]'); W(200)
+        pg.click('#app tr[data-rid="r1"] [data-bled]'); W(300)
+        ok(E(DR) is None, "a click in the ledger box does not open the details")
+        pg.keyboard.press("Escape"); W(200)
+        pg.click('body', position={"x": 5, "y": 5}); W(200)
+        n = E("document.querySelectorAll('#app tr[data-rid=\"r2\"] select').length")
+        if n:
+            pg.click('#app tr[data-rid="r2"] select'); W(200); pg.keyboard.press("Escape"); W(200)
+            ok(E(DR) is None, "a click on the voucher type list does not open the details")
+        pg.click('#app tr[data-rid="r2"] [data-narr-more]', force=True); W(300)
+        ok(E(DR) is None, "the narration's More does not open the details")
+        # the keyboard: the date is a button
+        pg.focus('#app tr[data-rid="r3"] [data-row-open]'); pg.keyboard.press("Enter"); W(400)
+        ok(E(DR) == "r3", "from the keyboard: Enter on the date opens it")
+        pg.click("[data-drawer-close]"); W(300)
+        ok(E("document.activeElement && document.activeElement.getAttribute('data-row-open')") == "r3", "✕: focus back on the line")
+        # the rail's full menu over the page: Esc closes the menu first, the details stay
+        pg.click('#app tr[data-rid="r2"] td.bal'); W(400)
+        pg.click('.bkr [data-rail-menu]'); W(300)
+        pg.keyboard.press("Escape"); W(300)
+        ok(E("!document.querySelector('.bkr [data-rail-menu][aria-expanded=true]')") and E(DR) == "r2", "with the full menu open, Esc closes the menu and the details stay")
+        pg.keyboard.press("Escape"); W(300)
+        ok(E(DR) is None, "a second Esc closes the details")
+    ctx.close()
+
+COLS = "() => !!document.querySelector('#app .bk-space.bk-dr-open') || getComputedStyle(document.querySelector('#app table.bk-table thead th.bal')).display === 'none'"
+FOCUS = "() => { const a = document.activeElement; return a ? (a.dataset.bankGrid !== undefined ? 'grid' : a.closest('[data-bank-drawer]') ? 'panel' : a.tagName + '.' + a.className) : null; }"
+
+def behave(br):
+    print("1280 px: the panel shuts when its line leaves the screen")
+    ctx, pg = start(br, 1280, 800); E, W = pg.evaluate, pg.wait_for_timeout
+    w0 = E(WIDTH)
+    def shut(why):
+        ok(E(DR) is None and not E(COLS) and abs(E(WIDTH) - w0) < 2, why + ": the panel shuts and the table has its columns and width again (%s, %d)" % (E(DR), E(WIDTH)))
+    # another tab (focus was in the panel): focus on the list, ↑ / ↓ move
+    pg.click('#app tr[data-rid="r4"] td.bal'); W(400)
+    ok(E(DR) == "r4" and E(COLS), "open on the line r4")
+    E("() => bankTabGo('ready')"); W(500)
+    shut("another tab")
+    ok(E(FOCUS) == "grid", "focus is on the list (%s)" % E(FOCUS))
+    k0 = E("B().kbRow"); pg.keyboard.press("ArrowDown"); W(200); k1 = E("B().kbRow")
+    ok(k1 and k1 != k0 and E("!!document.querySelector('#app tr.kb-on[data-rid=\"' + B().kbRow + '\"]')"), "↓ moves on the list (%s to %s)" % (k0, k1))
+    E("() => bankTabGo('all')"); W(500)
+    # a filter: Out / In
+    pg.click('#app tr[data-rid="r3"] td.bal'); W(400)
+    ok(E(DR) == "r3", "open on r3 (a withdrawal)")
+    pg.click('#app [data-dir="in"]'); W(500)
+    shut("In (deposits) only")
+    pg.click('#app [data-dir=""]'); W(400)
+    # the search: Esc in the box is the box's, then a search the line is not in
+    pg.click('#app tr[data-rid="r2"] td.bal'); W(400)
+    pg.click('#app input.bs-search'); pg.keyboard.type("GAMMA"); W(700)
+    ok(E(DR) == "r2", "a search the line is in: the panel stays")
+    pg.keyboard.press("Escape"); W(300)
+    ok(E(DR) == "r2" and E("document.activeElement && document.activeElement.classList.contains('bs-search')"), "Esc in the search box: the panel stays, focus in the box")
+    pg.fill('#app input.bs-search', "ALPHA"); W(700)
+    shut("a search the line is not in")
+    ok(E("document.activeElement && document.activeElement.classList.contains('bs-search')"), "and the search box keeps the focus")
+    pg.fill('#app input.bs-search', ""); W(700)
+    # posting it off the tab: a ready line on the Ready tab, posted (Tally's reply, as the bridge gives it)
+    E("() => bankTabGo('ready')"); W(500)
+    pg.click('#app tr[data-rid="r8"] td.bal'); W(400)
+    ok(E(DR) == "r8", "open on a ready line, Ready tab")
+    E("() => { const b = B(), r = b.rows.find(x => x.id === 'r8'); bankPosted(b.cid, r, {guid: 'g-demo-1', verified: true}, 'DEMO TRADERS', new Date().toISOString(), {quiet: true}); render(); }"); W(500)
+    shut("posted to Tally, off the Ready tab")
+    ok(E(FOCUS) == "grid", "focus is on the list (%s)" % E(FOCUS))
+    E("() => bankTabGo('all')"); W(500)
+    # a click that only shuts a column's filter does not open the line under it
+    pg.click('#app th [data-hf="bal"]'); W(300)
+    ok(E(VISQ, ".colpop"), "the Balance column's filter is open")
+    pg.click('#app tr[data-rid="r6"] td.bal'); W(400)
+    ok(not E(VISQ, ".colpop") and E(DR) is None, "a click on a line shuts the filter and does not open the line (%s)" % E(DR))
+    pg.click('#app tr[data-rid="r6"] td.bal'); W(400)
+    ok(E(DR) == "r6", "the next click opens it")
+    # one line per party: the panel stays inside the window, under the filters
+    E("() => { B().filter = 'review'; B().drawer = 'r4'; bankSetGrouped(true); }"); W(600)
+    g = E(PANEL)
+    ok(E(DR) == "r4" and g and g["t"] >= g["fb"] - 1 and g["b"] <= g["h"] + 1 and g["b"] - g["t"] >= 200, "one line per party: the panel under the filters, inside the window (%s)" % g)
+    E("() => { bankSetGrouped(false); }"); W(300)
+    ctx.close()
+
+VISQ = "(s) => { const e = document.querySelector(s); return !!e && e.getClientRects().length > 0; }"
+PANEL = """() => { const d = document.querySelector('[data-bank-drawer]'), f = document.querySelector('#app [data-bank-filters]'), hd = document.querySelector('header.top');
+  if (!d) return null; const a = d.getBoundingClientRect(), hp = hd ? getComputedStyle(hd).position : '';
+  return {t: Math.round(a.top), b: Math.round(a.bottom), fb: f ? Math.round(f.getBoundingClientRect().bottom) : 0, hb: hd && /fixed|sticky/.test(hp) ? Math.round(hd.getBoundingClientRect().bottom) : 0, h: innerHeight}; }"""
+
+def overlay(br):
+    print("900 px: the panel over the table follows the page's scroll")
+    ctx, pg = start(br, 900, 420); E, W = pg.evaluate, pg.wait_for_timeout
+    pg.click('#app tr[data-rid="r4"] td.bal'); W(500)
+    g0 = E(GEO); ok(E(DR) == "r4" and g0 and abs(g0["dt"] - g0["tt"]) <= 2, "open, at the table's top (%s / %s)" % (g0 and round(g0["dt"]), g0 and round(g0["tt"])))
+    for y in (0, 60, 400):
+        E("(y) => window.scrollTo(0, y)", y); W(400)
+        g, q = E(GEO), E(PANEL)
+        ok(E("scrollY") > 0 if y else E("scrollY") == 0, "the page scrolled to %d" % E("scrollY"))
+        want = max(g["tt"], q["hb"] + 6)
+        ok(abs(g["dt"] - want) <= 2, "scrolled %d: the panel starts at the table's top, or under the header (%d, want %d)" % (y, g["dt"], want))
+        ok(g["db"] <= g["h"] + 1 and g["dt"] >= 0 and g["db"] <= g["tb"] + 2 and g["db"] - g["dt"] >= 200, "and is inside the window, not past the table's foot (%d-%d of %d, table %d-%d)" % (g["dt"], g["db"], g["h"], g["tt"], g["tb"]))
+        ok(g["dt"] >= q["fb"] - 1, "and never over the filters (panel %d, filters end %d)" % (g["dt"], q["fb"]))
+    ctx.close()
+
+with sync_playwright() as p:
+    br = p.chromium.launch()
+    behave(br)
+    overlay(br)
+    docked(br, 1280, 800, True)
+    docked(br, 1600, 900, True)
+
+    print("1000 px: over the table, its full height")
+    ctx, pg = start(br, 1000, 800); E, W = pg.evaluate, pg.wait_for_timeout
+    pg.click('#app tr[data-rid="r4"] td.bal'); W(500)
+    g = E(GEO)
+    ok(E(DR) == "r4", "a click on the line opens it")
+    ok(g and abs(g["dt"] - g["tt"]) <= 2 and abs(g["db"] - g["tb"]) <= 2, "the panel has the table's top and bottom (panel %s-%s, table %s-%s)" % (g and round(g["dt"]), g and round(g["db"]), g and round(g["tt"]), g and round(g["tb"])))
+    ok(g and g["dr"] <= 1000.5 and g["dl"] > g["tl"], "on the right, over the table (%s-%s)" % (g and round(g["dl"]), g and round(g["dr"])))
+    ok(g and g["sw"] <= 1000, "no sideways scroll (%s)" % (g and g["sw"]))
+    ctx.close()
+
+    for w in (375, 390):
+        print("%d px: a phone" % w)
+        ctx, pg = start(br, w, 844); E, W = pg.evaluate, pg.wait_for_timeout
+        ok(E("document.documentElement.scrollWidth") <= w, "no sideways scroll (%d)" % E("document.documentElement.scrollWidth"))
+        E("() => { B().drawer = 'r2'; render(); }"); W(500)
+        d = E("() => { const r = document.querySelector('[data-bank-drawer]').getBoundingClientRect(); return [r.left, r.right, r.top, r.bottom]; }")
+        ok(d[0] <= 1 and d[1] >= w - 1 and d[3] >= 843, "the details are a sheet from the bottom (%s)" % [round(x) for x in d])
+        ok(E("document.documentElement.scrollWidth") <= w, "open: no sideways scroll (%d)" % E("document.documentElement.scrollWidth"))
+        if w == 390: shot(pg, "bank-panel-390.png")
+        pg.click("[data-drawer-close]"); W(300)
+        ok(E(DR) is None, "✕ closes it")
+        ctx.close()
+    br.close()
+ok(not errors, "no page errors" + ("" if not errors else ": " + "; ".join(errors[:3])))
+print("\nFAILED: %d" % len(fails) if fails else "\nall ok")
+raise SystemExit(1 if fails else 0)

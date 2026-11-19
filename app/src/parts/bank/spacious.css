@@ -6,7 +6,7 @@
         full width except the tabs and the filters, which share a line; "order" puts the header first;
      3. the table as tall as the window leaves (--bk-fill, Spacious.jsx), its header row and Date column frozen, its totals
         pinned at its foot;
-     4. a line's details in a drawer on the right; the totals of the page pinned at the foot (the bar);
+     4. a line's details in a panel on the right (beside the table from 1100 px, 18-Nov-2026); the totals of the page pinned at the foot (the bar);
      5. Comfortable (40 px lines) or Compact (30 px).
    Phones (600 px and less) keep FinCom's cards; only the header, the drawer and the totals are laid out for them. */
 @media (min-width: 601px) {
@@ -73,7 +73,8 @@
   #app .bk-space .bk-tablewrap { height: var(--bk-fill, auto); max-height: none; }
   #app .bk-space table.bk-table:not(.cards) th.pt { min-width: 300px; }
   html.bk-spacious #app .bk-space table.bk-table.lt.lt:not(.cards) > tfoot td { position: sticky; bottom: 0; z-index: 3; background: var(--surface, var(--sheet)); box-shadow: inset 0 1px 0 var(--border, var(--rule)); }
-  #app .bk-space table.bk-table.lt:not(.cards) > tbody > tr > td.pt, #app .bk-space table.bk-table.lt:not(.cards) > tbody > tr > td.dt { cursor: pointer; }
+  /* a click anywhere on a line opens its details (Spacious.jsx rowOpen), not on its tick box */
+  #app .bk-space table.bk-table.lt:not(.cards) > tbody > tr[data-rid] > td:not(.ck) { cursor: pointer; }
   #app .bk-space table.bk-table > tbody > tr.dr-on > td { background: color-mix(in oklab, var(--accent) 8%, var(--surface)) !important; }
 
   /* Comfortable: lines of 40 px (the owner's "about 40", 25-Oct-2026), the totals row low */
@@ -113,8 +114,33 @@
 .bsp-hist b { color: var(--foreground); }
 .bsp-acts { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 8px; border-top: 1px solid var(--border-subtle, var(--border)); }
 
-/* the totals row at the foot of the table (Bank.jsx FootNote) */
-#app .bk-space .bsp-foot { white-space: nowrap; font-variant-numeric: tabular-nums; }
+/* 18-Nov-2026 (the owner: "need a proper side panel with the same space"): a computer's screen, the panel the table's
+   height, starting where the table's box starts (--bk-top and --bk-dr-h, Spacious.jsx fill, measured again on scroll and
+   kept under the header and inside the window), over the table's right side */
+@media (min-width: 601px) {
+  html.bk-spacious .bsp-drawer { top: var(--bk-top, calc(var(--head-h, 56px) + 6px)); bottom: auto; height: var(--bk-dr-h, var(--bk-fill, calc(100vh - var(--head-h, 56px) - 98px))); }
+}
+/* 1100 px and more: beside the table, not over it. The table (.bs-grid) and the panel share the row (#app is a wrapping
+   flex row, spacious.css 2.): the table narrows, keeps its frozen header and Date column, pinned totals and sideways
+   scroll in its narrower box, and no column is hidden under the panel. The table's basis is the row less the panel and
+   the gap (412 px), so it never climbs onto the line of the tabs and filters above it, and shares its own line with the panel */
+@media (min-width: 1100px) {
+  html.bk-spacious #app > .react-host > .bk-space.bk-dr-open > .bs-grid { flex: 1 1 calc(100% - 413px); min-width: 0; align-self: flex-start; }
+  html.bk-spacious #app > .react-host > .bk-space.bk-dr-open > .bsp-drawer { position: relative; top: auto; right: auto; bottom: auto; z-index: 4;
+    flex: 0 0 400px; width: 400px; max-width: none; height: var(--bk-fill, 70vh); align-self: flex-start;
+    border-right: 1px solid var(--border); border-radius: 12px; box-shadow: none; }
+  /* the narrower table (the coordinator's review of the first screenshots, 18-Nov-2026): the Balance, Type and actions
+     columns rest while the panel is open (the panel shows the open line's balance, voucher type and actions), so the
+     Status pill is in view without scrolling sideways; the table is at least 880 px (the particulars about 230 px at
+     1280 px), the Ledger column partly behind the sideways scroll at 1280, all of it in view at 1600 */
+  html.bk-spacious #app .bk-space.bk-dr-open table.bk-table.lt.lt:not(.cards) { min-width: 880px; }
+  html.bk-spacious #app .bk-space.bk-dr-open table.bk-table:not(.cards) :is(th, td):is(.bal, .vt, .ac) { display: none; }
+}
+
+/* the totals row at the foot of the table (Bank.jsx FootNote): its words wrap inside their cell (the count and the
+   opening and closing ran over the withdrawals' total at 1280 px, 18-Nov-2026); each figure stays on one line */
+#app .bk-space .bsp-foot { white-space: normal; font-variant-numeric: tabular-nums; }
+#app .bk-space .bsp-foot b { white-space: nowrap; }
 #app .bk-space .bsp-foot .linkbtn { font-size: inherit; }
 #app .actionbar.bs-bankbar { flex-wrap: wrap !important; row-gap: 4px; }
 #app .actionbar.bs-bankbar > .ab-left { flex: 0 1 auto; min-width: 0; }

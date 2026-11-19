@@ -18,7 +18,7 @@ import HeadFilter from "../parts/bank/HeadFilter.jsx";
 import { markGone, goneOpen, goneLine, goneCount, goneToast } from "../parts/bank/goneSent.js";
 import "../parts/bank/bankSmart.css";
 import Rail from "../parts/bank/Rail.jsx";
-import { Drawer, Density, ActiveChips, useSpacious, rowOpen, rowTally, denseOn, bankParty, BST, fill, fillSoon } from "../parts/bank/Spacious.jsx";
+import { Drawer, Density, ActiveChips, useSpacious, rowOpen, dismissing, drawerGone, rowTally, denseOn, bankParty, BST, fill, fillSoon } from "../parts/bank/Spacious.jsx";
 import { BankSettings, RulesPanel } from "../parts/BankSettings.jsx";
 import { PostReport, ReviewCheck, FixBanner, BankBalance, Recon, Gone, DupFind, BankFocus } from "../parts/BankChecks.jsx";
 import { ColFunnel } from "../parts/ColHead.jsx";
@@ -107,7 +107,7 @@ function bankCols(b, rows, nSel) {
       cell: (r) => <input type="checkbox" aria-label="Select" checked={b.sel.has(r.id)} disabled={r.state === "sent"} onChange={() => {}} onClick={(ev) => bankToggleRow(r.id, ev.target.checked, ev.shiftKey)} /> },
     { k: "date", role: "date", label: "Date", cls: "dt", filter: <ColFunnel t="bank" k="date" label="Date" />, v: (r) => r.date || "", td: (r) => ({ title: fmtDate(r.date) }),
       // spacious layout: the date opens the line's details (the drawer), by keyboard too
-      cell: (r) => <button type="button" className="bs-dt" data-row-open={r.id} aria-label={"Details of the line of " + fmtDate(r.date)} onClick={() => { const b = B(); b.drawer = b.drawer === r.id ? null : r.id; render(); }}>{shortDate(r.date)}</button> },
+      cell: (r) => <button type="button" className="bs-dt" data-row-open={r.id} aria-label={"Details of the line of " + fmtDate(r.date)} onClick={(ev) => { if (dismissing(ev)) return; const b = B(); b.drawer = b.drawer === r.id ? null : r.id; render(); }}>{shortDate(r.date)}</button> },
     // the whole narration, two lines at most (all of it on hover), the party read from it first and the mode and reference
     // in small letters (24-Oct-2026: one line of 60 letters and a second of the narration cut short, 69 px a row)
     // 25-Oct-2026 (the owner: "size has become too short"; party, mode, reference and narration ran together): the party in
@@ -129,7 +129,7 @@ function bankCols(b, rows, nSel) {
     { k: "dep", role: "amount", label: "Deposit", cls: "n", filter: <ColFunnel t="bank" k="dep" label="Deposit" />, v: (r) => num(r.credit) || null, sum: (r) => num(r.credit), cell: (r) => <>{bkAmt(r.credit)}{r.credit ? flag(r) : null}</> },
     { k: "bal", role: "amount", label: "Balance", cls: "n bal", sum: false, filter: <HeadFilter k="bal" label="Balance" />, v: (r) => (r.balance === null || r.balance === undefined || r.balance === "" ? null : num(r.balance)),
       cell: (r) => (r.balance === null || r.balance === undefined || r.balance === "" ? "" : INR.format(r2(num(r.balance)))) },
-    { k: "st", role: "status", label: "Status", filter: <HeadFilter k="st" label="Status" />, v: (r) => (BST[r.state] || ["", r.state])[1], cell: (r) => { const w = BST[r.state] || ["no", r.state]; return <span className={"tag " + w[0]}>{w[1]}</span>; } },
+    { k: "st", role: "status", label: "Status", cls: "bs-st", filter: <HeadFilter k="st" label="Status" />, v: (r) => (BST[r.state] || ["", r.state])[1], cell: (r) => { const w = BST[r.state] || ["no", r.state]; return <span className={"tag " + w[0]}>{w[1]}</span>; } },
     { k: "led", label: "Ledger", cls: "lg", filter: <ColFunnel t="bank" k="led" label="Ledger" />, v: (r) => r.ledger || "", cell: (r) => <RowLedger r={r} /> },
     // the voucher type the line goes to Tally as (set by the ledger: Contra for a bank or cash ledger); changeable while open
     { k: "vt", label: "Type", cls: "vt", filter: <HeadFilter k="vt" label="Type" />, v: (r) => vtypeOf(r), cell: (r) => ["attention", "suggested", "ready"].includes(r.state)
@@ -232,7 +232,7 @@ function Table({ tab, all }) {
     <ListTable name="bank" className="bk-table gf-off" keepHead resize freeze={2} cols={bankCols(b, all, nSel)} rows={all} rowKey={(r) => r.id} selected={b.sel} unit={["entry", "entries"]} of={b.rows.length} limit={b.limit} more={more} footNote={<FootNote b={b} all={all} />}
       after={(r) => (b.splitOpen === r.id && ["attention", "suggested", "ready"].includes(r.state) ? <SplitEditor r={r} /> : null)}
       rowProps={(r) => ({ className: "st-" + r.state + (b.sel.has(r.id) ? " picked" : "") + (b.kbRow === r.id ? " kb-on" : "") + (b.drawer === r.id ? " dr-on" : ""), "data-rid": r.id,
-        onClick: (ev) => { if (ev.target.closest("td.pt, td.dt")) rowOpen(ev, r.id); } })}
+        onClick: (ev) => rowOpen(ev, r.id) })}
       empty={bankRangeOn() || (b.chips || []).length || b.sugOnly ? <>Nothing matches these filters. <button className="linkbtn" onClick={() => { b.chips = []; b.sugOnly = false; colChipAll("bank"); }}>Clear all filters</button> to see every entry.</> : EMPTY[tab] || "Nothing here. Use Upload statement at the top right to add one."} />
   </div>;
 }
@@ -441,9 +441,16 @@ function BankPage() {
   if (b.dense === undefined) b.dense = denseOn();
   // posting (moved from the bar at the foot to the header, spacious layout): waits until the account's ledger is confirmed
   const noLed = !bankLedgerReady(CO(), acc), whyLed = noLed ? bankLedgerWhy(CO(), acc) : "";
+  // the statement's lines are shown (not the rules, not one line per party): a line's details can sit beside them
+  const lines = tab !== "rules" && !(tab === "review" && b.grouped && apView("bank") !== "auto");
+  // the lines on screen (the column filters too): the open line's details only while it is one of them;
+  // a tab, filter, search or statement changed, or posting moved it off this tab: the panel shuts (18-Nov-2026 review)
+  const lsh = lines && b.drawer ? listShownSet("bank") : null, onScreen = lsh ? shown.filter((r) => lsh.has(r.id)) : shown;
+  if (b.drawer && (tab === "rules" || (b.drIn && b.drIn !== b.cur) || !onScreen.some((x) => x.id === b.drawer))) drawerGone(b);
+  b.drIn = b.drawer ? b.cur : null;
   return <>
     <SpaceOn />
-    <div className={"bk bk-smart bk-space" + (b.dense ? " bk-dense" : "")} data-density={b.dense ? "compact" : "comfortable"}>
+    <div className={"bk bk-smart bk-space" + (b.dense ? " bk-dense" : "") + (lines && b.drawer ? " bk-dr-open" : "")} data-density={b.dense ? "compact" : "comfortable"}>
       {/* upload-pages (14-Oct-2026): the states are the page's one row of states (parts/StateBar.jsx); the rules are not a
           state, so they open from their own button. 24-Oct-2026: the search and Group by party are in the filter bar */}
       {tab === "rules" && <div className="bk-bar"><button className="btn small" data-bank-rules-back="" onClick={() => bankTabGo("review")}>← Back to the statement</button></div>}
@@ -498,9 +505,10 @@ function BankPage() {
       {tab !== "rules" && <SmartBar rows={shown} base={view} grouped={b.grouped} />}
       {b.q.trim() && tab !== "rules" && <Found key={b.q} shown={shown} />}
       {tab !== "rules" && <AutoFilter kind="bank" all={b.rows} />}
-      {tab === "rules" ? <RulesPanel /> : tab === "review" && b.grouped && apView("bank") !== "auto" ? <Groups /> : <Table tab={tab} all={shown} />}
+      {tab === "rules" ? <RulesPanel /> : lines ? <Table tab={tab} all={shown} /> : <Groups />}
+      {/* a line's details: beside the table on a wide screen (spacious.css, .bk-dr-open), so drawn right after it */}
+      {tab !== "rules" && <Drawer rows={onScreen} />}
       {tab !== "rules" && apView("bank") === "auto" && <RunLine />}
-      {tab !== "rules" && <Drawer rows={shown} />}
     </div>
     {b.showSettings && <BankSettings />}
   </>;

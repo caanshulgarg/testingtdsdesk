@@ -146,6 +146,8 @@ with sync_playwright() as p:
     E(BACK); W(700)
     pg.focus('.bkr [data-rail="sales"]'); W(200); ok(E(VIS, '[data-rail-flyout="sales"]'), "focus Sales: its flyout"); pg.mouse.click(700, 500); W(250)
     ok(not E(VIS, '[data-rail-flyout="sales"]'), "a click elsewhere closes a flyout")
+    # that click lands on a line of the table: it only shuts the flyout, the line's details stay shut (18-Nov-2026 review)
+    ok(E("!document.querySelector('[data-bank-drawer]')"), "and does not open the line under it")
     E("() => { window.__acts = []; const a = window.bankAct, d = window.doAct; window.bankAct = (x, ...r) => { window.__acts.push(x); if (x !== 'bookPick' && x !== 'bankCheckTally') return a(x, ...r); }; window.doAct = (x, ...r) => { window.__acts.push(x); if (x !== 'uploadHere') return d(x, ...r); }; }")
     for (sec, word, want) in SUBS:
         E(BACK); W(700); E("window.__acts = []")
@@ -222,8 +224,9 @@ with sync_playwright() as p:
 
     print("6. the drawer")
     pg.click('#app tr[data-rid="r4"] td.pt .pn'); W(400)
-    dr = E("() => { const d = document.querySelector('[data-bank-drawer]'); if (!d) return null; const r = d.getBoundingClientRect(); return {id: d.dataset.bankDrawer, right: r.right, w: r.width, txt: d.innerText}; }")
-    ok(dr and dr["id"] == "r4" and abs(dr["right"] - 1440) < 2, "a click on a line's particulars: its drawer on the right")
+    dr = E("() => { const d = document.querySelector('[data-bank-drawer]'); if (!d) return null; const r = d.getBoundingClientRect(), t = document.querySelector('#app .bk-tablewrap').getBoundingClientRect(); return {id: d.dataset.bankDrawer, right: r.right, left: r.left, tr: t.right, w: r.width, txt: d.innerText}; }")
+    # 18-Nov-2026: on a wide screen the panel sits beside the table, inside the page's margin (run_bank_panel_ui.py)
+    ok(dr and dr["id"] == "r4" and dr["right"] <= 1440 and dr["right"] > 1440 - 40 and dr["tr"] <= dr["left"] + 0.5, "a click on a line's particulars: its details on the right, beside the table")
     ok(dr and "INVOICE 504" in dr["txt"] and "Rule used" in dr["txt"] and "Tally voucher" in dr["txt"] and "History" in dr["txt"], "with the narration, the rule, the Tally voucher and the history")
     ok(E(VIS, "[data-drawer-gone]") and "Already posted to Tally" in E("document.querySelector('[data-drawer-gone]').innerText"), "and the “Already posted to Tally” warning")
     ok(E("!!document.querySelector('[data-drawer-led=r4]')"), "its ledger can be changed there")

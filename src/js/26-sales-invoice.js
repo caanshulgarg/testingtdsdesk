@@ -270,6 +270,25 @@ function salesRemapWaiting(){
   return true;
 }
 if (typeof salesRemapWaiting !== "undefined") globalThis.salesRemapWaiting = salesRemapWaiting;
+// next-fix-sales-hang (FINCOM-APP-STAGING-K, staging 18-Nov-2026: 2,063 ms in React's click handler on Sales, last_ui
+// side-client): the client card opens the switcher, which draws the page again in the click's task, Sales with it. Each
+// invoice waiting showed its duplicate check (SalesAsk), and with no index by number each check went through every
+// invoice of the client (salesOfNo: the whole list): the drawing, and the problems worked out again on opening
+// (loadSales), went as the square of the invoices. f is run with the invoices listed by number once: within a drawing
+// the one list for the whole drawing (perRender, src/js/01), else made for f. tests/run_hang_sales_open.py
+function salesByNo(f){
+  const s = SL(), was = salesNoIdx;
+  if (was || !s || !s.list) return f();
+  // keyed on every save of the invoices (SALES_REV) and the list itself, so a draw reused after a save never checks old invoices
+  const list = s.list, make = () => ({list, i: Ledgers.keyed(list, v => normInvNo(v.x.number))});
+  let got = typeof perRender === "function" ? perRender(s, "salesByNo:" + (typeof SALES_REV === "number" ? SALES_REV : 0), make) : make();
+  if (got.list !== list) got = make();
+  salesNoIdx = got.i;
+  try { return f(); } finally { salesNoIdx = was; }
+}
+function salesDupNow(v){ return salesByNo(() => salesDupOf(v)); }
+if (typeof salesByNo !== "undefined") globalThis.salesByNo = salesByNo;
+if (typeof salesDupNow !== "undefined") globalThis.salesDupNow = salesDupNow;
 // (this file comes with the Sales screen: what is open is looked at now)
 setTimeout(() => { try { if (salesRemapWaiting()) render(); } catch (e){} }, 0);
 /* @react-lazy: end */

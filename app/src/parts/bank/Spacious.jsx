@@ -12,6 +12,7 @@ import { isAuto } from "../AutoPost.jsx";
 import { keep, kept } from "./Rail.jsx";
 import { RepMark } from "./Overlap.jsx";
 import { BankOverlap } from "../../lib/bankOverlap.js";
+import { kbMark } from "./smart.js";
 import "./spacious.css";
 
 const live = () => Bridge.on() && Bridge.up();
@@ -73,7 +74,7 @@ export function useSpacious() {
   useLayoutEffect(() => {
     const h = document.documentElement;
     h.classList.add("bk-spacious");
-    return () => { h.classList.remove("bk-spacious"); h.style.removeProperty("--bk-fill"); };
+    return () => { h.classList.remove("bk-spacious"); h.style.removeProperty("--bk-fill"); h.style.removeProperty("--bk-top"); h.style.removeProperty("--bk-dr-h"); };
   }, []);
   useLayoutEffect(fill);
   // what stands above the table (the header, the notices, the tabs and filters, which can wrap) changing height: measured again
@@ -89,10 +90,14 @@ export function useSpacious() {
   useEffect(() => {
     const on = () => fill();
     window.addEventListener("resize", on);
+    // the page scrolled: where the table's box starts in the window moved (the panel over it, 601-1099 px, follows)
+    window.addEventListener("scroll", fillSoon, { passive: true });
+    // a press that only shuts an open flyout, list or picker (rowOpen does not then open a line)
+    window.addEventListener("pointerdown", downAt, true);
     const ro = typeof ResizeObserver === "function" ? new ResizeObserver(fillSoon) : null;
     const top = document.querySelector("header.top"); if (ro && top) ro.observe(top);
     const app = document.getElementById("app"); if (ro && app) ro.observe(app);
-    return () => { window.removeEventListener("resize", on); if (ro) ro.disconnect(); };
+    return () => { window.removeEventListener("resize", on); window.removeEventListener("scroll", fillSoon); window.removeEventListener("pointerdown", downAt, true); if (ro) ro.disconnect(); };
   }, []);
 }
 // a ResizeObserver's callback never sets --bk-fill itself (Sentry FINCOM-APP-STAGING-E, 02/03-Nov-2026, Safari): --bk-fill
@@ -106,18 +111,49 @@ export function fillSoon() {
   fillFrame = typeof requestAnimationFrame === "function" ? requestAnimationFrame(go) : setTimeout(go, 16);
 }
 export function fill() {
-  const box = document.querySelector("#app .bk-space .bk-tablewrap");
-  if (!box || window.innerWidth <= 600) return;
+  if (window.innerWidth <= 600) return;
+  const box = document.querySelector("#app .bk-space .bk-tablewrap"), hs = document.documentElement.style;
   const bar = document.querySelector(".bs-bankbar"), ban = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--bottom-banner-h")) || 0;
-  const se = document.scrollingElement || document.documentElement;
-  const top = box.getBoundingClientRect().top + se.scrollTop, under = (bar ? bar.getBoundingClientRect().height : 0) + ban + 6;
+  const se = document.scrollingElement || document.documentElement, under = (bar ? bar.getBoundingClientRect().height : 0) + ban + 6;
+  const set = (k, v) => { if (hs.getPropertyValue(k) !== v) hs.setProperty(k, v); };
+  // the panel over the table (601-1099 px, and any width with no lines beside it) never above the header nor the filters,
+  // and its foot inside the window
+  const hd = document.querySelector("header.top"), hp = hd ? getComputedStyle(hd).position : "";
+  const hb = hd && (hp === "fixed" || hp === "sticky") ? Math.max(0, hd.getBoundingClientRect().bottom) : 0;
+  const place = (t, b) => { t = Math.round(Math.max(t, hb + 6)); set("--bk-top", t + "px"); set("--bk-dr-h", Math.max(200, Math.round(Math.min(b, window.innerHeight - under) - t)) + "px"); };
+  if (!box) {
+    // no table on the page (one line per party with none to show): the panel starts under the filters, or the header
+    const f = document.querySelector("#app [data-bank-filters]");
+    hs.removeProperty("--bk-fill");
+    place(f ? f.getBoundingClientRect().bottom + 6 : 0, window.innerHeight);
+    return;
+  }
+  const top = box.getBoundingClientRect().top + se.scrollTop;
   // the "Show more" button under the table, when there is one
   const more = box.parentElement && box.parentElement.querySelector(":scope > .bk-more"), mh = more ? more.getBoundingClientRect().height + 6 : 0;
-  const v = Math.max(280, Math.round(window.innerHeight - top - under - mh)) + "px";
-  if (document.documentElement.style.getPropertyValue("--bk-fill") !== v) document.documentElement.style.setProperty("--bk-fill", v);
+  set("--bk-fill", Math.max(280, Math.round(window.innerHeight - top - under - mh)) + "px");
+  // where the table's box is in the window, measured again as the page scrolls: the line's details (between 601 and
+  // 1099 px, over the table) start and end there too
+  const r = box.getBoundingClientRect();
+  place(r.top, r.bottom);
 }
 
-// ---- a line's details: the drawer on the right ----
+// a press while a flyout, a column's filter, a calendar, a list or the full menu is open, outside it: it only shuts that
+// (18-Nov-2026 review: it opened the line under it too)
+const OPEN_POP = "[data-rail-flyout], [role=menu], [role=listbox], .colpop, .datebox-pop, details[data-f-more][open], [data-ac-open]";
+let down = { t: 0, shut: false };
+function downAt(ev) {
+  const t = ev.target, inside = (el) => el.contains(t);
+  const pops = [...document.querySelectorAll(OPEN_POP)].filter((el) => el.getClientRects().length && !inside(el));
+  down = { t: Date.now(), shut: pops.length > 0 || (document.documentElement.classList.contains("bk-rail-menu") && !(t.closest && t.closest("#side, .bkr"))) };
+}
+// the click that follows such a press (not one from the keyboard: no press, ev.detail 0)
+export const dismissing = (ev) => !!(ev && ev.detail > 0 && down.shut && Date.now() - down.t < 2000);
+
+// ---- a line's details: the panel on the right ----
+// 18-Nov-2026 (the owner: "need a proper side panel with the same space"): on a wide screen (1100 px and more) the panel
+// sits beside the table, at the table's height, and the table narrows to share the space (spacious.css, .bk-dr-open);
+// between 601 and 1099 px it lies over the table, the table's full height; on a phone, a sheet from the bottom
 const STEP = { you: "set by you", rule: "by a rule", hist: "learnt from earlier statements" };
 function history(b, r) {
   const st = curStmt(), out = [];
@@ -131,12 +167,35 @@ function history(b, r) {
   return out;
 }
 
+// the open line no longer shown (another tab, filter, search or statement; posted off this tab): the panel shuts, and the
+// keys stay on the list, on its first line, when focus was in the panel or lost with it
+export function drawerGone(b) {
+  const a = document.activeElement, was = !!(a && a.closest && a.closest("[data-bank-drawer]"));
+  b.drawer = null;
+  requestAnimationFrame(() => {
+    const now = document.activeElement, g = document.querySelector("#app [data-bank-grid]");
+    if (!g || !(was || !now || now === document.body || !now.isConnected)) return;
+    g.focus({ preventScroll: true });
+    const ids = [...g.querySelectorAll("tbody tr[data-rid]")].map((tr) => tr.dataset.rid);
+    if (ids.length && !ids.includes(B().kbRow)) kbMark(g, ids[0]);
+  });
+}
+
 export function Drawer({ rows }) {
   const b = B(), box = useRef(null), id = b.drawer, r = id ? b.rows.find((x) => x.id === id) : null;
-  const close = () => { b.drawer = null; render(); };
+  // closed from inside it (✕, Esc): focus goes back to the line's date, so the keyboard carries on from the line
+  const close = () => {
+    const back = !!(box.current && box.current.contains(document.activeElement)), was = b.drawer;
+    b.drawer = null; render();
+    if (back && was) requestAnimationFrame(() => { const el = document.querySelector('#app [data-row-open="' + CSS.escape(was) + '"]'); if (el) el.focus({ preventScroll: true }); });
+  };
   useEffect(() => {
     if (!id) return undefined;
-    const esc = (ev) => { if (ev.key === "Escape" && !(ev.target && ev.target.closest && ev.target.closest(".acbox, [data-ac-open]"))) { ev.preventDefault(); ev.stopImmediatePropagation(); close(); } };
+    // the rail's full menu open over the page (Rail.jsx): Esc closes that first
+    // nor while focus is in a box, a list or another dialog (the search, a filter's words): Esc is theirs
+    const theirs = (t) => !!(t && t.closest && (t.isContentEditable || t.closest(".acbox, [data-ac-open], input, textarea, select, [aria-expanded=true]")
+      || [...document.querySelectorAll("dialog[open], [role=dialog], [role=listbox], [role=menu]")].some((d) => d !== box.current && d.contains(t))));
+    const esc = (ev) => { if (ev.key === "Escape" && !theirs(ev.target) && !document.querySelector('.bkr [data-rail-menu][aria-expanded="true"]')) { ev.preventDefault(); ev.stopImmediatePropagation(); close(); } };
     window.addEventListener("keydown", esc, true);
     return () => window.removeEventListener("keydown", esc, true);
   }, [id]);
@@ -190,9 +249,11 @@ export function Drawer({ rows }) {
   </aside>;
 }
 
-// a click on a line's date or particulars opens its details (not on a box, a button or a link in it)
+// a click anywhere on a line opens its details, a second click on the open line closes them (18-Nov-2026: was the date
+// and the particulars only); not on what does something of its own: its tick box, ledger box, lists, buttons and links
+export const DOES = "input, button, select, a, label, textarea, summary, [role=button], [role=checkbox], [contenteditable], [data-legacy], .lgbox, .bs-led, .acbox, td.ck";
 export function rowOpen(ev, id) {
-  if (ev.target.closest("input, button, select, a, label, textarea, [data-legacy], .lgbox")) return;
+  if (!ev.target.closest || ev.target.closest(DOES) || dismissing(ev)) return;
   if (window.getSelection && String(window.getSelection())) return;
   const b = B(); b.drawer = b.drawer === id ? null : id; render();
 }

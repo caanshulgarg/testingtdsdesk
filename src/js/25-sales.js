@@ -72,11 +72,14 @@ async function loadSales(cid){
   // next-fix-sales-sync: with the ledger list here, every invoice waiting is mapped again on this computer
   const remapped = typeof salesRemapWaiting === "function" && salesRemapWaiting();
   // invoices filed from elsewhere are matched now
+  // (next-fix-sales-hang: with the invoices listed by number once, salesByNo in src/js/26-sales-invoice.js, when it is in)
+  (window.salesByNo || (f => f()))(() => {
   const pend = S.sales.list.filter(v => v.needsMap);
   if (pend.length){ pend.forEach(v => { v.needsMap = false; mapInvoice(v); }); saveSales(); }
   // (item 6: the problems kept with an invoice waiting are worked out again on opening, so a label left from an earlier
   // state, "customer GSTIN is not valid" on a GSTIN since cleared, never stays)
   if (!remapped) S.sales.list.forEach(v => { if (["review", "ready"].includes(v.status) && !v.needsMap){ const was = JSON.stringify(v.problems || []); v.problems = invoiceProblems(v); if (was !== JSON.stringify(v.problems)) mapInvoice(v); } });
+  });
   salesLearnVt();
   render();
   if (bridgeLive(CO(cid))) salesAutoSync();
@@ -257,7 +260,6 @@ function ledgerRateInfo(name){
   if (/\d/.test(bare)) doubt = true;
   return {rates, doubt};
 }
-function ledgerRates(name){ return ledgerRateInfo(name).rates; }
 let ledStateKept = {};
 // the state a ledger is kept for, each ledger on its own: its Tally master's GSTIN, else its name (a state's name, an
 // abbreviation, a code in a state's context); "" untagged
@@ -566,7 +568,7 @@ function salesDupOf(v){
   const no = normInvNo(v.x.number); if (!no || (v.dupOverride && v.dupOverride.no === no)) return null;
   if (v.dupBlock) return Object.assign({src: "tally"}, v.dupBlock);
   const vt = String(salesVt(v.x)).toLowerCase();
-  const o = (salesOfNo(v.x.number) || []).find(o => o.id !== v.id && ["posted", "intally"].includes(o.status) && normInvNo(o.x.number) === no && String(salesVt(o.x)).toLowerCase() === vt && o.x.date && v.x.date && fyLabel(o.x.date) === fyLabel(v.x.date));
+  const o = salesOfNo(v.x.number).find(o => o.id !== v.id && ["posted", "intally"].includes(o.status) && normInvNo(o.x.number) === no && String(salesVt(o.x)).toLowerCase() === vt && o.x.date && v.x.date && fyLabel(o.x.date) === fyLabel(v.x.date));
   return o ? {src: "fincom", type: salesVt(o.x), number: o.x.number, date: o.x.date, amount: r2(Math.abs(num(o.x.total))), id: o.id} : null;
 }
 function salesDupWords(d){
