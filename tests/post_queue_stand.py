@@ -33,6 +33,11 @@ iso = lambda d: d.strftime("%Y-%m-%dT%H:%M:%SZ")
 class Stand:
     def __init__(self, port, extra=()):
         self.db = db = pg_stand.start(port)
+        # (a throwaway server: its WAL kept to 1 GB, so that a run of 50,000 entries does not fill a small disk. Not smaller: at
+        # 256 MB a checkpoint came every 17 s at 50,000 entries, and every statement reading the big posting waited on its
+        # writes, 4-8 s instead of 1-2 s: the timings measured the stand's disk, not the SQL)
+        db.sql("alter system set max_wal_size = '1GB'; alter system set min_wal_size = '64MB'; alter system set checkpoint_timeout = '15min'")
+        db.sql("select pg_reload_conf()")
         db.sql(part(os.path.join(HERE, "run_migration33.py"), "SCHEMA")); db.sql(part(os.path.join(HERE, "run_migration35.py"), "SCHEMA")); db.sql(part(os.path.join(HERE, "run_migration37.py"), "SCHEMA_X"))
         db.sql(part(os.path.join(HERE, "run_migration47.py"), "SCHEMA47"))
         db.sql("""do $$ begin if not exists (select 1 from pg_roles where rolname = 'service_role') then create role service_role bypassrls; end if;

@@ -35,7 +35,10 @@ GST_WANT_FAIL = [False]    # gst_calc_want_book fails (tally-ingest must not)
 NO_FN = set()             # functions this database does not have yet (an older cloud): PostgREST's 404 PGRST202
 FAIL_SELECT = {}          # table -> {message, code}: a GET answers this PostgREST error (bridge 2.3.1 Lows: errors are logged)
 FAIL_RPC = {}             # function -> {message, code}: the call answers this PostgREST error (the database cannot be read)
+GATEWAY_FAIL = {}         # table -> {status, body, n}: the next n GETs of it (n < 0: every one) answer the gateway's HTML error page
+                          # (Cloudflare's 52x in front of Supabase while Postgres restarts; FINCOM-CLOUD-STAGING-8/B/C)
 DELAY = [0.0]             # seconds every request waits before it is answered (a slow database)
+TABLE_DELAY = {}          # table -> [seconds, ...]: each GET of it waits the next of these (the last kept) before it is answered (a slow but healthy database, or one that hangs)
 SPANS = []                # while DELAY is on: (method, path?query, started, ended) of each request, to see which ran at the same time
 MAX_URL = [0]             # > 0: a request whose path and query are longer answers 414 (a gateway's URL limit; the refetch chunks)
 # migration 130 (bridge 2.5.0): by default a database before it (tally_openings_held not there); run_openings_ingest.py
@@ -43,6 +46,11 @@ MAX_URL = [0]             # > 0: a request whose path and query are longer answe
 NO_COL = {"tally_openings_held": {"id"}}   # table -> {column}: a database without these columns (a migration not run): a GET selecting one answers
                           # 42703, a POST carrying one PGRST204, as PostgREST does (bridge 2.3.1: 57's tally_ledgers.tds_deductee_type)
 HONOR_LIMIT = [False]     # True: order=col.asc|desc and limit=n are applied to a GET (off by default: as before)
+SETTLE_ITSELF = [None]    # migration 200: what tally_post_settle_itself answers (None: nothing held)
+PATCH_GUARD = {}          # table -> fn(old_row, patch) -> words or None: a trigger refusing the update (P0001), as 36b's resend guard
+JOB_ACCEPTED = [None]     # fn(args) -> tally_post_job_accepted's answer (None: nothing accepted)
+RPC_DELAY = {}            # function -> seconds it waits before it answers (a database that hangs on that call)
+RESEND_OK = {}            # migration 200: tally_post_resend_ok's words for a posting (none: it may send; its SQL: run_post_never_twice.py)
 LEASE7_MISSING = [False]  # migration 55 not run: the 7-argument tally_lease_take (p_purpose) is not there (PGRST202 for that call only)
 PK = {"gst_sessions": ["firm_id", "gstin"], "gst_filings": ["firm_id", "gstin", "form", "period"], "gst_returns": ["firm_id", "gstin", "form", "period"], "gst_einv_accounts": ["firm_id", "gstin"], "gst_einvoices": ["firm_id", "gstin", "doc_key"]}
 ids = itertools.count(1)
@@ -66,6 +74,20 @@ def match(row, q):
     return True
 def rpc(fn, a):
     ARGS.setdefault(fn, []).append(a)
+    if fn == "tally_post_id_accept_many":   # migration 199: each entry stamped as by the one-by-one calls (recorded under their own names, a test's hook too)
+        me, out = globals()["rpc"], {"ok": True, "n": 0, "stamped": 0, "zero": []}
+        for x in a.get("p_list") or []:
+            r = (me("tally_post_id_accept_reply", {"p_job": a["p_job"], "p_id": x.get("id"), "p_vch": x.get("vchId"), "p_batch_end": x.get("batchEnd"), "p_batch_n": x.get("batchN")}) if x.get("reply")
+                 else me("tally_post_id_accept", {"p_job": a["p_job"], "p_id": x.get("id"), "p_vch": x.get("vch")}))
+            r = (r.get("accept") or r) if isinstance(r, dict) else {}
+            out["n"] += 1; out["stamped"] += int(r.get("stamped") or 0)
+            if r.get("ok") and not r.get("stamped"): out["zero"].append(x.get("id"))
+        return out
+    if fn == "tally_post_settle_itself":   # migration 200 (its SQL: run_migration200.py): nothing held here unless a test sets SETTLE_ITSELF
+        return dict(SETTLE_ITSELF[0] or {"ok": True, "job": a.get("p_job"), "held": False}, job=a.get("p_job"))
+    if fn == "tally_post_settle_resend": return {"ok": True, "job": a.get("p_job"), "resent": False}
+    if fn == "tally_post_resend_ok": return RESEND_OK.get(a.get("p_job"))
+    if fn == "tally_post_job_accepted": return JOB_ACCEPTED[0](a) if JOB_ACCEPTED[0] else None
     if fn == "mfa_ok": return True
     if fn == "auth_rate_hit":   # migration-112: allowed (and counted) while the key has under max tries in the window
         t, w = now(), a["p_window_s"]
@@ -201,12 +223,17 @@ class H(http.server.BaseHTTPRequestHandler):
                 return self.send(500, dict(FAIL_RPC[path.rsplit("/", 1)[1]], details=None, hint=None))
             if path.rsplit("/", 1)[1] in NO_FN:
                 return self.send(404, {"code": "PGRST202", "message": "Could not find the function public.%s in the schema cache" % path.rsplit("/", 1)[1], "details": None, "hint": None})
+            if RPC_DELAY.get(path.rsplit("/", 1)[1]): time.sleep(RPC_DELAY[path.rsplit("/", 1)[1]])
             try: return self.send(200, rpc(path.rsplit("/", 1)[1], json.loads(raw or b"{}")))
             except LookupError:   # an overload this database does not have (PostgREST answers 404 PGRST202)
                 return self.send(404, {"code": "PGRST202", "message": "Could not find the function public.%s with those arguments in the schema cache" % path.rsplit("/", 1)[1], "details": None, "hint": None})
             except Exception as e: return self.send(400, {"message": str(e), "code": "P0001"})
         if path.startswith("/rest/v1/"):
             t = path.rsplit("/", 1)[1]; rows = T.setdefault(t, []); single = "vnd.pgrst.object" in (self.headers.get("Accept") or "")
+            g = GATEWAY_FAIL.get(t)
+            if method in ("GET", "HEAD") and g and g.get("n", 0) != 0:
+                g["n"] = g["n"] - 1 if g["n"] > 0 else g["n"]
+                return self.send(g["status"], raw=g["body"].encode(), headers={"Content-Type": "text/html; charset=UTF-8"})
             if method in ("GET", "HEAD") and t in FAIL_SELECT:
                 return self.send(400, dict(FAIL_SELECT[t], details=None, hint=None))
             if method in ("GET", "HEAD") and NO_COL.get(t):
@@ -250,6 +277,11 @@ class H(http.server.BaseHTTPRequestHandler):
             if method == "PATCH":
                 d = json.loads(raw); hit = []
                 with LOCK:                                   # one UPDATE ... WHERE ... RETURNING: atomic
+                    g = PATCH_GUARD.get(t)
+                    if g:
+                        for r in rows:
+                            w = match(r, q) and g(r, d)
+                            if w: return self.send(400, {"code": "P0001", "message": w, "details": None, "hint": None})
                     for r in rows:
                         if match(r, q): r.update(d); hit.append(r)
                 if "return=representation" in (self.headers.get("Prefer") or ""):
@@ -295,6 +327,13 @@ class H(http.server.BaseHTTPRequestHandler):
                 return self.send(200, raw=FILES[key], headers={"Content-Type": "application/gzip"})
         self.send(404, {"message": "no such path " + path})
     def timed(self, method):
+        td = TABLE_DELAY.get(self.path.split("?", 1)[0].rsplit("/", 1)[-1]) if method == "GET" and self.path.startswith("/rest/v1/") else None
+        if td:
+            time.sleep(td.pop(0) if len(td) > 1 else td[0])
+            try: return self.handle_any(method) if not DELAY[0] else self.timed_rest(method)
+            except (BrokenPipeError, ConnectionResetError): return   # the caller gave up waiting (its own time limit)
+        return self.timed_rest(method)
+    def timed_rest(self, method):
         if not DELAY[0]: return self.handle_any(method)
         t0 = time.time(); time.sleep(DELAY[0])
         try: return self.handle_any(method)

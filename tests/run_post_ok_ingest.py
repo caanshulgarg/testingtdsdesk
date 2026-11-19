@@ -8,7 +8,10 @@ post_ok, the bridge's read-only question before it sends each part of a posting 
   4. taken by another bridge, or queued for another bridge of this computer: notYours;
   5. done and being checked (checking): post false, stop "checking" (review L2: an owner may release or post it
      again), unless handed back to send some entries again (resend_only): post true; waiting (put back for this same
-     bridge): post true;
+     bridge): post true; (migration 200, never twice) one whose re-send list was not handed back yet, or has an entry
+     posted again in another posting since (tally_post_resend_ok's words): post false, stop "checking", those words; that
+     answer not had (an error, no such function, or not within 2 s of the request, the bridge waiting 3 s): post false,
+     never allowed; that refusal before any part was sent: the posting put back for the same bridge at once;
   6. not the main bridge any more (another of the same Windows user chosen): notMain;
   7. a cloud without 174 (no stop_reason): read without it, as before;
   8. posts_update with offlineSends: kept in the timing; without it the timing as before;
@@ -37,6 +40,43 @@ def job(i, status, **kw):
                  "results": [], "items": [], "target_bridge": ME["id"], "taken_by": ME["id"], "row_version": 0, "stop_reason": None,
                  "payload": {"vouchers": [{"id": "K1", "xml": "<VOUCHER/>"}]}}, **kw)
 row = lambda i: next(j for j in F.T["tally_post_jobs"] if j["id"] == i)
+# (the sixth review) 36b's resend guard and tally_post_job_accepted, the real ones: a throwaway PostgreSQL (post_queue_stand,
+# port 31204 unless PGOK_PORT) holds a copy of each posting the stand-in is asked to put back (as "waiting")
+import uuid as _uuid
+try:
+    import post_queue_stand as PS
+    PST = PS.Stand(int(os.environ.get("PGOK_PORT") or 31204), extra=tuple(os.path.join(PS.SQLDIR, f) for f in ("migration-184-post-dupes.sql", "migration-185-post-unrouted.sql")))
+    m182 = open(os.path.join(PS.SQLDIR, "migration-182-gap-after-post.sql")).read()
+    t0_ = m182.index("create table if not exists public.tally_light_days ("); t1_ = m182.index(");", t0_) + 2
+    f0_ = m182.index("create or replace function public.tally_post_job_read_back()"); f1_ = m182.index("end $$;", f0_) + len("end $$;")
+    PST.db.sql(m182[t0_:t1_] + "\n" + m182[f0_:f1_])
+    r_ = PST.psql_text("\n".join(open(os.path.join(PS.SQLDIR, f)).read() for f in ("migration-199-post-match-fast.sql", "migration-200-post-settle-itself.sql", "migration-201-post-register-async.sql", "migration-202-post-recheck.sql")))
+    assert r_.returncode == 0, r_.stderr[-300:]
+    PG = True
+except Exception as e_:
+    print("  (no PostgreSQL stand: %s)" % str(e_)[-200:]); PG = False; PST = None
+def pg_copy(r):   # the posting and its ids as the stand-in holds them now, written to PostgreSQL (its triggers off for the copy)
+    u = str(_uuid.uuid5(_uuid.NAMESPACE_URL, "post-ok/" + r["id"])); qq = PS.q
+    ids = [x for x in F.T.get("tally_post_ids", []) if x.get("job_id") == r["id"]]
+    PST.db.sql("set session_replication_role = replica; delete from tally_post_ids where job_id = %s or true; delete from tally_post_jobs where id = %s or true;"   # (the stand holds these copies only)
+               "insert into tally_post_jobs (id, firm_id, client_id, company, status, n, payload, device_id, taken_by, taken_at, results, items, resend_only, created_by) values (%s, %s, 'c1', %s, %s, %d, %s, %s, %s, now(), %s, %s, %s, %s);"
+               % (qq(u), qq(u), qq(u), qq(PS.F), qq(PS.CO), qq(r["status"]), len(ids), qq(json.dumps(r.get("payload") or {})), qq(PS.DA), qq(PS.BA), qq(json.dumps(r.get("results") or [])), qq(json.dumps(r.get("items") or [])),
+                  qq(json.dumps(r.get("resend_only"))) if r.get("resend_only") else "null", qq(PS.STAFF))
+               + "".join("insert into tally_post_ids (firm_id, client_id, fincom_id, job_id, entry_id, live, accepted_at, released_at, released_by) values (%s, 'c1', %s, %s, %s, %s, %s, %s, %s);"
+                         % (qq(PS.F), qq(x["fincom_id"]), qq(u), qq(x.get("entry_id") or x["fincom_id"]), "true" if x.get("live") else "false", qq(x["accepted_at"]) if x.get("accepted_at") else "null",
+                            qq(x["released_at"]) if x.get("released_at") else "null", qq(x["released_by"]) if x.get("released_by") else "null") for x in ids)
+               + " set session_replication_role = origin;")
+    return u
+def real_accepted(a):
+    r = next(j for j in F.T["tally_post_jobs"] if j["id"] == a["p_job"]); u = pg_copy(r)
+    return PST.db.one("set role service_role; select tally_post_job_accepted(%s::uuid, %s::jsonb, %s::jsonb)" % (PS.q(u), PS.q(json.dumps(a.get("p_results"))), PS.q(json.dumps(a.get("p_items")))))
+def real_guard(old, d):   # the stand-in's PATCH of a posting to "waiting": the same update on PostgreSQL, its triggers on (rolled back)
+    if not PG or d.get("status") != "waiting" or old.get("status") == "waiting" or not str(old.get("id", "")).startswith("p6"): return None
+    u = pg_copy(old)
+    try: PST.db.sql("begin; update tally_post_jobs set status = 'waiting', results = %s, items = %s where id = %s; rollback;"
+                    % (PS.q(json.dumps(d.get("results", old.get("results")))), PS.q(json.dumps(d.get("items", old.get("items")))), PS.q(u))); return None
+    except RuntimeError as e: return str(e).split("CONTEXT")[0].strip()[-300:] or "refused"
+F.PATCH_GUARD["tally_post_jobs"] = real_guard
 F.start()
 env = dict(os.environ, SUPABASE_URL="http://127.0.0.1:%d" % F.PORT, SUPABASE_SERVICE_ROLE_KEY=F.SERVICE, SUPABASE_ANON_KEY="anon-key")
 fn = subprocess.Popen([DENO, "run", "--allow-net", "--allow-env", "--allow-read", os.path.join(HERE, "..", "server", "tally-cloud", "index.ts")], env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
@@ -87,6 +127,59 @@ try:
     for jid in ("p53", "p52"):
         c, r = ask(jid)
         ok(c == 200 and r.get("post") is True, "%s: post true (%s)" % (jid, r))
+    NOT = "Not sent: K1 was posted again in posting p99 since it was released; it is not sent twice."
+    F.T["tally_post_jobs"].append(job("p54", "waiting", attempts=1, resend_only=["K1"])); F.RESEND_OK["p54"] = NOT
+    F.T["tally_post_jobs"].append(job("p55", "done", checking=True, resend_only=["K1"])); F.RESEND_OK["p55"] = "This posting is held for checking in FinCom; the entries released for sending again go when it is handed back, not before."
+    for jid in ("p54", "p55"):
+        c, r = ask(jid)
+        ok(c == 200 and r.get("post") is False and r.get("stop") == "checking" and r.get("error") == F.RESEND_OK[jid], "%s: the re-send list may not go now: post false (%s)" % (jid, r))
+    # (the fourth review; the fifth, B1) the whole answer within 2 s of the request (the bridge waits 3 s, then posts what it
+    # holds): the re-send check, the posting's read or the computer's lookup not had in time, or an error: refused, never allowed
+    UNSURE = "could not confirm in time"
+    for jid, how in (("p56", "error"), ("p57", "missing"), ("p58", "slow check"), ("p581", "slow posting read"), ("p582", "slow computer lookup")):
+        F.T["tally_post_jobs"].append(job(jid, "waiting", attempts=1, resend_only=["K1"]))
+        if how == "error": F.FAIL_RPC["tally_post_resend_ok"] = {"code": "57014", "message": "canceling statement due to statement timeout"}
+        if how == "missing": F.NO_FN.add("tally_post_resend_ok")
+        if how == "slow check": F.RPC_DELAY["tally_post_resend_ok"] = 12
+        if how == "slow posting read": F.TABLE_DELAY["tally_post_jobs"] = [12]
+        if how == "slow computer lookup": F.TABLE_DELAY["tally_devices"] = [1.5]
+        t0 = time.time(); c, r = ask(jid); t = time.time() - t0
+        F.FAIL_RPC.pop("tally_post_resend_ok", None); F.NO_FN.discard("tally_post_resend_ok"); F.RPC_DELAY.pop("tally_post_resend_ok", None); F.TABLE_DELAY.pop("tally_post_jobs", None); F.TABLE_DELAY.pop("tally_devices", None)
+        ok(c == 200 and r.get("post") is False and r.get("stop") == "checking" and UNSURE in str(r.get("error") or "") and t < 2.0,
+           "%s: %s: refused within the bridge's 3 s, never allowed (%.2f s, %s)" % (jid, how, t, r))
+    time.sleep(12)   # (the slow calls above end on the stand-in's side)
+    # its refusal ends the bridge's job "stopped" (reported as taken, its words with it): nothing of it was sent, so the posting
+    # is put back for the same bridge at once (it sends it once FinCom answers); a part sent already: left as it was (judged as before)
+    for jid, part, want in (("p59", "1 of 1", "waiting"), ("p591", "2 of 2", "taken")):
+        F.T["tally_post_jobs"].append(job(jid, "taken", attempts=1, resend_only=["K1"], items=[{"id": "K1", "kind": "voucher", "state": "waiting"}]))
+        c, r = call({"kind": "posts_update", "version": "2.5.15", "bridge": ME, "id": jid, "status": "taken", "done": 0, "seq": 2, "updatedAt": "2026-11-13T10:00:00Z",
+                     "message": "Stopped by FinCom before part %s was sent: FinCom %s that the entries released for sending again may go now, so nothing more is sent now." % (part, UNSURE),
+                     "results": [], "items": [{"id": "K1", "kind": "voucher", "state": "waiting"}], "reqs": [], "secondsTotal": 0})
+        j_ = row(jid)
+        ok(c == 200 and j_["status"] == want and j_["taken_by"] == ME["id"] and j_.get("resend_only") == ["K1"] and (want != "waiting" or "put back" in j_["message"].lower()),
+           "%s stopped before part %s: %s (%s %s; %s)" % (jid, part, want, c, r, j_["message"][:120]))
+    # (the sixth review, item 1) the put-back meets 36b's resend guard: a re-send posting whose other entry X FinCom found in
+    # Tally by itself (stamped accepted, its result FinCom's own) while the bridge's kept result for X says "sent, no answer".
+    # The guard and tally_post_job_accepted are the REAL ones, on a throwaway PostgreSQL (the stand-in asks it)
+    if PG:
+        UN = "Stopped by FinCom before part 1 of 1 was sent: FinCom could not confirm in time that this posting may be sent now, so nothing more is sent now."
+        XIN = {"id": "X1", "ok": True, "verified": True, "state": "in_tally", "by": "FinCom (by itself)", "byItself": True, "byItselfAt": "2026-11-19T06:00:00Z"}
+        XOLD = {"id": "X1", "ok": True, "verified": True, "state": "posted"}   # (a result of the bridge's own, not FinCom's settlement)
+        YOUT = {"id": "Y1", "ok": False, "verified": False, "state": "notfound", "byOwner": True, "byOwnerAt": "2026-11-19T06:00:00Z", "byItself": True}
+        XBR = {"id": "X1", "ok": False, "outcomeUnknown": True, "sent": True, "state": "unknown", "message": "Sent; no answer from Tally"}
+        for jid, xres, pre, want in (("p60", XIN, True, "waiting"), ("p61", XOLD, True, "taken"), ("p62", XOLD, False, "taken")):
+            F.T["tally_post_jobs"].append(job(jid, "taken", attempts=1, resend_only=["Y1"], results=[xres, YOUT], items=[{"id": "X1", "kind": "voucher", "state": "posted"}, {"id": "Y1", "kind": "voucher", "state": "notfound", "byOwner": True}],
+                                              payload={"vouchers": [{"id": "X1", "xml": "<VOUCHER/>"}, {"id": "Y1", "xml": "<VOUCHER/>"}]}))
+            F.T.setdefault("tally_post_ids", []).extend([{"job_id": jid, "fincom_id": "X1", "entry_id": "X1", "accepted_at": "2026-11-19T06:00:00Z", "released_at": None, "live": True},
+                                                         {"job_id": jid, "fincom_id": "Y1", "entry_id": "Y1", "accepted_at": None, "released_at": "2026-11-19T06:00:00Z", "released_by": "owner", "live": False}])
+            F.JOB_ACCEPTED[0] = real_accepted if pre else (lambda a_: None)   # p62: the check passes (a race), the guard refuses at the write
+            c, r = call({"kind": "posts_update", "version": "2.5.15", "bridge": ME, "id": jid, "status": "taken", "done": 0, "seq": 2, "updatedAt": "2026-11-19T07:00:00Z", "message": UN,
+                         "results": [XBR], "items": [{"id": "X1", "kind": "voucher", "state": "unknown"}, {"id": "Y1", "kind": "voucher", "state": "waiting"}], "reqs": [], "secondsTotal": 0})
+            j_ = row(jid); x_ = next((x for x in j_["results"] if x["id"] == "X1"), {})
+            ok(c == 200 and j_["status"] == want and j_["taken_by"] == ME["id"] and j_.get("resend_only") == ["Y1"] and (jid != "p60" or x_.get("byItself") is True),
+               "%s: %s (%s %s; X1 %s; %s)" % (jid, want, c, r, x_.get("state"), j_["message"][:90]))
+        F.JOB_ACCEPTED[0] = None
+    else: ok(False, "the put-back against the real resend guard (no PostgreSQL stand)")
     print("== 6. not the main bridge any more")
     dev = F.T["tally_devices"][0]
     dev["main_bridge"] = OTHER; dev["info"]["bridges"][OTHER] = {"at": "2026-11-13T10:00:00Z", "user": ME["user"]}
@@ -152,6 +245,7 @@ try:
     codes = [call({"kind": "key_check", "version": "2.5.16", "bridge": ME})[0] for _ in range(30)]
     ok(codes.count(429) >= 1 and codes[0] == 200, "at most 30 an hour for one key, then 429 (%s)" % codes[-3:])
 finally:
+    if PST: PST.stop()
     fn.terminate()
     try: fn.wait(10)
     except Exception: fn.kill()
