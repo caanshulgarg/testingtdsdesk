@@ -937,7 +937,17 @@ transaction, lock_timeout 10 s, safe twice. Needs 174 and 184. Deploy: 184, 185,
 while it waits). No bridge or tally-ingest change. Tested: `tests/run_migration185.py` (RED_WITHOUT_185=1 fails; two
 takes at the same moment: exactly one), `tests/run_cloud_post_ui.py`.
 
-## 199, 200, 201: a big posting is stored in time, a held posting settles by itself, the register follows in steps (not run yet; branch next-fix-posttimeout, 18-Nov-2026)
+## 199, 200, 201, 202: a big posting is stored in time, a held posting settles by itself, the register follows in steps, an entry that needs review is rechecked by itself (not run yet; branch next-fix-posttimeout, 18/19-Nov-2026)
+
+**One release, applied together.** 199, 200, 201 and 202 are applied in that order, back to back, in ONE session (for
+example `psql -v ON_ERROR_STOP=1 -f migration-199-post-match-fast.sql -f migration-200-post-settle-itself.sql -f
+migration-201-post-register-async.sql -f migration-202-post-recheck.sql`), then the tally-ingest of this branch. Alone, 199
+or 199 + 200 leave a posting of 20,000 entries at 4-6 s a change of status (the register's whole pass in the trigger);
+only with 201 is every statement under 1.5 s. One transaction for all four is not possible as written (each file is its
+own BEGIN/COMMIT, so that a rerun of one is safe); each later file refuses to run without the ones before it (200 without
+199, 201 without 199/200, 202 without 201). Tested as deployed: `tests/run_migration199_202.py` (the four in one session,
+then every statement timed at 20,000 and 50,000: run it alone).
+
 
 **199, post match fast** (18-Nov-2026, branch `next-fix-posttimeout`; **written, not run yet**; file md5
 04f5cd99f5cb71aff42671600610b303): `server/tally-cloud/migration-199-post-match-fast.sql`. On staging, 17-Nov-2026
@@ -1056,4 +1066,49 @@ than 7 days; service_role only) and in the server log. (3) The fold removes only
 with a lower number waits for the next step). Tested: run_migration201.py 6 (the double post of the review, in the waiting
 for a person and in the brief window, the hand-back finding the posting locked), 7 (a deleted firm's posting, a failing
 hand-back and a failing register pass: the others' work done), 8, 9 (200 run again after 201: the cron's command stays 201's).
+
+**Third review of 19-Nov-2026 (NO-SHIP, fixed before any run).** (1) Never twice. A member's "I looked in Tally: not there"
+(55/174's `tally_post_check_confirm`) on a held posting releases the entry and names it in `resend_only` while the posting
+stays held; nothing reserved it, so it could be posted in another posting and then handed back too (by 200's hand-back, or
+by a member's confirm of another entry). **This double post exists on staging today** (174 alone: confirm X on a held
+posting, queue X again, confirm W: the posting is handed back with X and W; `tests/run_post_never_twice.py`
+RED_WITHOUT_199_201=1 shows it). Now one rule for every path, in 200: `tally_post_resend_owed(firm, job)` (what a posting
+still owes to send again, whoever released it: its id released, its latest confirmed check not handed back and confirmed
+after the posting was last taken; never of a cancelled posting), `tally_post_resend_elsewhere(job, entries)` (those another
+posting has since), `tally_post_resend_list(job)` (the whole list a hand-back sends, those elsewhere closed; never a list
+kept from an earlier hand-back), `tally_post_resend_ok(job)` (tally-ingest's post_ok: a held posting's list not handed back
+yet, or one with an entry posted elsewhere, is not sent). 201's `tally_post_resend_reserved` keeps every owed entry and the
+re-send list of a posting sending it (or held with one) to that posting at the queue (enqueue, the queue trigger, a Retry);
+200's `tally_post_settle_resend` and 174's `tally_post_check_confirm` (replaced in 200 from 174's text) hand back that list;
+the cron hands back a settled posting that still owes entries (one a Mark posted settled: before, its released entry
+waited for ever). The cron's requeue keeps a hand-back's list (reserved). (2) 199-202 are one release (above); 200's
+section F hand-back is 6 s at 20,000 without 201 (re-baselined there to under 7.5 s, "199 and 200 alone are never the
+release"; `WITH_201=1` and run_migration199_202.py: under 1.5 s). (3) A register pass that fails 5 steps in a row is given
+up (`tally_post_register_give_up`): its entries need review in the register (with their history), the posting says so in
+plain words, the queue refuses them as waiting for review (never "still being recorded" for ever; held by the pass's row
+when even the review could not be written); a later pass that works clears it (run_migration201.py 10). (4) A stopped
+posting (stop_reason) whose entries are proven not in Tally is never handed back, though 174 clears the stop once it
+settles: their checks are closed, the entries free for a person once posting is allowed; a posting blocked by 174's rule at
+the hand-back likewise. Tested: run_post_never_twice.py (R the review's reproduction, T, E, K, M, O, W, Q, S),
+run_migration200.py (0), run_migration201.py (10), run_post_ok_ingest.py.
+
+**202, post recheck** (19-Nov-2026, the owner's decision; **written, not run yet**): `server/tally-cloud/migration-202-post-recheck.sql`.
+An entry that needs review (the posting register's needs_review, changed within the last day; its posting settled) is
+rechecked by itself on a back-off (2, 10, 30 minutes, then hourly) for a day, then left to a person in words
+(`tally_post_rechecks`, row security on, the firm reads): (a) the FinCom Bridge's existing check by narration (55's
+checks, asked by itself; no new request to Tally); (b) FinCom's own read of the linked company's Day Book (`tally_vouchers`
+/ `tally_lines`: the same day, voucher type, amount, party and number when known, so an edited narration still matches),
+and the recorder's read-back. Found (read back, the bridge's "found", or exactly one voucher like it): marked posted by
+itself; more than one like it: a person picks; a voucher of the same day and amount not like it in every field, or
+anything of Tally's saying it took it: kept for a person with the reason; Tally created it in another company
+(wrongCompany): needs review, said plainly; never sent again in any of these. Sent again only when every proof holds (the
+bridge's "not seen" since it needed review, no voucher of that day and amount, FinCom's read complete since the posting,
+nothing of Tally's saying it took it): released by itself and handed back through 200's guarded hand-back (reserved; never
+one posted elsewhere). The other-company recheck was dropped (the owner, 19-Nov-2026): an entry is only ever posted into
+the company its client is linked to; 202's `tally_post_take_for` (185's text) hands a posting to a bridge only when that
+bridge reports the linked company's GUID open (`tally_post_linked_open`). The cron: 201's `tally_post_work_due`,
+`tally_post_work` and `tally_post_work_run` (replaced from 201's text) gain the recheck (one posting a piece, its hand-back
+or the register in its own transaction). Add-only (one table, two partial indexes), one transaction, lock_timeout 10 s,
+safe twice; service_role only, granted explicitly. **After 201.** No bridge change, no new Tally request. Tested:
+`tests/run_migration202.py` (RED_WITHOUT_202=1 fails), run_migration199_202.py (20,000 / 50,000 timed).
 

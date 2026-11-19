@@ -1,0 +1,260 @@
+"""python3 run_migration202.py - server/tally-cloud/migration-202-post-recheck.sql (19-Nov-2026, branch next-fix-posttimeout).
+The owner: an entry that needs review is rechecked against Tally by itself, then marked posted or sent again; never a double
+entry; an entry only ever posted into the company its client is linked to (by its GUID). On a throwaway PostgreSQL
+(post_queue_stand: pg_stand, port 31203 unless PG202R_PORT; never a real database), 184, 185 as on staging, then 199, 200,
+201 and 202 applied together in one session; made-up firms, entries and Day Book vouchers only.
+  0. the file: one transaction, lock_timeout 10 s, add-only, every function granted explicitly, refuses to run without 201,
+     runs twice
+  A. read back by narration (the recorder's match): marked posted by itself
+  B. its narration edited in Tally: found by content in FinCom's read of the Day Book (day, type, amount, party, number)
+  C. two vouchers like it: found, a person picks; nothing released or sent
+  D. a voucher of the same day and amount but another type: kept for a person, never sent
+  E. Tally created it in another company (wrongCompany): needs review, said plainly, never sent
+  F. sent again only when every proof holds: the bridge's check "not seen" since it needed review, no voucher like it, FinCom's
+     read complete since the posting, nothing of Tally's says it took it; each proof missing on its own: not sent
+  G. the bridge's check "found": marked posted (55's path), the recheck closes
+  H. a day of rechecks: left to a person in words
+  I. never twice, every path again: the entry sent again is its posting's (a new posting refused, the queue's guard, a
+     Retry), one posted elsewhere meanwhile is not handed back, a recheck run again sends nothing
+  J. the hand-out: a posting goes only to a bridge that reports the linked company's GUID open
+  K. the cron: idle is one look; due: the recheck in the run
+RED_WITHOUT_202=1: the same checks without the file (fails)."""
+import os, re, sys, json, time, hashlib
+HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
+import post_queue_stand as PS
+from post_queue_stand import q, F, CO, OWNER, STAFF, DA, BA
+RED = os.environ.get("RED_WITHOUT_202") == "1"
+M = [os.path.join(PS.SQLDIR, f) for f in ("migration-199-post-match-fast.sql", "migration-200-post-settle-itself.sql", "migration-201-post-register-async.sql")]
+M202 = os.path.join(PS.SQLDIR, "migration-202-post-recheck.sql")
+M184, M185 = (os.path.join(PS.SQLDIR, f) for f in ("migration-184-post-dupes.sql", "migration-185-post-unrouted.sql"))
+ME = "00000000-0000-0000-0000-000000000200"
+fails = []
+def ok(c, w):
+    print(("  ok   " if c else "  FAIL ") + w, flush=True)
+    if not c: fails.append(w)
+text = open(M202).read() if os.path.exists(M202) else ""
+print("  md5 of %s: %s (%d bytes)" % (os.path.basename(M202), hashlib.md5(text.encode()).hexdigest(), len(text.encode())))
+code = "\n".join(l.split("--")[0] for l in text.lower().splitlines())
+print("== 0. the file")
+ok(re.search(r"^begin;\s*\nset local lock_timeout = '10s';", text, re.M) is not None and text.rstrip().endswith("commit;") and code.count("\nbegin;") == 1, "one transaction, lock_timeout 10 s")
+ok(bool(text) and "delete from" not in code and not re.search(r"\b(drop|truncate)\s", code) and code.count("create table") == 1 and code.count("create index if not exists") == 2 and "create trigger" not in code,
+   "add-only: one table, two indexes; nothing dropped, deleted or truncated; no trigger")
+ok(bool(text) and not re.search(r"supabase\.co|https?://|qbocskai|nrtczu|project[_ ]ref", text.lower()), "names no real database")
+FNS = ["tally_post_recheck_enroll()", "tally_post_recheck_any()", "tally_post_recheck_job(uuid)", "tally_post_recheck_run(uuid[])", "tally_post_work_due()", "tally_post_work()",
+       "tally_post_linked_open(uuid, uuid, text)", "tally_post_take_for(uuid, text, boolean)"]
+ok(all(("revoke all on function public.%s from public, anon, authenticated;" % s) in text and ("grant execute on function public.%s to service_role;" % s) in text for s in FNS)
+   and sorted(set(re.findall(r"create or replace function public\.(\w+)\(", code))) == sorted(f.split("(")[0] for f in FNS)
+   and "grant execute on procedure public.tally_post_work_run(integer) to service_role;" in text, "only these functions (and 201's procedure), each granted explicitly")
+ok("raise exception 'migration 202 runs after 199, 200 and 201" in text, "never runs without 199, 200, 201")
+ok("FinComVoucher" not in text and "<ENVELOPE>" not in text.upper(), "no new request to Tally")
+
+st = PS.Stand(int(os.environ.get("PG202R_PORT") or 31203), extra=(M184, M185)); db = st.db
+J = lambda n: "%08d-0000-0000-0000-000000000203" % n
+try:
+    m182 = open(os.path.join(PS.SQLDIR, "migration-182-gap-after-post.sql")).read()
+    t0_ = m182.index("create table if not exists public.tally_light_days ("); t1_ = m182.index(");", t0_) + 2
+    f0_ = m182.index("create or replace function public.tally_post_job_read_back()"); f1_ = m182.index("end $$;", f0_) + len("end $$;")
+    db.sql(m182[t0_:t1_] + "\n" + m182[f0_:f1_])
+    r = st.psql_text(text)
+    ok(r.returncode != 0 and "runs after 199, 200 and 201" in (r.stderr or ""), "without 201 first: refused (%s)" % (r.stderr or "").strip()[-120:])
+    r = st.psql_text("\n".join(open(p).read() for p in M + ([] if RED else [M202])))
+    ok(r.returncode == 0, "199, 200, 201%s applied together in one session %s" % ("" if RED else ", 202", (r.stderr or "").strip()[-300:]))
+    if not RED:
+        r = st.psql_text(text); ok(r.returncode == 0, "202 runs twice %s" % (r.stderr or "")[-200:])
+    st.grants()
+    st.setbeat(DA, st.beat("made-up-a", BA, [CO])); db.sql("update tally_devices set last_seen = now()")
+    has = lambda f: db.one("select (to_regprocedure(%s) is not null)::text" % q(f)) == "true"
+    def vx(x, party="Made-up Kite Supplies", amt="1250.00", vno=None, vtype="Payment", day="20261117"):
+        return {"id": x, "xml": "<VOUCHER VCHTYPE=\"%s\"><DATE>%s</DATE>%s<PARTYLEDGERNAME>%s</PARTYLEDGERNAME><NARRATION>TDSDesk:%s</NARRATION><ALLLEDGERENTRIES.LIST><LEDGERNAME>%s</LEDGERNAME><AMOUNT>-%s</AMOUNT></ALLLEDGERENTRIES.LIST></VOUCHER>"
+                % (vtype, day, ("<VOUCHERNUMBER>%s</VOUCHERNUMBER>" % vno) if vno else "", party.replace("&", "&amp;"), x, party.replace("&", "&amp;"), amt)}
+    def posting(n, vs, results=None, items=None):   # a posting its bridge had, settled (done), its entries uncertain: the register says needs review
+        db.sql("insert into tally_post_jobs (id, firm_id, client_id, company, status, n, payload, device_id, taken_by, taken_at, created_by) values (%s, %s, 'c1', %s, 'running', %d, %s, %s, %s, now() - interval '50 minutes', %s)"
+               % (q(J(n)), q(F), q(CO), len(vs), q(json.dumps({"vouchers": vs})), q(DA), q(BA), q(STAFF)))
+        res = results if results is not None else [{"id": v["id"], "kind": "voucher", "ok": False, "state": "sent", "outcomeUnknown": True, "message": "made-up: the reply was lost"} for v in vs]
+        db.sql("update tally_post_jobs set status = 'done', checking = false, results = %s, items = %s, message = 'Done (made-up)', updated_at = now() - interval '40 minutes' where id = %s"
+               % (q(json.dumps(res)), q(json.dumps(items if items is not None else [{"id": v["id"], "kind": "voucher", "state": "sent"} for v in vs])), q(J(n))))
+        db.sql("insert into tally_post_windows (firm_id, book_id, job_id, device_id, a0, a1, created_vch, at) values (%s, %s, %s, %s, 100, 120, 0, now() - interval '20 minutes') on conflict (job_id) do nothing" % (q(F), q(PS.BK), q(J(n)), q(DA)))
+        return [v["id"] for v in vs]
+    def reg(x): return db.one("select state from tally_post_register where fincom_id = %s" % q(x))
+    def read(complete=True):   # how far FinCom has read the company (the posting windows' a1 is 120)
+        db.sql("insert into tally_sync_cursor (book_id, firm_id, start_at, match_start, match_alter, match_at) values (%s, %s, '2026-11-01', '2026-11-01', %d, now()) on conflict (book_id) do update set start_at = '2026-11-01', match_start = '2026-11-01', match_alter = excluded.match_alter, match_at = now()"
+               % (q(PS.BK), q(F), 125 if complete else 110))
+    def daybook(guid, vtype="Payment", vno="", party="Made-up Kite Supplies", amt=1250, narration="Paid (made-up, narration edited)", day="2026-11-17", fid=None):
+        db.sql("insert into tally_vouchers (book_id, firm_id, guid, day, vtype, vno, party, narration%s) values (%s, %s, %s, %s, %s, %s, %s, %s%s)"
+               % (", fincom_id" if fid else "", q(PS.BK), q(F), q(guid), q(day), q(vtype), q(vno), q(party), q(narration), (", " + q(fid)) if fid else ""))
+        db.sql("insert into tally_lines (book_id, firm_id, guid, day, ledger, amount) values (%s, %s, %s, %s, %s, %s), (%s, %s, %s, %s, 'Made-up Bank', %s)"
+               % (q(PS.BK), q(F), q(guid), q(day), q(party), -amt, q(PS.BK), q(F), q(guid), q(day), amt))
+    def svc(sql_):
+        try: return json.loads(db.one("set role service_role; select %s::text" % sql_) or "null")
+        except RuntimeError as x_:
+            if RED: return {}
+            raise
+    def due(n):
+        if RED: return
+        db.sql("update tally_post_rechecks set next_at = now() - interval '1 second' where job_id = %s and state = 'open'" % q(J(n)))
+    def recheck(n):   # the cron's piece for this posting, and its follow-up (the hand-back, else the register)
+        svc("tally_post_recheck_enroll()"); due(n)
+        o = svc("tally_post_recheck_job(%s::uuid)" % q(J(n)))
+        if o and o.get("resend"): svc("tally_post_work_then(%s::uuid, 'resend')" % q(J(n)))
+        elif o and o.get("register"): svc("tally_post_work_then(%s::uuid, 'register')" % q(J(n)))
+        return o or {}
+    def rc(n, x):
+        try: return json.loads(db.one("select to_jsonb(x)::text from tally_post_rechecks x where job_id = %s and fincom_id = %s" % (q(J(n)), q(x))) or "{}")
+        except RuntimeError: return {}   # (RED_WITHOUT_202: no such table)
+    def row(n): return json.loads(db.one("select (to_jsonb(j) - 'payload')::text from tally_post_jobs j where id = %s" % q(J(n))) or "null")
+    def holders(x):
+        live = (db.one("select coalesce(string_agg(job_id::text, ',' order by job_id), '') from tally_post_ids where fincom_id = %s and live" % q(x)) or "").split(",")
+        rs = (db.one("select coalesce(string_agg(id::text, ',' order by id), '') from tally_post_jobs where status in ('waiting', 'taken', 'running') and resend_only ? %s" % q(x)) or "").split(",")
+        return sorted(set(z for z in live + rs if z))
+    def check_answer(n, x, result="notseen", vch="", mid=""):
+        cid = db.one("select id from tally_post_checks where job_id = %s and entry_id = %s and state = 'waiting' order by id desc limit 1" % (q(J(n)), q(x)))
+        if not cid: return None
+        return svc("tally_post_check_report(%s, %s::uuid, %s, true, %s, %s, %s, %s, '')" % (cid, q(DA), q(BA), q(CO), q(result), q(vch), q(mid)))
+    def close(*ns): db.sql("update tally_post_jobs set status = 'failed', checking = false where id = any(%s::uuid[])" % q("{" + ",".join(J(n) for n in ns) + "}"))
+    def enq(jid, vs): return st.rpc(STAFF, "select tally_post_enqueue_to(%s::uuid, 'c1', %s::jsonb, null, null)::text" % (q(jid), q(json.dumps({"masters": [], "vouchers": vs}))))
+
+    print("== A. read back by narration: marked posted by itself")
+    xa = posting(1, [vx("ra-1", amt="101.00")])[0]
+    ok(reg(xa) == "needs_review", "the register: needs review (its reply lost)")
+    db.sql("update tally_post_ids set matched_at = now(), matched_vch = 'V-77', matched_mid = '7077' where fincom_id = %s" % q(xa))
+    o = recheck(1) if not RED else {}
+    ok(o.get("posted") == 1 and reg(xa) == "in_tally" and rc(1, xa).get("state") == "posted", "found by FinCom's read-back: marked posted, the register in Tally (%s, %s)" % (o, reg(xa)))
+    ok(holders(xa) == [J(1)] and not (row(1)["resend_only"] or []), "never sent again")
+
+    print("== B. its narration edited in Tally: found by content in the Day Book")
+    xb = posting(2, [vx("rb-1", amt="202.00", vno="88")])[0]
+    daybook("g-rb-1", vno="88", amt=202, narration="Paid to Kite (narration edited by hand)")
+    o = recheck(2) if not RED else {}
+    r = row(2); res = next((x for x in r["results"] if x.get("id") == xb), {})
+    ok(o.get("posted") == 1 and reg(xb) == "in_tally" and "Day Book" in (res.get("message") or "") and "88" in (rc(2, xb).get("words") or ""),
+       "the same date, type, amount, party and number: marked posted (%s | %s)" % ((res.get("message") or "")[:120], rc(2, xb).get("words")))
+
+    print("== C. two vouchers like it: found, a person picks")
+    xc = posting(3, [vx("rc-1", amt="303.00")])[0]
+    daybook("g-rc-1", amt=303); daybook("g-rc-2", amt=303)
+    o = recheck(3) if not RED else {}
+    ok(o.get("pick") == 1 and rc(3, xc).get("state") == "person" and "2 vouchers like it" in (rc(3, xc).get("words") or "") and reg(xc) == "needs_review" and holders(xc) == [J(3)],
+       "needs a person to pick (%s); nothing released or sent" % rc(3, xc).get("words"))
+
+    print("== D. the same day and amount, another type: kept, never sent")
+    xd = posting(4, [vx("rd-1", amt="404.00")])[0]
+    daybook("g-rd-1", vtype="Journal", amt=404)
+    read(True)
+    o = recheck(4) if not RED else {}
+    check_answer(4, xd); o = recheck(4) if not RED else {}
+    ok(o.get("kept") == 1 and o.get("released", 0) == 0 and rc(4, xd).get("state") == "open" and "same day and amount" in (rc(4, xd).get("words") or "") and holders(xd) == [J(4)],
+       "kept for a person even with the bridge's 'not seen' and the read complete (%s)" % rc(4, xd).get("words"))
+
+    print("== E. Tally created it in another company: needs review, never sent")
+    xe = posting(5, [vx("re-1", amt="505.00")], results=[{"id": "re-1", "kind": "voucher", "ok": False, "state": "unknown", "outcomeUnknown": True, "wrongCompany": "Made-up Other Traders"}])[0]
+    o = recheck(5) if not RED else {}
+    ok(o.get("wrong") == 1 and rc(5, xe).get("state") == "person" and "Made-up Other Traders" in (rc(5, xe).get("words") or "") and "linked" in (rc(5, xe).get("words") or "") and holders(xe) == [J(5)],
+       "said plainly (%s); never sent again" % rc(5, xe).get("words"))
+
+    print("== F. sent again only when every proof holds")
+    read(False)
+    xf = posting(6, [vx("rf-1", amt="606.00")])[0]
+    o = recheck(6) if not RED else {}
+    ok(o.get("asked") == 1 and rc(6, xf).get("state") == "open", "first look: the bridge's check by narration asked by itself (%s)" % o)
+    check_answer(6, xf, "notseen")
+    o = recheck(6) if not RED else {}
+    ok(o.get("released", 0) == 0 and holders(xf) == [J(6)], "'not seen', FinCom's read of Tally not complete: not sent")
+    read(True)
+    o = recheck(6) if not RED else {}; r = row(6)
+    ok(o.get("released") == 1 and r["status"] == "waiting" and r["resend_only"] == [xf] and rc(6, xf).get("state") == "resent", "every proof holds: released, handed back by its posting alone (%s %s)" % (r["status"], r["resend_only"]))
+    ok(holders(xf) == [J(6)], "sent by that posting only, once")
+    # each proof missing on its own
+    for n, x, why in ((7, "rf-acc", "stamped accepted"), (8, "rf-old", "the check answered before it needed review"), (9, "rf-like", "a voucher of the same day and amount")):
+        posting(n, [vx(x, amt="7%02d.00" % n)])
+        if why == "stamped accepted": db.one("set role service_role; select tally_post_id_accept(%s::uuid, %s, null)::text" % (q(J(n)), q(x)))
+        if why == "a voucher of the same day and amount": daybook("g-" + x, vtype="Receipt", amt=700 + n)
+        if why == "the check answered before it needed review":
+            db.sql("insert into tally_post_checks (firm_id, job_id, entry_id, company, asked_by, why, state, checked_at, checked_bridge, checked_device, auto) values (%s, %s, %s, %s, %s, 'made-up', 'notseen', now() - interval '2 hours', %s, %s, true)"
+                   % (q(F), q(J(n)), q(x), q(CO), q(ME), q(BA), q(DA)))
+            db.sql("update tally_post_checks set asked_at = now() - interval '3 hours' where job_id = %s" % q(J(n)))
+        recheck(n) if not RED else None
+        if why != "the check answered before it needed review": check_answer(n, x, "notseen")
+        o = recheck(n) if not RED else {}
+        ok(o.get("released", 0) == 0 and row(n)["status"] == "done" and holders(x) == [J(n)] and rc(n, x).get("state") == "open",
+           "%s: never sent again (%s)" % (why, rc(n, x).get("words")))
+    ok(db.one("select count(*)::text from tally_post_checks where job_id = %s and state = 'waiting'" % q(J(8))) == "1", "the old answer: asked again by itself")
+
+    print("== G. the bridge's check 'found': marked posted")
+    xg = posting(10, [vx("rg-1", amt="1010.00", vno="91")])[0]
+    recheck(10) if not RED else None
+    a = check_answer(10, xg, "found", "91", "7091")
+    o = recheck(10) if not RED else {}
+    ok((a or {}).get("state") == "found" and reg(xg) == "in_tally" and rc(10, xg).get("state") in ("settled", "posted"), "found by the bridge: marked posted (%s, %s)" % (a, rc(10, xg).get("state")))
+
+    print("== H. a day of rechecks: left to a person")
+    xh = posting(11, [vx("rh-1", amt="1111.00")])[0]
+    recheck(11) if not RED else None
+    if not RED: db.sql("update tally_post_rechecks set since = now() - interval '25 hours' where job_id = %s; update tally_post_register set changed_at = now() - interval '25 hours' where fincom_id = %s" % (q(J(11)), q(xh)))
+    o = recheck(11) if not RED else {}
+    ok(rc(11, xh).get("state") == "person" and "a person must look" in (rc(11, xh).get("words") or "") and holders(xh) == [J(11)], "left to a person in words (%s)" % rc(11, xh).get("words"))
+
+    print("== I. never twice, every path again")
+    e = enq(J(20), [vx(xf, amt="606.00")])
+    ok(e.get("ok") is False, "the entry sent again (F): a new posting of it refused (%s)" % (e.get("error") or "")[:100])
+    try:
+        db.sql("insert into tally_post_jobs (id, firm_id, client_id, company, status, n, payload, device_id, created_by) values (%s, %s, 'c1', %s, 'waiting', 1, %s, %s, %s)" % (q(J(21)), q(F), q(CO), q(json.dumps({"vouchers": [vx(xf)]})), q(DA), q(STAFF))); e2 = ""
+    except RuntimeError as x_: e2 = str(x_)
+    ok("Not queued" in e2 or "already being posted" in e2, "by any other way into the queue: refused (%s)" % e2.split("CONTEXT")[0][-120:])
+    ok(recheck(6).get("released", 0) == 0 and holders(xf) == [J(6)], "a recheck run again: nothing more")
+    close(6)
+    if RED: ok(False, "I (RED_WITHOUT_202: the rest not run)")
+    else:
+        # posted elsewhere meanwhile (data from before this release): proven not in Tally, released, never handed back
+        xi = posting(22, [vx("ri-1", amt="2222.00")])[0]
+        recheck(22) if not RED else None; check_answer(22, xi, "notseen"); svc("tally_post_recheck_enroll()") if not RED else None; due(22)
+        o = svc("tally_post_recheck_job(%s::uuid)" % q(J(22))) if not RED else {}
+        db.sql("set session_replication_role = replica; insert into tally_post_jobs (id, firm_id, client_id, company, status, n, payload, device_id, created_by) values (%s, %s, 'c1', %s, 'waiting', 1, %s, %s, %s);"
+               "insert into tally_post_ids (firm_id, client_id, fincom_id, job_id, entry_id, live) values (%s, 'c1', %s, %s, %s, true); set session_replication_role = origin;"
+               % (q(J(23)), q(F), q(CO), q(json.dumps({"vouchers": [vx(xi)]})), q(DA), q(STAFF), q(F), q(xi), q(J(23)), q(xi)))
+        o2 = svc("tally_post_settle_resend(%s::uuid)" % q(J(22))) if not RED else {}
+        ok(o.get("released") == 1 and o2.get("resent") is False and holders(xi) == [J(23)], "released, then posted elsewhere before the hand-back: not handed back (%s)" % o2)
+        close(22, 23)
+        # a Retry of an older posting of the same entry, while it is owed
+        xr = posting(24, [vx("rr-1", amt="2424.00")])[0]
+        db.sql("set session_replication_role = replica; insert into tally_post_jobs (id, firm_id, client_id, company, status, n, payload, device_id, created_by) values (%s, %s, 'c1', %s, 'failed', 1, %s, %s, %s);"
+               "insert into tally_post_ids (firm_id, client_id, fincom_id, job_id, entry_id, live) values (%s, 'c1', %s, %s, %s, false); set session_replication_role = origin;"
+               % (q(J(25)), q(F), q(CO), q(json.dumps({"vouchers": [vx(xr)]})), q(DA), q(STAFF), q(F), q(xr), q(J(25)), q(xr)))
+        recheck(24) if not RED else None; check_answer(24, xr, "notseen")
+        db.sql("create or replace function t202_hold() returns trigger language plpgsql as $t$ begin if new.id = %s::uuid and new.status = 'waiting' then raise exception 'made-up: hand-back later'; end if; return new; end $t$;"
+               "create trigger t202_hold before update on tally_post_jobs for each row execute function t202_hold();" % q(J(24)))
+        o = recheck(24) if not RED else {}
+        e = enq(J(25), [vx(xr)])
+        ok(o.get("released") == 1 and e.get("ok") is False and holders(xr) == [], "released, its hand-back not done yet: a Retry of another posting holding it refused (%s)" % (e.get("error") or "")[:100])
+        db.sql("drop trigger t202_hold on tally_post_jobs")
+        svc("tally_post_settle_resend_due(5)")
+        ok(holders(xr) == [J(24)] and row(24)["resend_only"] == [xr], "then handed back by the cron, by its own posting alone")
+        close(24, 25)
+
+    print("== J. the hand-out: only to a bridge that reports the linked company's GUID open")
+    db.sql("update tally_post_jobs set status = 'failed' where status in ('waiting', 'taken', 'running')")
+    db.sql("insert into tally_post_jobs (id, firm_id, client_id, company, status, n, payload, device_id, created_by) values (%s, %s, 'c1', %s, 'waiting', 1, %s, %s, %s)" % (q(J(30)), q(F), q(CO), q(json.dumps({"vouchers": [vx("rj-1")]})), q(DA), q(STAFF)))
+    take = lambda: db.one("set role service_role; select coalesce(string_agg(id::text, ','), '') from tally_post_take_for(%s::uuid, %s, true)" % (q(DA), q(BA))) or ""
+    st.setbeat(DA, st.beat("made-up-a", BA, [CO], guid="ffffffff-0000-0000-0000-000000000202"))
+    ok(take() == "" if not RED else False, "the bridge has a company of that name open, another GUID: handed nothing")
+    st.setbeat(DA, st.beat("made-up-a", BA, [CO]))
+    ok(J(30) in take(), "the linked company's GUID open: handed it")
+    close(30)
+
+    print("== K. the cron")
+    if not RED: db.sql("update tally_post_rechecks set state = 'person' where state = 'open'")
+    db.sql("update tally_post_jobs set status = 'failed', checking = false where status in ('waiting', 'taken', 'running') or checking")
+    for _ in range(40):
+        if '"idle": true' in (db.one("set role service_role; select tally_post_register_step(null, 2000)::text") or ""): break
+    db.sql("update tally_post_register set changed_at = now() - interval '2 days' where state = 'needs_review'")
+    db.sql("update tally_post_checks set resent = true where state = 'confirmed' and resent is not true")
+    t0 = time.time(); r = st.psql_text("call public.tally_post_work_run();"); t = time.time() - t0
+    ok(r.returncode == 0 and t < 0.5 and db.one("set role service_role; select tally_post_work_due()::text") == "false", "nothing to do: at once (%.2f s)" % t)
+    xk = posting(40, [vx("rk-1", amt="4040.00")])[0]
+    db.sql("update tally_post_ids set matched_at = now(), matched_vch = 'V-40' where fincom_id = %s" % q(xk))
+    ok(db.one("set role service_role; select tally_post_work_due()::text") == "true", "an entry that needs review: the cron has work")
+    r = st.psql_text("call public.tally_post_work_run();")
+    ok(r.returncode == 0 and reg(xk) == "in_tally", "the cron's run rechecks it: marked posted (%s) %s" % (reg(xk), (r.stderr or "")[-200:]))
+finally:
+    st.stop()
+print("\n%s: %d" % ("FAILED" if fails else "ALL PASSED", len(fails)))
+raise SystemExit(1 if fails else 0)

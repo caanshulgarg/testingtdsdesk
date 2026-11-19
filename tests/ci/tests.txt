@@ -127,6 +127,12 @@ run_migration199.py                   1500
 run_migration200.py                   120
 # 18-Nov-2026 (next-fix-posttimeout): 201, the posting register's pass of a big posting in steps; 20,000 and 50,000 entries timed
 run_migration201.py                   480
+# 19-Nov-2026 (next-fix-posttimeout, the third review): never twice, every way an entry is sent again (199-201 in one session)
+run_post_never_twice.py               240
+# 19-Nov-2026 (next-fix-posttimeout): 202, an entry that needs review rechecked by itself (narration, the Day Book's content)
+run_migration202.py                   240
+# 19-Nov-2026 (next-fix-posttimeout): the release applied as deployed (199, 200, 201, 202 in one session), every statement timed at 20,000 and 50,000 (run alone)
+run_migration199_202.py               1500
 run_mis.js                            120
 run_mis_custom.js                     120  # My MIS engine = MIS / FinSt (ROUND 105)
 run_mis_xlsx.py                       300  TDSDESK_SITE=../app/dist-test @libreoffice  # needs LibreOffice: tagged, so run_ci.sh deals it to one share with run_fin_xlsx.py and ci.yml installs libreoffice-calc there only
