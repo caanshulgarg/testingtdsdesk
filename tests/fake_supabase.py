@@ -47,6 +47,7 @@ NO_COL = {"tally_openings_held": {"id"}}   # table -> {column}: a database witho
                           # 42703, a POST carrying one PGRST204, as PostgREST does (bridge 2.3.1: 57's tally_ledgers.tds_deductee_type)
 HONOR_LIMIT = [False]     # True: order=col.asc|desc and limit=n are applied to a GET (off by default: as before)
 SETTLE_ITSELF = [None]    # migration 200: what tally_post_settle_itself answers (None: nothing held)
+RPC_DELAY = {}            # function -> seconds it waits before it answers (a database that hangs on that call)
 RESEND_OK = {}            # migration 200: tally_post_resend_ok's words for a posting (none: it may send; its SQL: run_post_never_twice.py)
 LEASE7_MISSING = [False]  # migration 55 not run: the 7-argument tally_lease_take (p_purpose) is not there (PGRST202 for that call only)
 PK = {"gst_sessions": ["firm_id", "gstin"], "gst_filings": ["firm_id", "gstin", "form", "period"], "gst_returns": ["firm_id", "gstin", "form", "period"], "gst_einv_accounts": ["firm_id", "gstin"], "gst_einvoices": ["firm_id", "gstin", "doc_key"]}
@@ -219,6 +220,7 @@ class H(http.server.BaseHTTPRequestHandler):
                 return self.send(500, dict(FAIL_RPC[path.rsplit("/", 1)[1]], details=None, hint=None))
             if path.rsplit("/", 1)[1] in NO_FN:
                 return self.send(404, {"code": "PGRST202", "message": "Could not find the function public.%s in the schema cache" % path.rsplit("/", 1)[1], "details": None, "hint": None})
+            if RPC_DELAY.get(path.rsplit("/", 1)[1]): time.sleep(RPC_DELAY[path.rsplit("/", 1)[1]])
             try: return self.send(200, rpc(path.rsplit("/", 1)[1], json.loads(raw or b"{}")))
             except LookupError:   # an overload this database does not have (PostgREST answers 404 PGRST202)
                 return self.send(404, {"code": "PGRST202", "message": "Could not find the function public.%s with those arguments in the schema cache" % path.rsplit("/", 1)[1], "details": None, "hint": None})

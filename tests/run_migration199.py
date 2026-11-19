@@ -134,6 +134,12 @@ try:
                     (fincom_id = %(x)s or entry_id = %(x)s or regexp_replace(fincom_id, '[^A-Za-z0-9]', '', 'g') = regexp_replace(%(x)s, '[^A-Za-z0-9]', '', 'g')
                      or regexp_replace(coalesce(entry_id, ''), '[^A-Za-z0-9]', '', 'g') = regexp_replace(%(x)s, '[^A-Za-z0-9]', '', 'g')))::text || '/' ||
                   count(*) filter (where tally_post_id_match(fincom_id, entry_id, %(x)s))::text from tally_post_ids where job_id = %(j)s"""
+    print("== 0a. never runs without 111 and 174 (the fourth review)")
+    db.sql("alter function public.tally_post_job_blocked(uuid) rename to tally_post_job_blocked_t199")
+    r = st.psql_text(text)
+    db.sql("alter function public.tally_post_job_blocked_t199(uuid) rename to tally_post_job_blocked")
+    ok(r.returncode != 0 and "migration 199 runs after 111 and 174" in (r.stderr or "") and db.one("select count(*)::text from pg_proc where proname = 'tally_post_id_accept_many'") == "0",
+       "without 174: refused, nothing applied (%s)" % (r.stderr or "").strip()[-140:])
     print("== 0. runs twice")
     for n in (1, 2):
         if RED: ok(False, "run %d (RED_WITHOUT_199: not run)" % n); continue

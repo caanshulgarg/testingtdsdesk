@@ -944,8 +944,8 @@ example `psql -v ON_ERROR_STOP=1 -f migration-199-post-match-fast.sql -f migrati
 migration-201-post-register-async.sql -f migration-202-post-recheck.sql`), then the tally-ingest of this branch. Alone, 199
 or 199 + 200 leave a posting of 20,000 entries at 4-6 s a change of status (the register's whole pass in the trigger);
 only with 201 is every statement under 1.5 s. One transaction for all four is not possible as written (each file is its
-own BEGIN/COMMIT, so that a rerun of one is safe); each later file refuses to run without the ones before it (200 without
-199, 201 without 199/200, 202 without 201). Tested as deployed: `tests/run_migration199_202.py` (the four in one session,
+own BEGIN/COMMIT, so that a rerun of one is safe); each file refuses to run without the ones before it (199 without
+111 and 174, 200 without 199, 201 without 199/200, 202 without 201). Tested as deployed: `tests/run_migration199_202.py` (the four in one session,
 then every statement timed at 20,000 and 50,000: run it alone).
 
 
@@ -1106,7 +1106,12 @@ bridge's "not seen" since it needed review, no voucher of that day and amount, F
 nothing of Tally's saying it took it): released by itself and handed back through 200's guarded hand-back (reserved; never
 one posted elsewhere). The other-company recheck was dropped (the owner, 19-Nov-2026): an entry is only ever posted into
 the company its client is linked to; 202's `tally_post_take_for` (185's text) hands a posting to a bridge only when that
-bridge reports the linked company's GUID open (`tally_post_linked_open`). The cron: 201's `tally_post_work_due`,
+bridge reports the linked company's GUID open (`tally_post_linked_open`), and (the fourth review) the beat's count, 185's
+`tally_post_count_for` (replaced), asks the same gate: a posting of that bridge it refuses says why on the posting
+(`tally_post_linked_why`: "the linked company has no company ID yet", or "the Tally company open on the computer is not
+the linked one (different company ID)"), never the name alone. An entry whose date or amount cannot be read from the
+posting is never sent again by itself (a person looks). tally-ingest's post_ok refuses a re-send list when
+`tally_post_resend_ok` errors, is missing or does not answer within 4 s. The cron: 201's `tally_post_work_due`,
 `tally_post_work` and `tally_post_work_run` (replaced from 201's text) gain the recheck (one posting a piece, its hand-back
 or the register in its own transaction). Add-only (one table, two partial indexes), one transaction, lock_timeout 10 s,
 safe twice; service_role only, granted explicitly. **After 201.** No bridge change, no new Tally request. Tested:

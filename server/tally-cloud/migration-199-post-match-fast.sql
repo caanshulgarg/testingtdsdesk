@@ -28,6 +28,14 @@
 begin;
 set local lock_timeout = '10s';
 
+-- (the fourth review) 199 replaces 111's and 174's texts: it never runs without them (199, 200, 201 and 202 are one release)
+do $$ begin
+  if to_regprocedure('public.tally_post_job_blocked(uuid)') is null or to_regprocedure('public.tally_post_register_apply_row(public.tally_post_jobs,uuid)') is null
+     or to_regprocedure('public.tally_post_register_judged(public.tally_post_jobs)') is null then
+    raise exception 'migration 199 runs after 111 and 174 (then 200, 201 and 202, in that order, in one session)';
+  end if;
+end $$;
+
 -- 43's tally_post_job_accepted: the same answer; the ids matched by their spellings worked out once
 create or replace function public.tally_post_job_accepted(p_job uuid, p_results jsonb, p_items jsonb) returns text
 language sql stable security definer set search_path = public, pg_temp as $function$

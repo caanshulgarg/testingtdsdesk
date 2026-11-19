@@ -9,7 +9,8 @@ post_ok, the bridge's read-only question before it sends each part of a posting 
   5. done and being checked (checking): post false, stop "checking" (review L2: an owner may release or post it
      again), unless handed back to send some entries again (resend_only): post true; waiting (put back for this same
      bridge): post true; (migration 200, never twice) one whose re-send list was not handed back yet, or has an entry
-     posted again in another posting since (tally_post_resend_ok's words): post false, stop "checking", those words;
+     posted again in another posting since (tally_post_resend_ok's words): post false, stop "checking", those words; that
+     answer not had (an error, no such function, no answer within 4 s): post false, never allowed;
   6. not the main bridge any more (another of the same Windows user chosen): notMain;
   7. a cloud without 174 (no stop_reason): read without it, as before;
   8. posts_update with offlineSends: kept in the timing; without it the timing as before;
@@ -94,6 +95,17 @@ try:
     for jid in ("p54", "p55"):
         c, r = ask(jid)
         ok(c == 200 and r.get("post") is False and r.get("stop") == "checking" and r.get("error") == F.RESEND_OK[jid], "%s: the re-send list may not go now: post false (%s)" % (jid, r))
+    # (the fourth review) the database's answer on a re-send list not had (an error, no such function, or no answer in time):
+    # refused, never allowed
+    for jid, how in (("p56", "error"), ("p57", "missing"), ("p58", "slow")):
+        F.T["tally_post_jobs"].append(job(jid, "waiting", attempts=1, resend_only=["K1"]))
+        if how == "error": F.FAIL_RPC["tally_post_resend_ok"] = {"code": "57014", "message": "canceling statement due to statement timeout"}
+        if how == "missing": F.NO_FN.add("tally_post_resend_ok")
+        if how == "slow": F.RPC_DELAY["tally_post_resend_ok"] = 12
+        t0 = time.time(); c, r = ask(jid); t = time.time() - t0
+        F.FAIL_RPC.pop("tally_post_resend_ok", None); F.NO_FN.discard("tally_post_resend_ok"); F.RPC_DELAY.pop("tally_post_resend_ok", None)
+        ok(c == 200 and r.get("post") is False and r.get("stop") == "checking" and "could not" in str(r.get("error") or "") and t < 8,
+           "%s: tally_post_resend_ok %s: refused, never allowed (%.1f s, %s)" % (jid, how, t, r))
     print("== 6. not the main bridge any more")
     dev = F.T["tally_devices"][0]
     dev["main_bridge"] = OTHER; dev["info"]["bridges"][OTHER] = {"at": "2026-11-13T10:00:00Z", "user": ME["user"]}

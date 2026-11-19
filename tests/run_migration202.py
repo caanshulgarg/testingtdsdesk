@@ -16,8 +16,11 @@ entry; an entry only ever posted into the company its client is linked to (by it
   H. a day of rechecks: left to a person in words
   I. never twice, every path again: the entry sent again is its posting's (a new posting refused, the queue's guard, a
      Retry), one posted elsewhere meanwhile is not handed back, a recheck run again sends nothing
-  J. the hand-out: a posting goes only to a bridge that reports the linked company's GUID open
+  J. the hand-out: a posting goes only to a bridge that reports the linked company's GUID open; the beat's count
+     (tally_post_count_for) asks the same gate, and a posting it refuses says why in plain words (another company ID open,
+     or the link has no company ID yet): never waits silently, never the name alone
   K. the cron: idle is one look; due: the recheck in the run
+  L. an entry whose date or amount cannot be read from the posting: never sent again, left to a person in words
 RED_WITHOUT_202=1: the same checks without the file (fails)."""
 import os, re, sys, json, time, hashlib
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
@@ -41,7 +44,7 @@ ok(bool(text) and "delete from" not in code and not re.search(r"\b(drop|truncate
    "add-only: one table, two indexes; nothing dropped, deleted or truncated; no trigger")
 ok(bool(text) and not re.search(r"supabase\.co|https?://|qbocskai|nrtczu|project[_ ]ref", text.lower()), "names no real database")
 FNS = ["tally_post_recheck_enroll()", "tally_post_recheck_any()", "tally_post_recheck_job(uuid)", "tally_post_recheck_run(uuid[])", "tally_post_work_due()", "tally_post_work()",
-       "tally_post_linked_open(uuid, uuid, text)", "tally_post_take_for(uuid, text, boolean)"]
+       "tally_post_linked_open(uuid, uuid, text)", "tally_post_linked_why(uuid, uuid, text)", "tally_post_take_for(uuid, text, boolean)", "tally_post_count_for(uuid, text, boolean)"]
 ok(all(("revoke all on function public.%s from public, anon, authenticated;" % s) in text and ("grant execute on function public.%s to service_role;" % s) in text for s in FNS)
    and sorted(set(re.findall(r"create or replace function public\.(\w+)\(", code))) == sorted(f.split("(")[0] for f in FNS)
    and "grant execute on procedure public.tally_post_work_run(integer) to service_role;" in text, "only these functions (and 201's procedure), each granted explicitly")
@@ -234,11 +237,35 @@ try:
     db.sql("update tally_post_jobs set status = 'failed' where status in ('waiting', 'taken', 'running')")
     db.sql("insert into tally_post_jobs (id, firm_id, client_id, company, status, n, payload, device_id, created_by) values (%s, %s, 'c1', %s, 'waiting', 1, %s, %s, %s)" % (q(J(30)), q(F), q(CO), q(json.dumps({"vouchers": [vx("rj-1")]})), q(DA), q(STAFF)))
     take = lambda: db.one("set role service_role; select coalesce(string_agg(id::text, ','), '') from tally_post_take_for(%s::uuid, %s, true)" % (q(DA), q(BA))) or ""
+    count = lambda: db.one("set role service_role; select tally_post_count_for(%s::uuid, %s, true)::text" % (q(DA), q(BA)))
+    msg = lambda: (row(30) or {}).get("message") or ""
     st.setbeat(DA, st.beat("made-up-a", BA, [CO], guid="ffffffff-0000-0000-0000-000000000202"))
-    ok(take() == "" if not RED else False, "the bridge has a company of that name open, another GUID: handed nothing")
+    ok(count() == "0" if not RED else False, "the bridge has a company of that name open, another GUID: the beat counts nothing for it (%s)" % count())
+    ok("not the linked one (different company ID)" in msg(), "the posting says why (%s)" % msg())
+    ok(take() == "" if not RED else False, "and is handed nothing")
     st.setbeat(DA, st.beat("made-up-a", BA, [CO]))
+    g0 = db.one("select company_guid from tally_links where firm_id = %s and client_id = 'c1'" % q(F))
+    db.sql("update tally_links set company_guid = null where firm_id = %s and client_id = 'c1'" % q(F))
+    ok(count() == "0" and "has no company ID yet" in msg(), "the link has no company ID yet: nothing counted, never the name alone; it says so (%s)" % msg())
+    ok(take() == "", "and is handed nothing")
+    db.sql("update tally_links set company_guid = %s where firm_id = %s and client_id = 'c1'" % (q(g0), q(F)))
+    ok(count() == "1", "the linked company's GUID open: counted")
     ok(J(30) in take(), "the linked company's GUID open: handed it")
     close(30)
+
+    print("== L. its date or amount cannot be read: never sent again, left to a person")
+    read(True)
+    xl = vx("rl-date", amt="1313.00", day="")
+    xm = vx("rl-amt", amt="1414.00"); xm["xml"] = re.sub(r"<AMOUNT>[^<]*</AMOUNT>", "", xm["xml"])
+    for n, v, what in ((12, xl, "date"), (13, xm, "amount")):
+        x = posting(n, [v])[0]
+        recheck(n) if not RED else None
+        check_answer(n, x, "notseen")
+        o = recheck(n) if not RED else {}
+        w = rc(n, x).get("words") or ""
+        ok(not RED and o.get("released", 0) == 0 and row(n)["status"] == "done" and holders(x) == [J(n)] and rc(n, x).get("state") == "person" and "date or amount" in w,
+           "its %s not read: not sent, a person must look (%s %s)" % (what, rc(n, x).get("state"), w))
+        close(n)
 
     print("== K. the cron")
     if not RED: db.sql("update tally_post_rechecks set state = 'person' where state = 'open'")

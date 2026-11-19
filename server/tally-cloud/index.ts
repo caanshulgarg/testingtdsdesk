@@ -5117,10 +5117,20 @@ Deno.serve(sentry.wrap(async (req) => {
         if (j.status === "done" && j.checking && !(Array.isArray(j.resend_only) && j.resend_only.length)) return no("checking", "This posting is held for checking in FinCom; nothing more is sent until an owner settles it.");
         if ((j.target_bridge && j.target_bridge !== meO) || (j.taken_by && /^go-/.test(String(j.taken_by)) && j.taken_by !== meO)) return no("notYours", "This posting was taken by another FinCom Bridge; only that bridge may post it.");
         // migration 200 (never twice): a posting with a re-send list whose entries were released but not handed back yet (held
-        // for checking), or one of them posted again in another posting since: nothing more is sent. A cloud without 200: as before
+        // for checking), or one of them posted again in another posting since: nothing more is sent. (The fourth review) the
+        // database's answer not had (an error, no such function, no answer within 4 s): refused, never allowed; the bridge
+        // asks again before its next part
         if (Array.isArray(j.resend_only) && j.resend_only.length) {
-          const { data: why, error: wErr } = await db.rpc("tally_post_resend_ok", { p_job: id });
-          if (!wErr && typeof why === "string" && why) return no("checking", why.slice(0, 400));
+          let why: unknown = null, wErr: any = null;
+          try {
+            const r = await db.rpc("tally_post_resend_ok", { p_job: id }).abortSignal(AbortSignal.timeout(4000));
+            why = r.data; wErr = r.error;
+          } catch (e) { wErr = e; }
+          if (wErr) {
+            console.error("tally-ingest: post_ok tally_post_resend_ok", id, String((wErr as any)?.message || wErr).slice(0, 200));
+            return no("checking", "FinCom could not check that the entries released for sending again may go now; nothing is sent until it can (asked again shortly).");
+          }
+          if (typeof why === "string" && why) return no("checking", why.slice(0, 400));
         }
         return reply(200, { ok: true, post: true });
       }

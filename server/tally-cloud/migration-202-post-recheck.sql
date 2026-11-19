@@ -28,9 +28,13 @@
 --          released by itself (as 200 releases) and handed back by 200's tally_post_settle_resend: the reservation (201)
 --          and the taken-elsewhere guard apply.
 --   3. The hand-out (185's tally_post_take_for): a posting is handed to a bridge only when that bridge reports the linked
---      company's GUID open (its own list of open companies, else its key's beat): tally_post_linked_open.
+--      company's GUID open (its own list of open companies, else its key's beat): tally_post_linked_open. The beat's count
+--      (185's tally_post_count_for) asks the same gate, and a posting of the bridge it refuses says why on the posting
+--      (tally_post_linked_why: the link has no company ID yet, or another company ID is open): never the name alone, and
+--      never waiting silently. An entry whose date or amount cannot be read from the posting is never sent again by
+--      itself (a person looks).
 -- Add-only: one table (row security on, the firm reads), two partial indexes, functions new or replaced from their latest
--- text (185's tally_post_take_for; 201's tally_post_work_due, tally_post_work, tally_post_work_run gain the recheck).
+-- text (185's tally_post_take_for and tally_post_count_for; 201's tally_post_work_due, tally_post_work, tally_post_work_run gain the recheck).
 -- Nothing dropped or deleted. One transaction, lock_timeout 10 s, safe twice; service_role only, granted explicitly. No
 -- bridge change, no new Tally request.
 begin;
@@ -214,6 +218,9 @@ begin
                 when c0.n_alike > 1 then 'pick'
                 when c0.wc is not null then 'wrong'
                 when c0.n_loose > 0 then 'kept'
+                -- (the fourth review) its date or amount not read from the posting: FinCom's read of the Day Book cannot prove it is
+                -- not there, so it is never sent again by itself: a person looks
+                when fem -> c0.fid ->> 'day' is null or fem -> c0.fid ->> 'amt' is null then 'unread'
                 when c0.cst = 'notseen' and c0.c_at > c0.since and complete and (c0.marked_at is null or c0.marked_at <= c0.c_asked)
                      and c0.accepted_at is null and c0.reply_vch is null and c0.batch_end is null and not c0.took
                      and tally_post_check_bridge_ok(p_job, c0.cd, c0.cb, true) then 'out'
@@ -291,7 +298,7 @@ begin
 
   -- the recheck rows: their outcome, the next look on the back-off (2, 10, 30 minutes, then hourly), a person after a day
   update tally_post_rechecks x set tries = x.tries + 1, last_at = now(),
-         state = case z.cls when 'in' then 'posted' when 'out' then 'resent' when 'settled' then 'settled' when 'pick' then 'person' when 'wrong' then 'person'
+         state = case z.cls when 'in' then 'posted' when 'out' then 'resent' when 'settled' then 'settled' when 'pick' then 'person' when 'wrong' then 'person' when 'unread' then 'person'
                             else case when x.since < now() - interval '1 day' then 'person' else 'open' end end,
          next_at = now() + case x.tries when 0 then interval '2 minutes' when 1 then interval '10 minutes' when 2 then interval '30 minutes' else interval '1 hour' end,
          words = left(case z.cls
@@ -299,6 +306,7 @@ begin
            when 'out' then 'Not in Tally (proven on ' || day_ || '): released by itself; sent again once by its posting'
            when 'settled' then 'Settled meanwhile'
            when 'pick' then 'Found ' || z.n || ' vouchers like it in ' || j.company || ' (' || coalesce(z.vchs, '') || '): a person picks the one it is (Mark posted). It is never sent again by itself'
+           when 'unread' then 'Its date or amount could not be read from the posting, so FinCom cannot prove it is not in ' || j.company || ': a person must look in Tally (Mark posted if it is there, else Not in Tally). It is never sent again by itself'
            when 'wrong' then 'Tally created it in ' || z.wc || ', not in ' || j.company || ' (the company its client is linked to): a person must look in Tally. It is never sent again by itself'
            when 'kept' then case when coalesce(z.nl, 0) > 0 then 'A voucher of the same day and amount is in ' || j.company || ' (' || coalesce(z.vchs, '') || ') but not like it in every field: a person must look. It is never sent again by itself'
                                  else 'Tally''s reply says it took this entry, yet it is not found yet: looked at again by itself; never sent again by itself' end
@@ -486,6 +494,64 @@ returns boolean language sql stable security definer set search_path = public, p
 $function$;
 revoke all on function public.tally_post_linked_open(uuid, uuid, text) from public, anon, authenticated;
 grant execute on function public.tally_post_linked_open(uuid, uuid, text) to service_role;
+
+-- (the fourth review) why tally_post_linked_open refuses, in plain words (null: it does not). The same tests, in order:
+-- no link with a company ID, then the company this bridge reports open. Never the name alone
+create or replace function public.tally_post_linked_why(p_job uuid, p_device uuid, p_bridge text)
+returns text language sql stable security definer set search_path = public, pg_temp as $function$
+  select case
+    when tally_post_linked_open(p_job, p_device, p_bridge) then null
+    when not exists (select 1 from tally_links l join tally_companies tc on tc.firm_id = l.firm_id and tc.book_id = l.book_id
+                      where l.firm_id = j.firm_id and l.client_id = j.client_id and l.state = 'linked' and lower(tally_nm(tc.company)) = lower(tally_nm(j.company)))
+      then 'Not posted yet: the client is not linked to the Tally company ' || j.company || ' in FinCom. FinCom posts only into the linked company, by its company ID'
+    when not exists (select 1 from tally_links l join tally_companies tc on tc.firm_id = l.firm_id and tc.book_id = l.book_id
+                      where l.firm_id = j.firm_id and l.client_id = j.client_id and l.state = 'linked' and lower(tally_nm(tc.company)) = lower(tally_nm(j.company))
+                        and nullif(btrim(coalesce(l.company_guid, '')), '') is not null)
+      then 'Not posted yet: the linked company has no company ID yet (FinCom posts only into the linked company, by its company ID). Open ' || j.company || ' in Tally on the computer so the FinCom Bridge reads its ID'
+    when case when jsonb_typeof(me.info -> 'bridges' -> p_bridge -> 'cos') = 'array'
+           then exists (select 1 from jsonb_array_elements(me.info -> 'bridges' -> p_bridge -> 'cos') c where jsonb_typeof(c) = 'array' and nullif(btrim(coalesce(c ->> 1, '')), '') is not null)
+           else jsonb_typeof(me.info -> 'beat' -> 'companies') = 'array'
+            and exists (select 1 from jsonb_array_elements(me.info -> 'beat' -> 'companies') c where jsonb_typeof(c) = 'object' and nullif(btrim(coalesce(c ->> 'guid', '')), '') is not null
+                         and coalesce(c ->> 'open', 'true') <> 'false') end
+      then 'Not posted yet: the Tally company open on the computer is not the linked one (different company ID). Open ' || j.company || ' (the company its client is linked to) in Tally'
+    else 'Waiting: the linked Tally company ' || j.company || ' is not open in Tally on the computer' end
+    from tally_post_jobs j join tally_devices me on me.id = p_device
+   where j.id = p_job
+$function$;
+revoke all on function public.tally_post_linked_why(uuid, uuid, text) from public, anon, authenticated;
+grant execute on function public.tally_post_linked_why(uuid, uuid, text) to service_role;
+
+-- 185's tally_post_count_for (the beat's posts count); changed (the fourth review): the bridge's own postings and those it
+-- may pick up are counted only when it reports the linked company's GUID open (tally_post_linked_open, as the hand-out
+-- below); the third part (185's tally_post_unrouted_ok) asked it already. A posting of its own it refuses says why on the
+-- posting (tally_post_linked_why), written only when the words change, never waiting on a lock; a failure there never
+-- stops the count
+create or replace function public.tally_post_count_for(p_device uuid, p_bridge text, p_main boolean)
+returns integer language plpgsql volatile security definer set search_path = public, pg_temp as $function$
+declare n integer; go boolean := coalesce(p_bridge, '') ~ '^go-[0-9a-f]{6,32}$'; r record;
+begin
+  select count(*)::int into n from tally_post_jobs j
+   where j.device_id = p_device and j.status = 'waiting' and tally_post_mine_ok(j.id, p_device, p_bridge, p_main) and tally_post_linked_open(j.id, p_device, p_bridge);
+  if go then
+    n := n + (select count(*)::int from tally_post_jobs j join tally_devices me on me.id = p_device
+               where j.firm_id = me.firm_id and j.status = 'waiting' and j.taken_by is null and tally_post_pickable_ok(j.id, p_device, p_bridge) and tally_post_linked_open(j.id, p_device, p_bridge))
+            + (select count(*)::int from tally_post_jobs j join tally_devices me on me.id = p_device
+               where j.firm_id = me.firm_id and j.status = 'waiting' and j.device_id is null and tally_post_unrouted_ok(j.id, p_device, p_bridge));
+  end if;
+  begin
+    for r in select j.id, left(w.why, 300) as why from tally_post_jobs j cross join lateral (select tally_post_linked_why(j.id, p_device, p_bridge) as why) w
+              where j.device_id = p_device and j.status = 'waiting' and j.stop_reason is null and tally_post_mine_ok(j.id, p_device, p_bridge, p_main)
+                and w.why is not null and j.message is distinct from left(w.why, 300)
+              order by j.created_at limit 20 loop
+      perform 1 from tally_post_jobs j where j.id = r.id for update skip locked;
+      if found then update tally_post_jobs set message = r.why, updated_at = now() where id = r.id and status = 'waiting'; end if;
+    end loop;
+  exception when others then null;   -- (the words are a courtesy; the count stands)
+  end;
+  return n;
+end $function$;
+revoke all on function public.tally_post_count_for(uuid, text, boolean) from public, anon, authenticated;
+grant execute on function public.tally_post_count_for(uuid, text, boolean) to service_role;
 
 -- 185's tally_post_take_for; changed: the bridge's own postings and those picked up are handed out only when it reports the
 -- linked company's GUID open (tally_post_linked_open; the third loop asked it already, 185's tally_post_unrouted_ok)
