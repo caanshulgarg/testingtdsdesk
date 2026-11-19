@@ -144,7 +144,7 @@ def main():
         # the read on its way: its count
         E("""(c) => { const x = S.tcoSync[c] || (S.tcoSync[c] = {cid: c, at: Date.now(), samples: []}); FCRunState[c] = Object.assign(FCRunState[c] || {b: {n: 0, g: 0}}, {at: x.at, asking: false, say: ''});
           x.via = 'cloud'; x.prog = {round: 'r1', read: 1200, of: 3400, done: false, at: new Date().toISOString()}; render(); }""", cid); pg.wait_for_timeout(1300)
-        ok(txt(R(ORBIT) + " [data-tpg-ms]").startswith("Reading masters from Tally: 1,200 of 3,400 ledgers…") and n(R(ORBIT) + " .tpt-why") == 0, "3. 'Reading masters from Tally: 1,200 of 3,400 ledgers…', once, in Masters (%s)" % txt(R(ORBIT) + " [data-tpg-masters]"))
+        ok(txt(R(ORBIT) + " [data-tpg-ms]").startswith("1,200 of 3,400 ledgers") and n(R(ORBIT) + " .tpt-why") == 0, "3. 'Reading masters from Tally: 1,200 of 3,400 ledgers…', once, in Masters (%s)" % txt(R(ORBIT) + " [data-tpg-masters]"))
         # nothing from the bridge in 30 s: why
         E("(c) => { const x = S.tcoSync[c]; x.prog = null; x.at -= 31000; FCRunState[c].at = x.at; x.why = 'Tally is not open on SRV01: open TallyPrime there with ORBIT SPACE.'; render(); }", cid); pg.wait_for_timeout(1300)
         ok(txt(R(ORBIT) + " [data-tpg-ms]").startswith("Not started yet: Tally is not open on SRV01") and attr(R(ORBIT) + " [data-tpg-masters]", "data-tpg-masters") == "waiting", "3. nothing in 30 s: why, plainly, Masters waiting (%s)" % txt(R(ORBIT) + " [data-tpg-masters]"))
@@ -154,7 +154,7 @@ def main():
           set(window.__devs); set(TLight.st.devs); set(TCloud.pane.devices); render(); }"""
         E(SETKW, {"reason": "user-active", "words": KW, "since": "2026-11-07T06:12:00Z", "queued": True}); pg.wait_for_timeout(1300)
         w = txt(R(ORBIT) + " [data-tpg-ms]")
-        ok(KW in w and "warn" in (attr(R(ORBIT) + " [data-tpg-mw]", "class") or "") and n(R(ORBIT) + " .tpt-why") == 0, "3. bridge 2.5.5's keepWait: its words, amber, in Masters (%s)" % w)
+        ok(w == "Tally is busy, it reads when typing stops" and "warn" in (attr(R(ORBIT) + " [data-tpg-mw]", "class") or "") and n(R(ORBIT) + " .tpt-why") == 0, "3. bridge 2.5.5's keepWait (someone in Tally): Waiting: Tally is busy, it reads when typing stops (next-fix-mastersread), amber, in Masters (%s)" % w)
         ok(txt("#app [data-tsm-top-wait]") == KW + " (since 11:42)", "3. and in the top line (%s)" % txt("#app [data-tsm-top-wait]"))
         E(SETKW, None); pg.wait_for_timeout(1300)
         ok(txt(R(ORBIT) + " [data-tpg-ms]").startswith("Not started yet: ") and n("#app [data-tsm-top-wait]") == 0, "3. an older bridge (no keepWait): the 30 s reason again (%s)" % txt(R(ORBIT) + " [data-tpg-masters]"))

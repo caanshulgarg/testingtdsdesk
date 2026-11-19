@@ -569,7 +569,10 @@ function Row({ row, download, oneDl, seen, cs, x, checkAgain }) {
   else if (mm === "upload" || mm === "bring") { btn = <Act row={row} main />; main = mm; if (off) note = OFF_NOTE; }
   else if (pg.btn === "again") { btn = <Again row={row} x={x} cs={cs} checkAgain={checkAgain} label={pg.label} />; main = "again"; note = pg.note || ""; }
   // masters read first, entries only waiting after them: Reading… (Pause and Stop under More)
-  else if (pg.btn === "update" && p && e.st === "after") { btn = <button type="button" className="btn tpt-btn" data-tpt-main="reading" disabled title={READING_WHY}>Reading…</button>; main = "reading"; }
+  else if (pg.btn === "update" && p && e.st === "after" && !e.mastersFirst) { btn = <button type="button" className="btn tpt-btn" data-tpt-main="reading" disabled title={READING_WHY}>Reading…</button>; main = "reading"; }
+  // next-fix-mastersread: Bring books asked, but no masters in FinCom and none being read: Bring masters first (the
+  // entries wait for them; Pause stays under More)
+  else if (pg.btn === "update" && linked && !runningRead && p && e.mastersFirst && ledBook(row.cid) && !ledgersHeld(row.cid)) { btn = <BringMasters row={row} />; main = "masters"; if (!(row.o && row.o.w === YES) && !(readWhere(row.company) || {}).reader) note = "Needs the company open in Tally"; }
   // Bring books going or paused: Pause / Resume (Stop under More)
   else if (pg.btn === "update" && p && (p.state === "going" || p.state === "paused")) { btn = <PullButtons e={e} only={[p.state === "going" ? "pause" : "resume"]} main />; main = p.state === "going" ? "pause" : "resume"; }
   // masters not in FinCom yet: Bring masters (the masters' read; entries follow by themselves). Only for a book FinCom

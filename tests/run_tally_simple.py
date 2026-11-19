@@ -309,7 +309,7 @@ def main():
         ok(word(DELTA, "c") == "No" and txt(cell(DELTA, "c") + " [data-tsm-note]") == "Found in Tally: “%s”" % DELTA and [word(DELTA, k) for k in "ole"] == ["—"] * 3 and txt(row(DELTA) + " [data-tsm-act]") == "Link",
            "3. not connected, found in Tally: No, —, Link (%s)" % txt(row(DELTA)))
         ok(txt(cell(EVER, "c") + " [data-tsm-note]") == "Found in Tally: “%s”" % SPLIT, "3. a split is found by its client's name, said in full (%s)" % txt(cell(EVER, "c")))
-        ok(word(GAMMA, "l") == "Not yet" and word(GAMMA, "e") == "Not yet" and word(GAMMA, "o") == "No" and txt(cell(GAMMA, "do") + " [data-tsm-todo]") == "Open the company in Tally.", "3. linked, nothing received yet: Not yet (%s)" % txt(row(GAMMA)))
+        ok(word(GAMMA, "l") == "Not yet" and word(GAMMA, "e") == "Not yet" and word(GAMMA, "o") == "No" and txt(cell(GAMMA, "do") + " [data-tsm-todo]") == "Open “Gamma Agencies” in your own Tally and press Bring masters.", "3. linked, nothing received yet: Not yet (%s)" % txt(row(GAMMA)))
         ok(pg.get_attribute(row(ZETA), "data-tsm-kind") == "company" and "Not chosen yet" in txt(cell(ZETA, "client")) and txt(cell(ZETA, "c") + " [data-tsm-note]") == "Open in Tally: “%s”" % ZETA and txt(row(ZETA) + " [data-tsm-act]") == "Link",
            "3. a company no client has: Not chosen yet, Link to a client (%s)" % txt(row(ZETA)))
         acts = E("() => [...document.querySelectorAll('#app [data-tsm-table] tr[data-tsm-row]')].map(r => r.querySelectorAll('[data-tpt-main]').length)")
@@ -339,7 +339,7 @@ def main():
            "3b. the own bridge here says nothing is open: %s is No, %s (%s)" % (ACME, NOT_MINE, txt(cell(ACME, "o"))))
         ok("Yes" not in o.values() and all(o[c] == "No" for c in connected) and ZETA not in o, "3b. no Yes, and the company no client has is not this user's open one any more (%s)" % o)
         ok(fcount("closed") == len(connected) and say_ok(), "3b. Not open in Tally counts this user's Tally only (%d); the header follows (%s)" % (fcount("closed"), txt("#app [data-tsm-say]")))
-        ok(txt(cell(GAMMA, "do") + " [data-tsm-todo]") == "Open the company in Tally." and word(ACME, "c") == "Yes", "3b. what to do and Connected to Tally? stay as they were (%s)" % txt(cell(GAMMA, "do")))
+        ok(txt(cell(GAMMA, "do") + " [data-tsm-todo]") == "Open “Gamma Agencies” in your own Tally and press Bring masters." and word(ACME, "c") == "Yes", "3b. what to do and Connected to Tally? stay as they were (%s)" % txt(cell(GAMMA, "do")))
         # a local bridge answering on 127.0.0.1 with ANOTHER Windows user (made-up), even holding this id: ignored; the own
         # bridge's beat in FinCom's cloud answers instead
         E(LOCAL, [[BRIGHT, GAMMA], PC + "\\made-up-other", "go-7"]); pg.wait_for_timeout(1200)
