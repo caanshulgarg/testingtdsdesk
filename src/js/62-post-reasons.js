@@ -265,8 +265,7 @@ const postWhoSay = u => !u ? "" : typeof memberName === "function" ? memberName(
 function postStatus(entry, job, ids, marks, ctx){
   ctx = ctx || {};
   const e = entry || null, id = String((e && e.id) || ctx.id || "");
-  const r = job ? [].concat(job.results || []).find(x => x && String(x.id) === id) || null : null;
-  const it = job ? [].concat(job.items || []).find(x => x && String(x.id) === id) || null : null;
+  const ix = job ? CloudJobs.idx(job) : null, r = ix && ix.res.get(id) || null, it = ix && ix.it.get(id) || null;
   const bill = !!(e && e.x);
   const gone = !!(e && e.goneFromTally);
   const deleted = (bill && e.status === "deleted") || ctx.missing === true;
@@ -486,11 +485,15 @@ function postDiffers(e, v){
   if (amt && tot && Math.abs(amt - tot) > 0.5) out.push("amount " + mo(amt) + " (the bill says " + mo(tot) + ")");
   return out.length ? "What went to Tally differs from the bill now: " + out.join(", ") + "." : "";
 }
-function postEntryRows(cid){
+// (once a drawing, as postJobStates: postRev, src/js/59; the bank lines and sales by id, not looked for line by line)
+function postEntryRows(cid){ return perRender(postEntryRows, postRev(cid), () => postEntryRowsNow(cid)); }
+function postEntryRowsNow(cid){
   const d = typeof S === "object" && S.data ? S.data[cid] : null;
   if (!d || !d.loaded) return null;
   const jobs = postJobStates(cid), out = [], seen = new Set();
-  const b = S.bank && S.bank.cid === cid && !S.bank.loading ? S.bank : null;
+  const b = S.bank && S.bank.cid === cid && !S.bank.loading ? S.bank : null, bm = new Map();
+  if (b) b.rows.forEach(q => { const k = String(q.id); if (!bm.has(k)) bm.set(k, q); });
+  let sales = null;
   const pid = typeof PostIds === "object" ? PostIds.by[cid] : null;
   const me = (S.account && S.account.me && S.account.me.user_id) || "";
   const waiting = (typeof CloudJobs === "object" ? CloudJobs.list || [] : []).filter(j => j.status === "waiting").sort((x, y) => String(x.created_at || "").localeCompare(String(y.created_at || "")));
@@ -498,7 +501,7 @@ function postEntryRows(cid){
   const all = typeof CloudJobs === "object" ? CloudJobs.forClient(cid).slice().sort((x, y) => String(y.created_at || "").localeCompare(String(x.created_at || ""))) : [];
   jobs.forEach((js, id) => {
     let j = js.job;
-    const e = d.entries[id] || null, bl = !e && b ? b.rows.find(q => String(q.id) === id) : null;
+    const e = d.entries[id] || null, bl = !e && b ? bm.get(id) : null;
     // a posting that stopped (failed, cancelled) for an entry put in Tally since, by an older or later posting or another
     // way: the entry is where it went in, not under the stopped one
     if (!js.reg && CloudJobs.stopped(j) && !CloudJobs.okIn(j).has(id)){
@@ -512,7 +515,7 @@ function postEntryRows(cid){
     const marks = PostMarks.of(cid, j.id, id);
     const ent = e || bl || {id};
     const held = typeof postIdReleased === "function" ? (postIdReleased(id, cid) === false ? true : postIdReleased(id, cid) === true ? false : null) : null;
-    const missing = kind === "other" && !String(id).includes("-") && !(S.sales && (S.sales.list || []).some(v => String(v.id) === id));
+    const missing = kind === "other" && !String(id).includes("-") && !(S.sales && (sales || (sales = new Set((S.sales.list || []).map(v => String(v.id))))).has(id));
     const c0 = {id, me, held, missing, queue: waiting.findIndex(w => w.id === j.id) + 1 || 0, check: typeof PostChecks === "object" ? PostChecks.of(cid, j.id, id) : null, reg: js.reg};
     let st = postStatus(kind === "bank" ? Object.assign({}, bl, {x: undefined}) : ent, j, ids, marks, c0);
     // C6 "what differs": an entry that needs review is set beside what the posting sent (its payload, read on demand)
@@ -523,7 +526,7 @@ function postEntryRows(cid){
     }
     seen.add(id);
     if (!st) return;
-    const r = [].concat(j.results || []).find(x => x && String(x.id) === id) || null, it = [].concat(j.items || []).find(x => x && String(x.id) === id) || null;
+    const ix = CloudJobs.idx(j), r = ix.res.get(id) || null, it = ix.it.get(id) || null;
     const det = postDetailsOf(cid, id, ent, kind, j, r);
     if (kind === "other" && !det.found) needPay.push(j.id);
     out.push({key: j.id + ":" + id, id, kind, e: kind === "other" ? null : ent, job: j, r, it, ids, marks, st, d: det, reg: js.reg});

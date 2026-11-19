@@ -207,8 +207,20 @@ const CloudJobs = {
   },
   forClient(cid){ return (this.list || []).filter(j => !cid || j.client_id === cid); },
   idsOf(j){ return Array.isArray(j.entry_ids) ? j.entry_ids.map(String) : null; },
+  // next-fix-dashstall (FINCOM-APP-STAGING-K, 19-Nov-2026: 2 s in the click opening a client from Clients): a posting's
+  // results and items by id (the first of each id, as find gave it) and the ids it put in Tally (okIn), made once for the
+  // posting as read (a posting read again is a new object; its lists are never changed in place, and a list replaced or
+  // grown makes them again). They were looked up with find for every entry of the posting, and okIn made again for every
+  // entry (leftToSend, inTally): the square of the entries posted, in every drawing of a client's page
+  _idx: new WeakMap(),
+  idx(j){
+    const n = l => (l || []).length, by = l => { const m = new Map(); [].concat(l || []).forEach(x => { if (x && !m.has(String(x.id))) m.set(String(x.id), x); }); return m; };
+    let c = this._idx.get(j);
+    if (!c || c.r !== j.results || c.i !== j.items || c.nr !== n(j.results) || c.ni !== n(j.items)) this._idx.set(j, c = {r: j.results, i: j.items, nr: n(j.results), ni: n(j.items), res: by(j.results), it: by(j.items), ok: null});
+    return c;
+  },
   // an entry this posting put in Tally, or found there already (bridge 2.1.4: "Already in Tally (voucher no. …)")
-  okIn(j){ return new Set([].concat(j.results || []).filter(r => r && (r.ok || postAlready(r))).map(r => String(r.id))); },
+  okIn(j){ const c = this.idx(j); return c.ok || (c.ok = new Set([].concat(j.results || []).filter(r => r && (r.ok || postAlready(r))).map(r => String(r.id)))); },
   // when every entry of a posting went in through a later posting of the same client; null when one has not
   postedLater(j){
     const ids = this.idsOf(j);
@@ -224,19 +236,22 @@ const CloudJobs = {
   },
   // an entry of a posting already in Tally: put in by this posting or a later one, or known to be in Tally here (a bill,
   // or a bank line of the statement open)
-  inTally(j, id){
+  // (rows: the bank lines open by id, made once by leftToSend for all the entries of the posting)
+  inTally(j, id, rows){
     if (this.okIn(j).has(id)) return true;
     if ((this.list || []).some(k => k.client_id === j.client_id && k.id !== j.id && this.okIn(k).has(id))) return true;
     const d = S.data[j.client_id], e = d && d.entries && d.entries[id];
     if (e) return typeof billInTally === "function" && billInTally(e);
-    const b = S.bank && S.bank.cid === j.client_id ? S.bank : null, r = b && (b.rows || []).find(x => x.id === id);
+    const b = S.bank && S.bank.cid === j.client_id ? S.bank : null, r = b && (rows ? rows.get(id) : (b.rows || []).find(x => x.id === id));
     return !!(r && (r.state === "sent" || r.state === "intally") && !r.goneFromTally);
   },
   // how many entries are still to be sent (null: not known, as before migration-26)
   leftToSend(j){
     const ids = this.idsOf(j);
     if (!ids) return null;
-    return ids.filter(id => !this.inTally(j, id)).length;
+    const b = S.bank && S.bank.cid === j.client_id ? S.bank : null, rows = new Map();
+    if (b) (b.rows || []).forEach(x => { if (x && !rows.has(x.id)) rows.set(x.id, x); });
+    return ids.filter(id => !this.inTally(j, id, rows)).length;
   },
   // the queue's postings still going or stopped: waiting for the Tally computer, being posted, or failed
   open(cid){ return this.forClient(cid).filter(j => ["waiting", "taken", "running", "failed"].includes(j.status)); },
@@ -259,8 +274,9 @@ const CloudJobs = {
     }
     return last;
   },
+  // (once a drawing: postBills asks it for every count of Post to Tally; postRev, src/js/59)
   needing(cid){
-    return this.forClient(cid).filter(j => this.stopped(j) && !j.dismissed_at && !this.absorber(j) && this.leftToSend(j) !== 0);
+    return perRender(this.needing, postRev(cid), () => this.forClient(cid).filter(j => this.stopped(j) && !j.dismissed_at && !this.absorber(j) && this.leftToSend(j) !== 0));
   },
   // [{job, tries: [the stopped postings it absorbed], state: posted | partly | failed | cancelled | nothing, at}]: newest first
   history(cid){
