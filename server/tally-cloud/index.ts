@@ -376,7 +376,8 @@ function cosOf(body: any): { cos?: string[][] } {
   const out: string[][] = [];
   for (const c of body.companies.slice(0, 200) as any[]) {
     const n = coTrim(c?.name), g = typeof c?.guid === "string" ? c.guid.trim().toLowerCase().slice(0, 100) : "";
-    if (c?.open === true && n && /^[0-9a-z-]{1,100}$/.test(g) && !out.some((x) => x[0] === n)) out.push([String(n).slice(0, 200), g]);
+    // migration 202: two open companies of one name are two entries (each its GUID), never one
+    if (c?.open === true && n && /^[0-9a-z-]{1,100}$/.test(g) && !out.some((x) => x[0] === String(n).slice(0, 200) && x[1] === g)) out.push([String(n).slice(0, 200), g]);
     if (out.length >= 50) break;
   }
   return { cos: out };
@@ -5021,7 +5022,11 @@ Deno.serve(sentry.wrap(async (req) => {
         // migration 55 (decision B): the checks waiting for this bridge travel with it ([] on a cloud without 55). Final review
         // M1: only those of the postings it took (or is named in); a posting with no record, only for the key's main bridge
         const checks = await checksFor(dev, meT, main);
-        return reply(200, { ok: true, job: j ? { id: j.id, company: j.company, payload: j.payload, released, ...(resendOnly.length ? { resendOnly } : {}) } : null, ...(checks.length ? { checks } : {}) });
+        // migration 202 (the owner's rule: only into the linked company, by its GUID): the posting carries the linked GUID;
+        // none handed out: why the bridge's own postings wait (a cloud without 202: neither)
+        let wait = "";
+        if (!j) { const w: any = await db.rpc("tally_post_take_wait", { p_device: dev.id, p_bridge: meT }); if (!w.error && typeof w.data === "string") wait = w.data.slice(0, 300); }
+        return reply(200, { ok: true, job: j ? { id: j.id, company: j.company, payload: j.payload, released, ...(j.company_guid ? { guid: j.company_guid } : {}), ...(resendOnly.length ? { resendOnly } : {}) } : null, ...(wait ? { wait } : {}), ...(checks.length ? { checks } : {}) });
       }
       case "post_ok": {
         // FinCom Bridge 2.5.15 (item 1, the owner's approval of 13-Nov-2026): asked by the bridge before it sends each part of

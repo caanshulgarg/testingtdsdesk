@@ -936,3 +936,23 @@ posting say why, `targetWhy`). Add-only, one
 transaction, lock_timeout 10 s, safe twice. Needs 174 and 184. Deploy: 184, 185, then the app (src/js/51 shows the words
 while it waits). No bridge or tally-ingest change. Tested: `tests/run_migration185.py` (RED_WITHOUT_185=1 fails; two
 takes at the same moment: exactly one), `tests/run_cloud_post_ui.py`.
+
+## 202: a posting goes only into the linked Tally company, by its GUID (not run yet; branch next-fix-linkedguid, 19-Nov-2026)
+
+**202, post linked guid** (19-Nov-2026, branch `next-fix-linkedguid`, the owner's hard rule: FinCom Bridge posts only into
+the Tally company the client is linked to, identified by the company's GUID; **written, not run yet**; file md5 5ab41fdb66e69e34b9ef1320a8b3fa84):
+`server/tally-cloud/migration-202-post-linked-guid.sql`. The link record is already keyed by the GUID
+(`tally_links.company_guid`, 110), so no second GUID column is added. New columns: `tally_post_jobs.company_guid` (stamped
+as a posting is queued by a BEFORE INSERT trigger, `tally_post_jobs_guid`, so no enqueue function is replaced: 201 replaces
+`tally_post_enqueue_core`) and `tally_links.guid_pick` ("pick which company"). New (service_role): `tally_post_link_guid`,
+`tally_post_beat_cos`, `tally_post_guid_wait`, `tally_post_take_wait`, `tally_link_guid_pick_mark`; for owners
+(authenticated): `tally_link_guid_pick(book, guid)`. Replaced from their latest text: 185's `tally_post_take_for` (each of
+its three looks also needs the linked GUID open in this bridge's latest beat and no other open company of that name; the
+posting handed out carries `company_guid`), 155's `tally_link_guid_fill` (one line: the marks), 110's `tally_link_guid` (a
+GUID from the beats only when every beat naming the company gives the same one). Not touched: everything 199, 200 and 201
+replace. A posting that may not be handed out stays waiting, never failed; posts_take answers `{job: null, wait}`.
+Add-only, one transaction, lock_timeout 10 s, safe twice. Needs 110, 155, 174, 185. Deploy: 202, then tally-ingest of this
+branch (posts_take sends `guid` and `wait`; the beat's `cos` keeps two open companies of one name apart), then the bridge
+(linkguid.go: a fresh company list before each part and once after the last; the part before a look that no longer shows
+the GUID under the same name is unconfirmed, never sent again). Tested: `tests/run_migration202.py` (RED_WITHOUT_202=1
+fails), `tests/run_migration185.py`, `tests/run_migration_grants.py`; bridge: `go test ./...` (linkguid_test.go).
