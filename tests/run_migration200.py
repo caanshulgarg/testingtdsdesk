@@ -35,15 +35,15 @@ code = "\n".join(l.split("--")[0] for l in text.lower().splitlines())
 print("== 0. the file")
 ok(re.search(r"^begin;\s*\nset local lock_timeout = '10s';", text, re.M) is not None and text.rstrip().endswith("commit;") and code.count("\nbegin;") == 1, "one transaction, lock_timeout 10 s")
 ok(bool(text) and "delete from" not in code and not re.search(r"\b(drop|truncate)\s", code) and "create table if not exists public.tally_post_self_settle" in code and code.count("create table") == 1
-   and code.count("alter table") == 2 and "add column if not exists auto boolean not null default false" in code and code.count("create index if not exists") == 2 and "create trigger" not in code,
-   "add-only: one table, one column, two indexes, if not there; no trigger; nothing dropped, deleted or truncated")
+   and code.count("alter table") == 2 and "add column if not exists auto boolean not null default false" in code and code.count("create index if not exists") == 3 and "create trigger" not in code,
+   "add-only: one table, one column, three indexes, if not there; no trigger; nothing dropped, deleted or truncated")
 ok(bool(text) and not re.search(r"supabase\.co|https?://|qbocskai|nrtczu|project[_ ]ref", text.lower()), "names no real database")
 FNS = ["public.tally_member_name(uuid, uuid)", "public.tally_post_self_stamp(text, text, text, text, text, text, text, text)", "public.tally_post_settle_itself(uuid)",
        "public.tally_post_settle_resend(uuid)", "public.tally_post_settle_resend_due(integer)", "public.tally_post_settle_itself_all(integer)"]
 ok(sorted(set(re.findall(r"create or replace function (public\.\w+)\(", code))) == sorted(f.split("(")[0] for f in FNS), "only these functions: %s" % ", ".join(FNS))
 ok(all(("revoke all on function %s from public, anon, authenticated;" % s) in text and ("grant execute on function %s to service_role;" % s) in text for s in FNS), "service_role only, granted explicitly")
-ok("perform cron.schedule('tally-post-settle-itself', '* * * * *', 'select public.tally_post_settle_itself_all()')" in text and "to_regprocedure('cron.schedule(text,text,text)') is not null" in text,
-   "the cron job every minute, only where pg_cron is (scheduled by name: safe twice)")
+ok("perform cron.schedule('tally-post-settle-itself', '* * * * *', 'select public.tally_post_settle_itself_all()')" in text and "to_regprocedure('cron.schedule(text,text,text)') is not null and to_regprocedure('public.tally_post_work_run(integer)') is null" in text,
+   "the cron job every minute, only where pg_cron is and 201 has not given it its own command (scheduled by name: safe twice)")
 m55 = open(os.path.join(PS.SQLDIR, "migration-55-settle-and-lease.sql")).read()
 a = PS.fbody(text, "tally_member_name") if text else []; b = PS.fbody(m55, "tally_member_name")
 ok([l for l in b if l not in a] == ["select coalesce((select nullif(btrim(m.name), '') from members m where m.firm_id = p_firm and m.user_id = p_user limit 1), 'a member of the firm')"] and len([l for l in a if l not in b]) == 2,
@@ -243,6 +243,56 @@ try:
     ok(o.get("released") == 0 and len(o.get("conflicts") or []) == 1 and r["status"] == "done" and r["checking"] is False and "need" in (r["message"] or ""),
        "only a contradiction left: the posting settles at once (not held), that entry for a person (%s/%s %s)" % (r["status"], r["checking"], (r["message"] or "")[:200]))
     ok(cnt("select count(*) from tally_post_ids where job_id = %s and live" % q(J(7))) == 2 and r["resend_only"] in (None, []), "nothing released, nothing sent again")
+
+    print("== H. never twice: an entry released by itself, then posted in another posting before the hand-back, is not handed back")
+    def again(n, x, k, status="waiting"):   # the user posts entry x (the k-th of its posting) again in another posting n
+        V = [{"id": x, "xml": "<VOUCHER VCHTYPE=\"Payment\"><DATE>20261117</DATE><VOUCHERNUMBER>%d</VOUCHERNUMBER><NARRATION>TDSDesk:%s</NARRATION><AMOUNT>-%d.00</AMOUNT></VOUCHER>" % (k + 1, x, 100 + k)}]
+        db.sql("insert into tally_post_jobs (id, firm_id, client_id, company, status, n, payload, device_id, created_by) values (%s, %s, 'c1', %s, %s, 1, %s, %s, %s)"
+               % (q(J(n)), q(F), q(CO), q(status), q(json.dumps({"vouchers": V})), q(DA), q(OWNER)))
+    def notseen(n, xs):
+        for x in xs:
+            db.sql("insert into tally_post_checks (firm_id, job_id, entry_id, company, asked_by, why, state, checked_at, checked_bridge, checked_device, auto) values (%s, %s, %s, %s, %s, 'made-up', 'notseen', now(), %s, %s, true)"
+                   % (q(F), q(J(n)), q(x), q(CO), q(ME), q(BA), q(DA)))
+    # (a) held back by an entry a person must settle (possibly for days): 0 Tally accepted it; 1 posted again in a waiting
+    # posting; 3 posted again in a posting that failed since (created after the release); 2 nothing else
+    ids = job(8, 4)
+    report(8, [], [{"id": x, "kind": "voucher", "state": "sent"} for x in ids])
+    db.one("set role service_role; select tally_post_id_accept(%s::uuid, %s, null)::text" % (q(J(8)), q(ids[0]))); held(8); window(8, 120, 125); notseen(8, ids)
+    o = json.loads(settle(8) or "{}"); r = row(8)
+    ok(o.get("released") == 3 and len(o.get("conflicts") or []) == 1 and r["status"] == "done" and r["checking"] is False, "three proven not in Tally and released, one for a person: settled, the hand-back waits (%s)" % (r["message"] or "")[:160])
+    db.one("set role service_role; select tally_post_register_apply(%s::uuid)::text" % q(J(8)))
+    again(20, ids[1], 1); again(21, ids[3], 3); db.sql("update tally_post_jobs set status = 'failed' where id = %s" % q(J(21)))
+    for x in ids[:1]: db.one("set role service_role; select tally_post_mark_core(%s::uuid, %s::uuid, %s::uuid, %s, %s, 'made-up: found in Tally')::text" % (q(F), q(OWNER), q(J(8)), q(x), q("V" + x[-2:])))
+    out = db.one("set role service_role; " + SETTLE_ALL); r = row(8)
+    ok(r["status"] == "waiting" and r["resend_only"] == [ids[2]], "settled by a person: handed back with the one nobody posted since, never those posted again elsewhere (%s %s)" % (r["resend_only"], out))
+    ok(db.one("select string_agg(entry_id || '=' || state, ',' order by entry_id) from tally_post_checks where job_id = %s and entry_id = any(%s::text[])" % (q(J(8)), q("{%s,%s}" % (ids[1], ids[3]))))
+       == "%s=superseded,%s=superseded" % (ids[1], ids[3]) and J(20)[:8] in (r["message"] or ""), "theirs closed, with the posting that took each named (%s)" % (r["message"] or "")[-200:])
+    ok(json.loads(db.one("set role service_role; select tally_post_settle_resend_due()::text")).get("looked") == 0, "nothing left for the cron to hand back")
+    db.sql("update tally_post_jobs set status = 'failed' where id = any(array[%s, %s]::uuid[])" % (q(J(8)), q(J(20))))
+    # (b) no conflict: the brief window between the settling and its hand-back (or the hand-back finding the posting locked)
+    ids = job(10, 1)
+    report(10, [], [{"id": ids[0], "kind": "voucher", "state": "sent"}]); held(10); window(10, 120, 125); notseen(10, ids)
+    o = json.loads(settle(10) or "{}")
+    ok(o.get("released") == 1 and o.get("resend") is True and row(10)["checking"] is True, "proven not in Tally: released, held until handed back")
+    db.one("set role service_role; select tally_post_register_apply(%s::uuid)::text" % q(J(10)))
+    again(22, ids[0], 0)
+    o2 = resend(10); r = row(10)
+    ok(o2.get("resent") is False and r["status"] in ("done", "failed") and r["checking"] is False and r["resend_only"] in (None, []) and J(22)[:8] in (r["message"] or ""),
+       "posted again elsewhere meanwhile: not handed back; the posting settles as its entries say (none posted by it), saying where it went (%s/%s %s %s)" % (r["status"], r["checking"], o2, (r["message"] or "")[-160:]))
+    ok(db.one("select state from tally_post_checks where job_id = %s and entry_id = %s" % (q(J(10)), q(ids[0]))) == "superseded" and resend(10).get("resent") is False, "its check closed; called again: nothing")
+    db.sql("update tally_post_jobs set status = 'failed' where id = %s" % q(J(22)))
+
+    print("== I. one bad posting never stops the cron's hand-backs")
+    ids = job(11, 1); report(11, [], [{"id": ids[0], "kind": "voucher", "state": "sent"}]); held(11); window(11, 120, 125); notseen(11, ids)
+    ids2 = job(12, 1); report(12, [], [{"id": ids2[0], "kind": "voucher", "state": "sent"}]); held(12); window(12, 120, 125); notseen(12, ids2)
+    for n in (11, 12): settle(n)
+    db.sql("update tally_post_jobs set checking = false where id = any(array[%s, %s]::uuid[])" % (q(J(11)), q(J(12))))   # (as a settled posting waiting for its hand-back)
+    db.sql("""create or replace function t200_poison() returns trigger language plpgsql as $t$ begin if new.id = %s::uuid and new.status = 'waiting' then raise exception 'made-up poison'; end if; return new; end $t$;
+              create trigger t200_poison before update on tally_post_jobs for each row execute function t200_poison();""" % q(J(11)))
+    out, e, t = timed("set role service_role; select tally_post_settle_resend_due()::text")
+    ok(not e and row(12)["status"] == "waiting" and row(11)["status"] == "done", "the other posting is handed back all the same (%s %s)" % (out, e))
+    ok("made-up poison" in (db.one("select words from tally_post_self_settle where job_id = %s" % q(J(11))) or ""), "the bad one's error kept with its record, not silent")
+    db.sql("drop trigger t200_poison on tally_post_jobs; update tally_post_jobs set status = 'failed' where id = any(array[%s, %s]::uuid[])" % (q(J(11)), q(J(12))))
 
     if BIG:
         print("== F. 20,000 entries held: settled in one pass")

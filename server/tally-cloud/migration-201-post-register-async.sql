@@ -35,8 +35,16 @@
 --      pg_cron job ('tally-post-settle-itself', 200's name, every minute) is 'call public.tally_post_work_run()' alone,
 --      the requeue's ('tally-post-requeue') carries its own statement_timeout. tally_post_work(): the same within about a
 --      second, one transaction, for a caller that cannot CALL.
--- Add-only: two tables (row security on; the firm reads the first), their indexes; functions replaced from their latest
--- text (named above) or new, one procedure; nothing dropped or truncated (the wants a step has folded are deleted). One transaction, lock_timeout 10 s, safe twice; service_role
+--   7. The review of 19-Nov-2026. (a) Never twice: an entry 200 released by itself and its posting has not handed back yet
+--      (tally_post_resend_reserved) is kept to that posting: the enqueue answers it as already waiting to be posted there
+--      (a Retry of another posting holding it is refused), and the queue trigger refuses it for any other posting; 200's
+--      hand-back, as the last word, never sends one another posting has since. (b) One bad item never stops the cron: the
+--      wants of a posting no longer there are dropped; each piece of the run (a settling, a hand-back, a register step) in a
+--      block of its own, a failure undone, kept in tally_post_work_errors (one row a kind and posting, bounded: 500 rows,
+--      7 days) and the posting left out for the rest of that run. (c) A step removes only the wants it folded.
+-- Add-only: three tables (row security on; the firm reads the first), their indexes; functions replaced from their latest
+-- text (named above) or new, one procedure; nothing dropped or truncated (the wants a step has folded, or of a posting no
+-- longer there, are deleted, and the error log's old rows). One transaction, lock_timeout 10 s, safe twice; service_role
 -- only, granted explicitly. No bridge change, no new Tally request.
 begin;
 set local lock_timeout = '10s';
@@ -92,6 +100,64 @@ alter table public.tally_post_register_wants enable row level security;
 revoke all on public.tally_post_register_wants from anon, authenticated;
 grant all on public.tally_post_register_wants to service_role;
 grant usage, select on sequence public.tally_post_register_wants_id_seq to service_role;
+-- what the cron's worker could not do (the review of 19-Nov-2026: one bad posting stopped the whole run, every minute,
+-- for everyone): one row a kind and posting (the latest error, how many times, since when), so it is never silent; kept
+-- bounded (a row not seen for 7 days goes, and at most 500 rows); written by tally_post_work_error alone
+create table if not exists public.tally_post_work_errors (
+  kind        text not null,                        -- settle | then | resend | register | run
+  job_id      uuid not null,                        -- the posting (00000000-... when the run could not tell which)
+  n           integer not null default 1,
+  first_at    timestamptz not null default now(),
+  last_at     timestamptz not null default now(),
+  state       text,                                 -- the error's SQLSTATE
+  words       text,
+  primary key (kind, job_id)
+);
+alter table public.tally_post_work_errors enable row level security;
+revoke all on public.tally_post_work_errors from anon, authenticated;
+grant all on public.tally_post_work_errors to service_role;
+create or replace function public.tally_post_work_error(p_kind text, p_job uuid, p_state text, p_words text)
+returns void language plpgsql security definer set search_path = public, pg_temp as $fn$
+declare isnew boolean;
+begin
+  raise log 'tally_post_work: % %: % %', p_kind, p_job, p_state, p_words;
+  begin
+    insert into tally_post_work_errors as e (kind, job_id, state, words) values (left(coalesce(p_kind, 'run'), 20), coalesce(p_job, '00000000-0000-0000-0000-000000000000'::uuid), left(p_state, 10), left(p_words, 500))
+    on conflict (kind, job_id) do update set n = e.n + 1, last_at = now(), state = excluded.state, words = excluded.words
+    returning (xmax = 0) into isnew;
+    if isnew then   -- bounded: a new row, and the old ones go
+      delete from tally_post_work_errors e where e.last_at < now() - interval '7 days'
+          or (e.kind, e.job_id) not in (select e2.kind, e2.job_id from tally_post_work_errors e2 order by e2.last_at desc limit 500);
+    end if;
+  exception when others then
+    raise log 'tally_post_work_error: could not keep it: % %', sqlstate, sqlerrm;   -- (the line above keeps it in the log)
+  end;
+end $fn$;
+revoke all on function public.tally_post_work_error(text, uuid, text, text) from public, anon, authenticated;
+grant execute on function public.tally_post_work_error(text, uuid, text, text) to service_role;
+-- never twice (the review of 19-Nov-2026): an entry 200 released by itself (proven not in Tally) waits to be handed back by
+-- its own posting, for a moment or for days (an entry beside it a person must settle). Until then its id is not live, its
+-- posting is done and its record says released, so nothing else held it: posted again in another posting, it went to
+-- Tally there, and the hand-back then sent it a second time (the bridge honours the release). Such an entry is kept to its
+-- posting until handed back: these are the firm's (a check confirmed by itself and not handed back, of a posting done),
+-- found by 200's partial index of those checks; their ids by the posting's keys. The queue refuses them for any other
+-- posting (tally_post_enqueue_core, tally_post_register_queued); and once handed back, while that posting sends them again
+-- (waiting, taken or running with them in resend_only: a big posting's register follows the hand-back only in steps)
+create or replace function public.tally_post_resend_reserved(p_firm uuid)
+returns table (fincom_id text, entry_id text, job_id uuid)
+language sql stable security definer set search_path = public, pg_temp as $function$
+  with k as materialized (
+    select k0.job_id, k0.entry_id from tally_post_checks k0 join tally_post_jobs j on j.id = k0.job_id and j.status = 'done'
+     where k0.firm_id = p_firm and k0.state = 'confirmed' and k0.resent is not true and k0.confirmed_by = '00000000-0000-0000-0000-000000000200'::uuid
+    union
+    select j.id, e.eid from tally_post_jobs j cross join lateral jsonb_array_elements_text(case when jsonb_typeof(j.resend_only) = 'array' then j.resend_only end) e(eid)
+     where j.firm_id = p_firm and j.status in ('waiting', 'taken', 'running') and jsonb_typeof(j.resend_only) = 'array')
+  select i.fincom_id, i.entry_id, i.job_id from k join tally_post_ids i on i.job_id = k.job_id and i.entry_id = k.entry_id where i.released_at is not null
+  union
+  select i.fincom_id, i.entry_id, i.job_id from k join tally_post_ids i on i.job_id = k.job_id and i.fincom_id = k.entry_id where coalesce(i.entry_id, '') = '' and i.released_at is not null
+$function$;
+revoke all on function public.tally_post_resend_reserved(uuid) from public, anon, authenticated;
+grant execute on function public.tally_post_resend_reserved(uuid) to service_role;
 -- the pass's preparing step: each voucher (199's judge: one a FinCom id, the first by order) and the posting's results, items
 -- and marks by spelling, exactly as 199's judge works them out
 create or replace function public.tally_post_register_maps(j public.tally_post_jobs)
@@ -365,11 +431,18 @@ grant execute on function public.tally_post_register_mark(uuid, uuid, uuid, bool
 -- the passes wanted for a posting (tally_post_register_wants) merged into its row, as each mark was merged before, in
 -- order (several marks in a row give what the last of them gave, the queue phase if any asked it); only under the
 -- posting's pass lock (tally_post_register_step): the row is never written by two at once, and a mark never waits
+-- (the review of 19-Nov-2026) the wants of a posting no longer there (its firm deleted) are dropped, not folded (the
+-- pass's row refers to the posting: that insert failed, every minute); only the wants folded are removed (one appended
+-- meanwhile, even with a lower number committed late, waits for the next step)
 create or replace function public.tally_post_register_fold(p_job uuid)
 returns integer language plpgsql security definer set search_path = public, pg_temp as $fn$
 declare w record;
 begin
-  select max(x.id) as top, count(*) as n, bool_or(x.queue) as q, min(x.firm_id::text)::uuid as firm,
+  if not exists (select 1 from tally_post_jobs j where j.id = p_job) then
+    delete from tally_post_register_wants x where x.job_id = p_job;
+    return 0;
+  end if;
+  select array_agg(x.id) as ids, count(*) as n, bool_or(x.queue) as q, min(x.firm_id::text)::uuid as firm,
          (array_agg(x.by_user order by x.id desc))[1] as by_,
          (array_agg(x.rec order by x.id desc) filter (where x.queue))[1] as rec, (array_agg(x.by_q order by x.id desc) filter (where x.queue))[1] as by_q
     into w from tally_post_register_wants x where x.job_id = p_job;
@@ -389,7 +462,7 @@ begin
     maps = case when p.done_at is null then p.maps end,
     jsnap = case when p.done_at is null then p.jsnap end,
     done_at = null;
-  delete from tally_post_register_wants x where x.job_id = p_job and x.id <= w.top;
+  delete from tally_post_register_wants x where x.job_id = p_job and x.id = any(w.ids);
   return w.n;
 end $fn$;
 revoke all on function public.tally_post_register_fold(uuid) from public, anon, authenticated;
@@ -399,11 +472,13 @@ grant execute on function public.tally_post_register_fold(uuid) to service_role;
 -- phase (at most p_n ids, by key), the preparing step, or the judge of at most p_n vouchers. Never two workers on one
 -- posting (an advisory lock for the step's transaction); the cursor kept with the row; safe to run again
 -- (each statement planned for its own arguments: the cron runs many steps in one session, and a plan cached for one
--- posting's ids would be a bad one for another's)
-create or replace function public.tally_post_register_step(p_job uuid default null, p_n integer default 2000)
+-- posting's ids would be a bad one for another's). p_skip: postings left out (the cron's run: those that failed in it).
+-- A step that fails (the review of 19-Nov-2026: one bad posting stopped the cron for everyone) changes nothing, is kept
+-- (tally_post_work_error, the pass's words), goes to the back of the line and answers {error, job}: the next one goes on
+create or replace function public.tally_post_register_step(p_job uuid default null, p_n integer default 2000, p_skip uuid[] default '{}')
 returns jsonb language plpgsql security definer set search_path = public, pg_temp set plan_cache_mode = force_custom_plan as $fn$
 declare pr tally_post_register_pending%rowtype; j tally_post_jobs%rowtype; got uuid; n integer := greatest(1, least(coalesce(p_n, 2000), 5000));
-        m jsonb; v jsonb; fa text[]; c integer; newc integer; last_ text; k integer; cand record; lt0 text; out_ jsonb;
+        m jsonb; v jsonb; fa text[]; c integer; newc integer; last_ text; k integer; cand record; lt0 text; out_ jsonb; e_state text; e_words text;
 begin
   if coalesce(auth.role(), 'service_role') <> 'service_role' then raise exception 'service role only' using errcode = '42501'; end if;
   -- a posting whose pass is open, or one a pass was asked for since (its wants), that no other worker holds
@@ -411,6 +486,7 @@ begin
                 select p.job_id, p.since from tally_post_register_pending p where p.done_at is null and (p_job is null or p.job_id = p_job)
                 union all
                 select w.job_id, min(w.at) from tally_post_register_wants w where (p_job is null or w.job_id = p_job) group by w.job_id) z
+              where not (z.job_id = any(coalesce(p_skip, '{}')))
               group by z.job_id order by min(z.since) limit 20 loop
     if pg_try_advisory_xact_lock(hashtextextended('tally_post_register_pass ' || cand.job_id::text, 0)) then got := cand.job_id; exit; end if;
   end loop;
@@ -418,6 +494,7 @@ begin
   -- a row a report holds this moment is not waited for: this step is left for the next one (the review: no report waits on
   -- the worker, and the worker does not wait on a report while it holds the posting's rows)
   lt0 := current_setting('lock_timeout');
+  begin
   perform set_config('lock_timeout', '300ms', true);
   -- the passes asked for meanwhile, merged into its row (only here, under the lock: a report's mark never waits)
   begin
@@ -483,10 +560,22 @@ begin
     perform set_config('lock_timeout', lt0, true);
     return jsonb_build_object('ok', true, 'job', j.id, 'busy', true);
   end;
+  exception when others then
+    -- (everything of this step undone) kept, and this posting to the back of the line
+    get stacked diagnostics e_state = returned_sqlstate, e_words = message_text;
+    perform set_config('lock_timeout', lt0, true);
+    perform tally_post_work_error('register', got, e_state, e_words);
+    begin
+      update tally_post_register_pending set since = now(), last_at = now(), words = left('FinCom''s posting register could not follow this posting this time (it tries again): ' || e_words, 500) where job_id = got;
+      update tally_post_register_wants set at = now() where job_id = got;
+    exception when others then null;
+    end;
+    return jsonb_build_object('ok', false, 'job', got, 'error', left(e_words, 300));
+  end;
   return out_;
 end $fn$;
-revoke all on function public.tally_post_register_step(uuid, integer) from public, anon, authenticated;
-grant execute on function public.tally_post_register_step(uuid, integer) to service_role;
+revoke all on function public.tally_post_register_step(uuid, integer, uuid[]) from public, anon, authenticated;
+grant execute on function public.tally_post_register_step(uuid, integer, uuid[]) to service_role;
 
 -- 111's status trigger: a posting of 2,000 entries or fewer as before (the pass now); a bigger one is marked, its pass done
 -- in steps (tally_post_register_step: tally-ingest after each report, and the cron)
@@ -561,6 +650,15 @@ begin
         raise exception 'Not queued: % is still being recorded in FinCom''s posting register (posting %, which its Tally computer had). Wait a minute: if that posting may have put it in Tally, it is not posted twice.',
           coalesce(bad.entry_id, bad.fincom_id), left(bad.job_id::text, 8) using errcode = 'P0001';
       end if;
+      -- (the review of 19-Nov-2026, never twice) an entry released by itself that its posting is still to send again is that
+      -- posting's until it is handed back (tally_post_resend_reserved)
+      select nw.entry_id, nw.fincom_id, rv.job_id into bad
+        from tally_post_resend_reserved(j.firm_id) rv join nw on nw.fincom_id = rv.fincom_id and nw.job_id <> rv.job_id
+       order by nw.job_id, nw.fincom_id limit 1;
+      if found then
+        raise exception 'Not queued: % is already waiting to be posted in an earlier posting (posting %), which sends it again by itself (FinCom proved it is not in Tally). It is not posted twice.',
+          coalesce(bad.entry_id, bad.fincom_id), left(bad.job_id::text, 8) using errcode = 'P0001';
+      end if;
     end if;
     -- 201: a posting of more than 2,000 ids: the rest (the records and the register's pass) in steps (tally_post_register_step)
     if (select count(*) from nw) > coalesce(nullif(current_setting('fincom.register_sync_max', true), '')::int, 2000) then
@@ -600,6 +698,11 @@ begin
           case g.state when 'in_tally' then 'in Tally' when 'needs_review' then 'waiting for review' when 'sent' then 'with the Tally computer' else 'waiting to be sent' end,
           left(coalesce(g.job_id::text, '?'), 8),
           case g.state when 'in_tally' then 'It is not posted twice.' when 'needs_review' then 'Settle it first: Mark posted, or Not in Tally.' else 'Wait for that posting to finish.' end
+          using errcode = 'P0001';
+      elsif not rec and exists (select 1 from tally_post_resend_reserved(x.firm_id) rv where rv.fincom_id = x.fincom_id and rv.job_id <> x.job_id) then
+        -- (never twice: as in the one-posting path above)
+        raise exception 'Not queued: % is already waiting to be posted in an earlier posting (posting %), which sends it again by itself (FinCom proved it is not in Tally). It is not posted twice.',
+          coalesce(x.entry_id, x.fincom_id), left((select rv.job_id::text from tally_post_resend_reserved(x.firm_id) rv where rv.fincom_id = x.fincom_id and rv.job_id <> x.job_id limit 1), 8)
           using errcode = 'P0001';
       else
         perform tally_post_register_put(g.id, 'queued', 'queue', coalesce(auth.uid(), j.created_by), x.job_id, null, false, null,
@@ -737,6 +840,11 @@ begin
     if j.status in ('failed', 'cancelled') then
       select coalesce(i.entry_id, i.fincom_id) into dup from tally_post_ids i
        where i.job_id = p_id and exists (select 1 from tally_post_ids o where o.firm_id = i.firm_id and o.fincom_id = i.fincom_id and o.job_id <> p_id and o.live) limit 1;
+      -- (never twice) or one an earlier posting proved not in Tally and is still to send again by itself (201)
+      if dup is null then
+        select coalesce(i.entry_id, i.fincom_id) into dup from tally_post_resend_reserved(f) rv join tally_post_ids i on i.job_id = p_id and i.fincom_id = rv.fincom_id
+         where rv.job_id <> p_id limit 1;
+      end if;
       if dup is not null then return jsonb_build_object('ok', false, 'error', 'Not queued again: the entry ' || dup || ' is being posted in another posting; wait for that one to finish (or cancel it).'); end if;
       rr := tally_post_reroute(p_id, false);
       if rr ->> 'state' = 'stranded' then return jsonb_build_object('ok', false, 'company', j.company, 'error', 'Not queued again for ' || j.company || ': ' || (rr ->> 'words')); end if;
@@ -758,22 +866,29 @@ begin
   -- still waiting, taken or running (by its entry id, as before), or one whose FinCom id is live in another posting
   -- (tally_post_ids: sent and not settled, or in Tally; before 184 the insert below raised on it and refused them all).
   -- Each is answered with the posting that holds it (dupes: [{id, job, status}]); the page follows that posting
+  -- (the review of 19-Nov-2026, never twice) and one an earlier posting proved not in Tally and is still to send again by
+  -- itself (tally_post_resend_reserved: released, so neither of the above): held by that posting, answered as one waiting
+  -- to be posted there ('resend'); read in the same statement as the postings waiting, so the hand-back is seen either way
   with lv as materialized (select v->>'id' as id, j2.id as job, j2.status, j2.created_at
                 from tally_post_jobs j2, jsonb_array_elements(case when jsonb_typeof(j2.payload->'vouchers') = 'array' then j2.payload->'vouchers' else '[]'::jsonb end) v
                where j2.firm_id = f and j2.client_id = p_client and j2.status in ('waiting', 'taken', 'running')),
-       x as (select t.v, t.o, coalesce(a.job, b.job) as job, coalesce(a.status, b.status) as status
+       rv as materialized (select distinct on (r.fincom_id) r.fincom_id, r.job_id from tally_post_resend_reserved(f) r where r.job_id <> p_id order by r.fincom_id, r.job_id),
+       x as (select t.v, t.o, coalesce(a.job, b.job, rz.job_id) as job, coalesce(a.status, b.status, case when rz.job_id is not null then 'done' end) as status,
+                    (a.job is null and b.job is null and rz.job_id is not null) as resend
                from jsonb_array_elements(case when jsonb_typeof(p_payload->'vouchers') = 'array' then p_payload->'vouchers' else '[]'::jsonb end) with ordinality t(v, o)
+               cross join lateral (select tally_fincom_id(t.v) as fid) z
                left join (select distinct on (lv.id) lv.id, lv.job, lv.status from lv order by lv.id, lv.created_at) a on a.id = t.v->>'id'
                left join lateral (select i.job_id as job, j3.status from tally_post_ids i join tally_post_jobs j3 on j3.id = i.job_id
-                                   where i.firm_id = f and i.live and i.fincom_id = tally_fincom_id(t.v) and i.job_id <> p_id limit 1) b on true)
+                                   where i.firm_id = f and i.live and i.fincom_id = z.fid and i.job_id <> p_id limit 1) b on true
+               left join rv rz on rz.fincom_id = z.fid)   -- (not c: a variable of this function)
   select coalesce(jsonb_agg(x.v order by x.o) filter (where x.job is null), '[]'::jsonb),
-         coalesce(jsonb_agg(jsonb_build_object('id', x.v->>'id', 'job', x.job, 'status', x.status) order by x.o) filter (where x.job is not null), '[]'::jsonb)
+         coalesce(jsonb_agg(jsonb_build_object('id', x.v->>'id', 'job', x.job, 'status', x.status) || case when x.resend then jsonb_build_object('resend', true) else '{}'::jsonb end order by x.o) filter (where x.job is not null), '[]'::jsonb)
     into vs, dupes from x;
   -- every entry is in an earlier posting: nothing is queued (ok false with the words an older page shows; none: the page
   -- of this branch follows the posting named instead)
   if jsonb_array_length(dupes) > 0 and jsonb_array_length(vs) = 0 then
     return jsonb_build_object('ok', false, 'none', true, 'company', c.company, 'dupes', dupes,
-      'error', case when exists (select 1 from jsonb_array_elements(dupes) d where d->>'status' in ('waiting', 'taken', 'running'))
+      'error', case when exists (select 1 from jsonb_array_elements(dupes) d where d->>'status' in ('waiting', 'taken', 'running') or d->>'resend' = 'true')
         then 'These entries are already waiting to be posted in an earlier posting, which goes on by itself. Nothing was queued again.'
         else 'These entries are held by an earlier posting (sent to Tally, or waiting to be settled there); they are not sent twice. Nothing was queued again.' end);
   end if;
@@ -828,8 +943,12 @@ begin
   begin
     o := tally_post_settle_itself(r.id);
   exception when others then
-    insert into tally_post_self_settle as s (job_id, firm_id, tries, tried_at, words) values (r.id, r.firm_id, 1, now(), left('Could not be settled this time: ' || sqlerrm, 500))
-    on conflict (job_id) do update set tries = s.tries + 1, tried_at = now(), words = excluded.words;
+    perform tally_post_work_error('settle', r.id, sqlstate, sqlerrm);
+    begin
+      insert into tally_post_self_settle as s (job_id, firm_id, tries, tried_at, words) values (r.id, r.firm_id, 1, now(), left('Could not be settled this time: ' || sqlerrm, 500))
+      on conflict (job_id) do update set tries = s.tries + 1, tried_at = now(), words = excluded.words;
+    exception when others then null;   -- (gone meanwhile: kept by tally_post_work_error)
+    end;
     o := jsonb_build_object('ok', false, 'error', left(sqlerrm, 300));
   end;
   return jsonb_build_object('ok', true, 'job', r.id, 'settle', o,
@@ -847,6 +966,7 @@ begin
   if p_then = 'register' then return tally_post_register_apply(p_job); end if;
   return jsonb_build_object('ok', true);
 exception when others then
+  perform tally_post_work_error('then', p_job, sqlstate, sqlerrm);
   return jsonb_build_object('ok', false, 'job', p_job, 'error', left(sqlerrm, 300));
 end $fn$;
 revoke all on function public.tally_post_work_then(uuid, text) from public, anon, authenticated;
@@ -856,17 +976,30 @@ grant execute on function public.tally_post_work_then(uuid, text) to service_rol
 -- under a second; tells whether more is to do. (The cron does not use it: it CALLs tally_post_work_run below.)
 create or replace function public.tally_post_work()
 returns jsonb language plpgsql security definer set search_path = public, pg_temp as $fn$
-declare t0 timestamptz := clock_timestamp(); o jsonb; s jsonb := null; k integer := 0;
+declare t0 timestamptz := clock_timestamp(); o jsonb; s jsonb := null; k integer := 0; skip uuid[] := '{}';
 begin
   if coalesce(auth.role(), 'service_role') <> 'service_role' then raise exception 'service role only' using errcode = '42501'; end if;
   if not tally_post_work_due() then return jsonb_build_object('ok', true, 'idle', true); end if;
-  s := tally_post_work_settle('{}');
+  -- (each piece on its own: one that fails is kept and the next goes on)
+  begin
+    s := tally_post_work_settle('{}');
+  exception when others then
+    perform tally_post_work_error('settle', null, sqlstate, sqlerrm); s := jsonb_build_object('ok', false, 'idle', true, 'error', left(sqlerrm, 300));
+  end;
   if s->>'then' is not null then perform tally_post_work_then((s->>'job')::uuid, s->>'then'); end if;
   if coalesce((s->>'idle')::boolean, false) then
-    perform tally_post_settle_resend_due(1);
+    begin
+      perform tally_post_settle_resend_due(1);
+    exception when others then perform tally_post_work_error('resend', null, sqlstate, sqlerrm);
+    end;
     loop
-      o := tally_post_register_step(null, 2000);
+      begin
+        o := tally_post_register_step(null, 2000, skip);
+      exception when others then
+        perform tally_post_work_error('register', null, sqlstate, sqlerrm); exit;
+      end;
       exit when coalesce((o->>'idle')::boolean, false) or coalesce((o->>'busy')::boolean, false);
+      if o ? 'error' then skip := skip || (o->>'job')::uuid; end if;
       k := k + 1;
       exit when clock_timestamp() - t0 > interval '1 second';
     end loop;
@@ -886,26 +1019,44 @@ grant execute on function public.tally_post_work() to service_role;
 create or replace procedure public.tally_post_work_run(p_seconds integer default 25)
 language plpgsql as $proc$
 declare t0 timestamptz := clock_timestamp(); lim interval := make_interval(secs => greatest(1, least(coalesce(p_seconds, 25), 50))); tried uuid[] := '{}'; s jsonb; o jsonb; n int := 0; busy int := 0;
+        skip uuid[] := '{}';
 begin
   if not public.tally_post_work_due() then return; end if;
+  -- (the review of 19-Nov-2026) each piece in a block of its own: one that fails (a bad posting) is undone, kept
+  -- (tally_post_work_error) and left for this run; the rest goes on. Every COMMIT outside those blocks (a COMMIT is refused
+  -- inside a block with an exception handler)
   loop
     exit when n >= 10 or clock_timestamp() - t0 > lim;
-    s := public.tally_post_work_settle(tried);
+    begin
+      s := public.tally_post_work_settle(tried);
+    exception when others then
+      perform public.tally_post_work_error('settle', null, sqlstate, sqlerrm); s := jsonb_build_object('idle', true);
+    end;
     commit;
     exit when coalesce((s->>'idle')::boolean, false);
     tried := tried || (s->>'job')::uuid; n := n + 1;
     if s->>'then' is not null then
-      o := public.tally_post_work_then((s->>'job')::uuid, s->>'then');
+      o := public.tally_post_work_then((s->>'job')::uuid, s->>'then');   -- (its own handler)
       commit;
     end if;
   end loop;
-  o := public.tally_post_settle_resend_due(5);
+  begin
+    o := public.tally_post_settle_resend_due(5);   -- (each hand-back in its own block there)
+  exception when others then
+    perform public.tally_post_work_error('resend', null, sqlstate, sqlerrm);
+  end;
   commit;
   loop
     exit when clock_timestamp() - t0 > lim;
-    o := public.tally_post_register_step(null, 2000);
+    begin
+      o := public.tally_post_register_step(null, 2000, skip);
+    exception when others then
+      perform public.tally_post_work_error('register', null, sqlstate, sqlerrm); o := jsonb_build_object('idle', true);
+    end;
     commit;
     exit when coalesce((o->>'idle')::boolean, false);
+    -- a step that failed: kept by the step, that posting left out for the rest of this run
+    if o ? 'error' then skip := skip || (o->>'job')::uuid; continue; end if;
     -- a posting a report holds this moment: the step is left for later; a few in a row, then the next run
     if coalesce((o->>'busy')::boolean, false) then busy := busy + 1; exit when busy >= 5; perform pg_sleep(0.2); else busy := 0; end if;
   end loop;

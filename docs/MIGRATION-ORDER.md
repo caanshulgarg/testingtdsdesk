@@ -967,7 +967,7 @@ ids live; 20,000 entries from the queue to the register: every statement under 6
 5 s), `tests/run_post_settle_server.py`.
 
 **200, post settle itself** (18-Nov-2026, branch `next-fix-posttimeout`; **written, not run yet**; file md5
-6fe48934ca59585a735f949008ee3afb): `server/tally-cloud/migration-200-post-settle-itself.sql`. The owner (18-Nov-2026): a posting never stays
+c211b47e3ccdf3b13808be4dcbfbee17): `server/tally-cloud/migration-200-post-settle-itself.sql`. The owner (18-Nov-2026): a posting never stays
 "Held"; every posting settles by itself; never a double post; a person only for contradictory evidence, named. Staging's
 c66d0e82 (661 entries, all in Tally once) is held because its last reports were lost, though FinCom's read-back of Tally
 matched all 661 (`tally_post_ids.matched_at`). New (service_role): `tally_post_settle_itself(job)` settles a posting held
@@ -993,10 +993,19 @@ needs_review) and no longer holds the posting, which settles; entries proven not
 released, and `tally_post_settle_resend_due` (the cron, a partial index `tally_post_checks_resend_due`) hands them back once
 a person has settled it (36b's guard asked first). `tally_post_settle_itself` works the evidence out unlocked, then locks the
 posting only if unchanged (xmin, skip locked), takes the checks it writes NOWAIT, and re-checks every stamp as it releases.
-Tested: run_migration200.py G (each case). Both are on the posting path: the owner's OK before they run on staging, 199 first.
+Tested: run_migration200.py G (each case). Re-review of 19-Nov-2026 (NO-SHIP, fixed before any run): (1) never twice: an
+entry released by itself waits for its hand-back (a moment, or days while an entry beside it waits for a person), and posted
+again meanwhile in another posting it went to Tally there and then a second time from the hand-back (the bridge honours the
+release): `tally_post_settle_resend` now never hands back an entry another posting has since (its FinCom id in another
+posting's ids, live or put there after the release, or its register record on another posting; a new index
+`tally_post_ids_firm_fid`), closes its check (superseded, naming that posting) and settles the posting when nothing is left
+(201 keeps such an entry to its posting at the queue, below); (2) `tally_post_settle_resend_due` hands each back on its own:
+one that fails is kept in `tally_post_self_settle.words` (tried last next time) and the others go on; (4) the cron job is
+scheduled by 200 only while 201's `tally_post_work_run` is absent, so 200 run again after 201 keeps 201's command. Tested:
+run_migration200.py H, I. Both are on the posting path: the owner's OK before they run on staging, 199 first.
 
 **201, post register async** (18-Nov-2026, branch `next-fix-posttimeout`; **written, not run yet**; file md5
-205c7e97969fbb12a463c14100fa0d95): `server/tally-cloud/migration-201-post-register-async.sql`. The owner: every request and trigger on the
+54449e2bae256c221f0e77314732e059): `server/tally-cloud/migration-201-post-register-async.sql`. The owner: every request and trigger on the
 posting path under about 1.5 s at 20,000 entries, linear to 50,000. With 199/200 each change of a big posting's status
 still ran the posting register's whole pass inside the trigger (about 4 s at 20,000). Now the register pass of a posting
 of more than 2,000 entries leaves the triggers: 111's status trigger (`tally_post_register_job_changed`) and the queue
@@ -1029,4 +1038,22 @@ resend_only, taken_at, message as prepared (`jsnap`). While a big posting's reco
 trigger refuses its entries, by key, for another posting when that one's bridge had it (taken_at; failed or cancelled with
 nothing stamped). Tested: run_migration201.py 2b, 3b, 5 (the worker mid-pass at 20,000 while a status report, a register
 step and check reports run on the same postings: each under 1.5 s; the worker's longest transaction about 1.5 s).
+Re-review of 19-Nov-2026 (NO-SHIP, fixed before any run): (1) never twice: `tally_post_resend_reserved(firm)` (new; the
+firm's entries 200 released by itself whose posting, done, has not handed them back: its checks confirmed by itself and not
+resent, by 200's partial index; and, once handed back, those its posting is sending again, waiting, taken or running with them in
+`resend_only`, whose register follows only in steps for a big posting) keeps such an entry to its posting: `tally_post_enqueue_core` answers it as a duplicate of
+that posting (`dupes` with `resend: true`; all of them: "These entries are already waiting to be posted in an earlier
+posting, which goes on by itself. Nothing was queued again."), read in the same statement as the postings waiting, so the
+hand-back is seen either way; a Retry of another posting holding it is refused ("Not queued again: the entry ... is being
+posted in another posting"); the queue trigger refuses it for any other way in ("Not queued: ... already waiting to be
+posted in an earlier posting (posting ...), which sends it again by itself"). (2) One bad item never stops the cron: the
+fold drops the wants of a posting no longer there (a firm deleted: the pass's row refers to the posting, and that insert
+failed the whole CALL every minute); every piece of `tally_post_work_run` (and `tally_post_work`) is in a block of its own
+(each COMMIT outside it), `tally_post_register_step(job, n, skip)` (a third argument, default none) undoes a step that
+fails, keeps it and sends that posting to the back of the line, and the run leaves it out for the rest of that run; the
+errors are kept in `tally_post_work_errors` (new; one row a kind and posting with a count; at most 500 rows, none older
+than 7 days; service_role only) and in the server log. (3) The fold removes only the wants it folded (one committed late
+with a lower number waits for the next step). Tested: run_migration201.py 6 (the double post of the review, in the waiting
+for a person and in the brief window, the hand-back finding the posting locked), 7 (a deleted firm's posting, a failing
+hand-back and a failing register pass: the others' work done), 8, 9 (200 run again after 201: the cron's command stays 201's).
 
