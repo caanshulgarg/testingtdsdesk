@@ -112,9 +112,10 @@ def main():
         ok(heads == ["Client · Tally company", "State", "In Tally", "Masters", "Entries", "Last entry", "Action"], "2. the columns (%s)" % heads)
         for name, want in ((ORBIT, ("update", "reading")), (ACME, ("again",)), (NOVA_C, ("connect",)), (ZETA, ("link",)), (LARK, ("link",))):
             m = mains(name)
-            ok(len(m) == 1 and m[0] in want, "2. %s: exactly one button, %s (%s)" % (name, "/".join(want), m))
+            # (next-fix-mastersread: masters being read: no button, More only)
+            ok((len(m) == 1 and m[0] in want) or (name == ORBIT and m == [] and txt(R(name) + " [data-tpt-state]") == "Reading from Tally"), "2. %s: exactly one button, %s (%s)" % (name, "/".join(want), m))
             ok(txt(R(name) + " [data-tpt-open]") == "More ▾", "2. %s: and its More ▾" % name)
-        ok(n(R(ACME) + ".tpt-need") == 1 and txt(R(ACME) + " [data-tpt-state]").startswith("Not open in Tally"), "2. Acme Traders: shaded, Not open in Tally (the firm's bridge online) (%s)" % txt(R(ACME) + " .tpt-state")[:120])
+        ok(n(R(ACME) + ".tpt-need") == 0 and txt(R(ACME) + " [data-tpt-state]").startswith("Waiting") and "open ACME TRADERS 2025-26 in your own Tally" in txt(R(ACME) + " .tpt-state"), "2. Acme Traders (masters never read, not open): Waiting · open <company> in your own Tally, not shaded (next-fix-mastersread) (%s)" % txt(R(ACME) + " .tpt-state")[:120])
         ok(txt(R(ACME) + " [data-tsm-away-again]") == "Check again" and txt(R(ACME) + " [data-tpt-note]") == "Open it in Tally first", "2. Check again for the linked client not open (the reconnect button, in the table), Open it in Tally first")
         ok(attr(R(ORBIT) + " [data-tpt-dot]", "data-tpt-dot") in ("ok", "read", "warn") and "Kestrel" not in txt(TB), "2. Orbit Space: its state with a dot; never B's company")
         # More ▾ › Answers: the old answers (linked, open now, ledgers, entries, what to do)
@@ -127,7 +128,7 @@ def main():
         # Check again (Connect again): looks again and says what is missing
         pg.click(R(ACME) + " [data-tsm-away-again]"); pg.wait_for_timeout(2500)
         w = txt(R(ACME) + " .tpt-why")
-        ok("is not open in Tally" in w or w.startswith("Step "), "2. Connect again: the plain reason (%s)" % w[:140])
+        ok("is not open in Tally" in w or w.startswith("Step ") or w == "open ACME TRADERS 2025-26 in your own Tally", "2. Connect again: the plain reason (next-fix-mastersread: masters never read: the Masters cell's) (%s)" % w[:140])
         shot("tally-redesign-desktop.png", 1280, 900)
 
         print("== 3. Update from Tally is never silent")
@@ -137,8 +138,8 @@ def main():
         if n(R(ORBIT) + ' [data-tpt-main="update"]'):
             pg.click(R(ORBIT) + ' [data-tpt-main="update"]'); pg.wait_for_timeout(300)
             # (next-tally-simple2, review 5: the read's words in the Masters cell; the client cell just "● Updating")
-            ok(txt(R(ORBIT) + " [data-tpg-ms]").startswith("Asking Tally…") and mains(ORBIT) == ["reading"] and txt(R(ORBIT) + " [data-tpt-state]") == "Updating" and n(R(ORBIT) + " .tpt-why") == 0,
-               "3. at once: 'Asking Tally…' (Masters), '● Updating', the button Reading… (%s | %s)" % (txt(R(ORBIT) + " [data-tpg-masters]"), mains(ORBIT)))
+            ok(txt(R(ORBIT) + " [data-tpg-ms]").startswith("Asking Tally…") and mains(ORBIT) == [] and txt(R(ORBIT) + " [data-tpt-state]") == "Updating" and n(R(ORBIT) + " .tpt-why") == 0,
+               "3. at once: 'Asking Tally…' (Masters), '● Updating', no button while masters are read (next-fix-mastersread) (%s | %s)" % (txt(R(ORBIT) + " [data-tpg-masters]"), mains(ORBIT)))
         else: ok(False, "3. Orbit Space's Update from Tally (%s)" % mains(ORBIT))
         E("() => { Ledgers.askTally = window.__askO; }")
         # the read on its way: its count

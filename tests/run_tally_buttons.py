@@ -175,7 +175,7 @@ def main():
         ok(mains(NIMB) == ["masters"], "2. Nimbus: Bring masters (%s)" % mains(NIMB))
         pg.click(R(NIMB) + ' [data-tpt-main="masters"]')
         ok(seen(R(NIMB) + " .tpt-state, " + R(NIMB) + " [data-tpg-masters]", r"Updating|Waiting|Reading|Asking|Not (started|updated)", 5000) != "", "2. Bring masters: the row says it reads (%s)" % txt(R(NIMB) + " .tpt-state"))
-        ok(pg.is_disabled(R(NIMB) + " [data-tpt-main]") is False or bool(pg.get_attribute(R(NIMB) + " [data-tpt-main]", "title")), "2. Bring masters while reading: off with its reason in the title (%s)" % pg.get_attribute(R(NIMB) + " [data-tpt-main]", "title"))
+        ok(n(R(NIMB) + " [data-tpt-main]") == 0 or pg.is_disabled(R(NIMB) + " [data-tpt-main]") is False or bool(pg.get_attribute(R(NIMB) + " [data-tpt-main]", "title")), "2. Bring masters while reading: none (next-fix-mastersread), or off with its reason in the title (%s)" % txt(R(NIMB) + " .tpt-act"))
         no_rejections("2. Bring masters")
         ok(mains(ACME) == ["again"], "2. Acme (open nowhere): Check again (%s)" % mains(ACME))
         pg.click(R(ACME) + ' [data-tpt-main="again"]')

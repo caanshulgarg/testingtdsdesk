@@ -127,7 +127,7 @@ def main():
         ok(E("(c) => !!(window.FCRunState && window.FCRunState[c])", cid(NIMB)), "2. Bring masters: the masters' read asked (the Update from Tally of From Tally)")
         nm_ = txt(R(NIMB) + " [data-tpg-masters]")
         ok(pg.get_attribute(R(NIMB) + " [data-tpg-masters]", "data-tpg-masters") in ("reading", "waiting") and "group" not in nm_, "2 (review 1). a first masters read: no '· N groups' before FinCom holds them (%s)" % nm_)
-        ok(txt(R(NIMB) + " [data-tpt-state]") in ("Updating", "Waiting for Tally") and n(R(NIMB) + " .tpt-why") == 0 and mains(NIMB) == ["reading"],
+        ok(txt(R(NIMB) + " [data-tpt-state]") in ("Updating", "Waiting for Tally") and n(R(NIMB) + " .tpt-why") == 0 and mains(NIMB) == [],
            "2 (review 5). the State cell just '● Updating', the read's words only in the Masters cell (%s | %s)" % (txt(R(NIMB) + " .tpt-st"), nm_))
         # (review 5) "on the server" only once the look on this computer has found no bridge, never while it still looks
         # (next-tally-own-status: a bridge found here before makes this a Tally computer: nothing remembered here)
@@ -148,8 +148,8 @@ def main():
            "1. Masters reading: Reading from Tally now, its bar (62), 7,560 of 12,195 ledgers · 148 groups (%s)" % mk)
         ok(ek == "Next, after masters 1,304 of 2,651 · about 12 min" and n(R(KES) + " [data-tpg-entries] [role=progressbar]") == 1, "1. Entries: Next, after masters, its bar, 1,304 of 2,651 · about 12 min (%s)" % ek)
         ok("left" not in mk and "slow" not in txt(R(KES)), "1. no masters time left, no 'ledgers slow in Tally' (no data for them)")
-        ok(mains(KES) == ["reading"] and txt(R(KES) + " [data-tpt-main]") == "Reading…" and pg.is_disabled(R(KES) + " [data-tpt-main]"),
-           "1 (review 4). masters read, entries only waiting: the row's button the disabled Reading… (%s)" % mains(KES))
+        ok(mains(KES) == [] and n(R(KES) + " [data-tpt-open]") == 1,
+           "1 (review 4; next-fix-mastersread). masters read, entries only waiting: no button, More kept (%s)" % mains(KES))
         dl = "#app [data-tpg-dl-head]"
         ok(n(dl + " .tpg-title") == 0 and n("#app h2.tpg-title") == 0 and n(dl + " [data-tpg-download]") == 1 and txt(dl + " [data-tpg-download]") == "Download FinCom Bridge 2.5.5"
            and re.match(r"assets/bridge-go/FinComBridge-Setup-2\.5\.5\.exe\?v=cdcdcdcdcdcd$", pg.get_attribute(dl + " [data-tpg-download]", "href") or ""),

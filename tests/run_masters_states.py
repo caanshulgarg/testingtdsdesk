@@ -137,6 +137,21 @@ def main():
         ok(txt(R(FAL) + " [data-tpt-main]") == "Bring masters", "4. the row's button: Bring masters (%s)" % txt(R(FAL) + " [data-tpt-main]"))
         ok(all(st(nm) in ("done", "reading", "waiting", "why") for nm in clients), "every linked client: one of the four states (%s)" % [st(nm) for nm in clients])
 
+        print("== 5. the State column and the row's button follow the same four states")
+        S_ = lambda nm: txt(R(nm) + " [data-tpt-state]")
+        W_ = lambda nm: txt(R(nm) + " .tpt-why")
+        mains = lambda nm: E("(s) => [...document.querySelectorAll(s + ' [data-tpt-main]')].map(b => b.getAttribute('data-tpt-main'))", R(nm))
+        dot = lambda nm: pg.get_attribute(R(nm) + " [data-tpt-state] [data-tpt-dot]", "data-tpt-dot")
+        ok(S_(KES) == "Reading from Tally" and dot(KES) == "read" and mains(KES) == [] and n(R(KES) + " [data-tpt-open]") == 1 and n(R(KES) + ".tpt-need") == 0,
+           "5. Kestrel (reading): State Reading from Tally, blue dot, no main button, More kept (%s | %s | %s)" % (S_(KES), dot(KES), mains(KES)))
+        ok(S_(NIMB) == "Waiting" and W_(NIMB) == "Tally is busy, it reads when typing stops" and mains(NIMB) == ["masters"] and n(R(NIMB) + ".tpt-need") == 0 and "Needs you" not in txt(R(NIMB)),
+           "5. Nimbus (busy): State Waiting · Tally is busy, it reads when typing stops; never Needs you; Bring masters waits its turn (%s | %s | %s)" % (S_(NIMB), W_(NIMB), mains(NIMB)))
+        ok(S_(LOTUS) == "Waiting" and W_(LOTUS) == "open " + LOC + " in your own Tally" and n(R(LOTUS) + ".tpt-need") == 0 and mains(LOTUS) == ["again"] and txt(R(LOTUS) + " [data-tpt-note]") == "Open it in Tally first",
+           "5. Lotus (not open): State Waiting · open <company> in your own Tally, Check again · Open it in Tally first (%s | %s | %s)" % (S_(LOTUS), W_(LOTUS), mains(LOTUS)))
+        ok(S_(FAL) == "Needs you" and n(R(FAL) + ".tpt-need") == 1 and mains(FAL) == ["masters"], "5. Falcon (not read): the only Needs you, Bring masters (%s | %s)" % (S_(FAL), mains(FAL)))
+        chips = E("() => Object.fromEntries([...document.querySelectorAll('#app [data-tpf-chip]')].map(c => [c.getAttribute('data-tpf-chip'), c.textContent.replace(/\\D+/g, ' ').trim()]))")
+        ok(chips.get("need") == "2" and chips.get("reading") == "3", "5. chips: Needs attention 2 (Falcon, Acme not open), Reading now 3 (Kestrel, Nimbus, Lotus) (%s)" % chips)
+
         shot("tally-page.png", 1440, 1100)
         shot("falcon-row.png", 1440, 900, R(FAL))
         shot("phone.png", 390, 900)

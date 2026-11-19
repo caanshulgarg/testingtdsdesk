@@ -184,7 +184,8 @@ export function mastersOf(cid, company) {
       checked: why ? "Not checked today: " + why : "Checked today " + hhmm(last) });
   }
   // next-fix-mastersread (item 9): never read, nothing failed: what it waits for (was "Not brought yet" with nothing to do)
-  return Object.assign(base, { st: "waiting", idle: true, words: "Waiting: " + (waitOf(company) || "FinCom reads them at the next quiet moment in Tally") });
+  const wo = waitOf(company);
+  return Object.assign(base, { st: "waiting", idle: true, wait: wo, words: "Waiting: " + (wo || "FinCom reads them at the next quiet moment in Tally") });
 }
 // ---------- Step 2 · Entries: {st: going | after | paused | stopped | done | uptodate | behind | none, words, sub, pct, p}
 export function entriesOf(cid, ms, last) {
