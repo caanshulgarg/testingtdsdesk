@@ -948,6 +948,38 @@ own BEGIN/COMMIT, so that a rerun of one is safe); each file refuses to run with
 111 and 174, 200 without 199, 201 without 199/200, 202 without 201). Tested as deployed: `tests/run_migration199_202.py` (the four in one session,
 then every statement timed at 20,000 and 50,000: run it alone).
 
+**Applied on staging (qbocskaiewaxqcvaunzc, tds-desk-staging) on 19-Nov-2026**, at a quiet moment (no posting waiting, taken or
+running; no linked link without its company GUID), from commit 7af48909e of `next-fix-posttimeout`, through the Management
+API, each file inside a DO block that refused to run unless the text's md5 was the committed file's, then ran it as one
+transaction (the same result as `psql -f`, checked on a throwaway PostgreSQL first). Order and times (UTC):
+
+| file | md5 | applied |
+|---|---|---|
+| migration-199-post-match-fast.sql | f583e97af71b159fd0cf923d26842ba7 | 10:25:15-17 |
+| migration-200-post-settle-itself.sql | 10e2e3d1f27933d73926560d707c7b0a | 10:25:25-28 |
+| migration-201-post-register-async.sql | 3ac41835a46908e21d9093cda9fbda3f | 10:26:03-06 |
+| migration-201a-post-grants.sql | d256d069c17974b66f55be6b242c819c | 10:29:13-15 |
+| migration-202-post-recheck.sql | 9b780f343da333d5b29832d5d9e5f41f | 10:29:26-29 |
+| migration-201a-post-grants.sql (again, for 202's tables) | d256d069c17974b66f55be6b242c819c | 10:29:38 |
+
+After each file, every function, table and index it makes read back against the same files applied on a throwaway
+PostgreSQL (the definitions' md5, grants, security definer; the tables' columns, row security and grants; the indexes):
+the same, but for PostgreSQL 17's MAINTAIN (staging is 17) and tally_post_register_pending's table-level SELECT for
+authenticated, which Supabase's default privileges gave and 201 did not revoke (a member read every column of the firm's
+rows): fixed by **201a** (below) before 202. Then tally-ingest deployed from the same commit (`deploy-ingest.sh`,
+function version 100, 10:30 UTC). Seen after: posting c66d0e82 (held, 662 entries) settled by itself at 10:26:00 UTC (posted
+661 of 661, 211 confirmed from FinCom's read-back of Tally); the cron `tally-post-settle-itself` (`call
+tally_post_work_run()`) succeeding every minute, `tally_post_work_errors` empty; the four bridges' beats answered 200
+(p50 0.78 s against 1.26 s before; one 503 in 473 calls: the computer key's lookup timed out once, answered busy as
+designed and asked again).
+
+**201a, post grants** (19-Nov-2026, found applying 199-202 on staging): `server/tally-cloud/migration-201a-post-grants.sql`
+(md5 d256d069c17974b66f55be6b242c819c). tally_post_register_pending: SELECT revoked from authenticated, then 201's 11 columns
+granted again (job_id, firm_id, since, cursor, total, dirty, passes, last_at, done_at, words, failed_at); PostgreSQL 17's
+MAINTAIN revoked from anon and authenticated on the new tables of 199-202 that exist (a no-op before 17). Grants only, one
+transaction, lock_timeout 10 s, safe twice; refuses to run without 201. **After 201, and again after 202.** Tested:
+`tests/run_migration201a.py` (Supabase's default privileges on the stand; RED_WITHOUT_201A=1 fails).
+
 
 **199, post match fast** (18-Nov-2026, branch `next-fix-posttimeout`; **written, not run yet**; file md5
 04f5cd99f5cb71aff42671600610b303): `server/tally-cloud/migration-199-post-match-fast.sql`. On staging, 17-Nov-2026
