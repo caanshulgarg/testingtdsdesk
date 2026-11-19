@@ -637,7 +637,7 @@ func jobWorker(dir string) {
 				h, err := linkedIn(sess, guid, asked)
 				if err == nil {
 					port, company = h.port, h.name
-					p["port"], p["tallyCompany"] = h.port, h.name
+					p["port"], p["tallyCompany"], p["companyGuid"], p["guidFrom"] = h.port, h.name, guid, guidFromOf(pl, guid)
 					return true
 				}
 				why = err
@@ -714,8 +714,13 @@ func jobWorker(dir string) {
 	// the check is waited for
 	coGUID := ""
 	for {
-		g, err := companyCheck(fin, company, port)
-		if err == nil && g != "" && normGUID(g) != guid {
+		g, said, err := companyCheckSaid(fin, company, port)
+		switch {
+		case err == nil && normGUID(g) == "":
+			// linkguid.go, fail closed (the staging incident of 19-Nov-2026): Tally named no such company, or gave it no
+			// GUID: nothing is compared, so nothing is sent; waited for, with Tally's own words
+			err = checkWait(asked, said)
+		case err == nil && normGUID(g) != guid:
 			// linkguid.go: the company Tally names so is not the linked one (it changed since the list): waited for
 			err = &linkWait{"notopen", openToPost(asked)}
 		}

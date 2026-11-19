@@ -139,8 +139,20 @@ func companyCheck(tc *TC, company string, port int) (string, error) {
 	return g, err
 }
 
+// the company check before a posting (linkguid.go, fail closed): the GUID, and Tally's own words when it named no such
+// company or gave it no GUID (a LINEERROR such as "Could not set 'SVCurrentCompany' ..."; "" when it said none)
+func companyCheckSaid(tc *TC, company string, port int) (string, string, error) {
+	g, _, said, err := companyCheckAll(tc, company, port)
+	return g, said, err
+}
+
 // the company check; given: Tally gave change numbers above 0 this time (round 5 R5-3)
 func companyCheckNumbers(tc *TC, company string, port int) (string, bool, error) {
+	g, given, _, err := companyCheckAll(tc, company, port)
+	return g, given, err
+}
+
+func companyCheckAll(tc *TC, company string, port int) (string, bool, string, error) {
 	// 2.2.0 (the owner's finding): the change numbers by the form kept for the company (a: NATIVEMETHOD; b: the report);
 	// form a answering the company without numbers: form b once. Each request 15 s at most (CompanyCheckSec)
 	sec := keepNum("CompanyCheckSec", 15)
@@ -148,7 +160,7 @@ func companyCheckNumbers(tc *TC, company string, port int) (string, bool, error)
 	if cnFormFor(company) == "b" {
 		forms = []string{"b"}
 	}
-	guid, heads := "", []string{}
+	guid, heads, said := "", []string{}, ""
 	listed := false
 	for _, form := range forms {
 		x := companyCheckRequest(company)
@@ -158,11 +170,14 @@ func companyCheckNumbers(tc *TC, company string, port int) (string, bool, error)
 		raw, err := invokeTally(tc, port, x, sec)
 		if err != nil {
 			if !listed {
-				return guid, false, err
+				return guid, false, said, err
 			}
 			break
 		}
 		heads = append(heads, answerHead(raw))
+		if said == "" && re(`(?i)<LINEERROR[\s>]`).MatchString(raw) {
+			said = html.UnescapeString(flat(group(`(?i)<LINEERROR(?:\s[^>]*)?>([\s\S]*?)</LINEERROR>`, raw, 1)))
+		}
 		found := false
 		for _, c := range xmlDoc(raw).All("COMPANY") {
 			if n := nameOf(c); n != "" && !sameCompany(n, company) {
@@ -174,16 +189,16 @@ func companyCheckNumbers(tc *TC, company string, port int) (string, bool, error)
 			}
 			if setCompanyAlts(company, c) {
 				cnFormSay(company, form)
-				return guid, true, nil
+				return guid, true, said, nil
 			}
 			break
 		}
 		if !found && form == "a" {
-			return "", false, nil // Tally does not list it that way: nothing to compare
+			return "", false, said, nil // Tally does not list it that way: nothing to compare (a posting: never sent)
 		}
 	}
 	cnFormMiss(company, heads)
-	return guid, false, nil
+	return guid, false, said, nil
 }
 
 // --- the form that gave the change numbers, kept per company (sync\change-number-forms.json)

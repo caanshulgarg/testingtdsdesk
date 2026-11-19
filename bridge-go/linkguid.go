@@ -2,7 +2,7 @@ package main
 
 // The owner's hard rule (19-Nov-2026): FinCom Bridge posts an entry only into the Tally company the client is linked
 // to, known by the company's GUID; never into another company. The posting carries the linked GUID (FinCom's queue:
-// tally_post_jobs.company_guid, migration 202; a browser's /jobs or /import: its guid, else the GUID this computer holds
+// tally_post_jobs.company_guid, migration 203; a browser's /jobs or /import: its guid, else the GUID this computer holds
 // for the name). Before every request to Tally that posts or deletes, the company list is asked afresh (the same
 // request the posting asked before each part anyway: no new request, never a list held from before, never a late
 // answer) and the request goes only when exactly one open company of this user's Tally has the linked GUID and no
@@ -30,13 +30,58 @@ func linkedGuidOf(pl M) string {
 	if g := normGUID(str(pl["guid"])); g != "" {
 		return g
 	}
-	if truthy(pl["fromCloud"]) {
-		return "" // FinCom's queue names it; a queue that did not (no GUID on the link) is never guessed here
-	}
+	// FinCom's queue names it (migration 203); a FinCom before 203 names none (its hand-out gate, the applied 202, gives
+	// it only while this bridge reports the link's GUID open): the GUID this computer holds for the name, matched in
+	// Tally's list as any (linkedIn: one company of that name, that GUID); none held: it waits
 	return normGUID(heldGUID(str(pl["company"])))
 }
 
+// where the GUID a posting is for came from: "fincom" (named by FinCom's queue or the browser), "computer" (held here
+// for the name), "" (none)
+func guidFromOf(pl M, guid string) string {
+	switch {
+	case normGUID(str(pl["guid"])) != "":
+		return "fincom"
+	case guid != "":
+		return "computer"
+	}
+	return ""
+}
+
 func openToPost(company string) string { return "Open " + company + " in Tally to post" }
+
+// (the staging incident of 19-Nov-2026) whose Tally a posting may go to: this Windows user's own only. A Tally whose owner
+// Windows cannot tell (mine unknown) only while no Tally of this user runs at all (on a shared server it may be another
+// user's, with the same company open), and then only with the GUID matching (linkedIn matches by GUID alone). Another
+// user's (mine false): never
+func ownTallyRuns(sessions []M) bool {
+	for _, s := range sessions {
+		if s["mine"] == true && s["skipped"] != true {
+			return true
+		}
+	}
+	return false
+}
+
+func tallyToPost(s M, own bool) bool {
+	switch s["mine"] {
+	case true:
+		return true
+	case false:
+		return false
+	}
+	return !own
+}
+
+// the company check before a posting gave no company, or the company with no GUID: never sent (fail closed), the
+// posting waits with Tally's own words when it said any
+func checkWait(asked, said string) *linkWait {
+	t := openToPost(asked)
+	if said = strings.TrimSpace(said); said != "" {
+		t += " (Tally said: " + cut(said, 160) + ")"
+	}
+	return &linkWait{"nocheck", t}
+}
 
 // a reason not to post now (a wait, never a failure)
 type linkWait struct {
@@ -61,8 +106,9 @@ func linkedIn(sessions []M, guid, asked string) (linkLook, error) {
 	var hits []linkLook
 	stale := false
 	var fresh []M
+	own := ownTallyRuns(sessions)
 	for _, s := range sessions {
-		if s["skipped"] == true || s["mine"] == false {
+		if s["skipped"] == true || !tallyToPost(s, own) {
 			continue
 		}
 		if s["ok"] != true {
@@ -109,10 +155,10 @@ func linkedIn(sessions []M, guid, asked string) (linkLook, error) {
 	return h, nil
 }
 
-// a posting a browser handed here without a GUID, with none held for the name yet: the list just asked holds the
-// first GUID Tally gives for it (noteCompanyGUID, as before this rule); FinCom's queue is never guessed for
+// a posting handed here without a GUID, with none held for the name yet: the list just asked holds the first GUID Tally
+// gives for it (noteCompanyGUID, as before this rule); still only one company of that name may be open (linkedIn)
 func guidAfterList(guid string, pl M) string {
-	if guid != "" || truthy(pl["fromCloud"]) {
+	if guid != "" {
 		return guid
 	}
 	return normGUID(heldGUID(str(pl["company"])))
@@ -136,7 +182,7 @@ func confirmLinked(sessions []M, guid string, sent linkLook) (ok bool, wrong str
 	}
 	// whatever is now open under the name the part went to, with another GUID
 	for _, s := range sessions {
-		if s["skipped"] == true || s["mine"] == false || s["ok"] != true || toInt(s["port"]) != sent.port {
+		if s["skipped"] == true || !tallyToPost(s, ownTallyRuns(sessions)) || s["ok"] != true || toInt(s["port"]) != sent.port {
 			continue
 		}
 		for _, c := range sessCompanies(s) {

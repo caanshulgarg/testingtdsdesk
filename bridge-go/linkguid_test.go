@@ -312,9 +312,14 @@ func TestLinkedStaleCache(t *testing.T) {
 	cancelJob(str(j["id"]), "test")
 }
 
-// a posting from FinCom's queue whose link has no GUID: never posted, it waits in plain words
+// a posting from FinCom's queue that names no GUID (a FinCom before migration 203), with no GUID held on this computer
+// and none in Tally's list for the name: never posted, it waits in plain words (linkguid_closed_test.go: one held)
 func TestLinkedNoGUID(t *testing.T) {
 	_, l := lgSetup(t)
+	l.set(coPair{zz, ""})
+	if err := saveFile(guidFile(), "{}"); err != nil {
+		t.Fatal(err)
+	}
 	was := postOKFn
 	postOKFn = func(string) (string, bool) { return "", true }
 	t.Cleanup(func() { postOKFn = was })

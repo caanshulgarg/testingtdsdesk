@@ -1533,7 +1533,8 @@ func cloudPostTakeJobs() (checks []any) {
 		// round 7 (F2): the owner's releases ("Not in Tally — release") for the job's ids come with it
 		// review M1 / L2: a posting handed back after the bridge's "not found" names the entries to send again (resendOnly):
 		// only those go, never the whole posting
-		// linkguid.go: the linked company's Tally GUID (migration 202); none: the posting waits, nothing is sent
+		// linkguid.go: the linked company's Tally GUID (migration 203); none (a FinCom before 203): the GUID this computer
+		// holds for the name, matched in Tally's list; none held: the posting waits, nothing is sent
 		v, err := newPostJob(M{"jobId": id, "company": str(j["company"]), "guid": str(j["guid"]), "masters": arr(pl["masters"]), "vouchers": arr(pl["vouchers"]), "released": arr(j["released"]), "resendOnly": arr(j["resendOnly"]),
 			"fromCloud": true}) // 2.5.15 item 1: FinCom is asked before each part is sent
 		if err != nil {
@@ -1633,7 +1634,18 @@ func syncCloudPosts() {
 				"byReply": truthy(r["byReply"]), "batchN": toInt(r["batchN"]), "batchEnd": str(r["batchEnd"]), "vchId": str(r["vchId"]), "sentAt": str(r["sentAt"]), "secondsReq": num(r["secondsReq"]),
 				"needsReview": truthy(r["needsReview"]), "created": toInt(r["created"]), "altered": toInt(r["altered"]), "errors": toInt(r["errors"]), "exceptions": toInt(r["exceptions"]), "ignored": toInt(r["ignored"]),
 				"lineError": arr(r["lineError"]), "sent": truthy(r["sent"]), "alreadySent": truthy(r["alreadySent"]), "sentOn": str(r["sentOn"]),
-				"state": itemState(r, false), "reason": map[bool]string{true: "", false: failedLine(str(r["message"]))}[r["ok"] == true]})
+				"state": itemState(r, false), "reason": map[bool]string{true: "", false: failedLine(str(r["message"]))}[r["ok"] == true],
+				// linkguid.go (19-Nov-2026): where it went, the port and the company's name in Tally (the job's, for a
+				// result that names none), to FinCom too, not only this computer's progress.json
+				"port": toInt(r["port"]), "company": str(r["company"]), "refusedByTally": truthy(r["refusedByTally"])})
+			if e := res[len(res)-1].(M); toInt(e["port"]) == 0 || str(e["company"]) == "" {
+				if toInt(e["port"]) == 0 {
+					e["port"] = toInt(v["port"])
+				}
+				if str(e["company"]) == "" {
+					e["company"] = str(v["tallyCompany"])
+				}
+			}
 		}
 		// items: every entry's state (waiting, sending, sent, in_tally, failed with its reason), for FinCom to show live
 		// round 7 (F4): seq (per job, from progress.json, growing with every change) and updatedAt: the cloud ignores an
@@ -1641,7 +1653,9 @@ func syncCloudPosts() {
 		up := M{"kind": "posts_update", "id": id, "status": st, "done": toInt(v["done"]), "message": str(v["message"]), "results": res, "items": arr(v["items"]), "checking": v["checking"] == true,
 			"seq": toInt(v["seq"]), "updatedAt": str(v["updatedAt"]),
 			// round 15: every request's timing ({n, seconds, created, altered, exceptions, ignored, lastVchId}) and the total
-			"reqs": arr(v["reqs"]), "secondsTotal": num(v["secondsTotal"])}
+			"reqs": arr(v["reqs"]), "secondsTotal": num(v["secondsTotal"]),
+			// linkguid.go: the port and the company (its name in Tally, its GUID, and where the GUID came from) it posts to
+			"port": toInt(v["port"]), "tallyCompany": str(v["tallyCompany"]), "companyGuid": str(v["companyGuid"]), "guidFrom": str(v["guidFrom"])}
 		// 2.5.15 item 1: the parts sent while FinCom could not be reached (the owner's "Then go ahead"), said once it answers
 		if n := toInt(v["offlineSends"]); n > 0 {
 			up["offlineSends"] = n

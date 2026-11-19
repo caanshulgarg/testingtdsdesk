@@ -397,7 +397,7 @@ function cosOf(body: any): { cos?: string[][] } {
   const out: string[][] = [];
   for (const c of body.companies.slice(0, 200) as any[]) {
     const n = coTrim(c?.name), g = typeof c?.guid === "string" ? c.guid.trim().toLowerCase().slice(0, 100) : "";
-    // migration 202: two open companies of one name are two entries (each its GUID), never one
+    // migration 203: two open companies of one name are two entries (each its GUID), never one
     if (c?.open === true && n && /^[0-9a-z-]{1,100}$/.test(g) && !out.some((x) => x[0] === String(n).slice(0, 200) && x[1] === g)) out.push([String(n).slice(0, 200), g]);
     if (out.length >= 50) break;
   }
@@ -5112,11 +5112,10 @@ Deno.serve(sentry.wrap(async (req) => {
         // migration 55 (decision B): the checks waiting for this bridge travel with it ([] on a cloud without 55). Final review
         // M1: only those of the postings it took (or is named in); a posting with no record, only for the key's main bridge
         const checks = await checksFor(dev, meT, main);
-        // migration 202 (the owner's rule: only into the linked company, by its GUID): the posting carries the linked GUID;
-        // none handed out: why the bridge's own postings wait (a cloud without 202: neither)
-        let wait = "";
-        if (!j) { const w: any = await db.rpc("tally_post_take_wait", { p_device: dev.id, p_bridge: meT }); if (!w.error && typeof w.data === "string") wait = w.data.slice(0, 300); }
-        return reply(200, { ok: true, job: j ? { id: j.id, company: j.company, payload: j.payload, released, ...(j.company_guid ? { guid: j.company_guid } : {}), ...(resendOnly.length ? { resendOnly } : {}) } : null, ...(wait ? { wait } : {}), ...(checks.length ? { checks } : {}) });
+        // migration 203 (the owner's rule: only into the linked company, by its GUID): the posting carries the linked GUID
+        // its hand-out judged open (a cloud without 203: none; the bridge then posts only by its own record, linkguid.go)
+        const cg = typeof (j as any)?.company_guid === "string" ? String((j as any).company_guid).trim().toLowerCase() : "";
+        return reply(200, { ok: true, job: j ? { id: j.id, company: j.company, payload: j.payload, released, ...(/^[0-9a-z-]{1,100}$/.test(cg) ? { guid: cg } : {}), ...(resendOnly.length ? { resendOnly } : {}) } : null, ...(checks.length ? { checks } : {}) });
       }
       case "post_ok": {
         // FinCom Bridge 2.5.15 (item 1, the owner's approval of 13-Nov-2026): asked by the bridge before it sends each part of
@@ -5249,13 +5248,19 @@ Deno.serve(sentry.wrap(async (req) => {
           ...(REPLY_KEYS.some((k) => r && typeof r === "object" && k in r) ? { byReply: !!r?.byReply, vchId: s(r?.vchId, 30), batchEnd: s(r?.batchEnd, 30), batchN: int(r?.batchN, 500), needsReview: !!r?.needsReview,
             exceptions: int(r?.exceptions, 1e6), ignored: int(r?.ignored, 1e6), errors: int(r?.errors, 1e6), lineError: lineErrs(r?.lineError), company: s(r?.company, 200), sentAt: s(r?.sentAt, 40), secondsReq: secs(r?.secondsReq),
             // the review of 2.1.8 (finding 5): this computer sent the entry before (its own record): a refusal that is an acceptance, kept locked
-            alreadySent: !!r?.alreadySent } : {}) }));
+            alreadySent: !!r?.alreadySent } : {}),
+          // next-fix-linkedguid: where it went, the Tally port and the company's name there (the bridge sends both); Tally
+          // created nothing of its request (refusedByTally: failed in Tally's words, never needs review)
+          ...(r && typeof r === "object" && "port" in r ? { port: int(r?.port, 65535), company: s(r?.company, 200), refusedByTally: !!r?.refusedByTally } : {}) }));
         // 2.1.8: the bridge's request timings of the posting, for tally_post_jobs.timing (migration 43; dropped on an older cloud)
         const reqs = Array.isArray(body.reqs) ? body.reqs.slice(0, 1000).map((x: any) => ({ n: int(x?.n, 500), seconds: secs(x?.seconds), created: int(x?.created, 1e6), altered: int(x?.altered, 1e6), exceptions: int(x?.exceptions, 1e6), ignored: int(x?.ignored, 1e6), lastVchId: s(x?.lastVchId, 30) })) : null;
         // FinCom Bridge 2.5.15 (item 1): the parts it sent while this cloud could not be reached (its check before each part
         // had no answer in 3 s: the owner's "Then go ahead"), kept with the timing and logged
         const offlineSends = int(body.offlineSends, 1e6);
-        const timing = reqs || body.secondsTotal !== undefined || offlineSends ? { reqs: reqs || [], secondsTotal: secs(body.secondsTotal), ...(offlineSends ? { offlineSends } : {}) } : null;
+        // next-fix-linkedguid: the port and the company (its name in Tally, the GUID it was posted by, and where that GUID
+        // came from: fincom / computer) the bridge posts to, kept with the timing
+        const where = int(body.port, 65535) || body.tallyCompany ? { port: int(body.port, 65535), tallyCompany: s(body.tallyCompany, 200), companyGuid: s(body.companyGuid, 100), guidFrom: s(body.guidFrom, 10) } : null;
+        const timing = reqs || body.secondsTotal !== undefined || offlineSends || where ? { reqs: reqs || [], secondsTotal: secs(body.secondsTotal), ...(offlineSends ? { offlineSends } : {}), ...(where ? { where } : {}) } : null;
         if (offlineSends) console.log("tally-ingest posts_update: parts sent while FinCom's cloud could not be reached", String(body.id || "").slice(0, 64), offlineSends);
         // 02-Oct-2026: each entry's state as the bridge sees it (waiting / sending / sent / in_tally / failed, with why)
         // notfound (migration 37): checked and not in Tally; posted / needs_review (bridge 2.1.8, by Tally's reply; the review's finding 3)

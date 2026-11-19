@@ -357,8 +357,15 @@ func sendImport(port int, company, job string, r importReq) importOutcome {
 					b["message"] = "Altered in Tally: it existed already"
 				}
 			}
+		} else if created+altered > 0 {
+			// Tally made something of the request, not all of it as asked: needs review (Tally's counts and words)
+			b["ok"], b["needsReview"], b["accepted"] = false, true, true
+			b["lineError"] = toAny(lineErrorKept(lineErr))
+			b["message"] = replyLine(s, rr, lineErr)
 		} else {
-			b["ok"], b["needsReview"], b["accepted"] = false, true, created+altered > 0
+			// (19-Nov-2026) Tally created nothing of it: plainly failed in Tally's own words (never "needs review"); not on
+			// this computer's record, so it may go again (Retry)
+			b["ok"], b["accepted"], b["refusedByTally"] = false, false, true
 			b["lineError"] = toAny(lineErrorKept(lineErr))
 			b["message"] = replyLine(s, rr, lineErr)
 		}
@@ -476,9 +483,13 @@ func invokeImport(p M) (M, error) {
 	// answering the check: nothing is posted (each entry says so)
 	var stopAll M
 	if !truthy(p["guidChecked"]) {
-		g, err := companyCheck(fin, company, port)
+		g, said, err := companyCheckSaid(fin, company, port)
 		switch {
-		case err == nil && g != "" && normGUID(g) != guid:
+		case err == nil && normGUID(g) == "":
+			// linkguid.go, fail closed: no such company in Tally's answer, or no GUID: nothing compared, nothing sent
+			writeLog("  NOT POSTED: " + company + ": Tally's company check gave no company or no GUID" + map[bool]string{true: " (" + said + ")", false: ""}[said != ""])
+			stopAll = M{"ok": false, "notSent": true, "message": checkWait(asked, said).text}
+		case err == nil && normGUID(g) != guid:
 			writeLog("  NOT POSTED: " + company + " in Tally is not the linked company (Tally GUID " + g + ")")
 			stopAll = M{"ok": false, "notSent": true, "message": openToPost(asked)}
 		case err != nil:

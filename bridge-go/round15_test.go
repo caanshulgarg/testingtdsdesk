@@ -209,7 +209,8 @@ func TestPostNeedsReviewOnLineError(t *testing.T) {
 		f.importSkip = func(string) bool { return true }
 		standBridge(t, f, "")
 		r := postOne(t, "nm1", finVoucher("nm1", fgParty, "NM-1", td, "1.00"))
-		if r["ok"] != false || r["needsReview"] != true || r["accepted"] != false || toInt(r["created"]) != 0 || toInt(r["errors"]) != 1 {
+		// (19-Nov-2026) Tally created nothing: plainly failed in Tally's words, never "needs review"
+		if r["ok"] != false || r["needsReview"] == true || r["accepted"] != false || itemState(r, false) != "failed" || toInt(r["created"]) != 0 || toInt(r["errors"]) != 1 {
 			t.Fatalf("a reply that made nothing: %v", r)
 		}
 		if !strings.HasPrefix(str(r["message"]), "Tally's reply: created 0 of 1") {
@@ -665,7 +666,7 @@ func TestNothingMadeEndsFailed(t *testing.T) {
 		t.Fatalf("the job: %s %q", p["status"], p["message"])
 	}
 	for id, r := range r15Results(p) {
-		if r["needsReview"] != true || r["accepted"] != false || acceptedInfo(id) != nil {
+		if r["needsReview"] == true || r["accepted"] != false || itemState(r, false) != "failed" || acceptedInfo(id) != nil {
 			t.Fatalf("%s: %v", id, r)
 		}
 	}
@@ -750,11 +751,12 @@ func TestNoAnswerPlusRefusedEndsDone(t *testing.T) {
 	f.importSkip = func(x string) bool { return strings.Contains(x, "TDSDesk:uf2") }
 	standBridge(t, f, `,"PostBatchBills":1,"TallyMaxSec":1,"PostTimeoutSec":1,"PostTimeoutBaseSec":1,"TallyProbeEverySec":2,"PostWaitMs":200`)
 	p := r15Job(t, "job-r15-unknown-refused", r15Bills("uf", td, 2))
-	if str(p["status"]) != "done" || str(p["message"]) != "Posted 0 of 2; 1 need review; 1 sent with no answer from Tally — Check Tally in FinCom" {
+	// (19-Nov-2026) the refused one: Tally created nothing of it, so failed in Tally's words (never "needs review")
+	if str(p["status"]) != "done" || str(p["message"]) != "Posted 0 of 2 (Tally's reply); 1 sent with no answer from Tally — Check Tally in FinCom" {
 		t.Fatalf("the job: %s %q", p["status"], p["message"])
 	}
 	st := r6States(p)
-	if st["uf1"] != "unknown" || st["uf2"] != "needs_review" {
+	if st["uf1"] != "unknown" || st["uf2"] != "failed" {
 		t.Fatalf("states: %v", st)
 	}
 }
