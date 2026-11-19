@@ -32,9 +32,15 @@
 --      (185's tally_post_count_for) asks the same gate, and a posting of the bridge it refuses says why on the posting
 --      (tally_post_linked_why_for: the link has no company ID yet, or another company ID is open): never the name alone, and
 --      never waiting silently. The gate (tally_post_linked_ok) is asked once per client and company (the count as fast as
---      185's); the words only over an empty message or the gate's own, for a bridge that may post, never moving updated_at. An entry whose date or amount cannot be read from the posting is never sent again by
+--      185's); the words only over an empty message or the gate's own, for a bridge that may post, never moving updated_at;
+--      the gate's own words cleared once it opens; a posting put back by tally-ingest (FinCom could not confirm in time)
+--      handed out again after 30 s.
+--   4. (the sixth review) The cron's recheck in two transactions: judged (tally_post_recheck_step 'judge', read only, its
+--      plan kept in tally_post_recheck_plans for 10 minutes), then applied (201's tally_post_work_then, replaced: 'recheck')
+--      on what is still to recheck; tally_post_recheck_job does both at once (a recheck by hand, the tests). At 50,000
+--      entries each step about 1.3-1.5 s. An entry whose date or amount cannot be read from the posting is never sent again by
 --      itself (a person looks).
--- Add-only: one table (row security on, the firm reads), two partial indexes, functions new or replaced from their latest
+-- Add-only: two tables (tally_post_rechecks: row security on, the firm reads; tally_post_recheck_plans: the service only), two partial indexes, functions new or replaced from their latest
 -- text (185's tally_post_take_for and tally_post_count_for; 201's tally_post_work_due, tally_post_work, tally_post_work_run gain the recheck).
 -- Nothing dropped or deleted. One transaction, lock_timeout 10 s, safe twice; service_role only, granted explicitly. No
 -- bridge change, no new Tally request.
@@ -73,6 +79,17 @@ revoke all on public.tally_post_rechecks from anon;
 revoke insert, update, delete, truncate, references, trigger on public.tally_post_rechecks from authenticated;
 grant select on public.tally_post_rechecks to authenticated;
 grant all on public.tally_post_rechecks to service_role;
+-- (the sixth review) a recheck judged in one transaction and applied in the next (the cron's steps): each posting's plan
+-- for at most 10 minutes; nobody but the service reads it
+create table if not exists public.tally_post_recheck_plans (
+  job_id   uuid primary key references public.tally_post_jobs(id) on delete cascade,
+  e        jsonb not null,
+  complete boolean not null,
+  at       timestamptz not null default now()
+);
+alter table public.tally_post_recheck_plans enable row level security;
+revoke all on public.tally_post_recheck_plans from anon, authenticated;
+grant all on public.tally_post_recheck_plans to service_role;
 
 -- the entries that need review, taken up (changed within the last day; again when the record changes again): one indexed look
 create or replace function public.tally_post_recheck_enroll()
@@ -104,7 +121,7 @@ grant execute on function public.tally_post_recheck_any() to service_role;
 
 -- the entries of one posting due now (at most 1,000), rechecked by the evidence, set-based. The posting is locked only for the
 -- writes (skip locked: a report never waits on this). -> {job, posted, pick, kept, wrong, resend, asked, person}
-create or replace function public.tally_post_recheck_job(p_job uuid)
+create or replace function public.tally_post_recheck_step(p_job uuid, p_mode text default 'both')
 returns jsonb language plpgsql security definer set search_path = public, pg_temp as $fn$
 declare
   j tally_post_jobs%rowtype; w tally_post_windows%rowtype; cur tally_sync_cursor%rowtype; complete boolean := false; bk uuid;
@@ -122,6 +139,18 @@ begin
     update tally_post_rechecks set next_at = now() + interval '10 minutes' where job_id = p_job and state = 'open' and next_at <= now();
     return jsonb_build_object('ok', true, 'job', p_job, 'later', true);
   end if;
+  if p_mode = 'apply' then
+    -- (the sixth review) the judging done in the transaction before (its plan, made within 10 minutes), applied now: only the
+    -- entries still to recheck (their recheck open, their register record still needing review in this posting); every
+    -- write below is guarded again as written (released only while nothing of Tally's came; the counts must agree)
+    select p.e, p.complete into e, complete from tally_post_recheck_plans p where p.job_id = p_job and p.at > now() - interval '10 minutes';
+    delete from tally_post_recheck_plans where job_id = p_job;
+    if e is null then return jsonb_build_object('ok', true, 'job', p_job, 'idle', true, 'noplan', true); end if;
+    e := coalesce((select jsonb_agg(x order by x->>'fid') from jsonb_array_elements(e) x
+                     join tally_post_rechecks r on r.job_id = p_job and r.fincom_id = x->>'fid' and r.state = 'open'
+                     left join tally_post_register g on g.firm_id = j.firm_id and g.fincom_id = x->>'fid'
+                    where x->>'cls' = 'settled' or (g.state = 'needs_review' and g.job_id = p_job)), '[]'::jsonb);
+  else
   -- FinCom's read of the linked company complete since the posting (as 200: the book's match at or above the window's a1)
   select * into w from tally_post_windows where job_id = p_job;
   if w.id is not null then
@@ -162,9 +191,6 @@ begin
   select coalesce(jsonb_object_agg(z.k, z.g), '{}'::jsonb) into ladm from (
     select l.day::text || '|' || trim_scale(abs(l.amount))::text as k, jsonb_agg(distinct l.guid) as g
       from jsonb_object_keys(vdm) g(guid) join tally_lines l on l.book_id = bk and l.guid = g.guid group by 1) z;   -- (each voucher's lines by its key)
-  lt0 := current_setting('lock_timeout');
-  perform set_config('lock_timeout', '300ms', true);
-  begin
   with d as materialized (   -- due, and still needing review in this posting
     select x.fincom_id fid, coalesce(nullif(i.entry_id, ''), i.fincom_id) eid, x.since, x.tries, i.matched_at, coalesce(nullif(i.matched_vch, ''), nullif(i.matched_mid, '')) mvch, nullif(i.matched_mid, '') mid,
            i.accepted_at, nullif(i.reply_vch, '') reply_vch, nullif(i.batch_end, '') batch_end, i.released_at, (r.state = 'needs_review' and r.job_id = p_job) as still
@@ -232,6 +258,18 @@ begin
                                                'vch', coalesce(c.mvch, c.vch), 'mid', c.mid, 'vchs', c.vchs, 'n', c.n_alike, 'nl', c.n_loose, 'wc', c.wc, 'took', c.took,
                                                'by', case when c.matched_at is not null then 'readback' else 'content' end) order by c.fid), '[]'::jsonb)
     into e from c;
+  if p_mode = 'judge' then
+    -- (the sixth review) judged only: the plan kept for the next transaction (tally_post_work_then 'recheck'), nothing else written
+    if jsonb_array_length(e) = 0 then return jsonb_build_object('ok', true, 'job', p_job, 'idle', true); end if;
+    insert into tally_post_recheck_plans (job_id, e, complete, at) values (p_job, e, complete, now())
+      on conflict (job_id) do update set e = excluded.e, complete = excluded.complete, at = excluded.at;
+    return jsonb_build_object('ok', true, 'job', p_job, 'planned', jsonb_array_length(e));
+  end if;
+  end if;
+  lt0 := current_setting('lock_timeout');
+  perform set_config('lock_timeout', '300ms', true);
+  begin
+
   if jsonb_array_length(e) = 0 then perform set_config('lock_timeout', lt0, true); return jsonb_build_object('ok', true, 'job', p_job, 'idle', true); end if;
   select count(*) filter (where x->>'cls' = 'in'), count(*) filter (where x->>'cls' = 'out'), count(*) filter (where x->>'cls' = 'pick'), count(*) filter (where x->>'cls' = 'kept'),
          count(*) filter (where x->>'cls' = 'wrong'), coalesce(jsonb_object_agg(x->>'fid', x->>'cls') filter (where x->>'cls' in ('in', 'out')), '{}'::jsonb),
@@ -324,6 +362,14 @@ begin
   return jsonb_build_object('ok', true, 'job', p_job, 'posted', n_in, 'resend', n_out > 0, 'released', n_out, 'pick', n_pick, 'kept', n_kept, 'wrong', n_wrong, 'asked', n_asked, 'person', n_person,
                             'register', n_in + n_out > 0);
 end $fn$;
+revoke all on function public.tally_post_recheck_step(uuid, text) from public, anon, authenticated;
+grant execute on function public.tally_post_recheck_step(uuid, text) to service_role;
+
+-- the whole recheck of one posting in one transaction (judged and applied: the tests, and a posting rechecked by hand)
+create or replace function public.tally_post_recheck_job(p_job uuid)
+returns jsonb language sql security definer set search_path = public, pg_temp as $function$
+  select tally_post_recheck_step(p_job, 'both')
+$function$;
 revoke all on function public.tally_post_recheck_job(uuid) from public, anon, authenticated;
 grant execute on function public.tally_post_recheck_job(uuid) to service_role;
 
@@ -338,19 +384,36 @@ begin
   select x.job_id into r from tally_post_rechecks x where x.state = 'open' and x.next_at <= now() and not (x.job_id = any(coalesce(p_skip, '{}'))) order by x.next_at limit 1;
   if r.job_id is null then return jsonb_build_object('ok', true, 'idle', true); end if;
   begin
-    o := tally_post_recheck_job(r.job_id);
+    o := tally_post_recheck_step(r.job_id, 'judge');   -- (judged; applied in the caller's next transaction: 'recheck')
   exception when others then
     perform tally_post_work_error('recheck', r.job_id, sqlstate, sqlerrm);
     update tally_post_rechecks set next_at = now() + interval '10 minutes', words = left('Could not be rechecked this time: ' || sqlerrm, 500) where job_id = r.job_id and state = 'open' and next_at <= now();
     o := jsonb_build_object('ok', false, 'error', left(sqlerrm, 300));
   end;
   return jsonb_build_object('ok', true, 'job', r.job_id, 'recheck', o,
-    'then', case when coalesce((o->>'resend')::boolean, false) then 'resend' when coalesce((o->>'register')::boolean, false) then 'register' end);
+    'then', case when o ? 'planned' then 'recheck' when coalesce((o->>'resend')::boolean, false) then 'resend' when coalesce((o->>'register')::boolean, false) then 'register' end);
 end $fn$;
 revoke all on function public.tally_post_recheck_run(uuid[]) from public, anon, authenticated;
 grant execute on function public.tally_post_recheck_run(uuid[]) to service_role;
 
 -- ---------------------------------------------------------------- 2. the cron (201's texts, with the recheck)
+-- 201's tally_post_work_then; added (the sixth review): 'recheck', a recheck judged in the transaction before applied now
+-- (tally_post_recheck_step 'apply'), so neither step holds a statement long (each about a second at 50,000 entries)
+create or replace function public.tally_post_work_then(p_job uuid, p_then text)
+returns jsonb language plpgsql security definer set search_path = public, pg_temp as $fn$
+begin
+  if coalesce(auth.role(), 'service_role') <> 'service_role' then raise exception 'service role only' using errcode = '42501'; end if;
+  if p_then = 'resend' then return tally_post_settle_resend(p_job); end if;
+  if p_then = 'register' then return tally_post_register_apply(p_job); end if;
+  if p_then = 'recheck' then return tally_post_recheck_step(p_job, 'apply'); end if;
+  return jsonb_build_object('ok', true);
+exception when others then
+  perform tally_post_work_error('then', p_job, sqlstate, sqlerrm);
+  return jsonb_build_object('ok', false, 'job', p_job, 'error', left(sqlerrm, 300));
+end $fn$;
+revoke all on function public.tally_post_work_then(uuid, text) from public, anon, authenticated;
+grant execute on function public.tally_post_work_then(uuid, text) to service_role;
+
 create or replace function public.tally_post_work_due()
 returns boolean language sql stable security definer set search_path = public, pg_temp as $function$
   -- one indexed look each: an open pass, a pass asked for, a held posting, a hand-back due, a recheck due (202)
@@ -389,7 +452,13 @@ begin
       rc := tally_post_recheck_run('{}');
     exception when others then perform tally_post_work_error('recheck', null, sqlstate, sqlerrm); rc := null;
     end;
-    if rc->>'then' is not null then perform tally_post_work_then((rc->>'job')::uuid, rc->>'then'); end if;
+    if rc->>'then' is not null then
+      o := tally_post_work_then((rc->>'job')::uuid, rc->>'then');
+      -- (a recheck applied: its own follow-up, the hand-back or the register)
+      if rc->>'then' = 'recheck' and (coalesce((o->>'resend')::boolean, false) or coalesce((o->>'register')::boolean, false)) then
+        perform tally_post_work_then((rc->>'job')::uuid, case when coalesce((o->>'resend')::boolean, false) then 'resend' else 'register' end);
+      end if;
+    end if;
     loop
       begin
         o := tally_post_register_step(null, 2000, skip);
@@ -450,8 +519,12 @@ begin
     exit when coalesce((s->>'idle')::boolean, false);
     rtried := rtried || (s->>'job')::uuid; m := m + 1;
     if s->>'then' is not null then
-      o := public.tally_post_work_then((s->>'job')::uuid, s->>'then');
+      o := public.tally_post_work_then((s->>'job')::uuid, s->>'then');   -- (judged above; applied here, in its own transaction)
       commit;
+      if s->>'then' = 'recheck' and (coalesce((o->>'resend')::boolean, false) or coalesce((o->>'register')::boolean, false)) then
+        o := public.tally_post_work_then((s->>'job')::uuid, case when coalesce((o->>'resend')::boolean, false) then 'resend' else 'register' end);
+        commit;
+      end if;
     end if;
   end loop;
   loop
@@ -508,6 +581,8 @@ grant execute on function public.tally_post_linked_open(uuid, uuid, text) to ser
 create or replace function public.tally_post_linked_why_for(p_firm uuid, p_client text, p_company text, p_device uuid, p_bridge text)
 returns text language sql stable security definer set search_path = public, pg_temp as $function$
   select case
+    when p_client is null or nullif(btrim(coalesce(p_company, '')), '') is null
+      then 'Not posted yet: this posting names no ' || case when p_client is null then 'client' else 'Tally company' end || ', so FinCom cannot tell the linked company (it posts only into the linked company, by its company ID). Cancel it and post again from the client''s page'
     when not exists (select 1 from tally_links l join tally_companies tc on tc.firm_id = l.firm_id and tc.book_id = l.book_id
                       where l.firm_id = p_firm and l.client_id = p_client and l.state = 'linked' and lower(tally_nm(tc.company)) = lower(tally_nm(p_company)))
       then 'Not posted yet: the client is not linked to the Tally company ' || p_company || ' in FinCom. FinCom posts only into the linked company, by its company ID'
@@ -549,16 +624,18 @@ declare n integer; w jsonb; go boolean := coalesce(p_bridge, '') ~ '^go-[0-9a-f]
 begin
   with mine as materialized (
     select j.id, j.firm_id, j.client_id, j.company, j.message, j.stop_reason, j.created_at from tally_post_jobs j
-     where j.device_id = p_device and j.status = 'waiting' and tally_post_mine_ok(j.id, p_device, p_bridge, p_main)),
+     where j.device_id = p_device and j.status = 'waiting' and tally_post_mine_ok(j.id, p_device, p_bridge, p_main)
+       and not (j.message like 'Put back for the same FinCom Bridge%' and j.updated_at > now() - interval '30 seconds')),   -- (the put-back's pause, as the hand-out)
   gk as materialized (
     select g.firm_id, g.client_id, g.company, tally_post_linked_ok(g.firm_id, g.client_id, g.company, p_device, p_bridge) as ok
       from (select distinct m.firm_id, m.client_id, m.company from mine m) g),
   gw as materialized (select gk.*, case when not gk.ok then left(tally_post_linked_why_for(gk.firm_id, gk.client_id, gk.company, p_device, p_bridge), 300) end as why from gk)
-  select (select count(*)::int from mine m join gw on gw.firm_id = m.firm_id and gw.client_id = m.client_id and gw.company = m.company where gw.ok),
+  select (select count(*)::int from mine m join gw on gw.firm_id = m.firm_id and gw.client_id is not distinct from m.client_id and gw.company is not distinct from m.company where gw.ok),
+         -- the words: refused, the gate's words (empty over its own once open: never another writer's)
          (select coalesce(jsonb_agg(jsonb_build_object('id', x.id, 'why', x.why)), '[]'::jsonb) from (
-            select m.id, gw.why from mine m join gw on gw.firm_id = m.firm_id and gw.client_id = m.client_id and gw.company = m.company
-             where not gw.ok and m.stop_reason is null and m.message is distinct from gw.why
-               and (coalesce(m.message, '') = '' or m.message like 'Not posted yet: %')
+            select m.id, coalesce(gw.why, '') as why from mine m join gw on gw.firm_id = m.firm_id and gw.client_id is not distinct from m.client_id and gw.company is not distinct from m.company
+             where m.stop_reason is null and ((not gw.ok and gw.why is not null and m.message is distinct from gw.why and (coalesce(m.message, '') = '' or m.message like 'Not posted yet: %'))
+                                              or (gw.ok and m.message like 'Not posted yet: %'))
              order by m.created_at limit 20) x)
     into n, w;
   if go then
@@ -566,13 +643,13 @@ begin
                 select j.firm_id, j.client_id, j.company from tally_post_jobs j join tally_devices me on me.id = p_device
                  where j.firm_id = me.firm_id and j.status = 'waiting' and j.taken_by is null and tally_post_pickable_ok(j.id, p_device, p_bridge)),
               pg as materialized (select g.*, tally_post_linked_ok(g.firm_id, g.client_id, g.company, p_device, p_bridge) as ok from (select distinct * from pk) g)
-              select count(*)::int from pk join pg on pg.firm_id = pk.firm_id and pg.client_id = pk.client_id and pg.company = pk.company where pg.ok)
+              select count(*)::int from pk join pg on pg.firm_id = pk.firm_id and pg.client_id is not distinct from pk.client_id and pg.company is not distinct from pk.company where pg.ok)
            + (select count(*)::int from tally_post_jobs j join tally_devices me on me.id = p_device
                where j.firm_id = me.firm_id and j.status = 'waiting' and j.device_id is null and tally_post_unrouted_ok(j.id, p_device, p_bridge));
   end if;
   if jsonb_array_length(w) > 0 then
     begin
-      if tally_bridge_may_post(p_device, p_bridge) then
+      if tally_bridge_may_post(p_device, p_bridge) then   -- (cleared too only by a bridge that may post: its gate is the one judged)
         for r in select (x->>'id')::uuid as id, x->>'why' as why from jsonb_array_elements(w) x loop
           perform 1 from tally_post_jobs j where j.id = r.id for update skip locked;
           if found then
@@ -605,6 +682,8 @@ begin
        and j.firm_id = fm and j.stop_reason is null
        and (j.taken_by = p_bridge or (j.taken_by is null and ((j.taken_at is null and j.first_taken_at is null) or p_bridge !~ '^go-[0-9a-f]{6,32}$')))   -- once taken: only by the bridge that took it (H2a; a v1 take, by its history too: a v1 bridge, LOW 6 / fourth review LOW 1)
        and tally_post_linked_open(j.id, p_device, p_bridge)   -- 202: the linked company's GUID open on this bridge
+       -- (the sixth review) put back after FinCom could not confirm in time (tally-ingest's posts_update): taken again after 30 s
+       and not (j.message like 'Put back for the same FinCom Bridge%' and j.updated_at > now() - interval '30 seconds')
      order by j.created_at limit 1 for update skip locked;
     exit when jid is null;
     if tally_post_job_blocked(jid) is null then

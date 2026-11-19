@@ -1116,7 +1116,11 @@ at most 20 a beat, never moving updated_at. An entry whose date or amount cannot
 again by itself (a person looks). tally-ingest's post_ok answers within 1.8 s of the request (the bridge waits 3 s, then
 posts): the computer's key, its bridge, the posting and `tally_post_resend_ok` not had in time, or not had at all: post
 false, never allowed; such a refusal before any part was sent puts the posting back for the same bridge at once
-(posts_update, on the bridge's report). The cron: 201's `tally_post_work_due`,
+(posts_update, on the bridge's report), only when 36b's resend guard takes it (`tally_post_job_accepted` asked on the
+row as merged; a P0001 at the write falls back to the report stored as before); FinCom's own settlement by itself
+(byItself) is kept over the bridge's kept result when merging; `tally_post_take_for` hands such a posting out again after
+30 s. The cron's recheck runs in two transactions (`tally_post_recheck_step` judge, then `tally_post_work_then`
+'recheck' applies the plan kept in `tally_post_recheck_plans`; about 1.3-1.5 s each at 50,000 entries). The cron: 201's `tally_post_work_due`,
 `tally_post_work` and `tally_post_work_run` (replaced from 201's text) gain the recheck (one posting a piece, its hand-back
 or the register in its own transaction). Add-only (one table, two partial indexes), one transaction, lock_timeout 10 s,
 safe twice; service_role only, granted explicitly. **After 201.** No bridge change, no new Tally request. Tested:

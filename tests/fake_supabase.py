@@ -47,6 +47,8 @@ NO_COL = {"tally_openings_held": {"id"}}   # table -> {column}: a database witho
                           # 42703, a POST carrying one PGRST204, as PostgREST does (bridge 2.3.1: 57's tally_ledgers.tds_deductee_type)
 HONOR_LIMIT = [False]     # True: order=col.asc|desc and limit=n are applied to a GET (off by default: as before)
 SETTLE_ITSELF = [None]    # migration 200: what tally_post_settle_itself answers (None: nothing held)
+PATCH_GUARD = {}          # table -> fn(old_row, patch) -> words or None: a trigger refusing the update (P0001), as 36b's resend guard
+JOB_ACCEPTED = [None]     # fn(args) -> tally_post_job_accepted's answer (None: nothing accepted)
 RPC_DELAY = {}            # function -> seconds it waits before it answers (a database that hangs on that call)
 RESEND_OK = {}            # migration 200: tally_post_resend_ok's words for a posting (none: it may send; its SQL: run_post_never_twice.py)
 LEASE7_MISSING = [False]  # migration 55 not run: the 7-argument tally_lease_take (p_purpose) is not there (PGRST202 for that call only)
@@ -85,6 +87,7 @@ def rpc(fn, a):
         return dict(SETTLE_ITSELF[0] or {"ok": True, "job": a.get("p_job"), "held": False}, job=a.get("p_job"))
     if fn == "tally_post_settle_resend": return {"ok": True, "job": a.get("p_job"), "resent": False}
     if fn == "tally_post_resend_ok": return RESEND_OK.get(a.get("p_job"))
+    if fn == "tally_post_job_accepted": return JOB_ACCEPTED[0](a) if JOB_ACCEPTED[0] else None
     if fn == "mfa_ok": return True
     if fn == "auth_rate_hit":   # migration-112: allowed (and counted) while the key has under max tries in the window
         t, w = now(), a["p_window_s"]
@@ -274,6 +277,11 @@ class H(http.server.BaseHTTPRequestHandler):
             if method == "PATCH":
                 d = json.loads(raw); hit = []
                 with LOCK:                                   # one UPDATE ... WHERE ... RETURNING: atomic
+                    g = PATCH_GUARD.get(t)
+                    if g:
+                        for r in rows:
+                            w = match(r, q) and g(r, d)
+                            if w: return self.send(400, {"code": "P0001", "message": w, "details": None, "hint": None})
                     for r in rows:
                         if match(r, q): r.update(d); hit.append(r)
                 if "return=representation" in (self.headers.get("Prefer") or ""):

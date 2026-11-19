@@ -5350,12 +5350,16 @@ Deno.serve(sentry.wrap(async (req) => {
         // is never written over by the bridge: per entry id, the owner's stands, and one the bridge no longer names stays
         // (R1) unless the bridge's entry is newer than the owner's stamp (byOwnerAt): the bridge sent the entry once more
         // after the owner's release and reports what Tally said now (its acceptedAt, or the report's updatedAt)
-        const ownerOf = (list: any[]) => (Array.isArray(list) ? list : []).filter((x) => x && x.byOwner === true && x.id);
+        // (the sixth review) and FinCom's own settlement by itself (200/202: byItself, "In Tally" found by FinCom's read-back
+        // or recheck, or "needs review"): it stands unless Tally accepted the entry again after it (the bridge's acceptedAt
+        // newer than byItselfAt); the bridge's kept result of an entry it never sent again ("sent, no answer") never undoes it
+        const ownerOf = (list: any[]) => (Array.isArray(list) ? list : []).filter((x) => x && (x.byOwner === true || x.byItself === true) && x.id);
         const when = (v: unknown) => { const t = Date.parse(String(v || "")); return Number.isFinite(t) ? t : 0; };
         const bridgeAt = (x: any) => when(x && x.acceptedAt) || when(body.updatedAt);
+        const newer = (x: any, o: any) => o.byOwner === true ? !!bridgeAt(x) && bridgeAt(x) > when(o.byOwnerAt) : when(x && x.acceptedAt) > when(o.byItselfAt);
         const merge = (mine: any[], theirs: any[]) => {
           const by = new Map(theirs.map((x) => [fid(x.id), x]));
-          const out = mine.map((x) => { const o = by.get(fid(x.id)); return o && !(bridgeAt(x) && bridgeAt(x) > when(o.byOwnerAt)) ? o : x; });
+          const out = mine.map((x) => { const o = by.get(fid(x.id)); return o && !newer(x, o) ? o : x; });
           const mineIds = new Set(mine.map((m) => fid(m.id)));
           for (const x of theirs) if (!mineIds.has(fid(x.id))) out.push(x);
           return out;
@@ -5462,7 +5466,7 @@ Deno.serve(sentry.wrap(async (req) => {
         if (refused) return refused;
         // the row to write on the posting as read (cur), or the answer that ends the report
         const SENT_STATES = ["sending", "sent", "in_tally", "unknown", "posted", "needs_review"];
-        const prepare = async (c: any): Promise<{ end?: Response; row?: Record<string, unknown>; status?: string; stale?: boolean; stopped?: string }> => {
+        const prepare = async (c: any): Promise<{ end?: Response; row?: Record<string, unknown>; status?: string; stale?: boolean; stopped?: string; putBack?: any }> => {
           const end = endNow(c); if (end) return { end };
           const b: any = await build(c);
           // 174 (review B2): a posting back in the queue (the cron's requeue) its own bridge reports on (this computer, its
@@ -5483,11 +5487,28 @@ Deno.serve(sentry.wrap(async (req) => {
             const ours = (x: any) => !only || (x && only.has(String(x.id || "")));
             const sentAny = (r: any) => r && (r.ok === true || r.sent === true || r.outcomeUnknown === true || r.accepted === true || r.held === true || SENT_STATES.includes(String(r.state || "")));
             const prior = only ? [] : ([] as any[]).concat(Array.isArray(c.results) ? c.results : [], Array.isArray(c.items) ? c.items : []);   // (a re-send list: its earlier tries judged already)
-            const { data: ids0, error: idsErr } = await db.from("tally_post_ids").select("fincom_id, entry_id, accepted_at").eq("job_id", id);
-            const stamped = !!idsErr || (ids0 || []).some((r: any) => r && r.accepted_at && (!only || only.has(String(r.entry_id || "")) || only.has(String(r.fincom_id || ""))));
+            // (the posting's ids in pages of 1000: PostgREST answers 1000 rows at most)
+            let ids0: any[] = [], idsErr: any = null;
+            for (let from = 0; from < 100000; from += 1000) {
+              const { data: pg, error: pe } = await db.from("tally_post_ids").select("fincom_id, entry_id, accepted_at").eq("job_id", id).order("fincom_id").range(from, from + 999);
+              if (pe) { idsErr = pe; break; }
+              ids0 = ids0.concat(pg || []);
+              if ((pg || []).length < 1000 || (from > 0 && ids0.length > from + 1000)) break;
+            }
+            const stamped = !!idsErr || ids0.some((r: any) => r && r.accepted_at && (!only || only.has(String(r.entry_id || "")) || only.has(String(r.fincom_id || ""))));
             const anySent = accepted.size > 0 || stamped || (results as any[]).filter(ours).some(sentAny) || prior.some(sentAny)
               || ((items || []) as any[]).filter(ours).some((x) => !x || String(x.state || "waiting") !== "waiting");
+            // (the sixth review) and only when 36b's resend guard will take it: the row as merged, asked first
+            // (tally_post_job_accepted: an entry Tally accepted that is not confirmed, on the posting as it would be written);
+            // an error, or anything named: not put back (stored as before). The write below falls back the same way
+            let guardOk = false;
             if (!anySent) {
+              const { data: who, error: wErr } = await db.rpc("tally_post_job_accepted", { p_job: id, p_results: b.row.results ?? null, p_items: b.row.items ?? null });
+              guardOk = !wErr && (who === null || who === undefined || who === "");
+              if (!guardOk) console.log("tally-ingest posts_update: not put back (Tally accepted " + String(who || wErr?.message || "?").slice(0, 120) + ")", id);
+            }
+            if (!anySent && guardOk) {
+              b.putBack = { status: b.row.status, message: b.row.message, bstatus: b.status };
               b.row.status = "waiting";
               b.row.message = s("Put back for the same FinCom Bridge: FinCom could not confirm in time that it may be sent, so the bridge sent nothing of it; it is sent once FinCom answers.", 500);
               b.status = "waiting";
@@ -5517,7 +5538,7 @@ Deno.serve(sentry.wrap(async (req) => {
           }
           return b;
         };
-        let { end: end0, row, status, stale, stopped } = await prepare(cur);
+        let { end: end0, row, status, stale, stopped, putBack } = await prepare(cur);
         if (end0) return end0;
         // migration 174 (item 3): written only while the posting is still the version read (row_version); none changed it
         // since, else read again, the guards and the merge done again on what is there now (an owner's settlement kept),
@@ -5526,6 +5547,14 @@ Deno.serve(sentry.wrap(async (req) => {
           const ver = cur && typeof cur.row_version === "number" ? cur.row_version : null;
           const upd = (r: Record<string, unknown>) => { let qq = db.from("tally_post_jobs").update(r).eq("id", id).eq("device_id", dev.id).neq("status", "cancelled"); if (ver !== null) qq = qq.eq("row_version", ver); return qq.select("id"); };
           let { data: wrote, error } = await upd(row);
+          // (the sixth review) a put-back refused by 36b's resend guard (P0001): written as it would have been ('taken', the
+          // bridge's words), never a 500
+          if (error && putBack && row && row.status === "waiting" && (error.code === "P0001" || /not sent to Tally again/.test(String(error.message || "")))) {
+            console.log("tally-ingest posts_update: put-back refused by the resend guard; stored as reported", id, String(error.message || "").slice(0, 160));
+            const r0: Record<string, unknown> = row;
+            r0.status = putBack.status; r0.message = putBack.message; status = putBack.bstatus; putBack = null;
+            ({ data: wrote, error } = await upd(r0));
+          }
           // before migration-36b there is no seq column, before migration-24 no items column: the rest is kept as before
           if (error && "timing" in row && /timing/.test(error.message)) { delete row.timing; ({ data: wrote, error } = await upd(row)); }
           if (error && "seq" in row && /seq/.test(error.message)) { delete row.seq; ({ data: wrote, error } = await upd(row)); }
@@ -5548,7 +5577,7 @@ Deno.serve(sentry.wrap(async (req) => {
           console.log("tally-ingest posts_update: the posting changed since it was read; read again", id, "round", round + 1);
           cur = await readCur();
           let end1: Response | undefined;
-          ({ end: end1, row, status, stale, stopped } = await prepare(cur));
+          ({ end: end1, row, status, stale, stopped, putBack } = await prepare(cur));
           if (end1) return end1;
         }
         // migration 45: the posting window (Tally's change numbers before and after the job), saved only now: after the update's

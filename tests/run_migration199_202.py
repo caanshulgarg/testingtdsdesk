@@ -120,8 +120,10 @@ try:
         db.sql("update tally_post_rechecks set next_at = now() - interval '1 second' where job_id = %s" % q(JR))
         found = 0
         for _ in range(N // 1000 + 3):
-            o = json.loads(step("202: a recheck of 1,000 (tally_post_recheck_job)", "set role service_role; select tally_post_recheck_job(%s::uuid)::text" % q(JR)) or "{}")
+            # (the sixth review) as the cron does it: judged in one statement, applied in the next transaction
+            o = json.loads(step("202: a recheck of 1,000 judged (tally_post_recheck_step judge)", "set role service_role; select tally_post_recheck_step(%s::uuid, 'judge')::text" % q(JR)) or "{}")
             if o.get("idle"): break
+            o = json.loads(step("202: its stamps written (tally_post_work_then recheck)", "set role service_role; select tally_post_work_then(%s::uuid, 'recheck')::text" % q(JR)) or "{}")
             found += o.get("posted") or 0
         ok(found == N // 2 + N // 5, "found in Tally by itself: %d (the Day Book's content and the read-back), nothing sent again (%s)" % (found, db.one("select coalesce(resend_only::text, '-') from tally_post_jobs where id = %s" % q(JR))))
         step("202: the register follows (tally_post_register_apply)", "set role service_role; select tally_post_register_apply(%s::uuid)::text" % q(JR))
