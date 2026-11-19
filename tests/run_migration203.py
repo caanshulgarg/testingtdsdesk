@@ -7,7 +7,7 @@ in one session and 201a, as on staging; made-up firms, logins and companies only
   0. the file: one transaction, lock_timeout 3 s (the check validated in a second, short one of its own); add-only (three columns if not exists, the new column's check added NOT
      VALID and validated on its own, if not there; two triggers, if not there; no table; nothing dropped, deleted or
      truncated); every function's grants explicit; names no real database; refuses to run without the applied 202 (and
-     says so); runs twice; 202's tally_post_take_for with only the GUID lines changed, 155's tally_link_guid_fill with one
+     says so); runs twice; 202's tally_post_take_for with only the GUID lines and the hold check in each stamp changed, 155's tally_link_guid_fill with one
      line added, 174's tally_post_job_blocked with its two 203 cases
   1. handed out while the bridge reports the linked GUID open, carrying it (company_guid, the GUID the gate judged)
   2. two open companies of that name in the bridge's list (one the linked GUID): not counted, not handed out, the posting
@@ -26,6 +26,10 @@ in one session and 201a, as on staging; made-up firms, logins and companies only
      not known): its updated_at stands for the change, as before
   8. the beat's count agrees with the hand-out for postings queued for no computer
   9. the beat's count timed against 202's text (1,000 own and 1,000 for no computer, waiting)
+ 10. the hold check and the stamp in one statement: the link's GUID changed after the posting was made, and the check
+     before the hand-out not seeing it yet (as when the change commits between them): never stamped, held for a person
+ 11. the linked company open only in a Tally a posting would not use (the beat's openElsewhere): the posting says where and
+     what to do (as the bridge says it), never "not open"; still not handed out
 RED_WITHOUT_203=1: the same checks without the file (fails)."""
 import os, re, sys, json, hashlib, time
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
@@ -69,12 +73,12 @@ for fn in made:
     full = "public.%s(%s)" % (fn, types)
     ok(("revoke all on function %s from public, anon" % full) in code and ("grant execute on function %s to " % full) in code, "%s: grants explicit" % full)
 ok(bool(made) and all(("security definer set search_path = public, pg_temp" in seg) for seg in code.split("create or replace function")[1:]), "every function security definer with a fixed search_path")
-for fn, base, want in (("tally_post_take_for", "migration-202-post-recheck.sql", (4, 3)), ("tally_link_guid_fill", "migration-155-link-guid-fill.sql", (1, 0)),
+for fn, base, want in (("tally_post_take_for", "migration-202-post-recheck.sql", (10, 9)), ("tally_link_guid_fill", "migration-155-link-guid-fill.sql", (1, 0)),
                        ("tally_post_count_for", "migration-202-post-recheck.sql", (4, 2)), ("tally_post_job_blocked", "migration-174-post-jobs-safe.sql", (4, 0))):
     if ("create or replace function public." + fn + "(") not in text: ok(False, fn + ": not in the file"); continue
     a, b = PS.fbody(text, fn), PS.fbody(open(os.path.join(PS.SQLDIR, base)).read(), fn)
     added, gone = [l for l in a if l not in b], [l for l in b if l not in a]
-    ok((len(added), len(gone)) == want and all(any(w in l for w in ("company_guid", "tally_post_linked_open", "tally_link_guid_pick_mark", "tally_post_linked_ok", "tally_post_unrouted_ok", "uk.", "ug.", "linked to another tally company", "+ (with uk", "j.created_at")) for l in [x.lower() for x in added]),
+    ok((len(added), len(gone)) == want and all(any(w in l for w in ("company_guid", "tally_post_linked_open", "tally_link_guid_pick_mark", "tally_post_linked_ok", "tally_post_unrouted_ok", "uk.", "ug.", "linked to another tally company", "+ (with uk", "j.created_at", "tally_post_job_blocked(id) is null", "if found then return; end if;")) for l in [x.lower() for x in added]),
        "%s: the latest text (%s) with %d added / %d changed lines (want %s): %s" % (fn, base.split("-")[1], len(added), len(gone), want, [l[:90] for l in added]))
 
 st = PS.Stand(int(os.environ.get("PG203_PORT") or 31207), extra=(M184, M185)); db = st.db
@@ -266,6 +270,37 @@ tpair(3)   # (warm)
 n_new, t_new, n_old, t_old = tpair()
 print("    202 %.0f ms (%s), 203 %.0f ms (%s)" % (t_old * 1000, n_old, t_new * 1000, n_new))
 ok(n_new == n_old and n_new not in ("", "0") and t_new <= t_old * 1.25 + 0.03, "the gate open: counted alike, never slower than 202 (%.0f ms against %.0f ms)" % (t_new * 1000, t_old * 1000))
+close_all()
+
+print("== 10. the hold check and the stamp in one statement")
+# the check before the hand-out answers "nothing holds it" once (the link's change not seen yet); every later look sees it
+db.sql("""alter function public.tally_post_job_blocked(uuid) rename to tally_post_job_blocked_t203;
+create function public.tally_post_job_blocked(p_job uuid) returns text language plpgsql volatile security definer set search_path = public, pg_temp as $f$
+declare n integer := coalesce(nullif(current_setting('t203.n', true), ''), '0')::integer + 1;
+begin perform set_config('t203.n', n::text, true); if n = 1 then return null; end if; return tally_post_job_blocked_t203(p_job); end $f$;
+grant execute on function public.tally_post_job_blocked(uuid) to service_role;""")
+try:
+    for n_, dev_, what in ((101, DA, "its computer"), (102, None, "no computer")):
+        db.sql("update tally_links set company_guid = %s, linked_at = now() - interval '1 day', updated_at = now() - interval '1 day' where book_id = %s" % (q(GUID), q(BK)))
+        db.sql("update tally_links set company_guid = null where book_id = %s" % q(BK))
+        nostamp(n_, dev_)
+        db.sql("update tally_links set company_guid = %s where book_id = %s" % (q(GUID), q(BK)))   # (a first GUID: no hold)
+        db.sql("update tally_links set company_guid = %s, updated_at = now() where book_id = %s" % (q(OTHER), q(BK)))   # (a real change)
+        beat_cos([[CO, OTHER]]); t = take()
+        ok(t is None and stamp(n_) == "" and status(n_) == "failed" and msg(n_).startswith(WHY),
+           "10. %s: the change seen only by the stamping statement: never stamped, held (%s %r %r, %s)" % (what, status(n_), stamp(n_), msg(n_)[:60], t))
+finally:
+    db.sql("drop function public.tally_post_job_blocked(uuid); alter function public.tally_post_job_blocked_t203(uuid) rename to tally_post_job_blocked;")
+    db.sql("update tally_links set company_guid = %s, linked_at = now() - interval '1 day', updated_at = now() - interval '1 day' where book_id = %s" % (q(GUID), q(BK)))
+close_all()
+
+print("== 11. the linked company open only in a Tally a posting would not use")
+for n_, why, want in ((111, "owner unknown", "Tally on port 9001 has it open, but Windows cannot tell whose Tally that is"), (112, "other user", "open only in another Windows user's Tally (port 9001)")):
+    close_all(); info = st.beat("made-up-a", BA, [CO])   # (the bridge's open list names it: some Tally has it open)
+    info["bridges"][BA]["cos"] = []
+    info["beat"]["companies"] = [{"name": CO, "guid": "", "open": False, "openElsewhere": {"port": 9001, "why": why}}]
+    st.setbeat(DA, info); job(n_); c = count(); t = take()
+    ok(c == "0" and t is None and want in msg(n_) and "is not open in Tally" not in msg(n_), "11. %s: not handed out, the posting says where: %r" % (why, msg(n_)))
 close_all()
 
 print("\nALL PASSED: %d" % len(fails) if not fails else "\nFAILED: %d\n  %s" % (len(fails), "\n  ".join(fails)))

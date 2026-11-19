@@ -15,8 +15,9 @@
 --   3. 202's tally_post_linked_ok (same arguments), changed: the single linked GUID (2.), open in the bridge's list, and NO
 --      other open company of that name with another GUID in the same list (two open companies of one name: Tally is told
 --      the company by its name, so neither is posted to). The beat's count and the hand-out follow (both ask it).
---   4. 202's tally_post_linked_why_for, changed: two more plain reasons (two linked books disagree; two open companies of
---      that name), and "an owner picks" while 6. is waiting.
+--   4. 202's tally_post_linked_why_for, changed: three more plain reasons (two linked books disagree; two open companies of
+--      that name; open only in a Tally a posting would not use, the beat's openElsewhere: tally_post_elsewhere_why, the
+--      bridge's own words), and "an owner picks" while 6. is waiting.
 --   5. 202's tally_post_take_for, changed: a posting with no stamp is stamped as it is handed out; the third look (a
 --      posting queued for no computer, 185's tally_post_unrouted_ok) asks the gate too.
 --      174's tally_post_job_blocked, two cases added: the client linked to another Tally company (another GUID) after the
@@ -132,6 +133,23 @@ revoke all on function public.tally_post_linked_ok(uuid, text, text, uuid, text)
 grant execute on function public.tally_post_linked_ok(uuid, text, text, uuid, text) to service_role;
 
 -- ---------------------------------------------------------------- 4. the words (202's tally_post_linked_why_for)
+-- the company open only in a Tally a posting would not use, as the bridge's beat says it (companies[].openElsewhere:
+-- {port, why}: another Windows user's, or one whose owner Windows cannot tell; never a GUID): the bridge's own words for
+-- it (bridge linkguid.go elsewhereWords); null when the beat says none
+create or replace function public.tally_post_elsewhere_why(p_device uuid, p_company text)
+returns text language sql stable security definer set search_path = public, pg_temp as $function$
+  select case x -> 'openElsewhere' ->> 'why'
+           when 'owner unknown' then 'Not posted yet: ' || p_company || ': Tally on port ' || (x -> 'openElsewhere' ->> 'port') || ' has it open, but Windows cannot tell whose Tally that is (it may be running as administrator), so nothing is sent to it; run Tally normally as your own Windows user'
+           when 'other user' then 'Not posted yet: ' || p_company || ' is open only in another Windows user''s Tally (port ' || (x -> 'openElsewhere' ->> 'port') || '); open it in your own Tally' end
+    from tally_devices d, jsonb_array_elements(case when jsonb_typeof(d.info -> 'beat' -> 'companies') = 'array' then d.info -> 'beat' -> 'companies' else '[]'::jsonb end) x
+   where d.id = p_device and jsonb_typeof(x) = 'object' and jsonb_typeof(x -> 'openElsewhere') = 'object'
+     and x -> 'openElsewhere' ->> 'why' in ('owner unknown', 'other user') and (x -> 'openElsewhere' ->> 'port') ~ '^[0-9]{1,5}$'
+     and lower(regexp_replace(tally_nm(x ->> 'name'), '^[\s\x01-\x1f]+|[\s\x01-\x1f]+$', '', 'g')) = lower(regexp_replace(tally_nm(p_company), '^[\s\x01-\x1f]+|[\s\x01-\x1f]+$', '', 'g'))
+   limit 1
+$function$;
+revoke all on function public.tally_post_elsewhere_why(uuid, text) from public, anon, authenticated;
+grant execute on function public.tally_post_elsewhere_why(uuid, text) to service_role;
+
 -- 202's text; changed: two linked books disagree; two open companies of that name; an owner picks (6.)
 create or replace function public.tally_post_linked_why_for(p_firm uuid, p_client text, p_company text, p_device uuid, p_bridge text)
 returns text language sql stable security definer set search_path = public, pg_temp as $function$
@@ -155,6 +173,9 @@ returns text language sql stable security definer set search_path = public, pg_t
     when exists (select 1 from tally_post_beat_cos(p_device, p_bridge) a join tally_post_beat_cos(p_device, p_bridge) b on b.name = a.name and b.guid <> a.guid
                   where a.guid = tally_post_link_guid(p_firm, p_client, p_company))
       then 'Not posted yet: two open companies in Tally are named ' || p_company || '; close the one that is not the client''s (FinCom posts only into the linked company, by its company ID)'
+    -- 203: open only in a Tally a posting would not use (the beat's openElsewhere): where, and what to do; the gate stays shut
+    when tally_post_elsewhere_why(p_device, p_company) is not null
+      then tally_post_elsewhere_why(p_device, p_company)
     when (select case when jsonb_typeof(me.info -> 'bridges' -> p_bridge -> 'cos') = 'array'
            then exists (select 1 from jsonb_array_elements(me.info -> 'bridges' -> p_bridge -> 'cos') c where jsonb_typeof(c) = 'array' and nullif(btrim(coalesce(c ->> 1, '')), '') is not null)
            else jsonb_typeof(me.info -> 'beat' -> 'companies') = 'array'
@@ -167,7 +188,10 @@ revoke all on function public.tally_post_linked_why_for(uuid, text, text, uuid, 
 grant execute on function public.tally_post_linked_why_for(uuid, text, text, uuid, text) to service_role;
 
 -- ---------------------------------------------------------------- 5. the hand-out (202's tally_post_take_for)
--- 202's text; changed: each hand-out stamps company_guid (the GUID its gate judged open); the third look asks the gate too
+-- 202's text; changed: each hand-out stamps company_guid (the GUID its gate judged open); the third look asks the gate too.
+-- The hold check (174's tally_post_job_blocked) is asked again in the stamping statement itself, with the same snapshot as
+-- the stamp: a link changed between the check before it and the stamp is seen there, nothing is stamped (0 rows) and the
+-- posting is held (tally_post_hold_job) as by the check before; never stamped with the new company's GUID
 create or replace function public.tally_post_take_for(p_device uuid, p_bridge text, p_main boolean)
 returns setof public.tally_post_jobs language plpgsql security definer set search_path = public, pg_temp as $function$
 declare jid uuid; fm uuid; i integer;
@@ -190,9 +214,9 @@ begin
       return query
       update tally_post_jobs set status = 'taken', company_guid = coalesce(company_guid, tally_post_link_guid(firm_id, client_id, company)), taken_at = now(), first_taken_at = coalesce(first_taken_at, now()), updated_at = now(), seq = null, message = 'Taken by the Tally computer',
              taken_by = case when p_bridge ~ '^go-[0-9a-f]{6,32}$' then p_bridge else taken_by end   -- final review M1: the bridge that took it
-       where id = jid
+       where id = jid and tally_post_job_blocked(id) is null   -- (the check again in the stamping statement: a change seen now holds it)
       returning *;
-      return;
+      if found then return; end if;
     end if;
     perform tally_post_hold_job(jid);
   end loop;
@@ -208,9 +232,9 @@ begin
       return query
       update tally_post_jobs set status = 'taken', company_guid = coalesce(company_guid, tally_post_link_guid(firm_id, client_id, company)), taken_at = now(), first_taken_at = coalesce(first_taken_at, now()), updated_at = now(), seq = null, device_id = p_device, target_bridge = p_bridge, taken_by = p_bridge,
              message = left('Taken by the FinCom Bridge that has ' || company || ' open now (the one it was queued for did not have it open)', 300)
-       where id = jid and status = 'waiting' and taken_by is null and taken_at is null
+       where id = jid and status = 'waiting' and taken_by is null and taken_at is null and tally_post_job_blocked(id) is null
       returning *;
-      return;
+      if found then return; end if;
     end if;
     perform tally_post_hold_job(jid);
   end loop;
@@ -230,9 +254,9 @@ begin
       return query
       update tally_post_jobs set status = 'taken', company_guid = coalesce(company_guid, tally_post_link_guid(firm_id, client_id, company)), taken_at = now(), first_taken_at = coalesce(first_taken_at, now()), updated_at = now(), seq = null, device_id = p_device, target_bridge = p_bridge, taken_by = p_bridge,
              message = left('Taken by the FinCom Bridge that has ' || company || ' open now (it was queued for whichever computer opens it)', 300)
-       where id = jid and status = 'waiting' and device_id is null and taken_by is null and taken_at is null and first_taken_at is null
+       where id = jid and status = 'waiting' and device_id is null and taken_by is null and taken_at is null and first_taken_at is null and tally_post_job_blocked(id) is null
       returning *;
-      return;
+      if found then return; end if;
     end if;
     perform tally_post_hold_job(jid);
   end loop;
