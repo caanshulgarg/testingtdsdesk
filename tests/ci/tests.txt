@@ -23,6 +23,7 @@ run_ask_fab_overlap.py                480  TDSDESK_SITE=../app/dist-test
 run_audit2.js                         120
 run_no_lookbehind_same.js             120
 run_safari_compat.py                  300
+run_frame_ancestors.py                120
 run_audit2_ui.py                      120  TDSDESK_SITE=../app/dist-test
 run_audit_ui.py                       120  TDSDESK_SITE=../app/dist-test
 run_audit_wp.js                       120
