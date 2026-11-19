@@ -4,8 +4,8 @@ company's GUID). 203 is what this branch still needs after the applied 202 (migr
 staging: the hand-out and the beat's count gated on the linked GUID, tally_post_linked_ok). On a throwaway PostgreSQL
 (post_queue_stand: pg_stand, port 31207 unless PG203_PORT; never a real database): 184 and 185, then 199, 200, 201, 202
 in one session and 201a, as on staging; made-up firms, logins and companies only. Checks:
-  0. the file: one transaction, lock_timeout 3 s (the check validated in a second, short one of its own); add-only (two columns if not exists, the new column's check added NOT
-     VALID and validated on its own, if not there; one trigger, if not there; no table; nothing dropped, deleted or
+  0. the file: one transaction, lock_timeout 3 s (the check validated in a second, short one of its own); add-only (three columns if not exists, the new column's check added NOT
+     VALID and validated on its own, if not there; two triggers, if not there; no table; nothing dropped, deleted or
      truncated); every function's grants explicit; names no real database; refuses to run without the applied 202 (and
      says so); runs twice; 202's tally_post_take_for with only the GUID lines changed, 155's tally_link_guid_fill with one
      line added, 174's tally_post_job_blocked with its two 203 cases
@@ -18,9 +18,12 @@ in one session and 201a, as on staging; made-up firms, logins and companies only
      filled, marked "pick which company" (guid_pick) with both GUIDs and the posting says an owner picks; an owner picks
      (staff refused; a GUID not marked refused); a link made while two of the name are open takes no GUID (tally_link_guid)
   6. stamped as queued; the client linked to another company afterwards: held for a person (failed / stopped)
-  7. a posting queued before 203 (no stamp): stamped at its hand-out; one whose link changed after it was made (the link's
-     linked_at or updated_at later than the posting): held for a person instead, never stamped with the new GUID (each of
-     the three looks of the hand-out)
+  7. a posting with no stamp: stamped at its hand-out; one whose link's GUID changed, or whose client was relinked, after
+     it was made (tally_links.guid_changed_at, kept by the trigger tally_links_guid_changed, or linked_at, later than the
+     posting): held for a person instead, never stamped with the new GUID (each of the three looks of the hand-out). A
+     link changed otherwise (an owner's pick of its first GUID, posting allowed again, a rename, a data location
+     chosen): handed out by itself, into the GUID the link has then. A link not touched since before 203 (its history
+     not known): its updated_at stands for the change, as before
   8. the beat's count agrees with the hand-out for postings queued for no computer
   9. the beat's count timed against 202's text (1,000 own and 1,000 for no computer, waiting)
 RED_WITHOUT_203=1: the same checks without the file (fails)."""
@@ -47,9 +50,10 @@ ok(len(tx) == 2 and code.count("\nbegin;") == 2 and text.rstrip().endswith("comm
    and "alter table" not in "\n".join(l.split("--")[0] for l in tx[1].lower().splitlines()).replace("alter table public.tally_post_jobs validate constraint", ""),
    "one transaction, lock_timeout 3 s; the check validated in a second one of its own (nothing else in it)")
 ok(bool(text) and "delete from" not in code and not re.search(r"\b(drop|truncate)\s", code) and "create table" not in code
-   and code.count("create trigger") == 1 and "if not exists (select 1 from pg_trigger where tgname = 'tally_post_jobs_guid'" in code
-   and re.findall(r"alter table ([\w.]+) add column if not exists (\w+)(\s+\w+)?\s*(check)?", code) == [("public.tally_post_jobs", "company_guid", " text", ""), ("public.tally_links", "guid_pick", " jsonb", "")]
-   and len(re.findall(r"alter table", code)) == 4, "add-only: two columns (if not exists, no check inline), one trigger (if not there: the stamp as queued); no table; nothing dropped, deleted or truncated")
+   and code.count("create trigger") == 2 and "if not exists (select 1 from pg_trigger where tgname = 'tally_post_jobs_guid'" in code
+   and "if not exists (select 1 from pg_trigger where tgname = 'tally_links_guid_changed'" in code
+   and re.findall(r"alter table ([\w.]+) add column if not exists (\w+)(\s+\w+)?\s*(check)?", code) == [("public.tally_post_jobs", "company_guid", " text", ""), ("public.tally_links", "guid_pick", " jsonb", ""), ("public.tally_links", "guid_changed_at", " timestamptz", "")]
+   and len(re.findall(r"alter table", code)) == 5, "add-only: three columns (if not exists, no check inline), two triggers (if not there: the stamp as queued, the link's GUID change kept); no table; nothing dropped, deleted or truncated")
 ok(re.search(r"alter table public\.tally_post_jobs add constraint tally_post_jobs_company_guid_check check \(company_guid is null or company_guid ~ '\^\[0-9a-z-\]\{1,100\}\$'\) not valid;", code) is not None
    and "alter table public.tally_post_jobs validate constraint tally_post_jobs_company_guid_check;" in code
    and "if not exists (select 1 from pg_constraint where conname = 'tally_post_jobs_company_guid_check'" in code,
@@ -184,22 +188,60 @@ t = take(); sr = one("select coalesce(stop_reason, '') from tally_post_jobs wher
 ok(t is None and sr.startswith(WHY), "one taken before (perhaps partly sent): stopped with the reason, never handed out: %r (%s)" % (sr, t))
 db.sql("update tally_links set company_guid = %s where book_id = %s" % (q(GUID), q(BK)))
 
-print("== 7. a posting queued before 203 (no stamp): stamped at hand-out; the link changed since it was made: held")
+print("== 7. a posting with no stamp: stamped at hand-out; the link's GUID changed or the client relinked since: held")
+db.sql("update tally_links set linked_at = now() - interval '1 day', updated_at = now() - interval '1 day' where book_id = %s" % q(BK))
 close_all(); beat_cos([[CO, GUID]]); job(8); db.sql("update tally_post_jobs set company_guid = null, created_at = now() where id = %s" % q(J(8)))
-db.sql("update tally_links set linked_at = now() - interval '1 day', updated_at = now() - interval '1 day' where book_id = %s" % q(BK))
 t = take(); ok(t is not None and t["id"] == J(8) and t["g"] == GUID, "the link unchanged since: handed out, stamped with the linked GUID: %s" % t)
-for n_, col, dev_ in ((81, "updated_at", DA), (82, "linked_at", DA), (83, "updated_at", None)):
-    close_all(); job(n_, dev=dev_); db.sql("update tally_post_jobs set company_guid = null, created_at = now() - interval '1 hour' where id = %s" % q(J(n_)))
-    db.sql("update tally_links set %s = now() - interval '1 minute' where book_id = %s" % (col, q(BK)))
-    t = take(); g_ = one("select coalesce(company_guid, '') from tally_post_jobs where id = %s" % q(J(n_)))
-    ok(t is None and status(n_) == "failed" and msg(n_).startswith(WHY) and g_ == "",
-       "no stamp, the link's %s later than the posting (%s): held for a person, never stamped: %s %r %r (%s)" % (col, "no computer" if dev_ is None else "its computer", status(n_), msg(n_)[:60], g_, t))
-    db.sql("update tally_links set linked_at = now() - interval '1 day', updated_at = now() - interval '1 day' where book_id = %s" % q(BK))
-job(84); db.sql("update tally_post_jobs set company_guid = null, created_at = now() - interval '1 hour', taken_by = %s, first_taken_at = now() - interval '50 minutes', attempts = 1 where id = %s" % (q(BA), q(J(84))))
-db.sql("update tally_links set updated_at = now() - interval '1 minute' where book_id = %s" % q(BK))
-t = take(); sr = one("select coalesce(stop_reason, '') from tally_post_jobs where id = %s" % q(J(84)))
-ok(t is None and sr.startswith(WHY), "one taken before (no stamp), the link changed since: stopped with the reason: %r (%s)" % (sr, t))
-db.sql("update tally_links set linked_at = now() - interval '1 day', updated_at = now() - interval '1 day' where book_id = %s" % q(BK))
+stamp = lambda n: one("select coalesce(company_guid, '') from tally_post_jobs where id = %s" % q(J(n)))
+def nostamp(n, dev=DA):   # a posting made a moment ago while its link had no GUID (so no stamp)
+    close_all(); job(n, dev=dev); db.sql("update tally_post_jobs set company_guid = null, created_at = now() where id = %s" % q(J(n)))
+def held(n, t):
+    return t is None and status(n) == "failed" and msg(n).startswith(WHY) and stamp(n) == ""
+# (the link's GUID back, a while ago: the change before every posting below)
+db.sql("update tally_links set company_guid = %s, linked_at = now() - interval '1 day', updated_at = now() - interval '1 day' where book_id = %s" % (q(GUID), q(BK)))
+# 7a. an owner's pick of the first GUID: the posting made while the link had none goes by itself, into the picked GUID
+db.sql("update tally_links set company_guid = null where book_id = %s" % q(BK))
+nostamp(85); beat_cos([[CO, GUID], [CO, OTHER]])
+one("select tally_link_guid_fill(%s::uuid, %s::uuid, %s)" % (q(F), q(DA), q(BA)))
+r = st.rpc(OWNER, "select tally_link_guid_pick(%s::uuid, %s)::text" % (q(BK), q(GUID)))
+beat_cos([[CO, GUID]]); t = take()
+ok(r.get("company_guid") == GUID and t is not None and t["id"] == J(85) and t["g"] == GUID and stamp(85) == GUID,
+   "7a. the first GUID picked after the posting was made: handed out by itself, into the picked GUID (%s, %s)" % (t, str(r)[:80]))
+# 7b. a first GUID filled by itself (one open of the name): the same
+db.sql("update tally_links set company_guid = null where book_id = %s" % q(BK))
+nostamp(86); beat_cos([[CO, GUID]]); one("select tally_link_guid_fill(%s::uuid, %s::uuid, %s)" % (q(F), q(DA), q(BA)))
+t = take(); ok(t is not None and t["id"] == J(86) and t["g"] == GUID, "7b. the first GUID filled after the posting was made: handed out by itself (%s)" % t)
+# 7c-e. posting allowed again, a rename, a data location chosen (updated_at later than the posting): handed out (posting
+# switched off holds every waiting posting of the client by 174's own rule, with its own reason)
+for n_, what, sql in ((87, "7c. posting allowed (switched on) again", "update tally_links set posting_allowed = true, updated_by = null, updated_at = now(), version = version + 1 where book_id = %s; select %s"),
+                      (88, "7d. a rename", "update tally_links set company_name = company_name || '', updated_at = now(), version = version + 1 where book_id = %s; select %s"),
+                      (89, "7e. a data location chosen", "update tally_links set data_loc = coalesce(data_loc, 'made-up-loc'), updated_at = now(), version = version + 1 where book_id = %s; select %s")):
+    nostamp(n_); db.sql(sql % (q(BK), q(BK))); t = take()
+    ok(t is not None and t["id"] == J(n_) and t["g"] == GUID, "%s after the posting was made: handed out with the link's GUID (%s)" % (what, t))
+# 7f-h. the GUID really changed, or the client relinked, after the posting was made: held (each look of the hand-out)
+for n_, what, dev_, sql in ((90, "the GUID changed", DA, "update tally_links set company_guid = %s, updated_at = now() where book_id = %s" % (q(OTHER), q(BK))),
+                            (91, "the client relinked (linked_at)", DA, "update tally_links set linked_at = now(), updated_at = now() where book_id = %s" % q(BK)),
+                            (92, "the GUID changed (no computer)", None, "update tally_links set company_guid = %s, updated_at = now() where book_id = %s" % (q(OTHER), q(BK)))):
+    nostamp(n_, dev_); db.sql(sql); beat_cos([[CO, one("select company_guid from tally_links where book_id = %s" % q(BK))]]); t = take()
+    ok(held(n_, t), "7f. %s after the posting was made: held for a person, never stamped: %s %r %r (%s)" % (what, status(n_), msg(n_)[:60], stamp(n_), t))
+    db.sql("update tally_links set company_guid = %s, linked_at = now() - interval '1 day', updated_at = now() - interval '1 day' where book_id = %s" % (q(GUID), q(BK)))
+beat_cos([[CO, GUID]])
+job(84); db.sql("update tally_post_jobs set company_guid = null, created_at = now(), taken_by = %s, first_taken_at = now(), attempts = 1 where id = %s" % (q(BA), q(J(84))))
+db.sql("update tally_links set company_guid = %s, updated_at = now() where book_id = %s" % (q(OTHER), q(BK)))
+beat_cos([[CO, OTHER]]); t = take(); sr = one("select coalesce(stop_reason, '') from tally_post_jobs where id = %s" % q(J(84)))
+ok(t is None and sr.startswith(WHY), "7g. one taken before (no stamp), the link's GUID changed since: stopped with the reason: %r (%s)" % (sr, t))
+db.sql("update tally_links set company_guid = %s, linked_at = now() - interval '1 day', updated_at = now() - interval '1 day' where book_id = %s" % (q(GUID), q(BK)))
+beat_cos([[CO, GUID]])
+# 7h. a link not touched since before 203 (no record of its changes): its updated_at later than the posting holds it,
+# as before; touched after (a pick, a toggle), that time is kept (never forgotten by the touch)
+if not RED:
+    db.sql("alter table tally_links disable trigger tally_links_guid_changed; update tally_links set guid_changed_at = null, updated_at = now() - interval '1 minute' where book_id = %s; alter table tally_links enable trigger tally_links_guid_changed" % q(BK))
+for n_ in (93, 94):
+    close_all(); job(n_); db.sql("update tally_post_jobs set company_guid = null, created_at = now() - interval '1 hour' where id = %s" % q(J(n_)))
+    if n_ == 94: db.sql("update tally_links set posting_allowed = true, updated_at = now(), version = version + 1 where book_id = %s" % q(BK))
+    t = take()
+    ok(held(n_, t), "7h. %s: held for a person: %s %r (%s)" % ("a link not touched since before 203, changed after the posting" if n_ == 93 else "and touched since (the earlier change kept)", status(n_), msg(n_)[:60], t))
+db.sql("update tally_links set company_guid = %s, linked_at = now() - interval '1 day', updated_at = now() - interval '1 day' where book_id = %s" % (q(GUID), q(BK)))
 
 print("== 8. the beat's count agrees with the hand-out for postings queued for no computer")
 close_all(); beat_cos([[CO, GUID], [CO, OTHER]]); job(9, dev=None)

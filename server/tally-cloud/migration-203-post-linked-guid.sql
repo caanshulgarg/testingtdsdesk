@@ -20,9 +20,17 @@
 --   5. 202's tally_post_take_for, changed: a posting with no stamp is stamped as it is handed out; the third look (a
 --      posting queued for no computer, 185's tally_post_unrouted_ok) asks the gate too.
 --      174's tally_post_job_blocked, two cases added: the client linked to another Tally company (another GUID) after the
---      posting was made; or a posting with no stamp (queued before 203) whose link changed after it was made (the link's
---      linked_at or updated_at later than the posting: a relink, a rename, a GUID picked): held for a person with that
---      reason (174's hold: failed when never taken, else the stop flag), never stamped with, or handed to, the new company.
+--      posting was made; or a posting with no stamp (queued while its link had no GUID, or before 203) whose link's GUID
+--      changed, or whose client was relinked, after it was made (tally_links.guid_changed_at, 5d., or linked_at, later
+--      than the posting): held for a person with that reason (174's hold: failed when never taken, else the stop flag),
+--      never stamped with, or handed to, the new company. A link's first GUID (an owner's pick, or filled by itself), its
+--      posting switched off and on, a rename or a data location chosen hold nothing: such a posting is handed out by
+--      itself, stamped with the GUID the link has then.
+--      5d. tally_links.guid_changed_at (new): when the link's GUID last changed from one it had (to another or none), or
+--      the client was relinked (client, linked_at, or linked again), kept by a BEFORE INSERT OR UPDATE trigger
+--      (tally_links_guid_changed); a first GUID set on a link that had none does not move it. A link not touched since
+--      before 203 has none (its changes before 203 are not known): its updated_at stands for it, and the first touch
+--      after 203 keeps that time in the column (never forgotten).
 --      202's tally_post_count_for: the postings queued for no computer counted only when the gate is open (asked once per
 --      client and company), as the hand-out's third look; timed against 185's text (tests/run_migration203.py, 9.).
 --   6. "pick which company": tally_links.guid_pick (new, jsonb). A link with no GUID whose name a bridge's beat shows open
@@ -34,7 +42,7 @@
 --      gives the same one (two companies of that name open: none; then 6.).
 -- Not here (the applied 202 covers it, or it was dropped): a second wait function and posts_take's "wait" words (202's
 -- count writes the words on the posting), the 3-minute heard check (202's gate reads the bridge's latest list).
--- ADD-ONLY: two columns (if not exists; the new column's check added NOT VALID, if not there), one trigger (if not
+-- ADD-ONLY: three columns (if not exists; the jobs column's check added NOT VALID, if not there), two triggers (if not
 -- there); new functions; six replaced with the same arguments and their grants restated. No table, nothing dropped, no row
 -- changed. One transaction, lock_timeout 3 s, safe twice; then the check validated in a second short transaction of its
 -- own (a scan of tally_post_jobs that blocks no writer; nothing to do once valid, or when the first did not run).
@@ -54,6 +62,7 @@ end $$;
 -- ---------------------------------------------------------------- 1. the columns
 alter table public.tally_post_jobs add column if not exists company_guid text;
 alter table public.tally_links add column if not exists guid_pick jsonb;
+alter table public.tally_links add column if not exists guid_changed_at timestamptz;   -- 5d.
 -- the column's check: added NOT VALID (no scan under the table's lock), validated at the end in a transaction of its own
 do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'tally_post_jobs_company_guid_check' and conrelid = 'public.tally_post_jobs'::regclass) then
@@ -231,10 +240,36 @@ end $function$;
 revoke all on function public.tally_post_take_for(uuid, text, boolean) from public, anon, authenticated;
 grant execute on function public.tally_post_take_for(uuid, text, boolean) to service_role;
 
+-- ---------------------------------------------------------------- 5d. when the link's GUID changed (or the client was relinked)
+-- a new link, a GUID changed from one the link had (to another, or none), another client, linked again, or linked_at
+-- moved: now. Anything else (a first GUID on a link that had none, posting switched, a rename, a data location): kept as
+-- it was; a link with none yet (not touched since before 203) keeps its last change before then (updated_at)
+create or replace function public.tally_links_guid_changed()
+returns trigger language plpgsql security definer set search_path = public, pg_temp as $function$
+begin
+  if tg_op = 'INSERT'
+     or (nullif(btrim(coalesce(old.company_guid, '')), '') is not null and lower(btrim(coalesce(new.company_guid, ''))) is distinct from lower(btrim(old.company_guid)))
+     or new.client_id is distinct from old.client_id or new.linked_at is distinct from old.linked_at
+     or (new.state = 'linked' and old.state is distinct from 'linked') then
+    new.guid_changed_at := now();
+  else
+    new.guid_changed_at := coalesce(old.guid_changed_at, old.updated_at, old.linked_at, '-infinity'::timestamptz);
+  end if;
+  return new;
+end $function$;
+revoke all on function public.tally_links_guid_changed() from public, anon, authenticated;
+grant execute on function public.tally_links_guid_changed() to service_role;
+do $$ begin
+  if not exists (select 1 from pg_trigger where tgname = 'tally_links_guid_changed' and tgrelid = 'public.tally_links'::regclass) then
+    create trigger tally_links_guid_changed before insert or update on public.tally_links for each row execute function public.tally_links_guid_changed();
+  end if;
+end $$;
+
 -- ---------------------------------------------------------------- 5b. the link changed after the posting was made
 -- 174's tally_post_job_blocked; added: a posting stamped as queued whose client is now linked to another Tally company
 -- (another GUID) is held for a person (174's tally_post_hold_job: failed when never taken, else the stop flag), never
--- handed to the new company. One queued before 203 (no stamp) is stamped at its hand-out
+-- handed to the new company. One with no stamp is held when its link's GUID changed, or its client was relinked, after
+-- it was made (5d.); else it is stamped at its hand-out with the GUID the link has then
 create or replace function public.tally_post_job_blocked(p_job uuid)
 returns text language sql stable security definer set search_path = public, pg_temp as $function$
   select case
@@ -248,7 +283,7 @@ returns text language sql stable security definer set search_path = public, pg_t
       then 'Not posted: ' || j.company || ' is now the earlier-years company of ' || nm || ' in Tally; postings go to its current company only. Nothing of it was sent to Tally.'
     when j.company_guid is not null and tally_post_link_guid(j.firm_id, j.client_id, j.company) is not null and tally_post_link_guid(j.firm_id, j.client_id, j.company) <> j.company_guid
       then 'The client was linked to another Tally company after this posting was made: check the entries and post again. Nothing of it was sent to Tally.'
-    when j.company_guid is null and exists (select 1 from tally_links x join tally_companies t on t.firm_id = x.firm_id and t.book_id = x.book_id where x.firm_id = j.firm_id and x.client_id = j.client_id and x.state = 'linked' and lower(tally_nm(t.company)) = lower(tally_nm(j.company)) and greatest(x.linked_at, x.updated_at) > j.created_at)
+    when j.company_guid is null and exists (select 1 from tally_links x join tally_companies t on t.firm_id = x.firm_id and t.book_id = x.book_id where x.firm_id = j.firm_id and x.client_id = j.client_id and x.state = 'linked' and lower(tally_nm(t.company)) = lower(tally_nm(j.company)) and greatest(x.linked_at, coalesce(x.guid_changed_at, x.updated_at)) > j.created_at)
       then 'The client was linked to another Tally company after this posting was made: check the entries and post again. Nothing of it was sent to Tally.'
     when not l.posting_allowed
       then 'Not posted: posting into Tally was stopped for ' || nm || ' after this was queued. Nothing of it was sent to Tally. Allow it on the Tally page (the company''s ⋯ Post entries here), then post again.'
