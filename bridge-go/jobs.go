@@ -118,6 +118,23 @@ func newPostJob(pl M) (M, error) {
 		return nil, err
 	}
 	if exists(filepath.Join(dir, "progress.json")) {
+		// linkguid.go: a posting this computer has (a browser's, or an earlier hand-out) handed out by FinCom again names
+		// the linked GUID: the payload takes it when it has none; another GUID than the one it was started for is never
+		// followed (the client linked to another company since: a person looks)
+		if g := normGUID(str(pl["guid"])); g != "" && !jobAlive(id) {
+			if pay := readObjFileBak(filepath.Join(dir, "payload.json")); pay != nil {
+				switch had := normGUID(str(pay["guid"])); {
+				case had == "":
+					pay["guid"] = g
+					if truthy(pl["fromCloud"]) {
+						pay["fromCloud"] = true
+					}
+					_ = saveJSONBak(filepath.Join(dir, "payload.json"), pay)
+				case had != g:
+					return nil, errors.New("The client was linked to another Tally company after this posting was made: check the entries and post again")
+				}
+			}
+		}
 		v := jobView(dir)
 		// Retry (the same job sent again after it failed or was cancelled): the entries not posted go again; whatever
 		// was sent to Tally (posted by its reply, accepted by it, or sent without an answer) is kept and never sent twice

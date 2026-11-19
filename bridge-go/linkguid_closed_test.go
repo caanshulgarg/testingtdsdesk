@@ -210,3 +210,22 @@ func TestNothingCreatedIsFailedNotReview(t *testing.T) {
 		t.Fatalf("created 1 with an error: %v", r)
 	}
 }
+
+// a posting handed out again by FinCom: one started with no GUID takes FinCom's; one started for another GUID is never
+// started for the new one (the client linked to another company since: a person looks)
+func TestLinkedHandBackGUID(t *testing.T) {
+	_, l := lgSetup(t)
+	j, err := newPostJob(M{"jobId": "job-lg-handback", "company": zz, "guid": lgGUID, "vouchers": lgVouchers("h", 2)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitJob(t, str(j["id"]))
+	if _, err := newPostJob(M{"jobId": "job-lg-handback", "company": zz, "guid": "co-guid-new", "fromCloud": true, "vouchers": lgVouchers("h", 2)}); err == nil ||
+		!strings.HasPrefix(err.Error(), "The client was linked to another Tally company after this posting was made") {
+		t.Fatalf("started for another GUID: %v", err)
+	}
+	dir, _ := jobDir("job-lg-handback")
+	if g := str(readObjFileBak(dir + "/payload.json")["guid"]); g != lgGUID || l.n() != 1 {
+		t.Fatalf("the payload's GUID %q, %d imports", g, l.n())
+	}
+}
