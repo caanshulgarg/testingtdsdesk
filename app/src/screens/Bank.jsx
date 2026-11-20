@@ -38,6 +38,9 @@ import "../../../src/js/98-post-register.js";
 // an upload that overlapped the statements already here: what it left out, held or marked, and the join (next-bank-overlap)
 import "../../../src/js/96-bank-overlap.js";
 import { DupWords, OverlapPanel, RepMark } from "../parts/bank/Overlap.jsx";
+// a new Tally ledger suggested for a line with none, made from a review (next-bank-newled: src/js/96-bank-newled.js)
+import "../../../src/js/96-bank-newled.js";
+import { NewLedHint, NewLedBulk, NewLedReview } from "../parts/bank/NewLedgers.jsx";
 
 // an empty tab says what to do next (spec K6, round 2)
 const EMPTY = { review: "Nothing to do: every line has its ledger, and waits under Ready to post.", ready: "Nothing ready to post. Give each line under To do its ledger; it then waits here.",
@@ -73,6 +76,7 @@ function RowLedger({ r }) {
       {r.state === "suggested" && <button className="btn small primary bs-ok" data-accept={r.id} title={"Confirm " + (r.ledger || "") + " (" + said + ")"} aria-label={"Confirm " + (r.ledger || "")} onClick={() => bankRowAct("accept", r.id)}>✓</button>}
     </div>
     <span className={"src" + (r.state === "ready" ? " ok" : r.state === "attention" ? " muted" : "")} title={tip}>{said}{r.state === "ready" && r.billRef ? " · Bill " + r.billRef : ""}</span>
+    {r.state === "attention" && <NewLedHint r={r} />}
     {/* the rule's name opens it in the old rule editor */}
     {rule && <span className="src" data-legacy=""><button className="linkbtn" data-redit={r.ruleId}>rule: {ruleLabel(rule)}</button></span>}
     {r.tdsAtPay > 0 && <span className="src">TDS {money(r.tdsAtPay)} deducted at payment</span>}
@@ -511,6 +515,7 @@ function BankPage() {
       {tab !== "rules" && apView("bank") === "auto" && <RunLine />}
     </div>
     {b.showSettings && <BankSettings />}
+    {b.nlOpen && <NewLedReview key={b.nlOpen.seq} />}
   </>;
 }
 
@@ -549,6 +554,7 @@ export function BankBar() {
       <input type="text" className="bs-in bs-narrin" data-bulk-narr="" autoComplete="off" placeholder="Narration ({month}, {party})" aria-label="Narration for the selected"
         onKeyDown={(ev) => { if (ev.key === "Enter") bulkNarr(ev.target.value); }} />
       <button className="btn" data-bulk-narr-apply="" title="Set this narration on the selected lines" onClick={(ev) => bulkNarr(ev.currentTarget.previousSibling.value)}>Set</button>
+      <NewLedBulk rows={rows} />
       {rows.some((r) => r.state === "suggested") && <button className="btn primary" onClick={() => bankAct("bankBulkAccept")}>Confirm</button>}
       {rows.some((r) => ["attention", "suggested", "ready"].includes(r.state)) && <button className="btn" onClick={() => bankAct("bankBulkIgnore")}>Ignore</button>}
       {rows.some((r) => r.state === "ignored") && <button className="btn" onClick={() => bankAct("bankBulkRestore")}>Restore</button>}

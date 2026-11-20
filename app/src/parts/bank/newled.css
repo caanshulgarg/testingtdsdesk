@@ -1,0 +1,20 @@
+/* next-bank-newled: a line's suggested new ledger and the review of new ledgers (parts/bank/NewLedgers.jsx) */
+.nl-hint{display:block;font-size:11.5px;line-height:15px;margin-top:3px;color:var(--muted);white-space:normal;max-width:300px;overflow-wrap:anywhere}
+.nl-hint .linkbtn{font-size:11.5px}
+.nl-hint b{font-weight:600;color:var(--ink)}
+.nl-panel .nl-sub{margin:0 0 8px}
+.nl-lines,.nl-res{list-style:none;margin:10px 0;padding:0}
+.nl-line{display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-top:1px solid var(--rule-soft)}
+.nl-line.off .nl-fields,.nl-line.off .nl-meta{opacity:.55}
+.nl-on{margin-top:24px;flex:none}
+.nl-body{flex:1;min-width:0}
+.nl-fields{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,2fr);gap:8px}
+.nl-fields label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted)}
+.nl-fields input,.nl-fields select{font-size:14px;padding:6px 8px;min-width:0;width:100%;box-sizing:border-box}
+.nl-meta{font-size:12px;margin-top:4px}
+.nl-sim{font-size:12.5px;margin-top:5px}
+.nl-sim.bad{color:var(--bad)}
+.nl-res li{padding:8px 0;border-top:1px solid var(--rule-soft);font-size:14px;overflow-wrap:anywhere}
+.nl-why{margin:8px 0}
+.nl-foot{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;position:sticky;bottom:-40px;background:var(--sheet);padding:10px 0}
+@media (max-width:600px){.nl-fields{grid-template-columns:1fr}.nl-on{margin-top:22px}}
