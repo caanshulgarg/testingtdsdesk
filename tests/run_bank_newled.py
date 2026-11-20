@@ -152,7 +152,7 @@ with sync_playwright() as p:
     ok(review().count() == 0 and hint("r1").count() == 0 and hint("r2").count() == 0, "(4) closed; neither line offers a new ledger any more")
 
     # (5) ticked lines: merged per party, skipped counted, edited, one post with every master
-    E("() => { B().rows.push(Object.assign({}, B().rows.find(r => r.id === 'r3'), {id: 'r3b', fp: 'fp-r3b', date: '2026-10-20', debit: 4321})); suggestAll(B().rows, true); ['r3', 'r3b', 'r13', 'r12', 'r5', 'r6', 'r7'].forEach(id => B().sel.add(id)); render(); }")
+    E("() => { B().rows.push(Object.assign({}, B().rows.find(r => r.id === 'r3'), {id: 'r3b', fp: 'fp-r3b', date: '2026-10-20', debit: 4321})); suggestAll(B().rows, true); ['r3', 'r3b', 'r13', 'r10', 'r5', 'r6', 'r7'].forEach(id => B().sel.add(id)); render(); }")
     pg.wait_for_timeout(400)
     bulk = pg.locator("#app .actionbar [data-nl-bulk]")
     ok(bulk.count() == 1 and bulk.inner_text().strip() == "Create ledgers for 7 rows", "(5) the bar: 'Create ledgers for 7 rows' (%s)" % (bulk.inner_text() if bulk.count() else "none"))
@@ -188,7 +188,7 @@ with sync_playwright() as p:
     ok(any("Nova Textiles LLP" in r and "Already in Tally" in r for r in R) and row("r5") == {"st": "ready", "led": "Nova Textiles LLP"}, "(7) Tally already had it: 'Already in Tally', and it is used (%s)" % row("r5"))
     ok(any("Kavita Sharma" in r and "Failed: Group 'Sundry Creditorz' does not exist" in r for r in R), "(7) refused: 'Failed: <Tally's reason>' (%s)" % R)
     ok(row("r6")["led"] == "" and not E("B().newLed.some(l => l.name === 'Kavita Sharma')"), "(7) that line keeps no ledger, nothing waits for it (%s)" % row("r6"))
-    ok(row("r7")["led"] == "" and row("r12")["led"] == "" and row("r13")["led"] == "Orbit Engineers", "(5) the unticked line and the skipped ones are as they were")
+    ok(row("r7")["led"] == "" and row("r10")["led"] == "" and row("r13")["led"] == "Orbit Engineers", "(5) the unticked line and the skipped ones are as they were")
     if pg.locator("#app [data-nl-close]").count(): pg.click("#app [data-nl-close]"); pg.wait_for_timeout(300)
     ok(hint("r7").count() == 1, "(5) the unticked line still offers its new ledger")
 
