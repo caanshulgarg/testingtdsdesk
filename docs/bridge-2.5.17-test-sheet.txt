@@ -1,7 +1,7 @@
 FINCOM BRIDGE 2.5.17 - TEST SHEET (2.5.16's sheet below, with 2.5.17's changes first)
 
 File:        FinComBridge-Setup-2.5.17.exe
-Fingerprint: SHA-256 (filled in when the setup is built; compare with the .sha256 file next to the setup)
+Fingerprint: SHA-256 765a9a5c91e3d0b4b85f0a7c1a888e93de980e536be908dc72c1de744ef3a05a (FinComBridge-Setup-2.5.17.exe, built 20-Nov-2026 02:00 UTC at 7941fcecc (bridge sources 0e5b80ff0, after the independent reviews of 0ee7c6eec), POSTONLY=any; compare with the .sha256 file next to the setup); program FinComBridge-2.5.17.exe SHA-256 72d26ac1309c0b09810f72f91d45157a7e7f88f3f8c8909e9ed100522c66560a
 
 2.5.17: postings go only into the client's linked Tally company, known by its company ID (GUID), never by its name;
 the masters (ledgers and groups) read says plainly what it is doing; the daily check runs in the day; and reads follow
