@@ -214,10 +214,21 @@ export function ListWrap({ children, className }) {
 // GROW + 200 rows with no limit of its own draws GROW rows, and GROW more each time the row under them comes within
 // 1,500 px of sight, as the page or the table's box is scrolled. That row stands for the rows not drawn yet and is as tall
 // as they would be, so the page is as long as before; the foot counts and adds up every row, as before.
+// Printed (the browser's Print, or printTable: src/js/27), every list is drawn whole first, and in parts again after; a
+// list with an id (printTable prints one by its id) is never drawn in parts.
 const GROW = 300;
-function useGrow(len) {
-  const [, draw] = useState(0), ref = useRef(null), at = useRef({ n: GROW, len });
-  if (at.current.len !== len) at.current = { n: GROW, len };       // another search or list: from the top again
+let ALL = 0;
+const drawAll = (on) => { if (ALL !== on) { ALL = on; try { window.render(); } catch (e) { /* drawn at the next drawing */ } } };
+addEventListener("beforeprint", () => drawAll(1)); addEventListener("afterprint", () => drawAll(0));
+function hookPrint() {
+  const pt = window.printTable;
+  if (typeof pt === "function" && !pt.all) (window.printTable = function () { drawAll(1); try { return pt.apply(this, arguments); } finally { drawAll(0); } }).all = 1;
+}
+function useGrow(len, name) {
+  const [, draw] = useState(0), ref = useRef(null), at = useRef({ n: GROW, len, name }), a = at.current;
+  // another list, or another search (more than a few rows more or fewer): from the top again; a line posted or ignored
+  // far down the list keeps the rows drawn
+  if (a.name !== name || Math.abs(a.len - len) > Math.max(5, a.len / 50)) at.current = { n: GROW, len, name }; else a.len = len;
   useEffect(() => {
     const el = ref.current; if (!el) return;
     const f = el.parentElement.firstElementChild, n = +el.dataset.ltN;
@@ -235,7 +246,7 @@ export default function ListTable({ name, cols, rows, rowKey, rowProps, prep, un
   // arrows are the same
   const cs = orderCols(cols), s = sortOf(name);
   const Wrap = wrap || ListWrap;
-  const tref = useFreeze(freeze), [grown, gref] = useGrow(rows.length);
+  const tref = useFreeze(freeze), [grown, gref] = useGrow(rows.length, name);
   const w = resize ? colWidths(name) : null, tw = w ? tableWidth(cs, w) : undefined;
   const tcls = className + " lt" + (resize ? " lt-rsz" : "") + (freeze ? " lt-frozen" : "") + (tw ? " lt-sized" : "");
   const tstyle = tw ? { ...(style || {}), width: tw } : style;
@@ -269,8 +280,9 @@ export default function ListTable({ name, cols, rows, rowKey, rowProps, prep, un
     <tbody><tr className="lt-none"><td colSpan={cs.length}><EmptyNote className="bk-none lt-empty" data-list-empty="" what={empty || "Nothing here yet."} />{keepHead !== true ? keepHead : null}</td></tr></tbody></table></Wrap>;
   if (!rows.length) return empty === null ? null : <EmptyNote className="bk-none lt-empty" data-list-empty="" what={empty || "Nothing here yet."} />;
   const sorted = sortVia ? sortVia.state : s;
-  const all = sortVia ? rows : sortRows(name, cs, rows), grow = !limit && all.length > GROW + 200 && typeof IntersectionObserver === "function",
+  const all = sortVia ? rows : sortRows(name, cs, rows), grow = !limit && !id && !ALL && all.length > GROW + 200 && typeof IntersectionObserver === "function",
     shown = limit ? all.slice(0, limit) : grow ? all.slice(0, grown) : all;
+  if (grow) hookPrint();
   return <>
     {lf && <PhoneFunnels name={name} cs={cs} />}
     {fbar}
