@@ -10,15 +10,30 @@
 import { Suspense, lazy, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { CalendarDays } from "lucide-react";
-import { lineSlow } from "../screens/lazy.js";
+import { lineSlow, loaderFile } from "../screens/lazy.js";
 import arc from "@/registry/components/date-picker/date-picker.module.css";
 // next-fix-pagespeed: Arc's calendar in its own file (8 KB out of the first one), fetched ahead once the browser is idle
 // after the first page (none ahead on a slow line), or when a calendar is first opened. A file that does not come (an
 // old tab after an update, offline) never reloads FinCom (what is typed would be lost): the calendar's place says so, and
 // a date can still be typed
-let calP = null;
-const calLoad = () => calP || (calP = import("@/registry/components/calendar/calendar").catch((e) => { calP = null; throw e; }));
-const Calendar = lazy(() => calLoad().then((m) => ({ default: m.Calendar }), () => ({ default: () => <p className="note" data-cal-failed="" style={{ margin: 12 }}>The calendar could not be loaded. Type the date instead, as 01-Oct-2026.</p> })));
+// A file that did not come is asked for again at a new address (the browser keeps an import's failure for the page, as
+// screens/lazy.js says), its styles too
+let calP = null, calN = 0;
+const calImp = () => import("@/registry/components/calendar/calendar");
+const calLoad = () => calP || (calP = (calN++ ? calAgain() : calImp()).catch((e) => { calP = null; throw e; }));
+function calAgain() {
+  const at = loaderFile(calImp), q = "retry=" + Date.now();
+  document.querySelectorAll('link[rel=stylesheet][href*="/calendar-"]').forEach((l) => { if (!l.sheet) { const n = l.cloneNode(); n.href = l.href.split("?")[0] + "?" + q; l.replaceWith(n); } });
+  return at ? import(/* @vite-ignore */ at.url + "?" + q) : calImp();
+}
+// (the failed answer is kept by React.lazy: it asks for the file again each time it is shown, and is the calendar once
+// the file comes)
+function CalFailed(props) {
+  const [C, setC] = useState(null);
+  useEffect(() => { let on = 1; calLoad().then((m) => { if (on) setC(() => m.Calendar); }, () => {}); return () => { on = 0; }; }, []);
+  return C ? <C {...props} /> : <p className="note" data-cal-failed="" style={{ margin: 12 }}>The calendar could not be loaded. Type the date instead, as 01-Oct-2026.</p>;
+}
+const Calendar = lazy(() => calLoad().then((m) => ({ default: m.Calendar }), () => ({ default: CalFailed })));
 try { const f = () => calLoad().catch(() => {}); if (!lineSlow()) window.requestIdleCallback ? requestIdleCallback(f, { timeout: 8000 }) : setTimeout(f, 4000); } catch (e) { /* fetched when first opened */ }
 
 

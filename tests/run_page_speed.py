@@ -231,6 +231,10 @@ def part_f(br):
     ok(n == 1200, "printed with the browser's Print (beforeprint): all 1,200 rows drawn (%d)" % n)
     pg.evaluate("() => window.dispatchEvent(new Event('afterprint'))"); pg.wait_for_timeout(500)
     ok(pg.evaluate(TROWS) == 300, "after the print: 300 again (%d)" % pg.evaluate(TROWS))
+    pg.emulate_media(media="print"); pg.wait_for_timeout(300)
+    n = pg.evaluate(TROWS)
+    pg.emulate_media(media="screen"); pg.wait_for_timeout(300)
+    ok(n == 1200 and pg.evaluate(TROWS) == 300, "a browser that only turns the print media on: all 1,200 drawn, then 300 (%d, %d)" % (n, pg.evaluate(TROWS)))
     h = pg.evaluate("""() => { const t = document.querySelector('#app table[data-list=\\'txn-bank\\']'); t.parentElement.id = 'psPrintWrap'; let got = '';
       const pv = window.printView; window.printView = (title, html) => { got = html; }; try { printTable('psPrintWrap', 'Made up'); } finally { window.printView = pv; }
       return (got.match(/<tr[ >]/g) || []).length; }""")
@@ -271,6 +275,15 @@ def part_g(br):
     ok(pg.locator(".datebox-pop [data-cal-failed]").count() == 1, "the calendar's place says it could not be loaded")
     box = pg.locator('#app [data-datebox] input').first; box.fill("15-07-2026"); box.press("Enter"); pg.wait_for_timeout(600)
     ok(pg.evaluate("(id) => D().entries[id].x.invoiceDate", bid) == "2026-07-15", "a date typed still goes in (%s)" % pg.evaluate("(id) => D().entries[id].x.invoiceDate", bid))
+    # the line back: the calendar opened again shows (no reload needed)
+    ctx.unroute("**/assets/calendar-*")
+    btn = pg.locator('#app [data-datebox] button.datebox-cal').first
+    if pg.locator(".datebox-pop").count(): btn.dispatch_event("click"); pg.wait_for_timeout(300)
+    btn.dispatch_event("click")
+    try: pg.wait_for_selector(".datebox-pop [role=gridcell]", timeout=10000)
+    except Exception: pass
+    ok(pg.locator(".datebox-pop [role=gridcell]").count() > 0 and pg.evaluate("() => window.__stay === 1"), "the file reachable again: the calendar opened again shows, without a reload")
+    ok(pg.evaluate("() => [...document.querySelectorAll('link[rel=stylesheet][href*=\\'/calendar-\\']')].some((l) => !!l.sheet)"), "with its styles")
     ctx.close()
 
 def part_h(br):
