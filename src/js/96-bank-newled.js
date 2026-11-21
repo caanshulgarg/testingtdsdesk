@@ -15,7 +15,10 @@
 const NewLed = {
   busy: false,
   // the bank's and the payment app's words, honorifics and filler: never part of a ledger name
-  NOISE: /\b(UPI|NEFT|RTGS|IMPS|MMT|P2A|P2M|DR|CR|TRF|TRANSFER|BY|TO|FROM|INB|IB|CHQ|CHEQUE|CLG|ACH|NACH|ECS|PAYMENT|PAYMENTS|PAY|PAID|SENT|RECEIVED|REF|UTR|NA|NO|INR|RS|FT|INFT|NET ?BANK(?:ING)?|NETBANK|MOBILE|MB|BANKING|ONLINE|FUND|FR|FOR|TOWARDS|AGAINST|BILL|INVOICE|INV|MUM|DEL|MR|MRS|MS|M ?S|SHRI|SMT|SH|MESSRS|OK|QR|PAYTMQR|BHARATPE|GPAY|PHONEPE|PYTM|PAYTM|YBL|IBL|AXL|OKAXIS|OKHDFCBANK|OKICICI|OKSBI|HDFC|ICICI|SBI|AXIS|KOTAK|YES|IDFC|INDUSIND|CANARA|PNB|BOB|FEDERAL|RBL|BANK)\b/gi,
+  NOISE: /\b(UPI|NEFT|RTGS|IMPS|MMT|P2A|P2M|DR|CR|TRF|TRANSFER|BY|TO|FROM|INB|IB|CHQ|CHEQUE|CLG|ACH|NACH|ECS|PAYMENT|PAYMENTS|PAY|PAID|SENT|RECEIVED|REF|UTR|NA|NO|INR|RS|FT|INFT|NET ?BANK(?:ING)?|NETBANK|MOBILE|MB|BANKING|ONLINE|FUND|FR|FOR|TOWARDS|AGAINST|BILL|INVOICE|INV|MUM|DEL|MR|MRS|MS|M ?S|SHRI|SMT|SH|MESSRS|OK|QR|PAYTMQR|BHARATPE|GPAY|PHONEPE|PYTM|PAYTM|YBL|IBL|AXL|OKAXIS|OKHDFCBANK|OKICICI|OKSBI|HDFC|ICICI|SBI|AXIS|IDFC|INDUSIND|PNB|RBL|BANK)\b/gi,
+  // banks whose names are also people's and firms' words ("Kotak Traders", "Yes Foods"): dropped only as a bank's own
+  // words, "KOTAK BANK", "YES BANK LTD", "KOTAK MAHINDRA BANK"
+  BANK_NAMED: /\b(?:KOTAK(?:\s+MAHINDRA)?|YES|CANARA|BOB|FEDERAL|BANK\s+OF\s+BARODA)\s+BANK(?:\s+(?:LTD|LIMITED))?\b/gi,
   // a line that is not a party: cash, the bank's own charges and interest
   NOT_PARTY: ["ATM", "CASH", "CHARGES", "INTEREST"],
   UPPER: new Set(["LLP", "HUF", "OPC", "LLC", "II", "III", "IV", "IT", "HR"]),
@@ -25,7 +28,7 @@ const NewLed = {
     // "M/S DEEPAK HARDWARE" is read as "S DEEPAK HARDWARE" (the "/" splits it): the honorific goes
     if (row && /^S\s/i.test(s) && new RegExp("\\bM\\s*/\\s*" + s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i").test(row.narr || "")) s = s.slice(2);
     s = s.split(/[\s\/|*:,]+/).filter(t => t && !/@/.test(t) && !/\d/.test(t) && !/^[A-Z]{4}0[A-Z0-9]{6}$/i.test(t)).join(" ");
-    s = s.replace(/[._\-]+/g, " ").replace(this.NOISE, " ").replace(/[^A-Za-z&' ]+/g, " ").replace(/\s+/g, " ").trim();
+    s = s.replace(/[._\-]+/g, " ").replace(this.BANK_NAMED, " ").replace(this.NOISE, " ").replace(/[^A-Za-z&' ]+/g, " ").replace(/\s+/g, " ").trim();
     s = s.replace(/^(&|and)\s+|\s+(&|and)$/gi, "");
     const letters = (s.match(/[A-Za-z]/g) || []).length;
     if (letters < 3 || !/[A-Za-z]{3}/.test(s)) return "";
@@ -93,6 +96,37 @@ const NewLed = {
     const out = Array.from(lines.values()).map(ln => Object.assign(ln, {group: this.groupFor(ln.in > ln.out ? "in" : "out")}));
     return {lines: out, had, none, n: rows.length};
   },
+  // the review's lines use the new ledger (one still waiting too), and so does every other open line of the same party,
+  // in the same direction, that has NO ledger. A line with a ledger (a rule's, a bill's, set by hand) is never touched.
+  // A rule for that direction is written only when the party has none for it (nor one for either way); no rule is ever
+  // replaced or removed (setLedgerFor, src/js/22, spreads to every open line and writes an "any" rule: not for this)
+  use(ids, ledger){
+    const b = B(), co = CO(b.cid), now = new Date().toISOString(), done = new Map();
+    const blank = r => !String(r.ledger || "").trim();
+    const put = (r, why) => { if (done.has(r.id)) return; done.set(r.id, r);
+      Object.assign(r, {ledger, userSet: true, source: "you", why, billId: null, billRef: "", tdsAtPay: 0, vtype: vtypeFor(r, ledger), state: "ready"}); b.sticky.add(r.id); };
+    const own = ids.map(id => bankRow(id)).filter(r => r && ["attention", "suggested"].includes(r.state) && (blank(r) || ledgerKey(r.ledger) === ledgerKey(ledger)) && !isOwnBank(r, ledger));
+    own.forEach(r => put(r, "set by you"));
+    if (!own.length || co.bankAutoApply === false){ if (own.length) saveBank({rows: true}); return done.size; }
+    b.rows.forEach(r => {
+      if (done.has(r.id) || r.state !== "attention" || !blank(r) || (r.splits || []).length || isOwnBank(r, ledger)) return;
+      if (own.some(src => this.dir(src) === this.dir(r) && sameParty(src, r))) put(r, "same party as a row you set");
+    });
+    own.forEach(src => {
+      const dir = this.dir(src);
+      [src.dec && src.dec.key, src.dec ? partyKey(src.dec) : ""].filter(Boolean).forEach(k => {
+        if (!b.rules.some(x => x.key === k && (x.dir === dir || x.dir === "any")))
+          b.rules.push({key: k, dir, ledger, auto: true, label: src.dec.name || src.dec.upi || k, at: now});
+      });
+    });
+    learnRows(Array.from(done.values()), "you");
+    saveBank({rows: true, rules: true});
+    return done.size;
+  },
+  // no answer for a ledger sent: the bridge lost the posting, was quiet for 15 minutes, or could not check Tally. It may
+  // have been made: it waits (kept pending, on its lines), never "Failed"
+  noAnswer(r){ return !r || r.notAnswered === true || (typeof postCheckFail === "function" && postCheckFail(r)) || r.checkFailed === true ||
+    /lost this posting|did not answer for 15 minutes/i.test(String(r.message || "")); },
   // the bulk bar: how many of these lines could get a new ledger
   count(rows){ return rows.filter(r => this.guess(r)).length; },
   // why nothing can be sent now (as posting says it: src/js/26 ensureTallyCompany), after it said no
@@ -115,17 +149,22 @@ const NewLed = {
         const res = {name, group, rows: ln.rows || [], kind: "", word: ""};
         out.push(res);
         if (!name){ Object.assign(res, {kind: "failed", word: "Failed: no name"}); return; }
-        if (seen.has(name.toLowerCase())){ Object.assign(res, {kind: "dup"}); return; }
-        seen.add(name.toLowerCase());
-        const has = exactLedger(name), info = has ? ledgerInfo(has) : null;
+        const key = ledgerKey(name);
+        // "Ramesh & Co" and "Ramesh and Co" are one ledger
+        if (seen.has(key)){ Object.assign(res, {kind: "dup"}); return; }
+        seen.add(key);
+        const has = exactLedger(name), info = has ? ledgerInfo(has) : null, same = (b.newLed || []).filter(l => ledgerKey(l.name) === key);
         if (has && !(info && info.pending)){ Object.assign(res, {kind: "already", name: has, word: "Already in Tally"}); return; }
+        // made here and sent to Tally already, not read back from it yet: never sent again
+        const sentOne = same.find(l => l.sent);
+        if (sentOne){ Object.assign(res, {kind: "already", name: sentOne.name, word: "Already sent to Tally"}); return; }
         const bk = ln.bank || {};
-        b.newLed = (b.newLed || []).filter(l => l.name.toLowerCase() !== name.toLowerCase());
+        b.newLed = (b.newLed || []).filter(l => ledgerKey(l.name) !== key);
         const led = {name, group, pan: "", gstin: "", acNo: bk.acNo || "", ifsc: bk.ifsc || "", at: now, sent: false};
-        b.newLed.push(led); res.led = led; fresh.push(res);
+        b.newLed.push(led); res.led = led; res.old = same; fresh.push(res);
       });
       // the same name twice in the list: one ledger, both lines' rows
-      out.filter(x => x.kind === "dup").forEach(x => { const first = out.find(y => y !== x && y.kind !== "dup" && y.name.toLowerCase() === x.name.toLowerCase()); if (first) first.rows = first.rows.concat(x.rows); });
+      out.filter(x => x.kind === "dup").forEach(x => { const first = out.find(y => y !== x && y.kind !== "dup" && ledgerKey(y.name) === ledgerKey(x.name)); if (first) first.rows = first.rows.concat(x.rows); });
       saveBank({newLed: true});
       let sent = 0;
       if (fresh.length){
@@ -134,7 +173,8 @@ const NewLed = {
         else if (Bridge.st.allowImport === false && bridgeLive(co)) why = "Posting is switched off in the bridge settings (AllowImport).";
         else {
           // the review was the confirm: the posting's own "Create new ledgers?" is not asked again
-          if (typeof PostGate === "object") PostGate.approve(fresh.map(x => x.name), tname);
+          let mine = null;
+          if (typeof PostGate === "object"){ PostGate.approve(fresh.map(x => x.name), tname); mine = PostGate.ok; }
           try {
             const j = await Bridge.post({company: tname, client: co.id, masters: fresh.map(x => ({id: "led:" + x.name, xml: ledgerMasterXml(x.led)})), vouchers: []});
             const byId = new Map([].concat(j.results || []).map(x => [x.id, x]));
@@ -142,6 +182,7 @@ const NewLed = {
             fresh.forEach(x => {
               const r = byId.get("led:" + x.name);
               if (!r || j.notAllowed || r.held){ x.kind = "waiting"; if (r && r.held && !why) why = plainMsg(r.message); return; }
+              if (!r.ok && this.noAnswer(r)){ x.kind = "waiting"; x.word = "No answer from FinCom Bridge: it may have been made. Kept here; it goes with the next posting"; return; }
               if (r.ok){
                 x.led.sent = true; x.led.sentAt = now; sent++;
                 x.kind = r.existed || postAltered(r) ? "already" : "created";
@@ -150,21 +191,22 @@ const NewLed = {
                 return;
               }
               x.kind = "failed"; x.word = "Failed: " + (plainMsg(r.message) || "Tally did not accept it");
-              b.newLed = b.newLed.filter(l => l !== x.led);
+              // (an older pending ledger of that name, which other lines may use, is put back as it was)
+              b.newLed = b.newLed.filter(l => l !== x.led).concat(x.old || []);
             });
           } catch (e){
             why = e && e.code === "cancelled" ? "Nothing was sent to Tally." : "Could not create them in Tally now: " + plainMsg((e && e.message) || e) + ".";
             fresh.forEach(x => { x.kind = "waiting"; });
-          }
+          } finally { if (mine && PostGate.ok === mine) PostGate.ok = null; }
         }
-        fresh.forEach(x => { if (!x.kind) x.kind = "waiting"; if (x.kind === "waiting") x.word = "Not sent: goes to Tally with the next posting"; });
+        fresh.forEach(x => { if (!x.kind) x.kind = "waiting"; if (x.kind === "waiting" && !x.word) x.word = "Not sent: goes to Tally with the next posting"; });
       }
-      // the lines use their ledgers (every other open line of the party follows: setLedgerFor), then the rest is suggested again
+      // the lines use their ledgers (NewLed.use: the party's other lines with no ledger, in the same direction, follow), then
+      // the rest is suggested again
       if (sent) try { await syncLedgersFromTally(true); } catch (e){}
       out.forEach(x => {
         if (x.kind === "failed" || x.kind === "dup" || !x.rows.length) return;
-        const l = exactLedger(x.name) || x.name, rows = x.rows.map(id => bankRow(id)).filter(r => r && ["attention", "suggested"].includes(r.state) && (!String(r.ledger || "").trim() || ledgerKey(r.ledger) === ledgerKey(l)));
-        if (rows.length) setLedgerFor(rows, l, "newled");
+        this.use(x.rows, exactLedger(x.name) || x.name);
       });
       b.undo = null;
       suggestAll(b.rows, true);
