@@ -169,10 +169,36 @@ def part_c(br):
     ok(last == "20000", "the last row is line 20,000 (%s)" % last)
     pg.close()
 
+def part_d(br):
+    import gzip, glob
+    print("D. sizes; the date boxes' calendar in its own file")
+    gz = lambda f: len(gzip.compress(open(f, "rb").read(), 6))
+    lg = gz(os.path.join(SITE, "legacy.js")); mg = sum(gz(f) for f in glob.glob(os.path.join(SITE, "assets", "index-*.js")))
+    ok(lg <= 599744, "legacy.js: %d bytes gzip, no more than staging-next's 599,744" % lg)
+    ok(mg <= 262713, "the first file: %d bytes gzip, no more than staging-next's 262,713" % mg)
+    first = "".join(open(f, encoding="utf-8").read() for f in glob.glob(os.path.join(SITE, "assets", "index-*.js")))
+    cal = glob.glob(os.path.join(SITE, "assets", "calendar-*.js"))
+    ok(cal and "Previous month" not in first and "Previous month" in open(cal[0], encoding="utf-8").read(), "the calendar is in its own file, not the first one")
+    ok(cal and os.path.basename(cal[0]) in open(os.path.join(SITE, "sw.js"), encoding="utf-8").read(), "and the service worker keeps that file (it opens offline)")
+    pg = br.new_page(viewport={"width": 1440, "height": 900}); pg.on("pageerror", lambda e: errors.append(str(e)[:300]))
+    pg.goto(URL); pg.evaluate(READY)
+    bid = pg.evaluate("""async () => { const c = newCompany({name: 'Made Up Dates Client', gstin: ''}); S.companies[c.id] = c; S.data[c.id] = {parties: {}, entries: {}, loaded: true}; c.stats = {};
+      await openCompany(c.id); const e = newEntry('Manual entry'); Object.assign(e.x, {vendorName: 'Made Up Supplier', invoiceNo: 'D/1', invoiceDate: '2026-07-01', taxable: 1000, total: 1000});
+      S.data[c.id].entries[e.id] = e; goClient('bills'); revOpen(e.id); return e.id; }""")
+    pg.wait_for_timeout(1500)
+    btn = pg.locator('#app [data-datebox] button.datebox-cal').first
+    btn.click(); pg.wait_for_selector(".datebox-pop [role=gridcell]", timeout=15000)
+    cell = pg.locator('.datebox-pop [role=gridcell][aria-label*="15 July 2026"]')
+    ok(cell.count() == 1, "the calendar opens on the bill's month (July 2026)")
+    if cell.count(): cell.dispatch_event("click"); pg.wait_for_timeout(600)
+    v = pg.evaluate("(id) => [D().entries[id].x.invoiceDate, (document.querySelector('#app [data-datebox] input') || {}).value]", bid)
+    ok(v[0] == "2026-07-15" and v[1] == "15-Jul-2026", "a day picked: the bill's date and its box say 15-Jul-2026 (%r)" % v)
+    pg.close()
+
 try:
     with sync_playwright() as p:
         br = p.chromium.launch()
-        for k, f in [("A", part_a), ("B", part_b), ("C", part_c)]:
+        for k, f in [("A", part_a), ("B", part_b), ("C", part_c), ("D", part_d)]:
             if not ONLY or k in ONLY: f(br)
         br.close()
 finally:

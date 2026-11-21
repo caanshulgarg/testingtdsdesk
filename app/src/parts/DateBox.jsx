@@ -7,10 +7,13 @@
 // yyyy-mm-dd (value, or defaultValue), onChange gets {target: {value}} with the new yyyy-mm-dd date ("" when emptied),
 // and aria-label, min, max, disabled, readOnly, data-* stay on the box (inputClassName is the box's own class). onCommit(value) is CommitBox's way (a false answer puts
 // the old date back). A screen is told only of a whole date, never of one half-typed.
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { CalendarDays } from "lucide-react";
-import { Calendar } from "@/registry/components/calendar/calendar";
+import { lazyModule } from "../screens/lazy.js";
+// next-fix-pagespeed: Arc's calendar in its own file (8 KB out of the first one), fetched with the screens' files after the
+// first page is drawn (preloadScreens), or when a calendar is first opened
+const Calendar = lazyModule(() => import("@/registry/components/calendar/calendar"))("Calendar");
 import arc from "@/registry/components/date-picker/date-picker.module.css";
 
 const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -93,8 +96,8 @@ export default function DateBox({ value, defaultValue, onChange, onCommit, min, 
       <CalendarDays size={15} strokeWidth={1.75} aria-hidden="true" />
     </button>
     {open && at && createPortal(<div ref={pop} className={arc.popover + " datebox-pop"} role="dialog" aria-label={label + ": calendar"} style={{ position: "fixed", top: at.top, left: at.left }}>
-      <Calendar value={toDate(iso)} month={month} onMonthChange={setMonth} minDate={toDate(min)} maxDate={toDate(max)} locale="en-GB" showToday
-        onChange={(d) => { fire(fromDate(d)); setText(null); setOpen(false); box.current && box.current.focus(); }} />
+      <Suspense fallback={null}><Calendar value={toDate(iso)} month={month} onMonthChange={setMonth} minDate={toDate(min)} maxDate={toDate(max)} locale="en-GB" showToday
+        onChange={(d) => { fire(fromDate(d)); setText(null); setOpen(false); box.current && box.current.focus(); }} /></Suspense>
       <div className={arc.footer}><button type="button" onClick={() => { fire(""); setOpen(false); }} disabled={!iso}>Clear</button><span>{iso ? showDate(iso) : "Choose a day"}</span></div>
     </div>, document.body)}
   </span>;
