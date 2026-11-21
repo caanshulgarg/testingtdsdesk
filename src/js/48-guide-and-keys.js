@@ -56,11 +56,3 @@ if (typeof document !== "undefined"){
     }
   });
 }
-// the dashboard's question box (app/src/screens/Dash.jsx): opens Look up with the question asked
-function dashAsk(q){
-  goClient("books:lookup");
-  q = String(q || "").trim();
-  if (!q) return;
-  const go = (n) => { if (S.books && S.books.cid === S.coId && !S.books.loading){ lkAsk(q); } else if (n < 40) setTimeout(() => go(n + 1), 100); };
-  setTimeout(() => go(0), 50);
-}
