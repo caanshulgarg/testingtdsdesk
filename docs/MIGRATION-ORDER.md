@@ -1210,7 +1210,8 @@ gone since the stamp: "The client's Tally link changed or was removed after this
 ## 204: the heaviest statements made lighter, the same answers (not run yet; branch next-fix-dbspeed, 21-Nov-2026)
 
 **204, db speed** (21-Nov-2026, branch `next-fix-dbspeed`, the owner: "make the database fast ... the effect should remain
-the same"; **written, not run yet**; file md5 2b77b881eae761e4f9b0a3fc20626861):
+the same"; **written, not run yet**; file md5 2f2fc45ee6e392b62ab2714f51b2eab1; its indexes
+`server/tally-cloud/migration-204-indexes.sql`, md5 8259bf1c4fb80dab5c5d0a19244a03a9):
 `server/tally-cloud/migration-204-db-speed.sql`. Needs nothing of 199-203; runs before or after them. From staging's
 pg_stat_statements (21-Nov-2026), heaviest by total time:
 
@@ -1223,14 +1224,25 @@ pg_stat_statements (21-Nov-2026), heaviest by total time:
 
 Replaced with the same arguments and grants (restated): `gst_share_books_due` (170's text), `tally_unknown_ledger_entries`
 (56's), `gst_calc_rows` (153's), `gst_share_rows` (166's); each was staging's text (md5 of the body checked by the test).
-No table, nothing dropped, no row changed (ANALYZE of tally_recorder_lines only). One transaction, lock_timeout 3 s; then the
-index CONCURRENTLY with lock_timeout 3 s (if it times out, run the file again). Safe twice. Tested:
-`tests/run_migration204.py` (RED_WITHOUT_204=1 fails): 27 cases, the same answer before and after each.
+No table, nothing dropped, no row changed (ANALYZE of tally_recorder_lines only). **Apply, in this order:**
+1. `sbq.sh server/tally-cloud/migration-204-db-speed.sql` (one transaction, lock_timeout 3 s; safe twice);
+2. `python3 tools/apply_concurrent_indexes.py --run "sbq.sh" server/tally-cloud/migration-204-indexes.sql`: the index
+   built CONCURRENTLY in a call of its own, checked valid (one left invalid by a build cut off is dropped and built again, up
+   to 3 tries; exit 1 if it stays invalid), then the ANALYZE (the file's last line) only once it is valid. A CONCURRENTLY
+   build cannot share a call with `set lock_timeout` (several statements in one query are a transaction block), so it runs
+   under the session's own timeouts (staging, 21-Nov-2026: lock_timeout 0, statement_timeout 2 min); it blocks no reads or
+   writes while it builds. Re-running step 1 alone never mends an invalid index (IF NOT EXISTS skips it): use step 2.
+
+Tested: `tests/run_migration204.py` (RED_WITHOUT_204=1 fails): 27 cases, the same answer before and after each; applied as
+above through a stand-in for the API (`tests/api_standin.py`), the index valid. `tests/run_apply_indexes.py`: the script
+on a build cut off by a lock wait (left INVALID, skipped by IF NOT EXISTS), on an invalid index from before, and on a table
+held longer than every try (exit 1).
 
 ## 205: the advisor's findings and the GSTIN reads, the same effect (not run yet; branch next-fix-dbspeed, 21-Nov-2026)
 
 **205, db speed 2** (21-Nov-2026, branch `next-fix-dbspeed`; **written, not run yet**; file md5
-7ab92a5c5eab2f62d2cf402f84877083): `server/tally-cloud/migration-205-db-speed-2.sql`. Needs nothing of 199-204.
+3f5f550acf8e277c1be4120ee9650f18; its indexes `server/tally-cloud/migration-205-indexes.sql`, md5
+d4d05e08f4bf0bb1b934daba82eb8be0): `server/tally-cloud/migration-205-db-speed-2.sql`. Needs nothing of 199-204.
 
 - Staging's performance advisor: the five policies that asked `auth.uid()` once per row
   (`assistant_mismatch_status_owner_read`, `assistant_mismatches_owner_read`, `client_timings_insert_own`,
@@ -1245,5 +1257,8 @@ index CONCURRENTLY with lock_timeout 3 s (if it times out, run the file again). 
   and last dated month from each end of the book was tried and was slower on staging, so it was not done.
 
 Replaced with the same arguments, grants restated (service_role). No table, column or policy added, nothing dropped, no row
-changed. One transaction, lock_timeout 3 s; then the 22 indexes CONCURRENTLY with lock_timeout 3 s (if one times out, run the
-file again). Safe twice. Tested: `tests/run_migration205.py` (RED_WITHOUT_205=1 fails).
+changed. **Apply, in this order:** 1. `sbq.sh server/tally-cloud/migration-205-db-speed-2.sql` (one transaction,
+lock_timeout 3 s; safe twice); 2. `python3 tools/apply_concurrent_indexes.py --run "sbq.sh"
+server/tally-cloud/migration-205-indexes.sql` (the 22 indexes, each in a call of its own, checked valid, as for 204). The 21
+foreign-key columns checked on staging (read-only, 21-Nov-2026): all there, uuid. Tested: `tests/run_migration205.py`
+(RED_WITHOUT_205=1 fails), applied as for 204, every index valid.
