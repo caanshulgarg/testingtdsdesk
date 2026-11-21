@@ -663,7 +663,15 @@ const TCloud = {
   paneShown(){ const p = this.pane; if (p.devices && !p.busy && Date.now() - (p.at || 0) >= SLOW_MS && document.querySelector("#app [data-tco-list], #app [data-pc-line]")){ p.at = Date.now(); this.refreshPane({auto: true}); } },
   // next-speed-redraw: a re-read the page makes by itself (o.auto: every few minutes; o.soon: the first-link watcher's
   // 5 s look) is drawn with the background's drawing (soonRender, src/js/01); a click's (Refresh, Check again) at once
+  // next-fix-pagespeed: a read asked while one goes on waits for it (the Tally page's first read and every link's check
+  // came together: each ask twice); a full read asked during the page's few-minute look comes after it
   async refreshPane(o){
+    const p = this.pane, once = !(o && o.auto) || !p.onceAt, r = p.run;
+    if (r && (r.once || !once)){ await r.p; if (!(o && (o.auto || o.soon))) render(); return; }
+    const run = p.run = {once, p: (r ? r.p.catch(() => {}) : Promise.resolve()).then(() => this.readPane(o))};
+    try { await run.p; } finally { if (p.run === run) p.run = null; }
+  },
+  async readPane(o){
     const bg = !!(o && (o.auto || o.soon)), draw = () => { if (bg) soonRender(); else render(); };
     const p = this.pane; p.busy = "Loading…"; draw();
     const once = !(o && o.auto) || !p.onceAt;
