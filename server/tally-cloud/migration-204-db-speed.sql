@@ -15,9 +15,17 @@
 --      ledger is unknown by its book and name alone, so each distinct name is looked up once now.
 --   4. gst_calc_rows (596 ms) and gst_share_rows (535 ms): built as json and made jsonb once at the end; the same value.
 --
--- No table, nothing dropped, no row changed (ANALYZE only refreshes the planner's statistics). One transaction with
--- lock_timeout 3 s for the functions and the statistics; then the index, CONCURRENTLY, with lock_timeout 3 s (if it
--- times out, run the file again: everything in it is if-not-there or create-or-replace). Safe twice.
+-- No table, nothing dropped, no row changed (ANALYZE only refreshes the planner's statistics).
+-- How to apply (two steps, in this order):
+--   1. this file through the Management API, as one query (it is one transaction: functions, statistics, policies,
+--      grants; lock_timeout 3 s; safe twice):            sbq.sh server/tally-cloud/migration-204-db-speed.sql
+--   2. its indexes, one statement per call, each checked valid (an invalid one left by a build cut off is dropped and
+--      built again, up to 3 tries; exit 1 if one stays invalid):
+--        python3 tools/apply_concurrent_indexes.py --run "sbq.sh" server/tally-cloud/migration-204-indexes.sql
+--      The ANALYZE of tally_recorder_lines is that file's last line: the script runs it after the index is valid.
+--      A CONCURRENTLY build cannot share a call with "set lock_timeout" (a query of several statements is a
+--      transaction block), so it runs under the session's own timeouts (on staging, read 21-Nov-2026: lock_timeout 0,
+--      statement_timeout 2 min); it does not block reads or writes of the table while it builds.
 
 begin;
 set local lock_timeout = '3s';
@@ -132,11 +140,3 @@ grant execute on function public.gst_share_rows(uuid, text[]) to service_role;
 create statistics if not exists public.tally_recorder_lines_remote_guid_stats on (coalesce(payload->>'remoteGuid', payload->>'remote_guid', '')) from public.tally_recorder_lines;
 
 commit;
-
--- 2: the index for the settle's look-up by remote GUID (only the lines that carry one: none on staging today)
-set lock_timeout = '3s';
-create index concurrently if not exists tally_recorder_lines_remote_guid on public.tally_recorder_lines
-  (book_id, (coalesce(payload->>'remoteGuid', payload->>'remote_guid')))
-  where coalesce(payload->>'remoteGuid', payload->>'remote_guid', '') <> '';
-reset lock_timeout;
-analyze public.tally_recorder_lines;

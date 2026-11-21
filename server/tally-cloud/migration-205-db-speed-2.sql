@@ -12,9 +12,16 @@
 --   3. gst_itc_inputs (106 ms): its GSTINs as in 2 (before: every live entry sorted). The rest as it was. (Finding the
 --      first and last dated month from each end of the book was tried: slower on staging, so not done.)
 --
--- No table, column or policy added, nothing dropped, no row changed. One transaction with lock_timeout 3 s for the
--- functions and the policies; then the indexes, CONCURRENTLY, with lock_timeout 3 s (if one times out, run the file
--- again: everything in it is if-not-there, create-or-replace or the same alter). Safe twice.
+-- No table, column or policy added, nothing dropped, no row changed.
+-- How to apply (two steps, in this order):
+--   1. this file through the Management API, as one query (it is one transaction: functions, statistics, policies,
+--      grants; lock_timeout 3 s; safe twice):            sbq.sh server/tally-cloud/migration-205-db-speed-2.sql
+--   2. its indexes, one statement per call, each checked valid (an invalid one left by a build cut off is dropped and
+--      built again, up to 3 tries; exit 1 if one stays invalid):
+--        python3 tools/apply_concurrent_indexes.py --run "sbq.sh" server/tally-cloud/migration-205-indexes.sql
+--      A CONCURRENTLY build cannot share a call with "set lock_timeout" (a query of several statements is a
+--      transaction block), so it runs under the session's own timeouts (on staging, read 21-Nov-2026: lock_timeout 0,
+--      statement_timeout 2 min); it does not block reads or writes of the table while it builds.
 
 begin;
 set local lock_timeout = '3s';
@@ -138,30 +145,3 @@ alter policy client_timings_read_owner on public.client_timings using ((is_super
   WHERE ((m.user_id = (select auth.uid())) AND (m.firm_id = client_timings.firm_id) AND (m.role = 'owner'::text) AND COALESCE(m.active, true)))))));
 
 commit;
-
-set lock_timeout = '3s';
--- 2, 3: the company GSTINs of a book, one look-up each
-create index concurrently if not exists tally_vouchers_cmp_gstin on public.tally_vouchers (book_id, cmp_gstin);
--- 1: the foreign keys the advisor names (a delete of the row they point at no longer reads the whole table)
-create index concurrently if not exists assistant_notice_events_notice_id_fkey_idx on public.assistant_notice_events (notice_id);
-create index concurrently if not exists call_batch_members_firm_id_fkey_idx on public.call_batch_members (firm_id);
-create index concurrently if not exists call_captions_batch_id_fkey_idx on public.call_captions (batch_id);
-create index concurrently if not exists call_captions_firm_id_fkey_idx on public.call_captions (firm_id);
-create index concurrently if not exists call_captions_participant_id_fkey_idx on public.call_captions (participant_id);
-create index concurrently if not exists call_consents_firm_id_fkey_idx on public.call_consents (firm_id);
-create index concurrently if not exists call_consents_participant_id_fkey_idx on public.call_consents (participant_id);
-create index concurrently if not exists call_consents_recording_id_fkey_idx on public.call_consents (recording_id);
-create index concurrently if not exists call_invites_firm_id_fkey_idx on public.call_invites (firm_id);
-create index concurrently if not exists call_messages_firm_id_fkey_idx on public.call_messages (firm_id);
-create index concurrently if not exists call_messages_participant_id_fkey_idx on public.call_messages (participant_id);
-create index concurrently if not exists call_pieces_firm_id_fkey_idx on public.call_pieces (firm_id);
-create index concurrently if not exists call_recordings_batch_id_fkey_idx on public.call_recordings (batch_id);
-create index concurrently if not exists call_recordings_firm_id_fkey_idx on public.call_recordings (firm_id);
-create index concurrently if not exists call_remote_sessions_room_id_fkey_idx on public.call_remote_sessions (room_id);
-create index concurrently if not exists call_transcripts_batch_id_fkey_idx on public.call_transcripts (batch_id);
-create index concurrently if not exists call_transcripts_firm_id_fkey_idx on public.call_transcripts (firm_id);
-create index concurrently if not exists firm_signals_firm_id_fkey_idx on public.firm_signals (firm_id);
-create index concurrently if not exists subscriptions_plan_id_fkey_idx on public.subscriptions (plan_id);
-create index concurrently if not exists tally_bridge_update_asks_firm_id_fkey_idx on public.tally_bridge_update_asks (firm_id);
-create index concurrently if not exists tally_work_claims_firm_id_fkey_idx on public.tally_work_claims (firm_id);
-reset lock_timeout;
