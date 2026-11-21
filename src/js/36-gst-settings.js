@@ -120,8 +120,6 @@ function ecoGstinSet(reg, eco, g){
   if (!g) delete st.ecoGstin[eco];
   GSTR._carry = null; saveBooks(); render(); return true;
 }
-// "type it" beside a GSTIN: its settings shown, the cursor in the username box
-function gsetUserFocus(reg){ S.gsetReg = reg; render(); const i = document.querySelector('input[data-fk="gset-puser-' + reg + '"]'); if (i){ i.scrollIntoView({block: "center", behavior: "smooth"}); i.focus(); } }
 // a GSTIN added (it must carry the client's PAN) or removed
 function gregAdd(g){
   g = String(g || "").toUpperCase().trim(); const why = GSTRegs.refuse(g, S.books);
