@@ -1226,3 +1226,24 @@ Replaced with the same arguments and grants (restated): `gst_share_books_due` (1
 No table, nothing dropped, no row changed (ANALYZE of tally_recorder_lines only). One transaction, lock_timeout 3 s; then the
 index CONCURRENTLY with lock_timeout 3 s (if it times out, run the file again). Safe twice. Tested:
 `tests/run_migration204.py` (RED_WITHOUT_204=1 fails): 27 cases, the same answer before and after each.
+
+## 205: the advisor's findings and the GSTIN reads, the same effect (not run yet; branch next-fix-dbspeed, 21-Nov-2026)
+
+**205, db speed 2** (21-Nov-2026, branch `next-fix-dbspeed`; **written, not run yet**; file md5
+7ab92a5c5eab2f62d2cf402f84877083): `server/tally-cloud/migration-205-db-speed-2.sql`. Needs nothing of 199-204.
+
+- Staging's performance advisor: the five policies that asked `auth.uid()` once per row
+  (`assistant_mismatch_status_owner_read`, `assistant_mismatches_owner_read`, `client_timings_insert_own`,
+  `client_timings_read_owner`, `assistant_uploads_add`) ask it once per statement, `(select auth.uid())`; each is altered
+  in place (ALTER POLICY) and only if its words are staging's (else the file stops and names it). The same rows seen and the
+  same writes allowed or refused for an owner, a staff member, an inactive owner, another firm's owner and anon (the test).
+  The 21 foreign keys it names get an index each (`<table>_<column>_fkey_idx`, CONCURRENTLY, if not there).
+  `tally_sync_reads` (no primary key) is left: no column or set of columns is a key without a new column.
+- `gst_calc_gstins` (153's text; 38 ms, 1,234 calls): the book's company GSTINs by a loose index scan on the new
+  `tally_vouchers_cmp_gstin` (book_id, cmp_gstin): one look-up per distinct GSTIN instead of every entry (stand: 11.4 -> 0.4 ms).
+- `gst_itc_inputs` (171's text; 106 ms): its GSTINs the same way; the rest as it was (stand: 5-10% faster). Finding its first
+  and last dated month from each end of the book was tried and was slower on staging, so it was not done.
+
+Replaced with the same arguments, grants restated (service_role). No table, column or policy added, nothing dropped, no row
+changed. One transaction, lock_timeout 3 s; then the 22 indexes CONCURRENTLY with lock_timeout 3 s (if one times out, run the
+file again). Safe twice. Tested: `tests/run_migration205.py` (RED_WITHOUT_205=1 fails).
