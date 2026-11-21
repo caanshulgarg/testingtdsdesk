@@ -590,6 +590,7 @@ function suggestRow(row, ctx){
     }
   }
   if (dir === "in" && ctx.salesInvs.length){
+    // ctx.salesInvs and its invoices' totals must not change after the first call: the lighter search keeps its index by the list
     const m = matchSalesInvoice(row, ctx.salesInvs, ctx.takenSales);
     if (m){
       const l = exactLedger(m.inv[0].customerLedger);

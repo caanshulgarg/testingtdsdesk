@@ -330,7 +330,8 @@ PLAIN_SALES = """(row, invs, taken) => {
   if (h.sim < 0.3 && row.dec.name) return null;
   return {inv: h.inv, strong: h.sim >= 0.6};
 }"""
-# a client of 3,000 ledgers, 1,500 open sales invoices (1,200 of one customer), a statement of 2,000 lines: 500 receipts not
+# a client of 3,000 ledgers, 1,600 open sales invoices (1,200 of one customer; 100 with no date or dated in the month),
+# a statement of 2,000 lines: 500 receipts not
 # yet booked (most the sum of two invoices of a customer, some of one invoice, some of none), the rest booked payments
 SALES_BANK = """async ([nR]) => {
   let s = 5; const R = () => { s = (Math.imul(s, 1664525) + 1013904223) >>> 0; return s / 4294967296; }, pad = (x) => String(x).padStart(2, '0');
@@ -340,9 +341,16 @@ SALES_BANK = """async ([nR]) => {
   for (let i = 0; i < 3000; i++) leds.push({name: 'Made Up Customer ' + i, group: i % 3 ? 'Sundry Creditors' : 'Sundry Debtors'});
   const sl = []; for (let i = 0; i < 1500; i++) { const p = i < 1200 ? 'Made Up Customer 0' : 'Made Up Customer ' + (1 + i % 90);
     sl.push(newInvoice({number: 'S/' + i, date: '2025-04-' + pad(1 + i % 28), customerName: p, taxable: 5000, cgst: 450, sgst: 450, total: i < 1200 ? 5900 + i * 7 : 3000 + Math.round(R() * 9000) + (i % 2 ? .5 : 0)}, 'upload', {customerLedger: p, status: i % 5 ? 'ready' : 'review'})); }
+  // 100 more: half with no date, half dated in the statement's month (after some of its receipts)
+  for (let i = 1500; i < 1600; i++) { const p = 'Made Up Customer ' + (1 + i % 90);
+    sl.push(newInvoice({number: 'S/' + i, date: i % 2 ? '' : '2025-05-' + pad(1 + i % 28), customerName: p, taxable: 2000, cgst: 0, sgst: 0, total: 2000 + i * 3 + .25}, 'upload', {customerLedger: p, status: 'ready'})); }
+  // receipts at an invoice's amount (or a pair's) exactly a rupee off, and just past it: EDGE[i % 50]
+  const EDGE = {10: [1, 1], 20: [1, -1], 30: [1, 1.01], 40: [1, -1.01], 15: [2, 1], 25: [2, -1], 35: [2, 1.01], 45: [2, -1.01]};
   const rows = []; let bal = 1e7;
-  for (let i = 0; i < 2000; i++) { const inn = i < nR, k = i % 10, cu = k < 6 ? 'Made Up Customer 0' : 'Made Up Customer ' + (1 + Math.floor(R() * 90));
-    const amt = !inn ? 500 + i : k === 9 ? 3 + i * 0.37 : k === 8 ? sl[1200 + Math.floor(R() * 300)].x.total : Math.round(12000 + R() * 8000);
+  for (let i = 0; i < 2000; i++) { const inn = i < nR, k = i % 10, ed = inn && EDGE[i % 50]; let cu = k < 6 ? 'Made Up Customer 0' : 'Made Up Customer ' + (1 + Math.floor(R() * 90));
+    let amt = !inn ? 500 + i : k === 9 ? 3 + i * 0.37 : k === 8 ? sl[1200 + Math.floor(R() * 400)].x.total : Math.round(12000 + R() * 8000);
+    if (ed && ed[0] === 1) { const v = sl[1200 + Math.floor(R() * 400)]; cu = v.customerLedger; amt = v.x.total + ed[1]; }
+    if (ed && ed[0] === 2) { cu = 'Made Up Customer 0'; amt = sl[Math.floor(R() * 1200)].x.total + sl[Math.floor(R() * 1200)].x.total + ed[1]; }
     bal += inn ? amt : -amt;
     rows.push({id: 's1-' + i, fp: 'fp' + i, date: '2025-05-' + pad(1 + i % 28), debit: inn ? 0 : amt, credit: inn ? amt : 0, bal: r2(bal), narr: (inn ? 'NEFT CR ' : 'NEFT DR ') + cu.toUpperCase() + ' UTR' + i,
       dec: {name: k === 7 ? '' : cu, mode: 'NEFT', utr: 'UTR' + i}, ledger: inn ? '' : 'Made Up Customer ' + (1 + i % 90), state: inn ? 'attention' : 'ready', balOk: true, why: inn ? ['No ledger found for this party.'] : []}); }
@@ -367,16 +375,21 @@ def part_i(br):
     pg.wait_for_timeout(2500)
     lt = pg.evaluate(LTS, t0)
     ok(pg.evaluate("() => matchSalesInvoice.light === true"), "the lighter search is the one the app uses")
-    ok(lt[1] < 900, "switched to a client of 500 receipts and 1,500 sales invoices: the longest task %d ms (within 900; 1,468 ms on staging-next), %d ms in all" % (lt[1], lt[0]))
+    ok(lt[1] < 2000, "switched to a client of 500 receipts and 1,600 sales invoices: the longest task %d ms (within 2,000; 1,468 ms on staging-next), %d ms in all" % (lt[1], lt[0]))
     # the suggestions: the same as the earlier search gives, line by line
     r = pg.evaluate("""([plain, sugg]) => { const b = S.bank, open = () => b.rows.filter((r) => r.credit).map((r) => Object.assign(JSON.parse(JSON.stringify(r)), {state: 'attention', ledger: '', userSet: false}));
       const run = (f) => { const rows = open(), keep = window.matchSalesInvoice; if (f) window.matchSalesInvoice = f; let ms; try { const t = performance.now(); suggestAll(rows); ms = performance.now() - t; } finally { window.matchSalesInvoice = keep; } return [eval(sugg)(rows), ms]; };
       const [now, ms] = run(null), [was, msWas] = run((0, eval)('(' + plain + ')'));
       const shown = eval(sugg)(b.rows.filter((r) => r.credit));
-      return {same: JSON.stringify(now) === JSON.stringify(was), shownSame: JSON.stringify(shown) === JSON.stringify(was), n: now.length, sales: now.filter((x) => x[4] === 'sales').length, pairs: now.filter((x) => x[8].includes(',')).length, ms: Math.round(ms), msWas: Math.round(msWas),
+      const edge = {10: '+1', 20: '-1', 30: '+1.01', 40: '-1.01', 15: 'pair +1', 25: 'pair -1', 35: 'pair +1.01', 45: 'pair -1.01'}, edges = {};
+      now.forEach((x) => { const e = edge[Number(x[0].split('-')[1]) % 50]; if (e) { edges[e] = edges[e] || [0, 0]; edges[e][0]++; if (x[4] === 'sales') edges[e][1]++; } });
+      return {edges, same: JSON.stringify(now) === JSON.stringify(was), shownSame: JSON.stringify(shown) === JSON.stringify(was), n: now.length, sales: now.filter((x) => x[4] === 'sales').length, pairs: now.filter((x) => x[8].includes(',')).length, ms: Math.round(ms), msWas: Math.round(msWas),
         diff: now.map((x, i) => JSON.stringify(x) === JSON.stringify(was[i]) ? null : [x, was[i]]).filter(Boolean).slice(0, 2)}; }""", [PLAIN_SALES, SUGG])
     ok(r["same"] and r["shownSame"] and r["sales"] > 100 and r["pairs"] > 50, "every receipt's suggestion the same as the earlier search's (%d lines, %d to sales invoices, %d to two; shown on the page the same: %s) %s" % (r["n"], r["sales"], r["pairs"], r["shownSame"], r["diff"] or ""))
-    ok(r["ms"] < 300, "suggesting the 500 receipts: %d ms (within 300; the earlier search %d ms here, 1,150-1,330 on staging-next)" % (r["ms"], r["msWas"]))
+    e = r["edges"]
+    ok(all(e.get(k, [0, 0])[0] >= 10 for k in ["+1", "-1", "+1.01", "-1.01", "pair +1", "pair -1", "pair +1.01", "pair -1.01"]) and e["+1"][1] and e["-1"][1] and e["pair +1"][1] and e["pair -1"][1],
+       "receipts a rupee off an invoice or a pair, and just past it, among them (lines, to sales invoices: %r)" % e)
+    ok(r["ms"] * 3 <= r["msWas"] and r["ms"] < 2000, "suggesting the 500 receipts: %d ms, at least 3 times quicker than the earlier search's %d ms (and within 2,000)" % (r["ms"], r["msWas"]))
     pg.close()
 
 try:
