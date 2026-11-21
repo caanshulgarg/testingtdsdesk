@@ -19,6 +19,15 @@ only. Made-up statement and ledgers (never a client's). Checked:
  (8) the bridge not connected: nothing is sent, the review says why, the ledger waits for the next posting and the line
      uses it;
  (9) a new ledger sent alone from the old one-ledger path (pushNewLedger) carries the client too.
+ The independent review (21-Nov-2026):
+ (10) a party with a rule for money in to its debtor ledger, its receipt ready with it and a bill: a payment's Create
+      leaves the receipt, its bill and the rule as they were; the payments with no ledger use the new one; payments with a
+      ledger are not touched; a rule for money out only; (11) the same when the ledger waits (bridge not connected);
+ (12) no answer (lost, quiet 15 minutes, check failed) is Waiting, kept pending and on the line, never Failed;
+ (13) "Ramesh & Co" and "Ramesh and Co" are one ledger, and replace a pending one of that name;
+ (14) a pending ledger already sent, not read back yet, is not sent again; (15) a failed Create keeps an older pending
+      ledger of that name; (16) Kotak, Yes, Federal, Canara, Bob dropped only as a bank's words; (17) PostGate's approval
+      cleared after the post.
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_bank_newled.py"""
 import os, threading, functools, http.server, re, json
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -69,7 +78,7 @@ SETUP = r"""async ([G, LINES]) => {
   window.ensureTallyCompany = async co => (Bridge.on() && Bridge.up() ? G : (toast("Connect FinCom Bridge first."), null));
   window.syncBankBookFromTally = async () => true; window.checkBankBalance = async () => null;
   // ---- the stand's bridge: what Bridge.post was given, and Tally's answer for each ledger
-  const T = window.__T = {posts: [], syncs: 0, delay: 0, exist: {}, fail: {}, made: []};
+  const T = window.__T = {posts: [], syncs: 0, delay: 0, exist: {}, fail: {}, lost: {}, checkFail: {}, made: []};
   Object.assign(Bridge.st, {state: "up", version: "2.5.17", tallyUp: true, open: [{name: G, port: 9000}], allowImport: true});
   Bridge.on = () => true; Bridge.up = () => true; Bridge.openFor = () => ({name: G, port: 9000});
   Bridge.post = async (payload) => {
@@ -78,6 +87,9 @@ SETUP = r"""async ([G, LINES]) => {
     return {ok: true, company: payload.company, results: [].concat(payload.masters || []).map(m => {
       const name = (m.xml.match(/<LEDGER NAME="([^"]*)"/) || [])[1];
       if (T.fail[name]) return {id: m.id, ok: false, message: T.fail[name]};
+      // no answer: the bridge lost the posting, or went quiet for 15 minutes (Bridge.post's notAnswered), or could not check
+      if (T.lost[name]) return {id: m.id, ok: false, notAnswered: true, jobId: "job-lost-1", message: T.lost[name]};
+      if (T.checkFail[name]) return {id: m.id, ok: false, checkFailed: true, message: "Could not check Tally, not posted. Try again."};
       T.made.push({name, group: (m.xml.match(/<PARENT>([^<]*)<\/PARENT>/) || [])[1]});
       return T.exist[name] ? {id: m.id, ok: true, created: 0, altered: 1, message: "ALTERED: 1"} : {id: m.id, ok: true, created: 1, altered: 0, message: "CREATED: 1"};
     })};
@@ -210,6 +222,118 @@ with sync_playwright() as p:
     E("() => createLedger('Lotus Demo Stores', 'Sundry Debtors')"); pg.wait_for_timeout(800)
     t = T(); posts = t["posts"][n0:]
     ok(len(posts) == 1 and posts[0].get("client") == cid and len(posts[0]["masters"]) == 1, "(9) pushNewLedger: one master, with the client (%s)" % [x.get("client") for x in posts])
+
+    # ---- the independent review (21-Nov-2026)
+    # a line pushed onto the statement (attention, no ledger), or with what it already has
+    E("""(G) => { window.__add = (id, out, narr, more) => { const b = B(), i = b.rows.length;
+      const r = Object.assign({id, fp: 'fp-' + id, date: '2026-10-' + String(1 + i % 28).padStart(2, '0'), debit: out ? 500 + i : 0, credit: out ? 0 : 700 + i, narr, dec: decodeNarr(narr, G), ledger: '', state: 'attention', balOk: true, why: []}, more || {});
+      b.rows.push(r); return r; }; }""", G)
+    rule = lambda k: E("(k) => B().rules.filter(x => x.key === k).map(x => x.dir + ':' + x.ledger).sort()", k)
+    full = lambda i: E("(i) => { const r = B().rows.find(x => x.id === i); return {st: r.state, led: r.ledger, bill: r.billId || null, ref: r.billRef || '', src: r.source || ''}; }", i)
+
+    # (10) the blocker: a party with a rule for money IN to its debtor ledger, its receipt ready with it (a bill linked);
+    # a payment of the party with no rule is offered a new ledger under Sundry Creditors; Create must not move the receipt,
+    # its bill or its rule; the payment (and the party's other payment with no ledger) use the new one; a rule for money
+    # OUT is written; a payment that already has a ledger (set by a rule, or by hand) is not touched
+    E("""() => { const b = B(); b.ledgers.list.push({name: 'MG Receivables', group: 'Sundry Debtors'}); Ledgers.ver++;
+      const rin = window.__add('m-in', 0, 'NEFT CR-SBIN0000123-MANISH GOYAL-ORCHID DEMO TRADERS-SBINN52026111900099',
+        {ledger: 'MG Receivables', state: 'ready', userSet: false, source: 'rule', why: 'rule', billId: 'bill-7', billRef: 'INV-7'});
+      b.rules.push({key: rin.dec.key, dir: 'in', ledger: 'MG Receivables', auto: true, label: 'MANISH GOYAL', at: new Date().toISOString()});
+      window.__add('m-out1', 1, 'IMPS-412345678931-MANISH GOYAL-HDFC-XXXXXX1111');
+      window.__add('m-out2', 1, 'IMPS-412345678932-MANISH GOYAL-HDFC-XXXXXX1111');
+      window.__add('m-out3', 1, 'IMPS-412345678933-MANISH GOYAL-HDFC-XXXXXX1111', {ledger: 'Office Rent', state: 'ready', userSet: true, source: 'you', why: 'set by you'});
+      window.__add('m-out4', 1, 'IMPS-412345678934-MANISH GOYAL-HDFC-XXXXXX1111', {ledger: 'Bank Charges', state: 'ready', userSet: false, source: 'rule', why: 'rule'});
+      b.sel.clear(); b.filter = 'review'; render(); }"""); pg.wait_for_timeout(400)
+    mk = E("B().rows.find(r => r.id === 'm-in').dec.key")
+    in0 = full("m-in")
+    h = hint("m-out1")
+    ok(h.count() == 1 and "New ledger: Manish Goyal · Sundry Creditors" in h.inner_text().replace("\n", " "), "(10) the payment is offered 'New ledger: Manish Goyal · Sundry Creditors' (%s)" % (h.inner_text() if h.count() else "none"))
+    if h.count():
+        pg.click('#app [data-nl-create="m-out1"]'); pg.wait_for_timeout(300); pg.click("#app [data-nl-go]"); pg.wait_for_timeout(900)
+        if pg.locator("#app [data-nl-close]").count(): pg.click("#app [data-nl-close]"); pg.wait_for_timeout(300)
+    ok(full("m-in") == in0 and in0 == {"st": "ready", "led": "MG Receivables", "bill": "bill-7", "ref": "INV-7", "src": "rule"}, "(10) the receipt keeps its debtor ledger, its bill and its state (%s)" % full("m-in"))
+    R = rule(mk)
+    ok("in:MG Receivables" in R and "any:Manish Goyal" not in R and not any(x.startswith("any:") for x in R), "(10) the rule for money in is kept; no rule for either way is written (%s)" % R)
+    ok(R == ["in:MG Receivables", "out:Manish Goyal"], "(10) a rule for money out only, to the new ledger (%s)" % R)
+    ok(row("m-out1") == {"st": "ready", "led": "Manish Goyal"} and row("m-out2") == {"st": "ready", "led": "Manish Goyal"}, "(10) the payment and the party's other payment with no ledger use it (%s, %s)" % (row("m-out1"), row("m-out2")))
+    ok(row("m-out3") == {"st": "ready", "led": "Office Rent"} and row("m-out4") == {"st": "ready", "led": "Bank Charges"}, "(10) payments that had a ledger (by hand, by a rule) are not touched (%s, %s)" % (row("m-out3"), row("m-out4")))
+
+    # (11) the same in the Waiting case (the bridge not connected): the receipt, its bill and its rule as they were; a rule
+    # for money out only when none exists
+    E("""() => { const b = B(); b.ledgers.list.push({name: 'NK Receivables', group: 'Sundry Debtors'}); Ledgers.ver++;
+      const rin = window.__add('n-in', 0, 'NEFT CR-SBIN0000123-NEHA KAPOOR-ORCHID DEMO TRADERS-SBINN52026111900098',
+        {ledger: 'NK Receivables', state: 'ready', userSet: false, source: 'rule', why: 'rule', billId: 'bill-8', billRef: 'INV-8'});
+      b.rules.push({key: rin.dec.key, dir: 'in', ledger: 'NK Receivables', auto: true, label: 'NEHA KAPOOR', at: new Date().toISOString()});
+      b.rules.push({key: rin.dec.key, dir: 'out', ledger: 'Old Payable', auto: true, label: 'NEHA KAPOOR', at: new Date().toISOString()});
+      window.__add('n-out1', 1, 'IMPS-412345678941-NEHA KAPOOR-HDFC-XXXXXX2222');
+      Bridge.on = () => false; Bridge.up = () => false; render(); }"""); pg.wait_for_timeout(400)
+    nk = E("B().rows.find(r => r.id === 'n-in').dec.key")
+    n0 = len(T()["posts"])
+    if hint("n-out1").count():
+        pg.click('#app [data-nl-create="n-out1"]'); pg.wait_for_timeout(300); pg.click("#app [data-nl-go]"); pg.wait_for_timeout(900)
+    ok(len(T()["posts"]) == n0 and any("Neha Kapoor" in r and "next posting" in r for r in results()), "(11) bridge not connected: nothing sent, the ledger waits (%s)" % results())
+    if pg.locator("#app [data-nl-close]").count(): pg.click("#app [data-nl-close]"); pg.wait_for_timeout(300)
+    ok(full("n-in") == {"st": "ready", "led": "NK Receivables", "bill": "bill-8", "ref": "INV-8", "src": "rule"}, "(11) Waiting: the receipt keeps its ledger, bill and state (%s)" % full("n-in"))
+    ok(rule(nk) == ["in:NK Receivables", "out:Old Payable"], "(11) Waiting: both rules as they were, none replaced, none added (%s)" % rule(nk))
+    ok(row("n-out1") == {"st": "ready", "led": "Neha Kapoor"}, "(11) Waiting: the payment uses the waiting ledger (%s)" % row("n-out1"))
+    E("() => { Bridge.on = () => true; Bridge.up = () => true; }")
+
+    # (12) no answer is not a failure: the bridge lost the posting, went quiet for 15 minutes, could not check: Waiting,
+    # the ledger kept pending and on its line (it may have been made)
+    E("""() => { window.__add('o1', 1, 'IMPS-412345678951-ORION PACKERS-HDFC-XXXXXX3333'); window.__add('o2', 1, 'IMPS-412345678952-PIONEER FABRICATORS-HDFC-XXXXXX3333');
+      window.__add('o3', 1, 'IMPS-412345678953-QUARTZ INTERIORS-HDFC-XXXXXX3333');
+      Object.assign(window.__T.lost, {'Orion Packers': 'The bridge lost this posting. Press Post again: entries already in Tally are recognised and not sent twice.',
+        'Quartz Interiors': 'The bridge did not answer for 15 minutes. The posting may have finished: press Post again.'}); window.__T.checkFail['Pioneer Fabricators'] = true; }""")
+    res = E("""() => NewLed.create([{name: 'Orion Packers', group: 'Sundry Creditors', rows: ['o1']}, {name: 'Pioneer Fabricators', group: 'Sundry Creditors', rows: ['o2']},
+      {name: 'Quartz Interiors', group: 'Sundry Creditors', rows: ['o3']}])""")
+    kinds = {x["name"]: x["kind"] for x in (res or {}).get("results", [])}
+    ok(kinds == {"Orion Packers": "waiting", "Pioneer Fabricators": "waiting", "Quartz Interiors": "waiting"}, "(12) lost, 15 minutes quiet, check failed: each Waiting, never Failed (%s)" % kinds)
+    pend = E("() => B().newLed.filter(l => ['Orion Packers', 'Pioneer Fabricators', 'Quartz Interiors'].includes(l.name)).map(l => l.name).sort()")
+    ok(pend == ["Orion Packers", "Pioneer Fabricators", "Quartz Interiors"], "(12) the three kept as pending new ledgers (%s)" % pend)
+    ok(row("o1")["led"] == "Orion Packers" and row("o2")["led"] == "Pioneer Fabricators" and row("o3")["led"] == "Quartz Interiors", "(12) and on their lines (%s %s %s)" % (row("o1"), row("o2"), row("o3")))
+
+    # (13) near-duplicate names are one ledger: "Ramesh & Co" and "Ramesh and Co"; a pending entry of the same name is replaced
+    E("""() => { window.__add('q1', 1, 'IMPS-412345678961-RAMESH AND CO-HDFC-XXXXXX4444'); window.__add('q2', 1, 'IMPS-412345678962-RAMESH AND CO-HDFC-XXXXXX4444');
+      B().newLed.push({name: 'Lotus & Sons', group: 'Sundry Debtors', pan: '', gstin: '', acNo: '', ifsc: '', at: new Date().toISOString(), sent: false}); PostGate.ok = null; }""")
+    n0 = len(T()["posts"])
+    res = E("() => NewLed.create([{name: 'Ramesh & Co', group: 'Sundry Creditors', rows: ['q1']}, {name: 'Ramesh and Co', group: 'Sundry Creditors', rows: ['q2']}, {name: 'Lotus and Sons', group: 'Sundry Debtors', rows: []}])")
+    posts = T()["posts"][n0:]
+    sentNames = [re.search(r'<LEDGER NAME="([^"]*)"', m["xml"]).group(1) for x in posts for m in x["masters"]]
+    ok(len([n for n in sentNames if "Ramesh" in n]) == 1, "(13) 'Ramesh & Co' and 'Ramesh and Co': one ledger sent (%s)" % sentNames)
+    ok(row("q1")["led"] and row("q1")["led"] == row("q2")["led"], "(13) both lines use the one ledger (%s, %s)" % (row("q1"), row("q2")))
+    lk = E("() => B().newLed.filter(l => ledgerKey(l.name) === 'lotusandsons').map(l => l.name)")
+    ok(len(lk) == 1, "(13) 'Lotus and Sons' replaces the pending 'Lotus & Sons': one entry (%s)" % lk)
+    # (17) the approval the review gave is cleared once the post is done
+    ok(E("PostGate.ok") is None, "(17) PostGate's approval cleared after the post (%s)" % E("PostGate.ok && Array.from(PostGate.ok.names)"))
+
+    # (14) sent but not read back yet: not sent again, taken as made
+    E("""() => { window.__add('s1x', 1, 'IMPS-412345678971-SUNRISE TILES-HDFC-XXXXXX5555');
+      B().newLed.push({name: 'Sunrise Tiles', group: 'Sundry Creditors', pan: '', gstin: '', acNo: '', ifsc: '', at: new Date().toISOString(), sent: true, sentAt: new Date().toISOString()}); }""")
+    n0 = len(T()["posts"])
+    res = E("() => NewLed.create([{name: 'Sunrise Tiles', group: 'Sundry Creditors', rows: ['s1x']}])")
+    kinds = {x["name"]: x["kind"] for x in (res or {}).get("results", [])}
+    ok(len(T()["posts"]) == n0 and kinds.get("Sunrise Tiles") == "already", "(14) a pending ledger already sent is not sent again: taken as made (%s, %d posts)" % (kinds, len(T()["posts"]) - n0))
+    ok(row("s1x") == {"st": "ready", "led": "Sunrise Tiles"}, "(14) the line uses it (%s)" % row("s1x"))
+
+    # (15) a failed Create keeps the older pending ledger of that name other lines use
+    E("""() => { window.__add('v1', 1, 'IMPS-412345678981-VEGA STEEL-HDFC-XXXXXX6666', {ledger: 'Vega Steel', state: 'ready', userSet: true, source: 'you'});
+      window.__add('v2', 1, 'IMPS-412345678982-VEGA STEEL-HDFC-XXXXXX6666');
+      B().newLed.push({name: 'Vega Steel', group: 'Sundry Creditors', pan: '', gstin: '', acNo: '', ifsc: '', at: '2026-11-01T10:00:00.000Z', sent: false});
+      window.__T.fail['Vega Steel'] = 'Group &apos;Sundry Debtorz&apos; does not exist'; }""")
+    res = E("() => NewLed.create([{name: 'Vega Steel', group: 'Sundry Debtorz', rows: ['v2']}])")
+    kinds = {x["name"]: x["kind"] for x in (res or {}).get("results", [])}
+    vs = E("() => B().newLed.filter(l => ledgerKey(l.name) === 'vegasteel').map(l => [l.name, l.group, l.at])")
+    ok(kinds.get("Vega Steel") == "failed" and vs == [["Vega Steel", "Sundry Creditors", "2026-11-01T10:00:00.000Z"]], "(15) Tally refused it: the older pending 'Vega Steel' is kept as it was (%s, %s)" % (kinds, vs))
+    ok(row("v1") == {"st": "ready", "led": "Vega Steel"}, "(15) the line using it keeps it (%s)" % row("v1"))
+
+    # (16) bank names that are also real names: dropped only as a bank's words ("KOTAK BANK", "YES BANK")
+    C = E("""() => Object.fromEntries(['KOTAK TRADERS', 'FEDERAL AGENCIES', 'CANARA STORES', 'YES FOODS', 'BOB ENTERPRISES', 'RAMESH KUMAR KOTAK BANK', 'SURESH PAL YES BANK',
+      'ANITA DESAI FEDERAL BANK', 'MOHAN LAL CANARA BANK', 'GITA RAO BOB BANK', 'RAJ MEHTA KOTAK MAHINDRA BANK'].map(n => [n, NewLed.clean(n)]))""")
+    want = {"KOTAK TRADERS": "Kotak Traders", "FEDERAL AGENCIES": "Federal Agencies", "CANARA STORES": "Canara Stores", "YES FOODS": "Yes Foods", "BOB ENTERPRISES": "Bob Enterprises",
+            "RAMESH KUMAR KOTAK BANK": "Ramesh Kumar", "SURESH PAL YES BANK": "Suresh Pal", "ANITA DESAI FEDERAL BANK": "Anita Desai", "MOHAN LAL CANARA BANK": "Mohan Lal",
+            "GITA RAO BOB BANK": "Gita Rao", "RAJ MEHTA KOTAK MAHINDRA BANK": "Raj Mehta"}
+    for k, v in want.items():
+        ok(C.get(k) == v, "(16) %s -> %s (%s)" % (k, v, C.get(k)))
 
     ok(not errors, "no page errors (%s)" % errors[:3])
     br.close()
