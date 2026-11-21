@@ -6,7 +6,8 @@
 .nl-lines,.nl-res{list-style:none;margin:10px 0;padding:0}
 .nl-line{display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-top:1px solid var(--rule-soft)}
 .nl-line.off .nl-fields,.nl-line.off .nl-meta{opacity:.55}
-.nl-on{margin-top:24px;flex:none}
+.nl-onwrap{flex:none;display:flex;align-items:center;justify-content:center;width:44px;height:44px;margin:12px 0 0 -12px;cursor:pointer}
+.nl-on{margin:0;width:18px;height:18px}
 .nl-body{flex:1;min-width:0}
 .nl-fields{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,2fr);gap:8px}
 .nl-fields label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted)}
@@ -17,4 +18,21 @@
 .nl-res li{padding:8px 0;border-top:1px solid var(--rule-soft);font-size:14px;overflow-wrap:anywhere}
 .nl-why{margin:8px 0}
 .nl-foot{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;position:sticky;bottom:-40px;background:var(--sheet);padding:10px 0}
-@media (max-width:600px){.nl-fields{grid-template-columns:1fr}.nl-on{margin-top:22px}}
+@media (max-width:600px){
+  .nl-fields{grid-template-columns:1fr}
+  .nl-fields input,.nl-fields select{min-height:44px;font-size:16px}
+  .nl-onwrap{margin-top:14px}
+  .nl-on{width:22px;height:22px}
+  .nl-foot .btn{min-height:44px}
+  /* the line card on a phone (table.cards, src/css/app.css): the column's name, the ledger box, what the matching said
+     and the suggested new ledger each on a line of their own, full width; the box and the buttons 44px tall to tap */
+  #app table.bk-table.cards td.lg{flex-wrap:wrap;justify-content:flex-start;align-items:center;row-gap:6px;text-align:left}
+  #app table.bk-table.cards td.lg::before{flex:0 0 100%}
+  #app table.bk-table.cards td.lg>*{flex:1 1 100%;min-width:0;max-width:none;margin:0}
+  #app table.bk-table.cards td.lg .bs-led{display:flex;align-items:center;gap:6px}
+  #app table.bk-table.cards td.lg .bs-led .lgbox{flex:1 1 auto;width:100%;height:44px;font-size:16px;box-sizing:border-box}
+  #app table.bk-table.cards td.lg .bs-led .bs-ok{height:44px;min-width:44px}
+  #app table.bk-table.cards td.lg .src{white-space:normal;overflow:visible;text-overflow:clip;font-size:12.5px;line-height:17px}
+  #app table.bk-table.cards td.lg .nl-hint{font-size:13px;line-height:18px;overflow-wrap:anywhere}
+  #app table.bk-table.cards td.lg .nl-hint .linkbtn{display:flex;align-items:center;justify-content:center;width:max-content;min-height:44px;min-width:88px;margin-top:6px;padding:0 16px;font-size:14px;font-weight:600;border:1px solid var(--rule-strong);border-radius:8px;background:var(--sheet)}
+}

@@ -72,7 +72,7 @@ export function NewLedReview() {
           const k = String(l.name).trim().toLowerCase(), has = k && exactLedger(l.name), pend = has && (ledgerInfo(has) || {}).pending;
           const gs = groups.some((g) => g === l.group) ? groups : [l.group].concat(groups);
           return <li key={l.key} className={"nl-line" + (l.on ? "" : " off")} data-nl-line="">
-            <input type="checkbox" className="nl-on" data-nl-on="" checked={l.on} aria-label={"Create " + l.name} onChange={(ev) => set(l, "on", ev.target.checked)} />
+            <label className="nl-onwrap"><input type="checkbox" className="nl-on" data-nl-on="" checked={l.on} aria-label={"Create " + l.name} onChange={(ev) => set(l, "on", ev.target.checked)} /></label>
             <div className="nl-body">
               <div className="nl-fields">
                 <label><span>Ledger name</span><input type="text" data-nl-name="" value={l.name} disabled={!l.on} onChange={(ev) => set(l, "name", ev.target.value)} /></label>
