@@ -195,10 +195,33 @@ def part_d(br):
     ok(v[0] == "2026-07-15" and v[1] == "15-Jul-2026", "a day picked: the bill's date and its box say 15-Jul-2026 (%r)" % v)
     pg.close()
 
+def part_e(br):
+    print("E. Sales: each invoice's sales ledger")
+    pg = br.new_page(viewport={"width": 1440, "height": 900}); pg.on("pageerror", lambda e: errors.append(str(e)[:300]))
+    pg.goto(URL); pg.evaluate(READY)
+    cid = pg.evaluate(BANK, [20000, 10])
+    pg.evaluate("""async (cid) => { const L = (await BankDB.get('ledgers:' + cid)); L.list.push({name: 'Sales', group: ''});
+      await BankDB.set('ledgers:' + cid, L);
+      const sl = []; for (let i = 0; i < 1500; i++) sl.push(newInvoice({number: 'S/' + i, date: '2025-05-' + String(1 + i % 28).padStart(2, '0'), customerName: 'Made Up Ledger ' + i, taxable: 1000, cgst: 25, sgst: 25, total: 1050, items: [{rate: [5, 12, 18, 28][i % 4], taxable: 1000}]}, 'upload', {customerLedger: 'Made Up Ledger ' + i, status: 'review', needsMap: true}));
+      await BankDB.set('sales:' + cid, sl); }""", cid)
+    pg.goto("about:blank"); pg.goto(URL + "#/today"); pg.evaluate(READY); pg.evaluate(LT); pg.wait_for_timeout(1000)
+    pg.evaluate("(cid) => openCompany(cid).then(() => loadBank(cid))", cid); pg.wait_for_timeout(2500)
+    t0 = pg.evaluate("() => performance.now()")
+    pg.evaluate("() => { goClient('sales'); }"); pg.wait_for_function("() => S.sales && !S.sales.loading", timeout=60000); pg.wait_for_timeout(2500)
+    lt = pg.evaluate(LTS, t0)
+    ok(lt[0] < 1700, "Sales opened: %d ms of long tasks, the longest %d ms (within 1,700; 1,741 on staging-next)" % (lt[0], lt[1]))
+    # the ledger for each rate, local and inter-state, as the plain search over every ledger gives it
+    r = pg.evaluate("""() => { const plain = (rate, inter) => { const keep = ledInKept; ledInKept = []; try { return salesLedgerFor(rate, inter); } finally { ledInKept = keep; } };
+      const out = []; for (const rate of [0, 5, 12, 18, 28]) for (const inter of [false, true]) out.push([rate, inter, salesLedgerFor(rate, inter), plain(rate, inter)]); return out; }""")
+    ok(all(x[2] == x[3] for x in r) and any(x[2] == "Sales" for x in r), "each rate's sales ledger the same as worked out afresh (%r)" % [(x[0], x[1], x[2]) for x in r][:6])
+    t = pg.evaluate("() => { const t = performance.now(); for (let i = 0; i < 1500; i++) salesLedgerFor(5, false); return performance.now() - t; }")
+    ok(t < 150, "1,500 invoices' sales ledger worked out in %d ms (within 150)" % t)
+    pg.close()
+
 try:
     with sync_playwright() as p:
         br = p.chromium.launch()
-        for k, f in [("A", part_a), ("B", part_b), ("C", part_c), ("D", part_d)]:
+        for k, f in [("A", part_a), ("B", part_b), ("C", part_c), ("D", part_d), ("E", part_e)]:
             if not ONLY or k in ONLY: f(br)
         br.close()
 finally:

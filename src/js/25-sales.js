@@ -202,7 +202,8 @@ function salesLedgerFor(rate, inter){
   const plain = salesL.filter(l => !/\d\s*%/.test(l.name));
   if (plain.length === 1) return plain[0].name;
   if (salesL.length === 1) return salesL[0].name;
-  const named = (B().ledgers.list || []).find(l => /^sales(\s*(a\/c|account))?$/i.test(l.name));
+  // (next-fix-pagespeed: looked for once per list, kept with its sales ledgers: 20,000 ledgers each invoice)
+  const m = ledInKept.m, named = "n" in m ? m.n : (m.n = (B().ledgers.list || []).find(l => /^sales(\s*(a\/c|account))?$/i.test(l.name)));
   return named ? named.name : "";
 }
 // output tax ledgers (optionally rate-wise, e.g. "Output CGST 9%" or "Output IGST 18"); v: the invoice, for the state of
