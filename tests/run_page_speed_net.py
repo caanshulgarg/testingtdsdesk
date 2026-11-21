@@ -9,7 +9,8 @@ on the React test build (app/dist-test, or TDSDESK_SITE) signed in to the stand-
   F. the Tally page: opening it read the whole page twice at once (TCloud.refreshPane, src/js/49: the page's own first
      read and the check every link runs), so each of its ~20 asks went twice. Now a read asked while one is going on
      waits for that one (a read that brings less, the page's few-minute look, never stands in for a full one); the page
-     shows the same."""
+     shows the same. A read asked by an action (Link, Revoke, Check again, a save: not the page's own look) never takes
+     the answer of a read that began before it: it waits for one that begins after it (several such share it)."""
 import os, sys, json, time, asyncio, functools, threading, http.server, urllib.parse, collections
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
 from playwright.async_api import async_playwright
@@ -79,7 +80,32 @@ async def main():
         r = await pg.evaluate("async () => { TCloud.pane.onceAt = Date.now(); const a = TCloud.refreshPane({auto: true}), b = TCloud.refreshPane(); await Promise.all([a, b]); return !TCloud.pane.busy; }")
         dv = [x for x in log if x[2] == "tally_devices" and "main_bridge" in x[3]]
         rel = [x for x in log if x[2] == "tally_bridge_releases"]
-        ok(len(dv) == 2 and len(rel) == 1 and r, "the page's look going on and Refresh pressed: Refresh reads in full after it (%d reads, releases %d)" % (len(dv), len(rel)))
+        ok(len(dv) == 1 and len(rel) == 1 and r, "Refresh pressed as the page's look is asked, before it begins: the one read, made in full (%d reads, releases %d)" % (len(dv), len(rel)))
+        del log[:]
+        r = await pg.evaluate("async () => { TCloud.pane.onceAt = Date.now(); const a = TCloud.refreshPane({auto: true}); await new Promise((r) => setTimeout(r, 0)); const b = TCloud.refreshPane(); await Promise.all([a, b]); return !TCloud.pane.busy; }")
+        dv = [x for x in log if x[2] == "tally_devices" and "main_bridge" in x[3]]
+        rel = [x for x in log if x[2] == "tally_bridge_releases"]
+        ok(len(dv) == 2 and len(rel) == 1 and r, "the page's look begun, then Refresh pressed: Refresh reads in full after it (%d reads, releases %d)" % (len(dv), len(rel)))
+        # a save while the first-link watcher's read goes on: the read asked after the save shows the save
+        print("G. a read asked after a save shows the save, though another read was going on")
+        cp = fx["tally_companies"][0]; was = cp.get("gstin"); mark = "07ZZZZZ9999Z1Z9"         # (a made-up GSTIN: the saved change)
+        slow["on"] = True; del log[:]
+        await pg.evaluate("() => { window.__soon = TCloud.refreshPane({soon: true}); }")
+        for _ in range(200):
+            if any(x[2] == "tally_companies" for x in log): break
+            await asyncio.sleep(0.05)
+        cp["gstin"] = mark                                       # the save, after that read asked for the companies
+        r = await pg.evaluate("async (g) => { await TCloud.refreshPane(); return (TCloud.pane.companies || []).some((c) => c.gstin === g); }", mark)
+        await pg.evaluate("() => window.__soon")
+        slow["on"] = False
+        ok(r, "a company saved while the first-link watcher's 5 s look was reading: the read asked after it shows the save")
+        reads = len([x for x in log if x[2] == "tally_companies"])
+        ok(reads == 2, "one more read for it, after the one going on (%d reads of the companies)" % reads)
+        del log[:]
+        r = await pg.evaluate("async () => { const a = TCloud.refreshPane({soon: true}); await new Promise((r) => setTimeout(r, 0)); const b = TCloud.refreshPane(), c = TCloud.refreshPane(); await Promise.all([a, b, c]); return !TCloud.pane.busy; }")
+        reads = len([x for x in log if x[2] == "tally_companies"])
+        ok(r and reads == 2, "two actions during a read: they share the one read after it (%d reads)" % reads)
+        cp["gstin"] = was
         await br.close()
     srv.shutdown()
     print("\n" + ("%d FAILED" % len(fails) if fails else "all passed"))
