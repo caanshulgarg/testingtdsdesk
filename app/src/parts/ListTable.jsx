@@ -28,7 +28,7 @@
 // sorted-column tint and row hover redrawn on table.lt in styles/arc-look.css, because its own phone layout would undo
 // FinCom's phone cards, src/js/53-phone.js), on the same table as before, so every list keeps its rows, cells and
 // attributes; an empty list is Arc's empty state (EmptyNote).
-import { Children, Fragment, Suspense, cloneElement, isValidElement, lazy, useEffect, useLayoutEffect, useRef } from "react";
+import { Children, Fragment, Suspense, cloneElement, isValidElement, lazy, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { filterable, filterRows, listF, fActive, anyOn, openListF, clearListF, register, pruneSel } from "./colFilter.js";
 import Loading from "./Loading.jsx";
 import EmptyNote from "./EmptyNote.jsx";
@@ -210,13 +210,32 @@ export function ListWrap({ children, className }) {
   return <div className={"bk-tablewrap lt-wrap" + (className ? " " + className : "")}>{children}</div>;
 }
 
+// next-fix-pagespeed (20,000 bank lines on Transactions: 1 s to open, 2 s a key typed in its search): a list of more than
+// GROW + 200 rows with no limit of its own draws GROW rows, and GROW more each time the row under them comes within
+// 1,500 px of sight, as the page or the table's box is scrolled. That row stands for the rows not drawn yet and is as tall
+// as they would be, so the page is as long as before; the foot counts and adds up every row, as before.
+const GROW = 300;
+function useGrow(len) {
+  const [, draw] = useState(0), ref = useRef(null), at = useRef({ n: GROW, len });
+  if (at.current.len !== len) at.current = { n: GROW, len };       // another search or list: from the top again
+  useEffect(() => {
+    const el = ref.current; if (!el) return;
+    const f = el.parentElement.firstElementChild, n = +el.dataset.ltN;
+    el.firstChild.style.height = Math.round((el.offsetTop - f.offsetTop) / n * el.dataset.ltGrow) + "px";
+    let root = el.parentElement; while (root && !(root.scrollHeight > root.clientHeight + 1 && /auto|scroll/.test(getComputedStyle(root).overflowY))) root = root.parentElement;
+    const io = new IntersectionObserver((es) => { if (es.some((e) => e.isIntersecting)) { at.current.n += GROW; draw((x) => x + 1); } }, { root: root && root !== document.scrollingElement && root !== document.body ? root : null, rootMargin: "1500px 0px" });
+    io.observe(el); return () => io.disconnect();
+  });
+  return [at.current.n, ref];
+}
+
 export default function ListTable({ name, cols, rows, rowKey, rowProps, prep, unit = ["entry", "entries"], of, empty, loading, limit, more,
   className = "bk-table", wrap, style, foot = true, id, after, before, tail, sortVia, footNote, keepHead, resize, freeze, filters = true, selected }) {
   // sortVia: {state: {k, dir}, by(k)}: a list whose order is kept elsewhere (the rows come in sorted); the headers and
   // arrows are the same
   const cs = orderCols(cols), s = sortOf(name);
   const Wrap = wrap || ListWrap;
-  const tref = useFreeze(freeze);
+  const tref = useFreeze(freeze), [grown, gref] = useGrow(rows.length);
   const w = resize ? colWidths(name) : null, tw = w ? tableWidth(cs, w) : undefined;
   const tcls = className + " lt" + (resize ? " lt-rsz" : "") + (freeze ? " lt-frozen" : "") + (tw ? " lt-sized" : "");
   const tstyle = tw ? { ...(style || {}), width: tw } : style;
@@ -250,7 +269,8 @@ export default function ListTable({ name, cols, rows, rowKey, rowProps, prep, un
     <tbody><tr className="lt-none"><td colSpan={cs.length}><EmptyNote className="bk-none lt-empty" data-list-empty="" what={empty || "Nothing here yet."} />{keepHead !== true ? keepHead : null}</td></tr></tbody></table></Wrap>;
   if (!rows.length) return empty === null ? null : <EmptyNote className="bk-none lt-empty" data-list-empty="" what={empty || "Nothing here yet."} />;
   const sorted = sortVia ? sortVia.state : s;
-  const all = sortVia ? rows : sortRows(name, cs, rows), shown = limit ? all.slice(0, limit) : all;
+  const all = sortVia ? rows : sortRows(name, cs, rows), grow = !limit && all.length > GROW + 200 && typeof IntersectionObserver === "function",
+    shown = limit ? all.slice(0, limit) : grow ? all.slice(0, grown) : all;
   return <>
     {lf && <PhoneFunnels name={name} cs={cs} />}
     {fbar}
@@ -270,7 +290,7 @@ export default function ListTable({ name, cols, rows, rowKey, rowProps, prep, un
           const head = before && before(r, i);
           const rowsOut = open ? [tr, <tr key={k + ":open"} className="lt-open"><td colSpan={cs.length} style={{ background: "var(--paper)", padding: 0 }}>{open}</td></tr>] : [tr];
           return head ? [<tr key={k + ":head"} className="lt-grp"><td colSpan={cs.length}>{head}</td></tr>, ...rowsOut] : rowsOut.length === 1 ? tr : rowsOut;
-        })}{tail}</tbody>
+        })}{grow && shown.length < all.length && <tr ref={gref} data-lt-grow={all.length - shown.length} data-lt-n={shown.length} aria-hidden="true"><td colSpan={cs.length} style={{ padding: 0, border: 0 }} /></tr>}{tail}</tbody>
         {foot && <Foot cols={cs} rows={all} unit={unit} of={of} note={footNote} />}
       </table>
     </Wrap>

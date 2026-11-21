@@ -66,10 +66,113 @@ def part_a(br):
     ok(lt[0] < 6000, "opening a client of 12,000 ledgers with no ledInfo: %d ms of long tasks, the longest %d ms (within 6,000)" % (lt[0], lt[1]))
     pg.close()
 
+# a client with nL ledgers, a statement of nB lines, the account's ledger not confirmed (the Bank page asks for it)
+BANK = """async ([nL, nB]) => {
+  const c = newCompany({name: 'Made Up Bank Client ' + nL, gstin: ''}); S.companies[c.id] = c; S.data[c.id] = {parties: {}, entries: {}, loaded: true}; c.stats = {};
+  c.bankAccounts = [{id: 'a1', bank: 'Made Up Bank', acct: '0001'}];
+  const leds = [{name: 'Made Up Bank', group: 'Bank Accounts'}, {name: 'Made Up Cash', group: 'Cash-in-Hand'}];
+  for (let i = 0; i < nL; i++) leds.push({name: 'Made Up Ledger ' + i, group: i % 3 ? 'Sundry Creditors' : 'Sundry Debtors'});
+  leds.push({name: 'Made Up Ledger With The Longest Name Of All', group: 'Sundry Creditors'});
+  const rows = Array.from({length: nB}, (_, i) => ({id: 's1-' + i, fp: 'fp' + i, date: '2025-05-' + String(1 + i % 28).padStart(2, '0'), debit: 100 + i, credit: 0, bal: 0, narr: 'NEFT DR MADE UP LEDGER ' + i, dec: {name: 'Made Up Ledger ' + i, mode: 'NEFT', utr: 'U' + i}, ledger: 'Made Up Ledger ' + i, state: 'ready', balOk: true, why: []}));
+  await BankDB.set('stmts:' + c.id, [{id: 's1', acctId: 'a1', bank: 'Made Up Bank', acct: '0001', from: '2025-05-01', to: '2025-05-28', opening: 0, closing: 0, n: nB, counts: countStates(rows)}]);
+  await BankDB.set('stmt:' + c.id + ':s1', rows);
+  await BankDB.set('ledgers:' + c.id, {list: leds, importedAt: new Date().toISOString(), live: true});
+  Store.saveCompany(c); return c.id; }"""
+SEL = '#app select[aria-label="Tally ledger for this bank account"]'
+def part_b(br):
+    print("B. the ledger lists to choose from: a long one filled when it is used")
+    pg = br.new_page(viewport={"width": 1440, "height": 900}); pg.on("pageerror", lambda e: errors.append(str(e)[:300]))
+    pg.goto(URL); pg.evaluate(READY)
+    small = pg.evaluate(BANK, [300, 60]); big = pg.evaluate(BANK, [20000, 2000])
+    pg.goto("about:blank"); pg.goto(URL + "#/today"); pg.evaluate(READY); pg.evaluate(LT); pg.wait_for_timeout(1000)
+    # a short list (303 ledgers): every one at once, as before
+    pg.evaluate("(cid) => openCompany(cid).then(() => goClient('bank'))", small)
+    pg.wait_for_selector(SEL, timeout=30000); pg.wait_for_timeout(800)
+    r = pg.evaluate("(s) => { const e = document.querySelector(s); return [e.options.length, e.innerHTML === ledgerOptions('', BANK_GROUPS)]; }", SEL)
+    ok(r[0] == 304 and r[1], "303 ledgers: the list holds every one at once, as before (%d options)" % r[0])
+    # the long list: the Bank page opened, its long tasks
+    pg.evaluate("() => navHome('today')"); pg.wait_for_timeout(800)
+    t0 = pg.evaluate("() => performance.now()")
+    pg.evaluate("(cid) => { openCompany(cid).then(() => goClient('bank')); }", big)
+    pg.wait_for_selector(SEL, timeout=120000); pg.wait_for_timeout(3000)
+    lt = pg.evaluate(LTS, t0)
+    ok(lt[0] < 4000, "20,003 ledgers: the Bank page opened with %d ms of long tasks, the longest %d ms (within 4,000; was 22 s)" % (lt[0], lt[1]))
+    r = pg.evaluate("(s) => { const e = document.querySelector(s); return [e.options.length, e.value, Math.round(e.getBoundingClientRect().width), [...e.options].map((o) => o.text)]; }", SEL)
+    ok(r[0] <= 3 and r[1] == "" and "Made Up Ledger With The Longest Name Of All" in r[3], "before it is used: the choice and the longest name only (%d options: %r)" % (r[0], r[3][:4]))
+    pg.focus(SEL); pg.wait_for_timeout(300)
+    f = pg.evaluate("(s) => { const e = document.querySelector(s); return [e.options.length, e.innerHTML === ledgerOptions('', BANK_GROUPS), Math.round(e.getBoundingClientRect().width), e.value]; }", SEL)
+    ok(f[0] == 20004 and f[1], "focused: every ledger, in the same order and groups as before (%d options)" % f[0])
+    ok(abs(f[2] - r[2]) <= 6, "as wide before and after it is filled (%d px, %d px)" % (r[2], f[2]))
+    pg.select_option(SEL, "Made Up Bank"); pg.wait_for_timeout(500)
+    v = pg.evaluate("(s) => { const e = document.querySelector(s); return [e.value, e.options.length, [...e.options].filter((o) => o.selected).map((o) => o.text)]; }", SEL)
+    ok(v[0] == "Made Up Bank" and v[2] == ["Made Up Bank"], "a ledger chosen: shown as chosen (%r)" % v)
+    pg.click('#app [data-bank-ledger-confirm]'); pg.wait_for_timeout(800)
+    ok(pg.evaluate("(cid) => (CO(cid).bankAccounts[0] || {}).ledger", big) == "Made Up Bank", "and Confirm keeps it on the account, as before")
+    # typing in the statement's search: each key drawn within 1.5 s (was 5-13 s)
+    q = pg.locator('#app input[aria-label="Search the statement"]')
+    if q.count():
+        q.first.click(); t0 = pg.evaluate("() => performance.now()")
+        for ch in "ledger 1": pg.keyboard.type(ch); pg.wait_for_timeout(80)
+        pg.wait_for_timeout(1500); lt = pg.evaluate(LTS, t0)
+        ok(lt[1] < 1500, "typing in the search: the longest task %d ms (within 1,500), %d ms in all" % (lt[1], lt[0]))
+    else: ok(False, "the statement's search box")
+    # Client setup > Bank: its ledger lists
+    t0 = pg.evaluate("() => performance.now()")
+    pg.evaluate("() => { S.step = null; S.tab = 'bankset'; render(); }"); pg.wait_for_timeout(2500)
+    lt = pg.evaluate(LTS, t0)
+    n = pg.evaluate("() => [...document.querySelectorAll('#app select')].map((e) => e.options.length).filter((n) => n > 1000).length")
+    ok(lt[0] < 2000 and n == 0, "Client setup > Bank: %d ms of long tasks (within 2,000; was 5 s), no list filled before it is used" % lt[0])
+    m = pg.evaluate("() => { const e = [...document.querySelectorAll('#app select')].find((x) => x.options.length && x.options[0].text.includes('Choose a Tally ledger')); if (!e) return null; const was = e.value, n0 = e.options.length; e.dispatchEvent(new MouseEvent('mousedown', {bubbles: true})); return [n0, e.options.length, was === e.value, e.innerHTML === ledgerOptions(was, undefined)]; }")
+    ok(m and m[0] <= 3 and m[1] > 20000 and m[2] and m[3], "a ledger list there pressed with the mouse: every ledger, the choice kept (%r)" % (m,))
+    pg.close()
+
+TROWS = "() => document.querySelectorAll('#app table[data-list=\\'txn-bank\\'] tbody tr:not([data-lt-grow])').length"
+TFOOT = "() => { const f = document.querySelector('#app table[data-list=\\'txn-bank\\'] tfoot'); return f ? f.innerText.replace(/\\s+/g, ' ').trim() : ''; }"
+def part_c(br):
+    print("C. long lists: drawn as they are scrolled to")
+    pg = br.new_page(viewport={"width": 1440, "height": 900}); pg.on("pageerror", lambda e: errors.append(str(e)[:300]))
+    pg.goto(URL); pg.evaluate(READY)
+    small = pg.evaluate(BANK, [300, 450]); big = pg.evaluate(BANK, [300, 20000])
+    pg.goto("about:blank"); pg.goto(URL + "#/today"); pg.evaluate(READY); pg.evaluate(LT); pg.wait_for_timeout(1000)
+    def txn(cid):
+        pg.evaluate("(cid) => openCompany(cid).then(() => goClient('bank'))", cid); pg.wait_for_function("(cid) => S.bank && S.bank.cid === cid && !S.bank.loading", arg=cid, timeout=60000)
+        pg.wait_for_timeout(1500); t0 = pg.evaluate("() => performance.now()")
+        pg.evaluate("() => { S.txnQ = ''; goClient('txn'); txnTabGo('bank'); }"); pg.wait_for_selector("#app table[data-list='txn-bank']", timeout=60000); pg.wait_for_timeout(2000)
+        return pg.evaluate(LTS, t0)
+    txn(small)
+    ok(pg.evaluate(TROWS) == 450 and "450 lines" in pg.evaluate(TFOOT), "450 lines: every one drawn at once, as before (%d rows; %s)" % (pg.evaluate(TROWS), pg.evaluate(TFOOT)[:60]))
+    lt = txn(big)
+    n0 = pg.evaluate(TROWS); foot = pg.evaluate(TFOOT)
+    want = pg.evaluate("() => { const r = txnFiltered(txnRowsBank()); return [r.length, money(r2(r.reduce((a, x) => a + num(x.total), 0)))]; }")
+    ok(lt[0] < 1500, "20,000 lines: Transactions opened with %d ms of long tasks, the longest %d ms (within 1,500; was 1 s, 2 s a key)" % (lt[0], lt[1]))
+    ok(n0 == 300 and ("%d lines" % want[0]) in foot.replace(",", ""), "300 rows drawn, the foot counts all %d lines (%s)" % (want[0], foot[:80]))
+    ok(want[1] in foot, "the foot's total is of every line (%s)" % want[1])
+    h = pg.evaluate("() => { const g = document.querySelector('#app [data-lt-grow]'); const f = g && g.parentElement.firstElementChild; return g ? [Math.round(g.getBoundingClientRect().height), Math.round((g.getBoundingClientRect().top - f.getBoundingClientRect().top) / 300 * (20000 - 300))] : null; }")
+    ok(h and abs(h[0] - h[1]) <= h[1] * 0.01, "the rows not drawn yet stood for by one row as tall as they are (%r)" % (h,))
+    # the search: typed with every key drawn quickly, the same lines found
+    box = pg.locator('#app input[aria-label="Find a transaction"]'); box.click(); t0 = pg.evaluate("() => performance.now()")
+    for ch in "ledger 1": pg.keyboard.type(ch); pg.wait_for_timeout(80)
+    pg.wait_for_timeout(1500); lt = pg.evaluate(LTS, t0)
+    want = pg.evaluate("() => txnFiltered(txnRowsBank()).length")
+    ok(lt[1] < 400, "typing in the search: the longest task %d ms (within 400; was 2 s a key), %d ms in all" % (lt[1], lt[0]))
+    ok(("%d lines" % want) in pg.evaluate(TFOOT).replace(",", "") and pg.evaluate(TROWS) == min(300, want), "the search finds the same %d lines, the foot counts them" % want)
+    pg.evaluate("() => { S.txnQ = ''; render(); }"); pg.wait_for_timeout(1500)
+    # scrolled to: more rows come; to the end: every one, the last line last
+    pg.evaluate("() => { const g = document.querySelector('#app [data-lt-grow]'); if (g) g.scrollIntoView(); }"); pg.wait_for_timeout(1200)
+    n1 = pg.evaluate(TROWS)
+    ok(n1 > n0, "scrolled to the end of what is drawn: more rows (%d, then %d)" % (n0, n1))
+    for _ in range(200):
+        if not pg.evaluate("() => !!document.querySelector('#app [data-lt-grow]')"): break
+        pg.evaluate("() => { const g = document.querySelector('#app [data-lt-grow]'); if (g) g.scrollIntoView(); }"); pg.wait_for_timeout(120)
+    ok(pg.evaluate(TROWS) == 20000, "scrolled on to the end: all 20,000 lines drawn (%d)" % pg.evaluate(TROWS))
+    last = pg.evaluate("() => { const r = [...document.querySelectorAll('#app table[data-list=\\'txn-bank\\'] tbody tr')].pop(); return r ? r.cells[0].innerText.trim() : ''; }")
+    ok(last == "20000", "the last row is line 20,000 (%s)" % last)
+    pg.close()
+
 try:
     with sync_playwright() as p:
         br = p.chromium.launch()
-        for k, f in [("A", part_a)]:
+        for k, f in [("A", part_a), ("B", part_b), ("C", part_c)]:
             if not ONLY or k in ONLY: f(br)
         br.close()
 finally:
