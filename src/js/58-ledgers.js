@@ -19,6 +19,7 @@ const Ledgers = {
   err: {},            // cid -> what went wrong in the last read
   seen: {},           // cid -> when Ledgers.watch last looked
   ver: 0,
+  NONE: Object.freeze({}),
   // next-fix-books-freeze (FINCOM-APP-STAGING-M): inside run(f), what memo(k, f) works out is kept until run ends; outside
   // a run nothing is kept. For work that asks the same of the ledgers many times while they do not change (billAutoAll)
   _m: null,
@@ -49,7 +50,9 @@ const Ledgers = {
     if (!b || b.cid !== cid || b.loading) return [];
     // next-mis-speed (4,191 ledgers: 20 s in one task): every exactLedger asks for the list, and counting the masters each
     // time made the matching of all the ledgers go as their square. Counted once a task (until its microtasks)
-    const info = b.ledInfo || {}, under = b.under || {}, g = b.groups || {}, c = this._n,
+    // next-fix-pagespeed: books with no ledInfo (or no under) are compared by one empty object, not a new {} each ask,
+    // which never matched the count kept and so counted every name at each ask (232 s opening 20,000 ledgers)
+    const info = b.ledInfo || Ledgers.NONE, under = b.under || Ledgers.NONE, g = b.groups || {}, c = this._n,
       n = c && c.i === info && c.u === under ? c.n : (Promise.resolve().then(() => this._n = 0), (this._n = {i: info, u: under, n: Object.keys(info).length + "/" + Object.keys(under).length}).n),
       k = cid + (b.ledInfoAt || "") + n;
     if (b._led && b._led.k === k) return b._led.l;
