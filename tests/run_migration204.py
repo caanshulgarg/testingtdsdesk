@@ -4,8 +4,8 @@ unless PG204_PORT; never a real database), with staging's tables as they are (co
 realistic size (74,250 lines, 16,500 entries, 16,500 bills, 16,698 seen rows), each statement 204 makes lighter is run
 before and after the file and must give exactly the same answer (the md5 of its whole text), in every case below, and be
 no slower; the timings are printed. Checks:
-  0. the file: add-only (functions replaced with the same arguments, an index made CONCURRENTLY if not there, statistics if
-     not there; nothing dropped, deleted, updated or truncated; no table), lock_timeout set, every function's grants
+  0. the file: one transaction, safe through the API as one query (functions replaced with the same arguments,
+     statistics if not there; its index and the ANALYZE after it in migration-204-indexes.sql, one statement per line; nothing dropped, deleted, updated or truncated; no table), lock_timeout set, every function's grants
      explicit, names no real database, runs twice; the functions it replaces are staging's text (md5 of each body)
   1. gst_share_books_due (the gst-share-sweep job, every minute): as made, idle (every entry seen), a lease, a book with no
      context, an entry due, another engine, an entry unseen, p_n 1 / 5 / null
@@ -16,12 +16,16 @@ no slower; the timings are printed. Checks:
   4. the settle's look-up by the add-on's remote GUID (tally_post_register_settle_book's second look, per register row):
      the same lines found; the planner takes the new index
   5. grants as on staging
+Applied as on staging: the file through tests/api_standin.py (twice), then the indexes by
+tools/apply_concurrent_indexes.py (twice), every index valid (indisvalid).
 RED_WITHOUT_204=1: the same checks without the file (fails)."""
 import os, re, sys, hashlib, subprocess, shutil
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 import pg_stand
 ROOT = os.path.dirname(HERE)
 M204 = os.path.join(ROOT, "server", "tally-cloud", "migration-204-db-speed.sql")
+IFILE = os.path.join(ROOT, "server", "tally-cloud", "migration-204-indexes.sql")
+MFILE = M204
 RED = os.environ.get("RED_WITHOUT_204") == "1"
 PORT = int(os.environ.get("PG204_PORT", "31274"))
 fails = []
@@ -234,11 +238,21 @@ code = "\n".join(l.split("--")[0] for l in text.lower().splitlines())
 print("== 0. the file")
 ok(bool(text) and not re.search(r"\b(drop|truncate)\s", code) and "delete from" not in code and not re.search(r"\bupdate\s+\w", code) and "create table" not in code
    and "insert into" not in code, "add-only: nothing dropped, deleted, updated, inserted or truncated; no table")
-ok("set local lock_timeout = '3s';" in code and "\nset lock_timeout = '3s';" in code, "lock_timeout 3 s (the transaction, and the index made after it)")
-idx = re.findall(r"create index concurrently if not exists (\w+)", code)
-ok(idx == ["tally_recorder_lines_remote_guid"] and code.rfind("create index concurrently") > code.rfind("commit;"), "one index, CONCURRENTLY, if not there, outside the transaction: %s" % idx)
+ok("set local lock_timeout = '3s';" in code, "lock_timeout 3 s")
+itext = open(IFILE).read() if os.path.exists(IFILE) and not RED else ""
+ilines = [l.strip() for l in itext.splitlines() if l.strip() and not l.strip().startswith("--")]
+INAMES = re.findall(r"(?im)^create index concurrently if not exists (\w+) on ", itext)
+ok(bool(text) and "concurrently" not in code and code.rstrip().endswith("commit;") and code.count("\nbegin;") == 1,
+   "the file is one transaction, no index in it (CONCURRENTLY cannot run in the API's one query)")
+ok(bool(ilines) and all(l.endswith(";") and l.count(";") == 1 for l in ilines)
+   and all(re.match(r"create index concurrently if not exists \w+ on public\.\w+ ", l) or re.match(r"analyze public\.\w+;$", l) for l in ilines),
+   "%s: one statement per line, each index CONCURRENTLY IF NOT EXISTS" % os.path.basename(IFILE))
+ok(INAMES == ["tally_recorder_lines_remote_guid"] and ilines[-1] == "analyze public.tally_recorder_lines;", "one index, then the ANALYZE as the last line: %s" % INAMES)
+# the settle function the index serves, as staging has it (md5 of pg_proc.prosrc, 21-Nov-2026): 204 does not replace it
+ok(hashlib.md5(fdef(os.path.join(ROOT, "server/tally-cloud/migration-111-post-register.sql"), "tally_post_register_settle_book")[1].encode()).hexdigest() == "24dcf89f950abe1989d47342897a1558",
+   "tally_post_register_settle_book: staging's text (111's), its look-up the one the index is for")
 ok("create statistics if not exists public.tally_recorder_lines_remote_guid_stats" in code, "statistics on the remote-GUID test, if not there")
-ok(bool(text) and not re.search(r"supabase\.co|https?://|qbocskai|nrtczu|project[_ ]ref", text.lower()), "names no real database")
+ok(bool(text) and not re.search(r"supabase\.co|https?://|qbocskai|nrtczu|project[_ ]ref", (text + itext).lower()), "names no real database (the file and its indexes)")
 made = sorted(set(re.findall(r"create or replace function public\.(\w+)\(", code)))
 ok(made == sorted(b[0] for b in BEFORE), "replaces exactly: %s" % made)
 for name, path, md5, args in BEFORE:
@@ -257,10 +271,17 @@ try:
     print("   ", db.rows("select (select count(*) from tally_lines) lines, (select count(*) from tally_vouchers) entries, (select count(*) from tally_bills) bills, (select count(*) from calc_seen) seen, (select count(*) from tally_recorder_lines) recorder, (select count(*) from tally_post_register) register")[0])
     before = run_cases(db)
     if text:
+        # as it is applied: the file through the API (a stand-in: its whole text one query), twice; then its indexes by
+        # tools/apply_concurrent_indexes.py, one statement per call, twice; every index valid
+        api = ["python3", os.path.join(HERE, "api_standin.py"), str(db.port)]
         for i in (1, 2):
-            r = subprocess.run(["runuser", "-u", "postgres", "--", pg_stand.BIN + "/psql", "-h", "127.0.0.1", "-p", str(db.port), "-U", "postgres", "-d", "postgres", "-v", "ON_ERROR_STOP=1", "-q", "-X", "-f", "-"],
-                               input=text, capture_output=True, text=True)
-            ok(r.returncode == 0, "the file runs (time %d)%s" % (i, "" if r.returncode == 0 else ": " + r.stderr[-400:]))
+            r = subprocess.run(api + [MFILE], capture_output=True, text=True)
+            ok(r.returncode == 0 and not r.stdout.strip().startswith("{"), "the file runs through the API as one query (time %d)%s" % (i, "" if not r.stdout.strip().startswith("{") else ": " + r.stdout[-400:]))
+        for i in (1, 2):
+            r = subprocess.run(["python3", os.path.join(ROOT, "tools", "apply_concurrent_indexes.py"), "--run", " ".join(api), "--pause", "1", IFILE], capture_output=True, text=True)
+            ok(r.returncode == 0, "its indexes by the script (time %d)%s" % (i, "" if r.returncode == 0 else ": " + (r.stdout + r.stderr)[-400:]))
+        for name in INAMES:
+            ok(db.one("select coalesce((select indisvalid::text from pg_index i join pg_class c on c.oid = i.indexrelid where c.relname = '%s'), 'missing')" % name) == "true", "%s: valid (indisvalid)" % name)
     after = run_cases(db)
     print("    %-52s %10s %10s  %s" % ("case", "before ms", "after ms", "x"))
     for name, _, _, _ in CASES:

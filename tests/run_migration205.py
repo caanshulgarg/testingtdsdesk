@@ -2,8 +2,8 @@
 owner: "every documents, page, cloud should be lightening fast ... effect should remain same"). On a throwaway PostgreSQL
 (pg_stand, port 31275 unless PG205_PORT; never a real database), with staging's tables as they are and 204's made-up
 books (run_migration204.py's tables and rows) plus made-up GST rows. Checks:
-  0. the file: add-only (two functions replaced with the same arguments, five policies altered in place, indexes made
-     CONCURRENTLY if not there; nothing dropped, deleted, updated, inserted or truncated; no table, no column),
+  0. the file: one transaction, safe through the API as one query (two functions replaced with the same arguments, five
+     policies altered in place; its 22 indexes in migration-205-indexes.sql, one statement per line; nothing dropped, deleted, updated, inserted or truncated; no table, no column),
      lock_timeout set, grants explicit, names no real database, runs twice; each replaced function and each policy is
      staging's text (md5 of the body; the policy's words); the indexes are exactly the 21 foreign keys the advisor named
   1. the five policies (auth.uid() asked once per statement): the same rows seen and the same writes allowed or refused,
@@ -11,12 +11,16 @@ books (run_migration204.py's tables and rows) plus made-up GST rows. Checks:
   2. gst_calc_gstins and gst_itc_inputs: the same answer (md5 of the whole text) in every case, no slower, the main
      cases faster
   3. grants as on staging
+Applied as on staging: the file through tests/api_standin.py (twice), then the indexes by
+tools/apply_concurrent_indexes.py (twice), every index valid (indisvalid).
 RED_WITHOUT_205=1: the same checks without the file (fails)."""
 import os, re, sys, hashlib, subprocess, shutil
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 import pg_stand
 ROOT = os.path.dirname(HERE)
 M205 = os.path.join(ROOT, "server", "tally-cloud", "migration-205-db-speed-2.sql")
+IFILE = os.path.join(ROOT, "server", "tally-cloud", "migration-205-indexes.sql")
+MFILE = M205
 RED = os.environ.get("RED_WITHOUT_205") == "1"
 PORT = int(os.environ.get("PG205_PORT", "31275"))
 fails = []
@@ -172,13 +176,19 @@ code = "\n".join(l.split("--")[0] for l in text.lower().splitlines())
 print("== 0. the file")
 ok(bool(text) and not re.search(r"\b(drop|truncate)\s", code) and "delete from" not in code and not re.search(r"\bupdate\s+\w", code) and "create table" not in code
    and "insert into" not in code and "add column" not in code and "create policy" not in code, "add-only: nothing dropped, deleted, updated, inserted or truncated; no table, column or new policy")
-ok("set local lock_timeout = '3s';" in code and "\nset lock_timeout = '3s';" in code, "lock_timeout 3 s (the transaction, and the indexes made after it)")
-idx = re.findall(r"create index concurrently if not exists (\w+)\s+on public\.(\w+) \((\w+)\);", code)
+ok("set local lock_timeout = '3s';" in code, "lock_timeout 3 s")
+itext = open(IFILE).read() if os.path.exists(IFILE) and not RED else ""
+ilines = [l.strip() for l in itext.splitlines() if l.strip() and not l.strip().startswith("--")]
+INAMES = re.findall(r"(?im)^create index concurrently if not exists (\w+) on ", itext)
+ok(bool(text) and "concurrently" not in code and code.rstrip().endswith("commit;") and code.count("\nbegin;") == 1,
+   "the file is one transaction, no index in it (CONCURRENTLY cannot run in the API's one query)")
+ok(bool(ilines) and all(l.endswith(";") and l.count(";") == 1 for l in ilines)
+   and all(re.match(r"create index concurrently if not exists \w+ on public\.\w+ ", l) or re.match(r"analyze public\.\w+;$", l) for l in ilines),
+   "%s: one statement per line, each index CONCURRENTLY IF NOT EXISTS" % os.path.basename(IFILE))
+got = sorted(re.findall(r"(?im)^create index concurrently if not exists \w+ on public\.(\w+) \(([\w, ]+)\);$", itext))
 want = sorted(FKEYS + [("tally_vouchers", "book_id, cmp_gstin")])
-got = sorted([(t, c) for _, t, c in idx] + [(t, c) for t, c in re.findall(r"create index concurrently if not exists \w+\s+on public\.(\w+) \((book_id, cmp_gstin)\);", code)])
-ok(got == want and code.rfind("create index concurrently") > code.rfind("commit;") and code.find("create index concurrently") > code.rfind("commit;"),
-   "the 21 foreign keys and the GSTIN index, CONCURRENTLY, if not there, after the transaction (%d)" % len(got))
-ok(bool(text) and not re.search(r"supabase\.co|https?://|qbocskai|nrtczu|project[_ ]ref", text.lower()), "names no real database")
+ok(got == want and len(INAMES) == 22, "the 21 foreign keys and the GSTIN index (%d)" % len(got))
+ok(bool(text) and not re.search(r"supabase\.co|https?://|qbocskai|nrtczu|project[_ ]ref", (text + itext).lower()), "names no real database (the file and its indexes)")
 made = sorted(set(re.findall(r"create or replace function public\.(\w+)\(", code)))
 ok(made == sorted(b[0] for b in BEFORE), "replaces exactly: %s" % made)
 for name, path, md5, args in BEFORE:
@@ -207,10 +217,17 @@ try:
         db.sql("revoke all on function %s from public; grant execute on function %s to service_role;" % (sig, sig))
     access_before, before = access(db), run_cases(db)
     if text:
+        # as it is applied: the file through the API (a stand-in: its whole text one query), twice; then its indexes by
+        # tools/apply_concurrent_indexes.py, one statement per call, twice; every index valid
+        api = ["python3", os.path.join(HERE, "api_standin.py"), str(db.port)]
         for i in (1, 2):
-            r = subprocess.run(["runuser", "-u", "postgres", "--", pg_stand.BIN + "/psql", "-h", "127.0.0.1", "-p", str(db.port), "-U", "postgres", "-d", "postgres", "-v", "ON_ERROR_STOP=1", "-q", "-X", "-f", "-"],
-                               input=text, capture_output=True, text=True)
-            ok(r.returncode == 0, "the file runs (time %d)%s" % (i, "" if r.returncode == 0 else ": " + r.stderr[-400:]))
+            r = subprocess.run(api + [MFILE], capture_output=True, text=True)
+            ok(r.returncode == 0 and not r.stdout.strip().startswith("{"), "the file runs through the API as one query (time %d)%s" % (i, "" if not r.stdout.strip().startswith("{") else ": " + r.stdout[-400:]))
+        for i in (1, 2):
+            r = subprocess.run(["python3", os.path.join(ROOT, "tools", "apply_concurrent_indexes.py"), "--run", " ".join(api), "--pause", "1", IFILE], capture_output=True, text=True)
+            ok(r.returncode == 0, "its indexes by the script (time %d)%s" % (i, "" if r.returncode == 0 else ": " + (r.stdout + r.stderr)[-400:]))
+        for name in INAMES:
+            ok(db.one("select coalesce((select indisvalid::text from pg_index i join pg_class c on c.oid = i.indexrelid where c.relname = '%s'), 'missing')" % name) == "true", "%s: valid (indisvalid)" % name)
     access_after, after = access(db), run_cases(db)
     print("== 1. the policies")
     for (who, q, b), (_, _, a) in zip(access_before, access_after):
