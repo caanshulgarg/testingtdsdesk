@@ -60,6 +60,9 @@ async def main():
         trips = len([x for x in log if x[1] in ("GET", "POST", "PATCH")])
         ok(r["ms"] < (trips / 4.0 + 3) * WAIT, "%d asks in %d ms: %.1f round trips one after another (at most %d; was %d, one client after another)" % (trips, r["ms"], r["ms"] / WAIT, trips / 4 + 3, trips))
 
+        r = await pg.evaluate("""async () => { const on = typeof BookItems === 'object' && BookItems.on() ? BookItems : BookSync, f = on.pull; on.pull = () => { throw new Error('made-up'); };
+          try { DueList.synced = false; await DueList.syncAll(); return [DueList.busy, 'done']; } catch (e) { return [DueList.busy, String(e.message)]; } finally { on.pull = f; } }""")
+        ok(r == [0, "done"], "a client's pull that throws at once: the rest go on, and the list is not left busy (%r)" % r)
         print("F. the Tally page: its reads not made twice at once")
         await pg.evaluate("() => navHome('today')"); await asyncio.sleep(2)
         await pg.evaluate("() => { TCloud.pane.at = 0; TCloud.pane.onceAt = 0; TCloud.pane.devices = null; }")

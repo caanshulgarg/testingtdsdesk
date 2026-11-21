@@ -157,7 +157,7 @@ const DueList = {
     this.busy = 1;      // (the prefetch of the books gives way meanwhile: src/js/98)
     // next-fix-pagespeed: four clients at a time (one after another the list waited 2-3 round trips a client)
     const cos = Object.values(S.companies || {}).filter(c => c && !c.deleted);
-    await Promise.all([0, 1, 2, 3].map(async () => { for (let co; (co = cos.shift());) if (!(S.books && S.books.cid === co.id)) await on.pull(co.id).catch(() => {}); }));
+    await Promise.all([0, 1, 2, 3].map(async () => { for (let co; (co = cos.shift());) if (!(S.books && S.books.cid === co.id)) try { await on.pull(co.id); } catch (e){} }));
     this.busy = 0;
     return true;
   },

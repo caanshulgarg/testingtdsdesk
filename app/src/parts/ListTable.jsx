@@ -220,6 +220,8 @@ const GROW = 300;
 let ALL = 0;
 const drawAll = (on) => { if (ALL !== on) { ALL = on; try { window.render(); } catch (e) { /* drawn at the next drawing */ } } };
 addEventListener("beforeprint", () => drawAll(1)); addEventListener("afterprint", () => drawAll(0));
+// (a browser that sends neither: the print media turned on and off)
+try { matchMedia("print").addEventListener("change", (e) => drawAll(e.matches ? 1 : 0)); } catch (e) { /* the events above */ }
 function hookPrint() {
   const pt = window.printTable;
   if (typeof pt === "function" && !pt.all) (window.printTable = function () { drawAll(1); try { return pt.apply(this, arguments); } finally { drawAll(0); } }).all = 1;
