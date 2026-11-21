@@ -17,8 +17,8 @@ import { UploadLine } from "./parts/StateBar.jsx";
 const SheetPanel = lazy(() => import("./parts/SheetPanel.jsx"));
 // console phase 1b: the firm paused, or the open company switched off, by FinCom's console (src/js/99 FirmGate)
 const GateBanner = lazy(() => import("./parts/GateBanner.jsx"));
-// next-assistant (phase 1 design): the morning page, in a file of its own
-const AssistantPage = lazy(() => import("./screens/assistant/AssistantPage.jsx"));
+// next-assistant (phase 1 design): Daily Check, what last night's checks left, in a file of its own
+const DailyCheck = lazy(() => import("./screens/daily/DailyCheck.jsx"));
 const PausedPage = lazy(() => import("./parts/GateBanner.jsx").then((m) => ({ default: m.PausedPage })));
 
 const { Working, Books, Txn, Dash, DocqPanel, PostStep, DoneStep, ClientSetup, Collect, Sales, VendorRecon, ReviewTable, Invoices, Bank, Parties, Export,
@@ -53,7 +53,7 @@ function Screen() {
     return <Export />;
   }
   const t = S.homeTab;
-  return t === "help" ? <Help /> : t === "today" ? <Today /> : t === "compliance" ? <Compliance /> : t === "inbox" ? <InboxAll /> : t === "tally" ? <TallyHome /> : t === "integrations" ? <Integrations /> : t === "meetings" ? <Meetings /> : t === "assistant" ? <AssistantPage /> : t === "rules" ? <FirmSettings /> : <Clients />;
+  return t === "help" ? <Help /> : t === "today" ? <Today /> : t === "compliance" ? <Compliance /> : t === "inbox" ? <InboxAll /> : t === "tally" ? <TallyHome /> : t === "integrations" ? <Integrations /> : t === "meetings" ? <Meetings /> : t === "daily" ? <DailyCheck /> : t === "rules" ? <FirmSettings /> : <Clients />;
 }
 
 // the bar at the foot of a client's bank, sales or bills

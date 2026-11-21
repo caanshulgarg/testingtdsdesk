@@ -1,8 +1,8 @@
 // node tests/run_assistant_message.mjs - the client's weekly message (server/_shared/asks.js) carries only what is still
 // needed from the client: never a finding resolved by FinCom, one for the firm ("Needs you"), an answered or closed
-// question, or one not ticked. Made-up data only (app/src/screens/assistant/demo.js).
+// question, or one not ticked. Made-up data only (app/src/screens/daily/demo.js).
 import { sendable, message, waLink } from "../server/_shared/asks.js";
-import { FINDINGS, CLIENTS } from "../app/src/screens/assistant/demo.js";
+import { FINDINGS, CLIENTS } from "../app/src/screens/daily/demo.js";
 
 let fails = 0;
 const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };
@@ -13,8 +13,8 @@ for (const c of CLIENTS) {
   const qs = sendable(mine, null), m = message(c, qs, { firm: "Sample & Co", week: "16-Nov-2026" });
   for (const f of mine) {
     const inMsg = (t) => !!t && words(m.text).includes(words(t));
-    if (f.state === "resolved") ok(!inMsg(f.says) && !inMsg(f.how), c.name + ": resolved " + f.id + " is not in the message");
-    if (f.state === "you") ok(!inMsg(f.says), c.name + ": needs-you " + f.id + " is not in the message");
+    if (f.state === "resolved") ok(!inMsg(f.short) && !f.evidence.some((e) => inMsg(e.label)) && !inMsg(f.party + " "), c.name + ": resolved " + f.id + " is not in the message");
+    if (f.state === "you") ok(!inMsg(f.title), c.name + ": needs-you " + f.id + " is not in the message");
     if (f.ask && (f.ask.state === "answered" || f.ask.state === "closed")) ok(!inMsg(f.ask.text), c.name + ": " + f.ask.state + " " + f.ask.id + " is not asked again");
     if (f.state === "ask" && (f.ask.state === "draft" || f.ask.state === "asked")) ok(inMsg(f.ask.text), c.name + ": " + f.ask.id + " is in the message");
   }

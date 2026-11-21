@@ -1,4 +1,4 @@
-# The Assistant, phase 1: plan (DESIGN ROUND)
+# Daily Check (the Assistant), phase 1: plan (DESIGN ROUND)
 
 Branch `next-assistant`, 21-Nov-2026. **Design only.** Nothing here is applied, deployed, published or merged. The
 screens are built with made-up data (`app/src/screens/assistant/demo.js`, marked "Sample data" on the page). The
@@ -15,34 +15,39 @@ email from the server, or a WhatsApp link with the message ready. Where an answe
 for a 2B gap, a bank line it worked out), FinCom prepares it and shows it on the same page. The owner approves it there,
 and it goes to Tally through the **existing** posting path.
 
-## 2. The screens (made-up data)
+## 2. The screens (made-up data): "Daily Check"
 
-Screenshots: `scratchpad/shots-assistant/` (deviceScaleFactor 2, desktop 1440 and phone 390).
+The page is called **Daily Check** (the owner, 21-Nov-2026; "FinCom Assistant" stays the Ask FinCom chat). Second
+design, after the owner's "too many words, too cluttered": about 70% less text, tabs instead of one long page, one line
+a row, details only when a row is opened.
 
-| Shot | What |
-|---|---|
-| `1-assistant-desktop.png`, `1-assistant-phone.png` | The Assistant page: four figures, then the sections in order |
-| `2-resolved-open-*.png` | "Resolved by FinCom overnight (7)", opened: each with its evidence and Undo |
-| `3-entries-ready-*.png` | "Entries ready for you": type, date, Dr/Cr, amount, narration, why, evidence, checks passed, Approve / Edit / Reject, Approve ticked; GST set-off and payroll journals shown as "Coming" |
-| `4-needs-you-*.png` | "Needs you": two invoices that both fit (FinCom does not pick), a ₹1.50 near miss, a client with no contact, suspense |
-| `5-review-send-*.png` | Review and send for one client: test-mode banner, questions to tick and edit, the message exactly as it goes, Send test email, WhatsApp |
-| `6-review-ticked-edited-*.png` | The same with one question unticked and one edited: the message follows |
-| `7-question-states-*.png` | How a question moves: Draft, Asked, Answered, Closed, each with its history |
-| `8-client-contacts-*.png` | Client setup › Company › Contacts: several contacts, email and WhatsApp, "send questions by", the reminders switch (off) |
-| `9-assistant-dark-desktop.png` | The page in dark mode |
+- Top: one line "Last night · 5 clients", then four tabs with counts: **From clients** (questions, the only thing ever
+  sent) · **Needs you** · **Entries** · **Done by FinCom**. The page opens on the tab with the most to do (Done by FinCom
+  is never the default). The page title is the top bar's only ("Daily Check"); no second title, no "Sample data" label.
+- From clients: grouped by client, a "Send N" button per client. A row is amount · party · date · short ask, with a
+  small status dot (grey Draft, blue Asked, amber Answered, green Closed; the word is the dot's tooltip). Opening a row
+  shows the full question and its history ("Emailed to …").
+- Needs you: a short title and the choice as buttons (two invoices side by side, Same / Not the same, Add contact).
+- Entries: type · date · party · reason chip · amount, a small ✓ "Checks" chip (the checks in its tooltip), Approve and
+  Reject as icon buttons, tick boxes with "Approve N" for the ticked only. Opening shows Dr/Cr, narration, evidence, Edit.
+- Done by FinCom: rows with a green tick; opening shows the evidence and Undo.
+- Send: the client's questions to tick and edit, the message exactly as it goes, Send email, WhatsApp; one short line
+  "Test mode: emails go to your firm only".
+- Phone: the same tabs on one line ("Done" short), rows stacked, no sideways scroll.
 
-Page order (the owner's): **Resolved by FinCom overnight (N)** (folded, with evidence) → **Still need from client (N)**
-(the only thing ever sent) → **Needs you** beside **Entries ready for you**. On a phone each comes one under the other.
+Screenshots: `scratchpad/shots-assistant2/` (deviceScaleFactor 2, desktop 1440 and phone 390; the test site's strip
+hidden by CSS injected only for the screenshots): `1-from-clients`, `2-question-open`, `3-needs-you`, `4-entries`,
+`5-entry-open`, `6-done-by-fincom`, `7-done-open`, `8-send`, `9-contacts` (each `-desktop` and `-phone`), and
+`10-from-clients-dark-desktop`. The first design's shots are in `scratchpad/shots-assistant/`.
 
-Where the code is: `app/src/screens/assistant/` (AssistantPage, Review, AskStates, ClientContacts, assistant.css), a
-lazy chunk (Main.jsx: `lazy(() => import(...AssistantPage.jsx))`). The sidebar has "Assistant" under Firm. The page
-title is in TopBar.jsx. The contacts card is in Client setup › Company (Settings.jsx, already a lazy chunk). The
-client's message is `server/_shared/asks.js`: one file for the page's preview and the send function, so the words
-cannot differ.
+Where the code is: `app/src/screens/daily/` (DailyCheck, Review, ClientContacts, daily.css, demo.js), a lazy chunk
+(Main.jsx, homeTab "daily"). The sidebar has "Daily Check" under Firm; its title is in TopBar.jsx. The contacts card is in
+Client setup › Company (Settings.jsx, already a lazy chunk). The client's message is `server/_shared/asks.js`, one file
+for the page's preview and the send function, so the words cannot differ.
 
-Sizes after this round (gzip): legacy.js **599,732** (unchanged), main index **260,613** (+243 for the sidebar item,
-the title and the lazy import). The Assistant chunk is 9.5 kB. legacy.js was not touched. The address `#/assistant` (52-routes.js, legacy) is left for the
-build round: it costs about 15 bytes of legacy.js, which has 268 bytes left.
+Sizes (gzip): legacy.js **599,732** (unchanged), main index **260,613** (+243: the sidebar item, the title, the lazy
+import); the Daily Check chunk about 6 kB. The address `#/daily` (52-routes.js, legacy) is left for the build round
+(about 15 bytes of legacy.js, which has 268 left).
 
 ## 3. Where the nightly run happens: decision
 
@@ -226,29 +231,28 @@ in Resend; replies go to the firm's own address.
 - **Edge function time**: large books (40,000+ entries). Budgeted per client as in gst-run, resumable, and only the
   last 13 months are read for most checks.
 - **Email reaching a client from staging**: the three-layer guard in §8 and its test.
-- **Name clash**: "FinCom Assistant" is already the name of the Ask FinCom chat (server/assistant, assistant_* tables,
-  parts/Assistant.jsx). This feature's tables are named `night_*`, `client_asks` and `client_contacts`, and its functions
-  `assistant-night` and `assistant-send`, to keep them apart. The page name is an owner decision.
+- **Name clash**: "FinCom Assistant" is the Ask FinCom chat (server/assistant, assistant_* tables). This page is "Daily
+  Check"; its tables are `night_*`, `client_asks` and `client_contacts`, its functions `assistant-night` and `assistant-send`.
 - **Clients' data in email**: only the question's words (party, amount, date) go out, to the client's own contacts.
   Nothing from another client is ever read into a message (one client per function call).
 - **Size budgets**: legacy.js has 268 bytes left. All new code stays in lazy chunks and server files; only the route (about
   15 bytes) touches legacy.js.
 
-## 11. What needs the owner's decision
+## 11. The owner's decisions (21-Nov-2026: yes to every proposal)
 
-1. **Name of the page.** "Assistant" (as asked) sits beside the existing "Ask FinCom" / "FinCom Assistant" chat. Keep
-   "Assistant", or call it "Morning check" or "Overnight"?
-2. **Real sending.** When may `ASSISTANT_MAIL_LIVE` be set (§8)? The proposal: never on staging. On the live app only after
-   the reviews, and then each firm's owner still turns it on in Settings.
-3. **The From address** for client emails: the firm's own domain verified in Resend (best), or a FinCom sending address
-   with reply-to set to the firm.
-4. **Thresholds.** Advance age 60 days; cash over ₹10,000; round sums over ₹50,000; no narration over ₹1,00,000;
-   expense jump 3x and ₹50,000; wrong-side balance over ₹1,000; suspense older than 30 days. Keep these, or change them?
-5. **Night window**: 02:00 to 05:20 India time.
-6. **Weekly list day**: a new list each Monday; questions not sent carry over.
-7. **Who may send**: the owner only (proposed for phase 1), or staff too?
-8. **The "send reminders by itself" switch** (off by default): when on, resend only document requests already asked once, at most weekly?
-9. **Phase 2** entries (GST set-off, payroll journals): confirm they stay out of phase 1.
+1. **Name**: the page is **Daily Check** (not "Assistant"). Code: `app/src/screens/daily/`, homeTab `daily`. The server
+   names (`assistant-night`, `assistant-send`, the tables) stay as drafted: they are not shown to anyone.
+2. **Real sending**: `ASSISTANT_MAIL_LIVE` is never set on staging. On the live app only after the reviews (rule 7), and
+   then each firm's owner still turns real sending on.
+3. **From address**: the firm's own domain, verified in Resend; replies go to the firm.
+4. **Thresholds** as proposed: advance 60 days; cash over ₹10,000; round sums over ₹50,000; no narration over
+   ₹1,00,000; expense jump 3x and ₹50,000; wrong-side balance over ₹1,000; suspense older than 30 days.
+5. **Night window** 02:00 to 05:20 India time; a **new list every Monday**, questions not sent carry over.
+6. **Who sends**: only the firm's **owner** in phase 1 (`assistant-send` checks `members.role = 'owner'`; staff see the
+   questions and may edit them).
+7. **Reminders by itself**: off by default. When on, only document requests already asked once are sent again, at most
+   once a week. Nothing else is ever sent by itself.
+8. **Phase 2** journals (GST set-off, payroll) stay out of phase 1.
 
 ## 12. Build order (next round, after the owner's yes)
 

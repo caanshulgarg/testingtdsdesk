@@ -40,8 +40,8 @@ import GstSettings from "./gst/GstSettings.jsx";
 import Parties from "./Parties.jsx";
 import GstApiAll from "./GstApiAll.jsx";
 import LogoPick from "../parts/LogoPick.jsx";
-// next-assistant (phase 1 design): the client's own contacts, for the Assistant's weekly questions
-import ClientContacts from "./assistant/ClientContacts.jsx";
+// next-assistant (phase 1 design): the client's own contacts, for Daily Check's weekly questions
+import ClientContacts from "./daily/ClientContacts.jsx";
 import { clientTallyState, tallyDevs, pcLive, seenWords, openOn } from "../lib/tallyState.js";
 // TDSF25 (src/js/83-tds-forms-2025.js: the deductor's details) comes with this screen's file, not in legacy.js (build.py lazy_files)
 import "../../../src/js/83-tds-forms-2025.js";
