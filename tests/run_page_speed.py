@@ -7,6 +7,12 @@ in the branch's report). Each part below is one slowdown found there, held to it
      kept), so opening a client with 20,000 ledgers counted 20,000 names for each of its ~20,000 ledger look-ups (232 s of
      one task). Now counted once a task, as with ledInfo: the same list, a name added in place seen at the next task.
 
+  I. Bank on a client switch (FINCOM-APP-STAGING-Y: 2.3 s, one frame): a receipt was matched to the open sales invoices by
+     trying every invoice, then, with no one invoice of its amount, every two invoices of each customer (a customer of 1,200
+     invoices: 720,000 sums for each receipt). Now the invoices are put by amount once a run (app/src/lib/salesMatch.js, in
+     its place in the React app): the same invoices found and chosen for every line (held here to the earlier search, kept
+     in this test word for word), the page opened quickly.
+
 Made-up books only (seeded here; no client's name or figure). Run on the React build: app/dist-test, or TDSDESK_SITE."""
 import os, sys, json, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -306,10 +312,77 @@ def part_h(br):
     ok(short <= 3 and r[1], "its short form drawn again (%d options) and pressed: every ledger again (%d)" % (short, r[0]))
     pg.close()
 
+# the earlier search for a receipt's sales invoice (0d6212fc0's matchSalesInvoice), word for word: what the lighter one must give
+PLAIN_SALES = """(row, invs, taken) => {
+  const amt = row.credit;
+  const cands = invs.filter(v => !taken.has(v.id) && (!v.x.date || v.x.date <= row.date));
+  const score = v => Math.max(nameSim(row.dec.name, v.x.customerName), nameSim(row.dec.name, v.customerLedger));
+  let hits = cands.filter(v => Math.abs(num(v.x.total) - amt) <= 1).map(v => ({inv: [v], sim: score(v)}));
+  if (!hits.length){
+    const byCust = new Map();
+    cands.forEach(v => { const k = v.customerLedger; (byCust.get(k) || byCust.set(k, []).get(k)).push(v); });
+    byCust.forEach(list => { for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) if (Math.abs(num(list[i].x.total) + num(list[j].x.total) - amt) <= 1) hits.push({inv: [list[i], list[j]], sim: score(list[i])}); });
+  }
+  if (!hits.length) return null;
+  hits.sort((a, b2) => b2.sim - a.sim);
+  const h = hits[0];
+  if (h.sim < 0.45 && hits.length > 1) return null;
+  if (h.sim < 0.3 && row.dec.name) return null;
+  return {inv: h.inv, strong: h.sim >= 0.6};
+}"""
+# a client of 3,000 ledgers, 1,500 open sales invoices (1,200 of one customer), a statement of 2,000 lines: 500 receipts not
+# yet booked (most the sum of two invoices of a customer, some of one invoice, some of none), the rest booked payments
+SALES_BANK = """async ([nR]) => {
+  let s = 5; const R = () => { s = (Math.imul(s, 1664525) + 1013904223) >>> 0; return s / 4294967296; }, pad = (x) => String(x).padStart(2, '0');
+  const c = newCompany({name: 'Made Up Receipts Client', gstin: ''}); S.companies[c.id] = c; S.data[c.id] = {parties: {}, entries: {}, loaded: true}; c.stats = {};
+  c.bankAccounts = [{id: 'a1', bank: 'Made Up Bank', acct: '0001', ledger: 'Made Up Bank'}];
+  const leds = [{name: 'Made Up Bank', group: 'Bank Accounts'}];
+  for (let i = 0; i < 3000; i++) leds.push({name: 'Made Up Customer ' + i, group: i % 3 ? 'Sundry Creditors' : 'Sundry Debtors'});
+  const sl = []; for (let i = 0; i < 1500; i++) { const p = i < 1200 ? 'Made Up Customer 0' : 'Made Up Customer ' + (1 + i % 90);
+    sl.push(newInvoice({number: 'S/' + i, date: '2025-04-' + pad(1 + i % 28), customerName: p, taxable: 5000, cgst: 450, sgst: 450, total: i < 1200 ? 5900 + i * 7 : 3000 + Math.round(R() * 9000) + (i % 2 ? .5 : 0)}, 'upload', {customerLedger: p, status: i % 5 ? 'ready' : 'review'})); }
+  const rows = []; let bal = 1e7;
+  for (let i = 0; i < 2000; i++) { const inn = i < nR, k = i % 10, cu = k < 6 ? 'Made Up Customer 0' : 'Made Up Customer ' + (1 + Math.floor(R() * 90));
+    const amt = !inn ? 500 + i : k === 9 ? 3 + i * 0.37 : k === 8 ? sl[1200 + Math.floor(R() * 300)].x.total : Math.round(12000 + R() * 8000);
+    bal += inn ? amt : -amt;
+    rows.push({id: 's1-' + i, fp: 'fp' + i, date: '2025-05-' + pad(1 + i % 28), debit: inn ? 0 : amt, credit: inn ? amt : 0, bal: r2(bal), narr: (inn ? 'NEFT CR ' : 'NEFT DR ') + cu.toUpperCase() + ' UTR' + i,
+      dec: {name: k === 7 ? '' : cu, mode: 'NEFT', utr: 'UTR' + i}, ledger: inn ? '' : 'Made Up Customer ' + (1 + i % 90), state: inn ? 'attention' : 'ready', balOk: true, why: inn ? ['No ledger found for this party.'] : []}); }
+  await BankDB.set('stmts:' + c.id, [{id: 's1', acctId: 'a1', bank: 'Made Up Bank', acct: '0001', from: '2025-05-01', to: '2025-05-28', opening: 1e7, closing: rows[rows.length - 1].bal, n: rows.length, counts: countStates(rows)}]);
+  await BankDB.set('stmt:' + c.id + ':s1', rows);
+  await BankDB.set('ledgers:' + c.id, {list: leds, importedAt: new Date().toISOString(), live: true});
+  await BankDB.set('sales:' + c.id, sl);
+  Store.saveCompany(c); return c.id; }"""
+# each line's suggestion: what the Bank page shows and keeps
+SUGG = "(rows) => rows.map((r) => [r.id, r.state, r.ledger, r.level, r.source, r.srcLabel, (r.why || []).toString(), r.billRef, (r.salesIds || []).join(',')])"
+def part_i(br):
+    print("I. Bank on a client switch: receipts matched to sales invoices")
+    pg = br.new_page(viewport={"width": 1440, "height": 900}); pg.on("pageerror", lambda e: errors.append(str(e)[:300]))
+    pg.goto(URL); pg.evaluate(READY)
+    other = pg.evaluate(BANK, [300, 60]); cid = pg.evaluate(SALES_BANK, [500])
+    pg.goto("about:blank"); pg.goto(URL + "#/today"); pg.evaluate(READY); pg.evaluate(LT); pg.wait_for_timeout(1000)
+    pg.evaluate("(cid) => openCompany(cid).then(() => goClient('bank'))", other); pg.wait_for_function("(cid) => S.bank && S.bank.cid === cid && !S.bank.loading", arg=other, timeout=60000); pg.wait_for_timeout(1500)
+    # switched to the client: its statement opened, its 500 receipts suggested
+    t0 = pg.evaluate("() => performance.now()")
+    pg.evaluate("(cid) => { openCompany(cid).then(() => goClient('bank')); }", cid)
+    pg.wait_for_function("(cid) => S.bank && S.bank.cid === cid && !S.bank.loading && S.bank.rows.length === 2000 && !S.bank.rows.some((r) => r.state === 'attention' && !(r.why || []).length)", arg=cid, timeout=120000)
+    pg.wait_for_timeout(2500)
+    lt = pg.evaluate(LTS, t0)
+    ok(pg.evaluate("() => matchSalesInvoice.light === true"), "the lighter search is the one the app uses")
+    ok(lt[1] < 900, "switched to a client of 500 receipts and 1,500 sales invoices: the longest task %d ms (within 900; 1,468 ms on staging-next), %d ms in all" % (lt[1], lt[0]))
+    # the suggestions: the same as the earlier search gives, line by line
+    r = pg.evaluate("""([plain, sugg]) => { const b = S.bank, open = () => b.rows.filter((r) => r.credit).map((r) => Object.assign(JSON.parse(JSON.stringify(r)), {state: 'attention', ledger: '', userSet: false}));
+      const run = (f) => { const rows = open(), keep = window.matchSalesInvoice; if (f) window.matchSalesInvoice = f; let ms; try { const t = performance.now(); suggestAll(rows); ms = performance.now() - t; } finally { window.matchSalesInvoice = keep; } return [eval(sugg)(rows), ms]; };
+      const [now, ms] = run(null), [was, msWas] = run((0, eval)('(' + plain + ')'));
+      const shown = eval(sugg)(b.rows.filter((r) => r.credit));
+      return {same: JSON.stringify(now) === JSON.stringify(was), shownSame: JSON.stringify(shown) === JSON.stringify(was), n: now.length, sales: now.filter((x) => x[4] === 'sales').length, pairs: now.filter((x) => x[8].includes(',')).length, ms: Math.round(ms), msWas: Math.round(msWas),
+        diff: now.map((x, i) => JSON.stringify(x) === JSON.stringify(was[i]) ? null : [x, was[i]]).filter(Boolean).slice(0, 2)}; }""", [PLAIN_SALES, SUGG])
+    ok(r["same"] and r["shownSame"] and r["sales"] > 100 and r["pairs"] > 50, "every receipt's suggestion the same as the earlier search's (%d lines, %d to sales invoices, %d to two; shown on the page the same: %s) %s" % (r["n"], r["sales"], r["pairs"], r["shownSame"], r["diff"] or ""))
+    ok(r["ms"] < 300, "suggesting the 500 receipts: %d ms (within 300; the earlier search %d ms here, 1,150-1,330 on staging-next)" % (r["ms"], r["msWas"]))
+    pg.close()
+
 try:
     with sync_playwright() as p:
         br = p.chromium.launch()
-        for k, f in [("A", part_a), ("B", part_b), ("C", part_c), ("D", part_d), ("E", part_e), ("F", part_f), ("G", part_g), ("H", part_h)]:
+        for k, f in [("A", part_a), ("B", part_b), ("C", part_c), ("D", part_d), ("E", part_e), ("F", part_f), ("G", part_g), ("H", part_h), ("I", part_i)]:
             if not ONLY or k in ONLY: f(br)
         br.close()
 finally:

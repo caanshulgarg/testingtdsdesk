@@ -357,6 +357,8 @@ function openSalesInvoices(){
   const b = B();
   return (b.salesRef || []).filter(v => v.status !== "ignored" && !v.receivedBy && num(v.x.total) > 0 && v.customerLedger);
 }
+// (the React app puts a lighter search in its place, with the same results: app/src/lib/salesMatch.js, next-fix-bankswitch;
+// a change to the rules here is made there too, and tests/run_page_speed.py part I holds the two to one answer)
 function matchSalesInvoice(row, invs, taken){
   const amt = row.credit;
   const cands = invs.filter(v => !taken.has(v.id) && (!v.x.date || v.x.date <= row.date));

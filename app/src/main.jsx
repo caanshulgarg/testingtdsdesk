@@ -40,6 +40,8 @@ import("./lib/gstr1Fix.js").then(() => { try { if (typeof Engine === "object" &&
   try { if (typeof S === "object" && S.books && S.books.r1Fix) render(); } catch (e) { /* drawn later */ } }).catch((e) => staleReload(e, true));
 // next-24q-ready: the payroll read for the 24Q pages and TCloud.load (PayLoad, src/lib/payLoad.js)
 import "./lib/payLoad.js";
+// next-fix-bankswitch: a receipt's sales invoice (matchSalesInvoice, src/js/21) found without trying every two invoices
+import "./lib/salesMatch.js";
 // Post automatically: who approved and how, the run, the bell (lib/autopostBoot.js; the rules load when needed)
 import { installAutopost } from "./lib/autopostBoot.js";
 // the registers' and reconciliations' engine, loaded the first time it is needed (registersLoad, src/js/82-registers.js)
