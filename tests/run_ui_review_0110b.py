@@ -84,7 +84,9 @@ with sync_playwright() as p:
     vals = pg.evaluate("[document.querySelector('input[aria-label=\"MIS from\"]').value, document.querySelector('input[aria-label=\"MIS to\"]').value]")
     ok(lab[:2] == ["From", "To"] and all(re.match(r"\d{4}-\d{2}-\d{2}$", v) for v in vals), "16. MIS From / To labelled, with dates in them (%s)" % vals)
     # 3. step names
-    ok(pg.evaluate("[BANK_TABS.map(x => x[1]), SALES_TABS.map(x => x[1])]") == [["To review", "Post to Tally", "In Tally"]] * 2, "3. Bank and Sales: To review · Post to Tally · In Tally")
+    # (BANK_TABS and SALES_TABS are gone: the state bar's words are STATE_WORDS, the bank's own BANK_STATE_WORDS, src/js/02)
+    ok(pg.evaluate("[BANK_STATE_WORDS.review, STATE_WORDS.ready, BANK_STATE_WORDS.intally, STATE_WORDS.review, STATE_WORDS.intally]") == ["To do", "Ready to post", "Posted", "To review", "In Tally"],
+       "3. Bank: To do · Ready to post · Posted; Sales: To review · Ready to post · In Tally (the state bar's words)")
     go("S.tab = 'invoices'")
     hb = pg.evaluate("Array.from(document.querySelectorAll('#cobar nav.sbar button')).map(b => b.firstChild.textContent.trim())")
     ok(hb[:3] == ["To review", "Post to Tally", "In Tally"] and hb[3:] in (["Duplicates", "Deleted"], ["Duplicates", "Deleted", "No entry"]) and hb.count("To review") == 1, "3. Purchase, one row of tabs (review of 02-Oct-2026): %s" % hb)

@@ -218,10 +218,85 @@ def part_e(br):
     ok(t < 150, "1,500 invoices' sales ledger worked out in %d ms (within 150)" % t)
     pg.close()
 
+def part_f(br):
+    print("F. a long list printed: every row")
+    pg = br.new_page(viewport={"width": 1440, "height": 900}); pg.on("pageerror", lambda e: errors.append(str(e)[:300]))
+    pg.goto(URL); pg.evaluate(READY)
+    cid = pg.evaluate(BANK, [300, 1200])
+    pg.goto("about:blank"); pg.goto(URL + "#/today"); pg.evaluate(READY); pg.wait_for_timeout(800)
+    pg.evaluate("(cid) => openCompany(cid).then(() => goClient('bank'))", cid); pg.wait_for_function("(cid) => S.bank && S.bank.cid === cid && !S.bank.loading", arg=cid, timeout=60000); pg.wait_for_timeout(1000)
+    pg.evaluate("() => { S.txnQ = ''; goClient('txn'); txnTabGo('bank'); }"); pg.wait_for_selector("#app table[data-list='txn-bank']", timeout=60000); pg.wait_for_timeout(1500)
+    ok(pg.evaluate(TROWS) == 300, "1,200 lines: 300 drawn on the page (%d)" % pg.evaluate(TROWS))
+    n = pg.evaluate("() => { window.dispatchEvent(new Event('beforeprint')); return document.querySelectorAll('#app table[data-list=\\'txn-bank\\'] tbody tr:not([data-lt-grow])').length; }")
+    ok(n == 1200, "printed with the browser's Print (beforeprint): all 1,200 rows drawn (%d)" % n)
+    pg.evaluate("() => window.dispatchEvent(new Event('afterprint'))"); pg.wait_for_timeout(500)
+    ok(pg.evaluate(TROWS) == 300, "after the print: 300 again (%d)" % pg.evaluate(TROWS))
+    h = pg.evaluate("""() => { const t = document.querySelector('#app table[data-list=\\'txn-bank\\']'); t.parentElement.id = 'psPrintWrap'; let got = '';
+      const pv = window.printView; window.printView = (title, html) => { got = html; }; try { printTable('psPrintWrap', 'Made up'); } finally { window.printView = pv; }
+      return (got.match(/<tr[ >]/g) || []).length; }""")
+    ok(h >= 1201, "printTable of the box around it: every row in what is printed (%d rows)" % h)
+    pg.wait_for_timeout(500)
+    ok(pg.evaluate(TROWS) == 300, "and the page draws 300 again after it (%d)" % pg.evaluate(TROWS))
+    # far down the list, one line taken out: the rows drawn stay
+    for _ in range(30):
+        if pg.evaluate(TROWS) >= 600: break
+        pg.evaluate("() => { const g = document.querySelector('#app [data-lt-grow]'); if (g) g.scrollIntoView(); }"); pg.wait_for_timeout(150)
+    n0 = pg.evaluate(TROWS)
+    n1 = pg.evaluate("() => { S.bank.rows.splice(5, 1); render(); return document.querySelectorAll('#app table[data-list=\\'txn-bank\\'] tbody tr:not([data-lt-grow])').length; }")
+    ok(n0 >= 600 and n1 >= n0 - 1, "a line taken out far down the list: the rows drawn stay (%d, then %d)" % (n0, n1))
+    pg.evaluate("() => { S.txnQ = 'ledger 11'; render(); }"); pg.wait_for_timeout(500)
+    want = pg.evaluate("() => txnFiltered(txnRowsBank()).length")
+    ok(pg.evaluate(TROWS) == min(300, want), "another search: from the top again (%d of %d)" % (pg.evaluate(TROWS), want))
+    pg.close()
+
+def part_g(br):
+    import glob
+    print("G. the calendar's file not there")
+    cal = os.path.basename((glob.glob(os.path.join(SITE, "assets", "calendar-*.js")) or ["calendar-x.js"])[0])
+    ctx = br.new_context(viewport={"width": 1440, "height": 900}); pg = ctx.new_page(); pg.on("pageerror", lambda e: errors.append(str(e)[:300]))
+    asked = []
+    pg.on("request", lambda r: asked.append(r.url) if "/assets/calendar-" in r.url else None)
+    pg.goto(URL); pg.evaluate(READY); pg.wait_for_timeout(4000)
+    ok(any(cal in u for u in asked), "fetched ahead once the page is idle, before any calendar is opened (%d asks)" % len(asked))
+    ctx.close()
+    ctx = br.new_context(viewport={"width": 1440, "height": 900}); pg = ctx.new_page(); pg.on("pageerror", lambda e: errors.append(str(e)[:300]))
+    ctx.route("**/assets/calendar-*", lambda r: r.abort("internetdisconnected"))
+    pg.goto(URL); pg.evaluate(READY)
+    bid = pg.evaluate("""async () => { const c = newCompany({name: 'Made Up Dates Client', gstin: ''}); S.companies[c.id] = c; S.data[c.id] = {parties: {}, entries: {}, loaded: true}; c.stats = {};
+      await openCompany(c.id); const e = newEntry('Manual entry'); Object.assign(e.x, {vendorName: 'Made Up Supplier', invoiceNo: 'D/1', invoiceDate: '2026-07-01', taxable: 1000, total: 1000});
+      S.data[c.id].entries[e.id] = e; goClient('bills'); revOpen(e.id); window.__stay = 1; return e.id; }""")
+    pg.wait_for_timeout(1500)
+    pg.locator('#app [data-datebox] button.datebox-cal').first.click(); pg.wait_for_timeout(2500)
+    ok(pg.evaluate("() => window.__stay === 1"), "FinCom is not reloaded for it")
+    ok(pg.locator(".datebox-pop [data-cal-failed]").count() == 1, "the calendar's place says it could not be loaded")
+    box = pg.locator('#app [data-datebox] input').first; box.fill("15-07-2026"); box.press("Enter"); pg.wait_for_timeout(600)
+    ok(pg.evaluate("(id) => D().entries[id].x.invoiceDate", bid) == "2026-07-15", "a date typed still goes in (%s)" % pg.evaluate("(id) => D().entries[id].x.invoiceDate", bid))
+    ctx.close()
+
+def part_h(br):
+    print("H. a long ledger list filled once: later ledgers in it")
+    pg = br.new_page(viewport={"width": 1440, "height": 900}); pg.on("pageerror", lambda e: errors.append(str(e)[:300]))
+    pg.goto(URL); pg.evaluate(READY)
+    cid = pg.evaluate(BANK, [3000, 30])
+    pg.goto("about:blank"); pg.goto(URL + "#/today"); pg.evaluate(READY); pg.wait_for_timeout(800)
+    pg.evaluate("(cid) => openCompany(cid).then(() => goClient('bank'))", cid); pg.wait_for_selector(SEL, timeout=60000); pg.wait_for_timeout(800)
+    pg.focus(SEL); pg.wait_for_timeout(200)
+    n0 = pg.evaluate("(s) => document.querySelector(s).options.length", SEL)
+    pg.evaluate("() => { document.activeElement.blur(); S.bank.newLed = (S.bank.newLed || []).concat([{name: 'Made Up Ledger Created Here', group: 'Sundry Creditors'}]); render(); }"); pg.wait_for_timeout(500)
+    pg.focus(SEL); pg.wait_for_timeout(200)
+    r = pg.evaluate("(s) => { const e = document.querySelector(s); return [e.options.length, [...e.options].some((o) => o.value === 'Made Up Ledger Created Here'), e.innerHTML === ledgerOptions('', BANK_GROUPS)]; }", SEL)
+    ok(n0 > 3000 and r[1] and r[2], "a ledger created here: in the list the next time it is used (%d, then %r)" % (n0, r[:2]))
+    pg.evaluate("() => { document.activeElement.blur(); S.bank.newLed = S.bank.newLed.concat([{name: 'Made Up Ledger Created Here With A Name Longer Than Any', group: 'Sundry Creditors'}]); render(); }"); pg.wait_for_timeout(500)
+    short = pg.evaluate("(s) => document.querySelector(s).options.length", SEL)
+    pg.dispatch_event(SEL, "mousedown"); pg.wait_for_timeout(200)
+    r = pg.evaluate("(s) => { const e = document.querySelector(s); return [e.options.length, e.innerHTML === ledgerOptions('', BANK_GROUPS)]; }", SEL)
+    ok(short <= 3 and r[1], "its short form drawn again (%d options) and pressed: every ledger again (%d)" % (short, r[0]))
+    pg.close()
+
 try:
     with sync_playwright() as p:
         br = p.chromium.launch()
-        for k, f in [("A", part_a), ("B", part_b), ("C", part_c), ("D", part_d), ("E", part_e)]:
+        for k, f in [("A", part_a), ("B", part_b), ("C", part_c), ("D", part_d), ("E", part_e), ("F", part_f), ("G", part_g), ("H", part_h)]:
             if not ONLY or k in ONLY: f(br)
         br.close()
 finally:
