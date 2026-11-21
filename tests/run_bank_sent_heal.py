@@ -85,8 +85,23 @@ SETUP = r"""async () => {
       return JSON.parse(JSON.stringify(j));
     }
     if (/^\/jobs\/resume/.test(path)) return T.jobs[body.id];
+    // (a bridge that checks the linked company's GUID: linkGuid in its /status)
+    if (path === "/status") return {ok: true, linkGuid: true};
     return {ok: true};
   };
+  // signed in to FinCom's cloud, and the client's Tally link kept there (tally_links, src/js/98-link-record.js): the client
+  // linked to G with the company's GUID (made up), the record the posting gate reads (LinkRec.sendTo, the owner's rule
+  // of 19-Nov-2026); anything else asked of the cloud: nothing
+  const LINK = {book_id: "bk-1", client_id: c.id, company_guid: "made-up-guid-itseasy-0001", company_name: G, state: "linked", posting_allowed: true, version: 1};
+  TCloud.on = () => true; TCloud.st[c.id] = {at: Date.now(), books: [{book: "bk-1", company: G, from: null}]};
+  // (this test is of the page settling lines itself: a cloud without the posting register, migration 111, as before the
+  // cloud was signed in here; with the register, the register settles a partly made batch, src/js/96 bankPartialSplit)
+  TCloud.status = async () => TCloud.st[c.id].books; TCloud.rpc = async () => ({ok: true});
+  TCloud.restAll = async (u) => { if (/^tally_post_register\?/.test(String(u))) throw Error("PGRST205: Could not find the table 'public.tally_post_register' in the schema cache"); return []; };
+  if (typeof PostReg === "object") Object.assign(PostReg, {readable: null, by: {}, busy: {}, missingAt: 0});
+  if (typeof CloudJobs === "object"){ CloudJobs.load = async () => null; }
+  Cloud.api = async (u) => /^tally_links\?/.test(String(u)) ? [LINK] : [];
+  if (typeof LinkRec === "object") Object.assign(LinkRec.st, {rows: null, at: 0, p: null, pf: null, missing: false, err: ""});
   render();
   return c.id;
 }"""
