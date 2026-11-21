@@ -28,7 +28,7 @@ import { clientTallyState } from "./lib/tallyState.js";
 import TallyIcon from "./parts/TallyIcon.jsx";
 import { density, setDensity } from "./parts/density.js";
 
-const HOME_TITLES = { clients: "Clients", today: "Today", compliance: "Compliance", inbox: "Inbox", tally: "Tally", integrations: "Integrations", rules: "Settings", help: "Help", meetings: "Meetings" };
+const HOME_TITLES = { clients: "Clients", today: "Today", compliance: "Compliance", inbox: "Inbox", tally: "Tally", integrations: "Integrations", rules: "Settings", help: "Help", meetings: "Meetings", assistant: "Assistant" };
 // one name for one thing (spec K1; clean-up batch 1): each page is called what the sidebar calls it. From Tally keeps
 // the Tally ledgers as its tab, and Audit the tie-out with Tally
 const BOOKS_TITLES = { tds: "TDS", gst: "GST", import: "From Tally", ledgers: "From Tally", tieout: "Audit", reports: "Reports", lookup: "Look up",

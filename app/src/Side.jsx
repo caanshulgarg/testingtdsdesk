@@ -16,16 +16,16 @@ import { useDismiss } from "./parts/dismiss.js";
 // On a phone the bar along the bottom keeps five: Overview · Purchase · Bank · Sales · More (Today · Compliance ·
 // Clients · Tally · More on the firm's pages); More opens a sheet with everything else.
 import { ArrowLeftRight, BookOpen, Building2, Scale, CalendarCheck, ChartColumn, CircleHelp, CloudDownload, Ellipsis, FileSearch, FileText, Inbox,
-  Landmark, LayoutDashboard, Mail, PanelLeftClose, PanelLeftOpen, Percent, Plug, ReceiptText, Search, Settings, SlidersHorizontal, Sun,
+  Landmark, LayoutDashboard, ListChecks, Mail, PanelLeftClose, PanelLeftOpen, Percent, Plug, ReceiptText, Search, Settings, SlidersHorizontal, Sun,
   TrendingUp, Users, Video, X } from "lucide-react";
 
 const ICONS = { today: Sun, dash: LayoutDashboard, bills: ReceiptText, bank: Landmark, sales: TrendingUp, inbox: Inbox, fromtally: CloudDownload,
   setup: SlidersHorizontal, settings: Settings, txn: ArrowLeftRight, books: BookOpen, tds: Percent, gst: FileText, reports: ChartColumn, lookup: Search,
-  audit: FileSearch, letters: Mail, mymis: LayoutDashboard, help: CircleHelp, clients: Users, compliance: CalendarCheck, more: Ellipsis, integrations: Plug, recon: Scale, meetings: Video, corp: Building2 };
+  audit: FileSearch, letters: Mail, mymis: LayoutDashboard, help: CircleHelp, clients: Users, compliance: CalendarCheck, more: Ellipsis, integrations: Plug, recon: Scale, meetings: Video, corp: Building2, assistant: ListChecks };
 // each area its own colour (the owner, 09-Oct-2026: "some bright colours"), the accents of styles/arc-tokens.css
 const TONES = { today: "amber", dash: "indigo", bills: "amber", bank: "sky", sales: "emerald", inbox: "violet", fromtally: "teal", setup: "slate",
   settings: "slate", txn: "teal", books: "violet", tds: "rose", gst: "indigo", reports: "teal", mymis: "indigo", lookup: "sky", audit: "rose", letters: "amber",
-  help: "sky", clients: "indigo", compliance: "rose", more: "slate", integrations: "teal", recon: "emerald", meetings: "emerald", corp: "slate" };
+  help: "sky", clients: "indigo", compliance: "rose", more: "slate", integrations: "teal", recon: "emerald", meetings: "emerald", corp: "slate", assistant: "violet" };
 
 const RAIL = { Transactions: "Trans\u00ADactions", Reconciliations: "Reconcil\u00ADiations", Integrations: "Integra\u00ADtions", Compliance: "Compli\u00ADance" };
 function Item({ icon, label, on, count, onClick, title, bar }) {
@@ -61,6 +61,8 @@ function tree() {
     return [[null, [
       // the firm's home page (homeTab "today"); the Inbox for all clients is opened from it ("To read"), so it lights Today too
       { icon: "today", label: "Today", on: t === "today" || t === "inbox", go: () => navHome("today"), bar: true, title: "What needs doing, every client" },
+      // next-assistant (phase 1 design): what the night's checks found, what waits on clients, entries ready
+      { icon: "assistant", label: "Assistant", on: t === "assistant", go: () => navHome("assistant"), title: "Found overnight, waiting on clients, entries ready" },
       { icon: "compliance", label: "Compliance", on: t === "compliance", go: () => navHome("compliance"), bar: true, title: "Returns and payments due, every client" },
       { icon: "clients", label: "Clients", on: t === "clients", go: () => navHome("clients"), bar: true },
       // next-calls-meet (23-Oct-2026; the owner: "a proper system like Meet/Zoom"): video calls and meetings, for the

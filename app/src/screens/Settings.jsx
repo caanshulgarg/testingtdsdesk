@@ -40,6 +40,8 @@ import GstSettings from "./gst/GstSettings.jsx";
 import Parties from "./Parties.jsx";
 import GstApiAll from "./GstApiAll.jsx";
 import LogoPick from "../parts/LogoPick.jsx";
+// next-assistant (phase 1 design): the client's own contacts, for the Assistant's weekly questions
+import ClientContacts from "./assistant/ClientContacts.jsx";
 import { clientTallyState, tallyDevs, pcLive, seenWords, openOn } from "../lib/tallyState.js";
 // TDSF25 (src/js/83-tds-forms-2025.js: the deductor's details) comes with this screen's file, not in legacy.js (build.py lazy_files)
 import "../../../src/js/83-tds-forms-2025.js";
@@ -326,6 +328,9 @@ function Company() {
       {co.gstin && <button className="btn small" onClick={() => coClearIds(["gstin"])}>Clear a wrong GSTIN…</button>}
       {co.pan && <button className="btn small" onClick={() => coClearIds(["pan"])}>Clear a wrong PAN…</button>}</div>}
   </Card>;
+}
+function CompanyAndContacts() {
+  return <><Company /><Card title="Contacts"><ClientContacts co={CO()} key={CO().id} /></Card></>;
 }
 
 // review item 36: bills for services post as a Journal or as a Purchase voucher, as the client books them in Tally; a
@@ -621,7 +626,7 @@ export function ClientSetup() {
   // (a moment later: the address is written once the drawing is done)
   useEffect(() => { if (setupListAsked()) setTimeout(() => { if (setupListAsked()) { delete S.setupList; markStep({ fcSetList: 1, fcSetFrom: 0 }); } }, 0); });
   const body = {
-    settings: () => <Company />,
+    settings: () => <CompanyAndContacts />,
     cotally: () => <TallySetup />,
     cotds: () => <TdsSetup />,
     deductees: () => <Parties />,
