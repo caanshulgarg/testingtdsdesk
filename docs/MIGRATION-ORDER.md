@@ -1206,3 +1206,23 @@ names no GUID ("Update FinCom: ...", a job ends failed with each entry not sent)
 gone since the stamp: "The client's Tally link changed or was removed after this posting was made". Tested:
 `tests/run_migration203.py` (RED_WITHOUT_203=1 fails), `tests/run_migration202.py`; bridge: `go test ./...`
 (linkguid_test.go, linkguid_closed_test.go).
+
+## 204: the heaviest statements made lighter, the same answers (not run yet; branch next-fix-dbspeed, 21-Nov-2026)
+
+**204, db speed** (21-Nov-2026, branch `next-fix-dbspeed`, the owner: "make the database fast ... the effect should remain
+the same"; **written, not run yet**; file md5 2b77b881eae761e4f9b0a3fc20626861):
+`server/tally-cloud/migration-204-db-speed.sql`. Needs nothing of 199-203; runs before or after them. From staging's
+pg_stat_statements (21-Nov-2026), heaviest by total time:
+
+| statement | cause | 204 | staging, read-only EXPLAIN | stand (tests) |
+| --- | --- | --- | --- | --- |
+| gst-share-sweep job, every minute: `gst_share_books_due(3)` | one calc_seen probe per entry of every book (31,736) | the books with an unseen entry found by one anti-join | 288 -> 64 ms | 38 -> 8 ms |
+| tally-post-register-settle job, every 10 min: `tally_post_register_settle_book`'s look-up by remote GUID | every recorder line of the book read per open register row | index `tally_recorder_lines_remote_guid` (CONCURRENTLY) and statistics `tally_recorder_lines_remote_guid_stats`; the function not touched | 332 ms of a 512-row book's lines -> index (not made on staging) | 887 -> 3 ms |
+| `tally_unknown_ledger_entries(p_book)` | one ledger look-up per line (39,704) | each distinct name looked up once | 280 -> 70 ms | 116 -> 31 ms (a firm) |
+| `gst_calc_rows(p_book)`, `gst_share_rows(p_book, p_guids)` | jsonb taken apart and built again at every step | built as json, made jsonb once | 858 -> 714, 528 -> 468 ms | 333 -> 218, 213 -> 183 ms |
+
+Replaced with the same arguments and grants (restated): `gst_share_books_due` (170's text), `tally_unknown_ledger_entries`
+(56's), `gst_calc_rows` (153's), `gst_share_rows` (166's); each was staging's text (md5 of the body checked by the test).
+No table, nothing dropped, no row changed (ANALYZE of tally_recorder_lines only). One transaction, lock_timeout 3 s; then the
+index CONCURRENTLY with lock_timeout 3 s (if it times out, run the file again). Safe twice. Tested:
+`tests/run_migration204.py` (RED_WITHOUT_204=1 fails): 27 cases, the same answer before and after each.
