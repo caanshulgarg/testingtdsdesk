@@ -12,6 +12,7 @@
 import { useEffect, useRef, useState } from "react";
 import Tag from "./Tag.jsx";
 import Button from "./Button.jsx";
+import LedgerSelect from "./LedgerSelect.jsx";
 
 function useCapture(id) {
   const el = useRef(null);
@@ -103,7 +104,7 @@ export function BankLedger({ co, acc, compact }) {
     <div><b>{c.gone ? c.value + " is no longer in Tally. Choose again." : "Which Tally ledger is this bank account?"}</b>
       <div className="note">{where}{c.value && c.state === "guessed" && !c.gone ? (c.old ? " · Saved before: " + c.value + ". Confirm it, or choose another." : " · FinCom’s guess: " + c.value + (c.why ? " (" + c.why + ")" : "") + ". Confirm it, or choose another.") : ""}</div></div>
     {listed ? <span className="row" style={{ gap: 8, alignItems: "center" }}>
-      <select aria-label="Tally ledger for this bank account" key={sel} onChange={(ev) => choose(ev.target.value)} dangerouslySetInnerHTML={{ __html: ledgerOptions(sel, BANK_GROUPS) }} />
+      <LedgerSelect aria-label="Tally ledger for this bank account" selected={sel} prefer={BANK_GROUPS} onPick={choose} />
       <Button type="button" className="btn small primary" data-bank-ledger-confirm="" disabled={!sel} title={!sel ? "Choose the Tally ledger first" : undefined} onClick={confirm}>Confirm</Button>
       {changing && <Button type="button" className="btn small" onClick={() => { delete Drafts.picks[pid]; delete Drafts.secs[pid]; setChanging(false); }}>Cancel</Button>}
       {sel && pick !== undefined && <span className="cfm-state unsaved" data-cfm-state="unsaved">Not saved yet</span>}

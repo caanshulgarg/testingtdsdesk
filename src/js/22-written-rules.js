@@ -1062,11 +1062,13 @@ function stmtLabel(st){
   const acc = accountFor(st);
   return (exactLedger(acc.ledger) || (st.bank + (acc.last4 ? " \u00b7\u00b7" + acc.last4 : ""))) + " \u2014 " + shortDate(st.from) + " to " + shortDate(st.to) + " " + String(st.to || "").slice(0, 4);
 }
-function ledgerOptions(selected, preferGroups){
-  const list = Array.from(knownLedgers().values());
+// short (next-fix-pagespeed, parts/LedgerSelect.jsx): only the chosen ledger and the longest name, in their groups (as
+// wide), for a long list not yet used; every option it adds makes each later drawing of the page slower
+function ledgerOptions(selected, preferGroups, short){
+  const list = Array.from(knownLedgers().values()), w = short && list.reduce((a, l) => l.name.length > a.name.length ? l : a, list[0]);
   const pref = preferGroups ? list.filter(l => preferGroups.test(l.group || "")) : [];
   const rest = list.filter(l => !pref.includes(l));
-  const opt = l => '<option value="' + esc(l.name) + '"' + (selected && l.name === selected ? " selected" : "") + ">" + esc(l.name) + (l.pending ? " (new)" : "") + "</option>";
+  const opt = l => !short || l === w || l.name === selected ? '<option value="' + esc(l.name) + '"' + (selected && l.name === selected ? " selected" : "") + ">" + esc(l.name) + (l.pending ? " (new)" : "") + "</option>" : "";
   return '<option value="">\u2014 Choose a Tally ledger \u2014</option>' +
     (pref.length ? '<optgroup label="' + esc(preferGroups === BANK_GROUPS ? "Bank and cash ledgers" : "Suggested") + '">' + pref.map(opt).join("") + "</optgroup><optgroup label=\"All ledgers\">" + rest.map(opt).join("") + "</optgroup>" : rest.map(opt).join(""));
 }
