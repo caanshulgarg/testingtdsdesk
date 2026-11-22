@@ -166,6 +166,10 @@ func keepHoldWhy() (string, string) {
 		return "tallyYoung", "Tally has just opened; letting it finish loading"
 	}
 	if keepUserInTallyFn() {
+		if platPersonUnknown() {
+			// audit fix: the service cannot see the person (the tray does not report): taken as someone in Tally
+			return "userInTally", "the tray icon is not reporting, so someone may be working in Tally"
+		}
 		return "userInTally", "someone is working in Tally"
 	}
 	return "", ""
@@ -678,13 +682,11 @@ type keepRun struct {
 	day     bool            // next-fix-mastersread: runReq.day
 }
 
-// next-fix-mastersread: the TC of the company list and the company check: under the 2 s stop for a run reading on
-// (pressOn) or nobody pressed in the day (short)
+// next-fix-mastersread: the TC of the company list, the company check and the day-book slices: under the 2 s stop.
+// Audit fix (the owner's rule: each request to Tally 2 s at most): for every run, the nightly catch-up and a plain
+// Update now too, not only one reading on (pressOn) or nobody pressed in the day (short)
 func (k *keepRun) checkTC() *TC {
-	if k.pressOn || k.short {
-		return ledgerTC(k.tc)
-	}
-	return k.tc
+	return ledgerTC(k.tc)
 }
 
 type keepBack struct {

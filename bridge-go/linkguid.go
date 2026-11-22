@@ -294,7 +294,9 @@ func unconfirmResults(res []M, why, wrong string) []M {
 		for k, v := range r {
 			c[k] = v
 		}
-		if c["refused"] == true || c["notSent"] == true {
+		// audit fix: a part Tally plainly refused (refusedByTally, not accepted) keeps Tally's words and stays off the
+		// record: it may be sent again, so it is never made "sent, not sent again"
+		if c["refused"] == true || c["notSent"] == true || (c["refusedByTally"] == true && c["accepted"] != true) {
 			out = append(out, c)
 			continue
 		}

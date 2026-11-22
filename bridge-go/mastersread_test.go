@@ -235,8 +235,9 @@ func TestMastersShortRunUnderStop(t *testing.T) {
 	if k.checkTC().limitMs != recorderLimitMs() || k.checkTC().limitMs <= 0 {
 		t.Fatalf("the company check of a short run: %+v", k.checkTC())
 	}
-	if (&keepRun{tc: &TC{copier: true, readSec: 120}}).checkTC().limitMs != 0 {
-		t.Fatal("a pressed run's check under the stop")
+	// the bridge audit (22-Nov-2026, the owner's rule: each request 2 s at most): a pressed run's check under the stop too
+	if (&keepRun{tc: &TC{copier: true, readSec: 120}}).checkTC().limitMs != recorderLimitMs() {
+		t.Fatal("a pressed run's check not under the stop")
 	}
 }
 

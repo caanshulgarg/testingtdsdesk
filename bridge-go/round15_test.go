@@ -87,7 +87,7 @@ func r15Imports(f *standTally) (sizes []int, messages []int) {
 func TestPostTrustsCreatedReply(t *testing.T) {
 	td := today()
 	f := newStandTally(t)
-	standBridge(t, f, "")
+	standBridge(t, f, `,"PostPaceOff":true`) // the fixed parts (postpace.go): this test is about the reply, not the pace
 	p := r15Job(t, "job-r15-trust", r15Bills("tr", td, 3))
 	if str(p["status"]) != "done" || p["checking"] == true {
 		t.Fatalf("the job: %s %q checking %v", p["status"], p["message"], p["checking"])
@@ -146,7 +146,7 @@ func TestPostNeedsReviewOnLineError(t *testing.T) {
 	t.Run("errors in a batch", func(t *testing.T) {
 		f := newStandTally(t)
 		f.importSkip = func(x string) bool { return strings.Contains(x, "TDSDesk:nr3") } // Tally refuses the third (ERRORS 1)
-		standBridge(t, f, "")
+		standBridge(t, f, `,"PostPaceOff":true`)                                         // the fixed parts (postpace.go): this test is about the reply, not the pace
 		p := r15Job(t, "job-r15-review", r15Bills("nr", td, 3))
 		if f.n("Import") != 1 {
 			t.Fatalf("%d imports (nothing is retried by the bridge)", f.n("Import"))
@@ -191,7 +191,7 @@ func TestPostNeedsReviewOnLineError(t *testing.T) {
 		f := newStandTally(t)
 		f.behave = importReply("<ENVELOPE><BODY><DATA><IMPORTRESULT><CREATED>1</CREATED><ALTERED>0</ALTERED><ERRORS>0</ERRORS><EXCEPTIONS>0</EXCEPTIONS><LASTVCHID>501</LASTVCHID></IMPORTRESULT>" +
 			"<LINEERROR>Ledger &apos;Electricity Charges&apos; does not exist!</LINEERROR></DATA></BODY></ENVELOPE>")
-		standBridge(t, f, "")
+		standBridge(t, f, `,"PostPaceOff":true`) // the fixed parts (postpace.go): this test is about the reply, not the pace
 		r := postOne(t, "le1", finVoucher("le1", fgParty, "LE-1", td, "1.00"))
 		if r["ok"] != false || r["needsReview"] != true || r["accepted"] != true || str(r["lastVchId"]) != "501" {
 			t.Fatalf("a reply with a LINEERROR: %v", r)
@@ -207,7 +207,7 @@ func TestPostNeedsReviewOnLineError(t *testing.T) {
 	t.Run("nothing made", func(t *testing.T) {
 		f := newStandTally(t)
 		f.importSkip = func(string) bool { return true }
-		standBridge(t, f, "")
+		standBridge(t, f, `,"PostPaceOff":true`) // the fixed parts (postpace.go): this test is about the reply, not the pace
 		r := postOne(t, "nm1", finVoucher("nm1", fgParty, "NM-1", td, "1.00"))
 		// (19-Nov-2026) Tally created nothing: plainly failed in Tally's words, never "needs review"
 		if r["ok"] != false || r["needsReview"] == true || r["accepted"] != false || itemState(r, false) != "failed" || toInt(r["created"]) != 0 || toInt(r["errors"]) != 1 {
@@ -245,7 +245,7 @@ func TestPostNoReadBackRequests(t *testing.T) {
 	td := today()
 	f := newStandTally(t)
 	f.add(td, fgParty, "OLD-1", "Electricity | TDSDesk:rb1", "-1.00") // the same tag in Tally already: not asked about
-	standBridge(t, f, "")
+	standBridge(t, f, `,"PostPaceOff":true`)                          // the fixed parts (postpace.go): this test is about the reply, not the pace
 	master := `<LEDGER NAME="Round Fifteen" ACTION="Create"><NAME>Round Fifteen</NAME><PARENT>Sundry Creditors</PARENT></LEDGER>`
 	if _, err := newPostJob(M{"jobId": "job-r15-norb", "company": zz, "guid": "co-guid-1", "masters": []any{M{"id": "m1", "xml": master}}, "vouchers": r15Bills("rb", td, 5), "checkFirst": true}); err != nil {
 		t.Fatal(err)
@@ -283,7 +283,7 @@ func TestPostNoReadBackRequests(t *testing.T) {
 func TestPostBatchesBillsByTen(t *testing.T) {
 	td := today()
 	f := newStandTally(t)
-	standBridge(t, f, "")
+	standBridge(t, f, `,"PostPaceOff":true`) // the fixed parts (postpace.go): this test is about the reply, not the pace
 	p := r15Job(t, "job-r15-ten", r15Bills("bt", td, 25))
 	if str(p["status"]) != "done" {
 		t.Fatalf("the job: %v", p["message"])
@@ -303,7 +303,7 @@ func TestPostBatchesBillsByTen(t *testing.T) {
 	}
 	// the setting from the file
 	f2 := newStandTally(t)
-	standBridge(t, f2, `,"PostBatchBills":7`)
+	standBridge(t, f2, `,"PostBatchBills":7,"PostPaceOff":true`) // the fixed parts (postpace.go)
 	r15Job(t, "job-r15-seven", r15Bills("bs", td, 25))
 	if sizes, _ := r15Imports(f2); fmt.Sprint(sizes) != "[7 7 7 4]" {
 		t.Fatalf("with PostBatchBills 7: %v", sizes)
@@ -314,7 +314,7 @@ func TestPostBatchesBillsByTen(t *testing.T) {
 func TestPostBankBatchFifty(t *testing.T) {
 	td := today()
 	f := newStandTally(t)
-	standBridge(t, f, "")
+	standBridge(t, f, `,"PostPaceOff":true`) // the fixed parts (postpace.go): this test is about the reply, not the pace
 	vch := append(r15Bills("bb", td, 3), r15Bank("bk", td, 60)...)
 	p := r15Job(t, "job-r15-bank", vch)
 	if str(p["status"]) != "done" {
@@ -334,7 +334,7 @@ func TestPostBankBatchFifty(t *testing.T) {
 	}
 	// an item marked bank by FinCom goes with the bank lines whatever its type
 	f2 := newStandTally(t)
-	standBridge(t, f2, `,"PostBatchBank":4`)
+	standBridge(t, f2, `,"PostBatchBank":4,"PostPaceOff":true`) // the fixed parts (postpace.go)
 	marked := []any{}
 	for i, x := range r15Bills("mk", td, 5) {
 		o := obj(x)
@@ -394,7 +394,7 @@ func TestPostQueueNeverHeld(t *testing.T) {
 	td := today()
 	f := newStandTally(t)
 	f.importSkip = func(x string) bool { return strings.Contains(x, "TDSDesk:qa") } // Tally refuses job A's entries
-	standBridge(t, f, "")
+	standBridge(t, f, `,"PostPaceOff":true`)                                        // the fixed parts (postpace.go): this test is about the reply, not the pace
 	t0 := time.Now()
 	if _, err := newPostJob(M{"jobId": "job-r15-qa", "company": zz, "guid": "co-guid-1", "vouchers": r15Bills("qa", td, 3)}); err != nil {
 		t.Fatal(err)
@@ -428,7 +428,7 @@ func TestBeatSettingsApplied(t *testing.T) {
 	td := today()
 	f := newStandTally(t)
 	c := newStandCloud(t)
-	standBridge(t, f, c.cfg()+`,"PostBatchBills":12`)
+	standBridge(t, f, c.cfg()+`,"PostBatchBills":12,"PostPaceOff":true`) // the fixed parts (postpace.go): this test is about the setting
 	c.mu.Lock()
 	c.beatReply = M{"settings": M{"postOnly": []any{"ZZ TEST"}, "postBatchBills": 7, "postBatchBank": 20, "at": "2026-10-03T10:00:00Z"}}
 	c.mu.Unlock()
@@ -497,7 +497,7 @@ func TestPostTimingLogged(t *testing.T) {
 	td := today()
 	f := newStandTally(t)
 	c := newStandCloud(t)
-	standBridge(t, f, c.cfg()+`,"CloudPostSyncSec":0`)
+	standBridge(t, f, c.cfg()+`,"CloudPostSyncSec":0,"PostPaceOff":true`) // the fixed parts (postpace.go)
 	c.mu.Lock()
 	c.takeJobs = append(c.takeJobs, M{"id": "job-r15-timing", "company": zz, "payload": M{"vouchers": r15Bills("tm", td, 12)}})
 	c.mu.Unlock()
@@ -630,7 +630,7 @@ func TestPostTimingsOnStand(t *testing.T) {
 func TestNeedsReviewJobEndsDone(t *testing.T) {
 	td := today()
 	f := newStandTally(t)
-	standBridge(t, f, `,"PostBatchBills":3`)
+	standBridge(t, f, `,"PostBatchBills":3,"PostPaceOff":true`)                      // the fixed parts (postpace.go)
 	f.importSkip = func(x string) bool { return strings.Contains(x, "TDSDesk:nd5") } // the second request (nd4, nd5): created 1 of 2
 	p := r15Job(t, "job-r15-review-done", r15Bills("nd", td, 5))
 	if str(p["status"]) != "done" || str(p["message"]) != "Posted 3 of 5; 2 need review" {
@@ -770,7 +770,7 @@ func TestNeedsReviewMessageCapped(t *testing.T) {
 		fmt.Fprintf(&errs, "<LINEERROR>Ledger &apos;Some Long Ledger Name Number %02d That Does Not Exist In This Company&apos; does not exist!</LINEERROR>", i)
 	}
 	f.behave = importReply("<ENVELOPE><BODY><DATA><IMPORTRESULT><CREATED>0</CREATED><ALTERED>0</ALTERED><ERRORS>50</ERRORS><EXCEPTIONS>0</EXCEPTIONS></IMPORTRESULT>" + errs.String() + "</DATA></BODY></ENVELOPE>")
-	standBridge(t, f, `,"PostBatchBills":50`)
+	standBridge(t, f, `,"PostBatchBills":50,"PostPaceOff":true`) // the fixed parts (postpace.go)
 	p := r15Job(t, "job-r15-capped", r15Bills("cp", td, 50))
 	for id, r := range r15Results(p) {
 		m := str(r["message"])
@@ -812,7 +812,7 @@ func TestImportTimeoutScalesWithBatch(t *testing.T) {
 	td := today()
 	f := newStandTally(t)
 	f.importAt = func(id, body string) (bool, time.Duration) { return true, 3 * time.Second }
-	standBridge(t, f, `,"TallyMaxSec":1,"TallyProbeEverySec":1,"PostBatchBills":50,"SelfStopSec":1`)
+	standBridge(t, f, `,"TallyMaxSec":1,"TallyProbeEverySec":1,"PostBatchBills":50,"SelfStopSec":1,"PostPaceOff":true`) // the fixed parts (postpace.go)
 	p := r15Job(t, "job-r15-slow-import", r15Bills("sl", td, 50))
 	if str(p["status"]) != "done" || !strings.HasPrefix(str(p["message"]), "Posted 50 of 50") {
 		t.Fatalf("a 3 s import with a 1 s read cap: %s %q", p["status"], p["message"])

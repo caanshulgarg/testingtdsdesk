@@ -19,6 +19,8 @@ func platSessionUsers() map[int]string         { return map[int]string{} }
 func platMySessions() []int                    { return []int{0} }
 func platIdleSec() float64                     { return 99999 }
 func platFrontIsTally() bool                   { return false }
+func platPersonUnknown() bool                  { return false }
+func platOwnerActiveSessions() ([]int, bool)   { return nil, true }
 func platTallyYoung(min float64) bool          { return false }
 
 // 2.4.5: Tally's window answering (not Windows: the tests' stand-in flag)

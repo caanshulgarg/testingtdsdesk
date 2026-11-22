@@ -30,7 +30,10 @@ const ctx = {console, Math, JSON, Date, Number, String, RegExp, Object, Array, S
   tallyLedgerName: n => n, narrationFor: e => e.narr, exactLedger: n => n, knownLedgers: () => new Map(), bankLedgers: () => ({tds: "TDS Payable"}),
   B: () => ({salesRef: []}), SL: () => ({cfg: {voucherType: "Sales"}}),
   // the invoice's lines (salesLines works them out from the invoice and the company's ledgers): given here as they come out
-  salesLines: v => v.lines};
+  salesLines: v => v.lines,
+  // the company's GSTIN the invoice is made under (src/js/25 salesCmpGstin, from the client's own GSTINs): the invoice here
+  // names no seller GSTIN, so the company's own, as the app gives it then
+  salesCmpGstin: (v, co) => (co && co.gstin) || ""};
 vm.createContext(ctx);
 // the shared name helpers ledNm calls (namesBreaks), as the app has them first (build.py NAMES_JS, without the export line); not hashed: they are
 // the cloud's and the app's one rule for Tally names, not a posting builder
