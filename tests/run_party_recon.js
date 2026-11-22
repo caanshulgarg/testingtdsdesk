@@ -9,7 +9,7 @@ const {load, HTML} = require("./harness");
 let fails = 0;
 const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };
 const FX = path.join(__dirname, "fixtures", "sheets");
-const h = load(HTML, ["num", "r2", "money", "INR", "fpHash", "GST_STATES", "stateOfGstin", "GSTIN_RE", "normName", "normInv", "Market", "GST2B", "GSTAmend", "VR", "isSheetFile"]);
+const h = load(HTML, ["num", "r2", "money", "INR", "fpHash", "GST_STATES", "stateOfGstin", "GSTIN_RE", "NORM_CACHE", "normNameRaw", "normName", "normInv", "MONTHS", "toIsoDate", "Market", "GST2B", "GSTAmend", "VR", "isSheetFile"]);
 // the engine is a file of its own, loaded by the app when first used: run here on the program's helpers
 // (its import of the vendor reconciliation, src/js/42 since 25-Oct-2026, is left out: VR comes from the page above)
 const vm = require("vm"); h.ctx.window = h.ctx; vm.runInContext(fs.readFileSync(path.join(__dirname, "..", "app", "src", "lib", "registers.js"), "utf8").replace(/^import .*$/gm, ""), h.ctx);

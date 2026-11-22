@@ -127,7 +127,7 @@ Object.assign(GSTX, {
     const out = new Map(), H = s => String(s || "").toLowerCase().replace(/[^a-z0-9%]/g, "");
     const col = (hd, ...names) => hd.findIndex(h => names.some(n => h === n || h.startsWith(n)));
     wb.SheetNames.forEach(sn => {
-      const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], {header: 1, raw: true, defval: ""});
+      const rows = xlsxRows(wb.Sheets[sn]);
       const hi = rows.findIndex(r => r.some(c => /invoice\s*number|note\s*(\/\s*refund\s*voucher\s*)?number|note\s*no/i.test(String(c))) && r.some(c => /taxable\s*value/i.test(String(c))));
       if (hi < 0) return;
       const hd = rows[hi].map(H), name = sn.toLowerCase();
@@ -158,11 +158,10 @@ Object.assign(GSTX, {
     return Array.from(out.values());
   },
   dateKey(s){
-    const t = String(s || "").trim(), M = {jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12};
-    let m = t.match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4})$/); if (m) return m[3] + m[2].padStart(2, "0") + m[1].padStart(2, "0");
-    m = t.match(/^(\d{1,2})[-\s]([A-Za-z]{3})[A-Za-z]*[-\s](\d{2,4})$/); if (m && M[m[2].toLowerCase()]) return (m[3].length === 2 ? "20" + m[3] : m[3]) + String(M[m[2].toLowerCase()]).padStart(2, "0") + m[1].padStart(2, "0");
-    m = t.match(/^(\d{4})-(\d{2})-(\d{2})/); if (m) return m[1] + m[2] + m[3];
-    return t.replace(/\D/g, "").slice(0, 8);
+    const t = String(s || "").trim();
+    // (Market.date, src/js/26: dd-mm-yy too, day first; a value that is no date is "" and counted, never a key of its
+    // digits: next-fix-audit-imports)
+    return s instanceof Date || t ? Market.date(s instanceof Date ? s : t).replace(/-/g, "") : "";
   },
   // bringing in a filed GSTR-1 or IFF's details: the portal's Excel or JSON; the return period is read from the JSON (fp),
   // else the file name (MMYYYY), else the latest invoice month (a quarter's last month for a quarterly filer's GSTR-1)
@@ -173,7 +172,7 @@ Object.assign(GSTX, {
       const j = JSON.parse(await file.text()); docs = this.fromJson(j); fpGstin = String(j.gstin || "").toUpperCase();
       if (!per && /^\d{6}$/.test(String(j.fp || ""))) per = j.fp.slice(2) + j.fp.slice(0, 2);
     } else {
-      await ensureXlsx(); const wb = XLSX.read(new Uint8Array(await file.arrayBuffer()), {type: "array"}); docs = this.fromExcel(wb, reg);
+      await ensureXlsx(); const wb = xlsxBook(await file.arrayBuffer()); docs = this.fromExcel(wb, reg);
     }
     if (fpGstin && fpGstin.slice(0, 2) !== reg) throw new Error("This return is for GSTIN " + fpGstin + ", not this registration.");
     if (!docs.length) throw new Error("No invoices or notes were found in " + name + ".");
@@ -185,7 +184,7 @@ Object.assign(GSTX, {
     const k = reg + "|" + form + "|" + per, prev = b.filedDocs[k];
     if (prev) b.filedDocs[k + "|was" + Date.now()] = Object.assign({}, prev, {removed: {at: new Date().toISOString(), by: whoAmI(), reason: "replaced by " + name}});
     b.filedDocs[k] = {reg, per, form, source: isJson ? "json" : "excel", name, at: new Date().toISOString(), by: whoAmI(), docs};
-    return {per, form, n: docs.length};
+    return {per, form, n: docs.length, undated: docs.filter(d => !d.date).length};
   },
   // the books' invoices and notes that GSTR-1 reports one by one (B2B, large B2C, notes, exports)
   bookDocs(reg, fy){
@@ -352,7 +351,7 @@ Object.assign(GSTX, {
 async function gstxImport(files){
   const reg = S.gstReg || "", done = [], bad = [];
   for (const f of Array.from(files || [])){
-    try { const r = await GSTX.importFiled(f, reg, ""); done.push(GSTV.label(r.form) + " " + GSTV.perLabel(r.form, r.per, reg) + " (" + r.n + ")"); }
+    try { const r = await GSTX.importFiled(f, reg, ""); done.push(GSTV.label(r.form) + " " + GSTV.perLabel(r.form, r.per, reg) + " (" + r.n + (r.undated ? ", " + r.undated + " with a date FinCom could not read" : "") + ")"); }
     catch (e){ bad.push(f.name + ": " + ((e && e.message) || e)); }
   }
   if (done.length) saveBooks();

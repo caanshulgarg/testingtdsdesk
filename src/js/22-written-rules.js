@@ -391,6 +391,8 @@ async function uploadStatements(files, force){
       if (held){ b.busy = ""; await bankOpenHeld(b.cid, held.id); continue; }
       const parsed = await readStatement(file, msg => { b.busy = file.name + ": " + msg; render(); }, force);
       if (!parsed.rows.length) throw {code: "bank_no_rows", diag: parsed.diag};
+      // a dated line whose amount could not be read is said, never dropped unseen (next-fix-audit-imports)
+      if (parsed.rows.unread) toast(parsed.rows.unread + " dated line" + (parsed.rows.unread > 1 ? "s" : "") + " of " + file.name + " left out: the amount could not be read. Check them in the bank's copy.");
       const meta = parsed.meta;
       const chk = checkBalances(parsed.rows, meta);
       // which bank account of this client
@@ -529,9 +531,12 @@ async function importLedgerList(file){
         let hi = -1, cName = 0, cGroup = -1, cPan = -1, cGst = -1, cAc = -1;
         for (let i = 0; i < Math.min(grid.length, 30); i++){
           const r = grid[i].map(cellText);
-          const n = r.findIndex(x => /^(ledger\s*name|name(\s*of\s*ledger)?|particulars|ledger)$/i.test(x));
+          const n = r.findIndex(x => /^(ledger\s*name|name(\s*of\s*(the\s*)?(ledger|account))?|account\s*name|particulars|ledger)$/i.test(x));
           if (n >= 0){ hi = i; cName = n; cGroup = r.findIndex(x => /^(under|group|parent|group\s*name)$/i.test(x)); cPan = r.findIndex(x => /pan|income\s*tax/i.test(x)); cGst = r.findIndex(x => /gstin|gst\s*(no|number|registration)/i.test(x)); cAc = r.findIndex(x => /a\/?c\s*no|account\s*(no|number)/i.test(x)); break; }
         }
+        // a sheet with no "Ledger name" / "Particulars" heading is not a ledger list (a title, an address, a notes sheet):
+        // left out, never read from its first row (next-fix-audit-imports)
+        if (hi < 0) return;
         grid.slice(hi + 1).forEach(r => {
           const name = cellText(r[cName]);
           if (!name || /^(total|grand total|list of (ledgers|accounts))/i.test(name)) return;
@@ -542,7 +547,7 @@ async function importLedgerList(file){
   } catch (e){ toast("Could not read the ledger list: " + ((e && e.message) || "unknown format")); return; }
   const seen = new Set();
   list = list.filter(l => { const k = l.name.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; });
-  if (!list.length){ toast("No ledger names found in " + file.name + "."); return; }
+  if (!list.length){ toast("No ledger names found in " + file.name + " (a column headed Ledger name or Particulars)."); return; }
   const groupSet = new Set(list.map(l => l.group).filter(Boolean));
   const now = new Date().toISOString();
   Ledgers.take(b.cid, {list, parents: {}, at: now, srcAt: now, src: "file", file: file.name});

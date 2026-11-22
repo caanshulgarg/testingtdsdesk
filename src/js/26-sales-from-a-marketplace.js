@@ -1,171 +1,33 @@
 /* ================================================================== */
 /* Sales from a marketplace: Amazon MTR, Flipkart, Shopify            */
 /* ================================================================== */
+// The marketplace reports (Amazon MTR, Flipkart, Shopify) and the GST sales register are read by the register engine
+// (app/src/lib/registers.js: MarketRead, through the sheet panel), with one duplicate rule and one place of supply rule
+// for every sales upload (next-fix-audit-imports: the "Marketplace report" button's own reader is retired). What stays
+// here is the date rule the other readers share.
 const Market = {
-  // which report is this, from the columns it has
-  detect(head){
-    const h = head.map(x => String(x || "").toLowerCase().replace(/[^a-z0-9]/g, ""));
-    const has = n => h.some(x => x.includes(n));
-    if (has("orderitemid") || has("fsn") || has("finalinvoiceamount")) return "flipkart";
-    if (has("taxexclusivegross") || has("shipfromstate") || has("customerbstn") ||
-        (has("transactiontype") && has("invoiceamount")) || (has("sellergstin") && has("orderid"))) return "amazon";
-    if (has("lineitemprice") || (has("financialstatus") && has("lineitemname"))) return "shopify";
-    if (has("invoicenumber") && has("taxablevalue")) return "generic";
-    return "";
-  },
-  pick(head, names){
-    const h = head.map(x => String(x || "").toLowerCase().replace(/[^a-z0-9]/g, ""));
-    for (const n of names){ const i = h.findIndex(x => x === n); if (i >= 0) return i; }
-    for (const n of names){ const i = h.findIndex(x => x.includes(n)); if (i >= 0) return i; }
-    return -1;
-  },
+  // a date as yyyy-mm-dd: Excel's own, yyyy-mm-dd (or yyyy/mm/dd, yyyy.mm.dd), dd/mm/yyyy or dd/mm/yy and dd-Mon-yy. Day
+  // first always: figures alone are never given to new Date, which reads 05/09/26 as 9 May. "" when the day is not in
+  // its month. Any year 1990 to 2099 (review of e7bf15906: toIsoDate's GST years, 2017-2035, dropped a vendor
+  // statement's old bill of 2015; a register says so itself, SheetFmt.apply)
+  iso(d, m, y){ d = +d; m = +m; y = +y; if (y < 100) y += 2000; const t = new Date(Date.UTC(y, m - 1, d)); return y > 1989 && y < 2100 && m > 0 && m < 13 && t.getUTCDate() === d ? t.toISOString().slice(0, 10) : ""; },
   date(v){
     if (v == null || v === "") return "";
     // a date from Excel (or a date written out) is local midnight: read it by its local day, not in UTC (a day early in India)
-    const day = d => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+    const day = d => isNaN(d) ? "" : new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
     if (v instanceof Date) return day(v);
     const s = String(v).trim();
-    let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if (m) return m[1] + "-" + m[2] + "-" + m[3];
-    m = s.match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4})/);
-    if (m) return m[3] + "-" + String(m[2]).padStart(2, "0") + "-" + String(m[1]).padStart(2, "0");
-    m = s.match(/^(\d{1,2})[-\s]([A-Za-z]{3})[-\s](\d{2,4})/);
-    if (m){ const mo = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"].indexOf(m[2].toLowerCase()) + 1;
-      const y = m[3].length === 2 ? "20" + m[3] : m[3];
-      if (mo) return y + "-" + String(mo).padStart(2, "0") + "-" + String(m[1]).padStart(2, "0"); }
-    const d = new Date(s);
-    return isNaN(d) ? "" : day(d);
-  },
-  // one row per invoice line, whichever marketplace it came from
-  read(grid, kind){
-    const head = grid[0] || [], rows = grid.slice(1);
-    const at = names => this.pick(head, names);
-    const C = {
-      amazon: {no: ["invoicenumber", "creditnoteno", "vatinvoicenumber"], date: ["invoicedate", "creditnotedate", "shipmentdate", "orderdate"],
-        party: ["buyername", "customername", "shiptoname"],
-        gstin: ["customerbilltogstid", "customershiptogstid", "customerbstn", "buyergstin", "customergstin"],
-        pos: ["shiptostate", "billtostate", "shipfromstate", "placeofsupply"],
-        taxable: ["taxexclusivegross"], taxableParts: ["principalamount", "shippingamount", "giftwrapamount"],
-        cgst: ["cgsttax", "shippingcgsttax", "giftwrapcgsttax"], sgst: ["sgsttax", "utgsttax", "shippingsgsttax", "shippingutgsttax", "giftwrapsgsttax", "giftwraputgsttax"],
-        igst: ["igsttax", "shippingigsttax", "giftwrapigsttax"], cess: ["compensatorycesstax", "shippingcesstaxamount", "giftwrapcompensatorycesstax"],
-        tcs: ["tcscgstamount", "tcssgstamount", "tcsigstamount", "tcsutgstamount"],
-        rate: ["cgstrate", "igstrate", "taxrate"], hsn: ["hsnsac", "hsncode"], total: ["invoiceamount"], type: ["transactiontype"], order: ["orderid"]},
-      flipkart: {no: ["invoiceno", "invoicenumber"], date: ["invoicedate", "orderdate"], party: ["customername", "buyername"], gstin: ["customergstin", "buyergstin"],
-        pos: ["customerstate", "shiptostate", "placeofsupply"], taxable: ["taxablevalue", "productvaluebeforetax", "sellingprice"], cgst: ["cgstamount", "cgst"], sgst: ["sgstamount", "sgst"],
-        igst: ["igstamount", "igst"], cess: ["cessamount"], rate: ["taxrate", "gstrate"], hsn: ["hsncode", "hsn"], total: ["invoiceamount", "finalinvoiceamount"], type: ["eventtype", "transactiontype"], order: ["orderid"]},
-      shopify: {no: ["name", "orderid", "invoicenumber"], date: ["createdat", "paidat", "date"], party: ["billingname", "customername", "shippingname"],
-        gstin: ["gstin", "taxid"], pos: ["shippingprovince", "billingprovince"], taxable: ["lineitemprice", "subtotal", "subtotalprice"],
-        cgst: ["tax1value", "cgst"], sgst: ["tax2value", "sgst"], igst: ["tax3value", "igst"], cess: ["cess"], rate: ["tax1rate", "taxrate"],
-        hsn: ["hsn", "sku"], total: ["total", "totalprice"], type: ["financialstatus"], order: ["name"]},
-      generic: {no: ["invoicenumber", "invoiceno"], date: ["invoicedate", "date"], party: ["customername", "party"], gstin: ["gstin", "customergstin"],
-        pos: ["placeofsupply", "state"], taxable: ["taxablevalue", "taxable"], cgst: ["cgst"], sgst: ["sgst"], igst: ["igst"], cess: ["cess"],
-        rate: ["rate", "taxrate"], hsn: ["hsn", "hsncode"], total: ["invoicevalue", "total"], type: ["type"], order: ["orderid"]}
-    }[kind] || {};
-    const idx = {}, many = {};
-    Object.keys(C).forEach(k => {
-      idx[k] = at(C[k]);
-      many[k] = C[k].map(n => head.findIndex(x => String(x || "").toLowerCase().replace(/[^a-z0-9]/g, "") === n)).filter(i => i >= 0);
-    });
-    const get = (r, k) => idx[k] >= 0 ? r[idx[k]] : "";
-    // a figure that arrives in pieces, like Amazon's item, shipping and gift wrap
-    const sum = (r, k) => (many[k] || []).reduce((a, i) => a + num(r[i]), 0);
-    const amount = (r, k) => {
-      if ((many[k] || []).length > 1) return sum(r, k);
-      return num(get(r, k));
-    };
-    const byInvoice = new Map();
-    rows.forEach(r => {
-      if (!r || !r.length) return;
-      const typ = String(get(r, "type") || "").toLowerCase();
-      const back = /refund|return|cancel|credit/.test(typ);
-      const cnIdx = at(["creditnoteno", "creditnotenumber"]);
-      const cn = back && cnIdx >= 0 ? String(r[cnIdx] || "").trim() : "";
-      const no = cn || String(get(r, "no") || get(r, "order") || "").trim();
-      if (!no) return;
-      const against = cn ? String(get(r, "no") || "").trim() : "";
-      const sign = back ? -1 : 1;
-      const key = no + "|" + (back ? "CN" : "INV");
-      const inv = byInvoice.get(key) || {no, against, date: this.date(get(r, "date")), party: String(get(r, "party") || "").trim(),
-        gstin: String(get(r, "gstin") || "").toUpperCase().replace(/[^A-Z0-9]/g, ""), pos: String(get(r, "pos") || "").trim(),
-        hsn: String(get(r, "hsn") || "").trim(), taxable: 0, cgst: 0, sgst: 0, igst: 0, cess: 0, total: 0,
-        note: back ? "credit" : "", market: kind, lines: 0, tcs: 0};
-      const taxable = num(get(r, "taxable")) || sum(r, "taxableParts");
-      inv.taxable = r2(inv.taxable + sign * Math.abs(taxable));
-      inv.cgst = r2(inv.cgst + sign * Math.abs(amount(r, "cgst")));
-      inv.sgst = r2(inv.sgst + sign * Math.abs(amount(r, "sgst")));
-      inv.igst = r2(inv.igst + sign * Math.abs(amount(r, "igst")));
-      inv.cess = r2(inv.cess + sign * Math.abs(amount(r, "cess")));
-      inv.tcs = r2((inv.tcs || 0) + sign * Math.abs(sum(r, "tcs")));
-      inv.total = r2(inv.total + sign * Math.abs(num(get(r, "total")) || (taxable + amount(r, "cgst") + amount(r, "sgst") + amount(r, "igst"))));
-      inv.lines++;
-      if (!inv.date) inv.date = this.date(get(r, "date"));
-      byInvoice.set(key, inv);
-    });
-    const out = Array.from(byInvoice.values()).filter(x => x.taxable || x.total);
-    out.forEach(x => { const tax = r2(x.cgst + x.sgst + x.igst); x.rate = x.taxable ? Math.round(tax / x.taxable * 10000) / 100 : 0; });
-    return out;
-  },
-  async fromFile(file){
-    const name = String(file.name || "").toLowerCase();
-    let grid;
-    if (/\.(xlsx|xls)$/.test(name)){
-      await ensureXlsx();
-      const wb = XLSX.read(await file.arrayBuffer(), {type: "array", cellDates: true});
-      grid = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header: 1, raw: true, defval: ""});
-    } else {
-      const text = await file.text();
-      const sep = (text.split("\n")[0].match(/\t/g) || []).length > 2 ? "\t" : ",";
-      grid = text.split(/\r?\n/).filter(Boolean).map(line => {
-        const out = []; let cur = "", q = false;
-        for (let i = 0; i < line.length; i++){
-          const ch = line[i];
-          if (ch === '"'){ if (q && line[i + 1] === '"'){ cur += '"'; i++; } else q = !q; }
-          else if (ch === sep && !q){ out.push(cur); cur = ""; }
-          else cur += ch;
-        }
-        out.push(cur); return out;
-      });
-    }
-    // the header may sit a few rows down
-    let hi = 0;
-    for (let i = 0; i < Math.min(8, grid.length); i++){
-      const k = this.detect(grid[i] || []);
-      if (k){ hi = i; break; }
-    }
-    const kind = this.detect(grid[hi] || []);
-    if (!kind) return {error: "That file was not recognised as an Amazon, Flipkart or Shopify sales report."};
-    const invoices = this.read(grid.slice(hi), kind);
-    return {kind, invoices, rows: grid.length - hi - 1};
+    let m = s.match(/^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})(?!\d)/);
+    if (m) return this.iso(m[3], m[2], m[1]);
+    m = s.match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4}|\d{2})(?!\d)/);
+    if (m) return this.iso(m[1], m[2], m[3]);
+    m = s.match(/^(\d{1,2})[-\s]([A-Za-z]{3,4})[A-Za-z]*[-\s,]+(\d{4}|\d{2})(?!\d)/);
+    if (m) return this.iso(m[1], MONTHS[m[2].toLowerCase()] || MONTHS[m[2].slice(0, 3).toLowerCase()], m[3]);
+    // a month in words ("Sep 5, 2026"), never figures alone
+    return /[a-z]{3}/i.test(s) && !/^\d+[-\/.]\d/.test(s) ? day(new Date(s)) : "";
   }
 };
 
-// a marketplace report becomes invoices and credit notes in Sales
-async function importMarketFile(file){
-  const s = SL(), cid = S.coId;
-  s.busy = "Reading " + file.name + "\u2026"; render();
-  try {
-    const r = await Market.fromFile(file);
-    if (r.error){ s.busy = ""; toast(r.error); render(); return; }
-    let added = 0, again = 0;
-    r.invoices.forEach(inv => {
-      const no = normInv(inv.no + (inv.note === "credit" ? "-CN" : ""));
-      if (s.list.some(v => normInv(v.x.number) === no)){ again++; return; }
-      const x = {number: inv.no + (inv.note === "credit" && !/^cn/i.test(inv.no) ? " (CN)" : ""), againstInvoice: inv.against || "", date: inv.date, customerName: inv.party || (inv.gstin ? "" : "Retail customer"),
-        customerGstin: /^\d{2}[A-Z]{5}\d{4}[A-Z][A-Z\d]Z[A-Z\d]$/.test(inv.gstin) ? inv.gstin : "",
-        placeOfSupply: inv.pos, hsn: inv.hsn, taxable: Math.abs(inv.taxable), cgst: Math.abs(inv.cgst), sgst: Math.abs(inv.sgst),
-        igst: Math.abs(inv.igst), cess: Math.abs(inv.cess), total: Math.abs(inv.total), rate: inv.rate,
-        noteKind: inv.note || "", ecommerce: inv.market, tcs: Math.abs(inv.tcs || 0)};
-      const v = newInvoice(x, "market", {fileName: file.name, market: inv.market});
-      s.list.push(v); mapInvoice(v); added++;
-    });
-    saveSales();
-    s.busy = ""; render();
-    toast(({amazon: "Amazon", flipkart: "Flipkart", shopify: "Shopify", generic: "That"})[r.kind] + " report: " + added + " invoice" + (added === 1 ? "" : "s") +
-      " added" + (again ? ", " + again + " were already here" : "") + ", from " + r.rows + " rows.");
-  } catch (e){
-    s.busy = ""; toast("Could not read that file: " + ((e && e.message) || e)); render();
-  }
-}
 async function uploadSales(files){
   const s = SL(); if (!s) return;
   // a register (a sheet or JSON: GSTR-1, a marketplace's or an ERP's report) goes to the sheet panel (app/src/lib/registers.js)

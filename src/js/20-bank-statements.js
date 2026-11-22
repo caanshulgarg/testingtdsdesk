@@ -198,7 +198,10 @@ function cellText(v){
 function bankAmount(v){
   if (v == null || v === "") return null;
   if (typeof v === "number") return isFinite(v) ? v : null;
-  let s = String(v).replace(/[₹,\s]/g, "").replace(/^(rs\.?|inr)/i, "");
+  // (a minus as U+2212 or a dash, as PDF-to-Excel copies write it; 1.234,50 is no Indian figure, never read as 1.2345:
+  // next-fix-audit-imports)
+  if (/\.\d{3},\d{1,2}$/.test(String(v).trim())) return null;
+  let s = String(v).replace(/[₹,\s]/g, "").replace(/^(rs\.?|inr)/i, "").replace(/^[\u2212\u2013\u2014](?=\d)/, "-");
   if (!s || /^[-–—]+$/.test(s)) return null;
   let neg = false;
   if (/^\(.*\)$/.test(s)){ neg = true; s = s.slice(1, -1); }
@@ -314,21 +317,35 @@ function rowsFromCells(list, cols, getCell, rowText){
       else lastWasTxn = false;
       continue;
     }
-    if (!debit && !credit){ lastWasTxn = false; continue; }
+    if (!debit && !credit){ if (["debit", "credit", "amount"].some(k => /\d/.test(cellText(g(k))) && bankAmount(g(k)) === null)) out.unread = (out.unread || 0) + 1; lastWasTxn = false; continue; }
     lastWasTxn = true;
     out.push({date, valueDate: bankDate(g("valueDate")), narr, ref, page: raw.page || null, debit: debit ? Math.abs(debit) : 0, credit: credit ? Math.abs(credit) : 0, balance});
   }
   return out;
 }
 /* ---------- Excel / CSV ---------- */
+// A workbook from its bytes. A real Excel file (zip, or the old binary) is read with opt (its date cells as dates);
+// anything else (CSV, text, or an HTML or XML table called .xls, as many banks and portals export) keeps every cell as
+// written, so 05/09/26 stays 5 September and invoice 00123 stays 00123 (SheetJS reads such text US-style: next-fix-audit-imports)
+function xlsxBook(buf, opt){
+  const b = ArrayBuffer.isView(buf) ? buf : new Uint8Array(buf);
+  return XLSX.read(b, (b[0] === 0x50 && b[1] === 0x4b) || (b[0] === 0xd0 && b[1] === 0xcf) ? Object.assign({type: "array"}, opt) : {type: "array", raw: true});
+}
+// A sheet's rows, up to its last cell with a value (a cell formatted far down stretches the range to a million empty
+// rows). keep: a number Excel shows with leading zeros (00123) as that text
+function xlsxRows(ws, o, keep){
+  let r = -1, c = -1;
+  for (const k in ws){ const x = ws[k]; if (k[0] === "!" || !x || x.v == null || x.v === "") continue;
+    const a = XLSX.utils.decode_cell(k); if (a.r > r) r = a.r; if (a.c > c) c = a.c;
+    if (keep && x.t === "n" && /^0\d+$/.test(x.w || "")){ x.t = "s"; x.v = x.w; } }
+  if (ws["!ref"] && r >= 0){ const g = XLSX.utils.decode_range(ws["!ref"]); g.e.r = Math.min(g.e.r, r); g.e.c = Math.min(g.e.c, c); ws["!ref"] = XLSX.utils.encode_range(g); }
+  return XLSX.utils.sheet_to_json(ws, Object.assign({header: 1, raw: true, defval: ""}, o));
+}
 async function gridsFromSheet(file){
   await ensureXlsx();
   if (!window.XLSX) throw {code: "xlsx_missing"};
-  const buf = await file.arrayBuffer();
-  // CSV/text: keep every value as written, so 05-09-2026 stays 5 September (SheetJS would read it US-style)
-  const plain = /\.(csv|txt)$/i.test(file.name) || /text\/(csv|plain)/.test(file.type);
-  const wb = XLSX.read(buf, plain ? {type: "array", raw: true} : {type: "array", cellDates: true, raw: false, dateNF: "dd/mm/yyyy"});
-  return wb.SheetNames.map(n => XLSX.utils.sheet_to_json(wb.Sheets[n], {header: 1, raw: true, defval: "", blankrows: false}));
+  const wb = xlsxBook(await file.arrayBuffer(), {cellDates: true, raw: false, dateNF: "dd/mm/yyyy"});
+  return wb.SheetNames.map(n => xlsxRows(wb.Sheets[n], {blankrows: false}));
 }
 async function parseSheetStatement(file){
   const grids = await gridsFromSheet(file);
