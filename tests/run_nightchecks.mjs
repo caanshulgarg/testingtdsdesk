@@ -218,7 +218,8 @@ const one = (r, kind) => r.findings.filter((f) => f.kind === kind);
   // (phase 2) against salary payable only when October's payroll is booked to it: else Needs you
   r = run(inp([], B([row({ narr: "SALARY OCT", dec: { name: "SALARY" }, debit: 48000, date: "2026-11-01" })], { salary: sal })));
   eq(one(r, "bank_no_bill")[0].state, "you", "bank: the salary sheet's net, the payroll not booked yet: needs you");
-  r = run(inp([V("20261031", "Journal", [["Salary", -48000], ["Salary Payable", 48000]])], B([row({ narr: "SALARY OCT", dec: { name: "SALARY" }, debit: 48000, date: "2026-11-01" })], { salary: sal })));
+  // (the night gives the client's certain salary ledger: nightinput ledgersFor.salaryExpense)
+  r = run(inp([V("20261031", "Journal", [["Salary", -48000], ["Salary Payable", 48000]])], B([row({ narr: "SALARY OCT", dec: { name: "SALARY" }, debit: 48000, date: "2026-11-01" })], { salary: sal, ledgersFor: { salaryPayable: "Salary Payable", salaryExpense: "Salary" } })));
   eq(one(r, "bank_no_bill")[0].state, "resolved", "bank: the salary sheet's net, the payroll booked to salary payable: resolved");
   r = run(inp([V("20261031", "Journal", [["Salary", -48000], ["Salary Payable", 48000]])], B([row({ narr: "SALARY OCT", dec: { name: "SALARY" }, debit: 48000, date: "2026-11-01" })], { salary: sal, ledgersFor: { salaryPayable: "" } })));
   eq(one(r, "bank_no_bill")[0].state, "you", "bank: the salary sheet's net, no certain salary payable ledger: needs you");

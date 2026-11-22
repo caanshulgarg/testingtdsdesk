@@ -15,6 +15,8 @@
 --   entry_claim / entry_release / entry_approved   (review M3) Approve of a journal claims the entry first (ready ->
 --                           approving, atomically, one person at a time), posts through the existing path, then records it
 --                           approved, or releases the claim if the post failed; a claim left 30 minutes may be taken again
+--   entry_settle / asst_draft_state  (review N4) entries claimed and left are settled from their drafts (each night; and a
+--                           stale claim in entry_claim): posted or on its way -> approved; failed or none -> ready
 --   remind_due / remind_logged  "Remind by itself" (assistant-night's timer, service role only): document requests asked
 --                           once and still needed, at most weekly; each logged
 -- Grants: every right Supabase gives anon and authenticated by default is taken back (public too); then only what the page
@@ -39,7 +41,7 @@ begin
   foreach t in array array['daily_trust'] loop
     if to_regclass('public.' || t) is not null and coalesce(obj_description(to_regclass('public.' || t), 'pg_class'), '') <> 'daily check (migration 208)' then bad := bad || ('table ' || t); end if;
   end loop;
-  foreach f in array array['trust_set', 'trust_dismiss', 'trust_stats', 'trust_kind_of', 'remind_due', 'remind_logged', 'entry_claim', 'entry_release', 'entry_approved'] loop
+  foreach f in array array['trust_set', 'trust_dismiss', 'trust_stats', 'trust_kind_of', 'remind_due', 'remind_logged', 'entry_claim', 'entry_release', 'entry_approved', 'entry_settle', 'asst_draft_state'] loop
     if exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = f and coalesce(obj_description(p.oid, 'pg_proc'), '') <> 'daily check (migration 208)') then bad := bad || ('function ' || f); end if;
   end loop;
   if array_length(bad, 1) > 0 then
@@ -53,11 +55,11 @@ declare n text;
 begin
   select c.conname into n from pg_constraint c where c.conrelid = 'public.night_findings'::regclass and c.contype = 'c' and pg_get_constraintdef(c.oid) like '%advance_open%';
   if n is null then raise exception 'migration 208: night_findings has no kind check'; end if;
-  if pg_get_constraintdef((select oid from pg_constraint where conrelid = 'public.night_findings'::regclass and conname = n)) not like '%setoff_due%' then
+  if pg_get_constraintdef((select oid from pg_constraint where conrelid = 'public.night_findings'::regclass and conname = n)) not like '%setoff_exclude%' then
     execute format('alter table public.night_findings drop constraint %I', n);
     alter table public.night_findings add constraint night_findings_kind_check check (kind in ('advance_open', 'wrong_side', 'cash_big', 'round_sum', 'no_narration', 'expense_jump', 'suspense',
       'bank_no_bill', 'bank_month_missing', 'twob_not_in_books', 'sales_month_missing', 'salary_month_missing', 'salary_mismatch',
-      'setoff_due', 'payroll_due', 'recurring_due', 'ledger_pick'));
+      'setoff_due', 'payroll_due', 'recurring_due', 'ledger_pick', 'setoff_exclude'));
   end if;
   n := null;
   select c.conname into n from pg_constraint c where c.conrelid = 'public.night_entries'::regclass and c.contype = 'c' and pg_get_constraintdef(c.oid) like '%twob_inbox_bill%';
@@ -146,15 +148,54 @@ language sql stable security definer set search_path = '' as $$
 $$;
 
 -- ---------------------------------------------------------------- (review M3) Approve of a journal: claim, then approved or released
--- the claim: ready -> approving, one at a time (row lock), by owners and staff of the firm; a claim left 30 minutes (the
--- page closed half way) may be taken again. The night never touches an entry being approved (night_apply changes only
--- ready, held and withdrawn ones)
+-- (review N4) what became of an entry's draft (Daily Check's journals are kept as the existing path keeps a hand-made
+-- voucher: client_book_items "asstEntries", its dedupe in the data): 'none', 'failed' (Tally refused it, or the cloud's
+-- queue stopped its posting) or 'live' (posted, or on its way)
+create or replace function public.asst_draft_state(p_firm uuid, p_client text, p_dedupe text) returns text language sql stable security definer set search_path = '' as $$
+  select coalesce((select case when d.data->>'state' = 'failed'
+                                 or exists (select 1 from public.tally_post_jobs j where j.id::text = coalesce(d.data->>'job', '') and j.status in ('failed', 'cancelled') and coalesce(d.data->>'state', '') <> 'posted')
+                               then 'failed' else 'live' end
+                     from public.client_book_items d
+                    where d.firm_id = p_firm and d.client_id = p_client and d.key = 'asstEntries' and not d.deleted and d.item like '#dc-%'
+                      and d.data->>'dedupe' = p_dedupe and coalesce(d.data->>'removed', '') not in ('true')
+                    order by d.updated_at desc limit 1), 'none')
+$$;
+-- (review N4) entries claimed and left (a tab closed half way): a live draft -> approved (posted or on its way); a failed
+-- draft -> ready; no draft after 30 minutes -> ready. Then the second check's "already approved" applies as usual. The
+-- night (service role) runs it each night with the drafts its own look at the queue found failed (p_failed)
+create or replace function public.entry_settle(p_firm uuid, p_client text, p_failed text[] default '{}') returns integer language plpgsql security definer set search_path = '' as $$
+declare r public.night_entries; st text; n int := 0;
+begin
+  for r in select * from public.night_entries where firm_id = p_firm and client_id = p_client and state = 'approving' for update loop
+    st := case when r.dedupe = any (coalesce(p_failed, '{}')) then 'failed' else public.asst_draft_state(p_firm, p_client, r.dedupe) end;
+    if st = 'live' then
+      update public.night_entries set state = 'approved', approved_once = true, decided_at = now(), updated_at = now() where id = r.id;
+      insert into public.daily_log (firm_id, client_id, what, ref, evidence) values (p_firm, p_client, 'settled', r.id::text, jsonb_build_object('to', 'approved', 'draft', st));
+      n := n + 1;
+    elsif st = 'failed' or r.updated_at < now() - interval '30 minutes' then
+      update public.night_entries set state = 'ready', decided_by = null, decided_at = null, updated_at = now() where id = r.id;
+      insert into public.daily_log (firm_id, client_id, what, ref, evidence) values (p_firm, p_client, 'settled', r.id::text, jsonb_build_object('to', 'ready', 'draft', st));
+      n := n + 1;
+    end if;
+  end loop;
+  return n;
+end $$;
+-- the claim: ready -> approving, one at a time (row lock), by owners and staff of the firm. A claim left 30 minutes (the
+-- page closed half way) is settled first from its draft: live -> approved (said so, nothing claimed); failed or none ->
+-- claimed again. The night never touches an entry being approved (night_apply changes only ready, held and withdrawn)
 create or replace function public.entry_claim(p_id uuid) returns jsonb language plpgsql security definer set search_path = '' as $$
-declare r public.night_entries;
+declare r public.night_entries; st text;
 begin
   select * into r from public.night_entries where id = p_id and firm_id = public.my_firm() for update;
   if r.id is null or not public.can_write() then raise exception 'Not allowed.' using errcode = '42501'; end if;
-  if not (r.state = 'ready' or (r.state = 'approving' and r.updated_at < now() - interval '30 minutes')) then
+  if r.state = 'approving' and r.updated_at < now() - interval '30 minutes' then
+    st := public.asst_draft_state(r.firm_id, r.client_id, r.dedupe);
+    if st = 'live' then
+      update public.night_entries set state = 'approved', approved_once = true, decided_at = now(), updated_at = now() where id = r.id;
+      perform public.asst_log(r.firm_id, r.client_id, 'settled', r.id::text, jsonb_build_object('to', 'approved', 'draft', st));
+      return jsonb_build_object('ok', false, 'why', 'Already approved: it is on its way to Tally.');
+    end if;
+  elsif r.state <> 'ready' then
     raise exception 'This entry is not ready (it may be being approved).' using errcode = '22023';
   end if;
   update public.night_entries set state = 'approving', decided_by = auth.uid(), decided_at = now(), updated_at = now() where id = r.id;
@@ -228,7 +269,9 @@ $$;
 -- ---------------------------------------------------------------- function grants (explicit)
 revoke all on function public.trust_kind_of(text), public.trust_set(text, text, integer, numeric), public.trust_dismiss(text, text), public.trust_stats(),
   public.remind_due(boolean), public.remind_logged(uuid, text, bigint, uuid[], text, text),
-  public.entry_claim(uuid), public.entry_release(uuid, text), public.entry_approved(uuid, text) from public, anon, authenticated;
+  public.entry_claim(uuid), public.entry_release(uuid, text), public.entry_approved(uuid, text),
+  public.entry_settle(uuid, text, text[]), public.asst_draft_state(uuid, text, text) from public, anon, authenticated;
+grant execute on function public.entry_settle(uuid, text, text[]) to service_role;
 grant execute on function public.trust_set(text, text, integer, numeric), public.trust_dismiss(text, text), public.trust_stats(),
   public.entry_claim(uuid), public.entry_release(uuid, text), public.entry_approved(uuid, text) to authenticated;
 grant execute on function public.remind_due(boolean), public.remind_logged(uuid, text, bigint, uuid[], text, text) to service_role;
@@ -238,7 +281,7 @@ do $mark$
 declare r record;
 begin
   comment on table public.daily_trust is 'daily check (migration 208)';
-  for r in select p.oid::regprocedure as sig from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = any (array['trust_set', 'trust_dismiss', 'trust_stats', 'trust_kind_of', 'remind_due', 'remind_logged', 'entry_claim', 'entry_release', 'entry_approved']) loop
+  for r in select p.oid::regprocedure as sig from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = any (array['trust_set', 'trust_dismiss', 'trust_stats', 'trust_kind_of', 'remind_due', 'remind_logged', 'entry_claim', 'entry_release', 'entry_approved', 'entry_settle', 'asst_draft_state']) loop
     execute format('comment on function %s is %L', r.sig, 'daily check (migration 208)');
   end loop;
 end $mark$;

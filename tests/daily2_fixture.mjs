@@ -6,7 +6,7 @@ import { dbRows } from "./daily_fixture.mjs";
 import { booksOf, gstOf, nightInput } from "../server/assistant-night/nightinput.js";
 import { run } from "../server/_shared/nightchecks.js";
 import { journals } from "../server/_shared/dailyjournals.js";
-import { gstRows, head, L } from "./daily2_books.mjs";
+import { gstRows, head, L, keepFiled } from "./daily2_books.mjs";
 
 const CASH = "GST ELECTRONIC CASH LEDGER";
 const uuid = (n) => "00000000-0000-4000-8000-" + String(n).padStart(12, "0");
@@ -17,8 +17,9 @@ const SHEET = [
   { name: "Karan Mehta", date: "2026-10-31", gross: 19354.84, tds: 0, profTax: 0 },
 ];
 function nightOf(rows, today, more = {}) {
+  keepFiled(rows, today);
   const b = booksOf(rows), gst = gstOf(rows, b, today);
-  return nightInput(rows, b, Object.assign({ today, bankRecs: [], inboxRecs: [], entryRecs: [], twob: [], gst, prior: [], draftRecs: [], reads: [{ at: "2026-11-20T06:00:00Z", highest_alterid: 100 }] }, more));
+  return nightInput(rows, b, Object.assign({ today, bankRecs: [], inboxRecs: [], entryRecs: [], twob: [], gst, prior: [], draftRecs: [] }, more));
 }
 export function phase2() {
   const out = { entries: [], findings: [] };

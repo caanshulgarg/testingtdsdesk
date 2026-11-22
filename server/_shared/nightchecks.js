@@ -325,30 +325,48 @@ export function sheetMonth(r) { const m = ymd(r.date); if (m) return ymOf(m); co
 // (phase 2, review L2) one net for every use: the sheet's own net when it has one, else gross less TDS, professional tax,
 // PF and ESI
 export const sheetNet = (r) => r2(r.net != null && r.net !== "" ? num(r.net) : num(r.gross) - num(r.tds) - num(r.profTax) - num(r.pf) - num(r.esi));
-// (phase 2, review H2) salary booked for a month, the one rule for the payroll journal and the salary payments: a salary-like
-// expense (in the group of the client's salary ledger, or named salary, wages, staff, remuneration, stipend or bonus) on the
-// debit side of an entry dated in the month, or up to the 10th of the next, or whose narration names the month
-export const SALARY_RE = /SALAR|WAGES|STAFF|REMUNERATION|STIPEND|BONUS/i;
-export function salaryLike(A, l, base) {
-  if (!A.isExpense(l)) return false;
-  if (SALARY_RE.test(l)) return true;
-  // the salary ledger's own group counts only when it is a sub-group ("Employee costs" under Indirect Expenses): a primary
-  // group (Indirect Expenses itself) would make rent salary
+// (phase 2, review H2 and N5) salary booked for a month: one rule for the payroll journal and the salary payments.
+// A ledger is salary "yes" when it is the salary ledger the payroll uses (certain by name, or the owner's pick), or sits in
+// that ledger's own sub-group where EVERY ledger is salary-named; "maybe" when it is another expense named like salary
+// (salary, wages, remuneration, stipend, bonus, staff pay; not auditors' remuneration or staff welfare). A month with a
+// "maybe" cannot be decided exactly: Needs you.
+export const SALARY_RE = /SALAR|WAGES|REMUNERATION|STIPEND|BONUS|STAFF\s*(PAY|COST)/i;
+const NOT_SALARY = /AUDIT|WELFARE/i;
+export const salaryNamed = (l) => SALARY_RE.test(l) && !NOT_SALARY.test(l);
+export function salaryClass(A, l, base, ledgers) {
+  if (!A.isExpense(l)) return "";
+  if (base && l === base) return "yes";
   const pb = base ? A.path(base) || [] : [];
-  return pb.length >= 2 && (A.path(l) || [])[0] === pb[0];
+  if (pb.length >= 2 && (A.path(l) || [])[0] === pb[0]) {
+    const peers = (ledgers || []).filter((x) => (A.path(x) || [])[0] === pb[0]);
+    if (peers.length && peers.every(salaryNamed)) return "yes";
+  }
+  return salaryNamed(l) ? "maybe" : "";
 }
 const MONTH_RX = [/^jan/i, /^feb/i, /^mar/i, /^apr/i, /^may/i, /^jun/i, /^jul/i, /^aug/i, /^sep/i, /^oct/i, /^nov/i, /^dec/i];
-// the narration names the month: "Oct 2026", "October-2026", "Oct'26", "10/2026", "2026-10"
+// the narration names the month: "Oct 2026", "October-2026", "Oct'26", "10/2026", "2026-10"; a full date ("20/11/2026",
+// "2026-11-20") names a day, not a month (review N1)
 export function namesMonth(narr, ym) {
   const t = String(narr || ""), y = ym.slice(0, 4), m = +ym.slice(4, 6), yy = y.slice(2);
-  if (new RegExp("(^|\\D)0?" + m + "[-/.]" + "(" + y + "|" + yy + ")(\\D|$)").test(t) || new RegExp("(^|\\D)" + y + "[-/.]0?" + m + "(\\D|$)").test(t)) return true;
+  if (new RegExp("(^|[^\\d/.-])0?" + m + "[-/.](" + y + "|" + yy + ")(?![\\d/.-]*\\d)").test(t) || new RegExp("(^|[^\\d/.-])" + y + "[-/.]0?" + m + "(?![-/.]?\\d)").test(t)) return true;
   const re = /([A-Za-z]{3,9})[\s.'’,-]*('?)(\d{4}|\d{2})(?!\d)/g; let x;
   while ((x = re.exec(t))) { const yr = x[3].length === 4 ? x[3] : "20" + x[3]; if (MONTH_RX[m - 1].test(x[1]) && (x[1].length === 3 || /^(january|february|march|april|may|june|july|august|september|october|november|december|sept)$/i.test(x[1])) && yr === y) return true; }
   return false;
 }
-export function forMonth(v, ym) {
-  const m = ymOf(v.date);
-  return m === ym || (m === ymAdd(ym, 1) && +v.date.slice(6, 8) <= 10) || namesMonth(v.narr, ym);
+// the entries that book salary for a month, each counted for one month only (review N5): an entry naming a month counts for
+// that month; else one dated in the month; one dated the 1st to 10th of the next month counts for this month only when this
+// month has no salary entry of its own (and then not for the next)
+export function salaryEntries(V, ym, isSal) {
+  const sal = V.filter((v) => v.ent.some((e) => e.a < 0 && isSal(e.l)));
+  const named = (v, m) => namesMonth(v.narr, m), namesOther = (v, m) => !named(v, m) && Array.from({ length: 25 }, (_, i) => ymAdd(m, i - 12)).some((y) => y !== m && named(v, y));
+  const own = (m) => sal.filter((v) => ymOf(v.date) === m && !namesOther(v, m));
+  const early = (m) => own(m).some((v) => +v.date.slice(6, 8) > 10 || named(v, m)) ? [] : own(ymAdd(m, 1)).filter((v) => +v.date.slice(6, 8) <= 10 && !named(v, ymAdd(m, 1)));
+  const lent = new Set(early(ymAdd(ym, -1)).map((v) => v.id));
+  const out = new Map();
+  own(ym).filter((v) => !lent.has(v.id)).forEach((v) => out.set(v.id, v));
+  early(ym).forEach((v) => out.set(v.id, v));
+  sal.filter((v) => named(v, ym)).forEach((v) => out.set(v.id, v));
+  return Array.from(out.values());
 }
 function salary(inp, A, V, out) {
   const rows = inp.salary || [];
@@ -455,7 +473,8 @@ function candidates(f, inp, A, V) {
     // the month's payroll is booked to it (in the books, or its Daily Check journal approved); else Needs you
     const sp = (inp.ledgersFor || {}).salaryPayable || "";
     const base = (inp.ledgersFor || {}).salaryExpense || "";
-    const payBooked = (m) => !!sp && (V.some((v) => forMonth(v, m) && v.ent.some((e) => e.l === sp && e.a > 0) && v.ent.some((e) => e.a < 0 && salaryLike(A, e.l, base)))
+    const isSal = (l) => salaryClass(A, l, base, inp.ledgers) === "yes";
+    const payBooked = (m) => !!sp && (salaryEntries(V, m, isSal).some((v) => v.ent.some((e) => e.l === sp && e.a > 0))
       || (inp.drafts || []).some((d) => d && d.dedupe === "payroll:" + m && !d.removed && d.state !== "failed"));
     if (x.dir === "out" && /SALAR|WAGES/i.test(row.narr || "")) [ymOf(x.date), ymAdd(ymOf(x.date), -1)].forEach((m) => {
       const net = r2((inp.salary || []).filter((r) => sheetMonth(r) === m).reduce((s, r) => s + sheetNet(r), 0));

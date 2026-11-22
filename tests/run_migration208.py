@@ -58,6 +58,8 @@ try:
     as_ = lambda uid, q: db.rows("set role authenticated;\n" + q, uid)
     one = lambda uid, q: db.one("set role authenticated;\n" + q, uid)
     act = lambda uid, q: db.sql("set role authenticated;\n" + q, uid)
+    # staging's posting queue (migration 199), as much as 208 reads of it
+    db.sql("create table if not exists tally_post_jobs (id uuid primary key, firm_id uuid, client_id text, status text, results jsonb)")
     MIG208 = os.path.join(HERE, "..", "server", "assistant-night", "migration-208-daily-phase2.sql")
     db.sql(open(MIG).read())
     b208 = open(MIG208).read()
@@ -92,7 +94,7 @@ try:
     def ins_f(kind):
         try: db.sql("insert into night_findings (firm_id, client_id, kind, key, first_seen, last_seen) values ('%s', 'c1', '%s', 'chk:%s', '2026-11-22', '2026-11-22')" % (F1, kind, kind)); return True
         except RuntimeError: return False
-    ok(all(ins_f(k) for k in ("setoff_due", "payroll_due", "recurring_due", "ledger_pick", "advance_open")) and not ins_f("made_up_kind"), "3. phase 2's kinds go in, an old one still does, a made-up one does not")
+    ok(all(ins_f(k) for k in ("setoff_due", "payroll_due", "recurring_due", "ledger_pick", "setoff_exclude", "advance_open")) and not ins_f("made_up_kind"), "3. phase 2's kinds go in, an old one still does, a made-up one does not")
     db.sql("delete from night_findings where key like 'chk:%'")
     def ins_e(src):
         try: db.sql("insert into night_entries (firm_id, client_id, source, dedupe, voucher) values ('%s', 'c1', '%s', 'chk:%s', '{}')" % (F1, src, src)); return True
@@ -188,9 +190,35 @@ try:
     act(STAFF, "select public.entry_claim(%s)" % E9); act(STAFF, "select public.entry_approved(%s, 'dc-abc')" % E9)
     ok(db.one("select state || ' ' || work_ref || ' ' || approved_once from night_entries where id = %s" % E9) == "approved dc-abc true" and db.one("select count(*) from daily_log where what = 'approved' and ref = '00000000-0000-4000-8000-000000000091'") == "1", "8. Tally took it: approved by the claimer, logged")
     ok(raises(lambda: act(STAFF, "select public.entry_claim(%s)" % E9)), "8. an approved entry cannot be claimed again")
-    db.sql("update night_entries set state = 'approving', decided_by = '%s', updated_at = now() - interval '31 minutes' where id = %s" % (STAFF, E9))
-    act(OWN, "select public.entry_claim(%s)" % E9)
-    ok(db.one("select decided_by from night_entries where id = %s" % E9) == OWN, "8. a claim left 30 minutes (the page closed): may be taken again")
+    # (review N4) the closed tab: a claim left 30 minutes, settled from its draft
+    stale = lambda: db.sql("update night_entries set state = 'approving', decided_by = '%s', updated_at = now() - interval '31 minutes' where id = %s" % (STAFF, E9))
+    draft = lambda st, job=None: db.sql("delete from client_book_items where key = 'asstEntries'; insert into client_book_items (firm_id, client_id, key, item, data) values ('%s', 'c1', 'asstEntries', '#dc-p1', '%s'::jsonb)" % (F1, json.dumps(dict({"id": "dc-p1", "dedupe": "payroll:202610", "state": st}, **({"job": job} if job else {})))))
+    stale(); db.sql("delete from client_book_items where key = 'asstEntries'")
+    r = json.loads(one(OWN, "select public.entry_claim(%s)" % E9))
+    ok(r["ok"] and db.one("select decided_by from night_entries where id = %s" % E9) == OWN, "8. the tab closed before any draft was kept, 30 minutes on: claimed again (the second check then applies)")
+    stale(); draft("posting")
+    r = json.loads(one(OWN, "select public.entry_claim(%s)" % E9))
+    ok(r["ok"] is False and "Already approved" in r["why"] and st() == "approved", "8. the tab closed after the post started (a live draft): settled as approved, not claimed again")
+    stale(); draft("failed")
+    r = json.loads(one(OWN, "select public.entry_claim(%s)" % E9))
+    ok(r["ok"] and st() == "approving", "8. the draft failed (Tally refused it): claimed again")
+    J1 = "33333333-3333-4333-8333-333333333333"
+    db.sql("insert into tally_post_jobs (id, firm_id, client_id, status) values ('%s', '%s', 'c1', 'failed')" % (J1, F1))
+    stale(); draft("sent", J1)
+    r = json.loads(one(OWN, "select public.entry_claim(%s)" % E9))
+    ok(r["ok"] and st() == "approving", "8. queued, and the queue's posting failed: the draft counts as failed, claimed again")
+    # the night settles them too (service role)
+    stale(); draft("posted")
+    n = db.one("select public.entry_settle('%s', 'c1', '{}')" % F1)
+    ok(n == "1" and st() == "approved" and db.one("select count(*) from daily_log where what = 'settled'") >= "1", "8. the night: a claim left with a posted draft -> approved, logged")
+    db.sql("update night_entries set state = 'approving', updated_at = now() - interval '31 minutes' where id = %s" % E9); draft("sent", J1)
+    db.sql("update tally_post_jobs set status = 'waiting' where id = '%s'" % J1)
+    db.sql("select public.entry_settle('%s', 'c1', array['payroll:202610'])" % F1)
+    ok(st() == "ready", "8. the night: a draft its own look at the queue found failed (p_failed) -> ready")
+    db.sql("update night_entries set state = 'approving', updated_at = now() - interval '5 minutes' where id = %s" % E9); db.sql("delete from client_book_items where key = 'asstEntries'")
+    db.sql("select public.entry_settle('%s', 'c1', '{}')" % F1)
+    ok(st() == "approving", "8. the night: a claim 5 minutes old with no draft yet (still posting): left alone")
+    ok(not fp("authenticated", "entry_settle(uuid, text, text[])") and fp("service_role", "entry_settle(uuid, text, text[])") and not fp("authenticated", "asst_draft_state(uuid, text, text)"), "8. entry_settle: the night only; the draft helper: nobody from the page")
     ok(raises(lambda: act(OWN, "select public.remind_due(false)")) and raises(lambda: act(OWN, "select public.remind_logged('%s', 'c1', null, null, 'sent', '')" % F1)), "7. a person cannot run the reminders or write their log")
 finally:
     db.stop()

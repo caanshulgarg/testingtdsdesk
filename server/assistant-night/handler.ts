@@ -10,7 +10,7 @@
 import { firmGate, viaRest } from "../_shared/firmgate.ts";
 import { load } from "../gst-run/data.ts";
 // @ts-ignore plain JavaScript, shared with the Node tests
-import { booksOf, twobOnly, nightInput, gstOf } from "./nightinput.js";
+import { booksOf, twobOnly, nightInput, gstOf, draftsOf, jobOf } from "./nightinput.js";
 // @ts-ignore plain JavaScript, shared with the Node tests
 import { journals } from "../_shared/dailyjournals.js";
 // @ts-ignore plain JavaScript, shared with the Node tests
@@ -110,9 +110,13 @@ export function handler(deps: Deps) {
     // (phase 2) the app's own 3B of each month marked filed, and Daily Check's journals already approved (asstEntries)
     const gst = gstOf(rows, b, today);
     const draftRecs = (rows.items || []).filter((r: any) => r && r.key === "asstEntries");
-    // (review M2) the bridge's reads of this book (time and highest AlterID): a month changed after its 3B was filed
-    const reads = await rest("/rest/v1/tally_sync_reads?select=at,highest_alterid&book_id=eq." + enc(String(book.book_id)) + "&order=at.desc&limit=2000").catch(() => []);
-    const inp = nightInput(rows, b, { today, bankRecs, inboxRecs, entryRecs, twob, firmRules, gst, draftRecs, reads: Array.isArray(reads) ? reads : [], prior: prior.map((p: any) => ({ kind: p.kind, key: p.key, state: p.state, evidence: p.evidence, undone: !!p.undone_at })) });
+    // (review N4) the postings of Daily Check's drafts: one the cloud's queue stopped makes its draft failed (offered again);
+    // then entries claimed and left (a closed tab) are settled from their drafts (entry_settle)
+    const jobIds = Array.from(new Set(draftRecs.map((r: any) => jobOf(r.data)).filter((x: string) => /^[0-9a-f-]{36}$/i.test(x))));
+    const jobRows = jobIds.length ? await rest("/rest/v1/tally_post_jobs?select=id,status,results&id=in.(" + jobIds.join(",") + ")").catch(() => []) : [];
+    const jobs = Object.fromEntries((Array.isArray(jobRows) ? jobRows : []).map((j: any) => [j.id, j]));
+    await rpc("entry_settle", { p_firm: firm, p_client: cid, p_failed: draftsOf(draftRecs, jobs).filter((d: any) => d.state === "failed").map((d: any) => d.dedupe) }).catch(() => null);
+    const inp = nightInput(rows, b, { today, bankRecs, inboxRecs, entryRecs, twob, firmRules, gst, draftRecs, jobs, prior: prior.map((p: any) => ({ kind: p.kind, key: p.key, state: p.state, evidence: p.evidence, undone: !!p.undone_at })) });
     const res0 = run(inp), j = journals(inp);
     const res = { findings: res0.findings.concat(j.findings), entries: res0.entries.concat(j.entries) };
     if (spent() > (deps.total || TOTAL) * 3) { await fail("failed", "too large for one run (" + spent() + " ms)"); return { ok: false, error: "too large" }; }

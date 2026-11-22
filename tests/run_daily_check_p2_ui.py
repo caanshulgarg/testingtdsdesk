@@ -41,6 +41,7 @@ SEED = """([rows, role]) => { S.firm.firmName = "Sample & Co";
     return m ? rows.filter((x) => x.client_id === decodeURIComponent(m[1])) : rows; };
   Cloud.fn = async (name, body) => { window.__dc.calls.push(["fn:" + name, "POST", body]); return {ok: true}; };
   window.openCompany = async (cid) => { window.__dc.calls.push(["openCompany", cid]); S.books = {vouchers: [], map: {}}; };
+  try { TCloud.book = () => ({book: "b1"}); } catch (e) {}   // the same book the night read (the fixture's)
   const t0 = window.toast; window.toast = (m) => { window.__dc.toasts.push(String(m)); try { t0 && t0(m); } catch (e) {} };
   window.Bridge = Object.assign(window.Bridge || {}, {post: async () => { window.__dc.calls.push(["Bridge.post"]); return {ok: true, results: []}; }});
   S.view = "home"; navHome("daily"); return true; }"""
@@ -62,6 +63,12 @@ import datetime
 _busy = dict([e for e in ROWS["night_entries"] if e["source"] == "recurring"][0]); _busy.update({"id": "00000000-0000-4000-8000-000000000990", "state": "approving", "updated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(), "dedupe": "rec:busy"})
 ROWS["night_entries"].append(_busy)
 ids = {e["source"]: e["id"] for e in ROWS["night_entries"][::-1] if e.get("state") != "approving"}
+# (review N2) a hand tax journal that may be October's set-off: the owner may say it is not
+ROWS["night_findings"].append({"id": "00000000-0000-4000-8000-000000000995", "client_id": "d5", "kind": "setoff_exclude", "key": "excl:07:202610:rv", "state": "you",
+  "facts": {"party": "GST set-off Oct", "amt": 5000, "short": "Tax journal: which month?", "title": "A tax journal of 20-Nov (₹5,000) may be Oct 2026's set-off. Check it in Tally.", "ask_text": ""},
+  "evidence": [], "candidates": [{"t": "exclude", "ref": "excl:rv", "label": "That journal is not for Oct 2026", "voucher": "rv"}], "last_seen": "2026-11-22", "undone_at": None})
+ROWS["night_findings"].append({"id": "00000000-0000-4000-8000-000000000996", "client_id": "d5", "kind": "setoff_due", "key": "setoff:07:202610", "state": "you",
+  "facts": {"party": "GST set-off Oct", "short": "Set-off Oct 2026: check", "title": "Set-off Oct 2026: waiting on a tax journal that may be its set-off", "waits": True, "ask_text": ""}, "evidence": [], "candidates": [], "last_seen": "2026-11-22", "undone_at": None})
 sal = [e["id"] for e in ROWS["night_entries"] if e["source"] == "bank_self_answer" and any(x.get("t") == "salary" for x in e["evidence"])][0]
 with sync_playwright() as p:
     br = p.chromium.launch()
@@ -101,6 +108,11 @@ with sync_playwright() as p:
     pick.locator("button", has_text="TDS Payable 192 Staff").click(); settle(pg, 400)
     ch = rpcs(pg, "finding_choose")
     ok(ch and ch[-1][2]["p_ref"] == "ledger:tds:TDS Payable 192 Staff", "4. a pick calls finding_choose with that ledger")
+    ex = pg.locator(".dc-you", has_text="may be Oct 2026's set-off")
+    ok(ex.count() == 1 and ex.locator("button", has_text="That journal is not for Oct 2026").count() == 1 and ex.locator("button", has_text="Not needed").count() == 1 and ex.locator("button", has_text="Ask client").count() == 0, "N2: the hand journal: \"That journal is not for Oct 2026\" and Not needed, no Ask client")
+    ok("waiting on a tax journal" not in pg.inner_text(".dc-body"), "N2: the set-off waiting on it is not shown twice")
+    ex.locator("button", has_text="That journal is not for Oct 2026").click(); settle(pg, 400)
+    ok(rpcs(pg, "finding_choose")[-1][2] == {"p_id": "00000000-0000-4000-8000-000000000995", "p_ref": "excl:rv"}, "N2: the choice calls finding_choose (recorded and logged on the server)")
     pg.click("[data-tab=done]"); settle(pg)
     ok("GST set-off" not in pg.inner_text(".dc-body") and "Payroll" not in pg.inner_text(".dc-body"), "4. Done lists none of phase 2's own findings")
     pg.evaluate("() => { S.coId = 'd1'; S.view = 'company'; S.tab = 'settings'; S.loadingCo = false; delete S.setupList; render(); }")

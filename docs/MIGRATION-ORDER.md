@@ -1285,11 +1285,12 @@ of findings already "you" close at the next night run.
 
 ## 208: Daily Check phase 2 (a draft, not run yet; branch next-daily-p2, 22-Nov-2026)
 
-**208** (`server/assistant-night/migration-208-daily-phase2.sql`, md5 1836a3528b4c4ece3713f1d8a93f805c; and
+**208** (`server/assistant-night/migration-208-daily-phase2.sql`, md5 057cd7e5df6592b58219fcafad3c397e; and
 `server/assistant-night/migration-208-cron.sql`, md5 f1a2d0d8d49d70cf9faf8b30e834830b; **written, not run yet**). Needs 206
 and 207 (it stops, saying so, without them). docs/DAILY-CHECK-PHASE2.md section 5. Add-only: new table `daily_trust` (RLS,
 read by the firm, written only through `trust_set` / `trust_dismiss`, the owner only, logged), `trust_stats`, `trust_kind_of`,
-`remind_due` / `remind_logged` (service role only), `entry_claim` / `entry_release` / `entry_approved` (Approve's claim);
-`night_findings.kind`, `night_entries.source` and `night_entries.state` checks widened by name (only if 206's). No row changed; nothing of 206 or 207 replaced. One transaction, lock_timeout 10 s, safe twice; it stops,
+`remind_due` / `remind_logged` (service role only), `entry_claim` / `entry_release` / `entry_approved` (Approve's claim), `entry_settle` / `asst_draft_state` (claims left by a
+closed tab; the night);
+`night_findings.kind` (incl. `setoff_exclude`), `night_entries.source` and `night_entries.state` checks widened by name (only if 206's). No row changed; nothing of 206 or 207 replaced. One transaction, lock_timeout 10 s, safe twice; it stops,
 naming them, on any of its names already used by something else. **Apply:** 1. `sbq.sh server/assistant-night/migration-208-daily-phase2.sql`;
 2. deploy assistant-night again; 3. `sbq.sh server/assistant-night/migration-208-cron.sql`. Tested: `tests/run_migration208.py`.

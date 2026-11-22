@@ -178,7 +178,7 @@ export default function DailyCheck() {
   if (err) return <section className="dc" data-daily=""><p className="dc-none">Could not load. <button type="button" className="linkbtn" onClick={reload}>Try again</button></p></section>;
   if (data === null) return <section className="dc" data-daily="" data-loading-page=""><p className="dc-run">Loading…</p></section>;
   const d = data || { findings: [], entries: [], contacts: {}, mail: {} };
-  const ask = d.findings.filter((f) => f.state === "ask" && f.ask), you = d.findings.filter((f) => f.state === "you" && !(f.facts.waits && d.findings.some((g) => g.kind === "ledger_pick" && g.state === "you" && g.cid === f.cid))), resolved = d.findings.filter((f) => f.state === "resolved" && !P2.has(f.kind));
+  const ask = d.findings.filter((f) => f.state === "ask" && f.ask), you = d.findings.filter((f) => f.state === "you" && !(f.facts.waits && d.findings.some((g) => (g.kind === "ledger_pick" || g.kind === "setoff_exclude") && g.state === "you" && g.cid === f.cid))), resolved = d.findings.filter((f) => f.state === "resolved" && !P2.has(f.kind));
   const openAsks = ask.filter((f) => f.ask.state !== "closed").length;
   const TABS = [["clients", "From clients", openAsks], ["you", "Needs you", you.length], ["entries", "Entries", d.entries.length], ["done", <span key="d">Done<span className="dc-long"> by FinCom</span></span>, resolved.length]];
   const first = TABS.slice(0, 3).reduce((a, t) => (t[2] > a[2] ? t : a))[0], cur = tab || first;

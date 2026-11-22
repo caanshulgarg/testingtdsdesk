@@ -4,7 +4,7 @@
 // the same as last night (a line, an amount, the date, a check) refuses: "Changed since last night". Loaded only when a
 // journal is approved (a lazy part of the Daily Check chunk).
 /* global S, CO, Books, ledGroupPath, GSTR, GSTF, GSTSet, TCloud, Cloud */
-import { journals, gstMonths, picksOf, LOOKBACK } from "../../../../server/_shared/dailyjournals.js";
+import { journals, gstMonths, picksOf, excludedOf, draftState, LOOKBACK } from "../../../../server/_shared/dailyjournals.js";
 import { voucherId } from "../../../../server/_shared/dailytrust.js";
 
 export const CHANGED = "Changed since last night. Run again.";
@@ -32,26 +32,29 @@ export function inputOf(cid, o) {
     closed: closedTo ? [{ from: "19000101", to: closedTo }] : [],
     gst: typeof GSTR === "object" && typeof GSTF === "object" ? gstMonths({ GSTR, GSTF, GSTSet: typeof GSTSet === "object" ? GSTSet : null }, months) : [],
     drafts: (o.drafts || []).filter((d) => d && /^dc-/.test(String(d.id || "")) && d.dedupe).map((d) => ({ dedupe: d.dedupe, state: d.state || "", removed: !!d.removed })),
-    picks: picksOf(o.prior || []), picksOut: picksOf(o.prior || [], true),
-    reads: (o.reads || []).map((r) => ({ at: String(r.at || ""), alt: Number(r.highest_alterid) || 0 })).filter((r) => r.at && r.alt),
+    picks: picksOf(o.prior || []), picksOut: picksOf(o.prior || [], true), excluded: excludedOf(o.prior || []), bookId: o.bookId || "",
   };
 }
 // "" when the entry is still exactly what last night made; else why not
 export async function recheck(e, o = {}) {
   const cid = e.client_id;
-  let ledgers = o.ledgers, drafts = o.drafts, reads = o.reads;
-  // the bridge's reads of the book (time, highest AlterID), as the night reads them; none readable: none (the set-off of a
-  // month filed without a kept copy then refuses, as the night would)
-  if (!reads) { try { const bk = typeof TCloud === "object" && TCloud.book ? TCloud.book(cid) : null; reads = bk && bk.book ? (await Cloud.api("tally_sync_reads?select=at,highest_alterid&book_id=eq." + encodeURIComponent(bk.book) + "&order=at.desc&limit=2000")) || [] : []; } catch (x) { reads = []; } }
+  let ledgers = o.ledgers, drafts = o.drafts;
+  // (review low) the books opened here must be the ones the night read (a client's books split by year)
+  const bookId = o.bookId != null ? o.bookId : (() => { try { const bk = typeof TCloud === "object" && TCloud.book ? TCloud.book(cid) : null; return String((bk && bk.book) || ""); } catch (x) { return ""; } })();
+  if ((e.voucher || {}).book && bookId !== e.voucher.book) return "These are not the books last night read. Open " + ((e.voucher || {}).period ? "the year of " + e.voucher.period.slice(4, 6) + "/" + e.voucher.period.slice(0, 4) : "them") + " and try again.";
   if (!ledgers || !drafts) {
     const A = await import("../../lib/asstEntries.js");
     if (!ledgers) ledgers = ((await A.clientLedgers(CO(cid), true)) || []).map((l) => l.name);
     if (!drafts) drafts = (await A.Drafts.load(cid, true)) || [];
   }
+  // (review N4) a draft whose posting the cloud's queue stopped is failed, as the night counts it
+  const jobs = o.jobs || await (async () => { const ids = Array.from(new Set(drafts.map((d) => d.job || Object.values(d.results || {}).map((x) => x && x.job).find(Boolean)).filter((x) => /^[0-9a-f-]{36}$/i.test(String(x || "")))));
+    if (!ids.length) return {}; try { return Object.fromEntries(((await Cloud.api("tally_post_jobs?select=id,status,results&id=in.(" + ids.join(",") + ")")) || []).map((j) => [j.id, j])); } catch (x) { return {}; } })();
+  drafts = drafts.map((d) => Object.assign({}, d, { state: draftState({ state: d.state, job: d.job || Object.values(d.results || {}).map((x) => x && x.job).find(Boolean) || "", vid: d.id }, jobs) }));
   // this entry's own draft (a post that Tally refused before) is not "already approved"
   drafts = drafts.filter((d) => !(d.dedupe === e.dedupe && d.state === "failed"));
   if (drafts.some((d) => d.dedupe === e.dedupe && !d.removed)) return "Already approved: it is on its way to Tally.";
-  const inp = inputOf(cid, Object.assign({}, o, { ledgers, drafts, reads }));
+  const inp = inputOf(cid, Object.assign({}, o, { ledgers, drafts, bookId }));
   const now = journals(inp).entries.find((x) => x.dedupe === e.dedupe);
   if (!now || !now.ready || !sameJournal(now.voucher, e.voucher) || voucherId(e.dedupe) !== now.work_ref) return CHANGED;
   return "";

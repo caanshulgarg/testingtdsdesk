@@ -12,7 +12,7 @@
 import * as E from "../_shared/gst3b.js";
 import { books as engineBooks } from "../gst-run/engine.js";
 import { ymd, num, r2 } from "../_shared/nightchecks.js";
-import { gstMonths, pickLedger, picksOf, LOOKBACK } from "../_shared/dailyjournals.js";
+import { gstMonths, pickLedger, picksOf, excludedOf, draftState, LOOKBACK } from "../_shared/dailyjournals.js";
 
 const G = globalThis;
 // the app's globals the engine reads (S, CO) for the length of one call, then put back
@@ -90,8 +90,13 @@ export function gstOf(rows, b, today) {
 }
 // (phase 2) Daily Check's journals already approved: kept with the client's books as the existing posting path keeps a
 // hand-made voucher (client_book_items "asstEntries", items "#dc-..."; app/src/lib/asstEntries.js)
-export function draftsOf(recs) {
-  return (recs || []).filter((r) => r && r.data && /^#?dc-/.test(String(r.item || r.data.id || ""))).map((r) => ({ dedupe: String(r.data.dedupe || ""), state: String(r.data.state || ""), removed: !!(r.deleted || r.data.removed) })).filter((d) => d.dedupe);
+// (review N4) with the posting's job: a job the cloud's queue stopped makes the draft failed (offered again)
+export const jobOf = (data) => String((data && (data.job || Object.values(data.results || {}).map((x) => x && x.job).find(Boolean))) || "");
+export function draftsOf(recs, jobs) {
+  return (recs || []).filter((r) => r && r.data && /^#?dc-/.test(String(r.item || r.data.id || ""))).map((r) => {
+    const d = { dedupe: String(r.data.dedupe || ""), state: String(r.data.state || ""), removed: !!(r.deleted || r.data.removed), job: jobOf(r.data), vid: String(r.data.id || "") };
+    d.state = draftState(d, jobs); return d;
+  }).filter((d) => d.dedupe);
 }
 
 // x: {today, bankRecs, inboxRecs, entryRecs, twob, prior, firmRules, draftRecs}; rows.co is the client's settings (clients.data)
@@ -120,9 +125,9 @@ export function nightInput(rows, b, x) {
     // the last day the books hold an entry for: a month after it is the bridge being behind, not the client
     readTo: (b.vouchers || []).reduce((m, v) => (v.date > m ? v.date : m), ""),
     ledgersFor: ledgersFor(b), prior: x.prior || [],
-    gst: x.gst || [], drafts: draftsOf(x.draftRecs), picks: picksOf(x.prior), picksOut: picksOf(x.prior, true),
-    // (review M2) the bridge's reads: when each was made and the highest AlterID it had (tally_sync_reads)
-    reads: (x.reads || []).map((r) => ({ at: String(r.at || ""), alt: Number(r.highest_alterid) || 0 })).filter((r) => r.at && r.alt),
+    gst: x.gst || [], drafts: draftsOf(x.draftRecs, x.jobs), picks: picksOf(x.prior), picksOut: picksOf(x.prior, true), excluded: excludedOf(x.prior),
+    // the book the night read: Approve refuses on another (a client's books split by year)
+    bookId: String((rows.book && rows.book.book_id) || ""),
   };
   // (phase 2) a salary line is paid against the salary payable ledger only when that ledger is certain
   out.ledgersFor.salaryPayable = pickLedger("salaryPayable", out).ledger || "";

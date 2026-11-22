@@ -9,7 +9,7 @@ import { run } from "../server/_shared/nightchecks.js";
 import * as J from "../server/_shared/dailyjournals.js";
 import * as E from "../server/_shared/gst3b.js";
 import * as NC from "../server/_shared/nightchecks.js";
-import { gstRows, head, L } from "./daily2_books.mjs";
+import { gstRows, head, L, keepFiled } from "./daily2_books.mjs";
 
 let fails = 0, n = 0;
 const ok = (c, w) => { n++; console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };
@@ -18,10 +18,9 @@ const drcr = (e) => P(e.voucher.lines.reduce((s, l) => s + (l.dr || 0), 0)) === 
 const CASH = "GST ELECTRONIC CASH LEDGER";
 // the night, for one client: the input as nightinput makes it, then the journals
 function night(rows, today = "20261122", x = {}) {
+  if (!x.noKeep) keepFiled(rows, today);      // the 3B kept as filed (review N3), unless the case is about not keeping it
   const b = booksOf(rows), gst = gstOf(rows, b, today);
-  // the bridge read the books on the filing day (AlterID 100 then): the month's entries are as filed (review M2)
-  const inp = nightInput(rows, b, Object.assign({ today, bankRecs: [], inboxRecs: [], entryRecs: [], twob: [], gst, prior: [], draftRecs: (rows.items || []).filter((r) => r.key === "asstEntries"),
-    reads: [{ at: "2026-09-20T06:00:00Z", highest_alterid: 100 }, { at: "2026-10-20T06:00:00Z", highest_alterid: 100 }, { at: "2026-11-20T06:00:00Z", highest_alterid: 100 }, { at: "2026-12-05T06:00:00Z", highest_alterid: 100 }] }, x));
+  const inp = nightInput(rows, b, Object.assign({ today, bankRecs: [], inboxRecs: [], entryRecs: [], twob: [], gst, prior: [], draftRecs: (rows.items || []).filter((r) => r.key === "asstEntries") }, x));
   return { inp, out: J.journals(inp), gst };
 }
 const one = (r, kind) => r.out.findings.filter((f) => f.kind === kind);
@@ -85,7 +84,7 @@ const base = { ym: "202610", intra: 100000, inter: 50000, buyIntra: 40000, buyIn
   ok(!entry(r, "gst_setoff").length && !one(r, "setoff_due").length, "already in the books (the same lines): no entry");
   const other = { day: 18, type: "Journal", lines: [["CGST OUTPUT", -5000], ["CGST INPUT", 5000]] };
   const r2 = night(add(gstRows(base), other, "2026-11"));
-  ok(!entry(r2, "gst_setoff").length && /may be this month/.test(one(r2, "setoff_due")[0].facts.title), "a different tax journal in the month after: Needs you (it may be this one), never a second journal");
+  ok(!entry(r2, "gst_setoff").length && /may be Oct 2026's set-off/.test(one(r2, "setoff_exclude")[0].facts.title), "a different tax journal in the month after: Needs you (it may be this one), never a second journal");
   const tag = { day: 21, type: "Journal", lines: [["CGST OUTPUT", -1], [CASH, 1]] }, rw = add(gstRows(base), tag, "2026-11");
   rw.heads[rw.heads.length - 1].narration = "posted | TDSDesk:" + J.voucherId("setoff:07:202610");
   ok(!entry(night(rw), "gst_setoff").length && !one(night(rw), "setoff_due").length, "posted by Daily Check (its id in Tally's narration): no entry");
@@ -291,20 +290,27 @@ console.log("5b. the review's cases (H1, H2, M2, L1-L5, L8)");
   ok(!entry(night(addV(gstRows(SEP), "late", "2026-11-15", "Journal", sepLines)), "gst_setoff").length && !one(night(addV(gstRows(SEP), "late", "2026-11-15", "Journal", sepLines)), "setoff_due").length, "H1: September's set-off booked late by hand (15-Nov, after the month after): found, no second journal");
   ok(!entry(night(addV(gstRows(SEP), "late", "2026-11-15", "GST Setoff", sepLines)), "gst_setoff").length, "L5: the same under a custom voucher type (\"GST Setoff\"): found by its lines");
   const odd = night(addV(gstRows(SEP), "odd", "2026-11-12", "Journal", [["CGST OUTPUT", -700], ["CGST INPUT", 700]]));
-  ok(!entry(odd, "gst_setoff").length && /may be this month/.test(one(odd, "setoff_due")[0].facts.title), "H1: an unexplained tax journal any time after the month: Needs you");
-  ok(entry(night(addV(gstRows(SEP), "odd", "2026-11-12", "Journal", [["CGST OUTPUT", -700], ["CGST INPUT", 700]], "GST set-off for Aug 2026")), "gst_setoff").length === 1, "H1: one whose narration names another month is that month's: not this one");
+  ok(!entry(odd, "gst_setoff").length && /may be Sep 2026's set-off/.test(one(odd, "setoff_exclude")[0].facts.title), "H1: an unexplained tax journal any time after the month: Needs you");
+  const nar = night(addV(gstRows(SEP), "odd", "2026-11-12", "Journal", [["CGST OUTPUT", -700], ["CGST INPUT", 700]], "GST set-off for Aug 2026"));
+  ok(!entry(nar, "gst_setoff").length, "N1: a narration naming another month decides nothing (its lines are no month's set-off): Needs you");
+  const rv = night(addV(gstRows(Object.assign({}, base)), "rv", "2026-11-20", "Journal", [["CGST OUTPUT", -5000], ["CGST INPUT", 5000]], "GST set-off paid on 20/11/2026"));
+  ok(!entry(rv, "gst_setoff").length && one(rv, "setoff_exclude").length === 1 && one(rv, "setoff_due")[0].facts.waits, "N1: the reviewer's case \"GST set-off paid on 20/11/2026\" with other lines: Needs you, never ready");
+  const ex = one(rv, "setoff_exclude")[0];
+  ok(ex.candidates.length === 1 && ex.candidates[0].label === "That journal is not for Oct 2026" && ex.candidates[0].voucher === "rv", "N2: the choice \"That journal is not for Oct 2026\" (and Not needed on the page)");
+  const rv2 = night(addV(gstRows(Object.assign({}, base)), "rv", "2026-11-20", "Journal", [["CGST OUTPUT", -5000], ["CGST INPUT", 5000]], "GST set-off paid on 20/11/2026"), "20261122",
+    { prior: [{ kind: "setoff_exclude", key: ex.key, state: "resolved", evidence: [ex.candidates[0]] }] });
+  ok(entry(rv2, "gst_setoff").length === 1 && !one(rv2, "setoff_exclude").length, "N2: the owner said it is not for October: that journal left out, October proceeds");
+  const lines9 = [["IGST OUTPUT", -9000], ["CGST OUTPUT", -9000], ["SGST OUTPUT", -9000], ["IGST RCM OUTPUT", -1800], ["IGST INPUT", 5400], ["CGST INPUT", 3600], ["SGST INPUT", 3600], [CASH, 16200]];
+  ok(entry(night(addV(addV(gstRows(SEP), "a", "2026-10-20", "Journal", sepLines), "b0", "2026-11-01", "Journal", [["CGST OUTPUT", -1], ["CGST INPUT", 1]])), "gst_setoff").length === 0, "N1: only lines decide another month's (a 1-rupee tax journal is nobody's): Needs you");
   ok(!taxOnlyOK(addV(gstRows(SEP), "rnd", "2026-11-12", "Journal", [["CGST OUTPUT", -700], ["CGST INPUT", 688], ["Round Off", 12]])), "L5: a rounding line over ₹10: not a set-off journal");
 }
 function taxOnlyOK(rw) { const r = night(rw); const v = r.inp.books.vouchers.find((x) => x.id === "rnd"); const { groupsOf } = NC; return J.taxOnly(v, groupsOf(r.inp.books), r.inp.books.map); }
 {
-  // M2: filed with no copy kept: an entry of the month changed after the filing date; no read by then; a copy kept
-  const rw = gstRows(base); rw.heads[0].alter_id = 150;
-  const r = night(rw);
-  ok(!entry(r, "gst_setoff").length && /changed in Tally after the 3B was filed/.test(one(r, "setoff_due")[0].facts.title), "M2: a sale of the month changed after the filing (AlterID above the filing day's read): Needs you");
-  const r2 = night(gstRows(base), "20261122", { reads: [] });
-  ok(!entry(r2, "gst_setoff").length && /cannot tell/.test(one(r2, "setoff_due")[0].facts.title), "M2: no read of the books by the filing day: Needs you (keep the 3B as filed)");
+  // N3: ready only for a month kept as filed; a filed date alone: Needs you
+  const r = night(gstRows(base), "20261122", { noKeep: true });
+  ok(!entry(r, "gst_setoff").length && /keep this 3B as filed first/.test(one(r, "setoff_due")[0].facts.title), "N3: a filed date but no copy kept: Needs you, keep this 3B as filed first");
   const pay0 = night(gstRows(base)).gst[0].t.pay;
-  ok(entry(night(gstRows(Object.assign({}, base, { rec: { cashLedger: CASH, snap: { pay: pay0 } } })), "20261122", { reads: [] }), "gst_setoff").length === 1, "M2: with the 3B kept as filed (and the same): ready, reads not needed");
+  ok(entry(night(gstRows(Object.assign({}, base, { rec: { cashLedger: CASH, snap: { pay: pay0 } } }))), "gst_setoff").length === 1, "N3: kept as filed (and the same): ready");
   const r4 = night(gstRows(Object.assign({}, base, { filed: "", rec: { cashLedger: CASH, snap: { pay: pay0 } } })));
   ok(!entry(r4, "gst_setoff").length && /no filing date/.test(one(r4, "setoff_due")[0].facts.title), "L4: kept as filed with no filing date, past the due date: Needs you (interest and late fee not known)");
 }
@@ -316,8 +322,22 @@ function taxOnlyOK(rw) { const r = night(rw); const v = r.inp.books.vouchers.fin
   ok(!entry(nm, "payroll").length && !one(nm, "payroll_due").length, "H2: booked on 25-Nov with a narration naming October: booked");
   const bonus = n([{ date: "2026-10-31", lines: [["Staff Bonus", -5000], ["Salary Payable", 5000]] }], { ledgers: { "Staff Bonus": "Indirect Expenses" } });
   ok(!entry(bonus, "payroll").length && one(bonus, "payroll_due")[0].state === "you", "H2: a staff bonus booked in October (another salary-like ledger): Needs you, never a second journal");
-  const grp = n([{ date: "2026-10-31", lines: [["Crew Pay", -92903.23], ["Salary Payable", 92903.23]] }], { ledgers: { "Salary": "Employee Costs", "Crew Pay": "Employee Costs" }, groups: true });
-  ok(!entry(grp, "payroll").length, "H2: booked to another ledger in the salary ledger's own group: booked");
+  const grp = n([{ date: "2026-10-31", lines: [["Factory Wages", -92903.23], ["Salary Payable", 92903.23]] }], { ledgers: { "Salary": "Employee Costs", "Factory Wages": "Employee Costs" }, groups: true });
+  ok(!entry(grp, "payroll").length && one(grp, "payroll_due")[0].state === "you", "N5: two salary-named ledgers and no pick: the salary ledger is not certain, Needs you");
+  const grpP = night(pay({ more: [{ date: "2026-10-31", lines: [["Factory Wages", -92903.23], ["Salary Payable", 92903.23]] }], ledgers: { "Salary": "Employee Costs", "Factory Wages": "Employee Costs" }, groups: true }), "20261122",
+    { prior: [{ kind: "ledger_pick", key: "led:salaryExpense", state: "resolved", evidence: [{ ledger: "Salary" }] }] });
+  ok(!entry(grpP, "payroll").length && !one(grpP, "payroll_due").length, "N5: the owner picked Salary; booked to another ledger of its sub-group where every ledger is salary-named: booked");
+  const grp2 = n([{ date: "2026-10-31", lines: [["Crew Pay", -92903.23], ["Salary Payable", 92903.23]] }], { ledgers: { "Salary": "Employee Costs", "Crew Pay": "Employee Costs" }, groups: true });
+  ok(entry(grp2, "payroll").length === 1, "N5: a sub-group with a ledger not named salary: only the salary ledger itself counts");
+  ok(entry(n([{ date: "2026-10-31", lines: [["Auditors Remuneration", -25000], ["Sample Supplier", 25000]] }], { ledgers: { "Auditors Remuneration": "Indirect Expenses" } }), "payroll").length === 1, "N5: auditors' remuneration is not salary");
+  ok(entry(n([{ date: "2026-10-20", lines: [["Staff Welfare", -3000], ["Cash", 3000]] }], { ledgers: { "Staff Welfare": "Indirect Expenses" } }), "payroll").length === 1, "N5: staff welfare is not salary");
+  const both = n([{ date: "2026-10-31", lines: [["Salary", -92903.23], ["Salary Payable", 92903.23]] }, { date: "2026-11-05", lines: [["Salary", -1000], ["HDFC Bank", 1000]] }]);
+  ok(!entry(both, "payroll").length && !one(both, "payroll_due").length, "N5: October booked on 31-Oct; a salary entry on 5-Nov is November's, not counted twice for October");
+  {
+    const A = NC.groupsOf({ under: { Salary: "Indirect Expenses" }, groups: { "Indirect Expenses": "" } }), isS = (l) => l === "Salary";
+    const V = [{ id: "a", date: "20261031", narr: "", ent: [{ l: "Salary", a: -5 }] }, { id: "b", date: "20261105", narr: "", ent: [{ l: "Salary", a: -6 }] }, { id: "c", date: "20261205", narr: "", ent: [{ l: "Salary", a: -7 }] }];
+    ok(NC.salaryEntries(V, "202610", isS).map((v) => v.id).join() === "a" && NC.salaryEntries(V, "202611", isS).map((v) => v.id).join() === "b,c", "N5: each entry counts for one month only (5-Nov for November once October has its own; 5-Dec lent to November, which had none after the 10th)");
+  }
   ok(entry(n([{ date: "2026-10-31", lines: [["Rent", -45000], ["Sample Landlord", 45000]] }]), "payroll").length === 1, "H2: rent in October (the same primary group, not salary): not counted");
 }
 {
@@ -345,6 +365,9 @@ function taxOnlyOK(rw) { const r = night(rw); const v = r.inp.books.vouchers.fin
   ok(entry(r2, "payroll").length === 1, "L8: confirmed though outside the group: the journal is made");
   const r3 = night(pay({ ledgers: { "Salary Payable": "Indirect Expenses" } }), "20261122", { prior: [{ kind: "ledger_pick", key: "led:salaryPayable", state: "resolved", evidence: [{ ledger: "Salary Payable" }] }] });
   ok(!entry(r3, "payroll").length, "L8: picked without the confirmation: still asks");
+  const r4 = night(pay({ sheet: [{ name: "PF Person", date: "2026-10-31", gross: 20000, tds: 0, profTax: 0, pf: 1800 }], drop: ["Salary Payable", "PF Payable"], ledgers: { "Misc Dues": "Indirect Expenses" } }), "20261122",
+    { prior: [{ kind: "ledger_pick", key: "led:pf", state: "resolved", evidence: [{ ledger: "Misc Dues", outside: true }] }, { kind: "ledger_pick", key: "led:salaryPayable", state: "resolved", evidence: [{ ledger: "Misc Dues" }] }] });
+  ok(!entry(r4, "payroll").length, "low: a ledger confirmed outside its group for PF does not pass for salary payable (only its own role)");
 }
 
 console.log("6. every entry, every night: ready only with every check passed");

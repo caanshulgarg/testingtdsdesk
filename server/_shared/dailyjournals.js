@@ -24,11 +24,11 @@
 // The input is nightchecks' input (server/assistant-night/nightinput.js) plus:
 //   gst        gstMonths' rows      drafts  Daily Check's journals already approved ([{dedupe, state, removed}])
 //   picks      a person's ledger choices ({role: ledger}), from prior ledger_pick findings
-import { r2, num, ymd, ledgerKey, groupsOf, inr, dmon, monYear, checkEntry, sheetMonth, sheetNet, salaryLike, forMonth, namesMonth } from "./nightchecks.js";
+import { r2, num, ymd, ledgerKey, groupsOf, inr, dmon, monYear, checkEntry, sheetMonth, sheetNet, salaryClass, salaryEntries } from "./nightchecks.js";
 import { voucherId } from "./dailytrust.js";
 export { voucherId, TRUST_KINDS, TRUST_WORDS, LEVEL_WORDS, kindOfSource, PROMOTE_AFTER, AUTO_POSTING, trustGate, promotion } from "./dailytrust.js";
 
-export const KINDS = ["setoff_due", "payroll_due", "recurring_due", "ledger_pick"];
+export const KINDS = ["setoff_due", "payroll_due", "recurring_due", "ledger_pick", "setoff_exclude"];
 export const SOURCES = { setoff_due: "gst_setoff", payroll_due: "payroll", recurring_due: "recurring" };
 export const LOOKBACK = 6;           // months looked at for a set-off or a payroll journal
 const H = ["igst", "cgst", "sgst", "cess"];
@@ -89,8 +89,9 @@ function baseChecks(voucher, inp, roles) {
   const out = checkEntry({ voucher, source: "journal" }, inp).filter((c) => c.k !== "duplicate" && c.k !== "gst");
   const A = groupsOf(inp.books || {}), bad = [], pk = inp.picks || {}, po = inp.picksOut || {};
   // a ledger the owner confirmed for its role though it is in another group (review L8) passes as confirmed
-  const confirmed = (l) => Object.keys(po).some((r) => po[r] && pk[r] === l);
-  (roles || []).forEach(([l, test, words]) => { if (l && !test(A, l) && !confirmed(l)) bad.push(l + " (" + words + ")"); });
+  // only for the role it was confirmed for
+  const confirmed = (l, role) => !!role && !!po[role] && pk[role] === l;
+  (roles || []).forEach(([l, test, words, role]) => { if (l && !test(A, l) && !confirmed(l, role)) bad.push(l + " (" + words + ")"); });
   out.push({ k: "groups", ok: !bad.length, why: bad.length ? "Not in the right group: " + bad.join(", ") : "" });
   return out;
 }
@@ -215,12 +216,6 @@ export function taxOnly(v, A, map) {
   return v.ent.length >= 2 && v.ent.every((e) => tax(e.l) || Math.abs(e.a) <= 10) &&
     v.ent.some((e) => e.a < 0 && (map[e.l] || {}).kind === "gst" && (map[e.l] || {}).side === "output");
 }
-// the bridge's reads before a day ends (India): the highest AlterID Tally had then; null when none was made by then
-function altAt(reads, d8) {
-  const end = Date.UTC(+d8.slice(0, 4), +d8.slice(4, 6) - 1, +d8.slice(6, 8)) + (24 - 5.5) * 3600000;
-  let m = null; (reads || []).forEach((r) => { const t = Date.parse(r.at); if (isFinite(t) && t <= end && (m === null || r.alt > m)) m = r.alt; });
-  return m;
-}
 const vLines = (v) => v.ent.filter((e) => Math.abs(e.a) >= 0.005).map((e) => e.a < 0 ? { ledger: e.l, dr: r2(-e.a) } : { ledger: e.l, cr: r2(e.a) });
 const nearLines = (a, b) => { const k = (ls) => merge(ls).filter((l) => !/ROUND/i.test(l.ledger)); const x = k(a), y = k(b); return x.length === y.length && x.every((l) => y.some((z) => z.ledger === l.ledger && !!z.dr === !!l.dr && Math.abs(P(z.dr || z.cr) - P(l.dr || l.cr)) <= 100)); };
 
@@ -233,14 +228,8 @@ export function setoffOne(m, inp, others) {
   const J = m.journal, t = m.t;
   // (review L4) kept as filed with no filing date: interest and late fee are not known. Past the due date: Needs you
   if (!m.filed && m.due && String(inp.today) > m.due) return you("Set-off " + label + ": no filing date, so interest and late fee are not known. Type the filing date on the GST page.");
-  // (review M2) filed with no copy of the 3B kept: an entry of the month made or changed in Tally after the filing date
-  // (its AlterID above the highest the bridge had read by that day) means the books may not be the 3B as filed
-  if (m.filed && !m.snapPay) {
-    const cut = altAt(inp.reads, m.filed), mine = live(inp.books).filter((v) => ymOf(v.date) === m.ym);
-    if (cut === null) return you("Set-off " + label + ": FinCom cannot tell whether " + label.split(" ")[0] + "'s entries changed after the 3B was filed. Keep the 3B as filed on the GST page.");
-    const late = mine.find((v) => Number(v.alt) > cut);
-    if (late) return you("Set-off " + label + ": an entry of " + dmon(late.date) + " was made or changed in Tally after the 3B was filed. Look at the 3B first.");
-  }
+  // (review N3) exact or nothing: ready only for a month whose 3B is kept as filed (its copy is what the journal follows)
+  if (!m.snapPay) return you("Set-off " + label + ": keep this 3B as filed first (GST page), then FinCom prepares its set-off.");
   // 1. the interest and the late fee: the portal's own figures when kept; one worked out here and not confirmed waits
   const intAmt = m.portalInt != null ? r2(m.portalInt) : m.interest && m.interest.total > 0 ? null : 0;
   const feeAmt = m.portalFee != null ? r2(m.portalFee) : m.fee && m.fee.unknown ? null : m.fee && m.fee.fee > 0 ? null : 0;
@@ -258,10 +247,15 @@ export function setoffOne(m, inp, others) {
   const lines0 = J.lines.map((l) => P(l.dr) ? { ledger: l.l, dr: l.dr } : { ledger: l.l, cr: l.cr });
   const inWin = live(inp.books).filter((v) => v.date >= from && v.date <= to && taxOnly(v, A, map));
   if (inWin.some((v) => nearLines(vLines(v), lines0))) return null;
-  const otherMonth = (v) => (others || []).some((o) => o.ym !== m.ym && nearLines(vLines(v), o.lines)) ||
-    (!namesMonth(v.narr, m.ym) && Array.from({ length: 24 }, (_, i) => ymAdd(m.ym, i - 12)).some((y) => y !== m.ym && namesMonth(v.narr, y)));
-  const theirs = inWin.filter((v) => !otherMonth(v));
-  if (theirs.length) return you("Set-off " + label + ": a tax journal of " + dmon(theirs[0].date) + " (" + inr(theirs[0].ent.filter((e) => e.a < 0).reduce((s, e) => s - e.a, 0)) + ") may be this month's. Check it in Tally.");
+  // (review N1) another month's ONLY when its lines are that month's own set-off (within ₹1 a line); the narration never
+  // decides. (N2) one the owner said is not for this month is left out (a setoff_exclude finding they answered)
+  const otherMonth = (v) => (others || []).some((o) => o.ym !== m.ym && nearLines(vLines(v), o.lines));
+  const excl = inp.excluded || new Set();
+  const theirs = inWin.filter((v) => !otherMonth(v) && !excl.has(m.reg + ":" + m.ym + ":" + v.id));
+  if (theirs.length) return { finding: you("Set-off " + label + ": waiting on " + (theirs.length === 1 ? "a tax journal" : theirs.length + " tax journals") + " that may be its set-off", [], { waits: true }).finding,
+    picks: theirs.map((v) => finding("setoff_exclude", "excl:" + m.reg + ":" + m.ym + ":" + v.id, "you", { party: "GST set-off " + label.split(" ")[0], amt: r2(v.ent.filter((e) => e.a < 0).reduce((x, e) => x - e.a, 0)), date: v.date, ym: m.ym,
+      short: "Tax journal: which month?", title: "A tax journal of " + dmon(v.date) + " (" + inr(v.ent.filter((e) => e.a < 0).reduce((x, e) => x - e.a, 0)) + ") may be " + label + "'s set-off. Check it in Tally." },
+      [], [{ t: "exclude", ref: "excl:" + v.id, label: "That journal is not for " + label, voucher: v.id }])) };
   // 4. the lines: the app's journal, then interest and late fee from the cash ledger
   const ledI = intAmt ? pickLedger("gstInterest", inp) : null, ledF = feeAmt ? pickLedger("gstLateFee", inp) : null;
   const miss = [["gstInterest", ledI], ["gstLateFee", ledF]].filter(([, p]) => p && !p.ledger);
@@ -293,10 +287,10 @@ export function setoffOne(m, inp, others) {
   if (intAmt) ev.push({ t: "gst3b", ref: "3b:int", label: "Interest " + inr(intAmt) + " (the portal's figure)" });
   if (feeAmt) ev.push({ t: "gst3b", ref: "3b:fee", label: "Late fee " + inr(feeAmt) + " (the portal's figure)" });
   const d = J.date && J.date.length === 8 ? J.date : ymd(J.date);
-  const voucher = { type: "Journal", kind: "setoff", date: d, no: "", party: J.cashL, period: m.ym, reg: m.reg, lines,
+  const voucher = { type: "Journal", kind: "setoff", date: d, no: "", party: J.cashL, period: m.ym, reg: m.reg, book: inp.bookId || "", lines,
     narration: J.narr + (intAmt || feeAmt ? "; interest and late fee paid in cash" : "") };
   const checks = baseChecks(voucher, inp, lines.map((l) => [l.ledger, l.ledger === ledI?.ledger || l.ledger === ledF?.ledger ? isExp : l.ledger === J.cashL ? (A2, x) => A2.under(x, G.curAsset) : isDuties,
-    l.ledger === ledI?.ledger || l.ledger === ledF?.ledger ? "an expense" : l.ledger === J.cashL ? "Duties & Taxes or current assets" : "Duties & Taxes"]));
+    l.ledger === ledI?.ledger || l.ledger === ledF?.ledger ? "an expense" : l.ledger === J.cashL ? "Duties & Taxes or current assets" : "Duties & Taxes", l.ledger === ledI?.ledger ? "gstInterest" : l.ledger === ledF?.ledger ? "gstLateFee" : ""]));
   checks.push({ k: "duplicate", ok: true, why: "" });
   checks.push({ k: "setoff", ok: !legal, why: legal });
   checks.push({ k: "twoways", ok: agree, why: agree ? "" : appCash !== least.cash ? "The 3B pays " + inr(R(appCash)) + " in cash; the least the law allows is " + inr(R(least.cash)) : "The journal does not follow the 3B to the paisa" });
@@ -340,9 +334,13 @@ export function payrollOne(ym, rows, inp) {
   // 2. the books first (review H2, the same rule as the salary payments: nightchecks forMonth, salaryLike): salary booked
   // for the month by any entry with a salary-like expense on the debit side, dated in the month or up to the 10th of the
   // next, or naming the month. The same gross: nothing; anything else: Needs you
-  const A = groupsOf(inp.books || {}), sbase = (pickLedger("salaryExpense", inp).ledger) || "";
-  const sal = (e) => e.a < 0 && salaryLike(A, e.l, sbase);
-  const booked = live(inp.books).filter((v) => forMonth(v, ym) && v.ent.some(sal));
+  // (review N5) salary "yes" (the payroll's own salary ledger, or its all-salary sub-group) is compared; a "maybe" (another
+  // ledger named like salary) cannot be decided exactly: Needs you. Each entry counts for one month (salaryEntries)
+  const A = groupsOf(inp.books || {}), sbase = (pickLedger("salaryExpense", inp).ledger) || "", cls = (l) => salaryClass(A, l, sbase, inp.ledgers);
+  const booked = salaryEntries(live(inp.books), ym, (l) => cls(l) !== "");
+  const maybe = booked.find((v) => v.ent.some((e) => e.a < 0 && cls(e.l) === "maybe"));
+  if (maybe) return you("Payroll " + label + ": an entry of " + dmon(maybe.date) + " to " + maybe.ent.find((e) => e.a < 0 && cls(e.l) === "maybe").l + " may be salary. Check it first.", { amt: tot.gross });
+  const sal = (e) => e.a < 0 && cls(e.l) === "yes";
   if (booked.length) {
     const amt = r2(booked.reduce((s, v) => s + v.ent.filter(sal).reduce((x, e) => x - e.a, 0), 0));
     if (Math.abs(amt - tot.gross) <= 1) return null;
@@ -360,9 +358,9 @@ export function payrollOne(ym, rows, inp) {
   const plain = payrollPlain(rows);
   const agree = !plain.bad && plain.adds && P(plain.gross) === P(tot.gross) && P(plain.tds) === P(tot.tds) && P(plain.profTax) === P(tot.pt) && P(plain.pf) === P(tot.pf) && P(plain.esi) === P(tot.esi) && P(plain.net) === P(tot.net)
     && P(totalDr(lines)) === P(plain.gross) && P(lines.reduce((s, l) => s + P(l.cr), 0) / 100) === P(plain.tds + plain.profTax + plain.pf + plain.esi + plain.net);
-  const voucher = { type: "Journal", kind: "payroll", date, no: "", party: L(tot.net ? "salaryPayable" : "salaryExpense"), period: ym, lines,
+  const voucher = { type: "Journal", kind: "payroll", date, no: "", party: L(tot.net ? "salaryPayable" : "salaryExpense"), period: ym, book: inp.bookId || "", lines,
     narration: "Salary for " + label + " as per the salary sheet (" + rows.length + " employee" + (rows.length === 1 ? "" : "s") + ")" };
-  const checks = baseChecks(voucher, inp, [[L("salaryExpense"), isExp, "an expense"]].concat(roles.filter((r) => r !== "salaryExpense").map((r) => [L(r), r === "salaryPayable" ? (A2, x) => A2.under(x, G.curLiab) : isLiab, r === "salaryPayable" ? "current liabilities" : "Duties & Taxes or current liabilities"])));
+  const checks = baseChecks(voucher, inp, [[L("salaryExpense"), isExp, "an expense", "salaryExpense"]].concat(roles.filter((r) => r !== "salaryExpense").map((r) => [L(r), r === "salaryPayable" ? (A2, x) => A2.under(x, G.curLiab) : isLiab, r === "salaryPayable" ? "current liabilities" : "Duties & Taxes or current liabilities", r])));
   checks.push({ k: "duplicate", ok: true, why: "" });
   checks.push({ k: "adds", ok: plain.adds && !plain.bad, why: plain.bad ? plain.bad + " does not add up" : "" });
   checks.push({ k: "twoways", ok: agree, why: agree ? "" : "The plain sums and the journal differ" });
@@ -421,7 +419,7 @@ export function recurringAll(inp) {
     if (maybe) { you(party + " " + label + ": an entry of " + dmon(maybe.date) + " may be this month's. Check it."); continue; }
     const same3 = run.slice(-3).every((v) => sameLines(vLines(v), lines));
     if (!same3) { you(party + " " + label + " is missing. The amount moved (" + inr(lo) + " to " + inr(hi) + "): enter it by hand."); continue; }
-    const voucher = { type: "Journal", kind: "recurring", date: when, no: "", party, period: target, lines: merge(lines),
+    const voucher = { type: "Journal", kind: "recurring", date: when, no: "", party, period: target, book: inp.bookId || "", lines: merge(lines),
       narration: "Monthly entry for " + label + ", as in " + rng };
     const checks = baseChecks(voucher, inp, []);
     checks.push({ k: "duplicate", ok: true, why: "" });
@@ -471,6 +469,21 @@ export function journals(inp) {
   return { findings, entries };
 }
 // the people's ledger choices, from what earlier nights found (ledger_pick answered)
+// (review N2) the hand journals the owner said are not a month's set-off: "<reg>:<ym>:<voucher id>"
+export function excludedOf(prior) {
+  const o = new Set();
+  (prior || []).forEach((p) => { const ev = (p.evidence || [])[0]; if (p.kind === "setoff_exclude" && p.state === "resolved" && !p.undone && ev && ev.t === "exclude") o.add(String(p.key).replace(/^excl:/, "")); });
+  return o;
+}
+// (review N4) a draft whose posting the cloud's queue stopped (failed or cancelled), or whose result for its voucher says
+// not posted, is failed: the entry is offered again
+export function draftState(d, jobs) {
+  const st = String(d.state || ""), j = (jobs || {})[d.job || ""];
+  if (j && /^(failed|cancelled)$/.test(String(j.status || "")) && st !== "posted") return "failed";
+  const res = j && Array.isArray(j.results) ? j.results.find((x) => x && x.id === d.vid) : null;
+  if (res && res.ok === false && !res.held && st !== "posted") return "failed";
+  return st;
+}
 // (outside: which of them the person confirmed though the ledger is in another group)
 export function picksOf(prior, outside) {
   const o = {};

@@ -39,3 +39,14 @@ export function gstRows(o) {
     groups: GROUPS };
 }
 const r = (x) => Math.round(x * 100) / 100;
+// the 3B of each filed month kept as filed (its copy, as the GST page's "keep the 3B as filed" makes it): a set-off is
+// ready only for such a month (review N3). Rows already holding a copy keep theirs
+import { booksOf as _books, gstOf as _gst } from "../server/assistant-night/nightinput.js";
+export function keepFiled(rows, today = "20261122") {
+  const it = (rows.items || []).find((i) => i.key === "gstFiled");
+  if (!it) return rows;
+  const g = _gst(rows, _books(rows), today);
+  g.forEach((m) => { const rec = ((it.data || {})[m.reg] || {})[m.ym]; if (rec && !rec.snap && m.t) rec.snap = { pay: JSON.parse(JSON.stringify(m.t.pay)) }; });
+  delete rows.made;
+  return rows;
+}
