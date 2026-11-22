@@ -157,7 +157,19 @@ func (q *postQueue) next() importReq {
 	case len(q.masters) > 0:
 		return importReq{kind: "master", report: "All Masters", items: q.masters[:1]}
 	case len(q.bills) > 0:
-		return importReq{kind: "voucher", report: "Vouchers", items: q.bills[:minI(q.size[false], len(q.bills))]}
+		// 2.5.18: a payroll voucher always goes alone (its own allow-list id holds exactly one voucher); a part of
+		// other bills stops before one
+		if isPayrollItem(q.bills[0]) {
+			return importReq{kind: "voucher", report: "Vouchers", items: q.bills[:1]}
+		}
+		k := minI(q.size[false], len(q.bills))
+		for i := 1; i < k; i++ {
+			if isPayrollItem(q.bills[i]) {
+				k = i
+				break
+			}
+		}
+		return importReq{kind: "voucher", report: "Vouchers", items: q.bills[:k]}
 	default:
 		return importReq{kind: "voucher", report: "Vouchers", bank: true, items: q.bank[:minI(q.size[true], len(q.bank))]}
 	}
@@ -180,8 +192,12 @@ func (q *postQueue) done(r importReq, secs float64, err error) {
 		q.bank = q.bank[n:]
 		left = len(q.bank)
 	default:
+		payroll := n == 1 && isPayrollItem(r.items[0])
 		q.bills = q.bills[n:]
 		left = len(q.bills)
+		if payroll {
+			return // a payroll voucher's time says nothing of the bills' pace
+		}
 	}
 	if q.fixed {
 		return

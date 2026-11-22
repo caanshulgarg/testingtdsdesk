@@ -114,6 +114,31 @@ func TestPayrollPostsAlone(t *testing.T) {
 	if !alone {
 		t.Fatal("a payroll voucher shares a request with other vouchers")
 	}
+	// the posting job's queue too (review of e6b6994a2)
+	j := func(id string) M {
+		return M{"id": id, "xml": "<VOUCHER VCHTYPE=\"Journal\" ACTION=\"Create\"></VOUCHER>"}
+	}
+	q := newPostQueue(nil, []M{j("j1"), j("j2"), {"id": "p1", "xml": x}, j("j3")})
+	var got [][]string
+	for q.left() && len(got) < 10 {
+		r := q.next()
+		var ids []string
+		for _, it := range r.items {
+			ids = append(ids, str(it["id"]))
+		}
+		got = append(got, ids)
+		q.done(r, 0.1, nil)
+	}
+	for _, p := range got {
+		for _, id := range p {
+			if id == "p1" && len(p) != 1 {
+				t.Fatalf("the job queue puts the payroll voucher with others: %v", got)
+			}
+		}
+	}
+	if len(got) < 3 {
+		t.Fatalf("parts: %v", got)
+	}
 }
 
 func TestPayrollImportOwnID(t *testing.T) {

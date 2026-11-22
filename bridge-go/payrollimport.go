@@ -50,6 +50,9 @@ var (
 // an Import Data request that carries a payroll voucher (its id is payrollImportID)
 func isPayrollImport(x string) bool { return isImportRequest(x) && rePayrollMarks.MatchString(x) }
 
+// an item of a posting that is a payroll voucher (it goes in a request of its own)
+func isPayrollItem(v M) bool { return rePayrollMarks.MatchString(str(v["xml"])) }
+
 // a request id that is a posting: the plain Import or the payroll import
 func isImportID(id string) bool { return id == "Import" || id == payrollImportID }
 
