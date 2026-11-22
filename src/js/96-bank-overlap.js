@@ -148,6 +148,7 @@ const BankOverlap = (() => {
     if (weak) say += " " + (weak === 1 ? "1 entry is" : weak + " entries are") + " marked Possible repeat — check: not posted until you confirm.";
     if (x.dupRows && chk.bad) say += " " + chk.bad + " failing the balance check.";
     if (st.cut) say += " " + cutWords(st.cut);
+    if (chk.odMaybe) say += " " + odWords(chk.odMaybe);
     // rows: every line of the statement, held ones too (in the file's order); held: how many are held
     return {rows: x.rows, held: held.length, nk: x.nk, top: x.top, st, say};
   }
@@ -226,24 +227,42 @@ const BankOverlap = (() => {
     }
     // sure: both statements print their periods (audit of 22-Nov-2026: the dates of the lines were taken for the period, so
     // a quarter whose last line was on the 28th showed "No statement for 29-Jun to 30-Jun")
-    const end = prev.fileTo || prev.to, start = st.fileFrom || st.from, sure = !!(prev.printed && st.printed);
+    // a statement saved before "printed" was kept (re-review): printed when its period differs from its lines' dates;
+    // when that cannot be told, a gap is said as possible (maybeGap), never dropped
+    const pr = x => x.printed !== undefined ? (x.printed ? 1 : 0) : (x.fileFrom && x.fileTo && (x.fileFrom !== x.from || x.fileTo !== x.to)) ? 1 : 0.5;
+    const end = prev.fileTo || prev.to, start = st.fileFrom || st.from, sure = Math.min(pr(prev), pr(st));
     const add = (iso, n) => { const t = new Date(iso + "T00:00:00Z"); t.setUTCDate(t.getUTCDate() + n); return t.toISOString().slice(0, 10); };
-    if (start > end && days(start, end) > 1 && (sure || out.diff)){ const a = add(end, 1), z = add(start, -1); out.gap = {from: a, to: z, words: "No statement for " + (a === z ? fmtDate(a) : fmtDate(a) + " to " + fmtDate(z))}; }
-    return out.diff || out.gap ? out : null;
+    if (start > end && days(start, end) > 1 && (sure || out.diff)){
+      const a = add(end, 1), z = add(start, -1), g = {from: a, to: z, words: "No statement for " + (a === z ? fmtDate(a) : fmtDate(a) + " to " + fmtDate(z))};
+      if (sure === 1 || out.diff) out.gap = g; else out.maybeGap = Object.assign(g, {words: "Possibly no statement for " + g.words.slice(17) + " (unless the earlier statement’s period ends on its last entry)"});
+    }
+    return out.diff || out.gap || out.maybeGap ? out : null;
   }
   // the pages of a long PDF left unread
   function cutWords(c){ return "Only pages 1 to " + c[0] + " of " + c[1] + " were read: the entries on pages " + (c[0] + 1) + " to " + c[1] + " are not here. Split the PDF and upload the rest."; }
-  return {take, figures, keep, repeat, back, skipped, join, isOpen, isHeld, isRepeat, nearOf, refKey, periodWords, cutWords};
+  // an overdraft or cash-credit statement (balances printed without Dr) with a line or two misread: checkBalances odMaybe
+  function odWords(n){ return "The balances fit an overdraft or cash-credit account (debit balances printed without “Dr”) but for " + (n === 1 ? "1 line" : n + " lines") + ": if this is such an account, check " + (n === 1 ? "that line" : "those lines") + " against the statement; the lines were left as printed."; }
+  return {take, figures, keep, repeat, back, skipped, join, isOpen, isHeld, isRepeat, nearOf, refKey, periodWords, cutWords, odWords};
 })();
 /* ---------- a statement kept for a client not open now ---------- */
 // The statement's lines, record and fingerprints written straight to that client's bank records (read afresh, so
-// nothing written there meanwhile is lost); suggested when its page is opened (openStatement)
+// nothing written there meanwhile is lost); suggested when its page is opened (openStatement). "open": that client's
+// page is the one open now (opened again while the file was read), and has it in its list
 async function bankFileAway(cid, st, rows, nk, file){
   const [s0, k0] = await Promise.all([BankDB.get("stmts:" + cid), BankDB.get("keys:" + cid)]);
   st.counts = countStates(rows);
   S.files["st:" + st.id] = file; FileStore.put(cid, "st:" + st.id, file); CloudDocs.add(cid, "st:" + st.id, file, "stmt");
   await BankDB.set("stmt:" + cid + ":" + st.id, rows);
   await Promise.all([BankDB.set("stmts:" + cid, (s0 || []).filter(x => x.id !== st.id).concat([st])), BankDB.set("keys:" + cid, Object.assign(k0 || {}, nk))]);
+  // the same client's page opened afresh meanwhile (the inbox, or X, Y, X): it read the records before this was written,
+  // so the statement and its fingerprints go onto it too, or its next save would write the list without them
+  // (re-review of the bank audit: the statement left the list, its lines and fingerprints were left behind)
+  const nb = B();
+  if (nb && nb.cid === cid){
+    if (!(nb.stmts || (nb.stmts = [])).some(x => x.id === st.id)) nb.stmts.push(st);
+    Object.assign(nb.keys || (nb.keys = {}), nk);
+    return "open";
+  }
 }
 
 // Keep a statement under the client that owns the bank account (it is matched when that client is opened)

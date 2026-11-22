@@ -29,12 +29,22 @@ function checkBalances(rows, meta){
     }
     return {o, n};
   };
-  if (rows.some(r => has(r.balance)) && rows.every(r => !has(r.balance) || r.dirSure) && !chain(1) && (od = chain(-1)) && od.n >= 2){
+  // the lines that do not fit with the balances times sg, none turned round
+  const misfit = sg => { let p = has(meta.opening) && sg < 0 ? -Math.abs(meta.opening) : meta.opening, n = 0; rows.forEach(r => { const v = has(r.balance) ? sg * r.balance : null; if (has(v) && has(p) && !fits(p, r, v)) n++; if (has(v)) p = v; }); return n; };
+  // an opening or closing printed with Cr is in credit (statementMeta: crPrinted): a reader that took Deposit for
+  // Withdrawal fits as an overdraft as well, so it is never read as one (re-review of the bank audit)
+  const sure = rows.some(r => has(r.balance)) && rows.every(r => !has(r.balance) || r.dirSure) && !meta.crPrinted;
+  let odMaybe = 0;
+  if (sure && !chain(1) && (od = chain(-1)) && od.n >= 2){
     rows.forEach(r => { if (has(r.balance)) r.balance = -r.balance; });
     if (has(meta.opening)) meta.opening = od.o;
     const lb = rows.filter(r => has(r.balance)).pop();
     if (has(meta.closing) && Math.abs(meta.closing + lb.balance) <= 0.011) meta.closing = lb.balance;
-  } else od = null;
+  } else {
+    od = null;
+    // not every line fits as an overdraft, but far more do than as printed: said (BankOverlap.odWords), never guessed
+    if (sure && rows.filter(r => has(r.balance)).length >= 3){ const a = misfit(1), z = misfit(-1); if (z && z * 2 < a) odMaybe = z; }
+  }
   for (let i = 0; i < rows.length; i++){
     const r = rows[i];
     r.balOk = null;
@@ -50,7 +60,7 @@ function checkBalances(rows, meta){
   if (meta.closing === undefined && rows.length && rows[rows.length - 1].balance !== null) meta.closing = rows[rows.length - 1].balance;
   const totDr = r2(rows.reduce((a, r) => a + r.debit, 0)), totCr = r2(rows.reduce((a, r) => a + r.credit, 0));
   const summaryOk = meta.opening !== undefined && meta.closing !== undefined ? Math.abs(r2(meta.opening - totDr + totCr) - meta.closing) <= 0.011 : null;
-  return {bad, fixed, known, totDr, totCr, summaryOk, od: !!od};
+  return {bad, fixed, known, totDr, totCr, summaryOk, od: !!od, odMaybe};
 }
 
 /* ---------- a line's links to a bill or a sales invoice ---------- */
@@ -115,6 +125,10 @@ function bankAccIs(a, meta, last4){
 function bankLineProblem(r){
   if (r.balOk === false) return fmtDate(r.date) + ": does not agree with the statement’s running balance, so it may have been misread — check the amount";
   if ((r.splits || []).length && num(r.tdsAtPay) > 0 && r.debit) return fmtDate(r.date) + ": a split with TDS at payment — remove the split or the TDS";
+  // the split's parts (as bankVoucherXml takes them) must add up to the line (re-review: a rule's fixed split of 10,000 on
+  // a payment of 5,000 made a voucher of Dr 10,000 against Cr 5,000)
+  const sp = (r.splits || []).filter(x => x.ledger && exactLedger(x.ledger) && num(x.amt) > 0), tot = r2(sp.reduce((a, x) => a + num(x.amt), 0));
+  if (sp.length && Math.abs(r2(tot - (r.debit || r.credit))) > 0.005) return fmtDate(r.date) + ": its split adds up to " + INR.format(tot) + ", not the " + INR.format(r.debit || r.credit) + " on the statement — set the split again";
   return "";
 }
 // every name above on globalThis, for legacy.js in the React app (its own declaration: a test reading one name by

@@ -418,6 +418,18 @@ const AutoPost = {
     ids.forEach(id => this.logSet(id, {status, job: job || undefined}));
     if (typeof Cloud === "object" && Cloud.on() && Cloud.st && Cloud.st.firm){ try { await Cloud.rpc("autopost_mark", {p_client: cid, p_run: run, p_ids: ids, p_status: status, p_job: job || null}); } catch (e){ /* the claim's lease runs out by itself */ } }
   },
+  // the bill rule B6 may give a payment: never one another line holds, of this statement or another (bankClaims: re-review
+  // of the bank audit, a bill settled twice and its TDS at payment credited twice), nor one given earlier in this plan
+  billPicker(b, bills){
+    const taken = new Set();
+    return r => {
+      if (!bills.length || typeof matchBill !== "function") return null;
+      const held = typeof bankClaims === "function" ? bankClaims(b, b.rows, new Set([r])).t : new Set();
+      taken.forEach(id => held.add(id));
+      const m = matchBill(r, bills, held); if (!m || !m.strong) return null; taken.add(m.bill.e.id);
+      return {id: m.bill.e.id, ledger: m.bill.ledger, amt: m.bill.amounts[0].v, date: m.bill.date, ref: m.bill.ref, by: m.bill.e.approvedBy || "", at: m.bill.e.approvedAt || "", tdsAtPay: m.tdsAtPay, tdsLedger: m.tdsLedger};
+    };
+  },
   // the bank lines of the client that may go, worked out now (marks each open line with why it waits)
   async bankPlan(cid){
     const b = B(), co = CO(cid);
@@ -427,9 +439,7 @@ const AutoPost = {
     for (const s of b.stmts){ const rows = s.id === b.cur ? b.rows : ((await BankDB.get("stmt:" + cid + ":" + s.id)) || []); rows.forEach(r => all.push(r)); }
     const idx = this.bankIndex(all, (b.hist || {}).rows, env);
     const bills = typeof openBills === "function" ? openBills(cid).filter(x => x.e && this.BILL_TEACH.includes(this.billHow(x.e))) : [];
-    const taken = new Set();
-    env.billFor = r => { if (!bills.length || typeof matchBill !== "function") return null; const m = matchBill(r, bills, taken); if (!m || !m.strong) return null; taken.add(m.bill.e.id);
-      return {id: m.bill.e.id, ledger: m.bill.ledger, amt: m.bill.amounts[0].v, date: m.bill.date, ref: m.bill.ref, by: m.bill.e.approvedBy || "", at: m.bill.e.approvedAt || "", tdsAtPay: m.tdsAtPay, tdsLedger: m.tdsLedger}; };
+    env.billFor = this.billPicker(b, bills);
     const acc = typeof accountFor === "function" ? accountFor(curStmt()) : null;
     const accWhy = acc && typeof bankLedgerReady === "function" && !bankLedgerReady(co, acc) ? "the bank account’s Tally ledger is not confirmed" : "";
     const out = [];

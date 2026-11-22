@@ -298,16 +298,21 @@ function statementMeta(lines){
   if (ob) meta.opening = bankAmount(ob[1] + (ob[2] || ""));
   const cb = txt.match(/closing\s*balance[^0-9\-]{0,20}(-?[\d,]+\.\d{2})\s*(dr|cr)?/i);
   if (cb) meta.closing = bankAmount(cb[1] + (cb[2] || ""));
+  // a balance printed with Cr is in credit: never read as an overdraft (checkBalances)
+  if ((ob && /cr/i.test(ob[2] || "")) || (cb && /cr/i.test(cb[2] || ""))) meta.crPrinted = true;
   return meta;
 }
 // Turn cells into transactions; join narration lines that wrap onto the next row
-function rowsFromCells(list, cols, getCell, rowText){
+// opts.guess: the columns were placed by the words' x position (PDF text, OCR), so a Withdrawal or Deposit column does not
+// state a line's direction: such a line may still be turned round to fit its balance (re-review of the bank audit); a
+// printed Dr/Cr or a minus still states it
+function rowsFromCells(list, cols, getCell, rowText, opts){
   const out = [];
   let lastWasTxn = false;
   for (const raw of list){
     const g = k => cols[k] === undefined ? "" : getCell(raw, cols[k]);
     const date = bankDate(g("date"));
-    let debit = bankAmount(g("debit")), credit = bankAmount(g("credit")), dirSure = cols.debit !== undefined && cols.credit !== undefined;
+    let debit = bankAmount(g("debit")), credit = bankAmount(g("credit")), dirSure = !(opts && opts.guess) && cols.debit !== undefined && cols.credit !== undefined;
     if (cols.amount !== undefined){
       const a = bankAmount(g("amount")), t = cellText(g("drcr")).toUpperCase();
       if (a !== null){
@@ -358,7 +363,7 @@ async function parseSheetStatement(file){
   throw {code: "bank_no_header"};
 }
 /* ---------- PDF with text inside: rebuild the table from word positions ---------- */
-const MONEY_TOKEN = /^-?[\d,]+\.\d{2}(cr|dr)?$/i;
+const MONEY_TOKEN = /^-?[\d,]+\.\d{2}(cr|dr|-)?$/i;        // "500.00-": a trailing minus (bankAmount)
 const DATE_TOKEN = /^(\d{1,2}[\/\-.](\d{1,2}|[a-z]{3,9})[\/\-.]\d{2,4}|\d{4}-\d{2}-\d{2})$/i;
 // Split a text piece that holds several dates/amounts ("0.00 59,400.00 159,400.00") into positioned tokens
 function splitPiece(it){
@@ -543,7 +548,7 @@ async function parsePdfStatement(file){
   const colIdx = {};
   cols.forEach(c => { if (c.k) colIdx[c.k] = c.k; });
   const meta = statementMeta(metaLines);
-  const rows = rowsFromCells(allRows, colIdx, (r, k) => r.cells[k] || "", r => r.text);
+  const rows = rowsFromCells(allRows, colIdx, (r, k) => r.cells[k] || "", r => r.text, {guess: true});
   return {meta, rows, source: "pdf"};
 }
 /* ---------- reading any statement: headings first, then a heading-free reader, then OCR ---------- */
@@ -800,7 +805,7 @@ function parseByHeadings(pages){
     r.text = Object.values(r.cells).join(" ");
   });
   const colIdx = {}; cols.forEach(c => { if (c.k) colIdx[c.k] = c.k; });
-  return {rows: rowsFromCells(allRows, colIdx, (r, k) => r.cells[k] || "", r => r.text), meta: statementMeta(metaLines)};
+  return {rows: rowsFromCells(allRows, colIdx, (r, k) => r.cells[k] || "", r => r.text, {guess: true}), meta: statementMeta(metaLines)};
 }
 // OCR gives single words: join words on one line that sit close together into phrases
 function joinOcrWords(items){

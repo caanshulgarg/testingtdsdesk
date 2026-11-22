@@ -104,6 +104,13 @@ function applyRule(rule, row, co, acc){
       const value = sp.pct !== "" && sp.pct != null ? r2(amt * num(sp.pct) / 100) : r2(num(sp.amt));
       if (lname && exactLedger(lname) && value > 0){ parts.push({ledger: exactLedger(lname), amt: value}); left = r2(left - value); }
     });
+    // the rule's parts come to more than the line (a fixed split of 10,000 on a payment of 5,000): no split is guessed,
+    // the line waits for a person (re-review of the bank audit: its voucher was Dr 10,000 against Cr 5,000)
+    if (parts.length && left < -0.009){
+      row.state = "attention"; row.level = "none";
+      row.why.push("Its split comes to " + INR.format(r2(amt - left)) + ", more than the " + INR.format(amt) + " on the statement, so it was not applied: set the split by hand, or change the rule.");
+      return true;
+    }
     if (parts.length){
       if (left > 0.009) parts.push({ledger: row.ledger, amt: left});         // the rest goes to the main ledger
       row.splits = parts;
@@ -366,9 +373,12 @@ function suggestAll(rows, onlyOpen){
     if (!redo.has(r)) return;
     const rule = matchRule(r, co, accNow);          // a written rule beats every guess
     if (rule){ applyRule(rule, r, co, accNow); if (isOwnBank(r, r.ledger)) dropOwnBank(r); return; }
+    const wasRule = r.ruleId;
     r.ruleId = null; r.ruleNarr = "";
     const s = suggestRow(r, ctx);
-    if (s.ledger !== r.ledger) r.splits = [];          // a split is of its ledger's line
+    // a split is of its ledger's line, and of the rule that made it; a bill or invoice matched is posted whole to the party
+    // (re-review of the bank audit: a deleted rule's split kept with a bill's TDS at payment did not add up)
+    if (s.ledger !== r.ledger || wasRule || s.billId || num(s.tdsAtPay) > 0 || (s.salesIds || []).length) r.splits = [];
     r.userSet = false;
     r.ledger = s.ledger; r.why = s.why; r.source = s.source; r.level = s.level; r.srcLabel = s.label || "";
     r.billId = s.billId || null; r.billRef = s.billRef || ""; r.tdsAtPay = s.tdsAtPay || 0; r.tdsLedger = s.tdsLedger || ""; r.salesIds = s.salesIds || null;
@@ -445,7 +455,7 @@ async function uploadStatements(files, force){
       st.otherClient = other ? other.name : "";
       // another client (or this one afresh) opened while the file was read: the statement is kept under its own client,
       // written there, never on the page open now (audit of 22-Nov-2026), and suggested when its page is opened
-      if (B() !== b){ await bankFileAway(b.cid, st, rows, x.nk, file); toast(file.name + " was kept under " + co.name + ": open that client to see it."); continue; }
+      if (B() !== b){ const here = await bankFileAway(b.cid, st, rows, x.nk, file) === "open"; toast(file.name + (here ? " was added: choose it in the list of statements to see its lines." : " was kept under " + co.name + ": open that client to see it.")); if (here) render(); continue; }
       Object.assign(b.keys, x.nk);
       b.stmts.push(st);
       bankFlush(); b.cur = sid; b.rows = rows; b.sel.clear(); b.sticky.clear(); b.undo = null;
