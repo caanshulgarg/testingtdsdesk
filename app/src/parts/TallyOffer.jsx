@@ -15,6 +15,7 @@
 import { useState } from "react";
 import { companyRows, addNew, linkTo, alikeOf, askFirst } from "./TallyCompanies.jsx";
 import { tallyDevs, pcOf, mayLink } from "../lib/tallyState.js";
+import { ownOpen } from "../lib/tallySimple.js";
 import "./tallyOffer.css";
 
 const shown = (n) => String(n || "").replace(/\s+/g, " ").trim();
@@ -47,7 +48,8 @@ function OpenCompany({ r, here }) {
 
 export default function TallyOffer() {
   if (!mayLink() || typeof TCloud !== "object" || !TCloud.on()) return null;
-  const open = companyRows().filter((r) => r.open && !r.client);
+  // (audit 22-Nov-2026, tally-pages 3: only a company open in this login's own Tally; on a laptop, the firm's)
+  const own = ownOpen(), open = companyRows().filter((r) => r.open && !r.client && !own.theirs(r) && !own.elsewhere(r));
   if (!open.length) return null;
   const co = S.view === "company" && typeof CO === "function" ? CO() : null;
   const here = co && typeof tallyLinkOf === "function" && (tallyLinkOf(co) || {}).state === "unlinked" ? co : null;

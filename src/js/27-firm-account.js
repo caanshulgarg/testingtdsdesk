@@ -250,7 +250,8 @@ function clientRemoved(id){
 // in memory as JSON: the base cloudApplyNow merges against when a copy comes in over a change made here and not yet
 // sent (owner, 04-Oct-2026). Clients keep theirs in BankDB (ClientBase).
 const CloudBase = new Map();
-const CLOUD_BASE_SEED = new Set(["entry", "party", "unsorted", "sales", "firm"]);
+// (audit 22-Nov-2026: bank_rows too, so a statement part merges line by line against the copy both had: bankRowsMerge)
+const CLOUD_BASE_SEED = new Set(["entry", "party", "unsorted", "sales", "firm", "bank_rows"]);
 function cloudBaseSet(k, json){ if (!/^(client|inbox)\|/.test(k)) CloudBase.set(k, json); }
 // changes since the last sync (and anything deleted here)
 function cloudChanges(){
@@ -350,6 +351,29 @@ function merge3(base, mine, theirs){
     return out;
   }
   return mine;
+}
+// Audit 22-Nov-2026 (tally-sync 1): a statement's lines go as parts of 300 (bank_rows, {rows: [...]}); merge3 kept the
+// whole list of this computer, so a line another computer posted (its state, its Tally voucher) or classified came back
+// as ready here and was sent back. Now line by line on the id: each line merged as the client setup is (merge3 against
+// that line of the copy both had; with no such copy, this computer's line), and a line posted on one side only (sent or
+// in Tally, not as the copy both had) keeps that side's posting, so a voucher already in Tally is never offered again.
+// The list of lines stays this computer's (a part is a slice by position: no line is added to it from the other copy).
+const BANK_POST_KEYS = ["state", "sentAt", "postedVia", "postError", "postJob", "postJobNew", "postedOptional", "postVerified", "postByReply", "checking", "tally"];
+function bankRowsMerge(base, mine, theirs){
+  const by = d => new Map(((d && d.rows) || []).filter(x => x && x.id != null).map(x => [String(x.id), x]));
+  const bb = base === NOBASE ? null : by(base), tt = by(theirs), posted = x => !!x && (x.state === "sent" || x.state === "intally");
+  return ((mine && mine.rows) || []).map(m => {
+    const id = m && m.id != null ? String(m.id) : null, t = id ? tt.get(id) : undefined;
+    if (!t) return m;
+    const bl = bb ? bb.get(id) : undefined;
+    let v = bb ? merge3(bl, m, t) : m;
+    if (posted(v)) return v;
+    const p = [m, t].find(x => posted(x) && !(posted(bl) && bl.state === x.state && sameVal(bl.tally, x.tally)));
+    if (!p) return v;
+    v = Object.assign({}, v);
+    BANK_POST_KEYS.forEach(k => { if (k in p) v[k] = p[k]; else delete v[k]; });
+    return v;
+  });
 }
 // A choice the server holds that this copy never had stays, with the bank account it names and that account's ledger
 // (26-Oct-2026: a copy here older than the base, from another tab or an old object saved, removed the account's
@@ -525,6 +549,7 @@ async function cloudApplyNow(rows){
         const base = baseGet(k);
         // no base kept (a change made before this page was opened): what is here is kept whole
         let data = base !== undefined && plainObj(here) && plainObj(r.data) ? merge3(JSON.parse(base), here, r.data) : here;
+        if (r.kind === "bank_rows" && plainObj(here) && plainObj(r.data)) data = Object.assign({}, here, {rows: bankRowsMerge(base !== undefined ? JSON.parse(base) : NOBASE, here, r.data)});
         // (next-fix-sales-sync) Sales settings: their copy as it came, merged setting by setting with the times
         // (cloudApplySales), not by which push was later
         if (r.kind === "sales_cfg" && plainObj(data) && plainObj(r.data)) data = Object.assign({}, data, {cfg: r.data.cfg, cfgAt: r.data.cfgAt});

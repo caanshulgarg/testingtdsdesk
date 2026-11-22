@@ -60,8 +60,9 @@ HTML = write("DayBook-page.xml", b"<!doctype html><html><body><p>Day Book</p></b
 ADDON_ASK = re.compile(r"\b(load|loaded|update|turn on|switch on|enable|install)\b[^.\n]{0,60}\b(add-on|addon|TDLs?|recorder)\b"
                        r"|\b(add-on|addon|TDLs?|recorder)\b[^.\n]{0,40}\b(not loaded|not recording|load|update|turn on)\b|not recording|Manage Local TDLs", re.I)
 PLAIN = ("is not a file FinCom can read", "If it is a Day Book, send the file to FinCom support so we can see why.")
-EMPTY_WORDS = (" is a Tally export with no entries in it. In TallyPrime open Day Book, press F2 and choose the whole period (for example "
-               "1-Apr-2025 to today), then Alt+E (Export) → Format XML or JSON, and upload that file.")
+# (audit 22-Nov-2026: the Day Book's period is Alt+F2, and the export the same keys as everywhere: tallyJson.js HOW)
+EMPTY_WORDS = (" is a Tally export with no entries in it. In TallyPrime open Day Book, press Alt+F2 and choose the whole period (for example "
+               "1-Apr-2025 to today), then Alt+E (Export) → Current, F8 (File Format): XML or JSON, and E to export; upload that file.")
 
 with sync_playwright() as p:
     srv, br, pg = U.start(p, 8489, SITE, errors=errors)

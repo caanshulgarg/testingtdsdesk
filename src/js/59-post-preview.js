@@ -642,7 +642,9 @@ function postReconcile(cid, quiet){
   const d = S.data[cid], b = S.bank && S.bank.cid === cid && !S.bank.loading ? S.bank : null;
   const pid = typeof PostIds === "object" ? PostIds.by[cid] : null;
   const released = id => !!(pid && pid.held && pid.held.has(id) && !pid.held.get(id));
-  let bills = 0, lines = 0;
+  let bills = 0, lines = 0, byId = null;
+  // (audit 22-Nov-2026, tally-sync 4: the lines by id, made once, not a find over every line for each id posted)
+  const rowOf = id => b ? (byId || (byId = new Map(b.rows.slice().reverse().map(q => [String(q.id), q])))).get(id) : null;
   postJobStates(cid).forEach((v, id) => {
     const j = v.job;
     if (v.st !== "posted" || !j || (!v.reg && !["done", "failed"].includes(j.status))) return;
@@ -657,7 +659,7 @@ function postReconcile(cid, quiet){
       Store.saveEntry(cid, e); bills++;
       return;
     }
-    const r = b ? b.rows.find(q => String(q.id) === id) : null;
+    const r = rowOf(id);
     if (!r || r.goneFromTally || r.postVerified === true || r.postByReply === true) return;
     if (!((r.state === "ready" && !postOld(r, j)) || (r.state === "sent" && !r.checking))) return;
     if (typeof bankPosted === "function"){ bankPosted(cid, r, x, j.company || "", at, {by, quiet: true}); lines++; }
@@ -754,7 +756,7 @@ async function postClearReady(){
 }
 // the rarely used settling of a posting (Deleted in Tally, Not this Tally entry) is src/js/59-post-owner.js: loaded first
 function postPart(f){ (typeof PostOwner === "object" ? Promise.resolve() : window.loadPart ? window.loadPart("post") : Promise.reject(new Error("not in this page"))).then(() => f(PostOwner)).catch(e => toast("This could not be done: " + ((e && e.message) || e))); }
-function postMarkNew(cid, ids, job){ const d = S.data[cid], b = S.bank && S.bank.cid === cid ? S.bank : null; ids.forEach(x => { const o = (d && d.entries && d.entries[x]) || (b && b.rows.find(r => String(r.id) === String(x))); if (o) o.postJobNew = job; }); }
+function postMarkNew(cid, ids, job){ const d = S.data[cid], b = S.bank && S.bank.cid === cid ? S.bank : null; let m = null; ids.forEach(x => { const o = (d && d.entries && d.entries[x]) || (b && (m || (m = new Map(b.rows.slice().reverse().map(r => [String(r.id), r])))).get(String(x))); if (o) o.postJobNew = job; }); }
 // the entries a check with Tally released: the bridge lets each go once more (without looking in Tally)
 function postReleased(list){ return list.filter(x => x.release && x.release.at).map(x => ({id: x.id, at: x.release.at, by: x.release.by || "", why: x.release.why || ""})); }
 function postOwner(){ return !!(S.account && ((S.account.me || {}).role === "owner")); }

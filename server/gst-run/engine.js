@@ -33,7 +33,7 @@ import * as E from "../_shared/gst3b.js";
 import { gst3bPrint } from "../_shared/gst3bprint.js";
 
 // the revision of the function around the engine (data.ts, handler.ts): moved by hand with tests/gst_cloud_rev.json
-export const REV = "171.8";
+export const REV = "171.9";
 
 const G = globalThis;
 // what the app's program has around the engine: names.js (put at its head by build.py too)
@@ -186,9 +186,14 @@ function ctxBooks(ctx, rows) {
 // each ledger's part of a context (its settings, its groups up to the top, its GSTIN, the party switch): a new context
 // moves the entries on the ledgers whose part changed, and the entries whose place of supply typed changed. all: the
 // state moved (every entry)
+// Audit 22-Nov-2026 (speed-db 3): the kept context comes back from Postgres jsonb, which keeps an object's keys in its
+// own order (shorter first), while ctxOf writes them alphabetically; compared as text, every ledger of every book looked
+// moved, and the nightly parity marked every entry due and worked every share out again. Each part is now written with
+// its keys sorted at every level (keyText), so only a real change moves a ledger
+export const keyText = (v) => JSON.stringify(v, (k, x) => x && typeof x === "object" && !Array.isArray(x) ? Object.keys(x).sort().reduce((o, q) => { o[q] = x[q]; return o; }, {}) : x);
 export function ctxDiff(a, c) {
   if (!a) return { all: true, ledgers: [], guids: [] };
-  const part = (x, n) => JSON.stringify([(x.map || {})[n] || null, E.ledGroupPath(x, n), (x.gstins || {})[n] || ""]);
+  const part = (x, n) => keyText([(x.map || {})[n] || null, E.ledGroupPath(x, n), (x.gstins || {})[n] || ""]);
   const names = new Set([].concat(Object.keys(a.map || {}), Object.keys(c.map || {}), Object.keys(a.under || {}), Object.keys(c.under || {}), Object.keys(a.gstins || {}), Object.keys(c.gstins || {})));
   const moved = [...names].filter((n) => part(a, n) !== part(c, n));
   // a supplier that came into or left the GSTINs Tally types ISD (isdTyped): its ledgers move (their entries and 2B rows)
@@ -204,7 +209,7 @@ export function ctxDiff(a, c) {
   moved.forEach((n) => (byClean.get(E.ledClean(n)) || []).forEach((k) => out.add(k)));
   const ledgers = [...out].sort();
   const ids = new Set([].concat(Object.keys(a.gstPosFix || {}), Object.keys(c.gstPosFix || {})));
-  const guids = [...ids].filter((i) => JSON.stringify((a.gstPosFix || {})[i] || null) !== JSON.stringify((c.gstPosFix || {})[i] || null)).sort();
+  const guids = [...ids].filter((i) => keyText((a.gstPosFix || {})[i] || null) !== keyText((c.gstPosFix || {})[i] || null)).sort();
   return { all: String(a.stateOf || "") !== String(c.stateOf || ""), ledgers, guids };
 }
 // a batch's shares (rows: {client, heads, lines, bills} of gst_share_rows; ctx: ctxOf of the whole book) ->

@@ -24,15 +24,23 @@ const TCloud = {
   d8(iso){ return String(iso || "").replace(/-/g, "").slice(0, 8); },
   rpc(fn, args, q){ return Cloud.api("rpc/" + fn + (q || ""), {method: "POST", body: args || {}}); },
   // a list function, a thousand rows at a time (the database gives at most that many in one answer)
-  async rpcAll(fn, args){
-    let out = [], off = 0;
+  // Audit 22-Nov-2026 (speed-db 4): each page is a call of its own, so a ledger written by live sync between two pages
+  // moves the next page by one and a row comes twice (a trial balance that does not tally). A row seen on two pages: the
+  // whole list read once more; again so: an error, never a list counted twice
+  async rpcAll(fn, args, again){
+    let out = [], off = 0, seen = new Set(), twice = false;
     for (;;){
       const page = await this.rpc(fn, args, "?limit=1000&offset=" + off) || [];
       if (!Array.isArray(page)) throw Error("not a list: " + fn);   // (never paged through for ever)
+      if (off){ const k = page.map(r => JSON.stringify(r)); twice = twice || k.some(x => seen.has(x)); k.forEach(x => seen.add(x)); }
+      else if (page.length >= 1000) page.forEach(r => seen.add(JSON.stringify(r)));
       out = out.concat(page);
-      if (page.length < 1000) return out;
+      if (page.length < 1000) break;
       off += 1000;
     }
+    if (!twice) return out;
+    if (again) throw Error("The books changed while " + fn + " was read; try again in a moment.");
+    return this.rpcAll(fn, args, true);
   },
   // migration-32: a ledger deleted in Tally stays in the cloud, marked (tally_ledgers.deleted_at). Every read of the
   // cloud's ledger list leaves those out; a cloud without the column (migration-32 not applied) is read as before.
@@ -887,23 +895,13 @@ const TCloud = {
   },
   // why the poster has no bridge of their own for a company, and what to do (migration 54's tally_post_own_words)
   noTargetWords(company){
-    const own = this.bridgesHeard().filter(r => r.go && !r.old && r.id && this.isOwn(r)), w = (l) => [...new Set(l.map(r => [r.computer, r.user].filter(Boolean).join(" \u00b7 ")))].join(", ");
+    // (audit 22-Nov-2026, tally-pages 10: no computer's name or Windows login in these words)
+    const own = this.bridgesHeard().filter(r => r.go && !r.old && r.id && this.isOwn(r));
     const head = "Nobody can post into " + company + " from your sign-in just now: ";
     if (!own.length) return head + "FinCom has not heard from a FinCom Bridge of yours. Install FinCom Bridge on the computer where you use Tally, as your own Windows user (\u201cJust for me\u201d), and connect it to FinCom; then open " + company + " in Tally there and post again.";
     const has = own.filter(r => this.hasOpen(r, company));
-    if (has.length) return head + "your FinCom Bridge (" + w(has) + ") has it open but is set to Changes only or only reads Tally. Ask the firm\u2019s owner to switch Changes only off for it (Tally page), then post again.";
-    const may = own.filter(r => r.mayPost);
-    return head + "your FinCom Bridge (" + w(may.length ? may : own) + ") does not have " + company + " open in Tally. Open " + company + " in Tally there, then post again.";
-  },
-  // an owner switches a bridge to changes only (it never takes a posting) or back -> tally_bridge_changes_only
-  async changesOnly(r, on){
-    if (on){
-      const a = await askConfirm({title: "Changes only for " + this.bridgeWords(r) + "?", ok: "Changes only",
-        body: "<p>This bridge keeps reading Tally\u2019s changes for FinCom but is never given a posting, and the Post screen never offers it. A posting it is running now finishes.</p>"});
-      if (!a || !a.ok) return;
-    }
-    await this.control("tally_bridge_changes_only", {p_device: r.device.id, p_bridge: r.id, p_on: !!on},
-      (on ? "Changes only: " : "Posting allowed again: ") + this.bridgeWords(r) + ".");
+    if (has.length) return head + "your FinCom Bridge has it open but is set to Changes only or only reads Tally. Ask the firm\u2019s owner to switch Changes only off for it (Tally page), then post again.";
+    return head + "your FinCom Bridge does not have " + company + " open in Tally. Open " + company + " in Tally on the Tally computer, then post again.";
   },
   // the owner's condition (Fix 2): a computer key refused a bridge id: ONE alert per (id, computer) for the owners, until
   // read or until the identity is released (tally_bridge_alerts, migration 54); none on an older cloud
@@ -916,21 +914,6 @@ const TCloud = {
   async bridgeAlertRead(x){
     try { await this.rpc("tally_bridge_alert_read", {p_id: x.id}); x.read_at = new Date().toISOString(); } catch (e){ toast((e && e.message) || String(e)); }
     render();
-  },
-  // Fix 2b: an owner releases a bridge's identity: the next computer that reports the id gets it (kept with who, when, why)
-  async releaseIdentity(r){
-    const a = await askConfirm({title: "Release the identity of " + this.bridgeWords(r) + "?", ok: "Release it",
-      body: "<p>FinCom keeps bridge " + esc(r.id) + " tied to the computer key that reported it first. Released, the next computer that reports this id gets it. Who released it, when and why are kept.</p>" +
-        '<div class="bk-form one"><label><span>Why (kept with the release)</span><input id="releaseWhy" maxlength="300" placeholder="e.g. the computer was set up again"></label></div>',
-      read: () => ({why: ((document.getElementById("releaseWhy") || {}).value || "").trim()}), validate: d => d && d.why ? "" : "Say why the identity is released."});
-    if (!a || !a.ok) return;
-    await this.control("tally_bridge_reset", {p_bridge: r.id, p_why: a.data.why}, "The identity of " + this.bridgeWords(r) + " is released; the next computer that reports it gets it.");
-  },
-  // an owner links a member to the bridge they post through (r null: unlinked) -> tally_member_bridge_link
-  async linkMember(uid, r){
-    const m = ((typeof Cloud === "object" && Cloud.st.members) || []).find(x => x.user_id === uid), who = (m && (m.name || m.email)) || "The member";
-    await this.control("tally_member_bridge_link", {p_user: uid, p_device: r ? r.device.id : null, p_bridge: r ? r.id : null},
-      r ? who + " now posts through " + this.bridgeWords(r) + "." : who + " is no longer linked to a bridge.");
   },
   // the reading state of a bridge's computer (plan item 14): {state: reading | paused | retrying | fincomstop | offline,
   // text, reason}. A stop from FinCom still standing (tally_read_stops, for this computer or for all of them, or the
@@ -1017,49 +1000,11 @@ const TCloud = {
     }
     await this.refreshPane();
   },
-  // round 15 (F3): the posting settings of a computer, saved by an owner -> tally_device_post_settings(p_device, p_post_only
-  // (names; [] = any company), p_bills, p_bank (1..500)); the bridge applies them at its next heartbeat (info.beat.postOnly,
-  // postBatchBills, postBatchBank, settingsAt). Checked here first: the words stay on the line, nothing is sent
-  postSettingsCheck(v){
-    const n = k => { const x = Math.floor(num(v[k])); return x >= 1 && x <= 500 ? x : null; };
-    if (!n("bills")) return "Bills per request must be a number from 1 to 500.";
-    if (!n("bank")) return "Bank lines per request must be a number from 1 to 500.";
-    return "";
-  },
-  postSettingsNames(text){ const seen = new Set(); return String(text || "").split(/[,\n;]/).map(x => x.trim()).filter(x => x && !seen.has(x.toUpperCase()) && seen.add(x.toUpperCase())).slice(0, 20); },
-  // v.only0 is the names box as the editor opened: left as it was, p_post_only goes as null (the row's list, and an
-  // installer-set PostOnly, stay); emptied from a named list, the owner is asked first (review of 2.1.8, must-fix)
-  async postSettings(dev, v){
-    const why = this.postSettingsCheck(v);
-    if (why) return why;
-    const names = this.postSettingsNames(v.only), was = this.postSettingsNames(v.only0), touched = JSON.stringify(names) !== JSON.stringify(was);
-    if (touched && !names.length && was.length){
-      const a = await askConfirm({title: "Posting to any company from this computer?", ok: "Yes, any company", danger: true,
-        body: "<p>" + esc(dev.name || "This computer") + " now posts only to " + esc(was.join(", ")) + ". With the list empty, FinCom Bridge there posts into whichever Tally company a client is set to, and the list set by its installer goes.</p>"});
-      if (!a || !a.ok) return "Nothing sent: the list stays as it was.";
-    }
-    await this.control("tally_device_post_settings", {p_device: dev.id, p_post_only: touched ? names : null, p_bills: Math.floor(num(v.bills)), p_bank: Math.floor(num(v.bank))},
-      "Saved for " + (dev.name || "the computer") + "; the bridge applies it within a minute.");
-    return "";
-  },
-  // round 19: an owner switches the trial tools of one computer on or off -> tally_device_trial_tools(p_device, p_on)
-  // (migration 46; owner only there too); the bridge applies it at its next heartbeat (within 30 seconds)
-  async trialTools(dev, on){
-    await this.control("tally_device_trial_tools", {p_device: dev.id, p_on: !!on},
-      "Trial tools " + (on ? "on" : "off") + " for " + (dev.name || "the computer") + "; the bridge applies it within 30 seconds.");
-  },
-  // round 20 (d.3): an owner picks where a computer's changes come from -> tally_device_recorder_source(p_device,
-  // p_source) (migration 47; owner only there too); the bridge takes it from its next heartbeat's answer
-  RECORDER_SOURCES: [["addon", "the add-on"], ["alterid", "Tally’s change list"], ["both", "both"]],
-  async recorderSource(dev, src){
-    const w = (this.RECORDER_SOURCES.find(x => x[0] === src) || [])[1];
-    if (!w) return;
-    await this.control("tally_device_recorder_source", {p_device: dev.id, p_source: src},
-      "Changes on " + (dev.name || "the computer") + " now come from " + w + "; the bridge takes it within 30 seconds.");
-  },
+  // (audit 22-Nov-2026: changesOnly, releaseIdentity, linkMember, postSettings, trialTools and recorderSource, called
+  // by the Tally page only, are app/src/lib/tallyActs.js's, to keep legacy.js within its budget)
   async readStop(r){
-    const all = !r, where = all ? "every computer" : r.computer;
-    const a = await askConfirm({title: all ? "Stop reading Tally on all computers?" : "Stop reading Tally on " + r.computer + "?", ok: "Stop reading",
+    const all = !r, where = all ? "every computer" : "the Tally computer";
+    const a = await askConfirm({title: all ? "Stop reading Tally on all computers?" : "Stop reading Tally on the Tally computer?", ok: "Stop reading",
       body: "<p>FinCom Bridge on " + esc(where) + " stops reading Tally at its next heartbeat (within 30 seconds). Posting to Tally goes on. Reading starts again only when an owner presses Resume reading.</p>" +
         '<div class="bk-form one"><label><span>Why (shown on the Tally page and by the bridge)</span><input id="readStopWhy" maxlength="300" placeholder="Stopped from FinCom"></label></div>',
       read: () => ({why: ((document.getElementById("readStopWhy") || {}).value || "").trim()})});
@@ -1067,7 +1012,7 @@ const TCloud = {
     await this.control("tally_read_stop", {p_device: all ? null : r.device.id, p_reason: (a.data && a.data.why) || ""}, "Reading stopped on " + where + "; it stops within 30 seconds.");
   },
   async readResume(r){
-    await this.control("tally_read_resume", {p_device: r ? r.device.id : null}, "Reading resumes on " + (r ? r.computer : "every computer") + " within 30 seconds.");
+    await this.control("tally_read_resume", {p_device: r ? r.device.id : null}, "Reading resumes on " + (r ? "the Tally computer" : "every computer") + " within 30 seconds.");
   },
   // the owner's actions on the release, a book's baseline, the main bridge and an install log: app/src/lib/tallyActs.js
   // (next-fast-open: moved out of legacy.js, at its size budget; put on TCloud when the Tally page loads)
@@ -2485,6 +2430,8 @@ function tallyHereNow(co){
   }
   const company = here ? here.name : (st.open || []).map(x => x.name).join(", ");
   if (tally === "busy") return out("busy", "warn", "Tally busy", {company, hint: "Tally is open but answering slowly (a report, or a message box in Tally). FinCom asks again by itself; nothing is lost.", next: [check]});
+  // (audit 22-Nov-2026, tally-pages 1: a key FinCom's cloud refuses is not "no internet": red, and the way to a new key)
+  if (typeof FCOwn === "object" && FCOwn.refused && FCOwn.refused()) return out("refused", "bad", "Key not accepted", {company, hint: "FinCom\u2019s cloud does not accept the computer key of FinCom Bridge here any more, so nothing it reads reaches FinCom and postings from other computers do not come to it. Tally page \u2192 Connect this computer gives it a new key.", next: [{act: "tallyConnect", label: "Tally page"}]});
   if (tallyNoNet(st)) return out("nonet", "warn", "No internet", {company, hint: "FinCom Bridge here cannot reach FinCom since " + tallyIst(st.beat.missedSince) + ". Posting from this computer still works; the other computers see it again when the internet is back.", next: [check]});
   return out("ready", "ok", "Tally ready", {company, next: [{act: "tallyGuide", label: "Tally page"}]});
 }
