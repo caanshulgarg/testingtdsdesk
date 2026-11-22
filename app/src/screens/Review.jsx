@@ -11,6 +11,8 @@ import BillDetail from "./Bill.jsx";
 import { ChipBar } from "../parts/ChipBar.jsx";
 import { EmptyNext } from "../parts/StateBar.jsx";
 import QueueDone from "../parts/QueueDone.jsx";
+// the bill desk's suppliers: waiting bills' new suppliers, the year read from Tally (src/js/99, kept out of legacy.js)
+import "../../../src/js/99-bill-suppliers.js";
 
 const needsLook = (r) => notReadYet(r.e) || (r.c.missing || []).length || r.c.flags.some((f) => f.lvl === "hi") || r.e.confirmType;
 const NO_TALLY = "Needs Tally open with this client's company and FinCom Bridge running (see the Tally sign at the top)";

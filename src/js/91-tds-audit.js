@@ -54,7 +54,10 @@ const TDSAudit = {
     const lr = rows.filter(r => r.ledgerRate);
     if (lr.length) add("ledrate", "info", lr.length + (lr.length === 1 ? " deduction" : " deductions") + " at another rate than its TDS ledger's (" + Array.from(new Set(lr.map(r => r.rate + "% on " + r.ledger))).join(", ") + "): the amount paid is read from the entry, at the rate deducted");
     // N13: one TDS entry for several bills, one row dated on the first
-    rows.filter(r => (r.bills || []).length > 1).forEach(r => add("bills", "info", (r.party || "?") + ": one TDS entry of " + this.day(r.date) + " covers " + r.bills.length + " bills (" + r.bills.map(z => this.day(z.date) + " " + this.money(z.amount)).join(", ") + "); the return has one row dated on the first bill"));
+    // (review of 22-Nov-2026) the first bill within the limit on its own (r.creditCheck, TDSSep.link): TDS fell due only when
+    // the year's total crossed the limit, so the date of credit and the 201(1A)(i) interest from it are a person's check
+    rows.filter(r => (r.bills || []).length > 1).forEach(r => add("bills", r.creditCheck ? "warn" : "info", (r.party || "?") + ": one TDS entry of " + this.day(r.date) + " covers " + r.bills.length + " bills (" + r.bills.map(z => this.day(z.date) + " " + this.money(z.amount)).join(", ") + "); the return has one row dated on the first bill" +
+      (r.creditCheck ? ". That bill is within the limit on its own: TDS fell due when the year's total crossed the limit. Check the date of credit, and the interest from it" : ""), r.creditCheck ? {vid: String(r.id).split("|")[0], date: r.date, no: r.voucher} : undefined));
     // N12: salary TDS is dated on the payroll entry (month end)
     if (form === "24Q" && rows.some(r => r.src === "payroll")) add("sal192", "info", "Salary TDS is dated on the payroll entry (the month's end), as the deduction at payment would be when salary is paid in the month; where it is paid later, its due date and interest are a month later");
     // M8: Tally's nature of payment still at a rate of a time gone (2020-21's reduced rates)

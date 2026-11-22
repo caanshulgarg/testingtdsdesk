@@ -2,6 +2,8 @@
 // Was viewParties() in src/js/19 and its handlers in src/js/27.
 import ListTable from "../parts/ListTable.jsx";
 import DateBox from "../parts/DateBox.jsx";
+// the bill desk's suppliers: waiting bills' new suppliers, the year read from Tally (src/js/99, kept out of legacy.js)
+import "../../../src/js/99-bill-suppliers.js";
 const save = (p, now) => { if (now) Store.saveParty(S.coId, p); else later("p" + p.id, () => Store.saveParty(S.coId, p), 600); };
 const set = (p, k, v, now) => { p[k] = /^(pan|gstin)$/.test(k) ? String(v).toUpperCase().trim() : v; save(p, now); render(); };
 

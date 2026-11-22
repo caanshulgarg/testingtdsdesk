@@ -115,5 +115,6 @@
  "98-link-record.js",
  "98-post-register.js",
  "98-prefetch-books.js",
- "99-firm-gate.js"
+ "99-firm-gate.js",
+ "99-bill-suppliers.js"
 ]

@@ -1047,17 +1047,7 @@ function billGst(e, k, v){
   if (k === "blockCat") e.itcBlock = {on:true, cat:v};
   Store.saveEntry(cid, e); refreshStats(cid); render();
 }
-// the client's Tally ledger list, so a bill's entry can be checked line by line before approval (review item 2):
-// straight from Tally when the bridge has the company open, else from a ledger list file exported from Tally
-async function billReadLedgers(){
-  const cid = S.coId, co = CO(cid);
-  if (!S.bank || S.bank.cid !== cid || S.bank.loading) await loadBank(cid);
-  if (bridgeLive(co) || (typeof TCloud === "object" && TCloud.on() && TCloud.has(cid))){ await Ledgers.refresh(cid); return; }
-  const inp = document.createElement("input");
-  inp.type = "file"; inp.accept = ".xlsx,.xls,.csv,.xml";
-  inp.onchange = async () => { const f = inp.files && inp.files[0]; if (f && S.bank && S.bank.cid === cid){ await importLedgerList(f); render(); } };
-  inp.click();
-}
+// (billReadLedgers, focusBillField: src/js/99-bill-suppliers.js, with the bill screens)
 // "Booked before for this supplier": use that expense ledger
 function billUseExpense(e, name){ if (e && e.status === "draft"){ e.expenseLedger = name; e.expenseUserSet = true; e.expenseFrom = ""; Store.saveEntry(S.coId, e); render(); } }
 // a ledger not in Tally: use a suggested one (to) or create it; the same fix goes to every bill waiting with it
@@ -1169,18 +1159,6 @@ function billRestore(id){
 const MISSING_FIELD = {"invoice date": "invoiceDate", "supplier name": "vendorName", "taxable value": "taxable", "party ledger": "partyLedger", "expense ledger": "expenseLedger", "TDS ledger": "tdsLedger"};
 function missingField(item){ return MISSING_FIELD[String(item || "").trim()] || ""; }
 function firstMissingField(missing){ for (const m of (missing || [])){ const k = missingField(m); if (k) return k; } return ""; }
-// ui-tidy (13-Oct-2026; the owner: "there is some glitch also while opening this"): when a bill opens, its first missing
-// field gets the cursor without the page or the drawer scrolling to it ({noScroll}); the bill opens at its top, the PDF and
-// the fields in view. A click on a missing item ("Cannot approve: …") still scrolls to it
-function focusBillField(key, o){
-  const host = document.querySelector("#app aside.drawer") || document.getElementById("app") || document;
-  const el = host.querySelector('[data-focus-field="' + key + '"]');
-  if (!el) return false;
-  if (o && o.noScroll){ try { el.focus({preventScroll: true}); } catch (e){ el.focus(); } return true; }
-  try { el.scrollIntoView({block: "center"}); } catch (e){}
-  el.focus();
-  return true;
-}
 // C1 (the bulk buttons): why no bill is ready, counted from the drafts' missing lists: "No bill is ready: 2 need an invoice
 // date, 1 a party ledger"
 function noneReadyWords(rows){
@@ -1464,7 +1442,7 @@ function doAct(act, t){
       const rows = draftRows().filter(r => act === "revApprove" ? S.revSel.has(r.e.id) : (!(r.c.missing || []).length && !r.c.flags.some(f => f.lvl === "hi") && !r.e.confirmType));
       let ok = 0, held = 0;
       const heldIds = [];
-      rows.forEach(r => { const c = compute(r.e); if ((c.missing || []).length || notReadYet(r.e)){ held++; heldIds.push(r.e.id); return; } approve(r.e, {bulk: true}); ok++; });
+      statsHeld(() => rows.forEach(r => { const c = compute(r.e); if ((c.missing || []).length || notReadYet(r.e)){ held++; heldIds.push(r.e.id); return; } approve(r.e, {bulk: true}); ok++; }));
       S.revSel = new Set();
       // smart moves round 1 (8): "5 approved · Post 5 to Tally → · Show the 2 that need details" (buttons; nothing is posted by itself)
       const waiting = Object.values(D().entries).filter(x => x.status === "approved" && !x.exportedAt).length;
@@ -1573,6 +1551,7 @@ function doAct(act, t){
       break;
     }
     case "docIsBill": { const e0 = curEntry(); if (e0){ e0.docOverride = true; Store.saveEntry(S.coId, e0); toast("Taken as a tax invoice."); render(); } break; }
+    case "roOk": { const e0 = curEntry(); if (e0){ e0.roOk = compute(e0).ro; Store.saveEntry(S.coId, e0); refreshStats(S.coId); render(); } break; }
     case "buyerOk": { const e0 = curEntry(); if (e0){ e0.buyerOverride = true; Store.saveEntry(S.coId, e0); toast("Kept under " + CO().name + "."); render(); } break; }
     case "cloudSync": cloudSync(true); break;
     case "logAll": S.logAll = !S.logAll; render(); break;

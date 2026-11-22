@@ -672,3 +672,6 @@ run_hang_sales_open.py                300  TDSDESK_SITE=../app/dist-test
 # next-fix-dashstall (FINCOM-APP-STAGING-K, 19-Nov-2026): a client with 2,400 made-up bills posted through made-up postings opened from
 # Clients: the click's task and the drafts' counts after it within budget; Post to Tally's counts and rows once a drawing, as before
 run_hang_post_counts.py               300  TDSDESK_SITE=../app/dist-test
+# the purchase and TDS audit of 22-Nov-2026: credit notes and the year from Tally in the TDS limits, round off, a PDF's
+# pages kept on its bill, the drafts' checks in one pass, the client's other GSTINs, the inbox, 201(1A)(i), dated limits
+run_purchase_tds_audit.js             120

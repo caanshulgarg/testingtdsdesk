@@ -698,7 +698,8 @@ const SheetPost = {
   toBills(docs, cid, fileName){
     const res = {added: 0, held: 0, fixed: 0, ids: []};
     const pk = (g, n) => GSTIN_RE.test(g || "") ? g : normName(n || "");
-    docs.forEach(d => {
+    // (the client's counts once at the end, not after each row: statsHeld, src/js/01)
+    (typeof statsHeld === "function" ? statsHeld : (f) => f())(() => docs.forEach(d => {
       // (the client's own receiving registration is never the supplier's: reviews of 2b565f7e7 and a61ffbb12; a bill saved
       // before with it as the supplier's is matched as one with no GSTIN)
       const mine = this.issuer(d, "purchase", cid), pko = (g, n) => pk(String(g || "").toUpperCase() === mine ? "" : g, n);
@@ -759,7 +760,7 @@ const SheetPost = {
       finishNewEntry(e, cid, null);
       res.ids.push(e.id);
       if (e.status === "duplicate") res.held++; else res.added++;
-    });
+    }));
     return res;
   },
   // a bill's kind: a return (our debit note, the supplier's credit note) carries no TDS, as a credit note read from a

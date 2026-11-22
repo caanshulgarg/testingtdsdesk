@@ -115,8 +115,11 @@ const TDSRate = {
     if (/DIRECTOR/.test(u)) return "director";
     if (/PROFESSIONAL|PROFF?\b|LEGAL|AUDIT|ADVOCATE|RETAINER|CONSULT|ARCHITECT|DOCTOR|MEDICAL FEE|CHARTERED/.test(u)) return "professional";
     if (/(RENT|HIRE|LEASE).*(PLANT|MACHIN|EQUIPMENT)|(PLANT|MACHIN|EQUIPMENT).*(RENT|HIRE|LEASE)/.test(u)) return "rent_machinery";
-    if (/RENT|LEASE|LAND|BUILDING|GODOWN|WAREHOUSE|PREMISES|FURNITURE/.test(u)) return "rent_building";
-    if (/CONTRACT|LABOUR|JOB\s*WORK|MANPOWER|TRANSPORT|FREIGHT|CARTAGE|REPAIR|MAINTENANCE|ADVERT|PRINTING|CATERING|SECURITY|HOUSEKEEPING/.test(u)) return "contractor";
+    // rent as a word (not "Current", "Rentokil"); then the contract words, before what a contract may be done on (audit of
+    // 22-Nov-2026: "Building Repairs & Maintenance", "Land Development Contract" were read as rent, 194-I)
+    if (/\b(RENT(S|ALS?)?|LEASE)\b/.test(u)) return "rent_building";
+    if (/CONTRACT|LABOUR|JOB\s*WORK|MANPOWER|TRANSPORT|FREIGHT|CARTAGE|REPAIR|MAINTENANCE|ADVERT|PRINTING|CATERING|SECURITY|HOUSEKEEPING|PEST\s*CONTROL/.test(u)) return "contractor";
+    if (/\b(LAND|BUILDINGS?|GODOWN|WAREHOUSE|PREMISES|FURNITURE)\b/.test(u)) return "rent_building";
     return "";
   },
   // a deduction's payment type: the expense ledgers of its entry first (their nature in Tally, then their names), then the
@@ -281,8 +284,12 @@ const TDSSep = {
     }
     return false;
   },
+  // A TDS entry of its own whose own lines fit the rate (the payment: party Dr 60,000, bank Cr 54,000, TDS Cr 6,000) is
+  // matched too, to a bill booked before it without TDS: the tax was due on that bill's date (credit or payment, whichever
+  // is earlier: 194-I/194C/194J), so 201(1A)(i) interest runs from it and the return's date of payment or credit is the
+  // bill's (audit of 22-Nov-2026). Such a row is changed only when a bill without TDS is found for it
   link(rows){
-    const todo = rows.filter(r => r.sep && !(r.paid > 0) && r.tds > 0 && r.party);
+    const todo = rows.filter(r => r.sep && r.tds > 0 && r.party);
     if (!todo.length) return rows;
     const byId = {}, idx = this.bills();
     ((S.books || {}).vouchers || []).forEach(v => { byId[v.id] = v; });
@@ -305,12 +312,25 @@ const TDSSep = {
         for (let k = 2; !hit.length && k <= months.length; k++){ const g = cand.filter(bl => months.slice(0, k).includes(bl.date.slice(0, 6))); if (fits(g.reduce((s, bl) => s + bl.left, 0))) hit = g; }
         if (hit.length) how = "month";
       }
+      // a payment that says what it paid (r.paid: the party debited) takes from its bills only that much, the oldest first,
+      // and only from bills with something left (a bill paid in instalments, TDS cut in each, review of 22-Nov-2026);
+      // once the bills are used up it keeps its own amount
+      const pre = r.paid > 0;
+      if (pre) hit = hit.filter(bl => !bl.own && bl.left > 0.5);
+      const fresh = hit.filter(bl => !bl.own);
+      if (pre && !fresh.length) return;
       if (!hit.length){ r.covers = exp ? r2(r.tds * 100 / exp) : 0; return; }   // matched to no bill: what its TDS covers at the rate
       hit.sort((a, c) => a.date.localeCompare(c.date));
-      const fresh = hit.filter(bl => !bl.own), paid = r2(fresh.reduce((s, bl) => s + bl.left, 0));
-      fresh.forEach(bl => { bl.left = 0; });
+      let paid = 0;
+      const want = pre ? r.paid : Infinity, took = new Set();
+      fresh.slice().sort((a, c) => a.date.localeCompare(c.date)).forEach(bl => { const t = r2(Math.min(bl.left, Math.max(0, want - paid))); if (t > 0) took.add(bl); paid = r2(paid + t); bl.left = r2(bl.left - t); });
+      if (pre){ hit = hit.filter(bl => took.has(bl)); paid = r.paid; }
       r.credit = hit[0].date; r.bill = hit.map(bl => bl.no).filter(Boolean).join(", "); r.bills = hit.map(bl => ({vid: bl.vid, date: bl.date, no: bl.no, amount: bl.amount}));
       r.paid = paid; r.rateFrom = "bill (" + how + ")";
+      // several bills: the date of credit is the first's; where that one was within the limit on its own, TDS fell due only
+      // when the year's total crossed it (194C(5)/194J/194-I: the limits; 201(1A)(i) runs from then): a person checks it
+      const R = hit.length > 1 && typeof RULE_DEFAULTS === "object" ? RULE_DEFAULTS.find(z => z.old && TDS.sec(z.old) === sec && z.basis !== "never" && !z.form) : null, lim = R ? num(R.single || R.limit) : 0;
+      if (hit.length > 1 && (!lim || hit[0].amount <= lim)) r.creditCheck = true;
       // what was paid for: the bill's expense ledger (professional or technical, building or machinery)
       const kind = hit.map(bl => bl.ledgers.map(l => TDSRate.kindOf((((S.books || {}).ledInfo || {})[l] || {}).tdsNature) || TDSRate.kindOf(l)).find(Boolean)).find(Boolean);
       if (kind) r.pay = kind;
