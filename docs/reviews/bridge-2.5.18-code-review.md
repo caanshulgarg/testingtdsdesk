@@ -172,3 +172,6 @@ No blockers. M1, L1, L2 and L4 are fixed and tested in a22dba2e7. L3 is info and
 The code is ready as far as this review goes: 579f1d90c..41e561420, with the 41e561420 build's hashes consistent across the .sha256 file, latest.json (2.5.18, unsigned), the release log and the test sheet.
 
 The release stays held for the reasons the release log already gives: the review notes, release-check.sh, and FinComPayrollImport not yet timed against the 2 s rule at 100 employees.
+
+Coordinator addendum (22-Nov-2026): the bridge sources reviewed are those of a22dba2e7; the commits after it until the rebuild only move built files and change docs (git diff a22dba2e7 -- bridge-go is empty). Release-check range for this note:
+Range: 579f1d90c..1fd504ff7

@@ -96,3 +96,6 @@ No critical, high or medium finding over the whole range. L1 and L2 are fixed in
 marker split fails closed on anything it cannot tell apart. FinComPayrollImport is no wider than the plain Import and
 narrower in every respect; a payroll-marked body does not reach Tally by any other id. Not to be handed out until the
 release check's other conditions (signed list, the 100-employee timing) are met, as the build commit says.
+
+Coordinator addendum (22-Nov-2026): the bridge sources reviewed are those of a22dba2e7; the commits after it until the rebuild only move built files and change docs (git diff a22dba2e7 -- bridge-go is empty). Release-check range for this note:
+Range: 579f1d90c..1fd504ff7
