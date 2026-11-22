@@ -18,27 +18,38 @@ const EINV = {
   },
   addr1(s){ return String(s || "").split(/\n/)[0].replace(/\s+/g, " ").trim().slice(0, 100); },
   dmy(d){ const t = String(d || "").slice(0, 10); return /^\d{4}-\d{2}-\d{2}$/.test(t) ? t.slice(8, 10) + "/" + t.slice(5, 7) + "/" + t.slice(0, 4) : ""; },
+  // (next-fix-audit-sales-einv) the seller: the client's registration the invoice is issued from (salesRegOf, as the Tally
+  // voucher's CMPGSTIN), never its main GSTIN for an invoice of another; "" when the client has several and it is not
+  // known. Its address: Sales settings' for the main GSTIN, the registration's own (cfg["address_" + GSTIN]) for another
+  seller(v, co){ const r = salesRegOf(v); return String(r.gstin || (r.several ? "" : co.gstin) || "").toUpperCase(); },
+  address(gstin, co, cfg){ return gstin && gstin !== String(co.gstin || "").toUpperCase() ? cfg["address_" + gstin] || "" : cfg.address; },
   // what stops the invoice from being e-invoiced, in words
   problems(v, co, cfg){
-    const x = v.x, out = [], seller = String(co.gstin || "").toUpperCase(), buyer = String(x.customerGstin || "").toUpperCase();
-    if (!GSTIN_RE.test(seller)) out.push("The client's GSTIN is not set (Client setup).");
+    const x = v.x, out = [], seller = this.seller(v, co), buyer = String(x.customerGstin || "").toUpperCase();
+    if (!seller && salesRegOf(v).several) out.push("Which of the client's registrations this invoice is issued from is not known: set the seller GSTIN on the invoice.");
+    else if (!GSTIN_RE.test(seller)) out.push("The client's GSTIN is not set (Client setup).");
     if (!GSTIN_RE.test(buyer)) out.push("The customer has no GSTIN: an invoice to an unregistered person is not e-invoiced.");
     if (!x.number || String(x.number).length > 16) out.push("The invoice number must be 1 to 16 characters.");
     if (!/^\d{4}-\d{2}-\d{2}$/.test(String(x.date || ""))) out.push("The invoice date is missing.");
-    if (!this.pin(cfg.address)) out.push("The client's address in Sales settings needs its PIN code.");
+    if (!this.pin(this.address(seller, co, cfg))) out.push(seller && seller !== String(co.gstin || "").toUpperCase() ? "The address of the registration " + seller + " in Sales settings needs its PIN code." : "The client's address in Sales settings needs its PIN code.");
     if (!this.pin(x.address)) out.push("The customer's address needs its PIN code.");
     if (!(x.items || []).length) out.push("The invoice needs its items (description, HSN, quantity, rate).");
     (x.items || []).forEach((it, i) => { if (!/^\d{4,8}$/.test(String(it.hsn || "").trim())) out.push("Item " + (i + 1) + " needs an HSN or SAC code of 4 to 8 digits."); });
+    // (the IRP is given the items: they must come to the invoice's own total, a rupee's rounding aside)
+    if (!out.length){ const b = this.build(v, co, cfg), d = r2(num(x.total) - b.ItemList.reduce((a, it) => a + it.TotItemVal, 0)); if (Math.abs(d) > 1) out.push("The items come to " + money(r2(num(x.total) - d)) + " with GST, but the invoice to " + money(x.total) + ": check the items."); }
     return out;
   },
   // the invoice in the IRP's schema
   build(v, co, cfg){
-    const x = v.x, seller = String(co.gstin || "").toUpperCase(), buyer = String(x.customerGstin || "").toUpperCase();
-    const inter = !!(x.pos && seller.slice(0, 2) !== String(x.pos));
+    const x = v.x, seller = this.seller(v, co), buyer = String(x.customerGstin || "").toUpperCase(), addr = this.address(seller, co, cfg);
+    // (a supply to an SEZ: inter-state whatever the states, IGST Act s.7(5)(b); under LUT no IGST, s.16(3)(a): SupTyp
+    // SEZWP / SEZWOP, the IRP's supply types)
+    const sez = /^SEZWO?P$/.test(x.supply || "") ? x.supply : "", lut = sez === "SEZWOP";
+    const inter = !!sez || !!(x.pos && seller.slice(0, 2) !== String(x.pos));
     let ass = 0, cg = 0, sg = 0, ig = 0, ces = 0, tot = 0;
     const items = (x.items || []).map((it, i) => {
       const qty = num(it.qty) || 1, gross = r2(qty * num(it.rate)), taxable = r2(num(it.taxable) || gross), rate = num(it.gstRate), disc = r2(Math.max(0, gross - taxable));
-      const tax = r2(taxable * rate / 100), igst = inter ? tax : 0, cgst = inter ? 0 : r2(tax / 2), sgst = inter ? 0 : r2(tax - r2(tax / 2)), cess = r2(num(it.cess));
+      const tax = lut ? 0 : r2(taxable * rate / 100), igst = inter ? tax : 0, cgst = inter ? 0 : r2(tax / 2), sgst = inter ? 0 : r2(tax - r2(tax / 2)), cess = r2(num(it.cess));
       const val = r2(taxable + igst + cgst + sgst + cess);
       ass = r2(ass + taxable); cg = r2(cg + cgst); sg = r2(sg + sgst); ig = r2(ig + igst); ces = r2(ces + cess); tot = r2(tot + val);
       const hsn = String(it.hsn || "").trim();
@@ -48,9 +59,9 @@ const EINV = {
     const total = r2(num(x.total) || tot), round = r2(total - tot);
     return {
       Version: "1.1",
-      TranDtls: {TaxSch: "GST", SupTyp: "B2B", RegRev: "N", IgstOnIntra: "N"},
+      TranDtls: {TaxSch: "GST", SupTyp: sez || "B2B", RegRev: "N", IgstOnIntra: "N"},
       DocDtls: {Typ: x.noteKind === "credit" ? "CRN" : x.noteKind === "debit" ? "DBN" : "INV", No: String(x.number || ""), Dt: this.dmy(x.date)},
-      SellerDtls: {Gstin: seller, LglNm: String(co.tallyName || co.name || "").slice(0, 100), Addr1: this.addr1(cfg.address), Loc: this.loc(cfg.address), Pin: num(this.pin(cfg.address)), Stcd: seller.slice(0, 2)},
+      SellerDtls: {Gstin: seller, LglNm: String(co.tallyName || co.name || "").slice(0, 100), Addr1: this.addr1(addr), Loc: this.loc(addr), Pin: num(this.pin(addr)), Stcd: seller.slice(0, 2)},
       BuyerDtls: {Gstin: buyer, LglNm: String(x.customerName || "").slice(0, 100), Pos: String(x.pos || buyer.slice(0, 2)), Addr1: this.addr1(x.address), Loc: this.loc(x.address), Pin: num(this.pin(x.address)), Stcd: buyer.slice(0, 2)},
       ItemList: items,
       ValDtls: {AssVal: ass, CgstVal: cg, SgstVal: sg, IgstVal: ig, CesVal: ces, RndOffAmt: Math.abs(round) < 10 ? round : 0, TotInvVal: Math.abs(round) < 10 ? total : tot}
@@ -64,19 +75,24 @@ const EINV = {
   async irn(v){
     const s = SL(), co = CO(s.cid), probs = this.problems(v, co, s.cfg);
     if (probs.length) throw new Error(probs[0]);
-    const j = await GSTAPI.call({action: "irn", gstin: String(co.gstin).toUpperCase(), docKey: v.id, clientId: co.id, inv: this.build(v, co, s.cfg)});
-    Object.assign(v.x, {irn: j.irn, ackNo: j.ackNo, ackDt: j.ackDt, signedQr: j.signedQr || "", irnStatus: "active"});
+    const gstin = this.seller(v, co);
+    const j = await GSTAPI.call({action: "irn", gstin, docKey: v.id, clientId: co.id, inv: this.build(v, co, s.cfg)});
+    Object.assign(v.x, {irn: j.irn, ackNo: j.ackNo, ackDt: j.ackDt, signedQr: j.signedQr || "", irnStatus: "active", irnGstin: gstin});
     if (j.ewbNo) v.x.ewayNo = j.ewbNo;
     saveSales(); return j;
   },
   async cancel(v, reason, remark){
     const s = SL(), co = CO(s.cid);
-    await GSTAPI.call({action: "irn-cancel", gstin: String(co.gstin).toUpperCase(), docKey: v.id, reason, remark});
-    v.x.irnStatus = "cancelled"; v.x.irnCancelledAt = new Date().toISOString(); saveSales();
+    await GSTAPI.call({action: "irn-cancel", gstin: v.x.irnGstin || this.seller(v, co), docKey: v.id, reason, remark});
+    v.x.irnStatus = "cancelled"; v.x.irnCancelledAt = new Date().toISOString();
+    // (next-fix-audit-sales-einv) a cancelled IRN: the invoice is no supply any more (CGST Rules r.48(4)), so it leaves the
+    // sales (ignored, never posted); one already in Tally stays, marked: its voucher is to be cancelled in Tally
+    if (["posted", "intally"].includes(v.status)) v.x.irnCancelInTally = true; else v.status = "ignored";
+    saveSales();
   },
   async ewb(v, trans){
     const s = SL(), co = CO(s.cid);
-    const j = await GSTAPI.call({action: "ewb", gstin: String(co.gstin).toUpperCase(), docKey: v.id, trans});
+    const j = await GSTAPI.call({action: "ewb", gstin: v.x.irnGstin || this.seller(v, co), docKey: v.id, trans});
     Object.assign(v.x, {ewayNo: j.ewbNo, ewayDate: j.ewbDate, ewayValidTill: j.validTill}); saveSales(); return j;
   }
 };

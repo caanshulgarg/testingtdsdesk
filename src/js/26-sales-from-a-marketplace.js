@@ -241,10 +241,14 @@ function nextInvoiceNumber(date){
   return {number: seriesNumber(cfg, date, n), n};
 }
 function blankItem(){ return {desc: "", hsn: "", qty: 1, unit: "Nos", rate: 0, disc: 0, taxable: 0, gstRate: 18}; }
+// (next-fix-audit-sales-einv) an invoice with a live IRN is what the IRP holds: never changed here (CGST Rules r.48(4); an
+// IRN is only cancelled whole, within 24 hours, else a credit or debit note under s.34)
+function salesIrnLocked(v){ if (!(v && v.x.irnStatus === "active")) return false; toast("Invoice " + v.x.number + " has an IRN, so it cannot be changed: cancel the IRN (within 24 hours) and make a new invoice, or issue a credit or debit note."); return true; }
 function startDraft(fromId){
   const s = SL(), co = CO(s.cid);
   if (fromId){
     const v = inv(fromId);
+    if (salesIrnLocked(v)) return;
     s.draft = {editId: v.id, x: JSON.parse(JSON.stringify(v.x)), customerLedger: v.customerLedger, printedTotal: v.source === "created" ? null : num(v.x.total)};
     if (!s.draft.x.items.length) s.draft.x.items = [blankItem()];
   } else {
@@ -267,7 +271,8 @@ function recalcDraft(){
   x.items.forEach(it => {
     it.taxable = r2(num(it.qty) * num(it.rate) * (1 - num(it.disc) / 100));
     taxable += it.taxable;
-    const t = noState ? 0 : r2(it.taxable * num(it.gstRate) / 100);
+    // (a supply to an SEZ under LUT: no IGST, IGST Act s.16(3)(a))
+    const t = noState || x.supply === "SEZWOP" ? 0 : r2(it.taxable * num(it.gstRate) / 100);
     if (inter) igst += t; else { cgst += r2(t / 2); sgst += r2(t - r2(t / 2)); }
   });
   x.taxable = r2(taxable); x.cgst = r2(cgst); x.sgst = r2(sgst); x.igst = r2(igst);
@@ -306,6 +311,7 @@ function saveDraft(){
   if (d.editId){
     v = inv(d.editId);
     if (v.status === "posted"){ toast("This invoice is already in Tally; it cannot be changed here."); return null; }
+    if (salesIrnLocked(v)) return null;
     if (d.printedTotal && Math.abs(d.printedTotal - num(d.x.total)) > 1) toast("The items add up to " + money(d.x.total) + ", but the invoice shows " + money(d.printedTotal) + ". Check the items.");
     v.x = JSON.parse(JSON.stringify(d.x)); v.updatedAt = new Date().toISOString();
   } else {
@@ -698,7 +704,7 @@ function salesSetCust(id, val){
 }
 // a field of the invoice that is open (number, date, customer, amounts)
 function salesSetField(k, val){
-  const v = inv(SL().openId); if (!v) return;
+  const v = inv(SL().openId); if (!v || salesIrnLocked(v)) return;
   const before = [salesSnapshot(v)];
   const was = v.x[k];
   v.x[k] = ["taxable", "cgst", "sgst", "igst", "cess", "total"].includes(k) ? r2(num(val)) : k === "customerGstin" ? String(val).trim().toUpperCase().replace(/\s+/g, "") : String(val).trim();
