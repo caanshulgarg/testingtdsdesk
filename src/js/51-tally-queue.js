@@ -72,9 +72,12 @@ const CloudPost = {
     if (!(r && r.none && dup.size) && (!r || !r.ok)) throw {code: "cloud_post", message: (r && r.error) || "The entries could not be queued."};
     const own = r.none ? "" : id, jobOf = x => dup.has(x) ? dup.get(x).job : own, rows = new Map();
     ids.forEach(x => { if (jobOf(x)){ rows.set(jobOf(x), null); postMarkNew(cid, [x], jobOf(x)); } });
+    // (re-review 22-Nov-2026: an automatic run is told only its own posting, the new id when every entry is held by an
+    // earlier one: that one may be someone's posting by hand, and Undo must see it as held, never cancel it as the run's)
+    const mine = own || id;
     id = own || dup.values().next().value.job;
-    if (typeof AutoPost === "object" && AutoPost.jobSeen) AutoPost.jobSeen(cid, ids, id);
-    try { lsSet("tdsdesk:cloudpost", JSON.stringify({id, cid, at: Date.now(), n: ids.length, ids: ids.slice(0, 500)})); } catch (e){}
+    if (typeof AutoPost === "object" && AutoPost.jobSeen) AutoPost.jobSeen(cid, ids, mine);
+    try { lsSet("tdsdesk:cloudpost", JSON.stringify({id, own: mine, cid, at: Date.now(), n: ids.length, ids: ids.slice(0, 500)})); } catch (e){}
     // audit 22-Nov-2026 (low 1): the slot is cleared only while it still holds this posting (a later one took it over)
     const slotDel = () => { try { const m = JSON.parse(lsGet("tdsdesk:cloudpost") || "null"); if (!m || m.id === id) lsDel("tdsdesk:cloudpost"); } catch (e){} };
     const tell = j => { try { onProgress && onProgress(j); } catch (e){} };
@@ -188,11 +191,12 @@ const CloudJobs = {
   changed(d){
     const r = d && d.record, cols = this.list && this.list[0];
     if (r && r.id && cols && !(d.errors && d.errors.length) && !this.busy && d.type !== "DELETE"){
-      const keep = Object.keys(cols), row = {};
+      const keep = Object.keys(cols), row = {}, i = this.list.findIndex(j => j.id === r.id);
       keep.forEach(k => { if (k in r) row[k] = r[k]; });
-      if (keep.every(k => k in r)){
-        const i = this.list.findIndex(j => j.id === r.id);
-        this.list = i >= 0 ? this.list.map((j, n) => n === i ? row : j) : [row].concat(this.list);
+      // (re-review 22-Nov-2026: Realtime leaves unchanged large columns, results and items, out of an UPDATE's record: a
+      // posting already here keeps its own values of those, the columns that came are taken)
+      if (keep.every(k => k in r) || (i >= 0 && d.type === "UPDATE")){
+        this.list = i >= 0 ? this.list.map((j, n) => n === i ? Object.assign({}, j, row) : j) : [row].concat(this.list);
         clearTimeout(this.chT); this.chT = setTimeout(() => this.after(), 800);
         return;
       }

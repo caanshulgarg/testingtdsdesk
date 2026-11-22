@@ -13,6 +13,10 @@
 //   9. TCloud.rpcAll: a row on two pages (the list moved between pages) read again, never counted twice
 //  10. TCloud.noTargetWords: no computer name or Windows login
 //  11. tallyHereNow: a key FinCom's cloud refuses is "Key not accepted" (bad), not "No internet"
+//  12. (re-review) an automatic run whose every entry an earlier posting holds: the run's posting is its own (held), never
+//      the earlier one, so Undo never cancels someone's posting by hand; also from the last-posting slot
+//  (re-review, in 5 and 9: a live change without its unchanged large columns merged in place; a row removed between two
+//   pages read again, never a list short of a row)
 "use strict";
 const fs = require("fs"), path = require("path"), os = require("os"), vm = require("vm");
 process.env.TDSDESK_NO_FIXCACHE = process.env.TDSDESK_NO_FIXCACHE || "1";   // (no books read: no fixture cache)
@@ -104,6 +108,35 @@ const base = (c) => { Object.assign(c, {setTimeout, clearTimeout, Promise, crypt
     ok(slotB && slotAfterA === slotB, "3. the slot of the newer posting stays when an older one ends (" + slotAfterA + ")");
   }
 
+  // ------------------------------------------------------------------ 12 (re-review: every entry held by an earlier posting)
+  console.log("== 12. an automatic run whose every entry an earlier posting holds");
+  {
+    const {ctx, x} = L(["CloudPost", "AutoPost"]);
+    base(ctx);
+    const ls = {}; let wrote = null;
+    ctx.lsGet = k => (k in ls ? ls[k] : null); ctx.lsSet = (k, v) => { ls[k] = v; if (k === "tdsdesk:cloudpost") wrote = v; }; ctx.lsDel = k => { delete ls[k]; };
+    ctx.postMarkNew = () => {};
+    // a posting by hand (J-HAND-1, made up) holds B1, B2 and B3; the run takes B1 only: the cloud queues nothing
+    let answer = null; const made = [];
+    ctx.TCloud = {postTargetFor: () => "", bridgesHeard: () => [], rpc: async (fn, a) => { made.push(a.p_id); return answer(a); }};
+    ctx.Cloud = {api: async p => { const id = (p.match(/id=eq\.([^&]+)/) || [])[1]; return [{id, status: "done", n: 3, done: 3, results: [], company: "MADE UP CO"}]; }};
+    const post = (cid, vs) => x.CloudPost.run(cid, {vouchers: vs.map(id => ({id})), company: "MADE UP CO"});
+    answer = () => ({ok: true, none: true, dupes: [{id: "B1", job: "J-HAND-1", status: "waiting"}]});
+    await x.AutoPost.through("runN", () => post("cH", ["B1"]), () => false, "cH", () => ["B1"]);
+    const job = x.AutoPost.jobOf("cH", ["B1"], "runN");
+    ok(job && job !== "J-HAND-1", "12. all held: the run's posting is its own, not the posting by hand (" + job + "); held = " + ("J-HAND-1" !== job));
+    // the slot fallback (no run record, e.g. a run record lost) must not name the earlier posting as the run's own either
+    delete x.AutoPost.runJob.runN; ls["tdsdesk:cloudpost"] = wrote;   // (the slot as the run wrote it, while it waits)
+    const job2 = x.AutoPost.jobOf("cH", ["B1"], "runN");
+    ok(job2 !== "J-HAND-1", "12. all held, from the last-posting slot: not the posting by hand (" + job2 + ")");
+    ok(JSON.parse(wrote || "{}").id === "J-HAND-1", "12. the slot still follows the posting that holds the entries (for the reload message)");
+    // some held, some new: the run's own posting
+    answer = a => ({ok: true, dupes: [{id: "B1", job: "J-HAND-1", status: "waiting"}]});
+    await x.AutoPost.through("runM", () => post("cH", ["B1", "B4"]), () => false, "cH", () => ["B1", "B4"]);
+    const j3 = x.AutoPost.jobOf("cH", ["B1", "B4"], "runM");
+    ok(j3 === made[made.length - 1], "12. some held: the run's posting is the one queued for it (" + j3 + ")");
+  }
+
   // ------------------------------------------------------------------ 4, 5
   console.log("== 4-5. the list of postings");
   {
@@ -130,9 +163,24 @@ const base = (c) => { Object.assign(c, {setTimeout, clearTimeout, Promise, crypt
     await sleep(900);
     const j2 = (x.CloudJobs.list || []).find(j => j.id === "j2") || {};
     ok(reads === r0 && j2.status === "done" && !("payload" in j2), "5. a live change: its row put in place, no read of every posting (" + (reads - r0) + " reads, j2 " + j2.status + ")");
+    // (re-review) a status-only change of a big posting: Realtime leaves its unchanged large columns (results, items) out
+    // of the record; the row here keeps them, the changed ones are taken, nothing is read
+    const r1 = reads, big = [{id: "e1", ok: true, message: "MADE UP RESULT"}];
+    x.CloudJobs.list = x.CloudJobs.list.map(j => j.id === "j1" ? Object.assign({}, j, {results: big}) : j);
+    const part = Object.assign({}, job("j1", {status: "done", message: "Posted (made up)"})); delete part.results; delete part.items; delete part.timing;
+    x.CloudJobs.changed({type: "UPDATE", record: part, errors: null});
+    await sleep(900);
+    const j1b = (x.CloudJobs.list || []).find(j => j.id === "j1") || {};
+    ok(reads === r1 && j1b.message === "Posted (made up)" && JSON.stringify(j1b.results) === JSON.stringify(big) && Array.isArray(j1b.items), "5. a change without its unchanged large columns: merged into the row here, no read (" + (reads - r1) + " reads, " + j1b.message + ")");
+    // a new posting that comes without all its columns: the list is read
+    const r2 = reads, part2 = job("j7"); delete part2.results;
+    x.CloudJobs.changed({type: "INSERT", record: part2, errors: null});
+    await sleep(900);
+    ok(reads === r2 + 1, "5. a posting not here yet, not whole: the list is read (" + (reads - r2) + ")");
+    const r3 = reads;
     x.CloudJobs.changed({type: "UPDATE", record: {id: "j2"}, errors: ["Error 413: Payload Too Large"]});
     await sleep(900);
-    ok(reads === r0 + 1, "5. a row too big to come live: the list is read (" + (reads - r0) + " read)");
+    ok(reads === r3 + 1, "5. a row too big to come live: the list is read (" + (reads - r3) + " read)");
     // a posting made between two pages shifts the next page: each posting once
     ctx.TCloud.restAll = async () => [job("j3"), job("j1"), job("j1"), job("j2")];
     await x.CloudJobs.load(true);
@@ -237,6 +285,36 @@ const base = (c) => { Object.assign(c, {setTimeout, clearTimeout, Promise, crypt
     try { out = await x.TCloud.rpcAll("tally_tb", {p_book: "b1"}); } catch (e){ err = e.message; }
     const names = (out || []).map(r => r.ledger), dup = names.length - new Set(names).size;
     ok(out && dup === 0 && names.length === 1500, "9. a trial balance read while it moved: read again, " + names.length + " ledgers, " + dup + " twice" + (err ? " (" + err + ")" : ""));
+    // (re-review) a ledger removed (merged) above the page boundary between two pages: the list moves up by one and
+    // a row would be skipped without a word; read again, every ledger once
+    calls = 0;
+    ctx.Cloud = {api: async p => { calls++; const off = Number((p.match(/offset=(\d+)/) || [])[1] || 0);
+      const all = []; for (let i = 0; i < 1500; i++) all.push(row(i));
+      if (calls === 2) all.splice(10, 1);
+      return all.slice(off, off + Number((p.match(/limit=(\d+)/) || [])[1] || 1000)); }};
+    out = null; err = "";
+    try { out = await x.TCloud.rpcAll("tally_tb", {p_book: "b1"}); } catch (e){ err = e.message; }
+    const n2 = (out || []).map(r => r.ledger);
+    ok(out && n2.length === 1500 && new Set(n2).size === 1500, "9. a ledger removed between two pages: read again, " + n2.length + " ledgers (1500)" + (err ? " (" + err + ")" : ""));
+    // moving on every read: an error, never a list short of a ledger
+    calls = 0;
+    ctx.Cloud = {api: async p => { calls++; const off = Number((p.match(/offset=(\d+)/) || [])[1] || 0);
+      const all = []; for (let i = 0; i < 1500; i++) all.push(row(i));
+      if (off) all.splice(10, 1);
+      return all.slice(off, off + Number((p.match(/limit=(\d+)/) || [])[1] || 1000)); }};
+    out = null; err = "";
+    try { out = await x.TCloud.rpcAll("tally_tb", {p_book: "b1"}); } catch (e){ err = e.message; }
+    ok(!out && /changed while/.test(err), "9. still moving when read again: an error (" + (err || (out || []).length + " rows") + ")");
+    // a list of exactly 1000 and a short one: as before
+    calls = 0;
+    ctx.Cloud = {api: async p => { calls++; const off = Number((p.match(/offset=(\d+)/) || [])[1] || 0);
+      const all = []; for (let i = 0; i < 1000; i++) all.push(row(i));
+      return all.slice(off, off + Number((p.match(/limit=(\d+)/) || [])[1] || 1000)); }};
+    out = await x.TCloud.rpcAll("tally_tb", {p_book: "b1"});
+    ok(out.length === 1000 && new Set(out.map(r => r.ledger)).size === 1000, "9. exactly 1000 ledgers: " + out.length);
+    ctx.Cloud.api = async () => [row(1), row(2)];
+    out = await x.TCloud.rpcAll("tally_tb", {p_book: "b1"});
+    ok(out.length === 2, "9. a short list: " + out.length);
     // 10.
     ctx.TCloud = x.TCloud;
     x.TCloud.bridgesHeard = () => [{go: true, old: false, id: "go-abc123", computer: "MADEUP-PC7", user: "madeup.user", mayPost: true, device: {id: "d1"}}];

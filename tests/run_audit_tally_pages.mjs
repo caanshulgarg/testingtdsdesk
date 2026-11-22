@@ -8,6 +8,8 @@
 //   5. Link: this browser's bridge is named only when the company is open in its own Tally
 //   6. the list of companies open and not linked: never another login's
 //   7. a client's word before lib/linkStatus.js is here: the same four words (Linked, Waiting for Tally, Not linked)
+//   8. (re-review) a refusal is over for the company's Tally status (FCOwn.refused) once a new key is handed over, or
+//      FinCom answers the bridge's heartbeat again, as for the top-bar icon (cloudOff)
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 const HERE_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -113,6 +115,30 @@ G.tallyLinkOf = () => ({ state: "linked", company: "MADE UP CO", line: { state: 
 G.TCloud.on = () => false;
 const w7 = TS.clientTallyState({ id: "c1", name: "MADE UP CLIENT" });
 ok(w7.word === "Linked", "7. linked and open: Linked, the word every other place uses (" + w7.word + ")");
+
+// ------------------------------------------------------------------ 8
+console.log("== 8. a refused key, then a new one");
+{
+  const old8 = new Date(Date.now() - 10 * 60000).toISOString();
+  G.Bridge.st = { state: "ok", beat: { on: true, last: old8, missedSince: new Date(Date.now() - 60000).toISOString() } };
+  OB.HERE.refused = true;
+  ok(G.FCOwn.refused() === true, "8. the key refused, its heartbeat not answered: Key not accepted");
+  G.Bridge.st.beat = { on: true, last: new Date().toISOString(), missedSince: "" };
+  ok(G.FCOwn.refused() === false, "8. FinCom answers the heartbeat again: the refusal is over (as cloudOff)");
+  // a new key handed over from the code box (rekey), the bridge taking it in time
+  G.Bridge.st.beat = { on: true, last: old8, missedSince: old8 };
+  OB.HERE.refused = true;
+  cfg = { url: "http://127.0.0.1:9103", key: "made-up-key", bridgeId: "go-abc123" };
+  G.TCloud.rpc = async (fn) => fn === "tally_device_create" ? { id: "dev-made-up", key: "new-key" } : fn === "tally_bridge_whose" ? { mine: false } : { ok: true };
+  G.Bridge.call = async () => ({ ok: true });
+  delete store["tdsdesk:rekeyAt"];
+  await TC.rekey("key not known to FinCom");
+  ok(G.FCOwn.refused() === false && OB.HERE.refused === false, "8. a new key handed over (rekey): no longer Key not accepted (" + OB.HERE.refused + ")");
+  // the bridge took the key after the page stopped waiting ({late: true})
+  OB.HERE.refused = true;
+  const c8 = await rekeyCase(true);
+  ok(!c8.err && OB.HERE.refused === false, "8. a new key the bridge took late: the refusal is over (" + OB.HERE.refused + ")");
+}
 
 console.log(fails ? fails + " FAILED" : "all passed");
 process.exit(fails ? 1 : 0);

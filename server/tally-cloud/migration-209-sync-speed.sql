@@ -13,7 +13,7 @@
 --      time: 1,600 s over 6,322 calls). gst_run_post reads both secrets in ONE query, only when there is a book to send,
 --      and posts each book's call. Jobs gst-share-sweep and gst-share-parity are rescheduled through it (same names, same
 --      times). Jobs 28, 33 and 34 are not in this repository's migrations: the owner moves them the same way (one line).
---   3. tally_tb had no ORDER BY, so its pages (limit/offset, TCloud.rpcAll) were not stable between calls: a ledger
+--   3. tally_tb (and tally_monthly, re-review) had no ORDER BY, so its pages (limit/offset, TCloud.rpcAll) were not stable between calls: a ledger
 --      could come twice or not at all at a page boundary. Now ordered by ledger, as tally_period and tally_balances_on.
 --      (The app also reads such a list again when a row comes on two pages: src/js/49 rpcAll.)
 --   4. tally_post_own_words named the poster's computer and Windows login ("your FinCom Bridge (PC · user)"): the
@@ -29,7 +29,7 @@ set local lock_timeout = '3s';
 -- ---------------------------------------------------------------- 1. the books with a voucher gst-share has not seen
 create table if not exists public.gst_share_unseen (
   book_id uuid primary key references public.tally_books (book_id) on delete cascade,
-  at      timestamptz not null default now()
+  at      timestamptz not null default clock_timestamp()
 );
 alter table public.gst_share_unseen enable row level security;      -- no policy: the service and the jobs only
 revoke all on public.gst_share_unseen from public, anon, authenticated;
@@ -39,11 +39,11 @@ create or replace function public.gst_share_unseen_mark()
 as $function$
 begin
   if tg_table_name = 'tally_vouchers' then
-    insert into gst_share_unseen (book_id) select distinct n.book_id from new_rows n
-      on conflict (book_id) do update set at = now();
+    insert into gst_share_unseen (book_id, at) select distinct n.book_id, clock_timestamp() from new_rows n
+      on conflict (book_id) do update set at = clock_timestamp();
   else
-    insert into gst_share_unseen (book_id) select distinct o.book_id from old_rows o where o.calc = 'gst-share' and o.kind = 'entry'
-      on conflict (book_id) do update set at = now();
+    insert into gst_share_unseen (book_id, at) select distinct o.book_id, clock_timestamp() from old_rows o where o.calc = 'gst-share' and o.kind = 'entry'
+      on conflict (book_id) do update set at = clock_timestamp();
   end if;
   return null;
 end $function$;
@@ -63,16 +63,21 @@ insert into public.gst_share_unseen (book_id)
   on conflict (book_id) do nothing;
 
 -- a marked book with nothing unseen left: unmarked (a mark newer than 5 minutes stays: a write still being committed may
--- not be visible yet; the book is then only looked at again, never missed)
+-- not be visible yet; the book is then only looked at again, never missed). Re-review 22-Nov-2026: the mark is stamped
+-- with the write's own time (clock_timestamp(), not the start of its transaction), and a mark a write still holds (its
+-- upsert not committed) is skipped (SKIP LOCKED), never deleted on a re-check against a snapshot that cannot see that
+-- write's vouchers; the next minute looks at it again. Only books the sweep can take (a client: gst_share_books_due's
+-- own rule) are looked at; tally_books.client_id is NOT NULL on staging, so this leaves none out today
 create or replace function public.gst_share_unseen_settle()
  returns integer language sql volatile security definer set search_path = public, pg_temp
 as $function$
-  with gone as (
-    delete from gst_share_unseen u
+  with pick as (
+    select u.book_id from gst_share_unseen u join tally_books b on b.book_id = u.book_id and b.client_id is not null
      where u.at < now() - interval '5 minutes'
        and not exists (select 1 from tally_vouchers v where v.book_id = u.book_id
                          and not exists (select 1 from calc_seen s where s.book_id = v.book_id and s.calc = 'gst-share' and s.kind = 'entry' and s.key = v.guid))
-    returning 1)
+     for update of u skip locked),
+  gone as (delete from gst_share_unseen u using pick p where u.book_id = p.book_id returning 1)
   select count(*)::integer from gone;
 $function$;
 revoke all on function public.gst_share_unseen_settle() from public, anon, authenticated;
@@ -85,7 +90,7 @@ as $function$
   -- 209: the books with an entry gst-share has not seen, looked for only among the books marked since (gst_share_unseen:
   -- a voucher written, an entry mark removed); 204 anti-joined every voucher of every book. The same books, same order
   with unseen as materialized (
-    select u.book_id from gst_share_unseen u
+    select u.book_id from gst_share_unseen u join tally_books bu on bu.book_id = u.book_id and bu.client_id is not null
      where exists (select 1 from tally_vouchers v where v.book_id = u.book_id
                      and not exists (select 1 from calc_seen s where s.book_id = v.book_id and s.calc = 'gst-share' and s.kind = 'entry' and s.key = v.guid)))
   select b.book_id from tally_books b
@@ -158,6 +163,20 @@ begin
       from lg full join mv on mv.ledger = lg.name
      order by 1;                                                          -- 209: a steady order for its pages
 end $function$;
+
+-- ---------------------------------------------------------------- 3b. tally_monthly in a steady order (its pages)
+-- (re-review 22-Nov-2026: TCloud.rpcAll reads it a thousand rows at a time and now checks the rows at each page's edge; with
+-- no order its pages were not stable between calls. migration.sql's text, with the order only)
+create or replace function public.tally_monthly(p_client text, p_from date, p_to date)
+returns table (ledger text, ym text, amount numeric, dr numeric, cr numeric)
+language plpgsql stable security definer set search_path = public as $$
+declare bk uuid := tally_pick(p_client, p_from);
+begin
+  if bk is null then return; end if;
+  return query select d.ledger, to_char(d.day, 'YYYYMM'), sum(d.amount), sum(d.dr), sum(d.cr) from tally_ledger_day d
+    where d.book_id = bk and d.day between p_from and p_to group by d.ledger, to_char(d.day, 'YYYYMM')
+    order by 1, 2;                                                        -- 209: a steady order for its pages
+end $$;
 
 -- ---------------------------------------------------------------- 4. the poster's words without a computer or login name
 create or replace function public.tally_post_own_words(p_firm uuid, p_company text, p_user uuid)

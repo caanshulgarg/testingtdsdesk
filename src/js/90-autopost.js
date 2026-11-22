@@ -611,7 +611,7 @@ const AutoPost = {
   jobOf(cid, ids, run){
     if (run && this.runJob && this.runJob[run]) return this.runJob[run];
     // (the last posting's slot only when it names one of the run's entries: audit 22-Nov-2026)
-    try { const m = JSON.parse(lsGet("tdsdesk:cloudpost") || "null"); if (m && m.cid === cid && (m.ids || []).some(x => ids.map(String).includes(String(x)))) return m.id; } catch (e){}
+    try { const m = JSON.parse(lsGet("tdsdesk:cloudpost") || "null"); if (m && m.cid === cid && (m.ids || []).some(x => ids.map(String).includes(String(x)))) return m.own || m.id; } catch (e){}
     const j = typeof CloudJobs === "object" ? (CloudJobs.list || []).find(j => j.client_id === cid && (CloudJobs.idsOf(j) || []).some(x => ids.includes(x))) : null;
     return j ? j.id : null;
   },

@@ -27,12 +27,19 @@ const TCloud = {
   // Audit 22-Nov-2026 (speed-db 4): each page is a call of its own, so a ledger written by live sync between two pages
   // moves the next page by one and a row comes twice (a trial balance that does not tally). A row seen on two pages: the
   // whole list read once more; again so: an error, never a list counted twice
+  // (re-review 22-Nov-2026: a row removed or merged above a page boundary moved the list up by one and a row was skipped
+  // without a word. Each later page now starts one row back: that row must be the last row already read, else the list
+  // moved (up or down) between the pages, and it is read again the same way)
   async rpcAll(fn, args, again){
     let out = [], off = 0, seen = new Set(), twice = false;
     for (;;){
-      const page = await this.rpc(fn, args, "?limit=1000&offset=" + off) || [];
+      const page = await this.rpc(fn, args, off ? "?limit=1001&offset=" + (off - 1) : "?limit=1000&offset=0") || [];
       if (!Array.isArray(page)) throw Error("not a list: " + fn);   // (never paged through for ever)
-      if (off){ const k = page.map(r => JSON.stringify(r)); twice = twice || k.some(x => seen.has(x)); k.forEach(x => seen.add(x)); }
+      if (off){
+        const head = page.shift();
+        if (!head || JSON.stringify(head) !== JSON.stringify(out[out.length - 1])) twice = true;
+        const k = page.map(r => JSON.stringify(r)); twice = twice || k.some(x => seen.has(x)); k.forEach(x => seen.add(x));
+      }
       else if (page.length >= 1000) page.forEach(r => seen.add(JSON.stringify(r)));
       out = out.concat(page);
       if (page.length < 1000) break;

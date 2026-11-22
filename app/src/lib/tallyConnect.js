@@ -208,7 +208,7 @@ async function rekeyOnce(why) {
       for (let i = 0; i < 5; i++) {
         await pause(5000);
         const w = await whoseIs(id);
-        if (w && w.mine) { TCloud.autoAt = Date.now() + 60000; TCloud.autoErr = ""; TCloud.rekeyed = { at: Date.now(), why: why || "" }; return { late: true }; }
+        if (w && w.mine) { TCloud.autoAt = Date.now() + 60000; TCloud.autoErr = ""; TCloud.rekeyed = { at: Date.now(), why: why || "" }; HERE.refused = false; return { late: true }; }
       }
     }
     try { await TCloud.rpc("tally_device_revoke", { p_id: d.id }); } catch (e2) { /* left unused */ }
@@ -216,6 +216,7 @@ async function rekeyOnce(why) {
   }
   TCloud.autoAt = Date.now() + 60000; TCloud.autoErr = "";
   TCloud.rekeyed = { at: Date.now(), why: why || "" };
+  HERE.refused = false;   // (re-review 22-Nov-2026: a new key handed over, an earlier refusal is over everywhere)
   return r || {};
 }
 

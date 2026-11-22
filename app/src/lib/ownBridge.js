@@ -358,6 +358,12 @@ export function cloudOff(beat, now, heard) {
   if (HERE.refused === true && !heard && !(b.on && last && !b.missedSince && (now || Date.now()) - last < 120000)) return "refused";
   return b.on && since && (now || Date.now()) - since > 3 * 60000 ? "nobeat" : "";
 }
+// the company's Tally status (tallyHereNow): the same "refusal is over" checks as the icon (re-review 22-Nov-2026)
+function refusedNow() {
+  if (HERE.refused !== true) return false;
+  let heard = false; try { const o = ownBridge(); heard = !!o && fresh(o.at); } catch (e) { heard = false; }
+  return cloudOff(((typeof Bridge === "object" && Bridge.st) || {}).beat, 0, heard) === "refused";
+}
 // "yes" | "no" | "checking" | "away" | "none" for a company (own: ownState(), read once for the whole table)
 export function localOpen(company, own) {
   const o = own || ownState();
@@ -409,7 +415,7 @@ export const sees = (devId) => { try { if (S.account && S.account.me && S.accoun
 // (k: the link as its asker already has it; tallyLine, src/js/49, gives its own: tallyLinkOf asks tallyLine)
 export const line = (co, k) => { try { return farLine(lastEntry(co, k || (typeof tallyLinkOf === "function" ? tallyLinkOf(co) : null))); } catch (e) { return farLine(""); } };
 if (typeof window === "object") {
-  window.FCOwn = { state: mineState, bridge: mineBridge, place: placeOf, has, icon, sees, line, LOCALB, refused: () => HERE.refused === true };
+  window.FCOwn = { state: mineState, bridge: mineBridge, place: placeOf, has, icon, sees, line, LOCALB, refused: refusedNow };
   // the look on this computer, once for this tab: after the firm's computers are first read (their bridges' ports are
   // asked too), or 6 s; the page is drawn with the answer (look), and now with what is remembered
   let n = 0;
