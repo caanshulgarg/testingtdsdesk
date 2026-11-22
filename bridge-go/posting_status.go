@@ -147,7 +147,7 @@ func failedLine(tallySaid string) string {
 	// 2.1.4: the duplicate check before posting said so itself; round 15: this computer's record, and Tally's reply in
 	// its own words (needs review), go as they are
 	if strings.HasPrefix(m, "Already in Tally (") || m == dupCheckFailedMsg || strings.HasPrefix(m, "This computer posts only to ") ||
-		strings.HasPrefix(m, "already sent from this computer on ") || strings.HasPrefix(m, "Tally's reply: ") || m == unknownLine {
+		strings.HasPrefix(m, "already sent from this computer on ") || strings.HasPrefix(m, "Tally's reply: ") || m == unknownLine || m == stoppedNotSentWords {
 		return m
 	}
 	if g := group(`(?i)ledger\s*'([^']+)'\s*does\s*not\s*exist`, m, 1); g != "" {

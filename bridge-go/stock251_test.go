@@ -42,18 +42,26 @@ func stockBridge(t *testing.T) (*standTally, *standCloud, *[]M) {
 	wantAt = time.Time{} // FinCom's own request just above: the reads' 4 s of giving way are not this test's
 	wantMu.Unlock()
 	var got []M
-	var mu sync.Mutex
 	c.mu.Lock()
 	c.other = func(k string, b M) (int, M) {
 		if k == "stock" {
-			mu.Lock()
+			stockGotMu.Lock()
 			got = append(got, b)
-			mu.Unlock()
+			stockGotMu.Unlock()
 		}
 		return 200, M{"ok": true}
 	}
 	c.mu.Unlock()
 	return f, c, &got
+}
+
+// what FinCom got so far (a copy, read under the lock the stand cloud's handler writes it under)
+var stockGotMu sync.Mutex
+
+func stockSeen(got *[]M) []M {
+	stockGotMu.Lock()
+	defer stockGotMu.Unlock()
+	return append([]M{}, (*got)...)
 }
 
 func clickAt(d time.Duration) string { return time.Now().Add(d).UTC().Format(time.RFC3339Nano) }
@@ -440,17 +448,17 @@ func TestStock251WakeAndBeat(t *testing.T) {
 	f, c, got := stockBridge(t)
 	at := clickAt(0)
 	wakeEvent("stock", M{"company": zz, "from": "20260401", "to": "20261031", "at": at})
-	waitFor(t, func() bool { return len(*got) == 1 })
+	waitFor(t, func() bool { return len(stockSeen(got)) == 1 })
 	// the heartbeat's copy of the same click: not taken again
 	c.mu.Lock()
 	c.beatReply = M{"stock": M{zz: M{"from": "20260401", "to": "20261031", "at": at}}}
 	c.mu.Unlock()
 	beatOnce()
 	time.Sleep(300 * time.Millisecond)
-	if stockClicks(f) != 1 || len(*got) != 1 {
-		t.Fatalf("the heartbeat's copy taken again: %d asked, %d sent", stockClicks(f), len(*got))
+	if stockClicks(f) != 1 || len(stockSeen(got)) != 1 {
+		t.Fatalf("the heartbeat's copy taken again: %d asked, %d sent", stockClicks(f), len(stockSeen(got)))
 	}
-	b := (*got)[0]
+	b := stockSeen(got)[0]
 	if str(b["kind"]) != "stock" || str(b["company"]) != zz || str(b["from"]) != "20260401" || str(b["to"]) != "20261031" || str(b["at"]) != at ||
 		toF(b["opening"]) != 908443072.58 || toF(b["closing"]) != 2182130465.82 || str(b["status"]) != "ok" || str(b["company_guid"]) != b220CoGUID {
 		t.Fatalf("FinCom got: %v", b)
@@ -460,9 +468,9 @@ func TestStock251WakeAndBeat(t *testing.T) {
 	c.beatReply = M{"stock": M{zz: M{"from": "20261001", "to": "20261031", "at": clickAt(time.Second), "again": true}}}
 	c.mu.Unlock()
 	beatOnce()
-	waitFor(t, func() bool { return len(*got) == 2 })
-	if stockClicks(f) != 2 || str((*got)[1]["from"]) != "20261001" {
-		t.Fatalf("the heartbeat's click: %v", (*got)[1])
+	waitFor(t, func() bool { return len(stockSeen(got)) == 2 })
+	if stockClicks(f) != 2 || str(stockSeen(got)[1]["from"]) != "20261001" {
+		t.Fatalf("the heartbeat's click: %v", stockSeen(got)[1])
 	}
 }
 
@@ -534,7 +542,7 @@ func TestStock251FiguresAndExceptions(t *testing.T) {
 	a := tallyAllowList[stockID]
 	// 2.5.3: the row says it, as history ("2.5.2 allowed by ...; unchanged in 2.5.3"); the decision line names 2.5.3
 	if !strings.Contains(a.purpose, "2.5.2 allowed by the owner's decision of 2026-10-30 (person's click only; unchanged in "+BridgeVersion+")") || a.measureOnly || a.maxSec <= 0 ||
-		!strings.Contains(a.measuredOn, "41009967960") || requestClass[stockID] != "exception" || BridgeVersion != "2.5.17" { // 2.5.17 (r2517_test.go); 2.5.16 (r2516_test.go); 2.5.15 (r2515_test.go); 2.5.14 (r2514_test.go); 2.5.13 (r2513_test.go); 2.5.12 (r2512_test.go); 2.5.11 (r2511_test.go); 2.5.10 (r2510pick_test.go); 2.5.9 (fastmeasure_test.go); 2.5.8 (nocompany258_test.go); 2.5.7 (fastentries_test.go); 2.5.6 (firstread_test.go); 2.5.5 (ledgers255_test.go, loginport255_test.go); 2.5.4 (r254_test.go); 2.5.3 (r253owntally_test.go)
+		!strings.Contains(a.measuredOn, "41009967960") || requestClass[stockID] != "exception" || BridgeVersion != "2.5.18" { // 2.5.18 (r2518_test.go); 2.5.17 (r2517_test.go); 2.5.16 (r2516_test.go); 2.5.15 (r2515_test.go); 2.5.14 (r2514_test.go); 2.5.13 (r2513_test.go); 2.5.12 (r2512_test.go); 2.5.11 (r2511_test.go); 2.5.10 (r2510pick_test.go); 2.5.9 (fastmeasure_test.go); 2.5.8 (nocompany258_test.go); 2.5.7 (fastentries_test.go); 2.5.6 (firstread_test.go); 2.5.5 (ledgers255_test.go, loginport255_test.go); 2.5.4 (r254_test.go); 2.5.3 (r253owntally_test.go)
 		t.Fatalf("the allow-list row: %+v, class %q, version %s", a, requestClass[stockID], BridgeVersion)
 	}
 }
@@ -553,7 +561,7 @@ func allowRowsBeforeStock() string {
 // --- 8. 2.5.2: the version; one request added (the table otherwise 2.5.0's); the decision line names 2.5.2 by the owner's
 // decision of 2026-10-30 (person's click only), 2.5.0's kept as history; the dated line; the test sheet
 func TestStock251VersionAllowList(t *testing.T) {
-	if BridgeVersion != "2.5.17" { // 2.5.17 (r2517_test.go); 2.5.16 (r2516_test.go); 2.5.15 (r2515_test.go); 2.5.14 (r2514_test.go); 2.5.13 (r2513_test.go); 2.5.12 (r2512_test.go); 2.5.11 (r2511_test.go); 2.5.10 (r2510pick_test.go); 2.5.9 (fastmeasure_test.go); 2.5.8 (nocompany258_test.go); 2.5.7 (fastentries_test.go); 2.5.6 (firstread_test.go); 2.5.5 (ledgers255_test.go, loginport255_test.go); 2.5.4 (r254_test.go); 2.5.3 (r253owntally_test.go)
+	if BridgeVersion != "2.5.18" { // 2.5.18 (r2518_test.go); 2.5.17 (r2517_test.go); 2.5.16 (r2516_test.go); 2.5.15 (r2515_test.go); 2.5.14 (r2514_test.go); 2.5.13 (r2513_test.go); 2.5.12 (r2512_test.go); 2.5.11 (r2511_test.go); 2.5.10 (r2510pick_test.go); 2.5.9 (fastmeasure_test.go); 2.5.8 (nocompany258_test.go); 2.5.7 (fastentries_test.go); 2.5.6 (firstread_test.go); 2.5.5 (ledgers255_test.go, loginport255_test.go); 2.5.4 (r254_test.go); 2.5.3 (r253owntally_test.go)
 		t.Fatalf("BridgeVersion %s", BridgeVersion)
 	}
 	if h := allowListHash(allowRowsBeforeStock()); h != "0ed4d3e21f6fa4d61374a8bcbdef95d2044078d786d49d5d779c4b6d926332ad" {

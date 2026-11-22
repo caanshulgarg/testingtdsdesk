@@ -27,7 +27,7 @@
     "billVt",
     "salesVt"
   ],
-  "sha256": "9eca159c683d6e4bab9e0e40d040340ffc2b9612e7f65929cfa15bc07d6b8f71",
+  "sha256": "81e4dd052a87ae376e841d007d4a22017021b6dd96f2d4cb4080b0e50b17e2bd",
   "files": [
     "purchase-bill.xml",
     "journal.xml",

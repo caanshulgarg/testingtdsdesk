@@ -238,7 +238,9 @@ func newPostJob(pl M) (M, error) {
 			}
 			_ = os.Remove(filepath.Join(dir, "cancel"))
 			v["results"], v["done"], v["resumed"], v["status"], v["message"], v["finishedAt"] = kept, len(kept), true, "queued", "Sending again only what FinCom released", ""
-			startJob(id, dir, v)
+			if !startJob(id, dir, v) {
+				return jobView(dir), nil // audit fix: its worker runs already
+			}
 			writeLog(fmt.Sprintf("Posting job %s: only %d released entr%s sent again (%d kept, never sent again)", id, len(only), map[bool]string{true: "y", false: "ies"}[len(only) == 1], len(kept)))
 			return jobView(dir), nil
 		}
@@ -276,7 +278,9 @@ func newPostJob(pl M) (M, error) {
 			_ = os.Remove(filepath.Join(dir, "cancel"))
 			delete(v, "stoppedBy")
 			v["results"], v["done"], v["resumed"], v["status"], v["message"], v["finishedAt"] = kept, len(kept), true, "queued", "Retrying", ""
-			startJob(id, dir, v)
+			if !startJob(id, dir, v) {
+				return jobView(dir), nil // audit fix: its worker runs already
+			}
 			writeLog(fmt.Sprintf("Posting job %s: retried (%d already sent to Tally kept, never sent again)", id, len(kept)))
 			return jobView(dir), nil
 		}
@@ -344,8 +348,17 @@ func resendOnlyOf(pl M) map[string]bool {
 	return out
 }
 
-func startJob(id, dir string, p M) {
+// the job's worker (the tests replace it)
+var jobWorkerFn = jobWorker
+
+// audit fix: one worker per job. A second start while one runs (two resumes at the same moment) is refused: false, and
+// nothing is written over the running one's progress
+func startJob(id, dir string, p M) bool {
 	jobsMu.Lock()
+	if jobsRunning[id] {
+		jobsMu.Unlock()
+		return false
+	}
 	jobsRunning[id] = true
 	jobsMu.Unlock()
 	writeProgress(dir, p)
@@ -359,8 +372,9 @@ func startJob(id, dir string, p M) {
 			delete(jobsRunning, id)
 			jobsMu.Unlock()
 		}()
-		jobWorker(dir)
+		jobWorkerFn(dir)
 	}()
+	return true
 }
 
 func resumePostJob(id string) (M, error) {
@@ -368,6 +382,8 @@ func resumePostJob(id string) (M, error) {
 	if err != nil {
 		return nil, err
 	}
+	// audit fix: one resume (or hand-out) of a job at a time; the view read under the lock
+	defer jobLock(id)()
 	p := jobView(dir)
 	if p == nil {
 		return nil, errors.New("No such job.")
@@ -379,7 +395,9 @@ func resumePostJob(id string) (M, error) {
 		return nil, err
 	}
 	p["status"], p["message"] = "queued", "Resuming"
-	startJob(id, dir, p)
+	if !startJob(id, dir, p) {
+		return jobView(dir), nil // its worker runs already: never a second one
+	}
 	writeLog("Posting job " + id + " resumed")
 	return p, nil
 }
@@ -844,6 +862,9 @@ func jobWorker(dir string) {
 	// A5: this computer's record (sync\posted-ids.json): a voucher this computer already sent is refused, with the date
 	// and Tally's id when known; nothing is asked of Tally. An owner's release handed with the job (the cloud is the
 	// judge) lets an entry go once more
+	// audit fix: the record of each voucher as this check saw it; looked at again under postGate right before its part
+	// goes (a browser's /import may have sent it meanwhile: postGate is taken only around each part)
+	seenRec := map[string]string{}
 	{
 		var left []M
 		for _, it := range todo {
@@ -855,12 +876,14 @@ func jobWorker(dir string) {
 			key := acceptedKey(k, str(it["xml"]))
 			a := acceptedInfo(key)
 			if a == nil {
+				seenRec[key] = recSig(nil)
 				left = append(left, it)
 				continue
 			}
 			if rel := releaseFor(arr(pl["released"]), key, k, a); rel != nil {
 				writeLog("  entry " + k + ": released by " + or(str(rel["by"]), "the owner") + " at " + str(rel["at"]) + " (" + str(rel["why"]) + "); sent once more")
 				acceptedHonour(key, rel)
+				seenRec[key] = recSig(acceptedInfo(key))
 				left = append(left, it)
 				continue
 			}
@@ -889,7 +912,8 @@ func jobWorker(dir string) {
 	save()
 	// A3: each master on its own, then the bills, then the bank lines; linkguid speed round: each part sized by how long
 	// Tally took for the one before (postpace.go), from PostBatchBills / PostBatchBank
-	pq := newPostQueue(masters, vouchers)
+	pq := newPostQueueFor(company, guid, masters, vouchers) // speed audit: sized by the company's own time a voucher
+	defer postPaceFlush()
 	K := pq.parts()
 	notes := arr(p["reqs"]) // a resumed job keeps the notes of the requests it sent before
 	secondsTotal := num(p["secondsTotal"])
@@ -955,6 +979,24 @@ func jobWorker(dir string) {
 		} else {
 			gate := postGate(port) // the browser's /import and this job never interleave a record check and a send
 			gate.Lock()
+			// audit fix: the record looked at again under the gate: a voucher sent from this computer since the job's
+			// check (a browser's /import between two parts) is refused on the record and never sent a second time
+			// (review: only the entries that got a refusal are taken off; one whose note changed without a refusal goes on
+			// in this part, its note as seen now)
+			if refused, refusals := recheckRefusals(r, seenRec, sentBeforeRefusal); len(refused) > 0 {
+				gate.Unlock()
+				for i, it := range refused {
+					k, rr := str(it["id"]), refusals[i]
+					rr["company"], rr["port"] = company, port
+					results = append(results, rr)
+					delete(sending, k)
+					writeLog("  voucher " + k + ": NOT SENT: " + str(rr["message"]))
+				}
+				pq.drop(refused)
+				p["inflight"] = []any{}
+				save()
+				continue
+			}
 			o = sendImport(port, company, jobID, r)
 			gate.Unlock()
 		}
@@ -1269,4 +1311,48 @@ func cloudPostsHas(id string) bool {
 		}
 	}
 	return false
+}
+
+// the part's vouchers refused on the record now (sent from this computer since the job's check), with their refusals.
+// Review: only those; one whose note changed but gives no refusal now (its note gone again) stays in the part, its note
+// as seen now
+func recheckRefusals(r importReq, seen map[string]string, refuse func(id any, xml string) M) (refused, refusals []M) {
+	for _, it := range sentSinceCheck(r, seen) {
+		k := str(it["id"])
+		if rr := refuse(k, str(it["xml"])); rr != nil {
+			refused, refusals = append(refused, it), append(refusals, rr)
+		} else {
+			key := acceptedKey(k, str(it["xml"]))
+			seen[key] = recSig(acceptedInfo(key))
+		}
+	}
+	return
+}
+
+// audit fix: a record note as the job's check saw it ("" when there was none)
+func recSig(a M) string {
+	if a == nil {
+		return ""
+	}
+	return jsonText(a)
+}
+
+// the vouchers of the part whose record changed since the job's check (sent from this computer meanwhile); masters and
+// vouchers the check did not see are never refused here
+func sentSinceCheck(r importReq, seen map[string]string) []M {
+	if r.kind != "voucher" {
+		return nil
+	}
+	var out []M
+	for _, it := range r.items {
+		key := acceptedKey(str(it["id"]), str(it["xml"]))
+		was, had := seen[key]
+		if !had {
+			continue
+		}
+		if a := acceptedInfo(key); a != nil && recSig(a) != was {
+			out = append(out, it)
+		}
+	}
+	return out
 }

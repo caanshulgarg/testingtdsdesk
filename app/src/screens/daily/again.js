@@ -4,7 +4,7 @@
 // the same as last night (a line, an amount, the date, a check) refuses: "Changed since last night". Loaded only when a
 // journal is approved (a lazy part of the Daily Check chunk).
 /* global S, CO, Books, ledGroupPath, GSTR, GSTF, GSTSet, TCloud, Cloud */
-import { journals, gstMonths, picksOf, excludedOf, draftState, LOOKBACK } from "../../../../server/_shared/dailyjournals.js";
+import { journals, gstMonths, picksOf, excludedOf, draftState, retriedOf, LOOKBACK } from "../../../../server/_shared/dailyjournals.js";
 import { voucherId } from "../../../../server/_shared/dailytrust.js";
 
 export const CHANGED = "Changed since last night. Run again.";
@@ -50,9 +50,12 @@ export async function recheck(e, o = {}) {
   // (review N4) a draft whose posting the cloud's queue stopped is failed, as the night counts it
   const jobs = o.jobs || await (async () => { const ids = Array.from(new Set(drafts.map((d) => d.job || Object.values(d.results || {}).map((x) => x && x.job).find(Boolean)).filter((x) => /^[0-9a-f-]{36}$/i.test(String(x || "")))));
     if (!ids.length) return {}; try { return Object.fromEntries(((await Cloud.api("tally_post_jobs?select=id,status,results&id=in.(" + ids.join(",") + ")")) || []).map((j) => [j.id, j])); } catch (x) { return {}; } })();
-  drafts = drafts.map((d) => Object.assign({}, d, { state: draftState({ state: d.state, job: d.job || Object.values(d.results || {}).map((x) => x && x.job).find(Boolean) || "", vid: d.id }, jobs) }));
+  const retried = retriedOf(o.prior || []);
+  drafts = drafts.map((d) => { const own = (d.results || {})[d.id] || {}, job = d.job || Object.values(d.results || {}).map((x) => x && x.job).find(Boolean) || "";
+    return Object.assign({}, d, { state: draftState({ state: d.state, job, vid: d.id, dedupe: d.dedupe, results: d.results || {}, removed: d.removed, ver: String(own.at || "-"), at: String(own.at || d.savedAt || d.at || "") }, jobs, o.now, retried) }); });
   // this entry's own draft (a post that Tally refused before) is not "already approved"
   drafts = drafts.filter((d) => !(d.dedupe === e.dedupe && d.state === "failed"));
+  if (drafts.some((d) => d.dedupe === e.dedupe && !d.removed && d.state === "unconfirmed")) return "Sent to Tally but not confirmed there. Check Tally (Needs you).";
   if (drafts.some((d) => d.dedupe === e.dedupe && !d.removed)) return "Already approved: it is on its way to Tally.";
   const inp = inputOf(cid, Object.assign({}, o, { ledgers, drafts, bookId }));
   const now = journals(inp).entries.find((x) => x.dedupe === e.dedupe);

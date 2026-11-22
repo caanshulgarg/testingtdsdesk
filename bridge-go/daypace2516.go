@@ -231,7 +231,7 @@ var keyAt = struct {
 // looked at whenever the pull looks at the person, and at every beat: Tally in front and the computer used: that moment
 func keyNote() {
 	idle := pullIdleFn()
-	if idle < 0 || idle >= 99999 || !pullFrontFn() {
+	if idle < 0 || idle >= 99999 || !pullFrontFn() || platPersonUnknown() { // audit fix: a guess (no tray report) is no key seen
 		return
 	}
 	t := time.Now().Add(-time.Duration(idle * float64(time.Second))) // (the monotonic clock: the beat says seconds since)

@@ -1,0 +1,25 @@
+File Creation Date^Permanent Account Number (PAN)^Current Status of PAN^Financial Year^Assessment Year^Name of Assessee^Address Line 1
+01-11-2026^ZZZPX9999Z^Active^2025-26^2026-27^DEMO PROPRIETOR^1 SAMPLE STREET
+
+PART-I - Details of Tax Deducted at Source
+Sr. No.^Name of Deductor^TAN of Deductor^^^^^Total Amount Paid / Credited(Rs.)^Total Tax Deducted(Rs.)^Total TDS Deposited(Rs.)
+1^SAMPLE CLIENT ONE LTD^DELS00001A^^^^^500000.00^50000.00^50000.00
+^Sr. No.^Section^Transaction Date^Status of Booking^Date of Booking^Remarks^Amount Paid / Credited(Rs.)^Tax Deducted(Rs.)^TDS Deposited(Rs.)
+^1^194J^15-Jun-2025^F^31-Jul-2025^-^300000.00^30000.00^30000.00
+^2^194J^10-Dec-2025^F^31-Jan-2026^-^200000.00^20000.00^20000.00
+2^SAMPLE BUYER TWO PVT LTD^MUMS00002B^^^^^500000.00^5000.00^5000.00
+^1^194C^20-Sep-2025^F^31-Oct-2025^-^500000.00^5000.00^5000.00
+3^DEMO BANK^DELD00003C^^^^^52000.00^5200.00^5200.00
+^1^194A^31-Mar-2026^F^31-May-2026^-^52000.00^5200.00^5200.00
+
+PART-II - Details of Tax Deducted at Source for 15G / 15H
+No Transactions Present
+PART-VI - Details of Tax Collected at Source
+Sr. No.^Name of Collector^TAN of Collector^^^^^Total Amount Paid/ Debited(Rs.)^Total Tax Collected(Rs.)^Total TCS Deposited(Rs.)
+1^DEMO MOTORS^DELD00004D^^^^^1200000.00^12000.00^12000.00
+^1^206CL^05-Aug-2025^F^31-Oct-2025^-^1200000.00^12000.00^12000.00
+
+Details of Tax Paid (other than TDS or TCS)
+Sr. No.^Major Head^Minor Head^Tax (Rs.)^Surcharge (Rs.)^Education Cess (Rs.)^Others (Rs.)^Total Tax (Rs.)^BSR Code^Date of Deposit^Challan Serial Number^Remarks
+1^0021^100^40000.00^0.00^0.00^0.00^40000.00^0000001^14-Mar-2026^00011^-
+2^0021^300^15000.00^0.00^0.00^0.00^15000.00^0000001^20-Jul-2026^00027^-

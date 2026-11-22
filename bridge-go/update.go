@@ -137,6 +137,28 @@ func fetch(u string, max int64) ([]byte, error) {
 	return io.ReadAll(io.LimitReader(r.Body, max))
 }
 
+// audit fix: why a signed list is not FinCom Bridge's own ("" when it is): it must hold a "bridge" entry, name no other
+// product, and its program be FinComBridge-<version>.exe (never the setup or another program)
+func bridgeManifestRefuses(man, b M) string {
+	if b == nil {
+		return "it has no FinCom Bridge entry"
+	}
+	for _, p := range []string{str(man["product"]), str(b["product"])} {
+		if p != "" && !strings.EqualFold(p, "bridge") && !strings.EqualFold(p, "FinCom Bridge") && !strings.EqualFold(p, "fincom-bridge") {
+			return "it is for " + cutRunes(p, 40)
+		}
+	}
+	name := str(b["url"])
+	if i := strings.IndexAny(name, "?#"); i >= 0 {
+		name = name[:i]
+	}
+	name = name[strings.LastIndex(name, "/")+1:]
+	if !re(`(?i)^FinComBridge-[0-9][0-9.]*\.exe$`).MatchString(name) {
+		return "its program is not FinCom Bridge's"
+	}
+	return ""
+}
+
 // asked from the tray (now=true) or every few hours; returns what happened
 func checkForUpdate(now bool) M {
 	// 2.5.4 review S1: an update already put in place (waiting to start again, or not yet confirmed as running well:
@@ -167,9 +189,13 @@ func checkForUpdate(now bool) M {
 		return updateInfo()
 	}
 	man := parseObj(string(body))
+	// audit fix: the list is bound to this product: its "bridge" entry, for FinCom Bridge's own program, only. Another
+	// program's list signed with the same key (the FinCom Connector's top-level {version, url, sha256}) is never taken
 	b := obj(man["bridge"])
-	if b == nil {
-		b = man
+	if why := bridgeManifestRefuses(man, b); why != "" {
+		setUpd("message", "The list of updates is not FinCom Bridge's ("+why+"), so nothing was changed.")
+		writeLog("Update: the list of updates is not FinCom Bridge's (" + why + "); nothing changed")
+		return updateInfo()
 	}
 	ver, u, want := str(b["version"]), str(b["url"]), strings.ToLower(str(b["sha256"]))
 	setUpd("latest", ver)

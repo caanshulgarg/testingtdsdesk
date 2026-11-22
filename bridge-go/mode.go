@@ -141,22 +141,74 @@ func setPaused(on bool) {
 }
 
 // --- the person at the computer, as the tray in the owner's session sees it
+// audit fix (typing gate): each of the owner's sessions keeps its own report (a second session's tray never writes
+// over the first's). As a service, an active session of the owner whose tray has not reported for 30 s (closed with
+// Quit, crashed, not started yet) counts as someone working in Tally: the service cannot see that person, so the
+// background reads give way (only what a person starts goes, as when they type)
+type trayRep struct {
+	idle  float64
+	front bool
+	at    time.Time
+}
+
 var (
-	trayMu     sync.Mutex
-	trayIdle   float64
-	trayFront  bool
-	trayIdleAt time.Time
+	trayMu   sync.Mutex
+	trayReps = map[int]trayRep{}
 )
 
-func setTrayIdle(idle float64, front bool) {
+// the owner's sessions a person may be working in now (as a service; ok false when Windows could not list them)
+var ownerActiveSessionsFn = platOwnerActiveSessions
+
+const trayFreshFor = 30 * time.Second
+
+func setTrayIdle(session int, idle float64, front bool) {
 	trayMu.Lock()
-	trayIdle, trayFront, trayIdleAt = idle, front, time.Now()
+	trayReps[session] = trayRep{idle, front, time.Now()}
 	trayMu.Unlock()
 }
-func trayIdleFresh() (float64, bool, bool) {
+
+// the person as the service knows them: the idle seconds and whether Tally is in front, over the owner's sessions;
+// unknown when a session the owner works in sends no fresh report (then: idle 0 and Tally in front, so every gate
+// holds). No session of the owner active: nobody there (99999, as before)
+func trayPerson() (idle float64, front, unknown bool) {
+	active, ok := ownerActiveSessionsFn()
+	return trayPersonAt(active, ok, time.Now())
+}
+
+func trayPersonAt(active []int, listed bool, now time.Time) (idle float64, front, unknown bool) {
+	if !listed {
+		return 0, true, true
+	}
 	trayMu.Lock()
 	defer trayMu.Unlock()
-	return trayIdle, trayFront, time.Since(trayIdleAt) < 30*time.Second
+	seen := map[int]bool{}
+	idle, idleFront := 99999.0, 99999.0
+	note := func(r trayRep) {
+		if r.idle < idle {
+			idle = r.idle
+		}
+		if r.front && r.idle < idleFront {
+			idleFront = r.idle
+		}
+	}
+	for _, s := range active {
+		seen[s] = true
+		r, had := trayReps[s]
+		if !had || now.Sub(r.at) >= trayFreshFor {
+			return 0, true, true
+		}
+		note(r)
+	}
+	// a fresh report from a session not listed as active (it may have just changed): counted as well
+	for s, r := range trayReps {
+		if !seen[s] && now.Sub(r.at) < trayFreshFor {
+			note(r)
+		}
+	}
+	if idleFront < 99999 {
+		return idleFront, true, false // Tally in front in a session: its own idle time decides
+	}
+	return idle, false, false
 }
 
 // what the tray shows: green when the bridge can reach Tally and FinCom, red when not

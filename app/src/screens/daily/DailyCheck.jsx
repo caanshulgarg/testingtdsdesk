@@ -5,7 +5,7 @@
 // Approve hands an entry to the EXISTING approval and post path (data.js approveEntry). A lazy chunk (Main.jsx).
 import { useCallback, useEffect, useState } from "react";
 import { Check, X, ChevronRight, FileText, ReceiptText, ScrollText, Sigma, Undo2, Repeat } from "lucide-react";
-import { loadAll, cloudOn, canWrite, isOwner, nameOf, askable, undo, choose, askEdit, askClose, askReopen, askAnswer, reject, approveEntry, editEntry, trustSet, trustLater, P2, JOURNAL, beingApproved } from "./data.js";
+import { loadAll, cloudOn, canWrite, isOwner, nameOf, askable, undo, choose, askEdit, askClose, askReopen, askAnswer, reject, approveEntry, editEntry, trustSet, trustLater, P2, JOURNAL, beingApproved, unconfirm } from "./data.js";
 import { TRUST_WORDS, LEVEL_WORDS } from "../../../../server/_shared/dailytrust.js";
 import Review from "./Review.jsx";
 import "./daily.css";
@@ -87,7 +87,7 @@ function FromClients({ list, data, onSend, open, toggle, busy, run }) {
   });
 }
 
-function NeedsYou({ list, busy, run }) {
+function NeedsYou({ list, busy, run, entries }) {
   if (!list.length) return <p className="dc-none" data-none="you">Nothing needs you.</p>;
   const w = canWrite();
   return groups(list).map(({ cid, items }) => <Group key={cid} cid={cid}>
@@ -96,7 +96,7 @@ function NeedsYou({ list, busy, run }) {
       <div className="dc-you-t">{f.title || f.short}{f.ask && (f.ask.state === "asked" || f.ask.state === "answered") && <span className="dc-you-q"><i className={"dc-dot " + f.ask.state} aria-hidden="true" />{STATE[f.ask.state]}</span>}</div>
       <div className="dc-choices" role="group" aria-label={f.title || f.short}>
         {/* "That journal is not for <month>" is the owner's (the server checks it too) */}
-        {(f.candidates || []).map((c) => <button type="button" key={c.ref} className="dc-choice" disabled={busy || !w || (c.t === "exclude" && !isOwner())} title={c.t === "exclude" && !isOwner() ? "The firm's owner decides this" : undefined} onClick={() => run(() => choose(f.id, c.ref))}>{c.label}</button>)}
+        {(f.candidates || []).map((c) => <button type="button" key={c.ref} className="dc-choice" disabled={busy || !w || ((c.t === "exclude" || c.t === "retry") && !isOwner())} title={(c.t === "exclude" || c.t === "retry") && !isOwner() ? "The firm's owner decides this" : undefined} onClick={() => run(() => c.t === "retry" ? unconfirm(f, entries) : choose(f.id, c.ref))}>{c.label}</button>)}
         {!P2.has(f.kind) && <button type="button" className="dc-choice" disabled={busy || !w} onClick={() => run(() => choose(f.id, "ask"))}>Ask client</button>}
         <button type="button" className="dc-choice quiet" disabled={busy || !w} onClick={() => run(() => choose(f.id, "dismiss"))}>Not needed</button>
       </div>
@@ -179,7 +179,7 @@ export default function DailyCheck() {
   if (err) return <section className="dc" data-daily=""><p className="dc-none">Could not load. <button type="button" className="linkbtn" onClick={reload}>Try again</button></p></section>;
   if (data === null) return <section className="dc" data-daily="" data-loading-page=""><p className="dc-run">Loading…</p></section>;
   const d = data || { findings: [], entries: [], contacts: {}, mail: {} };
-  const ask = d.findings.filter((f) => f.state === "ask" && f.ask), you = d.findings.filter((f) => f.state === "you" && !(f.facts.waits && d.findings.some((g) => (g.kind === "ledger_pick" || g.kind === "setoff_exclude") && g.state === "you" && g.cid === f.cid))), resolved = d.findings.filter((f) => f.state === "resolved" && !P2.has(f.kind));
+  const ask = d.findings.filter((f) => f.state === "ask" && f.ask), you = d.findings.filter((f) => f.state === "you" && !(f.facts.waits && d.findings.some((g) => (g.kind === "ledger_pick" || g.kind === "setoff_exclude" || g.kind === "sent_check") && g.state === "you" && g.cid === f.cid))), resolved = d.findings.filter((f) => f.state === "resolved" && !P2.has(f.kind));
   const openAsks = ask.filter((f) => f.ask.state !== "closed").length;
   const TABS = [["clients", "From clients", openAsks], ["you", "Needs you", you.length], ["entries", "Entries", d.entries.length], ["done", <span key="d">Done<span className="dc-long"> by FinCom</span></span>, resolved.length]];
   const first = TABS.slice(0, 3).reduce((a, t) => (t[2] > a[2] ? t : a))[0], cur = tab || first;
@@ -192,7 +192,7 @@ export default function DailyCheck() {
     </div>
     <div className="dc-body" role="tabpanel">
       {cur === "clients" && <FromClients list={ask} data={d} open={open} toggle={toggle} busy={busy} run={run} onSend={(cid) => { setSend(cid); window.scrollTo(0, 0); }} />}
-      {cur === "you" && <NeedsYou list={you} busy={busy} run={run} />}
+      {cur === "you" && <NeedsYou list={you} busy={busy} run={run} entries={d.entries} />}
       {cur === "entries" && <Entries list={d.entries} open={open} toggle={toggle} busy={busy} run={run} approveMany={approveMany} suggest={d.suggestions} />}
       {cur === "done" && <Done list={resolved} open={open} toggle={toggle} busy={busy} run={run} />}
     </div>

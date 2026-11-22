@@ -1088,8 +1088,13 @@ func findCompanyWith(company string, preferred int, passes []bool, list func(fre
 		last = nil
 		var usable []M
 		answered, busy := false, false
-		for _, s := range list(fresh) {
-			if s["skipped"] == true {
+		ls := list(fresh)
+		// audit fix: only this user's own Tally, by the postings' rule (ownRule, linkguid.go): a Tally whose owner Windows
+		// cannot tell while it tells another's, or another Windows user's, is never read, and a page's port for it is
+		// not taken
+		own := ownRule(ls)
+		for _, s := range ls {
+			if !own(s) {
 				continue
 			}
 			if s["ok"] == true {
@@ -1149,8 +1154,14 @@ func findCompanyWith(company string, preferred int, passes []bool, list func(fre
 			last = &tallyWait{"many", fmt.Sprintf("Company '%s' is open in more than one Tally (ports %s). Choose your Tally in FinCom > Settings > Tally Bridge.", company, strings.Join(p, ", "))}
 			continue
 		}
+		elsewhere := ""
+		if last == nil {
+			elsewhere = readElsewhere(ls, company, "")
+		}
 		switch {
 		case last != nil:
+		case elsewhere != "":
+			last = &tallyWait{"notopen", "Company '" + company + "' is not open in your own Tally: " + elsewhere + "."}
 		case busy:
 			// re-review N2: a Tally that is busy (its last list kept, marked busy) may have the company open: busy, never
 			// "not open"

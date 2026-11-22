@@ -12,7 +12,7 @@
 import * as E from "../_shared/gst3b.js";
 import { books as engineBooks } from "../gst-run/engine.js";
 import { ymd, num, r2 } from "../_shared/nightchecks.js";
-import { gstMonths, pickLedger, picksOf, excludedOf, draftState, LOOKBACK } from "../_shared/dailyjournals.js";
+import { gstMonths, pickLedger, picksOf, excludedOf, draftState, retriedOf, LOOKBACK } from "../_shared/dailyjournals.js";
 
 const G = globalThis;
 // the app's globals the engine reads (S, CO) for the length of one call, then put back
@@ -92,10 +92,12 @@ export function gstOf(rows, b, today) {
 // hand-made voucher (client_book_items "asstEntries", items "#dc-..."; app/src/lib/asstEntries.js)
 // (review N4) with the posting's job: a job the cloud's queue stopped makes the draft failed (offered again)
 export const jobOf = (data) => String((data && (data.job || Object.values(data.results || {}).map((x) => x && x.job).find(Boolean))) || "");
-export function draftsOf(recs, jobs) {
+export function draftsOf(recs, jobs, prior, now) {
+  const retried = retriedOf(prior);
   return (recs || []).filter((r) => r && r.data && /^#?dc-/.test(String(r.item || r.data.id || ""))).map((r) => {
-    const d = { dedupe: String(r.data.dedupe || ""), state: String(r.data.state || ""), removed: !!(r.deleted || r.data.removed), job: jobOf(r.data), vid: String(r.data.id || "") };
-    d.state = draftState(d, jobs); return d;
+    const vid = String(r.data.id || ""), own = (r.data.results || {})[vid] || {};
+    const d = { dedupe: String(r.data.dedupe || ""), state: String(r.data.state || ""), removed: !!(r.deleted || r.data.removed), job: jobOf(r.data), vid, results: r.data.results || {}, ver: String(own.at || "-"), at: String(own.at || r.updated_at || "") };
+    d.state = draftState(d, jobs, now, retried); return d;
   }).filter((d) => d.dedupe);
 }
 
@@ -125,7 +127,7 @@ export function nightInput(rows, b, x) {
     // the last day the books hold an entry for: a month after it is the bridge being behind, not the client
     readTo: (b.vouchers || []).reduce((m, v) => (v.date > m ? v.date : m), ""),
     ledgersFor: ledgersFor(b), prior: x.prior || [],
-    gst: x.gst || [], drafts: draftsOf(x.draftRecs, x.jobs), picks: picksOf(x.prior), picksOut: picksOf(x.prior, true), excluded: excludedOf(x.prior),
+    gst: x.gst || [], drafts: draftsOf(x.draftRecs, x.jobs, x.prior, x.now), picks: picksOf(x.prior), picksOut: picksOf(x.prior, true), excluded: excludedOf(x.prior),
     // the book the night read: Approve refuses on another (a client's books split by year)
     bookId: String((rows.book && rows.book.book_id) || ""),
   };

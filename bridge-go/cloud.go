@@ -1553,7 +1553,14 @@ func cloudPostTakeJobs() (checks []any) {
 		// only those go, never the whole posting
 		// linkguid.go: the linked company's Tally GUID (migration 203); none: the posting waits ("Waiting for FinCom to
 		// name the linked company"), nothing is sent
-		v, err := newPostJob(M{"jobId": id, "company": str(j["company"]), "guid": str(j["guid"]), "masters": arr(pl["masters"]), "vouchers": arr(pl["vouchers"]), "released": arr(j["released"]), "resendOnly": arr(j["resendOnly"]),
+		// audit fix: on this computer's list of postings taken (cloud-posts.txt) BEFORE its worker starts: a bridge that
+		// stops right after the start still reports it (refused to start: let go again below, as before)
+		_, had := cp[id]
+		if !had && id != "" {
+			cp[id] = ""
+			saveCloudPosts()
+		}
+		v, err := newPostJobFn(M{"jobId": id, "company": str(j["company"]), "guid": str(j["guid"]), "masters": arr(pl["masters"]), "vouchers": arr(pl["vouchers"]), "released": arr(j["released"]), "resendOnly": arr(j["resendOnly"]),
 			"fromCloud": true}) // 2.5.15 item 1: FinCom is asked before each part is sent
 		if err != nil {
 			// linkguid.go: refused for another GUID than the one it was started for or posted into: what this computer
@@ -1570,14 +1577,21 @@ func cloudPostTakeJobs() (checks []any) {
 				}
 			}
 			invokeCloud(M{"kind": "posts_update", "id": id, "status": "failed", "done": done, "message": "The Tally computer could not start this posting: " + err.Error(), "results": res}, 30)
+			if !had {
+				delete(cp, id)
+				saveCloudPosts()
+			}
 			continue
 		}
-		cp[id] = ""
+		cp[id] = "" // reported afresh, as before
 		saveCloudPosts()
 		writeLog(fmt.Sprintf("Posting from FinCom's queue: %v item(s) for %s (job %s)", v["total"], str(j["company"]), id))
 	}
 	return
 }
+
+// the hand-out of a posting taken (the tests look at what is on the disk when it starts)
+var newPostJobFn = newPostJob
 
 // 2.5.15 item 1: how many parts sent without FinCom's answer each posting's reports have told FinCom of
 var offlineTold sync.Map
@@ -1596,6 +1610,79 @@ func cloudPostStatus(st string) string {
 		return "taken"
 	}
 	return "running"
+}
+
+// audit fix: a posting stopped on this computer, as FinCom's queue knows an end (the worker's own rule, jobs.go): done
+// when anything of it reached Tally, else failed
+func cancelledEnd(v M) string {
+	for _, x := range arr(v["results"]) {
+		if r := obj(x); r != nil && (r["ok"] == true || r["accepted"] == true || r["outcomeUnknown"] == true || (r["sent"] == true && r["alreadySent"] != true)) {
+			return "done"
+		}
+	}
+	return "failed"
+}
+
+// review of the audit fix: a posting stopped on this computer: an entry plainly never sent goes up as failed, "not
+// sent: stopped on this computer", so FinCom frees it for posting again; what was sent stays as it was. Re-check: an
+// entry is "not sent" ONLY when it was not in flight (p["inflight"]: a part that may have reached Tally before a
+// restart), its state is "waiting" (not "sending") and this computer's record has no note of it; any other entry with
+// no result goes up as sent with no answer (outcome unknown), so its id stays locked in FinCom and the posting ends
+// done. A copy: this computer's progress.json is not changed (a retry here still sends what was not sent)
+const stoppedNotSentWords = "not sent: stopped on this computer"
+
+func cancelledNotSent(v M, dir string) M {
+	had := map[string]bool{}
+	for _, x := range arr(v["results"]) {
+		if r := obj(x); r != nil {
+			had[str(r["id"])] = true
+		}
+	}
+	inflight := map[string]bool{}
+	for _, x := range arr(v["inflight"]) {
+		inflight[str(x)] = true
+	}
+	xmlOf := map[string]string{}
+	if pay := readObjFileBak(filepath.Join(dir, "payload.json")); pay != nil {
+		for _, x := range arr(pay["items"]) {
+			if it := obj(x); it != nil {
+				xmlOf[str(it["id"])] = str(it["xml"])
+			}
+		}
+	}
+	out := M{}
+	for k, x := range v {
+		out[k] = x
+	}
+	res := append([]any{}, arr(v["results"])...)
+	var items []any
+	for _, x := range arr(v["items"]) {
+		e := obj(x)
+		if e == nil {
+			items = append(items, x)
+			continue
+		}
+		k := str(e["id"])
+		if k == "" || had[k] {
+			items = append(items, e)
+			continue
+		}
+		c := M{}
+		for f, y := range e {
+			c[f] = y
+		}
+		if !inflight[k] && str(e["state"]) == "waiting" && acceptedInfo(acceptedKey(k, xmlOf[k])) == nil {
+			c["state"], c["reason"], c["notSent"] = "failed", stoppedNotSentWords, true
+			res = append(res, M{"id": k, "kind": str(e["kind"]), "ok": false, "notSent": true, "state": "failed", "message": stoppedNotSentWords})
+		} else {
+			c["state"], c["reason"], c["outcomeUnknown"], c["sent"] = "unknown", unknownLine, true, true
+			res = append(res, M{"id": k, "kind": str(e["kind"]), "ok": false, "outcomeUnknown": true, "sent": true, "state": "unknown", "message": unknownLine,
+				"detail": "the posting was stopped on this computer while this entry may have been at Tally"})
+		}
+		items = append(items, c)
+	}
+	out["results"], out["items"] = res, items
+	return out
 }
 
 // postings taken from the queue are followed and reported every few seconds while they run, and at once when they change
@@ -1635,13 +1722,18 @@ func syncCloudPosts() {
 				v = r
 			}
 		}
-		if str(v["status"]) == "cancelled" {
-			delete(cp, id)
-			offlineTold.Delete(id) // review L7
-			saveCloudPosts()
-			continue
-		}
 		st := cloudPostStatus(str(v["status"]))
+		if str(v["status"]) == "cancelled" {
+			// audit fix: stopped on this computer (FinCom's page asked the bridge only): its last results go to FinCom
+			// first, and it is let go only once FinCom took them (200), as for done and failed. Its worker still ending:
+			// at the next turn. Reported as FinCom's queue knows an end: done when anything reached Tally (posted, accepted
+			// or sent with no answer: never freed for posting again), else failed
+			if jobAlive(id) {
+				continue
+			}
+			v = cancelledNotSent(v, dir)
+			st = cancelledEnd(v)
+		}
 		sig := fmt.Sprint(st, "|", v["done"], "|", v["message"], "|", v["checking"], "|", jsonText(v["items"]))
 		if sig == last {
 			continue
@@ -1668,7 +1760,9 @@ func syncCloudPosts() {
 				"state": itemState(r, false), "reason": map[bool]string{true: "", false: failedLine(str(r["message"]))}[r["ok"] == true],
 				// linkguid.go (19-Nov-2026): where it went, the port and the company's name in Tally (the job's, for a
 				// result that names none), to FinCom too, not only this computer's progress.json
-				"port": toInt(r["port"]), "company": str(r["company"]), "refusedByTally": truthy(r["refusedByTally"])})
+				"port": toInt(r["port"]), "company": str(r["company"]), "refusedByTally": truthy(r["refusedByTally"]),
+				// review: never sent (a posting stopped on this computer, or refused before any request): FinCom may free it
+				"notSent": truthy(r["notSent"])})
 			if e := res[len(res)-1].(M); toInt(e["port"]) == 0 || str(e["company"]) == "" {
 				if toInt(e["port"]) == 0 {
 					e["port"] = toInt(v["port"])
@@ -1722,6 +1816,15 @@ func syncCloudPosts() {
 			_, _ = cancelJob(id, "stopped by FinCom")
 			delete(cp, id)
 			offlineTold.Delete(id) // review L7
+			saveCloudPosts()
+			continue
+		}
+		if str(v["status"]) == "cancelled" && r.code >= 400 && r.code < 500 && r.code != 409 && r.code != 429 {
+			// review of the audit fix: stopped on this computer, and FinCom does not take its last report (not this bridge's
+			// posting any more, or no longer there): let go and said, never asked again for ever
+			writeLog(fmt.Sprintf("Posting from FinCom's queue %s: stopped on this computer; FinCom did not take its last report (%d); let go", id, r.code))
+			delete(cp, id)
+			offlineTold.Delete(id)
 			saveCloudPosts()
 			continue
 		}

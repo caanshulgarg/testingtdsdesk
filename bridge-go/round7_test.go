@@ -156,7 +156,7 @@ func TestPartialBatchNeedsReview(t *testing.T) {
 	f := newStandTally(t)
 	f.ansi = true
 	f.importSkip = func(x string) bool { return strings.Contains(x, "TDSDesk:fb3") } // Tally refuses the third
-	standBridge(t, f, "")
+	standBridge(t, f, `,"PostPaceOff":true`)                                         // the fixed parts (postpace.go): this test is about the reply, not the pace
 	vch := []any{
 		M{"id": "fb1", "xml": finVoucher("fb1", fgParty, "FB-1", td, "1.00")},
 		M{"id": "fb2", "xml": finVoucher("fb2", fgParty, "FB-2", td, "2.00")},

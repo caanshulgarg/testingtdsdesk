@@ -41,7 +41,7 @@ begin
   foreach t in array array['daily_trust'] loop
     if to_regclass('public.' || t) is not null and coalesce(obj_description(to_regclass('public.' || t), 'pg_class'), '') <> 'daily check (migration 208)' then bad := bad || ('table ' || t); end if;
   end loop;
-  foreach f in array array['trust_set', 'trust_dismiss', 'trust_stats', 'trust_kind_of', 'remind_due', 'remind_logged', 'entry_claim', 'entry_release', 'entry_approved', 'entry_settle', 'asst_draft_state', 'asst_exclude_owner'] loop
+  foreach f in array array['trust_set', 'trust_dismiss', 'trust_stats', 'trust_kind_of', 'remind_due', 'remind_logged', 'entry_claim', 'entry_release', 'entry_approved', 'entry_settle', 'asst_draft_state', 'asst_exclude_owner', 'entry_unconfirm', 'asst_ts'] loop
     if exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = f and coalesce(obj_description(p.oid, 'pg_proc'), '') <> 'daily check (migration 208)') then bad := bad || ('function ' || f); end if;
   end loop;
   if array_length(bad, 1) > 0 then
@@ -55,11 +55,11 @@ declare n text;
 begin
   select c.conname into n from pg_constraint c where c.conrelid = 'public.night_findings'::regclass and c.contype = 'c' and pg_get_constraintdef(c.oid) like '%advance_open%';
   if n is null then raise exception 'migration 208: night_findings has no kind check'; end if;
-  if pg_get_constraintdef((select oid from pg_constraint where conrelid = 'public.night_findings'::regclass and conname = n)) not like '%setoff_exclude%' then
+  if pg_get_constraintdef((select oid from pg_constraint where conrelid = 'public.night_findings'::regclass and conname = n)) not like '%sent_check%' then
     execute format('alter table public.night_findings drop constraint %I', n);
     alter table public.night_findings add constraint night_findings_kind_check check (kind in ('advance_open', 'wrong_side', 'cash_big', 'round_sum', 'no_narration', 'expense_jump', 'suspense',
       'bank_no_bill', 'bank_month_missing', 'twob_not_in_books', 'sales_month_missing', 'salary_month_missing', 'salary_mismatch',
-      'setoff_due', 'payroll_due', 'recurring_due', 'ledger_pick', 'setoff_exclude'));
+      'setoff_due', 'payroll_due', 'recurring_due', 'ledger_pick', 'setoff_exclude', 'sent_check'));
   end if;
   n := null;
   select c.conname into n from pg_constraint c where c.conrelid = 'public.night_entries'::regclass and c.contype = 'c' and pg_get_constraintdef(c.oid) like '%twob_inbox_bill%';
@@ -153,7 +153,11 @@ $$;
 -- and the page's draftState (server/_shared/dailyjournals.js):
 --   'posted'  proof the voucher reached Tally: FinCom's id ("TDSDesk:<id>") in the client's books, or the cloud's job
 --             reporting THIS voucher's result ok
+--   'posted'  also: the draft's OWN result for its voucher ok AND carrying Tally's voucher id (posted straight to the bridge
+--             here: no cloud job)
 --   'live'    its job still waiting, taken or running
+--   'pending' the draft says posted without that proof, saved in the last 24 hours; 'unconfirmed' the same, older: Needs
+--             you ("Not confirmed in Tally"), never back to ready by itself
 --   'none'    no draft;  'failed'  anything else (refused, stopped, a job done without this voucher ok, no job at all)
 create or replace function public.asst_draft_state(p_firm uuid, p_client text, p_dedupe text) returns text language plpgsql stable security definer set search_path = '' as $$
 declare d public.client_book_items; vid text; job text; j record;
@@ -168,13 +172,29 @@ begin
     return 'posted';
   end if;
   if coalesce(d.data->>'removed', '') = 'true' then return 'failed'; end if;
+  if d.data->'results'->vid->>'ok' = 'true' and coalesce(nullif(d.data->'results'->vid->>'tallyId', ''), nullif(d.data->'results'->vid->>'vchId', ''), nullif(d.data->'results'->vid->>'masterId', '')) is not null then
+    return 'posted';
+  end if;
   job := coalesce(nullif(d.data->>'job', ''), (select e.value->>'job' from jsonb_each(case when jsonb_typeof(d.data->'results') = 'object' then d.data->'results' else '{}'::jsonb end) e where coalesce(e.value->>'job', '') <> '' limit 1), '');
   select * into j from public.tally_post_jobs t where t.id::text = job;
-  if j.id is null then return 'failed'; end if;
-  if exists (select 1 from jsonb_array_elements(case when jsonb_typeof(j.results) = 'array' then j.results else '[]'::jsonb end) r where r->>'id' = vid and r->>'ok' = 'true') then return 'posted'; end if;
-  if j.status in ('waiting', 'taken', 'running') then return 'live'; end if;
+  if j.id is not null then
+    if exists (select 1 from jsonb_array_elements(case when jsonb_typeof(j.results) = 'array' then j.results else '[]'::jsonb end) r where r->>'id' = vid and r->>'ok' = 'true') then return 'posted'; end if;
+    if j.status in ('waiting', 'taken', 'running') then return 'live'; end if;
+  end if;
+  if d.data->>'state' = 'posted' then
+    -- the owner said "Not in Tally: offer it again" for THIS version of the draft (its voucher's own send time, as the
+    -- night's draftState keys it): failed, so the entry is offered again (entry_settle moves a claim back to ready)
+    if exists (select 1 from public.night_findings f where f.firm_id = p_firm and f.client_id = p_client and f.kind = 'sent_check' and f.state = 'resolved' and f.undone_at is null
+                and f.key = 'sent:' || p_dedupe || ':' || coalesce(nullif(d.data->'results'->vid->>'at', ''), '-') and f.evidence->0->>'t' = 'retry') then
+      return 'failed';
+    end if;
+    return case when coalesce(public.asst_ts(d.data->'results'->vid->>'at'), d.updated_at) > now() - interval '24 hours' then 'pending' else 'unconfirmed' end;
+  end if;
   return 'failed';
 end $$;
+-- a time from a draft (an ISO string), or null when it is not one
+create or replace function public.asst_ts(p text) returns timestamptz language plpgsql immutable set search_path = '' as $$
+begin return p::timestamptz; exception when others then return null; end $$;
 -- (review N4, final review 1) entries claimed and left (a tab closed half way): approved ONLY with proof it reached Tally
 -- ('posted'); a job still on its way ('live') stays being approved until it settles; anything else (failed, no draft
 -- after 30 minutes) goes back to ready, where the second check and the bridge's own check by FinCom's id apply. The night
@@ -184,7 +204,7 @@ declare r public.night_entries; st text; n int := 0;
 begin
   for r in select * from public.night_entries where firm_id = p_firm and client_id = p_client and state = 'approving' for update loop
     st := public.asst_draft_state(p_firm, p_client, r.dedupe);
-    if st not in ('posted', 'live') and r.dedupe = any (coalesce(p_failed, '{}')) then st := 'failed'; end if;
+    if st = 'none' and r.dedupe = any (coalesce(p_failed, '{}')) then st := 'failed'; end if;
     if st = 'posted' then
       update public.night_entries set state = 'approved', approved_once = true, decided_at = now(), updated_at = now() where id = r.id;
       insert into public.daily_log (firm_id, client_id, what, ref, evidence) values (p_firm, p_client, 'settled', r.id::text, jsonb_build_object('to', 'approved', 'draft', st));
@@ -213,6 +233,10 @@ begin
       return jsonb_build_object('ok', false, 'why', 'Already in Tally.');
     elsif st = 'live' then
       return jsonb_build_object('ok', false, 'why', 'On its way to Tally: wait for it to finish.');
+    elsif st = 'pending' then
+      return jsonb_build_object('ok', false, 'why', 'Sent to Tally; Tally has not confirmed it yet.');
+    elsif st = 'unconfirmed' then
+      return jsonb_build_object('ok', false, 'why', 'Sent to Tally but not confirmed there. Check Tally (Needs you).');
     end if;
   elsif r.state <> 'ready' then
     raise exception 'This entry is not ready (it may be being approved).' using errcode = '22023';
@@ -245,12 +269,35 @@ begin
   return jsonb_build_object('ok', true);
 end $$;
 
+-- (last fix) "Not in Tally: offer it again": the OWNER says a journal sent but not confirmed in Tally for 24 hours is not
+-- there. Its entry (being approved) goes back to ready and the sent_check finding is answered (the night then treats that
+-- draft as failed, so the entry is made again; the bridge checks Tally for FinCom's id before posting it). Logged
+create or replace function public.entry_unconfirm(p_id uuid, p_finding uuid) returns jsonb language plpgsql security definer set search_path = '' as $$
+declare r public.night_entries; f public.night_findings; c jsonb;
+begin
+  if not public.asst_is_owner() then raise exception 'Only the firm''s owner can say this.' using errcode = '42501'; end if;
+  select * into r from public.night_entries where id = p_id and firm_id = public.my_firm() for update;
+  select * into f from public.night_findings where id = p_finding and firm_id = public.my_firm() and kind = 'sent_check' for update;
+  if r.id is null or f.id is null or f.client_id <> r.client_id or f.facts->>'dedupe' is distinct from r.dedupe then raise exception 'Not allowed.' using errcode = '42501'; end if;
+  if f.state <> 'you' then raise exception 'This is not waiting for you.' using errcode = '22023'; end if;
+  if r.state = 'approving' and public.asst_draft_state(r.firm_id, r.client_id, r.dedupe) <> 'unconfirmed' then raise exception 'It is not unconfirmed any more.' using errcode = '22023'; end if;
+  select x into c from jsonb_array_elements(f.candidates) x where x->>'t' = 'retry' limit 1;
+  update public.night_findings set state = 'resolved', evidence = jsonb_build_array(coalesce(c, '{"t": "retry"}'::jsonb)), decided_by = auth.uid(), decided_at = now() where id = f.id;
+  if r.state = 'approving' then update public.night_entries set state = 'ready', decided_by = null, decided_at = null, updated_at = now() where id = r.id; end if;
+  perform public.asst_log(r.firm_id, r.client_id, 'not_in_tally', r.id::text, jsonb_build_object('dedupe', r.dedupe, 'finding', f.id, 'was', r.state));
+  return jsonb_build_object('ok', true);
+end $$;
+
 -- (final review 3) "That journal is not for <month>" is the OWNER's decision, enforced here: a person deciding a
 -- setoff_exclude finding (decided_by set by finding_choose) must be the firm's owner. The night never sets decided_by
 create or replace function public.asst_exclude_owner() returns trigger language plpgsql security definer set search_path = '' as $$
 begin
   if new.kind = 'setoff_exclude' and new.decided_by is not null and old.decided_by is distinct from new.decided_by and not public.asst_is_owner() then
     raise exception 'Only the firm''s owner can say a journal is not for a month.' using errcode = '42501';
+  end if;
+  -- "Not in Tally: offer it again" (sent_check) is the owner's too, whichever way it is answered
+  if new.kind = 'sent_check' and new.decided_by is not null and old.decided_by is distinct from new.decided_by and not public.asst_is_owner() then
+    raise exception 'Only the firm''s owner can say a journal is not in Tally.' using errcode = '42501';
   end if;
   return new;
 end $$;
@@ -301,7 +348,9 @@ $$;
 revoke all on function public.trust_kind_of(text), public.trust_set(text, text, integer, numeric), public.trust_dismiss(text, text), public.trust_stats(),
   public.remind_due(boolean), public.remind_logged(uuid, text, bigint, uuid[], text, text),
   public.entry_claim(uuid), public.entry_release(uuid, text), public.entry_approved(uuid, text),
-  public.entry_settle(uuid, text, text[]), public.asst_draft_state(uuid, text, text), public.asst_exclude_owner() from public, anon, authenticated;
+  public.entry_settle(uuid, text, text[]), public.asst_draft_state(uuid, text, text), public.asst_exclude_owner(),
+  public.entry_unconfirm(uuid, uuid), public.asst_ts(text) from public, anon, authenticated;
+grant execute on function public.entry_unconfirm(uuid, uuid) to authenticated;
 grant execute on function public.entry_settle(uuid, text, text[]) to service_role;
 grant execute on function public.trust_set(text, text, integer, numeric), public.trust_dismiss(text, text), public.trust_stats(),
   public.entry_claim(uuid), public.entry_release(uuid, text), public.entry_approved(uuid, text) to authenticated;
@@ -312,7 +361,7 @@ do $mark$
 declare r record;
 begin
   comment on table public.daily_trust is 'daily check (migration 208)';
-  for r in select p.oid::regprocedure as sig from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = any (array['trust_set', 'trust_dismiss', 'trust_stats', 'trust_kind_of', 'remind_due', 'remind_logged', 'entry_claim', 'entry_release', 'entry_approved', 'entry_settle', 'asst_draft_state', 'asst_exclude_owner']) loop
+  for r in select p.oid::regprocedure as sig from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = any (array['trust_set', 'trust_dismiss', 'trust_stats', 'trust_kind_of', 'remind_due', 'remind_logged', 'entry_claim', 'entry_release', 'entry_approved', 'entry_settle', 'asst_draft_state', 'asst_exclude_owner', 'entry_unconfirm', 'asst_ts']) loop
     execute format('comment on function %s is %L', r.sig, 'daily check (migration 208)');
   end loop;
 end $mark$;

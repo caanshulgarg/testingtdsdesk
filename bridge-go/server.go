@@ -1094,7 +1094,7 @@ func route(w http.ResponseWriter, r *http.Request, path string, qs url.Values, b
 		// the tray, in the owner's Windows session, says how long the keyboard and mouse have been idle and whether Tally
 		// is in front: a service cannot see that itself
 		o, _ := bodyObj(body)
-		setTrayIdle(num(o["idleSec"]), truthy(o["tallyFront"]))
+		setTrayIdle(toInt(o["session"]), num(o["idleSec"]), truthy(o["tallyFront"])) // audit fix: per session
 		trayAlive(toInt(o["session"]))
 		return M{"ok": true}, nil
 	case "/tray/quit":

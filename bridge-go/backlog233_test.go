@@ -445,7 +445,7 @@ func TestBacklog233BeatWaiting(t *testing.T) {
 // --- the version, the allow-list's decision line (no request added or changed: TestAllowListUnchanged keeps the table's
 // hash) and the notes with their test sheet
 func TestBacklog233VersionAndDecisionLine(t *testing.T) {
-	if BridgeVersion != "2.5.17" { // 2.5.17 (r2517_test.go); 2.5.16 (r2516_test.go); 2.5.15 (r2515_test.go); 2.5.14 (r2514_test.go); 2.5.13 (r2513_test.go); 2.5.12 (r2512_test.go); 2.5.11 (r2511_test.go); 2.5.10 (r2510pick_test.go); 2.5.9 (fastmeasure_test.go); 2.5.8 (nocompany258_test.go); 2.5.7 (fastentries_test.go); 2.5.6 (firstread_test.go); 2.5.5 (ledgers255_test.go, loginport255_test.go); 2.5.4 (r254_test.go); 2.5.3 (r253owntally_test.go); 2.5.2 (stock251_test.go); 2.5.1 (r251openings_test.go); 2.5.0 (r250dated_test.go); 2.4.9 (r249batch_test.go); 2.4.8 (r248anyport_test.go); 2.4.7 (r247pair_test.go); 2.4.6 (r246pair_test.go); 2.4.5 (r245_test.go): kept as history
+	if BridgeVersion != "2.5.18" { // 2.5.18 (r2518_test.go); 2.5.17 (r2517_test.go); 2.5.16 (r2516_test.go); 2.5.15 (r2515_test.go); 2.5.14 (r2514_test.go); 2.5.13 (r2513_test.go); 2.5.12 (r2512_test.go); 2.5.11 (r2511_test.go); 2.5.10 (r2510pick_test.go); 2.5.9 (fastmeasure_test.go); 2.5.8 (nocompany258_test.go); 2.5.7 (fastentries_test.go); 2.5.6 (firstread_test.go); 2.5.5 (ledgers255_test.go, loginport255_test.go); 2.5.4 (r254_test.go); 2.5.3 (r253owntally_test.go); 2.5.2 (stock251_test.go); 2.5.1 (r251openings_test.go); 2.5.0 (r250dated_test.go); 2.4.9 (r249batch_test.go); 2.4.8 (r248anyport_test.go); 2.4.7 (r247pair_test.go); 2.4.6 (r246pair_test.go); 2.4.5 (r245_test.go): kept as history
 		t.Fatalf("BridgeVersion %s", BridgeVersion)
 	}
 	al := readText("../docs/tally-allowlist.md")
@@ -564,7 +564,7 @@ func TestBacklog233OldLinesAskedOnceOneAtATime(t *testing.T) {
 	// 2.4.4 (found at the 2.4.4 build, 12-Oct-2026): 6 minutes on from the stand's own clock (nwsBridge: 05-Oct-2026 07:15
 	// IST), not from the machine's: from 12-Oct-2026 the machine's clock put the old lines past the bridge's 7-day look-back
 	retryClock(time.Date(2026, 10, 5, 7, 15, 0, 0, liveZone), 360)
-	t.Cleanup(func() { nowFn = time.Now })
+	t.Cleanup(retryClockReal)
 	for start3 := time.Now(); time.Since(start3) < 40*time.Second; {
 		retryDue()
 		liveUploadOnce()

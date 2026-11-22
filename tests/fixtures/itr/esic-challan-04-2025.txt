@@ -1,0 +1,12 @@
+Employees' State Insurance Corporation
+E-Pehchan Challan Details
+Employer's Code No : 10000000000000001
+Employer's Name : DEMO PROPRIETOR
+Challan Period : Apr-2025
+Challan Number : 2025000000001
+Challan Created Date : 10-05-2025
+Challan Submitted Date : 12-05-2025
+Employee's Contribution : 375.00
+Employer's Contribution : 1625.00
+Amount Paid : 2000.00
+Transaction status : Transaction Successful

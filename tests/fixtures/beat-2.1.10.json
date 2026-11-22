@@ -1,6 +1,6 @@
 {
   "allowlist": {
-    "hash": "319afbbac7150678273402e8a9d30f3c43efcd0c9ae603485a5c9e2e2e7b9d35",
+    "hash": "553a24ff81ab764b43cc112fcad37c55fa3b90948cb6c772ef60a43f3f03604d",
     "measured": false
   },
   "autoUpdate": true,
@@ -143,6 +143,6 @@
     "offered": ""
   },
   "updating": false,
-  "version": "2.5.17",
+  "version": "2.5.18",
   "windowsUser": ""
 }

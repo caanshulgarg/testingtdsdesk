@@ -106,8 +106,13 @@ func postBatchBills() int { return clampBatch(keepNum("PostBatchBills", defaultB
 // bank lines per import request: PostBatchBank, default 50
 func postBatchBank() int { return clampBatch(keepNum("PostBatchBank", defaultBatchBank)) }
 
-// a bank line: marked so by FinCom (bank: true), else a Payment, Receipt or Contra voucher
+// a bank line: marked so by FinCom (bank: true), else a Payment, Receipt or Contra voucher. 2.5.18 (review M1 / L1 of
+// 7db75b73c): a payroll voucher never is, whatever it is marked or its type is named: payroll is decided before bank, so it
+// is always a bill posted alone (planImports, postQueue.next) and its time is never learned into either pace
 func isBankItem(it M) bool {
+	if isPayrollItem(it) {
+		return false
+	}
 	if truthy(it["bank"]) {
 		return true
 	}

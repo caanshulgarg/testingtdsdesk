@@ -1,0 +1,25 @@
+{
+  "AnnualInformationStatement": {
+    "PartA": { "PAN": "ZZZPX9999Z", "Name": "DEMO PROPRIETOR", "FinancialYear": "2025-26", "AssessmentYear": "2026-27" },
+    "PartB": {
+      "TDSTCSInformation": [
+        { "InformationCode": "TDS-194J", "InformationDescription": "Receipt of fees for professional or technical services", "InformationSource": "SAMPLE CLIENT ONE LTD", "SourceTAN": "DELS00001A",
+          "Details": [ { "Quarter": "Q1", "DateOfPayment": "15/06/2025", "AmountPaid": 300000, "TaxDeducted": 30000 }, { "Quarter": "Q3", "DateOfPayment": "10/12/2025", "AmountPaid": 200000, "TaxDeducted": 20000 } ] },
+        { "InformationCode": "TDS-194C", "InformationDescription": "Payment to contractors", "InformationSource": "SAMPLE BUYER TWO PVT LTD", "SourceTAN": "MUMS00002B",
+          "Details": [ { "Quarter": "Q2", "DateOfPayment": "20/09/2025", "AmountPaid": 500000, "TaxDeducted": 5000 } ] },
+        { "InformationCode": "TDS-194A", "InformationDescription": "Interest other than interest on securities", "InformationSource": "DEMO BANK", "SourceTAN": "DELD00003C",
+          "Details": [ { "Quarter": "Q4", "DateOfPayment": "31/03/2026", "AmountPaid": 52000, "TaxDeducted": 5200 } ] }
+      ],
+      "SFTInformation": [
+        { "InformationCode": "SFT-016", "InformationDescription": "Interest income (savings bank)", "InformationSource": "DEMO BANK", "ReportedValue": 8400 },
+        { "InformationCode": "SFT-015", "InformationDescription": "Dividend income", "InformationSource": "DEMO REGISTRAR", "ReportedValue": 3500 }
+      ],
+      "PaymentOfTaxes": [
+        { "InformationCode": "TAX-100", "InformationDescription": "Advance tax", "BSRCode": "0000001", "DateOfDeposit": "14/03/2026", "Amount": 40000 }
+      ],
+      "OtherInformation": [
+        { "InformationCode": "GSTR-3B", "InformationDescription": "GST turnover (GSTR-3B)", "InformationSource": "07ZZZPX9999Z1Z5", "Turnover": 4850000 }
+      ]
+    }
+  }
+}

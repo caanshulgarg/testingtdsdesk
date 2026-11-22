@@ -1,0 +1,6 @@
+{ "TaxpayerInformationSummary": { "PAN": "ZZZPX9999Z", "AssessmentYear": "2026-27",
+  "Categories": [ { "Category": "Business receipts", "ProcessedValue": 1000000, "DerivedValue": 1000000 },
+                  { "Category": "Interest from deposit", "ProcessedValue": 52000, "DerivedValue": 52000 },
+                  { "Category": "Interest from savings bank", "ProcessedValue": 8400, "DerivedValue": 8400 },
+                  { "Category": "Dividend", "ProcessedValue": 3500, "DerivedValue": 3500 },
+                  { "Category": "GST turnover", "ProcessedValue": 4850000, "DerivedValue": 4850000 } ] } }
