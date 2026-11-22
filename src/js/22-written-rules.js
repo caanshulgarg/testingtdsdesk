@@ -71,6 +71,9 @@ function ruleNarr(tpl, row){
 /* ---------- put a rule on a line ---------- */
 function applyRule(rule, row, co, acc){
   const led = ruleLedger(rule, co);
+  // the rule decides the line: a bill, an invoice or TDS an earlier suggestion put on it goes (audit of 22-Nov-2026: a split
+  // kept the old bill's TDS at payment, and the voucher did not balance)
+  bankUnlink(row);
   if (rule.then.action === "ignore"){
     row.ledger = ""; row.state = "ignored"; row.ruleId = rule.id; row.srcLabel = "rule: " + ruleLabel(rule);
     row.why = ["Set aside by your rule \u201c" + ruleLabel(rule) + "\u201d."];
@@ -354,16 +357,18 @@ function suggestAll(rows, onlyOpen){
   const acIndex = new Map();
   ledgerList.forEach(l => { const n = String(l.acNo || "").replace(/\D/g, "").replace(/^0+/, ""); if (n.length >= 8 && !BANK_GROUPS.test(l.group || "")) acIndex.set(n, l); });
   const partyCompact = ledgerList.filter(l => !BANK_GROUPS.test(l.group || "") && !/duties|taxes|capital|reserves|provisions|suspense/i.test(l.group || "")).map(l => ({l, c: normName(l.name).replace(/ /g, "")})).filter(x => x.c.length >= 4);
-  const ctx = {co, hasList: hasLedgerList() || b.newLed.length > 0, rules: b.rules, ruleMap, bills: openBills(b.cid), taken: new Set(), ledgerList, ledgerExact, simCache: new Map(), acIndex, partyCompact, salesInvs: openSalesInvoices(), takenSales: new Set()};
+  // the lines suggested again; a bill or invoice any other line holds (here or in another statement) is not offered again
+  const redo = new Set(rows.filter(r => !(bankAside(r) || (onlyOpen && !["attention", "suggested"].includes(r.state)) || (r.userSet && exactLedger(r.ledger) && !isOwnBank(r, r.ledger))))), cl = bankClaims(b, rows, redo);
+  const ctx = {co, hasList: hasLedgerList() || b.newLed.length > 0, rules: b.rules, ruleMap, bills: openBills(b.cid), taken: cl.t, ledgerList, ledgerExact, simCache: new Map(), acIndex, partyCompact, salesInvs: openSalesInvoices(), takenSales: cl.s};
   const stNow = curStmt();
   const accNow = stNow ? (co.bankAccounts || []).find(a => a.id === stNow.acctId) : null;
   rows.forEach(r => {
-    if (bankAside(r) || (onlyOpen && !["attention", "suggested"].includes(r.state))) return;
-    if (r.userSet && exactLedger(r.ledger) && !isOwnBank(r, r.ledger)) return;
+    if (!redo.has(r)) return;
     const rule = matchRule(r, co, accNow);          // a written rule beats every guess
     if (rule){ applyRule(rule, r, co, accNow); if (isOwnBank(r, r.ledger)) dropOwnBank(r); return; }
     r.ruleId = null; r.ruleNarr = "";
     const s = suggestRow(r, ctx);
+    if (s.ledger !== r.ledger) r.splits = [];          // a split is of its ledger's line
     r.userSet = false;
     r.ledger = s.ledger; r.why = s.why; r.source = s.source; r.level = s.level; r.srcLabel = s.label || "";
     r.billId = s.billId || null; r.billRef = s.billRef || ""; r.tdsAtPay = s.tdsAtPay || 0; r.tdsLedger = s.tdsLedger || ""; r.salesIds = s.salesIds || null;
@@ -379,9 +384,15 @@ function suggestAll(rows, onlyOpen){
 function isBankFile(f){ return /\.(xlsx|xls|xlsm|csv|txt|pdf|jpe?g|png|webp|heic)$/i.test(f.name) || /^image\//.test(f.type); }
 async function uploadStatements(files, force){
   const b = B(); if (!b) return;
+  // one at a time per client: a second file dropped while one is read would add its lines twice (audit of 22-Nov-2026)
+  // (by client, not by page: the client's page opened again while a file is read is a new page, not busy)
+  const on = uploadStatements.on || (uploadStatements.on = new Set());
+  if (b.busy || on.has(b.cid)){ toast("Wait: " + (b.busy || "a statement is being read.") + " Then upload " + (files.length === 1 ? files[0].name : "these files") + " again."); return; }
+  b.busy = "Reading\u2026"; on.add(b.cid);
+  try {
   const co = CO(b.cid);
   // statements this browser lost come back first (bankHeal), so a file already here is opened, never read again
-  if (await bankHeal(b.cid, b.stmts, b.keys)){ const [s1, k1] = await Promise.all([BankDB.get("stmts:" + b.cid), BankDB.get("keys:" + b.cid)]); b.stmts = s1 || b.stmts; b.keys = k1 || b.keys; }
+  if (await bankHeal(b.cid, b.stmts, b.keys).catch(() => false)){ const [s1, k1] = await Promise.all([BankDB.get("stmts:" + b.cid), BankDB.get("keys:" + b.cid)]); b.stmts = s1 || b.stmts; b.keys = k1 || b.keys; }
   for (const file of files){
     b.lastFile = file;
     b.busy = "Reading " + file.name + "…"; render();
@@ -396,7 +407,7 @@ async function uploadStatements(files, force){
       // which bank account of this client
       const last4 = meta.acct ? meta.acct.replace(/\D/g, "").slice(-4) : "";
       co.bankAccounts = co.bankAccounts || [];
-      let acc = co.bankAccounts.find(a => (last4 && a.last4 === last4) && (!meta.ifsc || !a.ifsc || a.ifsc === meta.ifsc));
+      let acc = co.bankAccounts.find(a => bankAccIs(a, meta, last4));
       // review 19: a statement whose account number could not be read is the same account when it can only be that one
       // (the one account of this bank, or the client's only account): it was a new account, with no ledger, each time
       if (!acc && !last4){
@@ -405,9 +416,9 @@ async function uploadStatements(files, force){
       }
       let newAcc = false;
       if (!acc && last4){
-        const owners = Object.values(S.companies).filter(c => c.id !== co.id && (c.bankAccounts || []).some(a => a.last4 === last4 && (!meta.ifsc || !a.ifsc || a.ifsc === meta.ifsc)));
+        const owners = Object.values(S.companies).filter(c => c.id !== co.id && (c.bankAccounts || []).some(a => bankAccIs(a, meta, last4)));
         if (owners.length === 1){
-          const moved = await fileStatementFor(owners[0], file, hash, parsed, chk, meta, last4);
+          await bankOv(); const moved = await fileStatementFor(owners[0], file, hash, parsed, chk, meta, last4);
           if (moved === null){ b.busy = ""; render(); return; }
           if (moved) b.moved = {cid: owners[0].id, name: owners[0].name, file: file.name, last4};
           continue;
@@ -423,24 +434,28 @@ async function uploadStatements(files, force){
         if (guess.length === 1 || (guess.length && last4 && guess[0].name.includes(last4))) choiceGuess(co, "bank:" + acc.id, guess[0].name, "its name in Tally fits the statement");
         Store.saveCompany(co);
       }
-      const other = Object.values(S.companies).find(c => c.id !== co.id && (c.bankAccounts || []).some(a => last4 && a.last4 === last4 && (!meta.ifsc || a.ifsc === meta.ifsc)));
+      const other = Object.values(S.companies).find(c => c.id !== co.id && (c.bankAccounts || []).some(a => bankAccIs(a, meta, last4)));
       // the lines not yet here, near-repeats held or marked, the statement's own dates and figures (src/js/96 BankOverlap)
       const sid = uid("st"), x = await bankTake(parsed, acc, b, sid, co.name, chk, file, hash), {rows, st} = x;
       // every line is already here, in a statement here: that statement is opened, nothing is charged or added
       if (!rows.length && x.top){ b.busy = ""; await bankOpenHeld(b.cid, x.top); continue; }
-      // a line held aside as a repeat is not charged (review of 08-Nov-2026)
-      const paid = parsed.rows.length - x.held;
+      // a line held aside as a repeat is not charged (review of 08-Nov-2026), nor one already uploaded (audit of 22-Nov-2026)
+      const paid = x.rows.length - x.held;
       if (paid > 0 && !(await charge("bank", paid, file.name, paid + " statement lines"))){ if (newAcc){ co.bankAccounts = co.bankAccounts.filter(a => a !== acc); Store.saveCompany(co); } b.busy = ""; render(); return; }
-      Object.assign(b.keys, x.nk);
       st.otherClient = other ? other.name : "";
+      // another client (or this one afresh) opened while the file was read: the statement is kept under its own client,
+      // written there, never on the page open now (audit of 22-Nov-2026), and suggested when its page is opened
+      if (B() !== b){ await bankFileAway(b.cid, st, rows, x.nk, file); toast(file.name + " was kept under " + co.name + ": open that client to see it."); continue; }
+      Object.assign(b.keys, x.nk);
       b.stmts.push(st);
-      b.cur = sid; b.rows = rows; b.sel.clear(); b.sticky.clear(); b.undo = null;
+      bankFlush(); b.cur = sid; b.rows = rows; b.sel.clear(); b.sticky.clear(); b.undo = null;
       suggestAll(rows);
       matchTallyBook(acc, rows);
-      st.counts = countStates(rows);
+      st.counts = countStates(rows); st.links = bankLinks(rows);
       S.files["st:" + sid] = file; FileStore.put(b.cid, "st:" + sid, file); CloudDocs.add(b.cid, "st:" + sid, file, "stmt");
       await BankDB.set("stmt:" + b.cid + ":" + sid, rows);
-      saveBank({stmts: true, keys: true});
+      // written under this client, whichever page is open now
+      if (B() === b) saveBank({stmts: true, keys: true}); else await Promise.all([BankDB.set("stmts:" + b.cid, b.stmts), BankDB.set("keys:" + b.cid, b.keys)]);
       b.filter = "review";
       toast(file.name + ": " + x.say + (newAcc ? (acc.ledger ? " Confirm the Tally ledger for this bank account." : " Choose the Tally ledger for this bank account.") : ""));
     } catch (err){
@@ -448,8 +463,9 @@ async function uploadStatements(files, force){
       b.lastFail = {file: file.name, report: bankReport(Object.assign({diag: {file: file.name, size: file.size}}, err)), msg: bankErr(err), at: new Date().toISOString()};
     }
   }
+  } finally { on.delete(b.cid); }
   b.busy = ""; render();
-  if (bridgeLive() && curStmt()) bankAutoSync(true);
+  if (B() === b && bridgeLive() && curStmt()) bankAutoSync(true);
 }
 // The lines of a statement not yet here. A line counts as here only when the statement holding it is here: a fingerprint
 // left by a statement this browser lost no longer hides the line (26-Oct-2026). top: the statement holding most of the rest.
@@ -467,30 +483,9 @@ function bankNewRows(list, acc, keys, stmts, sid, name){
   });
   return {rows, dupRows, nk, top: Object.keys(by).sort((x, y) => by[y] - by[x])[0]};
 }
-async function bankTake(...a){ return (window.BankOverlap || (await loadBankOverlap()).BankOverlap).take(...a); }
-// Keep a statement under the client that owns the bank account (it is matched when that client is opened)
-async function fileStatementFor(owner, file, hash, parsed, chk, meta, last4){
-  const cid = owner.id;
-  const acc = (owner.bankAccounts || []).find(a => a.last4 === last4 && (!meta.ifsc || !a.ifsc || a.ifsc === meta.ifsc));
-  const get = () => Promise.all([BankDB.get("stmts:" + cid), BankDB.get("keys:" + cid)]);
-  let [stmts0, keys0] = await get();
-  if (await bankHeal(cid, stmts0, keys0)) [stmts0, keys0] = await get();
-  const stmts = stmts0 || [], keys = keys0 || {};
-  // already there (26-Oct-2026: it was read and charged, then refused, and this client's empty page stayed): opened there
-  const held = stmts.find(x => x.hash === hash), sid = uid("st");
-  const x = await bankTake(parsed, acc, {cid, keys, stmts}, sid, owner.name, chk, file, hash), {rows, st} = x;
-  if (held || (!rows.length && x.top)){ await bankOpenHeld(cid, held ? held.id : x.top, owner.name); return false; }
-  const paid = parsed.rows.length - x.held;
-  if (paid > 0 && !(await charge("bank", paid, file.name, paid + " statement lines"))) return null;
-  Object.assign(keys, x.nk);
-  st.counts = {attention: rows.length};
-  stmts.push(st);
-  S.files["st:" + sid] = file; FileStore.put(cid, "st:" + sid, file); CloudDocs.add(cid, "st:" + sid, file, "stmt");
-  await BankDB.set("stmt:" + cid + ":" + sid, rows);
-  await Promise.all([BankDB.set("stmts:" + cid, stmts), BankDB.set("keys:" + cid, keys)]);
-  toast(file.name + " is for " + owner.name + " (account \u00b7\u00b7" + last4 + "), so it was filed there.");
-  return true;
-}
+async function bankOv(){ return window.BankOverlap || (await loadBankOverlap()).BankOverlap; }
+async function bankTake(...a){ return (await bankOv()).take(...a); }
+// fileStatementFor: src/js/96-bank-overlap.js (loaded with BankOverlap: bankOv)
 function bankErr(err){
   const code = (err && err.code) || "";
   return ({
@@ -681,7 +676,7 @@ function bankClearPosting(r, state){
   delete r.goneFromTally; delete r.tallyIdx; delete r.postJobNew;
   const b = B(); if (b && b.postedTags) delete b.postedTags[fpHash(r.fp || r.id)];
 }
-function rowSnapshot(r){ return {id: r.id, rep: r.rep ? Object.assign({}, r.rep) : r.rep, ledger: r.ledger, state: r.state, userSet: r.userSet, why: r.why, source: r.source, vtype: r.vtype, billId: r.billId, billRef: r.billRef, tdsAtPay: r.tdsAtPay}; }
+function rowSnapshot(r){ return {id: r.id, rep: r.rep ? Object.assign({}, r.rep) : r.rep, ledger: r.ledger, state: r.state, userSet: r.userSet, why: r.why, source: r.source, vtype: r.vtype, billId: r.billId, billRef: r.billRef, tdsAtPay: r.tdsAtPay, tdsLedger: r.tdsLedger || "", salesIds: r.salesIds || null, splits: (r.splits || []).slice()}; }
 // Set a ledger on some rows; every other open row of the same party follows, and a rule is kept for next time
 function setLedgerFor(rows, ledger, how){
   const b = B(), co = CO(b.cid);
@@ -692,8 +687,9 @@ function setLedgerFor(rows, ledger, how){
   const touched = new Map();
   const put = (r, why) => {
     if (!touched.has(r.id)) touched.set(r.id, rowSnapshot(r));
+    // another ledger: the line's bill, invoice, TDS at payment and split go; the same one (confirmed) keeps them
+    if (r.ledger !== ledger) bankUnlink(r);
     r.ledger = ledger; r.userSet = true; r.source = "you"; r.why = why;
-    r.billId = null; r.billRef = ""; r.tdsAtPay = 0;
     r.vtype = vtypeFor(r, ledger); r.state = "ready";
     b.sticky.add(r.id);
   };
@@ -724,7 +720,7 @@ function setRowLedger(row, ledger){
   if (!String(ledger || "").trim()){
     const b = B();
     b.undo = {what: "clear", label: row.dec.name || "this row", n: 1, others: 0, snaps: [rowSnapshot(row)], ruleKeys: [], oldRules: []};
-    row.ledger = ""; row.userSet = false; row.state = "attention"; row.why = "";
+    row.ledger = ""; row.userSet = false; row.state = "attention"; row.why = ""; bankUnlink(row);
     return;
   }
   setLedgerFor([row], ledger);
@@ -785,8 +781,8 @@ async function applyToVisible(ledger){
   if (rows.some(r => isOwnBank(r, exact))){ toast(OWN_BANK + "."); return; }
   if (!rows.length){ toast("No entries are showing."); return; }
   // no question first (the owner's spec K9, round 2: confirmations only for what cannot be undone): Undo in the bar
-  const before = rows.map(r => ({id: r.id, ledger: r.ledger, state: r.state, userSet: r.userSet}));
-  rows.forEach(r => { r.ledger = exact; r.userSet = true; if (r.state === "attention" || r.state === "suggested") r.state = "ready"; });
+  const before = rows.map(rowSnapshot);
+  rows.forEach(r => { if (r.ledger !== exact) bankUnlink(r); r.ledger = exact; r.userSet = true; if (r.state === "attention" || r.state === "suggested") r.state = "ready"; });
   learnRows(rows, "set");
   b.undo = {what: "Set " + exact + " on " + rows.length + " entries", rows: before};
   saveBank({rows: true});
@@ -922,9 +918,11 @@ function bankVoucherXml(row, acc, co){
   const inst = row.dec.chq || row.dec.utr || row.ref || "";
   const bankAlloc = sign => "<BANKALLOCATIONS.LIST>\n<DATE>" + d + "</DATE>\n<INSTRUMENTDATE>" + d + "</INSTRUMENTDATE>\n<TRANSACTIONTYPE>" + txType + "</TRANSACTIONTYPE>\n" +
     (inst ? "<INSTRUMENTNUMBER>" + xesc(inst) + "</INSTRUMENTNUMBER>\n" : "") + "<PAYMENTFAVOURING>" + xesc(party) + "</PAYMENTFAVOURING>\n<BANKERSDATE>" + d + "</BANKERSDATE>\n<AMOUNT>" + sign + amt2(amount) + "</AMOUNT>\n</BANKALLOCATIONS.LIST>\n";
-  const line = (ledger, dr, value, extra) => "<ALLLEDGERENTRIES.LIST>\n<LEDGERNAME>" + xesc(tallyLedgerName(ledger)) + "</LEDGERNAME>\n<ISDEEMEDPOSITIVE>" + (dr ? "Yes" : "No") + "</ISDEEMEDPOSITIVE>\n<AMOUNT>" + (dr ? "-" : "") + amt2(value) + "</AMOUNT>\n" + (extra || "") + "</ALLLEDGERENTRIES.LIST>\n";
-  const billAlloc = (dr, value) => co.billwise && row.billRef && /sundry/i.test((knownLedgers().get(party.toLowerCase()) || {group: "Sundry Creditors"}).group || "Sundry Creditors")
-    ? "<BILLALLOCATIONS.LIST>\n<NAME>" + xesc(row.billRef) + "</NAME>\n<BILLTYPE>Agst Ref</BILLTYPE>\n<AMOUNT>" + (dr ? "-" : "") + amt2(value) + "</AMOUNT>\n</BILLALLOCATIONS.LIST>\n" : "";
+  let dr = 0, cr = 0;
+  const line = (ledger, d1, value, extra) => { if (d1) dr += value; else cr += value; return "<ALLLEDGERENTRIES.LIST>\n<LEDGERNAME>" + xesc(tallyLedgerName(ledger)) + "</LEDGERNAME>\n<ISDEEMEDPOSITIVE>" + (d1 ? "Yes" : "No") + "</ISDEEMEDPOSITIVE>\n<AMOUNT>" + (d1 ? "-" : "") + amt2(value) + "</AMOUNT>\n" + (extra || "") + "</ALLLEDGERENTRIES.LIST>\n"; };
+  const sundry = co.billwise && /sundry/i.test((knownLedgers().get(party.toLowerCase()) || {group: "Sundry Creditors"}).group || "Sundry Creditors");
+  const allocOf = (ref, value, d1) => "<BILLALLOCATIONS.LIST>\n<NAME>" + xesc(ref) + "</NAME>\n<BILLTYPE>Agst Ref</BILLTYPE>\n<AMOUNT>" + (d1 ? "-" : "") + amt2(value) + "</AMOUNT>\n</BILLALLOCATIONS.LIST>\n";
+  const billAlloc = (d1, value) => sundry && row.billRef ? allocOf(row.billRef, value, d1) : "";
   let x = '<VOUCHER VCHTYPE="' + vt + '" ACTION="Create" OBJVIEW="Accounting Voucher View">\n<DATE>' + d + "</DATE>\n<EFFECTIVEDATE>" + d + "</EFFECTIVEDATE>\n<VOUCHERTYPENAME>" + vt + "</VOUCHERTYPENAME>\n" +
     "<NARRATION>" + xesc(narr) + "</NARRATION>\n<PARTYLEDGERNAME>" + xesc(party) + "</PARTYLEDGERNAME>\n<PERSISTEDVIEW>Accounting Voucher View</PERSISTEDVIEW>\n<ISOPTIONAL>" + (co.bankOptional ? "Yes" : "No") + "</ISOPTIONAL>\n";
   const splits = (row.splits || []).filter(sp => sp.ledger && exactLedger(sp.ledger) && num(sp.amt) > 0);
@@ -941,10 +939,12 @@ function bankVoucherXml(row, acc, co){
     if (tds) x += line(row.tdsLedger || bankLedgers(co).tds, false, tds);
   } else {
     x += line(acc.ledger, true, amount, bankAlloc("-"));
-    const invs = (row.salesIds || []).map(id => (B().salesRef || []).find(v => v.id === id)).filter(Boolean);
-    const alloc = co.billwise && invs.length ? invs.map(v => "<BILLALLOCATIONS.LIST>\n<NAME>" + xesc(v.x.number) + "</NAME>\n<BILLTYPE>Agst Ref</BILLTYPE>\n<AMOUNT>" + amt2(num(v.x.total)) + "</AMOUNT>\n</BILLALLOCATIONS.LIST>\n").join("") : "";
+    // the invoices of the customer posted to, each its share of the amount received (bankSalesAlloc: they add up to it)
+    const alloc = sundry ? bankSalesAlloc(bankSalesOf(row), amount).map(a => allocOf(a.ref, a.amt)).join("") : "";
     x += line(party, false, amount, alloc);
   }
+  // Tally refuses an entry whose debits and credits differ: never sent
+  if (Math.abs(r2(dr - cr)) > 0.005) throw new Error(fmtDate(row.date) + ": the entry does not add up (Dr " + amt2(dr) + ", Cr " + amt2(cr) + ") \u2014 set its split or TDS again");
   return x + "</VOUCHER>\n";
 }
 function ledgerMasterXml(l){
@@ -956,13 +956,7 @@ function ledgerMasterXml(l){
     (l.acNo ? "<PAYMENTDETAILS.LIST>\n<ACCOUNTNUMBER>" + xesc(l.acNo) + "</ACCOUNTNUMBER>\n" + (l.ifsc ? "<IFSCODE>" + xesc(l.ifsc) + "</IFSCODE>\n" : "") + "<PAYMENTFAVOURING>" + xesc(l.name) + "</PAYMENTFAVOURING>\n</PAYMENTDETAILS.LIST>\n" : "") +
     "</LEDGER>\n";
 }
-function markSalesReceived(r){
-  if (!r.salesIds || !r.salesIds.length) return;
-  const b = B(), list = b.salesRef || [];
-  let changed = false;
-  list.forEach(v => { if (r.salesIds.includes(v.id)){ v.receivedBy = r.id; v.receivedAt = r.date; changed = true; } });
-  if (changed){ if (S.sales && S.sales.cid === b.cid) saveSales(); else BankDB.set("sales:" + b.cid, list); }
-}
+// markSalesReceived: src/js/22-bank-guards.js
 function bankExportProblems(rows){
   const probs = [];
   rows.forEach(r => {
@@ -970,6 +964,7 @@ function bankExportProblems(rows){
     else if (!r.ledger) probs.push(fmtDate(r.date) + ": no ledger");
     else if (!exactLedger(r.ledger)) probs.push(fmtDate(r.date) + ": \u201c" + r.ledger + "\u201d is not a Tally ledger");
     else if (isOwnBank(r, r.ledger)) probs.push(fmtDate(r.date) + ": " + OWN_BANK);
+    else if (bankLineProblem(r)) probs.push(bankLineProblem(r));
   });
   const n = rows.filter(bankRepOpen).length;
   return (n ? [(n === 1 ? "1 entry is" : n + " entries are") + " marked Possible repeat — check: Keep it or It’s a repeat first"] : []).concat(probs);
@@ -992,8 +987,9 @@ async function exportBankXml(ids){
   const wrap = (report, body) => "<ENVELOPE>\n<HEADER><TALLYREQUEST>Import Data</TALLYREQUEST></HEADER>\n<BODY>\n<IMPORTDATA>\n<REQUESTDESC><REPORTNAME>" + report + "</REPORTNAME>" + sv + "</REQUESTDESC>\n<REQUESTDATA>\n" + body + "</REQUESTDATA>\n</IMPORTDATA>\n</BODY>\n</ENVELOPE>\n";
   let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
   // Tally imports one envelope per file; masters go first inside the same request so they exist before the vouchers
-  const body = masters.map(l => '<TALLYMESSAGE xmlns:UDF="TallyUDF">\n' + ledgerMasterXml(l) + "</TALLYMESSAGE>\n").join("") +
-    rows.map(r => '<TALLYMESSAGE xmlns:UDF="TallyUDF">\n' + bankVoucherXml(r, acc, co) + "</TALLYMESSAGE>\n").join("");
+  let body;
+  try { body = masters.map(l => '<TALLYMESSAGE xmlns:UDF="TallyUDF">\n' + ledgerMasterXml(l) + "</TALLYMESSAGE>\n").join("") +
+    rows.map(r => '<TALLYMESSAGE xmlns:UDF="TallyUDF">\n' + bankVoucherXml(r, acc, co) + "</TALLYMESSAGE>\n").join(""); } catch (e){ toast("Fix this first: " + e.message); return; }
   xml += wrap(masters.length ? "All Masters" : "Vouchers", body);
   const fname = "bank-" + (co.name || "client").replace(/[^a-z0-9]+/gi, "-").toLowerCase() + "-" + (acc.last4 || "acct") + "-" + new Date().toISOString().slice(0, 10) + ".xml";
   const ok = await saveFile(fname, new Blob([xml], {type: "application/xml"}));

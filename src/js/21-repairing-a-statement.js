@@ -129,13 +129,16 @@ async function claudeStatement(file, progress, onlyPages){
 }
 async function readStatement(file, progress, force){
   const diag = {file: file.name, size: file.size, tried: []};
+  // the pages left unread (statementImages: over 60 pages; pdfTextPages: over 400), for the reader chosen
+  file.cut = null;
+  const done = () => { best.p.method = best.method; best.p.diag = diag; best.p.cut = (file.cut || {})[/OCR|Claude/.test(best.method) ? "img" : "txt"] || null; return best.p; };
   const note = (method, p, err) => diag.tried.push({method, rows: p && p.rows ? p.rows.length : 0, score: scoreParse(p), error: err ? bankErr(err) : ""});
   let best = null;
   const consider = (method, p) => { const sc = scoreParse(p); note(method, p); if (sc > 0 && (!best || sc > best.score)) best = {p, score: sc, method}; };
   if (force === "claude"){
     try { consider("Claude read the pages", await claudeStatement(file, progress)); }
     catch (e){ note("Claude", null, e); if (!best) throw Object.assign({diag}, e); }
-    if (best){ best.p.method = best.method; best.p.diag = diag; return best.p; }
+    if (best) return done();
   }
   const isSheet = /\.(xlsx|xls|xlsm|csv|txt)$/i.test(file.name);
   const isImg = isImage(file);
@@ -176,14 +179,13 @@ async function readStatement(file, progress, force){
     }
   } else throw {code: "bank_type", diag};
   if (!best) throw {code: "bank_unreadable", diag};
-  best.p.method = best.method;
-  best.p.diag = diag;
-  return best.p;
+  return done();
 }
 async function pdfTextPages(file){
   await ensurePdfJs();
   const pdf = await openPdfDoc(new Uint8Array(await file.arrayBuffer()));
   const pages = [];
+  if (pdf.numPages > 400) (file.cut = file.cut || {}).txt = [400, pdf.numPages];
   for (let p = 1; p <= Math.min(pdf.numPages, 400); p++){
     const tc = await (await pdf.getPage(p)).getTextContent();
     pages.push({items: (tc.items || []).filter(it => it.str && it.str.trim()).map(it => ({s: it.str.replace(/\s+/g, " ").trim(), x: it.transform[4], y: it.transform[5], w: it.width || 0, h: Math.abs(it.transform[3]) || 8}))});
@@ -199,29 +201,7 @@ function bankReport(err){
     "Start of the file:", ...((d.sample || []).slice(0, 40).map(s => "  " + String(s).slice(0, 120)))].join("\n");
 }
 
-/* ---------- checks: running balance, order, direction ---------- */
-function checkBalances(rows, meta){
-  if (rows.length > 1 && rows[0].date > rows[rows.length - 1].date) rows.reverse();    // newest-first statements
-  let bad = 0, fixed = 0, known = 0;
-  for (let i = 0; i < rows.length; i++){
-    const r = rows[i];
-    r.balOk = null;
-    if (r.balance === null || r.balance === undefined) continue;
-    let prev = i > 0 ? rows[i - 1].balance : (meta.opening !== undefined ? meta.opening : null);
-    if (prev === null || prev === undefined){ r.balOk = true; known++; continue; }
-    known++;
-    const exp = r2(prev - r.debit + r.credit);
-    if (Math.abs(exp - r.balance) <= 0.011){ r.balOk = true; continue; }
-    const swapped = r2(prev + r.debit - r.credit);
-    if (Math.abs(swapped - r.balance) <= 0.011){ const d = r.debit; r.debit = r.credit; r.credit = d; r.balOk = true; r.fixedDir = true; fixed++; continue; }
-    r.balOk = false; bad++;
-  }
-  if (meta.opening === undefined && rows.length && rows[0].balance !== null) meta.opening = r2(rows[0].balance + rows[0].debit - rows[0].credit);
-  if (meta.closing === undefined && rows.length && rows[rows.length - 1].balance !== null) meta.closing = rows[rows.length - 1].balance;
-  const totDr = r2(rows.reduce((a, r) => a + r.debit, 0)), totCr = r2(rows.reduce((a, r) => a + r.credit, 0));
-  const summaryOk = meta.opening !== undefined && meta.closing !== undefined ? Math.abs(r2(meta.opening - totDr + totCr) - meta.closing) <= 0.011 : null;
-  return {bad, fixed, known, totDr, totCr, summaryOk};
-}
+/* ---------- checks: running balance, order, direction: checkBalances, src/js/22-bank-guards.js ---------- */
 /* ---------- narrations ---------- */
 // NORM_CACHE, normName, gramsOf, normNameRaw, nameSim: server/_shared/gst3b.js (shared with the gst-run function)
 const NARR_STRIP = /\b(UPI|NEFT|RTGS|IMPS|MMT|P2A|P2M|DR|CR|TRF|TRANSFER|TO|BY|FROM|INB|IB|CHQ|CHEQUE|PAID|DEP|DEPOSIT|CLG|CLEARING|ACH|NACH|ECS|PAYMENT|PAY|SENT|RECEIVED|REF|UTR|NA|NO|OTHERS|OTHER|INR|RS|MICR|CTS|INWARD|OUTWARD|RETURN|REV|REVERSAL|FUND|FT|BIL|ONL|MB|NET|BANKING|MOBILE|SI|INFT|INF|POS|BRN)\b/gi;
@@ -352,10 +332,12 @@ function openBills(cid){
     return {e, amounts, name: e.x.vendorName, ledger: e.partyLedger, date: e.x.invoiceDate, ref: e.x.invoiceNo};
   });
 }
-// A receipt equal to one open sales invoice (or two of the same customer) of an earlier date
+// A receipt equal to one open sales invoice (or two of the same customer) of an earlier date: an invoice (or a debit
+// note) in Tally or ready for it, never a credit note (it is owed to the customer, not paid by it) nor one still in
+// review (audit of 22-Nov-2026: a receipt was posted against a credit note, which showed as paid)
 function openSalesInvoices(){
   const b = B();
-  return (b.salesRef || []).filter(v => v.status !== "ignored" && !v.receivedBy && num(v.x.total) > 0 && v.customerLedger);
+  return (b.salesRef || []).filter(v => ["posted", "intally", "ready"].includes(v.status) && v.x.noteKind !== "credit" && !v.receivedBy && num(v.x.total) > 0 && v.customerLedger);
 }
 // (the React app puts a lighter search in its place, with the same results: app/src/lib/salesMatch.js, next-fix-bankswitch;
 // a change to the rules here is made there too, and tests/run_page_speed.py part I holds the two to one answer)
