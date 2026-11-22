@@ -45,6 +45,12 @@ const TABS = [["summary", "Summary"], ["pl", "Profit and loss"], ["recv", "Recei
 // the period and Run now, under the tabs; how often it runs on its own and the downloads fold away (review of 01-Oct-2026)
 // ui-tidy (13-Oct-2026): the one filter bar (parts/Filters.jsx): From, To and the quick periods; Run now and the downloads
 // at its end; the settings under it, folded
+// the days set: the books' MIS settings (b.misCfg, stored with the books), the month's MIS worked out again
+function misMsmeDaysSet(v) {
+  const b = S.books, c = Object.assign({}, b.misCfg);
+  if (v) c.msmeDays = Math.min(45, Math.max(1, Number(v) || 45)); else delete c.msmeDays;
+  b.misCfg = c; const r = (b.mis || {}).last; saveBooks(); if (r) MIS.runSoon(b, { from: r.from, to: r.to, how: r.how }); render();
+}
 function Head({ b, r, rg }) {
   const c = MIS.cfg(b);
   return <section className="mis-head" data-mis-head="">
@@ -59,6 +65,12 @@ function Head({ b, r, rg }) {
         <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 6 }}><span className="note">Run on its own</span>
           <select aria-label="MIS runs on its own" style={{ width: "auto" }} value={c.freq} onChange={(ev) => misFreqSet(ev.target.value)}>
             {[["monthly", "on the 1st, for the month just ended"], ["weekly", "every week, the year so far"], ["daily", "every day, the year so far"], ["off", "only when I run it"]].map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></div>
+        {/* section 43B(h) and section 15 of the MSMED Act: 15 days from acceptance without a written agreement, at most 45 days
+            with one (review of 22-Nov-2026: always 45, with no setting). Not set: 45 is used and the audit asks about 16 to 45 days */}
+        <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 6 }}><span className="note">Time allowed to micro and small suppliers</span>
+          <select aria-label="MSME days" data-mis-msmedays="" style={{ width: "auto" }} value={(b.misCfg || {}).msmeDays ? String(Math.min(45, +b.misCfg.msmeDays)) : ""} onChange={(ev) => misMsmeDaysSet(ev.target.value)}>
+            <option value="">not set (45 days used; the audit asks)</option><option value="15">15 days: no written agreement</option>
+            {[...new Set([30, 45].concat((b.misCfg || {}).msmeDays && ![15, 30, 45].includes(+b.misCfg.msmeDays) ? [Math.min(45, +b.misCfg.msmeDays)] : []))].sort((x, y) => x - y).map((d) => <option key={d} value={d}>{d + " days: agreed in writing"}</option>)}</select></div>
         </Confirm>
       </details>
       <span className="note mis-period" data-mis-period="">{rg.from && rg.to ? fmtDate(rg.from) + " to " + fmtDate(rg.to) : ""}</span>

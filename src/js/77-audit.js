@@ -412,7 +412,7 @@ const AuditRep = {
         "<p><b>Management response.</b> " + esc((this.STATUS.find(x => x[0] === s.s) || [])[1] || "Open") + (s.note ? ": " + esc(s.note) : "") + "</p>" +
         (f.rows && f.rows.length ? '<table><thead><tr><th>Date</th><th>Voucher</th><th>Party or ledger</th><th class="n">Amount</th><th>Detail</th></tr></thead><tbody>' +
           f.rows.slice(0, 15).map(r => "<tr><td>" + (r.date ? fmtDate(tallyDate(r.date)) : "") + "</td><td>" + esc(r.no || "") + (r.type ? '<br><span style="color:#5A6B63">' + esc(r.type) + "</span>" : "") + "</td><td>" + esc(r.party || "") + '</td><td class="n">' + (r.amount ? m(r.amount) : "") + "</td><td>" + esc(r.note || "") + "</td></tr>").join("") +
-          "</tbody></table>" + (f.rows.length > 15 ? '<p class="note">Showing 15 of ' + f.rows.length + "; all are in the Excel annexure.</p>" : "") : "") + "</div>";
+          "</tbody></table>" + (f.count > 15 ? '<p class="note">Showing 15 of ' + f.count + "; all are in the Excel annexure.</p>" : "") : "") + "</div>";
     });
     const done = (run.solved || []).filter(x => x.n);
     if (done.length){
@@ -430,23 +430,38 @@ const AuditRep = {
     const wb = XLSX.utils.book_new(), add = (name, rows) => XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), name.slice(0, 31));
     add("Observations", [["#", "Severity", "Area", "Clause", "Observation", "Items", "Amount", "Effect", "Recommendation", "Status", "Note"]].concat(run.findings.map((f, i) =>
       [i + 1, f.sev, (this.AREAS.find(a => a[0] === f.area) || [])[1], f.clause, f.title + ": " + f.problem, f.count, r2(f.amount), f.impact, f.suggestion, (this.STATUS.find(x => x[0] === this.status(f.id).s) || [])[1], this.status(f.id).note || ""])));
-    add("Annexure", [["#", "Observation", "Date", "Voucher", "Type", "Party or ledger", "Amount", "Detail"]].concat(run.findings.flatMap((f, i) => (f.rows || []).map(r => [i + 1, f.title, d(r.date), r.no, r.type, r.party, r2(r.amount || 0), r.note || ""]))));
+    add("Annexure", [["#", "Observation", "Date", "Voucher", "Type", "Party or ledger", "Amount", "Detail"]].concat(run.findings.flatMap((f, i) => { const rs = this.rowsOf(run, f); return rs.map(r => [i + 1, f.title, d(r.date), r.no, r.type, r.party, r2(r.amount || 0), r.note || ""]).concat(rs.cut ? [[i + 1, f.title, "", "", "", (rs.cut - rs.length) + " more rows: run the audit again for them", "", ""]] : []); })));
     add("Journal entries", [["#", "Observation", "Date", "Ledger", "Debit", "Credit", "Narration", "Ledger in Tally"]].concat(run.findings.flatMap((f, i) => (f.je || []).flatMap(j => j.lines.map((l, k) =>
       [i + 1, f.title, k ? "" : d(j.date), l.l, l.dr || "", l.cr || "", k ? "" : j.narr, this.exists(l.l) ? "yes" : "to create"])))));
     const out = XLSX.write(wb, {bookType: "xlsx", type: "array"});
     saveFile(CO().name.replace(/[^A-Za-z0-9]+/g, "-") + "-audit-" + run.from + "-" + run.to + ".xlsx", new Blob([out], {type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));
   },
   // the Form 3CD draft: the clauses the books answer, filled from them
+  // a finding's every row: a run keeps a finding's first 1,000 (Audit.calcIn); the rest are its items, written by the same
+  // run (review of 22-Nov-2026: the Excel annexure and the 3CD clauses stopped at 1,000 rows while their totals had all).
+  // A run whose items were written over since (a later run): its rows as kept, marked with the count (cut)
+  rowsOf(run, f){
+    const rows = f.rows || [];
+    if (rows.length >= (f.count || 0)) return rows;
+    const all = Object.values(((S.books || {}).audit || {}).items || {}).filter(it => it.f === f.id && it.last === run.at && !it.solved).map(it => Object.assign({}, it.row));
+    if (all.length !== f.count) return Object.assign(rows.slice(), {cut: f.count});
+    const k = r => [String(r.date || ""), String(r.no || ""), String(r.party || "")];
+    return all.sort((a, c) => { const x = k(a), y = k(c); return x[0].localeCompare(y[0]) || x[1].localeCompare(y[1]) || x[2].localeCompare(y[2]); });
+  },
   form3cd(run){
-    const b = S.books, from = run.from, to = run.to, f = id => run.findings.find(x => x.id === id), m = v => INR.format(r2(v || 0)), C = [];
+    const full = z => z && Object.assign({}, z, {rows: this.rowsOf(run, z)});
+    const b = S.books, from = run.from, to = run.to, f = id => full(run.findings.find(x => x.id === id)), m = v => INR.format(r2(v || 0)), C = [];
     const add = (no, title, head, rows, note) => C.push({no, title, head, rows: rows || [], note: note || ""});
     add("4", "GST registrations", ["GSTIN"], ((b.meta || {}).gstins || []).map(g => [g]));
     const pen = f("penalties");
     add("21(a)", "Penalties, fines and similar amounts debited to profit and loss", ["Ledger", "Amount", "Nature"], pen ? pen.rows.map(r => [r.party, r.amount, r.note]) : [], pen ? "" : "None found in the books.");
     // round 69: the TDS not deducted is a finding per party, section and year (TDSWatch.missed); its entries, the expense
     // TDS was due on, as the working papers list them
-    const tm = run.findings.filter(x => x.check === "tdsMissed");
-    add("21(b)(ii)(A)", "Amounts disallowable under section 40(a)(ia): TDS not deducted", ["Party", "Amount", "Detail"], tm.flatMap(x => x.rows.map(r => [r.party, r.amount, r.note])), tm.length ? "" : "None found.");
+    // (review of 22-Nov-2026) a party's bills are listed when TDS covers none of them; where deductions cover some, the part
+    // not covered (the finding's base, TDSWatch's uncovered) on one line: which bills it is, the books do not say
+    const tm = run.findings.filter(x => x.check === "tdsMissed").map(full), tot = x => r2(x.rows.reduce((s2, r) => s2 + num(r.amount), 0));
+    add("21(b)(ii)(A)", "Amounts disallowable under section 40(a)(ia): TDS not deducted", ["Party", "Amount", "Detail"], tm.flatMap(x => x.base == null || Math.abs(tot(x) - x.base) < 0.01 ? x.rows.map(r => [r.party, r.amount, r.note]) :
+      [[x.party, r2(x.base), x.section + ": the part of " + x.rows.length + " bills of \u20b9" + m(tot(x)) + " not covered by the TDS deducted"]]), tm.length ? "" : "None found.");
     const c3 = f("cash40A3");
     add("21(d)(A)", "Cash payments above the limit, section 40A(3)", ["Date", "Party or ledger", "Amount"], c3 ? c3.rows.map(r => [fmtDate(tallyDate(r.date)), r.party, r.amount]) : [], c3 ? "" : "None found.");
     const ms = f("msme43Bh");
@@ -454,17 +469,23 @@ const AuditRep = {
     const rp = f("related:40A2b");
     add("23", "Payments to persons specified in section 40A(2)(b)", ["Person", "Relation", "Amount", "Nature"], rp ? rp.rows.map(r => [r.party, r.type, r.amount, r.note]) : [], (b.auditRel || []).length ? (rp ? "" : "None in the period.") : "The list of related persons is not set yet (Audit \u2192 Related parties).");
     const d43 = f("balances:43B");
-    add("26", "Sums under section 43B", ["Ledger or supplier", "Amount unpaid at the end of the period", "Note"], (d43 ? d43.rows.map(r => [r.party, r.amount, "statutory dues"]) : []).concat(ms ? ms.rows.map(r => [r.party, r.amount, "43B(h) MSME"]) : []),
+    add("26", "Sums under section 43B", ["Ledger or supplier", "Amount unpaid at the end of the period", "Note"], (d43 ? d43.rows.map(r => [r.party, r.amount, r.note === "payable" ? "statutory dues" : r.note]) : []).concat(ms ? ms.rows.map(r => [r.party, r.amount, "43B(h) MSME"]) : []),
       "Add the date of payment of each before the due date of the return.");
     const lt = f("cashLoans:269SS"), lr = f("cashLoans:269T"), st = f("cash269ST");
     add("31(a)", "Loans or deposits taken or accepted otherwise than by bank (section 269SS)", ["Date", "Lender", "Amount"], lt ? lt.rows.map(r => [fmtDate(tallyDate(r.date)), r.party, r.amount]) : [], lt ? "" : "None found in cash.");
-    add("31(b), 31(c)", "Loans or deposits repaid otherwise than by bank (section 269T)", ["Date", "To", "Amount"], lr ? lr.rows.map(r => [fmtDate(tallyDate(r.date)), r.party, r.amount]) : [], lr ? "" : "None found in cash.");
+    // Form 3CD as amended in 2016-17: 31(b) specified sums taken (269SS), 31(ba)-(bd) 269ST, 31(c) repayments (269T)
+    add("31(b)", "Specified sums (advances for the transfer of immovable property) taken or accepted otherwise than by bank (section 269SS)", ["Date", "From", "Amount"], [], "Not told apart in the books; answer from the records.");
     add("31(ba)", "Receipts of \u20b92 lakh or more otherwise than by bank (section 269ST)", ["Date", "From", "Amount"], st ? st.rows.map(r => [fmtDate(tallyDate(r.date)), r.party, r.amount]) : [], st ? "" : "None found.");
+    const c2 = c3 ? c3.rows.filter(r => num(r.amount) >= 200000) : [];
+    add("31(bc)", "Payments of \u20b92 lakh or more otherwise than by bank (section 269ST)", ["Date", "To", "Amount"], c2.map(r => [fmtDate(tallyDate(r.date)), r.party, r.amount]), (c2.length ? "" : "None found. ") + "From the cash paid to one party in a day (40A(3)); a payment for one bill over several days is checked by hand.");
+    add("31(c)", "Repayments of loans or deposits otherwise than by bank (section 269T)", ["Date", "To", "Amount"], lr ? lr.rows.map(r => [fmtDate(tallyDate(r.date)), r.party, r.amount]) : [], lr ? "" : "None found in cash.");
     // 34(a): section by section, from the deductions and what was missed
-    const fy = TDS.fyOf(to), rows34 = {}, missed = tm.flatMap(x => x.rows);
+    const fy = TDS.fyOf(to), rows34 = {};
     TDS.allRows().filter(r => r.date >= from && r.date <= to).forEach(r => { const x = rows34[r.section] = rows34[r.section] || {paid: 0, tds: 0, n: 0, low: 0}; x.paid = r2(x.paid + r.paid); x.tds = r2(x.tds + r.tds); x.n++; });
     ["Q1", "Q2", "Q3", "Q4"].forEach(q => Certs.issues(fy, q).filter(x => x.short > 0 && x.row.date >= from && x.row.date <= to).forEach(x => { const y = rows34[x.row.section]; if (y) y.low++; }));
-    const miss = {}; missed.forEach(r => { const s2 = r.type || "?"; miss[s2] = r2((miss[s2] || 0) + r.amount); });
+    // (review of 22-Nov-2026) what was paid or credited without deduction is each finding's base (the part TDS does not
+    // cover), added once to what the deductions were made on
+    const miss = {}; tm.forEach(x => { const s2 = x.section || "?"; miss[s2] = r2((miss[s2] || 0) + num(x.base != null ? x.base : tot(x))); });
     Object.keys(rows34).forEach(k2 => { if (!k2){ rows34["not set (a TDS ledger with no section)"] = rows34[k2]; delete rows34[k2]; } });
     add("34(a)", "Tax deducted at source, section by section", ["Section", "Paid or credited", "On which tax was to be deducted", "Tax deducted", "Deductions at a lower rate", "Paid or credited without deduction"],
       Object.keys(Object.assign({}, rows34, miss)).sort().map(s2 => { const x = rows34[s2] || {paid: 0, tds: 0, low: 0}; return [s2, x.paid + (miss[s2] || 0), x.paid + (miss[s2] || 0), x.tds, x.low, miss[s2] || 0]; }),
@@ -480,8 +501,10 @@ const AuditRep = {
     const info = b.ledInfo || {}, gst = b.gstins || {}, g44 = {exempt: 0, comp: 0, other: 0, unreg: 0, total: 0};
     (b.vouchers || []).forEach(v => {
       if (v.date < from || v.date > to || v.opt || v.cancel || Books.isSale(v)) return;
-      const val = v.ent.filter(e => e.a < 0 && (this.isExpense(e.l) || this.under(e.l, /^purchase accounts$/i) || this.isFixed(e.l))).reduce((s, e) => s - e.a, 0);
-      if (!val) return;
+      // (review of 22-Nov-2026) expenditure on goods and services only: not depreciation, provisions or employees' pay (no
+      // supply under Schedule III of the CGST Act), and not an entry with no supplier, cash or bank side (a book entry)
+      const val = v.ent.filter(e => e.a < 0 && (this.isExpense(e.l) || this.under(e.l, /^purchase accounts$/i) || this.isFixed(e.l)) && !/DEPRECIATION|AMORTI[SZ]|PROVISION|SALAR|WAGES|BONUS|GRATUITY|STIPEND|STAFF WELFARE|EMPLOYEE|PROVIDENT|\bE?PF\b|\bESIC?\b|LEAVE ENCASH|REMUNERATION/i.test(e.l)).reduce((s, e) => s - e.a, 0);
+      if (!val || !v.ent.some(e => e.a > 0 && (this.isPerson(e.l) || this.isCash(e.l) || this.isBankL(e.l) || gst[e.l]))) return;
       const party = (v.ent.find(e => e.a > 0 && (gst[e.l] || this.isCreditor(e.l))) || {}).l || v.party, g = gst[party] || v.gstin, rt = String((info[party] || {}).regType || "");
       const tax = v.ent.some(e => { const k = Books.ledgerOf(e.l).kind; return e.a < 0 && (k === "gst" || k === "gst_common" || k === "ineligible"); });
       g44.total += val;
@@ -506,7 +529,9 @@ const AuditRep = {
       '<p class="note">The clauses the books answer. Every figure is to be verified against the documents before it goes into the report on the portal. Other clauses are filled from the records.</p></div>';
     d.clauses.forEach(c => {
       h += '<h2 style="font-size:14px;margin:14px 0 4px">Clause ' + esc(c.no) + ". " + esc(c.title) + "</h2>";
-      if (c.rows.length) h += "<table><thead><tr>" + c.head.map(x => "<th>" + esc(x) + "</th>").join("") + "</tr></thead><tbody>" + c.rows.slice(0, gfN(200)).map(r => "<tr>" + r.map(v => '<td class="' + (typeof v === "number" ? "n" : "") + '">' + m(v) + "</td>").join("") + "</tr>").join("") + "</tbody></table>";
+      const n = gfN(200);
+      if (c.rows.length) h += "<table><thead><tr>" + c.head.map(x => "<th>" + esc(x) + "</th>").join("") + "</tr></thead><tbody>" + c.rows.slice(0, n).map(r => "<tr>" + r.map(v => '<td class="' + (typeof v === "number" ? "n" : "") + '">' + m(v) + "</td>").join("") + "</tr>").join("") + "</tbody></table>";
+      if (c.rows.length > n) h += '<p class="note">' + INR.format(c.rows.length - n).replace(/\.00$/, "") + " more rows are in the Excel.</p>";
       if (c.note) h += '<p class="note">' + esc(c.note) + "</p>";
     });
     return h;

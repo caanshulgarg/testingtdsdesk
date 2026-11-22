@@ -733,7 +733,7 @@ const FinSt = (() => {
       lines.push(x); V[key] = x.v; return x.v;
     };
     const to = fyDates(fy).to, priorTo = fyDates(String(N(fy) - 1)).to;
-    const msme = at => { try { const r = Audit.checks.msme43Bh(Audit, [], {to: at, from: fyDates(at.slice(0, 4) - 1).from}); return r ? R2(r.amount) : 0; } catch (e){ return 0; } };
+    const msme = at => { try { const r = Audit.checks.msme43Bh(Audit, [], {to: at, from: fyDates(at.slice(0, 4) - 1).from}); return R2([].concat(r || []).filter(f => !f.key).reduce((s, f) => s + f.amount, 0)); } catch (e){ return 0; } };
     const pbt = R2(-T.rows.filter(r => isPL(r) && CODES[r.code].note !== "22").reduce((s, r) => s + r.final, 0));
     L("pbt", "Net profit before tax as per the statement of profit and loss", "A", pbt, {codes: "all P&L codes except 22A-22C"});
     const intT = byName(/INTEREST\b.*\b(TDS|TCS|INCOME TAX)\b|\b(TDS|TCS)\b.*\bINTEREST/), gstI = byName(/INTEREST\b.*\b(GST|IGST|CGST|SGST)\b|\b(GST|IGST|CGST|SGST)\b.*\bINTEREST/), pen = byName(/PENALT|\bFINES?\b|LATE FEE|COMPOUNDING/, /INTEREST/);

@@ -1,0 +1,142 @@
+// node run_audit_law.js - the audit's checks of the law, on small made-up books (review of 22-Nov-2026, track mis-audit):
+//   269ST by the person paying (the bill's GST with it), 40A(3) by the person paid (the GST with it), 269SS / 269T lender by
+//   lender with what the lender is owed, 206AA's rate without a PAN by section, 43B without TDS and with GST net of the
+//   input credit, 43B(h) only from FY 2023-24 and the time allowed asked when not set, no row cut inside a check (so no
+//   item is marked put right while still open), and the Form 3CD draft: 21(b)(ii)(A) and 34(a) not counted twice, clause 31
+//   as the form numbers it, every row (not the first 1,000), clause 44 without depreciation, salary or provisions.
+// Every name and figure is made up. TDSDESK_HTML points at another build (the check before a fix: it fails there).
+const {load, HTML} = require("./harness"), fs = require("fs");
+const src = fs.readFileSync(HTML, "utf8");
+const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "fmtDate", "tallyDate", "STATE_CODES", "RULE_DEFAULTS", "Books", "LedMaster", "Audit", "MIS", "TDS", "Certs", "GSTR", "GSTAdv", "GSTRev", "GSTAmend",
+  "GST2B", "INR", "NORM_CACHE", "normName", "normNameRaw", "nameSim", "gramsOf", "gfN", "Parties", "FS", "GSTSet", "GSTF", "GSTQ", "D", "TDSRate", "TDSInt", "GSTIN_RE", "TDSFiled", "BOOKS_KEYS",
+  "TDSWatch", "noPanRate", "NO_PAN_RATE"].concat(/\nconst AuditRep = /.test(src) ? ["AuditRep"] : []);
+const {ctx, x} = load(HTML, NAMES);
+let fails = 0; const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };
+const FROM = "20250401", TO = "20260331";
+ctx.CO = () => ({name: "Made-up Traders Private Limited", pan: "AAACM0000A"}); ctx.S.coId = "t"; ctx.S.data = {}; ctx.saveBooks = () => {};
+
+const UNDER = {"Cash": "Cash-in-Hand", "Made-up Bank": "Bank Accounts", "Sales": "Sales Accounts", "Purchase": "Purchase Accounts", "Rent": "Indirect Expenses", "Salary": "Indirect Expenses",
+  "Depreciation": "Indirect Expenses", "Plant": "Fixed Assets", "Salary Payable": "Current Liabilities", "Mohan Loan": "Unsecured Loans", "Asha Loan": "Unsecured Loans", "Capital": "Capital Account",
+  "07 CGST OUTPUT": "Duties & Taxes", "07 SGST OUTPUT": "Duties & Taxes", "07 CGST INPUT": "Duties & Taxes", "07 SGST INPUT": "Duties & Taxes", "07 IGST INPUT": "Duties & Taxes", "TDS Payable 194C": "Duties & Taxes",
+  "Professional Tax Payable": "Duties & Taxes", "Ravi Stores": "Sundry Debtors", "Supp A": "Sundry Creditors", "Supp B": "Sundry Creditors", "Supp C": "Sundry Creditors", "Supp D": "Sundry Creditors", "Tiny Works": "Sundry Creditors"};
+const GROUPS = {"Cash-in-Hand": "Current Assets", "Bank Accounts": "Current Assets", "Sundry Debtors": "Current Assets", "Sundry Creditors": "Current Liabilities", "Duties & Taxes": "Current Liabilities",
+  "Unsecured Loans": "Loans (Liability)", "Current Assets": "", "Current Liabilities": "", "Loans (Liability)": "", "Sales Accounts": "", "Purchase Accounts": "", "Indirect Expenses": "", "Capital Account": "", "Fixed Assets": ""};
+let n = 0;
+const V = (date, type, ent, o) => Object.assign({id: "v" + (++n), no: String(n), date, type, party: "", narr: "", ref: "", ent: ent.map(([l, a]) => ({l, a}))}, o || {});
+function books(vouchers, more){
+  const ledInfo = {}; Object.keys(UNDER).forEach(l => { ledInfo[l] = {ob: 0, from: FROM}; }); ledInfo["Capital"].ob = 10000000; ledInfo["Cash"].ob = -5000000; ledInfo["Made-up Bank"].ob = -5000000;
+  const b = Object.assign({cid: "t", vouchers: vouchers.sort((a, c) => a.date.localeCompare(c.date)), meta: {from: FROM, to: TO, gstins: ["07AAACM0000A1Z5"]}, under: Object.assign({}, UNDER), groups: Object.assign({}, GROUPS),
+    ledInfo, pans: {}, gstins: {}, challans: [], alloc: {}, msme: {}}, more || {});
+  b.map = x.Books.mapLedgers(b.vouchers, {}); ctx.S.books = b; return b;
+}
+const ctxOf = () => ({from: FROM, to: TO, bal: x.Audit.balances(FROM, TO)});
+const check = (id, vs) => [].concat(x.Audit.checks[id](x.Audit, x.Audit.vouchers(FROM, TO).sort((a, c) => a.date.localeCompare(c.date)), ctxOf()) || []).filter(Boolean);
+const rowsOf = (fs2, key) => (fs2.find(f => (f.key || "") === (key || "")) || {rows: []}).rows;
+
+console.log("1. 269ST: cash from one person in a day, the bill's tax with it");
+books([V("20250610", "Sales", [["Cash", -212400], ["Sales", 180000], ["07 CGST OUTPUT", 16200], ["07 SGST OUTPUT", 16200]], {party: "Ravi"})]
+  .concat(Array.from({length: 25}, (_, i) => V("20250612", "Sales", [["Cash", -9440], ["Sales", 8000], ["07 CGST OUTPUT", 720], ["07 SGST OUTPUT", 720]], {party: "Cash"}))));
+let r = rowsOf(check("cash269ST"));
+ok(r.length === 1 && r[0].amount === 212400 && r[0].party === "Ravi" && r[0].date === "20250610", "Ravi's one cash bill of 2,12,400 (1,80,000 + GST) is a 269ST receipt: " + JSON.stringify(r.map(z => [z.party, z.amount])));
+ok(!r.some(z => z.date === "20250612"), "25 cash sales of 9,440 to no one named on one day are not one person's 2 lakh");
+
+console.log("2. 40A(3): cash paid to one person in a day, the GST with it");
+books([V("20250510", "Payment", [["Purchase", -9000], ["07 CGST INPUT", -810], ["07 SGST INPUT", -810], ["Cash", 10620]], {party: "Cash"})]
+  .concat(["Supp A", "Supp B", "Supp C", "Supp D"].map(p => V("20250512", "Payment", [["Purchase", -3000], ["Cash", 3000]], {party: "Cash"}))));
+r = rowsOf(check("cash40A3"));
+ok(r.length === 1 && r[0].amount === 10620 && r[0].date === "20250510", "a direct cash purchase of 9,000 + 1,620 GST = 10,620 is over 10,000: " + JSON.stringify(r.map(z => [z.date, z.party, z.amount])));
+ok(!r.some(z => z.date === "20250512"), "four cash purchases of 3,000 to Purchase on one day, no payee named, are not one party's 12,000");
+books([V("20250520", "Payment", [["Supp A", -6000], ["Cash", 6000]], {party: "Supp A"}), V("20250520", "Payment", [["Rent", -5000], ["Cash", 5000]], {party: "Supp A"})]);
+r = rowsOf(check("cash40A3"));
+ok(r.length === 1 && r[0].amount === 11000 && r[0].party === "Supp A", "two cash payments to Supp A the same day (one booked to Rent with Supp A as the party) add up to 11,000");
+
+console.log("3. 269SS / 269T: lender by lender, with what is owed");
+books([V("20250805", "Receipt", [["Cash", -15000], ["Mohan Loan", 15000]]), V("20250805", "Receipt", [["Cash", -15000], ["Mohan Loan", 15000]]),
+  V("20250901", "Receipt", [["Cash", -25000], ["Asha Loan", 12500], ["Mohan Loan", 12500]])]);
+ctx.S.books.ledInfo["Asha Loan"].ob = 0;
+let lf = check("cashLoans"), tk = rowsOf(lf, "269SS");
+ok(tk.some(z => z.party === "Mohan Loan" && z.date === "20250805" && z.amount === 15000) && tk.filter(z => z.date === "20250805").length === 1, "Mohan Loan's second cash loan of 15,000 the same day (15,000 already owed) is a 269SS breach: " + JSON.stringify(tk.map(z => [z.date, z.party, z.amount])));
+ok(!tk.some(z => z.party === "Asha Loan"), "25,000 cash split 12,500 to two lenders: Asha Loan (owed nothing before) crossed no limit");
+ok(tk.some(z => z.party === "Mohan Loan" && z.date === "20250901"), "Mohan Loan's 12,500 with 30,000 owed: a breach");
+books([V("20250905", "Payment", [["Mohan Loan", -5000], ["Cash", 5000]])]); ctx.S.books.ledInfo["Mohan Loan"].ob = 50000;
+lf = check("cashLoans");
+ok(rowsOf(lf, "269T").length === 1, "a cash repayment of 5,000 of a loan standing at 50,000 (the opening balance) is a 269T breach");
+ok(lf.every(f => !/31\(b\)/.test(f.clause)), "269T is clause 31(c) of Form 3CD, not 31(b): " + lf.map(f => f.clause).join(" | "));
+
+console.log("4. 206AA: the rate without a PAN, by section");
+books([]);
+const tdsRows = x.TDS.rows, tdsCh = x.TDS.challans;
+x.TDS.rows = () => [{id: "q1", date: "20250715", section: "194Q", party: "Big Goods Co", pan: "", paid: 5000000, tds: 5000, rate: 0.1, voucher: "1"}];
+let f = check("tdsPan")[0];
+ok(f && Math.abs(f.amount - 245000) < 0.01, "194Q, 50 lakh above the limit, 5,000 deducted, no PAN: short 5% of 50 lakh less 5,000 = 2,45,000 (got " + (f && f.amount) + ")");
+ok(f && !/at 20% without a PAN;/.test(f.impact), "the effect does not say 20% for every section");
+
+console.log("5. no row cut inside a check: 600 unpaid deductions, one more entered earlier, nothing marked put right");
+const mk = k => ({id: "d" + k, voucherId: "dv" + k, date: "202506" + String(10 + (k % 18)).padStart(2, "0"), section: "194C", party: "Contractor " + String(k).padStart(3, "0"), pan: "AAAPC0000C", paid: 10000, tds: 100, rate: 1, voucher: "D" + k});
+let list = Array.from({length: 600}, (_, k) => mk(k + 10));
+x.TDS.rows = () => list; x.TDS.challans = () => [];
+books([V("20250601", "Journal", [["Rent", -1], ["Supp A", 1]])]);
+const a1 = x.Audit.run(FROM, TO, "test");
+list = [mk(1)].concat(list);
+const a2 = x.Audit.run(FROM, TO, "test"), solvedU = (a2.solved || []).filter(z => z.id === "tdsUnpaid").reduce((s, z) => s + z.n, 0);
+ok(solvedU === 0, "no unpaid deduction marked put right after one more came in earlier in the list (" + solvedU + " were)");
+ok(Object.values(ctx.S.books.audit.items).filter(it => it.f === "tdsUnpaid" && !it.solved).length === 601, "all 601 unpaid deductions are open items");
+x.TDS.rows = tdsRows; x.TDS.challans = tdsCh;
+
+console.log("6. 43B: TDS left out, GST net of the input credit");
+books([V("20260320", "Journal", [["Rent", -25000], ["TDS Payable 194C", 25000]]), V("20260321", "Sales", [["Ravi Stores", -200000], ["07 CGST OUTPUT", 100000], ["07 SGST OUTPUT", 100000]]),
+  V("20260322", "Purchase", [["07 CGST INPUT", -80000], ["07 SGST INPUT", -80000], ["Supp A", 160000]]), V("20260323", "Journal", [["Salary", -2500], ["Professional Tax Payable", 2500]])]);
+r = rowsOf(check("balances"), "43B");
+const tot = r.reduce((s, z) => s + z.amount, 0);
+ok(!r.some(z => /TDS/.test(z.party)), "TDS payable is not a 43B sum: " + JSON.stringify(r.map(z => [z.party, z.amount])));
+ok(Math.abs(tot - 42500) < 0.01, "GST payable after credit 20,000 + 20,000, and professional tax 2,500: 42,500 (got " + tot + ")");
+
+console.log("7. 43B(h): from FY 2023-24, and the time allowed asked when not set");
+const msmeBooks = (to) => { books([V(to.slice(0, 4) + "0101", "Purchase", [["Purchase", -50000], ["Tiny Works", 50000, ]], {party: "Tiny Works", ref: "T-1"}), V(to.slice(0, 4) + "0305", "Purchase", [["Purchase", -30000], ["Tiny Works", 30000]], {party: "Tiny Works", ref: "T-2"})]);
+  ctx.S.books.vouchers.forEach(v => { v.ent[1].b = [[v.ref, "New Ref", -v.ent[0].a]]; }); ctx.S.books.msme = {"Tiny Works": "Micro"}; ctx.S.books.meta.from = to.slice(0, 4) - 1 + "0401"; Object.values(ctx.S.books.ledInfo).forEach(i => { i.from = to.slice(0, 4) - 1 + "0401"; }); };
+msmeBooks("20230331");
+let old = [].concat(x.Audit.checks.msme43Bh(x.Audit, [], {from: "20220401", to: "20230331"}) || []).filter(Boolean);
+ok(!old.length, "FY 2022-23: no 43B(h) finding (the section applies from FY 2023-24)");
+msmeBooks("20260331");
+let mf = [].concat(x.Audit.checks.msme43Bh(x.Audit, [], {from: "20250401", to: "20260331"}) || []).filter(Boolean);
+ok(mf.some(z => !z.key && z.rows.length === 1 && z.rows[0].amount === 50000), "FY 2025-26: the bill 89 days old is beyond 45 days");
+ok(mf.some(z => z.key === "days" && z.rows.length === 1 && z.rows[0].amount === 30000), "the bill 26 days old is asked about: the time agreed is not set (15 days without a written agreement)");
+ctx.S.books.misCfg = {msmeDays: 15};
+mf = [].concat(x.Audit.checks.msme43Bh(x.Audit, [], {from: "20250401", to: "20260331"}) || []).filter(Boolean);
+ok(mf.length === 1 && !mf[0].key && mf[0].rows.length === 2 && mf[0].title.includes("15 days"), "set to 15 days: both bills are disallowed, nothing asked");
+
+console.log("8. Form 3CD draft");
+if (x.Audit.form3cd){
+  // 21(b)(ii)(A) and 34(a): a 194C contractor with 5 bills of 1 lakh, TDS on 3 of them
+  const fake = {from: FROM, to: TO, at: "2026-04-10T00:00:00Z", code: "X", findings: [{id: "tdsMissed:K|194C|2025-26", check: "tdsMissed", base: 200000, section: "194C", party: "K", count: 5, amount: 2000,
+    rows: [1, 2, 3, 4, 5].map(k => ({date: "2025060" + k, no: String(k), type: "194C", party: "K", amount: 100000, note: "booked to Contract"}))}]};
+  books([]);
+  const allRows = x.TDS.allRows, iss = x.Certs.issues;
+  x.TDS.allRows = () => [1, 2, 3].map(k => ({date: "2025060" + k, section: "194C", party: "K", paid: 100000, tds: 1000})); x.Certs.issues = () => [];
+  const d = x.Audit.form3cd(fake), cl = no => d.clauses.find(c => c.no === no);
+  const sum = (c, i) => c.rows.reduce((s, z) => s + z[i], 0);
+  ok(sum(cl("21(b)(ii)(A)"), 1) === 200000, "21(b)(ii)(A): 2,00,000 disallowable, not the 5 bills' 5,00,000 (got " + sum(cl("21(b)(ii)(A)"), 1) + ")");
+  const s34 = cl("34(a)").rows.find(z => z[0] === "194C") || [];
+  ok(s34[1] === 500000 && s34[5] === 200000, "34(a) 194C: paid or credited 5,00,000 and without deduction 2,00,000 (got " + s34[1] + ", " + s34[5] + ")");
+  x.TDS.allRows = allRows; x.Certs.issues = iss;
+  ok(cl("31(c)") && !d.clauses.some(c => c.no === "31(b), 31(c)"), "clause 31(c) holds the 269T repayments");
+  // every row: a finding of 1,400 cash payments keeps 1,000 in the run; the draft has all 1,400
+  books([]);
+  const big = Array.from({length: 1400}, (_, k) => ({key: "cash40A3|v" + k, vid: "v" + k, date: "20250" + (5 + (k % 4)) + "10", no: String(k), type: "Payment", party: "P" + k, amount: 10001, note: ""}));
+  const st = {items: {}};
+  big.forEach(z => { st.items[z.key] = {f: "cash40A3", title: "Cash", last: "2026-04-11T00:00:00Z", row: {date: z.date, no: z.no, party: z.party, amount: z.amount, note: z.note, type: z.type}}; });
+  ctx.S.books.audit = st;
+  const run2 = {from: FROM, to: TO, at: "2026-04-11T00:00:00Z", code: "Y", findings: [{id: "cash40A3", check: "cash40A3", count: 1400, amount: 1400 * 10001, rows: big.slice(0, 1000)}]};
+  const d2 = x.Audit.form3cd(run2);
+  ok(d2.clauses.find(c => c.no === "21(d)(A)").rows.length === 1400, "21(d)(A): all 1,400 cash payments, not the first 1,000");
+  const h = x.Audit.form3cdHtml(d2);
+  ok(/1,?200 more/.test(h) || (h.match(/<tr>/g) || []).length > 1400, "the printed draft says how many rows are not shown");
+  // clause 44: depreciation, salary and its provision are not expenditure on goods and services
+  books([V("20260331", "Journal", [["Depreciation", -500000], ["Plant", 500000]]), V("20260331", "Journal", [["Salary", -300000], ["Salary Payable", 300000]]),
+    V("20250601", "Purchase", [["Purchase", -10000], ["Supp A", 10000]], {party: "Supp A"})]);
+  const g = x.Audit.form3cd({from: FROM, to: TO, at: "", code: "", findings: []}).clauses.find(c => c.no === "44").rows[0];
+  ok(g[0] === 10000 && g[5] === 10000, "clause 44: only the purchase of 10,000 (from an unregistered supplier), not depreciation or salary (got total " + g[0] + ", unregistered " + g[5] + ")");
+} else ok(false, "Audit.form3cd is with the Audit screen's file (77-audit.js)");
+
+console.log(fails ? fails + " FAILED" : "all passed");
+process.exit(fails ? 1 : 0);

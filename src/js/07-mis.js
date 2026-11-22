@@ -33,7 +33,8 @@ const MIS = {
   // such steps at once
   *eachV(V, f){ for (let i = 0; i < V.length; i++){ f(V[i]); if (i % 5000 === 4999) yield; } },
   runSteps(it){ let r; while (!(r = it.next()).done); return r.value; },
-  cfg(b){ return Object.assign({freq: "monthly", msmeDays: 45}, (b && b.misCfg) || {}); },
+  // (MSMED Act section 15: never more than 45 days)
+  cfg(b){ const c = Object.assign({freq: "monthly"}, (b && b.misCfg) || {}); c.msmeDays = Math.min(45, num(c.msmeDays) || 45); return c; },
   ym(d){ return String(d).slice(0, 6); },
   monthsOf(from, to){ const out = []; let y = num(from.slice(0, 4)), m = num(from.slice(4, 6)); while (String(y) + String(m).padStart(2, "0") <= to.slice(0, 6)){ out.push(String(y) + String(m).padStart(2, "0")); m++; if (m > 12){ m = 1; y++; } } return out; },
   shift(d, years, days){ const t = new Date(Audit.iso(d) + "T00:00:00"); if (years) t.setFullYear(t.getFullYear() + years); if (days) t.setDate(t.getDate() + days); return t.getFullYear() + String(t.getMonth() + 1).padStart(2, "0") + String(t.getDate()).padStart(2, "0"); },
@@ -945,18 +946,27 @@ Object.assign(MIS, {
 Object.assign(Audit.checks, {
   // section 43B(h): what is owed to a micro or small enterprise beyond the agreed time is allowed only when paid
   msme43Bh(A, V, ctx){
+    // section 43B(h) came in with the Finance Act 2023, from FY 2023-24 (AY 2024-25): not for an earlier year
+    if (ctx.to < "20230401") return null;
     // (ctx.ageP: the same bills, worked out in steps before the checks by Audit.runIn)
-    const msme = MIS.msme(), days = MIS.cfg(S.books).msmeDays, ag = ctx.ageP || MIS.ageing(ctx.to, "p", null), rows = [];
+    // the time allowed (MSMED Act section 15): 15 days from acceptance, or the days agreed in writing, never over 45. Not
+    // set under MIS settings: 45 is used for the finding, and the bills between 16 and 45 days are asked about
+    const msme = MIS.msme(), set = num((S.books.misCfg || {}).msmeDays), days = set > 0 ? Math.min(45, set) : 45, ag = ctx.ageP || MIS.ageing(ctx.to, "p", null), rows = [], ask = [];
     ag.rows.forEach(p => {
       if (!/micro|small/i.test(msme[p.party] || "")) return;
-      (p.open || []).filter(x => x.age > days).forEach(x => rows.push({vid: "", date: x.date, no: x.ref, type: msme[p.party], party: p.party, amount: x.left,
+      (p.open || []).forEach(x => (x.age > days ? rows : !set && x.age > 15 ? ask : []).push({vid: "", date: x.date, no: x.ref, type: msme[p.party], party: p.party, amount: x.left,
         note: x.age + " days unpaid on " + fmtDate(tallyDate(ctx.to))}));
     });
-    if (!rows.length) return null;
-    return {area: "bal", sev: "high", clause: "3CD 22, 26; section 43B(h)", title: "Micro and small suppliers unpaid beyond " + days + " days",
-      problem: rows.length + " bills of " + new Set(rows.map(r => r.party)).size + " MSME suppliers are unpaid beyond the time the MSMED Act allows.",
+    const out = [], t = (r, n) => n + " bills of " + new Set(r.map(x => x.party).filter(Boolean)).size + " MSME suppliers";
+    if (rows.length) out.push({area: "bal", sev: "high", clause: "3CD 22, 26; section 43B(h)", title: "Micro and small suppliers unpaid beyond " + days + " days",
+      problem: t(rows, rows.length) + " are unpaid beyond the time the MSMED Act allows.",
       impact: "What is unpaid on 31 March beyond the time allowed (15 days, or up to 45 days by agreement) is not allowed as an expense for the year (section 43B(h)); interest under section 16 of the MSMED Act, at three times the bank rate, is also not allowed (clause 22).",
-      amount: rows.reduce((s, r) => s + r.amount, 0), suggestion: "Pay these suppliers before the year ends. What stays unpaid is added back in the computation and allowed in the year it is paid. Check each supplier's Udyam type: traders are outside this rule.", je: null, rows};
+      amount: rows.reduce((s, r) => s + r.amount, 0), suggestion: "Pay these suppliers before the year ends. What stays unpaid is added back in the computation and allowed in the year it is paid. Check each supplier's Udyam type: traders are outside this rule.", je: null, rows});
+    if (ask.length) out.push({key: "days", area: "bal", sev: "medium", clause: "3CD 22, 26; section 43B(h)", title: "MSME bills 16 to 45 days old: the time agreed with the suppliers is not set",
+      problem: t(ask, ask.length) + " are unpaid for 16 to 45 days. Without a written agreement the MSMED Act allows 15 days (section 15), and these are then disallowed.",
+      impact: "The time allowed decides the 43B(h) disallowance; it is not set for this client, so these are not counted in it.", amount: ask.reduce((s, r) => s + r.amount, 0),
+      suggestion: "Set the days agreed in writing (15 where there is no agreement, at most 45) under MIS \u2192 Settings, and run the audit again.", je: null, rows: ask});
+    return out;
   },
   // penalties, fines and interest that tax law does not allow
   penalties(A, V){

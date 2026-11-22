@@ -438,7 +438,7 @@ const FinDepr = (() => {
     const bookC = R2(Object.values(ca.classes).filter(c => dep(c.cls)).reduce((s, c) => s + c.nC, 0));
     const yr = yearCA(fy, 0), bookO = R2(Object.values(yr.classes).filter(c => dep(c.cls)).reduce((s, c) => s + R2(N(c.open && c.open.gross) - N(c.open && c.open.acc)), 0));
     const taxC = it.close, taxO = it.open;
-    let msme = 0; try { const r = Audit.checks.msme43Bh(Audit, [], {to, from: F.y0}); msme = r ? R2(r.amount) : 0; } catch (e){ msme = 0; }
+    let msme = 0; try { const r = Audit.checks.msme43Bh(Audit, [], {to, from: F.y0}); msme = R2([].concat(r || []).filter(f => !f.key).reduce((s, f) => s + f.amount, 0)); } catch (e){ msme = 0; }
     const statEd = (((f.compEdits || {})[fy]) || {}).add_43b_stat, stat = statEd && statEd.v != null && statEd.v !== "" ? R2(N(statEd.v)) : 0;
     const rate = RATE();
     const rows2 = [{key: "dep", label: "Property, plant and equipment: carrying amount in the books less written down value for income tax", book: bookC, tax: taxC, diff: R2(bookC - taxC)},
