@@ -29,7 +29,7 @@ func TestGuardByRequestID(t *testing.T) {
 		}
 	}
 	for id, x := range samples {
-		if id == "Import" {
+		if isImportID(id) { // 2.5.18: the payroll import too
 			continue // a posting, not a read: its vouchers carry their dates
 		}
 		for _, sp := range r4Spellings {

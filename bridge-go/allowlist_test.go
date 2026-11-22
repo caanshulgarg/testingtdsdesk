@@ -60,6 +60,10 @@ func driveEveryRequest(t *testing.T) *standTally {
 	if r := postOne(t, "every1", finVoucher("every1", fgParty, "EV-1", td, "3.00")); r["ok"] != true {
 		t.Fatalf("posting: %v", r)
 	}
+	// 2.5.18: the payroll import (one Tally payroll voucher, the owner's approval of 22-Nov-2026)
+	if r := postOne(t, "everypr", payrollFixture(t)); r["ok"] != true {
+		t.Fatalf("payroll posting: %v", r)
+	}
 	_, err = vouchersOnDate(f.port, zz, td, fgParty)
 	must("dup check", err)
 	_, err = tagsOnDate(f.port, zz, td)

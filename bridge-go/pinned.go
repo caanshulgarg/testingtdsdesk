@@ -176,8 +176,9 @@ var requestRebuild = map[string]func(x string) []string{
 		}
 		return o
 	},
-	editLogProbeID: pinOne(func(x string) string { return editLogProbeRequest(pinCo(x), group(`\$MasterID = (\d+)`, x, 1)) }),
-	"Import":       func(x string) []string { return importRebuild(x) },
+	editLogProbeID:  pinOne(func(x string) string { return editLogProbeRequest(pinCo(x), group(`\$MasterID = (\d+)`, x, 1)) }),
+	"Import":        func(x string) []string { return importRebuild(x) },
+	payrollImportID: payrollImportRebuild,
 	"FinComMeasureB": pinOne(func(x string) string {
 		a, z := pinDates(x)
 		return measureReqB(pinCo(x), a, z, pinNum(x, `\$AlterID &gt; (\d+)`))
