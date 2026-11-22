@@ -472,12 +472,15 @@ function salesTallyKey(x){ return String(x.guid || x.masterId || [x.date, x.type
 // invoices held by a posting in FinCom's cloud (v.postJob): that posting's result marked on them once it has one
 async function salesQueuedSync(){
   const s = SL(); let n = 0;
-  for (const v of s.list.filter(x => x.postJob && x.status === "ready")){
+  // (and one whose IRN was cancelled while it was queued: its result still recorded, review of b4ff11b10)
+  for (const v of s.list.filter(x => x.postJob && (x.status === "ready" || x.x.irnCancelInTally))){
     let j = null; try { j = await CloudPost.row(v.postJob); } catch (e){ continue; }
     const r = j && [].concat(j.results || []).find(x => x && x.id === v.id);
     if (r && r.ok){ n++; v.status = "posted"; v.postedAt = new Date().toISOString(); v.postError = ""; v.postedInto = j.company || ""; delete v.postJob; }
     else if (r && salesRefusal(r)){ n++; delete v.postJob; salesMarkRefused(v, r, salesRefusal(r)); }
     else if (j && ["failed", "cancelled"].includes(j.status)){ n++; v.postError = plainMsg((r && r.message) || j.message); delete v.postJob; }
+    // (not posted, its IRN cancelled: no sale any more, CGST Rules r.48(4), so set aside, nothing to cancel in Tally)
+    if (!v.postJob && v.status !== "posted" && v.x.irnStatus === "cancelled"){ v.status = "ignored"; delete v.x.irnCancelInTally; }
   }
   if (n){ saveSales(); render(); }
 }
@@ -633,7 +636,9 @@ function setCustomerLedger(v, ledger){
   return true;
 }
 function salesBulk(kind, ledger){
-  const s = SL(), rows = s.list.filter(v => s.sel.has(v.id) && !salesInTally(v));
+  // (an invoice with a live IRN is never ignored or deleted: the IRN is cancelled first, review of b4ff11b10)
+  const s = SL(), sel = s.list.filter(v => s.sel.has(v.id) && !salesInTally(v)), live = /^(ignore|delete)$/.test(kind) ? sel.filter(v => v.x.irnStatus === "active") : [], rows = sel.filter(v => !live.includes(v));
+  if (live.length) toast(live.length + " with an IRN kept: cancel the IRN first.");
   if (!rows.length) return;
   const before = rows.map(salesSnapshot);
   let n = 0;
@@ -661,6 +666,7 @@ function salesRowAct(a, id, force){
     if (a === "edit"){ s.openId = null; startDraft(v.id); return true; }
     if (a === "nottally"){ postPart(P => P.salesNotTally(v.id)); return true; }
     if (salesInTally(v)){ postPart(P => toast(P.keptOne(v, "invoice"))); return true; }
+    if ((a === "ignore" || a === "delete") && salesIrnLocked(v)) return true;
     const before = [salesSnapshot(v)];
     if (a === "confirm"){
       mapInvoice(v);

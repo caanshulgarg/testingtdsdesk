@@ -28,7 +28,7 @@
     "salesVt",
     "salesAgainstOf"
   ],
-  "sha256": "c0c78a612931a4750e8c29250f7a87cac48fab158e8d972e9ec90b80dbd0c61b",
+  "sha256": "8b21149a29c8300128f90d61c51388b3a4b85bbe0b5af3f74d46ad9c403e619b",
   "files": [
     "purchase-bill.xml",
     "journal.xml",

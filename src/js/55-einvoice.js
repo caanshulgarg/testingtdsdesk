@@ -22,6 +22,8 @@ const EINV = {
   // voucher's CMPGSTIN), never its main GSTIN for an invoice of another; "" when the client has several and it is not
   // known. Its address: Sales settings' for the main GSTIN, the registration's own (cfg["address_" + GSTIN]) for another
   seller(v, co){ const r = salesRegOf(v); return String(r.gstin || (r.several ? "" : co.gstin) || "").toUpperCase(); },
+  // the GSTIN an IRN was made under (cancel, e-way bill): one made before irnGstin was kept was made with the main GSTIN
+  irnSeller(v, co){ return v.x.irnGstin || (v.x.irnStatus ? String(co.gstin || "").toUpperCase() : this.seller(v, co)); },
   address(gstin, co, cfg){ return gstin && gstin !== String(co.gstin || "").toUpperCase() ? cfg["address_" + gstin] || "" : cfg.address; },
   // what stops the invoice from being e-invoiced, in words
   problems(v, co, cfg){
@@ -36,7 +38,11 @@ const EINV = {
     if (!(x.items || []).length) out.push("The invoice needs its items (description, HSN, quantity, rate).");
     (x.items || []).forEach((it, i) => { if (!/^\d{4,8}$/.test(String(it.hsn || "").trim())) out.push("Item " + (i + 1) + " needs an HSN or SAC code of 4 to 8 digits."); });
     // (the IRP is given the items: they must come to the invoice's own total, a rupee's rounding aside)
-    if (!out.length){ const b = this.build(v, co, cfg), d = r2(num(x.total) - b.ItemList.reduce((a, it) => a + it.TotItemVal, 0)); if (Math.abs(d) > 1) out.push("The items come to " + money(r2(num(x.total) - d)) + " with GST, but the invoice to " + money(x.total) + ": check the items."); }
+    if (!out.length){ const b = this.build(v, co, cfg), d = r2(num(x.total) - b.ItemList.reduce((a, it) => a + it.TotItemVal, 0)); if (Math.abs(d) > 1) out.push("The items come to " + money(r2(num(x.total) - d)) + " with GST, but the invoice to " + money(x.total) + ": check the items.");
+      // (the IRP's IGST or CGST + SGST are worked out from the seller's state and the place of supply, IGST Act ss.7-8: they
+      // must be the invoice's own, a rupee aside, or the IRN reports one tax and the books carry the other)
+      const vd = b.ValDtls, cs = r2(num(x.cgst) + num(x.sgst));
+      if (Math.abs(vd.IgstVal - num(x.igst)) > 1 || Math.abs(r2(vd.CgstVal + vd.SgstVal) - cs) > 1) out.push("By the place of supply the e-invoice would carry IGST " + money(vd.IgstVal) + " and CGST + SGST " + money(r2(vd.CgstVal + vd.SgstVal)) + ", but the invoice has IGST " + money(num(x.igst)) + " and CGST + SGST " + money(cs) + ": correct the tax or the place of supply."); }
     return out;
   },
   // the invoice in the IRP's schema
@@ -83,16 +89,17 @@ const EINV = {
   },
   async cancel(v, reason, remark){
     const s = SL(), co = CO(s.cid);
-    await GSTAPI.call({action: "irn-cancel", gstin: v.x.irnGstin || this.seller(v, co), docKey: v.id, reason, remark});
+    await GSTAPI.call({action: "irn-cancel", gstin: this.irnSeller(v, co), docKey: v.id, reason, remark});
     v.x.irnStatus = "cancelled"; v.x.irnCancelledAt = new Date().toISOString();
     // (next-fix-audit-sales-einv) a cancelled IRN: the invoice is no supply any more (CGST Rules r.48(4)), so it leaves the
     // sales (ignored, never posted); one already in Tally stays, marked: its voucher is to be cancelled in Tally
-    if (["posted", "intally"].includes(v.status)) v.x.irnCancelInTally = true; else v.status = "ignored";
+    // (a posting still queued in the cloud may yet reach Tally: marked, and salesQueuedSync sets it aside if it does not)
+    if (["posted", "intally"].includes(v.status) || v.postJob) v.x.irnCancelInTally = true; else v.status = "ignored";
     saveSales();
   },
   async ewb(v, trans){
     const s = SL(), co = CO(s.cid);
-    const j = await GSTAPI.call({action: "ewb", gstin: v.x.irnGstin || this.seller(v, co), docKey: v.id, trans});
+    const j = await GSTAPI.call({action: "ewb", gstin: this.irnSeller(v, co), docKey: v.id, trans});
     Object.assign(v.x, {ewayNo: j.ewbNo, ewayDate: j.ewbDate, ewayValidTill: j.validTill}); saveSales(); return j;
   }
 };

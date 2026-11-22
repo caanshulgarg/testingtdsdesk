@@ -78,7 +78,7 @@ function salesCols(s, list, nSel) {
         <span className="src muted">{v.status === "posted" ? "Posted " + (v.postedAt ? shortDate(v.postedAt.slice(0, 10)) : "") : v.status === "intally" ? "Already in Tally" : "Ignored"}{v.receivedAt ? " · paid " + shortDate(v.receivedAt) : ""}</span></> },
     { k: "ac", role: "act", cls: "ac", cell: (v, p) => p.editable ? <>
         {v.status === "review" && v.customerLedger && !p.issue ? <button className="btn small primary" onClick={act("confirm", v)}>Confirm</button> : <button className="btn small" onClick={() => salesOpen(v.id)}>Open</button>}
-        <button className="icon" title="Ignore" aria-label="Ignore" onClick={act("ignore", v)}>✕</button>
+        {v.x.irnStatus !== "active" && <button className="icon" title="Ignore" aria-label="Ignore" onClick={act("ignore", v)}>✕</button>}
       </> : <><button className="btn small" onClick={() => salesOpen(v.id)}>Open</button>{v.status === "ignored" && <button className="linkbtn" onClick={act("restore", v)}>Restore</button>}{v.status === "intally" && <button className="linkbtn" onClick={act("nottally", v)}>Not this Tally entry</button>}</> },
   ];
 }
@@ -133,7 +133,7 @@ function EinvPanel({ v }) {
     {EINV.host === "sandbox" && <p className="note">The firm's server sends to the IRP's <b>sandbox</b> (test): an IRN made here is not a real one.</p>}
     {active ? <div className="bk-alert"><b>IRN</b> {x.irn}<div className="note">Ack. no. {x.ackNo} · {fmtDateTime(x.ackDt)}{x.ewayNo ? " · E-way bill " + x.ewayNo + (x.ewayValidTill ? ", valid till " + fmtDateTime(x.ewayValidTill) : "") : ""}</div></div>
       : x.irnStatus === "cancelled" ? <p className="note"><b>IRN cancelled</b> {x.irn}.</p> : null}
-    {x.irnStatus === "cancelled" && x.irnCancelInTally && <div className="bk-alert bad" data-irn-cancel-tally="">This invoice is still in Tally as a sale, but its IRN is cancelled: cancel the voucher {x.number} in Tally, so the books and GSTR-1 do not count it.</div>}
+    {x.irnStatus === "cancelled" && x.irnCancelInTally && <div className="bk-alert bad" data-irn-cancel-tally="">{v.postJob ? "Its posting to Tally is still queued, but its IRN is cancelled: if it reaches Tally, cancel" : "This invoice is still in Tally as a sale, but its IRN is cancelled: cancel"} the voucher {x.number} in Tally, so the books and GSTR-1 do not count it.</div>}
     {!a ? <p className="note">Give the client's e-invoice API user in <button className="linkbtn" onClick={() => goGstSettings()}>GST settings</button> to make the IRN here.</p>
       : !active ? <>
         {probs.length > 0 && <div className="bk-alert bad">{probs.map((p, i) => <div key={i}>{p}</div>)}</div>}
@@ -198,7 +198,7 @@ function Detail({ v }) {
             <tr><td><b>Total</b></td><td className="n"><b>{INR.format(tot("Dr"))}</b></td><td className="n"><b>{INR.format(tot("Cr"))}</b></td></tr>
           </tbody>
         </table></div>
-        <p className="note">Voucher type “{salesVt(x)}” · bill-wise {ag ? "Agst Ref " + ag.x.number + " (the invoice this note is against)" : "New Ref " + x.number}{co.createOptional ? " · posted as Optional" : ""}</p>
+        <p className="note">Voucher type “{salesVt(x)}” · bill-wise {ag ? "Agst Ref " + ag.x.number + " (the invoice this note is against)" : "New Ref " + x.number + (x.againstInvoice ? " (no one posted invoice " + x.againstInvoice + " of this customer ledger in the note's year on or before it: set it against the bill in Tally if it is one)" : "")}{co.createOptional ? " · posted as Optional" : ""}</p>
       </section>
       <EinvPanel v={v} />
       {(v.trace || []).length > 0 && <section><h3>How it was read</h3><ol className="note">{v.trace.map((t, i) => <li key={i}>{t.ok ? "✔ " : "✖ "}{t.step}: {t.note || ""}</li>)}</ol></section>}
@@ -212,8 +212,10 @@ function Detail({ v }) {
         <button className="btn" onClick={act("print")}>Print invoice</button>
         {S.files["sv:" + v.id] && <button className="btn" onClick={act("file")}>View uploaded file</button>}
         {!fro && <button className="btn" onClick={act("edit")}>{v.source === "created" ? "Edit invoice" : (x.items || []).length ? "Edit items" : "Enter items"}</button>}
-        {!ro && <button className="btn" onClick={act("ignore")}>Ignore</button>}
-        {v.status !== "posted" && <button className="btn danger" onClick={act("delete")}>Delete</button>}
+        {/* (a live IRN: never ignored or deleted here, the IRN is cancelled first: review of b4ff11b10) */}
+        {x.irnStatus === "active" && !ro && <span className="note" data-irn-keep="">It has an IRN: to drop it, cancel the IRN first.</span>}
+        {!ro && x.irnStatus !== "active" && <button className="btn" onClick={act("ignore")}>Ignore</button>}
+        {v.status !== "posted" && x.irnStatus !== "active" && <button className="btn danger" onClick={act("delete")}>Delete</button>}
       </section>
     </Panel>
   );

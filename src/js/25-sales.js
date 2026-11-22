@@ -78,7 +78,7 @@ async function loadSales(cid){
   if (pend.length){ pend.forEach(v => { v.needsMap = false; mapInvoice(v); }); saveSales(); }
   // (item 6: the problems kept with an invoice waiting are worked out again on opening, so a label left from an earlier
   // state, "customer GSTIN is not valid" on a GSTIN since cleared, never stays)
-  if (!remapped) S.sales.list.forEach(v => { if (["review", "ready"].includes(v.status) && !v.needsMap){ const was = JSON.stringify(v.problems || []); v.problems = invoiceProblems(v); if (was !== JSON.stringify(v.problems)) mapInvoice(v); } });
+  if (!remapped) S.sales.list.forEach(v => { if (["review", "ready"].includes(v.status) && !v.needsMap){ const was = JSON.stringify(v.problems || []); v.problems = salesProblemsNow(v); if (was !== JSON.stringify(v.problems)) mapInvoice(v); } });
   });
   salesLearnVt();
   render();
@@ -529,6 +529,17 @@ function salesLines(v){
 }
 // the key of an output tax line a person sets on an invoice: its kind and the invoice's GST rate ("igst_18", "cess_0")
 function salesTaxKey(kind, rate){ return kind + "_" + (kind === "cess" ? "0" : rateTag(num(rate))); }
+// an invoice's problems with the items check (mapInvoice, and the check again on opening, so neither loses it)
+function salesProblemsNow(v, lines){
+  const p = invoiceProblems(v); if (lines === undefined) lines = hasLedgerList() ? salesLines(v) : null;
+  // (next-fix-audit-sales-einv) the voucher's sales and GST lines are the invoice's own figures, and Round Off no more than a
+  // rupee: items at their rates that do not add up to the invoice are held, never posted with the gap in Round Off
+  if (lines){ const x = v.x, sum = r => r2(lines.filter(l => l.role === r).reduce((a, l) => a + l.amt, 0)), ro = sum("roundoff");
+    if (Math.abs(sum("sales") - num(x.taxable)) > 1 || Math.abs(sum("tax") - num(x.cgst) - num(x.sgst) - num(x.igst) - num(x.cess)) > 1 || ro > 1)
+      p.push("the items (taxable " + money(sum("sales")) + ", GST " + money(sum("tax")) + ") do not agree with the invoice\u2019s taxable value and GST" + (ro > 1 ? ": " + money(ro) + " would go to Round Off" : "") + ". Check the items");
+  }
+  return p;
+}
 function invoiceProblems(v){
   const co = CO(SL().cid), x = v.x, p = [];
   if (v.hold) p.push(v.hold);   // a sheet's row held for a person (a negative amount its Type column does not explain)
@@ -640,14 +651,8 @@ function mapInvoice(v, keep){
     v.customerLedger = c.ledger; v.custSource = c.label; v.custSure = c.sure; v.userLedger = false;
   }
   salesLearnReg(v);
-  v.problems = invoiceProblems(v);
   const lines = hasLedgerList() ? salesLines(v) : null;
-  // (next-fix-audit-sales-einv) the voucher's sales and GST lines are the invoice's own figures, and Round Off no more than a
-  // rupee: items at their rates that do not add up to the invoice are held, never posted with the gap in Round Off
-  if (lines){ const x = v.x, sum = r => r2(lines.filter(l => l.role === r).reduce((a, l) => a + l.amt, 0)), ro = sum("roundoff");
-    if (Math.abs(sum("sales") - num(x.taxable)) > 1 || Math.abs(sum("tax") - num(x.cgst) - num(x.sgst) - num(x.igst) - num(x.cess)) > 1 || ro > 1)
-      v.problems.push("the items (taxable " + money(sum("sales")) + ", GST " + money(sum("tax")) + ") do not agree with the invoice\u2019s taxable value and GST" + (ro > 1 ? ": " + money(ro) + " would go to Round Off" : "") + ". Check the items");
-  }
+  v.problems = salesProblemsNow(v, lines);
   v.ledgerIssues = lines ? ledgerProblems(v, lines) : ["Tally ledger list not loaded"];
   // the output GST ledgers picked, with why (shown on the row), and the choices a person must make (next-fix-igst-pick)
   v.taxPicks = lines ? lines.filter(l => l.role === "tax" && l.ledger).map(l => ({kind: l.kind, ledger: l.ledger, why: l.why || ""})) : [];
@@ -672,7 +677,8 @@ function partyMaster(ledger){
 function salesPartyFill(v){
   // (only an invoice uploaded from a sheet since this rule, when it is added and when a person sets its customer ledger:
   // never one uploaded before, nor a B2CS / B2CL or unregistered row, which carry no v.sheetHad; never on a reload)
-  const x = v.x, h = v.sheetHad; if (!h || ["posted", "intally", "ignored"].includes(v.status)) return;
+  // (nor on an invoice with a live IRN: its party, GSTIN and place of supply are the IRN's)
+  const x = v.x, h = v.sheetHad; if (!h || x.irnStatus === "active" || ["posted", "intally", "ignored"].includes(v.status)) return;
   const f = v.filled || {}, m = v.customerLedger ? partyMaster(v.customerLedger) : null;
   const ours = k => !x[k] || (f[k] && x[k] === f[k]);
   const out = {ledger: v.customerLedger || ""};
@@ -692,8 +698,12 @@ function salesVt(x){ const c = SL().cfg; return x.noteKind === "credit" ? c.cred
 // the company GSTIN of the voucher: the client's registration the invoice is issued from, else its own
 function salesCmpGstin(v, co){ const r = salesRegOf(v); return r.gstin && salesIsOwn(r.gstin, co) ? r.gstin : co.gstin || ""; }
 // (next-fix-audit-sales-einv) the invoice a credit note is against (x.againstInvoice), posted from FinCom or found in Tally:
-// the note is set against that bill (Agst Ref), so the invoice is not left outstanding; else null (its own New Ref)
-function salesAgainstOf(v){ const x = v.x, ag = x.noteKind === "credit" && normInvNo(x.againstInvoice); return (ag && salesOfNo(x.againstInvoice).find(o => o.id !== v.id && !o.x.noteKind && ["posted", "intally"].includes(o.status) && normInvNo(o.x.number) === ag)) || null; }
+// the note is set against that bill (Agst Ref), so the invoice is not left outstanding; else null (its own New Ref).
+// Only the one invoice of that number to the same customer ledger, dated in the note's financial year on or before it:
+// another party's bill, or last year's of a series that starts again each year, is never taken (review of b4ff11b10)
+function salesAgainstOf(v){ const x = v.x, ag = x.noteKind === "credit" && x.date && v.customerLedger && normInvNo(x.againstInvoice);
+  const c = ag ? salesOfNo(x.againstInvoice).filter(o => o.id !== v.id && !o.x.noteKind && ["posted", "intally"].includes(o.status) && normInvNo(o.x.number) === ag && o.customerLedger === v.customerLedger && o.x.date && o.x.date <= x.date && fyLabel(o.x.date) === fyLabel(x.date)) : [];
+  return c.length === 1 ? c[0] : null; }
 function salesVoucherXml(v, co){
   const x = v.x, cn = x.noteKind === "credit";
   const vt = xesc(salesVt(x)), d = toTallyDate(x.date);
