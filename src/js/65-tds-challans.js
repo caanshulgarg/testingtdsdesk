@@ -126,6 +126,7 @@ const TDSCH = {
   MON: {JAN: 1, FEB: 2, MAR: 3, APR: 4, MAY: 5, JUN: 6, JUL: 7, AUG: 8, SEP: 9, OCT: 10, NOV: 11, DEC: 12},
   // a date as the portal writes it (05-May-2026, 05/05/2026, 2026-05-05, an Excel day number) -> yyyymmdd
   date8(v){
+    if (v instanceof Date) return Market.date(v).replace(/-/g, "");
     if (typeof v === "number" && v > 20000 && v < 80000){ const d = new Date(Date.UTC(1899, 11, 30) + v * 86400000); return d.toISOString().slice(0, 10).replace(/-/g, ""); }
     const s = String(v || "").trim();
     let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
@@ -151,7 +152,8 @@ const TDSCH = {
   // one challan from what was read; null when it has no BSR, date or serial
   make(x){
     const k = x.cin ? this.cin(x.cin) : null;
-    const bsr = String(x.bsr || (k && k.bsr) || "").replace(/\D/g, ""), serial = String(x.serial || (k && k.serial) || "").replace(/\D/g, "");
+    // a BSR code is 7 digits: one Excel saved as a number has lost its leading zeros (0510308 as 510308): put back
+    const bsr = String(x.bsr || (k && k.bsr) || "").replace(/\D/g, "").replace(/^\d{4,6}$/, b => b.padStart(7, "0")), serial = String(x.serial || (k && k.serial) || "").replace(/\D/g, "");
     const date = this.date8(x.date) || (k && k.date) || "";
     if (bsr.length !== 7 || !serial || !date) return null;
     const tax = this.money2(x.tax), sur = this.money2(x.surcharge), cess = this.money2(x.cess), interest = this.money2(x.interest), fee = this.money2(x.fee),
@@ -213,8 +215,8 @@ const TDSCH = {
       return this.fromTable(this.csv(text));
     }
     await ensureXlsx();
-    const wb = XLSX.read(new Uint8Array(await f.arrayBuffer()), {type: "array"});
-    return [].concat(...wb.SheetNames.map(s => this.fromTable(XLSX.utils.sheet_to_json(wb.Sheets[s], {header: 1, raw: true, defval: ""}))));
+    const wb = xlsxBook(await f.arrayBuffer());
+    return [].concat(...wb.SheetNames.map(s => this.fromTable(xlsxRows(wb.Sheets[s]))));
   },
   csv(text){
     const rows = []; let row = [], cell = "", q = false;

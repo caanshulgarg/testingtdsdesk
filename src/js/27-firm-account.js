@@ -2257,7 +2257,7 @@ document.addEventListener("change", ev => {
   if (ev.target && ev.target.id && ["tallyIn", "booksIn", "mastersIn", "tbIn", "tbCheckIn", "twoBIn", "filedIn"].includes(ev.target.id)){ booksChange(ev.target); return; }
   if (ev.target && ev.target.id === "multiBooksIn"){ MultiUp.pick(ev.target); return; }
   if (ev.target && ev.target.dataset && S.books && gstFixChange(ev.target)) return;
-  if (ev.target && ev.target.id === "marketIn"){ const f = (ev.target.files || [])[0]; ev.target.value = ""; if (f) importMarketFile(f); return; }
+  if (ev.target && ev.target.id === "marketIn"){ const f = (ev.target.files || [])[0]; ev.target.value = ""; if (f) sheetStart([f], "sales"); return; }
   if (ev.target && ev.target.id === "salaryIn"){
     const f = (ev.target.files || [])[0]; ev.target.value = "";
     if (!f) return;
@@ -2267,7 +2267,7 @@ document.addEventListener("change", ev => {
       if (r.error){ toast(r.error); render(); return; }
       b.salary = r.rows; await saveBooks();
       const noPan = r.rows.filter(x => !/^[A-Z]{5}\d{4}[A-Z]$/.test(x.pan)).length;
-      toast(r.rows.length + " salary rows read" + (noPan ? ", " + noPan + " without a valid PAN" : "") + ".");
+      toast(r.rows.length + " salary rows read" + (noPan ? ", " + noPan + " without a valid PAN" : "") + (r.undated ? ", " + r.undated + " without a date (in no quarter): give a Month or Date column" : "") + ".");
       render();
     }, e => { b.busy = ""; toast("Could not read that sheet: " + ((e && e.message) || e)); render(); });
     return;

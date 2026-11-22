@@ -53,7 +53,7 @@ export function PanPaste() {
       await ensureXlsx();
       const wb = XLSX.read(new Uint8Array(await f.arrayBuffer()), { type: "array" }), ws = wb.Sheets[wb.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false }).filter((r) => r && r.length >= 2);
-      run(rows.map((r) => { const pi = r.findIndex((x) => /^[A-Za-z]{5}\d{4}[A-Za-z]$/.test(String(x || "").trim())); return pi > 0 ? String(r[pi === 1 ? 0 : pi - 1]).trim() + "\t" + String(r[pi]).trim() : String(r[0]) + "\t" + String(r[1]); }).join("\n"));
+      run(TDSPanFix.sheetLines(rows));
     } catch (e) { setSaid({ n: 0, why: ["Could not read this file: " + ((e && e.message) || e)] }); }
   };
   return <SideDrawer open={!!S.tdsPanPaste} onClose={close} kind="pan-paste" draft={dr} title="Paste PANs" description="One deductee a line: the name as in Tally, then its PAN (a comma or a tab between, as copied from Excel)">

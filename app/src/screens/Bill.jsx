@@ -136,6 +136,7 @@ function Gst({ e, c, ro, snap }) {
           <div className="row" style={{ marginTop: 6 }}><button className="btn small" onClick={() => doAct("blockAccept")}>Accept: block credit</button><button className="btn small" onClick={() => doAct("blockReject")}>Reject: credit allowed</button></div></div>}
         {blocked175 && <>
           <label className="f" style={{ marginTop: 6 }}><span>Category</span><select value={bcat} onChange={(ev) => billGst(e, "blockCat", ev.target.value)}>
+            {!BLOCK_CATS.some((x) => x.id === bcat) && <option value={bcat}>{bcat}</option>}
             {BLOCK_CATS.map((x) => <option key={x.id} value={x.id}>{x.label + " — " + x.sec}</option>)}</select></label>
           <p className="note" style={{ margin: "6px 0 0" }}>{gd.block.from === "client" ? "Blocked by this client's setting. Untick to claim credit on this bill. " : ""}GST of {money_(c.gstTotal + (r ? r.tax : 0))} is added to the expense instead of input credit.</p>
         </>}

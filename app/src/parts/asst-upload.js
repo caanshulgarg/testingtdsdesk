@@ -90,9 +90,10 @@ const AUpload = window.AUpload = {
   async sheets(file){
     await ensureXlsx();
     if (!window.XLSX) throw {code: "xlsx_missing"};
-    const plain = /\.(csv|txt)$/i.test(file.name) || /text\/(csv|plain)/.test(file.type);
-    const wb = XLSX.read(await file.arrayBuffer(), plain ? {type: "array", raw: true} : {type: "array", cellDates: true, raw: false, dateNF: "dd/mm/yyyy"});
-    return wb.SheetNames.map(n => ({name: n, rows: XLSX.utils.sheet_to_json(wb.Sheets[n], {header: 1, raw: true, defval: "", blankrows: false})}));
+    // (xlsxBook, xlsxRows: src/js/20; an HTML or text table called .xls keeps its cells as written, a sheet's rows end at
+    // its last value: next-fix-audit-imports)
+    const wb = xlsxBook(await file.arrayBuffer(), {cellDates: true, raw: false, dateNF: "dd/mm/yyyy"});
+    return wb.SheetNames.map(n => ({name: n, rows: xlsxRows(wb.Sheets[n], {blankrows: false})}));
   },
   // rows on lines, cells by tabs, sheets apart by a blank line (fincom-assistant reads an .xls from it: filetable.ts)
   gridText(grids){ return grids.map(g => g.slice(0, 20000).map(r => r.map(c => cellText(c)).join("\t")).join("\n")).join("\n\n"); },

@@ -5,7 +5,7 @@ const TDS24Q = {
   // the salary sheet, in whatever column names the office uses
   cols: {
     name: ["employeename", "name", "nameofemployee", "employee"],
-    pan: ["pan", "pannumber", "panofemployee", "employeepan"],
+    pan: ["pan", "pannumber", "panno", "panofemployee", "employeepan"],
     code: ["employeecode", "empcode", "code", "employeeid"],
     month: ["month", "salarymonth", "period"],
     date: ["date", "paymentdate", "dateofpayment"],
@@ -19,53 +19,64 @@ const TDS24Q = {
     surcharge: ["surcharge"], cess: ["cess", "healthandeducationcess", "educationcess"],
     regime: ["regime", "taxregime", "newregime"]
   },
+  // a column: an exact name first, then a header holding the name, never a date of birth or joining nor the company
+  // ("Company" holds "pan"): next-fix-audit-imports
   pick(head, names){
     const h = head.map(x => String(x || "").toLowerCase().replace(/[^a-z0-9]/g, ""));
     for (const n of names){ const i = h.indexOf(n); if (i >= 0) return i; }
-    for (const n of names){ const i = h.findIndex(x => x.includes(n)); if (i >= 0) return i; }
+    for (const n of names){ const i = h.findIndex(x => x.includes(n) && !/birth|dob|join|company/.test(x)); if (i >= 0) return i; }
     return -1;
   },
   async fromFile(file){
     let grid;
     if (/\.(xlsx|xls)$/i.test(file.name)){
       await ensureXlsx();
-      const wb = XLSX.read(await file.arrayBuffer(), {type: "array", cellDates: true});
-      grid = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header: 1, raw: true, defval: ""});
+      const wb = xlsxBook(await file.arrayBuffer(), {cellDates: true});
+      grid = xlsxRows(wb.Sheets[wb.SheetNames[0]]);
     } else {
+      // (quoted cells, "Sharma, Ravi" and "1,00,000", kept whole: TDSCH.csv)
       const t = await file.text();
-      grid = t.split(/\r?\n/).filter(Boolean).map(l => l.split(l.includes("\t") ? "\t" : ","));
+      grid = /\t/.test(t.split(/\r?\n/)[0]) ? t.split(/\r?\n/).filter(Boolean).map(l => l.split("\t")) : TDSCH.csv(t);
     }
     let hi = -1;
     for (let i = 0; i < Math.min(10, grid.length); i++){
       if (this.pick(grid[i], this.cols.name) >= 0 && this.pick(grid[i], this.cols.tds) >= 0){ hi = i; break; }
     }
     if (hi < 0) return {error: "That sheet needs at least an employee name column and a TDS column."};
-    const head = grid[hi], idx = {};
+    const head = grid[hi], idx = {}, body = grid.slice(hi + 1), H = head.map(x => String(x || "").toLowerCase().replace(/[^a-z0-9]/g, ""));
     Object.keys(this.cols).forEach(k => { idx[k] = this.pick(head, this.cols[k]); });
+    // the PAN: the column whose values are PANs (most of them)
+    const pans = i => { const v = body.map(r => String(r[i] || "").trim()).filter(Boolean); return v.length && v.filter(x => /^[A-Z]{5}\d{4}[A-Z]$/i.test(x)).length * 2 >= v.length; };
+    if (idx.pan < 0 || !pans(idx.pan)) idx.pan = head.findIndex((x, i) => pans(i));
+    // a date only by its own name when there is a month column ("Date of Joining" is no payment date)
+    if (idx.month >= 0 && idx.date >= 0 && !this.cols.date.includes(H[idx.date])) idx.date = -1;
     const get = (r, k) => idx[k] >= 0 ? r[idx[k]] : "";
     const rows = [];
-    grid.slice(hi + 1).forEach(r => {
+    let undated = 0;
+    body.forEach(r => {
       const name = String(get(r, "name") || "").trim();
-      if (!name || /^total/i.test(name)) return;
+      if (!name || /^(grand\s*|sub\s*|net\s*)?total\b/i.test(name) || /^(grand\s*|sub\s*)?total\b/i.test(String(r[0] || "").trim())) return;
       const tds = num(get(r, "tds"));
       const when = Market.date(get(r, "date")) || this.monthDate(get(r, "month"));
+      if (!when) undated++;
       rows.push({name, pan: String(get(r, "pan") || "").toUpperCase().replace(/[^A-Z0-9]/g, ""), code: String(get(r, "code") || "").trim(),
         date: when, gross: num(get(r, "gross")), exempt: num(get(r, "exempt")), standard: num(get(r, "standard")),
         profTax: num(get(r, "profTax")), chapter6: num(get(r, "chapter6")), taxable: num(get(r, "taxable")),
         tds, surcharge: num(get(r, "surcharge")), cess: num(get(r, "cess")),
         regime: /new/i.test(String(get(r, "regime") || "")) ? "N" : /old/i.test(String(get(r, "regime") || "")) ? "O" : ""});
     });
-    return {rows: rows.filter(r => r.tds || r.gross)};
+    return {rows: rows.filter(r => r.tds || r.gross), undated};
   },
+  // a month as its last day: Apr-2026, April 26, 04/2026, 2026-04; a month with no year is no date ("")
   monthDate(v){
+    if (v instanceof Date) return Market.date(v);
     const s = String(v || "").trim();
     if (!s) return "";
-    const m = s.match(/([A-Za-z]{3,})[^0-9]*(\d{2,4})/);
-    if (m){
-      const mo = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"].indexOf(m[1].slice(0, 3).toLowerCase()) + 1;
-      const y = m[2].length === 2 ? "20" + m[2] : m[2];
-      if (mo) return y + "-" + String(mo).padStart(2, "0") + "-" + new Date(num(y), mo, 0).getDate();
-    }
+    let m = s.match(/([A-Za-z]{3,})[^0-9]*(\d{2,4})/), y, mo;
+    if (m){ mo = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"].indexOf(m[1].slice(0, 3).toLowerCase()) + 1; y = m[2]; }
+    else if ((m = s.match(/^(\d{1,2})[-\/.](\d{4})$/))){ mo = +m[1]; y = m[2]; }
+    else if ((m = s.match(/^(\d{4})[-\/.](\d{1,2})$/))){ mo = +m[2]; y = m[1]; }
+    if (y){ y = y.length === 2 ? "20" + y : y; return mo >= 1 && mo <= 12 ? y + "-" + String(mo).padStart(2, "0") + "-" + new Date(num(y), mo, 0).getDate() : ""; }
     return Market.date(s);
   },
   rows(){ return ((S.books || {}).salary || []).slice().sort((a, b) => String(a.date).localeCompare(String(b.date))); },

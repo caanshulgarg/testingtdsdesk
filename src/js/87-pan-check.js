@@ -74,6 +74,16 @@ const PANCheck = {
 // BOOKS_KEYS (src/js/18), so it is saved with the client's books and shared through client_books (src/js/41) with every
 // login, every quarter and every year. The order of truth is TDS.panPick (src/js/09): Tally's PAN, else this, else ask.
 const TDSPanFix = {
+  // an Excel of names and PANs (PanBook.jsx's Import Excel) as the lines bulk reads, "name<TAB>PAN": the name's column
+  // by the header (Name, Party, Deductee; never a code's), else the column left of the PAN (next-fix-audit-imports: a
+  // Ledger Code column there was saved as every deductee's name)
+  sheetLines(rows){
+    const isPan = x => /^[A-Za-z]{5}\d{4}[A-Za-z]$/.test(String(x || "").trim()), named = x => /name|party|deductee/i.test(String(x || ""));
+    const hr = rows.findIndex(r => !r.some(isPan) && r.some(named)), nc = hr >= 0 ? rows[hr].findIndex(x => named(x) && !/code|pan|gst/i.test(String(x || ""))) : -1;
+    return rows.filter((r, i) => i !== hr).map(r => { const pi = r.findIndex(isPan);
+      return pi >= 0 && nc >= 0 && nc !== pi && String(r[nc] || "").trim() ? String(r[nc]).trim() + "\t" + String(r[pi]).trim()
+        : pi > 0 ? String(r[pi === 1 ? 0 : pi - 1]).trim() + "\t" + String(r[pi]).trim() : String(r[0]) + "\t" + String(r[1]); }).join("\n");
+  },
   of(party){ return (typeof TDS === "object" && TDS.panRec ? TDS.panRec(party) : ((S.books || {}).panFix || {})[party]) || null; },
   keyOf(party){ const fx = (S.books || {}).panFix || {}; if (fx[party]) return party; const k = normName(party); return Object.keys(fx).find(x => normName(x) === k) || party; },
   pan(party){ const f = this.of(party); return f && f.pan ? f.pan : ""; },
