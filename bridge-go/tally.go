@@ -366,6 +366,7 @@ var requestClass = map[string]string{
 	vchObjectID: "exception", sliceID: "exception", vchByNumberID: "exception",
 	"TDSDeskKeepList":  "keepAbove",
 	"Import":           "import",
+	payrollImportID:    "import",
 	"TDSDeskCompanies": "undated", "TDSDeskCompanyInfo": "undated", "FinComCompany": "undated", "FinComFree": "undated",
 	ledListID: "ledgerPeriod", grpListID: "undated", "TDSDeskLedgers": "undated", "TDSDeskGroups": "undated", "TDSDeskNames": "undated",
 	"TDSDeskGroupNames": "undated", "FinComMeasureNames": "undated", "FinComMeasureLedF": "undated", "FinComMeasureLedO": "undated",

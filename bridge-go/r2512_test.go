@@ -308,6 +308,9 @@ const allowRange2512Words = "; 2.5.12 (the owner's approval of 09-Nov-2026): als
 func allowListRows2511() string {
 	var o []string
 	for _, l := range strings.SplitAfter(allowListRows(), "\n") {
+		if strings.HasPrefix(l, "| "+payrollImportID+" |") {
+			continue // 2.5.18 added the payroll import (payroll2518_test.go)
+		}
 		if strings.HasPrefix(l, "| "+dayHeadsID+" |") {
 			// 2.5.12's sentence on the range form (range2512.go) out: the row as 2.5.11 had it
 			l = strings.Replace(l, dayHeadsRangeWords, "", 1)

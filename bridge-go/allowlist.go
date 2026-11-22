@@ -74,6 +74,7 @@ var tallyAllowList = map[string]allowedReq{
 	tagCheckID:          {purpose: "the FinCom id check: one date's entries, heads and narration only"},
 	masterCheckID:       {purpose: "the posting read-back by Tally's voucher id (LASTVCHID): one month's entries filtered to that one MasterID, heads and narration only"},
 	"Import":            {purpose: "a posting or a deletion (Import Data)"},
+	payrollImportID:     {purpose: "a month's salary as one Tally payroll voucher (Import Data; owner approved 22-Nov-2026)"},
 	sliceID:             {purpose: "the recorder's source C (2.2.0, off by default): one month's entries above an AlterID as GUID, MasterID, AlterID and date, in the date form the read test kept"},
 	datesProbeID:        {purpose: "measure (the read test): one past-year month's entries as GUID, MasterID, AlterID and date, in each date form", measureOnly: true},
 	editLogProbeID:      {purpose: "measure (the read test): one entry by MasterID with its edit-log sub-collection (candidate names)", measureOnly: true},
@@ -141,6 +142,9 @@ func isImportRequest(x string) bool { return strings.HasPrefix(x, importHead) }
 // the collection's ID; else the report's name
 func tallyRequestID(x string) string {
 	if isImportRequest(x) {
+		if isPayrollImport(x) { // 2.5.18: a payroll voucher's Import is held to its own exact shape
+			return payrollImportID
+		}
 		return "Import"
 	}
 	if id, ok := objectRequestID(x); ok {
@@ -173,7 +177,7 @@ func checkAllowed(x string) error {
 		return &notAllowedError{id, "measure-only, and the measuring tool is not running"}
 	}
 
-	if id == "Import" {
+	if isImportID(id) {
 		if !pinnedToBuilder(id, x) {
 			return &pinRefusedError{id}
 		}
@@ -207,7 +211,9 @@ type pinRefusedError struct{ id string }
 
 func (e *pinRefusedError) Error() string {
 	why := "the " + or(e.id, "request") + " request differs from what the bridge builds"
-	if e.id == "Import" {
+	if e.id == payrollImportID {
+		why = "the payroll posting is not one payroll voucher exactly as FinCom builds it"
+	} else if e.id == "Import" {
 		why = "the posting holds something other than vouchers, ledgers, groups or a voucher type's numbering, as FinCom sends them"
 	}
 	return "FinCom Bridge refused to send this (it is not a request FinCom builds): " + why + "; nothing was sent to Tally"
@@ -248,6 +254,7 @@ func allowListSamples() map[string]string {
 		datesProbeID:         datesProbeRequest(c, collFilterGE, a, z),
 		editLogProbeID:       editLogProbeRequest(c, "1"),
 		"Import":             importEnvelope("Vouchers", c, ""),
+		payrollImportID:      payrollImportSample(c),
 		"FinComMeasureB":     measureReqB(c, a, z, 1),
 		"FinComMeasureC":     measureReqC(c, a, z, 1),
 		"FinComMeasureYear":  measureReqYear(c, a, z),

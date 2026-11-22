@@ -52,7 +52,7 @@ func noteRequest(x string, d time.Duration, fail string) {
 	kind := tallyRequestID(x)
 	n := &reqNote{kind: kind, ms: d.Milliseconds(), at: time.Now().Format("2006-01-02T15:04:05")}
 	over := d > time.Duration(selfStopSec())*time.Second
-	if over && kind == "Import" {
+	if over && isImportID(kind) {
 		// review of 2.1.8, finding 7: an import request has its own timeout (importTimeoutSec); its time is import time,
 		// never the self-watch's over-the-limit read
 		writeLog(fmt.Sprintf("Posting: an import request took %.1f s (%d voucher(s)); that is import time, not counted against the %d s read limit", d.Seconds(), strings.Count(x, "<VOUCHER "), selfStopSec()))
@@ -193,7 +193,7 @@ func trayResumeReading() (M, error) {
 // the requests that go on while reading is stopped: what a posting needs
 func readStopExempt(id string) bool {
 	switch id {
-	case "Import", dupCheckID, tagCheckID, "FinComCompany", "FinComFree", "TDSDeskCompanies", "TDSDeskCompanyInfo":
+	case "Import", payrollImportID, dupCheckID, tagCheckID, "FinComCompany", "FinComFree", "TDSDeskCompanies", "TDSDeskCompanyInfo":
 		return true
 	}
 	return false

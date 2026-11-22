@@ -171,6 +171,7 @@ The owner's approval of 2026-10-08 (the 13 fields above, in the entry request): 
 | FinComMeasureLedO | measure: one ledger's stored opening (the field, no period) | 4239cb0322f6 | not yet measured | - | measure-only |
 | FinComMeasureNames | measure: every ledger's name | 1eb2653d0641 | not yet measured | - | measure-only |
 | FinComMeasureYear | measure: the year's entries, dates only | a71140d1c723 | not yet measured | - | measure-only |
+| FinComPayrollImport | a month's salary as one Tally payroll voucher (Import Data; owner approved 22-Nov-2026) | 64332c142319 | not yet measured | - | bridge |
 | FinComSlice | the recorder's source C (2.2.0, off by default): one month's entries above an AlterID as GUID, MasterID, AlterID and date, in the date form the read test kept | 4ae8c3aa2577 | not yet measured | - | bridge |
 | FinComSnapshot | measure: one month's entries as GUID, AlterID, date, type and number | c48421c1f84f | not yet measured | - | measure-only |
 | FinComStockInHand | the stock for the period a person chose (2.5.2): Tally's Group collection, the reserved group Stock-in-Hand only (FILTERS $ReservedName), NAME, OPENINGBALANCE and CLOSINGBALANCE with SVFROMDATE / SVTODATE (yyyymmdd TYPE="Date") the period; sent ONLY on a person's click in FinCom (no background read, no schedule, no retry), at most once per company and period (the answer kept; Ask Tally again asks once more), one request in flight, postings first, stopped at 2 s; over 2 s or Tally's window held 2 s: that company is not asked again until the next click, and FinCom says so; 2.5.2 allowed by the owner's decision of 2026-10-30 (person's click only; unchanged in 2.5.17) | ae4df29a52a8 | 2.4 | 2026-10-30 (real TallyPrime 3.0 and 7.1; tally-versions mode stockp, run 41009967960 (tally-versions 51fe89998, results 960d5b047), 4,000 items with godowns and batches, 32,000 entries over two years: a period's first ask 1.37 s worst, window held 0.97 s; the first request after Tally started 2.37 s, window held 2.05 s (the bridge stops it at 2 s and says so); asked again 2 ms; the opening and closing equal Tally's per-item total for every period) | bridge |
@@ -191,4 +192,4 @@ The owner's approval of 2026-10-08 (the 13 fields above, in the entry request): 
 | TDSDeskVchHeads | voucher heads (Optional ones too) of one company for one month at most, no ledger lines | 53fc675a1641 | not yet measured | - | bridge |
 <!-- allowlist:end -->
 
-Table hash (SHA-256): 319afbbac7150678273402e8a9d30f3c43efcd0c9ae603485a5c9e2e2e7b9d35
+Table hash (SHA-256): caebb78e01437a069ac74a0e0fdc4c955483988e014c84705c3d5a114a98cc85
