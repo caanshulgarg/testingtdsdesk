@@ -104,6 +104,8 @@ const AuditWP = {
     },
     // 43B(h): bills of micro and small suppliers open on the last date beyond the agreed days (at most 45)
     msme43Bh(W, V, ctx){
+      // section 43B(h) applies from FY 2023-24 (Finance Act 2023), as the audit's own check (src/js/07)
+      if (ctx.to < "20230401") return {na: "section 43B(h) applies from FY 2023-24"};
       const msme = MIS.msme();
       if (!Object.values(msme).some(t => /micro|small/i.test(t))) return {na: "no supplier is marked micro or small (Tally's MSME details, or MIS settings)"};
       const days = Math.min(45, num(MIS.cfg(S.books).msmeDays) || 45), ag = MIS.ageing(ctx.to, "p", null), out = [];
@@ -113,7 +115,7 @@ const AuditWP = {
         if (!/micro|small/i.test(msme[p.party] || "")) return;
         (p.open || []).filter(x => x.age > days).forEach(x => out.push({vid: vidOf(p.party, x.date, x.no), date: x.date, no: x.ref || "", type: msme[p.party], party: p.party, amount: r2(x.left), note: x.age + " days unpaid on " + fmtDate(tallyDate(ctx.to)) + " (allowed " + days + ")"}));
       });
-      return {entries: out, note: "Open on " + fmtDate(tallyDate(ctx.to)) + " beyond " + days + " days: not allowed until paid."};
+      return {entries: out, note: "Open on " + fmtDate(tallyDate(ctx.to)) + " beyond " + days + " days: not allowed until paid." + ((S.books.misCfg || {}).msmeDays ? "" : " The time agreed with the suppliers is not set (MIS \u2192 Settings): 45 days used; without a written agreement the MSMED Act allows 15.")};
     },
     itc2b(W, V, ctx){
       if (!Object.keys(S.books.twoBs || {}).length) return {na: "no GSTR-2B brought in for these months"};
