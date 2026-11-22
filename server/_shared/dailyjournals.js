@@ -28,7 +28,7 @@ import { r2, num, ymd, ledgerKey, groupsOf, inr, dmon, monYear, checkEntry, shee
 import { voucherId } from "./dailytrust.js";
 export { voucherId, TRUST_KINDS, TRUST_WORDS, LEVEL_WORDS, kindOfSource, PROMOTE_AFTER, AUTO_POSTING, trustGate, promotion } from "./dailytrust.js";
 
-export const KINDS = ["setoff_due", "payroll_due", "recurring_due", "ledger_pick", "setoff_exclude"];
+export const KINDS = ["setoff_due", "payroll_due", "recurring_due", "ledger_pick", "setoff_exclude", "sent_check"];
 export const SOURCES = { setoff_due: "gst_setoff", payroll_due: "payroll", recurring_due: "recurring" };
 export const LOOKBACK = 6;           // months looked at for a set-off or a payroll journal
 const H = ["igst", "cgst", "sgst", "cess"];
@@ -109,6 +109,15 @@ export function sameLines(a, b) {
 // a journal FinCom posted carries its id; a pending one is in Daily Check's drafts
 const posted = (inp, vid) => live(inp.books).some((v) => String(v.narr || "").includes("TDSDesk:" + vid));
 const pending = (inp, dedupe) => (inp.drafts || []).some((d) => d && d.dedupe === dedupe && !d.removed && d.state !== "failed");
+// (last fix) sent to Tally and not confirmed there for 24 hours: never offered again silently. Needs you: a sent_check
+// finding for that draft ("Not in Tally: offer it again", the owner's, through entry_unconfirm); the entry waits on it
+function sentCheck(inp, dedupe, label, you) {
+  const d = (inp.drafts || []).find((x) => x && x.dedupe === dedupe && x.state === "unconfirmed");
+  if (!d) return null;
+  return { finding: you(label + ": waiting on Tally to confirm it", [], { waits: true }).finding,
+    picks: [finding("sent_check", "sent:" + dedupe + ":" + d.at, "you", { party: label, dedupe, at: d.at, short: "Not confirmed in Tally",
+      title: label + ": sent to Tally but not confirmed there after 24 hours. Check it in Tally." }, [], [{ t: "retry", ref: "retry:" + dedupe, label: "Not in Tally: offer it again", dedupe, at: d.at }])] };
+}
 function finding(kind, key, state, facts, evidence, candidates) {
   return { kind, key, state, facts: Object.assign({ ask_text: "" }, facts), evidence: evidence || [], candidates: candidates || [] };
 }
@@ -224,7 +233,9 @@ export function setoffOne(m, inp, others) {
   const base = { party: "GST set-off " + label.split(" ")[0], ym: m.ym, reg: m.reg, date: m.journal ? m.journal.date : "" };
   const you = (title, cands, extra) => ({ finding: finding("setoff_due", key, "you", Object.assign({}, base, { short: "Set-off " + label + ": check", title }, extra || {}), [], cands) });
   if (m.skip) return m.skip === "error" ? you("Set-off " + label + ": the 3B could not be worked out (" + m.why + ")") : null;   // a quarterly return: by hand
-  if (posted(inp, vid) || pending(inp, dedupe)) return null;                                                                   // in the books, or approved
+  if (posted(inp, vid)) return null;                                                                                           // in the books
+  { const sc = sentCheck(inp, dedupe, "Set-off " + label, you); if (sc) return sc; }
+  if (pending(inp, dedupe)) return null;                                                                                       // approved, on its way
   const J = m.journal, t = m.t;
   // (review L4) kept as filed with no filing date: interest and late fee are not known. Past the due date: Needs you
   if (!m.filed && m.due && String(inp.today) > m.due) return you("Set-off " + label + ": no filing date, so interest and late fee are not known. Type the filing date on the GST page.");
@@ -319,7 +330,9 @@ export function payrollOne(ym, rows, inp) {
   const key = "payroll:" + ym, dedupe = key, vid = voucherId(dedupe), label = monYear(ym), date = lastDay(ym);
   const base = { party: "Payroll " + label.split(" ")[0], ym, date, n: rows.length };
   const you = (title, extra) => ({ finding: finding("payroll_due", key, "you", Object.assign({}, base, { short: "Payroll " + label + ": check", title }, extra || {})) });
-  if (posted(inp, vid) || pending(inp, dedupe)) return null;
+  if (posted(inp, vid)) return null;
+  { const sc = sentCheck(inp, dedupe, "Payroll " + label, you); if (sc) return sc; }
+  if (pending(inp, dedupe)) return null;
   // 1. the sheet itself
   if (rows.some((r) => P(r.surcharge) || P(r.cess))) return you("Payroll " + label + ": the sheet has surcharge or cess on TDS. Book it by hand.");
   const seen = new Set(), twice = rows.find((r) => { const k = ledgerKey(r.name) + "|" + String(r.code || r.pan || ""); if (seen.has(k)) return true; seen.add(k); return false; });
@@ -406,9 +419,11 @@ export function recurringAll(inp) {
     // the month after is due too and missing: two in a row missed, the pattern is broken
     if (target < cur && today > addDays(monthEnd ? lastDay(cur) : dayIn(cur, usual), 5)) continue;
     const key = "rec:" + voucherId(k).slice(3) + ":" + target, dedupe = key, vid = voucherId(dedupe);
-    if (posted(inp, vid) || pending(inp, dedupe)) continue;
+    if (posted(inp, vid)) continue;
     const last = run[run.length - 1], lines = vLines(last), drL = lines.filter((l) => l.dr).map((l) => l.ledger);
     const party = (lines.find((l) => l.cr && !isExp(A, l.ledger)) || lines.find((l) => l.cr) || lines[0]).ledger;
+    { const sc = sentCheck(inp, dedupe, party + " " + monYear(target), (title, c, extra) => ({ finding: finding("recurring_due", key, "you", Object.assign({ party, ym: target, short: "Monthly: check", title }, extra || {}), [], c || []) })); if (sc) { out.push(sc); continue; } }
+    if (pending(inp, dedupe)) continue;
     // an entry in the target month to the same expense for about the same amount (other ledgers): it may be this month's
     const maybe = live(inp.books).find((v) => ymOf(v.date) === target && v.ent.some((e) => e.a < 0 && drL.includes(e.l) && Math.abs(-e.a - lines.find((l) => l.ledger === e.l).dr) <= 0.02 * lines.find((l) => l.ledger === e.l).dr));
     const label = monYear(target), first = run[0], rng = monYear(ymOf(first.date)).split(" ")[0] + "–" + monYear(ymOf(last.date));
@@ -480,13 +495,31 @@ export function excludedOf(prior) {
 // builder itself); "live" while its job is still waiting, taken or running; anything else ("failed": Tally refused it,
 // the queue stopped it, a job done without this voucher ok, or a draft with no job at all) is offered again. The bridge
 // checks Tally for FinCom's id before posting, so a voucher already there is never posted twice
-export function draftState(d, jobs) {
+// (last fix) the draft's own result for its voucher (posted straight to the bridge here: no cloud job) is proof when ok
+// AND it carries Tally's voucher id. A draft saying posted without that proof is "pending" for 24 hours, then
+// "unconfirmed" (Needs you), never failed; once the owner said "Not in Tally: offer it again" for that draft (a sent_check
+// answered) it is failed. d.at: when the draft's voucher was last sent (its result's time, else when it was saved)
+export const DAY_MS = 24 * 3600 * 1000;
+export function draftState(d, jobs, now, retried) {
   if (d.removed) return "failed";
+  const own = (d.results || {})[d.vid];
+  if (own && own.ok === true && String(own.tallyId || own.vchId || own.masterId || "").trim()) return "posted";
   const j = (jobs || {})[d.job || ""];
   const res = j && Array.isArray(j.results) ? j.results.find((x) => x && x.id === d.vid) : null;
   if (res && res.ok === true) return "posted";
   if (j && /^(waiting|taken|running)$/.test(String(j.status || ""))) return "live";
+  if (String(d.state || "") === "posted") {
+    if (retried && retried.has("sent:" + d.dedupe + ":" + d.at)) return "failed";
+    const at = Date.parse(String(d.at || "")), t = now == null ? Date.now() : now;
+    return isFinite(at) && t - at <= DAY_MS ? "pending" : "unconfirmed";
+  }
   return "failed";
+}
+// the drafts the owner said are not in Tally (sent_check answered "offer it again")
+export function retriedOf(prior) {
+  const o = new Set();
+  (prior || []).forEach((p) => { const ev = (p.evidence || [])[0]; if (p.kind === "sent_check" && p.state === "resolved" && !p.undone && ev && ev.t === "retry") o.add(String(p.key)); });
+  return o;
 }
 // (outside: which of them the person confirmed though the ledger is in another group)
 export function picksOf(prior, outside) {

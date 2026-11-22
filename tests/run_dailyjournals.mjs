@@ -95,7 +95,19 @@ const base = { ym: "202610", intra: 100000, inter: 50000, buyIntra: 40000, buyIn
   const okd = gstRows(Object.assign({}, base, { items: [{ key: "asstEntries", item: "#dc-ok", ord: 0, data: { id: "dc-ok", dedupe: "setoff:07:202610", state: "sent", job: "55555555-5555-4555-8555-555555555555" }, deleted: false }] }));
   ok(!entry(night(okd), "gst_setoff").length, "final review 1: the job reports this voucher ok (proof): no entry");
   const noproof = gstRows(Object.assign({}, base, { items: [{ key: "asstEntries", item: "#dc-x", ord: 0, data: { id: "dc-x", dedupe: "setoff:07:202610", state: "posted" }, deleted: false }] }));
-  ok(entry(night(noproof), "gst_setoff").length === 1, "final review 1: a draft saying posted with no job and nothing in Tally: not proof, offered again (the bridge checks Tally for FinCom's id first)");
+  ok(!entry(night(noproof), "gst_setoff").length && one(night(noproof), "sent_check").length === 1, "last fix: a draft saying posted with no proof and no time: not confirmed (Needs you), never offered again silently");
+  const D = (data) => gstRows(Object.assign({}, base, { items: [{ key: "asstEntries", item: "#dc-x", ord: 0, data: Object.assign({ id: "dc-x", dedupe: "setoff:07:202610" }, data), deleted: false }] }));
+  const hAgo = (h) => new Date(Date.now() - h * 3600000).toISOString();
+  const own = night(D({ state: "posted", results: { "dc-x": { ok: true, state: "posted", tallyId: "4417", at: hAgo(30) } } }));
+  ok(!entry(own, "gst_setoff").length && !one(own, "setoff_due").length && !one(own, "sent_check").length, "last fix: posted straight to the bridge, its own result ok with Tally's voucher id: proof (posted)");
+  const pnd = night(D({ state: "posted", results: { "dc-x": { ok: true, state: "posted", at: hAgo(2) } } }));
+  ok(!entry(pnd, "gst_setoff").length && !one(pnd, "sent_check").length, "last fix: says posted, no voucher id, sent 2 hours ago: pending, never offered again");
+  const at25 = hAgo(25), unc = night(D({ state: "posted", results: { "dc-x": { ok: true, state: "posted", at: at25 } } }));
+  const sc = one(unc, "sent_check")[0];
+  ok(!entry(unc, "gst_setoff").length && sc && sc.state === "you" && sc.candidates[0].t === "retry" && /not confirmed there after 24 hours/.test(sc.facts.title) && one(unc, "setoff_due")[0].facts.waits, "last fix: 25 hours and not confirmed: Needs you (Not confirmed in Tally), never back to ready");
+  const again = night(D({ state: "posted", results: { "dc-x": { ok: true, state: "posted", at: at25 } } }), "20261122", { prior: [{ kind: "sent_check", key: sc.key, state: "resolved", evidence: [sc.candidates[0]] }] });
+  ok(entry(again, "gst_setoff").length === 1, "last fix: the owner said it is not in Tally: the entry is made again (the bridge checks Tally for FinCom's id first)");
+  ok(entry(night(D({ state: "failed", results: { "dc-x": { ok: false, msg: "refused" } } })), "gst_setoff").length === 1, "last fix: Tally refused it: offered again");
   const failed = gstRows(Object.assign({}, base, { items: [{ key: "asstEntries", item: "#dc-x", ord: 0, data: { id: "dc-x", dedupe: "setoff:07:202610", state: "failed" }, deleted: false }] }));
   ok(entry(night(failed), "gst_setoff").length === 1, "a draft Tally refused is not pending: the entry is made again");
 }

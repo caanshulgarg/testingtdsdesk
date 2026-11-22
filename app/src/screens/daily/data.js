@@ -60,7 +60,13 @@ export const trustSet = (cid, kind, level, limit) => rpc("trust_set", { p_client
 export const trustLater = (cid, kind) => rpc("trust_dismiss", { p_client: cid, p_kind: kind });
 export const loadTrust = (cid) => api("daily_trust?select=kind,level,limit_amt&client_id=eq." + encodeURIComponent(cid));
 // phase 2's kinds: an entry FinCom made (shown under Entries), or a ledger to pick (Needs you); never under Done
-export const P2 = new Set(["setoff_due", "payroll_due", "recurring_due", "ledger_pick", "setoff_exclude"]);
+export const P2 = new Set(["setoff_due", "payroll_due", "recurring_due", "ledger_pick", "setoff_exclude", "sent_check"]);
+// (last fix) "Not in Tally: offer it again": the owner, on the entry being approved for that draft (entry_unconfirm)
+export function unconfirm(f, entries) {
+  const e = (entries || []).find((x) => x.client_id === f.cid && x.dedupe === (f.facts || {}).dedupe);
+  if (!e) return Promise.reject(new Error("That entry is not here any more. Run again."));
+  return rpc("entry_unconfirm", { p_id: e.id, p_finding: f.id });
+}
 export const JOURNAL = new Set(["gst_setoff", "payroll", "recurring"]);
 // an entry someone is approving now (claimed in the last 30 minutes): shown, not to be approved again
 export const beingApproved = (e) => e.state === "approving" && Date.now() - Date.parse(e.updated_at || 0) < 30 * 60000;

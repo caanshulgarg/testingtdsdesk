@@ -1285,7 +1285,7 @@ of findings already "you" close at the next night run.
 
 ## 208: Daily Check phase 2 (a draft, not run yet; branch next-daily-p2, 22-Nov-2026)
 
-**208** (`server/assistant-night/migration-208-daily-phase2.sql`, md5 2b23b59718e58e261459519be17922d1; and
+**208** (`server/assistant-night/migration-208-daily-phase2.sql`, md5 584554ebd41b45b2e0d8010b46d10a21; and
 `server/assistant-night/migration-208-cron.sql`, md5 f1a2d0d8d49d70cf9faf8b30e834830b; **written, not run yet**). Needs 206
 and 207 (it stops, saying so, without them). docs/DAILY-CHECK-PHASE2.md section 5. Add-only: new table `daily_trust` (RLS,
 read by the firm, written only through `trust_set` / `trust_dismiss`, the owner only, logged), `trust_stats`, `trust_kind_of`,

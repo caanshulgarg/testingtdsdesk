@@ -84,7 +84,7 @@ try:
        and not any(tp("authenticated", "daily_trust", p) for p in ("insert", "update", "delete", "truncate", "references", "trigger")), "2. daily_trust: anon nothing; authenticated reads only")
     ok(not db.one("select count(*) from information_schema.role_table_grants where table_name = 'daily_trust' and grantee = 'PUBLIC'") != "0", "2. daily_trust: nothing for public")
     FN = ["trust_set(text, text, integer, numeric)", "trust_dismiss(text, text)", "trust_stats()", "remind_due(boolean)", "remind_logged(uuid, text, bigint, uuid[], text, text)", "trust_kind_of(text)"]
-    FN3 = ["entry_claim(uuid)", "entry_release(uuid, text)", "entry_approved(uuid, text)"]
+    FN3 = ["entry_claim(uuid)", "entry_release(uuid, text)", "entry_approved(uuid, text)", "entry_unconfirm(uuid, uuid)"]
     ok(all(fp("authenticated", f) for f in FN3) and not any(fp("anon", f) for f in FN3), "2. the page calls entry_claim / entry_release / entry_approved; anon none")
     ok(not any(fp("anon", f) for f in FN), "2. anon runs none of 208's functions")
     ok(all(fp("authenticated", f) for f in FN[:3]) and not any(fp("authenticated", f) for f in FN[3:]), "2. the page calls trust_set, trust_dismiss, trust_stats; not remind_due, remind_logged or the helper")
@@ -94,7 +94,7 @@ try:
     def ins_f(kind):
         try: db.sql("insert into night_findings (firm_id, client_id, kind, key, first_seen, last_seen) values ('%s', 'c1', '%s', 'chk:%s', '2026-11-22', '2026-11-22')" % (F1, kind, kind)); return True
         except RuntimeError: return False
-    ok(all(ins_f(k) for k in ("setoff_due", "payroll_due", "recurring_due", "ledger_pick", "setoff_exclude", "advance_open")) and not ins_f("made_up_kind"), "3. phase 2's kinds go in, an old one still does, a made-up one does not")
+    ok(all(ins_f(k) for k in ("setoff_due", "payroll_due", "recurring_due", "ledger_pick", "setoff_exclude", "sent_check", "advance_open")) and not ins_f("made_up_kind"), "3. phase 2's kinds go in, an old one still does, a made-up one does not")
     db.sql("delete from night_findings where key like 'chk:%'")
     def ins_e(src):
         try: db.sql("insert into night_entries (firm_id, client_id, source, dedupe, voucher) values ('%s', 'c1', '%s', 'chk:%s', '{}')" % (F1, src, src)); return True
@@ -192,7 +192,7 @@ try:
     ok(raises(lambda: act(STAFF, "select public.entry_claim(%s)" % E9)), "8. an approved entry cannot be claimed again")
     # (review N4, final review 1) the closed tab: a claim left 30 minutes, settled from its draft; approved ONLY with proof
     stale = lambda: db.sql("update night_entries set state = 'approving', decided_by = '%s', updated_at = now() - interval '31 minutes' where id = %s" % (STAFF, E9))
-    draft = lambda st, job=None: db.sql("delete from client_book_items where key = 'asstEntries'; insert into client_book_items (firm_id, client_id, key, item, data) values ('%s', 'c1', 'asstEntries', '#dc-p1', '%s'::jsonb)" % (F1, json.dumps(dict({"id": "dc-p1", "dedupe": "payroll:202610", "state": st}, **({"job": job} if job else {})))))
+    draft = lambda st, job=None, res=None, age="0 minutes": db.sql("delete from client_book_items where key = 'asstEntries'; insert into client_book_items (firm_id, client_id, key, item, data, updated_at) values ('%s', 'c1', 'asstEntries', '#dc-p1', '%s'::jsonb, now() - interval '%s')" % (F1, json.dumps(dict({"id": "dc-p1", "dedupe": "payroll:202610", "state": st}, **({"job": job} if job else {}), **({"results": {"dc-p1": res}} if res else {}))), age))
     J1 = "33333333-3333-4333-8333-333333333333"
     job = lambda status, results: db.sql("delete from tally_post_jobs; insert into tally_post_jobs (id, firm_id, client_id, status, results) values ('%s', '%s', 'c1', '%s', '%s'::jsonb)" % (J1, F1, status, json.dumps(results)))
     claim = lambda: json.loads(one(OWN, "select public.entry_claim(%s)" % E9))
@@ -202,6 +202,26 @@ try:
     stale(); draft("posting")
     r = claim()
     ok(r["ok"] and st() == "approving", "8. a draft that says posting but has no job and nothing in Tally: not proof, claimed again")
+    # (last fix) posted straight to the bridge here: the draft's own result
+    stale(); draft("posted", res={"ok": True, "tallyId": "4417"})
+    r = claim()
+    ok(r["ok"] is False and "Already in Tally" in r["why"] and st() == "approved", "8. its own result ok with Tally's voucher id (no cloud job): proof, approved")
+    stale(); draft("posted", res={"ok": True})
+    r = claim()
+    ok(r["ok"] is False and "not confirmed it yet" in r["why"] and st() == "approving", "8. says posted, no voucher id, saved just now: pending (not approved, not claimed again)")
+    stale(); draft("posted", res={"ok": True}, age="25 hours")
+    r = claim()
+    ok(r["ok"] is False and "not confirmed there" in r["why"] and st() == "approving", "8. the same 25 hours on: unconfirmed, Needs you (never back to ready by itself)")
+    settle0 = db.one("select public.entry_settle('%s', 'c1', '{payroll:202610}')" % F1)
+    ok(st() == "approving", "8. the night leaves an unconfirmed one being approved (even on its own failed list)")
+    db.sql("insert into night_findings (id, firm_id, client_id, kind, key, state, facts, candidates, first_seen, last_seen) values ('00000000-0000-4000-8000-000000000098', '%s', 'c1', 'sent_check', 'sent:payroll:202610:x', 'you', '{\"dedupe\": \"payroll:202610\"}', '[{\"t\": \"retry\", \"ref\": \"retry:payroll:202610\", \"label\": \"Not in Tally: offer it again\"}]', '2026-11-22', '2026-11-22')" % F1)
+    ok(raises(lambda: act(STAFF, "select public.entry_unconfirm(%s, '00000000-0000-4000-8000-000000000098')" % E9)) and st() == "approving", "8. Not in Tally, offer it again: staff cannot")
+    act(OWN, "select public.entry_unconfirm(%s, '00000000-0000-4000-8000-000000000098')" % E9)
+    ok(st() == "ready" and db.one("select state || ' ' || (evidence->0->>'t') from night_findings where id = '00000000-0000-4000-8000-000000000098'") == "resolved retry" and db.one("select count(*) from daily_log where what = 'not_in_tally'") == "1", "8. the owner: the entry back to ready, the finding answered, logged")
+    # night_apply never sends an approved entry back to ready while the night does not make it again (its draft posted or pending)
+    db.sql("update night_entries set state = 'approved', decided_at = now() - interval '2 hours' where id = %s" % E9)
+    apply([dict(SO, key="payroll-y")], [])
+    ok(st() == "approved", "8. night_apply: an approved entry the night does not make again (draft posted or pending) stays approved")
     stale(); draft("sent", J1); job("waiting", [])
     r = claim()
     ok(r["ok"] is False and "On its way" in r["why"] and st() == "approving", "8. its job still waiting: not approved, not claimed again (on its way)")
@@ -222,9 +242,12 @@ try:
     settle = lambda failed="{}": db.one("select public.entry_settle('%s', 'c1', '%s')" % (F1, failed))
     db.sql("update night_entries set state = 'approving', updated_at = now() - interval '31 minutes' where id = %s" % E9); draft("sent", J1); job("done", [{"id": "dc-p1", "ok": True}])
     ok(settle() == "1" and st() == "approved", "8. the night: the job reports it ok -> approved, logged")
-    db.sql("update night_entries set state = 'approving', updated_at = now() - interval '31 minutes' where id = %s" % E9); draft("posted")
+    db.sql("update night_entries set state = 'approving', updated_at = now() - interval '31 minutes' where id = %s" % E9); draft("posting")
     db.sql("delete from tally_post_jobs"); settle()
-    ok(st() == "ready" and db.one("select evidence->>'why' from daily_log where what = 'settled' order by id desc limit 1") == "Not confirmed in Tally", "8. the night: a draft saying posted with no proof -> ready (Not confirmed in Tally)")
+    ok(st() == "ready" and db.one("select evidence->>'why' from daily_log where what = 'settled' order by id desc limit 1") == "Not confirmed in Tally", "8. the night: a draft saying posting with no job -> ready (Not confirmed in Tally)")
+    db.sql("update night_entries set state = 'approving', updated_at = now() - interval '31 minutes' where id = %s" % E9); draft("posted", res={"ok": True})
+    settle()
+    ok(st() == "approving", "8. the night: says posted (no proof) within 24 hours: pending, left being approved")
     db.sql("update night_entries set state = 'approving', updated_at = now() - interval '31 minutes' where id = %s" % E9); draft("sent", J1); job("running", [])
     settle()
     ok(st() == "approving", "8. the night: its job still running -> left being approved")

@@ -115,7 +115,7 @@ export function handler(deps: Deps) {
     const jobIds = Array.from(new Set(draftRecs.map((r: any) => jobOf(r.data)).filter((x: string) => /^[0-9a-f-]{36}$/i.test(x))));
     const jobRows = jobIds.length ? await rest("/rest/v1/tally_post_jobs?select=id,status,results&id=in.(" + jobIds.join(",") + ")").catch(() => []) : [];
     const jobs = Object.fromEntries((Array.isArray(jobRows) ? jobRows : []).map((j: any) => [j.id, j]));
-    await rpc("entry_settle", { p_firm: firm, p_client: cid, p_failed: draftsOf(draftRecs, jobs).filter((d: any) => d.state === "failed").map((d: any) => d.dedupe) }).catch(() => null);
+    await rpc("entry_settle", { p_firm: firm, p_client: cid, p_failed: draftsOf(draftRecs, jobs, prior.map((p: any) => ({ kind: p.kind, key: p.key, state: p.state, evidence: p.evidence, undone: !!p.undone_at }))).filter((d: any) => d.state === "failed").map((d: any) => d.dedupe) }).catch(() => null);
     const inp = nightInput(rows, b, { today, bankRecs, inboxRecs, entryRecs, twob, firmRules, gst, draftRecs, jobs, prior: prior.map((p: any) => ({ kind: p.kind, key: p.key, state: p.state, evidence: p.evidence, undone: !!p.undone_at })) });
     const res0 = run(inp), j = journals(inp);
     const res = { findings: res0.findings.concat(j.findings), entries: res0.entries.concat(j.entries) };
