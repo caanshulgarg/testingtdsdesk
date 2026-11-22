@@ -198,46 +198,58 @@ export function openLeft(A, V, open) {
 // ---------------------------------------------------------------- the checks (a) to (e)
 const F = (kind, key, facts) => ({ kind, key, facts });
 
-// (a) advances open after 60 days: a party's payments and bills taken first in, first out; what a payment paid beyond
-// every bill before it, and no bill after it took up, is an advance still open
+// (a) advances open after 60 days: a party's bills and payments taken first in, first out, from its opening balance.
+// Staging, 22-Nov-2026 (one client, 81 findings, nearly all noise): only a PAYMENT (or receipt) through bank or cash makes
+// an advance; a journal or debit note that takes a party past its bills (a TDS deduction, a write-off, a set-off) is no
+// advance and is never asked. One finding per party: what it paid (or received) beyond its bills more than 60 days ago,
+// with the oldest date. A party with no entries in the books' year (only an opening balance) and a ledger that takes far
+// more receipts than sales (a payment gateway, a settlement ledger) are for the firm to look at, not questions.
 function advances(inp, A, V, out) {
-  const by = {};
+  const by = {}, viaBank = (v) => v.ent.some((e) => A.isBankL(e.l) || A.isCash(e.l));
   V.forEach((v) => v.ent.forEach((e) => { if (A.isCreditor(e.l) || A.isDebtor(e.l)) (by[e.l] = by[e.l] || []).push({ v, a: e.a }); }));
-  const open = {}, ob = inp.open || {}, from = inp.booksFrom || (V[0] && V[0].date) || inp.today;
+  const open = {}, spareOf = {}, ob = inp.open || {}, from = inp.booksFrom || (V[0] && V[0].date) || inp.today, moved = new Set(Object.keys(by));
   Object.keys(ob).forEach((l) => { if ((A.isCreditor(l) || A.isDebtor(l)) && !by[l] && Math.abs(num(ob[l])) >= 0.01) by[l] = []; });
   Object.keys(by).sort().forEach((party) => {
     const cred = A.isCreditor(party), rows = by[party].sort((x, c) => x.v.date.localeCompare(c.v.date) || String(x.v.id).localeCompare(String(c.v.id)));
     // for a supplier a bill is a credit (a > 0) and a payment a debit; for a customer the other way round
     const bills = [], adv = [];
+    let spare = 0;   // what journals and notes took past the bills: no advance, taken up by the next bills first
     // the opening balance first (Tally's sign, a debit negative): last year's bills still owed, or an advance carried in
     const o0 = r2(cred ? num(ob[party]) : -num(ob[party]));
     if (o0 > 0) bills.push({ left: o0 });
     else if (o0 < 0) adv.push({ v: { id: "open", date: from }, left: -o0 });
+    let pays = 0, invoices = 0;
     rows.forEach(({ v, a }) => {
       let amt = r2(cred ? a : -a);
-      if (amt > 0) {   // a bill: takes up the oldest advances first, else waits
+      if (amt > 0) {   // a bill: takes up what journals left over, then the oldest advances, else waits
+        invoices++;
+        const t0 = Math.min(spare, amt); spare = r2(spare - t0); amt = r2(amt - t0);
         while (amt > 0 && adv.length) { const x = adv[0], t = Math.min(x.left, amt); x.left = r2(x.left - t); amt = r2(amt - t); if (x.left <= 0.005) adv.shift(); }
         if (amt > 0) bills.push({ left: amt });
-      } else if (amt < 0) {   // a payment: pays the oldest bills first; what is left over is an advance
-        let p = -amt;
+      } else if (amt < 0) {   // a payment or an adjustment: pays the oldest bills first
+        let p = -amt; const bank = viaBank(v);
+        if (bank) pays++;
         while (p > 0 && bills.length) { const x = bills[0], t = Math.min(x.left, p); x.left = r2(x.left - t); p = r2(p - t); if (x.left <= 0.005) bills.shift(); }
-        if (p > 0.005) adv.push({ v, left: r2(p) });
+        if (p > 0.005) { if (bank) adv.push({ v, left: r2(p) }); else spare = r2(spare + p); }
       }
     });
-    open[party] = adv;
-    adv.forEach((x) => {
-      if (x.left < LIMITS.wrongSide || daysBetween(x.v.date, inp.today) <= LIMITS.advanceDays) return;
-      // carried in from last year (no payment of this book): a balance on the wrong side, asked as such
-      if (x.v.id === "open") { out.push(F("wrong_side", "ws:" + ledgerKey(party), { party, amt: x.left, side: cred ? "supplier" : "customer", date: inp.today })); return; }
-      out.push(F("advance_open", "adv:" + ledgerKey(party) + ":" + x.v.id, { party, side: cred ? "paid" : "received", amt: x.left, date: x.v.date, vid: x.v.id, days: daysBetween(x.v.date, inp.today) }));
-    });
+    open[party] = adv; spareOf[party] = spare;
+    const old = adv.filter((x) => daysBetween(x.v.date, inp.today) > LIMITS.advanceDays);
+    // carried in from last year (no payment of this book): a balance on the wrong side
+    const carried = old.filter((x) => x.v.id === "open").reduce((s, x) => s + x.left, 0);
+    if (carried >= LIMITS.wrongSide) out.push(F("wrong_side", "ws:" + ledgerKey(party), { party, amt: r2(carried), side: cred ? "supplier" : "customer", date: inp.today, old: !moved.has(party) }));
+    const paid = old.filter((x) => x.v.id !== "open"), amt = r2(paid.reduce((s, x) => s + x.left, 0));
+    if (!paid.length || amt < LIMITS.wrongSide) return;
+    out.push(F("advance_open", "adv:" + ledgerKey(party), { party, side: cred ? "paid" : "received", amt, n: paid.length, date: paid[0].v.date, vid: paid[0].v.id, vids: paid.map((x) => x.v.id),
+      days: daysBetween(paid[0].v.date, inp.today), gateway: !cred && pays >= 10 && pays > 3 * invoices ? true : undefined }));
   });
-  // a party on the wrong side with no open advance found above (an opening balance, a journal)
+  // a party on the wrong side with no open advance found above (a journal took it there)
   const bal = balancesAt(V, inp.today, inp.open);
   Object.keys(bal).sort().forEach((l) => {
     const b = bal[l], wrong = (A.isCreditor(l) && b < -LIMITS.wrongSide) || (A.isDebtor(l) && b > LIMITS.wrongSide);
-    if (!wrong || (open[l] || []).length) return;   // an advance (of any age) explains it: that is asked once it is 60 days old
-    out.push(F("wrong_side", "ws:" + ledgerKey(l), { party: l, amt: Math.abs(b), side: A.isCreditor(l) ? "supplier" : "customer", date: inp.today }));
+    // (what journals or notes took past the bills is the firm's own adjustment: not asked)
+    if (!wrong || (open[l] || []).length || spareOf[l] > 0.005 || out.some((f) => f.facts.party === l)) return;
+    out.push(F("wrong_side", "ws:" + ledgerKey(l), { party: l, amt: Math.abs(b), side: A.isCreditor(l) ? "supplier" : "customer", date: inp.today, old: !moved.has(l) }));
   });
 }
 
@@ -246,7 +258,11 @@ function unusual(inp, A, V, out) {
   const from = addDays(inp.today, -400), recent = V.filter((v) => v.date >= from);
   cashRows(A, recent).forEach((x) => out.push(F("cash_big", "cash:" + x.date + ":" + ledgerKey(x.l) + (A.isExpense(x.l) ? ":" + x.vs[0].id : ""), { party: x.l, amt: x.amt, date: x.date, vids: x.vs.map((v) => v.id) })));
   roundRows(A, recent).forEach((x) => out.push(F("round_sum", "round:" + x.v.id, { party: (x.v.ent.find((e) => A.isExpense(e.l) || A.isIncome(e.l)) || {}).l || x.v.party || "", amt: x.amt, date: x.v.date, vid: x.v.id })));
-  bareRows(A, recent).forEach((x) => out.push(F("no_narration", "narr:" + x.v.id, { party: x.v.party || (x.v.ent.find((e) => e.a < 0) || {}).l || "", amt: x.amt, date: x.v.date, vid: x.v.id, type: x.v.type, ref: x.v.ref || "" })));
+  // (a journal of tax ledgers only, the GST set-off or a TDS transfer, with at most a rounding line (under ₹10, or a round-off
+  // ledger), is the firm's
+  // own: not asked)
+  const taxL = (l) => A.isDuties(l) || A.isBankL(l) || A.isCash(l) || A.under(l, /GST|TAX|TDS|TCS|CESS|ELECTRONIC/i) || /\bGST\b|GST\b|\bTDS\b|\bTCS\b|\bCESS\b|ELECTRONIC (CASH|CREDIT)/i.test(l);
+  bareRows(A, recent).filter((x) => !x.v.ent.every((e) => Math.abs(e.a) < 10 || /ROUND/i.test(e.l) || ((inp.books.map || {})[e.l] || {}).kind === "roundoff" || taxL(e.l))).forEach((x) => out.push(F("no_narration", "narr:" + x.v.id, { party: x.v.party || (x.v.ent.find((e) => e.a < 0) || {}).l || "", amt: x.amt, date: x.v.date, vid: x.v.id, type: x.v.type, ref: x.v.ref || "" })));
   // an expense ledger's last full month against the average of the three before it
   const last = ymAdd(ymOf(inp.today), -1), tot = {};
   V.forEach((v) => { const m = ymOf(v.date); if (m < ymAdd(last, -3) || m > last) return; v.ent.forEach((e) => { if (A.isExpense(e.l)) { const t = tot[e.l] = tot[e.l] || {}; t[m] = r2((t[m] || 0) - e.a); } }); });
@@ -482,6 +498,9 @@ export function answer(raw, inp) {
     else if (free.length) { state = "resolved"; evidence = free; }
     else if (f.near.length) { state = "you"; cands = f.near; }                            // a near miss: never resolved
     else state = "ask";
+    // a payment gateway or settlement ledger (receipts far beyond its sales), or an old balance with no entries this year:
+    // the firm looks at it, the client is not asked
+    if (state === "ask" && ((f.kind === "advance_open" && f.facts.gateway) || (f.kind === "wrong_side" && f.facts.old))) state = "you";
     // (N5) a line with FinCom's guess nobody reviewed, and nothing certain: the firm looks at the guess first
     if (state === "ask" && f.kind === "bank_no_bill" && f.facts.suggested !== undefined) state = "you";
     // a missing month while the Inbox holds files not read yet: read them first, ask nothing
@@ -501,7 +520,8 @@ const slim = (c) => { const o = { t: c.t, ref: c.ref, label: c.label }; if (c.le
 export function askText(f) {
   const x = f.facts || {}, a = inr(x.amt || 0), d = dmon(x.date || "");
   switch (f.kind) {
-    case "advance_open": return x.side === "paid" ? a + " advance to " + x.party + " on " + d + " is still open. Has the bill come?" : a + " advance from " + x.party + " on " + d + " is still open. Has the invoice gone out?";
+    case "advance_open": return (x.n > 1 ? a + " paid " + (x.side === "paid" ? "to " : "by ") + x.party + " since " + d + " (" + x.n + " payments) has no " + (x.side === "paid" ? "bill" : "invoice") + " in the books. "
+      : a + " advance " + (x.side === "paid" ? "to " : "from ") + x.party + " on " + d + " is still open. ") + (x.side === "paid" ? "Has the bill come?" : "Has the invoice gone out?");
     case "wrong_side": return x.side === "supplier" ? a + " is shown as paid in advance to " + x.party + ". Is a bill pending?" : a + " is shown as received in advance from " + x.party + ". Is an invoice pending?";
     case "cash_big": return a + " paid in cash to " + x.party + " on " + d + ". Please send the bill.";
     case "round_sum": return a + " entered to " + x.party + " on " + d + ". What is it for?";
@@ -534,6 +554,8 @@ function titleOf(f) {
   if (x.unread) return x.unread + " Inbox files not read · " + (f.kind === "bank_month_missing" ? "statement " : f.kind === "salary_month_missing" ? "salary sheet " : "sales ") + monYear(x.ym) + "?";
   if (x.readTo) return "Books read up to " + dmon(x.readTo) + " · sales " + monYear(x.ym) + "?";
   if (f.kind === "suspense") return "Suspense " + a + " since " + dmon(x.date);
+  if (f.kind === "advance_open" && x.gateway) return a + " received through " + x.party + " · not matched to sales";
+  if (f.kind === "wrong_side" && x.old && !(f.candidates || []).length) return a + " " + x.party + " · old balance, no entries this year";
   if (f.kind === "bank_no_bill" && x.suggested !== undefined && !(f.candidates || []).length) return a + " " + (x.dir === "out" ? "paid" : "received") + " " + dmon(x.date) + (x.suggested ? " · guess: " + x.suggested + " · right?" : " · what is it?");
   if (f.kind === "bank_no_bill") return a + " " + (x.dir === "out" ? "paid" : "received") + " " + dmon(x.date) + " · which one?";
   return a + " " + x.party + " · which one?";

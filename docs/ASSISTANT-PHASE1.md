@@ -53,6 +53,22 @@ screenshots.
 ### Sizes (gzip)
 legacy.js 599,738 (limit 600,000; +6 for `#/daily`); main index 260,627 (limit 264,192); Daily Check 5.8 kB, its own chunk.
 
+### The first night on staging (22-Nov-2026): only relevant questions
+One client: 94 findings, 93 Draft questions, 81 of them "advance open". Read-only queries showed why: (1) a journal or
+debit note that took a supplier past its bills (a TDS deduction, an adjustment) was counted as an advance; (2) every
+payment was its own finding (one supplier with 16 payments and no bill in the books gave 16 questions); (3) ledgers under
+payment-gateway groups take many receipts against few sales (receipts with the sales booked elsewhere), each receipt an
+"advance received"; (4) balances carried in with no entries this year were asked; (5) the monthly GST set-off journals
+(tax ledgers and a rounding line, no narration) were "big entries with no narration". The sign, the 60-day age and the
+opening balances were right.
+Now: only a payment or receipt through bank or cash makes an advance (journals and notes never do, and what they leave
+is not a wrong-side balance either); one finding a party (the total paid beyond its bills more than 60 days ago, the
+count, the oldest date); a ledger with 10 or more receipts and more than 3 for each sale, and a balance carried in with
+no entries this year, need you, not the client; a journal of tax ledgers only (a rounding line under ₹10 allowed) is not
+asked. On the same client's rows (read into memory only): 22 findings, 17 Draft questions (13 advances, 2 wrong side,
+1 round sum, 1 month with no sales), 5 for the firm, 0 resolved. The next night clears the old findings and closes their
+Draft questions ("no longer found in the books"), so the page shows only the new ones.
+
 ### The first apply on staging (22-Nov-2026)
 It stopped (rolled back, nothing applied): staging already has `assistant_log`, the Ask FinCom chat's usage log. Daily
 Check's log is now `daily_log`; the chat's table, grants and policies are not touched. Every other name of 206 was checked

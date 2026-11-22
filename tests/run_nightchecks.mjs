@@ -87,7 +87,7 @@ const one = (r, kind) => r.findings.filter((f) => f.kind === kind);
   eq(one(r, "advance_open")[0].state, "ask", "advance: undone before: asked, not resolved again");
   // two advances, one bill: a tie for both
   r = run(inp([pay("20260812", "ABC Traders", 250000), pay("20260815", "ABC Traders", 250000)], { bills: [B] }));
-  eq(one(r, "advance_open").map((x) => x.state), ["you", "you"], "advance: one bill fits two advances: both need you");
+  eq(one(r, "advance_open").map((x) => [x.state, x.facts.amt, x.facts.n]), [["ask", 500000, 2]], "advance: two payments to one party: one finding for the party, the total, asked (the one bill fits neither)");
   // received in advance from a customer
   r = run(inp([V("20260801", "Receipt", [["HDFC Bank", -90000], ["Sample Retail", 90000]], { party: "Sample Retail" })]));
   f = one(r, "advance_open")[0];
@@ -95,7 +95,10 @@ const one = (r, kind) => r.findings.filter((f) => f.kind === kind);
   // wrong side with no advance (an opening debit)
   r = run(inp([], { open: { "XYZ Logistics": -62000 }, booksFrom: "20260401" }));
   f = one(r, "wrong_side")[0];
-  eq([f && f.state, f && f.ask], ["ask", "₹62,000 is shown as paid in advance to XYZ Logistics. Is a bill pending?"], "wrong side: a supplier in debit");
+  eq([f && f.state, f && f.title], ["you", "₹62,000 XYZ Logistics · old balance, no entries this year"], "wrong side: carried in, no entries this year: for the firm, not a question");
+  r = run(inp([bill("20260601", "XYZ Logistics", 1000), pay("20260610", "XYZ Logistics", 1000)], { open: { "XYZ Logistics": -62000 }, booksFrom: "20260401" }));
+  f = one(r, "wrong_side")[0];
+  eq([f && f.state, f && f.ask], ["ask", "₹61,000 is shown as paid in advance to XYZ Logistics. Is a bill pending?"], "wrong side: carried in (less the bill since), and the party is in this year's books: asked");
   r = run(inp([], { open: { "XYZ Logistics": -999 }, booksFrom: "20260401" }));
   eq(one(r, "wrong_side").length, 0, "wrong side: under ₹1,000: nothing");
 }
@@ -341,11 +344,36 @@ const one = (r, kind) => r.findings.filter((f) => f.kind === kind);
   const rep = (d, a, party) => V(d, "Journal", [["Repairs", -a], ["Sample Hardware", a]], { party, narr: "x" });
   r = run(inp([rep("20260710", 22000, "x"), rep("20260810", 21000, "x"), rep("20260910", 22700, "x"), rep("20261012", 184000, "")], { bills: [fbill(4, "", "", "R1", "2026-10-10", 184000)] }));
   eq(one(r, "expense_jump")[0].state, "ask", "M2: a bill with no name never matches an entry with no party");
-  // M5: a bill an earlier finding owns is no tie for tonight's other finding
-  const A1 = pay("20260812", "ABC Traders", 250000), A2 = pay("20260815", "ABC Traders", 250000), Bl = fbill(1, "ABC Traders", "07AAAAA0000A1Z5", "AT/77", "2026-10-02", 250000);
-  const first = run(inp([A1], { bills: [Bl] })), k = one(first, "advance_open")[0].key;
-  r = run(inp([A1, A2], { bills: [Bl], prior: [{ kind: "advance_open", key: k, state: "resolved", evidence: [{ ref: "bill:e1" }] }] }));
-  eq(one(r, "advance_open").map((f) => [f.key === k, f.state]), [[true, "resolved"], [false, "ask"]], "M5: the earlier finding keeps its bill; the new one is asked, no churn");
+  // M5: a bill an earlier finding owns is no tie for tonight's other finding (a bank line that fits the same bill)
+  const A1 = pay("20260812", "ABC Traders", 250000), Bl = fbill(1, "ABC Traders", "07AAAAA0000A1Z5", "AT/77", "2026-10-02", 250000);
+  const line = { bank: { accounts: [{ id: "a1", ledger: "HDFC Bank" }], rows: [{ id: "r9", acct: "a1", sid: "s1", date: "2026-11-10", narr: "NEFT/ABC TRADERS", debit: 250000, credit: 0, ledger: "", state: "attention", dec: { name: "ABC TRADERS" } }] } };
+  const k = one(run(inp([A1], { bills: [Bl] })), "advance_open")[0].key;
+  r = run(inp([A1], Object.assign({ bills: [Bl], prior: [{ kind: "advance_open", key: k, state: "resolved", evidence: [{ ref: "bill:e1" }] }] }, line)));
+  eq([one(r, "advance_open")[0].state, one(r, "bank_no_bill")[0].state], ["resolved", "ask"], "M5: the earlier finding keeps its bill; the bank line is asked, no churn");
+}
+
+// staging's first night (22-Nov-2026): only relevant advances
+{
+  // a journal that takes a supplier past its bills (a TDS deduction, a write-off) is no advance
+  let r = run(inp([V("20260501", "Journal", [["ABC Traders", -8346], ["Purchase", 8346]], { party: "ABC Traders" })]));
+  eq(one(r, "advance_open").length + one(r, "wrong_side").length, 0, "a journal debit past the bills: no advance, nothing asked");
+  // ... and what it left over is used by the next bill before any payment advance
+  r = run(inp([V("20260501", "Journal", [["ABC Traders", -5000], ["Purchase", 5000]], { party: "ABC Traders" }), bill("20260601", "ABC Traders", 5000), pay("20260610", "ABC Traders", 5000)]));
+  eq(one(r, "advance_open").map((f) => f.facts.amt), [5000], "a payment after a bill the journal already took up: an advance of the payment only");
+  // one finding a party, with the payments' count and the oldest date
+  r = run(inp([pay("20260406", "ABC Traders", 1000), pay("20260506", "ABC Traders", 2000), pay("20261101", "ABC Traders", 9000)]));
+  const f = one(r, "advance_open")[0];
+  eq([one(r, "advance_open").length, f.facts.amt, f.facts.n, f.facts.date], [1, 3000, 2, "20260406"], "one finding a party: the payments older than 60 days, the oldest date");
+  eq(f.ask, "₹3,000 paid to ABC Traders since 06-Apr (2 payments) has no bill in the books. Has the bill come?", "the question for several payments");
+  // a payment gateway: receipts far beyond its sales: for the firm
+  const rec = (d, a) => V(d, "Receipt", [["HDFC Bank", -a], ["Sample Retail", a]], { party: "Sample Retail" });
+  r = run(inp([sale("20260601", "Sample Retail", 1000)].concat(Array.from({ length: 12 }, (_, i) => rec("2026070" + (i % 9 + 1), 5000)))));
+  eq([one(r, "advance_open")[0].state, one(r, "advance_open")[0].title], ["you", "₹59,000 received through Sample Retail · not matched to sales"], "receipts far beyond sales (a gateway): needs you, not a question");
+  // the GST set-off journal (tax ledgers only) is the firm's own: no narration is not asked
+  r = run(inp([V("20261020", "Journal", [["Output CGST", -150000], ["Input CGST", 149994.6], ["Rent", 5.4]], { narr: "" })]));
+  eq(one(r, "no_narration").length, 0, "a journal of tax ledgers only (a rounding line under ₹10) with no narration: not asked");
+  r = run(inp([V("20261020", "Journal", [["Output CGST", -150000], ["Rent", 150000]], { narr: "" })]));
+  eq(one(r, "no_narration").length, 1, "a journal of a tax ledger and an expense with no narration: asked");
 }
 
 // N7: a bill marked duplicate is no candidate
