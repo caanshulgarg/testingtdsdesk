@@ -67,6 +67,15 @@ function build(reg) {
       party: p.party || d0.party, gstin: p.gstin || d0.gstin, no: p.no, bookNo: x.books.map((d) => d.no).join(", "), voucher: x.books.map((d) => d.voucher).join(", "), date: p.date || d0.date,
       tm: p.ym, bm: d0.ym, ims: p.ims, issues: x.issues, bTax: x.books.reduce((a, d) => add(a, d, d.dir || 1), z()), pTax: heads(p, p.dir || 1) };
     if (!docs.length) { r.fixed = why(d0) || "nothing to take"; rows.push(r); return; }
+    // next-fix-audit-gst: 2B says "ITC not available" (itcavl N: section 16(4), place of supply): not taken, as GSTR.threeBm
+    // holds it: in the month booked on the 2B basis, else in the month of the 2B that says so (as a bill rejected in IMS)
+    if (p.itcavl === "N" && !p.rej) {
+      const nd = docs.map((d) => Object.assign({}, d, { eb: on(d.ym) ? d.ym : p.ym > d.ym && on(p.ym) ? p.ym : "" })).filter((d) => d.eb);
+      if (!nd.length) { r.fixed = "2B: credit not available; taken as booked (no 2B for its month)"; rows.push(r); return; }
+      money(r, nd); r.bm = nd[0].eb; r.na = "2B: credit not available, 4(D)(2)";
+      r.full = r.lower = r.laterAmt = r.defAmt = nd.reduce((a, d) => add(a, d), z()); r.def = r.def2 = "";
+      rows.push(r); return;
+    }
     r.bm = docs[0].ym; money(r, docs);
     const full = docs.reduce((a, d) => add(a, d), z());
     let lower = full;

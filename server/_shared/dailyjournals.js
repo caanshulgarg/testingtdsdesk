@@ -156,7 +156,8 @@ export function setoffMin(liab, rcm, credit, opening) {
 // the legal order checked on a set-off (the app's or the plain one): what is wrong, or ""
 export function setoffLegal(pay, liab, rcm, credit, opening) {
   const u = (f, t) => P(((pay.use || {})[f] || {})[t]);
-  const avail = (h) => Math.max(0, P(num((credit || {})[h]) + num((opening || {})[h]))), owe = (h) => Math.max(0, P((liab || {})[h]));
+  // (next-fix-audit-gst: the tax owed is less what 6.1 adjusts of an earlier month's negative liability, pay.negAdj)
+  const avail = (h) => Math.max(0, P(num((credit || {})[h]) + num((opening || {})[h]))), owe = (h) => Math.max(0, P((liab || {})[h]) - P(((pay || {}).negAdj || {})[h]));
   if (u("cgst", "sgst") || u("sgst", "cgst")) return "CGST and SGST credit crossed";
   if (["igst", "cgst", "sgst"].some((h) => u("cess", h) || u(h, "cess"))) return "Cess crossed with another head";
   for (const h of H) {
@@ -197,7 +198,8 @@ export function gstMonths(E, months) {
     if (type !== "monthly") { out.push({ reg, ym, skip: type }); continue; }
     try {
       const t = E.GSTR.threeB(ym, reg), J = E.GSTF.journal(ym, reg);
-      const nil = H.every((h) => !P((t.net || {})[h]) && !P((t.netItc || {})[h]) && !P((t.rcmOut || {})[h]));
+      // a nil return for the late fee: no tax payable (Notification 19/2021-CT), whatever the credit (next-fix-audit-gst)
+      const nil = H.every((h) => P((t.net || {})[h]) <= 0 && P((t.rcmOut || {})[h]) <= 0);
       const it = rec.r3b ? E.GSTF.interest(ym, reg, t) : null, fee = rec.r3b ? E.GSTF.lateFee(ym, reg, "r3b", nil) : null;
       const pick = (o) => JSON.parse(JSON.stringify(o || {}));
       out.push({ reg, ym, filed: String(rec.r3b || "").replace(/-/g, ""), due: String(E.GSTF.due(ym, "r3b", reg) || "").replace(/-/g, ""), arn: rec.r3bArn || "", kept: !!rec.snap, snapPay: rec.snap ? pick(rec.snap.pay) : null,
@@ -273,7 +275,8 @@ export function setoffOne(m, inp, others) {
   if (miss.length) return { finding: you("Set-off " + label + ": pick the " + miss.map(([r]) => ROLES[r].what).join(" and ") + " ledger", [], { waits: true }).finding, picks: picksNeeded(miss) };
   const lines = merge(lines0.concat(intAmt ? [{ ledger: ledI.ledger, dr: intAmt }, { ledger: J.cashL, cr: intAmt }] : [], feeAmt ? [{ ledger: ledF.ledger, dr: feeAmt }, { ledger: J.cashL, cr: feeAmt }] : []));
   // 5. two ways: the plain set-off from the 3B's own figures, and its journal
-  const least = setoffMin(t.net, t.rcmOut, t.netItc, t.opening), plain = t.pay;
+  const owed = {}; for (const h of H) owed[h] = num((t.net || {})[h]) - num(((t.pay || {}).negAdj || {})[h]);
+  const least = setoffMin(owed, t.rcmOut, t.netItc, t.opening), plain = t.pay;
   const legal = setoffLegal(t.pay, t.net, t.rcmOut, t.netItc, t.opening);
   const appCash = H.reduce((s, h) => s + P(t.pay.cash[h]) - P((t.pay.rcmCash || {})[h]), 0);
   const want = {};
