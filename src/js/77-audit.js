@@ -462,8 +462,16 @@ const AuditRep = {
     // (review of 22-Nov-2026) a party's bills are listed when TDS covers none of them; where deductions cover some, the part
     // not covered (the finding's base, TDSWatch's uncovered) on one line: which bills it is, the books do not say
     const tm = run.findings.filter(x => x.check === "tdsMissed").map(full), tot = x => r2(x.rows.reduce((s2, r) => s2 + num(r.amount), 0));
-    add("21(b)(ii)(A)", "Amounts disallowable under section 40(a)(ia): TDS not deducted", ["Party", "Amount", "Detail"], tm.flatMap(x => x.base == null || Math.abs(tot(x) - x.base) < 0.01 ? x.rows.map(r => [r.party, r.amount, r.note]) :
-      [[x.party, r2(x.base), x.section + ": the part of " + x.rows.length + " bills of \u20b9" + m(tot(x)) + " not covered by the TDS deducted"]]), tm.length ? "" : "None found.");
+    // (review of 22-Nov-2026) a deduction short of the rate (TDSSep's sepShort: its bills in full in TDS.allRows, its TDS
+    // covering r.covers of them) is in the finding's base as the part not covered; that part was paid with TDS deducted,
+    // at a lower rate: clause 34(a)'s "at less than the specified rate", not 21(b)(ii)(A) or "without deduction"
+    const allR = TDS.allRows(), fyR = r => r.credit ? TDS.fyOf(r.credit) : r.fy;
+    const shortOf = x => r2(Math.min(num(x.base != null ? x.base : tot(x)), allR.filter(r => r.sepShort && r.party === x.party && TDS.sec(r.section) === TDS.sec(x.section) &&
+      (x.fy ? fyR(r) === x.fy : r.date >= from && r.date <= to)).reduce((a, r) => a + Math.max(0, num(r.paid) - num(r.covers)), 0)));
+    const noDed = x => r2(Math.max(0, num(x.base != null ? x.base : tot(x)) - shortOf(x)));
+    add("21(b)(ii)(A)", "Amounts disallowable under section 40(a)(ia): TDS not deducted", ["Party", "Amount", "Detail"], tm.flatMap(x => x.base == null || (Math.abs(tot(x) - x.base) < 0.01 && !shortOf(x)) ? x.rows.map(r => [r.party, r.amount, r.note]) :
+      noDed(x) > 0.005 ? [[x.party, noDed(x), x.section + ": the part of " + x.rows.length + " bills of \u20b9" + m(tot(x)) + " not covered by the TDS deducted"]] : []),
+      (tm.length ? "" : "None found. ") + (tm.some(x => shortOf(x) > 0) ? "TDS deducted short of the rate is in 34(a) (at a lower rate), not here; whether section 40(a)(ia) reaches a short deduction is for the auditor." : ""));
     const c3 = f("cash40A3");
     add("21(d)(A)", "Cash payments above the limit, section 40A(3)", ["Date", "Party or ledger", "Amount"], c3 ? c3.rows.map(r => [fmtDate(tallyDate(r.date)), r.party, r.amount]) : [], c3 ? "" : "None found.");
     const ms = f("msme43Bh");
@@ -479,17 +487,30 @@ const AuditRep = {
     add("31(b)", "Specified sums (advances for the transfer of immovable property) taken or accepted otherwise than by bank (section 269SS)", ["Date", "From", "Amount"], [], "Not told apart in the books; answer from the records.");
     add("31(ba)", "Receipts of \u20b92 lakh or more otherwise than by bank (section 269ST)", ["Date", "From", "Amount"], st ? st.rows.map(r => [fmtDate(tallyDate(r.date)), r.party, r.amount]) : [], st ? "" : "None found.");
     const c2 = c3 ? c3.rows.filter(r => num(r.amount) >= 200000) : [];
-    add("31(bc)", "Payments of \u20b92 lakh or more otherwise than by bank (section 269ST)", ["Date", "To", "Amount"], c2.map(r => [fmtDate(tallyDate(r.date)), r.party, r.amount]), (c2.length ? "" : "None found. ") + "From the cash paid to one party in a day (40A(3)); a payment for one bill over several days is checked by hand.");
+    // (review of 22-Nov-2026) 40A(3) leaves out cash paid to lenders, capital, customers and advances; section 269ST is
+    // the receiver's, and reaches some of them (a loan repaid, an advance), not others (a loan or deposit given: section
+    // 269SS's, the first proviso's clause (ii)). Those of 2 lakh or more to one ledger in a day are listed, to be checked
+    const oth = {}, outK = l => this.isLoan(l) || this.isCapital(l) || this.isDebtor(l) || /IMPREST|ADVANCE|SECURITY DEPOSIT/i.test(l);
+    (b.vouchers || []).forEach(v => {
+      if (v.date < from || v.date > to || v.opt || v.cancel || /CONTRA/i.test(v.type)) return;
+      const paid = v.ent.filter(e => this.isCash(e.l) && e.a > 0).reduce((s2, e) => s2 + e.a, 0);
+      if (paid > 0) v.ent.forEach(e => { if (e.a < 0 && outK(e.l)){ const k = v.date + "|" + e.l, x = oth[k] = oth[k] || {date: v.date, party: e.l, amount: 0}; x.amount = r2(x.amount + Math.min(-e.a, paid)); } });
+    });
+    const c2o = Object.values(oth).filter(x => x.amount >= 200000), c2all = c2.concat(c2o).sort((a, c) => String(a.date).localeCompare(String(c.date)));
+    add("31(bc)", "Payments of \u20b92 lakh or more otherwise than by bank (section 269ST)", ["Date", "To", "Amount"], c2all.map(r => [fmtDate(tallyDate(r.date)), r.party, r.amount]), (c2all.length ? "" : "None found. ") +
+      "From the cash paid to one party in a day; a payment for one bill or one event over several days is checked by hand." + (c2o.length ? " " + c2o.length + " are to a lender, capital, a customer or an advance (not in 40A(3)): check whether section 269ST applies to each (not to a loan or deposit given, which is section 269SS's)." : ""));
     add("31(c)", "Repayments of loans or deposits otherwise than by bank (section 269T)", ["Date", "To", "Amount"], lr ? lr.rows.map(r => [fmtDate(tallyDate(r.date)), r.party, r.amount]) : [], lr ? "" : "None found in cash.");
     // 34(a): section by section, from the deductions and what was missed
     const fy = TDS.fyOf(to), rows34 = {};
-    TDS.allRows().filter(r => r.date >= from && r.date <= to).forEach(r => { const x = rows34[r.section] = rows34[r.section] || {paid: 0, tds: 0, n: 0, low: 0}; x.paid = r2(x.paid + r.paid); x.tds = r2(x.tds + r.tds); x.n++; });
-    ["Q1", "Q2", "Q3", "Q4"].forEach(q => Certs.issues(fy, q).filter(x => x.short > 0 && x.row.date >= from && x.row.date <= to).forEach(x => { const y = rows34[x.row.section]; if (y) y.low++; }));
+    // "at a lower rate" is the amount paid or credited on which TDS was deducted short of the rate (it was a count of the
+    // deductions): the rows Certs.issues finds short, and TDSSep's entries short of their bills (review of 22-Nov-2026)
+    allR.filter(r => r.date >= from && r.date <= to).forEach(r => { const x = rows34[r.section] = rows34[r.section] || {paid: 0, tds: 0, n: 0, low: 0}; x.paid = r2(x.paid + r.paid); x.tds = r2(x.tds + r.tds); x.n++; if (r.sepShort) x.low = r2(x.low + num(r.paid)); });
+    ["Q1", "Q2", "Q3", "Q4"].forEach(q => Certs.issues(fy, q).filter(x => x.short > 0 && x.row.date >= from && x.row.date <= to).forEach(x => { const y = rows34[x.row.section]; if (y) y.low = r2(y.low + num(x.row.paid)); }));
     // (review of 22-Nov-2026) what was paid or credited without deduction is each finding's base (the part TDS does not
     // cover), added once to what the deductions were made on
-    const miss = {}; tm.forEach(x => { const s2 = x.section || "?"; miss[s2] = r2((miss[s2] || 0) + num(x.base != null ? x.base : tot(x))); });
+    const miss = {}; tm.forEach(x => { const s2 = x.section || "?"; miss[s2] = r2((miss[s2] || 0) + noDed(x)); });
     Object.keys(rows34).forEach(k2 => { if (!k2){ rows34["not set (a TDS ledger with no section)"] = rows34[k2]; delete rows34[k2]; } });
-    add("34(a)", "Tax deducted at source, section by section", ["Section", "Paid or credited", "On which tax was to be deducted", "Tax deducted", "Deductions at a lower rate", "Paid or credited without deduction"],
+    add("34(a)", "Tax deducted at source, section by section", ["Section", "Paid or credited", "On which tax was to be deducted", "Tax deducted", "Paid or credited, deducted at a lower rate", "Paid or credited without deduction"],
       Object.keys(Object.assign({}, rows34, miss)).sort().map(s2 => { const x = rows34[s2] || {paid: 0, tds: 0, low: 0}; return [s2, x.paid + (miss[s2] || 0), x.paid + (miss[s2] || 0), x.tds, x.low, miss[s2] || 0]; }),
       "Salary under section 192 is from the books; confirm it against the salary sheet.");
     const il = f("tdsLate");
@@ -504,8 +525,10 @@ const AuditRep = {
     (b.vouchers || []).forEach(v => {
       if (v.date < from || v.date > to || v.opt || v.cancel || Books.isSale(v)) return;
       // (review of 22-Nov-2026) expenditure on goods and services only: not depreciation, provisions or employees' pay (no
-      // supply under Schedule III of the CGST Act), and not an entry with no supplier, cash or bank side (a book entry)
-      const val = v.ent.filter(e => e.a < 0 && (this.isExpense(e.l) || this.under(e.l, /^purchase accounts$/i) || this.isFixed(e.l)) && !/DEPRECIATION|AMORTI[SZ]|PROVISION|SALAR|WAGES|BONUS|GRATUITY|STIPEND|STAFF WELFARE|EMPLOYEE|PROVIDENT|\bE?PF\b|\bESIC?\b|LEAVE ENCASH|REMUNERATION/i.test(e.l)).reduce((s, e) => s - e.a, 0);
+      // supply under Schedule III of the CGST Act), and not an entry with no supplier, cash or bank side (a book entry).
+      // Only partners' and directors' remuneration is left out as pay (review of 22-Nov-2026: any "remuneration" left out the
+      // auditor's fee, and "staff welfare" the goods and services bought for the staff from suppliers)
+      const val = v.ent.filter(e => e.a < 0 && (this.isExpense(e.l) || this.under(e.l, /^purchase accounts$/i) || this.isFixed(e.l)) && !/DEPRECIATION|AMORTI[SZ]|PROVISION|SALAR|WAGES|BONUS|GRATUITY|STIPEND|EMPLOYEE|PROVIDENT|\bE?PF\b|\bESIC?\b|LEAVE ENCASH|(PARTNER|DIRECTOR)S?'?S?\W*REMUNERATION|REMUNERATION\W+(TO|OF)\W+(THE\W+)?(PARTNER|DIRECTOR)/i.test(e.l)).reduce((s, e) => s - e.a, 0);
       if (!val || !v.ent.some(e => e.a > 0 && (this.isPerson(e.l) || this.isCash(e.l) || this.isBankL(e.l) || gst[e.l]))) return;
       const party = (v.ent.find(e => e.a > 0 && (gst[e.l] || this.isCreditor(e.l))) || {}).l || v.party, g = gst[party] || v.gstin, rt = String((info[party] || {}).regType || "");
       const tax = v.ent.some(e => { const k = Books.ledgerOf(e.l).kind; return e.a < 0 && (k === "gst" || k === "gst_common" || k === "ineligible"); });
@@ -514,7 +537,8 @@ const AuditRep = {
     });
     add("44", "Break-up of expenditure by the GST status of the supplier", ["Total expenditure", "Registered: exempt or nil", "Registered: composition", "Registered: others", "Total with registered suppliers", "With unregistered suppliers"],
       [[r2(g44.total), r2(g44.exempt), r2(g44.comp), r2(g44.other), r2(g44.exempt + g44.comp + g44.other), r2(g44.unreg)]],
-      "Purchases, expenses and fixed assets booked in the period; \u201cexempt or nil\u201d is a registered supplier's bill with no GST on it. Composition dealers are recognised from their GST type in Tally.");
+      "Purchases, expenses and fixed assets booked in the period; \u201cexempt or nil\u201d is a registered supplier's bill with no GST on it. Composition dealers are recognised from their GST type in Tally. " +
+        "Employees' pay and partners' and directors' remuneration are left out (Schedule III); a director who is not an employee supplies a service under reverse charge (circular 140/10/2020-GST): add that remuneration if so.");
     return {from, to, at: run.at, code: run.code, clauses: C};
   },
   async form3cdExcel(run){

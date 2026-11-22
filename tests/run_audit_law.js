@@ -18,7 +18,8 @@ ctx.CO = () => ({name: "Made-up Traders Private Limited", pan: "AAACM0000A"}); c
 const UNDER = {"Cash": "Cash-in-Hand", "Made-up Bank": "Bank Accounts", "Sales": "Sales Accounts", "Purchase": "Purchase Accounts", "Rent": "Indirect Expenses", "Salary": "Indirect Expenses",
   "Depreciation": "Indirect Expenses", "Plant": "Fixed Assets", "Salary Payable": "Current Liabilities", "Mohan Loan": "Unsecured Loans", "Asha Loan": "Unsecured Loans", "Capital": "Capital Account",
   "07 CGST OUTPUT": "Duties & Taxes", "07 SGST OUTPUT": "Duties & Taxes", "07 CGST INPUT": "Duties & Taxes", "07 SGST INPUT": "Duties & Taxes", "07 IGST INPUT": "Duties & Taxes", "TDS Payable 194C": "Duties & Taxes",
-  "Professional Tax Payable": "Duties & Taxes", "Ravi Stores": "Sundry Debtors", "Supp A": "Sundry Creditors", "Supp B": "Sundry Creditors", "Supp C": "Sundry Creditors", "Supp D": "Sundry Creditors", "Tiny Works": "Sundry Creditors"};
+  "Professional Tax Payable": "Duties & Taxes", "07 IGST OUTPUT": "Duties & Taxes", "Auditor's Remuneration": "Indirect Expenses", "Staff Welfare": "Indirect Expenses", "Partners Remuneration": "Indirect Expenses",
+  "Directors Remuneration": "Indirect Expenses", "Audit Firm": "Sundry Creditors", "Interest on Loan": "Indirect Expenses", "Ravi Stores": "Sundry Debtors", "Supp A": "Sundry Creditors", "Supp B": "Sundry Creditors", "Supp C": "Sundry Creditors", "Supp D": "Sundry Creditors", "Tiny Works": "Sundry Creditors"};
 const GROUPS = {"Cash-in-Hand": "Current Assets", "Bank Accounts": "Current Assets", "Sundry Debtors": "Current Assets", "Sundry Creditors": "Current Liabilities", "Duties & Taxes": "Current Liabilities",
   "Unsecured Loans": "Loans (Liability)", "Current Assets": "", "Current Liabilities": "", "Loans (Liability)": "", "Sales Accounts": "", "Purchase Accounts": "", "Indirect Expenses": "", "Capital Account": "", "Fixed Assets": ""};
 let n = 0;
@@ -137,6 +138,61 @@ if (x.Audit.form3cd){
   const g = x.Audit.form3cd({from: FROM, to: TO, at: "", code: "", findings: []}).clauses.find(c => c.no === "44").rows[0];
   ok(g[0] === 10000 && g[5] === 10000, "clause 44: only the purchase of 10,000 (from an unregistered supplier), not depreciation or salary (got total " + g[0] + ", unregistered " + g[5] + ")");
 } else ok(false, "Audit.form3cd is with the Audit screen's file (77-audit.js)");
+
+console.log("9. 43B: GST set off as sections 49(5) and 49A with rule 88A allow (IGST credit first; CGST credit never for SGST)");
+books([V("20260321", "Sales", [["Ravi Stores", -200000], ["07 SGST OUTPUT", 100000], ["07 IGST OUTPUT", 100000]]),
+  V("20260322", "Purchase", [["07 IGST INPUT", -100000], ["07 CGST INPUT", -100000], ["Supp A", 200000]])]);
+r = rowsOf(check("balances"), "43B");
+const g9 = r.filter(z => /GST payable/.test(z.party)).reduce((s, z) => s + z.amount, 0);
+ok(Math.abs(g9 - 100000) < 0.01, "output SGST 1,00,000 and IGST 1,00,000, credit IGST 1,00,000 and CGST 1,00,000: SGST 1,00,000 payable (got " + g9 + ")");
+books([V("20260321", "Sales", [["Ravi Stores", -200000], ["07 IGST OUTPUT", 100000], ["07 CGST OUTPUT", 50000], ["07 SGST OUTPUT", 50000]]),
+  V("20260322", "Purchase", [["07 IGST INPUT", -50000], ["07 CGST INPUT", -30000], ["07 SGST INPUT", -80000], ["Supp A", 160000]])]);
+r = rowsOf(check("balances"), "43B");
+const g9b = r.filter(z => /GST payable/.test(z.party)).reduce((s, z) => s + z.amount, 0);
+ok(Math.abs(g9b - 40000) < 0.01, "output IGST 1,00,000, CGST 50,000, SGST 50,000; credit IGST 50,000 to IGST, CGST 30,000 to CGST, SGST 80,000 to SGST then 30,000 to IGST: CGST 20,000 and IGST 20,000 payable, 40,000 (got " + g9b + ")");
+
+console.log("10. 269SS: interest credited to the lender is said, not counted silently");
+books([V("20250501", "Receipt", [["Cash", -15000], ["Mohan Loan", 15000]]), V("20250930", "Journal", [["Interest on Loan", -1500], ["Mohan Loan", 1500]]),
+  V("20251010", "Receipt", [["Cash", -4000], ["Mohan Loan", 4000]])]);
+ctx.S.books.ledInfo["Mohan Loan"].ob = 0;
+tk = rowsOf(check("cashLoans"), "269SS");
+const t10 = tk.find(z => z.date === "20251010");
+ok(t10 && /interest/i.test(t10.note) && /19,000/.test(t10.note), "4,000 in cash with 16,500 owed, 1,500 of it interest: flagged, and the note says the loan alone comes to 19,000 (got " + JSON.stringify(t10 && t10.note) + ")");
+
+if (x.Audit.form3cd){
+  console.log("11. Form 3CD 34(a) and 21(b)(ii)(A): a short deduction is at a lower rate, not without deduction");
+  books([]);
+  const allRows = x.TDS.allRows, iss = x.Certs.issues;
+  x.TDS.allRows = () => [{date: "20250610", fy: "2025-26", section: "194C", party: "K", paid: 100000, tds: 1000, sepShort: true, covers: 50000}]; x.Certs.issues = () => [];
+  const d = x.Audit.form3cd({from: FROM, to: TO, at: "", code: "", findings: [{id: "tdsMissed:K|194C|2025-26", check: "tdsMissed", base: 50000, section: "194C", party: "K", fy: "2025-26", count: 1, amount: 1000,
+    rows: [{date: "20250610", no: "1", type: "194C", party: "K", amount: 100000, note: "booked to Contract"}]}]}), cl = no => d.clauses.find(c => c.no === no);
+  const s34 = cl("34(a)").rows.find(z => z[0] === "194C") || [];
+  ok(s34[1] === 100000 && s34[5] === 0 && s34[4] === 100000, "34(a) 194C: paid 1,00,000 (not 1,50,000), at a lower rate 1,00,000, without deduction nil (got " + JSON.stringify(s34) + ")");
+  ok(!cl("21(b)(ii)(A)").rows.some(z => z[0] === "K"), "21(b)(ii)(A): nothing for K, TDS was deducted (short): " + JSON.stringify(cl("21(b)(ii)(A)").rows));
+  x.TDS.allRows = allRows; x.Certs.issues = iss;
+
+  console.log("12. clause 44: auditor's remuneration and staff welfare are bought from suppliers; partners' and directors' pay is not");
+  books([V("20250601", "Purchase", [["Purchase", -10000], ["Supp A", 10000]], {party: "Supp A"}), V("20260331", "Journal", [["Auditor's Remuneration", -50000], ["Audit Firm", 50000]], {party: "Audit Firm"}),
+    V("20250815", "Payment", [["Staff Welfare", -20000], ["Cash", 20000]]), V("20260331", "Payment", [["Partners Remuneration", -300000], ["Made-up Bank", 300000]]),
+    V("20260331", "Payment", [["Directors Remuneration", -200000], ["Made-up Bank", 200000]])]);
+  const g12 = x.Audit.form3cd({from: FROM, to: TO, at: "", code: "", findings: []}).clauses.find(c => c.no === "44").rows[0];
+  ok(g12[0] === 80000, "clause 44: 10,000 + auditor 50,000 + staff welfare 20,000 = 80,000; not the partners' or directors' 5,00,000 (got " + g12[0] + ")");
+
+  console.log("13. clause 31(bc): cash paid of 2 lakh or more that 40A(3) leaves out is listed to check");
+  books([V("20250720", "Payment", [["Mohan Loan", -250000], ["Cash", 250000]]), V("20250721", "Payment", [["Capital", -300000], ["Cash", 300000]]), V("20250722", "Payment", [["Ravi Stores", -150000], ["Cash", 150000]])]);
+  ctx.S.books.ledInfo["Mohan Loan"].ob = 500000;
+  const fx = [].concat(check("cash40A3") || []).filter(Boolean).map(z => Object.assign({id: "cash40A3", check: "cash40A3", count: z.rows.length}, z));
+  const c31 = x.Audit.form3cd({from: FROM, to: TO, at: "", code: "", findings: fx}).clauses.find(c => c.no === "31(bc)");
+  ok(c31.rows.length === 2 && c31.rows.some(z => z[1] === "Mohan Loan" && z[2] === 250000) && c31.rows.some(z => z[1] === "Capital" && z[2] === 300000) && /check/i.test(c31.note),
+    "31(bc): the loan repaid (2,50,000) and the capital drawn (3,00,000) in cash are listed to check; 1,50,000 to Ravi Stores is under 2 lakh (got " + JSON.stringify(c31.rows) + ", " + c31.note + ")");
+}
+
+console.log("14. the audit run is stale once the MSME days are changed (MIS settings)");
+books([V("20250601", "Purchase", [["Purchase", -10000], ["Supp A", 10000]], {party: "Supp A"})]);
+const r14 = x.Audit.run(FROM, TO, "test");
+ok(!x.Audit.stale(r14), "just run: not stale");
+ctx.S.books.misCfg = {msmeDays: 15};
+ok(!!x.Audit.stale(r14), "the MSME days set to 15 after the run: the run is stale, so the Audit tab asks to run it again");
 
 console.log(fails ? fails + " FAILED" : "all passed");
 process.exit(fails ? 1 : 0);

@@ -356,14 +356,21 @@ Object.assign(Audit, {
     // a breach when it, with what the lender's loans stand at that day (the opening balance and every entry since, by bank
     // too), comes to 20,000 or more (269SS (a)-(c)); a repayment in cash when the loan repaid stands at 20,000 or more (269T)
     *cashLoans(A, V, ctx){
-      const taken = [], repaid = [], bal = ctx && ctx.bal && ctx.bal.ok ? ctx.bal.at(A.dayBefore(ctx.from)) : {}, run = {};
+      const taken = [], repaid = [], bal = ctx && ctx.bal && ctx.bal.ok ? ctx.bal.at(A.dayBefore(ctx.from)) : {}, run = {}, intr = {};
       yield* Audit.each(V.slice().sort((a, c) => a.date.localeCompare(c.date) || String(a.id).localeCompare(String(c.id))), v => {
         const cashIn = v.ent.filter(e => A.isCash(e.l) && e.a < 0).reduce((s, e) => s - e.a, 0), cashOut = v.ent.filter(e => A.isCash(e.l) && e.a > 0).reduce((s, e) => s + e.a, 0);
         v.ent.forEach(e => {
           if (!A.isLoan(e.l) || /BANK|FINANCE|NBFC|CAPITAL LTD|HOUSING/i.test(e.l)) return;
           const was = Math.max(0, run[e.l] != null ? run[e.l] : num(bal[e.l])), c = e.a > 0 ? Math.min(e.a, cashIn) : Math.min(-e.a, cashOut);
           run[e.l] = r2(was + e.a);
-          if (c > 0 && e.a > 0 && was + c >= 20000) taken.push(A.row(v, {party: e.l, amount: c, note: was ? A.money(was) + " already owed to the lender" : ""}));
+          // (review of 22-Nov-2026) interest credited to the lender (the entry's other side an interest ledger) is in what
+          // is owed; section 269SS counts the loan or deposit remaining unpaid, so where the limit is crossed only with the
+          // interest the row says so, for the auditor to decide (kept in the list: the stricter reading)
+          const it = Math.min(was, num(intr[e.l]));
+          if (e.a > 0 && !c && v.ent.some(o => o.a < 0 && /INTEREST/i.test(o.l))) intr[e.l] = r2(num(intr[e.l]) + e.a);
+          else if (e.a < 0) intr[e.l] = Math.max(0, r2(num(intr[e.l]) + e.a));
+          if (c > 0 && e.a > 0 && was + c >= 20000) taken.push(A.row(v, {party: e.l, amount: c, note: (was ? A.money(was) + " already owed to the lender" : "") +
+            (it > 0 && was - it + c < 20000 ? "; " + A.money(it) + " of it is interest credited: the loan alone comes to " + A.money(was - it + c) + ", under \u20b920,000 (check whether the interest counts)" : "")}));
           if (c > 0 && e.a < 0 && Math.max(was, c) >= 20000) repaid.push(A.row(v, {party: e.l, amount: c, note: "the loan stood at " + A.money(was)}));
         });
       });
@@ -527,9 +534,14 @@ Object.assign(Audit, {
         .map(([l, v]) => [l, v, /\b(PF|ESI|EPF|ESIC)\b/i.test(l) ? "employees' share: section 36(1)(va), clause 20(b); the employer's: section 43B \u2014 check which" : "payable"]);
       Object.keys(G).sort().forEach(reg => {
         const {L, C} = G[reg], c = x => Math.max(0, num(x)), use = (a, b) => { const u = Math.min(a.v, b.v); a.v -= u; b.v -= u; };
-        const lc = {v: c(L.CGST)}, ls = {v: c(L.SGST)}, li = {v: c(L.IGST)}, cc = {v: c(C.CGST)}, cs = {v: c(C.SGST)};
-        use(cc, lc); use(cs, ls); use(cc, li); use(cs, li);
-        const v = r2(Math.max(0, lc.v + ls.v + li.v - c(C.IGST)) + Math.max(0, c(L.CESS) - c(C.CESS)) + c(G[reg].rcm));
+        const lc = {v: c(L.CGST)}, ls = {v: c(L.SGST)}, li = {v: c(L.IGST)}, ci = {v: c(C.IGST)}, cc = {v: c(C.CGST)}, cs = {v: c(C.SGST)};
+        // sections 49(5) and 49A of the CGST Act with rule 88A: IGST credit first, against IGST and then CGST and SGST in
+        // any share (here the share that leaves least to pay); then CGST credit against CGST and then IGST, SGST credit
+        // against SGST and then IGST; CGST credit never against SGST, nor SGST credit against CGST (section 49(5)(e), (f))
+        // (review of 22-Nov-2026: CGST and SGST credit were used before the IGST credit, so output SGST 1,00,000 and IGST
+        // 1,00,000 with credit IGST 1,00,000 and CGST 1,00,000 showed nil payable; SGST 1,00,000 is)
+        use(ci, li); use(cc, lc); use(cs, ls); use(cc, li); use(cs, li);
+        const v = r2(Math.max(0, lc.v + ls.v - ci.v) + li.v + Math.max(0, c(L.CESS) - c(C.CESS)) + c(G[reg].rcm));
         if (v > 1) dues.push([(reg ? reg + " " : "") + "GST payable after input credit", v, "output less the input credit in the books, set off head by head"]);
       });
       if (dues.length) out.push({key: "43B", area: "bal", sev: "medium", clause: "3CD 26; section 43B", title: "Taxes and statutory dues unpaid at the end of the period", problem: dues.length + " amounts payable.",
@@ -572,7 +584,7 @@ Object.assign(Audit, {
     from = this.ymd(from); to = this.ymd(to);
     const V = this.vouchers(from, to);
     yield;
-    const basis = MIS.basis();
+    const basis = this.basisNow();
     yield;
     V.sort((a, c) => a.date.localeCompare(c.date) || String(a.id).localeCompare(String(c.id)));
     yield;
@@ -710,9 +722,13 @@ Object.assign(Audit, {
     if (!run || !run.from) return null;
     const n = this.vouchers(run.from, run.to).length;
     if (n !== run.vouchers) return {was: run.vouchers, now: n};
-    if (!run.basis || run.basis !== MIS.basis()) return {was: run.vouchers, now: n, changed: true};
+    if (!run.basis || run.basis !== this.basisNow()) return {was: run.vouchers, now: n, changed: true};
     return null;
   },
+  // the books' basis (MIS.basis) and the MSME suppliers' days set under MIS settings, which 43B(h) reads (review of
+  // 22-Nov-2026: the days changed, the Audit tab kept the old 43B(h) findings as if current). Not set: MIS.basis alone,
+  // so a run from before this still fits
+  basisNow(){ const d = num(((S.books || {}).misCfg || {}).msmeDays); return MIS.basis() + (d > 0 ? "|msme" + Math.min(45, d) : ""); },
   howLabel(run){ return !run || !run.how || run.how === "run now" ? "run by hand" : run.how; },
   // next-audit-steps (owner-approved, 12-Nov-2026): the day's first audit on its own ran in one go right after new
   // entries came in from the cloud copy (TCloud.rework) or the books opened, and held the page for it (1.4 s on 51,758
