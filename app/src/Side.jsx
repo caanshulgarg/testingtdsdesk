@@ -90,6 +90,7 @@ function tree() {
         count: S.bank && S.bank.cid === open.id ? tabCounts(S.bank.rows).review : 0 },
       { icon: "sales", label: "Sales", on: work && mod === "sales", go: () => goClient("sales") },
       { icon: "txn", label: "Transactions", on: inCo && S.tab === "txn", go: () => goClient("txn"), title: "One register: purchase, sales and bank" },
+      { icon: "txn", label: "Payroll", on: bt === "payroll", go: () => goClient("books:payroll"), title: "Salary: any sheet, or typed in" },
     ]],
     ["Returns", [
       { icon: "tds", label: "TDS", on: bt === "tds", go: () => goClient("books:tds"), title: "TDS returns and the challan register" },

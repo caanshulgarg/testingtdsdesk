@@ -117,6 +117,12 @@ export async function approveEntry(e) {
   await rpc("entry_decide", { p_id: e.id, p_decision: "approved", p_work_ref: e.work_ref });
   return true;
 }
+export const PAYROLL_HOLD = "This company books salary in Tally Payroll. Posting payroll vouchers waits for your OK of the new Tally request; to post the journal, choose “Post as a journal this month” on Payroll.";
+export function payrollHold(e, co) {
+  if (!e || e.source !== "payroll" || !co || ((co.payrollMethod || {}).value !== "tally")) return "";
+  const ym = String((e.voucher || {}).period || "");
+  return (co.payrollJournal || {})[ym] ? "" : PAYROLL_HOLD;
+}
 // (phase 2) a journal FinCom made: the second check first (the same builder on the books as they are now: anything
 // changed since the night, and nothing is approved), then the EXISTING path for a hand-made voucher
 // (app/src/lib/asstEntries.js: its checks, the post gate, the one XML builder and Bridge.post: the bridge here or the
@@ -125,6 +131,11 @@ export async function approveJournal(e) {
   const cid = e.client_id;
   await openCompany(cid);
   const { recheck } = await import("./again.js");
+  // next-payroll (docs/PAYROLL.md): a company that books salary in Tally Payroll posts payroll vouchers, a new Tally request
+  // that waits for the owner's OK; until then its payroll journal goes only for a month the owner chose "Post as a journal
+  // this month" (Payroll page)
+  const why0 = payrollHold(e, CO(cid));
+  if (why0) { toast(why0); return false; }
   const why = await recheck(e, { prior: lastPrior.filter((p) => p.cid === cid) });
   if (why) { toast(why); return false; }
   const A = await import("../../lib/asstEntries.js");
