@@ -896,7 +896,7 @@ function ourYtd(party, fy, natureId, cid, skipSent){
 }
 function ytdOf(party, fy, natureId, cid){
   const y = party && party.ytd && party.ytd[fy] && party.ytd[fy][natureId];
-  const stored = {credited: y ? num(y.credited) : 0, tdsBase: y ? num(y.tdsBase) : 0};
+  const stored = {credited: y ? Math.max(0, num(y.credited)) : 0, tdsBase: y ? num(y.tdsBase) : 0};
   const t = tallyYtdFor(party, fy, arguments[4]);
   if (!t) return stored;
   // Tally already holds the bills sent to it; count only the rest from here. What already had TDS: the Tally bills with
@@ -1070,7 +1070,9 @@ function itcCheck(e, co){
   let ok = true, why = "";
   if (!cli){ ok = false; why = "unregistered"; if (gst > 0) notes.push({lvl:"", t:"This client has no GSTIN, so no input credit: the GST of " + money(gst) + " is added to the expense. Add the GSTIN in Client setup if the client is registered."}); }
   else if (billedTo && !own.includes(billedTo)){ ok = false; why = "other-gstin"; if (gst > 0) notes.push({lvl:"hi", t:"No input credit: the bill is billed to GSTIN " + billedTo + ", not this client's " + cli + ". The GST of " + money(gst) + " is added to the expense. Ask the supplier for a bill on the right GSTIN."}); }
-  if (reg !== cli && gst > 0) notes.push({lvl:"", t:"Billed to this client's other registration " + reg + ": the input credit is that GSTIN's. Check the GST ledgers are the ones for " + reg + "."});
+  // each GSTIN is a distinct person (s.25(4) CGST Act) and the credit is the registration's the bill is made out to (s.16):
+  // posted to this client's GST ledgers it is that GSTIN's only once a person says so (e.regOk; compute's missing)
+  if (reg !== cli && gst > 0) notes.push({lvl:e.regOk === reg ? "" : "hi", t:"Billed to this client's other registration " + reg + ": the input credit is that GSTIN's. " + (e.regOk === reg ? "You confirmed the GST ledgers are " + reg + "'s." : "Check the GST ledgers are the ones for " + reg + ".")});
   if (ok && gst > 0 && pos.expect && pos.charged && pos.expect !== pos.charged)
     notes.push({lvl:"hi", t:pos.expect === "cgst" ? "The supplier is in the client's state (" + sup + "), so CGST + SGST are expected, but the bill charges IGST. Check the place of supply." : "The supplier is in another state (" + sup + ", client " + home + "), so IGST is expected, but the bill charges CGST + SGST. Check the place of supply."});
   return {ok, why, pos, notes, reg};
@@ -1182,9 +1184,10 @@ function compute(e, cid){
   // the year's figure read from Tally: what had TDS there is known only where the bill carries it, and Tally's figure
   // counts every credit to the ledger, of every payment type; the catch-up is included only when a person ticks it
   // (audit of 22-Nov-2026: TDS already deducted in Tally was deducted again)
-  const t = ytd.fromTally, catchUpAsk = catchUp > 0 && !!t && !e.catchUpTally, catchUpIn = catchUp > 0 && !!e.includeCatchUp && !catchUpAsk;
+  // (review of 22-Nov-2026) e.catchUpNotDue: a person checked Tally and found that TDS deducted already, or not due
+  const t = ytd.fromTally, nd = t && e.catchUpNotDue, catchUpAsk = catchUp > 0 && !!t && !e.catchUpTally && !nd, catchUpIn = catchUp > 0 && !!e.includeCatchUp && !catchUpAsk && !nd;
   if (catchUp > 0){
-    flags.push(catchUpAsk ? {lvl:"hi", t:"Earlier bills worth " + money0(catchUp) + " this year may have had no TDS: Tally has " + money0(t.credited) + " credited to " + t.ledger + " (every payment type), " + money0(num(t.tdsBase)) + " of it with TDS in the bill" + (num(t.tdsSep) ? ", and TDS of " + money0(t.tdsSep) + " in entries of their own" : "") + ". Check them in Tally; tick the box to include their TDS."}
+    flags.push(nd ? {lvl:"", t:"Earlier bills worth " + money0(catchUp) + ": checked in Tally by " + (nd.by || "?") + ", their TDS deducted already or not due. Not included."} : catchUpAsk ? {lvl:"hi", t:"Earlier bills worth " + money0(catchUp) + " this year may have had no TDS: Tally has " + money0(t.credited) + " credited to " + t.ledger + " (every payment type), " + money0(num(t.tdsBase)) + " of it with TDS in the bill" + (num(t.tdsSep) ? ", and TDS of " + money0(t.tdsSep) + " in entries of their own" : "") + ". Check them in Tally; tick the box to include their TDS."}
       : {lvl:"", t:"Earlier bills worth " + money0(catchUp) + " this year had no TDS. " + (catchUpIn ? "Their TDS is included in this entry." : "Their TDS is not included; tick the box to add it.")});
     if (catchUpIn) tdsBase = r2(tdsBase + catchUp);
   }
@@ -1284,6 +1287,7 @@ function compute(e, cid){
   const missing = [];
   if (e.docKind && !e.docOverride) missing.push("your confirmation that this really is a purchase bill");
   if (co.gstin && !mine && !e.buyerOverride) missing.push("your confirmation that this bill belongs to " + co.name);
+  if (itc.reg !== String(co.gstin || "").toUpperCase() && num(x.cgst) + num(x.sgst) + num(x.igst) > 0 && e.regOk !== itc.reg) missing.push("your word that the GST ledgers are " + itc.reg + "'s");
   if (!x.vendorName) missing.push("supplier name");
   if (!x.invoiceDate) missing.push("invoice date");
   if (!(base > 0)) missing.push("taxable value");
@@ -2993,9 +2997,10 @@ function approve(e, o){
   party.ytd = party.ytd || {};
   party.ytd[c.fy] = party.ytd[c.fy] || {};
   const cur = party.ytd[c.fy][c.rule.id] || {credited:0, tdsBase:0};
-  // a supplier's credit note takes its value off the year's total (never below nil) and adds nothing to what had TDS
+  // a supplier's credit note takes its value off the year's total and adds nothing to what had TDS; kept below nil when
+  // approved before its bill (read as nil: ytdOf), so the bill approved later is net of it
   const addBase = c.applicable && !c.cn ? c.tdsBase : 0, was = num(cur.credited);
-  cur.credited = r2(Math.max(0, was + (c.cn ? -c.base : c.base)));
+  cur.credited = r2(was + (c.cn ? -c.base : c.base));
   cur.tdsBase = r2(num(cur.tdsBase) + addBase);
   party.ytd[c.fy][c.rule.id] = cur;
   e.status = "approved"; delete e.notRead;
@@ -3042,7 +3047,7 @@ function unapply(e, cid, o){
   const a = e.applied, p = a && D(cid).parties[a.partyId];
   if (p && p.ytd && p.ytd[a.fy] && p.ytd[a.fy][a.natureId]){
     const cur = p.ytd[a.fy][a.natureId];
-    cur.credited = r2(Math.max(0, num(cur.credited) - a.credited));
+    cur.credited = r2(num(cur.credited) - a.credited);
     cur.tdsBase = r2(Math.max(0, num(cur.tdsBase) - a.tdsBase));
     Store.saveParty(cid, p);
   }

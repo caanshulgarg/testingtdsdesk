@@ -9,6 +9,11 @@
 //   P8  a bill to the client's other registration (Other GSTINs, its own PAN) is the client's: input credit kept
 //   PL  an inbox file sent to Sales / Unsorted is read; a PDF of several bills is read once all its parts are
 //   T2  TDS cut in the payment voucher of a bill booked earlier without TDS: 201(1A)(i) interest from the bill's date
+//   T2b a bill paid in instalments, TDS cut in each payment (Agst Ref): each row keeps its own amount paid; several bills
+//       in one TDS entry, the first within the limit on its own: the date of credit is flagged for a person
+//   N1  review of the fixes: a credit note approved before its bill is not lost; a catch-up a person checked in Tally
+//       (already deducted, or not due) is quiet; a bill to the other registration waits for a person's word on the GST
+//       ledgers; a debit note in Tally under the client's own type for it; a PDF part that failed says how to read it again
 //   T3  "Building Repairs", "Land Development Contract", "Rentokil", "Current" are not rent
 //   TL  194-O's limit only for an individual/HUF seller with a PAN; 194C(6) transporter only with a PAN; a bill dated
 //       before 1-Apr-2025 is tested against that year's limits (and 194T did not exist)
@@ -72,6 +77,22 @@ guard("P2", () => {
   ok(y.credited === 55000, "P2 from Tally: 75,000 in Tally less the credit note here (not sent): 55,000 (" + y.credited + ")");
 });
 
+// ---- N1: a credit note approved before the bill it reverses
+guard("N1 cn", () => {
+  reset();
+  const cn = bill({x: amt(20000), e: {noteKind: "credit"}});
+  const cc = comp(cn);
+  ok(cc.tds === 0 && !cc.applicable, "N1 a credit note on its own (no 'note' reason set): no TDS booked on it (" + cc.tds + ")");
+  x.approve(cn);
+  const p = Object.values(data.parties)[0];
+  x.approve(bill({x: amt(120000)}));
+  ok(p.ytd["2025-26"].contractor.credited === 100000, "N1 credit note of 20,000 approved before the bill of 1,20,000: 1,00,000 for the year (" + p.ytd["2025-26"].contractor.credited + ")");
+  ok(x.ytdOf(p, "2025-26", "contractor", "c1").credited >= 0, "N1 the year's figure for a bill is never below nil");
+  const p0 = Object.assign({}, p, {ytd: {"2025-26": {contractor: {credited: -20000, tdsBase: 0}}}});
+  ok(x.ytdOf(p0, "2025-26", "contractor", "c1").credited === 0, "N1 only the credit note so far: the year's figure reads nil (" + x.ytdOf(p0, "2025-26", "contractor", "c1").credited + ")");
+  ok(x.unapply(cn, "c1") && p.ytd["2025-26"].contractor.credited === 120000, "N1 the credit note's approval undone: 1,20,000 (" + p.ytd["2025-26"].contractor.credited + ")");
+});
+
 // ---- P3: the year from Tally and its catch-up
 const tallyRead = async (vouchers) => {
   Object.assign(ctx, {bridgeLive: () => true, Bridge: {call: async () => ({vouchers}), openFor: () => ({name: "Fern"})}, ledgerLinesUrl: () => "/ledgerlines"});
@@ -97,12 +118,25 @@ async function p3(){
   c = comp(e);
   const f = c.flags.find(z => /may have had no TDS/.test(z.t));
   ok(c.catchUp === 100000 && c.tdsBase === 20000 && !!c.catchUpAsk && f && f.lvl === "hi" && /2,000/.test(f.t), "P3 Tally bills without TDS: catch-up of 1,00,000 not included until ticked, a warning names the TDS of 2,000 in a journal (base " + c.tdsBase + ")");
+  // a person checked Tally: the earlier bills' TDS was deducted already, or is not due
+  e.catchUpNotDue = {by: "t", at: "2025-07-02"}; e.includeCatchUp = false;
+  c = comp(e);
+  ok(!c.catchUpAsk && !c.catchUpIn && c.tdsBase === 20000 && !c.flags.some(z => z.lvl === "hi" && /earlier bills/i.test(z.t)) && c.flags.some(z => /checked in Tally/i.test(z.t)), "N1 checked in Tally (already deducted or not due): no warning, nothing caught up (base " + c.tdsBase + ")");
+  delete e.catchUpNotDue; e.includeCatchUp = true;
   e.catchUpTally = true;
   c = comp(e);
   ok(c.tdsBase === 120000 && c.catchUpIn, "P3 ticked: the catch-up is included (base " + c.tdsBase + ")");
+  // a year from Tally stored before tdsBase / tdsSep were read: the catch-up still asks a person
+  co.tallyYtd = {[ctx.normName("Kestrel Works Pvt Ltd") + "|2025-26"]: {fy: "2025-26", ledger: "Kestrel Works Pvt Ltd", credited: 100000, gross: 100000, vouchers: 2}};
+  const eo = bill({x: amt(20000)}); c = comp(eo);
+  ok(c.catchUp === 100000 && c.catchUpAsk && c.tdsBase === 20000, "N1 a year from Tally stored before this change (no tdsBase): the catch-up asks (base " + c.tdsBase + ", catch-up " + c.catchUp + ")");
   // a debit note (a return to the supplier) in Tally takes its value off
   const t2 = await tallyRead([tv(118000, [["Contract Charges", -100000], ["Input CGST", -9000], ["Input SGST", -9000]]), tv(-11800, [["Contract Charges", 10000], ["Input CGST", 900], ["Input SGST", 900]], "Debit Note")]);
   ok(t2.credited === 90000, "P3 a debit note of 10,000 in Tally: 1,00,000 less 10,000 = 90,000 (" + t2.credited + ")");
+  co.debitNoteType = "DN";
+  const t3 = await tallyRead([tv(118000, [["Contract Charges", -100000], ["Input CGST", -9000], ["Input SGST", -9000]]), tv(-11800, [["Contract Charges", 10000], ["Input CGST", 900], ["Input SGST", 900]], "DN")]);
+  ok(t3.credited === 90000, "N1 a debit note under the client's own type for it (\u201cDN\u201d): taken off too, 90,000 (" + t3.credited + ")");
+  delete co.debitNoteType;
 }
 
 // ---- P5: round off
@@ -165,7 +199,11 @@ guard("P8", () => {
   const c = comp(e);
   ok(c.itc.ok && c.lines.some(l => l.role === "gst" && l.head === "CGST") && c.lines.find(l => l.role === "expense").amt === 100000, "P8 billed to the client's GJ GSTIN: input credit kept, expense 1,00,000 (" + c.lines.map(l => l.role + " " + l.amt).join(", ") + ")");
   ok(!c.missing.some(m => /belongs to/.test(m)) && !c.flags.some(f => /IGST is expected/.test(f.t)), "P8 no 'belongs to' stop, and CGST + SGST from a GJ supplier is right for the GJ registration");
-  ok(c.flags.some(f => f.lvl === "" && /other registration/.test(f.t)), "P8 a check that the GST ledgers are the GJ registration's");
+  ok(c.flags.some(f => f.lvl === "hi" && /other registration/.test(f.t)), "N1 P8 a warning to check the GST ledgers are the GJ registration's");
+  ok(c.missing.some(m => /GST ledgers/.test(m)), "N1 P8 approval waits for a person's word that the GST ledgers are " + gj + "'s (" + c.missing.join("; ") + ")");
+  e.regOk = gj;
+  const cOk = comp(e);
+  ok(!cOk.missing.some(m => /GST ledgers/.test(m)) && cOk.flags.some(f => f.lvl === "" && /other registration/.test(f.t)), "N1 P8 confirmed: approval goes on, a plain note stays");
   const e2 = bill({x: Object.assign(amt(100000, 9000), {buyerGstin: gst("24", "AAACZ9999Z"), vendorGstin: sup, vendorPan: "AAACH3333M", vendorName: "Heron Supplies Pvt Ltd"}), e: {natureId: "goods", expenseLedger: "Purchases"}});
   ok(!comp(e2).itc.ok, "P8 a GSTIN of another PAN is still not the client's");
 });
@@ -189,6 +227,7 @@ guard("PL", () => {
   j2.status = "failed"; j2.msg = "could not be read";
   x.docqFinish(j2);
   ok(!saved.length && marks.some(m => m[0] === "failed" && /page 2/.test(m[1] || "")), "PL its second part failed: it stays waiting and names that part (" + JSON.stringify(marks) + ")");
+  ok(marks.some(m => m[0] === "failed" && /Retry|Type it in/.test(m[1] || "")), "N1 PL the message says to Retry or Type it in on that part (reading the file again here skips the parts read)");
 });
 
 // ---- TL: limits by who and when
@@ -222,13 +261,13 @@ guard("TL", () => {
 function tdsRows(){
   const N = ["num", "r2", "xesc", "esc", "MONTHS", "fmtDate", "tallyDate", "STATE_CODES", "RULE_DEFAULTS", "Books", "LedMaster", "Audit", "MIS", "TDS", "Certs", "GSTR", "GSTAdv", "GSTRev", "GSTAmend",
     "GST2B", "INR", "NORM_CACHE", "normName", "normNameRaw", "nameSim", "gramsOf", "gfN", "Parties", "FS", "GSTSet", "GSTF", "GSTQ", "D", "AS26", "GSTCMP", "GSTAPI", "TDSRate", "TDSInt", "TDSSep", "GSTIN_RE", "TDSFiled", "ClosedP",
-    "BOOKS_KEYS", "AuditWP", "TDSWatch", "TDSTally", "noPanRate", "NO_PAN_RATE", "AIH", "istParts", "p2ist", "istDay", "istToday"];
+    "BOOKS_KEYS", "AuditWP", "TDSWatch", "TDSTally", "TDSAudit", "TDSCH", "TDSAdj", "noPanRate", "NO_PAN_RATE", "AIH", "istParts", "p2ist", "istDay", "istToday"];
   const L = load(HTML, N), c2 = L.ctx, y = L.x;
   c2.saveBooks = () => {}; c2.whoAmI = () => "t"; c2.S.data = {};
   // T3
   ["Building Repairs & Maintenance", "Factory Building Repair Contract", "Furniture Repair Labour", "Land Development Contract", "Rentokil Pest Control", "Housekeeping - Current Year", "Repairs to Building"].forEach(w =>
     ok(y.TDSRate.kindOf(w) === "contractor", "T3 “" + w + "”: a contract, not rent (" + y.TDSRate.kindOf(w) + ")"));
-  ["Rent", "Office Rent", "Godown Rent", "Lease Rentals", "Rent - Building"].forEach(w => ok(y.TDSRate.kindOf(w) === "rent_building", "T3 “" + w + "”: still rent"));
+  ["Rent", "Office Rent", "Godown Rent", "Lease Rentals", "Rent - Building", "Office Rentals", "Rentals"].forEach(w => ok(y.TDSRate.kindOf(w) === "rent_building", "T3 “" + w + "”: still rent"));
   ok(y.TDSRate.kindOf("Machinery Hire Charges") === "rent_machinery", "T3 machinery hire: still rent of machinery");
   // T2: rent of 60,000 credited on 1-Apr without TDS; the payment of 15-May cuts its TDS of 6,000
   const V = [
@@ -237,12 +276,21 @@ function tdsRows(){
     // the bill and its TDS in one entry, paid later: unchanged
     {id: "v3", no: "3", type: "Journal", date: "20250601", party: "Moss Interiors Pvt Ltd", ref: "", narr: "", ent: [{l: "Contract Charges", a: -50000}, {l: "TDS on Contract 194C", a: 1000}, {l: "Moss Interiors Pvt Ltd", a: 49000}]},
     // T3: repairs by a company at 1% under 194C (2% applies); the ledger's name alone does not hide the rate check
-    {id: "v4", no: "4", type: "Journal", date: "20250701", party: "Moss Interiors Pvt Ltd", ref: "", narr: "", ent: [{l: "Building Repairs & Maintenance", a: -100000}, {l: "TDS on Contract 194C", a: 1000}, {l: "Moss Interiors Pvt Ltd", a: 99000}]}];
+    {id: "v4", no: "4", type: "Journal", date: "20250701", party: "Moss Interiors Pvt Ltd", ref: "", narr: "", ent: [{l: "Building Repairs & Maintenance", a: -100000}, {l: "TDS on Contract 194C", a: 1000}, {l: "Moss Interiors Pvt Ltd", a: 99000}]},
+    // T2b: rent of 1,00,000 (New Ref WR-1) paid in two instalments, TDS cut in each (Agst Ref WR-1); a third payment after the bill is used up
+    {id: "w1", no: "11", type: "Journal", date: "20250401", party: "Wren Estates", ref: "", narr: "", ent: [{l: "Office Rent", a: -100000}, {l: "Wren Estates", a: 100000, b: [["WR-1", "New Ref", 100000]]}]},
+    {id: "w2", no: "12", type: "Payment", date: "20250515", party: "Wren Estates", ref: "", narr: "", ent: [{l: "Wren Estates", a: -50000, b: [["WR-1", "Agst Ref", -50000]]}, {l: "HDFC Bank", a: 45000}, {l: "TDS on Rent 194I", a: 5000}]},
+    {id: "w3", no: "13", type: "Payment", date: "20250615", party: "Wren Estates", ref: "", narr: "", ent: [{l: "Wren Estates", a: -50000, b: [["WR-1", "Agst Ref", -50000]]}, {l: "HDFC Bank", a: 45000}, {l: "TDS on Rent 194I", a: 5000}]},
+    {id: "w4", no: "14", type: "Payment", date: "20250715", party: "Wren Estates", ref: "", narr: "", ent: [{l: "Wren Estates", a: -10000, b: [["WR-1", "Agst Ref", -10000]]}, {l: "HDFC Bank", a: 9000}, {l: "TDS on Rent 194I", a: 1000}]},
+    // T2b: two professional bills (30,000, then 40,000) paid at once with TDS on 70,000: the first was within 50,000 on its own
+    {id: "o1", no: "21", type: "Journal", date: "20250602", party: "Owl Advisors", ref: "", narr: "", ent: [{l: "Professional Fees", a: -30000}, {l: "Owl Advisors", a: 30000}]},
+    {id: "o2", no: "22", type: "Journal", date: "20250610", party: "Owl Advisors", ref: "", narr: "", ent: [{l: "Professional Fees", a: -40000}, {l: "Owl Advisors", a: 40000}]},
+    {id: "o3", no: "23", type: "Payment", date: "20250630", party: "Owl Advisors", ref: "", narr: "", ent: [{l: "Owl Advisors", a: -70000}, {l: "HDFC Bank", a: 63000}, {l: "TDS on Professional 194J", a: 7000}]}];
   const under = {"Building Repairs & Maintenance": "Indirect Expenses", "Office Rent": "Indirect Expenses", "Contract Charges": "Indirect Expenses", "Lark Properties": "Sundry Creditors", "Moss Interiors Pvt Ltd": "Sundry Creditors", "HDFC Bank": "Bank Accounts",
-    "TDS on Rent 194I": "Duties & Taxes", "TDS on Contract 194C": "Duties & Taxes"};
+    "TDS on Rent 194I": "Duties & Taxes", "TDS on Contract 194C": "Duties & Taxes", "Wren Estates": "Sundry Creditors", "Owl Advisors": "Sundry Creditors", "Professional Fees": "Indirect Expenses", "TDS on Professional 194J": "Duties & Taxes"};
   const b = {cid: "ct", vouchers: V, meta: {from: "20250401", to: "20260331"}, under,
     groups: {"Sundry Creditors": "Current Liabilities", "Duties & Taxes": "Current Liabilities", "Bank Accounts": "Current Assets", "Indirect Expenses": "", "Current Liabilities": "", "Current Assets": ""},
-    ledInfo: Object.fromEntries(Object.keys(under).map(l => [l, {ob: 0, from: "20250401"}])), pans: {"Lark Properties": "AAAFL1234L", "Moss Interiors Pvt Ltd": "AAACM1234M"}, challans: [], alloc: {}};
+    ledInfo: Object.fromEntries(Object.keys(under).map(l => [l, {ob: 0, from: "20250401"}])), pans: {"Lark Properties": "AAAFL1234L", "Moss Interiors Pvt Ltd": "AAACM1234M", "Wren Estates": "AAAFW1234W", "Owl Advisors": "AAAFO1234O"}, challans: [], alloc: {}};
   const co2 = {id: "ct", name: "Rows Fixture"};
   c2.S.books = b; c2.S.coId = "ct"; c2.S.companies = {ct: co2}; c2.CO = () => co2;
   b.map = y.Books.mapLedgers(b.vouchers, {});
@@ -254,6 +302,15 @@ function tdsRows(){
   ok(iss && iss.expected === 2 && iss.short === 1000, "T3 1% to a company on \u201cBuilding Repairs & Maintenance\u201d under 194C: short by 1,000 at 2% (" + (iss && [iss.expected, iss.short]) + ")");
   const m = rows.find(z => String(z.id).startsWith("v3|"));
   ok(m && !m.credit && m.paid === 50000 && m.rate === 2, "T2 a bill with its TDS in it: unchanged (" + (m && [m.credit, m.paid, m.rate]) + ")");
+  const w = id => rows.find(z => String(z.id).startsWith(id + "|")) || {};
+  const w2 = w("w2"), w3 = w("w3"), w4 = w("w4");
+  ok(w2.paid === 50000 && w2.rate === 10 && !w2.sepShort && !w2.topUp && y.TDS.ymd(w2.credit) === "20250401", "T2b first instalment: 50,000 paid at 10%, credited 1-Apr, not short (" + [w2.paid, w2.rate, w2.sepShort, w2.topUp, w2.credit] + ")");
+  ok(w3.paid === 50000 && w3.rate === 10 && !w3.sepShort && !w3.topUp && y.TDS.ymd(w3.credit) === "20250401", "T2b second instalment: 50,000 paid at 10% too, not a top-up (" + [w3.paid, w3.rate, w3.sepShort, w3.topUp, w3.credit] + ")");
+  ok(w4.paid === 10000 && w4.rate === 10 && !w4.topUp && !w4.sepShort, "T2b a payment after the bill is used up keeps its own 10,000 (" + [w4.paid, w4.rate, w4.topUp, w4.credit] + ")");
+  const o3 = w("o3");
+  ok(o3.paid === 70000 && (o3.bills || []).length === 2 && y.TDS.ymd(o3.credit) === "20250602" && o3.creditCheck, "T2b TDS on two bills, the first (30,000) within 50,000 on its own: its date flagged for a person (" + [o3.paid, (o3.bills || []).length, o3.credit, o3.creditCheck] + ")");
+  if (y.TDSAudit || c2.TDSAudit){ const A = y.TDSAudit || c2.TDSAudit, notes = A.notes("2025-26", "Q1", "26Q");
+    ok(notes.some(z => z.level === "warn" && /Owl Advisors/.test(z.words) && /limit/.test(z.words)), "T2b Validate & file warns: check the date of credit of Owl Advisors' TDS"); }
 }
 
 (async () => {

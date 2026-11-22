@@ -97,7 +97,8 @@ function docqFinish(j){
   } else if (!bad.length){
     const r = j.dupRef || (all.find(x => x.dupRef) || {}).dupRef;
     localSet(id, "dup", j.msg || "", {entryId: (r && (r.entryId || r.e)) || "", cid: (r && r.cid) || d.client_id});
-  } else localSet(id, "failed", all.length > 1 ? bad.map(x => x.name + ": " + (x.msg || "could not be read")).join("; ") : j.msg || "could not be read");        // stays waiting; staff can try again
+  // (a part of several: reading the file again here finds the parts read as duplicates, so Retry or Type it in on that part)
+  } else localSet(id, "failed", all.length > 1 ? bad.map(x => x.name + ": " + (x.msg || "could not be read")).join("; ") + ". Use Retry or Type it in on " + (bad.length > 1 ? "those parts" : "that part") : j.msg || "could not be read");        // stays waiting; staff can try again
   softRender();
 }
 async function setAsideDocq(id){

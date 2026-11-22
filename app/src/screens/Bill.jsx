@@ -76,6 +76,8 @@ function DocWarnings({ e, c }) {
   const co = CO(), x = e.x, bill = String(x.buyerGstin || "").toUpperCase(), ship = String(x.shipGstin || "").toUpperCase();
   const notBill = e.docKind && !e.docOverride, elsewhere = co.gstin && bill && !ownGstins(co).includes(bill) && !e.buyerOverride, deliveredHere = ship && ship === co.gstin;
   const ro = e.status === "draft" && c && Math.abs(c.ro) > 1 && e.roOk !== c.ro;
+  // a bill to the client's other registration: its credit is that GSTIN's (s.16, s.25(4) CGST Act), a person says the GST ledgers are its
+  const reg = e.status === "draft" && c && c.itc && c.itc.reg && c.itc.reg !== String(co.gstin || "").toUpperCase() && e.regOk !== c.itc.reg && (c.missing || []).some((m) => /GST ledgers/.test(m)) ? c.itc.reg : "";
   return <>
     {notBill && <div className="bigwarn"><b>This is {DOC_KIND_TEXT[e.docKind] || "not a tax invoice"}, not a purchase bill.</b>
       <div>Nothing should be booked from it. Wait for the supplier's tax invoice and book that one instead.</div>
@@ -83,6 +85,9 @@ function DocWarnings({ e, c }) {
     {elsewhere && <div className="bigwarn"><b>This bill is not made out to {co.name}.</b>
       <div>It is billed to <b>{bill}</b>{deliveredHere ? <>, and only <b>delivered</b> to this client. The purchase belongs to the party it is billed to.</> : ", while this client’s GSTIN is " + co.gstin + "."} Check whether it was filed under the wrong client.</div>
       <div className="row" style={{ marginTop: 8 }}><button className="btn small" onClick={() => doAct("buyerOk")}>It does belong here — carry on</button></div></div>}
+    {reg && <div className="bigwarn"><b>Billed to this client’s other registration {reg}.</b>
+      <div>The input credit is that GSTIN’s, not {co.gstin}’s. Post it only to GST ledgers kept for {reg}; if this Tally company holds only {co.gstin}, the credit lands in the wrong GSTR-3B.</div>
+      <div className="row" style={{ marginTop: 8 }}><button className="btn small" onClick={() => billSetChoice(e, "regOk", reg)}>The GST ledgers are {reg}’s — carry on</button></div></div>}
     {ro && <div className="bigwarn"><b>The lines do not add up to the total.</b>
       <div>Taxable value plus GST is {money(r2(c.base + c.gstTotal))}; the total is {money(c.total)}. {money(Math.abs(c.ro))} would go to round off. Correct the figures, or confirm the total is right.</div>
       <div className="row" style={{ marginTop: 8 }}><button className="btn small" onClick={() => doAct("roOk")}>The total is right — post {money(Math.abs(c.ro))} to round off</button></div></div>}
@@ -208,7 +213,8 @@ function Tds({ e, c, v, ro }) {
       ) : ro && v.skip ? <p className="note" style={{ margin: "0 0 8px" }}>Not booked: {skipText(v.skip)}</p> : null}
       <ul className="why">{v.why.map((w, i) => <li key={i}>{w}</li>)}</ul>
       {v.meter && v.meter.limit ? <><Meter m={v.meter} /><YtdSource e={e} c={c} /></> : null}
-      {v.catchUp > 0 && !ro && <label className="chk" style={{ marginTop: 10 }}><input type="checkbox" checked={!!c.catchUpIn} onChange={(ev) => { if (c.ytd.fromTally) e.catchUpTally = ev.target.checked; billSetChoice(e, "includeCatchUp", ev.target.checked); }} /> Include TDS on earlier bills ({money0(v.catchUp)}) in this entry</label>}
+      {v.catchUp > 0 && !ro && <label className="chk" style={{ marginTop: 10 }}><input type="checkbox" checked={!!c.catchUpIn} onChange={(ev) => { if (c.ytd.fromTally){ e.catchUpTally = ev.target.checked; if (ev.target.checked) e.catchUpNotDue = null; } billSetChoice(e, "includeCatchUp", ev.target.checked); }} /> Include TDS on earlier bills ({money0(v.catchUp)}) in this entry</label>}
+      {v.catchUp > 0 && !ro && c.ytd.fromTally && !c.catchUpIn && <label className="chk" style={{ marginTop: 6 }}><input type="checkbox" checked={!!e.catchUpNotDue} onChange={(ev) => { if (ev.target.checked) e.includeCatchUp = false; billSetChoice(e, "catchUpNotDue", ev.target.checked ? { by: whoAmI(), at: new Date().toISOString() } : null); }} /> Checked in Tally: their TDS was deducted already, or is not due</label>}
     </div>
     <dl className="figs">
       <dt>Section</dt><dd>{v.ref}</dd><dt>Old section</dt><dd>{v.old}</dd>

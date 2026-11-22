@@ -66,7 +66,8 @@ async function fetchPartyYtd(party, fy, ledger, opts){
       base = r2(base + Math.abs(a));
     }); return base; };
     if (amt <= 0){
-      if (/debit\s*note|purchase\s*return/i.test(v.type || "")){ n++; credited = r2(credited - (side(-1) || -amt)); }
+      // a debit note: by its usual names, or the client's own type for one (co.debitNoteType: FinCom posts them so, src/js/03)
+      if (/debit\s*note|purchase\s*return/i.test(v.type || "") || (co.debitNoteType && norm(v.type) === norm(co.debitNoteType))){ n++; credited = r2(credited - (side(-1) || -amt)); }
       else if (tds) tdsSep = r2(tdsSep + entries.filter(x => isTds(x.ledger) && amtOf(x) > 0).reduce((s, x) => s + amtOf(x), 0));
       return;
     }
@@ -161,5 +162,29 @@ function openJobEntry(j){
 // the bar under an approved bill (app/src/screens/Review.jsx)
 function billBar(e){ const l = billPostLive(e, S.coId); return {note: e.exportedAt || e.goneFromTally ? tallyStateOf(e)[1] : "Waiting in Send to Tally",
   acts: [!l && ["undo", "Undo approval"], !e.exportedAt && ["goExport", "Send to Tally"], l && !postSending(S.coId).has(String(e.id)) && ["billDeletedInTally", "Deleted in Tally"]].filter(Boolean)}; }
-if (typeof globalThis === "object") Object.assign(globalThis, {pendingSuppliers, addPendingSupplier, fetchPartyYtd, addPasted, assignInbox, jobAction, typeItIn, openJobEntry, billBar});
+/* ---------- moved from src/js/27 as they were (legacy.js size budget) ---------- */
+// the client's Tally ledger list, so a bill's entry can be checked line by line before approval (review item 2):
+// straight from Tally when the bridge has the company open, else from a ledger list file exported from Tally
+async function billReadLedgers(){
+  const cid = S.coId, co = CO(cid);
+  if (!S.bank || S.bank.cid !== cid || S.bank.loading) await loadBank(cid);
+  if (bridgeLive(co) || (typeof TCloud === "object" && TCloud.on() && TCloud.has(cid))){ await Ledgers.refresh(cid); return; }
+  const inp = document.createElement("input");
+  inp.type = "file"; inp.accept = ".xlsx,.xls,.csv,.xml";
+  inp.onchange = async () => { const f = inp.files && inp.files[0]; if (f && S.bank && S.bank.cid === cid){ await importLedgerList(f); render(); } };
+  inp.click();
+}
+// ui-tidy (13-Oct-2026; the owner: "there is some glitch also while opening this"): when a bill opens, its first missing
+// field gets the cursor without the page or the drawer scrolling to it ({noScroll}); the bill opens at its top, the PDF and
+// the fields in view. A click on a missing item ("Cannot approve: …") still scrolls to it
+function focusBillField(key, o){
+  const host = document.querySelector("#app aside.drawer") || document.getElementById("app") || document;
+  const el = host.querySelector('[data-focus-field="' + key + '"]');
+  if (!el) return false;
+  if (o && o.noScroll){ try { el.focus({preventScroll: true}); } catch (e){ el.focus(); } return true; }
+  try { el.scrollIntoView({block: "center"}); } catch (e){}
+  el.focus();
+  return true;
+}
+if (typeof globalThis === "object") Object.assign(globalThis, {pendingSuppliers, addPendingSupplier, fetchPartyYtd, addPasted, assignInbox, jobAction, typeItIn, openJobEntry, billBar, billReadLedgers, focusBillField});
 /* @react-lazy: end */
