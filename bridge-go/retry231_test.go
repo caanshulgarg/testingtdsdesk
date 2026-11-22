@@ -28,7 +28,16 @@ func retryDue() {
 
 // the bridge's clock at base + sec seconds
 func retryClock(base time.Time, sec int) {
+	retryMu.Lock() // (a lift after a stop reads the clock under retryMu in its own goroutine: retry.go retryLift)
 	nowFn = func() time.Time { return base.Add(time.Duration(sec) * time.Second) }
+	retryMu.Unlock()
+}
+
+// the machine's clock again, under the same lock as retryClock
+func retryClockReal() {
+	retryMu.Lock()
+	nowFn = time.Now
+	retryMu.Unlock()
 }
 
 // staging's shape: NWS144's Journal lines of GARG SHEKHAR (MasterIDs 25689 on), held under 2.3.0 while reading was off;

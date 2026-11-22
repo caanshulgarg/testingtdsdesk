@@ -1519,6 +1519,9 @@ func companyNumbersRequest(company string) string {
 		"</TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>"
 }
 
+// the small check's wait: TallyProbeSec, 2 s at most (the owner's rule: each request to Tally 2 s at most)
+func probeSec() int { return maxI(1, minI(keepNum("TallyProbeSec", 2), 2)) }
+
 func freeProbe(ctx context.Context, port int, company string) (string, error) {
 	probeMu.Lock()
 	if p := probes[port]; p != nil {
@@ -1530,7 +1533,7 @@ func freeProbe(ctx context.Context, port int, company string) (string, error) {
 	}
 	probeMu.Unlock()
 	probeSent.Add(1)
-	raw, err := tallyRaw(ctx, port, companyCheckRequest(company), keepNum("TallyProbeSec", 10))
+	raw, err := tallyRaw(ctx, port, companyCheckRequest(company), probeSec()) // audit fix: 2 s at most
 	if err == nil {
 		clearProbe(port)
 		if company != "" {

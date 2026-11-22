@@ -156,6 +156,11 @@ func companyCheckAll(tc *TC, company string, port int) (string, bool, string, er
 	// 2.2.0 (the owner's finding): the change numbers by the form kept for the company (a: NATIVEMETHOD; b: the report);
 	// form a answering the company without numbers: form b once. Each request 15 s at most (CompanyCheckSec)
 	sec := keepNum("CompanyCheckSec", 15)
+	if tc != nil && tc.limitMs > 0 && tc.copier && !tc.person {
+		// audit fix: a background read under the 2 s stop: the check (FinComCompany, never stopped as a posting's read)
+		// waits 2 s at most too
+		sec = minI(sec, maxI(1, (tc.limitMs+999)/1000))
+	}
 	forms := []string{"a", "b"}
 	if cnFormFor(company) == "b" {
 		forms = []string{"b"}

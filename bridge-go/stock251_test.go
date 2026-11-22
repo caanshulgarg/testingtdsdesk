@@ -42,18 +42,26 @@ func stockBridge(t *testing.T) (*standTally, *standCloud, *[]M) {
 	wantAt = time.Time{} // FinCom's own request just above: the reads' 4 s of giving way are not this test's
 	wantMu.Unlock()
 	var got []M
-	var mu sync.Mutex
 	c.mu.Lock()
 	c.other = func(k string, b M) (int, M) {
 		if k == "stock" {
-			mu.Lock()
+			stockGotMu.Lock()
 			got = append(got, b)
-			mu.Unlock()
+			stockGotMu.Unlock()
 		}
 		return 200, M{"ok": true}
 	}
 	c.mu.Unlock()
 	return f, c, &got
+}
+
+// what FinCom got so far (a copy, read under the lock the stand cloud's handler writes it under)
+var stockGotMu sync.Mutex
+
+func stockSeen(got *[]M) []M {
+	stockGotMu.Lock()
+	defer stockGotMu.Unlock()
+	return append([]M{}, (*got)...)
 }
 
 func clickAt(d time.Duration) string { return time.Now().Add(d).UTC().Format(time.RFC3339Nano) }
@@ -440,17 +448,17 @@ func TestStock251WakeAndBeat(t *testing.T) {
 	f, c, got := stockBridge(t)
 	at := clickAt(0)
 	wakeEvent("stock", M{"company": zz, "from": "20260401", "to": "20261031", "at": at})
-	waitFor(t, func() bool { return len(*got) == 1 })
+	waitFor(t, func() bool { return len(stockSeen(got)) == 1 })
 	// the heartbeat's copy of the same click: not taken again
 	c.mu.Lock()
 	c.beatReply = M{"stock": M{zz: M{"from": "20260401", "to": "20261031", "at": at}}}
 	c.mu.Unlock()
 	beatOnce()
 	time.Sleep(300 * time.Millisecond)
-	if stockClicks(f) != 1 || len(*got) != 1 {
-		t.Fatalf("the heartbeat's copy taken again: %d asked, %d sent", stockClicks(f), len(*got))
+	if stockClicks(f) != 1 || len(stockSeen(got)) != 1 {
+		t.Fatalf("the heartbeat's copy taken again: %d asked, %d sent", stockClicks(f), len(stockSeen(got)))
 	}
-	b := (*got)[0]
+	b := stockSeen(got)[0]
 	if str(b["kind"]) != "stock" || str(b["company"]) != zz || str(b["from"]) != "20260401" || str(b["to"]) != "20261031" || str(b["at"]) != at ||
 		toF(b["opening"]) != 908443072.58 || toF(b["closing"]) != 2182130465.82 || str(b["status"]) != "ok" || str(b["company_guid"]) != b220CoGUID {
 		t.Fatalf("FinCom got: %v", b)
@@ -460,9 +468,9 @@ func TestStock251WakeAndBeat(t *testing.T) {
 	c.beatReply = M{"stock": M{zz: M{"from": "20261001", "to": "20261031", "at": clickAt(time.Second), "again": true}}}
 	c.mu.Unlock()
 	beatOnce()
-	waitFor(t, func() bool { return len(*got) == 2 })
-	if stockClicks(f) != 2 || str((*got)[1]["from"]) != "20261001" {
-		t.Fatalf("the heartbeat's click: %v", (*got)[1])
+	waitFor(t, func() bool { return len(stockSeen(got)) == 2 })
+	if stockClicks(f) != 2 || str(stockSeen(got)[1]["from"]) != "20261001" {
+		t.Fatalf("the heartbeat's click: %v", stockSeen(got)[1])
 	}
 }
 

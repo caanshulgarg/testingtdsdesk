@@ -371,21 +371,47 @@ func localFrontIsTally() bool {
 	}
 	return false
 }
+
+// as a service: the trays' reports, per session; a session of the owner's whose tray does not report counts as someone
+// working in Tally (audit fix: the typing gate never fails open, mode.go trayPerson)
 func platIdleSec() float64 {
 	if !asService {
 		return localIdleSec()
 	}
-	if idle, _, fresh := trayIdleFresh(); fresh {
-		return idle
-	}
-	return 99999
+	idle, _, _ := trayPerson()
+	return idle
 }
 func platFrontIsTally() bool {
 	if !asService {
 		return localFrontIsTally()
 	}
-	_, front, fresh := trayIdleFresh()
-	return fresh && front
+	_, front, _ := trayPerson()
+	return front
+}
+
+// the tray does not report for a session the owner works in (as a service only)
+func platPersonUnknown() bool {
+	if !asService {
+		return false
+	}
+	_, _, unknown := trayPerson()
+	return unknown
+}
+
+// the owner's active (connected) sessions, where a person may be at the keyboard; ok false when Windows gave no list
+func platOwnerActiveSessions() ([]int, bool) {
+	list := sessions() // never empty when Windows answers (session 0 is always there)
+	if len(list) == 0 {
+		return nil, false
+	}
+	owner := ownerName()
+	var out []int
+	for _, s := range list {
+		if s.id != 0 && s.state == windows.WTSActive && sameUser(s.user, owner) {
+			out = append(out, s.id)
+		}
+	}
+	return out, true
 }
 
 // --- bridge 1.15.0's lock on each Tally (Local\FinComTally<port>), shared when both run in the same Windows session

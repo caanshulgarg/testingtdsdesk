@@ -589,7 +589,7 @@ func lightCheckOpen(sessions []M) {
 		}
 		return
 	}
-	sessions, found := lightCompanyListFound(sessions)
+	sessions, _ = lightCompanyListFound(sessions) // (its found: every company's check now waits while someone types)
 	// the second review of next-fix-linkedguid: only this user's own Tally by the postings' rule (ownRule): a Tally whose
 	// owner Windows cannot tell while it tells another's, or another Windows user's, is never asked, and its port never
 	// feeds the start point, the recorder, bank, ledger or masters follow-ups
@@ -611,8 +611,10 @@ func lightCheckOpen(sessions []M) {
 				lightSkip(name, why)
 				return
 			}
-			// 2.5.8 review 2: a company that just appeared after Tally named none: its first check waits while someone types
-			if found[name] && typingInTally() {
+			// 2.5.8 review 2: a company that just appeared after Tally named none: its first check waits while someone types.
+			// Audit fix (the typing gate): every company's check waits while someone types or works in Tally, as the
+			// copier does; not marked, so it goes at the next turn after
+			if lightPersonHere() {
 				lightSkip(name, "someone is typing in Tally (the check goes after it)")
 				continue
 			}
@@ -645,21 +647,33 @@ func lightCheckOpen(sessions []M) {
 				continue
 			}
 			lightLogResult(name, had)
-			// 2.2.0: the recorder's source B (Tally's change list), when it is the source or one of them
-			liveAfterLightCheck(name, port)
-			// next-bankdate: Tally's voucher counter moved with no add-on line to explain it (a bank date set, bankdate.go)
-			bankAfterLightCheck(name, port)
-			// 2.3.1 (masters): the master counter moved: the ledgers created or altered since the last number (ledchanges.go)
-			ledChangesAfterLightCheck(name, port)
-			// next-fix-mastersread: no masters in FinCom after a failed read: read once more (mastersretry.go)
-			mastersRetryAfterLightCheck(name, port)
-			// 2.4.4 (payroll): the master counter moved: the payroll's employees read again, in chunks (payroll.go)
-			employeesAfterLightCheck(name, port)
-			// next release (item e): the nightly self-check, once a night after hours while Tally is idle (selfcheck.go)
-			selfCheckAfterLightCheck(name, port)
+			// audit fix (the typing gate): the follow-up reads give way while someone types or works in Tally, as the
+			// copier does; the company is unmarked, so its check and the follow-ups go again at the next turn after
+			for _, step := range []func(){
+				func() { liveAfterLightCheck(name, port) },         // 2.2.0: the recorder's source B (Tally's change list), when it is the source or one of them
+				func() { bankAfterLightCheck(name, port) },         // next-bankdate: the voucher counter moved with no add-on line to explain it (bankdate.go)
+				func() { ledChangesAfterLightCheck(name, port) },   // 2.3.1 (masters): the ledgers created or altered since the last number (ledchanges.go)
+				func() { mastersRetryAfterLightCheck(name, port) }, // next-fix-mastersread: no masters in FinCom after a failed read (mastersretry.go)
+				func() { employeesAfterLightCheck(name, port) },    // 2.4.4 (payroll): the payroll's employees read again, in chunks (payroll.go)
+				func() { selfCheckAfterLightCheck(name, port) },    // next release (item e): the nightly self-check (selfcheck.go)
+			} {
+				if lightPersonHere() {
+					spMu.Lock()
+					if spChecked[name].Equal(now) {
+						delete(spChecked, name)
+					}
+					spMu.Unlock()
+					lightSkip(name, "someone is typing in Tally (its follow-up reads go after it)")
+					break
+				}
+				step()
+			}
 		}
 	}
 }
+
+// audit fix: someone types or works in Tally now (the copier's gate, keep.go)
+func lightPersonHere() bool { return typingInTally() || keepUserInTallyFn() }
 
 // due: not checked in this run, or the last check 10 minutes ago or more
 func lightDue(name string) bool {

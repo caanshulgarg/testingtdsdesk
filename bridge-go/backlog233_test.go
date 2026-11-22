@@ -564,7 +564,7 @@ func TestBacklog233OldLinesAskedOnceOneAtATime(t *testing.T) {
 	// 2.4.4 (found at the 2.4.4 build, 12-Oct-2026): 6 minutes on from the stand's own clock (nwsBridge: 05-Oct-2026 07:15
 	// IST), not from the machine's: from 12-Oct-2026 the machine's clock put the old lines past the bridge's 7-day look-back
 	retryClock(time.Date(2026, 10, 5, 7, 15, 0, 0, liveZone), 360)
-	t.Cleanup(func() { nowFn = time.Now })
+	t.Cleanup(retryClockReal)
 	for start3 := time.Now(); time.Since(start3) < 40*time.Second; {
 		retryDue()
 		liveUploadOnce()
