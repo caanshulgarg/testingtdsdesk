@@ -19,9 +19,12 @@ package main
 // ever created by it: an employee or a pay head Tally does not have is the owner's to create (FinCom asks). No AI.
 
 import (
+	"html"
 	"regexp"
 	"strconv"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 )
 
 const (
@@ -29,6 +32,9 @@ const (
 	payrollMaxEmployees = 100
 	payrollMaxPayHeads  = 50 // per employee (B2)
 	payrollView         = "PaySlip Voucher View"
+	payrollMaxName      = 200     // characters of a name: the voucher type, the category, an employee, a pay head, the ledger, the company
+	payrollMaxNarration = 2000    // characters of the narration
+	payrollMaxBytes     = 1 << 20 // the whole request (100 employees of 50 pay heads each, with names of some 20 characters: some 850 KB)
 )
 
 var (
@@ -48,10 +54,73 @@ var (
 )
 
 // an Import Data request that carries a payroll voucher (its id is payrollImportID)
-func isPayrollImport(x string) bool { return isImportRequest(x) && rePayrollMarks.MatchString(x) }
+func isPayrollImport(x string) bool { return isImportRequest(x) && hasPayrollMark(x) }
 
 // an item of a posting that is a payroll voucher (it goes in a request of its own)
-func isPayrollItem(v M) bool { return rePayrollMarks.MatchString(str(v["xml"])) }
+func isPayrollItem(v M) bool { return hasPayrollMark(str(v["xml"])) }
+
+// review L2 of 7db75b73c: the payroll marker is looked for in the markup only (the tags and their attributes), never in
+// the text between them, so a plain voucher whose narration names the payslip view is a plain Import. Fails closed: when
+// the markup cannot be told apart from the text for certain (prMarkup), the whole text is looked at, as before
+func hasPayrollMark(x string) bool {
+	if m, ok := prMarkup(x); ok {
+		return rePayrollMarks.MatchString(m)
+	}
+	return rePayrollMarks.MatchString(x)
+}
+
+// the markup of x: every tag whole, its attributes and quoted values with it, the text between tags left out. ok is false
+// (not certain) on a tag or quote left open, a '<' inside a tag, a '>' in a text, or a comment, CDATA, declaration or
+// processing instruction ("<!", "<?"), whose ends a quote cannot be tracked through
+func prMarkup(x string) (string, bool) {
+	var b strings.Builder
+	in, q, start := false, byte(0), 0
+	for i := 0; i < len(x); i++ {
+		c := x[i]
+		switch {
+		case !in:
+			if c == '>' {
+				return "", false
+			}
+			if c == '<' {
+				if i+1 < len(x) && (x[i+1] == '!' || x[i+1] == '?') {
+					return "", false
+				}
+				in, start = true, i
+			}
+		case q != 0:
+			if c == q {
+				q = 0
+			}
+		case c == '"' || c == '\'':
+			q = c
+		case c == '<':
+			return "", false
+		case c == '>':
+			b.WriteString(x[start : i+1])
+			in = false
+		}
+	}
+	if in {
+		return "", false
+	}
+	return b.String(), true
+}
+
+// security review L2 / code review L1 of 7db75b73c: a payroll text (raw, as in the voucher) is valid UTF-8 of printable
+// characters only (no control character, NUL, tab, line break, format or bidi character), at most max characters
+func prTextOK(raw string, max int) bool {
+	u := html.UnescapeString(raw)
+	if !utf8.ValidString(u) || utf8.RuneCountInString(u) > max {
+		return false
+	}
+	for _, r := range u {
+		if !unicode.IsPrint(r) {
+			return false
+		}
+	}
+	return true
+}
 
 // a request id that is a posting: the plain Import or the payroll import
 func isImportID(id string) bool { return id == "Import" || id == payrollImportID }
@@ -101,6 +170,9 @@ func payrollVoucherShape(x string) string {
 	if m[3] != vt {
 		return "the voucher type differs from VCHTYPE"
 	}
+	if !prTextOK(vt, payrollMaxName) || !prTextOK(m[4], payrollMaxNarration) || !prTextOK(m[5], payrollMaxName) {
+		return "the voucher type, narration or category is not printable text of a sensible length"
+	}
 	if strings.TrimSpace(m[5]) == "" {
 		return "no cost category"
 	}
@@ -118,6 +190,9 @@ func payrollVoucherShape(x string) string {
 		key := foldName(name)
 		if strings.TrimSpace(name) == "" || seen[key] {
 			return "an employee with no name, or twice"
+		}
+		if !prTextOK(name, payrollMaxName) {
+			return "an employee's name is not printable text of a sensible length"
 		}
 		seen[key] = true
 		n++
@@ -140,6 +215,9 @@ func payrollVoucherShape(x string) string {
 			}
 			if strings.TrimSpace(p[1]) == "" || a == 0 || (p[2] == "Yes") != (a < 0) {
 				return "a pay head with no name, no amount, or the wrong sign"
+			}
+			if !prTextOK(p[1], payrollMaxName) {
+				return "a pay head's name is not printable text of a sensible length"
 			}
 			if hk := foldName(p[1]); heads[hk] {
 				return "the same pay head twice for one employee"
@@ -174,6 +252,9 @@ func payrollVoucherShape(x string) string {
 	if strings.TrimSpace(t[1]) == "" || prPaise(t[2]) <= 0 || prPaise(t[2]) != -total {
 		return "the salary payable line is not the net of the employees"
 	}
+	if !prTextOK(t[1], payrollMaxName) {
+		return "the salary payable ledger's name is not printable text of a sensible length"
+	}
 	return ""
 }
 
@@ -181,8 +262,8 @@ func payrollVoucherShape(x string) string {
 // payroll voucher of the spec's shape (white space around it as FinCom sends it); rebuilt from its own company and voucher
 func payrollImportRebuild(x string) []string {
 	head := importHead + "Vouchers</REPORTNAME>"
-	if !strings.HasPrefix(x, head) {
-		return nil
+	if len(x) > payrollMaxBytes || !strings.HasPrefix(x, head) || !prTextOK(pinCo(x), payrollMaxName) {
+		return nil // the request's size capped, the company printable text of a sensible length (review L2 of 7db75b73c)
 	}
 	a := strings.Index(x, "<REQUESTDATA>")
 	z := strings.LastIndex(x, "</REQUESTDATA>")
