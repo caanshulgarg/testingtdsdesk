@@ -252,3 +252,26 @@
 }
 .p-status > svg { flex: none; }
 .p-bk-lhead .p-bk-s3 { align-self: flex-start; }
+
+/* 1. FinCom Books (always) + source */
+.p-bk-fcb { border-color: color-mix(in oklab, var(--brand) 35%, var(--rule)); }
+.p-bk-fcb-h { display: flex; gap: 14px; align-items: flex-start; margin-bottom: var(--s4); }
+.p-bk-fcb-h > i { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; background: var(--brand); color: var(--on-brand); flex: none; }
+.p-bk-fcb-h > div { flex: 1; min-width: 0; }
+.p-bk-fcb-h b { display: block; font-size: var(--t-lg); font-weight: 600; }
+.p-bk-fcb-h small { font-size: var(--t-sm); }
+.p-bk-big { padding: 4px 10px; font-size: var(--t-sm); }
+.p-bk-fcb-g { display: grid; grid-template-columns: 1.2fr 1fr; gap: var(--s5); }
+.p-bk-have { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.p-bk-have li { display: flex; gap: 10px; align-items: flex-start; font-size: var(--t-sm); }
+.p-bk-have li > svg { color: var(--ok); flex: none; margin-top: 2px; }
+.p-bk-have b { font-weight: 600; display: block; }
+.p-bk-have small { font-size: var(--t-xs); }
+.p-bk-tie { background: var(--paper); border: 1px solid var(--rule); border-radius: var(--r-md); padding: var(--s4); }
+.p-bk-tie h3 { font-size: var(--t-sm); font-weight: 600; margin: 0 0 6px; display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.p-bk-srch { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: calc(-1 * var(--s3)); }
+@media (max-width: 760px) {
+  .p-bk-fcb-g { grid-template-columns: 1fr; }
+  .p-bk-fcb-h { flex-wrap: wrap; }
+  .p-bk-tie .p-bk-kv { flex-direction: column; gap: 2px; }
+}

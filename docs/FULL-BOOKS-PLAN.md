@@ -1,12 +1,13 @@
 # FinCom as a full accounting system: plan and design
 
-**Status:** PLAN + DESIGN ONLY, for the owner's review (the owner approved starting the plan and design on 22-Nov-2026).
+**Status:** PLAN + DESIGN ONLY, for the owner's review. The owner approved starting the plan and design on 22-Nov-2026, and
+revised the direction the same day: **every client has complete FinCom Books, whatever keeps the books.**
 No production code path, migration, edge function or bridge file changes on this branch. The only code is the mockups.
 **Branch:** `next-full-books`, off `origin/next-ux-proposal` (08587a33a), which is off `origin/staging-next` @ d580e8451.
 **Mockups:** `app/src/proposal/books.jsx` and `books.css`. These are standalone pages with made-up data, built and opened as
 the rest of the proposal (`docs/UX-QUICKBOOKS-OF-INDIA.md`). Use `index.html?s=<screen>` with `books-mode`, `books-coa`,
-`books-invoice`, `books-daybook`, `books-ledger`, `books-tb`, `books-audit`, `books-zoho` or `books-move`, and add `&phone`
-for a phone layout.
+`books-invoice`, `books-daybook`, `books-ledger`, `books-tb`, `books-audit`, `books-zoho` or `books-move`, and open the page at
+390 px wide for the phone layout.
 
 **The owner's standard, applied to every line below: exact or nothing.**
 - Every voucher has Dr = Cr to the paisa, or the database refuses it.
@@ -18,26 +19,38 @@ for a phone layout.
 
 ## 0. In one page
 
-1. **Three modes per client.** These are **Own books** (FinCom keeps the books), **Tally** (today's path, unchanged) and
-   **Zoho Books** (today's `server/zoho-books` path, extended).
-2. **One "books provider" interface.** Every feature asks it for masters, vouchers, balances and bills, and asks it to post.
-   There are three providers. The Tally provider is today's code behind the interface, line for line.
-3. **The own books live in new tables (`fb_*`), add-only, beside the Tally tables.** In phase 1 they also write a
-   **projection** into the existing cloud-copy tables (`tally_books`, `tally_vouchers`, `tally_lines`, `tally_ledgers`,
-   `tally_groups`, `tally_bills`, `tally_ledger_day`) marked `source = 'own'`. This is exactly what migration 75 already does
-   for Zoho (`source = 'zoho'`). As a result, GST, TDS, MIS, the balance sheet, Daily Check, Look up and ITR work for an own-books
-   client on day one, with no change to their code.
-4. **The audit trail is written by the database, not the app.** Every change to an `fb_*` row writes an edit log row
-   (who, when, before, after), chained by SHA-256. There is no setting that switches it off. This answers the proviso to
-   Rule 3(1) of the Companies (Accounts) Rules, 2014.
-5. **Moving a client from Tally is a verified copy.** FinCom copies the masters, the opening balances and the vouchers. It then
-   proves the trial balance, the voucher counts, the bill-wise outstanding and the GST figures tie to the paisa. The switch
-   button is disabled while a single difference remains.
-6. **Independent Books** (idpbook.com) is MIT-licensed (verified). FinCom ports its bill-wise, GST-split and parsing rules and
+1. **FinCom Books is the one standard ledger for every client.** It holds masters, openings, every voucher type, bill-wise
+   details, cost centres and stock. Anything about a client can be fetched from FinCom alone.
+   - **Source: Tally.** FinCom Books is a complete, verified **mirror**, kept in step by the bridge.
+   - **Source: Zoho Books.** It is a mirror, kept in step through Zoho's official API.
+   - **Source: FinCom.** FinCom Books is the master (own books).
+2. **Every report and feature reads only from FinCom Books.** That covers GST, TDS, ITR, MIS, Daily Check, audit / 3CD, Day
+   Book, Ledger, trial balance, balance sheet and P&L. No report reads Tally, Zoho or the bridge's landing tables directly.
+   One read layer (`Books.read`) serves them all.
+3. **Entries made in FinCom** (bank, purchase, sales, journals) are written to FinCom Books. For a Tally or Zoho client they
+   are also posted there, through today's `Bridge.post` or `ZohoB.post`. The mirror then **confirms** each one: FinCom sees
+   it come back from the source, matched by FinCom's id. Until then the entry shows as "Sent, not yet in Tally" and is kept
+   out of the totals, so FinCom's figures always equal the source's.
+4. **There is a daily tie-out against the source.** The trial balance (group by group, ledger by ledger where needed) and the
+   voucher counts must match Tally or Zoho to ₹0.00. Any difference is shown, and the book is marked **"Not in step"** until
+   it is explained or fixed.
+5. **Today's cloud copy is the starting point.** The bridge already fills it, and the Tally path stays unchanged. The copy
+   (`tally_*` tables, and Zoho's rows in them) becomes the **landing zone**. A deterministic **mirror builder** turns it into
+   FinCom Books rows (`fb_*`, `source = tally | zoho`), in the same transaction as each landing write.
+6. **The gaps to close for a complete mirror** are listed in section 3.4: opening bill-wise, voucher-type masters, non-payroll
+   cost-centre masters, the post-dated flag, multi-GSTIN, stock masters and godown / batch detail, and a Tally-side trial
+   balance read for the tie-out. Each one that needs a **new bridge request to Tally needs the owner's OK**. Each must also keep
+   the owner's bridge rules: **at most 2 s a request, one request in flight, the typing gate** (idle only).
+7. **The audit trail is written by the database, not the app.** Every change to an `fb_*` row writes an edit log row
+   (who, when, before, after), chained by SHA-256, with no setting to switch it off. This covers FinCom's own entries and every
+   mirror update. It answers the proviso to Rule 3(1) for own-books clients. For Tally and Zoho clients, their own edit logs
+   remain the statutory ones.
+8. **Re-phased.** Phase 1 is now **the complete mirror plus every report reading from FinCom Books plus the daily
+   tie-out**, ahead of own-books entry. The whole programme is about 47–67 engineer-weeks; phase 1 alone is 16–24
+   (section 9).
+9. **Independent Books** (idpbook.com) is MIT-licensed (verified). FinCom ports its bill-wise, GST-split and parsing rules and
    its test cases, with attribution. It does not take its storage, numbering or history, which would fail the audit-trail and
    retention rules (section 11).
-7. **Effort:** about 36–48 engineer-weeks over six phases (section 9). Phase 1 alone (the ledger engine, the audit trail and
-   the three core reports) is about 7–9 weeks.
 
 ---
 
@@ -45,11 +58,11 @@ for a phone layout.
 
 | Piece | Where | What it means for this plan |
 |---|---|---|
-| Cloud copy of Tally books | `server/tally-cloud/migration.sql` and its later migrations: `tally_books`, `tally_ledgers` (gstin, pan, tds_deductee_type, …), `tally_groups`, `tally_vouchers` (vtype, vno, party, irn, eway_no, gst_* …), `tally_lines` (ledger, amount), `tally_bills`, `tally_ledger_day` | Every report already reads this shape. The own books **project into it** (as Zoho does) and do not replace it. |
-| `source` column | migration 75 adds `source` ('tally' default, 'zoho') to `tally_books`, `tally_vouchers`, `tally_ledgers` | A third value, `'own'`, is all the reads need. |
-| Cloud figures | migrations 151/152 (`tally_calc_bal`, `tally_balances_at`, `tally_tieout`, `tally_ageing`) | The trial balance, the tie-out and the ageing are already worked out on the server from the copy. Own books reuse them through the projection. |
-| One set of entries for returns | `src/js/67-book-sources.js`, `server/_shared/gst3b.js` (`BookSrc`) | GST and TDS read one merged entry list. The own provider feeds the same list. |
-| Posting to Tally | `src/js/24-tally-bridge.js` (`Bridge.post`), `tally_post_jobs` (migration 5), the post register (migrations 111, 132, 200, 203) | This path does not change. It becomes `TallyProvider.post`. |
+| Cloud copy of Tally books (the landing zone) | `server/tally-cloud/migration.sql` and its later migrations: `tally_books`, `tally_ledgers` (gstin, pan, tds_deductee_type, …), `tally_groups`, `tally_vouchers` (vtype, vno, party, irn, eway_no, gst_* …), `tally_lines` (ledger, amount), `tally_bills`, `tally_ledger_day` | It stays exactly as it is, as the **landing zone**. The mirror builder (2.7) turns it into FinCom Books in the same transaction. |
+| `source` column | migration 75 adds `source` ('tally' default, 'zoho') to `tally_books`, `tally_vouchers`, `tally_ledgers` | Tells the mirror builder which source a book comes from. |
+| Cloud figures | migrations 151/152 (`tally_calc_bal`, `tally_balances_at`, `tally_tieout`, `tally_ageing`) | The trial balance, the tie-out and the ageing are already worked out on the server. In phase 1 they are re-pointed at `fb_lines`, and each is proven equal first. |
+| One set of entries for returns | `src/js/67-book-sources.js`, `server/_shared/gst3b.js` (`BookSrc`) | GST and TDS read one merged entry list. `Books.read.vouchers` gives the same shape from FinCom Books. |
+| Posting to Tally | `src/js/24-tally-bridge.js` (`Bridge.post`), `tally_post_jobs` (migration 5), the post register (migrations 111, 132, 200, 203) | This path does not change. FinCom's entries for a Tally client still go this way, and the mirror confirms them (3.2). |
 | Zoho Books | `server/zoho-books/index.ts` + `map.js`, migration 75 (`zoho_grants`, `zoho_connections`, `zoho_sync_state`, `zoho_seen`, `zoho_posts`, …), `src/js/74-zoho-books.js` (`ZohoB`) | Already reads a Zoho organisation (India DC) into the copy and posts bills, expenses and journals (POST only, never PUT or DELETE). The Zoho mode **extends** this and does not start over. |
 | Closed periods | `src/js/47-closed-periods.js` (warns and asks), `tally_month_lock` (recorder, migration 44) | For Tally this stays a warning, because Tally is the master. For own books the lock is **enforced by the database**. |
 | Sales invoice and e-invoice | `src/js/26-sales-invoice.js` (`invoiceHtml`), `src/js/55-einvoice.js` (`EINV`, INV-01 v1.1 through `gst-taxpro`) | The own-books invoice reuses both. The IRN, ack and QR land on the own voucher. |
@@ -57,7 +70,12 @@ for a phone layout.
 
 ---
 
-## 2. Data model for FinCom's own books
+## 2. Data model for FinCom Books (every client)
+
+**These tables are FinCom Books for every client.** Each row carries `source` (tally, zoho, own) and, for a mirror,
+`source_ref` (the Tally GUID and AlterID, or the Zoho id and last-modified time). A mirror book is written only by the
+mirror builder and by the confirmation of FinCom's own posted entries. People cannot edit it, because the source is the
+master. An own book is written by people, through the posting functions.
 
 All of it is **add-only**. These are new tables with the prefix `fb_` ("FinCom books"), in new migrations numbered when built
 (per `docs/MIGRATION-ORDER.md`). No existing table, column or function changes, apart from the new value `'own'` in the
@@ -72,7 +90,7 @@ Money is `numeric(18,2)` everywhere, never float. A line's amount is signed: **D
 
 | Table | Key columns | Notes |
 |---|---|---|
-| `fb_books` | `book_id` (uuid, also the `tally_books.book_id` of its projection), `firm_id`, `client_id`, `legal_name`, `constitution` (company, LLP, firm, proprietor, trust, …), `cin_llpin`, `pan`, `tan`, `sch3_division` ('I' AS, 'II' Ind AS, 'III' NBFC), `books_begin` (date), `currency` 'INR', `state` (setting_up, live, read_only, archived), `created_by/at` | One per client in own mode. `state = read_only` is used after archiving, or when the audit check fails (section 2.6). |
+| `fb_books` | `book_id` (uuid), `firm_id`, `client_id`, `source` (tally, zoho, own), `source_book_id` (the `tally_books.book_id` it mirrors, for tally and zoho), `in_step` (bool), `in_step_at`, `not_in_step_why`, `legal_name`, `constitution` (company, LLP, firm, proprietor, trust, …), `cin_llpin`, `pan`, `tan`, `sch3_division` ('I' AS, 'II' Ind AS, 'III' NBFC), `books_begin` (date), `currency` 'INR', `state` (setting_up, live, read_only, archived), `created_by/at` | One per client in own mode. `state = read_only` is used after archiving, or when the audit check fails (section 2.6). |
 | `fb_years` | `book_id`, `fy` ('2026-27'), `starts`, `ends`, `status` (open, closing, closed), `closed_by/at` | The year's closing entries (P&L to reserves) are an ordinary voucher, made by a function. |
 | `fb_registrations` | `id`, `book_id`, `gstin`, `state_code`, `reg_type` (regular, composition, SEZ unit, ISD, casual, non-resident), `legal_name`, `trade_name`, `valid_from/to`, `einvoice` (bool), `eway` (bool), `branch_id` | One row per GSTIN. A company with 6 states has 6 rows. |
 | `fb_branches` | `id`, `book_id`, `name`, `registration_id`, `address`, `is_head_office`, `ho_control_ledger_id` | A branch can share a GSTIN (two offices in one state) or have its own. |
@@ -168,7 +186,7 @@ zero, or the year cannot be opened. FinCom has no "Difference in opening balance
    (`voucher_id`, `version`, `snapshot` jsonb). An edit after approval sends the voucher back to `pending` when the rule
    says so.
 
-### 2.4 Items and stock (phase 6)
+### 2.4 Items and stock (mirrored in P2; own-books entry in P8)
 
 The stock tables are:
 - `fb_units` (with UQC);
@@ -215,7 +233,7 @@ fb_audit_log
   book_id      uuid not null
   at           timestamptz not null default clock_timestamp()   -- the server's time, never the browser's
   actor        uuid                -- auth.uid(); null only for a FinCom system job, which then names itself in actor_kind
-  actor_kind   text not null       -- member, system:import, system:projection, system:year_close, support (never silent)
+  actor_kind   text not null       -- member, system:mirror, system:import, system:year_close, support (never silent)
   actor_role   text not null       -- the member's role on the book at that moment
   client_info  jsonb               -- app version, device label, IP (from the edge function), session id
   action       text not null       -- insert, update, cancel, post, approve, reject, lock, unlock, import, restore_master
@@ -258,82 +276,165 @@ fb_audit_log
    `zoho_posts` for what *it* sent. The plan says this plainly in the product, and FinCom never claims to be the audit trail
    of a Tally book.
 
-### 2.7 The projection into the cloud copy (phase 1 design choice)
+### 2.7 The mirror builder (the copy → FinCom Books)
 
-Each post, edit or cancel of an own-books voucher runs in **the same transaction** as the change. That transaction calls
-`fb_project(voucher)`, which rewrites that voucher's rows in the copy tables, keyed on the own book's `book_id` (its own
-`tally_books` row with `source = 'own'`):
-- `tally_vouchers` (`guid` = the voucher id, `alter_id` = the version, `vtype` = the base type's Tally name, `vno`, `party`,
-  the `gst_*` fields, `irn`, `eway_no`, `cancelled`);
-- `tally_lines`, `tally_bills`, `tally_ledger_day`;
-- for masters, `tally_ledgers` and `tally_groups`.
+The bridge (Tally) and `server/zoho-books` (Zoho) keep writing the cloud copy exactly as today: `tally_vouchers`,
+`tally_lines`, `tally_bills`, `tally_cost_allocs`, `tally_item_lines`, `tally_ledgers`, `tally_groups`, and so on. **None of
+that code changes.** One new database function, `fb_mirror_apply(book, guid)`, is called **in the same transaction** as each
+landing write. Today those writes are `tally_ingest_day`, the recorder's apply, the ledger-list rounds, and the Zoho write
+functions. The function rebuilds that voucher's or master's FinCom Books rows:
+- one `fb_vouchers` row per Tally GUID, with `version` = AlterID;
+- `fb_lines` from `tally_lines`;
+- `fb_bill_refs` from `tally_bills`;
+- `fb_line_cc` from `tally_cost_allocs`;
+- stock lines from `tally_item_lines`;
+- `fb_ledgers` and `fb_groups` from the master rows;
+- deletions (`tally_vouchers_gone`) become `status = cancelled` with `cancel_reason = 'deleted in Tally'`. Nothing is ever
+  hard-deleted, even in a mirror.
 
-Because the projection is in the same transaction, the copy can never be behind or ahead of the books. Either both change or
-neither does. A nightly equality check compares the copy to the `fb_*` rows by ledger and day (count and sum) and reports
-any difference in Daily Check. A difference is a bug, so the book turns read-only until it is explained.
+Because the builder runs in the same transaction, FinCom Books can never be ahead of or behind the copy. A nightly equality
+check compares the two by ledger and day (count and sum) and marks the book "Not in step" on any difference.
 
-This is how today's features work for own books **without changing their code**. A later phase may let a report read the
-`fb_*` tables natively (owner decision D2).
+**The mirror keeps the source's own figures.** It writes what Tally or Zoho holds and never "fixes" it. Where the source has
+something FinCom Books cannot hold exactly, the voucher is still mirrored, but it is flagged `mirror_note`, and the book's tie-out
+says so. Examples are a forex voucher, or a line type FinCom does not model yet.
+
+For **own-books** clients there is no copy: the posting functions write `fb_*` directly.
 
 ---
 
-## 3. The books provider: how each feature switches source by mode
+## 3. FinCom Books for every client: source, reads, entries, tie-out
 
-### 3.1 The mode
+### 3.1 The source of a client's books
 
-`client_books_mode` has the columns `firm_id`, `client_id`, `mode` (tally, zoho, own), `effective_from` (date), `book_id`,
-`set_by/at` and `previous` (jsonb). A switch is effective **from a date**, normally 1 April. Before that date the earlier
-source stays readable and is frozen. The client's page header shows the mode ("Own books", "Tally: Kaveri Home Decor
-(2026-27)", "Zoho: Kaveri Home Decor").
+`client_books_mode` has the columns `firm_id`, `client_id`, `source` (tally, zoho, fincom), `effective_from` (date),
+`book_id`, `set_by/at` and `previous` (jsonb). **Every client has a FinCom Books book.** The source only says who is master.
+A change of source takes effect from a date, normally 1 April. Before that date the earlier source stays as read-only history.
+The client's header shows "FinCom Books · source: Tally (Kaveri Home Decor 2026-27)", "· source: Zoho" or "· source:
+FinCom" (mockup 1).
 
-### 3.2 The interface
+### 3.2 One read layer: `Books.read`
 
-This is one JS object in the app (`Books.provider(cid)`) and the same shape in `server/_shared` for edge functions:
+Every feature reads through one object: `Books.read(cid)` in the app, and the same shape in `server/_shared` for edge
+functions. It reads **only `fb_*`**, whatever the source:
 
 ```
-provider.kind                       'own' | 'tally' | 'zoho'
-provider.can                        {post, edit, cancel, lock, approve, auditTrail, invoicePdf, einvoice, stock}
-provider.masters(cid)               groups, ledgers (with GSTIN / PAN / state / TDS fields), cost centres, voucher types
-provider.vouchers(cid, from, to, since?)   the entries as BookSrc's list: {guid, day, vtype, vno, party, lines[], bills[], gst…}
-provider.balances(cid, dates[])     {date: {ledger: bal}}: today's tally_balances_json for tally / zoho / own (via projection)
-provider.bills(cid, party?, asOf)   bill-wise outstanding (tally_ageing)
-provider.post(cid, entries, onProgress)    -> {results: [{id, ok, message, ref}]}: the answer Bridge.post gives today
-provider.health(cid)                {ok, lastSync, problems[]}
+read.masters(cid)                    groups (with sch3_code), ledgers (GSTIN / PAN / state / TDS / MSME), cost centres, voucher types, items
+read.vouchers(cid, from, to, since?) the entries in BookSrc's list shape: {guid, day, vtype, vno, party, lines[], bills[], cc[], items[], gst…}
+read.balances(cid, dates[])          {date: {ledger: bal}} from fb_lines
+read.bills(cid, party?, asOf)        bill-wise outstanding from fb_bill_refs
+read.stock(cid, asOf)                item by item, from the stock lines and openings
+read.status(cid)                     {source, inStep, lastTieOut, differences[], sentNotConfirmed}
 ```
 
-| Provider | Reads | Posts |
+Posting stays per source, because it is the source that keeps the books:
+
+| Source | Writes an entry made in FinCom to | Then |
 |---|---|---|
-| **tally** | Today's `TCloud.load`, `BookSrc` and the cloud figures. **No line changes**: the interface wraps the calls. | `Bridge.post` → `tally_post_jobs` → the bridge, as today |
-| **zoho** | Today's: `server/zoho-books` already writes into the copy with `source = 'zoho'` | `ZohoB.post` (bills, expenses, journals today; invoices and payments added in phase 4) |
-| **own** | The `source = 'own'` projection for every existing report. The new screens (Day Book, Ledger, TB, Audit) read `fb_*` directly. | `fb_post(entries)`: a database function that validates, numbers, applies approval rules, writes the voucher, the log and the projection in one transaction |
+| **tally** | FinCom Books with `status = sent` (out of the totals) **and** `Bridge.post` → `tally_post_jobs` → Tally, as today | The bridge reads the voucher back (today's post register, migrations 111 / 132 / 200 / 203). The mirror builder sees the same GUID and matches FinCom's id, and the row becomes `posted` with Tally's GUID and AlterID. If Tally refuses, the row becomes `refused`, with Tally's own words. |
+| **zoho** | FinCom Books (`sent`) **and** `ZohoB.post` (bills, expenses and journals today; invoices and payments in P6) | Zoho's id comes back, and the next read confirms it (`FC:<id>` in the reference). |
+| **fincom** | FinCom Books directly: `fb_post` validates, numbers, applies approvals and writes the audit log in one transaction | — |
 
-### 3.3 Each feature, by mode
+**Why a sent entry stays out of the totals.** For a mirror, Tally or Zoho is the master. FinCom's trial balance must equal
+the source's at every moment, or the tie-out would fail for no reason. A sent entry is shown in its own list ("3 sent, not
+yet in Tally"), with a total, on Home and in the Day Book (decision D19).
 
-| Feature | Tally (unchanged) | Zoho | Own books |
+### 3.3 Each feature reads FinCom Books
+
+| Feature | Today | After phase 1 (every source) |
+|---|---|---|
+| GSTR-1, 3B, 9, 9C, 2B match, e-invoice | BookSrc over the copy, plus the uploaded Day Book | `Books.read.vouchers`, in BookSrc's shape. The GST engines (`server/_shared/gst3b.js` and the app's) keep their logic, and only their input changes. |
+| TDS 26Q, 24Q, challans | BookSrc | the same read; TDS lines carry section and base where the source gives them |
+| ITR (branch next-itr) | TB / P&L from the copy | `read.balances` with `sch3_code` |
+| MIS, balance sheet, P&L | copy + FinCom's ledger list | `read.balances` + `sch3_code` (Schedule III with no mapping step), with the ledger list's choices carried as overrides |
+| Audit / 3CD | copy + ledger list | FinCom Books; the clauses in 7.3 become exact where the source gives the fields |
+| Day Book, Ledger, TB | copy / cloud figures (migrations 151 / 152) | `fb_*` screens (mockups 4–6); the cloud figure functions are re-pointed at `fb_lines` |
+| Daily Check | copy | FinCom Books, plus the tie-out result, the sent-not-confirmed list, the audit-chain check and the mirror-equality check |
+| Bank, purchase, sales review | as today | as today; their "already in the books" checks read FinCom Books |
+| Period locks | warn (ClosedP), recorder month lock | mirror: warn, as the source decides; own books: enforced by the database |
+
+**How the move is made safe.** Each report is moved to `Books.read` one at a time. Before a report switches, it runs on
+**both** inputs (the copy as today, and FinCom Books) for every client in staging, for every period it covers. The two
+results must be **identical**, figure for figure, to the paisa. A report that differs anywhere does not switch. This is
+acceptance rule A9.
+
+The Tally path (`24-tally-bridge.js`, `49-tally-cloud.js`, `server/tally-cloud`, the Go bridge) does not change in phase 1,
+except for the new reads in 3.4 once the owner approves them.
+
+### 3.4 What is missing today for a complete mirror
+
+Read from `staging-next` @ d580e8451. **"New request"** means new or changed request XML to Tally. Each such request needs:
+- the owner's OK;
+- a row in `docs/tally-allowlist.md` and a matching entry in `bridge-go/allowlist.go` (`TestAllowListUnchanged`);
+- a measurement on ZZ BIG TEST under the **2 s stop**;
+- to run under the bridge's rules: **one request in flight per Tally**, the **typing gate** (no request while someone typed in
+  Tally within the form's tier; idle only), postings and saves first, and the six conditions before every request.
+
+**Tally**
+
+| Part of the books | What the copy holds today | Gap | Needs |
 |---|---|---|---|
-| Bank: import and review | as today | as today | as today |
-| Bank: post | Bridge.post (Payment, Receipt, Contra) | ZohoB.post (expense or journal today; phase 4 categorises the Zoho bank line itself) | fb_post: a Payment, Receipt or Contra voucher, with bill-wise refs from the match |
-| Purchase: post | Bridge.post (Purchase with GST and TDS lines) | ZohoB.post (bill) | fb_post (Purchase voucher; TDS line; input GST lines; ITC eligibility flag) |
-| Sales: import and review | as today | as today | as today |
-| Sales: post / create | Bridge.post | phase 4: Zoho invoice (needs `ZohoBooks.invoices.CREATE`, D8) | fb_post, or **create the invoice in FinCom** (mockup 3) with a PDF and e-invoice |
-| Day Book, Ledger, TB | read from the copy | read from the copy | native `fb_*` screens (mockups 4–6) |
-| MIS, balance sheet, P&L | copy + FinCom's ledger mapping | copy + Zoho account types | copy (projection); **Schedule III from `sch3_code`**, with no mapping step |
-| GSTR-1, 3B, 9, 9C, 2B match, e-invoice | BookSrc over the copy | the same | the same (the projection carries `gst_*`, irn and eway); plus a GST lock after filing |
-| TDS 26Q, 24Q, challans | BookSrc | the same | the same; TDS lines carry section and base natively, so no guessing from the ledger name |
-| ITR (branch next-itr) | TB / P&L from the copy | the same | the same; P&L lines from `sch3_code` |
-| Audit / 3CD | from the copy and the ledger list | the same | the same, plus clauses that become exact (section 7.3) |
-| Daily Check | as today | as today | as today, plus the own-books checks: audit chain, triggers, projection equality, pending approvals, unbalanced drafts, numbering gaps |
-| Period locks | warn and ask (ClosedP), recorder month lock | warn and ask | **enforced** by the database |
+| Groups | `tally_groups` (name, parent) | none for the tree. Group "nature" and "affects gross profit" are derived from the primary group. | — |
+| Ledgers | `tally_ledgers`: name, parent, opening, GSTIN, PAN, TDS deductee type, nature of payment, payroll fields; changes by AlterID (2.3.1) | state / place, GST registration type, bill-wise on/off, credit period, MSME / Udyam fields, address: **to confirm field by field** against the ledger list's FETCH | Fields not yet fetched: **changed request** (the ledger list's FETCH grows) → owner OK + new measurement |
+| Ledger openings | `tally_ledgers.open`, guarded by `tally_openings_held` (migration 130) | none for the amounts | — |
+| **Opening bill-wise** (bills outstanding at the books' start) | not read: `tally_bills` comes from vouchers only | **missing.** Receivable / payable ageing from the first day is impossible without it. | **New request**: the ledger master's opening bill allocations, for bill-wise ledgers only, in chunks |
+| Vouchers (all accounting types) | Day Book by month / day, the recorder, the fast and batch reads (2.4.5 / 2.4.9); `tally_vouchers`, `tally_lines`, the GST fields (migration 72), IRN / e-way (migration 57) | **History depth**: the copy holds what was read, from the books' start the bridge saw, plus periods a person pulled. A complete mirror needs every voucher of the current FY (and of earlier years kept in Tally, D20). | **No new request.** The existing period pull (2.4.5 / 2.4.9) runs on a schedule, idle only. Big books may take days. |
+| Optional vouchers | heads read ("Optional ones too"); `tally_vouchers.optional` | none. They are kept as memo, out of the totals, as Tally does. | — |
+| **Post-dated vouchers** | not distinguished: no ISPOSTDATED in any fetch | **missing**: a post-dated voucher must be out of the totals until its date | **Changed request**: add the flag to the Day Book / entry fetches → owner OK + measurement |
+| Bill-wise on vouchers | `tally_bills` (name, type, amount, bill date, credit days, due) | none | — |
+| Cost-centre allocations on lines | `tally_cost_allocs` (category, centre, amount; migration 57) | none for the lines | — |
+| **Cost-centre and cost-category masters** | Cost Centre masters read for **payroll employees** only (2.4.4) | non-payroll centres, their parents and categories | **Changed request** (the employees read widened to every cost centre, plus the categories) → owner OK |
+| **Voucher-type masters** | not read: only each voucher's type name | type → base type (a "Sales – Delhi" type is a Sales), numbering method, GSTIN / registration of the type | **New request**: the Voucher Type collection, stored fields only |
+| **Company registrations** | one GSTIN and PAN per company (`TDSDeskCompanyInfo`) | TallyPrime's several GST registrations in one company | **New request** (or a changed company-info request) → owner OK |
+| Stock: item lines | `tally_item_lines` (item, qty, unit, rate, taxable, HSN, GST) | **no godown or batch** ("no godown or batch, which no list…", fastvch.go); stock-journal lines partly | **Changed request** for godown / batch allocations on item lines → owner OK + measurement |
+| **Stock masters and openings** | not read: only Stock-in-Hand's group opening and closing for a period a person asks (2.5.2, `tally_stock_reads`) | items, units, stock groups, godowns, batches, item openings (qty, rate, value), HSN / GST on the item | **New requests**: Stock Item, Unit, Stock Group, Godown collections, stored fields only, in chunks |
+| **Tie-out figures from Tally** | the month tie-out is **typed by a person** (migration 44, `tally_tieouts`) | an automatic daily trial balance from Tally | **New request**: the closing balance of each **primary group** at a date (about 28 rows; a computed figure, so it must be measured under 2 s on ZZ BIG TEST). Ledger by ledger only for a group that differs, in chunks. Voucher counts come from the existing keep-list read (GUID, AlterID, date). |
+| Forex, job work, payroll details | payroll partly (2.4.4); forex not read | rare; out of scope for phase 1 | The voucher is mirrored with `mirror_note`, and the tie-out names it |
 
-**The rule that protects today's path:** the Tally provider is a wrapper, and the build puts **no** change in
-`24-tally-bridge.js`, `49-tally-cloud.js`, `67-book-sources.js` or `server/tally-cloud`. The whole existing test suite must
-pass unchanged at every phase (acceptance A0).
+**Zoho Books.** `server/zoho-books` already reads contacts, the chart of accounts, taxes, invoices, credit notes, bills,
+vendor credits, payments, expenses, journals and bank transfers into the copy.
+
+| Part | Gap | Needs |
+|---|---|---|
+| Opening balances | not read; the endpoint is **not verified** | confirm Zoho's opening-balance endpoint, then a new read |
+| Bill-wise | payments applied to invoices and bills (to confirm in `map.js`) | map applications to `fb_bill_refs` |
+| Cost centres | Zoho's reporting tags (not verified) | confirm the API, then map them to `fb_line_cc` |
+| Items and stock | not read | Zoho's items and inventory endpoints (to verify), in P2 |
+| Tie-out figures | none | Zoho's trial-balance report through the API is **not verified**. Otherwise FinCom compares document counts and totals by kind and month (verified list endpoints) and account balances. |
+| Daily cap | 1,000 to 10,000 calls a day | the tie-out costs only a few calls a day; the first complete read may need several days on the Free plan |
+
+### 3.5 The daily tie-out and "Not in step"
+
+1. **When.** Once a day per book, in the bridge's idle window (the typing gate), after the night's reads. A person can also
+   ask for it any time, and it still waits for idle.
+2. **What is compared, FinCom Books against the source, at today's date:**
+   - **Trial balance**, primary group by primary group, then ledger by ledger for any group that differs;
+   - **voucher count** by type and month (the keep list's GUIDs, AlterIDs and dates against FinCom Books);
+   - **highest AlterID** (Tally) or the newest last-modified time (Zoho), so a change not yet read shows at once.
+3. **Result.** `fb_tieouts` (book, at, source figures, FinCom figures, differences). Zero difference sets `in_step = true`. Any
+   difference sets **"Not in step"**, and the book shows exactly which group, ledger, month or GUIDs differ.
+4. **What "Not in step" does.** The client's pages show the banner "Not in step with Tally since 21-Nov, 18:00: Sundry
+   Debtors differs by ₹4,200.00". Daily Check lists it. Filing a return (GSTR-1, 3B, 26Q) for an affected period asks the
+   person to confirm first, or is blocked (owner decision D18).
+5. **The usual causes are shown as causes.** These are a change in Tally not yet read (it heals at the next read), a voucher
+   held by the bridge's safeguards (it names the hold), a gap from section 3.4 (for example post-dated vouchers before the flag
+   is read), or a real difference (a bug, so the book stays "Not in step" until it is explained).
 
 ---
 
 ## 4. Migration
 
 ### 4.1 From Tally into own books (mockup 9)
+
+**After phase 1 this is mostly a change of master.** A Tally client already has a complete FinCom Books mirror that ties
+every day. Moving to own books is therefore:
+1. confirm the latest tie-out shows ₹0.00 on every check;
+2. freeze the mirror at the cut-over date;
+3. turn the mirrored vouchers into own vouchers (`source = own`, `source_ref` kept), with one `import` row each in the
+   audit log;
+4. from then on, people enter in FinCom.
+The steps below are what the mirror and the tie-out must already have proved. They are kept as the switch's checklist, and
+they also serve a client whose mirror was never complete.
 
 The source is the cloud copy the bridge already keeps (`tally_groups`, `tally_ledgers`, `tally_vouchers`, `tally_lines`,
 `tally_bills`, `tally_stock_reads`). Reading from it involves **no bridge change**. What the copy does not hold today
@@ -525,7 +626,7 @@ The existing integration already does the following:
 - A cancelled IRN cancels the voucher. The number is kept, and the audit log records the cancellation.
 - After GSTR-1 for a month is filed, FinCom sets a `gst` lock for that GSTIN and month. A change after that is a credit or
   debit note, or an amendment in a later return, which is what the law expects.
-- The 2B match, ITC reversal and GSTR-9 / 9C run as today over the projection.
+- The 2B match, ITC reversal and GSTR-9 / 9C run as today, reading FinCom Books.
 
 ### 7.2 TDS
 
@@ -569,7 +670,7 @@ In `<scratchpad>/shots-books/`, each screen is at 1440 desktop and 390 phone, wi
 
 | # | File | What it shows |
 |---|---|---|
-| 1 | `01-mode.png`, `01-mode-phone.png` | Choosing a client's books mode: three cards (Own books, Tally, Zoho Books), what each one means for posting, the audit trail and reports, and the effective-from date |
+| 1 | `01-mode.png`, `01-mode-phone.png` | **FinCom Books (always) + source**: the client's FinCom Books status (complete, in step), then the source as three cards (Tally, Zoho Books, FinCom), each saying who is master, how entries flow and how the tie-out works |
 | 2 | `02-coa.png`, `02-coa-phone.png` | Chart of accounts: the Schedule III tree, ledgers with GSTIN / PAN / state, balances, and the "Schedule III line" each group feeds |
 | 3 | `03-invoice.png`, `03-invoice-phone.png` | New sales invoice: customer with GSTIN, items with HSN, **GST worked out** (intra-state CGST + SGST), the e-invoice switch, the Dr / Cr preview, and the **PDF preview** |
 | 4 | `04-daybook.png`, `04-daybook-phone.png` | Day Book: a day's vouchers by type, number, party, Dr = Cr per voucher, status (Posted / Pending approval / Cancelled), the day's totals tie |
@@ -588,17 +689,20 @@ the owner's review time.
 
 | Phase | What | Effort | Depends on |
 |---|---|---|---|
-| **P0** | This plan and design; owner decisions D1–D12 | done (this branch) | — |
-| **P1 Ledger engine** | `fb_books`, `fb_years`, `fb_groups` (Schedule III seed), `fb_ledgers`, `fb_openings`, `fb_vtypes`, `fb_series`, `fb_vouchers`, `fb_lines`, `fb_bill_refs`, `fb_cost_centres`; the balancing, numbering and no-delete rules; **audit log with hash chain, triggers, daily check, anchors**; `fb_locks`; the projection into the copy; the mode switch and `Books.provider` with the Tally provider as a pure wrapper; screens: mode, chart of accounts, journal / payment / receipt / contra entry, Day Book, Ledger, Trial Balance, voucher History | **7–9** | D1, D2, D3, D12 |
-| **P2 Documents and posting** | Sales invoice (GST auto, PDF, e-invoice and e-way through the existing functions), purchase bill, credit and debit notes; bank, purchase and sales posting into own books; approvals (`fb_approval_rules`, `fb_approvals`, maker ≠ checker); GST and TDS locks after filing; the own-books checks in Daily Check; Schedule III statements | **6–8** | P1 |
-| **P3 Tally migration and export** | Copy and verify from the cloud copy (section 4.1), parallel run, the switch; Tally XML export (reusing the posting builder) with a round-trip test; Excel; the full CSV archive with rebuild test. A bridge read for cost-centre allocations and voucher-type settings, if D5 says yes (+1–2 weeks and a bridge release) | **4–6** (+1–2) | P1, P2 |
-| **P4 Zoho two-way** | New CREATE scopes and re-consent; invoices, credit notes, customer and vendor payments, bank categorisation; signed webhooks; "Changed in Zoho" diff and conflict list; Zoho → own migration with verification | **4–5** | D8, D9, P3 for migration |
-| **P5 Corporate** | `fb_grants` roles per book and branch; multi-GSTIN registrations and series; inter-branch in one action with control-ledger check; cost-centre reports; auditor role and log export | **6–8** | P2 |
-| **P6 Inventory** | Items, units (UQC), godowns, batches, stock lines on vouchers, FIFO / weighted average, stock summary and movement, HSN summary for GSTR-1 from items; Tally stock import | **8–10** | P2 |
-| **Later** | Consolidation (D11); native report reads from `fb_*` (D2); multi-currency | — | — |
+| **P0** | This plan and design; owner decisions | done (this branch) | — |
+| **P1 Complete mirror + every report from FinCom Books + daily tie-out** | **1a** the `fb_*` store, the audit log (hash chain, triggers, daily check), `client_books_mode`, the mirror builder from today's copy (Tally and Zoho), the nightly mirror-equality check (5–7). **1b** the new bridge reads of 3.4: opening bill-wise, voucher-type masters, all cost-centre masters, post-dated flag, registrations, missing ledger fields, primary-group closing for the tie-out; each measured under 2 s, allow-listed, one in flight, typing gate; one bridge release (3–5, after the owner's OK). **1c** Zoho completeness: openings, bill-wise applications, reporting tags, tie-out figures (2–3). **1d** `Books.read`, and each report moved to it with the both-inputs equality proof: GST, TDS, ITR, MIS, BS / P&L, audit / 3CD, Daily Check, Day Book, Ledger, TB (5–7). **1e** the daily tie-out, "Not in step", and the sent-not-confirmed list (1–2) | **16–24** | D16, D17, D18, D20, D21 |
+| **P2 Stock in the mirror** | Stock masters, units, godowns, batches, item openings, godown / batch on lines, stock journals; stock summary from FinCom Books; stock in the tie-out | **4–6** | P1; D16 (new stock requests) |
+| **P3 Entries made in FinCom, end to end** | Bank, purchase and sales entries written to FinCom Books as `sent`, posted through today's `Bridge.post` / `ZohoB.post`, confirmed by the mirror (`posted`) or refused with the source's words; Home and Day Book lists | **2–3** | P1; D19 |
+| **P4 Own-books entry** | For source = FinCom: chart of accounts, journal / payment / receipt / contra; sales invoice with GST, PDF, e-invoice and e-way; bills; credit and debit notes; numbering series per GSTIN; approvals (maker ≠ checker); enforced period, GST and TDS locks | **8–11** | P1, P3 |
+| **P5 Change of source** | Tally → own (freeze the verified mirror, flip the master: 4.1); Zoho → own; export to Tally XML, Excel and the full archive, with round-trip tests; optional Tally XML file upload (11.3, D15) | **2–3** (+1.5–2 for the file upload) | P1, P4 |
+| **P6 Zoho two-way extras** | Invoices, credit notes, payments and bank categorisation into Zoho; signed webhooks; "Changed in Zoho" conflict view | **3–4** | D8, D9 |
+| **P7 Corporate** | Roles per book and branch, maker-checker rules, multi-GSTIN series and returns, inter-branch in one action, cost-centre reports, auditor role | **6–8** | P4 |
+| **P8 Own-books inventory** | Stock entry for source = FinCom: FIFO / weighted average, stock journals, HSN summary from items (the model exists from P2) | **6–8** | P2, P4 |
+| **Later** | Consolidation (D11), multi-currency | — | — |
 
-**Total: about 36–48 engineer-weeks** (P1–P6). A client can start keeping simple service-business books after **P2**,
-which is about 13–17 weeks. Moving Tally clients needs **P3**.
+**Total: about 47–67 engineer-weeks.** Phase 1 is the biggest phase because it builds the store, completes the mirror and
+moves every report onto it, each one proven equal. After P1, **every client** (Tally, Zoho or none) has complete, verified
+FinCom Books, and every figure can be fetched from FinCom alone. Own-books entry (P4) can start once P1 and P3 are in.
 
 ### 9.1 Acceptance rules (every phase)
 
@@ -612,7 +716,7 @@ which is about 13–17 weeks. Moving Tally clients needs **P3**.
   - the TB total Dr equals the total Cr;
   - balance sheet = P&L carried + openings;
   - every ledger's balance recomputed from the lines equals the report's figure;
-  - the projection equals the `fb_*` rows by ledger and day.
+  - the mirror equals the copy by ledger and day.
 - **A3. The audit trail cannot be changed or disabled.** As every role (member, owner, `service_role`), a test tries UPDATE,
   DELETE and TRUNCATE on `fb_audit_log`, and each fails. Disabling a trigger (as a superuser in the test database) makes the
   daily check fail and turns the book read-only. Corrupting one log row makes the chain check name that `seq`.
@@ -624,6 +728,12 @@ which is about 13–17 weeks. Moving Tally clients needs **P3**.
   every check in 4.1 step 5 shows ₹0.00 difference. An injected 1-paisa change is caught and named.
 - **A7. Export round-trips.** Export to Tally XML, import into an empty made-up Tally company, read back through the bridge,
   and the TB ties. Export the CSV archive, rebuild a book, and every row hash matches.
+- **A9. Reports move only when proven equal.** Before a report reads FinCom Books, it runs on the copy and on FinCom Books
+  for every staging client and every period it covers, and the two results are identical to the paisa.
+- **A10. The mirror ties.** For every Tally and Zoho client in staging, the daily tie-out shows ₹0.00 on the trial balance
+  and on the voucher counts for 30 days running. Each "Not in step" in that time is explained by a named cause (3.5 point 5).
+- **A11. The bridge rules hold.** Every new Tally request is on the allow-list, measured under 2 s on ZZ BIG TEST, sent one
+  at a time, and never while someone is typing in Tally (the existing bridge tests, plus one per new request).
 - **A8. Every report recomputes.** No report reads a stored total that the vouchers did not produce in the same request or
   the same transaction.
 
@@ -632,7 +742,11 @@ which is about 13–17 weeks. Moving Tally clients needs **P3**.
 | # | Risk | Mitigation |
 |---|---|---|
 | R1 | **The statutory audit-trail claim.** An auditor reporting under Rule 11(g) may test FinCom's trail, and a gap is a qualified report for the client. | Database-written log, no setting, hash chain, daily self-check, external anchor (2.6). Read ICAI's 2024 Implementation Guide clause by clause before P1 ships. Get an independent CA review of the design (D4). Be honest that a superuser can disable a trigger, and show that tampering is evident. |
-| R2 | **Projection drift**: the copy differs from the books. | Same-transaction projection, nightly equality check, read-only on difference (2.7). |
+| R2 | **Mirror drift**: FinCom Books differs from the copy, or from Tally / Zoho | Same-transaction mirror builder, nightly equality check, daily tie-out against the source, "Not in step" shown at once (2.7, 3.5) |
+| R10 | **Load on the client's Tally** from completing history and the tie-out | Existing rules: at most 2 s a request, one in flight, idle only (typing gate), postings first. A big book fills over days, not minutes, and the person sees the progress. |
+| R11 | **Report regressions** when reports move to FinCom Books | Both-inputs equality proof per report and period (A9). A report that differs stays on the copy. |
+| R12 | **False "Not in step"** from features not mirrored (forex, job work) or post-dated vouchers before their flag is read | `mirror_note` on such vouchers. The tie-out names the cause instead of a bare difference. |
+| R13 | **Tally's computed closing balances may be slow** on very big companies | Primary-group level first (about 28 rows), ledger level only where a group differs, in chunks, each measured under 2 s |
 | R3 | **Scope creep towards Tally parity** (inventory, payroll, manufacturing, multi-currency). | Phases; a client is offered own books only when its needs fit the phases built. Tally mode stays first-class. |
 | R4 | **Tally import fidelity**: optional and post-dated vouchers, cost centres, inventory, renamed or merged ledgers. | Copy from the cloud copy that already handles renames and merges (migrations 31–39). Anything not copied exactly is listed and blocks the switch. |
 | R5 | **Zoho quotas**: the Free plan has a cap of 1,000 calls a day. | Estimate before starting; spread over days; per-minute and concurrent limits under Zoho's. |
@@ -647,20 +761,26 @@ which is about 13–17 weeks. Moving Tally clients needs **P3**.
 
 | # | Decision | Recommendation |
 |---|---|---|
-| D1 | Which clients may choose Own books first: service MSMEs only (no stock) until P6? | Yes. Service businesses first, then trading after P6. |
-| D2 | Phase 1 reads: project own books into the cloud copy (`source = 'own'`) so every existing feature works unchanged, or rewrite the reports to read `fb_*` natively? | Project (section 2.7). Native reads later, one report at a time, each proven equal. |
+| D1 | Which clients may choose Own books first: service MSMEs only (no stock) until P8? | Yes. Service businesses first, then trading after P6. |
+| D2 | (Replaced by the owner's direction of 22-Nov-2026: every report reads FinCom Books.) | — |
 | D3 | Must every posted own-books voucher be editable (as a new version), or must posted vouchers be immutable, with changes only by cancel-and-replace? | Editable with versions and a reason. This is how Tally works and what the rule expects (an edit log). |
 | D4 | An independent CA's review of the audit-trail design against Rule 11(g) before P1 goes live? | Yes. |
-| D5 | A small bridge read for cost-centre allocations and voucher-type numbering settings (a bridge release), or migrate without them? | Do it in P3. Without it, cost centres cannot move. |
-| D6 | Division II (Ind AS) groups in P1, or Division I only? | Division I in P1; Division II in P5 for corporates. |
+| D5 | (Folded into D16: the cost-centre and voucher-type reads are part of the complete mirror.) | — |
+| D6 | Division II (Ind AS) groups in P1, or Division I only? | Division I in P1; Division II in P7 for corporates. |
 | D7 | A Tally company with a "Difference in opening balances": block the move, or allow it to a named suspense ledger with a reason? | Block by default; allow only with the owner's sign-off per client. |
-| D8 | Zoho mode: should FinCom create **sales invoices** in Zoho? This needs new scopes and each client signing in again. | Yes, in P4. |
-| D9 | Zoho mode: may FinCom ever **edit** (PUT) a document it created, under the rule in 5.3 point 3? | Not in P4. Revisit after a quarter of use. |
+| D8 | Zoho mode: should FinCom create **sales invoices** in Zoho? This needs new scopes and each client signing in again. | Yes, in P6. |
+| D9 | Zoho mode: may FinCom ever **edit** (PUT) a document it created, under the rule in 5.3 point 3? | Not in P6. Revisit after a quarter of use. |
 | D10 | Zoho Multi-DC: India's data centre only, or others too? | India only, as today. |
 | D11 | Consolidation: in scope this year? | No. Design note only. |
 | D12 | Confirm the Supabase project's region and backup location are in India (Rule 3(5)) before the first own-books client | Must confirm. Move or add a region if not. |
 | D13 | The default cut-over date for moves: 1 April (full year in FinCom) or any month start? | 1 April, with a month start allowed. |
 | D14 | Parallel-run length before the switch | 30 days, or one GST return cycle, whichever ends later. |
+| D16 | Approve the **new and changed Tally requests** in 3.4: opening bill-wise; voucher-type masters; all cost-centre masters and categories; the post-dated flag; company registrations; the missing ledger fields; primary-group closing for the tie-out; and in P2 stock masters and godown / batch allocations. Each would be allow-listed and measured under 2 s, one in flight, with the typing gate. | Approve as one bridge release for P1b, and a second for P2 (stock). |
+| D17 | Storage: one set of `fb_*` tables for every source, filled by the mirror builder (this plan), or FinCom Books as views over the copy? | One `fb_*` store. It is exact, keeps the audit log in one place, and makes a change of source a flip, not a migration. |
+| D18 | What "Not in step" does to filing a return for an affected period: warn and ask, or block? | Block GSTR-1, GSTR-3B and 26Q / 24Q filing for an affected period. Allow an owner override with a reason, recorded in the audit log. |
+| D19 | An entry FinCom sent to Tally or Zoho: kept out of FinCom's totals until the mirror confirms it? | Yes. FinCom's figures always equal the source's, and the sent entries are listed with their own total. |
+| D20 | How much history to mirror: the current FY plus openings, or every year kept in Tally? | The current and previous FY (for GSTR-9 / 9C and comparatives). Older years on request. |
+| D21 | When the daily tie-out runs | Nightly in the idle window, and on request (still idle only) |
 | D15 | Independent Books (MIT, verified): port its bill-wise, GST-split, parsing and inventory rules and its test cases, with the attribution plan in 11.5? Add a Tally **XML file upload** path ported from its importer, besides the bridge? | Yes to the rules and tests. Yes to the file upload in P3, as a second path that must tie exactly like the bridge path. |
 
 ---
@@ -707,12 +827,12 @@ reuse, port and change the code, as long as the copyright notice and permission 
 
 1. **Port the logic, not the code.** FinCom is JS/TS and Postgres, so nothing can be dropped in. Each rule below is
    rewritten as a Postgres check (the "never" rules) or a shared TS function (form help, previews).
-   - **Bill-wise rules** (P2): the four reference types, stable bill ids, over-allocation refusal, opposite-side check,
+   - **Bill-wise rules** (P1 mirror checks, P4 entry): the four reference types, stable bill ids, over-allocation refusal, opposite-side check,
      ambiguous-name refusal, partial settlement, ageing boundaries.
-   - **GST half-split rounding** (`sgst = tax − round(tax/2)`) and **blank state = IGST** (P2).
+   - **GST half-split rounding** (`sgst = tax − round(tax/2)`) and **blank state = IGST** (P4).
    - **Amount parsing** (P1): junk refused, ₹ and commas stripped, non-finite refused, ROUND_HALF_UP to the paisa.
    - **Cost-centre split must equal the line** (P1), which already matches rule 3 in section 2.3.
-   - **Inventory valuation** (FIFO, moving weighted average, compound units) (P6).
+   - **Inventory valuation** (FIFO, moving weighted average, compound units) (P2 / P8).
 2. **The chart of accounts and voucher types:** used as a cross-check of FinCom's seed list (Tally's 28 groups and the
    voucher-type list with "accounting" and "non-accounting" bases). Both are Tally's public structure, so no code needs to
    be copied for this.
@@ -725,7 +845,7 @@ reuse, port and change the code, as long as the copyright notice and permission 
    - `test_tally_bundle_import.py`, `test_master_xml_import.py`;
    - `test_phase3_inventory.py`.
    Each case keeps a comment naming the original test (the attribution in 11.5).
-4. **Their Tally XML import, for a file-upload path** (P3, optional, D15). It is *in addition to* the bridge, never instead
+4. **Their Tally XML import, for a file-upload path** (P5, optional, D15). It is *in addition to* the bridge, never instead
    of it. Port these:
    - the field mapping;
    - the split-file bundle handling;
@@ -771,9 +891,9 @@ structure of their functions or the substance of their test cases is treated as 
 5. The release checklist (`docs/RELEASE-CHECKLIST.md`) gets one line: "third-party notices updated if any ported code
    changed".
 
-**Effect on the phases.** Porting the bill-wise, GST-split and parsing rules with their tests saves about **1–2 weeks in P2**.
-The optional XML file import adds about **1.5–2 weeks to P3**, or nothing if D15 says no. The inventory rules and tests save
-about **1–2 weeks in P6**. The overall estimate becomes about 35–46 engineer-weeks.
+**Effect on the phases.** Porting the bill-wise, GST-split and parsing rules with their tests saves about **1–2 weeks in P4**.
+The optional XML file import adds about **1.5–2 weeks to P5**, or nothing if D15 says no. The inventory rules and tests save
+about **1–2 weeks in P8**. These savings are already counted in the 47–67 engineer-weeks of section 9.
 
 ---
 

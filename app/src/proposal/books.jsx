@@ -13,38 +13,44 @@ const Crumb = ({ children }) => <>{CLIENT.name} <span className="p-gst">GSTIN {C
 const Mode = ({ k = "own" }) => <span className="p-bk-mode" data-k={k}>{k === "own" ? <><BookOpen size={12} />Own books</> : k === "tally" ? <><Plug size={12} />Tally</> : <><Cloud size={12} />Zoho Books</>}</span>;
 const Chip = ({ on, n, children }) => <button className="p-chip" aria-pressed={on ? "true" : "false"}>{children}{n != null && <em>{n}</em>}</button>;
 
-/* ================================================================ 1. choosing the books mode */
-const MODES = [
-  { k: "own", I: BookOpen, t: "Own books", s: "FinCom keeps the books", tag: "New",
-    pts: [["Entries", "Made in FinCom: invoices, bills, bank, journals"], ["Audit trail", "Built in, cannot be switched off (Rule 3(1))"], ["Period locks", "Enforced: a filed month cannot be changed"], ["Reports", "Straight from the vouchers, Schedule III ready"]] },
-  { k: "tally", I: Plug, t: "Tally", s: "Tally keeps the books; FinCom reads and posts", tag: "Today",
-    pts: [["Entries", "Posted to Tally through FinCom Bridge"], ["Audit trail", "Tally's own edit log"], ["Period locks", "FinCom warns; Tally decides"], ["Reports", "From the copy the bridge sends"]] },
-  { k: "zoho", I: Cloud, t: "Zoho Books", s: "Zoho keeps the books; FinCom reads and posts",
-    pts: [["Entries", "Created in Zoho by FinCom; edits stay in Zoho"], ["Audit trail", "Zoho's own history"], ["Period locks", "Zoho's transaction lock"], ["Reports", "From Zoho, read every 15 minutes"]] },
+/* ================================================================ 1. FinCom Books (always) + the source */
+const SOURCES = [
+  { k: "tally", I: Plug, t: "Tally", s: "Tally is the master; FinCom Books mirrors it", tag: "Now",
+    pts: [["Kept in step", "By FinCom Bridge, idle only: never while someone types in Tally"], ["Entries made in FinCom", "Posted to Tally, then confirmed by the mirror"], ["Daily tie-out", "Trial balance and voucher counts against Tally"], ["Edit log", "Tally's own; FinCom logs every mirror change"]] },
+  { k: "zoho", I: Cloud, t: "Zoho Books", s: "Zoho is the master; FinCom Books mirrors it",
+    pts: [["Kept in step", "Through Zoho's API, every 15 minutes"], ["Entries made in FinCom", "Created in Zoho, then confirmed by the mirror"], ["Daily tie-out", "Balances and document counts against Zoho"], ["Edit log", "Zoho's own; FinCom logs every mirror change"]] },
+  { k: "own", I: BookOpen, t: "FinCom", s: "FinCom Books is the master", tag: "New",
+    pts: [["Kept in step", "Nothing to mirror: entries are made here"], ["Entries made in FinCom", "Straight into the books, with approvals"], ["Daily tie-out", "Not needed: FinCom checks Dr = Cr itself"], ["Edit log", "Built in, cannot be switched off (Rule 3(1))"]] },
 ];
+const HAVE = [["Masters", "10 groups + 14 sub-groups · 312 ledgers · 7 voucher types · 9 cost centres"], ["Openings", "312 balances and 148 open bills at 1-Apr-2026"],
+  ["Vouchers", "1,294 this year, every type · 3 post-dated kept out until their date"], ["Bill-wise and cost centres", "on every line Tally has them"], ["Stock", "41 items, 2 godowns, openings and movements"]];
 export function BooksMode() {
-  const pick = "own";
+  const pick = "tally";
   return <Shell scope="client" active="books">
-    <TopBar title="Where the books are kept" crumb={<Crumb />} />
+    <TopBar title="FinCom Books" crumb={<Crumb />} />
     <div className="p-page">
-      <div className="p-status" data-t="muted"><Plug size={16} /><span><b>Today: Tally.</b> Kaveri Home Decor (2026-27) on OFFICE-PC · last read 2 min ago · 1,286 entries this year</span></div>
-      <div className="p-bk-modes" role="radiogroup" aria-label="Books mode">
-        {MODES.map((m) => <button key={m.k} className="p-bk-mcard" role="radio" aria-checked={m.k === pick}>
-          <div className="p-bk-mhead"><i><m.I size={20} /></i><span><b>{m.t}</b><small>{m.s}</small></span>{m.tag && <em data-k={m.tag}>{m.tag}</em>}<span className="p-bk-radio" /></div>
+      <section className="p-card p-bk-fcb">
+        <div className="p-bk-fcb-h"><i><BookOpen size={22} /></i><div><b>FinCom Books · always on</b><small>The complete books of Kaveri Home Decor, kept by FinCom. Every report, return and check reads only from here.</small></div>
+          <span className="p-bk-ok p-bk-big"><ShieldCheck size={14} />In step with Tally</span></div>
+        <div className="p-bk-fcb-g">
+          <ul className="p-bk-have">{HAVE.map(([a, b]) => <li key={a}><Check size={15} /><span><b>{a}</b><small>{b}</small></span></li>)}</ul>
+          <div className="p-bk-tie">
+            <h3>Today's tie-out with Tally <span className="p-quiet">22-Nov-2026 02:10</span></h3>
+            <div className="p-bk-kv"><span>Trial balance</span><b className="p-num">₹1,98,47,740.00 = ₹1,98,47,740.00</b></div>
+            <div className="p-bk-kv"><span>Vouchers this year</span><b className="p-num">1,294 = 1,294</b></div>
+            <div className="p-bk-kv"><span>Difference</span><b className="p-num">₹0.00</b></div>
+            <div className="p-bk-kv"><span>Sent from FinCom, not yet in Tally</span><b>2 · ₹48,600.00</b></div>
+          </div>
+        </div>
+      </section>
+      <div className="p-bk-srch"><h2 className="p-bk-h2">Source of the books</h2><span className="p-quiet">who is the master; FinCom Books stays whichever you choose</span></div>
+      <div className="p-bk-modes" role="radiogroup" aria-label="Source of the books">
+        {SOURCES.map((m) => <button key={m.k} className="p-bk-mcard" role="radio" aria-checked={m.k === pick}>
+          <div className="p-bk-mhead"><i><m.I size={20} /></i><span><b>{m.t}</b><small>{m.s}</small></span>{m.tag && <em data-k={m.tag === "Now" ? "Today" : m.tag}>{m.tag}</em>}<span className="p-bk-radio" /></div>
           <dl>{m.pts.map(([a, b]) => <div key={a}><dt>{a}</dt><dd>{b}</dd></div>)}</dl>
         </button>)}
       </div>
-      <section className="p-card p-bk-when">
-        <div className="p-card-h"><h2>Move Kaveri Home Decor to own books</h2><span className="p-quiet">Nothing changes in Tally</span></div>
-        <div className="p-bk-wgrid">
-          <label className="p-field"><span>Own books start on</span><div className="p-input">1-Apr-2026 <Calendar size={14} /></div><small>The whole of FY 2026-27 is copied from Tally, so the year stays in one place</small></label>
-          <label className="p-field"><span>Run both in parallel</span><div className="p-input">30 days <ChevronDown size={14} /></div><small>FinCom compares the two every night; you switch when they match</small></label>
-        </div>
-        <ol className="p-bk-mini">
-          <li><b>1</b>Copy masters, openings and entries from Tally</li><li><b>2</b>Prove they tie to the paisa</li><li><b>3</b>Switch; Tally stays as read-only history</li>
-        </ol>
-        <div className="p-row-btns p-bk-end"><button className="p-btn p-ghost">Keep Tally</button><button className="p-btn p-primary">Copy from Tally and check <ArrowRight size={15} /></button></div>
-      </section>
+      <div className="p-bk-note"><Info size={15} /><span>Changing the source never starts the books again. To move from Tally to FinCom, the verified mirror simply becomes the master from the date you choose; Tally stays as read-only history.</span></div>
     </div>
   </Shell>;
 }
