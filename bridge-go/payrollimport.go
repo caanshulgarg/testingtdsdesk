@@ -1,7 +1,7 @@
 // Bridge 2.5.18 (owner approved the payroll request on 22-Nov-2026; docs/PAYROLL.md section 4).
 package main
 
-// Bridge 2.5.18, proposed (next-payroll, docs/PAYROLL.md section 4, awaiting the owner's sign-off): FinComPayrollImport, the
+// Bridge 2.5.18 (next-payroll, docs/PAYROLL.md section 4, signed off by the owner on 22-Nov-2026): FinComPayrollImport, the
 // one new request: a month's salary posted as Tally's own payroll voucher, each employee with their pay-head allocations.
 // It is an Import Data request like every posting (the Vouchers report, the company, one TALLYMESSAGE), with its own id on
 // the allow-list so that it is held to its own exact shape and to nothing wider:
@@ -27,15 +27,17 @@ import (
 const (
 	payrollImportID     = "FinComPayrollImport"
 	payrollMaxEmployees = 100
+	payrollMaxPayHeads  = 50 // per employee (B2)
 	payrollView         = "PaySlip Voucher View"
 )
 
 var (
 	// the markers of a payroll voucher's body: an Import carrying any of them is this id's, never the plain Import's
-	rePayrollMarks = regexp.MustCompile(`<(EMPLOYEEENTRIES\.LIST|PAYHEADALLOCATIONS\.LIST|CATEGORYENTRY\.LIST)\b|OBJVIEW="` + payrollView + `"`)
+	// any letter case and spacing, either quote (review of 9b30a5702, B1): such a body is never the plain Import's
+	rePayrollMarks = regexp.MustCompile(`(?i)<\s*/?\s*(EMPLOYEEENTRIES\.LIST|PAYHEADALLOCATIONS\.LIST|CATEGORYENTRY\.LIST)\b|OBJVIEW\s*=\s*["']\s*PAYSLIP\s+VOUCHER\s+VIEW`)
 	prText         = `((?:[^<>&]|&(?:amp|lt|gt|quot|apos);)*)`
-	prAmt          = `(-?\d{1,13}\.\d{2})`
-	rePrOpen       = regexp.MustCompile(`^<VOUCHER VCHTYPE="((?:[^"<>&]|&(?:amp|lt|gt|quot|apos);)*)" ACTION="Create" OBJVIEW="` + payrollView + `"(?: REMOTEID="[^"<>&]*")?>\n`)
+	prAmt          = `(-?\d{1,10}\.\d{2})`                                                                                                               // at most 10 digits of rupees (B2: no sum can overflow)
+	rePrOpen       = regexp.MustCompile(`^<VOUCHER VCHTYPE="((?:[^"<>&]|&(?:amp|lt|gt|quot|apos);)*)" ACTION="Create" OBJVIEW="` + payrollView + `">\n`) // no REMOTEID (M1: Create only, never an existing object)
 	rePrHead       = regexp.MustCompile(`^<DATE>(\d{8})</DATE>\n<EFFECTIVEDATE>(\d{8})</EFFECTIVEDATE>\n<VOUCHERTYPENAME>` + prText + `</VOUCHERTYPENAME>\n<NARRATION>` + prText +
 		`</NARRATION>\n<PERSISTEDVIEW>` + payrollView + `</PERSISTEDVIEW>\n<CATEGORYENTRY\.LIST>\n<CATEGORY>` + prText + `</CATEGORY>\n`)
 	rePrEmp  = regexp.MustCompile(`^<EMPLOYEEENTRIES\.LIST>\n<EMPLOYEENAME>` + prText + `</EMPLOYEENAME>\n<AMOUNT>` + prAmt + `</AMOUNT>\n`)
@@ -110,16 +112,18 @@ func payrollVoucherShape(x string) string {
 		}
 		name, ea := e[1], prPaise(e[2])
 		s = s[len(e[0]):]
-		if strings.TrimSpace(name) == "" || seen[name] {
+		key := foldName(name)
+		if strings.TrimSpace(name) == "" || seen[key] {
 			return "an employee with no name, or twice"
 		}
-		seen[name] = true
+		seen[key] = true
 		n++
 		if n > payrollMaxEmployees {
 			return "more than " + strconv.Itoa(payrollMaxEmployees) + " employees in one voucher"
 		}
 		var sum int64
 		k := 0
+		heads := map[string]bool{}
 		for {
 			p := rePrPay.FindStringSubmatch(s)
 			if p == nil {
@@ -128,8 +132,16 @@ func payrollVoucherShape(x string) string {
 			a := prPaise(p[3])
 			s = s[len(p[0]):]
 			k++
+			if k > payrollMaxPayHeads {
+				return "more than " + strconv.Itoa(payrollMaxPayHeads) + " pay heads for one employee"
+			}
 			if strings.TrimSpace(p[1]) == "" || a == 0 || (p[2] == "Yes") != (a < 0) {
 				return "a pay head with no name, no amount, or the wrong sign"
+			}
+			if hk := foldName(p[1]); heads[hk] {
+				return "the same pay head twice for one employee"
+			} else {
+				heads[hk] = true
 			}
 			sum += a
 		}
@@ -138,6 +150,9 @@ func payrollVoucherShape(x string) string {
 		}
 		if sum != ea {
 			return "an employee's amount is not the sum of their pay heads"
+		}
+		if ea >= 0 {
+			return "an employee's net pay is not above zero"
 		}
 		end := rePrEnd.FindString(s)
 		if end == "" {

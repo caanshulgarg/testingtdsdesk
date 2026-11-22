@@ -106,10 +106,14 @@ On the client's new **Payroll** page (sidebar › Work › Payroll, `books:payro
   - `6-tally-payroll-needs-ok`.
 - Sizes (gzip 6): legacy.js 599,738 (unchanged); the first file 260,708; the new Payroll chunk 15,176 (lazy).
 
-## 4. FOR THE OWNER'S SIGN-OFF: the Tally payroll voucher request
+## 4. The Tally payroll voucher request (signed off by the owner on 22-Nov-2026)
 
-**Status: proposed, not built into the bridge.** bridge-go is unchanged on this branch. The proposed Go file is
-`docs/payroll-proposal/payrollimport.go.txt`. It is not compiled.
+**Status: built into the bridge for 2.5.18** (bridge-go/payrollimport.go). The owner approved this request directly on
+22-Nov-2026 ("Yes for tally payroll request"). Review fixes of 9b30a5702: payroll markers recognised in any letter case,
+quote or spacing and never accepted by the plain Import pin; at most 50 pay heads per employee and 10 digits of rupees
+per amount (no sum can overflow); no REMOTEID (Create only); an employee's name compared case-insensitively; a pay head
+once per employee; each employee's net above zero; a payroll voucher always posted in a request of its own. The
+2-second rule is still to be measured on ZZ BIG TEST at 100 employees before release; the app must not send REMOTEID.
 
 ### 4.1 The XML: one voucher, Create only, import only
 
@@ -217,6 +221,4 @@ is the only stop: this branch never sends one (no `Bridge.post` from the Payroll
   approved steps as the journal.
 - `payrollHold` then lets a Tally Payroll company's Approve post the voucher instead of the journal.
 
-This round does not build that wiring, on purpose. On 22-Nov-2026 the coordinator relayed an approval to build the bridge
-change and the posting now. This session's permission check refused the bridge-go allow-list edit, so the change is left
-here for the owner to confirm directly.
+The bridge side is built (section 4). The app wiring above is the next step.

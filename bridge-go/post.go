@@ -202,6 +202,16 @@ func planImports(masters, vouchers []M) []importReq {
 			a = a[k:]
 		}
 	}
+	// 2.5.18: a payroll voucher always goes alone (its own allow-list id holds exactly one voucher)
+	var plain []M
+	for _, v := range bills {
+		if rePayrollMarks.MatchString(str(v["xml"])) {
+			o = append(o, importReq{kind: "voucher", report: "Vouchers", items: []M{v}})
+		} else {
+			plain = append(plain, v)
+		}
+	}
+	bills = plain
 	chunk(bills, postBatchBills(), false)
 	chunk(bank, postBatchBank(), true)
 	return o
