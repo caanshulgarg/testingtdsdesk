@@ -199,7 +199,7 @@ export function gstMonths(E, months) {
     try {
       const t = E.GSTR.threeB(ym, reg), J = E.GSTF.journal(ym, reg);
       // a nil return for the late fee: no tax payable (Notification 19/2021-CT), whatever the credit (next-fix-audit-gst)
-      const nil = H.every((h) => P((t.net || {})[h]) <= 0 && P((t.rcmOut || {})[h]) <= 0);
+      const nil = nil3bOf(t);
       const it = rec.r3b ? E.GSTF.interest(ym, reg, t) : null, fee = rec.r3b ? E.GSTF.lateFee(ym, reg, "r3b", nil) : null;
       const pick = (o) => JSON.parse(JSON.stringify(o || {}));
       out.push({ reg, ym, filed: String(rec.r3b || "").replace(/-/g, ""), due: String(E.GSTF.due(ym, "r3b", reg) || "").replace(/-/g, ""), arn: rec.r3bArn || "", kept: !!rec.snap, snapPay: rec.snap ? pick(rec.snap.pay) : null,
@@ -212,6 +212,9 @@ export function gstMonths(E, months) {
   }
   return out;
 }
+// a nil GSTR-3B for the late fee: no tax payable (Notification 19/2021-CT) in 3.1(a), 3.1(b) (IGST and cess on exports
+// or SEZ supplies with payment, re-review) or 3.1(d), whatever the credit (as app/src/lib/gst3bNil.js)
+export const nil3bOf = (t) => H.every((h) => ["net", "zero", "rcmOut"].every((k) => P((t[k] || {})[h]) <= 0));
 // what a ledger of the set-off journal is: "out:cgst", "in:igst", "rcm:igst", "cash"
 function roleOfGst(map, l, cashL) {
   if (l === cashL) return "cash";

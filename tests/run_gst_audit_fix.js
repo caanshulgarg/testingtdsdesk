@@ -21,6 +21,16 @@
 //      outward supplies on reverse charge are exempt turnover for rule 42 (section 17(3))
 //   7. 3B late fee (low): a nil return is one with no tax payable (Notification 19/2021-CT), whatever the credit
 //   8. the GSTR-1 bills Excel carries cess: a Cess column, and the row Total over taxable, IGST, CGST, SGST and cess
+//   re-review (next-fix-audit-gst, second pass):
+//   1b. our credit notes rejected by the customer in IMS are added back in the class they came off (an SEZ unit's note
+//      to 3.1(b), an exempt supply's to 3.1(c)), not all to 3.1(a); the R3B bill breakdown the same
+//   1c. a negative 3.1(c) value (a credit note on an earlier month's exempt sale) and 3.1(b) IGST (not in FinCom's 6.1
+//      set-off) are shown as "Needs you" (r3bNeeds)
+//   3b. GSTR-9 heldEnd leaves out credit 2B says is not available (held for good, not "held back for 2B")
+//   4b. GSTR-9 QRMP: the quarter's 3B kept as filed counts when the quarter's last month is not in the books
+//   6b. D2: not answered, but a 3B already filed reversed D2: it stays on until the CA says
+//   7b. nil 3B: 3.1(b) IGST payable (an export with payment) is tax payable: not nil
+//   9. PMT-06 (self-assessment): the quarter's second month starts from what the first month left of the credit
 "use strict";
 const fs = require("fs"), path = require("path"), vm = require("vm");
 process.env.TZ = process.env.TZ || "Asia/Kolkata";
@@ -84,6 +94,30 @@ console.log("== 1. 3.1: a credit note comes off its own class");
   ok(["cn", "zero", "nil"].every((q) => ["taxable", "igst", "cgst", "sgst"].every((h) => near(((sums["3B." + q]) || {})[h] || 0, P[q][h]))), "the shares of 3B.cn, 3B.zero and 3B.nil summed are sec31's (" + JSON.stringify(sums["3B.zero"]) + ")");
 }
 
+// ---------------------------------------------------------------- 1b. customer IMS: rejected notes added back in their class
+console.log("== 1b. our credit notes rejected by the customer in IMS go back in their own class");
+let T1B = null, B1B = null;
+{
+  const SZ = "07AABCS3333C1Z3", EC = "07AABCE4444D1Z4";
+  const vs = [out("Sales", "20251003", "Z/1", "Sunrise SEZ Unit", SZ, 100000, {}, {regType: "SEZ"}),
+    out("Credit Note", "20251010", "ZC/1", "Sunrise SEZ Unit", SZ, 10000, {}, {regType: "SEZ"}),
+    out("Sales", "20251004", "Z/2", "Sunrise SEZ Unit", SZ, 20000, {igst: 3600}, {regType: "SEZ"}),
+    out("Credit Note", "20251011", "ZC/2", "Sunrise SEZ Unit", SZ, 10000, {igst: 1800}, {regType: "SEZ"}),
+    out("Sales", "20251005", "X/2", "Harbour Exempt Clinic", EC, 30000, {}, {taxability: "Exempt"}),
+    out("Credit Note", "20251012", "XC/2", "Harbour Exempt Clinic", EC, 5000, {}, {taxability: "Exempt"}),
+    out("Sales", "20251006", "S/2", "Walk-in Customers", "", 50000, {cgst: 4500, sgst: 4500})];
+  books(vs);
+  const t0 = T("202510");
+  ok(near(t0.net.taxable, 50000) && near(t0.zero.taxable, 100000) && near(t0.zero.igst, 1800) && near(t0.nil.taxable, 25000), "before any rejection: 3.1(a) 50,000, 3.1(b) 1,00,000 (IGST 1,800), 3.1(c) 25,000 (" + t0.net.taxable + ", " + t0.zero.taxable + "/" + t0.zero.igst + ", " + t0.nil.taxable + ")");
+  const st = x.CustIMS.store(reg), docs = x.CustIMS.docs(reg);
+  ["ZC/1", "ZC/2", "XC/2"].forEach((no) => { const r = docs.find((d) => d.no === no); if (r) st[r.id] = {kind: "cn", no, date: r.date, party: r.party, gstin: r.gstin, rejYm: "202510", addYm: "202510", act: "rejected", remark: "", doneYm: "", at: "2025-10-25"}; });
+  const t = T("202510"); T1B = t; B1B = {vs, outRej: JSON.parse(JSON.stringify(ctx.S.books.outRej))};
+  ok(t.custRej.add.n === 3, "the three notes are rejected by the customers (" + t.custRej.add.n + ")");
+  ok(near(t.net.taxable, 50000) && near(t.net.igst, 0) && near(t.net.cgst, 4500), "3.1(a) stays 50,000, IGST 0, CGST 4,500: none of the notes was on a taxable supply (" + t.net.taxable + ", " + f(t.net) + ")");
+  ok(near(t.zero.taxable, 120000) && near(t.zero.igst, 3600), "3.1(b) 1,20,000, IGST 3,600: the SEZ unit's two notes added back there (" + t.zero.taxable + ", " + t.zero.igst + ")");
+  ok(near(t.nil.taxable, 30000), "3.1(c) 30,000: the exempt supply's note added back there (" + t.nil.taxable + ")");
+}
+
 // ---------------------------------------------------------------- 2. negative liability carried
 let NOV = null;
 console.log("== 2. a negative head is carried to the next month (Negative Liability Statement)");
@@ -124,6 +158,9 @@ console.log("== 3. a matched bill 2B marks ITC not available is not claimed");
   ok(G.threeBm.itcFinal === true, "GSTR.threeBm is wrapped by the Final credit for 3B");
   base(); const n2 = T("202511"), d2 = T("202512");
   ok(near(n2.other.igst, 900) && near(d2.other.igst, 900) && near(d2.netItc.igst, 900), "with the Final credit for 3B: November 900, December 900 (" + n2.other.igst + ", " + d2.other.igst + ")");
+  // (re-review) GSTR-9's "held back for 2B at the year's end" leaves out what 2B says is not available (held for good)
+  ok(near((d2.held || {}).na || 0, 18900), "the Final credit's held back carries the 18,900 not available apart (" + JSON.stringify(d2.held && d2.held.na) + ")");
+  ok(near(x.GST9.build("2025", reg).heldEnd, 0), "GSTR-9 heldEnd 0: P/77 and P/79 are not available, not waiting for 2B (" + x.GST9.build("2025", reg).heldEnd + ")");
 }
 
 // ---------------------------------------------------------------- 4. GSTR-9 of a QRMP client
@@ -140,6 +177,12 @@ console.log("== 4. GSTR-9 for a QRMP quarter kept as filed");
   ok(near(d1.T["6A"].cgst, 1200), "June's 3B kept as filed (the quarter): 6A CGST 1,200 (" + d1.T["6A"].cgst + ")");
   ok(near(d1.pay.cgst.due, 3000) && near(d1.T["4A"].cgst, 3000), "table 9 CGST 3,000 (" + d1.pay.cgst.due + ")");
   ok(near(d1.pay.cgst.cash + d1.pay.cgst.itc, 3000), "table 9 CGST paid: credit and cash add up to 3,000 (" + d1.pay.cgst.cash + " + " + d1.pay.cgst.itc + ")");
+  // (re-review) the books now run only to May: the quarter's 3B kept as filed still counts, once
+  const keep = {gstFiled: ctx.S.books.gstFiled, gstSet: ctx.S.books.gstSet};
+  books(vs.filter((v) => v.date < "20250601")); Object.assign(ctx.S.books, JSON.parse(JSON.stringify(keep)));
+  const d2 = x.GST9.build("2025", reg);
+  ok(d2.inBooks.join(",") === "202504,202505", "the books: April and May (" + d2.inBooks.join(",") + ")");
+  ok(near(d2.T["6A"].cgst, 1200) && near(d2.pay.cgst.due, 3000), "June (not in the books) kept as filed: 6A CGST 1,200, table 9 CGST 3,000 (" + d2.T["6A"].cgst + ", " + d2.pay.cgst.due + ")");
 }
 
 // ---------------------------------------------------------------- 5. GSTR-9: notes on supplies with no tax
@@ -167,6 +210,11 @@ console.log("== 6. rule 42: D2 off unless answered; outward reverse charge is ex
   ok(x.GSTRev.settings().d2 === true, "answered yes: D2 applies");
   ok(x.GSTRev.toPart({cls: "taxable", rcm: true}) === "E", "an outward supply on reverse charge is exempt turnover for rule 42 (section 17(3))");
   ok(x.GSTRev.toPart({cls: "taxable"}) === "T", "a taxable supply stays taxable turnover");
+  // (re-review) not answered, but a 3B already filed reversed D2: it stays on until the CA says (no silent change)
+  ctx.S.books.rev = {}; ctx.S.books.gstFiled = {[reg]: {"202506": {r3b: "2025-07-20", snap: {r42: {D2: {igst: 0, cgst: 50, sgst: 50, cess: 0}}}}}};
+  ok(x.GSTRev.settings().d2 === true && x.GSTRev.d2Filed() === true, "not answered, a filed 3B reversed D2: D2 stays on");
+  ctx.S.books.rev = {d2: false};
+  ok(x.GSTRev.settings().d2 === false, "answered no: D2 off, whatever was filed");
 }
 
 (async () => {
@@ -181,6 +229,33 @@ console.log("== 6. rule 42: D2 off unless answered; outward reverse charge is ex
   ok(nil3b({net: Object.assign(z(), {cgst: 10}), rcmOut: z()}) === false, "CGST 10 payable: not nil");
   ok(nil3b({net: z(), rcmOut: Object.assign(z(), {igst: 18})}) === false, "reverse charge IGST 18 payable: not nil");
   ok(nil3b({net: Object.assign(z(), {cgst: -2700}), rcmOut: z()}) === true, "a negative head is no tax payable: nil");
+  ok(nil3b({net: z(), rcmOut: z(), zero: Object.assign(z(), {taxable: 100000, igst: 18000}), other: Object.assign(z(), {igst: 20000})}) === false, "an export with IGST 18,000 (3.1(b)) is tax payable: not nil");
+  ok(DJ.nil3bOf({net: z(), rcmOut: z(), zero: Object.assign(z(), {igst: 18000})}) === false && DJ.nil3bOf({net: z(), rcmOut: z(), zero: z()}) === true, "the daily check's nil test the same");
+  // ---------------------------------------------------------------- 1b (portal) / 1c. the R3B bill breakdown, and what needs the CA
+  console.log("== 1b. the R3B bill breakdown: each class its own rejected notes");
+  globalThis.GSTR = G; globalThis.num = x.num; globalThis.r2 = x.r2; globalThis.GST2B = x.GST2B; globalThis.GSTAmend = x.GSTAmend; globalThis.STATE_CODES = x.STATE_CODES; globalThis.S = ctx.S;
+  const {r3bBills} = await import(path.join(__dirname, "..", "app", "src", "screens", "gst", "portal.js"));
+  { const t = T1B, lab = /rejected by customers/i; books(B1B.vs); Object.assign(ctx.S.books, {outRej: B1B.outRej});
+    const a = r3bBills("3.1a", "202510", reg, t), b = r3bBills("3.1b", "202510", reg, t), c = r3bBills("3.1c", "202510", reg, t);
+    const aj = (q) => q.adj.filter((y) => lab.test(y.label));
+    ok(!aj(a).length, "3.1(a): no rejected notes added (" + JSON.stringify(aj(a)) + ")");
+    ok(aj(b).length === 1 && near(aj(b)[0].taxable, 20000) && near(aj(b)[0].igst, 1800), "3.1(b): the SEZ unit's notes, 20,000 and IGST 1,800 (" + JSON.stringify(aj(b)) + ")");
+    ok(aj(c).length === 1 && near(aj(c)[0].taxable, 5000), "3.1(c): the exempt supply's note, 5,000 (" + JSON.stringify(aj(c)) + ")");
+    ok([a, b, c].every((q) => !q.off.length), "each figure is its bills and adjustments (" + [a, b, c].map((q) => JSON.stringify(q.off)).join(" ") + ")"); }
+  // (CustIMS.letter and .customers moved out of the engine to app/src/lib/custImsLetter.js, put on CustIMS by CustIms.jsx)
+  { ["GSTAmend", "GSTSet", "CustIMS", "INR"].forEach((q) => { globalThis[q] = x[q]; }); globalThis.CO = ctx.CO;
+    (await import(path.join(__dirname, "..", "app", "src", "lib", "custImsLetter.js"))).installCustIms();
+    const cs = x.CustIMS.customers(reg), c = cs.find((q) => q.party === "Sunrise SEZ Unit"), L = c ? x.CustIMS.letter(reg, c.gstin, c.party, c.items) : "";
+    ok(cs.length === 2 && c && c.items.length === 2 && /rejected in your Invoice Management System/.test(L) && L.includes("ZC/1") && L.includes("ZC/2"), "the letter to the SEZ unit names its two credit notes (" + cs.map((q) => q.party + ":" + q.items.length).join(", ") + ")"); }
+  console.log("== 1c. what the CA decides: a negative 3.1(c), and 3.1(b) IGST outside the set-off");
+  const {r3bNeeds} = await import(path.join(__dirname, "..", "app", "src", "lib", "gst3bNil.js"));
+  { books([out("Sales", "20250910", "X/61", "Harbour Exempt Clinic", "", 20000, {}, {taxability: "Exempt"}), out("Credit Note", "20251008", "CN/61", "Harbour Exempt Clinic", "", 5000, {}, {taxability: "Exempt"}),
+      out("Sales", "20251012", "E/61", "Kelpie Trading GmbH", "", 40000, {igst: 7200}, {country: "Germany"})]);
+    const t = T("202510"), w = r3bNeeds(t);
+    ok(near(t.nil.taxable, -5000), "3.1(c) is -5,000 (" + t.nil.taxable + ")");
+    ok(w.some((m) => /3\.1\(c\)/.test(m) && /negative/i.test(m)), "Needs you: 3.1(c) is negative (" + JSON.stringify(w) + ")");
+    ok(w.some((m) => /3\.1\(b\)/.test(m) && /7,200|7200/.test(m) && /6\.1/.test(m)), "Needs you: 3.1(b) IGST 7,200 is not in FinCom's 6.1 set-off");
+    ok(!r3bNeeds(NOV).length, "November of test 2: nothing to say"); }
 
   // ---------------------------------------------------------------- 8. the GSTR-1 bills Excel
   console.log("== 8. the GSTR-1 bills Excel carries cess");
@@ -196,5 +271,14 @@ console.log("== 6. rule 42: D2 off unless answered; outward reverse charge is ex
   ok(ws[col(ci) + "2"] && near(ws[col(ci) + "2"].v, 15000) && near(ws[col(ci) + "3"].v, 7500), "the bill's cess 15,000 and the summary line's 7,500 are there");
   ok(ws[col(ti) + "2"] && near(ws[col(ti) + "2"].v, 143000) && /SUM\(I2:M2\)/.test(ws[col(ti) + "2"].f), "the bill's Total 1,43,000 = SUM(I2:M2), as the screen's (" + JSON.stringify(ws[col(ti) + "2"]) + ")");
   ok(near(ws[col(ti) + "4"].v, 214500) && near(ws[col(ci) + "4"].v, 22500), "the totals row: Total 2,14,500, cess 22,500 (" + (ws[col(ti) + "4"] || {}).v + ")");
+  // ---------------------------------------------------------------- 9. PMT-06, self-assessment
+  console.log("== 9. PMT-06 (self-assessment): the second month starts from what the first left");
+  { books([out("Sales", "20250410", "Q/91", "Walk-in Customers", "", 10000, {cgst: 800, sgst: 800}), out("Sales", "20250512", "Q/92", "Walk-in Customers", "", 10000, {cgst: 800, sgst: 800}),
+      out("Sales", "20250612", "Q/93", "Walk-in Customers", "", 1000, {cgst: 90, sgst: 90})]);
+    ctx.S.books.gstOpen = {[reg]: {igst: 0, cgst: 1000, sgst: 1000, cess: 0}};
+    x.GSTSet.store(reg).filing = [{type: "qrmp", from: "202504"}]; x.GSTSet.store(reg).pmt = "self"; G._carry = null;
+    const p1 = x.GSTQ.pmt06("202504", reg), p2 = x.GSTQ.pmt06("202505", reg);
+    ok(near(p1.amt.cgst, 0), "April: 800 of tax, 1,000 of credit: nothing to deposit (" + p1.amt.cgst + ")");
+    ok(near(p2.amt.cgst, 600) && near(p2.amt.sgst, 600), "May: 800 of tax, 200 of credit left: 600 each (" + f(p2.amt) + ")"); }
   console.log("\n" + (fails ? fails + " FAILED" : "all passed")); process.exit(fails ? 1 : 0);
 })().catch((e) => { console.error(e); process.exit(2); });

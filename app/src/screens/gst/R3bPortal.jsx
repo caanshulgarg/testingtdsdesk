@@ -8,6 +8,7 @@
 import { useState } from "react";
 import CommitBox from "../../parts/CommitBox.jsx";
 import { r3bTables, r3bBills, R3B_CLICK } from "./portal.js";
+import { r3bNeeds } from "../../lib/gst3bNil.js";
 import { Pop } from "./ItcParts.jsx";
 import FigureDetail, { FIG_LABEL } from "./ItcFigure.jsx";
 
@@ -78,7 +79,9 @@ export default function R3bPortal({ b, t, cloud }) {
   const close = () => { S.r3bOpen = ""; render(); };
   const openTb = open && tables.find((tb) => tb.rows.some((r) => r.id === open)), openRow = openTb && openTb.rows.find((r) => r.id === open);
   const is4 = /^4/.test(open), is61 = /^6\.1[AB]\|/.test(open);
+  const needs = r3bNeeds(t);
   return <div data-r3b-portal="">
+    {needs.map((m, i) => <p key={i} className="note" data-r3b-needs={i} style={{ color: "var(--warn)" }}><b>Needs you:</b> {m}</p>)}
     {tables.map((tb) => {
       return <section key={tb.id} className="r3b-t" data-r3b-table={tb.id}>
         <div className="bk-tablewrap"><table className="bk-table tg-fit gf-off" data-statement="">

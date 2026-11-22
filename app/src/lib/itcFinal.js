@@ -301,7 +301,7 @@ function apply(t, ym, reg) {
   if (!anyAdj && !hasDec && !has2b) return Object.assign(t, { itcBase: base, itcBaseIsd: baseI, itcAdj: A });
   const mo = has2b || hasDec ? month(reg, ym) : { cats: { held: [], excess: [], released: [], from2b: [], cn2b: [], rejBack: [] }, effect: z(), rows: [], rev: z(), revList: [] };
   const c0 = mo.cats, sp = (i) => { const o = {}; Object.keys(c0).forEach((k) => { o[k] = c0[k].filter((x) => isdRow(x.r, iT) === i); }); return o; }, iT = isdTest(), c = sp(false), cI = sp(true);
-  const held = sumCat(c0.held.concat(c0.excess)), released = sumCat(c0.released.concat(c0.from2b)), cn2b = sumCat(c0.cn2b), rejBack = sumCat(c0.rejBack);
+  const held = Object.assign(sumCat(c0.held.concat(c0.excess)), { na: R(c0.held.filter((x) => x.r.na).reduce((s, x) => s + tot(x.amt), 0)) }), released = sumCat(c0.released.concat(c0.from2b)), cn2b = sumCat(c0.cn2b), rejBack = sumCat(c0.rejBack);
   const hI = sumCat(cI.held.concat(cI.excess)), rI = sumCat(cI.released.concat(cI.from2b)), nI = sumCat(cI.cn2b), bI = sumCat(cI.rejBack);
   const other = Object.assign({}, t.other), isd = Object.assign({}, g(t.isd)), isdAdj = z();
   // (as GSTR.threeBm: 2B's decisions never take 4(A)(4) below nothing; the rest stays in 4(A)(5))
@@ -396,7 +396,7 @@ export const ITCF = {
       months: this.months(M).map((m) => [m, lab(m)]), decs: DECS, lines: LINES,
       rows: lines.map((r) => ({ key: r.key, chip: r.chip, status: (CHIPS.find((c) => c[0] === r.chip) || [])[1] || "", kind: r.fixed ? "fixed" : r.kind, party: r.party || "", gstin: r.gstin || "",
         no: r.no || "", bookNo: r.bookNo || "", date: r.date || "", bm: lab(r.bm), tm: lab(r.tm), bTax: g(r.bTax), pTax: g(r.pTax), dec: r.show.code ? DEC_LABEL[r.show.code] : "", takeIn: lab(r.show.ym), note: (r.s && r.s.note) || "",
-        def: lab(r.def), booksM: g((r.booksBy || {})[M]), lower: g(r.lower), full: g(r.full), later: g(r.laterAmt), defAmt: g(r.defAmt), fixed: r.fixed || "", allow: r.allow,
+        def: lab(r.def), booksM: g((r.booksBy || {})[M]), lower: g(r.lower), full: g(r.full), later: g(r.laterAmt), defAmt: g(r.defAmt), fixed: r.fixed || "", na: r.na || "", allow: r.allow,
         eff: g(r.eff), line: isdRow(r, iT) ? "4A4" : "4A5", elig: r.fixed ? "" : ELIG_LABEL[r.el] || "", defE: r.fixed ? "" : ELIG_LABEL[r.defE] || "Eligible", def2: lab(r.def2), blkM: g((r.blkBy || {})[M]), rev: g(r.rev) })),
       base: { "4A5": base, reclaim, "4A4": g(t.itcBaseIsd || t.isd), "4A1": sansAdj(t.impGoods, "4A1"), "4A2": sansAdj(t.impServ, "4A2"), "4A3": sansAdj(t.rcmIn, "4A3"), "4B1": sub(sansAdj(t.rev1, "4B1"), g((t.itcRev || {}))), "4B2": sansAdj(t.rev2, "4B2"), "4D2": sansAdj(t.na, "4D2") },
       adj: Adj.list(reg, M).map((a) => ({ id: a.id, line: a.line, head: a.head, amt: a.amt, reason: a.reason })),

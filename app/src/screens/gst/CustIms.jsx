@@ -5,6 +5,8 @@
 // State: S.custImsQ (the number being looked for).
 import CommitBox from "../../parts/CommitBox.jsx";
 import ListTable from "../../parts/ListTable.jsx";
+import { installCustIms } from "../../lib/custImsLetter.js";
+installCustIms();   // CustIMS.letter and CustIMS.customers (moved out of the engine)
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
 const day = (d) => fmtDate(tallyDate(d));

@@ -16,7 +16,9 @@ const GST9 = {
       // next-fix-audit-gst: a QRMP quarter whose 3B is kept as filed is that one 3B (the three months'): at the quarter's end,
       // its first two months nothing (else they were counted twice); otherwise each month's own, the quarter's payment at its end
       if (typeof GSTSet === "object" && GSTSet.typeOf(m, reg) === "qrmp"){ const qe = GSTSet.qEnd(m), fq = typeof GSTF === "object" && GSTF.filed3b(qe, reg);
-        if (fq && fq.quarter) t3[m] = m === qe ? fq : {net: {}, rcmOut: {}, pay: {cash: {}, use: {}}};
+        // (re-review: the quarter's last month in the books carries it, when the quarter's end is not in the books)
+        const qLast = inBooks.filter(x => GSTSet.qEnd(x) === qe).pop();
+        if (fq && fq.quarter) t3[m] = m === qLast ? fq : {net: {}, rcmOut: {}, pay: {cash: {}, use: {}}};
         else { const q = GSTSet.isQEnd(m) ? GSTR.threeB(m, reg).pay : {cash: {}, use: {}}; t3[m] = Object.assign({}, t3[m], {pay: q}); } } });
     const S1 = f => this.sumRows(out.filter(f));
     const taxable = r => r.cls === "taxable" && !r.rcm;
@@ -112,7 +114,8 @@ const GST9 = {
     const hin = {};
     GSTR.partsOf(inn).forEach(q => { const r = q.row, k = (q.hsn || "no HSN") + "|" + q.rate, x = hin[k] = hin[k] || {hsn: q.hsn || "", rate: q.rate, taxable: 0, igst: 0, cgst: 0, sgst: 0, cess: 0}; ["taxable", "igst", "cgst", "sgst", "cess"].forEach(f => { x[f] = r2(x[f] + num(q[f]) * sgn(r)); }); });
     // credit held back for 2B at the year's end explains a 6J difference
-    const heldEnd = inBooks.reduce((a, m) => { const x = t3[m]; return x.held ? r2(a + x.held.igst + x.held.cgst + x.held.sgst + x.held.cess - x.released.igst - x.released.cgst - x.released.sgst - x.released.cess) : a; }, 0);
+    // (re-review: less what 2B says is not available, held.na: held for good, not waiting for 2B)
+    const heldEnd = inBooks.reduce((a, m) => { const x = t3[m]; return x.held ? r2(a + x.held.igst + x.held.cgst + x.held.sgst + x.held.cess - num(x.held.na) - x.released.igst - x.released.cgst - x.released.sgst - x.released.cess) : a; }, 0);
     return {fy, reg, months, inBooks, missing: months.filter(m => !have.has(m)), T, pay, twoB, part6, heldEnd, typed: ty,
       hsnOut: Object.values(hsn).sort((a, c) => c.taxable - a.taxable), hsnIn: Object.values(hin).sort((a, c) => c.taxable - a.taxable)};
   },

@@ -14,7 +14,7 @@ const z = () => ({ igst: 0, cgst: 0, sgst: 0, cess: 0 });
 export const FIG_LABEL = { "4A1": "4(A)(1) Import of goods", "4A2": "4(A)(2) Import of services", "4A3": "4(A)(3) Inward supplies on reverse charge", "4A4": "4(A)(4) Inward supplies from ISD", "4A5": "4(A)(5) All other ITC", "4A": "4(A) Total ITC available",
   "4B1": "4(B)(1) Reversed: rules 38, 42, 43 and section 17(5)", "4B2": "4(B)(2) Reversed: others", "4C": "4(C) Net ITC available", "4D1": "4(D)(1) ITC reclaimed, reversed under 4(B)(2) earlier", "4D2": "4(D)(2) Ineligible ITC: section 16(4) and place of supply" };
 
-const why = (r) => { const s = r.show || {}; return (s.code ? ITCF.DEC_LABEL[s.code] + (s.code === "later" && s.ym ? " · " + GSTR.label(s.ym) : "") : r.fixed || "") + (r.e && r.e.auto ? " (FinCom's rule)" : ""); };
+const why = (r) => { const s = r.show || {}; return r.na ? r.na : (s.code ? ITCF.DEC_LABEL[s.code] + (s.code === "later" && s.ym ? " · " + GSTR.label(s.ym) : "") : r.fixed || "") + (r.e && r.e.auto ? " (FinCom's rule)" : ""); };
 const fromRows = (list) => (list || []).map((r) => ({ key: r.key, party: r.party, gstin: r.gstin, no: r.no || r.bookNo, date: r.date, amt: r.amt, why: why(r) }));
 const fromBills = (bills) => bills.map((b) => ({ key: b.id || b.key, party: b.party, gstin: b.gstin, no: b.no, date: b.date, why: b.voucher ? "vch " + b.voucher : b.from2b ? "2B" : "", amt: H.reduce((o, k) => { o[k] = r2(num(b[k]) * (b.sg || 1)); return o; }, {}) }));
 const adjLines = (reg, M, k) => (ITCAdj.list(reg, M).filter((a) => a.line === k)).map((a) => ({ key: a.id, party: "Adjustment", gstin: a.by || "", no: a.reason, date: "", why: "added in FinCom", amt: Object.assign(z(), { [a.head]: a.amt }) }));
