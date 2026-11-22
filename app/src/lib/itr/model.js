@@ -2,7 +2,7 @@
 // files brought in (imports.js) and the owner's answers (b.itr "<ay>|state"). Pure. Every figure says where it came
 // from; what is not known stays empty and the checks say so.
 import { FORM_OF } from "./law.js";
-import { pf36va } from "./books.js";
+import { pf36va, settle36va, settle43B, settleMsme, adjustments } from "./books.js";
 
 const N = (v) => +v || 0;
 const R = (v) => { const x = N(v), r = Math.round(Math.abs(x) + 1e-9) * Math.sign(x); return r === 0 ? 0 : r; };
@@ -41,11 +41,17 @@ export function buildModel(c) {
   } else if (bk) {
     const adj = bk.adj, edits = st.adjEdits || {};
     const keep = (a) => (edits[a.key] && edits[a.key].v != null ? Object.assign({}, a, { amt: N(edits[a.key].v), why: edits[a.key].why, edited: true }) : a);
-    M.business = { itBlocks: (bk.f && bk.f.itBlocks) || [], pbt: bk.sched.totals.pbt, pbtSrc: "Part A-P&L (the books)", adds: adj.adds.filter((a) => a.key !== "36va").map(keep).filter((a) => R(a.amt)), less: adj.less.map(keep).filter((a) => R(a.amt)), itDep: adj.itDep };
-    // 36(1)(va) from the files brought in, as they are now (a challan added or removed changes it at once)
-    const late = pf36va(im.ecr, im.pfc, im.esi).filter((x) => x.late);
-    if (late.length) M.business.adds.push(keep({ key: "36va", label: "employees' PF / ESI contributions paid after their due dates (section 36(1)(va))", amt: R(late.reduce((t, x) => t + N(x.ee), 0)), bp: "AmtDebPLDisallowUs36", src: "ECR and challans brought in",
-      trace: late.map((x) => ({ ledger: x.fund + " " + x.ym.slice(4, 6) + "-" + x.ym.slice(0, 4), group: "due " + x.due + ", paid " + x.paidOn, amt: R(x.ee) })) }));
+    // 43B, 43B(h), 36(1)(va) and the earlier years' 43B are worked out here, from the books' items and the owner's answers
+    // (a payment date given on Checks changes the computation at once)
+    const OWN = new Set(["43b", "43bh", "36va"]);
+    M.business = { itBlocks: (bk.f && bk.f.itBlocks) || [], pbt: bk.sched.totals.pbt, pbtSrc: "Part A-P&L (the books)", adds: adj.adds.filter((a) => !OWN.has(a.key)).map(keep).filter((a) => R(a.amt)), less: adj.less.filter((a) => a.key !== "43b_prior").map(keep).filter((a) => R(a.amt)), itDep: adj.itDep };
+    const ans = st.paidOn || {};
+    M.dues43B = settle43B(bk.dues43B || [], ans, c.due || "20260831");
+    M.msme = settleMsme(bk.msme || null, ans);
+    M.prior43B = prior43B(bk, st, c.prevState);
+    const own = adjustments({ dues43B: M.dues43B, msmeRows: M.msme ? M.msme.rows : [], pf36va: settle36va(pf36va(im.ecr, im.pfc, im.esi), ans), prior43BPaid: M.prior43B.amt, prior43BSrc: M.prior43B.src, prior43BTrace: M.prior43B.trace });
+    own.adds.forEach((a) => M.business.adds.push(keep(a))); own.less.forEach((a) => M.business.less.push(keep(a)));
+    M.business.adds = M.business.adds.filter((a) => R(a.amt)); M.business.less = M.business.less.filter((a) => R(a.amt));
     (st.extraAdj || []).forEach((a) => (a.sign < 0 ? M.business.less : M.business.adds).push({ key: "own:" + a.id, label: a.label, amt: N(a.amt), bp: a.bp || (a.sign < 0 ? "AnyOthAmtAllDeduct" : "OthItemDisallowUs28To44DA"), src: "entered by " + (a.by || "the owner") + ": " + (a.why || ""), trace: [] }));
     M.turnover = bk.sched.totals.revenue;
     M.bookProfit = entity === "C" ? (st.bookProfit != null && st.bookProfit !== "" ? N(st.bookProfit) : bk.sched.totals.pat + bk.sched.pl.taxCurrent.cy + bk.sched.pl.taxDeferred.cy) : undefined;
@@ -65,14 +71,14 @@ export function buildModel(c) {
   const as26 = im.as26 && im.as26.data;
   M.paid = { tds: [], tcs: [], advance: [], selfAssessment: [] };
   if (as26) {
-    // only lines TRACES shows as finally booked (status F) are claimed; U and P are asked (verify.js)
-    M.paid.tds = as26.tds.filter((r) => !r.status || r.status === "F").map((r) => ({ tan: r.tan, name: r.name, sec: r.sec, gross: r.amount, amt: r.tax, date: r.date, head: headOf(r.sec, M) }));
+    // only lines TRACES shows as finally booked (status F) are claimed; U, P, O and a status not read are asked (verify.js)
+    M.paid.tds = as26.tds.filter((r) => String(r.status || "").toUpperCase() === "F").map((r) => ({ tan: r.tan, name: r.name, sec: r.sec, gross: r.amount, amt: r.tax, date: r.date, head: headOf(r.sec, M) }));
     M.paid.tcs = as26.tcs.map((r) => ({ tan: r.tan, name: r.name, sec: r.sec, gross: r.amount, amt: r.tax }));
     as26.paid.forEach((p) => { const x = { bsr: p.bsr, date: p.date, serial: p.serial, amt: p.amount }; if (p.kind === "advance") M.paid.advance.push(x); else if (p.kind === "self") M.paid.selfAssessment.push(x); });
     M.tdsSrc = "Form 26AS (the books' TDS receivable is checked against it)"; M.advSrc = "Form 26AS challans";
   }
   (st.saPaid || []).forEach((p) => { if (!M.paid.selfAssessment.some((x) => x.bsr === p.bsr && x.date === p.date && String(x.serial) === String(p.serial))) M.paid.selfAssessment.push({ bsr: p.bsr, date: p.date, serial: p.serial, amt: N(p.amt), src: "entered" }); });
-  M.pf36va = pf36va(im.ecr, im.pfc, im.esi);
+  M.pf36va = settle36va(pf36va(im.ecr, im.pfc, im.esi), st.paidOn);
   // the books' own figures to check the return's against
   // the tax ledgers of the books at 31-03-2026 (Balances with revenue authorities, by name): TDS, TCS, advance tax
   if (bk) {
@@ -82,6 +88,28 @@ export function buildModel(c) {
     M.books = { tds: tdsL.length ? tot(tdsL) : null, tdsLedgers: tdsL, tcs: tcsL.length ? tot(tcsL) : null, tcsLedgers: tcsL, adv: advL.length ? tot(advL) : null, advLedgers: advL, sa: saL.length ? tot(saL) : null };
   }
   return M;
+}
+
+// earlier years' 43B (and 43B(h)) dues paid this year, allowed now (AmtDisallUs43BNowAllow): from last year's return
+// made in FinCom (its version keeps what 43B added back, by ledger), else the owner's figure; with dues payable at the
+// start of the year and no figure, it is asked (the JSON waits). Payments in the year settle the opening balance oldest
+// first: a ledger's part allowed last year (paid by last year's due date) first, then last year's add-back.
+// -> {amt, src, trace, ask (true: to be answered), rows}
+export function prior43B(bk, st, prev) {
+  const rows = (bk && bk.prior43B) || [], ms = bk && bk.msme, msPrior = ms ? (ms.priorParties || []).length > 0 || (ms.prior || []).length > 0 : false;
+  const vs = (prev && prev.versions) || [], last = vs.length ? vs[vs.length - 1] : null;
+  if (last && Array.isArray(last.dis43B)) {
+    const trace = [];
+    let amt = 0;
+    last.dis43B.forEach((d) => {
+      const r = rows.find((x) => x.ledger === d.ledger), dl = N(d.amt);
+      const u = r ? Math.min(dl, Math.max(0, r.paidInYear - Math.max(0, r.opening - dl))) : 0;
+      amt += u; trace.push({ ledger: d.ledger, group: "added back last year " + R(dl) + (r ? ", paid in the year " + R(r.paidInYear) : ", ledger not in the books"), amt: R(u) });
+    });
+    return { amt: R(amt), src: "last year's return made in FinCom (v" + last.v + "), paid in FY 2025-26", trace, ask: false, rows };
+  }
+  if (st.prior43BPaid != null && st.prior43BPaid !== "") return { amt: R(st.prior43BPaid), src: "entered by the owner: earlier years' 43B paid in FY 2025-26", trace: [], ask: false, rows, entered: true };
+  return { amt: 0, src: "", trace: [], ask: rows.some((r) => r.paidInYear > 0) || msPrior, rows };
 }
 
 // the details the JSON needs about the person: the client record, the pre-filled data, then the owner's own entries

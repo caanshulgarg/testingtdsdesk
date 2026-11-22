@@ -101,3 +101,8 @@
   .itr .itr-file-main { flex-wrap: wrap; } .itr .itr-file-r { margin-left: 18px; text-align: left; flex-basis: 100%; }
   .itr table.itr-comp { font-size: 13px; } .itr table.itr-comp td.n { width: 110px; }
 }
+
+.itr-answers { display: grid; gap: 6px; margin: 8px 0; }
+.itr-answer { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.itr-answer-l { flex: 1 1 220px; min-width: 0; display: flex; gap: 8px; justify-content: space-between; }
+.itr-answer input[type=date] { max-width: 160px; }

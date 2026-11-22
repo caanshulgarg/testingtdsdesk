@@ -17,7 +17,7 @@ export function makeJson(X) {
   const res = asks.length || errors.length ? { ok: false, errors: [] } : T.check(doc);
   if (!doc.ITR || !doc.ITR[root]) res.ok = false;
   // a schedule with figures FinCom does not map: the JSON is blocked (verify.js shows each, never accepted)
-  return { doc, asks, mapErrors: errors, schema: res, root, coverage: coverage(X) };
+  return { doc, asks, mapErrors: errors, schema: res, root, coverage: coverage(X, sparse) };
 }
 // the file the owner downloads: the return JSON exactly as the schema has it (Winman imports the ITR JSON as is). The
 // version and the checks go in a second file beside it (a key the schema does not have would make the JSON invalid)

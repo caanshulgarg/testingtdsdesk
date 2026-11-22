@@ -4,7 +4,7 @@
 // It follows the same conventions as tax.js where the law leaves a choice (docs/ITR-MODULE.md, "Conventions"):
 // rupee rounding of each tax figure (each special-rate part on its own), total income to the nearest 10, the final payable / refund to the nearest 10,
 // interest month by month on the amount rounded down to 100, MAT shown in the tax heads when it is payable.
-export const KEYS = ["gti", "ti", "normalTax", "specialTax", "rebate", "sur", "cess", "liability", "i234a", "i234b", "i234c", "f234f", "payable", "refund"];
+export const KEYS = ["gti", "ti", "normalTax", "specialTax", "rebate", "sur", "cess", "liability", "i234a", "i234b", "i234c", "f234f", "payable", "refund", "cfBus", "cfUd", "cfHp"];
 
 function n(v) { v = Number(v); return isFinite(v) ? v : 0; }
 function rup(v) { v = n(v); const s = v < 0 ? -1 : 1; const r = s * Math.round(Math.abs(v) + 1e-9); return r === 0 ? 0 : r; }
@@ -185,17 +185,24 @@ export function check(inp) {
   os = rup(os);
   const cg = inp.cg || {};
   let a = rup(cg.s111A), b = rup(cg.s112A), c = rup(cg.s112), o = rup(cg.other), bp = bz.inc;
-  // this year's losses
+  // this year's losses; what is left is carried forward: up to the year's depreciation as unabsorbed depreciation
+  // (32(2), carried without limit, even in a belated return), the rest as business loss (72; none in a belated return, 80)
+  const dueC = inp.tp ? "20261130" : (inp.audit || ent === "C") ? "20261031" : "20260831", lateC = !!inp.filingDate && inp.filingDate > dueC;
+  let cfBus = 0, cfUd = 0, cfHp = 0;
   if (bp < 0) {
     let loss = -bp; bp = 0;
     const take = (v) => { const u = Math.min(Math.max(v, 0), loss); loss -= u; return v - u; };
     hp = take(hp); os = take(os); o = take(o); c = take(c); a = take(a); b = take(b);
+    cfUd = Math.min(loss, bz.dep); cfBus = lateC ? 0 : loss - cfUd;
   }
   let s = sal;
   if (hp < 0) {
+    const hl = -hp;
     let room = inp.regime === "new" ? 0 : Math.min(-hp, 200000); hp = 0;
+    const room0 = room;
     const take = (v) => { const u = Math.min(Math.max(v, 0), room); room -= u; return v - u; };
     os = take(os); bp = take(bp); o = take(o); c = take(c); a = take(a); b = take(b); s = take(s);
+    cfHp = hl - (room0 - room);
   }
   // brought forward
   const L = inp.losses || {};
@@ -304,7 +311,7 @@ export function check(inp) {
     }
   }
   const net = liability + i234a + i234b + i234c + f234f - tds - tcs - adv - sat;
-  return Object.assign(out, { gti, ti, liability, i234a, i234b, i234c, f234f, payable: net > 0 ? ten(net) : 0, refund: net < 0 ? ten(-net) : 0 });
+  return Object.assign(out, { cfBus: rup(cfBus), cfUd: rup(cfUd), cfHp: rup(cfHp), gti, ti, liability, i234a, i234b, i234c, f234f, payable: net > 0 ? ten(net) : 0, refund: net < 0 ? ten(-net) : 0 });
 }
 
 // the two computations side by side: [] when they agree on every figure

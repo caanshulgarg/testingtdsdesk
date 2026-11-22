@@ -83,6 +83,17 @@ const l4 = compute(biz(500000, { regime: "old", salary: { gross: 600000, std: 50
 ok(l4.gti === 500000 + 550000 - 200000, "house property loss: 2 lakh set off in the old regime");
 ok(compute(biz(500000, { hp: -300000 })).gti === 500000, "no house property loss set off in the new regime");
 ok(compute(biz(-800000, { salary: { gross: 1000000, std: 75000 } })).gti === 925000, "a business loss is never set off against salary");
+// the reviewer's case (5a6df2218): profit before tax -1 lakh, depreciation 4 lakh (book and section 32 alike)
+const ud1 = compute(biz(-100000, { business: { pbt: -100000, adds: [{ key: "dep_book", label: "book depreciation", amt: 400000 }], less: [], itDep: 400000 } }));
+ok(ud1.carry.cyUd === 100000 && ud1.carry.cyBus === 0 && !ud1.carry.business.length && ud1.key.cfUd === 100000 && ud1.key.cfBus === 0, "PBT -1 lakh, depreciation 4 lakh: the 1 lakh loss is this year's unabsorbed depreciation (32(2)), no business loss");
+const ud2 = compute(biz(-500000, { business: { pbt: -500000, adds: [{ key: "dep_book", label: "book depreciation", amt: 400000 }], less: [], itDep: 400000 } }));
+ok(ud2.carry.cyUd === 400000 && ud2.carry.cyBus === 100000, "PBT -5 lakh, depreciation 4 lakh: 4 lakh unabsorbed depreciation, 1 lakh business loss");
+const ud3 = compute(biz(-500000, { filingDate: "20261120", business: { pbt: -500000, adds: [{ key: "dep_book", label: "book depreciation", amt: 400000 }], less: [], itDep: 400000 } }));
+ok(ud3.carry.cyUd === 400000 && ud3.key.cfBus === 0 && ud3.carry.lostS80 === 100000, "the same, filed late: the business loss is lost (80), the depreciation still goes");
+const kd = differences(ud2.key, check(biz(-500000, { business: { pbt: -500000, adds: [{ key: "dep_book", label: "book depreciation", amt: 400000 }], less: [], itDep: 400000 } })));
+ok(!kd.length, "the second computation carries the same forward (business loss, unabsorbed depreciation, house property loss)" + (kd.length ? ": " + JSON.stringify(kd) : ""));
+const a3 = adjustments({ tdsMissed: [{ party: "R", section: "194C", base: 100000 }], nrMissed: [{ party: "NR1", section: "195", base: 50000 }], nrUnpaid: [{ party: "NR2", section: "195", base: 20000 }], tdsUnpaid: [{ party: "R2", section: "194J", base: 10000 }] });
+ok(a3.adds.find((a) => a.key === "40aia").amt === 33000 && a3.adds.find((a) => a.key === "40ai").amt === 70000, "40(a)(ia) 30% of resident sums (1,00,000 + 10,000); 40(a)(i) 100% of non-resident sums, not deducted (50,000) and not deposited (20,000)");
 console.log("Chapter VI-A");
 const d1 = compute(biz(1000000, { regime: "old", deductions: { "80C": 200000, "80TTA": 15000 } }));
 ok(d1.ded === 160000 && d1.warn.some((w) => w.key === "via_80C"), "old: 80C capped at 1.5 lakh, 80TTA at 10,000");
@@ -91,7 +102,7 @@ ok(d2.ded === 50000 && d2.warn.some((w) => w.key === "via_80C"), "new regime: 80
 ok(compute(biz(100000, { regime: "old", cg: { s111A: 300000 }, deductions: { "80C": 150000 } })).ded === 100000, "deductions never against special-rate income");
 console.log("special rates");
 const c1 = compute(biz(300000, { cg: { s111A: 200000 } }));
-ok(c1.tax.specialTax === 20000 && c1.tax.rebate === 0 && c1.liability === 20800, "new regime: the unused exemption against 111A; no 87A on special-rate tax (confirm)");
+ok(c1.tax.specialTax === 20000 && c1.tax.rebate === 0 && c1.liability === 20800, "new regime: the unused exemption against 111A; no 87A on special-rate tax");
 eq(compute(biz(1000000, { cg: { s112A: 225000 } })).tax.specialTax, 12500, "112A: 12.5% above 1.25 lakh");
 console.log("rounding (288A, 288B)");
 eq(compute(biz(744565)).ti, 744570, "total income to the nearest 10");
@@ -125,7 +136,7 @@ const a2 = adjustments({ tdsMissed: [{ party: "X", section: "194C", base: 100000
 ok(a2.adds.find((a) => a.key === "40aia").amt === 42000 && a2.adds.find((a) => a.key === "40ai").amt === 70000 && a2.adds.find((a) => a.key === "40a3").amt === 15000 && a2.itDep === 900, "40(a)(ia) 30% of not deducted (1L) and not deposited by the due date (40,000); 40(a)(i) 100% for the non-resident; 40A(3) in full; section 32 allowed");
 
 console.log("golden cases (hand-worked, CA style): 87A, Chapter VI-A, the company rate");
-// 87A, new regime (the reading the owner will confirm): eligibility on TOTAL income, special-rate income included; the
+// 87A, new regime (the owner's decision of 22-11-2026): eligibility on TOTAL income, special-rate income included; the
 // rebate (and its marginal relief) only ever against the tax on normal income
 const g1 = compute(biz(1100000, { cg: { s111A: 80000 } }));
 ok(g1.ti === 1180000 && g1.tax.normalTax === 50000 && g1.tax.rebate === 50000 && g1.tax.specialTax === 16000 && g1.liability === 16640, "G1 new: business 11L + 111A 80,000 (TI 11.8L): rebate 50,000 on the normal tax only; 111A tax 16,000 + cess = 16,640");

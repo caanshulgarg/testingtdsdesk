@@ -6,7 +6,7 @@
 import { importsOf, buildModel } from "../app/src/lib/itr/model.js";
 import { compute } from "../app/src/lib/itr/tax.js";
 import { verify, gate, fingerprint } from "../app/src/lib/itr/verify.js";
-import { dues43B, msme43Bh, kind43B, tallyPbt } from "../app/src/lib/itr/books.js";
+import { dues43B, msme43Bh, kind43B, tallyPbt, pfDedup, settle43B, msmeFifo, adjustments } from "../app/src/lib/itr/books.js";
 import { demo } from "./itr_demo.mjs";
 
 let fails = 0;
@@ -16,16 +16,20 @@ const D0 = await demo("ITR-3");
 function run(mut = {}) {
   const D = cp(D0);
   if (mut.demo) mut.demo(D);
+  // a planted list of dues / bills goes into the BOOKS, so the model works the add-back out of it (and the answers)
+  if ("dues43B" in mut) D.books.dues43B = mut.dues43B;
+  if ("msme" in mut) D.books.msme = mut.msme;
+  if (mut.books) mut.books(D.books);
   const files = Object.entries(D.booksObj.itr).filter(([, v]) => v && v.kind).map(([k, v]) => Object.assign({ id: k }, v));
   if (mut.files) mut.files(files);
   const imports = importsOf(files), state = Object.assign({}, D.booksObj.itr["2026|state"], mut.state || {});
-  const model = buildModel({ entity: mut.entity || D.client.entity, client: D.client, state, books: D.books, imports });
+  const model = buildModel({ entity: mut.entity || D.client.entity, client: D.client, state, books: D.books, imports, due: "20260831", prevState: mut.prevState });
   if (mut.model) mut.model(model);
   const comp = compute(model);
   if (mut.comp) mut.comp(comp);
   const bk = D.books;
   const ctx = { model, main: comp, imports, books: bk, gst: mut.gst || D.gst, tds: mut.tds || bk.tds, form3cd: mut.form3cd || bk.form3cd, pfBooks: "pfBooks" in mut ? mut.pfBooks : bk.sched.pl.pf.cy, esiBooks: mut.esiBooks !== undefined ? mut.esiBooks : bk.esiBooks,
-    pf36va: model.pf36va, dues43B: "dues43B" in mut ? mut.dues43B : bk.dues43B, msme: "msme" in mut ? mut.msme : bk.msme, nrAsk: mut.nrAsk || [], coverage: mut.coverage || [], accepted: mut.accepted || {} };
+    pf36va: model.pf36va, dues43B: model.dues43B, msme: model.msme, prior43B: model.prior43B, pfProof: bk.pfProof, due: "20260831", answers: state.paidOn || {}, nrAsk: mut.nrAsk || [], coverage: mut.coverage || [], accepted: mut.accepted || {} };
   const cs = verify(ctx), by = (id) => cs.find((c) => c.id === id) || { status: "absent" };
   return { cs, by, comp, model };
 }
@@ -40,6 +44,8 @@ r = run({ demo: (D) => { D.books.sched.bs.revenueAuth.trace = D.books.sched.bs.r
 ok(r.by("tds_26as").status === "missing", "no TDS receivable ledger: Missing data, never Matched");
 r = run({ files: (fs) => { fs.find((f) => f.kind === "as26").data.tds[0].status = "U"; } });
 ok(r.by("tds_status").status === "needs" && r.model.paid.tds.length === 3 && r.by("tds_26as").b.amt === 30200, "a 26AS line with status U is not claimed and is asked (Needs you)");
+r = run({ files: (fs) => { fs.find((f) => f.kind === "as26").data.tds[0].status = ""; } });
+ok(r.by("tds_status").status === "needs" && r.model.paid.tds.length === 3 && /status not read/.test(r.by("tds_status").rows[0].label), "a 26AS line whose status was not read: not claimed, asked");
 ok(S("tcs_26as") === "missing", "26AS shows TCS, the books have no TCS ledger: Missing data");
 ok(S("adv_tax") === "matched" && base.by("adv_tax").a.src.includes("ADVANCE TAX"), "the books' advance tax ledger (40,000) equals the 26AS challans");
 r = run({ demo: (D) => { D.books.sched.bs.revenueAuth.trace = D.books.sched.bs.revenueAuth.trace.filter((t) => !/ADVANCE TAX/.test(t.ledger)); } });
@@ -76,7 +82,12 @@ ok(r.by("gst_3b").status === "missing", "no filed 3B in FinCom: Missing data");
 r = run({ gst: Object.assign({}, D0.gst, { monthsR1: 9 }) });
 ok(r.by("gst_months").status === "missing", "three months of filed GSTR-1 missing: Missing data");
 console.log("TDS returns, 40(a)(ia), 40(a)(i)");
-ok(S("tds_40aia") === "matched" && base.by("tds_40aia").a.amt === 36000, "the return's 40(a)(ia) (36,000) equals 30% of the TDS records' sums without TDS");
+ok(S("tds_40aia") === "matched" && base.by("tds_40aia").a.amt === 36000 && base.by("tds_40aia").kind === "consistency", "the return's 40(a)(ia) (36,000) equals 30% of the TDS records' sums without TDS (a consistency check)");
+ok(S("tds_filed") === "missing" && S("tds_traces") === "missing", "no filed return marked and no TRACES file: the independent TDS checks are Missing data");
+r = run({ tds: Object.assign({}, D0.books.tds, { filed: { quarters: ["26Q Q1", "26Q Q2"], tds: 90000, records: 92000 }, notFiled: ["26Q Q3"], traces: { fincom: 92000, traces: 92000, rows: [] } }) });
+ok(r.by("tds_filed").status === "difference" && r.by("tds_filed").diff === 2000 && r.by("tds_traces").status === "matched", "records 92,000 against the returns as filed 90,000: Difference 2,000; challans as TRACES consumed them: Matched");
+r = run({ demo: (D) => { D.books.f.nrUnpaid = [{ party: "DEMO SOFTWARE INC", section: "195", base: 70000 }]; D.books.adj = adjustments(D.books.f); } });
+ok(r.comp.lines.find((l) => l.key === "add:40ai").amt === 70000, "a non-resident's TDS deducted and not deposited: 100% under 40(a)(i) (70,000), not 30%");
 r = run({ tds: Object.assign({}, D0.books.tds, { unpaidBase: 50000 }) });
 ok(r.by("tds_40aia").status === "difference" && r.by("tds_40aia").diff === -15000, "TDS deducted on 50,000 not deposited by the due date, not added back: Difference -15,000");
 r = run({ demo: (D) => { D.books.f.tdsUnpaid = [{ party: "DEMO CONTRACTOR", section: "194C", base: 50000 }]; } });
@@ -84,33 +95,84 @@ ok(r.comp.lines.find((l) => l.key === "add:40aia") && true, "the books' undeposi
 r = run({ nrAsk: ["DEMO SOFTWARE INC"] });
 ok(r.by("tds_nr").status === "needs", "a foreign-looking party without TDS: resident or not asked (40(a)(i) 100%)");
 console.log("PF and ESI");
+{ const late = run({ files: (fs) => { fs.splice(fs.findIndex((f) => f.kind === "pfchallan"), 1); }, state: { paidOn: { "36va:PF202504": "20250520" } } });
+  ok(late.comp.lines.find((l) => l.key === "add:36va").amt === 5040 && late.by("pf_36va_unknown").status === "absent", "a month with no challan answered 20-05-2025 (after the 15th): the employees' 5,040 disallowed");
+  const intime = run({ files: (fs) => { fs.splice(fs.findIndex((f) => f.kind === "pfchallan"), 1); }, state: { paidOn: { "36va:PF202504": "20250514" } } });
+  ok(!intime.comp.lines.some((l) => l.key === "add:36va"), "answered 14-05-2025: in time, allowed"); }
 ok(S("pf_months") === "missing" && S("pf_36va") === "difference" && base.by("pf_36va").diff === 5040, "PF months missing; April's PF paid 22 May: 36(1)(va) 5,040");
 r = run({ files: (fs) => { fs.splice(fs.findIndex((f) => f.kind === "pfchallan"), 1); } });
-ok(r.by("pf_36va").status === "matched" && r.by("pf_36va_unknown").status === "needs" && !r.comp.lines.some((l) => l.key === "add:36va"), "no challan: not disallowed; the payment date asked (Needs you)");
+ok(r.by("pf_36va").status === "matched" && r.by("pf_36va_unknown").status === "needs" && r.by("pf_36va_unknown").noAccept && !r.comp.lines.some((l) => l.key === "add:36va"), "no challan: not disallowed; the payment date asked (Needs you, cannot be noted away)");
 ok(S("esi_months") === "missing" && S("esi_books") === "missing", "ESI challan for April only: months Missing; no ESI expense ledger: Missing (not Matched)");
 r = run({ esiBooks: 1625, pfBooks: 0, files: (fs) => { fs.splice(fs.findIndex((f) => f.kind === "pfchallan"), 1); fs.splice(fs.findIndex((f) => f.kind === "ecr"), 1); } });
 ok(r.by("esi_books").status === "matched" && r.by("pf_months").status === "absent", "an ESI-only employer: the ESI checks run (books 1,625 = challans)");
 console.log("43B and 43B(h)");
 ok(kind43B("GST PAYABLE").kind === "gst" && !kind43B("GST PAYABLE").on && kind43B("PF PAYABLE").on && kind43B("BONUS PAYABLE").on && kind43B("INTEREST ACCRUED ON BANK LOAN").on && kind43B("TDS PAYABLE").kind === "tds", "43B kinds: GST / TDS listed (not under 43B), PF, bonus, bank interest under 43B");
-const d1 = dues43B([{ ledger: "BONUS PAYABLE", closing: 50000 }, { ledger: "PF PAYABLE", closing: 20000 }, { ledger: "PROFESSIONAL TAX PAYABLE", closing: 2500 }],
+const d1 = dues43B([{ ledger: "BONUS PAYABLE", closing: 50000, charge: 50000 }, { ledger: "PF PAYABLE", closing: 20000, charge: 20000 }, { ledger: "PROFESSIONAL TAX PAYABLE", closing: 2500, charge: 2500 }],
   [{ ledger: "BONUS PAYABLE", date: "20260910", amt: 50000 }, { ledger: "BONUS PAYABLE", date: "20260810", amt: 5000 }, { ledger: "PF PAYABLE", date: "20260415", amt: 20000 }], "20260831", "20260930", { pf: 0.5 });
-ok(d1.find((x) => x.kind === "bonus").paidByDue === 5000 && d1.find((x) => x.kind === "pf").closing === 10000 && d1.find((x) => x.kind === "tax").paidByDue === 0 && !d1.find((x) => x.kind === "tax").unknown, "bonus 5,000 paid by 31-08 (45,000 not); PF employer half; professional tax unpaid (books run past the due date)");
-ok(dues43B([{ ledger: "BONUS PAYABLE", closing: 50000 }], [], "20260831", "20260630", {})[0].unknown, "books ending before the due date: the payment date is unknown (Needs you)");
-ok(dues43B([{ ledger: "ESI PAYABLE", closing: 3000 }], [], "20260831", "20260930", { esi: null })[0].unknown, "ESI payable with no March challan: the employer's part unknown");
-ok(S("43b") === "matched", "43B: the demo's dues all paid in April 2026: nothing to add back, Matched");
+const dk = (k) => d1.find((x) => x.kind === k);
+ok(dk("bonus").dis === 45000 && dk("pf").dis === 0 && dk("tax").dis === 2500 && !dk("tax").unknown, "bonus 5,000 paid by 31-08 (45,000 not); PF paid in full; professional tax unpaid (books run past the due date)");
+// the reviewer's case: a leave provision of 30 lakh at the year end, of which only 3 lakh was charged this year
+const lv = (paid) => dues43B([{ ledger: "PROVISION FOR LEAVE ENCASHMENT", opening: 2850000, charge: 300000, closing: 3000000 }], paid ? [{ ledger: "PROVISION FOR LEAVE ENCASHMENT", date: "20260620", amt: paid }] : [], "20261031", "20261130", {})[0];
+ok(lv(0).dis === 300000, "43B on this year's charge: leave provision 30,00,000, 3,00,000 charged this year, unpaid: 3,00,000 added back (not 30 lakh)");
+ok(lv(100000).dis === 300000 && lv(2800000).dis === 200000 && lv(3000000).dis === 0, "payments after the year end settle the earlier years' balance first (1 lakh: still 3 lakh; 28 lakh: 27 lakh of earlier years first, 2 lakh of the charge left; all paid: nothing)");
+ok(dues43B([{ ledger: "BONUS PAYABLE", opening: 0, charge: 40000, closing: 60000 }], [], "20260831", "20260930", {})[0].dis === 40000, "a balance above the year's charge: only the charge is added back");
+// PF / ESI: the employer's ledger 43B in full, the employees' ledger never 43B (36(1)(va)), one ledger for both by the ECR's share
+const er = dues43B([{ ledger: "PF EMPLOYER CONTRIBUTION PAYABLE", closing: 12000, charge: 12000 }, { ledger: "PF EMPLOYEE CONTRIBUTION PAYABLE", closing: 11000, charge: 11000 }, { ledger: "ESI PAYABLE", closing: 3000, charge: 3000 }], [], "20260831", "20260930", { pf: 0.5, esi: 0.75 });
+ok(er[0].role === "er" && er[0].dis === 12000 && er[1].role === "ee" && !er[1].kind43B && er[1].dis === 0 && er[2].dis === 2250, "separate PF ledgers: employer's 12,000 under 43B in full, employees' 11,000 not under 43B; ESI for both: the challan's employer share (75%)");
+ok(kind43B("EMPLOYEES' PROVIDENT FUND PAYABLE").role === "" && kind43B("EMPLOYEE PF DEDUCTED").role === "ee" && kind43B("EMPLOYER'S CONTRIBUTION TO ESI PAYABLE").role === "er", "the scheme's own name (Employees' Provident Fund) is a ledger for both; 'employee ... deducted' is the employees'; 'employer's' the employer's");
+const esu = dues43B([{ ledger: "ESI PAYABLE", closing: 3000, charge: 3000 }], [], "20260831", "20260930", { esi: null })[0];
+ok(esu.unknownShare && !adjustments({ dues43B: [esu] }).adds.length, "ESI payable for both with no March challan: the employer's part unknown, nothing added until it is known");
+// a challan and its bank entry are one payment
+const dd = pfDedup([{ ledger: "PF PAYABLE", date: "20260415", amt: 20000, narr: "EPF MARCH" }, { ledger: "PF PAYABLE", date: "20260520", amt: 900, narr: "" }], [{ ledger: "PF PAYABLE", date: "20260414", amt: 20000, ref: "1234567890123" }]);
+ok(dd.pays.length === 2 && dd.pays.some((p) => p.date === "20260414") && !dd.pays.some((p) => p.date === "20260415"), "a March challan and its April bank entry (same ledger, amount, 1 day apart) count once, at the challan's date");
+ok(pfDedup([{ ledger: "PF PAYABLE", date: "20260430", amt: 20000, narr: "TRRN 1234567890123" }], [{ ledger: "PF PAYABLE", date: "20260414", amt: 20000, ref: "1234567890123" }]).pays.length === 1, "matched by the TRRN in the narration though 16 days apart");
+ok(dues43B([{ ledger: "PF PAYABLE", closing: 20000, charge: 20000 }], dd.pays, "20260831", "20260930", { pf: 1 })[0].paid === 20000, "the PF dues paid once (20,000), not twice (40,000)");
+// payment dates not shown in the books: asked item by item, and the answer changes the computation
+const bu = [{ ledger: "BONUS PAYABLE", closing: 50000, charge: 50000 }];
+ok(dues43B(bu, [], "20260831", "20260630", {})[0].unknown, "books ending before the due date: the payment date is unknown");
+ok(S("43b") === "matched" && base.by("43b").kind === "consistency", "43B: the demo's dues all paid in April 2026: Matched, labelled a consistency check");
+r = run({ dues43B: d1, state: { adjEdits: { "43b": { v: 0, why: "planted" } } } });
+ok(r.by("43b").status === "difference" && r.by("43b").diff === -47500, "43B: the return's add-back edited to 0 against 47,500 from the books: Difference -47,500");
 r = run({ dues43B: d1 });
-ok(r.by("43b").status === "difference" && r.by("43b").diff === -47500, "43B: 45,000 bonus + 2,500 professional tax unpaid by the due date, not added back: Difference -47,500");
-r = run({ dues43B: d1, model: (m) => { m.business.adds.push({ key: "43b", label: "43B", amt: 47500, bp: "AmtDebPLDisallowUs43B" }); } });
-ok(r.by("43b").status === "matched", "43B added back: Matched");
-r = run({ dues43B: dues43B([{ ledger: "BONUS PAYABLE", closing: 50000 }], [], "20260831", "20260630", {}) });
-ok(r.by("43b_unknown").status === "needs", "43B: a payment date not known is Needs you");
+ok(r.by("43b").status === "matched" && r.comp.lines.find((l) => l.key === "add:43b").amt === 47500, "43B from the books' dues: 47,500 added back, Matched");
+r = run({ dues43B: dues43B(bu, [], "20260831", "20260630", {}) });
+ok(r.by("43b_unknown").status === "needs" && r.by("43b_unknown").noAccept && r.by("43b_unknown").ask.length === 1 && !r.comp.lines.some((l) => l.key === "add:43b"), "43B: a payment date not known: asked per item, cannot be accepted with a note, nothing added yet");
+r = run({ dues43B: dues43B(bu, [], "20260831", "20260630", {}), state: { paidOn: { "43b:BONUS PAYABLE": "20260815" } } });
+ok(r.by("43b_unknown").status === "absent" && !r.comp.lines.some((l) => l.key === "add:43b"), "answered: paid 15-08-2026 (by the due date): nothing added back, the question closes");
+r = run({ dues43B: dues43B(bu, [], "20260831", "20260630", {}), state: { paidOn: { "43b:BONUS PAYABLE": "none" } } });
+ok(r.comp.lines.find((l) => l.key === "add:43b").amt === 50000 && r.by("43b").status === "matched", "answered: not paid: 50,000 added back");
+ok(settle43B(dues43B(bu, [], "20260831", "20260630", {}), { "43b:BONUS PAYABLE": "20260905" }, "20260831")[0].dis === 50000, "answered: paid after the due date: added back");
 ok(S("43b_gst") === "absent", "GST / TDS payable paid in April: no question");
+// the PF / ESI payments after the year end: the bank entries against the challans
+r = run({ books: (b) => { b.pfProof = { books: 20000, challans: 19000, rows: [] }; } });
+ok(r.by("43b_paid").status === "difference" && r.by("43b_paid").diff === 1000 && r.by("43b_paid").kind !== "consistency", "PF paid in April: bank entries 20,000 against challans 19,000: Difference 1,000 (an independent check)");
+r = run({ books: (b) => { b.pfProof = { books: 20000, challans: null, rows: [] }; } });
+ok(r.by("43b_paid").status === "missing", "no March challan: Missing data");
+// earlier years' 43B paid this year
+r = run({ books: (b) => { b.prior43B = [{ ledger: "BONUS PAYABLE", opening: 80000, paidInYear: 80000 }]; } });
+ok(r.by("43b_prior").status === "needs" && r.by("43b_prior").noAccept && r.by("43b_prior").askAmount, "dues payable at 1-04-2025 and paid, last year's return not in FinCom: the amount asked (cannot be noted away)");
+r = run({ books: (b) => { b.prior43B = [{ ledger: "BONUS PAYABLE", opening: 80000, paidInYear: 80000 }]; }, state: { prior43BPaid: 30000 } });
+ok(r.by("43b_prior").status === "absent" && r.comp.lines.find((l) => l.key === "less:43b_prior").amt === 30000, "answered 30,000: allowed in the computation (AmtDisallUs43BNowAllow)");
+r = run({ books: (b) => { b.prior43B = [{ ledger: "BONUS PAYABLE", opening: 80000, paidInYear: 60000 }]; }, prevState: { versions: [{ v: 3, dis43B: [{ ledger: "BONUS PAYABLE", amt: 50000 }] }] } });
+ok(r.by("43b_prior").status === "absent" && r.comp.lines.find((l) => l.key === "less:43b_prior").amt === 30000, "last year's return in FinCom: 50,000 added back of an 80,000 balance; 60,000 paid: 30,000 allowed now (the 30,000 allowed last year paid first)");
 const m1 = msme43Bh([{ party: "A", ref: "1", date: "20260201", amt: 10000, paidOn: "20260410" }, { party: "B", ref: "2", date: "20260320", amt: 20000, paidOn: "20260415" }, { party: "C", ref: "3", date: "20260325", amt: 30000, paidOn: "20260520" },
   { party: "D", ref: "4", date: "20260328", amt: 40000, paidOn: "" }], 45, "20260331", "20260630");
 ok(m1.rows.map((x) => x.party).join("") === "ACD" && !m1.rows.some((x) => x.party === "B"), "43B(h), 45 days: overdue at 31 March (A), paid after its limit in May (C) and unpaid past its limit (D) added back; paid within (B) allowed");
 ok(msme43Bh([{ party: "E", ref: "5", date: "20260325", amt: 1, paidOn: "" }], 15, "20260331", "20260331").unknown.length === 1, "43B(h): a limit after the books end: Needs you");
 ok(msme43Bh([{ party: "F", ref: "6", date: "20260320", amt: 1, paidOn: "20260404" }], 15, "20260331", "20260930").rows.length === 0, "43B(h), 15 days (no agreement): paid on day 15: allowed");
-ok(S("43bh") === "matched", "43B(h) in the demo: both MSME bills paid within 45 days");
+ok(S("43bh") === "matched" && base.by("43bh").kind === "consistency", "43B(h) in the demo: both MSME bills paid within 45 days (a consistency check)");
+ok(msme43Bh([{ party: "G", ref: "7", date: "20250220", amt: 5000, paidOn: "" }], 45, "20260331", "20260930", "20250401").rows.length === 0, "43B(h): a bill of last year is not this year's add-back");
+const ff = msmeFifo({ M1: { opening: 0, moves: [{ date: "20260201", amt: 10000 }, { date: "20260320", amt: 20000 }, { date: "20260310", amt: -10000 }, { date: "20260420", amt: -20000 }] } }, 45, "20250401", "20260331", "20260930");
+ok(ff.rows.length === 0, "the vouchers' way: the February bill paid in March, the March bill paid on 20 April within 45 days: nothing added");
+const ms2 = { rows: [], unknown: [{ id: "43bh:Z|9|20260325", party: "Z", ref: "9", date: "20260325", amt: 7000, limit: "20260409" }], days: 15, fifo: null };
+r = run({ msme: ms2 });
+ok(r.by("43bh_unknown").noAccept && r.by("43bh_unknown").ask[0].id === "43bh:Z|9|20260325" && !r.comp.lines.some((l) => l.key === "add:43bh"), "43B(h): a bill due after the books end: asked, nothing added yet");
+r = run({ msme: ms2, state: { paidOn: { "43bh:Z|9|20260325": "20260415" } } });
+ok(r.comp.lines.find((l) => l.key === "add:43bh").amt === 7000, "answered: paid 15-04 after its limit of 09-04: 7,000 added back");
+r = run({ msme: ms2, state: { paidOn: { "43bh:Z|9|20260325": "20260405" } } });
+ok(!r.comp.lines.some((l) => l.key === "add:43bh") && r.by("43bh_unknown").status === "absent", "answered: paid within the limit: allowed");
+r = run({ msme: Object.assign({}, ms2, { unknown: [], rows: [{ party: "Y", ref: "1", date: "20260101", amt: 4000, limit: "20260215" }], fifo: { amt: 0, unknown: 0, n: 0 } }) });
+ok(r.by("43bh_fifo").status === "difference" && r.by("43bh_fifo").diff === 4000, "43B(h): the bill references (4,000 late) against the payment vouchers (nothing late): Difference");
 ok(tallyPbt({ SALES: -1000, PURCHASES: 700, RENT: 100, BANK: 50 }, (l) => ({ SALES: "SALES ACCOUNTS", PURCHASES: "PURCHASE ACCOUNTS", RENT: "INDIRECT EXPENSES", BANK: "BANK ACCOUNTS" }[l]), { opening: 100, closing: 150 }) === 250, "Tally's own P&L: revenue groups only, with the stock (1,000 - 700 - 100 + 50 = 250)");
 console.log("3CD against the ITR's schedules");
 r = run({ state: { audit: true } });
@@ -123,7 +185,7 @@ r = run({ comp: (c) => { c.key = Object.assign({}, c.key, { liability: c.key.lia
 ok(r.by("two_computations").status === "difference" && r.by("two_computations").noAccept, "a rupee apart: Difference, never accepted");
 r = run({ state: { regime: "" } }); ok(r.by("need_regime").noAccept, "no regime: settled only on Data");
 r = run({ model: (m) => { m.cg = { s111A: 80000 }; } });
-ok(r.by("87a_special").status === "needs", "87A given with special-rate income: shown on Checks");
+ok(r.by("87a_special").status === "absent", "87A with special-rate income: the owner's reading (22-11-2026), no question");
 r = run({ entity: "F", state: { form: "ITR-5", llp: undefined } }); ok(r.by("llp").status === "needs" && r.by("llp").noAccept, "a firm: firm or LLP asked (never from the name)");
 r = run({ entity: "C", state: { form: "ITR-6", regime: "normal", smallCo: undefined } }); ok(r.by("need_small_co").noAccept && r.by("rates").status === "needs", "a company: the FY 2023-24 turnover asked; blocks");
 r = run({ coverage: [{ key: "hp", title: "Schedule HP", text: "House property income of 1,20,000: Schedule HP is not filled by FinCom yet." }] });

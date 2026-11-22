@@ -56,7 +56,8 @@ export async function demo(form = "ITR-3") {
     tdsMissed: [{ party: "DEMO TRANSPORT CO", section: "194C", base: 120000 }], tdsUnpaid: [], nrMissed: [], cash40A3: [{ date: "20250912", party: "DEMO HARDWARE STORE", amount: 18500 }],
     pf36va: pf36va(get("ecr"), get("pfchallan"), get("esic")) };
   // 43B: the payable ledgers at 31-03-2026 and the made-up payments of April 2026
-  const payRows = rows.filter((r) => ["7B", "7C", "7G", "5B", "5C"].includes(r.code)).map((r) => ({ ledger: r.ledger, closing: -r.final }));
+  // (the whole balance charged this year: the demo's payables have no opening balance of earlier years)
+  const payRows = rows.filter((r) => ["7B", "7C", "7G", "5B", "5C"].includes(r.code)).map((r) => ({ ledger: r.ledger, opening: 0, closing: -r.final, charge: -r.final }));
   f.dues43B = dues43B(payRows, [{ ledger: "GST PAYABLE", date: "20260420", amt: 40000 }, { ledger: "TDS PAYABLE", date: "20260430", amt: 25000 }, { ledger: "PF PAYABLE", date: "20260415", amt: 20000 }], "20260831", "20260930", { pf: 0.5, esi: null });
   const msme = msme43Bh([{ party: "DEMO MICRO SUPPLIER", ref: "MS/88", date: "20260305", amt: 42000, paidOn: "20260410" }, { party: "DEMO SMALL SUPPLIER", ref: "SS/12", date: "20260325", amt: 30000, paidOn: "20260405" }], 45, "20260331", "20260930");
   f.msmeRows = msme.rows;
@@ -64,7 +65,7 @@ export async function demo(form = "ITR-3") {
   const capOpen = -rows.find((r) => r.code === "3P").py;
   const books = { ok: true, fy: "2025", sched, f, adj, findings: [], notes: [], plTally: sched.totals.pbt, openingTally: 4512000, pyBs: { total: 4512000, capital: capOpen, src: "last year's audited balance sheet (made up)" },
     capital: { closing: sched.bs.capital.cy + sched.totals.pat, profit: sched.totals.pat, introduced: -rows.find((r) => r.code === "3P").final - capOpen, drawings: 360000 },
-    dues43B: f.dues43B, msme, tds: { ok: true, deducted: 186000, payable: 186000, deposited: 186000, unpaid: [], missedBase: 120000, unpaidBase: 0, nrBase: 0 }, form3cd: null, esiBooks: null, nrAsk: [] };
+    dues43B: f.dues43B, msme, tds: { ok: true, deducted: 186000, payable: 186000, deposited: 186000, unpaid: [], missedBase: 120000, unpaidBase: 0, nrBase: 0 }, form3cd: null, esiBooks: null, nrAsk: [], prior43B: [], pfProof: null };
   booksObj.itr["2026|state"] = { form, regime: ent === "C" ? "normal" : ent === "P" ? "new" : "", llp: ent === "F" ? false : undefined, bookProfitOk: ent === "C", filingDate: "20261125", age: 46, smallCo: true, pfCode: "DLCPM0000001000", esiCode: "10000000000000001",
     profile: Object.assign({ father: "DEMO FATHER", place: "NEW DELHI", swId: "SW00000000", capacity: "S", loansForBusiness: true, auditor: { firm: "DEMO AUDIT FIRM", firmPan: "ZZZFA1111A", reportDate: "2026-10-20", ack: "123456789012345" }, indAs: false, listed: false, authorised: 2500000 }, ent === "P" ? {} : { verName: "DEMO SIGNATORY", verPan: "ZZZPV7777V" }),
     partners: ent === "F" ? [{ name: "DEMO PARTNER ONE", pan: "ZZZPA1111A", share: 50, city: "NEW DELHI", state: "07", pin: "110001", addr: "1 SAMPLE STREET", remuneration: 300000, interest: 24000, rate: 12 }, { name: "DEMO PARTNER TWO", pan: "ZZZPB2222B", share: 50, city: "NEW DELHI", state: "07", pin: "110002", addr: "2 SAMPLE STREET", remuneration: 300000, interest: 30000, rate: 15 }] : undefined,

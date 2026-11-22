@@ -26,10 +26,10 @@ export const REBATE = {
   old: { upto: 500000, max: 12500 },
   new: { upto: 1200000, max: 60000, marginal: true },
   src: "Section 87A as amended by the Finance Act 2025; ITR-4 validation rules 227 and 229",
-  // the Finance Act 2025 keeps the rebate off the tax on income at special rates (111A, 112, 112A ...); the e-filing
-  // utility's rule 227 reads total income "excluding LTCG". FinCom: the rebate is on the tax on normal income only, and
-  // eligibility is tested on total income less special-rate income. confirm: the owner
-  special: "confirm",
+  // the Finance Act 2025 keeps the rebate off the tax on income at special rates (111A, 112, 112A ...). FinCom, new
+  // regime: eligibility on total income (special-rate income included), the rebate and its marginal relief above 12 lakh
+  // only against the tax on normal income. The owner's decision of 22-11-2026 (docs/ITR-MODULE.md, 7.1); the e-filing
+  // utility's rule 227 reads total income "excluding LTCG"
 };
 
 // Surcharge (individual / HUF / AOP / BOI): Finance Act 2025, First Schedule Part I; new regime capped at 25%
@@ -62,7 +62,7 @@ export const ITR4_MAX_INCOME = 5000000;      // ITR-4 (Sugam): total income not 
 export const S40B = { first: 600000, firstMin: 300000, firstRate: 0.9, restRate: 0.6, interest: 0.12, src: "Section 40(b)(iv) and (v) as amended by the Finance (No. 2) Act 2024: on the first Rs 6 lakh of book profit or a loss, Rs 3 lakh or 90% of book profit, whichever is more; on the balance 60%; interest at most 12% simple a year" };
 
 // Disallowances
-export const D40AIA = { share: 0.3, src: "Section 40(a)(ia): 30% of any sum payable to a resident on which tax was not deducted, or after deduction not paid on or before the due date of 139(1); allowed in the year it is paid" };
+export const D40AIA = { share: 0.3, src: "Section 40(a)(ia): 30% of any sum payable to a resident on which tax was not deducted, or after deduction not paid on or before the due date of 139(1); allowed in the year it is paid. Short deduction: 30% of the part of the sum the TDS deducted does not cover (the owner's decision of 22-11-2026)" };
 export const D40AI = { share: 1, src: "Section 40(a)(i): the whole sum payable to a non-resident when tax under Chapter XVII-B was not deducted or paid" };
 export const D40A3 = { limit: 10000, transport: 35000, src: "Section 40A(3) and (3A): a payment otherwise than by account payee cheque / draft / electronic clearing above Rs 10,000 in a day to a person (Rs 35,000 to a transporter of goods carriages); the exceptions of rule 6DD" };
 export const D43B = { src: "Section 43B: taxes, duties, cess, fees, employer's contribution to PF / ESI / other funds, bonus, leave encashment, interest to banks / NBFCs are allowed only when actually paid; a sum paid on or before the due date of 139(1) is allowed in this year (first proviso). 43B(h): sums payable to a micro or small enterprise beyond the time of section 15 of the MSMED Act (15 days, or 45 with a written agreement)" };

@@ -8,6 +8,7 @@ import { createHash } from "node:crypto";
 import { importsOf, buildModel, buildProfile } from "../app/src/lib/itr/model.js";
 import { compute } from "../app/src/lib/itr/tax.js";
 import { makeJson } from "../app/src/lib/itr/json.js";
+import { coverage } from "../app/src/lib/itr/forms.js";
 import { validator } from "../app/src/lib/itr/validate.js";
 import { demo } from "./itr_demo.mjs";
 import { ajvFor, schemaOf, FILES, SCHEMA_DIR } from "./itr_validate.mjs";
@@ -34,10 +35,15 @@ for (const form of Object.keys(FILES)) {
   const st2 = Object.assign({}, state, { filingDate: "20260720" }), books2 = JSON.parse(JSON.stringify(D.books));
   books2.sched.totals.pbt = -350000; scen.push(["a loss year, filed in time", st2, books2.sched, books2]);
   scen.push(["no books (Part A from nothing)", state, null, { ok: false, missing: ["none"] }]);
+  // the reviewer's case: PBT -1 lakh with depreciation of 4 lakh (all unabsorbed depreciation), and -5 lakh (4 lakh of
+  // it depreciation, 1 lakh business loss)
+  const udCase = (pbt) => (m) => { m.business = Object.assign({}, m.business, { pbt, adds: [{ key: "dep_book", label: "book depreciation", amt: 400000, bp: "DepreciationDebPLCosAct" }], less: [], itDep: 400000 }); m.os = { interest: 0, dividend: 0, other: 0 }; };
+  if (form !== "ITR-4") { scen.push(["PBT -1 lakh, depreciation 4 lakh", Object.assign({}, state, { filingDate: "20260720" }), D.books.sched, null, udCase(-100000)]); scen.push(["PBT -5 lakh, depreciation 4 lakh", Object.assign({}, state, { filingDate: "20260720" }), D.books.sched, null, udCase(-500000)]); }
   if (form === "ITR-6") scen.push(["MAT payable", Object.assign({}, state, { bookProfit: 90000000 }), D.books.sched]);
   if (form === "ITR-4") scen.push(["44ADA", Object.assign({}, state, { presumptive: { ada: { receipts: 4000000, cash: 100000 } } }), null]);
-  for (const [name, st, sched, books] of scen) {
+  for (const [name, st, sched, books, mutM] of scen) {
     const model = buildModel(Object.assign({}, base, { state: st, books: books || D.books }));
+    if (mutM) mutM(model);
     const profile = buildProfile(Object.assign({}, base, { state: st }));
     const comp = compute(model);
     const first = makeJson({ form, schema, model, comp, sched, profile, answers: {}, today: "2026-11-22", dues43B: D.books.dues43B });
@@ -53,6 +59,13 @@ for (const form of Object.keys(FILES)) {
     const pay = form === "ITR-4" ? R.TaxPaid.BalTaxPayable : R.PartB_TTI.TaxPaid.BalTaxPayable;
     ok(ti === comp.ti && refund === comp.refund && pay === comp.payable, form + ", " + name + ": total income, refund and payable are the computation's (" + ti + ", " + refund + ", " + pay + ")");
     if (sched && form !== "ITR-4" && form !== "ITR-6") { const bs = R.PARTA_BS; ok(bs.FundSrc.TotFundSrc === bs.FundApply.TotFundApply, form + ", " + name + ": Part A-BS sources equal application (" + bs.FundSrc.TotFundSrc + ")"); }
+    if (mutM) {
+      const ud = R[form === "ITR-3" ? "ITR3ScheduleUD" : "ITRScheduleUD"], cfl = R.ScheduleCFL, cyUd = comp.carry.cyUd, cyBus = comp.carry.cyBus;
+      ok(cyUd ? ud && ud.CurrAssYr === "2026-27" && ud.CurBalCFNY === cyUd && ud.TotDepritBalCFNY === cyUd : !ud, form + ", " + name + ": Schedule UD carries this year's unabsorbed depreciation (" + cyUd + (cyUd ? "" : ": none, the partners' 40(b) add-back leaves a profit") + ")");
+      const bus = cfl ? cfl.CurrentAYloss.LossSummaryDetail[form === "ITR-6" ? "BroughtFrwdBusLossSetOffDrYr" : "BusLossOthThanSpecLossCF"] : 0;
+      ok(bus === cyBus && (!cfl || !cfl.LossCFCurrentAssmntYear) && R["PartB-TI"].LossesOfCurrentYearCarriedFwd === cyBus, form + ", " + name + ": Schedule CFL's row of this year (not AY 2019-20's) carries the business loss net of the depreciation (" + cyBus + "), and Part B-TI the same");
+      ok(!r.coverage.some((x) => x.key === "cf_unmapped"), form + ", " + name + ": everything carried forward is in the JSON (no block)");
+    }
     if (name === "the demo books") {
       const cov = r.coverage.map((x) => x.key).join(",");
       ok(form === "ITR-6" ? cov === "sh" : cov === "", form + ": every schedule with figures is filled" + (form === "ITR-6" ? " except Schedule SH, which blocks the JSON" : "") + " (" + (cov || "none open") + ")");
@@ -90,6 +103,14 @@ console.log("coverage: a schedule with figures FinCom does not fill blocks the J
   ok(mk({ deductions: { "80C": 100000 }, regime: "old" }).includes("via_80C"), "80C claimed: Schedule 80C details block");
   ok(mk({ losses: { business: [{ ay: "2023", amt: 50000 }] } }).includes("cfl_prior"), "earlier years' losses: CFL rows block");
   ok(mk({ audit: true, profile: { auditor: {} } }).includes("audit_info"), "a tax audit without the report's details blocks");
+  ok(mk({ losses: { unabsorbedDep: 70000 } }).includes("ud"), "unabsorbed depreciation of earlier years: Schedule UD's rows block");
+  // a carry-forward the map does not hold blocks: coverage() against a map without Schedules CFL / UD
+  { const st = Object.assign({}, D.booksObj.itr["2026|state"], { filingDate: "20260720" }); const model = buildModel({ entity: "P", client: D.client, imports, state: st, books: D.books });
+    model.business = Object.assign({}, model.business, { pbt: -500000, adds: [], less: [], itDep: 400000 }); const comp = compute(model);
+    const keys = coverage({ form: "ITR-3", model, comp, profile: {} }, {}).map((x) => x.key);
+    ok(keys.includes("cf_unmapped"), "this year's loss and unabsorbed depreciation not in the map: blocked (cf_unmapped)");
+    const k4 = coverage({ form: "ITR-4", model, comp, profile: {} }, {}).map((x) => x.key);
+    ok(k4.includes("cf_itr4"), "ITR-4 with a loss to carry forward: blocked"); }
 }
 console.log(fails ? fails + " FAILED" : "all passed");
 process.exit(fails ? 1 : 0);

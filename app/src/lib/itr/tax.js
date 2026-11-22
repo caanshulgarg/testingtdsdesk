@@ -172,7 +172,7 @@ export function compute(inp) {
   if (udUsed) line("bfla_ud", "Unabsorbed depreciation set off (section 32(2))", udUsed, { sec: "sl", sign: -1, src: L.LOSS.src });
   const late = !!(inp.filingDate && inp.filingDate > dueDate(inp));
   // section 80: a belated return carries no business loss of the year forward (unabsorbed depreciation still goes)
-  S.carry = { business: bfLeft.filter((x) => !x.lapsed).concat(cyBizLoss && !late ? [{ ay: L.AY_START, amt: cyBizLoss }] : []), unabsorbedDep: R(ud + cyUnabDep), hp: cfHp, lostS80: late ? cyBizLoss : 0 };
+  S.carry = { business: bfLeft.filter((x) => !x.lapsed).concat(cyBizLoss && !late ? [{ ay: L.AY_START, amt: cyBizLoss }] : []), unabsorbedDep: R(ud + cyUnabDep), cyUd: R(cyUnabDep), bfUd: R(N(bf.unabsorbedDep)), bfUdLeft: R(ud), udUsed: R(udUsed), cyBus: R(cyBizLoss), hp: cfHp, lostS80: late ? cyBizLoss : 0 };
   if (cyBizLoss && inp.filingDate && inp.filingDate > dueDate(inp)) S.warn.push({ key: "s80", text: "The return is after the due date: this year's business loss of " + cyBizLoss + " cannot be carried forward (section 80). Unabsorbed depreciation still is." });
   if (bfLeft.some((x) => x.lapsed)) S.warn.push({ key: "lapsed", text: "A brought-forward business loss older than eight years has lapsed and is not set off." });
 
@@ -192,7 +192,7 @@ export function compute(inp) {
   const inr = (x) => { const v = String(Math.round(x)), l3 = v.slice(-3), r = v.slice(0, -3); return (r ? r.replace(/\B(?=(\d{2})+(?!\d))/g, ",") + "," : "") + l3; };
   line("tax_normal", "Tax on " + inr(normal) + " at the " + t.rateName, t.normalTax, { sec: "tx", src: t.src });
   if (t.specialTax) line("tax_special", "Tax on special-rate income (111A 20%, 112A 12.5% above Rs 1.25 lakh, 112 12.5%)", t.specialTax, { sec: "tx", src: "Sections 111A, 112, 112A" });
-  if (t.rebate) line("rebate", "Less: rebate under section 87A", t.rebate, { sec: "tx", sign: -1, src: L.REBATE.src, confirm: L.REBATE.special });
+  if (t.rebate) line("rebate", "Less: rebate under section 87A", t.rebate, { sec: "tx", sign: -1, src: L.REBATE.src });
   if (t.sur) line("surcharge", "Surcharge" + (t.relief ? " (after marginal relief of " + t.relief + ")" : ""), t.sur, { sec: "tx", src: L.SRC_SUR });
   line("cess", "Health and Education Cess at 4%", t.cess, { sec: "tx", src: L.SRC_SUR });
   if (t.mat) line("mat", "Tax under section 115JB (MAT) on book profit " + t.mat.bookProfit + ": " + t.mat.total + " is " + (t.mat.applies ? "higher, so payable" : "lower than the normal tax"), t.mat.total, { sec: "tx", src: L.SRC_CO, info: true });
@@ -219,7 +219,7 @@ export function compute(inp) {
     heads: { sal, hp, pgbp, os, cg: c111A + c112A + c112 + cOth, c111A, c112A, c112, cOth }, after: h, afterCyla, setoff, itDep,
     gti, ded, ti, normal, special, tax: t, liability, tds, tcs, adv, sat, interest: i, net: R(net), payable, refund, due, filing,
     // the figures the second computation must agree with, to the rupee
-    key: { gti, ti, normalTax: t.normalTax, specialTax: t.specialTax, rebate: t.rebate, sur: t.sur, cess: t.cess, liability, i234a: i.a, i234b: i.b, i234c: i.c, f234f: i.f, payable, refund },
+    key: { gti, ti, normalTax: t.normalTax, specialTax: t.specialTax, rebate: t.rebate, sur: t.sur, cess: t.cess, liability, i234a: i.a, i234b: i.b, i234c: i.c, f234f: i.f, payable, refund, cfBus: late ? 0 : R(cyBizLoss), cfUd: R(cyUnabDep), cfHp: R(cfHp) },
   });
   return S;
 }

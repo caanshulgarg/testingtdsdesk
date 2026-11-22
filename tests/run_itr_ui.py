@@ -123,6 +123,21 @@ def run(br, phone):
     pg.click("[data-itr-accept=ais_interest]"); pg.wait_for_timeout(200)
     ok("note" in text(pg, "[data-itr-more-of=ais_interest]").lower() and pg.get_attribute("[data-itr-check=ais_interest]", "data-accepted") == "0", tag + ": not accepted without a note")
     ok(fits(pg), tag + ": Checks fit the width")
+    # a 43B due whose payment date the books do not show: asked on its own row; the answer changes the computation
+    pg.evaluate("""() => { window.__itrDemo.books.dues43B.push({ id: '43b:DEMO BONUS PAYABLE', ledger: 'DEMO BONUS PAYABLE', kind: 'bonus', role: '', kind43B: true, opening: 0, charge: 25000, chargeKnown: true,
+      closing: 25000, paid: 0, dates: [], unpaid: 25000, part: 1, dis: 25000, unknown: true, unknownShare: false, trace: [] }); }""")
+    step(pg, "itr-comp"); step(pg, "itr-checks")
+    pg.click("[data-itr-check='43b_unknown'] .itr-check-main"); pg.wait_for_timeout(200)
+    ok(pg.query_selector("[data-itr-answer='43b:DEMO BONUS PAYABLE']") is not None and pg.query_selector("[data-itr-accept='43b_unknown']") is None, tag + ": a 43B due with no payment date is asked on its own row (date or Not paid), and cannot be noted away")
+    shot(pg, "9-payment-date-" + tag)
+    pg.fill("[data-itr-answer='43b:DEMO BONUS PAYABLE'] input", "2026-08-15"); settle(pg, 300)
+    ok(pg.query_selector("[data-itr-check='43b_unknown']") is None, tag + ": answered 15-08-2026 (by the due date): the question closes")
+    step(pg, "itr-comp")
+    ok(pg.query_selector("[data-itr-line='add:43b']") is None, tag + ": paid in time: nothing added back under 43B")
+    pg.evaluate("() => { const b = window.__itrDemo.booksObj.itr['2026|state']; b.paidOn = { '43b:DEMO BONUS PAYABLE': 'none' }; }")
+    step(pg, "itr-checks"); step(pg, "itr-comp")
+    ok("25,000" in text(pg, "[data-itr-line='add:43b']"), tag + ": answered Not paid: 25,000 added back under 43B")
+    step(pg, "itr-checks")
     # 4. JSON, blocked
     step(pg, "itr-json")
     ok(pg.query_selector("[data-itr-json=blocked]") is not None and pg.query_selector("[data-itr-download]") is None, tag + ": the JSON is not offered while checks are open")
@@ -134,7 +149,11 @@ def run(br, phone):
             ids = pg.evaluate("() => [...document.querySelectorAll('[data-itr-check][data-accepted=\"0\"]')].filter((e) => e.dataset.status !== 'matched').map((e) => e.dataset.itrCheck)")
             if not ids: break
             cid = ids[0]
-            if not pg.query_selector("[data-itr-note='%s']" % cid): pg.click("[data-itr-check='%s'] .itr-check-main" % cid); pg.wait_for_timeout(150)
+            if not pg.query_selector("[data-itr-note='%s']" % cid) and not pg.query_selector("[data-itr-answers='%s']" % cid): pg.click("[data-itr-check='%s'] .itr-check-main" % cid); pg.wait_for_timeout(150)
+            # a payment date asked item by item is answered (here: Not paid), never noted away
+            if pg.query_selector("[data-itr-answers='%s']" % cid):
+                for b in pg.query_selector_all("[data-itr-answers='%s'] [data-itr-notpaid]" % cid): b.click(); pg.wait_for_timeout(150)
+                continue
             if not pg.query_selector("[data-itr-note='%s']" % cid): ok(False, "check " + cid + " cannot be accepted"); break
             pg.fill("[data-itr-note='%s']" % cid, "Made-up demo: reviewed, reason noted (" + cid + ")"); pg.click("[data-itr-accept='%s']" % cid); pg.wait_for_timeout(200)
         ok(pg.query_selector("[data-itr-allclear]") is not None, tag + ": every check matched, accepted or answered")

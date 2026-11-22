@@ -5,6 +5,11 @@
 //   - every check compares two INDEPENDENT sources; "matched" only when both are there and agree to the rupee (exact or
 //     nothing); a side that is not there is "missing", never "matched";
 //   - what FinCom cannot know is "needs"; what only a change to the data settles cannot be accepted (noAccept);
+//   - a check whose two sides come from the same records (the return's add-back against the list it was made from) is
+//     a CONSISTENCY check (kind "consistency"): it proves the list reached the return, not that the list is right; where
+//     a second source exists (the bank entries, the challans, the filed TDS returns, TRACES) it is a check of its own;
+//   - a payment date the books do not show is asked item by item (ask); the answer changes the computation, and until
+//     every item is answered the check cannot be accepted with a note;
 //   - an acceptance is bound to the check's figures (fp: the difference and both sides): if either side changes, the
 //     acceptance lapses and the check is open again.
 // gate() says whether the JSON may be offered.
@@ -35,6 +40,9 @@ const missing = (id, group, title, text, how) => ({ id, group, title, status: "m
 // fix: true when only a change to the data settles it (never accepted with a note)
 const needs = (id, group, title, text, how, rows, fix) => ({ id, group, title, status: "needs", text, how: how || "", rows: rows || [], noAccept: !!fix });
 const matched = (id, group, title, text, rows) => ({ id, group, title, status: "matched", diff: 0, text: text || "", rows: rows || [] });
+const consistency = (x) => Object.assign(x, { kind: "consistency", title: "Consistency: " + x.title });
+// items to answer one by one on Checks: [{id, label, amt, value (the answer so far)}]
+const askOf = (xs, ans, label) => xs.map((x) => ({ id: x.id, label: label(x), amt: R(x.amt != null ? x.amt : x.dis != null ? x.dis : x.ee), value: (ans || {})[x.id] || "" }));
 
 export function verify(c) {
   const out = [], im = c.imports || {}, M = c.model || {}, S = c.main || {};
@@ -46,11 +54,12 @@ export function verify(c) {
   if (!as26) out.push(missing("as26", "ais", "Form 26AS", "Not brought in.", "Download 26AS from TRACES (View Tax Credit, export as text) and bring it in."));
   if (!ais) out.push(missing("ais_file", "ais", "AIS", "Not brought in.", "Download the AIS JSON from the compliance portal and bring it in."));
   if (as26) {
-    const booked = as26.tds.filter((r) => !r.status || r.status === "F"), notF = as26.tds.filter((r) => r.status && r.status !== "F");
+    const isF = (r) => String(r.status || "").toUpperCase() === "F";
+    const booked = as26.tds.filter(isF), notF = as26.tds.filter((r) => !isF(r));
     const rows = booked.map((r) => ({ label: r.name + " (" + r.tan + ", " + r.sec + ", " + dmy(r.date) + ")", a: null, b: R(r.tax) }));
     out.push(two("tds_26as", "ais", "TDS credit: the books against 26AS", { label: "TDS receivable in the books", amt: B.tds, src: led(B.tdsLedgers) + " at 31-03-2026", why: "no TDS receivable ledger found by name", how: "Say which ledger holds the TDS receivable." },
       { label: "Form 26AS (booking status F)", amt: sumBy(booked, (x) => x.tax), src: "26AS Part I, " + booked.length + " lines" }, rows, "Claim only what 26AS shows as booked; a deduction booked in the books but not in 26AS is followed up with the deductor."));
-    if (notF.length) out.push(needs("tds_status", "ais", "26AS lines not finally booked (status U or P)", notF.length + " lines of " + R(sumBy(notF, (x) => x.tax)) + " are not claimed: status U (unmatched) or P (provisional).", "Claim them only once TRACES shows them as F; or answer with the reason they are claimed.", notF.map((r) => ({ label: r.name + " (" + r.tan + ", " + r.sec + ", status " + r.status + ")", b: R(r.tax) }))));
+    if (notF.length) out.push(needs("tds_status", "ais", "26AS lines not finally booked (status other than F)", notF.length + " lines of " + R(sumBy(notF, (x) => x.tax)) + " are not claimed: status U (unmatched), P (provisional), O (overbooked) or a status that could not be read.", "Claim them only once TRACES shows them as F (bring in the 26AS text export if the status was not read); or answer with the reason.", notF.map((r) => ({ label: r.name + " (" + r.tan + ", " + r.sec + ", " + (r.status ? "status " + r.status : "status not read") + ")", b: R(r.tax) }))));
     if (as26.tcs.length || has(B.tcs)) out.push(two("tcs_26as", "ais", "TCS credit: the books against 26AS", { label: "TCS receivable in the books", amt: B.tcs, src: led(B.tcsLedgers), why: "no TCS receivable ledger found by name", how: "Book the TCS, or say where it is." }, { label: "Form 26AS", amt: sumBy(as26.tcs, (x) => x.tax), src: "26AS Part VI" }));
     out.push(two("adv_tax", "ais", "Advance tax: the books against 26AS", { label: "Advance tax ledger in the books", amt: B.adv, src: led(B.advLedgers), why: "no advance tax ledger found by name", how: "Say which ledger holds the advance tax." }, { label: "Form 26AS challans", amt: sumBy(as26.paid.filter((p) => p.kind === "advance"), (x) => x.amount), src: "26AS, tax paid (minor head 100)" },
       as26.paid.filter((p) => p.kind === "advance").map((p) => ({ label: dmy(p.date) + " BSR " + p.bsr + " / " + p.serial, b: R(p.amount) }))));
@@ -114,8 +123,14 @@ export function verify(c) {
       (td.unpaid || []).map((x) => ({ label: x.party + " " + x.section, a: R(x.tds), b: 0, diff: R(x.tds) })), "TDS not deposited by the due date of the return: 30% of the expense is disallowed (40(a)(ia))."));
     // 40(a)(ia) and 40(a)(i): the return's add-back against the TDS records themselves
     const rec = R(N(td.missedBase) * 0.3 + N(td.unpaidBase) * 0.3 + N(td.nrBase));
-    out.push(two("tds_40aia", "tds", "40(a)(ia) and 40(a)(i): the return against the TDS records", { label: "Added back in the return", amt: N(line("add:40aia")) + N(line("add:40ai")), src: "Schedule BP" },
-      { label: "From the TDS records", amt: rec, src: "30% of sums without TDS (" + R(td.missedBase) + ") and of TDS not deposited by the due date (" + R(td.unpaidBase) + "); 100% of non-resident sums without TDS (" + R(td.nrBase) + ")" }));
+    out.push(consistency(two("tds_40aia", "tds", "40(a)(ia) and 40(a)(i): the return against the TDS records", { label: "Added back in the return", amt: N(line("add:40aia")) + N(line("add:40ai")), src: "Schedule BP" },
+      { label: "From the TDS records", amt: rec, src: "30% of sums without TDS (" + R(td.missedBase) + ") and of TDS not deposited by the due date (" + R(td.unpaidBase) + "); 100% of non-resident sums without TDS or with TDS not deposited (" + R(td.nrBase) + ")" })));
+    // the TDS records against the returns as filed, and the challans against TRACES: second sources
+    out.push(two("tds_filed", "tds", "TDS deducted: FinCom's records against the returns as filed", { label: "FinCom's TDS records now", amt: td.filed ? td.filed.records : null, src: td.filed ? "26Q / 27Q, " + td.filed.quarters.join(", ") : "" },
+      { label: "The returns as filed", amt: td.filed ? td.filed.tds : null, src: "the copy kept when each return was marked filed", why: "no 26Q / 27Q of FY 2025-26 is marked filed in FinCom", how: "Mark each filed return on TDS › File (with its token number)." },
+      (td.notFiled || []).map((q) => ({ label: q + ": entries, not marked filed" })), "An entry changed after filing: a correction statement is due before the return relies on it."));
+    out.push(two("tds_traces", "tds", "TDS challans: FinCom against TRACES", { label: "Used by FinCom", amt: td.traces ? td.traces.fincom : null, src: "FinCom's challans" },
+      { label: "Consumed per TRACES", amt: td.traces ? td.traces.traces : null, src: "TRACES' consolidated file / challan status file", why: "no TRACES file for FY 2025-26 in FinCom", how: "Bring in the consolidated file or the challan status file on TDS › TRACES files." }, td.traces ? td.traces.rows : []));
     if ((c.nrAsk || []).length) out.push(needs("tds_nr", "tds", "Resident or non-resident?", c.nrAsk.length + " parties without TDS look foreign: " + c.nrAsk.join(", ") + ". A non-resident's sum is disallowed in full (40(a)(i)), a resident's at 30%.", "Mark the non-residents on TDS (27Q details), or answer that they are resident.", c.nrAsk.map((p) => ({ label: p }))));
   } else out.push(missing("tds", "tds", "TDS returns in FinCom", (td && td.text) || "No TDS data for the year.", "Open TDS for the client."));
 
@@ -145,39 +160,52 @@ export function verify(c) {
       a: { label: "Paid late (disallowed)", amt: R(sumBy(late, (x) => x.ee)), src: "challans brought in" }, b: { label: "Allowed", amt: 0, src: "" },
       rows: late.map((x) => ({ label: x.fund + " " + mm(x.ym) + ": due " + dmy(x.due) + ", paid " + dmy(x.paidOn), a: R(x.ee) })),
       how: late.length ? "Disallowed for good (no grace days, Checkmate Services, SC 2022); added back in the computation. Accept each with a note." : "" });
-    if (unknown.length) out.push(needs("pf_36va_unknown", "pf", "Employees' share: payment date not known", unknown.length + " months (" + unknown.map((x) => x.fund + " " + mm(x.ym)).join(", ") + ") have no challan: not disallowed, not confirmed.", "Bring in the challans; until then answer why the months are taken as paid in time.", unknown.map((x) => ({ label: x.fund + " " + mm(x.ym), a: R(x.ee) }))));
+    if (unknown.length) out.push(Object.assign(needs("pf_36va_unknown", "pf", "Employees' share: payment date not known", unknown.length + " months (" + unknown.map((x) => x.fund + " " + mm(x.ym)).join(", ") + ") have no challan: neither disallowed nor taken as paid in time.", "Bring in the challans, or give each month's date of payment (or Not paid) here: the computation follows the answer.", unknown.map((x) => ({ label: x.fund + " " + mm(x.ym), a: R(x.ee) })), true),
+      { ask: askOf(unknown, c.answers, (x) => x.fund + " " + mm(x.ym) + " (due " + dmy(x.due) + ")") }));
   }
 
-  // ---------- 43B and 43B(h): the books' dues at the year end and when they were paid ----------
+  // ---------- 43B and 43B(h): this year's charge to each payable, and when it was paid ----------
   const dues = c.dues43B;
   if (dues) {
-    const dis = dues.filter((x) => x.kind43B && !x.unknown && R(N(x.closing) - N(x.paidByDue)) > 0), unk = dues.filter((x) => x.unknown && R(N(x.closing) - N(x.paidByDue)) > 0);
-    const want = R(sumBy(dis, (x) => N(x.closing) - N(x.paidByDue)));
-    out.push(two("43b", "dis", "43B: dues unpaid by the due date of the return", { label: "Added back in the return", amt: N(line("add:43b")), src: "Schedule BP, 43B" },
-      { label: "Unpaid by the due date, from the books", amt: want, src: dues.length + " ledgers payable at 31-03-2026; payments from the later entries and challans" },
-      dues.map((x) => ({ label: x.ledger + " (" + x.kind + ")" + (x.kind43B ? "" : ": not an expense claimed, not under 43B") + (x.dates && x.dates.length ? ", paid " + x.dates.map(dmy).join(", ") : ""), a: R(x.closing), b: R(x.paidByDue) }))));
-    if (unk.length) out.push(needs("43b_unknown", "dis", "43B: payment dates not known", unk.length + " dues have no payment in the books up to the due date of the return (the books may end before it).", "Give the payment date and challan, or answer that it was not paid.", unk.map((x) => ({ label: x.ledger + " (" + x.kind + ")", a: R(N(x.closing) - N(x.paidByDue)) }))));
-    const gstLike = dues.filter((x) => (x.kind === "gst" || x.kind === "tds") && R(N(x.closing) - N(x.paidByDue)) > 0);
-    if (gstLike.length) out.push(needs("43b_gst", "dis", "GST / TDS payable at the year end, unpaid by the due date", gstLike.map((x) => x.ledger).join(", ") + ": GST is under 43B only if charged to the P&L; unpaid TDS falls under 40(a)(ia).", "Answer whether the GST was claimed as an expense.", gstLike.map((x) => ({ label: x.ledger, a: R(N(x.closing) - N(x.paidByDue)) }))));
+    const on = dues.filter((x) => x.kind43B), unk = on.filter((x) => x.unknown), shareUnk = on.filter((x) => x.unknownShare);
+    const want = R(sumBy(on.filter((x) => !x.unknown && !x.unknownShare), (x) => x.dis));
+    out.push(consistency(two("43b", "dis", "43B: this year's dues unpaid by the due date", { label: "Added back in the return", amt: N(line("add:43b")), src: "Schedule BP, 43B" },
+      { label: "This year's charge unpaid by the due date", amt: want, src: dues.length + " payables at 31-03-2026: the year's charge, the payments after the year end" },
+      dues.map((x) => ({ label: x.ledger + " (" + x.kind + (x.role === "ee" ? ", employees' share: 36(1)(va), not 43B" : x.role === "er" ? ", employer's" : "") + ")" + (x.kind43B ? ": charged this year " + R(x.charge) + (x.chargeKnown ? "" : " (not known: the balance)") : ": not under 43B") + (x.dates && x.dates.length ? ", paid " + x.dates.map(dmy).join(", ") : ""), a: R(x.closing), b: R(x.dis) })))));
+    if (unk.length) out.push(Object.assign(needs("43b_unknown", "dis", "43B: payment dates not known", unk.length + " dues are unpaid in the books and the books end before the due date of the return (" + dmy(c.due) + "). Nothing is added back for them until each is answered.", "Give each one's date of payment, or Not paid: the computation follows the answer.", unk.map((x) => ({ label: x.ledger + " (" + x.kind + ")", a: R(x.dis) })), true),
+      { ask: askOf(unk, c.answers, (x) => x.ledger + ": " + R(x.unpaid) + " of this year's charge") }));
+    if (shareUnk.length) out.push(needs("43b_share", "dis", "43B: the employer's part of a PF / ESI payable", shareUnk.map((x) => x.ledger).join(", ") + " holds the employer's and the employees' shares together and March's ECR / ESI challan is not in: the employer's part (43B) cannot be told from the employees' (36(1)(va)).", "Bring in March's ECR / ESI challan, or keep the shares in two ledgers in Tally.", shareUnk.map((x) => ({ label: x.ledger, a: R(x.unpaid) })), true));
+    const guess = on.filter((x) => !x.chargeKnown && R(x.dis));
+    if (guess.length) out.push(needs("43b_charge", "dis", "43B: this year's charge not known", guess.map((x) => x.ledger).join(", ") + ": the year's charge could not be read from the vouchers, so the whole unpaid balance is taken.", "Bring the year's vouchers in from Tally.", guess.map((x) => ({ label: x.ledger, a: R(x.dis) })), true));
+    const gstLike = dues.filter((x) => (x.kind === "gst" || x.kind === "tds") && R(N(x.closing) - N(x.paid)) > 0);
+    if (gstLike.length) out.push(needs("43b_gst", "dis", "GST / TDS payable at the year end, unpaid by the due date", gstLike.map((x) => x.ledger).join(", ") + ": GST is under 43B only if charged to the P&L; unpaid TDS falls under 40(a)(ia).", "Answer whether the GST was claimed as an expense.", gstLike.map((x) => ({ label: x.ledger, a: R(N(x.closing) - N(x.paid)) }))));
+    const pp = c.pfProof;
+    if (pp) out.push(two("43b_paid", "dis", "PF / ESI paid after the year end: the bank entries against the challans", { label: "Bank entries in the books", amt: pp.books, src: "payments to the PF / ESI payables, April to the due date" },
+      { label: "March challans brought in", amt: pp.challans, src: "EPFO / ESIC challans (dates of credit)", why: "March's challans are not brought in", how: "Bring in March's PF and ESI challans." }, pp.rows, "A payment without its challan, or a challan without its entry: find which, the 43B date follows the challan."));
   } else out.push(missing("43b", "dis", "43B dues from the books", "The books' payables at 31-03-2026 could not be read.", "Bring the books in from Tally."));
+  const pr = c.prior43B;
+  if (pr && pr.ask) out.push(Object.assign(needs("43b_prior", "dis", "43B of earlier years paid this year", "Dues were payable at 1-04-2025 (" + (pr.rows || []).map((x) => x.ledger).join(", ") + ") and last year's return is not in FinCom: what of them was added back last year and paid in FY 2025-26 is allowed now (section 43B).", "Give the amount (0 if none): it is allowed in the computation.", (pr.rows || []).map((x) => ({ label: x.ledger + ": opening " + R(x.opening) + ", paid in the year " + R(x.paidInYear) })), true), { askAmount: true }));
   const ms = c.msme;
   if (ms) {
-    out.push(two("43bh", "dis", "43B(h): micro and small suppliers paid late", { label: "Added back in the return", amt: N(line("add:43bh")), src: "Schedule BP, 43B(h)" }, { label: "Paid after the " + ms.days + " days, from the books", amt: R(sumBy(ms.rows, (x) => x.amt)), src: "bills open at 31-03-2026 and when each was settled" },
-      ms.rows.map((x) => ({ label: x.party + " " + (x.ref || "") + " of " + dmy(x.date) + ": limit " + dmy(x.limit) + (x.paidOn ? ", paid " + dmy(x.paidOn) : ", unpaid"), a: R(x.amt) }))));
-    if ((ms.unknown || []).length) out.push(needs("43bh_unknown", "dis", "43B(h): when MSME bills were paid", ms.unknown.length + " bills fall due after the books end: not known whether paid within " + ms.days + " days.", "Give the payment dates, or answer.", ms.unknown.map((x) => ({ label: x.party + " " + (x.ref || "") + ", limit " + dmy(x.limit), a: R(x.amt) }))));
+    out.push(consistency(two("43bh", "dis", "43B(h): micro and small suppliers paid late", { label: "Added back in the return", amt: N(line("add:43bh")), src: "Schedule BP, 43B(h)" }, { label: "Paid after the " + ms.days + " days, bill by bill", amt: R(sumBy(ms.rows, (x) => x.amt)), src: "bills of the year open at 31-03-2026 (the ageing's references) and when each was settled" },
+      ms.rows.map((x) => ({ label: x.party + " " + (x.ref || "") + " of " + dmy(x.date) + ": limit " + dmy(x.limit) + (x.paidOn ? ", paid " + dmy(x.paidOn) : ", unpaid"), a: R(x.amt) })))));
+    if (ms.fifo) out.push(two("43bh_fifo", "dis", "43B(h): the bill references against the payment vouchers", { label: "Bill by bill (the ageing)", amt: R(sumBy(ms.rows, (x) => x.amt)), src: "bill-wise references" },
+      { label: "From the payment vouchers", amt: ms.fifo.unknown ? null : ms.fifo.amt, src: "each MSME party's ledger, oldest bills paid first", why: "some bills fall due after the books end" }, [], "The references and the vouchers settle bills differently: see which bill each payment was for."));
+    if ((ms.unknown || []).length) out.push(Object.assign(needs("43bh_unknown", "dis", "43B(h): when MSME bills were paid", ms.unknown.length + " bills fall due after the books end: not known whether paid within " + ms.days + " days. Nothing is added back for them until each is answered.", "Give each bill's date of payment, or Not paid: the computation follows the answer.", ms.unknown.map((x) => ({ label: x.party + " " + (x.ref || "") + ", limit " + dmy(x.limit), a: R(x.amt) })), true),
+      { ask: askOf(ms.unknown, c.answers, (x) => x.party + " " + (x.ref || "") + " of " + dmy(x.date) + " (limit " + dmy(x.limit) + ")") }));
   }
 
   // ---------- 3CD: the saved 3CD against the ITR's schedules ----------
   if (M.audit) {
     if (!c.form3cd) out.push(missing("3cd", "3cd", "Form 3CD drafted in FinCom", "The tax audit applies; no saved Audit run for FY 2025-26 to draw the 3CD from.", "Run Audit for the whole year: its 3CD draft fills itself."));
-    else c.form3cd.forEach((x) => out.push(two("3cd_" + x.clause, "3cd", "3CD clause " + x.clause + " against the return", { label: "Form 3CD (" + x.what + ")", amt: x.amt, src: "the saved Audit run of " + (x.at || "").slice(0, 10) },
-      { label: "Schedule BP", amt: x.itrBase != null ? x.itrBase : N(line(x.itrKey)), src: x.itrSrc })));
+    else c.form3cd.forEach((x) => out.push((x.clause.startsWith("21(b)") ? consistency : (y) => y)(two("3cd_" + x.clause, "3cd", "3CD clause " + x.clause + " against the return", { label: "Form 3CD (" + x.what + ")", amt: x.amt, src: "the saved Audit run of " + (x.at || "").slice(0, 10) },
+      { label: "Schedule BP", amt: x.itrBase != null ? x.itrBase : N(line(x.itrKey)), src: x.itrSrc }))));
   }
 
   // ---------- the computation ----------
   (S.needs || []).forEach((n) => out.push(needs("need_" + n.key, "comp", n.text.split(":")[0], n.text, "Settle it on Data.", [], true)));
   (S.warn || []).forEach((w) => out.push({ id: "warn_" + w.key, group: "comp", title: w.text.split(/[.:]/)[0], status: "difference", diff: 0, text: w.text, rows: [], how: "Correct the figure, or accept it with a note." }));
-  if (S.tax && N(S.tax.rebate) && N(S.special)) out.push(needs("87a_special", "comp", "87A with special-rate income", "A rebate of " + R(S.tax.rebate) + " is given with special-rate income of " + R(S.special) + " (FinCom gives it only against the tax on normal income, eligibility on total income).", "Confirm the reading of section 87A for this client."));
+  if (S.carry && N(S.carry.cyUd) && M.form !== "ITR-4") out.push(needs("ud_split", "comp", "This year's unabsorbed depreciation", "Of the loss left after set-off, " + R(S.carry.cyUd) + " is this year's depreciation: it goes to Schedule UD (carried without limit, section 32(2)) and only " + R(S.carry.cyBus) + " to Schedule CFL as business loss. The e-filing utility's rule 618 compares CFL's business loss with CYLA's whole balance: if the utility asks for the whole balance in CFL, it would be counted twice.", "Confirm the split (or say how the utility took it)."));
   if (S.carry && N(S.carry.lostS80)) out.push(needs("carry_s80", "comp", "This year's business loss is lost", "The return is after the due date: the business loss of " + R(S.carry.lostS80) + " is not carried forward (section 80).", "Confirm it is understood (the JSON carries no such loss forward)."));
   sanity(M, S).forEach((x) => out.push(x));
   const b2 = recheck(M), dd = differences(S.key || {}, b2);

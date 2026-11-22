@@ -92,14 +92,19 @@ export function adjustments(f) {
   const tds = (f.tdsMissed || []).filter((x) => R(x.base)), unp = (f.tdsUnpaid || []).filter((x) => R(x.base));
   add("40aia", "30% of sums on which TDS was not deducted, or not deposited by the due date (section 40(a)(ia))", tds.concat(unp).reduce((s, x) => s + N(x.base) * 0.3, 0), "AmtDebPLDisallowUs40", "FinCom's TDS: should have deducted; deducted but not deposited",
     tds.map((x) => ({ ledger: x.party, group: "section " + x.section + ", not deducted", amt: R(N(x.base) * 0.3), note: "30% of " + R(x.base) })).concat(unp.map((x) => ({ ledger: x.party, group: "section " + x.section + ", not deposited by the due date", amt: R(N(x.base) * 0.3), note: "30% of " + R(x.base) }))));
-  const nr = (f.nrMissed || []).filter((x) => R(x.base));
-  add("40ai", "sums paid to non-residents without TDS (section 40(a)(i))", nr.reduce((s, x) => s + N(x.base), 0), "AmtDebPLDisallowUs40", "FinCom's TDS: non-resident payments", nr.map((x) => ({ ledger: x.party, group: "section " + (x.section || "195"), amt: R(x.base) })));
+  // 40(a)(i): the whole sum paid to a non-resident on which TDS was not deducted, or deducted and not deposited by the
+  // due date of the return
+  const nr = (f.nrMissed || []).filter((x) => R(x.base)), nrU = (f.nrUnpaid || []).filter((x) => R(x.base));
+  add("40ai", "sums paid to non-residents without TDS, or with TDS not deposited by the due date (section 40(a)(i))", nr.concat(nrU).reduce((s, x) => s + N(x.base), 0), "AmtDebPLDisallowUs40", "FinCom's TDS: non-resident payments",
+    nr.map((x) => ({ ledger: x.party, group: "section " + (x.section || "195") + ", not deducted", amt: R(x.base) })).concat(nrU.map((x) => ({ ledger: x.party, group: "section " + (x.section || "195") + ", not deposited by the due date", amt: R(x.base) }))));
   const cash = f.cash40A3 || [];
   add("40a3", "cash payments above the limit (section 40A(3))", cash.reduce((s, x) => s + N(x.amount), 0), "AmtDebPLDisallowUs40A", "Audit: cash payments above Rs 10,000 a day",
     cash.map((x) => ({ ledger: x.party, group: x.date, amt: R(x.amount) })));
-  const dues = (f.dues43B || []).filter((x) => x.kind43B && !x.unknown && R(N(x.closing) - N(x.paidByDue)) > 0);
-  add("43b", "statutory dues unpaid by the due date of the return (section 43B)", dues.reduce((s, x) => s + Math.max(0, N(x.closing) - N(x.paidByDue)), 0), "AmtDebPLDisallowUs43B", "Balances at 31-03-2026 and payments after",
-    dues.map((x) => ({ ledger: x.ledger, group: x.kind, amt: R(N(x.closing) - N(x.paidByDue)), note: "payable " + R(x.closing) + ", paid by the due date " + R(x.paidByDue) })));
+  // 43B: the part of this year's charge unpaid by the due date (dues43B); an item whose date or employer's share is not
+  // known is not added (the checks ask, and the JSON waits for the answer)
+  const dues = (f.dues43B || []).filter((x) => x.kind43B && !x.unknown && !x.unknownShare && R(x.dis) > 0);
+  add("43b", "this year's statutory dues unpaid by the due date of the return (section 43B)", dues.reduce((s, x) => s + N(x.dis), 0), "AmtDebPLDisallowUs43B", "the year's charge to each payable and the payments after the year end",
+    dues.map((x) => ({ ledger: x.ledger, group: x.kind + (x.role ? " (" + x.role + ")" : ""), amt: R(x.dis), note: "charged this year " + R(x.charge) + ", of it unpaid " + R(x.unpaid) + (x.part != null && x.part < 1 ? ", employer's part " + Math.round(x.part * 100) + "%" : "") + (x.answered ? ", answered " + x.answered : "") })));
   add("43b_leave", "leave encashment and bonus provided, not paid (section 43B)", f.leave43B, "AmtDebPLDisallowUs43B", "Provisions 5B / 5C", f.leaveTrace);
   const mrows = f.msmeRows || [];
   add("43bh", "dues to micro and small enterprises not paid within the time of the MSMED Act (section 43B(h))", mrows.length ? mrows.reduce((s, x) => s + N(x.amt), 0) : f.msme43Bh, "AmtDebPLDisallowUs43B", "the books: MSME bills open at the year end and when settled",
@@ -112,7 +117,7 @@ export function adjustments(f) {
   add("loss_sale", "loss on sale of fixed assets", f.lossOnSale, "OthItemDisallowUs28To44DA", "Part A-P&L, loss on sale");
   sub("os_interest", "interest income shown under other sources", f.interestIncome, "IncRecCredPLOthHeadDtls.OtherSources", "Part A-P&L, interest income", f.interestTrace);
   sub("profit_sale", "profit on sale of fixed assets (taken in the block, section 43(6))", f.profitOnSale, "AnyOthAmtAllDeduct", "Part A-P&L, profit on sale");
-  sub("43b_prior", "43B dues of earlier years paid this year", f.prior43BPaid, "AmtDisallUs43BNowAllow", "Last year's 43B, paid");
+  sub("43b_prior", "43B dues of earlier years paid this year", f.prior43BPaid, "AmtDisallUs43BNowAllow", f.prior43BSrc || "Last year's 43B, paid", f.prior43BTrace);
   return { adds, less, itDep: f.itDep == null ? null : R(f.itDep) };
 }
 
@@ -124,59 +129,130 @@ export function pf36va(ecr, pfc, esi) {
   (ecr || []).forEach((e) => {
     const pays = (pfc || []).filter((c) => c.wageMonth === e.wageMonth), paidOn = pays.map((c) => c.paidOn).sort().slice(-1)[0] || "";
     // no challan: the payment date is not known: neither disallowed nor taken as in time (the checks ask)
-    out.push({ fund: "PF", ym: e.wageMonth, ee: N(e.data && e.data.ee), due: due(e.wageMonth), paidOn, late: !!paidOn && paidOn > due(e.wageMonth), missing: !paidOn });
+    out.push({ id: "36va:PF" + e.wageMonth, fund: "PF", ym: e.wageMonth, ee: N(e.data && e.data.ee), due: due(e.wageMonth), paidOn, late: !!paidOn && paidOn > due(e.wageMonth), missing: !paidOn });
   });
-  (esi || []).forEach((c) => { if (c.data && c.data.ee != null) out.push({ fund: "ESI", ym: c.wageMonth, ee: N(c.data.ee), due: due(c.wageMonth), paidOn: c.paidOn, late: !!c.paidOn && c.paidOn > due(c.wageMonth), missing: !c.paidOn }); });
+  (esi || []).forEach((c) => { if (c.data && c.data.ee != null) out.push({ id: "36va:ESI" + c.wageMonth, fund: "ESI", ym: c.wageMonth, ee: N(c.data.ee), due: due(c.wageMonth), paidOn: c.paidOn, late: !!c.paidOn && c.paidOn > due(c.wageMonth), missing: !c.paidOn }); });
   return out.sort((a, b) => (a.ym + a.fund).localeCompare(b.ym + b.fund));
 }
+// the owner's payment dates for the months with no challan: ans {id: yyyymmdd | "none"}; after the 15th, or not paid,
+// the employees' share is disallowed (36(1)(va))
+export function settle36va(rows, ans) {
+  ans = ans || {};
+  return (rows || []).map((x) => { const a = ans[x.id]; if (!x.missing || !a) return x; return Object.assign({}, x, { missing: false, answered: a, paidOn: a === "none" ? "" : a, late: a === "none" || a > x.due }); });
+}
 
-// 43B: what each payable ledger is, and whether 43B applies to it (a deduction claimed only when paid)
+// 43B: what each payable ledger is, and whether 43B applies to it (a deduction claimed only when paid). A PF / ESI
+// ledger may be the employer's (43B in full), the employees' (36(1)(va) only, never 43B) or one for both (role "")
 export function kind43B(ledger) {
   const l = String(ledger || "").toUpperCase();
   if (/\bTDS\b|\bTCS\b|TAX DEDUCTED|TAX COLLECTED/.test(l)) return { kind: "tds", on: false };
   if (/GST|CGST|SGST|IGST|UTGST|OUTPUT TAX/.test(l)) return { kind: "gst", on: false };
-  if (/PROVIDENT|\bE?PF\b/.test(l)) return { kind: "pf", on: true };
-  if (/\bESIC?\b|STATE INSURANCE/.test(l)) return { kind: "esi", on: true };
+  const fund = /PROVIDENT|\bE?PF\b/.test(l) ? "pf" : /\bESIC?\b|STATE INSURANCE/.test(l) ? "esi" : "";
+  if (fund) {
+    const role = /EMPLOYER|\bER\b|COMPANY'?S? (SHARE|CONTRI)/.test(l) ? "er" : /EMPLOYEE'?S?'? ?(SHARE|CONTRI|DEDUCT)|\bEE\b|DEDUCTED|DEDUCTION|STAFF (SHARE|CONTRI)|RECOVER/.test(l) ? "ee" : "";
+    return { kind: fund, role, on: role !== "ee" };
+  }
   if (/BONUS/.test(l)) return { kind: "bonus", on: true };
   if (/LEAVE/.test(l)) return { kind: "leave", on: true };
   if (/INTEREST/.test(l) && /BANK|LOAN|NBFC|FINANCE|ACCRUED/.test(l)) return { kind: "interest", on: true };
   if (/PROFESSION(AL)? TAX|\bP\.?T\.? PAYABLE|PROPERTY TAX|MUNICIPAL|ELECTRICITY DUTY|STAMP DUTY|CESS|CUSTOMS|EXCISE|LABOUR WELFARE/.test(l)) return { kind: "tax", on: true };
   return null;
 }
-// rows: payable ledgers at the year end [{ledger, closing (positive = payable)}]; pays: payments after the year end
-// [{ledger, date, amt}] (debits in the later entries, and the March PF / ESI challans); due: the return's due date;
-// last: the books' last date; share: {pf, esi} the employer's part of a PF / ESI payable (March's ECR / challan) or null
+// 43B on THIS YEAR'S charge (the review of 5a6df2218): what the year's profit and loss was charged for the ledger and is
+// still unpaid on the due date of the return, never the whole balance (a 30 lakh leave provision of which 3 lakh was
+// charged this year adds back at most the 3 lakh). Payments are taken against the oldest dues first: in the year they
+// settle the opening balance before the year's charge, and after the year end what is left of the opening balance first.
+// rows: payable ledgers [{ledger, opening, charge (credits of the year from the P&L; null: not known), closing}]
+// (positive = payable); pays: payments after the year end [{ledger, date, amt}], one per payment (pfDedup); due: the
+// return's due date; last: the books' last date; share: {pf, esi} the employer's part of a ledger for both (March's ECR /
+// ESI challan) or null. Each -> {id, ledger, kind, role, kind43B, opening, charge, chargeKnown, closing, paid, unpaid (of
+// the year's charge), part (the employer's), dis (added back), dates, unknown (the date), unknownShare}
 export function dues43B(rows, pays, due, last, share) {
   const out = [];
   rows.forEach((r) => {
-    const k = kind43B(r.ledger); if (!k || R(r.closing) <= 0) return;
-    let closing = R(r.closing), part = 1, unknownShare = false;
-    if (k.kind === "pf" || k.kind === "esi") { const sh = share && share[k.kind]; if (sh == null) unknownShare = true; else part = sh; }
+    const k = kind43B(r.ledger), closing = R(r.closing); if (!k || closing <= 0) return;
+    const known = r.charge != null, charge = known ? Math.max(0, R(r.charge)) : closing;
+    const chargeOpen = Math.min(charge, closing), oldOpen = closing - chargeOpen;
     const mine = pays.filter((p) => p.ledger === r.ledger && p.date <= due).sort((a, b) => a.date.localeCompare(b.date));
     let paid = 0; const dates = [];
     mine.forEach((p) => { if (paid < closing) { paid += N(p.amt); dates.push(p.date); } });
     paid = Math.min(R(paid), closing);
-    const open = closing - paid;
-    // the employer's part of what is open (PF / ESI): the employee's part is 36(1)(va), not 43B
-    out.push({ ledger: r.ledger, kind: k.kind, kind43B: k.on, closing: k.on && part < 1 ? R(closing * part) : closing, paidByDue: k.on && part < 1 ? R(paid * part) : paid, dates,
-      unknown: (open > 0 && (!last || last < due)) || (unknownShare && open > 0), trace: r.trace || [] });
+    const unpaid = R(Math.max(0, chargeOpen - Math.max(0, paid - oldOpen)));
+    let part = k.on ? 1 : 0, unknownShare = false;
+    if (k.on && !k.role && (k.kind === "pf" || k.kind === "esi")) { const sh = share && share[k.kind]; if (sh == null) { part = null; unknownShare = unpaid > 0; } else part = sh; }
+    const dis = k.on ? R(unpaid * (part == null ? 1 : part)) : 0;
+    out.push({ id: "43b:" + r.ledger, ledger: r.ledger, kind: k.kind, role: k.role || "", kind43B: k.on, opening: R(r.opening), charge, chargeKnown: known, closing, paid, dates, unpaid, part, dis,
+      unknown: k.on && unpaid > 0 && (!last || last < due), unknownShare, trace: r.trace || [] });
   });
   return out;
 }
+// the owner's answers on the items whose payment date the books do not show: ans {id: yyyymmdd | "none"}. The answer
+// changes the computation: paid by the due date, nothing is added back; later or not paid, the unpaid part is
+export function settle43B(dues, ans, due) {
+  ans = ans || {};
+  return (dues || []).map((x) => {
+    const a = ans[x.id]; if (!x.unknown || !a) return x;
+    const late = a === "none" || a > due;
+    return Object.assign({}, x, { unknown: false, answered: a, dis: late ? x.dis : 0, dates: a === "none" ? x.dates : x.dates.concat([a]) });
+  });
+}
+export const dis43B = (dues) => R((dues || []).filter((x) => x.kind43B && !x.unknown && !x.unknownShare).reduce((s, x) => s + N(x.dis), 0));
+// one payment once: a March PF / ESI challan and the bank entry in the books for it (the same ledger, the same amount
+// to the rupee, and its CRN / TRRN in the narration or a date within five days) are the same payment: the challan's date
+// is kept (it is the date of credit). books: [{ledger, date, amt, narr}], challans: [{ledger, date, amt, ref}]
+export function pfDedup(books, challans) {
+  const used = new Set(), matched = [];
+  const days = (a, b) => Math.abs(Date.UTC(+a.slice(0, 4), +a.slice(4, 6) - 1, +a.slice(6, 8)) - Date.UTC(+b.slice(0, 4), +b.slice(4, 6) - 1, +b.slice(6, 8))) / 864e5;
+  (challans || []).forEach((c) => {
+    const i = books.findIndex((p, j) => !used.has(j) && p.ledger === c.ledger && Math.abs(N(p.amt) - N(c.amt)) < 1 && ((c.ref && String(p.narr || "").includes(c.ref)) || days(p.date, c.date) <= 5));
+    if (i >= 0) { used.add(i); matched.push({ challan: c, book: books[i] }); }
+  });
+  return { pays: books.filter((p, j) => !used.has(j)).concat(challans || []), matched, booksOnly: books.filter((p, j) => !used.has(j)) };
+}
 // 43B(h): bills of micro and small suppliers open at the year end; each is allowed this year only if paid within the
 // days of section 15 of the MSMED Act (15, or the agreed days up to 45) of its date: paid later (even after 31 March,
-// before the return) or unpaid, it is added back. bills: [{party, ref, date, amt, paidOn (yyyymmdd or "")}]
-export function msme43Bh(bills, days, fyEnd, last) {
+// before the return) or unpaid, it is added back. Bills of an earlier year (dated before fyStart) are not this year's
+// expense: they are left out (paid this year, they are earlier years' 43B paid: prior43BPaid).
+// bills: [{party, ref, date, amt, paidOn (yyyymmdd or "")}]
+export function msme43Bh(bills, days, fyEnd, last, fyStart) {
   const add = (d, n) => { const t = new Date(Date.UTC(+d.slice(0, 4), +d.slice(4, 6) - 1, +d.slice(6, 8)) + n * 864e5); return t.toISOString().slice(0, 10).replace(/-/g, ""); };
-  const rows = [], unknown = [];
+  const rows = [], unknown = [], prior = [];
   (bills || []).forEach((b) => {
-    const limit = add(b.date, N(days) || 15), x = Object.assign({}, b, { limit });
+    const limit = add(b.date, N(days) || 15), x = Object.assign({ id: "43bh:" + b.party + "|" + (b.ref || "") + "|" + b.date }, b, { limit });
+    if (fyStart && b.date < fyStart) { prior.push(x); return; }
     if (limit <= fyEnd) { rows.push(x); return; }                       // already beyond the days at the year end
     if (b.paidOn && b.paidOn <= limit) return;                           // paid in time: allowed
     if (b.paidOn && b.paidOn > limit) { rows.push(x); return; }          // paid late
     if (!last || last < limit) unknown.push(x); else rows.push(x);       // unpaid: late once the limit has passed
   });
-  return { rows, unknown, days: N(days) || 15 };
+  return { rows, unknown, prior, days: N(days) || 15 };
+}
+// the owner's payment dates for the MSME bills due after the books end: paid by the limit, allowed; later or not paid,
+// added back
+export function settleMsme(ms, ans) {
+  if (!ms) return ms; ans = ans || {};
+  const rows = ms.rows.slice(), unknown = [];
+  (ms.unknown || []).forEach((x) => { const a = ans[x.id]; if (!a) { unknown.push(x); return; } if (a === "none" || a > x.limit) rows.push(Object.assign({}, x, { paidOn: a === "none" ? "" : a, answered: a })); });
+  return Object.assign({}, ms, { rows, unknown });
+}
+// the same bills worked out a second way, for the check: each MSME party's own ledger in the vouchers, bills (credits)
+// settled by payments (debits) oldest first, not the bill-wise references the ageing uses.
+// flows: {party: {opening (credit positive), moves: [{date, amt (credit positive)}]}}
+export function msmeFifo(flows, days, fyStart, fyEnd, last) {
+  const bills = [];
+  Object.keys(flows || {}).forEach((party) => {
+    const f = flows[party], q = [];
+    if (N(f.opening) > 0) q.push({ party, ref: "opening", date: "00000000", amt: N(f.opening), left: N(f.opening), paidOn: "" });
+    const mv = (f.moves || []).slice().sort((a, b) => a.date.localeCompare(b.date));
+    mv.forEach((m) => {
+      if (N(m.amt) > 0) { q.push({ party, ref: "", date: m.date, amt: N(m.amt), left: N(m.amt), paidOn: "" }); return; }
+      let pay = -N(m.amt);
+      q.forEach((b) => { if (pay <= 0 || b.left <= 0) return; const u = Math.min(b.left, pay); b.left -= u; pay -= u; if (b.left <= 0.5) b.paidOn = m.date; });
+    });
+    // what was open at the year end: the bills of the year not settled by 31 March
+    q.forEach((b) => { if (b.date >= fyStart && b.date <= fyEnd) { const openAtEnd = !b.paidOn || b.paidOn > fyEnd; if (openAtEnd) bills.push({ party, ref: b.ref, date: b.date, amt: R(b.amt), paidOn: b.paidOn }); } });
+  });
+  return msme43Bh(bills, days, fyEnd, last, fyStart);
 }
 // the profit before tax as Tally's own profit and loss gives it: every ledger under Tally's revenue groups (sales,
 // purchases, direct and indirect incomes and expenses, by the books' group chain, not FinCom's codes), with the stock
@@ -225,18 +301,58 @@ export function fromApp(fy, imports, due) {
     }
   } catch (e) { notes.push("TDS could not be read: " + ((e && e.message) || e)); }
   const nrMissed = missed.filter((x) => nrInfo[x.party]), resMissed = missed.filter((x) => !nrInfo[x.party]);
+  // deducted but not deposited: a non-resident's sum goes in full under 40(a)(i), a resident's at 30% under 40(a)(ia)
+  const isNr = (x) => !!nrInfo[x.party] || /^195/.test(String(x.section || ""));
+  const nrUnpaid = unpaid.filter(isNr), resUnpaid = unpaid.filter((x) => !isNr(x));
   const nrAsk = resMissed.filter((x) => foreign.test(x.party)).map((x) => x.party);
-  if (tdsRec) { tdsRec.missedBase = R(resMissed.reduce((a, x) => a + x.base, 0)); tdsRec.unpaidBase = R(unpaid.reduce((a, x) => a + x.base, 0)); tdsRec.nrBase = R(nrMissed.reduce((a, x) => a + x.base, 0)); }
-  // 43B: the payable ledgers at the year end, and the payments in the later entries and the March challans up to the due date
-  const pays = [];
-  vs.forEach((v) => { if (v.date <= y1 || v.date > due) return; (v.ent || []).forEach((e) => { if (N(e.a) < 0) pays.push({ ledger: e.l, date: v.date, amt: -N(e.a) }); }); });
+  if (tdsRec) {
+    tdsRec.missedBase = R(resMissed.reduce((a, x) => a + x.base, 0)); tdsRec.unpaidBase = R(resUnpaid.reduce((a, x) => a + x.base, 0)); tdsRec.nrBase = R(nrMissed.concat(nrUnpaid).reduce((a, x) => a + x.base, 0));
+    // the second sources for the TDS: the returns as filed (the copy kept when each was marked filed, b.tdsSnap) and the
+    // challans as TRACES consumed them (the consolidated file / challan status file, TDSReg.traces)
+    try {
+      const fyl = fy + "-" + String(+fy + 1).slice(2), snap = b.tdsSnap || {}, qs = [];
+      let filedTds = 0, recTds = 0;
+      ["26Q", "27Q"].forEach((form) => ["Q1", "Q2", "Q3", "Q4"].forEach((q) => {
+        const s1 = snap[fyl + "|" + q + "|" + form];
+        const mine = G.TDS.formRows ? G.TDS.formRows(form).filter((r) => r.fy === fyl && r.q === q) : [];
+        if (s1 && s1.rows) { qs.push(form + " " + q); Object.values(s1.rows).forEach((r) => { filedTds += N(r[5]); }); recTds += mine.reduce((a, r) => a + N(r.tds), 0); }
+        else if (mine.length) tdsRec.notFiled = (tdsRec.notFiled || []).concat([form + " " + q]);
+      }));
+      tdsRec.filed = qs.length ? { quarters: qs, tds: R(filedTds), records: R(recTds) } : null;
+      const tr = G.TDSReg && G.TDSReg.traces ? G.TDSReg.traces({ fy: fyl }).filter((x) => x.src === "conso" || x.src === "status") : [];
+      tdsRec.traces = tr.length ? { fincom: R(tr.reduce((a, x) => a + N(x.fincom), 0)), traces: R(tr.reduce((a, x) => a + N(x.traces), 0)), rows: tr.filter((x) => Math.abs(N(x.diff)) >= 1).map((x) => ({ label: x.label, a: R(x.fincom), b: R(x.traces), diff: R(x.diff) })) } : null;
+    } catch (e) { notes.push("The filed TDS returns could not be read: " + ((e && e.message) || e)); }
+  }
+  // 43B: each payable ledger's opening, this year's charge from the P&L (its credits in vouchers that debit an income or
+  // expense ledger), the year's payments, and the payments after the year end up to the due date (the bank entries and
+  // the March PF / ESI challans, each payment once)
   const im = imports || {}, march = (xs) => (xs || []).filter((x) => x.wageMonth === (+fy + 1) + "03");
   const ecrM = march(im.ecr)[0], esiM = march(im.esi)[0];
   const share = { pf: ecrM ? (N(ecrM.data.eps) + N(ecrM.data.er)) / Math.max(1, N(ecrM.data.ee) + N(ecrM.data.eps) + N(ecrM.data.er)) : null, esi: esiM && esiM.data.er != null ? N(esiM.data.er) / Math.max(1, N(esiM.data.er) + N(esiM.data.ee)) : null };
-  const payRows = rows.filter((r) => ["7B", "7C", "7G", "5B", "5C", "5F", "5G"].includes(r.code)).map((r) => ({ ledger: r.ledger, closing: -N(r.final) }));
-  march(im.pfc).forEach((c) => { const l = payRows.find((r) => kind43B(r.ledger) && kind43B(r.ledger).kind === "pf"); if (l && c.paidOn <= due) pays.push({ ledger: l.ledger, date: c.paidOn, amt: N(c.data.total) }); });
-  march(im.esi).forEach((c) => { const l = payRows.find((r) => kind43B(r.ledger) && kind43B(r.ledger).kind === "esi"); if (l && c.paidOn <= due) pays.push({ ledger: l.ledger, date: c.paidOn, amt: N(c.data.total) }); });
-  const dues = dues43B(payRows, pays, due, last, share);
+  const plCode = new Set(rows.filter((r) => r.code && FinSt.CODES[r.code] && FinSt.CODES[r.code].side !== "BS").map((r) => r.ledger));
+  const payRows = rows.filter((r) => ["7B", "7C", "7G", "5B", "5C", "5F", "5G"].includes(r.code) && kind43B(r.ledger)).map((r) => ({ ledger: r.ledger, opening: -N(r.py), closing: -N(r.final), charge: 0, paidInYear: 0 }));
+  const byL = {}; payRows.forEach((r) => { byL[r.ledger] = r; });
+  const bookPays = [];
+  vs.forEach((v) => {
+    const ent = v.ent || [], pl = ent.some((e) => plCode.has(e.l) && N(e.a) < 0);
+    ent.forEach((e) => {
+      const r = byL[e.l]; if (!r) return;
+      if (v.date >= y0 && v.date <= y1) { if (N(e.a) > 0 && pl) r.charge += N(e.a); else if (N(e.a) < 0) r.paidInYear += -N(e.a); }
+      else if (v.date > y1 && v.date <= due && N(e.a) < 0) bookPays.push({ ledger: e.l, date: v.date, amt: -N(e.a), narr: v.narr || "" });
+    });
+  });
+  const fundL = (k) => { const ls = payRows.filter((r) => { const q = kind43B(r.ledger); return q.kind === k && q.role !== "ee" && r.closing > 0; }); return ls.length === 1 ? ls[0].ledger : (ls.find((r) => !kind43B(r.ledger).role) || ls[0] || {}).ledger; };
+  const challans = [];
+  march(im.pfc).forEach((c) => { const l = fundL("pf"); if (l && c.paidOn <= due) challans.push({ ledger: l, date: c.paidOn, amt: N(c.data.total), ref: c.trrn || "" }); });
+  march(im.esi).forEach((c) => { const l = fundL("esi"); if (l && c.paidOn <= due) challans.push({ ledger: l, date: c.paidOn, amt: N(c.data.total), ref: c.challan || "" }); });
+  const dd = pfDedup(bookPays, challans);
+  const dues = dues43B(payRows, dd.pays, due, last, share);
+  // the PF / ESI payments after the year end, two ways: the bank entries in the books and the challans brought in
+  const pfL = new Set(payRows.filter((r) => ["pf", "esi"].includes(kind43B(r.ledger).kind)).map((r) => r.ledger));
+  const pfProof = pfL.size ? { books: R(bookPays.filter((p) => pfL.has(p.ledger)).reduce((a, p) => a + p.amt, 0)), challans: challans.length ? R(challans.reduce((a, c) => a + c.amt, 0)) : null,
+    rows: dd.matched.map((m) => ({ label: m.book.ledger + ": " + m.book.date + " in the books, challan " + (m.challan.ref || "") + " of " + m.challan.date, a: R(m.book.amt), b: R(m.challan.amt) })).concat(dd.booksOnly.filter((p) => pfL.has(p.ledger)).map((p) => ({ label: p.ledger + ": " + p.date + " in the books, no challan", a: R(p.amt), b: null }))) } : null;
+  // earlier years' 43B: the dues payable at the start of the year (opening) and what was paid in the year
+  const prior43B = payRows.filter((r) => kind43B(r.ledger).on && r.opening > 0).map((r) => ({ ledger: r.ledger, opening: R(r.opening), paidInYear: R(r.paidInYear) }));
   // 43B(h): MSME bills open at the year end, settled when (the payables' ageing at each bill's limit date)
   let msme = null;
   try {
@@ -245,7 +361,7 @@ export function fromApp(fy, imports, due) {
       const openAt = (dt) => (memo[dt] = memo[dt] || G.MIS.ageing(dt, "p", null));
       const bills = [];
       ag.rows.forEach((pr) => { if (!/micro|small/i.test(types[pr.party] || "")) return; (pr.open || []).forEach((x) => bills.push({ party: pr.party, ref: x.ref, date: x.date, amt: N(x.left), paidOn: "" })); });
-      const res = msme43Bh(bills, days, y1, last);
+      const res = msme43Bh(bills, days, y1, last, y0);
       // a bill whose limit falls inside the books: still open at its limit date means paid late or unpaid
       res.unknown = res.unknown.filter((x) => x.limit > last);
       const keepRows = res.rows.filter((x) => {
@@ -253,7 +369,13 @@ export function fromApp(fy, imports, due) {
         const pr = openAt(x.limit).rows.find((z) => z.party === x.party), still = pr && (pr.open || []).some((z) => z.ref === x.ref && z.date === x.date);
         return !!still;
       });
-      msme = { rows: keepRows, unknown: res.unknown, days };
+      // the second way: each MSME party's ledger in the vouchers, oldest bills settled first
+      const flows = {};
+      Object.keys(types).filter((p) => /micro|small/i.test(types[p] || "")).forEach((p) => { const r0 = rows.find((r) => r.ledger === p); flows[p] = { opening: r0 ? -N(r0.py) : 0, moves: [] }; });
+      vs.forEach((v) => { if (v.date < y0) return; (v.ent || []).forEach((e) => { if (flows[e.l]) flows[e.l].moves.push({ date: v.date, amt: N(e.a) }); }); });
+      const fifo = msmeFifo(flows, days, y0, y1, last);
+      msme = { rows: keepRows, unknown: res.unknown, prior: res.prior, days, fifo: { amt: R(fifo.rows.reduce((a, x) => a + N(x.amt), 0)), unknown: fifo.unknown.length, n: fifo.rows.length },
+        priorParties: Object.keys(flows).filter((p) => N(flows[p].opening) > 0) };
     }
   } catch (e) { notes.push("MSME bills could not be read: " + ((e && e.message) || e)); }
   // the profit before tax from Tally's own groups (not FinCom's codes), with the stock-in-hand ledgers
@@ -297,11 +419,11 @@ export function fromApp(fy, imports, due) {
     taxProvision: sched.pl.taxCurrent.cy + sched.pl.taxDeferred.cy, taxTrace: sched.pl.taxCurrent.trace.concat(sched.pl.taxDeferred.trace),
     interestIncome: sched.pl.interestInc.cy, interestTrace: sched.pl.interestInc.trace, profitOnSale: sched.pl.profitAssets.cy,
     lossOnSale: (sched.pl.otherExp.trace.filter((t) => t.code === "17T")).reduce((a, t) => a + t.amt, 0),
-    tdsMissed: resMissed, tdsUnpaid: unpaid.map((x) => ({ party: x.party, section: x.section, base: x.base })), nrMissed,
+    tdsMissed: resMissed, tdsUnpaid: resUnpaid.map((x) => ({ party: x.party, section: x.section, base: x.base })), nrMissed, nrUnpaid: nrUnpaid.map((x) => ({ party: x.party, section: x.section, base: x.base })),
     cash40A3: fnd("cash40A3").flatMap((x) => (x.rows || []).map((r) => ({ date: r.date, party: r.party, amount: r.amount }))),
     msmeRows: msme ? msme.rows : [], penalties: fnd("penalties").reduce((a, x) => a + N(x.amount), 0), csr: sched.pl.csr.cy,
     leave43B: 0, pf36va: imports ? pf36va(imports.ecr, imports.pfc, imports.esi) : [], dues43B: dues,
   };
   return { ok: true, fy, sched, f, adj: adjustments(f), dep: td, findings, notes, comp: d.comp, inputs: d.inputs, plTally, openingTally: openSched.totals.apply, pyBs, capital, dues43B: dues, msme,
-    tds: tdsRec, form3cd, esiBooks: esiL.length ? R(esiL.reduce((a, t) => a + t.amt, 0)) : null, nrAsk, last };
+    tds: tdsRec, form3cd, esiBooks: esiL.length ? R(esiL.reduce((a, t) => a + t.amt, 0)) : null, nrAsk, last, pfProof, prior43B };
 }

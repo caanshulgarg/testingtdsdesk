@@ -24,6 +24,7 @@ const redraw = () => { try { if (typeof render === "function") render(); } catch
 const go = (t) => goClient("books:" + t);
 const ymdIn = (d) => (d ? d.slice(0, 4) + "-" + d.slice(4, 6) + "-" + d.slice(6, 8) : "");
 const ymdOut = (s) => String(s || "").replace(/-/g, "");
+const R0 = (v) => Math.round(+v || 0);
 
 // the schema from this site (itr-schema/, put there at publish time); kept for the page
 const schemas = {};
@@ -59,7 +60,7 @@ function useItr() {
   const entity = client.entity, form = state.form || formsFor(entity, state.llp)[0];
   const due = state.tp ? "20261130" : (state.audit || entity === "C") ? "20261031" : "20260831";
   const books = useMemo(() => (D ? D.books : fromApp(String(+AY_KEY - 1), imports, due)), [D, booksRev, files.length, due]);
-  const model = buildModel({ entity, client, state: Object.assign({}, state, { form }), books, imports });
+  const model = buildModel({ entity, client, state: Object.assign({}, state, { form }), books, imports, due, prevState: store.state(String(+AY_KEY - 1)) });
   const profile = buildProfile({ entity, client, state, imports });
   const comp = compute(model), second = check(model);
   const sch = useSchema(form);
@@ -67,9 +68,10 @@ function useItr() {
   const bk = books && books.ok ? books : null;
   const gstTurnover = gst && gst.ok ? (gst.perGstin || (client.gstin && gst.filedR1 != null ? [{ gstin: client.gstin, amt: gst.filedR1 }] : [])) : [];
   const json = sch.schema ? makeJson({ form, schema: sch.schema, model, comp, sched: bk ? bk.sched : null, profile, answers: (state.answers || {})[form] || {}, today: new Date().toISOString().slice(0, 10),
-    dues43B: bk ? bk.dues43B : [], gstTurnover, gstRegistered: !!client.gstin }) : null;
+    dues43B: model.dues43B || [], gstTurnover, gstRegistered: !!client.gstin }) : null;
   const checks = verify({ model, main: comp, imports, books, gst, tds: bk ? bk.tds : null, form3cd: bk ? bk.form3cd : null, pfBooks: pfBooks(books), esiBooks: bk ? bk.esiBooks : null, pfAdminCharges: state.pfAdmin,
-    pf36va: model.pf36va, dues43B: bk ? bk.dues43B : null, msme: bk ? bk.msme : null, nrAsk: bk ? bk.nrAsk : [], coverage: json ? json.coverage : [], accepted: state.accepted || {} });
+    pf36va: model.pf36va, dues43B: bk ? model.dues43B : null, msme: bk ? model.msme : null, prior43B: model.prior43B, pfProof: bk ? bk.pfProof : null, due, answers: state.paidOn || {},
+    nrAsk: bk ? bk.nrAsk : [], coverage: json ? json.coverage : [], accepted: state.accepted || {} });
   return { D, store, client, files, state, imports, books, form, model, profile, comp, second, checks, sch, json };
 }
 
@@ -329,7 +331,7 @@ function Check({ c, X, open, onOpen, refresh }) {
   return <div className="itr-check" data-itr-check={c.id} data-status={c.status} data-accepted={c.accepted ? "1" : "0"}>
     <button className="itr-check-main" onClick={onOpen} aria-expanded={open}>
       <span className="itr-chip" data-tone={c.accepted ? "none" : tone}>{c.accepted ? (c.status === "needs" ? "Answered" : "Accepted") : label}</span>
-      <span className="itr-check-t">{c.title}</span>
+      <span className="itr-check-t">{c.kind === "consistency" ? c.title.replace(/^Consistency: /, "") : c.title}{c.kind === "consistency" && <span className="itr-chip itr-chip-s" data-tone="none" data-itr-consistency=""> consistency</span>}</span>
       {c.status === "difference" && c.diff ? <span className="itr-check-d n">{money(c.diff)}</span> : null}
     </button>
     {open && <div className="itr-check-more" data-itr-more-of={c.id}>
@@ -340,12 +342,30 @@ function Check({ c, X, open, onOpen, refresh }) {
       {c.text && <p className="itr-note">{c.text}</p>}
       {c.rows && c.rows.length > 0 && <table className="itr-mini"><tbody>{c.rows.slice(0, 30).map((r, i) => <tr key={i}><td>{r.label}</td><td className="n">{r.a == null ? "" : money(r.a)}</td><td className="n">{r.b == null ? "" : money(r.b)}</td>{r.diff != null && <td className="n">{money(r.diff)}</td>}</tr>)}</tbody></table>}
       {c.how && <p className="itr-how">{c.how}</p>}
+      {c.ask && <Answers c={c} X={X} refresh={refresh} />}
+      {c.askAmount && <AmountAnswer X={X} refresh={refresh} />}
       {c.lapsed && !c.accepted && <p className="itr-err" data-itr-lapsed="">{"Accepted on " + String(c.lapsed.at).slice(0, 10) + " (“" + c.lapsed.note + "”), but the figures have changed since: look again."}</p>}
       {c.accepted ? <p className="itr-note" data-itr-accepted-note="">{(c.status === "needs" ? "Answered: " : "Accepted: ") + c.accepted.note + " (" + c.accepted.by + ", " + String(c.accepted.at).slice(0, 10) + ") "}<button className="linkbtn" onClick={() => { X.store.unaccept(c.id); refresh(); }}>Undo</button></p>
         : c.status !== "matched" && !c.noAccept && <div className="itr-accept"><input data-itr-note={c.id} placeholder={c.status === "needs" ? "Your answer" : "Why this is right (a note)"} value={note} onChange={(e) => setNote(e.target.value)} />
           <button className="btn small" data-itr-accept={c.id} onClick={() => { const r = X.store.accept(c.id, note, c.fp); if (!r.ok) setErr(r.text); else { setErr(""); refresh(); } }}>{c.status === "needs" ? "Confirm" : "Accept"}</button>{err && <span className="itr-err">{err}</span>}</div>}
     </div>}
   </div>;
+}
+
+// a payment date for each item the books do not show (43B, 43B(h), 36(1)(va)), or Not paid: kept in the state
+// (paidOn), and the computation follows it at once
+function Answers({ c, X, refresh }) {
+  const all = X.state.paidOn || {};
+  const set = (id, v) => { const p = Object.assign({}, X.state.paidOn || {}); if (v) p[id] = v; else delete p[id]; X.store.setState({ paidOn: p }); refresh(); };
+  return <div className="itr-answers" data-itr-answers={c.id}>{c.ask.map((a) => { const v = all[a.id] || "";
+    return <div key={a.id} className="itr-answer" data-itr-answer={a.id}><span className="itr-answer-l">{a.label}<span className="itr-src">{money(a.amt)}</span></span>
+      <input type="date" aria-label={"Paid on, " + a.label} value={v && v !== "none" ? ymdIn(v) : ""} onChange={(e) => set(a.id, ymdOut(e.target.value))} />
+      <button className="linkbtn" data-itr-notpaid={a.id} aria-pressed={v === "none"} onClick={() => set(a.id, v === "none" ? "" : "none")}>{v === "none" ? "Not paid ✓" : "Not paid"}</button></div>; })}</div>;
+}
+function AmountAnswer({ X, refresh }) {
+  const [v, setV] = useState(X.state.prior43BPaid ?? "");
+  return <div className="itr-accept" data-itr-prior43b=""><input inputMode="numeric" placeholder="Amount (0 if none)" value={v} onChange={(e) => setV(e.target.value.replace(/[^0-9]/g, ""))} />
+    <button className="btn small" data-itr-prior43b-save="" disabled={v === ""} onClick={() => { X.store.setState({ prior43BPaid: +v }); refresh(); }}>Save</button></div>;
 }
 
 // ---------------- 4. JSON ----------------
@@ -360,7 +380,10 @@ function JsonStep({ X, json, sch, g, refresh }) {
     const save = (blob, name) => { if (typeof saveFile === "function") saveFile(name, blob); else { const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; a.click(); } };
     save(new Blob([text], { type: "application/json" }), base + ".json");
     save(new Blob([JSON.stringify(rep, null, 1)], { type: "application/json" }), base + "_checks.json");
-    X.store.addVersion({ v: (X.state.versions || []).length + 1, at: rep.made, sha, liability: X.comp.liability, payable: X.comp.payable, refund: X.comp.refund, fincom: VERSION });
+    // what 43B and 43B(h) added back, by ledger / party: next year's return allows it when paid (prior43B, model.js)
+    const dis = (X.model.dues43B || []).filter((d) => d.kind43B && R0(d.dis) && !d.unknown && !d.unknownShare).map((d) => ({ ledger: d.ledger, amt: R0(d.dis) }))
+      .concat(((X.model.msme || {}).rows || []).map((m) => ({ ledger: m.party, amt: R0(m.amt), msme: true })));
+    X.store.addVersion({ v: (X.state.versions || []).length + 1, at: rep.made, sha, liability: X.comp.liability, payable: X.comp.payable, refund: X.comp.refund, fincom: VERSION, dis43B: dis });
     refresh();
   }
   if (sch.error) return <section className="itr-card" data-itr-json="noschema"><div className="itr-card-head"><h2>JSON</h2></div><p className="itr-note">The official schema could not be loaded ({sch.error}). The JSON is not offered without it.</p></section>;

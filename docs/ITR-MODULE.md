@@ -27,7 +27,7 @@ app's first file. Code: `app/src/screens/itr/ITR.jsx`, `itr.css`; the working, a
 |---|---|
 | `law.js` | Every rate, limit and date for AY 2026-27, each with its section and source |
 | `tax.js` | The computation (first): heads, presumptive, 40(b), set-off, Chapter VI-A, tax, 87A, surcharge with marginal relief, MAT, 234A/B/C, 234F, rounding |
-| `check.js` | The second computation, written apart (no shared code or figures), and the comparison of 14 figures |
+| `check.js` | The second computation, written apart (no shared code or figures), and the comparison of 17 figures |
 | `imports.js` | Reading the portal files: detection, PAN, AY, client, counts and totals |
 | `store.js` | Where the work is kept (`b.itr`), the files (the firm's private storage), accepting with a note, versions |
 | `books.js` | The books in the ITR's shape (Part A-BS, Part A-P&L, trading account) and the Schedule BP adjustments, each with its ledgers |
@@ -136,43 +136,84 @@ business loss forward (80).
 **AOP / BOI and other ITR-5 persons:** not covered yet (Needs you). Firm or LLP is asked in the return (Client setup has
 "Firm or LLP" as one choice); never read from the name. 234C: one instalment by 15 March only for 44AD / 44ADA (44AE alone
 has the four instalments). A belated return carries no business loss of the year forward (section 80): the JSON does not
-claim it, and Checks says so. 40(a)(ia): 30% of the sums on which TDS was not deducted AND of those whose TDS was deducted
-but not deposited by the due date of the return; 40(a)(i): 100% of a non-resident's sum without TDS (non-residents are the
-parties with 27Q details; a foreign-looking party without them is asked). 43B: the payable ledgers at 31-03-2026 (employer
-PF / ESI, bonus, leave encashment, interest to banks / NBFCs, taxes and duties) and their payments in the later entries and
-the March challans up to the due date; the unpaid part is added back; a payment date the books cannot show (the books
-ending before the due date) is Needs you; PF / ESI payables split into the employer's part (43B) and the employee's
-(36(1)(va)) by March's ECR / challan, else Needs you; GST and TDS payable are listed (GST is under 43B only when charged
-to the P&L; unpaid TDS is 40(a)(ia)). 43B(h): each micro / small supplier's bill open at the year end is allowed only if
-paid within the days of the MSMED Act (15, or the agreed days up to 45, from the MSME setting) of its date: paid later, even
-after 31 March and before the return, or unpaid, it is added back; a limit after the books end is Needs you. 36(1)(va): a
-month without its challan is not disallowed; its date is asked; ESI is checked like PF, also for ESI-only employers.
-43B of earlier years paid in this year (last year's disallowance) is entered by the owner as an adjustment.
+claim it, and Checks says so.
+
+**Losses carried forward (sections 32(2), 72, 80).** What is left of the year's business loss after set-off is, up to the
+year's depreciation under section 32, unabsorbed depreciation (carried without limit, even in a belated return) and only
+the rest business loss (eight years; none in a belated return). Both computations work this out and must agree on it
+(cfBus, cfUd, cfHp). The JSON carries it: Schedule UD's row of this year (CurrAssYr 2026-27, CurBalCFNY) and its totals;
+Schedule CFL's row of this year (CurrentAYloss, and CurrentYearLossCF in ITR-5 / ITR-6; note that LossCFCurrentAssmntYear
+is the schema's row of AY 2019-20, never this year's), its totals, and Part B-TI's LossesOfCurrentYearCarriedFwd. The
+review's case: PBT -1 lakh with depreciation of 4 lakh is 1 lakh of unabsorbed depreciation and no business loss;
+-5 lakh is 4 lakh of depreciation and 1 lakh of loss. Anything carried forward that the JSON does not hold (earlier
+years' rows of CFL and UD, ITR-4) blocks the JSON (coverage: `cf_unmapped`, `cfl_prior`, `ud`, `cf_itr4`). The e-filing
+utility's rule 618 compares CFL's business loss with CYLA's whole balance; FinCom's split is asked to be confirmed on
+Checks (`ud_split`).
+
+**40(a).** 40(a)(ia): 30% of the sums paid to residents on which TDS was not deducted, of the part of a sum the TDS
+deducted does not cover when it was deducted short (the owner's decision, below), and of the sums whose TDS was deducted
+but not deposited by the due date of the return. 40(a)(i): 100% of a non-resident's sum on which TDS was not deducted OR
+was deducted and not deposited by the due date (non-residents are the parties with 27Q details, or section 195; a
+foreign-looking party without them is asked).
+
+**43B on this year's charge.** For each payable ledger at 31-03-2026 under 43B (employer PF / ESI, bonus, leave
+encashment, interest to banks / NBFCs, taxes and duties) FinCom reads from the vouchers its opening balance, this year's
+charge (its credits in vouchers that debit an income or expense ledger), the year's payments, and the payments after the
+year end up to the due date. Only the part of THIS YEAR'S charge still unpaid on the due date is added back, never the
+whole balance: a leave provision of 30 lakh of which 3 lakh was charged this year adds back at most 3 lakh. Payments
+settle the oldest dues first (in the year the opening balance before the year's charge; after the year end what is left
+of the opening balance first). If the year's charge cannot be read, the balance is taken and Checks asks (`43b_charge`).
+PF / ESI: a ledger named for the employer's share is 43B in full; one named for the employees' share is never 43B (it is
+36(1)(va)); only a single ledger for both is split by March's ECR / ESI challan (none: `43b_share`, Needs you, blocks). A
+March challan and the April bank entry for it are one payment (same ledger, amount to the rupee, its TRRN / challan number
+in the narration or dates within five days), at the challan's date. GST and TDS payable are listed (GST is under 43B only
+when charged to the P&L; unpaid TDS is 40(a)(ia)).
+
+**Earlier years' 43B paid this year** (AmtDisallUs43BNowAllow): from last year's return made in FinCom (each download
+keeps what 43B and 43B(h) added back, by ledger / party): allowed = the part of last year's add-back paid in FY 2025-26,
+the year's payments settling first the part allowed last year. Without last year's return in FinCom and with dues payable
+at 1-04-2025 that were paid, the owner gives the amount (0 if none) on Checks; until then the JSON is blocked.
+
+**43B(h).** Each micro / small supplier's bill of the year open at the year end is allowed only if paid within the days of
+the MSMED Act (15, or the agreed days up to 45, from the MSME setting) of its date: paid later, even after 31 March and
+before the return, or unpaid, it is added back. A bill of an earlier year is not this year's add-back (paid this year, it
+is earlier years' 43B, above).
+
+**Payment dates the books do not show** (the books end before the due date or the limit; a PF / ESI month without its
+challan): asked item by item on Checks, a date or Not paid. The answer changes the computation at once (paid in time:
+allowed; later or not paid: added back) and until every item is answered the check cannot be accepted with a note.
+36(1)(va): a month without its challan is neither disallowed nor taken as in time until answered; ESI is checked like PF,
+also for ESI-only employers.
 
 ## 5. The checks
 
-Each check compares two independent sources. It is Matched only when both sides are there and agree to the rupee;
+Each check compares two independent sources, or is labelled a **consistency check** where both sides come from the same
+records (the return's 43B, 43B(h), 40(a)(ia) / 40(a)(i) add-backs and 3CD clause 21(b) against the lists they were made
+from): it shows the list reached the return, not that the list is right, and the independent checks beside it test the
+list (the bank entries against the challans, the bill references against the payment vouchers, the TDS records against
+the returns as filed and against TRACES). It is Matched only when both sides are there and agree to the rupee;
 Difference (the exact amount, both sides with their sources and the lines behind them); Missing data when a side is not
 there (never Matched); or Needs you.
 
 | Group | Checks |
 |---|---|
-| 26AS, AIS, TIS | TDS receivable in the books against 26AS lines of booking status F (U and P are not claimed: Needs you); TCS ledger against 26AS; the books' advance-tax ledger against the 26AS challans (no ledger: Missing data); the self-assessment tax ledger against 26AS; AIS interest, dividend, rent against the return; high-value purchases / sales (Needs you, each listed); AIS GST turnover against the return; AIS TDS against 26AS; TIS business receipts within the turnover; 26AS read completely (its own totals) |
+| 26AS, AIS, TIS | TDS receivable in the books against 26AS lines of booking status F (U, P, O and a status that could not be read are not claimed: Needs you); TCS ledger against 26AS; the books' advance-tax ledger against the 26AS challans (no ledger: Missing data); the self-assessment tax ledger against 26AS; AIS interest, dividend, rent against the return; high-value purchases / sales (Needs you, each listed); AIS GST turnover against the return; AIS TDS against 26AS; TIS business receipts within the turnover; 26AS read completely (its own totals) |
 | Tally books | Sources = application; Part A-P&L profit (FinCom's codes) = Tally's own profit and loss (the ledgers under Tally's revenue groups, by its group chain, with the stock-in-hand ledgers); every ledger in a schedule line; opening balances in Tally = last year's audited balance sheet as uploaded (FinPyBs), else Missing data; capital account: last year's closing capital (uploaded balance sheet) + profit + the year's capital credits - debits = the closing capital, else Missing data |
 | GST | Turnover = the FILED GSTR-1 (the portal's copies or downloads marked filed, totalled from the GSTN JSON) + the listed reasons; filed GSTR-1 = filed GSTR-3B (the portal's 3B JSON); months without a filed return listed |
-| TDS returns | Deducted (26Q / 24Q) = credited to TDS payable; deducted = deposited by the due date; the return's 40(a)(ia) / 40(a)(i) = the same worked out from the TDS records (TDSWatch, the rows and their challans' dates); non-resident or not asked |
-| 43B and 43B(h) | The return's 43B add-back = the books' dues unpaid by the due date (each ledger, its payments and dates); payment dates unknown: Needs you; GST / TDS payable unpaid: asked; the return's 43B(h) = the MSME bills paid after their limit |
+| TDS returns | Deducted (26Q / 24Q) = credited to TDS payable; deducted = deposited by the due date; consistency: the return's 40(a)(ia) / 40(a)(i) = the same worked out from the TDS records; independent: FinCom's records = the 26Q / 27Q returns as filed (the copy kept when each was marked filed), FinCom's challans = TRACES (consolidated file / challan status file), else Missing data; non-resident or not asked |
+| 43B and 43B(h) | Consistency: the return's 43B = this year's charge unpaid by the due date (each ledger: charge, payments, dates, employer's part); the return's 43B(h) = the MSME bills paid after their limit. Independent: the PF / ESI payments after the year end in the bank entries = the March challans; the bills settled by their references (the ageing) = the bills settled by the payment vouchers oldest first. Asked (blocking until answered): payment dates not shown, the employer's part of a joint PF / ESI ledger, the year's charge not read, earlier years' 43B paid; GST / TDS payable unpaid: asked |
 | PF and ESI | An ECR for every month; a challan for every ECR; employer's PF in the books = the ECRs (+ admin charges); employees' share credited by the 15th of the next month (36(1)(va)); the dates feed 43B |
 | Tax audit (3CD) | Where a tax audit applies: the 3CD drafted from the SAVED Audit run of the whole year (clauses 21(b)(ii)(A), 21(d)(A)) against the ITR's schedules as worked out now; no saved run for the year: Missing data |
-| The computation | The right form; firm or LLP; regime and rates (and the company's FY 2023-24 turnover) answered; every deduction within its limit; 87A with special-rate income shown; loss set-off and carry-forward (a belated return's loss lost); ITR-4 limits; Form 10-IEA; MAT book profit confirmed; the two computations agree on all 14 figures |
+| The computation | The right form; firm or LLP; regime and rates (and the company's FY 2023-24 turnover) answered; every deduction within its limit; loss set-off and carry-forward (a belated return's loss lost; this year's unabsorbed depreciation split confirmed); ITR-4 limits; Form 10-IEA; MAT book profit confirmed; the two computations agree on all 17 figures |
 | The JSON | Every schedule that has figures is filled by FinCom; one that is not blocks the JSON, said by name (below) |
 
 ## 6. Acceptance rules
 
 1. **Exact or nothing.** Matched only when the two sides agree to the rupee.
 2. **Two independent computations.** `check.js` imports nothing, carries its own figures and works in plain steps; the
-   JSON is offered only when it and `tax.js` agree on all 14 figures (total income, the tax heads, the liability, each
-   interest and fee, payable, refund). That check can never be accepted away.
+   JSON is offered only when it and `tax.js` agree on all 17 figures (total income, the tax heads, the liability, each
+   interest and fee, payable, refund, and what is carried forward: business loss, unabsorbed depreciation, house property
+   loss). That check can never be accepted away.
 3. **Schema-valid.** The JSON must pass the official schema (and, in the tests, ajv).
 4. **Every figure traced.** Every computation line shows its source; every schedule line its ledgers; every check both
    sides' sources. Unmapped required amounts are 0; nothing else is filled in by FinCom.
@@ -184,11 +225,12 @@ there (never Matched); or Needs you.
 7. **No schedule zero-filled.** A schedule of the official form that has figures in this return but that FinCom does not
    fill blocks the JSON with its name (Checks › The JSON). Filled from FinCom's data: Part A-BS / P&L / trading account
    (ITR-3, ITR-5; ITR-6 Schedule III balance sheet and P&L in full), Schedule BP, DPM / DOA / DEP by block, OS, VIA (ITR-3,
-   the allowed amounts), CYLA, BFLA, this year's row of CFL, Part A-OI (audit cases), the audit report details, Schedule
+   the allowed amounts), CYLA, BFLA, this year's rows of CFL and UD (and their totals), Part A-OI (audit cases), the audit report details, Schedule
    GST (from the filed GSTR-1), TDS2 (head of income from the section), IT, TCS, Part B-TI / TTI, ITR-4's 16(ia), VI-A
    (allowed amounts) and 112A (with the sale and cost entered), ITR-5's partners, ITR-6's MAT and MATC. Not yet filled, so
    blocking when they have figures: Schedule S (salary, ITR-3), HP, CG / SI (capital gains), the VI-A detail schedules
-   (80C, 80D, 80DD, 80DDB, 80U, 80E, 80EE/A/B, 80G, 80GGA, 80GGC), UD (unabsorbed depreciation), CFL rows of earlier years,
+   (80C, 80D, 80DD, 80DDB, 80U, 80E, 80EE/A/B, 80G, 80GGA, 80GGC), UD and CFL rows of earlier years (and any loss or
+   depreciation carried forward that the JSON does not hold; ITR-4 carries none),
    AL (income above Rs 1 crore), FA, ITR-5 / ITR-6 Schedule VIA, ITR-6 SH (every unlisted company: ITR-6 is blocked until
    it is built), Ind AS parts (an Ind AS company); also the authorised capital, the Ind AS question and the loans' purpose
    when not answered.
@@ -197,13 +239,21 @@ there (never Matched); or Needs you.
    schema file, the computation's totals, every check with its status, amounts, sources and accepted note, and the JSON's
    SHA-256. Each download is kept as a version in `b.itr`.
 
-## 7. Owner decisions (please confirm)
+## 7. Owner decisions
 
-1. **87A in the new regime and special-rate income** (the review's reading, for the owner to confirm): eligibility on
-   TOTAL income including special-rate income (Rs 12 lakh), the rebate and its marginal relief never against special-rate
-   tax (Finance Act 2025 amendment to section 87A). Note: ITR-4 validation rule 227 reads "total income excluding LTCG": the
-   e-filing utility may treat a case with 112A gains differently. Every rebate given with special-rate income is a Needs
-   you on Checks.
+Decided (the owner answered Yes to each, 22-11-2026):
+
+1. **87A in the new regime and special-rate income: decided, yes (22-11-2026).** Eligibility on TOTAL income including
+   special-rate income (Rs 12 lakh); the rebate, and its marginal relief above Rs 12 lakh, apply even when special-rate
+   income is part of the total income, and only ever against the tax on normal income (Finance Act 2025 amendment to
+   section 87A). Checks no longer asks about it. Note: ITR-4 validation rule 227 reads "total income excluding LTCG": the
+   e-filing utility may treat a case with 112A gains differently.
+1a. **40(a)(ia) on short deduction: decided, yes (22-11-2026).** Where TDS was deducted at less than the rate, 30% of the
+   part of the sum the deducted TDS does not cover is disallowed (TDSWatch's uncovered amount). Not flagged for
+   confirmation.
+
+To confirm:
+
 2. **Old-regime 87A:** against the tax on normal income, 111A and 112; never 112A (112A(6)).
 2a. **80JJAA in the new regime:** kept as allowed, because section 115BAC(2)(ii) excludes "Chapter VI-A other than 80CCD(2),
    80CCH(2) or 80JJAA". The review asked for 80CCD(2) and 80CCH only; confirm.
@@ -213,6 +263,11 @@ there (never Matched); or Needs you.
    it does not assume.
 5. **40(b) limits** from AY 2025-26 (Finance (No. 2) Act 2024): Rs 3 lakh or 90% on the first Rs 6 lakh, 60% on the rest.
 6. **36(1)(va)**: no grace days (Checkmate Services, SC 2022); a late month's employees' share is disallowed for good.
+6a. **43B: payments taken against the oldest dues first.** Without a voucher-level link between a payment and the due it
+   settles, FinCom applies payments to the opening balance before this year's charge. A stale old balance can make this
+   year's add-back larger (and next year's allowance follows). Confirm, or say where payments are linked.
+6b. **This year's unabsorbed depreciation in Schedule UD, the rest of the loss in CFL** (section 32(2)); the utility's
+   rule 618 reads CFL against CYLA's whole balance. Each such return asks to confirm on Checks.
 7. **Software ID** (`SWCreatedBy`): FinCom has no CBDT software ID. Give Winman's or the firm's, or leave the placeholder
    for Winman to replace on import. FinCom asks for it; it never makes one up.
 8. **Schemas in the build:** the CBDT schemas are fetched at test and publish time and served from FinCom's own site to
@@ -237,8 +292,8 @@ All on made-up data (`tests/fixtures/itr/`, `tests/itr_demo.mjs`):
 |---|---|
 | `node tests/run_itr_imports.mjs` | Each kind detected with PAN / AY / month, counts and totals, the PDF route, refusals (another PAN, another year, unknown, locked, an ITR JSON, no month), re-import, firm storage only, nothing logged |
 | `node tests/run_itr_tax.mjs` | Every rule with hand-worked figures and edge cases (87A and its relief, surcharge bands with marginal relief, both regimes, seniors, MAT and credit, 115BAA, 40(b), 44AD / 44ADA / 44AE thresholds, losses, VI-A limits, special rates, rounding, 234A/B/C/F, 43B and 36(1)(va) dates); 600 random returns through both computations; a planted one-rupee difference caught |
-| `node tests/run_itr_schema.mjs` | Pinned schema files; every form and scenario passes ajv and the page's validator alike; planted faults rejected by both; non-amount fields asked, never filled; the JSON's figures are the computation's |
-| `node tests/run_itr_verify.mjs` | Every check Matched on agreeing sides, and each planted fault found with its exact amount; Missing / Needs you; the gate |
+| `node tests/run_itr_schema.mjs` | Pinned schema files; every form and scenario passes ajv and the page's validator alike; planted faults rejected by both; non-amount fields asked, never filled; the JSON's figures are the computation's; the review's loss cases (PBT -1 lakh / -5 lakh with depreciation of 4 lakh) carried in Schedules UD and CFL for ITR-3, 5 and 6; a carry-forward the map does not hold blocks |
+| `node tests/run_itr_verify.mjs` | Every check Matched on agreeing sides, and each planted fault found with its exact amount; Missing / Needs you; consistency checks labelled; 43B on this year's charge (the 30 lakh leave provision), employer / employees' PF ledgers, one payment per challan, earlier years' 43B; payment dates answered item by item changing the computation; the gate |
 | `python3 tests/run_itr_ui.py` | The page, desktop and phone: Data, a file brought in, a wrong PAN refused, re-import, the sheet with its ledgers, PDF, Excel, the checks, a difference opened, accepting only with a note, the JSON offered only when settled, the download passing ajv; fits the width. `ITR_SHOTS=<dir>` saves the design screenshots |
 | `run_every_screen.py`, `run_legacy_room.py` | The four steps open on real (fixture) books with no error; legacy.js and the first file within their budgets |
 
