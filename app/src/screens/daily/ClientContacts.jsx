@@ -44,5 +44,7 @@ export default function ClientContacts({ co }) {
       {changed && <button type="button" className="btn small primary" data-contact-save="" disabled={busy || bad} onClick={save}>Save</button>}</div>}
     <label className="chk as-auto" style={{ marginTop: 14 }} title="Off: you approve every message. On: a document already asked for once is asked again, at most weekly.">
       <input type="checkbox" role="switch" checked={auto} disabled={!isOwner() || busy} onChange={() => { const v = !auto; setBusy(true); setPrefs(cid, v).then(() => setAuto(v), (e) => say(String((e && e.message) || e))).finally(() => setBusy(false)); }} /> Remind by itself</label>
+    {/* phase 2: on, a document already asked for once is asked again, at most weekly, through the same test-mode guard */}
+    <p className="as-auto-note" data-auto-note="">{auto ? "Documents asked for once are asked again, at most weekly. In test mode, to your firm only." : "Off: nothing is sent without you."}</p>
   </div>;
 }

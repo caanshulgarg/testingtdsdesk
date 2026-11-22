@@ -320,7 +320,7 @@ function gst(inp, A, V, out) {
 
 // (e) the salary sheet: months with salary in the books and no sheet; what was paid against the sheet
 const salaryLedger = (A, l) => /SALAR|WAGES/i.test(l) && (A.isExpense(l) || /PAYABLE/i.test(l));
-function sheetMonth(r) { const m = ymd(r.date); if (m) return ymOf(m); const s = String(r.month || ""); const x = s.match(/^(\d{4})-?(\d{2})$/); if (x) return x[1] + x[2]; const i = MON.findIndex((k) => s.toLowerCase().startsWith(k.toLowerCase())); const y = s.match(/(\d{4})/); return i >= 0 && y ? y[1] + String(i + 1).padStart(2, "0") : ""; }
+export function sheetMonth(r) { const m = ymd(r.date); if (m) return ymOf(m); const s = String(r.month || ""); const x = s.match(/^(\d{4})-?(\d{2})$/); if (x) return x[1] + x[2]; const i = MON.findIndex((k) => s.toLowerCase().startsWith(k.toLowerCase())); const y = s.match(/(\d{4})/); return i >= 0 && y ? y[1] + String(i + 1).padStart(2, "0") : ""; }
 export const sheetNet = (r) => r2(r.net != null && r.net !== "" ? num(r.net) : num(r.gross) - num(r.tds) - num(r.profTax));
 function salary(inp, A, V, out) {
   const rows = inp.salary || [];
@@ -422,11 +422,28 @@ function candidates(f, inp, A, V) {
     // 3. a 2B bill of a supplier the line names (the books do not have it yet)
     if (x.dir === "out") (inp.twob || []).forEach((p) => { const nm = names(row, p.party); if (!nm) return; const t = r2(num(p.taxable) + num(p.igst) + num(p.cgst) + num(p.sgst) + num(p.cess));
       const c = { t: "twob", ref: "2b:" + p.gstin + ":" + normNo(p.no), label: "2B: bill " + p.no + " of " + p.party + " · " + inr(t), ledger: p.party }; if (near(t, x.amt)) add(nm === "exact" ? exact : nearL, c); else if (closeish(t, x.amt)) add(nearL, c); });
-    // 4. salary: the sheet's net pay for the month (or the month before), a line that says salary
+    // 4. salary: the sheet's net pay for the month (or the month before), a line that says salary. (Phase 2) against the
+    // salary payable ledger only when that ledger is certain (exactly one, in current liabilities, or a person's pick) and
+    // the month's payroll is booked to it (in the books, or its Daily Check journal approved); else Needs you
+    const sp = (inp.ledgersFor || {}).salaryPayable || "";
+    const payBooked = (m) => !!sp && (V.some((v) => (ymOf(v.date) === m || (ymOf(v.date) === ymAdd(m, 1) && +v.date.slice(6, 8) <= 7)) && v.ent.some((e) => e.l === sp && e.a > 0) && v.ent.some((e) => e.a < 0 && /SALAR|WAGES/i.test(e.l)))
+      || (inp.drafts || []).some((d) => d && d.dedupe === "payroll:" + m && !d.removed && d.state !== "failed"));
     if (x.dir === "out" && /SALAR|WAGES/i.test(row.narr || "")) [ymOf(x.date), ymAdd(ymOf(x.date), -1)].forEach((m) => {
       const net = r2((inp.salary || []).filter((r) => sheetMonth(r) === m).reduce((s, r) => s + sheetNet(r), 0));
-      if (net && near(net, x.amt)) add(exact, { t: "salary", ref: "sal:" + m, label: "Salary sheet " + monYear(m) + " · net " + inr(net), ledger: (inp.ledgersFor || {}).salaryPayable || "" });
+      if (net && near(net, x.amt)) add(payBooked(m) ? exact : nearL, { t: "salary", ref: "sal:" + m, label: "Salary sheet " + monYear(m) + " · net " + inr(net), ledger: sp });
     });
+    // (phase 2) one employee's pay: the line's decoded name is the sheet's name (ledgerKey), the net within ₹1, the month
+    // the line pays (by the 15th: the month before), one row of that name in that month
+    if (x.dir === "out" && row.dec && ledgerKey(row.dec.name)) {
+      const m = +x.date.slice(6, 8) <= 15 ? ymAdd(ymOf(x.date), -1) : ymOf(x.date), k = ledgerKey(row.dec.name);
+      const rs = (inp.salary || []).filter((r) => sheetMonth(r) === m && ledgerKey(r.name) === k);
+      if (rs.length) {
+        const net = r2(rs.reduce((s, r) => s + sheetNet(r), 0)), c = { t: "salary", ref: "sal:" + m + ":" + k, label: "Salary sheet " + monYear(m) + " · " + rs[0].name + " · net " + inr(net), ledger: sp };
+        if (near(net, x.amt) && rs.length === 1 && payBooked(m)) add(exact, c); else if (near(net, x.amt) || closeish(net, x.amt)) add(nearL, c);
+        // two rows of that name: each that fits is shown, none is picked
+        else if (rs.length > 1) rs.forEach((r, i) => { if (near(sheetNet(r), x.amt)) add(nearL, Object.assign({}, c, { ref: c.ref + ":" + i, label: "Salary sheet " + monYear(m) + " · " + r.name + (r.code ? " (" + r.code + ")" : "") + " · net " + inr(sheetNet(r)) })); });
+      }
+    }
     // 5. tax challans: the same amount, the same day or the next bank day
     (inp.challans || []).forEach((c) => { const d = ymd(c.date); if (x.dir !== "out" || !d) return;
       const cc = { t: "challan", ref: "challan:" + c.kind + ":" + c.ref, label: (c.kind === "gst" ? "GST" : "TDS") + " challan " + String(c.ref || "").slice(-6) + " · " + inr(c.amt), ledger: (inp.ledgersFor || {})[c.kind === "gst" ? "gstCash" : "tds"] || "" };

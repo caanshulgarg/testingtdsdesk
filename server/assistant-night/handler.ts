@@ -2,6 +2,7 @@
 // timer (migration-206-cron.sql: x-cron-key, checked with gst_cron_ok as gst-run does) or the service role, never by a
 // browser. verify_jwt off: this handler checks the caller itself.
 //   POST {action: "client", firm_id, client_id}
+//   POST {action: "remind"}   (phase 2) the reminders the owners turned on ("Remind by itself"): see remind() below
 // It reads the client's books from FinCom's cloud with the service role (gst-run's own loader and engine: the same books
 // the app opens), adds the bank statements, the Inbox, FinCom's bills and what earlier nights found, runs the checks and
 // FinCom's own answers (server/_shared/nightchecks.js), and hands everything to night_apply in one call (idempotent:
@@ -9,7 +10,13 @@
 import { firmGate, viaRest } from "../_shared/firmgate.ts";
 import { load } from "../gst-run/data.ts";
 // @ts-ignore plain JavaScript, shared with the Node tests
-import { booksOf, twobOnly, nightInput } from "./nightinput.js";
+import { booksOf, twobOnly, nightInput, gstOf } from "./nightinput.js";
+// @ts-ignore plain JavaScript, shared with the Node tests
+import { journals } from "../_shared/dailyjournals.js";
+// @ts-ignore plain JavaScript, shared with the Node tests
+import { message } from "../_shared/asks.js";
+// @ts-ignore plain JavaScript, shared with the Node tests
+import { plan, mail } from "../_shared/sendguard.js";
 // @ts-ignore plain JavaScript, shared with the Node tests
 import { run } from "../_shared/nightchecks.js";
 // @ts-ignore plain JavaScript, shared with the Node tests
@@ -100,12 +107,49 @@ export function handler(deps: Deps) {
     }
     const twob = twobOnly(b, rows);
     const today = night.replace(/-/g, "");
-    const inp = nightInput(rows, b, { today, bankRecs, inboxRecs, entryRecs, twob, firmRules, prior: prior.map((p: any) => ({ kind: p.kind, key: p.key, state: p.state, evidence: p.evidence, undone: !!p.undone_at })) });
-    const res = run(inp);
+    // (phase 2) the app's own 3B of each month marked filed, and Daily Check's journals already approved (asstEntries)
+    const gst = gstOf(rows, b, today);
+    const draftRecs = (rows.items || []).filter((r: any) => r && r.key === "asstEntries");
+    const inp = nightInput(rows, b, { today, bankRecs, inboxRecs, entryRecs, twob, firmRules, gst, draftRecs, prior: prior.map((p: any) => ({ kind: p.kind, key: p.key, state: p.state, evidence: p.evidence, undone: !!p.undone_at })) });
+    const res0 = run(inp), j = journals(inp);
+    const res = { findings: res0.findings.concat(j.findings), entries: res0.entries.concat(j.entries) };
     if (spent() > (deps.total || TOTAL) * 3) { await fail("failed", "too large for one run (" + spent() + " ms)"); return { ok: false, error: "too large" }; }
     const version = String(book.book_id) + ":" + (b.vouchers || []).length + ":" + (book.ledgers_at || "");
     const counts = await rpc("night_apply", { p_firm: firm, p_client: cid, p_night: night, p_version: version, p_findings: res.findings, p_entries: res.entries, p_complete: true, p_why: "" });
     return { ok: true, night, counts };
+  }
+
+  // (phase 2) "Remind by itself": for each client whose owner turned it on, the document requests asked once and still
+  // needed are emailed again, at most once a week, through the same guard as a person's send (sendguard.js: test mode =
+  // the firm's own address only; the real address only when the firm's owner turned real sending on AND the secret
+  // ASSISTANT_MAIL_LIVE is "yes"). remind_due (migration 208) picks them (owner still active, questions still "ask",
+  // a week since the last send and the last reminder; in real sending only questions really asked); the send log is the
+  // one a person's send writes (ask_send_begin / ask_send_finish), and remind_logged logs each one.
+  async function remind(req: { rpc: any }) {
+    const KEY = String(env("RESEND_API_KEY") || ""), FROM = String(env("ASSISTANT_MAIL_FROM") || ""), LIVE = String(env("ASSISTANT_MAIL_LIVE") || "");
+    const due: any[] = (await req.rpc("remind_due", { p_live: LIVE === "yes" })) || [];
+    const out: any[] = [];
+    for (const r of due.slice(0, 50)) {
+      const p: any = plan({ contacts: r.contacts || [], realSend: r.real_send === true, live: LIVE, testTo: r.test_to, ownerEmail: r.owner_email });
+      const qs = (r.questions || []).map((q: any) => ({ state: "ask", ask: { id: q.id, text: q.text, state: q.state } }));
+      if (!qs.length) continue;
+      if (p.refused || !KEY || !FROM) { await req.rpc("remind_logged", { p_firm: r.firm_id, p_client: r.client_id, p_send: null, p_ids: qs.map((q: any) => q.ask.id), p_status: "refused", p_why: p.refused || "Email is not set up yet." }).catch(() => null); out.push({ client: r.client_id, ok: false }); continue; }
+      let sendId: number | null = null;
+      try { sendId = await req.rpc("ask_send_begin", { p_firm: r.firm_id, p_by: r.by, p_client: r.client_id, p_ids: qs.map((q: any) => q.ask.id), p_channel: "email", p_meant: p.meant || [], p_sent_to: p.to, p_test: p.test }); }
+      catch (e) { await req.rpc("remind_logged", { p_firm: r.firm_id, p_client: r.client_id, p_send: null, p_ids: qs.map((q: any) => q.ask.id), p_status: "refused", p_why: String((e as Error).message || e).slice(0, 200) }).catch(() => null); out.push({ client: r.client_id, ok: false }); continue; }
+      let st = "failed", why = "stopped before Resend answered", provider = "";
+      try {
+        const m = message({ name: r.client || "your company" }, qs, { firm: r.firm || "", week: "" });
+        const payload = mail({ from: FROM, replyTo: r.test_to || r.owner_email || "", plan: p, subject: "Reminder: " + m.subject, text: m.text });
+        const res = await doFetch("https://api.resend.com/emails", { method: "POST", headers: { Authorization: "Bearer " + KEY, "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+        const jj: any = await res.json().catch(() => ({}));
+        if (res.ok) { st = "sent"; why = ""; provider = String(jj.id || ""); } else why = String(jj.message || res.status).slice(0, 200);
+      } catch (e) { why = String((e as Error)?.message || e).slice(0, 200); }
+      await req.rpc("ask_send_finish", { p_send: sendId, p_status: st, p_provider: provider || null, p_why: why }).catch(() => null);
+      await req.rpc("remind_logged", { p_firm: r.firm_id, p_client: r.client_id, p_send: sendId, p_ids: qs.map((q: any) => q.ask.id), p_status: st, p_why: why }).catch(() => null);
+      out.push({ client: r.client_id, ok: st === "sent", test: p.test, to: p.to });
+    }
+    return { ok: true, reminders: out.length, sent: out.filter((x) => x.ok).length, test: out.every((x) => x.test !== false) };
   }
 
   return async (req: Request) => {
@@ -118,6 +162,7 @@ export function handler(deps: Deps) {
     const b0 = Date.now();
     try { body = await req.json(); } catch { return reply(400, { ok: false, error: "Bad request" }); }
     one.ctx.spent += Date.now() - b0;
+    if (body.action === "remind") { try { return reply(200, await remind(one)); } catch (e) { return reply(500, { ok: false, error: String((e as Error)?.message || e).slice(0, 300) }); } }
     if (body.action !== "client" || !UUID.test(String(body.firm_id || "")) || !/^[\w.:-]{1,80}$/.test(String(body.client_id || ""))) return reply(400, { ok: false, error: "Say which client." });
     try { return reply(200, await client(String(body.firm_id), String(body.client_id), one)); }
     catch (e) {

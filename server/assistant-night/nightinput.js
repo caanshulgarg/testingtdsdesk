@@ -12,6 +12,7 @@
 import * as E from "../_shared/gst3b.js";
 import { books as engineBooks } from "../gst-run/engine.js";
 import { ymd, num, r2 } from "../_shared/nightchecks.js";
+import { gstMonths, pickLedger, picksOf, LOOKBACK } from "../_shared/dailyjournals.js";
 
 const G = globalThis;
 // the app's globals the engine reads (S, CO) for the length of one call, then put back
@@ -81,7 +82,19 @@ export function ledgersFor(b) {
     gstCash: pick(/ELECTRONIC CASH|GST CASH/i), tds: pick(/TDS PAYABLE/i), salaryPayable: pick(/SALAR.*PAYABLE/i) };
 }
 
-// x: {today, bankRecs, inboxRecs, entryRecs, twob, prior, firmRules}; rows.co is the client's settings (clients.data)
+// (phase 2) the months the set-off looks at: the app's own 3B for each, worked out with the app's globals in place
+export function gstOf(rows, b, today) {
+  const cur = String(today).slice(0, 6), months = [];
+  for (let i = LOOKBACK; i >= 1; i--) { let y = +cur.slice(0, 4), m = +cur.slice(4, 6) - 1 - i; y += Math.floor(m / 12); m = ((m % 12) + 12) % 12; months.push(y + String(m + 1).padStart(2, "0")); }
+  return withApp(rows, b, () => gstMonths({ GSTR: E.GSTR, GSTF: E.GSTF, GSTSet: E.GSTSet }, months));
+}
+// (phase 2) Daily Check's journals already approved: kept with the client's books as the existing posting path keeps a
+// hand-made voucher (client_book_items "asstEntries", items "#dc-..."; app/src/lib/asstEntries.js)
+export function draftsOf(recs) {
+  return (recs || []).filter((r) => r && r.data && /^#?dc-/.test(String(r.item || r.data.id || ""))).map((r) => ({ dedupe: String(r.data.dedupe || ""), state: String(r.data.state || ""), removed: !!(r.deleted || r.data.removed) })).filter((d) => d.dedupe);
+}
+
+// x: {today, bankRecs, inboxRecs, entryRecs, twob, prior, firmRules, draftRecs}; rows.co is the client's settings (clients.data)
 export function nightInput(rows, b, x) {
   const co = rows.co || {}, bk = bankOf(x.bankRecs, co);
   const closedTo = ymd((co.closed || {}).to);
@@ -94,7 +107,7 @@ export function nightInput(rows, b, x) {
   // opening balances (tally_ledgers.open: Tally's sign, a debit negative)
   const open = {};
   (rows.ledgers || []).forEach((l) => { if (l && l.name && num(l.open)) open[l.name] = r2(num(l.open)); });
-  return {
+  const out = {
     today: x.today,
     books: { vouchers: b.vouchers || [], under: b.under || {}, groups: b.groups || {}, map: b.map || {}, gstin: Object.fromEntries(Object.entries(b.ledInfo || {}).map(([l, i]) => [l, (i && i.gstin) || ""])),
       pathOf: (l) => E.ledGroupPath(b, l), kindOf: (l) => ((b.map || {})[l] || {}).kind || "", isSale: (v) => sales.has(v.id), isPurchase: (v) => buys.has(v.id) },
@@ -107,5 +120,9 @@ export function nightInput(rows, b, x) {
     // the last day the books hold an entry for: a month after it is the bridge being behind, not the client
     readTo: (b.vouchers || []).reduce((m, v) => (v.date > m ? v.date : m), ""),
     ledgersFor: ledgersFor(b), prior: x.prior || [],
+    gst: x.gst || [], drafts: draftsOf(x.draftRecs), picks: picksOf(x.prior),
   };
+  // (phase 2) a salary line is paid against the salary payable ledger only when that ledger is certain
+  out.ledgersFor.salaryPayable = pickLedger("salaryPayable", out).ledger || "";
+  return out;
 }

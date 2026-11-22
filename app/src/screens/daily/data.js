@@ -2,8 +2,9 @@
 // their firm only), and every change through migration 206's functions (each checked and logged). Nothing here posts:
 // Approve hands an entry to the EXISTING approval (the bill's approve() in Purchase, the bank line's bankSetLedger in
 // Bank), so it reaches Tally the usual way, through the Post page and the bridge.
-/* global Cloud, S, openCompany, D, approve, loadBank, openStatement, bankSetLedger, bankRow, goStep, toast */
+/* global Cloud, S, CO, openCompany, D, approve, loadBank, openStatement, bankSetLedger, bankRow, goStep, toast */
 import { sendable } from "../../../../server/_shared/asks.js";
+import { promotion, voucherId } from "../../../../server/_shared/dailytrust.js";
 
 export const cloudOn = () => { try { return typeof Cloud === "object" && Cloud.on(); } catch (e) { return false; } };
 export const isOwner = () => { try { return !!(S.account && S.account.me && S.account.me.role === "owner"); } catch (e) { return false; } };
@@ -16,17 +17,22 @@ const all = async (path) => { const out = []; for (let off = 0; off < 20000; off
 
 export const nameOf = (cid) => { try { return ((S.companies || {})[cid] || {}).name || "Client"; } catch (e) { return "Client"; } };
 
+let lastPrior = [];
 // everything the page shows, in the page's shape: findings with their question, entries, the last night, contacts
 export async function loadAll() {
   if (!cloudOn()) return null;
-  const [fs, qs, es, runs, cs, mail] = await Promise.all([
+  const [fs, qs, es, runs, cs, mail, trust, stats] = await Promise.all([
     all("night_findings?select=id,client_id,kind,key,state,facts,evidence,candidates,last_seen,undone_at&state=in.(ask,you,resolved)&order=client_id,last_seen.desc"),
     all("client_asks?select=id,client_id,finding_id,week,text,edited,state,answer,closed_by,history,created_at&order=created_at"),
     all("night_entries?select=id,client_id,finding_id,source,dedupe,work_ref,voucher,reason,why,evidence,checks,state&state=eq.ready&order=created_at"),
     api("night_runs?select=client_id,night,status,finished_at&order=night.desc&limit=500").catch(() => []),
     all("client_contacts?select=id,client_id,name,email,whatsapp,by_email,by_whatsapp&removed_at=is.null&order=created_at").catch(() => []),
     api("assistant_mail?select=real_send,test_to,test_whatsapp").catch(() => []),
+    // (phase 2, migration 208) the trust levels and the approvals behind a promotion suggestion; none before 208
+    api("daily_trust?select=client_id,kind,level,limit_amt,dismissed_at").catch(() => []),
+    rpc("trust_stats", {}).catch(() => []),
   ]);
+  lastPrior = fs.map((f) => ({ cid: f.client_id, kind: f.kind, key: f.key, state: f.state, evidence: f.evidence || [], undone: !!f.undone_at }));
   const byFinding = new Map(qs.map((q) => [q.finding_id, q]));
   const findings = fs.map((f) => {
     const q = byFinding.get(f.id), x = f.facts || {};
@@ -38,9 +44,24 @@ export async function loadAll() {
   const last = (runs || [])[0];
   const contacts = {};
   (cs || []).forEach((c) => (contacts[c.client_id] = contacts[c.client_id] || []).push(c));
-  return { findings, entries: es, last, clients: new Set((runs || []).filter((r) => r.night === (last && last.night)).map((r) => r.client_id)).size,
+  return { findings, entries: es, last, trust: trust || [], suggestions: suggestionsOf(stats, trust), clients: new Set((runs || []).filter((r) => r.night === (last && last.night)).map((r) => r.client_id)).size,
     contacts, mail: (mail || [])[0] || { real_send: false, test_to: "", test_whatsapp: "" } };
 }
+
+// (phase 2) a promotion is suggested after 20 approvals of a kind for a client, made as FinCom made them (owner only)
+export function suggestionsOf(stats, trust) {
+  const lv = new Map((trust || []).map((t) => [t.client_id + "|" + t.kind, t]));
+  return (Array.isArray(stats) ? stats : []).map((s) => {
+    const t = lv.get(s.client_id + "|" + s.kind) || {}, p = promotion({ approved: s.approved, lastAt: s.last_at, dismissedAt: t.dismissed_at || s.dismissed_at }, t.level != null ? t.level : s.level);
+    return p ? { cid: s.client_id, kind: s.kind, n: p.n, to: p.to } : null;
+  }).filter(Boolean);
+}
+export const trustSet = (cid, kind, level, limit) => rpc("trust_set", { p_client: cid, p_kind: kind, p_level: level, p_limit: limit == null ? null : limit });
+export const trustLater = (cid, kind) => rpc("trust_dismiss", { p_client: cid, p_kind: kind });
+export const loadTrust = (cid) => api("daily_trust?select=kind,level,limit_amt&client_id=eq." + encodeURIComponent(cid));
+// phase 2's kinds: an entry FinCom made (shown under Entries), or a ledger to pick (Needs you); never under Done
+export const P2 = new Set(["setoff_due", "payroll_due", "recurring_due", "ledger_pick"]);
+export const JOURNAL = new Set(["gst_setoff", "payroll", "recurring"]);
 
 export const askable = (findings, cid) => sendable(findings.filter((f) => f.cid === cid && f.state === "ask"), null);
 
@@ -88,12 +109,40 @@ export async function approveEntry(e) {
     if (!sameLine(e, r)) { toast(CHANGED); return false; }
     if (!bankSetLedger(row, (e.voucher || {}).against || "")) return false;   // bankSetLedger said why
     if (r.state !== "ready") return false;
+  } else if (JOURNAL.has(e.source)) {
+    return approveJournal(e);
   } else return false;
   await rpc("entry_decide", { p_id: e.id, p_decision: "approved", p_work_ref: e.work_ref });
   return true;
 }
+// (phase 2) a journal FinCom made: the second check first (the same builder on the books as they are now: anything
+// changed since the night, and nothing is approved), then the EXISTING path for a hand-made voucher
+// (app/src/lib/asstEntries.js: its checks, the post gate, the one XML builder and Bridge.post: the bridge here or the
+// cloud's queue, Tally checked for FinCom's id first). The decision is recorded only once Tally took it or it is queued.
+export async function approveJournal(e) {
+  const cid = e.client_id;
+  await openCompany(cid);
+  const { recheck } = await import("./again.js");
+  const why = await recheck(e, { prior: lastPrior.filter((p) => p.cid === cid) });
+  if (why) { toast(why); return false; }
+  const A = await import("../../lib/asstEntries.js");
+  const co = CO(cid), gate = A.postGate(co);
+  if (!gate.ok) { toast(gate.why); return false; }
+  const list = await A.clientLedgers(co, true), v0 = e.voucher || {}, d8_ = d8(v0.date);
+  const v = { id: voucherId(e.dedupe), type: "Journal", date: d8_.slice(0, 4) + "-" + d8_.slice(4, 6) + "-" + d8_.slice(6, 8), narration: v0.narration || "",
+    lines: (v0.lines || []).map((l) => ({ ledger: l.ledger, dr: l.dr || "", cr: l.cr || "" })) };
+  const probs = A.voucherProblems(v, A.ledgerIndex(list), null);
+  if (probs.length) { toast(probs[0]); return false; }
+  const d = { id: v.id, from: "daily", dedupe: e.dedupe, night_entry: e.id, title: e.why || e.reason, vouchers: [v], created: new Date().toISOString(), by: A.me() };
+  const r = await A.postDraft(co, d, list);
+  const res = (d.results || {})[v.id] || {};
+  if (!r || !r.ok || res.state === "failed") { if (r && r.ok) await A.Drafts.save(cid, Object.assign(d, { state: "failed" }), "Tally did not take it"); toast((res && res.msg) || (r && r.error) || "Not posted."); return false; }
+  await rpc("entry_decide", { p_id: e.id, p_decision: "approved", p_work_ref: d.id });
+  return true;
+}
 // Edit: the entry opened where it is made (the bill in Purchase, the line in Bank)
 export async function editEntry(e) {
+  if (JOURNAL.has(e.source)) return;                       // a journal FinCom made: Reject it and enter it by hand
   await openCompany(e.client_id);
   if (e.source === "twob_inbox_bill") { S.selected = e.work_ref; goStep("review", "bills"); }
   else { const i = e.work_ref.lastIndexOf(":"); S.tab = "bank"; await loadBank(e.client_id); await openStatement(e.work_ref.slice(0, i)); }

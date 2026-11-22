@@ -42,6 +42,7 @@ import GstApiAll from "./GstApiAll.jsx";
 import LogoPick from "../parts/LogoPick.jsx";
 // next-assistant (phase 1 design): the client's own contacts, for Daily Check's weekly questions
 import ClientContacts from "./daily/ClientContacts.jsx";
+import TrustLevels from "./daily/TrustLevels.jsx";
 import { clientTallyState, tallyDevs, pcLive, seenWords, openOn } from "../lib/tallyState.js";
 // TDSF25 (src/js/83-tds-forms-2025.js: the deductor's details) comes with this screen's file, not in legacy.js (build.py lazy_files)
 import "../../../src/js/83-tds-forms-2025.js";
@@ -330,7 +331,7 @@ function Company() {
   </Card>;
 }
 function CompanyAndContacts() {
-  return <><Company /><Card title="Contacts"><ClientContacts co={CO()} key={CO().id} /></Card></>;
+  return <><Company /><Card title="Contacts"><ClientContacts co={CO()} key={CO().id} /></Card><Card title="What FinCom may do by itself"><TrustLevels co={CO()} key={CO().id} /></Card></>;
 }
 
 // review item 36: bills for services post as a Journal or as a Purchase voucher, as the client books them in Tally; a
