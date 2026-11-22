@@ -1271,3 +1271,14 @@ transaction, lock_timeout 10 s; safe twice; add-only: new tables client_contacts
 night_runs, night_findings, client_asks, ask_sends, night_entries, daily_log, their RLS, explicit grants and new
 functions); 2. deploy the functions assistant-night and assistant-send; 3. `sbq.sh server/assistant-night/migration-206-cron.sql`
 (md5 7995829e6e2cf4670876564103543a9f; the night timer, 02:00 to 05:20 IST, and the 05:35 list of clients not reached). Needs nothing of 199-205. Its log table is `daily_log` (staging's `assistant_log` is the Ask FinCom chat's and is not touched); it stops, naming them, if any of its table or function names is already used by something else. Tested: `tests/run_migration206.py` (pg_stand, with the chat's assistant_log in place).
+
+## 207: Daily Check, a Draft closes when its finding stops being a question (not run yet; branch next-assistant, 23-Nov-2026)
+
+**207** (`server/assistant-night/migration-207-night-close-drafts.sql`, md5 0bdc8c941b1cfc375da3ee0a6e1c0f6c; **written, not run yet**). Needs 206.
+night_apply replaced (same arguments, grants and mark restated): a finding that goes to "you" (or dismissed) closes its
+Draft question (closed_by 'fincom', "the firm looks at it first"); an Asked or Answered one stays as it is; cleared Drafts
+close with 'fincom'; a question FinCom closed reopens as a Draft when its finding is a question again (one a person closed
+stays closed). client_asks.closed_by may be 'fincom' (its check widened, by name). No row changed. Safe twice; one
+transaction. **Apply:** `sbq.sh server/assistant-night/migration-207-night-close-drafts.sql`. If 206 is ever run again,
+run 207 after it (206 would put its own night_apply back). Tested: `tests/run_migration206.py` section 8. Existing Drafts
+of findings already "you" close at the next night run.

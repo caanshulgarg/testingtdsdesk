@@ -53,6 +53,12 @@ screenshots.
 ### Sizes (gzip)
 legacy.js 599,738 (limit 600,000; +6 for `#/daily`); main index 260,627 (limit 264,192); Daily Check 5.8 kB, its own chunk.
 
+### Migration 207 (23-Nov-2026): Drafts follow their finding
+The second night moved two wrong-side findings from "ask" to "you"; their Draft questions stayed. `night_apply` (207) now
+closes a Draft whenever its finding stops being a question (closed_by 'fincom'); an Asked or Answered one stays, shown under
+Needs you (marked Asked), never under From clients (which takes only findings that are questions, as does the send step's
+`ask_send_prepare`). A question FinCom closed reopens as a Draft when the finding returns; one a person closed stays closed.
+
 ### The first night on staging (22-Nov-2026): only relevant questions
 One client: 94 findings, 93 Draft questions, 81 of them "advance open". Read-only queries showed why: (1) a journal or
 debit note that took a supplier past its bills (a TDS deduction, an adjustment) was counted as an advance; (2) every

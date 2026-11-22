@@ -123,3 +123,4 @@
 .dc-settings[open] { display: grid; gap: 8px; }
 .dc-settings .f { display: grid; gap: 3px; max-width: 320px; }
 .dc-settings .f span { color: var(--text-secondary); font-size: 12.5px; }
+.dc-you-q { display: inline-flex; align-items: center; gap: 5px; margin-left: 10px; font-size: 12.5px; color: var(--text-secondary); }

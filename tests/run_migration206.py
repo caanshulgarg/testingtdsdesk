@@ -13,6 +13,7 @@ import os, sys, json
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 import pg_stand
 MIG = os.path.join(HERE, "..", "server", "assistant-night", "migration-206-assistant-night.sql")
+MIG207 = os.path.join(HERE, "..", "server", "assistant-night", "migration-207-night-close-drafts.sql")
 fails = []
 def ok(c, w):
     print(("  ok   " if c else "  FAIL ") + w, flush=True)
@@ -175,6 +176,36 @@ try:
     d1 = db.rows("select * from public.night_due(10)"); d2 = db.rows("select * from public.night_due(10)")
     got = sorted(r["client_id"] for r in d1)
     ok("c2" in got and "c9" not in got and not any(r["client_id"] == "c2" for r in d2), "6. night_due claims a client with books once a night (%s, then %s)" % (got, [r["client_id"] for r in d2]))
+    # ---------------------------------------------------------------- 8. migration 207: a Draft closes when its finding stops being a question
+    b207 = open(MIG207).read()
+    db.sql(body); db.sql(b207)      # (206 run again after 207 would put 206's night_apply back: 207 is then run again too)
+    db.sql(b207)
+    ok(db.one("select obj_description('public.night_apply(uuid, text, date, text, jsonb, jsonb, boolean, text)'::regprocedure, 'pg_proc')") == "daily check (migration 206)" and db.one("select has_function_privilege('authenticated', 'public.night_apply(uuid, text, date, text, jsonb, jsonb, boolean, text)', 'execute')") == "f", "8. 207 runs twice; night_apply keeps 206's mark, the service role's only")
+    def apply3(findings, night, complete=True):
+        return json.loads(db.one("select public.night_apply('%s', 'c3', '%s', 'v1', '%s'::jsonb, '[]'::jsonb, %s)" % (F1, night, json.dumps(findings).replace("'", "''"), "true" if complete else "false")))
+    W = {"kind": "wrong_side", "key": "ws:x", "state": "ask", "facts": {"ask_text": "₹31,000 is shown as received in advance. Is an invoice pending?"}}
+    W2 = {"kind": "wrong_side", "key": "ws:y", "state": "ask", "facts": {"ask_text": "₹9,000 is shown as paid in advance. Is a bill pending?"}}
+    apply3([W, W2], "2026-11-23")
+    q = lambda key: db.one("select a.state || ':' || coalesce(a.closed_by, '') from client_asks a join night_findings n on n.id = a.finding_id where n.client_id = 'c3' and n.key = '%s'" % key)
+    db.sql("update client_asks a set state = 'asked' from night_findings n where n.id = a.finding_id and n.key = 'ws:y'")
+    apply3([dict(W, state="you"), dict(W2, state="you")], "2026-11-24")
+    ok(q("ws:x") == "closed:fincom", "8. ask -> you: its Draft closed by FinCom (%s)" % q("ws:x"))
+    ok(q("ws:y") == "asked:", "8. ask -> you: a question already Asked stays as it is")
+    ok("the firm looks at it first" in db.one("select history::text from client_asks a join night_findings n on n.id = a.finding_id where n.key = 'ws:x'"), "8. the short reason is in its history")
+    apply3([W, dict(W2, state="you")], "2026-11-25")
+    ok(q("ws:x") == "draft:", "8. you -> ask again: reopened as a Draft")
+    act(STAFF, "select public.ask_close(a.id) from client_asks a join night_findings n on n.id = a.finding_id where n.key = 'ws:x'")
+    apply3([dict(W, state="you"), dict(W2, state="you")], "2026-11-26"); apply3([W, dict(W2, state="you")], "2026-11-27")
+    ok(q("ws:x") == "closed:person", "8. a question a person closed stays closed when the finding returns")
+    W3 = {"kind": "round_sum", "key": "round:z", "state": "ask", "facts": {"ask_text": "₹50,000 entered. What is it for?"}}
+    apply3([W, dict(W2, state="you"), W3], "2026-11-28"); apply3([W, dict(W2, state="you")], "2026-11-29")
+    ok(q("round:z") == "closed:fincom", "8. cleared (no longer found): its Draft closed by FinCom")
+    apply3([W, dict(W2, state="you"), W3], "2026-11-30")
+    ok(q("round:z") == "draft:", "8. cleared, then found again: reopened as a Draft")
+    # the page's From clients and the send step take only findings that are questions (state ask)
+    open_y = db.one("select a.id from client_asks a join night_findings n on n.id = a.finding_id where n.key = 'ws:y'")
+    p8 = json.loads(one(OWN, "select public.ask_send_prepare('c3', array['%s']::uuid[], 'email')" % open_y))
+    ok(p8["questions"] == [], "8. an Asked question whose finding needs you is never sendable")
     # ---------------------------------------------------------------- 7. the review's cases
     def apply2(findings, entries=(), complete=True, night="2026-11-22"):
         return json.loads(db.one("select public.night_apply('%s', 'c2', '%s', 'v1', '%s'::jsonb, '%s'::jsonb, %s)" % (F1, night, json.dumps(findings).replace("'", "''"), json.dumps(list(entries)).replace("'", "''"), "true" if complete else "false")))

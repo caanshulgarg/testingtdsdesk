@@ -79,7 +79,8 @@ function NeedsYou({ list, busy, run }) {
   const w = canWrite();
   return groups(list).map(({ cid, items }) => <Group key={cid} cid={cid}>
     {items.map((f) => <li key={f.id} className="dc-row dc-you" data-row={f.id}>
-      <div className="dc-you-t">{f.title || f.short}</div>
+      {/* a question already Asked or Answered when the finding came here stays as it was: shown here, never under From clients */}
+      <div className="dc-you-t">{f.title || f.short}{f.ask && (f.ask.state === "asked" || f.ask.state === "answered") && <span className="dc-you-q"><i className={"dc-dot " + f.ask.state} aria-hidden="true" />{STATE[f.ask.state]}</span>}</div>
       <div className="dc-choices" role="group" aria-label={f.title || f.short}>
         {(f.candidates || []).map((c) => <button type="button" key={c.ref} className="dc-choice" disabled={busy || !w} onClick={() => run(() => choose(f.id, c.ref))}>{c.label}</button>)}
         <button type="button" className="dc-choice" disabled={busy || !w} onClick={() => run(() => choose(f.id, "ask"))}>Ask client</button>

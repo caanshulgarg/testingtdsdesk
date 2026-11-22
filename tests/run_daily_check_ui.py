@@ -29,6 +29,10 @@ srv = http.server.ThreadingHTTPServer(("localhost", PORT), functools.partial(Q, 
 threading.Thread(target=srv.serve_forever, daemon=True).start()
 URL = "http://localhost:%d/" % PORT
 ROWS = json.loads(subprocess.run(["node", "-e", "import('./daily_fixture.mjs').then(m => process.stdout.write(JSON.stringify(m.dbRows())))"], cwd=HERE, capture_output=True, text=True, check=True).stdout)
+# a question Asked before its finding moved to Needs you (207): shown there, never under From clients
+_you = [f for f in ROWS["night_findings"] if f["state"] == "you"][0]
+ROWS["client_asks"].append({"id": "00000000-0000-4000-8000-000000000999", "client_id": _you["client_id"], "finding_id": _you["id"], "week": "2026-11-16", "text": "A made-up question asked before.", "edited": None, "state": "asked", "answer": None, "closed_by": None,
+  "history": [{"at": "2026-11-17T10:00:00+05:30", "what": "Emailed to accounts@sampletraders.example"}], "created_at": "2026-11-14T02:10:00+05:30"})
 READY = "() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"
 SEED = """([rows, role]) => { S.firm.firmName = "Sample & Co";
   rows.clients.forEach((c) => { const co = newCompany({name: c.name}); co.id = c.id; co.stats = {}; S.companies[c.id] = co; S.data[c.id] = {parties: {}, entries: {}, loaded: true}; });
@@ -91,7 +95,9 @@ with sync_playwright() as p:
         if dev == "desktop":
             pg.click(".dc-acts button:has-text('Close')"); settle(pg, 300)
             ok(len(rpcs(pg, "ask_close")) == 1, "3. Close calls ask_close")
+        if dev == "desktop": ok("A made-up question asked before." not in pg.locator("[data-daily]").inner_text(), "2. a question whose finding needs you is not under From clients")
         pg.click("[data-tab=you]"); settle(pg, 250); shot(pg, "3-needs-you-" + dev)
+        if dev == "desktop": ok(pg.locator("[data-row='%s'] .dc-you-q" % _you["id"]).inner_text() == "Asked", "4. it is shown under Needs you, marked Asked")
         if dev == "desktop":
             pg.click(".dc-choice:has-text('Sales 1211')"); settle(pg, 300)
             c = rpcs(pg, "finding_choose")
