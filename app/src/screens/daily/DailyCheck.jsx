@@ -95,7 +95,8 @@ function NeedsYou({ list, busy, run }) {
       {/* a question already Asked or Answered when the finding came here stays as it was: shown here, never under From clients */}
       <div className="dc-you-t">{f.title || f.short}{f.ask && (f.ask.state === "asked" || f.ask.state === "answered") && <span className="dc-you-q"><i className={"dc-dot " + f.ask.state} aria-hidden="true" />{STATE[f.ask.state]}</span>}</div>
       <div className="dc-choices" role="group" aria-label={f.title || f.short}>
-        {(f.candidates || []).map((c) => <button type="button" key={c.ref} className="dc-choice" disabled={busy || !w} onClick={() => run(() => choose(f.id, c.ref))}>{c.label}</button>)}
+        {/* "That journal is not for <month>" is the owner's (the server checks it too) */}
+        {(f.candidates || []).map((c) => <button type="button" key={c.ref} className="dc-choice" disabled={busy || !w || (c.t === "exclude" && !isOwner())} title={c.t === "exclude" && !isOwner() ? "The firm's owner decides this" : undefined} onClick={() => run(() => choose(f.id, c.ref))}>{c.label}</button>)}
         {!P2.has(f.kind) && <button type="button" className="dc-choice" disabled={busy || !w} onClick={() => run(() => choose(f.id, "ask"))}>Ask client</button>}
         <button type="button" className="dc-choice quiet" disabled={busy || !w} onClick={() => run(() => choose(f.id, "dismiss"))}>Not needed</button>
       </div>

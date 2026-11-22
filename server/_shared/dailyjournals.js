@@ -255,7 +255,7 @@ export function setoffOne(m, inp, others) {
   if (theirs.length) return { finding: you("Set-off " + label + ": waiting on " + (theirs.length === 1 ? "a tax journal" : theirs.length + " tax journals") + " that may be its set-off", [], { waits: true }).finding,
     picks: theirs.map((v) => finding("setoff_exclude", "excl:" + m.reg + ":" + m.ym + ":" + v.id, "you", { party: "GST set-off " + label.split(" ")[0], amt: r2(v.ent.filter((e) => e.a < 0).reduce((x, e) => x - e.a, 0)), date: v.date, ym: m.ym,
       short: "Tax journal: which month?", title: "A tax journal of " + dmon(v.date) + " (" + inr(v.ent.filter((e) => e.a < 0).reduce((x, e) => x - e.a, 0)) + ") may be " + label + "'s set-off. Check it in Tally." },
-      [], [{ t: "exclude", ref: "excl:" + v.id, label: "That journal is not for " + label, voucher: v.id }])) };
+      [], [{ t: "exclude", ref: "excl:" + m.reg + ":" + m.ym + ":" + v.id, label: "That journal is not for " + label, voucher: v.id }])) };
   // 4. the lines: the app's journal, then interest and late fee from the cash ledger
   const ledI = intAmt ? pickLedger("gstInterest", inp) : null, ledF = feeAmt ? pickLedger("gstLateFee", inp) : null;
   const miss = [["gstInterest", ledI], ["gstLateFee", ledF]].filter(([, p]) => p && !p.ledger);
@@ -475,14 +475,18 @@ export function excludedOf(prior) {
   (prior || []).forEach((p) => { const ev = (p.evidence || [])[0]; if (p.kind === "setoff_exclude" && p.state === "resolved" && !p.undone && ev && ev.t === "exclude") o.add(String(p.key).replace(/^excl:/, "")); });
   return o;
 }
-// (review N4) a draft whose posting the cloud's queue stopped (failed or cancelled), or whose result for its voucher says
-// not posted, is failed: the entry is offered again
+// (final review 1) what a draft proves, the same rule as the server's asst_draft_state: "posted" only with proof the
+// voucher reached Tally (the cloud's job reports THIS voucher's result ok; FinCom's id in the books is checked by the
+// builder itself); "live" while its job is still waiting, taken or running; anything else ("failed": Tally refused it,
+// the queue stopped it, a job done without this voucher ok, or a draft with no job at all) is offered again. The bridge
+// checks Tally for FinCom's id before posting, so a voucher already there is never posted twice
 export function draftState(d, jobs) {
-  const st = String(d.state || ""), j = (jobs || {})[d.job || ""];
-  if (j && /^(failed|cancelled)$/.test(String(j.status || "")) && st !== "posted") return "failed";
+  if (d.removed) return "failed";
+  const j = (jobs || {})[d.job || ""];
   const res = j && Array.isArray(j.results) ? j.results.find((x) => x && x.id === d.vid) : null;
-  if (res && res.ok === false && !res.held && st !== "posted") return "failed";
-  return st;
+  if (res && res.ok === true) return "posted";
+  if (j && /^(waiting|taken|running)$/.test(String(j.status || ""))) return "live";
+  return "failed";
 }
 // (outside: which of them the person confirmed though the ledger is in another group)
 export function picksOf(prior, outside) {

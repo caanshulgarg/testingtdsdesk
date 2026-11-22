@@ -20,7 +20,9 @@ const CASH = "GST ELECTRONIC CASH LEDGER";
 function night(rows, today = "20261122", x = {}) {
   if (!x.noKeep) keepFiled(rows, today);      // the 3B kept as filed (review N3), unless the case is about not keeping it
   const b = booksOf(rows), gst = gstOf(rows, b, today);
-  const inp = nightInput(rows, b, Object.assign({ today, bankRecs: [], inboxRecs: [], entryRecs: [], twob: [], gst, prior: [], draftRecs: (rows.items || []).filter((r) => r.key === "asstEntries") }, x));
+  // the cloud's queue: one posting still running (a draft with it is on its way), one done with dc-ok posted
+  const jobs = { "44444444-4444-4444-8444-444444444444": { status: "running", results: [] }, "55555555-5555-4555-8555-555555555555": { status: "done", results: [{ id: "dc-ok", ok: true }] } };
+  const inp = nightInput(rows, b, Object.assign({ today, bankRecs: [], inboxRecs: [], entryRecs: [], twob: [], gst, prior: [], jobs, draftRecs: (rows.items || []).filter((r) => r.key === "asstEntries") }, x));
   return { inp, out: J.journals(inp), gst };
 }
 const one = (r, kind) => r.out.findings.filter((f) => f.kind === kind);
@@ -88,8 +90,12 @@ const base = { ym: "202610", intra: 100000, inter: 50000, buyIntra: 40000, buyIn
   const tag = { day: 21, type: "Journal", lines: [["CGST OUTPUT", -1], [CASH, 1]] }, rw = add(gstRows(base), tag, "2026-11");
   rw.heads[rw.heads.length - 1].narration = "posted | TDSDesk:" + J.voucherId("setoff:07:202610");
   ok(!entry(night(rw), "gst_setoff").length && !one(night(rw), "setoff_due").length, "posted by Daily Check (its id in Tally's narration): no entry");
-  const pend = gstRows(Object.assign({}, base, { items: [{ key: "asstEntries", item: "#dc-x", ord: 0, data: { id: "dc-x", dedupe: "setoff:07:202610", state: "posted" }, deleted: false }] }));
-  ok(!entry(night(pend), "gst_setoff").length, "approved and pending (Daily Check's draft): no entry");
+  const pend = gstRows(Object.assign({}, base, { items: [{ key: "asstEntries", item: "#dc-x", ord: 0, data: { id: "dc-x", dedupe: "setoff:07:202610", state: "sent", job: "44444444-4444-4444-8444-444444444444" }, deleted: false }] }));
+  ok(!entry(night(pend), "gst_setoff").length, "approved and its posting still running: no entry");
+  const okd = gstRows(Object.assign({}, base, { items: [{ key: "asstEntries", item: "#dc-ok", ord: 0, data: { id: "dc-ok", dedupe: "setoff:07:202610", state: "sent", job: "55555555-5555-4555-8555-555555555555" }, deleted: false }] }));
+  ok(!entry(night(okd), "gst_setoff").length, "final review 1: the job reports this voucher ok (proof): no entry");
+  const noproof = gstRows(Object.assign({}, base, { items: [{ key: "asstEntries", item: "#dc-x", ord: 0, data: { id: "dc-x", dedupe: "setoff:07:202610", state: "posted" }, deleted: false }] }));
+  ok(entry(night(noproof), "gst_setoff").length === 1, "final review 1: a draft saying posted with no job and nothing in Tally: not proof, offered again (the bridge checks Tally for FinCom's id first)");
   const failed = gstRows(Object.assign({}, base, { items: [{ key: "asstEntries", item: "#dc-x", ord: 0, data: { id: "dc-x", dedupe: "setoff:07:202610", state: "failed" }, deleted: false }] }));
   ok(entry(night(failed), "gst_setoff").length === 1, "a draft Tally refused is not pending: the entry is made again");
 }
@@ -223,7 +229,7 @@ const pay = (o = {}) => { const rw0 = gstRows({ ym: "202610", filed: "", extraLe
   const diff = { date: "2026-10-31", lines: [["Salary", -90000], ["HDFC Bank", 90000]], type: "Payment" };
   const r = night(pay({ more: [diff] }));
   ok(!entry(r, "payroll").length && /booked ₹90,000/.test(one(r, "payroll_due")[0].facts.title), "salary booked for another amount: Needs you, never a second journal");
-  ok(!entry(night(pay({ items: [{ key: "asstEntries", item: "#dc-p", ord: 0, data: { id: "dc-p", dedupe: "payroll:202610", state: "posting" }, deleted: false }] })), "payroll").length, "approved and pending: no entry");
+  ok(!entry(night(pay({ items: [{ key: "asstEntries", item: "#dc-p", ord: 0, data: { id: "dc-p", dedupe: "payroll:202610", state: "posting", job: "44444444-4444-4444-8444-444444444444" }, deleted: false }] })), "payroll").length, "approved and its posting still running: no entry");
   const r5 = night(pay({ closed: { to: "2026-10-31" } }));
   ok(!entry(r5, "payroll").length && /closed/i.test(one(r5, "payroll_due")[0].facts.title), "a closed period: Needs you");
   ok(!one(night(pay(), "20261015"), "payroll_due").length, "the month not over yet: nothing");
@@ -276,7 +282,7 @@ const rec = (more, today = "20261122", o = {}) => night(pay(Object.assign({ more
   const bank = rec(["08", "09", "10"].map((m) => ({ date: "2026-" + m + "-01", type: "Payment", lines: [["Rent", -45000], ["HDFC Bank", 45000]] })));
   ok(!one(bank, "recurring_due").length, "rent paid from the bank each month: the bank statement brings it, no journal");
   const k = one(rec([RENT("01", "2026-08"), RENT("01", "2026-09"), RENT("01", "2026-10")]), "recurring_due")[0].key;
-  ok(!entry(rec([RENT("01", "2026-08"), RENT("01", "2026-09"), RENT("01", "2026-10")], "20261122", { items: [{ key: "asstEntries", item: "#dc-r", ord: 0, data: { id: "dc-r", dedupe: k, state: "posted" }, deleted: false }] }), "recurring").length, "approved and pending: no entry");
+  ok(!entry(rec([RENT("01", "2026-08"), RENT("01", "2026-09"), RENT("01", "2026-10")], "20261122", { items: [{ key: "asstEntries", item: "#dc-r", ord: 0, data: { id: "dc-r", dedupe: k, state: "sent", job: "44444444-4444-4444-8444-444444444444" }, deleted: false }] }), "recurring").length, "approved and its posting still running: no entry");
   const a = rec([RENT("01", "2026-08"), RENT("01", "2026-09"), RENT("01", "2026-10")]), b2 = rec([RENT("01", "2026-08"), RENT("01", "2026-09"), RENT("01", "2026-10")]);
   ok(JSON.stringify(a.out) === JSON.stringify(b2.out), "the same night twice: the same");
 }
@@ -296,7 +302,7 @@ console.log("5b. the review's cases (H1, H2, M2, L1-L5, L8)");
   const rv = night(addV(gstRows(Object.assign({}, base)), "rv", "2026-11-20", "Journal", [["CGST OUTPUT", -5000], ["CGST INPUT", 5000]], "GST set-off paid on 20/11/2026"));
   ok(!entry(rv, "gst_setoff").length && one(rv, "setoff_exclude").length === 1 && one(rv, "setoff_due")[0].facts.waits, "N1: the reviewer's case \"GST set-off paid on 20/11/2026\" with other lines: Needs you, never ready");
   const ex = one(rv, "setoff_exclude")[0];
-  ok(ex.candidates.length === 1 && ex.candidates[0].label === "That journal is not for Oct 2026" && ex.candidates[0].voucher === "rv", "N2: the choice \"That journal is not for Oct 2026\" (and Not needed on the page)");
+  ok(ex.candidates.length === 1 && ex.candidates[0].label === "That journal is not for Oct 2026" && ex.candidates[0].voucher === "rv" && ex.candidates[0].ref === "excl:07:202610:rv", "N2: the choice \"That journal is not for Oct 2026\" (and Not needed on the page)");
   const rv2 = night(addV(gstRows(Object.assign({}, base)), "rv", "2026-11-20", "Journal", [["CGST OUTPUT", -5000], ["CGST INPUT", 5000]], "GST set-off paid on 20/11/2026"), "20261122",
     { prior: [{ kind: "setoff_exclude", key: ex.key, state: "resolved", evidence: [ex.candidates[0]] }] });
   ok(entry(rv2, "gst_setoff").length === 1 && !one(rv2, "setoff_exclude").length, "N2: the owner said it is not for October: that journal left out, October proceeds");
@@ -331,6 +337,10 @@ function taxOnlyOK(rw) { const r = night(rw); const v = r.inp.books.vouchers.fin
   ok(entry(grp2, "payroll").length === 1, "N5: a sub-group with a ledger not named salary: only the salary ledger itself counts");
   ok(entry(n([{ date: "2026-10-31", lines: [["Auditors Remuneration", -25000], ["Sample Supplier", 25000]] }], { ledgers: { "Auditors Remuneration": "Indirect Expenses" } }), "payroll").length === 1, "N5: auditors' remuneration is not salary");
   ok(entry(n([{ date: "2026-10-20", lines: [["Staff Welfare", -3000], ["Cash", 3000]] }], { ledgers: { "Staff Welfare": "Indirect Expenses" } }), "payroll").length === 1, "N5: staff welfare is not salary");
+  for (const l of ["Payroll Expenses", "Employee Benefit Expense", "Employee Cost - Office"]) {
+    const r = n([{ date: "2026-10-31", lines: [[l, -92903.23], ["Salary Payable", 92903.23]] }], { ledgers: { [l]: "Indirect Expenses" } });
+    ok(!entry(r, "payroll").length && one(r, "payroll_due")[0].state === "you", "final review 3: \"" + l + "\" is salary-named, not the payroll's ledger: Needs you");
+  }
   const both = n([{ date: "2026-10-31", lines: [["Salary", -92903.23], ["Salary Payable", 92903.23]] }, { date: "2026-11-05", lines: [["Salary", -1000], ["HDFC Bank", 1000]] }]);
   ok(!entry(both, "payroll").length && !one(both, "payroll_due").length, "N5: October booked on 31-Oct; a salary entry on 5-Nov is November's, not counted twice for October");
   {

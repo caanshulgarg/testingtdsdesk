@@ -43,7 +43,8 @@ ok(await browser(rows, so) === "" && await browser(rows, pay) === "", "Approve w
   ok(await browser(r2, pay) === CHANGED, "the salary booked by hand since: refused (never twice)");
 }
 {
-  ok(/Already approved/.test(await browser(rows, pay, { drafts: [{ id: "dc-1", dedupe: pay.dedupe, state: "posting" }] })), "approved already (on its way to Tally): refused, said so");
+  ok(/Already approved/.test(await browser(rows, pay, { drafts: [{ id: "dc-1", dedupe: pay.dedupe, state: "sent", job: "66666666-6666-4666-8666-666666666666" }], jobs: { "66666666-6666-4666-8666-666666666666": { status: "taken" } } })), "approved already (its posting on its way): refused, said so");
+  ok(await browser(rows, pay, { drafts: [{ id: "dc-1", dedupe: pay.dedupe, state: "posting" }] }) === "", "final review 1: a draft saying posting with no job: not proof, may be approved again (the bridge checks Tally for FinCom's id first)");
   ok(await browser(rows, pay, { drafts: [{ id: "dc-1", dedupe: pay.dedupe, state: "failed" }] }) === "", "its own earlier post that Tally refused: may be approved again");
   ok(/not the books last night read/.test(await browser(rows, so, { bookId: "b2" })), "low: other books open here (a client's books split by year): refused");
   ok(/Already approved/.test(await browser(rows, pay, { drafts: [{ id: "dc-1", dedupe: pay.dedupe, state: "sent", job: "11111111-1111-4111-8111-111111111111" }], jobs: { "11111111-1111-4111-8111-111111111111": { status: "waiting" } } })), "N4: queued and still waiting: approved already");

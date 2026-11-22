@@ -4,6 +4,19 @@ Branch `next-daily-p2` (from `staging-next`, which holds phase 1). Designed and 
 deployed, published or merged**: the owner reviews the screenshots, then applies and deploys. Made-up data only, in the
 tests and the screenshots. Phase 1 is `docs/ASSISTANT-PHASE1.md`.
 
+## 0b. The final review of 96cb62381, and what changed
+
+- A claim left by a closed tab is settled to approved ONLY with proof the voucher reached Tally: FinCom's id
+  ("TDSDesk:dc-…") in the client's books, or the cloud's job reporting THIS voucher's result ok. A job still waiting,
+  taken or running leaves it being approved; anything else (a draft saying posting or posted with no job, a job done with
+  this voucher refused, a stopped job) goes back to ready ("Not confirmed in Tally" in the log). The server
+  (`asst_draft_state`) and the night and page (`draftState`) read the per-voucher results by the same rule.
+- The exclusion is month-specific (`excl:<reg>:<ym>:<voucher id>`): one hand journal can be excluded from several months.
+- "That journal is not for <month>" is the owner's, enforced on the server (trigger `night_findings_exclude_owner`) and on
+  the page.
+- Ledgers named payroll, employee benefit or employee cost are salary-named: not the payroll's ledger, the month is Needs
+  you.
+
 ## 0a. The re-review of 1e4b2f1f9 (N1-N5), and what changed
 
 - **N1** "Another month's" is decided ONLY by lines: a tax-only entry is another month's set-off when its lines are that
@@ -153,7 +166,7 @@ the pattern is broken, nothing. An entry that month to the same expense for abou
 
 ## 5. Data model: migration 208 (a draft, NOT applied)
 
-`server/assistant-night/migration-208-daily-phase2.sql` (md5 057cd7e5df6592b58219fcafad3c397e) and
+`server/assistant-night/migration-208-daily-phase2.sql` (md5 2b23b59718e58e261459519be17922d1) and
 `server/assistant-night/migration-208-cron.sql` (md5 f1a2d0d8d49d70cf9faf8b30e834830b). One transaction each, lock_timeout
 10 s, safe twice, add-only.
 - Stops first unless 206 and 207 are in, and if any of its names (`daily_trust`, `trust_set`, `trust_dismiss`,
@@ -211,12 +224,12 @@ Phase 1's rules 1 to 7 stand. Phase 2 adds the owner's rules of 22-Nov-2026 ("ev
 
 | Test | What | Result |
 |---|---|---|
-| `node tests/run_dailyjournals.mjs` (114 after the review: H1, H2, M1 incl. brute force and the reviewer's case, M2, L1-L5, L8) | the builders through the night's own path (gst-run engine, nightinput, the app's GSTR/GSTF): set-off (ready, missing ledger, zero month, negative liability, RCM only, interest and late fee, paise, in the books, a different tax journal, posted, pending, refused draft, closed period, changed since filed, wrong group, not filed, a tampered journal, the legal order); the **differential**: `setoffPlain` = `GSTR.setOff` on 3,000 random months to the paisa, the legal order on each, and the journal total = the 3B's credit + cash on made-up books; payroll (ready, net off by a paisa, PF/ESI, surcharge, twice, missing ledger, a tie, a person's pick, wrong group, booked, booked for another amount, pending, closed, month not over); salary payments (match, ₹1.01, the month, payroll not booked, two of a name, two payables); monthly (ready, not yet due, present, two months, broken, moved within 2%, outside 2%, booked another way, month-end, closed, from the bank, pending); every entry ready only with every check; trust gate and promotion; each twice | 124 passed |
-| `node tests/run_daily_again.mjs` | the second check at Approve: unchanged goes on; a line, the date, a sale added, the sheet edited, a ledger gone, the period closed, booked by hand, approved already, posted already: refused | 16 passed |
-| `python3 tests/run_migration208.py` (pg_stand, after 206 and 207, Supabase's default grants simulated) | stops before 207 and on a clash (nothing changed); safe twice; grants (public/anon nothing, authenticated minimal, service role the reminders); the widened checks; night_apply with phase 2 (idempotent, held, a pick kept, cleared); trust_set (owner only, logged, other firms, bad input, RLS, no direct writes); trust_stats (since rejection, put-off, level change); remind_due (off, never asked, 3 days, a week, document requests only, the owner who turned it on, server switch off, real sending needs a real ask, logged then 7 days, resolved, answered, owner inactive, not callable by a person) | 60 passed (the claim, the closed tab) |
+| `node tests/run_dailyjournals.mjs` (114 after the review: H1, H2, M1 incl. brute force and the reviewer's case, M2, L1-L5, L8) | the builders through the night's own path (gst-run engine, nightinput, the app's GSTR/GSTF): set-off (ready, missing ledger, zero month, negative liability, RCM only, interest and late fee, paise, in the books, a different tax journal, posted, pending, refused draft, closed period, changed since filed, wrong group, not filed, a tampered journal, the legal order); the **differential**: `setoffPlain` = `GSTR.setOff` on 3,000 random months to the paisa, the legal order on each, and the journal total = the 3B's credit + cash on made-up books; payroll (ready, net off by a paisa, PF/ESI, surcharge, twice, missing ledger, a tie, a person's pick, wrong group, booked, booked for another amount, pending, closed, month not over); salary payments (match, ₹1.01, the month, payroll not booked, two of a name, two payables); monthly (ready, not yet due, present, two months, broken, moved within 2%, outside 2%, booked another way, month-end, closed, from the bank, pending); every entry ready only with every check; trust gate and promotion; each twice | 129 passed |
+| `node tests/run_daily_again.mjs` | the second check at Approve: unchanged goes on; a line, the date, a sale added, the sheet edited, a ledger gone, the period closed, booked by hand, approved already, posted already: refused | 17 passed |
+| `python3 tests/run_migration208.py` (pg_stand, after 206 and 207, Supabase's default grants simulated) | stops before 207 and on a clash (nothing changed); safe twice; grants (public/anon nothing, authenticated minimal, service role the reminders); the widened checks; night_apply with phase 2 (idempotent, held, a pick kept, cleared); trust_set (owner only, logged, other firms, bad input, RLS, no direct writes); trust_stats (since rejection, put-off, level change); remind_due (off, never asked, 3 days, a week, document requests only, the owner who turned it on, server switch off, real sending needs a real ask, logged then 7 days, resolved, answered, owner inactive, not callable by a person) | 68 passed (the claim, the closed tab, the proof rule, the owner-only exclusion) |
 | `deno test --no-check server/assistant-night/handler_test.ts` | the reminder action: the timer only; test mode to the firm only, marked; **never a client's address in test mode** across both firm switches and 4 server values; both switches: the client's; guard refusal, daily limit, Resend failing: logged | 5 passed |
 | `node tests/run_nightchecks.mjs` | phase 1's, with the salary rule now strict (payroll booked, payable certain) | 127 passed |
-| `python3 tests/run_daily_check_p2_ui.py` | the page: the four rows, opened (lines, trace, checks, no Edit), Approve refused by the second check (nothing posted or recorded), the suggestion (Move, Not now, staff none), the pick (no Ask client, not twice, finding_choose), Done, the trust card (owner, limit, staff), the reminder line, phone 390 | 33 passed |
+| `python3 tests/run_daily_check_p2_ui.py` | the page: the four rows, opened (lines, trace, checks, no Edit), Approve refused by the second check (nothing posted or recorded), the suggestion (Move, Not now, staff none), the pick (no Ask client, not twice, finding_choose), Done, the trust card (owner, limit, staff), the reminder line, phone 390 | 34 passed |
 | phase 1's `run_assistant_night.mjs`, `run_assistant_guard.mjs`, `run_assistant_message.mjs`, `run_nightchecks_diff.js`, `run_daily_check_ui.py`, `run_migration206.py`, `assistant-send/handler_test.ts`; `run_every_screen.py`, `run_legacy_room.py` | unchanged behaviour | passed (see the commit) |
 
 ## 8. Sizes (gzip, level 6 as phase 1 measured)
@@ -251,7 +264,7 @@ check (`again`, with the builders) 13,802, loaded only when a journal is approve
 
 ## 10. Files to apply and deploy (staging only, in this order; after the review)
 
-1. `server/assistant-night/migration-208-daily-phase2.sql` (md5 057cd7e5df6592b58219fcafad3c397e).
+1. `server/assistant-night/migration-208-daily-phase2.sql` (md5 2b23b59718e58e261459519be17922d1).
 2. Deploy **assistant-night** again (it reads the drafts' `tally_post_jobs` and calls `entry_settle`; it imports `../_shared/dailyjournals.js`, `../_shared/dailytrust.js`, the changed
    `../_shared/nightchecks.js`, and `asks.js` / `sendguard.js` for the reminders). **assistant-send** is unchanged.
 3. `server/assistant-night/migration-208-cron.sql` (md5 f1a2d0d8d49d70cf9faf8b30e834830b), once the function answers.

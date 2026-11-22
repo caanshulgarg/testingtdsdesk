@@ -330,7 +330,7 @@ export const sheetNet = (r) => r2(r.net != null && r.net !== "" ? num(r.net) : n
 // that ledger's own sub-group where EVERY ledger is salary-named; "maybe" when it is another expense named like salary
 // (salary, wages, remuneration, stipend, bonus, staff pay; not auditors' remuneration or staff welfare). A month with a
 // "maybe" cannot be decided exactly: Needs you.
-export const SALARY_RE = /SALAR|WAGES|REMUNERATION|STIPEND|BONUS|STAFF\s*(PAY|COST)/i;
+export const SALARY_RE = /SALAR|WAGES|REMUNERATION|STIPEND|BONUS|STAFF\s*(PAY|COST)|PAYROLL|EMPLOYEE\s*(BENEFIT|COST)/i;
 const NOT_SALARY = /AUDIT|WELFARE/i;
 export const salaryNamed = (l) => SALARY_RE.test(l) && !NOT_SALARY.test(l);
 export function salaryClass(A, l, base, ledgers) {

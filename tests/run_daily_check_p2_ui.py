@@ -66,7 +66,7 @@ ids = {e["source"]: e["id"] for e in ROWS["night_entries"][::-1] if e.get("state
 # (review N2) a hand tax journal that may be October's set-off: the owner may say it is not
 ROWS["night_findings"].append({"id": "00000000-0000-4000-8000-000000000995", "client_id": "d5", "kind": "setoff_exclude", "key": "excl:07:202610:rv", "state": "you",
   "facts": {"party": "GST set-off Oct", "amt": 5000, "short": "Tax journal: which month?", "title": "A tax journal of 20-Nov (₹5,000) may be Oct 2026's set-off. Check it in Tally.", "ask_text": ""},
-  "evidence": [], "candidates": [{"t": "exclude", "ref": "excl:rv", "label": "That journal is not for Oct 2026", "voucher": "rv"}], "last_seen": "2026-11-22", "undone_at": None})
+  "evidence": [], "candidates": [{"t": "exclude", "ref": "excl:07:202610:rv", "label": "That journal is not for Oct 2026", "voucher": "rv"}], "last_seen": "2026-11-22", "undone_at": None})
 ROWS["night_findings"].append({"id": "00000000-0000-4000-8000-000000000996", "client_id": "d5", "kind": "setoff_due", "key": "setoff:07:202610", "state": "you",
   "facts": {"party": "GST set-off Oct", "short": "Set-off Oct 2026: check", "title": "Set-off Oct 2026: waiting on a tax journal that may be its set-off", "waits": True, "ask_text": ""}, "evidence": [], "candidates": [], "last_seen": "2026-11-22", "undone_at": None})
 sal = [e["id"] for e in ROWS["night_entries"] if e["source"] == "bank_self_answer" and any(x.get("t") == "salary" for x in e["evidence"])][0]
@@ -112,7 +112,7 @@ with sync_playwright() as p:
     ok(ex.count() == 1 and ex.locator("button", has_text="That journal is not for Oct 2026").count() == 1 and ex.locator("button", has_text="Not needed").count() == 1 and ex.locator("button", has_text="Ask client").count() == 0, "N2: the hand journal: \"That journal is not for Oct 2026\" and Not needed, no Ask client")
     ok("waiting on a tax journal" not in pg.inner_text(".dc-body"), "N2: the set-off waiting on it is not shown twice")
     ex.locator("button", has_text="That journal is not for Oct 2026").click(); settle(pg, 400)
-    ok(rpcs(pg, "finding_choose")[-1][2] == {"p_id": "00000000-0000-4000-8000-000000000995", "p_ref": "excl:rv"}, "N2: the choice calls finding_choose (recorded and logged on the server)")
+    ok(rpcs(pg, "finding_choose")[-1][2] == {"p_id": "00000000-0000-4000-8000-000000000995", "p_ref": "excl:07:202610:rv"}, "N2: the choice calls finding_choose (recorded and logged on the server)")
     pg.click("[data-tab=done]"); settle(pg)
     ok("GST set-off" not in pg.inner_text(".dc-body") and "Payroll" not in pg.inner_text(".dc-body"), "4. Done lists none of phase 2's own findings")
     pg.evaluate("() => { S.coId = 'd1'; S.view = 'company'; S.tab = 'settings'; S.loadingCo = false; delete S.setupList; render(); }")
@@ -129,6 +129,9 @@ with sync_playwright() as p:
     ctx, pg = start(br, role="staff")
     pg.click("[data-tab=entries]"); settle(pg)
     ok(pg.locator("[data-suggest]").count() == 0, "3. staff: no promotion suggestion")
+    pg.click("[data-tab=you]"); settle(pg)
+    ok(pg.locator(".dc-you", has_text="may be Oct 2026's set-off").locator("button", has_text="That journal is not for Oct 2026").is_disabled(), "final review 3: staff cannot say a journal is not for a month (owner only)")
+    pg.click("[data-tab=entries]"); settle(pg)
     pg.evaluate("() => { S.coId = 'd1'; S.view = 'company'; S.tab = 'settings'; S.loadingCo = false; delete S.setupList; render(); }")
     pg.wait_for_selector("[data-trust] .tl-row", timeout=15000); settle(pg, 400)
     ok(pg.locator("[data-trust] .tl-seg button[disabled]").count() == 15 and "Only the firm’s owner" in pg.inner_text("[data-trust]"), "5. staff: the levels shown, not changeable")

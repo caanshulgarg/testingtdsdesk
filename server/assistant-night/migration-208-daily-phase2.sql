@@ -20,7 +20,7 @@
 --   remind_due / remind_logged  "Remind by itself" (assistant-night's timer, service role only): document requests asked
 --                           once and still needed, at most weekly; each logged
 -- Grants: every right Supabase gives anon and authenticated by default is taken back (public too); then only what the page
--- reads and calls. ADD-ONLY: one new table, its policy and grants, new functions, three check constraints widened (each
+-- reads and calls. Its one drop is its own trigger (night_findings_exclude_owner), made again at once. ADD-ONLY: one new table, its policy and grants, new functions, three check constraints widened (each
 -- dropped and made again with more values, by name, only if it is 206's). No row is changed; nothing of 206 or 207 is
 -- replaced. Safe to run twice. One transaction, lock_timeout 10 s.
 begin;
@@ -41,7 +41,7 @@ begin
   foreach t in array array['daily_trust'] loop
     if to_regclass('public.' || t) is not null and coalesce(obj_description(to_regclass('public.' || t), 'pg_class'), '') <> 'daily check (migration 208)' then bad := bad || ('table ' || t); end if;
   end loop;
-  foreach f in array array['trust_set', 'trust_dismiss', 'trust_stats', 'trust_kind_of', 'remind_due', 'remind_logged', 'entry_claim', 'entry_release', 'entry_approved', 'entry_settle', 'asst_draft_state'] loop
+  foreach f in array array['trust_set', 'trust_dismiss', 'trust_stats', 'trust_kind_of', 'remind_due', 'remind_logged', 'entry_claim', 'entry_release', 'entry_approved', 'entry_settle', 'asst_draft_state', 'asst_exclude_owner'] loop
     if exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = f and coalesce(obj_description(p.oid, 'pg_proc'), '') <> 'daily check (migration 208)') then bad := bad || ('function ' || f); end if;
   end loop;
   if array_length(bad, 1) > 0 then
@@ -148,33 +148,50 @@ language sql stable security definer set search_path = '' as $$
 $$;
 
 -- ---------------------------------------------------------------- (review M3) Approve of a journal: claim, then approved or released
--- (review N4) what became of an entry's draft (Daily Check's journals are kept as the existing path keeps a hand-made
--- voucher: client_book_items "asstEntries", its dedupe in the data): 'none', 'failed' (Tally refused it, or the cloud's
--- queue stopped its posting) or 'live' (posted, or on its way)
-create or replace function public.asst_draft_state(p_firm uuid, p_client text, p_dedupe text) returns text language sql stable security definer set search_path = '' as $$
-  select coalesce((select case when d.data->>'state' = 'failed'
-                                 or exists (select 1 from public.tally_post_jobs j where j.id::text = coalesce(d.data->>'job', '') and j.status in ('failed', 'cancelled') and coalesce(d.data->>'state', '') <> 'posted')
-                               then 'failed' else 'live' end
-                     from public.client_book_items d
-                    where d.firm_id = p_firm and d.client_id = p_client and d.key = 'asstEntries' and not d.deleted and d.item like '#dc-%'
-                      and d.data->>'dedupe' = p_dedupe and coalesce(d.data->>'removed', '') not in ('true')
-                    order by d.updated_at desc limit 1), 'none')
-$$;
--- (review N4) entries claimed and left (a tab closed half way): a live draft -> approved (posted or on its way); a failed
--- draft -> ready; no draft after 30 minutes -> ready. Then the second check's "already approved" applies as usual. The
--- night (service role) runs it each night with the drafts its own look at the queue found failed (p_failed)
+-- (review N4, final review 1) what an entry's draft proves (Daily Check's journals are kept as the existing path keeps a
+-- hand-made voucher: client_book_items "asstEntries", its dedupe and voucher id in the data). The same rule as the night's
+-- and the page's draftState (server/_shared/dailyjournals.js):
+--   'posted'  proof the voucher reached Tally: FinCom's id ("TDSDesk:<id>") in the client's books, or the cloud's job
+--             reporting THIS voucher's result ok
+--   'live'    its job still waiting, taken or running
+--   'none'    no draft;  'failed'  anything else (refused, stopped, a job done without this voucher ok, no job at all)
+create or replace function public.asst_draft_state(p_firm uuid, p_client text, p_dedupe text) returns text language plpgsql stable security definer set search_path = '' as $$
+declare d public.client_book_items; vid text; job text; j record;
+begin
+  select * into d from public.client_book_items x
+   where x.firm_id = p_firm and x.client_id = p_client and x.key = 'asstEntries' and not x.deleted and x.item like '#dc-%' and x.data->>'dedupe' = p_dedupe
+   order by x.updated_at desc limit 1;
+  if d.item is null then return 'none'; end if;
+  vid := coalesce(d.data->>'id', '');
+  if vid <> '' and exists (select 1 from public.tally_vouchers v join public.tally_books b on b.book_id = v.book_id
+                            where b.firm_id = p_firm and b.client_id = p_client and v.narration like '%TDSDesk:' || vid || '%' and v.deleted_at is null) then
+    return 'posted';
+  end if;
+  if coalesce(d.data->>'removed', '') = 'true' then return 'failed'; end if;
+  job := coalesce(nullif(d.data->>'job', ''), (select e.value->>'job' from jsonb_each(case when jsonb_typeof(d.data->'results') = 'object' then d.data->'results' else '{}'::jsonb end) e where coalesce(e.value->>'job', '') <> '' limit 1), '');
+  select * into j from public.tally_post_jobs t where t.id::text = job;
+  if j.id is null then return 'failed'; end if;
+  if exists (select 1 from jsonb_array_elements(case when jsonb_typeof(j.results) = 'array' then j.results else '[]'::jsonb end) r where r->>'id' = vid and r->>'ok' = 'true') then return 'posted'; end if;
+  if j.status in ('waiting', 'taken', 'running') then return 'live'; end if;
+  return 'failed';
+end $$;
+-- (review N4, final review 1) entries claimed and left (a tab closed half way): approved ONLY with proof it reached Tally
+-- ('posted'); a job still on its way ('live') stays being approved until it settles; anything else (failed, no draft
+-- after 30 minutes) goes back to ready, where the second check and the bridge's own check by FinCom's id apply. The night
+-- (service role) runs it each night with the drafts its own look found failed (p_failed)
 create or replace function public.entry_settle(p_firm uuid, p_client text, p_failed text[] default '{}') returns integer language plpgsql security definer set search_path = '' as $$
 declare r public.night_entries; st text; n int := 0;
 begin
   for r in select * from public.night_entries where firm_id = p_firm and client_id = p_client and state = 'approving' for update loop
-    st := case when r.dedupe = any (coalesce(p_failed, '{}')) then 'failed' else public.asst_draft_state(p_firm, p_client, r.dedupe) end;
-    if st = 'live' then
+    st := public.asst_draft_state(p_firm, p_client, r.dedupe);
+    if st not in ('posted', 'live') and r.dedupe = any (coalesce(p_failed, '{}')) then st := 'failed'; end if;
+    if st = 'posted' then
       update public.night_entries set state = 'approved', approved_once = true, decided_at = now(), updated_at = now() where id = r.id;
       insert into public.daily_log (firm_id, client_id, what, ref, evidence) values (p_firm, p_client, 'settled', r.id::text, jsonb_build_object('to', 'approved', 'draft', st));
       n := n + 1;
-    elsif st = 'failed' or r.updated_at < now() - interval '30 minutes' then
+    elsif st = 'failed' or (st = 'none' and r.updated_at < now() - interval '30 minutes') then
       update public.night_entries set state = 'ready', decided_by = null, decided_at = null, updated_at = now() where id = r.id;
-      insert into public.daily_log (firm_id, client_id, what, ref, evidence) values (p_firm, p_client, 'settled', r.id::text, jsonb_build_object('to', 'ready', 'draft', st));
+      insert into public.daily_log (firm_id, client_id, what, ref, evidence) values (p_firm, p_client, 'settled', r.id::text, jsonb_build_object('to', 'ready', 'draft', st, 'why', 'Not confirmed in Tally'));
       n := n + 1;
     end if;
   end loop;
@@ -190,10 +207,12 @@ begin
   if r.id is null or not public.can_write() then raise exception 'Not allowed.' using errcode = '42501'; end if;
   if r.state = 'approving' and r.updated_at < now() - interval '30 minutes' then
     st := public.asst_draft_state(r.firm_id, r.client_id, r.dedupe);
-    if st = 'live' then
+    if st = 'posted' then
       update public.night_entries set state = 'approved', approved_once = true, decided_at = now(), updated_at = now() where id = r.id;
       perform public.asst_log(r.firm_id, r.client_id, 'settled', r.id::text, jsonb_build_object('to', 'approved', 'draft', st));
-      return jsonb_build_object('ok', false, 'why', 'Already approved: it is on its way to Tally.');
+      return jsonb_build_object('ok', false, 'why', 'Already in Tally.');
+    elsif st = 'live' then
+      return jsonb_build_object('ok', false, 'why', 'On its way to Tally: wait for it to finish.');
     end if;
   elsif r.state <> 'ready' then
     raise exception 'This entry is not ready (it may be being approved).' using errcode = '22023';
@@ -225,6 +244,18 @@ begin
   perform public.asst_log(r.firm_id, r.client_id, 'approved', r.id::text, jsonb_build_object('source', r.source, 'work', coalesce(nullif(p_work_ref, ''), r.work_ref), 'voucher', r.voucher, 'evidence', r.evidence));
   return jsonb_build_object('ok', true);
 end $$;
+
+-- (final review 3) "That journal is not for <month>" is the OWNER's decision, enforced here: a person deciding a
+-- setoff_exclude finding (decided_by set by finding_choose) must be the firm's owner. The night never sets decided_by
+create or replace function public.asst_exclude_owner() returns trigger language plpgsql security definer set search_path = '' as $$
+begin
+  if new.kind = 'setoff_exclude' and new.decided_by is not null and old.decided_by is distinct from new.decided_by and not public.asst_is_owner() then
+    raise exception 'Only the firm''s owner can say a journal is not for a month.' using errcode = '42501';
+  end if;
+  return new;
+end $$;
+drop trigger if exists night_findings_exclude_owner on public.night_findings;   -- made again just below (this migration's own)
+create trigger night_findings_exclude_owner before update on public.night_findings for each row execute function public.asst_exclude_owner();
 
 -- ---------------------------------------------------------------- "Remind by itself" (the timer only)
 -- the reminders due now: clients whose switch is on, turned on by an owner who is still an active owner; their document
@@ -270,7 +301,7 @@ $$;
 revoke all on function public.trust_kind_of(text), public.trust_set(text, text, integer, numeric), public.trust_dismiss(text, text), public.trust_stats(),
   public.remind_due(boolean), public.remind_logged(uuid, text, bigint, uuid[], text, text),
   public.entry_claim(uuid), public.entry_release(uuid, text), public.entry_approved(uuid, text),
-  public.entry_settle(uuid, text, text[]), public.asst_draft_state(uuid, text, text) from public, anon, authenticated;
+  public.entry_settle(uuid, text, text[]), public.asst_draft_state(uuid, text, text), public.asst_exclude_owner() from public, anon, authenticated;
 grant execute on function public.entry_settle(uuid, text, text[]) to service_role;
 grant execute on function public.trust_set(text, text, integer, numeric), public.trust_dismiss(text, text), public.trust_stats(),
   public.entry_claim(uuid), public.entry_release(uuid, text), public.entry_approved(uuid, text) to authenticated;
@@ -281,7 +312,7 @@ do $mark$
 declare r record;
 begin
   comment on table public.daily_trust is 'daily check (migration 208)';
-  for r in select p.oid::regprocedure as sig from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = any (array['trust_set', 'trust_dismiss', 'trust_stats', 'trust_kind_of', 'remind_due', 'remind_logged', 'entry_claim', 'entry_release', 'entry_approved', 'entry_settle', 'asst_draft_state']) loop
+  for r in select p.oid::regprocedure as sig from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = any (array['trust_set', 'trust_dismiss', 'trust_stats', 'trust_kind_of', 'remind_due', 'remind_logged', 'entry_claim', 'entry_release', 'entry_approved', 'entry_settle', 'asst_draft_state', 'asst_exclude_owner']) loop
     execute format('comment on function %s is %L', r.sig, 'daily check (migration 208)');
   end loop;
 end $mark$;
