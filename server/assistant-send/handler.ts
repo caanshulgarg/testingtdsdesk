@@ -60,14 +60,22 @@ export function handler(deps: Deps) {
     let sendId: number;
     try { sendId = await svc("ask_send_begin", { p_firm: prep.firm_id, p_by: prep.by, p_client: cid, p_ids: qs.map((q: any) => q.ask.id), p_channel: "email", p_meant: (p as any).meant || [], p_sent_to: p.to, p_test: p.test }); }
     catch (e) { return reply(200, { ok: false, error: String((e as Error).message || "Not sent.") }); }
-    const finish = (st: string, provider: string, why: string) => svc("ask_send_finish", { p_send: sendId, p_status: st, p_provider: provider || null, p_why: why }).catch(() => null);
-    const m = message({ name: prep.client || "your company" }, qs, { firm: prep.firm || "", week: monday() });
-    const replyTo = prep.test_to || (me && me.email) || "";
-    const payload = mail({ from: FROM, replyTo, plan: p, subject: m.subject, text: m.text });
-    const r = await doFetch("https://api.resend.com/emails", { method: "POST", headers: { Authorization: "Bearer " + KEY, "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-    const j: any = await r.json().catch(() => ({}));
-    if (!r.ok) { await finish("failed", "", String(j.message || r.status).slice(0, 200)); return reply(200, { ok: false, error: "The email could not be sent. Try again later." }); }
-    const d: any = await finish("sent", String(j.id || ""), "");
-    return reply(200, { ok: true, sent: true, test: p.test, to: payload.to, marked: (d && d.marked) || 0 });
+    // a finish that fails is said in the function's log (the sweep marks the claim failed after 10 minutes)
+    const finish = (st: string, provider: string, why: string) => svc("ask_send_finish", { p_send: sendId, p_status: st, p_provider: provider || null, p_why: why })
+      .catch((e) => { console.error("assistant-send: the send log could not be finished", sendId, st, String((e as Error)?.message || e).slice(0, 200)); return null; });
+    let done = false, d: any = null;
+    try {
+      const m = message({ name: prep.client || "your company" }, qs, { firm: prep.firm || "", week: monday() });
+      const replyTo = prep.test_to || (me && me.email) || "";
+      const payload = mail({ from: FROM, replyTo, plan: p, subject: m.subject, text: m.text });
+      const r = await doFetch("https://api.resend.com/emails", { method: "POST", headers: { Authorization: "Bearer " + KEY, "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      const j: any = await r.json().catch(() => ({}));
+      if (!r.ok) { done = true; await finish("failed", "", String(j.message || r.status).slice(0, 200)); return reply(200, { ok: false, error: "The email could not be sent. Try again later." }); }
+      done = true; d = await finish("sent", String(j.id || ""), "");
+    } finally {
+      // anything thrown on the way (the message, the network): the claim is finished as failed, never left "sending"
+      if (!done) await finish("failed", "", "stopped before Resend answered");
+    }
+    return reply(200, { ok: true, sent: true, test: p.test, to: p.to, marked: (d && d.marked) || 0 });
   };
 }

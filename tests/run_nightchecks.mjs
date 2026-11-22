@@ -151,7 +151,7 @@ const one = (r, kind) => r.findings.filter((f) => f.kind === kind);
   eq(one(r, "bank_no_bill").length, 0, "bank: a line a person set: nothing");
   for (const st of ["sent", "intally", "ready", "ignored"]) eq(one(run(inp([], B([row({ state: st })]))), "bank_no_bill").length, 0, "bank: a line " + st + ": nothing");
   r = run(inp([], B([row({ ledger: "Salary", state: "suggested" })])));
-  eq([one(r, "bank_no_bill").length, one(r, "bank_no_bill")[0].state], [1, "ask"], "bank: a suggested (guessed) ledger is checked like any line, never taken as the answer");
+  eq([one(r, "bank_no_bill").length, one(r, "bank_no_bill")[0].state, one(r, "bank_no_bill")[0].title], [1, "you", "₹48,000 paid 05-Nov · guess: Salary · right?"], "bank: a suggested (guessed) ledger is checked, never the answer; nothing certain: needs you, not the client (N5)");
   // learnt rules and history (the shapes the cloud keeps)
   r = run(inp([], B([row({ dec: { name: "RAMESH", key: "upi:ramesh@okbank" } })], { learned: [{ key: "upi:ramesh@okbank", dir: "out", ledger: "Salary", auto: true, label: "RAMESH", at: "2026-10-01T00:00:00Z" }] })));
   eq([one(r, "bank_no_bill")[0].state, one(r, "bank_no_bill")[0].evidence[0].ledger], ["resolved", "Salary"], "bank: a learnt rule (same key, same direction): resolved");
@@ -164,6 +164,23 @@ const one = (r, kind) => r.findings.filter((f) => f.kind === kind);
   eq(one(r, "bank_no_bill")[0].state, "you", "bank: two ledgers before: needs you");
   r = run(inp([], B([row({ dec: { name: "RAMESH", key: "upi:ramesh@okbank" } })], { history: [H("Salary")] })));
   eq(one(r, "bank_no_bill")[0].state, "ask", "bank: chosen once before: not enough");
+  // re-review N1: a key made from the narration is never exact
+  const NK = "narr:rameshpaymentnov";
+  r = run(inp([], B([row({ dec: { name: "RAMESH", key: NK } })], { learned: [{ key: NK, dir: "out", ledger: "Salary" }] })));
+  eq(one(r, "bank_no_bill")[0].state, "you", "N1: a learnt rule on a narration key: needs you, never resolved");
+  r = run(inp([], B([row({ dec: { name: "RAMESH", key: NK } })], { history: [Object.assign(H("Salary"), { k: NK }), Object.assign(H("Salary"), { k: NK })] })));
+  eq(one(r, "bank_no_bill")[0].state, "you", "N1: history on a narration key: needs you");
+  // N1: a rule for either direction: exact only with a person's choice in this direction
+  const K = "upi:ramesh@okbank";
+  r = run(inp([], B([row({ dec: { name: "RAMESH", key: K } })], { learned: [{ key: K, dir: "any", ledger: "Salary" }] })));
+  eq(one(r, "bank_no_bill")[0].state, "you", "N1: an “any” rule with no choice in this direction: needs you");
+  r = run(inp([], B([row({ dec: { name: "RAMESH", key: K } })], { learned: [{ key: K, dir: "any", ledger: "Salary" }], history: [Object.assign(H("Salary"), { d: "in" })] })));
+  eq(one(r, "bank_no_bill")[0].state, "you", "N1: an “any” rule with a choice only in the other direction: needs you");
+  r = run(inp([], B([row({ dec: { name: "RAMESH", key: K } })], { learned: [{ key: K, dir: "any", ledger: "Salary" }], history: [H("Salary")] })));
+  eq(one(r, "bank_no_bill")[0].state, "resolved", "N1: an “any” rule with a person's choice in this direction: resolved");
+  // N5: history with no source is not counted
+  r = run(inp([], B([row({ dec: { name: "RAMESH", key: K } })], { history: [Object.assign(H("Salary"), { s: undefined }), Object.assign(H("Salary"), { s: "" })] })));
+  eq(one(r, "bank_no_bill")[0].state, "ask", "N5: history with a missing source: not counted");
   // a written rule
   const rule = { id: "w1", when: { text: [{ op: "has", v: "bses" }], dir: "out", amtMin: "", amtMax: "" }, then: { ledger: "Electricity" } };
   r = run(inp([], B([row({ narr: "NEFT/BSES RAJDHANI/112", dec: { name: "BSES RAJDHANI" }, debit: 9800 })], { rules: [rule] })));
@@ -329,6 +346,12 @@ const one = (r, kind) => r.findings.filter((f) => f.kind === kind);
   const first = run(inp([A1], { bills: [Bl] })), k = one(first, "advance_open")[0].key;
   r = run(inp([A1, A2], { bills: [Bl], prior: [{ kind: "advance_open", key: k, state: "resolved", evidence: [{ ref: "bill:e1" }] }] }));
   eq(one(r, "advance_open").map((f) => [f.key === k, f.state]), [[true, "resolved"], [false, "ask"]], "M5: the earlier finding keeps its bill; the new one is asked, no churn");
+}
+
+// N7: a bill marked duplicate is no candidate
+{
+  const r = run(inp([pay("20261103", "Sample Hardware", 15000, "Cash")], { bills: [fbill(3, "Sample Hardware", "", "SH/9", "2026-11-02", 15000, { status: "duplicate" })] }));
+  eq(one(r, "cash_big")[0].state, "ask", "N7: a bill marked duplicate is not a candidate");
 }
 
 // ---------------------------------------------------------------- opening balances (staging: tally_ledgers.open, a debit negative)

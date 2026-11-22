@@ -138,7 +138,8 @@ try:
     ok(w["test"] is True, "5. WhatsApp to a number that is not the client's: a test, whatever the switch")
     ok(raises(lambda: act(STAFF, "select public.assistant_mail_set(true)")), "5. staff cannot turn real sending on")
     ok(raises(lambda: act(OWN, "select public.assistant_mail_set(false, 'accounts@sampletraders.example')")), "5. the test address must be the firm's own (a client's is refused)")
-    act(OWN, "select public.assistant_mail_set(true, 'office@samplefirm.example')")
+    ok(raises(lambda: act(OWN, "select public.assistant_mail_set(false, 'office@samplefirm.example')")), "5. N2: the same domain is not enough: a member's exact email only")
+    act(OWN, "select public.assistant_mail_set(true, 'owner@samplefirm.example')")
     ok(db.one("select real_send from assistant_mail") == "t" and db.one("select count(*) from assistant_log where what = 'setting'") == "1", "5. the owner turns it on, logged")
     ok(raises(lambda: act(STAFF, "select public.prefs_set('c1', true)")), "5. reminders by itself: the owner only")
     db.sql("update client_asks set state = 'draft' where id = '%s'" % open_q)
@@ -173,6 +174,11 @@ try:
     db.sql("update night_entries set decided_at = now() - interval '2 hours' where id = '%s'" % eid)
     apply2([A], [E9], night="2026-11-26")
     ok(db.one("select state from night_entries where id = '%s'" % eid) == "ready" and db.one("select count(*) from assistant_log where what = 'approval_not_found'") == "1", "7. an approval the books do not show: back to ready, logged")
+    # N4: approved again; the night no longer makes it (its bill approved): withdrawn, approved once: undo still refused
+    act(STAFF, "select public.entry_decide('%s', 'approved', 'e9')" % eid)
+    db.sql("update night_entries set state = 'withdrawn' where id = '%s'" % eid)
+    ok(raises(lambda: act(STAFF, "select public.finding_undo('%s')" % fid)) and db.one("select approved_once from night_entries where id = '%s'" % eid) == "t", "7. N4: approved once and no longer made: undo still refused")
+    db.sql("update night_entries set state = 'ready', decided_by = null where id = '%s'" % eid)
     act(STAFF, "select public.entry_decide('%s', 'rejected')" % eid)
     ok(db.one("select state from night_findings where id = '%s'" % fid) == "you" and db.one("select state from client_asks where finding_id = '%s'" % fid) == "draft", "7. rejected: the finding needs you, its question reopened")
     apply2([A], [E9], night="2026-11-27")
@@ -185,10 +191,13 @@ try:
     ok(raises(lambda: act(STAFF, "select public.finding_choose('%s', 'vch:s7')" % b2)), "7. M5: choosing evidence another finding uses is refused")
     act(STAFF, "select public.finding_choose('%s', 'vch:s8')" % b2)
     ok(db.one("select state from night_findings where id = '%s'" % b2) == "resolved", "7. M5: a free candidate can be chosen")
+    # N3: a send left "sending" for 10 minutes is swept to failed and logged
+    db.sql("insert into ask_sends (firm_id, client_id, channel, test_mode, status, sent_by, sent_at) values ('%s', 'c1', 'email', true, 'sending', '%s', now() - interval '11 minutes')" % (F1, OWN))
+    ok(db.one("select public.ask_send_sweep()") == "1" and db.one("select count(*) from ask_sends where status = 'sending'") == "0" and db.one("select count(*) from assistant_log where what = 'send_stale'") == "1", "7. N3: a send stuck in sending for 10 minutes: failed, logged")
     # capacity: night_due with no number takes what the window needs; night_missed marks who was not reached
     db.sql("insert into clients (id, firm_id, name) select 'm' || g, '%s', 'Many ' || g from generate_series(1, 30) g; insert into tally_books (book_id, firm_id, client_id) select gen_random_uuid(), '%s', 'm' || g from generate_series(1, 30) g" % (F1, F1))
     got = db.rows("select * from public.night_due(null)")
-    ok(len(got) >= 4, "7. capacity: night_due(null) takes as many as the window needs (%d now)" % len(got))
+    ok(4 <= len(got) <= 20, "7. capacity: night_due(null) takes as many as the window needs, at most 20 a tick (%d now)" % len(got))
     n = int(db.one("select public.night_missed()"))
     ok(n >= 1 and db.one("select count(*) from assistant_log where what = 'night_missed'") >= "1", "7. capacity: every client not checked tonight is marked and logged (%d)" % n)
 finally:

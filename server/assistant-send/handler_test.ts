@@ -7,7 +7,7 @@ import { handler as night } from "../assistant-night/handler.ts";
 const eq = (a: unknown, b: unknown, w: string) => { if (JSON.stringify(a) !== JSON.stringify(b)) throw new Error(w + ": got " + JSON.stringify(a) + ", want " + JSON.stringify(b)); };
 const Q1 = "11111111-1111-4111-8111-111111111111", Q2 = "22222222-2222-4222-8222-222222222222";
 
-function stand(o: { owner?: boolean; realSend?: boolean; questions?: any[]; contacts?: any[]; resendOk?: boolean; limit?: boolean }) {
+function stand(o: { owner?: boolean; realSend?: boolean; questions?: any[]; contacts?: any[]; resendOk?: boolean; limit?: boolean; resendThrows?: boolean }) {
   const calls: any = { resend: [], done: [], begin: [] };
   const fetch = async (url: string | URL | Request, init: RequestInit = {}) => {
     const u = String(url), body = init.body ? JSON.parse(String(init.body)) : null;
@@ -23,6 +23,7 @@ function stand(o: { owner?: boolean; realSend?: boolean; questions?: any[]; cont
     }
     if (u.endsWith("/rest/v1/rpc/ask_send_finish")) { calls.done.push(Object.assign({}, body, calls.begin[0])); return new Response(JSON.stringify({ ok: true, marked: calls.begin[0].p_test ? 0 : calls.begin[0].p_ids.length })); }
     if (u.endsWith("/auth/v1/user")) return new Response(JSON.stringify({ email: "owner@samplefirm.example" }));
+    if (u === "https://api.resend.com/emails" && o.resendThrows) throw new Error("connection reset");
     if (u === "https://api.resend.com/emails") { calls.resend.push(body); return new Response(JSON.stringify(o.resendOk === false ? { message: "bad" } : { id: "re_1" }), { status: o.resendOk === false ? 500 : 200 }); }
     if (u.endsWith("/rest/v1/rpc/gst_cron_ok")) return new Response("false");
     return new Response("not here", { status: 404 });
@@ -69,6 +70,12 @@ Deno.test("the day's limit refused at the claim: nothing sent", async () => {
   const s = stand({ realSend: true, limit: true });
   const r = await ask(handler({ env: env("yes"), fetch: s.fetch }), { client_id: "c1", ask_ids: [Q1] });
   eq([r.j.ok, s.calls.resend.length, r.j.error], [false, 0, "Already emailed this client today. Try tomorrow."], "refused");
+});
+Deno.test("the network breaks on the way to Resend: the claim finished as failed, never left sending", async () => {
+  const s = stand({ resendThrows: true });
+  let threw = false;
+  try { await ask(handler({ env: env(), fetch: s.fetch }), { client_id: "c1", ask_ids: [Q1] }); } catch { threw = true; }
+  eq([threw, s.calls.done.length, s.calls.done[0] && s.calls.done[0].p_status], [true, 1, "failed"], "finished as failed");
 });
 Deno.test("Resend fails: said plainly, logged as failed", async () => {
   const s = stand({ resendOk: false });

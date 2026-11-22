@@ -143,6 +143,7 @@ create table if not exists public.night_entries (
   checks jsonb not null default '[]'::jsonb,
   state text not null default 'ready' check (state in ('ready', 'held', 'approved', 'rejected', 'withdrawn')),
   decided_by uuid, decided_at timestamptz,
+  approved_once boolean not null default false,    -- approved at least once: undo stays refused while it may be in the books
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   unique (firm_id, client_id, dedupe)
@@ -238,7 +239,7 @@ create trigger client_contacts_logged before insert or update on public.client_c
 -- the clients to check tonight (India date): no run yet, or a run stuck for 30 minutes, or failed (at most 3 tries);
 -- each is claimed at once (running), so a timer that fires twice never checks a client twice. p_n null (the timer): as
 -- many as tonight's window needs, the clients left spread over the ticks left until 05:20 India time (review: every
--- client every night), at most 60 a tick
+-- client every night), at most 20 a tick
 create or replace function public.night_due(p_n integer default null) returns table (firm_id uuid, client_id text) language plpgsql security definer set search_path = '' as $$
 #variable_conflict use_column
 declare v_night date := (now() at time zone 'Asia/Kolkata')::date; v_left int; v_ticks int; v_n int;
@@ -247,8 +248,9 @@ begin
    where not coalesce(cl.deleted, false) and coalesce(cl.status, 'active') = 'active'
      and exists (select 1 from public.tally_books b where b.firm_id = cl.firm_id and b.client_id = cl.id::text)
      and not exists (select 1 from public.night_runs r where r.firm_id = cl.firm_id and r.client_id = cl.id::text and r.night = v_night and r.status in ('ok', 'partial', 'skipped'));
+  perform public.ask_send_sweep();
   v_ticks := greatest(1, ceil(extract(epoch from ((v_night + time '05:20') - (now() at time zone 'Asia/Kolkata'))) / 600.0)::int);
-  v_n := coalesce(p_n, least(60, greatest(4, ceil(v_left::numeric / v_ticks)::int)));
+  v_n := coalesce(p_n, least(20, greatest(4, ceil(v_left::numeric / v_ticks)::int)));
   return query
   with c as (
     select cl.firm_id, cl.id::text as client_id from public.clients cl
@@ -256,7 +258,7 @@ begin
        and exists (select 1 from public.tally_books b where b.firm_id = cl.firm_id and b.client_id = cl.id::text)
        and not exists (select 1 from public.night_runs r where r.firm_id = cl.firm_id and r.client_id = cl.id::text and r.night = v_night
                         and (r.status in ('ok', 'partial', 'skipped') or (r.status = 'running' and r.started_at > now() - interval '30 minutes') or r.tries >= 3))
-     order by cl.firm_id, cl.id limit greatest(1, least(v_n, 60))),
+     order by cl.firm_id, cl.id limit greatest(1, least(v_n, 20))),
   claim as (
     insert into public.night_runs as r (firm_id, client_id, night, status) select c.firm_id, c.client_id, v_night, 'running' from c
       on conflict (firm_id, client_id, night) do update set status = 'running', started_at = now(), tries = r.tries + 1
@@ -394,7 +396,8 @@ create or replace function public.finding_undo(p_id uuid) returns jsonb language
 declare r public.night_findings := public.asst_finding(p_id);
 begin
   if r.state <> 'resolved' then raise exception 'Only something FinCom answered can be undone.' using errcode = '22023'; end if;
-  if exists (select 1 from public.night_entries n where n.finding_id = r.id and n.state = 'approved') then
+  -- approved, or approved once and no longer made by the night (its bill approved, its line set: in the books or on the way)
+  if exists (select 1 from public.night_entries n where n.finding_id = r.id and (n.state = 'approved' or (n.approved_once and n.state = 'withdrawn'))) then
     raise exception 'Its entry was approved. Undo it where it was approved (Purchase or Bank).' using errcode = '22023';
   end if;
   update public.night_findings set state = 'ask', evidence = '[]'::jsonb, undone_by = auth.uid(), undone_at = now(), decided_by = null, decided_at = null where id = r.id;
@@ -483,7 +486,8 @@ begin
   if r.id is null or not public.can_write() then raise exception 'Not allowed.' using errcode = '42501'; end if;
   if p_decision not in ('approved', 'rejected') then raise exception 'Approve or reject.' using errcode = '22023'; end if;
   if r.state <> 'ready' and not (r.state = 'held' and p_decision = 'rejected') then raise exception 'This entry is not ready.' using errcode = '22023'; end if;
-  update public.night_entries set state = p_decision, decided_by = auth.uid(), decided_at = now(), work_ref = coalesce(nullif(p_work_ref, ''), work_ref), updated_at = now() where id = r.id;
+  update public.night_entries set state = p_decision, decided_by = auth.uid(), decided_at = now(), work_ref = coalesce(nullif(p_work_ref, ''), work_ref), updated_at = now(),
+    approved_once = approved_once or p_decision = 'approved' where id = r.id;
   if p_decision = 'rejected' and r.finding_id is not null then
     update public.night_findings set state = 'you', candidates = evidence, evidence = '[]'::jsonb, undone_by = auth.uid(), undone_at = now() where id = r.finding_id and state = 'resolved';
     update public.client_asks set state = 'draft', closed_by = null, close_ref = null, history = public.asst_hist(history, 'Asked again: FinCom''s entry was rejected')
@@ -518,6 +522,15 @@ end $$;
 -- review: the send log cannot be written by hand. The send function (service role) claims a send first: the firm's lock,
 -- the day's limits counted with the claim itself (atomic), a row "sending"; then finishes it with what Resend said. Only a
 -- real send that went marks the questions Asked; a test never does.
+-- a claim still "sending" after 10 minutes (the function stopped half way): failed, logged
+create or replace function public.ask_send_sweep() returns integer language plpgsql security definer set search_path = '' as $$
+declare n int;
+begin
+  with x as (update public.ask_sends set status = 'failed', why = 'no answer from the send function in 10 minutes' where status = 'sending' and sent_at < now() - interval '10 minutes' returning firm_id, client_id, id)
+  insert into public.assistant_log (firm_id, client_id, what, ref, evidence) select firm_id, client_id, 'send_stale', id::text, '{}'::jsonb from x;
+  get diagnostics n = row_count;
+  return n;
+end $$;
 create or replace function public.ask_send_begin(p_firm uuid, p_by uuid, p_client text, p_ids uuid[], p_channel text, p_meant text[], p_sent_to text[], p_test boolean)
 returns bigint language plpgsql security definer set search_path = '' as $$
 declare n_client int; n_firm int; n_test int; v bigint;
@@ -526,6 +539,7 @@ begin
     raise exception 'Only the firm''s owner sends questions.' using errcode = '42501';
   end if;
   perform pg_advisory_xact_lock(hashtext('send|' || p_firm::text));
+  perform public.ask_send_sweep();
   select count(*) filter (where s.client_id = p_client and not s.test_mode), count(*) filter (where not s.test_mode), count(*) filter (where s.test_mode)
     into n_client, n_firm, n_test
     from public.ask_sends s where s.firm_id = p_firm and s.channel = 'email' and s.status in ('sending', 'sent') and s.sent_at > now() - interval '24 hours';
@@ -587,10 +601,10 @@ create or replace function public.assistant_mail_set(p_real boolean, p_test_to t
 declare f uuid := public.my_firm();
 begin
   if f is null or not public.asst_is_owner() then raise exception 'Only the firm''s owner can change this.' using errcode = '42501'; end if;
-  -- the test address is the firm's own: a member's email, or one on a member's domain (never a client's)
+  -- the test address is the firm's own: exactly an active member's email (never a client's, never just the same domain)
   if coalesce(p_test_to, '') <> '' and not exists (select 1 from public.members m join auth.users u on u.id = m.user_id
-       where m.firm_id = f and m.active and (lower(u.email) = lower(btrim(p_test_to)) or split_part(lower(u.email), '@', 2) = split_part(lower(btrim(p_test_to)), '@', 2))) then
-    raise exception 'The test address must be the firm''s own (a member''s email or domain).' using errcode = '22023';
+       where m.firm_id = f and m.active and lower(u.email) = lower(btrim(p_test_to))) then
+    raise exception 'The test address must be a member''s own email.' using errcode = '22023';
   end if;
   insert into public.assistant_mail (firm_id, real_send, test_to, test_whatsapp, set_by, set_at) values (f, coalesce(p_real, false), coalesce(p_test_to, ''), coalesce(p_test_whatsapp, ''), auth.uid(), now())
     on conflict (firm_id) do update set real_send = excluded.real_send, test_to = excluded.test_to, test_whatsapp = excluded.test_whatsapp, set_by = excluded.set_by, set_at = excluded.set_at;
@@ -605,9 +619,9 @@ revoke all on function public.asst_is_owner(), public.asst_log(uuid, text, text,
   public.asst_finding(uuid), public.asst_ask(uuid), public.finding_undo(uuid), public.finding_choose(uuid, text), public.ask_edit(uuid, text), public.ask_close(uuid, text),
   public.ask_reopen(uuid), public.ask_answer(uuid, text), public.entry_decide(uuid, text, text), public.ask_send_prepare(text, uuid[], text),
   public.ask_send_begin(uuid, uuid, text, uuid[], text, text[], text[], boolean), public.ask_send_finish(bigint, text, text, text), public.ask_whatsapp_opened(text, uuid[], text),
-  public.prefs_set(text, boolean), public.assistant_mail_set(boolean, text, text) from public, anon, authenticated;
+  public.prefs_set(text, boolean), public.assistant_mail_set(boolean, text, text), public.ask_send_sweep() from public, anon, authenticated;
 grant execute on function public.night_due(integer), public.night_missed(), public.night_apply(uuid, text, date, text, jsonb, jsonb, boolean, text), public.night_fail(uuid, text, date, text, text),
-  public.ask_send_begin(uuid, uuid, text, uuid[], text, text[], text[], boolean), public.ask_send_finish(bigint, text, text, text) to service_role;
+  public.ask_send_begin(uuid, uuid, text, uuid[], text, text[], text[], boolean), public.ask_send_finish(bigint, text, text, text), public.ask_send_sweep() to service_role;
 grant execute on function public.finding_undo(uuid), public.finding_choose(uuid, text), public.ask_edit(uuid, text), public.ask_close(uuid, text), public.ask_reopen(uuid),
   public.ask_answer(uuid, text), public.entry_decide(uuid, text, text), public.ask_send_prepare(text, uuid[], text), public.ask_whatsapp_opened(text, uuid[], text),
   public.prefs_set(text, boolean), public.assistant_mail_set(boolean, text, text) to authenticated;

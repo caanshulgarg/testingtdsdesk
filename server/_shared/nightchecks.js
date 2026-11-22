@@ -271,7 +271,7 @@ function bank(inp, out) {
     // explained: sent, in Tally, ready or ignored, or a ledger a person set; a "suggested" ledger is FinCom's guess, checked here
     if (!d || !amt || ["sent", "intally", "ready", "ignored"].includes(String(r.state || "")) || (r.userSet && r.ledger)) return;
     if (daysBetween(d, inp.today) < 3) return;   // too new: the day's own posting comes first
-    out.push(F("bank_no_bill", "bank:" + (r.sid || r.acct) + ":" + r.id, { party: (r.dec && r.dec.name) || shortNarr(r.narr), amt, date: d, dir: r.debit ? "out" : "in", row: r.id, acct: r.acct, sid: r.sid || "", narr: String(r.narr || "").slice(0, 120) }));
+    out.push(F("bank_no_bill", "bank:" + (r.sid || r.acct) + ":" + r.id, { party: (r.dec && r.dec.name) || shortNarr(r.narr), amt, date: d, dir: r.debit ? "out" : "in", row: r.id, acct: r.acct, sid: r.sid || "", suggested: r.state === "suggested" ? (r.ledger || "") : undefined, narr: String(r.narr || "").slice(0, 120) }));
   });
   const lastFull = ymAdd(ymOf(inp.today), -1);
   (bk.accounts || []).forEach((a) => {
@@ -338,7 +338,7 @@ export function checks(inp) {
 // ---------------------------------------------------------------- FinCom's own answer: the candidates of each finding
 // Each candidate: {t: entry|doc|rule|twob|salary|challan|history, ref (unique: nothing is used twice), label, ledger?,
 // work?}. exact: passes every test; near: fails one by a little (Needs you, never resolved).
-const billLive = (b) => b && b.x && !/rejected|deleted|removed/i.test(String(b.status || ""));
+const billLive = (b) => b && b.x && !/rejected|deleted|removed|duplicate/i.test(String(b.status || ""));
 // a bill posted to Tally is in the books (and settled there, first in first out): only bills not posted yet are candidates
 const billOpen = (b) => billLive(b) && !b.exportedAt && !/posted|exported|done/i.test(String(b.status || ""));
 const billTotal = (b) => r2(num(b.x.total) || (num(b.x.taxable) + num(b.x.cgst) + num(b.x.sgst) + num(b.x.igst)));
@@ -423,13 +423,20 @@ function candidates(f, inp, A, V) {
     // 7. rules the bank learnt from a person's choices (bank_meta.rules: {key, dir, ledger}; src/js/96 newled): the line's
     // decoded key, the same direction or any
     const dk = row.dec && row.dec.key;
-    if (dk) (inp.learned || []).forEach((r) => { if (r && r.key === dk && r.ledger && (r.dir === "any" || r.dir === x.dir)) add(exact, { t: "rule", ref: "learnt:" + r.key + ":" + x.row, label: "Learnt: " + (r.label || r.key) + " → " + r.ledger, ledger: r.ledger }); });
+    // (re-review N1) a key made from the narration ("narr:…") is a narration match: near, never exact; a rule for either
+    // direction ("any") is exact only when a person chose it before for a line in THIS direction
+    const byNarr = /^narr:/.test(String(dk || ""));
+    const seenDir = (r) => (inp.history || []).some((h) => h && h.k === dk && h.l === r.ledger && h.d === x.dir && /^(you|accepted|hand|confirm|rule-written)$/.test(String(h.s || "")));
+    if (dk) (inp.learned || []).forEach((r) => { if (!r || r.key !== dk || !r.ledger || !(r.dir === "any" || r.dir === x.dir)) return;
+      const c = { t: "rule", ref: "learnt:" + r.key + ":" + x.row, label: "Learnt: " + (r.label || r.key) + " → " + r.ledger, ledger: r.ledger };
+      add(!byNarr && (r.dir === x.dir || seenDir(r)) ? exact : nearL, c); });
     // 8. what people chose before for the same party (bank_meta.hist.rows: {k, d, l, s}): twice or more, always the same
     // ledger; two ledgers before is no answer
     if (dk) {
-      const before = (inp.history || []).filter((h) => h && h.k === dk && h.l && (!h.d || h.d === x.dir) && /^(you|accepted|hand|confirm|rule-written)$/.test(String(h.s || "you")));
+      // (N5) a choice whose source is not known is not counted
+      const before = (inp.history || []).filter((h) => h && h.k === dk && h.l && (!h.d || h.d === x.dir) && /^(you|accepted|hand|confirm|rule-written)$/.test(String(h.s || "")));
       const leds = Array.from(new Set(before.map((h) => h.l)));
-      if (before.length >= 2 && leds.length === 1) add(exact, { t: "history", ref: "hist:" + dk + ":" + x.row, label: "Same as before (" + before.length + " times): " + leds[0], ledger: leds[0] });
+      if (before.length >= 2 && leds.length === 1) add(byNarr ? nearL : exact, { t: "history", ref: "hist:" + dk + ":" + x.row, label: "Same as before (" + before.length + " times): " + leds[0], ledger: leds[0] });
       else if (leds.length > 1) leds.forEach((l) => add(nearL, { t: "history", ref: "hist:" + dk + ":" + l + ":" + x.row, label: "Before: " + l, ledger: l }));
     }
   } else if (f.kind === "twob_not_in_books") {
@@ -475,6 +482,8 @@ export function answer(raw, inp) {
     else if (free.length) { state = "resolved"; evidence = free; }
     else if (f.near.length) { state = "you"; cands = f.near; }                            // a near miss: never resolved
     else state = "ask";
+    // (N5) a line with FinCom's guess nobody reviewed, and nothing certain: the firm looks at the guess first
+    if (state === "ask" && f.kind === "bank_no_bill" && f.facts.suggested !== undefined) state = "you";
     // a missing month while the Inbox holds files not read yet: read them first, ask nothing
     if (state === "ask" && /month_missing$/.test(f.kind) && (inp.inboxUnread || 0) > 0) { state = "you"; f.facts = Object.assign({}, f.facts, { unread: inp.inboxUnread }); }
     // a month the books are not read up to yet: the bridge is behind, not the client
@@ -525,6 +534,7 @@ function titleOf(f) {
   if (x.unread) return x.unread + " Inbox files not read · " + (f.kind === "bank_month_missing" ? "statement " : f.kind === "salary_month_missing" ? "salary sheet " : "sales ") + monYear(x.ym) + "?";
   if (x.readTo) return "Books read up to " + dmon(x.readTo) + " · sales " + monYear(x.ym) + "?";
   if (f.kind === "suspense") return "Suspense " + a + " since " + dmon(x.date);
+  if (f.kind === "bank_no_bill" && x.suggested !== undefined && !(f.candidates || []).length) return a + " " + (x.dir === "out" ? "paid" : "received") + " " + dmon(x.date) + (x.suggested ? " · guess: " + x.suggested + " · right?" : " · what is it?");
   if (f.kind === "bank_no_bill") return a + " " + (x.dir === "out" ? "paid" : "received") + " " + dmon(x.date) + " · which one?";
   return a + " " + x.party + " · which one?";
 }

@@ -39,15 +39,24 @@ export function handler(deps: Deps) {
   const env = deps.env, doFetch = deps.fetch, now = deps.now || (() => new Date());
   const URL_ = String(env("SUPABASE_URL") || "").replace(/\/+$/, ""), SERVICE = String(env("SUPABASE_SERVICE_ROLE_KEY") || "");
   const reply = (code: number, body: unknown) => new Response(JSON.stringify(body), { status: code, headers: { "Content-Type": "application/json" } });
-  const rest = async (path: string, _t = SERVICE, init: RequestInit = {}) => {
-    const r = await doFetch(URL_ + path, { ...init, headers: { apikey: SERVICE, Authorization: "Bearer " + SERVICE, "Content-Type": "application/json", ...(init.headers || {}) } });
-    const t = await r.text(); let j: any = null; try { j = t ? JSON.parse(t) : null; } catch { j = t; }
-    if (!r.ok) throw Object.assign(new Error((j && (j.message || j.error)) || ("HTTP " + r.status)), { status: r.status });
-    return j;
+  // (re-review N6) the run's own work counted from the request's start: every answer's reading and JSON parse, the
+  // request's own body, and the work on the books; never the waits for the database. One counter per request
+  const per = () => {
+    const ctx = { spent: 0 };
+    const rest = async (path: string, _t = SERVICE, init: RequestInit = {}) => {
+      const r = await doFetch(URL_ + path, { ...init, headers: { apikey: SERVICE, Authorization: "Bearer " + SERVICE, "Content-Type": "application/json", ...(init.headers || {}) } });
+      const t = await r.text(), p0 = Date.now(); let j: any = null; try { j = t ? JSON.parse(t) : null; } catch { j = t; }
+      ctx.spent += Date.now() - p0;
+      if (!r.ok) throw Object.assign(new Error((j && (j.message || j.error)) || ("HTTP " + r.status)), { status: r.status });
+      return j;
+    };
+    const rpc = (fn: string, args: Record<string, unknown>) => rest("/rest/v1/rpc/" + fn, SERVICE, { method: "POST", body: JSON.stringify(args) });
+    return { ctx, rest, rpc };
   };
-  const rpc = (fn: string, args: Record<string, unknown>) => rest("/rest/v1/rpc/" + fn, SERVICE, { method: "POST", body: JSON.stringify(args) });
+  const top = per(), rpc = top.rpc;
 
-  async function client(firm: string, cid: string) {
+  async function client(firm: string, cid: string, req: { ctx: { spent: number }; rest: any; rpc: any }) {
+    const { rest, rpc } = req;
     const night = istDay(now()), ym = night.slice(0, 7).replace("-", "");
     const fail = (status: string, why: string) => rpc("night_fail", { p_firm: firm, p_client: cid, p_night: night, p_status: status, p_why: why }).catch(() => null);
     // the console's switches: when they cannot be read, nothing is checked (closed, not open); the next tick tries again
@@ -81,7 +90,7 @@ export function handler(deps: Deps) {
     ]);
     const firmRow = ((await rest("/rest/v1/firms?select=*&id=eq." + enc(firm)).catch(() => [])) || [])[0] || {};
     const firmRules = Array.isArray(firmRow.data && firmRow.data.bankRules) ? firmRow.data.bankRules : [];
-    const t0 = Date.now(), spent = () => Date.now() - t0 + (rows.unpackMs || 0);
+    const t0 = Date.now(), base = req.ctx.spent, spent = () => base + Date.now() - t0 + (rows.unpackMs || 0);
     const b = booksOf(rows);
     if (spent() > (deps.ready || READY) && !rows.fromPrep) {
       // too much for one run: the entries made are kept, the next tick goes on from them (the run is tried again)
@@ -104,10 +113,13 @@ export function handler(deps: Deps) {
     const jwt = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, ""), ck = req.headers.get("x-cron-key") || "";
     const inside = (SERVICE && jwt === SERVICE) || (ck && (await rpc("gst_cron_ok", { k: ck }).catch(() => false)) === true);
     if (!inside) return reply(401, { ok: false, error: "Only FinCom's own timer runs the night check." });
+    const one = per();
     let body: any = {};
+    const b0 = Date.now();
     try { body = await req.json(); } catch { return reply(400, { ok: false, error: "Bad request" }); }
+    one.ctx.spent += Date.now() - b0;
     if (body.action !== "client" || !UUID.test(String(body.firm_id || "")) || !/^[\w.:-]{1,80}$/.test(String(body.client_id || ""))) return reply(400, { ok: false, error: "Say which client." });
-    try { return reply(200, await client(String(body.firm_id), String(body.client_id))); }
+    try { return reply(200, await client(String(body.firm_id), String(body.client_id), one)); }
     catch (e) {
       const why = String((e as Error)?.message || e).slice(0, 300);
       await rpc("night_fail", { p_firm: body.firm_id, p_client: body.client_id, p_night: istDay(now()), p_status: "failed", p_why: why }).catch(() => null);

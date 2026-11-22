@@ -13,7 +13,7 @@ screenshots.
    timer's key itself; `assistant-send` takes the person's token). They import `../_shared/*` and `../gst-run/*`, as
    gst-run imports `../_shared/*`.
 3. `server/assistant-night/migration-206-cron.sql`: the night timer (02:00 to 05:20 India time, every 10 minutes, as many
-   clients a tick as the window needs; at 05:35 every client not reached is marked and logged). Last, once the function
+   clients a tick as the window needs (at most 20); at 05:35 every client not reached is marked and logged). Last, once the function
    answers.
 
 ### Secrets (names only)
@@ -52,6 +52,16 @@ screenshots.
 
 ### Sizes (gzip)
 legacy.js 599,738 (limit 600,000; +6 for `#/daily`); main index 260,627 (limit 264,192); Daily Check 5.8 kB, its own chunk.
+
+### The re-review of 75364c64f (N1 to N7)
+- N1: a learnt rule or history on a narration key ("narr:…") is near (needs you), never exact; a rule for either direction
+  is exact only with a person's choice in this direction. N5: a suggested line with nothing certain needs you (the guess
+  is shown), never a client question; history with no known source is not counted. N7: a bill marked duplicate is no
+  candidate.
+- N2: the test address must be exactly an active member's email. N3: the send is finished as failed on any exception; a
+  failed finish is logged; claims left "sending" for 10 minutes are swept to failed (each send and each night tick).
+- N4: an entry approved once keeps refusing undo while the night no longer makes it (approved_once). N6: at most 20
+  clients a tick; the run's budget counts every JSON parse from the request's start.
 
 ### Data sources (checked against staging's schema, 22-Nov-2026)
 - The cloud copy's entries, masters, groups and **opening balances** (`tally_ledgers.open`, a debit negative: each party's

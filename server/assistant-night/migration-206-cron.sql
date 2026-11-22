@@ -2,7 +2,7 @@
 -- Run AFTER migration-206-assistant-night.sql and after the assistant-night function is deployed.
 -- Every 10 minutes from 02:00 to 05:20 India time (20:30 to 23:50 UTC), the clients not checked tonight are each sent to
 -- assistant-night, one light request each. night_due(null) takes as many a tick as the window needs (the clients left over
--- the ticks left, at most 60), each once a night; a stuck run is taken again after 30 minutes, at most 3 tries. At 05:35
+-- the ticks left, at most 20), each once a night; a stuck run is taken again after 30 minutes, at most 3 tries. At 05:35
 -- (00:05 UTC) night_missed marks every client not reached and logs it, so no client is left out unseen. Each is sent to
 -- assistant-night with the platform's cron key (Vault gst_cron_key, which the function checks with gst_cron_ok, as gst-run
 -- and mis-run do). Only where pg_cron, pg_net and Vault are there. cron.schedule with the same name replaces the job, so
