@@ -1623,16 +1623,31 @@ func cancelledEnd(v M) string {
 	return "failed"
 }
 
-// review of the audit fix: a posting stopped on this computer: every entry never sent (no result) goes up as failed,
-// "not sent: stopped on this computer", so FinCom frees it for posting again; what was sent stays as it was. A copy:
-// this computer's progress.json is not changed (a retry here still sends those entries)
+// review of the audit fix: a posting stopped on this computer: an entry plainly never sent goes up as failed, "not
+// sent: stopped on this computer", so FinCom frees it for posting again; what was sent stays as it was. Re-check: an
+// entry is "not sent" ONLY when it was not in flight (p["inflight"]: a part that may have reached Tally before a
+// restart), its state is "waiting" (not "sending") and this computer's record has no note of it; any other entry with
+// no result goes up as sent with no answer (outcome unknown), so its id stays locked in FinCom and the posting ends
+// done. A copy: this computer's progress.json is not changed (a retry here still sends what was not sent)
 const stoppedNotSentWords = "not sent: stopped on this computer"
 
-func cancelledNotSent(v M) M {
+func cancelledNotSent(v M, dir string) M {
 	had := map[string]bool{}
 	for _, x := range arr(v["results"]) {
 		if r := obj(x); r != nil {
 			had[str(r["id"])] = true
+		}
+	}
+	inflight := map[string]bool{}
+	for _, x := range arr(v["inflight"]) {
+		inflight[str(x)] = true
+	}
+	xmlOf := map[string]string{}
+	if pay := readObjFileBak(filepath.Join(dir, "payload.json")); pay != nil {
+		for _, x := range arr(pay["items"]) {
+			if it := obj(x); it != nil {
+				xmlOf[str(it["id"])] = str(it["xml"])
+			}
 		}
 	}
 	out := M{}
@@ -1656,9 +1671,15 @@ func cancelledNotSent(v M) M {
 		for f, y := range e {
 			c[f] = y
 		}
-		c["state"], c["reason"], c["notSent"] = "failed", stoppedNotSentWords, true
+		if !inflight[k] && str(e["state"]) == "waiting" && acceptedInfo(acceptedKey(k, xmlOf[k])) == nil {
+			c["state"], c["reason"], c["notSent"] = "failed", stoppedNotSentWords, true
+			res = append(res, M{"id": k, "kind": str(e["kind"]), "ok": false, "notSent": true, "state": "failed", "message": stoppedNotSentWords})
+		} else {
+			c["state"], c["reason"], c["outcomeUnknown"], c["sent"] = "unknown", unknownLine, true, true
+			res = append(res, M{"id": k, "kind": str(e["kind"]), "ok": false, "outcomeUnknown": true, "sent": true, "state": "unknown", "message": unknownLine,
+				"detail": "the posting was stopped on this computer while this entry may have been at Tally"})
+		}
 		items = append(items, c)
-		res = append(res, M{"id": k, "kind": str(e["kind"]), "ok": false, "notSent": true, "state": "failed", "message": stoppedNotSentWords})
 	}
 	out["results"], out["items"] = res, items
 	return out
@@ -1710,8 +1731,8 @@ func syncCloudPosts() {
 			if jobAlive(id) {
 				continue
 			}
+			v = cancelledNotSent(v, dir)
 			st = cancelledEnd(v)
-			v = cancelledNotSent(v)
 		}
 		sig := fmt.Sprint(st, "|", v["done"], "|", v["message"], "|", v["checking"], "|", jsonText(v["items"]))
 		if sig == last {
@@ -1739,7 +1760,9 @@ func syncCloudPosts() {
 				"state": itemState(r, false), "reason": map[bool]string{true: "", false: failedLine(str(r["message"]))}[r["ok"] == true],
 				// linkguid.go (19-Nov-2026): where it went, the port and the company's name in Tally (the job's, for a
 				// result that names none), to FinCom too, not only this computer's progress.json
-				"port": toInt(r["port"]), "company": str(r["company"]), "refusedByTally": truthy(r["refusedByTally"])})
+				"port": toInt(r["port"]), "company": str(r["company"]), "refusedByTally": truthy(r["refusedByTally"]),
+				// review: never sent (a posting stopped on this computer, or refused before any request): FinCom may free it
+				"notSent": truthy(r["notSent"])})
 			if e := res[len(res)-1].(M); toInt(e["port"]) == 0 || str(e["company"]) == "" {
 				if toInt(e["port"]) == 0 {
 					e["port"] = toInt(v["port"])

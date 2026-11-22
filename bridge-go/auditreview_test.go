@@ -331,3 +331,80 @@ func TestReviewRecheckDropsOnlyRefused(t *testing.T) {
 		t.Fatal("rk2 not taken as seen now")
 	}
 }
+
+// the re-check of the review (#2): an entry that may have reached Tally (in flight when the bridge stopped, "sending",
+// or on this computer's record) is never reported "not sent": it goes up as sent with no answer (its id stays locked
+// in FinCom) and the posting ends done; only an entry plainly waiting and on no record is "not sent"
+func TestReviewCancelledInflightNotFreed(t *testing.T) {
+	f := newStandTally(t)
+	c := newStandCloud(t)
+	standBridge(t, f, c.cfg()+`,"CloudPostSyncSec":0`)
+	id := "job-review-inflight"
+	dir, _ := jobDir(id)
+	_ = os.MkdirAll(dir, 0o755)
+	xa, xb, xc := finVoucher("ia", fgParty, "IA-1", today(), "1.00"), finVoucher("ib", fgParty, "IB-1", today(), "2.00"), finVoucher("ic", fgParty, "IC-1", today(), "3.00")
+	_ = saveJSONBak(dir+"/payload.json", M{"company": zz, "fromCloud": true, "items": []any{M{"id": "ia", "kind": "voucher", "xml": xa}, M{"id": "ib", "kind": "voucher", "xml": xb}, M{"id": "ic", "kind": "voucher", "xml": xc}}})
+	// ic: waiting, but on this computer's record (sent by an earlier job)
+	_ = noteSent(acceptedKey("ic", xc), zz, "job-earlier", "", 1, "", "")
+	if err := writeProgress(dir, M{"id": id, "status": "cancelled", "company": zz, "total": 3, "done": 0, "results": []any{}, "inflight": []any{"ia"},
+		"items": []any{M{"id": "ia", "kind": "voucher", "state": "sending"}, M{"id": "ib", "kind": "voucher", "state": "waiting"}, M{"id": "ic", "kind": "voucher", "state": "waiting"}}}); err != nil {
+		t.Fatal(err)
+	}
+	cpMu.Lock()
+	cloudPosts = map[string]string{id: ""}
+	cpMu.Unlock()
+	t.Cleanup(func() { cpMu.Lock(); cloudPosts = nil; cpMu.Unlock() })
+	var mu sync.Mutex
+	var up M
+	c.mu.Lock()
+	c.postsReply = func(b M) (int, M) { mu.Lock(); up = b; mu.Unlock(); return 200, M{"ok": true} }
+	c.mu.Unlock()
+	postsDirty.Store(true)
+	syncCloudPosts()
+	mu.Lock()
+	defer mu.Unlock()
+	if up == nil || str(up["status"]) != "done" {
+		t.Fatalf("the end: %v (want done: ia may be in Tally)", up)
+	}
+	rs := map[string]M{}
+	for _, x := range arr(up["results"]) {
+		r := obj(x)
+		rs[str(r["id"])] = r
+	}
+	for _, k := range []string{"ia", "ic"} {
+		r := rs[k]
+		if r == nil || r["notSent"] == true || str(r["message"]) == stoppedNotSentWords || r["outcomeUnknown"] != true || r["sent"] != true || str(r["state"]) != "unknown" {
+			t.Fatalf("%s may be in Tally but is freed: %v", k, r)
+		}
+	}
+	if r := rs["ib"]; r == nil || r["notSent"] != true || str(r["message"]) != stoppedNotSentWords {
+		t.Fatalf("ib (waiting, on no record): %v", r)
+	}
+	for _, x := range arr(up["items"]) {
+		e := obj(x)
+		want := map[string]string{"ia": "unknown", "ib": "failed", "ic": "unknown"}[str(e["id"])]
+		if str(e["state"]) != want {
+			t.Fatalf("item %v (want %s)", e, want)
+		}
+	}
+}
+
+// after a restart the in-flight ids are on the disk while their items read "waiting" (nothing is sending now): still
+// never "not sent"
+func TestReviewCancelledInflightAfterRestart(t *testing.T) {
+	f := newStandTally(t)
+	standBridge(t, f, "")
+	dir := t.TempDir()
+	v := M{"status": "cancelled", "results": []any{}, "inflight": []any{"ra"}, "items": []any{M{"id": "ra", "kind": "voucher", "state": "waiting"}, M{"id": "rb", "kind": "voucher", "state": "waiting"}, M{"id": "rc", "kind": "voucher", "state": "sending"}}}
+	out := cancelledNotSent(v, dir)
+	rs := map[string]M{}
+	for _, x := range arr(out["results"]) {
+		rs[str(obj(x)["id"])] = obj(x)
+	}
+	if rs["ra"]["notSent"] == true || rs["ra"]["outcomeUnknown"] != true || rs["rb"]["notSent"] != true || rs["rc"]["notSent"] == true || rs["rc"]["outcomeUnknown"] != true || cancelledEnd(out) != "done" {
+		t.Fatalf("after a restart: %v, end %s", rs, cancelledEnd(out))
+	}
+	if len(arr(v["results"])) != 0 {
+		t.Fatal("the view itself was changed")
+	}
+}
