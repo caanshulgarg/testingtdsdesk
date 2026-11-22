@@ -8,7 +8,7 @@
 import Legacy from "../../parts/Legacy.jsx";
 import CommitBox from "../../parts/CommitBox.jsx";
 import { AuditButton, AiLedgers } from "../../parts/Ai.jsx";
-import { CatchUp } from "../../parts/Notes.jsx";
+import { CatchUp } from "../../parts/BookNotes.jsx";
 import { catchSoon } from "../../lib/catchSoon.js";
 import { behind } from "../../lib/behind.jsx";
 import { useAutoLine } from "../../lib/autoLine.js";

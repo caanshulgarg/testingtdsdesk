@@ -26,7 +26,7 @@ import "../../../src/js/47-gst-lock-checks.js";
 import { PreFileButton } from "../parts/PreFile.jsx";
 import NotRead from "../parts/NotRead.jsx";
 import { Notices } from "../parts/Ai.jsx";
-import { LedgerBanner } from "../parts/Notes.jsx";
+import { LedgerBanner } from "../parts/BookNotes.jsx";
 import TaxLedgers from "./books/TaxLedgers.jsx";
 import HelpButton from "../parts/HelpButton.jsx";
 import More from "../parts/More.jsx";

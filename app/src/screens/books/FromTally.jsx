@@ -13,7 +13,7 @@
 // Kept, minimally: the tie-out result (one line), the warning when the books are another PAN's, and More (Restore, the
 // removals, and the bridge's own update settings when this computer has one).
 import { lazy, Suspense, useEffect, useState } from "react";
-import { JobsNote } from "../../parts/Notes.jsx";
+import { JobsNote } from "../../parts/BookNotes.jsx";
 import DateBox from "../../parts/DateBox.jsx";
 import { needDays } from "../../lib/needDays.js";
 // 26-Oct-2026: the ledgers' one bar (reading / done / stuck / today's changes), as on the Tally page's row; loaded with

@@ -20,7 +20,7 @@ import Letters from "./books/Letters.jsx";
 import AuditTab, { Tabs as AuditTabs } from "./books/Audit.jsx";
 import Tieout from "./books/Tieout.jsx";
 import Recon from "./books/Recon.jsx";
-import { GstDriftNote, SyncNote, JobsNote } from "../parts/Notes.jsx";
+import { GstDriftNote, SyncNote, JobsNote } from "../parts/BookNotes.jsx";
 import { BooksStale } from "../parts/TallyLine.jsx";
 import { booksNeedTally } from "../parts/FreshBar.jsx";
 import HeldBooks from "../parts/HeldBooks.jsx";

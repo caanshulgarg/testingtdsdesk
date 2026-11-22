@@ -857,7 +857,7 @@ function supplierInTally(x){
   const names = new Set([].concat(Object.keys(info), Object.keys(b.gstins || {}), Object.keys(b.map || {}), Object.keys((b.tb || {}).led || {})));
   return Array.from(names).find(l => (typeof ledgerKey === "function" ? ledgerKey(l) : l.toLowerCase()) === k) || "";
 }
-// (pendingSuppliers, addPendingSupplier: src/js/99-bill-suppliers.js, with the screens that use them)
+// (pendingSuppliers, addPendingSupplier: src/js/99-pending-suppliers.js, with the screens that use them)
 /* ---------- what this supplier was already credited in Tally this year ---------- */
 function fyStartEnd(fy){
   const m = String(fy).match(/(\d{4})/);
