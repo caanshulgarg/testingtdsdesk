@@ -97,11 +97,15 @@ export const farLine = (at) => (at ? "Last entry from Tally received " + (typeof
 export function clientTallyState(co, real) {
   // next-link-record: one word everywhere (Linked / Waiting for Tally / Needs you), lib/linkStatus.js once loaded
   const w = globalThis.LinkWord && LinkWord(co, undefined, !real); if (w) return mark(w);
+  // (audit 22-Nov-2026, tally-pages 6: until it is loaded, the same four words, so a chip never flips from Connected /
+  // Disconnected to Linked / Waiting; its loading asked for at once)
+  if (!clientTallyState.asked) { clientTallyState.asked = true; import("../parts/LinkStatus.jsx").then(() => { if (typeof soonRender === "function") soonRender(); }, () => { clientTallyState.asked = false; }); }
+  const four = (r) => Object.assign(r, { word: r.state === "connected" ? "Linked" : r.state === "unlinked" ? "Not linked" : "Waiting for Tally" });
   const k = co && typeof tallyLinkOf === "function" ? tallyLinkOf(co) : null;
   if (!k || k.state === "unlinked") return { state: "unlinked", level: "warn", word: "Not linked", text: "Not linked to its company in Tally yet", computer: "", seen: "", company: "" };
   const cloud = typeof TCloud === "object" && TCloud.on();
-  if (!cloud && k.line && k.line.state === "open") return { state: "connected", level: "ok", word: "Connected", text: "Connected", computer: k.line.computer || "", seen: "", company: k.company };
-  return Object.assign(tallyCoState(k.company), { company: k.company });
+  if (!cloud && k.line && k.line.state === "open") return { state: "connected", level: "ok", word: "Linked", text: "Linked", computer: k.line.computer || "", seen: "", company: k.company };
+  return four(Object.assign(tallyCoState(k.company), { company: k.company }));
 }
 // the last entry: Tally's change recorder on the company's computer (its heartbeat), else the bridge's last read
 export function lastEntry(co, k) {
@@ -118,7 +122,10 @@ export function unlinkedOpen() {
   const linked = new Set(), seen = new Set(), out = [];
   [].concat((typeof TLight === "object" && TLight.st.cos) || [], (TCloud.pane && TCloud.pane.companies) || [])
     .forEach((r) => { const co = r && r.client_id && S.companies ? S.companies[r.client_id] : null; if (r && r.client_id && !(co && co.deleted)) linked.add(coKey(r.company)); });
-  tallyDevs().forEach((d) => { if (pcLive(d)) openOn(d).forEach((n) => { const k = coKey(n); if (k && !linked.has(k) && !seen.has(k)) { seen.add(k); out.push(n); } }); });
+  // (audit 22-Nov-2026, tally-pages 3: never a company open only in another login's Tally, or another computer's: the
+  // same rule as the Tally page's list, lib/tallySimple.js ownOpen, once it is here)
+  const own = globalThis.FCOwn && globalThis.FCOwn.open ? globalThis.FCOwn.open() : null, other = (n) => !!own && (own.theirs({ company: n, open: true }) || own.elsewhere({ company: n, open: true }));
+  tallyDevs().forEach((d) => { if (pcLive(d)) openOn(d).forEach((n) => { const k = coKey(n); if (k && !linked.has(k) && !seen.has(k) && !other(n)) { seen.add(k); out.push(n); } }); });
   return out;
 }
 // who may link a company to a client: the cloud's can_write (members owner or staff)

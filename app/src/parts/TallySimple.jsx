@@ -9,7 +9,7 @@
 // Before (next-tally-simple, 02-Nov-2026, "Tally — Yes or No"):
 //   1. the header: "Tally", "N clients are fine. M need you.", Check Tally now (the day check of every client:
 //      tally_check_request, the same as each client's "Check for changes in Tally"; a cloud without it: Update from Tally)
-//   2. Connect a company to Tally: four steps that move on by themselves from real state (no bridge heard → 1, Download;
+//   2. Connect a company to Tally (now the six steps of lib/connectSteps.js; audit 22-Nov-2026): steps that move on by themselves from real state (no bridge heard → 1, Download;
 //      a bridge, nothing open that no client has → 2; a company open that no client has → 3, "Connect it to client X?";
 //      just linked → 4). Small once every company is connected
 //   3. the strip, once a company is connected: a company open in Tally that no client has, one click to connect it
@@ -164,6 +164,7 @@ function Guide({ cs, collapsed, forced, asked, connectPanel, download, checkAgai
     : <button type="button" className="btn primary" data-tsm-go="choose" onClick={() => setPick(!pick)} aria-expanded={pick}>Choose the client</button>;
   // (still looking for this login's bridge: the Download stays in reach meanwhile)
   else if (now && now.n === 1 && now.hook === "checking") btn = download;
+  else if (a && a.kind === "rekey") btn = <button type="button" className="btn primary" data-tsm-go="rekey" disabled={OC.busy === "c"} onClick={() => { doConnect(true).finally(again); }}>{OC.busy === "c" ? "Connecting…" : "Connect this computer"}</button>;
   else if (a && a.kind === "check") btn = <>{now.n === 1 && download}<button type="button" className={"btn" + (now.n === 1 ? "" : " primary")} data-tsm-go="check" disabled={ck} onClick={again}>{ck ? "Checking…" : "Check again"}</button></>;
   const copy = a && a.free ? <button type="button" className="linkbtn" data-tsm-port-copy={a.free} onClick={() => (navigator.clipboard ? navigator.clipboard.writeText(String(a.free)) : Promise.reject()).then(() => toast("Port " + a.free + " copied."), () => toast("Could not copy; type " + a.free + ".", {sticky: false}))}>{"Copy " + a.free}</button> : null;
   // (the step to do now says what to do inside its own row, as the approved design)
@@ -189,7 +190,7 @@ function Guide({ cs, collapsed, forced, asked, connectPanel, download, checkAgai
     {a && a.kind === "link" && canWrite() && pick && <div className="tsm-pick" data-tsm-guide-pick=""><Pick r={a.r} co={null} pre="" onClose={() => setPick(false)} /></div>}
     {/* Set up again / another computer (openConnectTally(1)): the one Download for that other login */}
     {forced && !(now && now.n === 1) && another}
-    {now && now.n === 1 && connectPanel && now.hook !== "blocked" && <div className="tsm-guide-panel" data-tsm-panel="">{connectPanel}</div>}
+    {now && now.n === 1 && connectPanel && !["blocked", "refused", "nobeat"].includes(now.hook) && <div className="tsm-guide-panel" data-tsm-panel="">{connectPanel}</div>}
     {notSaved}
     {here}
   </section>;

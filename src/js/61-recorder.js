@@ -438,7 +438,9 @@ const Rec = {
   unkKey(books){ return books && books.length ? "b:" + books.join(",") : "firm"; },
   unkOf(books){
     const key = this.unkKey(books), u = this.unk[key] || (this.unk[key] = {rows: null, known: {}, at: 0, busy: false, none: false, err: ""});
-    if (typeof TCloud === "object" && TCloud.on() && !u.busy && (!u.at || (Date.now() - u.at > 60000 && pollOk()))){ u.at = Date.now(); setTimeout(() => this.unkLoad(books), 0); }
+    // (audit 22-Nov-2026, speed-db 2: the firm-wide list, the Bell's, scans every line of the firm: every 10 minutes, not
+    // every minute in every tab; a client's own list stays at a minute)
+    if (typeof TCloud === "object" && TCloud.on() && !u.busy && (!u.at || (Date.now() - u.at > (key === "firm" ? 600000 : 60000) && pollOk()))){ u.at = Date.now(); setTimeout(() => this.unkLoad(books), 0); }
     return u;
   },
   async unkLoad(books){
@@ -452,7 +454,8 @@ const Rec = {
       const out = [].concat(...got.map(r => [].concat(r || [])));
       u.known = await this.unkKnown([...new Set(out.map(r => String((r && r.book_id) || "")).filter(Boolean))]);
       u.rows = out; u.none = false; u.err = "";
-    } catch (e){ u.rows = []; if (this.missing(e)) u.none = true; else u.err = this.say(e); }
+    // (an error, a time-out on a large firm: the last list stays, with the error, never an alert gone without a word)
+    } catch (e){ if (this.missing(e)){ u.rows = []; u.none = true; } else { u.rows = u.rows || []; u.err = this.say(e); } }
     u.busy = false; u.at = Date.now();
     // drawn only when what it shows changed: the minute's re-read that finds the same lines draws nothing (a page drawn
     // again for nothing; run_quiet_refresh.py's own-save check caught it as an extra drawing)
@@ -471,8 +474,9 @@ const Rec = {
   // gave a ledger FinCom holds under another name (tally_ledger_aliases, migration 59; not ended). Members read both (their
   // firm's rows). Nothing on an error (an older cloud): the line is as the function says
   async unkKnown(books){
-    const out = {}, q = encodeURIComponent;
-    for (const bk of books.slice(0, 60)){
+    // (audit 22-Nov-2026: four books at a time, not one after another: up to 120 round trips each read)
+    const out = {}, q = encodeURIComponent, list = books.slice(0, 60);
+    const one = async bk => {
       const k = {names: new Map(), alias: new Map()};
       try {
         [].concat(await TCloud.restAll("tally_ledgers?select=name&merged_into=is.null&deleted_at=is.null&book_id=eq." + q(bk)) || []).forEach(r => {
@@ -484,7 +488,8 @@ const Rec = {
           if (r && r.tally_name && r.fincom_name) k.alias.set(String(r.tally_name), String(r.fincom_name)); });
       } catch (e){}
       out[bk] = k;
-    }
+    };
+    await Promise.all([0, 1, 2, 3].map(async w => { for (let i = w; i < list.length; i += 4) await one(list[i]); }));
     return out;
   },
   // FinCom has this ledger after all: {as, how} (how: "name" capitals or spaces, "renamed" in Tally, "confirmed" by a

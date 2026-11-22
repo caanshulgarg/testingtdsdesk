@@ -514,17 +514,22 @@ const AutoPost = {
   QUEUED: /stays queued|queued for the Tally computer|Still waiting for the Tally computer/i,
   // the run's posting, through the usual route; when a person undid one of its entries while it was queued (the posting
   // cancelled: tally_post_cancel), the rest goes again under a new posting
-  async through(run, post, again){
-    this.requeueRun = this.requeueRun || {};
+  // The cloud posting's id, kept for the run as soon as it is made (Undo cancels it while it waits). Audit 22-Nov-2026
+  // (tally-sync 2): CloudPost.uuid was swapped for the whole wait (up to 30 minutes), so another client's run, a posting
+  // by hand, or a second run took the id, and two runs ending out of turn left the swap in for good. Now CloudPost.run
+  // tells jobSeen the client, the entries and the posting; a run takes it only for its own client and entries
+  async through(run, post, again, cid, ids){
+    this.requeueRun = this.requeueRun || {}; this.runJob = this.runJob || {}; this.runIds = this.runIds || {};
     for (let i = 0; i < 4; i++){
       this.requeueRun[run] = false; this.inRun = run;
-      // the cloud posting's id, kept for the run as soon as it is made (Undo cancels it while it waits)
-      const mk = CloudPost.uuid; this.runJob = this.runJob || {};
-      CloudPost.uuid = function(){ const id = mk.call(this); AutoPost.runJob[run] = id; return id; };
-      try { await post(); } finally { this.inRun = null; CloudPost.uuid = mk; }
+      this.runIds[run] = {cid, ids: new Set((ids ? ids() : []).map(String))};
+      try { await post(); } finally { this.inRun = null; delete this.runIds[run]; }
       if (!this.requeueRun[run] || !again()) break;
     }
     delete this.requeueRun[run];
+  },
+  jobSeen(cid, ids, job){
+    Object.entries(this.runIds || {}).forEach(([run, o]) => { if (o.cid === cid && ids.some(x => o.ids.has(String(x)))) this.runJob[run] = job; });
   },
   async postBank(cid, rows, res){
     const run = CloudPost.uuid(), items = rows.map(r => ({cid: "bank:" + (r.fp || r.id), kind: "bank", amt: this.amt(r), rule: r.autoHold.rule, label: r.autoHold.chip, r}));
@@ -545,7 +550,7 @@ const AutoPost = {
     saveBank({rows: true});
     const live = () => go.filter(r => r.auto && r.state === "ready");
     this.posting = {run, by: "auto (rule)", owner: who};
-    try { await this.through(run, () => postBankToTally(live().map(r => { r.postError = ""; return r.id; })), () => live().length > 0); } finally { this.posting = null; }
+    try { await this.through(run, () => postBankToTally(live().map(r => { r.postError = ""; return r.id; })), () => live().length > 0, cid, () => live().map(r => r.id)); } finally { this.posting = null; }
     go.filter(r => r.autoUndone && !r.auto).forEach(r => { r.postError = ""; });
     const mine = go.filter(r => r.auto && r.auto.run === run);
     const sent = mine.filter(r => r.state === "sent" || r.state === "intally"), left = mine.filter(r => !sent.includes(r));
@@ -586,7 +591,7 @@ const AutoPost = {
     try {
       await this.through(run, () => postBillsToTally({ids: live().filter(e => e.status === "approved").map(e => e.id), auto: true}),
         // a cancelled posting sends its bills back to review: those still automatic are approved again and go under a new posting
-        () => { const back = live().filter(e => e.status === "draft"); approveAll(back); return live().length > 0; });
+        () => { const back = live().filter(e => e.status === "draft"); approveAll(back); return live().length > 0; }, cid, () => live().map(e => e.id));
     } finally { this.posting = null; }
     const mine = go.filter(e => e.auto && e.auto.run === run);
     const sent = mine.filter(e => e.exportedAt), left = mine.filter(e => !e.exportedAt);
@@ -615,7 +620,8 @@ const AutoPost = {
   // the cloud posting a run went in (its entries' ids), when it went through the queue
   jobOf(cid, ids, run){
     if (run && this.runJob && this.runJob[run]) return this.runJob[run];
-    try { const m = JSON.parse(lsGet("tdsdesk:cloudpost") || "null"); if (m && m.cid === cid) return m.id; } catch (e){}
+    // (the last posting's slot only when it names one of the run's entries: audit 22-Nov-2026)
+    try { const m = JSON.parse(lsGet("tdsdesk:cloudpost") || "null"); if (m && m.cid === cid && (m.ids || []).some(x => ids.map(String).includes(String(x)))) return m.own || m.id; } catch (e){}
     const j = typeof CloudJobs === "object" ? (CloudJobs.list || []).find(j => j.client_id === cid && (CloudJobs.idsOf(j) || []).some(x => ids.includes(x))) : null;
     return j ? j.id : null;
   },

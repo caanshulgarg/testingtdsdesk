@@ -126,7 +126,7 @@ function Upload({ b }) {
     {opening && <p className="bk-alert" data-up-opening="" style={{ margin: "0 0 10px" }}><b>Opening balances:</b> in Tally, open <b>Trial Balance</b> as on the day before the books here start, press <b>Ctrl+E</b>, choose <b>XML</b>, and drop the file below; FinCom asks whether to use it as the opening balances. With FinCom Bridge linked, Update from Tally reads them by itself.</p>}
     {/* 26-Oct-2026: the Day Book upload, said in one line. 30-Oct-2026 (the owner): books also come from Tally by
         themselves (Bring books from Tally, above), and an upload is checked against Tally (Upload checked against Tally) */}
-    <p className="note" data-up-older="" style={{ margin: "0 0 8px" }}>Older entries: in Tally open Day Book, choose the period (Alt+F2), E: Export → File Format (F8): XML or JSON, then drop the file here.</p>
+    <p className="note" data-up-older="" style={{ margin: "0 0 8px" }}>Older entries: in Tally open Day Book, press Alt+F2 for the period, then Alt+E (Export) → Current, F8 (File Format): XML or JSON, and E to export; then drop the file here.</p>
     <Drop />
     {lim && <p className="note" data-up-limit="" style={{ margin: "8px 0 0" }}>{"Only " + fmtDate(lim[0]) + (lim[1] !== lim[0] ? " to " + fmtDate(lim[1]) : "") + " is taken from the next Day Book. "}
       <button className="linkbtn" onClick={() => { S.dbFrom = ""; S.dbTo = ""; render(); }}>Take the file’s own dates</button></p>}
@@ -173,7 +173,8 @@ function HowTo() {
     <ol className="note" style={{ margin: "6px 0 0 18px", padding: 0 }}>
       <li>In Tally, open <b>Display More Reports → Day Book</b> and press <b>Alt+F2</b> for the period; for the ledger masters, <b>Display More Reports → List of Accounts</b>.</li>
       <li>Press <b>Alt+E</b> (Export) → <b>Current</b>, then <b>F8</b> (File Format) for <b>XML</b> or <b>JSON</b>, and <b>E</b> to export. Several months, or a zip of them, can be dropped at once.</li>
-      <li>Drop the file above. Uploading the same dates again replaces them; nothing is counted twice.</li>
+      {/* audit 22-Nov-2026 (tally-pages 11): only the days from the file's first entry to its last are replaced */}
+      <li>Drop the file above. The days from the file’s first entry to its last entry are replaced; nothing is counted twice. Days after the file’s last entry (entries deleted in Tally at the end of the period) are not touched: check the range FinCom says it replaced.</li>
     </ol></details>;
 }
 

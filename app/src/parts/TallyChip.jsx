@@ -6,7 +6,8 @@ import { clientTallyState, mayLink } from "../lib/tallyState.js";
 const ChangePick = lazy(() => import("./TallyCompanies.jsx").then((m) => ({ default: m.ChangePick })));
 // ONE page for Tally (24-Oct-2026, next-tally-one-page; the owner: "somewhere it is showing, other places it is not
 // showing.. I have to go everywhere to see where to add.. I need a clear page only"): a client's company in Tally is
-// added, linked, moved, unlinked and synced on the Tally page's Companies in Tally only. Everywhere else a client's Tally
+// added, linked, moved, unlinked and synced on the Tally page's Companies in Tally (since 31-Oct-2026 also Change and
+// Unlink in Client setup › Tally: TallyOne below; audit 22-Nov-2026). Everywhere else a client's Tally
 // is ONE status in the same words (lib/tallyState.js, from the cloud's link alone), and a click opens that row:
 //   TallyChip  the client's title, the Clients list: "● Connected" / "○ Disconnected" / "◐ Not linked"
 //   TallyOne   Client setup: "Tally: <company> ● Connected · Open in Tally page" / "Tally: Not linked · Choose on Tally page"

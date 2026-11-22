@@ -22,8 +22,10 @@ export function freePort(seen, user) {
   for (const ch of lc(user)) h = (h * 31 + ch.charCodeAt(0)) % 9973;
   return cands.find((p) => p >= 9000 + (h % 100)) || cands[0] || 0;
 }
+// TallyPrime's menu for its connection, written once (audit 22-Nov-2026, tally-pages 7: it was given three ways)
+export const TALLY_CONN = "F1 → Settings → Connectivity → Client/Server configuration";
 // the step's words: TallyPrime's own menu in one line (TallyPrime 3.0 to 7.1)
-export const portHowWords = (free) => "In TallyPrime: F1 → Settings → Connectivity → Client/Server configuration → Acts as Both, Port " + free + ", ODBC Yes → Ctrl+A → restart Tally.";
+export const portHowWords = (free) => "In TallyPrime: " + TALLY_CONN + " → Acts as Both, Port " + free + ", ODBC Yes → Ctrl+A → restart Tally.";
 // the one warning (the owner: "Use a port between 9000 and 9999 — 90xx is free")
 export const portWarnWords = (free) => "Use a port between " + PORT_MIN + " and " + PORT_MAX + " — " + free + " is free";
 const heard = (at) => { const t = Date.parse(at || ""); return !!t && Date.now() - t < 7 * 864e5; };
