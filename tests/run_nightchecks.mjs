@@ -93,10 +93,10 @@ const one = (r, kind) => r.findings.filter((f) => f.kind === kind);
   f = one(r, "advance_open")[0];
   eq([f && f.facts.side, f && f.state], ["received", "ask"], "advance received from a customer: asked");
   // wrong side with no advance (an opening debit)
-  r = run(inp([], { open: { "XYZ Logistics": -62000 } }));
+  r = run(inp([], { open: { "XYZ Logistics": -62000 }, booksFrom: "20260401" }));
   f = one(r, "wrong_side")[0];
   eq([f && f.state, f && f.ask], ["ask", "₹62,000 is shown as paid in advance to XYZ Logistics. Is a bill pending?"], "wrong side: a supplier in debit");
-  r = run(inp([], { open: { "XYZ Logistics": -999 } }));
+  r = run(inp([], { open: { "XYZ Logistics": -999 }, booksFrom: "20260401" }));
   eq(one(r, "wrong_side").length, 0, "wrong side: under ₹1,000: nothing");
 }
 
@@ -147,8 +147,23 @@ const one = (r, kind) => r.findings.filter((f) => f.kind === kind);
   let r = run(inp([], B([row()])));
   let f = one(r, "bank_no_bill")[0];
   eq([f.state, f.ask], ["ask", "₹48,000 paid to RAMESH on 05-Nov: what is it for? A bill, salary or advance?"], "bank: nothing fits: precise question");
-  r = run(inp([], B([row({ ledger: "Salary" })])));
-  eq(one(r, "bank_no_bill").length, 0, "bank: a line with its ledger set: nothing");
+  r = run(inp([], B([row({ ledger: "Salary", userSet: true, state: "ready" })])));
+  eq(one(r, "bank_no_bill").length, 0, "bank: a line a person set: nothing");
+  for (const st of ["sent", "intally", "ready", "ignored"]) eq(one(run(inp([], B([row({ state: st })]))), "bank_no_bill").length, 0, "bank: a line " + st + ": nothing");
+  r = run(inp([], B([row({ ledger: "Salary", state: "suggested" })])));
+  eq([one(r, "bank_no_bill").length, one(r, "bank_no_bill")[0].state], [1, "ask"], "bank: a suggested (guessed) ledger is checked like any line, never taken as the answer");
+  // learnt rules and history (the shapes the cloud keeps)
+  r = run(inp([], B([row({ dec: { name: "RAMESH", key: "upi:ramesh@okbank" } })], { learned: [{ key: "upi:ramesh@okbank", dir: "out", ledger: "Salary", auto: true, label: "RAMESH", at: "2026-10-01T00:00:00Z" }] })));
+  eq([one(r, "bank_no_bill")[0].state, one(r, "bank_no_bill")[0].evidence[0].ledger], ["resolved", "Salary"], "bank: a learnt rule (same key, same direction): resolved");
+  r = run(inp([], B([row({ dec: { name: "RAMESH", key: "upi:ramesh@okbank" } })], { learned: [{ key: "upi:ramesh@okbank", dir: "in", ledger: "Salary" }] })));
+  eq(one(r, "bank_no_bill")[0].state, "ask", "bank: a learnt rule for the other direction: not used");
+  const H = (l, s = "you") => ({ k: "upi:ramesh@okbank", p: "ramesh", t: "", l, d: "out", dt: "2026-09-01", s, n: "RAMESH" });
+  r = run(inp([], B([row({ dec: { name: "RAMESH", key: "upi:ramesh@okbank" } })], { history: [H("Salary"), H("Salary")] })));
+  eq(one(r, "bank_no_bill")[0].state, "resolved", "bank: chosen twice before, the same ledger: resolved");
+  r = run(inp([], B([row({ dec: { name: "RAMESH", key: "upi:ramesh@okbank" } })], { history: [H("Salary"), H("Repairs")] })));
+  eq(one(r, "bank_no_bill")[0].state, "you", "bank: two ledgers before: needs you");
+  r = run(inp([], B([row({ dec: { name: "RAMESH", key: "upi:ramesh@okbank" } })], { history: [H("Salary")] })));
+  eq(one(r, "bank_no_bill")[0].state, "ask", "bank: chosen once before: not enough");
   // a written rule
   const rule = { id: "w1", when: { text: [{ op: "has", v: "bses" }], dir: "out", amtMin: "", amtMax: "" }, then: { ledger: "Electricity" } };
   r = run(inp([], B([row({ narr: "NEFT/BSES RAJDHANI/112", dec: { name: "BSES RAJDHANI" }, debit: 9800 })], { rules: [rule] })));
@@ -268,6 +283,67 @@ const one = (r, kind) => r.findings.filter((f) => f.kind === kind);
   // with last night's answers as prior, nothing changes
   const prior = a.findings.map((f) => ({ kind: f.kind, key: f.key, state: f.state, evidence: f.evidence }));
   eq(JSON.stringify(run(Object.assign({}, I, { prior })).findings), JSON.stringify(a.findings), "with last night's answers: the same");
+}
+
+
+// ---------------------------------------------------------------- the review's cases (22-Nov-2026)
+{
+  const acct = { id: "a1", ledger: "HDFC Bank", last4: "2231" };
+  const row = (o) => Object.assign({ id: "r1", acct: "a1", sid: "s1", date: "2026-11-10", narr: "NEFT/RAMESHWAR ENTERPRISES/88", debit: 0, credit: 26500, ledger: "", state: "attention", dec: { name: "RAMESHWAR ENTERPRISES" } }, o);
+  const B = (rows, more = {}) => Object.assign({ bank: { accounts: [acct], rows } }, more);
+  // H2: a party's name inside another name is no match
+  const under2 = Object.assign({}, under, { "Ramesh": "Sundry Debtors" });
+  const I2 = (vs, more) => { const i = inp(vs, more); i.books.under = under2; return i; };
+  let r = run(I2([sale("20261028", "Ramesh", 26500)], B([row()])));
+  eq(one(r, "bank_no_bill")[0].state, "you", "H2: “RAMESHWAR ENTERPRISES” holds “Ramesh”: needs you, never resolved");
+  r = run(I2([sale("20261028", "Ramesh", 26500)], B([row({ narr: "NEFT/RAMESH/88", dec: { name: "RAMESH" } })])));
+  eq(one(r, "bank_no_bill")[0].state, "resolved", "H2: the decoded name is the party's: resolved");
+  r = run(I2([sale("20261028", "Ramesh", 26500)], B([row({ narr: "NEFT/RAMESH/88", dec: { name: "" } })])));
+  eq(one(r, "bank_no_bill")[0].state, "you", "H2: the name only in the narration: needs you");
+  // H1: the key is the statement's, whatever the account's ledger
+  const k1 = one(run(inp([], { bank: { accounts: [{ id: "a1", ledger: "" }], rows: [row({ acct: "a1" })] } })), "bank_no_bill")[0].key;
+  const k2 = one(run(inp([], { bank: { accounts: [{ id: "a1", ledger: "HDFC Bank" }], rows: [row({ acct: "a1" })] } })), "bank_no_bill")[0].key;
+  eq([k1, k1 === k2], ["bank:s1:r1", true], "H1: the bank line's key is the statement's and the line's");
+  // M1: an invoice already settled by a receipt in the books is no candidate
+  const inv = sale("20261028", "Sample Retail", 26500), rec = V("20261030", "Receipt", [["HDFC Bank", -26500], ["Sample Retail", 26500]], { party: "Sample Retail" });
+  r = run(inp([inv, rec], B([row({ narr: "NEFT/SAMPLE RETAIL", dec: { name: "SAMPLE RETAIL" } })])));
+  eq(one(r, "bank_no_bill")[0].state, "ask", "M1: the invoice was paid already (a receipt in the books): not a candidate");
+  r = run(inp([inv], B([row({ narr: "NEFT/SAMPLE RETAIL", dec: { name: "SAMPLE RETAIL" } })])));
+  eq(one(r, "bank_no_bill")[0].state, "resolved", "M1: the same invoice still open: resolved");
+  // M1: a bill already posted to Tally is not a candidate for an advance (it is in the books)
+  const ADV = pay("20260812", "ABC Traders", 250000);
+  r = run(inp([ADV], { bills: [fbill(1, "ABC Traders", "07AAAAA0000A1Z5", "AT/77", "2026-10-02", 250000, { status: "posted" })] }));
+  eq(one(r, "advance_open")[0].state, "ask", "M1: a posted bill is not a candidate (it would be in the books)");
+  // GSTIN mismatch blocks a name match
+  r = run(inp([ADV], { bills: [fbill(1, "ABC Traders", "29ZZZZZ9999Z1Z5", "AT/77", "2026-10-02", 250000)] }));
+  eq(one(r, "advance_open")[0].state, "ask", "GSTIN differs from the party's: no match, even with the same name");
+  // 2B candidates for an advance: within 365 days
+  r = run(inp([pay("20250901", "ABC Traders", 250000)], { today: "20261122", twob: [{ gstin: "07AAAAA0000A1Z5", party: "ABC", no: "AT-9", date: "20261002", taxable: 250000, igst: 0, cgst: 0, sgst: 0, cess: 0 }] }));
+  eq(one(r, "advance_open")[0].state === "resolved", false, "an advance's 2B bill more than 365 days after it: not resolved");
+  // M2: expense jump: no empty name matches an empty name
+  const rep = (d, a, party) => V(d, "Journal", [["Repairs", -a], ["Sample Hardware", a]], { party, narr: "x" });
+  r = run(inp([rep("20260710", 22000, "x"), rep("20260810", 21000, "x"), rep("20260910", 22700, "x"), rep("20261012", 184000, "")], { bills: [fbill(4, "", "", "R1", "2026-10-10", 184000)] }));
+  eq(one(r, "expense_jump")[0].state, "ask", "M2: a bill with no name never matches an entry with no party");
+  // M5: a bill an earlier finding owns is no tie for tonight's other finding
+  const A1 = pay("20260812", "ABC Traders", 250000), A2 = pay("20260815", "ABC Traders", 250000), Bl = fbill(1, "ABC Traders", "07AAAAA0000A1Z5", "AT/77", "2026-10-02", 250000);
+  const first = run(inp([A1], { bills: [Bl] })), k = one(first, "advance_open")[0].key;
+  r = run(inp([A1, A2], { bills: [Bl], prior: [{ kind: "advance_open", key: k, state: "resolved", evidence: [{ ref: "bill:e1" }] }] }));
+  eq(one(r, "advance_open").map((f) => [f.key === k, f.state]), [[true, "resolved"], [false, "ask"]], "M5: the earlier finding keeps its bill; the new one is asked, no churn");
+}
+
+// ---------------------------------------------------------------- opening balances (staging: tally_ledgers.open, a debit negative)
+{
+  // last year's bill of ₹2,50,000 owed to ABC Traders, paid on 12-Aug: no advance
+  let r = run(inp([pay("20260812", "ABC Traders", 250000)], { open: { "ABC Traders": 250000 }, booksFrom: "20260401" }));
+  eq(one(r, "advance_open").length + one(r, "wrong_side").length, 0, "opening: a payment of last year's bill is no advance");
+  // the opening bill takes the payment first: a receipt's invoice of this year stays open for the bank check
+  const inv = sale("20261028", "Sample Retail", 26500), rec = V("20260410", "Receipt", [["HDFC Bank", -40000], ["Sample Retail", 40000]], { party: "Sample Retail" });
+  r = run(inp([inv, rec], { open: { "Sample Retail": -40000 }, booksFrom: "20260401", bank: { accounts: [{ id: "a1", ledger: "HDFC Bank" }], rows: [{ id: "r1", acct: "a1", sid: "s1", date: "2026-11-10", narr: "NEFT/SAMPLE RETAIL", debit: 0, credit: 26500, ledger: "", state: "attention", dec: { name: "SAMPLE RETAIL" } }] } }));
+  eq(one(r, "bank_no_bill")[0].state, "resolved", "opening: a receipt of last year's balance does not settle this year's invoice");
+  eq(one(r, "advance_open").length, 0, "opening: no advance from a customer who paid last year's balance");
+  // suspense carried in
+  r = run(inp([], { open: { "Suspense": -5000 }, booksFrom: "20260401" }));
+  eq(one(r, "suspense").length, 1, "opening: suspense carried in is found");
 }
 
 // ---------------------------------------------------------------- small pieces

@@ -62,12 +62,14 @@ const closeish = (a, c) => { const d = Math.abs(r2(a) - r2(c)); return d > TOL &
 // src/js/21-repairing-a-statement.js ledgerKey, and GST2B.normNo (server/_shared/gst3b.js)
 export const ledgerKey = (s) => String(s || "").toLowerCase().replace(/&/g, "and").replace(/[^a-z0-9]+/g, "");
 export const normNo = (s) => String(s || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
-// a party named in a bank line: its decoded name is the party's, or the narration holds the party's whole key (5+ letters)
+// a party named in a bank line (review H2): "exact" only when the line's decoded name IS the party's (by ledgerKey);
+// the party's name somewhere in the narration ("RAMESHWAR ENTERPRISES" holds "Ramesh") is only "near": Needs you, never
+// resolved
 export function names(row, party) {
   const k = ledgerKey(party);
-  if (!k) return false;
-  if (row.dec && row.dec.name && ledgerKey(row.dec.name) === k) return true;
-  return k.length >= 5 && ledgerKey(row.narr).includes(k);
+  if (!k) return "";
+  if (row.dec && row.dec.name && ledgerKey(row.dec.name) === k) return "exact";
+  return k.length >= 4 && ledgerKey(row.narr).includes(k) ? "near" : "";
 }
 
 // ---------------------------------------------------------------- the group tests (src/js/06-audit.js Audit.is*)
@@ -98,8 +100,12 @@ export function groupsOf(books) {
   };
   return A;
 }
-const isSale = (v) => /SALES|CREDIT NOTE/i.test(v.type) && !/PURCHASE/i.test(v.type);
-const isPurchase = (v) => /PURCHASE|DEBIT NOTE/i.test(v.type);
+const isSaleRe = (v) => /SALES?\b|CREDIT NOTE/i.test(v.type) && !/PURCHASE/i.test(v.type);
+const isPurchaseRe = (v) => /PURCHASE|DEBIT NOTE/i.test(v.type);
+// books.isSale / isPurchase: the app's own (Books.isSale, by type and by content) where the caller has them; set at each
+// entry point (one call at a time: no await inside)
+let isSale = isSaleRe, isPurchase = isPurchaseRe;
+const use = (books) => { isSale = (books && books.isSale) || isSaleRe; isPurchase = (books && books.isPurchase) || isPurchaseRe; };
 const live = (books) => (books.vouchers || []).filter((v) => v && v.date && !v.opt && !v.cancel);
 
 // ---------------------------------------------------------------- the ported checks (the browser's rows, for the test)
@@ -164,6 +170,31 @@ export function ruleHits(rule, row, acc) {
   return (w.text || []).some((c) => String(c.v || "").trim() && c.op !== "not") || !!w.acNo || (w.modes || []).length > 0 || (w.amtMin !== "" && w.amtMin != null) || (w.amtMax !== "" && w.amtMax != null);
 }
 
+// each sale or purchase entry's amount still open after the party's receipts and payments in the books, first in first
+// out (as MIS ageing does for a party not kept bill-wise); kept per list of entries
+const OPEN = new WeakMap();
+let OPEN_BAL = {};
+export function openLeft(A, V, open) {
+  if (open) OPEN_BAL = open;
+  if (OPEN.has(V)) return OPEN.get(V);
+  const by = {}, left = new Map();
+  V.forEach((v) => v.ent.forEach((e) => { if (A.isCreditor(e.l) || A.isDebtor(e.l)) (by[e.l] = by[e.l] || []).push({ v, a: e.a }); }));
+  Object.keys(by).forEach((party) => {
+    const cred = A.isCreditor(party), bills = [];
+    // the opening balance first: an advance carried in is credit for the next bills; last year's bills are paid first
+    const o0 = r2(cred ? num((OPEN_BAL || {})[party]) : -num((OPEN_BAL || {})[party]));
+    let credit = o0 < 0 ? -o0 : 0;
+    if (o0 > 0) bills.push({ v: { id: "open" }, left: o0 });
+    by[party].sort((x, c) => x.v.date.localeCompare(c.v.date) || String(x.v.id).localeCompare(String(c.v.id))).forEach(({ v, a }) => {
+      let amt = r2(cred ? a : -a);
+      if (amt > 0) { const t = Math.min(credit, amt); credit = r2(credit - t); const x = { v, left: r2(amt - t) }; bills.push(x); left.set(v.id, x.left); }
+      else if (amt < 0) { let p = -amt; for (const x of bills) { if (p <= 0) break; const t = Math.min(x.left, p); x.left = r2(x.left - t); p = r2(p - t); left.set(x.v.id, x.left); } if (p > 0) credit = r2(credit + p); }
+    });
+  });
+  OPEN.set(V, left);
+  return left;
+}
+
 // ---------------------------------------------------------------- the checks (a) to (e)
 const F = (kind, key, facts) => ({ kind, key, facts });
 
@@ -172,11 +203,16 @@ const F = (kind, key, facts) => ({ kind, key, facts });
 function advances(inp, A, V, out) {
   const by = {};
   V.forEach((v) => v.ent.forEach((e) => { if (A.isCreditor(e.l) || A.isDebtor(e.l)) (by[e.l] = by[e.l] || []).push({ v, a: e.a }); }));
-  const open = {};
+  const open = {}, ob = inp.open || {}, from = inp.booksFrom || (V[0] && V[0].date) || inp.today;
+  Object.keys(ob).forEach((l) => { if ((A.isCreditor(l) || A.isDebtor(l)) && !by[l] && Math.abs(num(ob[l])) >= 0.01) by[l] = []; });
   Object.keys(by).sort().forEach((party) => {
     const cred = A.isCreditor(party), rows = by[party].sort((x, c) => x.v.date.localeCompare(c.v.date) || String(x.v.id).localeCompare(String(c.v.id)));
     // for a supplier a bill is a credit (a > 0) and a payment a debit; for a customer the other way round
     const bills = [], adv = [];
+    // the opening balance first (Tally's sign, a debit negative): last year's bills still owed, or an advance carried in
+    const o0 = r2(cred ? num(ob[party]) : -num(ob[party]));
+    if (o0 > 0) bills.push({ left: o0 });
+    else if (o0 < 0) adv.push({ v: { id: "open", date: from }, left: -o0 });
     rows.forEach(({ v, a }) => {
       let amt = r2(cred ? a : -a);
       if (amt > 0) {   // a bill: takes up the oldest advances first, else waits
@@ -191,6 +227,8 @@ function advances(inp, A, V, out) {
     open[party] = adv;
     adv.forEach((x) => {
       if (x.left < LIMITS.wrongSide || daysBetween(x.v.date, inp.today) <= LIMITS.advanceDays) return;
+      // carried in from last year (no payment of this book): a balance on the wrong side, asked as such
+      if (x.v.id === "open") { out.push(F("wrong_side", "ws:" + ledgerKey(party), { party, amt: x.left, side: cred ? "supplier" : "customer", date: inp.today })); return; }
       out.push(F("advance_open", "adv:" + ledgerKey(party) + ":" + x.v.id, { party, side: cred ? "paid" : "received", amt: x.left, date: x.v.date, vid: x.v.id, days: daysBetween(x.v.date, inp.today) }));
     });
   });
@@ -230,9 +268,10 @@ function bank(inp, out) {
   const bk = inp.bank || {}, rows = bk.rows || [];
   rows.forEach((r) => {
     const d = ymd(r.date), amt = r2(r.debit || r.credit);
-    if (!d || !amt || r.ledger || /posted|ready|done/i.test(String(r.state || ""))) return;
+    // explained: sent, in Tally, ready or ignored, or a ledger a person set; a "suggested" ledger is FinCom's guess, checked here
+    if (!d || !amt || ["sent", "intally", "ready", "ignored"].includes(String(r.state || "")) || (r.userSet && r.ledger)) return;
     if (daysBetween(d, inp.today) < 3) return;   // too new: the day's own posting comes first
-    out.push(F("bank_no_bill", "bank:" + r.acct + ":" + r.id, { party: (r.dec && r.dec.name) || shortNarr(r.narr), amt, date: d, dir: r.debit ? "out" : "in", row: r.id, acct: r.acct, sid: r.sid || "", narr: String(r.narr || "").slice(0, 120) }));
+    out.push(F("bank_no_bill", "bank:" + (r.sid || r.acct) + ":" + r.id, { party: (r.dec && r.dec.name) || shortNarr(r.narr), amt, date: d, dir: r.debit ? "out" : "in", row: r.id, acct: r.acct, sid: r.sid || "", narr: String(r.narr || "").slice(0, 120) }));
   });
   const lastFull = ymAdd(ymOf(inp.today), -1);
   (bk.accounts || []).forEach((a) => {
@@ -288,6 +327,7 @@ function salary(inp, A, V, out) {
 }
 
 export function checks(inp) {
+  use(inp.books);
   const books = inp.books || {}, A = groupsOf(books), V = live(books).sort((a, c) => a.date.localeCompare(c.date)), out = [];
   if (inp.today) {
     advances(inp, A, V, out); unusual(inp, A, V, out); bank(inp, out); gst(inp, A, V, out); salary(inp, A, V, out);
@@ -299,12 +339,18 @@ export function checks(inp) {
 // Each candidate: {t: entry|doc|rule|twob|salary|challan|history, ref (unique: nothing is used twice), label, ledger?,
 // work?}. exact: passes every test; near: fails one by a little (Needs you, never resolved).
 const billLive = (b) => b && b.x && !/rejected|deleted|removed/i.test(String(b.status || ""));
+// a bill posted to Tally is in the books (and settled there, first in first out): only bills not posted yet are candidates
+const billOpen = (b) => billLive(b) && !b.exportedAt && !/posted|exported|done/i.test(String(b.status || ""));
 const billTotal = (b) => r2(num(b.x.total) || (num(b.x.taxable) + num(b.x.cgst) + num(b.x.sgst) + num(b.x.igst)));
-const billParty = (b, party, gstin) => (gstin && String(b.x.vendorGstin || "").toUpperCase() === gstin) || (!!ledgerKey(b.x.vendorName) && ledgerKey(b.x.vendorName) === ledgerKey(party)) || (!!b.partyLedger && b.partyLedger === party);
+const billParty = (b, party, gstin) => {
+  const bg = String(b.x.vendorGstin || "").toUpperCase();
+  if (gstin && bg) return bg === gstin;                     // two GSTINs: they decide (a mismatch blocks a name match)
+  return (!!ledgerKey(b.x.vendorName) && ledgerKey(b.x.vendorName) === ledgerKey(party)) || (!!b.partyLedger && b.partyLedger === party);
+};
 const billCand = (b) => ({ t: "doc", ref: "bill:" + b.id, label: "Bill " + (b.x.invoiceNo || "") + " · " + dmon(ymd(b.x.invoiceDate)) + " · " + inr(billTotal(b)), work: b.id });
 
 function candidates(f, inp, A, V) {
-  const exact = [], nearL = [], x = f.facts, bills = (inp.bills || []).filter(billLive), gstinOf = (l) => String(((inp.books || {}).gstin || {})[l] || "").toUpperCase();
+  const exact = [], nearL = [], x = f.facts, bills = (inp.bills || []).filter(billOpen), gstinOf = (l) => String(((inp.books || {}).gstin || {})[l] || "").toUpperCase();
   const add = (list, c) => { if (!list.some((y) => y.ref === c.ref)) list.push(c); };
   if (f.kind === "advance_open" || f.kind === "wrong_side") {
     const g = gstinOf(x.party), after = f.kind === "advance_open" ? x.date : "";
@@ -316,7 +362,7 @@ function candidates(f, inp, A, V) {
       });
       (inp.twob || []).forEach((p) => {
         if (!g || p.gstin !== g) return;
-        const d = ymd(p.date), t = r2(num(p.taxable) + num(p.igst) + num(p.cgst) + num(p.sgst) + num(p.cess)), inDate = !!d && d >= after && d <= inp.today;
+        const d = ymd(p.date), t = r2(num(p.taxable) + num(p.igst) + num(p.cgst) + num(p.sgst) + num(p.cess)), inDate = !!d && d >= after && d <= inp.today && (!after || daysBetween(after, d) <= 365);
         // a 2B bill that is also FinCom's bill (same GSTIN and number) is the same candidate
         if (bills.some((b) => String(b.x.vendorGstin || "").toUpperCase() === p.gstin && normNo(b.x.invoiceNo) === normNo(p.no))) return;
         const c = { t: "twob", ref: "2b:" + p.gstin + ":" + normNo(p.no), label: "2B: bill " + p.no + " · " + dmon(d) + " · " + inr(t) };
@@ -335,27 +381,31 @@ function candidates(f, inp, A, V) {
   } else if (f.kind === "expense_jump") {
     const ms0 = x.ym + "01", me = ymAdd(x.ym, 1) + "01", jump = x.amt - x.avg;
     const big = V.filter((v) => v.date >= ms0 && v.date < me).map((v) => ({ v, a: v.ent.filter((e) => e.l === x.party && e.a < 0).reduce((s, e) => s - e.a, 0) })).filter((y) => y.a >= 0.8 * jump);
-    if (big.length === 1) bills.forEach((b) => { if (near(billTotal(b), big[0].a) && ledgerKey(b.x.vendorName) === ledgerKey(big[0].v.party)) add(exact, billCand(b)); });
+    if (big.length === 1) bills.forEach((b) => { if (near(billTotal(b), big[0].a) && !!ledgerKey(b.x.vendorName) && ledgerKey(b.x.vendorName) === ledgerKey(big[0].v.party)) add(exact, billCand(b)); });
   } else if (f.kind === "bank_no_bill") {
-    const row = ((inp.bank || {}).rows || []).find((r) => r.id === x.row && r.acct === x.acct) || {}, acc = ((inp.bank || {}).accounts || []).find((a) => a.id === x.acct);
+    const row = ((inp.bank || {}).rows || []).find((r) => r.id === x.row && (r.sid || r.acct) === (x.sid || x.acct)) || {}, acc = ((inp.bank || {}).accounts || []).find((a) => a.id === x.acct);
     // 1. written rules
     (inp.rules || []).forEach((r, i) => { if (ruleHits(r, row, acc)) { const led = r.then && (r.then.ledger || (r.then.kind && (inp.ledgersFor || {})[r.then.kind])) || ""; if (led) add(exact, { t: "rule", ref: "rule:" + (r.id || i) + ":" + x.row, label: "Rule: " + (r.name || (r.when.text || []).map((c) => "“" + c.v + "”").join(" + ")) + " → " + led, ledger: led }); } });
     // 2. bills and invoices of the party the line names
-    if (x.dir === "out") bills.forEach((b) => { if (!names(row, b.x.vendorName)) return; const d = ymd(b.x.invoiceDate), t = billTotal(b);
+    if (x.dir === "out") bills.forEach((b) => { const nm = names(row, b.x.vendorName); if (!nm) return; const d = ymd(b.x.invoiceDate), t = billTotal(b);
       const c = Object.assign(billCand(b), { ledger: b.partyLedger || b.x.vendorName });
-      if (near(t, x.amt) && d && d <= x.date) add(exact, c); else if (closeish(t, x.amt)) add(nearL, c); });
+      if (near(t, x.amt) && d && d <= x.date) add(nm === "exact" ? exact : nearL, c); else if (closeish(t, x.amt)) add(nearL, c); });
     V.forEach((v) => {
       const sale = isSale(v) && x.dir === "in", buy = isPurchase(v) && x.dir === "out";
       if (!sale && !buy) return;
       const p = v.ent.find((e) => (sale ? e.a < 0 && A.isDebtor(e.l) : e.a > 0 && A.isCreditor(e.l)));
-      if (!p || !names(row, p.l)) return;
+      const nm = p && names(row, p.l);
+      if (!nm) return;
+      // review M1: an invoice or bill already settled by receipts or payments in the books is no candidate
+      const left = openLeft(A, V, inp.open || {}).get(v.id);
+      if (left != null && left < Math.abs(p.a) - TOL) return;
       const t = Math.abs(p.a), okDate = sale ? v.date <= addDays(x.date, 7) : v.date <= x.date;
       const c = { t: "entry", ref: "vch:" + v.id, label: v.type + " " + (v.no || v.ref || "") + " · " + dmon(v.date) + " · " + inr(t), ledger: p.l };
-      if (near(t, x.amt) && okDate) add(exact, c); else if (closeish(t, x.amt)) add(nearL, c);
+      if (near(t, x.amt) && okDate) add(nm === "exact" ? exact : nearL, c); else if (closeish(t, x.amt)) add(nearL, c);
     });
     // 3. a 2B bill of a supplier the line names (the books do not have it yet)
-    if (x.dir === "out") (inp.twob || []).forEach((p) => { if (!names(row, p.party)) return; const t = r2(num(p.taxable) + num(p.igst) + num(p.cgst) + num(p.sgst) + num(p.cess));
-      const c = { t: "twob", ref: "2b:" + p.gstin + ":" + normNo(p.no), label: "2B: bill " + p.no + " of " + p.party + " · " + inr(t), ledger: p.party }; if (near(t, x.amt)) add(exact, c); else if (closeish(t, x.amt)) add(nearL, c); });
+    if (x.dir === "out") (inp.twob || []).forEach((p) => { const nm = names(row, p.party); if (!nm) return; const t = r2(num(p.taxable) + num(p.igst) + num(p.cgst) + num(p.sgst) + num(p.cess));
+      const c = { t: "twob", ref: "2b:" + p.gstin + ":" + normNo(p.no), label: "2B: bill " + p.no + " of " + p.party + " · " + inr(t), ledger: p.party }; if (near(t, x.amt)) add(nm === "exact" ? exact : nearL, c); else if (closeish(t, x.amt)) add(nearL, c); });
     // 4. salary: the sheet's net pay for the month (or the month before), a line that says salary
     if (x.dir === "out" && /SALAR|WAGES/i.test(row.narr || "")) [ymOf(x.date), ymAdd(ymOf(x.date), -1)].forEach((m) => {
       const net = r2((inp.salary || []).filter((r) => sheetMonth(r) === m).reduce((s, r) => s + sheetNet(r), 0));
@@ -370,10 +420,21 @@ function candidates(f, inp, A, V) {
     V.forEach((v) => { const back = daysBetween(v.date, x.date); if (back < 20 || back > 130) return;
       v.ent.forEach((e) => { if (e.a < 0 && A.isLoan(e.l) && near(-e.a, x.amt) && Math.abs(+v.date.slice(6, 8) - +x.date.slice(6, 8)) <= 3) (emi[e.l] = emi[e.l] || new Set()).add(ymOf(v.date)); }); });
     if (x.dir === "out") Object.keys(emi).forEach((l) => { if (emi[l].size >= 3) add(exact, { t: "history", ref: "emi:" + ledgerKey(l) + ":" + x.row, label: "EMI: same amount to " + l + " in " + emi[l].size + " months", ledger: l }); });
-    // 7. the same line set by a person before (same name, same amount)
-    (inp.history || []).forEach((h, i) => { if (h.name && row.dec && ledgerKey(h.name) === ledgerKey(row.dec.name) && near(h.amt, x.amt) && h.ledger) add(exact, { t: "history", ref: "hist:" + i + ":" + x.row, label: "Set by hand before: " + h.ledger, ledger: h.ledger }); });
+    // 7. rules the bank learnt from a person's choices (bank_meta.rules: {key, dir, ledger}; src/js/96 newled): the line's
+    // decoded key, the same direction or any
+    const dk = row.dec && row.dec.key;
+    if (dk) (inp.learned || []).forEach((r) => { if (r && r.key === dk && r.ledger && (r.dir === "any" || r.dir === x.dir)) add(exact, { t: "rule", ref: "learnt:" + r.key + ":" + x.row, label: "Learnt: " + (r.label || r.key) + " → " + r.ledger, ledger: r.ledger }); });
+    // 8. what people chose before for the same party (bank_meta.hist.rows: {k, d, l, s}): twice or more, always the same
+    // ledger; two ledgers before is no answer
+    if (dk) {
+      const before = (inp.history || []).filter((h) => h && h.k === dk && h.l && (!h.d || h.d === x.dir) && /^(you|accepted|hand|confirm|rule-written)$/.test(String(h.s || "you")));
+      const leds = Array.from(new Set(before.map((h) => h.l)));
+      if (before.length >= 2 && leds.length === 1) add(exact, { t: "history", ref: "hist:" + dk + ":" + x.row, label: "Same as before (" + before.length + " times): " + leds[0], ledger: leds[0] });
+      else if (leds.length > 1) leds.forEach((l) => add(nearL, { t: "history", ref: "hist:" + dk + ":" + l + ":" + x.row, label: "Before: " + l, ledger: l }));
+    }
   } else if (f.kind === "twob_not_in_books") {
-    bills.forEach((b) => {
+    // any bill FinCom holds, posted or not: the client need not send it again (a posted one makes no entry)
+    (inp.bills || []).filter(billLive).forEach((b) => {
       if (String(b.x.vendorGstin || "").toUpperCase() !== x.gstin || normNo(b.x.invoiceNo) !== normNo(x.no)) return;
       const c = Object.assign(billCand(b), { label: "Inbox: bill " + (b.x.invoiceNo || "") + " · " + inr(billTotal(b)) });
       if (near(billTotal(b), x.amt)) add(exact, c); else add(nearL, c);
@@ -389,6 +450,7 @@ const target = (c) => (DOCS.includes(c.t) ? c.ref : "") + "|" + (c.ledger || "")
 export const oneAnswer = (list) => list.length > 0 && new Set(list.map(target)).size === 1;
 
 export function answer(raw, inp) {
+  use(inp.books);
   const books = inp.books || {}, A = groupsOf(books), V = live(books).sort((a, c) => a.date.localeCompare(c.date));
   const prior = inp.prior || [], undone = new Set(prior.filter((p) => p.undone).map((p) => p.kind + "|" + p.key));
   // evidence already used by another finding (resolved on an earlier night, not undone)
@@ -397,7 +459,7 @@ export function answer(raw, inp) {
   const all = raw.map((f) => Object.assign({}, f, candidates(f, inp, A, V)));
   // a document or entry that fits two findings tonight is a tie for both (never picked)
   const count = new Map();
-  all.forEach((f) => f.exact.forEach((c) => { if (!/^rule:|^hist:|^emi:/.test(c.ref)) count.set(c.ref, (count.get(c.ref) || 0) + 1); }));
+  all.forEach((f) => f.exact.forEach((c) => { if (!/^rule:|^hist:|^emi:/.test(c.ref) && !usedBy.has(c.ref)) count.set(c.ref, (count.get(c.ref) || 0) + 1); }));
   return all.map((f) => {
     const me = f.kind + "|" + f.key, free = [], contested = [];
     f.exact.forEach((c) => {
@@ -509,7 +571,7 @@ export function entriesFor(findings, inp) {
     } else if (f.kind === "bank_no_bill") {
       const c = f.evidence[0], acc = ((inp.bank || {}).accounts || []).find((a) => a.id === x.acct) || {}, bankL = acc.ledger || "", against = c.ledger || "";
       const lines = x.dir === "out" ? [{ ledger: against, dr: x.amt }, { ledger: bankL, cr: x.amt }] : [{ ledger: bankL, dr: x.amt }, { ledger: against, cr: x.amt }];
-      out.push(made(f, "bank_self_answer", "row:" + x.acct + ":" + x.row, (x.sid || x.acct) + ":" + x.row, { type: x.dir === "out" ? "Payment" : "Receipt", date: x.date, no: "", party: against, bank: bankL, against, lines,
+      out.push(made(f, "bank_self_answer", "row:" + (x.sid || x.acct) + ":" + x.row, (x.sid || x.acct) + ":" + x.row, { type: x.dir === "out" ? "Payment" : "Receipt", date: x.date, no: "", party: against, bank: bankL, against, lines,
         narration: x.narr }, { rule: "Your rule", entry: "Invoice match", doc: "Bill match", twob: "2B bill", salary: "Salary sheet", challan: "Challan match", history: "Same as before" }[c.t] || "Matched", inp));
     }
   });

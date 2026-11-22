@@ -28,6 +28,7 @@ const ed = d1.map((f) => f.ask && f.ask.id === "q1" ? { ...f, ask: { ...f.ask, e
 ok(message(CLIENTS[0], sendable(ed, pick)).text.includes("1. Has the ABC Traders bill come?"), "an edited question goes as edited, numbered");
 ok(message(CLIENTS[0], []).text === "", "nothing to ask: no message");
 ok(message(CLIENTS[0], only, { test: true }).text.startsWith("[TEST"), "test mode marks the message");
+ok(!/[\r\n]/.test(message({ name: "Evil\r\nBcc: x@y" }, only, { firm: "F\nG" }).subject), "a name with a line break never breaks the subject");
 ok(waLink("90000 11111", "hi") === "https://wa.me/919000011111?text=hi", "a 10-digit number gets 91");
 ok(waLink("", "hi") === "", "no number: no link");
 console.log(fails ? fails + " failed" : "all passed");

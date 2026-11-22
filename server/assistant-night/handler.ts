@@ -12,8 +12,14 @@ import { load } from "../gst-run/data.ts";
 import { booksOf, twobOnly, nightInput } from "./nightinput.js";
 // @ts-ignore plain JavaScript, shared with the Node tests
 import { run } from "../_shared/nightchecks.js";
+// @ts-ignore plain JavaScript, shared with the Node tests
+import { ENGINE } from "../gst-run/engine.js";
 
-export type Deps = { env: (k: string) => string | undefined; fetch: typeof fetch; now?: () => Date };
+export type Deps = { env: (k: string) => string | undefined; fetch: typeof fetch; now?: () => Date; ready?: number; total?: number };
+// the run's own work, not the waits for the database (an edge function's CPU limit counts the same): making the books over
+// READY ms keeps the entries made (gst_calc_prep, as gst-run does) and the next tick goes on from them; the whole run over
+// TOTAL ms is stopped and said so
+const READY = 1100, TOTAL = 1800;
 const enc = encodeURIComponent;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export const istDay = (d: Date) => new Date(d.getTime() + 5.5 * 3600_000).toISOString().slice(0, 10);
@@ -44,16 +50,28 @@ export function handler(deps: Deps) {
   async function client(firm: string, cid: string) {
     const night = istDay(now()), ym = night.slice(0, 7).replace("-", "");
     const fail = (status: string, why: string) => rpc("night_fail", { p_firm: firm, p_client: cid, p_night: night, p_status: status, p_why: why }).catch(() => null);
-    const gate = await firmGate(viaRest(rest, SERVICE), firm, cid).catch(() => null);
+    // the console's switches: when they cannot be read, nothing is checked (closed, not open); the next tick tries again
+    // (firmGate itself lets a failed read through, for the pages; here a read that failed for any reason but a column this
+    // database does not have stops the night for the client)
+    let gate: any, unread = false;
+    const read = viaRest(rest, SERVICE);
+    const watched = async (t: any, cols: string, eq: Record<string, string>) => { try { return await read(t, cols, eq); } catch (e) { if (!/does not exist|42703|PGRST204|schema cache/i.test(String((e as Error)?.message || e))) unread = true; throw e; } };
+    try { gate = await firmGate(watched as any, firm, cid); } catch { unread = true; }
+    if (unread) { await fail("failed", "the console's switches could not be read"); return { ok: false, error: "gate" }; }
     if (gate) { await fail("skipped", gate.reason); return { ok: true, skipped: gate.reason }; }
-    const co = ((await rest("/rest/v1/clients?select=*&firm_id=eq." + enc(firm) + "&id=eq." + enc(cid))) || [])[0];
-    if (!co || co.deleted) { await fail("skipped", "no such client"); return { ok: true, skipped: "client" }; }
+    // the client's settings are its record's data (as gst-run reads them: closed periods, GST settings, bank accounts)
+    const cl = ((await rest("/rest/v1/clients?select=id,data,deleted&firm_id=eq." + enc(firm) + "&id=eq." + enc(cid))) || [])[0];
+    if (!cl || cl.deleted) { await fail("skipped", "no such client"); return { ok: true, skipped: "client" }; }
+    const co = Object.assign({}, cl.data || {}, { id: cl.id, deleted: !!cl.deleted });
     const bookId = await rpc("gst_calc_book", { p_firm: firm, p_client: cid, p_ym: ym }).catch(() => null);
     const book = bookId ? ((await rest("/rest/v1/tally_books?select=book_id,firm_id,client_id,company,from_date,open_as_on,ledgers_at&book_id=eq." + enc(String(bookId)))) || [])[0] : null;
     if (!book) { await fail("skipped", "no books in the cloud"); return { ok: true, skipped: "books" }; }
     const gstins: string[] = await rpc("gst_calc_gstins", { p_book: book.book_id, p_client: cid }).catch(() => []) || [];
     const fys = Array.from(new Set([fyOf(night), fyOf(new Date(now().getTime() - 400 * 86400_000).toISOString().slice(0, 10))]));
-    const rows = await load((p: string) => rest(p), rpc, firm, cid, book, co, fys, gstins);
+    // a large book's entries as an earlier run made them (gst_calc_prep, migration 162), when kept on the book's version
+    const bver = String(await rpc("tally_calc_version", { p_book: book.book_id }).catch(() => "") || "");
+    const prep = bver ? await rpc("gst_calc_prep_get", { p_book: book.book_id, p_version: bver, p_engine: ENGINE }).catch(() => null) : null;
+    const rows = await load((p: string) => rest(p), rpc, firm, cid, book, co, fys, gstins, Array.isArray(prep) ? prep : undefined);
     const w = "firm_id=eq." + enc(firm) + "&client_id=eq." + enc(cid);
     const [bankRecs, inboxRecs, entryRecs, prior] = await Promise.all([
       all((p) => rest(p), "/rest/v1/records?select=kind,id,data,deleted&" + w + "&kind=in.(bank_stmt,bank_rows,bank_meta)&deleted=not.is.true", "id"),
@@ -61,11 +79,21 @@ export function handler(deps: Deps) {
       all((p) => rest(p), "/rest/v1/records?select=id,data,deleted&" + w + "&kind=eq.entry&deleted=not.is.true", "id"),
       all((p) => rest(p), "/rest/v1/night_findings?select=kind,key,state,evidence,undone_at&" + w, "key"),
     ]);
+    const firmRow = ((await rest("/rest/v1/firms?select=*&id=eq." + enc(firm)).catch(() => [])) || [])[0] || {};
+    const firmRules = Array.isArray(firmRow.data && firmRow.data.bankRules) ? firmRow.data.bankRules : [];
+    const t0 = Date.now(), spent = () => Date.now() - t0 + (rows.unpackMs || 0);
     const b = booksOf(rows);
+    if (spent() > (deps.ready || READY) && !rows.fromPrep) {
+      // too much for one run: the entries made are kept, the next tick goes on from them (the run is tried again)
+      const put = bver ? await rpc("gst_calc_prep_put", { p_book: book.book_id, p_version: bver, p_engine: ENGINE, p_vouchers: rows.made }).catch(() => false) : false;
+      await fail("failed", put === true ? "large books: prepared, goes on next tick" : "large books: could not be prepared");
+      return { ok: true, prepared: put === true };
+    }
     const twob = twobOnly(b, rows);
     const today = night.replace(/-/g, "");
-    const inp = nightInput(rows, b, { today, bankRecs, inboxRecs, entryRecs, twob, prior: prior.map((p: any) => ({ kind: p.kind, key: p.key, state: p.state, evidence: p.evidence, undone: !!p.undone_at })) });
+    const inp = nightInput(rows, b, { today, bankRecs, inboxRecs, entryRecs, twob, firmRules, prior: prior.map((p: any) => ({ kind: p.kind, key: p.key, state: p.state, evidence: p.evidence, undone: !!p.undone_at })) });
     const res = run(inp);
+    if (spent() > (deps.total || TOTAL) * 3) { await fail("failed", "too large for one run (" + spent() + " ms)"); return { ok: false, error: "too large" }; }
     const version = String(book.book_id) + ":" + (b.vouchers || []).length + ":" + (book.ledgers_at || "");
     const counts = await rpc("night_apply", { p_firm: firm, p_client: cid, p_night: night, p_version: version, p_findings: res.findings, p_entries: res.entries, p_complete: true, p_why: "" });
     return { ok: true, night, counts };

@@ -14,9 +14,11 @@
 --   night_entries        entries FinCom prepared (unique per dedupe), with why, evidence and the checks they passed;
 --                        "ready" only when every check passed, else "held"
 --   assistant_log        every action (night, undo, choose, edit, close, answer, approve, reject, send, setting, contact)
--- Functions: night_due / night_apply (service role only: the night function), finding_undo, finding_choose, ask_edit,
--- ask_close, ask_reopen, ask_answer, entry_decide (owners and staff: can_write), ask_send_prepare, ask_send_done,
--- prefs_set, assistant_mail_set (the firm's OWNER only).
+-- Functions: night_due / night_apply / night_fail / night_missed and ask_send_begin / ask_send_finish (service role only:
+-- the night and send functions), finding_undo, finding_choose, ask_edit, ask_close, ask_reopen, ask_answer, entry_decide
+-- (owners and staff: can_write), ask_send_prepare, ask_whatsapp_opened, prefs_set, assistant_mail_set (the OWNER only).
+-- Grants (review S1): every right Supabase gives anon and authenticated by default is taken back; then only what the page
+-- reads and calls. The send log and the action log are not readable from the page.
 -- Who: members of the firm read their firm's rows; nobody writes the questions, findings or entries directly (no write
 -- policy): only through the functions above, each checked and logged. Contacts: owners and staff, logged by a trigger.
 -- ADD-ONLY: new tables, their indexes, policies, grants (explicit) and new functions. No existing table, column, policy
@@ -119,7 +121,7 @@ create table if not exists public.ask_sends (
   test_mode boolean not null,
   ask_ids uuid[] not null default '{}',
   provider_id text,
-  status text not null check (status in ('sent', 'opened_link', 'failed', 'refused')),
+  status text not null check (status in ('sending', 'sent', 'opened_link', 'failed', 'refused')),
   why text not null default '',
   sent_by uuid not null,
   sent_at timestamptz not null default now()
@@ -182,11 +184,14 @@ begin
   end if;
 end $$;
 
+-- review S1: Supabase gives anon and authenticated every right on a new table; all taken back, then only what the page
+-- reads (and contacts, which owners and staff write under their policies). The send log and the action log are read by
+-- nobody but the service role (and the console).
 revoke all on public.client_contacts, public.assistant_prefs, public.assistant_mail, public.night_runs, public.night_findings,
-  public.client_asks, public.ask_sends, public.night_entries, public.assistant_log from anon, public;
+  public.client_asks, public.ask_sends, public.night_entries, public.assistant_log from public, anon, authenticated;
 grant select, insert, update on public.client_contacts to authenticated;
-grant select on public.assistant_prefs, public.assistant_mail, public.night_runs, public.night_findings, public.client_asks, public.ask_sends,
-  public.night_entries, public.assistant_log to authenticated;
+grant select on public.assistant_prefs, public.assistant_mail, public.night_runs, public.night_findings, public.client_asks, public.night_entries to authenticated;
+revoke all on sequence public.night_runs_id_seq, public.ask_sends_id_seq, public.assistant_log_id_seq from public, anon, authenticated;
 grant select, insert, update on public.client_contacts, public.assistant_prefs, public.assistant_mail, public.night_runs, public.night_findings,
   public.client_asks, public.ask_sends, public.night_entries, public.assistant_log to service_role;
 grant usage, select on sequence public.night_runs_id_seq, public.ask_sends_id_seq, public.assistant_log_id_seq to service_role;
@@ -205,11 +210,25 @@ $$;
 create or replace function public.asst_week(d date) returns date language sql immutable set search_path = '' as $$ select d - (extract(isodow from d)::int - 1) $$;
 
 -- contacts: every change logged
+-- an address in the log, masked: the first 2 letters and the domain of an email, the last 4 digits of a number
+create or replace function public.asst_mask(v text) returns text language sql immutable set search_path = '' as $$
+  select case when coalesce(v, '') = '' then '' when position('@' in v) > 0 then left(v, 2) || '…@' || split_part(v, '@', 2)
+              else '…' || right(regexp_replace(v, '\D', '', 'g'), 4) end
+$$;
+-- contacts: every change logged, with what changed (addresses masked)
 create or replace function public.client_contacts_logged() returns trigger language plpgsql security definer set search_path = '' as $$
+declare ch jsonb := '{}'::jsonb;
 begin
   new.updated_at := now();
-  insert into public.assistant_log (firm_id, client_id, what, ref, evidence, by_user)
-    values (new.firm_id, new.client_id, 'contact', new.id::text, jsonb_build_object('name', new.name, 'email', new.email <> '', 'whatsapp', new.whatsapp <> '', 'removed', new.removed_at is not null), auth.uid());
+  if tg_op = 'INSERT' then ch := jsonb_build_object('added', true, 'email', public.asst_mask(new.email), 'whatsapp', public.asst_mask(new.whatsapp));
+  else
+    if new.email is distinct from old.email then ch := ch || jsonb_build_object('email', public.asst_mask(old.email) || ' → ' || public.asst_mask(new.email)); end if;
+    if new.whatsapp is distinct from old.whatsapp then ch := ch || jsonb_build_object('whatsapp', public.asst_mask(old.whatsapp) || ' → ' || public.asst_mask(new.whatsapp)); end if;
+    if new.name is distinct from old.name then ch := ch || jsonb_build_object('name', true); end if;
+    if new.by_email is distinct from old.by_email or new.by_whatsapp is distinct from old.by_whatsapp then ch := ch || jsonb_build_object('send_by', true); end if;
+    if new.removed_at is not null and old.removed_at is null then ch := ch || jsonb_build_object('removed', true); end if;
+  end if;
+  insert into public.assistant_log (firm_id, client_id, what, ref, evidence, by_user) values (new.firm_id, new.client_id, 'contact', new.id::text, ch || jsonb_build_object('name', left(new.name, 60)), auth.uid());
   return new;
 end $$;
 drop trigger if exists client_contacts_logged on public.client_contacts;   -- made again just below: the only drop here (a trigger of this migration)
@@ -217,11 +236,19 @@ create trigger client_contacts_logged before insert or update on public.client_c
 
 -- ---------------------------------------------------------------- the night (service role only)
 -- the clients to check tonight (India date): no run yet, or a run stuck for 30 minutes, or failed (at most 3 tries);
--- each is claimed at once (running), so a timer that fires twice never checks a client twice
-create or replace function public.night_due(p_n integer default 4) returns table (firm_id uuid, client_id text) language plpgsql security definer set search_path = '' as $$
+-- each is claimed at once (running), so a timer that fires twice never checks a client twice. p_n null (the timer): as
+-- many as tonight's window needs, the clients left spread over the ticks left until 05:20 India time (review: every
+-- client every night), at most 60 a tick
+create or replace function public.night_due(p_n integer default null) returns table (firm_id uuid, client_id text) language plpgsql security definer set search_path = '' as $$
 #variable_conflict use_column
-declare v_night date := (now() at time zone 'Asia/Kolkata')::date;
+declare v_night date := (now() at time zone 'Asia/Kolkata')::date; v_left int; v_ticks int; v_n int;
 begin
+  select count(*) into v_left from public.clients cl
+   where not coalesce(cl.deleted, false) and coalesce(cl.status, 'active') = 'active'
+     and exists (select 1 from public.tally_books b where b.firm_id = cl.firm_id and b.client_id = cl.id::text)
+     and not exists (select 1 from public.night_runs r where r.firm_id = cl.firm_id and r.client_id = cl.id::text and r.night = v_night and r.status in ('ok', 'partial', 'skipped'));
+  v_ticks := greatest(1, ceil(extract(epoch from ((v_night + time '05:20') - (now() at time zone 'Asia/Kolkata'))) / 600.0)::int);
+  v_n := coalesce(p_n, least(60, greatest(4, ceil(v_left::numeric / v_ticks)::int)));
   return query
   with c as (
     select cl.firm_id, cl.id::text as client_id from public.clients cl
@@ -229,12 +256,30 @@ begin
        and exists (select 1 from public.tally_books b where b.firm_id = cl.firm_id and b.client_id = cl.id::text)
        and not exists (select 1 from public.night_runs r where r.firm_id = cl.firm_id and r.client_id = cl.id::text and r.night = v_night
                         and (r.status in ('ok', 'partial', 'skipped') or (r.status = 'running' and r.started_at > now() - interval '30 minutes') or r.tries >= 3))
-     order by cl.firm_id, cl.id limit greatest(1, least(p_n, 20))),
+     order by cl.firm_id, cl.id limit greatest(1, least(v_n, 60))),
   claim as (
     insert into public.night_runs as r (firm_id, client_id, night, status) select c.firm_id, c.client_id, v_night, 'running' from c
       on conflict (firm_id, client_id, night) do update set status = 'running', started_at = now(), tries = r.tries + 1
     returning r.firm_id, r.client_id)
   select claim.firm_id, claim.client_id from claim;
+end $$;
+
+-- after the window: every client with books not checked tonight gets a run row saying so, and one log line per firm
+create or replace function public.night_missed() returns integer language plpgsql security definer set search_path = '' as $$
+declare v_night date := (now() at time zone 'Asia/Kolkata')::date; n int := 0; r record;   -- run at 05:35 India time: tonight's date
+begin
+  for r in select cl.firm_id, cl.id::text as client_id from public.clients cl
+            where not coalesce(cl.deleted, false) and coalesce(cl.status, 'active') = 'active'
+              and exists (select 1 from public.tally_books b where b.firm_id = cl.firm_id and b.client_id = cl.id::text)
+              and not exists (select 1 from public.night_runs x where x.firm_id = cl.firm_id and x.client_id = cl.id::text and x.night = v_night and x.status in ('ok', 'partial', 'skipped')) loop
+    insert into public.night_runs as x (firm_id, client_id, night, status, why, finished_at) values (r.firm_id, r.client_id, v_night, 'failed', 'not reached tonight', now())
+      on conflict (firm_id, client_id, night) do update set status = 'failed', why = case when x.why = '' then 'not reached tonight' else x.why end, finished_at = now();
+    n := n + 1;
+  end loop;
+  insert into public.assistant_log (firm_id, client_id, what, ref, evidence)
+    select x.firm_id, '', 'night_missed', v_night::text, jsonb_build_object('clients', count(*), 'which', jsonb_agg(x.client_id)) from public.night_runs x
+     where x.night = v_night and x.status = 'failed' group by x.firm_id;
+  return n;
 end $$;
 
 -- one client's night: findings, questions, entries, the run, all at once and safe to repeat (rule 4)
@@ -251,10 +296,12 @@ begin
   for f in select * from jsonb_array_elements(coalesce(p_findings, '[]'::jsonb)) loop
     seen := seen || ((f->>'kind') || '|' || (f->>'key'));
     st := f->>'state'; ev := case when st = 'resolved' then coalesce(f->'evidence', '[]'::jsonb) else '[]'::jsonb end;
+    cur := null;
     select * into cur from public.night_findings x where x.firm_id = p_firm and x.client_id = p_client and x.kind = f->>'kind' and x.key = f->>'key';
-    if found then
+    if cur.id is not null then
       if cur.decided_by is not null or cur.state = 'dismissed' then st := cur.state; ev := cur.evidence;      -- a person's choice stays
-      elsif cur.undone_at is not null and st = 'resolved' then st := 'ask'; ev := '[]'::jsonb; end if;      -- undone: never resolved again
+      elsif cur.undone_at is not null and st = 'resolved' then                                               -- undone or rejected: never resolved again
+        st := case when cur.state = 'you' then 'you' else 'ask' end; ev := '[]'::jsonb; end if;
       update public.night_findings set facts = coalesce(f->'facts', '{}'::jsonb), state = st, evidence = ev,
         candidates = case when st = 'you' and cur.decided_by is null then coalesce(f->'candidates', '[]'::jsonb) else candidates end, last_seen = greatest(last_seen, p_night)
        where id = cur.id;
@@ -271,6 +318,10 @@ begin
       -- a new question; one a finding, ever: a closed or answered one is never made again (unique finding_id)
       insert into public.client_asks (firm_id, client_id, finding_id, week, text, history)
         values (p_firm, p_client, fid, wk, f->'facts'->>'ask_text', public.asst_hist(null, 'Found by the night check')) on conflict (finding_id) do nothing;
+      c_asks := c_asks + 1;
+    elsif st = 'ask' and q.id is not null and q.state = 'closed' and q.closed_by in ('document', 'entry') and cur.id is not null and cur.state = 'resolved' then
+      -- FinCom's answer is gone (the document or entry went): asked again, as a new Draft on this week's list
+      update public.client_asks set state = 'draft', closed_by = null, close_ref = null, week = wk, history = public.asst_hist(history, 'Asked again: FinCom''s answer is no longer there') where id = q.id;
       c_asks := c_asks + 1;
     elsif st = 'resolved' and q.id is not null and q.state <> 'closed' then
       -- closes by itself: the document came, or the entry is in the books
@@ -307,6 +358,13 @@ begin
   if p_complete then
     update public.night_entries set state = 'withdrawn', updated_at = now()
      where firm_id = p_firm and client_id = p_client and state in ('ready', 'held') and not (dedupe = any (eseen));
+    -- an approval the books and FinCom do not show (the night made the same entry again: its bill is still not approved, its
+    -- bank line still has no ledger) more than 30 minutes after it was recorded: put back as ready, logged
+    for e in select jsonb_build_object('id', n.id, 'dedupe', n.dedupe) from public.night_entries n
+              where n.firm_id = p_firm and n.client_id = p_client and n.state = 'approved' and n.dedupe = any (eseen) and n.decided_at < now() - interval '30 minutes' loop
+      update public.night_entries set state = 'ready', decided_by = null, decided_at = null, updated_at = now() where id = (e->>'id')::uuid;
+      insert into public.assistant_log (firm_id, client_id, what, ref, evidence) values (p_firm, p_client, 'approval_not_found', e->>'id', e);
+    end loop;
   end if;
   update public.night_runs set finished_at = now(), status = case when p_complete then 'ok' else 'partial' end, why = left(coalesce(p_why, ''), 500),
     counts = jsonb_build_object('findings', jsonb_array_length(coalesce(p_findings, '[]'::jsonb)), 'new', c_new, 'asks', c_asks, 'closed', c_closed, 'resolved', c_res, 'you', c_you, 'entries', c_ent, 'cleared', c_clear)
@@ -336,6 +394,9 @@ create or replace function public.finding_undo(p_id uuid) returns jsonb language
 declare r public.night_findings := public.asst_finding(p_id);
 begin
   if r.state <> 'resolved' then raise exception 'Only something FinCom answered can be undone.' using errcode = '22023'; end if;
+  if exists (select 1 from public.night_entries n where n.finding_id = r.id and n.state = 'approved') then
+    raise exception 'Its entry was approved. Undo it where it was approved (Purchase or Bank).' using errcode = '22023';
+  end if;
   update public.night_findings set state = 'ask', evidence = '[]'::jsonb, undone_by = auth.uid(), undone_at = now(), decided_by = null, decided_at = null where id = r.id;
   insert into public.client_asks as a (firm_id, client_id, finding_id, week, text, history)
     values (r.firm_id, r.client_id, r.id, public.asst_week((now() at time zone 'Asia/Kolkata')::date), coalesce(nullif(r.facts->>'ask_text', ''), 'Please tell us about this entry.'), public.asst_hist(null, 'Undone: FinCom''s answer put back as a question'))
@@ -361,6 +422,10 @@ begin
   else
     select x into c from jsonb_array_elements(r.candidates) x where x->>'ref' = p_ref;
     if c is null then raise exception 'That choice is not one of the candidates.' using errcode = '22023'; end if;
+    if exists (select 1 from public.night_findings o, jsonb_array_elements(o.evidence) ev
+                where o.firm_id = r.firm_id and o.client_id = r.client_id and o.id <> r.id and o.state = 'resolved' and o.undone_at is null and ev->>'ref' = p_ref) then
+      raise exception 'That one is already used for another item.' using errcode = '22023';
+    end if;
     update public.night_findings set state = 'resolved', evidence = jsonb_build_array(c), decided_by = auth.uid(), decided_at = now() where id = r.id;
   end if;
   perform public.asst_log(r.firm_id, r.client_id, 'choose', r.id::text, jsonb_build_object('kind', r.kind, 'choice', p_ref, 'candidate', c));
@@ -419,6 +484,11 @@ begin
   if p_decision not in ('approved', 'rejected') then raise exception 'Approve or reject.' using errcode = '22023'; end if;
   if r.state <> 'ready' and not (r.state = 'held' and p_decision = 'rejected') then raise exception 'This entry is not ready.' using errcode = '22023'; end if;
   update public.night_entries set state = p_decision, decided_by = auth.uid(), decided_at = now(), work_ref = coalesce(nullif(p_work_ref, ''), work_ref), updated_at = now() where id = r.id;
+  if p_decision = 'rejected' and r.finding_id is not null then
+    update public.night_findings set state = 'you', candidates = evidence, evidence = '[]'::jsonb, undone_by = auth.uid(), undone_at = now() where id = r.finding_id and state = 'resolved';
+    update public.client_asks set state = 'draft', closed_by = null, close_ref = null, history = public.asst_hist(history, 'Asked again: FinCom''s entry was rejected')
+     where finding_id = r.finding_id and state = 'closed' and closed_by in ('document', 'entry');
+  end if;
   perform public.asst_log(r.firm_id, r.client_id, p_decision, r.id::text, jsonb_build_object('source', r.source, 'work', coalesce(nullif(p_work_ref, ''), r.work_ref), 'voucher', r.voucher, 'evidence', r.evidence));
   return jsonb_build_object('ok', true);
 end $$;
@@ -441,28 +511,66 @@ begin
   select count(*) filter (where s.client_id = p_client and not s.test_mode), count(*) filter (where not s.test_mode), count(*) filter (where s.test_mode)
     into real_today, firm_today, test_today
     from public.ask_sends s where s.firm_id = f and s.channel = 'email' and s.status = 'sent' and s.sent_at > now() - interval '24 hours';
-  return jsonb_build_object('questions', qs, 'contacts', ct, 'real_send', coalesce(m.real_send, false), 'test_to', coalesce(m.test_to, ''), 'test_whatsapp', coalesce(m.test_whatsapp, ''),
+  return jsonb_build_object('firm_id', f, 'by', auth.uid(), 'questions', qs, 'contacts', ct, 'real_send', coalesce(m.real_send, false), 'test_to', coalesce(m.test_to, ''), 'test_whatsapp', coalesce(m.test_whatsapp, ''),
     'client', (select to_jsonb(cl)->>'name' from public.clients cl where cl.firm_id = f and cl.id::text = p_client),
     'firm', (select to_jsonb(fi)->>'name' from public.firms fi where fi.id = f), 'real_today', real_today, 'firm_today', firm_today, 'test_today', test_today);
 end $$;
-create or replace function public.ask_send_done(p_client text, p_ids uuid[], p_channel text, p_meant text[], p_sent_to text[], p_test boolean, p_provider text, p_status text, p_why text default '')
-returns jsonb language plpgsql security definer set search_path = '' as $$
-declare f uuid := public.my_firm(); n int := 0;
+-- review: the send log cannot be written by hand. The send function (service role) claims a send first: the firm's lock,
+-- the day's limits counted with the claim itself (atomic), a row "sending"; then finishes it with what Resend said. Only a
+-- real send that went marks the questions Asked; a test never does.
+create or replace function public.ask_send_begin(p_firm uuid, p_by uuid, p_client text, p_ids uuid[], p_channel text, p_meant text[], p_sent_to text[], p_test boolean)
+returns bigint language plpgsql security definer set search_path = '' as $$
+declare n_client int; n_firm int; n_test int; v bigint;
 begin
-  if f is null or not public.asst_is_owner() then raise exception 'Only the firm''s owner sends questions.' using errcode = '42501'; end if;
-  if p_status not in ('sent', 'opened_link', 'failed', 'refused') then raise exception 'Bad status.' using errcode = '22023'; end if;
-  insert into public.ask_sends (firm_id, client_id, channel, meant_for, sent_to, test_mode, ask_ids, provider_id, status, why, sent_by)
-    values (f, p_client, p_channel, coalesce(p_meant, '{}'), coalesce(p_sent_to, '{}'), coalesce(p_test, true), coalesce(p_ids, '{}'), p_provider, p_status, left(coalesce(p_why, ''), 500), auth.uid());
-  if p_status in ('sent', 'opened_link') then
-    -- a test never marks a question Asked: the client got nothing
-    update public.client_asks a set state = case when coalesce(p_test, true) then a.state else 'asked' end,
-      history = public.asst_hist(a.history, case when coalesce(p_test, true) then 'Test ' || p_channel || ' to the firm' when p_channel = 'email' then 'Emailed to ' || array_to_string(p_sent_to, ', ') else 'WhatsApp to ' || array_to_string(p_sent_to, ', ') end)
-     where a.firm_id = f and a.client_id = p_client and a.id = any (coalesce(p_ids, '{}')) and a.state in ('draft', 'asked')
+  if not exists (select 1 from public.members m where m.user_id = p_by and m.firm_id = p_firm and m.active and m.role = 'owner') then
+    raise exception 'Only the firm''s owner sends questions.' using errcode = '42501';
+  end if;
+  perform pg_advisory_xact_lock(hashtext('send|' || p_firm::text));
+  select count(*) filter (where s.client_id = p_client and not s.test_mode), count(*) filter (where not s.test_mode), count(*) filter (where s.test_mode)
+    into n_client, n_firm, n_test
+    from public.ask_sends s where s.firm_id = p_firm and s.channel = 'email' and s.status in ('sending', 'sent') and s.sent_at > now() - interval '24 hours';
+  if p_channel = 'email' and not coalesce(p_test, true) and (n_client >= 1 or n_firm >= 50) then raise exception 'Already emailed this client today. Try tomorrow.' using errcode = '22023'; end if;
+  if p_channel = 'email' and coalesce(p_test, true) and n_test >= 20 then raise exception '20 test emails today already. Try tomorrow.' using errcode = '22023'; end if;
+  insert into public.ask_sends (firm_id, client_id, channel, meant_for, sent_to, test_mode, ask_ids, status, sent_by)
+    values (p_firm, p_client, p_channel, coalesce(p_meant, '{}'), coalesce(p_sent_to, '{}'), coalesce(p_test, true), coalesce(p_ids, '{}'), 'sending', p_by) returning id into v;
+  return v;
+end $$;
+create or replace function public.ask_send_finish(p_send bigint, p_status text, p_provider text, p_why text default '') returns jsonb language plpgsql security definer set search_path = '' as $$
+declare s public.ask_sends; n int := 0;
+begin
+  select * into s from public.ask_sends where id = p_send and status = 'sending' for update;
+  if s.id is null then raise exception 'No such send.' using errcode = '22023'; end if;
+  if p_status not in ('sent', 'failed', 'refused') then raise exception 'Bad status.' using errcode = '22023'; end if;
+  update public.ask_sends set status = p_status, provider_id = p_provider, why = left(coalesce(p_why, ''), 500) where id = s.id;
+  if p_status = 'sent' then
+    update public.client_asks a set state = case when s.test_mode then a.state else 'asked' end,
+      history = public.asst_hist(a.history, case when s.test_mode then 'Test email to the firm' else 'Emailed to ' || array_to_string(s.sent_to, ', ') end)
+     where a.firm_id = s.firm_id and a.client_id = s.client_id and a.id = any (s.ask_ids) and a.state in ('draft', 'asked')
        and exists (select 1 from public.night_findings x where x.id = a.finding_id and x.state = 'ask');
     get diagnostics n = row_count;
   end if;
-  perform public.asst_log(f, p_client, 'send', p_channel, jsonb_build_object('test', p_test, 'status', p_status, 'questions', n, 'to', p_sent_to, 'meant', p_meant, 'why', p_why));
+  insert into public.assistant_log (firm_id, client_id, what, ref, evidence, by_user) values (s.firm_id, s.client_id, 'send', s.id::text,
+    jsonb_build_object('channel', s.channel, 'test', s.test_mode, 'status', p_status, 'questions', n, 'to', s.sent_to, 'meant', s.meant_for, 'why', p_why), s.sent_by);
   return jsonb_build_object('ok', true, 'marked', n);
+end $$;
+-- WhatsApp: the owner opened the link here. The server decides what it was: a test unless the firm sends for real AND the
+-- number is one of the client's own contacts; only then are the questions marked Asked
+create or replace function public.ask_whatsapp_opened(p_client text, p_ids uuid[], p_to text) returns jsonb language plpgsql security definer set search_path = '' as $$
+declare f uuid := public.my_firm(); real boolean; to_d text := regexp_replace(coalesce(p_to, ''), '\D', '', 'g'); n int := 0;
+begin
+  if f is null or not public.asst_is_owner() then raise exception 'Only the firm''s owner sends questions.' using errcode = '42501'; end if;
+  real := coalesce((select m.real_send from public.assistant_mail m where m.firm_id = f), false)
+      and exists (select 1 from public.client_contacts c where c.firm_id = f and c.client_id = p_client and c.removed_at is null and c.by_whatsapp
+                   and length(to_d) >= 10 and right(regexp_replace(c.whatsapp, '\D', '', 'g'), 10) = right(to_d, 10));
+  insert into public.ask_sends (firm_id, client_id, channel, meant_for, sent_to, test_mode, ask_ids, status, sent_by)
+    values (f, p_client, 'whatsapp', '{}', array[public.asst_mask(p_to)], not real, coalesce(p_ids, '{}'), 'opened_link', auth.uid());
+  update public.client_asks a set state = case when real then 'asked' else a.state end,
+    history = public.asst_hist(a.history, case when real then 'WhatsApp to ' || public.asst_mask(p_to) else 'Test WhatsApp to the firm' end)
+   where a.firm_id = f and a.client_id = p_client and a.id = any (coalesce(p_ids, '{}')) and a.state in ('draft', 'asked')
+     and exists (select 1 from public.night_findings x where x.id = a.finding_id and x.state = 'ask');
+  get diagnostics n = row_count;
+  perform public.asst_log(f, p_client, 'send', 'whatsapp', jsonb_build_object('test', not real, 'to', public.asst_mask(p_to), 'questions', n));
+  return jsonb_build_object('ok', true, 'test', not real);
 end $$;
 
 create or replace function public.prefs_set(p_client text, p_auto boolean) returns jsonb language plpgsql security definer set search_path = '' as $$
@@ -479,21 +587,29 @@ create or replace function public.assistant_mail_set(p_real boolean, p_test_to t
 declare f uuid := public.my_firm();
 begin
   if f is null or not public.asst_is_owner() then raise exception 'Only the firm''s owner can change this.' using errcode = '42501'; end if;
+  -- the test address is the firm's own: a member's email, or one on a member's domain (never a client's)
+  if coalesce(p_test_to, '') <> '' and not exists (select 1 from public.members m join auth.users u on u.id = m.user_id
+       where m.firm_id = f and m.active and (lower(u.email) = lower(btrim(p_test_to)) or split_part(lower(u.email), '@', 2) = split_part(lower(btrim(p_test_to)), '@', 2))) then
+    raise exception 'The test address must be the firm''s own (a member''s email or domain).' using errcode = '22023';
+  end if;
   insert into public.assistant_mail (firm_id, real_send, test_to, test_whatsapp, set_by, set_at) values (f, coalesce(p_real, false), coalesce(p_test_to, ''), coalesce(p_test_whatsapp, ''), auth.uid(), now())
     on conflict (firm_id) do update set real_send = excluded.real_send, test_to = excluded.test_to, test_whatsapp = excluded.test_whatsapp, set_by = excluded.set_by, set_at = excluded.set_at;
   perform public.asst_log(f, '', 'setting', 'real_send', jsonb_build_object('real_send', p_real, 'test_to', p_test_to <> '', 'test_whatsapp', p_test_whatsapp <> ''));
   return jsonb_build_object('real_send', coalesce(p_real, false));
 end $$;
 
--- ---------------------------------------------------------------- function grants (explicit)
-revoke all on function public.asst_is_owner(), public.asst_log(uuid, text, text, text, jsonb), public.asst_hist(jsonb, text), public.asst_week(date),
-  public.client_contacts_logged(), public.night_due(integer), public.night_apply(uuid, text, date, text, jsonb, jsonb, boolean, text), public.night_fail(uuid, text, date, text, text),
+-- ---------------------------------------------------------------- function grants (explicit; review S1)
+-- Supabase lets anon and authenticated run every new function: all taken back, then given only to who calls it
+revoke all on function public.asst_is_owner(), public.asst_log(uuid, text, text, text, jsonb), public.asst_hist(jsonb, text), public.asst_week(date), public.asst_mask(text),
+  public.client_contacts_logged(), public.night_due(integer), public.night_missed(), public.night_apply(uuid, text, date, text, jsonb, jsonb, boolean, text), public.night_fail(uuid, text, date, text, text),
   public.asst_finding(uuid), public.asst_ask(uuid), public.finding_undo(uuid), public.finding_choose(uuid, text), public.ask_edit(uuid, text), public.ask_close(uuid, text),
   public.ask_reopen(uuid), public.ask_answer(uuid, text), public.entry_decide(uuid, text, text), public.ask_send_prepare(text, uuid[], text),
-  public.ask_send_done(text, uuid[], text, text[], text[], boolean, text, text, text), public.prefs_set(text, boolean), public.assistant_mail_set(boolean, text, text) from public, anon;
-grant execute on function public.night_due(integer), public.night_apply(uuid, text, date, text, jsonb, jsonb, boolean, text), public.night_fail(uuid, text, date, text, text) to service_role;
+  public.ask_send_begin(uuid, uuid, text, uuid[], text, text[], text[], boolean), public.ask_send_finish(bigint, text, text, text), public.ask_whatsapp_opened(text, uuid[], text),
+  public.prefs_set(text, boolean), public.assistant_mail_set(boolean, text, text) from public, anon, authenticated;
+grant execute on function public.night_due(integer), public.night_missed(), public.night_apply(uuid, text, date, text, jsonb, jsonb, boolean, text), public.night_fail(uuid, text, date, text, text),
+  public.ask_send_begin(uuid, uuid, text, uuid[], text, text[], text[], boolean), public.ask_send_finish(bigint, text, text, text) to service_role;
 grant execute on function public.finding_undo(uuid), public.finding_choose(uuid, text), public.ask_edit(uuid, text), public.ask_close(uuid, text), public.ask_reopen(uuid),
-  public.ask_answer(uuid, text), public.entry_decide(uuid, text, text), public.ask_send_prepare(text, uuid[], text),
-  public.ask_send_done(text, uuid[], text, text[], text[], boolean, text, text, text), public.prefs_set(text, boolean), public.assistant_mail_set(boolean, text, text) to authenticated;
+  public.ask_answer(uuid, text), public.entry_decide(uuid, text, text), public.ask_send_prepare(text, uuid[], text), public.ask_whatsapp_opened(text, uuid[], text),
+  public.prefs_set(text, boolean), public.assistant_mail_set(boolean, text, text) to authenticated;
 
 commit;

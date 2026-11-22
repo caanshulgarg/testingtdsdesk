@@ -1266,8 +1266,8 @@ foreign-key columns checked on staging (read-only, 21-Nov-2026): all there, uuid
 ## 206: Daily Check (not run yet; branch next-assistant, 22-Nov-2026)
 
 **206, Daily Check** (22-Nov-2026, branch `next-assistant`; **written, not run yet**). docs/ASSISTANT-PHASE1.md, section 0.
-**Apply, in this order:** 1. `sbq.sh server/assistant-night/migration-206-assistant-night.sql` (md5 97c1b0a33aab8a84a7abb9f2a9dcc701; one
+**Apply, in this order:** 1. `sbq.sh server/assistant-night/migration-206-assistant-night.sql` (md5 88eb81d4d22a538c29176009317202d1; one
 transaction, lock_timeout 10 s; safe twice; add-only: new tables client_contacts, assistant_prefs, assistant_mail,
 night_runs, night_findings, client_asks, ask_sends, night_entries, assistant_log, their RLS, explicit grants and new
 functions); 2. deploy the functions assistant-night and assistant-send; 3. `sbq.sh server/assistant-night/migration-206-cron.sql`
-(md5 293484b55cd691e5c9bfe87dbe70c981; the night timer, 02:00 to 05:20 IST). Needs nothing of 199-205. Tested: `tests/run_migration206.py` (pg_stand).
+(md5 072642452498c977c16af364f3e52d93; the night timer, 02:00 to 05:20 IST, and the 05:35 list of clients not reached). Needs nothing of 199-205. Tested: `tests/run_migration206.py` (pg_stand).

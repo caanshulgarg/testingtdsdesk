@@ -55,12 +55,29 @@ export const reject = (id) => rpc("entry_decide", { p_id: id, p_decision: "rejec
 
 // Approve: the existing approval first (it checks the bill or line as it always does and may refuse, saying why); only
 // when it took is the decision recorded. Returns true when approved.
+// review M3: the bill or line must still be what FinCom checked last night, else nothing is approved
+const d8 = (v) => { const t = String(v || "").trim(); let m = t.match(/^(\d{4})-(\d{2})-(\d{2})/); if (m) return m[1] + m[2] + m[3]; m = t.match(/^(\d{2})[-/.](\d{2})[-/.](\d{4})$/); if (m) return m[3] + m[2] + m[1]; return /^\d{8}$/.test(t) ? t : ""; };
+const n2 = (v) => Math.round((parseFloat(String(v == null ? "" : v).replace(/[,₹\s]/g, "")) || 0) * 100) / 100;
+const noN = (v) => String(v || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+const amtOf = (e) => n2(((e.voucher || {}).lines || []).reduce((s, l) => s + (Number(l.dr) || 0), 0));
+export function sameBill(e, bill) {
+  const v = e.voucher || {}, x = (bill && bill.x) || {};
+  return !!bill && Math.abs(n2(x.total) - amtOf(e)) <= 0.01 && d8(x.invoiceDate) === d8(v.date) && noN(x.invoiceNo) === noN(v.no)
+    && (!v.gstin || String(x.vendorGstin || "").toUpperCase() === String(v.gstin).toUpperCase());
+}
+export function sameLine(e, r) {
+  const v = e.voucher || {}, out = v.type === "Payment";
+  return !!r && Math.abs(n2(out ? r.debit : r.credit) - amtOf(e)) <= 0.01 && !n2(out ? r.credit : r.debit) && d8(r.date) === d8(v.date)
+    && !(r.userSet && r.ledger && r.ledger !== v.against);
+}
+const CHANGED = "Changed since last night. Run again.";
 export async function approveEntry(e) {
   const cid = e.client_id;
   if (e.source === "twob_inbox_bill") {
     await openCompany(cid);
     const bill = (D(cid).entries || {})[e.work_ref];
     if (!bill) { toast("That bill is no longer in FinCom."); return false; }
+    if (!sameBill(e, bill)) { toast(CHANGED); return false; }
     if (bill.status !== "approved") approve(bill, { bulk: true });
     if (bill.status !== "approved") return false;               // approve() said why (a toast)
   } else if (e.source === "bank_self_answer") {
@@ -68,6 +85,7 @@ export async function approveEntry(e) {
     await openCompany(cid); S.tab = "bank"; await loadBank(cid); await openStatement(sid);
     const r = typeof bankRow === "function" ? bankRow(row) : null;
     if (!r) { toast("That bank line is no longer in its statement."); return false; }
+    if (!sameLine(e, r)) { toast(CHANGED); return false; }
     if (!bankSetLedger(row, (e.voucher || {}).against || "")) return false;   // bankSetLedger said why
     if (r.state !== "ready") return false;
   } else return false;
@@ -84,7 +102,8 @@ export async function editEntry(e) {
 // sending: email from the server (assistant-send: the owner only, the guard there); WhatsApp as a wa.me link opened
 // here, to the firm's own number in test mode, the open logged
 export const sendEmail = (cid, ids) => Cloud.fn("assistant-send", { client_id: cid, ask_ids: ids });
-export const markWhatsApp = (cid, ids, to, test) => rpc("ask_send_done", { p_client: cid, p_ids: ids, p_channel: "whatsapp", p_meant: [], p_sent_to: [to], p_test: test, p_provider: null, p_status: "opened_link", p_why: "" });
+// the server decides whether it was a test (real sending off, or not the client's own number) and logs it
+export const markWhatsApp = (cid, ids, to) => rpc("ask_whatsapp_opened", { p_client: cid, p_ids: ids, p_to: to });
 export const setMail = (real, testTo, testWa) => rpc("assistant_mail_set", { p_real: real, p_test_to: testTo || "", p_test_whatsapp: testWa || "" });
 
 // contacts (Client setup)

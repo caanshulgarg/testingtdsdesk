@@ -44,7 +44,7 @@ SEED = """([rows, role]) => { S.firm.firmName = "Sample & Co";
   // the existing approvals, recorded (the real ones need a statement and a bill on this computer)
   window.openCompany = async (cid) => { window.__dc.calls.push(["openCompany", cid]); };
   window.loadBank = async () => {}; window.openStatement = async (sid) => { window.__dc.calls.push(["openStatement", sid]); };
-  window.__row = {state: "attention"}; window.bankRow = () => window.__row;
+  window.__row = {state: "attention", debit: 18450, credit: 0, date: "2026-11-07"}; window.bankRow = () => window.__row;
   window.bankSetLedger = (id, l) => { window.__dc.calls.push(["bankSetLedger", id, l]); if (window.__dc.bankOk) window.__row.state = "ready"; return window.__dc.bankOk; };
   S.view = "home"; navHome("daily"); return true; }"""
 HIDE = "body.is-test::after{display:none!important}.is-test header.top{box-shadow:none!important}.is-test .side-brand::after{display:none!important}"
@@ -104,6 +104,11 @@ with sync_playwright() as p:
             pg.click("[data-row='%s'] .dc-icon.no" % ROWS["night_entries"][2]["id"]); settle(pg, 300)
             c = rpcs(pg, "entry_decide")
             ok(len(c) == 1 and c[0][2]["p_decision"] == "rejected", "5. Reject calls entry_decide (rejected)")
+            # M3: the line changed since last night (another amount): refused before the bank's own approval is asked
+            pg.evaluate("() => { window.__row.debit = 18500; }")
+            pg.click("[data-row='%s'] .dc-icon.ok" % ROWS["night_entries"][1]["id"]); settle(pg, 600)
+            ok(not any(x[0] == "bankSetLedger" for x in calls(pg)) and len(rpcs(pg, "entry_decide")) == 1, "5. M3: the line changed since last night: refused, nothing set or recorded")
+            pg.evaluate("() => { window.__row.debit = 18450; navHome('daily'); }"); settle(pg, 400); pg.click("[data-tab=entries]"); settle(pg, 200)
             pg.evaluate("() => { window.__dc.bankOk = false; }")
             pg.click("[data-row='%s'] .dc-icon.ok" % ROWS["night_entries"][1]["id"]); settle(pg, 600)
             ok(any(x[0] == "bankSetLedger" for x in calls(pg)) and len(rpcs(pg, "entry_decide")) == 1, "5. Approve: the bank line's own approval refused it: nothing recorded")

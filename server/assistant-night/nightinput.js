@@ -46,9 +46,13 @@ export function twobOnly(b, rows) {
   });
 }
 
-// the bank: each statement an account (its Tally ledger where one is set), its rows from the parts kept in the cloud
-export function bankOf(recs) {
-  const stmts = {}, parts = {}, meta = {};
+// the bank (as staging keeps it): records bank_stmt {id, acctId, acct, bank, from, to, ...}, bank_rows {rows: [...]} in
+// parts, bank_meta {rules: learnt rules [{key, dir, ledger, auto, label, at}], hist: {rows: {fp: {k, p, t, l, d, dt, s, n}}}}.
+// An account is the statement's acctId (several statements of one account are one account); its Tally ledger, last 4
+// digits and name come from the client's bankAccounts [{id, ledger, last4, bank, acct, ifsc}], matched on that id.
+// A finding's key is the statement and the line (review H1), so setting a ledger later changes nothing.
+export function bankOf(recs, clientData) {
+  const stmts = {}, parts = {}, meta = {}, accs = ((clientData || {}).bankAccounts || []).filter((a) => a && a.id != null);
   (recs || []).forEach((r) => {
     if (!r || r.deleted || !r.data) return;
     const sid = String(r.id).split(":")[1];
@@ -58,14 +62,16 @@ export function bankOf(recs) {
   });
   const accounts = {}, rows = [];
   Object.keys(stmts).sort().forEach((sid) => {
-    const st = stmts[sid] || {}, m = st.meta || {}, acct = String(st.ledger || m.acct || sid);
-    if (!accounts[acct]) accounts[acct] = { id: acct, ledger: st.ledger || st.bankLedger || "", name: m.bank || st.ledger || "Bank", last4: String(m.acct || "").replace(/\D/g, "").slice(-4) };
+    const st = stmts[sid] || {}, acct = String(st.acctId || sid), ba = accs.find((a) => String(a.id) === String(st.acctId)) || {};
+    if (!accounts[acct]) accounts[acct] = { id: acct, ledger: ba.ledger || "", name: ba.bank || st.bank || "Bank", last4: String(ba.last4 || String(ba.acct || st.acct || "").replace(/\D/g, "").slice(-4)) };
     const ps = parts[sid] || [];
     for (let p = 0; ps[p]; p++) ps[p].forEach((x) => { if (x && x.id != null) rows.push(Object.assign({}, x, { id: String(x.id), acct, sid, date: ymd(x.date), debit: r2(num(x.debit)), credit: r2(num(x.credit)), narr: String(x.narr || "") })); });
   });
-  // a line a PERSON set (userSet) teaches: the same name and amount again is "same as before"
-  const history = rows.filter((x) => x.userSet && x.ledger && x.dec && x.dec.name).map((x) => ({ name: x.dec.name, amt: x.debit || x.credit, ledger: x.ledger }));
-  return { bank: { accounts: Object.values(accounts), rows }, rules: Array.isArray(meta.rules) ? meta.rules : [], history };
+  // what people chose before: the bank's own history (bank_meta.hist.rows), as the browser keeps it; else the lines a
+  // person set (never an ignored one)
+  const kept = meta.hist && meta.hist.rows && typeof meta.hist.rows === "object" ? Object.values(meta.hist.rows).filter((h) => h && h.k && h.l) : null;
+  const history = kept && kept.length ? kept : rows.filter((x) => x.userSet && x.ledger && x.state !== "ignored" && x.dec && x.dec.key).map((x) => ({ k: x.dec.key, l: x.ledger, d: x.debit ? "out" : "in", s: "you", n: x.dec.name || "" }));
+  return { bank: { accounts: Object.values(accounts), rows }, learned: Array.isArray(meta.rules) ? meta.rules.filter((r) => r && r.key && r.ledger) : [], history };
 }
 
 // the ledgers FinCom's entries use: the client's input GST ledgers and GST cash ledger, by FinCom's ledger list (kinds)
@@ -75,17 +81,26 @@ export function ledgersFor(b) {
     gstCash: pick(/ELECTRONIC CASH|GST CASH/i), tds: pick(/TDS PAYABLE/i), salaryPayable: pick(/SALAR.*PAYABLE/i) };
 }
 
+// x: {today, bankRecs, inboxRecs, entryRecs, twob, prior, firmRules}; rows.co is the client's settings (clients.data)
 export function nightInput(rows, b, x) {
-  const bk = bankOf(x.bankRecs), co = rows.co || {};
+  const co = rows.co || {}, bk = bankOf(x.bankRecs, co);
   const closedTo = ymd((co.closed || {}).to);
-  const bills = (x.entryRecs || []).filter((r) => r && !r.deleted && r.data && r.data.x).map((r) => Object.assign({}, r.data, { id: r.data.id || r.id }));
+  // FinCom's purchase bills only: a proforma, order, quotation, challan, receipt or statement read from the Inbox is not one
+  const bills = (x.entryRecs || []).filter((r) => r && !r.deleted && r.data && r.data.x && !String(r.data.docKind || "").trim()).map((r) => Object.assign({}, r.data, { id: r.data.id || r.id }));
   const challans = (b.challans || []).map((c) => ({ ref: c.cin || ((c.bsr || "") + (c.serial || "")), kind: "tds", date: ymd(c.date), amt: r2(num(c.total) || (num(c.tax) + num(c.surcharge) + num(c.cess) + num(c.interest) + num(c.fee) + num(c.others))) })).filter((c) => c.date && c.amt);
+  // the app's own sale and purchase tests (custom voucher types), worked out once with the app's globals in place
+  const sales = new Set(), buys = new Set();
+  withApp(rows, b, () => (b.vouchers || []).forEach((v) => { try { if (E.Books.isSale(v)) sales.add(v.id); else if (E.Books.isPurchase(v)) buys.add(v.id); } catch (e) { /* as the app: neither */ } }));
+  // opening balances (tally_ledgers.open: Tally's sign, a debit negative)
+  const open = {};
+  (rows.ledgers || []).forEach((l) => { if (l && l.name && num(l.open)) open[l.name] = r2(num(l.open)); });
   return {
     today: x.today,
     books: { vouchers: b.vouchers || [], under: b.under || {}, groups: b.groups || {}, map: b.map || {}, gstin: Object.fromEntries(Object.entries(b.ledInfo || {}).map(([l, i]) => [l, (i && i.gstin) || ""])),
-      pathOf: (l) => E.ledGroupPath(b, l), kindOf: (l) => ((b.map || {})[l] || {}).kind || "" },
+      pathOf: (l) => E.ledGroupPath(b, l), kindOf: (l) => ((b.map || {})[l] || {}).kind || "", isSale: (v) => sales.has(v.id), isPurchase: (v) => buys.has(v.id) },
+    open, booksFrom: ymd(rows.book && rows.book.from_date),
     ledgers: (rows.ledgers || []).map((l) => l.name).filter(Boolean),
-    bank: bk.bank, rules: bk.rules, history: bk.history, bills,
+    bank: bk.bank, rules: Array.isArray(x.firmRules) ? x.firmRules : [], learned: bk.learned, history: bk.history, bills,
     inboxUnread: (x.inboxRecs || []).filter((r) => r && !r.deleted && r.data && r.data.status === "waiting").length,
     twob: x.twob || [], salary: b.salary || [], challans,
     closed: closedTo ? [{ from: "19000101", to: closedTo }] : [],

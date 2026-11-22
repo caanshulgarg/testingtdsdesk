@@ -28,11 +28,12 @@ export function plan(o) {
 export function mail(o) {
   const p = o.plan;
   if (!p || p.refused || !Array.isArray(p.to) || !p.to.length) throw new Error("nothing to send");
-  const subject = (p.test ? "[TEST] " : "") + String(o.subject || "").replace(/^\[TEST\]\s*/i, "");
+  // no line breaks or other control characters in the subject (a header); none but line breaks and tabs in the text
+  const subject = ((p.test ? "[TEST] " : "") + String(o.subject || "").replace(/^\[TEST\]\s*/i, "")).replace(/[\u0000-\u001f\u007f\u2028\u2029]+/g, " ").trim().slice(0, 200);
   const head = p.test ? "[TEST: not sent to the client. In real sending it would go to: " + (p.meant.join(", ") || "no address yet") + "]\n\n" : "";
-  const text = head + String(o.text || "").replace(/^\[TEST[^\]]*\]\s*/i, "");
+  const text = (head + String(o.text || "").replace(/^\[TEST[^\]]*\]\s*/i, "")).replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, "");
   // only these keys: never cc or bcc, and "to" is the plan's own list
-  const body = { from: String(o.from || ""), to: p.to.slice(), subject, text };
+  const body = { from: String(o.from || "").replace(/[\u0000-\u001f\u007f]/g, ""), to: p.to.slice(), subject, text };
   if (EMAIL.test(clean(o.replyTo))) body.reply_to = clean(o.replyTo);
   return body;
 }

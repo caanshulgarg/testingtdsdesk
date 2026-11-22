@@ -12,14 +12,16 @@ screenshots.
 2. Deploy the functions `assistant-night` and `assistant-send` (verify_jwt off for `assistant-night`: it checks the
    timer's key itself; `assistant-send` takes the person's token). They import `../_shared/*` and `../gst-run/*`, as
    gst-run imports `../_shared/*`.
-3. `server/assistant-night/migration-206-cron.sql`: the night timer (02:00 to 05:20 India time, every 10 minutes, at most 4
-   clients a tick). Last, once the function answers.
+3. `server/assistant-night/migration-206-cron.sql`: the night timer (02:00 to 05:20 India time, every 10 minutes, as many
+   clients a tick as the window needs; at 05:35 every client not reached is marked and logged). Last, once the function
+   answers.
 
 ### Secrets (names only)
 - `RESEND_API_KEY`: the one support-mail already uses. Supabase function secrets are the project's, so it is reused as is.
 - `ASSISTANT_MAIL_FROM`: a sender on the firm's own domain, verified in Resend (the owner's decision 3).
 - `ASSISTANT_MAIL_LIVE`: **left unset on staging.** Unless it is exactly `yes`, every email goes only to the firm.
-- Already there: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` (the platform's), and in Vault
+- Already there: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` (the platform's; assistant-send now uses
+  the service role only to claim and finish its own send log), and in Vault
   `gst_cron_key` and `fincom_project_url` (migration 168 uses both).
 
 ### What each part is
@@ -38,30 +40,50 @@ screenshots.
 ### Tests (all with made-up books)
 | Test | What | Result |
 |---|---|---|
-| `node tests/run_nightchecks.mjs` | each check and self-answer: matches, near misses (₹1.01, wrong party, date out of range), ties, evidence already used, undone, empty books; entry checks (Dr = Cr, ledgers, closed period, duplicates, GST); the same run twice | 85 passed |
+| `node tests/run_nightchecks.mjs` | each check and self-answer: matches, near misses (₹1.01, wrong party, date out of range), ties, evidence already used, undone, empty books; the review's cases (a name inside another name, settled invoices, posted bills, GSTIN mismatch, 365 days, empty names, owned evidence); row states, learnt rules, history; opening balances; entry checks; the same run twice | 110 passed |
 | `node tests/run_nightchecks_diff.js` (needs `python3 build.py`) | differential against the browser's Audit on the fixture books: 68 ledgers × 9 group tests, cash in a day, round-sum journals, journals with no narration, written rules | 6 passed |
-| `node tests/run_assistant_night.mjs` | the cloud rows made into the input (gst-run's engine), bank records, Inbox, bills, end to end | 14 passed |
-| `python3 tests/run_migration206.py` (pg_stand) | runs twice; idempotent nights; answered never asked again; auto-close; cleared; undo; choose; RLS for owner, staff, look-only, another firm, anon; grants; owner-only send; prepare returns only still-needed questions; a test never marks Asked; contacts logged; night_due once a night | 40 passed |
-| `node tests/run_assistant_guard.mjs` | the guard: every switch combination, odd inputs, 1,000 random plans: no client address unless both switches are on; never cc or bcc | 258 passed |
-| `deno test --no-check server/assistant-send/handler_test.ts` | the send function with a stand-in database and Resend: owner only, test mode to the firm only, both switches for a client, nothing still needed sends nothing, Resend failure logged; the night function refuses anyone but the timer | 7 passed |
-| `node tests/run_assistant_message.mjs` | the client's message holds only "still need" items | passed |
-| `python3 tests/run_daily_check_ui.py` | the page with a stand-in cloud: tabs and counts, default tab, rows, open, close, choose, undo, reject, approve through the existing bank approval (refused there = nothing recorded), send (owner only, the message, the ids), contacts load and save, phone with no sideways scroll | 32 passed |
+| `node tests/run_assistant_night.mjs` | the input from rows shaped exactly as staging keeps them (real field names, made-up values): statements by acctId, bankAccounts, clients.data.closed, learnt rules and hist.rows, docKind, opening balances, custom sale types; H1 (a ledger set later changes no key, undo stays) | 26 passed |
+| `python3 tests/run_migration206.py` (pg_stand, with Supabase's default grants simulated) | S1: no right authenticated or anon should not have, on every table and function; idempotent nights; answered never asked again; auto-close and reopen; undo (refused after approval); choose (never used evidence); reject; approvals not found put back; RLS; owner-only send with an atomic daily limit; the send log only from the send function; WhatsApp decided by the server; test address the firm's own; contacts logged masked; capacity (night_due, night_missed) | 62 passed |
+| `node tests/run_assistant_guard.mjs` | the guard: every switch combination, odd inputs, control characters, 1,000 random plans | 259 passed |
+| `deno test --no-check server/assistant-send/handler_test.ts` | the send function (claim and finish, limits, both switches, failures) and the night function (timer only; fails closed when the console's switches cannot be read) | 9 passed |
+| `node tests/run_assistant_message.mjs` | the client's message holds only "still need" items; no line break gets into the subject | passed |
+| `python3 tests/run_daily_check_ui.py` | the page with a stand-in cloud, including M3 (a line changed since last night is refused before the bank's own approval) | passed |
 | `python3 tests/run_every_screen.py`, `python3 tests/run_legacy_room.py` | every screen (Daily Check added), and the room | passed |
 
 ### Sizes (gzip)
-legacy.js 599,738 (limit 600,000; +6 for `#/daily`); main index 260,623 (limit 264,192); Daily Check 5.9 kB, its own chunk.
+legacy.js 599,738 (limit 600,000; +6 for `#/daily`); main index 260,627 (limit 264,192); Daily Check 5.8 kB, its own chunk.
 
-### Data sources: what is read, and what is not (for the review)
-- Read: the cloud copy's entries, masters and groups (gst-run's own `load` and `engine.books`, the books the app opens);
-  2B documents the books lack (the app's own `GST2B.run` on them, `only2b`); the salary sheet and TDS challans (the
-  client's work: `salary`, `challans`); bank statements (records `bank_stmt`, `bank_rows`; written rules and lines a
-  person set from `bank_meta` and the rows); the Inbox (records `inbox`: files not read yet are counted); FinCom's bills
-  (records `entry`, each with its read fields `x`); the closed period (`clients.closed.to`).
-- Not read in phase 1 (their self-answer finds nothing, so the finding is asked or needs you, never resolved wrongly):
-  the firm's own bank rules (kept with the firm, not the client), GST payments (no cloud record of the challans), GST
-  months marked filed (the Post page's closed-period check still stops such entries).
-- A statement's account is its Tally ledger where the statement has one, else its account number. A bank entry whose
-  bank ledger is unknown fails "Ledgers in Tally" and is held, never shown as ready.
+### Data sources (checked against staging's schema, 22-Nov-2026)
+- The cloud copy's entries, masters, groups and **opening balances** (`tally_ledgers.open`, a debit negative: each party's
+  queue starts with them, so last year's bills are not advances; wrong side and suspense include them), through gst-run's
+  own `load` and `engine.books` (with `gst_calc_prep` and a time budget for a large book: over budget, the entries made are
+  kept and the next tick goes on from them). Sales and purchases by the app's own `Books.isSale / isPurchase` (custom
+  types such as "SALE (UP)").
+- The client's settings: `clients.data` (closed periods `data.closed.to`, GST settings for 2B, `data.bankAccounts`).
+- 2B documents the books lack: the app's own `GST2B.run` (`only2b`).
+- Bank: records `bank_stmt` (top-level `acctId`, `acct`, `bank`, `from`, `to`; an account is its `acctId`, several statements
+  one account), `bank_rows` (a line is explained only when sent, in Tally, ready or ignored, or set by a person; a
+  "suggested" guess is checked like any line), `bank_meta` (learnt rules `{key, dir, ledger}`: the line's decoded key and
+  direction; history `hist.rows`: chosen twice or more, always the same ledger). The account's ledger and last 4 digits
+  from `bankAccounts` (matched on `acctId`). Written rules: the firm's `bankRules` when the firm's record has them.
+- The Inbox (records `inbox`: files not read yet are counted); FinCom's bills (records `entry`; a proforma, order,
+  quotation, challan, receipt or statement (`docKind`) is not a bill); the salary sheet and TDS challans (client work).
+- Not read: GST payments (no cloud record) and GST months marked filed. Their self-answer finds nothing: the finding is
+  asked or needs you, never resolved wrongly.
+
+### The review of 099b3638a, and what changed
+- S1: every table and function: rights taken back from public, anon and authenticated, then only what the page needs.
+- H1: bank findings keyed on the statement and the line; accounts on `acctId` (never the ledger).
+- H2: a bank line names a party only when its decoded name is the party's (ledgerKey); a narration match needs you.
+- M1: invoices settled in the books (first in, first out, from the opening balance) and posted bills are no candidates.
+- M2: no empty name matches an empty name. M3: Approve re-checks amount, date, direction and GSTIN first. M4: no undo
+  after approval. M5: chosen evidence never used twice; owned evidence is not a tie.
+- Low: the send log is written only by the send function (`ask_send_begin` / `ask_send_finish`, service role), with the
+  daily limit counted atomically under the firm's lock; WhatsApp logged by the server, which decides test or real;
+  approvals the books do not show are put back to ready after 30 minutes; contact changes logged masked; the test address
+  must be the firm's own; no control characters in subjects or names; the night stops when the console's switches cannot
+  be read; resolved then asked reopens the question; a rejected entry needs you and reopens it; a GSTIN mismatch blocks
+  a name match; 2B candidates within 365 days; every client every night (adaptive ticks, the missed ones logged).
 
 ### Built differently from the plan, and why
 - The ported checks are **copies** in `nightchecks.js`, not moved out of `06-audit.js`: moving them would change

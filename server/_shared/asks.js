@@ -18,9 +18,12 @@ export function sendable(findings, picked) {
 }
 
 export function message(client, qs, o = {}) {
-  const firm = o.firm || "your accountant";
+  // names come from records people typed: no line breaks or control characters in them (the subject is a mail header)
+  const one = (v) => String(v || "").replace(/[\u0000-\u001f\u007f\u2028\u2029]+/g, " ").trim();
+  const firm = one(o.firm) || "your accountant";
+  client = Object.assign({}, client, { name: one(client && client.name) });
   const lines = qs.map((f, i) => (i + 1) + ". " + String((f.ask && (f.ask.edited || f.ask.text)) || "").trim());
-  const subject = "A few questions for " + client.name + (o.week ? ", week of " + o.week : "");
+  const subject = "A few questions for " + client.name + (o.week ? ", week of " + one(o.week) : "");
   const head = (o.test ? "[TEST: not sent to the client]\n\n" : "") + "Hello,\n\nWe need a few things to finish your books:\n\n";
   const foot = "\n\nYou can reply to this message, or send the documents to us the usual way.\n\nThank you,\n" + firm;
   const text = qs.length ? head + lines.join("\n") + foot : "";

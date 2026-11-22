@@ -47,7 +47,7 @@ export default function Review({ cid, data, back }) {
     if (!to) { say("Add the firm's WhatsApp number for tests in Settings below."); return; }
     try { await keepEdits(); } catch (e) { say(String(e.message || e)); return; }
     window.open(waLink(to, (waTest ? "[TEST]\n" : "") + m.wa), "_blank", "noopener");
-    markWhatsApp(cid, ids, to, waTest).catch(() => null);
+    markWhatsApp(cid, ids, to).catch(() => null);
   };
   return <section className="dc dc-send" data-send={cid}>
     <button type="button" className="linkbtn dc-back" onClick={back}><ArrowLeft width={15} height={15} aria-hidden="true" /> Daily Check</button>

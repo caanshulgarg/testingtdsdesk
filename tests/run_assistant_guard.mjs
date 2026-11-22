@@ -39,6 +39,9 @@ threw = false; try { mail({ plan: { test: true, to: [] } }); } catch (e) { threw
 // WhatsApp: the firm's own number in test mode
 ok(JSON.stringify(waTarget({ contacts, realSend: false, live: "yes", firmWa: "+91 90000 00000" })) === JSON.stringify({ test: true, phones: ["919000000000"] }), "WhatsApp test: the firm's number only");
 ok(waTarget({ contacts, realSend: true, live: "yes", firmWa: "+91 90000 00000" }).phones.length === 2, "WhatsApp real: the client's numbers");
+// control characters: none in the subject; only line breaks and tabs in the text
+{ const b = mail({ from: "f\r\nBcc: x@client.example <f@samplefirm.example>", plan: { test: true, to: [FIRM], meant: [] }, subject: "Q\r\nBcc: x@client.example", text: "a\nb\u0007c" });
+  ok(!/[\r\n]/.test(b.subject) && !/[\r\n]/.test(b.from) && b.text.endsWith("a\nbc") && reached(b).length === 1, "no CR/LF in the subject or sender; control characters out of the text"); }
 // random: a thousand made-up plans
 let bad = 0;
 for (let i = 0; i < 1000; i++) {
