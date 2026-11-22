@@ -43,9 +43,29 @@ try:
       alter default privileges in schema public grant all on tables to anon, authenticated;
       alter default privileges in schema public grant all on functions to anon, authenticated;
       alter default privileges in schema public grant all on sequences to anon, authenticated;""" % (F1, F2, OWN, F1, STAFF, F1, LOOK, F1, OWN2, F2, F1, F1, F1, F1, F1, OWN, STAFF, LOOK, OWN2))
+    # staging has the Ask FinCom chat's own assistant_log (its columns, RLS, a policy): migration 206 must not touch it
+    db.sql("""create table assistant_log (id bigserial primary key, firm_id uuid, user_id uuid, client_id text, at timestamptz default now(), question text, tools text[], input_tokens int, output_tokens int,
+        calls int, ms int, feature text, route text, models text[], cache_read int, cache_write int, cost_inr numeric, fell_through boolean);
+      alter table assistant_log enable row level security;
+      create policy assistant_log_owner_read on assistant_log for select to authenticated using (firm_id = my_firm());
+      insert into assistant_log (firm_id, question, cost_inr) values ('%s', 'made-up question', 1.25);""" % F1)
+    chat_before = db.one("select string_agg(column_name, ',' order by ordinal_position) from information_schema.columns where table_name = 'assistant_log'")
     body = open(MIG).read()
+    # a table of the same name as one of 206's, made by something else: the migration stops, naming it, and changes nothing
+    db.sql("create table night_runs (id int, note text)")
+    try: db.sql(body); stopped = ""
+    except RuntimeError as e: stopped = str(e)
+    ok("already used by something else" in stopped and "table night_runs" in stopped and db.one("select to_regclass('public.night_findings')") in (None, ""), "1. a same-named table made by something else: the migration stops loudly, nothing changed")
+    db.sql("drop table night_runs")
+    db.sql("create function night_due(p int) returns int language sql as 'select 1'")
+    try: db.sql(body); stopped = ""
+    except RuntimeError as e: stopped = str(e)
+    ok("function night_due" in stopped, "1. a same-named function made by something else: the migration stops loudly")
+    db.sql("drop function night_due(int)")
     db.sql(body); db.sql(body)
-    ok(True, "1. the migration runs, and runs again")
+    ok(True, "1. the migration runs, and runs again (its own names, marked)")
+    ok(db.one("select string_agg(column_name, ',' order by ordinal_position) from information_schema.columns where table_name = 'assistant_log'") == chat_before and db.one("select count(*) from assistant_log") == "1"
+       and db.one("select string_agg(policyname, ',') from pg_policies where tablename = 'assistant_log'") == "assistant_log_owner_read", "1. the chat's assistant_log is untouched: its columns, its row, its policy")
     as_ = lambda uid, q: db.rows("set role authenticated;\n" + q, uid)
     one = lambda uid, q: db.one("set role authenticated;\n" + q, uid)
     act = lambda uid, q: db.sql("set role authenticated;\n" + q, uid)
@@ -94,17 +114,17 @@ try:
     act(STAFF, "select public.finding_choose('%s', 'vch:s2')" % yid)
     apply([dict(ASK, state="resolved", evidence=[{"t": "doc", "ref": "bill:e1", "label": "x"}]), RES, YOU], [], night="2026-11-28")
     ok(db.one("select state || ':' || (evidence->0->>'ref') from night_findings where id = '%s'" % yid) == "resolved:vch:s2", "3. a person's choice stays over the next night")
-    ok(int(db.one("select count(*) from assistant_log where what in ('undo', 'choose', 'answer')")) == 3, "3. every action is logged")
+    ok(int(db.one("select count(*) from daily_log where what in ('undo', 'choose', 'answer')")) == 3, "3. every action is logged")
     # ---------------------------------------------------------------- 4. RLS and grants
     ok(one(OWN2, "select count(*) from night_findings") == "0" and one(OWN2, "select count(*) from client_asks") == "0", "4. another firm's owner sees nothing")
     ok(int(one(LOOK, "select count(*) from night_findings")) >= 3, "4. a look-only member of the firm reads its findings")
     ok(raises(lambda: act(STAFF, "insert into night_findings (firm_id, client_id, kind, key, first_seen, last_seen) values ('%s', 'c1', 'suspense', 'x', now(), now())" % F1)), "4. nobody writes findings directly")
     ok(raises(lambda: act(STAFF, "update client_asks set state = 'asked'")), "4. nobody changes questions directly")
     ok(raises(lambda: act(OWN, "select public.night_apply('%s', 'c1', '2026-11-22', 'v', '[]', '[]', true)" % F1)), "4. only the service role runs the night")
-    T9 = ["client_contacts", "assistant_prefs", "assistant_mail", "night_runs", "night_findings", "client_asks", "ask_sends", "night_entries", "assistant_log"]
+    T9 = ["client_contacts", "assistant_prefs", "assistant_mail", "night_runs", "night_findings", "client_asks", "ask_sends", "night_entries", "daily_log"]
     writes = [t for t in T9 for priv in ("insert", "update", "delete", "truncate") if t != "client_contacts" and db.one("select has_table_privilege('authenticated', 'public.%s', '%s')" % (t, priv)) == "t"]
     ok(not writes, "4. S1: with Supabase's default grants, authenticated may not write any of the tables (%s)" % writes[:4])
-    ok(db.one("select has_table_privilege('authenticated', 'public.ask_sends', 'select')") == "f" and db.one("select has_table_privilege('authenticated', 'public.assistant_log', 'select')") == "f", "4. S1: the send log and the action log are not readable from the page")
+    ok(db.one("select has_table_privilege('authenticated', 'public.ask_sends', 'select')") == "f" and db.one("select has_table_privilege('authenticated', 'public.daily_log', 'select')") == "f", "4. S1: the send log and the action log are not readable from the page")
     ok(db.one("select has_table_privilege('authenticated', 'public.client_contacts', 'delete')") == "f" and db.one("select has_table_privilege('anon', 'public.client_contacts', 'select')") == "f", "4. S1: contacts: no delete; anon nothing")
     FN = ["night_due(integer)", "night_missed()", "night_apply(uuid, text, date, text, jsonb, jsonb, boolean, text)", "night_fail(uuid, text, date, text, text)", "asst_log(uuid, text, text, text, jsonb)", "asst_hist(jsonb, text)", "asst_is_owner()", "asst_mask(text)",
           "ask_send_begin(uuid, uuid, text, uuid[], text, text[], text[], boolean)", "ask_send_finish(bigint, text, text, text)", "asst_finding(uuid)", "asst_ask(uuid)"]
@@ -140,16 +160,16 @@ try:
     ok(raises(lambda: act(OWN, "select public.assistant_mail_set(false, 'accounts@sampletraders.example')")), "5. the test address must be the firm's own (a client's is refused)")
     ok(raises(lambda: act(OWN, "select public.assistant_mail_set(false, 'office@samplefirm.example')")), "5. N2: the same domain is not enough: a member's exact email only")
     act(OWN, "select public.assistant_mail_set(true, 'owner@samplefirm.example')")
-    ok(db.one("select real_send from assistant_mail") == "t" and db.one("select count(*) from assistant_log where what = 'setting'") == "1", "5. the owner turns it on, logged")
+    ok(db.one("select real_send from assistant_mail") == "t" and db.one("select count(*) from daily_log where what = 'setting'") == "1", "5. the owner turns it on, logged")
     ok(raises(lambda: act(STAFF, "select public.prefs_set('c1', true)")), "5. reminders by itself: the owner only")
     db.sql("update client_asks set state = 'draft' where id = '%s'" % open_q)
     w = json.loads(one(OWN, "select public.ask_whatsapp_opened('c1', array['%s']::uuid[], '9000011111')" % open_q))
     ok(w["test"] is False and db.one("select state from client_asks where id = '%s'" % open_q) == "asked", "5. WhatsApp to the client's own number with real sending on: real, marked Asked")
     # ---------------------------------------------------------------- 6. contacts and night_due
     ok(raises(lambda: act(LOOK, "insert into client_contacts (client_id, name) values ('c1', 'X')")), "6. a look-only member cannot add a contact")
-    ok(db.one("select count(*) from assistant_log where what = 'contact'") == "1", "6. adding a contact is logged")
+    ok(db.one("select count(*) from daily_log where what = 'contact'") == "1", "6. adding a contact is logged")
     act(STAFF, "update client_contacts set email = 'anil.k@sampletraders.example' where name = 'Anil'")
-    ch = db.one("select evidence::text from assistant_log where what = 'contact' order by id desc limit 1")
+    ch = db.one("select evidence::text from daily_log where what = 'contact' order by id desc limit 1")
     ok("ac…@sampletraders.example → an…@sampletraders.example" in ch and "accounts@" not in ch, "6. an address change is logged, masked (%s)" % ch[:120])
     ok(raises(lambda: act(STAFF, "insert into client_contacts (client_id, name, email) values ('c1', 'Bad', 'not-an-email')")), "6. a bad email is refused")
     d1 = db.rows("select * from public.night_due(10)"); d2 = db.rows("select * from public.night_due(10)")
@@ -173,7 +193,7 @@ try:
     # an approval the night does not see (the same entry made again, 30 minutes on): put back as ready
     db.sql("update night_entries set decided_at = now() - interval '2 hours' where id = '%s'" % eid)
     apply2([A], [E9], night="2026-11-26")
-    ok(db.one("select state from night_entries where id = '%s'" % eid) == "ready" and db.one("select count(*) from assistant_log where what = 'approval_not_found'") == "1", "7. an approval the books do not show: back to ready, logged")
+    ok(db.one("select state from night_entries where id = '%s'" % eid) == "ready" and db.one("select count(*) from daily_log where what = 'approval_not_found'") == "1", "7. an approval the books do not show: back to ready, logged")
     # N4: approved again; the night no longer makes it (its bill approved): withdrawn, approved once: undo still refused
     act(STAFF, "select public.entry_decide('%s', 'approved', 'e9')" % eid)
     db.sql("update night_entries set state = 'withdrawn' where id = '%s'" % eid)
@@ -193,13 +213,13 @@ try:
     ok(db.one("select state from night_findings where id = '%s'" % b2) == "resolved", "7. M5: a free candidate can be chosen")
     # N3: a send left "sending" for 10 minutes is swept to failed and logged
     db.sql("insert into ask_sends (firm_id, client_id, channel, test_mode, status, sent_by, sent_at) values ('%s', 'c1', 'email', true, 'sending', '%s', now() - interval '11 minutes')" % (F1, OWN))
-    ok(db.one("select public.ask_send_sweep()") == "1" and db.one("select count(*) from ask_sends where status = 'sending'") == "0" and db.one("select count(*) from assistant_log where what = 'send_stale'") == "1", "7. N3: a send stuck in sending for 10 minutes: failed, logged")
+    ok(db.one("select public.ask_send_sweep()") == "1" and db.one("select count(*) from ask_sends where status = 'sending'") == "0" and db.one("select count(*) from daily_log where what = 'send_stale'") == "1", "7. N3: a send stuck in sending for 10 minutes: failed, logged")
     # capacity: night_due with no number takes what the window needs; night_missed marks who was not reached
     db.sql("insert into clients (id, firm_id, name) select 'm' || g, '%s', 'Many ' || g from generate_series(1, 30) g; insert into tally_books (book_id, firm_id, client_id) select gen_random_uuid(), '%s', 'm' || g from generate_series(1, 30) g" % (F1, F1))
     got = db.rows("select * from public.night_due(null)")
     ok(4 <= len(got) <= 20, "7. capacity: night_due(null) takes as many as the window needs, at most 20 a tick (%d now)" % len(got))
     n = int(db.one("select public.night_missed()"))
-    ok(n >= 1 and db.one("select count(*) from assistant_log where what = 'night_missed'") >= "1", "7. capacity: every client not checked tonight is marked and logged (%d)" % n)
+    ok(n >= 1 and db.one("select count(*) from daily_log where what = 'night_missed'") >= "1", "7. capacity: every client not checked tonight is marked and logged (%d)" % n)
 finally:
     db.stop()
 print("%d failed" % len(fails) if fails else "all passed")

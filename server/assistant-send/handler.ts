@@ -6,7 +6,7 @@
 // finding or a closed question can never get in: acceptance rule 6) by server/_shared/asks.js, the words the page shows.
 // The test-mode guard (server/_shared/sendguard.js): a real client address only when the firm's owner turned real sending
 // on AND the secret ASSISTANT_MAIL_LIVE is "yes"; else ONLY the firm's own address, marked TEST. Every try is logged
-// (ask_send_begin / ask_send_finish, service role only -> ask_sends, assistant_log). Secrets: RESEND_API_KEY (the one support-mail uses), ASSISTANT_MAIL_FROM
+// (ask_send_begin / ask_send_finish, service role only -> ask_sends, daily_log). Secrets: RESEND_API_KEY (the one support-mail uses), ASSISTANT_MAIL_FROM
 // (a sender on the firm's own domain, verified in Resend), ASSISTANT_MAIL_LIVE (not set on staging). Replies go to the firm.
 import { corsFor } from "../_shared/cors.ts";
 // @ts-ignore plain JavaScript, shared with the Node tests

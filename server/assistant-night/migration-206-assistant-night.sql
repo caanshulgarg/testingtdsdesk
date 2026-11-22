@@ -13,7 +13,7 @@
 --   ask_sends            each email or WhatsApp: to whom it was meant, where it really went (test mode), Resend's id
 --   night_entries        entries FinCom prepared (unique per dedupe), with why, evidence and the checks they passed;
 --                        "ready" only when every check passed, else "held"
---   assistant_log        every action (night, undo, choose, edit, close, answer, approve, reject, send, setting, contact)
+--   daily_log        every action (night, undo, choose, edit, close, answer, approve, reject, send, setting, contact)
 -- Functions: night_due / night_apply / night_fail / night_missed and ask_send_begin / ask_send_finish (service role only:
 -- the night and send functions), finding_undo, finding_choose, ask_edit, ask_close, ask_reopen, ask_answer, entry_decide
 -- (owners and staff: can_write), ask_send_prepare, ask_whatsapp_opened, prefs_set, assistant_mail_set (the OWNER only).
@@ -25,6 +25,24 @@
 -- or function is changed or dropped. Safe to run twice. One transaction, lock_timeout 10 s.
 begin;
 set local lock_timeout = '10s';
+
+-- Names first (22-Nov-2026, the first apply on staging: an "assistant_log" was already there, the Ask FinCom chat's): every
+-- table and function this migration makes must be absent, or be this migration's own (marked by its comment). Anything
+-- else of the same name stops the migration here, naming it, instead of being skipped or replaced.
+do $names$
+declare t text; f text; bad text[] := '{}';
+begin
+  foreach t in array array['client_contacts', 'assistant_prefs', 'assistant_mail', 'night_runs', 'night_findings', 'client_asks', 'ask_sends', 'night_entries', 'daily_log'] loop
+    if to_regclass('public.' || t) is not null and coalesce(obj_description(to_regclass('public.' || t), 'pg_class'), '') <> 'daily check (migration 206)' then bad := bad || ('table ' || t); end if;
+  end loop;
+  foreach f in array array['ask_answer', 'ask_close', 'ask_edit', 'ask_reopen', 'ask_send_begin', 'ask_send_finish', 'ask_send_prepare', 'ask_send_sweep', 'ask_whatsapp_opened', 'assistant_mail_set', 'asst_ask', 'asst_finding', 'asst_hist', 'asst_is_owner', 'asst_log', 'asst_mask', 'asst_week', 'client_contacts_logged', 'entry_decide', 'finding_choose', 'finding_undo', 'night_apply', 'night_due', 'night_fail', 'night_missed', 'prefs_set'] loop
+    if exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = f and coalesce(obj_description(p.oid, 'pg_proc'), '') <> 'daily check (migration 206)') then bad := bad || ('function ' || f); end if;
+  end loop;
+  if array_length(bad, 1) > 0 then
+    raise exception 'migration 206: these names are already used by something else: %. Nothing was changed.', array_to_string(bad, ', ');
+  end if;
+end $names$;
+
 
 create table if not exists public.client_contacts (
   id uuid primary key default gen_random_uuid(),
@@ -149,7 +167,7 @@ create table if not exists public.night_entries (
   unique (firm_id, client_id, dedupe)
 );
 
-create table if not exists public.assistant_log (
+create table if not exists public.daily_log (
   id bigserial primary key,
   firm_id uuid not null references public.firms (id) on delete cascade,
   client_id text not null default '',
@@ -159,7 +177,7 @@ create table if not exists public.assistant_log (
   by_user uuid,
   at timestamptz not null default now()
 );
-create index if not exists assistant_log_client on public.assistant_log (firm_id, client_id, at desc);
+create index if not exists daily_log_client on public.daily_log (firm_id, client_id, at desc);
 
 -- ---------------------------------------------------------------- row-level security: read your firm; contacts by policy
 alter table public.client_contacts enable row level security;
@@ -170,11 +188,11 @@ alter table public.night_findings enable row level security;
 alter table public.client_asks enable row level security;
 alter table public.ask_sends enable row level security;
 alter table public.night_entries enable row level security;
-alter table public.assistant_log enable row level security;
+alter table public.daily_log enable row level security;
 do $$
 declare t text;
 begin
-  foreach t in array array['client_contacts', 'assistant_prefs', 'assistant_mail', 'night_runs', 'night_findings', 'client_asks', 'ask_sends', 'night_entries', 'assistant_log'] loop
+  foreach t in array array['client_contacts', 'assistant_prefs', 'assistant_mail', 'night_runs', 'night_findings', 'client_asks', 'ask_sends', 'night_entries', 'daily_log'] loop
     if not exists (select 1 from pg_policies where schemaname = 'public' and tablename = t and policyname = t || '_read') then
       execute format('create policy %I on public.%I for select to authenticated using (firm_id = (select public.my_firm()))', t || '_read', t);
     end if;
@@ -189,20 +207,20 @@ end $$;
 -- reads (and contacts, which owners and staff write under their policies). The send log and the action log are read by
 -- nobody but the service role (and the console).
 revoke all on public.client_contacts, public.assistant_prefs, public.assistant_mail, public.night_runs, public.night_findings,
-  public.client_asks, public.ask_sends, public.night_entries, public.assistant_log from public, anon, authenticated;
+  public.client_asks, public.ask_sends, public.night_entries, public.daily_log from public, anon, authenticated;
 grant select, insert, update on public.client_contacts to authenticated;
 grant select on public.assistant_prefs, public.assistant_mail, public.night_runs, public.night_findings, public.client_asks, public.night_entries to authenticated;
-revoke all on sequence public.night_runs_id_seq, public.ask_sends_id_seq, public.assistant_log_id_seq from public, anon, authenticated;
+revoke all on sequence public.night_runs_id_seq, public.ask_sends_id_seq, public.daily_log_id_seq from public, anon, authenticated;
 grant select, insert, update on public.client_contacts, public.assistant_prefs, public.assistant_mail, public.night_runs, public.night_findings,
-  public.client_asks, public.ask_sends, public.night_entries, public.assistant_log to service_role;
-grant usage, select on sequence public.night_runs_id_seq, public.ask_sends_id_seq, public.assistant_log_id_seq to service_role;
+  public.client_asks, public.ask_sends, public.night_entries, public.daily_log to service_role;
+grant usage, select on sequence public.night_runs_id_seq, public.ask_sends_id_seq, public.daily_log_id_seq to service_role;
 
 -- ---------------------------------------------------------------- helpers
 create or replace function public.asst_is_owner() returns boolean language sql stable security definer set search_path = '' as $$
   select exists (select 1 from public.members m where m.user_id = auth.uid() and m.active and m.role = 'owner' and m.firm_id = public.my_firm())
 $$;
 create or replace function public.asst_log(p_firm uuid, p_client text, p_what text, p_ref text, p_ev jsonb) returns void language sql security definer set search_path = '' as $$
-  insert into public.assistant_log (firm_id, client_id, what, ref, evidence, by_user) values (p_firm, coalesce(p_client, ''), p_what, p_ref, coalesce(p_ev, '{}'::jsonb), auth.uid())
+  insert into public.daily_log (firm_id, client_id, what, ref, evidence, by_user) values (p_firm, coalesce(p_client, ''), p_what, p_ref, coalesce(p_ev, '{}'::jsonb), auth.uid())
 $$;
 create or replace function public.asst_hist(h jsonb, p_what text) returns jsonb language sql stable set search_path = '' as $$
   select coalesce(h, '[]'::jsonb) || jsonb_build_array(jsonb_build_object('at', now(), 'what', left(p_what, 300)))
@@ -229,7 +247,7 @@ begin
     if new.by_email is distinct from old.by_email or new.by_whatsapp is distinct from old.by_whatsapp then ch := ch || jsonb_build_object('send_by', true); end if;
     if new.removed_at is not null and old.removed_at is null then ch := ch || jsonb_build_object('removed', true); end if;
   end if;
-  insert into public.assistant_log (firm_id, client_id, what, ref, evidence, by_user) values (new.firm_id, new.client_id, 'contact', new.id::text, ch || jsonb_build_object('name', left(new.name, 60)), auth.uid());
+  insert into public.daily_log (firm_id, client_id, what, ref, evidence, by_user) values (new.firm_id, new.client_id, 'contact', new.id::text, ch || jsonb_build_object('name', left(new.name, 60)), auth.uid());
   return new;
 end $$;
 drop trigger if exists client_contacts_logged on public.client_contacts;   -- made again just below: the only drop here (a trigger of this migration)
@@ -278,7 +296,7 @@ begin
       on conflict (firm_id, client_id, night) do update set status = 'failed', why = case when x.why = '' then 'not reached tonight' else x.why end, finished_at = now();
     n := n + 1;
   end loop;
-  insert into public.assistant_log (firm_id, client_id, what, ref, evidence)
+  insert into public.daily_log (firm_id, client_id, what, ref, evidence)
     select x.firm_id, '', 'night_missed', v_night::text, jsonb_build_object('clients', count(*), 'which', jsonb_agg(x.client_id)) from public.night_runs x
      where x.night = v_night and x.status = 'failed' group by x.firm_id;
   return n;
@@ -365,13 +383,13 @@ begin
     for e in select jsonb_build_object('id', n.id, 'dedupe', n.dedupe) from public.night_entries n
               where n.firm_id = p_firm and n.client_id = p_client and n.state = 'approved' and n.dedupe = any (eseen) and n.decided_at < now() - interval '30 minutes' loop
       update public.night_entries set state = 'ready', decided_by = null, decided_at = null, updated_at = now() where id = (e->>'id')::uuid;
-      insert into public.assistant_log (firm_id, client_id, what, ref, evidence) values (p_firm, p_client, 'approval_not_found', e->>'id', e);
+      insert into public.daily_log (firm_id, client_id, what, ref, evidence) values (p_firm, p_client, 'approval_not_found', e->>'id', e);
     end loop;
   end if;
   update public.night_runs set finished_at = now(), status = case when p_complete then 'ok' else 'partial' end, why = left(coalesce(p_why, ''), 500),
     counts = jsonb_build_object('findings', jsonb_array_length(coalesce(p_findings, '[]'::jsonb)), 'new', c_new, 'asks', c_asks, 'closed', c_closed, 'resolved', c_res, 'you', c_you, 'entries', c_ent, 'cleared', c_clear)
    where firm_id = p_firm and client_id = p_client and night = p_night;
-  insert into public.assistant_log (firm_id, client_id, what, ref, evidence) values (p_firm, p_client, 'night', p_night::text,
+  insert into public.daily_log (firm_id, client_id, what, ref, evidence) values (p_firm, p_client, 'night', p_night::text,
     jsonb_build_object('new', c_new, 'asks', c_asks, 'closed', c_closed, 'resolved', c_res, 'you', c_you, 'entries', c_ent, 'cleared', c_clear, 'version', p_version));
   return jsonb_build_object('new', c_new, 'asks', c_asks, 'closed', c_closed, 'resolved', c_res, 'you', c_you, 'entries', c_ent, 'cleared', c_clear);
 end $$;
@@ -527,7 +545,7 @@ create or replace function public.ask_send_sweep() returns integer language plpg
 declare n int;
 begin
   with x as (update public.ask_sends set status = 'failed', why = 'no answer from the send function in 10 minutes' where status = 'sending' and sent_at < now() - interval '10 minutes' returning firm_id, client_id, id)
-  insert into public.assistant_log (firm_id, client_id, what, ref, evidence) select firm_id, client_id, 'send_stale', id::text, '{}'::jsonb from x;
+  insert into public.daily_log (firm_id, client_id, what, ref, evidence) select firm_id, client_id, 'send_stale', id::text, '{}'::jsonb from x;
   get diagnostics n = row_count;
   return n;
 end $$;
@@ -563,7 +581,7 @@ begin
        and exists (select 1 from public.night_findings x where x.id = a.finding_id and x.state = 'ask');
     get diagnostics n = row_count;
   end if;
-  insert into public.assistant_log (firm_id, client_id, what, ref, evidence, by_user) values (s.firm_id, s.client_id, 'send', s.id::text,
+  insert into public.daily_log (firm_id, client_id, what, ref, evidence, by_user) values (s.firm_id, s.client_id, 'send', s.id::text,
     jsonb_build_object('channel', s.channel, 'test', s.test_mode, 'status', p_status, 'questions', n, 'to', s.sent_to, 'meant', s.meant_for, 'why', p_why), s.sent_by);
   return jsonb_build_object('ok', true, 'marked', n);
 end $$;
@@ -625,5 +643,15 @@ grant execute on function public.night_due(integer), public.night_missed(), publ
 grant execute on function public.finding_undo(uuid), public.finding_choose(uuid, text), public.ask_edit(uuid, text), public.ask_close(uuid, text), public.ask_reopen(uuid),
   public.ask_answer(uuid, text), public.entry_decide(uuid, text, text), public.ask_send_prepare(text, uuid[], text), public.ask_whatsapp_opened(text, uuid[], text),
   public.prefs_set(text, boolean), public.assistant_mail_set(boolean, text, text) to authenticated;
+
+-- ---------------------------------------------------------------- this migration's own names (checked at the top on a second run)
+do $mark$
+declare t text; r record;
+begin
+  foreach t in array array['client_contacts', 'assistant_prefs', 'assistant_mail', 'night_runs', 'night_findings', 'client_asks', 'ask_sends', 'night_entries', 'daily_log'] loop execute format('comment on table public.%I is %L', t, 'daily check (migration 206)'); end loop;
+  for r in select p.oid::regprocedure as sig from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = any (array['ask_answer', 'ask_close', 'ask_edit', 'ask_reopen', 'ask_send_begin', 'ask_send_finish', 'ask_send_prepare', 'ask_send_sweep', 'ask_whatsapp_opened', 'assistant_mail_set', 'asst_ask', 'asst_finding', 'asst_hist', 'asst_is_owner', 'asst_log', 'asst_mask', 'asst_week', 'client_contacts_logged', 'entry_decide', 'finding_choose', 'finding_undo', 'night_apply', 'night_due', 'night_fail', 'night_missed', 'prefs_set']) loop
+    execute format('comment on function %s is %L', r.sig, 'daily check (migration 206)');
+  end loop;
+end $mark$;
 
 commit;

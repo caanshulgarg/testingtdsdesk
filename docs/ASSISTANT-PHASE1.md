@@ -53,6 +53,12 @@ screenshots.
 ### Sizes (gzip)
 legacy.js 599,738 (limit 600,000; +6 for `#/daily`); main index 260,627 (limit 264,192); Daily Check 5.8 kB, its own chunk.
 
+### The first apply on staging (22-Nov-2026)
+It stopped (rolled back, nothing applied): staging already has `assistant_log`, the Ask FinCom chat's usage log. Daily
+Check's log is now `daily_log`; the chat's table, grants and policies are not touched. Every other name of 206 was checked
+against server/ and migrations 1 to 205 (none in use), and the migration now stops at the start, naming them, if any of
+its tables or functions already exists and is not its own (marked by a comment).
+
 ### The re-review of 75364c64f (N1 to N7)
 - N1: a learnt rule or history on a narration key ("narr:…") is near (needs you), never exact; a rule for either direction
   is exact only with a person's choice in this direction. N5: a suggested line with nothing certain needs you (the guess
@@ -283,7 +289,7 @@ read **as that person** (RLS decides what they can send), then `fetch("https://a
 `RESEND_API_KEY` secret (set on the server, never in code or chat). The function takes question ids only. **The
 addresses are always read from `client_contacts` on the server**, never from the request. The text is built by
 `server/_shared/asks.js` from the ticked questions that are Draft or Asked, so nothing resolved can get in. Each send
-writes `ask_sends` and `assistant_log` and marks the questions Asked.
+writes `ask_sends` and `daily_log` and marks the questions Asked.
 
 **WhatsApp**: a `wa.me` link with the message ready (no Business API). The person's own WhatsApp opens and the person
 presses send. FinCom marks the questions Asked when the link is opened (logged as `opened_link`); a test never does.
@@ -311,7 +317,7 @@ in Resend; replies go to the firm's own address.
    period, no duplicate (same party, bill number and amount, posted or drafted), and the GST split adds up. If any check fails, the
    entry is not shown as ready.
 3. **No silent writes.** Nothing posts, sends or changes the books without the owner's approval. Every action is
-   logged (`assistant_log`) with its evidence and can be undone.
+   logged (`daily_log`) with its evidence and can be undone.
 4. **Idempotent nightly runs.** Re-running the same night creates no duplicate findings, questions or drafts (the
    unique keys above). An answered question is never asked again.
 5. **Tests.** Each check and each self-answer gets its own made-up cases: matches, near misses (₹1.01, wrong party,
