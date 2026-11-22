@@ -9,7 +9,7 @@
 //   5. the Excel and the Word are marked DRAFT
 //   6. with AuditWP present (the audit helper's 77-audit.js), its results are used and the counts agree
 const fs = require("fs"), {load, openBlob, HTML, DATA, CACHE, FIXTURE} = require("./harness");
-const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "fmtDate", "tallyDate", "STATE_CODES", "RULE_DEFAULTS", "Books", "LedMaster", "Audit", "MIS", "TDS", "Certs", "GSTR", "GSTAdv", "GSTRev", "GSTAmend", "GST2B", "INR", "NORM_CACHE", "normName", "normNameRaw", "nameSim", "gfN", "Parties", "FS", "GSTSet", "GSTF", "GSTQ", "D", "FSX",
+const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "fmtDate", "tallyDate", "STATE_CODES", "RULE_DEFAULTS", "Books", "LedMaster", "Audit", "AuditRep", "MIS", "TDS", "Certs", "GSTR", "GSTAdv", "GSTRev", "GSTAmend", "GST2B", "INR", "NORM_CACHE", "normName", "normNameRaw", "nameSim", "gfN", "Parties", "FS", "GSTSet", "GSTF", "GSTQ", "D", "FSX",
   // tds-layout (14-Oct-2026): the section codes' table, the challan register and the late-deduction interest the TDS rows read
   "TDS_SEC_CODES", "TDSReg", "TDSInt", "TDSFiled", "TDSCH", "BOOKS_KEYS", "uid", "lsGet", "lsSet", "istParts", "p2ist", "istDay", "istToday",
   // round 69: the audit's TDS not deducted is TDSWatch.missed (src/js/66)

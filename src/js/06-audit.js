@@ -875,58 +875,8 @@ Object.assign(Audit, {
     return x + "</REQUESTDATA></IMPORTDATA></BODY></ENVELOPE>";
   },
   jesToPass(run){ return run.findings.filter(f => f.je && this.status(f.id).s === "pass").flatMap(f => f.je); },
-  missingLedgers(jes){ return Array.from(new Set(jes.flatMap(j => j.lines.map(l => l.l)).filter(l => !this.exists(l)))); },
-  // the report: a cover, a summary by area, then each finding with what to do
-  reportHtml(run, stSnap){
-    const co = CO(), b = S.books, m = v => INR.format(r2(v || 0)), st = id => (stSnap ? stSnap[id] : null) || this.status(id);
-    const sevL = {high: "High", medium: "Medium", low: "Low"}, sevC = {high: "#B42318", medium: "#B9541B", low: "#5A6B63"};
-    let h = '<div style="border-bottom:2px solid #15201B;padding-bottom:10px;margin-bottom:14px"><div style="font-size:12px;color:#5A6B63">AUDIT OBSERVATIONS</div><h1 style="font-size:22px;margin:4px 0">' + esc(co.name) + "</h1>" +
-      '<div style="font-size:13px">' + esc(((b.meta || {}).gstins || []).join(", ")) + (co.pan ? " \u00b7 PAN " + esc(co.pan) : "") + "</div>" +
-      '<div style="font-size:13px;margin-top:6px">Period: <b>' + fmtDate(tallyDate(run.from)) + " to " + fmtDate(tallyDate(run.to)) + "</b> \u00b7 Checked on " + fmtDate(run.at.slice(0, 10)) + " \u00b7 " + run.vouchers + " vouchers read from Tally" +
-      (b.meta && b.meta.company ? " (" + esc(b.meta.company) + ")" : "") + "</div></div>";
-    h += "<h2>Summary</h2><table><thead><tr><th>Area</th><th>High</th><th>Medium</th><th>Low</th><th class=\"n\">Amount involved, high and medium</th></tr></thead><tbody>" +
-      this.AREAS.map(([a, l]) => { const f = run.findings.filter(x => x.area === a); if (!f.length) return ""; return "<tr><td>" + l + "</td><td>" + f.filter(x => x.sev === "high").length + "</td><td>" + f.filter(x => x.sev === "medium").length + "</td><td>" + f.filter(x => x.sev === "low").length + '</td><td class="n">' + m(f.filter(x => x.sev !== "low").reduce((s, x) => s + x.amount, 0)) + "</td></tr>"; }).join("") +
-      "</tbody></table>";
-    if (run.notes.length) h += '<p class="note">' + run.notes.map(esc).join(" ") + "</p>";
-    h += "<h2>Observations</h2>";
-    run.findings.forEach((f, i) => {
-      const s = st(f.id);
-      h += '<div style="border:1px solid #D9E0DC;border-left:4px solid ' + sevC[f.sev] + ';padding:10px 12px;margin:0 0 12px">' +
-        '<div style="font-size:11px;color:' + sevC[f.sev] + ';font-weight:700">' + (i + 1) + ". " + sevL[f.sev].toUpperCase() + " \u00b7 " + esc((this.AREAS.find(a => a[0] === f.area) || [])[1] || "") + (f.clause ? " \u00b7 " + esc(f.clause) : "") + "</div>" +
-        '<div style="font-size:15px;font-weight:700;margin:3px 0 6px;page-break-after:avoid">' + esc(f.title) + "</div>" +
-        "<p><b>Observation.</b> " + esc(f.problem) + (f.amount ? " Amount involved: \u20b9" + m(f.amount) + "." : "") + "</p>" +
-        "<p><b>Effect.</b> " + esc(f.impact) + "</p><p><b>Recommendation.</b> " + esc(f.suggestion) + "</p>" +
-        (f.je && f.je.length ? "<p><b>Suggested entr" + (f.je.length === 1 ? "y" : "ies") + ".</b></p><table><thead><tr><th>Date</th><th>Ledger</th><th class=\"n\">Debit</th><th class=\"n\">Credit</th></tr></thead><tbody>" +
-          f.je.slice(0, 12).map(j => j.lines.map((l, k) => "<tr><td>" + (k ? "" : fmtDate(tallyDate(j.date))) + "</td><td>" + (l.cr ? "&nbsp;&nbsp;&nbsp;To " : "") + esc(l.l) + (this.exists(l.l) ? "" : " <i>(create)</i>") + '</td><td class="n">' + (l.dr ? m(l.dr) : "") + '</td><td class="n">' + (l.cr ? m(l.cr) : "") + "</td></tr>").join("") +
-            '<tr><td></td><td colspan="3" style="color:#5A6B63;font-size:11px">(' + esc(j.narr) + ")</td></tr>").join("") + "</tbody></table>" + (f.je.length > 12 ? '<p class="note">' + (f.je.length - 12) + " more entries in the Excel.</p>" : "") : "") +
-        (this.solvedOf(f.id).n ? "<p><b>Put right since first found.</b> " + this.solvedOf(f.id).n + " item" + (this.solvedOf(f.id).n === 1 ? "" : "s") + "; " + f.count + " still open.</p>" : "") +
-        "<p><b>Management response.</b> " + esc((this.STATUS.find(x => x[0] === s.s) || [])[1] || "Open") + (s.note ? ": " + esc(s.note) : "") + "</p>" +
-        (f.rows && f.rows.length ? '<table><thead><tr><th>Date</th><th>Voucher</th><th>Party or ledger</th><th class="n">Amount</th><th>Detail</th></tr></thead><tbody>' +
-          f.rows.slice(0, 15).map(r => "<tr><td>" + (r.date ? fmtDate(tallyDate(r.date)) : "") + "</td><td>" + esc(r.no || "") + (r.type ? '<br><span style="color:#5A6B63">' + esc(r.type) + "</span>" : "") + "</td><td>" + esc(r.party || "") + '</td><td class="n">' + (r.amount ? m(r.amount) : "") + "</td><td>" + esc(r.note || "") + "</td></tr>").join("") +
-          "</tbody></table>" + (f.rows.length > 15 ? '<p class="note">Showing 15 of ' + f.rows.length + "; all are in the Excel annexure.</p>" : "") : "") + "</div>";
-    });
-    const done = (run.solved || []).filter(x => x.n);
-    if (done.length){
-      h += "<h2>Put right</h2><p class=\"note\">Found in an earlier run and no longer in the books when checked again.</p><table><thead><tr><th>Observation</th><th>Item</th><th>Date</th><th class=\"n\">Amount</th><th>Put right by</th></tr></thead><tbody>" +
-        done.flatMap(x => x.items.slice(-40).map(it => "<tr><td>" + esc(x.title) + "</td><td>" + esc([(it.row || {}).no, (it.row || {}).party].filter(Boolean).join(" \u00b7 ")) + "</td><td>" + ((it.row || {}).date ? fmtDate(tallyDate(it.row.date)) : "") +
-          '</td><td class="n">' + ((it.row || {}).amount ? m(it.row.amount) : "") + "</td><td>" + fmtDate(String(it.solved).slice(0, 10)) + "</td></tr>")).join("") + "</tbody></table>";
-    }
-    h += '<p class="note" style="margin-top:18px">Result code ' + esc(run.code || "") + ": the same books give the same code. Rules only; nothing in this report is guessed by a machine." + (run.balances ? " Balances: " + esc(run.balances) + "." : "") + "</p>";
-    h += '<p class="note" style="margin-top:6px">Prepared from the books in Tally by ' + esc(co.firm || (S.firm && S.firm.firmName) || "the firm") + ". These are observations for review; each is to be confirmed against the documents before any adjustment is made.</p>";
-    return h;
-  },
-  async toExcel(run){
-    await ensureXlsx();
-    const d = s => s && String(s).length === 8 ? String(s).slice(6, 8) + "-" + String(s).slice(4, 6) + "-" + String(s).slice(0, 4) : s || "";
-    const wb = XLSX.utils.book_new(), add = (name, rows) => XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), name.slice(0, 31));
-    add("Observations", [["#", "Severity", "Area", "Clause", "Observation", "Items", "Amount", "Effect", "Recommendation", "Status", "Note"]].concat(run.findings.map((f, i) =>
-      [i + 1, f.sev, (this.AREAS.find(a => a[0] === f.area) || [])[1], f.clause, f.title + ": " + f.problem, f.count, r2(f.amount), f.impact, f.suggestion, (this.STATUS.find(x => x[0] === this.status(f.id).s) || [])[1], this.status(f.id).note || ""])));
-    add("Annexure", [["#", "Observation", "Date", "Voucher", "Type", "Party or ledger", "Amount", "Detail"]].concat(run.findings.flatMap((f, i) => (f.rows || []).map(r => [i + 1, f.title, d(r.date), r.no, r.type, r.party, r2(r.amount || 0), r.note || ""]))));
-    add("Journal entries", [["#", "Observation", "Date", "Ledger", "Debit", "Credit", "Narration", "Ledger in Tally"]].concat(run.findings.flatMap((f, i) => (f.je || []).flatMap(j => j.lines.map((l, k) =>
-      [i + 1, f.title, k ? "" : d(j.date), l.l, l.dr || "", l.cr || "", k ? "" : j.narr, this.exists(l.l) ? "yes" : "to create"])))));
-    const out = XLSX.write(wb, {bookType: "xlsx", type: "array"});
-    saveFile(CO().name.replace(/[^A-Za-z0-9]+/g, "-") + "-audit-" + run.from + "-" + run.to + ".xlsx", new Blob([out], {type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));
-  }
+  missingLedgers(jes){ return Array.from(new Set(jes.flatMap(j => j.lines.map(l => l.l)).filter(l => !this.exists(l)))); }
+  // (reportHtml, toExcel: with the Audit screen, src/js/77-audit.js AuditRep, for legacy.js's budget)
 });
 // a check that has its steps (checkSteps) is worked out in them by Audit.runIn (a check put in its place has none)
 Object.keys(Audit.checkSteps).forEach(k => { Audit.checks[k].steps = Audit.checkSteps[k]; });
