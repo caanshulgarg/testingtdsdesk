@@ -111,7 +111,7 @@ data, the owner's details, or is asked on the JSON step with the schema's own de
 
 ## 4. Computation rules per form
 
-Common: total income rounded to the nearest 10 (288A); each tax figure to the rupee; the payable or refund to the nearest
+Common: total income rounded to the nearest 10 (288A); each tax figure to the rupee (each special-rate part on its own); the payable or refund to the nearest
 10 (288B). Due dates (schemas' `ItrFilingDueDate`): 31-Aug-2026 non-audit, 31-Oct-2026 audit and companies, 30-Nov-2026
 transfer pricing. Interest: 1% a month or part, on the amount rounded down to Rs 100 (rule 119A); 234A from the day after
 the due date, 234B from 1 April 2026, both to the filing date, a self-assessment payment stopping it from the month after
@@ -128,28 +128,44 @@ business loss forward (80).
 
 | Form | Who | Rules |
 |---|---|---|
-| ITR-3 | Individual / HUF with books | Slabs: new regime 0-4L nil, 5/10/15/20/25/30% to 24L+ (115BAC(1A)); old 2.5L (3L at 60, 5L at 80) 5/20/30%. 87A: new up to Rs 60,000 to Rs 12 lakh with marginal relief; old Rs 12,500 to Rs 5 lakh. Surcharge 10/15/25/37% above 50L/1Cr/2Cr/5Cr, 25% cap in the new regime, 15% cap on 111A/112/112A, marginal relief at each band. Special rates 111A 20%, 112A 12.5% above 1.25L, 112 12.5%, the unused exemption set against them. Chapter VI-A within limits; only 80CCD(2), 80CCH, 80JJAA in the new regime. Regime: both worked out and shown; the owner chooses; old needs Form 10-IEA (asked) |
+| ITR-3 | Individual / HUF with books | Slabs: new regime 0-4L nil, 5/10/15/20/25/30% to 24L+ (115BAC(1A)); old 2.5L (3L at 60, 5L at 80) 5/20/30%. 87A (the reading the owner confirms, below): new regime, eligibility on TOTAL income (special-rate income included) up to Rs 12 lakh, up to Rs 60,000, the rebate and its marginal relief above 12 lakh only ever against the tax on normal income; old regime, total income up to Rs 5 lakh, up to Rs 12,500 against the tax on normal income, 111A and 112 (never 112A). Any rebate with special-rate income is shown on Checks. Surcharge 10/15/25/37% above 50L/1Cr/2Cr/5Cr, 25% cap in the new regime, 15% cap on 111A/112/112A, marginal relief at each band. Special rates 111A 20%, 112A 12.5% above 1.25L, 112 12.5%; the unused basic exemption set first against 111A (20%), then 112, then 112A. Chapter VI-A, each section's limit: 80C + 80CCC + 80CCD(1) 1.5L (80CCE); 80CCD(1B) 50k; 80CCD(2) 14% of salary in the new regime, 10% in the old (14% for a government employer); 80D 25k / 50k (senior) for self and family plus 25k / 50k (senior parents); 80DD 75k / 1.25L severe; 80DDB 40k / 1L senior patient; 80U 75k / 1.25L severe; 80TTA 10k (not seniors), 80TTB 50k (seniors only); 80GG 60k; 80EE 50k; 80EEA / 80EEB 1.5L; 80G 100% / 50% with qualifying donations within 10% of the adjusted gross total income and no cash above Rs 2,000. New regime: 80CCD(2), 80CCH and 80JJAA only. Regime: both worked out and shown; the owner chooses; old needs Form 10-IEA (asked) |
 | ITR-4 | Resident individual / HUF / firm (not LLP), presumptive, TI up to 50L | 44AD 6% of digital receipts + 8% of others (limit 2 Cr, 3 Cr if cash up to 5%); 44ADA 50% (50L, 75L if cash up to 5%; not HUF); 44AE Rs 1,000 a ton a month (heavy) / Rs 7,500 a month, at most 10 vehicles. Declared below the minimum, above the limit, wrong entity, TI above 50L, a tax audit or capital gains beyond 112A 1.25L: Needs you (ITR-3 / ITR-5) |
 | ITR-5 | Firm / LLP | 30%, surcharge 12% above 1 Cr with marginal relief, no 87A. 40(b): interest to partners at most 12% simple; working partners' remuneration up to Rs 3 lakh or 90% of book profit on the first Rs 6 lakh (or a loss), 60% on the rest; book profit = business income before the remuneration (Explanation 3); a sleeping partner's remuneration not allowed |
-| ITR-6 | Company | 25% if FY 2023-24 turnover up to Rs 400 crore (asked), else 30%; surcharge 7% / 12% above 1 / 10 Cr with marginal relief. 115BAA: 22% + 10% + 4% (25.168%), no MAT, no MAT credit. MAT 15% of book profit (+ surcharge, marginal relief, cess) when higher; else MAT credit set off down to the MAT (115JAA) |
+| ITR-6 | Company | 25% if FY 2023-24 turnover up to Rs 400 crore, else 30%: asked, and the JSON is blocked until answered; surcharge 7% / 12% above 1 / 10 Cr with marginal relief. 115BAA: 22% + 10% + 4% (25.168%), no MAT, no MAT credit, Chapter VI-A only 80JJAA and 80M (115BAA(2)(ii); 80IAC and 80G not allowed). MAT 15% of book profit (+ surcharge, marginal relief, cess) when higher; else MAT credit set off down to the MAT (115JAA). The book profit must be entered with the 115JB Explanation 1 adjustments and confirmed (Needs you until then) |
 
-**AOP / BOI and other ITR-5 persons:** not covered yet (Needs you). **Capital gains:** taxed in the computation; the CG
-schedules are not mapped yet, so a return with capital gains shows them only in Part B (owner decision).
+**AOP / BOI and other ITR-5 persons:** not covered yet (Needs you). Firm or LLP is asked in the return (Client setup has
+"Firm or LLP" as one choice); never read from the name. 234C: one instalment by 15 March only for 44AD / 44ADA (44AE alone
+has the four instalments). A belated return carries no business loss of the year forward (section 80): the JSON does not
+claim it, and Checks says so. 40(a)(ia): 30% of the sums on which TDS was not deducted AND of those whose TDS was deducted
+but not deposited by the due date of the return; 40(a)(i): 100% of a non-resident's sum without TDS (non-residents are the
+parties with 27Q details; a foreign-looking party without them is asked). 43B: the payable ledgers at 31-03-2026 (employer
+PF / ESI, bonus, leave encashment, interest to banks / NBFCs, taxes and duties) and their payments in the later entries and
+the March challans up to the due date; the unpaid part is added back; a payment date the books cannot show (the books
+ending before the due date) is Needs you; PF / ESI payables split into the employer's part (43B) and the employee's
+(36(1)(va)) by March's ECR / challan, else Needs you; GST and TDS payable are listed (GST is under 43B only when charged
+to the P&L; unpaid TDS is 40(a)(ia)). 43B(h): each micro / small supplier's bill open at the year end is allowed only if
+paid within the days of the MSMED Act (15, or the agreed days up to 45, from the MSME setting) of its date: paid later, even
+after 31 March and before the return, or unpaid, it is added back; a limit after the books end is Needs you. 36(1)(va): a
+month without its challan is not disallowed; its date is asked; ESI is checked like PF, also for ESI-only employers.
+43B of earlier years paid in this year (last year's disallowance) is entered by the owner as an adjustment.
 
 ## 5. The checks
 
-Each is Matched (both sides agree to the rupee), Difference (the exact amount, both sides with their sources and the
-lines behind them), Missing data, or Needs you.
+Each check compares two independent sources. It is Matched only when both sides are there and agree to the rupee;
+Difference (the exact amount, both sides with their sources and the lines behind them); Missing data when a side is not
+there (never Matched); or Needs you.
 
 | Group | Checks |
 |---|---|
-| 26AS, AIS, TIS | TDS receivable in the books against 26AS (by deductor and section listed); TCS against 26AS; advance-tax ledgers against 26AS challans; self-assessment tax against 26AS; AIS interest, dividend, rent against the return; high-value purchases / sales (Needs you, each listed); AIS GST turnover against the return; AIS TDS against 26AS; TIS business receipts within the turnover; 26AS read completely (its own totals) |
-| Tally books | Sources = application; Part A-P&L profit = the statements' profit; every ledger in a schedule line (the ones not placed named); opening balances = last year's closing (Missing data until last year's balance sheet or ITR is in FinCom); capital account movement (shown with last year's figures) |
-| GST | Turnover = GSTR-1 + the listed reasons (other operating revenue, advances, credit notes across the year end); GSTR-1 = GSTR-3B |
-| TDS returns | Deducted (26Q / 24Q) = credited to TDS payable; deducted = deposited (the undeposited deductees named); 40(a)(ia) worked out and shown |
+| 26AS, AIS, TIS | TDS receivable in the books against 26AS lines of booking status F (U and P are not claimed: Needs you); TCS ledger against 26AS; the books' advance-tax ledger against the 26AS challans (no ledger: Missing data); the self-assessment tax ledger against 26AS; AIS interest, dividend, rent against the return; high-value purchases / sales (Needs you, each listed); AIS GST turnover against the return; AIS TDS against 26AS; TIS business receipts within the turnover; 26AS read completely (its own totals) |
+| Tally books | Sources = application; Part A-P&L profit (FinCom's codes) = Tally's own profit and loss (the ledgers under Tally's revenue groups, by its group chain, with the stock-in-hand ledgers); every ledger in a schedule line; opening balances in Tally = last year's audited balance sheet as uploaded (FinPyBs), else Missing data; capital account: last year's closing capital (uploaded balance sheet) + profit + the year's capital credits - debits = the closing capital, else Missing data |
+| GST | Turnover = the FILED GSTR-1 (the portal's copies or downloads marked filed, totalled from the GSTN JSON) + the listed reasons; filed GSTR-1 = filed GSTR-3B (the portal's 3B JSON); months without a filed return listed |
+| TDS returns | Deducted (26Q / 24Q) = credited to TDS payable; deducted = deposited by the due date; the return's 40(a)(ia) / 40(a)(i) = the same worked out from the TDS records (TDSWatch, the rows and their challans' dates); non-resident or not asked |
+| 43B and 43B(h) | The return's 43B add-back = the books' dues unpaid by the due date (each ledger, its payments and dates); payment dates unknown: Needs you; GST / TDS payable unpaid: asked; the return's 43B(h) = the MSME bills paid after their limit |
 | PF and ESI | An ECR for every month; a challan for every ECR; employer's PF in the books = the ECRs (+ admin charges); employees' share credited by the 15th of the next month (36(1)(va)); the dates feed 43B |
-| Tax audit (3CD) | Where a tax audit applies: 3CD clauses 21(b), 21(d) = Schedule BP's 40(a)(ia), 40A(3); a missing 3CD draft is Missing data |
-| The computation | The right form for the entity; regime and rates right; every deduction within its limit; loss set-off and carry-forward (section 80, lapsed losses); ITR-4 limits; Form 10-IEA; the two computations agree on all 14 figures |
+| Tax audit (3CD) | Where a tax audit applies: the 3CD drafted from the SAVED Audit run of the whole year (clauses 21(b)(ii)(A), 21(d)(A)) against the ITR's schedules as worked out now; no saved run for the year: Missing data |
+| The computation | The right form; firm or LLP; regime and rates (and the company's FY 2023-24 turnover) answered; every deduction within its limit; 87A with special-rate income shown; loss set-off and carry-forward (a belated return's loss lost); ITR-4 limits; Form 10-IEA; MAT book profit confirmed; the two computations agree on all 14 figures |
+| The JSON | Every schedule that has figures is filled by FinCom; one that is not blocks the JSON, said by name (below) |
 
 ## 6. Acceptance rules
 
@@ -161,7 +177,21 @@ lines behind them), Missing data, or Needs you.
 4. **Every figure traced.** Every computation line shows its source; every schedule line its ledgers; every check both
    sides' sources. Unmapped required amounts are 0; nothing else is filled in by FinCom.
 5. **Nothing open.** Every Difference or Missing data is accepted with the owner's note, every Needs you answered with a
-   note; what only the data settles (the form, the regime, the two computations) cannot be accepted.
+   note; what only the data settles (the form, firm or LLP, the regime, the company's turnover, the MAT book profit, a
+   schedule FinCom does not fill, the two computations) cannot be accepted. An acceptance is bound to the check's figures:
+   a fingerprint of the difference and of both sides (amounts and sources); if either side changes, the acceptance lapses
+   ("the figures have changed since") and the check is open again.
+7. **No schedule zero-filled.** A schedule of the official form that has figures in this return but that FinCom does not
+   fill blocks the JSON with its name (Checks › The JSON). Filled from FinCom's data: Part A-BS / P&L / trading account
+   (ITR-3, ITR-5; ITR-6 Schedule III balance sheet and P&L in full), Schedule BP, DPM / DOA / DEP by block, OS, VIA (ITR-3,
+   the allowed amounts), CYLA, BFLA, this year's row of CFL, Part A-OI (audit cases), the audit report details, Schedule
+   GST (from the filed GSTR-1), TDS2 (head of income from the section), IT, TCS, Part B-TI / TTI, ITR-4's 16(ia), VI-A
+   (allowed amounts) and 112A (with the sale and cost entered), ITR-5's partners, ITR-6's MAT and MATC. Not yet filled, so
+   blocking when they have figures: Schedule S (salary, ITR-3), HP, CG / SI (capital gains), the VI-A detail schedules
+   (80C, 80D, 80DD, 80DDB, 80U, 80E, 80EE/A/B, 80G, 80GGA, 80GGC), UD (unabsorbed depreciation), CFL rows of earlier years,
+   AL (income above Rs 1 crore), FA, ITR-5 / ITR-6 Schedule VIA, ITR-6 SH (every unlisted company: ITR-6 is blocked until
+   it is built), Ind AS parts (an Ind AS company); also the authorised capital, the Ind AS question and the loans' purpose
+   when not answered.
 6. Each JSON downloaded carries its version: the return JSON exactly as the schema has it (a key outside the schema would
    make it invalid), and beside it `<form>_<PAN>_AY2026-27_checks.json`: FinCom's version (`fincom-itr-2026.1`), the
    schema file, the computation's totals, every check with its status, amounts, sources and accepted note, and the JSON's
@@ -169,10 +199,14 @@ lines behind them), Missing data, or Needs you.
 
 ## 7. Owner decisions (please confirm)
 
-1. **87A in the new regime and special-rate income.** FinCom gives the rebate only on the tax on normal income and tests
-   eligibility on total income less special-rate income (Finance Act 2025 amendment to section 87A; ITR-4 validation rule
-   227 reads "total income excluding LTCG"). Shown as "confirm" on the sheet.
-2. **Old-regime 87A with 112A gains:** not against 112A tax (112A(6)); against 111A tax it is allowed. Confirm.
+1. **87A in the new regime and special-rate income** (the review's reading, for the owner to confirm): eligibility on
+   TOTAL income including special-rate income (Rs 12 lakh), the rebate and its marginal relief never against special-rate
+   tax (Finance Act 2025 amendment to section 87A). Note: ITR-4 validation rule 227 reads "total income excluding LTCG": the
+   e-filing utility may treat a case with 112A gains differently. Every rebate given with special-rate income is a Needs
+   you on Checks.
+2. **Old-regime 87A:** against the tax on normal income, 111A and 112; never 112A (112A(6)).
+2a. **80JJAA in the new regime:** kept as allowed, because section 115BAC(2)(ii) excludes "Chapter VI-A other than 80CCD(2),
+   80CCH(2) or 80JJAA". The review asked for 80CCD(2) and 80CCH only; confirm.
 3. **Due date of 31 August 2026** for non-audit returns (the schemas allow only this for ITR-4; ITR-4 rule 234). Confirm no
    further extension applies to the client.
 4. **Company rate:** 25% when FY 2023-24 turnover was up to Rs 400 crore (Finance Act 2025, Part I para E). FinCom asks;
@@ -185,9 +219,15 @@ lines behind them), Missing data, or Needs you.
    the page (not committed). Confirm serving them from the site is acceptable, or the page can fetch them another way.
 9. **Portal file layouts** (AIS, TIS, 26AS, pre-filled data, ECR, challans): built from published descriptions; the first
    real file of each kind should be checked (the page marks them).
-10. **Not covered yet:** AOP / BOI / trusts in ITR-5; capital gains schedules (CG, 112A) in the JSON; Ind AS balance sheet
-    figures in ITR-6 (zeros, with the Schedule III balance sheet filled); Schedule DEP block detail in the JSON (the total
-    is mapped); salary schedule detail. Each is a figure of 0 or a "Needs you", never a guess.
+10. **Not covered yet:** AOP / BOI / trusts in ITR-5, and the schedules listed under acceptance rule 7: each blocks the JSON
+    by name when it has figures; nothing is zero-filled. A non-Ind AS company's Ind AS parts (required by the ITR-6 schema)
+    are 0 only after the owner answers that it does not follow Ind AS.
+11. **What b.itr keeps:** only what the checks and the JSON need: per file, its kind, name, SHA-256, PAN, AY and what was
+    read (lines with amounts, deductor / source names and TANs); from the pre-filled data the date of birth, address,
+    email, mobile and the refund bank account (the schema needs them), never the Aadhaar; the owner's answers. The files
+    themselves only in the firm's private storage (client-docs, confirmed private on staging).
+12. **Imports:** a file naming neither a PAN nor an establishment code (an ECR upload file) is taken only after the person
+    says it is the client's; the AIS PAN is read from its taxpayer header (Part A) only.
 
 ## 8. Tests
 

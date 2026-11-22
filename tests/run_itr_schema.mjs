@@ -40,10 +40,10 @@ for (const form of Object.keys(FILES)) {
     const model = buildModel(Object.assign({}, base, { state: st, books: books || D.books }));
     const profile = buildProfile(Object.assign({}, base, { state: st }));
     const comp = compute(model);
-    const first = makeJson({ form, schema, model, comp, sched, profile, answers: {}, today: "2026-11-22" });
+    const first = makeJson({ form, schema, model, comp, sched, profile, answers: {}, today: "2026-11-22", dues43B: D.books.dues43B });
     ok(first.mapErrors.length === 0, form + ", " + name + ": every mapped field is in the schema" + (first.mapErrors.length ? ": " + first.mapErrors.slice(0, 3) : ""));
     ok(first.asks.every((q) => !(q.kind === "number")), form + ", " + name + ": FinCom fills no amount it does not have except with 0; " + first.asks.length + " non-amount fields asked");
-    const r = makeJson({ form, schema, model, comp, sched, profile, answers: answer(first.asks), today: "2026-11-22" });
+    const r = makeJson({ form, schema, model, comp, sched, profile, answers: answer(first.asks), today: "2026-11-22", dues43B: D.books.dues43B });
     const a = ajv(r.doc) && !!(r.doc.ITR && r.doc.ITR[ROOT[form]]);
     ok(a, form + ", " + name + ": passes the official schema (ajv)" + (a ? "" : ": " + JSON.stringify((ajv.errors || []).slice(0, 3))));
     ok(r.schema.ok === a, form + ", " + name + ": the page's validator agrees with ajv");
@@ -54,6 +54,17 @@ for (const form of Object.keys(FILES)) {
     ok(ti === comp.ti && refund === comp.refund && pay === comp.payable, form + ", " + name + ": total income, refund and payable are the computation's (" + ti + ", " + refund + ", " + pay + ")");
     if (sched && form !== "ITR-4" && form !== "ITR-6") { const bs = R.PARTA_BS; ok(bs.FundSrc.TotFundSrc === bs.FundApply.TotFundApply, form + ", " + name + ": Part A-BS sources equal application (" + bs.FundSrc.TotFundSrc + ")"); }
     if (name === "the demo books") {
+      const cov = r.coverage.map((x) => x.key).join(",");
+      ok(form === "ITR-6" ? cov === "sh" : cov === "", form + ": every schedule with figures is filled" + (form === "ITR-6" ? " except Schedule SH, which blocks the JSON" : "") + " (" + (cov || "none open") + ")");
+      const R3 = r.doc.ITR[ROOT[form]];
+      if (form !== "ITR-4") ok(R3.ScheduleDPM && R3.ScheduleDPM.PlantMachinery.Rate15.DepreciationDetail.TotalDepreciation === 180000 && R3.ScheduleDEP.SummaryFromDeprSch.TotalDepreciation === 197500, form + ": Schedule DPM by block (15% 1,80,000; 40% 17,500) and DEP's total 1,97,500");
+      if (form === "ITR-3") ok(R3.ScheduleOS.IncOthThanOwnRaceHorse.IntrstFrmTermDeposit === 52000 && R3.ScheduleCYLA.BusProfExclSpecProf.IncCYLA.IncOfCurYrUnderThatHead === comp.heads.pgbp, "ITR-3: Schedule OS (term deposit interest 52,000) and CYLA from the heads");
+      if (form === "ITR-6") { const bs = R3.PARTA_BSFor6FrmAY13; ok(bs.TotalAssets === bs.EquityAndLiablities.TotEquityAndLiabilities && bs.TotalAssets > 0, "ITR-6: Schedule III balance sheet: total assets = equity and liabilities (" + bs.TotalAssets + ")"); }
+      if (form === "ITR-6") ok(R3.ScheduleMAT && R3.ScheduleMAT.BookProfUs115JB === model.bookProfit && R3.ScheduleMATC.CurAssYr === "2026-27", "ITR-6: Schedules MAT (book profit) and MATC");
+      if (form === "ITR-5") ok(R3.PartA_GEN2.PartnerOrMemberInfo.length === 2 && R3.PartA_GEN2.PartnerOrMemberInfo[0].PAN === "ZZZPA1111A", "ITR-5: the partners' list");
+      if (form === "ITR-4") { const a = model.deductions; ok(R3.IncomeDeductions.DeductUndChapVIA.TotalChapVIADeductions === comp.ded, "ITR-4: Chapter VI-A shows the allowed amounts"); }
+      const tdsHeads = (form === "ITR-4" ? R3.TDSonOthThanSals.TDSonOthThanSalDtls : R3.ScheduleTDS2.TDSOthThanSalaryDtls).map((x) => x.HeadOfIncome).join(",");
+      ok(/OS/.test(tdsHeads) && /BP/.test(tdsHeads), form + ": TDS head of income from the section (194A interest OS, 194J / 194C BP): " + tdsHeads);
       // planted faults: both validators reject each
       const faults = [["a lower-case PAN", (d) => { const p = form === "ITR-4" ? "PersonalInfo" : form === "ITR-3" ? "PartA_GEN1/PersonalInfo" : "PartA_GEN1/OrgFirmInfo"; at(d.ITR[ROOT[form]], p).PAN = "zzzpx9999z"; }],
         ["total income as text", (d) => { const o = form === "ITR-4" ? d.ITR.ITR4.IncomeDeductions : d.ITR[ROOT[form]]["PartB-TI"]; o.TotalIncome = String(o.TotalIncome); }],
@@ -66,6 +77,19 @@ for (const form of Object.keys(FILES)) {
       ok(form === "ITR-4" ? strings.some((q) => /Form10IEAEarlierAYOldRegime/.test(q.path)) : strings.some((q) => /ResidentialStatus/.test(q.path)), form + ": a Yes/No or a choice FinCom cannot know is asked, never assumed (" + strings.map((q) => q.path.split("/").pop()).slice(0, 4).join(", ") + ")");
     }
   }
+}
+console.log("coverage: a schedule with figures FinCom does not fill blocks the JSON");
+{
+  const D = await demo("ITR-3"), schema = schemaOf("ITR-3");
+  const files = Object.entries(D.booksObj.itr).filter(([, v]) => v && v.kind).map(([k, v]) => Object.assign({ id: k }, v)), imports = importsOf(files);
+  const mk = (extra) => { const st = Object.assign({}, D.booksObj.itr["2026|state"], extra); const model = buildModel({ entity: "P", client: D.client, imports, state: st, books: D.books }); const comp = compute(model);
+    return makeJson({ form: "ITR-3", schema, model, comp, sched: D.books.sched, profile: buildProfile({ entity: "P", client: D.client, imports, state: st }), answers: {}, today: "2026-11-22" }).coverage.map((x) => x.key); };
+  ok(mk({ hp: 120000 }).includes("hp"), "house property income: Schedule HP blocks");
+  ok(mk({ salary: { gross: 600000 } }).includes("salary"), "salary in ITR-3: Schedule S blocks");
+  ok(mk({ cg: { s111A: 50000 } }).includes("cg"), "capital gains: Schedule CG blocks");
+  ok(mk({ deductions: { "80C": 100000 }, regime: "old" }).includes("via_80C"), "80C claimed: Schedule 80C details block");
+  ok(mk({ losses: { business: [{ ay: "2023", amt: 50000 }] } }).includes("cfl_prior"), "earlier years' losses: CFL rows block");
+  ok(mk({ audit: true, profile: { auditor: {} } }).includes("audit_info"), "a tax audit without the report's details blocks");
 }
 console.log(fails ? fails + " FAILED" : "all passed");
 process.exit(fails ? 1 : 0);

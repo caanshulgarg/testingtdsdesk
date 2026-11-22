@@ -28,11 +28,11 @@ export function makeStore(deps) {
     return d.save();
   }
   // bring a file in: {name, bytes (Uint8Array), text (or pdf lines), type}
-  async function bring(file, ay = AY_KEY) {
+  async function bring(file, ay = AY_KEY, opts = {}) {
     const f = read(file.name, file.text);
     if (f.error) return { ok: false, refused: true, code: f.error.code, text: f.error.text };
-    const open = d.open(), who = belongs(f, open, d.clients(), ay);
-    if (!who.ok) return { ok: false, refused: true, code: who.code, text: who.text, other: who.other || "" };
+    const open = d.open(), who = belongs(f, open, d.clients(), ay, !!opts.confirmed);
+    if (!who.ok) return { ok: false, refused: true, code: who.code, text: who.text, other: who.other || "", confirm: !!who.confirm };
     const sha = await d.sha(file.bytes), id = ik(ay, f), it = all(), was = it[id];
     if (was && was.sha === sha) return { ok: true, same: true, id, file: was, text: "Already in: this same file was brought in on " + String(was.at || "").slice(0, 10) + ". Nothing changed." };
     let docPath = "", stored = false, storeNote = "";
@@ -57,9 +57,11 @@ export function makeStore(deps) {
     return true;
   }
   // a difference accepted with the owner's note (never without one)
-  function accept(checkId, note, ay = AY_KEY) {
+  // bound to the check's figures (fp, verify.js fingerprint): a change to either side lapses it
+  function accept(checkId, note, fp, ay = AY_KEY) {
     const t = String(note || "").trim(); if (t.length < 3) return { ok: false, text: "Write a short note on why this difference is accepted." };
-    const s = state(ay), acc = Object.assign({}, s.accepted || {}); acc[checkId] = { note: t, at: d.now(), by: d.user() };
+    if (!fp) return { ok: false, text: "The check's figures are not known: open the check again." };
+    const s = state(ay), acc = Object.assign({}, s.accepted || {}); acc[checkId] = { note: t, fp, at: d.now(), by: d.user() };
     setState({ accepted: acc }, ay); return { ok: true };
   }
   function unaccept(checkId, ay = AY_KEY) { const s = state(ay), acc = Object.assign({}, s.accepted || {}); delete acc[checkId]; return setState({ accepted: acc }, ay); }

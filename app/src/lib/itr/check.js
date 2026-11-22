@@ -2,7 +2,7 @@
 // figures (typed again from the Act, not copied from law.js), and works step by step in plain code. The JSON is offered
 // only when this and tax.js agree on every figure in KEYS, to the rupee (gate.js).
 // It follows the same conventions as tax.js where the law leaves a choice (docs/ITR-MODULE.md, "Conventions"):
-// rupee rounding of each tax figure, total income to the nearest 10, the final payable / refund to the nearest 10,
+// rupee rounding of each tax figure (each special-rate part on its own), total income to the nearest 10, the final payable / refund to the nearest 10,
 // interest month by month on the amount rounded down to 100, MAT shown in the tax heads when it is payable.
 export const KEYS = ["gti", "ti", "normalTax", "specialTax", "rebate", "sur", "cess", "liability", "i234a", "i234b", "i234c", "f234f", "payable", "refund"];
 
@@ -53,7 +53,7 @@ function business(inp) {
       }
       inc += p.ae.declared != null ? n(p.ae.declared) : m;
     }
-    return { inc: rup(inc), dep: 0, pres: true };
+    return { inc: rup(inc), dep: 0, pres: !!(p.ad || p.ada) };
   }
   if (!inp.business) return { inc: 0, dep: 0, pres: false };
   const b = inp.business;
@@ -84,34 +84,39 @@ function business(inp) {
 
 function taxParts(inp, ti, normal, s111A, s112A, s112) {
   const ent = inp.entity;
-  let nt, st;
+  let nt, st, t111A = 0, t112 = 0;
   if (ent === "P" || ent === "H") {
     nt = inp.regime === "new" ? slabNew(normal) : slabOld(normal, n(inp.age), ent, inp.resident !== false);
     let unused = basicOf(inp) - normal; if (unused < 0) unused = 0;
     let a = s111A, b = s112A, c = s112;
     if (inp.resident !== false) {
-      let u = Math.min(unused, c); c -= u; unused -= u;
-      u = Math.min(unused, a); a -= u; unused -= u;
+      // first 111A (taxed at 20%), then 112 (12.5%), then 112A
+      let u = Math.min(unused, a); a -= u; unused -= u;
+      u = Math.min(unused, c); c -= u; unused -= u;
       u = Math.min(unused, b); b -= u; unused -= u;
     }
-    st = rup(a * 0.2 + (b > 125000 ? (b - 125000) * 0.125 : 0) + c * 0.125);
+    t111A = rup(a * 0.2); t112 = rup(c * 0.125);
+    st = t111A + t112 + rup(b > 125000 ? (b - 125000) * 0.125 : 0);
   } else if (ent === "C") {
     let rate = 0.25;
     if (inp.regime === "115BAA") rate = 0.22; else if (inp.smallCo === false) rate = 0.3;
     nt = rup(normal * rate);
-    st = rup(s111A * 0.2 + (s112A > 125000 ? (s112A - 125000) * 0.125 : 0) + s112 * 0.125);
+    t111A = rup(s111A * 0.2); t112 = rup(s112 * 0.125); st = t111A + t112 + rup(s112A > 125000 ? (s112A - 125000) * 0.125 : 0);
   } else {
     nt = rup(normal * 0.3);
-    st = rup(s111A * 0.2 + (s112A > 125000 ? (s112A - 125000) * 0.125 : 0) + s112 * 0.125);
+    t111A = rup(s111A * 0.2); t112 = rup(s112 * 0.125); st = t111A + t112 + rup(s112A > 125000 ? (s112A - 125000) * 0.125 : 0);
   }
   // rebate 87A
+  // section 87A: new regime, total income (special-rate income in it) at most 12,00,000, the rebate up to 60,000 out of the
+  // tax on normal income only; above 12,00,000 the tax is cut to the income above it, again only out of the normal tax.
+  // Old regime: total income at most 5,00,000, up to 12,500, out of the tax on normal income, 111A and 112 (not 112A)
   let reb = 0;
   if (ent === "P" && inp.resident !== false) {
     if (inp.regime === "new") {
-      if (normal <= 1200000) reb = Math.min(nt, 60000);
-      else if (nt > normal - 1200000) reb = rup(nt - (normal - 1200000));
+      if (ti <= 1200000) reb = nt < 60000 ? nt : 60000;
+      else { let r = nt + st - (ti - 1200000); if (r < 0) r = 0; reb = r > nt ? nt : rup(r); }
     } else if (ti <= 500000) {
-      reb = Math.min(nt + rup(s111A * 0.2), nt + st, 12500);
+      const e = nt + t111A + t112; reb = e < 12500 ? e : 12500;
     }
   }
   return { nt, st, reb };
@@ -205,19 +210,48 @@ export function check(inp) {
   }
   const spec = a + b + c;
   const gti = rup(s + hp + bp + os + o + spec);
-  // deductions
+  // deductions (Chapter VI-A), each section's limit typed here again from the Act
   const d = inp.deductions || {};
   let ded = 0;
-  if (inp.regime === "new" || ent === "C" || ent === "F") {
-    const ok = ent === "C" || ent === "F" ? ["80G", "80GGB", "80GGC", "80JJAA", "80IAC"] : ["80CCD2", "80CCH", "80JJAA"];
-    for (const k of Object.keys(d)) if (ok.includes(k)) ded += n(d[k]);
-  } else {
-    const senior = n(inp.age) >= 60;
-    ded += Math.min(n(d["80C"]), 150000) + Math.min(n(d["80CCD1B"]), 50000);
-    ded += Math.min(n(d["80D"]), senior ? 100000 : 75000);
-    ded += senior ? Math.min(n(d["80TTB"]), 50000) : Math.min(n(d["80TTA"]), 10000);
-    ded += Math.min(n(d["80GG"]), 60000);
-    for (const k of ["80G", "80E", "80CCD2", "80DD", "80DDB", "80U", "80GGC", "80JJAA"]) ded += n(d[k]);
+  const age = n(inp.age), senior = age >= 60;
+  const salPay = inp.salary ? n(inp.salary.basicDa != null ? inp.salary.basicDa : inp.salary.gross) : 0;
+  const lim = (v, m) => { v = n(v); return v < 0 ? 0 : v > m ? m : v; };
+  const gifts = Array.isArray(d["80G"]) ? d["80G"] : n(d["80G"]) ? [{ amt: n(d["80G"]), pct: 100, qualifying: false }] : [];
+  let may;   // the sections this person may take, or null for the old regime's full list
+  if (ent === "P" || ent === "H") may = inp.regime === "new" ? { "80CCD2": 1, "80CCH": 1, "80JJAA": 1 } : null;
+  else if (ent === "C") may = inp.regime === "115BAA" ? { "80JJAA": 1, "80M": 1 } : { "80G": 1, "80GGA": 1, "80GGB": 1, "80JJAA": 1, "80IA": 1, "80IAB": 1, "80IAC": 1, "80IB": 1, "80IBA": 1, "80IC": 1, "80LA": 1, "80M": 1, "80PA": 1 };
+  else may = { "80G": 1, "80GGA": 1, "80GGC": 1, "80JJAA": 1, "80IA": 1, "80IAB": 1, "80IAC": 1, "80IB": 1, "80IBA": 1, "80IC": 1, "80LA": 1 };
+  const can = (k) => may === null || may[k] === 1;
+  const done = {};
+  for (const key of Object.keys(d)) {
+    if (!/^80/.test(key)) continue;
+    const k = key.split("_")[0];
+    if (done[k] || !can(k)) continue;
+    done[k] = 1;
+    if (k === "80C" || k === "80CCC" || k === "80CCD1") ded += 0;
+    else if (k === "80CCD1B") ded += lim(d[k], 50000);
+    else if (k === "80CCD2") { let pc = 10; if (inp.regime === "new" || (ent !== "P" && ent !== "H") || d.govtEmployer) pc = 14; ded += lim(d[k], rup(salPay * pc / 100)); }
+    else if (k === "80D") { ded += lim(d["80D_self"], senior || d.selfSenior ? 50000 : 25000) + lim(d["80D_parents"], d.parentsSenior ? 50000 : 25000); }
+    else if (k === "80DD") ded += lim(d[k], d.ddSevere ? 125000 : 75000);
+    else if (k === "80DDB") ded += lim(d[k], d.ddbSenior || senior ? 100000 : 40000);
+    else if (k === "80U") ded += lim(d[k], d.uSevere ? 125000 : 75000);
+    else if (k === "80TTA") ded += senior ? 0 : lim(d[k], 10000);
+    else if (k === "80TTB") ded += senior ? lim(d[k], 50000) : 0;
+    else if (k === "80GG") ded += lim(d[k], 60000);
+    else if (k === "80EE") ded += lim(d[k], 50000);
+    else if (k === "80EEA" || k === "80EEB") ded += lim(d[k], 150000);
+    else if (k === "80G") ded += 0;
+    else ded += n(d[k]);
+  }
+  if (can("80C") && (n(d["80C"]) || n(d["80CCC"]) || n(d["80CCD1"]))) ded += lim(n(d["80C"]) + n(d["80CCC"]) + n(d["80CCD1"]), 150000);
+  if (can("80G") && gifts.length) {
+    const ok = gifts.filter((x) => !(n(x.cash) > 2000));
+    let qual = 0; for (const x of ok) if (x.qualifying) qual += n(x.amt);
+    let room = gti - spec - ded; if (room < 0) room = 0;
+    let left = Math.min(qual, rup(room * 0.1)), g = 0;
+    for (const x of ok) if (!x.qualifying) g += n(x.amt) * n(x.pct || 100) / 100;
+    for (const x of ok) if (x.qualifying) { const u = Math.min(n(x.amt), left); left -= u; g += u * n(x.pct || 100) / 100; }
+    ded += rup(g);
   }
   ded = rup(ded);
   if (ded > gti - spec) ded = rup(Math.max(0, gti - spec));

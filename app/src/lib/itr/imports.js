@@ -157,10 +157,20 @@ function panAy(j) {
   walk(j, 0);
   return { pan, ay, fy, name: nm };
 }
+// the AIS's own taxpayer header (Part A / taxpayer information): the PAN is taken from there only, never from a line
+// (a deductor's or buyer's PAN in a line would otherwise pass for the taxpayer's)
+function headerOf(j) {
+  const HDR = /^(parta|part_a|taxpayerinfo|taxpayerinformation|taxpayerdetails|header|assesseedetails|personalinfo|generalinformation)$/i;
+  const hits = [];
+  const walk = (o, d) => { if (!o || typeof o !== "object" || Array.isArray(o) || d > 3) return; Object.keys(o).forEach((k) => { if (HDR.test(k) && o[k] && typeof o[k] === "object") hits.push(o[k]); else walk(o[k], d + 1); }); };
+  walk(j, 0);
+  return hits[0] || null;
+}
 function aisJson(j) {
-  const id = panAy(j), rows = [];
+  const h = headerOf(j), id = h ? panAy(h) : { pan: "", ay: "", fy: "", name: "" }, rows = [];
+  if (h && (!id.ay || !id.fy)) { const all = panAy(j); id.ay = id.ay || all.ay; id.fy = id.fy || all.fy; }
   walkLines(j, (r) => rows.push(r));
-  if (!id.pan) return { error: { code: "no_pan", text: "No PAN was found in this AIS." } };
+  if (!id.pan) return { error: { code: "no_pan", text: "No PAN was found in this AIS's taxpayer header (Part A)." } };
   return Object.assign(id, { key: "ais", data: { rows }, read: { sections: summarize(aisSections(rows)) } });
 }
 function aisSections(rows) {
@@ -264,7 +274,8 @@ function as26Text(t) {
 // ---- the e-filing portal's pre-filled data (JSON)
 function prefillJson(j) {
   const id = panAy(j), tds = [], tax = [], bank = [];
-  let dob = "", addr = null, email = "", mobile = "", aadhaar = "";
+  // kept: only what the return's JSON needs (date of birth, address, contact, refund bank, TDS and challans); no Aadhaar
+  let dob = "", addr = null, email = "", mobile = "";
   const walk = (o, d, path) => {
     if (!o || typeof o !== "object" || d > 10) return;
     if (Array.isArray(o)) { o.forEach((x) => walk(x, d + 1, path)); return; }
@@ -273,7 +284,6 @@ function prefillJson(j) {
     if (!dob) { const v = get(/^(dob|dateofbirth|dateofincorporation)$/); if (v && dateOf(v)) dob = dateOf(v); }
     if (!email) { const v = get(/^(email|emailaddress)$/); if (v) email = String(v); }
     if (!mobile) { const v = get(/^(mobile|mobileno)$/); if (v) mobile = String(v); }
-    if (!aadhaar) { const v = get(/^(aadhaar|aadhaarcardno|aadhaarno)$/); if (v) aadhaar = String(v); }
     if (!addr && get(/^(pincode|pin)$/) != null) addr = { line: [get(/residenceno|flatdoor|doorno/), get(/roadorstreet|street/), get(/localityorarea|area/)].filter(Boolean).join(", "), city: get(/cityortownordistrict|city/) || "", state: String(get(/statecode|state/) || ""), pin: String(get(/^(pincode|pin)$/) || ""), country: String(get(/countrycode/) || "91") };
     const tan = get(/^tan|tanofdeductor|deductortan$/), ifsc = get(/^ifsc|ifsccode$/), bsr = get(/^bsr|bsrcode$/);
     if (tan && TAN_RE.test(String(tan))) tds.push({ tan: String(tan), name: String(get(/deductorname|name/) || ""), sec: section(get(/section/) || ""), amount: num(get(/^(amount|amountpaid|grossamount|totalamount)$/)) || 0, tax: num(get(/^(taxdeducted|tds|tdsamount|totaltds|claimed)$/)) || 0 });
@@ -284,7 +294,7 @@ function prefillJson(j) {
   walk(j, 0, "");
   if (!id.pan) return { error: { code: "no_pan", text: "No PAN was found in the pre-filled data." } };
   const sections = [{ name: "TDS", count: tds.length, total: tds.reduce((s, r) => s + r.tax, 0) }, { name: "Taxes paid", count: tax.length, total: tax.reduce((s, r) => s + r.amount, 0) }, { name: "Bank accounts", count: bank.length, total: 0 }];
-  return Object.assign(id, { key: "prefill", data: { dob, addr, email, mobile, aadhaarLast4: aadhaar ? String(aadhaar).slice(-4) : "", tds, tax, bank }, read: { sections: sections.filter((s) => s.count).map((s) => ({ name: s.name, count: s.count, total: r2(s.total) })) } });
+  return Object.assign(id, { key: "prefill", data: { dob, addr, email, mobile, tds, tax, bank }, read: { sections: sections.filter((s) => s.count).map((s) => ({ name: s.name, count: s.count, total: r2(s.total) })) } });
 }
 // ---- EPFO ECR: the upload text (UAN#~#Name#~#Gross#~#EPF wages#~#EPS wages#~#EDLI wages#~#EPF#~#EPS#~#Diff#~#NCP#~#Refund)
 // or the statement CSV / PDF text (a header with the establishment, the wage month and the TRRN; member rows)
@@ -346,8 +356,10 @@ function esicText(t) {
 // ---------------- whose file: the client and the year ----------------
 // clients: [{id, name, pan, pfCode, esiCode}]; open: the client the page is on; ay: "2026"
 // -> {ok: true} or {ok: false, code, text} (the refusal says which)
-export function belongs(f, open, clients, ay) {
+// confirmed: the person said the file is this client's (only asked for a file that names no PAN and no code)
+export function belongs(f, open, clients, ay, confirmed) {
   const want = String(ay || "2026");
+  if (!f.pan && !f.estCode && !confirmed) return { ok: false, code: "confirm", confirm: true, text: "This " + f.label + " names no PAN and no establishment code. Is it " + (open.name || "this client") + "'s?" };
   if (f.pan) {
     const p = String(open.pan || "").toUpperCase();
     if (!p) return { ok: false, code: "client_no_pan", text: "This client has no PAN in Client setup. Add it, then bring the file in again." };

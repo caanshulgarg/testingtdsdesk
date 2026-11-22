@@ -82,7 +82,13 @@ export const FEE234F = { full: 5000, small: 1000, smallIncome: 500000, src: "Sec
 export const VIA = {
   "80C": 150000, "80CCD1B": 50000, "80D_self": 25000, "80D_selfSenior": 50000, "80D_parents": 25000, "80D_parentsSenior": 50000,
   "80TTA": 10000, "80TTB": 50000, "80GG": 60000,
-  newAllowed: ["80CCD2", "80CCH", "80JJAA"],
+  // new regime, individuals / HUF: 80CCD(2), 80CCH and 80JJAA (115BAC(2)(ii)); 115BAA companies: 80JJAA and 80M
+  // (115BAA(2)(ii)); other companies and firms: the business and donation sections
+  newAllowed: ["80CCD2", "80CCH", "80JJAA"], baaAllowed: ["80JJAA", "80M"],
+  coAllowed: ["80G", "80GGA", "80GGB", "80JJAA", "80IA", "80IAB", "80IAC", "80IB", "80IBA", "80IC", "80LA", "80M", "80PA"], firmAllowed: ["80G", "80GGA", "80GGC", "80JJAA", "80IA", "80IAB", "80IAC", "80IB", "80IBA", "80IC", "80LA"],
+  ccd2New: 0.14, ccd2Old: 0.1, d80Self: 25000, d80SelfSenior: 50000, d80Par: 25000, d80ParSenior: 50000,
+  dd80: 75000, dd80Severe: 125000, ddb80: 40000, ddb80Senior: 100000, u80: 75000, u80Severe: 125000, ee80: 50000, eea80: 150000, g80Limit: 0.1, g80Cash: 2000,
+  src2: "80CCD(2) as amended by the Finance (No. 2) Act 2024 (14% in the new regime, 10% otherwise, 14% for government employers); 80D(2)-(3); 80DD(1); 80DDB; 80U(1); 80G(4), (5D); 80EE, 80EEA, 80EEB",
   src: "Chapter VI-A (sections 80C, 80CCE, 80CCD(1B), 80D, 80GG, 80TTA, 80TTB); section 115BAC(2) for the new regime",
 };
 

@@ -13,7 +13,7 @@ import { compute, compareRegimes, fmtDate } from "../../lib/itr/tax.js";
 import { check, differences } from "../../lib/itr/check.js";
 import { verify, gate, GROUPS, isOpen } from "../../lib/itr/verify.js";
 import { fromApp } from "../../lib/itr/books.js";
-import { gstData, tdsData, pfBooks, form3cdTie, clientOf } from "../../lib/itr/appData.js";
+import { gstData, pfBooks, clientOf } from "../../lib/itr/appData.js";
 import { makeJson, report, VERSION } from "../../lib/itr/json.js";
 import { SCHEMA_FILES } from "../../lib/itr/forms.js";
 import { rows as sheetRows, money, openPdf, workbook } from "../../lib/itr/sheet.js";
@@ -48,38 +48,44 @@ function demoDeps(D) {
     upload: async (path) => { (D.uploads = D.uploads || []).push(path); return { ok: true, path }; }, remove: async (path) => { (D.removed = D.removed || []).push(path); } };
 }
 
+// everything the page shows, worked out once a drawing: the books, the model, both computations, the JSON (once the
+// official schema is in) and the checks (which take the JSON's coverage: a schedule with figures FinCom does not fill)
 function useItr() {
   const D = window.__itrDemo || null;
   const store = useMemo(() => makeStore(D ? demoDeps(D) : appDeps()), [D]);
   const client = D ? D.client : clientOf();
   const files = store.files(), state = store.state(), imports = importsOf(files);
   const booksRev = D ? 0 : (typeof BOOKS_REV === "number" ? BOOKS_REV : 0);
-  const books = useMemo(() => (D ? D.books : fromApp(String(+AY_KEY - 1), imports)), [D, booksRev, files.length]);
-  const entity = client.entity, form = state.form || formsFor(entity, client.llp)[0];
-  const model = buildModel({ entity, llp: client.llp, client, state: Object.assign({}, state, { form }), books, imports });
+  const entity = client.entity, form = state.form || formsFor(entity, state.llp)[0];
+  const due = state.tp ? "20261130" : (state.audit || entity === "C") ? "20261031" : "20260831";
+  const books = useMemo(() => (D ? D.books : fromApp(String(+AY_KEY - 1), imports, due)), [D, booksRev, files.length, due]);
+  const model = buildModel({ entity, client, state: Object.assign({}, state, { form }), books, imports });
   const profile = buildProfile({ entity, client, state, imports });
   const comp = compute(model), second = check(model);
-  const gst = D ? D.gst : gstData(String(+AY_KEY - 1), books), tds = D ? D.tds : tdsData(String(+AY_KEY - 1));
-  const bkV = books && books.ok ? Object.assign({}, books, { plPbt: D ? D.plPbt : books.sched.totals.pbt, opening: D ? D.opening : null, capital: D ? D.capital : null }) : books;
-  const checks = verify({ model, main: comp, imports, books: bkV, gst, tds, form3cd: D ? D.form3cd : form3cdTie(books, comp), pfInBooks: !!(pfBooks(books)), pfBooks: pfBooks(books), pfAdminCharges: state.pfAdmin, pf36va: model.pf36va, accepted: state.accepted || {} });
-  return { D, store, client, files, state, imports, books, form, model, profile, comp, second, checks };
+  const sch = useSchema(form);
+  const gst = D ? D.gst : gstData(String(+AY_KEY - 1), books);
+  const bk = books && books.ok ? books : null;
+  const gstTurnover = gst && gst.ok ? (gst.perGstin || (client.gstin && gst.filedR1 != null ? [{ gstin: client.gstin, amt: gst.filedR1 }] : [])) : [];
+  const json = sch.schema ? makeJson({ form, schema: sch.schema, model, comp, sched: bk ? bk.sched : null, profile, answers: (state.answers || {})[form] || {}, today: new Date().toISOString().slice(0, 10),
+    dues43B: bk ? bk.dues43B : [], gstTurnover, gstRegistered: !!client.gstin }) : null;
+  const checks = verify({ model, main: comp, imports, books, gst, tds: bk ? bk.tds : null, form3cd: bk ? bk.form3cd : null, pfBooks: pfBooks(books), esiBooks: bk ? bk.esiBooks : null, pfAdminCharges: state.pfAdmin,
+    pf36va: model.pf36va, dues43B: bk ? bk.dues43B : null, msme: bk ? bk.msme : null, nrAsk: bk ? bk.nrAsk : [], coverage: json ? json.coverage : [], accepted: state.accepted || {} });
+  return { D, store, client, files, state, imports, books, form, model, profile, comp, second, checks, sch, json };
 }
 
 export default function ITR() {
   const [, tick] = useState(0);
   const refresh = () => { tick((x) => x + 1); redraw(); };
-  const X = useItr();
-  const sch = useSchema(X.form);
-  const co = typeof CO === "function" ? CO() : null;
-  if (!co && !window.__itrDemo) return null;
+  const X = useItr(), sch = X.sch, json = X.json;
   const tab = typeof booksTab === "function" ? booksTab() : "itr";
   const step = STEPS.some(([k]) => k === tab) ? tab : "itr";
-  // on a phone the steps scroll sideways: the one open is brought into view
+  // on a phone the steps scroll sideways: the one open is brought into view (every hook before any early return)
   useEffect(() => { try { const e = document.querySelector("[data-itr-tab][data-on='1']"); if (e && e.scrollIntoView) e.scrollIntoView({ block: "nearest", inline: "nearest" }); } catch (x) { /* only a nicety */ } }, [step]);
-  const json = sch.schema ? makeJson({ form: X.form, schema: sch.schema, model: X.model, comp: X.comp, sched: X.books && X.books.ok ? X.books.sched : null, profile: X.profile, answers: (X.state.answers || {})[X.form] || {}, today: new Date().toISOString().slice(0, 10) }) : null;
+  const co = typeof CO === "function" ? CO() : null;
+  if (!co && !window.__itrDemo) return null;
   const g = gate(X.checks, json ? (json.asks.length ? { ok: false, errors: json.asks.map((a) => ({ path: a.path, msg: "to answer" })) } : json.schema) : null);
   const open = X.checks.filter(isOpen);
-  const ent = { P: "Individual", H: "HUF", F: X.client.llp ? "LLP" : "Firm", C: "Company" }[X.client.entity] || "Other";
+  const ent = { P: "Individual", H: "HUF", F: X.model.llp === true ? "LLP" : X.model.llp === false ? "Firm" : "Firm or LLP", C: "Company" }[X.client.entity] || "Other";
   return <div className="itr" data-itr="" data-itr-step={step}>
     <header className="itr-head">
       <div>
@@ -115,7 +121,7 @@ function DataStep({ X, refresh }) {
       try {
         const fi = await fileIn(f, { passwords: dob ? [dob, String(X.client.pan || "").toLowerCase() + dob] : [] });
         const r = await X.store.bring(fi);
-        out.push({ name: f.name, ok: r.ok, text: r.text, ask: r.ask, id: r.id });
+        out.push({ name: f.name, ok: r.ok, text: r.text, ask: r.ask, id: r.id, confirm: r.confirm ? fi : null });
       } catch (e) { out.push({ name: f.name, ok: false, text: e && e.code === "pdf_password" ? "This PDF has a password FinCom could not open it with (the date of birth as DDMMYYYY; for AIS the PAN in small letters with it). Download the text or JSON instead." : "The file could not be read." }); }
     }
     setSaid(out); setBusy(false); refresh();
@@ -131,6 +137,7 @@ function DataStep({ X, refresh }) {
         <span className="itr-note">AIS, TIS, 26AS, pre-filled JSON, PF ECR and challans, ESI challans. FinCom tells which is which.</span>
       </label>
       {said.length > 0 && <ul className="itr-said" data-itr-said="">{said.map((s, i) => <li key={i} data-ok={s.ok ? "1" : "0"}><b>{s.name}</b> {s.text}
+        {s.confirm && <span> <button className="linkbtn" data-itr-confirm="" onClick={async () => { const r = await X.store.bring(s.confirm, AY_KEY, { confirmed: true }); setSaid(said.map((z, j) => j === i ? { name: z.name, ok: r.ok, text: r.text, ask: r.ask } : z)); refresh(); }}>{"Yes, it is " + (X.client.name || "this client") + "'s"}</button></span>}
         {s.ask && <span> {s.ask.text} <button className="linkbtn" data-itr-yes={s.ask.key} onClick={() => { X.store.setState({ [s.ask.key]: s.ask.value }); setSaid(said.map((z, j) => j === i ? Object.assign({}, z, { ask: null, text: z.text + " Remembered." }) : z)); refresh(); }}>Yes, it is</button></span>}</li>)}</ul>}
       <div className="itr-files">
         {KINDS.map(([k, label]) => { const f = fileOf(k); return <FileRow key={k} k={k} label={label} f={f} open={open === k} onOpen={() => setOpen(open === k ? "" : k)} onDrop={() => { X.store.drop(f.id); refresh(); }} />; })}
@@ -186,6 +193,14 @@ function ReturnCard({ X, refresh }) {
     {more && <div className="itr-more" data-itr-details="">
       {X.form === "ITR-4" && <Presumptive X={X} set={set} />}
       {ent === "F" && <Partners X={X} set={set} />}
+      {ent === "F" && <label className="itr-field"><span>Firm or LLP</span><select data-itr-llp="" value={st.llp === true ? "llp" : st.llp === false ? "firm" : ""} onChange={(e) => set({ llp: e.target.value === "" ? undefined : e.target.value === "llp" })}><option value="">Choose</option><option value="firm">Partnership firm</option><option value="llp">LLP</option></select></label>}
+      {ent === "C" && st.regime === "normal" && <div className="itr-grid"><label className="itr-field"><span>Book profit under 115JB (with the Explanation 1 adjustments)</span><input inputMode="numeric" data-itr-bp="" value={st.bookProfit ?? ""} onChange={(e) => set({ bookProfit: e.target.value === "" ? "" : +e.target.value, bookProfitOk: false })} /></label>
+        <label className="itr-field itr-tick"><input type="checkbox" data-itr-bp-ok="" checked={!!st.bookProfitOk} onChange={(e) => set({ bookProfitOk: e.target.checked })} /><span>The book profit is confirmed</span></label></div>}
+      {ent === "C" && <Yn label="Follows Ind AS" k="indAs" X={X} set={set} />}
+      {ent === "C" && <Yn label="Listed company" k="listed" X={X} set={set} />}
+      {ent !== "P" || X.form !== "ITR-4" ? <Yn label="Every loan and advance given is for the business" k="loansForBusiness" X={X} set={set} /> : null}
+      {st.audit && <Auditor X={X} set={set} />}
+      {(ent === "P" || ent === "H") && <Via X={X} set={set} />}
       {ent === "C" && <label className="itr-field"><span>Turnover of FY 2023-24 within Rs 400 crore</span><select data-itr-small="" value={st.smallCo === false ? "no" : st.smallCo ? "yes" : ""} onChange={(e) => set({ smallCo: e.target.value === "" ? undefined : e.target.value === "yes" })}><option value="">Choose</option><option value="yes">Yes (25%)</option><option value="no">No (30%)</option></select></label>}
       <Profile X={X} set={set} />
     </div>}
@@ -202,12 +217,37 @@ function Presumptive({ X, set }) {
 }
 function Partners({ X, set }) {
   const ps = X.state.partners || [];
-  const upd = (i, f, v) => set({ partners: ps.map((p, j) => (j === i ? Object.assign({}, p, { [f]: f === "name" ? v : +v }) : p)) });
-  return <div data-itr-partners=""><table className="itr-mini"><thead><tr><th>Partner</th><th>Remuneration</th><th>Interest</th><th>Rate %</th></tr></thead><tbody>
-    {ps.map((p, i) => <tr key={i}><td><input value={p.name || ""} onChange={(e) => upd(i, "name", e.target.value)} /></td><td><input inputMode="numeric" value={p.remuneration || ""} onChange={(e) => upd(i, "remuneration", e.target.value)} /></td>
+  const upd = (i, f, v) => set({ partners: ps.map((p, j) => (j === i ? Object.assign({}, p, { [f]: f === "name" || f === "pan" ? v : +v }) : p)) });
+  return <div data-itr-partners=""><table className="itr-mini"><thead><tr><th>Partner</th><th>PAN</th><th>Share %</th><th>City, state code, PIN</th><th>Remuneration</th><th>Interest</th><th>Rate %</th></tr></thead><tbody>
+    {ps.map((p, i) => <tr key={i}><td><input value={p.name || ""} onChange={(e) => upd(i, "name", e.target.value)} /></td><td><input value={p.pan || ""} onChange={(e) => upd(i, "pan", e.target.value.toUpperCase())} /></td>
+      <td><input inputMode="numeric" value={p.share ?? ""} onChange={(e) => upd(i, "share", e.target.value)} /></td>
+      <td><input value={[p.city, p.state, p.pin].filter((x) => x != null && x !== "").join(", ")} onChange={(e) => { const [c, st2, pin] = e.target.value.split(",").map((x) => x.trim()); set({ partners: ps.map((q, j) => (j === i ? Object.assign({}, q, { city: c || "", state: st2 || "", pin: pin || "" }) : q)) }); }} /></td>
+      <td><input inputMode="numeric" value={p.remuneration || ""} onChange={(e) => upd(i, "remuneration", e.target.value)} /></td>
       <td><input inputMode="numeric" value={p.interest || ""} onChange={(e) => upd(i, "interest", e.target.value)} /></td><td><input inputMode="numeric" value={p.rate || ""} onChange={(e) => upd(i, "rate", e.target.value)} /></td></tr>)}
   </tbody></table><button className="linkbtn" data-itr-add-partner="" onClick={() => set({ partners: ps.concat([{ name: "", remuneration: 0, interest: 0, rate: 12 }]) })}>Add a partner</button>
   {X.comp.p40b && <p className="itr-note">{"Book profit " + money(X.comp.p40b.bookProfit) + " · 40(b) limit " + money(X.comp.p40b.limit) + " · allowed " + money(X.comp.p40b.allowed)}</p>}</div>;
+}
+// a Yes / No kept in the person's details (the profile), unanswered until chosen
+function Yn({ label, k, X, set }) {
+  const own = X.state.profile || {}, v = own[k];
+  return <label className="itr-field"><span>{label}</span><select data-itr-yn={k} value={v === true ? "y" : v === false ? "n" : ""} onChange={(e) => set({ profile: Object.assign({}, own, { [k]: e.target.value === "" ? undefined : e.target.value === "y" }) })}><option value="">Choose</option><option value="y">Yes</option><option value="n">No</option></select></label>;
+}
+function Auditor({ X, set }) {
+  const own = X.state.profile || {}, a = own.auditor || {};
+  const upd = (k, v) => set({ profile: Object.assign({}, own, { auditor: Object.assign({}, a, { [k]: v }) }) });
+  return <div className="itr-grid" data-itr-auditor="">{[["firm", "Auditor's firm"], ["firmPan", "Firm's PAN"], ["reportDate", "Date of the audit report", "date"], ["ack", "Acknowledgement of 3CA / 3CB"]].map(([k, l, t]) =>
+    <label key={k} className="itr-field"><span>{l}</span><input type={t || "text"} data-itr-aud={k} value={a[k] || ""} onChange={(e) => upd(k, e.target.value)} /></label>)}</div>;
+}
+// Chapter VI-A claims (old regime: each section's limit applied by the computation; the new regime takes 80CCD(2), 80CCH)
+const VIA_F = [["80C", "80C"], ["80CCD1B", "80CCD(1B)"], ["80CCD2", "80CCD(2) employer"], ["80D_self", "80D self and family"], ["80D_parents", "80D parents"], ["80DD", "80DD"], ["80DDB", "80DDB"], ["80U", "80U"], ["80E", "80E"], ["80TTA", "80TTA"], ["80TTB", "80TTB"], ["80CCH", "80CCH"]];
+function Via({ X, set }) {
+  const d = X.state.deductions || {};
+  const upd = (k, v) => set({ deductions: Object.assign({}, d, { [k]: v === "" ? "" : +v }) });
+  const flag = (k, v) => set({ deductions: Object.assign({}, d, { [k]: v }) });
+  return <div data-itr-via=""><div className="itr-grid">{VIA_F.map(([k, l]) => <label key={k} className="itr-field"><span>{l}</span><input inputMode="numeric" data-itr-via-k={k} value={d[k] ?? ""} onChange={(e) => upd(k, e.target.value)} /></label>)}</div>
+    <div className="itr-grid">{[["parentsSenior", "Parents are senior citizens"], ["ddSevere", "80DD: severe disability"], ["uSevere", "80U: severe disability"], ["ddbSenior", "80DDB: patient a senior citizen"], ["govtEmployer", "Employer is the government"]].map(([k, l]) =>
+      <label key={k} className="itr-field itr-tick"><input type="checkbox" checked={!!d[k]} onChange={(e) => flag(k, e.target.checked)} /><span>{l}</span></label>)}</div>
+    {X.comp.viaAllowed && Object.keys(X.comp.viaAllowed).length > 0 && <p className="itr-note">{"Allowed: " + Object.entries(X.comp.viaAllowed).map(([k, v]) => k + " " + money(v)).join(" · ")}</p>}</div>;
 }
 const PF = [["dob", "Date of birth / incorporation", "date"], ["father", "Father's name (verification)"], ["verName", "Verified by"], ["verPan", "Verifier's PAN"], ["place", "Place"], ["email", "Email"], ["mobile", "Mobile"], ["swId", "Software ID (SW + 8 digits)"]];
 function Profile({ X, set }) {
@@ -300,9 +340,10 @@ function Check({ c, X, open, onOpen, refresh }) {
       {c.text && <p className="itr-note">{c.text}</p>}
       {c.rows && c.rows.length > 0 && <table className="itr-mini"><tbody>{c.rows.slice(0, 30).map((r, i) => <tr key={i}><td>{r.label}</td><td className="n">{r.a == null ? "" : money(r.a)}</td><td className="n">{r.b == null ? "" : money(r.b)}</td>{r.diff != null && <td className="n">{money(r.diff)}</td>}</tr>)}</tbody></table>}
       {c.how && <p className="itr-how">{c.how}</p>}
+      {c.lapsed && !c.accepted && <p className="itr-err" data-itr-lapsed="">{"Accepted on " + String(c.lapsed.at).slice(0, 10) + " (“" + c.lapsed.note + "”), but the figures have changed since: look again."}</p>}
       {c.accepted ? <p className="itr-note" data-itr-accepted-note="">{(c.status === "needs" ? "Answered: " : "Accepted: ") + c.accepted.note + " (" + c.accepted.by + ", " + String(c.accepted.at).slice(0, 10) + ") "}<button className="linkbtn" onClick={() => { X.store.unaccept(c.id); refresh(); }}>Undo</button></p>
         : c.status !== "matched" && !c.noAccept && <div className="itr-accept"><input data-itr-note={c.id} placeholder={c.status === "needs" ? "Your answer" : "Why this is right (a note)"} value={note} onChange={(e) => setNote(e.target.value)} />
-          <button className="btn small" data-itr-accept={c.id} onClick={() => { const r = X.store.accept(c.id, note); if (!r.ok) setErr(r.text); else { setErr(""); refresh(); } }}>{c.status === "needs" ? "Confirm" : "Accept"}</button>{err && <span className="itr-err">{err}</span>}</div>}
+          <button className="btn small" data-itr-accept={c.id} onClick={() => { const r = X.store.accept(c.id, note, c.fp); if (!r.ok) setErr(r.text); else { setErr(""); refresh(); } }}>{c.status === "needs" ? "Confirm" : "Accept"}</button>{err && <span className="itr-err">{err}</span>}</div>}
     </div>}
   </div>;
 }

@@ -5,7 +5,7 @@
 // (check.js) against the first on 600 made-up returns, and a planted difference caught.
 import { compute, limit40b, presumptive, monthsAfter, interest } from "../app/src/lib/itr/tax.js";
 import { check, differences, KEYS } from "../app/src/lib/itr/check.js";
-import { adjustments, pf36va } from "../app/src/lib/itr/books.js";
+import { adjustments, pf36va, dues43B } from "../app/src/lib/itr/books.js";
 
 let fails = 0;
 const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };
@@ -86,8 +86,8 @@ ok(compute(biz(-800000, { salary: { gross: 1000000, std: 75000 } })).gti === 925
 console.log("Chapter VI-A");
 const d1 = compute(biz(1000000, { regime: "old", deductions: { "80C": 200000, "80TTA": 15000 } }));
 ok(d1.ded === 160000 && d1.warn.some((w) => w.key === "via_80C"), "old: 80C capped at 1.5 lakh, 80TTA at 10,000");
-const d2 = compute(biz(1000000, { deductions: { "80C": 150000, "80CCD2": 50000 } }));
-ok(d2.ded === 50000 && d2.warn.some((w) => w.key === "via_80C"), "new regime: 80C left out, 80CCD(2) allowed");
+const d2 = compute(biz(1000000, { salary: { gross: 800000, std: 75000 }, deductions: { "80C": 150000, "80CCD2": 50000 } }));
+ok(d2.ded === 50000 && d2.warn.some((w) => w.key === "via_80C"), "new regime: 80C left out, 80CCD(2) allowed (within 14% of salary)");
 ok(compute(biz(100000, { regime: "old", cg: { s111A: 300000 }, deductions: { "80C": 150000 } })).ded === 100000, "deductions never against special-rate income");
 console.log("special rates");
 const c1 = compute(biz(300000, { cg: { s111A: 200000 } }));
@@ -116,12 +116,55 @@ ok(!pv.find((x) => x.ym === "202504").late, "PF for April paid on 15 May: in tim
 ok(pv.find((x) => x.ym === "202505").late && pv.find((x) => x.ym === "202505").due === "20250615", "PF for May paid on 16 June: late (due 15 June, no grace)");
 ok(!pv.find((x) => x.ym === "202603").late && pv.find((x) => x.ym === "202603").due === "20260415", "PF for March paid 14 April 2026: in time (due 15 April)");
 ok(pv.find((x) => x.fund === "ESI").late && pv.find((x) => x.fund === "ESI").due === "20260115", "ESI for December paid 16 January: late (December's due date crosses the year)");
-const a1 = adjustments({ dues43B: [{ ledger: "PF PAYABLE", kind: "PF", closing: 20000, paidByDue: 20000 }, { ledger: "BONUS PAYABLE", kind: "bonus", closing: 50000, paidByDue: 5000 }], pf36va: pv });
+const a1 = adjustments({ dues43B: dues43B([{ ledger: "PF PAYABLE", closing: 20000 }, { ledger: "BONUS PAYABLE", closing: 50000 }], [{ ledger: "PF PAYABLE", date: "20260415", amt: 20000 }, { ledger: "BONUS PAYABLE", date: "20260820", amt: 5000 }], "20260831", "20260930", { pf: 1 }), pf36va: pv });
 ok(a1.adds.find((a) => a.key === "43b").amt === 45000, "43B: bonus payable 50,000, 5,000 paid by the due date: 45,000 added back; PF paid in full: nothing");
 ok(a1.adds.find((a) => a.key === "36va").amt === 5375, "36(1)(va): the late months' employees' share added back (5,000 + 375)");
+ok(pf36va([{ wageMonth: "202506", data: { ee: 900 } }], [], []).every((x) => !x.late && x.missing), "36(1)(va): no challan is not late (Missing data), never disallowed");
 ok(a1.adds.find((a) => a.key === "43b").bp === "AmtDebPLDisallowUs43B" && a1.adds.find((a) => a.key === "36va").bp === "AmtDebPLDisallowUs36", "each goes to its own Schedule BP line");
-const a2 = adjustments({ tdsMissed: [{ party: "X", section: "194C", base: 100000, disallow: 30000 }], cash40A3: [{ date: "20250901", party: "Y", amount: 15000 }], bookDep: 1000, itDep: 900 });
-ok(a2.adds.find((a) => a.key === "40aia").amt === 30000 && a2.adds.find((a) => a.key === "40a3").amt === 15000 && a2.itDep === 900, "40(a)(ia) 30%, 40A(3) in full, book depreciation added back, section 32 allowed");
+const a2 = adjustments({ tdsMissed: [{ party: "X", section: "194C", base: 100000 }], tdsUnpaid: [{ party: "Z", section: "194J", base: 40000 }], nrMissed: [{ party: "W INC", section: "195", base: 70000 }], cash40A3: [{ date: "20250901", party: "Y", amount: 15000 }], bookDep: 1000, itDep: 900 });
+ok(a2.adds.find((a) => a.key === "40aia").amt === 42000 && a2.adds.find((a) => a.key === "40ai").amt === 70000 && a2.adds.find((a) => a.key === "40a3").amt === 15000 && a2.itDep === 900, "40(a)(ia) 30% of not deducted (1L) and not deposited by the due date (40,000); 40(a)(i) 100% for the non-resident; 40A(3) in full; section 32 allowed");
+
+console.log("golden cases (hand-worked, CA style): 87A, Chapter VI-A, the company rate");
+// 87A, new regime (the reading the owner will confirm): eligibility on TOTAL income, special-rate income included; the
+// rebate (and its marginal relief) only ever against the tax on normal income
+const g1 = compute(biz(1100000, { cg: { s111A: 80000 } }));
+ok(g1.ti === 1180000 && g1.tax.normalTax === 50000 && g1.tax.rebate === 50000 && g1.tax.specialTax === 16000 && g1.liability === 16640, "G1 new: business 11L + 111A 80,000 (TI 11.8L): rebate 50,000 on the normal tax only; 111A tax 16,000 + cess = 16,640");
+const g2 = compute(biz(1100000, { cg: { s111A: 200000 } }));
+ok(g2.ti === 1300000 && g2.tax.rebate === 0 && g2.liability === 93600, "G2 new: business 11L + 111A 2L (TI 13L): the whole tax (90,000) is below the 1L above 12L, so no relief; 93,600");
+const g2b = compute(biz(1160000, { cg: { s111A: 50000 } }));
+ok(g2b.ti === 1210000 && g2b.tax.rebate === 56000 && g2b.liability === 10400, "G2b new: TI 12.1L with 111A 50,000: total tax 66,000 limited to the 10,000 above 12L, the relief (56,000) only from the normal tax; 10,400");
+ok(compute(biz(1300000)).tax.rebate === 0 && compute(biz(1210000)).tax.rebate === 51500, "G2c new: plain business income, the marginal relief as before");
+// 87A, old regime: total income up to 5L; against normal, 111A and 112 tax, never 112A
+const g3 = compute(biz(300000, { regime: "old", cg: { s112: 180000 } }));
+ok(g3.ti === 480000 && g3.tax.rebate === 12500 && g3.liability === 13000, "G3 old: business 3L + 112 LTCG 1.8L: rebate 12,500 (112 tax eligible); 13,000");
+const g4 = compute(biz(150000, { regime: "old", cg: { s112A: 330000 } }));
+ok(g4.ti === 480000 && g4.tax.rebate === 0 && g4.tax.specialTax === 13125 && g4.liability === 13650, "G4 old: normal 1.5L + 112A 3.3L: the unused 1L exemption against 112A, 1.05L above 1.25L at 12.5% = 13,125; no rebate on 112A; 13,650");
+// the unused exemption first against 111A (20%), then 112 (12.5%), then 112A
+const g5 = compute(biz(200000, { cg: { s111A: 300000, s112: 100000 } }));
+ok(g5.tax.specialTax === 32500 && g5.tax.rebate === 0 && g5.liability === 33800, "G5 new: normal 2L, 111A 3L, 112 1L: the 2L unused against 111A first: 20,000 + 12,500 = 32,500; 33,800");
+// Chapter VI-A, old regime, age 40, salary 10L (private employer)
+const g6 = compute(biz(1500000, { regime: "old", salary: { gross: 1000000, std: 50000 }, deductions: { "80C": 160000, "80D_self": 30000, "80D_parents": 60000, parentsSenior: true, "80DD": 90000, "80DDB": 50000, "80U": 140000, uSevere: true, "80CCD2": 120000, "80TTA": 12000 } }));
+ok(g6.ded === 150000 + 25000 + 50000 + 75000 + 40000 + 125000 + 100000 + 10000, "G6 old: 80C 1.5L, 80D 25k + 50k (senior parents), 80DD 75k, 80DDB 40k, 80U 1.25L (severe), 80CCD(2) 10% of salary = 1L, 80TTA 10k = " + g6.ded);
+const g6s = compute(biz(1500000, { regime: "old", age: 65, deductions: { "80D_self": 70000, "80TTA": 10000, "80TTB": 70000, "80DDB": 120000 } }));
+ok(g6s.ded === 50000 + 50000 + 100000 && g6s.warn.some((w) => w.key === "via_80TTA"), "G6s old, senior: 80D 50k, 80TTB 50k (80TTA not for a senior), 80DDB 1L (senior patient): " + g6s.ded);
+const g6g = compute(biz(1000000, { regime: "old", deductions: { "80C": 150000, "80CCD1B": 50000, "80G": [{ amt: 200000, pct: 50, qualifying: true }, { amt: 20000, pct: 100, qualifying: false }, { amt: 5000, pct: 100, qualifying: false, cash: 5000 }] } }));
+ok(g6g.ded === 150000 + 50000 + 40000 + 20000, "G6g 80G: adjusted GTI 8L, qualifying limit 80,000 at 50% = 40,000; 100% without limit 20,000; a cash donation above 2,000 nothing: " + g6g.ded);
+// new regime, individual: only 80CCD(2) at 14% of salary, 80CCH (and 80JJAA, section 115BAC(2)(ii))
+const g7 = compute(biz(500000, { salary: { gross: 1000000, std: 75000 }, deductions: { "80C": 150000, "80CCD2": 200000, "80CCH": 10000, "80D_self": 25000 } }));
+ok(g7.ded === 140000 + 10000 && g7.warn.some((w) => w.key === "via_80C") && g7.warn.some((w) => w.key === "via_80CCD2"), "G7 new: 80CCD(2) 14% of 10L = 1.4L, 80CCH 10k; 80C and 80D left out: " + g7.ded);
+ok(compute(biz(500000, { regime: "old", salary: { gross: 1000000, std: 50000 }, deductions: { "80CCD2": 200000, govtEmployer: true } })).ded === 140000, "G7b old, government employer: 80CCD(2) 14%");
+// companies: 115BAA allows only 80JJAA and 80M; the 25% rate is asked, never assumed
+const g8 = compute(co(5000000, { regime: "115BAA", deductions: { "80IAC": 1000000, "80G": [{ amt: 100000, pct: 100, qualifying: false }], "80JJAA": 200000 } }));
+ok(g8.ded === 200000 && g8.warn.some((w) => w.key === "via_80IAC") && g8.warn.some((w) => w.key === "via_80G"), "G8 115BAA: 80IAC and 80G not allowed, 80JJAA allowed");
+ok(compute(co(5000000, { regime: "normal", deductions: { "80IAC": 1000000 } })).ded === 1000000, "G8b normal company: 80IAC allowed");
+const g9 = compute(co(5000000, { smallCo: undefined }));
+ok(g9.needs.some((n) => n.key === "small_co"), "G9 company, the FY 2023-24 turnover not answered: Needs you (the 25% rate is never assumed)");
+ok(compute(co(5000000, { bookProfit: 4000000 })).needs.some((n) => n.key === "mat_bp"), "MAT: book profit not confirmed with the 115JB adjustments: Needs you");
+ok(!compute(co(5000000, { bookProfit: 4000000, bookProfitOk: true })).needs.some((n) => n.key === "mat_bp"), "MAT: book profit confirmed: no question");
+// 234C: one instalment only for 44AD / 44ADA, not 44AE
+const r44ae = compute({ form: "ITR-4", entity: "P", regime: "new", age: 40, presumptive: { ae: { vehicles: Array.from({ length: 10 }, () => ({ gvwKg: 40000, months: 12 })) } }, paid: { advance: [{ date: "20260310", amt: 400000 }] } });
+ok(r44ae.interest.cParts.length === 4, "44AE alone: the four instalments of 234C (one instalment is only for 44AD / 44ADA)");
+ok(compute(biz(-100000, { filingDate: "20261120", business: { pbt: -100000, adds: [], less: [] } })).carry.business.length === 0, "a belated return: this year's business loss is not carried forward");
 
 console.log("the second computation against the first");
 let seed = 20262027; const rnd = () => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648; };
@@ -140,7 +183,9 @@ for (let i = 0; i < 600; i++) {
   if (rnd() < 0.3) m.cg = { s111A: amt(5e6), s112A: amt(3e6), s112: amt(1e6) };
   if (rnd() < 0.2) m.hp = amt(4e5) - 2e5;
   if (rnd() < 0.3) m.losses = { business: [{ ay: pick(["2016", "2019", "2023"]), amt: amt(5e5) }], unabsorbedDep: amt(2e5) };
-  if (rnd() < 0.4) m.deductions = { "80C": amt(2e5), "80D": amt(1e5), "80G": amt(5e4), "80CCD2": amt(5e4), "80TTA": amt(2e4) };
+  if (rnd() < 0.4) m.deductions = { "80C": amt(2e5), "80D_self": amt(6e4), "80D_parents": amt(6e4), parentsSenior: rnd() < 0.5, "80G": [{ amt: amt(2e5), pct: pick([50, 100]), qualifying: rnd() < 0.5, cash: amt(5000) }], "80CCD2": amt(2e5),
+    "80TTA": amt(2e4), "80TTB": amt(6e4), "80DD": amt(1.5e5), ddSevere: rnd() < 0.5, "80DDB": amt(1.2e5), ddbSenior: rnd() < 0.5, "80U": amt(1.5e5), uSevere: rnd() < 0.5, "80CCH": amt(2e4), "80JJAA": amt(1e5), "80IAC": amt(1e5), "80M": amt(5e4), "80GGC": amt(3e4) };
+  if (rnd() < 0.2) m.age = 65;
   m.paid = { tds: [{ amt: amt(3e5) }], tcs: [{ amt: amt(1e4) }], advance: [{ date: "20250612", amt: amt(1e6) }, { date: "20250914", amt: amt(1e6) }, { date: "20251215", amt: amt(1e6) }, { date: "20260313", amt: amt(1e6) }].filter(() => rnd() < 0.7), selfAssessment: rnd() < 0.4 ? [{ date: pick(["20260720", "20261005"]), amt: amt(5e5) }] : [] };
   const d = differences(compute(m).key, check(m));
   if (!d.length) agree++; else if (!firstDiff) firstDiff = { m, d };

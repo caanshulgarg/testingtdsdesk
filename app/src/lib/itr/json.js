@@ -3,20 +3,21 @@
 // itr-schema/ folder, put there at publish time from incometax.gov.in: docs/ITR-MODULE.md, "The official schemas").
 import { filler } from "./fill.js";
 import { validator } from "./validate.js";
-import { mapReturn, ROOT, sectionCodes } from "./forms.js";
+import { mapReturn, ROOT, sectionCodes, coverage } from "./forms.js";
 
 const cache = new WeakMap();
 function tools(schema) { let t = cache.get(schema); if (!t) { t = { fill: filler(schema), check: validator(schema), codes: sectionCodes(schema) }; cache.set(schema, t); } return t; }
 
 export const VERSION = "fincom-itr-2026.1";
-// X: {form, schema, model, comp, sched, profile, answers, today (yyyy-mm-dd), gstTurnover, fin44}
+// X: {form, schema, model, comp, sched, profile, answers, today (yyyy-mm-dd), gstTurnover [{gstin, amt}], gstRegistered, dues43B, fin44}
 export function makeJson(X) {
   const T = tools(X.schema), root = ROOT[X.form];
   const sparse = mapReturn(Object.assign({}, X, { codes: T.codes }));
   const { doc, asks, errors } = T.fill(root, sparse, X.answers || {});
   const res = asks.length || errors.length ? { ok: false, errors: [] } : T.check(doc);
   if (!doc.ITR || !doc.ITR[root]) res.ok = false;
-  return { doc, asks, mapErrors: errors, schema: res, root };
+  // a schedule with figures FinCom does not map: the JSON is blocked (verify.js shows each, never accepted)
+  return { doc, asks, mapErrors: errors, schema: res, root, coverage: coverage(X) };
 }
 // the file the owner downloads: the return JSON exactly as the schema has it (Winman imports the ITR JSON as is). The
 // version and the checks go in a second file beside it (a key the schema does not have would make the JSON invalid)

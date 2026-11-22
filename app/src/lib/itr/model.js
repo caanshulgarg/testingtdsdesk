@@ -13,14 +13,22 @@ export function importsOf(files) {
   return { ais: one("ais"), tis: one("tis"), as26: one("as26"), prefill: one("prefill"), ecr: files.filter((f) => f.kind === "ecr"), pfc: files.filter((f) => f.kind === "pfchallan"), esi: files.filter((f) => f.kind === "esic") };
 }
 
+// the head of income a TDS section's receipt belongs to (Schedule TDS2 HeadOfIncome)
+export function headOf(sec, M) {
+  const s = String(sec || "").toUpperCase().replace(/[()]/g, "");
+  if (/^(193|194|194A|194B|194BB|194EE|194K|194LA|194LB|194LBA|194LBB|194LBC|194N|194S|194BA)$/.test(s)) return "OS";
+  if (/^194I|^194IB/.test(s)) return M && M.hp != null ? "HP" : "OS";
+  return "BP";
+}
 export function formsFor(entity, llp) { const f = (FORM_OF[entity] || ["ITR-5"]).slice(); return entity === "F" && llp ? ["ITR-5"] : f; }
 
 // c: {entity, llp, client: {name, pan, gstin}, state, books (fromApp result or null), imports}
 export function buildModel(c) {
   const st = c.state || {}, im = c.imports || {}, bk = c.books && c.books.ok ? c.books : null;
   const entity = c.entity, form = st.form || formsFor(entity, c.llp)[0];
-  const M = { form, entity, llp: !!c.llp, regime: st.regime || (entity === "C" ? "" : entity === "F" ? "firm" : ""), age: N(st.age), resident: st.resident !== false,
-    audit: !!st.audit, tp: !!st.tp, filingDate: st.filingDate || "", smallCo: st.smallCo, form10iea: st.form10iea || "", deductions: st.deductions || {}, losses: st.losses || {}, matCredit: N(st.matCredit) };
+  // LLP or firm: asked in the return (Client setup has "Firm or LLP" as one choice); never read from the name
+  const M = { form, entity, llp: entity === "F" ? (st.llp === true || st.llp === false ? st.llp : (c.llp === true || c.llp === false ? c.llp : undefined)) : false, regime: st.regime || (entity === "C" ? "" : entity === "F" ? "firm" : ""), age: N(st.age), resident: st.resident !== false,
+    audit: !!st.audit, tp: !!st.tp, filingDate: st.filingDate || "", smallCo: st.smallCo, bookProfitOk: !!st.bookProfitOk, form10iea: st.form10iea || "", deductions: st.deductions || {}, losses: st.losses || {}, matCredit: N(st.matCredit) };
   if (entity === "F") M.regime = "firm";
   // business income
   if (form === "ITR-4") {
@@ -33,11 +41,15 @@ export function buildModel(c) {
   } else if (bk) {
     const adj = bk.adj, edits = st.adjEdits || {};
     const keep = (a) => (edits[a.key] && edits[a.key].v != null ? Object.assign({}, a, { amt: N(edits[a.key].v), why: edits[a.key].why, edited: true }) : a);
-    M.business = { pbt: bk.sched.totals.pbt, pbtSrc: "Part A-P&L (the books)", adds: adj.adds.map(keep).filter((a) => R(a.amt)), less: adj.less.map(keep).filter((a) => R(a.amt)), itDep: adj.itDep };
+    M.business = { itBlocks: (bk.f && bk.f.itBlocks) || [], pbt: bk.sched.totals.pbt, pbtSrc: "Part A-P&L (the books)", adds: adj.adds.filter((a) => a.key !== "36va").map(keep).filter((a) => R(a.amt)), less: adj.less.map(keep).filter((a) => R(a.amt)), itDep: adj.itDep };
+    // 36(1)(va) from the files brought in, as they are now (a challan added or removed changes it at once)
+    const late = pf36va(im.ecr, im.pfc, im.esi).filter((x) => x.late);
+    if (late.length) M.business.adds.push(keep({ key: "36va", label: "employees' PF / ESI contributions paid after their due dates (section 36(1)(va))", amt: R(late.reduce((t, x) => t + N(x.ee), 0)), bp: "AmtDebPLDisallowUs36", src: "ECR and challans brought in",
+      trace: late.map((x) => ({ ledger: x.fund + " " + x.ym.slice(4, 6) + "-" + x.ym.slice(0, 4), group: "due " + x.due + ", paid " + x.paidOn, amt: R(x.ee) })) }));
     (st.extraAdj || []).forEach((a) => (a.sign < 0 ? M.business.less : M.business.adds).push({ key: "own:" + a.id, label: a.label, amt: N(a.amt), bp: a.bp || (a.sign < 0 ? "AnyOthAmtAllDeduct" : "OthItemDisallowUs28To44DA"), src: "entered by " + (a.by || "the owner") + ": " + (a.why || ""), trace: [] }));
     M.turnover = bk.sched.totals.revenue;
     M.bookProfit = entity === "C" ? (st.bookProfit != null && st.bookProfit !== "" ? N(st.bookProfit) : bk.sched.totals.pat + bk.sched.pl.taxCurrent.cy + bk.sched.pl.taxDeferred.cy) : undefined;
-    if (entity === "F") M.partners = (st.partners || []).map((p) => ({ name: p.name, remuneration: N(p.remuneration), interest: N(p.interest), rate: N(p.rate), working: p.working !== false }));
+    if (entity === "F") { M.partners = (st.partners || []).map((p) => ({ name: p.name, remuneration: N(p.remuneration), interest: N(p.interest), rate: N(p.rate), working: p.working !== false })); M.partnersDetail = (st.partners || []).slice(); }
   }
   if (entity === "C" && M.bookProfit == null && st.bookProfit != null) M.bookProfit = N(st.bookProfit);
   // other sources: the interest the books hold (moved out of business) and what the owner adds
@@ -47,11 +59,14 @@ export function buildModel(c) {
   if (st.salary && N(st.salary.gross)) M.salary = { gross: N(st.salary.gross), std: Math.min(N(st.salary.gross), M.regime === "old" ? 50000 : 75000) };
   if (st.hp != null && st.hp !== "") M.hp = N(st.hp);
   if (st.cg) M.cg = st.cg;
+  if (st.cg112A && N(st.cg112A.sale)) M.cg112A = { sale: N(st.cg112A.sale), cost: N(st.cg112A.cost) };
+  if (Array.isArray(st.matCredits)) M.matCredits = st.matCredits;
   // taxes paid: the 26AS lines (they carry the TAN and BSR the JSON needs); the books' figures are checked against them
   const as26 = im.as26 && im.as26.data;
   M.paid = { tds: [], tcs: [], advance: [], selfAssessment: [] };
   if (as26) {
-    M.paid.tds = as26.tds.map((r) => ({ tan: r.tan, name: r.name, sec: r.sec, gross: r.amount, amt: r.tax, date: r.date }));
+    // only lines TRACES shows as finally booked (status F) are claimed; U and P are asked (verify.js)
+    M.paid.tds = as26.tds.filter((r) => !r.status || r.status === "F").map((r) => ({ tan: r.tan, name: r.name, sec: r.sec, gross: r.amount, amt: r.tax, date: r.date, head: headOf(r.sec, M) }));
     M.paid.tcs = as26.tcs.map((r) => ({ tan: r.tan, name: r.name, sec: r.sec, gross: r.amount, amt: r.tax }));
     as26.paid.forEach((p) => { const x = { bsr: p.bsr, date: p.date, serial: p.serial, amt: p.amount }; if (p.kind === "advance") M.paid.advance.push(x); else if (p.kind === "self") M.paid.selfAssessment.push(x); });
     M.tdsSrc = "Form 26AS (the books' TDS receivable is checked against it)"; M.advSrc = "Form 26AS challans";

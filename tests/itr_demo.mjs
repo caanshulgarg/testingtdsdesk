@@ -6,7 +6,7 @@ import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { schedules, adjustments, pf36va } from "../app/src/lib/itr/books.js";
+import { schedules, adjustments, pf36va, dues43B, msme43Bh } from "../app/src/lib/itr/books.js";
 import { makeStore } from "../app/src/lib/itr/store.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url)), FX = join(HERE, "fixtures", "itr");
@@ -47,23 +47,31 @@ export async function demo(form = "ITR-3") {
   const sw = (s) => s.replace(/ZZZPX9999Z/g, pan);
   for (const f of ["ais-demo.json", "26as-demo.txt", "prefill-demo.json", "ECR-04-2025.txt", "pf-challan-04-2025.txt", "esic-challan-04-2025.txt"]) {
     const t = sw(readFileSync(join(FX, f), "utf8"));
-    const r = await st.bring({ name: f, bytes: new TextEncoder().encode(t), text: t, type: "text/plain" });
+    const r = await st.bring({ name: f, bytes: new TextEncoder().encode(t), text: t, type: "text/plain" }, "2026", { confirmed: true });
     if (!r.ok) throw new Error(f + ": " + r.text);
   }
   const files = st.files(), get = (k) => files.filter((x) => x.kind === k);
-  const f = { bookDep: sched.pl.depreciation.cy, bookDepTrace: sched.pl.depreciation.trace, itDep: 197500, interestIncome: sched.pl.interestInc.cy, interestTrace: sched.pl.interestInc.trace,
-    tdsMissed: [{ party: "DEMO TRANSPORT CO", section: "194C", base: 120000, disallow: 36000 }], cash40A3: [{ date: "20250912", party: "DEMO HARDWARE STORE", amount: 18500 }],
+  const f = { bookDep: sched.pl.depreciation.cy, bookDepTrace: sched.pl.depreciation.trace, itDep: 197500,
+    itBlocks: [{ key: "pm15", rate: 0.15, open: 1000000, addA: 150000, addB: 100000, sale: 0, dep: 180000, close: 1070000 }, { key: "c40", rate: 0.4, open: 43750, addA: 0, addB: 0, sale: 0, dep: 17500, close: 26250 }], interestIncome: sched.pl.interestInc.cy, interestTrace: sched.pl.interestInc.trace,
+    tdsMissed: [{ party: "DEMO TRANSPORT CO", section: "194C", base: 120000 }], tdsUnpaid: [], nrMissed: [], cash40A3: [{ date: "20250912", party: "DEMO HARDWARE STORE", amount: 18500 }],
     pf36va: pf36va(get("ecr"), get("pfchallan"), get("esic")) };
+  // 43B: the payable ledgers at 31-03-2026 and the made-up payments of April 2026
+  const payRows = rows.filter((r) => ["7B", "7C", "7G", "5B", "5C"].includes(r.code)).map((r) => ({ ledger: r.ledger, closing: -r.final }));
+  f.dues43B = dues43B(payRows, [{ ledger: "GST PAYABLE", date: "20260420", amt: 40000 }, { ledger: "TDS PAYABLE", date: "20260430", amt: 25000 }, { ledger: "PF PAYABLE", date: "20260415", amt: 20000 }], "20260831", "20260930", { pf: 0.5, esi: null });
+  const msme = msme43Bh([{ party: "DEMO MICRO SUPPLIER", ref: "MS/88", date: "20260305", amt: 42000, paidOn: "20260410" }, { party: "DEMO SMALL SUPPLIER", ref: "SS/12", date: "20260325", amt: 30000, paidOn: "20260405" }], 45, "20260331", "20260930");
+  f.msmeRows = msme.rows;
   const adj = adjustments(f);
-  const books = { ok: true, fy: "2025", sched, f, adj, findings: [], notes: [] };
-  booksObj.itr["2026|state"] = { form, regime: ent === "C" ? "normal" : ent === "P" ? "new" : "", filingDate: "20261125", age: 46, smallCo: true, pfCode: "DLCPM0000001000", esiCode: "10000000000000001",
-    profile: Object.assign({ father: "DEMO FATHER", place: "NEW DELHI", swId: "SW00000000", capacity: "S" }, ent === "P" ? {} : { verName: "DEMO SIGNATORY", verPan: "ZZZPV7777V" }),
-    partners: ent === "F" ? [{ name: "DEMO PARTNER ONE", remuneration: 300000, interest: 24000, rate: 12 }, { name: "DEMO PARTNER TWO", remuneration: 300000, interest: 30000, rate: 15 }] : undefined,
+  const capOpen = -rows.find((r) => r.code === "3P").py;
+  const books = { ok: true, fy: "2025", sched, f, adj, findings: [], notes: [], plTally: sched.totals.pbt, openingTally: 4512000, pyBs: { total: 4512000, capital: capOpen, src: "last year's audited balance sheet (made up)" },
+    capital: { closing: sched.bs.capital.cy + sched.totals.pat, profit: sched.totals.pat, introduced: -rows.find((r) => r.code === "3P").final - capOpen, drawings: 360000 },
+    dues43B: f.dues43B, msme, tds: { ok: true, deducted: 186000, payable: 186000, deposited: 186000, unpaid: [], missedBase: 120000, unpaidBase: 0, nrBase: 0 }, form3cd: null, esiBooks: null, nrAsk: [] };
+  booksObj.itr["2026|state"] = { form, regime: ent === "C" ? "normal" : ent === "P" ? "new" : "", llp: ent === "F" ? false : undefined, bookProfitOk: ent === "C", filingDate: "20261125", age: 46, smallCo: true, pfCode: "DLCPM0000001000", esiCode: "10000000000000001",
+    profile: Object.assign({ father: "DEMO FATHER", place: "NEW DELHI", swId: "SW00000000", capacity: "S", loansForBusiness: true, auditor: { firm: "DEMO AUDIT FIRM", firmPan: "ZZZFA1111A", reportDate: "2026-10-20", ack: "123456789012345" }, indAs: false, listed: false, authorised: 2500000 }, ent === "P" ? {} : { verName: "DEMO SIGNATORY", verPan: "ZZZPV7777V" }),
+    partners: ent === "F" ? [{ name: "DEMO PARTNER ONE", pan: "ZZZPA1111A", share: 50, city: "NEW DELHI", state: "07", pin: "110001", addr: "1 SAMPLE STREET", remuneration: 300000, interest: 24000, rate: 12 }, { name: "DEMO PARTNER TWO", pan: "ZZZPB2222B", share: 50, city: "NEW DELHI", state: "07", pin: "110002", addr: "2 SAMPLE STREET", remuneration: 300000, interest: 30000, rate: 15 }] : undefined,
     presumptive: form === "ITR-4" ? { ad: { digital: 4600000, other: 300000 } } : undefined };
-  const gst = { ok: true, r1: 4850000, r3b: 4850000, months: 12, reasons: [{ label: "Credit notes of March 2026 shown in GSTR-1 of April 2026", amt: 50000 }] };
-  const tds = { ok: true, deducted: 186000, payable: 186000, deposited: 186000, unpaid: [] };
-  return { client: { id: "demo1", name, pan, entity: ent, llp: false }, clients, booksObj, books, gst, tds, plPbt: sched.totals.pbt, firm: "demo-firm",
-    opening: { tally: 4512000, lastYear: 4512000, src: "Last year's ITR (made up)", rows: [] }, capital: null, form3cd: null };
+  const gst = { ok: true, filedR1: 4850000, filedR3b: 4850000, monthsR1: 12, monthsR3b: 12, reasons: [{ label: "Credit notes of March 2026 shown in GSTR-1 of April 2026", amt: 50000 }] };
+  const tds = books.tds;
+  return { client: { id: "demo1", name, pan, entity: ent }, clients, booksObj, books, gst, tds, firm: "demo-firm" };
 }
 
 if (process.argv[1] && process.argv[1].endsWith("itr_demo.mjs")) {

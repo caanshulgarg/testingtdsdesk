@@ -75,10 +75,14 @@ const wrongAy = read("26as.txt", txt("26as-demo.txt").replace("2025-26^2026-27",
 const b2 = belongs(wrongAy, clients[0], clients, "2026");
 ok(!b2.ok && b2.code === "ay" && /2025-26/.test(b2.text) && /2026-27/.test(b2.text), "Another year's 26AS refused, saying which: " + b2.text);
 const ecrOld = read("ECR-03-2025.txt", txt("ECR-04-2025.txt"));
-const b3 = belongs(ecrOld, clients[0], clients, "2026");
+const b3c = belongs(ecrOld, clients[0], clients, "2026");
+ok(!b3c.ok && b3c.code === "confirm" && /Demo Proprietor/.test(b3c.text), "An ECR naming no PAN or code is not taken until the person says whose it is");
+const b3 = belongs(ecrOld, clients[0], clients, "2026", true);
 ok(!b3.ok && b3.code === "ay" && /03-2025/.test(b3.text), "An ECR for March 2025 (last year's) refused: " + b3.text);
 const ecrNoMonth = read("ecr.txt", txt("ECR-04-2025.txt"));
-ok(!belongs(ecrNoMonth, clients[0], clients, "2026").ok && belongs(ecrNoMonth, clients[0], clients, "2026").code === "no_ay", "An ECR whose month cannot be read is not guessed (Needs you)");
+ok(!belongs(ecrNoMonth, clients[0], clients, "2026", true).ok && belongs(ecrNoMonth, clients[0], clients, "2026", true).code === "no_ay", "An ECR whose month cannot be read is not guessed (Needs you)");
+const lineOnly = JSON.parse(txt("ais-demo.json")); delete lineOnly.AnnualInformationStatement.PartA; lineOnly.AnnualInformationStatement.PartB.TDSTCSInformation[0].PAN = "ZZZPX9999Z"; lineOnly.AnnualInformationStatement.AssessmentYear = "2026-27";
+ok(read("ais.json", JSON.stringify(lineOnly)).error && read("ais.json", JSON.stringify(lineOnly)).error.code === "no_pan", "The AIS PAN is taken from its taxpayer header only, never from a line");
 const pfOther = belongs(pf, Object.assign({}, clients[0], { pfCode: "DLCPM0000009000" }), clients, "2026");
 ok(!pfOther.ok && pfOther.code === "est", "A PF challan of another establishment refused");
 const pfAsk = belongs(pf, clients[0], clients, "2026");
@@ -105,8 +109,9 @@ const r2 = await st.bring(file("ais-demo.json", txt("ais-demo.json"))); const up
 const changed = txt("ais-demo.json").replace('"AmountPaid": 500000', '"AmountPaid": 600000');
 const r3 = await st.bring(file("AIS_2026-27.json", changed));
 const rWrong = await st.bring(file("ais.json", txt("ais-demo.json").replace(/ZZZPX9999Z/g, "ZZZPY8888Y")));
-const e1 = await st.bring(file("ECR-04-2025.txt", txt("ECR-04-2025.txt")));
-const e2 = await st.bring(file("ECR-05-2025.txt", txt("ECR-04-2025.txt").replace("20000", "21000")));
+const e0 = await st.bring(file("ECR-04-2025.txt", txt("ECR-04-2025.txt"))); const keptBefore = !!books.itr["2026|ecr|202504"];
+const e1 = await st.bring(file("ECR-04-2025.txt", txt("ECR-04-2025.txt")), "2026", { confirmed: true });
+const e2 = await st.bring(file("ECR-05-2025.txt", txt("ECR-04-2025.txt").replace("20000", "21000")), "2026", { confirmed: true });
 loud();
 ok(r1.ok && !r1.replaced && uploads.length >= 1 && uploads[0].path === "firm-1/c1/itr2026-ais-ais-demo.json", "First AIS: stored in the firm's storage under <firm>/<client>/itr2026-ais-…");
 ok(books.itr["2026|ais"] && books.itr["2026|ais"].pan === "ZZZPX9999Z" && books.itr["2026|ais"].stored === true, "Kept as one item of the client's books (2026|ais)");
@@ -114,6 +119,7 @@ ok(r2.ok && r2.same === true && upAfter2 === 1, "The same file again: nothing ch
 ok(r3.ok && r3.replaced === true && Object.keys(books.itr).filter((k) => k.startsWith("2026|ais")).length === 1, "Another AIS for the year replaces the first (one item, no duplicate)");
 ok(removed.includes("firm-1/c1/itr2026-ais-ais-demo.json") && books.itr["2026|ais"].docPath === "firm-1/c1/itr2026-ais-AIS_2026-27.json", "The replaced file's stored copy is removed");
 ok(!rWrong.ok && rWrong.refused && rWrong.code === "pan" && !Object.values(books.itr).some((v) => v.pan === "ZZZPY8888Y"), "A refused file is neither kept nor stored");
+ok(!e0.ok && e0.confirm && !keptBefore, "An ECR is not kept before the person confirms whose it is");
 ok(e1.ok && e2.ok && books.itr["2026|ecr|202504"] && books.itr["2026|ecr|202505"], "ECRs are kept month by month");
 ok(logs.length === 0, "Nothing of the files went to the console (" + logs.length + " lines)");
 firm = "";
@@ -125,8 +131,8 @@ quiet(); const s2 = await st.bring(file("tis-demo.json", txt("tis-demo.json")));
 ok(s2.ok && books.itr["2026|tis"].stored === false && /could not be stored/.test(s2.text), "Storage failing: said, and the file is not kept on this computer instead");
 failUpload = false;
 ok(JSON.stringify(books.itr).indexOf("#~#") < 0 && JSON.stringify(books.itr).indexOf("DEMO WORKER") < 0, "Only what was read is kept in the books, not the file's raw lines or members' names");
-const acc0 = st.accept("ais:tds:DELS00001A", "");
-ok(!acc0.ok && st.accept("ais:tds:DELS00001A", "Booked in April; deductor's quarter differs").ok && st.state().accepted["ais:tds:DELS00001A"].note.length > 3, "A difference is accepted only with a note");
+const acc0 = st.accept("ais:tds:DELS00001A", "", "abc12345");
+ok(!acc0.ok && !st.accept("ais:tds:DELS00001A", "a note", "").ok && st.accept("ais:tds:DELS00001A", "Booked in April; deductor's quarter differs", "abc12345").ok && st.state().accepted["ais:tds:DELS00001A"].fp === "abc12345", "A difference is accepted only with a note, bound to the check's figures");
 await st.drop("2026|ecr|202505");
 ok(!books.itr["2026|ecr|202505"], "A file can be removed");
 

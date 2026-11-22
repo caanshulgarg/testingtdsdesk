@@ -91,6 +91,8 @@ export function compute(inp) {
   const ent = inp.entity, ind = ent === "P" || ent === "H", firm = ent === "F" || ent === "A" || ent === "B", co = ent === "C";
   if (ind && inp.regime !== "new" && inp.regime !== "old") S.needs.push({ key: "regime", text: "Choose the tax regime (new is the default; old needs Form 10-IEA by the due date when there is business income)." });
   if (ent === "A" || ent === "B" || ent === "J" || ent === "L") S.needs.push({ key: "entity", text: "An AOP, BOI, local authority or artificial juridical person is not covered yet: FinCom works ITR-5 for firms and LLPs." });
+  if (co && inp.regime === "normal" && inp.smallCo == null) S.needs.push({ key: "small_co", text: "The company's turnover or gross receipts of FY 2023-24: within Rs 400 crore (25%) or above (30%)? Answer it on Data." });
+  if (co && inp.regime === "normal" && inp.bookProfit != null && !inp.bookProfitOk) S.needs.push({ key: "mat_bp", text: "Book profit under section 115JB: enter it with the Explanation 1 adjustments and confirm it on Data (the profit after tax as it is is not book profit)." });
   if (co && inp.regime !== "115BAA" && inp.regime !== "normal") S.needs.push({ key: "regime", text: "Say whether the company is under section 115BAA." });
 
   // 1. Profits and gains of business or profession
@@ -136,10 +138,12 @@ export function compute(inp) {
   // 3. Set-off of the year's losses (section 70, 71): business loss against any head but salary; house property loss
   // up to Rs 2 lakh against other heads (old regime; none in the new regime, 115BAC(2))
   let h = { sal, hp, pgbp, os, cOth, c112, c111A, c112A };
+  // each set-off by head, for Schedules CYLA and BFLA (forms.js)
+  const setoff = { bus: {}, hp: {}, bf: 0, ud: {} };
   let cyBizLoss = 0, cyUnabDep = 0;
   if (h.pgbp < 0) {
     let loss = -h.pgbp; h.pgbp = 0;
-    for (const k of ["hp", "os", "cOth", "c112", "c111A", "c112A"]) { if (loss <= 0) break; if (h[k] > 0) { const u = Math.min(h[k], loss); h[k] -= u; loss -= u; } }
+    for (const k of ["hp", "os", "cOth", "c112", "c111A", "c112A"]) { if (loss <= 0) break; if (h[k] > 0) { const u = Math.min(h[k], loss); h[k] -= u; loss -= u; setoff.bus[k] = u; } }
     if (loss > 0) { cyUnabDep = Math.min(loss, itDep); cyBizLoss = loss - cyUnabDep; }
     line("cyla_bp", "Business loss of the year set off against other heads (sections 70, 71)", -pgbp - loss, { sec: "sl", src: L.LOSS.src });
   }
@@ -147,7 +151,7 @@ export function compute(inp) {
   if (h.hp < 0) {
     let loss = -h.hp; h.hp = 0;
     const cap = inp.regime === "new" ? 0 : 200000; let room = Math.min(loss, cap); const used0 = room;
-    for (const k of ["os", "pgbp", "cOth", "c112", "c111A", "c112A", "sal"]) { if (room <= 0) break; if (h[k] > 0) { const u = Math.min(h[k], room); h[k] -= u; room -= u; } }
+    for (const k of ["os", "pgbp", "cOth", "c112", "c111A", "c112A", "sal"]) { if (room <= 0) break; if (h[k] > 0) { const u = Math.min(h[k], room); h[k] -= u; room -= u; setoff.hp[k] = u; } }
     cfHp = loss - (used0 - room);
   }
   // 4. Brought-forward losses (section 72, 32(2)): business loss within 8 years against business income only; then
@@ -161,10 +165,14 @@ export function compute(inp) {
     if (N(x.amt) - u > 0) bfLeft.push({ ay: x.ay, amt: N(x.amt) - u });
   });
   let ud = N(bf.unabsorbedDep);
-  for (const k of ["pgbp", "hp", "os", "cOth", "c112", "c111A", "c112A"]) { if (ud <= 0) break; if (h[k] > 0) { const u = Math.min(h[k], ud); h[k] -= u; ud -= u; udUsed += u; } }
+  const afterCyla = Object.assign({}, h, { pgbp: h.pgbp + bfUsed });
+  for (const k of ["pgbp", "hp", "os", "cOth", "c112", "c111A", "c112A"]) { if (ud <= 0) break; if (h[k] > 0) { const u = Math.min(h[k], ud); h[k] -= u; ud -= u; udUsed += u; setoff.ud[k] = u; } }
+  setoff.bf = bfUsed;
   if (bfUsed) line("bfla_bp", "Brought-forward business loss set off (section 72)", bfUsed, { sec: "sl", sign: -1, src: L.LOSS.src });
   if (udUsed) line("bfla_ud", "Unabsorbed depreciation set off (section 32(2))", udUsed, { sec: "sl", sign: -1, src: L.LOSS.src });
-  S.carry = { business: bfLeft.concat(cyBizLoss ? [{ ay: L.AY_START, amt: cyBizLoss }] : []), unabsorbedDep: R(ud + cyUnabDep), hp: cfHp };
+  const late = !!(inp.filingDate && inp.filingDate > dueDate(inp));
+  // section 80: a belated return carries no business loss of the year forward (unabsorbed depreciation still goes)
+  S.carry = { business: bfLeft.filter((x) => !x.lapsed).concat(cyBizLoss && !late ? [{ ay: L.AY_START, amt: cyBizLoss }] : []), unabsorbedDep: R(ud + cyUnabDep), hp: cfHp, lostS80: late ? cyBizLoss : 0 };
   if (cyBizLoss && inp.filingDate && inp.filingDate > dueDate(inp)) S.warn.push({ key: "s80", text: "The return is after the due date: this year's business loss of " + cyBizLoss + " cannot be carried forward (section 80). Unabsorbed depreciation still is." });
   if (bfLeft.some((x) => x.lapsed)) S.warn.push({ key: "lapsed", text: "A brought-forward business loss older than eight years has lapsed and is not set off." });
 
@@ -196,7 +204,7 @@ export function compute(inp) {
   const paid = inp.paid || {};
   const tds = R(sum(paid.tds, (x) => x.amt)), tcs = R(sum(paid.tcs, (x) => x.amt)), adv = R(sum(paid.advance, (x) => x.amt)), sat = R(sum(paid.selfAssessment, (x) => x.amt));
   const due = dueDate(inp), filing = inp.filingDate || due;
-  const i = interest({ liability, tds, tcs, advance: paid.advance || [], sa: paid.selfAssessment || [], due, filing, presumptive: !!pres, ti });
+  const i = interest({ liability, tds, tcs, advance: paid.advance || [], sa: paid.selfAssessment || [], due, filing, presumptive: !!(pres && inp.presumptive && (inp.presumptive.ad || inp.presumptive.ada)), ti });
   if (i.a) line("i234a", "Interest under section 234A (" + i.monthsA + " months)", i.a, { sec: "in", src: L.INTEREST.src });
   if (i.b) line("i234b", "Interest under section 234B (" + i.monthsB + " months)", i.b, { sec: "in", src: L.INTEREST.src });
   if (i.c) line("i234c", "Interest under section 234C", i.c, { sec: "in", src: L.INTEREST.src });
@@ -208,7 +216,7 @@ export function compute(inp) {
   line(payable ? "payable" : "refund", payable ? "Tax payable (rounded off under section 288B)" : "Refund due (rounded off under section 288B)", payable || refund, { sec: "pd", total: true, src: L.ROUND.tax });
 
   Object.assign(S, {
-    heads: { sal, hp, pgbp, os, cg: c111A + c112A + c112 + cOth, c111A, c112A, c112, cOth }, after: h, itDep,
+    heads: { sal, hp, pgbp, os, cg: c111A + c112A + c112 + cOth, c111A, c112A, c112, cOth }, after: h, afterCyla, setoff, itDep,
     gti, ded, ti, normal, special, tax: t, liability, tds, tcs, adv, sat, interest: i, net: R(net), payable, refund, due, filing,
     // the figures the second computation must agree with, to the rupee
     key: { gti, ti, normalTax: t.normalTax, specialTax: t.specialTax, rebate: t.rebate, sur: t.sur, cess: t.cess, liability, i234a: i.a, i234b: i.b, i234c: i.c, f234f: i.f, payable, refund },
@@ -222,27 +230,63 @@ export function dueDate(inp) {
   return L.DUE.nonAudit;
 }
 
+// Chapter VI-A within each section's own limit (old regime individuals / HUF); the new regime and other entities take
+// only the sections the law leaves them. d: the claims; flags: selfSenior / parentsSenior / ddSevere / uSevere /
+// ddbSenior / govtEmployer. 80G: a list [{amt, pct: 100 | 50, qualifying, cash}]
 function deductions(inp, room, S) {
-  const d = inp.deductions || {}; let tot = 0;
-  const cap = (k, lim) => { const v = N(d[k]); if (v > lim) S.warn.push({ key: "via_" + k, text: "Section " + k + " claimed " + v + ", allowed up to " + lim + "." }); return Math.min(v, lim); };
-  if (inp.regime === "new" || inp.entity === "C" || inp.entity === "F") {
-    const allowed = inp.entity === "C" || inp.entity === "F" ? ["80G", "80GGB", "80GGC", "80JJAA", "80IAC"] : L.VIA.newAllowed;
-    Object.keys(d).forEach((k) => { if (N(d[k]) && allowed.indexOf(k) < 0) S.warn.push({ key: "via_" + k, text: "Section " + k + " is not allowed " + (inp.regime === "new" ? "in the new regime (115BAC(2))" : "to this entity") + "; left out." }); else tot += N(d[k]); });
-  } else {
-    tot += cap("80C", L.VIA["80C"]) + cap("80CCD1B", L.VIA["80CCD1B"]);
-    tot += cap("80D", N(inp.age) >= 60 ? L.VIA["80D_selfSenior"] + L.VIA["80D_parentsSenior"] : L.VIA["80D_self"] + L.VIA["80D_parentsSenior"]);
-    if (N(inp.age) >= 60) tot += cap("80TTB", L.VIA["80TTB"]); else tot += cap("80TTA", L.VIA["80TTA"]);
-    tot += cap("80GG", L.VIA["80GG"]);
-    ["80G", "80E", "80CCD2", "80DD", "80DDB", "80U", "80GGC", "80JJAA"].forEach((k) => { tot += N(d[k]); });
+  const d = inp.deductions || {}, ent = inp.entity, ind = ent === "P" || ent === "H", V = L.VIA;
+  const warn = (k, t) => S.warn.push({ key: "via_" + k, text: t });
+  const cap = (k, lim, why) => { const v = N(d[k]); if (v > lim) warn(k, "Section " + k + " claimed " + v + ", allowed up to " + lim + (why ? " (" + why + ")" : "") + "."); return Math.max(0, Math.min(v, lim)); };
+  const salary = inp.salary ? N(inp.salary.basicDa != null ? inp.salary.basicDa : inp.salary.gross) : 0;
+  const allowedSet = ind ? (inp.regime === "new" ? V.newAllowed : null) : ent === "C" ? (inp.regime === "115BAA" ? V.baaAllowed : V.coAllowed) : V.firmAllowed;
+  const g80 = Array.isArray(d["80G"]) ? d["80G"] : N(d["80G"]) ? [{ amt: N(d["80G"]), pct: 100, qualifying: false }] : [];
+  const claimed = Object.keys(d).filter((k) => /^80/.test(k) && (k === "80G" ? g80.some((x) => N(x.amt)) : N(d[k])));
+  const ok = (k) => { const base = k.replace(/_.*$/, ""); if (allowedSet && allowedSet.indexOf(base) < 0) { warn(base, "Section " + base + " is not allowed " + (ind ? "in the new regime (115BAC(2))" : ent === "C" && inp.regime === "115BAA" ? "under section 115BAA (115BAA(2)(ii))" : "to this entity") + "; left out."); return false; } return true; };
+  let tot = 0;
+  const alw = {}, put = (k, v) => { v = R(v); alw[k] = (alw[k] || 0) + v; return v; };
+  const seen = new Set();
+  claimed.forEach((k) => { const base = k.replace(/_.*$/, ""); if (seen.has(base)) return; seen.add(base); if (!ok(k)) return;
+    switch (base) {
+      case "80C": case "80CCC": case "80CCD1": break;   // together under 80CCE, below
+      case "80CCD1B": tot += put(base, cap(k, V["80CCD1B"])); break;
+      case "80CCD2": { const r = inp.regime === "new" || !ind ? V.ccd2New : d.govtEmployer ? V.ccd2New : V.ccd2Old; tot += put(base, cap(k, R(salary * r), (r * 100) + "% of salary" + (salary ? "" : ": no salary"))); break; }
+      case "80D": { tot += put("80D", Math.min(N(d["80D_self"]), N(inp.age) >= 60 || d.selfSenior ? V.d80SelfSenior : V.d80Self) + Math.min(N(d["80D_parents"]), d.parentsSenior ? V.d80ParSenior : V.d80Par));
+        const lim = (N(inp.age) >= 60 || d.selfSenior ? V.d80SelfSenior : V.d80Self); if (N(d["80D_self"]) > lim) warn("80D_self", "Section 80D (self and family) claimed " + N(d["80D_self"]) + ", allowed up to " + lim + ".");
+        const lp = d.parentsSenior ? V.d80ParSenior : V.d80Par; if (N(d["80D_parents"]) > lp) warn("80D_parents", "Section 80D (parents) claimed " + N(d["80D_parents"]) + ", allowed up to " + lp + "."); break; }
+      case "80DD": tot += put(base, cap(k, d.ddSevere ? V.dd80Severe : V.dd80)); break;
+      case "80DDB": tot += put(base, cap(k, d.ddbSenior || N(inp.age) >= 60 ? V.ddb80Senior : V.ddb80)); break;
+      case "80U": tot += put(base, cap(k, d.uSevere ? V.u80Severe : V.u80)); break;
+      case "80TTA": if (N(inp.age) >= 60) warn(k, "Section 80TTA is not for a senior citizen (80TTB instead); left out."); else tot += put(base, cap(k, V["80TTA"])); break;
+      case "80TTB": if (N(inp.age) < 60) warn(k, "Section 80TTB is for senior citizens only; left out."); else tot += put(base, cap(k, V["80TTB"])); break;
+      case "80GG": tot += put(base, cap(k, V["80GG"])); break;
+      case "80EE": tot += put(base, cap(k, V.ee80)); break;
+      case "80EEA": case "80EEB": tot += put(base, cap(k, V.eea80)); break;
+      case "80G": break;  // below, on the adjusted gross total income
+      default: tot += put(base, N(d[k]));
+    }
+  });
+  if (["80C", "80CCC", "80CCD1"].some((k) => claimed.includes(k) && ok(k))) { const c = N(d["80C"]) + N(d["80CCC"]) + N(d["80CCD1"]); if (c > V["80C"]) warn("80C", "Sections 80C, 80CCC and 80CCD(1) claimed " + c + ", allowed together up to " + V["80C"] + " (80CCE)."); tot += put("80C", Math.min(c, V["80C"])); }
+  if (g80.length && claimed.includes("80G") && ok("80G")) {
+    // a cash donation above Rs 2,000 is not allowed (80G(5D)); qualifying donations within 10% of the adjusted gross total income
+    const adj = Math.max(0, room - tot), good = g80.filter((x) => { if (N(x.cash) > V.g80Cash) { warn("80G_cash", "A donation of " + N(x.amt) + " has " + N(x.cash) + " in cash: not allowed (80G(5D))."); return false; } return true; });
+    let q = 0; good.filter((x) => x.qualifying).forEach((x) => { q += N(x.amt); });
+    const qLim = R(adj * V.g80Limit); let qLeft = Math.min(q, qLim), g = 0;
+    good.filter((x) => !x.qualifying).forEach((x) => { g += N(x.amt) * N(x.pct || 100) / 100; });
+    good.filter((x) => x.qualifying).forEach((x) => { const u = Math.min(N(x.amt), qLeft); qLeft -= u; g += u * N(x.pct || 100) / 100; });
+    if (q > qLim) warn("80G_limit", "Qualifying donations " + q + " are limited to 10% of the adjusted gross total income (" + qLim + ").");
+    tot += put("80G", g);
   }
   tot = R(tot);
-  if (tot > room) { S.warn.push({ key: "via_room", text: "Chapter VI-A deductions are limited to the gross total income other than special-rate income (" + R(room) + ")." }); tot = R(Math.max(0, room)); }
+  S.viaAllowed = alw; S.viaCapped = tot > room;
+  if (tot > room) { warn("room", "Chapter VI-A deductions are limited to the gross total income other than special-rate income (" + R(room) + ")."); tot = R(Math.max(0, room)); }
   return tot;
 }
 
-function specialTax(p) {
-  return R(N(p.s111A) * L.SPECIAL.s111A + Math.max(0, N(p.s112A) - L.SPECIAL.s112AExempt) * L.SPECIAL.s112A + N(p.s112) * L.SPECIAL.s112);
+// tax on each special-rate part (after any exemption set against it)
+function specialParts(p) {
+  return { t111A: R(N(p.s111A) * L.SPECIAL.s111A), t112: R(N(p.s112) * L.SPECIAL.s112), t112A: R(Math.max(0, N(p.s112A) - L.SPECIAL.s112AExempt) * L.SPECIAL.s112A) };
 }
+function specialTax(p) { const t = specialParts(p); return t.t111A + t.t112 + t.t112A; }
 
 // tax on an income split into normal and special parts, before cess; for an individual the basic exemption left
 // over is used against the special-rate income (proviso to 111A / 112 / 112A, residents)
@@ -252,27 +296,27 @@ function baseTax(inp, p) {
     const slabs = slabsFor(inp), ex = exemptOf(slabs);
     let left = Math.max(0, ex - p.normal);
     const sp = { s111A: p.s111A, s112A: p.s112A, s112: p.s112 };
-    if (inp.resident !== false) for (const k of ["s112", "s111A", "s112A"]) { const u = Math.min(left, sp[k]); sp[k] -= u; left -= u; }
-    return { normalTax: slabTax(p.normal, slabs), specialTax: specialTax(sp), rateName: inp.regime === "new" ? "new regime slab rates (115BAC)" : "old regime slab rates", src: inp.regime === "new" ? L.SRC_SLABS.new : L.SRC_SLABS.old };
+    // the unused exemption first where it saves most: 111A (20%), then 112 (12.5%), then 112A (12.5% above 1.25 lakh)
+    if (inp.resident !== false) for (const k of ["s111A", "s112", "s112A"]) { const u = Math.min(left, sp[k]); sp[k] -= u; left -= u; }
+    return { normalTax: slabTax(p.normal, slabs), specialTax: specialTax(sp), parts: specialParts(sp), rateName: inp.regime === "new" ? "new regime slab rates (115BAC)" : "old regime slab rates", src: inp.regime === "new" ? L.SRC_SLABS.new : L.SRC_SLABS.old };
   }
   if (ent === "C") {
     const r = inp.regime === "115BAA" ? L.CO_RATE.baa : inp.smallCo === false ? L.CO_RATE.other : L.CO_RATE.small;
-    if (inp.regime !== "115BAA" && inp.smallCo == null) inp._askSmall = true;
-    return { normalTax: R(p.normal * r), specialTax: specialTax(p), rateName: (r * 100) + "% rate" + (inp.regime === "115BAA" ? " (section 115BAA)" : ""), src: L.SRC_CO };
+    return { normalTax: R(p.normal * r), specialTax: specialTax(p), parts: specialParts(p), rateName: (r * 100) + "% rate" + (inp.regime === "115BAA" ? " (section 115BAA)" : ""), src: L.SRC_CO };
   }
-  return { normalTax: R(p.normal * L.FIRM_RATE), specialTax: specialTax(p), rateName: "30% rate", src: "Finance Act 2025, First Schedule, Part I, Paragraph C" };
+  return { normalTax: R(p.normal * L.FIRM_RATE), specialTax: specialTax(p), parts: specialParts(p), rateName: "30% rate", src: "Finance Act 2025, First Schedule, Part I, Paragraph C" };
 }
+// 87A (resident individuals). New regime: total income up to 12 lakh, special-rate income included; the rebate, and the
+// marginal relief above 12 lakh (the tax at most the income above 12 lakh), only ever against the tax on normal income.
+// Old regime: total income up to 5 lakh; against the tax on normal income, 111A and 112, never 112A (112A(6)).
 function rebateOf(inp, p, bt) {
   if (inp.entity !== "P" || inp.resident === false) return 0;
   if (inp.regime === "new") {
-    if (p.normal <= L.REBATE.new.upto) return Math.min(bt.normalTax, L.REBATE.new.max);
-    const over = p.normal - L.REBATE.new.upto;        // marginal relief: the tax on normal income at most the income above 12 lakh
-    return bt.normalTax > over ? R(bt.normalTax - over) : 0;
+    if (p.ti <= L.REBATE.new.upto) return Math.min(bt.normalTax, L.REBATE.new.max);
+    const over = p.ti - L.REBATE.new.upto;
+    return Math.min(bt.normalTax, Math.max(0, R(bt.normalTax + bt.specialTax - over)));
   }
-  if (p.ti <= L.REBATE.old.upto) {
-    const onTax = bt.normalTax + R(N(p.s111A) * L.SPECIAL.s111A);        // not against 112A tax (112A(6))
-    return Math.min(Math.min(onTax, bt.normalTax + bt.specialTax), L.REBATE.old.max);
-  }
+  if (p.ti <= L.REBATE.old.upto) { const t = bt.parts || { t111A: 0, t112: 0 }; return Math.min(bt.normalTax + t.t111A + t.t112, L.REBATE.old.max); }
   return 0;
 }
 function surRate(inp, ti) {
