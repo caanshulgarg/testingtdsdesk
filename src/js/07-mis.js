@@ -459,9 +459,11 @@ const MIS = {
     let ym = this.shift(today, 0, -100).slice(0, 6);
     for (let i = 0; i < 6; i++, ym = GSTR.nextYm(ym)){
       const nx = GSTR.nextYm(ym), mo = +ym.slice(4, 6), lab = GSTR.label(ym);
-      add(mo === 3 ? nx.slice(0, 4) + "0430" : nx + "07", "TDS and TCS deposit for " + lab);
-      if ([6, 9, 12, 3].includes(mo)){ const q = {6: "Q1", 9: "Q2", 12: "Q3", 3: "Q4"}[mo], d = mo === 3 ? nx.slice(0, 4) + "0531" : mo === 12 ? nx.slice(0, 4) + "0131" : ym.slice(0, 4) + String(mo + 1).padStart(2, "0") + "31";
-        add(d, "TDS and TCS returns for " + q + " " + GSTF.fyOf(ym)); }
+      // TDS: the 7th, March's on 30 April (rule 30(2)); returns on the 31st after the quarter, 31 May for Q4 (rule 31A).
+      // TCS: the 7th for every month, March too (rule 37CA); Form 27EQ on the 15th after the quarter, 15 May for Q4 (rule 31AA)
+      add(mo === 3 ? nx.slice(0, 4) + "0430" : nx + "07", "TDS deposit for " + lab); add(nx + "07", "TCS deposit for " + lab);
+      if ([6, 9, 12, 3].includes(mo)){ const q = {6: "Q1", 9: "Q2", 12: "Q3", 3: "Q4"}[mo] + " " + GSTF.fyOf(ym), d = mo === 3 ? nx.slice(0, 4) + "0531" : mo === 12 ? nx.slice(0, 4) + "0131" : ym.slice(0, 4) + String(mo + 1).padStart(2, "0") + "31";
+        add(d, "TDS returns for " + q); add(d.slice(0, 6) + "15", "TCS return (Form 27EQ) for " + q); }
       if (reg){
         const t = typeof GSTSet === "object" ? GSTSet.typeOf(ym, reg) : "monthly";
         if (t === "monthly"){ add(GSTF.due(ym, "r1", reg), "GSTR-1 for " + lab); add(GSTF.due(ym, "r3b", reg), "GSTR-3B and tax for " + lab); }
@@ -799,7 +801,10 @@ Object.assign(MIS, {
   // 13 weeks ahead from the end of the period, by fixed rules
   forecast(to, recv, pay, bal){
     const start = this.shift(to, 0, 1), W = 13, weeks = Array.from({length: W}, (_, i) => ({i, from: this.shift(start, 0, i * 7), to: this.shift(start, 0, i * 7 + 6), inn: 0, out: 0, items: []}));
-    const put = (d, amt, what, who, why) => { let w = this.weekOf(start, d); if (w < 0) w = 0; if (w >= W) return; const x = weeks[w]; if (amt > 0) x.inn = r2(x.inn + amt); else x.out = r2(x.out - amt); x.items.push({d: d < start ? start : d, amt: r2(amt), what, who, why}); };
+    // a bill more than 180 days past when the party usually settles is doubtful: kept apart (old), not counted in week 1
+    // (review of 22-Nov-2026: a bill 400 days overdue was taken as collected in week 1)
+    const old = {inn: 0, out: 0, n: 0}, late = (d, amt) => { if (Audit.days(d, start) <= 180) return false; old.n++; if (amt > 0) old.inn = r2(old.inn + amt); else old.out = r2(old.out - amt); return true; };
+    const put = (d, amt, what, who, why) => { let w = this.weekOf(start, d); if (w < 0 && /^(Collections|Payments to suppliers)$/.test(what) && late(d, amt)) return; if (w < 0) w = 0; if (w >= W) return; const x = weeks[w]; if (amt > 0) x.inn = r2(x.inn + amt); else x.out = r2(x.out - amt); x.items.push({d: d < start ? start : d, amt: r2(amt), what, who, why}); };
     const rd = this.payDays("r", to), pd = this.payDays("p", to), msme = this.msme(), md = this.cfg(S.books).msmeDays;
     // each party's open bills net of its receipts on account and advances (MIS.netOpen, as the ageing): what is
     // expected from a party never exceeds its ledger balance (review of 02-Oct-2026)
@@ -835,7 +840,9 @@ Object.assign(MIS, {
     });
     // tax on fixed dates: GST on the 20th, TDS on the 7th, from the last months in the books
     const lastM = this.monthsOf(this.shift(to, 0, -89), to).slice(-3);
-    const gst = lastM.map(mm => { try { return r2(this.gst3b(mm).reduce((a, t) => a + Math.max(0, t.net.igst + t.net.cgst + t.net.sgst + t.net.cess - (t.netItc.igst + t.netItc.cgst + t.netItc.sgst + t.netItc.cess)), 0)); } catch (e){ return 0; } });
+    // the 3B working's cash (after the set-off by head and the credit carried forward), as compliance() takes it
+    const s4 = x => ["igst", "cgst", "sgst", "cess"].reduce((a, k) => a + num((x || {})[k]), 0);
+    const gst = lastM.map(mm => { try { return r2(this.gst3b(mm).reduce((a, t) => a + (t.pay && t.pay.cash ? s4(t.pay.cash) : Math.max(0, s4(t.net) - s4(t.netItc)) + (t.pay && t.pay.rcmCash ? s4(t.pay.rcmCash) : 0)), 0)); } catch (e){ return 0; } });
     const tds = lastM.map(mm => TDS.rows().filter(r => this.ym(r.date) === mm).reduce((s2, r) => s2 + r.tds, 0) + TDS.salaryRows().filter(r => this.ym(r.date) === mm).reduce((s2, r) => s2 + r.tds, 0));
     for (let k = 0; k < 4; k++){
       const d = new Date(Audit.iso(start) + "T00:00:00"); d.setDate(1); d.setMonth(d.getMonth() + k);
@@ -849,7 +856,7 @@ Object.assign(MIS, {
     let run = bal != null ? bal : null;
     weeks.forEach(w => { w.net = r2(w.inn - w.out); if (run != null){ w.open = run; run = r2(run + w.net); w.close = run; } w.items.sort((a, c) => a.d.localeCompare(c.d) || a.what.localeCompare(c.what) || String(a.who).localeCompare(String(c.who))); });
     const lows = weeks.filter(w => w.close != null).sort((a, c) => a.close - c.close);
-    return {start, weeks, opening: bal, low: lows[0] || null, rd: rd["\u0000all"], pd: pd["\u0000all"]};
+    return {start, weeks, opening: bal, low: lows[0] || null, rd: rd["\u0000all"], pd: pd["\u0000all"], old};
   },
   // ratios: from the flows always; from the balance sheet when Tally's balances are here
   ratios(r, balTo){
@@ -867,18 +874,19 @@ Object.assign(MIS, {
       // Accounts tab places it (FS.place: a debit balance under liabilities is an asset, a credit under assets a
       // liability), and assets and liabilities are taken as positive amounts; a ratio that still comes out negative or
       // with nothing to divide by is "not meaningful", never a negative number
-      const A = Audit, CA = {}, CL = {}, at = {ca: 0, cl: 0, stock: 0, debt: 0, eq: 0};
+      const A = Audit, CA = {}, CL = {}, at = {ca: 0, cl: 0, stock: 0, debt: 0, eq: 0, pl: 0};
       ["ci", "inv", "tr", "cash", "stla", "oca"].forEach(k => { CA[k] = 1; }); ["stb", "tp", "ocl", "stp"].forEach(k => { CL[k] = 1; });
       Object.entries(balTo).forEach(([l, v]) => {
         v = num(v); if (Math.abs(v) < 0.005) return;
-        if (typeof FS === "undefined" || FS.nature(l).rev) return;
+        if (typeof FS === "undefined") return;
+        if (FS.nature(l).rev){ at.pl += v; return; }
         const k = FS.place(l, v, "co");
         if (CA[k]){ at.ca += -v; if (k === "inv") at.stock += -v; }
         else if (CL[k]) at.cl += v;
         if (k === "ltb" || k === "stb") at.debt += v;
         if (k === "share" || k === "reserves" || k === "capital") at.eq += v;
       });
-      const ca = r2(at.ca), cl = r2(at.cl), liquid = r2(at.ca - at.stock), debt = r2(at.debt), eq = r2(at.eq + r.pl.pat.t);
+      const ca = r2(at.ca), cl = r2(at.cl), liquid = r2(at.ca - at.stock), debt = r2(at.debt), eq = r2(at.eq + at.pl);
       const NM = "not meaningful", times = (a, c) => !(c > 0) || a < 0 ? NM : Math.round(a / c * 100) / 100;
       out.push(["Current ratio", times(ca, cl), "times", "current assets " + INR.format(ca) + " \u00f7 current liabilities " + INR.format(cl)], ["Quick ratio", times(liquid, cl), "times", "without stock"],
         ["Debt to equity", !(eq > 0) || debt < 0 ? NM : Math.round(debt / eq * 100) / 100, "times", "borrowings \u00f7 capital and reserves"],

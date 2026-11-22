@@ -314,6 +314,7 @@ function CashFlow({ b, r, p2 }) {
     <Card top title={"The next 13 weeks, from " + d(F.start)}>
       {F.opening != null ? <p className="note">{"Starting with cash and bank of ₹" + m(F.opening) + (F.low ? "; the lowest point is ₹" + m(F.low.close) + " in the week of " + d(F.low.from) + "." : ".")}</p>
         : <p className="note">The cash in hand at the start is not known here (see the Summary); the table shows what comes in and goes out.</p>}
+      {F.old && F.old.n > 0 && <p className="note warn" data-mis-fc-old="">{F.old.n + (F.old.n === 1 ? " bill is" : " bills are") + " more than 180 days past when the party usually pays (₹" + m(F.old.inn) + " to collect, ₹" + m(F.old.out) + " to pay): doubtful, so left out of the weeks. Follow them up, or provide for them."}</p>}
       <Table id="misFc" head={<><th>Week of</th><th className="n">Coming in</th><th className="n">Going out</th><th className="n">Net</th>{F.opening != null && <th className="n">Cash at the end</th>}</>}>
         {F.weeks.map((w) => { const open = S.misWeek === w.i;
           return <Fragment key={w.i}><tr><td><Opener open={open} onClick={toggle("misWeek", w.i, -1)}>{d(w.from)}</Opener></td><td className="n">{m(w.inn)}</td><td className="n">{m(w.out)}</td><td className={"n" + (w.net < 0 ? " bad" : "")}>{m(w.net)}</td>
