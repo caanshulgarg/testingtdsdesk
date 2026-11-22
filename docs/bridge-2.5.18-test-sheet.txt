@@ -1,7 +1,7 @@
 FINCOM BRIDGE 2.5.18 - TEST SHEET (2.5.17's sheet below, with 2.5.18's changes first)
 
 File:        FinComBridge-Setup-2.5.18.exe
-Fingerprint: SHA-256 (filled in when the setup is built; compare with the .sha256 file next to the setup)
+Fingerprint: SHA-256 d113c6fc689ba4960fb4ed988df4c164d0981b57491fbb53a8a87967ee4f6be2 (FinComBridge-Setup-2.5.18.exe, built 22-Nov-2026 21:12 UTC at eaf02b72b, POSTONLY=any; NOT to be handed out until the 2.5.18 review notes are in docs/reviews and release-check.sh passes; compare with the .sha256 file next to the setup); program FinComBridge-2.5.18.exe SHA-256 69e0b56350e46c5f541d24256f5554749e94f86eff8ec923b521a55337050888
 
 2.5.18: the bridge audit fixes (the typing gate, postings' reports, one Tally, the 2-second rule for the nightly run,
 and each posting's parts sized by the company's own measured pace), and one new request to Tally: a month's salary
