@@ -238,18 +238,24 @@ export function r3bBills(id, ym, reg, t) {
   const neg = (o) => { const x = S5(o); HEADS.forEach((k) => { x[k] = -x[k]; }); return x; };
   let bills = [], adj = [], figure = null;
   const B = (rows, sg = 1) => rows.map((r) => Object.assign({}, r, { sg }));
+  // (GSTR.sec31: a credit note comes off its own class: 3.1(a) only by the notes on taxable supplies)
+  const CN = (rows) => rows.map((r) => Object.assign({}, r, { sg: r.kind === "CDNR" ? -1 : 1 }));
   const A = (label, o) => { const x = S5(o); if (HEADS.some((k) => Math.abs(x[k]) > 0.004)) adj.push(Object.assign({ label }, x)); };
+  // our credit notes rejected by customers in IMS: each added back in the class it came off (CustIMS.month's by; a month
+  // kept before it has the whole in 3.1(a), as then)
+  const rej = (t, c) => { const R = t.custRej; if (!R) return; const p = (o) => (o.by ? o.by[c] : c === "net" ? o : null);
+    if (p(R.add)) A("Our credit notes rejected by customers in IMS", p(R.add)); if (p(R.back)) A("Of those, accepted later", neg(p(R.back))); };
   switch (id) {
     case "3.1a": {
-      bills = B(out.filter((r) => r.cls === "taxable" && r.kind !== "CDNR")).concat(B(out.filter((r) => r.kind === "CDNR"), -1));
+      bills = B(out.filter((r) => r.cls === "taxable" && r.kind !== "CDNR")).concat(B(out.filter((r) => r.kind === "CDNR" && r.cls === "taxable"), -1));
       A("Tax on advances, 11A less 11B", t.adv);
-      if (t.custRej) { A("Our credit notes rejected by customers in IMS", t.custRej.add); A("Of those, accepted later", neg(t.custRej.back)); }
+      rej(t, "net");
       if (t.amend) A("Amendments of earlier months (9A, 9C, 10)", t.amend.out);
       figure = S5(t.net); break; }
-    case "3.1b": bills = B(out.filter((r) => r.cls === "export" || r.cls === "sez")); if (t.amend) A("Amendments of earlier months (9A, 9C, 10)", t.amend.zero); figure = S5(t.zero); break;
-    case "3.1c": bills = B(out.filter((r) => r.cls === "exempt" || r.cls === "nil")); figure = S5(t.nil); break;
+    case "3.1b": bills = CN(out.filter((r) => r.cls === "export" || r.cls === "sez")); if (t.amend) A("Amendments of earlier months (9A, 9C, 10)", t.amend.zero); rej(t, "zero"); figure = S5(t.zero); break;
+    case "3.1c": bills = CN(out.filter((r) => r.cls === "exempt" || r.cls === "nil")); rej(t, "nil"); figure = S5(t.nil); break;
     case "3.1d": bills = B(inn.filter((r) => r.rcm || (r.import && r.supply !== "Goods"))); figure = S5(t.rcmOut); break;
-    case "3.1e": bills = B(out.filter((r) => r.cls === "nongst")); figure = S5(t.nongst); break;
+    case "3.1e": bills = CN(out.filter((r) => r.cls === "nongst")); rej(t, "nongst"); figure = S5(t.nongst); break;
     case "4A1": bills = B(inn.filter((r) => r.import && r.supply === "Goods")); figure = S5(t.impGoods); break;
     case "4A2": bills = B(inn.filter((r) => r.import && r.supply !== "Goods")); figure = S5(t.impServ); break;
     case "4A3": bills = B(inn.filter((r) => r.rcm && !r.import)); figure = S5(t.rcmIn); break;

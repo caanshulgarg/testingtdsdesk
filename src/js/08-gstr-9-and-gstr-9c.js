@@ -13,7 +13,13 @@ const GST9 = {
     const months = this.months(fy), have = new Set(GSTR.months()), inBooks = months.filter(m => have.has(m));
     const out = [], inn = [], t3 = {};
     inBooks.forEach(m => { GSTR.outward(m, reg).forEach(r => out.push(r)); GSTR.inward(m, reg).forEach(r => inn.push(Object.assign({ym: m}, r))); t3[m] = (typeof GSTF === "object" && GSTF.filed3b(m, reg)) || GSTR.threeBm(m, reg);
-      if (typeof GSTSet === "object" && GSTSet.typeOf(m, reg) === "qrmp"){ const q = GSTSet.isQEnd(m) ? GSTR.threeB(m, reg).pay : {cash: {}, use: {}}; t3[m] = Object.assign({}, t3[m], {pay: q}); } });
+      // next-fix-audit-gst: a QRMP quarter whose 3B is kept as filed is that one 3B (the three months'): at the quarter's end,
+      // its first two months nothing (else they were counted twice); otherwise each month's own, the quarter's payment at its end
+      if (typeof GSTSet === "object" && GSTSet.typeOf(m, reg) === "qrmp"){ const qe = GSTSet.qEnd(m), fq = typeof GSTF === "object" && GSTF.filed3b(qe, reg);
+        // (re-review: the quarter's last month in the books carries it, when the quarter's end is not in the books)
+        const qLast = inBooks.filter(x => GSTSet.qEnd(x) === qe).pop();
+        if (fq && fq.quarter) t3[m] = m === qLast ? fq : {net: {}, rcmOut: {}, pay: {cash: {}, use: {}}};
+        else { const q = GSTSet.isQEnd(m) ? GSTR.threeB(m, reg).pay : {cash: {}, use: {}}; t3[m] = Object.assign({}, t3[m], {pay: q}); } } });
     const S1 = f => this.sumRows(out.filter(f));
     const taxable = r => r.cls === "taxable" && !r.rcm;
     const T = {};
@@ -27,20 +33,24 @@ const GST9 = {
     T["4F"] = adv;
     T["4G"] = inBooks.reduce((a, m) => this.add(a, Object.assign({taxable: 0}, t3[m].rcmOut)), this.Z());
     T["4H"] = ["4A", "4B", "4C", "4D", "4E", "4F", "4G"].reduce((a, k) => this.add(a, T[k]), this.Z());
-    T["4I"] = S1(r => r.kind === "CDNR" && r.cls !== "exempt" && r.cls !== "nil" && r.cls !== "nongst" && !r.rcm);
-    T["4J"] = S1(r => r.kind === "DBNR" && !r.rcm);
+    // notes (next-fix-audit-gst): on a supply of table 5 (5A/5B zero rated without tax, 5C reverse charge, 5D-5F exempt,
+    // nil, non-GST) in 5H / 5I; on a supply of table 4 in 4I / 4J
+    const note = r => r.kind === "CDNR" || r.kind === "DBNR";
+    const five = r => r.rcm || r.cls === "exempt" || r.cls === "nil" || r.cls === "nongst" || ((r.cls === "export" || r.cls === "sez") && !(r.igst > 0));
+    T["4I"] = S1(r => r.kind === "CDNR" && !five(r));
+    T["4J"] = S1(r => r.kind === "DBNR" && !five(r));
     const ty = this.typed(fy, reg), tz = k => Object.assign(this.Z(), ty[k] || {});
     T["4K"] = tz("4K"); T["4L"] = tz("4L");
     T["4N"] = this.add(this.add(this.add(this.add(T["4H"], T["4I"], -1), T["4J"]), T["4K"]), T["4L"], -1);
     T["5A"] = S1(r => r.cls === "export" && r.kind !== "CDNR" && r.kind !== "DBNR" && !(r.igst > 0));
     T["5B"] = S1(r => r.cls === "sez" && r.kind !== "CDNR" && r.kind !== "DBNR" && !(r.igst > 0));
-    T["5C"] = S1(r => r.rcm && r.kind !== "CDNR");
-    T["5D"] = S1(r => r.cls === "exempt" && r.kind !== "CDNR");
-    T["5E"] = S1(r => r.cls === "nil" && r.kind !== "CDNR");
-    T["5F"] = S1(r => r.cls === "nongst" && r.kind !== "CDNR");
+    T["5C"] = S1(r => r.rcm && !note(r));
+    T["5D"] = S1(r => r.cls === "exempt" && !note(r));
+    T["5E"] = S1(r => r.cls === "nil" && !note(r));
+    T["5F"] = S1(r => r.cls === "nongst" && !note(r));
     T["5G"] = ["5A", "5B", "5C", "5D", "5E", "5F"].reduce((a, k) => this.add(a, T[k]), this.Z());
-    T["5H"] = S1(r => r.kind === "CDNR" && (r.rcm || r.cls === "exempt" || r.cls === "nil" || r.cls === "nongst"));
-    T["5I"] = this.Z(); T["5J"] = tz("5J"); T["5K"] = tz("5K");
+    T["5H"] = S1(r => r.kind === "CDNR" && five(r));
+    T["5I"] = S1(r => r.kind === "DBNR" && five(r)); T["5J"] = tz("5J"); T["5K"] = tz("5K");
     T["5M"] = this.add(this.add(this.add(this.add(T["5G"], T["5H"], -1), T["5I"]), T["5J"]), T["5K"], -1);   // 5G - 5H + 5I + 5J - 5K
     T["5N"] = this.add(T["4N"], T["5M"]);
     // Part III: credit taken (6), reversed (7), and against 2B (8)
@@ -104,7 +114,8 @@ const GST9 = {
     const hin = {};
     GSTR.partsOf(inn).forEach(q => { const r = q.row, k = (q.hsn || "no HSN") + "|" + q.rate, x = hin[k] = hin[k] || {hsn: q.hsn || "", rate: q.rate, taxable: 0, igst: 0, cgst: 0, sgst: 0, cess: 0}; ["taxable", "igst", "cgst", "sgst", "cess"].forEach(f => { x[f] = r2(x[f] + num(q[f]) * sgn(r)); }); });
     // credit held back for 2B at the year's end explains a 6J difference
-    const heldEnd = inBooks.reduce((a, m) => { const x = t3[m]; return x.held ? r2(a + x.held.igst + x.held.cgst + x.held.sgst + x.held.cess - x.released.igst - x.released.cgst - x.released.sgst - x.released.cess) : a; }, 0);
+    // (re-review: less what 2B says is not available, held.na: held for good, not waiting for 2B)
+    const heldEnd = inBooks.reduce((a, m) => { const x = t3[m]; return x.held ? r2(a + x.held.igst + x.held.cgst + x.held.sgst + x.held.cess - num(x.held.na) - x.released.igst - x.released.cgst - x.released.sgst - x.released.cess) : a; }, 0);
     return {fy, reg, months, inBooks, missing: months.filter(m => !have.has(m)), T, pay, twoB, part6, heldEnd, typed: ty,
       hsnOut: Object.values(hsn).sort((a, c) => c.taxable - a.taxable), hsnIn: Object.values(hin).sort((a, c) => c.taxable - a.taxable)};
   },

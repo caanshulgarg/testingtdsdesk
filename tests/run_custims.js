@@ -27,6 +27,9 @@ let fails = 0; const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + 
   ok(later.custRej.back.n === 1 && Math.abs(later.custRej.back.igst + later.custRej.back.cgst + later.custRej.back.sgst - tax(cn)) < 0.02, "accepted later: taken out again in the month accepted");
   const si = x.CustIMS.add("07", inv.id); x.GSTR._carry = null;
   ok(si.kind === "inv" && si.act === "ask" && x.GSTR.threeB(x.GSTR.ym(inv.date), "07").custRej.add.n === 0, "a rejected invoice: our tax stays as reported; first step is to ask the customer");
+  // (the letter and the customers are the screen's, app/src/lib/custImsLetter.js, put on CustIMS when CustIms.jsx loads)
+  ["CO", "GSTR", "GSTAmend", "GSTSet", "CustIMS", "INR", "r2"].forEach(k => { globalThis[k] = x[k]; }); globalThis.S = ctx.S;
+  (await import(require("path").join(__dirname, "..", "app", "src", "lib", "custImsLetter.js"))).installCustIms();
   const c = x.CustIMS.customers("07").find(z => z.gstin === inv.gstin), L = x.CustIMS.letter("07", c.gstin, c.party, c.items);
   ok(/rejected in your Invoice Management System/.test(L) && L.includes(inv.no), "a letter to the customer asking them to accept it");
   // the guide has a page for every GST and TDS tab

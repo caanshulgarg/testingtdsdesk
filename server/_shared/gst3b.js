@@ -19,7 +19,7 @@
 // No AI here: M2B.aiLinks only reads the pairs the gst-2b-match function already stored for the year.
 // GST3B_SRC: this file's and names.js's text (this value left out), hashed (tests/run_gst_cloud.js keeps it so): a 3B the
 // cloud worked out carries it, and the 3B page uses the cloud's only when its own is the same (app/src/screens/gst/cloud3b.js)
-const GST3B_SRC = "sd087f24897b288cc";
+const GST3B_SRC = "s446614ef7dc90b7b";
 function num(v){ if (typeof v === "number") return isFinite(v) ? v : 0; const n = parseFloat(String(v == null ? "" : v).replace(/[^0-9.\-]/g, "")); return isFinite(n) ? n : 0; }
 function r2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
 const INR = new Intl.NumberFormat("en-IN", {minimumFractionDigits:2, maximumFractionDigits:2});
@@ -552,22 +552,25 @@ const CustIMS = {
   items(reg){
     const st = this.store(reg), byId = new Map(this.docs(reg).map(r => [r.id, r]));
     return Object.keys(st).map(id => { const s = st[id], r = byId.get(id);
-      const tax = r ? {igst: r.igst, cgst: r.cgst, sgst: r.sgst, cess: r.cess || 0, taxable: r.taxable} : {igst: 0, cgst: 0, sgst: 0, cess: 0, taxable: 0};
+      const tax = r ? {igst: r.igst, cgst: r.cgst, sgst: r.sgst, cess: r.cess || 0, taxable: r.taxable, cls: r.cls} : {igst: 0, cgst: 0, sgst: 0, cess: 0, taxable: 0};
       const open = s.kind === "cn" ? s.act !== "accepted" : s.act !== "done";
       return Object.assign({id, gone: !r}, s, tax, {tax: r2(tax.igst + tax.cgst + tax.sgst + tax.cess), open}); })
       .sort((a, c) => String(a.date).localeCompare(String(c.date)));
   },
-  // 3.1(a) for a month: rejected credit notes added back, and taken out again in the month the customer accepts them
+  // 3.1 for a month: rejected credit notes added back, and taken out again in the month the customer accepts them
+  // (next-fix-audit-gst, re-review: each in the class it came off, as GSTR.sec31 takes a note off: by.net 3.1(a), by.zero
+  // 3.1(b) (an SEZ unit's, an export's), by.nil 3.1(c), by.nongst 3.1(e); the totals as before, for the lists)
   month(ym, reg){
-    const add = {taxable: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, n: 0, list: []}, back = {taxable: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, n: 0, list: []};
-    const put = (o, x) => { ["taxable", "igst", "cgst", "sgst", "cess"].forEach(k => { o[k] = r2(o[k] + num(x[k])); }); o.n++; o.list.push(x); };
+    const Z = () => ({taxable: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, n: 0}), add = Object.assign(Z(), {list: []}), back = Object.assign(Z(), {list: []});
+    const put = (o, x) => { const c = /^(export|sez)$/.test(x.cls) ? "zero" : /^(exempt|nil)$/.test(x.cls) ? "nil" : x.cls === "nongst" ? "nongst" : "net", b = (o.by = o.by || {})[c] = o.by[c] || Z();
+      [o, b].forEach(q => { ["taxable", "igst", "cgst", "sgst", "cess"].forEach(k => { q[k] = r2(q[k] + num(x[k])); }); q.n++; }); o.list.push(x); };
     if (!S.books || !S.books.outRej) return {add, back};
     this.items(reg).filter(x => x.kind === "cn" && !x.gone).forEach(x => { if (x.addYm === ym) put(add, x); if (x.act === "accepted" && x.doneYm === ym) put(back, x); });
     return {add, back};
   },
   ACTS: {
     inv: [["ask", "Invoice is right: ask the customer to accept it, or send it again by amendment"], ["amend", "Details wrong: correct it in Tally, it goes as an amendment"], ["cancel", "Not a supply: issue a credit note"], ["done", "Settled"]],
-    cn: [["rejected", "Rejected: its tax is added back to 3.1(a)"], ["accepted", "Customer accepted it later"]]
+    cn: [["rejected", "Rejected: its tax is added back to 3.1"], ["accepted", "Customer accepted it later"]]
   },
   nextYm(ym){ const y = +ym.slice(0, 4), m = +ym.slice(4, 6); return m === 12 ? (y + 1) + "01" : y + String(m + 1).padStart(2, "0"); },
   find(reg, q){ const n = GST2B.normNo(q); if (!n) return []; return this.docs(reg).filter(r => GST2B.normNo(r.no) === n || GST2B.normNo(r.no).endsWith(n)).slice(0, 12); },
@@ -577,18 +580,7 @@ const CustIMS = {
     const ym = GSTR.ym(r.date), today = ITCT.today(), rejYm = today.slice(0, 7).replace("-", "") > ym ? today.slice(0, 7).replace("-", "") : ym;
     return st[id] = {kind: r.kind === "CDNR" ? "cn" : "inv", no: r.no, date: r.date, party: r.party, gstin: r.gstin, rejYm, addYm: this.nextYm(rejYm), act: r.kind === "CDNR" ? "rejected" : "ask", remark: "", doneYm: "", at: today};
   },
-  letter(reg, gstin, party, list){
-    const co = CO() || {}, g = (GSTR.gstins(S.books) || []).find(z => z.slice(0, 2) === reg) || reg, m = v => "\u20b9" + INR.format(r2(v));
-    let t = "Dear Sir/Madam,\n\nThe following documents issued by " + (co.name || "us") + " (GSTIN " + g + ") to " + party + " (GSTIN " + gstin + ") are shown as rejected in your Invoice Management System:\n\n";
-    t += list.map((x, i) => "   " + (i + 1) + ". " + (x.kind === "cn" ? "Credit note " : "Invoice ") + x.no + " dated " + GSTAmend.dmy(x.date) + ", taxable " + m(x.taxable) + ", tax " + m(x.tax) + (x.remark ? " (your remark: " + x.remark + ")" : "")).join("\n");
-    t += "\n\nWe have checked them against our books and they are correct. Please accept them in IMS before you file GSTR-3B; if your return for that month is already filed, please let us know and we will report them again so that they come back to your IMS.\n\nRegards,\n" + (co.name || "");
-    return t;
-  },
-  customers(reg){
-    const m = {};
-    this.items(reg).filter(x => x.open && ((x.kind === "inv" && x.act === "ask") || (x.kind === "cn" && x.act === "rejected"))).forEach(x => { const k = x.gstin; (m[k] = m[k] || {gstin: x.gstin, party: x.party, items: []}).items.push(x); });
-    return Object.values(m).map(c => { const k = GSTSet.contact(c.gstin, c.party); return Object.assign(c, {email: k.email, phone: k.phone, tax: r2(c.items.reduce((a, x) => a + x.tax, 0))}); });
-  },
+  // (letter and customers, for the screen only: app/src/lib/custImsLetter.js, put on CustIMS by CustIms.jsx)
 };
 // GST2B (src/js/11-section.js)
 const GST2B = {
@@ -1556,7 +1548,11 @@ const GSTQ = {
       else { const prevQ = GSTSet.typeOf(prevEnd, reg) === "qrmp", t = GSTR.threeB(prevEnd, reg), f = prevQ ? 0.35 : 1;
         this.H.forEach(h => { amt[h] = Math.round(num(t.pay.cash[h]) * f); });
         why = prevQ ? "35% of the cash paid in the 3B for " + GSTSet.qLabel(prevEnd) : "the cash paid in the 3B for " + GSTR.label(prevEnd) + " (a monthly return)"; }
-    } else { const t = GSTR.threeBm(ym, reg); this.H.forEach(h => { amt[h] = Math.max(0, Math.round(num(t.pay.cash[h]))); }); why = "the month\u2019s tax less its credit"; }
+    } else { const t = GSTR.threeBm(ym, reg), q0 = GSTSet.qStart(ym);
+      // (re-review: the second month starts from what the first left of the credit and of an earlier negative liability,
+      // not from the quarter's opening again: section 39(7) proviso, Notification 85/2020-CT, the tax due less the credit left)
+      const p = q0 !== ym && GSTR.months().includes(q0) ? GSTR.setOff(t.net, t.rcmOut, t.netItc, GSTR.threeBm(q0, reg).pay.carry) : t.pay;
+      this.H.forEach(h => { amt[h] = Math.max(0, Math.round(num(p.cash[h]))); }); why = "the month\u2019s tax less its credit"; }
     const total = this.H.reduce((a, h) => a + amt[h], 0), paid = rec.pmt06 || {};
     return {method, amt, total, why, known, due: GSTF.due(ym, "pmt06", reg), paid, paidTotal: r2(this.H.reduce((a, h) => a + num(paid[h]), 0))};
   },
@@ -2121,10 +2117,13 @@ const GSTR = {
   sec31(out, inn){
     const S1 = f => this.sum(out.filter(f)), S2 = f => this.sum(inn.filter(f));
     const taxableOut = S1(r => r.cls === "taxable" && r.kind !== "CDNR");
-    const cn = S1(r => r.kind === "CDNR");
-    const zero = S1(r => r.cls === "export" || r.cls === "sez");
-    const nil = S1(r => r.cls === "exempt" || r.cls === "nil");
-    const nongst = S1(r => r.cls === "nongst");
+    // next-fix-audit-gst: a credit note comes off its own class: 3.1(a) only by the notes on taxable supplies; a note on an
+    // export, SEZ, exempt, nil or non-GST supply comes off 3.1(b), 3.1(c) or 3.1(e) (signed, as GSTRev.turnoverNow has it)
+    const cn = S1(r => r.kind === "CDNR" && r.cls === "taxable");
+    const S1s = f => { const a = S1(r => f(r) && r.kind !== "CDNR"), c = S1(r => f(r) && r.kind === "CDNR"); Object.keys(a).forEach(k => { a[k] = k === "n" ? a[k] + c[k] : r2(a[k] - c[k]); }); return a; };
+    const zero = S1s(r => r.cls === "export" || r.cls === "sez");
+    const nil = S1s(r => r.cls === "exempt" || r.cls === "nil");
+    const nongst = S1s(r => r.cls === "nongst");
     const rcmOut = S2(r => r.rcm || (r.import && r.supply !== "Goods"));   // 3.1(d): tax we pay on inward supplies, imported services included
     const toUnreg = S1(r => !r.gstin && r.igst > 0);                 // 3.2 inter-state to unregistered
     // 3.2: inter-state supplies to unregistered persons, place of supply by place of supply
@@ -2160,7 +2159,7 @@ const GSTR = {
   },
   threeBm(ym, reg){
     const src = (S.books || {}).shareSrc, B = src ? src.base(ym, reg) : this.bookBase(ym, reg);
-    const P31 = B.P31, {taxableOut, cn, zero, nil, nongst, rcmOut, toUnreg} = P31;
+    const P31 = B.P31, {taxableOut, cn, rcmOut, toUnreg} = P31, [zero, nil, nongst] = [P31.zero, P31.nil, P31.nongst].map(o => Object.assign({}, o));
     const {rcmIn, impGoods, impServ, blocked, buy} = B.P4;
     // next-gst-isd: 4(A)(4), the ISD's credit: as the books have it, less what the 2B basis below holds back of the ISD's
     // documents and plus what it takes now (review of e9ebac1c7, M4: as 4(A)(5) for the rest); 4(A) total, 4(C) and table
@@ -2171,7 +2170,8 @@ const GSTR = {
     // and taken in the month their 2B carries them
     const basis = this.itcBasis(ym, reg), held = {igst: 0, cgst: 0, sgst: 0, cess: 0, n: 0, list: []}, released = {igst: 0, cgst: 0, sgst: 0, cess: 0, n: 0, list: []}, cn2b = {igst: 0, cgst: 0, sgst: 0, cess: 0, n: 0, list: []}, rejBack = {igst: 0, cgst: 0, sgst: 0, cess: 0, n: 0, list: []};
     if (basis.on){
-      const add = (o, d) => { o.igst = r2(o.igst + d.igst); o.cgst = r2(o.cgst + d.cgst); o.sgst = r2(o.sgst + d.sgst); o.cess = r2(o.cess + d.cess); o.n++; o.list.push(d); };
+      // (re-review: held.na, the part 2B says is not available, held for good, not waiting for 2B: GSTR-9's heldEnd leaves it out)
+      const add = (o, d) => { o.igst = r2(o.igst + d.igst); o.cgst = r2(o.cgst + d.cgst); o.sgst = r2(o.sgst + d.sgst); o.cess = r2(o.cess + d.cess); o.n++; o.list.push(d); if (d.na) o.na = r2((o.na || 0) + d.igst + d.cgst + d.sgst + d.cess); };
       const vById = new Map((S.books.vouchers || []).map(v => [v.id, v]));
       // a bill the books hold ("NOT SHOWN IN 2B") took no credit: nothing to hold back or release (the books' move takes it)
       // (a document kept by its entry says whether it is an import: imp)
@@ -2179,10 +2179,15 @@ const GSTR = {
       // an ISD's: a 2B row of 2B's ISD part, or a document of an ISD's entry (a document kept by its entry says so: isd)
       const isdX = this.isdTest(id => vById.get(id));
       basis.res.onlyBooks.filter(d => d.ym === ym && claimable(d)).forEach(d => add(held, d));
-      basis.res.pairs.forEach(x => { if (x.p.ym > ym) x.books.filter(d => d.ym === ym && claimable(d)).forEach(d => add(held, d));
+      // next-fix-audit-gst: a bill matched to a 2B row that says "ITC not available" (itcavl N: section 16(4) time limit, or
+      // the place of supply in another state, section 16(2)) gives no credit: held back for good (na), as a bill rejected in
+      // IMS: in the month booked, if that month is on the 2B basis; else in the month of the 2B that says so. 4(D)(2) shows it
+      const naPair = x => x.p.itcavl === "N" && !x.p.rej;
+      basis.res.pairs.filter(naPair).forEach(x => x.books.filter(d => claimable(d) && (d.ym === ym || (x.p.ym === ym && d.ym < ym && !this.itcBasis(d.ym, reg, true)))).forEach(d => add(held, Object.assign({}, d, {na: true}))));
+      basis.res.pairs.filter(x => !naPair(x)).forEach(x => { if (x.p.ym > ym) x.books.filter(d => d.ym === ym && claimable(d)).forEach(d => add(held, d));
         if (x.p.ym === ym) x.books.filter(d => d.ym < ym && basis.loaded.has(d.ym) && this.itcBasis(d.ym, reg, true) && claimable(d)).forEach(d => add(released, d)); });
       // in both, but more tax in Tally than in 2B: the excess waits (the lower of the two is taken)
-      basis.res.pairs.filter(x => x.status === "diff").forEach(x => {
+      basis.res.pairs.filter(x => x.status === "diff" && !naPair(x)).forEach(x => {
         const bks = x.books.filter(d => d.ym === ym && claimable(d)); if (!bks.length || x.p.ym > ym) return;
         const bt = bks.reduce((a, d) => a + d.igst + d.cgst + d.sgst + d.cess, 0), pt = num(x.p.igst) + num(x.p.cgst) + num(x.p.sgst) + num(x.p.cess), ex = r2(bt - pt);
         if (ex < 1 || bt <= 0) return;
@@ -2233,12 +2238,13 @@ const GSTR = {
     // paid with this month's 3B (3.1(a); an SEZ or export invoice's in 3.1(b)); the earlier month's filed 3B is not changed
     const amd = O ? O.amd : this.amendDiff(ym, reg);
     const rul = GSTRev.month(ym, reg);                               // rules 42 and 43 go into 4(B)(1)
-    // our credit notes rejected by the customer in IMS: the portal adds the tax back to 3.1(a)
+    // our credit notes rejected by the customer in IMS: the portal adds the tax back (3.1(a), or the class the note came off)
     const cust = O ? O.cust : typeof CustIMS === "object" ? CustIMS.month(ym, reg) : {add: {taxable: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, n: 0}, back: {taxable: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, n: 0}};
-    const cx = k => r2(cust.add[k] - cust.back[k]);
+    // (by class: CustIMS.month; a month kept before it, all in 3.1(a) as then)
+    const cx = (k, c = "net") => { const g = o => num(((o.by ? o.by[c] : c === "net" && o) || {})[k]); return r2(g(cust.add) - g(cust.back)); };
     const net = {taxable: r2(taxableOut.taxable - cn.taxable + adv.taxable + cx("taxable") + amd.out.taxable), cgst: r2(taxableOut.cgst - cn.cgst + adv.cgst + cx("cgst") + amd.out.cgst), sgst: r2(taxableOut.sgst - cn.sgst + adv.sgst + cx("sgst") + amd.out.sgst),
       igst: r2(taxableOut.igst - cn.igst + adv.igst + cx("igst") + amd.out.igst), cess: r2(taxableOut.cess - cn.cess + adv.cess + cx("cess") + amd.out.cess)};
-    ["taxable", "igst", "cgst", "sgst", "cess"].forEach(k => { zero[k] = r2(num(zero[k]) + amd.zero[k]); });
+    ["taxable", "igst", "cgst", "sgst", "cess"].forEach(k => { zero[k] = r2(num(zero[k]) + amd.zero[k] + cx(k, "zero")); nil[k] = r2(num(nil[k]) + cx(k, "nil")); nongst[k] = r2(num(nongst[k]) + cx(k, "nongst")); });
     const itc = {cgst: r2(impGoods.cgst + impServ.cgst + rcmIn.cgst + isd.cgst + other.cgst), sgst: r2(impGoods.sgst + impServ.sgst + rcmIn.sgst + isd.sgst + other.sgst),
                  igst: r2(impGoods.igst + impServ.igst + rcmIn.igst + isd.igst + other.igst), cess: r2(impGoods.cess + impServ.cess + rcmIn.cess + isd.cess + other.cess)};
     // 4(B)(1): rules 38, 42 and 43 and section 17(5), reversed for good; 4(B)(2): other reversals, which may come back
@@ -2265,10 +2271,15 @@ const GSTR = {
   // payment of tax, sections 49 and 49A with rule 88A: IGST credit first against IGST, what is left of it against
   // CGST and SGST; only then CGST credit against CGST and then IGST, SGST credit against SGST and then IGST;
   // CGST never against SGST, cess only against cess. Reverse charge is paid in cash. Credit left over is carried.
+  // next-fix-audit-gst: negative liability (more credit notes than invoices in a head, the portal's Negative Liability
+  // Statement, GSTN advisory of Aug-2023 under rule 61 and sections 39 and 49): a head's negative figure is not tax to pay;
+  // it is carried (carry.neg, beside the credit) and set against the next return's tax of the same head (negAdj: 6.1's
+  // "adjustment of negative liability of previous tax period"), never against another head and never paid out
   setOff(liab, rcm, credit, opening){
     const L = {}, C = {}, use = {igst: {igst: 0, cgst: 0, sgst: 0}, cgst: {cgst: 0, igst: 0}, sgst: {sgst: 0, igst: 0}, cess: {cess: 0}};
-    this.HEADS.forEach(h => { L[h] = Math.max(0, r2(num(liab[h]))); C[h] = Math.max(0, r2(num(credit[h]) + num((opening || {})[h]))); });
-    // a negative figure (more credit notes than invoices in the month) is not tax to pay
+    const g0 = (opening || {}).neg || {}, neg = {}, negAdj = {}, nz = o => this.HEADS.some(h => o[h] >= .005);
+    this.HEADS.forEach(h => { const l = r2(num(liab[h])), g = Math.max(0, num(g0[h])), v = r2(l - g); L[h] = Math.max(0, v); neg[h] = Math.max(0, -v); negAdj[h] = Math.min(g, Math.max(0, l));
+      C[h] = Math.max(0, r2(num(credit[h]) + num((opening || {})[h]))); });
     const take = (from, to, amt) => { const a = r2(Math.min(amt, C[from], L[to])); if (a > 0){ C[from] = r2(C[from] - a); L[to] = r2(L[to] - a); use[from][to] = r2(use[from][to] + a); } };
     take("igst", "igst", Infinity);
     // what IGST credit is left goes where CGST or SGST credit falls short, then to the rest
@@ -2279,7 +2290,8 @@ const GSTR = {
     take("cess", "cess", Infinity);
     const cash = {}, rc = {};
     this.HEADS.forEach(h => { rc[h] = Math.max(0, r2(num((rcm || {})[h]))); cash[h] = r2(L[h] + rc[h]); });
-    return {use, cash, rcmCash: rc, carry: C, due: liab};
+    if (nz(neg)) C.neg = neg;
+    return Object.assign({use, cash, rcmCash: rc, carry: C, due: liab}, nz(negAdj) ? {negAdj} : {});
   },
   // the credit carried into a month: the balance typed for the first month here, then each month's left-over
   creditIn(ym, reg){
@@ -2302,7 +2314,7 @@ const GSTR = {
     // one item per rate on the invoice
     const items = r => { const m = {}; this.partsOf([r]).forEach(q => { const k = String(q.rate), x = m[k] = m[k] || {rt: q.rate, txval: 0, iamt: 0, camt: 0, samt: 0, csamt: 0};
         x.txval = r2(x.txval + num(q.taxable)); x.iamt = r2(x.iamt + num(q.igst)); x.camt = r2(x.camt + num(q.cgst)); x.samt = r2(x.samt + num(q.sgst)); x.csamt = r2(x.csamt + num(q.cess)); });
-      return Object.values(m).sort((a, c) => a.rt - c.rt).map((x, i) => ({num: i + 1, itm_det: Object.assign({rt: x.rt, txval: x.txval, csamt: x.csamt}, r.igst ? {iamt: x.iamt} : {camt: x.camt, samt: x.samt})})); };
+      return Object.values(m).sort((a, c) => a.rt - c.rt).map((x, i) => ({num: i + 1, itm_det: Object.assign({rt: x.rt, txval: x.txval, csamt: x.csamt}, r.igst || /^(export|sez)$/.test(r.cls) ? {iamt: x.iamt} : {camt: x.camt, samt: x.samt})})); };   // (an export or SEZ supply is inter-state: section 16 IGST Act)
     const posOf = r => String(r.posCode || (r.posCode == null ? STATE_CODES[(r.pos || "").toUpperCase()] || (r.gstin || "").slice(0, 2) : "") || "").padStart(2, "0");
     const byParty = (rows, wrap) => {
       const m = {};
@@ -2426,12 +2438,13 @@ function entryShares(v, ctx){
       const r = GSTR.outRow(v, null, "");
       if (r){
         if (r.cls === "taxable" && r.kind !== "CDNR") add("3B.sale", "", "", "", r, 1);
-        if (r.kind === "CDNR") add("3B.cn", "", "", "", r, 1);
-        if (r.cls === "export" || r.cls === "sez") add("3B.zero", "", "", "", r, 1);
-        if (r.cls === "exempt" || r.cls === "nil") add("3B.nil", "", "", "", r, 1);
-        if (r.cls === "nongst") add("3B.nongst", "", "", "", r, 1);
-        if (!r.gstin && r.igst > 0) add("3B.unreg", "", "", "", r, 1);
+        // (GSTR.sec31: a credit note on a taxable supply is 3B.cn; on any other class it comes off that class's own figure)
         const sg = r.kind === "CDNR" ? -1 : 1, parts = GSTR.partsOf([r]);
+        if (r.kind === "CDNR" && r.cls === "taxable") add("3B.cn", "", "", "", r, 1);
+        if (r.cls === "export" || r.cls === "sez") add("3B.zero", "", "", "", r, sg);
+        if (r.cls === "exempt" || r.cls === "nil") add("3B.nil", "", "", "", r, sg);
+        if (r.cls === "nongst") add("3B.nongst", "", "", "", r, sg);
+        if (!r.gstin && r.igst > 0) add("3B.unreg", "", "", "", r, 1);
         if (!r.gstin && r.igst > 0 && r.cls === "taxable") parts.forEach(q => add("3B.pos", (r.posCode || "00") || "97", "", "", {taxable: q.taxable, igst: q.igst}, sg));
         add("R1." + r.kind, "", "", "", r, 1);
         if (r.kind === "B2C") parts.forEach(q => add("R1.B2CS", String(q.rate), r.posCode || "", "", q, 1));
@@ -2464,7 +2477,11 @@ const GSTRev = {
   HEADS: ["igst", "cgst", "sgst", "cess"],
   z(){ return {igst: 0, cgst: 0, sgst: 0, cess: 0}; },
   add(a, c, k){ const o = {}; this.HEADS.forEach(h => { o[h] = r2(num(a[h]) + num(c[h]) * (k == null ? 1 : k)); }); return o; },
-  settings(){ return Object.assign({d2: true}, (S.books && S.books.rev) || {}); },
+  // next-fix-audit-gst: D2 (rule 42(1)(g), 5% of the common credit) only where common inputs are used partly for
+  // non-business purposes: off until the CA says so in GST settings (b.rev.d2 not set: shown as not answered)
+  // (re-review: not answered, but a 3B already filed reversed D2: it stays on until the CA says, not dropped silently)
+  settings(){ const r = (S.books && S.books.rev) || {}; return Object.assign({}, r, {d2: typeof r.d2 === "boolean" ? r.d2 : this.d2Filed()}); },
+  d2Filed(){ const F = (S.books && S.books.gstFiled) || {}; return Object.keys(F).some(g => Object.values(F[g] || {}).some(x => x && x.snap && x.snap.r42 && this.HEADS.some(h => num((x.snap.r42.D2 || {})[h]) > 0))); },
   // turnover of the month: E is exempt, nil rated and non-GST; F is all of it, exports included
   // next-speed-render: kept for the drawing or calculation (each month's 3B asked it of every earlier month: 28 readings of
   // a month's sales a 3B on 25 months of books); the figures are only read
@@ -2482,7 +2499,8 @@ const GSTRev = {
     return {taxable: r2(T), zero: r2(Z), exempt: r2(E), total: r2(T + Z + E)};
   },
   // which part of the turnover an outward row is (zero rated, exempt, the rest taxable); a credit note takes it off
-  toPart(r){ return r.cls === "export" || r.cls === "sez" ? "Z" : r.cls === "exempt" || r.cls === "nil" || r.cls === "nongst" ? "E" : "T"; },
+  // (section 17(3): a supply on which the recipient pays tax on reverse charge is exempt supply for rule 42's E)
+  toPart(r){ return r.cls === "export" || r.cls === "sez" ? "Z" : r.cls === "exempt" || r.cls === "nil" || r.cls === "nongst" || r.rcm ? "E" : "T"; },
   // rule 42(1)(h): a month with no turnover takes E and F of the last month that had some
   ratio(ym, reg){
     const t = this.turnover(ym, reg);

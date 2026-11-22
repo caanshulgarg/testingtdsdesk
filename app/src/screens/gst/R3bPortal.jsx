@@ -8,6 +8,7 @@
 import { useState } from "react";
 import CommitBox from "../../parts/CommitBox.jsx";
 import { r3bTables, r3bBills, R3B_CLICK } from "./portal.js";
+import { r3bNeeds } from "../../lib/gst3bNil.js";
 import { Pop } from "./ItcParts.jsx";
 import FigureDetail, { FIG_LABEL } from "./ItcFigure.jsx";
 
@@ -50,8 +51,10 @@ function PayDetail({ t, head }) {
   const P = t.pay || { use: {}, cash: {}, rcmCash: {}, carry: {} }, HW = { igst: "Integrated Tax", cgst: "Central Tax", sgst: "State/UT Tax", cess: "Cess" };
   const rowsP = [["Tax payable, 3.1 other than reverse charge (A)", num((t.net || {})[head])], ["Tax payable on reverse charge (B), paid in cash", num((t.rcmOut || {})[head])],
     ["Credit brought forward", num((t.opening || {})[head])], ["Net ITC of the month, 4(C)", num((t.netItc || {})[head])]]
+    .concat(num(((P.negAdj || {})[head])) ? [["Less: negative liability of an earlier month adjusted (Negative Liability Statement)", -num(P.negAdj[head])]] : [])
     .concat(["igst", "cgst", "sgst", "cess"].map((c) => ["Paid with " + HW[c] + " credit", num(((P.use || {})[c] || {})[head])]))
-    .concat([["Paid in cash (A)", r2(num((P.cash || {})[head]) - num((P.rcmCash || {})[head]))], ["Paid in cash (B), reverse charge", num((P.rcmCash || {})[head])], [HW[head] + " credit carried to next month", num((P.carry || {})[head])]]);
+    .concat([["Paid in cash (A)", r2(num((P.cash || {})[head]) - num((P.rcmCash || {})[head]))], ["Paid in cash (B), reverse charge", num((P.rcmCash || {})[head])], [HW[head] + " credit carried to next month", num((P.carry || {})[head])]])
+    .concat(num((((P.carry || {}).neg) || {})[head]) ? [["Negative liability carried to next month", num(P.carry.neg[head])]] : []);
   return <div className="itc-pop-table" data-pay-detail={head}><table className="bk-table gf-off"><tbody>{rowsP.map(([l, v], i) => <tr key={i}><td>{l}</td><td className="n">{money(v)}</td></tr>)}</tbody></table>
     <p className="note">Credit is used as sections 49 and 49A and rule 88A require: IGST credit first, then CGST and SGST against their own tax and then IGST; CGST never against SGST; cess only against cess.</p></div>;
 }
@@ -60,7 +63,9 @@ function PayDetail({ t, head }) {
 function Ledger({ t }) {
   const H = ["igst", "cgst", "sgst", "cess"], P = t.pay, line = (f) => H.map((k) => HEADW[k] + " " + money(f(k))).join(" · ");
   return <p className="note r3b-note" data-r3b-ledger="">Total tax payable, (A) + (B): {line((k) => r2(num((t.net || {})[k]) + num((t.rcmOut || {})[k])))}.<br />
-    Credit brought forward: {line((k) => num((t.opening || {})[k]))}.<br />Credit carried to next month: {line((k) => num((P.carry || {})[k]))}.</p>;
+    Credit brought forward: {line((k) => num((t.opening || {})[k]))}.<br />Credit carried to next month: {line((k) => num((P.carry || {})[k]))}.
+    {P.negAdj && <><br /><span data-r3b-negadj="">Negative liability of an earlier month set against this month's tax: {line((k) => num(P.negAdj[k]))}.</span></>}
+    {(P.carry || {}).neg && <><br /><b data-r3b-neg="" style={{ color: "var(--warn)" }}>Needs you: the tax in 3.1 is negative in a head (credit notes above the sales). FinCom carries {line((k) => num(P.carry.neg[k]))} as negative liability and sets it against next month's tax of the same head, as the portal's Negative Liability Statement does. Check that the portal shows the same figure there before filing; if the offline tool refuses the negative figure, enter 3.1 on the portal.</b></>}</p>;
 }
 
 export default function R3bPortal({ b, t, cloud }) {
@@ -74,7 +79,9 @@ export default function R3bPortal({ b, t, cloud }) {
   const close = () => { S.r3bOpen = ""; render(); };
   const openTb = open && tables.find((tb) => tb.rows.some((r) => r.id === open)), openRow = openTb && openTb.rows.find((r) => r.id === open);
   const is4 = /^4/.test(open), is61 = /^6\.1[AB]\|/.test(open);
+  const needs = r3bNeeds(t);
   return <div data-r3b-portal="">
+    {needs.map((m, i) => <p key={i} className="note" data-r3b-needs={i} style={{ color: "var(--warn)" }}><b>Needs you:</b> {m}</p>)}
     {tables.map((tb) => {
       return <section key={tb.id} className="r3b-t" data-r3b-table={tb.id}>
         <div className="bk-tablewrap"><table className="bk-table tg-fit gf-off" data-statement="">

@@ -171,8 +171,9 @@ export function Gstr3b({ b, sub }) {
         <Row label="(a) Outward taxable supplies, other than zero rated, nil and exempt" x={t.sale} />
         {(t.adv.taxable || t.adv.igst || t.adv.cgst) ? <Row label="Add: tax on advances, 11A less 11B" x={t.adv} /> : null}
         <Row label="Less: credit notes" x={neg(t.cn)} />
-        {t.custRej && t.custRej.add.n ? <Row label={"Add: our credit notes rejected by customers in IMS (" + t.custRej.add.n + ")"} x={t.custRej.add} /> : null}
-        {t.custRej && t.custRej.back.n ? <Row label={"Less: of those, accepted later (" + t.custRej.back.n + ")"} x={neg(t.custRej.back)} /> : null}
+        {/* (re-review: the part in 3.1(a) only, CustIMS.month's by.net; a note on an SEZ, export or exempt supply goes back in its own class) */}
+        {[["add", "Add: our credit notes rejected by customers in IMS", (o) => o], ["back", "Less: of those, accepted later", neg]].map(([k, l, s]) => { const o = t.custRej && t.custRej[k], x = o && (o.by ? o.by.net : o);
+          return x && x.n ? <Row key={k} label={l + " (" + x.n + ")"} x={s(x)} /> : null; })}
         <Row label="(b) Outward zero rated: exports and SEZ" x={t.zero} />
         <Row label="(c) Other outward: nil rated and exempt" x={t.nil} />
         <Row label="(d) Inward supplies on which tax is payable by you (reverse charge)" x={t.rcmOut} />
@@ -192,7 +193,7 @@ export function Gstr3b({ b, sub }) {
         <Row label="(A)(1) Import of goods" x={t.impGoods} /><Row label="(A)(2) Import of services" x={t.impServ} />
         <Row label="(A)(3) Inward supplies on reverse charge" x={t.rcmIn} /><Row label="(A)(4) Inward supplies from ISD" x={t.isd || {}} /><Row label="(A)(5) All other ITC" x={t.other} />
         {heldNote ? <tr><td colSpan={5} className="nr" style={{ whiteSpace: "normal" }}>
-          {t.held.n ? "Not taken this month (not in 2B, a later month, follow-up or reversed): " + t.held.n + " bill" + (t.held.n === 1 ? "" : "s") + ", " + money(all4(t.held)) + ". " : ""}
+          {t.held.n ? "Not taken this month (not in 2B, a later month, follow-up or reversed): " + t.held.n + " bill" + (t.held.n === 1 ? "" : "s") + ", " + money(all4(t.held)) + (num(t.held.na) ? ", of which " + money(t.held.na) + " 2B says is not available (4(D)(2), not taken later)" : "") + ". " : ""}
           {t.released.n ? "Taken now, booked in another month or only in 2B: " + t.released.n + ", " + money(all4(t.released)) + ". " : ""}
           {t.rejBack && t.rejBack.n ? "Credit notes rejected in IMS, not reducing credit: " + t.rejBack.n + ", " + money(all4(t.rejBack)) + ". " : ""}
           {t.cn2b && t.cn2b.n ? "Less suppliers’ credit notes in 2B, not in Tally: " + t.cn2b.n + ", " + money(all4(t.cn2b)) + ". " : ""}
