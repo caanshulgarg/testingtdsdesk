@@ -78,7 +78,7 @@ function salesCols(s, list, nSel) {
         <span className="src muted">{v.status === "posted" ? "Posted " + (v.postedAt ? shortDate(v.postedAt.slice(0, 10)) : "") : v.status === "intally" ? "Already in Tally" : "Ignored"}{v.receivedAt ? " · paid " + shortDate(v.receivedAt) : ""}</span></> },
     { k: "ac", role: "act", cls: "ac", cell: (v, p) => p.editable ? <>
         {v.status === "review" && v.customerLedger && !p.issue ? <button className="btn small primary" onClick={act("confirm", v)}>Confirm</button> : <button className="btn small" onClick={() => salesOpen(v.id)}>Open</button>}
-        <button className="icon" title="Ignore" aria-label="Ignore" onClick={act("ignore", v)}>✕</button>
+        {v.x.irnStatus !== "active" && <button className="icon" title="Ignore" aria-label="Ignore" onClick={act("ignore", v)}>✕</button>}
       </> : <><button className="btn small" onClick={() => salesOpen(v.id)}>Open</button>{v.status === "ignored" && <button className="linkbtn" onClick={act("restore", v)}>Restore</button>}{v.status === "intally" && <button className="linkbtn" onClick={act("nottally", v)}>Not this Tally entry</button>}</> },
   ];
 }
@@ -110,6 +110,10 @@ function CfgField({ c, label, k, ph, area }) {
 function CfgLedger({ label, k, selected, prefer }) {
   return <label><span>{label}</span><LedgerSelect selected={selected} prefer={prefer} onPick={(val) => salesCfgLedger(k, val)} /></label>;
 }
+// (next-fix-audit-sales-einv) the supply's kind: a supply to an SEZ unit or developer is zero-rated (IGST Act s.16(1)(b))
+function Supplies() {
+  return <><option value="">Regular</option><option value="SEZWP">SEZ, with payment of IGST</option><option value="SEZWOP">SEZ, under LUT (no IGST)</option></>;
+}
 function DraftText({ x, label, k, area, ...p }) {
   return <label><span>{label}</span>{area
     ? <textarea rows={2} value={x[k] || ""} onChange={(ev) => draftSet(k, ev.target.value)} {...p} />
@@ -118,16 +122,18 @@ function DraftText({ x, label, k, area, ...p }) {
 
 // tax-accuracy: the e-invoice (IRN) and e-way bill of this invoice, made through the firm's GST API
 function EinvPanel({ v }) {
-  const s = SL(), co = CO(s.cid), x = v.x, gstin = String(co.gstin || "").toUpperCase();
+  // (next-fix-audit-sales-einv) the e-invoice user of the registration the invoice is issued from (EINV.seller), not always the main GSTIN
+  const s = SL(), co = CO(s.cid), x = v.x, gstin = String(co.gstin || "").toUpperCase(), seller = EINV.seller(v, co) || gstin;
   const [busy, setBusy] = useState(""), [msg, setMsg] = useState(""), [t, setT] = useState({ distance: "", vehicleNo: "", transporterId: "", mode: "1" });
   if (!GSTAPI.on() || !GSTIN_RE.test(gstin) || !GSTIN_RE.test(String(x.customerGstin || "").toUpperCase())) return null;
-  const a = EINV.need(gstin), probs = EINV.problems(v, co, s.cfg);
+  const a = EINV.need(seller), probs = EINV.problems(v, co, s.cfg);
   const go = (label, f) => async () => { setBusy(label); setMsg(""); try { setMsg(await f()); } catch (e) { setMsg((e && e.message) || String(e)); } setBusy(""); render(); };
   const active = x.irn && x.irnStatus !== "cancelled", canCancel = active && x.ackDt && Date.now() - Date.parse(x.ackDt) < 24 * 3600000;
   return <section data-einv={v.id}><h3>E-invoice and e-way bill</h3>
     {EINV.host === "sandbox" && <p className="note">The firm's server sends to the IRP's <b>sandbox</b> (test): an IRN made here is not a real one.</p>}
     {active ? <div className="bk-alert"><b>IRN</b> {x.irn}<div className="note">Ack. no. {x.ackNo} · {fmtDateTime(x.ackDt)}{x.ewayNo ? " · E-way bill " + x.ewayNo + (x.ewayValidTill ? ", valid till " + fmtDateTime(x.ewayValidTill) : "") : ""}</div></div>
       : x.irnStatus === "cancelled" ? <p className="note"><b>IRN cancelled</b> {x.irn}.</p> : null}
+    {x.irnStatus === "cancelled" && x.irnCancelInTally && <div className="bk-alert bad" data-irn-cancel-tally="">{v.postJob ? "Its posting to Tally is still queued, but its IRN is cancelled: if it reaches Tally, cancel" : "This invoice is still in Tally as a sale, but its IRN is cancelled: cancel"} the voucher {x.number} in Tally, so the books and GSTR-1 do not count it.</div>}
     {!a ? <p className="note">Give the client's e-invoice API user in <button className="linkbtn" onClick={() => goGstSettings()}>GST settings</button> to make the IRN here.</p>
       : !active ? <>
         {probs.length > 0 && <div className="bk-alert bad">{probs.map((p, i) => <div key={i}>{p}</div>)}</div>}
@@ -142,7 +148,7 @@ function EinvPanel({ v }) {
         </div>}
         {canCancel && <button className="linkbtn" style={{ marginTop: 6 }} disabled={!!busy} onClick={go("cancel", async () => {
           const ok = await askConfirm({ title: "Cancel this IRN?", ok: "Cancel the IRN", body: '<p class="note">Within 24 hours of the IRN only. The invoice number cannot be used again for another invoice.</p>' });
-          if (!ok) return ""; await EINV.cancel(v, "2", "Cancelled from FinCom"); return "IRN cancelled.";
+          if (!ok) return ""; await EINV.cancel(v, "2", "Cancelled from FinCom"); return v.status === "ignored" ? "IRN cancelled: the invoice is set aside (Ignored), no longer a sale." : "IRN cancelled.";
         })}>Cancel the IRN</button>}
       </>}
     {msg && <p className="note">{msg}</p>}
@@ -151,6 +157,8 @@ function EinvPanel({ v }) {
 
 function Detail({ v }) {
   const s = SL(), x = v.x, co = CO(s.cid), ro = !["review", "ready"].includes(v.status);
+  // (next-fix-audit-sales-einv) an invoice with a live IRN: its figures are the IRP's, never changed here (its ledgers still can be)
+  const fro = ro || x.irnStatus === "active", ag = salesAgainstOf(v);
   const lines = salesLines(v), tot = (side) => r2(lines.filter((l) => l.side === side).reduce((a, l) => a + l.amt, 0));
   const probs = (v.problems || []).concat(v.ledgerIssues || []), act = (a, force) => () => salesRowAct(a, v.id, force);
   const [cls, word] = STATUS[v.status] || ["no", v.status];
@@ -161,10 +169,11 @@ function Detail({ v }) {
       <SalesAsk v={v} wide />
       <section><h3>Invoice details</h3>
         <div className="bk-form">
-          <Field x={x} ro={ro} label="Invoice number" k="number" /><Field x={x} ro={ro} label="Date" k="date" type="date" /><Field x={x} ro={ro} label="Customer name" k="customerName" /><Field x={x} ro={ro} label={gstinFromLedger(v) ? "Customer GSTIN (GSTIN from Tally ledger)" : "Customer GSTIN"} k="customerGstin" />
-          <label><span>Place of supply</span><select value={x.pos || ""} disabled={ro} onChange={(ev) => salesSetField("pos", ev.target.value)}><States /></select></label>
-          <Field x={x} ro={ro} label="Taxable value" k="taxable" type="number" /><Field x={x} ro={ro} label="CGST" k="cgst" type="number" /><Field x={x} ro={ro} label="SGST" k="sgst" type="number" /><Field x={x} ro={ro} label="IGST" k="igst" type="number" />
-          <Field x={x} ro={ro} label="Cess" k="cess" type="number" /><Field x={x} ro={ro} label="Invoice total" k="total" type="number" />
+          <Field x={x} ro={fro} label="Invoice number" k="number" /><Field x={x} ro={fro} label="Date" k="date" type="date" /><Field x={x} ro={fro} label="Customer name" k="customerName" /><Field x={x} ro={fro} label={gstinFromLedger(v) ? "Customer GSTIN (GSTIN from Tally ledger)" : "Customer GSTIN"} k="customerGstin" />
+          <label><span>Place of supply</span><select value={x.pos || ""} disabled={fro} onChange={(ev) => salesSetField("pos", ev.target.value)}><States /></select></label>
+          <Field x={x} ro={fro} label="Taxable value" k="taxable" type="number" /><Field x={x} ro={fro} label="CGST" k="cgst" type="number" /><Field x={x} ro={fro} label="SGST" k="sgst" type="number" /><Field x={x} ro={fro} label="IGST" k="igst" type="number" />
+          <Field x={x} ro={fro} label="Cess" k="cess" type="number" /><Field x={x} ro={fro} label="Invoice total" k="total" type="number" />
+          <label><span>Supply</span><select data-sv-supply="" value={x.supply || ""} disabled={fro} onChange={(ev) => salesSetField("supply", ev.target.value)}><Supplies /></select></label>
         </div>
         {(x.items || []).length > 0 && <div className="bk-tablewrap" style={{ marginTop: 10 }}><table className="bk-table" data-statement="">
           <thead><tr><th>Item</th><th>HSN</th><th className="n">Qty</th><th className="n">Rate</th><th className="n">Taxable</th><th className="n">GST %</th></tr></thead>
@@ -189,7 +198,7 @@ function Detail({ v }) {
             <tr><td><b>Total</b></td><td className="n"><b>{INR.format(tot("Dr"))}</b></td><td className="n"><b>{INR.format(tot("Cr"))}</b></td></tr>
           </tbody>
         </table></div>
-        <p className="note">Voucher type “{salesVt(x)}” · bill-wise New Ref {x.number}{co.createOptional ? " · posted as Optional" : ""}</p>
+        <p className="note">Voucher type “{salesVt(x)}” · bill-wise {ag ? "Agst Ref " + ag.x.number + " (the invoice this note is against)" : "New Ref " + x.number + (x.againstInvoice ? " (no one posted invoice " + x.againstInvoice + " of this customer ledger in the note's year on or before it: set it against the bill in Tally if it is one)" : "")}{co.createOptional ? " · posted as Optional" : ""}</p>
       </section>
       <EinvPanel v={v} />
       {(v.trace || []).length > 0 && <section><h3>How it was read</h3><ol className="note">{v.trace.map((t, i) => <li key={i}>{t.ok ? "✔ " : "✖ "}{t.step}: {t.note || ""}</li>)}</ol></section>}
@@ -202,9 +211,11 @@ function Detail({ v }) {
         {v.status === "ready" && <button className="btn" onClick={act("unready")}>Back to review</button>}
         <button className="btn" onClick={act("print")}>Print invoice</button>
         {S.files["sv:" + v.id] && <button className="btn" onClick={act("file")}>View uploaded file</button>}
-        {!ro && <button className="btn" onClick={act("edit")}>{v.source === "created" ? "Edit invoice" : (x.items || []).length ? "Edit items" : "Enter items"}</button>}
-        {!ro && <button className="btn" onClick={act("ignore")}>Ignore</button>}
-        {v.status !== "posted" && <button className="btn danger" onClick={act("delete")}>Delete</button>}
+        {!fro && <button className="btn" onClick={act("edit")}>{v.source === "created" ? "Edit invoice" : (x.items || []).length ? "Edit items" : "Enter items"}</button>}
+        {/* (a live IRN: never ignored or deleted here, the IRN is cancelled first: review of b4ff11b10) */}
+        {x.irnStatus === "active" && !ro && <span className="note" data-irn-keep="">It has an IRN: to drop it, cancel the IRN first.</span>}
+        {!ro && x.irnStatus !== "active" && <button className="btn" onClick={act("ignore")}>Ignore</button>}
+        {v.status !== "posted" && x.irnStatus !== "active" && <button className="btn danger" onClick={act("delete")}>Delete</button>}
       </section>
     </Panel>
   );
@@ -228,6 +239,8 @@ function SettingsPanel() {
           <CfgField c={c} label="Bank name" k="bankName" /><CfgField c={c} label="Account number" k="bankAc" /><CfgField c={c} label="IFSC" k="bankIfsc" /><CfgField c={c} label="Branch" k="bankBranch" />
           <CfgField c={c} label="Terms and conditions" k="terms" area /><CfgField c={c} label="Signatory (below the signature)" k="signatory" ph="Authorised Signatory" />
         </div>
+        {/* (next-fix-audit-sales-einv) each other registration's own address, for its e-invoices (EINV.address) */}
+        {salesOwnGstins().filter((g) => g !== String(co.gstin || "").toUpperCase()).map((g) => <div className="bk-form" key={g}><CfgField c={c} label={"Address of " + g + " (" + (GST_STATES[g.slice(0, 2)] || "") + ")"} k={"address_" + g} area /></div>)}
         <p className="note">GSTIN, PAN and state come from Client setup → Company{co.gstin ? " (" + co.gstin + ", " + (GST_STATES[home] || "") + ")" : ": add the GSTIN there"}.</p></section>
       <section><h3>Tally ledgers</h3><p className="note">Found automatically in the ledger list. Choose them here if this client names them differently.</p>
         <div className="bk-form">
@@ -275,7 +288,8 @@ function Create() {
           <label><span>Customer ledger (Tally)</span><LedgerBox className={"lgbox" + (d.customerLedger ? " done" : "")} value={d.customerLedger || ""} fk="sdcust" data-sdcust="" placeholder="Type to search customers" onCommit={draftCust} /></label>
           <DraftText x={x} label="Name on invoice" k="customerName" /><DraftText x={x} label="GSTIN (blank if unregistered)" k="customerGstin" maxLength={15} /><DraftText x={x} label="Address" k="address" area />
           <label><span>Place of supply</span><select value={x.pos || ""} onChange={(ev) => draftSet("pos", ev.target.value)}><States /></select></label>
-          {stateOfGstin(co.gstin) && x.pos ? <p className="note" style={{ margin: 0 }}>{d.inter ? <>Another state: <b>IGST</b> is charged.</> : <>Same state: <b>CGST + SGST</b> are charged.</>}</p>
+          <label><span>Supply</span><select data-sd-supply="" value={x.supply || ""} onChange={(ev) => draftSet("supply", ev.target.value)}><Supplies /></select></label>
+          {stateOfGstin(co.gstin) && x.pos ? <p className="note" style={{ margin: 0 }}>{x.supply === "SEZWOP" ? <>To an SEZ under LUT: <b>no IGST</b> (IGST Act s.16(3)(a)).</> : /^SEZ/.test(x.supply || "") ? <>To an SEZ: <b>IGST</b>, inter-state by law (IGST Act s.7(5)(b)).</> : d.inter ? <>Another state: <b>IGST</b> is charged.</> : <>Same state: <b>CGST + SGST</b> are charged.</>}</p>
             : !stateOfGstin(co.gstin) ? <p className="note" style={{ margin: 0 }}>The client's state is not known: add its GSTIN in Client setup to charge GST.</p> : null}
         </div></section>
       </div>

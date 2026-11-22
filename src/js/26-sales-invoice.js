@@ -3,7 +3,10 @@
 /* ---------- the printed invoice ---------- */
 function invoiceHtml(x, co, cfg){
   const inter = isInterState(x, co);
-  const home = stateOfGstin(co.gstin);
+  // (next-fix-audit-sales-einv) the registration the invoice is issued from (as the voucher's and the e-invoice's), with its
+  // own address when it is not the main GSTIN; under LUT to an SEZ no IGST on any line (IGST Act s.16(3)(a))
+  const own = salesCmpGstin({x}, co), home = stateOfGstin(own), lut = x.supply === "SEZWOP";
+  if (own && own.toUpperCase() !== String(co.gstin || "").toUpperCase()) cfg = Object.assign({}, cfg, {address: cfg["address_" + own] || ""});
   const items = (x.items || []).filter(it => it.desc || num(it.taxable));
   const hsn = new Map();
   items.forEach(it => { const k = (it.hsn || "\u2014") + "|" + num(it.gstRate); const e = hsn.get(k) || {hsn: it.hsn || "\u2014", rate: num(it.gstRate), taxable: 0}; e.taxable = r2(e.taxable + num(it.taxable)); hsn.set(k, e); });
@@ -20,11 +23,13 @@ function invoiceHtml(x, co, cfg){
     '<div class="inv"><div class="cell b" style="text-align:center"><h2>TAX INVOICE</h2>' + (x.irn ? '<div class="muted">IRN: ' + e(x.irn) + "</div>" : "") +
       (x.ackNo ? '<div class="muted">Ack. No.: ' + e(x.ackNo) + (x.ackDt ? " · Ack. Date: " + e(fmtDateTime(x.ackDt)) : "") + "</div>" : "") +
       (x.irnStatus === "cancelled" ? '<div><b>IRN CANCELLED</b></div>' : "") +
+      // (the endorsement a supply to an SEZ carries, CGST Rules r.46, proviso)
+      (/^SEZ/.test(x.supply || "") ? "<div><b>SUPPLY MEANT FOR SEZ UNIT OR SEZ DEVELOPER FOR AUTHORISED OPERATIONS " + (lut ? "UNDER BOND OR LETTER OF UNDERTAKING WITHOUT PAYMENT OF INTEGRATED TAX" : "ON PAYMENT OF INTEGRATED TAX") + "</b></div>" : "") +
       // the signed QR code of the e-invoice (rule 48(4)), drawn in the printed page from the IRP's signed text
       (x.signedQr && x.irnStatus !== "cancelled" ? '<div id="einvqr" style="display:inline-block;margin-top:6px"></div><scr' + 'ipt src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></scr' + 'ipt>' +
         "<scr" + "ipt>try{new QRCode(document.getElementById('einvqr'),{text:" + JSON.stringify(String(x.signedQr)).replace(/</g, "\\u003c") + ",width:150,height:150,correctLevel:QRCode.CorrectLevel.L})}catch(e){}</scr" + "ipt>" : "") + "</div>" +
     '<div class="row b"><div class="cell r w50"><h1>' + e(co.name) + "</h1>" + (cfg.address ? "<div>" + e(cfg.address).replace(/\n/g, "<br>") + "</div>" : "") +
-      (co.gstin ? "<div><b>GSTIN:</b> " + e(co.gstin) + "</div>" : "") + (co.pan || co.gstin ? "<div><b>PAN:</b> " + e(co.pan || String(co.gstin).slice(2, 12)) + "</div>" : "") +
+      (own ? "<div><b>GSTIN:</b> " + e(own) + "</div>" : "") + (co.pan || co.gstin ? "<div><b>PAN:</b> " + e(co.pan || String(co.gstin).slice(2, 12)) + "</div>" : "") +
       (home ? "<div><b>State:</b> " + e(GST_STATES[home] || "") + " (" + home + ")</div>" : "") + (cfg.phone ? "<div>Phone: " + e(cfg.phone) + "</div>" : "") + (cfg.email ? "<div>Email: " + e(cfg.email) + "</div>" : "") + "</div>" +
       '<div class="cell w50"><table style="border:0"><tbody>' +
       [["Invoice No.", x.number], ["Invoice Date", fmtDate(x.date)], ["Place of Supply", x.pos ? (GST_STATES[x.pos] || "") + " (" + e(x.pos) + ")" : ""], ["Reverse Charge", "No"], ["Order / PO Ref.", x.poNo], ["E-way Bill No.", x.ewayNo], ["Credit period", x.dueDays ? x.dueDays + " days" : ""]]
@@ -33,7 +38,7 @@ function invoiceHtml(x, co, cfg){
       "<div><b>GSTIN:</b> " + (x.customerGstin ? e(x.customerGstin) : "Unregistered") + (x.pos ? " &nbsp; <b>State:</b> " + e(GST_STATES[x.pos] || "") + " (" + e(x.pos) + ")" : "") + "</div></div>" +
     "<table><thead><tr><th>#</th><th>Description of goods / services</th><th>HSN/SAC</th><th class=\"n\">Qty</th><th>Unit</th><th class=\"n\">Rate</th><th class=\"n\">Disc %</th><th class=\"n\">Taxable value</th><th class=\"n\">GST %</th>" +
       (inter ? '<th class="n">IGST</th>' : '<th class="n">CGST</th><th class="n">SGST</th>') + '<th class="n">Amount</th></tr></thead><tbody>' +
-      lines.map((it, i) => { const t = r2(num(it.taxable) * num(it.gstRate) / 100), c = r2(t / 2);
+      lines.map((it, i) => { const t = lut ? 0 : r2(num(it.taxable) * num(it.gstRate) / 100), c = r2(t / 2);
         return "<tr><td>" + (i + 1) + "</td><td>" + e(it.desc) + "</td><td>" + e(it.hsn || "") + '</td><td class="n">' + e(it.qty) + "</td><td>" + e(it.unit || "") + '</td><td class="n">' + (it.rate !== "" ? f(it.rate) : "") + '</td><td class="n">' + (num(it.disc) ? num(it.disc) : "") + '</td><td class="n">' + f(it.taxable) + '</td><td class="n">' + num(it.gstRate) + "%</td>" +
           (inter ? '<td class="n">' + f(t) + "</td>" : '<td class="n">' + f(c) + '</td><td class="n">' + f(t - c) + "</td>") + '<td class="n">' + f(num(it.taxable) + t) + "</td></tr>"; }).join("") +
       '<tr class="tot"><td colspan="7" class="n">Total</td><td class="n">' + f(x.taxable) + "</td><td></td>" + (inter ? '<td class="n">' + f(x.igst) + "</td>" : '<td class="n">' + f(x.cgst) + '</td><td class="n">' + f(x.sgst) + "</td>") + '<td class="n">' + f(num(x.taxable) + num(x.cgst) + num(x.sgst) + num(x.igst)) + "</td></tr></tbody></table>" +
@@ -52,7 +57,7 @@ function invoiceHtml(x, co, cfg){
 }
 // an invoice read again (was in src/js/25: used on this screen only)
 async function rereadSales(v, force){
-  const s = SL(); if (!s) return;
+  const s = SL(); if (!s || salesIrnLocked(v)) return;
   const file = S.files["sv:" + v.id];
   if (!file){ toast("The file for this invoice is not on this computer any more. Upload it again."); return; }
   if (force === "claude" && !claudeReady()){ toast("Claude is not available on this plan or in this view."); return; }
@@ -96,7 +101,7 @@ function salesWhy(){
 // "Edit type" on an invoice held for a person (a sheet's negative amount, or "Purchase Return" on Sales): they say what
 // it is; its amounts are taken positive, a credit note's number marked as a sheet's is, and it is held no more
 function salesSetKind(id, k){
-  const v = inv(id); if (!v || !k || !v.hold || v.status !== "review") return;   // only a held invoice still in To review
+  const v = inv(id); if (!v || !k || !v.hold || v.status !== "review" || salesIrnLocked(v)) return;   // only a held invoice still in To review
   const x = v.x;
   ["taxable", "cgst", "sgst", "igst", "cess", "total"].forEach(f => { x[f] = Math.abs(num(x[f])); });
   (x.items || []).forEach(it => ["taxable", "igst", "cgst", "sgst", "tax"].forEach(f => { if (it[f] != null && it[f] !== "") it[f] = Math.abs(num(it[f])); }));
@@ -245,7 +250,72 @@ if (typeof salesSetKind !== "undefined") globalThis.salesSetKind = salesSetKind;
 if (typeof salesPostOneByOne !== "undefined") globalThis.salesPostOneByOne = salesPostOneByOne;
 if (typeof rereadSales !== "undefined") globalThis.rereadSales = rereadSales;
 if (typeof salesWhy !== "undefined") globalThis.salesWhy = salesWhy;
+/* ---------- reading an uploaded sales invoice (was in src/js/25; readSalesFile there loads this file first) ---------- */
+function salesPrompt(text, fileName, nImages, co){
+  return "You read an Indian GST sales (tax) invoice issued by " + co.name + (co.gstin ? " (GSTIN " + co.gstin + ")" : "") + ". The customer is the buyer / bill-to party.\n" +
+    (text ? "Text found in the file (may be incomplete):\n" + String(text).slice(0, 6000) + "\n" : "") +
+    (nImages ? "The invoice pages are attached as " + nImages + " image(s).\n" : "") +
+    "File name: " + fileName + "\n" +
+    'Reply with only JSON: {"invoiceNo":"","invoiceDate":"YYYY-MM-DD","sellerGstin":"","customerName":"","customerGstin":"","customerAddress":"","placeOfSupply":"state name or 2-digit code",' +
+    '"items":[{"description":"","hsn":"","qty":0,"unit":"","rate":0,"taxable":0,"gstRate":0}],"taxableValue":0,"cgst":0,"sgst":0,"igst":0,"cess":0,"roundOff":0,"totalAmount":0,"irn":"","dueDays":0}. ' +
+    "Use 0 or empty when a value is not on the invoice. Amounts are plain numbers without commas.";
+}
+function salesFromClaude(j, co){
+  const g = s => fixGstin(s).value || "";
+  const cust = g(j.customerGstin);
+  const items = (j.items || []).filter(it => it && (num(it.taxable) || num(it.qty))).map(it => ({desc: String(it.description || "").slice(0, 200), hsn: String(it.hsn || ""), qty: num(it.qty), unit: String(it.unit || ""), rate: num(it.rate), disc: 0, taxable: num(it.taxable) || r2(num(it.qty) * num(it.rate)), gstRate: num(it.gstRate)}));
+  return {number: String(j.invoiceNo || "").trim(), date: /^\d{4}-\d{2}-\d{2}$/.test(j.invoiceDate || "") ? j.invoiceDate : "", sellerGstin: g(j.sellerGstin),
+    customerName: String(j.customerName || "").trim(), customerGstin: cust && cust !== co.gstin ? cust : "", address: String(j.customerAddress || ""),
+    pos: stateCodeFrom(j.placeOfSupply) || stateOfGstin(cust), taxable: num(j.taxableValue), cgst: num(j.cgst), sgst: num(j.sgst), igst: num(j.igst), cess: num(j.cess),
+    total: num(j.totalAmount), irn: String(j.irn || ""), dueDays: num(j.dueDays), items};
+}
+async function salesReadFile(file, cid, progress, pageList, force){
+  const co = CO(cid), trace = [];
+  let text = "", canvases = [], kind;
+  if (isPdf(file)){ const r = await pdfPages(file, pageList || [1, 2]); text = r.text; canvases = r.canvases; kind = text.replace(/\s/g, "").length >= 80 ? "pdf_text" : "pdf_scan"; }
+  else if (isImage(file)){ canvases = [await imageToCanvas(file)]; kind = "photo"; }
+  else throw {code: "sales_type"};
+  await readerLoad();   // freeParse: the bill reader, the first time (src/js/82)
+  let best = null;
+  const tryText = (t, label) => {
+    const fp = freeParse(t, cid, file.name, {ocr: kind !== "pdf_text"});
+    const x = salesFromFree(fp, co, t);
+    const why = fp.why.filter(w => !/supplier GSTIN not found|client's own sales invoice|not a standard rate/.test(w));
+    const ok = why.length === 0 && x.number && x.date && x.total > 0;
+    trace.push({step: label, ok, note: ok ? "all checks passed" : why.join("; ")});
+    if (!best || ok) best = {x, ok, why};
+    return ok;
+  };
+  if (kind === "pdf_text") tryText(text, "PDF\u2019s own text");
+  if (!(best && best.ok) && canvases.length){
+    if (progress) progress("reading the scan");
+    for (const psm of ["3", "11"]){
+      const o = await ocrCanvas(canvases[0], psm).catch(() => null);
+      if (!o) break;
+      if (tryText(o.text, "Built-in OCR")) break;
+    }
+  }
+  if (force === "google" && googleReady()){
+    try { const o = await googleOcr(canvases[0] || (await imageToCanvas(file))); if (tryText(o.text, "Google OCR")) { /* best updated inside */ } } catch (e){ trace.push({step: "Google OCR", ok: false, note: (e && e.code) || "failed"}); }
+  }
+  if (best && best.ok && force !== "claude"){ best.x.noteKind = best.x.noteKind || noteKindOf(String(text || "").split("\n")); return {x: best.x, method: force === "google" ? "google-ocr" : "free", trace}; }
+  // Claude reads the rest (items included)
+  if (S.engine){
+    if (progress) progress("asking Claude");
+    let images = [];
+    if (S.imgMax && canvases.length){ for (const c of canvases.slice(0, Math.min(2, S.imgMax))) images.push(await imgBlob(c, kind === "pdf_text" ? "page" : "photo")); images = images.filter(Boolean); }
+    try {
+      const j = await claudeRead(salesPrompt(kind === "pdf_text" ? text : "", file.name, images.length, co), images, false);
+      const x = salesFromClaude(j, co);
+      trace.push({step: images.length ? "Claude (images)" : "Claude (text)", ok: !!(x.number && x.total), note: x.number ? "read" : "incomplete"});
+      if (x.number || x.total) return {x, method: "claude", trace};
+    } catch (e){ trace.push({step: "Claude", ok: false, note: errCopy(e && e.code)}); }
+  }
+  if (best && (best.x.number || best.x.total)) return {x: best.x, method: "free-partial", trace};
+  throw {code: "sales_unreadable", trace};
+}
 if (typeof invoiceHtml !== "undefined") globalThis.invoiceHtml = invoiceHtml;
+if (typeof salesReadFile !== "undefined") globalThis.salesReadFile = salesReadFile;
 // (each name only when declared: a test's harness loads a file's names one by one, tests/harness.js)
 // next-fix-sales-sync: the invoices waiting, looked at again on this computer (src/js/25, salesSynced). True when it ran
 const salesFilled = new Set();

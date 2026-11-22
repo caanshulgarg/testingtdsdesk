@@ -103,10 +103,14 @@ function nextInvoiceNumber(date){
   return {number: seriesNumber(cfg, date, n), n};
 }
 function blankItem(){ return {desc: "", hsn: "", qty: 1, unit: "Nos", rate: 0, disc: 0, taxable: 0, gstRate: 18}; }
+// (next-fix-audit-sales-einv) an invoice with a live IRN is what the IRP holds: never changed here (CGST Rules r.48(4); an
+// IRN is only cancelled whole, within 24 hours, else a credit or debit note under s.34)
+function salesIrnLocked(v){ if (!(v && v.x.irnStatus === "active")) return false; toast("Invoice " + v.x.number + " has an IRN, so it cannot be changed: cancel the IRN (within 24 hours) and make a new invoice, or issue a credit or debit note."); return true; }
 function startDraft(fromId){
   const s = SL(), co = CO(s.cid);
   if (fromId){
     const v = inv(fromId);
+    if (salesIrnLocked(v)) return;
     s.draft = {editId: v.id, x: JSON.parse(JSON.stringify(v.x)), customerLedger: v.customerLedger, printedTotal: v.source === "created" ? null : num(v.x.total)};
     if (!s.draft.x.items.length) s.draft.x.items = [blankItem()];
   } else {
@@ -129,7 +133,8 @@ function recalcDraft(){
   x.items.forEach(it => {
     it.taxable = r2(num(it.qty) * num(it.rate) * (1 - num(it.disc) / 100));
     taxable += it.taxable;
-    const t = noState ? 0 : r2(it.taxable * num(it.gstRate) / 100);
+    // (a supply to an SEZ under LUT: no IGST, IGST Act s.16(3)(a))
+    const t = noState || x.supply === "SEZWOP" ? 0 : r2(it.taxable * num(it.gstRate) / 100);
     if (inter) igst += t; else { cgst += r2(t / 2); sgst += r2(t - r2(t / 2)); }
   });
   x.taxable = r2(taxable); x.cgst = r2(cgst); x.sgst = r2(sgst); x.igst = r2(igst);
@@ -168,6 +173,7 @@ function saveDraft(){
   if (d.editId){
     v = inv(d.editId);
     if (v.status === "posted"){ toast("This invoice is already in Tally; it cannot be changed here."); return null; }
+    if (salesIrnLocked(v)) return null;
     if (d.printedTotal && Math.abs(d.printedTotal - num(d.x.total)) > 1) toast("The items add up to " + money(d.x.total) + ", but the invoice shows " + money(d.printedTotal) + ". Check the items.");
     v.x = JSON.parse(JSON.stringify(d.x)); v.updatedAt = new Date().toISOString();
   } else {
@@ -328,12 +334,15 @@ function salesTallyKey(x){ return String(x.guid || x.masterId || [x.date, x.type
 // invoices held by a posting in FinCom's cloud (v.postJob): that posting's result marked on them once it has one
 async function salesQueuedSync(){
   const s = SL(); let n = 0;
-  for (const v of s.list.filter(x => x.postJob && x.status === "ready")){
+  // (and one whose IRN was cancelled while it was queued: its result still recorded, review of b4ff11b10)
+  for (const v of s.list.filter(x => x.postJob && (x.status === "ready" || x.x.irnCancelInTally))){
     let j = null; try { j = await CloudPost.row(v.postJob); } catch (e){ continue; }
     const r = j && [].concat(j.results || []).find(x => x && x.id === v.id);
     if (r && r.ok){ n++; v.status = "posted"; v.postedAt = new Date().toISOString(); v.postError = ""; v.postedInto = j.company || ""; delete v.postJob; }
     else if (r && salesRefusal(r)){ n++; delete v.postJob; salesMarkRefused(v, r, salesRefusal(r)); }
     else if (j && ["failed", "cancelled"].includes(j.status)){ n++; v.postError = plainMsg((r && r.message) || j.message); delete v.postJob; }
+    // (not posted, its IRN cancelled: no sale any more, CGST Rules r.48(4), so set aside, nothing to cancel in Tally)
+    if (!v.postJob && v.status !== "posted" && v.x.irnStatus === "cancelled"){ v.status = "ignored"; delete v.x.irnCancelInTally; }
   }
   if (n){ saveSales(); render(); }
 }
@@ -489,7 +498,9 @@ function setCustomerLedger(v, ledger){
   return true;
 }
 function salesBulk(kind, ledger){
-  const s = SL(), rows = s.list.filter(v => s.sel.has(v.id) && !salesInTally(v));
+  // (an invoice with a live IRN is never ignored or deleted: the IRN is cancelled first, review of b4ff11b10)
+  const s = SL(), sel = s.list.filter(v => s.sel.has(v.id) && !salesInTally(v)), live = /^(ignore|delete)$/.test(kind) ? sel.filter(v => v.x.irnStatus === "active") : [], rows = sel.filter(v => !live.includes(v));
+  if (live.length) toast(live.length + " with an IRN kept: cancel the IRN first.");
   if (!rows.length) return;
   const before = rows.map(salesSnapshot);
   let n = 0;
@@ -517,6 +528,7 @@ function salesRowAct(a, id, force){
     if (a === "edit"){ s.openId = null; startDraft(v.id); return true; }
     if (a === "nottally"){ postPart(P => P.salesNotTally(v.id)); return true; }
     if (salesInTally(v)){ postPart(P => toast(P.keptOne(v, "invoice"))); return true; }
+    if ((a === "ignore" || a === "delete") && salesIrnLocked(v)) return true;
     const before = [salesSnapshot(v)];
     if (a === "confirm"){
       mapInvoice(v);
@@ -560,7 +572,7 @@ function salesSetCust(id, val){
 }
 // a field of the invoice that is open (number, date, customer, amounts)
 function salesSetField(k, val){
-  const v = inv(SL().openId); if (!v) return;
+  const v = inv(SL().openId); if (!v || salesIrnLocked(v)) return;
   const before = [salesSnapshot(v)];
   const was = v.x[k];
   v.x[k] = ["taxable", "cgst", "sgst", "igst", "cess", "total"].includes(k) ? r2(num(val)) : k === "customerGstin" ? String(val).trim().toUpperCase().replace(/\s+/g, "") : String(val).trim();

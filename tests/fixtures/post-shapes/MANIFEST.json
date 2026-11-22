@@ -27,9 +27,10 @@
     "billVt",
     "salesVt",
     "bankSalesOf",
-    "bankSalesAlloc"
+    "bankSalesAlloc",
+    "salesAgainstOf"
   ],
-  "sha256": "b4c01121cc5827d10fe496cc6c981b6face1886f659ca8d6bdc408c62f981257",
+  "sha256": "ed6113376f42398c0b4f2374d1eb94ce3d7adc6b415915e324a7948ecaaa4d03",
   "files": [
     "purchase-bill.xml",
     "journal.xml",

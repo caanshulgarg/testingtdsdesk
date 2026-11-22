@@ -806,7 +806,8 @@ const SheetPost = {
       // what FinCom filled from the Tally ledger; never one posted, nor one queued for posting, v.postJob)
       if (was){
         res.again++;
-        if (["review", "ready"].includes(was.status) && !was.postJob){
+        // (next-fix-audit-sales-einv: nor one with a live IRN, whose figures are the IRP's, CGST Rules r.48(4))
+        if (["review", "ready"].includes(was.status) && !was.postJob && was.x.irnStatus !== "active"){
           const sig = () => JSON.stringify([was.customerLedger, was.salesLedgers || {}, was.x.customerGstin || "", was.x.pos || ""]), before = sig(), ready = was.status === "ready";
           const gst = this.fillParty(was, d, own);
           if (was.source === "sheet" || was.source === "market"){
@@ -822,7 +823,7 @@ const SheetPost = {
       // an invoice held for a person (never posted) and the sheet uploaded again with its Type put right: that invoice is
       // put right in place. Only after the already-here check (above), and only the held invoice of the same number,
       // date, party AND amount (its sign and its kind are what changed): another row of that number never rewrites it
-      const heldV = !d.hold && ofNo(d.no).find(v => v.hold && v.status === "review" && (!v.x.date || !d.date || v.x.date === d.date) && same(v)
+      const heldV = !d.hold && ofNo(d.no).find(v => v.hold && v.status === "review" && v.x.irnStatus !== "active" && (!v.x.date || !d.date || v.x.date === d.date) && same(v)
         && Math.abs(Math.abs(num(v.x.total)) - Math.abs(d.total)) < 0.005);
       if (heldV){
         Object.assign(heldV.x, {number: no, taxable: Math.abs(d.taxable), cgst: Math.abs(d.cgst), sgst: Math.abs(d.sgst), igst: Math.abs(d.igst), cess: Math.abs(d.cess), total: Math.abs(d.total), rate: d.rate, noteKind: d.note || "", items: this.items(d, Math.abs)});

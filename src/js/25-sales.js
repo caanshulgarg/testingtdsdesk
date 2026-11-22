@@ -78,7 +78,7 @@ async function loadSales(cid){
   if (pend.length){ pend.forEach(v => { v.needsMap = false; mapInvoice(v); }); saveSales(); }
   // (item 6: the problems kept with an invoice waiting are worked out again on opening, so a label left from an earlier
   // state, "customer GSTIN is not valid" on a GSTIN since cleared, never stays)
-  if (!remapped) S.sales.list.forEach(v => { if (["review", "ready"].includes(v.status) && !v.needsMap){ const was = JSON.stringify(v.problems || []); v.problems = invoiceProblems(v); if (was !== JSON.stringify(v.problems)) mapInvoice(v); } });
+  if (!remapped) S.sales.list.forEach(v => { if (["review", "ready"].includes(v.status) && !v.needsMap){ const was = JSON.stringify(v.problems || []); v.problems = salesProblemsNow(v); if (was !== JSON.stringify(v.problems)) mapInvoice(v); } });
   });
   salesLearnVt();
   render();
@@ -486,7 +486,9 @@ function salesTotals(x){
   return Array.from(groups.values()).sort((a, b) => a.rate - b.rate);
 }
 // (the home state: the client's registration the invoice is issued from, salesRegOf; else the client's GSTIN)
-function isInterState(x, co){ const home = (SL() && salesRegOf({x}).code) || stateOfGstin(co.gstin); const pos = x.pos || stateOfGstin(x.customerGstin) || home; return !!(home && pos && home !== pos); }
+// (next-fix-audit-sales-einv) a supply to an SEZ unit or developer (x.supply "SEZWP" with payment of IGST, "SEZWOP" under
+// LUT): inter-state whatever the states, IGST Act s.7(5)(b)
+function isInterState(x, co){ if (/^SEZ/.test(x.supply || "")) return true; const home = (SL() && salesRegOf({x}).code) || stateOfGstin(co.gstin); const pos = x.pos || stateOfGstin(x.customerGstin) || home; return !!(home && pos && home !== pos); }
 function salesLines(v){
   const co = CO(SL().cid), x = v.x;
   const inter = num(x.igst) > 0 || (!num(x.cgst) && isInterState(x, co));
@@ -527,6 +529,17 @@ function salesLines(v){
 }
 // the key of an output tax line a person sets on an invoice: its kind and the invoice's GST rate ("igst_18", "cess_0")
 function salesTaxKey(kind, rate){ return kind + "_" + (kind === "cess" ? "0" : rateTag(num(rate))); }
+// an invoice's problems with the items check (mapInvoice, and the check again on opening, so neither loses it)
+function salesProblemsNow(v, lines){
+  const p = invoiceProblems(v); if (lines === undefined) lines = hasLedgerList() ? salesLines(v) : null;
+  // (next-fix-audit-sales-einv) the voucher's sales and GST lines are the invoice's own figures, and Round Off no more than a
+  // rupee: items at their rates that do not add up to the invoice are held, never posted with the gap in Round Off
+  if (lines){ const x = v.x, sum = r => r2(lines.filter(l => l.role === r).reduce((a, l) => a + l.amt, 0)), ro = sum("roundoff");
+    if (Math.abs(sum("sales") - num(x.taxable)) > 1 || Math.abs(sum("tax") - num(x.cgst) - num(x.sgst) - num(x.igst) - num(x.cess)) > 1 || ro > 1)
+      p.push("the items (taxable " + money(sum("sales")) + ", GST " + money(sum("tax")) + ") do not agree with the invoice\u2019s taxable value and GST" + (ro > 1 ? ": " + money(ro) + " would go to Round Off" : "") + ". Check the items");
+  }
+  return p;
+}
 function invoiceProblems(v){
   const co = CO(SL().cid), x = v.x, p = [];
   if (v.hold) p.push(v.hold);   // a sheet's row held for a person (a negative amount its Type column does not explain)
@@ -542,7 +555,18 @@ function invoiceProblems(v){
   // sheet gave none); an IGST invoice whose party's state is not known is held, never posted as a sale to a consumer
   const from = v.filled && v.filled.pos && v.filled.pos === x.pos ? " (the party\u2019s state in its Tally ledger)" : "";
   const stName = c => GST_STATES[c] || c;
-  if (gst > 0 && inter && !num(x.igst)) p.push("CGST + SGST are charged, but the place of supply is " + stName(pos) + from + ", another state than " + stName(home) + ", so IGST is expected");
+  const sez = /^SEZ/.test(x.supply || "");
+  // (next-fix-audit-sales-einv) a supply to an SEZ (IGST Act s.7(5)(b), zero-rated under s.16(1)(b)): IGST with payment,
+  // none under LUT; held for Tally, since FinCom does not mark a voucher SEZ (Tally would report it as B2B, not SEZ)
+  if (sez){
+    if (num(x.cgst) || num(x.sgst)) p.push("a supply to an SEZ is inter-state (IGST Act s.7(5)(b)): IGST, not CGST + SGST");
+    if (x.supply === "SEZWOP" && gst > 0) p.push("a supply to an SEZ under LUT carries no IGST");
+    if (x.supply === "SEZWP" && !num(x.igst) && num(x.taxable) > 0) p.push("a supply to an SEZ with payment of IGST, but no IGST is charged");
+    p.push("a supply to an SEZ: enter it in Tally by hand, with the party marked SEZ (FinCom does not yet mark the voucher SEZ)");
+  }
+  // (an IRN cancelled: the invoice is not a supply any more, never posted, CGST Rules r.48(4))
+  if (x.irnStatus === "cancelled") p.push("its IRN is cancelled: this invoice is not a sale any more");
+  if (gst > 0 && inter && !num(x.igst) && !sez) p.push("CGST + SGST are charged, but the place of supply is " + stName(pos) + from + ", another state than " + stName(home) + ", so IGST is expected");
   if (gst > 0 && !inter && num(x.igst) && pos) p.push("IGST is charged, but the place of supply is " + stName(pos) + from + ", the state " + co.name + " issues it from, so CGST + SGST are expected");
   // (asked once the customer ledger is set: with none, the ledger is what it waits for, and Tally's master gives the state)
   if (num(x.igst) > 0 && !pos && v.customerLedger) p.push("IGST is charged, but the party\u2019s state is not known (no GSTIN or state on the sheet or in its Tally ledger): set the customer\u2019s GSTIN or the place of supply");
@@ -627,8 +651,8 @@ function mapInvoice(v, keep){
     v.customerLedger = c.ledger; v.custSource = c.label; v.custSure = c.sure; v.userLedger = false;
   }
   salesLearnReg(v);
-  v.problems = invoiceProblems(v);
   const lines = hasLedgerList() ? salesLines(v) : null;
+  v.problems = salesProblemsNow(v, lines);
   v.ledgerIssues = lines ? ledgerProblems(v, lines) : ["Tally ledger list not loaded"];
   // the output GST ledgers picked, with why (shown on the row), and the choices a person must make (next-fix-igst-pick)
   v.taxPicks = lines ? lines.filter(l => l.role === "tax" && l.ledger).map(l => ({kind: l.kind, ledger: l.ledger, why: l.why || ""})) : [];
@@ -653,7 +677,8 @@ function partyMaster(ledger){
 function salesPartyFill(v){
   // (only an invoice uploaded from a sheet since this rule, when it is added and when a person sets its customer ledger:
   // never one uploaded before, nor a B2CS / B2CL or unregistered row, which carry no v.sheetHad; never on a reload)
-  const x = v.x, h = v.sheetHad; if (!h || ["posted", "intally", "ignored"].includes(v.status)) return;
+  // (nor on an invoice with a live IRN: its party, GSTIN and place of supply are the IRN's)
+  const x = v.x, h = v.sheetHad; if (!h || x.irnStatus === "active" || ["posted", "intally", "ignored"].includes(v.status)) return;
   const f = v.filled || {}, m = v.customerLedger ? partyMaster(v.customerLedger) : null;
   const ours = k => !x[k] || (f[k] && x[k] === f[k]);
   const out = {ledger: v.customerLedger || ""};
@@ -672,6 +697,13 @@ function learnCustomer(v){
 function salesVt(x){ const c = SL().cfg; return x.noteKind === "credit" ? c.creditNoteType || "Credit Note" : x.noteKind === "debit" ? c.debitNoteType || "Debit Note" : c.voucherType || "Sales"; }
 // the company GSTIN of the voucher: the client's registration the invoice is issued from, else its own
 function salesCmpGstin(v, co){ const r = salesRegOf(v); return r.gstin && salesIsOwn(r.gstin, co) ? r.gstin : co.gstin || ""; }
+// (next-fix-audit-sales-einv) the invoice a credit note is against (x.againstInvoice), posted from FinCom or found in Tally:
+// the note is set against that bill (Agst Ref), so the invoice is not left outstanding; else null (its own New Ref).
+// Only the one invoice of that number to the same customer ledger, dated in the note's financial year on or before it:
+// another party's bill, or last year's of a series that starts again each year, is never taken (review of b4ff11b10)
+function salesAgainstOf(v){ const x = v.x, ag = x.noteKind === "credit" && x.date && v.customerLedger && normInvNo(x.againstInvoice);
+  const c = ag ? salesOfNo(x.againstInvoice).filter(o => o.id !== v.id && !o.x.noteKind && ["posted", "intally"].includes(o.status) && normInvNo(o.x.number) === ag && o.customerLedger === v.customerLedger && o.x.date && o.x.date <= x.date && fyLabel(o.x.date) === fyLabel(x.date)) : [];
+  return c.length === 1 ? c[0] : null; }
 function salesVoucherXml(v, co){
   const x = v.x, cn = x.noteKind === "credit";
   const vt = xesc(salesVt(x)), d = toTallyDate(x.date);
@@ -680,6 +712,7 @@ function salesVoucherXml(v, co){
   // registration the invoice is issued from. An IGST invoice with no place of supply is held, invoiceProblems)
   const pos = x.pos || stateOfGstin(x.customerGstin) || (salesOwnStates().length > 1 && salesRegOf(v).code) || stateOfGstin(co.gstin);
   const amt2 = n => r2(n).toFixed(2);
+  const orig = salesAgainstOf(v);
   let s = '<VOUCHER VCHTYPE="' + vt + '" ACTION="Create" OBJVIEW="Accounting Voucher View">\n<DATE>' + d + "</DATE>\n<EFFECTIVEDATE>" + d + "</EFFECTIVEDATE>\n" +
     "<VOUCHERTYPENAME>" + vt + "</VOUCHERTYPENAME>\n<VOUCHERNUMBER>" + xesc(x.number) + "</VOUCHERNUMBER>\n<REFERENCE>" + xesc(x.number) + "</REFERENCE>\n<REFERENCEDATE>" + d + "</REFERENCEDATE>\n" +
     "<PARTYLEDGERNAME>" + xesc(tallyLedgerName(v.customerLedger)) + "</PARTYLEDGERNAME>\n<PARTYNAME>" + xesc(x.customerName || v.customerLedger) + "</PARTYNAME>\n<BASICBUYERNAME>" + xesc(x.customerName || v.customerLedger) + "</BASICBUYERNAME>\n" +
@@ -687,13 +720,13 @@ function salesVoucherXml(v, co){
     (pos && GST_STATES[pos] ? "<STATENAME>" + xesc(GST_STATES[pos]) + "</STATENAME>\n<PLACEOFSUPPLY>" + xesc(GST_STATES[pos]) + "</PLACEOFSUPPLY>\n" : "") +
     "<COUNTRYOFRESIDENCE>India</COUNTRYOFRESIDENCE>\n" +
     (salesCmpGstin(v, co) ? "<CMPGSTIN>" + xesc(salesCmpGstin(v, co)) + "</CMPGSTIN>\n" : "") +
-    (x.irn ? "<IRN>" + xesc(x.irn) + "</IRN>\n" : "") +
+    (x.irn && x.irnStatus !== "cancelled" ? "<IRN>" + xesc(x.irn) + "</IRN>\n" : "") +
     "<NARRATION>" + xesc((x.noteKind === "credit" ? "Being credit note " : x.noteKind === "debit" ? "Being debit note " : v.source === "created" ? "Sales invoice " : "Being sales invoice ") + x.number + " dated " + fmtDate(x.date) + " to " + (x.customerName || v.customerLedger) + " | TDSDesk:" + v.id) + "</NARRATION>\n" +
     "<PERSISTEDVIEW>Accounting Voucher View</PERSISTEDVIEW>\n<ISINVOICE>No</ISINVOICE>\n<ISOPTIONAL>" + (co.createOptional ? "Yes" : "No") + "</ISOPTIONAL>\n";
   salesLines(v).forEach(l => {
     const dr = cn ? l.side !== "Dr" : l.side === "Dr", a = (dr ? "-" : "") + amt2(l.amt);
     s += "<ALLLEDGERENTRIES.LIST>\n<LEDGERNAME>" + xesc(tallyLedgerName(l.ledger)) + "</LEDGERNAME>\n<ISDEEMEDPOSITIVE>" + (dr ? "Yes" : "No") + "</ISDEEMEDPOSITIVE>\n<ISPARTYLEDGER>" + (l.role === "party" ? "Yes" : "No") + "</ISPARTYLEDGER>\n<AMOUNT>" + a + "</AMOUNT>\n";
-    if (l.role === "party") s += "<BILLALLOCATIONS.LIST>\n<NAME>" + xesc(x.number) + "</NAME>\n<BILLTYPE>New Ref</BILLTYPE>\n" + (x.dueDays ? "<BILLCREDITPERIOD>" + num(x.dueDays) + " Days</BILLCREDITPERIOD>\n" : "") + "<AMOUNT>" + a + "</AMOUNT>\n</BILLALLOCATIONS.LIST>\n";
+    if (l.role === "party") s += "<BILLALLOCATIONS.LIST>\n<NAME>" + xesc(orig ? orig.x.number : x.number) + "</NAME>\n<BILLTYPE>" + (orig ? "Agst Ref" : "New Ref") + "</BILLTYPE>\n" + (x.dueDays ? "<BILLCREDITPERIOD>" + num(x.dueDays) + " Days</BILLCREDITPERIOD>\n" : "") + "<AMOUNT>" + a + "</AMOUNT>\n</BILLALLOCATIONS.LIST>\n";
     s += "</ALLLEDGERENTRIES.LIST>\n";
   });
   return s + "</VOUCHER>\n";
@@ -708,15 +741,6 @@ function customerMasterXml(l){
     "</LEDGER>\n";
 }
 /* ---------- reading uploaded sales invoices ---------- */
-function salesPrompt(text, fileName, nImages, co){
-  return "You read an Indian GST sales (tax) invoice issued by " + co.name + (co.gstin ? " (GSTIN " + co.gstin + ")" : "") + ". The customer is the buyer / bill-to party.\n" +
-    (text ? "Text found in the file (may be incomplete):\n" + String(text).slice(0, 6000) + "\n" : "") +
-    (nImages ? "The invoice pages are attached as " + nImages + " image(s).\n" : "") +
-    "File name: " + fileName + "\n" +
-    'Reply with only JSON: {"invoiceNo":"","invoiceDate":"YYYY-MM-DD","sellerGstin":"","customerName":"","customerGstin":"","customerAddress":"","placeOfSupply":"state name or 2-digit code",' +
-    '"items":[{"description":"","hsn":"","qty":0,"unit":"","rate":0,"taxable":0,"gstRate":0}],"taxableValue":0,"cgst":0,"sgst":0,"igst":0,"cess":0,"roundOff":0,"totalAmount":0,"irn":"","dueDays":0}. ' +
-    "Use 0 or empty when a value is not on the invoice. Amounts are plain numbers without commas.";
-}
 // the customer name: the line under "Bill to" (or on it), else the line above the customer's GSTIN
 function customerFromText(text, custGstin, co){
   const lines = String(text || "").split(/\n/).map(l => l.replace(/\s+/g, " ").trim()).filter(Boolean);
@@ -746,60 +770,9 @@ function salesFromFree(fp, co, text){
     customerGstin: cust, pos: stateOfGstin(cust) || posFromText(text || j.hint),
     taxable: num(j.taxableValue), cgst: num(j.cgst), sgst: num(j.sgst), igst: num(j.igst), cess: 0, total: num(j.totalAmount), items: []};
 }
-function salesFromClaude(j, co){
-  const g = s => fixGstin(s).value || "";
-  const cust = g(j.customerGstin);
-  const items = (j.items || []).filter(it => it && (num(it.taxable) || num(it.qty))).map(it => ({desc: String(it.description || "").slice(0, 200), hsn: String(it.hsn || ""), qty: num(it.qty), unit: String(it.unit || ""), rate: num(it.rate), disc: 0, taxable: num(it.taxable) || r2(num(it.qty) * num(it.rate)), gstRate: num(it.gstRate)}));
-  return {number: String(j.invoiceNo || "").trim(), date: /^\d{4}-\d{2}-\d{2}$/.test(j.invoiceDate || "") ? j.invoiceDate : "", sellerGstin: g(j.sellerGstin),
-    customerName: String(j.customerName || "").trim(), customerGstin: cust && cust !== co.gstin ? cust : "", address: String(j.customerAddress || ""),
-    pos: stateCodeFrom(j.placeOfSupply) || stateOfGstin(cust), taxable: num(j.taxableValue), cgst: num(j.cgst), sgst: num(j.sgst), igst: num(j.igst), cess: num(j.cess),
-    total: num(j.totalAmount), irn: String(j.irn || ""), dueDays: num(j.dueDays), items};
-}
-async function readSalesFile(file, cid, progress, pageList, force){
-  const co = CO(cid), trace = [];
-  let text = "", canvases = [], kind;
-  if (isPdf(file)){ const r = await pdfPages(file, pageList || [1, 2]); text = r.text; canvases = r.canvases; kind = text.replace(/\s/g, "").length >= 80 ? "pdf_text" : "pdf_scan"; }
-  else if (isImage(file)){ canvases = [await imageToCanvas(file)]; kind = "photo"; }
-  else throw {code: "sales_type"};
-  await readerLoad();   // freeParse: the bill reader, the first time (src/js/82)
-  let best = null;
-  const tryText = (t, label) => {
-    const fp = freeParse(t, cid, file.name, {ocr: kind !== "pdf_text"});
-    const x = salesFromFree(fp, co, t);
-    const why = fp.why.filter(w => !/supplier GSTIN not found|client's own sales invoice|not a standard rate/.test(w));
-    const ok = why.length === 0 && x.number && x.date && x.total > 0;
-    trace.push({step: label, ok, note: ok ? "all checks passed" : why.join("; ")});
-    if (!best || ok) best = {x, ok, why};
-    return ok;
-  };
-  if (kind === "pdf_text") tryText(text, "PDF\u2019s own text");
-  if (!(best && best.ok) && canvases.length){
-    if (progress) progress("reading the scan");
-    for (const psm of ["3", "11"]){
-      const o = await ocrCanvas(canvases[0], psm).catch(() => null);
-      if (!o) break;
-      if (tryText(o.text, "Built-in OCR")) break;
-    }
-  }
-  if (force === "google" && googleReady()){
-    try { const o = await googleOcr(canvases[0] || (await imageToCanvas(file))); if (tryText(o.text, "Google OCR")) { /* best updated inside */ } } catch (e){ trace.push({step: "Google OCR", ok: false, note: (e && e.code) || "failed"}); }
-  }
-  if (best && best.ok && force !== "claude"){ best.x.noteKind = best.x.noteKind || noteKindOf(String(text || "").split("\n")); return {x: best.x, method: force === "google" ? "google-ocr" : "free", trace}; }
-  // Claude reads the rest (items included)
-  if (S.engine){
-    if (progress) progress("asking Claude");
-    let images = [];
-    if (S.imgMax && canvases.length){ for (const c of canvases.slice(0, Math.min(2, S.imgMax))) images.push(await imgBlob(c, kind === "pdf_text" ? "page" : "photo")); images = images.filter(Boolean); }
-    try {
-      const j = await claudeRead(salesPrompt(kind === "pdf_text" ? text : "", file.name, images.length, co), images, false);
-      const x = salesFromClaude(j, co);
-      trace.push({step: images.length ? "Claude (images)" : "Claude (text)", ok: !!(x.number && x.total), note: x.number ? "read" : "incomplete"});
-      if (x.number || x.total) return {x, method: "claude", trace};
-    } catch (e){ trace.push({step: "Claude", ok: false, note: errCopy(e && e.code)}); }
-  }
-  if (best && (best.x.number || best.x.total)) return {x: best.x, method: "free-partial", trace};
-  throw {code: "sales_unreadable", trace};
-}
+// (next-fix-audit-sales-einv) the reader of an uploaded invoice (salesReadFile, salesPrompt, salesFromClaude) comes with the
+// Sales screen's part, src/js/26-sales-invoice.js: loaded first when an upload starts elsewhere (the assistant)
+async function readSalesFile(...a){ if (typeof salesReadFile !== "function") await window.loadPart("invoice"); return salesReadFile(...a); }
 function newInvoice(x, source, extra){
   return Object.assign({id: uid("sv"), source, status: "review", x: Object.assign({number: "", date: "", customerName: "", customerGstin: "", address: "", pos: "", taxable: 0, cgst: 0, sgst: 0, igst: 0, cess: 0, total: 0, items: []}, x),
     customerLedger: "", userLedger: false, createdAt: new Date().toISOString()}, extra || {});
