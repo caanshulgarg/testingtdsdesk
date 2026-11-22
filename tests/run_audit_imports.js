@@ -16,7 +16,9 @@ const PAGE = fs.readFileSync(HTML, "utf8"), has = n => new RegExp("\\n(?:const|l
 const want = ["num", "r2", "money", "INR", "fpHash", "GST_STATES", "SALES_RATES", "stateOfGstin", "GSTIN_RE", "NORM_CACHE", "normNameRaw", "normName", "normInv", "normInvNo",
   "MONTHS", "toIsoDate", "Market", "GST2B", "GSTAmend", "VR", "isSheetFile", "GST_CHARS", "gstinCheckChar", "gstinValid", "cellText", "bankAmount", "bankDate", "rowsFromCells",
   "xlsxBook", "xlsxRows", "gridsFromSheet", "TDSCH", "TDS24Q", "FinPyBs", "GSTX", "RCM_CATS", "BLOCK_CATS", "gstText", "suggestRcm", "billCodes", "blockRule", "suggestBlock", "gstDecision", "rcmTaxOf",
-  "catLabel", "TALLY_GROUPS", "importLedgerList", "TDSPanFix", "STATE_CODES", "GSTR"].filter(has);
+  "catLabel", "TALLY_GROUPS", "importLedgerList", "TDSPanFix", "STATE_CODES", "GSTR",
+  // (next-fix-audit-all: the purchase-tds track's rcmTaxOf takes the client's state from itcCheck, the bill's registration)
+  "itcCheck", "ownGstins", "salesPan", "salesGstinOfPan"].filter(has);
 const h = load(HTML, want), C = h.ctx;
 // (a const of the page is not a property of its context: put on it, so the checks below reach it by C.name)
 Object.keys(h.x).forEach(k => { if (!(k in C)) C[k] = h.x[k]; });
