@@ -115,8 +115,8 @@ function sentCheck(inp, dedupe, label, you) {
   const d = (inp.drafts || []).find((x) => x && x.dedupe === dedupe && x.state === "unconfirmed");
   if (!d) return null;
   return { finding: you(label + ": waiting on Tally to confirm it", [], { waits: true }).finding,
-    picks: [finding("sent_check", "sent:" + dedupe + ":" + d.at, "you", { party: label, dedupe, at: d.at, short: "Not confirmed in Tally",
-      title: label + ": sent to Tally but not confirmed there after 24 hours. Check it in Tally." }, [], [{ t: "retry", ref: "retry:" + dedupe, label: "Not in Tally: offer it again", dedupe, at: d.at }])] };
+    picks: [finding("sent_check", "sent:" + dedupe + ":" + d.ver, "you", { party: label, dedupe, at: d.at, ver: d.ver, short: "Not confirmed in Tally",
+      title: label + ": sent to Tally but not confirmed there after 24 hours. Check it in Tally." }, [], [{ t: "retry", ref: "retry:" + dedupe, label: "Not in Tally: offer it again", dedupe, ver: d.ver }])] };
 }
 function finding(kind, key, state, facts, evidence, candidates) {
   return { kind, key, state, facts: Object.assign({ ask_text: "" }, facts), evidence: evidence || [], candidates: candidates || [] };
@@ -498,7 +498,8 @@ export function excludedOf(prior) {
 // (last fix) the draft's own result for its voucher (posted straight to the bridge here: no cloud job) is proof when ok
 // AND it carries Tally's voucher id. A draft saying posted without that proof is "pending" for 24 hours, then
 // "unconfirmed" (Needs you), never failed; once the owner said "Not in Tally: offer it again" for that draft (a sent_check
-// answered) it is failed. d.at: when the draft's voucher was last sent (its result's time, else when it was saved)
+// answered) it is failed. d.ver: the draft's version, its voucher's own send time (results[vid].at; "-" when none), the
+// same on the server; d.at: the time its age is counted from (that send time, else when it was saved)
 export const DAY_MS = 24 * 3600 * 1000;
 export function draftState(d, jobs, now, retried) {
   if (d.removed) return "failed";
@@ -509,7 +510,7 @@ export function draftState(d, jobs, now, retried) {
   if (res && res.ok === true) return "posted";
   if (j && /^(waiting|taken|running)$/.test(String(j.status || ""))) return "live";
   if (String(d.state || "") === "posted") {
-    if (retried && retried.has("sent:" + d.dedupe + ":" + d.at)) return "failed";
+    if (retried && retried.has("sent:" + d.dedupe + ":" + (d.ver || "-"))) return "failed";
     const at = Date.parse(String(d.at || "")), t = now == null ? Date.now() : now;
     return isFinite(at) && t - at <= DAY_MS ? "pending" : "unconfirmed";
   }

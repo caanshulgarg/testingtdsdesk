@@ -182,6 +182,12 @@ begin
     if j.status in ('waiting', 'taken', 'running') then return 'live'; end if;
   end if;
   if d.data->>'state' = 'posted' then
+    -- the owner said "Not in Tally: offer it again" for THIS version of the draft (its voucher's own send time, as the
+    -- night's draftState keys it): failed, so the entry is offered again (entry_settle moves a claim back to ready)
+    if exists (select 1 from public.night_findings f where f.firm_id = p_firm and f.client_id = p_client and f.kind = 'sent_check' and f.state = 'resolved' and f.undone_at is null
+                and f.key = 'sent:' || p_dedupe || ':' || coalesce(nullif(d.data->'results'->vid->>'at', ''), '-') and f.evidence->0->>'t' = 'retry') then
+      return 'failed';
+    end if;
     return case when coalesce(public.asst_ts(d.data->'results'->vid->>'at'), d.updated_at) > now() - interval '24 hours' then 'pending' else 'unconfirmed' end;
   end if;
   return 'failed';
@@ -288,6 +294,10 @@ create or replace function public.asst_exclude_owner() returns trigger language 
 begin
   if new.kind = 'setoff_exclude' and new.decided_by is not null and old.decided_by is distinct from new.decided_by and not public.asst_is_owner() then
     raise exception 'Only the firm''s owner can say a journal is not for a month.' using errcode = '42501';
+  end if;
+  -- "Not in Tally: offer it again" (sent_check) is the owner's too, whichever way it is answered
+  if new.kind = 'sent_check' and new.decided_by is not null and old.decided_by is distinct from new.decided_by and not public.asst_is_owner() then
+    raise exception 'Only the firm''s owner can say a journal is not in Tally.' using errcode = '42501';
   end if;
   return new;
 end $$;

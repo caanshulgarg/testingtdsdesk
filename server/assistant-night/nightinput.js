@@ -96,7 +96,7 @@ export function draftsOf(recs, jobs, prior, now) {
   const retried = retriedOf(prior);
   return (recs || []).filter((r) => r && r.data && /^#?dc-/.test(String(r.item || r.data.id || ""))).map((r) => {
     const vid = String(r.data.id || ""), own = (r.data.results || {})[vid] || {};
-    const d = { dedupe: String(r.data.dedupe || ""), state: String(r.data.state || ""), removed: !!(r.deleted || r.data.removed), job: jobOf(r.data), vid, results: r.data.results || {}, at: String(own.at || r.updated_at || "") };
+    const d = { dedupe: String(r.data.dedupe || ""), state: String(r.data.state || ""), removed: !!(r.deleted || r.data.removed), job: jobOf(r.data), vid, results: r.data.results || {}, ver: String(own.at || "-"), at: String(own.at || r.updated_at || "") };
     d.state = draftState(d, jobs, now, retried); return d;
   }).filter((d) => d.dedupe);
 }
