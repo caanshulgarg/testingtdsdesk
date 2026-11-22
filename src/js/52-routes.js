@@ -20,7 +20,7 @@ const Route = {
       else if (S.tallyTab === "activity" || S.tallyTab === "sent") return "#/tally/" + S.tallyTab;
       // zoho-books (13-Oct-2026): the Integrations page and each integration's own page (#/integrations/zoho)
       if (S.homeTab === "integrations") return "#/integrations" + (S.integPage ? "/" + encodeURIComponent(S.integPage) : "");
-      return "#/" + (["clients", "today", "compliance", "inbox", "tally", "help", "meetings"].includes(S.homeTab) ? S.homeTab : "clients");
+      return "#/" + (["clients", "today", "compliance", "inbox", "tally", "help", "meetings", "daily"].includes(S.homeTab) ? S.homeTab : "clients");
     }
     const c = "#/c/" + encodeURIComponent(S.coId) + "/";
     if (S.step === "collect") return c + "upload";
@@ -182,7 +182,7 @@ const Route = {
         if (qs.get("grant")) S.zohoGrant = qs.get("grant");
         if (qs.get("zoho")) S.zohoBack = qs.get("zoho");
       }
-      else if (["clients", "today", "compliance", "inbox", "tally", "help", "meetings"].includes(p[0])){ S.view = "home"; S.homeTab = p[0]; S.step = null; S.tallyOld = p[0] === "tally" && p[1] === "bridge-1.15"; if (p[0] === "tally") S.tallyTab = p[1] === "activity" || p[1] === "sent" ? p[1] : "computers"; }
+      else if (["clients", "today", "compliance", "inbox", "tally", "help", "meetings", "daily"].includes(p[0])){ S.view = "home"; S.homeTab = p[0]; S.step = null; S.tallyOld = p[0] === "tally" && p[1] === "bridge-1.15"; if (p[0] === "tally") S.tallyTab = p[1] === "activity" || p[1] === "sent" ? p[1] : "computers"; }
       else return false;
       return true;
     } finally {

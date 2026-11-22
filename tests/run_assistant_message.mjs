@@ -1,8 +1,8 @@
 // node tests/run_assistant_message.mjs - the client's weekly message (server/_shared/asks.js) carries only what is still
 // needed from the client: never a finding resolved by FinCom, one for the firm ("Needs you"), an answered or closed
-// question, or one not ticked. Made-up data only (app/src/screens/daily/demo.js).
+// question, or one not ticked. Made-up data only (tests/daily_fixture.mjs).
 import { sendable, message, waLink } from "../server/_shared/asks.js";
-import { FINDINGS, CLIENTS } from "../app/src/screens/daily/demo.js";
+import { FINDINGS, CLIENTS } from "./daily_fixture.mjs";
 
 let fails = 0;
 const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };

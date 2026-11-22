@@ -1,8 +1,78 @@
-# Daily Check (the Assistant), phase 1: plan (DESIGN ROUND)
+# Daily Check (the Assistant), phase 1
 
-Branch `next-assistant`, 21-Nov-2026. **Design only.** Nothing here is applied, deployed, published or merged. The
-screens are built with made-up data (`app/src/screens/assistant/demo.js`, marked "Sample data" on the page). The
-migration is a draft (`server/assistant-night/migration-206-assistant-night.DRAFT.sql`), not run anywhere.
+Branch `next-assistant`. Designed 21-Nov-2026 (sections 1 to 12 below); **built 22-Nov-2026** (section 0). Nothing is
+applied, deployed, published or merged: the owner reviews, applies and deploys. Made-up data only, in the tests and the
+screenshots.
+
+## 0. Built (22-Nov-2026)
+
+### Files to apply, in this order (staging only)
+1. `server/assistant-night/migration-206-assistant-night.sql`: tables, RLS, explicit grants, the functions (one
+   transaction, lock_timeout 10 s, safe twice; add-only: its one drop is its own trigger, made again at once).
+2. Deploy the functions `assistant-night` and `assistant-send` (verify_jwt off for `assistant-night`: it checks the
+   timer's key itself; `assistant-send` takes the person's token). They import `../_shared/*` and `../gst-run/*`, as
+   gst-run imports `../_shared/*`.
+3. `server/assistant-night/migration-206-cron.sql`: the night timer (02:00 to 05:20 India time, every 10 minutes, at most 4
+   clients a tick). Last, once the function answers.
+
+### Secrets (names only)
+- `RESEND_API_KEY`: the one support-mail already uses. Supabase function secrets are the project's, so it is reused as is.
+- `ASSISTANT_MAIL_FROM`: a sender on the firm's own domain, verified in Resend (the owner's decision 3).
+- `ASSISTANT_MAIL_LIVE`: **left unset on staging.** Unless it is exactly `yes`, every email goes only to the firm.
+- Already there: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` (the platform's), and in Vault
+  `gst_cron_key` and `fincom_project_url` (migration 168 uses both).
+
+### What each part is
+| Part | File |
+|---|---|
+| The checks (a) to (e), FinCom's own answers, the entries and their checks, the words | `server/_shared/nightchecks.js` |
+| The input from the cloud (gst-run's loader and engine for the books, 2B by the app's GST2B.run, bank records, Inbox, FinCom's bills) | `server/assistant-night/nightinput.js` |
+| The night function (timer only) | `server/assistant-night/handler.ts`, `index.ts` |
+| The client's message (page preview and email: the same words) | `server/_shared/asks.js` |
+| The test-mode guard | `server/_shared/sendguard.js` |
+| The send function (owner only) | `server/assistant-send/handler.ts`, `index.ts` |
+| The page: tabs, rows, approve / reject / edit, undo, choose, send, settings | `app/src/screens/daily/DailyCheck.jsx`, `Review.jsx`, `data.js`, `daily.css` |
+| Contacts in Client setup › Company | `app/src/screens/daily/ClientContacts.jsx` (Settings.jsx) |
+| The address `#/daily` | `src/js/52-routes.js` (6 bytes of legacy.js) |
+
+### Tests (all with made-up books)
+| Test | What | Result |
+|---|---|---|
+| `node tests/run_nightchecks.mjs` | each check and self-answer: matches, near misses (₹1.01, wrong party, date out of range), ties, evidence already used, undone, empty books; entry checks (Dr = Cr, ledgers, closed period, duplicates, GST); the same run twice | 85 passed |
+| `node tests/run_nightchecks_diff.js` (needs `python3 build.py`) | differential against the browser's Audit on the fixture books: 68 ledgers × 9 group tests, cash in a day, round-sum journals, journals with no narration, written rules | 6 passed |
+| `node tests/run_assistant_night.mjs` | the cloud rows made into the input (gst-run's engine), bank records, Inbox, bills, end to end | 14 passed |
+| `python3 tests/run_migration206.py` (pg_stand) | runs twice; idempotent nights; answered never asked again; auto-close; cleared; undo; choose; RLS for owner, staff, look-only, another firm, anon; grants; owner-only send; prepare returns only still-needed questions; a test never marks Asked; contacts logged; night_due once a night | 40 passed |
+| `node tests/run_assistant_guard.mjs` | the guard: every switch combination, odd inputs, 1,000 random plans: no client address unless both switches are on; never cc or bcc | 258 passed |
+| `deno test --no-check server/assistant-send/handler_test.ts` | the send function with a stand-in database and Resend: owner only, test mode to the firm only, both switches for a client, nothing still needed sends nothing, Resend failure logged; the night function refuses anyone but the timer | 7 passed |
+| `node tests/run_assistant_message.mjs` | the client's message holds only "still need" items | passed |
+| `python3 tests/run_daily_check_ui.py` | the page with a stand-in cloud: tabs and counts, default tab, rows, open, close, choose, undo, reject, approve through the existing bank approval (refused there = nothing recorded), send (owner only, the message, the ids), contacts load and save, phone with no sideways scroll | 32 passed |
+| `python3 tests/run_every_screen.py`, `python3 tests/run_legacy_room.py` | every screen (Daily Check added), and the room | passed |
+
+### Sizes (gzip)
+legacy.js 599,738 (limit 600,000; +6 for `#/daily`); main index 260,623 (limit 264,192); Daily Check 5.9 kB, its own chunk.
+
+### Data sources: what is read, and what is not (for the review)
+- Read: the cloud copy's entries, masters and groups (gst-run's own `load` and `engine.books`, the books the app opens);
+  2B documents the books lack (the app's own `GST2B.run` on them, `only2b`); the salary sheet and TDS challans (the
+  client's work: `salary`, `challans`); bank statements (records `bank_stmt`, `bank_rows`; written rules and lines a
+  person set from `bank_meta` and the rows); the Inbox (records `inbox`: files not read yet are counted); FinCom's bills
+  (records `entry`, each with its read fields `x`); the closed period (`clients.closed.to`).
+- Not read in phase 1 (their self-answer finds nothing, so the finding is asked or needs you, never resolved wrongly):
+  the firm's own bank rules (kept with the firm, not the client), GST payments (no cloud record of the challans), GST
+  months marked filed (the Post page's closed-period check still stops such entries).
+- A statement's account is its Tally ledger where the statement has one, else its account number. A bank entry whose
+  bank ledger is unknown fails "Ledgers in Tally" and is held, never shown as ready.
+
+### Built differently from the plan, and why
+- The ported checks are **copies** in `nightchecks.js`, not moved out of `06-audit.js`: moving them would change
+  legacy.js, which has 262 bytes left. The differential test keeps the two the same and fails when one changes.
+- "Remind by itself": the switch is there (owner only, off by default, logged); **sending by itself is not built** in
+  phase 1. Nothing is ever sent without the owner's press.
+- A test send (email or WhatsApp) never marks a question Asked: the client got nothing.
+- WhatsApp has its own two layers: test mode (real sending off) opens to the firm's own number, and the test site
+  never opens WhatsApp to a client whatever the switch says.
+- The server refuses, as well as the page: `ask_send_prepare` returns only questions whose finding still needs the
+  client, so a resolved item cannot reach a message even from a hand-made request.
 
 ## 1. What it does, in one paragraph
 
@@ -40,7 +110,7 @@ hidden by CSS injected only for the screenshots): `1-from-clients`, `2-question-
 `5-entry-open`, `6-done-by-fincom`, `7-done-open`, `8-send`, `9-contacts` (each `-desktop` and `-phone`), and
 `10-from-clients-dark-desktop`. The first design's shots are in `scratchpad/shots-assistant/`.
 
-Where the code is: `app/src/screens/daily/` (DailyCheck, Review, ClientContacts, daily.css, demo.js), a lazy chunk
+Where the code is: `app/src/screens/daily/` (DailyCheck, Review, ClientContacts, data.js, daily.css), a lazy chunk
 (Main.jsx, homeTab "daily"). The sidebar has "Daily Check" under Firm; its title is in TopBar.jsx. The contacts card is in
 Client setup › Company (Settings.jsx, already a lazy chunk). The client's message is `server/_shared/asks.js`, one file
 for the page's preview and the send function, so the words cannot differ.
@@ -184,7 +254,7 @@ addresses are always read from `client_contacts` on the server**, never from the
 writes `ask_sends` and `assistant_log` and marks the questions Asked.
 
 **WhatsApp**: a `wa.me` link with the message ready (no Business API). The person's own WhatsApp opens and the person
-presses send. FinCom marks the questions Asked when the link is opened (logged as `opened_link`).
+presses send. FinCom marks the questions Asked when the link is opened (logged as `opened_link`); a test never does.
 
 **Test-mode guard (safe sending, acceptance rule 6).** It works in three layers:
 1. **The firm's switch** `assistant_mail.real_send` is **false** by default. Only the firm's owner can change it, through
@@ -254,12 +324,9 @@ in Resend; replies go to the firm's own address.
    once a week. Nothing else is ever sent by itself.
 8. **Phase 2** journals (GST set-off, payroll) stay out of phase 1.
 
-## 12. Build order (next round, after the owner's yes)
+## 12. Left for the review and after
 
-1. `nightchecks.js` (moved from 06/21/22/17) + the differential test; 06-audit.js calls it (legacy.js size checked).
-2. Migration 206 for real (from the draft), with its own pg_stand test (RLS for owner, staff, look-only, another firm,
-   anon; idempotent upserts), then applied to **staging only** by the owner.
-3. `assistant-night` (findings, self-answer, entry checks) with the tests of rule 5; the cron job last.
-4. `assistant-send` with the guard and its test; the page reading the tables instead of demo.js.
-5. Approve wiring into the existing bill and bank approvals; the Post page check that both pages show the same item.
-6. Independent review, then the number-by-number check against the source rows (rule 7).
+1. The independent code review, then the check of every number against the source rows (acceptance rule 7).
+2. On staging after applying: one night on a test client; compare its findings with the Audit, Bank and GST pages.
+3. Phase 2: GST set-off and payroll journals; sending reminders by itself; the firm's bank rules and GST payments as
+   sources.

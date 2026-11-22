@@ -1262,3 +1262,12 @@ lock_timeout 3 s; safe twice); 2. `python3 tools/apply_concurrent_indexes.py --r
 server/tally-cloud/migration-205-indexes.sql` (the 22 indexes, each in a call of its own, checked valid, as for 204). The 21
 foreign-key columns checked on staging (read-only, 21-Nov-2026): all there, uuid. Tested: `tests/run_migration205.py`
 (RED_WITHOUT_205=1 fails), applied as for 204, every index valid.
+
+## 206: Daily Check (not run yet; branch next-assistant, 22-Nov-2026)
+
+**206, Daily Check** (22-Nov-2026, branch `next-assistant`; **written, not run yet**). docs/ASSISTANT-PHASE1.md, section 0.
+**Apply, in this order:** 1. `sbq.sh server/assistant-night/migration-206-assistant-night.sql` (md5 97c1b0a33aab8a84a7abb9f2a9dcc701; one
+transaction, lock_timeout 10 s; safe twice; add-only: new tables client_contacts, assistant_prefs, assistant_mail,
+night_runs, night_findings, client_asks, ask_sends, night_entries, assistant_log, their RLS, explicit grants and new
+functions); 2. deploy the functions assistant-night and assistant-send; 3. `sbq.sh server/assistant-night/migration-206-cron.sql`
+(md5 293484b55cd691e5c9bfe87dbe70c981; the night timer, 02:00 to 05:20 IST). Needs nothing of 199-205. Tested: `tests/run_migration206.py` (pg_stand).

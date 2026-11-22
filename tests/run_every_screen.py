@@ -48,7 +48,7 @@ CLIENT = [["Overview", "goClient('dash')", None], ["Inbox", "goClient('inbox')",
   ["import", "tds", "gst", "recon", "reports", "mis", "mymis", "fs", "audit", "tieout", "lookup", "letters", "ledgers", "corp", "corp-forms", "corp-docs", "corp-aoc4"]] + \
   [["Client setup " + t, "S.step = null; S.tab = '%s'; render()" % t, None] for t in
   ["settings", "cotally", "cotds", "deductees", "gstset", "bankset", "bankrules", "coclosed", "cosheets", "coremove"]]
-HOME = [["Today", "navHome('today')"], ["Compliance", "navHome('compliance')"], ["Clients", "navHome('clients')"], ["Tally", "navHome('tally')"],
+HOME = [["Today", "navHome('today')"], ["Compliance", "navHome('compliance')"], ["Daily Check", "navHome('daily')"], ["Clients", "navHome('clients')"], ["Tally", "navHome('tally')"],
   ["Integrations", "navHome('integrations')"], ["Help", "navHome('help')"], ["Inbox (all clients)", "navHome('inbox')"], ["Settings", "goSettings(null)"],
   ["Settings account", "goSettings('account')"], ["Settings plan", "goSettings('plan')"], ["Settings closed", "goSettings('closed')"]]
 

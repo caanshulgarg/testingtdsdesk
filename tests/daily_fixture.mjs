@@ -1,4 +1,4 @@
-// Made-up data for the Daily Check page's design round (next-assistant). Every name, number, address and phone is
+// Made-up data for Daily Check (next-assistant): the message test and the screenshots. Every name, number, address and phone is
 // invented. Phase 1 reads the same shape from the cloud (night_findings, client_asks, night_entries:
 // docs/ASSISTANT-PHASE1.md).
 //   finding.state  "resolved" Done by FinCom (exact rule-based match, with evidence, can be undone)
@@ -59,9 +59,9 @@ export const FINDINGS = [
   // Needs you
   { id: "f20", cid: "d1", state: "you", title: "₹75,000 received 12-Nov · which invoice?",
     choices: ["Sales 1204 · 30-Oct · ₹75,000", "Sales 1211 · 04-Nov · ₹75,000"] },
-  { id: "f21", cid: "d3", state: "you", title: "₹40,000 advance · bill of ₹40,001.50 · same?", choices: ["Same", "Not the same"] },
+  { id: "f21", cid: "d3", state: "you", title: "₹40,000 advance · bill of ₹40,001.50 · same?", choices: ["Bill SPK/220 · 02-Nov · ₹40,001.50"] },
   { id: "f22", cid: "d4", state: "you", title: "3 questions · no contact", act: "Add contact" },
-  { id: "f23", cid: "d2", state: "you", title: "Suspense ₹12,300 since 30-Sep", choices: ["Make an entry", "Ask client"] },
+  { id: "f23", cid: "d2", state: "you", title: "Suspense ₹12,300 since 30-Sep", choices: [] },
 ];
 
 export const ENTRIES = [
@@ -79,3 +79,28 @@ export const ENTRIES = [
 export const CHECKS = "Dr = Cr · ledgers in Tally · not in a closed period · no duplicate · GST adds up";
 export const STATE_WORD = { draft: "Draft", asked: "Asked", answered: "Answered", closed: "Closed" };
 export const WEEK = "16-Nov-2026";
+
+// the same made-up data as the cloud's rows (migration 206's tables), for the screenshots and the page's test: what
+// Cloud.api answers for each table when the page is opened with a stand-in for the cloud
+const MI = { Jan: 1, Feb: 2, Mar: 3, Apr: 4, May: 5, Jun: 6, Jul: 7, Aug: 8, Sep: 9, Oct: 10, Nov: 11, Dec: 12 };
+const d8 = (s) => { const m = String(s).match(/^(\d{2})-([A-Z][a-z]{2})$/); if (m) return "2026" + String(MI[m[2]]).padStart(2, "0") + m[1]; const k = MI[s]; return k ? "2026" + String(k).padStart(2, "0") : ""; };
+const uuid = (n) => "00000000-0000-4000-8000-" + String(n).padStart(12, "0");
+export function dbRows() {
+  let n = 0;
+  const night_findings = [], client_asks = [];
+  FINDINGS.filter((f) => !f.act).forEach((f) => {
+    const id = uuid(++n);
+    night_findings.push({ id, client_id: f.cid, kind: f.kind === "salary" ? "salary_month_missing" : "bank_no_bill", key: f.id, state: f.state,
+      facts: { amt: f.amt || 0, party: f.party || "", date: d8(f.date || ""), short: f.short || "", title: f.title || "", ask_text: f.ask ? f.ask.text : "" },
+      evidence: f.evidence || [], candidates: (f.choices || []).map((c, i) => ({ t: "entry", ref: f.id + ":" + i, label: c })), last_seen: "2026-11-22", undone_at: null });
+    if (f.ask) client_asks.push({ id: uuid(100 + n), client_id: f.cid, finding_id: id, week: "2026-11-16", text: f.ask.text, edited: null, state: f.ask.state, answer: null, closed_by: f.ask.state === "closed" ? "document" : null,
+      history: f.ask.history.map((h) => ({ at: h.at + ":00+05:30", what: h.what })), created_at: "2026-11-21T02:10:00+05:30" });
+  });
+  const night_entries = ENTRIES.map((e, i) => ({ id: uuid(500 + i), client_id: e.cid, finding_id: null, source: e.reason.startsWith("2B") ? "twob_inbox_bill" : "bank_self_answer", dedupe: e.id, work_ref: e.reason.startsWith("2B") ? e.id : "s1:r" + (i + 1),
+    voucher: { type: e.type, date: d8(e.date), party: e.party, narration: e.narr, against: e.type === "Payment" ? e.lines[0].l : e.lines[e.lines.length - 1].l, bank: e.type === "Payment" ? e.lines[1].l : e.lines[0].l, lines: e.lines.map((l) => ({ ledger: l.l, dr: l.dr || 0, cr: l.cr || 0 })) }, reason: e.reason, why: e.reason,
+    evidence: e.evidence, checks: ["drcr", "ledgers", "period", "duplicate"].concat(e.type === "Purchase" ? ["gst"] : []).map((k) => ({ k, ok: true })), state: "ready" }));
+  const night_runs = CLIENTS.map((c) => ({ client_id: c.id, night: "2026-11-22", status: "ok", finished_at: "2026-11-22T02:16:00+05:30" }));
+  const client_contacts = [];
+  CLIENTS.forEach((c) => c.contacts.forEach((k) => client_contacts.push({ id: uuid(900 + client_contacts.length), client_id: c.id, name: k.name, role: k.role, email: k.email, whatsapp: k.wa, by_email: k.byEmail, by_whatsapp: k.byWa })));
+  return { night_findings, client_asks, night_entries, night_runs, client_contacts, assistant_mail: [{ real_send: false, test_to: FIRM.email, test_whatsapp: FIRM.wa }], assistant_prefs: [], clients: CLIENTS.map((c) => ({ id: c.id, name: c.name })) };
+}
