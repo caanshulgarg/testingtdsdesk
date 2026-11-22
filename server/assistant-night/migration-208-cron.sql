@@ -6,6 +6,7 @@
 -- cron.schedule with the same name replaces the job, so this is safe to run twice. To stop it:
 -- select cron.unschedule('assistant-night-remind');
 begin;
+set local lock_timeout = '10s';
 
 do $cron$
 declare cmd text := $job$

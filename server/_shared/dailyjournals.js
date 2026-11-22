@@ -4,8 +4,8 @@
 //
 //   journals(inp)              -> {findings, entries}: the GST set-off, payroll and monthly (recurring) journals
 //   setoffOne(m, inp)          one GST month (gstMonths' row) -> {finding, entry?}
-//   setoffPlain(liab, rcm, credit, opening)   the independent set-off (sections 49, 49A, rule 88A), written apart from
-//                              GSTR.setOff on purpose; setoffLegal(pay, ...) the legal order checked on any set-off
+//   setoffMin(liab, rcm, credit, opening)   the least cash the law allows, by its own method (a search over the legal
+//                              allocations, not GSTR.setOff's steps); setoffLegal(pay, ...) the legal order (49, 49A, 88A)
 //   payrollOne(ym, rows, inp)  one month of the salary sheet -> {finding, entry?}; payrollPlain(rows) the independent sums
 //   recurringAll(inp)          monthly repeats in the books -> [{finding, entry?}]
 //   pickLedger(role, inp)      a ledger matched CERTAINLY (exactly one by name and group, or a person's choice), else the
@@ -24,7 +24,7 @@
 // The input is nightchecks' input (server/assistant-night/nightinput.js) plus:
 //   gst        gstMonths' rows      drafts  Daily Check's journals already approved ([{dedupe, state, removed}])
 //   picks      a person's ledger choices ({role: ledger}), from prior ledger_pick findings
-import { r2, num, ymd, ledgerKey, groupsOf, inr, dmon, monYear, checkEntry, sheetMonth, sheetNet } from "./nightchecks.js";
+import { r2, num, ymd, ledgerKey, groupsOf, inr, dmon, monYear, checkEntry, sheetMonth, sheetNet, salaryLike, forMonth, namesMonth } from "./nightchecks.js";
 import { voucherId } from "./dailytrust.js";
 export { voucherId, TRUST_KINDS, TRUST_WORDS, LEVEL_WORDS, kindOfSource, PROMOTE_AFTER, AUTO_POSTING, trustGate, promotion } from "./dailytrust.js";
 
@@ -65,24 +65,32 @@ export function pickLedger(role, inp) {
   const inGroup = (l) => R0.groups.some((g) => A.under(l, g));
   const named = all.filter((l) => (R0.name.test(l) || (R0.kind && R0.kind(map[l] || {}))) && !(R0.not && R0.not.test(l)) && (!R0.also || R0.also.test(l)));
   const ok = named.filter(inGroup);
-  const chosen = (inp.picks || {})[role];
+  const chosen = (inp.picks || {})[role], out = !!(inp.picksOut || {})[role];
+  // (review L8) none of that name in the right group: the ones of that name elsewhere, each to be confirmed as used anyway,
+  // and the right group's ledgers, so a choice is always there
+  const offer = (list) => list.map((l) => ({ ledger: l })).concat(ok.length ? [] : named.filter((l) => !inGroup(l)).map((l) => ({ ledger: l, outside: (A.path(l) || [])[0] || "another group" })),
+    ok.length ? [] : all.filter((l) => inGroup(l) && !named.includes(l))
+      // plain ledgers of the group first, then tax ledgers and parties
+      .map((l) => [l, (A.under(l, /^sundry (creditors|debtors)$/i) ? 2 : 0) + (A.under(l, G.duties) || (map[l] || {}).kind ? 1 : 0)]).sort((x, y) => x[1] - y[1] || x[0].localeCompare(y[0])).slice(0, 8).map(([l]) => ({ ledger: l }))).slice(0, 10);
   if (chosen) {
-    if (all.includes(chosen) && inGroup(chosen)) return { ledger: chosen, by: "you" };
-    return { cands: ok, why: "The " + R0.what + " ledger you chose (" + chosen + ") is " + (all.includes(chosen) ? "not in a " + groupWords(R0) + " group" : "no longer in Tally") };
+    if (all.includes(chosen) && (inGroup(chosen) || out)) return { ledger: chosen, by: out ? "you, outside the group" : "you" };
+    return { cands: offer(ok), why: "The " + R0.what + " ledger you chose (" + chosen + ") is " + (all.includes(chosen) ? "not in a " + groupWords(R0) + " group" : "no longer in Tally") };
   }
   let one = ok;
   if (R0.prefer && ok.length > 1) { const p = ok.filter((l) => R0.prefer(l, map[l] || {})); if (p.length) one = p; }
   if (R0.prefer && ok.length === 1 && !R0.prefer(ok[0], map[ok[0]] || {})) one = [];   // one TDS ledger, not said to be salary's
   if (one.length === 1) return { ledger: one[0], by: "name" };
-  return { cands: (one.length ? one : ok.length ? ok : named).slice(0, 6), why: one.length > 1 ? one.length + " ledgers could be the " + R0.what + " ledger" : "No " + R0.what + " ledger found" + (named.length && !ok.length ? " in a " + groupWords(R0) + " group" : "") };
+  return { cands: offer((one.length ? one : ok).slice(0, 6)), why: one.length > 1 ? one.length + " ledgers could be the " + R0.what + " ledger" : "No " + R0.what + " ledger found" + (named.length && !ok.length ? " in a " + groupWords(R0) + " group" : "") };
 }
 const groupWords = (R0) => R0.groups === ROLES.salaryExpense.groups ? "expenses" : R0.groups.includes(G.duties) ? "Duties & Taxes or current liabilities" : "current liabilities";
 
 // the checks every journal gets: Dr = Cr, ledgers in Tally (nightchecks' own), the right groups, not in a closed period
 function baseChecks(voucher, inp, roles) {
   const out = checkEntry({ voucher, source: "journal" }, inp).filter((c) => c.k !== "duplicate" && c.k !== "gst");
-  const A = groupsOf(inp.books || {}), bad = [];
-  (roles || []).forEach(([l, test, words]) => { if (l && !test(A, l)) bad.push(l + " (" + words + ")"); });
+  const A = groupsOf(inp.books || {}), bad = [], pk = inp.picks || {}, po = inp.picksOut || {};
+  // a ledger the owner confirmed for its role though it is in another group (review L8) passes as confirmed
+  const confirmed = (l) => Object.keys(po).some((r) => po[r] && pk[r] === l);
+  (roles || []).forEach(([l, test, words]) => { if (l && !test(A, l) && !confirmed(l)) bad.push(l + " (" + words + ")"); });
   out.push({ k: "groups", ok: !bad.length, why: bad.length ? "Not in the right group: " + bad.join(", ") : "" });
   return out;
 }
@@ -109,31 +117,31 @@ function entryOf(f, source, dedupe, voucher, reason, evidence, checks) {
 // a ledger that is not certain: a ledger_pick finding (Needs you: pick one) for each, the journal's finding waits on it
 function picksNeeded(misses) {
   return misses.map(([role, p]) => finding("ledger_pick", "led:" + role, "you", { party: ROLES[role].what, short: "Pick a ledger", title: "Which ledger is the " + ROLES[role].what + "?" + ((p.cands || []).length ? "" : " " + p.why + "."), role },
-    [], (p.cands || []).map((l) => ({ t: "ledger", ref: "ledger:" + role + ":" + l, label: l, ledger: l }))));
+    [], (p.cands || []).map((c) => c.outside ? { t: "ledger", ref: "ledger:" + role + ":" + c.ledger + ":outside", label: "Use “" + c.ledger + "” anyway (under " + c.outside + ")", ledger: c.ledger, outside: true }
+      : { t: "ledger", ref: "ledger:" + role + ":" + c.ledger, label: c.ledger, ledger: c.ledger })));
 }
 
 // ---------------------------------------------------------------- 1. the GST set-off journal
-// The section 49 order, written plainly and apart from GSTR.setOff (server/_shared/gst3b.js) on purpose: IGST credit
-// first against IGST; what is left against CGST and SGST where their own credit falls short, then half each way, then the
-// rest; CGST credit against CGST then IGST; SGST credit against SGST then IGST; CGST and SGST never across; cess only cess.
-// Reverse charge is paid in cash. A negative liability (more credit notes than invoices) is no tax to pay. In paise.
-export function setoffPlain(liab, rcm, credit, opening) {
-  const L = {}, C = {}, use = { igst: { igst: 0, cgst: 0, sgst: 0 }, cgst: { cgst: 0, igst: 0 }, sgst: { sgst: 0, igst: 0 }, cess: { cess: 0 } };
+// (review M1) The least cash the law allows, found by its own method and not by GSTR.setOff's steps: sections 49(5), 49A
+// and rule 88A stated as constraints, then every allocation that could be best is tried. IGST credit goes first to IGST
+// and must be used up (49A) before any CGST or SGST credit; what is left of it goes to CGST and SGST in any proportion
+// (rule 88A): the share to CGST is the one free choice, and the cash is piecewise linear in it, so the least is at one of
+// its breakpoints (the ends, or where CGST's or SGST's own credit exactly covers the rest). CGST credit then pays CGST and
+// then IGST, SGST credit SGST and then IGST; never across; cess only cess; reverse charge is not set off. In paise.
+export function setoffMin(liab, rcm, credit, opening) {
+  const L = {}, C = {};
   for (const h of H) { L[h] = Math.max(0, P((liab || {})[h])); C[h] = Math.max(0, P(num((credit || {})[h]) + num((opening || {})[h]))); }
-  const use_ = (from, to, cap) => { const a = Math.max(0, Math.min(cap, C[from], L[to])); if (a > 0) { C[from] -= a; L[to] -= a; use[from][to] += a; } };
-  use_("igst", "igst", Infinity);
-  use_("igst", "cgst", Math.max(0, L.cgst - C.cgst));
-  use_("igst", "sgst", Math.max(0, L.sgst - C.sgst));
-  // the app halves what IGST credit is left in rupees with paise (r2(C/2)); in paise that is half rounded half up
-  const half = Math.round(C.igst / 2 + 1e-9);
-  use_("igst", "cgst", half); use_("igst", "sgst", Infinity); use_("igst", "cgst", Infinity);
-  use_("cgst", "cgst", Infinity); use_("sgst", "sgst", Infinity);
-  use_("cgst", "igst", Infinity); use_("sgst", "igst", Infinity);
-  use_("cess", "cess", Infinity);
-  const cash = {}, rcmCash = {}, carry = {};
-  for (const h of H) { rcmCash[h] = Math.max(0, P((rcm || {})[h])); cash[h] = L[h] + rcmCash[h]; carry[h] = C[h]; }
-  const toR = (o) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, typeof v === "object" ? toR(v) : R(v)]));
-  return { use: toR(use), cash: toR(cash), rcmCash: toR(rcmCash), carry: toR(carry) };
+  const ii = Math.min(L.igst, C.igst), restI = L.igst - ii, credI = C.igst - ii, T = Math.min(credI, L.cgst + L.sgst);
+  const lo = Math.max(0, T - L.sgst), hi = Math.min(L.cgst, T);
+  const cashAt = (a) => {
+    const b = T - a, owC = L.cgst - a, owS = L.sgst - b, cc = Math.min(C.cgst, owC), ss = Math.min(C.sgst, owS);
+    const toI = Math.min(restI, (C.cgst - cc) + (C.sgst - ss));
+    return (owC - cc) + (owS - ss) + (restI - toI);
+  };
+  let best = Infinity, at = lo;
+  for (const a0 of [lo, hi, L.cgst - C.cgst, T - (L.sgst - C.sgst)]) { const a = Math.max(lo, Math.min(hi, a0)); const c = cashAt(a); if (c < best) { best = c; at = a; } }
+  const cess = Math.max(0, L.cess - C.cess), rc = H.reduce((s, h) => s + Math.max(0, P((rcm || {})[h])), 0);
+  return { cash: best + cess, cashAll: best + cess + rc, igstToCgst: at, igstToSgst: T - at };
 }
 // the legal order checked on a set-off (the app's or the plain one): what is wrong, or ""
 export function setoffLegal(pay, liab, rcm, credit, opening) {
@@ -149,6 +157,9 @@ export function setoffLegal(pay, liab, rcm, credit, opening) {
     if (P((pay.rcmCash || {})[h]) !== Math.max(0, P((rcm || {})[h]))) return "Reverse charge is not paid in cash";
   }
   if (u("igst", "igst") !== Math.min(owe("igst"), avail("igst"))) return "IGST credit not used against IGST first";
+  // 49A: no CGST or SGST credit used at all while IGST credit is left that could have paid it
+  const usedCS = ["cgst", "sgst"].reduce((s, f) => s + H.reduce((x, t) => x + u(f, t), 0), 0), leftI0 = avail("igst") - H.reduce((s, t) => s + u("igst", t), 0);
+  if (usedCS > 0 && leftI0 > 0) return "CGST or SGST credit used before the IGST credit was used up (section 49A)";
   const leftI = avail("igst") - H.reduce((s, t) => s + u("igst", t), 0);
   if ((u("cgst", "igst") || u("sgst", "igst")) && leftI > 0) return "CGST or SGST credit used for IGST before the IGST credit";
   // cash only when no credit that may pay it is left
@@ -179,7 +190,7 @@ export function gstMonths(E, months) {
       const nil = H.every((h) => !P((t.net || {})[h]) && !P((t.netItc || {})[h]) && !P((t.rcmOut || {})[h]));
       const it = rec.r3b ? E.GSTF.interest(ym, reg, t) : null, fee = rec.r3b ? E.GSTF.lateFee(ym, reg, "r3b", nil) : null;
       const pick = (o) => JSON.parse(JSON.stringify(o || {}));
-      out.push({ reg, ym, filed: String(rec.r3b || "").replace(/-/g, ""), arn: rec.r3bArn || "", kept: !!rec.snap, snapPay: rec.snap ? pick(rec.snap.pay) : null,
+      out.push({ reg, ym, filed: String(rec.r3b || "").replace(/-/g, ""), due: String(E.GSTF.due(ym, "r3b", reg) || "").replace(/-/g, ""), arn: rec.r3bArn || "", kept: !!rec.snap, snapPay: rec.snap ? pick(rec.snap.pay) : null,
         t: { net: pick(t.net), rcmOut: pick(t.rcmOut), netItc: pick(t.netItc), opening: pick(t.opening), pay: pick(t.pay) },
         journal: { lines: pick(J.lines), missing: J.missing || [], date: J.date, narr: J.narr, cashL: J.cashL, balanced: !!J.balanced },
         interest: it ? { total: r2(it.total), days: it.days } : null, fee: fee ? { fee: r2(fee.fee || 0), days: fee.days || 0, unknown: !!fee.unknown } : null,
@@ -197,11 +208,18 @@ function roleOfGst(map, l, cashL) {
   const h = String(m.tax || "").toLowerCase();
   return (m.rcm && m.side === "output" ? "rcm:" : m.side === "output" ? "out:" : "in:") + h;
 }
-// a tax-only journal (the set-off) in the books: every line a tax ledger, the bank or cash, or a rounding line under ₹10
-function taxOnly(v, A, map) {
+// a tax-only entry (a set-off) in the books, under ANY voucher type (review L5): every line a tax ledger, or a rounding line
+// of at most ₹10; an output GST ledger on the debit side
+export function taxOnly(v, A, map) {
   const tax = (l) => A.isDuties(l) || A.under(l, /GST|TAX|TDS|TCS|CESS|ELECTRONIC/i) || /\bGST\b|GST\b|\bTDS\b|\bTCS\b|\bCESS\b|ELECTRONIC (CASH|CREDIT)/i.test(l);
-  return /JOURNAL/i.test(v.type) && v.ent.every((e) => Math.abs(e.a) < 10 || /ROUND/i.test(e.l) || (map[e.l] || {}).kind === "roundoff" || tax(e.l)) &&
+  return v.ent.length >= 2 && v.ent.every((e) => tax(e.l) || Math.abs(e.a) <= 10) &&
     v.ent.some((e) => e.a < 0 && (map[e.l] || {}).kind === "gst" && (map[e.l] || {}).side === "output");
+}
+// the bridge's reads before a day ends (India): the highest AlterID Tally had then; null when none was made by then
+function altAt(reads, d8) {
+  const end = Date.UTC(+d8.slice(0, 4), +d8.slice(4, 6) - 1, +d8.slice(6, 8)) + (24 - 5.5) * 3600000;
+  let m = null; (reads || []).forEach((r) => { const t = Date.parse(r.at); if (isFinite(t) && t <= end && (m === null || r.alt > m)) m = r.alt; });
+  return m;
 }
 const vLines = (v) => v.ent.filter((e) => Math.abs(e.a) >= 0.005).map((e) => e.a < 0 ? { ledger: e.l, dr: r2(-e.a) } : { ledger: e.l, cr: r2(e.a) });
 const nearLines = (a, b) => { const k = (ls) => merge(ls).filter((l) => !/ROUND/i.test(l.ledger)); const x = k(a), y = k(b); return x.length === y.length && x.every((l) => y.some((z) => z.ledger === l.ledger && !!z.dr === !!l.dr && Math.abs(P(z.dr || z.cr) - P(l.dr || l.cr)) <= 100)); };
@@ -213,6 +231,16 @@ export function setoffOne(m, inp, others) {
   if (m.skip) return m.skip === "error" ? you("Set-off " + label + ": the 3B could not be worked out (" + m.why + ")") : null;   // a quarterly return: by hand
   if (posted(inp, vid) || pending(inp, dedupe)) return null;                                                                   // in the books, or approved
   const J = m.journal, t = m.t;
+  // (review L4) kept as filed with no filing date: interest and late fee are not known. Past the due date: Needs you
+  if (!m.filed && m.due && String(inp.today) > m.due) return you("Set-off " + label + ": no filing date, so interest and late fee are not known. Type the filing date on the GST page.");
+  // (review M2) filed with no copy of the 3B kept: an entry of the month made or changed in Tally after the filing date
+  // (its AlterID above the highest the bridge had read by that day) means the books may not be the 3B as filed
+  if (m.filed && !m.snapPay) {
+    const cut = altAt(inp.reads, m.filed), mine = live(inp.books).filter((v) => ymOf(v.date) === m.ym);
+    if (cut === null) return you("Set-off " + label + ": FinCom cannot tell whether " + label.split(" ")[0] + "'s entries changed after the 3B was filed. Keep the 3B as filed on the GST page.");
+    const late = mine.find((v) => Number(v.alt) > cut);
+    if (late) return you("Set-off " + label + ": an entry of " + dmon(late.date) + " was made or changed in Tally after the 3B was filed. Look at the 3B first.");
+  }
   // 1. the interest and the late fee: the portal's own figures when kept; one worked out here and not confirmed waits
   const intAmt = m.portalInt != null ? r2(m.portalInt) : m.interest && m.interest.total > 0 ? null : 0;
   const feeAmt = m.portalFee != null ? r2(m.portalFee) : m.fee && m.fee.unknown ? null : m.fee && m.fee.fee > 0 ? null : 0;
@@ -223,11 +251,16 @@ export function setoffOne(m, inp, others) {
   if (intAmt === null) return you("Set-off " + label + ": interest of about " + inr(m.interest.total) + " (" + m.interest.days + " days late). Type the portal's figure on the GST page.");
   if (feeAmt === null) return you("Set-off " + label + ": a late fee is due. Type the portal's figure on the GST page.");
   // 3. the books first: a set-off journal of this month already there (the same lines), or a tax journal that may be it
-  const A = groupsOf(inp.books || {}), map = (inp.books || {}).map || {}, from = m.ym + "01", to = lastDay(ymAdd(m.ym, 1));
+  // (review H1) looked for from the month's start up to tonight (a set-off booked late by hand, after the filing date, or
+  // at the end of the look-back), under any voucher type; one not clearly another month's (the same lines as another
+  // month's set-off, or its narration naming another month) is Needs you
+  const A = groupsOf(inp.books || {}), map = (inp.books || {}).map || {}, from = m.ym + "01", to = String(inp.today || lastDay(ymAdd(m.ym, 1)));
   const lines0 = J.lines.map((l) => P(l.dr) ? { ledger: l.l, dr: l.dr } : { ledger: l.l, cr: l.cr });
   const inWin = live(inp.books).filter((v) => v.date >= from && v.date <= to && taxOnly(v, A, map));
   if (inWin.some((v) => nearLines(vLines(v), lines0))) return null;
-  const theirs = inWin.filter((v) => !(others || []).some((o) => o.ym !== m.ym && nearLines(vLines(v), o.lines)));
+  const otherMonth = (v) => (others || []).some((o) => o.ym !== m.ym && nearLines(vLines(v), o.lines)) ||
+    (!namesMonth(v.narr, m.ym) && Array.from({ length: 24 }, (_, i) => ymAdd(m.ym, i - 12)).some((y) => y !== m.ym && namesMonth(v.narr, y)));
+  const theirs = inWin.filter((v) => !otherMonth(v));
   if (theirs.length) return you("Set-off " + label + ": a tax journal of " + dmon(theirs[0].date) + " (" + inr(theirs[0].ent.filter((e) => e.a < 0).reduce((s, e) => s - e.a, 0)) + ") may be this month's. Check it in Tally.");
   // 4. the lines: the app's journal, then interest and late fee from the cash ledger
   const ledI = intAmt ? pickLedger("gstInterest", inp) : null, ledF = feeAmt ? pickLedger("gstLateFee", inp) : null;
@@ -235,8 +268,9 @@ export function setoffOne(m, inp, others) {
   if (miss.length) return { finding: you("Set-off " + label + ": pick the " + miss.map(([r]) => ROLES[r].what).join(" and ") + " ledger", [], { waits: true }).finding, picks: picksNeeded(miss) };
   const lines = merge(lines0.concat(intAmt ? [{ ledger: ledI.ledger, dr: intAmt }, { ledger: J.cashL, cr: intAmt }] : [], feeAmt ? [{ ledger: ledF.ledger, dr: feeAmt }, { ledger: J.cashL, cr: feeAmt }] : []));
   // 5. two ways: the plain set-off from the 3B's own figures, and its journal
-  const plain = setoffPlain(t.net, t.rcmOut, t.netItc, t.opening);
+  const least = setoffMin(t.net, t.rcmOut, t.netItc, t.opening), plain = t.pay;
   const legal = setoffLegal(t.pay, t.net, t.rcmOut, t.netItc, t.opening);
+  const appCash = H.reduce((s, h) => s + P(t.pay.cash[h]) - P((t.pay.rcmCash || {})[h]), 0);
   const want = {};
   const add = (k, p) => { if (p) want[k] = (want[k] || 0) + p; };
   for (const h of H) {
@@ -247,8 +281,8 @@ export function setoffOne(m, inp, others) {
   add("cash", H.reduce((s, h) => s + P(plain.cash[h]), 0) + P(intAmt) + P(feeAmt));
   const got = {}, roles = m.roles || {};
   lines.forEach((l) => { const r0 = l.ledger === J.cashL ? "cash" : roles[l.ledger] || ""; if (r0) got[r0] = (got[r0] || 0) + (P(l.dr) || P(l.cr)); });
-  const byRole = Object.keys(want).concat(Object.keys(got)).every((k) => (want[k] || 0) === (got[k] || 0) || (k === "cash" && Math.abs((want[k] || 0) - (got[k] || 0)) < 100));
-  const agree = samePay(plain, t.pay) && byRole;
+  const byRole = Object.keys(want).concat(Object.keys(got)).every((k) => (want[k] || 0) === (got[k] || 0));
+  const agree = !legal && appCash === least.cash && byRole;
   // 6. the trace: each head, the credit used and the cash
   const ev = [{ t: "gst3b", ref: "3b:" + m.reg + ":" + m.ym, label: "GSTR-3B " + label + (m.filed ? " · filed " + dmon(m.filed) + (m.arn ? " · ARN …" + String(m.arn).slice(-6) : "") : " · kept as filed") }];
   for (const h of H) {
@@ -265,7 +299,7 @@ export function setoffOne(m, inp, others) {
     l.ledger === ledI?.ledger || l.ledger === ledF?.ledger ? "an expense" : l.ledger === J.cashL ? "Duties & Taxes or current assets" : "Duties & Taxes"]));
   checks.push({ k: "duplicate", ok: true, why: "" });
   checks.push({ k: "setoff", ok: !legal, why: legal });
-  checks.push({ k: "twoways", ok: agree, why: agree ? "" : "The plain set-off and the app's journal differ" });
+  checks.push({ k: "twoways", ok: agree, why: agree ? "" : appCash !== least.cash ? "The 3B pays " + inr(R(appCash)) + " in cash; the least the law allows is " + inr(R(least.cash)) : "The journal does not follow the 3B to the paisa" });
   const amt = totalDr(lines);
   const f = finding("setoff_due", key, "resolved", Object.assign({}, base, { amt, date: d, short: "GST set-off " + label }), ev);
   const e = entryOf(f, "gst_setoff", dedupe, voucher, "GST set-off", ev, checks);
@@ -297,16 +331,20 @@ export function payrollOne(ym, rows, inp) {
   const seen = new Set(), twice = rows.find((r) => { const k = ledgerKey(r.name) + "|" + String(r.code || r.pan || ""); if (seen.has(k)) return true; seen.add(k); return false; });
   if (twice) return you("Payroll " + label + ": " + twice.name + " is on the sheet twice.");
   // the builder: each employee's net, then the totals by ledger (rupees with paise, as the sheet keeps them)
-  const per = rows.map((r) => { const gross = r2(num(r.gross)), ded = r2(num(r.tds) + num(r.profTax) + num(r.pf) + num(r.esi)); return { name: r.name, gross, tds: r2(num(r.tds)), pt: r2(num(r.profTax)), pf: r2(num(r.pf)), esi: r2(num(r.esi)), net: r.net != null && r.net !== "" ? r2(num(r.net)) : r2(gross - ded), ded }; });
+  // (review L2) each employee's net by the one net function (nightchecks sheetNet: TDS, PT, PF and ESI)
+  const per = rows.map((r) => { const gross = r2(num(r.gross)), ded = r2(num(r.tds) + num(r.profTax) + num(r.pf) + num(r.esi)); return { name: r.name, gross, tds: r2(num(r.tds)), pt: r2(num(r.profTax)), pf: r2(num(r.pf)), esi: r2(num(r.esi)), net: sheetNet(r), ded }; });
   const wrong = per.find((p) => Math.abs(r2(p.net + p.ded) - p.gross) >= 0.005 || p.net < 0 || p.gross <= 0);
   if (wrong) return you("Payroll " + label + ": " + wrong.name + "'s gross " + inr(wrong.gross) + " is not net " + inr(wrong.net) + " plus deductions " + inr(wrong.ded) + ".");
   const sum = (k) => r2(per.reduce((s, p) => s + p[k], 0));
   const tot = { gross: sum("gross"), tds: sum("tds"), pt: sum("pt"), pf: sum("pf"), esi: sum("esi"), net: sum("net") };
-  // 2. the books first: salary of this month already booked (any entry with a salary or wages expense on the debit side)
-  const A = groupsOf(inp.books || {});
-  const booked = live(inp.books).filter((v) => ymOf(v.date) === ym && v.ent.some((e) => e.a < 0 && /SALAR|WAGES/i.test(e.l) && isExp(A, e.l)));
+  // 2. the books first (review H2, the same rule as the salary payments: nightchecks forMonth, salaryLike): salary booked
+  // for the month by any entry with a salary-like expense on the debit side, dated in the month or up to the 10th of the
+  // next, or naming the month. The same gross: nothing; anything else: Needs you
+  const A = groupsOf(inp.books || {}), sbase = (pickLedger("salaryExpense", inp).ledger) || "";
+  const sal = (e) => e.a < 0 && salaryLike(A, e.l, sbase);
+  const booked = live(inp.books).filter((v) => forMonth(v, ym) && v.ent.some(sal));
   if (booked.length) {
-    const amt = r2(booked.reduce((s, v) => s + v.ent.filter((e) => e.a < 0 && /SALAR|WAGES/i.test(e.l) && isExp(A, e.l)).reduce((x, e) => x - e.a, 0), 0));
+    const amt = r2(booked.reduce((s, v) => s + v.ent.filter(sal).reduce((x, e) => x - e.a, 0), 0));
     if (Math.abs(amt - tot.gross) <= 1) return null;
     return you("Payroll " + label + ": salary booked " + inr(amt) + ", the sheet says " + inr(tot.gross) + ".", { amt: tot.gross });
   }
@@ -346,7 +384,7 @@ export function payrollOne(ym, rows, inp) {
 export function recurringAll(inp) {
   const A = groupsOf(inp.books || {}), map = (inp.books || {}).map || {}, today = inp.today, cur = ymOf(today), out = [];
   const fit = (v) => /JOURNAL/i.test(v.type) && v.ent.length >= 2 && !v.ent.some((e) => A.isBankL(e.l) || A.isCash(e.l)) && !taxOnly(v, A, map) &&
-    !v.ent.some((e) => /SALAR|WAGES/i.test(e.l)) && !String(v.narr || "").includes("TDSDesk:dc-");
+    !v.ent.some((e) => /SALAR|WAGES/i.test(e.l));   // FinCom's own posted monthly entries count too (review L3): the series goes on
   const sig = (v) => v.ent.filter((e) => !/ROUND/i.test(e.l) && (map[e.l] || {}).kind !== "roundoff").map((e) => e.l + (e.a < 0 ? "|D" : "|C")).sort().join(";");
   const by = new Map();
   live(inp.books).filter((v) => v.date > ymAdd(cur, -14) + "00" && fit(v)).forEach((v) => { const k = sig(v); if (!by.has(k)) by.set(k, []); by.get(k).push(v); });
@@ -433,9 +471,10 @@ export function journals(inp) {
   return { findings, entries };
 }
 // the people's ledger choices, from what earlier nights found (ledger_pick answered)
-export function picksOf(prior) {
+// (outside: which of them the person confirmed though the ledger is in another group)
+export function picksOf(prior, outside) {
   const o = {};
-  (prior || []).forEach((p) => { if (p.kind === "ledger_pick" && p.state === "resolved" && !p.undone && (p.evidence || [])[0] && p.evidence[0].ledger) o[String(p.key).replace(/^led:/, "")] = p.evidence[0].ledger; });
+  (prior || []).forEach((p) => { if (p.kind === "ledger_pick" && p.state === "resolved" && !p.undone && (p.evidence || [])[0] && p.evidence[0].ledger) o[String(p.key).replace(/^led:/, "")] = outside ? !!p.evidence[0].outside : p.evidence[0].ledger; });
   return o;
 }
 // bank lines paying an employee: the sheet's name (by ledgerKey) and net pay for the month, within ₹1

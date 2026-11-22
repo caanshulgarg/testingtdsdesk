@@ -120,9 +120,13 @@ export function nightInput(rows, b, x) {
     // the last day the books hold an entry for: a month after it is the bridge being behind, not the client
     readTo: (b.vouchers || []).reduce((m, v) => (v.date > m ? v.date : m), ""),
     ledgersFor: ledgersFor(b), prior: x.prior || [],
-    gst: x.gst || [], drafts: draftsOf(x.draftRecs), picks: picksOf(x.prior),
+    gst: x.gst || [], drafts: draftsOf(x.draftRecs), picks: picksOf(x.prior), picksOut: picksOf(x.prior, true),
+    // (review M2) the bridge's reads: when each was made and the highest AlterID it had (tally_sync_reads)
+    reads: (x.reads || []).map((r) => ({ at: String(r.at || ""), alt: Number(r.highest_alterid) || 0 })).filter((r) => r.at && r.alt),
   };
   // (phase 2) a salary line is paid against the salary payable ledger only when that ledger is certain
   out.ledgersFor.salaryPayable = pickLedger("salaryPayable", out).ledger || "";
+  // (review H2) the client's salary ledger: its group says what else is salary
+  out.ledgersFor.salaryExpense = pickLedger("salaryExpense", out).ledger || "";
   return out;
 }

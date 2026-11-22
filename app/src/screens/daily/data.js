@@ -24,7 +24,7 @@ export async function loadAll() {
   const [fs, qs, es, runs, cs, mail, trust, stats] = await Promise.all([
     all("night_findings?select=id,client_id,kind,key,state,facts,evidence,candidates,last_seen,undone_at&state=in.(ask,you,resolved)&order=client_id,last_seen.desc"),
     all("client_asks?select=id,client_id,finding_id,week,text,edited,state,answer,closed_by,history,created_at&order=created_at"),
-    all("night_entries?select=id,client_id,finding_id,source,dedupe,work_ref,voucher,reason,why,evidence,checks,state&state=eq.ready&order=created_at"),
+    all("night_entries?select=id,client_id,finding_id,source,dedupe,work_ref,voucher,reason,why,evidence,checks,state,updated_at&state=in.(ready,approving)&order=created_at"),
     api("night_runs?select=client_id,night,status,finished_at&order=night.desc&limit=500").catch(() => []),
     all("client_contacts?select=id,client_id,name,email,whatsapp,by_email,by_whatsapp&removed_at=is.null&order=created_at").catch(() => []),
     api("assistant_mail?select=real_send,test_to,test_whatsapp").catch(() => []),
@@ -62,6 +62,8 @@ export const loadTrust = (cid) => api("daily_trust?select=kind,level,limit_amt&c
 // phase 2's kinds: an entry FinCom made (shown under Entries), or a ledger to pick (Needs you); never under Done
 export const P2 = new Set(["setoff_due", "payroll_due", "recurring_due", "ledger_pick"]);
 export const JOURNAL = new Set(["gst_setoff", "payroll", "recurring"]);
+// an entry someone is approving now (claimed in the last 30 minutes): shown, not to be approved again
+export const beingApproved = (e) => e.state === "approving" && Date.now() - Date.parse(e.updated_at || 0) < 30 * 60000;
 
 export const askable = (findings, cid) => sendable(findings.filter((f) => f.cid === cid && f.state === "ask"), null);
 
@@ -133,11 +135,18 @@ export async function approveJournal(e) {
     lines: (v0.lines || []).map((l) => ({ ledger: l.ledger, dr: l.dr || "", cr: l.cr || "" })) };
   const probs = A.voucherProblems(v, A.ledgerIndex(list), null);
   if (probs.length) { toast(probs[0]); return false; }
+  // (review M3) claimed on the server first (ready -> approving, one person at a time); refused: nothing posted
+  try { await rpc("entry_claim", { p_id: e.id }); } catch (x) { toast(String((x && x.message) || x).replace(/^.*?ERROR:\s*/, "") || "This entry is not ready."); return false; }
   const d = { id: v.id, from: "daily", dedupe: e.dedupe, night_entry: e.id, title: e.why || e.reason, vouchers: [v], created: new Date().toISOString(), by: A.me() };
-  const r = await A.postDraft(co, d, list);
-  const res = (d.results || {})[v.id] || {};
-  if (!r || !r.ok || res.state === "failed") { if (r && r.ok) await A.Drafts.save(cid, Object.assign(d, { state: "failed" }), "Tally did not take it"); toast((res && res.msg) || (r && r.error) || "Not posted."); return false; }
-  await rpc("entry_decide", { p_id: e.id, p_decision: "approved", p_work_ref: d.id });
+  let r = null, res = {};
+  try { r = await A.postDraft(co, d, list); res = (d.results || {})[v.id] || {}; }
+  catch (x) { r = { ok: false, error: String((x && x.message) || x) }; }
+  if (!r || !r.ok || res.state === "failed") {
+    if (r && r.ok) await A.Drafts.save(cid, Object.assign(d, { state: "failed" }), "Tally did not take it");
+    await rpc("entry_release", { p_id: e.id, p_why: String((res && res.msg) || (r && r.error) || "").slice(0, 200) }).catch(() => null);
+    toast((res && res.msg) || (r && r.error) || "Not posted."); return false;
+  }
+  await rpc("entry_approved", { p_id: e.id, p_work_ref: d.id });
   return true;
 }
 // Edit: the entry opened where it is made (the bill in Purchase, the line in Bank)

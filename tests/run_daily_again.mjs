@@ -11,15 +11,17 @@ let fails = 0, n = 0;
 const ok = (c, w) => { n++; console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };
 const { recheck, CHANGED, inputOf } = await import("../app/src/screens/daily/again.js");
 const CASH = "GST ELECTRONIC CASH LEDGER", TODAY = "20261122";
+// the bridge read the books on the filing day (review M2), as the night and the browser both read it
+const READS = [{ at: "2026-11-20T06:00:00Z", highest_alterid: 100 }];
 const PL = { "Salary": "Indirect Expenses", "TDS on Salary 192": "Duties & Taxes", "Professional Tax Payable": "Duties & Taxes", "Salary Payable": "Provisions" };
 const SHEET = [{ name: "Ravi Kumar", date: "2026-10-31", gross: 50000, tds: 2500, profTax: 200 }, { name: "Asha Verma", date: "2026-10-31", gross: 30000, tds: 0, profTax: 200 }];
 const rowsOf = (o = {}) => gstRows(Object.assign({ ym: "202610", intra: 100000, inter: 50000, buyIntra: 40000, buyInter: 20000, rcm: 10000, rec: { cashLedger: CASH }, extraLedgers: PL, items: [{ key: "salary", item: "", ord: 0, data: SHEET, deleted: false }] }, o));
 // last night (the cloud) and the browser now: the same rows made into books twice, as each opens them
-function lastNight(rows) { const b = booksOf(rows); return journals(nightInput(rows, b, { today: TODAY, bankRecs: [], inboxRecs: [], entryRecs: [], twob: [], gst: gstOf(rows, b, TODAY), prior: [], draftRecs: [] })).entries; }
+function lastNight(rows) { const b = booksOf(rows); return journals(nightInput(rows, b, { today: TODAY, bankRecs: [], inboxRecs: [], entryRecs: [], twob: [], gst: gstOf(rows, b, TODAY), prior: [], draftRecs: [], reads: READS })).entries; }
 async function browser(rows, e, o = {}) {
   const b = booksOf(JSON.parse(JSON.stringify(Object.assign({}, rows, { made: undefined }))));
   Object.assign(globalThis, { S: { books: b, coId: "c1", companies: { c1: rows.co } }, CO: () => rows.co, GSTR: E.GSTR, GSTF: E.GSTF, GSTSet: E.GSTSet, Books: E.Books, ledGroupPath: E.ledGroupPath });
-  try { return await recheck(Object.assign({ client_id: "c1" }, e), Object.assign({ today: TODAY, ledgers: rows.ledgers.map((l) => l.name), drafts: [], prior: [] }, o)); }
+  try { return await recheck(Object.assign({ client_id: "c1" }, e), Object.assign({ today: TODAY, ledgers: rows.ledgers.map((l) => l.name), drafts: [], prior: [], reads: READS }, o)); }
   finally { delete globalThis.S; delete globalThis.CO; delete globalThis.GSTR; delete globalThis.GSTF; delete globalThis.GSTSet; delete globalThis.Books; delete globalThis.ledGroupPath; }
 }
 const rows = rowsOf(), night = lastNight(rows), so = night.find((e) => e.source === "gst_setoff"), pay = night.find((e) => e.source === "payroll");
@@ -44,6 +46,9 @@ ok(await browser(rows, so) === "" && await browser(rows, pay) === "", "Approve w
 {
   ok(/Already approved/.test(await browser(rows, pay, { drafts: [{ id: "dc-1", dedupe: pay.dedupe, state: "posting" }] })), "approved already (on its way to Tally): refused, said so");
   ok(await browser(rows, pay, { drafts: [{ id: "dc-1", dedupe: pay.dedupe, state: "failed" }] }) === "", "its own earlier post that Tally refused: may be approved again");
+  ok(await browser(rows, so, { reads: [] }) === CHANGED, "the bridge's reads not readable here: the set-off of a month filed without a kept copy is refused (as the night would say)");
+  const r4 = rowsOf(); r4.heads[0].alter_id = 400;
+  ok(await browser(r4, so) === CHANGED, "an entry of the month changed in Tally after the filing, since last night: refused");
   const r3 = rowsOf(); r3.heads.push(head("tag", "2026-11-25", "Journal", "", { narration: "Salary | TDSDesk:" + pay.work_ref })); [["Salary", -1], ["Salary Payable", 1]].forEach(([l, a]) => r3.lines.push(L("tag", l, a)));
   ok(await browser(r3, pay) === CHANGED, "posted already (its id in Tally): refused");
 }

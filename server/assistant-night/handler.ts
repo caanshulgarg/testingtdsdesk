@@ -110,7 +110,9 @@ export function handler(deps: Deps) {
     // (phase 2) the app's own 3B of each month marked filed, and Daily Check's journals already approved (asstEntries)
     const gst = gstOf(rows, b, today);
     const draftRecs = (rows.items || []).filter((r: any) => r && r.key === "asstEntries");
-    const inp = nightInput(rows, b, { today, bankRecs, inboxRecs, entryRecs, twob, firmRules, gst, draftRecs, prior: prior.map((p: any) => ({ kind: p.kind, key: p.key, state: p.state, evidence: p.evidence, undone: !!p.undone_at })) });
+    // (review M2) the bridge's reads of this book (time and highest AlterID): a month changed after its 3B was filed
+    const reads = await rest("/rest/v1/tally_sync_reads?select=at,highest_alterid&book_id=eq." + enc(String(book.book_id)) + "&order=at.desc&limit=2000").catch(() => []);
+    const inp = nightInput(rows, b, { today, bankRecs, inboxRecs, entryRecs, twob, firmRules, gst, draftRecs, reads: Array.isArray(reads) ? reads : [], prior: prior.map((p: any) => ({ kind: p.kind, key: p.key, state: p.state, evidence: p.evidence, undone: !!p.undone_at })) });
     const res0 = run(inp), j = journals(inp);
     const res = { findings: res0.findings.concat(j.findings), entries: res0.entries.concat(j.entries) };
     if (spent() > (deps.total || TOTAL) * 3) { await fail("failed", "too large for one run (" + spent() + " ms)"); return { ok: false, error: "too large" }; }

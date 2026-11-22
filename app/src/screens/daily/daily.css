@@ -152,3 +152,4 @@
   .tl-seg button { flex: 1 1 0; padding: 6px 4px; }
   .dc-suggest li { padding: 10px; }
 }
+.dc-claimed { font-size: 12.5px; white-space: nowrap; }

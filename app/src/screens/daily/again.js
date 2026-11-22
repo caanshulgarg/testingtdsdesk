@@ -3,7 +3,7 @@
 // computer has them now (opened from the cloud: S.books), with the app's own GSTR / GSTF for the set-off. Anything not
 // the same as last night (a line, an amount, the date, a check) refuses: "Changed since last night". Loaded only when a
 // journal is approved (a lazy part of the Daily Check chunk).
-/* global S, CO, Books, ledGroupPath, GSTR, GSTF, GSTSet */
+/* global S, CO, Books, ledGroupPath, GSTR, GSTF, GSTSet, TCloud, Cloud */
 import { journals, gstMonths, picksOf, LOOKBACK } from "../../../../server/_shared/dailyjournals.js";
 import { voucherId } from "../../../../server/_shared/dailytrust.js";
 
@@ -32,13 +32,17 @@ export function inputOf(cid, o) {
     closed: closedTo ? [{ from: "19000101", to: closedTo }] : [],
     gst: typeof GSTR === "object" && typeof GSTF === "object" ? gstMonths({ GSTR, GSTF, GSTSet: typeof GSTSet === "object" ? GSTSet : null }, months) : [],
     drafts: (o.drafts || []).filter((d) => d && /^dc-/.test(String(d.id || "")) && d.dedupe).map((d) => ({ dedupe: d.dedupe, state: d.state || "", removed: !!d.removed })),
-    picks: picksOf(o.prior || []),
+    picks: picksOf(o.prior || []), picksOut: picksOf(o.prior || [], true),
+    reads: (o.reads || []).map((r) => ({ at: String(r.at || ""), alt: Number(r.highest_alterid) || 0 })).filter((r) => r.at && r.alt),
   };
 }
 // "" when the entry is still exactly what last night made; else why not
 export async function recheck(e, o = {}) {
   const cid = e.client_id;
-  let ledgers = o.ledgers, drafts = o.drafts;
+  let ledgers = o.ledgers, drafts = o.drafts, reads = o.reads;
+  // the bridge's reads of the book (time, highest AlterID), as the night reads them; none readable: none (the set-off of a
+  // month filed without a kept copy then refuses, as the night would)
+  if (!reads) { try { const bk = typeof TCloud === "object" && TCloud.book ? TCloud.book(cid) : null; reads = bk && bk.book ? (await Cloud.api("tally_sync_reads?select=at,highest_alterid&book_id=eq." + encodeURIComponent(bk.book) + "&order=at.desc&limit=2000")) || [] : []; } catch (x) { reads = []; } }
   if (!ledgers || !drafts) {
     const A = await import("../../lib/asstEntries.js");
     if (!ledgers) ledgers = ((await A.clientLedgers(CO(cid), true)) || []).map((l) => l.name);
@@ -47,7 +51,7 @@ export async function recheck(e, o = {}) {
   // this entry's own draft (a post that Tally refused before) is not "already approved"
   drafts = drafts.filter((d) => !(d.dedupe === e.dedupe && d.state === "failed"));
   if (drafts.some((d) => d.dedupe === e.dedupe && !d.removed)) return "Already approved: it is on its way to Tally.";
-  const inp = inputOf(cid, Object.assign({}, o, { ledgers, drafts }));
+  const inp = inputOf(cid, Object.assign({}, o, { ledgers, drafts, reads }));
   const now = journals(inp).entries.find((x) => x.dedupe === e.dedupe);
   if (!now || !now.ready || !sameJournal(now.voucher, e.voucher) || voucherId(e.dedupe) !== now.work_ref) return CHANGED;
   return "";

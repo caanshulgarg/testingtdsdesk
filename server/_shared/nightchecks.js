@@ -56,6 +56,7 @@ export function inr(v) {
   const n = Math.abs(r2(v)), [i, f] = n.toFixed(2).split("."), last = i.slice(-3), rest = i.slice(0, -3);
   return (v < 0 ? "-" : "") + "₹" + (rest ? rest.replace(/\B(?=(\d{2})+(?!\d))/g, ",") + "," : "") + last + (f === "00" ? "" : "." + f);
 }
+const P2 = (x) => Math.round((Number(x) || 0) * 100);
 const near = (a, c) => Math.abs(r2(a) - r2(c)) <= TOL;
 const closeish = (a, c) => { const d = Math.abs(r2(a) - r2(c)); return d > TOL && d <= Math.max(TOL, Math.abs(c) * LIMITS.near); };
 
@@ -321,7 +322,34 @@ function gst(inp, A, V, out) {
 // (e) the salary sheet: months with salary in the books and no sheet; what was paid against the sheet
 const salaryLedger = (A, l) => /SALAR|WAGES/i.test(l) && (A.isExpense(l) || /PAYABLE/i.test(l));
 export function sheetMonth(r) { const m = ymd(r.date); if (m) return ymOf(m); const s = String(r.month || ""); const x = s.match(/^(\d{4})-?(\d{2})$/); if (x) return x[1] + x[2]; const i = MON.findIndex((k) => s.toLowerCase().startsWith(k.toLowerCase())); const y = s.match(/(\d{4})/); return i >= 0 && y ? y[1] + String(i + 1).padStart(2, "0") : ""; }
-export const sheetNet = (r) => r2(r.net != null && r.net !== "" ? num(r.net) : num(r.gross) - num(r.tds) - num(r.profTax));
+// (phase 2, review L2) one net for every use: the sheet's own net when it has one, else gross less TDS, professional tax,
+// PF and ESI
+export const sheetNet = (r) => r2(r.net != null && r.net !== "" ? num(r.net) : num(r.gross) - num(r.tds) - num(r.profTax) - num(r.pf) - num(r.esi));
+// (phase 2, review H2) salary booked for a month, the one rule for the payroll journal and the salary payments: a salary-like
+// expense (in the group of the client's salary ledger, or named salary, wages, staff, remuneration, stipend or bonus) on the
+// debit side of an entry dated in the month, or up to the 10th of the next, or whose narration names the month
+export const SALARY_RE = /SALAR|WAGES|STAFF|REMUNERATION|STIPEND|BONUS/i;
+export function salaryLike(A, l, base) {
+  if (!A.isExpense(l)) return false;
+  if (SALARY_RE.test(l)) return true;
+  // the salary ledger's own group counts only when it is a sub-group ("Employee costs" under Indirect Expenses): a primary
+  // group (Indirect Expenses itself) would make rent salary
+  const pb = base ? A.path(base) || [] : [];
+  return pb.length >= 2 && (A.path(l) || [])[0] === pb[0];
+}
+const MONTH_RX = [/^jan/i, /^feb/i, /^mar/i, /^apr/i, /^may/i, /^jun/i, /^jul/i, /^aug/i, /^sep/i, /^oct/i, /^nov/i, /^dec/i];
+// the narration names the month: "Oct 2026", "October-2026", "Oct'26", "10/2026", "2026-10"
+export function namesMonth(narr, ym) {
+  const t = String(narr || ""), y = ym.slice(0, 4), m = +ym.slice(4, 6), yy = y.slice(2);
+  if (new RegExp("(^|\\D)0?" + m + "[-/.]" + "(" + y + "|" + yy + ")(\\D|$)").test(t) || new RegExp("(^|\\D)" + y + "[-/.]0?" + m + "(\\D|$)").test(t)) return true;
+  const re = /([A-Za-z]{3,9})[\s.'’,-]*('?)(\d{4}|\d{2})(?!\d)/g; let x;
+  while ((x = re.exec(t))) { const yr = x[3].length === 4 ? x[3] : "20" + x[3]; if (MONTH_RX[m - 1].test(x[1]) && (x[1].length === 3 || /^(january|february|march|april|may|june|july|august|september|october|november|december|sept)$/i.test(x[1])) && yr === y) return true; }
+  return false;
+}
+export function forMonth(v, ym) {
+  const m = ymOf(v.date);
+  return m === ym || (m === ymAdd(ym, 1) && +v.date.slice(6, 8) <= 10) || namesMonth(v.narr, ym);
+}
 function salary(inp, A, V, out) {
   const rows = inp.salary || [];
   if (!rows.length) return;
@@ -426,11 +454,13 @@ function candidates(f, inp, A, V) {
     // salary payable ledger only when that ledger is certain (exactly one, in current liabilities, or a person's pick) and
     // the month's payroll is booked to it (in the books, or its Daily Check journal approved); else Needs you
     const sp = (inp.ledgersFor || {}).salaryPayable || "";
-    const payBooked = (m) => !!sp && (V.some((v) => (ymOf(v.date) === m || (ymOf(v.date) === ymAdd(m, 1) && +v.date.slice(6, 8) <= 7)) && v.ent.some((e) => e.l === sp && e.a > 0) && v.ent.some((e) => e.a < 0 && /SALAR|WAGES/i.test(e.l)))
+    const base = (inp.ledgersFor || {}).salaryExpense || "";
+    const payBooked = (m) => !!sp && (V.some((v) => forMonth(v, m) && v.ent.some((e) => e.l === sp && e.a > 0) && v.ent.some((e) => e.a < 0 && salaryLike(A, e.l, base)))
       || (inp.drafts || []).some((d) => d && d.dedupe === "payroll:" + m && !d.removed && d.state !== "failed"));
     if (x.dir === "out" && /SALAR|WAGES/i.test(row.narr || "")) [ymOf(x.date), ymAdd(ymOf(x.date), -1)].forEach((m) => {
       const net = r2((inp.salary || []).filter((r) => sheetMonth(r) === m).reduce((s, r) => s + sheetNet(r), 0));
-      if (net && near(net, x.amt)) add(payBooked(m) ? exact : nearL, { t: "salary", ref: "sal:" + m, label: "Salary sheet " + monYear(m) + " · net " + inr(net), ledger: sp });
+      // (review L1) resolved only to the paisa; ₹0.01 to ₹1 out: Needs you
+      if (net && near(net, x.amt)) add(payBooked(m) && P2(net) === P2(x.amt) ? exact : nearL, { t: "salary", ref: "sal:" + m, label: "Salary sheet " + monYear(m) + " · net " + inr(net), ledger: sp });
     });
     // (phase 2) one employee's pay: the line's decoded name is the sheet's name (ledgerKey), the net within ₹1, the month
     // the line pays (by the 15th: the month before), one row of that name in that month
@@ -439,7 +469,7 @@ function candidates(f, inp, A, V) {
       const rs = (inp.salary || []).filter((r) => sheetMonth(r) === m && ledgerKey(r.name) === k);
       if (rs.length) {
         const net = r2(rs.reduce((s, r) => s + sheetNet(r), 0)), c = { t: "salary", ref: "sal:" + m + ":" + k, label: "Salary sheet " + monYear(m) + " · " + rs[0].name + " · net " + inr(net), ledger: sp };
-        if (near(net, x.amt) && rs.length === 1 && payBooked(m)) add(exact, c); else if (near(net, x.amt) || closeish(net, x.amt)) add(nearL, c);
+        if (P2(net) === P2(x.amt) && rs.length === 1 && payBooked(m)) add(exact, c); else if (near(net, x.amt) || closeish(net, x.amt)) add(nearL, c);
         // two rows of that name: each that fits is shown, none is picked
         else if (rs.length > 1) rs.forEach((r, i) => { if (near(sheetNet(r), x.amt)) add(nearL, Object.assign({}, c, { ref: c.ref + ":" + i, label: "Salary sheet " + monYear(m) + " · " + r.name + (r.code ? " (" + r.code + ")" : "") + " · net " + inr(sheetNet(r)) })); });
       }

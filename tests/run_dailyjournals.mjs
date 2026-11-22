@@ -8,6 +8,7 @@ import { booksOf, gstOf, nightInput } from "../server/assistant-night/nightinput
 import { run } from "../server/_shared/nightchecks.js";
 import * as J from "../server/_shared/dailyjournals.js";
 import * as E from "../server/_shared/gst3b.js";
+import * as NC from "../server/_shared/nightchecks.js";
 import { gstRows, head, L } from "./daily2_books.mjs";
 
 let fails = 0, n = 0;
@@ -18,7 +19,9 @@ const CASH = "GST ELECTRONIC CASH LEDGER";
 // the night, for one client: the input as nightinput makes it, then the journals
 function night(rows, today = "20261122", x = {}) {
   const b = booksOf(rows), gst = gstOf(rows, b, today);
-  const inp = nightInput(rows, b, Object.assign({ today, bankRecs: [], inboxRecs: [], entryRecs: [], twob: [], gst, prior: [], draftRecs: (rows.items || []).filter((r) => r.key === "asstEntries") }, x));
+  // the bridge read the books on the filing day (AlterID 100 then): the month's entries are as filed (review M2)
+  const inp = nightInput(rows, b, Object.assign({ today, bankRecs: [], inboxRecs: [], entryRecs: [], twob: [], gst, prior: [], draftRecs: (rows.items || []).filter((r) => r.key === "asstEntries"),
+    reads: [{ at: "2026-09-20T06:00:00Z", highest_alterid: 100 }, { at: "2026-10-20T06:00:00Z", highest_alterid: 100 }, { at: "2026-11-20T06:00:00Z", highest_alterid: 100 }, { at: "2026-12-05T06:00:00Z", highest_alterid: 100 }] }, x));
   return { inp, out: J.journals(inp), gst };
 }
 const one = (r, kind) => r.out.findings.filter((f) => f.kind === kind);
@@ -51,7 +54,7 @@ const base = { ym: "202610", intra: 100000, inter: 50000, buyIntra: 40000, buyIn
   const r = night(gstRows({ ym: "202610", intra: 10000, credit: 30000, buyIntra: 5000, rec: { cashLedger: CASH } }));
   const m = r.gst[0];
   ok(m && m.t.net.cgst < 0 && !entry(r, "gst_setoff").length && !one(r, "setoff_due").length, "more credit notes than sales (a negative liability): no tax to pay, no journal");
-  ok(P(J.setoffPlain(m.t.net, m.t.rcmOut, m.t.netItc, m.t.opening).cash.cgst) === 0, "the plain set-off: a negative liability is no tax");
+  ok(J.setoffMin(m.t.net, m.t.rcmOut, m.t.netItc, m.t.opening).cash === 0, "the independent least cash: a negative liability is no tax");
 }
 {
   const r = night(gstRows({ ym: "202610", rcm: 10000, rec: { cashLedger: CASH } })), e = entry(r, "gst_setoff")[0];
@@ -113,7 +116,11 @@ const base = { ym: "202610", intra: 100000, inter: 50000, buyIntra: 40000, buyIn
   const r = night(gstRows(base)), m = JSON.parse(JSON.stringify(r.gst[0]));
   m.journal.lines.find((l) => l.l === "CGST INPUT").cr -= 1; m.journal.lines.find((l) => l.l === "SGST INPUT").cr += 1;
   const x = J.setoffOne(m, r.inp, []);
-  ok(!x.entry && /two ways|differ/.test(x.finding.facts.title), "a journal the plain set-off does not agree with: Needs you, never ready");
+  ok(!x.entry && /follow the 3B/.test(x.finding.facts.title), "a journal that does not follow the 3B to the paisa: Needs you, never ready");
+  const m2 = JSON.parse(JSON.stringify(r.gst[0])); m2.journal.lines.find((l) => l.l === CASH).cr += 0.01; m2.journal.lines.find((l) => l.l === "CGST OUTPUT").dr += 0.01;
+  ok(!J.setoffOne(m2, r.inp, []).entry, "the cash line a paisa out (still balanced): Needs you (exact, review L6)");
+  const m3 = JSON.parse(JSON.stringify(r.gst[0])); m3.t.pay.use.igst.igst -= 1000; m3.t.pay.cash.igst += 1000;
+  ok(!J.setoffOne(m3, r.inp, []).entry, "a 3B paying more cash than the law needs: Needs you");
   const bad = JSON.parse(JSON.stringify(m.t.pay)); bad.use.cgst.cgst -= 100; bad.use.cgst.igst = 0; bad.cash.cgst += 100;
   ok(/paid in cash while credit was left/.test(J.setoffLegal(bad, m.t.net, m.t.rcmOut, m.t.netItc, m.t.opening)), "the legal order: cash paid while credit was left is caught");
   const cross = JSON.parse(JSON.stringify(m.t.pay)); cross.use.cgst.sgst = 10;
@@ -122,20 +129,43 @@ const base = { ym: "202610", intra: 100000, inter: 50000, buyIntra: 40000, buyIn
 
 console.log("2. the set-off against the app's own (differential)");
 {
-  // the plain set-off and GSTR.setOff (server/_shared/gst3b.js, the app's 3B) on random months: every head, to the paisa
+  // the app's GSTR.setOff (server/_shared/gst3b.js) against the independent least cash (setoffMin, a search over the legal
+  // allocations): the same cash to the paisa, and the app's allocation legal (49, 49A, 88A), on random months
   let seed = 7; const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
   const amt = () => { const k = rnd(); return k < 0.15 ? 0 : k < 0.2 ? -Math.round(rnd() * 50000) / 100 : Math.round(rnd() * 5000000) / 100; };
   let same = 0, legal = 0, N = 3000;
   for (let i = 0; i < N; i++) {
     const L0 = { igst: amt(), cgst: amt(), sgst: amt(), cess: amt() }, Rc = { igst: rnd() < 0.3 ? amt() : 0, cgst: rnd() < 0.2 ? amt() : 0, sgst: 0, cess: 0 }; Rc.sgst = Rc.cgst;
     const C = { igst: amt(), cgst: amt(), sgst: amt(), cess: amt() }, O = { igst: rnd() < 0.3 ? amt() : 0, cgst: rnd() < 0.3 ? amt() : 0, sgst: rnd() < 0.3 ? amt() : 0, cess: 0 };
-    const app = E.GSTR.setOff(L0, Rc, C, O), mine = J.setoffPlain(L0, Rc, C, O);
-    const k = (p) => ["igst", "cgst", "sgst", "cess"].map((h) => [P(p.cash[h]), P(p.rcmCash[h]), P(p.carry[h])].concat(Object.keys(p.use[h] || {}).sort().map((t) => P(p.use[h][t])))).join("|");
-    if (k(app) === k(mine)) same++; else if (same + 5 > i) console.log("    differs:", JSON.stringify({ L0, Rc, C, O }));
+    const app = E.GSTR.setOff(L0, Rc, C, O), cash = ["igst", "cgst", "sgst", "cess"].reduce((s0, h) => s0 + P(app.cash[h]) - P(app.rcmCash[h]), 0);
+    if (cash === J.setoffMin(L0, Rc, C, O).cash) same++; else if (same + 5 > i) console.log("    differs:", JSON.stringify({ L0, Rc, C, O }));
     if (!J.setoffLegal(app, L0, Rc, C, O)) legal++;
   }
-  ok(same === N, "the plain set-off equals the app's GSTR.setOff on " + N + " random months, every head and every use, to the paisa (" + same + ")");
+  ok(same === N, "the app's cash equals the independent least cash on " + N + " random months, to the paisa (" + same + ")");
   ok(legal === N, "the app's set-off keeps the legal order on every one (" + legal + ")");
+  // the independent method checked by brute force: every legal allocation of small whole amounts, the least cash found
+  let bf = 0, BN = 300;
+  for (let i = 0; i < BN; i++) {
+    const v = () => Math.floor(rnd() * 5), L0 = { igst: v(), cgst: v(), sgst: v(), cess: 0 }, C = { igst: v(), cgst: v(), sgst: v(), cess: 0 };
+    let best = Infinity;
+    for (let ii = 0; ii <= Math.min(L0.igst, C.igst); ii++) for (let ic = 0; ic <= C.igst - ii; ic++) for (let is = 0; is <= C.igst - ii - ic; is++)
+      for (let cc = 0; cc <= C.cgst; cc++) for (let ci = 0; ci <= C.cgst - cc; ci++) for (let ss = 0; ss <= C.sgst; ss++) for (let si = 0; si <= C.sgst - ss; si++) {
+        if (ii + ci + si > L0.igst || ic + cc > L0.cgst || is + ss > L0.sgst) continue;
+        const pay = { use: { igst: { igst: ii, cgst: ic, sgst: is }, cgst: { cgst: cc, igst: ci }, sgst: { sgst: ss, igst: si }, cess: { cess: 0 } },
+          cash: { igst: L0.igst - ii - ci - si, cgst: L0.cgst - ic - cc, sgst: L0.sgst - is - ss, cess: 0 }, rcmCash: { igst: 0, cgst: 0, sgst: 0, cess: 0 } };
+        if (J.setoffLegal(pay, L0, {}, C, {})) continue;
+        best = Math.min(best, (pay.cash.igst + pay.cash.cgst + pay.cash.sgst) * 100);
+      }
+    if (best === J.setoffMin(L0, {}, C, {}).cash) bf++; else if (bf + 3 > i) console.log("    brute force differs:", JSON.stringify({ L0, C, best, min: J.setoffMin(L0, {}, C, {}) }));
+  }
+  ok(bf === BN, "the independent least cash equals a brute-force search over every legal allocation (" + bf + " of " + BN + " small months)");
+  // the reviewer's case: CGST tax 100, IGST credit 100, CGST credit 100. Using the CGST credit first is illegal (49A)
+  {
+    const L0 = { igst: 0, cgst: 100, sgst: 0, cess: 0 }, C = { igst: 100, cgst: 100, sgst: 0, cess: 0 };
+    const wrong = { use: { igst: { igst: 0, cgst: 0, sgst: 0 }, cgst: { cgst: 100, igst: 0 }, sgst: { sgst: 0, igst: 0 }, cess: { cess: 0 } }, cash: { igst: 0, cgst: 0, sgst: 0, cess: 0 }, rcmCash: { igst: 0, cgst: 0, sgst: 0, cess: 0 } };
+    const right = JSON.parse(JSON.stringify(wrong)); right.use.cgst.cgst = 0; right.use.igst.cgst = 100;
+    ok(/49A/.test(J.setoffLegal(wrong, L0, {}, C, {})) && !J.setoffLegal(right, L0, {}, C, {}) && !J.setoffLegal(E.GSTR.setOff(L0, {}, C, {}), L0, {}, C, {}), "the reviewer's case: CGST credit used before the IGST credit is illegal; IGST credit first is legal, and so is the app's");
+  }
   // and on the 3B of made-up books: the entry's total is the app's 3B credit used plus cash paid, exactly
   for (const o of [base, { ym: "202610", intra: 250000, buyInter: 300000, rec: { cashLedger: CASH } }, { ym: "202610", inter: 80000, buyIntra: 90000, rec: { cashLedger: CASH } }, Object.assign({}, base, { intra: 777777.77 })]) {
     const r = night(gstRows(o)), e = entry(r, "gst_setoff")[0], m = r.gst[0], p = m.t.pay;
@@ -151,7 +181,8 @@ const sheet = [
   { name: "Asha Verma", date: "2026-10-31", gross: 30000, tds: 0, profTax: 200 },            // no TDS
   { name: "New Joiner", date: "2026-10-31", gross: 12903.23, tds: 0, profTax: 0 },          // joined on 18-Oct: part of a month
 ];
-const pay = (o = {}) => { const rw = gstRows({ ym: "202610", filed: "", extraLedgers: Object.assign({}, PL, o.ledgers || {}), drop: o.drop || [], closed: o.closed, items: [{ key: "salary", item: "", ord: 0, data: o.sheet || sheet, deleted: false }].concat(o.items || []) });
+const pay = (o = {}) => { const rw0 = gstRows({ ym: "202610", filed: "", extraLedgers: Object.assign({}, PL, o.ledgers || {}), drop: o.drop || [], closed: o.closed, items: [{ key: "salary", item: "", ord: 0, data: o.sheet || sheet, deleted: false }].concat(o.items || []) });
+  const rw = rw0; if (o.groups) rw.groups.push({ name: "Employee Costs", parent: "Indirect Expenses" });
   (o.more || []).forEach((x, i) => { const g = "p" + i; rw.heads.push(head(g, x.date, x.type || "Journal", "")); x.lines.forEach(([l, a]) => rw.lines.push(L(g, l, a))); if (x.narr) rw.heads[rw.heads.length - 1].narration = x.narr; });
   return rw; };
 {
@@ -249,6 +280,71 @@ const rec = (more, today = "20261122", o = {}) => night(pay(Object.assign({ more
   ok(!entry(rec([RENT("01", "2026-08"), RENT("01", "2026-09"), RENT("01", "2026-10")], "20261122", { items: [{ key: "asstEntries", item: "#dc-r", ord: 0, data: { id: "dc-r", dedupe: k, state: "posted" }, deleted: false }] }), "recurring").length, "approved and pending: no entry");
   const a = rec([RENT("01", "2026-08"), RENT("01", "2026-09"), RENT("01", "2026-10")]), b2 = rec([RENT("01", "2026-08"), RENT("01", "2026-09"), RENT("01", "2026-10")]);
   ok(JSON.stringify(a.out) === JSON.stringify(b2.out), "the same night twice: the same");
+}
+
+console.log("5b. the review's cases (H1, H2, M2, L1-L5, L8)");
+{
+  const addV = (rw, g, day, type, lines, narr) => { rw.heads.push(head(g, day, type, "", narr ? { narration: narr } : {})); lines.forEach(([l, a]) => rw.lines.push(L(g, l, a))); return rw; };
+  const SEP = Object.assign({}, base, { ym: "202609" });   // September, filed 20-Oct
+  const sepLines = [["IGST OUTPUT", -9000], ["CGST OUTPUT", -9000], ["SGST OUTPUT", -9000], ["IGST RCM OUTPUT", -1800], ["IGST INPUT", 5400], ["CGST INPUT", 3600], ["SGST INPUT", 3600], [CASH, 16200]];
+  ok(entry(night(gstRows(SEP)), "gst_setoff").length === 1, "H1: September's set-off ready while none is in the books");
+  ok(!entry(night(addV(gstRows(SEP), "late", "2026-11-15", "Journal", sepLines)), "gst_setoff").length && !one(night(addV(gstRows(SEP), "late", "2026-11-15", "Journal", sepLines)), "setoff_due").length, "H1: September's set-off booked late by hand (15-Nov, after the month after): found, no second journal");
+  ok(!entry(night(addV(gstRows(SEP), "late", "2026-11-15", "GST Setoff", sepLines)), "gst_setoff").length, "L5: the same under a custom voucher type (\"GST Setoff\"): found by its lines");
+  const odd = night(addV(gstRows(SEP), "odd", "2026-11-12", "Journal", [["CGST OUTPUT", -700], ["CGST INPUT", 700]]));
+  ok(!entry(odd, "gst_setoff").length && /may be this month/.test(one(odd, "setoff_due")[0].facts.title), "H1: an unexplained tax journal any time after the month: Needs you");
+  ok(entry(night(addV(gstRows(SEP), "odd", "2026-11-12", "Journal", [["CGST OUTPUT", -700], ["CGST INPUT", 700]], "GST set-off for Aug 2026")), "gst_setoff").length === 1, "H1: one whose narration names another month is that month's: not this one");
+  ok(!taxOnlyOK(addV(gstRows(SEP), "rnd", "2026-11-12", "Journal", [["CGST OUTPUT", -700], ["CGST INPUT", 688], ["Round Off", 12]])), "L5: a rounding line over ₹10: not a set-off journal");
+}
+function taxOnlyOK(rw) { const r = night(rw); const v = r.inp.books.vouchers.find((x) => x.id === "rnd"); const { groupsOf } = NC; return J.taxOnly(v, groupsOf(r.inp.books), r.inp.books.map); }
+{
+  // M2: filed with no copy kept: an entry of the month changed after the filing date; no read by then; a copy kept
+  const rw = gstRows(base); rw.heads[0].alter_id = 150;
+  const r = night(rw);
+  ok(!entry(r, "gst_setoff").length && /changed in Tally after the 3B was filed/.test(one(r, "setoff_due")[0].facts.title), "M2: a sale of the month changed after the filing (AlterID above the filing day's read): Needs you");
+  const r2 = night(gstRows(base), "20261122", { reads: [] });
+  ok(!entry(r2, "gst_setoff").length && /cannot tell/.test(one(r2, "setoff_due")[0].facts.title), "M2: no read of the books by the filing day: Needs you (keep the 3B as filed)");
+  const pay0 = night(gstRows(base)).gst[0].t.pay;
+  ok(entry(night(gstRows(Object.assign({}, base, { rec: { cashLedger: CASH, snap: { pay: pay0 } } })), "20261122", { reads: [] }), "gst_setoff").length === 1, "M2: with the 3B kept as filed (and the same): ready, reads not needed");
+  const r4 = night(gstRows(Object.assign({}, base, { filed: "", rec: { cashLedger: CASH, snap: { pay: pay0 } } })));
+  ok(!entry(r4, "gst_setoff").length && /no filing date/.test(one(r4, "setoff_due")[0].facts.title), "L4: kept as filed with no filing date, past the due date: Needs you (interest and late fee not known)");
+}
+{
+  // H2: salary booked in the month after (by the 10th), or naming the month, or under a salary-like ledger
+  const n = (more, o = {}) => night(pay(Object.assign({ more }, o)));
+  ok(!entry(n([{ date: "2026-11-07", lines: [["Salary", -92903.23], ["Salary Payable", 92903.23]] }]), "payroll").length && !one(n([{ date: "2026-11-07", lines: [["Salary", -92903.23], ["Salary Payable", 92903.23]] }]), "payroll_due").length, "H2: October's salary booked on 7-Nov: booked, no journal");
+  const nm = n([{ date: "2026-11-25", lines: [["Salary", -92903.23], ["Salary Payable", 92903.23]], narr: "Salary for October 2026" }]);
+  ok(!entry(nm, "payroll").length && !one(nm, "payroll_due").length, "H2: booked on 25-Nov with a narration naming October: booked");
+  const bonus = n([{ date: "2026-10-31", lines: [["Staff Bonus", -5000], ["Salary Payable", 5000]] }], { ledgers: { "Staff Bonus": "Indirect Expenses" } });
+  ok(!entry(bonus, "payroll").length && one(bonus, "payroll_due")[0].state === "you", "H2: a staff bonus booked in October (another salary-like ledger): Needs you, never a second journal");
+  const grp = n([{ date: "2026-10-31", lines: [["Crew Pay", -92903.23], ["Salary Payable", 92903.23]] }], { ledgers: { "Salary": "Employee Costs", "Crew Pay": "Employee Costs" }, groups: true });
+  ok(!entry(grp, "payroll").length, "H2: booked to another ledger in the salary ledger's own group: booked");
+  ok(entry(n([{ date: "2026-10-31", lines: [["Rent", -45000], ["Sample Landlord", 45000]] }]), "payroll").length === 1, "H2: rent in October (the same primary group, not salary): not counted");
+}
+{
+  // L1 / L2: salary payments to the paisa; the net less PF and ESI
+  const stmt = { kind: "bank_stmt", id: "c1:s1", data: { id: "s1", acctId: "acc-1", acct: "XX2231", bank: "HDFC Bank", from: "2026-11-01", to: "2026-11-30" } };
+  const bl = (id, amt, name) => ({ id, date: "2026-11-01", narr: "NEFT/" + name.toUpperCase(), debit: amt, credit: 0, ledger: "", state: "attention", dec: { name, key: "neft:" + name, mode: "NEFT" } });
+  const go = (rs, sh) => { const rw = pay({ sheet: sh || sheet, more: [{ date: "2026-10-31", lines: [["Salary", -1], ["Salary Payable", 1]] }] }); rw.co.bankAccounts = [{ id: "acc-1", ledger: "HDFC Bank", last4: "2231" }];
+    const b = booksOf(rw); return run(nightInput(rw, b, { today: "20261122", bankRecs: [stmt, { kind: "bank_rows", id: "c1:s1:0", data: { rows: rs } }], inboxRecs: [], entryRecs: [], twob: [], gst: [], prior: [], draftRecs: [] })); };
+  const f = (r, id) => r.findings.find((x) => x.facts.row === String(id));
+  ok(f(go([bl(1, 47299.5, "Ravi Kumar")]), 1).state === "you", "L1: 50 paise off the net: Needs you (resolved only to the paisa)");
+  ok(f(go([bl(1, 47300, "Ravi Kumar")]), 1).state === "resolved", "L1: to the paisa: resolved");
+  ok(f(go([bl(1, 18050, "PF Person")], [{ name: "PF Person", date: "2026-10-31", gross: 20000, tds: 0, profTax: 0, pf: 1800, esi: 150 }]), 1).state === "resolved", "L2: the net less PF and ESI, the same everywhere");
+}
+{
+  // L3: FinCom's own monthly entry posted in October continues the series
+  const own = Object.assign(RENT("01", "2026-10"), { narr: "Monthly entry | TDSDesk:" + J.voucherId("rec:x:202610") });
+  ok(entry(rec([RENT("01", "2026-08"), RENT("01", "2026-09"), own]), "recurring").length === 1, "L3: FinCom's own posted entry counts in the pattern: November proposed");
+}
+{
+  // L8: no salary payable in a liabilities group: a clear choice, one outside the group confirmed explicitly, never stuck
+  const r = night(pay({ ledgers: { "Salary Payable": "Indirect Expenses", "Staff Dues": "Provisions" } }));
+  const pk = one(r, "ledger_pick").find((f) => f.key === "led:salaryPayable");
+  ok(pk && pk.candidates.some((c) => c.outside && /Use “Salary Payable” anyway \(under Indirect Expenses\)/.test(c.label)) && pk.candidates.some((c) => c.ledger === "Staff Dues" && !c.outside), "L8: the one of that name outside the group (to confirm), and the right group's ledgers");
+  const r2 = night(pay({ ledgers: { "Salary Payable": "Indirect Expenses" } }), "20261122", { prior: [{ kind: "ledger_pick", key: "led:salaryPayable", state: "resolved", evidence: [{ ledger: "Salary Payable", outside: true }] }] });
+  ok(entry(r2, "payroll").length === 1, "L8: confirmed though outside the group: the journal is made");
+  const r3 = night(pay({ ledgers: { "Salary Payable": "Indirect Expenses" } }), "20261122", { prior: [{ kind: "ledger_pick", key: "led:salaryPayable", state: "resolved", evidence: [{ ledger: "Salary Payable" }] }] });
+  ok(!entry(r3, "payroll").length, "L8: picked without the confirmation: still asks");
 }
 
 console.log("6. every entry, every night: ready only with every check passed");

@@ -5,7 +5,7 @@
 // Approve hands an entry to the EXISTING approval and post path (data.js approveEntry). A lazy chunk (Main.jsx).
 import { useCallback, useEffect, useState } from "react";
 import { Check, X, ChevronRight, FileText, ReceiptText, ScrollText, Sigma, Undo2, Repeat } from "lucide-react";
-import { loadAll, cloudOn, canWrite, isOwner, nameOf, askable, undo, choose, askEdit, askClose, askReopen, askAnswer, reject, approveEntry, editEntry, trustSet, trustLater, P2, JOURNAL } from "./data.js";
+import { loadAll, cloudOn, canWrite, isOwner, nameOf, askable, undo, choose, askEdit, askClose, askReopen, askAnswer, reject, approveEntry, editEntry, trustSet, trustLater, P2, JOURNAL, beingApproved } from "./data.js";
 import { TRUST_WORDS, LEVEL_WORDS } from "../../../../server/_shared/dailytrust.js";
 import Review from "./Review.jsx";
 import "./daily.css";
@@ -125,7 +125,7 @@ function Entries({ list, open, toggle, busy, run, approveMany, suggest }) {
   const [tick, setTick] = useState(() => new Set());
   if (!list.length) return <><Suggest list={suggest || []} busy={busy} run={run} /><p className="dc-none" data-none="entries">No entries ready.</p></>;
   const w = canWrite(), flip = (id) => { const t = new Set(tick); t.has(id) ? t.delete(id) : t.add(id); setTick(t); };
-  const picked = list.filter((e) => tick.has(e.id));
+  const picked = list.filter((e) => tick.has(e.id) && !beingApproved(e));
   return <>
     <Suggest list={suggest || []} busy={busy} run={run} />
     {w && <div className="dc-bar"><label className="chk"><input type="checkbox" checked={tick.size === list.length} onChange={() => setTick(tick.size === list.length ? new Set() : new Set(list.map((e) => e.id)))} /> All</label>
@@ -138,8 +138,9 @@ function Entries({ list, open, toggle, busy, run, approveMany, suggest }) {
             <span className="dc-type">{W.type}</span><span className="dc-date">{when(v.date)}</span><span className="dc-party">{W.party}</span><span className="dc-reason">{W.reason}</span><Amt v={amt} /></button>
           <div className="dc-side">
             <span className="dc-ok" title={"Checks passed: " + (e.checks || []).map((c) => CHECKS[c.k] || c.k).join(" · ")}><Check width={12} height={12} aria-hidden="true" /><span className="dc-ok-w">Checks</span></span>
+            {beingApproved(e) ? <span className="note dc-claimed" data-claimed="">Being approved</span> : <>
             {w && <button type="button" className="dc-icon ok" aria-label="Approve" title="Approve" disabled={busy} onClick={() => approveMany([e])}><Check width={16} height={16} /></button>}
-            {w && <button type="button" className="dc-icon no" aria-label="Reject" title="Reject" disabled={busy} onClick={() => run(() => reject(e.id))}><X width={16} height={16} /></button>}
+            {w && <button type="button" className="dc-icon no" aria-label="Reject" title="Reject" disabled={busy || e.state !== "ready"} onClick={() => run(() => reject(e.id))}><X width={16} height={16} /></button>}</>}
           </div>
         </div>
         {open === e.id && <div className="dc-more"><div className="dc-sub">{nameOf(e.client_id)}{v.narration ? " · " + v.narration : ""}</div><Lines lines={v.lines || []} /><Evidence items={e.evidence} />

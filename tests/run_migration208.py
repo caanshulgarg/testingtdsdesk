@@ -8,6 +8,8 @@
      picked stays picked
   5. trust levels: the owner only, logged; staff and other firms refused; bad levels and limits refused
   6. trust_stats: approvals since the last rejection, level change or put-off
+  8. (review M3) Approve claims an entry first: ready -> approving, one person at a time; approved only by the claimer;
+     released when the post fails; a claim left 30 minutes may be taken again; the night leaves it alone
   7. remind_due: only switched-on clients of an active owner, document requests asked once and still needed, at most
      weekly; in real sending only questions really asked; remind_logged logs each
 PG_PORT (55473)."""
@@ -80,6 +82,8 @@ try:
        and not any(tp("authenticated", "daily_trust", p) for p in ("insert", "update", "delete", "truncate", "references", "trigger")), "2. daily_trust: anon nothing; authenticated reads only")
     ok(not db.one("select count(*) from information_schema.role_table_grants where table_name = 'daily_trust' and grantee = 'PUBLIC'") != "0", "2. daily_trust: nothing for public")
     FN = ["trust_set(text, text, integer, numeric)", "trust_dismiss(text, text)", "trust_stats()", "remind_due(boolean)", "remind_logged(uuid, text, bigint, uuid[], text, text)", "trust_kind_of(text)"]
+    FN3 = ["entry_claim(uuid)", "entry_release(uuid, text)", "entry_approved(uuid, text)"]
+    ok(all(fp("authenticated", f) for f in FN3) and not any(fp("anon", f) for f in FN3), "2. the page calls entry_claim / entry_release / entry_approved; anon none")
     ok(not any(fp("anon", f) for f in FN), "2. anon runs none of 208's functions")
     ok(all(fp("authenticated", f) for f in FN[:3]) and not any(fp("authenticated", f) for f in FN[3:]), "2. the page calls trust_set, trust_dismiss, trust_stats; not remind_due, remind_logged or the helper")
     ok(fp("service_role", FN[3]) and fp("service_role", FN[4]), "2. the service role runs the reminders")
@@ -168,6 +172,25 @@ try:
     db.sql("update client_asks set state = 'asked' where id = '00000000-0000-4000-8000-000000000081'; update members set active = false where user_id = '%s'" % OWN)
     ok(due() == [], "7. the owner who turned it on is no longer active: nothing")
     db.sql("update members set active = true where user_id = '%s'" % OWN)
+    # 8. the claim
+    db.sql("insert into night_entries (id, firm_id, client_id, source, dedupe, voucher, state) values ('00000000-0000-4000-8000-000000000091', '%s', 'c1', 'payroll', 'payroll:202610', '{}', 'ready')" % F1)
+    E9 = "'00000000-0000-4000-8000-000000000091'"
+    st = lambda: db.one("select state from night_entries where id = %s" % E9)
+    act(STAFF, "select public.entry_claim(%s)" % E9)
+    ok(st() == "approving", "8. claimed: ready -> approving")
+    ok(raises(lambda: act(OWN, "select public.entry_claim(%s)" % E9)), "8. a second claim (another person, the same moment): refused")
+    ok(raises(lambda: act(OWN, "select public.entry_approved(%s, 'dc-x')" % E9)) and raises(lambda: act(OWN, "select public.entry_release(%s, '')" % E9)), "8. someone else cannot approve or release it")
+    ok(raises(lambda: act(LOOK, "select public.entry_claim(%s)" % E9)) and raises(lambda: act(OWN2, "select public.entry_claim(%s)" % E9)), "8. a look-only member, another firm: not allowed")
+    apply([dict(SO, key="payroll-x")], [])
+    ok(st() == "approving", "8. the night (complete) leaves an entry being approved alone")
+    act(STAFF, "select public.entry_release(%s, 'Tally refused')" % E9)
+    ok(st() == "ready" and db.one("select count(*) from daily_log where what = 'release'") == "1", "8. the post failed: released to ready, logged")
+    act(STAFF, "select public.entry_claim(%s)" % E9); act(STAFF, "select public.entry_approved(%s, 'dc-abc')" % E9)
+    ok(db.one("select state || ' ' || work_ref || ' ' || approved_once from night_entries where id = %s" % E9) == "approved dc-abc true" and db.one("select count(*) from daily_log where what = 'approved' and ref = '00000000-0000-4000-8000-000000000091'") == "1", "8. Tally took it: approved by the claimer, logged")
+    ok(raises(lambda: act(STAFF, "select public.entry_claim(%s)" % E9)), "8. an approved entry cannot be claimed again")
+    db.sql("update night_entries set state = 'approving', decided_by = '%s', updated_at = now() - interval '31 minutes' where id = %s" % (STAFF, E9))
+    act(OWN, "select public.entry_claim(%s)" % E9)
+    ok(db.one("select decided_by from night_entries where id = %s" % E9) == OWN, "8. a claim left 30 minutes (the page closed): may be taken again")
     ok(raises(lambda: act(OWN, "select public.remind_due(false)")) and raises(lambda: act(OWN, "select public.remind_logged('%s', 'c1', null, null, 'sent', '')" % F1)), "7. a person cannot run the reminders or write their log")
 finally:
     db.stop()

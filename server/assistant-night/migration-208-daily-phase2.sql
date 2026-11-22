@@ -12,10 +12,13 @@
 --   trust_set / trust_dismiss   the OWNER sets a level or a limit, or puts a suggestion off (logged)
 --   trust_stats             per client and kind: approvals since the last rejection, level change or put-off (the page's
 --                           promotion suggestion after 20)
+--   entry_claim / entry_release / entry_approved   (review M3) Approve of a journal claims the entry first (ready ->
+--                           approving, atomically, one person at a time), posts through the existing path, then records it
+--                           approved, or releases the claim if the post failed; a claim left 30 minutes may be taken again
 --   remind_due / remind_logged  "Remind by itself" (assistant-night's timer, service role only): document requests asked
 --                           once and still needed, at most weekly; each logged
 -- Grants: every right Supabase gives anon and authenticated by default is taken back (public too); then only what the page
--- reads and calls. ADD-ONLY: one new table, its policy and grants, new functions, two check constraints widened (each
+-- reads and calls. ADD-ONLY: one new table, its policy and grants, new functions, three check constraints widened (each
 -- dropped and made again with more values, by name, only if it is 206's). No row is changed; nothing of 206 or 207 is
 -- replaced. Safe to run twice. One transaction, lock_timeout 10 s.
 begin;
@@ -36,7 +39,7 @@ begin
   foreach t in array array['daily_trust'] loop
     if to_regclass('public.' || t) is not null and coalesce(obj_description(to_regclass('public.' || t), 'pg_class'), '') <> 'daily check (migration 208)' then bad := bad || ('table ' || t); end if;
   end loop;
-  foreach f in array array['trust_set', 'trust_dismiss', 'trust_stats', 'trust_kind_of', 'remind_due', 'remind_logged'] loop
+  foreach f in array array['trust_set', 'trust_dismiss', 'trust_stats', 'trust_kind_of', 'remind_due', 'remind_logged', 'entry_claim', 'entry_release', 'entry_approved'] loop
     if exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = f and coalesce(obj_description(p.oid, 'pg_proc'), '') <> 'daily check (migration 208)') then bad := bad || ('function ' || f); end if;
   end loop;
   if array_length(bad, 1) > 0 then
@@ -62,6 +65,13 @@ begin
   if pg_get_constraintdef((select oid from pg_constraint where conrelid = 'public.night_entries'::regclass and conname = n)) not like '%gst_setoff%' then
     execute format('alter table public.night_entries drop constraint %I', n);
     alter table public.night_entries add constraint night_entries_source_check check (source in ('twob_inbox_bill', 'bank_self_answer', 'gst_setoff', 'payroll', 'recurring'));
+  end if;
+  n := null;
+  select c.conname into n from pg_constraint c where c.conrelid = 'public.night_entries'::regclass and c.contype = 'c' and pg_get_constraintdef(c.oid) like '%withdrawn%';
+  if n is null then raise exception 'migration 208: night_entries has no state check'; end if;
+  if pg_get_constraintdef((select oid from pg_constraint where conrelid = 'public.night_entries'::regclass and conname = n)) not like '%approving%' then
+    execute format('alter table public.night_entries drop constraint %I', n);
+    alter table public.night_entries add constraint night_entries_state_check check (state in ('ready', 'held', 'approved', 'rejected', 'withdrawn', 'approving'));
   end if;
 end $c$;
 
@@ -135,6 +145,46 @@ language sql stable security definer set search_path = '' as $$
    group by e.client_id, e.kind
 $$;
 
+-- ---------------------------------------------------------------- (review M3) Approve of a journal: claim, then approved or released
+-- the claim: ready -> approving, one at a time (row lock), by owners and staff of the firm; a claim left 30 minutes (the
+-- page closed half way) may be taken again. The night never touches an entry being approved (night_apply changes only
+-- ready, held and withdrawn ones)
+create or replace function public.entry_claim(p_id uuid) returns jsonb language plpgsql security definer set search_path = '' as $$
+declare r public.night_entries;
+begin
+  select * into r from public.night_entries where id = p_id and firm_id = public.my_firm() for update;
+  if r.id is null or not public.can_write() then raise exception 'Not allowed.' using errcode = '42501'; end if;
+  if not (r.state = 'ready' or (r.state = 'approving' and r.updated_at < now() - interval '30 minutes')) then
+    raise exception 'This entry is not ready (it may be being approved).' using errcode = '22023';
+  end if;
+  update public.night_entries set state = 'approving', decided_by = auth.uid(), decided_at = now(), updated_at = now() where id = r.id;
+  perform public.asst_log(r.firm_id, r.client_id, 'claim', r.id::text, jsonb_build_object('source', r.source, 'dedupe', r.dedupe, 'was', r.state));
+  return jsonb_build_object('ok', true);
+end $$;
+-- the post failed: back to ready (the claimer only, or a claim left 30 minutes)
+create or replace function public.entry_release(p_id uuid, p_why text default '') returns jsonb language plpgsql security definer set search_path = '' as $$
+declare r public.night_entries;
+begin
+  select * into r from public.night_entries where id = p_id and firm_id = public.my_firm() for update;
+  if r.id is null or not public.can_write() then raise exception 'Not allowed.' using errcode = '42501'; end if;
+  if r.state <> 'approving' then return jsonb_build_object('ok', true, 'state', r.state); end if;
+  if r.decided_by is distinct from auth.uid() and r.updated_at >= now() - interval '30 minutes' then raise exception 'Someone else is approving this entry.' using errcode = '22023'; end if;
+  update public.night_entries set state = 'ready', decided_by = null, decided_at = null, updated_at = now() where id = r.id;
+  perform public.asst_log(r.firm_id, r.client_id, 'release', r.id::text, jsonb_build_object('why', left(coalesce(p_why, ''), 300)));
+  return jsonb_build_object('ok', true);
+end $$;
+-- Tally took it (or it is queued): approved, by the person who claimed it
+create or replace function public.entry_approved(p_id uuid, p_work_ref text) returns jsonb language plpgsql security definer set search_path = '' as $$
+declare r public.night_entries;
+begin
+  select * into r from public.night_entries where id = p_id and firm_id = public.my_firm() for update;
+  if r.id is null or not public.can_write() then raise exception 'Not allowed.' using errcode = '42501'; end if;
+  if r.state <> 'approving' or r.decided_by is distinct from auth.uid() then raise exception 'Claim the entry first.' using errcode = '22023'; end if;
+  update public.night_entries set state = 'approved', decided_at = now(), work_ref = coalesce(nullif(p_work_ref, ''), work_ref), updated_at = now(), approved_once = true where id = r.id;
+  perform public.asst_log(r.firm_id, r.client_id, 'approved', r.id::text, jsonb_build_object('source', r.source, 'work', coalesce(nullif(p_work_ref, ''), r.work_ref), 'voucher', r.voucher, 'evidence', r.evidence));
+  return jsonb_build_object('ok', true);
+end $$;
+
 -- ---------------------------------------------------------------- "Remind by itself" (the timer only)
 -- the reminders due now: clients whose switch is on, turned on by an owner who is still an active owner; their document
 -- requests (a statement, a 2B bill, a salary sheet, a cash bill) whose finding still needs the client and whose question
@@ -177,8 +227,10 @@ $$;
 
 -- ---------------------------------------------------------------- function grants (explicit)
 revoke all on function public.trust_kind_of(text), public.trust_set(text, text, integer, numeric), public.trust_dismiss(text, text), public.trust_stats(),
-  public.remind_due(boolean), public.remind_logged(uuid, text, bigint, uuid[], text, text) from public, anon, authenticated;
-grant execute on function public.trust_set(text, text, integer, numeric), public.trust_dismiss(text, text), public.trust_stats() to authenticated;
+  public.remind_due(boolean), public.remind_logged(uuid, text, bigint, uuid[], text, text),
+  public.entry_claim(uuid), public.entry_release(uuid, text), public.entry_approved(uuid, text) from public, anon, authenticated;
+grant execute on function public.trust_set(text, text, integer, numeric), public.trust_dismiss(text, text), public.trust_stats(),
+  public.entry_claim(uuid), public.entry_release(uuid, text), public.entry_approved(uuid, text) to authenticated;
 grant execute on function public.remind_due(boolean), public.remind_logged(uuid, text, bigint, uuid[], text, text) to service_role;
 
 -- ---------------------------------------------------------------- this migration's own names (checked at the top on a second run)
@@ -186,7 +238,7 @@ do $mark$
 declare r record;
 begin
   comment on table public.daily_trust is 'daily check (migration 208)';
-  for r in select p.oid::regprocedure as sig from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = any (array['trust_set', 'trust_dismiss', 'trust_stats', 'trust_kind_of', 'remind_due', 'remind_logged']) loop
+  for r in select p.oid::regprocedure as sig from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = any (array['trust_set', 'trust_dismiss', 'trust_stats', 'trust_kind_of', 'remind_due', 'remind_logged', 'entry_claim', 'entry_release', 'entry_approved']) loop
     execute format('comment on function %s is %L', r.sig, 'daily check (migration 208)');
   end loop;
 end $mark$;

@@ -57,7 +57,11 @@ def start(br, w=1440, h=900, role="owner"):
     return ctx, pg
 calls = lambda pg: pg.evaluate("() => window.__dc.calls")
 rpcs = lambda pg, fn: [c for c in calls(pg) if c[0] == "rpc/" + fn]
-ids = {e["source"]: e["id"] for e in ROWS["night_entries"][::-1]}
+# (review M3) one entry someone is approving now: shown, not to be approved again
+import datetime
+_busy = dict([e for e in ROWS["night_entries"] if e["source"] == "recurring"][0]); _busy.update({"id": "00000000-0000-4000-8000-000000000990", "state": "approving", "updated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(), "dedupe": "rec:busy"})
+ROWS["night_entries"].append(_busy)
+ids = {e["source"]: e["id"] for e in ROWS["night_entries"][::-1] if e.get("state") != "approving"}
 sal = [e["id"] for e in ROWS["night_entries"] if e["source"] == "bank_self_answer" and any(x.get("t") == "salary" for x in e["evidence"])][0]
 with sync_playwright() as p:
     br = p.chromium.launch()
@@ -78,7 +82,9 @@ with sync_playwright() as p:
     pg.click("[data-row='%s'] .dc-icon.ok" % ids["payroll"]); settle(pg, 900)
     toasts = pg.evaluate("() => window.__dc.toasts")
     ok(any("Changed since last night" in t for t in toasts), "2. Approve a journal: the second check runs; the books differ: Changed since last night")
-    ok(not rpcs(pg, "entry_decide") and not [c for c in calls(pg) if c[0] == "Bridge.post"], "2. refused: nothing posted, nothing recorded")
+    ok(not rpcs(pg, "entry_decide") and not rpcs(pg, "entry_claim") and not [c for c in calls(pg) if c[0] == "Bridge.post"], "2. refused: nothing claimed, posted or recorded")
+    busy = "[data-row='00000000-0000-4000-8000-000000000990']"
+    ok(pg.locator(busy + " [data-claimed]").count() == 1 and pg.locator(busy + " .dc-icon.ok").count() == 0, "2. an entry someone is approving now: 'Being approved', no Approve (review M3)")
     ok(pg.locator("[data-suggest-row='d1:bank']").count() == 1 and "23 approved as made" in pg.inner_text("[data-suggest]"), "3. the promotion suggestion after 20 approvals (23)")
     ok(pg.locator("[data-suggest-row^='d3:']").count() == 0, "3. 6 approvals: no suggestion")
     pg.click("[data-suggest-row='d1:bank'] .btn"); settle(pg, 400)

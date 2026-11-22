@@ -18,7 +18,7 @@ const SHEET = [
 ];
 function nightOf(rows, today, more = {}) {
   const b = booksOf(rows), gst = gstOf(rows, b, today);
-  return nightInput(rows, b, Object.assign({ today, bankRecs: [], inboxRecs: [], entryRecs: [], twob: [], gst, prior: [], draftRecs: [] }, more));
+  return nightInput(rows, b, Object.assign({ today, bankRecs: [], inboxRecs: [], entryRecs: [], twob: [], gst, prior: [], draftRecs: [], reads: [{ at: "2026-11-20T06:00:00Z", highest_alterid: 100 }] }, more));
 }
 export function phase2() {
   const out = { entries: [], findings: [] };
