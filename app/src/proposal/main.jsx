@@ -9,7 +9,7 @@ import "../styles/arc-tokens.css";
 import "./proposal.css";
 import { FirmHome, ClientHome, NewMenu, SearchPalette, Bank, Entry, Tally, System } from "./screens.jsx";
 import { BankStatements, Settings } from "./screens2.jsx";
-import { BankLines, BankRules } from "./screens3.jsx";
+import { BankLines, BankRules, Purchase } from "./screens3.jsx";
 
 const q = new URLSearchParams(location.search);
 const s = q.get("s") || "home", state = q.get("state") || undefined;
@@ -30,8 +30,13 @@ const SCREENS = {
   upload: () => <BankStatements upload />,
   stmtopen: () => <BankLines stmt />,
   lines: () => <BankLines />,
-  linesfilters: () => <BankLines view="filters" />,
+  linescollapsed: () => <BankLines view={q.get("nobulk") ? "full" : "bulk"} collapsed />,
+  linesledger: () => <BankLines view="ledger" />,
+  linesamount: () => <BankLines view="amount" />,
+  linesdate: () => <BankLines view="date" />,
   linescols: () => <BankLines view="cols" />,
+  linessheet: () => <BankLines view="sheet" phone />,
+  purchase: () => <Purchase />,
   linesopen: () => <BankLines view="open" stmt />,
   linesphone: () => <BankLines phone />,
   rules: () => <BankRules />,

@@ -4,6 +4,7 @@ import { ArrowDownLeft, ArrowUpRight, Landmark, Percent, FileText, Sparkles, Mai
   ReceiptText, TrendingUp, HandCoins, Wallet, BookOpen, ArrowLeftRight, FileSpreadsheet, Camera, UserPlus, Search, X, Calendar,
   Filter, Download, CircleCheck, Paperclip, Info, RefreshCw, Copy, Inbox, CornerDownLeft, ArrowUp, ArrowDown, Building2, Users, Hash } from "lucide-react";
 import { Shell, TopBar, Pill, Due, Sk, inr, short, STATUS, BankTabs } from "./ui.jsx";
+import { Th } from "./tablef.jsx";
 import { FIRM, CLIENT, FLOW, BANKS, TODOS, OVERNIGHT_FIRM, DUES, OVERNIGHT_CLIENT, NEXT, LINES, SEARCH, TALLY_COS, PORTS } from "./data.js";
 
 const Av = ({ t }) => <span className="p-av sm">{t}</span>;
@@ -158,7 +159,7 @@ export function Bank({ state = "full", phone }) {
         </div>
         {state === "full" && <div className="p-bulk"><b>3 selected</b><span className="p-quiet">₹2,08,530</span><button className="p-btn p-sm">Set ledger ▾</button><button className="p-btn p-sm p-primary">Post 3 to Tally</button><button className="p-btn p-sm p-ghost">Not business</button><span className="p-grow" /><button className="p-icon" aria-label="Clear"><X size={16} /></button></div>}
         {state === "empty" ? <Empty /> : <table className="p-table">
-          <thead><tr><th className="p-ck"><input type="checkbox" readOnly /></th><th>Date</th><th>Narration</th><th>Ledger</th><th className="p-r">Money out</th><th className="p-r">Money in</th><th>Status</th><th /></tr></thead>
+          <thead><tr><th className="p-ck"><input type="checkbox" readOnly /></th><Th sort="desc">Date</Th><Th>Narration</Th><Th>Ledger</Th><Th r>Money out</Th><Th r>Money in</Th><Th>Status</Th><th /></tr></thead>
           <tbody>
             {state === "loading" ? [...Array(8)].map((_, i) => <tr key={i} className="p-skrow"><td className="p-ck"><Sk w={14} h={14} r={4} /></td><td><Sk w={44} /></td><td><Sk w={i % 2 ? "70%" : "85%"} /></td><td><Sk w="60%" /></td><td className="p-r"><Sk w={64} /></td><td className="p-r"><Sk w={56} /></td><td><Sk w={72} h={20} r={10} /></td><td /></tr>)
               : rows.map((r) => <Row key={r.id} r={r} sel={sel.has(r.id)} open={open === r.id} />)}
@@ -283,7 +284,7 @@ export function Tally({ state = "linking" }) {
         <div className="p-card-h p-pad"><h2>This computer</h2><span className="p-quiet">{fresh ? "Shown once the bridge is installed" : "OFFICE-PC · checked 1 min ago"}</span></div>
         {fresh ? <div className="p-ports-none"><Plug size={18} /><span>After step 1, FinCom shows which ports Tally uses here, and which are free.</span></div>
         : <table className="p-table">
-          <thead><tr><th>Port</th><th>Status</th><th>Detail</th><th /></tr></thead>
+          <thead><tr><Th sort="asc">Port</Th><Th>Status</Th><Th>Detail</Th><th /></tr></thead>
           <tbody>{PORTS.map((r, i) => <tr key={i} className="p-prow" data-t={r.t}>
             <td><span className="p-portnums">{r.p.map((n) => <code key={n}>{n}</code>)}</span></td>
             <td><span className="p-pst"><i className="p-dot" data-t={r.t} />{r.st}</span></td>
@@ -294,7 +295,7 @@ export function Tally({ state = "linking" }) {
       {!fresh && <section className="p-card p-list">
         <div className="p-tabs"><button aria-selected="true">Companies <em>16</em></button><button>Sent to Tally <em>54 today</em></button><button>Settings</button></div>
         <table className="p-table">
-          <thead><tr><th>Company in Tally</th><th>FinCom client</th><th>Status</th><th>Last sync</th><th /></tr></thead>
+          <thead><tr><Th sort="asc">Company in Tally</Th><Th>FinCom client</Th><Th>Status</Th><Th>Last sync</Th><th /></tr></thead>
           <tbody>{TALLY_COS.map((c) => <tr key={c.co} className="p-row">
             <td><b>{c.co}</b></td>
             <td>{c.cl || <span className="p-sugg"><Sparkles size={13} className="p-ic-brand" />{c.co.startsWith("Patil") ? "Patil Auto Spares?" : "Arora Pharma Distributors?"}</span>}</td>

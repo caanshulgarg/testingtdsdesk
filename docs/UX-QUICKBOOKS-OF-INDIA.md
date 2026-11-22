@@ -4,7 +4,7 @@
 **Branch:** `next-ux-proposal`, off `origin/staging-next` @ d580e8451.
 **Mockups:** `app/src/proposal/` (standalone React pages with made-up data, not linked from the app). To build them:
 `cd app && npx vite build --config src/proposal/vite.config.js --outDir <a folder outside the repo>`, then open
-`index.html?s=home|client|new|search|bank|entry|tally|phone|phonebank|system|stmts|stmtsphone|upload|stmtopen|lines|linesfilters|linescols|linesopen|linesphone|rules|settings|settingsphone`, adding `&theme=dark` or `&state=empty|loading|new`.
+`index.html?s=home|client|new|search|bank|entry|tally|phone|phonebank|system|stmts|stmtsphone|upload|stmtopen|lines|linescollapsed|linesledger|linesamount|linesdate|linescols|linessheet|purchase|linesopen|linesphone|rules|settings|settingsphone`, adding `&theme=dark` or `&state=empty|loading|new`.
 
 The goal is QuickBooks' *level* of simplicity and confidence, not its look. Nothing here copies its name, logo, colours,
 layout or wording. FinCom keeps its indigo brand and Inter/Geist type, and it is built around what an Indian CA firm does
@@ -36,7 +36,7 @@ every day: Tally first, GST and TDS, ₹ in lakh and crore, and dates written as
 
 | # | File | What it shows |
 |---|---|---|
-| 13 | `13-bank-statements.png` | Bank › **Statements**: tabs Statements · Lines to review · Rules · Reconciliation; account cards; every statement grouped by account with period, file, uploaded (date, who), lines, opening and closing with ✓, "X of Y done" with a bar, status; a dashed "Oct 2026 statement missing — Upload" row; a Problem row (opening ≠ June's closing); an overlap warning |
+| 13 | `13-bank-statements.png` | Bank › **Statements**, dense: one slim head row (account picker, Upload, + New), one row with the tabs Statements · Lines to review · Rules · Reconciliation and the status shortcuts; one table grouped by account with period, file, uploaded (date, who), lines, opening and closing with ✓, "X of Y done" with a bar, status; a dashed "Oct 2026 statement missing — Upload" row; a Problem row (opening ≠ June's closing); an overlap warning; a filter in every heading |
 | 13 | `13-bank-statements-open.png` | A statement opened: Lines to review filtered to it (a chip with ← All statements) |
 | 14 | `14-bank-upload.png` | The upload drawer: drop a PDF, Excel or CSV; account found; period found; **Read**: 251 lines, opening, closing, balance checks ✓ (it fills the missing October) |
 | 15 | `15-bank-statements-phone.png` | Statements on a phone: each statement a card |
@@ -44,14 +44,20 @@ every day: Tally first, GST and TDS, ₹ in lakh and crore, and dates written as
 | 17 | `17-tally-ports-first-time.png` | The same before anything is done: step 1 now, ports shown after the bridge is in. Supersedes 07b |
 | 18 | `18-settings.png` | Settings cleaned up: 6 plain groups (Firm, My account, Client defaults, Email and messages, Billing, Advanced), one line of help per setting; no Tally group |
 | 19 | `19-settings-phone.png` | Settings on a phone: the list first |
-| 20 | `20-bank-lines-full.png` | Lines to review with **everything today's Bank page does**: today's columns, the source of each suggestion, bill or invoice, TDS at payment, type, balance, posted info, a new-ledger suggestion, a split, ≈, the statement's checks, the bulk bar. Supersedes 05 |
-| 21 | `21-bank-filters-open.png` | The filter panel open, the filter row under each column header, active filters as chips, quick chips (UPI, NEFT, …), saved view, Rule from filter |
-| 21 | `21-bank-filters-open-columns.png` | The column picker |
+| 20 | `20-bank-lines-full.png` | Lines to review, **dense** (34 px rows, 22 lines visible at 1440×900) with **everything today's Bank page does**: today's columns, a filter funnel in every heading, the source of each suggestion, bill or invoice, TDS at payment, type, balance, a new-ledger suggestion, a split, ≈, a Problem with Fix, the sticky foot of totals. Supersedes 05 |
+| 20b | `20b-bank-lines-collapsed-menu.png` | The same with the left menu as icons and 4 lines ticked: the bulk bar lies over the heading row and does not push the table down |
+| 20c | `20c-bank-lines-1366.png` | At 1366×768 (the menu starts as icons under 1400 px): 18 lines visible |
+| 21 | `21-bank-filters-open.png` | The **Ledger** heading's filter open: sort, "Is one of", a searchable tick list of every ledger in the column with counts, (No ledger yet), Select all shown, Clear and Apply. The Status heading's funnel is filled (set by the To review shortcut); the foot says "9 of 248 shown · filtered by Status, Ledger · Clear all filters" |
+| 21b | `21b-amount-filter-open.png` | The **Withdrawal** heading's filter: sort, Between / = / More than / Less than, from–to, quick amounts, blank / not blank |
+| 21c | `21c-date-filter-open.png` | The **Date** heading's filter: sort, This month / Last month / Q3 / FY 2026-27, a month of the FY, a quarter, from–to, blank / not blank |
+| 21d | `21d-bank-columns.png` | The column picker (show or hide any of today's columns; Compact or Comfortable) |
 | 22 | `22-bank-line-open-with-learnings.png` | A line opened (statement view): why this ledger and its history, **3 similar lines — apply to all**, **make a rule from this** (client or firm), copy to other clients, and every action on the line |
 | 23 | `23-bank-rules-tab.png` | Bank › Rules: rules FinCom can make (3 repeats), the client's rules (learned and written, order, fits now, used, changed by hand), firm-wide rules, remembered choices |
-| 24 | `24-bank-lines-phone.png` | Lines to review on a phone |
+| 24 | `24-bank-lines-phone.png` | Lines to review on a phone: one chip per column for its filter, rows as cards with the narration on one line |
+| 25 | `25-purchase-list.png` | Purchase on the same dense table: a filter in every heading (bill date sorted), status shortcuts, sticky totals |
+| 26 | `26-bank-lines-phone-filter-sheet.png` | On a phone a column's filter (Ledger) opens as a sheet from the bottom |
 
-05, 05b, 05c and 11 were taken again with the new Bank tabs. All shots are at deviceScaleFactor 2: desktop at 1440 wide, phone at 390 wide.
+05 (now with a filter in every heading), 05b, 05c and 11 show the older Bank layout, which 20 replaces. All shots are at deviceScaleFactor 2: desktop at 1440 wide, phone at 390 wide.
 
 ---
 
@@ -197,7 +203,7 @@ The owner's rule: the new Bank page must lose nothing. The audit below covers `a
 | Tick (select all of what the filters show) | First column; head tick = all shown; footer "Select all N" (20) |
 | Date (opens the line's details) | Date column; the row's ▸ opens the line (20, 22) |
 | Particulars: party read from the narration (bold), mode and reference (UPI / IMPS / NEFT / Chq no. / UTR), the narration, More | Particulars: party bold; mode, ref and narration under it, 2 lines, all on open (20, 22) |
-| UPI / UTR / cheque ref as its own value | In Particulars, and as its own column "UPI / UTR / Chq ref" in the column picker (21 columns) |
+| UPI / UTR / cheque ref as its own value | In Particulars, and as its own column "UPI / UTR / Chq ref" in the column picker (21d) |
 | Withdrawal, Deposit, with ! (does not agree with the running balance) and ≈ (read from the balance change) | Withdrawal, Deposit; ! and ≈ kept beside the amount (20: the cash deposit) |
 | Balance | Balance column (20) |
 | Status (No ledger, Suggested, Ready to post, In Tally, Already in Tally, Ignored) | The 5 words: To review (no ledger or suggested), Ready, Done · in Tally, Problem; Set aside is a chip (20) |
@@ -208,21 +214,21 @@ The owner's rule: the new Bank page must lose nothing. The audit below covers `a
 | Split (ledger and amount parts) | "split" tag on the line; Split on the opened line (20, 22) |
 | Voucher type (Payment, Receipt, Contra…; changeable while open) | Type column with ▾ (20) |
 | Posted words (register, batch, by whom, Matched with Tally) and Take it back | Posted line under Done (voucher no., date, who); ↶ Take it back (20); Posted column in the picker |
-| Automatic posting chip, why, Undo, Undo this run | Filter "Posted automatically"; the line's posted words; Undo on the line (21) |
+| Automatic posting chip, why, Undo, Undo this run | Status heading filter "Posted automatically"; the line's posted words on hover; Undo on the line (20) |
 | Post error, "I checked — it is not in Tally" | Problem row with the reason and the fix (20) |
 | New ledger suggestion ("New ledger: … · Sundry Creditors", Similar: …) | Under the ledger, with Create (20: Swift Freight) |
-| Column widths, freeze, Comfortable / Compact | Column picker with Comfortable / Compact (21 columns) |
+| Column widths, freeze, Comfortable / Compact | Column picker with Compact (default) / Comfortable (21d) |
 | **Filters** (SmartBar, HeadFilter, ColFunnel) | |
 | Tabs To do / Ready / Done / Ignored with counts | Status chips with counts (20) |
 | Search Particulars, amount, ledger | Search box (20) |
-| Quick chips UPI, IMPS, NEFT, RTGS, Cheque, ATM, Card, NACH with counts | Quick chips row (20, 21) |
-| In / Out | Money: Both / Out / In (21) |
-| Unassigned only; Suggestions to accept; ledger any / not chosen / chosen | Ledger filter; Suggestion from (21) |
-| Date from–to; Amount from–to | Date and Amount range (21) |
-| Column filters in each header (Date, Particulars, Withdrawal, Deposit, Balance, Status, Ledger, Type) and their removable chips | A filter row under the headers, active ones in brand colour; active filters as chips with ✕ (21) |
-| (new) Party, suggestion source, has bill or invoice, TDS, posted or not, voucher type, balance check, split, set aside, new ledger suggested | Filter panel (21) |
-| (new) Saved views | View ▾ and Save as view (21) |
-| Count and sums of what is shown; Clear filters | Panel foot "38 lines match · out ₹…", Clear all; table footer sums (21) |
+| Quick chips UPI, IMPS, NEFT, RTGS, Cheque, ATM, Card, NACH with counts | The Particulars heading's filter: the mode as a tick list with counts (UPI 61, NEFT 74, …) |
+| In / Out | The Withdrawal and Deposit headings' filters ("Not blank" = money out / in) (21b) |
+| Unassigned only; Suggestions to accept; ledger any / not chosen / chosen | Ledger heading: (No ledger yet) in its tick list; the source tags in the same filter (21) |
+| Date from–to; Amount from–to | Date and amount headings (21b, 21c) |
+| Column filters in each header (Date, Particulars, Withdrawal, Deposit, Balance, Status, Ledger, Type) and their removable chips | A funnel in every heading, filled while on; the foot names the filtered columns, with Clear all filters (20, 21) |
+| (new) Party, suggestion source, has bill or invoice, TDS, posted or not, voucher type, balance check, split | Each is its own column's heading filter: Ledger (source), Bill / inv. (blank / not blank), TDS, Status, Type, Balance (21) |
+| (new) Saved views | View ▾ keeps the column filters and sort (20, 21) |
+| Count and sums of what is shown; Clear filters | The sticky foot: "9 of 248 shown · filtered by … · Clear all filters" and the sums of the rows shown (21) |
 | Group by party (one ledger for all of a party's lines) | Group by party toggle (20) |
 | Keys (↑ ↓ Enter Space A) | ⌨ button (20) |
 | **Bulk actions** (BankBar) | |
@@ -247,11 +253,11 @@ The owner's rule: the new Bank page must lose nothing. The audit below covers `a
 | Copy rules to other clients; firm-wide rules | Copy to other clients (23), Whole firm (22), "Also a supplier of … · Copy the rule to them" (22) |
 | Rules list: order, rule, does, matches now, used, changed by hand, Change, Pause, Copy to…, Delete, New rule, Apply to this statement | Rules tab (23) |
 | Remembered decisions (clean up) | Rules tab › Remembered choices (23) |
-| Used by your other clients | Source tag "Other clients" and its filter (21) |
+| Used by your other clients | Source tag "Other clients", filtered in the Ledger heading (21) |
 | **The statement** (BankChecks, 21-repairing, 96-overlap) | |
 | "The statement adds up" / N lines do not agree; ≈ amounts read from the balance change; checked against Tally | The checks line above the table (20) |
 | Opening, Withdrawals, Deposits, Closing | The four figures on the checks line (20) |
-| Repair a statement (read again the pages that break the balance) | Problem on the statement row with Upload the full PDF (13), "Doesn't agree (!)" filter (21) |
+| Repair a statement (read again the pages that break the balance) | Problem on the statement row with Upload the full PDF (13); ! lines found from the Balance heading's filter |
 | Missing days / months, the join with the statement before | Dashed missing row (13), the chain ✓ (13, 14) |
 | Overlap (near-repeats held or marked) | Overlap warning on the statement (13) |
 | Statement chooser; moved to another client | Statements tab; account cards (13) |
@@ -259,9 +265,47 @@ The owner's rule: the new Bank page must lose nothing. The audit below covers `a
 | Lines no longer in Tally (post them again) | Problem lines, with Post again (20 pattern) |
 | Bank settings (ledger list, bank accounts, standard ledgers, automation, clean up) | Bank accounts: account cards (+ Add account); the rest in the client's settings (see Settings) |
 
+### Tables everywhere (round 3)
+The owner: filters go **inside the column headings**, as in the old design, on every table, with complete filters per column; no separate filter panel and no chips as the main way to filter.
+
+**What the app has today** (`app/src/parts/ListTable.jsx`, `ColFilterPop.jsx`, `colFilter.js`, from next-ui-table-filters; the older pop-up `src/js/23-column-filters.js` on Purchase review, Bank and Sales):
+- a funnel on every heading with words in it (not the tick box, S. no. or buttons), filled while its filter is on;
+- text: words (a comma means "or") and, when a column has 30 values or fewer, a tick list with counts and a search; "(blank)" is one of the values;
+- date: This month, Last month, This quarter, This year (April to March), and from–to; a date it cannot read is never hidden;
+- amount: from–to (₹, commas, Dr / Cr read as written); an amount it cannot read is kept;
+- the filters run on all rows before the sort and the cut; Select all, Post and bulk actions keep to the rows shown; ticks on rows a filter hides are taken off;
+- a click on a heading sorts (▲, then ▼; blanks last); "Showing N of M · Clear filters"; the totals in the foot add up only the rows shown;
+- on a phone the funnels become a row of chips and the filter opens as a sheet from the bottom.
+
+**The proposal: one table part, a complete filter in every heading.** It replaces ListTable, FilterBar, ChipBar, Filters, ColFilterPop and the old pop-up, on Bank lines, Statements, Purchase, Sales, Post to Tally, the GST and TDS lists and registers, the Daily Check lists, Clients, the Tally companies and ports, Rules and Settings › People. Every filter box has the column's name, sort (A → Z, Old → new, Small → large), its type's body, Clear and Apply with the count it will show.
+
+| Column type | Examples | The filter |
+|---|---|---|
+| Text | Particulars, Bill no., GSTIN, Narration, Email | Contains / Equals / Starts with / Does not contain; words (a comma means "or"); the values as a tick list with counts when there are few; blank / not blank |
+| Party or ledger | Supplier, Customer, Ledger, FinCom client | "Is one of": a searchable tick list of every value in the column (the whole list, not only the rows shown) with counts; (No ledger yet) as a value; Select all shown |
+| Amount | Withdrawal, Deposit, Taxable, GST, Total, TDS, Balance | Between / = / More than / Less than; from–to; quick (over ₹1 L, under ₹5,000); blank / not blank |
+| Date | Date, Bill date, Uploaded, Last sync | This month, Last month, a quarter (Q1–Q4 of the FY), the FY; a month of the FY; from–to; blank / not blank |
+| Status | Status | The five words as a tick list with counts |
+| Small set | Type, Mode, Role, Made | A tick list with counts |
+
+- **Status shortcuts** above a table (All · To review · Ready · Done · Problem) only set the Status column's filter, and its funnel fills.
+- **Saved views** (View ▾) keep the column filters, the sort and the columns shown.
+- **What is on** shows on the headings (filled funnel, the heading in brand colour) and in the foot: "9 of 248 shown · filtered by Status, Ledger · Clear all filters". The foot's totals are of the rows shown.
+- **Phone:** one chip per column above the cards (a dot when its filter is on); a chip opens that column's filter as a sheet from the bottom (26).
+
+### Density (round 3)
+The owner: "the Bank page eats a lot of space; only a few entries are visible." The same rules hold for every table page.
+- **One slim head row, about 48 px:** title, account or statement picker, a short check ("✓ Adds up", all of it on hover), search (Ctrl K), Upload, the page's main action, + New, the bell and the user. The big top bar and the account cards go.
+- **One row of about 36 px** under it: the tabs, the status shortcuts, View ▾, Columns, keys and ⋯.
+- **The table fills the rest of the height** in its own scrolling box, with no card margin or padding around it, a **sticky heading row** and a **sticky foot** with the count, opening and closing, and the totals.
+- **Rows of 34 px** by default (Compact), with **Comfortable** (44 px) in the column picker. Cell padding 6 px. The narration is on one line, cut short, with all of it on hover or on ▸. The source of a suggestion is a short tag on the same line (Bill, Booked before, Rule, Firm rule, Similar, UPI match).
+- **The bulk bar lies over the heading row** while rows are ticked; it does not push the table down.
+- **The left menu folds to icons** (64 px), by its button at the foot; it starts folded on screens under 1400 px wide.
+- **Measured** in the screenshot run (rows wholly visible between the sticky heading and foot): **22 lines at 1440×900** (20, 20b), against about 10 before, and **18 at 1366×768** (20c). Statements, Purchase and Rules use the same frame.
+
 ### List and table pattern (Bank shown; Purchase, Sales, Clients, To-dos and GST registers use the same)
-- Above the card: the context, such as account cards with balance and "as of" date.
-- **Filter chips** with counts that use the status words, plus a dashed "+ filter" chip (party, amount, ledger). Search sits on the right, with the date range and download.
+- Above the table: the context in the slim head row, such as the account and statement pickers (see Density).
+- **Status shortcuts** with counts that use the status words (they set the Status column's filter); every other filter is in its column's heading (see Tables everywhere). Search is in the head row.
 - **Bulk bar:** when rows are ticked, a tinted bar replaces the column header row. It shows "3 selected · ₹2,08,530", the main bulk action (Post 3 to Tally), Set ledger, Not business, and clear.
 - **Row:** one line. ✦ marks FinCom's suggestion. Money-in figures are green, money-out figures stay in normal ink. The status pill is the last column.
 - **Row expand** (▸): the match or suggestion, with Confirm, Pick another and Split. A **Problem** row always shows its reason and a fix button beneath it.
@@ -269,7 +313,7 @@ The owner's rule: the new Bank page must lose nothing. The audit below covers `a
 - **Empty state:** an icon, one sentence on what this page is for, the main action, a second option ("Ask the client for it") and a line of reassurance.
 - **Loading:** skeleton rows with the same height and columns as the real rows. Chip counts show "…".
 - **Phone:** rows become two-line cards, the chips scroll sideways, and the bulk bar wraps.
-- This means 1 table part replaces ListTable, FilterBar, ChipBar, Filters and ColFilterPop. Column filters stay as an option inside the "+ filter" chip.
+- This means 1 table part replaces ListTable, FilterBar, ChipBar, Filters and ColFilterPop, with the filters in the headings (see Tables everywhere).
 
 ### Form pattern (a bill shown; sale, receipt, payment, journal and contra use the same)
 - **Left: the entry.**
@@ -420,5 +464,5 @@ Effort is in developer-days for one experienced front-end developer working with
 ## 9. What this branch contains
 
 - `app/src/proposal/` holds the mockups (React, made-up data, own Vite config). Nothing in the live app imports them, and `app/index.html` does not reach them.
-- `app/src/proposal/screens2.jsx` (Statements, upload, Settings) and `screens3.jsx` (Bank lines with everything, Rules) are round 2.
+- `app/src/proposal/screens2.jsx` (Statements, upload, Settings) and `screens3.jsx` (Bank lines with everything, Rules, Purchase) are rounds 2 and 3; `tablef.jsx` is the heading filter (Tables everywhere).
 - `docs/UX-QUICKBOOKS-OF-INDIA.md` is this plan.

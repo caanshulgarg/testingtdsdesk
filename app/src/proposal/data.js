@@ -141,6 +141,47 @@ export const BLINES = [
   { id: 10, d: "16-Nov", party: "Salaries · 18 employees", mode: "NEFT", ref: "BULK 1611", narr: "SALARY NOV-BULK 18 EMPLOYEES", led: "Salaries Payable", src: "Your rule · firm-wide", link: "", vt: "Payment", out: 412600, in: 0, st: "done", posted: "Payment 2196 · 16-Nov, Anil" },
 ];
 
+
+// more made-up lines of the same statement (older), so the dense table fills a screen
+const MORE = [
+  ["16-Nov", "Mehra Textiles", "NEFT", "UTR N3211160098", "NEFT CR-MEHRA TEXTILES-INV 0812", "Mehra Textiles (Debtor)", "Sales invoice", "Inv SI/26-27/0812", "Receipt", 0, 118000, "done"],
+  ["16-Nov", "Airtel", "NACH", "MANDATE 77120", "ACH D-BHARTI AIRTEL LTD-77120", "Telephone Expenses", "Your rule", "", "Payment", 2949, 0, "done"],
+  ["15-Nov", "Kumar Transport", "UPI", "431912009871", "UPI/DR/431912009871/kumartransport@ybl", "", "", "", "Payment", 8500, 0, "review"],
+  ["15-Nov", "Bank charges", "", "SMS CHG OCT", "SMS CHGS OCT-26 INCL GST", "Bank Charges", "Your rule · firm-wide", "", "Payment", 17.7, 0, "ready"],
+  ["15-Nov", "Decor World", "IMPS", "P2A 631177420", "IMPS-P2A-631177420-DECOR WORLD", "Decor World (Debtor)", "Booked before", "Inv SI/26-27/0806", "Receipt", 0, 54280, "ready"],
+  ["14-Nov", "Bharat Petroleum", "Card", "POS 4521XXXX", "POS 4521XXXX BHARAT PETROLEUM SAKET", "Vehicle Running Expenses", "Similar past entry", "", "Payment", 4200, 0, "ready"],
+  ["14-Nov", "Gupta Packaging Pvt Ltd", "NEFT", "UTR N3211140044", "NEFT-HDFC0001234-GUPTA PACKAGING PVT LTD-INV 1101", "Gupta Packaging Pvt Ltd", "Bill match", "Bill PB/1101", "Payment", 35400, 0, "review"],
+  ["13-Nov", "TDS payment", "NEFT", "CIN 2611130012", "TDS PMT 281 CIN 2611130012", "TDS Payable 194C", "Your rule · firm-wide", "", "Payment", 6120, 0, "done"],
+  ["13-Nov", "Zomato", "UPI", "431800771234", "UPI/DR/431800771234/zomato@hdfcbank", "Staff Welfare", "Your rule", "", "Payment", 1840, 0, "ready"],
+  ["12-Nov", "Shree Balaji Hardware", "Cheque", "Chq 000418", "CHQ PAID 000418 SHREE BALAJI HARDWARE", "Shree Balaji Hardware", "Name match", "Bill SBH/221", "Payment", 23600, 0, "review"],
+  ["12-Nov", "Amazon Seller Services", "UPI", "431799120554", "UPI/CR/431799120554/AMAZON SELLER SERVICES", "Amazon Seller Services (Debtor)", "Booked before", "", "Receipt", 0, 94310, "done"],
+  ["11-Nov", "Interest", "", "INT.PD", "INT.PD 01-10-26 TO 31-10-26", "Bank Interest", "Your rule · firm-wide", "", "Receipt", 0, 1284, "done"],
+  ["11-Nov", "Gupta Packaging Pvt Ltd", "NEFT", "UTR N3211110071", "NEFT-HDFC0001234-GUPTA PACKAGING PVT LTD-INV 1094", "Gupta Packaging Pvt Ltd", "Bill match", "Bill PB/1094", "Payment", 28320, 0, "review"],
+  ["10-Nov", "Electricity BSES", "NEFT", "CA 152009934", "BSES RAJDHANI CA 152009934 OCT", "Electricity Expenses", "Booked before", "", "Payment", 11870, 0, "done"],
+  ["10-Nov", "Ritu Enterprises", "UPI", "431655002211", "UPI/CR/431655002211/rituent@okicici", "Ritu Enterprises", "Similar past entry", "", "Receipt", 0, 32000, "ready"],
+  ["10-Nov", "Office rent deposit", "RTGS", "UTR HDFCR5202611100", "RTGS-MALHOTRA PROPERTIES-DEPOSIT", "", "", "", "Payment", 180000, 0, "review"],
+];
+MORE.forEach(([d, party, mode, ref, narr, led, src, link, vt, out, inn, st], i) => BLINES.push({ id: 100 + i, d, party, mode, ref, narr, led, src, link, vt, out, in: inn, st,
+  ...(st === "done" ? { posted: (inn ? "Receipt " : "Payment ") + (1160 - i) + " · " + d } : {}), ...(!led && st === "review" ? { newLed: party + " · Sundry Creditors" } : {}) }));
+
+// Purchase bills (made up) for the Purchase list with header filters
+export const BILLS = [
+  { d: "21-Nov", sup: "Gupta Packaging Pvt Ltd", no: "PB/1123", gstin: "07AACCG4410H1Z2", tax: 40000, gst: 7200, tds: 0, led: "Packing Material", st: "review" },
+  { d: "20-Nov", sup: "Swift Freight Carriers", no: "SFC/2211", gstin: "", tax: 12400, gst: 0, tds: 124, led: "Freight Inward", st: "review" },
+  { d: "20-Nov", sup: "Shree Balaji Hardware", no: "SBH/221", gstin: "07ABKPB2231L1ZQ", tax: 20000, gst: 3600, tds: 0, led: "Repairs & Maintenance", st: "ready" },
+  { d: "19-Nov", sup: "Ganga Fabrics", no: "GF-0912", gstin: "09AAFFG7720K1Z8", tax: 186000, gst: 9300, tds: 186, led: "Purchase IGST 5%", st: "review" },
+  { d: "18-Nov", sup: "Staples Office", no: "ST/88412", gstin: "07AAICS1182D1ZM", tax: 2932, gst: 528, tds: 0, led: "Office Expenses", st: "done" },
+  { d: "18-Nov", sup: "Malhotra Properties", no: "MP/RENT/11", gstin: "07AAHFM5521N1Z1", tax: 90000, gst: 16200, tds: 9000, led: "Rent (TDS 194-I)", st: "problem" },
+  { d: "17-Nov", sup: "Decor Lights India", no: "DLI/556", gstin: "27AADCD8812B1ZK", tax: 64500, gst: 11610, tds: 0, led: "Purchase IGST 18%", st: "done" },
+  { d: "16-Nov", sup: "Kumar Transport", no: "KT/77", gstin: "", tax: 8500, gst: 0, tds: 85, led: "Freight Inward", st: "new" },
+  { d: "15-Nov", sup: "Gupta Packaging Pvt Ltd", no: "PB/1101", gstin: "07AACCG4410H1Z2", tax: 30000, gst: 5400, tds: 0, led: "Packing Material", st: "done" },
+  { d: "14-Nov", sup: "Ceramic Hub", no: "CH/2026/319", gstin: "24AAKFC3310Q1ZT", tax: 142000, gst: 25560, tds: 142, led: "Purchase IGST 18%", st: "review" },
+  { d: "13-Nov", sup: "Bharat Petroleum", no: "BP-SKT-9921", gstin: "07AAACB2902M1ZS", tax: 3559, gst: 641, tds: 0, led: "Vehicle Running Expenses", st: "done" },
+  { d: "12-Nov", sup: "Woodcraft Studio", no: "WS/104", gstin: "07ABDFW4471C1Z0", tax: 48000, gst: 8640, tds: 480, led: "Purchase CGST/SGST 18%", st: "ready" },
+  { d: "11-Nov", sup: "Airtel", no: "AIRT/7712", gstin: "07AAACB2894G1ZJ", tax: 2499, gst: 450, tds: 0, led: "Telephone Expenses", st: "done" },
+  { d: "10-Nov", sup: "Ganga Fabrics", no: "GF-0897", gstin: "09AAFFG7720K1Z8", tax: 92000, gst: 4600, tds: 92, led: "Purchase IGST 5%", st: "done" },
+];
+
 // Rules tab: what FinCom found in past work, the client's own rules, the firm's (made up)
 export const RULE_SUGG = [
   { when: "BAJAJ FINANCE", dir: "out", led: "Bajaj Finance Loan A/c", n: 7, agree: 100 },

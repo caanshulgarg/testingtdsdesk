@@ -1,7 +1,7 @@
 // The proposal's shared parts: the frame (left nav, top bar with search and + New, phone tab bar), the one status pill,
 // money and date helpers, the skeleton. Design proposal only: nothing here is used by the live app.
 import { Home, Users, CalendarCheck, ListChecks, Settings, CircleHelp, Landmark, ReceiptText, TrendingUp, Percent, BookOpen,
-  Search, Plus, Bell, ChevronDown, Plug, Menu, Ellipsis } from "lucide-react";
+  Search, Plus, Bell, ChevronDown, Plug, Menu, Ellipsis, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { FIRM, CLIENT } from "./data.js";
 
 // ₹12,34,567 (Indian grouping) and ₹12.3 L / ₹1.2 Cr for figures at a glance
@@ -29,7 +29,7 @@ const CLIENT_NAV = [["home", "Home", Home], ["bank", "Bank", Landmark], ["purcha
   ["returns", "GST · TDS · ITR", Percent], ["books", "Books", BookOpen], ["tally", "Tally", Plug]];
 const COUNTS = { firm: { home: 7 }, client: { bank: 12, purchase: 3 } };
 
-function Side({ scope, active, tallyOff, noCounts }) {
+function Side({ scope, active, tallyOff, noCounts, collapsed }) {
   const nav = scope === "firm" ? FIRM_NAV : CLIENT_NAV;
   return <aside className="p-side">
     <div className="p-brand"><span className="p-mark">F</span><b>FinCom</b></div>
@@ -39,13 +39,14 @@ function Side({ scope, active, tallyOff, noCounts }) {
       <ChevronDown size={15} />
     </button>
     <nav className="p-nav">
-      {nav.map(([k, w, I]) => <a key={k} className="p-navi" aria-current={k === active ? "page" : undefined}><I size={18} strokeWidth={1.8} /><span>{w}</span>
+      {nav.map(([k, w, I]) => <a key={k} className="p-navi" title={w} aria-current={k === active ? "page" : undefined}><I size={18} strokeWidth={1.8} /><span>{w}</span>
         {!noCounts && COUNTS[scope][k] ? <b className="p-count">{COUNTS[scope][k]}</b> : null}</a>)}
     </nav>
     <div className="p-grow" />
     <div className="p-side-foot">
-      <div className="p-tally-line">{tallyOff ? <><i className="p-dot" />Tally not connected</> : <><i className="p-dot" data-t="ok" />Tally connected · 2 min ago</>}</div>
-      <div className="p-foot-links"><a><Settings size={16} />Settings</a><a><CircleHelp size={16} />Help</a></div>
+      <div className="p-tally-line" title={tallyOff ? "Tally not connected" : "Tally connected · 2 min ago"}>{tallyOff ? <><i className="p-dot" /><span>Tally not connected</span></> : <><i className="p-dot" data-t="ok" /><span>Tally connected · 2 min ago</span></>}</div>
+      <div className="p-foot-links"><a title="Settings"><Settings size={16} /><span>Settings</span></a><a title="Help"><CircleHelp size={16} /><span>Help</span></a>
+        <a className="p-collapse" title={collapsed ? "Show the menu" : "Menu to icons"}>{collapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}</a></div>
     </div>
   </aside>;
 }
@@ -82,9 +83,10 @@ function PhoneTabs({ active }) {
     : <a key={k} aria-current={k === active ? "page" : undefined}><I size={20} strokeWidth={1.8} /><span>{w}</span></a>)}</nav>;
 }
 
-export function Shell({ scope = "client", active, children, overlay, phone, tallyOff, noCounts }) {
-  return <div className="p-app" data-phone={phone ? "" : undefined}>
-    <Side scope={scope} active={active} tallyOff={tallyOff} noCounts={noCounts} />
+// collapsed: the left menu as icons only (a page with a wide table; it also starts so under 1400 px)
+export function Shell({ scope = "client", active, children, overlay, phone, tallyOff, noCounts, collapsed }) {
+  return <div className="p-app" data-phone={phone ? "" : undefined} data-collapsed={collapsed ? "" : undefined}>
+    <Side scope={scope} active={active} tallyOff={tallyOff} noCounts={noCounts} collapsed={collapsed} />
     <div className="p-main">
       <PhoneTop scope={scope} />
       {children}
@@ -96,7 +98,24 @@ export function Shell({ scope = "client", active, children, overlay, phone, tall
 
 // Bank's own tabs, under the top bar (Bank is one item in the left menu; no Bank menu of its own). right: the tab's action
 const BANK_TABS = [["stmts", "Statements", 11], ["lines", "Lines to review", 12], ["rules", "Rules", 18], ["recon", "Reconciliation", null]];
-export function BankTabs({ on, right }) {
+export function BankTabs({ on, right, inline }) {
+  if (inline) return <div className="p-tabs p-pagetabs p-dtabs" role="tablist">{BANK_TABS.map(([k, w, n]) =>
+    <button key={k} role="tab" aria-selected={k === on ? "true" : "false"}>{w}{n != null && <em>{n}</em>}</button>)}</div>;
   return <div className="p-ptabbar"><div className="p-tabs p-pagetabs" role="tablist">{BANK_TABS.map(([k, w, n]) =>
     <button key={k} role="tab" aria-selected={k === on ? "true" : "false"}>{w}{n != null && <em>{n}</em>}</button>)}</div>{right}</div>;
 }
+
+// the dense page head (the owner, 22-Nov-2026: "Bank eats a lot of space"): ONE slim row of about 48 px with the title,
+// the account or statement picker, a short check, search, Upload, + New, the bell and the user; under it ONE row of
+// about 36 px with the tabs, the status shortcuts and the table's tools. The table then fills the rest of the height.
+export function SlimTop({ title, picker, note, actions }) {
+  return <header className="p-slim">
+    <h1>{title}</h1>{picker}{note}<span className="p-grow" />
+    <button className="p-slim-search" aria-label="Search"><Search size={15} /><span>Search</span><kbd>Ctrl K</kbd></button>
+    {actions}
+    <button className="p-btn p-sm p-primary"><Plus size={14} strokeWidth={2.4} />New</button>
+    <button className="p-icon p-sm-ic2" aria-label="Notifications"><Bell size={17} /><i className="p-badge">3</i></button>
+    <span className="p-av p-me sm">{FIRM.initials}</span>
+  </header>;
+}
+export function SlimRow({ children }) { return <div className="p-slim2">{children}</div>; }
