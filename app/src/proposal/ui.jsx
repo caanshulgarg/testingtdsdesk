@@ -93,3 +93,10 @@ export function Shell({ scope = "client", active, children, overlay, phone, tall
     {overlay}
   </div>;
 }
+
+// Bank's own tabs, under the top bar (Bank is one item in the left menu; no Bank menu of its own). right: the tab's action
+const BANK_TABS = [["stmts", "Statements", 11], ["lines", "Lines to review", 12], ["rules", "Rules", 18], ["recon", "Reconciliation", null]];
+export function BankTabs({ on, right }) {
+  return <div className="p-ptabbar"><div className="p-tabs p-pagetabs" role="tablist">{BANK_TABS.map(([k, w, n]) =>
+    <button key={k} role="tab" aria-selected={k === on ? "true" : "false"}>{w}{n != null && <em>{n}</em>}</button>)}</div>{right}</div>;
+}

@@ -4,7 +4,7 @@
 **Branch:** `next-ux-proposal`, off `origin/staging-next` @ d580e8451.
 **Mockups:** `app/src/proposal/` (standalone React pages with made-up data, not linked from the app). To build them:
 `cd app && npx vite build --config src/proposal/vite.config.js --outDir <a folder outside the repo>`, then open
-`index.html?s=home|client|new|search|bank|entry|tally|phone|phonebank|system`, adding `&theme=dark` or `&state=empty|loading|new`.
+`index.html?s=home|client|new|search|bank|entry|tally|phone|phonebank|system|stmts|stmtsphone|upload|stmtopen|lines|linesfilters|linescols|linesopen|linesphone|rules|settings|settingsphone`, adding `&theme=dark` or `&state=empty|loading|new`.
 
 The goal is QuickBooks' *level* of simplicity and confidence, not its look. Nothing here copies its name, logo, colours,
 layout or wording. FinCom keeps its indigo brand and Inter/Geist type, and it is built around what an Indian CA firm does
@@ -32,7 +32,26 @@ every day: Tally first, GST and TDS, ₹ in lakh and crore, and dates written as
 | 11 | `11-phone-bank.png` | Bank on a phone: rows turn into cards, and the chips scroll sideways |
 | 12 | `12-phone-home-dark.png` | Phone Client Home in dark mode |
 
-All shots are at deviceScaleFactor 2: desktop at 1440 wide, phone at 390 wide.
+### Round 2 (the owner's review of 22-Nov-2026)
+
+| # | File | What it shows |
+|---|---|---|
+| 13 | `13-bank-statements.png` | Bank › **Statements**: tabs Statements · Lines to review · Rules · Reconciliation; account cards; every statement grouped by account with period, file, uploaded (date, who), lines, opening and closing with ✓, "X of Y done" with a bar, status; a dashed "Oct 2026 statement missing — Upload" row; a Problem row (opening ≠ June's closing); an overlap warning |
+| 13 | `13-bank-statements-open.png` | A statement opened: Lines to review filtered to it (a chip with ← All statements) |
+| 14 | `14-bank-upload.png` | The upload drawer: drop a PDF, Excel or CSV; account found; period found; **Read**: 251 lines, opening, closing, balance checks ✓ (it fills the missing October) |
+| 15 | `15-bank-statements-phone.png` | Statements on a phone: each statement a card |
+| 16 | `16-tally-ports.png` | Tally: one status line ("Connected. Your Tally is on port 9002. 5 ports in use by other users. Port 9001 is free."), the 3 steps ticked, **This computer** with the ports table. Supersedes 07 |
+| 17 | `17-tally-ports-first-time.png` | The same before anything is done: step 1 now, ports shown after the bridge is in. Supersedes 07b |
+| 18 | `18-settings.png` | Settings cleaned up: 6 plain groups (Firm, My account, Client defaults, Email and messages, Billing, Advanced), one line of help per setting; no Tally group |
+| 19 | `19-settings-phone.png` | Settings on a phone: the list first |
+| 20 | `20-bank-lines-full.png` | Lines to review with **everything today's Bank page does**: today's columns, the source of each suggestion, bill or invoice, TDS at payment, type, balance, posted info, a new-ledger suggestion, a split, ≈, the statement's checks, the bulk bar. Supersedes 05 |
+| 21 | `21-bank-filters-open.png` | The filter panel open, the filter row under each column header, active filters as chips, quick chips (UPI, NEFT, …), saved view, Rule from filter |
+| 21 | `21-bank-filters-open-columns.png` | The column picker |
+| 22 | `22-bank-line-open-with-learnings.png` | A line opened (statement view): why this ledger and its history, **3 similar lines — apply to all**, **make a rule from this** (client or firm), copy to other clients, and every action on the line |
+| 23 | `23-bank-rules-tab.png` | Bank › Rules: rules FinCom can make (3 repeats), the client's rules (learned and written, order, fits now, used, changed by hand), firm-wide rules, remembered choices |
+| 24 | `24-bank-lines-phone.png` | Lines to review on a phone |
+
+05, 05b, 05c and 11 were taken again with the new Bank tabs. All shots are at deviceScaleFactor 2: desktop at 1440 wide, phone at 390 wide.
 
 ---
 
@@ -156,7 +175,89 @@ The colours stay FinCom's (`src/css/app.css :root`, `app/src/styles/arc-tokens.c
   Done steps fold to one line. The current step has the only primary button.
 - **Tabs:** Companies (Tally company ↔ client, status, last sync, Link) · Sent to Tally (history, with Problem rows and their fix) · Settings.
 - **Details and help** (collapsed): bridge version, computers, log, and what FinCom reads and writes.
+- **Round 2 (16, 17):** the status line reads like a sentence: "Connected. Your Tally is on port 9002. 5 ports in use by other users. Port 9001 is free." The 3 steps are now **Install FinCom Bridge · Open Tally · Link the company**, each ticked when done, with what was found beside the tick (bridge version and port, Tally's port, the company).
+- **This computer** lists the ports the bridge sees: 9103 FinCom Bridge (Connected); 9002 your Tally (company open, linked); 1950, 2022, 2929, 3543 and 9000 in use by another Windows user (not used by FinCom; company names hidden); 9001 free (can be used for a new Tally, Copy port). Details open on expand. Before the bridge is installed it says the ports show after step 1.
 - **Everything else only links here.** The top bar's Tally icon becomes the sidebar foot's status line (it opens this page). Settings' Tally group, Integrations' Tally card, Client setup › Tally and Overview's card are removed or turned into links. A client's view of Tally (its company and its imports) is a filter of this same page.
+
+### Bank: Statements, Lines to review, Rules, Reconciliation (round 2)
+- **Bank is one item in the left menu.** Its page has four tabs: **Statements | Lines to review | Rules | Reconciliation**. No Bank menu or rail of its own.
+- **Statements** lists every statement uploaded for the client, grouped by account under the account cards. Each row: bank and account (••last4), period from–to, file name, uploaded date and who, lines, opening and closing balance (✓ when the chain checks: the lines add up, and the opening is the previous closing), "X of Y done" with a small bar, and one status word.
+  - A **missing month** is a dashed row: "Oct 2026 statement missing", with Ask the client and Upload.
+  - An **overlap** is a warning under the row ("Overlaps 15–31 Oct … 38 lines are in both; FinCom keeps one copy of each"), with See the lines.
+  - A **broken chain** makes the row Problem, with the reason and the fix ("Upload the full PDF").
+  - Clicking a row opens **Lines to review** filtered to that statement, with ← All statements.
+- **Upload statement** (on the tab bar) opens a drawer: drop the file → account found → period found → **Read** (lines, opening, closing, balance checks ✓, and whether it fills a gap). Add statement is the one primary button. Nothing goes to Tally until lines are confirmed.
+
+### Bank: keeping everything today's page does (feature parity, round 2)
+The owner's rule: the new Bank page must lose nothing. The audit below covers `app/src/screens/Bank.jsx`, `app/src/parts/bank/*` (SmartBar, HeadFilter, Spacious, NewLedgers, Overlap, smart.js, goneSent), `app/src/parts/BankChecks.jsx`, `app/src/parts/BankSettings.jsx` and the legacy `src/js/20-bank-statements.js`, `21-repairing-a-statement.js`, `22-written-rules.js`, `96-bank-newled.js`, `96-bank-overlap.js`, `96-bank-sent-heal.js`.
+
+| Today (where) | In the new design (where; screenshot) |
+|---|---|
+| **Columns** (Bank.jsx bankCols) | |
+| Tick (select all of what the filters show) | First column; head tick = all shown; footer "Select all N" (20) |
+| Date (opens the line's details) | Date column; the row's ▸ opens the line (20, 22) |
+| Particulars: party read from the narration (bold), mode and reference (UPI / IMPS / NEFT / Chq no. / UTR), the narration, More | Particulars: party bold; mode, ref and narration under it, 2 lines, all on open (20, 22) |
+| UPI / UTR / cheque ref as its own value | In Particulars, and as its own column "UPI / UTR / Chq ref" in the column picker (21 columns) |
+| Withdrawal, Deposit, with ! (does not agree with the running balance) and ≈ (read from the balance change) | Withdrawal, Deposit; ! and ≈ kept beside the amount (20: the cash deposit) |
+| Balance | Balance column (20) |
+| Status (No ledger, Suggested, Ready to post, In Tally, Already in Tally, Ignored) | The 5 words: To review (no ledger or suggested), Ready, Done · in Tally, Problem; Set aside is a chip (20) |
+| Ledger box with ✓ to confirm a suggestion | Ledger and source column, ✓ beside a suggested ledger (20) |
+| Source under the ledger: Saved rule / rule: name, Bill ref, Sales invoice, Booked before, Similar past entry, Past entries (n), Bank account match, Name match, UPI match, used by your other clients, Claude, Set by you, No match found, Import the ledger list | A source tag on every line, same words, coloured by kind (rule, bill or invoice, history, guess) (20) |
+| Bill or invoice matched (billRef) | Bill / invoice column (20) |
+| TDS deducted at payment | TDS column (20) |
+| Split (ledger and amount parts) | "split" tag on the line; Split on the opened line (20, 22) |
+| Voucher type (Payment, Receipt, Contra…; changeable while open) | Type column with ▾ (20) |
+| Posted words (register, batch, by whom, Matched with Tally) and Take it back | Posted line under Done (voucher no., date, who); ↶ Take it back (20); Posted column in the picker |
+| Automatic posting chip, why, Undo, Undo this run | Filter "Posted automatically"; the line's posted words; Undo on the line (21) |
+| Post error, "I checked — it is not in Tally" | Problem row with the reason and the fix (20) |
+| New ledger suggestion ("New ledger: … · Sundry Creditors", Similar: …) | Under the ledger, with Create (20: Swift Freight) |
+| Column widths, freeze, Comfortable / Compact | Column picker with Comfortable / Compact (21 columns) |
+| **Filters** (SmartBar, HeadFilter, ColFunnel) | |
+| Tabs To do / Ready / Done / Ignored with counts | Status chips with counts (20) |
+| Search Particulars, amount, ledger | Search box (20) |
+| Quick chips UPI, IMPS, NEFT, RTGS, Cheque, ATM, Card, NACH with counts | Quick chips row (20, 21) |
+| In / Out | Money: Both / Out / In (21) |
+| Unassigned only; Suggestions to accept; ledger any / not chosen / chosen | Ledger filter; Suggestion from (21) |
+| Date from–to; Amount from–to | Date and Amount range (21) |
+| Column filters in each header (Date, Particulars, Withdrawal, Deposit, Balance, Status, Ledger, Type) and their removable chips | A filter row under the headers, active ones in brand colour; active filters as chips with ✕ (21) |
+| (new) Party, suggestion source, has bill or invoice, TDS, posted or not, voucher type, balance check, split, set aside, new ledger suggested | Filter panel (21) |
+| (new) Saved views | View ▾ and Save as view (21) |
+| Count and sums of what is shown; Clear filters | Panel foot "38 lines match · out ₹…", Clear all; table footer sums (21) |
+| Group by party (one ledger for all of a party's lines) | Group by party toggle (20) |
+| Keys (↑ ↓ Enter Space A) | ⌨ button (20) |
+| **Bulk actions** (BankBar) | |
+| Apply ledger to the ticked | Set ledger ▾ (20) |
+| Voucher type and narration for all | Type ▾, Narration (20) |
+| Post N to Tally (only the ready ones; the shown ones when filtered) | Post 3 to Tally in the bulk bar; Post 30 on the tab bar (20) |
+| Create ledgers for N rows (the new-ledger review) | Create ledgers for N (20) |
+| Ignore / Restore | Set aside (20); Restore on Set aside lines |
+| Confirm all suggestions (N) | "12 suggestions to confirm · Confirm all 12" (20) |
+| Rule from the ticked / "Keep this as a rule?" after a bulk change | Make a rule (20); the same offer after a bulk change |
+| Undo (and Don't remember) snack | Kept as the undo toast (09) |
+| **Per line** (RowActions, Drawer) | |
+| Confirm (✓), change ledger | ✓ and Change ledger (20, 22) |
+| Split, Save split, Remove the split | Split on the opened line (22) |
+| Pick bill (match) | Pick another bill (22) |
+| Rule (make a rule from this line) | Make a rule from this: This client / Whole firm (22) |
+| New ledger (create one) | Create beside the suggestion (20) |
+| Ignore ✕, Restore, Post, Undo (back to review), Take it back (unpost), Not this Tally entry | Set aside, Previous / Next on the open line; ↶ on Done lines (20, 22) |
+| **Learnings** (21-repairing suggestRow, 22-written-rules) | |
+| History: Booked before, Similar past entry, Past entries (n) | Source tag, and on open "Booked before: 6 payments … since Apr" (22) |
+| Rule suggestions after 3 repeats at 80% the same | Rules tab: "3 rules FinCom can make from your work" (23) |
+| Copy rules to other clients; firm-wide rules | Copy to other clients (23), Whole firm (22), "Also a supplier of … · Copy the rule to them" (22) |
+| Rules list: order, rule, does, matches now, used, changed by hand, Change, Pause, Copy to…, Delete, New rule, Apply to this statement | Rules tab (23) |
+| Remembered decisions (clean up) | Rules tab › Remembered choices (23) |
+| Used by your other clients | Source tag "Other clients" and its filter (21) |
+| **The statement** (BankChecks, 21-repairing, 96-overlap) | |
+| "The statement adds up" / N lines do not agree; ≈ amounts read from the balance change; checked against Tally | The checks line above the table (20) |
+| Opening, Withdrawals, Deposits, Closing | The four figures on the checks line (20) |
+| Repair a statement (read again the pages that break the balance) | Problem on the statement row with Upload the full PDF (13), "Doesn't agree (!)" filter (21) |
+| Missing days / months, the join with the statement before | Dashed missing row (13), the chain ✓ (13, 14) |
+| Overlap (near-repeats held or marked) | Overlap warning on the statement (13) |
+| Statement chooser; moved to another client | Statements tab; account cards (13) |
+| More: Reconcile with Tally, Check the balance with Tally, Mark lines already in Tally, Find double or wrong-date entries, Reload ledgers, Create a Tally file, Download Excel, Ask Claude for the rest, Clear all decisions, Delete / Restore a statement | ⋯ menu on the list bar (20); Reconcile with Tally is also its own tab |
+| Lines no longer in Tally (post them again) | Problem lines, with Post again (20 pattern) |
+| Bank settings (ledger list, bank accounts, standard ledgers, automation, clean up) | Bank accounts: account cards (+ Add account); the rest in the client's settings (see Settings) |
 
 ### List and table pattern (Bank shown; Purchase, Sales, Clients, To-dos and GST registers use the same)
 - Above the card: the context, such as account cards with balance and "as of" date.
@@ -203,6 +304,59 @@ The colours stay FinCom's (`src/css/app.css :root`, `app/src/styles/arc-tokens.c
 - Lists become cards. Forms become one column, with the Dr/Cr preview as a collapsible strip above the Save button.
 
 ---
+
+### Settings (round 2)
+The owner: "Settings is unclear: Tally appears in Settings but serves no purpose there; remove any sub-heading that isn't used." The audit covers `app/src/screens/Settings.jsx` (FirmSettings, ClientSetup), `SettingsMore.jsx`, `Account.jsx`, `parts/AiSettings`, `AssistantSettings.jsx`, `AutoPostSettings.jsx`, `BankSettings.jsx`, and the legacy routes and panes in `src/js/27-firm-account.js`, `36-gst-settings.js`, `43-two-step.js`, `52-routes.js`, `64-smart-moves.js`. Nothing is removed from the live app by this branch.
+
+**Firm Settings today** (groups: Your firm · Tally · GST · How the work is done)
+
+| Today (group › section) | What it does | Read by | Duplicates | Verdict |
+|---|---|---|---|---|
+| Your firm › Firm details (name, address, logo) | The firm's name and letterhead | Page header, reports, MIS, Assistant letters (75-assistant.js) | — | **Keep** → Firm |
+| Your firm › Sign-in and people: sign-in, change password, two-step, sign out of all devices | The person's own sign-in | Cloud sign-in, 43-two-step.js | — | **Keep** → My account |
+| Sign-in and people › People in the firm, roles, reset links, unlock | Who may sign in and do what | FirmGate roles everywhere | — | **Keep** → Firm › People and roles |
+| Sign-in and people › Documents in the firm account (keep for N years) | How long bills and statements are kept | docs retention (docYears) | — | **Keep** → Firm |
+| Sign-in and people › Document inbox: keys for the agent | Keys for the inbox agent | the inbox agent | — | **Move** → Advanced |
+| Sign-in and people › Backups | Backups and restore | backups | — | **Move** → Advanced |
+| Your firm › Academy batches | Video-call classes | Calls | Not a setting | **Move** → its own Academy page |
+| Your firm › Plan and credit, Have a coupon?, Records on this computer | What the firm pays, credit, use | billing | — | **Keep** → Billing (records as one usage line) |
+| Tally › Connect Tally | Only a link: "Nothing to set here" | — | The Tally page | **Remove** (the Tally page) |
+| Tally › Books in the cloud | The computers that send Tally's books | TCloud | The Tally page (computers) | **Move** → Tally page › This computer / Details |
+| Tally › Sent to Tally | Only a link to the posting record | — | Tally page › Sent to Tally | **Remove** |
+| GST › GST API, all clients | Every client's GST portal link, until when | GSTAPI | A firm view of the GST page; not a setting | **Move** → GST · TDS · ITR (firm view); the "Needs you" item stays on Home |
+| How the work is done › TDS rates and limits | Rates and yearly limits for every client | TDS working | — | **Keep** → Client defaults |
+| How the work is done › Reading bills | Reading order (free → Google OCR → Claude), keys, tests, diagnostic report | Reading | — | **Keep** → Advanced |
+| How the work is done › AI help (on/off, clients kept from AI) | Claude's suggestions | AIH | — | **Keep** → Advanced |
+| AI help › FinCom Assistant: monthly limit, ₹ to a dollar, use | What the Assistant may spend | Assistant | — | **Move** → Billing |
+| How the work is done › Post automatically | Approved-before lines post by themselves, client by client | 90-autopost.js | Posting to Tally | **Move** → Tally page › Settings tab |
+| How the work is done › Move on by itself (5 switches, this browser) | The page opens what comes next | Smart (64) | — | **Keep** → Advanced, one switch with the 5 on expand |
+| FinCom › Admin console ↗ | FinCom staff only | — | — | **Keep** (hidden for others) |
+| About line (build) | Version | — | — | **Move** → Help |
+| Group headings "Tally", "GST", "How the work is done" | — | — | Empty of settings once the above move | **Remove** |
+| (today on Daily Check's Send) Real sending on/off, test email, test WhatsApp | Daily Check's test mode | assistant_mail (daily/data.js setMail) | — | **Move in** → Email and messages |
+
+**Client setup today** (groups: The client · Tax · Bank · Books), under the client's own settings, not the firm's:
+
+| Today | Read by | Verdict |
+|---|---|---|
+| Company: name, GSTIN, PAN, entity type, other GSTINs | everywhere | **Keep** |
+| Tally: entry numbering, round-off ledger (the company link is already on the Tally page) | posting | **Move** → Tally page, that client's view |
+| TDS: deducts or not, expense ledger per payment type, deductor details | TDS | **Keep** |
+| Suppliers (deductees: PAN, usual payment type, amounts before FinCom) | TDS limits | **Move** → Purchase › Suppliers (it is data, not a setting) |
+| GST: registrations, how each is filed, blocked credit (36-gst-settings.js) | GST | **Keep** |
+| Bank accounts and their Tally ledger | Bank | **Move** → Bank account cards (+ Add account) |
+| Bank rules | Bank | **Move** → Bank › Rules tab (23) |
+| Closed periods, TDS returns filed | posting warnings | **Keep** |
+| Sheet formats learnt | Purchase and Sales import | **Keep** → Advanced |
+
+**The new Settings (18, 19):** six plain groups, each setting with one short line of help.
+1. **Firm**: name, address, logo, people and roles, keep documents for.
+2. **My account**: email and password, two-step sign-in, signed-in devices.
+3. **Client defaults**: financial year, TDS rates and limits, GST defaults for new clients.
+4. **Email and messages**: Daily Check sender (name, reply-to), test mode (emails to the firm only, test WhatsApp number).
+5. **Billing**: plan, credit left, coupon, this month's use, Assistant limit.
+6. **Advanced**: reading bills, AI help, move on by itself, backups, inbox keys, sheet formats, diagnostic report.
+A line at the foot of the list says Tally is set up on the Tally page only. The "Needs you" strip stays. Old addresses (`#/settings/bridge`, `#/settings/tcloud`, `#/settings/postlog`, `#/settings/gstapi`, `#/settings/autopost`) open the page that now holds them.
 
 ## 7. Phased rollout
 
@@ -258,10 +412,13 @@ Effort is in developer-days for one experienced front-end developer working with
 | D7 | **The manual voucher form** (Phase 3) | Build full entry in FinCom, or keep FinCom as "bring in, review, post" with Journal only | Build it: it is what makes FinCom feel like accounting software, not only a review tool |
 | D8 | **Compact rows for accountants** | One row height (44 px) for all, or a "Compact" choice (36 px) in Settings | Offer the choice; default to 44 |
 | D9 | **Order of rollout** | Phase 1 in one release, or item by item behind a "New look" switch for the firm | Item by item, with the switch, over 3 weekly releases |
+| D10 | **Bank tabs** | Statements · Lines to review · Rules · Reconciliation, or keep the single page with a statement chooser | The four tabs; Lines to review opens first when there is work, Statements otherwise |
+| D11 | **Settings groups** | The six groups above, or keep "How the work is done" | The six; Tally, GST API, Post automatically and Bank rules leave Settings for their pages |
 
 ---
 
 ## 9. What this branch contains
 
 - `app/src/proposal/` holds the mockups (React, made-up data, own Vite config). Nothing in the live app imports them, and `app/index.html` does not reach them.
+- `app/src/proposal/screens2.jsx` (Statements, upload, Settings) and `screens3.jsx` (Bank lines with everything, Rules) are round 2.
 - `docs/UX-QUICKBOOKS-OF-INDIA.md` is this plan.

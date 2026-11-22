@@ -3,8 +3,8 @@ import { useState } from "react";
 import { ArrowDownLeft, ArrowUpRight, Landmark, Percent, FileText, Sparkles, Mail, Plug, ChevronRight, ChevronDown, Check, Upload,
   ReceiptText, TrendingUp, HandCoins, Wallet, BookOpen, ArrowLeftRight, FileSpreadsheet, Camera, UserPlus, Search, X, Calendar,
   Filter, Download, CircleCheck, Paperclip, Info, RefreshCw, Copy, Inbox, CornerDownLeft, ArrowUp, ArrowDown, Building2, Users, Hash } from "lucide-react";
-import { Shell, TopBar, Pill, Due, Sk, inr, short, STATUS } from "./ui.jsx";
-import { FIRM, CLIENT, FLOW, BANKS, TODOS, OVERNIGHT_FIRM, DUES, OVERNIGHT_CLIENT, NEXT, LINES, SEARCH, TALLY_COS } from "./data.js";
+import { Shell, TopBar, Pill, Due, Sk, inr, short, STATUS, BankTabs } from "./ui.jsx";
+import { FIRM, CLIENT, FLOW, BANKS, TODOS, OVERNIGHT_FIRM, DUES, OVERNIGHT_CLIENT, NEXT, LINES, SEARCH, TALLY_COS, PORTS } from "./data.js";
 
 const Av = ({ t }) => <span className="p-av sm">{t}</span>;
 
@@ -145,7 +145,8 @@ export function Bank({ state = "full", phone }) {
   const c = (n) => state === "full" ? n : state === "loading" ? "…" : 0;
   const tot = rows.reduce((a, r) => ({ out: a.out + r.out, in: a.in + r.in }), { out: 0, in: 0 });
   return <Shell scope="client" active="bank" phone={phone} noCounts={state === "empty"}>
-    <TopBar title="Bank" crumb={<>{CLIENT.name}</>} actions={<button className="p-btn"><Upload size={15} />Upload statement</button>} />
+    <TopBar title="Bank" crumb={<>{CLIENT.name}</>} />
+    <BankTabs on="lines" right={<button className="p-btn p-sm"><Upload size={14} />Upload statement</button>} />
     <div className="p-page">
       <div className="p-acct">{BANKS.map((b, i) => <button key={b.no} className="p-acct-i" aria-pressed={i === 0}><Landmark size={16} /><span><b>{b.name} ••{b.no}</b><small>{state === "empty" && i === 0 ? "No statement yet" : inr(b.bal) + " · " + b.asOf}</small></span>{i === 0 && state === "full" && <em className="p-count">12</em>}</button>)}
         <button className="p-acct-add">+ Add account</button></div>
@@ -253,30 +254,42 @@ function Field({ label, wide, children }) { return <label className={"p-field" +
 /* ---------------------------------------------------------------- Tally, one page */
 export function Tally({ state = "linking" }) {
   const fresh = state === "new";
+  // the 3-step guide: install the bridge, open Tally, link the company; each ticked when done (the owner's spec, 22-Nov-2026)
   const steps = [
-    { t: "Install FinCom Bridge on the Tally computer", s: "One download, about 2 minutes. Runs quietly next to Tally.", done: !fresh, b: "Download for Windows" },
-    { t: "Turn on Tally's connection", s: "In TallyPrime: F1 Help › Settings › Connectivity › set ‘TallyPrime acts as’ to Both, port 9000.", done: !fresh, b: "Check again" },
-    { t: "Link each Tally company to its client", s: fresh ? "FinCom lists the companies open in Tally and suggests the client for each." : "14 of 16 linked. 2 companies are open in Tally without a client.", done: false, b: "Link 2 companies" },
+    { t: "Install FinCom Bridge", s: "On the computer with Tally. About 2 minutes.", done: !fresh, b: "Download for Windows", got: "Bridge 2.5.17 · port 9103" },
+    { t: "Open Tally", s: "Open TallyPrime and your company. FinCom finds the port by itself.", done: !fresh, b: "Check again", got: "TallyPrime 5.1 · port 9002" },
+    { t: "Link the company", s: "Pick the FinCom client for the company open in Tally.", done: !fresh, b: "Link company", got: "Kaveri Home Decor (2026-27)" },
   ];
-  const now = fresh ? 0 : 2;
+  const now = fresh ? 0 : -1;
   return <Shell scope="firm" active="tally" tallyOff={fresh}>
     <TopBar title="Tally" sub={fresh ? "Connect once; FinCom then reads and posts by itself" : null} />
     <div className="p-page">
       <div className="p-status" data-t={fresh ? "muted" : "ok"}>
         <i className="p-dot" data-t={fresh ? "muted" : "ok"} />
         {fresh ? <span><b>Not connected yet.</b> Three steps, about 5 minutes.</span>
-          : <span><b>Connected.</b> TallyPrime 5.1 on OFFICE-PC · last sync 2 min ago · 14 of 16 clients linked</span>}
+          : <span><b>Connected.</b> Your Tally is on port 9002. 5 ports in use by other users. Port 9001 is free.</span>}
         <span className="p-grow" />
         {!fresh && <button className="p-btn p-sm"><RefreshCw size={14} />Sync now</button>}
       </div>
       <section className="p-card p-steps">
-        <div className="p-card-h"><h2>{fresh ? "Connect Tally" : "Set-up"}</h2><span className="p-quiet">{fresh ? "Step 1 of 3" : "2 of 3 done"}</span></div>
+        <div className="p-card-h"><h2>{fresh ? "Connect Tally" : "Set-up"}</h2><span className="p-quiet">{fresh ? "Step 1 of 3" : "3 of 3 done"}</span></div>
         <ol>{steps.map((x, i) => <li key={i} data-s={x.done ? "done" : i === now ? "now" : "later"}>
           <span className="p-step-n">{x.done ? <Check size={15} strokeWidth={3} /> : i + 1}</span>
-          <div><b>{x.t}</b>{(i === now || fresh) && <small>{x.s}</small>}
-            {i === 1 && i === now && <div className="p-copy">Port <code>9000</code><Copy size={13} /></div>}</div>
-          {i === now ? <button className="p-btn p-primary">{x.b}</button> : x.done ? <span className="p-quiet">Done</span> : null}
+          <div><b>{x.t}</b>{!x.done && <small>{x.s}</small>}</div>
+          {i === now ? <button className="p-btn p-primary">{x.b}</button> : x.done ? <span className="p-quiet p-got">{x.got}<Check size={14} className="p-okic" /></span> : null}
         </li>)}</ol>
+      </section>
+      <section className="p-card p-list p-ports">
+        <div className="p-card-h p-pad"><h2>This computer</h2><span className="p-quiet">{fresh ? "Shown once the bridge is installed" : "OFFICE-PC · checked 1 min ago"}</span></div>
+        {fresh ? <div className="p-ports-none"><Plug size={18} /><span>After step 1, FinCom shows which ports Tally uses here, and which are free.</span></div>
+        : <table className="p-table">
+          <thead><tr><th>Port</th><th>Status</th><th>Detail</th><th /></tr></thead>
+          <tbody>{PORTS.map((r, i) => <tr key={i} className="p-prow" data-t={r.t}>
+            <td><span className="p-portnums">{r.p.map((n) => <code key={n}>{n}</code>)}</span></td>
+            <td><span className="p-pst"><i className="p-dot" data-t={r.t} />{r.st}</span></td>
+            <td className="p-quiet">{r.d}</td>
+            <td className="p-r">{r.t === "free" ? <button className="p-btn p-sm"><Copy size={13} />Copy port</button> : r.more ? <ChevronRight size={16} className="p-quiet" /> : null}</td></tr>)}</tbody>
+        </table>}
       </section>
       {!fresh && <section className="p-card p-list">
         <div className="p-tabs"><button aria-selected="true">Companies <em>16</em></button><button>Sent to Tally <em>54 today</em></button><button>Settings</button></div>
@@ -291,7 +304,7 @@ export function Tally({ state = "linking" }) {
           <tfoot><tr><td colSpan={5}>Showing 6 of 16 · <a className="p-link">Show all</a></td></tr></tfoot>
         </table>
       </section>}
-      <details className="p-card p-details"><summary><ChevronRight size={15} />Details and help <span className="p-quiet">bridge version, computers, log, what FinCom reads and writes</span></summary></details>
+      <details className="p-card p-details"><summary><ChevronRight size={15} />Details and help <span className="p-quiet">bridge version, ports, log, what FinCom reads and writes</span></summary></details>
     </div>
   </Shell>;
 }
