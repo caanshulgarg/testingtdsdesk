@@ -350,7 +350,7 @@ const AuditWP = {
   book(res, b){
     const wb = XLSX.utils.book_new();
     this.sheets(res, b).forEach(([n, rows]) => {
-      const ws = XLSX.utils.aoa_to_sheet(rows);
+      const ws = (typeof FC === "object" && FC.sheet ? FC.sheet : XLSX.utils.aoa_to_sheet)(rows);
       // amounts shown with two decimals
       Object.keys(ws).forEach(k => { if (k[0] !== "!" && ws[k].t === "n" && !ws[k].z && /^[F]\d+$/.test(k) && n !== "Benford") ws[k].z = "#,##0.00"; });
       XLSX.utils.book_append_sheet(wb, ws, n);
@@ -427,7 +427,7 @@ const AuditRep = {
   async toExcel(run){
     await ensureXlsx();
     const d = s => s && String(s).length === 8 ? String(s).slice(6, 8) + "-" + String(s).slice(4, 6) + "-" + String(s).slice(0, 4) : s || "";
-    const wb = XLSX.utils.book_new(), add = (name, rows) => XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), name.slice(0, 31));
+    const wb = XLSX.utils.book_new(), add = (name, rows) => XLSX.utils.book_append_sheet(wb, (typeof FC === "object" && FC.sheet ? FC.sheet : XLSX.utils.aoa_to_sheet)(rows), name.slice(0, 31));
     add("Observations", [["#", "Severity", "Area", "Clause", "Observation", "Items", "Amount", "Effect", "Recommendation", "Status", "Note"]].concat(run.findings.map((f, i) =>
       [i + 1, f.sev, (this.AREAS.find(a => a[0] === f.area) || [])[1], f.clause, f.title + ": " + f.problem, f.count, r2(f.amount), f.impact, f.suggestion, (this.STATUS.find(x => x[0] === this.status(f.id).s) || [])[1], this.status(f.id).note || ""])));
     add("Annexure", [["#", "Observation", "Date", "Voucher", "Type", "Party or ledger", "Amount", "Detail"]].concat(run.findings.flatMap((f, i) => { const rs = this.rowsOf(run, f); return rs.map(r => [i + 1, f.title, d(r.date), r.no, r.type, r.party, r2(r.amount || 0), r.note || ""]).concat(rs.cut ? [[i + 1, f.title, "", "", "", (rs.cut - rs.length) + " more rows: run the audit again for them", "", ""]] : []); })));
@@ -519,7 +519,7 @@ const AuditRep = {
     const d = this.form3cd(run);
     await ensureXlsx();
     const wb = XLSX.utils.book_new();
-    d.clauses.forEach(c => XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["Clause " + c.no + ". " + c.title], c.head].concat(c.rows).concat(c.note ? [[], [c.note]] : [])), ("Cl " + c.no).replace(/[\\/?*\[\]:]/g, " ").slice(0, 31)));
+    d.clauses.forEach(c => XLSX.utils.book_append_sheet(wb, (typeof FC === "object" && FC.sheet ? FC.sheet : XLSX.utils.aoa_to_sheet)([["Clause " + c.no + ". " + c.title], c.head].concat(c.rows).concat(c.note ? [[], [c.note]] : [])), ("Cl " + c.no).replace(/[\\/?*\[\]:]/g, " ").slice(0, 31)));
     saveFile(CO().name.replace(/[^A-Za-z0-9]+/g, "-") + "-3CD-working-" + run.from + "-" + run.to + ".xlsx", new Blob([XLSX.write(wb, {bookType: "xlsx", type: "array"})], {type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));
   },
   form3cdHtml(d){
