@@ -107,6 +107,8 @@ function tree() {
       { icon: "mymis", label: "My MIS", on: bt === "mymis", go: () => goClient("books:mymis"), title: "Build your own MIS: choose the figures, add charts, save and share" },
       { icon: "books", label: "Statements", on: bt === "fs", go: () => { S.fsTab = ""; goClient("books:fs"); }, title: "Financial statements: balance sheet, P&L, cash flow, notes and computation, linked to the trial balance" },
       // corporate (07-Nov-2026): a company's profile, e-Forms, resolutions and minutes (screens/corp, its own file)
+      // Income Tax Return (next-itr): AY 2026-27, ITR-3/4/5/6 (screens/itr, its own file)
+      { icon: "reports", label: "Income tax return", on: /^itr/.test(bt), go: () => goClient("books:itr"), title: "AY 2026-27: computation from the books, the CA checks, the official ITR JSON" },
       ...(FS.entityOf(open).code === "C" ? [{ icon: "corp", label: "Corporate", on: /^corp/.test(bt), go: () => goClient("books:corp") }] : []),
       // the tie-out with Tally is a tab of Audit
       { icon: "audit", label: "Audit", on: bt === "audit" || bt === "tieout", go: () => goClient("books:audit"), title: "Checks over the books, and the tie-out with Tally" },

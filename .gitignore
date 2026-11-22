@@ -22,3 +22,7 @@ bridge-go/bridge.exe
 
 # the Go tests' whole output, kept by CI for upload (.github/workflows/ci.yml): never committed
 bridge-go/go-test.log
+
+# the CBDT ITR JSON schemas (incometax.gov.in, "All Rights Reserved"): fetched by tools/itr-schemas.sh at test and
+# publish time, checked against their pinned SHA-256; never committed
+app/public/itr-schema/

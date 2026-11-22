@@ -1,0 +1,7 @@
+{ "personalInfo": { "pan": "ZZZPX9999Z", "assesseeName": { "firstName": "DEMO", "surNameOrOrgName": "PROPRIETOR" }, "dob": "1980-05-10",
+    "address": { "residenceNo": "1", "roadOrStreet": "SAMPLE STREET", "localityOrArea": "SAMPLE AREA", "cityOrTownOrDistrict": "NEW DELHI", "stateCode": "07", "countryCode": "91", "pinCode": 110001, "mobileNo": "9000000000", "emailAddress": "demo@example.com" } },
+  "assessmentYear": "2026-27",
+  "bankDetails": [ { "ifscCode": "DEMO0000001", "bankName": "DEMO BANK", "bankAccountNo": "000000000001" } ],
+  "tdsDetails": [ { "tan": "DELS00001A", "deductorName": "SAMPLE CLIENT ONE LTD", "section": "194J", "amountPaid": 500000, "taxDeducted": 50000 },
+                  { "tan": "MUMS00002B", "deductorName": "SAMPLE BUYER TWO PVT LTD", "section": "194C", "amountPaid": 500000, "taxDeducted": 5000 } ],
+  "taxPaid": { "advanceTax": [ { "bsrCode": "0000001", "dateDep": "2026-03-14", "srlNoOfChaln": "00011", "amt": 40000 } ] } }

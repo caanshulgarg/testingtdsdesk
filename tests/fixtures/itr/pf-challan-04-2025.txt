@@ -1,0 +1,13 @@
+EMPLOYEES' PROVIDENT FUND ORGANISATION
+Payment Confirmation Receipt
+Establishment Code & Name : DLCPM0000001000 , DEMO PROPRIETOR
+TRRN No : 1112025000001
+Wage Month : April 2025
+A/C No 01 : 8130.00
+A/C No 02 : 254.00
+A/C No 10 : 3500.00
+A/C No 21 : 210.00
+A/C No 22 : 0.00
+Employee's Share : 5040.00
+Grand Total : 12094.00
+Date of Credit : 22-05-2025

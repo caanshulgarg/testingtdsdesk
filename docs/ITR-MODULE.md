@@ -1,0 +1,205 @@
+# Income Tax Return (AY 2026-27)
+
+FinCom prepares a client's income tax return for AY 2026-27 (FY 2025-26) as the official ITR JSON for ITR-3, ITR-4,
+ITR-5 and ITR-6. The owner imports that JSON into his income tax software (Winman) and files from there. Before the JSON
+is offered, FinCom checks the return the way an experienced CA reviewer would and shows the checks report.
+
+Branch `next-itr` (off `staging-next`). Staging only: nothing here is published, merged or deployed, and no SQL is needed.
+
+## 1. The design
+
+One page per client, under Books in the sidebar: **Income tax return**. Four steps, each a books tab with its own address
+(`#/c/<client>/books/itr`, `itr-comp`, `itr-checks`, `itr-json`):
+
+| Step | What it shows | Details on expand |
+|---|---|---|
+| 1 Data | The portal files (AIS, TIS, 26AS, pre-filled data, PF ECR and challans, ESI challans), one line each; "Bring in files"; the form, regime, filing date, tax audit; the books' revenue, profit and whether the balance sheet tallies | What each file held (counts and totals by section, PAN, AY, stored or not); the return's details (date of birth, verifier, place, software ID, partners, presumptive receipts) with where each came from |
+| 2 Computation | The CA's Computation of Income: business income with every addition and deduction, other heads, set-off, total income, tax, rebate, surcharge, cess, interest, taxes paid, refund or payable. "Checked twice" when the second computation agrees. PDF and Excel | Click a line: its source (section, schedule) and the ledgers behind it |
+| 3 Checks | Counts of Matched / Difference / Missing data / Needs you; the open checks by group | Click a check: both sides with their amounts and sources, the lines behind them, what to do, and "Accept" with a note (or "Confirm" with an answer) |
+| 4 JSON | Not yet / Ready for Winman, with three ticks: the official schema passes, the two computations agree, every check settled | The schema's own questions (Yes/No and choices FinCom cannot know), what the schema says if it fails, the versions made |
+
+The calm style of the client pages: few words, one chip in the heading ("7 to look at" / "JSON ready"), details on expand.
+The page is one lazy chunk (`ITR-*.js`, about 50 KB gzip, with `ITR-*.css` 2 KB); nothing of it is in `legacy.js` or the
+app's first file. Code: `app/src/screens/itr/ITR.jsx`, `itr.css`; the working, all pure and tested in Node, in
+`app/src/lib/itr/`:
+
+| File | Does |
+|---|---|
+| `law.js` | Every rate, limit and date for AY 2026-27, each with its section and source |
+| `tax.js` | The computation (first): heads, presumptive, 40(b), set-off, Chapter VI-A, tax, 87A, surcharge with marginal relief, MAT, 234A/B/C, 234F, rounding |
+| `check.js` | The second computation, written apart (no shared code or figures), and the comparison of 14 figures |
+| `imports.js` | Reading the portal files: detection, PAN, AY, client, counts and totals |
+| `store.js` | Where the work is kept (`b.itr`), the files (the firm's private storage), accepting with a note, versions |
+| `books.js` | The books in the ITR's shape (Part A-BS, Part A-P&L, trading account) and the Schedule BP adjustments, each with its ledgers |
+| `model.js` | The return model: books + imports + the owner's answers -> the computation's input; the person's details |
+| `verify.js` | The checks and the gate |
+| `forms.js` | The mapping layer: FinCom's figures -> the official schema's fields, form by form |
+| `fill.js`, `validate.js`, `json.js` | Completing the JSON (zeros for unmapped amounts, questions for the rest), the draft-04 validator, one JSON with its report |
+| `appData.js`, `sheet.js` | The page's reads of GST / TDS / 3CD; the sheet's PDF and Excel |
+
+## 2. Data sources
+
+| Source | Where it comes from in FinCom | Used for |
+|---|---|---|
+| Tally books | The synced day book (`S.books`, from `tally_vouchers` / `tally_lines` / `tally_ledgers` in the cloud) through the financial statements model (`FinSt`, `src/js/88-fin-statements.js`): every ledger has a code | Part A-BS, Part A-P&L, trading account, profit before tax, every schedule line's ledgers |
+| Income-tax depreciation | `FinSt.taxDep` / `FinDepr` (`src/js/88-fin-depr.js`): blocks and rates of Appendix I, 180-day rule, opening WDV from last year's ITR | Schedule DEP, depreciation allowed under section 32; book depreciation added back |
+| Audit findings | `Audit.calcIn` (`src/js/06-audit.js`), worked out without writing anything | 40(a)(ia) (TDSWatch "should have deducted"), 40A(3) cash payments, 43B(h) MSME dues, penalties |
+| 3CD draft | `Audit.form3cd` (`src/js/07-mis.js`) | The 3CD tie (clauses 21(b), 21(d)) |
+| TDS returns | `TDS.allRows`, the challans and the TDS payable ledgers (`src/js/09-tds.js`, 26Q / 24Q) | Deducted vs payable vs deposited |
+| GST | `GSTR.outward` (`server/_shared/gst3b.js`, GSTR-1 worked out from the books) | Turnover against GSTR-1 / 3B, with the reasons |
+| Portal files | Brought in by the owner (below) | TDS / TCS credit, challans, AIS income, PF / ESI dates |
+| The owner's answers | `b.itr["2026|state"]` | Form, regime, filing date, audit, details, accepted differences, the schema's questions |
+
+### The imports (owner, 22-Nov-2026: "the data comes in by file import first")
+
+| Kind | Formats | Read |
+|---|---|---|
+| AIS | JSON, PDF | TDS / TCS by deductor (TAN) and section, interest, dividend, rent, high-value purchases and sales (SFT), GST turnover, taxes paid |
+| TIS | JSON, PDF | Category, processed and derived value |
+| Form 26AS | TRACES text export ("^"), PDF | TDS (Part I), TCS (Part VI), advance and self-assessment tax challans (BSR, date, serial, minor head 100 / 300); a self-check against each deductor's own totals |
+| Pre-filled data | e-filing JSON | Date of birth, address, email, mobile, bank accounts, TDS lines, challans |
+| PF ECR | EPFO upload text (`#~#`), the statement CSV | Members, wages, employee share, employer share; the wage month (from the file, or its name) |
+| PF challan | EPFO payment receipt (text, PDF) | TRRN, establishment, wage month, A/c 01-22, date of credit |
+| ESI challan | ESIC challan (text, PDF) | Employer code, period, challan number, employee and employer share, paid date |
+
+- **Detection:** each file's kind is told from its content (never its name alone), with its PAN, AY (or wage month, so the
+  AY) and the client. A PDF is read with pdf.js (scripts off); a locked PDF is tried with the client's date of birth
+  (26AS) and PAN + date of birth (AIS).
+- **Wrong files are refused, saying which:** "This AIS is for PAN ZZZPY8888Y (Other Demo Client), not Demo Traders
+  (ZZZPX9999Z)." Another year: "This Form 26AS is for AY 2025-26, not AY 2026-27." A PF or ESI code not yet known for the
+  client is asked once ("Is DLCPM0000001000 this client's PF establishment code?"), never assumed.
+- **What was read:** counts and totals per section, on the file's line.
+- **Storage:** the file goes only to the firm's private storage (bucket `client-docs`, `<firm>/<client>/itr2026-<kind>-<name>`,
+  the Inbox documents' bucket and its row security). Never to this computer's store, the repository or a log; nothing of
+  a file is written to the console (tested). Signed out, what the file holds is kept and the file is not stored (said).
+  What was read is kept in `b.itr`, a part of the client's books (`BOOKS_KEYS` gains `"itr"`), synced item by item through
+  `client_book_items` like the TDS uploads: no new table, so **no SQL**.
+- **Re-import replaces:** one item per AY and kind (per month for ECR, per challan for challans). The same file again
+  (same SHA-256) changes nothing; another file of the same kind replaces the first and its stored copy is removed.
+
+**Layouts to confirm (owner).** Only the ITR schemas are official files FinCom could read: the AIS / TIS compliance
+portal, TRACES, EPFO and ESIC could not be reached from where FinCom is built. Their readers go by field names, from the
+portals' published descriptions; the test files in `tests/fixtures/itr/` are made up in those layouts. Each file's line
+says "layout to confirm on the first real file" until checked. The AIS JSON as downloaded may be locked for the portal's
+offline utility: FinCom says so and asks for the unlocked JSON or the PDF.
+
+## 3. The official schemas
+
+Source: incometax.gov.in, Downloads > Income Tax Returns > "Schema" of each form (fetched 22-Nov-2026):
+
+| Form | File | SHA-256 |
+|---|---|---|
+| ITR-3 | `ITR-3_2026_Main_V1.1.json` (2026-07) | `66f4bd70…25e8b` |
+| ITR-4 | `ITR-4_2026_Main_V1.1.json` (2026-07) | `5e9af500…c2ac` |
+| ITR-5 | `ITR-5_2026_Main_V1.1.json` (2026-08) | `3bb5f158…6a9` |
+| ITR-6 | `ITR-6_2026_Main_V1.0.json` (2026-08) | `15fb2426…6e83e6a` |
+
+JSON Schema draft-04, 0.25-1.3 MB each. The site says "All Rights Reserved", so the schemas are **not kept in the
+repository**: `tools/itr-schemas.sh` fetches them into `app/public/itr-schema/` (git-ignored), refusing any file whose
+SHA-256 differs from the pins (a new version is a deliberate change to `forms.js` and the pins). Vite copies the folder into
+the build, so the page validates against the same files; without them the JSON step says "The official schema could not be
+loaded" and offers nothing. The CBDT validation-rule PDFs (ITR-3 V1.0, ITR-4) were read for the rules quoted below.
+
+Validation: the page has its own draft-04 validator (`validate.js`; it reports any keyword it does not understand rather
+than skipping it); the tests check every JSON with **ajv** as well and require both to agree, and plant faults both must
+reject. The schemas' root does not require `ITR`, so the tests also require `ITR.ITRn`.
+
+**Never invented.** `fill.js` sets 0 only in required *amount* fields FinCom does not map (as the CBDT utilities do for an
+empty line). Every other required field (Yes/No, a choice, a name, a date) comes from FinCom's data, the pre-filled
+data, the owner's details, or is asked on the JSON step with the schema's own description and choices. The software ID
+(`SWCreatedBy`, pattern `SW` + 8 digits) is the owner's to give (owner decision below).
+
+## 4. Computation rules per form
+
+Common: total income rounded to the nearest 10 (288A); each tax figure to the rupee; the payable or refund to the nearest
+10 (288B). Due dates (schemas' `ItrFilingDueDate`): 31-Aug-2026 non-audit, 31-Oct-2026 audit and companies, 30-Nov-2026
+transfer pricing. Interest: 1% a month or part, on the amount rounded down to Rs 100 (rule 119A); 234A from the day after
+the due date, 234B from 1 April 2026, both to the filing date, a self-assessment payment stopping it from the month after
+it is paid; 234C on the instalments 15/45/75/100% (12% and 36% safe), one instalment by 15 March for 44AD / 44ADA; none
+below Rs 10,000 of tax (208). 234F: Rs 5,000, Rs 1,000 up to Rs 5 lakh.
+
+Business income from books: profit before tax (Part A-P&L) + book depreciation + 40(a)(ia) (30%) + 40A(3) + 43B unpaid by
+the due date (statutory dues, leave / bonus provisions, 43B(h) MSME) + 36(1)(va) late employees' PF / ESI + penalties /
+CSR (37) + tax provisions + loss on sale - interest income (to other sources) - profit on sale - 43B of earlier years paid
+- depreciation under section 32. Each line keeps its ledgers and its Schedule BP field. Set-off: a business loss against
+any head but salary (71(2A)); house property loss up to Rs 2 lakh (old regime only); brought-forward business loss
+within 8 years against business only (72); unabsorbed depreciation without limit (32(2)); a late return carries no
+business loss forward (80).
+
+| Form | Who | Rules |
+|---|---|---|
+| ITR-3 | Individual / HUF with books | Slabs: new regime 0-4L nil, 5/10/15/20/25/30% to 24L+ (115BAC(1A)); old 2.5L (3L at 60, 5L at 80) 5/20/30%. 87A: new up to Rs 60,000 to Rs 12 lakh with marginal relief; old Rs 12,500 to Rs 5 lakh. Surcharge 10/15/25/37% above 50L/1Cr/2Cr/5Cr, 25% cap in the new regime, 15% cap on 111A/112/112A, marginal relief at each band. Special rates 111A 20%, 112A 12.5% above 1.25L, 112 12.5%, the unused exemption set against them. Chapter VI-A within limits; only 80CCD(2), 80CCH, 80JJAA in the new regime. Regime: both worked out and shown; the owner chooses; old needs Form 10-IEA (asked) |
+| ITR-4 | Resident individual / HUF / firm (not LLP), presumptive, TI up to 50L | 44AD 6% of digital receipts + 8% of others (limit 2 Cr, 3 Cr if cash up to 5%); 44ADA 50% (50L, 75L if cash up to 5%; not HUF); 44AE Rs 1,000 a ton a month (heavy) / Rs 7,500 a month, at most 10 vehicles. Declared below the minimum, above the limit, wrong entity, TI above 50L, a tax audit or capital gains beyond 112A 1.25L: Needs you (ITR-3 / ITR-5) |
+| ITR-5 | Firm / LLP | 30%, surcharge 12% above 1 Cr with marginal relief, no 87A. 40(b): interest to partners at most 12% simple; working partners' remuneration up to Rs 3 lakh or 90% of book profit on the first Rs 6 lakh (or a loss), 60% on the rest; book profit = business income before the remuneration (Explanation 3); a sleeping partner's remuneration not allowed |
+| ITR-6 | Company | 25% if FY 2023-24 turnover up to Rs 400 crore (asked), else 30%; surcharge 7% / 12% above 1 / 10 Cr with marginal relief. 115BAA: 22% + 10% + 4% (25.168%), no MAT, no MAT credit. MAT 15% of book profit (+ surcharge, marginal relief, cess) when higher; else MAT credit set off down to the MAT (115JAA) |
+
+**AOP / BOI and other ITR-5 persons:** not covered yet (Needs you). **Capital gains:** taxed in the computation; the CG
+schedules are not mapped yet, so a return with capital gains shows them only in Part B (owner decision).
+
+## 5. The checks
+
+Each is Matched (both sides agree to the rupee), Difference (the exact amount, both sides with their sources and the
+lines behind them), Missing data, or Needs you.
+
+| Group | Checks |
+|---|---|
+| 26AS, AIS, TIS | TDS receivable in the books against 26AS (by deductor and section listed); TCS against 26AS; advance-tax ledgers against 26AS challans; self-assessment tax against 26AS; AIS interest, dividend, rent against the return; high-value purchases / sales (Needs you, each listed); AIS GST turnover against the return; AIS TDS against 26AS; TIS business receipts within the turnover; 26AS read completely (its own totals) |
+| Tally books | Sources = application; Part A-P&L profit = the statements' profit; every ledger in a schedule line (the ones not placed named); opening balances = last year's closing (Missing data until last year's balance sheet or ITR is in FinCom); capital account movement (shown with last year's figures) |
+| GST | Turnover = GSTR-1 + the listed reasons (other operating revenue, advances, credit notes across the year end); GSTR-1 = GSTR-3B |
+| TDS returns | Deducted (26Q / 24Q) = credited to TDS payable; deducted = deposited (the undeposited deductees named); 40(a)(ia) worked out and shown |
+| PF and ESI | An ECR for every month; a challan for every ECR; employer's PF in the books = the ECRs (+ admin charges); employees' share credited by the 15th of the next month (36(1)(va)); the dates feed 43B |
+| Tax audit (3CD) | Where a tax audit applies: 3CD clauses 21(b), 21(d) = Schedule BP's 40(a)(ia), 40A(3); a missing 3CD draft is Missing data |
+| The computation | The right form for the entity; regime and rates right; every deduction within its limit; loss set-off and carry-forward (section 80, lapsed losses); ITR-4 limits; Form 10-IEA; the two computations agree on all 14 figures |
+
+## 6. Acceptance rules
+
+1. **Exact or nothing.** Matched only when the two sides agree to the rupee.
+2. **Two independent computations.** `check.js` imports nothing, carries its own figures and works in plain steps; the
+   JSON is offered only when it and `tax.js` agree on all 14 figures (total income, the tax heads, the liability, each
+   interest and fee, payable, refund). That check can never be accepted away.
+3. **Schema-valid.** The JSON must pass the official schema (and, in the tests, ajv).
+4. **Every figure traced.** Every computation line shows its source; every schedule line its ledgers; every check both
+   sides' sources. Unmapped required amounts are 0; nothing else is filled in by FinCom.
+5. **Nothing open.** Every Difference or Missing data is accepted with the owner's note, every Needs you answered with a
+   note; what only the data settles (the form, the regime, the two computations) cannot be accepted.
+6. Each JSON downloaded carries its version: the return JSON exactly as the schema has it (a key outside the schema would
+   make it invalid), and beside it `<form>_<PAN>_AY2026-27_checks.json`: FinCom's version (`fincom-itr-2026.1`), the
+   schema file, the computation's totals, every check with its status, amounts, sources and accepted note, and the JSON's
+   SHA-256. Each download is kept as a version in `b.itr`.
+
+## 7. Owner decisions (please confirm)
+
+1. **87A in the new regime and special-rate income.** FinCom gives the rebate only on the tax on normal income and tests
+   eligibility on total income less special-rate income (Finance Act 2025 amendment to section 87A; ITR-4 validation rule
+   227 reads "total income excluding LTCG"). Shown as "confirm" on the sheet.
+2. **Old-regime 87A with 112A gains:** not against 112A tax (112A(6)); against 111A tax it is allowed. Confirm.
+3. **Due date of 31 August 2026** for non-audit returns (the schemas allow only this for ITR-4; ITR-4 rule 234). Confirm no
+   further extension applies to the client.
+4. **Company rate:** 25% when FY 2023-24 turnover was up to Rs 400 crore (Finance Act 2025, Part I para E). FinCom asks;
+   it does not assume.
+5. **40(b) limits** from AY 2025-26 (Finance (No. 2) Act 2024): Rs 3 lakh or 90% on the first Rs 6 lakh, 60% on the rest.
+6. **36(1)(va)**: no grace days (Checkmate Services, SC 2022); a late month's employees' share is disallowed for good.
+7. **Software ID** (`SWCreatedBy`): FinCom has no CBDT software ID. Give Winman's or the firm's, or leave the placeholder
+   for Winman to replace on import. FinCom asks for it; it never makes one up.
+8. **Schemas in the build:** the CBDT schemas are fetched at test and publish time and served from FinCom's own site to
+   the page (not committed). Confirm serving them from the site is acceptable, or the page can fetch them another way.
+9. **Portal file layouts** (AIS, TIS, 26AS, pre-filled data, ECR, challans): built from published descriptions; the first
+   real file of each kind should be checked (the page marks them).
+10. **Not covered yet:** AOP / BOI / trusts in ITR-5; capital gains schedules (CG, 112A) in the JSON; Ind AS balance sheet
+    figures in ITR-6 (zeros, with the Schedule III balance sheet filled); Schedule DEP block detail in the JSON (the total
+    is mapped); salary schedule detail. Each is a figure of 0 or a "Needs you", never a guess.
+
+## 8. Tests
+
+All on made-up data (`tests/fixtures/itr/`, `tests/itr_demo.mjs`):
+
+| Test | What |
+|---|---|
+| `node tests/run_itr_imports.mjs` | Each kind detected with PAN / AY / month, counts and totals, the PDF route, refusals (another PAN, another year, unknown, locked, an ITR JSON, no month), re-import, firm storage only, nothing logged |
+| `node tests/run_itr_tax.mjs` | Every rule with hand-worked figures and edge cases (87A and its relief, surcharge bands with marginal relief, both regimes, seniors, MAT and credit, 115BAA, 40(b), 44AD / 44ADA / 44AE thresholds, losses, VI-A limits, special rates, rounding, 234A/B/C/F, 43B and 36(1)(va) dates); 600 random returns through both computations; a planted one-rupee difference caught |
+| `node tests/run_itr_schema.mjs` | Pinned schema files; every form and scenario passes ajv and the page's validator alike; planted faults rejected by both; non-amount fields asked, never filled; the JSON's figures are the computation's |
+| `node tests/run_itr_verify.mjs` | Every check Matched on agreeing sides, and each planted fault found with its exact amount; Missing / Needs you; the gate |
+| `python3 tests/run_itr_ui.py` | The page, desktop and phone: Data, a file brought in, a wrong PAN refused, re-import, the sheet with its ledgers, PDF, Excel, the checks, a difference opened, accepting only with a note, the JSON offered only when settled, the download passing ajv; fits the width. `ITR_SHOTS=<dir>` saves the design screenshots |
+| `run_every_screen.py`, `run_legacy_room.py` | The four steps open on real (fixture) books with no error; legacy.js and the first file within their budgets |
+
+Run `sh tools/itr-schemas.sh` before building and before the schema test.
