@@ -24,6 +24,7 @@
  "20-bank-statements.js",
  "21-repairing-a-statement.js",
  "22-written-rules.js",
+ "22-bank-guards.js",
  "23-column-filters.js",
  "24-pair-spake.js",
  "24-tally-bridge.js",

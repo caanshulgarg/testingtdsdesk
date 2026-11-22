@@ -25,9 +25,11 @@
     "OWN_BANK",
     "vchTypeOf",
     "billVt",
-    "salesVt"
+    "salesVt",
+    "bankSalesOf",
+    "bankSalesAlloc"
   ],
-  "sha256": "81e4dd052a87ae376e841d007d4a22017021b6dd96f2d4cb4080b0e50b17e2bd",
+  "sha256": "b4c01121cc5827d10fe496cc6c981b6face1886f659ca8d6bdc408c62f981257",
   "files": [
     "purchase-bill.xml",
     "journal.xml",

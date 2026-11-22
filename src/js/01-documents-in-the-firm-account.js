@@ -1678,10 +1678,11 @@ async function ocrCanvas(c, psm, opts){
 /* A result is accepted only when every check passes.                  */
 /* ------------------------------------------------------------------ */
 const MONTHS = {jan:1, feb:2, mar:3, apr:4, may:5, jun:6, jul:7, aug:8, sep:9, sept:9, oct:10, nov:11, dec:12};
-function toIsoDate(d, m, y){
+// lo: the first year taken (2017, the first year of GST, for bills; 2000 for a bank statement's lines: bankDate)
+function toIsoDate(d, m, y, lo){
   d = +d; m = +m; y = +y;
   if (y < 100) y += 2000;
-  if (!(y >= 2017 && y <= 2035 && m >= 1 && m <= 12 && d >= 1 && d <= 31)) return "";
+  if (!(y >= (lo || 2017) && y <= 2035 && m >= 1 && m <= 12 && d >= 1 && d <= 31)) return "";
   const dt = new Date(Date.UTC(y, m - 1, d));
   if (dt.getUTCMonth() !== m - 1) return "";
   return y + "-" + String(m).padStart(2, "0") + "-" + String(d).padStart(2, "0");

@@ -16,7 +16,9 @@ const js = [SHARED].concat(ORDER.map(f => fs.readFileSync(path.join(SRC, f), "ut
 const NAMES = ["xesc", "r2", "num", "amt", "toTallyDate", "fmtDate", "toDateObj", "MONTHS", "MONTHS3", "voucherXml", "vchNoFor", "remoteIdFor", "remoteIdTrial",
   "bankVoucherXml", "ledgerMasterXml", "salesVoucherXml", "customerMasterXml", "GST_STATES", "stateOfGstin", "fpHash", "setAutoNumbering", "ledNm", "OWN_BANK",
   // the sheet-import change: voucherXml takes the voucher type from vchTypeOf (src/js/03), which asks billVt; salesVoucherXml from salesVt (src/js/25)
-  "vchTypeOf", "billVt", "salesVt"];
+  "vchTypeOf", "billVt", "salesVt",
+  // next-fix-audit-bank: a receipt's allocations, of the invoices of the customer posted to (src/js/22-bank-guards.js)
+  "bankSalesOf", "bankSalesAlloc"];
 const re = /\n(?:async function|function|const|let|var|class) ([A-Za-z_$][\w$]*)/g;
 const decl = []; let m;
 while ((m = re.exec(js))) decl.push({name: m[1], at: m.index});
@@ -29,6 +31,8 @@ const ctx = {console, Math, JSON, Date, Number, String, RegExp, Object, Array, S
   S: {bank: null, sales: {cfg: {voucherType: "Sales"}}},
   tallyLedgerName: n => n, narrationFor: e => e.narr, exactLedger: n => n, knownLedgers: () => new Map(), bankLedgers: () => ({tds: "TDS Payable"}),
   B: () => ({salesRef: []}), SL: () => ({cfg: {voucherType: "Sales"}}),
+  // the client's own GSTIN the invoice is under (src/js/25, 16-Nov-2026: by the state of its registration): one here
+  salesCmpGstin: (v, co) => co.gstin || "",
   // the invoice's lines (salesLines works them out from the invoice and the company's ledgers): given here as they come out
   salesLines: v => v.lines,
   // the company's GSTIN the invoice is made under (src/js/25 salesCmpGstin, from the client's own GSTINs): the invoice here
