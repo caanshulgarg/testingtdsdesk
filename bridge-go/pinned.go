@@ -176,8 +176,13 @@ var requestRebuild = map[string]func(x string) []string{
 		}
 		return o
 	},
-	editLogProbeID:  pinOne(func(x string) string { return editLogProbeRequest(pinCo(x), group(`\$MasterID = (\d+)`, x, 1)) }),
-	"Import":        func(x string) []string { return importRebuild(x) },
+	editLogProbeID: pinOne(func(x string) string { return editLogProbeRequest(pinCo(x), group(`\$MasterID = (\d+)`, x, 1)) }),
+	"Import": func(x string) []string { // 2.5.18: a payroll-shaped body is never a plain Import (B1)
+		if rePayrollMarks.MatchString(x) {
+			return nil
+		}
+		return importRebuild(x)
+	},
 	payrollImportID: payrollImportRebuild,
 	"FinComMeasureB": pinOne(func(x string) string {
 		a, z := pinDates(x)
