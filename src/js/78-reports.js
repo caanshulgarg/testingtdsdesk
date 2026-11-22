@@ -1992,6 +1992,8 @@ const FSX = (() => {
     const reconTot = sum(recon, z => z[1]);
     return {from: inp.from, to: inp.to, months: ms, rec, pay, lines, totals: {receipts: R, payments: Pp, net: R - Pp}, cash: {open, move, close: open + move, ledgers: cashL.map(t => t.l)}, recon, reconTot, diff: reconTot - move, voucherDiff: (R - Pp) - move, entity: inp.entity || {}};
   };
+  // (review of 22-Nov-2026) each head's month by an exact match (SUMPRODUCT): SUMIFS read * ? ~ in a Tally group's name as
+  // wildcards and a leading < > = as a comparison, so "Salary*" added up "Salary" too
   X.cashMisExcel = function(cm){
     const mL = m => { const [y, mo] = m.split("-"); return MON[Number(mo) - 1].slice(0, 3) + "-" + y.slice(2); };
     const ln = {name: "Lines", rows: [["Date", "Month", "Voucher", "Type", "Head", "Ledger", "Receipt", "Payment"]], widths: [12, 9, 14, 14, 30, 36, 16, 16]};
@@ -2000,7 +2002,7 @@ const FSX = (() => {
     const rp = {name: "Receipts and Payments", rows: [[String((cm.entity || {}).name || "").toUpperCase()], ["Receipts and payments (cash basis) " + cm.from + " to " + cm.to], [X.UNITS], [], ["Head"].concat(cm.months.map(mL)).concat(["Total"])], widths: [40].concat(cm.months.map(() => 14)).concat([16])};
     const block = (title, list, col) => {
       rp.rows.push([{v: title, s: 1}]); const first = rp.rows.length + 1;
-      list.forEach(h => { const r = rp.rows.length + 1; rp.rows.push([h.head].concat(cm.months.map(m => ({v: (h.m[m] || 0) / 100, f: "SUMIFS(" + col + ",CM_H,$A" + r + ",CM_M,\"" + m + "\")", s: 2}))).concat([{v: h.t / 100, f: "SUM(B" + r + ":" + colL(cm.months.length) + r + ")", s: 3}])); });
+      list.forEach(h => { const r = rp.rows.length + 1; rp.rows.push([h.head].concat(cm.months.map(m => ({v: (h.m[m] || 0) / 100, f: "SUMPRODUCT((CM_H=$A" + r + ")*(CM_M=\"" + m + "\")*" + col + ")", s: 2}))).concat([{v: h.t / 100, f: "SUM(B" + r + ":" + colL(cm.months.length) + r + ")", s: 3}])); });
       const last = rp.rows.length, r = last + 1;
       rp.rows.push([{v: "Total " + title.toLowerCase(), s: 1}].concat(cm.months.map((m, j) => ({v: sum(list, h => h.m[m] || 0) / 100, f: "SUM(" + colL(j + 1) + first + ":" + colL(j + 1) + last + ")", s: 3}))).concat([{v: sum(list, h => h.t) / 100, f: "SUM(" + colL(cm.months.length + 1) + first + ":" + colL(cm.months.length + 1) + last + ")", s: 3}]));
       return r;
