@@ -1623,6 +1623,47 @@ func cancelledEnd(v M) string {
 	return "failed"
 }
 
+// review of the audit fix: a posting stopped on this computer: every entry never sent (no result) goes up as failed,
+// "not sent: stopped on this computer", so FinCom frees it for posting again; what was sent stays as it was. A copy:
+// this computer's progress.json is not changed (a retry here still sends those entries)
+const stoppedNotSentWords = "not sent: stopped on this computer"
+
+func cancelledNotSent(v M) M {
+	had := map[string]bool{}
+	for _, x := range arr(v["results"]) {
+		if r := obj(x); r != nil {
+			had[str(r["id"])] = true
+		}
+	}
+	out := M{}
+	for k, x := range v {
+		out[k] = x
+	}
+	res := append([]any{}, arr(v["results"])...)
+	var items []any
+	for _, x := range arr(v["items"]) {
+		e := obj(x)
+		if e == nil {
+			items = append(items, x)
+			continue
+		}
+		k := str(e["id"])
+		if k == "" || had[k] {
+			items = append(items, e)
+			continue
+		}
+		c := M{}
+		for f, y := range e {
+			c[f] = y
+		}
+		c["state"], c["reason"], c["notSent"] = "failed", stoppedNotSentWords, true
+		items = append(items, c)
+		res = append(res, M{"id": k, "kind": str(e["kind"]), "ok": false, "notSent": true, "state": "failed", "message": stoppedNotSentWords})
+	}
+	out["results"], out["items"] = res, items
+	return out
+}
+
 // postings taken from the queue are followed and reported every few seconds while they run, and at once when they change
 func syncCloudPosts() {
 	cpMu.Lock()
@@ -1670,6 +1711,7 @@ func syncCloudPosts() {
 				continue
 			}
 			st = cancelledEnd(v)
+			v = cancelledNotSent(v)
 		}
 		sig := fmt.Sprint(st, "|", v["done"], "|", v["message"], "|", v["checking"], "|", jsonText(v["items"]))
 		if sig == last {
@@ -1751,6 +1793,15 @@ func syncCloudPosts() {
 			_, _ = cancelJob(id, "stopped by FinCom")
 			delete(cp, id)
 			offlineTold.Delete(id) // review L7
+			saveCloudPosts()
+			continue
+		}
+		if str(v["status"]) == "cancelled" && r.code >= 400 && r.code < 500 && r.code != 409 && r.code != 429 {
+			// review of the audit fix: stopped on this computer, and FinCom does not take its last report (not this bridge's
+			// posting any more, or no longer there): let go and said, never asked again for ever
+			writeLog(fmt.Sprintf("Posting from FinCom's queue %s: stopped on this computer; FinCom did not take its last report (%d); let go", id, r.code))
+			delete(cp, id)
+			offlineTold.Delete(id)
 			saveCloudPosts()
 			continue
 		}

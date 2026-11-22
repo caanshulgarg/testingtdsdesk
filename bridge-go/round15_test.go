@@ -87,7 +87,7 @@ func r15Imports(f *standTally) (sizes []int, messages []int) {
 func TestPostTrustsCreatedReply(t *testing.T) {
 	td := today()
 	f := newStandTally(t)
-	standBridge(t, f, `,"PostPaceOff":true`) // the fixed parts (postpace.go): this test is about the reply, not the pace
+	standBridge(t, f, `,"PostPaceOff":true`) // the fixed parts (postpace.go): this test is about one request's reply
 	p := r15Job(t, "job-r15-trust", r15Bills("tr", td, 3))
 	if str(p["status"]) != "done" || p["checking"] == true {
 		t.Fatalf("the job: %s %q checking %v", p["status"], p["message"], p["checking"])
@@ -245,7 +245,13 @@ func TestPostNoReadBackRequests(t *testing.T) {
 	td := today()
 	f := newStandTally(t)
 	f.add(td, fgParty, "OLD-1", "Electricity | TDSDesk:rb1", "-1.00") // the same tag in Tally already: not asked about
-	standBridge(t, f, `,"PostPaceOff":true`)                          // the fixed parts (postpace.go): this test is about the reply, not the pace
+	f.slow = func(id, body string) time.Duration {                    // pacing on (the production default): each import timed, 20 ms
+		if id == "Import" {
+			return 20 * time.Millisecond
+		}
+		return 0
+	}
+	standBridge(t, f, "")
 	master := `<LEDGER NAME="Round Fifteen" ACTION="Create"><NAME>Round Fifteen</NAME><PARENT>Sundry Creditors</PARENT></LEDGER>`
 	if _, err := newPostJob(M{"jobId": "job-r15-norb", "company": zz, "guid": "co-guid-1", "masters": []any{M{"id": "m1", "xml": master}}, "vouchers": r15Bills("rb", td, 5), "checkFirst": true}); err != nil {
 		t.Fatal(err)
@@ -261,7 +267,7 @@ func TestPostNoReadBackRequests(t *testing.T) {
 	if f.n("FinComCompany") != 2 || ids[len(ids)-1] != "FinComCompany" {
 		t.Fatalf("the company check went %d times (want once before the job and once after it): %v", f.n("FinComCompany"), ids)
 	}
-	if f.n("Import") != 2 { // the master, then the five bills in one request
+	if f.n("Import") != 3 { // the master, then the five bills as the pace sizes them (pacing on): 2 (not known yet), then 3
 		t.Fatalf("%d imports: %v", f.n("Import"), f.ids())
 	}
 	for _, id := range []string{dupCheckID, tagCheckID, masterCheckID, "TDSDeskVchHeads", "Day Book"} {
@@ -394,7 +400,7 @@ func TestPostQueueNeverHeld(t *testing.T) {
 	td := today()
 	f := newStandTally(t)
 	f.importSkip = func(x string) bool { return strings.Contains(x, "TDSDesk:qa") } // Tally refuses job A's entries
-	standBridge(t, f, `,"PostPaceOff":true`)                                        // the fixed parts (postpace.go): this test is about the reply, not the pace
+	standBridge(t, f, `,"PostPaceOff":true`)                                        // the fixed parts (postpace.go): this test is about the queue
 	t0 := time.Now()
 	if _, err := newPostJob(M{"jobId": "job-r15-qa", "company": zz, "guid": "co-guid-1", "vouchers": r15Bills("qa", td, 3)}); err != nil {
 		t.Fatal(err)

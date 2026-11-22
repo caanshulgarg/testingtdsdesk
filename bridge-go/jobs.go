@@ -981,20 +981,18 @@ func jobWorker(dir string) {
 			gate.Lock()
 			// audit fix: the record looked at again under the gate: a voucher sent from this computer since the job's
 			// check (a browser's /import between two parts) is refused on the record and never sent a second time
-			if gone := sentSinceCheck(r, seenRec); len(gone) > 0 {
+			// (review: only the entries that got a refusal are taken off; one whose note changed without a refusal goes on
+			// in this part, its note as seen now)
+			if refused, refusals := recheckRefusals(r, seenRec, sentBeforeRefusal); len(refused) > 0 {
 				gate.Unlock()
-				for _, it := range gone {
-					k := str(it["id"])
-					rr := sentBeforeRefusal(k, str(it["xml"]))
-					if rr == nil {
-						continue
-					}
+				for i, it := range refused {
+					k, rr := str(it["id"]), refusals[i]
 					rr["company"], rr["port"] = company, port
 					results = append(results, rr)
 					delete(sending, k)
 					writeLog("  voucher " + k + ": NOT SENT: " + str(rr["message"]))
 				}
-				pq.drop(gone)
+				pq.drop(refused)
 				p["inflight"] = []any{}
 				save()
 				continue
@@ -1313,6 +1311,22 @@ func cloudPostsHas(id string) bool {
 		}
 	}
 	return false
+}
+
+// the part's vouchers refused on the record now (sent from this computer since the job's check), with their refusals.
+// Review: only those; one whose note changed but gives no refusal now (its note gone again) stays in the part, its note
+// as seen now
+func recheckRefusals(r importReq, seen map[string]string, refuse func(id any, xml string) M) (refused, refusals []M) {
+	for _, it := range sentSinceCheck(r, seen) {
+		k := str(it["id"])
+		if rr := refuse(k, str(it["xml"])); rr != nil {
+			refused, refusals = append(refused, it), append(refusals, rr)
+		} else {
+			key := acceptedKey(k, str(it["xml"]))
+			seen[key] = recSig(acceptedInfo(key))
+		}
+	}
+	return
 }
 
 // audit fix: a record note as the job's check saw it ("" when there was none)

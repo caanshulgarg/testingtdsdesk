@@ -38,11 +38,13 @@ type postQueue struct {
 }
 
 // speed audit (22-Nov-2026, the owner's approval): single imports of 9 and 42 bills took 14.5 s and 12.1 s at Tally,
-// freezing it for the person. Each part is now sized by the company's own measured time a voucher (bills and bank lines
-// apart), kept in sync\post-pace.json as day-pace.json is: the part aims at PostTargetMs (1350 ms); a company whose
-// time is not known starts with 2 vouchers at most; no part is predicted over 2 s, except a single voucher that alone
-// takes longer; every part's time is learned. It grows at most doubled a part; PostBatchBills / PostBatchBank, when set,
-// are the most a part holds. PostPaceOff true: the fixed sizes as before.
+// freezing it for the person. Each part is now sized by the company's own measured time a voucher and a KB of XML
+// (bills and bank lines apart; the larger estimate decides), kept in sync\post-pace.json across bridge versions: the
+// part aims at PostTargetMs (1350 ms); a company whose time is not known starts with 2 vouchers at most; a job's first
+// part is at most PostBatchBills (10) / PostBatchBank (50) and the company's last whole part; no part is predicted over
+// 2 s, except a single voucher that alone takes longer; every answered part's time is learned (a timeout is not: the
+// next part is half). It grows at most doubled a part; PostBatchBills / PostBatchBank, when set, are the most a part
+// holds. PostPaceOff true: the fixed sizes as before.
 const (
 	paceStartMax = 2    // vouchers in a part while the company's time is not known
 	paceHardMs   = 2000 // the owner's rule: each request 2 s at most
@@ -82,18 +84,53 @@ func paceCap(bank bool) int {
 	return maxBatch
 }
 
-// the next part's size from the company's time a voucher (ms): unknown, 2 at most; else the target over it, at most
-// doubled from the part before in this job, never predicted over 2 s (one voucher when it alone takes longer)
+// review of the speed audit: the most a job's FIRST part holds: PostBatchBills (10) / PostBatchBank (50), and no more
+// than the company's last part in good time (the previous job's), so a new job never starts bigger than the last went
+func paceFirstCap(bank bool, rec postPaceRec) int {
+	c := postBatchBills()
+	if bank {
+		c = postBatchBank()
+	}
+	if rec.Part > 0 {
+		c = minI(c, rec.Part)
+	}
+	return c
+}
+
+// a voucher's size in KB (its XML), for the time a KB
+func paceKB(it M) float64 { return float64(maxI(len(str(it["xml"])), 1)) / 1024 }
+
+// the next part's size from the company's times (ms a voucher and ms a KB of XML, bills and bank lines apart): unknown,
+// 2 at most; else as many as the target holds by the LARGER of the two estimates (heavy bills after light ones are
+// sized by their size, not their count), at most doubled from the part before in this job, the first part of a job
+// under paceFirstCap; never predicted over 2 s (one voucher when it alone takes longer)
 func (q *postQueue) paceSize(bank bool) int {
 	c := paceCap(bank)
-	per := postPaceMs(q.key, bank)
+	rec := postPaceGet(q.key, bank)
+	if q.sent[bank] == 0 {
+		c = minI(c, paceFirstCap(bank, rec))
+	}
+	per, perK := rec.perVch(), rec.perKB()
 	if per <= 0 {
 		return clampBatch(minI(paceStartMax, c))
 	}
-	target := postTargetSec() * 1000
-	n := int(math.Floor(target / per))
-	if hard := int(math.Floor(paceHardMs / per)); n > hard {
-		n = hard
+	target := postTargetSec() * 1000 // 1350 ms by default, 1800 at most: under the 2 s rule
+	items := q.bills
+	if bank {
+		items = q.bank
+	}
+	n := 0
+	if len(items) == 0 {
+		n = int(math.Floor(target / per))
+	} else {
+		kb := 0.0
+		for i := 0; i < len(items) && i < c; i++ {
+			kb += paceKB(items[i])
+			if math.Max(float64(i+1)*per, kb*perK) > target {
+				break
+			}
+			n = i + 1
+		}
 	}
 	if prev := q.sent[bank]; prev > 0 && n > 2*prev {
 		n = 2 * prev
@@ -134,39 +171,72 @@ func (q *postQueue) done(r importReq, secs float64, err error) {
 		return
 	}
 	n := len(r.items)
+	left := 0 // what is left after this part (0: it was the last, maybe cut short by the queue's end)
 	switch {
 	case r.kind == "master":
 		q.masters = q.masters[n:]
 		return
 	case r.bank:
 		q.bank = q.bank[n:]
+		left = len(q.bank)
 	default:
 		q.bills = q.bills[n:]
+		left = len(q.bills)
 	}
 	if q.fixed {
 		return
 	}
-	if n > 0 && !errors.As(err, &pin) {
-		ms := secs * 1000 / float64(n)
-		if err != nil {
-			ms = math.Max(ms, paceHardMs/float64(n)) // no answer: at least the 2 s over the part, so the next is smaller
-		}
-		if err != nil || secs > 0 {
-			postPaceNote(q.key, r.bank, ms)
-		}
-	}
+	planned := q.size[r.bank]
 	q.sent[r.bank] = n
-	if err != nil && tallyNoAnswer(err) {
-		q.size[r.bank] = clampBatch(minI(q.paceSize(r.bank), maxI(1, n/2)))
+	if errors.As(err, &pin) {
+		q.size[r.bank] = q.paceSize(r.bank)
 		return
+	}
+	if err != nil {
+		// review: a part Tally did not answer in time teaches nothing of its time (its seconds are the wait, not Tally's):
+		// never folded in; the next part is half of it, and the company's last part in good time no bigger
+		q.size[r.bank] = clampBatch(minI(q.paceSize(r.bank), maxI(1, n/2)))
+		postPaceNote(q.key, r.bank, 0, 0, q.size[r.bank])
+		return
+	}
+	if n > 0 && secs > 0 {
+		kb := 0.0
+		for _, it := range r.items {
+			kb += paceKB(it)
+		}
+		part := 0
+		if n >= planned && left > 0 {
+			part = n // a whole part (not the last one, cut short by the queue's end): the size the next job may start at
+		}
+		postPaceNote(q.key, r.bank, secs*1000/float64(n), secs*1000/kb, part)
 	}
 	q.size[r.bank] = q.paceSize(r.bank)
 }
 
-// --- the companies' times a voucher (sync\post-pace.json), as day-pace.json keeps the day pull's
+// --- the companies' times (sync\post-pace.json), as day-pace.json keeps the day pull's. Review: kept across bridge
+// versions (an update is never slower than before); started again only when the file's format changes
+const postPaceFormat = 2
+
 type postPaceRec struct {
-	Last, Avg float64 // ms a voucher
-	N         int
+	Last, Avg   float64 // ms a voucher
+	N           int
+	KLast, KAvg float64 // ms a KB of the vouchers' XML
+	KN          int
+	Part        int // the company's last whole part in good time (0: none)
+}
+
+// the time to plan by: the larger of the last part's and the running average (a Tally slower now is believed at once)
+func (p postPaceRec) perVch() float64 {
+	if p.N <= 0 {
+		return 0
+	}
+	return math.Max(p.Last, p.Avg)
+}
+func (p postPaceRec) perKB() float64 {
+	if p.KN <= 0 {
+		return 0
+	}
+	return math.Max(p.KLast, p.KAvg)
 }
 
 var postPace = struct {
@@ -194,60 +264,85 @@ func postPaceFreshLocked() {
 	}
 	postPace.dir, postPace.m = d, map[string]*postPaceRec{}
 	o := readObjFile(postPaceFile())
-	if o == nil || str(o["version"]) != BridgeVersion {
+	if o == nil || toInt(o["format"]) != postPaceFormat {
 		return
 	}
 	for k, v := range obj(o["companies"]) {
 		e := obj(v)
-		if e == nil || toInt(e["n"]) <= 0 || num(e["avg"]) <= 0 {
+		if e == nil {
 			continue
 		}
-		postPace.m[k] = &postPaceRec{Last: num(e["last"]), Avg: num(e["avg"]), N: toInt(e["n"])}
+		r := &postPaceRec{Last: num(e["last"]), Avg: num(e["avg"]), N: toInt(e["n"]), KLast: num(e["klast"]), KAvg: num(e["kavg"]), KN: toInt(e["kn"]), Part: toInt(e["part"])}
+		if r.N <= 0 || r.Avg <= 0 {
+			r.N, r.Last, r.Avg = 0, 0, 0
+		}
+		if r.KN <= 0 || r.KAvg <= 0 {
+			r.KN, r.KLast, r.KAvg = 0, 0, 0
+		}
+		if r.N > 0 || r.Part > 0 {
+			postPace.m[k] = r
+		}
 	}
 }
 
-// the time a voucher to plan by (ms): the larger of the last part's and the running average (a Tally slower now is
-// believed at once); 0 when not known
-func postPaceMs(key string, bank bool) float64 {
+func postPaceMapLocked(key string) map[string]*postPaceRec {
+	if key != "" {
+		postPaceFreshLocked()
+		return postPace.m
+	}
+	if postPace.mem == nil {
+		postPace.mem = map[string]*postPaceRec{}
+	}
+	return postPace.mem
+}
+
+// the company's record (a copy; empty when none)
+func postPaceGet(key string, bank bool) postPaceRec {
 	postPace.mu.Lock()
 	defer postPace.mu.Unlock()
-	var p *postPaceRec
-	if key == "" {
-		p = postPace.mem[postPaceKey(key, bank)]
-	} else {
-		postPaceFreshLocked()
-		p = postPace.m[postPaceKey(key, bank)]
+	if p := postPaceMapLocked(key)[postPaceKey(key, bank)]; p != nil {
+		return *p
 	}
-	if p == nil || p.N <= 0 {
-		return 0
-	}
-	return math.Max(p.Last, p.Avg)
+	return postPaceRec{}
 }
 
-func postPaceNote(key string, bank bool, ms float64) {
-	if ms <= 0 {
+// the time a voucher to plan by (ms); 0 when not known
+func postPaceMs(key string, bank bool) float64 { return postPaceGet(key, bank).perVch() }
+
+// a part's times learned (ms a voucher, ms a KB; 0: not learned) and the company's last whole part (0: unchanged)
+func postPaceNote(key string, bank bool, ms, msKB float64, part int) {
+	if ms <= 0 && msKB <= 0 && part <= 0 {
 		return
 	}
 	postPace.mu.Lock()
-	m := postPace.mem
-	if key != "" {
-		postPaceFreshLocked()
-		m = postPace.m
-	} else if m == nil {
-		postPace.mem = map[string]*postPaceRec{}
-		m = postPace.mem
-	}
+	m := postPaceMapLocked(key)
 	k := postPaceKey(key, bank)
 	p := m[k]
 	if p == nil {
-		p = &postPaceRec{Avg: ms}
+		p = &postPaceRec{}
 		m[k] = p
 	}
-	p.Last = ms
-	if p.N > 0 {
-		p.Avg = (p.Avg*3 + ms) / 4
+	if ms > 0 {
+		p.Last = ms
+		if p.N > 0 {
+			p.Avg = (p.Avg*3 + ms) / 4
+		} else {
+			p.Avg = ms
+		}
+		p.N++
 	}
-	p.N++
+	if msKB > 0 {
+		p.KLast = msKB
+		if p.KN > 0 {
+			p.KAvg = (p.KAvg*3 + msKB) / 4
+		} else {
+			p.KAvg = msKB
+		}
+		p.KN++
+	}
+	if part > 0 {
+		p.Part = part
+	}
 	var text string
 	if key != "" {
 		postPace.dirty = true
@@ -264,10 +359,10 @@ func postPaceNote(key string, bank bool, ms float64) {
 func postPaceTextLocked() string {
 	cos := M{}
 	for k, p := range postPace.m {
-		cos[k] = M{"last": round3(p.Last), "avg": round3(p.Avg), "n": p.N}
+		cos[k] = M{"last": round3(p.Last), "avg": round3(p.Avg), "n": p.N, "klast": round3(p.KLast), "kavg": round3(p.KAvg), "kn": p.KN, "part": p.Part}
 	}
 	postPace.saveAt, postPace.dirty = time.Now(), false
-	return jsonText(M{"version": BridgeVersion, "companies": cos})
+	return jsonText(M{"format": postPaceFormat, "version": BridgeVersion, "companies": cos})
 }
 
 // written now when anything is not on the disk yet (the end of a posting)
