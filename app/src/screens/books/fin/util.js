@@ -26,20 +26,23 @@ export const dmy = (ymd) => fmtDate(tallyDate(ymd));
 export const fyEnd = (fy) => String(+fy + 1) + "0331";
 
 // the statements for a year in a unit, worked out once for each state of the books and of what the page keeps (b.fs)
-let memo = { key: "", d: null };
+// (review of 22-Nov-2026) and of the books themselves: the same books object, list of entries and save of the books
+// (BOOKS_REV, moved by every save: an entry changed in place, or ledgers regrouped with the same count), else worked out again
+let memo = { key: "", d: null, b: null, v: null, rev: -1 };
 export function built(b, fy, unit, dec, period) {
   const co = typeof CO === "function" ? CO() : null, firm = S.firm || {};
   // the reports' answers (b.fs.reports, ROUND 100) do not change the statements
   let fsTxt = ""; try { fsTxt = JSON.stringify(Object.assign({}, b.fs, { reports: undefined })); } catch (e) { fsTxt = String(Date.now()); }
   const key = [b.cid, fy, unit, dec, period ? period.from + "-" + period.to + "-" + period.cmp : "", (b.vouchers || []).length, (b.tb || {}).at || "", (b.tb || {}).from || "", Object.keys(b.under || {}).length, Object.keys(b.msme || {}).length, fsTxt,
     co ? [co.name, co.pan, co.cin, co.entity, co.address].join("|") : "", [firm.firmName, firm.frn, firm.partner, firm.mno].join("|")].join("\u0001");
-  if (memo.key === key && memo.d) return memo.d;
+  const rev = typeof BOOKS_REV === "number" ? BOOKS_REV : 0;
+  if (memo.key === key && memo.d && memo.b === b && memo.v === b.vouchers && memo.rev === rev) return memo.d;
   let d;
   try { d = FinSt.build(fy, { unit, dec, period }); } catch (e) { d = { error: String((e && e.message) || e), fy }; if (typeof console === "object") console.error(e); }
-  memo = { key, d };
+  memo = { key, d, b, v: b.vouchers, rev };
   return d;
 }
-export function forget() { memo = { key: "", d: null }; }
+export function forget() { memo = { key: "", d: null, b: null, v: null, rev: -1 }; }
 
 // the codes of the catalogue for this kind, by note (for the code list): [[note title, [[code, label]]]]
 export function codeGroups(kind) {
