@@ -42,7 +42,9 @@ const fyLabel = (fy) => yearOf(fy) + "-" + String(yearOf(fy) + 1).slice(2);
 const RATIOS = [
   ["current", "Current ratio", "Current assets", "Current liabilities", ["CA"], ["CL"], false],
   ["debtEq", "Debt-equity ratio", "Total borrowings (long-term + short-term)", "Shareholders' funds", ["ltb", "stb"], ["EQ"], false],
-  ["dscr", "Debt service coverage ratio", "Earnings available for debt service (profit + depreciation + finance costs)", "Debt service (finance costs)", ["pat", "dep", "fin"], ["fin"], false],
+  // (review of 22-Nov-2026) debt service is the finance costs and the principal repaid in the year (ICAI's guidance on the
+  // Schedule III ratio); the principal as typed for the statements' ratios (Reports: b.fs.rx.det[fy].dscr), nil if not typed
+  ["dscr", "Debt service coverage ratio", "Earnings available for debt service (profit + depreciation + finance costs)", "Debt service (finance costs + principal repaid in the year)", ["pat", "dep", "fin"], ["fin", "prin"], false],
   ["roe", "Return on equity", "Profit for the year", "Shareholders' funds", ["pat"], ["EQ"], true],
   ["invTurn", "Inventory turnover ratio", "Cost of goods sold (materials, purchases, change in inventories)", "Inventories", ["mat", "pur", "chg"], ["inv"], false],
   ["trTurn", "Trade receivables turnover ratio", "Revenue from operations", "Trade receivables", ["rev"], ["tr"], false],
@@ -55,6 +57,7 @@ const RATIOS = [
 const COMP_LABEL = { CA: "Current assets", CL: "Current liabilities", EQ: "Shareholders' funds", ltb: "Long-term borrowings", stb: "Short-term borrowings", dtl: "Deferred tax liabilities (net)",
   tr: "Trade receivables", inv: "Inventories", tpm: "Trade payables: micro and small enterprises", tpo: "Trade payables: others", nci: "Non-current investments", ci: "Current investments",
   obb: "Other bank balances", rev: "Revenue from operations", mat: "Cost of materials consumed", pur: "Purchases of stock-in-trade", chg: "Changes in inventories", exp: "Other expenses",
+  prin: "Principal repaid on borrowings in the year (as typed for the ratios; nil if not typed)",
   pat: "Profit for the year", dep: "Depreciation and amortisation", fin: "Finance costs", pbt: "Profit before tax", int14A: "Interest on fixed deposits", int14D: "Interest on income tax refund" };
 function comps(d) {
   const bsl = (id) => { for (const s of Object.values(d.bs.sections)) { const l = s.lines.find((z) => z.id === id); if (l) return { cy: l.cy, py: l.py }; } return { cy: 0, py: 0 }; };
@@ -66,6 +69,8 @@ function comps(d) {
   const o = { CA: sec("CA"), CL: sec("CL"), EQ: sec("EQ"), obb: grp("11", "obb"), int14A: ln("14", "14A"), int14D: ln("14", "14D") };
   ["ltb", "stb", "dtl", "tr", "inv", "tpm", "tpo", "nci", "ci"].forEach((k) => { o[k] = bsl(k); });
   ["rev", "mat", "pur", "chg", "exp", "pat", "dep", "fin", "pbt"].forEach((k) => { o[k] = pl(k); });
+  const ds = ((((((G.S || {}).books || {}).fs || {}).rx || {}).det || {})[d.fy] || {}).dscr || {}, u = N((d.inputs || {}).unit) || 1;
+  o.prin = { cy: N(ds.principalCy) / u, py: N(ds.principalPy) / u, typed: ds.principalCy != null && ds.principalCy !== "" };
   return o;
 }
 export function ratios(d) {
@@ -240,11 +245,15 @@ function workbook(ExcelJS, d) {
   });
   const tsum = (col, key) => T.reduce((s, x) => s + (key === "h" ? x.final / unit : key === "i" ? x.py / unit : N(x[key])), 0);
   put("tb", "A" + tTot, "Total", { b: true });
-  [["C", "py"], ["D", "cy"], ["E", "adj"], ["F", "final"], ["H", "h"], ["I", "i"]].forEach(([c, k]) => put("tb", c + tTot, { f: T.length ? "SUM(" + c + t0 + ":" + c + tN + ")" : "0", v: tsum(c, k) }, { b: true, top: true, nf: c === "H" || c === "I" ? nf : NF2 }));
+  // (review of 22-Nov-2026) to the row above the Total wherever it is: a ledger typed in on a row inserted just above it counts
+  [["C", "py"], ["D", "cy"], ["E", "adj"], ["F", "final"], ["H", "h"], ["I", "i"]].forEach(([c, k]) => put("tb", c + tTot, { f: T.length ? "SUM(" + c + t0 + ":INDEX(" + c + ":" + c + ",ROW()-1))" : "0", v: tsum(c, k) }, { b: true, top: true, nf: c === "H" || c === "I" ? nf : NF2 }));
   widths("tb", { A: 46, B: 26, C: 16, D: 16, E: 16, F: 16, G: 7, H: 15, I: 15, J: 6, K: 40, L: 18, M: 16, N: 15 });
   WS.tb.views = [{ state: "frozen", ySplit: 4, showGridLines: true }];
   page("tb", "A1:J" + tTot, true);
   const TBrng = (c) => Q(SH.tb) + "!$" + c + "$" + t0 + ":$" + c + "$" + Math.max(t0, tN);
+  // the checks' ranges (review of 22-Nov-2026): past the Total row, so a row inserted above it, or a ledger added under it,
+  // is inside them (the statements read whole columns); the Total row itself left out
+  const TBall = (c) => Q(SH.tb) + "!$" + c + "$" + t0 + ":$" + c + "$" + (tTot + 500), notTot = "(" + TBall("A") + '<>"Total")';
 
   put("jv", "A1", { f: IN.name, v: inp.name }, { b: true, sz: 12 });
   put("jv", "A2", "Adjustments for " + (part ? per.range : fyLabel(d.fy)) + " (audit entries kept in FinCom, not posted to Tally): the trial balance's Adjustments column reads them", { b: true });
@@ -579,8 +588,9 @@ function workbook(ExcelJS, d) {
       x.pat = RND(x.pbt - N(p.tax[col]), dec);
       const S = d.bs.sections, n4 = d.notes.find((n) => n.key === "4"), n3 = d.notes.find((n) => n.key === "3");
       const lnv = (n, code) => (n ? N((n.lines.find((l) => l.code === code) || {})[col]) : 0);
-      const eqPre = co ? (n3 ? N(n3.total[col]) : 0) + (n4 ? N((n4.groups.res || {})[col]) : 0) + lnv(n4, "4A") + lnv(n4, "4E")
-        : lnv(n3, "3P") + lnv(n3, "3Q") + lnv(n3, "3R") + (n4 ? N(n4.total[col]) : 0);
+      // (3S, 4F: what the Profit & Loss A/c took in the year, FinSt's own lines)
+      const eqPre = co ? (n3 ? N(n3.total[col]) : 0) + (n4 ? N((n4.groups.res || {})[col]) : 0) + lnv(n4, "4A") + lnv(n4, "4E") + lnv(n4, "4F")
+        : lnv(n3, "3P") + lnv(n3, "3Q") + lnv(n3, "3R") + lnv(n3, "3S") + (n4 ? N(n4.total[col]) : 0);
       x.bsp = (N(S.NCA.total[col]) + N(S.CA.total[col])) - (eqPre + N(S.NCL.total[col]) + N(S.CL.total[col]));
       x.res = RND(x.pat - x.bsp, dec); x.plug = plug;
       pre[col] = x;
@@ -591,7 +601,7 @@ function workbook(ExcelJS, d) {
       ["pbt", "Profit before tax before rounding", (col, rr) => "ROUND(ROUND(" + P("inc", col) + "-" + at(col, rr.tot) + ",DEC)-" + P("exc", col) + ",DEC)"],
       ["pat", "Profit for the year before rounding", (col, rr) => "ROUND(" + at(col, rr.pbt) + "-" + P("tax", col) + ",DEC)"],
       ["bsp", "Balance sheet: assets - (equity before this year's profit + liabilities)", (col) => {
-        const eqPre = co ? plus([NT("3", col), grp("4", "res", col), ln("4", "4A", col), ln("4", "4E", col)]) : plus([ln("3", "3P", col), ln("3", "3Q", col), ln("3", "3R", col), NT("4", col)]);
+        const eqPre = co ? plus([NT("3", col), grp("4", "res", col), ln("4", "4A", col), ln("4", "4E", col), ln("4", "4F", col)]) : plus([ln("3", "3P", col), ln("3", "3Q", col), ln("3", "3R", col), ln("3", "3S", col), NT("4", col)]);
         return R.bsTot.assets[col] + "-(" + eqPre + "+" + R.bsSec.NCL[col] + "+" + R.bsSec.CL[col] + ")"; }],
       ["res", "Difference, rounded", (col, rr) => "ROUND(" + at(col, rr.pat) + "-" + at(col, rr.bsp) + ",DEC)"],
       ["plug", "Rounding put in Note 17 (within the tolerance, else nil)", (col, rr) => "IF(ABS(" + at(col, rr.res) + ")<=TOL," + at(col, rr.res) + ",0)"]];
@@ -637,7 +647,7 @@ function workbook(ExcelJS, d) {
     obb: () => "ROUND(-" + DG("11", "obb") + ",DEC)", invest: () => "ROUND(-(" + D("36") + "+" + D("37") + "),DEC)", intRec: () => "ROUND(" + L("14", "14A") + "+" + L("14", "14D") + "-" + DL("12", "12E") + ",DEC)",
     inv: () => R5(["capex", "sale", "obb", "invest", "intRec"].map(cf)),
     equity: () => (co ? "ROUND(" + D("3") + "+" + DG("4", "res") + ",DEC)" : "ROUND(" + D("3") + "-" + P("pat", "cy") + "+" + D("4") + ",DEC)"),
-    surplus: () => (co ? "ROUND(" + plus([L("4", "4A"), L("4", "4E")]) + "-" + grp("4", "sur", OBc) + ",DEC)" : "0"),
+    surplus: () => (co ? "ROUND(" + plus([L("4", "4A"), L("4", "4E"), L("4", "4F")]) + "-" + grp("4", "sur", OBc) + ",DEC)" : "0"),
     borrow: () => "ROUND(" + D("30") + "+" + D("33") + ",DEC)", finPaid: () => "ROUND(-" + P("fin", "cy") + ",DEC)",
     fin: () => R5(["equity", "surplus", "borrow", "finPaid"].map(cf)),
     net: () => R5(["op", "inv", "fin"].map(cf)), open: () => grp("11", "cce", OBc), close: () => R5([cf("open"), cf("net")]), perNote: () => grp("11", "cce", "cy"),
@@ -679,13 +689,18 @@ function workbook(ExcelJS, d) {
   // tax at the regime's rates (FinSt.taxOn), its surcharge with marginal relief at each threshold
   const steps = rg === "115BAA" ? [[0, 0.10]] : rg === "firm" ? [[1e7, 0.12]] : rg === "normal" ? [[1e7, 0.07], [1e8, 0.12]] : [[5e6, 0.10], [1e7, 0.15], [2e7, 0.25]];
   const rateNormal = inp.small400 === false ? 0.30 : 0.25;
-  const baseF = (ti) => (rg === "115BAA" ? ti + "*22%" : rg === "firm" ? ti + "*30%" : rg === "normal" ? ti + "*" + rateNormal
-    : "IF(" + ti + "<=1200000,0,SUMPRODUCT(--(" + ti + ">{0;400000;800000;1200000;1600000;2000000;2400000}),(" + ti + "-{0;400000;800000;1200000;1600000;2000000;2400000}),{0;0.05;0.05;0.05;0.05;0.05;0.05}))");
+  // the slabs of the year (FinSt.slabOf, section 115BAC(1A)) and the rebate u/s 87A with its marginal relief for a resident
+  // individual (review of 22-Nov-2026: FY 2025-26's slabs and a 12 lakh rebate for every year and every entity)
+  const sl = fs.slabOf ? fs.slabOf(comp.fy) : null, ind = (comp.ent == null ? "P" : comp.ent) === "P";
+  const slabF = (ti) => { if (!sl) return "0"; const lo = [0].concat(sl.bands.slice(0, -1).map((z) => z[0])), inc = sl.bands.map((z, i) => Math.round((z[1] - (i ? sl.bands[i - 1][1] : 0)) * 100) / 100);
+    const t = "SUMPRODUCT(--(" + ti + ">{" + lo.join(";") + "}),(" + ti + "-{" + lo.join(";") + "}),{" + inc.join(";") + "})";
+    return ind ? "IF(" + ti + "<=" + sl.reb + ",0,MIN(" + t + "," + ti + "-" + sl.reb + "))" : t; };
+  const baseF = (ti) => (rg === "115BAA" ? ti + "*22%" : rg === "firm" ? ti + "*30%" : rg === "normal" ? ti + "*" + rateNormal : slabF(ti));
   const rateAt = (i) => steps.reduce((r2, [t, s]) => (i > t ? s : r2), 0);
   const surF = (ti, tax) => {
     const rate = steps.slice().reverse().reduce((acc, [t, s]) => "IF(" + ti + ">" + t + "," + s + "," + acc + ")", "0");
     let f = "ROUND(" + tax + "*" + rate + ",2)";
-    if (rg !== "115BAA") steps.forEach(([t]) => { const atT = Math.round(fs.taxOn(t, rg, inp).tax * 100) / 100 * (1 + rateAt(t)); f = "IF(" + ti + ">" + t + ",MIN(" + f + ",ROUND(MAX(0," + atT + "+" + ti + "-" + t + "-" + tax + "),2))," + f + ")"; });
+    if (rg !== "115BAA") steps.forEach(([t]) => { const atT = Math.round(fs.taxOn(t, rg, inp, comp.fy, comp.ent).tax * 100) / 100 * (1 + rateAt(t)); f = "IF(" + ti + ">" + t + ",MIN(" + f + ",ROUND(MAX(0," + atT + "+" + ti + "-" + t + "-" + tax + "),2))," + f + ")"; });
     return f;
   };
   const sumOf = (keys) => keys.map(CE).join("+");
@@ -774,13 +789,13 @@ function workbook(ExcelJS, d) {
   const half = "0.5*10^-DEC-1E-9", zf = (x, t) => "IF(ABS(ROUND(" + x + ",DEC+2))<=" + t + ",0,ROUND(" + x + ",DEC))";
   const ckF = {
     bsCy: () => zf(R.bsTot.eqL.cy + "-" + R.bsTot.assets.cy, half), bsPy: () => zf(R.bsTot.eqL.py + "-" + R.bsTot.assets.py, half),
-    tbCy: () => (T.length ? "IF(ABS(ROUND(SUM(" + TBrng("F") + "),2))<0.011,0,ROUND(SUM(" + TBrng("F") + "),2))" : "0"),
-    tbPy: () => (T.length ? "IF(ABS(ROUND(SUM(" + TBrng("C") + "),2))<0.011,0,ROUND(SUM(" + TBrng("C") + "),2))" : "0"),
-    unmapped: () => (T.length ? zf("SUMPRODUCT((" + TBrng("G") + '="")*(ABS(' + TBrng("H") + ")+ABS(" + TBrng("I") + ")))", half) : "0"),
+    tbCy: () => (T.length ? "IF(ABS(ROUND(SUMPRODUCT(" + notTot + "*" + TBall("F") + "),2))<0.011,0,ROUND(SUMPRODUCT(" + notTot + "*" + TBall("F") + "),2))" : "0"),
+    tbPy: () => (T.length ? "IF(ABS(ROUND(SUMPRODUCT(" + notTot + "*" + TBall("C") + "),2))<0.011,0,ROUND(SUMPRODUCT(" + notTot + "*" + TBall("C") + "),2))" : "0"),
+    unmapped: () => (T.length ? zf("SUMPRODUCT((" + TBall("G") + '="")*' + notTot + "*(ABS(" + TBall("H") + ")+ABS(" + TBall("I") + ")))", half) : "0"),
     surplus: () => zf(ln("4", "4A", "cy") + "-" + grp("4", "sur", "py"), "TOL"),
     ppeDep: () => zf("(" + ppeT(R.ppe, "I") + "+" + ppeT(R.int, "I") + ")-(" + LVf("cy", "8E", 1) + "+" + LVf("cy", "34D", 1) + ")", "TOL"),
     ppeNet: () => { const codes = fs.PPE.concat(fs.INT).reduce((a, c) => a.concat(c[3] ? [c[2], c[3]] : [c[2]]), []);
-      return zf("(" + ppeT(R.ppe, "M") + "+" + ppeT(R.int, "M") + ")-ROUND(SUMPRODUCT(ISNUMBER(MATCH(" + TBrng("G") + ",{" + codes.map(qs).join(",") + "},0))*" + TBrng("H") + "),DEC)", "TOL"); },
+      return zf("(" + ppeT(R.ppe, "M") + "+" + ppeT(R.int, "M") + ")-ROUND(SUMPRODUCT(ISNUMBER(MATCH(" + TBall("G") + ",{" + codes.map(qs).join(",") + "},0))*" + TBall("H") + "),DEC)", "TOL"); },
     cfCy: () => zf(R.cf.diff.cy, "TOL"), cfPy: () => zf(R.cf.diff.py || "0", "TOL"),
     deferredTax: () => zf(P("def", "cy") + "-(ROUND(" + grp("31", "dtl", "cy") + "-" + grp("31", "dtl", OBc) + ",DEC)-ROUND(" + grp("9", "dta", "cy") + "-" + grp("9", "dta", OBc) + ",DEC))", "TOL"),
     compPbt: () => cchk.pbt,
@@ -797,7 +812,7 @@ function workbook(ExcelJS, d) {
     // the figures the ratios use, linked to the statements, below the table
     const c0 = 7 + ra.list.length + 2, CA = {};
     put("ar", "C" + c0, "Figures used", { b: true }); put("ar", "F" + c0, part ? per.range : fyLabel(d.fy), { b: true, al: "right" }); put("ar", "G" + c0, part ? per.pyPlLabel : fyLabel(String(yearOf(d.fy) - 1)), { b: true, al: "right" });
-    const refOf = (k, col) => (R.bsSec[k] ? R.bsSec[k][col] || "0" : k === "obb" ? grp("11", "obb", col) : k === "int14A" ? ln("14", "14A", col) : k === "int14D" ? ln("14", "14D", col) : R.bs[k] ? R.bs[k][col] : R.pl[k] ? R.pl[k][col] : "0");
+    const refOf = (k, col) => (k === "prin" ? String(ra.comps.prin[col] || 0) : R.bsSec[k] ? R.bsSec[k][col] || "0" : k === "obb" ? grp("11", "obb", col) : k === "int14A" ? ln("14", "14A", col) : k === "int14D" ? ln("14", "14D", col) : R.bs[k] ? R.bs[k][col] : R.pl[k] ? R.pl[k][col] : "0");
     Object.keys(ra.comps).forEach((k, i) => {
       const rr = c0 + 1 + i; CA[k] = rr;
       put("ar", "C" + rr, COMP_LABEL[k] || k);
@@ -810,10 +825,14 @@ function workbook(ExcelJS, d) {
       ["F", "G"].forEach((c) => { const col = c === "F" ? "cy" : "py", den = "(" + expr(x.den, c) + ")";
         put("ar", c + rr, { f: "IF(" + den + "=0,0,(" + expr(x.num, c) + ")/" + den + ")", v: x[col], src: ["ratios", "list", i, col] }, { box: true, nf: x.pct ? "0.00%" : "0.00", al: "center" }); });
       put("ar", "H" + rr, { f: "IF(G" + rr + "=0,0,(F" + rr + "-G" + rr + ")/G" + rr + ")", v: x.variance, src: ["ratios", "list", i, "variance"] }, { box: true, nf: "0.00%", al: "center" });
+      // Schedule III: a ratio that changed by more than 25% needs its reason; and DSCR says when the principal is not typed
+      put("ar", "I" + rr, { f: 'IF(ABS(H' + rr + ')>0.25,"Reason needed (a change of more than 25%)","")', v: Math.abs(x.variance) > 0.25 ? "Reason needed (a change of more than 25%)" : "" }, { box: true, wrap: true, sz: 9 });
+      if (x.key === "dscr" && !ra.comps.prin.typed) put("ar", "J" + rr, "Principal repaid not typed: taken as nil", { i: true, sz: 9, color: "FFC00000" });
       WS.ar.getRow(rr).height = 30;
     });
-    widths("ar", { A: 3, B: 7, C: 34, D: 36, E: 36, F: 14, G: 14, H: 12 });
-    page("ar", "A1:H" + (c0 + Object.keys(ra.comps).length + 1), true, true);
+    put("ar", "I6", "Reason for the change", { b: true, box: true, al: "center", wrap: true });
+    widths("ar", { A: 3, B: 7, C: 34, D: 36, E: 36, F: 14, G: 14, H: 12, I: 24, J: 26 });
+    page("ar", "A1:J" + (c0 + Object.keys(ra.comps).length + 1), true, true);
   }
 
   // the sheets of depreciation and deferred tax (FA - Companies Act, FA - Income tax, Deferred tax), when in use

@@ -11,8 +11,9 @@ const R = (v) => { const x = N(v), r = Math.round(Math.abs(x) + 1e-9) * Math.sig
 // (TB amounts: debit positive; a liability or income line is the negative of its codes)
 export const BS_LINES = [
   // sources of funds
-  ["capital", "Proprietor's / partners' capital", ["3P", "3Q", "3R"], -1], ["shareCap", "Share capital", ["3A", "3B"], -1],
-  ["reserves", "Reserves and surplus", ["4B", "4C", "4D"], -1], ["plBalance", "Profit and loss balance brought forward", ["4A", "4E"], -1],
+  // (3S, 4F: what the Profit & Loss A/c took in the year, the statements' own lines: the profit credited to the partners, appropriations)
+  ["capital", "Proprietor's / partners' capital", ["3P", "3Q", "3R", "3S"], -1], ["shareCap", "Share capital", ["3A", "3B"], -1],
+  ["reserves", "Reserves and surplus", ["4B", "4C", "4D"], -1], ["plBalance", "Profit and loss balance brought forward", ["4A", "4E", "4F"], -1],
   ["securedBank", "Secured loans from banks", ["30A", "33A"], -1], ["unsecuredOthers", "Unsecured loans from others", ["30B", "33B", "33C"], -1],
   ["deferredTax", "Deferred tax liability", ["31A"], -1], ["advancesIn", "Advances received", ["7E"], -1],
   // application of funds

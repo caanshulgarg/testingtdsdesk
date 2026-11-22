@@ -53,7 +53,9 @@ function makeBooks() {
   v = two("Receipt", "20250805", "Cash", "Ramesh Gupta Loan", 25000.50); exp("cashLoans", v, 25000.50);
   v = two("Payment", "20250905", "Ramesh Gupta Loan", "Cash", 20000.00); exp("cashLoans", v, 20000.00);
   two("Receipt", "20250906", "HDFC Bank", "Ramesh Gupta Loan", 15000.15);                                        // by bank
-  two("Receipt", "20250908", "Cash", "Ramesh Gupta Loan", 19999.00);                                             // under 20,000
+  // under 20,000 itself, but 20,000.65 of the lender's loans is unpaid that day (25,000.50 - 20,000 + 15,000.15): section
+  // 269SS counts the new loan with what is already owed (clauses (b) and (c)), so it is a breach (review of 22-Nov-2026)
+  v = two("Receipt", "20250908", "Cash", "Ramesh Gupta Loan", 19999.00); exp("cashLoans", v, 19999.00);
 
   // ---------------------------------------------------------------- TDS: not deducted, short deducted, paid late
   const k1 = two("Journal", "20251006", "Professional Fees", "Kapoor Associates", 60000.40, { party: "Kapoor Associates" });

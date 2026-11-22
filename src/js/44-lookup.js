@@ -66,10 +66,21 @@ const FC = {
     S.tab = "books"; S.booksTab = tab; S.step = null; S.drawerOpen = false;
     render(); window.scrollTo(0, 0);
   },
+  // a table as a sheet, a date shown as text (dd-Mon-yyyy, dd/mm/yyyy, dd-mm-yyyy, yyyy-mm-dd) put in as Excel's own date
+  // (review of 22-Nov-2026: text dates sorted and filtered as words); any other text stays text
+  sheet(rows){
+    const dt = v => { if (typeof v !== "string") return v; let m = /^(\d{2})([-/])(\d{2}|[A-Z][a-z]{2})\2(\d{4})$/.exec(v), y, mo, d;
+      if (m){ d = +m[1]; mo = /\d/.test(m[3]) ? m[3] - 1 : MONTHS3.indexOf(m[3]); y = +m[4]; } else if ((m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v))){ y = +m[1]; mo = m[2] - 1; d = +m[3]; } else return v;
+      const t = new Date(y, mo, d); return mo >= 0 && t.getMonth() === mo && t.getDate() === d ? t : v; };
+    return XLSX.utils.aoa_to_sheet(rows.map(r => Array.isArray(r) ? r.map(dt) : r), {cellDates: true, dateNF: "dd-mm-yyyy"});
+  },
   async excel(name, sheets){
     await ensureXlsx();
-    const wb = XLSX.utils.book_new();
-    sheets.forEach(([n, rows]) => XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), String(n).replace(/[\\/?*[\]:]/g, " ").slice(0, 31)));
+    const wb = XLSX.utils.book_new(), seen = new Set();
+    // (review of 22-Nov-2026) a name used already, as Excel compares them: " 2", " 3" within 31 characters (SheetJS refused it)
+    sheets.forEach(([n, rows]) => { const b = String(n).replace(/[\\/?*[\]:]/g, " ").slice(0, 31) || "Sheet"; let k = b, i = 1;
+      while (seen.has(k.toLowerCase())) k = b.slice(0, 31 - String(++i).length - 1) + " " + i;
+      seen.add(k.toLowerCase()); XLSX.utils.book_append_sheet(wb, this.sheet(rows), k); });
     saveFile(String((CO() || {}).name || "client").replace(/[^A-Za-z0-9]+/g, "-") + "-" + name.replace(/[^A-Za-z0-9]+/g, "-") + ".xlsx", new Blob([XLSX.write(wb, {bookType: "xlsx", type: "array"})], {type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));
   }
 };

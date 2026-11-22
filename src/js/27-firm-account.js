@@ -1697,17 +1697,7 @@ function doAct(act, t){
       saveBooks(); render(); break;
     }
     case "audit3cdPdf": { const run = (S.books.audit || {}).last; if (run) printView(CO().name + " 3CD working " + run.from + "-" + run.to, "<style>@page{size:A4 portrait;margin:14mm}p{margin:0 0 6px}</style>" + Audit.form3cdHtml(Audit.form3cd(run))); break; }
-    case "audit3cdExcel": {
-      const run = (S.books.audit || {}).last; if (!run) break;
-      const d = Audit.form3cd(run);
-      ensureXlsx().then(() => {
-        const wb = XLSX.utils.book_new();
-        d.clauses.forEach(c => XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["Clause " + c.no + ". " + c.title], c.head].concat(c.rows).concat(c.note ? [[], [c.note]] : [])), ("Cl " + c.no).replace(/[\\/?*\[\]:]/g, " ").slice(0, 31)));
-        saveFile(CO().name.replace(/[^A-Za-z0-9]+/g, "-") + "-3CD-working-" + run.from + "-" + run.to + ".xlsx", new Blob([XLSX.write(wb, {bookType: "xlsx", type: "array"})], {type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));
-        toast("Downloaded.");
-      }, e => toast("Could not build the file: " + (e && e.message)));
-      break;
-    }
+    case "audit3cdExcel": { const run = (S.books.audit || {}).last; if (run) Audit.form3cdExcel(run).then(() => toast("Downloaded."), e => toast("Could not build the file: " + (e && e.message))); break; }
     case "auditReadLy": {
       const b = S.books, dr = Audit.defaultRange(b), r0 = S.auditRange || {from: Audit.iso(dr.from), to: Audit.iso(dr.to)};
       const f0 = Audit.ymd(r0.from), t0 = Audit.ymd(r0.to), lf = MIS.shift(f0, -1), lt = MIS.shift(t0, -1);

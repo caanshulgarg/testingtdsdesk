@@ -136,7 +136,7 @@ async function vendorReconExcel(){
   if (!R) return;
   await ensureXlsx();
   const V = R.V, T = R.T, d = s => fmtDate(s);
-  const wb = XLSX.utils.book_new(), add = (name, rows) => XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), name.slice(0, 31));
+  const wb = XLSX.utils.book_new(), add = (name, rows) => XLSX.utils.book_append_sheet(wb, (typeof FC === "object" && FC.sheet ? FC.sheet : XLSX.utils.aoa_to_sheet)(rows), name.slice(0, 31));
   const sumSide = (list, f) => r2(list.filter(f).reduce((a, x) => a + Math.abs(x.eff), 0));
   add("Reconciliation", [
     ["Vendor ledger reconciliation"], [CO().name + " · " + R.ledger + " · " + d(R.from) + " to " + d(R.to)], ["Vendor's file: " + R.file + " (read as " + R.sides + ")"], [],
@@ -165,7 +165,7 @@ async function bankReconExcel(){
   if (!R) return;
   await ensureXlsx();
   const rowById = new Map(b.rows.map(r => [r.id, r])), d = s => fmtDate(s), eff = r => r2(num(r.credit) - num(r.debit));
-  const wb = XLSX.utils.book_new(), add = (name, rows) => XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), name.slice(0, 31));
+  const wb = XLSX.utils.book_new(), add = (name, rows) => XLSX.utils.book_append_sheet(wb, (typeof FC === "object" && FC.sheet ? FC.sheet : XLSX.utils.aoa_to_sheet)(rows), name.slice(0, 31));
   const miss = R.missing.map(id => rowById.get(id)).filter(Boolean), extra = R.extra.map(i => R.T[i]);
   add("Reconciliation", [
     ["Bank reconciliation"], [CO().name + " · " + R.ledger + " · " + d(R.from) + " to " + d(R.to)], [],

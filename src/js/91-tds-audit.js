@@ -84,7 +84,7 @@ if (typeof TDS === "object") TDS.toExcel = async function(fy, q, form){
   const cs = [["Challans", "", "", "", "", "", ""], ["BSR code", "Challan serial", "Date deposited", "Tax", "Interest", "Total", "Allocated", "Left", "Used by this return", "Interest allocated here", "Fee allocated here"]]
     .concat(ch.map(c => [c.bsr, c.serial, d(c.date), num(c.tax), num(c.interest), r2(num(c.tax) + num(c.interest)), use[c.id] || 0, r2(num(c.tax) - (use[c.id] || 0)),
       r2(rows.filter(r => r.challan === c.id).reduce((a, r) => a + r.tds, 0)), part(c).interest, part(c).fee]));
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(cs), "Challans");
+  XLSX.utils.book_append_sheet(wb, (typeof FC === "object" && FC.sheet ? FC.sheet : XLSX.utils.aoa_to_sheet)(cs), "Challans");
   const head = ["Sl. No.", "Deductee code", "PAN of the deductee", "Name of the deductee", "Section code", "Date of payment or credit", "Amount paid or credited",
     "TDS", "Total tax deducted", "Date of deduction", "Rate at which deducted", "Reason for non-deduction or lower deduction", "Certificate number", "Voucher", "Challan BSR", "Challan serial", "Challan date", "Declaration UIN (Form 121 / 15G / 15H)"];
   const body = rows.map((r, i) => {
@@ -93,10 +93,10 @@ if (typeof TDS === "object") TDS.toExcel = async function(fy, q, form){
     return [i + 1, form === "26Q" ? dc : String(dc).padStart(2, "0"), pan, TDS26Q.fileName(r), form === "27EQ" ? r.code : TDS26Q.codeFor ? TDS26Q.codeFor(r) || TDS26Q.code(r.section) : TDS26Q.code(r.section),
       d(r.credit || r.date), r.paid, r.tds, r.tds, d(r.date), r.rate, m.remark, m.certNo, r.voucher, c.bsr || "", c.serial || "", d(c.date || ""), m.uin || ""];
   });
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([head].concat(body)), "Deductees");
+  XLSX.utils.book_append_sheet(wb, (typeof FC === "object" && FC.sheet ? FC.sheet : XLSX.utils.aoa_to_sheet)([head].concat(body)), "Deductees");
   const sum = [["Section", "Deductions", "Amount paid", "TDS", "Not against a challan", "Without PAN"]]
     .concat(this.summary(fy, q, form).map(s => [s.section, s.count, s.paid, s.tds, s.unallocated, s.noPan]));
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sum), "Summary");
+  XLSX.utils.book_append_sheet(wb, (typeof FC === "object" && FC.sheet ? FC.sheet : XLSX.utils.aoa_to_sheet)(sum), "Summary");
   const out = XLSX.write(wb, {bookType: "xlsx", type: "array"});
   saveFile(CO().name.replace(/[^A-Za-z0-9]+/g, "-") + "-" + form + "-" + (q || "all") + "-" + (fy || "") + ".xlsx", new Blob([out], {type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));
 };
