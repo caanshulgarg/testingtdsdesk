@@ -223,17 +223,28 @@ async function gst9Excel(which){
     GST9.ROWS.forEach(r => { if (r.length === 3 && /^(II|III|IV|V|VI)$/.test(r[0])){ rows.push(["Part " + r[0], r[1] + ". " + r[2]]); return; } const x = d.T[r[0]] || GST9.Z(); rows.push([r[0].replace(/-.*/, ""), r[1], x.taxable, x.igst, x.cgst, x.sgst, x.cess]); });
     rows.push([]); rows.push(["Part IV", "9. Tax paid", "Tax payable", "Paid in cash", "Through IGST credit", "Through CGST credit", "Through SGST credit", "Through cess credit"]);
     [["igst", "Integrated tax"], ["cgst", "Central tax"], ["sgst", "State/UT tax"], ["cess", "Cess"]].forEach(([k, l]) => { const p = d.pay[k], by = p.by || {}; rows.push(["9", l, p.due, p.cash, by.igst || 0, by.cgst || 0, by.sgst || 0, by.cess || 0]); });
-    const T14 = d.T["14"] || {}; rows.push([]); rows.push(["14", "Differential tax paid on 10 and 11", "payable " + num(T14.payable), "paid " + num(T14.paid)]);
+    // (review of 22-Nov-2026) Table 14's figures as numbers under their headings, not the text "payable 1234.5"
+    const T14 = d.T["14"] || {}; rows.push([]); rows.push(["14", "Differential tax paid on 10 and 11", "Tax payable", "Paid"]); rows.push(["14", "", num(T14.payable), num(T14.paid)]);
     rows.push([]); rows.push(["Part VI", "15, 16 and 19", "Value / amount", "IGST", "CGST", "SGST", "Cess"]);
     GST9.TYPED.filter(([k]) => /^1[569]/.test(k)).forEach(([k, l]) => { const x = d.part6[k] || {}; rows.push([k, l.replace(/^\d+[A-Z]? /, ""), num(x.taxable), num(x.igst), num(x.cgst), num(x.sgst), num(x.cess)]); });
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), "GSTR-9");
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["HSN", "Rate", "Taxable", "IGST", "CGST", "SGST", "Cess"]].concat(d.hsnOut.map(x => [x.hsn, x.rate, x.taxable, x.igst, x.cgst, x.sgst, x.cess]))), "17 HSN outward");
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["HSN", "Taxable", "IGST", "CGST", "SGST", "Cess"]].concat(d.hsnIn.map(x => [x.hsn, x.taxable, x.igst, x.cgst, x.sgst, x.cess]))), "18 HSN inward");
   } else {
-    const c = GST9C.build(fy, reg), rows = [["Table", "Details", "Amount"], ["5A", "Turnover as per audited financial statements", c.a5]].concat(GST9C.ADJ.map(([k, l, sg]) => [k, l + (sg > 0 ? " (+)" : " (-)"), c.adjOf(k)]))
-      .concat([["5O", "Annual turnover after adjustments", c.o5], ["5P", "Turnover as per GSTR-9", c.p5], ["5Q", "Unreconciled", c.q5], ["6", "Reasons", c.st.reasons["6"] || ""],
-        ["7A", "Annual turnover after adjustments", c.o5], ["7B", "Exempted, nil, non-GST", c.exempt], ["7C", "Zero rated without payment", c.zero], ["7D", "Reverse charge supplies", c.rcm], ["7E", "Taxable turnover as per adjustments", c.e7], ["7F", "Taxable turnover as per GSTR-9", c.f7], ["7G", "Unreconciled", c.g7], ["8", "Reasons", c.st.reasons["8"] || ""],
-        ["12A", "ITC as per audited financial statements", c.itcBooks], ["12B", "ITC of earlier years claimed this year", num(c.st.adj["12B"])], ["12C", "ITC of this year to be claimed later", num(c.st.adj["12C"])], ["12D", "After adjustments", c.d12], ["12E", "ITC claimed in GSTR-9", c.e12], ["12F", "Unreconciled", c.f12], ["13", "Reasons", c.st.reasons["13"] || ""]]);
+    // (review of 22-Nov-2026) the derived lines as formulas on the lines above (5O, 5Q, 7A, 7E, 7G, 12D, 12F), each with its
+    // value, so a corrected 5A or adjustment in the working moves them
+    const c = GST9C.build(fy, reg), rows = [["Table", "Details", "Amount"]], at = {}, put = (k, l, v) => { rows.push([k, l, v]); at[k] = "C" + rows.length; };
+    const fx = (f, v) => ({t: "n", f, v});
+    put("5A", "Turnover as per audited financial statements", c.a5);
+    GST9C.ADJ.forEach(([k, l, sg]) => put(k, l + (sg > 0 ? " (+)" : " (-)"), c.adjOf(k)));
+    put("5O", "Annual turnover after adjustments", fx(at["5A"] + GST9C.ADJ.map(([k, , sg]) => (sg > 0 ? "+" : "-") + at[k]).join(""), c.o5)); put("5P", "Turnover as per GSTR-9", c.p5);
+    put("5Q", "Unreconciled", fx(at["5O"] + "-" + at["5P"], c.q5)); rows.push(["6", "Reasons", c.st.reasons["6"] || ""]);
+    put("7A", "Annual turnover after adjustments", fx(at["5O"], c.o5)); put("7B", "Exempted, nil, non-GST", c.exempt); put("7C", "Zero rated without payment", c.zero); put("7D", "Reverse charge supplies", c.rcm);
+    put("7E", "Taxable turnover as per adjustments", fx(at["7A"] + "-" + at["7B"] + "-" + at["7C"] + "-" + at["7D"], c.e7)); put("7F", "Taxable turnover as per GSTR-9", c.f7);
+    put("7G", "Unreconciled", fx(at["7E"] + "-" + at["7F"], c.g7)); rows.push(["8", "Reasons", c.st.reasons["8"] || ""]);
+    put("12A", "ITC as per audited financial statements", c.itcBooks); put("12B", "ITC of earlier years claimed this year", num(c.st.adj["12B"])); put("12C", "ITC of this year to be claimed later", num(c.st.adj["12C"]));
+    put("12D", "After adjustments", fx(at["12A"] + "+" + at["12B"] + "-" + at["12C"], c.d12)); put("12E", "ITC claimed in GSTR-9", c.e12);
+    put("12F", "Unreconciled", fx(at["12D"] + "-" + at["12E"], c.f12)); rows.push(["13", "Reasons", c.st.reasons["13"] || ""]);
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), "GSTR-9C");
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["Rate", "Taxable", "Tax payable"]].concat(c.rates.map(x => [x.rate, x.taxable, x.tax]))), "9 Tax by rate");
   }
