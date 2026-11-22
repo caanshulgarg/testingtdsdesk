@@ -16,7 +16,7 @@ const PAGE = fs.readFileSync(HTML, "utf8"), has = n => new RegExp("\\n(?:const|l
 const want = ["num", "r2", "money", "INR", "fpHash", "GST_STATES", "SALES_RATES", "stateOfGstin", "GSTIN_RE", "NORM_CACHE", "normNameRaw", "normName", "normInv", "normInvNo",
   "MONTHS", "toIsoDate", "Market", "GST2B", "GSTAmend", "VR", "isSheetFile", "GST_CHARS", "gstinCheckChar", "gstinValid", "cellText", "bankAmount", "bankDate", "rowsFromCells",
   "xlsxBook", "xlsxRows", "gridsFromSheet", "TDSCH", "TDS24Q", "FinPyBs", "GSTX", "RCM_CATS", "BLOCK_CATS", "gstText", "suggestRcm", "billCodes", "blockRule", "suggestBlock", "gstDecision", "rcmTaxOf",
-  "catLabel", "TALLY_GROUPS", "importLedgerList", "TDSPanFix"].filter(has);
+  "catLabel", "TALLY_GROUPS", "importLedgerList", "TDSPanFix", "STATE_CODES", "GSTR"].filter(has);
 const h = load(HTML, want), C = h.ctx;
 // (a const of the page is not a property of its context: put on it, so the checks below reach it by C.name)
 Object.keys(h.x).forEach(k => { if (!(k in C)) C[k] = h.x[k]; });
@@ -204,6 +204,69 @@ const file = (name, data) => { const u = typeof data === "string" ? new TextEnco
     const f = out.refused.map(x => x.field); return f.includes("date") && f.includes("party") && f.includes("row"); }, "a row added, the date and the deductee changed: each said as refused, never silently ignored");
   tryOk(() => C.TDSPanFix.sheetLines([["Name", "Ledger Code", "PAN"], ["ZZ Party One", "LC001", "ABCDE1234F"]]) === "ZZ Party One\tABCDE1234F" && C.TDSPanFix.sheetLines([["ZZ P", "ABCDE1234F"]]) === "ZZ P\tABCDE1234F",
     "the PAN book Excel takes the Name column, not the code next to the PAN");
+
+  console.log("19. the review of e7bf15906: marketplace sales in GSTR-1 / 3B and table 14, dates, parties, 24Q PANs, total rows, 2B sheets, returns, the PAN book");
+  list.length = 0;
+  C.S.coId = "c1"; C.S.books = C.S.books || {}; C.S.sales = {cid: "c1", list};
+  const az2 = [["Invoice Number", "Invoice Date", "Transaction Type", "Order Id", "Ship To State", "Invoice Amount", "Tax Exclusive Gross", "Igst Tax", "Tcs Igst Amount"],
+    ["AMZ-21", "05/09/2026", "Shipment", "O-21", "KARNATAKA", 1180, 1000, 180, 10], ["AMZ-22", "06/09/2026", "Shipment", "O-22", "KARNATAKA", 2360, 2000, 360, 20]];
+  const fk2 = [["Order ID", "Order Item ID", "Event Type", "Buyer Invoice ID", "Buyer Invoice Date", "Taxable Value", "IGST Amount", "Final Invoice Amount", "Customer's Delivery State"],
+    ["OD5", "I5", "Sale", "FK-101", "05/09/2026", 1000, 180, 1180, "Karnataka"], ["OD7", "I7", "Cancellation", "FK-103", "07/09/2026", -500, -90, -590, "Karnataka"]];
+  tryOk(() => { const r = C.SheetPost.toSales(F.apply(F.builtin(az2[0], "sales"), az2, 0, CO, "sales"), "c1", "mtr.csv"), a = list.find(v => v.x.number === "AMZ-21");
+    return r.added === 2 && a.source === "market" && a.x.ecommerce === "amazon" && a.x.tcs === 10 && /karnataka/i.test(a.x.placeOfSupply || ""); }, "an Amazon report: its invoices kept as a marketplace's (source market, the operator, the TCS, the place of supply)");
+  tryOk(() => { C.SheetPost.toSales(F.apply(F.builtin(fk2[0], "sales"), fk2, 0, CO, "sales"), "c1", "fk.csv");
+    const rows = C.GSTR.fromSales("202609"), a = rows.find(x => x.no === "AMZ-21"), f = rows.find(x => x.no === "FK-101");
+    return rows.length === 3 && a && a.eco === "amazon" && a.tcs === 10 && a.posCode === "29" && a.taxable === 1000 && f && f.eco === "flipkart" && !rows.some(x => /FK-103/.test(x.no)); },
+    "GSTR.fromSales after a Marketplace report upload: AMZ-21, AMZ-22, FK-101 in the month's outward figures (the held cancellation FK-103 not, until a person sets it)");
+  tryOk(() => { const t = C.GSTR.eco14("202609", "09AAAAA0000A1Z5", {eco: C.GSTR.fromSales("202609")}), m = t.missing || [], am = m.find(x => x.eco === "amazon"), fl = m.find(x => x.eco === "flipkart");
+    return am && am.n === 2 && am.suppval === 3000 && am.igst === 540 && am.tcs && fl && fl.n === 1 && fl.suppval === 1000; }, "table 14 (u/s 52): Amazon 2 invoices 3,000 and Flipkart 1 invoice 1,000, by operator");
+  tryOk(() => { const r = C.SheetPost.toSales(F.apply(F.builtin(gg[0], "sales"), gg, 0, CO, "sales"), "c1", "reg.csv"); const s1 = list.find(v => v.x.number === "S-1"); return r.added === 2 && s1.source === "sheet" && !s1.x.ecommerce; },
+    "a GST sales register (generic) stays the client's own sales: never an e-commerce operator's");
+  tryOk(() => { const cnL = list.find(v => v.x.number === "CN-0042") || (C.SheetPost.toSales(F.apply(F.builtin(cn[0], "sales"), cn, 0, CO, "sales"), "c1", "a.csv"), list.find(v => v.x.number === "CN-0042"));
+    return cnL && cnL.x.againstInvoice === "AMZ-7" && cnL.x.noteKind === "credit" && cnL.x.date === "2026-09-20"; }, "credit note CN-0042 is against invoice AMZ-7, dated its own date");
+
+  tryOk(() => C.Market.date("2026/09/05") === "2026-09-05" && C.Market.date("2026.09.05") === "2026-09-05" && C.Market.date("2026-9-5") === "2026-09-05" && F.date("2026/09/05") === "2026-09-05"
+    && F.date("26/09/05", "ymd") === "2026-09-05" && F.date("2026/09/05", "ymd") === "2026-09-05", "year first: 2026/09/05 and 2026.09.05 are 5 September 2026; a format saved as year / month / day read so");
+  tryOk(() => C.Market.date("01/09/2015") === "2015-09-01" && C.Market.date("15/03/2016") === "2016-03-15" && C.Market.date("29/02/2024") === "2024-02-29" && C.Market.date("29/02/2025") === "" && C.Market.date("01/01/1985") === "",
+    "a date before GST is still a date (a vendor statement's old bill of 01/09/2015); 29/02/2025 is none");
+  tryOk(() => { const g = [["Invoice No", "Date", "Party", "Total"], ["A9", "15/03/2016", "X", 100]]; const d = F.apply({map: {no: "invoiceno", date: "date", party: "party", total: "total"}, transforms: {date: "dmy"}}, g, 0, CO, "sales");
+    return d.length === 1 && d[0].date === "2016-03-15" && /before GST/.test(d[0].hold || "") && !/not a date/.test(d[0].hold || ""); }, "a register row dated 15/03/2016 is held as before GST (1 July 2017), not as no date");
+
+  const gs1 = h => [["Customer", "GSTIN", "Invoice No", "Date", "Taxable", "IGST", "CGST", "SGST", "Total"]].concat(h);
+  const fmS = {map: {party: "customer", gstin: "gstin", no: "invoiceno", date: "date", taxable: "taxable", igst: "igst", cgst: "cgst", sgst: "sgst", total: "total"}, transforms: {date: "dmy", groupByNo: true}};
+  tryOk(() => { const d = F.apply(fmS, gs1([["P One", "09BBBBB1111B1Z5", "S-1", "05/09/2026", 1000, 0, 90, 90, 1180], ["P One", "", "S-1", "05/09/2026", 500, 0, 45, 45, 590]]), 0, CO, "sales");
+    const e = F.apply(fmS, gs1([["P One", "", "S-1", "05/09/2026", 500, 0, 45, 45, 590], ["P One", "09BBBBB1111B1Z5", "S-1", "05/09/2026", 1000, 0, 90, 90, 1180]]), 0, CO, "sales");
+    return d.length === 1 && !d[0].hold && d[0].gstin === "09BBBBB1111B1Z5" && d[0].total === 1770 && e.length === 1 && !e[0].hold && e[0].gstin === "09BBBBB1111B1Z5" && e[0].total === 1770; },
+    "a sales invoice's GSTIN on one row only, the same name on both: one invoice to P One (09BBBBB1111B1Z5), 1,770, not held");
+
+  const csvP = "Employee Name,PAN,Month,Gross Salary,TDS\nA One,ABCDE1234F,Apr-2026,100000,10000\nB Two,PANNOTAVBL,Apr-2026,50000,5000\nC Three,PANNOTAVBL,Apr-2026,50000,5000\nD Four,,Apr-2026,50000,5000\n";
+  const rP = await C.TDS24Q.fromFile(file("pans.csv", csvP)).catch(e => ({error: String(e)}));
+  tryOk(() => rP.rows && rP.rows.length === 4 && rP.rows[0].pan === "ABCDE1234F", "24Q: a PAN column mostly PANNOTAVBL keeps A One's PAN ABCDE1234F (" + JSON.stringify((rP.rows || []).map(x => x.pan)) + ")");
+
+  const gt = [["Customer Name", "Invoice Number", "Invoice Date", "GSTIN", "Taxable Value", "CGST Amount", "SGST Amount", "Invoice Amount"],
+    ["Total Solutions Pvt Ltd", "S-1", "05/09/2026", "09BBBBB1111B1Z5", 1000, 90, 90, 1180], ["P Two", "S-2", "06/09/2026", "09BBBBB1111B1Z5", 2000, 180, 180, 2360], ["Total", "", "", "", 3000, 270, 270, 3540]];
+  tryOk(() => { const d = F.apply(F.builtin(gt[0], "sales"), gt, 0, CO, "sales"); return d.length === 2 && by(d, "S-1").length === 1 && (d.skipped || []).length === 1 && d.skipped[0].why === "a total row"; },
+    "a register whose first column is the customer: S-1 to Total Solutions Pvt Ltd kept; the Total row left out, and counted");
+  tryOk(() => { const d = F.apply({map: {party: "customername", no: "invoicenumber", date: "invoicedate", total: "invoiceamount"}, transforms: {date: "dmy"}}, gt, 0, CO, "sales"); return d.length === 2 && by(d, "S-1").length === 1 && d.skipped.length === 1; },
+    "… the same with a saved format");
+
+  const wb3 = X.utils.book_new();
+  X.utils.book_append_sheet(wb3, X.utils.aoa_to_sheet(b2b), "B2B");
+  X.utils.book_append_sheet(wb3, X.utils.aoa_to_sheet([["Goods and Services Tax - GSTR-2B"], [], ["Import of goods"], [], ["Icegate Reference Date", "Port Code", "Bill of Entry Number", "Bill of Entry Date", "Taxable Value", "Integrated Tax"], ["01/09/2026", "INNSA1", "1234567", "01/09/2026", 10000, 1800]]), "IMPG");
+  X.utils.book_append_sheet(wb3, X.utils.aoa_to_sheet([["Goods and Services Tax - GSTR-2B"], [], ["ISD credits (amendment)"], [], ["GSTIN of ISD", "Trade name", "ISD document number", "ISD document date", "Integrated Tax"], ["09EEEEE4444E1Z5", "ISD", "ISD-1", "01/09/2026", 100]]), "ISDA");
+  const rd3 = await F.read(file("2b3.xlsx", X.write(wb3, {bookType: "xlsx", type: "array"}))).catch(e => { console.log("       (" + e + ")"); return null; });
+  tryOk(() => rd3 && (rd3.amend || []).includes("ISDA") && !(rd3.amend || []).includes("IMPG") && (rd3.notRead || []).includes("IMPG"), "2B: IMPG is no amendment (it is named as not read); ISDA is one (" + JSON.stringify(rd3 && [rd3.amend, rd3.notRead]) + ")");
+  tryOk(() => { const g = b2b.map(r => r.slice()), hi = F.head(g); C.S.sheetImp = {side: "purchase", cid: "c1", docs: F.apply(F.builtin(g[hi], "purchase"), g, hi, CO, "purchase"), read: {amend: [], notRead: ["IMPG"]}};
+    C.SheetImport.check(); const q = C.S.sheetImp.questions.find(x => x.id === "notread"); return q && /IMPG/.test(q.text) && !C.S.sheetImp.questions.some(x => x.id === "amend"); }, "… and the panel says the IMPG sheet is not read, never that it is an amendment");
+
+  const fk3 = [["Order ID", "Order Item ID", "Event Type", "Buyer Invoice ID", "Buyer Invoice Date", "Return Date", "Taxable Value", "IGST Amount", "Final Invoice Amount", "Customer's Delivery State"],
+    ["OD9", "I1", "Return", "FK-1", "05/09/2026", "10/09/2026", -1000, -180, -1180, "Karnataka"], ["OD9", "I2", "Return", "FK-1", "05/09/2026", "20/09/2026", -1000, -180, -1180, "Karnataka"]];
+  tryOk(() => { const d = F.apply(F.builtin(fk3[0], "sales"), fk3, 0, CO, "sales").filter(x => x.note === "credit");
+    return d.length === 2 && d.some(x => x.date === "2026-09-10" && x.total === -1180) && d.some(x => x.date === "2026-09-20" && x.total === -1180) && d.every(x => x.against === "FK-1"); },
+    "two returns of FK-1 in one report (10/09 and 20/09): two credit notes of 1,180, each its own date, against FK-1");
+
+  tryOk(() => C.TDSPanFix.sheetLines([["Company Name", "Ledger Code", "PAN"], ["ZZ Party One Pvt Ltd", "LC001", "ABCDE1234F"]]) === "ZZ Party One Pvt Ltd\tABCDE1234F"
+    && C.TDSPanFix.sheetLines([["Name", "PAN No", "Ledger Code"], ["ZZ P", "ABCDE1234F", "LC1"]]) === "ZZ P\tABCDE1234F", "the PAN book: 'Company Name' is the name column (company holds 'pan'), not the code");
 
   console.log(fails ? "\n" + fails + " FAILED" : "\nall passed");
   process.exit(fails ? 1 : 0);

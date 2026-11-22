@@ -76,10 +76,11 @@ const PANCheck = {
 const TDSPanFix = {
   // an Excel of names and PANs (PanBook.jsx's Import Excel) as the lines bulk reads, "name<TAB>PAN": the name's column
   // by the header (Name, Party, Deductee; never a code's), else the column left of the PAN (next-fix-audit-imports: a
-  // Ledger Code column there was saved as every deductee's name)
+  // Ledger Code column there was saved as every deductee's name;
+  // PAN by the whole word: "Company Name" holds "pan")
   sheetLines(rows){
     const isPan = x => /^[A-Za-z]{5}\d{4}[A-Za-z]$/.test(String(x || "").trim()), named = x => /name|party|deductee/i.test(String(x || ""));
-    const hr = rows.findIndex(r => !r.some(isPan) && r.some(named)), nc = hr >= 0 ? rows[hr].findIndex(x => named(x) && !/code|pan|gst/i.test(String(x || ""))) : -1;
+    const hr = rows.findIndex(r => !r.some(isPan) && r.some(named)), nc = hr >= 0 ? rows[hr].findIndex(x => named(x) && !/\bpan\b|code|gstin/i.test(String(x || ""))) : -1;
     return rows.filter((r, i) => i !== hr).map(r => { const pi = r.findIndex(isPan);
       return pi >= 0 && nc >= 0 && nc !== pi && String(r[nc] || "").trim() ? String(r[nc]).trim() + "\t" + String(r[pi]).trim()
         : pi > 0 ? String(r[pi === 1 ? 0 : pi - 1]).trim() + "\t" + String(r[pi]).trim() : String(r[0]) + "\t" + String(r[1]); }).join("\n");

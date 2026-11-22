@@ -76,9 +76,11 @@ const SheetFmt = {
   date(v, order){
     if (v == null || v === "") return "";
     if (typeof v === "number" && v > 20000 && v < 80000){ const d = new Date(Date.UTC(1899, 11, 30) + v * 86400000); return d.toISOString().slice(0, 10); }
-    if (v instanceof Date || order !== "mdy") return Market.date(v);
+    // (review of e7bf15906: "ymd" was read as "dmy": 26/09/05 year first is 5 September 2026; a four-figure year first,
+    // 2026/09/05, Market.date reads in any order)
+    if (v instanceof Date || (order !== "mdy" && order !== "ymd")) return Market.date(v);
     const s = String(v).trim(), m = s.match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4}|\d{2})(?!\d)/);
-    return m ? toIsoDate(m[2], m[1], m[3]) : Market.date(s);
+    return !m ? Market.date(s) : order === "ymd" ? (m[3].length === 2 ? Market.iso(m[3], m[2], m[1]) : "") : Market.iso(m[2], m[1], m[3]);
   },
   // the header row: the first of the first 15 rows with three or more words in it, most of its cells not figures
   // A header on two rows (GSTR-2B's "Invoice Details" over "Invoice number | Invoice type | …", merged cells): the row
@@ -222,7 +224,11 @@ const SheetFmt = {
   // the documents a mapped sheet holds: one per invoice number (lines of one invoice added up), totals and blank rows
   // skipped; FinCom's rules work out the tax split, the place of supply, the totals and the check to the paisa
   apply(fmt, grid, hi, co, side){
-    if (fmt.builtin && fmt.side === "sales" && fmt.builtin !== "2b-excel") return MarketRead.read(grid.slice(hi), fmt.builtin).map(x => this.fromMarket(x));
+    if (fmt.builtin && fmt.side === "sales" && fmt.builtin !== "2b-excel"){
+      const m = MarketRead.read(grid.slice(hi), fmt.builtin), out = m.map(x => this.fromMarket(x));
+      out.skipped = (m.skipped || []).map(x => ({row: hi + x.row, why: x.why}));
+      return out;
+    }
     const head = (grid[hi] || []).map(h => this.norm(h)), map = fmt.map || {}, t = fmt.transforms || {};
     const col = f => map[f] ? head.indexOf(map[f]) : -1, idx = {};
     SHEET_FIELDS.forEach(([f]) => { idx[f] = col(f); });
@@ -233,7 +239,11 @@ const SheetFmt = {
     grid.slice(hi + 1).forEach((r, n) => {
       if (!r || !r.some(c => String(c == null ? "" : c).trim())) return;
       const no = String(get(r, "no") || "").trim(), first = String(r.find(c => String(c == null ? "" : c).trim()) || "");
-      if (!no || /^(grand\s*)?total|^sub\s*total|^net\s*total/i.test(first)){ skipped.push({row: hi + 2 + n, why: /total/i.test(first) ? "a total row" : "no invoice number"}); return; }
+      // a total row: "Total" as its invoice number, or as its first cell when that is the row's label (not the party's
+      // column, and no date): "Total Solutions Pvt Ltd" as the customer is an invoice (review of e7bf15906)
+      const fi = r.findIndex(c => String(c == null ? "" : c).trim()), TOT = /^(grand\s*|sub\s*|net\s*)?total\b/i;
+      const tot = TOT.test(no) || (TOT.test(first) && fi !== idx.party && !String(get(r, "date") == null ? "" : get(r, "date")).trim());
+      if (!no || tot){ skipped.push({row: hi + 2 + n, why: tot || TOT.test(first) ? "a total row" : "no invoice number"}); return; }
       // the kind the document-type column says (the owner, 13-Nov-2026): never a voucher type's name, and by whole
       // words only ("Non-returnable" is no return, "Credit" alone no credit note). A negative total is looked at on
       // the whole invoice, once its lines are added up (below)
@@ -260,7 +270,11 @@ const SheetFmt = {
       const a = f => this.amount(get(r, f));
       const had = docs.get(key);
       if (had){
-        if (side !== "purchase" && (rowG || rowP) && (had.gstin || had.party) && !(GSTIN_RE.test(rowG) && rowG === had.gstin) && pkOf(rowG, rowP) !== pkOf(had.gstin, had.party))
+        // (the same name where one of the two rows has no GSTIN is the same party, as on Purchase: an item-wise register
+        // writes the GSTIN on the invoice's first row only; the invoice takes it. Review of e7bf15906)
+        const sameName = !!rowP && (!GSTIN_RE.test(rowG) || !GSTIN_RE.test(had.gstin)) && normName(had.party) === normName(rowP);
+        if (side !== "purchase" && sameName && GSTIN_RE.test(rowG) && !GSTIN_RE.test(had.gstin)) had.gstin = rowG;
+        if (side !== "purchase" && !sameName && (rowG || rowP) && (had.gstin || had.party) && !(GSTIN_RE.test(rowG) && rowG === had.gstin) && pkOf(rowG, rowP) !== pkOf(had.gstin, had.party))
           had.hold = had.hold || "Rows of invoice " + no + " name different parties (" + (had.party || had.gstin) + ", " + (rowP || rowG) + "): an invoice is issued to one party; check the sheet";
         if (rowDate && had.date && rowDate !== had.date) had.hold = had.hold || "Rows of " + no + " carry different dates (" + had.date + ", " + rowDate + "): check the sheet";
       } else (byBase[base] = byBase[base] || []).push(key);
@@ -271,7 +285,11 @@ const SheetFmt = {
         note: kind === "C" ? "credit" : kind === "D" ? "debit" : "", hold: kind === "?" ? "“" + String(get(r, "doctype")).trim() + "” on a sales sheet: is this a credit note or a debit note? Set it in the Type column" : "", taxable: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, total: 0, rates: [], lines: 0, rows: [], lineTotals: []};
       // a date the sheet gives that is no date in the order chosen (13/09/26 as month first): held, never left blank by itself
       const dv = get(r, "date");
-      if (!rowDate && idx.date >= 0 && String(dv == null ? "" : dv).trim()) d.hold = d.hold || "The date “" + String(dv).trim() + "” is not a date" + (t.date === "mdy" ? " as month / day / year" : "") + ": check the date order";
+      if (!rowDate && idx.date >= 0 && String(dv == null ? "" : dv).trim()) d.hold = d.hold || "The date “" + String(dv).trim() + "” is not a date" + (t.date === "mdy" ? " as month / day / year" : t.date === "ymd" ? " as year / month / day" : "") + ": check the date order";
+      // a date before GST began (1 July 2017, the CGST Act in force): no GST invoice; held, said so (review of e7bf15906)
+      // (and one after 2035, as toIsoDate kept them before: a typed year, 2062, is asked about, never booked)
+      if (rowDate && rowDate < "2017-07-01") d.hold = d.hold || "The date " + rowDate + " is before GST began (1 July 2017): check the date or the sheet";
+      else if (rowDate > "2035-12-31") d.hold = d.hold || "The date " + rowDate + " is years ahead: check the date or the sheet";
       // reverse charge and input credit, as the sheet says them (GSTR-2B's "Supply Attract Reverse Charge", "ITC Availability")
       if (idx.rcm >= 0 && /^(y|yes)$/i.test(String(get(r, "rcm") || "").trim())) d.rcm = true;
       if (idx.itc >= 0 && /^(n|no)$/i.test(String(get(r, "itc") || "").trim())){ const w = String(get(r, "itcwhy") || "").trim(); d.itc = {available: false, why: w || "not available in 2B"}; }
@@ -371,7 +389,7 @@ const SheetFmt = {
     return d;
   },
   fromMarket(x){ return this.finish({no: x.no, date: x.date, party: x.party, gstin: x.gstin, pos: this.pos(x.pos), hsn: x.hsn, ledger: "", against: x.against || "", note: x.note || "",
-    taxable: x.taxable, igst: x.igst, cgst: x.cgst, sgst: x.sgst, cess: x.cess, total: x.total, rates: x.rate ? [x.rate] : [], lines: x.lines, rows: [], market: x.market, hold: x.hold || ""}); },
+    taxable: x.taxable, igst: x.igst, cgst: x.cgst, sgst: x.sgst, cess: x.cess, total: x.total, rates: x.rate ? [x.rate] : [], lines: x.lines, rows: [], market: x.market, tcs: x.tcs || 0, hold: x.hold || ""}); },
   // a file: a sheet (xlsx, xls, csv, a PDF table) or JSON (GSTR-1, GSTR-2B, or another portal's)
   async read(file){
     const name = String(file.name || "").toLowerCase();
@@ -392,8 +410,12 @@ const SheetFmt = {
       const b2b = by(/^b2b$/i), cdnr = by(/^b2b[\s-]*cdnr$/i);
       if (b2b || cdnr){
         const main = b2b || cdnr, more = b2b && cdnr ? [{sheet: cdnr.n, grid: cdnr.grid}] : [];
-        const amend = sheets.filter(x => /^(b2ba|b2b[\s-]*cdnra|ecoa|impga?)$/i.test(String(x.n).trim()) && x.grid.slice(SheetFmt.head(x.grid) + 1).some(r => (r || []).some(c => String(c == null ? "" : c).trim()))).map(x => x.n);
-        return {kind: "grid", grid: main.grid, sheet: main.n, more, amend};
+        // (review of e7bf15906: IMPG is the import of goods, no amendment; its amendments IMPGA, IMPGSEZA, ISDA are. The
+        // sheets FinCom does not read - imports, ISD credits, the operator's 9(5) supplies - are named apart: notRead)
+        const filled = x => x.grid.slice(SheetFmt.head(x.grid) + 1).some(r => (r || []).some(c => String(c == null ? "" : c).trim()));
+        const amend = sheets.filter(x => /^(b2ba|b2b[\s-]*cdnra|ecoa|impga|impgseza|isda)$/i.test(String(x.n).trim()) && filled(x)).map(x => x.n);
+        const notRead = sheets.filter(x => /^(impg|impgsez|isd|eco)$/i.test(String(x.n).trim()) && filled(x)).map(x => x.n);
+        return {kind: "grid", grid: main.grid, sheet: main.n, more, amend, notRead};
       }
       // the sheet with the most rows that has a header
       const best = sheets.filter(s => s.grid.length > 1).sort((a, b) => b.grid.length - a.grid.length)[0] || sheets[0];
@@ -548,18 +570,23 @@ const MarketRead = {
     const shop = kind === "shopify", cnIdx = this.pick(head, ["creditnoteno", "creditnotenumber"]), cnDate = this.pick(head, ["creditnotedate", "returndate", "refunddate"]);
     // Shopify's tax lines: "Tax 1 Name" (IGST 18%) and "Tax 1 Value"
     const taxCols = [1, 2, 3, 4, 5].map(i => [H.indexOf("tax" + i + "name"), H.indexOf("tax" + i + "value")]).filter(([a, b]) => a >= 0 && b >= 0);
-    const byInvoice = new Map();
-    rows.forEach(r => {
+    const byInvoice = new Map(), skipped = [];
+    rows.forEach((r, ri) => {
       if (!r || !r.some(c => !blank(c))) return;
       const typ = shop ? "" : String(get(r, "type") || "").toLowerCase();
       // Flipkart's event types: Sale, Return, Cancellation, Return Cancellation (a return undone)
       const rc = /return\s*cancel|cancel\w*\s*(of\s*)?(the\s*)?return/.test(typ), back = !rc && /refund|return|credit/.test(typ), cancel = !rc && !back && /cancel/.test(typ);
       const toCn = rc || back, cn = toCn && cnIdx >= 0 ? String(r[cnIdx] || "").trim() : "";
-      const no = cn || String(get(r, "no") || get(r, "order") || "").trim(), first = String(r.find(c => !blank(c)) || "").trim();
-      if (!no || this.TOTAL.test(no) || this.TOTAL.test(first)) return;
+      const no = cn || String(get(r, "no") || get(r, "order") || "").trim(), fi = r.findIndex(c => !blank(c)), first = String(r[fi]).trim();
+      // a total row: "Total" as its number, or as its first cell when that is the row's label (not the customer's column,
+      // and no date); left out and counted (review of e7bf15906: a customer "Total Solutions Pvt Ltd" was dropped silently)
+      const tot = this.TOTAL.test(no) || (this.TOTAL.test(first) && fi !== idx.party && blank(get(r, "date")));
+      if (!no || tot){ skipped.push({row: ri + 2, why: tot || this.TOTAL.test(first) ? "a total row" : "no invoice number"}); return; }
       // a line's own sign; a return's, a refund's or a cancellation's made negative; a return cancelled, positive
       const dir = v => rc ? Math.abs(v) : (back || cancel) && v > 0 ? -v : v;
-      const key = no + "|" + (toCn ? "CN" : "INV");
+      // a credit note with no number of its own: one a return date (two returns of one invoice in one report, on 10/09 and
+      // 20/09, are two notes, as across reports; review of e7bf15906)
+      const key = no + "|" + (toCn ? "CN|" + (cn ? "" : cnDate >= 0 ? String(r[cnDate] == null ? "" : r[cnDate] instanceof Date ? Market.date(r[cnDate]) : r[cnDate]).trim() : "") : "INV");
       let inv = byInvoice.get(key);
       if (!inv){
         inv = {no, against: toCn ? (cn ? String(get(r, "no") || "").trim() : no) : "", date: Market.date(toCn && cnDate >= 0 && !blank(r[cnDate]) ? r[cnDate] : get(r, "date")), party: String(get(r, "party") || "").trim(),
@@ -577,6 +604,7 @@ const MarketRead = {
       inv.total = r2(inv.total + dir(blank(get(r, "total")) ? taxable + cg + sg + ig + ce : n(get(r, "total"))));
     });
     const out = Array.from(byInvoice.values()).filter(x => x.taxable || x.total);
+    out.skipped = skipped;
     out.forEach(x => {
       const tax = r2(x.cgst + x.sgst + x.igst); x.rate = x.taxable ? Math.round(tax / x.taxable * 10000) / 100 : 0;
       // a cancellation with no sale of it in this report, or a return cancelled with no return in it: asked, never booked by itself
@@ -780,12 +808,12 @@ const SheetPost = {
         if (["review", "ready"].includes(was.status) && !was.postJob){
           const sig = () => JSON.stringify([was.customerLedger, was.salesLedgers || {}, was.x.customerGstin || "", was.x.pos || ""]), before = sig(), ready = was.status === "ready";
           const gst = this.fillParty(was, d, own);
-          if (was.source === "sheet"){
+          if (was.source === "sheet" || was.source === "market"){
             if (d.own && !was.x.sellerGstin) was.x.sellerGstin = d.own;
             if (d.branch && !was.x.branch) was.x.branch = d.branch;
             this.ledgersTo(was, d, true);
           }
-          if (gst || was.source === "sheet") mapInvoice(was);
+          if (gst || was.source === "sheet" || was.source === "market") mapInvoice(was);
           if (ready && sig() !== before) was.status = "review";
         }
         return;
@@ -797,11 +825,19 @@ const SheetPost = {
         && Math.abs(Math.abs(num(v.x.total)) - Math.abs(d.total)) < 0.005);
       if (heldV){
         Object.assign(heldV.x, {number: no, taxable: Math.abs(d.taxable), cgst: Math.abs(d.cgst), sgst: Math.abs(d.sgst), igst: Math.abs(d.igst), cess: Math.abs(d.cess), total: Math.abs(d.total), rate: d.rate, noteKind: d.note || "", items: this.items(d, Math.abs)});
-        delete heldV.hold; this.ledgersTo(heldV, d, true); this.fillParty(heldV, d, own); mapInvoice(heldV); res.fixed++; res.ids.push(heldV.id); return;
+        delete heldV.hold; if (heldV.x.ecommerce) heldV.source = "market"; this.ledgersTo(heldV, d, true); this.fillParty(heldV, d, own); mapInvoice(heldV); res.fixed++; res.ids.push(heldV.id); return;
       }
-      const v = newInvoice({number: no, date: d.date, customerName: d.party || (d.gstin ? "" : "Retail customer"), customerGstin: GSTIN_RE.test(d.gstin) ? d.gstin : "", pos: d.pos,
+      // a marketplace's report (Amazon, Flipkart, Shopify): its invoices are kept as a marketplace's (source "market",
+      // as the retired importMarketFile made them), so GSTR.fromSales (server/_shared/gst3b.js) counts them in the month's
+      // GSTR-1 / 3B outward supplies and in table 14 by the operator, with the TCS it collected u/s 52 CGST Act (review
+      // of e7bf15906: they were made "sheet", in neither until posted). A GST register (generic) stays the client's own.
+      // One held for a person (a cancellation with no sale in the report, a refunded or voided order) is "sheet" until it
+      // is put right (heldV, above), so it is never counted with the report's own signs
+      const mk = ["amazon", "flipkart", "shopify"].includes(d.market) ? d.market : "";
+      const v = newInvoice(Object.assign({number: no, date: d.date, customerName: d.party || (d.gstin ? "" : "Retail customer"), customerGstin: GSTIN_RE.test(d.gstin) ? d.gstin : "", pos: d.pos,
         hsn: d.hsn, taxable: ab(d.taxable), cgst: ab(d.cgst), sgst: ab(d.sgst), igst: ab(d.igst), cess: ab(d.cess), total: ab(d.total),
-        rate: d.rate, noteKind: d.note || "", againstInvoice: d.against || "", sellerGstin: d.own || "", branch: d.branch || "", items: this.items(d, ab), ecommerce: d.market || undefined}, "sheet", {fileName, sheet: {rows: d.rows, check: d.check, sec: d.sec || ""},
+        rate: d.rate, noteKind: d.note || "", againstInvoice: d.against || "", sellerGstin: d.own || "", branch: d.branch || "", items: this.items(d, ab)},
+        mk ? {ecommerce: mk, tcs: Math.abs(num(d.tcs)), placeOfSupply: (d.pos && typeof GST_STATES === "object" && GST_STATES[d.pos]) || d.pos || ""} : null), mk && !d.hold ? "market" : "sheet", {fileName, market: mk || undefined, sheet: {rows: d.rows, check: d.check, sec: d.sec || ""},
         // (item 1: what the sheet itself gave; a GSTIN or place of supply it did not give comes from the party's Tally
         // ledger, src/js/25 salesPartyFill)
         // (never a GSTR-1's B2CS / B2CL / unregistered note, a summary or a row the file marks unregistered: review of 44e4c1e97)
@@ -1060,6 +1096,7 @@ const SheetImport = {
     if (!this.recon(st.side)) (st.docs || []).forEach((d, i) => { st.docs[i] = SheetPost.notOwn(d, SheetPost.issuer(d, st.side === "sales" ? "sales" : "purchase", st.cid)); });
     const qs = [], seen = new Set();
     if (st.b2cs && st.b2cs.length) qs.push({id: "b2cs", kind: "b2cs", text: "GSTR-1 has " + st.b2cs.length + " B2CS summary row" + (st.b2cs.length === 1 ? "" : "s") + " (sales to consumers, by rate and place of supply). Post B2CS as one summary entry per rate / place of supply?", options: [["yes", "Yes, one entry each"], ["no", "No, leave them out"]]});
+    if (st.read && st.read.notRead && st.read.notRead.length) qs.push({id: "notread", kind: "amend", text: "This GSTR-2B also has " + st.read.notRead.join(", ") + " (imports of goods, ISD credits or an operator's supplies u/s 9(5)). FinCom does not read those sheets: book them by hand.", options: [["ok", "Understood"]]});
     if (st.read && st.read.amend && st.read.amend.length) qs.push({id: "amend", kind: "amend", text: "This GSTR-2B also has amendments (" + st.read.amend.join(", ") + "). FinCom does not post them: an amendment changes a bill already booked. Check those bills by hand.", options: [["ok", "Understood"]]});
     const rcm = (st.docs || []).filter(d => d.rcm);
     if (rcm.length) qs.push({id: "rcm", kind: "rcm", text: rcm.length + " document" + (rcm.length === 1 ? " is" : "s are") + " under reverse charge: the supplier charges no GST, and the client pays the tax (section 9(3) / 9(4) CGST Act, 5(3) / 5(4) IGST Act). Book the tax as payable under reverse charge, with its input credit?", options: [["rcm", "Yes, reverse charge"], ["skip", "Leave them out"]]});

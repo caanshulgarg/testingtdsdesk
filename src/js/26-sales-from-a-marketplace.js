@@ -6,20 +6,23 @@
 // for every sales upload (next-fix-audit-imports: the "Marketplace report" button's own reader is retired). What stays
 // here is the date rule the other readers share.
 const Market = {
-  // a date as yyyy-mm-dd: Excel's own, yyyy-mm-dd, dd/mm/yyyy or dd/mm/yy and dd-Mon-yy. Day first always: figures alone
-  // are never given to new Date, which reads 05/09/26 as 9 May. "" when the day is not in its month
+  // a date as yyyy-mm-dd: Excel's own, yyyy-mm-dd (or yyyy/mm/dd, yyyy.mm.dd), dd/mm/yyyy or dd/mm/yy and dd-Mon-yy. Day
+  // first always: figures alone are never given to new Date, which reads 05/09/26 as 9 May. "" when the day is not in
+  // its month. Any year 1990 to 2099 (review of e7bf15906: toIsoDate's GST years, 2017-2035, dropped a vendor
+  // statement's old bill of 2015; a register says so itself, SheetFmt.apply)
+  iso(d, m, y){ d = +d; m = +m; y = +y; if (y < 100) y += 2000; const t = new Date(Date.UTC(y, m - 1, d)); return y > 1989 && y < 2100 && m > 0 && m < 13 && t.getUTCDate() === d ? t.toISOString().slice(0, 10) : ""; },
   date(v){
     if (v == null || v === "") return "";
     // a date from Excel (or a date written out) is local midnight: read it by its local day, not in UTC (a day early in India)
     const day = d => isNaN(d) ? "" : new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
     if (v instanceof Date) return day(v);
     const s = String(v).trim();
-    let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
-    if (m) return toIsoDate(m[3], m[2], m[1]);
+    let m = s.match(/^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})(?!\d)/);
+    if (m) return this.iso(m[3], m[2], m[1]);
     m = s.match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4}|\d{2})(?!\d)/);
-    if (m) return toIsoDate(m[1], m[2], m[3]);
+    if (m) return this.iso(m[1], m[2], m[3]);
     m = s.match(/^(\d{1,2})[-\s]([A-Za-z]{3,4})[A-Za-z]*[-\s,]+(\d{4}|\d{2})(?!\d)/);
-    if (m) return toIsoDate(m[1], MONTHS[m[2].toLowerCase()] || MONTHS[m[2].slice(0, 3).toLowerCase()], m[3]);
+    if (m) return this.iso(m[1], MONTHS[m[2].toLowerCase()] || MONTHS[m[2].slice(0, 3).toLowerCase()], m[3]);
     // a month in words ("Sep 5, 2026"), never figures alone
     return /[a-z]{3}/i.test(s) && !/^\d+[-\/.]\d/.test(s) ? day(new Date(s)) : "";
   }
