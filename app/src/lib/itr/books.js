@@ -147,9 +147,15 @@ export function kind43B(ledger) {
   const l = String(ledger || "").toUpperCase();
   if (/\bTDS\b|\bTCS\b|TAX DEDUCTED|TAX COLLECTED/.test(l)) return { kind: "tds", on: false };
   if (/GST|CGST|SGST|IGST|UTGST|OUTPUT TAX/.test(l)) return { kind: "gst", on: false };
-  const fund = /PROVIDENT|\bE?PF\b/.test(l) ? "pf" : /\bESIC?\b|STATE INSURANCE/.test(l) ? "esi" : "";
+  // the schemes' own names (Employees' Provident Fund, Employees' State Insurance) say nothing of whose share it is
+  const bare = l.replace(/EMPLOYEES?'?S?'? ?PROVIDENT FUND/g, "PROVIDENT FUND").replace(/EMPLOYEES?'?S?'? ?STATE INSURANCE/g, "STATE INSURANCE");
+  const admin = /\bEDLI\b|ADMIN(ISTRATION|ISTRATIVE)? (CHARGES?|EXP)|INSPECTION CHARGES/.test(bare);
+  let fund = /PROVIDENT|\bE?PF\b/.test(bare) ? "pf" : /\bESIC?\b|STATE INSURANCE/.test(bare) ? "esi" : admin ? "pf" : "";
+  // "Employee's contribution" naming no fund is the employees' PF
+  if (!fund && /EMPLOYEES?'?S?'? ?(SHARE|CONTRI)/.test(bare)) fund = "pf";
   if (fund) {
-    const role = /EMPLOYER|\bER\b|COMPANY'?S? (SHARE|CONTRI)/.test(l) ? "er" : /EMPLOYEE'?S?'? ?(SHARE|CONTRI|DEDUCT)|\bEE\b|DEDUCTED|DEDUCTION|STAFF (SHARE|CONTRI)|RECOVER/.test(l) ? "ee" : "";
+    // PF admin charges and EDLI are the employer's (43B in full, never split by the ECR)
+    const role = admin || /EMPLOYER|\bER\b|COMPANY'?S? (SHARE|CONTRI)/.test(bare) ? "er" : /EMPLOYEE|\bEE\b|DEDUCTED|DEDUCTION|STAFF (SHARE|CONTRI)|RECOVER/.test(bare) ? "ee" : "";
     return { kind: fund, role, on: role !== "ee" };
   }
   if (/BONUS/.test(l)) return { kind: "bonus", on: true };
@@ -160,9 +166,10 @@ export function kind43B(ledger) {
 }
 // 43B on THIS YEAR'S charge (the review of 5a6df2218): what the year's profit and loss was charged for the ledger and is
 // still unpaid on the due date of the return, never the whole balance (a 30 lakh leave provision of which 3 lakh was
-// charged this year adds back at most the 3 lakh). Payments are taken against the oldest dues first: in the year they
+// charged this year adds back at most the 3 lakh). PF / ESI payments by wage month; for the rest (the fallback) payments are taken against the oldest dues first: in the year they
 // settle the opening balance before the year's charge, and after the year end what is left of the opening balance first.
-// rows: payable ledgers [{ledger, opening, charge (credits of the year from the P&L; null: not known), closing}]
+// rows: payable ledgers [{ledger, opening, charge (credits of the year from the P&L; null: not known), closing, minBal (the
+// lowest balance in the year: the old balance, stale)}]; a payment may carry ym (a challan's wage month)
 // (positive = payable); pays: payments after the year end [{ledger, date, amt}], one per payment (pfDedup); due: the
 // return's due date; last: the books' last date; share: {pf, esi} the employer's part of a ledger for both (March's ECR /
 // ESI challan) or null. Each -> {id, ledger, kind, role, kind43B, opening, charge, chargeKnown, closing, paid, unpaid (of
@@ -172,17 +179,33 @@ export function dues43B(rows, pays, due, last, share) {
   rows.forEach((r) => {
     const k = kind43B(r.ledger), closing = R(r.closing); if (!k || closing <= 0) return;
     const known = r.charge != null, charge = known ? Math.max(0, R(r.charge)) : closing;
-    const chargeOpen = Math.min(charge, closing), oldOpen = closing - chargeOpen;
+    // stale: the part of the opening balance never reduced in the year (the ledger's lowest balance in the year, at most
+    // the opening): an old due, asked (already disallowed in an earlier year? paid?), never added back by FinCom
+    const stale0 = k.on && r.minBal != null ? Math.max(0, Math.min(R(r.opening), R(r.minBal), closing)) : 0;
+    const rest = closing - stale0, chargeOpen = Math.min(charge, rest), oldOpen = rest - chargeOpen;
     const mine = pays.filter((p) => p.ledger === r.ledger && p.date <= due).sort((a, b) => a.date.localeCompare(b.date));
     let paid = 0; const dates = [];
     mine.forEach((p) => { if (paid < closing) { paid += N(p.amt); dates.push(p.date); } });
     paid = Math.min(R(paid), closing);
-    const unpaid = R(Math.max(0, chargeOpen - Math.max(0, paid - oldOpen)));
+    let unpaid, staleLeft;
+    if (k.kind === "pf" || k.kind === "esi") {
+      // PF / ESI by wage month: a payment for a month of this year (a challan's wage month, or a bank entry naming none)
+      // settles this year's dues; one for a month before the year settles the old balance
+      const fy0 = String(+String(due).slice(0, 4) - 1) + "04";
+      const old = R(mine.filter((p) => p.ym && p.ym < fy0).reduce((a, p) => a + N(p.amt), 0)), cur = Math.max(0, paid - old);
+      const onCharge = Math.min(chargeOpen, cur), over = Math.max(0, cur - onCharge - oldOpen);
+      unpaid = R(chargeOpen - onCharge); staleLeft = R(Math.max(0, stale0 - old - over));
+    } else {
+      // bonus, leave, interest, taxes (the fallback, no link from a payment to its due): the oldest dues first, the old
+      // balance, then what was left of the opening, then this year's charge
+      let p = paid; const s = Math.min(stale0, p); p -= s; staleLeft = R(stale0 - s);
+      unpaid = R(Math.max(0, chargeOpen - Math.max(0, p - oldOpen)));
+    }
     let part = k.on ? 1 : 0, unknownShare = false;
     if (k.on && !k.role && (k.kind === "pf" || k.kind === "esi")) { const sh = share && share[k.kind]; if (sh == null) { part = null; unknownShare = unpaid > 0; } else part = sh; }
     const dis = k.on ? R(unpaid * (part == null ? 1 : part)) : 0;
     out.push({ id: "43b:" + r.ledger, ledger: r.ledger, kind: k.kind, role: k.role || "", kind43B: k.on, opening: R(r.opening), charge, chargeKnown: known, closing, paid, dates, unpaid, part, dis,
-      unknown: k.on && unpaid > 0 && (!last || last < due), unknownShare, trace: r.trace || [] });
+      stale: k.on ? staleLeft : 0, staleOpen: stale0, unknown: k.on && unpaid > 0 && (!last || last < due), unknownShare, trace: r.trace || [] });
   });
   return out;
 }
@@ -332,19 +355,26 @@ export function fromApp(fy, imports, due) {
   const plCode = new Set(rows.filter((r) => r.code && FinSt.CODES[r.code] && FinSt.CODES[r.code].side !== "BS").map((r) => r.ledger));
   const payRows = rows.filter((r) => ["7B", "7C", "7G", "5B", "5C", "5F", "5G"].includes(r.code) && kind43B(r.ledger)).map((r) => ({ ledger: r.ledger, opening: -N(r.py), closing: -N(r.final), charge: 0, paidInYear: 0 }));
   const byL = {}; payRows.forEach((r) => { byL[r.ledger] = r; });
-  const bookPays = [];
+  const bookPays = [], moves = {};
   vs.forEach((v) => {
     const ent = v.ent || [], pl = ent.some((e) => plCode.has(e.l) && N(e.a) < 0);
     ent.forEach((e) => {
       const r = byL[e.l]; if (!r) return;
-      if (v.date >= y0 && v.date <= y1) { if (N(e.a) > 0 && pl) r.charge += N(e.a); else if (N(e.a) < 0) r.paidInYear += -N(e.a); }
+      if (v.date >= y0 && v.date <= y1) { (moves[e.l] = moves[e.l] || []).push({ date: v.date, amt: N(e.a) }); if (N(e.a) > 0 && pl) r.charge += N(e.a); else if (N(e.a) < 0) r.paidInYear += -N(e.a); }
       else if (v.date > y1 && v.date <= due && N(e.a) < 0) bookPays.push({ ledger: e.l, date: v.date, amt: -N(e.a), narr: v.narr || "" });
     });
   });
+  // each payable's lowest balance in the year (at the end of a day): the part of the opening never paid down (dues43B: stale)
+  payRows.forEach((r) => {
+    let bal = r.opening, min = r.opening; const ds = {};
+    (moves[r.ledger] || []).forEach((m) => { ds[m.date] = (ds[m.date] || 0) + m.amt; });
+    Object.keys(ds).sort().forEach((d) => { bal += ds[d]; if (bal < min) min = bal; });
+    r.minBal = R(min);
+  });
   const fundL = (k) => { const ls = payRows.filter((r) => { const q = kind43B(r.ledger); return q.kind === k && q.role !== "ee" && r.closing > 0; }); return ls.length === 1 ? ls[0].ledger : (ls.find((r) => !kind43B(r.ledger).role) || ls[0] || {}).ledger; };
   const challans = [];
-  march(im.pfc).forEach((c) => { const l = fundL("pf"); if (l && c.paidOn <= due) challans.push({ ledger: l, date: c.paidOn, amt: N(c.data.total), ref: c.trrn || "" }); });
-  march(im.esi).forEach((c) => { const l = fundL("esi"); if (l && c.paidOn <= due) challans.push({ ledger: l, date: c.paidOn, amt: N(c.data.total), ref: c.challan || "" }); });
+  march(im.pfc).forEach((c) => { const l = fundL("pf"); if (l && c.paidOn <= due) challans.push({ ledger: l, date: c.paidOn, amt: N(c.data.total), ref: c.trrn || "", ym: c.wageMonth }); });
+  march(im.esi).forEach((c) => { const l = fundL("esi"); if (l && c.paidOn <= due) challans.push({ ledger: l, date: c.paidOn, amt: N(c.data.total), ref: c.challan || "", ym: c.wageMonth }); });
   const dd = pfDedup(bookPays, challans);
   const dues = dues43B(payRows, dd.pays, due, last, share);
   // the PF / ESI payments after the year end, two ways: the bank entries in the books and the challans brought in
@@ -376,6 +406,12 @@ export function fromApp(fy, imports, due) {
       const fifo = msmeFifo(flows, days, y0, y1, last);
       msme = { rows: keepRows, unknown: res.unknown, prior: res.prior, days, fifo: { amt: R(fifo.rows.reduce((a, x) => a + N(x.amt), 0)), unknown: fifo.unknown.length, n: fifo.rows.length },
         priorParties: Object.keys(flows).filter((p) => N(flows[p].opening) > 0) };
+      // the bills of earlier years open at 31-03-2025 and paid in the year (by reference and date): last year's 43B(h)
+      // add-back is allowed bill by bill (model.js prior43B)
+      const ag0 = G.MIS.ageing(fy + "0331", "p", null), priorPaid = [];
+      (ag0.rows || []).forEach((pr) => { if (!/micro|small/i.test(types[pr.party] || "")) return; const now = (ag.rows.find((z) => z.party === pr.party) || {}).open || [];
+        (pr.open || []).forEach((x) => { const z = now.find((y) => y.ref === x.ref && y.date === x.date), paid = R(N(x.left) - (z ? N(z.left) : 0)); if (paid > 0) priorPaid.push({ party: pr.party, ref: x.ref, date: x.date, amt: paid }); }); });
+      msme.priorPaid = priorPaid;
     }
   } catch (e) { notes.push("MSME bills could not be read: " + ((e && e.message) || e)); }
   // the profit before tax from Tally's own groups (not FinCom's codes), with the stock-in-hand ledgers

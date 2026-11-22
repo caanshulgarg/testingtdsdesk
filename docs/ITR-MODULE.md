@@ -160,18 +160,29 @@ foreign-looking party without them is asked).
 encashment, interest to banks / NBFCs, taxes and duties) FinCom reads from the vouchers its opening balance, this year's
 charge (its credits in vouchers that debit an income or expense ledger), the year's payments, and the payments after the
 year end up to the due date. Only the part of THIS YEAR'S charge still unpaid on the due date is added back, never the
-whole balance: a leave provision of 30 lakh of which 3 lakh was charged this year adds back at most 3 lakh. Payments
-settle the oldest dues first (in the year the opening balance before the year's charge; after the year end what is left
-of the opening balance first). If the year's charge cannot be read, the balance is taken and Checks asks (`43b_charge`).
-PF / ESI: a ledger named for the employer's share is 43B in full; one named for the employees' share is never 43B (it is
-36(1)(va)); only a single ledger for both is split by March's ECR / ESI challan (none: `43b_share`, Needs you, blocks). A
+whole balance: a leave provision of 30 lakh of which 3 lakh was charged this year adds back at most 3 lakh. A part of
+the opening balance never paid down in the year (the ledger's lowest balance in the year, at most the opening) is an old
+balance: never added back by FinCom, asked on Checks ("already disallowed in an earlier year, or paid?", `43b_stale`,
+answered with a note). PF / ESI payments are matched by wage month: a challan for a month of the year (or a bank entry
+naming none) settles this year's dues, a challan for an earlier month the old balance. Bonus, leave, interest and taxes
+have no such link, so for them alone payments settle the oldest dues first (the old balance, then the rest of the
+opening, then the year's charge): a fallback. The review's PF case: 2 lakh of stale arrears, 12 lakh charged, 3 lakh at
+the year end, March's 1 lakh paid on 10 April: nothing added back, the 2 lakh asked. If the year's charge cannot be read,
+the balance is taken and Checks asks (`43b_charge`).
+PF / ESI: a ledger named for the employer's share, PF admin charges and EDLI are 43B in full (never split by the ECR); one
+named for the employees' share ("Employee PF payable", "Employees PF payable", "Employee's contribution", "PF deducted",
+"PF (employee)" and the ESI equivalents) is never 43B (it is 36(1)(va)); the schemes' own names (Employees' Provident
+Fund, Employees' State Insurance) say nothing of the share; only a single ledger for both is split by March's ECR / ESI
+challan (none: `43b_share`, Needs you, blocks). A
 March challan and the April bank entry for it are one payment (same ledger, amount to the rupee, its TRRN / challan number
 in the narration or dates within five days), at the challan's date. GST and TDS payable are listed (GST is under 43B only
 when charged to the P&L; unpaid TDS is 40(a)(ia)).
 
 **Earlier years' 43B paid this year** (AmtDisallUs43BNowAllow): from last year's return made in FinCom (each download
-keeps what 43B and 43B(h) added back, by ledger / party): allowed = the part of last year's add-back paid in FY 2025-26,
-the year's payments settling first the part allowed last year. Without last year's return in FinCom and with dues payable
+keeps what 43B added back by ledger, and what 43B(h) added back bill by bill: party, bill reference and date): allowed =
+the part of last year's add-back paid in FY 2025-26, the year's payments settling first the part allowed last year; a
+43B(h) bill is allowed when that bill (its reference and date in the payables' ageing) was paid in the year, never by the
+party's name alone. Without last year's return in FinCom and with dues payable
 at 1-04-2025 that were paid, the owner gives the amount (0 if none) on Checks; until then the JSON is blocked.
 
 **43B(h).** Each micro / small supplier's bill of the year open at the year end is allowed only if paid within the days of
@@ -201,7 +212,7 @@ there (never Matched); or Needs you.
 | Tally books | Sources = application; Part A-P&L profit (FinCom's codes) = Tally's own profit and loss (the ledgers under Tally's revenue groups, by its group chain, with the stock-in-hand ledgers); every ledger in a schedule line; opening balances in Tally = last year's audited balance sheet as uploaded (FinPyBs), else Missing data; capital account: last year's closing capital (uploaded balance sheet) + profit + the year's capital credits - debits = the closing capital, else Missing data |
 | GST | Turnover = the FILED GSTR-1 (the portal's copies or downloads marked filed, totalled from the GSTN JSON) + the listed reasons; filed GSTR-1 = filed GSTR-3B (the portal's 3B JSON); months without a filed return listed |
 | TDS returns | Deducted (26Q / 24Q) = credited to TDS payable; deducted = deposited by the due date; consistency: the return's 40(a)(ia) / 40(a)(i) = the same worked out from the TDS records; independent: FinCom's records = the 26Q / 27Q returns as filed (the copy kept when each was marked filed), FinCom's challans = TRACES (consolidated file / challan status file), else Missing data; non-resident or not asked |
-| 43B and 43B(h) | Consistency: the return's 43B = this year's charge unpaid by the due date (each ledger: charge, payments, dates, employer's part); the return's 43B(h) = the MSME bills paid after their limit. Independent: the PF / ESI payments after the year end in the bank entries = the March challans; the bills settled by their references (the ageing) = the bills settled by the payment vouchers oldest first. Asked (blocking until answered): payment dates not shown, the employer's part of a joint PF / ESI ledger, the year's charge not read, earlier years' 43B paid; GST / TDS payable unpaid: asked |
+| 43B and 43B(h) | Consistency: the return's 43B = this year's charge unpaid by the due date (each ledger: charge, payments, dates, employer's part); the return's 43B(h) = the MSME bills paid after their limit. Independent: the PF / ESI payments after the year end in the bank entries = the March challans; the bills settled by their references (the ageing) = the bills settled by the payment vouchers oldest first. Asked (blocking until answered): payment dates not shown, the employer's part of a joint PF / ESI ledger, the year's charge not read, earlier years' 43B paid; asked with a note: an old balance not reduced in the year (never added back); GST / TDS payable unpaid: asked |
 | PF and ESI | An ECR for every month; a challan for every ECR; employer's PF in the books = the ECRs (+ admin charges); employees' share credited by the 15th of the next month (36(1)(va)); the dates feed 43B |
 | Tax audit (3CD) | Where a tax audit applies: the 3CD drafted from the SAVED Audit run of the whole year (clauses 21(b)(ii)(A), 21(d)(A)) against the ITR's schedules as worked out now; no saved run for the year: Missing data |
 | The computation | The right form; firm or LLP; regime and rates (and the company's FY 2023-24 turnover) answered; every deduction within its limit; loss set-off and carry-forward (a belated return's loss lost; this year's unabsorbed depreciation split confirmed); ITR-4 limits; Form 10-IEA; MAT book profit confirmed; the two computations agree on all 17 figures |
@@ -263,11 +274,14 @@ To confirm:
    it does not assume.
 5. **40(b) limits** from AY 2025-26 (Finance (No. 2) Act 2024): Rs 3 lakh or 90% on the first Rs 6 lakh, 60% on the rest.
 6. **36(1)(va)**: no grace days (Checkmate Services, SC 2022); a late month's employees' share is disallowed for good.
-6a. **43B: payments taken against the oldest dues first.** Without a voucher-level link between a payment and the due it
-   settles, FinCom applies payments to the opening balance before this year's charge. A stale old balance can make this
-   year's add-back larger (and next year's allowance follows). Confirm, or say where payments are linked.
+6a. **43B: oldest dues first is a fallback only.** PF / ESI payments are matched to their challan's wage month; an old
+   balance not reduced in the year (any 43B ledger) is asked, never added back. Only for bonus, leave, interest and taxes,
+   where nothing links a payment to the due it settles, are payments taken against the oldest dues first (after the old
+   balance). Confirm, or say where those payments are linked.
 6b. **This year's unabsorbed depreciation in Schedule UD, the rest of the loss in CFL** (section 32(2)); the utility's
-   rule 618 reads CFL against CYLA's whole balance. Each such return asks to confirm on Checks.
+   rule 618 reads CFL against CYLA's whole balance. Each such return asks to confirm on Checks (`ud_split`, open). Run one
+   split return through Winman and the offline utility. If rule 618 forces the whole balance into CFL, set UD's
+   current-year row to 0 and keep the 32(2) depreciation as a working note.
 7. **Software ID** (`SWCreatedBy`): FinCom has no CBDT software ID. Give Winman's or the firm's, or leave the placeholder
    for Winman to replace on import. FinCom asks for it; it never makes one up.
 8. **Schemas in the build:** the CBDT schemas are fetched at test and publish time and served from FinCom's own site to
@@ -293,7 +307,7 @@ All on made-up data (`tests/fixtures/itr/`, `tests/itr_demo.mjs`):
 | `node tests/run_itr_imports.mjs` | Each kind detected with PAN / AY / month, counts and totals, the PDF route, refusals (another PAN, another year, unknown, locked, an ITR JSON, no month), re-import, firm storage only, nothing logged |
 | `node tests/run_itr_tax.mjs` | Every rule with hand-worked figures and edge cases (87A and its relief, surcharge bands with marginal relief, both regimes, seniors, MAT and credit, 115BAA, 40(b), 44AD / 44ADA / 44AE thresholds, losses, VI-A limits, special rates, rounding, 234A/B/C/F, 43B and 36(1)(va) dates); 600 random returns through both computations; a planted one-rupee difference caught |
 | `node tests/run_itr_schema.mjs` | Pinned schema files; every form and scenario passes ajv and the page's validator alike; planted faults rejected by both; non-amount fields asked, never filled; the JSON's figures are the computation's; the review's loss cases (PBT -1 lakh / -5 lakh with depreciation of 4 lakh) carried in Schedules UD and CFL for ITR-3, 5 and 6; a carry-forward the map does not hold blocks |
-| `node tests/run_itr_verify.mjs` | Every check Matched on agreeing sides, and each planted fault found with its exact amount; Missing / Needs you; consistency checks labelled; 43B on this year's charge (the 30 lakh leave provision), employer / employees' PF ledgers, one payment per challan, earlier years' 43B; payment dates answered item by item changing the computation; the gate |
+| `node tests/run_itr_verify.mjs` | Every check Matched on agreeing sides, and each planted fault found with its exact amount; Missing / Needs you; consistency checks labelled; 43B on this year's charge (the 30 lakh leave provision), employer / employees' PF ledgers by their usual names, admin charges and EDLI, PF by wage month and the old balance asked (the review's 2 lakh arrears), one payment per challan, earlier years' 43B (43B(h) bill by bill); payment dates answered item by item changing the computation; the gate |
 | `python3 tests/run_itr_ui.py` | The page, desktop and phone: Data, a file brought in, a wrong PAN refused, re-import, the sheet with its ledgers, PDF, Excel, the checks, a difference opened, accepting only with a note, the JSON offered only when settled, the download passing ajv; fits the width. `ITR_SHOTS=<dir>` saves the design screenshots |
 | `run_every_screen.py`, `run_legacy_room.py` | The four steps open on real (fixture) books with no error; legacy.js and the first file within their budgets |
 

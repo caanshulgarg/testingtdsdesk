@@ -382,7 +382,7 @@ function JsonStep({ X, json, sch, g, refresh }) {
     save(new Blob([JSON.stringify(rep, null, 1)], { type: "application/json" }), base + "_checks.json");
     // what 43B and 43B(h) added back, by ledger / party: next year's return allows it when paid (prior43B, model.js)
     const dis = (X.model.dues43B || []).filter((d) => d.kind43B && R0(d.dis) && !d.unknown && !d.unknownShare).map((d) => ({ ledger: d.ledger, amt: R0(d.dis) }))
-      .concat(((X.model.msme || {}).rows || []).map((m) => ({ ledger: m.party, amt: R0(m.amt), msme: true })));
+      .concat(((X.model.msme || {}).rows || []).map((m) => ({ ledger: m.party, party: m.party, ref: m.ref || "", date: m.date, amt: R0(m.amt), msme: true })));
     X.store.addVersion({ v: (X.state.versions || []).length + 1, at: rep.made, sha, liability: X.comp.liability, payable: X.comp.payable, refund: X.comp.refund, fincom: VERSION, dis43B: dis });
     refresh();
   }

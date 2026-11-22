@@ -155,6 +155,35 @@ r = run({ books: (b) => { b.prior43B = [{ ledger: "BONUS PAYABLE", opening: 8000
 ok(r.by("43b_prior").status === "absent" && r.comp.lines.find((l) => l.key === "less:43b_prior").amt === 30000, "answered 30,000: allowed in the computation (AmtDisallUs43BNowAllow)");
 r = run({ books: (b) => { b.prior43B = [{ ledger: "BONUS PAYABLE", opening: 80000, paidInYear: 60000 }]; }, prevState: { versions: [{ v: 3, dis43B: [{ ledger: "BONUS PAYABLE", amt: 50000 }] }] } });
 ok(r.by("43b_prior").status === "absent" && r.comp.lines.find((l) => l.key === "less:43b_prior").amt === 30000, "last year's return in FinCom: 50,000 added back of an 80,000 balance; 60,000 paid: 30,000 allowed now (the 30,000 allowed last year paid first)");
+// the third review (0610180ac): employees' PF / ESI ledgers by their usual names; admin charges and EDLI the employer's
+const EE = ["EMPLOYEE PF PAYABLE", "EMPLOYEES PF PAYABLE", "EMPLOYEE'S CONTRIBUTION", "PF DEDUCTED", "PF (EMPLOYEE)", "EMPLOYEE ESI PAYABLE", "EMPLOYEES ESI PAYABLE", "EMPLOYEE'S CONTRIBUTION TO ESI", "ESI DEDUCTED", "ESI (EMPLOYEE)", "EMPLOYEES' CONTRIBUTION TO ESIC"];
+const badEE = EE.filter((l) => { const k = kind43B(l); return !k || k.role !== "ee" || k.on; });
+ok(!badEE.length, "employees' PF / ESI ledgers by their usual names: 36(1)(va) only, never 43B" + (badEE.length ? ": " + badEE.join(", ") : ""));
+ok(kind43B("EMPLOYEE'S CONTRIBUTION TO ESI").kind === "esi" && kind43B("PF (EMPLOYEE)").kind === "pf", "the fund read from the name (ESI / PF)");
+const ADM = ["PF ADMIN CHARGES PAYABLE", "EDLI PAYABLE", "EDLI CHARGES PAYABLE", "PF ADMINISTRATION CHARGES"];
+const badAdm = ADM.filter((l) => { const k = kind43B(l); return !k || k.kind !== "pf" || k.role !== "er" || !k.on; });
+ok(!badAdm.length, "PF admin charges and EDLI: the employer's, under 43B" + (badAdm.length ? ": " + badAdm.join(", ") : ""));
+ok(kind43B("EMPLOYEES' PROVIDENT FUND PAYABLE").role === "" && kind43B("EMPLOYEES STATE INSURANCE PAYABLE").role === "", "the schemes' own names (Employees' Provident Fund, Employees' State Insurance) stay ledgers for both");
+ok(dues43B([{ ledger: "EMPLOYEE PF PAYABLE", closing: 50000, charge: 50000 }], [], "20260831", "20260930", { pf: 0.5 })[0].dis === 0, "an employees' PF ledger with 50,000 unpaid: nothing added back under 43B");
+const adm = dues43B([{ ledger: "PF ADMIN CHARGES PAYABLE", closing: 4000, charge: 4000 }], [], "20260831", "20260930", { pf: 0.5 })[0];
+ok(adm.dis === 4000 && adm.part === 1 && !adm.unknownShare, "PF admin charges unpaid: 4,000 in full, never split by the ECR");
+// PF / ESI by wage month; an old balance not reduced in the year is asked, never added back
+const pfc = dues43B([{ ledger: "PF PAYABLE", opening: 300000, charge: 1200000, closing: 300000, minBal: 200000 }], [{ ledger: "PF PAYABLE", date: "20260410", amt: 100000, ym: "202603" }], "20260831", "20260930", { pf: 0.55 })[0];
+ok(pfc.dis === 0 && pfc.stale === 200000, "the reviewer's case: PF payable, 2 lakh of stale arrears, 12 lakh charged, 3 lakh at the year end, March's 1 lakh paid 10-04: nothing added back; the 2 lakh asked");
+const pfn = dues43B([{ ledger: "PF PAYABLE", opening: 300000, charge: 1200000, closing: 300000, minBal: 200000 }], [], "20260831", "20260930", { pf: 1 })[0];
+ok(pfn.dis === 100000 && pfn.stale === 200000, "the same, March not paid: only March's 1 lakh added back (of this year's charge), the arrears still asked, not added");
+const pfa = dues43B([{ ledger: "PF PAYABLE", opening: 300000, charge: 1200000, closing: 300000, minBal: 200000 }], [{ ledger: "PF PAYABLE", date: "20260410", amt: 100000, ym: "202603" }, { ledger: "PF PAYABLE", date: "20260520", amt: 200000, ym: "202405" }], "20260831", "20260930", { pf: 1 })[0];
+ok(pfa.dis === 0 && pfa.stale === 0, "a challan for an old wage month (May 2024) settles the arrears: no question left");
+const bst = dues43B([{ ledger: "BONUS PAYABLE", opening: 50000, charge: 40000, closing: 90000, minBal: 50000 }], [], "20260831", "20260930", {})[0];
+ok(bst.dis === 40000 && bst.stale === 50000, "bonus: last year's 50,000 never reduced in the year: asked (not added back); this year's 40,000 unpaid added back");
+const bsp = dues43B([{ ledger: "BONUS PAYABLE", opening: 50000, charge: 40000, closing: 90000, minBal: 50000 }], [{ ledger: "BONUS PAYABLE", date: "20260601", amt: 60000 }], "20260831", "20260930", {})[0];
+ok(bsp.dis === 30000 && bsp.stale === 0, "bonus, the fallback (oldest first): 60,000 paid in June settles the old 50,000, then 10,000 of the year's charge: 30,000 added back");
+r = run({ dues43B: [pfc] });
+ok(r.by("43b_stale").status === "needs" && !r.by("43b_stale").noAccept && /already disallowed/i.test(r.by("43b_stale").how) && !r.comp.lines.some((l) => l.key === "add:43b"), "the stale arrears question shown on Checks (answered with a note); the add-back 0");
+// earlier years' 43B(h): matched by the bill, never by the party's name alone
+r = run({ books: (b) => { b.prior43B = []; b.msme = Object.assign({}, b.msme, { priorPaid: [{ party: "G", ref: "7", date: "20250220", amt: 5000 }, { party: "G", ref: "8", date: "20250301", amt: 9000 }] }); },
+  prevState: { versions: [{ v: 2, dis43B: [{ msme: true, party: "G", ref: "7", date: "20250220", amt: 5000 }, { msme: true, party: "G", ref: "9", date: "20250310", amt: 4000 }] }] } });
+ok(r.comp.lines.find((l) => l.key === "less:43b_prior").amt === 5000, "last year's 43B(h) bills: bill 7 paid this year allowed (5,000); bill 9 not paid, and bill 8 (not added back last year) of the same party, not allowed");
 const m1 = msme43Bh([{ party: "A", ref: "1", date: "20260201", amt: 10000, paidOn: "20260410" }, { party: "B", ref: "2", date: "20260320", amt: 20000, paidOn: "20260415" }, { party: "C", ref: "3", date: "20260325", amt: 30000, paidOn: "20260520" },
   { party: "D", ref: "4", date: "20260328", amt: 40000, paidOn: "" }], 45, "20260331", "20260630");
 ok(m1.rows.map((x) => x.party).join("") === "ACD" && !m1.rows.some((x) => x.party === "B"), "43B(h), 45 days: overdue at 31 March (A), paid after its limit in May (C) and unpaid past its limit (D) added back; paid within (B) allowed");

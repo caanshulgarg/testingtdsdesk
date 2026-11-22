@@ -101,8 +101,17 @@ export function prior43B(bk, st, prev) {
   if (last && Array.isArray(last.dis43B)) {
     const trace = [];
     let amt = 0;
+    const paidBills = (ms && ms.priorPaid) || [];
     last.dis43B.forEach((d) => {
-      const r = rows.find((x) => x.ledger === d.ledger), dl = N(d.amt);
+      const dl = N(d.amt);
+      // 43B(h): a bill added back last year is allowed when THAT bill was paid this year (by its reference and date,
+      // never by the party's name alone)
+      if (d.msme) {
+        const b = d.ref != null ? paidBills.find((x) => x.party === d.party && String(x.ref || "") === String(d.ref || "") && x.date === d.date) : null, u = b ? Math.min(dl, N(b.amt)) : 0;
+        amt += u; trace.push({ ledger: d.party || d.ledger, group: "43B(h) bill " + (d.ref || "(no reference kept)") + " of " + (d.date || "?") + " added back last year " + R(dl) + (b ? ", paid in the year " + R(b.amt) : ", not paid in the year"), amt: R(u) });
+        return;
+      }
+      const r = rows.find((x) => x.ledger === d.ledger);
       const u = r ? Math.min(dl, Math.max(0, r.paidInYear - Math.max(0, r.opening - dl))) : 0;
       amt += u; trace.push({ ledger: d.ledger, group: "added back last year " + R(dl) + (r ? ", paid in the year " + R(r.paidInYear) : ", ledger not in the books"), amt: R(u) });
     });
