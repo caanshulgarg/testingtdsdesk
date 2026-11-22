@@ -1464,7 +1464,7 @@ function doAct(act, t){
       const rows = draftRows().filter(r => act === "revApprove" ? S.revSel.has(r.e.id) : (!(r.c.missing || []).length && !r.c.flags.some(f => f.lvl === "hi") && !r.e.confirmType));
       let ok = 0, held = 0;
       const heldIds = [];
-      rows.forEach(r => { const c = compute(r.e); if ((c.missing || []).length || notReadYet(r.e)){ held++; heldIds.push(r.e.id); return; } approve(r.e, {bulk: true}); ok++; });
+      statsHeld(() => rows.forEach(r => { const c = compute(r.e); if ((c.missing || []).length || notReadYet(r.e)){ held++; heldIds.push(r.e.id); return; } approve(r.e, {bulk: true}); ok++; }));
       S.revSel = new Set();
       // smart moves round 1 (8): "5 approved · Post 5 to Tally → · Show the 2 that need details" (buttons; nothing is posted by itself)
       const waiting = Object.values(D().entries).filter(x => x.status === "approved" && !x.exportedAt).length;
@@ -1573,6 +1573,7 @@ function doAct(act, t){
       break;
     }
     case "docIsBill": { const e0 = curEntry(); if (e0){ e0.docOverride = true; Store.saveEntry(S.coId, e0); toast("Taken as a tax invoice."); render(); } break; }
+    case "roOk": { const e0 = curEntry(); if (e0){ e0.roOk = compute(e0).ro; Store.saveEntry(S.coId, e0); refreshStats(S.coId); render(); } break; }
     case "buyerOk": { const e0 = curEntry(); if (e0){ e0.buyerOverride = true; Store.saveEntry(S.coId, e0); toast("Kept under " + CO().name + "."); render(); } break; }
     case "cloudSync": cloudSync(true); break;
     case "logAll": S.logAll = !S.logAll; render(); break;

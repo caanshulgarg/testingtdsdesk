@@ -115,8 +115,11 @@ const TDSRate = {
     if (/DIRECTOR/.test(u)) return "director";
     if (/PROFESSIONAL|PROFF?\b|LEGAL|AUDIT|ADVOCATE|RETAINER|CONSULT|ARCHITECT|DOCTOR|MEDICAL FEE|CHARTERED/.test(u)) return "professional";
     if (/(RENT|HIRE|LEASE).*(PLANT|MACHIN|EQUIPMENT)|(PLANT|MACHIN|EQUIPMENT).*(RENT|HIRE|LEASE)/.test(u)) return "rent_machinery";
-    if (/RENT|LEASE|LAND|BUILDING|GODOWN|WAREHOUSE|PREMISES|FURNITURE/.test(u)) return "rent_building";
-    if (/CONTRACT|LABOUR|JOB\s*WORK|MANPOWER|TRANSPORT|FREIGHT|CARTAGE|REPAIR|MAINTENANCE|ADVERT|PRINTING|CATERING|SECURITY|HOUSEKEEPING/.test(u)) return "contractor";
+    // rent as a word (not "Current", "Rentokil"); then the contract words, before what a contract may be done on (audit of
+    // 22-Nov-2026: "Building Repairs & Maintenance", "Land Development Contract" were read as rent, 194-I)
+    if (/\b(RENT(S|AL)?|LEASE)\b/.test(u)) return "rent_building";
+    if (/CONTRACT|LABOUR|JOB\s*WORK|MANPOWER|TRANSPORT|FREIGHT|CARTAGE|REPAIR|MAINTENANCE|ADVERT|PRINTING|CATERING|SECURITY|HOUSEKEEPING|PEST\s*CONTROL/.test(u)) return "contractor";
+    if (/\b(LAND|BUILDINGS?|GODOWN|WAREHOUSE|PREMISES|FURNITURE)\b/.test(u)) return "rent_building";
     return "";
   },
   // a deduction's payment type: the expense ledgers of its entry first (their nature in Tally, then their names), then the
@@ -281,8 +284,12 @@ const TDSSep = {
     }
     return false;
   },
+  // A TDS entry of its own whose own lines fit the rate (the payment: party Dr 60,000, bank Cr 54,000, TDS Cr 6,000) is
+  // matched too, to a bill booked before it without TDS: the tax was due on that bill's date (credit or payment, whichever
+  // is earlier: 194-I/194C/194J), so 201(1A)(i) interest runs from it and the return's date of payment or credit is the
+  // bill's (audit of 22-Nov-2026). Such a row is changed only when a bill without TDS is found for it
   link(rows){
-    const todo = rows.filter(r => r.sep && !(r.paid > 0) && r.tds > 0 && r.party);
+    const todo = rows.filter(r => r.sep && r.tds > 0 && r.party);
     if (!todo.length) return rows;
     const byId = {}, idx = this.bills();
     ((S.books || {}).vouchers || []).forEach(v => { byId[v.id] = v; });
@@ -305,9 +312,11 @@ const TDSSep = {
         for (let k = 2; !hit.length && k <= months.length; k++){ const g = cand.filter(bl => months.slice(0, k).includes(bl.date.slice(0, 6))); if (fits(g.reduce((s, bl) => s + bl.left, 0))) hit = g; }
         if (hit.length) how = "month";
       }
+      const pre = r.paid > 0, fresh = hit.filter(bl => !bl.own);
+      if (pre && !fresh.length) return;
       if (!hit.length){ r.covers = exp ? r2(r.tds * 100 / exp) : 0; return; }   // matched to no bill: what its TDS covers at the rate
       hit.sort((a, c) => a.date.localeCompare(c.date));
-      const fresh = hit.filter(bl => !bl.own), paid = r2(fresh.reduce((s, bl) => s + bl.left, 0));
+      const paid = r2(fresh.reduce((s, bl) => s + bl.left, 0));
       fresh.forEach(bl => { bl.left = 0; });
       r.credit = hit[0].date; r.bill = hit.map(bl => bl.no).filter(Boolean).join(", "); r.bills = hit.map(bl => ({vid: bl.vid, date: bl.date, no: bl.no, amount: bl.amount}));
       r.paid = paid; r.rateFrom = "bill (" + how + ")";

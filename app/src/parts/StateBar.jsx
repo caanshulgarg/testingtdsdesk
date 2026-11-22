@@ -15,6 +15,8 @@ import tabs from "@/registry/components/tabs/tabs.module.css";
 import HelpButton from "./HelpButton.jsx";
 import Button from "./Button.jsx";
 import { FinComNav } from "../nav.js";
+// the reading queue's buttons (jobAction: src/js/99, kept out of legacy.js)
+import "../../../src/js/99-bill-suppliers.js";
 
 // the old step of each state, kept on the tab (data-step) for the pages that look for a step
 const STEP = { review: "review", ready: "post", intally: "done" };

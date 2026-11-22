@@ -2,6 +2,8 @@
 import DocqPanel from "./Docq.jsx";
 import ListTable from "./ListTable.jsx";
 import Button from "./Button.jsx";
+// pasted bills and Unsorted uploads moved to a client (src/js/99, kept out of legacy.js)
+import "../../../src/js/99-bill-suppliers.js";
 
 export default function Unsorted() {
   const items = Object.values(S.inbox).sort((a, b) => b.createdAt.localeCompare(a.createdAt));

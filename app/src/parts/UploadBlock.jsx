@@ -4,6 +4,8 @@ import { useState } from "react";
 import DropZone from "./DropZone.jsx";
 import { ReadingCheck, UploadOptions } from "./Reading.jsx";
 import Button from "./Button.jsx";
+// pasted bills and Unsorted uploads moved to a client (src/js/99, kept out of legacy.js)
+import "../../../src/js/99-bill-suppliers.js";
 
 export default function UploadBlock() {
   const co = CO(), f = freeRate(co);
